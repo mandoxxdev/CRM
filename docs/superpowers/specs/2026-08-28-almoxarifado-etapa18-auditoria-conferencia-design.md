@@ -30,7 +30,7 @@ A medição achou um buraco **diferente e maior** do que a spec descrevia:
   zero chamadas de `registrarAuditoria`; só os estornos aparecem, como `movimentacao`.
 - **Assimetria gritante:** `PUT /materiais/:id` audita; `DELETE /materiais/:id` (soft-delete)
   não.
-- **Zero testes de auditoria de inventário:** os 8 arquivos de teste de conferência não
+- **Zero testes de auditoria de inventário:** os 7 arquivos de teste de conferência não
   mencionam auditoria. O único teste é do motor (`AJUSTE_INVENTARIO`), não da conferência.
 
 **Escopo escolhido:** a trilha do inventário ponta a ponta + as três assimetrias baratas e
@@ -68,11 +68,11 @@ graves ao lado + a correção das specs erradas.
 
 | Ato | Ponto | `acao` | `dados_novos` |
 |---|---|---|---|
-| Criar conferência | após o INSERT dos itens (`routes/almoxarifado.js` ~936) | `CRIACAO` | `{ numero, tipo, escopo_descricao, modo_cego, dupla_contagem, tolerancia_percentual, total_itens }` |
+| Criar conferência | ponto que os DOIS ramos alcancem (o ramo "zero materiais" retorna 201 antes do laço de itens — a versão original deste design pulava esse caso e furava a própria RN-01) | `CRIACAO` | `{ numero, escopo_descricao, modo_cego, dupla_contagem, tolerancia_percentual, total_itens }` — **sem `tipo`: a coluna existe e nunca foi escrita por ninguém, é a 3ª coluna morta da tabela** |
 | Contar item | após o UPDATE do item (~1022), ramo normal | `CONTAGEM` | `{ conferencia_numero, item_id, material_codigo, quantidade_sistema, quantidade_contada, divergencia }` + `dados_anteriores` com a contagem anterior quando for **correção do próprio contador** (é o caso em que o passado evapora) |
 | Recontar | mesmo ponto, ramo `marcaRecontagem` | `RECONTAGEM` | idem + `{ recontado_por_nome }`, com `dados_anteriores` = contagem do colega |
 | Concluir | após o UPDATE final (~1209), **antes** dos ganchos existentes | `CONCLUSAO` | `{ numero, aplicar_ajustes, ajustesAplicados, impactoFinanceiro, itens_contados, itens_divergentes, tolerancia_percentual, modo_cego, dupla_contagem }`, `justificativa: justificativa_ajuste` |
-| Cancelar | após o UPDATE (~1235) | `CANCELAMENTO` | `{ numero, status_anterior, itens_contados }`, `justificativa: motivo` |
+| Cancelar | após o UPDATE, na rota reescrita como `async` (hoje é `db.run` em callback, sem ler a conferência) | `CANCELAMENTO` | `{ numero, itens_contados }` — os dois exigem consulta —, `dados_anteriores: { status: 'ABERTO' }`, `justificativa: motivo` |
 
 `entidade_id` = id da conferência em todas (o log fica consultável por conferência num
 `GET /auditoria?entidade=conferencia&entidade_id=N`).
@@ -82,9 +82,13 @@ graves ao lado + a correção das specs erradas.
 - Colunas novas por `safeAlter` em `conferencias_almoxarifado`: `cancelado_por_id INTEGER`,
   `cancelado_por_nome TEXT`, `cancelado_em DATETIME`, `motivo_cancelamento TEXT`.
 - `PUT /conferencias/:id/cancelar` passa a exigir `motivo` (≥ 5 caracteres, mesma régua da
-  `justificativa_ajuste` da conclusão) → 400 com mensagem literal; grava as 4 colunas + audita.
-- **Só cancela conferência ABERTA** (hoje a rota não checa status — conferência CONCLUIDA
-  pode ser "cancelada", apagando o fato de que ela concluiu). 409 com mensagem literal.
+  `justificativa_ajuste` da conclusão) → 400 `Motivo do cancelamento deve ter pelo menos 5
+  caracteres`; grava as 4 colunas + audita.
+- **Só cancela conferência ABERTA**, com o **mesmo 400 e o mesmo literal das duas rotas irmãs**
+  (`Conferência não está aberta (status atual: X)`). *(Correção da revisão do plano: a versão
+  anterior propunha 409 e um texto novo — seria um terceiro literal para a mesma semântica, e
+  no módulo 409 é reservado a unicidade/corrida.)* Id inexistente passa a devolver 404, que
+  hoje não existe nessa rota.
 
 ### 3. `aprovador_*` deixam de ser colunas mortas
 

@@ -9,12 +9,13 @@ motivo e grava autor, `aprovador_*` deixam de ser colunas mortas, três atos viz
 auditoria e a rota de leitura do log ganha gate.
 
 **Architecture:** auditoria **pós-escrita e best-effort** (`.catch` — nunca derruba o ato já
-efetivado), no molde de `scrapDisposalService.compensarAssinatura`. Sem serviço novo: o bloco
-`/conferencias` é inline na rota e esta etapa **não** o refatora (mudança de estrutura junto
-com mudança de comportamento esconderia defeito).
+efetivado), no molde de `routes/almoxarifado.js:481-483` (try/catch com `console.error` e o
+comentário dizendo por que silêncio total é ruim). Sem serviço novo: o bloco `/conferencias`
+é inline na rota e esta etapa **não** o refatora (mudança de estrutura junto com mudança de
+comportamento esconde defeito).
 
 **Tech Stack:** Express + SQLite, `registrarAuditoria` (`services/almoxarifado/audit.js`),
-`safeAlter` do schema, supertest; React CRA (só o formulário de cancelar).
+`safeAlter` do schema, supertest; React CRA (só o fluxo de cancelar).
 
 **Spec:** `docs/superpowers/specs/2026-08-28-almoxarifado-etapa18-auditoria-conferencia-design.md`
 
@@ -26,145 +27,216 @@ com mudança de comportamento esconderia defeito).
 - **O motor de estoque não é tocado.** A conclusão continua aplicando ajuste por
   `AJUSTE_INVENTARIO` exatamente como hoje.
 - **Nada de refatorar o bloco `/conferencias` para service nesta etapa** — só acrescentar.
-- Toda auditoria nova é **pós-escrita** e envolvida em `.catch` (RN-02). Nenhuma auditoria
-  "de tentativa" (antes do efeito).
+  Ampliar um `SELECT` existente e converter uma rota de callback para `async` **contam como
+  acrescentar** (são exigidos pelos contratos abaixo).
+- Toda auditoria nova é **pós-escrita**, envolvida em try/catch com `console.error` (RN-02).
+  Nenhuma auditoria "de tentativa" (antes do efeito).
 - Asserções de auditoria sempre por `entidade` + `acao` + `entidade_id`, nunca por contagem
-  global da tabela (a mesma lição de "asserção por evento" das etapas 16/17).
+  global da tabela.
+- **Mensagens de API são ACENTUADAS** (a regra "sem acento" do CLAUDE.md vale para corpo de
+  commit, não para texto de usuário — molde: `routes/almoxarifado.js:1072`).
 
 ## Regras de negócio (RN) — enunciado completo no design
 
 | ID | Resumo |
 |---|---|
-| RN-01 | Criar, contar, recontar, concluir e cancelar geram linha `entidade='conferencia'` com autor e `entidade_id` |
+| RN-01 | Criar (**inclusive conferência sem nenhum item**), contar, recontar, concluir e cancelar geram linha `entidade='conferencia'` com autor e `entidade_id` |
 | RN-02 | Auditoria nunca derruba o ato (falha → o ato responde normal) |
 | RN-03 | Cancelar exige `motivo` (≥5) e só vale em ABERTO; grava autor, data e motivo |
-| RN-04 | Correção da própria contagem guarda o de/para em `dados_anteriores` |
+| RN-04 | Contagem que sobrescreve a anterior guarda o de/para em `dados_anteriores` |
 | RN-05 | `aprovador_*` só preenchidos na conclusão COM `aplicar_ajustes` |
 | RN-06 | `GET /auditoria` exige `configurar` |
 | RN-07 | Desativar material, cancelar requisição e excluir requisição auditam |
 
 ## Contratos congelados
 
+> **Todos os contratos abaixo foram conferidos contra o código pela revisão da Fase 2 e
+> CORRIGIDOS.** A primeira versão listava campos "em escopo" que não estavam — o executor
+> pode confiar nas notas de escopo daqui, mas continua obrigado a ler o handler antes de
+> escrever cada teste.
+
+### C0 — pré-requisito de import (achado 1 da revisão, BLOQUEANTE)
+
+`routes/almoxarifado.js:38` hoje é `const { registrarAuditoria } = require('../services/almoxarifado/audit');`
+— binding `const` resolvido no require e cacheado. **O teste de RN-02 não conseguiria stubar
+nada** (passaria verde sem jamais derrubar auditoria: teste vazio).
+
+**Passo obrigatório do Step 3 da Task 1:** trocar por
+`const audit = require('../services/almoxarifado/audit');` e usar
+`audit.registrarAuditoria(...)` **nas chamadas novas**. As chamadas antigas do arquivo podem
+continuar com o binding desestruturado (mantendo `registrarAuditoria` também importado) — a
+etapa não reescreve o que já funciona; o que importa é que os 5 pontos novos e os 3 do C6
+sejam alcançáveis pelo stub.
+
 ### C1 — as 5 auditorias da conferência
 
 `entidade: 'conferencia'`, `entidade_id`: id da conferência, `usuario_id`/`usuario_nome` do
-`req.user`. Ações e cargas (campos exatos):
+`req.user`.
 
 | `acao` | Ponto exato | `dados_anteriores` | `dados_novos` |
 |---|---|---|---|
-| `CRIACAO` | após o laço de INSERT dos itens em `POST /conferencias` (`routes/almoxarifado.js` ~936), antes do `res` | — | `{ numero, tipo, escopo_descricao, modo_cego, dupla_contagem, tolerancia_percentual, total_itens }` |
-| `CONTAGEM` | após o UPDATE do item (~1022) quando NÃO é recontagem | `{ quantidade_contada }` anterior **apenas quando havia contagem** (correção do próprio contador — RN-04); senão null | `{ conferencia_numero, item_id, material_codigo, quantidade_sistema, quantidade_contada, divergencia }` |
-| `RECONTAGEM` | mesmo ponto, ramo `marcaRecontagem` | `{ quantidade_contada, contado_por_nome }` do colega | idem `CONTAGEM` + `{ recontado_por_nome }` |
-| `CONCLUSAO` | após o UPDATE final (~1209), **antes** do gancho de alerta da ~1211 | — | `{ numero, aplicar_ajustes, ajustesAplicados, impactoFinanceiro, itens_contados, itens_divergentes, tolerancia_percentual, modo_cego, dupla_contagem }`; `justificativa: justificativa_ajuste \|\| null` |
-| `CANCELAMENTO` | após o UPDATE do cancelar (~1235) | `{ status: 'ABERTO' }` | `{ numero, itens_contados }`; `justificativa: motivo` |
+| `CRIACAO` | **ANTES do `return res.status(201)` do ramo "zero materiais"** (`routes/almoxarifado.js:925-934`) e também no ramo normal — na prática: extrair um ponto único depois do INSERT dos itens que os dois ramos alcancem (achado 4: o ponto original pulava a conferência sem itens, furando a RN-01) | — | `{ numero, escopo_descricao, modo_cego, dupla_contagem, tolerancia_percentual, total_itens }` — variáveis reais: `escopoDescricao`, `modoCegoValor`, `duplaContagemValor`, `toleranciaValor`, `materiais.length`. **`tipo` NÃO entra** (achado 3: é a 3ª coluna morta da tabela; ver "Achados vizinhos") |
+| `CONTAGEM` | após o UPDATE do item (~1022), quando `!marcaRecontagem` | `{ quantidade_contada, contado_por_nome }` da linha antiga **quando havia contagem** (RN-04 — é o caso "correção", que só existe com `dupla_contagem`); senão `null` | `{ conferencia_numero, item_id, material_codigo, quantidade_sistema, quantidade_contada, divergencia }` |
+| `RECONTAGEM` | mesmo ponto, quando `marcaRecontagem` | `{ quantidade_contada, contado_por_nome }` da linha antiga — **NÃO afirmar que é "de outra pessoa"**: sem `dupla_contagem`, a 2ª contagem do MESMO usuário cai aqui (achado 6) | idem `CONTAGEM` + `{ recontado_por_nome }` (variável `autorNome`) |
+| `CONCLUSAO` | após o UPDATE final (~1207-1209), **antes** do gancho de alerta (~1211) | — | `{ numero, aplicar_ajustes, ajustesAplicados, impactoFinanceiro, itens_contados, itens_divergentes, tolerancia_percentual, modo_cego, dupla_contagem }`; `justificativa: justificativa_ajuste \|\| null`. **Todas as 9 já estão em escopo** (`conf` vem de `SELECT *`; `itens_contados` = `todosItens.length`; `itens_divergentes` = `ajustes.length`; `tolerancia_percentual` = a variável **`tolerancia`**, a efetiva que governou a decisão — achado 17b) |
+| `CANCELAMENTO` | após o `dbRun` do UPDATE, na rota reescrita (ver C2) | `{ status: 'ABERTO' }` | `{ numero, itens_contados }` — **os dois exigem consulta**: `numero` vem do `dbGet` que o C2 já obriga; `itens_contados` de um `SELECT COUNT(*) ... WHERE quantidade_contada IS NOT NULL` (achado 7) |
 
-Todas envolvidas em `.catch((e) => console.warn(...))` — RN-02.
+**Ampliações de SELECT obrigatórias** (achado 5 — os campos NÃO estão em escopo hoje):
+- `routes/almoxarifado.js:971` — `SELECT status, dupla_contagem` → acrescentar `, numero`.
+- `routes/almoxarifado.js:977-980` — o JOIN com `materiais_almoxarifado` → acrescentar
+  `, ma.codigo AS material_codigo`.
 
-### C2 — `PUT /conferencias/:id/cancelar` (contrato novo)
+**Distinção de ramo, congelada do código** (`routes/almoxarifado.js:988, 1004-1012`):
+`ehRecontagem = item.quantidade_contada !== null`;
+`ehCorrecaoDoPrimeiro = conf.dupla_contagem && ehPrimeiroContador && !item.recontado`;
+`marcaRecontagem = ehRecontagem && !ehCorrecaoDoPrimeiro`. **CONTAGEM = `!marcaRecontagem`,
+RECONTAGEM = `marcaRecontagem`.** O `dados_anteriores` é obtível nos dois: `item` é lido na
+977, antes do UPDATE da 1022 (o código já depende disso na 988).
 
-Body: `{ motivo: string }`. Gate atual mantido (`requirePermission('inventario')`).
+Todas as chamadas em try/catch com `console.error` (RN-02).
 
-| Caso | Status | Corpo |
-|---|---|---|
-| ok | 200 | `{ success: true }` (mesma resposta de hoje) |
-| sem motivo / < 5 chars | 400 | `{ error: "Motivo do cancelamento e obrigatorio (minimo 5 caracteres)" }` |
-| status ≠ ABERTO | 409 | `{ error: "Só é possível cancelar conferência em andamento. Status atual: <STATUS>." }` |
-| id inexistente | 404 | `{ error: "Conferência não encontrada" }` (mensagem já usada no bloco — conferir o literal exato antes de escrever o teste) |
+### C2 — `PUT /conferencias/:id/cancelar` (rota reescrita)
 
-Grava `cancelado_por_id`, `cancelado_por_nome`, `cancelado_em = CURRENT_TIMESTAMP`,
-`motivo_cancelamento`.
+Hoje (`routes/almoxarifado.js:1235-1242`) é um `db.run` de uma linha em estilo callback, com
+`status='ABERTO'` embutido no WHERE e um 400 genérico cobrindo "não existe" e "não está
+aberta" indistintamente. **Reescrever como `async`** (exigido pelo gate de status e pelos
+campos do log):
 
-### C3 — colunas novas (`schema.js`, por `safeAlter`, junto das outras de conferência ~1736-1763)
+1. `dbGet` da conferência (`SELECT id, numero, status`) → ausente: **404**
+   `{ error: 'Conferência não encontrada' }` (literal já usado em 772/972/1078). *(Nota: hoje
+   esse caso devolve 400; introduzir o 404 é mudança de comportamento **deliberada**, sem
+   teste existente que a trave.)*
+2. `motivo` ausente ou `String(motivo).trim().length < 5` → **400**
+   `{ error: 'Motivo do cancelamento deve ter pelo menos 5 caracteres' }` (molde da régua
+   irmã, `routes/almoxarifado.js:1072`; achado 9 — mensagem acentuada).
+3. `status !== 'ABERTO'` → **400**
+   `` { error: `Conferência não está aberta (status atual: ${conf.status})` } `` — **o mesmo
+   literal e o mesmo código das duas rotas irmãs** (973-975 e 1083-1085, esta última com
+   comentário dizendo que a padronização foi deliberada). **Descartado o 409** que a primeira
+   versão deste plano propunha: no módulo, 409 é reservado a unicidade/corrida
+   (`extended.js:130,228,280,301,885,894`) — seria um terceiro texto para a mesma semântica
+   (achado 8).
+4. `dbRun` do UPDATE: `status='CANCELADO'`, `cancelado_por_id`, `cancelado_por_nome`,
+   `cancelado_em = CURRENT_TIMESTAMP`, `motivo_cancelamento`.
+5. `SELECT COUNT(*)` dos itens com `quantidade_contada IS NOT NULL` (para o log).
+6. Auditoria C1 `CANCELAMENTO` em try/catch.
+7. `res.json({ success: true })` — resposta de sucesso **inalterada**.
+
+**Chamadores existentes que quebram com o motivo obrigatório** (achado 2 — atualizar no
+mesmo commit, mandando `{ motivo: '...' }`):
+- `server/tests/api/conferenciaTolerancia.api.test.js:131-132` (`.send({})`, espera 200)
+- `server/tests/api/conferenciaAcuracidade.api.test.js:250-251` (sem `.send`, espera 200)
+- `server/tests/api/permissoesRotas.api.test.js:185-186` (GESTOR → 200, `.send({})`)
+  *(o caso PRODUCAO → 403 das linhas 168-178 continua válido: o gate roda antes do handler)*
+
+### C3 — colunas novas (`schema.js`, `safeAlter`, junto do bloco de conferência 1733-1763)
 
 `cancelado_por_id INTEGER`, `cancelado_por_nome TEXT`, `cancelado_em DATETIME`,
 `motivo_cancelamento TEXT`.
 
 ### C4 — `aprovador_*` na conclusão
 
-No UPDATE final (~1207), quando `aplicar_ajustes` for verdadeiro, incluir
-`aprovador_id = ?`, `aprovador_nome = ?` com o usuário do ato. Sem ajustes, **não** tocar as
-colunas (RN-05).
+O UPDATE final (1207-1209) é template string única com 3 params. Incluir condicionalmente com
+o mesmo truque de fragmento que o arquivo já usa em `camposAutoria` (1018-1023):
+`aplicar_ajustes ? ', aprovador_id = ?, aprovador_nome = ?' : ''` + 2 params. Sem ajustes, as
+colunas **não são tocadas** (RN-05).
 
 ### C5 — gate do log
 
-`GET /api/almoxarifado/auditoria` (`routes/almoxarifado/extended.js` ~1264) passa a ter
-`requirePermission('configurar')` entre `auth` e o handler. 403 = padrão do módulo.
+`GET /api/almoxarifado/auditoria` (`routes/almoxarifado/extended.js:1264`) hoje tem só `auth`.
+Passa a ter `requirePermission('configurar')` (ADMINISTRADOR, `permissions.js:74`).
+**Verificado pela revisão:** nenhuma tela do client e nenhuma rota interna consomem essa rota
+— nada quebra. 403 = padrão do módulo.
+
+**Junto (achado 13):** trocar `ORDER BY created_at DESC` por
+`ORDER BY created_at DESC, id DESC` (`extended.js:1271`). `created_at` tem resolução de
+segundo e as auditorias de um mesmo ato empatam — sem o desempate, a jornada da Task 4 seria
+flaky **e o controle positivo dela não saberia falhar**.
 
 ### C6 — os três atos vizinhos (RN-07)
 
-| Ato | Arquivo:linha | `entidade` / `acao` | Carga |
+| Ato | Arquivo:linha | `entidade`/`acao` | Como obter os dados |
 |---|---|---|---|
-| `DELETE /materiais/:id` (soft-delete) | `routes/almoxarifado.js` ~504 | `material` / `DESATIVACAO` | `dados_anteriores: { ativo: 1 }`, `dados_novos: { ativo: 0, codigo, nome }` |
-| `PUT /requisicoes/:id/cancelar` | ~2725 | `requisicao` / `CANCELAMENTO` | `dados_anteriores: { status }`, `dados_novos: { status: 'CANCELADA', numero }`, `justificativa` se o body tiver |
-| `DELETE /requisicoes/:id` | ~2751 | `requisicao` / `EXCLUSAO` | `dados_anteriores: { status, numero }`, `dados_novos: { estornos: N }` (a rota já sabe quantas entregas estornou) |
+| `DELETE /materiais/:id` (soft-delete `ativo=0`) | `routes/almoxarifado.js:503-511` | `material` / `DESATIVACAO` | **`SELECT id, codigo, nome, ativo` ANTES do UPDATE** (achado 12): se não existir, **não audita** (hoje a rota responde `success:true` mesmo para id inexistente — auditar cegamente criaria linha fantasma); `dados_anteriores: { ativo: <o valor real lido> }`, `dados_novos: { ativo: 0, codigo, nome }` |
+| `PUT /requisicoes/:id/cancelar` | `routes/almoxarifado.js:2725-2747` | `requisicao` / `CANCELAMENTO` | status literal é **`'CANCELADO'`** (achado 10 — a 1ª versão dizia `'CANCELADA'`, que não existe; ver `:2735`). **A rota é callback aninhado e responde dentro de um `.finally()`** (`:2742-2744`, achado 16): encadear a auditoria na MESMA promessa, antes do `.finally` — não converter o handler |
+| `DELETE /requisicoes/:id` | `routes/almoxarifado.js:2751-2760` | `requisicao` / `EXCLUSAO` | **`dbGet` de `status`/`numero` ANTES de chamar o serviço** (achado 11: o serviço não os devolve, e depois da chamada o status já virou CANCELADO); `dados_novos: { estornos: result.estornos.length }` — **`estornos` é ARRAY**, não número (`requisitionService.js:456`) |
 
-**Atenção:** confirmar os literais de status e os nomes de campo lendo o handler — o plano
-cita linhas aproximadas de propósito; o executor confere.
+## Achados vizinhos a registrar no fechamento (não são task)
+
+- **`conferencias_almoxarifado.tipo` é a 3ª coluna morta** da tabela (`schema.js:1733`,
+  `DEFAULT 'GERAL'`, nunca escrita por ninguém) — junto de `aprovador_id`/`aprovador_nome`,
+  que esta etapa ressuscita. Nomear na spec 17/23; ligá-la é decisão de negócio (o que
+  significaria "tipo" de conferência?).
+- **O design dizia "os 8 arquivos de teste de conferência"; são 7** (achado 17a).
 
 ## Sort topológico
 
 | Task | Tipo | Depende de |
 |---|---|---|
-| 1. Colunas + cancelar (motivo/status/autor) + as 5 auditorias da conferência | **tronco** | — |
-| 2. `aprovador_*`, gate do log e os 3 atos vizinhos | **tronco** | Task 1 (mesmo arquivo de rotas) |
-| 3. Front: cancelar conferência pede motivo | **galho** | contrato C2 |
+| 1. C0 + colunas + cancelar reescrito + as 5 auditorias | **tronco** | — |
+| 2. `aprovador_*`, gate+ordem do log e os 3 atos vizinhos | **tronco** | Task 1 (mesmo arquivo de rotas) |
+| 3. Front: cancelar conferência pede motivo | **galho** | C2 (já congelado — pode ir em paralelo com T2) |
 | 4. Jornada: o log conta a história inteira | integração | Tasks 1+2 |
 
-T1 e T2 tocam o MESMO arquivo (`routes/almoxarifado.js`) — sequenciais de propósito, não
-paralelizáveis. T3 é client puro.
+T1 e T2 tocam o MESMO arquivo (`routes/almoxarifado.js`) — sequenciais de propósito. T3 é
+client puro e pode rodar junto com T2.
 
 ---
 
-### Task 1 (tronco): colunas, cancelar e as 5 auditorias
+### Task 1 (tronco): C0, colunas, cancelar e as 5 auditorias
 
 **Files:**
-- Modify: `server/services/almoxarifado/schema.js` (C3),
-  `server/routes/almoxarifado.js` (bloco `/conferencias`: 5 auditorias + cancelar novo)
+- Modify: `server/services/almoxarifado/schema.js` (C3), `server/routes/almoxarifado.js`
+  (C0 + 2 ampliações de SELECT + 5 auditorias + cancelar reescrito),
+  `server/tests/api/conferenciaTolerancia.api.test.js`,
+  `server/tests/api/conferenciaAcuracidade.api.test.js`,
+  `server/tests/api/permissoesRotas.api.test.js` (os 3 chamadores do C2)
 - Test: `server/tests/api/conferenciaAuditoria.api.test.js`
 
-**Interfaces:** Consumes: `registrarAuditoria(db, {...})` de `services/almoxarifado/audit.js`;
-molde de auditoria best-effort de `scrapDisposalService.compensarAssinatura`; moldes de setup
-dos testes de conferência existentes (`conferenciaTolerancia.api.test.js`,
-`conferenciaDuplaContagem.api.test.js`). Produces: C1, C2, C3.
+**Interfaces:** Consumes: `audit.registrarAuditoria` (C0); moldes de setup dos testes de
+conferência (`conferenciaTolerancia`, `conferenciaDuplaContagem`); molde de try/catch de
+auditoria em `routes/almoxarifado.js:481-483`. Produces: C0, C1, C2, C3.
 
 - [ ] **Step 1: escrever o teste que falha** — cenários:
-  1. **RN-01 criar:** `POST /conferencias` → 1 linha `conferencia`/`CRIACAO` com
-     `entidade_id` = id da conferência, autor certo e `total_itens` batendo.
-  2. **RN-01 contar:** contar um item → 1 linha `CONTAGEM` com material, quantidade e
-     divergência; **RN-04:** contar de novo o MESMO item (correção do próprio contador) →
-     `dados_anteriores` traz a quantidade anterior.
-  3. **RN-01 recontar:** com `dupla_contagem`, outro usuário reconta → linha `RECONTAGEM`
-     com o de/para e os dois nomes.
-  4. **RN-01 concluir:** concluir com ajuste → linha `CONCLUSAO` com
-     `ajustesAplicados`/`impactoFinanceiro`/`justificativa`; concluir sem ajuste → linha
-     igualmente presente com `aplicar_ajustes:false`.
-  5. **RN-03:** cancelar sem motivo → 400 literal e **nenhuma** linha nem mudança de status;
-     motivo curto → 400; cancelar ABERTA com motivo → 200, colunas gravadas
-     (`cancelado_por_id/nome`, `cancelado_em`, `motivo_cancelamento`) e linha
-     `CANCELAMENTO`; cancelar CONCLUIDA → 409 literal.
+  1. **RN-01 criar:** `POST /conferencias` → linha `conferencia`/`CRIACAO` com `entidade_id`,
+     autor e `total_itens`. **E o ramo de ZERO itens** (escopo que não casa material nenhum)
+     → também audita (achado 4).
+  2. **RN-01 contar + RN-04:** conferência **com `dupla_contagem: true`** (obrigatório — o
+     ramo de correção só existe assim, achado 6): contar → `CONTAGEM`; o MESMO usuário conta
+     de novo → `CONTAGEM` com `dados_anteriores` trazendo a quantidade anterior.
+  3. **RN-01 recontar:** outro usuário reconta → `RECONTAGEM` com o de/para e
+     `recontado_por_nome`. **E o caso sem dupla contagem:** 2ª contagem do mesmo usuário cai
+     em `RECONTAGEM` (não em CONTAGEM) — congelar o comportamento real, sem afirmar "colega".
+  4. **RN-01 concluir:** com ajuste → `CONCLUSAO` com `ajustesAplicados`/`impactoFinanceiro`/
+     `justificativa`; sem ajuste → linha igualmente presente com `aplicar_ajustes:false`.
+  5. **RN-03 (C2):** sem motivo → 400 literal, status inalterado, zero linha; motivo com 3
+     chars → 400; ABERTA com motivo → 200, as 4 colunas gravadas e linha `CANCELAMENTO` com
+     `numero` e `itens_contados`; CONCLUIDA → **400** com
+     `Conferência não está aberta (status atual: CONCLUIDO)`; id inexistente → 404 literal.
   6. **RN-02:** stubar `audit.registrarAuditoria` para lançar (guardar/restaurar no
-     `finally`) e conferir que criar/contar/concluir/cancelar **respondem normal** e gravam
-     tudo; fila de log vazia. (Os handlers chamam pelo objeto do módulo — se alguém
-     desestruturar, este teste denuncia.)
+     `finally`) e conferir que criar/contar/concluir/cancelar **respondem normal e gravam
+     tudo**. *(Só funciona por causa do C0 — se o executor pular o C0, este teste passa sem
+     provar nada: é o teste vazio que a revisão pegou.)*
 - [ ] **Step 2: rodar e ver falhar** (`cd server && node tests/api/conferenciaAuditoria.api.test.js`).
-- [ ] **Step 3: implementar** — colunas por `safeAlter`; cancelar com motivo/status/autor; as
-  5 auditorias nos pontos do C1, cada uma com `.catch`.
+- [ ] **Step 3: implementar** — nesta ordem: C0 (import) → C3 (colunas) → ampliar os 2
+  SELECTs → 5 auditorias → cancelar reescrito → **atualizar os 3 chamadores do C2**.
 - [ ] **Step 4: verde + controle positivo** — sabotar a guarda de status do cancelar
-  (aceitar qualquer status) e ver o cenário 5 falhar; reverter. Rodar `npm run test:api`.
+  (aceitar qualquer status) e ver o cenário 5 falhar; reverter, `git diff` limpo. Rodar
+  `npm run test:api` inteiro (os 3 testes tocados TÊM de continuar verdes).
 - [ ] **Step 5: commit** — `Almoxarifado Etapa 18 Task 1: a conferencia passa a deixar rastro`.
 
-### Task 2 (tronco): `aprovador_*`, gate do log e os 3 atos vizinhos
+### Task 2 (tronco): `aprovador_*`, gate+ordem do log e os 3 atos vizinhos
 
 **Files:**
 - Modify: `server/routes/almoxarifado.js` (C4 + C6), `server/routes/almoxarifado/extended.js` (C5)
 - Test: `server/tests/api/auditoriaAtosEGate.api.test.js`
 
-**Interfaces:** Consumes: C1 (padrão já estabelecido pela T1), `requirePermission`.
-
-- [ ] **Step 1: teste que falha** — RN-05 (`aprovador_*` preenchidos SÓ com ajuste; sem
-  ajuste ficam nulos); RN-06 (matriz de 8 perfis no `GET /auditoria`, usuários com
-  `role:'usuario'` e `perfil_almoxarifado` — NUNCA `role:'admin'`, senão a matriz passa
-  vazia); RN-07 (os três atos, cada um com sua linha e o de/para do C6).
+- [ ] **Step 1: teste que falha** — RN-05 (`aprovador_*` só com ajuste; sem ajuste, nulos);
+  RN-06 (matriz de 8 perfis no `GET /auditoria`, usuários com `role:'usuario'` e
+  `perfil_almoxarifado` — **NUNCA `role:'admin'`**, senão a matriz passa vazia:
+  `permissions.js:93`); RN-07 (os três atos do C6, cada um com o de/para certo, incluindo
+  **id inexistente no DELETE de material não auditando**); ordem estável do log (C5) com duas
+  auditorias no mesmo segundo.
 - [ ] **Step 2: rodar e ver falhar; implementar; verde.**
 - [ ] **Step 3: controle positivo** — remover `requirePermission('configurar')` do
   `GET /auditoria` e ver a matriz falhar; reverter. `npm run test:api` inteiro.
@@ -173,50 +245,70 @@ dos testes de conferência existentes (`conferenciaTolerancia.api.test.js`,
 ### Task 3 (galho): cancelar conferência pede motivo
 
 **Files:**
-- Modify: `client/src/components/almoxarifado/ConferenciaEstoque.js` (o botão/fluxo de
-  cancelar) + o teste correspondente (achar o arquivo de teste da tela; se não houver,
-  criar `ConferenciaEstoque.cancelar.test.js` no padrão das telas vizinhas)
+- Modify: `client/src/components/almoxarifado/ConferenciaEstoque.js` (fluxo de cancelar,
+  linhas ~246-255 — hoje `window.confirm` puro e `api.put` sem corpo; botão em ~560)
+- Modify: `client/src/components/almoxarifado/ConferenciaEstoque.test.js` (**o arquivo EXISTE,
+  707 linhas, e não tem nenhum caso de cancelar** — achado 14: estender, NÃO criar arquivo
+  irmão)
 
-**Interfaces:** Consumes: C2 (mock de fronteira HTTP legítimo).
+**Padrão a seguir — o do PRÓPRIO arquivo, não o de fora:** `ConferenciaEstoque.js:449-482` já
+tem modal com textarea de justificativa e botão desabilitado até 5 caracteres
+(`:480 disabled={... justificativaAjuste.trim().length < 5}`), com teste em
+`ConferenciaEstoque.test.js:278-299`. É esse que casa com a régua ≥5 do C2. *(A primeira
+versão do plano mandava seguir o `confirm`+`prompt` da tela de Reposição, que barra só vazio
+— um motivo de 3 caracteres passaria pela tela e tomaria 400 do servidor.)*
 
-- [ ] **Step 1: teste que falha** — cancelar sem motivo não chama a API e mostra o aviso;
-  com motivo, o `PUT` sai com `{ motivo }`; erro 409 do servidor aparece para o usuário.
-- [ ] **Step 2: implementar no padrão da casa** (o módulo já tem cancelamentos com
-  justificativa — ex.: solicitação de compra na tela de Reposição: confirmação + prompt de
-  justificativa, com o vazio barrado ANTES da chamada). Seguir aquele padrão, não inventar.
-- [ ] **Step 3: suíte client + build `CI=true`; commit** —
-  `Almoxarifado Etapa 18 Task 3: cancelar conferencia pede motivo`.
+- [ ] **Step 1: teste que falha** (dentro do arquivo existente) — abrir o modal de cancelar;
+  botão desabilitado com motivo vazio e com 3 caracteres; com ≥5, o `PUT` sai com
+  `{ motivo }`; erro do servidor (400 do status) aparece para o usuário.
+- [ ] **Step 2: implementar no molde das linhas 449-482; suíte client + build `CI=true`;
+  commit** — `Almoxarifado Etapa 18 Task 3: cancelar conferencia pede motivo`.
 
 ### Task 4 (integração): a história inteira no log
 
 **Files:** Test: `server/tests/api/conferenciaAuditoriaJornada.api.test.js`
 
-- [ ] **Step 1: jornada** — abrir conferência (2 itens) → contar os dois → corrigir um →
-  recontar o outro com segundo usuário → concluir aplicando ajuste → `GET /auditoria?
-  entidade=conferencia&entidade_id=N` (como ADMIN) devolve a sequência **em ordem**
-  (`CRIACAO`, `CONTAGEM`×2, `CONTAGEM` de correção com de/para, `RECONTAGEM`, `CONCLUSAO`),
-  com autores corretos; e o saldo do material bate com o ajuste (o motor rodou de verdade).
-- [ ] **Step 2: rodar; controle positivo** (sabotar a ordem do `ORDER BY` da rota de
-  auditoria, ou remover uma das 5 auditorias, e ver a jornada falhar); reverter;
-  `npm run test:api`; commit — `Almoxarifado Etapa 18 Task 4: jornada da trilha do inventario`.
+- [ ] **Step 1: jornada** — abrir conferência com `dupla_contagem` (2 itens) → contar os dois
+  → corrigir um (mesmo usuário) → recontar o outro com segundo usuário → concluir aplicando
+  ajuste → `GET /auditoria?entidade=conferencia&entidade_id=N` **como ADMIN** devolve a
+  sequência em ordem (`CRIACAO`, `CONTAGEM`×2, `CONTAGEM` de correção com de/para,
+  `RECONTAGEM`, `CONCLUSAO`) com autores corretos; e o saldo do material bate com o ajuste
+  (o motor rodou de verdade). A ordem só é aferível por causa do desempate do C5.
+- [ ] **Step 2: rodar; controle positivo** — remover UMA das 5 auditorias e ver a jornada
+  falhar (não sabotar só o `ORDER BY`: com o desempate do C5 isso funciona, mas a prova mais
+  forte é a linha que some); reverter; `npm run test:api`; commit —
+  `Almoxarifado Etapa 18 Task 4: jornada da trilha do inventario`.
 
 ---
 
-## Self-review do plano (feito na escrita)
+## Self-review do plano (feito na escrita, revisado na Fase 2)
 
 - Cobertura: RN-01..07 têm task e teste nomeados. As correções das specs 03 e 23 ficam para a
-  Fase 6 (fechar-etapa) — não são task de executor, mas **não podem ser esquecidas**: são o
-  item mais importante do fechamento desta etapa (documentação que descreve bug morto).
-- T1→T2 sequencial porque tocam o mesmo arquivo; T3 é o único paralelizável e é client puro.
-- Risco declarado: o bloco `/conferencias` é inline e grande; o executor deve **acrescentar**
-  e nunca reorganizar — refatoração junto com mudança de comportamento esconde defeito.
-- Ponto de atenção do C2: o literal do 404 do bloco de conferências precisa ser LIDO do
-  código antes de virar teste (o plano não o congela de memória — lição das etapas anteriores,
-  em que literais escritos de cabeça não existiam).
+  Fase 6 — **são o item mais importante do fechamento** (documentação que descreve bug morto).
+- T1→T2 sequencial (mesmo arquivo); T3 paraleliza com T2 por contrato congelado.
+- Risco declarado: o bloco `/conferencias` é inline e grande; **acrescentar, nunca
+  reorganizar** — exceto as duas ampliações de SELECT e a reescrita da rota de cancelar, que
+  os contratos exigem e estão nomeadas.
+- Todos os literais deste plano foram LIDOS do código (a revisão da Fase 2 conferiu um a um);
+  o executor ainda assim confere antes de escrever cada teste.
 
 ## Execução (estado)
 
-- [ ] Fase 2 — revisão do plano por agente fresco
+- [x] Fase 2 — revisão do plano por agente fresco (2026-08-28): **17 achados, 6 bloqueantes,
+  todos acatados.** Os que mudavam o plano de verdade: (1) o teste de RN-02 era **impossível**
+  — o arquivo desestrutura o import e o stub nunca pegaria, teste vazio garantido (→ C0);
+  (2) 3 testes existentes quebrariam com o motivo obrigatório e nenhuma task os mencionava;
+  (3) `tipo` não existe em escopo — é a 3ª coluna morta da tabela; (4) o ponto da auditoria
+  de criação **pulava a conferência sem itens** (furo na própria RN-01); (5) `conferencia_numero`
+  e `material_codigo` exigem ampliar dois SELECTs; (6) o ramo "correção do primeiro contador"
+  só existe com `dupla_contagem` — o cenário de teste cairia no ramo errado; (7) a rota de
+  cancelar é callback e não tem `numero` nem contagem de itens; (8) o 409 proposto
+  contradizia duas rotas irmãs que já usam 400 com literal padronizado; (10-12) `'CANCELADA'`
+  não existe (é `'CANCELADO'`), os dois DELETEs precisam de SELECT prévio e `estornos` é
+  array; (13) o `ORDER BY` empata por segundo e o controle positivo da jornada não saberia
+  falhar; (14) o teste da tela **já existe** e o padrão de justificativa está no próprio
+  arquivo, não na tela de Reposição. O revisor confirmou que **todas as afirmações medidas do
+  design da Fase 0 são verdadeiras**.
 - [ ] Task 1 (tronco)
 - [ ] Task 2 (tronco)
 - [ ] Task 3 (galho)
