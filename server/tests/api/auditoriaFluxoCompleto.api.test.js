@@ -237,6 +237,45 @@ let seq = 0;
       `a janela vazou para o dia anterior (${ontem}): ${JSON.stringify(res.body.itens.map((i) => i.created_at))}`);
   });
 
+  // Este cenario NAO estava no plano e foi acrescentado por MEDICAO durante a execucao.
+  // Os dois cenarios de dia acima usam o relogio real, entao so exercitam a conversao de fuso
+  // quando o teste roda entre 21h e meia-noite de Sao Paulo. Medido as 20:47 SP: com a rota
+  // sabotada para `janelaUtc(..., 'UTC')` os NOVE cenarios deste arquivo continuavam VERDES —
+  // ou seja, a perna de RN-04 daqui nao guardava nada naquele horario (a suite da Task 2, com
+  // `created_at` explicito, pegou a mesma sabotagem). Um teste que so sabe falhar em tres das
+  // vinte e quatro horas do dia e pior que nenhum: passa a impressao de cobertura.
+  //
+  // O conserto mantem a premissa do arquivo (o ato foi escrito por ROTA REAL) e fixa so o
+  // RELOGIO da linha, que e o que o achado A4 manda fazer. 00:30 UTC do dia 11 = 21:30 LOCAL do
+  // dia 10; data escolhida longe de qualquer virada de horario de verao.
+  await test('[Step 1/RN-04] ato de FIM DE EXPEDIENTE cai no dia LOCAL, nao no dia UTC', async () => {
+    const mat = await criarMaterial();
+    const res = await enviarFoto(mat.id, 'aud-2130.png');
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+
+    const alvo = await dbGet(db,
+      `SELECT id FROM auditoria_log_almoxarifado
+        WHERE entidade = 'material' AND entidade_id = ? ORDER BY id DESC LIMIT 1`, [mat.id]);
+    assert.ok(alvo, 'a rota real nao gravou a linha — nao ha relogio para fixar');
+    const escrita = await dbRun(db,
+      "UPDATE auditoria_log_almoxarifado SET created_at = '2026-03-11 00:30:00' WHERE id = ?", [alvo.id]);
+    assert.strictEqual(escrita.changes, 1, 'o UPDATE do created_at nao pegou a linha');
+
+    const noDiaLocal = await lerTrilha({
+      entidade: 'material', entidade_id: mat.id, data_inicio: '2026-03-10', data_fim: '2026-03-10',
+    });
+    assert.strictEqual(noDiaLocal.body.total, 1,
+      'o ato das 21:30 sumiu do filtro do proprio dia — todo fim de expediente ficaria invisivel');
+
+    // O cenario IRMAO, que fecha o limite SUPERIOR. Sozinho nenhum dos dois prova a conversao:
+    // a janela UTC tambem exclui o dia 11, por outro motivo (foi o achado do controle da Task 2).
+    const noDiaUtc = await lerTrilha({
+      entidade: 'material', entidade_id: mat.id, data_inicio: '2026-03-11', data_fim: '2026-03-11',
+    });
+    assert.strictEqual(noDiaUtc.body.total, 0,
+      'o ato apareceu no dia 11 — a janela esta usando o dia UTC, nao o dia de quem pergunta');
+  });
+
   // ═══════════════ Step 2 — RN-08: o segredo nao desmascara ═══════════════
 
   let atoSegredo = null;
