@@ -16,6 +16,8 @@
  */
 const { dbAll, dbGet } = require('./db');
 const { TRANSICOES } = require('./requisitionStateMachine');
+// divergencia.js so exporta constantes/formula (sem require de servicos) — top-level seguro.
+const { divergenciaRealSql } = require('./divergencia');
 
 /**
  * Status em que uma requisicao pode estar ATRASADA — DERIVADO da maquina de estados, nunca
@@ -96,8 +98,89 @@ function maisVelhoQueDias(dataStr, dias) {
   return Number.isFinite(t) && t < Date.now() - dias * 24 * 60 * 60 * 1000;
 }
 
+// ── Etapa 17 — os tres `listar` de evento, DUAL-MODE (correcao Importante da revisao do
+// plano): com `{ dias }` filtram a janela (central + varredura de rede); com o id do fato
+// (`{ inspecaoId }` / `{ recebimentoId }` / `{ conferenciaId }`) devolvem a(s) linha(s)
+// daquele fato para o gancho do ato — a MESMA query nos dois modos, senao nasceriam duas
+// definicoes da condicao (a classe de bug que divergencia.js mata). Exportados porque os
+// ganchos da Task 2 chamam o modo por id direto.
+
 /**
- * C2/C3 — as 7 entradas. `listar(db, { dias })` devolve as linhas cruas da condicao;
+ * MATERIAL_REPROVADO (RN-03): inspecoes com `quantidade_reprovada > 0`. Janela por
+ * `data_inspecao` (DATETIME UTC do SQLite — comparacao de string com datetime('now') e
+ * consistente).
+ */
+async function listarReprovados(db, { dias, inspecaoId } = {}) {
+  const filtro = inspecaoId
+    ? 'AND i.id = ?'
+    : `AND i.data_inspecao >= datetime('now', '-' || ? || ' days')`;
+  return dbAll(db, `
+    SELECT i.id AS inspecao_id, m.codigo AS material_codigo, m.nome AS material_nome,
+      i.quantidade_reprovada, i.encaminhamento, r.numero AS recebimento_numero, r.nota_fiscal,
+      i.data_inspecao, i.responsavel_nome
+    FROM inspecoes_recebimento_almoxarifado i
+    JOIN recebimentos_material_itens_almoxarifado ri ON ri.id = i.recebimento_item_id
+    JOIN recebimentos_material_almoxarifado r ON r.id = ri.recebimento_id
+    JOIN materiais_almoxarifado m ON m.id = ri.material_id
+    WHERE i.quantidade_reprovada > 0
+      ${filtro}
+    ORDER BY i.data_inspecao DESC, i.id DESC`, [inspecaoId ?? dias]);
+}
+
+/**
+ * DIVERGENCIA_RECEBIMENTO (RN-04): itens com quantidade recebida REGISTRADA e diferente da
+ * esperada pela regua float-safe `divergenciaRealSql` (segundo consumidor SQL da formula,
+ * declarado no header de divergencia.js). Janela por `COALESCE(r.updated_at, r.created_at)`
+ * (achado CRITICO da revisao: `created_at` puro deixaria recebimento antigo conferido HOJE
+ * fora da central E da rede de seguranca; o item nao tem timestamp proprio — limitacao
+ * declarada: qualquer toque posterior no recebimento renova a presenca na central; o dedupe
+ * por item segura o e-mail).
+ */
+async function listarDivergenciasRecebimento(db, { dias, recebimentoId } = {}) {
+  const filtro = recebimentoId
+    ? 'AND ri.recebimento_id = ?'
+    : `AND COALESCE(r.updated_at, r.created_at) >= datetime('now', '-' || ? || ' days')`;
+  return dbAll(db, `
+    SELECT ri.id AS item_id, ri.recebimento_id, m.codigo AS material_codigo,
+      m.nome AS material_nome, ri.quantidade_esperada, ri.quantidade_recebida,
+      (ri.quantidade_recebida - ri.quantidade_esperada) AS divergencia,
+      r.numero AS recebimento_numero, r.nota_fiscal
+    FROM recebimentos_material_itens_almoxarifado ri
+    JOIN recebimentos_material_almoxarifado r ON r.id = ri.recebimento_id
+    JOIN materiais_almoxarifado m ON m.id = ri.material_id
+    WHERE ri.quantidade_recebida IS NOT NULL
+      AND ${divergenciaRealSql('ri.quantidade_recebida - ri.quantidade_esperada')}
+      ${filtro}
+    ORDER BY ri.id ASC`, [recebimentoId ?? dias]);
+}
+
+/**
+ * DIVERGENCIA_INVENTARIO (RN-05): conferencias CONCLUIDO com item divergente pela MESMA regua
+ * do inventario (`divergenciaRealSql('ic.divergencia')` — ABS(NULL) e NULL, entao item nao
+ * contado nao conta), AGREGADO por conferencia (1 aviso, nunca por item — a exclusao de
+ * AJUSTE_INVENTARIO em resolverClasseMovimentacao existe pelo mesmo motivo). SEM
+ * `impacto_financeiro` no SELECT de proposito (B30: e-mail vaza para caixa de entrada; o
+ * valor e gateado por `inventario` no relatorio).
+ */
+async function listarDivergenciaConferencia(db, { dias, conferenciaId } = {}) {
+  const filtro = conferenciaId
+    ? 'AND c.id = ?'
+    : `AND c.data_fim >= datetime('now', '-' || ? || ' days')`;
+  return dbAll(db, `
+    SELECT c.id AS conferencia_id, c.numero, c.data_fim, COUNT(ic.id) AS itens_divergentes
+    FROM conferencias_almoxarifado c
+    JOIN itens_conferencia_almoxarifado ic ON ic.conferencia_id = c.id
+    WHERE c.status = 'CONCLUIDO'
+      AND ${divergenciaRealSql('ic.divergencia')}
+      ${filtro}
+    GROUP BY c.id
+    ORDER BY c.data_fim DESC, c.id DESC`, [conferenciaId ?? dias]);
+}
+
+/**
+ * C2/C3 — as 7 entradas da Etapa 16 + as 4 da Etapa 17 (as tres de evento no fim tem tambem
+ * gancho no ato — `dispararAlertaRegistrado` — com o MESMO dedupe, RN-01).
+ * `listar(db, { dias })` devolve as linhas cruas da condicao;
  * `dedupeChave(linha)` e estavel no mesmo estado (RN-02); `payload(linha)` e o rastro minimo
  * gravado na fila (campo aditivo ao C2 — as assercoes de teste filtram por ele, nunca por
  * total global).
@@ -265,6 +348,102 @@ const ALERT_REGISTRY = Object.freeze([
       `Expira em: ${linha.expira_em || '-'}`,
     ].join('\n'),
   },
+  // ── Etapa 17 — 4 entradas novas (C2), na ordem do plano. As tres primeiras sao de EVENTO
+  // (`evento: true`, documentacional): o ato dispara na hora pelo helper e o `listar` daqui
+  // segue alimentando a central E a varredura diaria como rede de seguranca (RN-01).
+  {
+    chave: 'MATERIAL_REPROVADO',
+    titulo: 'Material reprovado',
+    descricao: 'Inspeções de recebimento com quantidade reprovada na janela configurada.',
+    evento: true,
+    configDias: { chave: 'alerta_eventos_janela_dias', default: 7 },
+    listar: (db, { dias }) => listarReprovados(db, { dias }),
+    // Decisao de inspecao e imutavel — 1 aviso por inspecao, para sempre.
+    dedupeChave: (linha) => `reprovado-${linha.inspecao_id}`,
+    payload: (linha) => ({ inspecao_id: linha.inspecao_id }),
+    assunto: (linha) => `[Almoxarifado] Material reprovado — ${linha.material_codigo}`,
+    corpo: (linha) => [
+      `Material: ${linha.material_codigo} — ${linha.material_nome}`,
+      `Quantidade reprovada: ${linha.quantidade_reprovada}`,
+      `Encaminhamento: ${linha.encaminhamento || '-'}`,
+      `Recebimento: ${linha.recebimento_numero}${linha.nota_fiscal ? ` (NF ${linha.nota_fiscal})` : ''}`,
+      `Inspeção em: ${linha.data_inspecao}`,
+      `Responsável: ${linha.responsavel_nome || '-'}`,
+    ].join('\n'),
+  },
+  {
+    chave: 'DIVERGENCIA_RECEBIMENTO',
+    titulo: 'Divergência de recebimento',
+    descricao: 'Itens recebidos com quantidade diferente da esperada na janela configurada.',
+    evento: true,
+    configDias: { chave: 'alerta_eventos_janela_dias', default: 7 },
+    listar: (db, { dias }) => listarDivergenciasRecebimento(db, { dias }),
+    // 1x por item; correcao posterior da quantidade nao re-alerta (declarado no design).
+    dedupeChave: (linha) => `receb-diverg-${linha.item_id}`,
+    payload: (linha) => ({ item_id: linha.item_id, recebimento_id: linha.recebimento_id }),
+    assunto: (linha) => `[Almoxarifado] Divergência de recebimento — ${linha.material_codigo}`,
+    corpo: (linha) => [
+      `Material: ${linha.material_codigo} — ${linha.material_nome}`,
+      `Quantidade esperada: ${linha.quantidade_esperada}`,
+      `Quantidade recebida: ${linha.quantidade_recebida}`,
+      `Divergência: ${linha.divergencia}`,
+      `Recebimento: ${linha.recebimento_numero}${linha.nota_fiscal ? ` (NF ${linha.nota_fiscal})` : ''}`,
+    ].join('\n'),
+  },
+  {
+    chave: 'DIVERGENCIA_INVENTARIO',
+    titulo: 'Divergência de inventário',
+    descricao: 'Conferências concluídas com itens divergentes na janela configurada.',
+    evento: true,
+    configDias: { chave: 'alerta_eventos_janela_dias', default: 7 },
+    listar: (db, { dias }) => listarDivergenciaConferencia(db, { dias }),
+    // Conferencia conclui 1x — 1 aviso agregado por conferencia (RN-05).
+    dedupeChave: (linha) => `inv-diverg-${linha.conferencia_id}`,
+    payload: (linha) => ({ conferencia_id: linha.conferencia_id }),
+    assunto: (linha) => `[Almoxarifado] Divergência de inventário — ${linha.numero}`,
+    // B30: o corpo diz o NUMERO de itens divergentes, nunca o impacto financeiro.
+    corpo: (linha) => [
+      `Conferência: ${linha.numero}`,
+      `Concluída em: ${linha.data_fim}`,
+      `Itens divergentes: ${linha.itens_divergentes}`,
+    ].join('\n'),
+  },
+  {
+    chave: 'LOTE_SEM_CERTIFICADO',
+    titulo: 'Lote sem certificado',
+    descricao: 'Lotes com saldo de material que exige certificado e sem arquivo anexado.',
+    configDias: null,
+    // Molde da subquery de saldo: varrerLotesVencendo (notificationQueueService.js:492-502;
+    // filtro de saldo em JS como la). SEM o filtro `l.status='ATIVO'` do molde, DE PROPOSITO
+    // (achado da revisao): o lote sem certificado NASCE `BLOQUEADO` (receiptService:471 +
+    // lotService:113-136) — copiar o filtro cegaria o alerta para o caso principal. A regua e
+    // `certificado_arquivo IS NULL` (lote destravado na mao sem anexo continua sem
+    // certificado). Material de CLIENTE ENTRA (decisao do plano: certificado e
+    // rastreabilidade do lote, nao propriedade — coerente com B29/sem-endereco).
+    listar: async (db) => {
+      const lotes = await dbAll(db, `
+        SELECT l.id, l.id AS lote_id, l.codigo, l.status, l.material_id,
+          m.codigo AS material_codigo, m.nome AS material_nome, m.unidade AS material_unidade,
+          COALESCE((SELECT SUM(s.quantidade) FROM estoque_saldo_almoxarifado s WHERE s.lote_id = l.id), 0) AS saldo
+        FROM lotes_almoxarifado l
+        JOIN materiais_almoxarifado m ON m.id = l.material_id
+        WHERE m.ativo = 1
+          AND m.controle_certificado = 1
+          AND l.certificado_arquivo IS NULL
+        ORDER BY m.codigo, l.codigo`);
+      return lotes.filter((l) => Number(l.saldo) > 0);
+    },
+    // RN-06: re-lembra 1x/mes enquanto o lote seguir sem certificado e com saldo.
+    dedupeChave: (linha) => `sem-certificado-${linha.id}-${mesAtual()}`,
+    payload: (linha) => ({ lote_id: linha.id }),
+    assunto: (linha) => `[Almoxarifado] Lote sem certificado — ${linha.codigo}`,
+    corpo: (linha) => [
+      `Lote: ${linha.codigo}`,
+      `Material: ${linha.material_codigo} — ${linha.material_nome}`,
+      `Saldo: ${linha.saldo} ${linha.material_unidade || ''}`.trim(),
+      `Status: ${linha.status}`,
+    ].join('\n'),
+  },
 ]);
 
 /** Corte de linhas por alerta na central (C1) — o `total` continua sendo o numero cheio. */
@@ -312,4 +491,8 @@ module.exports = {
   listarMateriaisSemEndereco,
   STATUS_REQUISICAO_ATRASAVEL,
   montarCentral,
+  // Etapa 17 — dual-mode exportado: os ganchos dos atos (Task 2) chamam o modo por id.
+  listarReprovados,
+  listarDivergenciasRecebimento,
+  listarDivergenciaConferencia,
 };

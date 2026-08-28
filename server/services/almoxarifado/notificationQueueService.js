@@ -626,6 +626,46 @@ async function varrerAlertasRegistrados(db, registro) {
   return resultados;
 }
 
+/**
+ * Etapa 17, Task 1 (C1) — disparo NO ATO de um alerta do registro. O gancho pos-commit do ato
+ * (inspecao decidida, quantidade recebida registrada, conferencia concluida) chama isto com a
+ * linha JA vinda do `listar` da propria entrada em modo por id — a regua e sempre a query
+ * compartilhada, nunca uma comparacao refeita em JS.
+ *
+ * Aplica os MESMOS guards de `varrerAlertasRegistrados` (toggle mestre `alertas_estoque_
+ * notificar_email`, destinatarios `alertas_estoque_emails`, escape linha a linha) e o MESMO
+ * `dedupeChave` da entrada — e por isso que o duplo caminho (ato + varredura de rede no dia
+ * seguinte) e inofensivo: o segundo vira DUPLICADA no INSERT OR IGNORE (RN-01).
+ *
+ * Chave inexistente LANCA (bug de programacao — o try/catch do gancho engole e loga, RN-02);
+ * toggle desligado devolve `{enfileirada:false, motivo:'DESLIGADO'}` (RN-07 lado gancho).
+ *
+ * Require LAZY do alertRegistry pelo mesmo ciclo documentado em `varrerAlertasRegistrados`.
+ */
+async function dispararAlertaRegistrado(db, chave, linha) {
+  const alertService = require('./alertService');
+  const { ALERT_REGISTRY } = require('./alertRegistry');
+
+  const entrada = ALERT_REGISTRY.find((e) => e.chave === chave);
+  if (!entrada) throw new Error(`Alerta desconhecido: ${chave}`);
+
+  if (!(await alertService.alertasEmailLigado(db))) {
+    return { enfileirada: false, motivo: 'DESLIGADO' };
+  }
+
+  const destinatarios = alertService.parseList(await alertService.getConfigValue(db, 'alertas_estoque_emails'));
+  const corpoTexto = entrada.corpo(linha);
+  return enfileirar(db, {
+    evento: entrada.chave,
+    dedupe_chave: entrada.dedupeChave(linha),
+    destinatarios,
+    assunto: entrada.assunto(linha),
+    corpo_texto: corpoTexto,
+    corpo_html: `<div>${corpoTexto.split('\n').map((l) => `<p>${alertService.escapeHtml(l)}</p>`).join('\n')}</div>`,
+    payload: entrada.payload ? entrada.payload(linha) : undefined,
+  });
+}
+
 module.exports = {
   STATUS_VALIDOS,
   enfileirar,
@@ -639,4 +679,5 @@ module.exports = {
   varrerLotesVencendo,
   varrerRemessasVencidas,
   varrerAlertasRegistrados,
+  dispararAlertaRegistrado,
 };

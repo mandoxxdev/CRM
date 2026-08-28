@@ -13,6 +13,13 @@
 // gate de recontagem, recontagem_necessaria do GET /:id) e reportService.js (relatorio de
 // divergencias). O front espelha o mesmo valor na fronteira HTTP (ConferenciaEstoque.js,
 // contador local de divergencias) — copia declarada, legitima so porque a fronteira existe.
+//
+// Etapa 17 (expansao de escopo DECLARADA): alertRegistry.js passa a ser consumidor SQL FORA do
+// inventario — `listarDivergenciasRecebimento` compara quantidade_recebida - quantidade_esperada
+// (alerta DIVERGENCIA_RECEBIMENTO) e `listarDivergenciaConferencia` compara ic.divergencia
+// (alerta DIVERGENCIA_INVENTARIO). Mesma classe de bug e mesmo motivo: a quantidade recebida
+// tambem nasce de conta com REAL, e um `!= 0` cru transformaria 10.0000000001 em "divergencia"
+// e mandaria e-mail para quem acertou. A funcao NAO muda — so ganha consumidor.
 const EPSILON_DIVERGENCIA = 1e-9;
 
 // Fragmento SQL para "tem divergencia de verdade" sobre uma coluna de divergencia.

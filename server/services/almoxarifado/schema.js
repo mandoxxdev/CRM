@@ -1834,6 +1834,11 @@ async function initSchema(db) {
     ['alerta_calibracao_dias', '30', 'Dias de antecedencia para alertar calibracao de ferramenta vencendo'],
     ['alerta_quarentena_dias', '7', 'Dias em quarentena (inspecao pendente) para alertar item parado'],
     ['alerta_reserva_parada_dias', '30', 'Dias de reserva ATIVA sem consumo para alertar reserva parada'],
+    // Etapa 17 (C3): janela dos alertas de EVENTO (reprovado, divergencia de recebimento,
+    // divergencia de inventario). O disparo desses tres e no ATO — esta janela governa o que a
+    // central mostra e o que a varredura diaria re-verifica como rede de seguranca. Mesmo
+    // prefixo 'alerta_' ja validado nos dois lados na Etapa 16.
+    ['alerta_eventos_janela_dias', '7', 'Janela em dias que os alertas de evento (reprovado, divergencias) mostram na central'],
   ];
   for (const [chave, valor, desc] of configs) {
     await dbRun(db, 'INSERT OR IGNORE INTO configuracoes_almoxarifado (chave, valor, descricao) VALUES (?,?,?)', [chave, valor, desc]);
