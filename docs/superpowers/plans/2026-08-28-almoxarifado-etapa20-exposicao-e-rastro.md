@@ -184,24 +184,60 @@ T3 (feita) → T1 → T2. Sem task de jornada: as três não compõem um fluxo.
 **Files:** Modify `server/routes/almoxarifado.js`; Test
 `server/tests/api/configuracoesSegredo.api.test.js`.
 
-- [ ] **Step 1: teste que falha** — RN-05 com **asserção negativa explícita** para as **2**
+- [x] **Step 1: teste que falha** (`a0b19c9`) — RN-05 com **asserção negativa explícita** para as **2**
   chaves secretas (o webhook saiu do escopo — C3). **A asserção negativa só vale se o segredo
   estiver MESMO na coluna** (achado A3: gravá-lo pelo PUT genérico daria 400 depois do C4, a
   coluna ficaria `''` — a semente é `''`, `schema.js:1799-1803` — e o teste passaria provando
   zero). Gravar por `PUT /configuracoes/alertas-estoque` **ou** `dbRun` direto, **assertar a
   coluna antes** (molde exato: `auditoriaConfiguracoes.api.test.js:281-282`) e só então checar
   o GET. Idem RN-06: pôr valor não-vazio ANTES do 400, senão "coluna intacta" compara `''`
-  com `''`. Mais: asserção positiva de que
-  asserção positiva de que `descricao`/`id` e as 18 chaves da tela continuam iguais; RN-06
+  com `''`. Mais: asserção positiva de que `descricao`/`id` e as 18 chaves da tela continuam iguais; RN-06
   (400 com a mensagem literal + a coluna intacta depois); e o **controle de compatibilidade**:
   a rota de alertas continua devolvendo `'********'` e o `shouldUpdateSecret` continua
   funcionando (reenviar a máscara pela rota de alertas **não** grava).
-- [ ] **Step 2: rodar e ver falhar; implementar; verde.**
-- [ ] **Step 3: controle positivo** — desligar a máscara e ver o cenário negativo falhar;
-  reverter (**commitar antes**). `npm run test:api`, com
-  `node tests/api/configuracoesGerais.api.test.js` e os 4 de auditoria rodados explicitamente
-  (todos usam o GET para montar payload).
-- [ ] **Step 4: commit.**
+- [x] **Step 2: rodar e ver falhar; implementar; verde** (`a0b19c9`) — **vermelho: 7 passed, 6
+  failed**. Caíram: a máscara do GET (a senha saiu em claro, com o valor no diff do assert), os
+  4 cenários da RN-06 (o PUT genérico respondia `{"success":true}` e gravava) e — por
+  consequência honesta — o de compatibilidade, porque o cenário anterior tinha acabado de gravar
+  `''` por cima da senha pelo PUT genérico, que é exatamente o defeito. Os 7 que já passavam
+  passavam por motivo declarado: as duas guardas anti-teste-vazio, o caso da coluna VAZIA
+  (`''` continua `''` com ou sem máscara), a forma do corpo (`descricao`/`id` e as 18 chaves
+  da tela — prova que a asserção de shape estava certa ANTES), o webhook em claro (decisão A5,
+  já era o comportamento) e o 200 do PUT do webhook.
+  **Implementação:** pré-requisito A1 primeiro (`configDiff` vira namespace, as 3 chamadas de
+  `calcularDiff` trocadas por script com assert de contagem — 3 antes, 3 depois, zero nuas);
+  C3 na montagem da resposta do GET; C4 no laço de VALIDAÇÃO do PUT (não no de UPDATE).
+  **Verde: 13 passed, 0 failed.**
+- [x] **Step 3: controle positivo** (`a0b19c9`) — **três** sabotagens por script com
+  `assert` de que o alvo existia (no-op silencioso já aconteceu nesta base), todas **depois** do
+  commit e revertidas com `git checkout`:
+  (1) máscara do GET desligada → **11 passed, 2 failed**, e o que caiu foi
+  `[RN-05] com valor na coluna, o GET devolve a mascara e NUNCA o segredo` — os demais seguiram
+  verdes, então é essa asserção que mede a máscara e ela não pega carona em nada;
+  (2) guarda do PUT removida → **8 passed, 5 failed** (os 4 da RN-06 + a compatibilidade, que cai
+  porque sem a guarda o PUT genérico apaga a senha);
+  (3) import de volta a desestruturado → o processo **nem chega a rodar cenário**:
+  `ReferenceError: configDiff is not defined`. Confirma que o achado A1 era bloqueante de
+  verdade, e não uma precaução: sem a troca, a primeira request das TRÊS rotas de configuração
+  morria.
+  **Placares:** `npm run test:api` **141/141 arquivos OK**; rodados explicitamente —
+  `configuracoesGerais` 15/0, `auditoriaConfiguracoes` 23/0 (inclusive o `:426-453`, que exige
+  **200** e a URL inteira no PUT do webhook — a decisão A5 é o que o mantém verde),
+  `auditoriaCadastros` 24/0, `auditoriaExtended` 15/0, `auditoriaAtosEGate` 19/0,
+  `auditoriaConfiguracaoJornada` 8/0.
+- [x] **Step 4: commit** (`a0b19c9`).
+
+  **Acrescentado ao previsto:** (a) um cenário travando a decisão A5 — o webhook SAI EM CLARO do
+  GET, de propósito — para que uma "melhoria" futura tenha de derrubar um teste que diz o porquê
+  em vez de mascarar e quebrar as notificações; (b) o caso da coluna VAZIA (`''` não vira
+  `'********'`), porque responder a máscara para senha inexistente MENTIRIA "já configurado" —
+  é o que a tela lê para decidir o placeholder; (c) o lote misto (`aprovacao_automatica` +
+  segredo), provando que a recusa vem antes de QUALQUER UPDATE — sem transação, recusar no meio
+  do laço deixaria metade do formulário aplicada; (d) chave secreta com valor `''` também é
+  recusada — não há "apagar a senha por atalho" pelo PUT genérico.
+
+  **Divergência do contrato: nenhuma.** C3 e C4 saíram como escritos, inclusive a decisão A5
+  (webhook fora da máscara) e a mensagem literal do 400.
 
 ### Task 3 (galho): gate do GET de permissões
 
@@ -250,7 +286,7 @@ T3 (feita) → T1 → T2. Sem task de jornada: as três não compõem um fluxo.
   (A11-A13). O revisor rodou 10 arquivos de teste: **todos verdes**, e mediu que o escopo
   escrito não quebra nenhum — com uma quebra latente que a decisão do A5 justamente evita
   (`auditoriaConfiguracoes.api.test.js:426-453` exige 200 no PUT do webhook).
-- [x] Task 1 (`6cb594e`) · [ ] Task 2 · [x] Task 3 (`8c0feff`)
+- [x] Task 1 (`6cb594e`) · [x] Task 2 (`a0b19c9`) · [x] Task 3 (`8c0feff`)
 - [ ] Fase 4 — suíte completa serial
 - [ ] Fase 5 — revisão adversarial (2 lentes)
 - [ ] Fase 6 — fechar-etapa + retro
