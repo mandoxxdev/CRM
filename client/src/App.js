@@ -102,6 +102,7 @@ import {
   ConfiguracoesAlmoxarifado,
   MapaLocalizacoesAlmoxarifado,
   RecebimentosAlmoxarifado,
+  ScannerAlmoxarifado,
   ReservasAlmoxarifado,
   InspecoesAlmoxarifado,
   LotesAlmoxarifado,
@@ -470,6 +471,7 @@ function AppRoutes() {
         }
       >
         <Route index element={<AlmoxarifadoDashboard />} />
+        <Route path="scanner" element={<ScannerAlmoxarifado />} />
         <Route path="materiais" element={<MateriaisAlmoxarifado />} />
         <Route path="materiais/novo" element={<MaterialAlmoxarifadoForm />} />
         <Route path="materiais/editar/:id" element={<MaterialAlmoxarifadoForm />} />
