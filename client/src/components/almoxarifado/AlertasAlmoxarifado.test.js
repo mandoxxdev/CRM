@@ -87,6 +87,62 @@ const CENTRAL_FIXTURE = {
         { id: 7, material_codigo: 'ALM-0070', material_nome: 'Chapa Inox 2mm', quantidade: 3, material_unidade: 'PC', created_at: '2026-07-01 10:00:00', expira_em: null },
       ],
     },
+    // ── Etapa 17 (Task 3): as 4 chaves novas, com os campos que o `listar` do servidor
+    // REALMENTE devolve (server/services/almoxarifado/alertRegistry.js, entradas
+    // MATERIAL_REPROVADO / DIVERGENCIA_RECEBIMENTO / DIVERGENCIA_INVENTARIO /
+    // LOTE_SEM_CERTIFICADO) — não os que o plano descreve de memória. Sem entrada em
+    // COLUNAS_POR_CHAVE elas caem no fallback genérico e a central mostra `inspecao_id`,
+    // `item_id` e `conferencia_id` crus no lugar da história.
+    {
+      chave: 'MATERIAL_REPROVADO', titulo: 'Material reprovado',
+      descricao: 'Inspeções de recebimento com quantidade reprovada na janela configurada.',
+      dias: 7, total: 1,
+      linhas: [
+        {
+          inspecao_id: 5, material_codigo: 'ALM-0021', material_nome: 'Parafuso M8',
+          quantidade_reprovada: 3, encaminhamento: 'DEVOLUCAO',
+          recebimento_numero: 'REC-2026-011', nota_fiscal: '12345',
+          data_inspecao: '2026-08-27 14:30:00', responsavel_nome: 'Carlos Lima',
+        },
+      ],
+    },
+    {
+      chave: 'DIVERGENCIA_RECEBIMENTO', titulo: 'Divergência de recebimento',
+      descricao: 'Itens recebidos com quantidade diferente da esperada na janela configurada.',
+      dias: 7, total: 1,
+      // nota_fiscal null de propósito: o recebimento aparece sem o sufixo "(NF ...)".
+      linhas: [
+        {
+          item_id: 88, recebimento_id: 11, material_codigo: 'ALM-0033',
+          material_nome: 'Chapa Aço 3mm', quantidade_esperada: 10, quantidade_recebida: 8,
+          divergencia: -2, recebimento_numero: 'REC-2026-012', nota_fiscal: null,
+        },
+      ],
+    },
+    {
+      chave: 'DIVERGENCIA_INVENTARIO', titulo: 'Divergência de inventário',
+      descricao: 'Conferências concluídas com itens divergentes na janela configurada.',
+      dias: 7, total: 1,
+      // Linha AGREGADA (RN-05) e SEM impacto_financeiro — o servidor não seleciona o valor
+      // (B30) e a central não pode inventar coluna que o e-mail não tem.
+      linhas: [
+        { conferencia_id: 4, numero: 'CONF-2026-004', data_fim: '2026-08-26 09:15:00', itens_divergentes: 2 },
+      ],
+    },
+    {
+      chave: 'LOTE_SEM_CERTIFICADO', titulo: 'Lote sem certificado',
+      descricao: 'Lotes com saldo de material que exige certificado e sem arquivo anexado.',
+      dias: null, total: 1,
+      // status BLOQUEADO é o caso PRINCIPAL (o lote sem certificado nasce bloqueado) — a
+      // coluna de status existe para o almoxarife entender por que o lote está travado.
+      linhas: [
+        {
+          id: 70, lote_id: 70, codigo: 'LOTE-70', status: 'BLOQUEADO', material_id: 3,
+          material_codigo: 'ALM-0044', material_nome: 'Barra Inox', material_unidade: 'KG',
+          saldo: 25,
+        },
+      ],
+    },
   ],
 };
 
@@ -128,6 +184,10 @@ test('um cartao por alerta, na ordem do array do C1 (a tela nao reordena)', asyn
     'alerta-card-QUARENTENA_PARADA',
     'alerta-card-REQUISICAO_ATRASADA',
     'alerta-card-RESERVA_PARADA',
+    'alerta-card-MATERIAL_REPROVADO',
+    'alerta-card-DIVERGENCIA_RECEBIMENTO',
+    'alerta-card-DIVERGENCIA_INVENTARIO',
+    'alerta-card-LOTE_SEM_CERTIFICADO',
   ]);
   expect(texto()).toContain('Calibração vencendo');
   expect(texto()).toContain('Requisição atrasada');
@@ -198,6 +258,91 @@ test('403 de perfil renderiza painel de sem-permissao — NUNCA "nenhum alerta"'
   // O Critical da Etapa 11: o 403 nao pode virar o estado vazio operacional.
   expect(texto()).not.toMatch(/[Nn]enhum alerta/);
   expect(container.querySelector('[data-testid^="alerta-card-"]')).toBeNull();
+});
+
+/**
+ * Etapa 17, Task 3 — colunas amigáveis das 4 chaves novas (contrato C2). Sem entrada em
+ * COLUNAS_POR_CHAVE o cartão NÃO some (o fallback genérico existe de propósito), mas mostra
+ * `inspecao_id`/`item_id`/`conferencia_id` crus e corta em 6 campos na ordem do SELECT — a
+ * central contaria uma história diferente da do e-mail que o MESMO alerta manda. Estes testes
+ * amarram cada chave aos campos que o `listar` do servidor realmente devolve, e o assert
+ * negativo (`não` mostrar o nome cru da coluna) é o que denuncia a volta ao genérico.
+ */
+const cabecalhos = (chave) => [...card(chave).querySelectorAll('th')].map((th) => th.textContent);
+async function expandir(chave) {
+  const botao = [...card(chave).querySelectorAll('button')]
+    .find((b) => /Detalhes|Ver linhas/i.test(b.textContent));
+  expect(botao).not.toBeUndefined();
+  await clicar(botao);
+}
+
+test('MATERIAL_REPROVADO: colunas da inspecao reprovada, nao os campos crus', async () => {
+  await renderizar();
+  await expandir('MATERIAL_REPROVADO');
+
+  expect(cabecalhos('MATERIAL_REPROVADO')).toEqual([
+    'Material', 'Qtd. reprovada', 'Encaminhamento', 'Recebimento', 'Inspeção em', 'Responsável',
+  ]);
+  const t = card('MATERIAL_REPROVADO').textContent;
+  expect(t).toContain('ALM-0021 — Parafuso M8');
+  expect(t).toContain('3');
+  expect(t).toContain('DEVOLUCAO');
+  expect(t).toContain('REC-2026-011 (NF 12345)');
+  expect(t).toContain('Carlos Lima');
+  // data_inspecao é DATETIME UTC do SQLite ("YYYY-MM-DD HH:MM:SS") — formatData põe o 'Z'.
+  expect(t).toContain('27/08/26');
+  // Fallback genérico mostraria a chave crua da primeira coluna do SELECT.
+  expect(t).not.toMatch(/inspecao id/i);
+});
+
+test('DIVERGENCIA_RECEBIMENTO: esperada, recebida e a divergencia calculada pelo servidor', async () => {
+  await renderizar();
+  await expandir('DIVERGENCIA_RECEBIMENTO');
+
+  expect(cabecalhos('DIVERGENCIA_RECEBIMENTO')).toEqual([
+    'Material', 'Qtd. esperada', 'Qtd. recebida', 'Divergência', 'Recebimento',
+  ]);
+  const t = card('DIVERGENCIA_RECEBIMENTO').textContent;
+  expect(t).toContain('ALM-0033 — Chapa Aço 3mm');
+  expect(t).toContain('-2');
+  expect(t).toContain('REC-2026-012');
+  // nota_fiscal null: nada de "(NF null)" na tela.
+  expect(t).not.toMatch(/NF null/);
+  expect(t).not.toMatch(/item id/i);
+});
+
+test('DIVERGENCIA_INVENTARIO: linha agregada por conferencia, sem impacto financeiro', async () => {
+  await renderizar();
+  await expandir('DIVERGENCIA_INVENTARIO');
+
+  expect(cabecalhos('DIVERGENCIA_INVENTARIO')).toEqual([
+    'Conferência', 'Concluída em', 'Itens divergentes',
+  ]);
+  const t = card('DIVERGENCIA_INVENTARIO').textContent;
+  expect(t).toContain('CONF-2026-004');
+  expect(t).toContain('26/08/26');
+  expect(t).toContain('2');
+  // B30: o valor do inventário é gateado por `inventario` no relatório — a central não o expõe
+  // (e o servidor nem o seleciona).
+  expect(t).not.toMatch(/impacto/i);
+  expect(t).not.toMatch(/conferencia id/i);
+});
+
+test('LOTE_SEM_CERTIFICADO: lote, saldo e o status BLOQUEADO que e o caso principal', async () => {
+  await renderizar();
+  await expandir('LOTE_SEM_CERTIFICADO');
+
+  expect(cabecalhos('LOTE_SEM_CERTIFICADO')).toEqual([
+    'Lote', 'Material', 'Saldo', 'Status',
+  ]);
+  const t = card('LOTE_SEM_CERTIFICADO').textContent;
+  expect(t).toContain('LOTE-70');
+  expect(t).toContain('ALM-0044 — Barra Inox');
+  expect(t).toContain('25 KG');
+  // O lote sem certificado NASCE bloqueado — esconder o status faria o alerta parecer sobre
+  // um lote disponível.
+  expect(t).toContain('BLOQUEADO');
+  expect(t).not.toMatch(/material id/i);
 });
 
 test('gate visual: sem ver_alertas o painel de sem-permissao aparece sem nem chamar o GET', async () => {
