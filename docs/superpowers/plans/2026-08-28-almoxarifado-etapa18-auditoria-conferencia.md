@@ -298,15 +298,33 @@ versão do plano mandava seguir o `confirm`+`prompt` da tela de Reposição, que
 
 **Files:** Test: `server/tests/api/conferenciaAuditoriaJornada.api.test.js`
 
-- [ ] **Step 1: jornada** — abrir conferência com `dupla_contagem` (2 itens) → contar os dois
-  → corrigir um (mesmo usuário) → recontar o outro com segundo usuário → concluir aplicando
-  ajuste → `GET /auditoria?entidade=conferencia&entidade_id=N` **como ADMIN** devolve a
-  sequência em ordem (`CRIACAO`, `CONTAGEM`×2, `CONTAGEM` de correção com de/para,
-  `RECONTAGEM`, `CONCLUSAO`) com autores corretos; e o saldo do material bate com o ajuste
-  (o motor rodou de verdade). A ordem só é aferível por causa do desempate do C5.
-- [ ] **Step 2: rodar; controle positivo** — remover UMA das 5 auditorias e ver a jornada
-  falhar (não sabotar só o `ORDER BY`: com o desempate do C5 isso funciona, mas a prova mais
-  forte é a linha que some); reverter; `npm run test:api`; commit —
+- [x] **Step 1: jornada** (`bc4046a`) — 5 casos em
+  `server/tests/api/conferenciaAuditoriaJornada.api.test.js`, **tudo por rota real, zero mock**.
+  Três atores `role:'usuario'` com perfil de verdade (com `role:'admin'` todos virariam
+  ADMINISTRADOR e a jornada não provaria autoria contra os gates reais): Ana e Bruno
+  ALMOXARIFE (têm `inventario`, **não** têm `ajustar_estoque`), Gisele GESTOR (homologa), e um
+  quarto usuário ADMINISTRADOR só para ler o log (o único que passa no `configurar` do C5).
+  Ana abre com `dupla_contagem` (2 itens) → conta os dois → corrige um (ramo
+  `ehCorrecaoDoPrimeiro`, que continua `CONTAGEM` com de/para) → Bruno reconta o outro →
+  Gisele conclui aplicando ajuste → `GET /auditoria?entidade=conferencia&entidade_id=N` como
+  ADMINISTRADOR devolve as 6 linhas. **A tradução DESC→cronológica está explícita**: a rota
+  ordena `created_at DESC, id DESC`, então a sequência dos fatos é o array `.reverse()`ado —
+  com asserção de controle sobre as pontas (a mais nova primeiro) para que uma troca da rota
+  para ASC derrube o teste em vez de passar despercebida, e com os `id` conferidos crescentes.
+  O motor: saldo 100→**95** e 50→**46** (os valores CORRIGIDO/RECONTADO, não a primeira
+  contagem — se o ajuste usasse o primeiro valor, o log estaria certo e o estoque errado), dois
+  `AJUSTE_INVENTARIO` no ledger assinados pelo homologador e `aprovador_*` do C4 gravado.
+- [x] **Step 2: rodar; controle positivo** (`bc4046a`) — **5/5 de primeira**. Controle positivo
+  obrigatório: removida **só a auditoria de RECONTAGEM** (a de CONTAGEM compartilha a mesma
+  chamada, então a sabotagem entrou no ramo `marcaRecontagem`) → **2/5**, com os três testes de
+  log vermelhos e a mensagem certa (`a jornada tem 6 atos auditados; veio 5:
+  ["CONCLUSAO","CONTAGEM","CONTAGEM","CONTAGEM","CRIACAO"]`). **Os 2 que sobreviveram
+  sobreviveram com razão**, e isso é parte do resultado: o da jornada só afere respostas HTTP
+  (RN-02 — auditoria quebrada não derruba o ato) e o do motor afere estoque, que a sabotagem não
+  toca. Sabotar o `ORDER BY` foi **descartado de propósito**: com o desempate do C5 a ordem
+  continuaria correta e a sabotagem seria no-op — a lição da Task 2 da Etapa 17. Revertido,
+  `git diff` limpo (`grep SABOTAGEM` = 0) e 5/5 de novo. `npm run test:api` inteiro:
+  **134/134 arquivos**. Commit `bc4046a` —
   `Almoxarifado Etapa 18 Task 4: jornada da trilha do inventario`.
 
 ---
@@ -367,7 +385,19 @@ versão do plano mandava seguir o `confirm`+`prompt` da tela de Reposição, que
     coluna. Registrado aqui porque é exatamente a armadilha de teste vazio do CLAUDE.md — quem
     ler só o placar poderia achar que 6 cenários já estavam cobertos.
 - [ ] Task 3 (galho)
-- [ ] Task 4 (integração)
+- [x] Task 4 (integração) — `bc4046a` (2026-08-28). **5/5 de primeira** (é teste de integração
+  sobre implementação já pronta: não há vermelho inicial a reportar, e por isso o controle
+  positivo era a única prova de que o arquivo sabe falhar). Sabotagem: removida só a auditoria
+  de RECONTAGEM → **2/5**, os três testes de log vermelhos; revertido e limpo. Suíte:
+  **134/134 arquivos** em `npm run test:api` (133 + o arquivo novo). Três notas de execução:
+  - **A ordem só é aferível por causa do desempate `, id DESC` do C5** — os 6 atos da jornada
+    caem no mesmo segundo com folga. A rota devolve DESC, então a asserção cronológica é sobre
+    o array invertido, e o `.reverse()` está explícito no teste com controle nas duas pontas.
+  - **Sabotar o `ORDER BY` foi descartado**: com o desempate ela seria no-op — exatamente o
+    defeito da sabotagem prescrita na Task 2 da Etapa 17. A prova forte é a linha que some.
+  - **Dois testes sobreviveram à sabotagem, e isso é resultado, não falha**: o da jornada só
+    afere respostas HTTP (é a RN-02 em ação — auditoria quebrada não derruba o ato) e o do
+    motor afere saldo/ledger. Registrado aqui para que ninguém leia `2/5` como cobertura frouxa.
 - [ ] Fase 4 — suíte completa serial
 - [ ] Fase 5 — revisão adversarial (2 lentes)
 - [ ] Fase 6 — fechar-etapa + retro (**incluindo a correção das specs 03 e 23**)
