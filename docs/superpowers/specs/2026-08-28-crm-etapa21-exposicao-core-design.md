@@ -51,6 +51,12 @@ ninguém "consertar" inventando uma.
   **estão** preenchidos hoje. Aquilo não era salvaguarda, era interruptor que dispararia: o
   host de produção sairia de `smtp.locaweb.com.br` (que funciona) para `smtplw.com.br`, outro
   produto com outro esquema de credencial, e o `from` viraria uma lista de DOIS destinatários.
+  **Reconferido direto no banco em 2026-08-28** (a Task 3 sinalizou que herdou esta afirmação
+  sem revalidar, e ela é o motivo inteiro da decisão): `email_smtp_host` = `'smtplw.com.br'`,
+  `email_smtp_user` = `'solicitacoes@gmp.ind.br'`, `email_smtp_pass` preenchida (16 caracteres)
+  e `email_from` = `'compras@gmp.ind.br, sheila@gmp.ind.br'` — **dois** endereços. Os dois
+  campos da condição antiga estão de fato preenchidos, o host de fato difere, e o `from` de
+  fato é uma lista. A decisão se sustenta na medição, não na memória.
   O objetivo da etapa — tirar a senha do código como fonte primária — é cumprido por
   `env → hardcoded` **sem trocar host em produção**. Adotar o banco exigiria envio real
   verificado contra aquele host, impossível daqui; fica declarado na letra B. O hardcoded
