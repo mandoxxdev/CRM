@@ -1027,8 +1027,9 @@
   .almox-kpis { grid-template-columns: 1fr 1fr; }
   .almox-form-grid { grid-template-columns: 1fr; }
   .almox-form-grid-3 { grid-template-columns: 1fr; }
-  .almox-table th:nth-child(n+4),
-  .almox-table td:nth-child(n+4) { display: none; }
+  .almox-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap; }
+  .almox-modal, .almox-modal-sm { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; border-radius: 0; }
+  .almox-modal-overlay { padding: 0; }
   .almox-wizard-setor-grid { grid-template-columns: 1fr 1fr; }
   .almox-wizard-cards-row { grid-template-columns: 1fr; }
   .almox-wizard-confirm-dl { grid-template-columns: 1fr; }
