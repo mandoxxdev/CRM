@@ -193,6 +193,11 @@ aprendidas por falha silenciosa aqui:
 - Mensagem em **português**, corpo **sem acento** (o histórico é assim).
 - Explique **por quê**: qual era o bug, qual a consequência, o que foi **decidido e descartado**.
 - **Um commit por assunto.**
+- **Hash de task executada em worktree só vale DEPOIS do cherry-pick.** O cherry-pick reescreve
+  o hash, então o que o executor reportou existe apenas no reflog da máquina dele — num clone,
+  `git show <aquele hash>` falha. Já aconteceu duas vezes (a revisão adversarial da Etapa 21
+  pegou um; a Etapa 22 tinha quatro). Depois de integrar, confira cada hash citado com
+  `git merge-base --is-ancestor <hash> HEAD` e corrija os órfãos.
 - **Nunca `git add -A` na raiz** — há artefatos de runtime em `server/data/` e `server/uploads/`.
   Sempre `git add <caminhos explícitos>`.
 
