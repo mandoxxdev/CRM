@@ -77,6 +77,24 @@ Exportar `deveIncluirNoBackup`, `backupMaisRecente` e `EXCLUIDOS`.
 //   antes, senao timingSafeEqual lanca)
 ```
 
+**Divergências de C1/C2 assumidas na Task 1** (`d5c8d3a`) — o contrato ficou mais estreito que
+a realidade em três pontos:
+
+1. `validarTokenBackup` devolve **`avisos: string[]`** (com `aviso` = `avisos[0]` mantido por
+   compatibilidade), não um `aviso` único: `CURTO` e `QUERY_DEPRECIADA` **coocorrem** no caso
+   mais provável em produção (token curto chamado por cron pela query string), e um campo só
+   perderia justamente o aviso que a RN-02 existe para dar.
+2. `motivo` **não** assume `'CURTO'` — o C2 listava `CURTO` no enum de `motivo` e ao mesmo
+   tempo mandava `{ ok:true, aviso:'CURTO' }`; as duas coisas não cabem juntas. `motivo` ficou
+   com os três casos de recusa (`SEM_TOKEN_CONFIGURADO`, `AUSENTE`, `INVALIDO`) e `null` no
+   sucesso.
+3. `backupMaisRecente` filtra `database-*.sqlite` (mesmo filtro de
+   `dbRecovery.pruneOldBackups`), não "o arquivo mais novo do diretório": um `-wal`/`-shm`
+   solto e mais novo não é uma cópia e sozinho não restaura nada. E a **rota** soma os
+   acompanhantes `-wal`/`-shm` da cópia escolhida — `.sqlite` sem o `-wal` restaura **sem** as
+   transações que só existem no WAL, o bug que `dbRecoveryBackup.api.test.js` congelou. Sem
+   isso a RN-08 entregaria um fallback que não abre.
+
 ### C3 — `server/services/configSecrets.js` (novo)
 
 ```js
@@ -120,7 +138,12 @@ etapa — o ganho não compensa conflito num arquivo desse tamanho.
 Modify `server/index.js` (rota de backup); Test
 `server/tests/api/backupExposicao.api.test.js`.
 
-- [ ] **Step 1: teste que falha** — RN-01: `deveIncluirNoBackup` recusa
+**Feito em `d5c8d3a`** (2026-08-28). Suíte: `backupExposicao.api.test.js` **25/25**;
+`npm run test:api` **142/142** (três execuções seguidas — a primeira, ainda com o servidor de
+prova recém-derrubado na máquina, deu 137/142 sem nenhum `✗`, ou seja, arquivos que
+abortaram, não asserções que falharam; as três execuções seguintes vieram limpas).
+
+- [x] **Step 1: teste que falha** — RN-01: `deveIncluirNoBackup` recusa
   `.runtime-secrets.json` e qualquer coisa sob `backups/`, **e aceita** `database.sqlite`,
   `database.sqlite-wal`, `uploads/almoxarifado/x.png`, `variaveis-base.json` (o caso positivo
   é o que impede "excluir demais"); RN-02: `validarTokenBackup` — header válido ok, query
@@ -128,16 +151,27 @@ Modify `server/index.js` (rota de backup); Test
   `CURTO`, token errado de MESMO tamanho → `INVALIDO` (prova o `timingSafeEqual`), token
   errado de tamanho diferente → `INVALIDO` **sem lançar**, env ausente →
   `SEM_TOKEN_CONFIGURADO`.
-- [ ] **Step 2: rodar e ver falhar.**
-- [ ] **Step 3: implementar** (as duas funções puras; depois a rota). **Antes de mexer na
-  rota, conferir a API do `archiver` instalado** — `archive.directory` não filtra; ver
-  `glob`+`ignore` ou caminhada manual com `archive.file`.
-- [ ] **Step 4: verde + controle positivo** (commitar antes) — tirar `.runtime-secrets.json`
-  de `EXCLUIDOS` e ver o cenário falhar; reverter. `npm run test:api` inteiro.
-- [ ] **Step 5: prova manual do zip** (não versionada): rodar a rota com token e listar o
-  conteúdo do zip, confirmando que o segredo e `backups/` não estão lá e que
-  `database.sqlite` está. Registrar a saída no relato — é a única prova de fiação possível.
-- [ ] **Step 6: commit.**
+- [x] **Step 2: rodar e ver falhar.** Módulo inexistente é vermelho fraco (só `MODULE_NOT_FOUND`),
+  então os dois serviços foram criados como **stubs permissivos** (`deveIncluirNoBackup` sempre
+  `true`, `validarTokenBackup` sempre `{ok:true}`) para o vermelho ser por asserção:
+  **9 passed, 16 failed**.
+- [x] **Step 3: implementar** (as duas funções puras; depois a rota). API do `archiver@7.0.1`
+  reconferida no código instalado antes de mexer na rota: `lib/core.js:605,624-672` — o 3º
+  argumento de `directory()` recebe `entryData` com `name = match.relative` e devolver `false`
+  pula a entrada. Confere com o C4 ponto 1.
+- [x] **Step 4: verde + controle positivo** (commitado antes, em `d5c8d3a`) — comentar
+  `.runtime-secrets.json` em `EXCLUIDOS` derrubou 2 cenários (**23 passed, 2 failed**: o da
+  RN-01 e o que congela o conteúdo de `EXCLUIDOS`); revertido com `git checkout`, verde de
+  novo. `npm run test:api` **142/142**.
+- [x] **Step 5: prova manual do zip** (não versionada). Rota real, servidor de pé com
+  `CRM_DATA_DIR` apontado para pasta temporária (**não** o `server/data` real) e
+  `BACKUP_TOKEN` de teste. Conteúdo do zip: `database.sqlite`, `variaveis-base.json`,
+  `uploads/**` e **uma única** entrada sob `backups/` — a cópia mais recente e seu `-wal`.
+  **Sem `.runtime-secrets.json`** (que existia na pasta) e **sem** as 3 cópias antigas. Log:
+  `[Backup] NEGADO ip=… xff=- motivo=AUSENTE`, `motivo=INVALIDO` (token errado do mesmo
+  tamanho), `[Backup] ACEITO ip=… xff=203.0.113.9 fallback=database-…sqlite` e
+  `avisos=QUERY_DEPRECIADA` no acesso por query string.
+- [x] **Step 6: commit** — `d5c8d3a`.
 
 ### Task 2 (galho): máscara e guarda nas configurações do core
 
@@ -188,7 +222,11 @@ rota que não tem harness. A prova é manual (Step 2).
   proxy (A6); tirar `backups/` inteiro removeria o fallback que `dbRecovery` manda usar (A7);
   a data da senha no git era 2026-03-17, não 02-05 (A8). O revisor confirmou os três fatos
   centrais, inclusive que o zip entrega o `jwtSecret`.
-- [ ] Task 1 · [ ] Task 2 · [ ] Task 3 · [ ] Task 4
+- [x] **Task 1 (tronco): backup** — `d5c8d3a` (2026-08-28). 25/25 no arquivo novo,
+  `npm run test:api` 142/142, controle positivo 23/25 com a sabotagem. Três divergências do
+  contrato assumidas e documentadas acima (avisos em lista, `motivo` sem `CURTO`,
+  acompanhantes do backup no zip).
+- [ ] Task 2 · [ ] Task 3 · [ ] Task 4
 - [ ] Fase 4 — suíte completa serial
 - [ ] Fase 5 — revisão adversarial (2 lentes)
 - [ ] Fase 6 — fechar-etapa + retro
