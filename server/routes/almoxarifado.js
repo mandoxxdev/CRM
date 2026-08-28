@@ -215,6 +215,26 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     return materialService.resolveLocalizacaoFromFk(db, localizacaoPadraoId);
   }
 
+  // Etapa 19 (RN-01/RN-02): auditoria dos 12 cadastros deste arquivo. Os handlers são callback
+  // aninhado (nada de refatorar para async só para pendurar um log), então o helper devolve uma
+  // promessa que NUNCA rejeita — o chamador encadeia `.finally(() => res.json(...))` e a
+  // resposta sai com log ou sem ele. A chamada é `audit.registrarAuditoria` (por objeto, não
+  // pelo binding desestruturado da linha 38): é isso que torna o stub do teste de RN-02
+  // alcançável — sem ele o teste passaria verde provando nada (lição da Etapa 18, C0).
+  function auditarCadastro({ req, entidade, entidade_id, acao, dados_anteriores, dados_novos }) {
+    return audit.registrarAuditoria(db, {
+      entidade,
+      entidade_id: entidade_id || null,
+      acao,
+      usuario_id: req.user && req.user.id,
+      usuario_nome: req.user && (req.user.nome || req.user.email),
+      dados_anteriores: dados_anteriores || null,
+      dados_novos: dados_novos || null,
+    }).catch((errAudit) => {
+      console.error(`[almoxarifado] Falha ao registrar auditoria de ${entidade}/${acao}:`, errAudit.message);
+    });
+  }
+
   // Resolve o almoxarifado_id a persistir numa localização: usa o valor informado,
   // ou (ausente) o id do ALM-GERAL como default — tolera a tabela almoxarifados ainda
   // não existir/estar vazia (fallback null, sem quebrar a criação da localização).
@@ -1613,28 +1633,59 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
        requer_assinatura ? 1 : 0, requer_termo ? 1 : 0, is_epi ? 1 : 0, is_controlado ? 1 : 0],
       function (err) {
         if (err) return res.status(500).json({ error: err.message });
-        db.get(`SELECT * FROM tipos_material_almoxarifado WHERE id = ?`, [this.lastID], (e, r) => res.status(201).json(r));
+        // Etapa 19 (RN-01): `this.lastID` existe AQUI, mas nao dentro do callback do SELECT
+        // abaixo, que e arrow. Como a rota ja le a linha recem-criada para responder, o `r`
+        // dela da `entidade_id` e `dados_novos` de graca — e sem depender de `this`.
+        db.get(`SELECT * FROM tipos_material_almoxarifado WHERE id = ?`, [this.lastID], (e, r) => {
+          if (e || !r) return res.status(201).json(r);
+          auditarCadastro({
+            req, entidade: 'tipo_material', entidade_id: r.id, acao: 'CRIACAO',
+            dados_anteriores: null, dados_novos: r,
+          }).finally(() => res.status(201).json(r));
+        });
       });
   });
 
   app.put('/api/almoxarifado/tipos-material/:id',(req, res) => {
     if (denyUnlessAlmoxAdmin(req, res)) return;
     const { nome, descricao, icone, cor, requer_assinatura, requer_termo, is_epi, is_controlado, ativo } = req.body;
-    db.run(`UPDATE tipos_material_almoxarifado SET nome=?, descricao=?, icone=?, cor=?, requer_assinatura=?, requer_termo=?, is_epi=?, is_controlado=?, ativo=? WHERE id=?`,
-      [nome, descricao || null, icone || '📦', cor || '#4facfe',
-       requer_assinatura ? 1 : 0, requer_termo ? 1 : 0, is_epi ? 1 : 0, is_controlado ? 1 : 0,
-       ativo !== undefined ? ativo : 1, req.params.id],
-      function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        db.get(`SELECT * FROM tipos_material_almoxarifado WHERE id = ?`, [req.params.id], (e, r) => res.json(r));
-      });
+    // Etapa 19 (RN-01): leitura previa so para o "de" do log — a rota nao a tinha porque nao
+    // precisava dela para gravar.
+    db.get(`SELECT * FROM tipos_material_almoxarifado WHERE id = ?`, [req.params.id], (selErr, anterior) => {
+      if (selErr) return res.status(500).json({ error: selErr.message });
+      db.run(`UPDATE tipos_material_almoxarifado SET nome=?, descricao=?, icone=?, cor=?, requer_assinatura=?, requer_termo=?, is_epi=?, is_controlado=?, ativo=? WHERE id=?`,
+        [nome, descricao || null, icone || '📦', cor || '#4facfe',
+         requer_assinatura ? 1 : 0, requer_termo ? 1 : 0, is_epi ? 1 : 0, is_controlado ? 1 : 0,
+         ativo !== undefined ? ativo : 1, req.params.id],
+        function (err) {
+          if (err) return res.status(500).json({ error: err.message });
+          // Etapa 19 (RN-03): id inexistente respondia 200 com corpo `undefined` e passaria a
+          // auditar um ato que nao aconteceu. Nao ha literal de 404 para tipo de material no
+          // modulo — este e novo, no molde acentuado dos irmaos ('Localização não encontrada',
+          // 'Família não encontrada').
+          if (this.changes === 0) return res.status(404).json({ error: 'Tipo de material não encontrado' });
+          db.get(`SELECT * FROM tipos_material_almoxarifado WHERE id = ?`, [req.params.id], (e, r) => {
+            auditarCadastro({
+              req, entidade: 'tipo_material', entidade_id: Number(req.params.id), acao: 'EDICAO',
+              dados_anteriores: anterior || null, dados_novos: r || null,
+            }).finally(() => res.json(r));
+          });
+        });
+    });
   });
 
   app.delete('/api/almoxarifado/tipos-material/:id',(req, res) => {
     if (denyUnlessAlmoxAdmin(req, res)) return;
-    db.run(`UPDATE tipos_material_almoxarifado SET ativo = 0 WHERE id = ?`, [req.params.id], function (err) {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ success: true });
+    db.get(`SELECT * FROM tipos_material_almoxarifado WHERE id = ?`, [req.params.id], (selErr, anterior) => {
+      if (selErr) return res.status(500).json({ error: selErr.message });
+      db.run(`UPDATE tipos_material_almoxarifado SET ativo = 0 WHERE id = ?`, [req.params.id], function (err) {
+        if (err) return res.status(500).json({ error: err.message });
+        if (this.changes === 0) return res.status(404).json({ error: 'Tipo de material não encontrado' });
+        auditarCadastro({
+          req, entidade: 'tipo_material', entidade_id: Number(req.params.id), acao: 'EXCLUSAO',
+          dados_anteriores: anterior || null, dados_novos: { ativo: 0 },
+        }).finally(() => res.json({ success: true }));
+      });
     });
   });
 
@@ -1702,7 +1753,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         // O código tem constraint UNIQUE, mas a exclusão é "soft" (ativo = 0): a linha
         // permanece e continua ocupando o código. Para não bloquear a recriação de um
         // código que foi excluído, reativamos/reescrevemos a linha inativa existente.
-        db.get(`SELECT id, ativo FROM localizacoes_almoxarifado WHERE codigo = ?`, [codigo], (selErr, existente) => {
+        // Etapa 19: o SELECT era `id, ativo` — virou `*` porque a linha inativa e o
+        // `dados_anteriores` da REATIVACAO. Nenhum handler desestrutura esta row.
+        db.get(`SELECT * FROM localizacoes_almoxarifado WHERE codigo = ?`, [codigo], (selErr, existente) => {
           if (selErr) return res.status(500).json({ error: selErr.message });
 
           // Já existe uma localização ATIVA com este código → realmente duplicado.
@@ -1720,7 +1773,14 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
                bloqueadaVal, tiposPermitidosVal, existente.id],
               function (updErr) {
                 if (updErr) return res.status(500).json({ error: updErr.message });
-                db.get(`SELECT * FROM localizacoes_almoxarifado WHERE id = ?`, [existente.id], (e, r) => res.status(201).json(r));
+                db.get(`SELECT * FROM localizacoes_almoxarifado WHERE id = ?`, [existente.id], (e, r) => {
+                  // Etapa 19: REATIVACAO, nao CRIACAO. Auditar os dois caminhos com o mesmo
+                  // verbo mentiria — este tem "de" (a linha inativa) e a criacao nao tem.
+                  auditarCadastro({
+                    req, entidade: 'localizacao', entidade_id: existente.id, acao: 'REATIVACAO',
+                    dados_anteriores: existente, dados_novos: r || null,
+                  }).finally(() => res.status(201).json(r));
+                });
               });
             return;
           }
@@ -1735,7 +1795,15 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
                 if (err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Código já existe' });
                 return res.status(500).json({ error: err.message });
               }
-              db.get(`SELECT * FROM localizacoes_almoxarifado WHERE id = ?`, [this.lastID], (e, r) => res.status(201).json(r));
+              // `this.lastID` existe aqui, mas nao no callback do SELECT (arrow): o `r` que a
+              // rota ja le para responder da o id e o `dados_novos`.
+              db.get(`SELECT * FROM localizacoes_almoxarifado WHERE id = ?`, [this.lastID], (e, r) => {
+                if (e || !r) return res.status(201).json(r);
+                auditarCadastro({
+                  req, entidade: 'localizacao', entidade_id: r.id, acao: 'CRIACAO',
+                  dados_anteriores: null, dados_novos: r,
+                }).finally(() => res.status(201).json(r));
+              });
             });
         });
       });
@@ -1767,7 +1835,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     // almoxarifado_id, aqui um `null`/`[]` EXPLÍCITO precisa poder LIMPAR o valor (não só
     // "trocar por outro"), então COALESCE puro não serve — computamos em JS lendo a linha atual:
     // omitido (undefined) preserva; presente (incluindo null/[]) substitui/limpa normalmente.
-    db.get(`SELECT bloqueada, tipos_material_permitidos FROM localizacoes_almoxarifado WHERE id = ?`,
+    //
+    // Etapa 19: o SELECT era `bloqueada, tipos_material_permitidos` — virou `*` porque a mesma
+    // leitura serve de `dados_anteriores` do log (RN-01). Os dois campos acima continuam sendo
+    // lidos de `current` normalmente.
+    db.get(`SELECT * FROM localizacoes_almoxarifado WHERE id = ?`,
       [req.params.id], (curErr, current) => {
         if (curErr) return res.status(500).json({ error: curErr.message });
         if (!current) return res.status(404).json({ error: 'Localização não encontrada' });
@@ -1787,7 +1859,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
              ativo !== undefined ? ativo : 1, req.params.id],
             function (err) {
               if (err) return res.status(500).json({ error: err.message });
-              db.get(`SELECT * FROM localizacoes_almoxarifado WHERE id = ?`, [req.params.id], (e, r) => res.json(r));
+              db.get(`SELECT * FROM localizacoes_almoxarifado WHERE id = ?`, [req.params.id], (e, r) => {
+                auditarCadastro({
+                  req, entidade: 'localizacao', entidade_id: Number(req.params.id), acao: 'EDICAO',
+                  dados_anteriores: current, dados_novos: r || null,
+                }).finally(() => res.json(r));
+              });
             });
         });
       });
@@ -1804,9 +1881,19 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         if (row) {
           return res.status(400).json({ error: 'Não é possível remover: localização possui saldo' });
         }
-        db.run(`UPDATE localizacoes_almoxarifado SET ativo = 0 WHERE id = ?`, [req.params.id], function (err) {
-          if (err) return res.status(500).json({ error: err.message });
-          res.json({ success: true });
+        // Etapa 19 (RN-01): leitura previa so para o "de" do log — as leituras que a rota ja
+        // fazia sao de SALDO, nao da linha.
+        db.get(`SELECT * FROM localizacoes_almoxarifado WHERE id = ?`, [req.params.id], (selErr, anterior) => {
+          if (selErr) return res.status(500).json({ error: selErr.message });
+          db.run(`UPDATE localizacoes_almoxarifado SET ativo = 0 WHERE id = ?`, [req.params.id], function (err) {
+            if (err) return res.status(500).json({ error: err.message });
+            // RN-03: id inexistente respondia 200 ("success: true" sobre nada).
+            if (this.changes === 0) return res.status(404).json({ error: 'Localização não encontrada' });
+            auditarCadastro({
+              req, entidade: 'localizacao', entidade_id: Number(req.params.id), acao: 'EXCLUSAO',
+              dados_anteriores: anterior || null, dados_novos: { ativo: 0 },
+            }).finally(() => res.json({ success: true }));
+          });
         });
       });
   });
@@ -1851,7 +1938,17 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
                   (SELECT COUNT(*) FROM localizacoes_almoxarifado l
                    WHERE l.ativo = 1 AND l.setor = s.nome) as qtd_localizacoes
                 FROM setores_almoxarifado s WHERE s.id = ?`,
-          [this.lastID], (e, r) => res.status(201).json(r));
+          [this.lastID], (e, r) => {
+            if (e || !r) return res.status(201).json(r);
+            // Etapa 19: `qtd_localizacoes` é CONTAGEM derivada que este SELECT calcula para a
+            // tela — não é campo do cadastro e não entra no log (senão o "de/para" de um setor
+            // pareceria mudar sozinho quando alguém cria uma localização).
+            const { qtd_localizacoes, ...cadastro } = r;
+            auditarCadastro({
+              req, entidade: 'setor', entidade_id: r.id, acao: 'CRIACAO',
+              dados_anteriores: null, dados_novos: cadastro,
+            }).finally(() => res.status(201).json(r));
+          });
       });
   });
 
@@ -1864,7 +1961,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     const prefixo = String(codigo_prefixo).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (!prefixo) return res.status(400).json({ error: 'Prefixo do código inválido' });
 
-    db.get('SELECT nome FROM setores_almoxarifado WHERE id = ?', [req.params.id], (err, atual) => {
+    // Etapa 19: o SELECT era `nome` — virou `*` para servir de `dados_anteriores` (RN-01).
+    db.get('SELECT * FROM setores_almoxarifado WHERE id = ?', [req.params.id], (err, atual) => {
       if (err) return res.status(500).json({ error: err.message });
       if (!atual) return res.status(404).json({ error: 'Setor não encontrado' });
 
@@ -1876,15 +1974,47 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
               if (upErr.message.includes('UNIQUE')) return res.status(400).json({ error: 'Já existe um setor com este nome' });
               return res.status(500).json({ error: upErr.message });
             }
+
+            // Etapa 19 (RN-08): o efeito colateral mais amplo do escopo — renomear o setor
+            // renomeia N localizações — era fire-and-forget (callback vazio, erro engolido,
+            // `changes` nunca lido). Agora é CONTADO e vai para o log.
+            //
+            // Duas armadilhas resolvidas aqui:
+            // 1. o callback do cascata era ARROW, e `this.changes` num arrow é `undefined`: o
+            //    log gravaria `localizacoes_renomeadas: undefined`. Virou `function`.
+            // 2. quando o nome NÃO muda, o cascata nem roda — mas a EDICAO (prefixo, tipo,
+            //    ordem, ativo) aconteceu do mesmo jeito. Auditar só dentro do cascata faria
+            //    essa edição sumir do log. Por isso os dois caminhos chamam `concluir`.
+            const concluir = (renomeadas) => {
+              db.get(`SELECT s.*,
+                        (SELECT COUNT(*) FROM localizacoes_almoxarifado l
+                         WHERE l.ativo = 1 AND l.setor = s.nome) as qtd_localizacoes
+                      FROM setores_almoxarifado s WHERE s.id = ?`,
+                [req.params.id], (e, r) => {
+                  const { qtd_localizacoes, ...cadastro } = r || {};
+                  auditarCadastro({
+                    req, entidade: 'setor', entidade_id: Number(req.params.id), acao: 'EDICAO',
+                    dados_anteriores: atual,
+                    dados_novos: { ...cadastro, localizacoes_renomeadas: renomeadas },
+                  }).finally(() => res.json(r));
+                });
+            };
+
             if (atual.nome !== nome.trim()) {
               db.run('UPDATE localizacoes_almoxarifado SET setor = ? WHERE setor = ? AND ativo = 1',
-                [nome.trim(), atual.nome], () => {});
+                [nome.trim(), atual.nome], function (cascErr) {
+                  if (cascErr) {
+                    // Continua não derrubando o rename do setor (o comportamento antigo era
+                    // engolir em silêncio); mas agora o erro aparece, e o log diz `null` em vez
+                    // de fingir um número que não foi medido.
+                    console.error('[almoxarifado] Cascata de rename de setor falhou:', cascErr.message);
+                    return concluir(null);
+                  }
+                  concluir(this.changes);
+                });
+              return;
             }
-            db.get(`SELECT s.*,
-                      (SELECT COUNT(*) FROM localizacoes_almoxarifado l
-                       WHERE l.ativo = 1 AND l.setor = s.nome) as qtd_localizacoes
-                    FROM setores_almoxarifado s WHERE s.id = ?`,
-              [req.params.id], (e, r) => res.json(r));
+            concluir(0);
           });
       };
 
@@ -1907,7 +2037,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
   app.delete('/api/almoxarifado/setores/:id',(req, res) => {
     if (denyUnlessAlmoxAdmin(req, res)) return;
-    db.get('SELECT nome FROM setores_almoxarifado WHERE id = ?', [req.params.id], (err, setor) => {
+    // Etapa 19: o SELECT era `nome` — virou `*` para servir de `dados_anteriores` (RN-01).
+    db.get('SELECT * FROM setores_almoxarifado WHERE id = ?', [req.params.id], (err, setor) => {
       if (err) return res.status(500).json({ error: err.message });
       if (!setor) return res.status(404).json({ error: 'Setor não encontrado' });
 
@@ -1921,7 +2052,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
           }
           db.run('UPDATE setores_almoxarifado SET ativo = 0 WHERE id = ?', [req.params.id], function (delErr) {
             if (delErr) return res.status(500).json({ error: delErr.message });
-            res.json({ success: true });
+            auditarCadastro({
+              req, entidade: 'setor', entidade_id: Number(req.params.id), acao: 'EXCLUSAO',
+              dados_anteriores: setor, dados_novos: { ativo: 0 },
+            }).finally(() => res.json({ success: true }));
           });
         });
     });
@@ -2027,7 +2161,15 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
             if (err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Código já existe' });
             return res.status(500).json({ error: err.message });
           }
-          db.get('SELECT * FROM familias_material_almoxarifado WHERE id = ?', [this.lastID], (e, r) => res.status(201).json(r));
+          // `this.lastID` existe aqui, mas nao no callback do SELECT (arrow): o `r` que a rota
+          // ja le para responder da o id e o `dados_novos`.
+          db.get('SELECT * FROM familias_material_almoxarifado WHERE id = ?', [this.lastID], (e, r) => {
+            if (e || !r) return res.status(201).json(r);
+            auditarCadastro({
+              req, entidade: 'familia', entidade_id: r.id, acao: 'CRIACAO',
+              dados_anteriores: null, dados_novos: r,
+            }).finally(() => res.status(201).json(r));
+          });
         });
     };
 
@@ -2067,7 +2209,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     // inativada) e `categoria_id` ausente virava NULL (apagando o vínculo com a categoria).
     // Qualquer campo AUSENTE (undefined) preserva o valor atual; qualquer valor informado —
     // incluindo `null` explícito, `0` ou `''` — substitui.
-    db.get('SELECT parent_id, ativo, categoria_id FROM familias_material_almoxarifado WHERE id = ?', [familiaId], (errCurrent, current) => {
+    //
+    // Etapa 19: o SELECT era `parent_id, ativo, categoria_id` — virou `*` porque a mesma
+    // leitura serve de `dados_anteriores` do log (RN-01). Os três campos acima continuam sendo
+    // lidos de `current` normalmente.
+    db.get('SELECT * FROM familias_material_almoxarifado WHERE id = ?', [familiaId], (errCurrent, current) => {
       if (errCurrent) return res.status(500).json({ error: errCurrent.message });
       if (!current) return res.status(404).json({ error: 'Família não encontrada' });
 
@@ -2085,7 +2231,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
           [nome.trim(), descricao || null, categoriaIdVal, tipoUsoVal, ativoVal, parentId, familiaId],
           function (err) {
             if (err) return res.status(500).json({ error: err.message });
-            db.get('SELECT * FROM familias_material_almoxarifado WHERE id = ?', [familiaId], (e, r) => res.json(r));
+            db.get('SELECT * FROM familias_material_almoxarifado WHERE id = ?', [familiaId], (e, r) => {
+              auditarCadastro({
+                req, entidade: 'familia', entidade_id: familiaId, acao: 'EDICAO',
+                dados_anteriores: current, dados_novos: r || null,
+              }).finally(() => res.json(r));
+            });
           });
       };
 
@@ -2131,9 +2282,19 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         if (subRow.c > 0) {
           return res.status(400).json({ error: `Não é possível remover: família possui ${subRow.c} subfamília(s) ativa(s)` });
         }
-        db.run('UPDATE familias_material_almoxarifado SET ativo = 0 WHERE id = ?', [req.params.id], function (err2) {
-          if (err2) return res.status(500).json({ error: err2.message });
-          res.json({ success: true });
+        // Etapa 19 (RN-01): leitura previa so para o "de" do log — as leituras que a rota ja
+        // fazia sao CONTAGENS (itens e subfamilias), nao a linha.
+        db.get('SELECT * FROM familias_material_almoxarifado WHERE id = ?', [req.params.id], (selErr, anterior) => {
+          if (selErr) return res.status(500).json({ error: selErr.message });
+          db.run('UPDATE familias_material_almoxarifado SET ativo = 0 WHERE id = ?', [req.params.id], function (err2) {
+            if (err2) return res.status(500).json({ error: err2.message });
+            // RN-03: id inexistente respondia 200 ("success: true" sobre nada).
+            if (this.changes === 0) return res.status(404).json({ error: 'Família não encontrada' });
+            auditarCadastro({
+              req, entidade: 'familia', entidade_id: Number(req.params.id), acao: 'EXCLUSAO',
+              dados_anteriores: anterior || null, dados_novos: { ativo: 0 },
+            }).finally(() => res.json({ success: true }));
+          });
         });
       });
     });
