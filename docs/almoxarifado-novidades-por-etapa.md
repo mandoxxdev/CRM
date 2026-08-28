@@ -3167,7 +3167,7 @@ por qualquer usuário do módulo, embora só administrador pudesse **mudá-lo**.
 | A foto anterior era apagada **em paralelo** com a gravação da nova — e uma falha ao apagar derrubava o processo | A anterior só é apagada **depois** de a nova estar gravada, e falhar ao apagar **não derruba nada** |
 | Trocar a foto de um material não deixava rastro nenhum | Deixa uma linha no histórico: quem, quando, e **de qual arquivo para qual** |
 | A leitura das configurações devolvia a **senha de SMTP** e a **chave de API** em texto puro | Devolve `********` quando há valor gravado, e **vazio** quando não há |
-| O salvamento genérico de configurações **aceitava** essas duas chaves — e gravava a máscara como se fosse a senha | **Recusa**, apontando a tela certa, e **sem tocar** em nenhuma outra chave do mesmo salvamento |
+| O salvamento genérico de configurações **aceitava** essas duas chaves e gravava o que viesse, sem a proteção que a tela de Alertas usa (a que ignora o reenvio da máscara) | **Recusa**, apontando a tela certa, e **sem tocar** em nenhuma outra chave do mesmo salvamento |
 | Ler o mapa de materiais permitidos de um setor bastava estar logado no módulo | Exige **administrador do Almoxarifado ou super administrador** — o mesmo que já era exigido para mudá-lo |
 
 ### As regras, com o cenário exato
