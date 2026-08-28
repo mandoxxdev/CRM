@@ -1706,6 +1706,22 @@ async function initSchema(db) {
     FOREIGN KEY (requisicao_id) REFERENCES requisicoes_almoxarifado(id)
   )`);
 
+  // ── Etapa 15 (Task 1): assinatura digital da entrega — TABELA e não coluna na requisição
+  // porque a entrega é parcial por design (N entregas, N recebedores); coluna única guardaria só
+  // a última assinatura e mentiria sobre as anteriores. Append-only: assinatura é evidência, não
+  // se edita nem se apaga — erro se corrige colhendo outra (RN-04 do design da Etapa 15). ──
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS assinaturas_entrega_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    requisicao_id INTEGER NOT NULL REFERENCES requisicoes_almoxarifado(id),
+    recebedor_nome TEXT NOT NULL,
+    arquivo TEXT NOT NULL,
+    criado_por INTEGER NOT NULL,
+    criado_por_nome TEXT,
+    criado_em TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_assinaturas_entrega_req
+    ON assinaturas_entrega_almoxarifado(requisicao_id)`);
+
   // ── Atendimento parcial por item ──
   await safeAlter(db, 'ALTER TABLE itens_requisicao_almoxarifado ADD COLUMN quantidade_separada REAL DEFAULT 0');
   await safeAlter(db, 'ALTER TABLE itens_requisicao_almoxarifado ADD COLUMN quantidade_entregue REAL DEFAULT 0');

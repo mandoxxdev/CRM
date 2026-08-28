@@ -11,6 +11,7 @@ const alertService = require('../services/almoxarifado/alertService');
 const notificationQueueService = require('../services/almoxarifado/notificationQueueService');
 const requisitionReminderService = require('../services/almoxarifado/requisitionReminderService');
 const requisitionService = require('../services/almoxarifado/requisitionService');
+const deliverySignatureService = require('../services/almoxarifado/deliverySignatureService');
 const { disponivelSql } = require('../services/almoxarifado/availabilitySql');
 const { valorEstoqueSql, custoUnitarioSql } = require('../services/almoxarifado/custoSql');
 const requisitionCreateService = require('../services/almoxarifado/requisitionCreateService');
@@ -2172,13 +2173,24 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
               LEFT JOIN localizacoes_almoxarifado l ON ma.localizacao_padrao_id = l.id
               LEFT JOIN almoxarifados a ON l.almoxarifado_id = a.id
               WHERE ir.requisicao_id = ?`,
-        [req.params.id], (err2, itens) => {
+        [req.params.id], async (err2, itens) => {
           if (err2) return res.status(500).json({ error: err2.message });
+          // Etapa 15 (C2, mudança aditiva): quem vê a requisição vê as assinaturas de entrega
+          // dela — sem gate novo de leitura. Callback virou async DE PROPÓSITO (achado da
+          // revisão do plano: `await` num callback não-async seria SyntaxError); erro da busca
+          // não é engolido — vira 500 como qualquer outro deste handler.
+          let assinaturas;
+          try {
+            assinaturas = await deliverySignatureService.listarAssinaturas(db, req.params.id);
+          } catch (e) {
+            return res.status(500).json({ error: e.message });
+          }
           res.json({
             ...req_row,
             itens: enrichMaterialRows(
               (itens || []).map(requisitionService.normalizarItem),
             ),
+            assinaturas_entrega: assinaturas,
           });
         });
     });

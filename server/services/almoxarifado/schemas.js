@@ -722,6 +722,17 @@ const OcorrenciaSchema = z.object({
   responsavel_colaborador_id: numFromForm(z.number().int().positive().nullable().optional()),
 });
 
+/**
+ * Assinatura de entrega (Etapa 15, Task 1) — POST /requisicoes/:id/assinatura-entrega é
+ * multipart (arquivo `assinatura` obrigatório via multer), então aqui só a FORMA do campo de
+ * texto: a obrigatoriedade do arquivo (`!req.file`) e o status da requisição são regra de
+ * negócio com mensagem literal do contrato C1 — moram na rota e no serviço, pelo mesmo motivo
+ * de CalibracaoSchema/OcorrenciaSchema acima (o Zod embrulharia em "Dados inválidos — ...").
+ */
+const AssinaturaEntregaFormSchema = z.object({
+  recebedor_nome: z.string().trim().min(1).max(120),
+});
+
 module.exports = {
   CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, TIPOS_MOVIMENTO_ROTA,
   RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema,
@@ -733,5 +744,5 @@ module.exports = {
   SucateamentoCreateSchema, SucateamentoDestinoSchema, SucateamentoDestinoFormSchema,
   FerramentaCreateSchema, FerramentaUpdateSchema, EmprestimoSchema, DevolucaoEmprestimoSchema,
   CalibracaoSchema, JustificativaSchema, ManutencaoSchema, ManutencaoConcluirSchema,
-  OcorrenciaSchema,
+  OcorrenciaSchema, AssinaturaEntregaFormSchema,
 };

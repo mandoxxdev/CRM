@@ -11,7 +11,7 @@ const { requirePermission, can, getPerfilFromUser, ACAO_PERFIS, PERFIS } = requi
 const { dbAll, dbGet, dbRun } = require('../../services/almoxarifado/db');
 const { disponivelSql } = require('../../services/almoxarifado/availabilitySql');
 const { validate, formatZodError } = require('../../services/almoxarifado/validation');
-const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema, RemessaTerceiroSchema, RetornoRemessaSchema, TransformacaoRemessaSchema, EncerramentoRemessaSchema, CancelamentoRemessaSchema, SobraUpdateSchema, GerarRetalhoSchema, SucateamentoCreateSchema, SucateamentoDestinoFormSchema, FerramentaCreateSchema, FerramentaUpdateSchema, EmprestimoSchema, DevolucaoEmprestimoSchema, CalibracaoSchema, JustificativaSchema, ManutencaoSchema, ManutencaoConcluirSchema, OcorrenciaSchema } = require('../../services/almoxarifado/schemas');
+const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema, RemessaTerceiroSchema, RetornoRemessaSchema, TransformacaoRemessaSchema, EncerramentoRemessaSchema, CancelamentoRemessaSchema, SobraUpdateSchema, GerarRetalhoSchema, SucateamentoCreateSchema, SucateamentoDestinoFormSchema, FerramentaCreateSchema, FerramentaUpdateSchema, EmprestimoSchema, DevolucaoEmprestimoSchema, CalibracaoSchema, JustificativaSchema, ManutencaoSchema, ManutencaoConcluirSchema, OcorrenciaSchema, AssinaturaEntregaFormSchema } = require('../../services/almoxarifado/schemas');
 const { registrarAuditoria } = require('../../services/almoxarifado/audit');
 const stockService = require('../../services/almoxarifado/stockService');
 const lotService = require('../../services/almoxarifado/lotService');
@@ -23,6 +23,7 @@ const returnService = require('../../services/almoxarifado/returnService');
 const scrapService = require('../../services/almoxarifado/scrapService');
 const scrapDisposalService = require('../../services/almoxarifado/scrapDisposalService');
 const toolService = require('../../services/almoxarifado/toolService');
+const deliverySignatureService = require('../../services/almoxarifado/deliverySignatureService');
 const reportService = require('../../services/almoxarifado/reportService');
 const sectorMaterialService = require('../../services/almoxarifado/sectorMaterialService');
 const purchaseService = require('../../services/almoxarifado/purchaseService');
@@ -1042,6 +1043,56 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     try { res.json(await toolService.listarOcorrencias(db, req.params.id)); }
     catch (e) { handleError(res, e); }
   });
+
+  // ── Assinatura digital da entrega de requisicao (Etapa 15, Task 1 — contrato C1) ─────────────
+  // Upload CLONE de uploadFotoOcorrencia (acima): gravacao FLAT em uploadsAlmoxDir com prefixo
+  // `assinatura-`, SEM subpasta (D3: o multer nao cria diretorio — ENOENT no primeiro upload).
+  // Filtro SO imagem (sem PDF, diferente dos comprovantes): o que chega aqui e o PNG do canvas
+  // de assinatura; 2MB porque um traco exportado de canvas nao passa disso.
+  const uploadAssinatura = multer({
+    storage: multer.diskStorage({
+      destination: (req, file, cb) => cb(null, uploadsAlmoxDir),
+      filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname);
+        cb(null, `assinatura-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
+      },
+    }),
+    limits: { fileSize: 2 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+      if (/^image\/(jpeg|jpg|png|webp)$/i.test(file.mimetype)) return cb(null, true);
+      cb(new Error('Assinatura deve ser imagem (PNG, JPEG ou WebP)'));
+    },
+  });
+
+  // POST /requisicoes/:id/assinatura-entrega — multipart, arquivo `assinatura` OBRIGATORIO.
+  // Ordem canonica: auth -> requirePermission -> multer -> safeParse manual (mesmo desenho de
+  // /calibracoes e /ocorrencias acima — o gate e uma acao so, vai na PORTA, antes do multer
+  // gravar em disco; RN-05). NAO usa o middleware validate(): ele responderia o 400 do Zod
+  // ANTES do handler e o arquivo ja gravado ficaria orfao — `limparUploadOrfao` em TODA saida
+  // que nao for 201. RN-03 (status da requisicao) mora no SERVICO, com a mensagem literal do
+  // contrato, e cai no catch. Gate `separar_emitir`: quem entrega e quem colhe a assinatura —
+  // o recebedor e um nome digitado + traco na tela, nao um usuario do sistema.
+  app.post('/api/almoxarifado/requisicoes/:id/assinatura-entrega', auth, requirePermission('separar_emitir'),
+    uploadAssinatura.single('assinatura'), async (req, res) => {
+      const parsed = AssinaturaEntregaFormSchema.safeParse(req.body);
+      if (!parsed.success) {
+        limparUploadOrfao(req);
+        return res.status(400).json({ error: `Dados inválidos — ${formatZodError(parsed.error)}` });
+      }
+      if (!req.file) {
+        return res.status(400).json({ error: "Assinatura é obrigatória — envie a imagem no campo 'assinatura'." });
+      }
+      try {
+        const assinatura = await deliverySignatureService.registrarAssinatura(
+          db, req.user, req.params.id,
+          { recebedor_nome: parsed.data.recebedor_nome, arquivo: req.file.filename },
+        );
+        res.status(201).json({ success: true, assinatura });
+      } catch (e) {
+        limparUploadOrfao(req);
+        handleError(res, e);
+      }
+    });
 
   // ── Materiais de cliente: a ILHA foi aposentada na Etapa 8 (decisao 4) ───────────────────────
   // Existiam aqui GET/POST /materiais-cliente e POST /materiais-cliente/:id/consumir, sobre
