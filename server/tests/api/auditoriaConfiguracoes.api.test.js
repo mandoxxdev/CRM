@@ -422,6 +422,82 @@ const SEGREDO_WPP = 'token-WhatsApp-secretissimo-4K2';
     assert.strictEqual(await contarConfig(), antes, 'a auditoria sabotada gravou linha assim mesmo');
   });
 
+  // ── Achados da revisao adversarial (Fase 5) ─────────────────────────────────────────────────
+  await test('A1-exposicao: a URL do webhook vai para o log SEM a query string (o token mora la)', async () => {
+    const TOKEN = 'TOKEN-DENTRO-DA-URL-9Z8';
+    const url = `https://api.zap.example/send?token=${TOKEN}`;
+
+    // Funcao pura: host e caminho ficam, credencial some.
+    const d = configDiff.calcularDiff(
+      { alertas_whatsapp_webhook_url: 'https://api.zap.example/send?token=ANTIGO' },
+      { alertas_whatsapp_webhook_url: url },
+    );
+    const logado = JSON.stringify(d);
+    assert.ok(!logado.includes(TOKEN), `o token vazou no diff: ${logado}`);
+    assert.ok(!logado.includes('ANTIGO'), `o token ANTIGO vazou no diff: ${logado}`);
+    assert.ok(logado.includes('api.zap.example/send'), 'o host e o caminho devem sobreviver — senao o log perde utilidade');
+
+    // Ponta a ponta pela rota generica (a que a Fase 0 provou que TAMBEM grava essas chaves).
+    const antes = await contarConfig();
+    const res = await request(app).put('/api/almoxarifado/configuracoes')
+      .send({ alertas_whatsapp_webhook_url: url });
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(await contarConfig(), antes + 1);
+    const linha = await ultimaConfig();
+    assert.ok(!`${linha.dados_novos}${linha.dados_anteriores}`.includes(TOKEN),
+      `o token vazou no log da rota generica: ${linha.dados_novos}`);
+
+    // E a COLUNA guarda a URL inteira (a mascara e do log, nao do dado).
+    const col = await dbGet(db, "SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'alertas_whatsapp_webhook_url'");
+    assert.strictEqual(col.valor, url, 'a mascara nao pode alterar o que e persistido');
+  });
+
+  await test('A2-trilha: sem o ANTES a rota NAO audita (o diff fabricaria 18 mudancas inexistentes)', async () => {
+    // Por que este teste NAO usa stub: `routes/almoxarifado.js` desestrutura `dbAll` no import
+    // (`const { dbRun, dbGet, dbAll } = require(...)`), entao trocar a propriedade do modulo
+    // depois nao alcanca o call site — a MESMA armadilha do import de `audit` que a Etapa 18
+    // documentou. A primeira versao deste teste tentou o stub e a flag `alcancado` se recusou
+    // a passar vazia, que e o comportamento certo dela.
+    //
+    // (1) a unidade: com o "antes" AUSENTE, o diff fabrica de-null-para-X em toda chave.
+    const fabricado = configDiff.calcularDiff({}, { alertas_smtp_host: 'host-x', alertas_smtp_port: '587' });
+    assert.strictEqual(Object.keys(fabricado.novos).length, 2,
+      'sem o "antes", TODA chave vira mudanca — e por isso que a rota precisa guardar');
+    assert.strictEqual(fabricado.anteriores.alertas_smtp_host, null);
+
+    // (2) a guarda na rota, por varredura de fonte (padrao ja usado nesta base em
+    // availabilitySql.api.test.js, que varre o codigo provando que nao sobrou replica).
+    const fonte = require('fs').readFileSync(require('path').join(__dirname, '../../routes/almoxarifado.js'), 'utf8');
+    assert.ok(/chavesTocadas\)\.catch\(\(\) => null\)/.test(fonte),
+      'a leitura do "antes" de alertas-estoque tem de degradar para null, nao para []');
+    assert.ok(/if \(!anterioresMapa\) \{[\s\S]{0,400}?SEM auditoria/.test(fonte),
+      'a rota tem de PULAR a auditoria quando o "antes" falhou, em vez de logar um diff inventado');
+  });
+
+  await test('A1-trilha: liberacao-valor persistida com 500 na resposta AINDA deixa rastro', async () => {
+    // O cenario que a revisao adversarial reproduziu: `saveConfig` grava as 3 chaves e SO
+    // ENTAO monta a resposta consultando `usuarios`. Se aquela consulta falha, a REGRA JA
+    // MUDOU, o cliente ve 500 e — no desenho anterior — a auditoria nunca rodava. O harness
+    // nao tem a tabela `usuarios`, entao o caminho de falha e o default aqui: e exatamente
+    // por isso que a suite anterior so mandava `aprovadorIds: []` (short-circuit) e NUNCA
+    // exercitava este caminho.
+    const antes = await contarConfig();
+    const res = await request(app).put('/api/almoxarifado/configuracoes/liberacao-valor')
+      .send({ ativo: true, limite: 777, aprovadorIds: [7] });
+    assert.strictEqual(res.status, 500, `pre-condicao do cenario: ${JSON.stringify(res.body)}`);
+
+    // A escrita aconteceu...
+    const limite = await dbGet(db, "SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'liberacao_valor_limite'");
+    assert.strictEqual(limite.valor, '777', 'pre-condicao: a regra foi mesmo persistida');
+
+    // ...logo o rastro TEM de existir, apesar do 500.
+    assert.strictEqual(await contarConfig(), antes + 1,
+      'regra de liberacao mudada com 500 na resposta e o log vazio: era o buraco do achado A1');
+    const linha = await ultimaConfig();
+    assert.ok(/777/.test(linha.dados_novos), `o limite novo tem de estar no log: ${linha.dados_novos}`);
+    assert.strictEqual(linha.usuario_id, 7, 'o autor da mudanca fica registrado');
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);

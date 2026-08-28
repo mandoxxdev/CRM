@@ -2501,9 +2501,15 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       const chavesTocadas = upserts.map(([chave]) => chave);
       const linhasAntes = await dbAll(db,
         `SELECT chave, valor FROM configuracoes_almoxarifado WHERE chave IN (${chavesTocadas.map(() => '?').join(',')})`,
-        chavesTocadas).catch(() => []);
-      const anterioresMapa = {};
-      linhasAntes.forEach((r) => { anterioresMapa[r.chave] = r.valor; });
+        chavesTocadas).catch(() => null);
+      // `null` (nao `[]`) quando a leitura do "antes" falha — achado A2 da revisao adversarial,
+      // reproduzido: com `[]`, `calcularDiff` trata TODA chave como inexistente antes e o log
+      // afirmava `de null -> para X` para as 18 chaves num save em que NADA mudou. O log
+      // FABRICAVA mudanca. Degradar para silencio e o que o irmao `estoques-minimos` ja fazia;
+      // duas quedas best-effort da mesma etapa degradavam em direcoes opostas, e a que
+      // inventava registro era justamente a nao declarada.
+      const anterioresMapa = linhasAntes ? {} : null;
+      if (linhasAntes) linhasAntes.forEach((r) => { anterioresMapa[r.chave] = r.valor; });
       const novosMapa = {};
       upserts.forEach(([chave, valor]) => { novosMapa[chave] = valor; });
 
@@ -2518,16 +2524,21 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // RN-05: `alertas_smtp_pass` e `alertas_whatsapp_api_key` entram no diff como
       // '(alterado)' — a mascara e do configDiff e esta SEMPRE ligada, nao depende desta rota
       // lembrar de pedir. Log de auditoria com senha em claro seria pior que a ausencia de log.
-      const diff = calcularDiff(anterioresMapa, novosMapa);
-      if (Object.keys(diff.novos).length) {
-        try {
-          await audit.registrarAuditoria(db, {
-            entidade: 'configuracao', entidade_id: null, acao: 'EDICAO',
-            usuario_id: req.user.id, usuario_nome: updatedBy,
-            dados_anteriores: diff.anteriores, dados_novos: diff.novos,
-          });
-        } catch (errAudit) {
-          console.error('[almoxarifado] Falha ao registrar auditoria de alertas de estoque:', errAudit.message);
+      // Sem o "antes" nao ha de/para honesto: nao audita e avisa no log do servidor (A2).
+      if (!anterioresMapa) {
+        console.error('[almoxarifado] Alertas de estoque gravados SEM auditoria: a leitura do estado anterior falhou');
+      } else {
+        const diff = calcularDiff(anterioresMapa, novosMapa);
+        if (Object.keys(diff.novos).length) {
+          try {
+            await audit.registrarAuditoria(db, {
+              entidade: 'configuracao', entidade_id: null, acao: 'EDICAO',
+              usuario_id: req.user.id, usuario_nome: updatedBy,
+              dados_anteriores: diff.anteriores, dados_novos: diff.novos,
+            });
+          } catch (errAudit) {
+            console.error('[almoxarifado] Falha ao registrar auditoria de alertas de estoque:', errAudit.message);
+          }
         }
       }
       res.json({ success: true });
@@ -2585,16 +2596,27 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // '[]' na coluna, `String(false)` === 'false' contra '0'. Auditado NA ROTA porque o
       // servico so recebe `userName`, nao o usuario.
       const antes = normalizarLiberacaoValor(await valueApprovalService.getConfig(db));
-      const saved = await valueApprovalService.saveConfig(db, req.body, req.user.nome || req.user.email);
-      const depois = normalizarLiberacaoValor(await valueApprovalService.getConfig(db));
-      const diff = calcularDiff(antes, depois);
-      if (Object.keys(diff.novos).length) {
+      // Auditoria em `finally` (achado A1 da revisao adversarial, reproduzido): esta e a UNICA
+      // das 5 rotas de configuracao com uma chamada FALIVEL entre a escrita e o log —
+      // `saveConfig` grava as 3 chaves e SO ENTAO monta a resposta com `getConfigForApi`, que
+      // consulta a tabela `usuarios`. Se aquela consulta lanca, a regra JA FOI PERSISTIDA, o
+      // cliente recebe 500 e, no desenho anterior, a auditoria nunca rodava: mudanca da regra
+      // de liberacao por valor sem rastro nenhum. Comparar o estado REAL antes x depois aqui
+      // audita o que de fato ficou gravado, com 500 ou sem.
+      let saved;
+      try {
+        saved = await valueApprovalService.saveConfig(db, req.body, req.user.nome || req.user.email);
+      } finally {
         try {
-          await audit.registrarAuditoria(db, {
-            entidade: 'configuracao', entidade_id: null, acao: 'EDICAO',
-            usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
-            dados_anteriores: diff.anteriores, dados_novos: diff.novos,
-          });
+          const depois = normalizarLiberacaoValor(await valueApprovalService.getConfig(db));
+          const diff = calcularDiff(antes, depois);
+          if (Object.keys(diff.novos).length) {
+            await audit.registrarAuditoria(db, {
+              entidade: 'configuracao', entidade_id: null, acao: 'EDICAO',
+              usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
+              dados_anteriores: diff.anteriores, dados_novos: diff.novos,
+            });
+          }
         } catch (errAudit) {
           console.error('[almoxarifado] Falha ao registrar auditoria de liberação por valor:', errAudit.message);
         }
