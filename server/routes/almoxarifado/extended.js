@@ -32,6 +32,9 @@ const purchaseService = require('../../services/almoxarifado/purchaseService');
 const clienteEstoqueService = require('../../services/almoxarifado/clienteEstoqueService');
 const thirdPartyService = require('../../services/almoxarifado/thirdPartyService');
 const notificationQueueService = require('../../services/almoxarifado/notificationQueueService');
+// Etapa 16, Task 1: fonte unica da regua do relatorio `materiais-sem-endereco` (extraida para
+// o registro de alertas — ver o comentario na entrada do mapa `reports`).
+const alertRegistry = require('../../services/almoxarifado/alertRegistry');
 // Etapa 13, Task 1 (RN-01): registro puro de metadados dos relatorios — sem `fn` (ver cabecalho
 // do arquivo). `fn` e ligada logo antes do dispatcher, apos o mapa `reports` estar montado.
 const { RELATORIOS } = require('../../services/almoxarifado/reportRegistry');
@@ -1327,20 +1330,11 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     // consumo-periodo/consumo-os (data_inicio/data_fim extraidos da querystring aqui, nao dentro
     // do service — convencao do arquivo).
     'custo-por-projeto': (db, q) => reportService.relatorioCustoProjeto(db, q.data_inicio, q.data_fim),
-    'materiais-sem-endereco': async (db) => {
-      // Etapa 8, Task 1, classe C da auditoria: NAO filtra o dono de proposito. Enderecar
-      // material do cliente e tao necessario quanto enderecar o nosso — a chapa dele precisa
-      // de prateleira de verdade. Filtrar aqui esconderia trabalho real do almoxarife.
-      return dbAll(db, `
-        SELECT m.* FROM materiais_almoxarifado m
-        WHERE m.ativo = 1 AND m.localizacao_padrao_id IS NULL
-        AND NOT EXISTS (
-          SELECT 1 FROM estoque_saldo_almoxarifado s
-          WHERE s.material_id = m.id AND s.localizacao_id IS NOT NULL AND s.quantidade > 0
-        )
-        ORDER BY m.codigo
-      `);
-    },
+    // Etapa 16, Task 1: a query (regua + comentario da classe C, que NAO filtra o dono de
+    // proposito) foi EXTRAIDA para alertRegistry.listarMateriaisSemEndereco — fonte unica com
+    // o alerta MATERIAL_SEM_ENDERECO, senao relatorio e alerta de mesmo nome divergiriam
+    // (achado Critico 2 da revisao do plano da etapa). Comportamento identico ao anterior.
+    'materiais-sem-endereco': (db) => alertRegistry.listarMateriaisSemEndereco(db),
   };
 
   // Exposto SO para o teste de paridade (relatoriosRegistro.api.test.js) inspecionar o PAR

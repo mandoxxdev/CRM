@@ -563,6 +563,57 @@ async function varrerRemessasVencidas(db) {
   return { total: remessas.length, enfileiradas };
 }
 
+/**
+ * Etapa 16, Task 1 (RN-01/RN-02/RN-03): varredura unica dirigida pelo ALERT_REGISTRY — itera o
+ * registro, resolve a janela de dias de cada alerta e enfileira cada linha da condicao; o
+ * dedupe da fila (INSERT OR IGNORE por hash) segura a repeticao entre varreduras. Mesmos
+ * guards das varreduras da Etapa 12 acima (`varrerLotesVencendo` e o molde): toggle mestre
+ * `alertas_estoque_notificar_email` governa TUDO (RN-03) e o destinatario e a lista unica
+ * `alertas_estoque_emails`. Devolve [{chave, enfileiradas, duplicadas, sem_destinatario}]
+ * para teste/log — com o toggle desligado, tudo zerado sem nem consultar as condicoes.
+ *
+ * Require LAZY do alertRegistry: as entradas dele requerem (tambem lazy) purchaseService/
+ * inspectionService, que requerem ESTE arquivo no topo — mesmo ciclo e mesmo padrao dos
+ * requires lazy documentados no topo deste arquivo.
+ */
+async function varrerAlertasRegistrados(db) {
+  const alertService = require('./alertService');
+  const { ALERT_REGISTRY, resolverDias } = require('./alertRegistry');
+
+  if (!(await alertService.alertasEmailLigado(db))) {
+    return ALERT_REGISTRY.map((entrada) => ({
+      chave: entrada.chave, enfileiradas: 0, duplicadas: 0, sem_destinatario: 0, motivo: 'email desligado',
+    }));
+  }
+
+  const destinatarios = alertService.parseList(await alertService.getConfigValue(db, 'alertas_estoque_emails'));
+
+  const resultados = [];
+  for (const entrada of ALERT_REGISTRY) {
+    const dias = await resolverDias(db, entrada);
+    const linhas = await entrada.listar(db, { dias });
+    let enfileiradas = 0; let duplicadas = 0; let sem_destinatario = 0;
+    for (const linha of linhas) {
+      const corpoTexto = entrada.corpo(linha);
+      const r = await enfileirar(db, {
+        evento: entrada.chave,
+        dedupe_chave: entrada.dedupeChave(linha),
+        destinatarios,
+        assunto: entrada.assunto(linha),
+        corpo_texto: corpoTexto,
+        // RN-04 da Etapa 12 (escape linha a linha) vale para os 7 alertas novos tambem.
+        corpo_html: `<div>${corpoTexto.split('\n').map((l) => `<p>${alertService.escapeHtml(l)}</p>`).join('\n')}</div>`,
+        payload: entrada.payload ? entrada.payload(linha) : undefined,
+      });
+      if (r.enfileirada) enfileiradas++;
+      else if (r.motivo === 'DUPLICADA') duplicadas++;
+      else if (r.motivo === 'SEM_DESTINATARIO') sem_destinatario++;
+    }
+    resultados.push({ chave: entrada.chave, enfileiradas, duplicadas, sem_destinatario });
+  }
+  return resultados;
+}
+
 module.exports = {
   STATUS_VALIDOS,
   enfileirar,
@@ -575,4 +626,5 @@ module.exports = {
   varrerLembretesFerramenta,
   varrerLotesVencendo,
   varrerRemessasVencidas,
+  varrerAlertasRegistrados,
 };

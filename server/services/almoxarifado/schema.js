@@ -1826,6 +1826,14 @@ async function initSchema(db) {
     ['notificacoes_dest_ajustes', '', 'E-mails para notificacao de ajuste de estoque (lista; vazio = usa alertas_estoque_emails)'],
     ['notificacoes_dest_terceiros', '', 'E-mails para notificacao de movimentacao de terceiro (lista; vazio = usa alertas_estoque_emails)'],
     ['notificacoes_dest_compras', '', 'E-mails para notificacao de solicitacao de compra gerada (lista; vazio = usa compras_notificar_emails)'],
+    // Etapa 16 (C4): janelas dos alertas do registro (alertRegistry.js). Mesma licao da Etapa 10
+    // registrada acima — chave nao semeada e ineditavel pelo PUT /configuracoes. As tres caem na
+    // validacao de dias pelo prefixo unico 'alerta_' (routes/almoxarifado.js, PREFIXOS_DIAS);
+    // `reposicao_dias_sem_consumo` (regua do ESTOQUE_SEM_CONSUMO) ja existe na Etapa 11 e NAO e
+    // semeada de novo.
+    ['alerta_calibracao_dias', '30', 'Dias de antecedencia para alertar calibracao de ferramenta vencendo'],
+    ['alerta_quarentena_dias', '7', 'Dias em quarentena (inspecao pendente) para alertar item parado'],
+    ['alerta_reserva_parada_dias', '30', 'Dias de reserva ATIVA sem consumo para alertar reserva parada'],
   ];
   for (const [chave, valor, desc] of configs) {
     await dbRun(db, 'INSERT OR IGNORE INTO configuracoes_almoxarifado (chave, valor, descricao) VALUES (?,?,?)', [chave, valor, desc]);

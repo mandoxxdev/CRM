@@ -1892,7 +1892,14 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // `notificacoes_dest_*` (texto livre) NAO caem em nenhum dos dois de proposito — as
       // demais configs do modulo tem semanticas proprias (booleana '0'/'1', texto livre, etc.)
       // que esta regra nao serve.
-      const PREFIXOS_DIAS = ['reposicao_', 'alerta_lote_'];
+      // Etapa 16 (C4): 'alerta_lote_' virou o prefixo unico 'alerta_' — cobre
+      // alerta_lote_vencendo_dias E as 3 chaves novas do registro de alertas
+      // (alerta_calibracao_dias, alerta_quarentena_dias, alerta_reserva_parada_dias).
+      // Seguro de proposito: 'alertas_' (emails/toggles/smtp) NAO comeca com 'alerta_'
+      // (o 's' na 7a posicao nao casa com o '_'), entao nenhuma chave de texto/booleano
+      // cai na validacao de dias. A primeira versao do plano da etapa afirmava o
+      // contrario e estava errada (corrigido pela revisao).
+      const PREFIXOS_DIAS = ['reposicao_', 'alerta_'];
       const PREFIXOS_INTEIRO = ['notificacoes_worker_', 'notificacoes_max_'];
       // Revisao da Task 1 (Minor i): a RN-09 promete "0 ou 1" para o liga/desliga — sem esta
       // guarda, 'banana' gravava com 200 e o gancho da Task 2 trataria como desligado em
@@ -2831,15 +2838,17 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   }, 30 * 1000).unref();
 
   // Job B — varreduras diarias (lembrete de ferramenta vencida, lote proximo do vencimento,
-  // remessa a terceiro vencida). Uma vez por dia basta: o dedupe de cada varredura ja e por
-  // dia/validade/prazo (RN-06/RN-07), entao rodar mais vezes so custaria SELECTs extras sem
-  // gerar e-mail a mais.
+  // remessa a terceiro vencida e, desde a Etapa 16, os 7 alertas do registro via
+  // varrerAlertasRegistrados). Uma vez por dia basta: o dedupe de cada varredura ja e por
+  // dia/validade/prazo/estado (RN-06/RN-07 da E12; C3 da E16), entao rodar mais vezes so
+  // custaria SELECTs extras sem gerar e-mail a mais.
   const DAILY_SCAN_INTERVAL_MS = 24 * 60 * 60 * 1000;
   const runDailyNotificationScans = () => {
     Promise.all([
       notificationQueueService.varrerLembretesFerramenta(db),
       notificationQueueService.varrerLotesVencendo(db),
       notificationQueueService.varrerRemessasVencidas(db),
+      notificationQueueService.varrerAlertasRegistrados(db),
     ]).catch((err) => {
       console.warn('[almoxarifado-notificacoes] Erro nas varreduras diarias:', err.message);
     });
