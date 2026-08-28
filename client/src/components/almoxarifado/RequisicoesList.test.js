@@ -25,10 +25,16 @@ jest.mock('react-toastify', () => ({
   toast: { success: jest.fn(), error: jest.fn(), info: jest.fn(), warn: jest.fn() },
 }));
 
-// Permissões liberadas: o alvo é o comportamento da tela, o gate real é do servidor.
+// Permissões liberadas por padrão: o alvo é o comportamento da tela, o gate real é do
+// servidor. `mockPode` é mutável para os cenários da Etapa 15 que testam sumiço de botão
+// por perfil (pode('separar_emitir') === false).
+let mockPode = () => true;
 jest.mock('../../hooks/useAlmoxPermissoes', () => ({
   useAlmoxPermissoes: () => ({
-    perfil: 'ADMINISTRADOR', pode: () => true, bloquearSeNaoPode: () => true, loading: false,
+    perfil: 'ADMINISTRADOR',
+    pode: (acao) => mockPode(acao),
+    bloquearSeNaoPode: (acao) => mockPode(acao),
+    loading: false,
   }),
 }));
 
@@ -62,6 +68,7 @@ let detalheDoBanco;
 
 beforeEach(() => {
   global.IS_REACT_ACT_ENVIRONMENT = true;
+  mockPode = () => true;
   api.get.mockImplementation((url) => {
     if (url === '/almoxarifado/requisicoes') {
       const { itens, ...linha } = detalheDoBanco;
@@ -134,5 +141,181 @@ describe('status de reserva da Etapa 4 na tela de requisições', () => {
     const valores = [...container.querySelectorAll('select option')].map((o) => o.value);
     expect(valores).toContain('PARCIALMENTE_RESERVADA');
     expect(valores).toContain('TOTALMENTE_RESERVADA');
+  });
+});
+
+// ─── Etapa 15: assinatura digital na entrega (contratos C1/C2/C4 congelados) ────────────────
+//
+// Mock de fronteira HTTP é legítimo aqui: o teste programa contra o CONTRATO (POST multipart
+// C1 e detalhe C2), não contra o backend — a prova cruzando o motor real é a Task 5.
+describe('Etapa 15: colher assinatura do recebedor na entrega', () => {
+  const ASSINATURA = {
+    id: 1,
+    recebedor_nome: 'Maria Recebedora',
+    arquivo_url: '/api/uploads/almoxarifado/assinatura-abc.png',
+    criado_em: '2026-08-28T14:00:00',
+    criado_por_nome: 'Almoxarife Teste',
+  };
+
+  beforeEach(() => {
+    // jsdom não implementa canvas 2D, toBlob nem pointer capture — o AssinaturaCanvas
+    // renderiza dentro do fluxo. No beforeEach (não beforeAll) porque o CRA roda com
+    // `resetMocks: true`, que apagaria a implementação antes de cada teste.
+    HTMLCanvasElement.prototype.getContext = jest.fn(() => ({
+      fillStyle: '', strokeStyle: '', lineWidth: 0, lineCap: '', lineJoin: '',
+      fillRect: jest.fn(), beginPath: jest.fn(), moveTo: jest.fn(),
+      lineTo: jest.fn(), stroke: jest.fn(),
+    }));
+    HTMLCanvasElement.prototype.toBlob = jest.fn(function (cb) {
+      cb(new Blob(['png-fake'], { type: 'image/png' }));
+    });
+    HTMLElement.prototype.setPointerCapture = jest.fn();
+    HTMLElement.prototype.releasePointerCapture = jest.fn();
+  });
+
+  const emSeparacaoComSeparado = () => ({
+    ...baseRequisicao('EM_SEPARACAO'),
+    itens: [{ ...ITEM, quantidade_separada: 5 }],
+  });
+
+  // jsdom não tem PointerEvent; React delega pelo type do evento, então um MouseEvent com
+  // o type certo (+ pointerId) atravessa a delegação do React 18.
+  const pointerEvent = (tipo, x, y) => {
+    const ev = new MouseEvent(tipo, { bubbles: true, cancelable: true, clientX: x, clientY: y });
+    Object.defineProperty(ev, 'pointerId', { value: 1 });
+    return ev;
+  };
+
+  const desenharNoCanvas = () => {
+    const canvas = container.querySelector('canvas');
+    act(() => { canvas.dispatchEvent(pointerEvent('pointerdown', 10, 10)); });
+    act(() => { canvas.dispatchEvent(pointerEvent('pointermove', 40, 30)); });
+    act(() => { canvas.dispatchEvent(pointerEvent('pointerup', 40, 30)); });
+  };
+
+  // Input controlado do React: setar .value direto não dispara o onChange — usa o setter
+  // nativo + evento input, que o React ouve.
+  const digitar = (input, valor) => {
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    act(() => {
+      setter.call(input, valor);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  };
+
+  const inputRecebedor = () => [...container.querySelectorAll('input')]
+    .find((i) => (i.placeholder || '').toLowerCase().includes('recebeu'));
+
+  const entregarTudo = async () => {
+    api.put.mockResolvedValue({ data: { parcial: false } });
+    await act(async () => { botaoPorTexto('Confirmar Entrega e Baixar Estoque').click(); });
+  };
+
+  test('após entrega ok abre a etapa "Colher assinatura do recebedor" (nome + canvas + Pular)', async () => {
+    detalheDoBanco = emSeparacaoComSeparado();
+    await renderizar();
+    await entregarTudo();
+    expect(container.textContent).toContain('Colher assinatura do recebedor');
+    expect(inputRecebedor()).toBeTruthy();
+    expect(container.querySelector('canvas')).toBeTruthy();
+    expect(botaoPorTexto('Pular')).toBeTruthy();
+  });
+
+  test('Pular fecha a etapa sem POST de assinatura (RN-02: opcional de verdade)', async () => {
+    detalheDoBanco = emSeparacaoComSeparado();
+    await renderizar();
+    await entregarTudo();
+    await act(async () => { botaoPorTexto('Pular').click(); });
+    expect(container.textContent).not.toContain('Colher assinatura do recebedor');
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  test('confirmar com nome → POST multipart C1 com recebedor_nome e assinatura', async () => {
+    detalheDoBanco = emSeparacaoComSeparado();
+    await renderizar();
+    await entregarTudo();
+    api.post.mockResolvedValue({ data: { success: true, assinatura: ASSINATURA } });
+    digitar(inputRecebedor(), 'José da Silva');
+    desenharNoCanvas();
+    await act(async () => { botaoPorTexto('Confirmar assinatura').click(); });
+
+    expect(api.post).toHaveBeenCalledTimes(1);
+    const [url, fd] = api.post.mock.calls[0];
+    expect(url).toBe('/almoxarifado/requisicoes/55/assinatura-entrega');
+    expect(fd).toBeInstanceOf(FormData);
+    expect(fd.get('recebedor_nome')).toBe('José da Silva');
+    const arquivo = fd.get('assinatura');
+    expect(arquivo).toBeTruthy();
+    expect(arquivo.type).toBe('image/png');
+    // fechou a etapa depois do sucesso
+    expect(container.textContent).not.toContain('Colher assinatura do recebedor');
+  });
+
+  test('sem nome do recebedor não faz POST (campo obrigatório do contrato C1)', async () => {
+    detalheDoBanco = emSeparacaoComSeparado();
+    await renderizar();
+    await entregarTudo();
+    desenharNoCanvas();
+    await act(async () => { botaoPorTexto('Confirmar assinatura').click(); });
+    expect(api.post).not.toHaveBeenCalled();
+    // etapa continua aberta esperando o nome
+    expect(container.textContent).toContain('Colher assinatura do recebedor');
+  });
+
+  test('falha no POST de assinatura mostra erro e NÃO desfaz a entrega (RN-02)', async () => {
+    const { toast } = require('react-toastify');
+    detalheDoBanco = emSeparacaoComSeparado();
+    await renderizar();
+    await entregarTudo();
+    api.put.mockClear();
+    api.post.mockRejectedValue({ response: { data: { error: 'Falha ao salvar assinatura' } } });
+    digitar(inputRecebedor(), 'José da Silva');
+    desenharNoCanvas();
+    await act(async () => { botaoPorTexto('Confirmar assinatura').click(); });
+    expect(toast.error).toHaveBeenCalledWith('Falha ao salvar assinatura');
+    // nada de desfazer: nenhum PUT novo (estorno/cancelamento) depois da falha
+    expect(api.put).not.toHaveBeenCalled();
+  });
+
+  test('detalhe com assinaturas_entrega renderiza nome, data e thumbnail (C2)', async () => {
+    detalheDoBanco = {
+      ...baseRequisicao('ENTREGUE'),
+      assinaturas_entrega: [ASSINATURA],
+    };
+    await renderizar();
+    expect(container.textContent).toContain('Maria Recebedora');
+    expect(container.textContent).toContain('28/08');
+    const thumb = [...container.querySelectorAll('img')]
+      .find((img) => (img.getAttribute('src') || '').includes('/api/uploads/almoxarifado/assinatura-abc.png'));
+    expect(thumb).toBeTruthy();
+  });
+
+  test.each(['ENTREGUE', 'PARCIALMENTE_ATENDIDA', 'ENCERRADA'])(
+    'botão "＋ Assinatura de entrega" aparece em %s', async (status) => {
+      detalheDoBanco = baseRequisicao(status);
+      await renderizar();
+      expect(botaoPorTexto('Assinatura de entrega')).toBeTruthy();
+    }
+  );
+
+  test('botão avulso NÃO aparece fora dos status entregues', async () => {
+    detalheDoBanco = emSeparacaoComSeparado();
+    await renderizar();
+    expect(botaoPorTexto('Assinatura de entrega')).toBeFalsy();
+  });
+
+  test('botão avulso some sem pode(separar_emitir) — quem entrega é quem colhe (RN-05)', async () => {
+    mockPode = (acao) => acao !== 'separar_emitir';
+    detalheDoBanco = baseRequisicao('ENTREGUE');
+    await renderizar();
+    expect(botaoPorTexto('Assinatura de entrega')).toBeFalsy();
+  });
+
+  test('botão avulso abre a mesma etapa de assinatura', async () => {
+    detalheDoBanco = baseRequisicao('ENTREGUE');
+    await renderizar();
+    await act(async () => { botaoPorTexto('Assinatura de entrega').click(); });
+    expect(container.textContent).toContain('Colher assinatura do recebedor');
+    expect(container.querySelector('canvas')).toBeTruthy();
   });
 });
