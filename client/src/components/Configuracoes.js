@@ -119,7 +119,14 @@ const Configuracoes = () => {
   //
   // Por isso a senha e o UNICO campo desta tela que nao salva a cada tecla: o onChange so alimenta
   // o estado local e o PUT sai no blur. Salvar por tecla aqui gravaria as senhas parciais 'N',
-  // 'No', 'Nov'... e quem saisse da tela no meio da digitacao deixaria o SMTP com meia senha.
+  // 'No', 'Nov'...
+  //
+  // O que o blur GARANTE, e o que nao garante (achado A7 da revisao adversarial, reproduzido):
+  // ele reduz N gravacoes parciais para UMA, nao elimina a parcial. Quem digita metade da senha e
+  // clica no campo de cima para conferir o usuario dispara o blur e grava a metade. O 400 do
+  // servidor nao pega isso — 'Nov' e um valor legitimo do ponto de vista da guarda. Fechar de
+  // verdade exigiria botao de salvar explicito nesta tela, que salva tudo por tecla; fica
+  // declarado em vez de descrito como resolvido.
   // Campo vazio nao dispara PUT nenhum — e assim que se mantem a senha atual (o servidor tambem
   // recusa vazio com 400, RN-06; a tela so evita o erro desnecessario).
   const salvarSenhaSmtp = async () => {

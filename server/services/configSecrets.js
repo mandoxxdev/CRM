@@ -26,8 +26,16 @@ const PASSWORD_MASK = alertService.PASSWORD_MASK;
 // design da Etapa 21).
 const CHAVES_SECRETAS_CORE = ['email_smtp_pass'];
 
+// Normaliza antes de comparar (achado A9 da revisao adversarial, reproduzido): a comparacao era
+// por igualdade exata, entao `PUT /api/configuracoes/EMAIL_SMTP_PASS` e
+// `PUT /api/configuracoes/email_smtp_pass%20` (com espaco no fim) criavam LINHAS NOVAS, fora da
+// lista de secretas — gravadas e devolvidas EM CLARO pelos dois GETs para todo o grupo
+// administrativo-ou-comercial. A linha real continuava intacta, entao nao vazava o segredo
+// existente; o buraco era o admin que "consertasse" a senha na grafia errada.
 function ehChaveSecretaCore(chave) {
-  return CHAVES_SECRETAS_CORE.includes(chave);
+  if (typeof chave !== 'string') return false;
+  const normalizada = chave.trim().toLowerCase();
+  return CHAVES_SECRETAS_CORE.some((c) => c.toLowerCase() === normalizada);
 }
 
 /**
@@ -66,7 +74,17 @@ const MENSAGEM_SEGREDO_INVALIDO =
  * do core salva a cada tecla. Com a mascara no input, o admin que clicasse no campo e digitasse
  * mandaria '********N' — que NAO e a mascara, passa em qualquer guarda de igualdade e
  * SOBRESCREVE a senha real com lixo. E como o GET seguinte remascara, o estrago fica invisivel
- * ate o proximo e-mail nao sair. A tela foi corrigida junto (RN-07: campo nasce vazio), mas a
+ * — e ninguem percebe.
+ *
+ * CORRECAO (achado A10 da revisao adversarial): este comentario dizia "invisivel ATE O PROXIMO
+ * E-MAIL NAO SAIR", e isso e FALSO. Varredura em todo `server/` fora de `tests/`: NINGUEM le
+ * `email_smtp_*` da tabela `configuracoes` — os unicos toques sao o seed (`index.js:2116-2120`)
+ * e os dois GETs, e `getEmailConfig` ficou deliberadamente sem banco (RN-04). Sobrescrever
+ * `email_smtp_pass` hoje nao quebra envio nenhum, porque a coluna e dado morto. A guarda
+ * continua valendo — a coluna e exibida como senha configurada, e uma etapa futura pode ligar o
+ * banco na precedencia — mas a consequencia declarada nao pode ser inventada: exagerar o
+ * estrago engana tanto quanto minimiza-lo, e faz a proxima sessao priorizar errado.
+ * A tela foi corrigida junto (RN-07: campo nasce vazio), mas a
  * guarda do servidor nao pode depender de a tela estar certa — e o backend que decide.
  *
  * Vazio tambem e recusa, nao "apagar a senha": o unico jeito de esvaziar o campo passa a ser um
@@ -77,9 +95,13 @@ const MENSAGEM_SEGREDO_INVALIDO =
  */
 function podeGravarSegredo(valor) {
   if (valor === null || valor === undefined) return { ok: false, motivo: 'VAZIO' };
-  const texto = String(valor);
-  if (texto.trim() === '') return { ok: false, motivo: 'VAZIO' };
-  if (texto.includes(PASSWORD_MASK)) return { ok: false, motivo: 'MASCARA' };
+  // Achado A8 da revisao adversarial, reproduzido: `{"valor":{"a":"x"},"tipo":"json"}` gravava
+  // `[object Object]` na coluna do segredo, porque `String({})` nao e vazio e nao contem a
+  // mascara. Senha e texto; qualquer outra coisa e engano de quem chama ou payload malicioso, e
+  // a coluna do segredo nao e lugar para descobrir isso depois.
+  if (typeof valor !== 'string') return { ok: false, motivo: 'TIPO' };
+  if (valor.trim() === '') return { ok: false, motivo: 'VAZIO' };
+  if (valor.includes(PASSWORD_MASK)) return { ok: false, motivo: 'MASCARA' };
   return { ok: true, motivo: null };
 }
 

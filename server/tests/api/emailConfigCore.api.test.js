@@ -142,6 +142,24 @@ test('assinatura travada em 2 parametros (env, padroes) — o banco NAO particip
     `resolverEmailConfig deveria receber exatamente (env, padroes), recebe ${resolverEmailConfig.length} parametros`);
   assert.deepStrictEqual(Object.keys(emailConfig).sort(), ['resolverEmailConfig'],
     'o modulo passou a exportar outra coisa — se for um leitor de banco, a RN-04 caiu');
+
+  // A ARIDADE SOZINHA NAO SEGURA A RN-04, e a revisao adversarial provou: reintroduzindo a
+  // leitura de banco DENTRO da funcao — sem mexer na assinatura nem nas exports, com a leitura
+  // valendo so quando ha conexao aberta (em teste unitario nao ha) — este arquivo ficava 9/9
+  // VERDE e, em producao, o host voltava a ser `smtplw.com.br`. Ou seja: a assercao acima
+  // registra a decisao, nao a impede. Quem impede e a de baixo, sobre o FONTE do modulo: o
+  // caminho realista de "usar o banco" precisa de um require de banco ou de um SELECT, e
+  // nenhum dos dois cabe num resolvedor de precedencia que recebe tudo por parametro.
+  const fonteModulo = require('fs')
+    .readFileSync(require('path').join(__dirname, '../../services/emailConfig.js'), 'utf8');
+  const semComentarios = fonteModulo
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+  for (const proibido of ['sqlite3', 'require(', 'SELECT', 'configuracoes', 'db.']) {
+    assert.ok(!semComentarios.includes(proibido),
+      `services/emailConfig.js passou a conter "${proibido}" fora de comentario — `
+      + 'a RN-04 manda o banco ficar FORA da precedencia, e um resolvedor puro nao precisa disso');
+  }
 });
 
 test('[fiacao] getEmailConfig do core consome esta regua (checagem de TEXTO)', () => {

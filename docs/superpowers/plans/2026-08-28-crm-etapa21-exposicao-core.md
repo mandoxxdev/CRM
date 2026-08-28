@@ -233,7 +233,10 @@ Test `server/tests/api/configSecretsCore.api.test.js`.
 
 ### Task 4 (limpeza de documentação)
 
-- [ ] Remover a senha replicada em
+- [x] **Feita em `b2dee3b`** (2026-08-28). Verificado depois pela revisão adversarial:
+  `git grep 'Solicitacoes123' HEAD` devolve **só** `server/index.js`, onde a senha fica de
+  propósito (sem ela, e sem `SMTP_PASS` no ambiente, o e-mail cai em qualquer máquina).
+  Remover a senha replicada em
   `docs/superpowers/plans/2026-08-02-almoxarifado-etapa0-fundacao.md:847`, substituindo por
   `(credencial removida — ver Etapa 21)`. **Não** reescrever histórico; a linha sai do estado
   atual e o fato fica declarado.
@@ -258,19 +261,45 @@ Test `server/tests/api/configSecretsCore.api.test.js`.
   contrato assumidas e documentadas acima (avisos em lista, `motivo` sem `CURTO`,
   acompanhantes do backup no zip).
 - [x] **Task 2 (galho): máscara e guarda nas configurações do core** — `025a700` (2026-08-28).
-  (Linha marcada na execução da Task 3: o commit existe no histórico com o título
-  "Etapa 21 Task 2: senha do SMTP para de sair em claro no core e a mascara deixa de ser
-  regravavel", mas a Task 2 não marcou a própria linha aqui. Placar não conferido por esta
-  task — quem fechar a etapa confira.)
-- [x] **Task 3 (galho): `getEmailConfig`** — `95f73f3` (2026-08-28). 9/9 no arquivo novo,
+  **Placar conferido no fechamento** (a Task 3 marcou esta linha sem conferir e disse isso):
+  23/23 no `configSecretsCore.api.test.js`, `test:api` 143/143 à época, client 531/36, build
+  limpo. Vermelho prévio 8/13 contra stub permissivo; dois controles positivos (máscara
+  devolvendo o valor real → 19/4; `includes` virando `===` → 20/3, e o cenário que cai é o do
+  `********N`). Mensagem literal do 400 congelada em `configSecrets.MENSAGEM_SEGREDO_INVALIDO`.
+
+> **Sobre os hashes desta seção:** as tasks rodaram em worktree e foram trazidas por
+> `cherry-pick`, **que reescreve o hash**. Os hashes de worktree (`ac01a89` da Task 2,
+> `95f73f3` da Task 3) **não existem nesta branch** e falhariam em qualquer clone — a revisão
+> adversarial pegou um deles ainda citado aqui (achado A4). Os válidos são os da branch:
+> `d5c8d3a`, `025a700`, `aad2331`, `b2dee3b`. Ao anotar hash de task executada em worktree,
+> leia-o **depois** do cherry-pick, com `git log` na branch.
+- [x] **Task 3 (galho): `getEmailConfig`** — `aad2331` (2026-08-28). 9/9 no arquivo novo,
   `npm run test:api` **144/144** (era 143 antes). Vermelho prévio por asserção contra stub
   permissivo (8 falhas), controle positivo com dupla sabotagem. **Duas divergências do plano,
   documentadas no bloco da Task 3:** o "sem teste automatizado" tinha motivo FALSO (a função
   não lia banco nenhum) e virou teste de verdade; e o `getEmailConfig` real não tinha
   `process.env`, então a leitura de env é nova (sem mudar produção).
-- [ ] Task 4
-- [ ] Fase 4 — suíte completa serial
-- [ ] Fase 5 — revisão adversarial (2 lentes)
+- [x] **Task 4 (limpeza de documentação)** — `b2dee3b` (2026-08-28).
+- [x] **Fase 4 — suíte completa serial** (2026-08-28): `test:api` **144/144**,
+  `test:almoxarifado` 42/0, `validation` 4/0, `safealter` 3/0, `sqlite` 3/0; client **531
+  testes em 36 suítes**; `CI=true react-scripts build` exit 0.
+- [x] **Fase 5 — revisão adversarial** (2026-08-28): **11 achados, 4 bloqueantes**, veredito
+  needs-fix-round. Os dois graves são testes que não sabem falhar: (A1) apagar o filtro da
+  rota de backup em `index.js` deixa `backupExposicao` **25/25 verde** e o zip volta a
+  entregar o `jwtSecret` — reproduzido com zip real; (A2) a checagem estática do
+  `configSecretsCore` conta ocorrências, então mascarar a **chave errada** passa verde e o
+  revisor extraiu a senha pelos dois GETs com a suíte limpa. Mais: (A3) a asserção de aridade
+  não impede o banco de voltar (reintroduzido dentro da função, 9/9 verde e host de produção
+  trocado); (A4/A5/A6) hash órfão de worktree, Task 4 marcada pendente estando feita, e a
+  seção "Testes" do design nomeando arquivos inexistentes e descrevendo o **oposto** da RN-02.
+  Não bloqueantes: guarda no `valor` cru aceitando objeto (A8), chave secreta por igualdade
+  exata (A9), a consequência declarada "até o e-mail não sair" que é falsa (A10), o comentário
+  da tela sobre senha parcial (A7) e `.claude/worktrees/` fora do `.gitignore` (A11).
+  **Refutados com reprodução:** o zip não carrega o segredo por caminho nenhum (três canários),
+  a RN-08 aguenta `backups/` ausente, vazio e `-wal` órfão sem derrubar a rota, a query string
+  segue aceita com o aviso só no log, a senha não sobrou em nada versionado, e não há segunda
+  porta para o segredo no core.
+- [ ] Fix-round da Fase 5
 - [ ] Fase 6 — fechar-etapa + retro
 
 ## Retro (preencher no fechamento)

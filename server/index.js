@@ -18490,6 +18490,11 @@ app.put('/api/configuracoes/:chave', authenticateToken, requireAdministrativoCon
   const { chave } = req.params;
   const { valor, tipo, categoria, descricao } = req.body;
 
+  // Achado A8 da revisao adversarial: `{"valor":{"a":"x"},"tipo":"json"}` passava na guarda e
+  // gravava `[object Object]` na coluna do segredo — `String({})` nao e vazio e nao contem a
+  // mascara. A correcao esta em `podeGravarSegredo`, que agora recusa o que nao e texto
+  // (motivo 'TIPO'). Julgar `valorFinal` em vez do cru NAO resolveria: `String(undefined)` e a
+  // string `'undefined'`, que passaria — o valor ausente deixaria de ser recusado.
   if (ehChaveSecretaCore(chave)) {
     const guarda = podeGravarSegredo(valor);
     if (!guarda.ok) {

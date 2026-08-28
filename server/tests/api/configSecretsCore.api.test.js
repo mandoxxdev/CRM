@@ -26,7 +26,12 @@
  *   CONTENHA a mascara. O `contem` e o ponto: a tela do core salva a cada tecla, entao o admin
  *   que clicasse no campo com '********' e digitasse mandaria '********N' — que NAO e a
  *   mascara, passa em qualquer guarda de igualdade e SOBRESCREVE a senha real com lixo; e como
- *   o GET seguinte remascara, o estrago fica invisivel ate o proximo e-mail nao sair.
+ *   o GET seguinte remascara, o estrago fica invisivel.
+ *   (A versao anterior desta frase dizia "invisivel ate o proximo e-mail nao sair". ESTAVA
+ *   ERRADA: ninguem em `server/` le `email_smtp_*` da tabela `configuracoes`, entao a coluna e
+ *   dado morto hoje e sobrescreve-la nao derruba envio nenhum. A guarda vale pelo que a coluna
+ *   representa e por uma etapa futura ligar o banco na precedencia — ver o comentario de
+ *   `podeGravarSegredo`.)
  */
 const assert = require('assert');
 
@@ -195,9 +200,15 @@ test('[fiacao] as 3 rotas do core consomem esta regua (checagem de TEXTO, nao de
   const fonte = require('fs').readFileSync(require('path').join(__dirname, '../../index.js'), 'utf8');
   assert.ok(fonte.includes("require('./services/configSecrets')"),
     'server/index.js parou de importar services/configSecrets');
-  const usosMascara = fonte.split('mascararValorConfig').length - 1;
-  assert.ok(usosMascara >= 3, // 1 no require + 1 em cada GET
-    `mascararValorConfig aparece ${usosMascara}x em index.js — um dos dois GETs perdeu a mascara`);
+  // CONTAR OCORRENCIAS NAO BASTA, e a revisao adversarial provou: trocando
+  // `mascararValorConfig(row.chave, valor)` por `mascararValorConfig('empresa_nome', valor)` nos
+  // dois GETs, a contagem continuava >= 3 e o teste passava 23/23 — enquanto as rotas reais
+  // devolviam a senha SMTP em claro (canario extraido pelos dois GETs com a suite verde).
+  // A assercao passa a ser sobre a CHAMADA LITERAL: a chave mascarada tem de ser a da linha.
+  const chamadasCertas = fonte.split('mascararValorConfig(row.chave, valor)').length - 1;
+  assert.ok(chamadasCertas >= 2, // 1 em cada GET (plural e singular)
+    `mascararValorConfig(row.chave, valor) aparece ${chamadasCertas}x em index.js — `
+    + 'um dos dois GETs perdeu a mascara ou passou a mascarar outra chave');
   assert.ok(fonte.split('podeGravarSegredo').length - 1 >= 2,
     'o PUT /api/configuracoes/:chave perdeu a guarda do segredo');
   assert.ok(fonte.includes('MENSAGEM_SEGREDO_INVALIDO'),

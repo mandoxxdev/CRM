@@ -193,5 +193,30 @@ test('Bearer vazio nao e tratado como token', () => {
   assert.strictEqual(r.motivo, 'AUSENTE');
 });
 
+// ── Fiacao em index.js ───────────────────────────────────────────────────────────────
+// ESTE ARQUIVO NASCEU SEM ESTE CENARIO, e a revisao adversarial mostrou o custo: apagando o
+// TERCEIRO argumento de archive.directory em index.js — uma linha, servico intacto — a suite
+// ficava 25/25 VERDE e o zip real voltava a entregar `.runtime-secrets.json` com o jwtSecret,
+// que e escalada de privilegio (quem baixa forja token de superadmin). A regra pura sozinha nao
+// protege nada se ninguem a chamar. Nao ha harness de core, entao a checagem e de TEXTO — e por
+// isso mesmo e sobre a CHAMADA LITERAL, nao sobre contagem de identificador (a contagem passa
+// com a fiacao presente-porem-errada; ver configSecretsCore.api.test.js).
+test('[fiacao] a rota de backup consome esta regua (checagem de TEXTO, nao de comportamento)', () => {
+  const fonte = require('fs').readFileSync(require('path').join(__dirname, '../../index.js'), 'utf8');
+  assert.ok(fonte.includes("require('./services/backupPackage')"),
+    'server/index.js parou de importar services/backupPackage');
+  assert.ok(fonte.includes("require('./services/backupAuth')"),
+    'server/index.js parou de importar services/backupAuth');
+  assert.ok(fonte.includes('archive.directory(backupDir, false, '),
+    'archive.directory perdeu o 3o argumento — o zip volta a levar o diretorio INTEIRO, '
+    + 'incluindo .runtime-secrets.json com o jwtSecret');
+  assert.ok(fonte.includes('deveIncluirNoBackup(entry.name)'),
+    'o filtro do zip parou de consultar deveIncluirNoBackup');
+  assert.ok(fonte.includes('backupMaisRecente('),
+    'a rota parou de somar a copia de backup mais recente — RN-08, o fallback de recuperacao');
+  assert.ok(fonte.includes('validarTokenBackup('),
+    'o gate do backup parou de usar a comparacao em tempo constante');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

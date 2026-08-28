@@ -143,15 +143,28 @@ Três funções puras novas em `server/services/`, testáveis sem HTTP (o padrã
 
 ## Testes
 
-- `backupPackage.api.test.js`: RN-01 (os dois excluídos, o resto incluído, e um caso provando
-  que `database.sqlite` **continua** entrando — senão o backup deixaria de ser backup).
-- `backupAuth.api.test.js`: RN-02 (header ok, query recusada, token curto recusado, token
-  errado recusado, ausência de env recusada).
-- `configSecrets.api.test.js`: RN-05/RN-06 (máscara nas duas formas; `podeGravarSegredo`
-  recusando vazio e a própria máscara).
-- **Declarado sem teste:** o gate HTTP das três rotas e o `getEmailConfig` — não há harness de
-  core, e montar um exigiria extrair rotas de um arquivo de 23 mil linhas. As funções puras
-  cobrem a régua; a fiação fica declarada.
+> **Esta seção inteira estava ERRADA** e a revisão adversarial a pegou (achado A6): ela nomeava
+> três arquivos que não existem e descrevia o comportamento **oposto** ao entregue no token
+> ("query recusada, token curto recusado"), que é o que a própria RN-02 deste documento manda
+> **não** fazer. Era texto da versão anterior à correção A4, sobrevivendo à correção. Segue o
+> que existe de fato:
+
+- `backupExposicao.api.test.js` (**25 cenários**): RN-01 (os dois excluídos, o resto incluído, e
+  um caso provando que `database.sqlite` **continua** entrando — senão o backup deixaria de ser
+  backup), RN-02 (header ok; **query string ACEITA com aviso `QUERY_DEPRECIADA`**; token curto
+  **aceito com aviso `CURTO`**; token errado e ausência de env recusados) e RN-08.
+- `configSecretsCore.api.test.js` (**23 cenários**): RN-05/RN-06 — máscara nas duas formas,
+  fonte única da constante, e `podeGravarSegredo` recusando vazio, espaços, a máscara e
+  **qualquer valor que a contenha** (`********N`).
+- `emailConfigCore.api.test.js` (**9 cenários**): RN-04 — precedência campo a campo e o `from`
+  caindo para `user` quando não é endereço único.
+- **Declarado sem teste:** o gate HTTP das três rotas de configuração — não há harness de core,
+  e montar um exigiria extrair rotas de um arquivo de 23 mil linhas.
+  **A fiação, porém, NÃO pode ficar só declarada onde o defeito é grave**: a revisão apagou uma
+  linha do `index.js` e reabriu a escalada de privilégio com a suíte **25/25 verde**. Onde o
+  custo de errar é esse, a etapa trava o **texto literal da chamada** em `index.js` — não é
+  teste de comportamento e está rotulado como tal, mas pega a fiação sendo removida ou
+  trocada, que foi exatamente como o defeito nasceu.
 
 ## O que muda em cada camada
 

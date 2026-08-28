@@ -77,3 +77,7 @@ deploy/
 .nixpacks/
 
 .superpowers/
+
+# Worktrees de agente (Claude Code). Sao copias completas do repo — 89 MB cada — e
+# carregam server/index.js com a credencial SMTP em claro. Nao versionar.
+.claude/worktrees/
