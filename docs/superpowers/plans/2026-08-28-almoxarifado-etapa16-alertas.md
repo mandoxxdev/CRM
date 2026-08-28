@@ -255,15 +255,18 @@ Reposição (`ReposicaoAlmoxarifado.js` — o Critical da E11: 403 nunca vira te
 
 **Files:** Test: `server/tests/api/alertaJornada.api.test.js`
 
-- [ ] **Step 1: jornada** — semear 3 condições reais (calibração vencida; requisição
+- [x] **Step 1: jornada** — semear 3 condições reais (calibração vencida; requisição
   atrasada; reserva parada) → `varrerAlertasRegistrados` → fila com os 3 eventos
-  (`dbAll` na `fila_notificacoes_almoxarifado`) → `GET /alertas/central` com os 3 totais ≥1 →
-  resolver a requisição (entregar de verdade pela rota, motor real) → central mostra
-  requisição atrasada a menos; a fila NÃO encolheu (RN-05) → 2ª varredura → 0 novas (RN-02
-  ponta a ponta).
-- [ ] **Step 2: rodar; controle positivo se passar de primeira** (sabotar o status-set do
-  SQL de requisição atrasada incluindo `'ENTREGUE'` e ver o passo "a menos" falhar;
-  reverter). `npm run test:api` inteiro; commit —
+  (`fila_notificacoes_almoxarifado`, asserção POR EVENTO/hash de dedupe) →
+  `GET /alertas/central` com os 3 totais ≥1 → resolver a requisição entregando de verdade
+  pela rota (separar APROVADO→EM_SEPARACAO + entregar; motor real: saldo 50→40 e
+  movimentação SAIDA gravada) → central mostra requisição atrasada a menos; a fila NÃO
+  encolheu (RN-05) → 2ª varredura → 0 novas (RN-02 ponta a ponta).
+- [x] **Step 2: rodar; controle positivo se passar de primeira** — passou de primeira
+  (5/5), então a sabotagem obrigatória foi feita: `'ENTREGUE'` retirado de
+  `STATUS_FORA_DO_ATRASO` no `alertRegistry.js` derrubou exatamente os passos 4 ("a
+  menos") e 5 (3/5); revertida, 5/5 de novo, `git diff` limpo. `npm run test:api` inteiro:
+  128/128 arquivos OK; commit `5b468ac`
   `Almoxarifado Etapa 16 Task 4: jornada de integracao dos alertas`.
 
 ---
@@ -315,7 +318,15 @@ Reposição (`ReposicaoAlmoxarifado.js` — o Critical da E11: 403 nunca vira te
   `extended.js` gateado por `requirePermission('ver_alertas')`. A Task 3 consome o C1 como
   está; a Task 4 consome a rota + `varrerAlertasRegistrados`.
 - [ ] Task 3 (galho)
-- [ ] Task 4 (integração)
+- [x] Task 4 (integração) — `5b468ac` (2026-08-28). `alertaJornada.api.test.js` 5/5:
+  3 condições reais (calibração vencida; requisição atrasada em APROVADO com item e
+  material com saldo; reserva ATIVA de 40 dias) → varredura → fila (asserção por
+  evento/hash, nunca total global) → central com os 3 → entrega REAL pela rota (separar +
+  entregar, `stockService` baixa 50→40 e grava SAIDA) → central com a requisição a menos e
+  fila intacta (RN-05) → 2ª varredura 0 novas (RN-02). Passou de primeira → controle
+  positivo: sabotagem do status-set (`ENTREGUE` fora da exclusão) caçada pelos passos 4 e 5
+  (3/5), revertida, 5/5 e diff limpo. Suíte `npm run test:api` completa: **128/128 arquivos
+  OK**. Nota: rodou antes da Task 3 (galho de client, independente — contrato C1 congelado).
 - [ ] Fase 4 — suíte completa serial
 - [ ] Fase 5 — revisão adversarial (2 lentes)
 - [ ] Fase 6 — fechar-etapa + retro
