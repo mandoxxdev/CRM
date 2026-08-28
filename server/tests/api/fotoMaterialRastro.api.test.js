@@ -11,12 +11,19 @@
  *   uploads/almoxarifado sem nada no banco apontando pra ele (contagem antes/depois, molde
  *   `permissoesRotas.api.test.js:535-549`, `uploadsAlmoxDir` vindo do harness).
  *
- * - RN-02, ramo "erro de banco": FICA SEM TESTE, DE PROPOSITO. `routes/almoxarifado.js:35`
- *   desestrutura `const { dbRun, dbGet, dbAll }` — o binding e resolvido no require e cacheado,
- *   entao um stub no modulo `db` nao alcanca o call site (mesma armadilha ja documentada em
- *   `auditoriaConfiguracoes.api.test.js:456-461`). O codigo do 500 + limpeza existe e esta
- *   escrito; o que nao existe e uma forma honesta de exercita-lo daqui. Declarado em vez de
- *   coberto por um teste que passaria sem provar nada.
+ * - RN-02, ramo "erro de banco": a versao anterior deste cabecalho dizia que este ramo FICAVA
+ *   SEM TESTE porque `routes/almoxarifado.js:35` desestrutura `const { dbRun, dbGet, dbAll }` e
+ *   o binding cacheado no require nao alcanca um stub no modulo `db`. **A premissa e verdadeira
+ *   e a conclusao ESTAVA ERRADA** — a revisao adversarial reproduziu o contrario. O alvo nao
+ *   precisa ser o modulo: `dbGet(db, ...)`/`dbRun(db, ...)` recebem a INSTANCIA do banco como
+ *   primeiro argumento, e o harness entrega essa mesma instancia aqui. Patchar `db.get`/`db.run`
+ *   na instancia (e restaurar no `finally`) força os dois ramos sem tocar em producao. Os dois
+ *   cenarios abaixo saem de graça.
+ *
+ * - RN-02, ramo TOCTOU: o SELECT resolve o material inexistente, mas nao fecha a janela entre o
+ *   SELECT e o UPDATE. Com a linha sumindo no meio, a rota respondia 200 e deixava arquivo no
+ *   disco para material que nao existe. Provado deterministicamente aqui, apagando a linha de
+ *   dentro do `db.run` patchado, imediatamente antes do UPDATE real.
  *
  * - RN-02, ramo 403: nao ha arquivo para limpar — `requirePermission` roda ANTES do multer,
  *   entao nada foi gravado. Ja provado por `permissoesRotas.api.test.js:535-549`, que serve
@@ -225,6 +232,81 @@ let seq = 0;
       assert.ok(fs.existsSync(path.join(uploadsAlmoxDir, res.body.foto)), 'o arquivo novo sumiu');
     } finally {
       auditModule.registrarAuditoria = original;
+    }
+  });
+
+  // ══════════════════ RN-02 — erro de banco e TOCTOU (ver o cabecalho) ══════════════════
+  // O patch e na INSTANCIA `db`, que e o 1o argumento de `dbGet(db, ...)`/`dbRun(db, ...)`, e nao
+  // no modulo — por isso alcança o call site mesmo com o require desestruturado. Sempre com
+  // `finally` restaurando: vazar o patch envenenaria os cenarios seguintes em silencio.
+
+  await test('[RN-02] falha no SELECT -> 500 e sem orfao no disco', async () => {
+    const matId = await criarMaterial();
+    const antes = contarArquivosUpload();
+    const getOriginal = db.get;
+    db.get = function (sql, params, cb) {
+      if (typeof sql === 'string' && sql.includes('SELECT id, codigo, nome, foto FROM materiais_almoxarifado')) {
+        const callback = typeof params === 'function' ? params : cb;
+        return callback(new Error('SQLITE_IOERR: disco simulado'));
+      }
+      return getOriginal.apply(this, arguments);
+    };
+    try {
+      const res = await enviarFoto(matId, 'select-quebrado.png');
+      assert.strictEqual(res.status, 500, `esperava 500, veio ${res.status}: ${JSON.stringify(res.body)}`);
+      assert.strictEqual(contarArquivosUpload(), antes,
+        'o 500 do SELECT nao limpou o arquivo que o multer ja tinha gravado');
+    } finally {
+      db.get = getOriginal;
+    }
+  });
+
+  await test('[RN-02] falha no UPDATE -> 500, sem orfao e sem gravar a coluna', async () => {
+    const matId = await criarMaterial();
+    const antes = contarArquivosUpload();
+    const runOriginal = db.run;
+    db.run = function (sql, params, cb) {
+      if (typeof sql === 'string' && sql.includes('UPDATE materiais_almoxarifado SET foto = ?')) {
+        const callback = typeof params === 'function' ? params : cb;
+        return callback(new Error('SQLITE_FULL: disco cheio simulado'));
+      }
+      return runOriginal.apply(this, arguments);
+    };
+    try {
+      const res = await enviarFoto(matId, 'update-quebrado.png');
+      assert.strictEqual(res.status, 500, `esperava 500, veio ${res.status}: ${JSON.stringify(res.body)}`);
+      assert.strictEqual(contarArquivosUpload(), antes,
+        'o 500 do UPDATE nao limpou o arquivo que o multer ja tinha gravado');
+      assert.strictEqual(await fotoDe(matId), null, 'a coluna foi gravada apesar do UPDATE ter falhado');
+    } finally {
+      db.run = runOriginal;
+    }
+  });
+
+  await test('[RN-02] material apagado ENTRE o SELECT e o UPDATE -> 404, sem 200 mentiroso', async () => {
+    const matId = await criarMaterial();
+    const antes = contarArquivosUpload();
+    const runOriginal = db.run;
+    let apagou = false;
+    db.run = function (sql, params, cb) {
+      if (!apagou && typeof sql === 'string' && sql.includes('UPDATE materiais_almoxarifado SET foto = ?')) {
+        // A janela: a linha some DEPOIS do SELECT ter respondido e ANTES de o UPDATE rodar.
+        apagou = true;
+        const args = arguments;
+        const self = this;
+        return runOriginal.call(self, 'DELETE FROM materiais_almoxarifado WHERE id = ?', [matId],
+          () => runOriginal.apply(self, args));
+      }
+      return runOriginal.apply(this, arguments);
+    };
+    try {
+      const res = await enviarFoto(matId, 'toctou.png');
+      assert.strictEqual(res.status, 404,
+        `UPDATE casou zero linhas e a rota respondeu ${res.status}: ${JSON.stringify(res.body)}`);
+      assert.strictEqual(res.body.foto, undefined, 'devolveu nome de arquivo para escrita que nao aconteceu');
+      assert.strictEqual(contarArquivosUpload(), antes, 'orfao no disco apos o 404 da janela TOCTOU');
+    } finally {
+      db.run = runOriginal;
     }
   });
 

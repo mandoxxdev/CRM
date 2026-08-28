@@ -659,9 +659,17 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   //
   //  1) RESPONDIA 200 PARA MATERIAL INEXISTENTE. O `db.run` era `function` (tem `this`), mas
   //     ninguém lia `this.changes` — um UPDATE que casou zero linhas devolvia o nome do arquivo
-  //     e a tela dizia "foto salva". Não era bug de arrow function; era omissão. O conserto aqui
-  //     não é ler `changes`: é o SELECT ANTES (404), que também é o que dá o `dados_anteriores`
-  //     da auditoria e o nome da foto a apagar — três necessidades, uma leitura.
+  //     e a tela dizia "foto salva". Não era bug de arrow function; era omissão. O conserto
+  //     principal é o SELECT ANTES (404), que também é o que dá o `dados_anteriores` da
+  //     auditoria e o nome da foto a apagar — três necessidades, uma leitura.
+  //     A versão anterior deste comentário ia além e dizia "o conserto NÃO é ler `changes`":
+  //     ESTAVA ERRADO, e a revisão adversarial reproduziu por quê. O SELECT resolve o caso
+  //     comum, mas deixa a janela SELECT→UPDATE aberta: com a linha sumindo no meio, a rota
+  //     ainda respondia 200 e gravava arquivo no disco para material que não existe. Por isso
+  //     o `changes === 0` abaixo — `dbRun` já devolve `{ changes }` (services/almoxarifado/db.js:5-12),
+  //     então o cinto custa uma linha. Alcance real é baixo (o DELETE de material é soft,
+  //     `ativo = 0`, e não há `DELETE FROM materiais_almoxarifado` no código), mas "baixo" não
+  //     é motivo para responder 200 a uma escrita que não aconteceu.
   //  2) NÃO LIMPAVA O ÓRFÃO em nenhuma saída ≠ 200 (o multer já gravou quando o handler roda).
   //  3) APAGAVA A FOTO ANTERIOR num `db.get` FIRE-AND-FORGET, sem await, correndo em paralelo
   //     com o UPDATE — e com `fs.unlinkSync` SEM try/catch. Uma falha ali (arquivo virou
@@ -691,12 +699,19 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       return res.status(404).json({ error: 'Material não encontrado' });
     }
 
+    let escrita;
     try {
-      await dbRun(db, `UPDATE materiais_almoxarifado SET foto = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      escrita = await dbRun(db, `UPDATE materiais_almoxarifado SET foto = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
         [filename, material.id]);
     } catch (err) {
       limparUploadOrfao(req, uploadsAlmoxDir);
       return res.status(500).json({ error: err.message });
+    }
+    // Fecha a janela SELECT→UPDATE (ver o item 1 acima): se a linha sumiu no meio, o UPDATE casa
+    // zero linhas e não há foto gravada em lugar nenhum — 404 e o arquivo do multer vai embora.
+    if (escrita.changes === 0) {
+      limparUploadOrfao(req, uploadsAlmoxDir);
+      return res.status(404).json({ error: 'Material não encontrado' });
     }
 
     // DEPOIS do UPDATE e em try/catch (ver o item 3 acima). `materialPhotoFilename` porque a
