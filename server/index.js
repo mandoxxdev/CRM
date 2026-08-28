@@ -207,6 +207,8 @@ const {
   persistSeedAdmin,
   generatePassword,
 } = require('./services/runtimeSecrets');
+const { deveIncluirNoBackup, backupMaisRecente } = require('./services/backupPackage');
+const { validarTokenBackup } = require('./services/backupAuth');
 const {
   PERSISTENT_DATA_DIR,
   uploadsDir,
@@ -3466,16 +3468,34 @@ app.get('/api/health', (req, res) => {
 
 // ========== BACKUP DE DADOS (banco + uploads) ==========
 // Uso: GET /api/backup?token=SEU_BACKUP_TOKEN (defina BACKUP_TOKEN no .env do servidor)
+// A query string segue aceita, com aviso de depreciacao no log — ver services/backupAuth.js.
+// O zip NAO leva mais o diretorio de dados inteiro: services/backupPackage.js diz o que fica
+// de fora (`.runtime-secrets.json`, que entregava o jwtSecret e permitia forjar superadmin, e
+// as ~188 MB de copias historicas de `backups/`) e o que volta a entrar (a copia de backup
+// mais recente, o fallback que dbRecovery.js:86 manda usar).
 app.get('/api/backup', (req, res) => {
-  const token = process.env.BACKUP_TOKEN;
-  const provided = req.query.token || (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-  if (!token || provided !== token) {
+  // req.ip E x-forwarded-for: nao ha `trust proxy` configurado, entao atras do nginx o
+  // req.ip vira 127.0.0.1 e o log ficaria inutil justamente em producao.
+  const origem = `ip=${req.ip} xff=${req.headers['x-forwarded-for'] || '-'}`;
+  const auth = validarTokenBackup(
+    { authorization: req.headers.authorization, queryToken: req.query.token },
+    process.env.BACKUP_TOKEN
+  );
+  if (!auth.ok) {
+    console.warn(`[Backup] NEGADO ${origem} motivo=${auth.motivo}`);
+    // Mesmo corpo de antes: o motivo vai para o log, nunca para a resposta.
     return res.status(401).json({ error: 'Token de backup inválido ou não configurado' });
   }
+  if (auth.avisos.length) console.warn(`[Backup] ${origem} avisos=${auth.avisos.join(',')}`);
+
   const backupDir = PERSISTENT_DATA_DIR;
   if (!fs.existsSync(backupDir)) {
+    console.warn(`[Backup] NEGADO ${origem} motivo=PASTA_INEXISTENTE`);
     return res.status(404).json({ error: 'Pasta de dados não encontrada' });
   }
+  const copiaRecente = backupMaisRecente(backupDir);
+  console.log(`[Backup] ACEITO ${origem} fallback=${copiaRecente || 'nenhum'}`);
+
   const filename = `crm-backup-${new Date().toISOString().slice(0, 10)}.zip`;
   res.setHeader('Content-Type', 'application/zip');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -3484,7 +3504,22 @@ app.get('/api/backup', (req, res) => {
     if (!res.headersSent) res.status(500).json({ error: err.message });
   });
   archive.pipe(res);
-  archive.directory(backupDir, false);
+  // 3o argumento de Archiver.prototype.directory: recebe o entryData (com `name` relativo) e
+  // devolver `false` pula a entrada (archiver@7.0.1, lib/core.js:624-672). `entries` NAO e
+  // API de filtro, e so contador de progresso.
+  archive.directory(backupDir, false, (entry) => (deveIncluirNoBackup(entry.name) ? entry : false));
+  if (copiaRecente) {
+    // A copia mais recente volta ao zip sob o mesmo caminho de sempre, para a instrucao de
+    // dbRecovery ("restaure a partir de server/data/backups/ mais recente") continuar valendo.
+    // Os acompanhantes vao junto: `.sqlite` sem o `-wal` restaura SEM as transacoes que so
+    // existem no WAL — e o bug que dbRecoveryBackup.api.test.js congelou.
+    for (const sufixo of ['', '-wal', '-shm']) {
+      const origemArquivo = path.join(backupDir, 'backups', copiaRecente + sufixo);
+      if (fs.existsSync(origemArquivo)) {
+        archive.file(origemArquivo, { name: `backups/${copiaRecente}${sufixo}` });
+      }
+    }
+  }
   archive.finalize();
 });
 
