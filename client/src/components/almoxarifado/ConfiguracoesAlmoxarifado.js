@@ -2710,6 +2710,11 @@ const TabConfiguracoes = () => {
     { chave: 'notificacoes_worker_intervalo_min', label: 'Intervalo do Worker (min)', tipo: 'number', descricao: 'Intervalo, em minutos, entre execuções do worker que envia a fila de notificações' },
     { chave: 'notificacoes_max_tentativas', label: 'Máx. Tentativas de Envio', tipo: 'number', descricao: 'Número de tentativas de envio antes de marcar a notificação como FALHA' },
     { chave: 'alerta_lote_vencendo_dias', label: 'Alerta de Lote Vencendo (dias)', tipo: 'number', descricao: 'Dias de antecedência para alertar lote próximo do vencimento' },
+    // Etapa 16 (C4): as 3 janelas dos alertas novos — semeadas no schema.js e lidas por
+    // alertRegistry.resolverDias (varredura diária E central de alertas, RN-01: mesma régua).
+    { chave: 'alerta_calibracao_dias', label: 'Alerta de Calibração (dias)', tipo: 'number', descricao: 'Dias de antecedência para alertar calibração de ferramenta vencendo' },
+    { chave: 'alerta_quarentena_dias', label: 'Alerta de Quarentena Parada (dias)', tipo: 'number', descricao: 'Dias aguardando inspeção para o item de recebimento contar como quarentena parada' },
+    { chave: 'alerta_reserva_parada_dias', label: 'Alerta de Reserva Parada (dias)', tipo: 'number', descricao: 'Dias com reserva ativa parada para gerar alerta de reserva esquecida' },
     { chave: 'notificacoes_dest_entradas', label: 'Destinatários — Entradas', tipo: 'text', descricao: 'E-mails (lista) para notificação de entrada de material; vazio usa o e-mail de alertas' },
     { chave: 'notificacoes_dest_saidas', label: 'Destinatários — Saídas', tipo: 'text', descricao: 'E-mails (lista) para notificação de saída de material; vazio usa o e-mail de alertas' },
     { chave: 'notificacoes_dest_ajustes', label: 'Destinatários — Ajustes', tipo: 'text', descricao: 'E-mails (lista) para notificação de ajuste de estoque; vazio usa o e-mail de alertas' },
@@ -2753,7 +2758,13 @@ const TabConfiguracoes = () => {
     // MINUTOS (`notificacoes_worker_*`, `notificacoes_max_*`) — reusar a mensagem "dias" para
     // elas MENTIRIA. Mesmo par de prefixos/mensagens que a rota valida no servidor
     // (routes/almoxarifado.js) — espelho de proposito, nao fonte unica.
-    const PREFIXOS_DIAS = ['reposicao_', 'alerta_lote_'];
+    //
+    // Etapa 16 (C4, achado da revisao do plano): `'alerta_lote_'` deixaria as 3 chaves novas
+    // (`alerta_calibracao_dias`, `alerta_quarentena_dias`, `alerta_reserva_parada_dias`) FORA
+    // do guard — o front deixaria o "0" ir ao servidor e a RN-06 "nos dois lados" falharia.
+    // Prefixo unico `'alerta_'`, a MESMA decisao da rota no servidor: `alertas_*` (emails,
+    // toggle) NAO casa com `alerta_` — o `_` na 7ª posicao nao e `s`.
+    const PREFIXOS_DIAS = ['reposicao_', 'alerta_'];
     const PREFIXOS_INTEIRO = ['notificacoes_worker_', 'notificacoes_max_'];
     const chaveInvalida = CAMPOS.find((c) => {
       const ehDias = PREFIXOS_DIAS.some((p) => c.chave.startsWith(p));
@@ -2804,7 +2815,7 @@ const TabConfiguracoes = () => {
             ) : (
               <input className="almox-input" style={{ width: 180, flexShrink: 0 }}
                 type={campo.tipo === 'number' ? 'number' : 'text'}
-                min={(campo.chave.startsWith('reposicao_') || campo.chave.startsWith('alerta_lote_')
+                min={(campo.chave.startsWith('reposicao_') || campo.chave.startsWith('alerta_')
                   || campo.chave.startsWith('notificacoes_worker_') || campo.chave.startsWith('notificacoes_max_')) ? 1 : undefined}
                 value={configs[campo.chave] || ''}
                 onChange={e => setConfigs(c => ({ ...c, [campo.chave]: e.target.value }))} />
