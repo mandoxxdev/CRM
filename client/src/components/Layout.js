@@ -12,7 +12,7 @@ import {
   FiCalendar, FiLogOut, FiMenu, FiX, FiUserPlus, FiPackage, FiBarChart2, FiMap, FiDollarSign, FiSettings, FiShield, FiMoon, FiSun, FiGrid,
   FiShoppingCart, FiTrendingDown, FiTrendingUp, FiCreditCard, FiTruck, FiFileText as FiFileText2, FiTool, FiCheckCircle,   FiSliders, FiCircle, FiDroplet, FiZap, FiLayers, FiClipboard,
   FiArchive, FiActivity, FiList, FiMessageCircle, FiAlertTriangle, FiCheckSquare, FiLock, FiCornerUpLeft,
-  FiScissors, FiBell, FiMail
+  FiScissors, FiBell, FiMail, FiCamera
 } from 'react-icons/fi';
 import Notificacoes from './Notificacoes';
 import BuscaGlobal from './BuscaGlobal';
@@ -327,6 +327,8 @@ const Layout = () => {
   // Menu do módulo Almoxarifado
   const almoxarifadoMenuItems = [
     { path: '/almoxarifado', icon: FiArchive, label: 'Dashboard' },
+    // Etapa 15: ler o QR de uma etiqueta (6c) = navegar direto para a tela do item
+    { path: '/almoxarifado/scanner', icon: FiCamera, label: 'Scanner' },
     { path: '/almoxarifado/materiais', icon: FiList, label: 'Materiais' },
     { path: '/almoxarifado/requisicoes', icon: FiCheckCircle, label: 'Requisições (almox.)' },
     { path: '/almoxarifado/requisicoes-material/nova', icon: FiClipboard, label: 'Solicitar Material' },
