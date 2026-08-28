@@ -447,7 +447,26 @@ T1 e T2 tocam `routes/almoxarifado.js` — sequenciais. T3 é `extended.js`, par
   Sem merge de worktree nesta etapa: T2 e T3 rodaram **em paralelo na mesma árvore**,
   cada uma restrita a um arquivo de rotas diferente — zero conflito, e o executor da T3
   rodou a suíte com as mudanças não commitadas da T2 na árvore sem nenhuma falha.
-- [ ] Fase 5 — revisão adversarial (2 lentes)
+- [x] Fase 5 — revisão adversarial (2 lentes: trilha e **exposição**, 2026-08-28).
+  **Needs-fix-round nos dois, 3 correções de código + 1 de texto**, todas da mesma família —
+  o log afirmando o que não aconteceu: (a) `liberacao-valor` é a ÚNICA das 5 rotas de
+  configuração com chamada falível **entre** a escrita e o log; se ela falha, a regra fica
+  persistida, o cliente vê 500 e o rastro não existia → auditoria em `finally` comparando o
+  estado real; (b) na rota de alertas, a leitura do "antes" caía para `[]` e o diff
+  **fabricava 18 mudanças inexistentes** → cai para `null` e a rota pula a auditoria,
+  degradando para silêncio como o irmão já fazia; (c) a **URL do webhook ia em claro** e é
+  onde o token mora (a semente descreve a chave separada como "opcional") → query string
+  mascarada, host preservado; (d) comentário do `configDiff` afirmava que a normalização
+  resolvia a reordenação de aprovadores — **não resolve**, corrigido. Tudo com teste e
+  controle positivo medido (23/23 no arquivo; 138/138 na suíte).
+  **Refutado com sonda pelos dois revisores:** cobertura 23/23 verificada de forma
+  independente, RN-01/02/03/05/06/07/08 reproduzidas, gates intactos nos 23 handlers, nenhum
+  leitor alternativo do log, o 24º endpoint honestamente declarado, a limitação de "linha já
+  inativa" exatamente como escrita, e a jornada com carga real dos dois lados (cada sabotagem
+  derruba metade).
+  **Incidente de processo (3ª ocorrência no módulo):** o controle positivo rodou com a árvore
+  suja e o `git checkout` do restauro **apagou as três correções**; refeitas e commitadas
+  ANTES de sabotar de novo. A regra que fica: commitar, depois sabotar.
 - [ ] Fase 6 — fechar-etapa + retro
 
 ## Retro (4 números — preencher no fechamento)
