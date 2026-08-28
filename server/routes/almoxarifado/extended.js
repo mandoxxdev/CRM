@@ -1250,6 +1250,16 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     } catch (e) { handleError(res, e); }
   });
 
+  // ── Central de alertas (Etapa 16, Task 2) — C1/RN-01/RN-04/RN-05 do design. Avaliacao AO
+  // VIVO pelo MESMO registro da varredura diaria (fonte unica — a logica mora em
+  // alertRegistry.montarCentral, ver o porque la). Gate proprio `ver_alertas` (C5): a central
+  // expoe numeros de estoque e valor parado, PRODUCAO/ENGENHARIA/CONSULTA fora (licao G1).
+  app.get('/api/almoxarifado/alertas/central', auth, requirePermission('ver_alertas'), async (req, res) => {
+    try {
+      res.json(await alertRegistry.montarCentral(db));
+    } catch (e) { handleError(res, e); }
+  });
+
   // ── Auditoria ──
   app.get('/api/almoxarifado/auditoria', auth, async (req, res) => {
     try {

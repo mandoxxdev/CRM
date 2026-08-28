@@ -77,6 +77,12 @@ const ACAO_PERFIS = {
   // Mesmo criterio de gerenciar_reposicao (Etapa 11, D9): reversivel, uma linha, registrado na
   // letra B do doc de novidades.
   gerenciar_notificacoes: [PERFIS.ADMINISTRADOR, PERFIS.GESTOR],
+  // Etapa 16 (C5 do plano): a central de alertas expoe numeros de estoque e valor parado —
+  // PRODUCAO/ENGENHARIA/CONSULTA ficam fora DE PROPOSITO (licao G1: requisitante nao ve
+  // quantidade). COMPRAS entra porque sem-consumo/excessivo e insumo direto de decisao de
+  // compra (mesmo criterio que a colocou em gerenciar_reposicao, Etapa 11 D9). Entra de graca
+  // em GET /almoxarifado/minhas-permissoes — a rota itera Object.keys(ACAO_PERFIS).
+  ver_alertas: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE, PERFIS.GESTOR, PERFIS.COMPRAS],
 };
 
 function getPerfilFromUser(user) {

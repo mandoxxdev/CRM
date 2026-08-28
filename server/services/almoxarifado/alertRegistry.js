@@ -267,9 +267,49 @@ const ALERT_REGISTRY = Object.freeze([
   },
 ]);
 
+/** Corte de linhas por alerta na central (C1) — o `total` continua sendo o numero cheio. */
+const LIMITE_LINHAS_CENTRAL = 50;
+
+/**
+ * Etapa 16, Task 2 — a central de alertas (C1): avalia o registro AO VIVO, na ordem do
+ * registro, e devolve `{ alertas: [...] }` para o GET /alertas/central.
+ *
+ * Mora AQUI (e nao na rota) porque a rota da extended vive dentro do closure de
+ * `registerExtendedRoutes` e nunca e exportada — logica ali seria intestavel por unidade, o
+ * mesmo motivo pelo qual toda rota do modulo delega a um service. O `registro` e INJETAVEL
+ * de proposito (achado da revisao do plano): o teste do `erro:true` passa um registro com um
+ * `listar` que lanca, sem sabotagem manual nao versionada.
+ *
+ * Erro num `listar` individual NAO derruba a central: a entrada vem
+ * `{ chave, titulo, erro: true, total: 0, linhas: [] }` e as demais respondem — central
+ * parcial honesta em vez de 500 total (decisao registrada no C1).
+ */
+async function montarCentral(db, registro = ALERT_REGISTRY) {
+  const alertas = [];
+  for (const entrada of registro) {
+    try {
+      const dias = await resolverDias(db, entrada);
+      const linhas = await entrada.listar(db, { dias });
+      alertas.push({
+        chave: entrada.chave,
+        titulo: entrada.titulo,
+        descricao: entrada.descricao,
+        dias,
+        total: linhas.length,
+        linhas: linhas.slice(0, LIMITE_LINHAS_CENTRAL),
+      });
+    } catch (e) {
+      console.error(`Central de alertas: falha no listar de ${entrada.chave}:`, e.message);
+      alertas.push({ chave: entrada.chave, titulo: entrada.titulo, erro: true, total: 0, linhas: [] });
+    }
+  }
+  return { alertas };
+}
+
 module.exports = {
   ALERT_REGISTRY,
   resolverDias,
   listarMateriaisSemEndereco,
   STATUS_REQUISICAO_ATRASAVEL,
+  montarCentral,
 };
