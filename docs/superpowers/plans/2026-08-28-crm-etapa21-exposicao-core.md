@@ -262,7 +262,7 @@ Test `server/tests/api/configSecretsCore.api.test.js`.
   "Etapa 21 Task 2: senha do SMTP para de sair em claro no core e a mascara deixa de ser
   regravavel", mas a Task 2 não marcou a própria linha aqui. Placar não conferido por esta
   task — quem fechar a etapa confira.)
-- [x] **Task 3 (galho): `getEmailConfig`** — `1766a64` (2026-08-28). 9/9 no arquivo novo,
+- [x] **Task 3 (galho): `getEmailConfig`** — `95f73f3` (2026-08-28). 9/9 no arquivo novo,
   `npm run test:api` **144/144** (era 143 antes). Vermelho prévio por asserção contra stub
   permissivo (8 falhas), controle positivo com dupla sabotagem. **Duas divergências do plano,
   documentadas no bloco da Task 3:** o "sem teste automatizado" tinha motivo FALSO (a função
