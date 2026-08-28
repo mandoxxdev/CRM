@@ -211,9 +211,13 @@ T3 (feita) → T1 → T2. Sem task de jornada: as três não compõem um fluxo.
 - [x] **Step 3: controle positivo** (`a0b19c9`) — **três** sabotagens por script com
   `assert` de que o alvo existia (no-op silencioso já aconteceu nesta base), todas **depois** do
   commit e revertidas com `git checkout`:
-  (1) máscara do GET desligada → **11 passed, 2 failed**, e o que caiu foi
-  `[RN-05] com valor na coluna, o GET devolve a mascara e NUNCA o segredo` — os demais seguiram
-  verdes, então é essa asserção que mede a máscara e ela não pega carona em nada;
+  (1) máscara do GET desligada → **11 passed, 2 failed**. **Correção de uma frase errada deste
+  plano** (achado A5 da revisão, reproduzido): a versão anterior narrava **uma** queda e dizia
+  "os demais seguiram verdes" na mesma linha em que registrava `2 failed` — contradição própria.
+  Caem **dois**: `[RN-05] com valor na coluna, o GET devolve a mascara e NUNCA o segredo` **e**
+  `[compat] a rota de alertas continua mascarando e o shouldUpdateSecret continua valendo`, este
+  porque o cenário termina relendo o GET genérico. Dois cenários medindo a máscara por caminhos
+  diferentes é resultado melhor do que um — o que não pode é o plano contar errado;
   (2) guarda do PUT removida → **8 passed, 5 failed** (os 4 da RN-06 + a compatibilidade, que cai
   porque sem a guarda o PUT genérico apaga a senha);
   (3) import de volta a desestruturado → o processo **nem chega a rodar cenário**:

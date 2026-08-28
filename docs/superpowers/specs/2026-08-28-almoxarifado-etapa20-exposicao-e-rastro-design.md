@@ -58,6 +58,13 @@ na letra B do fechamento):
   dobraria a etapa. Segue nomeado na spec 24.
 - **A matriz de leitura do módulo** (dezenas de GETs operacionais com só `auth`) — é dado de
   estoque, não credencial; etapa própria se um dia valer.
+- **`GET /setores-requisicao` continua devolvendo `qtd_permissoes` por setor sem gate**
+  (`sectorMaterialService.listSetores:328-334`, só `auth`) — **buraco irmão do C5, achado pela
+  revisão adversarial e declarado aqui em vez de consertado**. Não é o mapa (não diz *quais*
+  materiais nem *quais* perfis), mas é a mesma tabela e o mesmo tipo de reconhecimento que
+  justifica o C5: dá para saber quais setores têm lista explícita e quais estão abertos.
+  Fechar exigiria decidir o que a **tela de requisição** (consumidora legítima e não-admin)
+  passa a receber — mudança de contrato, não uma linha de gate. Vai para a letra B.
 
 ## Regras de negócio (RN)
 
@@ -68,10 +75,19 @@ na letra B do fechamento):
 - **RN-03 — A troca de foto não corre com o UPDATE.** A foto anterior só é apagada **depois**
   de o novo caminho estar gravado, e a falha ao apagar não derruba a resposta (try/catch).
 - **RN-04 — Trocar foto deixa rastro** (`material`/`ATUALIZACAO`, de/para do nome do arquivo).
-- **RN-05 — O GET genérico não devolve segredo.** `alertas_smtp_pass` e
+- **RN-05 — O GET genérico não devolve as duas chaves de senha.** `alertas_smtp_pass` e
   `alertas_whatsapp_api_key` saem como `'********'` quando há valor, `''` quando não há —
-  idêntico à rota de alertas. `alertas_whatsapp_webhook_url` sai com a query string
-  mascarada (mesmo tratamento que o log já dá, `configDiff.mascararUrl`).
+  idêntico à rota de alertas.
+  **CORREÇÃO — esta RN dizia que `alertas_whatsapp_webhook_url` sairia com a query string
+  mascarada. ESTAVA ERRADO**: não é o que foi entregue, e não por esquecimento. A entrega
+  mantém o webhook **em claro** de propósito (decisão A5 do plano), porque a URL é o próprio
+  campo que o admin edita na tela — devolvê-la mascarada faria a tela reenviar a máscara como
+  URL na primeira gravação, trocando o webhook por lixo. O que a máscara protege ali é o
+  **log** (`configDiff.mascararUrl` continua valendo na auditoria, onde ninguém reedita o
+  valor). O teste `configuracoesSegredo.api.test.js:188-196` trava esse comportamento. A
+  consequência aceita está declarada: **quem tem acesso ao módulo lê o token embutido na query
+  string do webhook** — registrado na letra C do documento de apresentação, e o conserto de
+  verdade é mover o token para uma chave própria, fora da URL, em etapa futura.
 - **RN-06 — O PUT genérico recusa as chaves secretas.** 400 com mensagem que aponta a rota
   própria; a coluna não é tocada.
 - **RN-07 — Ler o mapa de acesso exige o mesmo que escrevê-lo.** Perfis sem
