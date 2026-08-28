@@ -705,3 +705,77 @@ describe('ConferenciaEstoque — RN-05: impacto financeiro sem ajuste aplicado',
     expect(mensagem).toContain('nenhum ajuste aplicado');
   });
 });
+
+/**
+ * Etapa 18, Task 3 (RN-03) — cancelar conferência pede motivo.
+ *
+ * Contrato C2 (`PUT /almoxarifado/conferencias/:id/cancelar`, já commitado na Task 1
+ * `3893444`): `motivo` é obrigatório e `String(motivo).trim().length >= 5`; abaixo disso o
+ * servidor devolve 400 "Motivo do cancelamento deve ter pelo menos 5 caracteres". Antes desta
+ * task a tela mandava o PUT SEM corpo depois de um `window.confirm` — com o motivo obrigatório
+ * no servidor, cancelar tinha virado 400 garantido, e um inventário com centenas de contagens
+ * sumia do fluxo sem autor nem motivo no log de auditoria.
+ *
+ * O molde é o do PRÓPRIO arquivo (modal de concluir, justificativa do ajuste, régua >= 5 —
+ * testes acima em "concluir: justificativa do ajuste (RN-06b)"), e não o `confirm`+`prompt`
+ * da tela de Reposição: aquele só barra vazio, então um motivo de 3 caracteres passaria pela
+ * tela e tomaria o 400 do servidor.
+ */
+describe('ConferenciaEstoque — RN-03: cancelar conferência exige motivo (>= 5)', () => {
+  test('clicar em cancelar abre modal com o número da conferência e campo de motivo — sem window.confirm e sem PUT', async () => {
+    const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
+    await renderizar();
+    await clicar(botao('Cancela esta contagem'));
+
+    const modal = container.querySelector('.almox-modal');
+    expect(modal).toBeTruthy();
+    expect(modal.textContent).toContain('CONF-0001');
+    expect(campo('Motivo do cancelamento')).toBeTruthy();
+    // Abrir o modal não pode, sozinho, cancelar nada.
+    expect(api.put).not.toHaveBeenCalled();
+    expect(confirmSpy).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
+  test('botão de confirmar fica desabilitado com motivo vazio e com 3 caracteres; com 5+ o PUT sai com { motivo }', async () => {
+    await renderizar();
+    await clicar(botao('Cancela esta contagem'));
+
+    const modal = container.querySelector('.almox-modal');
+    const rodape = () => modal.querySelector('.almox-modal-footer');
+    expect(botao('Confirmar', rodape()).disabled).toBe(true);
+
+    // 3 caracteres: a régua do servidor recusaria com 400 — a tela tem de barrar ANTES.
+    preencher(campo('Motivo do cancelamento'), 'abc');
+    expect(botao('Confirmar', rodape()).disabled).toBe(true);
+
+    // Só espaços não conta: o servidor faz trim antes de medir.
+    preencher(campo('Motivo do cancelamento'), '        ');
+    expect(botao('Confirmar', rodape()).disabled).toBe(true);
+
+    preencher(campo('Motivo do cancelamento'), 'Contagem duplicada por engano');
+    expect(botao('Confirmar', rodape()).disabled).toBe(false);
+
+    await clicar(botao('Confirmar', rodape()));
+    expect(api.put).toHaveBeenCalledWith('/almoxarifado/conferencias/1/cancelar', {
+      motivo: 'Contagem duplicada por engano',
+    });
+    expect(toast.success).toHaveBeenCalled();
+    // Sucesso fecha o modal e recarrega a lista.
+    expect(container.querySelector('.almox-modal')).toBeFalsy();
+  });
+
+  test('erro do servidor (400 de status) chega ao usuário com a mensagem literal e o modal continua aberto', async () => {
+    const mensagem = 'Conferência não está aberta (status atual: CONCLUIDO)';
+    api.put.mockRejectedValueOnce({ response: { status: 400, data: { error: mensagem } } });
+    await renderizar();
+    await clicar(botao('Cancela esta contagem'));
+
+    preencher(campo('Motivo do cancelamento'), 'Duplicidade com o inventario geral');
+    await clicar(botao('Confirmar', container.querySelector('.almox-modal-footer')));
+
+    expect(toast.error).toHaveBeenCalledWith(mensagem);
+    // O modal fica de pé: quem tomou a recusa continua vendo o que escreveu.
+    expect(container.querySelector('.almox-modal')).toBeTruthy();
+  });
+});
