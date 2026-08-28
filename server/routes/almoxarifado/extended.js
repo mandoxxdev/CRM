@@ -29,6 +29,11 @@ const { registrarAuditoria } = require('../../services/almoxarifado/audit');
 // proposito — esta etapa acrescenta, nao reescreve o que ja funciona. Mesmo movimento que
 // `routes/almoxarifado.js:45` fez na Etapa 18.
 const audit = require('../../services/almoxarifado/audit');
+// Etapa 22 (C1/C2/C3): vocabulario e calendario da trilha de auditoria. Modulos PUROS — a rota
+// nao traduz nem calcula fuso por conta propria, e a tela tambem nao: quem le a trilha ve o
+// mesmo rotulo e o mesmo de/para que o teste de servidor congela.
+const auditLabels = require('../../services/almoxarifado/auditLabels');
+const auditFiltros = require('../../services/almoxarifado/auditFiltros');
 const stockService = require('../../services/almoxarifado/stockService');
 const lotService = require('../../services/almoxarifado/lotService');
 const seriesService = require('../../services/almoxarifado/seriesService');
@@ -1340,6 +1345,41 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
       const params = [];
       if (req.query.entidade) { sql += ' AND entidade = ?'; params.push(req.query.entidade); }
       if (req.query.entidade_id) { sql += ' AND entidade_id = ?'; params.push(req.query.entidade_id); }
+      // ── Etapa 22, Task 2 (C1): os quatro filtros novos ──
+      if (req.query.usuario_id) { sql += ' AND usuario_id = ?'; params.push(req.query.usuario_id); }
+      // `acao` e UM parametro so, string com virgulas (`acao=CRIACAO,CRIAR`), porque o axios do
+      // client (`services/api.js`) e um `axios.create()` SEM `paramsSerializer`: mandar array
+      // viraria `acao[]=A&acao[]=B`, o parser `extended` do Express entregaria ARRAY aqui, e um
+      // `.split(',')` cru estouraria TypeError -> 500. A normalizacao aceita os dois formatos.
+      //
+      // UM PLACEHOLDER POR VALOR, nunca `IN (?)` com a string inteira: `WHERE acao IN (?)` com o
+      // parametro 'CRIACAO,CRIAR' devolve ZERO LINHAS SEM ERRO (reproduzido). Numa trilha de
+      // auditoria, zero em silencio parece prova de que nada aconteceu — e o mesmo perigo que
+      // motiva a RN-03. Precedente da base: stockService.js:1363.
+      const verbos = (Array.isArray(req.query.acao) ? req.query.acao : String(req.query.acao || '').split(','))
+        .map((v) => String(v).trim()).filter(Boolean);
+      if (verbos.length) {
+        sql += ` AND acao IN (${verbos.map(() => '?').join(',')})`;
+        params.push(...verbos);
+      }
+      // Datas (RN-03 + RN-04). A validacao roda ANTES do COUNT: com data podre nao existe
+      // resposta parcial correta, e um 200 com `itens: []` seria lido como "nada aconteceu".
+      // `Date.parse` sozinho nao serve — '2026-02-30' e valido em JS e rola no SQLite,
+      // ALARGANDO a janela em silencio; `validarData` fecha isso com o ida-e-volta.
+      for (const campo of ['data_inicio', 'data_fim']) {
+        const valor = req.query[campo];
+        if (valor === undefined || valor === '') continue;
+        if (!auditFiltros.validarData(valor).ok) {
+          throw Object.assign(new Error('Data inválida: use uma data real no formato AAAA-MM-DD'), { status: 400 });
+        }
+      }
+      // A janela vai para UTC ANTES do SQL: `created_at` e gravado por `CURRENT_TIMESTAMP`, que
+      // e UTC, e quem filtra pensa em dia de Brasilia. Sem isto, um ato das 21:30 esta gravado
+      // como 00:30 do dia seguinte e SOME do filtro do proprio dia. Nada de `date(?, '+1 day')`
+      // cru no SQL: o SQLite so somaria um dia no dia UTC, que e o dia errado.
+      const janela = auditFiltros.janelaUtc(req.query.data_inicio || null, req.query.data_fim || null);
+      if (janela.de) { sql += ' AND created_at >= ?'; params.push(janela.de); }
+      if (janela.ate) { sql += ' AND created_at < ?'; params.push(janela.ate); }
       // Desempate por `id DESC` (Etapa 18, C5): `created_at` e DATETIME com resolucao de SEGUNDO,
       // entao as auditorias de um mesmo ato (criar + contar, contar + concluir) empatam e a ordem
       // dentro do empate fica indefinida. Sem o desempate, ler a historia de uma conferencia pelo
@@ -1356,8 +1396,67 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
       const limite = Math.min(Math.max(parseInt(req.query.limite, 10) || 200, 1), 1000);
       const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
       sql += ' ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?';
-      const itens = await dbAll(db, sql, [...params, limite, offset]);
+      const linhas = await dbAll(db, sql, [...params, limite, offset]);
+      // Etapa 22 (C1): a FORMA da resposta continua a da Etapa 18 e as 10 colunas saem como
+      // estao no banco (`dados_*` seguem string JSON ou null). O que muda e que cada item ganha
+      // TRES campos derivados. Eles ficam aqui, e nao na tela, porque a regua de leitura tem de
+      // ter UM dono: com o mapa no client, a tela precisaria de `/opcoes` carregado antes de
+      // renderizar a primeira linha, e a traducao viraria copia divergente do servidor.
+      const itens = linhas.map((r) => ({
+        ...r,
+        acao_rotulo: auditLabels.rotularAcao(r.acao),
+        entidade_rotulo: auditLabels.rotularEntidade(r.entidade),
+        // NAO e `configDiff.calcularDiff` (achado A1): aquela itera so `Object.keys(novos)` e
+        // por isso apaga a troca de segredo mascarada e fabrica alteracao a partir de campo de
+        // contexto. A regua de LEITURA e a uniao das chaves — ver o cabecalho de auditLabels.js.
+        alteracoes: auditLabels.alteracoesDaLinha(r.dados_anteriores, r.dados_novos),
+      }));
       res.json({ total, limite, offset, truncado: total > offset + itens.length, itens });
+    } catch (e) { handleError(res, e); }
+  });
+
+  // Opcoes dos filtros da trilha (Etapa 22, C2 / RN-05). Mesmo gate da listagem: a lista de quem
+  // mexeu no modulo e de que entidades foram tocadas ja e informacao de auditoria.
+  //
+  // Tudo sai de `SELECT DISTINCT` do que esta REALMENTE gravado, nunca de lista hardcoded — as
+  // etapas 18-20 criaram seis entidades novas, e um select que envelhece oferece filtro que nao
+  // acha nada. Nao ha colisao com a rota acima: `app.get('/api/almoxarifado/auditoria')` casa
+  // caminho EXATO, em qualquer ordem de registro (verificado na revisao da Fase 2).
+  app.get('/api/almoxarifado/auditoria/opcoes', auth, requirePermission('configurar'), async (req, res) => {
+    try {
+      const [entidades, acoes, usuarios] = await Promise.all([
+        dbAll(db, `SELECT DISTINCT entidade FROM auditoria_log_almoxarifado
+                   WHERE entidade IS NOT NULL AND entidade <> '' ORDER BY entidade`),
+        dbAll(db, `SELECT DISTINCT acao FROM auditoria_log_almoxarifado
+                   WHERE acao IS NOT NULL AND acao <> '' ORDER BY acao`),
+        // `usuario_id` e NULL-avel (ha atos sem `req.user`): sem o filtro, o select da tela
+        // ganharia uma opcao `{ id: null }` que nao filtra nada.
+        dbAll(db, `SELECT DISTINCT usuario_id, usuario_nome FROM auditoria_log_almoxarifado
+                   WHERE usuario_id IS NOT NULL ORDER BY usuario_nome, usuario_id`),
+      ]);
+
+      // RN-06: sinonimo nao divide a lista — `CRIACAO` e `CRIAR` viram UMA opcao "Criação" com
+      // os dois verbos, e e a lista inteira que volta no filtro, entao o usuario nao perde linha
+      // por causa da inconsistencia do vocabulario. Verbo sem rotulo entra com o PROPRIO nome
+      // (`rotularAcao` devolve o verbo quando nao ha grupo): sumir com ele esconderia atos.
+      // So os verbos PRESENTES entram em `verbos` — mandar os ausentes nao mudaria resultado
+      // nenhum e faria a rota afirmar que existe no banco o que nao existe.
+      const porRotulo = new Map();
+      for (const { acao } of acoes) {
+        const rotulo = auditLabels.rotularAcao(acao);
+        if (!porRotulo.has(rotulo)) porRotulo.set(rotulo, []);
+        porRotulo.get(rotulo).push(acao);
+      }
+
+      res.json({
+        entidades: entidades
+          .map((e) => ({ valor: e.entidade, rotulo: auditLabels.rotularEntidade(e.entidade) }))
+          .sort((a, b) => a.rotulo.localeCompare(b.rotulo, 'pt-BR')),
+        acoes: [...porRotulo.entries()]
+          .map(([rotulo, verbos]) => ({ rotulo, verbos }))
+          .sort((a, b) => a.rotulo.localeCompare(b.rotulo, 'pt-BR')),
+        usuarios: usuarios.map((u) => ({ id: u.usuario_id, nome: u.usuario_nome })),
+      });
     } catch (e) { handleError(res, e); }
   });
 
