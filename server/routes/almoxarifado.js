@@ -43,6 +43,78 @@ const { registrarAuditoria } = require('../services/almoxarifado/audit');
 // da chamada, e por isso sao alcancaveis pelo stub. As antigas ficam como estao de proposito —
 // esta etapa acrescenta, nao reescreve o que ja funciona.
 const audit = require('../services/almoxarifado/audit');
+// Etapa 19 (C1): diff das rotas de configuracao — funcao pura, com a mascara de segredo
+// SEMPRE ligada. As tres rotas de configuracao usam a mesma para nao divergirem entre si.
+const { calcularDiff } = require('../services/almoxarifado/configDiff');
+
+// Etapa 19 (C4 #15): `valueApprovalService.getConfig` devolve valores TIPADOS
+// ({ ativo: boolean, limite: number, aprovadorIds: number[] }) e a coluna e TEXT. Esta funcao
+// devolve exatamente o que `saveConfig` grava, para que o diff compare coluna com coluna.
+// Sem ela, `String(false)` ('false' contra '0') e `String([])` ('' contra '[]') fariam TODO
+// save parecer mudanca.
+function normalizarLiberacaoValor(cfg) {
+  const chaves = valueApprovalService.CONFIG_KEYS;
+  return {
+    [chaves.ativo]: cfg.ativo ? '1' : '0',
+    [chaves.limite]: String(cfg.limite),
+    [chaves.aprovadores]: JSON.stringify(cfg.aprovadorIds),
+  };
+}
+
+// Etapa 19 (C4 #16/#17): os dois PUTs de "configuracao" que na verdade editam
+// `materiais_almoxarifado` em lote. Campos declarados aqui para as duas rotas nao divergirem.
+//
+// COMPARACAO POR `Number()`, nao `String()`: o front manda `parseFloat`/`parseInt` contra
+// colunas numericas, entao `5` contra `'5'` da coluna nao pode contar como mudanca. Coluna
+// NULL contra payload `0` E mudanca real nos campos de estoque — o UPDATE grava 0, e
+// `Number(null) === 0` esconderia isso; por isso o `null` e tratado antes da comparacao.
+// Ja `tipo_material_id` grava `|| null`, entao ali null contra null NAO e mudanca.
+const CAMPOS_ESTOQUE_MINIMO = [
+  { campo: 'quantidade_minima', valor: (m) => m.quantidade_minima ?? 0 },
+  { campo: 'quantidade_maxima', valor: (m) => m.quantidade_maxima ?? 0 },
+  { campo: 'ponto_pedido', valor: (m) => m.ponto_pedido ?? 0 },
+  { campo: 'prazo_reposicao_dias', valor: (m) => m.prazo_reposicao_dias ?? 0 },
+];
+const CAMPOS_TIPO_MATERIAL = [
+  { campo: 'tipo_material_id', valor: (m) => m.tipo_material_id || null, nulavel: true },
+];
+
+function mudouNumero(anterior, novo, nulavel) {
+  const ausente = anterior === undefined || anterior === null;
+  if (nulavel) {
+    const novoAusente = novo === undefined || novo === null;
+    if (ausente || novoAusente) return ausente !== novoAusente;
+    return Number(anterior) !== Number(novo);
+  }
+  if (ausente) return true;
+  return Number(anterior) !== Number(novo);
+}
+
+/**
+ * RN-06: uma linha de auditoria por material EFETIVAMENTE alterado, com o de/para so dos
+ * campos que mudaram. Material cujo id nao veio no SELECT do "antes" (id inexistente) nao
+ * audita — auditar ali registraria um ato que nao aconteceu.
+ */
+async function auditarLoteMaterial(db, req, materiais, antesPorId, campos) {
+  for (const m of materiais) {
+    const antes = antesPorId.get(Number(m.id));
+    if (!antes) continue;
+    const dadosAnteriores = {};
+    const dadosNovos = {};
+    for (const { campo, valor, nulavel } of campos) {
+      const novo = valor(m);
+      if (!mudouNumero(antes[campo], novo, nulavel)) continue;
+      dadosAnteriores[campo] = antes[campo] ?? null;
+      dadosNovos[campo] = novo;
+    }
+    if (!Object.keys(dadosNovos).length) continue;
+    await audit.registrarAuditoria(db, {
+      entidade: 'material', entidade_id: Number(m.id), acao: 'ATUALIZACAO',
+      usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
+      dados_anteriores: dadosAnteriores, dados_novos: dadosNovos,
+    });
+  }
+}
 
 function denyUnlessAlmoxAdmin(req, res) {
   if (!canConfigureAlmox(req.user)) {
@@ -2104,7 +2176,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     try {
       // Valida TODAS antes de gravar QUALQUER uma: sem transação neste módulo, rejeitar no meio
       // do laço deixaria metade do formulário aplicada e a outra metade não.
-      const existentes = await dbAll(db, `SELECT chave FROM configuracoes_almoxarifado`);
+      // Etapa 19 (C4 #13): `SELECT chave` virou `SELECT chave, valor` — a validacao abaixo so
+      // alimenta o Set de chaves conhecidas, entao a coluna a mais nao muda nada nela, e e ela
+      // que da o `dados_anteriores` do diff sem um segundo SELECT.
+      const existentes = await dbAll(db, `SELECT chave, valor FROM configuracoes_almoxarifado`);
       const conhecidas = new Set(existentes.map(r => r.chave));
       const desconhecidas = entradas.map(([chave]) => chave).filter(c => !conhecidas.has(c));
       if (desconhecidas.length) {
@@ -2157,6 +2232,30 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
                          SET valor = ?, updated_at = CURRENT_TIMESTAMP, updated_by = ?
                          WHERE chave = ?`,
           [String(valor), req.user.nome || req.user.email, chave]);
+      }
+
+      // Etapa 19 (RN-04): UMA linha por PUT, com o DIFF apenas. `entidade_id` fica null porque
+      // a coluna e INTEGER e o identificador de uma configuracao e a CHAVE, que e TEXT.
+      // `dados_novos` guarda `String(valor)` — o que foi de FATO escrito na coluna. Logar o
+      // valor cru do body faria um `null` do payload virar `null` no log enquanto a coluna
+      // guarda a string 'null': numa etapa cujo tema e o log nao mentir, seria o proprio
+      // defeito. Pos-escrita e best-effort (RN-02): os UPDATEs ja foram commitados, derrubar a
+      // resposta por causa do log nao desfaria nada.
+      const anterioresMapa = {};
+      existentes.forEach((r) => { anterioresMapa[r.chave] = r.valor; });
+      const novosMapa = {};
+      entradas.forEach(([chave, valor]) => { novosMapa[chave] = String(valor); });
+      const diff = calcularDiff(anterioresMapa, novosMapa);
+      if (Object.keys(diff.novos).length) {
+        try {
+          await audit.registrarAuditoria(db, {
+            entidade: 'configuracao', entidade_id: null, acao: 'EDICAO',
+            usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
+            dados_anteriores: diff.anteriores, dados_novos: diff.novos,
+          });
+        } catch (errAudit) {
+          console.error('[almoxarifado] Falha ao registrar auditoria de configuração:', errAudit.message);
+        }
       }
       res.json({ success: true });
     } catch (e) {
@@ -2234,6 +2333,19 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       if (alertService.shouldUpdateSecret(payload.whatsappApiKey)) {
         upserts.push([alertService.WHATSAPP_CONFIG_KEYS.apiKey, String(payload.whatsappApiKey)]);
       }
+      // Etapa 19 (C4 #14): o SELECT do "antes" e montado a partir do PROPRIO array `upserts`,
+      // depois de montado e antes do Promise.all — os dois segredos entram nele
+      // CONDICIONALMENTE (shouldUpdateSecret), entao o conjunto de chaves varia por request e
+      // uma lista chumbada aqui divergiria da que a rota grava.
+      const chavesTocadas = upserts.map(([chave]) => chave);
+      const linhasAntes = await dbAll(db,
+        `SELECT chave, valor FROM configuracoes_almoxarifado WHERE chave IN (${chavesTocadas.map(() => '?').join(',')})`,
+        chavesTocadas).catch(() => []);
+      const anterioresMapa = {};
+      linhasAntes.forEach((r) => { anterioresMapa[r.chave] = r.valor; });
+      const novosMapa = {};
+      upserts.forEach(([chave, valor]) => { novosMapa[chave] = valor; });
+
       const promises = upserts.map(([chave, valor]) => new Promise((resolve, reject) => {
         db.run(`INSERT INTO configuracoes_almoxarifado (chave, valor, updated_at, updated_by)
                 VALUES (?, ?, CURRENT_TIMESTAMP, ?)
@@ -2241,6 +2353,22 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         [chave, valor, updatedBy], (err) => (err ? reject(err) : resolve()));
       }));
       await Promise.all(promises);
+
+      // RN-05: `alertas_smtp_pass` e `alertas_whatsapp_api_key` entram no diff como
+      // '(alterado)' — a mascara e do configDiff e esta SEMPRE ligada, nao depende desta rota
+      // lembrar de pedir. Log de auditoria com senha em claro seria pior que a ausencia de log.
+      const diff = calcularDiff(anterioresMapa, novosMapa);
+      if (Object.keys(diff.novos).length) {
+        try {
+          await audit.registrarAuditoria(db, {
+            entidade: 'configuracao', entidade_id: null, acao: 'EDICAO',
+            usuario_id: req.user.id, usuario_nome: updatedBy,
+            dados_anteriores: diff.anteriores, dados_novos: diff.novos,
+          });
+        } catch (errAudit) {
+          console.error('[almoxarifado] Falha ao registrar auditoria de alertas de estoque:', errAudit.message);
+        }
+      }
       res.json({ success: true });
     } catch (e) {
       res.status(500).json({ error: e.message });
@@ -2289,7 +2417,27 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   app.put('/api/almoxarifado/configuracoes/liberacao-valor', authenticateToken, async (req, res) => {
     if (denyUnlessAlmoxAdmin(req, res)) return;
     try {
+      // Etapa 19 (C4 #15): `getConfig` NOS DOIS LADOS, normalizado para a forma PERSISTIDA.
+      // O retorno de `saveConfig` e `getConfigForApi`, de shape DIFERENTE (traz `aprovadores`
+      // e `souAprovador` a mais) — diffar um contra o outro logaria chaves novas em TODO save.
+      // E `String()` cru sobre o shape tipado tambem seria errado: `String([])` === '' contra
+      // '[]' na coluna, `String(false)` === 'false' contra '0'. Auditado NA ROTA porque o
+      // servico so recebe `userName`, nao o usuario.
+      const antes = normalizarLiberacaoValor(await valueApprovalService.getConfig(db));
       const saved = await valueApprovalService.saveConfig(db, req.body, req.user.nome || req.user.email);
+      const depois = normalizarLiberacaoValor(await valueApprovalService.getConfig(db));
+      const diff = calcularDiff(antes, depois);
+      if (Object.keys(diff.novos).length) {
+        try {
+          await audit.registrarAuditoria(db, {
+            entidade: 'configuracao', entidade_id: null, acao: 'EDICAO',
+            usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
+            dados_anteriores: diff.anteriores, dados_novos: diff.novos,
+          });
+        } catch (errAudit) {
+          console.error('[almoxarifado] Falha ao registrar auditoria de liberação por valor:', errAudit.message);
+        }
+      }
       res.json(saved);
     } catch (e) {
       res.status(500).json({ error: e.message });
@@ -2302,20 +2450,42 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     const { materiais } = req.body; // [{ id, quantidade_minima, quantidade_maxima, ponto_pedido, prazo_reposicao_dias }]
     if (!Array.isArray(materiais)) return res.status(400).json({ error: 'Envie um array de materiais' });
 
-    const promises = materiais.map(m =>
-      new Promise((resolve, reject) => {
-        db.run(`UPDATE materiais_almoxarifado SET
-                  quantidade_minima=?, quantidade_maxima=?, ponto_pedido=?,
-                  prazo_reposicao_dias=?, updated_at=CURRENT_TIMESTAMP
-                WHERE id=?`,
-          [m.quantidade_minima ?? 0, m.quantidade_maxima ?? 0,
-           m.ponto_pedido ?? 0, m.prazo_reposicao_dias ?? 0, m.id],
-          (e) => e ? reject(e) : resolve());
+    const ids = materiais.map(m => m.id).filter(Boolean);
+    // Etapa 19 (C4 #16 / RN-06): esta rota nao e configuracao — e edicao em LOTE de material.
+    // Audita como `material`, UMA linha por material EFETIVAMENTE alterado (nao uma por
+    // request), com o verbo `ATUALIZACAO` que a entidade `material` ja usa desde o CRUD v1:
+    // usar `EDICAO` aqui partiria o historico do material em dois verbos e quem consultasse
+    // por acao receberia metade.
+    //
+    // O SELECT e EM LOTE e vem ANTES do Promise.all: os callbacks dele sao arrow (sem `this`),
+    // entao nao ha `this.changes` para consultar depois, e ler depois do UPDATE devolveria o
+    // valor NOVO nos dois lados do de/para. Best-effort de proposito (`.catch(() => [])`):
+    // falha na leitura do "antes" custa o log, nunca a escrita.
+    const lerAntes = ids.length
+      ? dbAll(db, `SELECT id, quantidade_minima, quantidade_maxima, ponto_pedido, prazo_reposicao_dias
+                   FROM materiais_almoxarifado WHERE id IN (${ids.map(() => '?').join(',')})`, ids)
+        .catch(() => [])
+      : Promise.resolve([]);
+
+    lerAntes
+      .then((linhas) => {
+        const antesPorId = new Map(linhas.map(r => [Number(r.id), r]));
+        const promises = materiais.map(m =>
+          new Promise((resolve, reject) => {
+            db.run(`UPDATE materiais_almoxarifado SET
+                      quantidade_minima=?, quantidade_maxima=?, ponto_pedido=?,
+                      prazo_reposicao_dias=?, updated_at=CURRENT_TIMESTAMP
+                    WHERE id=?`,
+              [m.quantidade_minima ?? 0, m.quantidade_maxima ?? 0,
+               m.ponto_pedido ?? 0, m.prazo_reposicao_dias ?? 0, m.id],
+              (e) => e ? reject(e) : resolve());
+          })
+        );
+        return Promise.all(promises).then(() => antesPorId);
       })
-    );
-    Promise.all(promises)
+      .then((antesPorId) => auditarLoteMaterial(db, req, materiais, antesPorId, CAMPOS_ESTOQUE_MINIMO)
+        .catch(errAudit => console.error('[almoxarifado] Falha ao registrar auditoria de estoques mínimos:', errAudit.message)))
       .then(() => {
-        const ids = materiais.map(m => m.id).filter(Boolean);
         Promise.all(ids.map(id => alertService.verificarAlertaPorMaterialId(db, id).catch(() => null)))
           .catch(() => null);
         res.json({ success: true, updated: materiais.length });
@@ -2329,14 +2499,30 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     const { materiais } = req.body; // [{ id, tipo_material_id }]
     if (!Array.isArray(materiais)) return res.status(400).json({ error: 'Envie um array' });
 
-    const promises = materiais.map(m =>
-      new Promise((resolve, reject) => {
-        db.run(`UPDATE materiais_almoxarifado SET tipo_material_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-          [m.tipo_material_id || null, m.id],
-          (e) => e ? reject(e) : resolve());
+    // Etapa 19 (C4 #17): mesma classe da rota acima — lote de `material`, verbo `ATUALIZACAO`,
+    // SELECT em lote antes do Promise.all. ROTA ORFA: zero chamadores no client (medido na
+    // Fase 0). Auditada mesmo assim — apagar rota sem confirmar quem a chama e irreversivel de
+    // graca —, e nomeada na spec como candidata a remocao.
+    const ids = materiais.map(m => m.id).filter(Boolean);
+    const lerAntes = ids.length
+      ? dbAll(db, `SELECT id, tipo_material_id FROM materiais_almoxarifado
+                   WHERE id IN (${ids.map(() => '?').join(',')})`, ids).catch(() => [])
+      : Promise.resolve([]);
+
+    lerAntes
+      .then((linhas) => {
+        const antesPorId = new Map(linhas.map(r => [Number(r.id), r]));
+        const promises = materiais.map(m =>
+          new Promise((resolve, reject) => {
+            db.run(`UPDATE materiais_almoxarifado SET tipo_material_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+              [m.tipo_material_id || null, m.id],
+              (e) => e ? reject(e) : resolve());
+          })
+        );
+        return Promise.all(promises).then(() => antesPorId);
       })
-    );
-    Promise.all(promises)
+      .then((antesPorId) => auditarLoteMaterial(db, req, materiais, antesPorId, CAMPOS_TIPO_MATERIAL)
+        .catch(errAudit => console.error('[almoxarifado] Falha ao registrar auditoria de tipos de material em lote:', errAudit.message)))
       .then(() => res.json({ success: true }))
       .catch(e => res.status(500).json({ error: e.message }));
   });
