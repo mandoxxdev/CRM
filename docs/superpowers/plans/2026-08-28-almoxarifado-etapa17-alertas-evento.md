@@ -35,7 +35,7 @@ console.warn; aviso NUNCA derruba o ato).
 | RN-01 | Dedupe idêntico nos 2 caminhos: ato → enfileira; varredura no mesmo estado → DUPLICADA |
 | RN-02 | Gancho nunca derruba o ato (falha → console.warn; ato responde 200/201 e grava tudo) |
 | RN-03 | Reprovado dispara só com `quantidade_reprovada > 0` |
-| RN-04 | Divergência de recebimento nasce da CONFERÊNCIA com `divergenciaRealSql`; flags da inspeção FORA (declarado) |
+| RN-04 | Divergência de recebimento nasce do REGISTRO da quantidade recebida (conferência OU fiscal) com `divergenciaRealSql` nos 2 caminhos; flags da inspeção FORA (declarado) |
 | RN-05 | Inventário: 1 aviso AGREGADO por conferência, corpo SEM impacto_financeiro (B30) |
 | RN-06 | Sem certificado: varredura pura, régua `certificado_arquivo IS NULL` + saldo>0, re-lembrete mensal |
 | RN-07 | Toggle mestre governa os DOIS caminhos (gancho e varredura); a central segue ao vivo |
@@ -56,10 +56,10 @@ motivo:'DUPLICADA'|'SEM_DESTINATARIO'}`).
 
 | Chave | `listar` (ao vivo) | configDias | dedupeChave |
 |---|---|---|---|
-| `MATERIAL_REPROVADO` | inspeções `quantidade_reprovada>0` com `data_inspecao` na janela; JOIN item→material→recebimento (campos: `inspecao_id, material_codigo, material_nome, quantidade_reprovada, encaminhamento, recebimento_numero, nota_fiscal, data_inspecao, responsavel_nome`) | `{ chave: 'alerta_eventos_janela_dias', default: 7 }` | `` (l) => `reprovado-${l.inspecao_id}` `` |
-| `DIVERGENCIA_RECEBIMENTO` | itens `quantidade_recebida IS NOT NULL` AND `divergenciaRealSql('ri.quantidade_recebida - ri.quantidade_esperada')`, janela por `r.created_at` (campos: `item_id, material_codigo, material_nome, quantidade_esperada, quantidade_recebida, divergencia, recebimento_numero, nota_fiscal`) | idem (mesma chave) | `` (l) => `receb-diverg-${l.item_id}` `` |
-| `DIVERGENCIA_INVENTARIO` | `listarDivergenciaConferencia(db, { dias })` — conferências `status='CONCLUIDO'` com item `divergenciaRealSql('ic.divergencia')`, `data_fim` na janela, AGREGADO (campos: `conferencia_id, numero, data_fim, itens_divergentes`; SEM impacto_financeiro) | idem (mesma chave) | `` (l) => `inv-diverg-${l.conferencia_id}` `` |
-| `LOTE_SEM_CERTIFICADO` | lotes de material `ativo=1` com `controle_certificado=1`, `certificado_arquivo IS NULL`, saldo>0 (subquery de `estoque_saldo_almoxarifado` — molde `varrerLotesVencendo`, notificationQueueService.js:492-502; filtro de saldo em JS como lá) (campos: `lote_id (l.id), codigo (do lote), material_codigo, material_nome, saldo, status`) | `null` | `` (l) => `sem-certificado-${l.id}-${mesAtual()}` `` |
+| `MATERIAL_REPROVADO` | `listarReprovados(db, { dias | inspecaoId })` — **dual-mode exportado** (a MESMA query com JOIN item→material→recebimento; `{dias}` = janela por `data_inspecao` p/ central/varredura, `{inspecaoId}` = a linha do fato p/ o gancho). Campos: `inspecao_id, material_codigo, material_nome, quantidade_reprovada, encaminhamento, recebimento_numero, nota_fiscal, data_inspecao, responsavel_nome`. payload `{inspecao_id}` | `{ chave: 'alerta_eventos_janela_dias', default: 7 }` | `` (l) => `reprovado-${l.inspecao_id}` `` |
+| `DIVERGENCIA_RECEBIMENTO` | `listarDivergenciasRecebimento(db, { dias | recebimentoId })` — **dual-mode exportado**: itens `quantidade_recebida IS NOT NULL` AND `divergenciaRealSql('ri.quantidade_recebida - ri.quantidade_esperada')`; `{dias}` = janela por **`COALESCE(r.updated_at, r.created_at)`** (achado Crítico da revisão: `created_at` puro deixaria recebimento antigo conferido HOJE fora da central E da rede de segurança; o item não tem timestamp — limitação declarada), `{recebimentoId}` = os itens divergentes daquele recebimento p/ os ganchos. Campos: `item_id, material_codigo, material_nome, quantidade_esperada, quantidade_recebida, divergencia, recebimento_numero, nota_fiscal`. payload `{item_id, recebimento_id}` | idem (mesma chave) | `` (l) => `receb-diverg-${l.item_id}` `` |
+| `DIVERGENCIA_INVENTARIO` | `listarDivergenciaConferencia(db, { dias | conferenciaId })` — dual-mode: conferências `status='CONCLUIDO'` com item `divergenciaRealSql('ic.divergencia')`, `data_fim` na janela, AGREGADO (campos: `conferencia_id, numero, data_fim, itens_divergentes`; SEM impacto_financeiro). payload `{conferencia_id}` | idem (mesma chave) | `` (l) => `inv-diverg-${l.conferencia_id}` `` |
+| `LOTE_SEM_CERTIFICADO` | lotes de material `ativo=1` com `controle_certificado=1`, `certificado_arquivo IS NULL`, saldo>0 (subquery de `estoque_saldo_almoxarifado` — molde `varrerLotesVencendo`, notificationQueueService.js:492-502; filtro de saldo em JS como lá) (campos: `lote_id (l.id), codigo (do lote), material_codigo, material_nome, saldo, status`). payload `{lote_id}`. **NÃO copiar o filtro `l.status='ATIVO'` do molde** — o lote sem certificado NASCE `BLOQUEADO` (receiptService.js:471 + lotService.js:113-136); copiar o filtro cegaria o alerta para o caso principal (achado da revisão) | `null` | `` (l) => `sem-certificado-${l.id}-${mesAtual()}` `` |
 
 `listarDivergenciaConferencia(db, { dias, conferenciaId })` é exportada pelo registro: com
 `dias` filtra janela (uso do `listar`); com `conferenciaId` devolve só aquela conferência
@@ -75,14 +75,16 @@ espelho client; o campo novo entra na tela de Configurações (Task 3) no padrã
 
 ### C4 — ganchos (pontos exatos, padrão pós-commit try/catch → console.warn)
 
-1. `inspectionService.decidirInspecao` — após o INSERT da inspeção (inspectionService.js,
-   após a linha do INSERT ~131, antes do return): se `reprovada > 0`,
-   `dispararAlertaRegistrado(db, 'MATERIAL_REPROVADO', linha)` com a linha montada dos dados
-   locais (o id do INSERT + campos já carregados).
-2. `receiptService.conferirRecebimento` — após o loop de UPDATE dos itens (~155-165, antes
-   do `return {success:true}`): para cada item conferido com
-   `Math.abs(recebida - esperada) > EPSILON_DIVERGENCIA` (importar a constante de
-   `divergencia.js`), dispara `DIVERGENCIA_RECEBIMENTO`.
+1. `inspectionService.decidirInspecao` — após o INSERT da inspeção (~131, antes do return):
+   se `reprovada > 0`, buscar a linha por `listarReprovados(db, { inspecaoId: ins.lastID })`
+   e disparar. (Correção da revisão: a versão anterior mandava "montar a linha dos dados
+   locais" — os campos do C2 NÃO estão carregados ali; o dual-mode é a régua única.)
+2. **DOIS pontos** em `receiptService` (correção da revisão: a UI nunca chama a rota de
+   conferir — o fluxo real escreve `quantidade_recebida` por `PUT /recebimentos/:id/fiscal`
+   → `atualizarDadosFiscais`): após o loop de UPDATE de `conferirRecebimento` (~155-165) E
+   após o de `atualizarDadosFiscais` (~279-308), o MESMO bloco: buscar
+   `listarDivergenciasRecebimento(db, { recebimentoId })` e disparar por item retornado.
+   NUNCA refazer a comparação em JS (segunda régua) — a query compartilhada é a régua.
 3. `routes/almoxarifado.js` PUT `/conferencias/:id/concluir` — junto do gancho existente da
    linha ~1208: `listarDivergenciaConferencia(db, { conferenciaId: id })` → se veio linha,
    dispara `DIVERGENCIA_INVENTARIO`.
@@ -93,7 +95,7 @@ espelho client; o campo novo entra na tela de Configurações (Task 3) no padrã
 |---|---|---|
 | 1. Registro: 4 entradas + helper + config (backend) | **tronco** | — |
 | 2. Ganchos nos 3 atos (backend) | **tronco** | Task 1 |
-| 3. Colunas das 4 chaves no client + campo de config | **galho** | contratos C2/C3 |
+| 3. Colunas das 4 chaves no client + campo de config | **galho** | contratos C2/C3 **+ Task 1 no repositório** (o teste de paridade `configuracoesGerais.api.test.js` lê o arquivo da tela e exige seed+leitor do servidor; e não mudar a FORMA literal do bloco `const CAMPOS = [...]` — o parser do teste depende dela) |
 | 4. Integração: jornada ato→fila→central→varredura | integração | Tasks 1+2 |
 
 ---
@@ -114,7 +116,9 @@ molde de subquery de saldo de lote em `notificationQueueService.js:492-502`; `me
 - [ ] **Step 1: teste que falha** — cenários (setup por INSERT direto nos moldes dos testes
   da 16; asserções por evento/hash):
   1. `LOTE_SEM_CERTIFICADO`: lote de material com
-     `controle_certificado=1` sem certificado e COM saldo → varredura enfileira; mesmo lote
+     `controle_certificado=1` sem certificado e COM saldo → varredura enfileira — **o lote
+     do cenário nasce com `status='BLOQUEADO'`** (o caso principal real; controle positivo
+     contra a cópia cega do filtro `status='ATIVO'` do molde — achado da revisão); mesmo lote
      com `certificado_arquivo` preenchido → fora; lote sem saldo → fora; material de
      cliente? (o lote herda material — material de cliente com controle de certificado
      ENTRA ou sai? DECISÃO: entra — certificado é rastreabilidade, dono não importa;
@@ -125,7 +129,10 @@ molde de subquery de saldo de lote em `notificationQueueService.js:492-502`; `me
      dentro.
   3. `DIVERGENCIA_RECEBIMENTO` via `listar`: item `esperada=10, recebida=8` → dentro;
      `recebida=10` → fora; `recebida NULL` → fora; `recebida=10.0000000001` → FORA
-     (float-safe, prova que usa `divergenciaRealSql`).
+     (float-safe, prova que usa `divergenciaRealSql`); recebimento CRIADO 30 dias atrás mas
+     com `updated_at` de hoje → DENTRO da janela 7 (a régua é COALESCE(updated_at,
+     created_at) — achado Crítico da revisão); modo `{recebimentoId}` devolve os mesmos
+     itens.
   4. `DIVERGENCIA_INVENTARIO` via `listar`: conferência CONCLUIDO com 2 itens divergentes →
      UMA linha com `itens_divergentes=2` (RN-05 agregação) e SEM campo `impacto_financeiro`;
      conferência EM_ANDAMENTO → fora; divergência 0 em todos → fora.
@@ -223,7 +230,18 @@ conferência/data/itens divergentes; sem certificado lote/material/saldo/status)
 
 ## Execução (estado)
 
-- [ ] Fase 2 — revisão do plano por agente fresco
+- [x] Fase 2 — revisão do plano por agente fresco (2026-08-28): 7 achados, todos acatados.
+  **2 Críticos:** o gancho da divergência estava SÓ na rota de conferir, que a UI nunca
+  chama (o fluxo real escreve `quantidade_recebida` pelo `/fiscal` → gancho nos DOIS
+  métodos); janela por `created_at` puro quebrava a rede de segurança para recebimento
+  antigo (→ `COALESCE(updated_at, created_at)`, limitação declarada). **2 Importantes:**
+  "dados locais" dos ganchos 1 e 2 NÃO existiam no escopo (→ dual-mode por id nos três
+  `listar` de evento — régua única e dado completo). **1 Importante de teste:** lote sem
+  certificado NASCE BLOQUEADO — cenário explícito contra a cópia cega do filtro
+  `status='ATIVO'` do molde. Menores: payloads declarados no C2; dependência T3→T1 pelo
+  teste de paridade (e a forma literal do bloco CAMPOS). O revisor confirmou: cadeia de
+  requires, stub do RN-02, fixture do client (só o assert de ordem precisa acompanhar) e
+  todos os literais/linhas citados.
 - [ ] Task 1 (tronco)
 - [ ] Task 2 (tronco)
 - [ ] Task 3 (galho)
