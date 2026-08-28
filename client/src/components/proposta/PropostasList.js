@@ -18,6 +18,7 @@ const STATUS = {
   enviada: 'Enviada',
   visualizada: 'Visualizada',
   aceita: 'Aceita',
+  aprovada: 'Aprovada',
   rejeitada: 'Rejeitada',
   cancelada: 'Cancelada',
   expirada: 'Expirada'
@@ -153,7 +154,7 @@ export default function PropostasList() {
   };
 
   const podeAceitarRejeitar = (s) => s === 'enviada' || s === 'visualizada';
-  const podeNovaRevisao = (s) => ['enviada', 'visualizada', 'aceita', 'rejeitada', 'cancelada', 'expirada'].includes(s);
+  const podeNovaRevisao = (s) => ['enviada', 'visualizada', 'aceita', 'aprovada', 'rejeitada', 'cancelada', 'expirada'].includes(s);
   const isInativa = isPropostaInativa;
   const podeExcluir = (p) => isAdmin || isRascunho(p?.status);
   const confirmExcluir = (p) => {

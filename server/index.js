@@ -8787,7 +8787,11 @@ app.post('/api/propostas/:id/marcar-visualizada', authenticateToken, (req, res) 
   });
 });
 
-// POST aceitar proposta (enviada/visualizada → aceita)
+// POST aceitar proposta (enviada/visualizada → APROVADA)
+// O status gravado e 'aprovada', nao 'aceita': 'aprovada' e o que TODO o resto do sistema
+// conta como ganha - taxa de conversao, valor aprovado, ranking de vendedores, data de
+// fechamento. 'aceita' nao aparecia em NENHUMA consulta de relatorio, entao a proposta
+// fechada por este botao ficava invisivel nos numeros. Corrigido a pedido do usuario.
 app.post('/api/propostas/:id/aceitar', authenticateToken, (req, res) => {
   const { id } = req.params;
   const userId = req.user?.id;
@@ -8800,12 +8804,14 @@ app.post('/api/propostas/:id/aceitar', authenticateToken, (req, res) => {
     }
     const statusAnterior = proposta.status;
     db.run(
-      `UPDATE propostas SET status = 'aceita', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-      [id],
+      // data_fechamento acompanha, do mesmo jeito que o PUT ja faz ao mudar para aprovada.
+      // COALESCE para nao sobrescrever uma data que alguem tenha informado a mao.
+      `UPDATE propostas SET status = 'aprovada', data_fechamento = COALESCE(data_fechamento, ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [new Date().toISOString().split('T')[0], id],
       (errUpdate) => {
         if (errUpdate) return res.status(500).json({ error: errUpdate.message });
-        registrarStatusProposta(id, statusAnterior, 'aceita', userId, observacao || 'Proposta aceita', () => {});
-        res.json({ message: 'Proposta aceita', status: 'aceita' });
+        registrarStatusProposta(id, statusAnterior, 'aprovada', userId, observacao || 'Proposta aprovada', () => {});
+        res.json({ message: 'Proposta aprovada', status: 'aprovada' });
       }
     );
   });
