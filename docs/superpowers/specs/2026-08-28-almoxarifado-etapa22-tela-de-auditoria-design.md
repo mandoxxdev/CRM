@@ -66,16 +66,33 @@ coisa e concluiria, corretamente, que o sistema não sabe o que registrou.
   sem-permissão do módulo, não uma tela vazia (vazia é indistinguível de "não há registros").
 - **RN-02 — Quatro filtros novos, combináveis:** `usuario_id`, `acao`, `data_inicio`,
   `data_fim`. Combinados por `AND` com os dois que já existem.
-- **RN-03 — Data malformada é 400, não filtro ignorado.** `data_inicio=ontem` ou
-  `data_inicio=2026-13-45` → **400** `'Data inválida: use o formato AAAA-MM-DD'`. Hoje a rota
-  aceita qualquer coisa e o SQLite compara string com string: `'ontem'` não casa nada e a tela
-  mostraria "nenhum registro", que é a **resposta errada mais perigosa numa auditoria** —
-  parece prova de que nada aconteceu.
-- **RN-04 — O período é inclusivo nos dois extremos.** `data_fim=2026-08-28` inclui o dia 28
-  inteiro. A coluna é DATETIME (`'2026-08-28 14:30:00'`), então comparar com `<= '2026-08-28'`
-  excluiria o dia todo — a régua é `< '2026-08-29'`, ou seja, `data_fim` mais um dia.
-  (Este é o mesmo tipo de erro de fuso/limite que a Etapa 16 corrigiu na exibição de datas
-  DATE-only; aqui ele apareceria como "o ato de hoje não está na trilha".)
+- **RN-03 — Data inválida é 400, não filtro ignorado.** `data_inicio=ontem`,
+  `data_inicio=2026-13-45` **e `data_fim=2026-02-30`** → **400**
+  `'Data inválida: use uma data real no formato AAAA-MM-DD'`. Hoje a rota aceita qualquer coisa
+  e o SQLite compara string com string: `'ontem'` não casa nada e a tela mostraria "nenhum
+  registro", que é a **resposta errada mais perigosa numa auditoria** — parece prova de que
+  nada aconteceu.
+  **O 30 de fevereiro entrou aqui pela revisão da Fase 2, que reproduziu o segundo modo de
+  falha:** `Date.parse('2026-02-30')` é **válido** em JS (rola para 02/03), e o SQLite também
+  rola — `date('2026-02-30','+1 day')` = `'2026-03-03'`. Não dá lista vazia, dá **janela
+  alargada em silêncio**: uma consulta de fevereiro devolvendo três dias de março. A régua que
+  fecha é o ida-e-volta: `new Date(v + 'T00:00:00Z').toISOString().slice(0,10) === v`.
+  A mensagem fala em "data real" porque `2026-13-45` **está** no formato pedido — a versão
+  anterior mentia para metade dos casos que ela mesma listava.
+- **RN-04 — O período é inclusivo nos dois extremos, no fuso de quem pergunta.**
+  `data_fim=2026-08-28` inclui o dia 28 inteiro **do horário de Brasília**.
+  **CORREÇÃO — esta RN consertava metade do problema e a metade errada.** Ela dizia que bastava
+  `< data_fim + 1 dia` porque a coluna é DATETIME. Isso está certo como comparação de string, e
+  a revisão da Fase 2 reproduziu que **não basta**: `created_at DATETIME DEFAULT
+  CURRENT_TIMESTAMP` grava em **UTC** (medido: `date` = 19:45 -03, `CURRENT_TIMESTAMP` =
+  `'2026-08-28 22:45:51'`). O dia recortado seria o dia **UTC**, então um ato registrado às
+  **21:30 de 28/08** vira `'2026-08-29 00:30'` e **não aparece** num filtro de 28/08 — o
+  sintoma exato que a RN dizia estar corrigindo, sobrevivendo à correção por outra causa. Três
+  horas de todo fim de expediente sumiriam da trilha.
+  A régua é converter os dois limites de dia local para instante UTC **antes** do SQL, em
+  função pura (`janelaUtc`), e a coluna é comparada com esses limites. O teste **fixa o
+  `created_at` do arranjo** em vez de usar `CURRENT_TIMESTAMP` — senão o cenário fica verde de
+  dia e vermelho entre 21h e meia-noite, e a próxima sessão vai depurar o SQL em vez do fuso.
 - **RN-05 — Os selects vêm do banco.** `GET /auditoria/opcoes` devolve
   `{ entidades: [], acoes: [], usuarios: [{id, nome}] }` com os valores **distintos realmente
   presentes**. Lista hardcoded envelheceria no primeiro `entidade` novo — e as etapas 18-20
@@ -85,9 +102,32 @@ coisa e concluiria, corretamente, que o sistema não sabe o que registrou.
   A tela **não esconde** que o dado é inconsistente: a linha exibe o verbo real como legenda
   secundária.
 - **RN-07 — O de/para mostra o que mudou, não o JSON.** A linha expande e lista uma entrada por
-  campo alterado (`nome: "Parafuso" → "Parafuso M8"`), calculada com o mesmo
-  `configDiff.calcularDiff` que a Etapa 19 usa para *gravar* o diff das configurações — fonte
-  única, não uma segunda régua de comparação.
+  campo (`nome: "Parafuso" → "Parafuso M8"`), calculada **no servidor** e entregue no item como
+  `alteracoes: [{ campo, de, para }]`.
+  **CORREÇÃO — esta RN mandava calcular com `configDiff.calcularDiff`, "fonte única". ESTAVA
+  ERRADA, e era o defeito mais grave deste design; a revisão da Fase 2 reproduziu os três
+  modos de falha.** `calcularDiff` foi escrita para o `PUT /configuracoes`, onde `anteriores` é
+  a tabela inteira e `novos` é o payload; o cabeçalho dela (`configDiff.js:9-13`) diz que itera
+  `Object.keys(novos)` e **ignora de propósito** chave que existe só em `anteriores`. As linhas
+  de auditoria não têm essa forma — `dados_novos` mistura campos mudados com campos de
+  contexto, e `dados_anteriores` é um recorte às vezes disjunto. Reproduzido:
+  1. **Some com a mudança do segredo.** A Etapa 19 já grava o diff mascarado, então quando a
+     senha muda os **dois** lados valem `'(alterado)'`; rediffar cai no `if (String(bruto) ===
+     String(novo)) continue` e a chave **desaparece**. A tela mostraria `dias: 30 → 45` e
+     esconderia que a senha foi trocada — o oposto exato da RN-08.
+  2. **Inventa ato que não houve.** Numa exclusão de requisição
+     (`ant={status:PENDENTE}`, `nov={numero:REQ-1, estornos:2}`) sai
+     `numero: — → REQ-1` e `estornos: — → 2` como se fossem alterações, e o `status` anterior
+     — o único de/para real da linha — é **descartado**. Numa trilha de auditoria, isso é
+     afirmar que a pessoa fez algo que ela não fez.
+  3. **Sujeira no próprio alvo do teste de integração.** A foto de material grava
+     `dados_novos: { foto, codigo, nome }`, então dois campos que não mudaram apareceriam como
+     alteração.
+  A régua de **leitura** é outra, e é dela que a etapa precisa: **união das chaves dos dois
+  lados**, `null` explícito para "ausente", **nenhum remascaramento**, e lista vazia quando os
+  dois lados são vazios (há call sites que gravam nenhum dos dois — `receiptService.js:236-239`,
+  os 5 verbos de transição). `configDiff` continua sendo fonte única **da gravação**; leitura e
+  gravação são problemas diferentes e forçá-las na mesma função foi o erro.
 - **RN-08 — Segredo não desmascara na tela.** O log já grava `'(alterado)'` para as chaves
   secretas e a URL do webhook sem a query string (Etapa 19). A tela **exibe o que está
   gravado** e não tenta embelezar — se um dia alguém gravar segredo cru, o lugar de consertar é
@@ -100,11 +140,19 @@ coisa e concluiria, corretamente, que o sistema não sabe o que registrou.
 
 - **`services/almoxarifado/auditLabels.js`** (novo, função pura — o padrão de `alertRegistry` e
   `configDiff`): `ROTULOS_ENTIDADE`, `GRUPOS_ACAO` (rótulo → lista de verbos crus),
-  `rotularAcao(verbo)`, `verbosDoGrupo(rotulo)`. Testável sem HTTP. **O mapa é a fonte única**:
-  a tela não repete tradução nenhuma, recebe do servidor.
-- **`extended.js:1337`** — os quatro filtros, a validação de data e o `LEFT JOIN`/`DISTINCT`
-  da rota de opções. A forma da resposta (`{total, limite, offset, truncado, itens}`)
-  **não muda** — foi congelada na Etapa 18 e agora ganha o primeiro consumidor.
+  `rotularAcao(verbo)`, `verbosDoGrupo(rotulo)`, e `alteracoesDaLinha(anteriores, novos)` — a
+  régua de **leitura** da RN-07 (união das chaves, `null` para ausente, sem remascarar).
+  Testável sem HTTP.
+- **`services/almoxarifado/auditFiltros.js`** (novo, função pura): `validarData(v)` e
+  `janelaUtc(dataInicio, dataFim)` → `{ de, ate }` já em UTC (RN-03 e RN-04). Separado dos
+  rótulos porque é outro assunto — um traduz vocabulário, o outro resolve fuso.
+- **`extended.js:1337`** — os quatro filtros, a validação de data e o `DISTINCT` da rota de
+  opções. A forma da resposta **não muda** (`{total, limite, offset, truncado, itens}`,
+  congelada na Etapa 18), mas **cada item ganha três campos derivados**: `acao_rotulo`,
+  `entidade_rotulo` e `alteracoes`. Isso é o que cumpre de verdade a promessa de que **a tela
+  não repete tradução nenhuma** — a versão anterior deste design afirmava isso e entregava um
+  item sem rótulo nenhum, obrigando a tela a remontar o mapa a partir de `/opcoes` (achado A9).
+  Com o cálculo no servidor, a régua de leitura tem **um** dono e é testável sem React.
 - **`schema.js`** — três índices `CREATE INDEX IF NOT EXISTS` (padrão desta base, idempotente,
   sem ledger): `(created_at)`, `(entidade, entidade_id)` e `(usuario_id)`.
 - **`client/src/components/almoxarifado/AuditoriaAlmoxarifado.js`** — tela, molde de
