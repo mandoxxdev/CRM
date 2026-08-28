@@ -113,7 +113,7 @@ espelho client; o campo novo entra na tela de Configurações (Task 3) no padrã
 molde de subquery de saldo de lote em `notificationQueueService.js:492-502`; `mesAtual()` e
 `resolverDias` do próprio registro; `enfileirar`. Produces: C1, C2, C3.
 
-- [ ] **Step 1: teste que falha** — cenários (setup por INSERT direto nos moldes dos testes
+- [x] **Step 1: teste que falha** (c1cd0a1) — cenários (setup por INSERT direto nos moldes dos testes
   da 16; asserções por evento/hash):
   1. `LOTE_SEM_CERTIFICADO`: lote de material com
      `controle_certificado=1` sem certificado e COM saldo → varredura enfileira — **o lote
@@ -142,12 +142,21 @@ molde de subquery de saldo de lote em `notificationQueueService.js:492-502`; `me
      e fila intacta (RN-07 lado gancho).
   6. RN-01: disparar no "ato" (helper) e depois `varrerAlertasRegistrados` no mesmo estado →
      a entrada reporta `duplicadas>=1, enfileiradas=0` para aquele evento.
-- [ ] **Step 2: rodar e ver falhar.**
-- [ ] **Step 3: implementar** (entradas na ordem C2; requires lazy; `listarDivergenciaConferencia`
-  com os dois modos; helper C1 espelhando os guards da varredura).
-- [ ] **Step 4: verde + controle positivo** — sabotar `divergenciaRealSql` no `listar` de
-  recebimento trocando por `!=` cru e ver o cenário float falhar; reverter. `npm run test:api`.
-- [ ] **Step 5: commit** — `Almoxarifado Etapa 17 Task 1: 4 entradas de alerta e o disparo no ato`.
+- [x] **Step 2: rodar e ver falhar** (c1cd0a1) — vermelho real medido: **0 passed, 6 failed**
+  (`listarReprovados/listarDivergenciasRecebimento/listarDivergenciaConferencia is not a
+  function`; a varredura não devolvia entrada para `LOTE_SEM_CERTIFICADO`).
+- [x] **Step 3: implementar** (c1cd0a1) — entradas na ordem C2; `divergencia.js` no topo do
+  registro (só constantes/fórmula, sem ciclo — os requires lazy das entradas antigas ficaram
+  como estavam); os 3 `listar` dual-mode exportados; helper C1 espelhando os guards da
+  varredura.
+- [x] **Step 4: verde + controle positivo** (c1cd0a1) — `alertaEvento.api.test.js` **6/6**.
+  Sabotagem medida: `divergenciaRealSql` do `listar` de recebimento trocado por
+  `ri.quantidade_recebida != ri.quantidade_esperada` → **5 passed, 1 failed**, exatamente o
+  cenário 3 na asserção `10.0000000001 NAO pode listar`; revertido e verde de novo.
+  `npm run test:api` → **129/129 arquivos OK** (inclui `configuracoesGerais` 15/15,
+  `alertaRegistro` 10/10 e `alertaCentral` 5/5 da Etapa 16).
+- [x] **Step 5: commit** (c1cd0a1) — `Almoxarifado Etapa 17 Task 1: 4 entradas de alerta e o
+  disparo no ato`.
 
 ### Task 2 (tronco): ganchos nos 3 atos
 
@@ -242,7 +251,13 @@ conferência/data/itens divergentes; sem certificado lote/material/saldo/status)
   teste de paridade (e a forma literal do bloco CAMPOS). O revisor confirmou: cadeia de
   requires, stub do RN-02, fixture do client (só o assert de ordem precisa acompanhar) e
   todos os literais/linhas citados.
-- [ ] Task 1 (tronco)
+- [x] Task 1 (tronco) — c1cd0a1. Vermelho inicial 0/6; verde `alertaEvento.api.test.js` 6/6;
+  controle positivo do `divergenciaRealSql` (`!=` cru) derrubou só o cenário float (5/6) e foi
+  revertido; `npm run test:api` **129/129 arquivos OK**. Entregue: C1
+  (`dispararAlertaRegistrado`, exportado — os ganchos da Task 2 devem chamá-lo **pelo objeto do
+  módulo**), C2 (as 4 entradas + os 3 `listar` dual-mode exportados do `alertRegistry`) e C3
+  (seed `alerta_eventos_janela_dias`='7', já editável pelo PUT via prefixo `alerta_` — o campo
+  na tela é da Task 3). `divergencia.js` mudou **só no header** (consumidor novo declarado).
 - [ ] Task 2 (tronco)
 - [ ] Task 3 (galho)
 - [ ] Task 4 (integração)
