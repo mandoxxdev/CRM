@@ -119,7 +119,7 @@ Galhos 2/3/4 em worktrees isoladas (arquivos client distintos; merge serial na F
   `registrarAssinatura(db, user, requisicaoId, { recebedor_nome, arquivo })` → objeto da
   resposta C1; `listarAssinaturas(db, requisicaoId)` → array C2.
 
-- [ ] **Step 1: escrever o teste que falha** — `requisicaoAssinaturaEntrega.api.test.js` no
+- [x] **Step 1: escrever o teste que falha** — `requisicaoAssinaturaEntrega.api.test.js` no
   molde de `requisicaoEntregaMotor.api.test.js` (helpers `criarMaterial`/`criarRequisicao`
   copiados) + multipart no molde de `toolOcorrencia.api.test.js`. Cenários:
 
@@ -152,8 +152,8 @@ const PNG_1PX = Buffer.from(
 // 9. C2: GET /requisicoes/:id → assinaturas_entrega presente ([] quando não há)
 ```
 
-- [ ] **Step 2: rodar e ver falhar** — `cd server && node tests/api/requisicaoAssinaturaEntrega.api.test.js` → 404 nas rotas novas / campo ausente no detalhe.
-- [ ] **Step 3: schema** — em `schema.js`, junto das outras tabelas:
+- [x] **Step 2: rodar e ver falhar** — `cd server && node tests/api/requisicaoAssinaturaEntrega.api.test.js` → 404 nas rotas novas / campo ausente no detalhe. (Vermelho medido: 0/9 — POST cai no 404 default do Express sem corpo JSON, detalhe sem `assinaturas_entrega`.)
+- [x] **Step 3: schema** — em `schema.js`, junto das outras tabelas:
 
 ```sql
 CREATE TABLE IF NOT EXISTS assinaturas_entrega_almoxarifado (
@@ -169,7 +169,7 @@ CREATE INDEX IF NOT EXISTS idx_assinaturas_entrega_req
   ON assinaturas_entrega_almoxarifado(requisicao_id);
 ```
 
-- [ ] **Step 4: serviço** — `deliverySignatureService.js`:
+- [x] **Step 4: serviço** — `deliverySignatureService.js`:
 
 ```js
 const STATUS_ASSINAVEIS = ['ENTREGUE', 'PARCIALMENTE_ATENDIDA', 'ENCERRADA'];
@@ -185,20 +185,22 @@ const STATUS_ASSINAVEIS = ['ENTREGUE', 'PARCIALMENTE_ATENDIDA', 'ENCERRADA'];
   (conferir como `extended.js` sinaliza status de erro dos serviços — seguir o padrão
   existente de `handleError`/erros com `status`, não inventar um novo.)
 
-- [ ] **Step 5: rota** — em `extended.js`: multer `uploadAssinatura` (prefixo `assinatura-`,
+- [x] **Step 5: rota** — em `extended.js`: multer `uploadAssinatura` (prefixo `assinatura-`,
   filtro `image/(png|jpeg|jpg|webp)`, 2MB, mesmo `diskStorage`/dir flat); Zod
   `AssinaturaEntregaFormSchema = z.object({ recebedor_nome: z.string().trim().min(1).max(120) })`;
   rota na ordem canônica com `safeParse` manual (NÃO o middleware `validate()` — deixa órfão)
   e `limparUploadOrfao` em TODA saída ≠ 201; `!req.file` → 400 literal C1.
-- [ ] **Step 6: detalhe C2** — em `almoxarifado.js:2177`, antes do `res.json`, buscar
+- [x] **Step 6: detalhe C2** — em `almoxarifado.js:2177`, antes do `res.json`, buscar
   `listarAssinaturas` e incluir `assinaturas_entrega` na resposta.
   **Atenção (achado da revisão):** o ponto de inserção fica dentro de callback aninhado
   `db.all(..., (err2, itens) => {...})` que NÃO é async — `await` colado ali é SyntaxError.
   Tornar o callback interno `async (err2, itens) =>` (ou encadear `.then/.catch` com 500 no
   catch), no estilo já misto do arquivo; erro da busca de assinaturas → 500, não engolir.
-- [ ] **Step 7: rodar o teste até verde; controle positivo** — sabotar `STATUS_ASSINAVEIS`
+- [x] **Step 7: rodar o teste até verde; controle positivo** — sabotar `STATUS_ASSINAVEIS`
   (incluir `'APROVADA'`) e ver o cenário 2 falhar; reverter. Rodar `npm run test:api` inteiro.
-- [ ] **Step 8: commit** — `Almoxarifado Etapa 15 Task 1: assinatura digital de entrega no backend` (por que: spec secao 5/13.2 pedia; RN-02 justifica opcional).
+  (Feito: verde 9/9; com a sabotagem o cenário RN-03 ficou vermelho — 8/9, o POST em APROVADA
+  devolveu 201 — revertido e verde 9/9 de novo. Suíte inteira: 124/124 arquivos OK.)
+- [x] **Step 8: commit** — `Almoxarifado Etapa 15 Task 1: assinatura digital de entrega no backend` (por que: spec secao 5/13.2 pedia; RN-02 justifica opcional). Commit `fa119c8`.
 
 ### Task 2 (galho): scanner QR pela câmera
 
@@ -340,7 +342,11 @@ e `GET /requisicoes/:id` (Task 1) — motor e serviço REAIS, zero mock.
   exigido); aviso de callback não-async no Step 6 da T1; matriz RN-05 sem `role:'admin'`
   (senão falso verde); 404 sem ponto final; posição do menu alinhada; nota sobre a spec da
   feature. Independência dos galhos confirmada no código (arquivos disjuntos).
-- [ ] Task 1 (tronco)
+- [x] Task 1 (tronco) — commit `fa119c8` (2026-08-28). TDD: vermelho inicial 0/9; verde 9/9;
+  controle positivo da sabotagem de `STATUS_ASSINAVEIS` derrubou o cenário RN-03 (8/9) e foi
+  revertido; `npm run test:api` completo: 124/124 arquivos OK. Nenhuma divergência
+  plano × código — os três avisos da revisão (callback async no detalhe, matriz sem
+  `role:'admin'`, 404 sem ponto) foram seguidos como escritos.
 - [ ] Task 2 (galho)
 - [ ] Task 3 (galho)
 - [ ] Task 4 (galho)
