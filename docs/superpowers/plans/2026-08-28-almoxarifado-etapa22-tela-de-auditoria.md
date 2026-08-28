@@ -93,6 +93,12 @@ Query: `entidade`, `entidade_id`, `usuario_id`, `acao`, `data_inicio`, `data_fim
   gravado por `CURRENT_TIMESTAMP`, que é **UTC**, e quem filtra pensa em dia de Brasília
   (achado A4). `created_at >= ?` / `created_at < ?` com os limites já convertidos — **não**
   use `date(?, '+1 day')` cru no SQL.
+  **Acrescentado pela execução da Task 2:** o fuso do recorte é **constante do módulo**
+  (`FUSO_PADRAO = 'America/Sao_Paulo'`, terceiro parâmetro opcional de `janelaUtc`), **nunca
+  `process.env.TZ`**. O contrato era omisso e a leitura óbvia — `new Date(ano, mes-1, dia)`, que
+  usa o fuso do processo — passaria em qualquer máquina de dev brasileira e viraria **no-op num
+  contêiner com `TZ=UTC`**, ressuscitando a RN-04 em produção com o teste verde. Há cenário que
+  troca o `TZ` do processo para `UTC` e `Asia/Tokyo` e exige a mesma janela.
 
 Resposta 200 (**forma inalterada**, congelada na Etapa 18):
 ```json
@@ -124,6 +130,12 @@ renderizar. Com o cálculo no servidor, a Task 3 volta a ser galho de verdade.
 Só valores **realmente presentes** (`SELECT DISTINCT`). Verbo sem rótulo entra com `rotulo` = o
 próprio verbo (nunca some — sumir esconderia atos). `usuarios`: `DISTINCT usuario_id,
 usuario_nome` com `usuario_id NOT NULL`, ordenado por nome.
+**Precisão da Task 2:** `verbos` traz só os verbos do grupo que **estão no banco**, não os do
+grupo inteiro. O exemplo acima mostra `["CRIACAO","CRIAR"]` porque a base tem os dois; num banco
+que só gravou `CRIAR`, a opção "Criação" sai com `["CRIAR"]`. Mandar o verbo ausente não mudaria
+resultado nenhum e faria a rota afirmar que existe no log o que não existe.
+`entidades` e `acoes` saem ordenados por `rotulo` (`localeCompare('pt-BR')`) — a tela não
+reordena.
 Verificado pela Fase 2: **não há colisão de rota** — `app.get('/api/almoxarifado/auditoria')`
 casa caminho exato e não captura `/auditoria/opcoes`, em qualquer ordem de registro. E o
 `req.user` está sempre populado (`almoxarifado.js:199-202` aplica `authenticateToken` ao
@@ -257,20 +269,46 @@ e `alteracoesDaLinha`.
 
 ---
 
-### Task 2 (tronco): filtros, validação, janela e opções
+### Task 2 (tronco): filtros, validação, janela e opções — **FEITA** (`6e29217`, `5a0f2f3`)
+
+> **Placar real:** `auditoriaFiltros.api.test.js` **36 passed, 0 failed**; `npm run test:api`
+> **145/145 arquivos** (144 do baseline da Task 1 + o novo); `test:almoxarifado` 42/0,
+> `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 3/0.
 
 **Files:** Create `server/services/almoxarifado/auditFiltros.js`; Modify
 `server/routes/almoxarifado/extended.js:1337`; Test `server/tests/api/auditoriaFiltros.api.test.js`.
 
 **Interfaces:** Consumes C3. Produces C1 e C2.
 
-- [ ] **Step 1: `auditFiltros.js` com teste próprio primeiro.** `validarData(v)` → `{ ok }`
+**O QUE A TASK 3 PRECISA SABER e o contrato não dizia:**
+
+1. **`janelaUtc` NÃO usa o fuso do processo — e isso é divergência deliberada do plano.** O
+   Step 1 abaixo só exigia o cenário "com `TZ=America/Sao_Paulo`", e `new Date(ano, mes-1, dia)`
+   teria resolvido de graça. **Não serve:** o default da maioria dos contêineres é `TZ=UTC`, e
+   lá esse atalho vira **no-op** — a RN-04 volta a falhar em produção com o teste verde na
+   máquina do dev, que é exatamente a classe de falha silenciosa desta etapa. O fuso é constante
+   do módulo (`FUSO_PADRAO = 'America/Sao_Paulo'`, terceiro parâmetro opcional), o offset sai do
+   `Intl` (horário de verão respeitado por data) e há cenário que troca o `TZ` do processo para
+   `UTC` e `Asia/Tokyo` provando que a janela não se mexe.
+2. **`GET /auditoria/opcoes` devolve em `verbos` só os verbos PRESENTES no banco**, não todos os
+   do grupo. Mandar os ausentes não mudaria resultado nenhum e faria a rota afirmar que existe
+   no banco o que não existe. Consequência para a tela: o `verbos` que ela recebe é exatamente o
+   que ela deve mandar de volta em `acao`, juntado por vírgula — sem consultar `auditLabels`.
+3. **`entidades` e `acoes` vêm ordenados por `rotulo`** (`localeCompare('pt-BR')`), `usuarios`
+   por nome. A tela não precisa reordenar.
+4. **`alteracoes: []` é resultado legítimo e frequente** — há call sites que não gravam nenhum
+   dos dois lados. A tela mostra "sem detalhes registrados", nunca área em branco (já previsto
+   na Task 3 Step 1).
+5. O item continua trazendo `dados_anteriores`/`dados_novos` como **string JSON crua**; a tela
+   não deve parseá-los para montar o de/para — `alteracoes` já vem pronto.
+
+- [x] **Step 1: `auditFiltros.js` com teste próprio primeiro.** `validarData(v)` → `{ ok }`
   recusando `'ontem'`, `'2026-13-45'`, `'2026-02-30'` e `'2026-04-31'`, aceitando `'2026-08-28'`.
   `janelaUtc(inicio, fim)` → `{ de, ate }` em `'AAAA-MM-DD HH:MM:SS'` UTC, com `ate` = início do
   dia seguinte ao `fim` (inclusivo). **Cenário que prova o fuso:** com `TZ=America/Sao_Paulo`,
   `janelaUtc('2026-08-28','2026-08-28')` tem de conter `'2026-08-29 00:30:00'` (o ato das 21:30
   local) e **não** conter `'2026-08-29 03:30:00'` (00:30 do dia 29 local).
-- [ ] **Step 2: teste da rota que falha.** Todas as linhas de arranjo gravadas por `dbRun`
+- [x] **Step 2: teste da rota que falha.** Todas as linhas de arranjo gravadas por `dbRun`
   **com `created_at` explícito** — nunca `CURRENT_TIMESTAMP` (achado A4: usar o relógio deixa o
   cenário verde de dia e vermelho entre 21h e meia-noite, e a próxima sessão depura o SQL em
   vez do fuso). Cenários: cada filtro isolado; `usuario_id` + `data_inicio` combinados;
@@ -280,13 +318,31 @@ e `alteracoesDaLinha`.
   próprio nome); RN-01 (**403** nas duas rotas para usuário sem `configurar` — a de opções é
   nova e é onde o gate costuma faltar); regressão da **forma** da resposta; e um cenário para
   os **três campos derivados** (`acao_rotulo`, `entidade_rotulo`, `alteracoes`).
-- [ ] **Step 3: implementar** conforme C1 (placeholders no `IN`, validação antes do `COUNT`,
+- [x] **Step 3: implementar** conforme C1 (placeholders no `IN`, validação antes do `COUNT`,
   janela em UTC, campos derivados no `.map` dos itens).
-- [ ] **Step 4: controle positivo** (commitar antes), com alvo e resultado previstos:
-  (1) trocar o `IN` por `IN (?)` com a string única → o cenário de `acao=CRIACAO,CRIAR` cai;
-  (2) tirar a conversão de fuso (comparar direto com a data crua) → o cenário RN-04 cai;
-  (3) trocar `validarData` pelo `Date.parse` sozinho → o cenário do 30 de fevereiro cai.
-- [ ] **Step 5: `npm run test:api`; commit.**
+- [x] **Step 4: controle positivo** (commitado antes, `6e29217`). Os três alvos do plano
+  bateram; o **stub permissivo** do Step 1 deu **6 passed / 29 failed**, todos por asserção.
+  1. `IN (?)` com a string única → **31/4**. Caiu o alvo previsto (`acao=CRIACAO,CRIAR`, com a
+     mensagem `veio []`) **e mais três** que o plano não listava e que são o mesmo defeito visto
+     de outro ângulo: o de espaços/vazio na lista, o de `acao` como array e o de `acao_rotulo`
+     colapsado. Nenhum deles sobra: os três só existem porque o `IN` correto é pré-requisito.
+  2. Janela sem conversão de fuso (`janelaUtc(..., 'UTC')` na rota) → **33/2**. Caiu o alvo
+     (`o ato das 21:30 APARECE no filtro do dia 28`) e o do conjunto exato do dia. **O cenário
+     irmão — "o ato das 00:30 do dia 29 NÃO aparece" — continua verde, e está certo assim:** ele
+     guarda o limite **superior**, que a janela UTC também exclui, por outro motivo. Os dois
+     juntos é que fecham a RN-04; sozinho, nenhum dos dois prova a conversão.
+  3. `validarData` reduzida ao `Date.parse` → **31/5**. Caíram os dois cenários unitários e os
+     três de rota; e o `2026-04-31` também passa no `Date.parse` do Node 24, não só o
+     `2026-02-30` — o plano só previa o de fevereiro.
+  `md5sum` conferido antes / depois / restaurado nas três, e `git diff --stat` vazio no fim.
+  **Achado do próprio controle (commit `5a0f2f3`):** na sabotagem 3 o `test()` único do
+  `validarData` caía na **primeira** asserção do laço e o vermelho dizia só
+  `deveria recusar "2026-8-28"` — um defeito de **formato**. O 30 de fevereiro, que é o achado
+  que a RN-03 existe para guardar, tinha asserção mas **a mensagem dela era engolida**. Não era
+  asserção faltando, era diagnóstico enganoso: manda depurar o regex em vez do calendário.
+  Separado em dois cenários (formato / data inexistente); a sabotagem foi refeita e agora o
+  segundo se nomeia (`30 de fevereiro passou`), com **31/5**.
+- [x] **Step 5: `npm run test:api` (145/145); commits `6e29217` e `5a0f2f3`.**
 
 ---
 

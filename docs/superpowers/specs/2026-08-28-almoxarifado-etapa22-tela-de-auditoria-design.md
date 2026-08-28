@@ -93,6 +93,14 @@ coisa e concluiria, corretamente, que o sistema não sabe o que registrou.
   função pura (`janelaUtc`), e a coluna é comparada com esses limites. O teste **fixa o
   `created_at` do arranjo** em vez de usar `CURRENT_TIMESTAMP` — senão o cenário fica verde de
   dia e vermelho entre 21h e meia-noite, e a próxima sessão vai depurar o SQL em vez do fuso.
+  **PRECISÃO DA EXECUÇÃO (Task 2) — esta RN dizia "fuso de quem pergunta" sem dizer de onde ele
+  sai, e a leitura óbvia teria refeito o defeito.** `new Date(ano, mes-1, dia)` usa o fuso do
+  **processo**, o que passa em qualquer máquina de dev brasileira e vira **no-op num contêiner
+  com `TZ=UTC`** — o default da maioria dos deploys. O fuso do recorte é o do **negócio** (site
+  único, no Brasil) e por isso é constante do módulo (`FUSO_PADRAO`), com terceiro parâmetro
+  opcional; o offset sai do `Intl`, então horário de verão é respeitado por data em vez de
+  tabela fixa. Há cenário que troca o `TZ` do processo para `UTC` e `Asia/Tokyo` e exige a mesma
+  janela.
 - **RN-05 — Os selects vêm do banco.** `GET /auditoria/opcoes` devolve
   `{ entidades: [], acoes: [], usuarios: [{id, nome}] }` com os valores **distintos realmente
   presentes**. Lista hardcoded envelheceria no primeiro `entidade` novo — e as etapas 18-20
