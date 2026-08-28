@@ -360,6 +360,15 @@ e `alteracoesDaLinha`.
 mock é legítimo nesta base). A tela **não calcula de/para nem traduz rótulo**: os dois vêm
 prontos do servidor.
 
+**O QUE A TASK 4 CONGELOU e a Task 3 vai ver na tela** (medido contra as rotas reais, em
+`auditoriaFluxoCompleto.api.test.js`): a linha de troca de foto de material chega com **três**
+`alteracoes`, não uma — `foto: antiga → nova`, `codigo: null → X` e `nome: null → Y`. Os dois
+últimos são **contexto**, não mudança, e aparecem de propósito (C3, detalhe 2). Se o mock da
+tela trouxer só o `foto`, a Task 3 vai desenhar contra uma forma que a rota não produz. O
+design dizia o contrário no item 3 da RN-07 e **estava errado** — já corrigido lá.
+**A Task 3 rodou ANTES desta nota** (as duas foram paralelas) — a conferência de que o mock da
+tela bate com a forma real fica para a revisão adversarial da Fase 5.
+
 - [x] **Step 1: teste que falha:** filtro de período dispara nova busca com os params certos
   (**`acao` como string com vírgulas, nunca array** — ver C1/A5); `truncado: true` mostra o
   aviso de corte; expandir mostra as `alteracoes`; `alteracoes: []` mostra "sem detalhes
@@ -437,23 +446,66 @@ prontos do servidor.
 
 ---
 
-### Task 4 (integração, cruza os galhos)
+### Task 4 (integração, cruza os galhos) — **FEITA** (`aa500fc`, `c5043c0`)
+
+> **Placar real:** `auditoriaFluxoCompleto.api.test.js` **10 passed, 0 failed**;
+> `npm run test:api` **146/146 arquivos** (145 do baseline da Task 2 + o novo);
+> `test:almoxarifado` 42/0, `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 3/0;
+> cliente `CI=true test` **36 suítes / 531 testes**, `CI=true build` **Compiled successfully**.
 
 **Files:** Test `server/tests/api/auditoriaFluxoCompleto.api.test.js`.
 
-- [ ] **Step 1:** escrever de verdade por uma rota real instrumentada — trocar a foto de um
-  material (`POST /materiais/:id/foto`, Etapa 20) — e **ler pela C1** com `usuario_id` +
-  período do dia, conferindo as `alteracoes`. **Asserção que a versão anterior não tinha:** a
-  linha grava `dados_novos: { foto, codigo, nome }` contra `dados_anteriores: { foto }`, então
-  o teste precisa afirmar o **conjunto inteiro** de `alteracoes` — conferir só o campo `foto`
-  deixaria passar `codigo` e `nome` renderizados como alteração que não houve (achado A1).
-- [ ] **Step 2:** RN-08 — gravar uma configuração secreta pelo PUT real e conferir que o item
-  traz `'(alterado)'` **nas `alteracoes`, não só no JSON cru** (era assim que a versão anterior
-  deixava o buraco passar), e que o valor real não aparece em lugar nenhum do corpo.
-- [ ] **Step 3:** `SELECT DISTINCT acao FROM auditoria_log_almoxarifado` depois dos atos
-  escritos, afirmando que **todo verbo gravado tem rótulo** — é a terceira perna da cobertura
-  do vocabulário (Task 1 Step 2), a única que vê os verbos dinâmicos em uso real.
-- [ ] **Step 4: suíte completa (os cinco comandos); commit.**
+**Divergência declarada:** a Global Constraint 4 (stub permissivo primeiro, vermelho por
+asserção) **não se aplica** — a Task 4 não cria código de produção nenhum, só testa o que as
+Tasks 1 e 2 entregaram. O papel dela é cumprido pelo **controle positivo com alvo** do Step 4.
+
+- [x] **Step 1** (`aa500fc`): escrita real pela rota de foto (`POST /materiais/:id/foto`) e
+  leitura pela C1 com `usuario_id` + `data_inicio`/`data_fim`. O `deepStrictEqual` é sobre o
+  **array inteiro** de `alteracoes` — `[foto: antiga→nova, codigo: null→X, nome: null→Y]`.
+  Cenários irmãos que o plano não pedia e que impedem teste vazio: o filtro de `usuario_id`
+  grava o ato de um **segundo** usuário e afirma que ele **existe** antes de afirmar que não
+  aparece; e a asserção de que `dados_*` continuam **string JSON crua** (nota 5 da Task 2).
+  **O dia do filtro sai do `created_at` da própria linha convertido para `America/Sao_Paulo`,
+  nunca do relógio de parede** — o dia UTC de um ato das 21:30 é o dia seguinte (achado A4), e
+  derivar do relógio abriria corrida de meia-noite entre a escrita e a leitura.
+- [x] **Step 2** (`aa500fc`): segredo gravado pelo **PUT real** de alertas
+  (`PUT /configuracoes/alertas-estoque` — **não** o `PUT /configuracoes` genérico, que **recusa
+  chave secreta com 400** e mandaria usar a outra rota: `almoxarifado.js:2487-2491`). Os dois
+  lados saem `'(alterado)'` porque a semente de `alertas_smtp_pass` é `''`, então `existia` é
+  verdadeiro e `configDiff` mascara os dois. Asserção negativa sobre o corpo **inteiro
+  serializado**, com controle do próprio cenário (o corpo tem de conter a linha, senão a
+  negativa passaria sobre resposta vazia) e controle do arranjo (a coluna guarda mesmo o
+  segredo, senão a máscara estaria protegendo um no-op).
+  **Cenário-TESTEMUNHA acrescentado, não previsto no plano:** roda `configDiff.calcularDiff`
+  sobre a **mesma linha** e afirma que ela **apagaria** a chave. Sem ele, um futuro "vamos
+  unificar as duas réguas" reabriria o achado A1 e só o cenário acima cairia, sem dizer por quê.
+- [x] **Step 3** (`aa500fc`): `SELECT DISTINCT acao` depois dos atos. **Medido: 4 verbos** —
+  `ATUALIZACAO`, `EDICAO`, `ENTRADA_MANUAL`, `SAIDA`, os dois últimos escritos por
+  `movimentacoes/v2` e portanto **dinâmicos** (`stockService.js:1366`, `acao: tipo`). O cenário
+  **começa** exigindo `> 1` verbo distinto e há um cenário anterior que afirma os dois verbos
+  dinâmicos pelo nome — sem isso a terceira perna ficaria vazia sem ninguém perceber. O rótulo
+  é conferido **duas vezes**: no módulo e no `acao_rotulo` que a C1 devolve.
+- [x] **Step 4: controle positivo com alvo** (commitado antes, `aa500fc`). Três sabotagens, cada
+  uma com `md5sum` antes / depois / restaurado e `git diff --stat` vazio no fim:
+  1. `alteracoesDaLinha` filtrando chave de valor igual → **7/2**. Caiu o alvo previsto, o
+     cenário do segredo, **nomeando o segredo** ("a troca de senha SUMIU de `alteracoes`") e
+     listando as quatro chaves sobreviventes; a testemunha do A1 caiu junto, como esperado.
+  2. `ENTRADA_MANUAL` removido do mapa de rótulos → **8/1**. Caiu o alvo previsto, o Step 3,
+     **nomeando o verbo**.
+  3. Sabotagem não prevista no plano, para o Step 1: a rota filtrando `de === null` de
+     `alteracoes` ("limpar o ruído de contexto") → **8/1**. Caiu o cenário do conjunto inteiro,
+     e a mensagem mostra `foto` sobrevivendo sozinho — ou seja, **prova que conferir só o
+     `foto` teria passado**, que é exatamente o que o plano queria guardar.
+- [x] **Step 5: achado do controle, corrigido em `c5043c0`.** Quarta sabotagem
+  (`janelaUtc(..., 'UTC')` na rota): os **nove cenários continuaram verdes** às 20:47 SP,
+  enquanto a suíte da Task 2 pegou a mesma sabotagem em dois cenários. Motivo: os cenários de
+  dia do Step 1 usam o relógio real, e fora da faixa 21h–meia-noite o dia UTC **é** o dia local
+  — a perna de RN-04 deste arquivo só sabia falhar em três das vinte e quatro horas do dia, o
+  que é pior que não existir porque passa impressão de cobertura. Conserto: um décimo cenário
+  que mantém a premissa do arquivo (ato escrito por **rota real**) e fixa só o **relógio** da
+  linha em `'2026-03-11 00:30:00'` UTC = 21:30 local do dia 10, com o cenário irmão do limite
+  superior. Sabotagem refeita: cai **exatamente** o cenário novo (**9/1**).
+- [x] **Step 6: suíte completa (os cinco comandos); commits `aa500fc` e `c5043c0`.**
 
 ---
 

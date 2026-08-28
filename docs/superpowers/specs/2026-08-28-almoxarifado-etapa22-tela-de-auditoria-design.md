@@ -128,9 +128,20 @@ coisa e concluiria, corretamente, que o sistema não sabe o que registrou.
      `numero: — → REQ-1` e `estornos: — → 2` como se fossem alterações, e o `status` anterior
      — o único de/para real da linha — é **descartado**. Numa trilha de auditoria, isso é
      afirmar que a pessoa fez algo que ela não fez.
-  3. **Sujeira no próprio alvo do teste de integração.** A foto de material grava
+  3. ~~**Sujeira no próprio alvo do teste de integração.** A foto de material grava
      `dados_novos: { foto, codigo, nome }`, então dois campos que não mudaram apareceriam como
-     alteração.
+     alteração.~~
+     **ESTE ITEM ESTAVA ERRADO e foi corrigido pela execução da Task 4.** Ele está listado
+     entre os "três modos de falha" de `calcularDiff`, o que faz o leitor esperar que a régua de
+     leitura **resolva** isso e que a linha da foto saia com **uma** alteração. Ela sai com
+     **três**: a régua da união também mostra `codigo` e `nome`, com `de: null`. E tem de
+     mostrar — é a **ausência de filtro de igualdade** que mantém a troca de senha mascarada
+     visível (defeito 1), e os dois vêm da mesma decisão. Ou seja, contexto na lista é
+     **consequência aceita**, não defeito resolvido; enxugá-lo seria trabalho da **escrita**
+     (gravar menos), nunca da leitura. Os defeitos 1 e 2 continuam corretos e continuam sendo
+     razão suficiente para não usar `calcularDiff`. O contrato real está congelado em
+     `auditoriaFluxoCompleto.api.test.js` (Task 4, Step 1), que afirma o **conjunto inteiro** das
+     três entradas justamente para que isso não vire surpresa na tela.
   A régua de **leitura** é outra, e é dela que a etapa precisa: **união das chaves dos dois
   lados**, `null` explícito para "ausente", **nenhum remascaramento**, e lista vazia quando os
   dois lados são vazios (há call sites que gravam nenhum dos dois — `receiptService.js:236-239`,
