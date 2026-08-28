@@ -50,7 +50,11 @@ const { registrarAuditoria } = require('../services/almoxarifado/audit');
 const audit = require('../services/almoxarifado/audit');
 // Etapa 19 (C1): diff das rotas de configuracao — funcao pura, com a mascara de segredo
 // SEMPRE ligada. As tres rotas de configuracao usam a mesma para nao divergirem entre si.
-const { calcularDiff } = require('../services/almoxarifado/configDiff');
+// Etapa 20 (C3, pre-requisito): importado como NAMESPACE, nao desestruturado. O GET e o PUT
+// genericos de configuracao passaram a precisar tambem de `CHAVES_SECRETAS` — a lista das duas
+// chaves que sao segredo mora aqui e e a MESMA que o diff usa para mascarar o log, de proposito:
+// duas listas separadas divergiriam na primeira chave nova e a mascara ficaria meio ligada.
+const configDiff = require('../services/almoxarifado/configDiff');
 
 // Etapa 19 (C4 #15): `valueApprovalService.getConfig` devolve valores TIPADOS
 // ({ ativo: boolean, limite: number, aprovadorIds: number[] }) e a coluna e TEXT. Esta funcao
@@ -2366,12 +2370,35 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // CONFIGURAÇÕES (admin only)
   // ════════════════════════════════════════════════════════════════════════════
 
+  // Etapa 20 (C3, RN-05): esta rota devolvia a tabela INTEIRA em claro — inclusive
+  // `alertas_smtp_pass` e `alertas_whatsapp_api_key` — enquanto a rota IRMA de alertas
+  // (`GET /configuracoes/alertas-estoque`) ja mascarava as duas com o mesmo gate. Duas portas
+  // para o mesmo dado, uma trancada e outra nao.
+  //
+  // FORMA DA MASCARA: `alertService.PASSWORD_MASK` ('********') quando ha valor, `''` quando nao
+  // ha — IDENTICO ao que `getAlertSettingsForApi` devolve, para que a tela veja o mesmo formato
+  // nas duas rotas. Descartado omitir a chave (mudaria a forma da resposta e a tela itera as
+  // chaves) e descartado um booleano `configurado` (formato novo so para este caso). O `''` do
+  // caso vazio importa: dizer '********' para senha inexistente MENTIRIA "ja configurado".
+  //
+  // `alertas_whatsapp_webhook_url` FICA DE FORA de proposito (decisao A5, congelada em
+  // `tests/api/configuracoesSegredo.api.test.js`): a rota irma devolve o webhook EM CLARO sob o
+  // mesmo gate, entao mascarar so aqui nao reduziria exposicao nenhuma; e mascarar sem guardar o
+  // PUT criaria o pior caso — quem reenviasse a mascara gravaria '(credenciais omitidas)' como
+  // URL e mataria as notificacoes em silencio. A preocupacao de fundo (registro PERMANENTE) ja
+  // esta resolvida: o log de auditoria mascara a query string desde a Etapa 19
+  // (`configDiff.mascararUrl`), e e o log que e imutavel — a coluna guarda so o valor atual.
   app.get('/api/almoxarifado/configuracoes', authenticateToken, (req, res) => {
     if (denyUnlessAlmoxAdmin(req, res)) return;
     db.all(`SELECT * FROM configuracoes_almoxarifado ORDER BY chave`, [], (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
       const obj = {};
-      rows.forEach(r => { obj[r.chave] = { valor: r.valor, descricao: r.descricao, id: r.id }; });
+      rows.forEach(r => {
+        const valor = configDiff.CHAVES_SECRETAS.includes(r.chave)
+          ? (r.valor ? alertService.PASSWORD_MASK : '')
+          : r.valor;
+        obj[r.chave] = { valor, descricao: r.descricao, id: r.id };
+      });
       res.json(obj);
     });
   });
@@ -2435,6 +2462,18 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // silencio (getConfig compara com '1').
       const CHAVES_BOOL = ['notificar_movimentacoes'];
       for (const [chave, valor] of entradas) {
+        // Etapa 20 (C4, RN-06): as duas chaves de SEGREDO sao semeadas, entao passavam na guarda
+        // de chaves conhecidas acima e esta rota as gravava — SEM o `shouldUpdateSecret` que a
+        // rota de alertas usa. Com a mascara do C3 no GET, isso viraria o pior caso: a tela leria
+        // '********', reenviaria no proximo Salvar e a MASCARA viraria a senha, quebrando o envio
+        // de e-mail em silencio. Recusar apontando a rota certa e o conserto honesto — e a recusa
+        // fica AQUI, no laco de validacao que roda inteiro antes do laco de UPDATE, porque sem
+        // transacao rejeitar no meio da gravacao deixaria metade do formulario aplicada.
+        if (configDiff.CHAVES_SECRETAS.includes(chave)) {
+          return res.status(400).json({
+            error: `Configuração "${chave}" só pode ser alterada em Configurações → Alertas de Estoque`,
+          });
+        }
         if (CHAVES_BOOL.includes(chave) && !['0', '1'].includes(String(valor))) {
           return res.status(400).json({ error: `Configuração "${chave}" deve ser 0 ou 1` });
         }
@@ -2467,7 +2506,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       existentes.forEach((r) => { anterioresMapa[r.chave] = r.valor; });
       const novosMapa = {};
       entradas.forEach(([chave, valor]) => { novosMapa[chave] = String(valor); });
-      const diff = calcularDiff(anterioresMapa, novosMapa);
+      const diff = configDiff.calcularDiff(anterioresMapa, novosMapa);
       if (Object.keys(diff.novos).length) {
         try {
           await audit.registrarAuditoria(db, {
@@ -2589,7 +2628,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       if (!anterioresMapa) {
         console.error('[almoxarifado] Alertas de estoque gravados SEM auditoria: a leitura do estado anterior falhou');
       } else {
-        const diff = calcularDiff(anterioresMapa, novosMapa);
+        const diff = configDiff.calcularDiff(anterioresMapa, novosMapa);
         if (Object.keys(diff.novos).length) {
           try {
             await audit.registrarAuditoria(db, {
@@ -2670,7 +2709,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       } finally {
         try {
           const depois = normalizarLiberacaoValor(await valueApprovalService.getConfig(db));
-          const diff = calcularDiff(antes, depois);
+          const diff = configDiff.calcularDiff(antes, depois);
           if (Object.keys(diff.novos).length) {
             await audit.registrarAuditoria(db, {
               entidade: 'configuracao', entidade_id: null, acao: 'EDICAO',
