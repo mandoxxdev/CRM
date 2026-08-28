@@ -314,7 +314,19 @@ conferência/data/itens divergentes; sem certificado lote/material/saldo/status)
   real) e zero `DIVERGENCIA_RECEBIMENTO` no recebimento sem divergência. Controle positivo
   (verde de primeira): ignorar o parâmetro `dias` no `listarReprovados` derruba **só** o passo
   final (**4/5**, `1 !== 0`); revertido. Nenhum arquivo de produção mudou nesta task.
-- [ ] Fase 4 — suíte completa serial
+- [x] Task 3 (galho) — commit `454c601`, merge `30385a5`. Base da worktree nasceu errada
+  (`5dadd59`) pela TERCEIRA vez nesta sessão e a checagem obrigatória pegou antes do código.
+  Colunas das 4 chaves espelhando os campos REAIS do `listar` (o executor leu o registro em
+  vez do plano — e por isso incluiu `responsavel_nome` e o `status` do lote, que o plano não
+  listava); `divergencia` renderizada como veio do servidor (sem segunda régua em JS);
+  inventário sem coluna de valor (B30). Controle positivo do parser de paridade medido —
+  com nota de honestidade: a primeira tentativa rodou contra o repo principal e **provava
+  nada**; refeita dentro da worktree, a paridade caiu para 12/15 com a chave sabotada.
+  Client 527/527 em 36 suítes; build zero warning.
+- [x] Fase 4 — merge do galho (`30385a5`) + suíte completa serial na branch (2026-08-28):
+  `test:api` **131/131**, `test:almoxarifado` **42/0**, `test:validation` **4/0**,
+  `test:safealter` **3/0**, `test:sqlite` **3/0**; client **527 testes em 36 suítes**,
+  build `CI=true` exit 0.
 - [ ] Fase 5 — revisão adversarial (2 lentes)
 - [ ] Fase 6 — fechar-etapa + retro
 
