@@ -13,6 +13,14 @@ const { disponivelSql } = require('../../services/almoxarifado/availabilitySql')
 const { validate, formatZodError } = require('../../services/almoxarifado/validation');
 const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema, RemessaTerceiroSchema, RetornoRemessaSchema, TransformacaoRemessaSchema, EncerramentoRemessaSchema, CancelamentoRemessaSchema, SobraUpdateSchema, GerarRetalhoSchema, SucateamentoCreateSchema, SucateamentoDestinoFormSchema, FerramentaCreateSchema, FerramentaUpdateSchema, EmprestimoSchema, DevolucaoEmprestimoSchema, CalibracaoSchema, JustificativaSchema, ManutencaoSchema, ManutencaoConcluirSchema, OcorrenciaSchema, AssinaturaEntregaFormSchema } = require('../../services/almoxarifado/schemas');
 const { registrarAuditoria } = require('../../services/almoxarifado/audit');
+// Etapa 19 (C0): o binding desestruturado acima e resolvido no require e cacheado — um teste
+// nao consegue substitui-lo por um stub que lanca, e a RN-02 ("auditoria nunca derruba o ato")
+// viraria um teste VAZIO neste arquivo: passaria verde sem jamais ter derrubado auditoria
+// nenhuma. As chamadas NOVAS usam `audit.registrarAuditoria(...)`, resolvido na hora da
+// chamada e por isso alcancavel pelo stub. A chamada antiga (perfis-usuario) fica como esta de
+// proposito — esta etapa acrescenta, nao reescreve o que ja funciona. Mesmo movimento que
+// `routes/almoxarifado.js:45` fez na Etapa 18.
+const audit = require('../../services/almoxarifado/audit');
 const stockService = require('../../services/almoxarifado/stockService');
 const lotService = require('../../services/almoxarifado/lotService');
 const seriesService = require('../../services/almoxarifado/seriesService');
@@ -43,6 +51,30 @@ function handleError(res, err) {
   const status = err.status || 500;
   res.status(status).json({ error: err.message });
 }
+
+// Etapa 19 (RN-02): auditoria POS-ESCRITA e best-effort. Quando esta funcao roda o efeito ja
+// aconteceu no banco — derrubar a resposta por causa do log desfaria nada e devolveria erro
+// para um ato que deu certo. O `console.error` e a unica saida do erro, de proposito.
+async function auditar(db, payload, contexto) {
+  try {
+    await audit.registrarAuditoria(db, payload);
+  } catch (err) {
+    console.error(`[almoxarifado] Falha ao registrar auditoria de ${contexto}:`, err.message);
+  }
+}
+
+// Quem assinou o ato. `nome || email` e a convencao ja usada nas chamadas da Etapa 18.
+const autorDe = (req) => ({ usuario_id: req.user?.id, usuario_nome: req.user?.nome || req.user?.email });
+
+// Etapa 19 (C5): o de/para de permissao de setor precisa ser LEGIVEL sem consultar outras
+// tabelas (o log e lido meses depois, quando a familia pode ter sido renomeada ou excluida) e
+// COMPACTO — `getPermissoesSetor` devolve `p.*` mais seis colunas de JOIN por linha.
+const resumirPermissoes = (rows) => (rows || []).map((p) => ({
+  familia_id: p.familia_id ?? null,
+  categoria_id: p.categoria_id ?? null,
+  material_id: p.material_id ?? null,
+  nome: p.familia_nome || p.categoria_nome || p.material_nome || null,
+}));
 
 async function runInitSchemaWithRetry(db, retries = 3) {
   for (let attempt = 1; attempt <= retries; attempt++) {
@@ -125,6 +157,11 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     try {
       const { codigo, nome } = req.body;
       const r = await dbRun(db, 'INSERT INTO centros_custo_almoxarifado (codigo, nome) VALUES (?,?)', [codigo.trim(), nome.trim()]);
+      // Log do que foi de FATO gravado (`trim()`), nao do que chegou no body.
+      await auditar(db, {
+        entidade: 'centro_custo', entidade_id: r.lastID, acao: 'CRIACAO', ...autorDe(req),
+        dados_novos: { codigo: codigo.trim(), nome: nome.trim(), ativo: 1 },
+      }, 'criacao de centro de custo');
       res.status(201).json({ id: r.lastID, codigo, nome, ativo: 1 });
     } catch (e) {
       if (/UNIQUE constraint/i.test(e.message)) return res.status(409).json({ error: 'Código de centro de custo já existe' });
@@ -138,6 +175,13 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
       if (!atual) return res.status(404).json({ error: 'Centro de custo não encontrado' });
       const { codigo = atual.codigo, nome = atual.nome, ativo = atual.ativo } = req.body;
       await dbRun(db, 'UPDATE centros_custo_almoxarifado SET codigo=?, nome=?, ativo=? WHERE id=?', [codigo, nome, ativo, req.params.id]);
+      // de/para SIMETRICO nos campos que a rota escreve: `atual` e um SELECT * e carregaria
+      // `id`/`created_at` — ruido que nunca muda, dos dois lados.
+      await auditar(db, {
+        entidade: 'centro_custo', entidade_id: Number(req.params.id), acao: 'EDICAO', ...autorDe(req),
+        dados_anteriores: { codigo: atual.codigo, nome: atual.nome, ativo: atual.ativo },
+        dados_novos: { codigo, nome, ativo },
+      }, 'edicao de centro de custo');
       res.json({ id: Number(req.params.id), codigo, nome, ativo });
     } catch (e) { handleError(res, e); }
   });
@@ -275,6 +319,12 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
       const { codigo, nome, descricao } = req.body;
       const r = await dbRun(db, 'INSERT INTO almoxarifados (codigo, nome, descricao) VALUES (?,?,?)',
         [codigo.trim(), nome.trim(), descricao || null]);
+      await auditar(db, {
+        entidade: 'almoxarifado', entidade_id: r.lastID, acao: 'CRIACAO', ...autorDe(req),
+        dados_novos: {
+          codigo: codigo.trim(), nome: nome.trim(), descricao: descricao || null, ativo: 1,
+        },
+      }, 'criacao de almoxarifado');
       res.status(201).json({ id: r.lastID, codigo, nome, descricao: descricao || null, ativo: 1 });
     } catch (e) {
       if (/UNIQUE constraint/i.test(e.message)) return res.status(409).json({ error: 'Código de almoxarifado já existe' });
@@ -296,6 +346,13 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
       }
       await dbRun(db, 'UPDATE almoxarifados SET codigo=?, nome=?, descricao=?, ativo=? WHERE id=?',
         [codigo, nome, descricao, ativo, req.params.id]);
+      await auditar(db, {
+        entidade: 'almoxarifado', entidade_id: Number(req.params.id), acao: 'EDICAO', ...autorDe(req),
+        dados_anteriores: {
+          codigo: atual.codigo, nome: atual.nome, descricao: atual.descricao, ativo: atual.ativo,
+        },
+        dados_novos: { codigo, nome, descricao, ativo },
+      }, 'edicao de almoxarifado');
       res.json({ id: Number(req.params.id), codigo, nome, descricao, ativo });
     } catch (e) {
       if (/UNIQUE constraint/i.test(e.message)) return res.status(409).json({ error: 'Código de almoxarifado já existe' });
@@ -1505,7 +1562,20 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     const { permissoes } = req.body;
     if (!Array.isArray(permissoes)) return res.status(400).json({ error: 'Envie um array de permissões' });
     try {
+      // C5 #22 (RN-07): permissao de setor e CONTROLE DE ACESSO — o log guarda o de/para
+      // COMPLETO (lista anterior x lista nova), nao o delta, porque `salvarPermissoesSetor`
+      // faz DELETE-all + N INSERTs: nao existe "campo alterado" a reportar. Os dois lados
+      // vem de `getPermissoesSetor` (estado REAL da tabela), nao do payload — entradas sem
+      // nenhum id sao descartadas pelo servico e o log nao pode prometer o que nao gravou.
+      // Auditado AQUI e nao no servico: ele nao recebe `user`, e mudar a assinatura das duas
+      // funcoes seria refatoracao fora do escopo (mesmo motivo da rota de perfis-usuario).
+      const antes = await sectorMaterialService.getPermissoesSetor(db, req.params.id);
       const rows = await sectorMaterialService.salvarPermissoesSetor(db, req.params.id, permissoes);
+      await auditar(db, {
+        entidade: 'setor_permissao', entidade_id: Number(req.params.id), acao: 'EDICAO', ...autorDe(req),
+        dados_anteriores: { total: antes.length, permissoes: resumirPermissoes(antes) },
+        dados_novos: { total: rows.length, permissoes: resumirPermissoes(rows) },
+      }, 'permissoes de setor');
       res.json(rows);
     } catch (e) { handleError(res, e); }
   });
@@ -1520,7 +1590,26 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     }
     try {
       await sectorMaterialService.ensureSetoresRequisicao(db);
+      // C5 #23: a leitura do "antes" vem DEPOIS do ensure (que cria as tabelas) e antes do
+      // bulk. `incluidas` NAO existe no retorno do servico — ele devolve a lista inteira; e
+      // derivado de `depois - antes`, valido porque a operacao e puramente ADITIVA (o bulk so
+      // insere familia que ainda nao estava la, nunca remove).
+      const antes = await sectorMaterialService.getPermissoesSetor(db, req.params.id);
       const rows = await sectorMaterialService.bulkAssignFamiliasPorTipo(db, req.params.id, tipo_uso);
+      // Audita mesmo com `incluidas: 0`: diferente do PUT /configuracoes (que a tela dispara
+      // com as 18 chaves a cada Salvar, mudadas ou nao), o bulk e um clique DELIBERADO em
+      // controle de acesso — "o gestor mandou incluir tudo de industrial e nao entrou nada"
+      // e informacao, nao ruido.
+      await auditar(db, {
+        entidade: 'setor_permissao', entidade_id: Number(req.params.id), acao: 'INCLUSAO_EM_LOTE', ...autorDe(req),
+        dados_anteriores: { total: antes.length, permissoes: resumirPermissoes(antes) },
+        dados_novos: {
+          tipo_uso,
+          incluidas: rows.length - antes.length,
+          total: rows.length,
+          permissoes: resumirPermissoes(rows),
+        },
+      }, 'inclusao em lote de permissoes de setor');
       res.json(rows);
     } catch (e) { handleError(res, e); }
   });
