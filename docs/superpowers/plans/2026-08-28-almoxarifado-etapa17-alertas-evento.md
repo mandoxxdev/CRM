@@ -81,10 +81,14 @@ espelho client; o campo novo entra na tela de Configurações (Task 3) no padrã
    locais" — os campos do C2 NÃO estão carregados ali; o dual-mode é a régua única.)
 2. **DOIS pontos** em `receiptService` (correção da revisão: a UI nunca chama a rota de
    conferir — o fluxo real escreve `quantidade_recebida` por `PUT /recebimentos/:id/fiscal`
-   → `atualizarDadosFiscais`): após o loop de UPDATE de `conferirRecebimento` (~155-165) E
-   após o de `atualizarDadosFiscais` (~279-308), o MESMO bloco: buscar
+   → **`salvarDadosFiscal`**): após o loop de UPDATE de `conferirRecebimento` (~155-165) E
+   após o de `salvarDadosFiscal` (~279-308), o MESMO bloco: buscar
    `listarDivergenciasRecebimento(db, { recebimentoId })` e disparar por item retornado.
    NUNCA refazer a comparação em JS (segunda régua) — a query compartilhada é a régua.
+   **(Correção da Task 2: este contrato dizia `atualizarDadosFiscais`, função que NÃO EXISTE
+   no código — o nome real é `salvarDadosFiscal`, `receiptService.js:213`. O ponto do gancho
+   estava certo; só o nome estava errado. Corrigido aqui e no design para o próximo não
+   procurar uma função inexistente.)**
 3. `routes/almoxarifado.js` PUT `/conferencias/:id/concluir` — junto do gancho existente da
    linha ~1208: `listarDivergenciaConferencia(db, { conferenciaId: id })` → se veio linha,
    dispara `DIVERGENCIA_INVENTARIO`.
@@ -170,7 +174,9 @@ molde de subquery de saldo de lote em `notificationQueueService.js:492-502`; `me
 `POST /recebimentos/itens/:itemId/inspecionar`, `PUT /recebimentos/:id/conferir`,
 `PUT /conferencias/:id/concluir`. Produces: os 3 atos disparando.
 
-- [ ] **Step 1: teste que falha** — por ato, pela ROTA real:
+- [x] **Step 1: teste que falha** (8eeaeea) — `alertaEventoGanchos.api.test.js`, 6 cenários (os 5
+  do plano + o **2b** separado para a rota `/fiscal`, que é o achado Crítico). Por ato, pela
+  ROTA real:
   1. inspecionar com reprovação → 200/201 do ato E `MATERIAL_REPROVADO` na fila (payload com
      a inspeção); inspecionar aprovando tudo → nada na fila (RN-03).
   2. conferir recebimento com item divergente → fila com `receb-diverg-<item_id>`; conferir
@@ -183,11 +189,23 @@ molde de subquery de saldo de lote em `notificationQueueService.js:492-502`; `me
      grava a inspeção; fila sem o evento. (Funciona porque os ganchos chamam pelo objeto do
      módulo — se alguém desestruturar, este teste quebra e denuncia.)
   5. RN-07 ponta a ponta: toggle off → ato dispara nada; ligar → ato seguinte dispara.
-- [ ] **Step 2: rodar e ver falhar; implementar os 3 ganchos (padrão try/catch → console.warn
-  — copiar o bloco de stockService.js:1370-1405); verde.**
-- [ ] **Step 3: controle positivo** — remover o `if (reprovada > 0)` do gancho 1 (sabotagem) e
-  ver RN-03 falhar; reverter. `npm run test:api` inteiro.
-- [ ] **Step 4: commit** — `Almoxarifado Etapa 17 Task 2: os tres atos passam a avisar`.
+- [x] **Step 2: rodar e ver falhar; implementar; verde** (8eeaeea) — vermelho real medido:
+  **0 passed, 6 failed**, os seis na asserção "TINHA de enfileirar" (o ato acontecia, o aviso
+  não). Implementados os 3 ganchos no padrão try/catch → `console.warn`
+  (molde `stockService.js:1374-1405`), todos chamando o helper **pelo objeto do módulo** e
+  buscando a linha pelo `listar` dual-mode. O ponto 2 do C4 é **`salvarDadosFiscal`** — o
+  plano/design chamavam a função de `atualizarDadosFiscais`, nome que não existe no código
+  (a rota `PUT /recebimentos/:id/fiscal` chama `receiptService.salvarDadosFiscal`); o **ponto**
+  é o do plano, só o nome estava errado. Verde: **6/6**.
+- [x] **Step 3: controle positivo** (8eeaeea) — **a sabotagem prescrita no plano é um no-op, e
+  isso foi medido**: remover só o `if (reprovada > 0)` do gancho 1 deixa RN-03 **verde** (6/6),
+  porque o `WHERE i.quantidade_reprovada > 0` do `listarReprovados` já barra; remover só o
+  filtro da query também deixa verde (6/6), porque a guarda já barra. As duas defesas são
+  independentemente suficientes. A sabotagem que prova a asserção: **as duas juntas fora** →
+  **5 passed, 1 failed**, exatamente `RN-03: aprovacao total NAO pode enfileirar` (`1 !== 0`).
+  Revertidas as duas (`git diff` de `alertRegistry.js` vazio); redundância declarada em
+  comentário no `inspectionService`. `npm run test:api` → **130/130 arquivos OK**.
+- [x] **Step 4: commit** (8eeaeea) — `Almoxarifado Etapa 17 Task 2: os tres atos passam a avisar`.
 
 ### Task 3 (galho): colunas das 4 chaves + campo de config no client
 
@@ -258,7 +276,22 @@ conferência/data/itens divergentes; sem certificado lote/material/saldo/status)
   módulo**), C2 (as 4 entradas + os 3 `listar` dual-mode exportados do `alertRegistry`) e C3
   (seed `alerta_eventos_janela_dias`='7', já editável pelo PUT via prefixo `alerta_` — o campo
   na tela é da Task 3). `divergencia.js` mudou **só no header** (consumidor novo declarado).
-- [ ] Task 2 (tronco)
+- [x] Task 2 (tronco) — 8eeaeea. Vermelho inicial **0 passed, 6 failed**; verde
+  `alertaEventoGanchos.api.test.js` **6/6**; `npm run test:api` **130/130 arquivos OK**.
+  Entregue: os 3 ganchos do C4 disparando no ato —
+  `inspectionService.decidirInspecao` (MATERIAL_REPROVADO, RN-03),
+  `receiptService.conferirRecebimento` **e** `receiptService.salvarDadosFiscal`
+  (DIVERGENCIA_RECEBIMENTO, RN-04, via o helper local `avisarDivergenciasDoRecebimento`) e
+  `PUT /conferencias/:id/concluir` em `routes/almoxarifado.js` (DIVERGENCIA_INVENTARIO, RN-05).
+  Todos chamam `notificationQueueService.dispararAlertaRegistrado` **pelo objeto do módulo**
+  (RN-02 versionado: com o helper stubado lançando, a rota responde 201, a inspeção fica
+  gravada e o motor ainda bloqueia o reprovado) e buscam a linha pelo `listar` dual-mode por id.
+  Correção de contrato: `atualizarDadosFiscais` não existe — o nome real é `salvarDadosFiscal`
+  (C4 e design corrigidos). Controle positivo: a sabotagem prescrita (tirar o
+  `if (reprovada > 0)`) é **no-op** — a guarda e o `WHERE quantidade_reprovada > 0` do
+  `listarReprovados` são independentemente suficientes; RN-03 só cai com as duas fora
+  (**5/6**, `1 !== 0` em "aprovacao total NAO pode enfileirar"). Revertido, `alertRegistry.js`
+  intocado. `divergencia.js` e o motor de estoque seguem intocados nesta task.
 - [ ] Task 3 (galho)
 - [ ] Task 4 (integração)
 - [ ] Fase 4 — suíte completa serial

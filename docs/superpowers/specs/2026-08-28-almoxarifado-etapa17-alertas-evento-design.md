@@ -79,7 +79,9 @@ colunas das 4 chaves na central. Zero mudança de rota nova, zero permissão nov
   - **Registro da quantidade recebida — DOIS pontos** (correção da revisão: a primeira
     versão punha o gancho só em `conferirRecebimento`, mas **a UI nunca chama a rota de
     conferir** — o fluxo real escreve `quantidade_recebida` pela rota `/fiscal`
-    → `atualizarDadosFiscais`): gancho pós-escrita nos dois métodos, ambos chamando
+    → **`salvarDadosFiscal`**; na execução da Task 2 o design foi corrigido: ele dizia
+    `atualizarDadosFiscais`, nome que NÃO existe no código — o real é `salvarDadosFiscal`,
+    `receiptService.js:213`): gancho pós-escrita nos dois métodos, ambos chamando
     `listar({ recebimentoId })` e disparando por item divergente (o dedupe por item torna o
     duplo caminho inofensivo).
   - `PUT /conferencias/:id/concluir` junto do gancho existente (linha ~1208): dispara
@@ -91,7 +93,7 @@ colunas das 4 chaves na central. Zero mudança de rota nova, zero permissão nov
 | Chave | Condição (`listar`, ao vivo) | Gancho | Dedupe (idêntico nos 2 caminhos) |
 |---|---|---|---|
 | `MATERIAL_REPROVADO` | inspeções com `quantidade_reprovada>0` e `data_inspecao` dentro da janela | decidirInspecao | `reprovado-<inspecao_id>` (decisão é imutável — 1× para sempre) |
-| `DIVERGENCIA_RECEBIMENTO` | itens com `quantidade_recebida IS NOT NULL` e `divergenciaRealSql(recebida−esperada)`, janela por `COALESCE(r.updated_at, r.created_at)` — **correção da revisão: `created_at` puro deixaria recebimento antigo conferido HOJE fora da central e da rede de segurança**; o item não tem timestamp próprio (limitação declarada: qualquer toque posterior no recebimento renova a presença na central; o dedupe segura o e-mail) | conferirRecebimento E atualizarDadosFiscais | `receb-diverg-<item_id>` (1× por item; correção posterior da quantidade não re-alerta — declarado) |
+| `DIVERGENCIA_RECEBIMENTO` | itens com `quantidade_recebida IS NOT NULL` e `divergenciaRealSql(recebida−esperada)`, janela por `COALESCE(r.updated_at, r.created_at)` — **correção da revisão: `created_at` puro deixaria recebimento antigo conferido HOJE fora da central e da rede de segurança**; o item não tem timestamp próprio (limitação declarada: qualquer toque posterior no recebimento renova a presença na central; o dedupe segura o e-mail) | conferirRecebimento E salvarDadosFiscal | `receb-diverg-<item_id>` (1× por item; correção posterior da quantidade não re-alerta — declarado) |
 | `DIVERGENCIA_INVENTARIO` | conferências `status='CONCLUIDO'` com item `divergenciaRealSql('ic.divergencia')`, agregado por conferência (`itens_divergentes`, `data_fim` na janela) | rota concluir | `inv-diverg-<conferencia_id>` (conferência conclui 1×) |
 | `LOTE_SEM_CERTIFICADO` | lote de material ativo `controle_certificado=1` com `certificado_arquivo IS NULL` e saldo>0 (subquery de `estoque_saldo_almoxarifado`, molde de `varrerLotesVencendo`) | — (varredura pura) | `sem-certificado-<lote_id>-<AAAA-MM>` (re-lembra 1×/mês enquanto persistir) |
 
