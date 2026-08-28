@@ -123,8 +123,17 @@ Três funções puras novas em `server/services/`, testáveis sem HTTP (o padrã
   segmento obrigatória.
 - **`services/backupAuth.js`** — `validarTokenBackup(header, tokenEsperado)`:
   `timingSafeEqual`, comprimento mínimo, sem query string. Devolve `{ ok, motivo }`.
-- **`services/configSecrets.js`** — `mascararConfig(linha)` e `podeGravarSegredo(valor)`,
-  reusando `PASSWORD_MASK` do `alertService` (fonte única — não criar uma segunda máscara).
+- **`services/configSecrets.js`** — `mascararValorConfig(chave, valor)` e
+  `podeGravarSegredo(valor)` → `{ ok, motivo }`, reusando `PASSWORD_MASK` do `alertService`
+  (fonte única — não criar uma segunda máscara), mais `MENSAGEM_SEGREDO_INVALIDO` e
+  `ehChaveSecretaCore`.
+  **Esta linha dizia `mascararConfig(linha)` e `podeGravarSegredo(valor) → boolean`: ESTAVA
+  ERRADA** — ficou para trás do contrato C3 do plano, corrigido na Fase 2, e do que foi
+  entregue. A assinatura recebe `(chave, valor)` porque quem chama itera linhas do banco e
+  precisa decidir **por chave**; e o retorno é `{ ok, motivo }` porque a rota distingue os dois
+  jeitos de recusar (`VAZIO` e `MASCARA`), que dão a mesma mensagem mas não são o mesmo fato.
+  A mensagem literal mora no serviço, não inline na rota: é a única parte da fiação HTTP que o
+  teste alcança sem harness de core.
 
 ## Testes
 

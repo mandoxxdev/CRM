@@ -103,13 +103,25 @@ a realidade em três pontos:
 const CHAVES_SECRETAS_CORE = ['email_smtp_pass'];
 // mascararValorConfig(chave, valor) -> valor mascarado ('' quando vazio, PASSWORD_MASK quando
 //   houver conteudo) ou o valor original quando a chave nao e secreta.
-// podeGravarSegredo(valor) -> boolean: false para vazio/espacos e para qualquer valor que
-//   CONTENHA o PASSWORD_MASK (nao so o exatamente igual — achado A2: '********N' vindo do
-//   onChange da tela passaria numa comparacao de igualdade). Regua irma:
-//   alertService.shouldUpdateSecret:168-172.
+// podeGravarSegredo(valor) -> { ok, motivo }: recusa vazio/espacos (motivo 'VAZIO') e qualquer
+//   valor que CONTENHA o PASSWORD_MASK (motivo 'MASCARA') — nao so o exatamente igual (achado
+//   A2: '********N' vindo do onChange da tela passaria numa comparacao de igualdade). Regua
+//   irma: alertService.shouldUpdateSecret:168-172.
+//   CORRECAO deste contrato: ele dizia "-> boolean". ESTAVA ERRADO e o executor seguiu o certo:
+//   os dois jeitos de recusar dao a mesma mensagem mas nao sao o mesmo fato, e a rota devolve
+//   `motivo` no corpo para que o 400 seja diagnosticavel sem ler log.
+// MENSAGEM_SEGREDO_INVALIDO -> a mensagem literal do 400, EXPORTADA pelo servico e nao inline
+//   na rota: sem harness de core, e a unica parte da fiacao HTTP que o teste alcanca.
+// ehChaveSecretaCore(chave) -> boolean.
 ```
 
 ### C4 — os 4 pontos em `server/index.js`
+
+> **Os números de linha desta tabela são os da Fase 0 e JÁ ANDARAM** — a Task 1 inseriu dois
+> `require` e o corpo da rota de backup, a Task 2 mexeu nas três de configuração. Posições
+> reais medidas depois da Task 2: `getEmailConfig` **:2936**, `GET /api/configuracoes`
+> **:17989**, `GET /:chave` **:18437**, `PUT /:chave` **:18471**. **Ache por padrão, não por
+> número** — os números abaixo ficam só como registro de onde a medição encontrou cada coisa.
 
 | # | Ponto | Mudança |
 |---|---|---|
