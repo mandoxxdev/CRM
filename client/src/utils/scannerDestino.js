@@ -21,6 +21,10 @@ export function parseQrDestino(texto) {
     return null; // nao e URL absoluta — texto solto, codigo interno etc.
   }
   if (!PROTOCOLOS_PERMITIDOS.includes(url.protocol)) return null;
-  if (!url.pathname.startsWith('/almoxarifado')) return null;
-  return url.pathname + url.search;
+  // Prefixo com barra obrigatoria: startsWith('/almoxarifado') sozinho deixava
+  // /almoxarifado-admin e /almoxarifadoX passarem para fora do modulo (tela branca,
+  // pois o App nao tem rota catch-all na raiz) — achado Important da revisao da etapa.
+  const { pathname } = url;
+  if (pathname !== '/almoxarifado' && !pathname.startsWith('/almoxarifado/')) return null;
+  return pathname + url.search;
 }

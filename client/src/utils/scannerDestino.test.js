@@ -56,4 +56,12 @@ describe('parseQrDestino (RN-01)', () => {
   test('caminho raiz do modulo sem query tambem navega', () => {
     expect(parseQrDestino(`${ORIGIN}/almoxarifado`, ORIGIN)).toBe('/almoxarifado');
   });
+
+  test('prefixo SEM barra nao navega (achado Important da revisao da etapa)', () => {
+    // startsWith('/almoxarifado') sozinho deixava tudo isso passar — e o App nao tem
+    // rota catch-all na raiz, entao navegar para esses paths dava tela branca.
+    expect(parseQrDestino('https://x.com/almoxarifado-admin/dump', ORIGIN)).toBeNull();
+    expect(parseQrDestino('https://x.com/almoxarifadoX/foo', ORIGIN)).toBeNull();
+    expect(parseQrDestino('https://x.com/almoxarifado%2F..%2Fadmin', ORIGIN)).toBeNull();
+  });
 });

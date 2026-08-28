@@ -100,11 +100,14 @@ describe('AssinaturaCanvas (C4)', () => {
     await renderizar({ onConfirm });
     desenhar(container.querySelector('canvas'));
     await act(async () => { botaoPorTexto('Confirmar assinatura').click(); });
-    expect(HTMLCanvasElement.prototype.toBlob).toHaveBeenCalled();
+    // O mock devolve BLOB_PNG seja qual for o MIME pedido — checar blob.type provaria o
+    // mock, nao o componente (achado Minor da revisao). O que prende o formato PNG do
+    // contrato C4 e o ARGUMENTO passado ao toBlob:
+    expect(HTMLCanvasElement.prototype.toBlob).toHaveBeenCalledWith(
+      expect.any(Function), 'image/png'
+    );
     expect(onConfirm).toHaveBeenCalledTimes(1);
-    const blob = onConfirm.mock.calls[0][0];
-    expect(blob).toBe(BLOB_PNG);
-    expect(blob.type).toBe('image/png');
+    expect(onConfirm.mock.calls[0][0]).toBe(BLOB_PNG);
   });
 
   test('Limpar apaga o traço e desabilita Confirmar de novo', async () => {

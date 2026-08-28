@@ -75,8 +75,11 @@ criado_por_nome }]` (array vazio quando não há; ordenado por `criado_em` ASC, 
 ### C3 — `parseQrDestino(texto, origin)` → `string | null`
 
 `client/src/utils/scannerDestino.js`. Devolve `path + search` relativo quando o texto é URL
-válida cujo `pathname` começa com `/almoxarifado` (QUALQUER host — o identificador útil está
-no path; etiqueta impressa em outro ambiente continua útil). Qualquer outra coisa → `null`.
+válida cujo `pathname` é exatamente `/almoxarifado` ou começa com `/almoxarifado/`
+(QUALQUER host — o identificador útil está no path; etiqueta impressa em outro ambiente
+continua útil). Qualquer outra coisa → `null`. **(Corrigido no fix round da Fase 5: a
+versão original dizia só "começa com `/almoxarifado`", mais frouxa que a RN-01 —
+`/almoxarifado-admin` passava e navegava para tela branca.)**
 **Atenção (achado da revisão):** `new URL('javascript:alert(1)')` faz parse SEM lançar — o
 parse NÃO filtra protocolo. A função DEVE verificar explicitamente
 `['http:','https:'].includes(url.protocol)`; o teste com `javascript:` é o controle disso.
@@ -372,12 +375,29 @@ e `GET /requisicoes/:id` (Task 1) — motor e serviço REAIS, zero mock.
   registrado: as worktrees dos galhos nasceram da `main` (5dadd59) em vez do HEAD da etapa —
   T2/T3 resetaram para a base certa ANTES de implementar; T4 tinha commitado na base velha e
   entrou por cherry-pick com revalidação. Zero retrabalho de código entre galhos.
-- [ ] Fase 5 — revisão adversarial (2 lentes)
+- [x] Fase 5 — revisão adversarial (2 lentes, 2026-08-28). **Backend: Aprovado** — 1 Minor
+  real reproduzido (erro de nível multer — PDF, >2MB, campo inesperado — vira 500 opaco e
+  não tem teste; sem órfão, sem linha no banco, idêntico às 4 rotas multipart existentes →
+  vira pendência nomeada na spec 24 para conserto uniforme, não fix desta etapa); todo o
+  resto refutado com sondas (órfãos, matriz de perfis, empate de `criado_em` no mesmo
+  segundo desempatado por id, Zod, callback async do detalhe, rota irmã sem vazamento).
+  **Front: Needs-fix-round** — 1 Important reproduzido (RN-01: `startsWith('/almoxarifado')`
+  sem exigir barra deixava `/almoxarifado-admin` navegar para tela branca) + 2 Minor (assert
+  do PNG provava o mock; ✕ do modal de assinatura ignorava `enviandoAssinatura`); demais
+  ataques refutados (20 vetores de URL, costura C1/C2 literal por literal, vida do stream,
+  CSS desktop intacto). **Fix round aplicado nesta rodada:** prefixo com barra obrigatória +
+  3 cenários de teste novos, `toHaveBeenCalledWith(..., 'image/png')`, ✕ guardado.
+  Revalidação: client **513/513 em 35 suítes**, build `CI=true` exit 0.
 - [ ] Fase 6 — fechar-etapa + retro
 
 ## Retro (4 números — preencher no fechamento)
 
-- Rodadas de correção até verde: —
-- Achados da revisão: reais — / ruído —
-- Paralelismo real: —
+- Rodadas de correção até verde: **1** (um fix round após a Fase 5; nenhum teste falhou
+  duas vezes; o incidente das worktrees na base errada foi de infraestrutura, não de teste)
+- Achados da revisão: **reais 4** (1 Important RN-01 + 3 Minor, todos reproduzidos) /
+  **ruído 0** — os dois revisores listaram e refutaram os demais ataques com sonda
+- Paralelismo real: **3 galhos (T2/T3/T4) em worktrees paralelas + T5 em série com eles na
+  árvore principal; zero retrabalho de código entre galhos** (arquivos disjuntos como
+  previsto); o retrabalho que houve foi da infraestrutura (worktrees nascidas da `main` —
+  T2/T3 resetaram a base antes de codar, T4 refez a validação via cherry-pick)
 - Defeito que escapou (preencher na etapa seguinte): —

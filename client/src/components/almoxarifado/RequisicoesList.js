@@ -1422,7 +1422,7 @@ const RequisicoesList = () => {
           <div className="almox-modal almox-modal-sm" onClick={e => e.stopPropagation()}>
             <div className="almox-modal-header">
               <h2>✍ Colher assinatura do recebedor{assinaturaPos.numero ? ` — ${assinaturaPos.numero}` : ''}</h2>
-              <button className="almox-modal-close" onClick={() => setAssinaturaPos(null)}>✕</button>
+              <button className="almox-modal-close" onClick={() => !enviandoAssinatura && setAssinaturaPos(null)} disabled={enviandoAssinatura}>✕</button>
             </div>
             <div className="almox-modal-body">
               <p style={{ color: 'var(--gmp-text-light)', marginBottom: 12, fontSize: '0.85rem' }}>
