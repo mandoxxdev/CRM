@@ -161,7 +161,7 @@ registrados" — há call sites que gravam nenhum dos dois, `receiptService.js:2
 e a chave some) e **fabrica alterações** a partir de campos de contexto. É o achado A1, o mais
 grave da revisão, e está detalhado na RN-07 do design.
 
-**ENTREGUE em `8f708b0`.** Três detalhes que a Task 2 e a Task 3 precisam saber e que o
+**ENTREGUE em `8c6ffbe`.** Três detalhes que a Task 2 e a Task 3 precisam saber e que o
 contrato não dizia:
 1. **`de`/`para` saem CRUS, sem `String()`.** Número continua número, `false` continua `false`,
    array continua array. Quem renderiza é a tela — coagir aqui apagaria a diferença entre `0` e
@@ -179,7 +179,7 @@ array externo.
 
 ---
 
-### Task 1 (tronco): rótulos, régua de leitura e índices — **FEITA** (`8f708b0`)
+### Task 1 (tronco): rótulos, régua de leitura e índices — **FEITA** (`8c6ffbe`)
 
 > **Placar real:** `auditLabels.api.test.js` **14 passed, 0 failed**; `npm run test:api`
 > **144/144 arquivos** (143 do baseline + o novo); `test:almoxarifado` 42/0, `test:validation`
@@ -251,7 +251,7 @@ e `alteracoesDaLinha`.
   `SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='auditoria_log_almoxarifado'`
   — asserção de **exatamente 3** (verificado que não há `sqlite_autoindex_*` inflando a
   contagem: a tabela não tem `UNIQUE` e o PK é o rowid).
-- [x] **Step 5: controle positivo** (commitado antes, `8f708b0`): apagar `'CRIAR'` do grupo →
+- [x] **Step 5: controle positivo** (commitado antes, `8c6ffbe`): apagar `'CRIAR'` do grupo →
   caíram exatamente os três previstos, (a), (b) e o de cobertura, este nomeando `["CRIAR"]`
   (11 passed / 3 failed). Segunda sabotagem, `alteracoesDaLinha` iterando só
   `Object.keys(nov)` → caiu o cenário do `status` perdido, **e também** o `(e3)` de `nov=null`
@@ -265,11 +265,11 @@ e `alteracoesDaLinha`.
   guarda o achado mais grave da revisão ficaria **não provada**. Sabotagem: acrescentar
   `.filter((c) => String(ant[c]) !== String(nov[c]))` → `(e2)` cai com a mensagem "a troca de
   senha sumiu da leitura", sobrando só `alertas_dias` (e `(e4)` cai junto). Restaurado.
-- [x] **Step 6: `npm run test:api` (144/144); commit `8f708b0`.**
+- [x] **Step 6: `npm run test:api` (144/144); commit `8c6ffbe`.**
 
 ---
 
-### Task 2 (tronco): filtros, validação, janela e opções — **FEITA** (`6e29217`, `5a0f2f3`)
+### Task 2 (tronco): filtros, validação, janela e opções — **FEITA** (`8dda8de`, `71582ec`)
 
 > **Placar real:** `auditoriaFiltros.api.test.js` **36 passed, 0 failed**; `npm run test:api`
 > **145/145 arquivos** (144 do baseline da Task 1 + o novo); `test:almoxarifado` 42/0,
@@ -320,7 +320,7 @@ e `alteracoesDaLinha`.
   os **três campos derivados** (`acao_rotulo`, `entidade_rotulo`, `alteracoes`).
 - [x] **Step 3: implementar** conforme C1 (placeholders no `IN`, validação antes do `COUNT`,
   janela em UTC, campos derivados no `.map` dos itens).
-- [x] **Step 4: controle positivo** (commitado antes, `6e29217`). Os três alvos do plano
+- [x] **Step 4: controle positivo** (commitado antes, `8dda8de`). Os três alvos do plano
   bateram; o **stub permissivo** do Step 1 deu **6 passed / 29 failed**, todos por asserção.
   1. `IN (?)` com a string única → **31/4**. Caiu o alvo previsto (`acao=CRIACAO,CRIAR`, com a
      mensagem `veio []`) **e mais três** que o plano não listava e que são o mesmo defeito visto
@@ -335,18 +335,18 @@ e `alteracoesDaLinha`.
      três de rota; e o `2026-04-31` também passa no `Date.parse` do Node 24, não só o
      `2026-02-30` — o plano só previa o de fevereiro.
   `md5sum` conferido antes / depois / restaurado nas três, e `git diff --stat` vazio no fim.
-  **Achado do próprio controle (commit `5a0f2f3`):** na sabotagem 3 o `test()` único do
+  **Achado do próprio controle (commit `71582ec`):** na sabotagem 3 o `test()` único do
   `validarData` caía na **primeira** asserção do laço e o vermelho dizia só
   `deveria recusar "2026-8-28"` — um defeito de **formato**. O 30 de fevereiro, que é o achado
   que a RN-03 existe para guardar, tinha asserção mas **a mensagem dela era engolida**. Não era
   asserção faltando, era diagnóstico enganoso: manda depurar o regex em vez do calendário.
   Separado em dois cenários (formato / data inexistente); a sabotagem foi refeita e agora o
   segundo se nomeia (`30 de fevereiro passou`), com **31/5**.
-- [x] **Step 5: `npm run test:api` (145/145); commits `6e29217` e `5a0f2f3`.**
+- [x] **Step 5: `npm run test:api` (145/145); commits `8dda8de` e `71582ec`.**
 
 ---
 
-### Task 3 (galho): a tela — **FEITA** (`b746e72`)
+### Task 3 (galho): a tela — **FEITA** (`0a57fe1`)
 
 > **Placar real:** `AuditoriaAlmoxarifado.test.js` **15 passed, 0 failed**; suíte inteira do
 > client **546/546 em 37 arquivos** (531/36 do baseline + os 15 novos); `CI=true
@@ -399,7 +399,7 @@ prontos do servidor.
 - [x] **Step 4: controle positivo com alvo definido** (achado A10 — "controle positivo" sem
   alvo vira `md5sum` cerimonial): troque o `params` do fetch por objeto vazio → o cenário
   "filtro de período dispara nova busca com os params certos" tem de ficar vermelho.
-  **Resultado: cinco sabotagens, todas commitadas depois de `b746e72`, todas com `md5sum`
+  **Resultado: cinco sabotagens, todas commitadas depois de `0a57fe1`, todas com `md5sum`
   antes / depois / restaurado e `git diff --stat` vazio no fim** (baseline
   `97ffb10549eecdc35f064933589c1dd4`):
   1. `{ params }` → `{ params: {} }` (a do plano) → **2 vermelhos**, o previsto e mais o
@@ -418,7 +418,7 @@ prontos do servidor.
   5. `Sem detalhes registrados` → `XXX` **e** `{dados.truncado && (` → `{false && (` numa só
      rodada → caem os dois cenários correspondentes e **nenhum outro** (13/2), o que também
      mostra que eles não estão se cobrindo por acidente.
-- [x] **Step 5:** `CI=true` test (546/546) e build (limpo); commit `b746e72`.
+- [x] **Step 5:** `CI=true` test (546/546) e build (limpo); commit `0a57fe1`.
 
 **Divergências do plano, e o motivo de cada uma:**
 - **Paginação por `offset` não estava no plano e foi acrescentada.** Sem ela o aviso de corte é
