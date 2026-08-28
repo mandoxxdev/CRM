@@ -2715,6 +2715,10 @@ const TabConfiguracoes = () => {
     { chave: 'alerta_calibracao_dias', label: 'Alerta de Calibração (dias)', tipo: 'number', descricao: 'Dias de antecedência para alertar calibração de ferramenta vencendo' },
     { chave: 'alerta_quarentena_dias', label: 'Alerta de Quarentena Parada (dias)', tipo: 'number', descricao: 'Dias aguardando inspeção para o item de recebimento contar como quarentena parada' },
     { chave: 'alerta_reserva_parada_dias', label: 'Alerta de Reserva Parada (dias)', tipo: 'number', descricao: 'Dias com reserva ativa parada para gerar alerta de reserva esquecida' },
+    // Etapa 17 (C3): janela UNICA dos 3 alertas de evento (material reprovado, divergencia de
+    // recebimento, divergencia de inventario) — semeada no schema.js e lida pela mesma
+    // alertRegistry.resolverDias. O prefixo `alerta_` ja cai no guard do handleSalvar.
+    { chave: 'alerta_eventos_janela_dias', label: 'Alerta de Eventos (dias)', tipo: 'number', descricao: 'Janela em dias que os alertas de evento (reprovado, divergências) mostram na central' },
     { chave: 'notificacoes_dest_entradas', label: 'Destinatários — Entradas', tipo: 'text', descricao: 'E-mails (lista) para notificação de entrada de material; vazio usa o e-mail de alertas' },
     { chave: 'notificacoes_dest_saidas', label: 'Destinatários — Saídas', tipo: 'text', descricao: 'E-mails (lista) para notificação de saída de material; vazio usa o e-mail de alertas' },
     { chave: 'notificacoes_dest_ajustes', label: 'Destinatários — Ajustes', tipo: 'text', descricao: 'E-mails (lista) para notificação de ajuste de estoque; vazio usa o e-mail de alertas' },

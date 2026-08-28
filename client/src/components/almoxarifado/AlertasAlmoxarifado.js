@@ -129,6 +129,46 @@ const COLUNAS_POR_CHAVE = {
     { titulo: 'Criada em', render: (l) => formatData(l.created_at) },
     { titulo: 'Expira em', render: (l) => formatData(l.expira_em) },
   ],
+  // ── Etapa 17 (C2): as 4 chaves novas. As colunas espelham os campos que o `listar` do
+  // servidor REALMENTE devolve (alertRegistry.js, `listarReprovados` /
+  // `listarDivergenciasRecebimento` / `listarDivergenciaConferencia` / o SELECT de lotes) e a
+  // ordem do corpo do e-mail do MESMO alerta — as três primeiras chegam aqui pelos dois
+  // caminhos (gancho no ato e varredura de rede), então central e caixa de entrada precisam
+  // contar a mesma história.
+  MATERIAL_REPROVADO: [
+    { titulo: 'Material', render: (l) => `${l.material_codigo} — ${l.material_nome}` },
+    { titulo: 'Qtd. reprovada', render: (l) => formatNum(l.quantidade_reprovada) },
+    { titulo: 'Encaminhamento', render: (l) => l.encaminhamento || '—' },
+    { titulo: 'Recebimento', render: (l) => `${l.recebimento_numero || '—'}${l.nota_fiscal ? ` (NF ${l.nota_fiscal})` : ''}` },
+    // data_inspecao é DATETIME UTC do SQLite — formatData põe o 'Z' antes de ler.
+    { titulo: 'Inspeção em', render: (l) => formatData(l.data_inspecao) },
+    { titulo: 'Responsável', render: (l) => l.responsavel_nome || '—' },
+  ],
+  // `divergencia` vem CALCULADA do servidor (recebida − esperada, mesma régua float-safe do
+  // filtro) — a tela nunca refaz a conta (lição G6: régua única, do lado de lá).
+  DIVERGENCIA_RECEBIMENTO: [
+    { titulo: 'Material', render: (l) => `${l.material_codigo} — ${l.material_nome}` },
+    { titulo: 'Qtd. esperada', render: (l) => formatNum(l.quantidade_esperada) },
+    { titulo: 'Qtd. recebida', render: (l) => formatNum(l.quantidade_recebida) },
+    { titulo: 'Divergência', render: (l) => formatNum(l.divergencia) },
+    { titulo: 'Recebimento', render: (l) => `${l.recebimento_numero || '—'}${l.nota_fiscal ? ` (NF ${l.nota_fiscal})` : ''}` },
+  ],
+  // Linha AGREGADA por conferência (RN-05) e SEM impacto_financeiro — o servidor não seleciona
+  // o valor de propósito (B30: e-mail vaza para caixa de entrada; o valor é gateado por
+  // `inventario` no relatório), então a central também não tem coluna de valor.
+  DIVERGENCIA_INVENTARIO: [
+    { titulo: 'Conferência', render: (l) => l.numero || `#${l.conferencia_id}` },
+    { titulo: 'Concluída em', render: (l) => formatData(l.data_fim) },
+    { titulo: 'Itens divergentes', render: (l) => formatNum(l.itens_divergentes) },
+  ],
+  // O status entra porque o lote sem certificado NASCE `BLOQUEADO` (receiptService/lotService)
+  // — sem a coluna, o alerta pareceria falar de um lote disponível para consumo.
+  LOTE_SEM_CERTIFICADO: [
+    { titulo: 'Lote', render: (l) => l.codigo || `#${l.id}` },
+    { titulo: 'Material', render: (l) => `${l.material_codigo} — ${l.material_nome}` },
+    { titulo: 'Saldo', render: (l) => `${formatNum(l.saldo)} ${l.material_unidade || ''}`.trim() },
+    { titulo: 'Status', render: (l) => l.status || '—' },
+  ],
 };
 
 // Alerta que o registro do servidor ganhar amanhã e esta tabela ainda não conhecer não pode

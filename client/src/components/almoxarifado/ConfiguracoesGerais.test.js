@@ -79,6 +79,10 @@ const RESPOSTA_DO_SERVIDOR = {
   alerta_calibracao_dias: { valor: '30', descricao: 'Alerta de calibração (dias)', id: 16 },
   alerta_quarentena_dias: { valor: '7', descricao: 'Alerta de quarentena parada (dias)', id: 17 },
   alerta_reserva_parada_dias: { valor: '30', descricao: 'Alerta de reserva parada (dias)', id: 18 },
+  // Etapa 17 (C3): a janela unica dos 3 alertas de EVENTO (reprovado, divergencia de
+  // recebimento, divergencia de inventario). Mesma obrigacao das anteriores — sem fixture
+  // valida, o guard client-side veria undefined como NaN e derrubaria os testes de Salvar.
+  alerta_eventos_janela_dias: { valor: '7', descricao: 'Janela dos alertas de evento (dias)', id: 19 },
 };
 
 let container;
@@ -425,4 +429,44 @@ test('as 3 chaves de alerta (Etapa 16) aparecem e cada uma recusa 0 antes do sub
   expect(corpo.alerta_calibracao_dias).toBe('15');
   expect(corpo.alerta_quarentena_dias).toBe('10');
   expect(corpo.alerta_reserva_parada_dias).toBe('60');
+});
+
+/**
+ * Etapa 17, Task 3 (C3) — `alerta_eventos_janela_dias`: a janela que os 3 alertas de EVENTO
+ * (reprovado, divergência de recebimento, divergência de inventário) mostram na central e a
+ * varredura de rede usa. Semeada em schema.js e lida por `alertRegistry.resolverDias` (Task 1),
+ * mas a tela renderiza a LISTA FIXA `CAMPOS` — fora dela a chave existe no banco e é ineditável
+ * pela UI, exatamente o defeito que originou este arquivo. O prefixo `'alerta_'` do guard já
+ * cobre a chave nova nos dois lados (não há nada a mudar na validação): este teste prova que a
+ * cobertura VALE para ela — 0 é recusado ANTES do submit com o literal do 400 — e que o valor
+ * válido entra no corpo achatado do PUT.
+ */
+test('a chave de janela dos alertas de evento (Etapa 17) aparece, recusa 0 e entra no payload', async () => {
+  await renderAbaGeral();
+
+  expect(container.textContent).toContain('Alerta de Eventos (dias)');
+  const inputEventos = inputDoCampo('Alerta de Eventos (dias)');
+  expect(inputEventos).not.toBeNull();
+  // A fixture do servidor manda '7' — a tela mostra o valor gravado, não um default local.
+  expect(inputEventos.value).toBe('7');
+
+  const preencher = (el, valor) => {
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(el, valor);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  const botao = [...container.querySelectorAll('button')]
+    .find(b => /Salvar Configurações/.test(b.textContent));
+
+  // Só esta chave inválida (as demais vêm válidas da fixture): o guard tem de pegá-la.
+  await act(async () => { preencher(inputEventos, '0'); });
+  await act(async () => { botao.click(); });
+  expect(api.put).not.toHaveBeenCalled();
+  expect(toast.error).toHaveBeenCalledWith(
+    'Configuração "alerta_eventos_janela_dias" deve ser um número de dias maior que zero'
+  );
+
+  await act(async () => { preencher(inputEventos, '15'); });
+  await act(async () => { botao.click(); });
+  expect(api.put).toHaveBeenCalledTimes(1);
+  expect(api.put.mock.calls[0][1].alerta_eventos_janela_dias).toBe('15');
 });
