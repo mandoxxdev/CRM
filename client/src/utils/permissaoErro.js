@@ -68,6 +68,12 @@ const PERFIS = {
   ENGENHARIA: 'Engenharia',
   GESTOR: 'Gestor',
   CONSULTA: 'Consulta (somente leitura)',
+  // Etapa 24: o perfil novo precisa entrar AQUI também, não só em PERFIS_INFO da tela de
+  // atribuição. Sem esta linha o 403 de um inspetor da qualidade dizia "seu perfil é
+  // QUALIDADE" — a chave crua em caixa alta —, que é o mesmo buraco do achado 7 da Etapa 11,
+  // entrando pelo lado do PERFIL em vez do lado da AÇÃO. É a mensagem que ele mais vê:
+  // QUALIDADE não movimenta estoque nem ajusta saldo, então esbarra no 403 com frequência.
+  QUALIDADE: 'Qualidade',
   // frota
   ADMIN_FROTA: 'Administrador de Frota',
   MOTORISTA: 'Motorista',

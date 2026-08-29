@@ -55,6 +55,19 @@ describe('formatarErroPermissao', () => {
       .toBe('Sem permissão para apontar produção — seu perfil é Operador. Solicite acesso a um administrador.');
   });
 
+  test('o perfil QUALIDADE aparece traduzido, não como a chave crua (Etapa 24)', () => {
+    // `labelPerfil` degrada para a chave crua em vez de sumir, e por isso um cenario que so
+    // exigisse "contem QUALIDADE" ficaria VERDE sem a entrada no mapa — o mesmo modo de falha
+    // do controle da sabotagem W7, agora do lado do PERFIL. Só a forma exata ('Qualidade',
+    // capitalizada) prova que o mapa tem a linha. As duas metades no mesmo teste: o que TEM de
+    // aparecer, e a chave crua que NÃO pode aparecer.
+    const msg = formatarErroPermissao({ acao: 'ajustar_estoque', perfil: 'QUALIDADE' });
+    expect(msg).toBe(
+      'Sem permissão para ajustar saldo de estoque — seu perfil é Qualidade. Solicite acesso a um administrador.'
+    );
+    expect(msg).not.toContain('QUALIDADE');
+  });
+
   test('retorna null quando não é 403 de perfil — quem chama mantém a mensagem original', () => {
     expect(formatarErroPermissao(null)).toBeNull();
     expect(formatarErroPermissao({})).toBeNull();
