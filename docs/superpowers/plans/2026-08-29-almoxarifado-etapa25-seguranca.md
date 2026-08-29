@@ -435,31 +435,139 @@ atrás do nginx, o normal é `ip` = cliente e `ip_proxy` = `127.0.0.1`; em acess
    o painel funciona inteiro, e a fronteira do manual continua de pé. A explicação completa para o
    usuário está no guia e nas novidades, que são os documentos certos para ela.
 
-## Próxima tarefa detalhada
+## Próxima tarefa detalhada — a ETAPA 26, e a Fase 0 dela já está medida
 
-**As Tasks 1 (`6209037`) e 2 (`d81191e`) estão feitas. A próxima é a Task 3** (a origem da
-requisição na auditoria de movimentação). Ela **não** depende de nada do que as Tasks 1 e 2
-tocaram — `dbRecovery.js` e o boot do `index.js` não têm interseção com `stockService.js`.
+> **A Etapa 25 inteira está fechada** (Tasks 1 a 4). O que segue é o Passo 8 da skill
+> `fechar-etapa`: a próxima etapa escolhida e a **Fase 0 medida no código**, para a sessão
+> seguinte não remedir e não desenhar sobre premissa falsa.
 
-O que a Task 3 consome (medido, não suposto — reconfira antes de escrever):
+### A escolha, e por que não foi outra
 
-- `registrarMovimentacao(db, user, params, opcoes)` em
-  `server/services/almoxarifado/stockService.js` — o `req` **não** chega lá, e **23 dos 28** call
-  sites nascem dentro de outros serviços. O caminho é `req.user.origem`: **57 de 57** chamadas de
-  serviço nas rotas do módulo usam `Service.x(db, req.user, …)`.
-- A auditoria de movimentação fica em `stockService.js:1367` (confira a linha, o arquivo mudou
-  desde a medição) e **não tem `try/catch`** — não crie um (achado A4).
-- Nos testes o `user` é literal, então `user.origem` vira `undefined` — degrada limpo, mas os
-  cenários novos precisam construir a origem explicitamente.
+Pela ordem da skill: (1) a "próxima tarefa detalhada" anterior → cumprida (era a Task 3);
+(2) o que o fechamento nomeou como "falta para 🟢" → é a perna *Perfis*, cuja metade aberta
+(**B56**, `bloquear/liberar sob desvio`) **espera resposta do usuário** e não pode ser começada;
+(3) o mapa `specs/modulo-almoxarifado/README.md`. Foi pelo (3).
 
-### Estado do backup/retenção depois da Task 2 (para a Task 4 não remedir do zero)
+**Escolhida: FEATURE 01 — a taxonomia de categorias de material.** Ela resolve a decisão **B6**,
+aberta desde a Etapa 8c, **removendo a pergunta em vez de respondê-la**: hoje a lista é fixa no
+código, e o objetivo é que o usuário defina a lista na tela.
+
+**Descartadas, com o motivo:**
+
+| Feature | Por que não agora |
+|---|---|
+| **05 (picking)** | Não existe **nada** — nem rota, nem tela, nem tabela. `maxSeparar` (`requisitionService.js:42`) e `separarRequisicao` (`:189`) servem só ao fluxo de requisição, e não há componente de picking em `client/src/components/almoxarifado/`. É construção do zero, etapa grande |
+| **06 (motor de aprovação)** | Alto valor (alçada por setor é exigência real), **mas risco alto**: hoje é **uma** regra (`liberacao_valor_ativo` + `_limite` + `_aprovadores`, `schema.js:1826-1828`, com `isAprovadorValor` em `requisitionValueApprovalService.js:90`). Generalizar para motor é **reescrita** do caminho crítico de aprovação de requisição, que já tem suíte extensa. Não é extensão, é troca de fundação |
+| **08 (tipos de entrada)** | **Baixo risco, mas baixo valor.** Os "tipos" hoje são rótulos do enum `TIPOS_MOVIMENTO` (`schema.js:46`), e `TIPOS_ENTRADA` (`movementTypes.js:44`) é só um subconjunto para classificar relatório. Embrulhar 3 valores de enum num CRUD é burocracia, não entrega |
+| **09 (plano de inspeção / RNC)** | **O de maior valor de negócio para uma metalúrgica** — não-conformidade documentada é o coração da qualidade. Mas é 100% do zero: `plano_inspecao`, `caracteristica`, `tolerancia`, `nao_conformidade`, `rnc`, `disposicao`, `tratativa` **não existem em lugar nenhum** do módulo (o único hit de `nao_conformidade` no repo é `index.js:22706`, de **outro módulo**, lendo `controle_qualidade`). É a etapa seguinte natural, depois da 01 |
+
+### O ACHADO da Fase 0 — e ele muda o enunciado da B6
+
+A B6 pergunta *"qual lista de categorias vale?"*. **Medido hoje, a resposta é constrangedora: as
+duas listas que existem não têm UMA categoria em comum.**
+
+```
+# a lista que o usuario VE nas telas — 11 itens, hardcoded, DUPLICADA em 3 arquivos
+$ sed -n '/^const CATEGORIAS = \[/,/\];/p' client/src/components/almoxarifado/{MateriaisAlmoxarifado,MaterialAlmoxarifadoForm,ConferenciaEstoque}.js
+→ 'CONSUMÍVEL', 'FERRAMENTA', 'EPI', 'ELÉTRICO', 'HIDRÁULICO', 'MECÂNICO',
+  'INSUMO', 'EMBALAGEM', 'ESCRITÓRIO', 'LIMPEZA', 'OUTROS'
+  (MateriaisAlmoxarifado.js:20 · MaterialAlmoxarifadoForm.js:13 · ConferenciaEstoque.js:10,
+   esta ultima com um '' extra na frente)
+
+# a lista que o SERVIDOR semeia na tabela — 27 itens, especificos de metalurgica
+$ grep -n "CATEGORIAS_SEED" -A 6 server/services/almoxarifado/schema.js
+→ 'Aço carbono', 'Aço inox', 'Chapas', 'Tubos', 'Perfis estruturais', 'Barras e eixos',
+  'Componentes usinados', 'Motores elétricos', 'Redutores', 'Bombas', 'Válvulas', 'Conexões',
+  'Pneumática', 'Hidráulica', 'Elétrica', 'Automação', 'Sensores e instrumentos', 'Rolamentos',
+  'Retentores', 'Elementos de fixação', 'Solda e consumíveis', 'Pintura', 'EPIs', 'Ferramentas',
+  'Materiais de montagem', 'Materiais fornecidos pelo cliente', 'Sucata e sobras reaproveitáveis'
+```
+
+**Interseção: zero.** A GMP é uma metalúrgica classificando material como `CONSUMÍVEL` e `OUTROS`,
+enquanto uma tabela com `Aço carbono`, `Chapas`, `Tubos` e `Perfis estruturais` — desenhada
+**para ela** — está no banco sem ninguém usar. **A lista adequada ao negócio é justamente a que
+está morta.**
+
+### O estado exato, medido (não remeça — confira só o que mudou)
+
+**Backend:**
+- `categorias_material_almoxarifado` (`schema.js:681`) — `id`, `nome`, `parent_id` (auto-referência,
+  até 2 níveis), `ativo`. Semeada com os 27 nomes na primeira subida.
+- **Só tem GET.** `app.get('/api/almoxarifado/categorias')` em
+  `server/routes/almoxarifado/extended.js:148` — `SELECT * ... WHERE ativo = 1 ORDER BY nome`,
+  **sem `requirePermission`**, só `auth`. **Não existe POST, PUT nem DELETE** (procurei nos dois
+  arquivos de rota).
+- **Assimetria importante:** `familias_material_almoxarifado` (`schema.js:698`), a outra taxonomia,
+  **tem CRUD completo** — `routes/almoxarifado.js:2243` (GET), `:2261`, `:2273`, `:2288` (POST),
+  `:2337` (PUT), `:2413` (DELETE). **O padrão a copiar já existe no próprio módulo**, e é o de
+  famílias. Não invente forma nova.
+- `materiais_almoxarifado.categoria` é **TEXT** com `DEFAULT 'OUTROS'` (`schema.js:293`) — texto
+  solto, sem FK. `familia_id` e `subfamilia_id` são FK de verdade (`schema.js:723`).
+
+**Client:**
+- As 3 listas hardcoded acima. `ConferenciaEstoque.js:667` usa `.filter(Boolean)` sobre a dela.
+- `ConfiguracoesAlmoxarifado.js:2884` **já busca** `GET /almoxarifado/categorias` no `loadBase`, e
+  guarda em `setCategorias` — mas **não há tela de editar categoria**. Hoje o dado serve só para
+  preencher o seletor de `categoria_id` da família.
+- **Consequência:** já existe o consumidor do contrato. Uma etapa que criasse "a tela de
+  categorias" sem olhar isso repetiria o erro da Etapa 24 (desenhar sobre "a tela não existe").
+  **Ela não existe; o CARREGAMENTO dela existe.** São coisas diferentes e as duas precisam ser
+  ditas.
+
+### Os pontos de atenção que a etapa vai encontrar
+
+1. **A migração é o risco real, não o CRUD.** Trocar `categoria TEXT` por `categoria_id` FK exige
+   decidir o que fazer com os valores já gravados — e os 11 valores atuais **não existem** na
+   tabela de 27. Não há de-para óbvio (`CONSUMÍVEL` → ?). **Caminho reversível a considerar:**
+   manter a coluna `categoria` como está, alimentar o seletor **pela tabela** e só então oferecer
+   a conversão; assim nada de histórico se perde se o de-para for adiado.
+2. **A B6 vira decisão do usuário na tela, não pergunta no documento.** Este é o ponto da etapa:
+   se ele pode editar a lista, ninguém precisa saber "qual vale". Mas a B6 **continua em aberto
+   para os dados já gravados** — e isso tem de ser dito, não escondido pela feature nova.
+3. **`GET /categorias` não tem `requirePermission`.** Editar terá de ter. O verbo natural, pelo
+   precedente das famílias, é o que a rota de família usa — **confira qual é antes de escolher**,
+   não presuma.
+4. **Auditoria.** Cadastro novo audita: `registrarAuditoria` com `entidade: 'categoria'`. A trilha
+   já lê entidade nova sozinha (a lista de filtros é montada do que existe no histórico).
+5. **Categoria tem `parent_id` e ninguém usa.** Decidir explicitamente se a etapa entrega 2 níveis
+   ou trata a coluna como fora de escopo — **e escrever a decisão**, porque coluna viva sem uso é
+   exatamente o padrão de "feature morta" que esta base já achou cinco vezes.
+
+### O que a Etapa 25 deixou pronto — não reabra
+
+**Origem da requisição (Task 3, `9027c36`) — está fechado:**
+
+- `origemRequisicao(req)`, `anexarOrigemAoUsuario(req,res,next)`, `camposDeOrigem(user)` e
+  `LIMITE_USER_AGENT = 255` em `server/services/almoxarifado/origemRequisicao.js`.
+- A origem é pendurada **envolvendo o `authenticateToken`** no registrador do módulo
+  (`routes/almoxarifado.js:152`) e em `routes/requisicoesMaterial.js`. **NÃO mova para um
+  `app.use` de prefixo** — as rotas redeclaram `auth` e `req.user = user` apaga o `origem`.
+  Isso foi medido na execução: 12 cenários de unidade **verdes** e 4 de integração **vermelhos**.
+- Lida em `stockService.js` na auditoria de movimentação e na de **cancelamento** (`:1814`).
+- **Nenhum `try/catch` novo** — a auditoria de movimentação nunca teve um, e 59 das 60 chamadas
+  de `registrarAuditoria` do módulo estão sem. Não crie um.
+
+**Retenção de backup (Tasks 1 e 2, `6209037` + `d81191e`) — está fechado:**
 
 - A retenção agora é `{ manterDias: <backup_manter_dias>, tetoCopias: 10 }`, com piso de 3.
 - O prune roda **dentro de `initializeDatabase`**, em `podarBackupsConformeConfiguracao()`, e
   registra no log quantos arquivos saiu e com que régua — é por essa linha que a letra A da
   Task 4 pode conferir a limpeza no primeiro boot em produção.
 - `backup_automatico` e `backup_frequencia` **continuam sem leitor no servidor** (achado A11).
-  A tela de Backup tem **um** controle vivo e **dois** decorativos — a letra C tem de dizer isso.
+  A tela de Backup tem **um** controle vivo e **dois** decorativos — está na letra **C32**.
+
+### O que a Etapa 25 deixou EM ABERTO, de propósito
+
+- **B57** — dupla conferência em material crítico. **Espera resposta do usuário**, com quatro
+  opções e a recomendação escrita. Não comece sem ela.
+- **B56** — `bloquear/liberar sob desvio` para o perfil QUALIDADE. **Espera resposta.** É a
+  metade que impede a feature 23 de virar 🟢.
+- **A justificativa** tem lacunas nomeadas (`QUARENTENA`, `LIBERACAO_INSPECAO`, `RETRABALHO`,
+  `DEVOLUCAO_CLIENTE`, `excluirRequisicao`, tamanho mínimo despadronizado). **Nenhuma delas
+  espera resposta** — são código, e cabem numa etapa curta a qualquer momento.
+- **`backup_automatico` e `backup_frequencia`** — fazer os dois valerem exige um agendador, que
+  o processo não tem (o único `setInterval` é limpeza de rate limit, `index.js:378`). Etapa
+  própria.
 
 ---
 
