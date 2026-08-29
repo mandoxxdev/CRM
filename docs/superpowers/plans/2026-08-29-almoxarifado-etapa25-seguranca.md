@@ -102,7 +102,7 @@ Etapa 21.
 (vai em `tests/api/` porque **é o único lugar que o runner enxerga** — precedente explícito em
 `dbRecoveryBackup.api.test.js:1-6`, que já faz isso sendo teste de serviço).
 
-> **STATUS: Task 1 FEITA** — commit `ffea21f`. Placar: `backupRetencao.api.test.js` **21/21**
+> **STATUS: Task 1 FEITA** — commit `6209037`. Placar: `backupRetencao.api.test.js` **21/21**
 > (novo), `dbRecoveryBackup.api.test.js` **5/5** antes e depois, `test:api` **152/152** arquivos
 > (era 151), `test:sqlite` **5/5**. Três divergências registradas no fim desta task.
 
@@ -131,7 +131,7 @@ Etapa 21.
   desestruturado vira **no-op silencioso**, não erro. Rode
   `node tests/api/dbRecoveryBackup.api.test.js` (5 cenários, verde hoje) **antes e depois** — ele
   chama `pruneOldBackups(dbPath, 1)`, abaixo do piso, e é o teste que congela o contrato.
-- [x] **Step 3: controle positivo** (commitado antes, `ffea21f`), **três**, lendo qual asserção
+- [x] **Step 3: controle positivo** (commitado antes, `6209037`), **três**, lendo qual asserção
   caiu:
   1. acompanhante nem classificado (régua volta a olhar só `.sqlite`) → **RN-01 caiu nomeando os
      6 órfãos que ficaram** (`apagar=[]`). 7 passed, 14 failed.
@@ -143,7 +143,7 @@ Etapa 21.
      `backupDatabaseFiles` só produz o nome novo. É a prova de que o teste congelado sozinho
      **não pega** o bug de 44 MB, e de que o cenário novo não é vazio.
   `md5sum` conferido antes/depois/restaurado (OK nos dois arquivos), `git diff --stat` vazio.
-- [x] **Step 4:** `test:api` **152/152**, `test:sqlite` **5/5**; commit `ffea21f`.
+- [x] **Step 4:** `test:api` **152/152**, `test:sqlite` **5/5**; commit `6209037`.
 
 #### Divergências desta task (o que saiu diferente do plano, e por quê)
 
@@ -283,7 +283,7 @@ os **23 movimentos originados em serviço gravariam `null`** — metade da featu
 
 ## Próxima tarefa detalhada
 
-**A Task 1 está feita (`ffea21f`). A próxima é a Task 2.** O que ela consome:
+**A Task 1 está feita (`6209037`). A próxima é a Task 2.** O que ela consome:
 
 - `pruneOldBackups(dbPath, opcoes)` aceita **objeto** `{ manterDias, pisoCopias, tetoCopias }` ou
   **número** (= `tetoCopias`, o sentido histórico). Devolve `{ apagados: string[], motivo }`.
