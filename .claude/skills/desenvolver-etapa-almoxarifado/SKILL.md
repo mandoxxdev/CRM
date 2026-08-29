@@ -51,6 +51,13 @@ O plano desta base **tem de conter**, além das tasks:
 4. **Pelo menos uma task de teste de integração que cruza galhos** — um fluxo que passa por
    mais de uma rota nova (ex.: criar → consumir → conferir saldo). Verde por unidade não prova
    que as partes compõem.
+   **Onde a feature depende de FIAÇÃO — middleware, ordem de registro, herança de contexto —, o
+   cenário de integração é a única prova que existe.** Na Etapa 25 o plano mandava pendurar a
+   origem da requisição num `app.use` do prefixo; como `req.user` é **reatribuído** pelo `auth`
+   que cada rota redeclara, a origem era jogada fora. Placar dessa forma: **12 cenários de
+   unidade verdes e 4 de integração vermelhos** — a feature morta com a suíte de unidade inteira
+   passando. Quando existirem os dois caminhos, exija no plano um cenário que entre **pela rota**
+   e outro que entre **pelo serviço**.
 
 ## Fase 2 — Revisar o plano ANTES de executar
 
