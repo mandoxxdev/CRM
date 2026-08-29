@@ -179,9 +179,17 @@ const CHAVES = [CHAVE_1, CHAVE_2, CHAVE_3];
 
   await test('[RN-01] salvar 2 chaves nao encosta na 3a nem em outra configuracao', async () => {
     await semearConhecido('P', 'Q', 'R');
+    // A chave de controle e SEMEADA aqui, nao apenas lida. Medido no controle positivo desta
+    // task: com o `WHERE chave IN` frouxo (`OR 1=1`), o CASE sem ELSE ja tinha zerado esta chave
+    // nos cenarios ANTERIORES, e o cenario caia na guarda de setup — a assercao de peso ficava
+    // encoberta. Semeando, a guarda so pega banco vazio/chave inexistente (o defeito que ela
+    // existe para pegar) e quem cai e a assercao que interessa.
+    const TOLERANCIA_CONTROLE = '7';
+    await dbRun(db, 'UPDATE configuracoes_almoxarifado SET valor = ? WHERE chave = ?',
+      [TOLERANCIA_CONTROLE, 'tolerancia_inventario_percentual']);
     const toleranciaAntes = await valorDe('tolerancia_inventario_percentual');
-    assert.ok(toleranciaAntes !== undefined && toleranciaAntes !== null,
-      'setup: a chave de controle precisa existir com valor conhecido');
+    assert.strictEqual(toleranciaAntes, TOLERANCIA_CONTROLE,
+      'setup: a chave de controle precisa EXISTIR com o valor semeado');
 
     const res = await salvar({ [CHAVE_1]: 'so-1', [CHAVE_2]: 'so-2' });
     assert.strictEqual(res.status, 200, `esperava 200, veio ${res.status}: ${JSON.stringify(res.body)}`);
