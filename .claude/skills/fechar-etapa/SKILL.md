@@ -190,6 +190,13 @@ aprendidas por falha silenciosa aqui:
   teste no ambiente errado, em vez de deixá-lo verde provando nada.
 - **Cenário que afirma ausência ("não mostra o aviso") passa com a tela vazia.** Todo cenário
   negativo precisa da metade positiva no mesmo teste — alguma coisa que **tem** de estar lá.
+- **Asserção negativa sobre permissão não fica vermelha na rodada TDD** — e por isso o controle
+  positivo é a **única** prova dela. Ao criar um perfil novo, o cenário "não pode `movimentar`"
+  passa **verde antes de o perfil existir**, porque `can()` devolve `false` para o que não
+  conhece. Quem tratar o controle positivo como formalidade entrega a lista negativa sem prova
+  nenhuma — e a lista negativa é justamente a que importa, porque perfil que herda demais é pior
+  que perfil nenhum. Sabote **concedendo** a permissão proibida e confirme que o cenário cai
+  **nomeando a ação**.
 
 ---
 

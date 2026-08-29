@@ -83,7 +83,7 @@ algum ficar vermelho, **você mudou contrato** — pare e relate, não conserte 
 
 ---
 
-### Task 1 (tronco): o perfil QUALIDADE, ponta a ponta — ✅ FEITA (`0b53852`)
+### Task 1 (tronco): o perfil QUALIDADE, ponta a ponta — ✅ FEITA (`a81e51a`)
 
 **Files:** Modify `server/services/almoxarifado/permissions.js` **e**
 `client/src/components/almoxarifado/ConfiguracoesAlmoxarifado.js` (`PERFIS_INFO`, `:2535`);
@@ -94,7 +94,7 @@ o perfil sai como `QUALIDADE` cru no seletor e `—` na coluna "O que isso permi
 anterior dizia que o perfil apareceria "sem tocar no front" — verdadeiro para a lista (que vem
 do servidor), falso para o texto.
 
-- [x] **Step 1: teste que falha.** RN-01, com as duas metades: `0b53852`
+- [x] **Step 1: teste que falha.** RN-01, com as duas metades: `a81e51a`
   - **pode**: `inspecionar`, `visualizar`;
   - **NÃO pode**: `movimentar`, `ajustar_estoque`, `configurar`, `criar_material`,
     `editar_material`, `receber_material`, **`ver_alertas`**. Esta é a asserção que importa —
@@ -104,7 +104,7 @@ do servidor), falso para o texto.
     mediu 404, ou seja, passa o gate e morre no "não encontrado"); e `POST /movimentacoes` com o
     mesmo usuário **tem** de dar 403.
 - [x] **Step 2: implementar** (perfil em `PERFIS`, duas entradas de `ACAO_PERFIS`, entrada em
-  `PERFIS_INFO` com rótulo "Qualidade" e descrição do que permite); verde. `0b53852`
+  `PERFIS_INFO` com rótulo "Qualidade" e descrição do que permite); verde. `a81e51a`
 - [x] **Step 3: controle positivo** (commitar antes): acrescente `QUALIDADE` a `movimentar` → o
   cenário da asserção **negativa** cai nomeando `movimentar`. Se nada cair, a lista negativa não
   está sendo exercida — é achado.
@@ -114,7 +114,7 @@ do servidor), falso para o texto.
   caiu nomeando `ver_alertas`. `md5sum` 09f82107 antes e depois do restauro, `git diff --stat`
   vazio.
 - [x] **Step 4: `npm run test:api`; commit.** 150/150 arquivos, `test:almoxarifado` 42/42,
-  cliente 549/549 em 37 suítes e `CI=true build` limpo. Commit `0b53852`.
+  cliente 549/549 em 37 suítes e `CI=true build` limpo. Commit `a81e51a`.
 
 ---
 
@@ -193,7 +193,7 @@ funciona** — escrevê-los não é redundância, é a rede que não existe.
 ## Próxima tarefa detalhada
 
 **A Fase 2 já rodou** (9 achados; o A1 derrubou a premissa da etapa e o plano foi reescrito por
-causa dele). **A Task 1 está FEITA** (`0b53852`): `QUALIDADE` existe em `PERFIS`, entra em
+causa dele). **A Task 1 está FEITA** (`a81e51a`): `QUALIDADE` existe em `PERFIS`, entra em
 `visualizar` e `inspecionar`, tem rótulo e descrição em `PERFIS_INFO`, e está provado no gate
 real (404 em `PUT /lotes/:id/status`, 403 em `POST /movimentacoes`).
 
