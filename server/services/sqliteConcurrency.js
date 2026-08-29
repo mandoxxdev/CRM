@@ -77,8 +77,33 @@ function retryAsync(executor, context) {
 }
 
 /**
+ * Entrega o resultado ao callback de quem pediu a operacao UMA vez so (RN-05).
+ *
+ * Fecha duas armadilhas:
+ *  - `promise.then(ok).catch(erro)` ENCADEADO chama o callback DUAS vezes quando o
+ *    proprio callback lanca: a excecao do `ok` cai no `.catch`, que chama de novo,
+ *    agora com o erro errado. Por isso as duas maos vao no MESMO `then`.
+ *  - o `.catch` final existe para nao deixar rejeicao orfa: excecao vinda de dentro
+ *    do callback de quem pediu e reemitida FORA da cadeia, virando uncaughtException
+ *    (que e o que ja acontecia quando o cb rodava dentro do callback do sqlite3),
+ *    e nunca unhandledRejection.
+ */
+function entregarUmaVez(promise, aoResolver, aoRejeitar) {
+  promise.then(aoResolver, aoRejeitar).catch((e) => {
+    setImmediate(() => {
+      throw e;
+    });
+  });
+}
+
+/**
  * Serialize writes and retry reads/writes on SQLITE_BUSY.
  * Preserves sqlite3 `this` context on db.run callbacks (lastID / changes).
+ *
+ * O callback de quem pediu e chamado UMA vez, na tentativa FINAL — nunca dentro do
+ * executor do retryAsync, que roda uma vez por tentativa. Chamar la dentro entregava
+ * o SQLITE_BUSY de uma tentativa que ainda ia ser refeita: a rota respondia 500 e a
+ * escrita acontecia depois, sem auditoria (RN-05 / Etapa 23 Task 0).
  */
 function wrapDatabase(db) {
   if (!db || db.__orionWrapped) return db;
@@ -105,19 +130,27 @@ function wrapDatabase(db) {
     }
     if (!Array.isArray(p)) p = p != null ? [p] : [];
 
+    // `this` do sqlite3 (lastID / changes) so existe dentro do callback do driver.
+    // Guardamos o da ultima tentativa para repassar a quem pediu — por isso `function`
+    // e nao arrow aqui e no cb.call() abaixo.
+    let ctxFinal = null;
+
     const promise = enqueueWrite(() =>
       retryAsync((done) => {
         originalRun(sql, p, function onRun(err) {
-          if (typeof cb === 'function') {
-            cb.call(this, err);
-          }
+          ctxFinal = this;
           done(err, err ? undefined : this);
         });
       }, `run:${String(sql).slice(0, 80)}`)
     );
 
     if (typeof cb === 'function') {
-      return db;
+      entregarUmaVez(
+        promise,
+        (ctx) => cb.call(ctx || ctxFinal || {}, null),
+        (err) => cb.call(ctxFinal || {}, err)
+      );
+      return db; // contrato do sqlite3: com callback, o retorno sincrono e o db
     }
     return promise;
   };
@@ -136,7 +169,7 @@ function wrapDatabase(db) {
     }, `get:${String(sql).slice(0, 80)}`);
 
     if (typeof cb === 'function') {
-      promise.then((row) => cb(null, row)).catch((err) => cb(err, null));
+      entregarUmaVez(promise, (row) => cb(null, row), (err) => cb(err, null));
       return db;
     }
     return promise;
@@ -156,7 +189,7 @@ function wrapDatabase(db) {
     }, `all:${String(sql).slice(0, 80)}`);
 
     if (typeof cb === 'function') {
-      promise.then((rows) => cb(null, rows)).catch((err) => cb(err, null));
+      entregarUmaVez(promise, (rows) => cb(null, rows), (err) => cb(err, null));
       return db;
     }
     return promise;
@@ -170,7 +203,7 @@ function wrapDatabase(db) {
     );
 
     if (typeof callback === 'function') {
-      promise.then(() => callback(null)).catch((err) => callback(err));
+      entregarUmaVez(promise, () => callback(null), (err) => callback(err));
       return db;
     }
     return promise;
