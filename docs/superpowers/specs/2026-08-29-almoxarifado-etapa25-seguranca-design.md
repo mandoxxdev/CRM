@@ -10,7 +10,7 @@ A medição mudou o escopo **antes** de o plano existir: dos cinco itens da spec
 tarefa**, **um está muito mais pago do que a spec diz**, e **um escondia um defeito real** que
 vale mais que a feature pedida.
 
-### 1. Retenção de backup: a chave é dado morto, e há 66 arquivos órfãos em disco
+### 1. Retenção de backup: a chave é dado morto, e há 132 acompanhantes órfãos em disco
 
 `index.js:1013` chama `pruneOldBackups(dbPath, 10)` — **literal**. A tela de Configurações edita
 `backup_manter_dias` (semeada com `'30'`, `index.js:2128`; editada em `Configuracoes.js:437`) e
@@ -22,8 +22,20 @@ o diretório por `.sqlite` (`dbRecovery.js:105`) e, para cada backup **além do 
 filtro não o vê. Medido agora:
 
 ```
-data/backups: 11 .sqlite · 77 -wal · 77 -shm  →  66 -wal órfãos · 188 MB
+data/backups: 11 .sqlite (133,4 MB) · 77 -wal · 77 -shm  →  132 acompanhantes órfãos · 44,4 MB
 ```
+
+**CORREÇÃO (achado A6): a primeira versão deste documento escreveu "66 órfãos · 188 MB", e os
+dois números estavam errados.** Órfãos são **132** (66 `-wal` **+ 66 `-shm`**, que eu não contei)
+e ocupam **44,4 MB**. Os 187,4 MB são o diretório **inteiro**, dos quais 133,4 MB são as 11
+cópias legítimas — que esta etapa **não** apaga. Prometer "limpar 188 MB" seria prometer 4× o
+que se entrega, e no documento que o André leva para a empresa.
+
+**E o passivo está quase todo no nome ANTIGO** (achado A2): `database-X-wal`, sem o `.sqlite` no
+meio — que é exatamente o formato que a Etapa 21 consertou, então tudo que ela deixou para trás
+tem esse nome. Medido: 130 dos 132 órfãos. Uma régua que só reconheça `<base>.sqlite-wal`
+limparia **2 arquivos, 0,03 MB**, e o teste passaria verde — porque o arranjo montado por
+`backupDatabaseFiles` só produz o nome novo. É teste vazio com aparência de prova.
 
 A Etapa 21 consertou a **causa** (o prune passou a apagar os acompanhantes), mas o passivo
 anterior ao conserto continua lá e **nunca será varrido**. É a diferença entre parar de sujar e
@@ -42,11 +54,14 @@ deixar `[ ]` faria a próxima sessão procurar trabalho que não existe.
 
 ### 3. Justificativa em operações excepcionais: muito mais paga do que a spec diz
 
-A coluna existe, `registrarAuditoria` a grava, e há **77 call sites** com `justificativa` em
-`routes/` e `services/` — inspeção, sucateamento, compras, estoque e a rota estendida já a
-exigem com validação. A spec a lista como "não construída", o que é **falso**. A tarefa real é
-**medir o que falta** e reescrever o item com a lista do que sobra, em vez de tratar tudo como
-ausente.
+A coluna existe, `registrarAuditoria` a grava, e a spec a lista como "não construída", o que é
+**falso** — mas **o número que eu usei para provar isso estava inflado ~10×** (achado A10). Os
+"77 call sites" são ocorrências de `justificativa:` como **chave de objeto**, ou seja, o campo
+sendo **repassado** pelo pipeline. Os pontos que de fato **exigem** justificativa são **~8**
+(`inspectionService.js:99/185/198`, `seriesService.js:296`, `scrapDisposalService.js:154`,
+`thirdPartyService.js:585`, `schemas.js:347/586`, `routes/almoxarifado.js:1360`).
+A direção estava certa e a magnitude não: **o 77 é número a descartar, não a confirmar.** A
+tarefa real continua sendo medir o que falta e reescrever o item com a lista.
 
 ### 4. Dispositivo/IP na movimentação: não existe, e tem uma armadilha medida
 
@@ -75,8 +90,15 @@ Vai para a letra B com a medição, apontando o precedente.
 
 - **RN-01 — O prune varre acompanhante órfão.** Um `-wal`/`-shm` cujo `.sqlite` não existe mais é
   removido, independentemente do `keep`. Hoje ele é invisível para a varredura.
-- **RN-02 — A retenção é por DIAS e tem piso.** `backup_manter_dias` passa a valer: apaga o que
-  for mais velho que N dias, **mas nunca deixa menos de 3 cópias**, por mais velhas que sejam.
+- **RN-02 — A retenção é por DIAS, com piso E TETO.** `backup_manter_dias` passa a valer: apaga
+  o que for mais velho que N dias, **nunca deixa menos de 3 cópias** e **nunca mantém mais de
+  10**.
+  **O teto entrou pelo achado A5, e sem ele esta etapa faria o oposto do que promete.** Hoje
+  `keep = 10` é teto rígido: no máximo ~121 MB. Trocar isso por "piso + dias" **remove o limite
+  de tamanho** — simulado sobre o diretório real com o valor semeado (30 dias), sobrevivem **11**
+  cópias, uma a mais que hoje. E `backupDatabaseFiles` roda **a cada boot**: o diretório já tem 8
+  cópias criadas em ~30 minutos num dia de desenvolvimento. A 8 boots/dia × 30 dias × 12,1 MB, o
+  diretório iria a **~2,9 GB**. A etapa que existe para limpar disco passaria a enchê-lo.
   **Descartado** ligar a chave direto ao parâmetro de quantidade (a tela prometeria dias e o
   servidor contaria cópias) e **descartado** retenção só por dias sem piso: um valor baixo
   apagaria tudo e **removeria o fallback de recuperação** que a RN-08 da Etapa 21 garante —
@@ -86,8 +108,16 @@ Vai para a letra B com a medição, apontando o precedente.
 - **RN-04 — A movimentação registra de onde veio.** A auditoria de movimentação passa a gravar
   `ip` e `user_agent`, com o `x-forwarded-for` junto **porque não há `trust proxy`** — sem ele o
   campo seria `127.0.0.1` para todo mundo em produção.
-- **RN-05 — Registrar origem não pode derrubar a movimentação.** É dado de rastro, best-effort,
-  no mesmo `try/catch` da auditoria (padrão do módulo desde a Etapa 19).
+- **RN-05 — Registrar origem não pode derrubar a movimentação.**
+  **CORREÇÃO (achado A4): esta RN dizia "no mesmo `try/catch` da auditoria (padrão do módulo
+  desde a Etapa 19)" — e esse `try/catch` NÃO EXISTE nos dois pontos que a etapa toca.** Medido:
+  das 60 chamadas de `registrarAuditoria` em `services/almoxarifado/`, **59 estão sem `try`**,
+  incluindo `stockService.js:1367` (a auditoria de movimentação) e `:1814`. Hoje, se a auditoria
+  falhar, a movimentação **já commitada no ledger** rejeita e a rota devolve 500.
+  Então a régua real é outra: **a origem é montada FORA e chega como dado inerte** — um objeto
+  já pronto, sem `req.get` nem acesso a Express dentro do serviço. Assim não há o que falhar no
+  ponto da escrita, e a etapa **não** muda a semântica congelada da auditoria de movimentação.
+  Criar o `try/catch` seria mudança de comportamento própria, não um detalhe desta RN.
 
 ## Arquitetura
 
@@ -95,7 +125,16 @@ Vai para a letra B com a medição, apontando o precedente.
   separadas e testáveis: varrer órfãos, e aplicar a régua de dias com piso. Função pura para a
   decisão ("dada esta lista de arquivos e esta régua, o que apagar"), para que o teste não
   dependa do relógio nem do disco.
-- **`index.js:1013`** — passa a ler `backup_manter_dias` do banco antes de chamar o prune.
+- **`index.js`** — a leitura de `backup_manter_dias` **não pode ficar em `:1013`** (achado A1,
+  bloqueante e reproduzido): quem **cria** a tabela `configuracoes` (`:1504`) e **semeia** a
+  chave (`:2128`) é `initializeDatabase`, que roda **depois**. No primeiro boot de uma instalação
+  nova a tabela não existe, e o `SELECT` falha com `no such table: configuracoes`. Os dois
+  desfechos são ruins: dentro do `.then` de `:1012`, o `.catch` de `:1016` marca
+  `dbStartupFailed = true` e o `/health` passa a **mentir sobre a integridade do banco** pelo
+  resto do processo; fora dele, a rejeição não tratada **derruba o processo** no Node 24 — e o
+  backup do boot, que é a rede de segurança do sistema, nunca roda.
+  **O prune passa para dentro de `initializeDatabase`, depois de `inicializarConfiguracoesPadrao`
+  (`:2074`).** Só o `backupDatabaseFiles` precisa acontecer antes das migrations; o prune não.
 - **A auditoria de movimentação** (`stockService.js`, onde `acao: tipo` é gravado) — recebe `ip`
   e `user_agent` no `dados_novos`, montados por um helper único (`origemRequisicao(req)`), para
   que as próximas rotas não repitam a régua do `x-forwarded-for`.
@@ -103,8 +142,11 @@ Vai para a letra B com a medição, apontando o precedente.
 ## Testes
 
 - `backupRetencao.api.test.js`: RN-01 (órfão varrido — **o cenário de peso**, com contagem de
-  arquivos antes/depois), RN-02 (piso de 3 respeitado mesmo com todas velhas; e o mais recente
-  **nunca** apagado), RN-03 (lixo na chave não apaga nada).
+  arquivos antes/depois, e **obrigatoriamente com órfãos de nome ANTIGO `database-X-wal`**, onde
+  está 130 dos 132 do passivo real: o arranjo montado por `backupDatabaseFiles` só produz o nome
+  novo, então sem isso o cenário fica verde com a régua limpando 2 arquivos), RN-02 (piso de 3
+  respeitado mesmo com todas velhas; **teto de 10 respeitado mesmo com todas novas**; e o mais
+  recente **nunca** apagado), RN-03 (lixo na chave não apaga nada).
   **Sem depender do relógio:** os `mtime` do arranjo são fixados com `fs.utimesSync`, não
   esperados — senão o cenário fica verde de dia e vermelho de madrugada, como na Etapa 22.
 - `origemRequisicao`: função pura — `x-forwarded-for` com um IP, com vários (o primeiro é o
