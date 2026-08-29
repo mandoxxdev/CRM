@@ -2503,12 +2503,33 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
           return res.status(400).json({ error: msg });
         }
       }
-      for (const [chave, valor] of entradas) {
-        await dbRun(db, `UPDATE configuracoes_almoxarifado
-                         SET valor = ?, updated_at = CURRENT_TIMESTAMP, updated_by = ?
-                         WHERE chave = ?`,
-          [String(valor), req.user.nome || req.user.email, chave]);
-      }
+      // Etapa 23 (RN-01): era UM UPDATE POR CHAVE, em sequencia. A tela manda as 18 chaves a cada
+      // Salvar; falhando o 3o UPDATE, as duas primeiras JA estavam gravadas, o catch respondia 500
+      // e a auditoria (que vem depois) NUNCA rodava — configuracao alterada, usuario vendo erro, e
+      // a trilha sem uma linha sequer. Com a tela de auditoria da Etapa 22, isso virou ausencia
+      // visivel para quem audita.
+      //
+      // O conserto NAO e transacao, e isso e contraintuitivo o bastante para ficar escrito aqui:
+      // `server/index.js` abre UMA UNICA conexao SQLite para o CRM inteiro, e transacao em SQLite
+      // e por CONEXAO, nao por requisicao. Entre um BEGIN e um COMMIT desta rota, a escrita de
+      // qualquer outra requisicao em voo entraria nesta transacao — e um ROLLBACK por falha ao
+      // salvar configuracao desfaria a movimentacao de estoque de outra pessoa. `db.serialize()`
+      // NAO resolve (ordena a fila, nao da exclusividade); a Fase 2 da Etapa 23 reproduziu os dois.
+      //
+      // A atomicidade vem de UM UPDATE SO com CASE: o SQLite e atomico POR STATEMENT. Grava as N
+      // chaves ou nao grava nenhuma, sem prender a conexao. ORDEM DOS PARAMETROS (facil de errar):
+      // os pares do CASE primeiro, depois o updated_by, depois as chaves do IN. `String(valor)`
+      // continua sendo o que vai para a coluna — a Etapa 19 decidiu logar o que foi de fato
+      // escrito, nao o valor cru do body. O `WHERE chave IN (...)` nao e decorativo: sem ele, o
+      // CASE sem ELSE devolveria NULL para toda chave nao enviada e zeraria a tabela.
+      const partes = entradas.map(() => 'WHEN ? THEN ?').join(' ');
+      const marcadores = entradas.map(() => '?').join(',');
+      await dbRun(db, `UPDATE configuracoes_almoxarifado
+                          SET valor = CASE chave ${partes} END,
+                              updated_at = CURRENT_TIMESTAMP, updated_by = ?
+                        WHERE chave IN (${marcadores})`,
+        [...entradas.flatMap(([c, v]) => [c, String(v)]), req.user.nome || req.user.email,
+          ...entradas.map(([c]) => c)]);
 
       // Etapa 19 (RN-04): UMA linha por PUT, com o DIFF apenas. `entidade_id` fica null porque
       // a coluna e INTEGER e o identificador de uma configuracao e a CHAVE, que e TEXT.
