@@ -145,10 +145,114 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     res.json({ tipos: TIPOS_MATERIAL_ENUM, setores: SETORES_REQUISICAO, localizacoes_tipos: TIPOS_LOCALIZACAO });
   });
 
+  // ── Categorias de material (Etapa 26) ──────────────────────────────────────────────────────
+  //
+  // O `GET` ja existia e ja era consumido; a Etapa 26 acrescenta o CRUD. O molde e HIBRIDO, POR
+  // ASSUNTO, e a escolha esta escrita aqui porque o molde OBVIO e o errado:
+  //
+  //   - Gate e auditoria: CENTROS DE CUSTO, logo abaixo neste arquivo — `requirePermission
+  //     ('configurar')` e o helper `auditar(...)`/`autorDe(req)` do topo. O `auditarCadastro` de
+  //     familias e closure NAO exportada de routes/almoxarifado.js:261: nao ha como chama-lo daqui.
+  //   - Regua de nome e unicidade: SETORES (routes/almoxarifado.js:2041+) — `nome.trim()`,
+  //     UNIQUE no banco, 400 nomeando o cadastro. Familias NAO tem unicidade de nome.
+  //   - Soft delete: TIPOS DE MATERIAL na versao ja corrigida pela Etapa 23 — `AND ativo = 1`
+  //     (sem ele o `changes` conta a linha que o WHERE CASOU, nao a que MUDOU, e a 2a exclusao
+  //     vira uma linha de auditoria indistinguivel da real), 404 para inexistente, 200
+  //     `ja_inativo` idempotente SEM auditar.
+  //
+  // FAMILIAS NAO E MOLDE DE NADA AQUI, e vale dizer por que: ela tem `parent_id`, validacao de
+  // pai, bloqueio de inativacao com filhas e codigo automatico. E `categorias_material_almoxarifado`
+  // TEM uma coluna `parent_id` — herdada da modelagem original e sem nenhum uso —, o que torna
+  // "copiar familias" um erro facil de cometer sem perceber. Estas rotas nao a tocam.
   app.get('/api/almoxarifado/categorias', auth, async (req, res) => {
     try {
-      const rows = await dbAll(db, 'SELECT * FROM categorias_material_almoxarifado WHERE ativo = 1 ORDER BY nome');
+      // `?todos=1` (Etapa 26, C1): traz as INATIVAS junto. Sem ele a aba de Configuracoes nao
+      // tem como REATIVAR o que desativou — a categoria desativada some da tela que a editaria e
+      // "desativar nao apaga" vira promessa vazia.
+      //
+      // Escolhido o `?todos=1` dos CENTROS DE CUSTO (a linha logo abaixo) e nao o `?all=1` dos
+      // setores nem o `?ativo=0|all` das familias: dois GETs vizinhos no mesmo arquivo com nomes
+      // diferentes para o mesmo parametro e a divergencia que o proximo leitor paga.
+      const where = req.query.todos === '1' ? '1=1' : 'ativo = 1';
+      const rows = await dbAll(db, `SELECT * FROM categorias_material_almoxarifado WHERE ${where} ORDER BY nome`);
       res.json(rows);
+    } catch (e) { handleError(res, e); }
+  });
+
+  // Mensagem UNICA da colisao de nome: a mesma frase no POST e no PUT. A tela mostra o
+  // `error` do servidor cru, entao duas redacoes diferentes para o mesmo erro apareceriam
+  // para o usuario como dois problemas diferentes.
+  const CATEGORIA_DUPLICADA = 'Já existe uma categoria com este nome';
+
+  app.post('/api/almoxarifado/categorias', auth, requirePermission('configurar'), async (req, res) => {
+    try {
+      const nome = String(req.body?.nome ?? '').trim();
+      if (!nome) return res.status(400).json({ error: 'Nome é obrigatório' });
+      const r = await dbRun(db, 'INSERT INTO categorias_material_almoxarifado (nome) VALUES (?)', [nome]);
+      // Log do que foi de FATO gravado (com `trim()`), nao do que chegou no body — mesma regra
+      // do centro de custo abaixo.
+      await auditar(db, {
+        entidade: 'categoria', entidade_id: r.lastID, acao: 'CRIACAO', ...autorDe(req),
+        dados_novos: { nome, ativo: 1 },
+      }, 'criacao de categoria');
+      res.status(201).json({ id: r.lastID, nome, ativo: 1 });
+    } catch (e) {
+      // A colisao e detectada pelo BANCO (idx_categorias_almox_nome), nao por um SELECT previo:
+      // e a regua dos setores, e um SELECT-depois-INSERT tem janela de corrida entre os dois.
+      if (/UNIQUE constraint/i.test(e.message)) return res.status(400).json({ error: CATEGORIA_DUPLICADA });
+      handleError(res, e);
+    }
+  });
+
+  app.put('/api/almoxarifado/categorias/:id', auth, requirePermission('configurar'), async (req, res) => {
+    try {
+      const atual = await dbGet(db, 'SELECT * FROM categorias_material_almoxarifado WHERE id = ?', [req.params.id]);
+      if (!atual) return res.status(404).json({ error: 'Categoria não encontrada' });
+      // Preserve-when-omitted: `ativo` omitido MANTEM o valor atual. Se caisse para 1, um
+      // rename pela tela reativaria em silencio uma categoria desativada.
+      const nome = req.body?.nome === undefined ? atual.nome : String(req.body.nome).trim();
+      if (!nome) return res.status(400).json({ error: 'Nome é obrigatório' });
+      const ativo = req.body?.ativo === undefined ? atual.ativo : (req.body.ativo ? 1 : 0);
+
+      await dbRun(db, 'UPDATE categorias_material_almoxarifado SET nome = ?, ativo = ? WHERE id = ?',
+        [nome, ativo, req.params.id]);
+      // de/para SIMETRICO nos campos que a rota escreve — `atual` e um SELECT * e carregaria
+      // `id`, `parent_id` e `created_at`, ruido que nunca muda, dos dois lados.
+      //
+      // RN-05: renomear a categoria NAO reescreve `materiais.categoria` (a coluna e texto
+      // livre). Isso e intencional e esta declarado no design; o aviso ao usuario e da tela.
+      await auditar(db, {
+        entidade: 'categoria', entidade_id: Number(req.params.id), acao: 'EDICAO', ...autorDe(req),
+        dados_anteriores: { nome: atual.nome, ativo: atual.ativo },
+        dados_novos: { nome, ativo },
+      }, 'edicao de categoria');
+      res.json({ id: Number(req.params.id), nome, ativo });
+    } catch (e) {
+      if (/UNIQUE constraint/i.test(e.message)) return res.status(400).json({ error: CATEGORIA_DUPLICADA });
+      handleError(res, e);
+    }
+  });
+
+  app.delete('/api/almoxarifado/categorias/:id', auth, requirePermission('configurar'), async (req, res) => {
+    try {
+      const anterior = await dbGet(db, 'SELECT * FROM categorias_material_almoxarifado WHERE id = ?', [req.params.id]);
+      // SOFT delete: a linha fica. Material ja classificado continua com o nome dela em
+      // `materiais.categoria` — apagar a linha nao apagaria a classificacao (a coluna e texto),
+      // mas tiraria a categoria de qualquer tela que a listasse para reativacao ou historico.
+      const r = await dbRun(db, 'UPDATE categorias_material_almoxarifado SET ativo = 0 WHERE id = ? AND ativo = 1',
+        [req.params.id]);
+      // `changes === 0` tem DOIS significados, e quem os separa e o SELECT acima: linha
+      // inexistente => 404; linha ja inativa => 200 idempotente SEM auditar (Etapa 23).
+      if (r.changes === 0) {
+        if (!anterior) return res.status(404).json({ error: 'Categoria não encontrada' });
+        return res.json({ success: true, ja_inativo: true });
+      }
+      await auditar(db, {
+        entidade: 'categoria', entidade_id: Number(req.params.id), acao: 'EXCLUSAO', ...autorDe(req),
+        dados_anteriores: { nome: anterior.nome, ativo: anterior.ativo },
+        dados_novos: { ativo: 0 },
+      }, 'exclusao de categoria');
+      res.json({ success: true });
     } catch (e) { handleError(res, e); }
   });
 

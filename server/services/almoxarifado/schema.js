@@ -694,6 +694,35 @@ async function initSchema(db) {
     }
   }
 
+  // Etapa 26 (RN-06): ate aqui a tabela nao tinha indice NENHUM — ela nasceu como semente
+  // (27 linhas, nenhum POST) e "categoria duplicada" nunca foi possivel porque nao havia como
+  // criar categoria. A Etapa 26 abre o cadastro, e a unicidade de NOME e o que impede a lista do
+  // cliente de ganhar duas "Chapas" que o select mostra iguais e o filtro trata como diferentes.
+  //
+  // A regua e a dos SETORES (`nome TEXT UNIQUE NOT NULL`), o unico cadastro do modulo com
+  // unicidade de nome — familias NAO tem (o UNIQUE dela e no `codigo`), entao nao havia regua
+  // para copiar de la.
+  //
+  // Indice em vez de recriar a tabela com UNIQUE: `ALTER TABLE` do SQLite nao acrescenta
+  // constraint, e o caminho seria o table-rebuild (create-new/copy/drop/rename) que a migracao
+  // do saldo faz acima — risco desproporcional para uma coluna que nenhuma FK aponta.
+  //
+  // O try/catch NAO e defensividade decorativa: `CREATE UNIQUE INDEX` falha se a base ja tiver
+  // duas linhas com o mesmo nome, e uma excecao aqui derruba o initSchema INTEIRO (tres
+  // tentativas e "Falha definitiva schema"), tirando o modulo do ar por causa de duas
+  // categorias. As 27 sementes nao colidem entre si (medido), entao em base limpa isto aplica
+  // sempre; se falhar, o log diz exatamente o que fazer e as rotas de escrita seguem devolvendo
+  // 400 apenas para as colisoes que o banco conseguir barrar.
+  try {
+    await dbRun(db, `CREATE UNIQUE INDEX IF NOT EXISTS idx_categorias_almox_nome
+      ON categorias_material_almoxarifado(nome)`);
+  } catch (e) {
+    console.error('⚠️  [almoxarifado] Nao foi possivel criar idx_categorias_almox_nome:', e.message,
+      '— ha categorias com nome repetido. Renomeie/desative as duplicadas '
+      + '(SELECT nome, COUNT(*) FROM categorias_material_almoxarifado GROUP BY nome HAVING COUNT(*) > 1) '
+      + 'e reinicie o servidor.');
+  }
+
   // ── Famílias de material ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS familias_material_almoxarifado (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

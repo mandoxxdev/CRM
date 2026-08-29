@@ -45,6 +45,11 @@
  */
 const ROTULOS_ENTIDADE = Object.freeze({
   almoxarifado: 'Almoxarifado',
+  // Etapa 26: o catalogo de categorias virou cadastro editavel e passou a auditar. Sem esta
+  // linha o teste de cobertura de entidades deste vocabulario (auditLabels.api.test.js) fica
+  // vermelho — de proposito: ele varre `entidade: '<nome>'` em routes/ e services/ e exige
+  // rotulo para todo literal, para que nenhuma entidade nova apareca crua no filtro da tela.
+  categoria: 'Categoria',
   centro_custo: 'Centro de custo',
   conferencia: 'Conferência',
   configuracao: 'Configuração',
