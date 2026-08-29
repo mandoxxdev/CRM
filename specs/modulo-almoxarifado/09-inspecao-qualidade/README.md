@@ -36,8 +36,33 @@ Inspeção de recebimento com plano, quarentena e bloqueio efetivos no saldo, n�
 ## Checklist
 
 ### Backend
-- [ ] Planos de inspeção (por material/família: o que medir, critérios) — **fora do escopo da Etapa 5** (decisão do design 2026-08-07): liga com a feature 16 (calibração de instrumentos), que também não existe ainda.
-- [ ] Registro de medidas + instrumento de medição utilizado (liga com feature 16) — **fora do escopo da Etapa 5**, mesmo motivo acima.
+- [ ] Planos de inspeção (por material/família: o que medir, critérios) — **fora do escopo da Etapa 5** (decisão do design 2026-08-07).
+- [ ] Registro de medidas + instrumento de medição utilizado — **fora do escopo da Etapa 5**, mesmo motivo acima.
+  > **CORREÇÃO (Fase 0 da Etapa 27, medida em 2026-08-29): estas duas linhas diziam que a feature
+  > 16 (calibração de instrumentos) "também não existe ainda", e isso ESTÁ ERRADO desde
+  > 2026-08-22.** A feature 16 está **🟢** no mapa (`specs/modulo-almoxarifado/README.md:603`),
+  > entregue pela Etapa 9b (`d644827..b8e6f60`): `ferramentas_almoxarifado.exige_calibracao`
+  > (`schema.js:1572`, rotulada na tela como *"Exige calibração (instrumento de medição)"*),
+  > `calibracoes_ferramenta_almoxarifado` (`schema.js:1537`), `toolService.calibracaoVigente` e
+  > `painelCalibracoes`, `GET /ferramentas` (`extended.js:1083`) e
+  > `GET /ferramentas/:id/calibracoes` (`:1166`), mais a tela `FerramentasAlmoxarifado.js`.
+  > **O único bloqueio declarado desta feature caiu há uma semana e a spec continuou lendo como
+  > bloqueada** — é a terceira vez seguida nesta base que uma spec afirma a ausência de algo que
+  > existe (a 23 dizia que a tela de perfis não existia; a 01 teve a varredura de categorias
+  > errada; agora esta). **A afirmação errada fica à vista, não apagada**, porque apagar em
+  > silêncio faz o próximo confiar nela de novo.
+  >
+  > **O outro lado da ponte já estava certo:** `16-ferramentas-calibracao/README.md` lista
+  > *"Integração com inspeção (instrumento calibrado referenciado na medição) — feature 09"* em
+  > "O que ficou de fora" **e** em Dependências. As duas specs querem a mesma integração; só esta
+  > aqui achava que a outra ponta não existia.
+  >
+  > **Armadilha de segunda porta, medida e descartada:** além de `controle_qualidade` (que esta
+  > spec já manda ignorar, e continua certo), o núcleo do CRM tem `padroes_qualidade`
+  > (`server/index.js`, com `codigo/nome/especificacoes/limites`) — que **tem a forma** de um plano
+  > de inspeção. Medido pelo nome do contrato: **uma única ocorrência no repositório inteiro, o
+  > próprio `CREATE`**; zero escritor, zero leitor, zero linhas. Não há reuso possível, e isto está
+  > escrito aqui para ninguém "descobrir" a tabela no meio da etapa e achar que ela é aproveitável.
 - [x] Resultado: aprovar / aprovar parcialmente / reprovar lote — com efeito no saldo (aprovado → disponível; reprovado → bloqueado) — **Etapa 5 (2026-08-08)**: `inspectionService.decidirInspecao` (`dc841f2`, corrigida para claim atômico em duas fases em `91184ca`, backfill e teste discriminante da fila em `436eed2`). Aprovação parcial testada: `quantidade_aprovada + quantidade_reprovada` tem de fechar exatamente com o retido, senão recusa antes de qualquer efeito no saldo.
 - [x] Quarentena como estado real: entrada inspecionável nasce `em_inspecao`, aprovação move para disponível via movimentação — **Etapa 5**: motor (`c37b67e`) + entrada retida em vez de barrada (`4db5e11`) + decisão via `DECISAO_INSPECAO` (`91184ca`). **A spec estava descrevendo um objetivo que a implementação anterior não cumpria** — verificado em 2026-08-07 (design da etapa) que `darEntradaEstoque` na verdade **recusava** aprovar recebimento de item crítico sem inspeção prévia (o material nunca chegava a existir no sistema, mesmo já estando fisicamente no galpão); não era "quarentena que não funciona", era ausência total de quarentena na entrada. Está corrigido: item que exige inspeção agora entra sempre, retido.
 - [x] Bloqueio de material fora de recebimento (achado em estoque) com motivo — **Etapa 5**: `inspectionService.bloquearMaterial`/`desbloquearMaterial` (`dc841f2`), rotas `POST /materiais/:id/bloquear|desbloquear` (`bbf7ed7`), botões na tela (`dcee909`). Motivo é `justificativa` obrigatória desde `c6a76a4`.

@@ -106,13 +106,22 @@ Todos os tipos de entrada da spec, conferência documental e física estruturada
   > (`RecebimentosAlmoxarifado.js:600`). Procurar por `tipo_entrada` no código não acha **nada** —
   > é exatamente o modo de errar que já custou duas etapas nesta base (medir ausência pelo nome
   > que se imagina, em vez do nome do **contrato**).
-  > **(2) O que falta não é o campo: são os VALORES e a VALIDAÇÃO.** O campo aceita hoje dois
+  > **(2) Os outros tipos JÁ TÊM PORTA, e construí-los aqui criaria uma segunda.** Esta linha diz
+  > que os demais "entram pelas features 11/12/13/14/15" mas não registra que **as cinco estão
+  > 🟢** (mapa, linhas 598-602): transferências, devoluções, materiais de clientes, terceiros e
+  > retalhos/sucatas foram todas entregues. Lido de fora, o item parece dizer que esses tipos não
+  > têm caminho. Têm — e replicá-los como tipos de recebimento é exatamente o erro de **segunda
+  > porta** que a Etapa 24 quase cometeu.
+  > **(3) O que falta de verdade não é o campo: são os VALORES e a VALIDAÇÃO.** O campo aceita hoje dois
   > valores por convenção (`NOTA_FISCAL` e `PEDIDO_COMPRA`) e **não é validado em lugar nenhum** —
   > não há enum, não há Zod (`schemas.js` não tem schema de recebimento) e a rota
   > `POST /api/almoxarifado/recebimentos` (`extended.js:765`) tem **só** o gate
   > `requirePermission('receber_material')`, sem `validate(...)`. O valor do body é gravado cru:
-  > qualquer string entra na coluna. **A tarefa real desta linha é**: definir a lista de tipos,
-  > validá-la, e decidir o que cada tipo exige (nota fiscal obrigatória? pedido? fornecedor?).
+  > qualquer string entra na coluna. **A tarefa real desta linha é**: fechar o enum dos tipos
+  > que o recebimento de fato faz hoje e validá-lo nas **duas** portas de escrita — o `POST` e o
+  > `PUT /:id/fiscal` (`receiptService.js:281`, `tipo_recebimento = COALESCE(?, tipo_recebimento)`),
+  > senão a validação é contornável por um `PUT`. Ampliar a lista para os dez tipos da spec 8.1 é
+  > **decisão de negócio**, não código, e esbarra no ponto (2).
   > **Medido no banco de desenvolvimento: zero recebimentos gravados** — não há acervo a migrar,
   > e um enum aplicado agora não invalida dado nenhum.
 - [ ] Recebimento parcial de pedido (validar suporte real + saldo pendente do pedido)
