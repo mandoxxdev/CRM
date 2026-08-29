@@ -1,7 +1,7 @@
 # 23 — Perfis, Segurança e Auditoria
 
-> **Status:** 🟡-forte (inalterado pela Etapa 21, que é do **núcleo do CRM** e não desta feature — ver o bloco "Etapa 21" no fim; a feature continua com a TELA de auditoria como o que falta para 🟢) · antes 🟡-forte (Etapa 20: os **três** buracos de exposição que esta spec nomeava estão pagos; resta a TELA de auditoria e os itens nomeados abaixo) · antes 🟡-forte (Etapa 19: os 23 endpoints de cadastro/configuração auditam) · antes 🟡 — sistema de permissões robusto; auditoria em uso pelos fluxos principais desde as Etapas 3–6 (os dois buracos daquela auditoria foram PAGOS — Etapa 9 e Etapas 18/19) · **Spec original:** seções 28, 29
-> **Última atualização:** 2026-08-28 (Etapa 21, `d5c8d3a..07a4b1c`: **nada desta feature mudou** — a etapa é do núcleo do CRM e fecha os itens que a Etapa 20 empurrou para cá dizendo "é do core"; registrada no bloco "Etapa 21 — o que era do núcleo" no fim deste arquivo, e o item de backup do checklist de Segurança ganhou a medição que faltava). Antes: 2026-08-28 (Etapa 20, `1b0f0e9..a3f5135`: a rota de foto de material para de mentir sucesso, de deixar órfão e de não auditar; a leitura de configurações para de devolver segredo em claro e o PUT genérico para de aceitá-lo; ler o mapa de permissões por setor passa a exigir o mesmo que escrevê-lo). Antes: 2026-08-28 (Etapa 19, `a574b3a..55e4144`: os 23 endpoints de cadastro e configuração passam a auditar, com diff nas configurações, segredo mascarado e três correções de comportamento que o log exigia). Antes: 2026-08-28 (Etapa 18: a trilha do inventário). Antes: 2026-08-11 — auditoria de cauda: corrigida a afirmação "auditoria não é usada em produção" (era verdade em 2026-08-02, foi superada pelas Etapas 3–6 e ninguém atualizou aqui), corrigida a contagem de ações (14, não 15) e nomeados os dois buracos reais de auditoria que restam
+> **Status:** 🟡-forte (**Etapa 22, `8c6ffbe..169458d`: a TELA de auditoria — o item que as etapas 18, 19, 20 e 21 nomearam como "o que falta para 🟢" — está ENTREGUE.** A feature **continua 🟡-forte e NÃO vira 🟢**, e a decisão está escrita no bloco "Etapa 22" abaixo: o que sobra não é mais "falta leitor", são quatro itens de **outra natureza** — dois deles decisão de negócio pendente do usuário (o volume do log G8, a normalização dos verbos antigos), um deles um buraco de rastro medido e não pago (`PUT /configuracoes` grava chave a chave sem transação; falha no meio deixa parte gravada **sem** linha de histórico) e o `EXCLUSAO` de linha já inativa. Um deles — o ato parcial sem rastro — é a trilha **mentindo por omissão**, e trilha que mente não fecha em 🟢) · antes 🟡-forte (inalterado pela Etapa 21, que é do **núcleo do CRM** e não desta feature — ver o bloco "Etapa 21" no fim; a feature continua com a TELA de auditoria como o que falta para 🟢) · antes 🟡-forte (Etapa 20: os **três** buracos de exposição que esta spec nomeava estão pagos; resta a TELA de auditoria e os itens nomeados abaixo) · antes 🟡-forte (Etapa 19: os 23 endpoints de cadastro/configuração auditam) · antes 🟡 — sistema de permissões robusto; auditoria em uso pelos fluxos principais desde as Etapas 3–6 (os dois buracos daquela auditoria foram PAGOS — Etapa 9 e Etapas 18/19) · **Spec original:** seções 28, 29
+> **Última atualização:** 2026-08-28 (**Etapa 22, `8c6ffbe..169458d`: a trilha ganha leitor** — tela `/almoxarifado/auditoria` com os quatro filtros novos, o de/para calculado no servidor, a rota de opções alimentada pelo banco e os **três índices** que a tabela nunca teve; ver o bloco "Etapa 22" no fim e o checklist "Auditoria visível"). Antes: 2026-08-28 (Etapa 21, `d5c8d3a..07a4b1c`: **nada desta feature mudou** — a etapa é do núcleo do CRM e fecha os itens que a Etapa 20 empurrou para cá dizendo "é do core"; registrada no bloco "Etapa 21 — o que era do núcleo" no fim deste arquivo, e o item de backup do checklist de Segurança ganhou a medição que faltava). Antes: 2026-08-28 (Etapa 20, `1b0f0e9..a3f5135`: a rota de foto de material para de mentir sucesso, de deixar órfão e de não auditar; a leitura de configurações para de devolver segredo em claro e o PUT genérico para de aceitá-lo; ler o mapa de permissões por setor passa a exigir o mesmo que escrevê-lo). Antes: 2026-08-28 (Etapa 19, `a574b3a..55e4144`: os 23 endpoints de cadastro e configuração passam a auditar, com diff nas configurações, segredo mascarado e três correções de comportamento que o log exigia). Antes: 2026-08-28 (Etapa 18: a trilha do inventário). Antes: 2026-08-11 — auditoria de cauda: corrigida a afirmação "auditoria não é usada em produção" (era verdade em 2026-08-02, foi superada pelas Etapas 3–6 e ninguém atualizou aqui), corrigida a contagem de ações (14, não 15) e nomeados os dois buracos reais de auditoria que restam
 
 ## Objetivo
 
@@ -52,12 +52,24 @@ Perfis da spec cobertos, regras de segurança da seção 29 aplicadas (imutabili
   (sem ele o teste de "auditoria quebrada não derruba o ato" era vazio naquele arquivo).
 
   **O que continua aberto:**
-  - **A rota `GET /almoxarifado/auditoria` não é consumida por nenhuma tela** — a trilha, agora
-    muito mais rica, segue sem leitor prático (letra B33). O gate é `configurar`, que aceita
+  - ~~**A rota `GET /almoxarifado/auditoria` não é consumida por nenhuma tela** — a trilha, agora
+    muito mais rica, segue sem leitor prático (letra B33).~~ — **PAGO na Etapa 22**
+    (`0a57fe1` a tela; `8dda8de`/`71582ec` os filtros e a rota de opções). Mantido riscado, não
+    apagado, para quem lembrar da pendência confirmar que ela fechou e com qual commit.
+    **Continua verdade** o resto do parágrafo original: o gate é `configurar`, que aceita
     administrador do sistema — grupo ligeiramente mais amplo do que o que a tela de
-    configurações exige (`canConfigureAlmox`); nota, não risco.
+    configurações exige (`canConfigureAlmox`); nota, não risco. E **o Gestor continua sem ver a
+    trilha** (metade (b) da B33, ainda em aberto e ainda decisão do usuário).
   - **Volume:** o histórico de `setor_permissao` grava a lista inteira duas vezes por save
-    (~46 KB medidos com 200 famílias) — dívida a resolver antes da tela (letra G8).
+    (~46 KB medidos com 200 famílias) — letra G8.
+    ~~dívida a resolver **antes** da tela~~ — **esta ordem foi invertida de propósito na Etapa
+    22, e a inversão é decisão:** a tela foi construída **antes** de resolver o volume, porque
+    reduzir o que se grava é mudar o contrato de auditoria (*o que deixa de ser registrado?*),
+    decisão de negócio do usuário, e porque a tela **torna o problema visível**, que é progresso.
+    A mitigação na tela é o truncamento em **300 caracteres com a contagem do resto**
+    (`169458d`, achado A7 da revisão adversarial: sem limite, o token de 46 KB **sem espaços**
+    vira um bloco que o `.almox-table-container` — `overflow: hidden` — clipa pelo começo, e o
+    valor fica ilegível). **G8 segue aberto.**
   - **Rastro do ato parcial:** `PUT /configuracoes` grava chave a chave sem transação; se
     falhar no meio, parte fica gravada **sem** linha de histórico.
   - **`EXCLUSAO` de linha já inativa** é registrada mesmo sem excluir nada (SQLite conta a
@@ -67,6 +79,15 @@ Perfis da spec cobertos, regras de segurança da seção 29 aplicadas (imutabili
     entidade** (`material` seguiu com `ATUALIZACAO`) e `EDICAO` só para as entidades novas —
     e introduziu `REATIVACAO` e `INCLUSAO_EM_LOTE`. Normalizar as antigas mexeria em log
     histórico; fica declarado.
+    **Estado depois da Etapa 22:** o dado continua inconsistente **de propósito** e a
+    normalização passou a ser **só de exibição** (`8c6ffbe`, `services/almoxarifado/auditLabels.js`):
+    `GRUPOS_ACAO` junta os sinônimos, o filtro por rótulo manda **todos** os verbos do grupo que
+    existem no banco, e a linha continua mostrando o verbo cru como legenda secundária — a tela
+    **não esconde** a inconsistência. **Descartado** o `UPDATE` de migração: é irreversível sobre
+    dado histórico, que é o que uma trilha não pode sofrer. O mapa está pronto e medido (**68
+    verbos**, todos com rótulo: 45 da varredura com guarda de fronteira, 18 de `movementTypes`,
+    5 chaves de `transicoes` e `CONTAGEM`/`RECONTAGEM`) — se o usuário mandar migrar, é passo
+    curto. Virou a letra **B47** das novidades. **Continua aberto como decisão de negócio.**
   - **Rota órfã:** `PUT /configuracoes/tipos-material` não tem nenhum chamador no client;
     auditada mesmo assim, **candidata a remoção** (apagar sem confirmar quem chama seria
     irreversível de graça).
@@ -122,9 +143,76 @@ Perfis da spec cobertos, regras de segurança da seção 29 aplicadas (imutabili
       servidor**. É feature morta, nomeada no design da Etapa 21 e na letra D das novidades, e
       consertá-la é decidir a política de retenção — decisão de negócio, não linha de código.
 
-### Auditoria visível
-- [ ] Tela de auditoria no front (a rota existe; falta UI) — **segue verdade em 2026-08-11**: não há tela de auditoria do almoxarifado; `Logs.js` consome a rota de auditoria global, não a do módulo
-- [ ] Filtros por entidade/usuário/período; exportação
+### Auditoria visível (Etapa 22 — `8c6ffbe..169458d`)
+
+- [x] **Tela de auditoria no front** — `0a57fe1`.
+      `client/src/components/almoxarifado/AuditoriaAlmoxarifado.js`, rota lazy em
+      `routes/lazyModules.js`, `<Route path="auditoria">` em `App.js` e item de menu em
+      `Layout.js` com **`adminOnly`** (verificado: `canConfigureModule` espelha o
+      `getPerfilFromUser` do backend, então admin de módulo com `role='usuario'` vê o item **e**
+      passa no gate). A tela **não traduz nada e não calcula de/para**: `acao_rotulo`,
+      `entidade_rotulo` e `alteracoes` vêm prontos do servidor.
+      *(**A afirmação antiga deste item ESTAVA CERTA e foi superada, não corrigida:** ela dizia
+      "segue verdade em 2026-08-11: não há tela… `Logs.js` consome a rota de auditoria global,
+      não a do módulo". A segunda metade **continua verdade** — `Logs.js` lê `/auditoria/logs`,
+      que é outro sistema, do core, com outra tabela. São duas trilhas distintas e nada foi
+      unificado.)*
+- [x] **Filtros por entidade/usuário/período** — `8dda8de` (+ `71582ec`).
+      Quatro filtros novos combináveis por `AND` com os dois que já existiam (`usuario_id`,
+      `acao`, `data_inicio`, `data_fim`), mais `GET /api/almoxarifado/auditoria/opcoes` (mesmo
+      gate `configurar`) alimentando os selects com `SELECT DISTINCT` do que está **realmente
+      gravado** — lista fixa envelheceria no primeiro `entidade` novo, e as etapas 18–20 criaram
+      seis. Duas travas que existem por modo de falha **reproduzido**: `acao` é **um** parâmetro
+      string com vírgulas, com **um placeholder por valor** no `IN` (`IN (?)` com
+      `'CRIACAO,CRIAR'` devolve **zero linhas sem erro**), e a validação de data roda **antes**
+      do `COUNT`.
+- [x] **Data inválida é 400, não filtro ignorado** — `8dda8de`.
+      `services/almoxarifado/auditFiltros.js`, `validarData` por ida-e-volta
+      (`new Date(v+'T00:00:00Z').toISOString().slice(0,10) === v`). `Date.parse` **não serve**:
+      `2026-02-30` é válido em JS e o SQLite rola para `2026-03-03` — não dá lista vazia, dá
+      **janela alargada em silêncio**. Mensagem literal:
+      `Data inválida: use uma data real no formato AAAA-MM-DD`.
+- [x] **Período invertido é 400** — `169458d` (achado A3 da revisão adversarial). As duas datas
+      podem ser individualmente válidas e o intervalo impossível: `data_inicio=2026-08-20` com
+      `data_fim=2026-08-01` devolvia **200 com lista vazia**, que é o mesmo modo de falha da
+      linha acima entrando pela outra porta. Mensagem literal:
+      `Período inválido: a data inicial é posterior à data final`. A guarda usa `>` e não `>=`,
+      com cenário irmão garantindo que o filtro de **um** dia (`inicio === fim`) continua valendo.
+- [x] **O período é inclusivo nos dois extremos no fuso do NEGÓCIO** — `8dda8de`.
+      `janelaUtc` converte os dois limites de dia local para instante UTC **antes** do SQL,
+      porque `created_at DATETIME DEFAULT CURRENT_TIMESTAMP` grava em UTC (medido: `date` =
+      19:45 -03, `CURRENT_TIMESTAMP` = `'2026-08-28 22:45:51'`). Sem isso, **três horas de todo
+      fim de expediente sumiriam** do filtro do próprio dia. O fuso é **constante do módulo**
+      (`FUSO_PADRAO = 'America/Sao_Paulo'`), **nunca `process.env.TZ`** — a leitura óbvia
+      (`new Date(ano, mes-1, dia)`) passaria em qualquer máquina de dev brasileira e viraria
+      **no-op num contêiner com `TZ=UTC`**. Há cenário que troca o `TZ` do processo para `UTC` e
+      `Asia/Tokyo` e exige a mesma janela.
+- [x] **O de/para é calculado no servidor, por uma régua de LEITURA própria** — `8c6ffbe`
+      (`auditLabels.alteracoesDaLinha`), congelado ponta a ponta em `15c7eda`.
+      União das chaves dos dois lados, `null` explícito para ausente, **sem remascarar nada**,
+      `[]` quando os dois lados são vazios. **`configDiff.calcularDiff` NÃO serve** e isso foi
+      reproduzido: ela itera só `Object.keys(novos)` (`configDiff.js:9-13`) e tem
+      `if (String(bruto) === String(novo)) continue`, então **apaga a troca de segredo
+      mascarada** (os dois lados valem `'(alterado)'`) e **fabrica alterações** a partir de campo
+      de contexto. Há um cenário-**testemunha** em `auditoriaFluxoCompleto.api.test.js` que roda
+      `calcularDiff` sobre a mesma linha e afirma que ela apagaria a chave — para que um futuro
+      "vamos unificar as duas réguas" caia dizendo **por quê**.
+- [x] **Os três índices que a tabela nunca teve** — `8c6ffbe` (asserção endurecida em `169458d`).
+      `idx_auditoria_almox_created (created_at)`,
+      `idx_auditoria_almox_entidade (entidade, entidade_id)` e
+      `idx_auditoria_almox_usuario (usuario_id)`, padrão `CREATE INDEX IF NOT EXISTS` do
+      `schema.js`. O teste original assertava só o **nome**: mantendo o nome e trocando a coluna
+      (`created_at` → `id`) ele passava verde **com a feature quebrada**. Agora confere as
+      colunas por `PRAGMA index_info` (achado A5 da revisão adversarial).
+- [ ] **Exportação da trilha (XLSX)** — **fora de escopo declarado, não esquecimento.** O módulo
+      já tem export genérico no `reportRegistry` (Etapa 13), com colunas curadas e proteção por
+      relatório; enxertar uma segunda régua dentro da tela de auditoria duplicaria a existente.
+      Se a demanda aparecer, a trilha vira uma chave do `reportRegistry`. Letra **D** das
+      novidades.
+- [ ] **A trilha continua ADMIN-only** — a metade (b) da letra **B33** segue **em aberto**, e é
+      decisão do usuário, não pendência técnica: alargar o gate é uma linha em `ACAO_PERFIS`
+      (`services/almoxarifado/permissions.js`). Não foi feito de propósito — decidir exposição no
+      lugar dele é o que a própria B33 dizia não fazer.
 
 ### Exposição e rastro (Etapa 20 — `1b0f0e9..a3f5135`)
 
@@ -218,6 +306,54 @@ por **token estático** sem identificação de quem baixou além do log; o hist�
 reescrito; **não** foi criada rota de restore (a medição confirmou que não existe, e inventá-la
 seria abrir um buraco maior); e a aba "Backup" da tela de Configurações edita 3 chaves que
 **nenhum leitor do servidor consome**.
+
+### Etapa 22 — a trilha ganha leitor, e por que a feature NÃO virou 🟢
+
+**A decisão de cor, escrita.** Quatro documentos desta base (o mapa de status, esta spec e o guia
+do usuário) afirmavam, em cinco lugares, que *"para virar 🟢 falta a tela de auditoria"*. A tela
+foi entregue (`8c6ffbe..169458d`) e **a feature continua 🟡-forte** — então a afirmação anterior
+precisa ser corrigida em voz alta, não só superada:
+
+> **A frase "para virar 🟢 falta a tela de auditoria" ESTAVA ERRADA por ser incompleta.** Ela
+> tratava os outros itens abertos como "decisão de negócio declarada" e portanto não-bloqueantes.
+> **Um deles não é decisão de negócio: é a trilha mentindo por omissão.**
+
+O que sobra, e a classificação honesta de cada item:
+
+| O que sobra | Natureza | Bloqueia 🟢? |
+|---|---|---|
+| **Ato parcial do `PUT /configuracoes` sem rastro** — grava chave a chave **sem transação**; falhando no meio, parte fica gravada e **nenhuma** linha de histórico é escrita | **Defeito de trilha**, medido, não pago | **SIM.** Uma trilha que pode não registrar uma mudança que aconteceu é o defeito que este módulo de auditoria existe para não ter |
+| **`EXCLUSAO` de linha já inativa** é registrada mesmo sem excluir nada (o SQLite conta a linha atingida) | Defeito de trilha, menor: registra ato que não teve efeito | **SIM**, junto com o de cima — é a mesma família (a trilha afirmando o que não corresponde ao que houve), e agora que há tela isso vira visível para quem audita |
+| **Volume do log de permissões (~46 KB/save)** — letra **G8** | Decisão de negócio do usuário (*o que deixa de ser registrado?*) | Não |
+| **Normalização dos verbos antigos** — letra **B47** | Decisão de negócio do usuário (migração irreversível sobre dado histórico) | Não |
+| **Gate ADMIN-only** — metade (b) da **B33** | Decisão de exposição do usuário | Não |
+| **Exportação XLSX / retenção do log** | Corte de escopo declarado (letra **D**) | Não |
+
+**Portanto: 🟡-forte, e o que falta para 🟢 mudou de item.** Não é mais "falta leitor" — é
+**fechar os dois buracos de rastro acima** (transação ou registro do parcial no `PUT
+/configuracoes`; e não registrar `EXCLUSAO` que não excluiu). Os dois são código, cabem numa
+etapa curta, e nenhum depende de resposta do usuário. Os outros quatro itens seguem declarados e
+**não** contam para a cor, porque são escolha dele, não dívida minha.
+
+**O que a Etapa 22 entregou, em uma tabela:**
+
+| Camada | Entrega | Commit |
+|---|---|---|
+| `services/almoxarifado/auditLabels.js` (novo) | rótulos de entidade e ação, grupos de sinônimo com congelamento **em profundidade**, e `alteracoesDaLinha` — a régua de **leitura** | `8c6ffbe` |
+| `services/almoxarifado/schema.js` | os 3 índices da tabela de auditoria (a única das 13 sem nenhum) | `8c6ffbe` |
+| `services/almoxarifado/auditFiltros.js` (novo) | `validarData` (ida-e-volta) e `janelaUtc` (offset via `Intl`, fuso constante) | `8dda8de` |
+| `routes/almoxarifado/extended.js` | 4 filtros novos, validação de data e de período, janela em UTC, 3 campos derivados por item, e `GET /auditoria/opcoes` | `8dda8de`, `71582ec`, `169458d` |
+| `client/.../AuditoriaAlmoxarifado.js` (novo) + rota + menu | a tela, com paginação, de/para expansível, truncamento em 300 caracteres e legenda de contexto | `0a57fe1`, `169458d` |
+| `client/jest.globalSetup.js` (novo) | fixa o `TZ` **antes** de o Jest forkar os workers — sem ele a suíte do cliente era **vermelha em qualquer máquina em UTC** | `169458d` |
+
+**Correção de uma afirmação que circulou nesta etapa e estava errada** (registrada aqui porque
+ela chegou a entrar no design): o design dizia que a régua de leitura resolveria a "sujeira" da
+linha de foto de material, fazendo-a sair com **uma** alteração. **Ela sai com três** — `foto`,
+`codigo` e `nome`, os dois últimos com `de: null`. E **tem** de sair: é a mesma ausência de
+filtro de igualdade que mantém visível a troca de senha mascarada. Contexto na lista é
+**consequência aceita**, não defeito resolvido; enxugá-lo seria trabalho da **escrita** (gravar
+menos), nunca da leitura. O contrato real está congelado em `auditoriaFluxoCompleto.api.test.js`,
+que afirma o **conjunto inteiro** das três entradas.
 
 ## Regras essenciais + testes de API exigidos
 

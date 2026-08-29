@@ -2,11 +2,29 @@
 
 > Atualizado em 2026-08-28 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, no fim, porque nasceu de um corte de escopo da Etapa 20.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20.
 
-> ## Onde o desenvolvimento está — 2026-08-28 (Etapa 21 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-08-28 (Etapa 22 ENTREGUE · modo contínuo pelo mapa)
 >
-> **Etapas 1 a 20 completas no módulo, e a Etapa 21 entregue no NÚCLEO do CRM.** A **Etapa 21
+> **Etapas 1 a 20 e 22 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
+> A **Etapa 22 (a trilha de auditoria ganha leitor)** fechou em 2026-08-28
+> (`8c6ffbe..169458d`) e é a que **tem tela nova**: **Almoxarifado → Auditoria**, no menu, ao
+> lado de Configurações. Três etapas seguidas (18, 19 e 20) fizeram o sistema anotar quem mexeu
+> em quê — cadastros, configurações, o ciclo do inventário, a troca de foto de material — e
+> **nada disso tinha como ser lido**: a única forma era pedir a alguém que consultasse o banco
+> por fora do sistema. Agora a tela responde a pergunta para a qual a trilha existe: **"quem
+> mexeu nisto, e quando?"**, com filtro por tipo de coisa, por ação, por pessoa e por período, e
+> com o **de/para campo a campo** ao expandir a linha. Duas correções vieram junto e são
+> invisíveis mas importantes: uma data escrita errada agora dá **erro explícito** em vez de uma
+> lista vazia que parece prova de que nada aconteceu; e o filtro de período passou a respeitar o
+> **horário de Brasília** — sem isso, as três últimas horas de todo expediente sumiriam do filtro
+> do próprio dia, porque o sistema grava a hora em UTC. A tabela do histórico, que não tinha
+> **nenhum** índice, ganhou os três que faltavam.
+> **Atenção operacional: o acesso é só de Administrador** — o Gestor que conduziu um inventário
+> ainda **não** vê o próprio registro; abrir para ele é decisão sua (letra B33). Ver a seção
+> "Etapa 22" no fim deste guia.
+>
+> **Antes: Etapas 1 a 20 completas no módulo, e a Etapa 21 entregue no NÚCLEO do CRM.** A **Etapa 21
 > (exposição no núcleo)** fechou em 2026-08-28 (`d5c8d3a..07a4b1c`) e é a **primeira etapa fora
 > do módulo Almoxarifado**: ela mexe no arquivo de backup do sistema, na senha do e-mail e na
 > tela **Configurações do Sistema** (a do CRM inteiro, não a do módulo). O motivo dela existir:
@@ -972,6 +990,10 @@ plano original; nasceu do review da Etapa 6, aprovada pelo cliente em 2026-08-09
 - **Não é possível ver o histórico de mudanças de status de um lote pela tela** — a auditoria é
   gravada (`auditoria_log_almoxarifado`, `entidade='lote'`), mas não há uma tela de "extrato do
   lote" que a mostre. Continua na lista de pendências da Etapa 6.
+  **Atualização (Etapa 22):** ainda **não** há extrato dentro da tela de lotes, mas o histórico
+  já é legível em **Almoxarifado → Auditoria**, filtrando a entidade **Lote** — o caminho é o
+  filtro geral da trilha, não uma aba dentro do lote. Fica registrado porque a frase acima, lida
+  sozinha, faria parecer que não há caminho nenhum.
 - **Quem liberou o vencimento aparece como "usuário #&lt;id&gt;", não pelo nome** — a API de lotes
   não faz `JOIN` com a tabela de usuários (só o `stockService`/`movimentacoes` faz isso hoje).
   Decisão desta task: não alterar o servidor (fora do escopo — "não mude nada no servidor" era
@@ -2988,7 +3010,9 @@ registro com autor e de/para, e cancelar exige justificativa escrita.
    mostra a data do cancelamento (antes ficava vazia para sempre).
 3. **Só cancela o que está em andamento.** Tente cancelar uma conferência já concluída: a
    recusa é `Conferência não está aberta (status atual: CONCLUIDO)`.
-4. **A trilha existe** (mas ainda não tem tela — letra B33): quem tiver perfil de
+4. **A trilha existe** (~~mas ainda não tem tela — letra B33~~ — **a tela chegou na Etapa 22:
+   Almoxarifado → Auditoria. Hoje o caminho de clique é filtrar lá por entidade "Conferência".
+   O passo por API abaixo continua válido e é o que esta etapa entregou**): quem tiver perfil de
    Administrador pode conferir por API em
    `/api/almoxarifado/auditoria?entidade=conferencia&entidade_id=<id>` — a resposta traz
    `total`, `truncado` e a lista `itens` com CRIACAO, cada CONTAGEM, as RECONTAGENS e a
@@ -3002,8 +3026,11 @@ registro com autor e de/para, e cancelar exige justificativa escrita.
 
 ### O que a Etapa 18 NÃO cobre
 
-- **Não há tela de auditoria** — a trilha é gravada e consultável só por API, com perfil de
-  Administrador (letra B33: você decide se abre para o Gestor ou se vale construir a tela).
+- ~~**Não há tela de auditoria** — a trilha é gravada e consultável só por API, com perfil de
+  Administrador (letra B33: você decide se abre para o Gestor ou se vale construir a tela).~~
+  **A tela foi construída na Etapa 22** (`8c6ffbe..169458d`) — ver a seção dela no fim deste
+  guia. **Continua sua a outra metade da B33:** o acesso segue restrito ao Administrador; abrir
+  para o Gestor é decisão de exposição, não pendência técnica.
 - **Cadastros e configurações continuam sem trilha** (tipos, localizações, setores, famílias,
   centros de custo, almoxarifados, permissões por setor e as configurações do módulo).
 - Conclusões simultâneas da mesma conferência ainda podem se sobrepor — limitação anterior a
@@ -3036,8 +3063,10 @@ um setor passa a ficar registrado, com o valor de antes e o de depois.
 
 ### O que a Etapa 19 NÃO cobre
 
-- **Não há tela de auditoria** — o registro só é legível por consulta técnica (é a mesma
-  pendência da etapa anterior, letra B33, agora mais cara porque o registro ficou mais rico).
+- ~~**Não há tela de auditoria** — o registro só é legível por consulta técnica (é a mesma
+  pendência da etapa anterior, letra B33, agora mais cara porque o registro ficou mais rico).~~
+  **PAGO na Etapa 22** (`8c6ffbe..169458d`): tudo o que a Etapa 19 passou a registrar é legível
+  em **Almoxarifado → Auditoria**, com filtro de entidade "Configuração" e o de/para por campo.
 - **Excluir algo já excluído** ainda responde sucesso e registra uma exclusão vazia.
 - **Salvar configuração sem mudar nada** não gera registro, mas ainda marca "última alteração"
   no banco.
@@ -3175,6 +3204,102 @@ e a senha do e-mail parou de ser devolvida em texto puro pela tela de Configura�
   campos são gravados e **nenhuma parte do servidor os lê**. Não confie neles.
 - **As configurações de e-mail gravadas no banco continuam sem efeito sobre o envio** (**B42**) —
   o envio usa o ambiente do servidor e, na falta dele, o valor do código.
+
+## Etapa 22 — A trilha de auditoria ganha uma tela (ENTREGUE — 2026-08-28)
+
+> **Esta é a etapa com tela nova.** Ela fecha uma pendência que estava aberta desde a Etapa 18 e
+> foi repetida no fechamento da 19, da 20 e da 21: o sistema anotava tudo e **ninguém conseguia
+> ler**.
+
+As Etapas 18, 19 e 20 fizeram o sistema registrar quem mexeu em quê — o ciclo do inventário, os
+cadastros do módulo, as configurações que mudam regra de negócio, a lista de materiais por setor,
+a troca de foto de material. Mais de trinta operações passaram a deixar rastro. **E não havia
+onde olhar**: a única forma de ler era pedir a alguém que consultasse o banco por fora do
+sistema. Numa auditoria de verdade, um registro que ninguém abre vale quase o mesmo que registro
+nenhum.
+
+Agora existe **Almoxarifado → Auditoria**, no menu, ao lado de Configurações — e só aparece para
+quem pode configurar o módulo.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| O histórico existia e **nenhuma tela o mostrava** | Tela **Auditoria**, com filtros e paginação |
+| Só dava para filtrar por tipo de coisa e por número do registro | Filtra também por **pessoa**, **ação** e **período**, tudo combinável |
+| Uma data escrita errada era aceita e a resposta vinha **vazia** — parecendo prova de que nada aconteceu | **Erro explícito** na tela, nunca "nenhum registro" |
+| Um ato das 21h não aparecia no filtro do próprio dia (o sistema grava em UTC) | O período respeita o **horário de Brasília**, inclusivo nos dois extremos |
+| O mesmo ato tinha dois nomes conforme a tela que o gravou | Uma opção por ato no filtro, e o nome cru continua visível na linha |
+| Ver o que mudou exigia ler o texto técnico com todos os campos | A linha expande numa tabelinha **Campo · De · Para** |
+| A consulta cortava em 200 e avisava, sem oferecer saída | O aviso continua, com **Anteriores / Próximos** |
+| A tabela do histórico não tinha **nenhum** índice | Três índices (data, tipo + número, pessoa) |
+
+### Roteiro de teste manual
+
+1. **Entre como Administrador do módulo.** No menu do Almoxarifado, o item **Auditoria** aparece
+   ao lado de **Configurações**. Clique.
+2. **Filtre por você mesmo e por hoje.** Escolha seu nome no seletor de usuário e ponha a data de
+   hoje nos dois campos de data. Devem aparecer os atos que você acabou de fazer nesta sessão.
+   *(Se você fizer este teste depois das 21h, este é justamente o caso que a etapa consertou: o
+   sistema grava a hora em UTC, então às 21:30 o registro está gravado como 00:30 do dia
+   seguinte. Sem a conversão, ele não apareceria aqui.)*
+3. **Expanda uma linha.** Clique em **Detalhes**. Aparece a tabelinha `Campo · De · Para` com só
+   os campos que mudaram. Se aquele ato não guardou nem o antes nem o depois, a mensagem é:
+   > *Sem detalhes registrados para este ato — a linha existe, mas não guardou o antes nem o
+   > depois.*
+4. **Note a legenda do "De" vazio.** Se alguma linha tiver o **De** em branco (—), aparece um
+   aviso embaixo da tabelinha explicando que aquilo pode ser um valor que a operação apenas
+   registrou junto, e não um campo que mudou. É o caso da troca de foto de material, que grava
+   também o código e o nome.
+5. **Filtre por "Criação".** No seletor de ação, escolha **Criação**. O resultado traz tanto as
+   linhas gravadas como `CRIACAO` quanto as gravadas como `CRIAR` — e cada linha mostra, em letra
+   miúda embaixo do rótulo, o nome cru que está gravado. O sistema **não esconde** que o
+   vocabulário dele é inconsistente; ele só evita que você perca linhas por causa disso.
+6. **Tente uma data que não existe.** Digite `2026-02-30` (30 de fevereiro) em qualquer um dos
+   campos de data. A tela mostra o painel vermelho com a mensagem literal:
+   > **Data inválida: use uma data real no formato AAAA-MM-DD**
+
+   *(Isto parece exagero e não é: o 30 de fevereiro é **aceito** tanto pelo JavaScript quanto
+   pelo banco, que "rolam" a data para 2 de março. Sem a guarda, a busca não daria lista vazia —
+   daria uma janela alargada em silêncio, com fevereiro devolvendo três dias de março.)*
+7. **Inverta as datas.** Ponha data inicial `2026-08-20` e final `2026-08-01`. As duas existem,
+   então a regra anterior não pega. A mensagem literal é:
+   > **Período inválido: a data inicial é posterior à data final**
+
+   Antes, isso voltava com sucesso e lista vazia.
+8. **Filtre por algo que não existe.** Combine filtros que não trazem nada. A mensagem literal é:
+   > **Nenhum registro para os filtros aplicados**
+
+   E **não** "não há registros" — a tela não sabe nada sobre o mundo, só sobre os filtros que
+   você pôs. Numa auditoria, a diferença entre as duas frases é a diferença entre uma informação
+   e uma afirmação falsa.
+9. **Confirme o gate.** Saia e entre com um usuário **sem** perfil de administrador do módulo, e
+   vá para `/almoxarifado/auditoria` pela barra de endereços. Aparece o painel de falta de
+   permissão — não uma tela vazia, que seria indistinguível de "não há registros".
+
+### O que a Etapa 22 NÃO cobre
+
+- **Não exporta para Excel.** O módulo já tem exportação nos Relatórios; enxertar uma segunda
+  régua aqui duplicaria trabalho. Se a demanda aparecer, a trilha vira mais um relatório
+  (letra **D** das novidades).
+- **Os nomes das ações continuam inconsistentes no banco.** A tela agrupa **na exibição** e o
+  dado histórico ficou intacto — reescrever o que o sistema afirma ter registrado é justamente o
+  que uma trilha não pode sofrer. Se você quiser a correção definitiva, o mapa está pronto: item
+  **B47**.
+- **O acesso continua sendo só de Administrador.** O Gestor que conduziu um inventário ainda não
+  vê o próprio registro. Abrir para ele é decisão sua (metade que resta da letra **B33**).
+- **Valores muito grandes aparecem cortados em 300 caracteres**, com a contagem do que falta. A
+  linha do histórico de permissões por setor guarda ~46 KB de uma vez; exibida inteira, ficaria
+  ilegível. Quem precisar do conteúdo completo dessa linha específica ainda depende de consulta
+  técnica (furo **C29**, e o volume em si é o item **G8**).
+- **Não há retenção nem expurgo do histórico** — o log cresce indefinidamente. Sem política
+  definida por você, apagar trilha de auditoria é a última coisa que se faz por conta própria
+  (letra **D**).
+- **Duas coisas que a trilha ainda não registra direito e que agora ficam visíveis:** salvar
+  configurações é gravado chave a chave, então uma falha no meio pode deixar parte gravada **sem
+  nenhuma linha de histórico**; e excluir algo que já estava inativo gera um registro de exclusão
+  mesmo sem excluir nada. As duas são as pendências que faltam para a área de auditoria ser
+  considerada completa.
 
 ## Correção — a posição por cliente não fechava a conta (2026-08-13)
 

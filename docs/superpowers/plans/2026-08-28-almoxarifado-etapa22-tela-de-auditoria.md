@@ -526,3 +526,141 @@ consumidor no client, os sinônimos coexistindo).
 G8; se `(created_at)` sozinho é usado pelo `ORDER BY created_at DESC, id DESC` ou se
 `(created_at, id)` seria melhor; e a serialização do axios ponta a ponta (deduzida da versão e
 da ausência de `paramsSerializer`, não reproduzida contra a rota).
+
+---
+
+## Fase 5 — revisão adversarial (`169458d`): 9 achados, 2 bloqueantes, e o alvo prioritário REFUTADO
+
+**O alvo prioritário da revisão era o risco criado pelo paralelismo** (Tasks 3 e 4 rodaram ao
+mesmo tempo, ver a retro abaixo): a suspeita de que o mock da tela não bateria com a forma que a
+rota produz. **REFUTADO** — a conferência chave por chave, contra a rota real, mostrou que
+correspondem. A Task 3 acertou o formato **antes** de a Task 4 medi-lo. Deu certo, mas por sorte,
+e a retro registra isso como risco de processo, não como sucesso de desenho.
+
+Os nove achados e o que foi feito de cada um:
+
+| # | Achado | Desfecho |
+|---|---|---|
+| **A1** (bloqueante) | O teste da tela fazia `process.env.TZ = 'America/Sao_Paulo'` no topo do arquivo, com o comentário "Node reconfigura o V8 ao setar `process.env.TZ`". **A afirmação é FALSA sob Jest**: com `TZ` já definido no ambiente, a atribuição em runtime é no-op porque o V8 já resolveu o fuso. Parecia funcionar só porque esta máquina é -03. Com `TZ=UTC` — o default da maioria dos contêineres, e **exatamente o ambiente que a RN-04 desta etapa existe para tratar** — a suíte ficava **vermelha**, e o placar 546/546 valia só aqui | Resolvido com `client/jest.globalSetup.js`, que roda **antes** de o Jest forkar os workers. Verde em `UTC`, `Asia/Tokyo`, `Pacific/Kiritimati` e `America/Sao_Paulo` |
+| **A2** (bloqueante) | Cinco lugares em três documentos afirmavam, no HEAD, que a trilha **não tem tela** | Fase 6 — este fechamento |
+| **A3** | `data_inicio > data_fim` devolvia **200 com lista vazia**. As duas datas são individualmente válidas, então a validação de formato não pega — é o mesmo modo de falha que a RN-03 existe para matar, entrando pela outra porta | 400 com mensagem própria (`Período inválido: a data inicial é posterior à data final`), guarda com `>` e não `>=`, e cenário irmão garantindo que o filtro de **um** dia continua valendo |
+| **A4** | A paginação por offset entrou fora do plano e **sem rede**: o revisor removeu o `setOffset(0)` de `mudarFiltro` e a suíte passou **15/15**, nenhuma asserção caiu. O comportamento estava certo, faltava prova | Três cenários novos; a mesma sabotagem agora derruba exatamente o do reset |
+| **A5** | O teste dos índices assertava o **nome**. Mantendo o nome e trocando a coluna (`created_at` → `id`) ele passava **verde com a feature quebrada** — o propósito declarado dos três é o `ORDER BY created_at DESC` e o filtro por período | Confere as colunas por `PRAGMA index_info` |
+| **A6** | O comentário dizia que o `Intl` faz o horário de verão ser "respeitado por data". Vale **dentro** do DST, não **no dia da virada**: em `2018-11-04` a meia-noite local não existiu e a janela sai 1h deslocada | **Não consertado de propósito** (Brasil sem DST desde 2019, trilha começa em 2026; escolher qual leitura vale numa hora que não existiu, sem caso de uso, é chute). A ressalva ficou **escrita e medida** no cabeçalho de `auditFiltros.js`, em vez de a afirmação continuar mais larga que a verdade. O fall-back (meia-noite dupla de `2019-02-16/17`) foi verificado e **está correto** |
+| **A7** | `valorAuditoria` fazia `JSON.stringify` **sem limite**, e o `.almox-table-container` é `overflow: hidden`. A linha de `setor_permissao` grava o mapa inteiro (~46 KB, o G8) **sem espaços**, virando um token único não quebrável: o valor ficava ilegível, com o começo clipado junto | Truncado em **300** com a contagem do resto — que diz que há mais, o que "sumir" não diz |
+| **A8** | Parte das entradas do de/para é **contexto**, não mudança (a troca de foto grava `{foto, codigo, nome}` contra `{foto}`, então `codigo` e `nome` saem como `— → valor` e leem como "foi definido agora"). Aparecem de propósito, pela mesma ausência de filtro de igualdade que mantém visível a troca de senha — mas **isso não estava dito a quem audita** | Legenda na tela sempre que alguma linha vem com o `De` vazio; furo **C28** das novidades |
+| **A9** | A Global Constraint dizia "`python` NÃO EXISTE nesta máquina". Enganosa: `/usr/bin/python3` existe e o revisor o usou a revisão inteira. O que falta é o **alias** `python`, e um heredoc chamando `python` vira no-op silencioso — foi assim que quatro sabotagens da Etapa 8b passaram sem sabotar nada | Corrigida no plano (Global Constraint 1) e na skill `fechar-etapa` (`083d7ba`), com o motivo real |
+
+---
+
+## Retro da Etapa 22 — quatro números e um padrão
+
+**1. Rodadas até verde.** Quatro tasks, cada uma verde na primeira rodada de suíte completa
+depois do próprio controle positivo — mas **duas rodadas de correção pós-task**: a Fase 5
+(`169458d`, 9 achados) e a correção dos hashes de worktree (`4d9a4be`, `86bad81`), que não é
+código mas é retrabalho de fechamento e conta.
+
+**2. Achados reais × ruído.**
+- **Revisão do plano (Fase 2): 10 achados, 2 críticos** — e **os dois críticos eram erro meu de
+  desenho**, não descuido de execução: (a) mandar usar `configDiff.calcularDiff` como régua de
+  **leitura**, que apagaria a troca de segredo mascarada e fabricaria alterações inexistentes;
+  (b) a varredura de vocabulário, ao mesmo tempo **ruidosa** (`localizacao: 'A...'` virando o
+  verbo `A`) e **cega** (~25 verbos dinâmicos que ela nunca veria). A guarda antiga do teste
+  (">= 20 verbos") passava nos dois defeitos ao mesmo tempo.
+- **Revisão adversarial (Fase 5): 9 achados, 2 bloqueantes, e o alvo prioritário REFUTADO.**
+  Zero ruído: os nove eram reais, e a refutação do alvo é resultado, não achado vazio.
+
+**3. Paralelismo — e o risco que ele criou.** As Tasks 3 (tela) e 4 (integração) rodaram **em
+paralelo**. Consequência medida: **a Task 3 escreveu o mock da fronteira HTTP antes de a Task 4
+descobrir a forma real que a rota produz** (a linha de troca de foto sai com **três**
+`alteracoes`, não uma). Se tivessem divergido, a tela teria sido desenhada contra uma forma
+inexistente e o vermelho só apareceria em produção. **Deu certo — e deu certo por sorte.** A
+conferência ficou para a Fase 5, que a fez e refutou o risco. **Registrado como custo do
+paralelismo:** quando um galho consome contrato que outro galho ainda vai medir, o paralelismo
+compra tempo comprando uma dívida de verificação; ou a medição vira pré-requisito sequencial, ou
+a conferência entra explicitamente na revisão adversarial, como entrou aqui.
+
+**4. Defeito escapado.** **A preencher na etapa seguinte** — nada reportado até o fechamento.
+Este número só é honesto olhando para trás: escrevê-lo como "zero" agora seria afirmar o que
+ainda não se sabe.
+
+### O padrão desta etapa: as correções vieram dos executores, não da revisão de texto
+
+**Cada uma das quatro tasks achou pelo menos um erro que a revisão do plano deixou passar** — e
+as três correções mais valiosas vieram de **executores discordando do plano**, não de revisão de
+texto:
+
+| Task | O que o plano dizia | O que a execução descobriu |
+|---|---|---|
+| 1 | "as **5** chaves de `transicoes`" | São **6**. O número 5 estava certo, mas por outro motivo: a sexta (`processar`) nunca chega ao `acao.toUpperCase()` — cai no `handler` e retorna antes, gravando o literal `'PROCESSAR_NOTA'` que a varredura já vê. Quem lesse "5 chaves" acharia 6 no fonte e não saberia qual sobra |
+| 1 | **Não** agrupar `EXCLUSAO` e `DESATIVACAO`, "porque desativar é `ativo = 0` e é reversível por `REATIVACAO`" | **A justificativa estava invertida.** Medido: os **dois** são `ativo = 0`, e `REATIVACAO` existe para as entidades que recebem **`EXCLUSAO`**, não para a que recebe `DESATIVACAO`. São o mesmo ato com nome diferente por entidade |
+| 2 | Cenário de fuso só "com `TZ=America/Sao_Paulo`" — `new Date(ano, mes-1, dia)` resolveria de graça | **Não serve:** vira **no-op em `TZ=UTC`**, o default da maioria dos contêineres. O fuso virou constante do módulo, com cenário trocando o `TZ` do processo para `UTC` e `Asia/Tokyo` |
+| 2 | Controle positivo previa 3 alvos | A sabotagem 3 caía na **primeira** asserção do laço e o vermelho dizia só "recusar `2026-8-28`" — um defeito de **formato**. O 30 de fevereiro, que é o achado que a RN-03 existe para guardar, **tinha asserção mas a mensagem era engolida**. Diagnóstico enganoso manda depurar o regex em vez do calendário; separado em dois cenários (`71582ec`) |
+| 3 | Sabotagem "trocar os `params` por `{}`" como controle da fiação | Ela derruba o cenário pela **primeira** asserção (`data_inicio`), então a linha do `Array.isArray` — o ponto do achado A5 — **nunca rodava**. Sabotagem acrescentada: `verbos.join(',')` → `verbos` |
+| 3 | (nada sobre paginação) | Sem paginação o aviso de corte é um beco sem saída. Acrescentada, com reset de offset ao trocar filtro |
+| 4 | "gravar uma configuração secreta pelo PUT real" | A leitura óbvia (`PUT /configuracoes`) **não funciona**: essa rota **recusa chave secreta com 400**. A certa é `PUT /configuracoes/alertas-estoque` |
+| 4 | Controle positivo com 3 sabotagens | A quarta (`janelaUtc(..., 'UTC')`) deixou os **nove cenários verdes** às 20:47 SP: os cenários de dia usavam o relógio real e só sabiam falhar em **3 das 24 horas** do dia. Décimo cenário com o relógio fixo (`15eec92`) |
+
+**A leitura disto para as próximas etapas:** revisão de plano pega desenho errado (foi o que
+pegou os dois críticos da Fase 2); **só a execução pega plano impreciso**, e imprecisão de plano
+é o que produz teste que passa provando nada. Por isso a Global Constraint 3 (controle positivo
+com `md5sum`) e a regra "leia QUAL asserção caiu" da skill continuam sendo o que separa suíte
+verde de suíte que sabe falhar.
+
+---
+
+## Próxima tarefa detalhada — Etapa 23: fechar os dois buracos de rastro da feature 23
+
+**Por que esta e não outra.** Com a tela entregue, a spec 23 foi reclassificada no fechamento
+desta etapa: o que falta para ela virar 🟢 **deixou de ser "falta leitor"** e passou a ser dois
+defeitos de trilha — os únicos itens abertos que **não** dependem de resposta do usuário. Os
+outros (G8, B47, B33 metade b, XLSX, retenção) são decisão dele e não contam para a cor.
+
+**Buraco 1 — o ato parcial do `PUT /api/almoxarifado/configuracoes` não deixa rastro.**
+Medido no fechamento, em `server/routes/almoxarifado.js:2432`:
+
+- O laço de validação roda **inteiro** antes do de UPDATE (isso está certo e foi decisão da
+  Etapa 20 — recusar no meio da gravação deixaria metade do formulário aplicada).
+- Mas o laço de UPDATE é `for (const [chave, valor] of entradas) await dbRun(...)` **sem
+  transação**. Se o terceiro `dbRun` de cinco lançar, os dois primeiros **já estão commitados**,
+  o `catch` responde **500**, e o `registrarAuditoria` — que vem **depois** do laço — nunca roda.
+  Resultado: **configuração mudada, resposta de erro, e nenhuma linha de histórico.** É a trilha
+  mentindo por omissão, e agora que existe tela isso fica visível para quem audita.
+- Duas saídas, e a escolha é de desenho, não óbvia: **(a)** envolver o laço numa transação
+  (`BEGIN`/`COMMIT`/`ROLLBACK`), o que torna o ato atômico e o rastro trivial — mas muda o
+  contrato observável da rota (hoje uma falha parcial deixa parte aplicada, e pode haver quem
+  dependa disso sem saber); **(b)** manter a semântica e registrar o parcial, gravando a
+  auditoria do que **de fato** foi escrito antes de propagar o erro. A (a) é o conserto de
+  verdade; a (b) é o que não muda comportamento. **Decidir e escrever o descartado.**
+
+**Buraco 2 — `EXCLUSAO` de linha já inativa é registrada mesmo sem excluir nada.** O
+`DELETE` das entidades de cadastro é *soft* (`UPDATE ... SET ativo = 0`), e o SQLite conta a
+linha **atingida**, não a **alterada** — então excluir algo que já estava inativo devolve
+`changes = 1` e grava uma linha de auditoria de um ato que não teve efeito. Só id **inexistente**
+vira 404. É o espelho do buraco 1: ali a trilha omite, aqui ela inventa.
+
+**O que já está pronto e a próxima tarefa NÃO precisa reabrir:**
+
+- `services/almoxarifado/auditLabels.js` — rótulos, grupos de sinônimo (congelados em
+  profundidade) e `alteracoesDaLinha`. **Todo verbo novo precisa de rótulo**, senão
+  `auditLabels.api.test.js` cai; se a Etapa 23 criar um verbo, acrescente ao mapa no mesmo commit.
+- `services/almoxarifado/auditFiltros.js` — `validarData` e `janelaUtc`. Não mexer.
+- `GET /api/almoxarifado/auditoria` e `/auditoria/opcoes` — contratos C1 e C2 congelados neste
+  plano, com a **forma** da resposta congelada desde a Etapa 18
+  (`{total, limite, offset, truncado, itens}` + os três derivados por item). **A tela consome
+  isso e não traduz nada** — qualquer rótulo novo entra em `auditLabels`, nunca no client.
+- A tela `client/src/components/almoxarifado/AuditoriaAlmoxarifado.js` — não precisa de mudança
+  para nenhum dos dois buracos; eles são de **escrita**.
+- Os três índices de `auditoria_log_almoxarifado`, com asserção por `PRAGMA index_info`.
+
+**Pontos de atenção herdados:**
+
+1. **`registrarAuditoria` é pós-escrita e best-effort** em toda a base (try/catch com
+   `console.error`): falha de log **não** derruba o ato. Isso é regra, não descuido — mantenha.
+2. **Teste que depende de relógio precisa fixar o `created_at` do arranjo**, nunca usar
+   `CURRENT_TIMESTAMP` (achado A4 da Fase 2, e o defeito que o Step 5 da Task 4 teve de
+   consertar: um cenário que só sabia falhar em 3 das 24 horas do dia).
+3. **Cenário que afirma ausência precisa da metade positiva no mesmo teste**, senão passa com a
+   resposta vazia.
+4. **Controle positivo com alvo nomeado**, e **leia qual asserção caiu** — três vezes nesta base
+   uma sabotagem derrubou o cenário certo pela asserção errada, deixando o achado sem prova.

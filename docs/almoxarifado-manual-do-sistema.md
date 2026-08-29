@@ -221,6 +221,8 @@ Não existe cadastro separado de "material de cliente": ele é material normal, 
 
 Toda criação e toda edição de material ficam registradas com **quem fez, quando, e o de/para de cada campo alterado** — apenas os campos que realmente mudaram, não a ficha inteira. **Trocar a foto também conta como edição**, e o registro guarda o nome do arquivo anterior e o do novo. Excluir um material é uma **inativação**: ele sai das listas, mas o histórico de movimentações continua íntegro.
 
+Esse histórico é lido em **Almoxarifado → Auditoria**, filtrando a entidade **Material** (seção 5.8). Ele não aparece dentro da ficha do material — a consulta é sempre pela tela de Auditoria, e é restrita a quem administra o módulo.
+
 ---
 
 ## 3. Localizações e endereçamento
@@ -629,7 +631,53 @@ Duas notas de comportamento que evitam mal-entendido:
 - **Movimentação confirmada não se apaga.** Não existe "excluir lançamento". O único caminho para desfazer é o **estorno**, que exige motivo e cria um lançamento próprio — o engano fica visível no livro, junto com a correção.
 - **Configuração registra só o que mudou.** A tela de configurações envia todos os campos a cada salvamento; o histórico guarda **uma** linha por salvamento, contendo apenas os campos que de fato mudaram de valor. Salvar sem alterar nada não gera registro.
 - **Segredo nunca entra no histórico.** Senha de SMTP e chave de API aparecem como `(alterado)` — o registro diz que mudaram e quem mudou, nunca o valor. O endereço do webhook aparece sem os parâmetros (`(credenciais omitidas)`), porque é neles que costuma viajar o token.
-- **Quem lê a trilha.** A consulta ao histórico do módulo é restrita ao **Administrador**, e hoje ela existe apenas como consulta técnica: nenhuma tela do sistema exibe a trilha. Na prática, isso significa que o histórico serve para investigar um caso específico com apoio de quem administra o sistema, não para consulta do dia a dia. A consulta informa quantos registros existem no total e avisa quando a resposta foi cortada, de modo que ninguém leia uma lista parcial achando que é tudo.
+- **Quem lê a trilha.** O histórico do módulo é restrito ao **Administrador** — o mesmo nível exigido para configurar o módulo. Quem tem esse nível lê a trilha inteira pela tela **Almoxarifado → Auditoria** (seção 5.8). Quem não tem não vê o item no menu, e, se chegar ao endereço da tela por outro caminho, recebe o aviso de falta de permissão — nunca uma tela vazia, que seria indistinguível de "não há registros". Na prática: um Gestor que conduziu um inventário **não** consegue ver o próprio registro; a leitura passa por quem administra o módulo.
+
+### 5.8 A tela de Auditoria — como ler a trilha
+
+**Almoxarifado → Auditoria** (visível apenas para quem pode configurar o módulo, ao lado de **Configurações**). É a tela que responde *"quem mexeu nisto, e quando?"*. Ela é **somente leitura**: não existe nenhuma forma, no sistema, de editar ou apagar uma linha do histórico.
+
+**Os filtros.** Quatro seletores e duas datas, todos combináveis entre si:
+
+| Filtro | O que traz |
+|---|---|
+| **Entidade** | O tipo de coisa que foi tocada — material, conferência, configuração, lote, requisição, e assim por diante |
+| **Ação** | O que foi feito — Criação, Edição, Exclusão, e os demais atos |
+| **Usuário** | Quem fez |
+| **Período** | Data inicial e data final |
+
+As três primeiras listas **não são fixas**: elas são montadas a partir do que existe de fato no histórico. Um tipo de registro que ainda não aconteceu não aparece como opção — e um tipo novo aparece sozinho assim que a primeira linha dele for gravada.
+
+**O período é inclusivo nos dois extremos, no horário de Brasília.** Filtrar de 10/03 a 10/03 traz o dia 10 inteiro, da meia-noite às 23h59 do horário local. Isso é mais importante do que parece: o sistema grava a hora em UTC, três horas à frente, então um ato das 21h30 fica gravado com a data do dia seguinte. O filtro converte a data antes de consultar — sem essa conversão, o fim de todo expediente desapareceria do filtro do próprio dia. Um aviso na própria tela repete essa regra abaixo dos filtros.
+
+**Datas que o sistema recusa.** Duas verificações acontecem antes de qualquer busca, e as duas devolvem um aviso vermelho em vez de uma lista:
+
+- Data que não existe no calendário (`2026-02-30`, `2026-04-31`, `2026-13-45`) ou fora do formato `AAAA-MM-DD`:
+  > *Data inválida: use uma data real no formato AAAA-MM-DD*
+- Data inicial posterior à data final:
+  > *Período inválido: a data inicial é posterior à data final*
+
+A razão de as duas recusarem em vez de simplesmente não achar nada: numa auditoria, **lista vazia parece prova de que nada aconteceu**. Uma data escrita errada que devolvesse zero linhas levaria alguém a concluir, com toda a boa-fé, que ninguém mexeu em nada naquele período.
+
+**Ações com nomes diferentes para o mesmo ato aparecem juntas.** O sistema, por razões históricas, gravou o mesmo ato com nomes diferentes conforme a tela que o registrou. O filtro de ação mostra **uma** opção por ato — escolher "Criação" traz todas as grafias juntas, e você não perde nenhuma linha por causa disso. Ao mesmo tempo, cada linha da lista continua mostrando, em letra miúda embaixo do rótulo, **o nome exato que está gravado**. A tela agrupa para facilitar a busca; ela não esconde o que o registro diz.
+
+**A linha e o detalhe.** Cada linha mostra quando, quem, a ação, a entidade (com o número do registro) e a justificativa, quando o ato exigiu uma. O botão **Detalhes** expande e mostra o que mudou, campo a campo, numa tabela **Campo · De · Para**. Só aparecem os campos que a operação gravou — não o registro técnico inteiro.
+
+Três comportamentos do detalhe que evitam leitura errada:
+
+- **Ato sem antes e sem depois.** Algumas operações registram que aconteceram sem guardar valores. Nesses casos aparece:
+  > *Sem detalhes registrados para este ato — a linha existe, mas não guardou o antes nem o depois.*
+
+  Área em branco pareceria defeito da tela, e "nada mudou" seria falso.
+- **Campo com o "De" vazio nem sempre é uma mudança.** Algumas operações registram, junto com o que mudou, valores que servem para identificar sobre o que elas agiram — o código e o nome do material, por exemplo. Esses aparecem com o **De** vazio (—) e leem como se tivessem acabado de ser definidos. Sempre que alguma linha do detalhe estiver nessa condição, a tela exibe um aviso explicando isso. **Por que não são simplesmente escondidos:** o sistema exibe tudo o que foi gravado, sem descartar nada — e é essa mesma regra que garante que uma **troca de senha** apareça. Senhas e chaves de API entram no histórico como `(alterado)` dos dois lados; um filtro que escondesse "campos iguais" faria a troca de senha desaparecer da tela.
+- **Valores muito longos vêm cortados.** O registro da lista de materiais permitidos por setor guarda o mapa inteiro de uma vez, e pode passar de 40 mil caracteres. A tela mostra os primeiros 300 e indica quantos faltam — por exemplo, `… (+45 812 caracteres)`. O conteúdo completo dessas linhas específicas continua exigindo consulta técnica.
+
+**Lista vazia e lista cortada.** Quando nenhum registro atende aos filtros, a tela diz:
+> *Nenhum registro para os filtros aplicados*
+
+E não "não há registros" — a tela sabe o que os filtros trouxeram, não o que existe no mundo. Quando a consulta encontra mais linhas do que cabem na página, aparece um aviso dizendo **quantas** foram encontradas e quantas estão sendo mostradas, e os botões **Anteriores** e **Próximos** percorrem o resto. Trocar qualquer filtro volta para a primeira página.
+
+**O que a tela não faz.** Não exporta para Excel (a exportação do módulo vive nos Relatórios), não apaga nem arquiva histórico antigo — o registro cresce indefinidamente e nada no sistema o remove.
 
 ---
 

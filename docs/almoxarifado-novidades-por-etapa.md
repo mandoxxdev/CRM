@@ -52,6 +52,7 @@
 | 19 | Cadastros e configurações deixam rastro | 2026-08-28 | 23 operações que mudavam o comportamento do sistema sem deixar quem/quando passam a registrar, com o de/para e sem nunca gravar segredo |
 | 20 | Exposição e rastro | 2026-08-28 | Foto de material para de mentir sucesso e de deixar arquivo órfão (e passa a auditar a troca); senha e chave de API somem da leitura de configurações; ler o mapa de permissões por setor passa a exigir administrador |
 | 21 | **Núcleo do CRM:** o backup para de guardar segredo | 2026-08-28 | O zip do backup deixa de levar a chave com que o servidor assina os crachás de login (quem baixasse **virava super administrador**) e as 188 MB de cópias antigas; todo download fica registrado; a senha do e-mail passa a vir do ambiente do servidor; e o campo de Senha SMTP para de devolver a senha em claro e de gravar a máscara por cima dela |
+| 22 | A trilha de auditoria ganha uma tela | 2026-08-28 | Três etapas anotaram quem mexeu em quê e **nada disso tinha leitor**; agora há a tela **Auditoria**, com filtro de tipo, ação, pessoa e período, o de/para campo a campo ao expandir a linha, e os três índices que a tabela nunca teve |
 
 Com a 6c, a feature 10 (lotes, séries e etiquetas) ficou **completa por inteiro**; com a 7, as
 features 11 (transferências) e 12 (devoluções) também; com a 8, a feature 13 (materiais de
@@ -72,8 +73,10 @@ escopo (letra D) — **a 10b entregou boa parte disso** (ver a seção dela).
 recebimento ou cancela com justificativa) e a **feature 22 (integrações) fica entregue na fatia
 integrável hoje** — Compras de verdade; BOM/OP bloqueados por dependência, com a medição
 escrita. **Com a 20, a feature 23 (perfis, segurança e auditoria) paga os três buracos de
-exposição que ela mesma tinha nomeado** — resta dela a tela de auditoria (B33) e os itens
-declarados nas letras B/C/D. O desenvolvimento **não está mais pausado** (a pausa valeu entre a
+exposição que ela mesma tinha nomeado** — ~~resta dela a tela de auditoria (B33)~~ e os itens
+declarados nas letras B/C/D. **A tela de auditoria foi entregue na Etapa 22**
+(`8c6ffbe..169458d`); o texto riscado ficou à vista de propósito, para quem lembrar da pendência
+confirmar que ela fechou e com qual etapa. O desenvolvimento **não está mais pausado** (a pausa valeu entre a
 14 e a 15); a próxima frente sai do mapa de status — ver "Onde estamos e o que vem a seguir".
 **A Etapa 21 não mexe em feature nenhuma do mapa**: ela é do **núcleo do CRM** e fecha o quarto
 item que a Etapa 20 tinha declarado fora do escopo por ser "do núcleo, não do módulo" — o backup
@@ -127,7 +130,7 @@ para de sair.
 
 ### B. Decisões de negócio
 
-### B. Decisões de negócio — B1 a B46; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B50; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(O título desta seção dizia "B1 a B24" — **estava defasado**: os itens já iam até B36 antes da
 Etapa 20. Corrigido aqui em vez de reescrito em silêncio, porque a contagem errada fazia parecer
@@ -139,11 +142,14 @@ B12 (recontagem pelo mesmo contador), B13 (quem decide compra),
 B15-B17 (as três da Etapa 12: ligar o e-mail de movimentação e validar os destinos/toggle),
 B18-B20 (as três da Etapa 13: proteção dos Indicadores, unificar as réguas de consumo, tetos/
 auditoria de export/gates antigos), B21-B24 (as quatro da Etapa 14 — **a B21 é uma abertura de
-acesso já em vigor, leia primeiro**), B33 (quem lê a trilha de auditoria) e **B41 (o único item
-em aberto da Etapa 20: a contagem de permissões por setor que qualquer usuário do módulo lê)**.
-As quatro decisões da Etapa 20 que **eu já tomei** e você pode reverter estão em B37-B40, e as
-**cinco da Etapa 21** (a primeira etapa do núcleo do CRM) estão em **B42-B46** — todas tomadas por
-mim, nenhuma esperando resposta, todas reversíveis.
+acesso já em vigor, leia primeiro**) e **B41 (o único item em aberto da Etapa 20: a contagem de
+permissões por setor que qualquer usuário do módulo lê)**.
+As quatro decisões da Etapa 20 que **eu já tomei** e você pode reverter estão em B37-B40, as
+**cinco da Etapa 21** (a primeira etapa do núcleo do CRM) estão em **B42-B46**, e as **quatro da
+Etapa 22** estão em **B47-B50** — todas tomadas por mim, nenhuma esperando resposta, todas
+reversíveis.
+**B33 (quem lê a trilha de auditoria) SAIU da lista de em aberto** — a tela foi entregue na
+Etapa 22 (`8c6ffbe..169458d`). Ver o item B33 abaixo, que ficou no lugar com o desfecho escrito.
 **Resolvidas ou já decididas** — B1-B3 (Etapa 10), B4 (custo da transformação), B7 (lembrete de
 ferramenta, pago na Etapa 12), B10 (ajuste recusado contra retenção), B14 (cancelar solicitação
 de compra, **entregue na Etapa 14**).
@@ -461,8 +467,10 @@ nota com N itens divergentes gera N avisos (medido: 300 itens = 300 e-mails de u
 o material; **descartado** agregar por nota. Se aparecer nota gigante na prática, a saída é
 o mesmo resumo do inventário.
 
-**B33 (NOVO, da Etapa 18) — a trilha do inventário existe e ainda não tem leitor prático.
-Preciso da sua decisão.** A etapa passou a gravar cinco atos por conferência (e a exigir um
+**B33 (da Etapa 18 — ✅ METADE FECHADA NA ETAPA 22, a outra metade continua esperando você) — a
+trilha do inventário existe e ainda não tem leitor prático. Preciso da sua decisão.**
+*(O texto abaixo é o registro original, de quando o item nasceu; o desfecho está no bloco no fim
+dele. Mantido inteiro em vez de reescrito, para você reconhecer o que decidiu e o que não.)* A etapa passou a gravar cinco atos por conferência (e a exigir um
 motivo de quem cancela), mas: (a) **nenhuma tela mostra o log**, e (b) a consulta exige perfil
 de **Administrador** — então o Gestor que conduziu o inventário não consegue ver nem o próprio
 registro. **Escolhido** fechar o gate agora, porque antes dele QUALQUER usuário do módulo lia
@@ -472,6 +480,16 @@ tomada no seu lugar. As opções: (1) fica só com Administrador e a leitura é 
 técnica; (2) abre para Gestor também; (3) constrói-se uma tela de auditoria filtrada por
 conferência (aí o Gestor vê o log do inventário dele sem ver o resto). A (3) é a resposta
 completa e é uma etapa própria.
+
+> **✅ FECHADO NA ETAPA 22 (`8c6ffbe..169458d`) — a metade (a) deste item foi paga: a trilha tem
+> tela.** `/almoxarifado/auditoria`, com filtro de entidade, ação, pessoa e período, o de/para
+> legível e paginação. **A metade (b) continua sua e continua em aberto:** o gate segue sendo
+> **Administrador** (`configurar`), então o Gestor que conduziu o inventário ainda não vê o
+> próprio registro. Das três opções acima, foi entregue **a tela** — mas para Administrador, que
+> era a opção (1) somada à tela, e **não** a (3) (tela filtrada por conferência para o Gestor).
+> Abrir para o Gestor continua sendo decisão de exposição sua, e é uma linha de código
+> (`ACAO_PERFIS` em `permissions.js`). Deixado como está de propósito: alargar o gate por conta
+> própria seria decidir exposição no seu lugar, que é justamente o que este item dizia não fazer.
 
 **B34 (NOVO, da Etapa 18) — cancelar inventário agora exige justificativa escrita.** Antes era
 um clique. **Escolhido** exigir motivo (mínimo 5 caracteres), pela mesma régua que a conclusão
@@ -591,6 +609,43 @@ arquivo de configuração. Como ela já está no histórico do repositório desd
 seria **risco imediato em troca de zero ganho**: o que resolve é a rotação no provedor (item **A3**),
 e depois dela o valor do código deixa de abrir qualquer coisa. Fica no código com um comentário
 dizendo, em voz alta, que é credencial comprometida à espera de rotação.
+
+**B47 (NOVO, da Etapa 22) — os nomes inconsistentes das ações foram normalizados NA TELA, e o
+dado histórico ficou intacto. Se você quiser o conserto de verdade, é só mandar.** O módulo grava
+o mesmo ato com nomes diferentes conforme a tela que o gravou: `CRIACAO` **e** `CRIAR`, `EDICAO`
+**e** `ATUALIZACAO` **e** `ATUALIZAR`. **Escolhido** agrupar os sinônimos **na exibição** — o
+filtro "Criação" traz as duas grafias e cada linha mostra, em letra miúda, o nome cru que está
+gravado. **Descartado** corrigir no banco (um comando que reescreve `CRIAR` para `CRIACAO` em
+todas as linhas antigas): é o conserto de verdade, e é **irreversível sobre dado histórico** —
+reescreve o que o sistema afirma ter registrado, que é exatamente o que uma trilha de auditoria
+não pode sofrer. Não há como voltar atrás depois. **O mapa de sinônimos já está pronto e medido**
+(68 nomes de ação, todos com rótulo); se você decidir que quer a migração, ela é um passo curto e
+não precisa de investigação nova.
+
+**B48 (NOVO, da Etapa 22) — "excluir" e "desativar" aparecem como UM ato só na tela.**
+**Escolhido** juntar `EXCLUSAO` e `DESATIVACAO` sob o rótulo **"Exclusão"**. **Descartado**
+mantê-los separados. O motivo é medido, não estético: **os dois fazem a mesma coisa no banco** —
+marcam a linha como inativa. Um cadastro de material sai como `DESATIVACAO`; um tipo de material,
+uma localização, um setor e uma família saem como `EXCLUSAO`; nenhum dos dois apaga nada de
+verdade. São o mesmo ato com nome diferente por tipo de cadastro. Se para você esses dois atos são
+gerencialmente diferentes, separá-los é uma linha e me diga.
+
+**B49 (NOVO, da Etapa 22) — a tela ganhou "Anteriores / Próximos", que não estava no plano.**
+**Escolhido** acrescentar a navegação de páginas. **Descartado** entregar só o aviso de corte,
+como o plano previa: sem paginação o aviso vira um beco sem saída — a tela diria *"encontrei 4820
+registros e mostro 200"* sem oferecer nenhum caminho para ver o resto, e quem audita ficaria
+preso estreitando filtros no escuro. Consequência: trocar um filtro ou limpar **volta para a
+primeira página**, de propósito — manter a página 4 de um resultado novo mostraria lista vazia
+sem motivo aparente, que nesta tela é justamente a resposta que não pode aparecer por engano.
+
+**B50 (NOVO, da Etapa 22) — o fuso do filtro de período é fixo em horário de Brasília, e isso é
+uma aposta declarada sobre o negócio.** **Escolhido** gravar `America/Sao_Paulo` como constante
+do sistema. **Descartado** usar o fuso da máquina onde o servidor roda: servidores costumam ficar
+em UTC, e nesse caso o recorte do dia sairia errado **em produção** enquanto continuaria certo na
+máquina de desenvolvimento — o pior tipo de defeito, o que só aparece longe de quem pode ver. A
+aposta é que o cliente opera num site só, no Brasil (a mesma premissa que sustenta o saldo global
+por material). **Se um dia houver operação em outro fuso, este é um dos pontos que precisa mudar
+junto** — e não é automático.
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -801,6 +856,28 @@ dizendo, em voz alta, que é credencial comprometida à espera de rotação.
    **não apaga** a senha de nenhuma cópia do repositório já feita: quem tiver um clone antigo tem
    a senha. É o item **A3**, e é a única coisa deste documento inteiro que **nenhum código** resolve.
 
+28. **(22) Na tela de Auditoria, nem toda linha do "De → Para" é uma mudança — parte é
+   contexto.** Ao expandir uma linha, você pode ver campos com o **De vazio (—)** que não mudaram
+   nada: são valores que a operação apenas **registrou junto**, para identificar sobre o que ela
+   agiu. O exemplo concreto: trocar a foto de um material grava, além da foto, o **código** e o
+   **nome** do material — e os dois aparecem como `— → valor`, que lê como "foi definido agora".
+   **Quem audita precisa saber disto**, porque a leitura ingênua é concluir que houve alteração
+   onde não houve. **Há uma legenda na própria tela** avisando sempre que alguma linha tem o De
+   vazio, mas legenda não substitui a pessoa entender a regra. E isto **não é defeito a
+   consertar na tela**: a régua de leitura mostra tudo o que foi gravado, sem descartar nada —
+   é exatamente a mesma ausência de descarte que mantém visível a **troca de senha mascarada**
+   (que tem `(alterado)` dos dois lados e sumiria se a régua filtrasse "iguais"). Enxugar isso
+   seria trabalho da **gravação** (gravar menos), nunca da leitura.
+
+29. **(22) Valores muito grandes aparecem cortados em 300 caracteres.** A linha de histórico da
+   **lista de materiais permitidos por setor** guarda o mapa de acesso inteiro — cerca de **46
+   KB** de uma vez, sem espaços. Exibido sem limite, ele vira um bloco único que a tabela não
+   consegue quebrar e que **fica ilegível, com o começo cortado junto**. A tela mostra os
+   primeiros 300 caracteres e, no fim, quantos caracteres ainda faltam (`… (+45 812
+   caracteres)`). Ou seja: **quem precisar do conteúdo completo dessa linha específica ainda
+   depende de consulta técnica ao banco.** O aviso de corte foi escolhido justamente porque
+   "sumir" não avisa nada, e o volume em si é o item **G8**, que espera decisão sua.
+
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -959,6 +1036,33 @@ dizendo, em voz alta, que é credencial comprometida à espera de rotação.
   deles hoje **não muda nada**. Não foi consertado nesta etapa porque consertar é decidir como a
   rotina deve se comportar (com que frequência, quantas cópias, quem dispara) — é etapa própria, não
   uma linha. Enquanto isso: não confie nesses campos.
+
+- **(22) A trilha de auditoria NÃO exporta para Excel.** O módulo já tem exportação nos
+  Relatórios, com colunas curadas e proteção por relatório; enxertar uma segunda régua de export
+  dentro da tela de Auditoria duplicaria esse trabalho e criaria dois lugares para manter. Se a
+  demanda aparecer, o caminho certo é a trilha virar mais um relatório do registro existente —
+  etapa curta, mas etapa.
+
+- **(22) Não existe retenção nem expurgo do histórico.** O log cresce indefinidamente, e nada no
+  sistema apaga linha antiga. Não foi implementado de propósito: **sem uma política definida por
+  você** (guardar quanto tempo? o quê pode ser descartado? quem autoriza?), apagar trilha de
+  auditoria é a última coisa que se faz por conta própria. Os três índices novos aliviam o custo
+  de consulta, não o de armazenamento.
+
+- **(22) Os nomes das ações NÃO foram padronizados nas gravações novas.** O sistema continua
+  gravando `CRIACAO` num lugar e `CRIAR` noutro; a tela agrupa na exibição (item **B47**).
+  Padronizar exigiria mexer em ~45 pontos do código, e feito junto com esta etapa faria **o dado e
+  a tela mudarem no mesmo dia** — se algo quebrasse, não haveria como saber qual dos dois foi.
+
+- **(22) O filtro de período erra em uma hora no DIA em que um horário de verão vira — e isso é
+  inalcançável hoje.** A conversão do dia local para o horário gravado respeita horário de verão
+  por data, exceto **no próprio dia da virada**, em que a meia-noite local não existe (ou existe
+  duas vezes) e a janela sai deslocada em 1h. **Está declarado em vez de consertado** por dois
+  motivos medidos: o Brasil não tem horário de verão desde 2019 e a trilha só tem registros a
+  partir de 2026 — o caso não é alcançável com os dados reais —, e consertá-lo exigiria escolher
+  qual das duas leituras vale numa hora que não existiu, escolha que sem caso de uso é chute. O
+  caso oposto (a meia-noite dupla do fim do horário de verão) foi verificado e **está correto**,
+  sem buraco nem sobreposição.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -1233,9 +1337,14 @@ commitadas de novo (md5 pegou, retrabalho de meia hora). O harness segue pagando
 **G8 (NOVO, medido na revisão da Etapa 19). O histórico das permissões por setor é grande e
 cresce a cada salvamento.** Cada salvamento da lista de materiais permitidos de um setor grava
 a lista **inteira** duas vezes (antes e depois). Medido com 200 famílias: ~46 KB por
-salvamento. Como não há tela lendo o histórico, hoje não incomoda ninguém — mas é dívida a
-resolver **antes** de construir a tela de auditoria (B33): uma consulta filtrando essas linhas
-pode montar uma resposta de dezenas de MB.
+salvamento. ~~Como não há tela lendo o histórico, hoje não incomoda ninguém — mas é dívida a
+resolver **antes** de construir a tela de auditoria (B33)~~ **A frase riscada foi superada pela
+Etapa 22, que construiu a tela ANTES de resolver esta dívida — e isso foi decisão, não
+esquecimento.** Reduzir o que se grava é mudar o contrato de auditoria (*o que deixa de ser
+registrado?*), e essa decisão é sua; construir a tela primeiro **torna o problema visível**, que
+é progresso. O que a Etapa 22 fez para o problema não morder: a tela **corta cada valor em 300
+caracteres** e diz quantos faltam (furo **C29**), e a consulta continua paginada declarando o
+corte. **G8 segue aberto e esperando você.**
 
 **G7 (NOVO, medido na revisão da Etapa 15). As CINCO rotas de upload do módulo respondem erro
 genérico 500 quando o arquivo em si é rejeitado** — tipo errado (um PDF onde se espera imagem),
@@ -3251,8 +3360,11 @@ antes desta etapa não havia como saber quem mudou nem quando.
 
 ### O que esta etapa NÃO cobre (é decisão declarada, não esquecimento)
 
-- **Continua não havendo tela para ler o histórico** (é a mesma pendência da etapa anterior —
-  letra B33). Com esta etapa, o histórico ficou bem mais rico, e o custo de não ter tela subiu.
+- ~~**Continua não havendo tela para ler o histórico** (é a mesma pendência da etapa anterior —
+  letra B33). Com esta etapa, o histórico ficou bem mais rico, e o custo de não ter tela subiu.~~
+  — **PAGO na Etapa 22** (`8c6ffbe..169458d`): a tela **Almoxarifado → Auditoria** existe, com
+  filtro de entidade, ação, pessoa e período. Riscado em vez de apagado para quem reler esta
+  seção não concluir de novo que a pendência está de pé.
 - **Quem lê o histórico é um grupo ligeiramente mais amplo do que quem edita a configuração**:
   a leitura aceita administrador do sistema; a tela de configurações exige administrador do
   módulo. Nota, não risco — quem tem o primeiro consegue se tornar o segundo.
@@ -3522,6 +3634,133 @@ trocar o servidor de e-mail em produção de lambuja.
   host gravado ali é de outro produto e o remetente gravado ali tem dois endereços. Está medido e
   escrito no item B42.
 
+## Etapa 22 — A trilha de auditoria ganha uma tela (2026-08-28)
+
+Três etapas seguidas (18, 19 e 20) fizeram o sistema **anotar** quem mexeu em quê: o ciclo do
+inventário, os cadastros, as configurações que mudam regra de negócio, a lista de materiais por
+setor, a troca de foto de material. Tudo isso ficou gravado — e **ninguém tinha como ler**. A
+única forma de olhar o histórico era pedir a alguém que consultasse o banco por fora do sistema.
+Numa auditoria de verdade, um registro que ninguém consegue abrir vale quase o mesmo que registro
+nenhum.
+
+Agora existe a tela **Almoxarifado → Auditoria**. Ela responde a pergunta para a qual a trilha foi
+feita: **"quem mexeu nisto, e quando?"** — com filtro por tipo de coisa (material, conferência,
+configuração…), por ação, por pessoa e por período. Cada linha abre e mostra o **de/para**: só o
+que mudou, campo a campo, em vez do despejo técnico que estava guardado.
+
+Junto veio uma coisa invisível e importante: a tabela do histórico **não tinha nenhum índice**. É
+a tabela que mais cresce do módulo — cada salvamento de configuração escreve uma linha. Sem
+índice, filtrar por período obrigava o banco a ler a tabela inteira, e isso piora todo mês. Foram
+criados os três índices que faltavam (data, tipo de coisa, pessoa).
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| O histórico existia e **nenhuma tela o mostrava** — só consulta técnica ao banco | Tela **Almoxarifado → Auditoria**, no menu, ao lado de Configurações |
+| A consulta só sabia filtrar por tipo de coisa e por número do registro | Filtra também por **pessoa**, por **ação** e por **período** (data inicial e final), tudo combinável |
+| Não havia como perguntar "o que aconteceu ontem" | O período é **inclusivo nos dois extremos**, no horário de Brasília |
+| Uma data escrita errada (`ontem`, `2026-13-45`, `30 de fevereiro`) era aceita em silêncio e a resposta vinha **vazia**, parecendo prova de que nada aconteceu | A tela recebe **erro explícito** e mostra o painel vermelho, nunca "nenhum registro" |
+| O mesmo ato aparecia com dois nomes diferentes conforme a tela que o gravou (`CRIACAO` e `CRIAR`, `EDICAO` e `ATUALIZACAO` e `ATUALIZAR`) | O filtro tem **uma** opção por ato — "Criação" traz as duas grafias juntas — e a linha continua mostrando, em letra miúda, o nome cru que foi gravado |
+| Para ver o que mudou era preciso ler o texto técnico com todos os campos | A linha expande numa tabelinha **Campo · De · Para** |
+| A consulta trazia no máximo 200 linhas e avisava que cortou, sem oferecer saída | O aviso continua, e agora há **Anteriores / Próximos** para percorrer o resto |
+| A tabela do histórico não tinha **nenhum** índice — filtrar por data lia a tabela inteira | Três índices: data, tipo de coisa + número, e pessoa |
+
+### As regras, com o cenário exato
+
+**1. Só administrador entra — e quem não é vê o motivo, não uma tela vazia.**
+Entre com um usuário sem perfil de administrador do módulo e vá para
+`/almoxarifado/auditoria` pela barra de endereços. A tela abre com o painel vermelho de falta de
+permissão, e **nenhuma consulta é feita**. Tela vazia seria pior do que negar: vazia é
+indistinguível de "não há registros".
+
+**2. Data que não existe no calendário é recusada — e a recusa aparece.**
+Nos campos de data, digite `2026-02-30` (30 de fevereiro). A tela mostra o painel vermelho com a
+mensagem literal:
+
+> **Data inválida: use uma data real no formato AAAA-MM-DD**
+
+Isto é mais sutil do que parece e foi medido: `30 de fevereiro` é **aceito** tanto pelo
+JavaScript quanto pelo banco, que "rolam" a data para 2 de março. Sem esta guarda, a consulta não
+daria lista vazia — daria uma **janela alargada em silêncio**: uma busca de fevereiro devolvendo
+três dias de março, sem nada na tela dizendo que a pergunta foi outra.
+
+**3. Período invertido também é recusado.**
+Ponha data inicial `2026-08-20` e data final `2026-08-01`. As duas datas existem, então a regra
+anterior não pega. A mensagem literal é:
+
+> **Período inválido: a data inicial é posterior à data final**
+
+Antes disso, o pedido voltava com `200 OK` e lista vazia — o mesmo engano da regra 2 entrando pela
+outra porta.
+
+**4. Filtrar por um dia traz o expediente inteiro daquele dia.**
+Filtre pelo dia de hoje. Um ato registrado às **21:30** aparece nesse filtro. Parece óbvio e não
+é: o sistema grava a hora em **UTC**, então um ato das 21:30 de segunda está guardado como
+**00:30 de terça**. Sem a conversão, **as três últimas horas de todo expediente sumiriam** do
+filtro do próprio dia. A tela avisa isso em letra miúda logo abaixo dos filtros.
+
+**5. Sinônimo não divide a lista.**
+No filtro de ação, escolha **"Criação"**. O resultado traz tanto as linhas gravadas como `CRIACAO`
+quanto as gravadas como `CRIAR` — e cada linha mostra, embaixo do rótulo, o nome cru que foi
+gravado. O sistema não esconde que o vocabulário dele é inconsistente; ele só evita que você
+perca linhas por causa disso.
+
+**6. Expandir uma linha mostra o de/para, e nunca uma área em branco.**
+Clique em **Detalhes**. Se o ato guardou antes e depois, aparece a tabelinha `Campo · De · Para`.
+Se aquele ato não guardou nenhum dos dois lados — existem operações assim —, a mensagem literal é:
+
+> **Sem detalhes registrados para este ato — a linha existe, mas não guardou o antes nem o
+> depois.**
+
+Área em branco pareceria defeito da tela, e "nada mudou" seria mentira.
+
+**7. Senha trocada aparece como trocada, sem mostrar a senha.**
+Numa linha de mudança de configuração com senha, o campo aparece com `(alterado)` dos dois lados.
+A tela **exibe o que está gravado** e não embeleza. Isso é resultado de uma decisão de leitura: a
+régua que monta o de/para **não descarta campos com os dois lados iguais** — se descartasse, a
+troca de senha mascarada **sumiria da tela**, e o histórico mostraria "prazo: 30 → 45" escondendo
+que a senha foi trocada no mesmo salvamento.
+
+**8. Filtro vazio diz o que sabe, e não mais.**
+Filtre por uma combinação que não tem nada. A mensagem literal é:
+
+> **Nenhum registro para os filtros aplicados**
+
+E não "não há registros" — a tela não sabe nada sobre o mundo, só sobre os filtros que você pôs.
+Numa auditoria, a diferença entre as duas frases é a diferença entre uma informação e uma
+afirmação falsa.
+
+### Roteiro rápido para demonstrar ao vivo
+
+1. Entrar como administrador → menu **Almoxarifado → Auditoria** (o item fica ao lado de
+   Configurações; só quem pode configurar o módulo o vê).
+2. Filtrar **pelo próprio usuário** e **pelo dia de hoje** — devem aparecer os atos da sessão.
+3. **Expandir** uma linha e mostrar o de/para.
+4. Trocar o filtro de ação para **"Criação"** e apontar que a lista traz `CRIACAO` **e** `CRIAR`
+   juntos, com o nome cru visível em cada linha.
+5. Inverter as datas (inicial depois da final) e mostrar o erro **Período inválido**.
+
+### O que esta etapa NÃO cobre
+
+- **Exportar a trilha para Excel.** O módulo já tem exportação nos Relatórios; enxertar uma
+  segunda régua aqui duplicaria trabalho. Se a demanda aparecer, a trilha vira mais um relatório
+  (letra **D**).
+- **Corrigir os nomes das ações no banco.** A tela agrupa os sinônimos **na exibição** e o dado
+  histórico fica intacto — reescrever o que o sistema afirma ter registrado é exatamente o que
+  uma trilha de auditoria não pode sofrer. É decisão sua, item **B47**.
+- **Padronizar os nomes das ações nas gravações novas.** São ~45 pontos do código; feito junto
+  com esta tela, dado e tela mudariam no mesmo dia e não haveria como saber qual dos dois quebrou
+  se algo quebrasse (letra **D**).
+- **Reduzir o volume do histórico de permissões por setor.** Cada salvamento grava o mapa inteiro
+  (~46 KB). A tela agora **mostra** essas linhas, o que torna o problema visível — que já é
+  progresso. Encolher o que se grava é mudar o contrato de auditoria: o que deixa de ser
+  registrado? Decisão sua (item **G8** e letra **D**).
+- **Apagar histórico antigo (retenção/expurgo).** Sem política definida por você, apagar trilha é
+  a última coisa que se implementa por conta própria (letra **D**).
+- **Trilha por conferência específica para o Gestor.** O gate continua sendo Administrador. Abrir
+  para o Gestor é decisão de exposição, e continua sua (era a opção 2 do antigo **B33**).
+
 ## Onde estamos e o que vem a seguir
 
 - **Concluído até aqui:** Etapas 0 a 11 — fundação, motor de estoque, cadastros, requisições,
@@ -3549,6 +3788,23 @@ trocar o servidor de e-mail em produção de lambuja.
   contexto do material para quem decide compra, e o relatório **Custo por projeto** com herança
   de projeto na devolução. BOM/OP/centro-de-custo ficaram **bloqueados por dependência com a
   medição escrita** (BOM inexistente; MES sem uso) — não são promessa.
+- **Etapa 22 entregue (2026-08-28):** **a trilha de auditoria ganha leitor** (feature 23,
+  `8c6ffbe..169458d`) — três etapas (18, 19 e 20) instrumentaram o módulo e **nada disso tinha
+  tela**; agora tem **Almoxarifado → Auditoria**, com filtro de entidade, ação, pessoa e período,
+  o **de/para legível** por linha (só o que mudou, não o despejo técnico) e paginação. A consulta
+  ganhou os quatro filtros novos, **validação de data que recusa o que não existe no calendário**
+  (o 30 de fevereiro passava em JavaScript e no banco, alargando a janela em silêncio) e a
+  conversão do dia de Brasília para o horário gravado — sem ela, **as três últimas horas de todo
+  expediente sumiriam** do filtro do próprio dia. A tabela do histórico, que não tinha **nenhum**
+  índice, ganhou os três que faltavam. Revisão do plano: **10 achados, 2 críticos** — os dois
+  eram erro meu de desenho: mandar reusar a régua de diff das configurações como leitor (ela
+  apagaria a troca de senha mascarada e fabricaria alterações que não houve) e uma varredura de
+  vocabulário ao mesmo tempo ruidosa e cega. Revisão adversarial: **9 achados, 2 bloqueantes**, e
+  o alvo prioritário dela **REFUTADO** — o bloqueante principal era a suíte do cliente ficar
+  **vermelha em qualquer máquina em UTC**, ou seja, o placar verde valia só nesta máquina. **O
+  que continua aberto e é seu:** normalizar os nomes das ações no banco (**B47**), abrir a trilha
+  para o Gestor (**B33**, metade b), o volume do log de permissões (**G8**) e a política de
+  retenção (letra **D**).
 - **Etapa 21 entregue (2026-08-28):** **exposição no núcleo do CRM** (`d5c8d3a..07a4b1c`) — a
   **primeira etapa fora do módulo almoxarifado**, e a única até aqui que fechou uma **escalada de
   privilégio**: o zip de `GET /api/backup` levava o arquivo de segredos do servidor, e quem
