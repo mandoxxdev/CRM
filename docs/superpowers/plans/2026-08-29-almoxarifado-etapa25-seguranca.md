@@ -197,7 +197,7 @@ roda **depois** do prune. No primeiro boot de uma instalação nova (volume vazi
 **Mova o prune para dentro de `initializeDatabase`, depois de `inicializarConfiguracoesPadrao`
 (`:2074`).** Só o `backupDatabaseFiles` precisa acontecer antes das migrations; o prune não.
 
-> **STATUS: Task 2 FEITA** — commit `f2f1400`. Placar: `backupRetencao.api.test.js` **33/33**
+> **STATUS: Task 2 FEITA** — commit `d81191e`. Placar: `backupRetencao.api.test.js` **33/33**
 > (era 21, +12 cenários), `dbRecoveryBackup.api.test.js` **5/5** antes e depois, `test:api`
 > **152/152** arquivos (nenhum arquivo novo, como previsto), `test:sqlite` **5/5**.
 > Duas divergências registradas no fim desta task.
@@ -220,7 +220,7 @@ roda **depois** do prune. No primeiro boot de uma instalação nova (volume vazi
   `[DB Recovery] 2 acompanhante(s) orfao(s) removido(s)` + `retencao: 2 arquivo(s) removido(s)
   (manter 30 dias, teto de 10 copias)` + `✅ Banco de dados totalmente inicializado`, **sem**
   `Falha na preparação do banco` e sem `no such table: configuracoes`.
-- [x] **Step 3: controle positivo** (commitado antes, `f2f1400`), **dois**, lendo qual asserção
+- [x] **Step 3: controle positivo** (commitado antes, `d81191e`), **dois**, lendo qual asserção
   caiu:
   1. leitura ignorando a chave (`const bruto = undefined`) → **o cenário do `'7'` caiu nomeando o
      valor**: "backup_manter_dias='7' virou manterDias=30 — a chave foi ignorada e o valor da
@@ -237,7 +237,7 @@ roda **depois** do prune. No primeiro boot de uma instalação nova (volume vazi
   — ou seja, `dbStartupFailed = true` e `/health` (`index.js:437`) reportando
   `db_startup_failed` pelo resto do processo. Experimento revertido com `git checkout`.
 - [x] **Step 4:** `test:api` **152/152**, `test:sqlite` **5/5**, `dbRecoveryBackup` **5/5**;
-  commit `f2f1400`.
+  commit `d81191e`.
 
 #### Divergências desta task (o que saiu diferente do plano, e por quê)
 
@@ -330,7 +330,7 @@ os **23 movimentos originados em serviço gravariam `null`** — metade da featu
 
 ## Próxima tarefa detalhada
 
-**As Tasks 1 (`6209037`) e 2 (`f2f1400`) estão feitas. A próxima é a Task 3** (a origem da
+**As Tasks 1 (`6209037`) e 2 (`d81191e`) estão feitas. A próxima é a Task 3** (a origem da
 requisição na auditoria de movimentação). Ela **não** depende de nada do que as Tasks 1 e 2
 tocaram — `dbRecovery.js` e o boot do `index.js` não têm interseção com `stockService.js`.
 

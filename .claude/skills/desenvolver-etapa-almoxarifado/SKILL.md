@@ -80,6 +80,10 @@ Regras de execução:
   O tronco *é* o congelamento do contrato interno da etapa.
 - **Galhos de backend em paralelo só em worktrees isoladas** (`superpowers:using-git-worktrees`)
   — os testes batem num SQLite só; dois executores na mesma árvore corrompem a suíte um do outro.
+- **Arquivo de scratchpad precisa de nome único por agente.** O diretório é compartilhado entre
+  os agentes em paralelo: na Etapa 25 dois executores usaram `msg.txt` para a mensagem de commit
+  e um sobrescreveu o do outro. Não custou nada daquela vez porque o commit já tinha saído, mas
+  o modo de falha é um agente commitar com a mensagem do outro. Use `msg-<assunto>.txt`.
 - **Galho testa contra o motor REAL, nunca contra mock do motor.** Mock entre rotas
   institucionaliza divergência: cada agente escreve o mock refletindo a própria suposição e as
   duas suítes passam provando coisas incompatíveis. Mock de JSON é legítimo **só na fronteira
