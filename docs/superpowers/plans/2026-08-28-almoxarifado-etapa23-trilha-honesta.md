@@ -142,11 +142,27 @@ o retry **aplica a escrita depois**. É o defeito nº 1 do design por um caminho
 
 ---
 
-### Task 1 (tronco): `PUT /configuracoes` atômico
+### Task 1 (tronco): `PUT /configuracoes` atômico — FEITA (`878f184` + `3e317fa`)
+
+> **Entregue.** `test:api` **148/148** arquivos (147 + o novo), `test:almoxarifado` 42/0,
+> `test:sqlite` 5/0. O C1 foi aplicado **letra por letra** (a ordem dos parâmetros do plano está
+> certa: pares do `CASE` → `updated_by` → chaves do `IN`).
+> **Cenários entregues: 4, não 2.** Além dos dois do plano, um que restaura o `db.run` e prova
+> que a rota volta ao normal (senão um patch vazando do `finally` deixaria vermelho por setup
+> quem escrever o próximo cenário), e um que prova que **salvar 2 chaves não encosta na 3ª nem em
+> outra configuração** — o `CASE` sem `ELSE` devolve `NULL` para chave que não casou, então
+> **sem o `WHERE chave IN` um Salvar de três chaves zeraria a tabela inteira**. Nem o plano nem o
+> design dizem isso; o `IN` aparece nos dois como parte do SQL, sem nota de que é ele que segura
+> o `ELSE` ausente. É a única armadilha do C1 que a revisão não nomeou.
+> **Achado no próprio teste (commit `3e317fa`):** o controle positivo do 4º cenário
+> (`WHERE chave IN (...) OR 1=1`) derrubava o cenário **pela guarda de setup**, não pela
+> asserção final — os cenários anteriores já tinham zerado a chave de controle. Vermelho pelo
+> motivo errado. Corrigido semeando a chave de controle com valor conhecido; agora cai nomeando
+> `notificacoes_dest_ajustes=null`.
 
 **Files:** Modify `server/routes/almoxarifado.js`; Test `server/tests/api/configuracoesAtomicidade.api.test.js`.
 
-- [ ] **Step 1: teste que falha.** Dois cenários:
+- [x] **Step 1: teste que falha.** Dois cenários:
   - **Caminho feliz:** salvar 3 chaves → 200, as três com o valor novo no banco, **uma** linha de
     auditoria com o diff das três.
   - **Falha no meio (o cenário que importa):** patchar `db.run` na **instância** para lançar no
@@ -166,14 +182,22 @@ o retry **aplica a escrita depois**. É o defeito nº 1 do design por um caminho
   - **O caminho feliz precisa de valores DIFERENTES dos atuais** (achado A9): a auditoria só é
     gravada `if (Object.keys(diff.novos).length)` (`:2525`), então reenviar os valores que já
     estão no banco produz **zero** linhas e o cenário falha por motivo alheio à RN-01.
-- [ ] **Step 2: rodar, ver falhar** (hoje o segundo cenário falha por deixar chaves gravadas),
-  **implementar o C1, verde.**
-- [ ] **Step 3: controle positivo** (commitar antes): volte ao laço de `UPDATE` um-por-um,
+- [x] **Step 2: rodar, ver falhar** (hoje o segundo cenário falha por deixar chaves gravadas),
+  **implementar o C1, verde.** Vermelho medido **antes** do conserto, na asserção do banco
+  intocado: `+ notificacoes_dest_entradas=1 / + notificacoes_dest_saidas=2 / notificacoes_dest_ajustes=C`.
+- [x] **Step 3: controle positivo** (commitar antes): volte ao laço de `UPDATE` um-por-um,
   **mantendo o patch seletivo** → o cenário da falha no meio tem de cair **na asserção do banco
   intocado**, nomeando a chave que ficou gravada. Se cair só no status, a asserção que interessa
   não está provada. Resultado medido pela Fase 2 com o patch seletivo: `UPDATE` único →
   `["a=A","b=B","c=C"]` (intocado); laço → `["a=1","b=2","c=C"]` (duas gravadas).
-- [ ] **Step 4: `npm run test:api`; commit.**
+  **Confirmado na execução:** o laço cai em `'o 500 tem de descrever um banco INTOCADO'` com
+  `entradas=1, saidas=2, ajustes=C` — os outros três cenários seguem verdes, e o **status
+  continua 500 nos dois códigos**, que é a prova de que o status sozinho não pegaria o defeito.
+  **Segundo controle positivo (não previsto no plano):** `WHERE chave IN (...) OR 1=1` derruba o
+  4º cenário nomeando `notificacoes_dest_ajustes=null`. `md5sum` de `routes/almoxarifado.js`:
+  `001c0e6e…` antes → `9dbc76c9…`/`47dd0309…` sabotado → `001c0e6e…` restaurado;
+  `git diff --stat` vazio.
+- [x] **Step 4: `npm run test:api`; commit.** 148/148 arquivos.
 
 ---
 
@@ -251,9 +275,25 @@ razão estava errada e por quê — não apague, ele explica o `SELECT`, que con
 
 ## Próxima tarefa detalhada (para retomar sem reler o código)
 
-Se parar aqui: o próximo passo é a **Fase 2** — agente fresco com este plano + o design, três
-perguntas (os contratos cobrem os erros e as mensagens literais? as RN batem com o código? a
-Task 2 é galho de verdade?). Dar atenção especial a **duas armadilhas já conhecidas**: `changes`
-contando linha casada e não linha alterada (é o defeito que a etapa conserta — o plano não pode
-repeti-lo em outro lugar), e a proibição de transação da Global Constraint 1, que é
-contraintuitiva e um revisor desatento vai querer "corrigir".
+**Feitas: Fase 2, Task 0 e Task 1.** O próximo passo é a **Task 2** (exclusão idempotente nas
+CINCO rotas), inteira acima — ela toca o **mesmo arquivo** da Task 1 (`routes/almoxarifado.js`),
+em trecho distante, então é **serial**, não paralela. Leia antes de começar:
+
+- o **C2** (mensagens literais de 404 por rota, e o `function`, não arrow, para ter `this.changes`);
+- as **duas coisas que o plano original não previa** listadas na Task 2: o teste existente
+  `auditoriaCadastros.api.test.js:339-354` **vai ficar vermelho de propósito** (afirma `2`, vira
+  `1`), e o `setor` (`:2118`), cujo ramo "404 por `SELECT` vazio" é **inalcançável**;
+- a **quinta rota**, `DELETE /materiais/:id` (`:623`), onde o conserto é só a condição da
+  auditoria (`if (antes && antes.ativo === 1)`) e o comentário `:615-622` precisa ser reescrito.
+
+Contrato que a Task 2 consome da Task 1: **nenhum** — as duas rotas não se cruzam. O que a Task 1
+deixa como régua para ela é a **Global Constraint 1** (nada de `BEGIN`/`COMMIT` com `await` no
+meio) e a lição do controle positivo: **sabotagem que derruba o cenário certo pela asserção
+errada não prova nada**. Na Task 1 isso aconteceu de verdade (a guarda de setup disparava antes
+da asserção de peso, `3e317fa`); na Task 2 o análogo é o cenário cair pelo **status** em vez de
+pela **contagem de linhas de auditoria**.
+
+Armadilhas já conhecidas, que continuam valendo: `changes` contando linha **casada** e não linha
+**alterada** (é o defeito que a etapa conserta — o plano não pode repeti-lo em outro lugar), e a
+proibição de transação da Global Constraint 1, que é contraintuitiva e um revisor desatento vai
+querer "corrigir".

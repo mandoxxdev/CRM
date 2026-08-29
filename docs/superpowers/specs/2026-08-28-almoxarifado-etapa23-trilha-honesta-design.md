@@ -110,6 +110,15 @@ UPDATE configuracoes_almoxarifado
 ```
 
 Grava as 18 ou não grava nenhuma, e não existe janela em que metade esteja aplicada.
+
+> **Nota da Task 1 (medida na implementação): o `WHERE chave IN (...)` não é decoração, e nem
+> este documento nem o C1 do plano diziam por quê.** O `CASE` não tem `ELSE`, e `CASE` sem `ELSE`
+> devolve **`NULL`** para toda linha que não casou nenhum `WHEN`. Sem o `IN` — ou com ele frouxo —
+> um Salvar de três chaves gravaria `NULL` em **todas as outras configurações da tabela**, com
+> HTTP 200. É a única armadilha do `UPDATE` único, e ela é silenciosa: o cenário feliz passa
+> igual. Há cenário próprio segurando isso em `configuracoesAtomicidade.api.test.js` (salvar 2
+> chaves não pode encostar na 3ª nem em `tolerancia_inventario_percentual`), e o controle
+> positivo `OR 1=1` o derruba nomeando a chave que virou `null`.
 **Descartado** também registrar a auditoria dentro do `catch` (rastro do ato parcial): documenta
 o estrago em vez de evitá-lo, e deixa o banco meio gravado do mesmo jeito.
 
