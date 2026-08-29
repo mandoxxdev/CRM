@@ -118,7 +118,7 @@ do servidor), falso para o texto.
 
 ---
 
-### Task 2 (tronco): a revogação de perfil deixa rastro
+### Task 2 (tronco): a revogação de perfil deixa rastro — ✅ FEITA (`07cac3a`)
 
 **Files:** Modify `server/routes/almoxarifado/extended.js:273-315`;
 Test `server/tests/api/perfisUsuario.api.test.js` (o que já existe, 11 cenários).
@@ -128,17 +128,33 @@ Test `server/tests/api/perfisUsuario.api.test.js` (o que já existe, 11 cenário
 `dados_novos`, então a concessão aparece na tela de auditoria **sem o "de"**. É a mesma família
 que a Etapa 23 fechou, na rota que decide quem tem acesso ao módulo.
 
-- [ ] **Step 1: teste que falha,** acrescentado ao arquivo existente: atribuir → 1 linha com
+- [x] **Step 1: teste que falha,** `07cac3a` — acrescentado ao arquivo existente: atribuir → 1 linha com
   `dados_anteriores` refletindo o perfil anterior (`null` na primeira vez); trocar de perfil →
   `dados_anteriores` traz o **anterior**; **remover** → **uma linha nova**, com `dados_novos`
   dizendo que o perfil saiu. **Asserção de peso: a CONTAGEM de linhas** — hoje remover deixa a
   contagem parada, e uma asserção sobre "a última linha" passaria com o bug.
-- [ ] **Step 2: implementar.** Ler o perfil anterior **antes** de escrever (a rota já faz
-  `SELECT` do usuário; o `perfil_explicito` precisa vir junto), e auditar nos **dois** caminhos.
-  Mantenha o padrão do módulo: pós-escrita, best-effort, `.catch()` que não derruba a resposta.
-- [ ] **Step 3: controle positivo** (commitar antes): remova a auditoria do caminho de remoção →
-  o cenário da contagem cai **dizendo que a remoção não gerou linha**.
-- [ ] **Step 4: `npm run test:api`; commit.**
+  Os três cenários entraram no arquivo existente (11 → **14**), com a **contagem** como asserção
+  de peso e o estado semeado com valor conhecido (usuário 106 novo, `DELETE` da trilha dele antes
+  da guarda, para que a guarda de setup não seja o que derruba a asserção de peso).
+- [x] **Step 2: implementar.** `07cac3a`. O `SELECT` do usuário ganhou o mesmo `LEFT JOIN` do
+  `GET` (traz `perfil_explicito`), e os **dois** caminhos auditam: `ATUALIZAR` na atribuição/troca,
+  **`EXCLUSAO`** na remoção (verbo que já está em `GRUPOS_ACAO`, então a revogação fica filtrável
+  na tela como "Exclusão"). Pós-escrita, best-effort, `.catch()` mantido.
+  **Decisão registrada:** os dois lados gravam a **mesma forma**
+  (`{usuario, perfil, perfil_efetivo, origem}`, espelhando o corpo do C2), porque
+  `auditLabels.alteracoesDaLinha` é **união de chaves** — chave presente só de um lado sairia na
+  tela como `null -> valor` fingindo alteração. E a remoção audita **mesmo quando não havia perfil
+  explícito**: registra-se o ATO, não o diff (omitir por "não mudou nada" é a família de defeito
+  que a etapa fecha).
+- [x] **Step 3: controle positivo**, commitado antes, **três** sabotagens com alvo: (a) auditoria
+  do caminho de remoção desligada → caiu **só** o cenário da contagem, com
+  `a remoção do perfil não gerou linha de auditoria: a trilha tinha 2 e continuou com 2`;
+  (b) `dados_anteriores` fora da atribuição → caíram os dois cenários do "de"
+  (`dados_anteriores ficou nulo…`); (c) `perfilAnterior` lido **depois** da escrita → caíram os
+  três, nomeando o valor errado (`veio "GESTOR"` na troca). `md5sum` `47ea57ea` antes e depois do
+  restauro, `git diff --stat` vazio.
+- [x] **Step 4:** `test:api` **150/150 arquivos**, `test:almoxarifado` **42/42**, `perfisUsuario`
+  **14/14** (os 11 congelados verdes — contrato HTTP intacto). Commit `07cac3a`.
 
 ---
 
@@ -197,12 +213,23 @@ causa dele). **A Task 1 está FEITA** (`a81e51a`): `QUALIDADE` existe em `PERFIS
 `visualizar` e `inspecionar`, tem rótulo e descrição em `PERFIS_INFO`, e está provado no gate
 real (404 em `PUT /lotes/:id/status`, 403 em `POST /movimentacoes`).
 
-O próximo passo é a **Task 2** — a revogação de perfil deixar rastro.
-Contrato que ela consome: **C2** acima (`PUT /perfis-usuario/:usuarioId`, `extended.js:273`), que
-**não pode mudar** — os 11 cenários de `tests/api/perfisUsuario.api.test.js` o congelam. O ponto
-de atenção é `extended.js:294-297`, que retorna **antes** do `registrarAuditoria` de `:309`: a
-asserção de peso é a **contagem** de linhas de auditoria, porque uma asserção sobre "a última
-linha" passa com o bug.
+**A Task 2 está FEITA** (`07cac3a`): o caminho "voltar ao padrão" audita (`EXCLUSAO`) e a
+atribuição grava `dados_anteriores`. O contrato C2 **não mudou** — os 11 cenários congelados
+seguem verdes, e o arquivo foi a 14.
+
+O próximo passo é a **Task 3** — a aba existente (`TabPerfisAcesso`,
+`ConfiguracoesAlmoxarifado.js:2545-2680`): tirar `ADMINISTRADOR` do seletor (RN-07) e escrever o
+primeiro teste da aba, contra o mock do **C1/C2** (a aba tem **zero** teste hoje). Pontos de
+atenção: o seletor lê `data.perfis` do servidor (não hardcoda), então o filtro tem de ser na
+tela; `origem: 'forcado'` não pode mostrar seletor (RN-03); e o fuso da suíte é fixado por
+`client/jest.globalSetup.js` — não refixe `process.env.TZ` no topo do arquivo.
+
+O que a Task 2 acrescentou ao que a Task 3/4 pode assumir: cada `PUT` de perfil grava **uma**
+linha em `auditoria_log_almoxarifado` (`entidade = 'perfil_almoxarifado_usuario'`,
+`entidade_id = usuario_id`), com `acao` `ATUALIZAR` ou `EXCLUSAO` e os dois lados no formato
+`{usuario, perfil, perfil_efetivo, origem}`. A Task 4 lê isso pelo
+`GET /auditoria?entidade=perfil_almoxarifado_usuario` — **note que agora um par
+atribuir+revogar rende DUAS linhas**, então não espere `total === 1`.
 
 O que a Fase 2 **refutou** e não precisa ser reaberto: nenhuma das quatro rotas de `inspecionar`
 faz checagem além do `requirePermission` (medido com usuário QUALIDADE real — as quatro devolvem
