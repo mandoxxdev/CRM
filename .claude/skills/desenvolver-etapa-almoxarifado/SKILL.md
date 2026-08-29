@@ -31,6 +31,12 @@ Crie uma tarefa por fase abaixo e execute em ordem.
 **Se a spec contradiz o código existente, pare e registre** — spec errada já enganou sessões
 inteiras aqui. A correção da spec faz parte da etapa (regra 5 do CLAUDE.md).
 
+**Cuidado com o falso negativo do `grep` em palavra acentuada.** `grep -i "inspec"` devolve
+**zero** para "inspeção" — a cedilha quebra a raiz truncada. Na Etapa 27 isso quase virou uma
+pendência inventada ("o README não menciona inspeção"), quando o README mencionava nos dois
+lugares certos. Ao medir ausência, teste a régua contra um caso que você **sabe** que existe
+antes de concluir que não existe. É o mesmo princípio do controle positivo, aplicado à busca.
+
 **E o inverso também: ANTES de medir "o que existe / o que falta / em quantos lugares está",
 leia o que a spec já mediu.** Duas etapas seguidas desenharam sobre varredura minha que estava
 errada: na 24 afirmei que uma tela não existia (existia, estava no menu e no manual) porque
