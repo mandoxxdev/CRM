@@ -687,7 +687,24 @@ Três comportamentos do detalhe que evitam leitura errada:
 
 E não "não há registros" — a tela sabe o que os filtros trouxeram, não o que existe no mundo. Quando a consulta encontra mais linhas do que cabem na página, aparece um aviso dizendo **quantas** foram encontradas e quantas estão sendo mostradas, e os botões **Anteriores** e **Próximos** percorrem o resto. Trocar qualquer filtro volta para a primeira página.
 
-**O que a tela não faz.** Não exporta para Excel (a exportação do módulo vive nos Relatórios), não apaga nem arquiva histórico antigo — o registro cresce indefinidamente e nada no sistema o remove.
+**De onde partiu o ato — só nas movimentações.** As linhas de **movimentação de estoque** guardam, além de quem e quando, **de onde** o movimento veio. No detalhe expandido aparecem dois campos a mais:
+
+| Campo | O que é |
+|---|---|
+| `ip` | O endereço de rede do computador ou celular de quem fez o movimento |
+| `user_agent` | O navegador e o sistema operacional usados, cortados em 255 caracteres |
+
+Quando o sistema é acessado através de um servidor intermediário, o `ip` continua sendo o **da pessoa**, não o do servidor: o sistema lê a cadeia de encaminhamento e guarda o primeiro endereço dela, que é o de origem. Nesse caso aparece também um terceiro campo, `ip_proxy`, com o endereço do intermediário. **Quando não há intermediário, `ip_proxy` não aparece** — campo vazio não é gravado, justamente para não encher toda movimentação com uma linha `— → —` que não informa nada.
+
+Três coisas que essa origem alcança e que não são óbvias:
+
+- **Movimentos criados por dentro do sistema também registram.** Uma devolução, um retorno de material de terceiro ou o estorno gerado pela exclusão de uma requisição não são digitados na tela de Movimentações — nascem de outros fluxos —, e mesmo assim guardam de onde partiram.
+- **O estorno de um cancelamento registra.** Cancelar uma movimentação gera **duas** linhas no histórico, a do cancelamento e a do estorno, e as duas trazem `ip` e `user_agent`.
+- **Só a movimentação tem esses campos.** Requisição, recebimento, inspeção e alterações de cadastro registram quem e quando, mas não de onde.
+
+O sistema **anota** a origem; ele não a usa para decidir nada. Não existe recusa de acesso por endereço de rede, nem restrição de horário, nem aviso de "acesso de local incomum".
+
+**O que a tela não faz.** Não exporta para Excel (a exportação do módulo vive nos Relatórios), não apaga nem arquiva histórico antigo — o registro cresce indefinidamente e nada no sistema o remove. Não há filtro por endereço de origem.
 
 ---
 
@@ -2979,6 +2996,6 @@ Com as retenções resolvidas, o ajuste por localização também fica seguro e 
 
 **Este documento não cobre:**
 
-- **instalação, atualização e configuração de servidor** do sistema — nada aqui trata de ambiente, acesso à rede, cópias de segurança ou implantação. Isso inclui a tela **Configurações do Sistema** do CRM (empresa, servidor de e-mail, backup), que é do sistema inteiro e não do Almoxarifado: as configurações **do módulo** ficam em Almoxarifado → Configurações, e são essas que este manual descreve;
+- **instalação, atualização e configuração de servidor** do sistema — nada aqui trata de ambiente, acesso à rede, cópias de segurança ou implantação. Isso inclui a tela **Configurações do Sistema** do CRM (empresa, servidor de e-mail, backup), que é do sistema inteiro e não do Almoxarifado: as configurações **do módulo** ficam em Almoxarifado → Configurações, e são essas que este manual descreve. **Uma ressalva sobre a aba Backup dessa tela do sistema, porque a aparência engana:** dos três campos dela, apenas **"Manter Backups (dias)"** tem efeito — ele define por quantos dias as cópias do banco são guardadas, com um mínimo de 3 e um máximo de 10 cópias mantidas, e um valor vazio ou inválido cai no padrão de 30 dias em vez de apagar tudo. **"Backup Automático" e "Frequência" não fazem nada**: não existe agendamento no servidor, e marcá-los como "Ativado / Diário" não cria uma rotina diária. As cópias são feitas **quando o servidor é iniciado** e quando alguém baixa o backup pela tela;
 - **o funcionamento interno dos outros módulos** com os quais o Almoxarifado conversa (Compras, Contas a Pagar, Ordens de Serviço, Projetos, Clientes). Este manual descreve apenas o que o Almoxarifado faz com essa informação: o pedido de compra que alimenta um recebimento, a conta a pagar gerada ao processar a nota, a OS ou o projeto que dá destino a uma saída;
 - **o que ainda não existe no sistema.** O manual descreve o comportamento de hoje. Se uma função que você espera não está descrita aqui, o mais provável é que ela ainda não exista — e não que exista escondida numa tela. Quando uma decisão de escopo é deliberada, o texto diz isso explicitamente ("não é modelado", "não bloqueia", "é registro de cadastro").

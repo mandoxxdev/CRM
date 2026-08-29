@@ -2,9 +2,29 @@
 
 > Atualizado em 2026-08-29 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 24) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 25) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20.
 
-> ## Onde o desenvolvimento está — 2026-08-29 (Etapa 24 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-08-29 (Etapa 25 ENTREGUE · modo contínuo pelo mapa)
+>
+> **Etapas 1 a 20 e 22 a 25 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
+> A **Etapa 25 (de onde veio cada movimento, e o backup que parou de crescer sozinho)** fechou em
+> 2026-08-29 (`6209037..9027c36`) e é a **primeira etapa da perna *Segurança*** da feature 23 —
+> as etapas 18 a 23 fecharam a perna de *Auditoria* e a 24 começou a de *Perfis*. Ela **não tem
+> tela nova**: o que muda aparece dentro da tela de **Auditoria** que já existe e no campo
+> **"Manter Backups (dias)"** que já estava lá sem funcionar. Entregue: **(1)** cada movimentação
+> passou a registrar **de onde veio** — endereço de rede e aparelho —, cobrindo os 28 caminhos que
+> geram movimento, inclusive o **estorno** do cancelamento; **(2)** o campo **"Manter Backups
+> (dias)"** deixou de ser decorativo e passou a decidir a limpeza, com trava de **no mínimo 3 e no
+> máximo 10 cópias**; **(3)** a limpeza passou a recolher os **arquivos auxiliares órfãos** que
+> nenhuma rotina alcançava — são **132 arquivos e 44 MB** parados no servidor de produção.
+> **Atenção operacional (duas coisas):** a limpeza roda **sozinha no primeiro arranque depois do
+> deploy** e vai apagar **135 arquivos / ~57 MB** — leia a **A5** das novidades antes de subir; e
+> a aba **Backup** fica com **um** campo funcionando e **dois** decorativos (*Backup Automático* e
+> *Frequência* continuam sem efeito — furo **C32**). **E uma decisão espera você:** quais
+> operações sobre material crítico exigem duas assinaturas (**B57**). Ver a seção "Etapa 25" no
+> fim deste guia.
+>
+> **Antes: Etapas 1 a 20 e 22 a 24 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
 >
 > **Etapas 1 a 20 e 22 a 24 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
 > A **Etapa 24 (a Qualidade ganha perfil, e a tela de perfis para de mentir)** fechou em
@@ -3537,6 +3557,113 @@ administrador do sistema ou administrador do módulo Almoxarifado).
   filtro é da tela. Rode a consulta **A4** das novidades antes do deploy — furo **C31**.
 - **A trilha antiga não ganhou o "de" retroativamente.** As sete atribuições anteriores a esta
   etapa continuam registradas como estavam.
+
+
+## Etapa 25 — De onde veio cada movimento, e o backup que parou de crescer sozinho (ENTREGUE — 2026-08-29)
+
+> **Não tem tela nova.** O que mudou aparece dentro da tela de **Auditoria** e num campo da aba
+> **Backup** das Configurações que já existia sem funcionar.
+
+**O problema, em uma frase cada:**
+
+1. O histórico de movimentação dizia **quem** e **quando**, nunca **de onde**. Numa dúvida sobre
+   uma baixa estranha, dava para saber o nome da pessoa e mais nada.
+2. A pasta de backups do servidor **nunca parava de crescer**: cada cópia do banco deixa dois
+   arquivos auxiliares, e a limpeza automática apagava a cópia e **esquecia os auxiliares**. Em
+   produção sobraram **132 arquivos órfãos ocupando 44 MB** que nenhuma rotina recolhia.
+3. O campo **"Manter Backups (dias)"** das Configurações **não fazia nada**. Salvava um número que
+   nenhum código lia.
+
+**Um problema sério pego antes de chegar em produção:** a primeira versão lia a configuração de
+retenção cedo demais no arranque, antes de o banco terminar de se montar. Num servidor em uso
+ninguém notaria; **numa instalação nova, o sistema subiria com o sinal de saúde travado em "falha
+no banco" para sempre** e o backup de arranque nunca rodaria. Foi reproduzido de propósito, num
+servidor limpo, antes de existir a correção.
+
+### Roteiro de teste manual
+
+**Parte 1 — a origem da movimentação (5 minutos)**
+
+1. Entre como **Administrador**.
+2. **Almoxarifado → Movimentações** → registre uma **entrada** de qualquer material (quantidade
+   pequena, para não bagunçar o saldo).
+3. **Almoxarifado → Auditoria** → no filtro **Entidade**, escolha **Movimentação** → clique na
+   linha mais recente para expandir.
+4. **Confira:** além de `material_id`, `tipo`, `quantidade` e `saldo_posterior`, aparecem agora as
+   linhas **`ip`** e **`user_agent`**. O `ip` é o endereço do computador de onde você clicou; o
+   `user_agent` é o navegador. A coluna **De** mostra `—` em todas as linhas — normal, movimentação
+   é criação, não havia estado anterior.
+5. **Não** deve aparecer uma linha `ip_proxy` se você está acessando direto (sem servidor
+   intermediário). Isso é de propósito: gravá-la vazia encheria toda movimentação com uma linha
+   `ip_proxy: — → —` inútil.
+6. Volte a **Movimentações** e **cancele** o movimento que acabou de criar. O sistema **exige**
+   justificativa — tente sem, e a mensagem literal é:
+
+   > *Justificativa obrigatória para cancelamento*
+
+7. **Auditoria** de novo: aparecem **duas** linhas novas — o **cancelamento** e o **estorno** — e
+   **as duas** têm `ip` e `user_agent`. O estorno é criado por um caminho diferente do resto do
+   sistema e teria ficado de fora se ninguém tivesse ido atrás dele.
+8. **O caminho "por dentro do sistema":** vá em **Almoxarifado → Devoluções**, registre uma
+   devolução. Na **Auditoria**, a entrada gerada por ela **também** traz `ip`. Este é o teste que
+   importa: movimentos criados por dentro do sistema (devolução, retorno de terceiro, exclusão de
+   requisição) são **23 dos 28** caminhos, e são justamente os que o desenho original da etapa
+   teria deixado sem origem.
+
+**Parte 2 — a retenção de backup (2 minutos, e o efeito só aparece no próximo arranque)**
+
+9. **Configurações → aba Backup**. Três campos: **Backup Automático**, **Frequência** e **Manter
+   Backups (dias)**.
+10. Mude **Manter Backups (dias)** para `15` e salve.
+11. **Reinicie o servidor.** No registro do servidor (terminal onde ele roda) aparece uma linha
+    dizendo quantos arquivos foram removidos e com que régua. As mensagens literais são:
+
+    > `[DB Recovery] 132 acompanhante(s) orfao(s) removido(s)`
+    > `[DB Recovery] retencao: 135 arquivo(s) removido(s) (manter 15 dias, teto de 10 copias)`
+12. **Teste o valor inválido:** volte e salve o campo com `0` (ou apague, ou ponha `-5`). Reinicie.
+    O servidor **não apaga tudo** — ele avisa no registro que o valor é inválido e usa o padrão de
+    **30 dias**.
+
+### As travas que impedem a limpeza de fazer besteira
+
+| Trava | O que faz | Por quê |
+|---|---|---|
+| **Mínimo 3 cópias** | As 3 mais recentes **nunca** são apagadas, mesmo com anos de idade | O download de backup usa a cópia mais recente como salvação. Sem esta trava, um prazo curto deixaria o sistema sem nenhum fallback |
+| **Máximo 10 cópias** | Da 11ª em diante sai sempre, mesmo sendo de hoje | Trocar "10 fixas" por "N dias" **sem teto** faria a pasta crescer sem limite — no ritmo medido de reinícios, ~2,9 GB em 30 dias |
+| **Valor inválido → padrão** | Vazio, `0`, `-5` ou texto caem em 30 dias, com **um** aviso no registro | Um campo em branco jamais pode significar "apague tudo" |
+| **Nunca derruba o arranque** | Se a limpeza falhar, é só um aviso no registro | Apagar arquivo velho é conveniência; nunca pode impedir o sistema de subir |
+
+### ⚠️ Antes do deploy em produção
+
+A limpeza **roda sozinha no primeiro arranque** depois do deploy. Medição real feita em 29/08/2026
+sobre a pasta de backups (em modo de simulação — nada foi apagado):
+
+```
+ANTES  : 165 arquivos, 187,36 MB
+APAGA  : 135 arquivos,  57,27 MB  (132 órfãos + a 11ª cópia e seus 2 auxiliares)
+DEPOIS :  30 arquivos, 130,09 MB  — 10 cópias completas do banco
+```
+
+**Leia a A5 das novidades antes de subir.** Se houver na pasta alguma cópia que você guardou de
+propósito, mova-a para fora antes.
+
+### O que esta etapa NÃO cobre
+
+- **Não há tela para consultar a origem.** O `ip` e o `user_agent` aparecem dentro da linha
+  expandida da Auditoria, junto dos outros campos. Não existe filtro "movimentações vindas deste
+  endereço" nem alerta de "acesso de local incomum".
+- **A origem não foi para trás.** Movimentações anteriores a esta etapa continuam sem `ip` — o
+  dado não existia e não há de onde inventá-lo.
+- **Só a movimentação ganhou origem.** Requisição, recebimento, inspeção e cadastro continuam sem.
+- **Registrar não é impedir.** O sistema anota de onde veio; ele **não** recusa acesso por
+  endereço de rede nem restringe horário.
+- **Não existe botão "limpar backups agora".** A limpeza é no arranque.
+- **Os uploads (fotos, anexos) não têm expurgo.** Eles entram no download de backup, então estão
+  salvos; o que não existe é regra para apagar os antigos. Só o banco é podado.
+- **Backup Automático e Frequência continuam decorativos** — furo **C32**. Não existe agendamento
+  no servidor: o backup acontece **no arranque** e quando alguém clica em baixar. Marcar "Ativado"
+  e "Diário" **não** cria rotina diária.
+- **Dupla conferência em material crítico não foi feita** — é decisão de negócio, item **B57**.
 
 
 ## Correção — a posição por cliente não fechava a conta (2026-08-13)

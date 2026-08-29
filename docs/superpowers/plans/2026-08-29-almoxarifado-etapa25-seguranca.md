@@ -371,7 +371,14 @@ atrás do nginx, o normal é `ip` = cliente e `ip_proxy` = `127.0.0.1`; em acess
 
 ### Task 4: as duas correções de spec, integração e fechamento
 
-- [ ] **Step 1: reescrever os dois itens errados da spec 23**, dizendo que estavam errados:
+> **STATUS: Task 4 FEITA — a ETAPA 25 ESTÁ FECHADA.** Placar final **lido**: `test:api`
+> **153/153** arquivos, `test:almoxarifado` **42/42**, `test:validation` **4/4**,
+> `test:safealter` **3/3**, `test:sqlite` **5/5**, cliente **38 suítes / 557 testes** (rodado
+> **duas vezes**: fuso local e `TZ=UTC`, mesmo resultado nos dois), `build` OK com `CI=true`.
+> `server/data/backups` conferido por leitura ao fim: **165 arquivos**, intacto.
+> Três divergências registradas no fim desta task.
+
+- [x] **Step 1: reescrever os dois itens errados da spec 23**, dizendo que estavam errados:
   - **lançamento retroativo** — não é tarefa: `created_at` é `CURRENT_TIMESTAMP` e nenhuma rota
     aceita data do cliente; bloquear o retroativo é impossível porque o retroativo é impossível.
     **Meça de novo antes de escrever** (não confie neste plano) e cole o comando.
@@ -379,8 +386,9 @@ atrás do nginx, o normal é `ip` = cliente e `ip_proxy` = `127.0.0.1`; em acess
     mas **o "77" é número a DESCARTAR, não a confirmar** (achado A10): ele conta `justificativa:`
     como chave de objeto, ou seja, o campo sendo **repassado** pelo pipeline. Os pontos que de
     fato **exigem** são **~8**. Meça o que falta, liste, e reescreva o item com a lista.
-- [ ] **Step 2:** os cinco comandos da suíte + o cliente com `TZ=UTC`, números **lidos**.
-- [ ] **Step 3:** skill `fechar-etapa` inteira, **incluindo o Passo 8** (escolher a próxima etapa
+- [x] **Step 2:** os cinco comandos da suíte + o cliente com `TZ=UTC`, números **lidos** (no bloco
+  STATUS acima).
+- [x] **Step 3:** skill `fechar-etapa` inteira, **incluindo o Passo 8** (escolher a próxima etapa
   e começar a Fase 0 no mesmo turno). Diga se a feature 23 finalmente vira 🟢 — e se não virar,
   diga **o que exatamente** falta, sem repetir o erro das etapas 22 e 24 de pesar só uma perna.
   Letra **B**: dupla conferência em material crítico (com o precedente do sucateamento).
@@ -394,6 +402,38 @@ atrás do nginx, o normal é `ip` = cliente e `ip_proxy` = `127.0.0.1`; em acess
   Letra **C**: a tela de Backup fica com **um** controle vivo e **dois** decorativos —
   `backup_automatico` e `backup_frequencia` seguem sem leitor no servidor (achado A11). Se o guia
   disser só "a retenção agora funciona", o usuário conclui que o painel inteiro funciona.
+
+#### Divergências desta task (o que saiu diferente do plano, e por quê)
+
+1. **O "~8 pontos que exigem justificativa" que este plano previa ESTÁ ERRADO — são muito mais, e
+   a medição certa é de outra natureza.** O plano mandava descartar o 77 (certo) e substituí-lo
+   por "~8" (errado). Contando **pontos que recusam**, e não chaves de objeto:
+   - **16 dos 33 tipos de movimento** são recusados pelo próprio motor
+     (`movementRules.REGRAS_VINCULO` + `stockService.js:681`) — e como o gate vive **dentro** de
+     `registrarMovimentacao`, ele alcança os 28 call sites de uma vez. Somam-se a isso a regra do
+     **emergencial** (`movementRules.js:94`), que recusa em **qualquer** tipo.
+   - **10 `throw` em serviço**, **2 schemas Zod cobrindo 4 rotas**, **1 validação de rota** e
+     **1 `NOT NULL` de tabela**.
+   O "~8" provavelmente contou só a camada de serviço. A lição não é o número: é que **"quantos
+   pontos exigem" é a pergunta errada** quando o gate é central — 1 ponto de código pode cobrir
+   28 caminhos, e 10 pontos podem cobrir 10. O que a spec ganhou foi a lista do que **falta**
+   (`QUARENTENA`, `LIBERACAO_INSPECAO`, `RETRABALHO`, `DEVOLUCAO_CLIENTE`, `excluirRequisicao`,
+   e a falta de tamanho mínimo padronizado), que é acionável; a contagem não era.
+2. **O dry-run refeito bateu exatamente com o da Task 1** — 165 arquivos / 187,36 MB de entrada,
+   135 / 57,27 MB apagados, 30 / 130,09 MB sobrando, 10 cópias `.sqlite`. O plano avisava que "o
+   número muda conforme quantas cópias houver no dia"; não mudou porque não houve boot novo entre
+   as duas medições. **O aviso continua válido** e ficou escrito na letra A5 como regra ("sobram no
+   máximo 10, nunca menos de 3"), não como número fixo — quem repetir a medição noutro dia vai
+   achar outro total e não pode achar que o documento está errado.
+3. **O manual do sistema NÃO ganhou seção de backup, e isso é deliberado.** O briefing pedia a
+   retenção configurável no manual. Mas o próprio manual declara, na seção "Este documento não
+   cobre", que a tela **Configurações do Sistema** do CRM (empresa, e-mail, backup) está **fora do
+   escopo** por ser do sistema inteiro, não do módulo. Criar uma seção de backup ali contradiria a
+   fronteira declarada do documento. **O que foi feito:** a própria linha de exclusão — que já
+   citava "backup" — ganhou a ressalva com as regras precisas (um campo vale, dois não; mínimo 3 e
+   máximo 10 cópias; valor inválido cai em 30 dias). Assim o leitor que for até lá não conclui que
+   o painel funciona inteiro, e a fronteira do manual continua de pé. A explicação completa para o
+   usuário está no guia e nas novidades, que são os documentos certos para ela.
 
 ## Próxima tarefa detalhada
 

@@ -94,10 +94,11 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Três consultas para rodar em produção ANTES do deploy — e uma ação no provedor de e-mail
+### A. Três consultas para rodar em produção ANTES do deploy — uma ação no provedor de e-mail, e uma limpeza de disco que roda sozinha
 
-*(Este título dizia "Duas consultas" — **passou a três com a A4, da Etapa 24**. Corrigido aqui em
-vez de deixado defasado, porque a contagem no título é o que faz alguém parar de procurar.)*
+*(Este título dizia "Duas consultas" — **passou a três com a A4, da Etapa 24**, e ganhou a
+**limpeza de disco A5 na Etapa 25**. Corrigido aqui em vez de deixado defasado, porque a contagem
+no título é o que faz alguém parar de procurar.)*
 
 | # | Por quê | Consulta |
 |---|---|---|
@@ -160,6 +161,51 @@ SELECT p.usuario_id, u.nome, u.email, u.ativo, u.admin_modulos
   verdade e sobrevive aos salvamentos); se **não deve**, apague a linha. Deixar como está é a pior
   das três opções, porque o acesso existe hoje e desaparece num dia imprevisível. É o furo
   **C31**.
+
+**A5 (NOVO, da Etapa 25) — a primeira coisa que acontece em produção depois deste deploy é uma
+limpeza de arquivos, e ela é grande. Confira o espaço antes.** Não é uma consulta SQL: é uma
+limpeza automática que roda **sozinha no primeiro arranque do servidor** depois do deploy. Está
+aqui porque você deve **saber que vai acontecer** e ter conferido o número antes, não descobrir
+depois olhando o disco.
+
+**O que ela vai apagar** (medição real feita no diretório de backups em 29/08/2026, em modo de
+simulação — nada foi apagado para tirar este número):
+
+```
+ANTES da limpeza  : 165 arquivos, 187,36 MB
+SERÃO APAGADOS    : 135 arquivos,  57,27 MB
+  órfãos          : 132  (44,39 MB) — arquivos auxiliares -wal/-shm cuja cópia do banco já não existe
+  acima do teto   :   1  (12,13 MB) — a 11ª cópia mais antiga, que sai pela trava de 10
+  acompanhantes   :   2  ( 0,75 MB) — os dois auxiliares dessa 11ª cópia
+  por idade       :   0            — as 11 cópias estão todas dentro dos 30 dias
+DEPOIS da limpeza :  30 arquivos, 130,09 MB — 10 cópias completas do banco
+```
+
+**Como conferir antes do deploy**, na VPS (só leitura, não apaga nada):
+
+```bash
+ls -1 /caminho/para/server/data/backups | wc -l     # quantos arquivos há hoje
+du -sh /caminho/para/server/data/backups            # quanto ocupam hoje
+ls -1 /caminho/para/server/data/backups/*.sqlite | wc -l   # quantas cópias completas há
+```
+
+**O que fazer com cada resultado:**
+
+- **Número de cópias `.sqlite` ≤ 10** — o esperado. A limpeza vai tirar só os órfãos; nenhuma cópia
+  se perde. Pode seguir.
+- **Número de cópias `.sqlite` > 10** — as excedentes **serão apagadas**, das mais antigas para as
+  mais novas. Se alguma delas for uma cópia que você guardou de propósito (antes de uma restauração,
+  por exemplo), **mova-a para fora dessa pasta antes do deploy**. A limpeza não toca em arquivo que
+  não comece com `database-`, mas mover é mais seguro que confiar nisso.
+- **O total não bate nem de longe com os 165 acima** — normal, o número muda conforme quantos boots
+  houve. O que importa é a regra, não o número: sobram **no máximo 10** cópias, **nunca menos de 3**,
+  e todo arquivo auxiliar sem dono sai.
+
+⚠️ **Dois números errados que circularam durante o desenvolvimento e que você pode ter visto:**
+o documento de desenho começou dizendo que a limpeza liberaria **"188 MB"** — isso é o tamanho
+**total** da pasta, ou seja, 4× o que ela de fato libera, e apagar tudo aquilo seria apagar os
+backups. Depois circulou **"~44 MB, e as 11 cópias continuam"** — também errado, porque com a trava
+de 10 cópias a 11ª sai. **O número certo é ~57 MB em 135 arquivos, sobrando 10 cópias e ~130 MB.**
 
 ### B. Decisões de negócio
 
@@ -771,6 +817,38 @@ topo ficam barrados para quem é Qualidade, com a mensagem que está na regra 2 
 mesmo critério que o módulo já usou três vezes (remessa a terceiro, ajuste de material de cliente,
 ferramentas). É etapa curta, e depende da sua resposta.
 
+**B57 (NOVO, da Etapa 25, EM ABERTO — preciso da sua resposta) — quais operações sobre material
+crítico exigem duas assinaturas?**
+
+A spec do módulo pede *"dupla conferência em materiais críticos"* desde o começo, e é o **último**
+item da lista de segurança que continua sem construir. Ele não foi feito na Etapa 25 porque **não
+é falta de código: é falta de resposta sua.** As duas peças já existem e estão testadas:
+
+- **A marcação existe.** Cada material tem a marca **"material crítico"** no cadastro, e ela já
+  decide duas coisas hoje: o material aparece como **risco de parada** na tela de reposição quando
+  o saldo zera, e a carga dele **fica retida para inspeção** no recebimento (se a opção *"Exigir
+  inspeção para materiais críticos"* estiver ligada).
+- **A mecânica de dupla assinatura existe.** O **sucateamento** já funciona assim: uma pessoa
+  solicita, **outra pessoa** aprova, e o sistema recusa se for a mesma — com a mensagem literal
+  *"dupla aprovacao com a mesma pessoa nas duas pernas e uma assinatura com dois carimbos. A
+  segunda assinatura tem de ser de outra pessoa."* Note que a barreira é por **identidade**, não
+  por cargo: não basta ter o perfil certo, tem de ser gente diferente.
+
+**O que falta é você dizer sobre o quê ela incide.** As opções, com a consequência de cada uma:
+
+| Opção | O que acontece na prática | Custo operacional |
+|---|---|---|
+| **(a) Toda saída** de material crítico | Nenhuma peça crítica sai do estoque sem duas pessoas | **Alto.** Se material crítico for usado no dia a dia, para a produção toda vez que faltar um segundo aprovador no turno |
+| **(b) Só ajuste e sucata** de material crítico | As correções manuais de saldo e as baixas por perda exigem dois; o consumo normal não | **Baixo.** É onde o risco de fraude e erro se concentra, e são operações raras |
+| **(c) Acima de um valor** (ex.: R$ 5.000 na movimentação) | A regra deixa de ser sobre "crítico" e passa a ser sobre dinheiro | **Médio**, e depende de o custo do material estar sempre preenchido — hoje nem sempre está |
+| **(d) Não fazer** | Fica como está: material crítico é sinalizado, mas nada exige segunda pessoa | Zero, e o item sai da lista de pendências |
+
+**Minha recomendação, se você não quiser decidir agora: a (b).** É a que o precedente do
+sucateamento já sustenta sem inventar regra nova, é onde o risco realmente mora, e não trava a
+produção. **Nada foi implementado** — nem a (b) — porque implementar a errada custa mais que
+esperar: seria travar operação de galpão com uma regra que ninguém pediu. Enquanto você não
+responder, o comportamento é o **(d)**.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -1031,6 +1109,23 @@ ferramentas). É etapa curta, e depende da sua resposta.
    Depois de rodar, cada caso tem duas saídas legítimas: marcar o almoxarifado entre os módulos
    que ela administra, no cadastro de usuário (é lá que a condição vive e sobrevive), ou apagar a
    linha. **Não há como reconceder pela tela**, e isso é intencional.
+32. **(25) A aba Backup das Configurações tem UM campo que funciona e DOIS que não fazem nada.**
+   A Etapa 25 fez **"Manter Backups (dias)"** passar a valer — antes ele salvava um número que
+   ninguém lia. **Os outros dois campos da mesma aba continuam decorativos:** **"Backup
+   Automático"** (Ativado/Desativado) e **"Frequência"** (Diário/Semanal/Mensal) **salvam o valor
+   e nada acontece**. Não existe agendamento no servidor: o backup é feito **no arranque do
+   sistema** e por quem clica em baixar backup, e isso não mudou. Colocar "Ativado" e "Diário" na
+   tela **não** cria uma rotina diária.
+   **Está aqui e não na letra D porque o risco é de operação, não de escopo:** quem apresentar a
+   novidade dizendo *"a retenção agora funciona"* faz o ouvinte concluir que o painel inteiro
+   funciona, e alguém vai confiar num backup diário que não existe. **A frase certa ao apresentar
+   é:** *"o campo de dias passou a valer; os outros dois ainda são visuais"*.
+   **O que de fato garante os backups hoje:** toda vez que o servidor sobe, ele grava uma cópia do
+   banco antes de qualquer outra coisa. Se o servidor ficar semanas sem reiniciar, **não haverá
+   cópia nova nesse período** — e agora, com a retenção por dias ligada, cópias além do prazo
+   saem. Com o padrão de 30 dias e a trava de mínimo 3 cópias, nunca se fica sem backup; mas o
+   mais recente pode ser mais velho do que se imagina. Fazer os dois campos funcionarem é etapa
+   própria (letra **D**).
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -4201,6 +4296,122 @@ Na linha de quem recebeu **Qualidade**, a terceira coluna mostra:
 - **A trilha de perfil não foi para trás.** As sete atribuições feitas antes desta etapa continuam
   no histórico como estavam — sem o "de", porque na época ele não era gravado. Só os atos novos
   trazem o de/para completo.
+
+
+## Etapa 25 — De onde veio cada movimento, e o backup que parou de crescer sozinho (2026-08-29)
+
+Duas coisas que ninguém vê no dia a dia e que só aparecem quando dão problema.
+
+A primeira: até agora, o histórico de movimentações dizia **quem** mexeu no estoque e **quando** —
+mas não de **onde**. Se aparecesse uma baixa estranha às três da manhã, dava para saber o nome da
+pessoa e nada mais: se foi do computador do almoxarifado, do celular no galpão, de casa. Agora cada
+movimentação guarda o **endereço de rede e o aparelho** de onde partiu. É o tipo de informação que
+não serve para nada até o dia em que é a única coisa que resolve uma discussão.
+
+A segunda: a pasta de backups do servidor **nunca parava de crescer**. Havia uma limpeza automática,
+mas ela só enxergava metade dos arquivos — cada cópia do banco deixa dois arquivos auxiliares, e a
+limpeza apagava a cópia e **esquecia os dois acompanhantes**. Depois de meses, sobraram **132
+arquivos soltos ocupando 44 MB** que não servem para nada e que nenhuma rotina ia recolher. Além
+disso, o campo **"Manter Backups (dias)"** da tela de Configurações **não fazia nada**: era um campo
+que salvava um número que ninguém lia. Agora ele vale.
+
+**Um problema sério que foi pego antes de existir.** A primeira versão desta mudança lia a
+configuração de retenção cedo demais no arranque do servidor — antes de o próprio banco terminar de
+se montar. Num servidor já em uso ninguém notaria; **numa instalação nova, o sistema subiria com o
+sinal de saúde travado em "falha no banco" para sempre**, e o backup de arranque — que é a rede de
+segurança de tudo — nunca rodaria. Foi reproduzido de propósito, num servidor limpo, antes de
+existir a correção.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| O histórico de uma movimentação mostrava **quem** e **quando** | Mostra também **de onde**: endereço de rede e aparelho usado |
+| Movimentos criados por dentro do sistema (devolução, retorno de terceiro, estorno) não tinham como registrar origem | Registram igual aos manuais — são **28 caminhos** cobertos de uma vez |
+| **Cancelar** uma movimentação gerava um estorno **sem origem** | O estorno também guarda de onde partiu — é o ato que mais se quer rastrear |
+| A pasta de backups crescia para sempre: 132 arquivos órfãos, 44 MB, que nenhuma limpeza recolhia | A limpeza recolhe os órfãos, nos dois formatos de nome que existem no disco |
+| **"Manter Backups (dias)"** era um campo decorativo — salvava e ninguém lia | O número da tela **vale**: é ele que decide o que a limpeza apaga |
+| A limpeza guardava **10 cópias fixas**, sem relação com nenhuma configuração | Guarda pelo prazo que você definir, **nunca menos de 3 cópias** e **nunca mais de 10** |
+| Um número inválido no campo (vazio, `0`, `-5`, texto) não tinha tratamento previsto | Cai no padrão de **30 dias** e escreve um aviso no registro do servidor — **nunca apaga tudo** |
+
+### As regras, com o cenário exato
+
+**1. Uma movimentação normal passa a registrar de onde veio.**
+Vá em **Almoxarifado → Movimentações**, registre uma entrada ou saída qualquer. Depois vá em
+**Almoxarifado → Auditoria**, filtre **Entidade = Movimentação** e expanda a linha mais recente.
+Além das linhas de sempre (`material_id`, `tipo`, `quantidade`, `saldo_posterior`), aparecem agora:
+
+| Campo | De | Para |
+|---|---|---|
+| `ip` | — | `192.168.1.34` |
+| `user_agent` | — | `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 …` |
+
+O **De** aparece como `—` porque movimentação é um ato de criação: não havia estado anterior. Isso
+já era assim para todos os outros campos.
+
+**2. O endereço é o de quem clicou, não o do servidor.**
+Este é o detalhe que faz a diferença em produção. Quando o sistema roda atrás de um servidor de
+entrada (que é o caso da GMP), o registro ingênuo gravaria `127.0.0.1` em **todas** as linhas — o
+endereço do próprio servidor, inútil. A regra implementada lê a cadeia de encaminhamento e guarda o
+**primeiro** endereço, que é o do computador da pessoa. Se houver um servidor intermediário, ele
+aparece numa linha separada, `ip_proxy`. Quando não há intermediário nenhum, a linha `ip_proxy`
+**não aparece** — e isso é de propósito: gravá-la vazia encheria toda movimentação com uma linha
+`ip_proxy: — → —` que não informa nada.
+
+**3. Cancelar uma movimentação também registra de onde veio.**
+Em **Almoxarifado → Movimentações**, cancele um movimento (é preciso informar a justificativa — o
+sistema recusa sem ela, com a mensagem literal *"Justificativa obrigatória para cancelamento"*).
+Volte à **Auditoria**: aparecem **duas** linhas novas, a do cancelamento e a do **estorno**, e as
+duas trazem `ip` e `user_agent`. O estorno é criado por um caminho diferente do resto do sistema, e
+ficaria de fora se ninguém tivesse ido atrás dele.
+
+**4. O campo "Manter Backups (dias)" passou a valer.**
+Vá em **Configurações → aba Backup**. A tela tem três campos: **Backup Automático**
+(Ativado/Desativado), **Frequência** (Diário/Semanal/Mensal) e **Manter Backups (dias)**. Mude o
+terceiro para, por exemplo, `15` e salve. A partir do próximo arranque do servidor, cópias com mais
+de 15 dias são apagadas — **respeitando duas travas**: as **3 mais recentes nunca saem**, mesmo que
+tenham anos (é a cópia mais nova que o download de backup usa como salvação), e **no máximo 10
+cópias ficam**, mesmo que todas sejam de ontem.
+
+> ⚠️ **Os outros dois campos dessa aba continuam decorativos.** Ver a letra **C** — é importante,
+> porque a tela dá a impressão de que os três funcionam.
+
+**5. Número inválido não apaga nada.**
+Se alguém salvar o campo vazio, com `0`, com `-5` ou com texto, o sistema **não** entende como
+"apagar tudo": usa o padrão de **30 dias** e escreve **um** aviso no registro do servidor. Foi
+testado com os oito valores possíveis de lixo.
+
+### Roteiro de teste manual (10 minutos)
+
+1. Entre como **Administrador**.
+2. **Almoxarifado → Movimentações** → registre uma **entrada** de qualquer material.
+3. **Almoxarifado → Auditoria** → filtro **Entidade = Movimentação** → expanda a linha mais recente
+   → confira as linhas `ip` e `user_agent`.
+4. Volte a **Movimentações**, **cancele** o movimento que acabou de criar (informe a justificativa).
+5. **Auditoria** de novo → aparecem **duas** linhas novas, e as duas têm `ip` e `user_agent`.
+6. **Almoxarifado → Devoluções** → registre uma devolução → **Auditoria** → a linha de entrada da
+   devolução **também** tem `ip`. (Este é o caminho "por dentro do sistema", que antes ficaria de
+   fora.)
+7. **Configurações → aba Backup** → mude **Manter Backups (dias)** e salve. O efeito só aparece no
+   próximo arranque do servidor — não há botão de "limpar agora".
+
+### O que esta etapa NÃO cobre (é decisão declarada, não esquecimento)
+
+- **Não há tela para consultar a origem.** O `ip` e o `user_agent` aparecem dentro da linha
+  expandida da Auditoria, misturados aos outros campos. Não existe filtro "movimentações vindas
+  deste endereço" nem alerta de "acesso de local incomum". Guardar o dado é o pré-requisito; usá-lo
+  é outra etapa.
+- **A origem não foi para trás.** Movimentações registradas antes desta etapa continuam sem `ip` e
+  sem `user_agent` — o dado não existia e não há de onde inventá-lo. Só os atos novos trazem.
+- **Nenhum outro tipo de registro ganhou origem.** Requisição, recebimento, inspeção e cadastro
+  continuam sem `ip`. A movimentação foi escolhida porque é onde o estoque muda de valor.
+- **Não existe botão "limpar backups agora".** A limpeza roda no arranque do servidor. Mudar o
+  número na tela não apaga nada na hora.
+- **Os uploads (fotos e anexos) não têm política de expurgo.** Eles **entram** no download de
+  backup, então estão salvos; o que não existe é regra para apagar os antigos. Só o banco é podado.
+- **Backup Automático e Frequência continuam sem efeito** — letra **C**.
+- **Registrar de onde veio não é o mesmo que impedir.** O sistema anota a origem; ele não recusa
+  acesso por endereço de rede, nem restringe horário. Isso não foi pedido e não foi feito.
 
 
 ## Onde estamos e o que vem a seguir
