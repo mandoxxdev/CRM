@@ -1143,6 +1143,88 @@ async function initSchema(db) {
   await safeAlter(db, 'ALTER TABLE inspecoes_recebimento_almoxarifado ADD COLUMN quantidade_reprovada REAL');
   await safeAlter(db, 'ALTER TABLE inspecoes_recebimento_almoxarifado ADD COLUMN encaminhamento TEXT');
 
+  // ── Plano de inspeção e medidas (Etapa 27, contrato C2) ──────────────────────────────────────
+  //
+  // Até aqui `divergencia_dimensional` (acima) era uma CAIXA QUE O INSPETOR MARCAVA. Com plano e
+  // medidas ela passa a ser DERIVADA do número (RN-03): se alguma medida sai da tolerância, a flag
+  // é verdadeira porque a conta diz, não porque alguém lembrou de marcar.
+  //
+  // O plano é FILHO DE UM MATERIAL, com N características. `material_id` é NOT NULL porque plano
+  // sem material não é plano de nada — mas a FK NÃO é a régua: o harness de teste roda com
+  // `PRAGMA foreign_keys = 0` e produção com `1`, então um `material_id` fantasma passaria no
+  // teste e falharia em produção. Quem barra é a validação em código da rota (404).
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS planos_inspecao_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    material_id INTEGER NOT NULL,
+    caracteristica TEXT NOT NULL,
+    unidade TEXT,
+    valor_nominal REAL NOT NULL,
+    desvio_inferior REAL NOT NULL DEFAULT 0,
+    desvio_superior REAL NOT NULL DEFAULT 0,
+    ativo INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
+  )`);
+
+  // Os desvios são COM SINAL, não magnitudes: `inf = nominal + desvio_inferior`,
+  // `sup = nominal + desvio_superior`. O simétrico continua sendo -0,05 / +0,05, e a TOLERÂNCIA
+  // UNILATERAL DESLOCADA (ISO 286: eixo +0,005 / +0,021, os DOIS limites acima do nominal, normal
+  // em usinagem) passa a ser representável — com magnitudes não-negativas ela seria inexprimível.
+  // A validação correspondente (`desvio_inferior <= desvio_superior`) é da rota; aqui só o dado.
+  // Trocar depois seria migração de dado CONGELADO (RN-05, abaixo): era agora ou nunca.
+
+  // O índice é COMPOSTO e PARCIAL, e as duas coisas importam:
+  //
+  //   - COMPOSTO `(material_id, caracteristica)`: unicidade só na característica faria
+  //     "Diâmetro externo" existir UMA vez no sistema inteiro. Sem nenhuma unicidade, um material
+  //     aceita dois "Diâmetro externo" com nominais diferentes e o payload de medidas da Task 3
+  //     fica ambíguo — qual dos dois planos a medida atende?
+  //   - PARCIAL `WHERE ativo = 1`: o delete é SOFT (a linha fica, porque `medidas...plano_id` é
+  //     NOT NULL e aponta para ela). Com índice total, desativar uma característica trancaria o
+  //     nome para sempre e o usuário não teria como corrigir um cadastro errado.
+  //
+  // A colisão é detectada PELO BANCO, como em categorias (extended.js:200): um SELECT antes do
+  // INSERT tem janela de corrida entre os dois.
+  //
+  // Sem o try/catch que a Etapa 26 precisou usar em `idx_categorias_almox_nome`, e a diferença é
+  // real: lá o índice foi acrescentado a uma tabela que JÁ TINHA dados (27 sementes) e podia ter
+  // duplicatas, e uma exceção derrubaria o initSchema inteiro. Aqui a tabela NASCE com o índice —
+  // não existe base legada com plano duplicado, porque não existe base legada com plano.
+  await dbRun(db, `CREATE UNIQUE INDEX IF NOT EXISTS idx_planos_inspecao_almox_mat_carac
+    ON planos_inspecao_almoxarifado(material_id, caracteristica) WHERE ativo = 1`);
+
+  // As MEDIDAS de uma inspeção (preenchidas pela Task 3, dentro de `decidirInspecao`).
+  //
+  // RN-05 — O PLANO É CONGELADO NO ATO. `caracteristica`, `unidade`, `valor_nominal` e os dois
+  // desvios são CÓPIAS do plano no instante da inspeção, não uma referência a ele: editar o plano
+  // depois NÃO pode reescrever a inspeção antiga. É a mesma razão da RN-05 da Etapa 26 (renomear
+  // categoria não reclassifica o acervo) e da regra da Etapa 22 (a trilha não muda retroativamente).
+  // `ferramenta_nome` é congelado pelo mesmo motivo — o instrumento pode ser renomeado ou baixado.
+  //
+  // `plano_id` é NOT NULL: o CRUD faz soft delete, então o plano NUNCA é apagado e não existe
+  // medida órfã por exclusão. `valor_medido` é NOT NULL porque medida não numérica é 400 e NÃO
+  // grava nada (RN-07) — um NULL aqui seria uma reprovação sem número por trás.
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS medidas_inspecao_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    inspecao_id INTEGER NOT NULL,
+    plano_id INTEGER NOT NULL,
+    caracteristica TEXT,
+    unidade TEXT,
+    valor_nominal REAL,
+    desvio_inferior REAL,
+    desvio_superior REAL,
+    valor_medido REAL NOT NULL,
+    conforme INTEGER NOT NULL,
+    ferramenta_id INTEGER,
+    ferramenta_nome TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (inspecao_id) REFERENCES inspecoes_recebimento_almoxarifado(id),
+    FOREIGN KEY (plano_id) REFERENCES planos_inspecao_almoxarifado(id)
+  )`);
+
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_medidas_inspecao_almox_inspecao
+    ON medidas_inspecao_almoxarifado(inspecao_id)`);
+
   const recebCols = [
     "tipo_recebimento TEXT DEFAULT 'NOTA_FISCAL'",
     'fornecedor_cnpj TEXT',

@@ -10,6 +10,12 @@ const { initSchema, TIPOS_MATERIAL_ENUM, TIPOS_LOCALIZACAO, SETORES_REQUISICAO }
 const { requirePermission, can, getPerfilFromUser, ACAO_PERFIS, PERFIS } = require('../../services/almoxarifado/permissions');
 const { dbAll, dbGet, dbRun } = require('../../services/almoxarifado/db');
 const { disponivelSql } = require('../../services/almoxarifado/availabilitySql');
+// Etapa 27, Task 2: a MESMA conversao numerica que a regua da tolerancia aplica a medida, reusada
+// no CRUD do plano de proposito. Ela existe porque `Number(null)`, `Number('')` e `Number([])` sao
+// 0 — todos passariam por `Number.isFinite` como "nominal zero" — e porque `Number('12,4')` (a
+// virgula decimal de um input pt-BR) e NaN: um NaN gravado como `valor_nominal` faria TODA peca
+// reprovar depois, por comparacao com NaN.
+const { paraNumeroFinito } = require('../../services/almoxarifado/toleranciaInspecao');
 const { validate, formatZodError } = require('../../services/almoxarifado/validation');
 const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema, RemessaTerceiroSchema, RetornoRemessaSchema, TransformacaoRemessaSchema, EncerramentoRemessaSchema, CancelamentoRemessaSchema, SobraUpdateSchema, GerarRetalhoSchema, SucateamentoCreateSchema, SucateamentoDestinoFormSchema, FerramentaCreateSchema, FerramentaUpdateSchema, EmprestimoSchema, DevolucaoEmprestimoSchema, CalibracaoSchema, JustificativaSchema, ManutencaoSchema, ManutencaoConcluirSchema, OcorrenciaSchema, AssinaturaEntregaFormSchema } = require('../../services/almoxarifado/schemas');
 // Etapa 20 (C1): a limpeza do upload orfao SAIU deste arquivo para um modulo compartilhado —
@@ -252,6 +258,197 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
         dados_anteriores: { nome: anterior.nome, ativo: anterior.ativo },
         dados_novos: { ativo: 0 },
       }, 'exclusao de categoria');
+      res.json({ success: true });
+    } catch (e) { handleError(res, e); }
+  });
+
+  // ── Plano de inspeção do material (Etapa 27, contrato C4) ──────────────────────────────────
+  //
+  // O MOLDE É O CRUD DE CATEGORIAS, logo acima neste arquivo: `auditar(...)`/`autorDe(req)`, soft
+  // delete `WHERE id = ? AND ativo = 1` (404 para inexistente, 200 `ja_inativo` idempotente SEM
+  // auditar — lição da Etapa 23), colisão detectada PELO BANCO via índice único (o comentário de
+  // :200 explica que SELECT-antes-do-INSERT tem janela de corrida) e preserve-when-omitted no
+  // `ativo` do PUT. Famílias continua não sendo molde de nada aqui.
+  //
+  // TRÊS COISAS QUE O MOLDE NÃO COBRE, porque plano é FILHO DE UM MATERIAL e não catálogo global:
+  //
+  //   1. o GET EXIGE `?material_id=N`. Sem filtro obrigatório, a tela de um material mostraria o
+  //      plano de todos os outros — e uma listagem global não tem leitor nenhum no produto.
+  //   2. o `material_id` é VALIDADO em código (404). O molde não tem pai para validar, e A FK NÃO
+  //      SEGURA NO HARNESS: os testes rodam com `PRAGMA foreign_keys = 0` e produção com `1`, ou
+  //      seja, um material fantasma passaria no teste e falharia em produção. A validação em
+  //      código é a única régua portável — a mesma conclusão do achado B8 sobre `plano_id`.
+  //   3. o índice único é COMPOSTO e PARCIAL (`(material_id, caracteristica) WHERE ativo = 1`),
+  //      o que muda o significado do 400 de duplicada: a mesma característica em OUTRO material é
+  //      legítima, e depois de desativada ela pode voltar.
+  //
+  // O gate NÃO é `configurar` (que é [ADMINISTRADOR] sozinho) e sim a ação própria
+  // `gerenciar_plano_inspecao` — ver a justificativa em permissions.js. O GET fica só com `auth`,
+  // como o de categorias: quem inspeciona precisa ler o plano para saber o que medir.
+  const PLANO_DUPLICADO = 'Já existe esta característica no plano deste material';
+  const PLANO_FAIXA_INVERTIDA = 'O desvio inferior não pode ser maior que o superior';
+  const PLANO_NAO_ENCONTRADO = 'Característica não encontrada';
+
+  app.get('/api/almoxarifado/planos-inspecao', auth, async (req, res) => {
+    try {
+      const materialId = paraNumeroFinito(req.query.material_id);
+      if (materialId === null) return res.status(400).json({ error: 'Material é obrigatório' });
+      // `?todos=1` traz as INATIVAS junto — mesmo nome do parâmetro de categorias e centros de
+      // custo (não `?all=1` dos setores): sem ele a tela não tem como REATIVAR o que desativou.
+      const where = req.query.todos === '1' ? '' : ' AND ativo = 1';
+      const rows = await dbAll(db,
+        `SELECT * FROM planos_inspecao_almoxarifado WHERE material_id = ?${where} ORDER BY caracteristica`,
+        [materialId]);
+      res.json(rows);
+    } catch (e) { handleError(res, e); }
+  });
+
+  // Leitura + validação dos campos numéricos, compartilhada entre POST e PUT: a régua da faixa
+  // (`inf <= sup`) TEM de valer nos dois, senão a faixa inválida entra pela porta dos fundos de um
+  // PUT parcial — e faixa invertida faz `avaliarMedida` devolver FAIXA_INVALIDA, ou seja, TODA
+  // peça reprova e a divergência dimensional liga sozinha em todas.
+  const validarFaixa = (inf, sup) => (inf > sup ? PLANO_FAIXA_INVERTIDA : null);
+
+  app.post('/api/almoxarifado/planos-inspecao', auth, requirePermission('gerenciar_plano_inspecao'), async (req, res) => {
+    try {
+      const materialId = paraNumeroFinito(req.body?.material_id);
+      if (materialId === null) return res.status(400).json({ error: 'Material é obrigatório' });
+      const material = await dbGet(db, 'SELECT id FROM materiais_almoxarifado WHERE id = ?', [materialId]);
+      if (!material) return res.status(404).json({ error: 'Material não encontrado' });
+
+      const caracteristica = String(req.body?.caracteristica ?? '').trim();
+      if (!caracteristica) return res.status(400).json({ error: 'Característica é obrigatória' });
+
+      // Zero é nominal LEGÍTIMO (batimento, planeza, folga), então a checagem é `=== null` e não
+      // falsy — `if (!valor_nominal)` recusaria o caso mais comum de desvio de forma.
+      const valorNominal = paraNumeroFinito(req.body?.valor_nominal);
+      if (valorNominal === null) return res.status(400).json({ error: 'Valor nominal é obrigatório' });
+
+      // Desvio omitido é 0: o default do schema. Plano com os dois zerados é faixa de largura
+      // zero — a medida tem de bater o nominal exatamente —, que é válido, não vazio.
+      const desvioInf = paraNumeroFinito(req.body?.desvio_inferior) ?? 0;
+      const desvioSup = paraNumeroFinito(req.body?.desvio_superior) ?? 0;
+      const erroFaixa = validarFaixa(desvioInf, desvioSup);
+      if (erroFaixa) return res.status(400).json({ error: erroFaixa });
+
+      const unidade = req.body?.unidade === undefined || req.body.unidade === null
+        ? null : String(req.body.unidade).trim() || null;
+
+      const r = await dbRun(db,
+        `INSERT INTO planos_inspecao_almoxarifado
+           (material_id, caracteristica, unidade, valor_nominal, desvio_inferior, desvio_superior)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [materialId, caracteristica, unidade, valorNominal, desvioInf, desvioSup]);
+
+      const criado = {
+        id: r.lastID, material_id: materialId, caracteristica, unidade,
+        valor_nominal: valorNominal, desvio_inferior: desvioInf, desvio_superior: desvioSup, ativo: 1,
+      };
+      // Log do que foi de FATO gravado (com `trim()` e com os números já convertidos), não do que
+      // chegou no body — mesma regra de categoria e centro de custo.
+      await auditar(db, {
+        entidade: 'plano_inspecao', entidade_id: r.lastID, acao: 'CRIACAO', ...autorDe(req),
+        dados_novos: criado,
+      }, 'criacao de plano de inspecao');
+      res.status(201).json(criado);
+    } catch (e) {
+      if (/UNIQUE constraint/i.test(e.message)) return res.status(400).json({ error: PLANO_DUPLICADO });
+      handleError(res, e);
+    }
+  });
+
+  app.put('/api/almoxarifado/planos-inspecao/:id', auth, requirePermission('gerenciar_plano_inspecao'), async (req, res) => {
+    try {
+      const atual = await dbGet(db, 'SELECT * FROM planos_inspecao_almoxarifado WHERE id = ?', [req.params.id]);
+      if (!atual) return res.status(404).json({ error: PLANO_NAO_ENCONTRADO });
+
+      // `material_id` NÃO é editável de propósito: mudar o pai seria mover uma característica de
+      // material, e as medidas já gravadas (congeladas, RN-05) continuariam contando a história do
+      // material antigo. Quem errou o material apaga e cria — é o caminho reversível.
+      const caracteristica = req.body?.caracteristica === undefined
+        ? atual.caracteristica : String(req.body.caracteristica).trim();
+      if (!caracteristica) return res.status(400).json({ error: 'Característica é obrigatória' });
+
+      const valorNominal = req.body?.valor_nominal === undefined
+        ? atual.valor_nominal : paraNumeroFinito(req.body.valor_nominal);
+      if (valorNominal === null) return res.status(400).json({ error: 'Valor nominal é obrigatório' });
+
+      const desvioInf = req.body?.desvio_inferior === undefined
+        ? atual.desvio_inferior : paraNumeroFinito(req.body.desvio_inferior);
+      const desvioSup = req.body?.desvio_superior === undefined
+        ? atual.desvio_superior : paraNumeroFinito(req.body.desvio_superior);
+      if (desvioInf === null || desvioSup === null) {
+        return res.status(400).json({ error: 'Desvio inválido' });
+      }
+      // A faixa é validada sobre o resultado da MISTURA (campo enviado + campo preservado), não só
+      // sobre o que veio no body: mandar `desvio_inferior: 2` sozinho, contra um superior de 1 já
+      // gravado, produz exatamente a faixa invertida que o POST recusa.
+      const erroFaixa = validarFaixa(desvioInf, desvioSup);
+      if (erroFaixa) return res.status(400).json({ error: erroFaixa });
+
+      const unidade = req.body?.unidade === undefined ? atual.unidade
+        : (req.body.unidade === null ? null : String(req.body.unidade).trim() || null);
+      // Preserve-when-omitted: `ativo` omitido MANTÉM o valor atual. Se caísse para 1, corrigir o
+      // nominal de uma característica desativada a RESSUSCITARIA em silêncio, e a inspeção voltaria
+      // a exigir uma medida que ninguém pediu de volta.
+      const ativo = req.body?.ativo === undefined ? atual.ativo : (req.body.ativo ? 1 : 0);
+
+      await dbRun(db,
+        `UPDATE planos_inspecao_almoxarifado
+            SET caracteristica = ?, unidade = ?, valor_nominal = ?, desvio_inferior = ?,
+                desvio_superior = ?, ativo = ?
+          WHERE id = ?`,
+        [caracteristica, unidade, valorNominal, desvioInf, desvioSup, ativo, req.params.id]);
+
+      // de/para SIMÉTRICO nos campos que a rota escreve — `atual` é um SELECT * e carregaria `id`,
+      // `material_id` e `created_at`, ruído que nunca muda, dos dois lados.
+      //
+      // RN-05: editar o plano NÃO reescreve inspeção antiga. As medidas guardam CÓPIAS do nominal
+      // e dos desvios usados no ato, e é por isso que esta rota pode mudar o plano à vontade.
+      await auditar(db, {
+        entidade: 'plano_inspecao', entidade_id: Number(req.params.id), acao: 'EDICAO', ...autorDe(req),
+        dados_anteriores: {
+          caracteristica: atual.caracteristica, unidade: atual.unidade, valor_nominal: atual.valor_nominal,
+          desvio_inferior: atual.desvio_inferior, desvio_superior: atual.desvio_superior, ativo: atual.ativo,
+        },
+        dados_novos: {
+          caracteristica, unidade, valor_nominal: valorNominal,
+          desvio_inferior: desvioInf, desvio_superior: desvioSup, ativo,
+        },
+      }, 'edicao de plano de inspecao');
+      res.json({
+        id: Number(req.params.id), material_id: atual.material_id, caracteristica, unidade,
+        valor_nominal: valorNominal, desvio_inferior: desvioInf, desvio_superior: desvioSup, ativo,
+      });
+    } catch (e) {
+      if (/UNIQUE constraint/i.test(e.message)) return res.status(400).json({ error: PLANO_DUPLICADO });
+      handleError(res, e);
+    }
+  });
+
+  app.delete('/api/almoxarifado/planos-inspecao/:id', auth, requirePermission('gerenciar_plano_inspecao'), async (req, res) => {
+    try {
+      const anterior = await dbGet(db, 'SELECT * FROM planos_inspecao_almoxarifado WHERE id = ?', [req.params.id]);
+      // SOFT delete, e aqui ele não é só convenção: `medidas_inspecao_almoxarifado.plano_id` é
+      // NOT NULL e aponta para esta linha. Apagar deixaria medida órfã apontando para o nada — a
+      // prova da reprovação sem a característica que a produziu.
+      const r = await dbRun(db, 'UPDATE planos_inspecao_almoxarifado SET ativo = 0 WHERE id = ? AND ativo = 1',
+        [req.params.id]);
+      // `changes === 0` tem DOIS significados, e quem os separa é o SELECT acima: linha
+      // inexistente => 404; linha já inativa => 200 idempotente SEM auditar (Etapa 23).
+      if (r.changes === 0) {
+        if (!anterior) return res.status(404).json({ error: PLANO_NAO_ENCONTRADO });
+        return res.json({ success: true, ja_inativo: true });
+      }
+      await auditar(db, {
+        entidade: 'plano_inspecao', entidade_id: Number(req.params.id), acao: 'EXCLUSAO', ...autorDe(req),
+        dados_anteriores: {
+          caracteristica: anterior.caracteristica, valor_nominal: anterior.valor_nominal,
+          desvio_inferior: anterior.desvio_inferior, desvio_superior: anterior.desvio_superior,
+          ativo: anterior.ativo,
+        },
+        dados_novos: { ativo: 0 },
+      }, 'exclusao de plano de inspecao');
       res.json({ success: true });
     } catch (e) { handleError(res, e); }
   });

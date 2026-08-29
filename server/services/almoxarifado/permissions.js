@@ -92,6 +92,25 @@ const ACAO_PERFIS = {
   reservar_outra_os: [PERFIS.ADMINISTRADOR, PERFIS.GESTOR],
   inventario: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE, PERFIS.GESTOR],
   configurar: [PERFIS.ADMINISTRADOR],
+  // Etapa 27 (C4): cadastrar o PLANO DE INSPECAO (caracteristica, nominal e os dois desvios) e
+  // acao propria pelo mesmo criterio ja escrito acima (linhas 35-51): quando a operacao muda a
+  // NATUREZA DO RISCO, ela ganha acao em vez de pegar carona num gate existente. Aqui o risco e
+  // novo de verdade — a partir da Etapa 27 a `divergencia_dimensional` deixa de ser marcada a mao
+  // e passa a ser DERIVADA da medida (RN-03), entao quem edita a tolerancia decide, por numero,
+  // qual peca reprova.
+  //
+  // NAO E O `configurar`, e essa foi a decisao: `configurar` e [ADMINISTRADOR] sozinho, e reusa-lo
+  // deixaria a QUALIDADE sem poder cadastrar o que ela mesma vai medir (ela tem `inspecionar`
+  // desde a Etapa 24) e a ENGENHARIA sem poder definir a tolerancia que ela especifica em desenho.
+  // Na pratica o cadastro so aconteceria por pedido ao administrador, e o plano nao seria feito.
+  //
+  // ALMOXARIFE fica de fora DE PROPOSITO, e e a exclusao que precisa de justificativa porque ele
+  // e o candidato obvio (tem `inspecionar`): quem RECEBE o material nao define o criterio pelo
+  // qual o proprio recebimento sera julgado. Reversivel numa linha se o cliente pedir; registrado
+  // na letra B do doc de novidades.
+  //
+  // Entra de graca em GET /almoxarifado/minhas-permissoes — a rota itera Object.keys(ACAO_PERFIS).
+  gerenciar_plano_inspecao: [PERFIS.ADMINISTRADOR, PERFIS.QUALIDADE, PERFIS.ENGENHARIA],
   // Etapa 12 (D7 do design): reenviar e-mail e drenar a fila e operacao administrativa da fila,
   // nao operacao de balcao — COMPRAS fica fora DE PROPOSITO (recebe e-mail, nao opera a fila).
   // Mesmo criterio de gerenciar_reposicao (Etapa 11, D9): reversivel, uma linha, registrado na

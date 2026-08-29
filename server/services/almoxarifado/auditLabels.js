@@ -40,8 +40,9 @@
  */
 
 /**
- * Entidades: os 25 valores literais de `entidade: '<nome>'` em routes/ e services/ (verificado:
- * nenhum call site monta a entidade dinamicamente, ao contrario de `acao`).
+ * Entidades: os 26 valores literais de `entidade: '<nome>'` em routes/ e services/ (verificado:
+ * nenhum call site monta a entidade dinamicamente, ao contrario de `acao`). Eram 25 ate a Etapa 27,
+ * que acrescentou `plano_inspecao`.
  */
 const ROTULOS_ENTIDADE = Object.freeze({
   almoxarifado: 'Almoxarifado',
@@ -63,6 +64,10 @@ const ROTULOS_ENTIDADE = Object.freeze({
   movimentacao: 'Movimentação',
   notificacao: 'Notificação',
   perfil_almoxarifado_usuario: 'Perfil de usuário',
+  // Etapa 27: o plano de inspeção do material (característica, nominal e os dois desvios) nasce
+  // auditado — quem muda a tolerância muda, por número, qual peça reprova (RN-03). Mesma regra da
+  // `categoria` acima: sem esta linha o teste de cobertura de entidades fica vermelho de propósito.
+  plano_inspecao: 'Plano de inspeção',
   recebimento: 'Recebimento',
   remessa_terceiro: 'Remessa a terceiro',
   requisicao: 'Requisição',
