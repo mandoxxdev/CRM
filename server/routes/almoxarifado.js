@@ -613,13 +613,20 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // Etapa 18 (RN-07): assimetria gritante ate aqui — `PUT /materiais/:id` audita e o DELETE, que
   // tira o material do cadastro inteiro, nao deixava rastro nenhum.
   //
-  // O SELECT vem ANTES do UPDATE por DOIS motivos, nao um:
+  // O SELECT vem ANTES do UPDATE, e continua necessario:
   //  1) o UPDATE nao distingue "id inexistente" de "desativei" (a rota responde `success: true`
   //     nos dois casos, e este comportamento fica inalterado) — auditar cegamente criaria uma
   //     linha de auditoria para um material que nunca existiu;
-  //  2) `dados_anteriores.ativo` tem de ser o valor REAL. Um `1` chumbado mentiria toda vez que o
-  //     material ja estivesse inativo, que e justamente o caso em que o log importa (quem tentou
-  //     desativar de novo, e quando).
+  //  2) o SELECT tambem le `ativo`, que e o que decide SE ha o que auditar (ver abaixo).
+  //
+  // A SEGUNDA RAZAO ORIGINAL ESTAVA ERRADA, e a Etapa 23 a substituiu. Ela dizia que
+  // `dados_anteriores.ativo` tinha de ser o valor real porque "e justamente o caso em que o log
+  // importa (quem tentou desativar de novo, e quando)". Nao importa: desde a Etapa 22 existe uma
+  // tela de auditoria, e nela uma linha DESATIVACAO de um material que JA ESTAVA inativo nao se
+  // distingue de uma desativacao real — mesmo verbo, mesmo autor, mesmo horario. Registrar
+  // tentativa sem efeito com o verbo do ato com efeito e o log mentindo por EXCESSO (RN-03).
+  // Se um dia houver valor em registrar tentativas, isso pede um verbo PROPRIO, nao este.
+  // O `ativo` lido segue servindo de `dados_anteriores` no caso que realmente desativa.
   app.delete('/api/almoxarifado/materiais/:id', requirePermission('editar_material'), async (req, res) => {
     try {
       const antes = await dbGet(db, `SELECT id, codigo, nome, ativo FROM materiais_almoxarifado WHERE id = ?`,
@@ -629,7 +636,13 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
       // Pos-escrita e best-effort: o material JA esta inativo neste ponto: derrubar a resposta por
       // causa do log desfaria nada e devolveria erro para um ato que aconteceu.
-      if (antes) {
+      //
+      // Etapa 23 (RN-03): `antes.ativo === 1` — so audita quando havia o que desativar. Aqui o
+      // conserto e DIFERENTE das outras quatro rotas de exclusao: elas ganharam `AND ativo = 1`
+      // no WHERE para o `changes` decidir 404/`ja_inativo`; esta responde `success: true` tambem
+      // para id inexistente (contrato declarado na Etapa 19) e isso fica INALTERADO — o que muda
+      // e so a condicao da auditoria, sem tocar no corpo da resposta.
+      if (antes && antes.ativo === 1) {
         try {
           await audit.registrarAuditoria(db, {
             entidade: 'material', entidade_id: antes.id, acao: 'DESATIVACAO',
@@ -1758,9 +1771,17 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     if (denyUnlessAlmoxAdmin(req, res)) return;
     db.get(`SELECT * FROM tipos_material_almoxarifado WHERE id = ?`, [req.params.id], (selErr, anterior) => {
       if (selErr) return res.status(500).json({ error: selErr.message });
-      db.run(`UPDATE tipos_material_almoxarifado SET ativo = 0 WHERE id = ?`, [req.params.id], function (err) {
+      // Etapa 23 (RN-04): o `AND ativo = 1` nao e otimizacao, e o que da SENTIDO ao `changes`.
+      // Sem ele o SQLite conta a linha que o WHERE CASOU, nao a que MUDOU: excluir de novo dava
+      // `changes = 1` e gravava um segundo EXCLUSAO, indistinguivel do real na tela de auditoria.
+      db.run(`UPDATE tipos_material_almoxarifado SET ativo = 0 WHERE id = ? AND ativo = 1`, [req.params.id], function (err) {
         if (err) return res.status(500).json({ error: err.message });
-        if (this.changes === 0) return res.status(404).json({ error: 'Tipo de material não encontrado' });
+        // `changes === 0` agora tem DOIS significados, e quem os separa e o SELECT acima:
+        // linha inexistente => 404 (como antes); linha ja inativa => 200 idempotente SEM auditar.
+        if (this.changes === 0) {
+          if (!anterior) return res.status(404).json({ error: 'Tipo de material não encontrado' });
+          return res.json({ success: true, ja_inativo: true });
+        }
         auditarCadastro({
           req, entidade: 'tipo_material', entidade_id: Number(req.params.id), acao: 'EXCLUSAO',
           dados_anteriores: anterior || null, dados_novos: { ativo: 0 },
@@ -1965,10 +1986,16 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         // fazia sao de SALDO, nao da linha.
         db.get(`SELECT * FROM localizacoes_almoxarifado WHERE id = ?`, [req.params.id], (selErr, anterior) => {
           if (selErr) return res.status(500).json({ error: selErr.message });
-          db.run(`UPDATE localizacoes_almoxarifado SET ativo = 0 WHERE id = ?`, [req.params.id], function (err) {
+          // Etapa 23 (RN-04): `AND ativo = 1` para o `changes` responder a pergunta certa —
+          // sem ele, uma 2a exclusao contava 1 e gravava rastro de um ato sem efeito.
+          db.run(`UPDATE localizacoes_almoxarifado SET ativo = 0 WHERE id = ? AND ativo = 1`, [req.params.id], function (err) {
             if (err) return res.status(500).json({ error: err.message });
             // RN-03: id inexistente respondia 200 ("success: true" sobre nada).
-            if (this.changes === 0) return res.status(404).json({ error: 'Localização não encontrada' });
+            // Etapa 23: e `changes === 0` com a linha EXISTINDO e "ja inativa" — 200 sem auditar.
+            if (this.changes === 0) {
+              if (!anterior) return res.status(404).json({ error: 'Localização não encontrada' });
+              return res.json({ success: true, ja_inativo: true });
+            }
             auditarCadastro({
               req, entidade: 'localizacao', entidade_id: Number(req.params.id), acao: 'EXCLUSAO',
               dados_anteriores: anterior || null, dados_novos: { ativo: 0 },
@@ -2130,8 +2157,13 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
               error: `Não é possível excluir: ${row.c} localização(ões) ativa(s) usam este setor`,
             });
           }
-          db.run('UPDATE setores_almoxarifado SET ativo = 0 WHERE id = ?', [req.params.id], function (delErr) {
+          // Etapa 23 (RN-04): esta rota nem LIA `changes` — passa a ler, com o estado no WHERE.
+          db.run('UPDATE setores_almoxarifado SET ativo = 0 WHERE id = ? AND ativo = 1', [req.params.id], function (delErr) {
             if (delErr) return res.status(500).json({ error: delErr.message });
+            // Aqui NAO existe o ramo de 404 que as outras tres rotas tem: o `if (!setor)` acima ja
+            // devolveu 404 antes do UPDATE, entao chegar com `changes === 0` so pode significar
+            // "ja inativa". Implementar o 404 por SELECT vazio do contrato C2 seria codigo morto.
+            if (this.changes === 0) return res.json({ success: true, ja_inativo: true });
             auditarCadastro({
               req, entidade: 'setor', entidade_id: Number(req.params.id), acao: 'EXCLUSAO',
               dados_anteriores: setor, dados_novos: { ativo: 0 },
@@ -2366,10 +2398,16 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         // fazia sao CONTAGENS (itens e subfamilias), nao a linha.
         db.get('SELECT * FROM familias_material_almoxarifado WHERE id = ?', [req.params.id], (selErr, anterior) => {
           if (selErr) return res.status(500).json({ error: selErr.message });
-          db.run('UPDATE familias_material_almoxarifado SET ativo = 0 WHERE id = ?', [req.params.id], function (err2) {
+          // Etapa 23 (RN-04): `AND ativo = 1` para o `changes` distinguir linha ALTERADA de
+          // linha apenas CASADA — sem ele a 2a exclusao auditava um ato que nao aconteceu.
+          db.run('UPDATE familias_material_almoxarifado SET ativo = 0 WHERE id = ? AND ativo = 1', [req.params.id], function (err2) {
             if (err2) return res.status(500).json({ error: err2.message });
             // RN-03: id inexistente respondia 200 ("success: true" sobre nada).
-            if (this.changes === 0) return res.status(404).json({ error: 'Família não encontrada' });
+            // Etapa 23: `changes === 0` com a linha EXISTINDO e "ja inativa" — 200 sem auditar.
+            if (this.changes === 0) {
+              if (!anterior) return res.status(404).json({ error: 'Família não encontrada' });
+              return res.json({ success: true, ja_inativo: true });
+            }
             auditarCadastro({
               req, entidade: 'familia', entidade_id: Number(req.params.id), acao: 'EXCLUSAO',
               dados_anteriores: anterior || null, dados_novos: { ativo: 0 },

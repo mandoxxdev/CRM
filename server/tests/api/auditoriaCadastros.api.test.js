@@ -19,11 +19,17 @@
  *   `chamado`, o ato responde e gravou, zero linhas) — sem a primeira, uma rota que
  *   simplesmente NÃO auditasse passaria verde e o teste seria vazio.
  *
- * LIMITAÇÃO DECLARADA (medida aqui, não corrigida nesta etapa): em SQLite um UPDATE numa linha
- * existente conta `changes = 1` mesmo sem mudar valor nenhum. Então DELETE numa linha JÁ
- * INATIVA continua 200 e audita um EXCLUSAO que não excluiu nada. Só id INEXISTENTE cai no
- * 404. O cenário do fim do arquivo fixa esse comportamento por escrito para que a próxima
- * sessão não o descubra como surpresa.
+ * LIMITAÇÃO DECLARADA NA ETAPA 19 — CORRIGIDA NA ETAPA 23 (Task 2). O texto original desta
+ * seção dizia: "em SQLite um UPDATE numa linha existente conta `changes = 1` mesmo sem mudar
+ * valor nenhum. Então DELETE numa linha JÁ INATIVA continua 200 e audita um EXCLUSAO que não
+ * excluiu nada. Só id INEXISTENTE cai no 404." A primeira frase continua verdadeira sobre o
+ * SQLite; as outras duas **deixaram de ser verdade** e ficariam mentindo para quem lesse este
+ * arquivo. A Etapa 23 pôs `AND ativo = 1` no WHERE das quatro rotas (RN-04) — com o estado
+ * dentro do WHERE, `changes === 0` na linha já inativa — e o SELECT que a rota já fazia separa
+ * "não existe" (404, como sempre) de "já inativa" (200 `ja_inativo`, SEM auditar, RN-03).
+ * O cenário do fim do arquivo foi atualizado de 2 linhas para 1 e continua aqui: a limitação
+ * declarada virou pendência resolvida, e o histórico explica por que o cenário existe.
+ * A cobertura completa das CINCO rotas está em `exclusaoIdempotente.api.test.js`.
  */
 const assert = require('assert');
 const request = require('supertest');
@@ -336,21 +342,26 @@ const uniq = (p) => `${p}${Date.now() % 100000}${++seq}`;
       'auditou uma exclusao que a rota recusou');
   });
 
-  // ── Limitação declarada: DELETE de linha JÁ INATIVA ─────────────────────────────────────
-  await test('[limitacao declarada] DELETE de linha JA INATIVA segue 200 e audita um EXCLUSAO', async () => {
-    // Em SQLite `changes` conta a linha ATINGIDA, nao a linha que mudou de valor — entao a
-    // guarda de 404 da RN-03 so pega id INEXISTENTE. Este cenario existe para FIXAR o
-    // comportamento por escrito: quem ler o log vera dois EXCLUSAO do mesmo id e precisa saber
-    // que o segundo nao excluiu nada. Corrigir exigiria checar `ativo` antes — fora do escopo
-    // da Etapa 19, declarado no plano e no fechamento.
+  // ── Limitação da Etapa 19, CORRIGIDA na Etapa 23: DELETE de linha JÁ INATIVA ────────────
+  await test('[E19 limitacao -> E23 corrigida] DELETE de linha JA INATIVA segue 200, mas NAO audita', async () => {
+    // ATE A ETAPA 22 este cenario afirmava `length === 2` e existia para FIXAR uma limitacao:
+    // em SQLite `changes` conta a linha ATINGIDA, nao a que mudou de valor, entao a guarda de
+    // 404 da RN-03 (Etapa 19) so pegava id INEXISTENTE e o 2o DELETE gravava um EXCLUSAO que
+    // nao excluiu nada. A Etapa 23 (RN-04) pos `AND ativo = 1` no WHERE e o numero virou 1.
+    // O 200 permanece de proposito: a exclusao e IDEMPOTENTE — a tela deixa clicar de novo, e
+    // transformar isso em erro quebraria o fluxo do usuario por causa de um conserto de log.
     const criado = await criarTipo(uniq('E19 Tipo Duplo '));
     const um = await request(app).delete(`/api/almoxarifado/tipos-material/${criado.id}`);
     assert.strictEqual(um.status, 200, JSON.stringify(um.body));
+    assert.strictEqual((await linhasDe('tipo_material', 'EXCLUSAO', criado.id)).length, 1,
+      'setup: a 1a exclusao devia deixar exatamente 1 linha');
+
     const dois = await request(app).delete(`/api/almoxarifado/tipos-material/${criado.id}`);
     assert.strictEqual(dois.status, 200,
-      `o comportamento mudou: DELETE em linha ja inativa respondeu ${dois.status} — atualize a limitacao declarada`);
-    assert.strictEqual((await linhasDe('tipo_material', 'EXCLUSAO', criado.id)).length, 2,
-      'a limitacao declarada mudou: o 2o DELETE nao gerou linha');
+      `a exclusao continua idempotente: esperado 200, veio ${dois.status} — ${JSON.stringify(dois.body)}`);
+    assert.strictEqual((await linhasDe('tipo_material', 'EXCLUSAO', criado.id)).length, 1,
+      'a Etapa 23 regrediu: o 2o DELETE voltou a gravar rastro de um ato sem efeito');
+    assert.strictEqual(dois.body.ja_inativo, true, `esperado ja_inativo: ${JSON.stringify(dois.body)}`);
   });
 
   // ── RN-02: auditoria quebrada NAO derruba o ato ─────────────────────────────────────────

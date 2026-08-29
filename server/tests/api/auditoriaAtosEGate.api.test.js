@@ -14,9 +14,17 @@
  *    ADMINISTRADOR para todos (permissions.js:93) e a matriz passaria vazia — todos os 8 casos
  *    dariam 200 e o teste nao saberia falhar.
  *  - RN-07: tres atos vizinhos que nao deixavam rastro nenhum passam a auditar. O DELETE de
- *    material precisa de SELECT ANTES do UPDATE por dois motivos: id inexistente NAO pode gerar
- *    linha fantasma (a rota responde `success:true` mesmo para id que nao existe), e
- *    `dados_anteriores.ativo` tem de ser o valor REAL lido, nao um `1` fixo.
+ *    material precisa de SELECT ANTES do UPDATE: id inexistente NAO pode gerar linha fantasma
+ *    (a rota responde `success:true` mesmo para id que nao existe), e o `ativo` lido e o que
+ *    decide SE ha o que auditar.
+ *    ATUALIZADO NA ETAPA 23 (RN-03): a segunda razao original dizia que
+ *    `dados_anteriores.ativo` tinha de ser o valor REAL "porque e justamente o caso em que o log
+ *    importa" — desativar um material JA inativo gravava outra DESATIVACAO. **Essa razao estava
+ *    errada**: na tela de auditoria da Etapa 22 essa linha nao se distingue de uma desativacao
+ *    real. Agora so audita `if (antes && antes.ativo === 1)`, e o cenario do material ja inativo
+ *    (abaixo) afirma ZERO linhas. Efeito colateral honesto: como o unico caminho auditado e o do
+ *    material que ESTAVA ativo, `dados_anteriores.ativo` e 1 por construcao — a guarda do "1
+ *    chumbado" perdeu o ramo que ela guardava, e nao ha como prova-la sem esse ramo.
  *  - Ordem estavel do log: `created_at` do SQLite tem resolucao de SEGUNDO, entao duas auditorias
  *    do mesmo ato empatam. Sem o desempate por `id DESC`, a ordem do GET e indefinida e a jornada
  *    da Task 4 seria flaky.
@@ -218,17 +226,25 @@ async function criarRequisicao(db, { status = 'PENDENTE', itens = [], solicitant
     assert.strictEqual(log.dados_novos.nome, mat.nome);
   });
 
-  await test('RN-07 material: material JA inativo registra dados_anteriores.ativo = 0 (valor real, nao 1 fixo)', async () => {
+  await test('[E18 -> E23] material JA inativo: 200 inalterado, e ZERO linhas DESATIVACAO', async () => {
+    // ATE A ETAPA 22 este cenario se chamava "registra dados_anteriores.ativo = 0 (valor real,
+    // nao 1 fixo)" e afirmava 1 linha. A Etapa 23 (RN-03) decidiu o contrario e o cenario mudou
+    // de lado: desativar o que ja esta inativo NAO e um ato, e nao pode virar uma DESATIVACAO
+    // indistinguivel da real na tela de auditoria da Etapa 22. O 200 fica INALTERADO — esta rota
+    // nunca teve 404 nem `ja_inativo`, e mudar isso seria contrato fora do tema da etapa.
     setUser(ADMIN);
     const mat = await novoMaterial(db, { qtd: 5, ativo: 0 });
+    const antes = await auditorias(db, 'material', mat.id, 'DESATIVACAO');
+    assert.strictEqual(antes.length, 0, 'setup: o material nasceu inativo e sem rastro nenhum');
 
     const res = await request(app).delete(`/api/almoxarifado/materiais/${mat.id}`);
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(res.body.success, true, 'a resposta desta rota nao muda');
 
     const linhas = await auditorias(db, 'material', mat.id, 'DESATIVACAO');
-    assert.strictEqual(linhas.length, 1, `esperava 1 DESATIVACAO, veio ${linhas.length}`);
-    assert.strictEqual(linhas[0].dados_anteriores.ativo, 0,
-      'o de/para tem de vir do SELECT, nao de um 1 chumbado');
+    assert.strictEqual(linhas.length, 0,
+      `desativar o que ja estava inativo gravou ${linhas.length} linha(s) de um ato sem efeito: `
+      + JSON.stringify(linhas.map((l) => l.id)));
   });
 
   await test('RN-07 material: id INEXISTENTE responde success e NAO audita (nada de linha fantasma)', async () => {
