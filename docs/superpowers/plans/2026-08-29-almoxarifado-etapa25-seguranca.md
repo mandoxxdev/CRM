@@ -197,16 +197,63 @@ roda **depois** do prune. No primeiro boot de uma instalação nova (volume vazi
 **Mova o prune para dentro de `initializeDatabase`, depois de `inicializarConfiguracoesPadrao`
 (`:2074`).** Só o `backupDatabaseFiles` precisa acontecer antes das migrations; o prune não.
 
-- [ ] **Step 1: teste que falha** — extraia a tradução configuração → opções para uma **função**
-  (sem harness de core, é o que dá para testar): `'7'` → `manterDias: 7`; ausente, `'abc'`,
-  `'0'`, `'-5'` e `NaN` → padrão **com log** (RN-03). **Inclua o caminho "tabela ausente"**: a
-  função recebe o erro e cai no padrão sem lançar — é o cenário que guarda o A1.
-- [ ] **Step 2: implementar** a mudança de lugar + a leitura. Confira que o backup do boot
-  continua rodando **antes** das migrations (não mova esse).
-- [ ] **Step 3: controle positivo** (commitar antes): faça a leitura ignorar a chave e sempre usar
-  o padrão → o cenário do `'7'` cai nomeando o valor lido. Segunda: faça o caminho de erro
-  **lançar** → o cenário da tabela ausente cai.
-- [ ] **Step 4:** `npm run test:api`; commit.
+> **STATUS: Task 2 FEITA** — commit `f2f1400`. Placar: `backupRetencao.api.test.js` **33/33**
+> (era 21, +12 cenários), `dbRecoveryBackup.api.test.js` **5/5** antes e depois, `test:api`
+> **152/152** arquivos (nenhum arquivo novo, como previsto), `test:sqlite` **5/5**.
+> Duas divergências registradas no fim desta task.
+
+- [x] **Step 1: teste que falha** — a tradução virou `opcoesDeRetencao(err, row)` em
+  `services/dbRecovery.js`, recebendo o par exato do callback do `db.get`. 12 cenários novos:
+  `'7'` → `manterDias: 7` e `45` (número) → 45; ausente / linha sem `valor` / `null` / `''` /
+  `'abc'` / `'0'` / `'-5'` / `NaN` → padrão de 30 **com exatamente 1 aviso** no `console.warn`
+  (capturado, não impresso); e os **dois** do caminho "tabela ausente": não lança (via
+  `assert.doesNotThrow`) e as opções que saem dali ainda são régua utilizável (limpam órfão e
+  respeitam o piso — se a função devolvesse `{}` o prune viraria no-op no primeiro boot).
+  Vermelho de partida: **21 passed, 12 failed**, `opcoesDeRetencao is not a function`.
+- [x] **Step 2: implementar** — `pruneOldBackups` sai de `beginDatabaseInitialization` e passa a
+  rodar em `podarBackupsConformeConfiguracao()`, chamada dentro de `initializeDatabase` no
+  callback de `inicializarConfiguracoesPadrao`. `backupDatabaseFiles` **não** se moveu: continua
+  dentro de `prepareDatabaseOnStartup`, antes das migrations (comentário no lugar antigo diz por
+  quê, para ninguém "consertar" isso de volta).
+  **Smoke test de boot real** (não só unitário), com `CRM_DATA_DIR` num diretório temporário
+  vazio — instalação nova de verdade, com 2 órfãos e 1 cópia velha plantados:
+  `[DB Recovery] 2 acompanhante(s) orfao(s) removido(s)` + `retencao: 2 arquivo(s) removido(s)
+  (manter 30 dias, teto de 10 copias)` + `✅ Banco de dados totalmente inicializado`, **sem**
+  `Falha na preparação do banco` e sem `no such table: configuracoes`.
+- [x] **Step 3: controle positivo** (commitado antes, `f2f1400`), **dois**, lendo qual asserção
+  caiu:
+  1. leitura ignorando a chave (`const bruto = undefined`) → **o cenário do `'7'` caiu nomeando o
+     valor**: "backup_manter_dias='7' virou manterDias=30 — a chave foi ignorada e o valor da
+     tela não chega no prune". 31/2.
+  2. caminho de erro voltando a `throw err` → **os dois cenários A1 caíram**: "Got unwanted
+     exception: opcoesDeRetencao LANÇOU no erro de leitura…" e "no such table: configuracoes".
+     31/2.
+  `md5sum` conferido antes/depois/restaurado (`fac5684c…` nos dois ciclos), `git diff --stat`
+  vazio.
+- [x] **Step 3b (extra): o A1 reproduzido no boot de verdade, não só citado.** Com a leitura
+  colocada de volta no lugar antigo (dentro do `.then` de `beginDatabaseInitialization`) e o
+  servidor subindo sobre um `CRM_DATA_DIR` vazio, o log traz
+  `❌ Falha na preparação do banco (integrity/WAL): SQLITE_ERROR: no such table: configuracoes`
+  — ou seja, `dbStartupFailed = true` e `/health` (`index.js:437`) reportando
+  `db_startup_failed` pelo resto do processo. Experimento revertido com `git checkout`.
+- [x] **Step 4:** `test:api` **152/152**, `test:sqlite` **5/5**, `dbRecoveryBackup` **5/5**;
+  commit `f2f1400`.
+
+#### Divergências desta task (o que saiu diferente do plano, e por quê)
+
+1. **Quem loga o aviso da RN-03 é `opcoesDeRetencao`, não `pruneOldBackups`.** A "próxima tarefa
+   detalhada" mandava "só passar a chave lida", já que `pruneOldBackups` loga sozinho quando
+   recebe `manterDias` inválido num objeto. Não fecha com o que o Step 1 pede da função
+   (`'abc'` → **padrão**): passar o valor cru faria `opcoesDeRetencao` devolver
+   `manterDias: 'abc'`. E o caminho de erro **não tem valor nenhum** para repassar — a tabela nem
+   existe —, então a função teria de decidir o padrão de qualquer forma. Ela normaliza e loga; o
+   prune passa a receber sempre número válido e **não** duplica o log (há cenário afirmando
+   `manterDiasInvalido === false` justamente para provar que o aviso não sai duas vezes).
+2. **O prune ficou dentro de `try/catch`** — o plano não pediu. Motivo: no lugar antigo, uma
+   exceção do prune caía no `.catch` do boot e marcava `dbStartupFailed`; no lugar novo ela seria
+   exceção solta dentro de um callback do sqlite3. Limpeza de arquivo antigo é conveniência e
+   nunca pode ser motivo para o servidor não subir. Muda a semântica antiga (antes, prune quebrado
+   = boot degradado; agora = um `console.warn`), e é de propósito.
 
 ---
 
@@ -283,19 +330,29 @@ os **23 movimentos originados em serviço gravariam `null`** — metade da featu
 
 ## Próxima tarefa detalhada
 
-**A Task 1 está feita (`6209037`). A próxima é a Task 2.** O que ela consome:
+**As Tasks 1 (`6209037`) e 2 (`f2f1400`) estão feitas. A próxima é a Task 3** (a origem da
+requisição na auditoria de movimentação). Ela **não** depende de nada do que as Tasks 1 e 2
+tocaram — `dbRecovery.js` e o boot do `index.js` não têm interseção com `stockService.js`.
 
-- `pruneOldBackups(dbPath, opcoes)` aceita **objeto** `{ manterDias, pisoCopias, tetoCopias }` ou
-  **número** (= `tetoCopias`, o sentido histórico). Devolve `{ apagados: string[], motivo }`.
-- `motivo.manterDiasInvalido` é `true` quando o valor lido não presta; `motivo.manterDias` traz o
-  efetivo. `pruneOldBackups` **já loga** o aviso da RN-03 quando recebe `manterDias` num objeto —
-  a Task 2 não precisa duplicar o log, só passar a chave lida.
-- Constantes exportadas para a Task 2 não reinventar: `MANTER_DIAS_PADRAO` (30),
-  `PISO_COPIAS_PADRAO` (3), `TETO_COPIAS_PADRAO` (10).
-- **`index.js:1013` continua `pruneOldBackups(dbPath, 10)` e continua correto** (vira teto 10,
-  padrão de 30 dias). A Task 2 é que o move para dentro de `initializeDatabase`, depois de
-  `inicializarConfiguracoesPadrao` (`:2074`), e troca o `10` por
-  `{ manterDias: <valor lido>, tetoCopias: 10 }`.
+O que a Task 3 consome (medido, não suposto — reconfira antes de escrever):
+
+- `registrarMovimentacao(db, user, params, opcoes)` em
+  `server/services/almoxarifado/stockService.js` — o `req` **não** chega lá, e **23 dos 28** call
+  sites nascem dentro de outros serviços. O caminho é `req.user.origem`: **57 de 57** chamadas de
+  serviço nas rotas do módulo usam `Service.x(db, req.user, …)`.
+- A auditoria de movimentação fica em `stockService.js:1367` (confira a linha, o arquivo mudou
+  desde a medição) e **não tem `try/catch`** — não crie um (achado A4).
+- Nos testes o `user` é literal, então `user.origem` vira `undefined` — degrada limpo, mas os
+  cenários novos precisam construir a origem explicitamente.
+
+### Estado do backup/retenção depois da Task 2 (para a Task 4 não remedir do zero)
+
+- A retenção agora é `{ manterDias: <backup_manter_dias>, tetoCopias: 10 }`, com piso de 3.
+- O prune roda **dentro de `initializeDatabase`**, em `podarBackupsConformeConfiguracao()`, e
+  registra no log quantos arquivos saiu e com que régua — é por essa linha que a letra A da
+  Task 4 pode conferir a limpeza no primeiro boot em produção.
+- `backup_automatico` e `backup_frequencia` **continuam sem leitor no servidor** (achado A11).
+  A tela de Backup tem **um** controle vivo e **dois** decorativos — a letra C tem de dizer isso.
 
 ---
 
