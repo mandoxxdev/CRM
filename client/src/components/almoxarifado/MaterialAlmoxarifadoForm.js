@@ -4,16 +4,15 @@ import { useAuth } from '../../context/AuthContext';
 import { getEffectiveUser } from '../../services/permissionsCache';
 import { canConfigureAlmox } from '../../utils/systemPermissions';
 import api from '../../services/api';
+import { useCategoriasMaterial } from '../../hooks/useCategoriasMaterial';
 import { resolveMaterialPhotoUrl } from '../../utils/resolveMaterialPhotoUrl';
 import { formatLocalizacaoLabel } from '../../utils/localizacaoLabel';
 import { toast } from 'react-toastify';
 import { FiSave, FiArrowLeft, FiImage, FiRefreshCw } from 'react-icons/fi';
 import './Almoxarifado.css';
 
-const CATEGORIAS = [
-  'CONSUMÍVEL', 'FERRAMENTA', 'EPI', 'ELÉTRICO', 'HIDRÁULICO',
-  'MECÂNICO', 'INSUMO', 'EMBALAGEM', 'ESCRITÓRIO', 'LIMPEZA', 'OUTROS'
-];
+// Etapa 26: a lista de categorias saiu daqui (era uma de três cópias hardcoded) e passou a vir
+// de GET /almoxarifado/categorias, via useCategoriasMaterial.
 
 const UNIDADES = ['UN', 'KG', 'G', 'L', 'ML', 'M', 'CM', 'M²', 'M³', 'CX', 'PC', 'PAR', 'ROLO', 'BALDE', 'TAMBOR', 'SACO'];
 
@@ -62,12 +61,19 @@ const MaterialAlmoxarifadoForm = () => {
   // módulo) — por isso a falha é silenciosa: sem a lista o select fica só com "GMP (estoque
   // próprio)" e o cadastro de material continua funcionando, que é o caminho comum.
   const [clientes, setClientes] = useState([]);
+  // Etapa 26 (RN-01): o catálogo do cliente, ponto único de busca compartilhado com as duas
+  // telas de listagem.
+  const { categorias, erro: erroCategorias } = useCategoriasMaterial();
 
   const [form, setForm] = useState({
     codigo: '',
     nome: '',
     descricao: '',
-    categoria: 'CONSUMÍVEL',
+    // Etapa 26 (RN-07): NASCE VAZIO. O default era 'CONSUMÍVEL', que não está no catálogo —
+    // todo material criado sem tocar no campo nascia fora dele, em silêncio. Descartado usar a
+    // primeira do catálogo: classificaria material como 'Aço carbono' por acidente de ordenação
+    // alfabética, que é a mesma mentira com outra roupa.
+    categoria: '',
     unidade: 'UN',
     familia_id: searchParams.get('familia_id') || '',
     subfamilia_id: '',
@@ -204,6 +210,32 @@ const MaterialAlmoxarifadoForm = () => {
     [almoxarifados]
   );
 
+  // Etapa 26, RN-04 — o cerne desta etapa, e o ponto onde ela pode estragar dado do cliente.
+  //
+  // O <select> é CONTROLADO por state. Quando o valor do state não está entre as opções, o React
+  // não dispara onChange e o navegador exibe a PRIMEIRA opção: a tela mostra 'Aço carbono'
+  // enquanto o payload segue mandando 'CONSUMÍVEL'. Reproduzido nesta base — o material 78 do
+  // teste (categoria 'MATERIAL DE SOLDA') exibia 'CONSUMÍVEL'. A tela mente sobre o que está no
+  // banco, o que é pior que trocar o valor: não deixa rastro de erro.
+  //
+  // Por isso o valor gravado entra na lista quando não está no catálogo, ROTULADO. Descartado
+  // bloquear o salvamento nesse caso: impediria corrigir o preço de um material só porque a
+  // categoria dele é antiga.
+  const categoriasOpcoes = useMemo(() => {
+    const opcoes = categorias.map((nome) => ({ valor: nome, rotulo: nome }));
+    const atual = form.categoria;
+    if (atual && !categorias.includes(atual)) {
+      opcoes.push({ valor: atual, rotulo: `${atual} (fora de catálogo)` });
+    }
+    return opcoes;
+  }, [categorias, form.categoria]);
+
+  // Sem categoria o cadastro não conclui (RN-07), então a falha de carga precisa ser dita — ao
+  // contrário dos filtros das listagens, onde o catálogo é conveniência.
+  useEffect(() => {
+    if (erroCategorias) toast.error('Erro ao carregar as categorias. Recarregue a página.');
+  }, [erroCategorias]);
+
   // Opções estreitadas pelo almoxarifado escolhido. A localização já vinculada ao material
   // entra sempre — mesmo inativa ou de outro almoxarifado — para a edição nunca perder o
   // vínculo existente sem o usuário perceber.
@@ -252,7 +284,9 @@ const MaterialAlmoxarifadoForm = () => {
         codigo: m.codigo || '',
         nome: m.nome || '',
         descricao: m.descricao || '',
-        categoria: m.categoria || 'CONSUMÍVEL',
+        // Etapa 26: sem fallback para 'CONSUMÍVEL'. O material carregado mostra a categoria que
+        // ESTÁ gravada nele — inclusive fora do catálogo (RN-04) — e vazio continua vazio.
+        categoria: m.categoria || '',
         unidade: m.unidade || 'UN',
         familia_id: m.familia_id ? String(m.familia_id) : '',
         subfamilia_id: m.subfamilia_id ? String(m.subfamilia_id) : '',
@@ -354,6 +388,18 @@ const MaterialAlmoxarifadoForm = () => {
     }
     if (!isEdit && !form.familia_id) {
       toast.error('Selecione a família do material');
+      return;
+    }
+    // Etapa 26, RN-07. Não basta o campo nascer vazio: `createMaterial` (materialService.js:179)
+    // faz `categoria: categoria || 'OUTROS'`, então mandar vazio trocaria "nasce CONSUMÍVEL" por
+    // "nasce OUTROS" — as duas fora do catálogo, e a segunda ainda por cima escolhida pelo
+    // servidor sem aparecer na tela. Nem o plano nem o design tinham visto esse fallback.
+    //
+    // A trava é só do vazio, e vale também na edição (o PUT grava o '' como está, deixando o
+    // material sem classificação nenhuma). Categoria FORA do catálogo continua salvando normal:
+    // a decisão 3 do design descartou de propósito bloquear o save por causa dela.
+    if (!form.categoria) {
+      toast.error('Selecione a categoria do material');
       return;
     }
     // Fatores de conversão (Etapa 2, Task 4): espelha no cliente a invariante que o servidor
@@ -564,9 +610,15 @@ const MaterialAlmoxarifadoForm = () => {
                   )}
                 </div>
                 <div className="almox-field">
-                  <label className="almox-label">Categoria</label>
-                  <select className="almox-form-select" value={form.categoria} onChange={e => set('categoria', e.target.value)}>
-                    {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
+                  <label className="almox-label" htmlFor="material-categoria">Categoria</label>
+                  <select
+                    id="material-categoria"
+                    className="almox-form-select"
+                    value={form.categoria}
+                    onChange={e => set('categoria', e.target.value)}
+                  >
+                    <option value="">Selecione…</option>
+                    {categoriasOpcoes.map(c => <option key={c.valor} value={c.valor}>{c.rotulo}</option>)}
                   </select>
                 </div>
                 <div className="almox-field">

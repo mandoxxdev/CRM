@@ -78,12 +78,21 @@ const CONFERENCIA_ABERTA_CEGA = {
   ],
 };
 
+// Etapa 26 — o catálogo do cliente (GET /almoxarifado/categorias), que substitui a lista de 11
+// itens em MAIÚSCULAS que este arquivo declarava.
+const CATALOGO = [
+  { id: 1, nome: 'Aço carbono', parent_id: null, ativo: 1 },
+  { id: 2, nome: 'Chapas', parent_id: null, ativo: 1 },
+  { id: 3, nome: 'Ferramentas', parent_id: null, ativo: 1 },
+];
+
 let container; let root;
 
 beforeEach(() => {
   global.IS_REACT_ACT_ENVIRONMENT = true;
   mockPode = () => true;
   api.get.mockImplementation((url) => {
+    if (url === '/almoxarifado/categorias') return Promise.resolve({ data: CATALOGO });
     if (url === '/almoxarifado/conferencias') return Promise.resolve({ data: CONFERENCIAS });
     if (url === '/almoxarifado/conferencias/1') return Promise.resolve({ data: CONFERENCIA_ABERTA_NORMAL });
     if (url === '/almoxarifado/conferencias/2') return Promise.resolve({ data: CONFERENCIA_ABERTA_CEGA });
@@ -803,5 +812,53 @@ describe('ConferenciaEstoque — RN-03: cancelar conferência exige motivo (>= 5
     const dica = container.querySelector('[title*="Cancelada por"]');
     expect(dica).toBeTruthy();
     expect(dica.getAttribute('title')).toContain('Gestor Teste');
+  });
+});
+
+/**
+ * Etapa 26, Task 2 — RN-01 nesta tela: o filtro "Filtrar por Categoria" do modal de criação
+ * lia uma lista hardcoded (a 2ª das 3 cópias). Ele restringe QUAIS materiais entram na
+ * conferência, então uma lista que não bate com as categorias gravadas gera conferência vazia.
+ *
+ * As duas metades andam juntas: o mock deste arquivo termina em `{ data: [] }` como catch-all,
+ * então "não tem CONSUMÍVEL" sozinho seria satisfeito por um select sem opção nenhuma.
+ */
+describe('ConferenciaEstoque — RN-01: o filtro de categoria vem do catálogo', () => {
+  test('as opções são as do endpoint, e a lista hardcoded sumiu', async () => {
+    await renderizar();
+    await clicar(botao('Nova Conferência'));
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/categorias');
+    const opcoes = [...campo('Filtrar por Categoria').querySelectorAll('option')].map((o) => o.textContent.trim());
+    expect(opcoes).toContain('Aço carbono');
+    expect(opcoes).toContain('Chapas');
+    expect(opcoes).toContain('Ferramentas');
+    expect(opcoes).not.toContain('CONSUMÍVEL');
+    expect(opcoes).not.toContain('EPI');
+    // "Todos os materiais" continua sendo o default (filtrar é opcional).
+    expect(opcoes[0]).toBe('Todos os materiais');
+    expect(campo('Filtrar por Categoria').value).toBe('');
+  });
+
+  test('trocar o catálogo do mock troca as opções — não é constante do front', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/categorias') return Promise.resolve({ data: [{ id: 9, nome: 'Rolamentos', ativo: 1 }] });
+      if (url === '/almoxarifado/conferencias') return Promise.resolve({ data: CONFERENCIAS });
+      return Promise.resolve({ data: [] });
+    });
+    await renderizar();
+    await clicar(botao('Nova Conferência'));
+    const opcoes = [...campo('Filtrar por Categoria').querySelectorAll('option')].map((o) => o.textContent.trim());
+    expect(opcoes).toContain('Rolamentos');
+    expect(opcoes).not.toContain('Aço carbono');
+  });
+
+  test('a categoria escolhida no filtro vai no POST', async () => {
+    await renderizar();
+    await clicar(botao('Nova Conferência'));
+    preencher(campo('Filtrar por Categoria'), 'Chapas');
+    await clicar(botao('Criar Conferência'));
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/conferencias', expect.objectContaining({
+      categoria: 'Chapas',
+    }));
   });
 });

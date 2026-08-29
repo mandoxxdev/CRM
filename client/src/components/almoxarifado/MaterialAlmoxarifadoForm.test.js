@@ -23,6 +23,7 @@ import { createRoot } from 'react-dom/client';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import MaterialAlmoxarifadoForm from './MaterialAlmoxarifadoForm';
 import api from '../../services/api';
+import { toast } from 'react-toastify';
 
 jest.mock('../../services/api', () => ({
   __esModule: true,
@@ -49,6 +50,23 @@ const MATERIAL_DO_CLIENTE = {
   proprietario_cliente_id: 1,
 };
 
+// Etapa 26 — o catálogo do cliente (GET /almoxarifado/categorias). `Aço carbono` é a primeira
+// em ordem alfabética DE PROPÓSITO: é a opção que o <select> exibiria por conta própria se o
+// valor gravado no material não estivesse entre as opções (ver o describe da RN-04).
+const CATALOGO = [
+  { id: 1, nome: 'Aço carbono', parent_id: null, ativo: 1 },
+  { id: 2, nome: 'Chapas', parent_id: null, ativo: 1 },
+  { id: 3, nome: 'Ferramentas', parent_id: null, ativo: 1 },
+];
+
+// Material legado com categoria que não está NEM na lista hardcoded antiga NEM no catálogo —
+// é o cenário onde a mentira da tela é visível hoje, sem depender de nenhuma implementação.
+const MATERIAL_CATEGORIA_LEGADA = {
+  id: 78, codigo: 'CHP-003', nome: 'Eletrodo revestido', familia_id: 5,
+  unidade: 'KG', categoria: 'MATERIAL DE SOLDA', quantidade_atual: 4,
+  proprietario_cliente_id: null,
+};
+
 let container;
 let root;
 
@@ -58,6 +76,8 @@ beforeEach(() => {
     if (url === '/clientes') return Promise.resolve({ data: [CLIENTE_UM, CLIENTE_DOIS] });
     if (url === '/almoxarifado/familias') return Promise.resolve({ data: [FAMILIA] });
     if (url === '/almoxarifado/proximo-codigo') return Promise.resolve({ data: { codigo: 'CHP-999' } });
+    if (url === '/almoxarifado/categorias') return Promise.resolve({ data: CATALOGO });
+    if (url === '/almoxarifado/materiais/78') return Promise.resolve({ data: MATERIAL_CATEGORIA_LEGADA });
     if (url.startsWith('/almoxarifado/materiais/')) return Promise.resolve({ data: MATERIAL_DO_CLIENTE });
     return Promise.resolve({ data: [] });
   });
@@ -89,10 +109,10 @@ async function renderizarNovo() {
   await esperarEfeitos();
 }
 
-async function renderizarEdicao() {
+async function renderizarEdicao(id = 77) {
   await act(async () => {
     root.render(
-      <MemoryRouter initialEntries={['/almoxarifado/materiais/77/editar']}>
+      <MemoryRouter initialEntries={[`/almoxarifado/materiais/${id}/editar`]}>
         <Routes><Route path="/almoxarifado/materiais/:id/editar" element={<MaterialAlmoxarifadoForm />} /></Routes>
       </MemoryRouter>,
     );
@@ -111,6 +131,18 @@ function preencher(elemento, valor) {
 
 const proprietario = () => container.querySelector('#material-proprietario');
 
+// Localiza o <select> de Categoria pelo rótulo da própria seção — funciona igual antes e depois
+// da Etapa 26, então o vermelho do TDD é de asserção, não de seletor que não existe ainda.
+function categoriaSelect() {
+  const campo = [...container.querySelectorAll('.almox-field')]
+    .find((d) => d.querySelector('.almox-label')?.textContent.trim() === 'Categoria');
+  return campo ? campo.querySelector('select') : null;
+}
+const categoriaOpcoes = () => [...categoriaSelect().querySelectorAll('option')].map((o) => o.textContent.trim());
+const categoriaValores = () => [...categoriaSelect().querySelectorAll('option')].map((o) => o.value);
+const opcaoSelecionada = () => [...categoriaSelect().querySelectorAll('option')]
+  .find((o) => o.value === categoriaSelect().value);
+
 async function submeter() {
   const form = container.querySelector('form');
   await act(async () => { form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
@@ -119,6 +151,10 @@ async function submeter() {
 async function preencherObrigatorios() {
   preencher(container.querySelector('input[placeholder="PAR-001"]'), 'CHP-100');
   preencher(container.querySelector('input[placeholder="Nome completo do material"]'), 'Chapa 3mm');
+  // Etapa 26/RN-07: categoria deixou de ter default e passou a ser obrigatória (o servidor
+  // grava 'OUTROS' quando recebe vazio — materialService.js:179 —, e 'OUTROS' também está fora
+  // do catálogo). Sem escolher aqui, os testes de Propriedade abaixo nem chegariam ao POST.
+  preencher(categoriaSelect(), 'Chapas');
 }
 
 describe('MaterialAlmoxarifadoForm — seção Propriedade', () => {
@@ -160,6 +196,7 @@ describe('MaterialAlmoxarifadoForm — seção Propriedade', () => {
       if (url === '/clientes') return Promise.reject(new Error('403'));
       if (url === '/almoxarifado/familias') return Promise.resolve({ data: [FAMILIA] });
       if (url === '/almoxarifado/proximo-codigo') return Promise.resolve({ data: { codigo: 'CHP-999' } });
+      if (url === '/almoxarifado/categorias') return Promise.resolve({ data: CATALOGO });
       return Promise.resolve({ data: [] });
     });
     await renderizarNovo();
@@ -191,5 +228,127 @@ describe('MaterialAlmoxarifadoForm — edição de material com dono', () => {
     preencher(proprietario(), '2');
     await submeter();
     expect(api.put.mock.calls[0][1].proprietario_cliente_id).toBe(2);
+  });
+});
+
+/**
+ * Etapa 26, Task 2 — a categoria do material deixa de ser lista hardcoded no front.
+ *
+ * Por que cada metade existe:
+ *
+ *  - Toda asserção NEGATIVA aqui vem acompanhada da POSITIVA no mesmo teste. O mock deste
+ *    arquivo termina em `Promise.resolve({ data: [] })` como catch-all, então "a lista não tem
+ *    CONSUMÍVEL" seria satisfeito por uma lista VAZIA — um verde que não prova nada.
+ *  - O cenário da RN-04 mira a metade VISÍVEL. A asserção de payload já passava antes da
+ *    implementação (o state nunca foi trocado; o <select> é controlado e o React não dispara
+ *    onChange para valor ausente das opções), então ela entra como NÃO-REGRESSÃO. O que a
+ *    implementação muda é o que o usuário VÊ.
+ */
+describe('MaterialAlmoxarifadoForm — RN-01: a lista de categorias vem do catálogo', () => {
+  test('as opções são as do endpoint, e as antigas hardcoded sumiram', async () => {
+    await renderizarNovo();
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/categorias');
+    const opcoes = categoriaOpcoes();
+    // Metade positiva — sem ela, um catálogo vazio satisfaria as três linhas seguintes.
+    expect(opcoes).toContain('Aço carbono');
+    expect(opcoes).toContain('Chapas');
+    expect(opcoes).toContain('Ferramentas');
+    // Metade negativa: a lista genérica de 11 itens não existe mais no front.
+    expect(opcoes).not.toContain('CONSUMÍVEL');
+    expect(opcoes).not.toContain('FERRAMENTA');
+    expect(opcoes).not.toContain('HIDRÁULICO');
+  });
+
+  test('trocar o catálogo do mock troca as opções — não é constante do front', async () => {
+    // Se as opções continuassem as mesmas com o mock trocado, a tela estaria lendo constante.
+    api.get.mockImplementation((url) => {
+      if (url === '/clientes') return Promise.resolve({ data: [CLIENTE_UM] });
+      if (url === '/almoxarifado/familias') return Promise.resolve({ data: [FAMILIA] });
+      if (url === '/almoxarifado/proximo-codigo') return Promise.resolve({ data: { codigo: 'CHP-999' } });
+      if (url === '/almoxarifado/categorias') {
+        return Promise.resolve({ data: [{ id: 9, nome: 'Rolamentos', ativo: 1 }, { id: 10, nome: 'Tubos', ativo: 1 }] });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    await renderizarNovo();
+    const opcoes = categoriaOpcoes();
+    expect(opcoes).toContain('Rolamentos');
+    expect(opcoes).toContain('Tubos');
+    expect(opcoes).not.toContain('Aço carbono');
+    expect(opcoes).not.toContain('Chapas');
+  });
+});
+
+describe('MaterialAlmoxarifadoForm — RN-07: material novo nasce sem categoria de mentira', () => {
+  test('o campo nasce VAZIO, com "Selecione", e não com uma categoria escolhida por acidente', async () => {
+    await renderizarNovo();
+    expect(categoriaSelect().value).toBe('');
+    expect(categoriaOpcoes()[0]).toMatch(/Selecione/i);
+    // Metade positiva: nascer vazio porque o catálogo não carregou não vale.
+    expect(categoriaOpcoes()).toContain('Aço carbono');
+    // Nem o default antigo ('CONSUMÍVEL', fora do catálogo) nem a 1ª do catálogo por ordenação.
+    expect(categoriaSelect().value).not.toBe('CONSUMÍVEL');
+    expect(categoriaSelect().value).not.toBe('Aço carbono');
+  });
+
+  test('salvar sem escolher categoria NÃO cria material — o servidor gravaria "OUTROS"', async () => {
+    // materialService.js:179 faz `categoria: categoria || 'OUTROS'`. Deixar o campo opcional
+    // trocaria "nasce CONSUMÍVEL" por "nasce OUTROS": as duas fora do catálogo, e a segunda
+    // ainda por cima invisível na tela. Por isso o vazio é barrado ANTES do POST.
+    await renderizarNovo();
+    preencher(container.querySelector('input[placeholder="PAR-001"]'), 'CHP-100');
+    preencher(container.querySelector('input[placeholder="Nome completo do material"]'), 'Chapa 3mm');
+    await submeter();
+    expect(api.post).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalled();
+    expect(toast.error.mock.calls.map((c) => String(c[0])).join(' ')).toMatch(/categoria/i);
+  });
+
+  test('escolhida uma categoria do catálogo, é ela que vai no payload', async () => {
+    await renderizarNovo();
+    await preencherObrigatorios();
+    preencher(categoriaSelect(), 'Ferramentas');
+    await submeter();
+    expect(api.post).toHaveBeenCalled();
+    expect(api.post.mock.calls[0][1].categoria).toBe('Ferramentas');
+  });
+});
+
+describe('MaterialAlmoxarifadoForm — RN-04: categoria fora do catálogo aparece na tela', () => {
+  test('material gravado com CONSUMÍVEL mostra CONSUMÍVEL, marcado como fora de catálogo', async () => {
+    // CONSUMÍVEL é o valor REAL dos materiais no banco (medido na Fase 0). Sem a opção extra,
+    // o <select> exibe a primeira do catálogo ('Aço carbono') enquanto o state — e o payload —
+    // seguem com CONSUMÍVEL: a tela mente sobre o que está no banco.
+    await renderizarEdicao(77);
+    expect(categoriaSelect().value).toBe('CONSUMÍVEL');
+    expect(opcaoSelecionada().textContent).toMatch(/fora de catálogo/i);
+    // Metade positiva: o catálogo continua ali para o usuário poder reclassificar.
+    expect(categoriaOpcoes().some((o) => o.includes('Aço carbono'))).toBe(true);
+    expect(categoriaOpcoes().some((o) => o.includes('Chapas'))).toBe(true);
+    // E o valor fora de catálogo entra UMA vez só, sem duplicar nenhuma do catálogo.
+    expect(categoriaValores().filter((v) => v === 'CONSUMÍVEL')).toHaveLength(1);
+  });
+
+  test('categoria legada fora das duas listas também aparece — hoje a tela exibiria outra', async () => {
+    await renderizarEdicao(78);
+    expect(categoriaSelect().value).toBe('MATERIAL DE SOLDA');
+    expect(opcaoSelecionada().textContent).toMatch(/fora de catálogo/i);
+    expect(categoriaOpcoes()).toContain('Chapas');
+  });
+
+  test('[não-regressão] salvar sem tocar no campo mantém a categoria gravada', async () => {
+    // Esta asserção JÁ PASSAVA antes da Etapa 26 — o state nunca foi trocado. Ela está aqui
+    // para prender o que a correção não pode quebrar, NÃO como o teste-que-falha.
+    await renderizarEdicao(77);
+    await submeter();
+    expect(api.put).toHaveBeenCalled();
+    expect(api.put.mock.calls[0][1].categoria).toBe('CONSUMÍVEL');
+  });
+
+  test('a categoria fora do catálogo pode ser trocada por uma do catálogo', async () => {
+    await renderizarEdicao(77);
+    preencher(categoriaSelect(), 'Chapas');
+    await submeter();
+    expect(api.put.mock.calls[0][1].categoria).toBe('Chapas');
   });
 });

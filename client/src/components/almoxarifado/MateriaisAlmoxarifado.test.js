@@ -57,6 +57,14 @@ const MATERIAL_CLIENTE_SEM_NOME = {
   proprietario_cliente_id: 9,
 };
 
+// Etapa 26 — o catálogo do cliente (GET /almoxarifado/categorias), que substitui a 3ª cópia da
+// lista hardcoded (a que o design da Fase 0 tinha deixado de fora da varredura).
+const CATALOGO = [
+  { id: 1, nome: 'Aço carbono', parent_id: null, ativo: 1 },
+  { id: 2, nome: 'Chapas', parent_id: null, ativo: 1 },
+  { id: 3, nome: 'Ferramentas', parent_id: null, ativo: 1 },
+];
+
 let container;
 let root;
 
@@ -68,6 +76,7 @@ beforeEach(() => {
     if (url === '/almoxarifado/materiais') {
       return Promise.resolve({ data: [MATERIAL_NOSSO, MATERIAL_CLIENTE, MATERIAL_CLIENTE_SEM_NOME] });
     }
+    if (url === '/almoxarifado/categorias') return Promise.resolve({ data: CATALOGO });
     return Promise.resolve({ data: [] });
   });
   container = document.createElement('div');
@@ -136,5 +145,59 @@ describe('MateriaisAlmoxarifado — selo de propriedade', () => {
     expect(regra).not.toBeNull();
     expect(regra[0]).toMatch(/color\s*:/);
     expect(regra[0]).toMatch(/background\s*:/);
+  });
+});
+
+/**
+ * Etapa 26, Task 2 — RN-01 nesta tela. Este arquivo é a 3ª cópia da lista hardcoded, a que a
+ * varredura da Fase 0 tinha deixado de fora (achado A1). O filtro é o caso mais visível de
+ * lista errada: nenhum material da GMP tem `EPI`, então filtrar por `EPI` devolvia zero linhas
+ * — e "zero linhas" parece estoque vazio, não filtro inútil.
+ *
+ * As metades andam juntas: o mock termina em `{ data: [] }` como catch-all, então "não tem
+ * CONSUMÍVEL" sozinho seria satisfeito por um select sem nenhuma opção.
+ */
+const filtroCategoria = () => [...container.querySelectorAll('.almox-filters select')]
+  .find((s) => s.querySelector('option')?.textContent.trim() === 'Todas categorias');
+
+function escolher(el, valor) {
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
+  act(() => {
+    setter.call(el, valor);
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+}
+
+describe('MateriaisAlmoxarifado — RN-01: o filtro de categoria vem do catálogo', () => {
+  test('as opções são as do endpoint, e a lista hardcoded sumiu', async () => {
+    await renderizar();
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/categorias');
+    const opcoes = [...filtroCategoria().querySelectorAll('option')].map((o) => o.textContent.trim());
+    expect(opcoes).toContain('Aço carbono');
+    expect(opcoes).toContain('Chapas');
+    expect(opcoes).toContain('Ferramentas');
+    expect(opcoes).not.toContain('CONSUMÍVEL');
+    expect(opcoes).not.toContain('EPI');
+    expect(opcoes[0]).toBe('Todas categorias');
+  });
+
+  test('trocar o catálogo do mock troca as opções — não é constante do front', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/materiais') return Promise.resolve({ data: [MATERIAL_NOSSO] });
+      if (url === '/almoxarifado/categorias') return Promise.resolve({ data: [{ id: 9, nome: 'Rolamentos', ativo: 1 }] });
+      return Promise.resolve({ data: [] });
+    });
+    await renderizar();
+    const opcoes = [...filtroCategoria().querySelectorAll('option')].map((o) => o.textContent.trim());
+    expect(opcoes).toContain('Rolamentos');
+    expect(opcoes).not.toContain('Aço carbono');
+  });
+
+  test('escolher uma categoria manda o filtro para o servidor', async () => {
+    await renderizar();
+    escolher(filtroCategoria(), 'Chapas');
+    await act(async () => { await new Promise((r) => setTimeout(r, 350)); });
+    const chamadas = api.get.mock.calls.filter((c) => c[0] === '/almoxarifado/materiais');
+    expect(chamadas[chamadas.length - 1][1]).toEqual({ params: { categoria: 'Chapas' } });
   });
 });

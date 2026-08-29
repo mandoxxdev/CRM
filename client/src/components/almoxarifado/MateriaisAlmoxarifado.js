@@ -4,6 +4,7 @@ import api from '../../services/api';
 import { resolveMaterialPhotoUrl } from '../../utils/resolveMaterialPhotoUrl';
 import { prefixarAlmoxarifado } from '../../utils/localizacaoLabel';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
+import { useCategoriasMaterial } from '../../hooks/useCategoriasMaterial';
 import { toast } from 'react-toastify';
 import { SkeletonTable } from '../SkeletonLoader';
 import {
@@ -17,13 +18,14 @@ import SeloProprietario from './SeloProprietario';
 import { montarEtiquetaMaterial } from '../../utils/etiquetasPdf';
 import './Almoxarifado.css';
 
-const CATEGORIAS = [
-  'CONSUMÍVEL', 'FERRAMENTA', 'EPI', 'ELÉTRICO', 'HIDRÁULICO',
-  'MECÂNICO', 'INSUMO', 'EMBALAGEM', 'ESCRITÓRIO', 'LIMPEZA', 'OUTROS'
-];
+// Etapa 26: a lista de categorias saiu daqui (era a TERCEIRA cópia hardcoded — a que a varredura
+// do design tinha deixado de fora) e passou a vir de GET /almoxarifado/categorias. Filtrar por
+// 'EPI' aqui devolvia zero linhas, porque nenhum material da GMP tem essa categoria — e zero
+// linhas parece estoque vazio, não filtro inútil.
 
 const MateriaisAlmoxarifado = () => {
   const { bloquearSeNaoPode } = useAlmoxPermissoes();
+  const { categorias } = useCategoriasMaterial();
   const [materiais, setMateriais] = useState([]);
   const [familias, setFamilias] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -189,7 +191,7 @@ const MateriaisAlmoxarifado = () => {
         </div>
         <select className="almox-select" value={categoria} onChange={e => setCategoria(e.target.value)}>
           <option value="">Todas categorias</option>
-          {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
+          {categorias.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
         <select className="almox-select" value={familiaFilter} onChange={e => setFamiliaFilter(e.target.value)}>
           <option value="">Todas famílias</option>

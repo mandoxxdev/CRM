@@ -5,12 +5,13 @@ import { FiPlus, FiRefreshCw, FiCheckCircle, FiXCircle, FiEye, FiClipboard } fro
 import { SkeletonTable } from '../SkeletonLoader';
 import { prefixarAlmoxarifado } from '../../utils/localizacaoLabel';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
+import { useCategoriasMaterial } from '../../hooks/useCategoriasMaterial';
 import './Almoxarifado.css';
 
-const CATEGORIAS = [
-  '', 'CONSUMÍVEL', 'FERRAMENTA', 'EPI', 'ELÉTRICO', 'HIDRÁULICO',
-  'MECÂNICO', 'INSUMO', 'EMBALAGEM', 'ESCRITÓRIO', 'LIMPEZA', 'OUTROS'
-];
+// Etapa 26: a lista de categorias saiu daqui (era uma de três cópias hardcoded) e passou a vir
+// de GET /almoxarifado/categorias, via useCategoriasMaterial. O filtro decide QUAIS materiais
+// entram na conferência — uma lista que não bate com as categorias gravadas gerava conferência
+// vazia, e conferência vazia parece almoxarifado vazio.
 
 // Fallback final do servidor (routes/almoxarifado.js, toleranciaEfetiva) quando a config nem
 // existe — usado só se a leitura de /almoxarifado/configuracoes falhar ou a chave não estiver
@@ -23,6 +24,7 @@ const formatMoeda = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'curr
 
 const ConferenciaEstoque = () => {
   const { bloquearSeNaoPode } = useAlmoxPermissoes();
+  const { categorias } = useCategoriasMaterial();
   const [conferencias, setConferencias] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -664,7 +666,7 @@ const ConferenciaEstoque = () => {
                   <label className="almox-label">Filtrar por Categoria (opcional)</label>
                   <select className="almox-form-select" value={criarCategoria} onChange={e => setCriarCategoria(e.target.value)}>
                     <option value="">Todos os materiais</option>
-                    {CATEGORIAS.filter(Boolean).map(c => <option key={c} value={c}>{c}</option>)}
+                    {categorias.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div className="almox-field">
