@@ -27,7 +27,15 @@ const { RequisicaoSchema } = require('../services/almoxarifado/schemas');
 
 module.exports = function registerRequisicoesMaterialRoutes(app, db, authenticateToken) {
 
-  app.use('/api/requisicoes-material', authenticateToken);
+  // Etapa 25, Task 3: este prefixo NAO e `/api/almoxarifado`, entao o middleware de origem
+  // registrado la nao o alcanca — e o `DELETE /api/requisicoes-material/:id` chega em
+  // `requisitionService.excluirRequisicao`, que ESTORNA as entregas por
+  // `stockService.registrarMovimentacao` (requisitionService.js:415). Sem esta linha, a exclusao
+  // administrativa de requisicao seria o unico caminho de movimentacao de producao a gravar
+  // origem vazia — e em silencio, porque o mesmo servico entra tambem por
+  // `routes/almoxarifado.js:3544`, que fica coberto.
+  const { anexarOrigemAoUsuario } = require('../services/almoxarifado/origemRequisicao');
+  app.use('/api/requisicoes-material', authenticateToken, anexarOrigemAoUsuario);
 
 
 

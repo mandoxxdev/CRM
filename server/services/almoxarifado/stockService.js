@@ -1,5 +1,7 @@
 const { dbRun, dbGet, dbAll } = require('./db');
 const { registrarAuditoria } = require('./audit');
+// Etapa 25 (C2): funcao PURA sobre `user.origem` — nao importa Express nem toca no `req`.
+const { camposDeOrigem } = require('./origemRequisicao');
 const { can } = require('./permissions');
 const alertService = require('./alertService');
 const { avaliarRegrasVinculo } = require('./movementRules');
@@ -1364,10 +1366,19 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
       [result.lastID, ...seriesClaim.map((c) => c.linha.id)]);
   }
 
+  // Etapa 25 (RN-04/RN-05): `ip` e `user_agent` de onde a movimentacao partiu. `camposDeOrigem`
+  // e funcao PURA sobre `user.origem` — um objeto ja montado pelo middleware do modulo, sem
+  // nenhum acesso a Express aqui dentro. E por isso que esta linha NAO ganhou `try/catch`: a
+  // auditoria de movimentacao nunca teve um (59 das 60 chamadas de `registrarAuditoria` do
+  // modulo estao sem `try`), criar um agora mudaria a semantica congelada — hoje, auditoria que
+  // falha derruba a resposta com 500 — e esta etapa nao decidiu isso. Sem `req` (job de fundo,
+  // teste com `user` literal) o retorno e `{}` e a trilha fica exatamente como era.
   await registrarAuditoria(db, {
     entidade: 'movimentacao', entidade_id: result.lastID, acao: tipo,
     usuario_id: user.id, usuario_nome: user.nome || user.email,
-    dados_novos: { material_id, tipo, quantidade, saldo_posterior: saldoPosterior },
+    dados_novos: {
+      material_id, tipo, quantidade, saldo_posterior: saldoPosterior, ...camposDeOrigem(user),
+    },
     justificativa,
   });
 
@@ -1811,10 +1822,16 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
     throw err;
   }
 
+  // Etapa 25 (RN-04): o cancelamento tambem e `entidade: 'movimentacao'` e e o ato que mais se
+  // quer rastrear — deixar origem so na linha de cima daria uma trilha que sabe de onde veio
+  // toda movimentacao MENOS o estorno dela. O plano da Task 3 citava apenas `:1367`; incluir
+  // este ponto e extensao declarada, nao esquecimento (a linha de ESTORNO em si nasce de um
+  // INSERT direto aqui dentro, nao de `registrarMovimentacao`, entao ela nao seria alcancada
+  // pela auditoria de cima).
   await registrarAuditoria(db, {
     entidade: 'movimentacao', entidade_id: movimentoId, acao: 'CANCELAMENTO',
     usuario_id: user.id, usuario_nome: user.nome || user.email, justificativa: motivo,
-    dados_novos: { estorno_id: estornoId },
+    dados_novos: { estorno_id: estornoId, ...camposDeOrigem(user) },
   });
 
   try {

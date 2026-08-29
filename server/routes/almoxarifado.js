@@ -151,6 +151,34 @@ const { EPSILON_DIVERGENCIA } = require('../services/almoxarifado/divergencia');
 
 module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, checkModulePermission) {
 
+  // ── Etapa 25, Task 3 (RN-04): de onde a requisição veio ─────────────────────
+  // `anexarOrigemAoUsuario` pendura `{ ip, ip_proxy, user_agent }` em `req.user`, que é o objeto
+  // que TODAS as rotas deste módulo repassam aos serviços (`Service.x(db, req.user, …)`) — é por
+  // ele que a origem alcança os 28 call sites de `registrarMovimentacao`, dos quais 23 nascem
+  // dentro de serviços que nunca receberam o `req`.
+  //
+  // POR QUE ENVOLVER O `authenticateToken` E NÃO ACRESCENTAR UM `app.use` NO PREFIXO (medido,
+  // e a primeira forma tentada FALHOU): um `app.use('/api/almoxarifado', …, anexarOrigem)` roda
+  // ANTES dos middlewares de rota, e as rotas da `extended` declaram `auth` de novo em cada uma
+  // — `authenticateToken` faz `req.user = user` e SUBSTITUI o objeto, levando o `origem` junto.
+  // O resultado era a trilha continuar sem `ip` com todos os cenários de unidade verdes. A
+  // origem tem de ser pendurada DEPOIS que o auth terminou, e o único ponto que garante isso
+  // para as 12 rotas com `auth` próprio deste arquivo, para as ~90 da `extended` e para toda
+  // rota futura é o próprio `authenticateToken`.
+  //
+  // A reatribuição do parâmetro é deliberada (não é descuido): qualquer nome novo deixaria o
+  // `authenticateToken` original ainda em escopo, e a próxima rota escrita com ele voltaria a
+  // gravar movimentação sem origem, em silêncio. `next` só é chamado quando o auth autorizou;
+  // em 401 nada disto roda.
+  const { anexarOrigemAoUsuario } = require('../services/almoxarifado/origemRequisicao');
+  const authOriginal = authenticateToken;
+  authenticateToken = function authComOrigem(req, res, next) {
+    authOriginal(req, res, (err) => {
+      if (err) return next(err);
+      anexarOrigemAoUsuario(req, res, next);
+    });
+  };
+
   // ── Diretório de fotos ──────────────────────────────────────────────────────
   const uploadsAlmoxDir = path.join(PERSISTENT_DATA_DIR, 'uploads', 'almoxarifado');
   if (!fs.existsSync(uploadsAlmoxDir)) fs.mkdirSync(uploadsAlmoxDir, { recursive: true });
