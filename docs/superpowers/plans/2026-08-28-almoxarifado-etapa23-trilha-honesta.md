@@ -89,7 +89,16 @@ arrow**: arrow não tem `this` e `this.changes` fica `undefined`. Três das quat
 
 ---
 
-### Task 0 (TRONCO, vai primeiro): o retry para de responder erro e gravar assim mesmo
+### Task 0 (TRONCO, vai primeiro): o retry para de responder erro e gravar assim mesmo — FEITA (`0fe8d02`)
+
+> **Entregue.** `test:sqlite` 3 → **5 cenários**, `test:api` 147/147, `test:almoxarifado` 42/0.
+> **Achado além do previsto:** só o `db.run` tinha o defeito do retry; `get`/`all`/`exec` já
+> chamavam o cb fora do executor, **mas os três chamavam o callback DUAS vezes quando o próprio
+> callback lançava** (a exceção do `.then(ok)` caía no `.catch(erro)`, que chamava de novo, com
+> o erro errado) e produziam **rejeição órfã**. Medido contra o commit anterior: `cb do get
+> chamado: 2`, `unhandledRejection: ["boom-get"]`. Unificado num helper `entregarUmaVez`.
+> **Declarado, não consertado:** o wrapper chama `cb(null, row)` em `get`/`all` sem o `this` do
+> sqlite3 (o Statement) — ninguém no CRM lê isso ali, e está fora da RN-05.
 
 **Files:** Modify `server/services/sqliteConcurrency.js`; Test `server/tests/sqliteConcurrency.test.js`
 (o de `npm run test:sqlite` — **não** é um `*.api.test.js`, é o único lugar onde o wrapper roda
@@ -120,8 +129,14 @@ o retry **aplica a escrita depois**. É o defeito nº 1 do design por um caminho
     e que uma exceção lançada **dentro** do `cb` não vire `unhandledRejection`;
   - `db.get`, `db.all` e `db.exec` têm o mesmo padrão — **confira os quatro** e diga no relatório
     quais tinham o defeito.
-- [ ] **Step 3: controle positivo** (commitar antes): volte o `cb.call` para dentro do executor →
-  o cenário da contagem tem de cair **dizendo que houve 2 chamadas**, não por outro motivo.
+- [x] **Step 3: controle positivo** (commitar antes): volte o `cb.call` para dentro do executor →
+  o cenário da contagem tem de cair **nomeando uma contagem maior que 1**, não por outro motivo.
+  **Correção do executor:** o plano dizia "2 chamadas" e o medido foram **3** (e 5 no cenário
+  irmão) — o número não depende do defeito, e sim de quantos retries cabem antes de o lock
+  soltar. Fixar o número deixaria o teste frágil em máquina lenta; a asserção é `contagem !== 1`.
+  Saída real: `callback ... foi chamado 3 vezes, esperado 1 — [{"err":"SQLITE_BUSY"},
+  {"err":"SQLITE_BUSY"},{"err":null,"changes":1,"lastID":1}]` — e note que a ÚLTIMA chamada é o
+  sucesso: uma asserção de "último valor" ficaria **verde com o bug presente**.
 - [ ] **Step 4:** `npm run test:sqlite` **e** `npm run test:api` (o wrapper não é usado pelo
   harness, mas uma regressão no contrato de `db.run` derruba tudo); commit.
 
