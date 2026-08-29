@@ -295,43 +295,130 @@ razão estava errada e por quê — não apague, ele explica o `SELECT`, que con
 
 ---
 
-### Task 3: integração e fechamento
+### Task 3: integração e fechamento — FEITA (`4f1aeb9` teste, fechamento neste commit)
 
-- [ ] **Step 1:** cenário que cruza as duas tasks em `auditoriaFluxoCompleto.api.test.js` (ou
-  arquivo próprio): excluir um tipo de material duas vezes e **ler pela tela-contrato**
-  (`GET /auditoria?entidade=tipo_material`), afirmando que a trilha mostra **um** ato, não dois.
-  É o que prova que o conserto aparece para quem audita — o motivo de a etapa existir.
-- [ ] **Step 2:** os cinco comandos da suíte, com os números lidos. Rodar o cliente **também com
-  `TZ=UTC`** (`client/jest.globalSetup.js` existe para isso desde a Etapa 22).
-- [ ] **Step 3:** skill `fechar-etapa` inteira. Na spec 23, **os dois itens saem de "falta para
-  🟢"** — e diga se a feature muda de cor.
+> **Entregue.** `test:api` **150/150** arquivos (149 + `exclusaoNaTrilha.api.test.js`, 5
+> cenários), `test:almoxarifado` 42/0, `test:sqlite` 5/0, `test:validation` 4/0,
+> `test:safealter` 3/0, client **549/549 em 37 suítes** (e 549/549 com `TZ=UTC`), build
+> `CI=true` **Compiled successfully**.
+> **Arquivo próprio, não dentro do `auditoriaFluxoCompleto`** (o plano permitia os dois): aquele
+> arquivo é da Etapa 22 e guarda outro contrato; misturar deixaria o controle positivo desta
+> etapa derrubando cenários alheios, e a leitura de "qual asserção caiu" ficaria mais difícil.
+> **ACHADO na primeira execução, e ele invalidava o enunciado do Step 1:** a **CRIAÇÃO também é
+> auditada**, nas duas entidades. A trilha de um cadastro criado-e-excluído tem **DOIS** atos, de
+> verbos diferentes — `['EXCLUSAO','CRIACAO']`. O cenário como o plano o descreve ("a trilha
+> mostra **um** ato, não dois") estaria **errado por outro motivo**: `total === 1` falharia com o
+> código correto. A asserção virou a contagem do **verbo de exclusão** (tem de ser 1) **mais** a
+> composição inteira da trilha da entidade, que não pode crescer. **Descartado** filtrar a
+> leitura por `acao=EXCLUSAO`: estreitaria o cenário justamente onde ele precisa ser largo — o
+> defeito é a trilha **crescer**, então ler a entidade inteira faz um ato extra de **qualquer**
+> verbo derrubar o teste.
+> **Cenário do material acrescentado além do tipo de material** (a quinta rota, cujo conserto é
+> diferente): mesma forma, e com `deepStrictEqual` no `alteracoes` inteiro
+> (`[{ativo,1,0},{codigo,null,…},{nome,null,…}]`), que ali é pequeno e determinístico. No
+> tipo_material o `alteracoes` são 11 chaves (o `dados_anteriores` é a linha inteira), então o
+> congelamento é do **conjunto de campos** + o de/para do `ativo` + a garantia de que **nenhum**
+> campo de contexto ganhou lado "para".
+> **Congelado de propósito:** `DESATIVACAO` e `EXCLUSAO` caem no **mesmo rótulo de tela**
+> ("Exclusão") — é exatamente por isso que uma desativação sem efeito era indistinguível de uma
+> real, e é o que sustenta a decisão que derrubou o comentário do material (B53).
+> **Duas guardas anti-teste-vazio, medidas e não por precaução:** a C1 exige
+> `requirePermission('configurar')` e `getPerfilFromUser` faz fallback para **PRODUCAO** — com o
+> gate errado todo cenário afirmaria "um ato" sobre trilha **vazia**. Há cenário provando o 403 do
+> usuário sem perfil e outro provando que o auditor passa nos **dois** gates (escrever e ler).
+> **Dois controles positivos com alvo**, um por forma de conserto, os dois derrubando a asserção
+> de peso e **nomeando as duas linhas de auditoria** (nunca pelo status nem pelo `ja_inativo`):
+> - `AND ativo = 1` fora do `tipo_material` → cai só o cenário do tipo, com
+>   `QUEM AUDITA ve 2 exclusoes do tipo de material 10 … [{"id":5,"acao":"EXCLUSAO"…},{"id":4,…}]`;
+>   o cenário do **material seguiu verde** (isolamento de alvo confirmado);
+> - `if (antes && antes.ativo === 1)` → `if (antes)` no material → cai só o cenário do material,
+>   com `QUEM AUDITA ve 2 desativacoes do material 1 … [{"id":8"},{"id":7"}]`.
+>
+> `md5sum` de `routes/almoxarifado.js`: `7d4fb36f…` antes → `8b1a7ecc…`/`8fdf40b0…` sabotado →
+> `7d4fb36f…` restaurado; `git diff --stat` vazio.
+
+- [x] **Step 1:** cenário que cruza as tasks — feito em **arquivo próprio**,
+  `tests/api/exclusaoNaTrilha.api.test.js` (`4f1aeb9`), com o **material** além do tipo de
+  material. Divergência do enunciado registrada no bloco acima (a criação também audita).
+- [x] **Step 2:** os cinco comandos da suíte + `test:sqlite`, com os números lidos (acima). O
+  cliente rodou **também com `TZ=UTC`**, 549/549 nos dois.
+- [x] **Step 3:** skill `fechar-etapa` inteira. Na spec 23 os dois itens **saíram** de "falta para
+  🟢" (riscados, não apagados, com o commit que os pagou). **A feature NÃO muda de cor: continua
+  🟡-forte** — e a razão é um erro de conta que esta base cometeu **duas vezes seguidas**, agora
+  registrado: as duas últimas leituras de cor pesaram **só a perna de auditoria** da feature 23 e
+  chamaram aquilo de "o que falta para 🟢" da feature inteira. A feature são **três** pernas
+  (Perfis, Segurança, Auditoria); a de auditoria não tem mais defeito conhecido, mas os
+  checklists de **Perfis** (5 itens) e **Segurança** (5 itens) têm **funcionalidade não
+  construída** — perfil QUALIDADE inexistente (verificado em `ACAO_PERFIS`), UI de atribuição de
+  perfil, dispositivo/IP na movimentação (verificado: não há coluna nem gravação), lançamento
+  retroativo, dupla conferência. **É isso o que falta para 🟢 agora.**
+  Junto: **uma afirmação errada há três etapas foi corrigida em voz alta** no checklist de
+  Segurança da spec — ela dizia que "localizações, setores, famílias e configs seguem sem
+  auditoria", **falso desde a Etapa 19**; ninguém atualizou o item ali, e ele passou três etapas
+  contradizendo o resto do próprio arquivo.
+
+---
+
+## Retro — os 4 números
+
+| Número | Valor | O que ele diz |
+|---|---|---|
+| **Tasks planejadas × entregues** | 3 planejadas → **4 entregues** | A **Fase 2 mudou o escopo da etapa**: o achado A1 (o retry de `SQLITE_BUSY` chamando o callback de quem pediu em toda tentativa) virou a **Task 0**, e ela foi **primeiro**. Sem ela a RN-01 seria **promessa falsa** — o `UPDATE` único não fecha aquele caminho, e a rota continuaria respondendo 500, pulando a auditoria, e gravando depois. Uma revisão que **acrescenta** task antes de a primeira linha ser escrita é o melhor retorno que a Fase 2 já deu nesta base |
+| **Tasks que acharam erro que a revisão do plano deixou passar** | **4 de 4** (Tasks 0, 1, 2 e 3) | Task 0: só o `db.run` tinha o defeito do retry, mas `get`/`all`/`exec` chamavam o callback **duas vezes** quando ele lançava, com **rejeição órfã** — não estava em lugar nenhum. Task 1: é o `WHERE chave IN (…)`, e **não** o `CASE`, que segura o `ELSE` ausente; sem ele um Salvar de 3 chaves gravaria `NULL` em **toda a tabela**, com HTTP 200 — nem o design nem o C1 diziam isso. Task 2: existia um **segundo** teste de caracterização (`auditoriaAtosEGate.api.test.js:221`) que ninguém tinha mapeado, e ele trouxe a consequência de que a guarda do "`1` chumbado" perdeu o ramo que guardava. Task 3: a **criação também audita**, então o enunciado do Step 1 ("um ato, não dois") estaria errado por outro motivo. **O plano detalhado não substitui a medição — ele só faz a medição achar coisa mais fina** |
+| **Controles positivos com alvo** | **6**, todos derrubando a asserção de peso | Task 0: 1 (contagem de chamadas — e o número medido foi **3**, não 2 como o plano dizia; fixar o número deixaria o teste frágil, a asserção virou `contagem !== 1`). Task 1: 2 (o laço um-por-um caindo em "banco INTOCADO" nomeando as chaves gravadas; e `OR 1=1` nomeando a chave que virou `null`). Task 2: 3, um por **forma** de conserto. Task 3: 2, um por forma. **Nenhum caiu pelo status nem pelo `ja_inativo`** — foi para isso que a contagem de auditoria foi posta **antes** da checagem do corpo, lição do `d507ccc` |
+| **Placar da suíte** | `test:api` **147 → 150** arquivos; `test:sqlite` **3 → 5** | Três arquivos novos (`configuracoesAtomicidade`, `exclusaoIdempotente`, `exclusaoNaTrilha`) e **dois** arquivos antigos **atualizados de propósito** para o comportamento novo, com o histórico escrito no cabeçalho em vez de apagado. `test:almoxarifado` 42/0, `test:validation` 4/0, `test:safealter` 3/0, client 549/549 (e 549/549 com `TZ=UTC`), build limpo |
+
+**A lição transversal desta etapa, em uma frase:** *sabotagem que derruba o cenário certo pela
+asserção errada não prova nada* — apareceu nas **quatro** tasks, sempre na mesma forma (a guarda
+de setup ou o campo do corpo disparando antes da asserção de peso), e a solução foi sempre a
+mesma: **semear o estado com valor conhecido** e afirmar a **contagem de linhas de auditoria
+antes** de olhar a resposta HTTP.
 
 ## Próxima tarefa detalhada (para retomar sem reler o código)
 
-**Feitas: Fase 2, Task 0, Task 1 e Task 2.** O próximo passo é a **Task 3** (integração e
-fechamento), inteira acima. Ela **não** muda código de rota — é leitura pela tela-contrato,
-suíte completa e documentação. O que ela precisa saber do que já está entregue:
+**A Etapa 23 está FECHADA.** Fase 2, Tasks 0, 1, 2 e 3 entregues; documentação e verificação
+final feitas. **Não há próxima tarefa DESTA etapa** — o que segue é a escolha da próxima etapa
+pelo mapa de status (`specs/modulo-almoxarifado/README.md`), que é o modo de trabalho desde a
+Etapa 15.
 
-- **Contrato que a Task 3 consome da Task 2:** `DELETE` em linha já inativa responde
-  **200 `{ success: true, ja_inativo: true }`** nas quatro rotas de cadastro (tipo_material,
-  localizacao, setor, familia) e **200 `{ success: true }`** (sem a flag, contrato inalterado) em
-  `DELETE /materiais/:id`. Em **nenhuma** delas há linha de auditoria nova. O 404 de id
-  inexistente continua com as mensagens literais de sempre nas quatro; o material continua
-  respondendo 200 para id inexistente.
-- **O cenário do Step 1 da Task 3** (`GET /auditoria?entidade=tipo_material` mostrando **um**
-  ato, não dois) é a leitura pela tela do que `exclusaoIdempotente.api.test.js` já prova pelo
-  banco. Atenção ao gate: `GET /almoxarifado/auditoria` exige `configurar` (só ADMINISTRADOR,
-  RN-06 da Etapa 18) — usuário sem isso toma 403 e o cenário passaria vazio.
-- **Dois arquivos de teste antigos já foram atualizados pela Task 2** e não devem ser
-  "consertados de volta": `auditoriaCadastros.api.test.js` (cenário do fim, `2` → `1`) e
-  `auditoriaAtosEGate.api.test.js:221` (`1` → `0`). Os cabeçalhos dos dois explicam por quê.
-- **Régua que continua valendo:** a **Global Constraint 1** (nada de `BEGIN`/`COMMIT`), e
-  **sabotagem que derruba o cenário certo pela asserção errada não prova nada** — na Task 1 foi a
-  guarda de setup disparando antes da asserção de peso (`d507ccc`); na Task 2, o risco era o
-  cenário cair pelo **status** ou pelo `ja_inativo` em vez de pela **contagem de linhas de
-  auditoria**, resolvido pondo a contagem **antes** da checagem do corpo.
+**O que quem retomar precisa saber, para não reabrir o que está fechado:**
+
+- **A feature 23 continua 🟡-forte, e o motivo MUDOU.** Não procure mais "os dois buracos de
+  rastro" — eles estão pagos (`b6b7b24`/`d507ccc` e `9858bec`). O que bloqueia 🟢 agora são as
+  pernas de **Perfis** (5 itens) e **Segurança** (5 itens) do checklist da spec 23:
+  funcionalidade não construída, não decisão de negócio. Verificado no código nesta etapa:
+  `ACAO_PERFIS` tem **7 perfis e nenhum é QUALIDADE**; a auditoria **não grava user-agent nem IP**
+  (não há coluna). Se a próxima etapa for a 23 de novo, é por aí que ela começa.
+- **A Global Constraint 1 continua valendo e é contraintuitiva** — um revisor desatento vai querer
+  "consertar" a ausência de transação. A razão está escrita em três lugares (aqui, no design e no
+  bloco "Etapa 23" da spec), **com a ressalva da Fase 2**: a proibição vale para `BEGIN`/`await`/
+  `COMMIT`, **não** para transação em geral; a forma segura (transação inteira num `db.exec`) é
+  usada pelo próprio CRM em `index.js:4479` e `:5700`.
+- **O perigo irmão do núcleo NÃO foi consertado, de propósito:** naqueles dois `db.exec`, o
+  `ROLLBACK` do `catch` é chamada **separada** — entre o `exec` que falhou e o `ROLLBACK`, escrita
+  alheia entra na transação. É rota do **núcleo** (usuários e propostas), não do módulo. Está na
+  letra **C30** das novidades e é etapa própria.
+- **Contratos congelados por esta etapa, que a próxima consome sem reabrir:**
+  - `DELETE` em linha já inativa → **200 `{ success: true, ja_inativo: true }`** nas quatro rotas
+    de cadastro (tipo_material, localizacao, setor, familia) e **200 `{ success: true }`** (sem a
+    flag, contrato inalterado) em `DELETE /materiais/:id`. Em **nenhuma** há linha de auditoria
+    nova. O 404 de id inexistente segue com as mensagens literais de sempre nas quatro; o material
+    segue respondendo 200 para id inexistente.
+  - `PUT /configuracoes` é **um** `UPDATE` com `CASE … END … WHERE chave IN (…)`. **O `IN` não é
+    decoração:** o `CASE` não tem `ELSE`, e sem o `IN` um Salvar de N chaves gravaria `NULL` em
+    toda a tabela, com HTTP 200. Há cenário próprio segurando isso.
+  - `sqliteConcurrency` chama o callback de quem pediu **uma vez**, na tentativa final, em
+    `run`/`get`/`all`/`exec` (helper `entregarUmaVez`). **Declarado, não consertado:** `get`/`all`
+    chamam `cb(null, row)` sem o `this` do sqlite3 — ninguém no CRM lê isso ali.
+- **Quatro arquivos de teste NÃO devem ser "consertados de volta":**
+  `auditoriaCadastros.api.test.js` (cenário do fim, `2` → `1`),
+  `auditoriaAtosEGate.api.test.js:221` (`1` → `0`), e os dois novos
+  (`exclusaoIdempotente`, `exclusaoNaTrilha`). Os cabeçalhos explicam por quê.
+- **Régua de teste que esta etapa reforçou quatro vezes:** afirme a **contagem de linhas de
+  auditoria antes** de olhar status ou corpo da resposta — senão o controle positivo cai pelo
+  campo errado e a asserção que interessa fica sem prova. Foi o `d507ccc`, e o risco reapareceu
+  nas Tasks 2 e 3.
 
 Armadilhas já conhecidas, que continuam valendo: `changes` contando linha **casada** e não linha
-**alterada** (é o defeito que a etapa conserta — o plano não pode repeti-lo em outro lugar), e a
-proibição de transação da Global Constraint 1, que é contraintuitiva e um revisor desatento vai
-querer "corrigir".
+**alterada** (é o defeito que a etapa consertou — nenhuma rota nova pode repeti-lo), e a proibição
+de transação da Global Constraint 1.

@@ -53,6 +53,7 @@
 | 20 | Exposição e rastro | 2026-08-28 | Foto de material para de mentir sucesso e de deixar arquivo órfão (e passa a auditar a troca); senha e chave de API somem da leitura de configurações; ler o mapa de permissões por setor passa a exigir administrador |
 | 21 | **Núcleo do CRM:** o backup para de guardar segredo | 2026-08-28 | O zip do backup deixa de levar a chave com que o servidor assina os crachás de login (quem baixasse **virava super administrador**) e as 188 MB de cópias antigas; todo download fica registrado; a senha do e-mail passa a vir do ambiente do servidor; e o campo de Senha SMTP para de devolver a senha em claro e de gravar a máscara por cima dela |
 | 22 | A trilha de auditoria ganha uma tela | 2026-08-28 | Três etapas anotaram quem mexeu em quê e **nada disso tinha leitor**; agora há a tela **Auditoria**, com filtro de tipo, ação, pessoa e período, o de/para campo a campo ao expandir a linha, e os três índices que a tabela nunca teve |
+| 23 | O histórico para de mentir por omissão e por excesso | 2026-08-28 | **Sem tela nova:** o que muda é a confiança no que a tela da 22 mostra. Salvar configurações virou tudo-ou-nada (falha no meio deixava parte gravada **sem nenhuma linha de histórico**), excluir o que já está inativo parou de virar uma segunda linha de "Exclusão" indistinguível da real, e o mecanismo de "tenta de novo" parou de responder erro e gravar assim mesmo |
 
 Com a 6c, a feature 10 (lotes, séries e etiquetas) ficou **completa por inteiro**; com a 7, as
 features 11 (transferências) e 12 (devoluções) também; com a 8, a feature 13 (materiais de
@@ -647,6 +648,48 @@ aposta é que o cliente opera num site só, no Brasil (a mesma premissa que sust
 por material). **Se um dia houver operação em outro fuso, este é um dos pontos que precisa mudar
 junto** — e não é automático.
 
+**B51 (NOVO, da Etapa 23) — salvar configurações virou tudo-ou-nada por um caminho, e a
+alternativa óbvia foi descartada por medição, não por gosto.** O problema: a tela de Configurações
+manda as 18 chaves a cada Salvar, e o sistema gravava **uma de cada vez**. Falhando na terceira, as
+duas primeiras ficavam gravadas, você via erro, e **o histórico não ganhava linha nenhuma** —
+configuração alterada, usuário achando que não salvou, e trilha muda. **Escolhido:** um único
+comando de gravação que aplica as 18 juntas — o banco garante que um comando só é indivisível.
+**Descartado:** a solução de manual, a *transação* (abrir, gravar tudo, e desfazer se falhar). O
+motivo é medido e é grave: o sistema inteiro do CRM usa **uma conexão só** com o banco, e transação
+ali vale para a **conexão**, não para o seu pedido. Entre o "abrir" e o "confirmar" da sua gravação
+de configuração, **tudo o que qualquer outra pessoa gravasse no mesmo instante entraria junto** — e
+o "desfazer" por causa de uma configuração **apagaria a movimentação de estoque que o almoxarife
+acabou de lançar**. Trocar "histórico ausente" por "lançamento de outra pessoa revertido em
+silêncio" não é progresso. **Ressalva honesta, medida na revisão e escrita porque a primeira versão
+deste texto exagerava:** transação **em geral** não é proibida — a forma segura (a transação inteira
+num comando só) existe e **o próprio CRM já a usa duas vezes**, na exclusão de usuário e na
+renumeração de propostas. O que foi descartado é a forma com espera no meio. A recomendação
+continua sendo o comando único, por ser mais simples e por não prender a conexão.
+
+**B52 (NOVO, da Etapa 23) — clicar Excluir de novo no que já está inativo responde SUCESSO, não
+erro.** **Escolhido** tornar a exclusão *idempotente*: o segundo clique devolve sucesso, com a
+informação de que o item já estava inativo, e **não registra nada no histórico**. **Descartado**
+responder erro (400/409, "este item já está inativo"). O motivo: a tela **permite** clicar de novo
+— duas abas abertas, um duplo-clique, um F5 depois de excluir —, e transformar isso em erro na
+cara do usuário seria quebrar a tela por causa de um conserto de histórico. O que essa etapa
+conserta é **a trilha**, não o fluxo de quem opera. Consequência declarada: pela tela, excluir uma
+vez e excluir duas vezes ficam **indistinguíveis** — é exatamente o que se queria, porque no
+cadastro elas realmente têm o mesmo efeito. **Se para você o segundo clique deve avisar alguma
+coisa na tela ("este item já estava inativo"), isso é uma mensagem no front e me diga** — mas o
+histórico continua não registrando, porque não houve ato.
+
+**B53 (NOVO, da Etapa 23) — havia uma doutrina escrita no código dizendo o CONTRÁRIO, e ela
+perdeu.** No cadastro de material havia um comentário defendendo, com todas as letras, que
+desativar um material já inativo **devia** virar registro, porque *"é justamente o caso em que o
+log importa: quem tentou desativar de novo, e quando"*. **Escolhido** o oposto: não registrar.
+**Descartado** manter a doutrina antiga. O motivo é a tela que a Etapa 22 entregou — antes dela o
+argumento era defensável, porque ninguém lia a trilha. **Agora alguém lê**, e nessa tela uma linha
+"Exclusão" de um material que já estava inativo é **indistinguível** de uma desativação de
+verdade: mesmo verbo, mesmo autor, mesmo horário. Registrar tentativa sem efeito com o **mesmo
+nome** do ato com efeito é o histórico mentindo por excesso. **Se um dia registrar tentativas
+tiver valor, isso pede um nome próprio de ato ("tentativa de desativação"), nunca o mesmo** — e
+aí é etapa nova, com decisão sua.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -878,6 +921,22 @@ junto** — e não é automático.
    depende de consulta técnica ao banco.** O aviso de corte foi escolhido justamente porque
    "sumir" não avisa nada, e o volume em si é o item **G8**, que espera decisão sua.
 
+30. **(23) O MESMO perigo que a Etapa 23 evitou no Almoxarifado já existe hoje em DOIS pontos do
+   núcleo do CRM, e continua lá.** A Etapa 23 recusou usar transação em `PUT /configuracoes` pelo
+   motivo explicado em **B51**: o CRM tem uma conexão só com o banco, então uma transação com
+   espera no meio engole a gravação de quem estiver trabalhando ao mesmo tempo, e o "desfazer"
+   apaga o trabalho dessa pessoa. **A forma segura é a transação inteira num comando só — e é a
+   que o CRM usa em dois lugares: a exclusão de usuário e a renumeração de propostas.** Só que nos
+   dois, quando o comando falha, o "desfazer" é disparado **num segundo comando, separado**. Entre
+   um e outro há uma fresta: **o que outra pessoa gravar nesse intervalo entra na transação que
+   está sendo desfeita, e é apagado junto.** Isto **não é regressão desta etapa** — existe hoje,
+   nasceu antes dela e foi encontrado enquanto se media o problema do almoxarifado. Ficou **fora
+   do escopo de propósito**: são rotas do núcleo (usuários e propostas), e mexer nelas dentro de
+   uma etapa de auditoria do almoxarifado misturaria dois assuntos. **Na prática, a chance de
+   alguém ser atingido é pequena** (exige uma falha exatamente naquele comando **e** outra pessoa
+   gravando no mesmo instante), mas quem opera precisa saber que existe. **Conserto é etapa
+   própria, no núcleo.**
+
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -1063,6 +1122,24 @@ junto** — e não é automático.
   qual das duas leituras vale numa hora que não existiu, escolha que sem caso de uso é chute. O
   caso oposto (a meia-noite dupla do fim do horário de verão) foi verificado e **está correto**,
   sem buraco nem sobreposição.
+
+- **(23) O "tudo ou nada" foi entregue SÓ no salvamento de configurações — os outros lugares do
+  módulo que gravam em série NÃO foram varridos.** A Etapa 23 olhou o `Salvar` da tela de
+  Configurações porque era o que estava nomeado como buraco de histórico. **Não** houve varredura
+  atrás de outros pontos do módulo onde o sistema grava vários registros em sequência e uma falha
+  no meio deixa parte aplicada. **Isso é corte de escopo, não conclusão de que não existem.** E há
+  um motivo técnico para não ter sido feito por atacado: a solução usada aqui — um único comando
+  gravando tudo — só serve quando os registros são **da mesma tabela** e o valor depende só da
+  chave. Onde não for, o conserto é outro, e escolher qual em cada ponto é o trabalho de uma etapa
+  própria.
+
+- **(23) "Excluir" e "desativar" continuam sendo dois nomes diferentes nas gravações NOVAS.** A
+  Etapa 23 fez os dois pararem de registrar ato sem efeito, mas **não** unificou o vocabulário: um
+  material sai como `DESATIVACAO`, um tipo de material sai como `EXCLUSAO`, e os dois significam a
+  mesma coisa no banco (marcar a linha como inativa). Na tela eles já aparecem juntos sob
+  **"Exclusão"** desde a Etapa 22 (item **B48**), então **para quem audita isso já está resolvido**
+  — o que continua é o dado bruto. Padronizar a gravação é o mesmo trabalho de ~45 pontos do item
+  acima, e segue declarado desde a Etapa 22.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -3761,6 +3838,129 @@ afirmação falsa.
 - **Trilha por conferência específica para o Gestor.** O gate continua sendo Administrador. Abrir
   para o Gestor é decisão de exposição, e continua sua (era a opção 2 do antigo **B33**).
 
+## Etapa 23 — O histórico para de mentir por omissão e por excesso (2026-08-28)
+
+A Etapa 22 deu uma tela ao histórico do módulo. E foi ela que tornou visíveis dois defeitos que
+até então ninguém enxergava, porque ninguém lia a trilha: **em um caso o sistema mudava uma
+configuração e não anotava nada; no outro, anotava uma exclusão que não excluiu coisa alguma.**
+Enquanto o histórico vivia no banco, os dois eram teoria. A partir do momento em que alguém abre a
+tela **Almoxarifado → Auditoria** para responder *"quem mexeu nisto?"*, o primeiro vira uma
+**ausência** que engana e o segundo vira uma **linha a mais** que engana.
+
+Esta etapa fecha os dois. Ela **não tem tela nova** — o que muda é a confiança no que a tela da
+Etapa 22 mostra.
+
+**O primeiro caso, com números.** A tela de Configurações do módulo manda **18 campos** a cada
+`Salvar`, e o sistema gravava um de cada vez. Falhando no terceiro: os dois primeiros já estavam
+gravados, você via a mensagem de erro, e o histórico **não ganhava nenhuma linha** — porque a
+anotação só acontecia no fim, depois de todos. Resultado: configuração alterada pela metade,
+usuário convencido de que não salvou, e trilha muda. Numa etapa cujo tema é o histórico não
+mentir, essa é a pior combinação possível.
+
+**O segundo caso.** Excluir um tipo de material, uma localização, um setor, uma família ou um
+material é uma **inativação** — a linha some das listas mas continua no banco. Clicar Excluir de
+novo (duas abas abertas, um F5, um duplo-clique) respondia sucesso e **gravava outra linha de
+"Exclusão"**, com autor e horário, sobre um item que já estava inativo. Na tela de Auditoria essa
+linha é **indistinguível** de uma exclusão de verdade. O motivo é uma armadilha do banco: ele conta
+as linhas que a busca **encontrou**, não as que **mudaram de valor** — uma linha já inativa é
+"atualizada" para o mesmo valor e conta como uma.
+
+**E apareceu um terceiro, que não estava no escopo.** Ao medir o primeiro caso, a revisão encontrou
+um defeito mais fundo: quando duas gravações disputam o banco ao mesmo tempo, o sistema **tenta de
+novo** — e a versão antiga desse mecanismo **respondia o erro da primeira tentativa para quem
+pediu** e só **depois** decidia refazer. Na prática: a tela mostrava erro, o pedido era refeito nos
+bastidores, **a gravação acontecia**, e a anotação no histórico já tinha sido pulada. **Sem
+consertar isso, o conserto do primeiro caso seria promessa falsa** — o "tudo ou nada" continuaria
+falhando por outro caminho. Foi consertado primeiro.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| `Salvar` em Configurações gravava campo a campo; falha no meio deixava **parte gravada** | As 18 vão **juntas ou nenhuma vai** — não existe mais estado pela metade |
+| Falha no meio do `Salvar` deixava a configuração alterada **sem nenhuma linha no histórico** | O erro passa a descrever um banco **intocado**: nada mudou, e por isso não há o que anotar |
+| Clicar **Excluir** de novo num item já inativo gravava **outra** linha de "Exclusão" na Auditoria | O segundo clique responde sucesso e **não gera linha nenhuma** — a trilha mostra **um** ato |
+| Excluir um material já inativo gravava outra "Exclusão" — na entidade central do módulo | Idem: só a desativação que **teve efeito** vira registro |
+| Excluir um item **que não existe** e excluir um item **já inativo** eram tratados como o mesmo caso | São separados: item inexistente continua devolvendo *não encontrado*; item já inativo devolve sucesso |
+| Quando duas gravações disputavam o banco, quem pediu recebia **erro** e a gravação acontecia depois | Quem pediu recebe **uma** resposta, a da tentativa final — o "tenta de novo" ficou invisível, que é o que ele deve ser |
+
+### As regras, com o cenário exato
+
+**1. Excluir duas vezes é UM ato no histórico, não dois.**
+Vá em **Almoxarifado → Configurações → Tipos de Material**, crie um tipo qualquer (ex.: *Teste
+Auditoria*) e clique **Excluir**. Clique **Excluir** de novo no mesmo item (recarregue a tela se
+ele já tiver sumido da lista, ou abra a mesma tela em duas abas antes de excluir). Agora vá em
+**Almoxarifado → Auditoria**, filtre a entidade **Tipo de material** e procure o item.
+
+> **Aparece UMA linha de "Exclusão", não duas.**
+
+Antes desta etapa apareceriam duas, com horários diferentes, e não haveria como saber que a segunda
+não excluiu nada. **Repita o mesmo com um material** (Cadastro → Materiais → Excluir duas vezes) e
+filtre a entidade **Material** na Auditoria: também **uma** linha só.
+
+**2. Excluir algo que não existe continua avisando que não existe.**
+O conserto não engoliu o aviso legítimo. Um item que nunca existiu continua respondendo com as
+mensagens de sempre, cada uma na sua tela:
+
+> *Tipo de material não encontrado* · *Localização não encontrada* · *Setor não encontrado* ·
+> *Família não encontrada*
+
+A diferença que esta etapa introduziu é justamente **separar** os dois casos, que antes eram
+tratados como um só.
+
+**3. Um setor já inativo cujo nome ainda é usado por uma localização ativa continua sendo
+recusado — e isso é decisão, não sobra.**
+Se você excluir um setor e depois criar uma localização usando o nome dele, tentar excluir o setor
+de novo **não** responde "já estava inativo": responde a recusa do vínculo, com a mensagem literal
+
+> *Não é possível excluir: 1 localização(ões) ativa(s) usam este setor*
+
+**Foi decidido assim de propósito**: a mensagem do vínculo é verdade, e trocá-la por "já estava
+inativo" esconderia de quem está limpando o cadastro que existe uma localização ativa presa àquele
+nome.
+
+**4. Salvar configurações é tudo ou nada.**
+Este é o cenário difícil de demonstrar ao vivo (exige provocar uma falha de banco no meio da
+gravação) — ele está congelado em teste automatizado. O que dá para afirmar na apresentação:
+
+> **Se o `Salvar` da tela de Configurações falhar, nenhum dos 18 campos foi gravado.** A mensagem
+> de erro passou a descrever um banco intocado. Antes, ela podia estar mentindo.
+
+**5. Excluir uma localização que tem saldo continua sendo recusado.**
+Nada do que a etapa mexeu afrouxou as travas de exclusão. A mensagem continua:
+
+> *Não é possível remover: localização possui saldo*
+
+### Roteiro rápido para demonstrar ao vivo
+
+1. **Configurações → Tipos de Material** → criar *Teste Auditoria* → **Excluir**.
+2. Recarregar a tela e **Excluir de novo** o mesmo item (ou fazer o segundo clique numa segunda aba
+   aberta antes da primeira exclusão).
+3. **Almoxarifado → Auditoria** → filtro **Entidade = Tipo de material** → mostrar que há **uma
+   única** linha de *Exclusão* para aquele item.
+4. Expandir a linha em **Detalhes** e mostrar o de/para: o único campo que mudou de verdade é
+   `ativo`, de `1` para `0`.
+5. Repetir 1–3 com um **material**, para mostrar que vale também na entidade central do módulo.
+
+### O que esta etapa NÃO cobre (é decisão declarada, não esquecimento)
+
+- **Nenhuma tela mudou.** A exclusão repetida responde sucesso como sempre respondeu; o que mudou é
+  o que fica gravado. Se você quiser que a tela **avise** ("este item já estava inativo"), é uma
+  mensagem no front e é decisão sua — item **B52**.
+- **O "tudo ou nada" foi entregue só no `Salvar` de Configurações.** Os demais pontos do módulo que
+  gravam vários registros em sequência **não foram varridos** — não é conclusão de que não existem,
+  é corte de escopo (letra **D**).
+- **O mesmo perigo de "desfazer apagando o trabalho de outra pessoa" existe hoje em dois pontos do
+  núcleo do CRM** (exclusão de usuário e renumeração de propostas) e **continua lá** — foi
+  encontrado nesta etapa, é anterior a ela, e consertá-lo é etapa do núcleo. Furo **C30**.
+- **"Excluir" e "desativar" continuam com nomes diferentes no dado gravado.** Na tela eles já
+  aparecem juntos desde a Etapa 22 (**B48**); padronizar a gravação são ~45 pontos do código
+  (letra **D**).
+- **Não foi criado um ato "tentativa de desativação".** A doutrina antiga do código dizia que valia
+  a pena registrar quem tentou desativar de novo; ela **perdeu** (item **B53**), porque registrar
+  tentativa com o mesmo nome do ato real é o histórico mentindo por excesso. Se registrar tentativas
+  tiver valor para vocês, isso pede um nome próprio de ato — etapa nova.
+
 ## Onde estamos e o que vem a seguir
 
 - **Concluído até aqui:** Etapas 0 a 11 — fundação, motor de estoque, cadastros, requisições,
@@ -3788,6 +3988,22 @@ afirmação falsa.
   contexto do material para quem decide compra, e o relatório **Custo por projeto** com herança
   de projeto na devolução. BOM/OP/centro-de-custo ficaram **bloqueados por dependência com a
   medição escrita** (BOM inexistente; MES sem uso) — não são promessa.
+- **Etapa 23 entregue (2026-08-28):** **o histórico para de mentir por omissão e por excesso**
+  (feature 23, `0fe8d02..4f1aeb9`) — a etapa que a **própria 22 pediu ao fechar**. Ao dar tela à
+  trilha, a 22 tornou visíveis dois defeitos que até então eram teoria: salvar configurações
+  gravava **campo a campo**, e uma falha no meio deixava parte aplicada **sem nenhuma linha de
+  histórico** (mentira por omissão); e excluir o que **já estava inativo** gravava outra linha de
+  "Exclusão", com autor e horário, indistinguível na tela de uma exclusão real (mentira por
+  excesso). Os dois estão fechados: as 18 chaves do `Salvar` vão **num comando só** (juntas ou
+  nenhuma), e as **cinco** rotas de exclusão do módulo — tipo de material, localização, setor,
+  família e **material** — passaram a distinguir "não existe" de "já estava inativo". **A revisão
+  mudou o escopo da etapa:** ela encontrou um terceiro defeito, mais fundo, que **não estava no
+  plano** — o mecanismo que refaz uma gravação quando duas disputam o banco **respondia o erro da
+  primeira tentativa** e gravava depois, o que faria o "tudo ou nada" ser promessa falsa por outro
+  caminho. Virou a primeira tarefa e foi consertado antes das outras duas. **O que continua aberto
+  e é seu:** se o segundo clique em Excluir deve **avisar** alguma coisa na tela (**B52**); e o
+  mesmo perigo de transação existindo hoje em dois pontos do **núcleo** do CRM (**C30**), que é
+  etapa própria.
 - **Etapa 22 entregue (2026-08-28):** **a trilha de auditoria ganha leitor** (feature 23,
   `8c6ffbe..169458d`) — três etapas (18, 19 e 20) instrumentaram o módulo e **nada disso tinha
   tela**; agora tem **Almoxarifado → Auditoria**, com filtro de entidade, ação, pessoa e período,

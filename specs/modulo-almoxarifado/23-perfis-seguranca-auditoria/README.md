@@ -1,7 +1,7 @@
 # 23 — Perfis, Segurança e Auditoria
 
-> **Status:** 🟡-forte (**Etapa 22, `8c6ffbe..169458d`: a TELA de auditoria — o item que as etapas 18, 19, 20 e 21 nomearam como "o que falta para 🟢" — está ENTREGUE.** A feature **continua 🟡-forte e NÃO vira 🟢**, e a decisão está escrita no bloco "Etapa 22" abaixo: o que sobra não é mais "falta leitor", são quatro itens de **outra natureza** — dois deles decisão de negócio pendente do usuário (o volume do log G8, a normalização dos verbos antigos), um deles um buraco de rastro medido e não pago (`PUT /configuracoes` grava chave a chave sem transação; falha no meio deixa parte gravada **sem** linha de histórico) e o `EXCLUSAO` de linha já inativa. Um deles — o ato parcial sem rastro — é a trilha **mentindo por omissão**, e trilha que mente não fecha em 🟢) · antes 🟡-forte (inalterado pela Etapa 21, que é do **núcleo do CRM** e não desta feature — ver o bloco "Etapa 21" no fim; a feature continua com a TELA de auditoria como o que falta para 🟢) · antes 🟡-forte (Etapa 20: os **três** buracos de exposição que esta spec nomeava estão pagos; resta a TELA de auditoria e os itens nomeados abaixo) · antes 🟡-forte (Etapa 19: os 23 endpoints de cadastro/configuração auditam) · antes 🟡 — sistema de permissões robusto; auditoria em uso pelos fluxos principais desde as Etapas 3–6 (os dois buracos daquela auditoria foram PAGOS — Etapa 9 e Etapas 18/19) · **Spec original:** seções 28, 29
-> **Última atualização:** 2026-08-28 (**Etapa 22, `8c6ffbe..169458d`: a trilha ganha leitor** — tela `/almoxarifado/auditoria` com os quatro filtros novos, o de/para calculado no servidor, a rota de opções alimentada pelo banco e os **três índices** que a tabela nunca teve; ver o bloco "Etapa 22" no fim e o checklist "Auditoria visível"). Antes: 2026-08-28 (Etapa 21, `d5c8d3a..07a4b1c`: **nada desta feature mudou** — a etapa é do núcleo do CRM e fecha os itens que a Etapa 20 empurrou para cá dizendo "é do core"; registrada no bloco "Etapa 21 — o que era do núcleo" no fim deste arquivo, e o item de backup do checklist de Segurança ganhou a medição que faltava). Antes: 2026-08-28 (Etapa 20, `1b0f0e9..a3f5135`: a rota de foto de material para de mentir sucesso, de deixar órfão e de não auditar; a leitura de configurações para de devolver segredo em claro e o PUT genérico para de aceitá-lo; ler o mapa de permissões por setor passa a exigir o mesmo que escrevê-lo). Antes: 2026-08-28 (Etapa 19, `a574b3a..55e4144`: os 23 endpoints de cadastro e configuração passam a auditar, com diff nas configurações, segredo mascarado e três correções de comportamento que o log exigia). Antes: 2026-08-28 (Etapa 18: a trilha do inventário). Antes: 2026-08-11 — auditoria de cauda: corrigida a afirmação "auditoria não é usada em produção" (era verdade em 2026-08-02, foi superada pelas Etapas 3–6 e ninguém atualizou aqui), corrigida a contagem de ações (14, não 15) e nomeados os dois buracos reais de auditoria que restam
+> **Status:** 🟡-forte (**Etapa 23, `0fe8d02..4f1aeb9`: os DOIS buracos de rastro que a Etapa 22 nomeou como "o que falta para 🟢" estão PAGOS** — `PUT /configuracoes` virou tudo-ou-nada e `EXCLUSAO`/`DESATIVACAO` de linha já inativa parou de ser gravada, nas **cinco** rotas. **A feature CONTINUA 🟡-forte, e o que falta para 🟢 mudou de item OUTRA VEZ** — a decisão e a correção da afirmação anterior estão no bloco "Etapa 23" no fim. Em uma linha: a **perna de auditoria** desta feature não tem mais defeito conhecido, mas a feature são **três pernas** (Perfis, Segurança e Auditoria) e as duas primeiras têm **dez itens desmarcados** que não são decisão de negócio — são funcionalidade não construída. A Etapa 22 escreveu "o que falta para 🟢 são esses dois", e **isso estava incompleto: ela pesou só a perna de auditoria**) · antes 🟡-forte (**Etapa 22, `8c6ffbe..169458d`: a TELA de auditoria — o item que as etapas 18, 19, 20 e 21 nomearam como "o que falta para 🟢" — está ENTREGUE.** A feature **continua 🟡-forte e NÃO vira 🟢**, e a decisão está escrita no bloco "Etapa 22" abaixo: o que sobra não é mais "falta leitor", são quatro itens de **outra natureza** — dois deles decisão de negócio pendente do usuário (o volume do log G8, a normalização dos verbos antigos), um deles um buraco de rastro medido e não pago (`PUT /configuracoes` grava chave a chave sem transação; falha no meio deixa parte gravada **sem** linha de histórico) e o `EXCLUSAO` de linha já inativa. Um deles — o ato parcial sem rastro — é a trilha **mentindo por omissão**, e trilha que mente não fecha em 🟢) · antes 🟡-forte (inalterado pela Etapa 21, que é do **núcleo do CRM** e não desta feature — ver o bloco "Etapa 21" no fim; a feature continua com a TELA de auditoria como o que falta para 🟢) · antes 🟡-forte (Etapa 20: os **três** buracos de exposição que esta spec nomeava estão pagos; resta a TELA de auditoria e os itens nomeados abaixo) · antes 🟡-forte (Etapa 19: os 23 endpoints de cadastro/configuração auditam) · antes 🟡 — sistema de permissões robusto; auditoria em uso pelos fluxos principais desde as Etapas 3–6 (os dois buracos daquela auditoria foram PAGOS — Etapa 9 e Etapas 18/19) · **Spec original:** seções 28, 29
+> **Última atualização:** 2026-08-28 (**Etapa 23, `0fe8d02..4f1aeb9`: a trilha para de mentir por omissão e por excesso** — o retry de `SQLITE_BUSY` para de responder erro e gravar assim mesmo (`0fe8d02`), `PUT /configuracoes` vira um `UPDATE` único com `CASE` (`b6b7b24`/`d507ccc`), as **cinco** rotas de exclusão distinguem "não existe" de "já inativa" (`9858bec`) e a leitura pela tela-contrato prova que a trilha mostra **um** ato (`4f1aeb9`); ver o bloco "Etapa 23" no fim e o checklist "Trilha honesta"). Antes: 2026-08-28 (**Etapa 22, `8c6ffbe..169458d`: a trilha ganha leitor** — tela `/almoxarifado/auditoria` com os quatro filtros novos, o de/para calculado no servidor, a rota de opções alimentada pelo banco e os **três índices** que a tabela nunca teve; ver o bloco "Etapa 22" no fim e o checklist "Auditoria visível"). Antes: 2026-08-28 (Etapa 21, `d5c8d3a..07a4b1c`: **nada desta feature mudou** — a etapa é do núcleo do CRM e fecha os itens que a Etapa 20 empurrou para cá dizendo "é do core"; registrada no bloco "Etapa 21 — o que era do núcleo" no fim deste arquivo, e o item de backup do checklist de Segurança ganhou a medição que faltava). Antes: 2026-08-28 (Etapa 20, `1b0f0e9..a3f5135`: a rota de foto de material para de mentir sucesso, de deixar órfão e de não auditar; a leitura de configurações para de devolver segredo em claro e o PUT genérico para de aceitá-lo; ler o mapa de permissões por setor passa a exigir o mesmo que escrevê-lo). Antes: 2026-08-28 (Etapa 19, `a574b3a..55e4144`: os 23 endpoints de cadastro e configuração passam a auditar, com diff nas configurações, segredo mascarado e três correções de comportamento que o log exigia). Antes: 2026-08-28 (Etapa 18: a trilha do inventário). Antes: 2026-08-11 — auditoria de cauda: corrigida a afirmação "auditoria não é usada em produção" (era verdade em 2026-08-02, foi superada pelas Etapas 3–6 e ninguém atualizou aqui), corrigida a contagem de ações (14, não 15) e nomeados os dois buracos reais de auditoria que restam
 
 ## Objetivo
 
@@ -70,10 +70,20 @@ Perfis da spec cobertos, regras de segurança da seção 29 aplicadas (imutabili
     (`169458d`, achado A7 da revisão adversarial: sem limite, o token de 46 KB **sem espaços**
     vira um bloco que o `.almox-table-container` — `overflow: hidden` — clipa pelo começo, e o
     valor fica ilegível). **G8 segue aberto.**
-  - **Rastro do ato parcial:** `PUT /configuracoes` grava chave a chave sem transação; se
-    falhar no meio, parte fica gravada **sem** linha de histórico.
-  - **`EXCLUSAO` de linha já inativa** é registrada mesmo sem excluir nada (SQLite conta a
-    linha atingida); só id inexistente vira 404.
+  - ~~**Rastro do ato parcial:** `PUT /configuracoes` grava chave a chave sem transação; se
+    falhar no meio, parte fica gravada **sem** linha de histórico.~~ — **PAGO na Etapa 23**
+    (`b6b7b24`, `d507ccc`): um `UPDATE` só com `CASE`, atômico por statement, **sem** transação
+    (a razão está no bloco "Etapa 23" e na letra B51 das novidades). Mantido riscado, não
+    apagado, para quem lembrar da pendência confirmar que fechou e com qual commit.
+    **Pré-requisito que ninguém tinha visto:** sem `0fe8d02` este item **não fecharia** — o
+    retry de `SQLITE_BUSY` chamava o callback de quem pediu em **toda** tentativa, então a rota
+    respondia 500, pulava a auditoria, e o retry aplicava a escrita depois. É o defeito nº 1
+    letra por letra, por um caminho que o `UPDATE` único não fecha.
+  - ~~**`EXCLUSAO` de linha já inativa** é registrada mesmo sem excluir nada (SQLite conta a
+    linha atingida); só id inexistente vira 404.~~ — **PAGO na Etapa 23** (`9858bec`), e em
+    **CINCO** rotas, não quatro: esta spec e o design da etapa só tinham visto as quatro de
+    cadastro. **`DELETE /materiais/:id` tinha o mesmo defeito na entidade central do módulo** —
+    gravava `DESATIVACAO` sempre que o `SELECT` achava a linha. Riscado, não apagado.
   - **Verbos do log:** o módulo já era inconsistente (`CRIACAO`/`CRIAR`,
     `EDICAO`/`ATUALIZACAO`/`ATUALIZAR`). A Etapa 19 fixou a regra — **consistência dentro da
     entidade** (`material` seguiu com `ATUALIZACAO`) e `EDICAO` só para as entidades novas —
@@ -127,7 +137,20 @@ Perfis da spec cobertos, regras de segurança da seção 29 aplicadas (imutabili
 - [x] Movimentação confirmada não pode ser excluída — **confirmado na auditoria de 2026-08-11**: não existe rota DELETE de movimentação; estorno (cancelamento) é o único caminho — feature 03
 - [x] Estorno exige motivo — existe no motor e **agora tem teste**: `server/tests/api/estorno.api.test.js` (a spec pedia esse teste como pendente; coberto na Etapa 6)
 - [ ] Registrar usuário, data/hora e **dispositivo** (user-agent/IP na movimentação)
-- [ ] Alterações de cadastro com histórico — parcial: **materiais auditam desde a Etapa 2** (criação/edição com de/para, inclusive pela rota v1 — a redação anterior "CRUDs v1 não auditam" ficou defasada, corrigida em 2026-08-11); localizações, setores, famílias e configs seguem sem auditoria
+- [x] Alterações de cadastro com histórico — **Etapa 19 (`a574b3a..55e4144`) + Etapa 23 (`9858bec`)**.
+      **⚠️ Correção (2026-08-28, Etapa 23): a redação anterior deste item ESTAVA ERRADA há três
+      etapas.** Ela dizia *"materiais auditam desde a Etapa 2 …; **localizações, setores, famílias
+      e configs seguem sem auditoria**"* — e a segunda metade **é falsa desde a Etapa 19**, que
+      deu trilha aos **23** endpoints de cadastro e configuração, com de/para completo nos
+      cadastros e diff nas configurações. Ninguém atualizou este item ali, e ele ficou três etapas
+      afirmando que a auditoria de cadastro não existia enquanto o resto do mesmo arquivo dizia o
+      contrário. Fica dito em vez de corrigido em silêncio, porque foi exatamente assim que a
+      afirmação anterior ("CRUDs v1 não auditam") enganou quem leu em 2026-08-11.
+      **O que fechou o item nesta etapa:** com a Etapa 19 o histórico existia mas **registrava ato
+      que não aconteceu** (exclusão de linha já inativa) e **podia não registrar ato que
+      aconteceu** (o `Salvar` parcial de configurações) — as duas metades da RN-03/RN-01, pagas
+      em `9858bec` e `b6b7b24`. Só agora "alterações de cadastro com histórico" é uma afirmação
+      verdadeira ponta a ponta.
 - [ ] Bloquear lançamento retroativo sem autorização (data do movimento ≠ data atual exige permissão)
 - [ ] Justificativa obrigatória em operações excepcionais (emergencial, desvio, ajuste)
 - [ ] Dupla conferência em materiais críticos (feature 05)
@@ -213,6 +236,78 @@ Perfis da spec cobertos, regras de segurança da seção 29 aplicadas (imutabili
       decisão do usuário, não pendência técnica: alargar o gate é uma linha em `ACAO_PERFIS`
       (`services/almoxarifado/permissions.js`). Não foi feito de propósito — decidir exposição no
       lugar dele é o que a própria B33 dizia não fazer.
+
+### Trilha honesta (Etapa 23 — `0fe8d02..4f1aeb9`)
+
+- [x] **O retry de `SQLITE_BUSY` é transparente: o callback de quem pediu é chamado UMA vez, na
+      tentativa final** (RN-05) — `0fe8d02`. `services/sqliteConcurrency.js`.
+      **Esta task não estava no plano original e a Fase 2 provou que sem ela a RN-01 seria
+      promessa falsa**: `db.run` chamava `cb.call(this, err)` em **toda** tentativa, inclusive nas
+      que iam ser refeitas; como `services/almoxarifado/db.js` promisifica passando callback, um
+      `SQLITE_BUSY` fazia `await dbRun(...)` **rejeitar**, a rota respondia 500 e pulava a
+      auditoria, e o retry **aplicava a escrita depois**.
+      **Achado além do previsto:** só o `db.run` tinha o defeito do retry, mas `get`/`all`/`exec`
+      chamavam o callback **duas vezes quando o próprio callback lançava** (a exceção do
+      `.then(ok)` caía no `.catch(erro)`, que chamava de novo, com o erro errado) e produziam
+      **rejeição órfã**. Medido contra o commit anterior: `cb do get chamado: 2`,
+      `unhandledRejection: ["boom-get"]`. Unificado num helper `entregarUmaVez`.
+      **Declarado, não consertado:** o wrapper chama `cb(null, row)` em `get`/`all` sem o `this`
+      do sqlite3 (o Statement); ninguém no CRM lê isso ali, e está fora da RN-05.
+      Teste: `tests/sqliteConcurrency.test.js` (**não** é `*.api.test.js` — é o único lugar onde
+      o wrapper roda de verdade; `tests/helpers/testApp.js:18` **não** chama `wrapDatabase`).
+      `test:sqlite` foi de 3 para **5** cenários.
+- [x] **`PUT /configuracoes` é tudo ou nada** (RN-01) — `b6b7b24` (+ `d507ccc`). O laço de
+      `UPDATE` por chave virou **um** `UPDATE` com `CASE chave WHEN ? THEN ? … END … WHERE chave
+      IN (…)`. **Sem transação, e isso é decisão medida, não esquecimento** — ver o bloco
+      "Etapa 23" abaixo.
+      **A armadilha que nem o design nem o plano nomearam, achada na implementação:** o `CASE`
+      **não tem `ELSE`**, e `CASE` sem `ELSE` devolve **`NULL`** para toda linha que não casou
+      nenhum `WHEN`. É o `WHERE chave IN (…)` que segura isso — **sem ele, um Salvar de três
+      chaves gravaria `NULL` em todas as outras configurações da tabela, com HTTP 200.** O
+      cenário feliz passa igual, então a armadilha é silenciosa. Há cenário próprio segurando-a, e
+      o controle positivo `OR 1=1` o derruba nomeando a chave que virou `null`.
+- [x] **O 500 do `PUT /configuracoes` descreve um banco INTOCADO** (RN-02) — `b6b7b24`.
+      `tests/api/configuracoesAtomicidade.api.test.js`, 4 cenários (o plano previa 2).
+      **A RN-02 desta etapa é MAIS ESTREITA do que a versão anterior do design prometia, e a
+      correção está registrada:** aquela versão dizia "escrita que aconteceu **tem** rastro", e
+      **isso o código não entrega nem depois desta etapa** — `registrarAuditoria` roda em
+      `try/catch` que engole o erro (best-effort, decidido na Etapa 19). Numa etapa cujo tema é o
+      log não mentir, a RN não pode prometer garantia que não existe.
+- [x] **Excluir o que já está inativo não é um ato: 200 `ja_inativo`, sem auditar** (RN-03) —
+      `9858bec`. **CINCO** rotas: `tipo_material`, `localizacao`, `setor`, `familia` e
+      `material`. As quatro de cadastro ganharam `AND ativo = 1` no `WHERE` e distinguem 404
+      (linha inexistente, mensagens literais inalteradas) de 200 `{ success: true, ja_inativo:
+      true }` (linha já inativa). **`DELETE /materiais/:id` é diferente e mais estreito:** ela
+      responde `success: true` também para id inexistente (contrato da Etapa 19) e isso **fica
+      inalterado** — muda só a condição da auditoria, para `if (antes && antes.ativo === 1)`.
+      O `setor` **não** ganhou o ramo de 404: ele já responde 404 antes do `UPDATE`, e
+      implementá-lo ali seria código morto (confirmado).
+- [x] **`changes` só decide "não existe" se o `WHERE` carregar o estado** (RN-04) — `9858bec`.
+      É a régua que o defeito ensinou: em SQLite `changes` conta a linha que o `WHERE` **casou**,
+      não a que **mudou de valor**. Vale para rotas futuras.
+- [x] **A trilha lida PELA TELA-CONTRATO mostra um ato, não dois** — `4f1aeb9`.
+      `tests/api/exclusaoNaTrilha.api.test.js`. `exclusaoIdempotente.api.test.js` prova a RN-03
+      pelo **banco**; este prova pelo **leitor** — `GET /api/almoxarifado/auditoria`, a mesma C1
+      que a tela da Etapa 22 consome, com gate, filtros, paginação e os três campos derivados no
+      caminho. É o que faz a etapa valer a pena agora, e não antes da 22.
+      Congela também que **`DESATIVACAO` e `EXCLUSAO` caem no mesmo rótulo de tela ("Exclusão")**
+      — que é exatamente por que uma desativação sem efeito era indistinguível de uma real.
+- [x] **Os dois testes de caracterização que afirmavam o comportamento antigo foram atualizados,
+      sem apagar o histórico** — `9858bec`. `auditoriaCadastros.api.test.js` (`2` → `1`) e
+      `auditoriaAtosEGate.api.test.js:221` (`1` → `0`).
+      **O segundo não estava previsto em lugar nenhum** — nem no design, nem no plano, que
+      nomeavam só o primeiro. E ele trouxe uma **consequência honesta que ninguém tinha notado:**
+      aquele cenário era o **único** lugar onde a guarda do "`1` chumbado" em
+      `dados_anteriores.ativo` podia falhar; com a RN-03, o único caminho auditado é o do material
+      que **estava** ativo, então o valor é `1` **por construção** e a guarda perdeu o ramo que
+      guardava. Registrado no arquivo em vez de fingir que ainda prova algo.
+- [ ] **Os demais laços de escrita sem transação do módulo NÃO foram varridos** — corte de escopo
+      declarado, não conclusão de que não existem. O `UPDATE` único só serve onde as linhas são da
+      **mesma tabela** e o valor é função da chave; onde não for, o conserto é outro. Letra **D**
+      das novidades.
+- [ ] **`EXCLUSAO` vs `DESATIVACAO` nas escritas novas continua sem padronizar** — segue da
+      Etapa 22 (~45 pontos do código). Na **exibição** já estão unificados (**B48**); o que
+      continua é o dado bruto. Letra **D**.
 
 ### Exposição e rastro (Etapa 20 — `1b0f0e9..a3f5135`)
 
@@ -354,6 +449,94 @@ filtro de igualdade que mantém visível a troca de senha mascarada. Contexto na
 **consequência aceita**, não defeito resolvido; enxugá-lo seria trabalho da **escrita** (gravar
 menos), nunca da leitura. O contrato real está congelado em `auditoriaFluxoCompleto.api.test.js`,
 que afirma o **conjunto inteiro** das três entradas.
+
+### Etapa 23 — os dois buracos de rastro fechados, e por que a feature AINDA NÃO é 🟢
+
+**A decisão de cor, escrita — e a correção de uma afirmação desta própria spec.** O bloco "Etapa
+22" logo acima termina dizendo, com todas as letras:
+
+> *"o que falta para 🟢 mudou de item. Não é mais 'falta leitor' — é **fechar os dois buracos de
+> rastro** acima."*
+
+**Os dois estão fechados** (`b6b7b24`/`d507ccc` e `9858bec`, provados pela tela-contrato em
+`4f1aeb9`). E a feature **continua 🟡-forte**. Então:
+
+> **A frase da Etapa 22 ESTAVA INCOMPLETA, do mesmo jeito que a frase da Etapa 18–21 que ela
+> mesma corrigiu.** Ela pesou **só a perna de auditoria** desta feature e concluiu dali a cor da
+> feature inteira. Mas esta feature são **três** pernas — *Perfis*, *Segurança* e *Auditoria* —,
+> e os checklists das duas primeiras, que estão neste arquivo desde o começo e nunca foram
+> tocados, têm **dez itens desmarcados que não são decisão de negócio**: são funcionalidade não
+> construída. **Errar duas vezes seguidas o mesmo tipo de conta — olhar a perna que a etapa mexeu
+> e chamar aquilo de "o que falta para 🟢" — é o padrão que fica registrado aqui.**
+
+**O que sobra, agora com as três pernas na mesma tabela:**
+
+| Perna | O que sobra | Natureza | Bloqueia 🟢? |
+|---|---|---|---|
+| **Auditoria** | ~~ato parcial do `PUT /configuracoes`~~ · ~~`EXCLUSAO` de linha já inativa~~ | **PAGOS na Etapa 23** | — |
+| **Auditoria** | Volume do log de permissões (~46 KB/save, **G8**) · normalização dos verbos antigos (**B47**) · gate ADMIN-only (**B33** metade b) · exportação XLSX e retenção (letra **D**) | Decisão de negócio do usuário / corte declarado | **Não** |
+| **Auditoria** | Laços de escrita sem transação não varridos · `EXCLUSAO` vs `DESATIVACAO` nas escritas novas | Corte de escopo declarado (Etapa 23, letra **D**) | **Não** |
+| **Perfis** | **Perfil QUALIDADE não existe** (verificado no código: `ACAO_PERFIS` tem 7 perfis, nenhum é QUALIDADE) · mapeamento dos perfis da spec 28 · **UI de atribuição de perfil por usuário** · revisar o fallback `getPerfilFromUser` → PRODUCAO · revisar o default de módulo | **Funcionalidade não construída** — 5 itens | **SIM** |
+| **Segurança** | **Registrar dispositivo (user-agent/IP) na movimentação** (verificado: não há coluna nem gravação) · **bloquear lançamento retroativo** · justificativa obrigatória em operações excepcionais · dupla conferência em materiais críticos · política de retenção de backup configurável | **Funcionalidade não construída** — 5 itens | **SIM** |
+
+**Portanto: 🟡-forte, e o que falta para 🟢 mudou de item pela terceira vez.** Desta vez a
+resposta não é uma pendência de auditoria: é que **a perna de auditoria terminou** e as pernas de
+**Perfis** e **Segurança** mal começaram. Escrito assim, de propósito, para que a próxima sessão
+não leia "faltam dois buracos de rastro", veja os dois pagos e conclua 🟢.
+
+**A decisão de arquitetura da etapa, com o descartado (é a mais importante e a mais
+contraintuitiva):**
+
+> **NÃO usar `BEGIN`/`COMMIT`/`ROLLBACK` com `await` no meio.** `server/index.js:1026` abre **uma
+> única** conexão SQLite carregada pelo processo do servidor, e transação em SQLite é por
+> **conexão**, não por requisição. Entre um `BEGIN` e um `COMMIT` numa rota, **as escritas de
+> todas as outras requisições em voo entram na mesma transação** — e um `ROLLBACK` por falha ao
+> salvar configuração **desfaria a movimentação de estoque de outra pessoa**. A atomicidade vem
+> de **um `UPDATE` só**: o SQLite é atômico por statement.
+>
+> **Duas ressalvas que a Fase 2 mediu e que corrigem o que este raciocínio afirmava demais:**
+> 1. **`db.serialize()` não salva** — ele ordena a fila, não dá exclusividade; a escrita alheia
+>    entrou na transação e sumiu no `ROLLBACK` do mesmo jeito. (Confirmação, não correção: vale
+>    registrar porque `serialize` é a primeira ideia de quem tenta consertar isso.)
+> 2. **A proibição vale para essa FORMA, não para transação em geral.** Uma transação inteira num
+>    único `db.exec` **é segura**, e o próprio CRM já usa isso duas vezes em produção
+>    (`index.js:4479`, o `DELETE /api/usuarios/:id`; e `:5700`, a renumeração de propostas) — a
+>    escrita concorrente sobreviveu no teste. Dizer "transação seria um bug pior" sem essa
+>    ressalva **estava mais largo do que a medição**. A recomendação continua sendo o `UPDATE`
+>    único (mais simples, não prende a conexão), mas a razão certa é essa.
+>
+> **Descartado** também registrar a auditoria dentro do `catch` (rastro do ato parcial): documenta
+> o estrago em vez de evitá-lo, e deixa o banco meio gravado do mesmo jeito.
+
+**O perigo irmão que existe HOJE e ficou FORA:** nos dois `db.exec` do núcleo acima, o `ROLLBACK`
+do `catch` é uma **chamada separada** — entre o `exec` que falhou e o `ROLLBACK`, escrita alheia
+entra na transação que está sendo desfeita. **É o mesmo perigo, é anterior a esta etapa, e são
+rotas do núcleo do CRM** (usuários e propostas), não do módulo. Declarado na letra **C30** das
+novidades; consertar é etapa própria, no núcleo.
+
+**A doutrina que estava escrita no código e PERDEU.** O comentário de `DELETE /materiais/:id`
+(`:615-622`) defendia, com todas as letras, que `dados_anteriores.ativo` precisava ser o valor real
+porque esse *"é justamente o caso em que o log importa (quem tentou desativar de novo, e quando)"*.
+**A RN-03 venceu, e o comentário foi reescrito em vez de apagado** — ele ainda explica o `SELECT`,
+que continua necessário. O motivo de a doutrina antiga ter perdido é **a Etapa 22**: antes dela o
+argumento era defensável, porque ninguém lia a trilha; depois dela, uma linha `DESATIVACAO` de um
+material que já estava inativo é **indistinguível**, na tela, de uma desativação real — mesmo
+verbo, mesmo autor, mesmo horário, e o rótulo de tela dos dois é o mesmo ("Exclusão"). Registrar
+tentativa sem efeito com o verbo do ato com efeito é o log mentindo por excesso. **Se um dia houver
+valor em registrar tentativas, isso pede um verbo PRÓPRIO, não este.** Letra **B53**.
+
+**O que a Etapa 23 entregou, em uma tabela:**
+
+| Camada | Entrega | Commit |
+|---|---|---|
+| `services/sqliteConcurrency.js` | o retry passa a chamar o callback de quem pediu **uma vez**, na tentativa final; `run`/`get`/`all`/`exec` unificados em `entregarUmaVez` (os três últimos chamavam o cb **duas** vezes quando ele lançava, com rejeição órfã) | `0fe8d02` |
+| `routes/almoxarifado.js` — `PUT /configuracoes` | laço de `UPDATE` → **um** `UPDATE` com `CASE … END … WHERE chave IN (…)` | `b6b7b24` |
+| `routes/almoxarifado.js` — 5 rotas de exclusão | `AND ativo = 1` nas quatro de cadastro (+ `setor` passa a **ler** `changes`); `if (antes && antes.ativo === 1)` no material | `9858bec` |
+| `tests/sqliteConcurrency.test.js` | 3 → **5** cenários | `0fe8d02` |
+| `tests/api/configuracoesAtomicidade.api.test.js` (novo) | 4 cenários (o plano previa 2) | `b6b7b24`, `d507ccc` |
+| `tests/api/exclusaoIdempotente.api.test.js` (novo) | 20 cenários, as cinco rotas | `9858bec` |
+| `tests/api/exclusaoNaTrilha.api.test.js` (novo) | 5 cenários — a leitura **pela tela-contrato** | `4f1aeb9` |
+| `tests/api/auditoriaCadastros.api.test.js`, `auditoriaAtosEGate.api.test.js` | os dois testes de caracterização atualizados, com o histórico escrito no cabeçalho | `9858bec` |
 
 ## Regras essenciais + testes de API exigidos
 
