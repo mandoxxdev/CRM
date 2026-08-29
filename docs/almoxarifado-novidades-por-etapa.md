@@ -209,12 +209,13 @@ de 10 cópias a 11ª sai. **O número certo é ~57 MB em 135 arquivos, sobrando 
 
 ### B. Decisões de negócio
 
-### B. Decisões de negócio — B1 a B56; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B57; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(O título desta seção dizia "B1 a B24" — **estava defasado**: os itens já iam até B36 antes da
-Etapa 20. Corrigido em 2026-08-28 para B50 e **de novo agora para B56**, com as três da Etapa 24.
-Fica dito em vez de reescrito em silêncio, porque a contagem errada fazia parecer que as decisões
-novas não tinham sido registradas — e este título já esteve defasado duas vezes.)*
+Etapa 20. Corrigido em 2026-08-28 para B50, depois para B56 com as três da Etapa 24, e **agora
+para B57**, com a da Etapa 25. Fica dito em vez de reescrito em silêncio, porque a contagem errada
+fazia parecer que as decisões novas não tinham sido registradas — e este título já esteve defasado
+duas vezes.)*
 
 Guia rápido do estado: **em aberto** — B5 (taxonomia de sucata), B6 (categorias), B8 (tela de
 editar ferramenta), B9 (campo do filtro de calibração), B11 (dupla aprovação formal do ajuste),
@@ -224,13 +225,16 @@ B18-B20 (as três da Etapa 13: proteção dos Indicadores, unificar as réguas d
 auditoria de export/gates antigos), B21-B24 (as quatro da Etapa 14 — **a B21 é uma abertura de
 acesso já em vigor, leia primeiro**), **B41 (o único item em aberto da Etapa 20: a contagem de
 permissões por setor que qualquer usuário do módulo lê)** e **B54 (o único item em aberto da
-Etapa 24: apertar o perfil padrão de quem não tem perfil definido)**.
+Etapa 24: apertar o perfil padrão de quem não tem perfil definido)** e **B57 (o único item da
+Etapa 25: quais operações sobre material crítico exigem duas assinaturas)**.
 As quatro decisões da Etapa 20 que **eu já tomei** e você pode reverter estão em B37-B40, as
 **cinco da Etapa 21** (a primeira etapa do núcleo do CRM) estão em **B42-B46**, e as **quatro da
 Etapa 22** estão em **B47-B50** — todas tomadas por mim, nenhuma esperando resposta, todas
 reversíveis. As **três da Etapa 23** estão em **B51-B53** e as **três da Etapa 24** em
 **B54-B56** — destas últimas, **a B54 (apertar o padrão de quem não tem perfil) espera você**;
-as outras duas eu tomei e você reverte se quiser.
+as outras duas eu tomei e você reverte se quiser. A **única da Etapa 25 é a B57 (dupla conferência
+em material crítico) e ela espera você** — está escrita com quatro opções, a consequência de cada
+uma, a minha recomendação e o comportamento de hoje declarado, para você arbitrar lendo.
 **B33 (quem lê a trilha de auditoria) SAIU da lista de em aberto** — a tela foi entregue na
 Etapa 22 (`8c6ffbe..169458d`). Ver o item B33 abaixo, que ficou no lugar com o desfecho escrito.
 **Resolvidas ou já decididas** — B1-B3 (Etapa 10), B4 (custo da transformação), B7 (lembrete de
