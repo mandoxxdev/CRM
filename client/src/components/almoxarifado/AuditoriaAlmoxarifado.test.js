@@ -20,7 +20,14 @@
 
 // Fuso FIXADO antes de qualquer Date: o cenário do created_at só distingue o certo do errado
 // num fuso != UTC (em UTC as duas leituras coincidem e o teste passaria provando nada — o
-// "teste vazio" que o CLAUDE.md manda desconfiar). Node reconfigura o V8 ao setar process.env.TZ.
+// "teste vazio" que o CLAUDE.md manda desconfiar).
+//
+// QUEM FIXA É `client/jest.globalSetup.js`, NÃO a linha abaixo. O comentário anterior dizia
+// "Node reconfigura o V8 ao setar process.env.TZ" e ESTAVA ERRADO — a revisão adversarial
+// reproduziu: com `TZ` já definido no ambiente, a atribuição em runtime é no-op (o V8 já
+// resolveu o fuso), e a suíte do cliente ficava VERMELHA em `TZ=UTC`, o default da maioria dos
+// contêineres. A atribuição fica aqui só como rede para execução avulsa deste arquivo por um
+// runner que ignore o globalSetup; ela não é a garantia.
 process.env.TZ = 'America/Sao_Paulo';
 
 import React, { act } from 'react';
@@ -368,4 +375,77 @@ test('gate visual: sem `configurar` o painel de sem-permissao aparece sem nem ch
   expect(api.get).not.toHaveBeenCalled();
   expect(texto()).toMatch(/Sem permissão/);
   expect(texto()).not.toMatch(/nenhum registro/i);
+});
+
+// ── Paginação por offset ─────────────────────────────────────────────────────────────
+// Estes três cenários entraram no fix-round da Fase 5 (achado A4). A paginação foi acrescentada
+// fora do plano e ficou SEM REDE: a revisão adversarial removeu o `setOffset(0)` de
+// `mudarFiltro` e a suíte passou **15/15**, nenhuma asserção caiu. O comportamento estava
+// certo — o que faltava era prova. E a regressão aqui é silenciosa e produz exatamente "lista
+// vazia sem motivo aparente" (página 4 de um resultado novo), a resposta que esta tela não pode
+// dar por engano.
+const botaoPorTexto = (re) => [...container.querySelectorAll('button')].find((b) => re.test(b.textContent));
+
+function listaGrande(total, offset, quantidade) {
+  return {
+    total, limite: 200, offset, truncado: offset + quantidade < total,
+    itens: Array.from({ length: quantidade }, (_, i) => ({
+      ...LISTA.itens[0], id: offset + i + 1,
+    })),
+  };
+}
+
+test('[A4] "Próximos" avança o offset e a faixa exibida acompanha', async () => {
+  api.get.mockImplementation((url, config) => {
+    if (typeof url === 'string' && url.includes('/auditoria/opcoes')) return Promise.resolve({ data: OPCOES });
+    const off = (config && config.params && config.params.offset) || 0;
+    return Promise.resolve({ data: listaGrande(450, off, off === 400 ? 50 : 200) });
+  });
+  await renderizar();
+  expect(texto()).toContain('1–200 de 450');
+  expect(botaoPorTexto(/Anteriores/).disabled).toBe(true);
+
+  await clicar(botaoPorTexto(/Próximos/));
+  expect(ultimaBusca()[1].params.offset).toBe(200);
+  expect(texto()).toContain('201–400 de 450');
+
+  await clicar(botaoPorTexto(/Próximos/));
+  expect(ultimaBusca()[1].params.offset).toBe(400);
+  expect(texto()).toContain('401–450 de 450');
+  expect(botaoPorTexto(/Próximos/).disabled).toBe(true);
+});
+
+test('[A4] trocar filtro VOLTA para a primeira pagina — senao a tela mostra vazio sem motivo', async () => {
+  api.get.mockImplementation((url, config) => {
+    if (typeof url === 'string' && url.includes('/auditoria/opcoes')) return Promise.resolve({ data: OPCOES });
+    const off = (config && config.params && config.params.offset) || 0;
+    return Promise.resolve({ data: listaGrande(450, off, off === 400 ? 50 : 200) });
+  });
+  await renderizar();
+  await clicar(botaoPorTexto(/Próximos/));
+  await clicar(botaoPorTexto(/Próximos/));
+  expect(ultimaBusca()[1].params.offset).toBe(400);
+
+  // Um resultado novo pode ter menos de 400 linhas; manter o offset devolveria lista vazia, e
+  // numa auditoria isso é indistinguível de "nada aconteceu".
+  preencher(porTestId('filtro-entidade'), 'material');
+  await esperarEfeitos();
+
+  expect(ultimaBusca()[1].params.offset).toBe(0);
+  expect(ultimaBusca()[1].params.entidade).toBe('material');
+});
+
+test('[A4] "Anteriores" volta uma pagina e nunca passa de zero', async () => {
+  api.get.mockImplementation((url, config) => {
+    if (typeof url === 'string' && url.includes('/auditoria/opcoes')) return Promise.resolve({ data: OPCOES });
+    const off = (config && config.params && config.params.offset) || 0;
+    return Promise.resolve({ data: listaGrande(450, off, off === 400 ? 50 : 200) });
+  });
+  await renderizar();
+  await clicar(botaoPorTexto(/Próximos/));
+  await clicar(botaoPorTexto(/Anteriores/));
+
+  expect(ultimaBusca()[1].params.offset).toBe(0);
+  expect(texto()).toContain('1–200 de 450');
+  expect(botaoPorTexto(/Anteriores/).disabled).toBe(true);
 });

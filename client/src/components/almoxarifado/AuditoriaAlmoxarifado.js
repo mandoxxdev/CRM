@@ -92,11 +92,20 @@ const formatDataHora = (d) => {
 // `de`/`para` chegam CRUS do servidor (decisão registrada no C3: número continua número,
 // `false` continua `false`) — a coerção para texto acontece AQUI, na borda de renderização.
 // `0` e `false` NÃO viram travessão: numa auditoria, "0" e "vazio" são fatos diferentes.
+// Achado A7 da revisão adversarial: sem limite, a linha de `setor_permissao` — que grava o mapa
+// de acesso inteiro, ~46 KB (o G8) — vira um token único sem espaços dentro de um `<td>`, e o
+// `.almox-table-container` é `overflow: hidden`. O resultado não era só feio: era ilegível, com
+// o começo do valor clipado junto. Truncar diz ao leitor que há mais, o que "sumir" não diz.
+const LIMITE_VALOR = 300;
 const valorAuditoria = (v) => {
   if (v === null || v === undefined) return '—';
-  if (typeof v === 'object') return JSON.stringify(v);
-  if (typeof v === 'boolean') return v ? 'sim' : 'não';
-  return String(v);
+  let texto;
+  if (typeof v === 'object') texto = JSON.stringify(v);
+  else if (typeof v === 'boolean') texto = v ? 'sim' : 'não';
+  else texto = String(v);
+  return texto.length > LIMITE_VALOR
+    ? `${texto.slice(0, LIMITE_VALOR)}… (+${texto.length - LIMITE_VALOR} caracteres)`
+    : texto;
 };
 
 const LIMITE = 200; // default do C1 (1..1000)
@@ -395,6 +404,22 @@ const AuditoriaAlmoxarifado = () => {
                                         ))}
                                       </tbody>
                                     </table>
+                                  )}
+                                  {/* Achado A8: parte das entradas é CONTEXTO, não mudança. A
+                                      troca de foto de material, por exemplo, grava
+                                      `{foto, codigo, nome}` contra `{foto}`, então `codigo` e
+                                      `nome` aparecem como `— → valor` e leem como "foi definido
+                                      agora". Aparecem de propósito: é a mesma ausência de filtro
+                                      de igualdade que mantém visível a troca de senha (as duas
+                                      pontas valem '(alterado)'). Sem esta legenda, quem audita
+                                      conclui que houve alteração onde não houve. */}
+                                  {alteracoes.some((a) => a.de === null || a.de === undefined) && (
+                                    <p style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)', margin: '8px 0 0' }}>
+                                      Linhas com <strong>De</strong> vazio (—) podem ser o valor
+                                      que a operação apenas registrou junto, e não um campo que
+                                      mudou. O sistema guarda o que foi gravado no ato, sem
+                                      descartar nada.
+                                    </p>
                                   )}
                                 </div>
                               </td>

@@ -162,7 +162,12 @@ Quando um teste novo passa de primeira, rode um **controle positivo**: quebre a 
 propósito e confirme que o teste **fica vermelho**. Regras do harness de sabotagem, todas
 aprendidas por falha silenciosa aqui:
 
-- **`python` não existe nesta máquina.** Heredoc de python vira no-op silencioso.
+- **Use `python3`, nunca `python`.** O binário é `/usr/bin/python3`; o alias `python` **não
+  existe**, e um heredoc chamando `python` vira **no-op silencioso** — foi assim que quatro
+  sabotagens da Etapa 8b "passaram" sem sabotar nada. A versão anterior desta regra dizia
+  "`python` não existe nesta máquina" e **mandava evitar a ferramenta mais confiável
+  disponível**; a revisão adversarial da Etapa 22 pegou isso usando `python3` sem problema
+  algum. O erro real era o alias, não a linguagem.
 - Conte a âncora antes de aplicar `sed`: `grep -cF '<ancora>' arquivo` **tem de dar exatamente 1**.
   Se der 0 ou mais de 1, **aborte** — já houve sabotagem aplicada na tabela errada por casar a 1ª
   de 4 ocorrências.

@@ -20,7 +20,10 @@ congelado, que não traduz nem calcula nada por conta própria.
 
 Valem para **todas** as tasks. Cada uma foi aprendida por falha nesta base:
 
-1. **`python` NÃO EXISTE nesta máquina.** Heredoc de python vira no-op silencioso. Use `sed`
+1. **Use `python3`, nunca `python`** (correção do achado A9 da Fase 5: esta constraint dizia
+   "`python` NÃO EXISTE nesta máquina" e **estava enganando** — `/usr/bin/python3` existe e o
+   revisor o usou a revisão inteira; o que falta é só o alias `python`, e um heredoc chamando
+   `python` vira **no-op silencioso**, como nas quatro sabotagens da Etapa 8b). Ou use `sed`
    (contando a âncora antes: `grep -cF '<ancora>' arquivo` **tem de dar exatamente 1**) ou a
    ferramenta Edit.
 2. **COMMITE ANTES DE SABOTAR.** Três vezes nesta sessão um `git checkout` de restauração

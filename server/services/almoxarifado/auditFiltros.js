@@ -32,6 +32,19 @@
  *
  * O calculo do offset vem do `Intl` (base de fuso do proprio Node), entao horario de verao —
  * abolido no Brasil em 2019, mas nao no mundo — e respeitado por data, sem tabela hardcoded.
+ *
+ * RESSALVA MEDIDA (achado A6 da revisao adversarial): "respeitado por data" vale DENTRO do
+ * horario de verao, nao NO DIA DA VIRADA. Em 2018-11-04 a meia-noite local simplesmente nao
+ * existiu (00:00 pulou para 01:00), e a janela sai deslocada em uma hora:
+ *
+ *   janelaUtc('2018-11-04','2018-11-04') -> de '2018-11-04 02:00:00' (deveria ser 03:00)
+ *   ponta a ponta: um ato das 23:30 de 03/11 local cai no filtro do dia 04, nao do 03
+ *
+ * E o mesmo sintoma da RN-04 sobrevivendo num dia de virada. NAO foi consertado de proposito:
+ * o Brasil nao tem horario de verao desde 2019 e a trilha comeca em 2026, entao o caso e
+ * inalcancavel com os dados reais; consertar exigiria escolher qual das duas leituras vale
+ * numa hora que nao existiu, e essa escolha sem caso de uso e chute. O fall-back (a meia-noite
+ * DUPLA de 2019-02-16/17) esta correto — sem buraco nem sobreposicao, verificado.
  */
 
 /**

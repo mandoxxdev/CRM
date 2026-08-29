@@ -265,6 +265,27 @@ function idsDe(res) {
     assert.strictEqual(res.body.error, MSG_DATA);
   });
 
+  // Achado A3 da revisao adversarial: as duas datas VALIDAS com intervalo impossivel devolviam
+  // 200 com `itens: []`. Mesmo modo de falha da RN-03 pela outra porta — e a tela nao impede
+  // (os `input type=date` nao tem min/max cruzados), entao o usuario chega la sozinho.
+  await test('intervalo INVERTIDO => 400, nao 200 com lista vazia', async () => {
+    const res = await request(app)
+      .get('/api/almoxarifado/auditoria?data_inicio=2026-08-20&data_fim=2026-08-01');
+    assert.strictEqual(res.status, 400,
+      `status ${res.status} — lista vazia por intervalo impossivel parece prova de que nada aconteceu`);
+    assert.strictEqual(res.body.error, 'Período inválido: a data inicial é posterior à data final',
+      `mensagem: ${JSON.stringify(res.body)}`);
+    assert.strictEqual(res.body.itens, undefined, 'veio corpo de listagem junto do erro');
+  });
+
+  await test('intervalo de UM dia so (inicio == fim) continua valendo', async () => {
+    // A guarda acima usa `>`, nao `>=` — o filtro de um unico dia e o caso mais comum da tela.
+    const res = await request(app)
+      .get('/api/almoxarifado/auditoria?data_inicio=2026-08-28&data_fim=2026-08-28');
+    assert.strictEqual(res.status, 200, `a guarda do intervalo invertido barrou o dia unico: ${JSON.stringify(res.body)}`);
+    assert.ok(idsDe(res).includes(ids.fim_de_expediente), 'o filtro de um dia parou de trazer o dia');
+  });
+
   console.log('\n── RN-04: o dia e o de Brasilia, nao o UTC ──');
 
   await test('o ato das 21:30 de 28/08 APARECE no filtro do dia 28', async () => {

@@ -1373,6 +1373,16 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
           throw Object.assign(new Error('Data inválida: use uma data real no formato AAAA-MM-DD'), { status: 400 });
         }
       }
+      // Intervalo INVERTIDO (achado A3 da revisao adversarial): as duas datas podem ser
+      // individualmente validas e o intervalo ser impossivel — `data_inicio=2026-08-20` com
+      // `data_fim=2026-08-01` devolvia 200 com `itens: []`. E o MESMO modo de falha que a
+      // RN-03 existe para matar, entrando pela outra porta: numa trilha de auditoria, lista
+      // vazia parece prova de que nada aconteceu. Comparacao de string basta — as duas ja
+      // passaram por `validarData`, entao sao AAAA-MM-DD, que ordena lexicograficamente.
+      if (req.query.data_inicio && req.query.data_fim && req.query.data_inicio > req.query.data_fim) {
+        throw Object.assign(
+          new Error('Período inválido: a data inicial é posterior à data final'), { status: 400 });
+      }
       // A janela vai para UTC ANTES do SQL: `created_at` e gravado por `CURRENT_TIMESTAMP`, que
       // e UTC, e quem filtra pensa em dia de Brasilia. Sem isto, um ato das 21:30 esta gravado
       // como 00:30 do dia seguinte e SOME do filtro do proprio dia. Nada de `date(?, '+1 day')`

@@ -256,6 +256,17 @@ function verbosDeTransicao() {
         'idx_auditoria_almox_entidade',
         'idx_auditoria_almox_usuario',
       ], `indices encontrados: ${JSON.stringify(linhas.map((l) => l.name))}`);
+
+      // AS COLUNAS, nao so os nomes (achado A5 da revisao adversarial): trocando a coluna e
+      // mantendo o nome — `created_at` virando `id`, `(entidade, entidade_id)` virando
+      // `justificativa` — a assercao acima passava VERDE. Um indice com nome certo em coluna
+      // errada e a feature quebrada com o teste limpo: o proposito declarado destes tres e o
+      // `ORDER BY created_at DESC` e o filtro por periodo, que so o `created_at` serve.
+      const colunasDe = async (indice) => (await dbAll(db, `PRAGMA index_info(${indice})`))
+        .sort((a, b) => a.seqno - b.seqno).map((c) => c.name);
+      assert.deepStrictEqual(await colunasDe('idx_auditoria_almox_created'), ['created_at']);
+      assert.deepStrictEqual(await colunasDe('idx_auditoria_almox_entidade'), ['entidade', 'entidade_id']);
+      assert.deepStrictEqual(await colunasDe('idx_auditoria_almox_usuario'), ['usuario_id']);
     } finally {
       await new Promise((r) => db.close(r));
     }

@@ -37,6 +37,9 @@
   "devDependencies": {
     "react-scripts": "5.0.1"
   },
+  "jest": {
+    "globalSetup": "<rootDir>/jest.globalSetup.js"
+  },
   "eslintConfig": {
     "extends": [
       "react-app"
