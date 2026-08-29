@@ -7,7 +7,7 @@ const {
   isSqliteBusy,
   respondDbError,
 } = require('./services/sqliteConcurrency');
-const { prepareDatabaseOnStartup, pruneOldBackups, fileSizeIfExists } = require('./services/dbRecovery');
+const { prepareDatabaseOnStartup, pruneOldBackups, opcoesDeRetencao, fileSizeIfExists } = require('./services/dbRecovery');
 const { otimizarImagem, otimizarPasta } = require('./services/otimizarImagem');
 const { getClausulasHelices } = require('./clausulasHelices');
 
@@ -1008,9 +1008,13 @@ let dbReady = false; // Flag para indicar se o banco está totalmente pronto
 let dbStartupFailed = false;
 
 function beginDatabaseInitialization(onReadyCallback) {
+  // O BACKUP fica aqui (dentro de prepareDatabaseOnStartup): ele tem de acontecer ANTES das
+  // migrations, senao a copia de socorro ja nasce com o schema alterado.
+  // A LIMPEZA (prune), nao — ela mudou de lugar na Etapa 25 Task 2 e roda dentro de
+  // initializeDatabase, depois de inicializarConfiguracoesPadrao, porque so la a tabela
+  // `configuracoes` existe. Ver podarBackupsConformeConfiguracao().
   prepareDatabaseOnStartup(db, dbPath)
     .then(() => {
-      pruneOldBackups(dbPath, 10);
       initializeDatabase(onReadyCallback);
     })
     .catch((prepErr) => {
@@ -2072,6 +2076,9 @@ function initializeDatabase(onReadyCallback) {
     executeMigrations(() => {
       // Inicializar configurações padrão após migrações
       inicializarConfiguracoesPadrao(() => {
+        // A limpeza dos backups roda AQUI, e não junto do backup do boot: `configuracoes` só
+        // existe depois das migrations e a chave só é semeada por inicializarConfiguracoesPadrao.
+        podarBackupsConformeConfiguracao();
         // Verificar se o banco está realmente acessível
         db.get('SELECT 1', [], (err) => {
           if (err) {
@@ -2090,6 +2097,35 @@ function initializeDatabase(onReadyCallback) {
       });
     });
   }, 500);
+}
+
+/**
+ * Limpeza dos backups antigos, com a retencao que o usuario configurou na tela.
+ *
+ * Por que NAO fica junto do backup do boot (onde estava, `pruneOldBackups(dbPath, 10)` literal):
+ * quem cria a tabela `configuracoes` e semeia `backup_manter_dias` e o proprio
+ * initializeDatabase, que roda DEPOIS. No primeiro boot de uma instalacao nova (volume vazio,
+ * clone novo) o SELECT falharia com `no such table: configuracoes` — e ali dentro isso ou marca
+ * `dbStartupFailed` para sempre (o /health passa a mentir sobre a integridade do banco) ou vira
+ * rejeicao nao tratada, que no Node 24 encerra o processo, levando junto o backup do boot.
+ *
+ * Aqui a tabela ja existe. E, mesmo assim, o erro de leitura nao derruba nada:
+ * `opcoesDeRetencao` cai no padrao de 30 dias, e o proprio prune e protegido — a limpeza e
+ * conveniencia, nunca motivo para o servidor nao subir.
+ */
+function podarBackupsConformeConfiguracao() {
+  db.get('SELECT valor FROM configuracoes WHERE chave = ?', ['backup_manter_dias'], (cfgErr, row) => {
+    try {
+      const opcoes = opcoesDeRetencao(cfgErr, row);
+      const { apagados, motivo } = pruneOldBackups(dbPath, opcoes);
+      if (apagados.length) {
+        console.log(`[DB Recovery] retencao: ${apagados.length} arquivo(s) removido(s) `
+          + `(manter ${motivo.manterDias} dias, teto de ${motivo.tetoCopias} copias)`);
+      }
+    } catch (pruneErr) {
+      console.warn('[DB Recovery] limpeza de backups falhou (nao fatal):', pruneErr.message);
+    }
+  });
 }
 
 // Inicializar configurações padrão

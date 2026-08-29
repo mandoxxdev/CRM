@@ -262,6 +262,46 @@ function pruneOldBackups(dbPath, opcoes = {}) {
   return { apagados, motivo };
 }
 
+/**
+ * Traduz a linha de `configuracoes` (chave `backup_manter_dias`) nas opções de
+ * `pruneOldBackups`. Recebe exatamente o par `(err, row)` do callback do `db.get`.
+ *
+ * **NUNCA lança, nem no erro de leitura** — e isso é o ponto, não um detalhe defensivo. O prune
+ * roda no boot; no PRIMEIRO boot de uma instalação nova a tabela `configuracoes` pode não
+ * existir ainda (`no such table: configuracoes`). Se este caminho estourasse, ou o `.catch` do
+ * boot marcaria `dbStartupFailed` e o `/health` mentiria sobre a integridade do banco pelo resto
+ * da vida do processo, ou seria rejeição não tratada — que no Node 24 ENCERRA o processo, e o
+ * backup do boot (a rede de segurança do sistema) nunca rodaria.
+ *
+ * O valor inválido cai no padrão **aqui**, já normalizado, e o aviso da RN-03 sai daqui — é o
+ * único lugar que sabe distinguir "a chave tem lixo" de "não deu para ler a chave".
+ * `pruneOldBackups` então recebe sempre um número válido e não duplica o log.
+ *
+ * @param {Error|null} err   erro do `db.get` (tabela ausente, banco fechado, …)
+ * @param {{valor?: any}|undefined} row
+ * @returns {{manterDias: number, tetoCopias: number, usouPadrao: boolean}}
+ */
+function opcoesDeRetencao(err, row) {
+  const bruto = err ? undefined : (row ? row.valor : undefined);
+  const dias = Number(bruto);
+  const valido = bruto !== undefined && bruto !== null && String(bruto).trim() !== ''
+    && Number.isFinite(dias) && dias >= 1;
+
+  if (err) {
+    console.warn(`[DB Recovery] nao consegui ler backup_manter_dias (${err.message}) `
+      + `— usando o padrao de ${MANTER_DIAS_PADRAO} dias`);
+  } else if (!valido) {
+    console.warn(`[DB Recovery] backup_manter_dias invalido (${JSON.stringify(bruto)}) `
+      + `— usando o padrao de ${MANTER_DIAS_PADRAO} dias`);
+  }
+
+  return {
+    manterDias: valido ? dias : MANTER_DIAS_PADRAO,
+    tetoCopias: TETO_COPIAS_PADRAO,
+    usouPadrao: !valido,
+  };
+}
+
 module.exports = {
   backupDatabaseFiles,
   runIntegrityCheck,
@@ -269,6 +309,7 @@ module.exports = {
   prepareDatabaseOnStartup,
   pruneOldBackups,
   decidirRemocao,
+  opcoesDeRetencao,
   fileSizeIfExists,
   MANTER_DIAS_PADRAO,
   PISO_COPIAS_PADRAO,

@@ -24,7 +24,13 @@ const assert = require('assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { decidirRemocao, pruneOldBackups } = require('../../services/dbRecovery');
+const {
+  decidirRemocao,
+  pruneOldBackups,
+  opcoesDeRetencao,
+  MANTER_DIAS_PADRAO,
+  TETO_COPIAS_PADRAO,
+} = require('../../services/dbRecovery');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -250,6 +256,103 @@ test('compat: decidirRemocao(arquivos, 1) não vira no-op silencioso', () => {
   const { apagar } = decidirRemocao(arquivos, 1);
   assert.strictEqual(apagar.length, 2,
     'Number desestruturado virou no-op: os campos viraram undefined e a limpeza não fez nada');
+});
+
+// ── Etapa 25 Task 2: a tradução configuração → opções ────────────────────────────────────────
+//
+// `opcoesDeRetencao(err, row)` é a ÚNICA parte da mudança de lugar do prune que dá para testar
+// sem subir o core (`index.js` não exporta nada e monta o servidor ao ser exigido). Ela recebe
+// exatamente o que `db.get('SELECT valor FROM configuracoes WHERE chave = ?')` entrega — o par
+// `(err, row)` — e devolve as opções de `pruneOldBackups`. Nunca lança: ver o cenário da tabela
+// ausente lá embaixo, que é o que guarda o achado A1.
+
+/** Roda `fn` capturando console.warn, para afirmar o log da RN-03 sem sujar o placar. */
+function capturandoWarn(fn) {
+  const original = console.warn;
+  const linhas = [];
+  console.warn = (...args) => linhas.push(args.join(' '));
+  try { return { valor: fn(), linhas }; } finally { console.warn = original; }
+}
+
+test('config `7` vira manterDias 7 (a chave é REALMENTE lida)', () => {
+  const { valor: o, linhas } = capturandoWarn(() => opcoesDeRetencao(null, { valor: '7' }));
+  assert.strictEqual(o.manterDias, 7,
+    `backup_manter_dias='7' virou manterDias=${JSON.stringify(o.manterDias)} — a chave foi `
+    + 'ignorada e o valor da tela não chega no prune (o dado volta a ser morto)');
+  assert.strictEqual(o.usouPadrao, false, "'7' foi sinalizado como inválido");
+  assert.strictEqual(o.tetoCopias, TETO_COPIAS_PADRAO,
+    `o teto de ${TETO_COPIAS_PADRAO} tem de continuar valendo junto com os dias`);
+  assert.deepStrictEqual(linhas, [], `valor válido não deveria logar aviso: ${JSON.stringify(linhas)}`);
+});
+
+test('config `45` (número, não string) também é lido', () => {
+  const { valor: o } = capturandoWarn(() => opcoesDeRetencao(null, { valor: 45 }));
+  assert.strictEqual(o.manterDias, 45, `veio ${JSON.stringify(o.manterDias)}`);
+});
+
+// RN-03: chave ausente ou com lixo → padrão de 30 dias, E com log (senão o operador nunca
+// descobre por que a retenção que ele configurou não vale).
+[
+  ['linha ausente (chave nunca semeada)', undefined],
+  ['linha sem coluna valor', {}],
+  ['valor null', { valor: null }],
+  ['valor vazio', { valor: '' }],
+  ['abc', { valor: 'abc' }],
+  ['0', { valor: '0' }],
+  ['-5', { valor: '-5' }],
+  ['NaN', { valor: NaN }],
+].forEach(([rotulo, row]) => {
+  test(`RN-03 config ${rotulo}: cai no padrão de ${MANTER_DIAS_PADRAO} dias, com log`, () => {
+    const { valor: o, linhas } = capturandoWarn(() => opcoesDeRetencao(null, row));
+    assert.strictEqual(o.manterDias, MANTER_DIAS_PADRAO,
+      `veio manterDias=${JSON.stringify(o.manterDias)} — lixo na chave virou régua de verdade`);
+    assert.strictEqual(o.usouPadrao, true, 'não sinalizou que caiu no padrão');
+    assert.strictEqual(linhas.length, 1,
+      `esperava 1 aviso no log, veio ${linhas.length}: ${JSON.stringify(linhas)}`);
+    assert.ok(/backup_manter_dias/.test(linhas[0]),
+      `o aviso não nomeia a chave: ${JSON.stringify(linhas[0])}`);
+  });
+});
+
+// ── O cenário que guarda o achado A1 (bloqueante) ────────────────────────────────────────────
+// No PRIMEIRO boot de uma instalação nova a tabela `configuracoes` ainda não existe quando o
+// prune roda — é `initializeDatabase` quem a cria e quem semeia a chave. Se esta função lançar
+// (ou repassar a rejeição), os dois desfechos são ruins: dentro do `.then` do boot o `.catch`
+// marca `dbStartupFailed` e o /health mente pelo resto da vida do processo; fora dele é
+// rejeição não tratada, e no Node 24 isso ENCERRA o processo — o backup do boot, que é a rede
+// de segurança do sistema, nunca roda.
+test('A1: erro de leitura (`no such table: configuracoes`) cai no padrão SEM lançar', () => {
+  const erro = new Error('SQLITE_ERROR: no such table: configuracoes');
+  let capturado;
+  assert.doesNotThrow(() => { capturado = capturandoWarn(() => opcoesDeRetencao(erro, undefined)); },
+    'opcoesDeRetencao LANÇOU no erro de leitura — no primeiro boot de uma instalação nova isso '
+    + 'derruba o processo (Node 24) ou marca dbStartupFailed para sempre');
+  assert.strictEqual(capturado.valor.manterDias, MANTER_DIAS_PADRAO,
+    `veio ${JSON.stringify(capturado.valor.manterDias)} em vez do padrão`);
+  assert.strictEqual(capturado.valor.usouPadrao, true, 'não sinalizou que caiu no padrão');
+  assert.strictEqual(capturado.linhas.length, 1,
+    `esperava 1 aviso, veio ${capturado.linhas.length}: ${JSON.stringify(capturado.linhas)}`);
+  assert.ok(/no such table/.test(capturado.linhas[0]),
+    `o aviso não diz qual foi o erro: ${JSON.stringify(capturado.linhas[0])}`);
+});
+
+test('A1: as opções do caminho de erro ainda limpam órfão e respeitam o piso', () => {
+  // Não basta não lançar: o que sai dali tem de ser uma régua utilizável. Se `opcoesDeRetencao`
+  // devolvesse `{}` ou `undefined`, o prune viraria no-op silencioso no primeiro boot.
+  const o = capturandoWarn(() => opcoesDeRetencao(new Error('no such table: configuracoes'))).valor;
+  const arquivos = [
+    f('database-2026-08-28T10-00-00.sqlite', 1),
+    f('database-2026-08-27T10-00-00.sqlite', 2),
+    f('database-2026-08-26T10-00-00.sqlite', 3),
+    f('database-2026-06-01T10-00-00-wal', 90),   // órfão
+  ];
+  const { apagar, motivo } = decidirRemocao(arquivos, { ...o, agora: AGORA });
+  guardaNaoVazio(arquivos, apagar);
+  assert.deepStrictEqual(apagar, ['database-2026-06-01T10-00-00-wal'],
+    `esperava só o órfão fora: ${JSON.stringify(apagar)}`);
+  assert.strictEqual(motivo.manterDias, MANTER_DIAS_PADRAO);
+  assert.strictEqual(motivo.manterDiasInvalido, false,
+    'o padrão saiu de opcoesDeRetencao como valor inválido — o log da RN-03 sairia DUAS vezes');
 });
 
 test('compat: pruneOldBackups(dbPath, 2) — o número é TETO, não piso', () => {
