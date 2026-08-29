@@ -201,7 +201,7 @@ o retry **aplica a escrita depois**. É o defeito nº 1 do design por um caminho
 
 ---
 
-### Task 2 (galho): exclusão idempotente nas CINCO rotas — FEITA (`e912675`)
+### Task 2 (galho): exclusão idempotente nas CINCO rotas — FEITA (`9858bec` código, `36f2afd` documentação)
 
 > **Entregue.** `test:api` **149/149** arquivos (148 + `exclusaoIdempotente.api.test.js`, 20
 > cenários), `test:almoxarifado` 42/0. As cinco rotas conferidas uma a uma; os dois avisos do
