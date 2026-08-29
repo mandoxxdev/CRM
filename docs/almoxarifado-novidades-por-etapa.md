@@ -4705,7 +4705,7 @@ o que auditar.
 ## Onde estamos e o que vem a seguir
 
 - **Etapa 26 entregue (2026-08-29):** **uma lista de categorias só, e ela é da GMP** (feature 01,
-  `1bca087..6b981ac`) — a dívida mais antiga do módulo ainda aberta: as categorias de material
+  `1bca087..9d86a84`) — a dívida mais antiga do módulo ainda aberta: as categorias de material
   estavam **escritas dentro do código, repetidas em três telas**, desde a Etapa 2 (04/08). Agora as
   três leem o **catálogo do cliente** (as 27 de metalúrgica que estavam no banco **sem nenhum
   uso**), o catálogo virou **cadastro editável** em Configurações → aba Categorias (criar,

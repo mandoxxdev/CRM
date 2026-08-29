@@ -8,7 +8,7 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 >
 > **Etapas 1 a 20 e 22 a 26 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
 > A **Etapa 26 (uma lista de categorias só, e ela é da GMP)** fechou em 2026-08-29
-> (`1bca087..6b981ac`) e é da **feature 01 (cadastros de materiais)** — a primeira etapa fora da
+> (`1bca087..9d86a84`) e é da **feature 01 (cadastros de materiais)** — a primeira etapa fora da
 > feature 23 desde a 15. Ela pagou a **dívida mais antiga do módulo ainda aberta**: as categorias
 > de material estavam **escritas dentro do código, repetidas em três telas**, desde a Etapa 2
 > (04/08). Entregue: **(1)** as três telas (cadastro de material, filtro da listagem de materiais e

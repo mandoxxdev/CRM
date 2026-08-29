@@ -5,7 +5,7 @@
 > conversões genérica, grupo acima de família, motivos/transportadoras/tipos de documento,
 > `almoxarifadoApi.js`, ficha técnica/anexos na tela). Etapa 2 entregue (2026-08-04): ~21 colunas novas no material (técnicos, reposição, controles, ABC, unidades compra/consumo + fatores), subfamílias via `parent_id` em famílias, `MaterialSchema`/`MaterialUpdateSchema` (Zod) com validação e auditoria de criação/atualização, form em 6 seções.
 > **Spec original:** seções 4.1, 4.2, 4.3
-> **Última atualização:** 2026-08-29 (**Etapa 26 (`1bca087..6b981ac`) — o catálogo de categorias
+> **Última atualização:** 2026-08-29 (**Etapa 26 (`1bca087..9d86a84`) — o catálogo de categorias
 > virou cadastro e as três telas pararam de hardcodar a lista.** Ver a seção "Entregue na Etapa
 > 26", no fim.)
 > Antes: 2026-08-13 (**Etapa 8c, Task 1 (`028da1e`) — criar material virou serviço
@@ -149,7 +149,7 @@ por onde**. O que mudou aqui, e que até agora não estava documentado em lugar 
 > pelo serviço, e a guarda de refactor não pegaria porque o corpo de teste não manda
 > `localizacao_padrao_id`.
 
-## Entregue na Etapa 26 (2026-08-29, `1bca087..6b981ac`)
+## Entregue na Etapa 26 (2026-08-29, `1bca087..9d86a84`)
 
 **A dívida "categorias hardcoded no front" fechou** — estava aberta desde a Etapa 2 (2026-08-04),
 foi encostada e não resolvida pela Etapa 8c, e era a pendência mais antiga desta feature ainda de
