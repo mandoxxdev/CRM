@@ -94,6 +94,19 @@ um comentário dizendo isso), então atrás do nginx `req.ip` é `127.0.0.1`. Gu
 dá a trilha errada em produção **ou** perde o dado quando não há proxy. O core faz assim desde a
 Etapa 21.
 
+**C2 como ficou implementado** (commit `8de05e4` — o bloco acima descreve só a primeira das
+quatro exportações, e por isso está **incompleto como escrito**):
+
+```js
+// origemRequisicao(req) -> { ip, ip_proxy, user_agent }   // ← o do contrato acima; nunca lança
+// anexarOrigemAoUsuario(req, res, next)                   // pendura `origem` em req.user
+// camposDeOrigem(user) -> { ip?, ip_proxy?, user_agent? } // PURA; omite campo nulo
+// LIMITE_USER_AGENT = 255                                 // afirmado por número no teste
+```
+`anexarOrigemAoUsuario` **não** entra como `app.use` no prefixo: ele **envolve o
+`authenticateToken`** que o registrador do módulo recebe. Motivo medido na divergência 1 da
+Task 3 — as rotas redeclaram `auth`, e `req.user = user` apaga o `origem` pendurado antes.
+
 ---
 
 ### Task 1 (tronco): o prune varre órfão e passa a ter régua testável
@@ -279,26 +292,80 @@ constroem `user` literal: `user.origem` vira `undefined`.
 **Descartado** `opcoes.origem` (o 4º parâmetro, que já existe): só as 5 rotas passariam origem, e
 os **23 movimentos originados em serviço gravariam `null`** — metade da feature, em silêncio.
 
-- [ ] **Step 1: teste que falha** — `origemRequisicao` puro: `x-forwarded-for` com um IP; com
+> **STATUS: Task 3 FEITA** — commit `8de05e4`. Placar: `origemMovimentacao.api.test.js`
+> **16/16** (novo), `test:api` **153/153** arquivos (era 152), `test:almoxarifado` **42/42**,
+> `test:validation` **4/4**, `test:safealter` **3/3**, `test:sqlite` **5/5**. Três divergências
+> registradas no fim desta task — a primeira é **bloqueante e foi medida na execução**.
+
+- [x] **Step 1: teste que falha** — `origemRequisicao` puro: `x-forwarded-for` com um IP; com
   **vários** (`"cliente, proxy1, proxy2"` → o **primeiro** é o cliente); ausente (cai em
-  `req.ip`, `ip_proxy` fica `null`); `user-agent` ausente; `user-agent` gigante (truncado, com o
-  limite **afirmado**); e `req` malformado (sem `get`) → não lança, devolve campos nulos.
-  O último importa porque a origem vai virar **dado inerte** (RN-05).
-- [ ] **Step 2: implementar** o helper, anexar `origem` a `req.user` no middleware do módulo, e
-  ler `user.origem` na auditoria de movimentação (`stockService.js:1367`).
-  **NÃO crie `try/catch` ali** — ele não existe (achado A4: 59 das 60 chamadas de
-  `registrarAuditoria` estão sem `try`), e criá-lo mudaria a semântica congelada da auditoria de
-  movimentação sem que esta etapa tenha decidido isso. A origem é dado já pronto; não há o que
-  falhar no ponto da escrita.
-- [ ] **Step 3: integração** — movimentar por rota real e ler pela tela-contrato
-  (`GET /api/almoxarifado/auditoria?entidade=movimentacao`), conferindo que `ip` e `user_agent`
-  aparecem nas `alteracoes`. **Não** espere total fixo; afirme a composição.
-  **E um cenário para o caminho de serviço:** uma operação que movimenta de dentro de um serviço
-  (devolução, recebimento) também tem de gravar a origem — é o que separa esta forma da
-  descartada.
-- [ ] **Step 4: controle positivo com alvo:** faça o helper devolver `req.ip` cru → o cenário do
-  `x-forwarded-for` com vários IPs cai **nomeando o IP do proxy no lugar do cliente**.
-- [ ] **Step 5:** `npm run test:api`; commit.
+  `req.ip`, `ip_proxy` fica `null`); `x-forwarded-for` **igual** ao `req.ip` (não duplica);
+  `user-agent` ausente; `user-agent` gigante (truncado, limite **255 afirmado por número**);
+  `req` malformado (sem `get`, `null`, string, número) → não lança, devolve campos nulos; e
+  `req.get` que **lança** → não propaga e **não perde o `ip`**.
+  O último importa porque a origem vira **dado inerte** (RN-05). Vermelho por **asserção**, não
+  por `Cannot find module`: o helper nasceu como stub permissivo (devolvia sempre nulos), e o
+  primeiro placar foi **4 passed, 12 failed**.
+- [x] **Step 2: implementar** o helper + `anexarOrigemAoUsuario` + `camposDeOrigem`, e ler
+  `user.origem` na auditoria de movimentação (`stockService.js:1367`).
+  **Nenhum `try/catch` novo** foi criado, como o plano manda.
+- [x] **Step 3: integração** — 4 cenários por rota real, lidos pela tela-contrato
+  (`GET /api/almoxarifado/auditoria?entidade=movimentacao`): movimentação v2 com
+  `x-forwarded-for`; movimentação **sem** proxy (o `ip` é o da conexão e **não** se inventa
+  `ip_proxy`); **devolução** (`POST /devolucoes` → `returnService` → `ENTRADA_DEVOLUCAO`), que é
+  o caminho de **serviço**; e **cancelamento**. Mais um cenário de **degradação**: chamada
+  direta ao motor com `user` literal não lança e não inventa campo.
+  Composição afirmada (`material_id`, `tipo`, `quantidade`, `saldo_posterior`, `ip`,
+  `user_agent` presentes), **nunca total fixo**; guarda anti-teste-vazio antes de cada leitura.
+- [x] **Step 4: controle positivo com alvo** (commitado antes, `8de05e4`), **três**, lendo qual
+  asserção caiu; `md5sum` antes/depois/restaurado bateu nos três arquivos e `git diff --stat`
+  ficou vazio:
+  1. helper devolve `req.ip` cru → **10/6**, e o cenário do `x-forwarded-for` com vários IPs caiu
+     **nomeando o proxy no lugar do cliente**: "deveria ser o CLIENTE (203.0.113.77), o PRIMEIRO
+     da cadeia […], e veio '172.16.0.9'". Os três cenários de integração caíram mostrando o
+     sintoma **literal de produção**: `a trilha gravou '::ffff:127.0.0.1' como ip`.
+  2. wiring pelo `app.use` do prefixo (a forma que **de fato falhou** na execução) → **12/4**:
+     os 12 cenários de unidade **verdes** e os 4 de integração vermelhos. É a prova de que a
+     suíte de unidade sozinha **não pega** a feature morta.
+  3. `camposDeOrigem` grava chave nula + truncamento removido → **12/4**: o cenário do
+     `user-agent` gigante caiu dizendo "5017 caracteres", e os de campo nulo caíram nomeando a
+     linha "`de: null / para: null`" que apareceria na tela.
+- [x] **Step 5:** `test:api` **153/153**; commit `8de05e4`.
+
+#### Divergências desta task (o que saiu diferente do plano, e por quê)
+
+1. **"Anexe `origem` a `req.user` num middleware do módulo" está CERTO no destino e ERRADO no
+   mecanismo — e a forma óbvia não funciona.** Um
+   `app.use('/api/almoxarifado', auth, checkModulePermission, anexarOrigem)` roda **antes** dos
+   middlewares de **rota**, e as ~90 rotas da `extended` (mais as 12 deste arquivo) declaram
+   `auth` **de novo** em cada uma. `authenticateToken` faz `req.user = user`: substitui o objeto
+   e leva o `origem` junto. Medido na execução — os 12 cenários de unidade ficaram **verdes** e
+   os 4 de integração vermelhos, exatamente o modo de falha que a etapa inteira caça.
+   **A origem passou a ser pendurada envolvendo o próprio `authenticateToken`** no registrador
+   do módulo (`routes/almoxarifado.js:152`, reatribuição deliberada do parâmetro): é o único
+   ponto que cobre as rotas com `auth` próprio deste arquivo, as da `extended` **e toda rota
+   futura**. Um nome novo deixaria o `authenticateToken` original em escopo, e a próxima rota
+   escrita com ele voltaria a gravar movimentação sem origem, em silêncio.
+2. **Foram TRÊS edições de produção, não duas.** `routes/requisicoesMaterial.js` também recebeu
+   o middleware: aquele prefixo **não** é `/api/almoxarifado`, e
+   `DELETE /api/requisicoes-material/:id` cai em `requisitionService.excluirRequisicao`, que
+   estorna as entregas por `registrarMovimentacao` (`requisitionService.js:415`). Sem essa
+   linha seria o **único** caminho de movimentação de produção a gravar origem vazia — e em
+   silêncio, porque o mesmo serviço entra também por `routes/almoxarifado.js:3544`, que fica
+   coberto. Ali o `app.use` **basta**: as rotas daquele arquivo não redeclaram `auth`.
+3. **A auditoria de CANCELAMENTO (`stockService.js:1814`) também grava origem** — o plano citava
+   só `:1367`. Ela é `entidade: 'movimentacao'` igual, e a linha de ESTORNO nasce de um `INSERT`
+   direto dentro de `cancelarMovimentacao`, **não** passa por `registrarMovimentacao`: deixar de
+   fora daria uma trilha que sabe de onde veio toda movimentação **menos o estorno dela**, que é
+   o ato que mais se quer rastrear. Extensão declarada, com cenário próprio.
+4. **Números do plano conferidos e corretos:** os 28 call sites de `registrarMovimentacao`
+   (23 em serviço, 5 em rota) batem exatamente com a contagem de hoje, e nenhuma chamada de
+   serviço **de escrita** nas rotas do módulo usa outra coisa que não `req.user`.
+
+**Detalhe de contrato que a Task 4 consome:** campo nulo **não** vai para a trilha
+(`camposDeOrigem` omite a chave). `alteracoes` é união das chaves dos dois lados, então gravar
+`ip_proxy: null` viraria a linha "— → —" em **toda** movimentação feita sem proxy. Em produção,
+atrás do nginx, o normal é `ip` = cliente e `ip_proxy` = `127.0.0.1`; em acesso direto, só `ip`.
 
 ---
 
