@@ -273,9 +273,16 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
   app.put('/api/almoxarifado/perfis-usuario/:usuarioId', auth, requirePermission('configurar'), async (req, res) => {
     try {
       const { perfil } = req.body;
-      const usuario = await dbGet(db,
-        'SELECT id, nome, role, is_superadmin, admin_modulos FROM usuarios WHERE id = ? AND ativo = 1',
-        [req.params.usuarioId]);
+      // O `perfil_explicito` vem junto (mesmo LEFT JOIN do GET acima) porque a auditoria precisa
+      // do "de": sem ler ANTES de escrever, o upsert já apagou o valor anterior e a trilha só
+      // consegue dizer o "para".
+      const usuario = await dbGet(db, `
+        SELECT u.id, u.nome, u.role, u.is_superadmin, u.admin_modulos,
+               p.perfil as perfil_explicito
+        FROM usuarios u
+        LEFT JOIN perfil_almoxarifado_usuario p ON p.usuario_id = u.id
+        WHERE u.id = ? AND u.ativo = 1`,
+      [req.params.usuarioId]);
       if (!usuario) return res.status(404).json({ error: 'Usuário não encontrado' });
 
       const { origem } = classificarPerfil(usuario, null);
@@ -290,9 +297,35 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
         });
       }
 
+      const perfilAnterior = usuario.perfil_explicito || null;
+      // Os dois lados da trilha têm a MESMA forma de propósito: a régua de leitura
+      // (`auditLabels.alteracoesDaLinha`) é união de chaves, então chave que só existe de um
+      // lado sairia na tela como `null -> valor` fingindo alteração. Espelha o corpo do C2.
+      const fotoPerfil = (p) => ({
+        usuario: usuario.nome,
+        perfil: p || null,
+        perfil_efetivo: p || PERFIS.PRODUCAO,
+        origem: p ? 'explicito' : 'padrao',
+      });
+
       // perfil vazio/null = voltar ao padrão (sem linha → fallback PRODUCAO)
       if (perfil === null || perfil === undefined || perfil === '') {
         await dbRun(db, 'DELETE FROM perfil_almoxarifado_usuario WHERE usuario_id = ?', [usuario.id]);
+        // Etapa 24: este caminho retornava ANTES do registrarAuditoria lá de baixo — tirar o
+        // acesso de alguém, o ato mais sensível do módulo, era invisível na trilha. Auditar aqui
+        // e não só no fim, porque a resposta sai daqui.
+        // Audita mesmo quando não havia perfil explícito: o que se registra é o ATO ("mandaram
+        // voltar ao padrão"), não o diff — omitir por "não mudou nada" é a família de defeito
+        // que esta etapa fecha.
+        await registrarAuditoria(db, {
+          entidade: 'perfil_almoxarifado_usuario',
+          entidade_id: usuario.id,
+          acao: 'EXCLUSAO',
+          usuario_id: req.user?.id,
+          usuario_nome: req.user?.nome,
+          dados_anteriores: fotoPerfil(perfilAnterior),
+          dados_novos: fotoPerfil(null),
+        }).catch(() => { /* auditoria não bloqueia: o DELETE já foi commitado (Etapa 19) */ });
         return res.json({ usuario_id: usuario.id, perfil_explicito: null, perfil_efetivo: PERFIS.PRODUCAO, origem: 'padrao' });
       }
 
@@ -312,7 +345,8 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
         acao: 'ATUALIZAR',
         usuario_id: req.user?.id,
         usuario_nome: req.user?.nome,
-        dados_novos: { usuario: usuario.nome, perfil },
+        dados_anteriores: fotoPerfil(perfilAnterior),
+        dados_novos: fotoPerfil(perfil),
       }).catch(() => { /* auditoria não bloqueia a operação */ });
 
       res.json({ usuario_id: usuario.id, perfil_explicito: perfil, perfil_efetivo: perfil, origem: 'explicito' });

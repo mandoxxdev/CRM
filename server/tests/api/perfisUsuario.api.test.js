@@ -168,6 +168,81 @@ const acharUsuario = (body, id) => body.usuarios.find((u) => u.id === id);
     setUser(ADMIN);
   });
 
+  // ── A trilha: conceder e REVOGAR acesso ao módulo têm de aparecer (Etapa 24, RN-06) ──
+  //
+  // A asserção de peso destes três cenários é a CONTAGEM de linhas, não o conteúdo da última.
+  // O defeito que eles guardam era exatamente uma omissão: o caminho "perfil vazio = voltar ao
+  // padrão" apagava a linha e retornava ANTES do registrarAuditoria, então revogar o acesso de
+  // alguém não deixava rastro nenhum — e um teste que olhasse só "a última linha da trilha"
+  // passaria com o bug presente, porque a última linha continuaria sendo a concessão anterior.
+
+  const contarTrilha = async (usuarioId) => (await dbGet(db,
+    `SELECT COUNT(*) as c FROM auditoria_log_almoxarifado
+     WHERE entidade = 'perfil_almoxarifado_usuario' AND entidade_id = ?`, [usuarioId])).c;
+
+  const ultimaTrilha = (usuarioId) => dbGet(db,
+    `SELECT * FROM auditoria_log_almoxarifado
+     WHERE entidade = 'perfil_almoxarifado_usuario' AND entidade_id = ?
+     ORDER BY id DESC LIMIT 1`, [usuarioId]);
+
+  await test('PUT audita a primeira atribuição, com dados_anteriores dizendo que não havia perfil', async () => {
+    await criarUsuario(db, { id: 106, nome: 'Alvo Da Trilha', email: 'trilha@t.com' });
+    // Semeadura com valor CONHECIDO: sem esta limpeza a guarda abaixo poderia derrubar o
+    // cenário por estado herdado, e não pela asserção de peso.
+    await dbRun(db, 'DELETE FROM perfil_almoxarifado_usuario WHERE usuario_id = 106');
+    await dbRun(db, `DELETE FROM auditoria_log_almoxarifado
+      WHERE entidade = 'perfil_almoxarifado_usuario' AND entidade_id = 106`);
+    assert.strictEqual(await contarTrilha(106), 0, 'semeadura falhou: a trilha do 106 não começou vazia');
+
+    const res = await request(app).put('/api/almoxarifado/perfis-usuario/106').send({ perfil: 'ALMOXARIFE' });
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(await contarTrilha(106), 1, 'a atribuição de perfil não gerou linha de auditoria');
+
+    const linha = await ultimaTrilha(106);
+    const de = JSON.parse(linha.dados_anteriores || 'null');
+    const para = JSON.parse(linha.dados_novos || 'null');
+    assert.ok(de, 'dados_anteriores ficou nulo: a tela de auditoria mostra a concessão sem o "de"');
+    assert.strictEqual(de.perfil, null,
+      `dados_anteriores deveria dizer que não havia perfil, veio ${JSON.stringify(de.perfil)}`);
+    assert.strictEqual(para.perfil, 'ALMOXARIFE', JSON.stringify(para));
+    assert.strictEqual(linha.usuario_id, ADMIN.id, 'a trilha tem de dizer QUEM concedeu');
+  });
+
+  await test('PUT que troca o perfil audita o de/para (dados_anteriores traz o anterior)', async () => {
+    const antes = await contarTrilha(106);
+    const res = await request(app).put('/api/almoxarifado/perfis-usuario/106').send({ perfil: 'GESTOR' });
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(await contarTrilha(106), antes + 1, 'a troca de perfil não gerou linha de auditoria');
+
+    const linha = await ultimaTrilha(106);
+    const de = JSON.parse(linha.dados_anteriores || 'null');
+    assert.ok(de, 'dados_anteriores ficou nulo na troca');
+    assert.strictEqual(de.perfil, 'ALMOXARIFE',
+      `a troca tem de registrar o perfil ANTERIOR, veio ${JSON.stringify(de.perfil)}`);
+    assert.strictEqual(JSON.parse(linha.dados_novos).perfil, 'GESTOR');
+  });
+
+  await test('PUT que remove o perfil gera uma linha NOVA na trilha (revogar não pode ser invisível)', async () => {
+    const antes = await contarTrilha(106);
+    const res = await request(app).put('/api/almoxarifado/perfis-usuario/106').send({ perfil: '' });
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(res.body.origem, 'padrao', 'contrato C2 mudou');
+
+    const depois = await contarTrilha(106);
+    assert.strictEqual(depois, antes + 1,
+      `a remoção do perfil não gerou linha de auditoria: a trilha tinha ${antes} e continuou com ${depois}`);
+
+    const linha = await ultimaTrilha(106);
+    const de = JSON.parse(linha.dados_anteriores || 'null');
+    const para = JSON.parse(linha.dados_novos || 'null');
+    assert.ok(de, 'a revogação não registrou dados_anteriores');
+    assert.strictEqual(de.perfil, 'GESTOR', 'a revogação tem de dizer QUAL perfil saiu');
+    assert.ok(para, 'a revogação não registrou dados_novos');
+    assert.strictEqual(para.perfil, null, 'dados_novos tem de deixar explícito que o perfil saiu');
+    assert.strictEqual(para.perfil_efetivo, 'PRODUCAO', 'o efetivo voltou a ser o padrão — tem de estar dito');
+    assert.strictEqual(para.origem, 'padrao');
+  });
+
   // ── Quem pode mexer nisso ──
 
   await test('exige perfil `configurar`: ALMOXARIFE e PRODUCAO recebem 403', async () => {
