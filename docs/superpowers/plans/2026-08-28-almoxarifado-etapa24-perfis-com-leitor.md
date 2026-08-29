@@ -83,7 +83,7 @@ algum ficar vermelho, **você mudou contrato** — pare e relate, não conserte 
 
 ---
 
-### Task 1 (tronco): o perfil QUALIDADE, ponta a ponta
+### Task 1 (tronco): o perfil QUALIDADE, ponta a ponta — ✅ FEITA (`0b53852`)
 
 **Files:** Modify `server/services/almoxarifado/permissions.js` **e**
 `client/src/components/almoxarifado/ConfiguracoesAlmoxarifado.js` (`PERFIS_INFO`, `:2535`);
@@ -94,7 +94,7 @@ o perfil sai como `QUALIDADE` cru no seletor e `—` na coluna "O que isso permi
 anterior dizia que o perfil apareceria "sem tocar no front" — verdadeiro para a lista (que vem
 do servidor), falso para o texto.
 
-- [ ] **Step 1: teste que falha.** RN-01, com as duas metades:
+- [x] **Step 1: teste que falha.** RN-01, com as duas metades: `0b53852`
   - **pode**: `inspecionar`, `visualizar`;
   - **NÃO pode**: `movimentar`, `ajustar_estoque`, `configurar`, `criar_material`,
     `editar_material`, `receber_material`, **`ver_alertas`**. Esta é a asserção que importa —
@@ -103,12 +103,18 @@ do servidor), falso para o texto.
     `inspecionar` com usuário `perfil_almoxarifado: 'QUALIDADE'` **não** pode dar 403 (a revisão
     mediu 404, ou seja, passa o gate e morre no "não encontrado"); e `POST /movimentacoes` com o
     mesmo usuário **tem** de dar 403.
-- [ ] **Step 2: implementar** (perfil em `PERFIS`, duas entradas de `ACAO_PERFIS`, entrada em
-  `PERFIS_INFO` com rótulo "Qualidade" e descrição do que permite); verde.
-- [ ] **Step 3: controle positivo** (commitar antes): acrescente `QUALIDADE` a `movimentar` → o
+- [x] **Step 2: implementar** (perfil em `PERFIS`, duas entradas de `ACAO_PERFIS`, entrada em
+  `PERFIS_INFO` com rótulo "Qualidade" e descrição do que permite); verde. `0b53852`
+- [x] **Step 3: controle positivo** (commitar antes): acrescente `QUALIDADE` a `movimentar` → o
   cenário da asserção **negativa** cai nomeando `movimentar`. Se nada cair, a lista negativa não
   está sendo exercida — é achado.
-- [ ] **Step 4: `npm run test:api`; commit.**
+  **Feito, duas vezes.** `movimentar` → o cenário negativo caiu com
+  `QUALIDADE recebeu acao que NAO devia ter: movimentar`, e a prova de ponta caiu junto (201 em
+  vez de 403). Repetido com **`ver_alertas`** — a permissão que a etapa exclui de propósito —, e
+  caiu nomeando `ver_alertas`. `md5sum` 09f82107 antes e depois do restauro, `git diff --stat`
+  vazio.
+- [x] **Step 4: `npm run test:api`; commit.** 150/150 arquivos, `test:almoxarifado` 42/42,
+  cliente 549/549 em 37 suítes e `CI=true build` limpo. Commit `0b53852`.
 
 ---
 
@@ -187,7 +193,16 @@ funciona** — escrevê-los não é redundância, é a rede que não existe.
 ## Próxima tarefa detalhada
 
 **A Fase 2 já rodou** (9 achados; o A1 derrubou a premissa da etapa e o plano foi reescrito por
-causa dele). O próximo passo é executar a **Task 1**.
+causa dele). **A Task 1 está FEITA** (`0b53852`): `QUALIDADE` existe em `PERFIS`, entra em
+`visualizar` e `inspecionar`, tem rótulo e descrição em `PERFIS_INFO`, e está provado no gate
+real (404 em `PUT /lotes/:id/status`, 403 em `POST /movimentacoes`).
+
+O próximo passo é a **Task 2** — a revogação de perfil deixar rastro.
+Contrato que ela consome: **C2** acima (`PUT /perfis-usuario/:usuarioId`, `extended.js:273`), que
+**não pode mudar** — os 11 cenários de `tests/api/perfisUsuario.api.test.js` o congelam. O ponto
+de atenção é `extended.js:294-297`, que retorna **antes** do `registrarAuditoria` de `:309`: a
+asserção de peso é a **contagem** de linhas de auditoria, porque uma asserção sobre "a última
+linha" passa com o bug.
 
 O que a Fase 2 **refutou** e não precisa ser reaberto: nenhuma das quatro rotas de `inspecionar`
 faz checagem além do `requirePermission` (medido com usuário QUALIDADE real — as quatro devolvem
