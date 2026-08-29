@@ -79,7 +79,25 @@ catálogo. É a RN-04, e é o ponto onde esta etapa pode estragar dado do client
 
 ---
 
-### Task 1 (tronco): o catálogo vira cadastro
+### Task 1 (tronco): o catálogo vira cadastro — FEITA (`1bca087`)
+
+> **Entregue.** 11 cenários (`categoriasCrud.api.test.js`), `test:api` 154/154, almoxarifado
+> 42/42. Três controles positivos, cada um caindo na asserção certa — o do gate nomeou os
+> **21** acessos indevidos (7 perfis × 3 verbos).
+> **Contrato para as Tasks 2 e 3:** `GET /categorias[?todos=1]` (o `?todos=1` dos centros de
+> custo, não o `?all=1` dos setores — é o GET vizinho no mesmo arquivo); `POST {nome}` → 201;
+> `PUT /:id {nome?, ativo?}` → 200, **omitir `ativo` preserva** (reativar é `{nome, ativo:1}`);
+> `DELETE /:id` → 200 `{success}` ou `{success, ja_inativo}`. Erros: 400 `'Nome é obrigatório'`,
+> 400 `'Já existe uma categoria com este nome'`, 404 `'Categoria não encontrada'`, 403.
+> **Três correções que a execução fez neste plano:** (1) a RN-06 só falava de **criar**
+> duplicada — sem a mesma régua no **PUT**, renomear para nome ocupado devolvia **500** em vez
+> de 400, e a tela diria "erro interno" para erro de preenchimento; (2) o `CREATE UNIQUE INDEX`
+> **não** pode ficar solto: este plano dizia "aplica limpo (medido)" e o medido foi o **dev** —
+> se a base do cliente tiver dois nomes iguais, a exceção sobe pelo `initSchema` inteiro e
+> derruba o módulo por causa de duas linhas de catálogo. Ficou em `try/catch` com log que traz
+> o `GROUP BY ... HAVING COUNT(*) > 1` pronto; (3) `tipo_uso` **não existe** nesta tabela — o
+> aviso deste plano misturou com `familias_material_almoxarifado`; a armadilha real é só o
+> `parent_id`, intocado.
 
 **Files:** Modify `server/routes/almoxarifado/extended.js` (onde o `GET` e os centros de custo
 já moram), `server/services/almoxarifado/schema.js` (o índice único) e
