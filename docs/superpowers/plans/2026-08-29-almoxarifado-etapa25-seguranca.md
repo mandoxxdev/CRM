@@ -94,7 +94,7 @@ um comentário dizendo isso), então atrás do nginx `req.ip` é `127.0.0.1`. Gu
 dá a trilha errada em produção **ou** perde o dado quando não há proxy. O core faz assim desde a
 Etapa 21.
 
-**C2 como ficou implementado** (commit `8de05e4` — o bloco acima descreve só a primeira das
+**C2 como ficou implementado** (commit `9027c36` — o bloco acima descreve só a primeira das
 quatro exportações, e por isso está **incompleto como escrito**):
 
 ```js
@@ -292,7 +292,7 @@ constroem `user` literal: `user.origem` vira `undefined`.
 **Descartado** `opcoes.origem` (o 4º parâmetro, que já existe): só as 5 rotas passariam origem, e
 os **23 movimentos originados em serviço gravariam `null`** — metade da feature, em silêncio.
 
-> **STATUS: Task 3 FEITA** — commit `8de05e4`. Placar: `origemMovimentacao.api.test.js`
+> **STATUS: Task 3 FEITA** — commit `9027c36`. Placar: `origemMovimentacao.api.test.js`
 > **16/16** (novo), `test:api` **153/153** arquivos (era 152), `test:almoxarifado` **42/42**,
 > `test:validation` **4/4**, `test:safealter` **3/3**, `test:sqlite` **5/5**. Três divergências
 > registradas no fim desta task — a primeira é **bloqueante e foi medida na execução**.
@@ -317,7 +317,7 @@ os **23 movimentos originados em serviço gravariam `null`** — metade da featu
   direta ao motor com `user` literal não lança e não inventa campo.
   Composição afirmada (`material_id`, `tipo`, `quantidade`, `saldo_posterior`, `ip`,
   `user_agent` presentes), **nunca total fixo**; guarda anti-teste-vazio antes de cada leitura.
-- [x] **Step 4: controle positivo com alvo** (commitado antes, `8de05e4`), **três**, lendo qual
+- [x] **Step 4: controle positivo com alvo** (commitado antes, `9027c36`), **três**, lendo qual
   asserção caiu; `md5sum` antes/depois/restaurado bateu nos três arquivos e `git diff --stat`
   ficou vazio:
   1. helper devolve `req.ip` cru → **10/6**, e o cenário do `x-forwarded-for` com vários IPs caiu
@@ -330,7 +330,7 @@ os **23 movimentos originados em serviço gravariam `null`** — metade da featu
   3. `camposDeOrigem` grava chave nula + truncamento removido → **12/4**: o cenário do
      `user-agent` gigante caiu dizendo "5017 caracteres", e os de campo nulo caíram nomeando a
      linha "`de: null / para: null`" que apareceria na tela.
-- [x] **Step 5:** `test:api` **153/153**; commit `8de05e4`.
+- [x] **Step 5:** `test:api` **153/153**; commit `9027c36`.
 
 #### Divergências desta task (o que saiu diferente do plano, e por quê)
 
