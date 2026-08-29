@@ -226,3 +226,26 @@ aprendidas por falha silenciosa aqui:
 - [ ] `git status` limpo e tudo commitado?
 
 Se algum item ficou não, **a etapa não está fechada** — termine antes de reportar.
+
+---
+
+## Passo 8 (obrigatório): emende na próxima etapa, no mesmo turno
+
+**Fechar uma etapa não é o fim do trabalho — é o meio.** Este é o ponto exato em que se costuma
+parar e devolver o turno ao André, e é o que ele pediu, com irritação, para não acontecer mais:
+*"toda hora tenho que pedir pra vc continuar, nao quero que pare"*.
+
+Depois de reportar o fechamento — **na mesma resposta, sem perguntar nada**:
+
+1. **Escolha a próxima etapa**, nesta ordem: a "próxima tarefa detalhada" que você acabou de
+   escrever no plano → o que o fechamento nomeou como "falta para 🟢" → o mapa
+   `specs/modulo-almoxarifado/README.md` (a feature 🔴/🟡 de maior valor).
+2. **Comece a Fase 0** da skill `desenvolver-etapa-almoxarifado`: medir no código **antes** de
+   prometer. Uma sessão desta base já desenhou uma etapa inteira sobre a premissa "esta tela não
+   existe" — a tela existia, estava no menu e no manual. Medir ausência exige procurar pelo nome
+   do **contrato**, não pelo nome que você imagina que o consumidor usaria.
+3. **Relate ao André** o que foi fechado **e** o que já começou. Um relatório que termina em
+   "o que você quer que eu faça agora?" é um relatório mal terminado.
+
+**Não termine o turno com uma pauta de perguntas.** Decisão ambígua → caminho reversível,
+executado, registrado na letra B. Ele arbitra depois, lendo o documento.

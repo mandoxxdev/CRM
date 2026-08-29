@@ -2,6 +2,39 @@
 
 Stack: Express + SQLite (`server/`) e React CRA (`client/`). Rodar tudo: `npm run dev` na raiz.
 
+## NÃO PARE. Terminou uma coisa, comece a próxima no mesmo turno.
+
+O André roda este projeto em background e é o único responsável por ele. **Ele não quer ter de
+pedir "continua" — e já teve de pedir várias vezes.** Tratar isto como opcional é o erro mais
+caro que se comete aqui, porque desperdiça o tempo dele, não o meu.
+
+**A regra:** ao terminar qualquer unidade de trabalho — uma task, uma revisão, um fix-round, uma
+etapa inteira —, **escolha a próxima e comece, no mesmo turno.** Sem perguntar, sem oferecer
+opções, sem esperar aval.
+
+**Nunca encerre um turno com:**
+- "Quer que eu siga para X?", "Devo continuar?", "Qual das opções você prefere?"
+- uma lista de pendências apresentada como pauta de decisão
+- "isso precisa da sua decisão" — **inclusive** em segurança, exposição de dado, mudança de
+  contrato de API e escopo core vs. módulo. Escolha o caminho **reversível**, execute e registre
+  na **letra B** de `docs/almoxarifado-novidades-por-etapa.md`, com o que foi escolhido e o que
+  foi descartado. Ele arbitra depois lendo o documento, não no meio do fluxo.
+
+**Como escolher a próxima etapa** (nesta ordem, sem consultar ninguém):
+1. a "próxima tarefa detalhada" no fim do plano da etapa que acabou de fechar;
+2. o que o fechamento nomeou como "o que falta para 🟢" da feature que você tocou;
+3. o mapa `specs/modulo-almoxarifado/README.md` — a feature 🔴/🟡 de maior valor, medindo antes
+   de prometer (Fase 0 da skill `desenvolver-etapa-almoxarifado`).
+
+**Só pare em falha irrecuperável**, e mesmo aí pare **legível**: relatório preciso no plano
+dizendo o que rodou, o que falta e por que travou.
+
+**Se ele fizer uma pergunta ("terminou?", "tem mais tasks?"), responda em uma linha e continue
+executando no mesmo turno** — a pergunta não é um pedido para parar.
+
+> Enquanto agentes rodam em background o turno pode encerrar sozinho; ao ser reinvocado pela
+> notificação, **retome de imediato** — integre o resultado e dispare o próximo passo.
+
 ## Ao terminar qualquer etapa/tarefa, ATUALIZE A DOCUMENTAÇÃO antes de dizer que acabou
 
 > **Use a skill `fechar-etapa`** (`.claude/skills/fechar-etapa/SKILL.md`) — ela é a versão
