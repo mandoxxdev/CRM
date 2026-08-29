@@ -171,7 +171,31 @@ expõe a ação nova de graça (itera `Object.keys(ACAO_PERFIS)`).
 
 ---
 
-### Task 1 (galho — ver nota): a régua da tolerância
+### Task 1 (galho — ver nota): a régua da tolerância — FEITA (`bae9350`)
+
+> **Entregue.** 18 asserções, `test:api` 156/156. Vermelho inicial 8/10 contra stub ingênuo.
+> Epsilon `1e-6` validado com folga: o pior erro de ponto flutuante na varredura de 50.000 pares
+> foi `7,1e-15` — o epsilon é **1,4e8×** maior —, e ele só domina em faixa total abaixo de
+> `~1e-6` mm, três ordens abaixo do melhor instrumento do cadastro (comparador, 0,0001 mm).
+>
+> **DUAS CORREÇÕES QUE ESTA TASK FEZ NO PLANO, e a segunda muda a Task 3:**
+>
+> **1. O controle positivo (a) deste plano não derrubava nada.** Trocar `<=` por `<` mantendo o
+> `+ EPS` é **semanticamente invisível**: nenhuma medida cai exatamente em `sup + 1e-6`. O que o
+> teste ancora é a **posição do limite**, não o operador — movendo o limite de fato, caem 6
+> cenários, todos do lado sabotado. Quem prescrever "troque `<=` por `<`" como sabotagem em
+> régua com epsilon está prescrevendo um no-op.
+>
+> **2. `NaN` NÃO reprova sozinho — ele APROVA.** O design e este plano afirmavam que, sem guarda,
+> `Number('12,4')` faria a característica reprovar. Isso só vale na forma positiva
+> (`conforme = m >= inf && m <= sup`). Na forma de **guardas de rejeição** — que é a natural
+> quando se quer devolver motivo específico, e é a que foi escrita — o `NaN` não dispara guarda
+> nenhuma e sai **conforme**. Medido: `"12,4" foi aceito como medida conforme`.
+> **É pior que o previsto:** não é falsa reprovação, é falsa **aprovação**, com `valor_medido`
+> nulo e a divergência apagada. **A Task 3 NÃO pode se apoiar em "NaN reprova sozinho"** — a
+> validação explícita é obrigatória, e `paraNumeroFinito` está exportada para ela reusar.
+> (Também: `Number(null)`, `Number('')`, `Number('  ')` e `Number([])` são **0**, e passariam por
+> `Number.isFinite` como "medida zero".)
 
 **Files:** Create `server/services/almoxarifado/toleranciaInspecao.js`;
 Test `server/tests/api/toleranciaInspecao.api.test.js`.
