@@ -216,26 +216,222 @@ funciona** — escrevê-los não é redundância, é a rede que não existe.
 
 ---
 
-### Task 4: integração e fechamento
+### Task 4: integração e fechamento — ✅ FEITA (`b9a5848`, `4680daa` e o commit de fechamento)
 
-- [ ] **Step 1:** atribuir **e depois revogar** um perfil pelas rotas reais e ler pela
-  tela-contrato (`GET /auditoria?entidade=perfil_almoxarifado_usuario`), conferindo que **os
-  dois** atos aparecem, com autor e com o de/para que a Task 2 passou a gravar (RN-05 + RN-06).
-  **Guarda anti-teste-vazio:** afirme que a leitura trouxe ao menos o primeiro ato antes de
-  afirmar qualquer coisa sobre o segundo. E **não** espere `total === N` sem antes ver o que mais
-  aquele `entidade_id` acumula — o plano da Etapa 23 errou exatamente assim.
-- [ ] **Step 2:** os cinco comandos da suíte + cliente com `TZ=UTC`, números **lidos**.
-- [ ] **Step 3:** skill `fechar-etapa` inteira. Na spec 23, a perna **Perfis** perde itens — mas
-  **o item 131 NÃO fica integralmente pago** (bloquear/liberar usa `ajustar_estoque`, que
-  QUALIDADE não tem: dois dos três botões da tela de inspeções ficam barrados, e
-  `POST /materiais/:id/bloquear` dá 403). Diga isso em vez de marcar `[x]`.
-  Letra **B**: o fallback `PRODUCAO` (agora viável de apertar, com a tela existente); a central
-  de alertas sem filtro por perfil (é o que destrava `ver_alertas` para QUALIDADE);
-  `ajustar_estoque` para bloqueio de qualidade.
-  Letra **C**: `ADMINISTRADOR` explícito é apagado por `syncModuleAdminProfiles` no próximo save
-  do cadastro — quem já tiver esse perfil hoje deve ser conferido.
+- [x] **Step 1:** `b9a5848` — `server/tests/api/perfilAuditoriaIntegracao.api.test.js`, **5
+  cenários**. Escreve por `PUT /perfis-usuario/:id` (atribuir `QUALIDADE`, depois revogar) e lê
+  por `GET /auditoria?entidade=perfil_almoxarifado_usuario`, a query **exata** da tela.
+  - **Composição, não `total === N`** (o erro do plano da Etapa 23, que a Task 2 tinha avisado):
+    a asserção é `meus.map(i => i.acao)` → `['EXCLUSAO', 'ATUALIZAR']` (a C1 ordena
+    `created_at DESC, id DESC`), mais os rótulos `['Exclusão', 'Edição']`. A query da tela é por
+    `entidade`, **sem `entidade_id`** — ela traz o que qualquer outro ato de perfil acumular, e
+    contagem fixa quebraria por motivo errado.
+  - **Guarda anti-teste-vazio:** a leitura é conferida **depois da concessão e antes de revogar**
+    (`meus.length === 1`, com a mensagem "a tela de auditoria não enxergou a concessão"). Sem ela,
+    o cenário da revogação afirmaria coisas sobre uma lista que já estava vazia.
+  - **O de/para é o CONJUNTO INTEIRO de `alteracoes`**, com `deepStrictEqual`, nos dois atos —
+    `usuario` aparecendo com `de === para` é a evidência de que nenhuma chave entra por um lado
+    só (que é a decisão da Task 2 sobre a régua de união).
+  - Quinto cenário: `acao=EXCLUSAO` isola a revogação, e o **mesmo teste** confere que
+    `acao=ATUALIZAR` acha a concessão — senão "o filtro isolou" passaria com lista vazia. É a
+    prova de que escolher `EXCLUSAO` (verbo já em `GRUPOS_ACAO`) deixou a revogação **filtrável**.
+  - **Controle positivo, três sabotagens com alvo**, lendo qual asserção caiu: (a) auditoria da
+    revogação desligada (`if (false) await registrarAuditoria`) → caiu **nomeando a ausência do
+    segundo ato** (`falta a revogação? veio ["ATUALIZAR"]`), e junto o cenário do filtro
+    (`o filtro por verbo não isolou a revogação: []`) — **não** pelo status nem por contagem;
+    (b) `dados_anteriores: fotoPerfil(null)` na revogação → caiu na asserção do de/para, mostrando
+    `perfil: null → null`, que é a revogação dizendo "não mudou nada"; (c) `dados_anteriores` da
+    **concessão** trocado por um objeto com 2 chaves → caiu **só** a RN-06 da concessão, com
+    `perfil_efetivo: null → QUALIDADE` e `origem: null → explicito` — a alteração fabricada que a
+    régua de união produz, que é exatamente o que a Task 2 evitou.
+    **Uma quarta tentativa ABORTOU na âncora**, como a skill manda: `grep -cF` do
+    `dados_anteriores: fotoPerfil(perfilAnterior),` com 8 espaços deu **2** (os dois caminhos), e a
+    sabotagem foi refeita com âncora de duas linhas. `md5sum 47ea57ea` antes e depois de cada
+    restauro, `git diff --stat` vazio.
+- [x] **Step 2:** rodados; números na seção "Verificação final" no fim deste plano.
+- [x] **Step 3:** skill `fechar-etapa` inteira, com o item 131 **explicado em vez de marcado** e
+  as letras A4/B54-B56/C31 escritas.
 
-## Próxima tarefa detalhada
+**Divergência da Task 4, encontrada no fechamento e não no plano:** `client/src/utils/permissaoErro.js`
+traduz o corpo do 403 em frase, e o mapa `PERFIS` dele **não tinha `QUALIDADE`** — o inspetor via
+*"seu perfil é QUALIDADE"*, chave crua em caixa alta. É o achado 7 da Etapa 11 entrando pelo lado
+do **perfil** em vez do lado da **ação**, e é a mensagem que este perfil mais vê (ele não movimenta
+nem ajusta saldo). Corrigido em `4680daa`, com o teste afirmando a **frase inteira** (`toBe`) mais
+`not.toContain('QUALIDADE')` — `toContain('Qualidade')` passaria com o fallback. Controle positivo
+feito. **Registro de processo:** o `git checkout` do restauro **apagou a correção**, que ainda não
+estava commitada — a armadilha que a Global Constraint 2 descreve com todas as letras, e que
+aconteceu mesmo assim. Reaplicada e conferida por `md5sum` antes do commit.
+
+## Verificação final — medida em 2026-08-29, números lidos
+
+| Comando | Resultado |
+|---|---|
+| `cd server && npm run test:api` | **151/151 arquivos** (eram 150 — `perfilAuditoriaIntegracao` é o novo) |
+| `cd server && npm run test:almoxarifado` | **42 passou, 0 falhou** |
+| `cd server && npm run test:validation` | **4 passed, 0 failed** |
+| `cd server && npm run test:safealter` | **3 passed, 0 failed** |
+| `cd server && npm run test:sqlite` | **5 passed, 0 failed** |
+| `cd client && CI=true npx react-scripts test --watchAll=false` | **557 passed / 38 suítes** (eram 556/38 — o cenário novo de `permissaoErro`) |
+| `cd client && TZ=UTC CI=true npx react-scripts test --watchAll=false` | **557 passed / 38 suítes** — mesmo placar, ou seja **nenhum cenário desta etapa depende do fuso da máquina** |
+| `cd client && CI=true npx react-scripts build` | **Compiled successfully.** |
+
+`git status` limpo fora de `docs/almoxarifado-apresentacao.md`, que é untracked e **não foi
+tocado de propósito**.
+
+## Retro — os quatro números
+
+| # | Número | O que ele diz |
+|---|---|---|
+| 1 | **1 premissa derrubada, na Fase 2, sobre a etapa inteira** | O design afirmava que a tela de atribuição de perfil **não existia** e o plano mandava criá-la. Ela existe desde `6018f0a` (2026-08-05), está no menu, no manual e tinha 7 usos no banco. **O escopo foi reescrito de "criar tela" para "consertar quatro defeitos do que existe"** — construir teria feito uma segunda porta para a mesma função. Duas fontes somadas: o checklist da spec 23 dava a UI como não construída (**errado há três semanas**) e a varredura do client procurou `perfil_almoxarifado` em vez do nome do **contrato**, `perfis-usuario`. |
+| 2 | **4 defeitos reais no que "já funcionava"** | Nenhum estava no plano original: revogação sem rastro, concessão sem o `de`, `ADMINISTRADOR` oferecido no seletor, zero teste na aba. Todos vivendo na rota que decide **quem tem acesso ao módulo**. |
+| 3 | **10 sabotagens de controle positivo, 1 abortada na âncora** | Task 1: 2 (`movimentar`, `ver_alertas`). Task 2: 3. Task 3: 3. Task 4: 3 + **1 abortada** porque `grep -cF` da âncora deu 2 em vez de 1 — a regra da skill funcionando na prática, não no papel. |
+| 4 | **1 achado só do fechamento** | `permissaoErro.js` sem `QUALIDADE`: o 403 dizia *"seu perfil é QUALIDADE"*. Não havia teste que o pegasse, e nenhuma das três tasks passaria por ali. |
+
+**Os dois registros que valem mais que os números:**
+
+**(a) A Fase 2 derrubou a premissa da etapa, e é a segunda vez que uma medição de ausência falha
+aqui pelo mesmo motivo.** Medir "isto não existe" pelo nome que eu **imagino** que o consumidor
+usaria é medir nada. A busca tem de ser pelo nome do **contrato** — a rota, o endpoint, a chave —,
+e o resultado tem de ser confrontado com o menu e com o manual antes de virar afirmação. E item
+desmarcado numa spec **não é prova de ausência**: é prova de que ninguém marcou.
+
+**(b) Asserção negativa sobre permissão não fica vermelha na rodada TDD** (achado da Task 1, já
+escrito em `.claude/skills/fechar-etapa/SKILL.md`). O cenário "QUALIDADE **não pode**
+`movimentar`" passa **verde antes de o perfil existir**, porque `can()` devolve `false` para tudo
+o que não conhece. Quem tratar o controle positivo como formalidade entrega a lista negativa
+**sem prova nenhuma** — e a lista negativa é justamente a que importa, porque perfil que herda
+demais é pior que perfil nenhum. A sabotagem certa é **conceder** a permissão proibida e conferir
+que o cenário cai **nomeando a ação**.
+
+## Próxima tarefa detalhada — Etapa 25: a perna *Segurança* da feature 23 (Fase 0 JÁ MEDIDA)
+
+**Por que esta e não a feature 09.** O fechamento desta etapa nomeou, na spec 23 e no mapa, que
+**o que falta para 🟢 é a perna Segurança, intacta** — cinco itens, nenhum começado. A feature 09
+(plano de inspeção com medidas, não conformidade formal numerada) é maior, não bloqueia cor
+nenhuma e depende de decisões de processo do cliente que ninguém tomou. Segurança é o caminho
+curto para fechar a feature que seis etapas seguidas vêm empurrando.
+
+**Fase 0 medida em 2026-08-29, no código, ANTES de prometer qualquer coisa.** O resultado abaixo
+já muda o escopo: dos cinco itens, **um não é tarefa (é correção de spec), um está muito mais
+pago do que a spec diz, e um rendeu um defeito real de disco que ninguém tinha visto.**
+
+### Item 1 — dispositivo/IP na movimentação: **NÃO EXISTE**, e há uma armadilha medida
+
+- `movimentacoes_almoxarifado` (`schema.js:311`) tem 13 colunas e **nenhuma de origem** — sem
+  `ip`, sem `user_agent`. `auditoria_log_almoxarifado` (`:1593`) idem (tem `justificativa`, não
+  tem origem).
+- `grep -rn "req\.ip|x-forwarded-for|user_agent|userAgent"` em `services/almoxarifado/` e
+  `routes/almoxarifado*` → **zero ocorrências**. O item da spec está correto.
+- **⚠️ A ARMADILHA, e é a coisa mais importante desta medição:** `grep -rn "trust proxy"` no
+  repositório inteiro devolve **uma única linha, e é um COMENTÁRIO dizendo que NÃO está
+  configurado** (`index.js:3501-3502`). Sem `app.set('trust proxy', …)`, **atrás do nginx o
+  `req.ip` vira `127.0.0.1`** — gravar `req.ip` cru encheria a trilha inteira com o IP do proxy
+  **em produção**, enquanto em desenvolvimento (sem proxy) o teste passaria verde. É o modo de
+  falha "verde só nesta máquina" que já mordeu a Etapa 22 pelo lado do fuso.
+  **O precedente correto já está no repositório:** `index.js:3503` grava
+  `` `ip=${req.ip} xff=${req.headers['x-forwarded-for'] || '-'}` `` — os **dois**, justamente por
+  causa disso. Ou se segue esse precedente, ou se configura `trust proxy`, **que é mudança do
+  núcleo do CRM e afeta todas as rotas** — decisão que vai para a letra B, não para dentro de uma
+  task de almoxarifado.
+
+### Item 2 — bloquear lançamento retroativo: **NÃO É TAREFA — é correção de spec**
+
+`movimentacoes_almoxarifado.created_at` é `DATETIME DEFAULT CURRENT_TIMESTAMP`, e
+`grep -rn "data_movimento|data_lancamento|retroativ"` no módulo **não acha nenhuma rota que
+aceite data do cliente** (as cinco ocorrências de "retroativ" são comentários sobre custo médio e
+backfill, nada de entrada de data). **Não há como lançar retroativo hoje: é impossível por
+construção.** A spec pede para *bloquear* algo que já não existe. O item tem de ser **reescrito ou
+marcado como confirmado-impossível dizendo que estava errado** — nunca implementado como se fosse
+buraco, porque construir uma trava para um caminho inexistente é código morto no dia 1. **E há a
+leitura oposta, que é a que provavelmente interessa ao cliente:** talvez ele queira **permitir**
+data retroativa sob autorização (nota que chegou ontem e só foi lançada hoje). Isso é feature
+nova, com decisão de negócio — letra B.
+
+### Item 3 — justificativa em operações excepcionais: **MUITO MAIS PAGO do que a spec diz**
+
+`auditoria_log_almoxarifado` **já tem a coluna `justificativa`**, `registrarAuditoria`
+(`services/almoxarifado/audit.js:4`) já a grava, e há **77 call sites** passando `justificativa:`
+em `services/almoxarifado/` e nas rotas. Estorno exige motivo (feature 03, com teste próprio),
+bloqueio/desbloqueio exige justificativa desde `c6a76a4`, cancelamento de conferência exige motivo
+desde a Etapa 18. **A tarefa real é medir o que FALTA**, operação por operação, e a Fase 2 tem de
+fazer isso antes de o plano prometer qualquer coisa — o risco aqui é o oposto do normal: escrever
+uma etapa inteira para algo que já está 80% pronto.
+
+### Item 4 — dupla conferência em materiais críticos: **NÃO EXISTE, mas o gancho e o precedente existem**
+
+- `materiais_almoxarifado.material_critico` **já é coluna** e já é usada: `receiptService.js:478`
+  retém o item crítico para inspeção quando a configuração `inspecao_material_critico` vale `'1'`.
+  Ou seja, "material crítico" já é um conceito vivo no módulo, não precisa ser inventado.
+- O que **não** existe é regra de **duas pessoas** para movimentar ou ajustar material crítico.
+- **Precedente pronto, e é o que a Fase 2 deve ler primeiro:** a dupla aprovação de sucateamento
+  (Etapa 9) separa as duas pernas por **perfil** (`aprovar_sucateamento` × 
+  `aprovar_sucateamento_gestao`) **e** por **identidade** — a segunda barreira mora em
+  `scrapDisposalService.aprovar`, porque permissão por perfil não sabe quem já assinou. Dupla
+  conferência tem exatamente essa forma.
+
+### Item 5 — retenção de backup configurável: **NÃO EXISTE — e a medição achou 52 MB de lixo real**
+
+- `pruneOldBackups(dbPath, keep = 10)` existe (`services/dbRecovery.js:101`) e é chamada em
+  `index.js:1013` com **`10` escrito no código**. Não há configuração, nem tela, nem chave.
+- **O defeito que a medição encontrou, e que não estava em spec nenhuma:** `server/data/backups`
+  tem hoje **11 arquivos `.sqlite` (134 MB)** — o prune está funcionando —, mas **77 `-wal`
+  (52 MB)** e **77 `-shm` (2,4 MB)**, dos quais **66 `-wal` são ÓRFÃOS**: não existe `.sqlite`
+  correspondente a eles. A Etapa 21 consertou a **causa** (o prune passou a apagar os
+  acompanhantes do `.sqlite` que descarta), e o cabeçalho de `dbRecovery.js:111` registra "154
+  órfãos para 10 backups no repo real". **Mas o prune itera sobre os `.sqlite` que AINDA
+  EXISTEM** — os órfãos que já estavam lá quando o conserto entrou **nunca serão varridos por
+  ele**. São 154 arquivos e ~52 MB parados agora, e o número não vai baixar sozinho.
+  **Isto é achado, não escopo herdado:** vira a primeira task da Etapa 25, do mesmo jeito que a
+  Task 0 da Etapa 23 nasceu de um achado da Fase 2.
+
+### O que a Fase 0 NÃO mediu e a Fase 2 tem de medir
+
+- **Quais operações do módulo ainda aceitam ato excepcional sem justificativa** (item 3) — a
+  contagem de 77 call sites diz que muita coisa grava, **não** diz o que falta.
+- **Se `trust proxy` pode ser ligado no núcleo sem quebrar outra coisa** (item 1) — há pelo menos
+  quatro outros lugares no `index.js` lendo `req.ip` para gravar log, e mudar `trust proxy` muda o
+  valor **deles todos** de uma vez.
+- **O que o cliente entende por "materiais críticos"** para a dupla conferência (item 4): a
+  coluna `material_critico` existe, mas hoje ela governa **retenção para inspeção**, não risco de
+  furto/valor. Pode ser o mesmo conjunto ou não — é pergunta de negócio.
+
+### O que a Etapa 25 pode assumir pronto, e não precisa reabrir
+
+- **A trilha de auditoria lê e escreve bem.** Etapas 18-24 fecharam a perna de auditoria: os
+  cadastros auditam, as configurações auditam com diff e segredo mascarado, o inventário audita,
+  a exclusão idempotente não infla o histórico, o perfil audita nos dois sentidos, e há **tela**
+  (`/almoxarifado/auditoria`) com filtros, de/para e paginação. Coluna nova de origem entra numa
+  tabela que **já tem leitor** — o custo de exibição é `auditLabels`, não uma tela nova.
+- **`registrarAuditoria` aceita `justificativa` e é best-effort** (`.catch()` em todo call site):
+  auditoria **nunca** derruba a operação, e isso é doutrina do módulo, não descuido.
+- **O gate de quem lê a trilha é `requirePermission('configurar')`** e o menu é `adminOnly` —
+  medido na Etapa 24: os dois cobrem o mesmo conjunto de usuários.
+- **Perfis:** são 8, `QUALIDADE` incluso, e a tela de atribuição existe e **tem teste** desde esta
+  etapa. Qualquer ação nova entra em `ACAO_PERFIS` e aparece sozinha em
+  `GET /almoxarifado/minhas-permissoes` — **mas o rótulo dela em `client/src/utils/permissaoErro.js`
+  NÃO é automático**, e esquecê-lo foi o achado `4680daa` desta etapa. **Ação nova ⇒ entrada em
+  `ACOES` do `permissaoErro.js`, com teste afirmando a frase literal.**
+
+### Armadilhas de teste que valem para a Etapa 25 inteira
+
+1. **Asserção negativa sobre permissão não fica vermelha no TDD** — se a etapa criar ação nova,
+   a lista negativa só tem prova pelo controle positivo (sabote **concedendo**).
+2. **Cenário que depende de proxy/IP passa vazio na máquina de desenvolvimento**, que não tem
+   proxy. Vale a mesma regra do fuso: guarda que **derruba** no ambiente errado, em vez de ficar
+   verde provando nada.
+3. **Teste de arquivo/backup depois de fechar a conexão SQLite prova nada** — o checkpoint apaga
+   o `-wal`. Já aconteceu nesta base.
+4. Testes de API só em `server/tests/api/*.api.test.js`; o fuso da suíte do client é fixado por
+   `client/jest.globalSetup.js` — não refixe `process.env.TZ` no topo de um arquivo de teste.
+
+---
+
+## Histórico — o que a Task 4 recebeu pronto das Tasks 1-3
+
+*(Esta seção era a "Próxima tarefa detalhada" enquanto a Task 4 estava aberta. Com a etapa
+fechada, ela vira histórico: o que está escrito abaixo já aconteceu, e "o próximo passo é a
+Task 4" é passado. Mantida em vez de apagada porque registra o que cada task deixou pronta para a
+seguinte — que é o formato que a próxima etapa vai reusar.)*
 
 **A Fase 2 já rodou** (9 achados; o A1 derrubou a premissa da etapa e o plano foi reescrito por
 causa dele). **A Task 1 está FEITA** (`a81e51a`): `QUALIDADE` existe em `PERFIS`, entra em

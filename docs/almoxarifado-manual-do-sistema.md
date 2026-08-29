@@ -557,7 +557,7 @@ Ou seja: **usuário sem perfil definido não é "usuário sem acesso" — é Pro
 
 Corolário que vale conhecer: o perfil **Consulta** nunca acontece por omissão — ele só existe se alguém o atribuir de propósito.
 
-### 5.4 Os sete perfis
+### 5.4 Os oito perfis
 
 | Perfil | Em uma frase |
 |---|---|
@@ -567,37 +567,38 @@ Corolário que vale conhecer: o perfil **Consulta** nunca acontece por omissão 
 | **Compras** | Consulta e recebe material |
 | **Engenharia** | Cadastra e edita material, requisita e reserva |
 | **Produção** | Consulta, requisita e reserva material (é o padrão de quem não tem perfil definido) |
+| **Qualidade** | Consulta e decide inspeção: aprova/reprova item recebido, libera vencimento de lote e muda situação de lote e de série — não movimenta estoque, não ajusta saldo nem cadastra material |
 | **Consulta** | Somente leitura |
 
 A separação entre **Almoxarife** e **Gestor** é intencional e é o desenho de controle interno do módulo: quem **movimenta** o estoque não é quem **corrige** o saldo. O almoxarife lança entradas e saídas; o ajuste de inventário — o lançamento que faz o número bater sem que nada tenha entrado ou saído — pertence ao gestor.
 
 ### 5.5 A tabela completa de ação × perfil
 
-| Ação | Administrador | Almoxarife | Compras | Produção | Engenharia | Gestor | Consulta |
-|---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
-| Visualizar | ● | ● | ● | ● | ● | ● | ● |
-| Criar material | ● | ● | – | – | ● | – | – |
-| Editar material | ● | ● | – | – | ● | – | – |
-| Movimentar estoque | ● | ● | – | – | – | – | – |
-| Gerenciar ferramentas (emprestar, calibrar, bloquear...) | ● | ● | – | – | – | – | – |
-| Aprovar sucateamento (perna do almoxarifado) | ● | ● | – | – | – | – | – |
-| Aprovar sucateamento (perna da gestão) | ● | – | – | – | – | ● | – |
-| Ajustar estoque | ● | – | – | – | – | ● | – |
-| Ajustar material de cliente | ● | – | – | – | – | – | – |
-| Remeter a terceiro | ● | ● | – | – | – | – | – |
-| Aprovar requisição | ● | ● | – | – | – | ● | – |
-| Separar / emitir | ● | ● | – | – | – | – | – |
-| Requisitar | ● | ● | – | ● | ● | – | – |
-| Receber material | ● | ● | ● | – | – | – | – |
-| Inspecionar | ● | ● | – | – | – | – | – |
-| Reservar | ● | ● | – | ● | ● | – | – |
-| Reservar para outra OS | ● | – | – | – | – | ● | – |
-| Inventariar | ● | ● | – | – | – | ● | – |
-| Gerenciar reposição e compras (sugestões, gerar/vincular/cancelar solicitação, verificar mínimos, contexto do material) | ● | – | ● | – | – | ● | – |
-| Ver a central de alertas | ● | ● | ● | – | – | ● | – |
-| Configurar o módulo | ● | – | – | – | – | – | – |
+| Ação | Administrador | Almoxarife | Compras | Produção | Engenharia | Gestor | Qualidade | Consulta |
+|---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| Visualizar | ● | ● | ● | ● | ● | ● | ● | ● |
+| Criar material | ● | ● | – | – | ● | – | – | – |
+| Editar material | ● | ● | – | – | ● | – | – | – |
+| Movimentar estoque | ● | ● | – | – | – | – | – | – |
+| Gerenciar ferramentas (emprestar, calibrar, bloquear...) | ● | ● | – | – | – | – | – | – |
+| Aprovar sucateamento (perna do almoxarifado) | ● | ● | – | – | – | – | – | – |
+| Aprovar sucateamento (perna da gestão) | ● | – | – | – | – | ● | – | – |
+| Ajustar estoque | ● | – | – | – | – | ● | – | – |
+| Ajustar material de cliente | ● | – | – | – | – | – | – | – |
+| Remeter a terceiro | ● | ● | – | – | – | – | – | – |
+| Aprovar requisição | ● | ● | – | – | – | ● | – | – |
+| Separar / emitir | ● | ● | – | – | – | – | – | – |
+| Requisitar | ● | ● | – | ● | ● | – | – | – |
+| Receber material | ● | ● | ● | – | – | – | – | – |
+| Inspecionar | ● | ● | – | – | – | – | ● | – |
+| Reservar | ● | ● | – | ● | ● | – | – | – |
+| Reservar para outra OS | ● | – | – | – | – | ● | – | – |
+| Inventariar | ● | ● | – | – | – | ● | – | – |
+| Gerenciar reposição e compras (sugestões, gerar/vincular/cancelar solicitação, verificar mínimos, contexto do material) | ● | – | ● | – | – | ● | – | – |
+| Ver a central de alertas | ● | ● | ● | – | – | ● | – | – |
+| Configurar o módulo | ● | – | – | – | – | – | – | – |
 
-Cinco leituras que essa tabela permite fazer, e que vale explicar a quem pergunta:
+Seis leituras que essa tabela permite fazer, e que vale explicar a quem pergunta:
 
 - **Gerenciar ferramentas é independente de movimentar estoque**, mesmo com os mesmos dois perfis
   hoje: ferramenta é patrimônio emprestável, não estoque (seção 21), e a permissão existe separada
@@ -605,17 +606,23 @@ Cinco leituras que essa tabela permite fazer, e que vale explicar a quem pergunt
   material, se um dia isso for pedido.
 - **Ajustar material de cliente é mais restrito que ajustar o estoque próprio.** O Gestor ajusta o saldo da GMP; **apenas o Administrador** ajusta o saldo de material que pertence a um cliente. O motivo é direto: aquele número é o que o cliente vai conferir e cobrar.
 - **Reservar para outra OS** é separado de **Reservar**. Qualquer requisitante reserva material para a própria ordem; transferir uma reserva de uma OS para outra é decisão de priorização, e fica com o Administrador e o Gestor.
-- **Inspecionar** é o que autoriza aprovar, reprovar e liberar material da quarentena, e também mudar a situação de um lote ou de uma série, e liberar vencimento. Hoje pertence ao Administrador e ao Almoxarife.
+- **Inspecionar** é o que autoriza aprovar, reprovar e liberar material da quarentena, e também mudar a situação de um lote ou de uma série, e liberar vencimento. Pertence ao Administrador, ao Almoxarife e ao **Qualidade**.
+- **O perfil Qualidade decide inspeção sem receber nada além disso.** Ele existe justamente para que a área de qualidade não precise pedir ao almoxarifado que decida por ela, nem receber um perfil largo. Consequência que quem for usá-lo precisa saber: **os botões "Bloquear Material" e "Desbloquear Material" da tela de Inspeções não são dele** — eles mexem em saldo e pertencem a **Ajustar estoque** (Administrador e Gestor). Clicando neles, o Qualidade recebe:
+  > *Sem permissão para ajustar saldo de estoque — seu perfil é Qualidade. Solicite acesso a um administrador.*
+
+  Bloquear material por decisão de qualidade continua acontecendo **dentro da inspeção** (reprovar o item recebido), que é o que ele pode.
 - **As duas aprovações de sucateamento são de balcões diferentes de propósito.** A perna do almoxarifado (Administrador, Almoxarife) e a perna da gestão (Administrador, Gestor) precisam **das duas assinaturas, de pessoas diferentes**, para uma baixa de sucata sair do estoque — e, embora o Administrador tenha as duas permissões, **a mesma pessoa nunca assina as duas pernas** (seção 20).
 
-E uma que a tabela **não** mostra: **Inspecionar** cobre as decisões de qualidade, mas anexar o certificado do fornecedor a um lote pertence a **Receber material** — é o pessoal que recebe a carga que tem o documento em mãos.
+E duas que a tabela **não** mostra: **Inspecionar** cobre as decisões de qualidade, mas anexar o certificado do fornecedor a um lote pertence a **Receber material** — é o pessoal que recebe a carga que tem o documento em mãos. E **a central de alertas não é filtrada por perfil**: quem tem *Ver a central de alertas* vê o registro inteiro, inclusive os alertas de estoque parado e de estoque excessivo, que trazem o **valor em dinheiro** parado. É por isso que o perfil **Qualidade** não a recebe — os quatro alertas que interessariam a ele (material reprovado, divergência de recebimento, lote sem certificado e fila de itens aguardando inspeção) só ficam acessíveis quando a central souber filtrar por perfil.
 
 ### 5.6 Como se atribui um perfil
 
 Em **Almoxarifado → Configurações → aba "Perfis de Acesso"** (acessível apenas a quem pode configurar o módulo). A tela lista os usuários com busca por nome ou e-mail, e três colunas: **Usuário**, **Perfil no almoxarifado** e **O que isso permite**. Basta escolher o perfil na lista da linha.
 
+- Escolher um perfil confirma na hora: *"Perfil definido: Qualidade"* (com o nome do perfil escolhido).
 - Deixar em **"Produção (padrão)"** remove o perfil explícito: *"Perfil removido — o usuário volta ao padrão (Produção)"*.
 - Quem já é superadministrador, administrador do sistema ou administrador do módulo aparece com o selo **Administrador** e **sem lista de escolha** — atribuir outro perfil a essa pessoa não teria efeito, porque a condição de administrador tem precedência. A tela explica: *"Para dar um perfil específico, remova a condição de administrador no cadastro de usuário."*
+- **"Administrador" não é uma das opções da lista**, e isso é deliberado. Administrador do módulo se define no **cadastro de usuário**, marcando o almoxarifado entre os módulos que a pessoa administra — é lá que essa condição vive. A própria tela avisa: *"Administrador do módulo não é oferecido aqui: define-se no cadastro de usuário, marcando o almoxarifado entre os módulos que a pessoa administra. Concedido por esta tela, seria apagado no próximo salvamento daquele cadastro."* Duas razões se somam: quem recebesse esse perfil por aqui passaria a **configurar o módulo e a promover outras pessoas**; e o salvamento seguinte daquele cadastro de usuário **apagaria** o perfil sozinho, sem avisar ninguém.
 
 A mudança vale para as próximas ações da pessoa — pode levar alguns instantes para que ela deixe de ver os bloqueios antigos na tela dela.
 
@@ -623,7 +630,9 @@ A mudança vale para as próximas ações da pessoa — pode levar alguns instan
 
 Toda operação relevante do módulo grava uma trilha com **quem** (nome do usuário), **quando**, **o que** (a entidade e a ação), os **valores anteriores e novos** quando houve alteração, e a **justificativa** quando a operação exige uma.
 
-São auditados: criação e **desativação** de material, e a edição — **inclusive a troca da foto**; **os cadastros do módulo — tipos de material, localizações, setores, famílias, centros de custo e almoxarifados — em criação, edição e exclusão**; **as configurações do módulo**, inclusive as que mudam regra de negócio (tolerância de inventário, parâmetros de alerta, alçada de liberação por valor); **a lista de materiais permitidos por setor**; aprovação, rejeição, confirmação, encerramento, **cancelamento e exclusão** de requisição; **todo o ciclo da conferência de inventário — abertura, cada contagem, cada recontagem, a conclusão e o cancelamento**; movimentação de estoque e estorno; reservas; lotes (mudança de situação, liberação de vencimento, certificado); séries (entrada, saída, bloqueio, estorno); recebimentos; inspeções; devoluções; materiais de clientes; remessas a terceiros; sobras e retalhos (geração e edição); sucateamentos (solicitação, cada aprovação, rejeição, cancelamento, destino e a compensação automática quando uma aprovação é desfeita); e a própria troca de perfil de um usuário.
+São auditados: criação e **desativação** de material, e a edição — **inclusive a troca da foto**; **os cadastros do módulo — tipos de material, localizações, setores, famílias, centros de custo e almoxarifados — em criação, edição e exclusão**; **as configurações do módulo**, inclusive as que mudam regra de negócio (tolerância de inventário, parâmetros de alerta, alçada de liberação por valor); **a lista de materiais permitidos por setor**; aprovação, rejeição, confirmação, encerramento, **cancelamento e exclusão** de requisição; **todo o ciclo da conferência de inventário — abertura, cada contagem, cada recontagem, a conclusão e o cancelamento**; movimentação de estoque e estorno; reservas; lotes (mudança de situação, liberação de vencimento, certificado); séries (entrada, saída, bloqueio, estorno); recebimentos; inspeções; devoluções; materiais de clientes; remessas a terceiros; sobras e retalhos (geração e edição); sucateamentos (solicitação, cada aprovação, rejeição, cancelamento, destino e a compensação automática quando uma aprovação é desfeita); e **o perfil de acesso ao módulo — tanto conceder quanto retirar**.
+
+Sobre esse último item, que é o ato mais sensível do módulo, vale o detalhe: **dar e tirar perfil deixam, cada um, uma linha própria na trilha.** Conceder ou trocar aparece como **Edição**; devolver alguém ao padrão (Produção) aparece como **Exclusão** — e, filtrando por essas ações na tela de Auditoria, as duas são encontradas. As duas linhas mostram o **de → para** completo: o perfil que havia antes, o que passou a valer, e a origem (explícito ou padrão). Retirar o perfil de alguém fica registrado **mesmo que a pessoa não tivesse perfil explícito nenhum** — o que se registra é o ato de mandar voltar ao padrão, não a diferença.
 
 Duas notas de comportamento que evitam mal-entendido:
 

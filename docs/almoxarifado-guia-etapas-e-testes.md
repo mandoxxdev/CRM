@@ -1,12 +1,29 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-08-28 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-08-29 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 e 23) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 24) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20.
 
-> ## Onde o desenvolvimento está — 2026-08-28 (Etapa 23 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-08-29 (Etapa 24 ENTREGUE · modo contínuo pelo mapa)
 >
-> **Etapas 1 a 20, 22 e 23 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
+> **Etapas 1 a 20 e 22 a 24 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
+> A **Etapa 24 (a Qualidade ganha perfil, e a tela de perfis para de mentir)** fechou em
+> 2026-08-29 (`a81e51a..4680daa`) e é a **primeira etapa da perna *Perfis*** da feature 23 — as
+> etapas 18 a 23 fecharam a perna de *Auditoria* dessa mesma feature. Ela **não tem tela nova**:
+> a aba **Configurações → Perfis de Acesso** já existia, e o desenho da etapa **afirmava que não**
+> — o escopo foi reescrito no meio do caminho, de "criar a tela" para "consertar quatro defeitos
+> da que existe". Entregue: **(1)** o perfil **Qualidade**, que consulta e decide inspeção e nada
+> além — antes a área de qualidade dependia do almoxarifado para aprovar/reprovar carga; **(2)**
+> **retirar** o perfil de alguém passou a deixar rastro na Auditoria (era invisível — o ato mais
+> sensível do módulo saía sem registro); **(3)** a concessão passou a gravar **qual era o perfil
+> anterior**; **(4)** **Administrador saiu da lista de opções**, porque concedê-lo por ali dá
+> poder de promover outras pessoas e **evapora sozinho** no salvamento seguinte daquele cadastro.
+> **Atenção operacional: nada foi migrado.** Quem já tiver *Administrador* gravado continua com
+> ele — rode a consulta **A4** das novidades no banco de produção antes do deploy (furo **C31**).
+> **E uma decisão espera você:** apertar o perfil padrão de quem não tem perfil definido, hoje
+> **Produção** (**B54**). Ver a seção "Etapa 24" no fim deste guia.
+>
+> **Antes: Etapas 1 a 20, 22 e 23 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
 > A **Etapa 23 (o histórico para de mentir por omissão e por excesso)** fechou em 2026-08-28
 > (`0fe8d02..4f1aeb9`) e é a **primeira etapa que a etapa anterior pediu ao fechar**. Ela **não
 > tem tela nova** — o que ela muda é a **confiança no que a tela da Etapa 22 mostra**. Dois
@@ -3422,6 +3439,105 @@ erro podia estar mentindo.
   que valia a pena registrar quem tentou desativar de novo; ele **perdeu** (item **B53**), porque
   registrar tentativa com o mesmo nome do ato real é o histórico mentindo por excesso. Se isso
   tiver valor para vocês, pede um nome próprio de ato — etapa nova.
+
+## Etapa 24 — A Qualidade ganha perfil, e a tela de perfis para de mentir (ENTREGUE — 2026-08-29)
+
+> **Esta etapa não tem tela nova, e isso é o principal a saber sobre ela.** O desenho dela começou
+> afirmando que a tela de atribuir perfil **não existia** e mandava construí-la. **A afirmação era
+> falsa:** a aba **Almoxarifado → Configurações → Perfis de Acesso** existe desde 05/08/2026, está
+> no menu, está no manual e já tinha sido usada sete vezes. O escopo foi reescrito de *"criar a
+> tela"* para *"consertar quatro defeitos da tela que existe"* — porque construir de novo teria
+> criado **duas portas para a mesma função**, cada uma sem saber da outra.
+
+**O que a etapa resolve, em uma frase:** quem inspeciona material recebido não tinha perfil no
+sistema, e a tela que decide quem tem acesso ao módulo apagava perfis **sem deixar rastro**.
+
+**O perfil Qualidade.** Para aprovar ou reprovar uma carga, liberar um lote vencido ou mudar a
+situação de um lote ou de uma série, a área de qualidade dependia de o almoxarifado decidir por
+ela — ou recebia um perfil largo, que abria junto movimentar estoque e cadastrar material. Agora
+existe **Qualidade**, com duas coisas: **consultar** e **decidir inspeção**. Nada além, de
+propósito.
+
+**Os três consertos da tela.** (1) **Retirar** o perfil de alguém não gerava nenhuma linha no
+histórico — o ato mais sensível do módulo era invisível; (2) **dar** o perfil ficava registrado
+sem dizer qual era o perfil anterior, então a trilha mostrava o "para" sem o "de"; (3) a lista de
+opções oferecia **Administrador**, que dá poder de configurar o módulo e promover outras pessoas
+e que **é apagado sozinho** no próximo salvamento daquele cadastro de usuário.
+
+### Roteiro de teste manual
+
+**Pré-requisito:** entrar com um usuário que possa configurar o módulo (superadministrador,
+administrador do sistema ou administrador do módulo Almoxarifado).
+
+**Parte 1 — o perfil novo aparece com nome e descrição**
+
+1. Menu **Almoxarifado → Configurações** → aba **Perfis de Acesso**.
+2. Localizar um usuário comum (a busca por nome ou e-mail ajuda) que **não** tenha o selo
+   *Administrador*.
+3. Abrir a lista de perfis da linha dele. Conferir as opções:
+   *Produção (padrão)*, *Almoxarife*, *Compras*, *Engenharia*, *Gestor*, *Consulta*, **Qualidade**.
+   - ✅ **Qualidade** aparece escrito assim, capitalizado — **não** `QUALIDADE` em caixa alta.
+   - ✅ **Administrador NÃO aparece na lista.**
+4. Escolher **Qualidade**. O aviso é:
+   > *Perfil definido: Qualidade*
+5. Na mesma linha, olhar a coluna **O que isso permite**:
+   > *Consulta e decide inspeção: aprova/reprova item recebido, libera vencimento de lote e muda
+   > status de lote e de série — não movimenta estoque, não ajusta saldo nem cadastra material*
+
+**Parte 2 — a explicação do Administrador está na tela**
+
+6. Acima da tabela, ler o parágrafo:
+   > *Administrador do módulo não é oferecido aqui: define-se no cadastro de usuário, marcando o
+   > almoxarifado entre os módulos que a pessoa administra. Concedido por esta tela, seria apagado
+   > no próximo salvamento daquele cadastro.*
+7. Procurar na tabela alguém que **seja** administrador: a linha mostra o selo **Administrador**,
+   **sem lista de escolha**, e abaixo:
+   > *Para dar um perfil específico, remova a condição de administrador no cadastro de usuário.*
+
+**Parte 3 — dar e tirar deixam DUAS marcas no histórico** *(é o coração da etapa)*
+
+8. Na linha do usuário da Parte 1, escolher **Produção (padrão)**:
+   > *Perfil removido — o usuário volta ao padrão (Produção)*
+9. Menu **Almoxarifado → Auditoria**.
+10. No filtro **Entidade**, escolher **Perfil de usuário**.
+11. Conferir que aparecem **duas** linhas para aquela pessoa:
+    - ✅ a mais recente com a ação **Exclusão** — é a retirada;
+    - ✅ a anterior com a ação **Edição** — é a concessão.
+12. Expandir **Detalhes** da linha de **Exclusão**. O De → Para tem de mostrar
+    `perfil: QUALIDADE → —` e `perfil efetivo: QUALIDADE → PRODUCAO`.
+13. Expandir a de **Edição**: `perfil: — → QUALIDADE`.
+    - ⚠️ **Antes desta etapa, o passo 11 mostraria uma linha só** (a concessão), e o passo 13
+      mostraria a concessão **sem o "de"**.
+
+**Parte 4 — o perfil Qualidade é estreito de propósito** *(precisa de um segundo login)*
+
+14. Entrar com o usuário que recebeu **Qualidade** (se você já o devolveu ao padrão no passo 8,
+    atribua de novo).
+15. Menu **Almoxarifado → Inspeções**. A tela abre e é possível decidir a inspeção de um item.
+16. Clicar em **Bloquear Material** (botão do topo). O aviso é:
+    > *Sem permissão para ajustar saldo de estoque — seu perfil é Qualidade. Solicite acesso a um
+    > administrador.*
+    - ✅ O nome do perfil aparece **por extenso e capitalizado** — *Qualidade*, não `QUALIDADE`.
+17. O mesmo vale para **Desbloquear Material**. Os dois botões mexem em **saldo**, e por isso
+    pertencem a *Ajustar estoque* (Administrador e Gestor), não a *Inspecionar*.
+
+### O que esta etapa NÃO cobre
+
+- **A central de alertas continua invisível para o perfil Qualidade** — inclusive os quatro
+  alertas que seriam dele (material reprovado, divergência de recebimento, lote sem certificado e
+  a fila de itens aguardando inspeção). O motivo é que a central **não filtra por perfil**: quem a
+  abre vê o registro inteiro, com os alertas que trazem **valor em dinheiro** parado. Item **B55**
+  das novidades; destravar isso é etapa própria.
+- **Bloquear/desbloquear material avulso não entrou no perfil** (passos 16-17 acima). Item **B56**
+  — se tiver de caber, o caminho é uma permissão própria de bloqueio por qualidade, não abrir
+  *ajustar estoque*.
+- **Quem não tem perfil definido continua entrando como Produção.** Item **B54**, o único desta
+  etapa que espera resposta sua.
+- **Nada foi migrado no banco.** Quem já tiver **Administrador** gravado continua com ele: o
+  filtro é da tela. Rode a consulta **A4** das novidades antes do deploy — furo **C31**.
+- **A trilha antiga não ganhou o "de" retroativamente.** As sete atribuições anteriores a esta
+  etapa continuam registradas como estavam.
+
 
 ## Correção — a posição por cliente não fechava a conta (2026-08-13)
 

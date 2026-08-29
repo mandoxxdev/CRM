@@ -1,18 +1,19 @@
 # 23 — Perfis, Segurança e Auditoria
 
-> **Status:** 🟡-forte (**Etapa 23, `0fe8d02..4f1aeb9`: os DOIS buracos de rastro que a Etapa 22 nomeou como "o que falta para 🟢" estão PAGOS** — `PUT /configuracoes` virou tudo-ou-nada e `EXCLUSAO`/`DESATIVACAO` de linha já inativa parou de ser gravada, nas **cinco** rotas. **A feature CONTINUA 🟡-forte, e o que falta para 🟢 mudou de item OUTRA VEZ** — a decisão e a correção da afirmação anterior estão no bloco "Etapa 23" no fim. Em uma linha: a **perna de auditoria** desta feature não tem mais defeito conhecido, mas a feature são **três pernas** (Perfis, Segurança e Auditoria) e as duas primeiras têm **dez itens desmarcados** que não são decisão de negócio — são funcionalidade não construída. A Etapa 22 escreveu "o que falta para 🟢 são esses dois", e **isso estava incompleto: ela pesou só a perna de auditoria**) · antes 🟡-forte (**Etapa 22, `8c6ffbe..169458d`: a TELA de auditoria — o item que as etapas 18, 19, 20 e 21 nomearam como "o que falta para 🟢" — está ENTREGUE.** A feature **continua 🟡-forte e NÃO vira 🟢**, e a decisão está escrita no bloco "Etapa 22" abaixo: o que sobra não é mais "falta leitor", são quatro itens de **outra natureza** — dois deles decisão de negócio pendente do usuário (o volume do log G8, a normalização dos verbos antigos), um deles um buraco de rastro medido e não pago (`PUT /configuracoes` grava chave a chave sem transação; falha no meio deixa parte gravada **sem** linha de histórico) e o `EXCLUSAO` de linha já inativa. Um deles — o ato parcial sem rastro — é a trilha **mentindo por omissão**, e trilha que mente não fecha em 🟢) · antes 🟡-forte (inalterado pela Etapa 21, que é do **núcleo do CRM** e não desta feature — ver o bloco "Etapa 21" no fim; a feature continua com a TELA de auditoria como o que falta para 🟢) · antes 🟡-forte (Etapa 20: os **três** buracos de exposição que esta spec nomeava estão pagos; resta a TELA de auditoria e os itens nomeados abaixo) · antes 🟡-forte (Etapa 19: os 23 endpoints de cadastro/configuração auditam) · antes 🟡 — sistema de permissões robusto; auditoria em uso pelos fluxos principais desde as Etapas 3–6 (os dois buracos daquela auditoria foram PAGOS — Etapa 9 e Etapas 18/19) · **Spec original:** seções 28, 29
-> **Última atualização:** 2026-08-28 (**Etapa 23, `0fe8d02..4f1aeb9`: a trilha para de mentir por omissão e por excesso** — o retry de `SQLITE_BUSY` para de responder erro e gravar assim mesmo (`0fe8d02`), `PUT /configuracoes` vira um `UPDATE` único com `CASE` (`b6b7b24`/`d507ccc`), as **cinco** rotas de exclusão distinguem "não existe" de "já inativa" (`9858bec`) e a leitura pela tela-contrato prova que a trilha mostra **um** ato (`4f1aeb9`); ver o bloco "Etapa 23" no fim e o checklist "Trilha honesta"). Antes: 2026-08-28 (**Etapa 22, `8c6ffbe..169458d`: a trilha ganha leitor** — tela `/almoxarifado/auditoria` com os quatro filtros novos, o de/para calculado no servidor, a rota de opções alimentada pelo banco e os **três índices** que a tabela nunca teve; ver o bloco "Etapa 22" no fim e o checklist "Auditoria visível"). Antes: 2026-08-28 (Etapa 21, `d5c8d3a..07a4b1c`: **nada desta feature mudou** — a etapa é do núcleo do CRM e fecha os itens que a Etapa 20 empurrou para cá dizendo "é do core"; registrada no bloco "Etapa 21 — o que era do núcleo" no fim deste arquivo, e o item de backup do checklist de Segurança ganhou a medição que faltava). Antes: 2026-08-28 (Etapa 20, `1b0f0e9..a3f5135`: a rota de foto de material para de mentir sucesso, de deixar órfão e de não auditar; a leitura de configurações para de devolver segredo em claro e o PUT genérico para de aceitá-lo; ler o mapa de permissões por setor passa a exigir o mesmo que escrevê-lo). Antes: 2026-08-28 (Etapa 19, `a574b3a..55e4144`: os 23 endpoints de cadastro e configuração passam a auditar, com diff nas configurações, segredo mascarado e três correções de comportamento que o log exigia). Antes: 2026-08-28 (Etapa 18: a trilha do inventário). Antes: 2026-08-11 — auditoria de cauda: corrigida a afirmação "auditoria não é usada em produção" (era verdade em 2026-08-02, foi superada pelas Etapas 3–6 e ninguém atualizou aqui), corrigida a contagem de ações (14, não 15) e nomeados os dois buracos reais de auditoria que restam
+> **Status:** 🟡-forte (**Etapa 24, `a81e51a..4680daa`: a perna *Perfis* COMECOU** — perfil `QUALIDADE` criado com `visualizar`+`inspecionar` e a lista negativa provada por controle positivo; a revogação de perfil passou a auditar e a concessão ganhou o `dados_anteriores`; `ADMINISTRADOR` saiu do seletor; e a aba, que tinha **zero** teste, ganhou 7 + a integração com a tela de auditoria. **A feature CONTINUA 🟡-forte.** ⚠️ **E esta spec ESTAVA ERRADA num item que custou caro:** o checklist trazia *"UI de atribuição de perfil por usuário"* desmarcado, e a tela **existe desde 2026-08-05** (`6018f0a`) — o design da Etapa 24 leu este item, somou a uma varredura incompleta do client e desenhou a etapa inteira sobre a premissa "a tela não existe", mandando construir uma segunda. A Fase 2 derrubou a premissa e o escopo foi reescrito no meio da etapa. Ver o bloco "Etapa 24" no fim. **O item 131 (perfil QUALIDADE) NÃO ficou integralmente pago e por isso continua desmarcado:** `bloquear/liberar sob desvio` usa `ajustar_estoque`, que o perfil não recebeu — dois dos três botões de `/almoxarifado/inspecoes` seguem barrados e `POST /materiais/:id/bloquear` dá 403, com a decisão declarada na letra **B56**) · antes 🟡-forte (**Etapa 23, `0fe8d02..4f1aeb9`: os DOIS buracos de rastro que a Etapa 22 nomeou como "o que falta para 🟢" estão PAGOS** — `PUT /configuracoes` virou tudo-ou-nada e `EXCLUSAO`/`DESATIVACAO` de linha já inativa parou de ser gravada, nas **cinco** rotas. **A feature CONTINUA 🟡-forte, e o que falta para 🟢 mudou de item OUTRA VEZ** — a decisão e a correção da afirmação anterior estão no bloco "Etapa 23" no fim. Em uma linha: a **perna de auditoria** desta feature não tem mais defeito conhecido, mas a feature são **três pernas** (Perfis, Segurança e Auditoria) e as duas primeiras têm **dez itens desmarcados** que não são decisão de negócio — são funcionalidade não construída. A Etapa 22 escreveu "o que falta para 🟢 são esses dois", e **isso estava incompleto: ela pesou só a perna de auditoria**) · antes 🟡-forte (**Etapa 22, `8c6ffbe..169458d`: a TELA de auditoria — o item que as etapas 18, 19, 20 e 21 nomearam como "o que falta para 🟢" — está ENTREGUE.** A feature **continua 🟡-forte e NÃO vira 🟢**, e a decisão está escrita no bloco "Etapa 22" abaixo: o que sobra não é mais "falta leitor", são quatro itens de **outra natureza** — dois deles decisão de negócio pendente do usuário (o volume do log G8, a normalização dos verbos antigos), um deles um buraco de rastro medido e não pago (`PUT /configuracoes` grava chave a chave sem transação; falha no meio deixa parte gravada **sem** linha de histórico) e o `EXCLUSAO` de linha já inativa. Um deles — o ato parcial sem rastro — é a trilha **mentindo por omissão**, e trilha que mente não fecha em 🟢) · antes 🟡-forte (inalterado pela Etapa 21, que é do **núcleo do CRM** e não desta feature — ver o bloco "Etapa 21" no fim; a feature continua com a TELA de auditoria como o que falta para 🟢) · antes 🟡-forte (Etapa 20: os **três** buracos de exposição que esta spec nomeava estão pagos; resta a TELA de auditoria e os itens nomeados abaixo) · antes 🟡-forte (Etapa 19: os 23 endpoints de cadastro/configuração auditam) · antes 🟡 — sistema de permissões robusto; auditoria em uso pelos fluxos principais desde as Etapas 3–6 (os dois buracos daquela auditoria foram PAGOS — Etapa 9 e Etapas 18/19) · **Spec original:** seções 28, 29
+> **Última atualização:** 2026-08-29 (**Etapa 24, `a81e51a..4680daa`: a perna Perfis começa** — `QUALIDADE` em `permissions.js` (`a81e51a`), a revogação auditando com `EXCLUSAO` e o `dados_anteriores` nos dois caminhos (`9f7c309`), `ADMINISTRADOR` fora do seletor com a razão visível e os 7 primeiros testes da aba (`b13de4a`), a integração que dá e tira perfil e lê pela tela-contrato (`b9a5848`) e o rótulo do perfil no 403 do client (`4680daa`); ver o bloco "Etapa 24" no fim). Antes: 2026-08-28 (**Etapa 23, `0fe8d02..4f1aeb9`: a trilha para de mentir por omissão e por excesso** — o retry de `SQLITE_BUSY` para de responder erro e gravar assim mesmo (`0fe8d02`), `PUT /configuracoes` vira um `UPDATE` único com `CASE` (`b6b7b24`/`d507ccc`), as **cinco** rotas de exclusão distinguem "não existe" de "já inativa" (`9858bec`) e a leitura pela tela-contrato prova que a trilha mostra **um** ato (`4f1aeb9`); ver o bloco "Etapa 23" no fim e o checklist "Trilha honesta"). Antes: 2026-08-28 (**Etapa 22, `8c6ffbe..169458d`: a trilha ganha leitor** — tela `/almoxarifado/auditoria` com os quatro filtros novos, o de/para calculado no servidor, a rota de opções alimentada pelo banco e os **três índices** que a tabela nunca teve; ver o bloco "Etapa 22" no fim e o checklist "Auditoria visível"). Antes: 2026-08-28 (Etapa 21, `d5c8d3a..07a4b1c`: **nada desta feature mudou** — a etapa é do núcleo do CRM e fecha os itens que a Etapa 20 empurrou para cá dizendo "é do core"; registrada no bloco "Etapa 21 — o que era do núcleo" no fim deste arquivo, e o item de backup do checklist de Segurança ganhou a medição que faltava). Antes: 2026-08-28 (Etapa 20, `1b0f0e9..a3f5135`: a rota de foto de material para de mentir sucesso, de deixar órfão e de não auditar; a leitura de configurações para de devolver segredo em claro e o PUT genérico para de aceitá-lo; ler o mapa de permissões por setor passa a exigir o mesmo que escrevê-lo). Antes: 2026-08-28 (Etapa 19, `a574b3a..55e4144`: os 23 endpoints de cadastro e configuração passam a auditar, com diff nas configurações, segredo mascarado e três correções de comportamento que o log exigia). Antes: 2026-08-28 (Etapa 18: a trilha do inventário). Antes: 2026-08-11 — auditoria de cauda: corrigida a afirmação "auditoria não é usada em produção" (era verdade em 2026-08-02, foi superada pelas Etapas 3–6 e ninguém atualizou aqui), corrigida a contagem de ações (14, não 15) e nomeados os dois buracos reais de auditoria que restam
 
 ## Objetivo
 
 Perfis da spec cobertos, regras de segurança da seção 29 aplicadas (imutabilidade, estorno, histórico de cadastro, justificativas) e trilha de auditoria visível.
 
-## O que já existe (4 camadas — detalhes em `00-fundacao-tecnica/estado-atual.md`)
+## O que já existe (5 camadas — detalhes em `00-fundacao-tecnica/estado-atual.md`)
 
 1. Flags globais: `is_superadmin`, `role='admin'`, `admin_modulos` (`services/systemPermissions.js`).
 2. Permissão por módulo: `checkModulePermission` + tabelas `permissoes`/grupos.
-3. **7 perfis × 14 ações** do almoxarifado (`ACAO_PERFIS` em `services/almoxarifado/permissions.js`): ADMINISTRADOR, ALMOXARIFE, COMPRAS, PRODUCAO, ENGENHARIA, GESTOR, CONSULTA. *(A spec dizia "15 ações" — contagem errada, corrigida em 2026-08-11.)*
-4. Whitelist de materiais por setor (`sectorMaterialService.js`).
+3. **8 perfis** do almoxarifado (`ACAO_PERFIS` em `services/almoxarifado/permissions.js`): ADMINISTRADOR, ALMOXARIFE, COMPRAS, PRODUCAO, ENGENHARIA, GESTOR, CONSULTA e **QUALIDADE** (criado na Etapa 24, `a81e51a`). *(Esta linha dizia "7 perfis × 14 ações"; a spec original dizia "15 ações" — contagem errada, corrigida em 2026-08-11. A contagem de ações saiu daqui de propósito: ela já esteve errada duas vezes e envelhece a cada etapa que cria uma ação — quem precisar do número conta `Object.keys(ACAO_PERFIS)`.)*
+4. **A tela de atribuição de perfil por usuário** — aba *Perfis de Acesso* em `ConfiguracoesAlmoxarifado.js:2545`, no menu por `Layout.js:393`, desde `6018f0a` (2026-08-05). **Está listada aqui porque o checklist abaixo a dava como inexistente e enganou uma etapa inteira** — ver o bloco "Etapa 24".
+5. Whitelist de materiais por setor (`sectorMaterialService.js`).
 
 - Auditoria: `auditoria_log_almoxarifado` + `registrarAuditoria()`; rota `GET /almoxarifado/auditoria` (`extended.js`).
   **⚠️ Correção (2026-08-11):** esta spec afirmava "0 linhas em produção — o front usa a rota v1 que não audita". A afirmação era verdadeira em 2026-08-02 e foi **superada pelas Etapas 3–6** sem que a spec fosse atualizada. Hoje auditam (todos com tela no front):
@@ -127,11 +128,47 @@ Perfis da spec cobertos, regras de segurança da seção 29 aplicadas (imutabili
 ## Checklist
 
 ### Perfis (spec 28)
-- [ ] Mapear perfis da spec → perfis existentes: Solicitante→PRODUCAO? · Aprovador→GESTOR · Supervisor→? · Qualidade→**falta perfil QUALIDADE** · Auditoria/Diretoria→CONSULTA com relatórios
-- [ ] Criar perfil QUALIDADE (ações `inspecionar`, aprovar/reprovar/bloquear/liberar sob desvio — feature 09)
-- [ ] Revisar fallback perigoso: usuário sem perfil → PRODUCAO (`getPerfilFromUser` em `permissions.js`) — decidir se CONSULTA é default mais seguro
+- [ ] Mapear perfis da spec → perfis existentes: Solicitante→PRODUCAO? · Aprovador→GESTOR · Supervisor→? · ~~Qualidade→**falta perfil QUALIDADE**~~ **Qualidade→QUALIDADE, criado na Etapa 24 (`a81e51a`)** · Auditoria/Diretoria→CONSULTA com relatórios.
+      **Continua desmarcado**, e o motivo é o resto da linha: *Solicitante*, *Supervisor* e
+      *Auditoria/Diretoria* seguem sem mapeamento decidido, e isso depende da spec 28, não desta.
+      Só a perna de Qualidade foi paga.
+- [ ] **Criar perfil QUALIDADE (ações `inspecionar`, aprovar/reprovar/bloquear/liberar sob desvio — feature 09) — PAGO PELA METADE na Etapa 24 (`a81e51a`), e por isso NÃO está marcado.**
+      O perfil existe, com `visualizar` e `inspecionar`, e as quatro rotas gateadas por
+      `inspecionar` (decidir o item recebido, liberar vencimento de lote, mudar status de lote e
+      de série) foram medidas com um usuário QUALIDADE real no harness: nenhuma delas faz
+      checagem além do `requirePermission`. Aprovar/reprovar está pago.
+      **O que NÃO está: `bloquear/liberar sob desvio`.** Bloqueio/desbloqueio avulso usa
+      `ajustar_estoque` (`[ADMINISTRADOR, GESTOR]`), não `inspecionar` — a spec 09 já tinha
+      medido isso e esta spec nunca incorporou. Consequência medida: em
+      `/almoxarifado/inspecoes`, **dois dos três botões do topo ficam barrados** para QUALIDADE
+      (`InspecoesAlmoxarifado.js:197` e `:202`), e `POST /materiais/:id/bloquear` responde **403**.
+      **Manter `ajustar_estoque` fora foi decisão declarada** (mexer em saldo não é ofício de
+      qualidade, e abri-lo abriria junto o ajuste de inventário) — letra **B56** das novidades.
+      Marcar `[x]` aqui faria a próxima sessão acreditar que o desvio está coberto. **O caminho
+      limpo, se um dia for pedido, é uma ação PRÓPRIA de bloqueio por qualidade** — mesmo critério
+      que o módulo já usou em `remessar_terceiro`, `ajustar_material_cliente` e
+      `gerenciar_ferramentas`: quando a operação muda a natureza do risco, ela ganha ação.
+- [ ] Revisar fallback perigoso: usuário sem perfil → PRODUCAO (`getPerfilFromUser` em `permissions.js`) — decidir se CONSULTA é default mais seguro.
+      **Etapa 24: continua desmarcado de propósito, mas deixou de ser bloqueado por falta de
+      ferramenta.** O motivo de nunca ter sido mexido era que apertar o padrão trancaria, no dia
+      do deploy, todo mundo que opera sem perfil explícito. Com a tela de atribuição (que já
+      existia — ver a correção de premissa no bloco "Etapa 24") e com o perfil QUALIDADE cobrindo
+      um dos casos que forçavam o padrão largo, a sequência segura existe: atribuir perfil a quem
+      opera → conferir quem ficou sem → trocar o padrão. **É decisão de negócio, letra B54.**
 - [ ] Revisar default de módulo: usuário sem grupo ganha `comercial` (`index.js`) — fora do escopo do almoxarifado, mas registrar
-- [ ] UI de atribuição de perfil por usuário (hoje via sync de admin_modulos)
+- [x] UI de atribuição de perfil por usuário (hoje via sync de admin_modulos) — **⚠️ ESTE ITEM JÁ ESTAVA PAGO DESDE 2026-08-05 (`6018f0a`) E FICOU TRÊS SEMANAS DESMARCADO AQUI.**
+      A aba `TabPerfisAcesso` (`ConfiguracoesAlmoxarifado.js:2545`) existe, está registrada em
+      `TABS`, está no menu (`Layout.js:393`) e está descrita no manual do repositório
+      (`docs/almoxarifado-manual-do-sistema.md`). **A Etapa 24 inteira foi desenhada sobre a
+      premissa de que ela não existia** — premissa que veio da leitura deste checklist somada a
+      uma varredura incompleta do client (procurei `perfil_almoxarifado`; o consumidor chama
+      `perfis-usuario`). A Fase 2 derrubou a premissa com quatro provas e o escopo virou
+      "consertar o que existe". **Sem isso, o sistema teria ganhado uma segunda tela para a mesma
+      função.** Marcado agora com o hash de quem realmente o entregou (`6018f0a`), e não com um da
+      Etapa 24 — o que a Etapa 24 fez foi consertar quatro defeitos dele: `PERFIS_INFO` sem o
+      perfil novo (`a81e51a`), a revogação sem rastro e a concessão sem o "de" (`9f7c309`),
+      `ADMINISTRADOR` oferecido no seletor (`b13de4a`) e a ausência total de teste
+      (`b13de4a`, 7 cenários; `b9a5848`, a integração com a tela de auditoria).
 
 ### Segurança (spec 29)
 - [x] Movimentação confirmada não pode ser excluída — **confirmado na auditoria de 2026-08-11**: não existe rota DELETE de movimentação; estorno (cancelamento) é o único caminho — feature 03
@@ -476,13 +513,24 @@ que afirma o **conjunto inteiro** das três entradas.
 | **Auditoria** | ~~ato parcial do `PUT /configuracoes`~~ · ~~`EXCLUSAO` de linha já inativa~~ | **PAGOS na Etapa 23** | — |
 | **Auditoria** | Volume do log de permissões (~46 KB/save, **G8**) · normalização dos verbos antigos (**B47**) · gate ADMIN-only (**B33** metade b) · exportação XLSX e retenção (letra **D**) | Decisão de negócio do usuário / corte declarado | **Não** |
 | **Auditoria** | Laços de escrita sem transação não varridos · `EXCLUSAO` vs `DESATIVACAO` nas escritas novas | Corte de escopo declarado (Etapa 23, letra **D**) | **Não** |
-| **Perfis** | **Perfil QUALIDADE não existe** (verificado no código: `ACAO_PERFIS` tem 7 perfis, nenhum é QUALIDADE) · mapeamento dos perfis da spec 28 · **UI de atribuição de perfil por usuário** · revisar o fallback `getPerfilFromUser` → PRODUCAO · revisar o default de módulo | **Funcionalidade não construída** — 5 itens | **SIM** |
+| **Perfis** | ~~**Perfil QUALIDADE não existe**~~ **CRIADO na Etapa 24 (`a81e51a`)** — mas só a metade `inspecionar`; `bloquear/liberar sob desvio` usa `ajustar_estoque` e ficou fora (**B56**) · ~~**UI de atribuição de perfil por usuário**~~ **JÁ EXISTIA desde `6018f0a` (2026-08-05) — esta linha estava ERRADA**, ver o bloco "Etapa 24" · mapeamento dos perfis da spec 28 · o fallback `getPerfilFromUser` → PRODUCAO (agora **decisão de negócio viável**, letra **B54**, em vez de bloqueado por falta de tela) · revisar o default de módulo | 5 itens → **2 pagos, 1 virou decisão de negócio (B54), 2 continuam funcionalidade não construída** | **SIM** (pelos 2 restantes + a metade do 131) |
 | **Segurança** | **Registrar dispositivo (user-agent/IP) na movimentação** (verificado: não há coluna nem gravação) · **bloquear lançamento retroativo** · justificativa obrigatória em operações excepcionais · dupla conferência em materiais críticos · política de retenção de backup configurável | **Funcionalidade não construída** — 5 itens | **SIM** |
 
 **Portanto: 🟡-forte, e o que falta para 🟢 mudou de item pela terceira vez.** Desta vez a
 resposta não é uma pendência de auditoria: é que **a perna de auditoria terminou** e as pernas de
 **Perfis** e **Segurança** mal começaram. Escrito assim, de propósito, para que a próxima sessão
 não leia "faltam dois buracos de rastro", veja os dois pagos e conclua 🟢.
+
+> **Atualização da Etapa 24 (`a81e51a..4680daa`): a perna *Perfis* deixou de estar em zero, e a
+> feature continua 🟡-forte.** Dos cinco itens dela: o perfil QUALIDADE foi criado (pago pela
+> metade — falta `bloquear/liberar sob desvio`, **B56**); a UI de atribuição **já existia e a
+> linha desta spec estava errada**; o fallback `PRODUCAO` deixou de ser funcionalidade não
+> construída e virou **decisão de negócio** (**B54**), porque a ferramenta que faltava existe;
+> e sobram o mapeamento da spec 28 e o default de módulo, os dois **dependentes de outra spec**.
+> **O que passou a bloquear 🟢 é a perna *Segurança*, intacta** — cinco itens, nenhum começado:
+> dispositivo/IP na movimentação, lançamento retroativo, justificativa em operações excepcionais,
+> dupla conferência em materiais críticos e retenção de backup configurável. **É essa a resposta
+> para "o que falta para 🟢" hoje**, e é a quarta vez que essa resposta muda de item nesta spec.
 
 **A decisão de arquitetura da etapa, com o descartado (é a mais importante e a mais
 contraintuitiva):**
@@ -537,6 +585,114 @@ valor em registrar tentativas, isso pede um verbo PRÓPRIO, não este.** Letra *
 | `tests/api/exclusaoIdempotente.api.test.js` (novo) | 20 cenários, as cinco rotas | `9858bec` |
 | `tests/api/exclusaoNaTrilha.api.test.js` (novo) | 5 cenários — a leitura **pela tela-contrato** | `4f1aeb9` |
 | `tests/api/auditoriaCadastros.api.test.js`, `auditoriaAtosEGate.api.test.js` | os dois testes de caracterização atualizados, com o histórico escrito no cabeçalho | `9858bec` |
+
+## Etapa 24 — a perna *Perfis* começa (`a81e51a..4680daa`)
+
+**A primeira etapa desta feature que não é da perna de auditoria.** As etapas 18 a 23 fecharam
+*Auditoria*; esta abre *Perfis*, que o fechamento da Etapa 23 nomeou como parte do que falta
+para 🟢.
+
+### ⚠️ Uma afirmação DESTA spec estava errada e derrubou a premissa de uma etapa inteira
+
+O checklist de *Perfis* trazia, desmarcado:
+
+> `- [ ] UI de atribuição de perfil por usuário (hoje via sync de admin_modulos)`
+
+**Estava errado desde 2026-08-05.** A tela existe: é a aba `TabPerfisAcesso` em
+`client/src/components/almoxarifado/ConfiguracoesAlmoxarifado.js:2545`, registrada em `TABS`
+(`:191`), renderizada em `:265`, no menu por `Layout.js:393`, descrita no manual do repositório e
+**usada de verdade** — sete linhas de `perfil_almoxarifado_usuario` no histórico do banco de
+desenvolvimento, a mais recente em 2026-08-25. O commit é `6018f0a`, *"tela para atribuir perfil
+de acesso por usuario"*.
+
+**A consequência:** o design da Etapa 24 leu este item, somou a uma varredura incompleta do client
+(procurei por `perfil_almoxarifado` e por `perfis-almoxarifado`; o consumidor chama
+`perfis-usuario`, dentro do arquivo de **outra aba**) e escreveu, como premissa da etapa inteira,
+que *"nenhum componente do client consome as rotas de perfil"* e que *"todo usuário novo entra
+como chão de fábrica sem que ninguém consiga promovê-lo pela interface — só por `curl` ou
+escrevendo no banco"*. O plano mandava **criar** `AlmoxarifadoPerfis.js`, com rota e item de menu
+próprios. **A Fase 2 derrubou a premissa com quatro provas independentes** (o componente, o menu,
+o manual, o uso real) e o plano foi reescrito no meio da etapa.
+
+**Se a premissa tivesse sobrevivido, o módulo teria ganhado duas telas para a mesma função**, cada
+uma sem saber da outra, e a Etapa 25 estaria decidindo qual apagar.
+
+**A lição, escrita para a próxima sessão:** *medir ausência exige procurar pelo nome do CONTRATO —
+a rota, o endpoint —, nunca pelo nome que se imagina que o consumidor usaria.* E: **item
+desmarcado nesta spec não é prova de que a funcionalidade não existe** — é prova de que ninguém
+marcou. A verificação tem de ir ao código.
+
+### O que a etapa entregou
+
+| Camada | Entrega | Commit |
+|---|---|---|
+| `services/almoxarifado/permissions.js` | perfil `QUALIDADE` em `PERFIS`, entrando em `visualizar` e `inspecionar` — e **em mais nada**, com a lista negativa provada no gate real | `a81e51a` |
+| `client/.../ConfiguracoesAlmoxarifado.js` (`PERFIS_INFO`) | rótulo "Qualidade" e a descrição do que ele permite — sem isso o perfil saía como `QUALIDADE` cru e `—` na coluna explicativa | `a81e51a` |
+| `routes/almoxarifado/extended.js` — `PUT /perfis-usuario/:id` | o caminho "voltar ao padrão" **audita** (`EXCLUSAO`); os dois caminhos gravam `dados_anteriores` | `9f7c309` |
+| `client/.../ConfiguracoesAlmoxarifado.js` (`TabPerfisAcesso`) | `ADMINISTRADOR` fora do seletor + o parágrafo com a razão visível ao usuário | `b13de4a` |
+| `client/.../PerfisAcesso.test.js` (novo) | **7 cenários** — a aba tinha **zero** | `b13de4a` |
+| `tests/api/perfisUsuario.api.test.js` | 11 → **14 cenários**; os 11 congelados seguem verdes (contrato C2 intacto) | `9f7c309` |
+| `tests/api/perfilAuditoriaIntegracao.api.test.js` (novo) | **5 cenários** — escreve pelas rotas reais e lê pela **tela-contrato** `GET /auditoria?entidade=perfil_almoxarifado_usuario` | `b9a5848` |
+| `client/src/utils/permissaoErro.js` | o mapa de rótulos de perfil não tinha `QUALIDADE`: o 403 dizia *"seu perfil é QUALIDADE"*, chave crua em caixa alta | `4680daa` |
+
+### As decisões, com o descartado
+
+**`ver_alertas` FICOU DE FORA — e isto corrige uma decisão anterior deste mesmo design.** A versão
+inicial dava a permissão ao perfil, com a justificativa de que "sem ela ele veria a tela de
+alertas vazia, que parece que não há nada pendente". **A justificativa era falsa:** a tela não
+chama o GET sem a permissão e mostra o painel de sem-acesso (corrigido na Etapa 11). E o custo
+medido é o oposto do suposto: `montarCentral` percorre o registro **inteiro**, sem régua por
+perfil, e entrega **11 alertas**, incluindo `ESTOQUE_SEM_CONSUMO` e `ESTOQUE_EXCESSIVO`, que
+carregam `valor_parado`. A Etapa 16 excluiu PRODUCAO/ENGENHARIA/CONSULTA da central pelo mesmo
+motivo. **Declarado:** os quatro alertas de qualidade — material reprovado, divergência de
+recebimento, lote sem certificado e `QUARENTENA_PARADA` (a fila de itens aguardando inspeção) —
+seguem invisíveis para o perfil até a central saber filtrar. Letra **B55**.
+
+**`EXCLUSAO` como verbo da revogação, e não um verbo novo.** `EXCLUSAO` já está em `GRUPOS_ACAO`
+(`auditLabels.js`), então a revogação fica **filtrável na tela** como "Exclusão" — provado por
+cenário próprio na integração. **Descartado** inventar `REVOGACAO`: o vocabulário da trilha ficaria
+com um verbo sem rótulo, que é o defeito que a Etapa 22 passou uma task inteira consertando.
+
+**Os dois lados da auditoria gravam a MESMA forma** (`{usuario, perfil, perfil_efetivo, origem}`).
+`auditLabels.alteracoesDaLinha` é **união de chaves sem filtro de igualdade**: chave presente só
+de um lado sairia na tela como `null -> valor`, **fingindo alteração que não houve** — foi
+exatamente o que aconteceu com `codigo`/`nome` da foto de material, congelado como contrato em
+`auditoriaFluxoCompleto`. A integração afirma o **conjunto inteiro** de `alteracoes`, não só o
+campo `perfil`, justamente para que essa decisão tenha prova.
+
+**A remoção audita mesmo quando não havia perfil explícito.** Registra-se o **ato** ("mandaram
+voltar ao padrão"), não o diff. **Descartado** omitir por "não mudou nada": omitir por ausência de
+diff é a família de defeito que a Etapa 23 fechou.
+
+**`ADMINISTRADOR` fora do seletor, em vez de "deixar e avisar".** Dois problemas se somam:
+`hasAlmoxAdminPerfil` faz `canConfigureModule('almoxarifado')` valer para quem tem
+`perfil_almoxarifado === 'ADMINISTRADOR'` — quem recebesse pela tela passaria a configurar o
+módulo e **a promover outros** —, e `classificarPerfil` o marca como `explicito`, não `forcado`,
+então **nem o 409 nem a RN-03 o protegem**; e `syncModuleAdminProfiles` roda em todo save de
+usuário e apaga a linha, então a concessão **evapora sozinha** depois. Parecer que funcionou, dar
+poder demais e sumir sozinho, juntos, são pior que a opção não existir. **O filtro é da tela, não
+uma migração:** quem já tiver esse perfil gravado continua com ele, e continua sujeito ao
+apagamento silencioso — daí a consulta **A4** e o furo **C31** das novidades.
+
+### O que o achado metodológico da Task 1 acrescentou à skill de fechamento
+
+**Asserção negativa sobre permissão não fica vermelha na rodada TDD.** O cenário "QUALIDADE não
+pode `movimentar`" passa **verde antes de o perfil existir**, porque `can()` devolve `false` para
+o que não conhece. Ou seja: a lista negativa — que é a parte que importa, porque perfil que herda
+demais é pior que perfil nenhum — **só tem prova pelo controle positivo**, sabotando o código para
+**conceder** a permissão proibida e conferindo que o cenário cai **nomeando a ação**. Feito duas
+vezes (`movimentar` e `ver_alertas`), e a regra ficou escrita em
+`.claude/skills/fechar-etapa/SKILL.md`.
+
+### O que continua faltando nesta perna
+
+- O **mapeamento da spec 28** (Solicitante, Supervisor, Auditoria/Diretoria) — depende daquela spec.
+- O **default de módulo** (`comercial`) — do núcleo, não do almoxarifado.
+- O fallback `PRODUCAO` — **deixou de ser funcionalidade não construída e virou decisão de
+  negócio** (**B54**), porque a ferramenta que faltava (dar perfil explícito antes de apertar)
+  existe e o caso que forçava o padrão largo (a Qualidade) foi coberto.
+- `bloquear/liberar sob desvio` do item 131 — **B56**, e o caminho limpo é ação própria.
+
 
 ## Regras essenciais + testes de API exigidos
 

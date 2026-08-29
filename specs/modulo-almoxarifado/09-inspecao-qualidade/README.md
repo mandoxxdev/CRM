@@ -1,9 +1,16 @@
 # 09 — Inspeção e Qualidade
 
-> **Status:** 🟡 — quarentena e decisão de inspeção reais desde a Etapa 5; faltam plano de
-> inspeção com medidas, não conformidade formal numerada, desvio autorizado e perfil QUALIDADE ·
+> **Status:** 🟡 — quarentena e decisão de inspeção reais desde a Etapa 5; **o perfil QUALIDADE
+> existe desde a Etapa 24** (`a81e51a`) e alcança as quatro rotas de `inspecionar`, com a ressalva
+> de que bloqueio/desbloqueio **avulso** usa `ajustar_estoque` e ficou fora de propósito (**B56**);
+> faltam plano de inspeção com medidas, não conformidade formal numerada e desvio autorizado ·
 > **Spec original:** seção 9
-> **Última atualização:** 2026-08-11 (**auditoria spec×código: nenhuma divergência encontrada**;
+> **Última atualização:** 2026-08-29 (**Etapa 24, `a81e51a`: o perfil QUALIDADE — pendência que
+> esta spec nomeava desde a Etapa 5 — foi criado**, com `visualizar` e `inspecionar` e mais nada;
+> as quatro rotas de `inspecionar` medidas com um usuário QUALIDADE real no harness. A ressalva de
+> bloqueio avulso, que esta spec já nomeava em 2026-08-11, **continua valendo e agora tem
+> consequência visível na tela** — está escrita no item do checklist). Antes: 2026-08-11
+> (**auditoria spec×código: nenhuma divergência encontrada**;
 > adicionada à tabela de testes a regressão de devolução para quarentena, que existia e não estava
 > listada. Antes: 2026-08-09, Etapa 6 — registra a pendência nova "reprovar por lote não
 > está ligado à inspeção" e corrige a linha da tabela que dizia que a feature 10 não existia)
@@ -39,7 +46,29 @@ Inspeção de recebimento com plano, quarentena e bloqueio efetivos no saldo, n�
 - [x] Solicitar análise da Engenharia / devolução ao fornecedor / substituição (registrar o encaminhamento pretendido) — **Etapa 5** (`dc841f2`): o campo `encaminhamento` (`DEVOLVER` | `ANALISE_ENGENHARIA` | `SUBSTITUICAO`) é validado e gravado em `inspecoes_recebimento_almoxarifado` na reprovação.
 - [ ] Encaminhamentos **com status** (acompanhar se a devolução/análise/substituição já foi executada) — **não implementado**. O `encaminhamento` de hoje é só a intenção registrada no momento da reprovação; não há campo de status nem nada que marque quando ela é cumprida. É **a pendência que esta etapa cria**, ver seção própria abaixo — a execução em si é a feature 12 (Devoluções), que ainda não existe.
 - [ ] Anexos: certificado, relatório dimensional, fotos (`anexos_documento_almoxarifado`) — não implementado, fora do escopo da Etapa 5.
-- [ ] Perfil QUALIDADE nas ações de inspeção (hoje só ADMIN/ALMOXARIFE — spec 28 prevê Qualidade) — **fora do escopo da Etapa 5** (decisão do design), confirmado inalterado em `permissions.js`: `inspecionar` continua `[ADMINISTRADOR, ALMOXARIFE]`. Detalhe novo: bloqueio/desbloqueio avulso usa a permissão `ajustar_estoque` (`[ADMINISTRADOR, GESTOR]`), não `inspecionar` — então mesmo sem o perfil QUALIDADE, hoje nem todo ALMOXARIFE consegue usar os botões de bloqueio avulso da tela nova (só decidir inspeção).
+- [x] Perfil QUALIDADE nas ações de inspeção — **PAGO na Etapa 24 (`a81e51a`)**, com **uma ressalva
+      declarada que vale ler antes de acreditar no `[x]`**.
+      ~~Fora do escopo da Etapa 5 (decisão do design), confirmado inalterado em `permissions.js`:
+      `inspecionar` continua `[ADMINISTRADOR, ALMOXARIFE]`.~~ **Isto valeu da Etapa 5 até a 24.**
+      Hoje `inspecionar` é `[ADMINISTRADOR, ALMOXARIFE, QUALIDADE]`, e o perfil recebeu **só**
+      `visualizar` e `inspecionar` — nada mais. As **quatro** rotas gateadas por `inspecionar`
+      (decidir o item recebido, liberar vencimento de lote, mudar status de lote e mudar status
+      de série) foram exercitadas com um usuário QUALIDADE real no harness, que roda o
+      `requirePermission` de produção: as quatro passam o gate.
+      **A RESSALVA — e é a mesma que esta linha já nomeava desde 2026-08-11.** O *detalhe novo*
+      que estava escrito aqui continua verdadeiro e agora tem consequência: **bloqueio/desbloqueio
+      avulso usa `ajustar_estoque` (`[ADMINISTRADOR, GESTOR]`), não `inspecionar`.** Portanto o
+      perfil QUALIDADE **não** usa os botões *Bloquear Material* e *Desbloquear Material* da tela
+      de Inspeções (`InspecoesAlmoxarifado.js:197` e `:202`), e `POST /materiais/:id/bloquear`
+      responde **403** para ele. **Foi decisão declarada**, não esquecimento: mexer em saldo
+      disponível não é ofício de qualidade, e abrir `ajustar_estoque` abriria junto o ajuste de
+      inventário. Letra **B56** das novidades. **Por isso o item 131 da spec 23 — que pede
+      "inspecionar, aprovar/reprovar, bloquear/liberar sob desvio" — continua desmarcado lá**,
+      enquanto este aqui fica marcado: o que esta spec pedia era o perfil **nas ações de
+      inspeção**, e isso está entregue. **Se um dia bloquear por desvio tiver de caber no perfil,
+      o caminho limpo é uma ação PRÓPRIA** (`bloquear_qualidade`), não abrir `ajustar_estoque` —
+      mesmo critério que o módulo já usou em `remessar_terceiro`, `ajustar_material_cliente` e
+      `gerenciar_ferramentas`.
 
 ### Frontend
 - [x] Fila de inspeções pendentes — **Etapa 5** (`dcee909`, `InspecoesAlmoxarifado.js`): lista o que está retido, de qual recebimento, há quantos dias.
