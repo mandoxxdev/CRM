@@ -2,9 +2,32 @@
 
 > Atualizado em 2026-08-29 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 25) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 26) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20.
 
-> ## Onde o desenvolvimento está — 2026-08-29 (Etapa 25 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-08-29 (Etapa 26 ENTREGUE · modo contínuo pelo mapa)
+>
+> **Etapas 1 a 20 e 22 a 26 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
+> A **Etapa 26 (uma lista de categorias só, e ela é da GMP)** fechou em 2026-08-29
+> (`1bca087..6b981ac`) e é da **feature 01 (cadastros de materiais)** — a primeira etapa fora da
+> feature 23 desde a 15. Ela pagou a **dívida mais antiga do módulo ainda aberta**: as categorias
+> de material estavam **escritas dentro do código, repetidas em três telas**, desde a Etapa 2
+> (04/08). Entregue: **(1)** as três telas (cadastro de material, filtro da listagem de materiais e
+> filtro da conferência) passaram a ler o **catálogo do cliente** — as **27 categorias de
+> metalúrgica** que estavam no banco **sem nenhum uso**; **(2)** o catálogo virou **cadastro
+> editável** em *Configurações → aba Categorias*, com criar, renomear, desativar e **reativar**,
+> recusa de nome duplicado e rastro na Auditoria; **(3)** dois defeitos que só apareceram ao medir
+> — o formulário **mostrava a primeira categoria da lista** para material gravado com outra (a tela
+> mentia sobre o banco) e material salvo sem categoria virava `OUTROS` **pelo servidor**, sem
+> passar pela tela. **Isto responde a B6**, aberta desde a Etapa 8c.
+> **Atenção operacional (três coisas):** rode a **A6** no banco de produção antes do deploy para
+> decidir o que fazer com os materiais já classificados pela lista antiga — **nada foi migrado, de
+> propósito**; rode a **A7** para procurar categorias de nome repetido, que impedem a trava nova de
+> valer; e saiba que **o filtro de categoria devolve zero** para as categorias novas enquanto o
+> acervo não for remapeado (furo **C33**). **E uma decisão espera você:** renomear categoria
+> deve reclassificar os materiais já classificados (**B58**). Ver a seção "Etapa 26" no fim deste
+> guia.
+>
+> **Antes: Etapas 1 a 20 e 22 a 25 completas no módulo.**
 >
 > **Etapas 1 a 20 e 22 a 25 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
 > A **Etapa 25 (de onde veio cada movimento, e o backup que parou de crescer sozinho)** fechou em
@@ -3665,6 +3688,100 @@ propósito, mova-a para fora antes.
   e "Diário" **não** cria rotina diária.
 - **Dupla conferência em material crítico não foi feita** — é decisão de negócio, item **B57**.
 
+
+## Etapa 26 — Uma lista de categorias só, e ela é da GMP (ENTREGUE — 2026-08-29)
+
+**O que mudou, em uma frase:** as categorias de material deixaram de ser uma lista genérica
+escrita dentro do sistema e passaram a ser **o catálogo da GMP**, que agora dá para editar pela
+tela.
+
+### O problema que existia
+
+Ao cadastrar um material, a lista de categorias que aparecia era `CONSUMÍVEL`, `FERRAMENTA`,
+`EPI`, `ELÉTRICO`, `HIDRÁULICO`… — genérica, servia para qualquer empresa e para nenhuma em
+particular. Ela estava **escrita dentro do programa**, em **três telas diferentes**, e mudá-la
+exigia programador.
+
+Ao mesmo tempo, existia no banco um catálogo de **27 categorias de metalúrgica** — `Aço carbono`,
+`Aço inox`, `Chapas`, `Tubos`, `Perfis estruturais`, `Componentes usinados`, `Rolamentos`,
+`Elementos de fixação`, `Solda e consumíveis`… — feito para a GMP e **completamente sem uso**. As
+duas listas não tinham **uma única categoria em comum**.
+
+Isso produzia dois efeitos ruins na prática:
+
+1. **O filtro de categoria devolvia zero.** Ele oferecia `EPI`, e nenhum material do banco estava
+   como `EPI`. Zero linhas parece estoque vazio, não filtro inútil.
+2. **A tela mentia sobre o que estava gravado.** Ao abrir um material cuja categoria não estava na
+   lista, o formulário mostrava **a primeira opção da lista** — a pessoa via `Aço carbono` na tela
+   enquanto o cadastro continuava guardando `CONSUMÍVEL`. E se ela salvasse, salvava `CONSUMÍVEL`
+   mesmo. Não havia mensagem de erro nem indício nenhum.
+
+### O que existe agora
+
+| Onde | O que mudou |
+|---|---|
+| **Materiais → Novo/Editar Material** | O campo Categoria lista o catálogo da GMP; nasce **vazio** (`Selecione…`) e o sistema **recusa salvar sem categoria** |
+| **Materiais** (filtro da listagem) | O seletor de categoria lista o catálogo |
+| **Conferência de Estoque** (filtro da nova conferência) | Idem |
+| **Configurações → aba Categorias** (nova) | Criar, renomear, desativar e **reativar** categoria |
+| **Auditoria** | Filtro **Entidade = Categoria**, com quem fez e o de/para do nome |
+
+### Roteiro de teste manual (8 minutos)
+
+1. Entre como usuário **Administrador** do almoxarifado (os outros perfis leem, mas não editam o
+   catálogo).
+2. **Almoxarifado → Configurações → aba "Categorias".** Confira que a lista traz as 27 categorias
+   de metalúrgica, todas com a etiqueta verde **Ativa**.
+3. Clique em **➕ Nova Categoria**, digite `Perfis de alumínio` e **Salvar Categoria**. Deve
+   aparecer *"Categoria criada!"* e a linha nova na tabela.
+4. Clique em **➕ Nova Categoria** de novo e tente o **mesmo nome**. O sistema recusa com
+   *"Já existe uma categoria com este nome"*. (Tente também com espaços: `" Perfis de alumínio "`
+   colide igual.) Salvar com o nome vazio dá *"Nome é obrigatório"*.
+5. **Almoxarifado → Materiais → Novo Material.** Na seção *Classificação*, abra o campo
+   **Categoria**: `Perfis de alumínio` **já está lá**, sem precisar recarregar a página.
+6. Preencha o resto do material e clique em salvar **sem escolher categoria**. O sistema recusa
+   com *"Selecione a categoria do material"*. Escolha `Perfis de alumínio` e salve.
+7. **Abra para edição um material antigo** (cadastrado antes desta etapa). O campo Categoria
+   mostra o valor gravado com o aviso — por exemplo **`CONSUMÍVEL (fora de catálogo)`**. Salve sem
+   tocar no campo e reabra: **continua `CONSUMÍVEL`**. (Antes, esta mesma tela mostrava
+   `Aço carbono`.)
+8. Volte a **Configurações → Categorias**, clique no **lápis** de `Perfis de alumínio`. Leia o
+   **aviso amarelo**: *"Renomear não reclassifica os materiais: os que já usam esta categoria
+   continuam gravados com o nome antigo. Para movê-los, edite cada material."* Renomeie para
+   `Perfis de alumínio extrudado` e salve — *"Categoria renomeada! Os materiais já classificados
+   mantêm o nome antigo."*
+9. Abra o material do passo 6: ele mostra **o nome antigo, marcado como fora de catálogo**. É o
+   comportamento declarado, e é a decisão **B58**.
+10. Clique na **lixeira** da categoria. Leia a pergunta: *"Desativar a categoria "…"? Ela sai das
+    listas de novos materiais, mas os que já a usam continuam com ela."* Confirme
+    (*"Categoria desativada"*): a linha fica **Inativa** e o botão vira **Reativar**. Confira em
+    **Novo Material** que ela sumiu da lista, e que o material do passo 6 **continua com ela**.
+11. Clique em **Reativar** (*"Categoria reativada"*): ela volta às listas.
+12. **Almoxarifado → Auditoria** → filtro **Entidade = Categoria**. Aparecem as linhas de
+    **Criação**, **Edição** e **Exclusão**, com o autor; expanda a de Edição para ver o de/para do
+    nome.
+
+### Teste de permissão (2 minutos)
+
+Entre com um usuário que **não** seja Administrador do módulo (Almoxarife, Gestor, Compras,
+Engenharia, Consulta, Qualidade ou alguém sem perfil). A lista de categorias **continua aparecendo
+normalmente** no cadastro de material — a leitura é liberada, porque a tela precisa dela para
+exibir a categoria do item. O que ele não consegue é criar, renomear ou desativar: o servidor
+recusa com 403.
+
+### O que esta etapa NÃO cobre
+
+- **Nenhum material foi reclassificado.** Quem estava como `CONSUMÍVEL` continua como
+  `CONSUMÍVEL`. Isso é decisão declarada: a consulta para decidir em produção é a **A6** do
+  documento de novidades.
+- **⚠️ Enquanto o acervo não for remapeado, filtrar a lista de materiais por qualquer categoria
+  nova devolve ZERO.** Não é defeito — as opções agora são as certas, o que falta é o acervo
+  chegar nelas. É o furo **C33**, e quem opera precisa saber antes de estranhar.
+- **Renomear não reclassifica** os materiais (passo 8/9) — decisão **B58**.
+- **Não existe reclassificação em massa pela tela.** Para mover materiais de uma categoria para
+  outra, edita-se material por material ou roda-se o `UPDATE` da A6.
+- **As 27 categorias do catálogo não foram revisadas com a GMP.** Estavam no banco desde o começo
+  e foram assumidas como certas. Se alguma sobrar ou faltar, agora dá para arrumar pela tela.
 
 ## Correção — a posição por cliente não fechava a conta (2026-08-13)
 

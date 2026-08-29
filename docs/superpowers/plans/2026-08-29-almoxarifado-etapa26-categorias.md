@@ -104,23 +104,23 @@ já moram), `server/services/almoxarifado/schema.js` (o índice único) e
 `server/services/almoxarifado/auditLabels.js` (o rótulo);
 Test `server/tests/api/categoriasCrud.api.test.js`.
 
-- [ ] **Step 0: leia as TRÊS fontes do C2** — o gate e a auditoria em **centros de custo**
+- [x] **Step 0: leia as TRÊS fontes do C2** (`1bca087`) — o gate e a auditoria em **centros de custo**
   (`extended.js:162+`), a régua de nome em **setores** (`almoxarifado.js:2041+`) e o soft delete
   em **tipos de material**. Anote no relatório o que encontrou em cada uma.
   **NÃO** use famílias como molde: ela tem `parent_id`, validação de pai e código automático que
   categoria não precisa — e **não tem** unicidade de nome, que é justamente o que a RN-06 pede.
-- [ ] **Step 1: teste que falha** — RN-02 (criar, renomear, desativar), RN-03 (**matriz de
+- [x] **Step 1: teste que falha** (`1bca087`) — RN-02 (criar, renomear, desativar), RN-03 (**matriz de
   perfis, com a asserção negativa**: quem não tem o gate recebe 403), RN-06 (duplicada recusada),
   e **desativar não apaga**: o material que usa a categoria continua com ela, e a categoria some
   do `GET`. Guarda anti-teste-vazio: afirme que o `GET` **trazia** a categoria antes de afirmar
   que ela sumiu.
-- [ ] **Step 2: implementar**: as três rotas + o `CREATE UNIQUE INDEX` no `schema.js` + o
+- [x] **Step 2: implementar** (`1bca087`): as três rotas + o `CREATE UNIQUE INDEX` no `schema.js` + o
   parâmetro de inativas no `GET` (C1) + `categoria: 'Categoria'` no `auditLabels.js`.
   **Com auditoria** — este cadastro nasce instrumentado, não vira o 13º sem rastro.
-- [ ] **Step 3: controle positivo** (commitar antes): (a) remova o gate → o cenário da matriz cai
+- [x] **Step 3: controle positivo** (`1bca087`): (a) remova o gate → o cenário da matriz cai
   nomeando o perfil que passou; (b) faça o desativar apagar a linha → o cenário do material cai;
   (c) remova o índice único → o cenário da duplicada cai.
-- [ ] **Step 4:** `npm run test:api`; commit.
+- [x] **Step 4:** `npm run test:api` **154/154**; commit `1bca087`.
 
 ---
 
@@ -201,7 +201,7 @@ a lista hardcoded** (verificado pela Fase 2), então nada fica vermelho por tabe
 
 ---
 
-### Task 3 (galho): a aba de categorias em Configurações
+### Task 3 (galho): a aba de categorias em Configurações — FEITA (`c87fe92`)
 
 **Files:** Modify `client/src/components/almoxarifado/ConfiguracoesAlmoxarifado.js`;
 Test: arquivo próprio da aba (a convenção do diretório é **um arquivo por aba** — foi o que a
@@ -217,33 +217,125 @@ que a Task 1 relatar.
   que justifica a mudança de contrato dizendo que o parâmetro de inativas existe "para a aba ter
   como reativar o que desativou". Executado ao pé da letra, entregaria a aba **sem o único uso
   que justifica a mudança da Task 1**, e sem teste que denunciasse.
-- [ ] **Step 2: implementar**, molde: a aba de famílias.
-- [ ] **Step 3: controle positivo com alvo** (remova o aviso da RN-05 → cai o cenário dele).
-- [ ] **Step 4:** `CI=true` test e build; commit.
+- [x] **Step 2: implementar** (`c87fe92`) — molde: a aba de famílias, mas SEM `parent_id`/código automático/hierarquia (a tabela tem `parent_id` herdado e sem uso; a lista é plana).
+- [x] **Step 3: controle positivo com alvo** (`c87fe92`) — removido o aviso da RN-05, caiu o cenário dele.
+- [x] **Step 4:** `CI=true` test **582/582** em 39 suítes e build limpo; commit `c87fe92`.
 
 ---
 
-### Task 4: integração e fechamento
+### Task 4: integração e fechamento — FEITA (`9d86a84`)
 
-- [ ] **Step 1:** integração — criar categoria pela rota, ver aparecer no `GET`, classificar um
-  material com ela, e **ler pela tela-contrato da auditoria** (`GET /auditoria?entidade=<a que o
-  molde usar>`) conferindo que o cadastro deixou rastro. **Não** espere total fixo.
-- [ ] **Step 2:** os cinco comandos da suíte + o cliente com `TZ=UTC`, números **lidos**.
-- [ ] **Step 3:** skill `fechar-etapa` inteira, **incluindo o Passo 8**.
-  - **Letra A — a consulta de produção**, que é o entregável mais importante desta etapa para o
-    André: quantos materiais existem por categoria hoje em produção. Escreva o SQL pronto para
-    copiar e **o que fazer com cada resultado** (se todos estiverem numa categoria genérica, o
-    remapeamento é trivial; se estiverem espalhados, é decisão dele). No banco de desenvolvimento
-    são 2 materiais em `CONSUMÍVEL` — **diga que esse número é do dev e não vale para produção**.
-  - **Letra B — a B6 é respondida** (vence o catálogo do cliente); e entra a pergunta nova:
-    renomear deve propagar para os materiais, ou a coluna deve virar chave estrangeira?
-  - **Spec 01:** a pendência "categorias hardcoded no front" sai; diga se a feature muda de cor.
+> **Entregue.** `server/tests/api/categoriaIntegracao.api.test.js`, **4 cenários**, `test:api`
+> **155/155 arquivos**. Três controles positivos com alvo (md5 antes/depois/restaurado,
+> `git diff --stat` vazio nas três vezes), cada um caindo na asserção certa:
+> (a) removido `categoria: 'Categoria'` do `auditLabels` → cai **só** o cenário (3), na linha do
+> `entidade_rotulo` (`"categoria"` cru);
+> (b) auditado com `entidade: 'categoria_material'` → cai o (3) **na guarda anti-teste-vazio**
+> (*"a trilha de `entidade=categoria` voltou VAZIA"*) e o (4) nomeando o que o filtro passou a
+> oferecer (`["categoria_material","familia","material"]`) — **é o controle que prova que a guarda
+> é carregada, não decorativa**;
+> (c) `categoria: categoria || 'OUTROS'` trocado por `'OUTROS'` fixo → cai **só** o (2), com
+> *"o material foi gravado com "OUTROS" e nao com a categoria escolhida"*.
+>
+> **Divergência do plano, deliberada:** o Step 1 dizia `GET /auditoria?entidade=<a que o molde
+> usar>`. O cenário (10) da Task 1 **já lê a trilha filtrando por `entidade` + `entidade_id`**, e
+> repetir aquilo aqui não acrescentaria nada. A integração filtra **só por `entidade`** — que é
+> como a tela é usada de verdade ("o que aconteceu com categorias") — e acrescenta um quarto
+> cenário que o plano não previa: **`/auditoria/opcoes` passa a OFERECER `categoria`** no filtro.
+> Sem ele, o rastro poderia existir no banco e não ter como ser filtrado pela tela, que na prática
+> é o mesmo que não existir.
+
+- [x] **Step 1:** integração (`9d86a84`) — criar categoria pela rota, ver aparecer no `GET`,
+  classificar um material com ela, e ler pela tela-contrato da auditoria. **Sem total fixo**: o
+  banco de teste é compartilhado com as sementes e com os outros arquivos, então um número fixo
+  quebraria por motivo alheio e esconderia o achado atrás de um vermelho de contagem — o que se
+  afirma é a **composição** (os atos DESTA categoria, com estas ações, este rótulo e este autor).
+  **Guarda anti-teste-vazio em dois degraus**, porque `[].every(...)` é verdadeiro: primeiro "a
+  leitura trouxe alguma coisa" e "o ato desta categoria foi encontrado", só depois qualquer
+  asserção sobre conteúdo.
+- [x] **Step 2:** verificação final — números lidos, na seção abaixo.
+- [x] **Step 3:** skill `fechar-etapa` inteira, incluindo o Passo 8.
+  - **Letra A:** entraram **duas** consultas, não uma. A **A6** (materiais por categoria em
+    produção, com o que fazer em cada cenário e o aviso explícito de que os 2 materiais do dev
+    **não valem** para produção) e a **A7**, que o plano não previa: a Task 1 pôs o
+    `CREATE UNIQUE INDEX` em `try/catch`, então **se houver nome duplicado em produção o índice
+    não é criado e a RN-06 não vale** — sem nada quebrar visivelmente. A consulta é o
+    `GROUP BY ... HAVING COUNT(*) > 1` que já está no log do `schema.js`.
+  - **Letra B:** a **B6 foi respondida** (vence o catálogo do cliente) e entrou a **B58**
+    (renomear propaga, vira chave estrangeira, ou fica como está?), com as três opções, o custo de
+    cada uma e a recomendação escrita.
+  - **Letra C:** entrou o furo **C33** — o filtro de categoria da listagem passa a oferecer as 27
+    do catálogo e **devolve zero** enquanto o acervo não for remapeado. Consequência direta da
+    decisão 2 (não migrar), e o usuário precisa saber antes de estranhar.
+  - **Spec 01:** a pendência da linha `:52` saiu, **e ficou escrito no lugar dela que a Fase 0
+    desta etapa errou a varredura tendo a resposta ali mesmo** — aquela linha nomeava os três
+    arquivos corretamente e dizia "mexe em três telas". **A feature 01 continua 🟡** (fecha um item
+    do checklist de Frontend; sobram tabela de conversões, grupo acima de família,
+    motivos/transportadoras/tipos de documento, `almoxarifadoApi.js` e anexos na tela).
+
+## Verificação final — números LIDOS (2026-08-29)
+
+| Comando | Resultado |
+|---|---|
+| `cd server && npm run test:api` | **155/155 arquivos** |
+| `cd server && npm run test:almoxarifado` | **42/42** |
+| `cd server && npm run test:validation` | **4/4** |
+| `cd server && npm run test:safealter` | **3/3** |
+| `cd server && npm run test:sqlite` | **5/5** |
+| `cd client && CI=true npx react-scripts test --watchAll=false` | **582/582 em 39 suítes** |
+| `cd client && TZ=UTC CI=true npx react-scripts test --watchAll=false` | **582/582 em 39 suítes** |
+| `cd client && CI=true npx react-scripts build` | `Compiled successfully` |
+
+## Retro — os quatro números desta etapa
+
+| Número | O quê |
+|---|---|
+| **10 achados, 2 críticos** | A **Fase 2** revisou o plano antes de qualquer código. Os dois críticos: (1) **a varredura do design errou os arquivos** — dizia "3" e nomeava **dois**, deixando `MateriaisAlmoxarifado.js` de fora, com a resposta certa escrita em `01-cadastros-materiais/README.md:52`; executado assim, o plano violaria a própria RN-01; (2) **o molde era o errado** — mandava copiar famílias, que tem `parent_id`, validação de pai e código automático e **não tem unicidade de nome**, justamente o que a RN-06 pedia. |
+| **3 de 3 tasks corrigiram o plano** | Nenhuma executou o plano como estava escrito, e as três correções foram medidas, não opinião. |
+| **2 defeitos de produto achados ao medir** | O `<select>` controlado exibindo a primeira opção enquanto o payload mandava outra (**a tela mentia sobre o banco**), e `categoria \|\| 'OUTROS'` no `materialService`. Nenhum dos dois estava no design. |
+| **3 controles positivos na Task 4, 3 acertando a asserção certa** | Incluindo o (b), que derruba a **guarda anti-teste-vazio** — a prova de que ela não é decorativa. |
+
+**O que cada task corrigiu no plano:**
+
+1. **Task 1** — a **RN-06 estava incompleta**: só falava de **criar** duplicada. Sem a mesma régua
+   no `PUT`, renomear para nome ocupado devolvia **500**, e a tela (que mostra o `error` cru do
+   servidor) diria "erro interno" para erro de preenchimento. E **protegeu o `initSchema`**: o
+   plano dizia que o `CREATE UNIQUE INDEX` "aplica limpo (medido)" — o medido foi o **dev**; numa
+   base de cliente com duplicatas, a exceção subiria pelo `initSchema` inteiro e derrubaria o
+   módulo por causa de duas linhas de catálogo.
+2. **Task 2** — **"nascer vazio" não bastava**, e nem o plano nem o design tinham visto:
+   `createMaterial` faz `categoria: categoria || 'OUTROS'`, então o campo vazio apenas trocaria
+   "nasce `CONSUMÍVEL`" por "nasce `OUTROS`" — as duas fora do catálogo, e a segunda escolhida
+   pelo **servidor**, sem sequer aparecer na tela.
+3. **Task 3** — o **Step 1 omitia "reativar", contradizendo o próprio C1** deste plano, que
+   justifica a mudança de contrato da Task 1 dizendo que o parâmetro de inativas existe "para a
+   aba ter como reativar o que desativou". Executado ao pé da letra, entregaria a aba **sem o
+   único uso que justifica a mudança da Task 1**, e sem teste que denunciasse.
+
+**A lição que sai desta etapa e vale para a próxima:** a Fase 0 mediu o código **sem ler a spec da
+feature antes**, e errou uma medição que estava pronta no repositório. É a **segunda etapa
+seguida** (a 24 foi a primeira, com a tela de perfis que existia) em que uma varredura minha sobre
+"o que existe no client" falha. **Ler a spec da feature ANTES de medir** virou passo obrigatório
+da Fase 0.
 
 ## Próxima tarefa detalhada
 
-Se parar aqui: **Fase 2** — agente fresco com plano + design e três perguntas (os contratos
-cobrem os erros? as RN batem com o código? a Task 2 é galho de verdade?). Atenção especial a:
-**o molde de famílias é mesmo o certo** (ou há cadastro mais parecido, como tipos de material?);
-**quantos arquivos do client declaram a lista** (o design diz 3 — confira, porque foi uma
-varredura minha e na Etapa 24 uma varredura minha estava errada); e se algum teste existente
-congela a lista hardcoded (se congelar, ele **vai** ficar vermelho e isso precisa estar previsto).
+**Etapa 27 — feature 08 (tipos de entrada de material).** Escolhida entre as candidatas do mapa
+(05 picking, 06 motor de regras de aprovação, 08 tipos de entrada, 09 plano de inspeção com
+medidas) pela Fase 0 medida em 2026-08-29 — **ver a medição completa no relatório do fechamento**.
+O que a próxima sessão precisa saber antes de abrir código:
+
+- **Meça pelo nome do CONTRATO, não pelo nome que você imagina.** Foi assim que a Etapa 24 errou
+  (procurou `perfil_almoxarifado`; a rota era `perfis-usuario`) e como esta errou a contagem de
+  arquivos do client.
+- **Leia `specs/modulo-almoxarifado/<feature>/README.md` ANTES de medir o código.** A regra nova,
+  e ela existe por causa do erro desta etapa.
+- **O molde de cadastro simples do módulo já está resolvido e escrito**: gate
+  `requirePermission('configurar')` + `auditar(db, payload, contexto)`/`autorDe(req)` dos centros
+  de custo em `routes/almoxarifado/extended.js`; régua de nome/unicidade dos setores; soft delete
+  dos tipos de material (versão da Etapa 23: `AND ativo = 1`, 404, 200 `ja_inativo` sem auditar);
+  `?todos=1` no GET; rótulo em `auditLabels.ROTULOS_ENTIDADE`. **Famílias não é molde de nada.**
+- **O molde de aba de Configurações também**: `TabCategorias` em `ConfiguracoesAlmoxarifado.js`
+  (Etapa 26) é o exemplo mais novo e mais simples — GET sempre com `?todos=1`, `PUT` de rename
+  **omitindo** `ativo`, `PUT` de reativação com `ativo: 1` explícito, e a mensagem do servidor
+  exibida crua.

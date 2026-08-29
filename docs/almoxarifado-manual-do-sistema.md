@@ -115,7 +115,27 @@ No formulário, o campo **Subfamília** só se habilita depois que a Família é
 
 As famílias são mantidas em **Almoxarifado → Configurações → aba "Famílias"**, cada uma com um tipo de uso (administrativo, industrial ou ambos).
 
-Além da família existe o campo **Categoria**, uma classificação livre de apoio (Consumível, Ferramenta, EPI, Elétrico, Hidráulico, Mecânico, Insumo, Embalagem, Escritório, Limpeza, Outros) e o campo **Tipo de Material**, texto que descreve a natureza física do item (chapa, tubo, perfil, barra, motor, rolamento, válvula, ferramenta, EPI, consumível etc.). O Tipo de Material não é decorativo: é ele que a restrição de endereço consulta (ver 3.4).
+Além da família existe o campo **Categoria**, uma classificação de apoio escolhida num **catálogo mantido pela própria empresa** — Aço carbono, Aço inox, Chapas, Tubos, Perfis estruturais, Componentes usinados, Rolamentos, Elementos de fixação, Solda e consumíveis e assim por diante. O catálogo é editado em **Almoxarifado → Configurações → aba "Categorias"** (logo abaixo), e é a **mesma lista** que alimenta o cadastro de material, o filtro da listagem de materiais e o filtro de escopo da conferência de estoque.
+
+**A categoria é obrigatória no cadastro.** O campo começa vazio, mostrando `Selecione…`, e salvar sem escolher é recusado com *"Selecione a categoria do material"*.
+
+**Material classificado com uma categoria que não está mais no catálogo continua válido, e a tela mostra isso.** Ao abrir esse material para edição, o campo exibe o valor gravado seguido de **`(fora de catálogo)`** — por exemplo `CONSUMÍVEL (fora de catálogo)`. Salvar sem tocar no campo **mantém** o valor: o sistema não reclassifica material por conta própria, e não impede a edição do resto do cadastro por causa de uma categoria antiga.
+
+Existe também o campo **Tipo de Material**, texto que descreve a natureza física do item (chapa, tubo, perfil, barra, motor, rolamento, válvula, ferramenta, EPI, consumível etc.). O Tipo de Material não é decorativo: é ele que a restrição de endereço consulta (ver 3.4). Categoria e Tipo de Material são coisas diferentes e não se substituem.
+
+#### O catálogo de categorias
+
+Em **Almoxarifado → Configurações → aba "Categorias"**, quem tem perfil **Administrador** do módulo pode criar, renomear, desativar e reativar categorias. Ler a lista é liberado a qualquer usuário do módulo — o formulário de material precisa dela para exibir a categoria do item.
+
+| Ação | Regra |
+|---|---|
+| **Criar** | O nome é obrigatório (*"Nome é obrigatório"*) e é gravado sem os espaços das pontas |
+| **Nome repetido** | Recusado, na criação e no renomear: *"Já existe uma categoria com este nome"*. `" Chapas "` e `Chapas` são o mesmo nome |
+| **Renomear** | **Não reclassifica os materiais.** Os que já usam a categoria continuam gravados com o nome antigo; para movê-los, edita-se cada material. A tela avisa antes de salvar e repete na confirmação: *"Categoria renomeada! Os materiais já classificados mantêm o nome antigo."* |
+| **Desativar** | **Não apaga.** A categoria sai das listas de novos materiais e **continua valendo** nos materiais que já a usam — que seguem sendo encontrados na busca por ela. A tela confirma antes: *"Desativar a categoria "…"? Ela sai das listas de novos materiais, mas os que já a usam continuam com ela."* |
+| **Reativar** | A categoria inativa continua na tabela, marcada como **Inativa**, com o botão **Reativar**; ao ser reativada, volta a aparecer nas listas |
+
+Criar, renomear e desativar categoria ficam registrados no histórico do módulo, sob a entidade **Categoria**, com o autor e o de/para do nome (ver a seção de histórico).
 
 ### 2.2 O código do material
 
@@ -630,7 +650,7 @@ A mudança vale para as próximas ações da pessoa — pode levar alguns instan
 
 Toda operação relevante do módulo grava uma trilha com **quem** (nome do usuário), **quando**, **o que** (a entidade e a ação), os **valores anteriores e novos** quando houve alteração, e a **justificativa** quando a operação exige uma.
 
-São auditados: criação e **desativação** de material, e a edição — **inclusive a troca da foto**; **os cadastros do módulo — tipos de material, localizações, setores, famílias, centros de custo e almoxarifados — em criação, edição e exclusão**; **as configurações do módulo**, inclusive as que mudam regra de negócio (tolerância de inventário, parâmetros de alerta, alçada de liberação por valor); **a lista de materiais permitidos por setor**; aprovação, rejeição, confirmação, encerramento, **cancelamento e exclusão** de requisição; **todo o ciclo da conferência de inventário — abertura, cada contagem, cada recontagem, a conclusão e o cancelamento**; movimentação de estoque e estorno; reservas; lotes (mudança de situação, liberação de vencimento, certificado); séries (entrada, saída, bloqueio, estorno); recebimentos; inspeções; devoluções; materiais de clientes; remessas a terceiros; sobras e retalhos (geração e edição); sucateamentos (solicitação, cada aprovação, rejeição, cancelamento, destino e a compensação automática quando uma aprovação é desfeita); e **o perfil de acesso ao módulo — tanto conceder quanto retirar**.
+São auditados: criação e **desativação** de material, e a edição — **inclusive a troca da foto**; **os cadastros do módulo — tipos de material, localizações, setores, famílias, categorias, centros de custo e almoxarifados — em criação, edição e exclusão**; **as configurações do módulo**, inclusive as que mudam regra de negócio (tolerância de inventário, parâmetros de alerta, alçada de liberação por valor); **a lista de materiais permitidos por setor**; aprovação, rejeição, confirmação, encerramento, **cancelamento e exclusão** de requisição; **todo o ciclo da conferência de inventário — abertura, cada contagem, cada recontagem, a conclusão e o cancelamento**; movimentação de estoque e estorno; reservas; lotes (mudança de situação, liberação de vencimento, certificado); séries (entrada, saída, bloqueio, estorno); recebimentos; inspeções; devoluções; materiais de clientes; remessas a terceiros; sobras e retalhos (geração e edição); sucateamentos (solicitação, cada aprovação, rejeição, cancelamento, destino e a compensação automática quando uma aprovação é desfeita); e **o perfil de acesso ao módulo — tanto conceder quanto retirar**.
 
 Sobre esse último item, que é o ato mais sensível do módulo, vale o detalhe: **dar e tirar perfil deixam, cada um, uma linha própria na trilha.** Conceder ou trocar aparece como **Edição**; devolver alguém ao padrão (Produção) aparece como **Exclusão** — e, filtrando por essas ações na tela de Auditoria, as duas são encontradas. As duas linhas mostram o **de → para** completo: o perfil que havia antes, o que passou a valer, e a origem (explícito ou padrão). Retirar o perfil de alguém fica registrado **mesmo que a pessoa não tivesse perfil explícito nenhum** — o que se registra é o ato de mandar voltar ao padrão, não a diferença.
 
@@ -1376,7 +1396,7 @@ O escopo é montado por filtros **combináveis** (todos opcionais; sem nenhum, e
 
 | Filtro | O que seleciona |
 |---|---|
-| **Categoria** | materiais daquela categoria |
+| **Categoria** | materiais daquela categoria — a lista oferecida é o **catálogo de categorias** da empresa (ver 2.1) |
 | **Família** | materiais daquela família — o seletor só oferece **famílias raiz**, porque é a raiz que o cadastro de material vincula |
 | **Classe ABC** | materiais da classe A, B ou C |
 | **Somente críticos** | materiais marcados como críticos no cadastro |

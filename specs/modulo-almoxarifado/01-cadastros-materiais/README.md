@@ -1,8 +1,14 @@
 # 01 — Cadastros de Materiais
 
-> **Status:** 🟡 — Etapa 2 entregue (2026-08-04): ~21 colunas novas no material (técnicos, reposição, controles, ABC, unidades compra/consumo + fatores), subfamílias via `parent_id` em famílias, `MaterialSchema`/`MaterialUpdateSchema` (Zod) com validação e auditoria de criação/atualização, form em 6 seções. Falta: tabela de conversões genérica, grupo acima de família, motivos/transportadoras/tipos de documento, remover categorias hardcoded do front, `almoxarifadoApi.js`.
+> **Status:** 🟡 — **continua 🟡, e a Etapa 26 não muda a cor**: ela fecha **um** item do
+> checklist de Frontend (as categorias hardcoded), e os outros quatro seguem abertos (tabela de
+> conversões genérica, grupo acima de família, motivos/transportadoras/tipos de documento,
+> `almoxarifadoApi.js`, ficha técnica/anexos na tela). Etapa 2 entregue (2026-08-04): ~21 colunas novas no material (técnicos, reposição, controles, ABC, unidades compra/consumo + fatores), subfamílias via `parent_id` em famílias, `MaterialSchema`/`MaterialUpdateSchema` (Zod) com validação e auditoria de criação/atualização, form em 6 seções.
 > **Spec original:** seções 4.1, 4.2, 4.3
-> **Última atualização:** 2026-08-13 (**Etapa 8c, Task 1 (`028da1e`) — criar material virou serviço
+> **Última atualização:** 2026-08-29 (**Etapa 26 (`1bca087..6b981ac`) — o catálogo de categorias
+> virou cadastro e as três telas pararam de hardcodar a lista.** Ver a seção "Entregue na Etapa
+> 26", no fim.)
+> Antes: 2026-08-13 (**Etapa 8c, Task 1 (`028da1e`) — criar material virou serviço
 > e o gerador de código passou a aguentar lote.** Ver a seção "Entregue na Etapa 8c, Task 1", no
 > fim. Nada disso estava documentado nesta feature até agora.)
 > Antes: 2026-08-11 (auditoria spec×código: corrigida a afirmação falsa sobre `controle_lote`/`controle_certificado`; refs de linha trocadas por nomes)
@@ -17,7 +23,7 @@ Cadastro completo de materiais com todos os campos da spec, famílias/subfamíli
 - Tabela `materiais_almoxarifado` (criada em `services/almoxarifado/schema.js`; colunas v3 e as da Etapa 2 adicionadas via `safeAlter` no mesmo arquivo): codigo UNIQUE, nome, descricao, categoria/categoria_id, familia_id, subcategoria_id, subfamilia_id, unidade, foto, localizacao_padrao_id, quantidade_atual/minima/maxima, custo_unitario/custo_medio, fornecedor_id, ncm, tipo_material, material_critico, controle_lote, controle_certificado, controle_serie, controle_validade, controle_corrida, requer_inspecao, requer_foto, classe_abc, fabricante, codigo_fabricante, peso_unitario, dimensoes, material_construtivo, norma, marca, modelo, aplicacao, ponto_reposicao, lote_economico, unidade_compra/fator_conversao_compra, unidade_consumo/fator_conversao_consumo, permite_saldo_negativo, ativo.
 - CRUD completo: rotas GET/POST/PUT/DELETE de `/materiais` em `routes/almoxarifado.js` (validação de família ativa obrigatória, soft delete, foto ≤10 MB, código automático por família/setor). **Desde a Etapa 8c, Task 1 (2026-08-13, `028da1e`), o POST é um chamador magro:** a criação mora em `services/almoxarifado/materialService.createMaterial` — ver a seção do fim; POST/PUT migrados para `validate(MaterialSchema)`/`validate(MaterialUpdateSchema)` (Zod, com coerção de strings do form) na Etapa 2; PUT preserva qualquer campo omitido do payload (inclusive os novos); toda criação/edição grava auditoria (`CRIACAO`/`ATUALIZACAO`) com diff dos campos alterados em `auditoria_log_almoxarifado`.
 - Famílias: `familias_material_almoxarifado` + CRUD (rotas de `/familias` em `routes/almoxarifado.js`) com `tipo_uso` (administrativo/industrial/ambos); ganhou `parent_id` na Etapa 2 (subfamílias, máx. 2 níveis, validação de hierarquia em POST/PUT/DELETE).
-- Categorias com hierarquia (`parent_id`), 27 seeds. Unidades de medida (12 seeds). Tipos de material (20 no enum + tabela com flags EPI/controlado/assinatura).
+- Categorias: 27 seeds em `CATEGORIAS_SEED`, **CRUD completo desde a Etapa 26** (`GET [?todos=1]`/`POST`/`PUT`/`DELETE` em `routes/almoxarifado/extended.js`, gate `requirePermission('configurar')`, soft delete, auditoria com entidade `categoria`, `CREATE UNIQUE INDEX idx_categorias_almox_nome`) + aba **Categorias** em `ConfiguracoesAlmoxarifado.js`. A coluna `parent_id` da tabela **existe e continua sem uso nenhum** — a hierarquia nunca foi construída, e o CRUD da Etapa 26 não a toca (a lista é plana, de propósito). Unidades de medida (12 seeds). Tipos de material (20 no enum + tabela com flags EPI/controlado/assinatura).
 - Front: `MateriaisAlmoxarifado.js`, `MaterialAlmoxarifadoForm.js` (reorganizado em 6 seções na Etapa 2: Identificação · Classificação com cascata família→subfamília · Dados Técnicos · Estoque e Reposição · Controles · Unidades e Custos), aba Famílias em `ConfiguracoesAlmoxarifado.js`.
 - Testes: cobertura parcial em `almoxarifado.test.js` (material inativo, foto em `materialPhoto.test.js`); Etapa 2 adiciona `server/tests/api/materialCompleto.api.test.js` e `server/tests/api/subfamilias.api.test.js`.
 
@@ -49,7 +55,16 @@ Cadastro completo de materiais com todos os campos da spec, famílias/subfamíli
 
 ### Frontend
 - [x] Form de material com os novos campos, em seções (`MaterialAlmoxarifadoForm.js`: Identificação · Classificação com cascata família→subfamília · Dados Técnicos · Estoque e Reposição · Controles · Unidades e Custos)
-- [ ] Remover listas de categorias hardcoded duplicadas em `MateriaisAlmoxarifado.js` (`CATEGORIAS` em `:15`), `MaterialAlmoxarifadoForm.js`, `ConferenciaEstoque.js` → usar `/almoxarifado/categorias` — **ainda não feito**. **A Etapa 8c encostou nesta dívida e NÃO a resolveu (2026-08-13):** a sobra da transformação é material normal e usa a categoria "Sucata e sobras reaproveitáveis", que **já existe no `CATEGORIAS_SEED`** — a lista hardcoded do front não a tem, e é diferente da tabela seedada. Resolver mexe em **três telas** por um motivo que não era o da etapa, então ficou de fora **de propósito**; segue aberta, e cada etapa que cria material por caminho novo aumenta a chance de a lista do front mentir
+- [x] Remover listas de categorias hardcoded duplicadas em `MateriaisAlmoxarifado.js`, `MaterialAlmoxarifadoForm.js`, `ConferenciaEstoque.js` → usar `/almoxarifado/categorias` — **FEITO na Etapa 26 (2026-08-29, `f047948`)**, via o hook único `client/src/hooks/useCategoriasMaterial.js`; nenhuma das três constantes existe mais. A dívida estava aberta desde a Etapa 2 e a Etapa 8c encostou nela sem resolver (a sobra da transformação usa "Sucata e sobras reaproveitáveis", que existe no `CATEGORIAS_SEED` e **não** existia na lista do front).
+  > **AVISO PARA QUEM FOR MEDIR ESTA SPEC: esta linha estava CERTA e a Fase 0 da Etapa 26 a
+  > ignorou.** A varredura de abertura daquela etapa escreveu "3 arquivos" e nomeou **dois**
+  > (contou duas linhas do mesmo `MaterialAlmoxarifadoForm.js` como se fossem arquivos
+  > diferentes), deixando `MateriaisAlmoxarifado.js` de fora — **e esta linha aqui já nomeava os
+  > três corretamente e já dizia "mexe em três telas"**. A Fase 2 pegou o erro (achado A1) antes de
+  > qualquer código, mas executado como estava o plano teria violado a própria RN-01 da etapa e
+  > deixado esta pendência impossível de marcar como fechada. **A regra que saiu disso: ler a spec
+  > da feature ANTES de medir o código** — foi a segunda etapa seguida (a 24 foi a primeira) em que
+  > uma varredura sobre "o que existe no client" errou tendo a resposta pronta no repositório.
 - [ ] Criar `client/src/services/almoxarifadoApi.js` (camada de service, padrão de `frotasApi.js`) — **não criado**
 
 ## Regras essenciais + testes de API exigidos
@@ -133,3 +148,94 @@ por onde**. O que mudou aqui, e que até agora não estava documentado em lugar 
 > reescrevê-las mudaria, calado, o rótulo gravado na coluna `localizacao` de todo material criado
 > pelo serviço, e a guarda de refactor não pegaria porque o corpo de teste não manda
 > `localizacao_padrao_id`.
+
+## Entregue na Etapa 26 (2026-08-29, `1bca087..6b981ac`)
+
+**A dívida "categorias hardcoded no front" fechou** — estava aberta desde a Etapa 2 (2026-08-04),
+foi encostada e não resolvida pela Etapa 8c, e era a pendência mais antiga desta feature ainda de
+pé. Junto com ela, o catálogo deixou de ser semente morta e virou cadastro.
+
+**O estado que a etapa encontrou, medido:** duas listas de categorias coexistindo, **sem uma única
+categoria em comum**. A das telas — 11 nomes em maiúsculas (`CONSUMÍVEL`, `FERRAMENTA`, `EPI`…) —
+hardcoded em três componentes. A do servidor — as 27 de `CATEGORIAS_SEED`, taxonomia de
+metalúrgica — semeada em `categorias_material_almoxarifado` e **com zero materiais usando**. O
+`GET /api/almoxarifado/categorias` já existia e já era consumido por `ConfiguracoesAlmoxarifado.js`
+(o seletor de catálogo por setor); o que não existia era **POST/PUT/DELETE** e nenhum formulário de
+material lia dali. No banco de desenvolvimento: **2 materiais, ambos `CONSUMÍVEL`**.
+
+### Task 1 (`1bca087`) — o catálogo virou cadastro
+
+- **POST/PUT/DELETE** em `routes/almoxarifado/extended.js`, ao lado do `GET` que já morava lá.
+  **Molde híbrido por assunto**, e a escolha está escrita no código porque o molde óbvio é o
+  errado: gate e auditoria dos **centros de custo** (mesmo arquivo — o `auditarCadastro` de
+  famílias é closure **não exportada** de `routes/almoxarifado.js`, inalcançável dali); régua de
+  nome e unicidade dos **setores**; soft delete dos **tipos de material** na versão corrigida pela
+  Etapa 23 (`AND ativo = 1`, 404 para inexistente, 200 `ja_inativo` idempotente **sem auditar**).
+  **Famílias não é molde de nada aqui** — tem `parent_id`, validação de pai, bloqueio de inativação
+  com filhas e código automático, e **não tem unicidade de nome**, que é justamente o que a etapa
+  precisava.
+- **`CREATE UNIQUE INDEX idx_categorias_almox_nome`** em `services/almoxarifado/schema.js` — a
+  tabela não tinha índice nenhum.
+- **`?todos=1`** no `GET` (molde do centro de custo, o GET vizinho no mesmo arquivo), sem o qual a
+  aba de CRUD não teria como reativar o que desativou.
+- **`categoria: 'Categoria'`** em `ROTULOS_ENTIDADE` (`auditLabels.js`) — sem isso a entidade nova
+  apareceria crua no filtro da tela de auditoria.
+- Testes: `server/tests/api/categoriasCrud.api.test.js` (11 cenários), com matriz de perfis
+  (7 perfis × 3 verbos = 21 acessos indevidos nomeados no vermelho).
+
+**Duas correções que a execução fez no plano** (o plano estava incompleto, não errado):
+
+1. **A RN-06 só falava de CRIAR duplicada.** Sem a mesma régua no `PUT`, renomear para um nome já
+   ocupado devolvia **500** em vez de 400 — e a tela, que mostra o `error` do servidor cru, diria
+   "erro interno" para um erro de preenchimento.
+2. **O `CREATE UNIQUE INDEX` não podia ficar solto.** O plano dizia "aplica limpo (medido)" — e o
+   medido foi o **dev**. Numa base de cliente com dois nomes iguais, a exceção subiria pelo
+   `initSchema` inteiro e derrubaria o módulo por causa de duas linhas de catálogo. Ficou em
+   `try/catch` com log que traz o `GROUP BY ... HAVING COUNT(*) > 1` pronto. **Consequência
+   declarada:** se houver duplicatas em produção, o índice **não é criado** e a regra de unicidade
+   não vale — é a consulta **A7** do documento de apresentação.
+
+### Task 2 (`f047948`) — as três telas pararam de hardcodar
+
+Ponto único de busca: **`client/src/hooks/useCategoriasMaterial.js`**, consumido por
+`MaterialAlmoxarifadoForm.js`, `ConferenciaEstoque.js` e `MateriaisAlmoxarifado.js`. Devolve os
+**nomes**, porque é nome que `materiais.categoria` guarda. **Sem cache de módulo, de propósito**
+(ao contrário de `useAlmoxPermissoes`): com cache, a categoria recém-criada na aba não apareceria
+no select até um reload completo — o mesmo "a tela mente" que a etapa existe para corrigir.
+
+**Dois defeitos que a medição encontrou e que o design não tinha visto:**
+
+- **A tela mostrava a primeira opção da lista** para material gravado com categoria fora dela. O
+  `<select>` é controlado por state e o React **não dispara `onChange`** para valor ausente das
+  opções: DOM `select.value = "Chapas"` enquanto o payload mandava `"CONSUMÍVEL"`. O design tinha
+  descrito o bug **errado** ("salvar trocaria a categoria em silêncio") — não troca, e o real é
+  pior, porque não deixa rastro. Corrigido concatenando o valor atual, rotulado
+  `(fora de catálogo)`.
+- **"Nascer vazio" não bastava.** `materialService.createMaterial` faz
+  `categoria: categoria || 'OUTROS'`: mandar vazio trocaria "nasce `CONSUMÍVEL`" por "nasce
+  `OUTROS`" — as duas fora do catálogo, e a segunda escolhida pelo **servidor**, sem sequer
+  aparecer na tela. Por isso o submit **barra o vazio antes do POST** (*"Selecione a categoria do
+  material"*). A trava é **só do vazio**: categoria fora de catálogo continua salvando.
+
+### Task 3 (`c87fe92`) — a aba Categorias em Configurações
+
+Criar, renomear, desativar e **reativar**, com o aviso da RN-05 no renomear e a mensagem do
+servidor exibida crua. O `GET` vai sempre com `?todos=1`; o `PUT` de rename **omite** `ativo` (a
+rota preserva), e o de reativação manda `ativo: 1` explícito.
+
+### Task 4 (`9d86a84`) — integração
+
+`server/tests/api/categoriaIntegracao.api.test.js` (4 cenários): criar pela rota → aparecer no
+`GET` → classificar material → **ler pela tela-contrato da auditoria**
+(`GET /auditoria?entidade=categoria`), conferindo rótulo, autor e de/para, e que
+`/auditoria/opcoes` passa a **oferecer** `categoria` no filtro.
+
+### O que esta etapa deliberadamente NÃO fez
+
+- **Não migrou material nenhum.** A coluna `materiais.categoria` continua com o valor que tinha.
+  A consulta de produção é a **A6** do documento de apresentação; a decisão é do usuário.
+- **Renomear não propaga** (RN-05) — a coluna é texto livre, não chave estrangeira. Está declarado
+  na tela e virou a decisão **B58**.
+- **Categoria não virou chave estrangeira.** É o que tornaria a RN-05 desnecessária, e é migração
+  de schema sobre o cadastro de material: etapa própria.
+- **`parent_id` da tabela continua sem uso.** O CRUD trata a lista como plana.
