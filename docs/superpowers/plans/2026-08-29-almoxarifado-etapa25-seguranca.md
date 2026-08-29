@@ -102,7 +102,11 @@ Etapa 21.
 (vai em `tests/api/` porque **é o único lugar que o runner enxerga** — precedente explícito em
 `dbRecoveryBackup.api.test.js:1-6`, que já faz isso sendo teste de serviço).
 
-- [ ] **Step 1: teste que falha** — `decidirRemocao` como função pura, com `agora` fixo e
+> **STATUS: Task 1 FEITA** — commit `ffea21f`. Placar: `backupRetencao.api.test.js` **21/21**
+> (novo), `dbRecoveryBackup.api.test.js` **5/5** antes e depois, `test:api` **152/152** arquivos
+> (era 151), `test:sqlite` **5/5**. Três divergências registradas no fim desta task.
+
+- [x] **Step 1: teste que falha** — `decidirRemocao` como função pura, com `agora` fixo e
   `mtime` fixos:
   - **RN-01, o cenário de peso:** lista com 2 `.sqlite` e 8 `-wal`, dos quais 6 são órfãos →
     os 6 entram em `apagar`, os 2 acompanhados não saem por serem órfãos.
@@ -122,17 +126,55 @@ Etapa 21.
     apagado por data (só órfão).
   - **Guarda anti-teste-vazio:** afirme que a lista de entrada não está vazia e que **algo**
     sobrou, antes de afirmar o que saiu.
-- [ ] **Step 2: implementar** `decidirRemocao` + `pruneOldBackups` usando-a. **Compatibilidade
+- [x] **Step 2: implementar** `decidirRemocao` + `pruneOldBackups` usando-a. **Compatibilidade
   explícita** (`typeof opcoes === 'number'` → `{ tetoCopias: n }`), pelo motivo do C1: número
   desestruturado vira **no-op silencioso**, não erro. Rode
   `node tests/api/dbRecoveryBackup.api.test.js` (5 cenários, verde hoje) **antes e depois** — ele
   chama `pruneOldBackups(dbPath, 1)`, abaixo do piso, e é o teste que congela o contrato.
-- [ ] **Step 3: controle positivo** (commitar antes), **três**, lendo qual asserção caiu:
-  (1) régua ignorando órfãos (volta a filtrar só `.sqlite`) → RN-01 cai **nomeando os órfãos que
-  ficaram**; (2) piso removido → RN-02 cai dizendo que a mais recente foi apagada;
-  (3) **reconhecer só o nome novo de órfão** → o cenário do nome ANTIGO cai sozinho. A (3) é a
-  que prova que o teste não é vazio — sem ela, (1) e (2) passariam com a régua que limpa 0,03 MB.
-- [ ] **Step 4:** `npm run test:api` e `npm run test:sqlite`; commit.
+- [x] **Step 3: controle positivo** (commitado antes, `ffea21f`), **três**, lendo qual asserção
+  caiu:
+  1. acompanhante nem classificado (régua volta a olhar só `.sqlite`) → **RN-01 caiu nomeando os
+     6 órfãos que ficaram** (`apagar=[]`). 7 passed, 14 failed.
+  2. `pisoEfetivo = 0` → **RN-02 caiu**: "a régua apagou TUDO (5/5) — isso não é limpeza, é perda"
+     e "única cópia (de 8 anos) foi apagada — a recuperação ficou sem fallback". 18/3.
+  3. `ehAcompanhante` só reconhece o nome NOVO → **RN-01 caiu mostrando exatamente o passivo
+     real**: `apagar` só com os 2 órfãos de nome novo, os 4 de nome antigo intactos. 7/14.
+     **E o `dbRecoveryBackup.api.test.js` continuou 5/5 sob essa sabotagem** — porque
+     `backupDatabaseFiles` só produz o nome novo. É a prova de que o teste congelado sozinho
+     **não pega** o bug de 44 MB, e de que o cenário novo não é vazio.
+  `md5sum` conferido antes/depois/restaurado (OK nos dois arquivos), `git diff --stat` vazio.
+- [x] **Step 4:** `test:api` **152/152**, `test:sqlite` **5/5**; commit `ffea21f`.
+
+#### Divergências desta task (o que saiu diferente do plano, e por quê)
+
+1. **O contrato C1 acima está incompleto:** ele lista `{ manterDias, pisoCopias = 3, agora }` e
+   **não tem `tetoCopias`** — mas a própria RN-02 (corrigida na Fase 2 pelo achado A5) e a regra 2
+   exigem o teto. A assinatura implementada é
+   `decidirRemocao(arquivos, { manterDias, pisoCopias = 3, tetoCopias = 10, agora })`.
+   O texto do C1 ficou defasado quando a Fase 2 acrescentou o teto; **está errado como escrito**.
+2. **Regra 3 apaga os acompanhantes nos DOIS formatos de nome**, não só no novo. O plano diz
+   "junto com seus acompanhantes" sem qualificar. Se a regra 3 só limpasse `X.sqlite-wal`, um
+   `X-wal` de mesmo carimbo sobreviveria à passagem — e como a regra 1 já rodou antes dele virar
+   órfão, ele só sairia no boot **seguinte**. Custa uma linha varrer os dois agora.
+3. **A letra A da Task 4 vai prometer o número errado.** Ela manda escrever "liberam-se ~44 MB em
+   132 acompanhantes órfãos; as 11 cópias e seus 133 MB **continuam**". Com o teto de 10 isso não
+   se sustenta: há **11** cópias em disco, então a 11ª sai pelo teto. Dry-run sobre o diretório
+   real (só leitura, nada executado) em 2026-08-29:
+
+   ```
+   ENTRADA        : 165 arquivos, 187,36 MB
+   APAGARIA       : 135 arquivos,  57,27 MB
+     orfaos       : 132   (44,4 MB — o passivo)
+     acimaDoTeto  :   1   database-2026-08-05T19-54-12.sqlite
+     acompanhantes:   2   (os dessa cópia)
+     porIdade     :   0   (as 11 cópias estão todas dentro dos 30 dias)
+     ignorados(r0):   0
+   SOBRARIAM      :  30 arquivos, 130,09 MB — 10 cópias .sqlite
+   ```
+
+   Texto correto para a letra A: **liberam-se ~57 MB em 135 arquivos** — 132 acompanhantes
+   órfãos (44,4 MB) **mais** a 11ª cópia e seus 2 acompanhantes (12,9 MB), que saem pelo teto de
+   10. Sobram **10 cópias e ~130 MB**, não 11 e 133 MB.
 
 ---
 
@@ -229,13 +271,35 @@ os **23 movimentos originados em serviço gravariam `null`** — metade da featu
   diga **o que exatamente** falta, sem repetir o erro das etapas 22 e 24 de pesar só uma perna.
   Letra **B**: dupla conferência em material crítico (com o precedente do sucateamento).
   Letra **A**: a limpeza é a primeira coisa a rodar em produção — escreva como, **com os números
-  certos**: liberam-se **~44 MB em 132 acompanhantes órfãos**; as 11 cópias e seus 133 MB
-  **continuam**. Prometer "188 MB" seria prometer 4× o que se entrega (achado A6).
+  certos**. Prometer "188 MB" seria prometer 4× o que se entrega (achado A6) — **mas "~44 MB e as
+  11 cópias continuam" também está errado**, e foi corrigido na execução da Task 1 (ver
+  "Divergências" lá): com o teto de 10, a 11ª cópia sai. Dry-run sobre o diretório real:
+  **liberam-se ~57 MB em 135 arquivos** — 132 acompanhantes órfãos (44,4 MB) **mais** a 11ª cópia
+  e seus 2 acompanhantes (12,9 MB). **Sobram 10 cópias e ~130 MB.** Confira com o dry-run de novo
+  antes de escrever: o número muda conforme quantas cópias houver no dia.
   Letra **C**: a tela de Backup fica com **um** controle vivo e **dois** decorativos —
   `backup_automatico` e `backup_frequencia` seguem sem leitor no servidor (achado A11). Se o guia
   disser só "a retenção agora funciona", o usuário conclui que o painel inteiro funciona.
 
 ## Próxima tarefa detalhada
+
+**A Task 1 está feita (`ffea21f`). A próxima é a Task 2.** O que ela consome:
+
+- `pruneOldBackups(dbPath, opcoes)` aceita **objeto** `{ manterDias, pisoCopias, tetoCopias }` ou
+  **número** (= `tetoCopias`, o sentido histórico). Devolve `{ apagados: string[], motivo }`.
+- `motivo.manterDiasInvalido` é `true` quando o valor lido não presta; `motivo.manterDias` traz o
+  efetivo. `pruneOldBackups` **já loga** o aviso da RN-03 quando recebe `manterDias` num objeto —
+  a Task 2 não precisa duplicar o log, só passar a chave lida.
+- Constantes exportadas para a Task 2 não reinventar: `MANTER_DIAS_PADRAO` (30),
+  `PISO_COPIAS_PADRAO` (3), `TETO_COPIAS_PADRAO` (10).
+- **`index.js:1013` continua `pruneOldBackups(dbPath, 10)` e continua correto** (vira teto 10,
+  padrão de 30 dias). A Task 2 é que o move para dentro de `initializeDatabase`, depois de
+  `inicializarConfiguracoesPadrao` (`:2074`), e troca o `10` por
+  `{ manterDias: <valor lido>, tetoCopias: 10 }`.
+
+---
+
+### Se a etapa inteira parar aqui
 
 Se parar aqui: **Fase 2** — agente fresco com plano + design e três perguntas (contratos cobrem
 os erros? as RN batem com o código? a Task 3 é galho de verdade?). Peça atenção especial a:
