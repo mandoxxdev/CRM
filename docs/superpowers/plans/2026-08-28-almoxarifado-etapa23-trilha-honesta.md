@@ -111,14 +111,14 @@ que vão ser refeitas. Como `services/almoxarifado/db.js` promisifica passando c
 o retry **aplica a escrita depois**. É o defeito nº 1 do design por um caminho que o `UPDATE`
 único não fecha.
 
-- [ ] **Step 1: teste que falha**, em `tests/sqliteConcurrency.test.js`. Cenário: segurar o lock
+- [x] **Step 1: teste que falha**, em `tests/sqliteConcurrency.test.js`. Cenário: segurar o lock
   com uma **segunda conexão**, disparar um `db.run` com callback pela conexão embrulhada, soltar
   o lock, e afirmar que o callback foi chamado **uma vez só** e **sem erro** (hoje é chamado 1×
   por tentativa, a primeira com `SQLITE_BUSY`). Use um contador, não só o último valor — a
   asserção de peso é a **contagem de chamadas**, e sem ela o cenário passa com o bug.
   `SQLITE_BUSY_TIMEOUT_MS=0` na env torna o cenário determinístico.
   Cenário irmão: quando **todas** as tentativas falham, o callback recebe o erro **uma vez**.
-- [ ] **Step 2: implementar.** O `cb` sai de dentro do executor e passa a ser chamado na
+- [x] **Step 2: implementar.** O `cb` sai de dentro do executor e passa a ser chamado na
   finalização do `retryAsync`. Cuidados **obrigatórios**:
   - **preservar o `this` do sqlite3** (`lastID`/`changes`) — é o motivo de o wrapper usar
     `function` e não arrow, e há comentário no arquivo dizendo isso;
@@ -137,12 +137,12 @@ o retry **aplica a escrita depois**. É o defeito nº 1 do design por um caminho
   Saída real: `callback ... foi chamado 3 vezes, esperado 1 — [{"err":"SQLITE_BUSY"},
   {"err":"SQLITE_BUSY"},{"err":null,"changes":1,"lastID":1}]` — e note que a ÚLTIMA chamada é o
   sucesso: uma asserção de "último valor" ficaria **verde com o bug presente**.
-- [ ] **Step 4:** `npm run test:sqlite` **e** `npm run test:api` (o wrapper não é usado pelo
+- [x] **Step 4:** `npm run test:sqlite` **e** `npm run test:api` (o wrapper não é usado pelo
   harness, mas uma regressão no contrato de `db.run` derruba tudo); commit.
 
 ---
 
-### Task 1 (tronco): `PUT /configuracoes` atômico — FEITA (`878f184` + `3e317fa`)
+### Task 1 (tronco): `PUT /configuracoes` atômico — FEITA (`b6b7b24` + `d507ccc`)
 
 > **Entregue.** `test:api` **148/148** arquivos (147 + o novo), `test:almoxarifado` 42/0,
 > `test:sqlite` 5/0. O C1 foi aplicado **letra por letra** (a ordem dos parâmetros do plano está
@@ -154,7 +154,7 @@ o retry **aplica a escrita depois**. É o defeito nº 1 do design por um caminho
 > **sem o `WHERE chave IN` um Salvar de três chaves zeraria a tabela inteira**. Nem o plano nem o
 > design dizem isso; o `IN` aparece nos dois como parte do SQL, sem nota de que é ele que segura
 > o `ELSE` ausente. É a única armadilha do C1 que a revisão não nomeou.
-> **Achado no próprio teste (commit `3e317fa`):** o controle positivo do 4º cenário
+> **Achado no próprio teste (commit `d507ccc`):** o controle positivo do 4º cenário
 > (`WHERE chave IN (...) OR 1=1`) derrubava o cenário **pela guarda de setup**, não pela
 > asserção final — os cenários anteriores já tinham zerado a chave de controle. Vermelho pelo
 > motivo errado. Corrigido semeando a chave de controle com valor conhecido; agora cai nomeando
@@ -290,7 +290,7 @@ Contrato que a Task 2 consome da Task 1: **nenhum** — as duas rotas não se cr
 deixa como régua para ela é a **Global Constraint 1** (nada de `BEGIN`/`COMMIT` com `await` no
 meio) e a lição do controle positivo: **sabotagem que derruba o cenário certo pela asserção
 errada não prova nada**. Na Task 1 isso aconteceu de verdade (a guarda de setup disparava antes
-da asserção de peso, `3e317fa`); na Task 2 o análogo é o cenário cair pelo **status** em vez de
+da asserção de peso, `d507ccc`); na Task 2 o análogo é o cenário cair pelo **status** em vez de
 pela **contagem de linhas de auditoria**.
 
 Armadilhas já conhecidas, que continuam valendo: `changes` contando linha **casada** e não linha
