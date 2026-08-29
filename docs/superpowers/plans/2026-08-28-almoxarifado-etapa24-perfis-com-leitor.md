@@ -118,7 +118,7 @@ do servidor), falso para o texto.
 
 ---
 
-### Task 2 (tronco): a revogação de perfil deixa rastro — ✅ FEITA (`07cac3a`)
+### Task 2 (tronco): a revogação de perfil deixa rastro — ✅ FEITA (`9f7c309`)
 
 **Files:** Modify `server/routes/almoxarifado/extended.js:273-315`;
 Test `server/tests/api/perfisUsuario.api.test.js` (o que já existe, 11 cenários).
@@ -128,7 +128,7 @@ Test `server/tests/api/perfisUsuario.api.test.js` (o que já existe, 11 cenário
 `dados_novos`, então a concessão aparece na tela de auditoria **sem o "de"**. É a mesma família
 que a Etapa 23 fechou, na rota que decide quem tem acesso ao módulo.
 
-- [x] **Step 1: teste que falha,** `07cac3a` — acrescentado ao arquivo existente: atribuir → 1 linha com
+- [x] **Step 1: teste que falha,** `9f7c309` — acrescentado ao arquivo existente: atribuir → 1 linha com
   `dados_anteriores` refletindo o perfil anterior (`null` na primeira vez); trocar de perfil →
   `dados_anteriores` traz o **anterior**; **remover** → **uma linha nova**, com `dados_novos`
   dizendo que o perfil saiu. **Asserção de peso: a CONTAGEM de linhas** — hoje remover deixa a
@@ -136,7 +136,7 @@ que a Etapa 23 fechou, na rota que decide quem tem acesso ao módulo.
   Os três cenários entraram no arquivo existente (11 → **14**), com a **contagem** como asserção
   de peso e o estado semeado com valor conhecido (usuário 106 novo, `DELETE` da trilha dele antes
   da guarda, para que a guarda de setup não seja o que derruba a asserção de peso).
-- [x] **Step 2: implementar.** `07cac3a`. O `SELECT` do usuário ganhou o mesmo `LEFT JOIN` do
+- [x] **Step 2: implementar.** `9f7c309`. O `SELECT` do usuário ganhou o mesmo `LEFT JOIN` do
   `GET` (traz `perfil_explicito`), e os **dois** caminhos auditam: `ATUALIZAR` na atribuição/troca,
   **`EXCLUSAO`** na remoção (verbo que já está em `GRUPOS_ACAO`, então a revogação fica filtrável
   na tela como "Exclusão"). Pós-escrita, best-effort, `.catch()` mantido.
@@ -154,7 +154,7 @@ que a Etapa 23 fechou, na rota que decide quem tem acesso ao módulo.
   três, nomeando o valor errado (`veio "GESTOR"` na troca). `md5sum` `47ea57ea` antes e depois do
   restauro, `git diff --stat` vazio.
 - [x] **Step 4:** `test:api` **150/150 arquivos**, `test:almoxarifado` **42/42**, `perfisUsuario`
-  **14/14** (os 11 congelados verdes — contrato HTTP intacto). Commit `07cac3a`.
+  **14/14** (os 11 congelados verdes — contrato HTTP intacto). Commit `9f7c309`.
 
 ---
 
@@ -213,7 +213,7 @@ causa dele). **A Task 1 está FEITA** (`a81e51a`): `QUALIDADE` existe em `PERFIS
 `visualizar` e `inspecionar`, tem rótulo e descrição em `PERFIS_INFO`, e está provado no gate
 real (404 em `PUT /lotes/:id/status`, 403 em `POST /movimentacoes`).
 
-**A Task 2 está FEITA** (`07cac3a`): o caminho "voltar ao padrão" audita (`EXCLUSAO`) e a
+**A Task 2 está FEITA** (`9f7c309`): o caminho "voltar ao padrão" audita (`EXCLUSAO`) e a
 atribuição grava `dados_anteriores`. O contrato C2 **não mudou** — os 11 cenários congelados
 seguem verdes, e o arquivo foi a 14.
 
