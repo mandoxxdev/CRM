@@ -233,7 +233,11 @@ function verbosDeTransicao() {
       `verbos gravaveis sem rotulo: ${JSON.stringify(semRotulo)} — a tela mostraria o verbo cru`);
   });
 
-  await test('cobertura das entidades: os 25 literais tem rotulo (nenhum e dinamico)', () => {
+  // O titulo dizia "os 25 literais" ate a Etapa 27, que acrescentou `plano_inspecao` e fez o
+  // numero virar 26. A assercao e `>= 25` de proposito (entidade nova nao pode derrubar este
+  // teste por CONTAGEM — so por FALTA DE ROTULO), mas o titulo mentindo faria o proximo leitor
+  // achar que a varredura parou de ver algo.
+  await test('cobertura das entidades: os 26 literais tem rotulo (nenhum e dinamico)', () => {
     const saida = execFileSync('grep',
       ['-rhoP', "(?<![A-Za-z_])entidade: '\\K[a-z_]+", ...DIRS_AUDITADOS], { encoding: 'utf8' });
     const entidades = [...new Set(saida.split('\n').filter(Boolean))];

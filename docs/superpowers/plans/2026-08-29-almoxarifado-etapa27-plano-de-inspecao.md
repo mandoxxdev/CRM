@@ -225,6 +225,61 @@ Test `server/tests/api/toleranciaInspecao.api.test.js`.
 
 ---
 
+### Task 2 (tronco): o plano de inspeção — FEITA (`a214111`)
+
+> **Entregue.** 22 asserções em `planoInspecao.api.test.js`, vermelho inicial **0/22** (todas por
+> rota/tabela ausente, nenhuma por erro de setup). `test:api` **157/157**, `test:almoxarifado`
+> **42/42**, `test:validation` 4/4, `test:safealter` 3/3, `test:sqlite` 5/5.
+>
+> **Sobre o gate:** nenhum teste conta as ações de `ACAO_PERFIS` — `minhasPermissoes.api.test.js`
+> itera `Object.keys` e não tem asserção de `length` (verificado). A ação nova entrou sem ajuste
+> em teste nenhum.
+>
+> **CINCO DECISÕES QUE O C4 NÃO COBRIA, tomadas aqui e declaradas:**
+>
+> 1. **GET sem `material_id` é 400 `'Material é obrigatório'`.** O C4 dizia "filtro obrigatório"
+>    sem dar código nem literal. Escolhido 400 e não "devolve tudo" (vazaria plano alheio para a
+>    tela de qualquer material) nem `[]` (mentira: existe plano, só não foi pedido).
+> 2. **`material_id` NÃO é editável pelo PUT.** "Campos parciais" não dizia se o pai entrava.
+>    Mover a característica de material deixaria as medidas congeladas (RN-05) contando a história
+>    do material antigo. Quem errou o material desativa e cria — é o caminho reversível.
+> 3. **Literal nova: 400 `'Desvio inválido'`** para desvio não numérico no PUT (`'abc'`, `null`).
+>    A lista do C4 não tinha mensagem para esse caso, e cair no `?? 0` transformaria lixo em
+>    "desvio zero" em silêncio.
+> 4. **`material_id` é validado por EXISTÊNCIA, não por `ativo = 1`.** O molde de ferramentas usa
+>    `WHERE id = ? AND ativo = 1`, mas aqui o alvo declarado é o material *fantasma*; exigir ativo
+>    impediria corrigir o plano de um material temporariamente desativado.
+> 5. **Sem `try/catch` no `CREATE UNIQUE INDEX`**, ao contrário da Etapa 26. Lá o índice foi
+>    acrescentado a uma tabela **que já tinha dados** e podia colidir, derrubando o `initSchema`
+>    inteiro. Aqui a tabela **nasce** com o índice: não existe base legada com plano duplicado.
+>
+> **O Step 3 deste plano previa duas sabotagens; foram precisas CINCO** — e a terceira é a que
+> quase virou no-op, exatamente o defeito que a Task 1 descreveu:
+>
+> - (a) gate removido → cai só o (22), nomeando `ALMOXARIFE`/`GESTOR`/`COMPRAS`/`CONSULTA`/
+>   `PRODUCAO` **verbo a verbo** (`POST 201`, `PUT 200`, `DELETE 200`);
+> - (b) filtro por material removido → caem (9) e (4). **Medido com cuidado:** a guarda
+>   `every(material_id === MAT_A)` dispara **antes** da asserção do B, então a asserção do B foi
+>   medida em separado (guarda neutralizada só para a medição) e cai nomeando a característica que
+>   vazou — `"So do A ..." apareceu no plano do material B`;
+> - (c) índice único removido → caem (11), (15) e (21);
+> - **(c2) índice deixa de ser PARCIAL** (só o `WHERE ativo = 1` retirado) → caem (13) e (21).
+>   **Sem o cenário (13), esta sabotagem passaria verde:** um índice total satisfaz o teste de
+>   duplicada e só quebra na *recriação após desativar*, que é o caso do usuário corrigindo um
+>   cadastro errado. É a mesma lição da Task 1 — sabotar o operador sem mover o comportamento;
+> - (d) rótulo removido de `auditLabels.js` → cai a cobertura de vocabulário
+>   (`entidades sem rotulo: ["plano_inspecao"]`) **e** o (19) deste arquivo.
+>
+> `md5sum` antes/depois/restaurado idênticos nos três arquivos, `git diff --stat` vazio.
+>
+> **Correção de documento:** o título do teste de cobertura de entidades dizia "os 25 literais";
+> agora são 26. A asserção é `>= 25` de propósito (entidade nova não pode derrubar o teste por
+> contagem, só por falta de rótulo), mas o título mentindo faria o próximo achar que a varredura
+> parou de ver algo. Corrigido, com a razão escrita ao lado.
+>
+> **Fica para a Task 4** (fechamento), não esquecido: `specs/`, o guia do usuário e a letra B do
+> doc de novidades — inclusive a exclusão deliberada do `ALMOXARIFE` do gate.
+
 ### Task 2 (tronco): o plano de inspeção
 
 **Files:** Modify `server/services/almoxarifado/schema.js` (as duas tabelas),
@@ -245,17 +300,17 @@ que `material_id` existe** (o molde não tem pai para validar, e a FK não segur
 `[ADMINISTRADOR]` sozinho, e deixaria o perfil QUALIDADE sem poder cadastrar o que ele mesmo vai
 medir.
 
-- [ ] **Step 1: teste que falha** — RN-01 (criar/listar/editar/desativar característica de um
+- [x] **Step 1: teste que falha** — RN-01 (criar/listar/editar/desativar característica de um
   material), gate (matriz de perfis com a **asserção negativa**), e **listar por material**
   (o plano de um material não aparece no de outro — guarda anti-teste-vazio: afirme que **há**
   plano no material A antes de afirmar que não há no B).
-- [ ] **Step 2: implementar** as tabelas e o CRUD; auditoria com entidade nova.
+- [x] **Step 2: implementar** as tabelas e o CRUD; auditoria com entidade nova.
   **Acrescente o rótulo em `auditLabels.js`** — há um teste de cobertura de vocabulário
   (`auditLabels.api.test.js:235`) que fica **vermelho** se a entidade nova não tiver rótulo. Ele
   é o controle positivo natural deste item.
-- [ ] **Step 3: controle positivo** (commitar antes): (a) gate removido → a matriz cai nomeando
+- [x] **Step 3: controle positivo** (commitar antes): (a) gate removido → a matriz cai nomeando
   o perfil; (b) filtro por material removido → o cenário do B cai.
-- [ ] **Step 4:** `npm run test:api`; commit.
+- [x] **Step 4:** `npm run test:api`; commit.
 
 ---
 
