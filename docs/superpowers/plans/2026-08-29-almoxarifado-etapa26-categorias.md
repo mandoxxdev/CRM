@@ -320,22 +320,78 @@ da Fase 0.
 
 ## Próxima tarefa detalhada
 
-**Etapa 27 — feature 08 (tipos de entrada de material).** Escolhida entre as candidatas do mapa
-(05 picking, 06 motor de regras de aprovação, 08 tipos de entrada, 09 plano de inspeção com
-medidas) pela Fase 0 medida em 2026-08-29 — **ver a medição completa no relatório do fechamento**.
-O que a próxima sessão precisa saber antes de abrir código:
+**Etapa 27 — feature 08 (recebimento): o tipo de entrada passa a existir de verdade.**
+Escolhida entre as quatro candidatas do mapa (05 separação/picking, 06 motor de aprovações,
+08 recebimento, 09 inspeção e qualidade) pela **Fase 0 medida em 2026-08-29**, com a spec de cada
+uma lida **antes** do código — a regra nova.
 
-- **Meça pelo nome do CONTRATO, não pelo nome que você imagina.** Foi assim que a Etapa 24 errou
-  (procurou `perfil_almoxarifado`; a rota era `perfis-usuario`) e como esta errou a contagem de
-  arquivos do client.
-- **Leia `specs/modulo-almoxarifado/<feature>/README.md` ANTES de medir o código.** A regra nova,
-  e ela existe por causa do erro desta etapa.
-- **O molde de cadastro simples do módulo já está resolvido e escrito**: gate
-  `requirePermission('configurar')` + `auditar(db, payload, contexto)`/`autorDe(req)` dos centros
-  de custo em `routes/almoxarifado/extended.js`; régua de nome/unicidade dos setores; soft delete
-  dos tipos de material (versão da Etapa 23: `AND ativo = 1`, 404, 200 `ja_inativo` sem auditar);
-  `?todos=1` no GET; rótulo em `auditLabels.ROTULOS_ENTIDADE`. **Famílias não é molde de nada.**
-- **O molde de aba de Configurações também**: `TabCategorias` em `ConfiguracoesAlmoxarifado.js`
-  (Etapa 26) é o exemplo mais novo e mais simples — GET sempre com `?todos=1`, `PUT` de rename
-  **omitindo** `ativo`, `PUT` de reativação com `ativo: 1` explícito, e a mensagem do servidor
-  exibida crua.
+**O que a medição encontrou, e é o que define o escopo:**
+
+- **O campo JÁ EXISTE, e a spec 08 errava o nome dele.** A spec dizia "campo `tipo_entrada`";
+  `tipo_entrada` **não aparece em lugar nenhum do código**. O nome do contrato é
+  **`tipo_recebimento`** — `services/almoxarifado/schema.js:1147`
+  (`TEXT DEFAULT 'NOTA_FISCAL'`), gravado em `receiptService.js:106`
+  (`tipo_recebimento || (pedido_compra_id ? 'PEDIDO_COMPRA' : 'NOTA_FISCAL')`), e com `<select>`
+  próprio na tela em `client/src/components/almoxarifado/RecebimentosAlmoxarifado.js:600`.
+  **A spec foi corrigida dizendo que estava errada.**
+- **E ele não é validado em lugar nenhum.** `schemas.js` **não tem** schema de recebimento; a rota
+  `POST /api/almoxarifado/recebimentos` (`routes/almoxarifado/extended.js:765`) tem **só** o gate
+  `requirePermission('receber_material')`, sem `validate(...)`. O valor do body vai cru para a
+  coluna — qualquer string entra.
+- **Zero recebimentos no banco de desenvolvimento** (medido, leitura). Não há acervo a migrar e um
+  enum aplicado agora não invalida dado nenhum — o oposto da situação da Etapa 26.
+- **A duplicidade de nota também está ausente** (item do checklist da spec 08): não há nenhuma
+  checagem de "mesma NF + mesmo fornecedor" em `receiptService.js`.
+
+**Por que esta e não as outras três:** a 05 (picking) e a 06 (regras configuráveis de aprovação)
+pedem **decisão de negócio que ninguém respondeu** — como a GMP separa material e quais faixas de
+valor/quantidade disparam qual alçada — e virariam etapa parada esperando o André. A 09 tem
+**7 de 14 itens já marcados** e o que sobra (plano de inspeção com medidas) é modelagem nova de
+porte, com dependência da B56 ainda aberta. A 08 é a única cujo item mais valioso está
+**inteiramente do lado do código**, com o campo já existindo, sem acervo a migrar e com defeito
+real e demonstrável (campo de domínio sem domínio).
+
+**O contrato que a etapa consome, já pronto e que ela NÃO precisa reabrir:**
+
+- `POST /api/almoxarifado/recebimentos` → `receiptService.criarRecebimento(db, user, data)`;
+  o `tipo` é resolvido em `receiptService.js:106` e o `INSERT` está em `:128`.
+- `PUT /api/almoxarifado/recebimentos/:id/fiscal` → `atualizarFiscal` (`:257`), que já faz
+  `tipo_recebimento = COALESCE(?, tipo_recebimento)` — **é a segunda porta de escrita do campo, e
+  ela também não valida**. Qualquer enum tem de cobrir as duas, senão a validação é contornável
+  por um `PUT`.
+- O molde de validação por Zod do módulo: `validate(<Schema>)` em `services/almoxarifado/schemas.js`
+  (ver `MaterialSchema`/`CentroCustoSchema`), aplicado como middleware na rota.
+- Auditoria: `auditar(db, payload, contexto)` + `autorDe(req)` no topo de `extended.js`; rótulo em
+  `auditLabels.ROTULOS_ENTIDADE`.
+
+**Pontos de atenção para quem executar:**
+
+1. **Não invente a lista de tipos sozinho.** A spec 8.1 lista dez (materiais de cliente,
+   consignado, retorno de industrialização/fornecedor/assistência, devolução da produção,
+   transferência, fabricado internamente, sobra/retalho, ajuste, ferramenta, produto acabado), mas
+   **a maioria já entra por outra feature** (11 transferências, 12 devoluções, 13 materiais de
+   clientes, 14 terceiros, 15 retalhos/sucatas). Meça quais desses caminhos **já criam entrada** e
+   entregue o enum do que o recebimento de fato faz hoje + o que a validação precisa barrar. O
+   resto vira letra B, não código.
+2. **Validar um campo que hoje aceita tudo é mudança de contrato.** Se alguma rota interna ou
+   algum teste manda um valor fora do enum, ele passa a receber 400. Meça os chamadores **antes**
+   (a busca por `tipo_recebimento` acha os testes que o usam).
+3. **Cenário negativo precisa da metade positiva.** "Tipo inválido é recusado" passa verde se a
+   rota estiver quebrada e recusar tudo — o teste tem de afirmar, no mesmo cenário, que um tipo
+   **válido** é aceito.
+4. **Meça pelo nome do CONTRATO, não pelo nome que você imagina.** Foi assim que a Etapa 24 errou
+   (procurou `perfil_almoxarifado`; a rota era `perfis-usuario`), como a Etapa 26 errou a contagem
+   de arquivos do client, e como a própria spec 08 chegou a `tipo_entrada`.
+5. **Leia `specs/modulo-almoxarifado/08-recebimento/README.md` inteiro antes de medir.** É a regra
+   que saiu desta etapa, e ela já pagou: foi lendo a spec primeiro que a correção acima apareceu.
+
+**Moldes prontos que a etapa pode reaproveitar sem redescobrir:**
+
+- **Cadastro simples com gate e auditoria**: `requirePermission('configurar')` +
+  `auditar`/`autorDe` dos centros de custo em `routes/almoxarifado/extended.js`; régua de
+  nome/unicidade dos setores; soft delete dos tipos de material (versão da Etapa 23:
+  `AND ativo = 1`, 404, 200 `ja_inativo` sem auditar); `?todos=1` no GET. **Famílias não é molde
+  de nada** (tem `parent_id`, validação de pai e código automático).
+- **Aba de Configurações**: `TabCategorias` em `ConfiguracoesAlmoxarifado.js` (Etapa 26) é o
+  exemplo mais novo e mais simples — GET sempre com `?todos=1`, `PUT` de rename **omitindo**
+  `ativo`, `PUT` de reativação com `ativo: 1` explícito, mensagem do servidor exibida crua.

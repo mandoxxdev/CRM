@@ -97,7 +97,24 @@ Todos os tipos de entrada da spec, conferência documental e física estruturada
 ## Checklist
 
 ### Backend
-- [ ] Tipos de entrada (spec 8.1): materiais de cliente, consignado, retorno de industrialização/fornecedor/assistência, devolução da produção, transferência, fabricado internamente, sobra/retalho, ajuste, ferramenta, produto acabado — hoje o recebimento é só de NF de compra (os demais entram pelas features 11/12/13/14/15; aqui: campo `tipo_entrada` + validações por tipo). **Fora do escopo da Etapa 5** (design 2026-08-07): decisão explícita de deixar para quando houver demanda real de um tipo específico.
+- [ ] Tipos de entrada (spec 8.1): materiais de cliente, consignado, retorno de industrialização/fornecedor/assistência, devolução da produção, transferência, fabricado internamente, sobra/retalho, ajuste, ferramenta, produto acabado — hoje o recebimento é só de NF de compra (os demais entram pelas features 11/12/13/14/15). **Fora do escopo da Etapa 5** (design 2026-08-07): decisão explícita de deixar para quando houver demanda real de um tipo específico.
+  > **CORREÇÃO (Fase 0 da Etapa 27, medida em 2026-08-29): esta linha dizia "aqui: campo
+  > `tipo_entrada` + validações por tipo", e ESTAVA ERRADA nas duas metades.**
+  > **(1) O campo não se chama `tipo_entrada` e ele JÁ EXISTE**: é `tipo_recebimento`
+  > (`schema.js:1147`, `TEXT DEFAULT 'NOTA_FISCAL'`), gravado por `criarRecebimento`
+  > (`receiptService.js:106`), e há um `<select>` para ele na tela
+  > (`RecebimentosAlmoxarifado.js:600`). Procurar por `tipo_entrada` no código não acha **nada** —
+  > é exatamente o modo de errar que já custou duas etapas nesta base (medir ausência pelo nome
+  > que se imagina, em vez do nome do **contrato**).
+  > **(2) O que falta não é o campo: são os VALORES e a VALIDAÇÃO.** O campo aceita hoje dois
+  > valores por convenção (`NOTA_FISCAL` e `PEDIDO_COMPRA`) e **não é validado em lugar nenhum** —
+  > não há enum, não há Zod (`schemas.js` não tem schema de recebimento) e a rota
+  > `POST /api/almoxarifado/recebimentos` (`extended.js:765`) tem **só** o gate
+  > `requirePermission('receber_material')`, sem `validate(...)`. O valor do body é gravado cru:
+  > qualquer string entra na coluna. **A tarefa real desta linha é**: definir a lista de tipos,
+  > validá-la, e decidir o que cada tipo exige (nota fiscal obrigatória? pedido? fornecedor?).
+  > **Medido no banco de desenvolvimento: zero recebimentos gravados** — não há acervo a migrar,
+  > e um enum aplicado agora não invalida dado nenhum.
 - [ ] Recebimento parcial de pedido (validar suporte real + saldo pendente do pedido)
 - [ ] Recebimento excedente só com autorização
 - [ ] Conferência física estruturada (spec 8.3): contagem, pesagem, medição, checklist configurável por tipo de material. **Fora do escopo da Etapa 5**, mesma decisão acima.
@@ -106,7 +123,7 @@ Todos os tipos de entrada da spec, conferência documental e física estruturada
 - [ ] Ao aprovar: definir localização (sugestão da feature 02) + gerar etiqueta (feature 10) + **atualizar saldo via movimentação v2** — a entrada já passa pelo motor (`registrarMovimentacao`) desde antes da Etapa 5, e desde a Etapa 6 a movimentação vai com `lote_id` (`64686b1`). Continuam faltando a **etiqueta** (Etapa 6c, não a 6) e a sugestão de localização
 - [x] Quarentena: material aguardando inspeção não entra no disponível (`quantidade_em_inspecao`) — **Etapa 5 (2026-08-08)**. Três movimentos novos no motor (`QUARENTENA`, `LIBERACAO_INSPECAO`, `REPROVACAO_INSPECAO`) com guarda atômica (`c37b67e`); entrada retida em vez de barrada (`4db5e11`). A decisão de inspeção em si (aprovar/reprovar/parcial) é da feature 09 — ver aquele README para o motor real usado na decisão (`DECISAO_INSPECAO`, não os dois tipos separados acima).
 - [ ] E-mail automático na entrada confirmada (feature 19)
-- [ ] Duplicidade: mesma NF+fornecedor não entra duas vezes
+- [ ] Duplicidade: mesma NF+fornecedor não entra duas vezes — **confirmado ausente** (Fase 0 da Etapa 27, 2026-08-29): não há nenhuma checagem de nota repetida em `receiptService.js`, e a rota não tem schema de validação
 
 ### Frontend
 - [ ] Campos de conferência física + fotos
