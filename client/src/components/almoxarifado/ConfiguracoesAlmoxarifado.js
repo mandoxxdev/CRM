@@ -2603,6 +2603,11 @@ const TabPerfisAcesso = () => {
         Quem não tem perfil definido entra como <strong>Produção</strong> — consulta e requisita, mas não
         movimenta estoque, não cadastra material e não aprova.
       </p>
+      <p style={{ color: 'var(--gmp-text-light)', fontSize: '0.8rem', marginBottom: 20 }}>
+        <strong>Administrador do módulo</strong> não é oferecido aqui: define-se no <strong>cadastro de usuário</strong>,
+        marcando o almoxarifado entre os módulos que a pessoa administra. Concedido por esta tela, seria apagado
+        no próximo salvamento daquele cadastro.
+      </p>
 
       <div className="almox-field" style={{ maxWidth: 360, marginBottom: 16 }}>
         <input
@@ -2652,7 +2657,19 @@ const TabPerfisAcesso = () => {
                         onChange={(e) => alterar(u.id, e.target.value)}
                       >
                         <option value="">Produção (padrão)</option>
-                        {perfis.filter((p) => p !== 'PRODUCAO').map((p) => (
+                        {/* ADMINISTRADOR sai do seletor (Etapa 24, RN-07). A rota devolve
+                            PERFIS_VALIDOS inteiro, mas conceder este perfil AQUI é um erro por
+                            dois caminhos que se somam: (1) `hasAlmoxAdminPerfil` faz
+                            `canConfigureModule('almoxarifado')` valer para quem tem
+                            `perfil_almoxarifado === 'ADMINISTRADOR'` — quem recebesse por esta
+                            tela passaria a configurar o módulo e a promover outros, e
+                            `classificarPerfil` o marca como `explicito`, não `forcado`, então
+                            o 409 não protege; (2) `syncModuleAdminProfiles` roda em todo save de
+                            usuário e apaga essa linha quando `admin_modulos` não contém
+                            'almoxarifado' — a concessão evaporaria sozinha depois. Administrador
+                            do módulo se define no cadastro de usuário, e é só lá.
+                            PRODUCAO sai por outro motivo: é a opção vazia (RN-04). */}
+                        {perfis.filter((p) => p !== 'PRODUCAO' && p !== 'ADMINISTRADOR').map((p) => (
                           <option key={p} value={p}>{PERFIS_INFO[p]?.label || p}</option>
                         ))}
                       </select>
