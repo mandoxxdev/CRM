@@ -225,7 +225,23 @@ Test `server/tests/api/toleranciaInspecao.api.test.js`.
 
 ---
 
-### Task 2 (tronco): o plano de inspeção — FEITA (`a214111`)
+### Task 2 (tronco): o plano de inspeção — FEITA (`a15ac3b`)
+
+> **Entregue.** 22 cenários, vermelho inicial 0/22, `test:api` 157/157.
+> **O C4 estava INCOMPLETO em cinco pontos** (não errado) — as decisões que a execução teve de
+> tomar e que o contrato não cobria: GET sem `material_id` → **400 `'Material é obrigatório'`**
+> (descartado devolver tudo, que vaza plano alheio, e `[]`, que mente); **`material_id` não é
+> editável pelo PUT** (mover a característica de material deixaria as medidas congeladas contando
+> a história do material antigo); literal nova **400 `'Desvio inválido'`** para desvio não
+> numérico (cair no `?? 0` viraria "desvio zero" em silêncio); `material_id` validado por
+> **existência**, não por `ativo = 1` (o alvo é o material fantasma); e **sem `try/catch` no
+> índice** — ao contrário da Etapa 26, aqui a tabela nasce com ele.
+>
+> **E o controle positivo precisou de cinco sabotagens, não duas.** A que quase virou no-op:
+> retirar **só o `WHERE ativo = 1`** do índice (deixando-o total) **passa verde** no cenário da
+> duplicada — só quebra na recriação após desativar. Sem esse cenário específico, a sabotagem não
+> distinguiria nada. Mesma lição da Task 1: numa régua com folga, sabotar o operador é invisível;
+> o que o teste ancora é a **posição** da régua. — FEITA (`a15ac3b`)
 
 > **Entregue.** 22 asserções em `planoInspecao.api.test.js`, vermelho inicial **0/22** (todas por
 > rota/tabela ausente, nenhuma por erro de setup). `test:api` **157/157**, `test:almoxarifado`
