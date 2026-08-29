@@ -123,6 +123,14 @@ dele é antiga).
   com uma opção `Selecione…`, tornando a classificação uma escolha consciente.
   **Descartado** usar a primeira do catálogo (classificaria material como `Aço carbono` por
   acidente de ordenação alfabética).
+  **CORREÇÃO (execução da Task 2, `4180e2b`): "nascer vazio" NÃO basta, e este documento estava
+  errado ao parar aí.** `createMaterial`
+  (`server/services/almoxarifado/materialService.js:179`) faz `categoria: categoria || 'OUTROS'`.
+  Com o campo vazio e opcional, o material continuaria nascendo fora do catálogo — só que agora
+  como `OUTROS`, escolhido pelo **servidor** e sem nunca aparecer na tela, o que é pior de achar
+  que o `CONSUMÍVEL` de antes. A entrega inclui, por isso, **barrar o submit com categoria
+  vazia** ("Selecione a categoria do material"). A trava é **só do vazio**: categoria fora do
+  catálogo continua salvando, como a decisão 3 acima exige.
 - **RN-05 — Renomear categoria não reescreve os materiais.** A coluna `materiais.categoria` é
   texto; renomear a linha do catálogo **não** propaga. Isso fica **declarado na tela** (ao
   renomear, avisa que os materiais já classificados mantêm o nome antigo) — e vai para a letra B

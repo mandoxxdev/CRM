@@ -124,7 +124,34 @@ Test `server/tests/api/categoriasCrud.api.test.js`.
 
 ---
 
-### Task 2 (galho): as telas param de hardcodar
+### Task 2 (galho): as telas param de hardcodar — FEITA (`4180e2b`)
+
+> **Entregue.** 15 cenários novos (53 nos três arquivos, era 38); suíte do client **572/572** em
+> 38 arquivos; `CI=true build` limpo. Três controles positivos com alvo, cada um derrubando só
+> o cenário certo.
+>
+> **O ponto único de busca é o hook `client/src/hooks/useCategoriasMaterial.js`** (molde:
+> `useAlmoxPermissoes`, o hook vizinho), que devolve os **nomes** — é nome que
+> `materiais.categoria` guarda. **Sem cache de módulo, de propósito**, ao contrário de
+> `useAlmoxPermissoes`: a Task 3 torna o catálogo editável, e com cache a categoria recém-criada
+> não apareceria no formulário de material até um reload completo — o usuário cadastraria a
+> categoria e não a acharia no select, que é o mesmo "a tela mente" que esta etapa corrige. As
+> três telas nunca ficam montadas juntas; uma requisição por montagem é barata perto disso.
+>
+> **UMA CORREÇÃO A ESTE PLANO, medida:** a RN-07 **não se resolve** só fazendo o campo nascer
+> vazio. `createMaterial` (`server/services/almoxarifado/materialService.js:179`) faz
+> `categoria: categoria || 'OUTROS'` — mandar vazio apenas trocaria "nasce `CONSUMÍVEL`" por
+> "nasce `OUTROS`": as duas fora do catálogo, e a segunda escolhida pelo **servidor**, sem
+> sequer aparecer na tela. Nem este plano nem o design tinham visto o fallback. Por isso o
+> submit **barra o vazio antes do POST** ("Selecione a categoria do material"), com cenário
+> próprio. A trava é **só do vazio**: categoria fora de catálogo continua salvando, como a
+> decisão 3 do design mandava.
+>
+> **Divergência menor no controle positivo:** removida só a concatenação do valor atual, o
+> select cai para `""` (a opção `Selecione…`), não para `Aço carbono` como este plano previa.
+> `Aço carbono` aparece quando as **duas** sabotagens são aplicadas juntas — feito, e a
+> mensagem foi exatamente `Expected: "CONSUMÍVEL" / Received: "Aço carbono"`. As duas correções
+> se sustentam mutuamente, e o plano descrevia o mundo sem o `Selecione…`.
 
 **Files:** Modify **os TRÊS** componentes que declaram a lista (achado A1 — a versão anterior
 listava dois e chamava de três):
@@ -137,7 +164,8 @@ a lista hardcoded** (verificado pela Fase 2), então nada fica vermelho por tabe
 
 **Independência:** não depende da Task 1 (o `GET` já existe e já devolve as 27 categorias).
 
-- [ ] **Step 1: teste que falha:**
+- [x] **Step 1: teste que falha** — `4180e2b`. 15 cenários, **14 vermelhos** antes da
+  implementação (o 15º é o de não-regressão do payload, verde de propósito).
   - **RN-01:** a lista do select vem do endpoint — **sabote o mock** trocando as categorias e o
     teste tem de acompanhar. Se ele passar com o mock trocado, está lendo constante do front.
   - **RN-04, o cenário de peso — e o vermelho é a metade VISÍVEL** (achado A4, reproduzido):
@@ -154,12 +182,22 @@ a lista hardcoded** (verificado pela Fase 2), então nada fica vermelho por tabe
     catálogo". **A metade positiva é obrigatória aqui por um motivo medido:** os três mocks
     terminam em `Promise.resolve({ data: [] })` como catch-all, então um cenário só-negativo
     passa com a lista **vazia**.
-- [ ] **Step 2: implementar.** Um só ponto de busca reaproveitado pelos dois componentes; a
-  lista deixa de existir como constante.
-- [ ] **Step 3: controle positivo com alvo:** remova a concatenação do valor atual à lista → o
-  cenário RN-04 cai **mostrando que a tela exibe `Aço carbono` para um material gravado como
-  `CONSUMÍVEL`**. E remova o `Selecione…` → cai o cenário da RN-07.
-- [ ] **Step 4:** `CI=true` test e build; commit.
+- [x] **Step 2: implementar** — `4180e2b`. Ponto único: `hooks/useCategoriasMaterial.js`,
+  reaproveitado pelos **três** componentes; nenhuma das três constantes existe mais.
+- [x] **Step 3: controle positivo com alvo** — `md5sum` antes/depois/restaurado, `git diff
+  --stat` vazio nas três vezes:
+  - (a) removida a concatenação do valor atual → caem **só** os 2 cenários da RN-04
+    (`Expected: "CONSUMÍVEL" / Received: ""`, `Expected: "MATERIAL DE SOLDA" / Received: ""`);
+    14 passam.
+  - (b) removido o `Selecione…` → cai **só** o cenário da RN-07
+    (`Expected: "" / Received: "Aço carbono"` — o material nasceria classificado como
+    `Aço carbono` por acidente de ordenação); 15 passam.
+  - (a)+(b) juntas → a mentira que o plano descreve, verbatim:
+    `Expected: "CONSUMÍVEL" / Received: "Aço carbono"`.
+  - (c) devolvida a constante hardcoded a `MateriaisAlmoxarifado.js` → caem **só** os 3
+    cenários da RN-01 **daquele** arquivo; os outros dois arquivos seguem verdes (50/53).
+- [x] **Step 4:** `CI=true` test **572/572** (38 suítes) e build `Compiled successfully`;
+  commit `4180e2b`.
 
 ---
 
