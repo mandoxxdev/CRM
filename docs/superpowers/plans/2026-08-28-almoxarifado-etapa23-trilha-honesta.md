@@ -201,7 +201,31 @@ o retry **aplica a escrita depois**. É o defeito nº 1 do design por um caminho
 
 ---
 
-### Task 2 (galho): exclusão idempotente nas CINCO rotas
+### Task 2 (galho): exclusão idempotente nas CINCO rotas — FEITA (`e912675`)
+
+> **Entregue.** `test:api` **149/149** arquivos (148 + `exclusaoIdempotente.api.test.js`, 20
+> cenários), `test:almoxarifado` 42/0. As cinco rotas conferidas uma a uma; os dois avisos do
+> plano (o teste de caracterização que vira vermelho, e o `setor` com o ramo morto) se
+> confirmaram **exatamente** como escritos.
+> **ACHADO — existe um SEGUNDO teste de caracterização, que o plano não previa:**
+> `tests/api/auditoriaAtosEGate.api.test.js:221` (`RN-07 material: material JA inativo registra
+> dados_anteriores.ativo = 0`) afirmava **1** linha `DESATIVACAO` para material já inativo — é a
+> contrapartida em teste do comentário `:620-622` que o plano mandou reescrever, e o plano
+> nomeou só o `auditoriaCadastros`. Virou **0**, cenário e cabeçalho (`:16-19`) reescritos com o
+> histórico. **Consequência honesta que ninguém tinha notado:** aquele cenário era o **único**
+> lugar onde a guarda do "`1` chumbado" podia falhar — com a RN-03, o único caminho auditado é o
+> do material que **estava** ativo, então `dados_anteriores.ativo` é `1` **por construção** e a
+> guarda perdeu o ramo que guardava. Registrado no arquivo em vez de fingir que ainda prova algo.
+> **Três controles positivos**, um por forma de conserto (`AND ativo = 1` numa rota do molde;
+> a condição da auditoria do material; e o `setor`, que é o único que passou a **ler** `changes`).
+> Os três derrubaram **só** o cenário da própria entidade, **nomeando a linha de auditoria
+> extra** — nunca pelo status nem pelo `ja_inativo`. `md5sum` de `routes/almoxarifado.js`:
+> `7d4fb36f…` antes → `4469a891…`/`8fdf40b0…`/`b4ac6c89…` sabotado → `7d4fb36f…` restaurado;
+> `git diff --stat` vazio.
+> **Detalhe de projeto do teste que vale para as próximas tasks:** a contagem de auditoria é
+> afirmada **antes** do `ja_inativo` do corpo. Sem `AND ativo = 1` a rota volta a responder
+> `{ success: true }` sem a flag, então checar o corpo primeiro faria o controle positivo cair
+> pelo campo do corpo — vermelho pelo motivo errado, o mesmo erro do `d507ccc`.
 
 **Files:** Modify `server/routes/almoxarifado.js`; Test `server/tests/api/exclusaoIdempotente.api.test.js`.
 
@@ -248,17 +272,26 @@ razão estava errada e por quê — não apague, ele explica o `SELECT`, que con
    o vínculo de quem está tentando limpar o cadastro. Escreva isso no teste como cenário
    declarado, não deixe implícito.
 
-- [ ] **Step 1: teste que falha.** Para **cada uma das quatro** entidades, o mesmo trio:
+- [x] **Step 1: teste que falha.** Para **cada uma das quatro** entidades, o mesmo trio:
   criar → excluir (200, **1** linha `EXCLUSAO`) → excluir de novo (**200 `ja_inativo`, e o total
   de linhas de auditoria da entidade continua 1**) → id inexistente (**404**, nenhuma linha).
   A contagem de auditoria antes/depois é a asserção de peso; o status sozinho não pega o defeito
   (hoje a segunda exclusão **já** responde 200 — o que ela faz de errado é auditar).
-- [ ] **Step 2: implementar o C2; verde.** Atenção ao `setor`, que hoje nem lê `changes`.
-- [ ] **Step 3: controle positivo** (commitar antes), com alvo e leitura da asserção: tirar o
+  **Feito para as CINCO** (a do material com o trio adaptado ao contrato dela: sem `ja_inativo`,
+  e id inexistente segue 200). Vermelho medido antes do conserto: **15 passed, 5 failed**, e as
+  cinco falhas na asserção da contagem (`antes 1, depois 2 — [ids das duas linhas]`), nenhuma
+  pelo status. Mais dois cenários fora do trio: o `[cenário declarado]` do setor já inativo com
+  localização ativa (400 do vínculo, sem rastro) e uma regressão de localização **com saldo**.
+- [x] **Step 2: implementar o C2; verde.** Atenção ao `setor`, que hoje nem lê `changes`.
+  20/20. O `setor` passou a ler `changes` **sem** o ramo de 404 (código morto, achado A6
+  confirmado); o material mudou **só** a condição da auditoria, com o comentário `:615-622`
+  reescrito.
+- [x] **Step 3: controle positivo** (commitar antes), com alvo e leitura da asserção: tirar o
   `AND ativo = 1` de **uma** das quatro → o cenário da segunda exclusão **daquela entidade** tem
   de cair nomeando a linha de auditoria extra. Se cair o de outra entidade, ou cair pelo status,
-  diga — é achado.
-- [ ] **Step 4: `npm run test:api`; commit.**
+  diga — é achado. **Feitos três, um por forma de conserto** (família, material, setor); os três
+  derrubaram só a própria entidade, nomeando a linha extra. Hashes no bloco acima.
+- [x] **Step 4: `npm run test:api`; commit.** 149/149 arquivos, `test:almoxarifado` 42/0.
 
 ---
 
@@ -275,23 +308,28 @@ razão estava errada e por quê — não apague, ele explica o `SELECT`, que con
 
 ## Próxima tarefa detalhada (para retomar sem reler o código)
 
-**Feitas: Fase 2, Task 0 e Task 1.** O próximo passo é a **Task 2** (exclusão idempotente nas
-CINCO rotas), inteira acima — ela toca o **mesmo arquivo** da Task 1 (`routes/almoxarifado.js`),
-em trecho distante, então é **serial**, não paralela. Leia antes de começar:
+**Feitas: Fase 2, Task 0, Task 1 e Task 2.** O próximo passo é a **Task 3** (integração e
+fechamento), inteira acima. Ela **não** muda código de rota — é leitura pela tela-contrato,
+suíte completa e documentação. O que ela precisa saber do que já está entregue:
 
-- o **C2** (mensagens literais de 404 por rota, e o `function`, não arrow, para ter `this.changes`);
-- as **duas coisas que o plano original não previa** listadas na Task 2: o teste existente
-  `auditoriaCadastros.api.test.js:339-354` **vai ficar vermelho de propósito** (afirma `2`, vira
-  `1`), e o `setor` (`:2118`), cujo ramo "404 por `SELECT` vazio" é **inalcançável**;
-- a **quinta rota**, `DELETE /materiais/:id` (`:623`), onde o conserto é só a condição da
-  auditoria (`if (antes && antes.ativo === 1)`) e o comentário `:615-622` precisa ser reescrito.
-
-Contrato que a Task 2 consome da Task 1: **nenhum** — as duas rotas não se cruzam. O que a Task 1
-deixa como régua para ela é a **Global Constraint 1** (nada de `BEGIN`/`COMMIT` com `await` no
-meio) e a lição do controle positivo: **sabotagem que derruba o cenário certo pela asserção
-errada não prova nada**. Na Task 1 isso aconteceu de verdade (a guarda de setup disparava antes
-da asserção de peso, `d507ccc`); na Task 2 o análogo é o cenário cair pelo **status** em vez de
-pela **contagem de linhas de auditoria**.
+- **Contrato que a Task 3 consome da Task 2:** `DELETE` em linha já inativa responde
+  **200 `{ success: true, ja_inativo: true }`** nas quatro rotas de cadastro (tipo_material,
+  localizacao, setor, familia) e **200 `{ success: true }`** (sem a flag, contrato inalterado) em
+  `DELETE /materiais/:id`. Em **nenhuma** delas há linha de auditoria nova. O 404 de id
+  inexistente continua com as mensagens literais de sempre nas quatro; o material continua
+  respondendo 200 para id inexistente.
+- **O cenário do Step 1 da Task 3** (`GET /auditoria?entidade=tipo_material` mostrando **um**
+  ato, não dois) é a leitura pela tela do que `exclusaoIdempotente.api.test.js` já prova pelo
+  banco. Atenção ao gate: `GET /almoxarifado/auditoria` exige `configurar` (só ADMINISTRADOR,
+  RN-06 da Etapa 18) — usuário sem isso toma 403 e o cenário passaria vazio.
+- **Dois arquivos de teste antigos já foram atualizados pela Task 2** e não devem ser
+  "consertados de volta": `auditoriaCadastros.api.test.js` (cenário do fim, `2` → `1`) e
+  `auditoriaAtosEGate.api.test.js:221` (`1` → `0`). Os cabeçalhos dos dois explicam por quê.
+- **Régua que continua valendo:** a **Global Constraint 1** (nada de `BEGIN`/`COMMIT`), e
+  **sabotagem que derruba o cenário certo pela asserção errada não prova nada** — na Task 1 foi a
+  guarda de setup disparando antes da asserção de peso (`d507ccc`); na Task 2, o risco era o
+  cenário cair pelo **status** ou pelo `ja_inativo` em vez de pela **contagem de linhas de
+  auditoria**, resolvido pondo a contagem **antes** da checagem do corpo.
 
 Armadilhas já conhecidas, que continuam valendo: `changes` contando linha **casada** e não linha
 **alterada** (é o defeito que a etapa conserta — o plano não pode repeti-lo em outro lugar), e a

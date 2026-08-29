@@ -142,6 +142,13 @@ o estrago em vez de evitá-lo, e deixa o banco meio gravado do mesmo jeito.
   `WHERE id = ? AND ativo = 1`. Com `changes === 0`, a rota distingue os dois casos usando o
   `SELECT` que **já faz** hoje: linha inexistente → **404** (como hoje); linha existente e já
   inativa → **200 `{ success: true, ja_inativo: true }` SEM auditar**.
+  > **Correção da Task 2 (entregue): são CINCO rotas, não quatro.** Este documento não tinha
+  > visto `DELETE /materiais/:id` (achado A4 da Fase 2). Nela o conserto é **diferente e mais
+  > estreito**: ela responde `success: true` também para id inexistente (contrato da Etapa 19) e
+  > isso **fica inalterado** — não ganha `AND ativo = 1`, não ganha 404 e não ganha `ja_inativo`.
+  > Muda só a condição da auditoria, para `if (antes && antes.ativo === 1)`. Aplicar o molde das
+  > outras quatro ali seria mudança de contrato fora do tema da etapa.
+  > E o `setor` **não** ganha o ramo de 404: ele já responde 404 antes do `UPDATE` (achado A6).
   **Descartado responder 400/409**: a exclusão passa a ser idempotente, que é o comportamento
   que a tela já assume ao permitir clicar de novo — e transformar em erro quebraria a tela por
   causa de um conserto de log. O que muda é **a trilha**, não o fluxo do usuário.
@@ -159,7 +166,10 @@ Sem serviço novo, sem migration. Duas mudanças pontuais em `routes/almoxarifad
   explica que isso existe justamente porque não há transação.
 - **As quatro rotas de exclusão**: `AND ativo = 1` no `WHERE`, e o ramo `changes === 0`
   distinguindo 404 de já-inativo pelo `SELECT` anterior. O `setor` (`:2118`) ganha o check de
-  `changes` que não tem.
+  `changes` que não tem — mas **sem** o ramo de 404, que ali é código morto (ele já responde 404
+  antes do `UPDATE`).
+- **`DELETE /materiais/:id` (`:623`), a quinta rota**: muda **só** a condição da auditoria
+  (`if (antes && antes.ativo === 1)`). Sem `AND ativo = 1`, sem 404, sem `ja_inativo`.
 
 > **Nota da Fase 2 (achado A8):** os números de linha da versão anterior deste documento
 > apontavam para as chamadas de `auditarCadastro`, **não para as rotas**. Já corrigidos acima —
@@ -172,18 +182,27 @@ Sem serviço novo, sem migration. Duas mudanças pontuais em `routes/almoxarifad
   (patch de `db.run` na instância, a técnica que a Etapa 20 estabeleceu), afirmar que **nenhuma**
   das outras chaves mudou de valor no banco **e** que não há linha de auditoria; e o caminho
   feliz gravando as N chaves com **uma** linha de auditoria.
-- `exclusaoIdempotente.api.test.js`: RN-03 — para **cada uma das quatro** entidades: excluir →
+- `exclusaoIdempotente.api.test.js`: RN-03 — para **cada uma das cinco** entidades: excluir →
   200 + 1 linha `EXCLUSAO`; excluir de novo → 200 `ja_inativo` + **nenhuma linha nova**;
   id inexistente → 404 + nenhuma linha. A contagem de auditoria é a asserção de peso.
+  (Na do **material**, o trio é adaptado ao contrato dela: sem `ja_inativo`, e id inexistente
+  segue **200**. A asserção de peso é a mesma.)
 - Controle positivo obrigatório, **commitado antes**, e **lendo qual asserção caiu** (regra nova
   da skill): tirar o `AND ativo = 1` tem de derrubar o cenário da segunda exclusão **nomeando a
-  linha extra**, não outro.
+  linha extra**, não outro. **Para isso a contagem tem de ser afirmada ANTES do `ja_inativo`** —
+  sem o `AND ativo = 1` a rota volta a responder `{ success: true }` sem a flag, e checar o corpo
+  primeiro derrubaria o cenário pelo campo errado.
+- **Dois testes de caracterização afirmavam o comportamento antigo** e viram vermelho de
+  propósito; ambos atualizados, sem apagar o histórico: `auditoriaCadastros.api.test.js` (fim do
+  arquivo, `2` → `1`) e — **que este documento e o plano não previam** —
+  `auditoriaAtosEGate.api.test.js:221`, que afirmava 1 `DESATIVACAO` para material já inativo
+  (`1` → `0`).
 
 ## O que muda em cada camada
 
 | Camada | Mudança |
 |---|---|
-| `routes/almoxarifado.js` | `PUT /configuracoes` atômico; `AND ativo = 1` nas 4 exclusões |
+| `routes/almoxarifado.js` | `PUT /configuracoes` atômico; `AND ativo = 1` nas 4 exclusões de cadastro + condição da auditoria no `DELETE /materiais/:id` |
 | `specs/23` | os dois itens saem de "falta para 🟢" |
 
 ## Fica FORA, declarado
