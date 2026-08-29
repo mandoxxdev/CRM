@@ -31,6 +31,16 @@ Crie uma tarefa por fase abaixo e execute em ordem.
 **Se a spec contradiz o código existente, pare e registre** — spec errada já enganou sessões
 inteiras aqui. A correção da spec faz parte da etapa (regra 5 do CLAUDE.md).
 
+**E o inverso também: ANTES de medir "o que existe / o que falta / em quantos lugares está",
+leia o que a spec já mediu.** Duas etapas seguidas desenharam sobre varredura minha que estava
+errada: na 24 afirmei que uma tela não existia (existia, estava no menu e no manual) porque
+procurei pelo nome que **imaginei** que o consumidor usaria em vez do nome do **contrato**; na
+26 contei "3 arquivos" e nomeei dois, deixando o terceiro de fora — enquanto a
+`specs/.../01-cadastros-materiais/README.md:52` **já nomeava os três**, corretamente, e dizia
+"mexe em três telas". Medir é obrigatório; medir **sem cruzar com a spec** é refazer, pior, um
+trabalho que já estava feito. Quando os dois discordarem, isso é um achado — investigue qual
+está errado em vez de escolher o seu.
+
 ## Fase 1 — Pensar: design e plano (o pensador, sequencial)
 
 Use `superpowers:brainstorming` e depois `superpowers:writing-plans`. Convenção de nomes:

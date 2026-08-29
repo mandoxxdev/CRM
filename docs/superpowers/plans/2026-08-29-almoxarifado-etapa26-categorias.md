@@ -6,8 +6,14 @@
 a ler o catálogo do cliente; o catálogo vira cadastro editável; e nenhum material tem a
 classificação trocada em silêncio no caminho.
 
-**Architecture:** o `GET` já existe e **já é consumido**; a etapa acrescenta o CRUD (molde:
-famílias, que já o têm completo) e troca a fonte no client. Sem migration de schema.
+**Architecture:** o `GET` já existe e **já é consumido**; a etapa acrescenta o CRUD (molde
+**híbrido, por assunto** — ver C2) e troca a fonte no client. **Com** uma migration: o índice
+único de nome que a RN-06 exige (a versão anterior dizia "sem migration" e estava errada).
+
+> **REESCRITO PELA FASE 2** (10 achados, 2 críticos): a varredura do design errou os arquivos
+> (são 3, e um deles não estava listado); o molde de famílias é o **errado**; o gate e o teste
+> de matriz se contradiziam; a RN-04 descrevia um bug que **não é o que acontece**; e o default
+> de criação não tinha dono. Onde o texto diz "ESTAVA ERRADO", vale a versão corrigida.
 
 **Spec:** `docs/superpowers/specs/2026-08-29-almoxarifado-etapa26-categorias-design.md`
 
@@ -33,24 +39,39 @@ famílias, que já o têm completo) e troca a fonte no client. Sem migration de 
 | RN | Enunciado | Onde é provada |
 |---|---|---|
 | RN-01 | Uma fonte só: as telas leem `GET /categorias`, nenhum arquivo do client declara a lista | testes de client |
-| RN-02 | Categoria é cadastro editável (criar/renomear/desativar), molde das famílias | `categoriasCrud` |
-| RN-03 | Escrever categoria exige perfil — **o mesmo gate das famílias**, não um novo | `categoriasCrud` (matriz) |
-| RN-04 | Categoria fora do catálogo **não some e não troca sozinha** ao salvar | teste de client (**cenário de peso**) |
+| RN-02 | Cadastro editável; soft delete no molde de **tipos de material** (o já corrigido pela Etapa 23), **não** famílias | `categoriasCrud` |
+| RN-03 | Escrever exige **`requirePermission('configurar')`** (gate dos centros de custo, mesmo arquivo) | `categoriasCrud` (matriz de perfis) |
+| RN-04 | A tela **mostra** a categoria gravada mesmo fora do catálogo (hoje mostra a 1ª opção e manda outra no payload) | teste de client (**cenário de peso**) |
 | RN-05 | Renomear **não** reescreve os materiais — a tela avisa | `categoriasCrud` + tela |
-| RN-06 | Duplicada é recusada, com a régua de nome dos cadastros irmãos | `categoriasCrud` |
+| RN-06 | Duplicada recusada, régua de **setores** — exige `CREATE UNIQUE INDEX` | `categoriasCrud` |
+| RN-07 | **Material novo nasce com categoria do catálogo** (campo vazio + `Selecione…`) | teste de client |
 
 ## Contratos
 
 **C1 — `GET /api/almoxarifado/categorias`** (existe, `extended.js:148`, gate `auth`)
 Devolve as linhas de `categorias_material_almoxarifado` com `ativo = 1`, `ORDER BY nome`.
-**Não muda.** Já é consumido por `ConfiguracoesAlmoxarifado.js:2884`.
+Já é consumido por `ConfiguracoesAlmoxarifado.js:2884`.
+**MUDA em um ponto** (achado A6 — a versão anterior dizia "não muda" e a Task 3 seria impossível):
+ganha um parâmetro para trazer as inativas, **no molde dos irmãos** (`?all=1` em setores,
+`?ativo=0|all` em famílias, `?todos=1` em centros de custo — escolha um e diga qual). Sem ele a
+aba de CRUD não tem como **reativar** o que desativou, e "desativar não apaga" vira promessa
+vazia.
 
-**C2 — as rotas novas.** **Antes de escrever, leia o CRUD de famílias**
-(`routes/almoxarifado.js:2288` POST, `:2337` PUT, `:2413` DELETE) e **copie a forma**: mesmo
-gate, mesmo formato de erro, mesma régua de nome, mesma auditoria. **Não invente contrato** —
-o valor desta etapa está em o cadastro novo ser indistinguível dos 12 que a Etapa 19
-instrumentou, e o plano **não** congela literais aqui de propósito: quem executa **lê do molde**
-e registra no relatório qual gate, qual mensagem e qual régua encontrou.
+**C2 — as rotas novas.** **O molde é híbrido, por assunto** — a versão anterior mandava copiar
+famílias, e famílias é o cadastro **errado** (achado A2): tem `parent_id`, validação de pai,
+bloqueio de inativação com filhas e código automático, e **não tem unicidade de nome**.
+
+| Assunto | Fonte | Onde |
+|---|---|---|
+| Gate | `auth` + `requirePermission('configurar')` | centros de custo, `extended.js:169` |
+| Unicidade + régua de nome | `nome.trim()`, `UNIQUE`, 400 nomeando o cadastro | **setores**, `almoxarifado.js:2041+` |
+| Soft delete | `WHERE id = ? AND ativo = 1`, 404, 200 `ja_inativo` sem auditar | **tipos de material** (versão da Etapa 23) |
+| Auditoria | `auditar(db, payload, contexto)` + `autorDe(req)` | `extended.js:71` — o `auditarCadastro` de famílias é closure **não exportada** (A8) |
+
+**A migration:** `CREATE UNIQUE INDEX` sobre `categorias_material_almoxarifado(nome)`. A tabela
+não tem índice nenhum hoje, e as 27 sementes não colidem (medido) — aplica sem conflito.
+
+**`auditLabels.js`:** acrescente `categoria: 'Categoria'` a `ROTULOS_ENTIDADE` (A7).
 
 **C3 — o que a tela recebe.** O select de categoria do material passa a receber a lista do
 endpoint **mais** o valor atual do material quando ele não estiver nela, marcado como fora de
@@ -60,45 +81,66 @@ catálogo. É a RN-04, e é o ponto onde esta etapa pode estragar dado do client
 
 ### Task 1 (tronco): o catálogo vira cadastro
 
-**Files:** Modify `server/routes/almoxarifado/extended.js` (ou o arquivo das famílias, o que for
-coerente com o molde); Test `server/tests/api/categoriasCrud.api.test.js`.
+**Files:** Modify `server/routes/almoxarifado/extended.js` (onde o `GET` e os centros de custo
+já moram), `server/services/almoxarifado/schema.js` (o índice único) e
+`server/services/almoxarifado/auditLabels.js` (o rótulo);
+Test `server/tests/api/categoriasCrud.api.test.js`.
 
-- [ ] **Step 0: leia o molde antes de escrever** — o CRUD de famílias, ponta a ponta, incluindo
-  o gate, a auditoria e a régua de nome. Anote no relatório o que encontrou.
+- [ ] **Step 0: leia as TRÊS fontes do C2** — o gate e a auditoria em **centros de custo**
+  (`extended.js:162+`), a régua de nome em **setores** (`almoxarifado.js:2041+`) e o soft delete
+  em **tipos de material**. Anote no relatório o que encontrou em cada uma.
+  **NÃO** use famílias como molde: ela tem `parent_id`, validação de pai e código automático que
+  categoria não precisa — e **não tem** unicidade de nome, que é justamente o que a RN-06 pede.
 - [ ] **Step 1: teste que falha** — RN-02 (criar, renomear, desativar), RN-03 (**matriz de
   perfis, com a asserção negativa**: quem não tem o gate recebe 403), RN-06 (duplicada recusada),
   e **desativar não apaga**: o material que usa a categoria continua com ela, e a categoria some
   do `GET`. Guarda anti-teste-vazio: afirme que o `GET` **trazia** a categoria antes de afirmar
   que ela sumiu.
-- [ ] **Step 2: implementar**, copiando o molde. **Com auditoria** — a Etapa 19 instrumentou os
-  12 cadastros; este nasce instrumentado, não vira o 13º sem rastro.
+- [ ] **Step 2: implementar**: as três rotas + o `CREATE UNIQUE INDEX` no `schema.js` + o
+  parâmetro de inativas no `GET` (C1) + `categoria: 'Categoria'` no `auditLabels.js`.
+  **Com auditoria** — este cadastro nasce instrumentado, não vira o 13º sem rastro.
 - [ ] **Step 3: controle positivo** (commitar antes): (a) remova o gate → o cenário da matriz cai
-  nomeando o perfil que passou; (b) faça o desativar apagar a linha → o cenário do material cai.
+  nomeando o perfil que passou; (b) faça o desativar apagar a linha → o cenário do material cai;
+  (c) remova o índice único → o cenário da duplicada cai.
 - [ ] **Step 4:** `npm run test:api`; commit.
 
 ---
 
 ### Task 2 (galho): as telas param de hardcodar
 
-**Files:** Modify `client/src/components/almoxarifado/MaterialAlmoxarifadoForm.js` (`:14`, `:70`,
-`:255`) e `ConferenciaEstoque.js` (`:11`); Test — os arquivos de teste existentes desses
-componentes (**confira quais existem** antes de criar novo).
+**Files:** Modify **os TRÊS** componentes que declaram a lista (achado A1 — a versão anterior
+listava dois e chamava de três):
+`MaterialAlmoxarifadoForm.js` (`:13` a lista, `:569` o select, `:70` o default de criação, `:255`
+o fallback), `ConferenciaEstoque.js` (`:10` a lista, `:667` o filtro) e
+**`MateriaisAlmoxarifado.js`** (`:20` a lista, `:192` o filtro da listagem).
+Test: `MaterialAlmoxarifadoForm.test.js`, `ConferenciaEstoque.test.js` e
+`MateriaisAlmoxarifado.test.js` — os três **existem** e passam (38 cenários), e **nenhum congela
+a lista hardcoded** (verificado pela Fase 2), então nada fica vermelho por tabela.
 
 **Independência:** não depende da Task 1 (o `GET` já existe e já devolve as 27 categorias).
 
 - [ ] **Step 1: teste que falha:**
   - **RN-01:** a lista do select vem do endpoint — **sabote o mock** trocando as categorias e o
     teste tem de acompanhar. Se ele passar com o mock trocado, está lendo constante do front.
-  - **RN-04, o cenário de peso:** material gravado com `CONSUMÍVEL` (que **não** está no
-    catálogo) abre com o valor **preservado e visível**, e **salvar sem tocar no campo mantém
-    `CONSUMÍVEL`**. Afirme o payload do `PUT`, não só o que aparece na tela — o estrago é o que
-    vai para o banco.
+  - **RN-04, o cenário de peso — e o vermelho é a metade VISÍVEL** (achado A4, reproduzido):
+    material gravado com `CONSUMÍVEL` (fora do catálogo) **aparece selecionado na tela**, marcado
+    como fora de catálogo. **Hoje a tela mostra a primeira opção (`Aço carbono`) enquanto o
+    payload manda `CONSUMÍVEL`** — o `<select>` é controlado por state e o React não dispara
+    `onChange` para valor ausente das opções. A tela mente sobre o que está no banco.
+    **A asserção de payload entra como NÃO-REGRESSÃO, não como o vermelho** — ela **já passa
+    hoje**, antes de qualquer implementação, e usada como teste-que-falha seria verde vazio.
+  - **RN-07:** formulário de **criação** nasce com o campo vazio e uma opção `Selecione…` — hoje
+    nasce `CONSUMÍVEL` (`:70`), fora do catálogo. Sem este cenário a etapa continua fabricando
+    material que o catálogo não contém (achado A5).
   - Cenário negativo com a metade positiva: "a lista não tem `CONSUMÍVEL`" **e** "tem as do
-    catálogo".
+    catálogo". **A metade positiva é obrigatória aqui por um motivo medido:** os três mocks
+    terminam em `Promise.resolve({ data: [] })` como catch-all, então um cenário só-negativo
+    passa com a lista **vazia**.
 - [ ] **Step 2: implementar.** Um só ponto de busca reaproveitado pelos dois componentes; a
   lista deixa de existir como constante.
-- [ ] **Step 3: controle positivo com alvo:** faça o select cair na primeira opção quando o valor
-  não está na lista → o cenário RN-04 cai **mostrando a categoria trocada no payload**.
+- [ ] **Step 3: controle positivo com alvo:** remova a concatenação do valor atual à lista → o
+  cenário RN-04 cai **mostrando que a tela exibe `Aço carbono` para um material gravado como
+  `CONSUMÍVEL`**. E remova o `Selecione…` → cai o cenário da RN-07.
 - [ ] **Step 4:** `CI=true` test e build; commit.
 
 ---
