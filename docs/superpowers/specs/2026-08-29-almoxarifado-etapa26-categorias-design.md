@@ -123,7 +123,7 @@ dele é antiga).
   com uma opção `Selecione…`, tornando a classificação uma escolha consciente.
   **Descartado** usar a primeira do catálogo (classificaria material como `Aço carbono` por
   acidente de ordenação alfabética).
-  **CORREÇÃO (execução da Task 2, `4180e2b`): "nascer vazio" NÃO basta, e este documento estava
+  **CORREÇÃO (execução da Task 2, `f047948`): "nascer vazio" NÃO basta, e este documento estava
   errado ao parar aí.** `createMaterial`
   (`server/services/almoxarifado/materialService.js:179`) faz `categoria: categoria || 'OUTROS'`.
   Com o campo vazio e opcional, o material continuaria nascendo fora do catálogo — só que agora

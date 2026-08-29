@@ -124,7 +124,7 @@ Test `server/tests/api/categoriasCrud.api.test.js`.
 
 ---
 
-### Task 2 (galho): as telas param de hardcodar — FEITA (`4180e2b`)
+### Task 2 (galho): as telas param de hardcodar — FEITA (`f047948`)
 
 > **Entregue.** 15 cenários novos (53 nos três arquivos, era 38); suíte do client **572/572** em
 > 38 arquivos; `CI=true build` limpo. Três controles positivos com alvo, cada um derrubando só
@@ -164,7 +164,7 @@ a lista hardcoded** (verificado pela Fase 2), então nada fica vermelho por tabe
 
 **Independência:** não depende da Task 1 (o `GET` já existe e já devolve as 27 categorias).
 
-- [x] **Step 1: teste que falha** — `4180e2b`. 15 cenários, **14 vermelhos** antes da
+- [x] **Step 1: teste que falha** — `f047948`. 15 cenários, **14 vermelhos** antes da
   implementação (o 15º é o de não-regressão do payload, verde de propósito).
   - **RN-01:** a lista do select vem do endpoint — **sabote o mock** trocando as categorias e o
     teste tem de acompanhar. Se ele passar com o mock trocado, está lendo constante do front.
@@ -182,7 +182,7 @@ a lista hardcoded** (verificado pela Fase 2), então nada fica vermelho por tabe
     catálogo". **A metade positiva é obrigatória aqui por um motivo medido:** os três mocks
     terminam em `Promise.resolve({ data: [] })` como catch-all, então um cenário só-negativo
     passa com a lista **vazia**.
-- [x] **Step 2: implementar** — `4180e2b`. Ponto único: `hooks/useCategoriasMaterial.js`,
+- [x] **Step 2: implementar** — `f047948`. Ponto único: `hooks/useCategoriasMaterial.js`,
   reaproveitado pelos **três** componentes; nenhuma das três constantes existe mais.
 - [x] **Step 3: controle positivo com alvo** — `md5sum` antes/depois/restaurado, `git diff
   --stat` vazio nas três vezes:
@@ -197,7 +197,7 @@ a lista hardcoded** (verificado pela Fase 2), então nada fica vermelho por tabe
   - (c) devolvida a constante hardcoded a `MateriaisAlmoxarifado.js` → caem **só** os 3
     cenários da RN-01 **daquele** arquivo; os outros dois arquivos seguem verdes (50/53).
 - [x] **Step 4:** `CI=true` test **572/572** (38 suítes) e build `Compiled successfully`;
-  commit `4180e2b`.
+  commit `f047948`.
 
 ---
 
