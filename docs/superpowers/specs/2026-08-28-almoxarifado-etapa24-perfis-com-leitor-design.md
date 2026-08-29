@@ -194,15 +194,26 @@ tela **não** hardcoda a lista de perfis, e QUALIDADE aparece nela sem tocar no 
 
 ## Testes
 
-- `permissions` (no arquivo que já cobre perfis): RN-01 — `QUALIDADE` **pode** `inspecionar`,
-  `visualizar` e `ver_alertas`, e **não pode** `movimentar`, `ajustar_estoque`, `configurar`,
-  `criar_material`. A asserção negativa é a que importa: um perfil novo que herda demais é pior
-  que perfil nenhum.
+- `permissions` (no arquivo que já cobre perfis): RN-01 — `QUALIDADE` **pode** `inspecionar` e
+  `visualizar`, e **não pode** `movimentar`, `ajustar_estoque`, `configurar`, `criar_material`
+  nem **`ver_alertas`**. A asserção negativa é a que importa: um perfil novo que herda demais é
+  pior que perfil nenhum.
+  **ESTA LINHA ESTAVA ERRADA e foi corrigida:** dizia que `QUALIDADE` **pode** `ver_alertas`,
+  contradizendo a RN-01 e o "Escopo escolhido" acima, que tiram `ver_alertas` de propósito
+  (achados A4/A5 — a rota entrega 11 alertas, com `valor_parado`). A Task 1 implementou o
+  escopo certo (duas ações) e o teste prova a exclusão; a linha aqui é que ficou para trás.
 - Uma das quatro rotas de `inspecionar` exercitada **com um usuário QUALIDADE de verdade** pelo
   harness (que roda `requirePermission` real) — sem isso, o perfil está provado só na tabela.
-- `AlmoxarifadoPerfis.test.js`: lista com as três origens; o seletor **não aparece** para
-  `forcado`; escolher um perfil manda o `PUT` certo; "Padrão (Produção)" manda vazio; o 409
-  mostra a mensagem do servidor.
+- **`PerfisAcesso.test.js`** (a aba que já existe, mock na fronteira HTTP `api.get`/`api.put`):
+  lista com as três origens **e a origem visível, não só o perfil**; o seletor **não aparece**
+  para `forcado`, com o motivo na linha; escolher um perfil manda o `PUT` certo; "Produção
+  (padrão)" manda vazio; o 409 mostra a mensagem do servidor; **`ADMINISTRADOR` não é oferecido**
+  (RN-07); e o rótulo "Qualidade" aparece (RN-02).
+  **O nome `AlmoxarifadoPerfis.test.js` que estava aqui era resíduo da versão descartada deste
+  design**, a que mandava criar uma tela nova — arquivo que nunca existiu. E o plano, por sua
+  vez, afirmava que `ConfiguracoesAlmoxarifado.test.js` "já existe": também não existe. A
+  convenção real do diretório é **um arquivo por aba** (`ConfiguracoesGerais.test.js` cobre a aba
+  "geral" do mesmo componente), e é ela que o arquivo novo segue.
 - **Integração cruzando com a Etapa 22:** mudar o perfil de alguém e ler pela tela-contrato
   (`GET /auditoria?entidade=perfil_almoxarifado_usuario`), conferindo que o ato aparece com o
   de/para.

@@ -158,32 +158,61 @@ que a Etapa 23 fechou, na rota que decide quem tem acesso ao módulo.
 
 ---
 
-### Task 3 (galho): a aba existente — `ADMINISTRADOR` fora do seletor, e o primeiro teste
+### Task 3 (galho): a aba existente — `ADMINISTRADOR` fora do seletor, e o primeiro teste — ✅ FEITA (`60ba3fa`)
 
 **Files:** Modify `client/src/components/almoxarifado/ConfiguracoesAlmoxarifado.js`
-(`TabPerfisAcesso`, `:2545-2680`); Create/Modify o teste da aba
-(`ConfiguracoesAlmoxarifado.test.js` já existe — **confira** antes se cobre outra aba, e
-acrescente sem quebrar o que houver).
+(`TabPerfisAcesso`, `:2545-2680`); Create/Modify o teste da aba.
+
+**CORREÇÃO DO PLANO — `ConfiguracoesAlmoxarifado.test.js` NÃO existe.** Este plano afirmava que
+sim, e mandava "acrescentar sem quebrar". O que existe é
+`client/src/components/almoxarifado/ConfiguracoesGerais.test.js`, que cobre a aba **"geral"** do
+**mesmo** componente (renderiza `ConfiguracoesAlmoxarifado` com `?tab=geral`). Ou seja: a
+convenção do diretório é **um arquivo de teste por aba**, com o nome da aba — não um arquivo com
+o nome do componente. O teste novo seguiu essa convenção: **`PerfisAcesso.test.js`**. Um arquivo
+chamado `ConfiguracoesAlmoxarifado.test.js` sugeriria cobrir o componente inteiro (dez abas) e
+esconderia que `ConfiguracoesGerais.test.js` cobre o mesmo componente.
 
 **Hoje a aba tem ZERO teste** (varredura da revisão: nenhum `.test.js` menciona
 `TabPerfisAcesso` nem `perfis-usuario`). Os cenários abaixo cobrem comportamento que **já
 funciona** — escrevê-los não é redundância, é a rede que não existe.
 
-- [ ] **Step 1: teste que falha** (contra o mock do C1/C2, fronteira HTTP):
-  - as três origens aparecem, e a **origem** é visível, não só o perfil;
-  - `origem: 'forcado'` → **sem seletor**, com o motivo na linha (RN-03);
-  - escolher perfil → `PUT` com `{ perfil }` na URL do usuário certo;
-  - "Produção (padrão)" → `PUT` com perfil **vazio** (RN-04);
-  - 409 → a **mensagem do servidor** aparece (não uma genérica);
-  - **RN-07: `ADMINISTRADOR` NÃO aparece entre as opções**, mesmo vindo em `data.perfis`;
-  - o rótulo de `QUALIDADE` aparece (RN-02) — liga esta task à Task 1.
-- [ ] **Step 2: implementar** só o que falta: filtrar `ADMINISTRADOR` do seletor, com o porquê
-  visível ao usuário (administrador do módulo se define no cadastro de usuário). **Não reescreva
-  a aba** — ela está correta no resto.
-- [ ] **Step 3: controle positivo com alvo:** deixe `ADMINISTRADOR` voltar ao seletor → cai o
-  cenário da RN-07 nomeando a opção. E faça o seletor aparecer para `forcado` → cai o da RN-03.
-- [ ] **Step 4:** `CI=true` test e build (o fuso é fixado por `client/jest.globalSetup.js`);
-  commit.
+- [x] **Step 1: teste que falha** (contra o mock do C1/C2, fronteira HTTP): `60ba3fa`.
+  Sete cenários em `PerfisAcesso.test.js`; **um nasceu vermelho** (RN-07) e os outros seis são a
+  rede que faltava. Cada cenário negativo carrega **a metade positiva no mesmo teste**:
+  - as três origens aparecem, e a **origem** é visível, não só o perfil (o `explicito` vem com o
+    select **posicionado** em GESTOR; o `padrao` vem vazio **e a opção vazia diz "padrão"** — sem
+    essa palavra, "Produção" é indistinguível de escolha deliberada; o `forcado` mostra o estado);
+  - `origem: 'forcado'` → **sem seletor**, com o motivo na linha (RN-03) — e o **mesmo teste**
+    afirma que as outras duas origens **têm** seletor, senão "não há seletor" passaria com a
+    tabela vazia;
+  - escolher perfil → `PUT /almoxarifado/perfis-usuario/22` com `{ perfil: 'ALMOXARIFE' }` (o id
+    da **linha**, não o do primeiro da lista);
+  - "Produção (padrão)" → `PUT` com perfil **vazio**, e explicitamente **não** `'PRODUCAO'`
+    (RN-04) — mandar `'PRODUCAO'` gravaria perfil explícito e a origem ficaria `explicito`;
+  - 409 → a **literal do servidor** aparece (`toBe(MSG_409)`, e **não** a genérica
+    'Erro ao alterar o perfil'), com `toast.success` **não** chamado;
+  - **RN-07: `ADMINISTRADOR` não aparece entre as opções**, mesmo vindo em `data.perfis` (a
+    fixture manda `PERFIS_VALIDOS` inteiro **de propósito**) — e o **mesmo teste** afirma que
+    ALMOXARIFE, GESTOR, QUALIDADE, CONSULTA, ENGENHARIA e COMPRAS **estão** lá, senão a ausência
+    passaria com um seletor vazio;
+  - o rótulo de `QUALIDADE` aparece (RN-02) — `toBe('Qualidade')` e **não** `'QUALIDADE'`, que é
+    o que liga esta task à Task 1.
+- [x] **Step 2: implementar** `60ba3fa`: `perfis.filter((p) => p !== 'PRODUCAO' && p !== 'ADMINISTRADOR')`
+  mais um parágrafo na aba com o porquê visível ao usuário (administrador do módulo se define no
+  **cadastro de usuário**; concedido aqui, seria apagado no próximo salvamento daquele cadastro).
+  A aba **não** foi reescrita — está correta no resto, e reescrever criaria risco onde não há
+  defeito.
+- [x] **Step 3: controle positivo com alvo**, commitado antes, **três** sabotagens, lendo qual
+  asserção caiu: (a) `ADMINISTRADOR` de volta ao seletor → caiu **só** a RN-07, nomeando a opção
+  (`Received array: ["", "ADMINISTRADOR", …]`); (b) `forcado = false` → caiu a RN-03 no
+  `expect(selectDe('fatima@ex.com')).toBeNull()`, **e junto** o cenário da origem visível
+  (`Expected pattern: /Administrador/` — a linha forçada perdeu o badge, que é exatamente a
+  origem deixando de ser visível: colateral correto, não ruído); (c) `PERFIS_INFO` sem a entrada
+  `QUALIDADE` → caiu **só** a RN-02, com `Expected: "Qualidade" / Received: "QUALIDADE"`,
+  provando que a Task 1 tem guarda no client. `md5sum` `604ea5d6` antes e depois dos três
+  restauros, `git diff --stat` vazio.
+- [x] **Step 4:** cliente **556/556 em 38 suítes** (eram 549/37 na Task 1 — as 7 novas) e
+  `CI=true npx react-scripts build` **limpo**. Commit `60ba3fa`.
 
 ---
 
@@ -217,12 +246,28 @@ real (404 em `PUT /lotes/:id/status`, 403 em `POST /movimentacoes`).
 atribuição grava `dados_anteriores`. O contrato C2 **não mudou** — os 11 cenários congelados
 seguem verdes, e o arquivo foi a 14.
 
-O próximo passo é a **Task 3** — a aba existente (`TabPerfisAcesso`,
-`ConfiguracoesAlmoxarifado.js:2545-2680`): tirar `ADMINISTRADOR` do seletor (RN-07) e escrever o
-primeiro teste da aba, contra o mock do **C1/C2** (a aba tem **zero** teste hoje). Pontos de
-atenção: o seletor lê `data.perfis` do servidor (não hardcoda), então o filtro tem de ser na
-tela; `origem: 'forcado'` não pode mostrar seletor (RN-03); e o fuso da suíte é fixado por
-`client/jest.globalSetup.js` — não refixe `process.env.TZ` no topo do arquivo.
+**A Task 3 está FEITA** (`60ba3fa`): `ADMINISTRADOR` saiu do seletor com a razão visível na aba
+(RN-07), e a aba ganhou o primeiro teste — `client/src/components/almoxarifado/PerfisAcesso.test.js`,
+**7 cenários**, mock em `api.get`/`api.put`. O componente **não** foi reescrito: mudaram duas
+coisas, o `filter` do `<select>` e um parágrafo de explicação.
+
+O próximo passo é a **Task 4** — integração e fechamento. O que ela pode assumir da Task 3:
+
+- **a aba tem rede.** Mexer em `TabPerfisAcesso` sem rodar
+  `CI=true npx react-scripts test src/components/almoxarifado/PerfisAcesso --watchAll=false`
+  agora é escolha, não descuido. O arquivo guarda o formato do `PUT` (URL do usuário da linha,
+  `{ perfil }`, **vazio** no voltar-ao-padrão) — se a Task 4 precisar mudar o contrato C2, **este
+  arquivo cai junto** com `perfisUsuario.api.test.js`, e isso é o sinal, não o obstáculo;
+- **a RN-02 tem guarda no client.** Provado por sabotagem: tirar `QUALIDADE` de `PERFIS_INFO`
+  derruba o cenário do rótulo. A Task 1 não pode mais regredir em silêncio pelo lado da tela;
+- **`ADMINISTRADOR` não é mais oferecido.** A letra **C** do fechamento continua valendo e fica
+  *mais* importante, não menos: quem já tiver `perfil_almoxarifado = 'ADMINISTRADOR'` explícito
+  no banco **continua com ele** — o filtro é da tela, não uma migração. Esse perfil segue sendo
+  apagado por `syncModuleAdminProfiles` no próximo save daquele cadastro, e agora não há como
+  reconceder pela tela (que é o ponto). Confira o banco do cliente antes de fechar.
+
+Ponto de atenção que sobreviveu: o fuso da suíte do client é fixado por
+`client/jest.globalSetup.js` — não refixe `process.env.TZ` no topo de um arquivo de teste.
 
 O que a Task 2 acrescentou ao que a Task 3/4 pode assumir: cada `PUT` de perfil grava **uma**
 linha em `auditoria_log_almoxarifado` (`entidade = 'perfil_almoxarifado_usuario'`,
