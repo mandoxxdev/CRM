@@ -172,9 +172,13 @@ Etapa 24 estabeleceu ao criar `PerfisAcesso.test.js`).
 **Interfaces:** consome C2 (Task 1) — **serialize com a Task 1**, ou construa contra o contrato
 que a Task 1 relatar.
 
-- [ ] **Step 1: teste que falha:** listar, criar, renomear, desativar pela aba; erro do servidor
-  aparece com a **mensagem do servidor**; e **o aviso da RN-05** ao renomear (os materiais já
-  classificados mantêm o nome antigo).
+- [x] **Step 1: teste que falha** (`c87fe92`): listar, criar, renomear, desativar **e REATIVAR**
+  pela aba; erro do servidor aparece com a **mensagem do servidor**; e **o aviso da RN-05** ao
+  renomear (os materiais já classificados mantêm o nome antigo).
+  **CORREÇÃO — este step OMITIA "reativar", e a omissão contradizia o C1 deste mesmo plano**,
+  que justifica a mudança de contrato dizendo que o parâmetro de inativas existe "para a aba ter
+  como reativar o que desativou". Executado ao pé da letra, entregaria a aba **sem o único uso
+  que justifica a mudança da Task 1**, e sem teste que denunciasse.
 - [ ] **Step 2: implementar**, molde: a aba de famílias.
 - [ ] **Step 3: controle positivo com alvo** (remova o aviso da RN-05 → cai o cenário dele).
 - [ ] **Step 4:** `CI=true` test e build; commit.
