@@ -1,6 +1,6 @@
 /**
  * Perfis de permissão do módulo Almoxarifado
- * Perfis: ADMINISTRADOR, ALMOXARIFE, COMPRAS, PRODUCAO, ENGENHARIA, GESTOR, CONSULTA
+ * Perfis: ADMINISTRADOR, ALMOXARIFE, COMPRAS, PRODUCAO, ENGENHARIA, GESTOR, CONSULTA, QUALIDADE
  */
 
 const PERFIS = {
@@ -11,10 +11,15 @@ const PERFIS = {
   ENGENHARIA: 'ENGENHARIA',
   GESTOR: 'GESTOR',
   CONSULTA: 'CONSULTA',
+  // Etapa 24: a area de qualidade decide inspecao de recebimento, vencimento de lote, status de
+  // lote e status de serie — as quatro rotas de `inspecionar`. Ate aqui so ADMINISTRADOR e
+  // ALMOXARIFE as alcancavam, o que obrigava a qualidade a pedir para o almoxarifado decidir, ou
+  // a receber um perfil largo demais. Duas acoes e SO: `visualizar` e `inspecionar`.
+  QUALIDADE: 'QUALIDADE',
 };
 
 const ACAO_PERFIS = {
-  visualizar: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE, PERFIS.COMPRAS, PERFIS.PRODUCAO, PERFIS.ENGENHARIA, PERFIS.GESTOR, PERFIS.CONSULTA],
+  visualizar: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE, PERFIS.COMPRAS, PERFIS.PRODUCAO, PERFIS.ENGENHARIA, PERFIS.GESTOR, PERFIS.CONSULTA, PERFIS.QUALIDADE],
   criar_material: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE, PERFIS.ENGENHARIA],
   editar_material: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE, PERFIS.ENGENHARIA],
   movimentar: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE],
@@ -67,7 +72,22 @@ const ACAO_PERFIS = {
   separar_emitir: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE],
   requisitar: [PERFIS.ADMINISTRADOR, PERFIS.PRODUCAO, PERFIS.ENGENHARIA, PERFIS.ALMOXARIFE],
   receber_material: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE, PERFIS.COMPRAS],
-  inspecionar: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE],
+  // Etapa 24: QUALIDADE entra aqui — as quatro rotas gateadas por `inspecionar` sao atos de
+  // qualidade (decidir o item recebido, liberar vencimento de lote, mudar status de lote e de
+  // serie), e nenhuma delas faz checagem alem do requirePermission (medido na Fase 2).
+  //
+  // O que ficou de fora DE PROPOSITO, para o proximo nao "consertar":
+  // - `ver_alertas`: `montarCentral` percorre o registro INTEIRO, sem regua por perfil — a
+  //   permissao entregaria 11 alertas, incluindo ESTOQUE_SEM_CONSUMO e ESTOQUE_EXCESSIVO, que
+  //   carregam `valor_parado` (CUSTO de estoque). A Etapa 16 excluiu PRODUCAO/ENGENHARIA/CONSULTA
+  //   da central exatamente por isso. Consequencia declarada: os quatro alertas de qualidade
+  //   (material reprovado, divergencia de recebimento, lote sem certificado e QUARENTENA_PARADA)
+  //   seguem invisiveis para o perfil ate a central saber filtrar por perfil.
+  // - `receber_material`: anexar certificado e ato de recebimento, nao de qualidade.
+  // - `ajustar_estoque`: mexer em saldo nao e oficio de qualidade. Consequencia declarada: na
+  //   tela /almoxarifado/inspecoes dois dos tres botoes ficam barrados para QUALIDADE e
+  //   POST /materiais/:id/bloquear responde 403 — o item 131 da spec 23 NAO fica pago inteiro.
+  inspecionar: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE, PERFIS.QUALIDADE],
   reservar: [PERFIS.ADMINISTRADOR, PERFIS.ENGENHARIA, PERFIS.PRODUCAO, PERFIS.ALMOXARIFE],
   reservar_outra_os: [PERFIS.ADMINISTRADOR, PERFIS.GESTOR],
   inventario: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE, PERFIS.GESTOR],

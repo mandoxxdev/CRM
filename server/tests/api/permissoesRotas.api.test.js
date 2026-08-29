@@ -28,6 +28,7 @@ const fs = require('fs');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbGet, dbAll } = require('../../services/almoxarifado/db');
+const { PERFIS, can } = require('../../services/almoxarifado/permissions');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -43,6 +44,8 @@ const ALMOXARIFE = { id: 52, nome: 'Almoxarife', role: 'usuario', perfil_almoxar
 const GESTOR = { id: 53, nome: 'Gestor', role: 'usuario', perfil_almoxarifado: 'GESTOR', email: 'gestor@test.com' };
 const ENGENHARIA = { id: 54, nome: 'Engenharia', role: 'usuario', perfil_almoxarifado: 'ENGENHARIA', email: 'eng@test.com' };
 const ADMIN = { id: 55, nome: 'Admin', role: 'admin', is_superadmin: 1, email: 'admin@test.com' };
+// Etapa 24: perfil da area de qualidade — `visualizar` + `inspecionar`, e nada alem.
+const QUALIDADE = { id: 56, nome: 'Qualidade', role: 'usuario', perfil_almoxarifado: 'QUALIDADE', email: 'qualidade@test.com' };
 
 let seqMat = 0; let seqReq = 0; let seqConf = 0;
 
@@ -610,6 +613,71 @@ const saldoDe = (db, matId) => dbGet(db, 'SELECT quantidade_atual FROM materiais
     const res = await request(app).post(`/api/almoxarifado/requisicoes/${reqId}/copiar`).send({});
     assert.strictEqual(res.status, 201, `esperava 201, veio ${res.status}: ${JSON.stringify(res.body)}`);
     assert.strictEqual(res.body.status, 'RASCUNHO');
+  });
+
+  // ══════════════════ ETAPA 24 / RN-01: o perfil QUALIDADE ══════════════════
+  //
+  // A area de qualidade decide inspecao de recebimento, vencimento de lote, status de lote e
+  // status de serie — as quatro rotas de `inspecionar`. Ate a Etapa 24 so ADMINISTRADOR e
+  // ALMOXARIFE as alcancavam, o que obrigava a qualidade a pedir para o almoxarifado decidir,
+  // ou a receber um perfil largo demais.
+  //
+  // A metade que importa aqui e a NEGATIVA: perfil novo que herda demais e pior que perfil
+  // nenhum. Em especial `ver_alertas` fica DE FORA de proposito — `montarCentral` percorre o
+  // registro inteiro sem regua por perfil, entao a permissao entregaria 11 alertas, dois deles
+  // com `valor_parado` (custo de estoque), que a Etapa 16 excluiu de outros perfis justamente
+  // por isso. Nao e esquecimento; e decisao medida no design da Etapa 24 (secao "Escopo
+  // escolhido").
+
+  await test('[RN-01] QUALIDADE PODE visualizar e inspecionar', async () => {
+    const permitidas = ['visualizar', 'inspecionar'];
+    const faltando = permitidas.filter((acao) => !can(QUALIDADE, acao));
+    assert.deepStrictEqual(faltando, [],
+      `QUALIDADE deveria poder, e nao pode: ${faltando.join(', ')}`);
+  });
+
+  await test('[RN-01] QUALIDADE NAO pode movimentar/ajustar/configurar/material/receber/ver_alertas', async () => {
+    const proibidas = ['movimentar', 'ajustar_estoque', 'configurar', 'criar_material',
+      'editar_material', 'receber_material', 'ver_alertas'];
+    const vazou = proibidas.filter((acao) => can(QUALIDADE, acao));
+    assert.deepStrictEqual(vazou, [],
+      `QUALIDADE recebeu acao que NAO devia ter: ${vazou.join(', ')}`);
+  });
+
+  await test('[RN-01] QUALIDADE existe em PERFIS e entra na lista do seletor (PERFIS_VALIDOS)', async () => {
+    assert.strictEqual(PERFIS.QUALIDADE, 'QUALIDADE',
+      `PERFIS.QUALIDADE ausente: ${JSON.stringify(Object.keys(PERFIS))}`);
+    assert.ok(Object.values(PERFIS).includes('QUALIDADE'),
+      'QUALIDADE fora de Object.values(PERFIS) — nao apareceria em GET /perfis-usuario');
+  });
+
+  // Prova de PONTA: a tabela acima mede `can()`; estes dois medem o GATE REAL
+  // (`requirePermission` roda de verdade no harness). Sem eles o perfil estaria provado
+  // so na tabela.
+  await test('[RN-01/ponta] QUALIDADE PASSA o gate de `inspecionar` (PUT /lotes/:id/status -> 404, nao 403)', async () => {
+    setUser(QUALIDADE);
+    const res = await request(app).put('/api/almoxarifado/lotes/999999/status')
+      .send({ status: 'BLOQUEADO', justificativa: 'teste de gate' });
+    assert.notStrictEqual(res.status, 403,
+      `QUALIDADE foi barrado no gate de inspecionar: ${JSON.stringify(res.body)}`);
+    assert.strictEqual(res.status, 404,
+      `esperava 404 (passa o gate, morre no "nao encontrado"), veio ${res.status}: ${JSON.stringify(res.body)}`);
+  });
+
+  await test('[RN-01/ponta] QUALIDADE e BARRADO em POST /movimentacoes -> 403 acao=movimentar', async () => {
+    const matId = await criarMaterial(db);
+    const antes = await dbGet(db, 'SELECT COUNT(*) as c FROM movimentacoes_almoxarifado');
+
+    setUser(QUALIDADE);
+    const res = await request(app).post('/api/almoxarifado/movimentacoes')
+      .send({ material_id: matId, tipo: 'ENTRADA', quantidade: 5 });
+    assert.strictEqual(res.status, 403,
+      `esperava 403, veio ${res.status}: ${JSON.stringify(res.body)}`);
+    assert.strictEqual(res.body.acao, 'movimentar', JSON.stringify(res.body));
+    assert.strictEqual(res.body.perfil, 'QUALIDADE', JSON.stringify(res.body));
+
+    const depois = await dbGet(db, 'SELECT COUNT(*) as c FROM movimentacoes_almoxarifado');
+    assert.strictEqual(depois.c, antes.c, 'movimentacao gravada apesar do 403');
   });
 
   // ══════════════════ REGRESSÃO: rotas fora do escopo não mudaram ══════════════════

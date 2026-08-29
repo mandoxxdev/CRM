@@ -2540,6 +2540,7 @@ const PERFIS_INFO = {
   ENGENHARIA: { label: 'Engenharia', desc: 'Cadastra e edita material, requisita e reserva' },
   PRODUCAO: { label: 'Produção', desc: 'Consulta, requisita e reserva material (é o padrão de quem não tem perfil definido)' },
   CONSULTA: { label: 'Consulta', desc: 'Somente leitura' },
+  QUALIDADE: { label: 'Qualidade', desc: 'Consulta e decide inspeção: aprova/reprova item recebido, libera vencimento de lote e muda status de lote e de série — não movimenta estoque, não ajusta saldo nem cadastra material' },
 };
 
 const TabPerfisAcesso = () => {
