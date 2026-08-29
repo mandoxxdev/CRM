@@ -158,7 +158,7 @@ que a Etapa 23 fechou, na rota que decide quem tem acesso ao módulo.
 
 ---
 
-### Task 3 (galho): a aba existente — `ADMINISTRADOR` fora do seletor, e o primeiro teste — ✅ FEITA (`60ba3fa`)
+### Task 3 (galho): a aba existente — `ADMINISTRADOR` fora do seletor, e o primeiro teste — ✅ FEITA (`b13de4a`)
 
 **Files:** Modify `client/src/components/almoxarifado/ConfiguracoesAlmoxarifado.js`
 (`TabPerfisAcesso`, `:2545-2680`); Create/Modify o teste da aba.
@@ -176,7 +176,7 @@ esconderia que `ConfiguracoesGerais.test.js` cobre o mesmo componente.
 `TabPerfisAcesso` nem `perfis-usuario`). Os cenários abaixo cobrem comportamento que **já
 funciona** — escrevê-los não é redundância, é a rede que não existe.
 
-- [x] **Step 1: teste que falha** (contra o mock do C1/C2, fronteira HTTP): `60ba3fa`.
+- [x] **Step 1: teste que falha** (contra o mock do C1/C2, fronteira HTTP): `b13de4a`.
   Sete cenários em `PerfisAcesso.test.js`; **um nasceu vermelho** (RN-07) e os outros seis são a
   rede que faltava. Cada cenário negativo carrega **a metade positiva no mesmo teste**:
   - as três origens aparecem, e a **origem** é visível, não só o perfil (o `explicito` vem com o
@@ -197,7 +197,7 @@ funciona** — escrevê-los não é redundância, é a rede que não existe.
     passaria com um seletor vazio;
   - o rótulo de `QUALIDADE` aparece (RN-02) — `toBe('Qualidade')` e **não** `'QUALIDADE'`, que é
     o que liga esta task à Task 1.
-- [x] **Step 2: implementar** `60ba3fa`: `perfis.filter((p) => p !== 'PRODUCAO' && p !== 'ADMINISTRADOR')`
+- [x] **Step 2: implementar** `b13de4a`: `perfis.filter((p) => p !== 'PRODUCAO' && p !== 'ADMINISTRADOR')`
   mais um parágrafo na aba com o porquê visível ao usuário (administrador do módulo se define no
   **cadastro de usuário**; concedido aqui, seria apagado no próximo salvamento daquele cadastro).
   A aba **não** foi reescrita — está correta no resto, e reescrever criaria risco onde não há
@@ -212,7 +212,7 @@ funciona** — escrevê-los não é redundância, é a rede que não existe.
   provando que a Task 1 tem guarda no client. `md5sum` `604ea5d6` antes e depois dos três
   restauros, `git diff --stat` vazio.
 - [x] **Step 4:** cliente **556/556 em 38 suítes** (eram 549/37 na Task 1 — as 7 novas) e
-  `CI=true npx react-scripts build` **limpo**. Commit `60ba3fa`.
+  `CI=true npx react-scripts build` **limpo**. Commit `b13de4a`.
 
 ---
 
@@ -246,7 +246,7 @@ real (404 em `PUT /lotes/:id/status`, 403 em `POST /movimentacoes`).
 atribuição grava `dados_anteriores`. O contrato C2 **não mudou** — os 11 cenários congelados
 seguem verdes, e o arquivo foi a 14.
 
-**A Task 3 está FEITA** (`60ba3fa`): `ADMINISTRADOR` saiu do seletor com a razão visível na aba
+**A Task 3 está FEITA** (`b13de4a`): `ADMINISTRADOR` saiu do seletor com a razão visível na aba
 (RN-07), e a aba ganhou o primeiro teste — `client/src/components/almoxarifado/PerfisAcesso.test.js`,
 **7 cenários**, mock em `api.get`/`api.put`. O componente **não** foi reescrito: mudaram duas
 coisas, o `filter` do `<select>` e um parágrafo de explicação.
