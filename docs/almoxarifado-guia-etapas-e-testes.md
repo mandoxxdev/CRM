@@ -3883,6 +3883,11 @@ reclassificar o acervo.
 nada quebrou; os passos 3 a 6 exercitam a etapa pela API, porque **é onde ela está**; o passo 7
 volta para a tela, na Auditoria.
 
+**Faça o roteiro como Administrador.** Os passos 2 e 7 abrem a tela de Auditoria, que exige a
+permissão *Configurar o módulo* — só do Administrador. O passo 3 (cadastrar a característica)
+aceita também **Qualidade** e **Engenharia**; se quiser conferir isso, refaça só ele com um
+usuário desses perfis.
+
 Para os passos de API você precisa do token da sua sessão: abra o sistema logado, tecle `F12` →
 aba **Rede**, clique em qualquer tela do almoxarifado e copie o cabeçalho `Authorization` de uma
 requisição. Nos comandos abaixo ele é `$TOKEN`.
