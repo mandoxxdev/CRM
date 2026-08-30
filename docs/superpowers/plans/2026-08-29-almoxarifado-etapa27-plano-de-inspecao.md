@@ -330,7 +330,7 @@ medir.
 
 ---
 
-### Task 3 (tronco): medidas na decisão de inspeção — FEITA (`b95d5ad` + o commit deste fecho)
+### Task 3 (tronco): medidas na decisão de inspeção — FEITA (`964cf57` + o commit deste fecho)
 
 > **Entregue.** 21 cenários em `medidasInspecao.api.test.js`, vermelho inicial **17/20** (os três
 > verdes eram âncoras de posição, não cenários vazios — ver abaixo). `test:api` **158/158**,
