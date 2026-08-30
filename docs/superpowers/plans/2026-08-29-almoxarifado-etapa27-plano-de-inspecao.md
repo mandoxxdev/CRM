@@ -330,14 +330,92 @@ medir.
 
 ---
 
-### Task 3 (tronco): medidas na decisão de inspeção
+### Task 3 (tronco): medidas na decisão de inspeção — FEITA (`b95d5ad` + o commit deste fecho)
+
+> **Entregue.** 21 cenários em `medidasInspecao.api.test.js`, vermelho inicial **17/20** (os três
+> verdes eram âncoras de posição, não cenários vazios — ver abaixo). `test:api` **158/158**,
+> `test:almoxarifado` **42/42**, `test:validation` 4/4, `test:safealter` 3/3, `test:sqlite` 5/5.
+> Os testes de inspeção existentes seguem verdes: `inspecaoDecisao` 15/15, `inspecaoRotas` 12/12.
+>
+> **UMA SABOTAGEM PREVISTA VIROU NO-OP, e a medição diz por quê.** Trocar o `INSERT` multi-linha
+> por um **laço** de `INSERT` — a defesa nº 2 do C3, marcada como bloqueante — **passa 21/21**.
+> Não é teste fraco: é que, com a validação completa rodando **antes** do claim, nenhuma linha do
+> payload consegue mais falhar no `INSERT` (todo `valor_medido` já é número finito, todo `conforme`
+> já é 0/1, e não há `UNIQUE` em `medidas_inspecao_almoxarifado`). O ato parcial ficou
+> **inalcançável pela porta da frente**, e por isso indistinguível por teste de caixa-preta.
+> Medido com um probe que cria um `UNIQUE (inspecao_id, plano_id)` artificial para forçar a falha
+> na segunda linha:
+>
+> | gravação | erro | medidas gravadas | inspeção gravada |
+> |---|---|---|---|
+> | laço | `SQLITE_CONSTRAINT` | **1** ← ato parcial | 1, com `divergencia_dimensional=1` |
+> | multi-linha (atual) | `SQLITE_CONSTRAINT` | **0** | 1, com `divergencia_dimensional=1` |
+>
+> Ou seja: a diferença **existe e é exatamente a descrita**, mas só aparece com uma restrição que o
+> schema não tem. O multi-linha fica — é defesa em profundidade barata contra o dia em que alguém
+> acrescentar uma constraint ou uma coluna `NOT NULL` — mas **quem revisar isto no futuro precisa
+> saber que a suíte não o protege**. Mesma lição da Task 1 e da Task 2 por um terceiro caminho: o
+> que o teste ancora é a **posição** da validação, não a forma da escrita.
+>
+> **Nota sobre a linha "inspeção ainda gravada" da tabela:** mesmo no multi-linha, o `INSERT` da
+> inspeção já aconteceu quando as medidas falham, então uma falha de infraestrutura ali deixaria a
+> inspeção com a flag derivada e nenhuma medida. Inverter a ordem não resolve (o `inspecao_id` é
+> FK das medidas) e `BEGIN` está proibido nesta base. Fica **declarado**, não escondido.
+>
+> **DUAS DECISÕES QUE O C3 NÃO COBRIA, tomadas aqui:**
+>
+> 1. **O plano é validado por EXISTÊNCIA, não por `ativo = 1`.** O C3 só dizia "inexistente ou de
+>    outro material → 400". Escolhida a mesma régua que a Task 2 aplicou ao material pai: exigir
+>    ativo travaria a inspeção em andamento porque alguém desativou a característica no meio, e os
+>    valores são congelados de qualquer jeito (RN-05) — a medida continua significando o que
+>    significava no ato. Cenário (20) fixa a decisão para que mudá-la seja deliberado.
+> 2. **`ferramenta_id` é OPCIONAL.** A RN-04 do design diz "medida exige instrumento", mas a coluna
+>    que a Task 2 congelou é `ferramenta_id INTEGER` **nullable** — exigir em código contradiria o
+>    schema. **A RN-04 está imprecisa nesse ponto**: o que ela de fato garante é "instrumento
+>    *declarado* e vencido não mede", não "toda medida tem instrumento". Escolhido seguir o schema
+>    (caminho reversível: tornar obrigatório depois é uma linha; afrouxar depois exigiria migração
+>    de dado congelado).
+>
+> **Dois acréscimos ao contrato, ambos aditivos:** o retorno passa a expor
+> `divergencia_dimensional` e `medidas_registradas` — sem isso quem chamou não tem como saber que a
+> marcação manual foi ignorada, que é o defeito da Etapa 26 (tela mostra uma coisa, banco guarda
+> outra); e existe um cenário **pela rota HTTP** (21), porque os outros 20 chamam o serviço direto
+> e continuariam verdes no dia em que um Zod que não declara `medidas` matasse a feature pela tela.
+>
+> **Controle positivo — seis sabotagens, cinco com alvo e uma medida como no-op:**
+>
+> - (a) flag do payload no lugar da avaliação → caem **(1) (2) (3) (19)**, a primeira dizendo
+>   *"medida 10.5 fora de [9.9, 10.1] tinha de LIGAR a flag sozinha — a divergencia nao foi
+>   derivada"*;
+> - (b) checagem de calibração desligada → caem **(5) (6)**, *"esperava recusa, mas a chamada teve
+>   SUCESSO"*;
+> - (c) valores não congelados (só `plano_id`) → caem **(11) (20)**, *"o nominal da medida tem de
+>   ser o do ATO, nao o de agora"*;
+> - **(d) validação movida para DEPOIS do claim** — a sabotagem que importa nesta task → caem
+>   **(5) (9) (12) (13) (14) (15)**, cada uma nomeando a ordem: *"o 400 saiu DEPOIS de o claim ter
+>   baixado o retido do item — a validacao esta no lugar errado do fluxo"*;
+> - (e) laço no lugar do `INSERT` multi-linha → **NO-OP, 21/21** (medido acima);
+> - (f) `if (data.medidas)` no lugar de `Array.isArray && length > 0` → cai **(17)**, *"array vazio
+>   de medidas zerou a marcacao manual do inspetor"*. **Primeira tentativa foi vermelho por erro de
+>   SQL** (`VALUES` vazio), não pela asserção — refeita mantendo o SQL íntegro para que o vermelho
+>   viesse da flag;
+> - (g) epsilon zerado em `toleranciaInspecao` → cai **(4)**, provando que a âncora do limite exato
+>   não é vazia;
+> - (h) a rota deixa de repassar `medidas` → cai **(21)**, e **só ela** — que é exatamente a razão
+>   de (21) existir.
+>
+> `md5sum` antes/depois/restaurado idênticos nos três arquivos tocados, `git diff --stat` vazio
+> entre as sabotagens.
+>
+> **Fica para a Task 4:** as medidas nascem sem leitor (já declarado no design) e a tela de
+> inspeção continua com a caixa manual — os dois precisam estar na letra C.
 
 **Files:** Modify `server/services/almoxarifado/inspectionService.js` (`decidirInspecao`, `:46`);
 Test `server/tests/api/medidasInspecao.api.test.js`.
 
 **Depende das Tasks 1 e 2** — serialize.
 
-- [ ] **Step 1: teste que falha** — os quatro cenários, nesta ordem de importância:
+- [x] **Step 1: teste que falha** — os quatro cenários, nesta ordem de importância:
   - **RN-03, o de peso:** inspeção com uma medida **fora** da tolerância → o registro sai com
     `divergencia_dimensional = 1` **sem que o payload tenha marcado nada**. E o irmão: todas
     dentro → `0`, mesmo que o payload mande `1` (a derivação **vence** o manual quando há
@@ -358,15 +436,15 @@ Test `server/tests/api/medidasInspecao.api.test.js`.
   - **B2:** `ferramenta_id` inexistente → **404**, não 500.
   - **Regressão:** inspeção **sem** medidas continua funcionando exatamente como hoje, incluindo
     a flag manual (os testes de inspeção existentes não podem quebrar — rode-os).
-- [ ] **Step 2: implementar.** **Toda a resolução/validação ANTES do claim da linha 90** (C3) —
+- [x] **Step 2: implementar.** **Toda a resolução/validação ANTES do claim da linha 90** (C3) —
   se um 400 seu sair depois de o saldo ter se movido, o conserto não é mover o `catch`, é mover a
   validação. E as medidas num **único `INSERT` multi-linha**, nunca em laço.
-- [ ] **Step 3: controle positivo** (commitar antes), lendo qual asserção caiu:
+- [x] **Step 3: controle positivo** (commitar antes), lendo qual asserção caiu:
   (a) ignore o resultado da avaliação e use a flag do payload → o cenário RN-03 cai **dizendo que
   a divergência não foi derivada**; (b) remova a checagem de calibração → o cenário RN-04 cai
   nomeando o instrumento; (c) grave `plano_id` em vez dos valores congelados → o cenário RN-05
   cai mostrando o nominal novo na inspeção antiga.
-- [ ] **Step 4:** `npm run test:api` e `npm run test:almoxarifado`; commit.
+- [x] **Step 4:** `npm run test:api` e `npm run test:almoxarifado`; commit.
 
 ---
 

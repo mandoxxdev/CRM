@@ -90,6 +90,13 @@ usa `Math.abs(...) > 1e-6` com um comentário explicando exatamente este fenôme
   impedir.
   **Descartado** apenas avisar: uma medida feita com instrumento vencido não é dado, é ruído com
   aparência de dado — e ficaria na trilha como se fosse prova.
+  **CORREÇÃO (Task 3): "Medida exige instrumento" está IMPRECISO — `ferramenta_id` é OPCIONAL.**
+  A coluna que a Task 2 congelou é `medidas...ferramenta_id INTEGER`, **nullable**, e exigir o
+  campo em código contradiria o schema. O que esta RN de fato garante é *"instrumento **declarado**
+  e vencido não mede"*, não *"toda medida tem instrumento"*. Decidido seguir o schema, que é o
+  caminho reversível: tornar obrigatório depois é uma linha de validação; afrouxar depois exigiria
+  migração de dado congelado. Quem ler "exige instrumento" e escrever a tela contando com o campo
+  preenchido sempre vai se enganar — daí a correção estar aqui e não só no plano.
 - **RN-05 — O plano é congelado no ato.** A inspeção guarda o valor nominal e as tolerâncias
   **usados naquele momento**, não uma referência ao plano. Editar o plano depois **não** reescreve
   inspeções antigas. É a mesma razão da RN-05 da Etapa 26 (renomear categoria não reclassifica o

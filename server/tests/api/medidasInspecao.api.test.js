@@ -25,6 +25,7 @@
  *     isso o cenario do '12,4' afirma o 400 E a ausencia total de escrita.
  */
 const assert = require('assert');
+const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbGet, dbAll } = require('../../services/almoxarifado/db');
 const stockService = require('../../services/almoxarifado/stockService');
@@ -120,7 +121,7 @@ async function recusa(fn) {
 }
 
 (async () => {
-  const { db, close } = await createTestApp({ user: ADMIN });
+  const { app, db, close } = await createTestApp({ user: ADMIN });
 
   // ─── RN-03: a divergencia dimensional e DERIVADA, e vence o payload ────────────────────────
   // O par e obrigatorio. So o primeiro prova que a derivacao existe; so o par prova que ela
@@ -490,6 +491,29 @@ async function recusa(fn) {
     const [insp] = await inspecoesDoItem(db, itemId);
     const [med] = await medidasDaInspecao(db, insp.id);
     assert.strictEqual(med.caracteristica, 'Diametro desativado');
+  });
+
+  await test('(21) [rota] o array `medidas` ATRAVESSA a fronteira HTTP e a flag derivada volta na resposta', async () => {
+    // A rota de inspecao repassa `req.body` inteiro, sem Zod — mas este modulo ja tem rotas com
+    // schema (a de transformacao de remessa), e a licao registrada la e que um campo novo que o
+    // schema nao declara chega ao servico como `undefined` SEM erro nenhum. Se um dia esta rota
+    // ganhar validacao de corpo e `medidas` ficar de fora, os 20 cenarios acima continuam verdes
+    // (chamam o servico direto) e a feature para de existir pela tela. Este cenario e o unico que
+    // cai nesse dia.
+    const { mat, itemId, qtd } = await itemRetido(db, 10);
+    const plano = await novoPlano(db, mat, { caracteristica: 'Diametro pela rota', valor_nominal: 10, desvio_inferior: -0.1, desvio_superior: 0.1 });
+
+    const resp = await request(app)
+      .post(`/api/almoxarifado/recebimentos/itens/${itemId}/inspecionar`)
+      .send({ quantidade_aprovada: qtd, quantidade_reprovada: 0, medidas: [{ plano_id: plano, valor_medido: 10.5 }] });
+
+    assert.strictEqual(resp.status, 201, `esperava 201, veio ${resp.status}: ${JSON.stringify(resp.body)}`);
+    assert.strictEqual(resp.body.divergencia_dimensional, 1,
+      'a flag derivada tem de voltar na resposta — senao a tela mostra uma coisa e o banco guarda outra');
+    assert.strictEqual(resp.body.medidas_registradas, 1);
+    const [insp] = await inspecoesDoItem(db, itemId);
+    assert.strictEqual((await medidasDaInspecao(db, insp.id)).length, 1,
+      'o array `medidas` nao chegou ao servico pela rota');
   });
 
   await close();
