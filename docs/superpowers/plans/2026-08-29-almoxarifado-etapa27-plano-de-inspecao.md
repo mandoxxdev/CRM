@@ -551,10 +551,90 @@ sem medir vai entregar o defeito que ele descreve.
 
 ## Próxima tarefa detalhada
 
-Se parar aqui: **Fase 2** — agente fresco com plano + design e três perguntas (os contratos
-cobrem os erros? as RN batem com o código? as tasks são mesmo tronco?). Atenção especial a:
-**`decidirInspecao` tem transação ou é sequência de escritas?** (se for sequência, gravar medidas
-no meio cria o mesmo ato-parcial que a Etapa 23 consertou no `PUT /configuracoes` — e a Global
-Constraint da 23 proíbe `BEGIN` com `await` no meio, porque a conexão é única);
-**a tela de inspeção manda payload que quebraria com campo novo?**; e se `calibracaoVigente` é
-alcançável de `inspectionService` sem import circular.
+> A pergunta antiga desta seção ("se parar aqui: Fase 2") **foi respondida** — a Fase 2 rodou,
+> achou 15 problemas com 3 bloqueantes, e as três tasks foram executadas. **A etapa 27 está
+> fechada** (`063f3ce..64d88d6`). O que segue é a próxima.
+
+### A etapa escolhida: 28 — a separação passa a ter DONO e RASTRO (feature 05)
+
+**Fase 0 medida no código em 2026-08-29, cruzada com a spec ANTES de medir.** As três candidatas
+do mapa foram avaliadas; a escolha e o descarte das outras duas estão escritos para não se
+refazer a conta:
+
+| Candidata | Veredito | Por quê |
+|---|---|---|
+| **05 — Separação/picking** | **ESCOLHIDA** | Tem um defeito **medido, concreto e pequeno** que bloqueia três itens do próprio checklist, e um molde pronto na base para copiar |
+| 06 — Motor de regras de aprovação | Descartada **agora** | O motor configurável está adiado **por decisão de escopo declarada** ("fica para demanda real"), não por esquecimento — construí-lo sem demanda seria especulação. A Fase 0 corrigiu **três itens defasados** da spec 06 e registrou dois achados (config morta `limite_aprovacao_auto`; o lembrete que nunca alcança `AGUARDANDO_APROVACAO_VALOR`), que é o valor que essa medição tinha a dar |
+| 08 — Tipos de entrada | Descartada, **e a razão está registrada desde a Fase 0 da 27** | Os tipos que faltam **já têm porta própria em cinco features 🟢**. Construí-los ali seria **segunda porta** para o mesmo ato — o erro que esta base já nomeou |
+
+**O achado que define a etapa 28, medido e conferido linha a linha:**
+
+> **A separação não tem autor e não deixa rastro.**
+> - `requisitionService.separarRequisicao(db, requisicaoId, itensSeparados = [])` (`:189`) **não
+>   recebe `user`**;
+> - o handler `handleSeparacao` (`routes/almoxarifado.js:3301`) **não repassa `req.user`** —
+>   chama `separarRequisicao(db, req.params.id, itens_separados || [])`;
+> - `requisitionService.js` tem **zero** ocorrências de `registrarAuditoria`/`auditar` (contado);
+> - `auditLabels.js` tem **zero** ocorrências de `SEPARA` — não existe verbo de separação no
+>   vocabulário da trilha;
+> - o contraste está no **mesmo arquivo de rotas**: `/confirmar-recebimento` e `/rejeitar-valor`
+>   auditam; `/separacao` e `/liberar-retirada` não.
+>
+> **Consequência:** não há como saber **quem separou** uma requisição — nem pela trilha, nem pela
+> tabela. E isso não é um campo a somar depois: é o campo sem o qual os itens *"Prioridade e
+> responsável pela separação"*, *"Segunda conferência (conferente ≠ separador)"* e a regra
+> *"conferência pelo mesmo usuário da separação falha"* **não têm como existir**.
+
+**E a spec 05 tinha uma afirmação ERRADA, já corrigida à vista:** ela dizia que
+`TIPOS_LOCALIZACAO` "já contempla tipos que servem para Reservado/Kit/Aguardando retirada
+(validar na implementação)". **Não contempla nenhum dos três** (`schema.js:21-26`, lista lida
+inteira). O item que depende disso exigiria **estender o enum**, que é exportado (`:2046`) e
+servido ao front como `localizacoes_tipos` (`extended.js:151`) — **mudança de contrato de API**,
+não conferência. **Por isso esse item fica FORA da etapa 28.**
+
+**O molde a copiar já existe e é o mais maduro da base:** a dupla assinatura do sucateamento —
+duas colunas por perna (`schema.js:1565-1569`), **duas ações de perfil próprias**
+(`permissions.js:64-65`), **segregação por IDENTIDADE** (a mesma pessoa não assina as duas pernas
+nem sendo Administrador — `scrapDisposalService.js:342`) e fechamento do status por `CASE` num
+**claim único** (`scrapDisposalStateMachine.js:11-22`), com teste de API dedicado
+(`sucateamentoAprovacao.api.test.js`). A etapa 28 é esse padrão aplicado à separação.
+
+**Armadilha de segunda porta, já medida e descartada — não a "descubra" no meio da etapa:**
+existe `conferencias_almoxarifado` com `dupla_contagem`, `contado_por_id`/`recontado_por_id` e
+`modo_cego` (`schema.js:1876-1891`). **Não serve:** é conferência de **inventário** (feature 10,
+`tipo DEFAULT 'GERAL'`, tela `ConferenciaEstoque.js`), sem ligação nenhuma com requisição.
+
+### Escopo proposto para a 28 (a confirmar na Fase 1)
+
+1. **A separação ganha autor.** `separarRequisicao` passa a receber `user`; `handleSeparacao`
+   repassa `req.user`. Colunas novas em `requisicoes_almoxarifado` (ou em
+   `itens_requisicao_almoxarifado` — a Fase 1 decide, e a decisão importa: separação é por item,
+   mas o "separador da requisição" é o que a conferência precisa comparar).
+2. **A separação e a liberação para retirada passam a auditar**, com verbo novo em
+   `auditLabels.js` — há um teste de cobertura de vocabulário (`auditLabels.api.test.js`) que fica
+   **vermelho** se a entidade/ação nova não tiver rótulo; ele é o controle positivo natural.
+3. **Segunda conferência de saída**, com a regra `conferente ≠ separador` **por identidade**,
+   copiando o molde do sucateamento. Ação de perfil própria (o critério do módulo é explícito:
+   `permissions.js:35-51`, "quando a operação muda a natureza do risco, ela ganha ação própria").
+4. **Testes:** a regra *"separar acima do estoque falha"* existe **só em teste de serviço**
+   (`server/tests/almoxarifado.test.js:274`) e **não** em teste de API — a spec 05 já pedia
+   "cobrir na API" e continua descoberta.
+
+### Pontos de atenção que a Fase 1 precisa medir antes de escrever
+
+- **A separação NÃO move saldo** (a reserva acontece na **aprovação**, desde a Etapa 4). Não
+  invente movimentação: a spec 05 já teve essa afirmação errada e ela foi corrigida em 11/08.
+- **`separarRequisicao` acumula** (`novaSeparada = getSeparado(item) + qty`) e tem teto
+  `maxSeparar`. Registrar autor em separação **parcial em múltiplas rodadas** é a pergunta de
+  desenho: o autor é o da última rodada, o da primeira, ou uma lista?
+- **A rota de separação não tem Zod** (`handleSeparacao` não passa por `validate()`; não há schema
+  de separação em `schemas.js`). Campo novo que dependa de validação precisa do schema junto,
+  senão ele não atravessa a rota — foi exatamente o cenário (21) que a Task 3 da Etapa 27 criou
+  para se proteger disso.
+- **`GET /requisicoes/:id` já faz `LEFT JOIN localizacoes_almoxarifado`** (`routes/almoxarifado.js:2984`)
+  e **não seleciona nenhuma coluna dela** — o join só serve de ponte para `almoxarifados`. Se a
+  etapa quiser ordenação por rota, esse é o caminho barato, sem query nova.
+- **Comentário de código desatualizado, medido:** `requisitionService.js:339-341` afirma que
+  `entregarRequisicao` é chamada por "as duas rotas que ainda o passam (`routes/almoxarifado.js`,
+  `routes/requisicoesMaterial.js`)". `routes/requisicoesMaterial.js` **não contém** `entregar` nem
+  `separ` (grep zero). Há **um** chamador. Corrigir junto, dizendo que estava errado.
