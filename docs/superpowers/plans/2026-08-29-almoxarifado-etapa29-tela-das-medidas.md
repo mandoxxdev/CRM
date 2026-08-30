@@ -111,10 +111,10 @@ instrumento`. Linha com `medidas_total === 0` mostra *"Sem medidas registradas"*
 | # | Task | Tipo | Depende |
 |---|---|---|---|
 | 1 | C1 + C2 no backend + `inspecaoHistorico.api.test.js` — ✅ `96525d5` | **tronco** | — |
-| 2 | Modal de medidas (C3, RN-01..04, RN-07, RN-08) + Jest em `InspecoesAlmoxarifado.js` | **galho** | contrato da Etapa 27 (já existe) |
-| 3 | **Componente novo** `HistoricoInspecoes.js` + `HistoricoInspecoes.test.js` (C4, RN-06), recebendo `materialFilter` por prop | **galho** — arquivo próprio, paralelo à 2 (achado 8 da revisão) | contrato C1/C2 |
+| 2 | Modal de medidas (C3, RN-01..04, RN-07, RN-08) + Jest em `InspecoesAlmoxarifado.js` — ✅ `75f1e24` | **galho** | contrato da Etapa 27 (já existe) |
+| 3 | **Componente novo** `HistoricoInspecoes.js` + `HistoricoInspecoes.test.js` (C4, RN-06), recebendo `materialFilter` por prop — ✅ `38e74f4` | **galho** — arquivo próprio, paralelo à 2 (achado 8 da revisão) | contrato C1/C2 |
 | 3b | Abas *Pendentes* / *Histórico* em `InspecoesAlmoxarifado.js` (~10 linhas; a aba Histórico **não** renderiza a tabela de pendentes — os helpers do teste selecionam `.almox-table tbody tr` sem discriminar) | galho curto, **depois** da 2 e da 3 | 2, 3 |
-| 4 | Integração: decidir com medidas pela rota → `historico` traz `medidas_total` → `/:id/medidas` traz os valores; editar o plano depois → resposta inalterada (congelado) | tronco | 1 |
+| 4 | Integração: decidir com medidas pela rota → `historico` traz `medidas_total` → `/:id/medidas` traz os valores; editar o plano depois → resposta inalterada (congelado) — ✅ `dbde88b` | tronco | 1 |
 
 Tasks 1, 2 e 3 rodam em paralelo (arquivos disjuntos). A 3 mocka C1/C2 na fronteira HTTP.
 
@@ -175,7 +175,18 @@ reporte).
 
 Commit: `Almoxarifado Etapa 29 Task 1: a inspecao decidida e as medidas ganham leitura`.
 
-## Task 2 — Medidas no modal, B60 cumprida (galho)
+## Task 2 — Medidas no modal, B60 cumprida (galho) — ✅ FEITA (`75f1e24`)
+
+> **Fechamento (2026-08-30).** 20/20 no `InspecoesAlmoxarifado.test.js`. Divergências do
+> enunciado, todas deliberadas: o toast da RN-07 flexiona o plural — *"(1 medida)"* /
+> *"(2 medidas)"*; se `GET /ferramentas` rejeitar, `toast.warn('Não foi possível carregar os
+> instrumentos')` e o modal abre com o seletor vazio (mesma régua da RN-08, que o enunciado só
+> previa para o plano); guarda de corrida `aberturaRef` para o plano de um modal já fechado não
+> pousar no modal seguinte; o rótulo da característica mostra `nominal N` cru (sem `toFixed`) —
+> a faixa `[inf ; sup]` é que é formatada com as casas do plano; o teste (3) usa `api.post`
+> **rejeitando** para conseguir limpar a medida depois de ler o payload (com o mock resolvendo,
+> o modal fecha e a caixa some antes da asserção "marcada de novo").
+
 
 Arquivo: `client/src/components/almoxarifado/InspecoesAlmoxarifado.js` + `.test.js`.
 Jest: (1) sem plano (`[]`), modal idêntico (nenhum "Medidas do plano", nenhuma chamada a
@@ -195,7 +206,15 @@ remover o `disabled` da caixa → (3) cai; trocar `checked={false}` pelo estado 
 
 Commit: `Almoxarifado Etapa 29 Task 2: o formulario de inspecao ganha as medidas do plano`.
 
-## Task 3 — Componente `HistoricoInspecoes` (galho, paralelo à 2)
+## Task 3 — Componente `HistoricoInspecoes` (galho, paralelo à 2) — ✅ FEITA (`38e74f4`)
+
+> **Fechamento (2026-08-30).** 7/7 no `HistoricoInspecoes.test.js`. O componente rende **só** o
+> `almox-table-container` (sem cabeçalho nem filtro próprios — quem envolve é a tela da 3b);
+> flags da inspeção viram badges; erro do C2 ao expandir → toast literal **e a linha recolhe**
+> (não fica um "carregando" eterno); exporta `formatarFaixa` como named export. Há **duas
+> implementações equivalentes** da faixa `[inf ; sup]` (esta e a do modal da Task 2) — unificar
+> é opcional e fica para quem tocar as duas de novo.
+
 
 Arquivos novos: `client/src/components/almoxarifado/HistoricoInspecoes.js` (props:
 `materialFilter`) e `HistoricoInspecoes.test.js`. Jest: (1) lista com contagem de medidas e
@@ -214,12 +233,47 @@ componente; os 11+8 testes anteriores continuam verdes.
 
 Commit: `Almoxarifado Etapa 29 Task 3b: a tela de Inspecoes ganha as abas Pendentes e Historico`.
 
-## Task 4 — Integração pela rota
+## Task 4 — Integração pela rota — ✅ FEITA (`dbde88b`)
 
 `inspecaoFluxoMedidas.api.test.js`: plano → recebimento → decidir com 2 medidas (1 fora) pela
 rota → `historico` (`medidas_total 2`, `nao_conformes 1`, `divergencia_dimensional 1`) →
 `/:id/medidas` (2 linhas, `conforme` 0/1) → `PUT /planos-inspecao/:id` mudando o nominal →
 `/:id/medidas` **inalterado**. Suíte completa serial.
+
+> **Fechamento (2026-08-30).** 9/9, **tudo por HTTP** (nenhum INSERT nem chamada de serviço):
+> `PUT /configuracoes` + `POST /materiais` crítico → `POST /planos-inspecao` ×2 (simétrica
+> `12.3 ±0.1` e unilateral `10 +0.005/+0.021`) → `POST /ferramentas` ×2 exigindo calibração +
+> `POST /:id/calibracoes` (multipart, `.field`) com uma vigente e uma **vencida** (registrada, não
+> ausente) → `GET /ferramentas` rotula `calibracao_vigente` `true`/`false` (RN-04 da tela) →
+> `POST /recebimentos` + `/aprovar`, item lido de `GET /inspecoes/pendentes` (`item_id`,
+> `quantidade_retida`) → decisão com 2 medidas sem a flag no payload → resposta
+> `divergencia_dimensional 1`, `medidas_registradas 2` → `historico` 2/1/1 → `/:id/medidas` com
+> `conforme` 1/0 e `ferramenta_nome` → `PUT` no plano mudando nominal **e** característica, e as
+> duas leituras saem `JSON.stringify` iguais ao snapshot → segundo item: instrumento vencido → 400
+> literal, `historico` sem linha nova e o item **continua na fila**; `'12,4'` → 400 literal, nada
+> gravado; sem medidas com `divergencia_dimensional: true` → `historico` com flag 1 e
+> `medidas_total 0`, `/:id/medidas` → `[]`.
+>
+> **Controle positivo** (commit antes; md5 `06fbdef9…` → sabotado → `06fbdef9…` restaurado;
+> `git diff --stat -- server` vazio), em duas rodadas porque a primeira caiu **antes** do
+> previsto: (a) `conforme: aval.conforme ? 1 : 0` → `conforme: 1` no `resolverMedidas` derruba
+> primeiro o cenário da **decisão** (a resposta vem `divergencia_dimensional: 0` — a derivação
+> lê o mesmo `conforme`), e o do `historico` cai na guarda; (b) forçar `1` só no **INSERT** das
+> medidas (derivação intacta) derruba o cenário do `historico` exatamente em
+> `medidas_nao_conformes` (`0 !== 1`) e o de `/:id/medidas` em *"10.03 esta acima de 10.021"*
+> (`1 !== 0`). Os dois caminhos de fuga estão cobertos.
+>
+> **Achado de integração:** o backend se comportou como a tela assume em tudo — nenhuma linha de
+> produção mudou. Única surpresa foi de nome: a fila de pendentes chama a coluna de
+> `quantidade_retida`, não `quantidade_em_inspecao`.
+>
+> **Placar da suíte serial:** `test:api` 163/164 arquivos na primeira rodada — a única falha,
+> `remessaTerceiroCiclo` (*UNIQUE constraint failed: remessas_terceiro_almoxarifado.numero*),
+> passa 53/53 isolada; é flake preexistente de `thirdPartyService.gerarNumero()`
+> (`REM-` + 8 dígitos de `Date.now()` + aleatório 0..99: duas remessas no mesmo milissegundo com
+> o mesmo sorteio colidem). Fora do escopo desta task; candidato a correção própria (sequência
+> ou `INSERT` com retry). `test:almoxarifado` 42/42, `test:validation` 4/4, `test:safealter`
+> 3/3, `test:sqlite` 5/5; client 40 suítes / 613 testes verdes e `CI=true build` compilou.
 
 ## Fechamento
 
