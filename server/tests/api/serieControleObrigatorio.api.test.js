@@ -116,7 +116,7 @@ async function criarRequisicao(db, materialId, quantidade, { status = 'APROVADO'
     const mat = await novoMaterial(db, { controle_serie: 1, qtd: 5 });
     const { id: reqId, itemId } = await criarRequisicao(db, mat, 5, { status: 'APROVADO' });
 
-    await requisitionService.separarRequisicao(db, reqId, [{ item_id: itemId, quantidade_separada: 5 }]);
+    await requisitionService.separarRequisicao(db, reqId, [{ item_id: itemId, quantidade_separada: 5 }], ADMIN);
     const separada = await dbGet(db, 'SELECT quantidade_separada FROM itens_requisicao_almoxarifado WHERE id = ?', [itemId]);
     assert.strictEqual(separada.quantidade_separada, 5);
 

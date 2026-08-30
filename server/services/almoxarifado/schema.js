@@ -1850,6 +1850,29 @@ async function initSchema(db) {
   await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_assinaturas_entrega_req
     ON assinaturas_entrega_almoxarifado(requisicao_id)`);
 
+  // ── Etapa 28 (Task 1): a separação ganha dono. TABELA append-only, não coluna na requisição,
+  // porque a separação ACUMULA em rodadas (separarRequisicao soma sobre quantidade_separada):
+  // `separado_por_id` no cabeçalho guardaria só o último e apagaria os outros — e quem separou
+  // a primeira rodada poderia conferir a própria separação (RN-03). Mesmo padrão de
+  // `assinaturas_entrega_almoxarifado` acima. Derivar da trilha de auditoria foi descartado:
+  // auditoria é best-effort neste módulo, e barreira apoiada nela falha ABERTA. ──
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS separacoes_requisicao_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    requisicao_id INTEGER NOT NULL REFERENCES requisicoes_almoxarifado(id),
+    usuario_id INTEGER NOT NULL,
+    usuario_nome TEXT,
+    itens_tocados INTEGER NOT NULL DEFAULT 0,
+    itens_json TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_separacoes_req
+    ON separacoes_requisicao_almoxarifado(requisicao_id)`);
+  // Segunda conferência da separação (Etapa 28, RN-05/RN-07). As colunas entram JÁ na Task 1
+  // porque uma rodada nova de separação as limpa (a caixa mudou, a conferência anterior não vale).
+  await safeAlter(db, 'ALTER TABLE requisicoes_almoxarifado ADD COLUMN conferido_por_id INTEGER');
+  await safeAlter(db, 'ALTER TABLE requisicoes_almoxarifado ADD COLUMN conferido_por_nome TEXT');
+  await safeAlter(db, 'ALTER TABLE requisicoes_almoxarifado ADD COLUMN conferido_em DATETIME');
+
   // ── Atendimento parcial por item ──
   await safeAlter(db, 'ALTER TABLE itens_requisicao_almoxarifado ADD COLUMN quantidade_separada REAL DEFAULT 0');
   await safeAlter(db, 'ALTER TABLE itens_requisicao_almoxarifado ADD COLUMN quantidade_entregue REAL DEFAULT 0');

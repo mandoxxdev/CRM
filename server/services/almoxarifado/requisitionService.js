@@ -2,6 +2,7 @@
  * Requisições de material — atendimento parcial com validação de estoque
  */
 const { dbRun, dbGet, dbAll } = require('./db');
+const { registrarAuditoria } = require('./audit');
 const { disponivelSql } = require('./availabilitySql');
 const { custoUnitarioSql } = require('./custoSql');
 const valueApprovalService = require('./requisitionValueApprovalService');
@@ -186,7 +187,64 @@ async function reservarItensAprovacao(db, requisicaoId, user, reqRow = {}) {
   return { status: algumFaltou ? STATUS_PARCIALMENTE_RESERVADA : STATUS_TOTALMENTE_RESERVADA, reservas };
 }
 
-async function separarRequisicao(db, requisicaoId, itensSeparados = []) {
+/** Molde: scrapDisposalService.js — nome para a trilha e para a rodada. */
+const nomeDoUsuario = (user) => user?.nome || user?.email || null;
+
+/**
+ * Régua ÚNICA da segunda conferência (Etapa 28, D2): obrigatória quando há material crítico
+ * SEPARADO — crítico com `quantidade_separada = 0` ainda não está na caixa. Para virar "sempre"
+ * ou "nunca" muda-se esta linha, e só ela.
+ */
+function conferenciaObrigatoria(itens) {
+  return (itens || []).some((i) => Number(i.material_critico) === 1 && num(i.quantidade_separada) > 0);
+}
+
+/** Rodadas de separação de uma requisição, em ordem (Etapa 28, RN-02/RN-09). */
+async function listarSeparacoes(db, requisicaoId) {
+  const rows = await dbAll(db, `SELECT id, usuario_id, usuario_nome, itens_tocados, itens_json, created_at
+    FROM separacoes_requisicao_almoxarifado WHERE requisicao_id = ?
+    ORDER BY created_at ASC, id ASC`, [requisicaoId]);
+  return rows.map((r) => {
+    let itens = [];
+    try { itens = r.itens_json ? JSON.parse(r.itens_json) : []; } catch (e) { itens = []; }
+    return {
+      id: r.id,
+      usuario_id: r.usuario_id,
+      usuario_nome: r.usuario_nome,
+      itens_tocados: r.itens_tocados,
+      itens,
+      created_at: r.created_at,
+    };
+  });
+}
+
+/**
+ * Etapa 28 (Task 1): a separação passa a ter DONO. `user` é obrigatório (RN-01): sem `user.id`
+ * a operação não acontece — não é um `|| null` silencioso, porque a rodada é a base da barreira
+ * "quem separou não confere" (RN-03), e rodada sem dono é barreira furada.
+ *
+ * A separação ACUMULA (soma sobre quantidade_separada), então cada chamada com ≥1 item efetivo
+ * vira UMA linha append-only em `separacoes_requisicao_almoxarifado` (RN-02). Rodada sem item
+ * efetivo (`[]`, quantidades 0, item inexistente) não gera linha — mas o UPDATE de status para
+ * EM_SEPARACAO continua INCONDICIONAL, como sempre foi: "Iniciar Separação" com quantidades
+ * zeradas é caminho real da tela.
+ *
+ * Rodada com item efetivo LIMPA a segunda conferência (RN-07, D3): a conferência atesta o
+ * conteúdo de uma caixa; se a caixa mudou, precisa ser atestada de novo. A conferência apagada
+ * vai para `dados_anteriores` da auditoria. A releitura de `conferido_por_*` acontece
+ * IMEDIATAMENTE antes do UPDATE, não no SELECT inicial — e mesmo assim NÃO é atômica: uma
+ * conferência que entre entre a releitura e o UPDATE é apagada sem aparecer na trilha. A
+ * consequência é segura (o estado final nunca é "conferida" com rodada nova sem registro na
+ * requisição), só o rastro fica incompleto; fechar a janela exigiria RETURNING no UPDATE, e
+ * ficou fora de propósito (achado 6 do plano).
+ */
+async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
+  if (!user?.id) {
+    const err = new Error('Separação exige usuário identificado');
+    err.status = 400;
+    throw err;
+  }
+
   const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId]);
   if (!reqRow) {
     const err = new Error('Requisição não encontrada');
@@ -204,6 +262,7 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = []) {
   await valueApprovalService.verificarBloqueioLiberacao(db, requisicaoId);
 
   const itens = await carregarItensRequisicao(db, requisicaoId);
+  const tocados = []; // [{ item_id, material_id, quantidade }] — só item existente com qty > 0
 
   for (const entrada of itensSeparados) {
     const item = itens.find((i) => Number(i.id) === Number(entrada.item_id));
@@ -232,13 +291,69 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = []) {
     await dbRun(db, 'UPDATE itens_requisicao_almoxarifado SET quantidade_separada = ? WHERE id = ?',
       [novaSeparada, item.id]);
     item.quantidade_separada = novaSeparada;
+    tocados.push({ item_id: item.id, material_id: item.material_id, quantidade: qty });
   }
 
-  await dbRun(db,
-    `UPDATE requisicoes_almoxarifado SET status='EM_SEPARACAO', updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL WHERE id=?`,
-    [requisicaoId]);
+  let rodadaId = null;
+  let conferenciaAnterior = null;
 
-  return { success: true, status: 'EM_SEPARACAO' };
+  if (tocados.length > 0) {
+    // RN-02: a rodada é append-only — nunca UPDATE/DELETE aqui.
+    const ins = await dbRun(db, `INSERT INTO separacoes_requisicao_almoxarifado
+      (requisicao_id, usuario_id, usuario_nome, itens_tocados, itens_json)
+      VALUES (?, ?, ?, ?, ?)`,
+      [requisicaoId, user.id, nomeDoUsuario(user), tocados.length, JSON.stringify(tocados)]);
+    rodadaId = ins.lastID;
+
+    // RN-07: reler a conferência AGORA (não do reqRow do começo) — ver cabeçalho.
+    const conf = await dbGet(db,
+      'SELECT conferido_por_id, conferido_por_nome, conferido_em FROM requisicoes_almoxarifado WHERE id = ?',
+      [requisicaoId]);
+    if (conf && conf.conferido_por_id != null) {
+      conferenciaAnterior = {
+        usuario_id: conf.conferido_por_id,
+        usuario_nome: conf.conferido_por_nome,
+        em: conf.conferido_em,
+      };
+    }
+
+    await dbRun(db,
+      `UPDATE requisicoes_almoxarifado
+         SET status='EM_SEPARACAO', updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL,
+             conferido_por_id=NULL, conferido_por_nome=NULL, conferido_em=NULL
+       WHERE id=?`,
+      [requisicaoId]);
+  } else {
+    await dbRun(db,
+      `UPDATE requisicoes_almoxarifado SET status='EM_SEPARACAO', updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL WHERE id=?`,
+      [requisicaoId]);
+  }
+
+  // RN-04: rastro pós-escrita, best-effort (decisão da Etapa 19: falha de log não desfaz o ato).
+  // Só há linha quando houve rodada — "Iniciar Separação" sem quantidade não é evento da caixa.
+  if (rodadaId != null) {
+    try {
+      await registrarAuditoria(db, {
+        entidade: 'requisicao',
+        entidade_id: Number(requisicaoId),
+        acao: 'SEPARACAO',
+        usuario_id: user.id,
+        usuario_nome: nomeDoUsuario(user),
+        dados_anteriores: conferenciaAnterior ? { conferencia: conferenciaAnterior } : undefined,
+        dados_novos: {
+          rodada_id: rodadaId,
+          itens_tocados: tocados.length,
+          itens: tocados.map((t) => ({ item_id: t.item_id, quantidade: t.quantidade })),
+        },
+      });
+    } catch (e) {
+      console.warn(`[almoxarifado-separacao] Falha ao auditar a rodada ${rodadaId} da requisição ${requisicaoId}: ${e.message}`);
+    }
+  }
+
+  return {
+    success: true, status: 'EM_SEPARACAO', rodada_id: rodadaId, itens_tocados: tocados.length,
+  };
 }
 
 /**
@@ -472,4 +587,8 @@ module.exports = {
   separarRequisicao,
   entregarRequisicao,
   excluirRequisicao,
+  // Etapa 28
+  nomeDoUsuario,
+  conferenciaObrigatoria,
+  listarSeparacoes,
 };

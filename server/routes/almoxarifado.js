@@ -2973,7 +2973,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
                                FROM reservas_material_almoxarifado r2
                                WHERE r2.item_requisicao_id = ir.id AND r2.material_id = ir.material_id
                                  AND r2.status = 'ATIVA' AND r2.origem = 'REQUISICAO'), 0) as quantidade_reservada_item,
-                     ma.foto,
+                     ma.foto, ma.material_critico,
                      ma.localizacao, ma.localizacao_padrao_id,
                      a.codigo as almoxarifado_codigo, a.nome as almoxarifado_nome,
                      tm.nome as tipo_nome, tm.icone as tipo_icone, tm.is_epi, tm.requer_assinatura
@@ -2989,18 +2989,28 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
           // dela — sem gate novo de leitura. Callback virou async DE PROPÓSITO (achado da
           // revisão do plano: `await` num callback não-async seria SyntaxError); erro da busca
           // não é engolido — vira 500 como qualquer outro deste handler.
+          // Etapa 28 (RN-09), mesma régua: as rodadas de separação, a segunda conferência e se
+          // ela é obrigatória (material crítico SEPARADO) saem junto — leitura sem gate novo.
           let assinaturas;
+          let separacoes;
           try {
             assinaturas = await deliverySignatureService.listarAssinaturas(db, req.params.id);
+            separacoes = await requisitionService.listarSeparacoes(db, req.params.id);
           } catch (e) {
             return res.status(500).json({ error: e.message });
           }
+          const conferencia = req_row.conferido_por_id != null
+            ? { usuario_id: req_row.conferido_por_id, usuario_nome: req_row.conferido_por_nome, em: req_row.conferido_em }
+            : null;
           res.json({
             ...req_row,
             itens: enrichMaterialRows(
               (itens || []).map(requisitionService.normalizarItem),
             ),
             assinaturas_entrega: assinaturas,
+            separacoes,
+            conferencia,
+            conferencia_obrigatoria: requisitionService.conferenciaObrigatoria(itens || []),
           });
         });
     });
@@ -3301,7 +3311,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
   const handleSeparacao = (req, res) => {
     const { itens_separados } = req.body || {};
-    requisitionService.separarRequisicao(db, req.params.id, itens_separados || [])
+    // Etapa 28: a separação tem dono — `req.user` chega ao serviço (RN-01). Sem isto o serviço
+    // recusa com 400, e é essa a fiação que a Etapa 25 ensinou a provar pela rota.
+    requisitionService.separarRequisicao(db, req.params.id, itens_separados || [], req.user)
       .then((result) => res.json(result))
       .catch((e) => res.status(e.status || 500).json({ error: e.message }));
   };

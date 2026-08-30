@@ -121,6 +121,13 @@ const GRUPOS_ACAO = congelarGrupos([
   { rotulo: 'Mudança de status', verbos: ['MUDANCA_STATUS'] },
   { rotulo: 'Assinatura de entrega', verbos: ['ASSINATURA_ENTREGA'] },
   { rotulo: 'Confirmação de recebimento', verbos: ['CONFIRMACAO_RECEBIMENTO'] },
+  // Etapa 28: a separação passa a ter dono e a auditar (SEPARACAO, Task 1); a segunda
+  // conferência e a liberação para retirada ganham verbo próprio (Task 2). Os três entram
+  // juntos aqui para a Task 2 não reabrir este arquivo. A entidade continua `requisicao`:
+  // a rodada é evento da requisição, não entidade nova.
+  { rotulo: 'Separação', verbos: ['SEPARACAO'] },
+  { rotulo: 'Conferência da separação', verbos: ['CONFERENCIA_SEPARACAO'] },
+  { rotulo: 'Liberação para retirada', verbos: ['LIBERACAO_RETIRADA'] },
 
   // Recebimento de material — os 5 verbos de transicao (receiptService, `acao.toUpperCase()`)
   // e o PROCESSAR_NOTA, que e gravado por outro caminho (processarNota).

@@ -283,7 +283,7 @@ async function run() {
       await requisitionService.separarRequisicao(db, reqRes.lastID, [{
         item_id: itemRes.lastID,
         quantidade_separada: 3,
-      }]);
+      }], userAlmox);
     } catch (e) {
       erro = e.status === 400 && /não é possível separar 3/i.test(e.message);
     }
@@ -348,7 +348,7 @@ async function run() {
     await requisitionService.separarRequisicao(db, reqRes.lastID, [{
       item_id: itemRes.lastID,
       quantidade_separada: 1,
-    }]);
+    }], userAlmox);
 
     const result = await requisitionService.entregarRequisicao(db, reqRes.lastID, [{
       item_id: itemRes.lastID,
@@ -662,7 +662,7 @@ async function run() {
     await dbRun(db, `UPDATE requisicoes_almoxarifado SET valor_total=250, requer_aprovacao_valor=1 WHERE id=?`, [reqId]);
     let bloqueado = false;
     try {
-      await requisitionService.separarRequisicao(db, reqId, []);
+      await requisitionService.separarRequisicao(db, reqId, [], userAlmox);
     } catch (e) {
       bloqueado = e.status === 403 && e.code === 'AGUARDANDO_APROVACAO_VALOR';
     }
