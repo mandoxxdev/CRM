@@ -57,6 +57,20 @@ const FERRAMENTAS = [
   { id: 3, nome: 'Régua', codigo_patrimonio: 'REG-3', exige_calibracao: 0, calibracao_vigente: null },
 ];
 
+// Etapa 29, Task 3b — uma inspeção decidida no shape C1, para a aba Histórico. Material
+// DIFERENTE do pendente de propósito: a asserção "a tabela de pendentes sumiu" procura o
+// recebimento REC-55, e se o histórico tivesse o mesmo texto a sabotagem "renderizar junto"
+// passaria despercebida.
+const HISTORICO = [{
+  id: 7, recebimento_numero: 'REC-2026-055', nota_fiscal: 'NF-777',
+  material_codigo: 'ALM-0010', material_nome: 'Eixo Retificado 10mm', material_unidade: 'PC',
+  quantidade_aprovada: 8, quantidade_reprovada: 2, conforme: 0,
+  divergencia_quantidade: 0, divergencia_dimensional: 1, certificado_ausente: 0,
+  dano_fisico: 0, material_incorreto: 0, encaminhamento: 'DEVOLVER',
+  observacoes: 'Diametro fora', responsavel_nome: 'Carlos Lima',
+  data_inspecao: '2026-08-28T14:30:00Z', medidas_total: 2, medidas_nao_conformes: 1,
+}];
+
 let container;
 let root;
 let pendentesDoBanco;
@@ -79,6 +93,7 @@ beforeEach(() => {
     }
     if (url === '/almoxarifado/planos-inspecao') return Promise.resolve({ data: planoDoBanco });
     if (url === '/almoxarifado/ferramentas') return Promise.resolve({ data: ferramentasDoBanco });
+    if (url === '/almoxarifado/inspecoes/historico') return Promise.resolve({ data: HISTORICO });
     return Promise.resolve({ data: [] });
   });
   api.post.mockResolvedValue({ data: { success: true } });
@@ -447,5 +462,84 @@ describe('InspecoesAlmoxarifado — medidas do plano de inspeção (Etapa 29)', 
     expect(container.querySelector('.almox-modal')).not.toBeNull();
     expect(textoModal()).not.toContain('Medidas do plano');
     expect(chamadasGet('/almoxarifado/ferramentas')).toHaveLength(0);
+  });
+});
+
+/*
+ * Etapa 29, Task 3b — abas Pendentes / Histórico (C4).
+ *
+ * A aba Histórico renderiza `HistoricoInspecoes` NO LUGAR da tabela de pendentes, nunca junto:
+ * os helpers acima (`linhas()`, `campoPorLabel`) selecionam `.almox-table tbody tr` e
+ * `.almox-modal .almox-field` sem discriminar, e duas tabelas na tela quebrariam o índice das
+ * linhas. O conteúdo do histórico em si (expandir, faixa, contagem) é coberto em
+ * HistoricoInspecoes.test.js — aqui só a troca de aba e o filtro de material chegando lá.
+ */
+describe('InspecoesAlmoxarifado — abas Pendentes / Histórico (Etapa 29)', () => {
+  const botaoAba = (texto) => [...container.querySelectorAll('.almox-abas button')]
+    .find((b) => b.textContent.trim() === texto);
+  const clicarAba = async (texto) => {
+    await act(async () => { botaoAba(texto).dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+  };
+  const chamadasHistorico = () => api.get.mock.calls.filter(([u]) => u === '/almoxarifado/inspecoes/historico');
+  const linhasPendentes = () => linhas().filter((tr) => tr.textContent.includes('REC-55'));
+  const botoesDecidir = () => [...container.querySelectorAll('.almox-btn-icon')]
+    .filter((b) => b.getAttribute('title')?.includes('Decidir'));
+  const linhaHistorico = () => container.querySelector('[data-testid="historico-linha-7"]');
+  const selectMaterial = () => container.querySelector('.almox-filters .almox-select');
+
+  test('(1) por padrão a aba Pendentes está ativa, a fila aparece e o histórico NÃO é buscado', async () => {
+    await renderizar();
+    expect(botaoAba('Pendentes').className).toBe('btn-almox-primary');
+    expect(botaoAba('Histórico').className).toBe('btn-almox-secondary');
+    expect(linhasPendentes()).toHaveLength(1);
+    expect(linhaHistorico()).toBeNull();
+    // Abrir a tela não pode custar a consulta do histórico que ninguém pediu.
+    expect(chamadasHistorico()).toHaveLength(0);
+  });
+
+  test('(2) Histórico esconde a tabela de pendentes (no lugar, não junto) e busca o histórico', async () => {
+    await renderizar();
+    await clicarAba('Histórico');
+    expect(botaoAba('Histórico').className).toBe('btn-almox-primary');
+    expect(botaoAba('Pendentes').className).toBe('btn-almox-secondary');
+    expect(chamadasHistorico()).toHaveLength(1);
+    expect(linhaHistorico()).not.toBeNull();
+    expect(linhaHistorico().textContent).toContain('Eixo Retificado 10mm');
+    // A fila de pendentes sumiu de verdade: nem a linha do REC-55 nem o botão "Decidir".
+    expect(linhasPendentes()).toHaveLength(0);
+    expect(botoesDecidir()).toHaveLength(0);
+    // O filtro de material da tela-mãe continua visível e alimenta as duas abas.
+    expect(selectMaterial()).not.toBeNull();
+    // Os botões de bloqueio avulso continuam onde estavam.
+    expect([...container.querySelectorAll('.almox-header-actions button')].map((b) => b.textContent.trim()))
+      .toEqual(expect.arrayContaining(['Bloquear Material', 'Desbloquear Material']));
+  });
+
+  test('(3) o material selecionado na tela-mãe chega ao histórico como material_id', async () => {
+    await renderizar();
+    preencher(selectMaterial(), '10');
+    await clicarAba('Histórico');
+    expect(chamadasHistorico()).toHaveLength(1);
+    expect(chamadasHistorico()[0][1]).toEqual({ params: { material_id: '10' } });
+    // Trocar o filtro com a aba aberta refaz a consulta com o novo valor (aqui: todos).
+    preencher(selectMaterial(), '');
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    expect(chamadasHistorico()).toHaveLength(2);
+    expect(chamadasHistorico()[1][1]).toEqual({ params: {} });
+  });
+
+  test('(4) voltar para Pendentes mostra a fila de novo e some com o histórico', async () => {
+    await renderizar();
+    await clicarAba('Histórico');
+    expect(linhasPendentes()).toHaveLength(0);
+    await clicarAba('Pendentes');
+    expect(botaoAba('Pendentes').className).toBe('btn-almox-primary');
+    expect(linhasPendentes()).toHaveLength(1);
+    expect(botoesDecidir()).toHaveLength(1);
+    expect(linhaHistorico()).toBeNull();
+    // E o modal de decisão continua funcionando depois da ida e volta.
+    await abrirDecisao(0);
+    expect(campoPorLabel('Quantidade aprovada').value).toBe('100');
   });
 });

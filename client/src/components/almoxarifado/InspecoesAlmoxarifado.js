@@ -4,6 +4,7 @@ import { toast } from 'react-toastify';
 import { FiRefreshCw, FiCheckSquare, FiLock, FiUnlock } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
+import HistoricoInspecoes from './HistoricoInspecoes';
 import './Almoxarifado.css';
 
 /**
@@ -102,6 +103,10 @@ const InspecoesAlmoxarifado = () => {
   const [materiais, setMateriais] = useState([]);
   const [loading, setLoading] = useState(true);
   const [materialFilter, setMaterialFilter] = useState('');
+  // Etapa 29 (C4): 'pendentes' (a fila de sempre) | 'historico' (HistoricoInspecoes). A aba
+  // Histórico entra NO LUGAR da tabela de pendentes, nunca junto — os testes desta tela
+  // selecionam `.almox-table tbody tr` sem discriminar, e duas tabelas quebrariam o índice.
+  const [aba, setAba] = useState('pendentes');
 
   const [decisaoTarget, setDecisaoTarget] = useState(null);
   const [decisaoForm, setDecisaoForm] = useState(FORM_DECISAO_VAZIO);
@@ -286,13 +291,19 @@ const InspecoesAlmoxarifado = () => {
     <div className="almox-page">
       <div className="almox-header">
         <div>
-          <h1>Inspeções Pendentes</h1>
-          <p>{pendentes.length} inspeç{pendentes.length !== 1 ? 'ões' : 'ão'} pendente{pendentes.length !== 1 ? 's' : ''}</p>
+          <h1>Inspeções</h1>
+          <p>
+            {aba === 'historico'
+              ? 'Inspeções decididas e as medidas registradas em cada uma'
+              : `${pendentes.length} inspeç${pendentes.length !== 1 ? 'ões' : 'ão'} pendente${pendentes.length !== 1 ? 's' : ''}`}
+          </p>
         </div>
         <div className="almox-header-actions">
-          <button className="btn-almox-secondary" onClick={loadPendentes}>
-            <FiRefreshCw size={13} /> Atualizar
-          </button>
+          {aba === 'pendentes' && (
+            <button className="btn-almox-secondary" onClick={loadPendentes}>
+              <FiRefreshCw size={13} /> Atualizar
+            </button>
+          )}
           <button className="btn-almox-secondary"
             title="Bloqueia material fora do fluxo de inspeção — ex.: avaria encontrada na prateleira"
             onClick={(e) => { if (!bloquearSeNaoPode('ajustar_estoque', e)) return; abrirAjuste('BLOQUEAR'); }}>
@@ -306,6 +317,13 @@ const InspecoesAlmoxarifado = () => {
         </div>
       </div>
 
+      {/* Abas — molde de LotesAlmoxarifado.js/FerramentasAlmoxarifado.js: botões primary/secondary
+          alternando, sem CSS novo. O filtro de material abaixo vale para as duas. */}
+      <div className="almox-abas" style={{ display: 'flex', gap: 8, margin: '12px 0' }}>
+        <button className={aba === 'pendentes' ? 'btn-almox-primary' : 'btn-almox-secondary'} onClick={() => setAba('pendentes')}>Pendentes</button>
+        <button className={aba === 'historico' ? 'btn-almox-primary' : 'btn-almox-secondary'} onClick={() => setAba('historico')}>Histórico</button>
+      </div>
+
       {/* Filtros */}
       <div className="almox-filters">
         <select className="almox-select" value={materialFilter} onChange={(e) => setMaterialFilter(e.target.value)}>
@@ -317,7 +335,11 @@ const InspecoesAlmoxarifado = () => {
         )}
       </div>
 
-      {/* Tabela */}
+      {/* Aba Histórico — no lugar da tabela de pendentes (C4). */}
+      {aba === 'historico' && <HistoricoInspecoes materialFilter={materialFilter} />}
+
+      {/* Tabela — Pendentes */}
+      {aba === 'pendentes' && (
       <div className="almox-table-container">
         {loading ? <SkeletonTable rows={8} columns={5} /> : pendentes.length === 0 ? (
           <div className="almox-empty"><p>Nenhuma inspeção pendente</p></div>
@@ -369,6 +391,7 @@ const InspecoesAlmoxarifado = () => {
           </table>
         )}
       </div>
+      )}
 
       {/* Modal — decidir inspeção */}
       {decisaoTarget && (
