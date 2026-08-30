@@ -280,7 +280,52 @@ diff --stat` vazio.
 
 **Commit:** `Almoxarifado Etapa 28 Task 1: a separacao passa a ter dono, rodada e rastro`.
 
-## Task 2 — Segunda conferência com barreira no WHERE (tronco)
+## Task 2 — Segunda conferência com barreira no WHERE (tronco) — ✅ FEITA (`174d388`)
+
+> **Fechamento (2026-08-30).** Entregue como previsto: C2 (`conferirSeparacao`, com os seis erros
+> na ordem e nas mensagens literais do contrato; `claimConferencia` **exportado**;
+> `assertConferidaSeObrigatorio`), C3 (rota `PUT /requisicoes/:id/conferir-separacao` com
+> `requirePermission('conferir_separacao')`; `liberar-retirada` com o 400 da RN-06 depois do
+> `'Nenhum item separado'` e antes do UPDATE, auditando `LIBERACAO_RETIRADA` pós-escrita via
+> `audit.registrarAuditoria`; `entregarRequisicao` chama `assertConferidaSeObrigatorio` depois de
+> `PODE_ENTREGAR`/`verificarBloqueioLiberacao` e **antes de qualquer baixa**), C4
+> (`conferir_separacao: [ADMINISTRADOR, ALMOXARIFE]` com o comentário de critério; nenhum teste
+> conta as ações — `minhasPermissoes` itera `Object.keys(ACAO_PERFIS)`, então a ação nova entra
+> de graça). `carregarItensRequisicao` passou a trazer `ma.material_critico`.
+> Teste `segundaConferencia.api.test.js`: **26 cenários**, vermelhos por asserção nos 19 que
+> dependiam do serviço (200 !== 400, 0 !== 1, função ausente) antes da implementação.
+> Placar: `test:api` **161/161** arquivos (segundaConferencia 26/26, separacaoComDono 9/9,
+> requisicaoEstados 25/25, minhasPermissoes 10/10, permissoesRotas 51/51, auditLabels 14/14);
+> `test:almoxarifado` **42/42**.
+>
+> **Controles positivos com alvo triplo** (md5 `fe988e72…` antes/restaurado nos três,
+> `git diff --stat` vazio):
+> (a) só a checagem JS da RN-03 removida → 25/26; cai **só** `[RN-03] PESO` com
+> "A deveria levar 403, veio 409" — o `WHERE` segurou (A não conferiu), a mensagem piorou. É o
+> no-op parcial que a Global Constraint 3 previu, e por isso a asserção é pela mensagem/status.
+> (b) só o `NOT EXISTS` removido do `WHERE` (e o 4º param) → 25/26; cai **só**
+> `[RN-03] o claim sozinho segura` com "o claim de quem separou passou: {id, conferido_em}". O
+> sequencial e a corrida RN-03b **continuaram verdes** — exatamente o achado 2: sem o teste
+> direto do claim, o `WHERE` seria invisível. **Não está vazio.**
+> (c) `assertConferidaSeObrigatorio` removido de `entregarRequisicao` → 24/26; cai o cenário do
+> achado 1 pela **asserção de saldo**: "a entrega baixou o saldo sem conferencia (50 -> 48);
+> resposta 200" (a asserção de saldo foi posta ANTES da de status de propósito, para ser ela a
+> falar), e cai também o de `PARCIALMENTE_ATENDIDA` sem conferência.
+>
+> **Divergências do previsto:** nenhuma de contrato. Três coisas que a Task 4 precisa saber:
+> (1) **conferir só em `EM_SEPARACAO`** (C2, à risca). Consequência medida e testada: requisição em
+> `PARCIALMENTE_ATENDIDA` com crítico separado e **sem** conferência (ex.: entregue antes desta
+> etapa) leva 400 na entrega **e** 400 ao conferir ("status atual: PARCIALMENTE_ATENDIDA"). O
+> caminho de saída é "Iniciar Separação" sem quantidade — o UPDATE de status é incondicional
+> (RN-02) e a requisição volta a `EM_SEPARACAO` **sem rodada nova** (a conferência, se houvesse,
+> ficaria), e aí outra pessoa confere. Descartado abrir a conferência em outros status antes de a
+> Task 4 medir o fluxo pela rota; **registrar no fechamento** (letra B) e no guia.
+> (2) A ordem dos erros no `liberar-retirada` é 404 → transição → `'Nenhum item separado'` →
+> RN-06; na conferência é 400 user → 404 → 400 status → 400 sem item → 403 rodada → 409 claim. A
+> Task 4 tem de conferir **rota+status**, não só a mensagem (`'Nenhum item separado'` existe nas
+> duas, achado 10).
+> (3) O 403 da RN-03 cita a **primeira** rodada do usuário (`ORDER BY id ASC LIMIT 1`), não a
+> última — quem separou duas vezes vê o `#` da primeira.
 
 **Arquivos:** `requisitionService.js` (`conferirSeparacao`, `conferenciaObrigatoria`),
 `permissions.js`, `routes/almoxarifado.js` (rota nova + `liberar-retirada`),
@@ -323,7 +368,17 @@ achado 1 cai **com saldo baixado** (leia a asserção de saldo).
 
 **Commit:** `Almoxarifado Etapa 28 Task 2: quem separou nao confere, e a barreira vive no WHERE`.
 
-## Task 3 — Tela: rodadas, conferência e o botão (galho, worktree)
+## Task 3 — Tela: rodadas, conferência e o botão (galho, worktree) — ✅ FEITA (`75b5d3d`)
+
+> **Fechamento.** Entregue em worktree contra o contrato C3, **antes** das Tasks 1 e 2 no
+> histórico (`75b5d3d` precede `f298536`): `RequisicoesList.js` + `RequisicoesList.test.js`.
+> Client **593/593** em 39 suítes, `CI=true` build ok.
+> **Divergência do C6:** o botão **"Confirmar Entrega"** em `PARCIALMENTE_ATENDIDA` **não ganhou o
+> gate** `conferencia_obrigatoria && !conferencia` na tela — só o de `EM_SEPARACAO`. O backend
+> recusa de qualquer jeito (Task 2, `assertConferidaSeObrigatorio` em `entregarRequisicao`, cenário
+> `[RN-06] em PARCIALMENTE_ATENDIDA ... SEM conferencia -> 400`), então o usuário vê o
+> `toast.error` com a mensagem da RN-06 em vez do botão desabilitado. Fica para o fechamento
+> decidir se vale um commit de tela (é um `disabled`+`title` a mais) — registrar na letra B.
 
 **Arquivos:** `client/src/components/almoxarifado/RequisicoesList.js`, `RequisicoesList.test.js`.
 Contrato C3/C6. Mock **só** na fronteira HTTP (`api.get/put`), como os testes existentes do arquivo.
