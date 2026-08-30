@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import { FiRefreshCw, FiCheckSquare, FiLock, FiUnlock } from 'react-icons/fi';
@@ -57,6 +57,37 @@ const FORM_DECISAO_VAZIO = {
 
 const formatDataHora = (d) => (d ? new Date(d).toLocaleDateString('pt-BR') : '—');
 
+/*
+ * Etapa 29 — faixa de tolerância exibida no modal.
+ *
+ * A tela SÓ SOMA para mostrar a faixa; a comparação (conforme/não conforme) é do servidor, que
+ * tem o epsilon e a régua congelada no ato (Etapa 27). Os desvios do plano são COM SINAL:
+ * `inf = nominal + desvio_inferior`, `sup = nominal + desvio_superior`. Um plano unilateral
+ * (+0.005/+0.021) tem a faixa inteira ACIMA do nominal — `nominal − |inf|` mostraria 9.995 e o
+ * operador mediria contra uma faixa que não existe.
+ *
+ * A formatação usa o número de casas do próprio plano (o maior entre nominal e desvios), senão
+ * `12.3 + 0.1` vira `12.399999999999999` na tela.
+ */
+const casasDecimais = (v) => {
+  const s = String(v ?? '');
+  const ponto = s.indexOf('.');
+  return ponto < 0 ? 0 : s.length - ponto - 1;
+};
+
+const faixaDoPlano = (p) => {
+  const nominal = Number(p.valor_nominal);
+  const casas = Math.max(
+    casasDecimais(p.valor_nominal), casasDecimais(p.desvio_inferior), casasDecimais(p.desvio_superior));
+  const inf = (nominal + Number(p.desvio_inferior)).toFixed(casas);
+  const sup = (nominal + Number(p.desvio_superior)).toFixed(casas);
+  return `[${inf} ; ${sup}]`;
+};
+
+const TEXTO_DIVERGENCIA_DERIVADA = 'Derivada das medidas ao salvar — fora da tolerância liga sozinha';
+const TEXTO_AJUDA_MEDIDAS = 'Com medidas preenchidas, a divergência dimensional é calculada só pelas '
+  + 'características do plano. Divergência em algo que o plano não mede vai em Observações.';
+
 // `data_entrada` vem de `recebimentos_material_almoxarifado.created_at`, sempre timestamp
 // completo (não a data "meio-dia local" que outras telas do módulo usam para campos DATE puro).
 const diasEmEspera = (d) => {
@@ -75,6 +106,16 @@ const InspecoesAlmoxarifado = () => {
   const [decisaoTarget, setDecisaoTarget] = useState(null);
   const [decisaoForm, setDecisaoForm] = useState(FORM_DECISAO_VAZIO);
   const [saving, setSaving] = useState(false);
+
+  // Etapa 29 — plano do material do modal aberto, instrumentos e o que foi digitado por
+  // característica: `{ [plano_id]: { valor, ferramenta_id } }`. `valor` fica STRING até o
+  // servidor: parseFloat transformaria '12,4' em 12 em silêncio (Global Constraint 5).
+  const [planoMedidas, setPlanoMedidas] = useState([]);
+  const [ferramentas, setFerramentas] = useState([]);
+  const [medidas, setMedidas] = useState({});
+  // Cada abertura do modal invalida a carga anterior: fechar o item A e abrir o B antes de o
+  // plano de A chegar não pode deixar o plano de A dentro do modal de B.
+  const aberturaRef = useRef(0);
 
   const [ajusteTarget, setAjusteTarget] = useState(null); // { tipo: 'BLOQUEAR' | 'DESBLOQUEAR' }
   const [ajusteForm, setAjusteForm] = useState({ material_id: '', quantidade: '', justificativa: '' });
@@ -104,7 +145,31 @@ const InspecoesAlmoxarifado = () => {
   useEffect(() => { loadPendentes(); }, [loadPendentes]);
   useEffect(() => { loadMateriais(); }, [loadMateriais]);
 
+  const carregarPlanoDoModal = async (materialId, abertura) => {
+    let plano;
+    try {
+      const res = await api.get('/almoxarifado/planos-inspecao', { params: { material_id: materialId } });
+      plano = res.data || [];
+    } catch {
+      // RN-08: falha de rede NÃO vira "material sem plano" em silêncio — o inspetor decidiria
+      // sem medir achando que não havia o que medir.
+      toast.warn('Não foi possível carregar o plano de inspeção');
+      return;
+    }
+    if (abertura !== aberturaRef.current) return;
+    setPlanoMedidas(plano);
+    if (plano.length === 0) return;
+    // Instrumentos só interessam se há o que medir (D4).
+    try {
+      const fer = await api.get('/almoxarifado/ferramentas');
+      if (abertura === aberturaRef.current) setFerramentas(fer.data || []);
+    } catch {
+      toast.warn('Não foi possível carregar os instrumentos');
+    }
+  };
+
   const abrirDecisao = (row) => {
+    aberturaRef.current += 1;
     setDecisaoTarget(row);
     setDecisaoForm({
       ...FORM_DECISAO_VAZIO,
@@ -112,7 +177,28 @@ const InspecoesAlmoxarifado = () => {
       quantidade_aprovada: String(row.quantidade_retida),
       quantidade_reprovada: '0',
     });
+    setPlanoMedidas([]);
+    setFerramentas([]);
+    setMedidas({});
+    carregarPlanoDoModal(row.material_id, aberturaRef.current);
   };
+
+  const setMedida = (planoId, patch) => setMedidas((m) => ({
+    ...m, [planoId]: { valor: '', ferramenta_id: '', ...m[planoId], ...patch },
+  }));
+
+  // Só a linha com valor preenchido conta (D3): instrumento escolhido sem valor é ignorado.
+  const linhasMedidasPreenchidas = () => planoMedidas
+    .map((p) => ({ plano: p, m: medidas[p.id] }))
+    .filter(({ m }) => m && m.valor.trim() !== '')
+    .map(({ plano, m }) => {
+      const linha = { plano_id: plano.id, valor_medido: m.valor };
+      if (m.ferramenta_id) linha.ferramenta_id = Number(m.ferramenta_id);
+      return linha;
+    });
+
+  // B60/RN-02: com qualquer medida preenchida, a divergência dimensional é do servidor.
+  const temMedidas = linhasMedidasPreenchidas().length > 0;
 
   const reprovadaNum = parseFloat(decisaoForm.quantidade_reprovada) || 0;
 
@@ -136,10 +222,25 @@ const InspecoesAlmoxarifado = () => {
       const payload = { quantidade_aprovada: aprovada, quantidade_reprovada: reprovada };
       if (decisaoForm.observacoes.trim()) payload.observacoes = decisaoForm.observacoes.trim();
       if (reprovada > 0 && decisaoForm.encaminhamento) payload.encaminhamento = decisaoForm.encaminhamento;
-      FLAGS_INSPECAO.forEach(({ key }) => { if (decisaoForm[key]) payload[key] = true; });
+      const linhasMedidas = linhasMedidasPreenchidas();
+      FLAGS_INSPECAO.forEach(({ key }) => {
+        // Com medidas, a flag manual de divergência dimensional NÃO vai: o servidor deriva das
+        // medidas, e mandar `true` junto ligaria a divergência mesmo com tudo dentro da faixa.
+        if (linhasMedidas.length > 0 && key === 'divergencia_dimensional') return;
+        if (decisaoForm[key]) payload[key] = true;
+      });
+      // A chave só entra se houver linha (achado 12): `medidas: []` é outra coisa para o servidor.
+      if (linhasMedidas.length > 0) payload.medidas = linhasMedidas;
 
-      await api.post(`/almoxarifado/recebimentos/itens/${decisaoTarget.item_id}/inspecionar`, payload);
-      toast.success('Inspeção registrada!');
+      const res = await api.post(`/almoxarifado/recebimentos/itens/${decisaoTarget.item_id}/inspecionar`, payload);
+      const registradas = res.data?.medidas_registradas;
+      if (registradas > 0) {
+        // RN-07: o resultado da régua vem do servidor — a tela não pré-calcula (D2).
+        toast.success(`Inspeção registrada! Divergência dimensional: ${res.data.divergencia_dimensional ? 'sim' : 'não'} `
+          + `(${registradas} medida${registradas !== 1 ? 's' : ''})`);
+      } else {
+        toast.success('Inspeção registrada!');
+      }
       setDecisaoTarget(null);
       loadPendentes();
     } catch (err) {
@@ -321,15 +422,61 @@ const InspecoesAlmoxarifado = () => {
                 <div className="almox-field almox-form-full">
                   <label className="almox-label">Problemas identificados</label>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px' }}>
-                    {FLAGS_INSPECAO.map(({ key, label }) => (
-                      <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 400, fontSize: '0.85rem' }}>
-                        <input type="checkbox" checked={decisaoForm[key]}
-                          onChange={(e) => setDecisaoForm((f) => ({ ...f, [key]: e.target.checked }))} />
-                        {label}
-                      </label>
-                    ))}
+                    {FLAGS_INSPECAO.map(({ key, label }) => {
+                      // RN-02: `checked={false}` de propósito, não o estado — o estado fica
+                      // guardado para a caixa voltar como estava se o inspetor limpar as medidas.
+                      const derivada = key === 'divergencia_dimensional' && temMedidas;
+                      return (
+                        <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 400, fontSize: '0.85rem' }}>
+                          <input type="checkbox" checked={derivada ? false : decisaoForm[key]} disabled={derivada}
+                            onChange={(e) => setDecisaoForm((f) => ({ ...f, [key]: e.target.checked }))} />
+                          {label}
+                          {derivada && (
+                            <span style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>
+                              — {TEXTO_DIVERGENCIA_DERIVADA}
+                            </span>
+                          )}
+                        </label>
+                      );
+                    })}
                   </div>
                 </div>
+                {planoMedidas.length > 0 && (
+                  <div className="almox-field almox-form-full almox-medidas-plano">
+                    <label className="almox-label">Medidas do plano</label>
+                    {planoMedidas.map((p) => {
+                      const m = medidas[p.id] || { valor: '', ferramenta_id: '' };
+                      return (
+                        <div key={p.id} className="almox-medida-linha"
+                          style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px', marginBottom: 8 }}>
+                          <label style={{ gridColumn: '1 / -1', fontWeight: 400, fontSize: '0.85rem' }}>
+                            {p.caracteristica} ({p.unidade}) — nominal {p.valor_nominal} · faixa {faixaDoPlano(p)}
+                          </label>
+                          <input className="almox-input" type="text" inputMode="decimal"
+                            placeholder="ex.: 12.40 (ponto decimal)" value={m.valor}
+                            onChange={(e) => setMedida(p.id, { valor: e.target.value })} />
+                          <select className="almox-form-select" value={m.ferramenta_id}
+                            onChange={(e) => setMedida(p.id, { ferramenta_id: e.target.value })}>
+                            <option value="">— sem instrumento —</option>
+                            {ferramentas.map((f) => {
+                              // D4: vencida aparece, mas desabilitada — o servidor recusaria de
+                              // qualquer jeito; `null` (não exige calibração) aparece normal.
+                              const vencida = f.calibracao_vigente === false;
+                              return (
+                                <option key={f.id} value={f.id} disabled={vencida}>
+                                  {f.nome}{f.codigo_patrimonio ? ` (${f.codigo_patrimonio})` : ''}{vencida ? ' (calibração vencida)' : ''}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </div>
+                      );
+                    })}
+                    <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: 'var(--gmp-text-light)' }}>
+                      {TEXTO_AJUDA_MEDIDAS}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
             <div className="almox-modal-footer">

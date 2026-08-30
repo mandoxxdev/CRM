@@ -14,6 +14,7 @@ import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import InspecoesAlmoxarifado from './InspecoesAlmoxarifado';
 import api from '../../services/api';
+import { toast } from 'react-toastify';
 
 jest.mock('../../services/api', () => ({
   __esModule: true,
@@ -37,13 +38,36 @@ const PENDENTE = {
   recebimento_numero: 'REC-55', nota_fiscal: 'NF-999', data_entrada: '2026-08-08T10:00:00Z',
 };
 
+// Plano de inspeção (Etapa 27) do material 10. Os desvios são COM SINAL: o primeiro é
+// unilateral (+0.005/+0.021 — a faixa inteira fica ACIMA do nominal) justamente para pegar a
+// conta errada `nominal − |inf|`; o segundo é o ±0.1 comum.
+const PLANO_DIAMETRO = {
+  id: 1, material_id: 10, caracteristica: 'Diâmetro', unidade: 'mm',
+  valor_nominal: 10, desvio_inferior: 0.005, desvio_superior: 0.021, ativo: 1,
+};
+const PLANO_ESPESSURA = {
+  id: 2, material_id: 10, caracteristica: 'Espessura', unidade: 'mm',
+  valor_nominal: 12.3, desvio_inferior: -0.1, desvio_superior: 0.1, ativo: 1,
+};
+
+// `calibracao_vigente`: true (vigente), false (vencida — o servidor recusa) e null (não exige).
+const FERRAMENTAS = [
+  { id: 1, nome: 'Paquímetro', codigo_patrimonio: 'PAQ-1', exige_calibracao: 1, calibracao_vigente: true },
+  { id: 2, nome: 'Micrômetro', codigo_patrimonio: 'MIC-2', exige_calibracao: 1, calibracao_vigente: false },
+  { id: 3, nome: 'Régua', codigo_patrimonio: 'REG-3', exige_calibracao: 0, calibracao_vigente: null },
+];
+
 let container;
 let root;
 let pendentesDoBanco;
+let planoDoBanco;
+let ferramentasDoBanco;
 
 beforeEach(() => {
   global.IS_REACT_ACT_ENVIRONMENT = true;
   pendentesDoBanco = [PENDENTE];
+  planoDoBanco = [];
+  ferramentasDoBanco = FERRAMENTAS;
   // Implementações aqui, não na fábrica do jest.mock: clearAllMocks apaga implementações e só
   // o primeiro teste teria dados.
   api.get.mockImplementation((url) => {
@@ -53,6 +77,8 @@ beforeEach(() => {
         data: [{ id: 10, codigo: 'MAT-1', nome: 'Chapa 3mm', unidade: 'PC', quantidade_bloqueada: 0 }],
       });
     }
+    if (url === '/almoxarifado/planos-inspecao') return Promise.resolve({ data: planoDoBanco });
+    if (url === '/almoxarifado/ferramentas') return Promise.resolve({ data: ferramentasDoBanco });
     return Promise.resolve({ data: [] });
   });
   api.post.mockResolvedValue({ data: { success: true } });
@@ -236,5 +262,190 @@ describe('InspecoesAlmoxarifado — bloqueio/desbloqueio avulso de material', ()
     expect(api.post).toHaveBeenCalledWith('/almoxarifado/materiais/10/desbloquear', {
       quantidade: 5, justificativa: 'Reinspecionado, conforme',
     });
+  });
+});
+
+/*
+ * Etapa 29 — medidas do plano dentro do modal de decisão (C3, RN-01..04, RN-07, RN-08).
+ *
+ * O que estes testes protegem, na ordem do plano:
+ * - sem plano cadastrado, o modal é IDÊNTICO ao de sempre (compromisso da Etapa 27);
+ * - a faixa exibida soma o desvio COM SINAL — `nominal − |inf|` erraria o plano unilateral;
+ * - B60 à risca: com medida preenchida a caixa "Divergência dimensional" é do servidor
+ *   (desabilitada E desmarcada), e o payload não leva a flag manual;
+ * - o valor medido vai como STRING CRUA ('12,4' continua '12,4' — parseFloat faria 12 em silêncio).
+ */
+describe('InspecoesAlmoxarifado — medidas do plano de inspeção (Etapa 29)', () => {
+  const textoModal = () => container.querySelector('.almox-modal')?.textContent || '';
+  const linhasMedida = () => [...container.querySelectorAll('.almox-modal .almox-medida-linha')];
+  const inputMedida = (i) => linhasMedida()[i].querySelector('input');
+  const selectInstrumento = (i) => linhasMedida()[i].querySelector('select');
+  const checkboxFlag = (rotulo) => [...container.querySelectorAll('.almox-modal input[type="checkbox"]')]
+    .find((c) => c.closest('label')?.textContent.includes(rotulo));
+  const chamadasGet = (url) => api.get.mock.calls.filter(([u]) => u === url);
+  const payloadEnviado = () => api.post.mock.calls[0][1];
+
+  const clicar = async (el) => {
+    await act(async () => { el.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+  };
+
+  test('(1) sem plano cadastrado o modal é idêntico ao de hoje e não busca ferramentas', async () => {
+    planoDoBanco = [];
+    await renderizar();
+    await abrirDecisao(0);
+    expect(chamadasGet('/almoxarifado/planos-inspecao')[0][1]).toEqual({ params: { material_id: 10 } });
+    expect(textoModal()).not.toContain('Medidas do plano');
+    expect(linhasMedida()).toHaveLength(0);
+    expect(chamadasGet('/almoxarifado/ferramentas')).toHaveLength(0);
+    // O resto do modal continua lá, como sempre.
+    expect(campoPorLabel('Quantidade aprovada').value).toBe('100');
+    expect(checkboxFlag('Divergência dimensional').disabled).toBe(false);
+  });
+
+  test('(2) com plano, um campo por característica com a faixa somada COM SINAL', async () => {
+    planoDoBanco = [PLANO_DIAMETRO, PLANO_ESPESSURA];
+    await renderizar();
+    await abrirDecisao(0);
+    expect(textoModal()).toContain('Medidas do plano');
+    expect(linhasMedida()).toHaveLength(2);
+    const rotulos = linhasMedida().map((l) => l.querySelector('label').textContent);
+    // Unilateral: a faixa inteira fica ACIMA do nominal. `nominal − |inf|` daria 9.995 aqui.
+    expect(rotulos[0]).toContain('Diâmetro (mm)');
+    expect(rotulos[0]).toContain('nominal 10');
+    expect(rotulos[0]).toContain('[10.005 ; 10.021]');
+    // Simétrico, formatado pelas casas do plano (1 casa), sem lixo de ponto flutuante.
+    expect(rotulos[1]).toContain('Espessura (mm)');
+    expect(rotulos[1]).toContain('[12.2 ; 12.4]');
+    // Entrada de texto com teclado decimal, não `type="number"` (achado 7).
+    expect(inputMedida(0).getAttribute('type')).toBe('text');
+    expect(inputMedida(0).getAttribute('inputmode')).toBe('decimal');
+    expect(inputMedida(0).getAttribute('placeholder')).toBe('ex.: 12.40 (ponto decimal)');
+    // Ferramentas só são buscadas porque há plano.
+    expect(chamadasGet('/almoxarifado/ferramentas')).toHaveLength(1);
+    expect(selectInstrumento(0).options[0].textContent).toBe('— sem instrumento —');
+    // Texto de ajuda fixo (achado 8).
+    expect(textoModal()).toContain('Com medidas preenchidas, a divergência dimensional é calculada só pelas características do plano. Divergência em algo que o plano não mede vai em Observações.');
+  });
+
+  test('(3) B60: medida preenchida desabilita E desmarca a divergência dimensional, o payload leva a string crua, e limpar devolve a caixa', async () => {
+    planoDoBanco = [PLANO_ESPESSURA];
+    // O servidor recusa: o modal fica aberto com os valores (RN-03) e dá para seguir mexendo.
+    api.post.mockRejectedValue({ response: { data: { error: 'recusado pelo teste' } } });
+    await renderizar();
+    await abrirDecisao(0);
+
+    // 1. Inspetor marca a caixa na mão...
+    await clicar(checkboxFlag('Divergência dimensional'));
+    expect(checkboxFlag('Divergência dimensional').checked).toBe(true);
+
+    // 2. ...e preenche uma medida (com vírgula, de propósito: vai como está).
+    preencher(inputMedida(0), '12,4');
+
+    // 3. A caixa passa a ser do servidor: desabilitada E desmarcada, com o porquê ao lado.
+    const caixa = checkboxFlag('Divergência dimensional');
+    expect(caixa.disabled).toBe(true);
+    expect(caixa.checked).toBe(false);
+    expect(textoModal()).toContain('Derivada das medidas ao salvar — fora da tolerância liga sozinha');
+
+    // 4. Salvar: a flag manual NÃO vai, e o valor vai como STRING CRUA.
+    await clicarBotaoModal('Salvar');
+    expect(api.post).toHaveBeenCalledWith(
+      '/almoxarifado/recebimentos/itens/1/inspecionar',
+      expect.not.objectContaining({ divergencia_dimensional: true }));
+    const payload = payloadEnviado();
+    expect(payload.medidas).toHaveLength(1);
+    expect(payload.medidas[0].plano_id).toBe(2);
+    expect(payload.medidas[0].valor_medido).toBe('12,4');
+    expect(typeof payload.medidas[0].valor_medido).toBe('string');
+    expect(container.querySelector('.almox-modal')).not.toBeNull();
+
+    // 5. Limpar a medida devolve a caixa ao que era: habilitada e MARCADA de novo.
+    preencher(inputMedida(0), '');
+    const caixaDepois = checkboxFlag('Divergência dimensional');
+    expect(caixaDepois.disabled).toBe(false);
+    expect(caixaDepois.checked).toBe(true);
+    expect(textoModal()).not.toContain('Derivada das medidas ao salvar');
+  });
+
+  test('(4) linha sem valor não entra: payload SEM a chave medidas, mesmo com instrumento escolhido', async () => {
+    planoDoBanco = [PLANO_DIAMETRO, PLANO_ESPESSURA];
+    await renderizar();
+    await abrirDecisao(0);
+    // Instrumento sem valor é ignorado (D3) — e só espaço não é valor.
+    preencher(selectInstrumento(0), '1');
+    preencher(inputMedida(1), '   ');
+    // Sem medida de verdade, a caixa continua manual.
+    expect(checkboxFlag('Divergência dimensional').disabled).toBe(false);
+    await clicarBotaoModal('Salvar');
+    expect(api.post).toHaveBeenCalledTimes(1);
+    expect(Object.prototype.hasOwnProperty.call(payloadEnviado(), 'medidas')).toBe(false);
+  });
+
+  test('(5) instrumento com calibração vencida aparece rotulado e desabilitado; sem exigência aparece normal', async () => {
+    planoDoBanco = [PLANO_DIAMETRO];
+    await renderizar();
+    await abrirDecisao(0);
+    const opcoes = [...selectInstrumento(0).options];
+    const porValor = (v) => opcoes.find((o) => o.value === v);
+    expect(porValor('2').textContent).toContain('(calibração vencida)');
+    expect(porValor('2').disabled).toBe(true);
+    expect(porValor('1').textContent).not.toContain('(calibração vencida)');
+    expect(porValor('1').disabled).toBe(false);
+    expect(porValor('3').textContent).not.toContain('(calibração vencida)');
+    expect(porValor('3').disabled).toBe(false);
+    // Instrumento escolhido acompanha a medida no payload.
+    preencher(inputMedida(0), '10.01');
+    preencher(selectInstrumento(0), '1');
+    await clicarBotaoModal('Salvar');
+    expect(payloadEnviado().medidas[0]).toEqual({ plano_id: 1, valor_medido: '10.01', ferramenta_id: 1 });
+  });
+
+  test('(6) recusa do servidor vai literal ao toast e o modal continua aberto com os valores', async () => {
+    planoDoBanco = [PLANO_DIAMETRO];
+    api.post.mockRejectedValue({
+      response: { data: { error: 'Ferramenta com calibração vencida ou sem calibração registrada (Micrômetro)' } },
+    });
+    await renderizar();
+    await abrirDecisao(0);
+    preencher(inputMedida(0), '10.03');
+    await clicarBotaoModal('Salvar');
+    expect(toast.error).toHaveBeenCalledWith('Ferramenta com calibração vencida ou sem calibração registrada (Micrômetro)');
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(container.querySelector('.almox-modal')).not.toBeNull();
+    expect(inputMedida(0).value).toBe('10.03');
+  });
+
+  test('(7) o toast de sucesso diz o resultado do servidor quando houve medidas', async () => {
+    planoDoBanco = [PLANO_DIAMETRO, PLANO_ESPESSURA];
+    api.post.mockResolvedValue({ data: { divergencia_dimensional: 1, medidas_registradas: 2 } });
+    await renderizar();
+    await abrirDecisao(0);
+    preencher(inputMedida(0), '10.03');
+    preencher(inputMedida(1), '12.5');
+    await clicarBotaoModal('Salvar');
+    expect(toast.success).toHaveBeenCalledWith('Inspeção registrada! Divergência dimensional: sim (2 medidas)');
+  });
+
+  test('(7b) sem medidas registradas na resposta, o toast é o de sempre', async () => {
+    planoDoBanco = [PLANO_DIAMETRO];
+    await renderizar();
+    await abrirDecisao(0);
+    // Mock padrão: `{ success: true }`, sem `medidas_registradas` (achado 6).
+    await clicarBotaoModal('Salvar');
+    expect(toast.success).toHaveBeenCalledWith('Inspeção registrada!');
+  });
+
+  test('(8) falha ao carregar o plano avisa (toast.warn) e abre o modal sem o bloco — não vira "sem plano" em silêncio', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/inspecoes/pendentes') return Promise.resolve({ data: pendentesDoBanco });
+      if (url === '/almoxarifado/planos-inspecao') return Promise.reject(new Error('rede'));
+      return Promise.resolve({ data: [] });
+    });
+    await renderizar();
+    await abrirDecisao(0);
+    expect(toast.warn).toHaveBeenCalledWith('Não foi possível carregar o plano de inspeção');
+    expect(container.querySelector('.almox-modal')).not.toBeNull();
+    expect(textoModal()).not.toContain('Medidas do plano');
+    expect(chamadasGet('/almoxarifado/ferramentas')).toHaveLength(0);
   });
 });
