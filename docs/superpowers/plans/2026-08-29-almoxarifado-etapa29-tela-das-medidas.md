@@ -110,7 +110,7 @@ instrumento`. Linha com `medidas_total === 0` mostra *"Sem medidas registradas"*
 
 | # | Task | Tipo | Depende |
 |---|---|---|---|
-| 1 | C1 + C2 no backend + `inspecaoHistorico.api.test.js` | **tronco** | — |
+| 1 | C1 + C2 no backend + `inspecaoHistorico.api.test.js` — ✅ `96525d5` | **tronco** | — |
 | 2 | Modal de medidas (C3, RN-01..04, RN-07, RN-08) + Jest em `InspecoesAlmoxarifado.js` | **galho** | contrato da Etapa 27 (já existe) |
 | 3 | **Componente novo** `HistoricoInspecoes.js` + `HistoricoInspecoes.test.js` (C4, RN-06), recebendo `materialFilter` por prop | **galho** — arquivo próprio, paralelo à 2 (achado 8 da revisão) | contrato C1/C2 |
 | 3b | Abas *Pendentes* / *Histórico* em `InspecoesAlmoxarifado.js` (~10 linhas; a aba Histórico **não** renderiza a tabela de pendentes — os helpers do teste selecionam `.almox-table tbody tr` sem discriminar) | galho curto, **depois** da 2 e da 3 | 2, 3 |
@@ -118,7 +118,46 @@ instrumento`. Linha com `medidas_total === 0` mostra *"Sem medidas registradas"*
 
 Tasks 1, 2 e 3 rodam em paralelo (arquivos disjuntos). A 3 mocka C1/C2 na fronteira HTTP.
 
-## Task 1 — Leitura de inspeção decidida (tronco)
+## Task 1 — Leitura de inspeção decidida (tronco) — ✅ FEITA (`96525d5`)
+
+> **Fechamento (2026-08-30).** Entregue como previsto: `inspectionService.listarHistorico(db,
+> { material_id?, limite? })` e `listarMedidasDaInspecao(db, inspecaoId)` (→ `null` se a inspeção
+> não existe, `[]` se decidida sem medida — a rota distingue 404 de "sem medida"); rotas
+> `GET /inspecoes/historico` e `GET /inspecoes/:id/medidas` em `extended.js`, `auth` sem gate novo
+> (D6), registradas logo após `/pendentes` com o comentário preventivo de ordem (achado 3: hoje não
+> há colisão; **não** há controle positivo de ordem, como o plano manda). Exporta também
+> `HISTORICO_LIMITE_PADRAO` (100) e `HISTORICO_LIMITE_TETO` (500).
+> Teste `inspecaoHistorico.api.test.js`: **11 cenários** (os 7 do plano + 4 de borda: decidida sem
+> medida no histórico com `medidas_total 0`; item pendente **não** aparece; `/:id/medidas` de
+> decidida sem medida → `[]` não 404; ordem principal por data antes do id), vermelhos por
+> asserção nos 11 antes das rotas (0/11: `404 !== 200`). O empate de `data_inspecao` é **forçado
+> por UPDATE** no setup; o teto 500 é provado com `db` falso lendo o último parâmetro do SQL
+> (`[9999, ausente, 'abc', 0, -5] → [500, 100, 100, 100, 100]`), não criando 501 inspeções.
+> Placar: `test:api` **163/163** arquivos (inspecaoHistorico 11/11, medidasInspecao 21/21,
+> planoInspecao 22/22); `test:almoxarifado` 42/42.
+>
+> **Controles positivos** (md5 `06fbdef9…` antes/restaurado nos dois, `git diff --stat -- server`
+> vazio): (a) leitura das medidas trocada por `JOIN planos_inspecao_almoxarifado` lendo
+> `p.caracteristica/p.valor_nominal/...` → cai **"caracteristica congelada no ato, nao a
+> renomeada"** (10/11); (b) `ORDER BY` sem `i.id DESC` → cai **"empate em data_inspecao tem de
+> desempatar por id DESC; veio [3,4]"** e, de brinde, "com limite, quem entra e a mais recente"
+> (as três decisões do cenário de limite caem no mesmo segundo) — 9/11. O desempate **não** é
+> teste vazio.
+>
+> **Divergências/decisões (reversíveis):** `material_id` não numérico no histórico é **ignorado**
+> (lista tudo, 200) em vez de 400 — mesma régua de `/pendentes`, que passa `req.query` direto;
+> `limite` inválido/zero/negativo cai no default 100, nunca 400. O cenário de D6 afirma também o
+> contraste: o mesmo usuário sem perfil toma **403** na decisão — D6 é "sem gate NOVO na leitura",
+> não "sem gate". Contrato C1 checado campo a campo e C2 com `Object.keys` exato, para o mock da
+> Task 3 não inventar nome.
+>
+> **Para a Task 4:** decidir pela rota exige `encaminhamento` do enum
+> `['DEVOLVER','ANALISE_ENGENHARIA','SUBSTITUICAO']` (texto livre dá 400 — o primeiro cenário
+> desta task caiu nisso); o `PUT /planos-inspecao/:id` precisa de `gerenciar_plano_inspecao`
+> (ADMIN do harness com `role: 'admin'` serve); o helper `itemRetido`/`novoPlano`/`decidir` deste
+> arquivo é o molde. O fluxo da Task 4 já está coberto ponta a ponta pelo cenário "congelado"
+> daqui — a Task 4 acrescenta a **suíte serial** e a leitura pelo `historico` após o PUT.
+
 
 Arquivos: `server/services/almoxarifado/inspectionService.js` (`listarHistorico`,
 `listarMedidasDaInspecao`), `server/routes/almoxarifado/extended.js` (as duas rotas, C1 antes de
