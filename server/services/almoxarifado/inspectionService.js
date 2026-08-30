@@ -21,8 +21,134 @@ const { registrarMovimentacao } = require('./stockService');
 // de `stockService` acima ja carrega `notificationQueueService` por inteiro.
 const notificationQueueService = require('./notificationQueueService');
 const alertRegistry = require('./alertRegistry');
+// Etapa 27, Task 3. `toleranciaInspecao` e funcao pura (sem db, sem ciclo). `calibracaoVigente`
+// vem de `toolService` por require direto — verificado que nao ha ciclo: toolService so carrega
+// db/audit/toolStateMachine, e nenhum deles chega aqui. Reusar a consulta em vez de copiar o
+// `date(data_validade) >= date('now')` foi decisao explicita da Etapa 9b ("nao duplicar esta
+// consulta em outro lugar", toolService.js:55): duas definicoes de "calibracao vigente" e como
+// ter duas reguas para o mesmo fato.
+const { avaliarMedida, paraNumeroFinito } = require('./toleranciaInspecao');
+const { calibracaoVigente } = require('./toolService');
 
 const ENCAMINHAMENTOS = ['DEVOLVER', 'ANALISE_ENGENHARIA', 'SUBSTITUICAO'];
+
+/**
+ * Etapa 27 (RN-03 a RN-07, contrato C3): resolve o payload de medidas em linhas prontas para
+ * gravar, JA AVALIADAS pela regua da tolerancia.
+ *
+ * Devolve `null` quando nao ha medidas — e `null` e diferente de `[]` de proposito: sem medidas a
+ * `divergencia_dimensional` continua sendo a marcacao MANUAL do payload (RN-03), e um `[]`
+ * tratado como "tem medidas" zeraria a flag legitima de quem inspecionou sem medir.
+ * `Array.isArray(medidas) && medidas.length > 0` e a guarda exata: `[]` e TRUTHY, entao
+ * `if (data.medidas)` estaria errado.
+ *
+ * ─── POR QUE ESTA FUNCAO NAO ESCREVE NADA, E RODA ANTES DO CLAIM ────────────────────────────
+ *
+ * Ela so LE e AVALIA. Todas as recusas novas (plano inexistente, plano de outro material,
+ * ferramenta inexistente/inativa, ferramenta descalibrada, medida nao numerica) saem daqui, e
+ * `decidirInspecao` a chama ANTES da Fase 1 (o claim da linha do item). No lugar "natural" —
+ * junto da gravacao das medidas, depois do INSERT da inspecao — cada uma dessas recusas seria um
+ * 400 emitido DEPOIS de o saldo ja ter se movido, contra o que o comentario da guarda de
+ * fechamento promete ("o saldo nao pode mudar quando isto recusa"). Nada aqui precisa do
+ * `inspecao_id`: a derivacao da flag e calculada em memoria neste ponto, e o `inspecao_id` so
+ * entra na hora do INSERT.
+ *
+ * ─── POR QUE NAO CONFIAR EM "NaN REPROVA SOZINHO" ───────────────────────────────────────────
+ *
+ * `Number('12,4')` (virgula decimal de input pt-BR) e NaN. A intuicao diz que ele reprovaria a
+ * caracteristica; a Task 1 MEDIU o contrario: na forma de guardas de rejeicao — a natural quando
+ * se quer devolver motivo especifico — nenhuma guarda dispara e a medida sai CONFORME. O defeito
+ * nao seria falsa reprovacao, seria falsa APROVACAO com `valor_medido` nulo e a divergencia
+ * apagada. Por isso `NAO_NUMERICO` vira 400 explicito aqui, e nada e gravado (RN-07).
+ */
+async function resolverMedidas(db, materialId, medidas) {
+  if (!Array.isArray(medidas) || medidas.length === 0) return null;
+
+  const linhas = [];
+  for (const m of medidas) {
+    const bruto = m || {};
+    const planoId = paraNumeroFinito(bruto.plano_id);
+    // Validado por EXISTENCIA, nao por `ativo = 1` — mesma regua que a Task 2 aplicou ao material
+    // pai. O alvo e o plano FANTASMA (a FK nao segura: o harness roda com foreign_keys = 0 e
+    // producao com 1, entao `plano_id` inexistente passaria no teste e falharia em producao).
+    // Exigir ativo travaria a inspecao em andamento porque alguem desativou a caracteristica no
+    // meio; e os valores sao congelados de qualquer jeito (RN-05), entao a medida continua
+    // significando exatamente o que significava no ato.
+    const plano = planoId === null ? null : await dbGet(db,
+      'SELECT * FROM planos_inspecao_almoxarifado WHERE id = ?', [planoId]);
+    if (!plano) {
+      throw Object.assign(
+        new Error(`Característica de plano de inspeção não encontrada: ${bruto.plano_id}`),
+        { status: 400 });
+    }
+    if (Number(plano.material_id) !== Number(materialId)) {
+      throw Object.assign(
+        new Error(`A característica "${plano.caracteristica}" não pertence ao plano de inspeção deste material`),
+        { status: 400 });
+    }
+
+    // Ferramenta e OPCIONAL (a coluna `medidas...ferramenta_id` e nullable, fixada pela Task 2).
+    // Quando vem, vale o padrao do vizinho: `WHERE id = ? AND ativo = 1` e 404 se nao casar —
+    // sem isso, `f.exige_calibracao` sobre `undefined` seria TypeError, ou seja 500 numa
+    // situacao que e erro do pedido.
+    let ferramenta = null;
+    const ferramentaId = paraNumeroFinito(bruto.ferramenta_id);
+    if (bruto.ferramenta_id !== undefined && bruto.ferramenta_id !== null && bruto.ferramenta_id !== '') {
+      ferramenta = ferramentaId === null ? null : await dbGet(db,
+        'SELECT * FROM ferramentas_almoxarifado WHERE id = ? AND ativo = 1', [ferramentaId]);
+      if (!ferramenta) {
+        throw Object.assign(new Error('Ferramenta não encontrada'), { status: 404 });
+      }
+      // RN-04: instrumento vencido NAO MEDE. Mensagem literal do vizinho (toolService.js:70),
+      // que cobre "vencida" e "nunca calibrada" com a mesma frase de proposito: `calibracaoVigente`
+      // devolve a linha vigente ou `undefined`, entao na recusa nao existe data para prometer.
+      // Descartado apenas avisar: medida feita com paquimetro descalibrado nao e dado, e ruido
+      // com aparencia de dado — e ficaria gravada como se fosse prova.
+      if (ferramenta.exige_calibracao && !(await calibracaoVigente(db, ferramenta.id))) {
+        throw Object.assign(
+          new Error(`Ferramenta com calibração vencida ou sem calibração registrada (${ferramenta.nome})`),
+          { status: 400 });
+      }
+    }
+
+    const aval = avaliarMedida({
+      nominal: plano.valor_nominal,
+      desvioInf: plano.desvio_inferior,
+      desvioSup: plano.desvio_superior,
+      medido: bruto.valor_medido,
+    });
+    if (aval.motivo === 'NAO_NUMERICO') {
+      throw Object.assign(
+        new Error(`Valor medido inválido para "${plano.caracteristica}": informe um número (use ponto decimal)`),
+        { status: 400 });
+    }
+    if (aval.motivo === 'FAIXA_INVALIDA') {
+      // Plano com faixa invertida ou nominal nulo: o CRUD barra isso com 400, mas dado gravado
+      // antes da validacao — ou escrita direta no banco — chega aqui. Recusar e melhor que gravar
+      // "nao conforme" por causa de um cadastro quebrado, o que ligaria a divergencia sem medida.
+      throw Object.assign(
+        new Error(`Plano de inspeção inválido para "${plano.caracteristica}": verifique o valor nominal e os desvios`),
+        { status: 400 });
+    }
+
+    linhas.push({
+      plano_id: plano.id,
+      // RN-05: os valores do plano sao COPIADOS, nunca referenciados. Editar o plano depois nao
+      // pode reescrever inspecao antiga — mesma razao da RN-05 da Etapa 26 (renomear categoria
+      // nao reclassifica o acervo). `ferramenta_nome` e congelado pelo mesmo motivo.
+      caracteristica: plano.caracteristica,
+      unidade: plano.unidade || null,
+      valor_nominal: plano.valor_nominal,
+      desvio_inferior: plano.desvio_inferior,
+      desvio_superior: plano.desvio_superior,
+      valor_medido: paraNumeroFinito(bruto.valor_medido),
+      conforme: aval.conforme ? 1 : 0,
+      ferramenta_id: ferramenta ? ferramenta.id : null,
+      ferramenta_nome: ferramenta ? ferramenta.nome : null,
+    });
+  }
+  return linhas;
+}
 
 /**
  * `retido` vem de `recebimentos_material_itens_almoxarifado.quantidade_em_inspecao` — o quanto
@@ -84,6 +210,20 @@ async function decidirInspecao(db, user, itemId, data = {}) {
     throw Object.assign(new Error(`Encaminhamento inválido: ${data.encaminhamento}`), { status: 400 });
   }
 
+  // Etapa 27 (RN-03, contrato C3) — AQUI, e nao la embaixo junto do INSERT das medidas. Este e o
+  // ultimo ponto do fluxo em que uma recusa ainda nao custou saldo: resolver os planos, avaliar
+  // pela regua e checar a calibracao roda ANTES do claim da Fase 1, pelo mesmo motivo que a guarda
+  // de fechamento acima roda antes. Depois desta linha, recusar significa deixar o item com o
+  // retido baixado e nenhuma inspecao gravada.
+  const medidasResolvidas = await resolverMedidas(db, item.material_id, data.medidas);
+  // A DERIVACAO VENCE A MARCACAO MANUAL quando ha medidas (RN-03): a flag deixa de ser opiniao de
+  // quem inspecionou e passa a ser o que o numero diz. Descartado manter as duas fontes lado a
+  // lado — a manual venceria por ser a que a tela mostra, e o modulo teria duas verdades para o
+  // mesmo fato. Sem medidas, `medidasResolvidas` e null e tudo segue como antes desta etapa.
+  const divergenciaDimensional = medidasResolvidas
+    ? (medidasResolvidas.some((m) => !m.conforme) ? 1 : 0)
+    : (data.divergencia_dimensional ? 1 : 0);
+
   // Fase 1 — reivindica o retido do ITEM. E o guarda real contra decidir o mesmo item duas
   // vezes (inclusive concorrente): a segunda tentativa le quantidade_em_inspecao=0 e este UPDATE
   // nao casa, ANTES de tocar no saldo do material.
@@ -132,11 +272,35 @@ async function decidirInspecao(db, user, itemId, data = {}) {
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
     itemId,
     reprovada === 0 ? 1 : 0,
-    data.divergencia_quantidade ? 1 : 0, data.divergencia_dimensional ? 1 : 0,
+    data.divergencia_quantidade ? 1 : 0, divergenciaDimensional,
     data.certificado_ausente ? 1 : 0, data.dano_fisico ? 1 : 0, data.material_incorreto ? 1 : 0,
     data.acao || null, user.id, user.nome || user.email, data.observacoes || null,
     aprovada, reprovada, data.encaminhamento || null,
   ]);
+
+  // As medidas entram num UNICO INSERT multi-linha, nunca em laco (contrato C3, achado A3).
+  // Um laco deixa, se a segunda de tres falhar, a inspecao gravada com divergencia_dimensional = 1
+  // e UMA medida so — a flag afirmando uma reprovacao cuja prova nao esta no banco. E o defeito
+  // que a Etapa 23 consertou no PUT /configuracoes. `BEGIN` NAO e a saida: a mesma etapa mediu que
+  // a conexao SQLite deste modulo e unica e o ROLLBACK engoliria escrita de outra requisicao em
+  // voo. `VALUES (?,...),(?,...)` e atomico por statement, que e a garantia portavel aqui.
+  // Tudo que podia recusar ja recusou la em cima, antes do claim — este INSERT so pode falhar por
+  // erro de infraestrutura.
+  if (medidasResolvidas) {
+    const cols = ['inspecao_id', 'plano_id', 'caracteristica', 'unidade', 'valor_nominal',
+      'desvio_inferior', 'desvio_superior', 'valor_medido', 'conforme', 'ferramenta_id',
+      'ferramenta_nome'];
+    const placeholder = `(${cols.map(() => '?').join(',')})`;
+    const params = [];
+    for (const m of medidasResolvidas) {
+      params.push(ins.lastID, m.plano_id, m.caracteristica, m.unidade, m.valor_nominal,
+        m.desvio_inferior, m.desvio_superior, m.valor_medido, m.conforme, m.ferramenta_id,
+        m.ferramenta_nome);
+    }
+    await dbRun(db, `INSERT INTO medidas_inspecao_almoxarifado (${cols.join(',')})
+      VALUES ${medidasResolvidas.map(() => placeholder).join(',')}`, params);
+  }
+
   // Etapa 17 (RN-02/RN-03, gancho C4.1): aviso pos-commit — os dois claims e o INSERT ja
   // aconteceram quando chegamos aqui, entao o try/catch abaixo so pode custar o e-mail, nunca a
   // decisao (molde de stockService.js:1374-1405). A linha vem do dual-mode do registro
@@ -157,7 +321,17 @@ async function decidirInspecao(db, user, itemId, data = {}) {
     }
   }
 
-  return { id: ins.lastID, quantidade_aprovada: aprovada, quantidade_reprovada: reprovada };
+  // `divergencia_dimensional` volta no retorno DE PROPOSITO (campo novo, aditivo): com medidas ela
+  // pode ser o contrario do que o payload mandou, e sem ela quem chamou nao teria como saber que a
+  // marcacao manual foi ignorada — a tela mostraria uma coisa e o banco guardaria outra, que e
+  // exatamente o defeito da Etapa 26.
+  return {
+    id: ins.lastID,
+    quantidade_aprovada: aprovada,
+    quantidade_reprovada: reprovada,
+    divergencia_dimensional: divergenciaDimensional,
+    medidas_registradas: medidasResolvidas ? medidasResolvidas.length : 0,
+  };
 }
 
 /**
