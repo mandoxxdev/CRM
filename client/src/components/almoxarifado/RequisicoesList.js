@@ -631,6 +631,22 @@ const RequisicoesList = () => {
     }
   };
 
+  // Etapa 28 (C3/C6): segunda conferência da separação. Sem corpo — quem confere é o
+  // usuário logado, e o backend recusa (403) quem aparece em qualquer rodada de separação.
+  const handleConferirSeparacao = async (id) => {
+    setSaving(true);
+    try {
+      await api.put(`/almoxarifado/requisicoes/${id}/conferir-separacao`);
+      toast.success('Separação conferida!');
+      await abrirDetalhe(id, { force: true });
+      await loadRequisicoes();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao conferir separação');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleConfirmarRecebimento = async (id) => {
     setSaving(true);
     try {
@@ -681,6 +697,14 @@ const RequisicoesList = () => {
   };
 
   const formatDate = (d) => d ? new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
+
+  // Etapa 28 (C6). `separacoes`/`conferencia`/`conferencia_obrigatoria` só vêm do
+  // GET /almoxarifado/requisicoes/:id — no modo não-warehouse (/requisicoes-material/:id)
+  // não existem, por isso os defaults: sem eles, a tela se comporta como antes.
+  const separacoes = detalhe?.separacoes || [];
+  const euSeparei = !!user?.id && separacoes.some((s) => Number(s.usuario_id) === Number(user.id));
+  const conferenciaPendente = !!detalhe?.conferencia_obrigatoria && !detalhe?.conferencia;
+  const TITLE_CONFERENCIA_PENDENTE = 'Esta requisição tem material crítico separado e precisa da segunda conferência antes de sair';
 
   const StatusBadge = ({ status }) => {
     const info = STATUS_INFO[status] || { label: status, cls: 'almox-badge-ajuste', icon: FiClock };
@@ -946,6 +970,38 @@ const RequisicoesList = () => {
                   </div>
                 ))}
 
+                {/* Rodadas de separação e segunda conferência (Etapa 28, C6) — leitura junto
+                    da requisição, sem gate novo, no mesmo molde das assinaturas de entrega. */}
+                {warehouseMode && (separacoes.length > 0 || detalhe.conferencia) && (
+                  <div style={{ marginTop: 16 }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--gmp-text)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                      Separação{separacoes.length > 0 ? ` (${separacoes.length})` : ''}
+                    </div>
+                    {separacoes.map((s) => (
+                      <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--gmp-border)', fontSize: '0.82rem' }}>
+                        <FiPackage size={12} style={{ color: 'var(--gmp-text-light)', flexShrink: 0 }} />
+                        <span style={{ fontWeight: 600 }}>{s.usuario_nome || `Usuário #${s.usuario_id}`}</span>
+                        <span style={{ color: 'var(--gmp-text-light)' }}>
+                          · {formatDate(s.created_at)} · {Number(s.itens_tocados) || 0} {Number(s.itens_tocados) === 1 ? 'item' : 'itens'}
+                        </span>
+                      </div>
+                    ))}
+                    {detalhe.conferencia && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', fontSize: '0.82rem', color: 'var(--gmp-success, #2e7d32)' }}>
+                        <FiCheckCircle size={13} style={{ flexShrink: 0 }} />
+                        <span>
+                          Conferida por <strong>{detalhe.conferencia.usuario_nome}</strong> em {formatDate(detalhe.conferencia.em)}
+                        </span>
+                      </div>
+                    )}
+                    {conferenciaPendente && (
+                      <div className="almox-hint-banner" style={{ marginTop: 8, fontSize: '0.78rem', borderColor: 'var(--gmp-warning)' }}>
+                        Há material crítico separado — outra pessoa do almoxarifado precisa conferir antes de liberar ou entregar.
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Assinaturas de entrega (Etapa 15, C2) — leitura junto da requisição,
                     sem gate novo: quem vê a requisição vê as assinaturas dela. */}
                 {(detalhe.assinaturas_entrega || []).length > 0 && (
@@ -1062,6 +1118,18 @@ const RequisicoesList = () => {
                       title="Corrige as quantidades já registradas na separação">
                       <FiPackage size={14} /> Ajustar Separação
                     </button>
+                    {/* Etapa 28: segunda conferência — quem separou não confere (o backend
+                        dá 403 de qualquer jeito; aqui o botão já nasce desabilitado). */}
+                    {!detalhe.conferencia && detalhe.itens.some((i) => getSeparado(i) > 0) && (
+                      <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center' }}
+                        onClick={(e) => { if (!bloquearSeNaoPode('conferir_separacao', e)) return; handleConferirSeparacao(detalhe.id); }}
+                        disabled={saving || euSeparei}
+                        title={euSeparei
+                          ? 'Você separou esta requisição — a segunda conferência precisa ser feita por outra pessoa'
+                          : 'Confere fisicamente o que foi separado; obrigatória quando há material crítico'}>
+                        <FiUserCheck size={14} /> Conferir separação
+                      </button>
+                    )}
                     {detalhe.itens.some((i) => getSeparado(i) > 0) && (
                       <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center' }}
                         onClick={(e) => {
@@ -1073,15 +1141,16 @@ const RequisicoesList = () => {
                             onConfirm: () => handleLiberarRetirada(detalhe.id),
                           });
                         }}
-                        disabled={saving}
-                        title="Marca a requisição como pronta para o solicitante buscar os itens já separados">
+                        disabled={saving || conferenciaPendente}
+                        title={conferenciaPendente ? TITLE_CONFERENCIA_PENDENTE : 'Marca a requisição como pronta para o solicitante buscar os itens já separados'}>
                         <FiCheckSquare size={14} /> Liberar para Retirada
                       </button>
                     )}
                     {temEntregavel(detalhe.itens) ? (
                       <button className="btn-almox-primary" style={{ width: '100%', justifyContent: 'center' }}
-                        onClick={(e) => { if (!bloquearSeNaoPode('separar_emitir', e)) return; handleConfirmarEntrega({ direto: true }); }} disabled={saving}
-                        title="Entrega os itens separados e dá baixa no estoque — a movimentação fica registrada no livro">
+                        onClick={(e) => { if (!bloquearSeNaoPode('separar_emitir', e)) return; handleConfirmarEntrega({ direto: true }); }}
+                        disabled={saving || conferenciaPendente}
+                        title={conferenciaPendente ? TITLE_CONFERENCIA_PENDENTE : 'Entrega os itens separados e dá baixa no estoque — a movimentação fica registrada no livro'}>
                         <FiTruck size={14} /> {saving ? 'Confirmando...' : 'Confirmar Entrega e Baixar Estoque'}
                       </button>
                     ) : (
@@ -1098,8 +1167,9 @@ const RequisicoesList = () => {
                     </div>
                     {temEntregavel(detalhe.itens) ? (
                       <button className="btn-almox-primary" style={{ width: '100%', justifyContent: 'center' }}
-                        onClick={(e) => { if (!bloquearSeNaoPode('separar_emitir', e)) return; handleConfirmarEntrega({ direto: true }); }} disabled={saving}
-                        title="Entrega os itens separados e dá baixa no estoque — a movimentação fica registrada no livro">
+                        onClick={(e) => { if (!bloquearSeNaoPode('separar_emitir', e)) return; handleConfirmarEntrega({ direto: true }); }}
+                        disabled={saving || conferenciaPendente}
+                        title={conferenciaPendente ? TITLE_CONFERENCIA_PENDENTE : 'Entrega os itens separados e dá baixa no estoque — a movimentação fica registrada no livro'}>
                         <FiTruck size={14} /> {saving ? 'Confirmando...' : 'Confirmar Entrega e Baixar Estoque'}
                       </button>
                     ) : (

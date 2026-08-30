@@ -319,3 +319,140 @@ describe('Etapa 15: colher assinatura do recebedor na entrega', () => {
     expect(container.querySelector('canvas')).toBeTruthy();
   });
 });
+
+// ─── Etapa 28: separação com dono e segunda conferência (contratos C3/C6 congelados) ────────
+//
+// Mesmo padrão da Etapa 15: mock só na fronteira HTTP. O GET do detalhe passa a trazer
+// `separacoes[]`, `conferencia` e `conferencia_obrigatoria`; o PUT /conferir-separacao
+// não tem corpo. O usuário logado do mock é id 99 — é ele quem "separou" no cenário (6).
+describe('Etapa 28: rodadas de separação e segunda conferência', () => {
+  const RODADA_A = {
+    id: 1, usuario_id: 7, usuario_nome: 'Ana Separadora', itens_tocados: 2,
+    itens: [{ item_id: 1, quantidade_separada: 3 }, { item_id: 2, quantidade_separada: 1 }],
+    created_at: '2026-08-28T14:00:00',
+  };
+  const RODADA_B = {
+    id: 2, usuario_id: 8, usuario_nome: 'Bruno Separador', itens_tocados: 1,
+    itens: [{ item_id: 1, quantidade_separada: 5 }],
+    created_at: '2026-08-28T15:30:00',
+  };
+
+  const emSeparacao = (extra = {}) => ({
+    ...baseRequisicao('EM_SEPARACAO'),
+    itens: [{ ...ITEM, quantidade_separada: 5 }],
+    separacoes: [RODADA_A, RODADA_B],
+    conferencia: null,
+    conferencia_obrigatoria: false,
+    ...extra,
+  });
+
+  test('(1) modal lista as rodadas com nome e contagem de itens', async () => {
+    detalheDoBanco = emSeparacao();
+    await renderizar();
+    expect(container.textContent).toContain('Ana Separadora');
+    expect(container.textContent).toContain('Bruno Separador');
+    expect(container.textContent).toMatch(/2 itens/);
+    expect(container.textContent).toMatch(/1 item\b/);
+    expect(container.textContent).toContain('28/08');
+  });
+
+  test('(2) "Conferir separação" aparece em EM_SEPARACAO sem conferência e chama PUT /conferir-separacao', async () => {
+    const { toast } = require('react-toastify');
+    detalheDoBanco = emSeparacao();
+    await renderizar();
+    const btn = botaoPorTexto('Conferir separação');
+    expect(btn).toBeTruthy();
+    expect(btn.disabled).toBe(false);
+    api.put.mockResolvedValue({ data: { success: true } });
+    await act(async () => { btn.click(); });
+    expect(api.put).toHaveBeenCalledTimes(1);
+    expect(api.put.mock.calls[0][0]).toBe('/almoxarifado/requisicoes/55/conferir-separacao');
+    expect(api.put.mock.calls[0][1]).toBeUndefined();
+    expect(toast.success).toHaveBeenCalledWith('Separação conferida!');
+  });
+
+  test('(2b) erro do PUT vira toast.error com a mensagem do servidor', async () => {
+    const { toast } = require('react-toastify');
+    detalheDoBanco = emSeparacao();
+    await renderizar();
+    api.put.mockRejectedValue({ response: { data: { error: 'Quem separou nao confere' } } });
+    await act(async () => { botaoPorTexto('Conferir separação').click(); });
+    expect(toast.error).toHaveBeenCalledWith('Quem separou nao confere');
+  });
+
+  test('(3) com conferencia preenchida mostra "Conferida por" e esconde o botão', async () => {
+    detalheDoBanco = emSeparacao({
+      conferencia: { usuario_id: 12, usuario_nome: 'Carla Conferente', em: '2026-08-28T16:00:00' },
+    });
+    await renderizar();
+    expect(container.textContent).toMatch(/Conferida por Carla Conferente/);
+    expect(botaoPorTexto('Conferir separação')).toBeFalsy();
+  });
+
+  test('(4) conferencia_obrigatoria sem conferencia desabilita "Liberar para Retirada" e "Confirmar Entrega"', async () => {
+    detalheDoBanco = emSeparacao({ conferencia_obrigatoria: true });
+    await renderizar();
+    const liberar = botaoPorTexto('Liberar para Retirada');
+    expect(liberar).toBeTruthy();
+    expect(liberar.disabled).toBe(true);
+    expect(liberar.title).toMatch(/segunda conferência/);
+    const entregar = botaoPorTexto('Confirmar Entrega e Baixar Estoque');
+    expect(entregar).toBeTruthy();
+    expect(entregar.disabled).toBe(true);
+    expect(entregar.title).toMatch(/segunda conferência/);
+  });
+
+  test('(4b) conferencia_obrigatoria COM conferencia libera os dois botões', async () => {
+    detalheDoBanco = emSeparacao({
+      conferencia_obrigatoria: true,
+      conferencia: { usuario_id: 12, usuario_nome: 'Carla Conferente', em: '2026-08-28T16:00:00' },
+    });
+    await renderizar();
+    expect(botaoPorTexto('Liberar para Retirada').disabled).toBe(false);
+    expect(botaoPorTexto('Confirmar Entrega e Baixar Estoque').disabled).toBe(false);
+  });
+
+  test('(4c) em PRONTA_PARA_RETIRADA o "Confirmar Entrega" também respeita a conferência obrigatória', async () => {
+    detalheDoBanco = { ...emSeparacao({ conferencia_obrigatoria: true }), status: 'PRONTA_PARA_RETIRADA' };
+    await renderizar();
+    const entregar = botaoPorTexto('Confirmar Entrega e Baixar Estoque');
+    expect(entregar).toBeTruthy();
+    expect(entregar.disabled).toBe(true);
+  });
+
+  test('(5) sem pode(conferir_separacao) o clique bloqueia e não chama o PUT', async () => {
+    mockPode = (acao) => acao !== 'conferir_separacao';
+    detalheDoBanco = emSeparacao();
+    await renderizar();
+    const btn = botaoPorTexto('Conferir separação');
+    expect(btn).toBeTruthy();
+    await act(async () => { btn.click(); });
+    expect(api.put).not.toHaveBeenCalled();
+  });
+
+  test('(6) quem separou (usuário logado em separacoes[].usuario_id) vê o botão desabilitado com title', async () => {
+    detalheDoBanco = emSeparacao({
+      separacoes: [RODADA_A, { ...RODADA_B, usuario_id: 99, usuario_nome: 'Almoxarife Teste' }],
+    });
+    await renderizar();
+    const btn = botaoPorTexto('Conferir separação');
+    expect(btn).toBeTruthy();
+    expect(btn.disabled).toBe(true);
+    expect(btn.title).toMatch(/separou/i);
+    await act(async () => { btn.click(); });
+    expect(api.put).not.toHaveBeenCalled();
+  });
+
+  test('botão não aparece sem item separado nem fora de EM_SEPARACAO', async () => {
+    detalheDoBanco = emSeparacao({ itens: [{ ...ITEM, quantidade_separada: 0 }] });
+    await renderizar();
+    expect(botaoPorTexto('Conferir separação')).toBeFalsy();
+  });
+
+  test('detalhe sem os campos novos (modo não-warehouse / backend antigo) não quebra', async () => {
+    detalheDoBanco = { ...baseRequisicao('EM_SEPARACAO'), itens: [{ ...ITEM, quantidade_separada: 5 }] };
+    await renderizar();
+    expect(container.textContent).toContain('REQ-055');
+    expect(botaoPorTexto('Liberar para Retirada').disabled).toBe(false);
+  });
+});
