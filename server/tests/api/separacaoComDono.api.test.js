@@ -124,6 +124,59 @@ const auditoriaSeparacao = (db, reqId) => dbAll(db,
     }
   });
 
+  await test('[RN-01] payload misto valido+invalido -> 400 e NADA gravado (fix-round 1, F1)', async () => {
+    // Antes do fix-round o laco gravava item a item e lancava 400 no meio: o item valido ficava
+    // gravado SEM rodada — e sem rodada nao ha dono, quem separou confere a propria caixa, e a
+    // conferencia preexistente sobrevive a uma caixa que mudou. A separacao tem de ser tudo ou nada.
+    const matCritico = await criarMaterial('SEPDONO-F1C', 50, { critico: 1 });
+    const matComum = await criarMaterial('SEPDONO-F1N', 50);
+    const { id: reqId, itemIds } = await criarRequisicao(db, {
+      status: 'APROVADO',
+      itens: [
+        { material_id: matCritico, quantidade: 10, quantidade_separada: 1 },
+        { material_id: matComum, quantidade: 10 },
+      ],
+    });
+    await dbRun(db, `UPDATE requisicoes_almoxarifado
+      SET conferido_por_id = 99, conferido_por_nome = 'Conferente', conferido_em = '2026-08-30 08:00:00' WHERE id = ?`, [reqId]);
+
+    const payload = [
+      { item_id: itemIds[0], quantidade_separada: 2 }, // valido sozinho
+      { item_id: itemIds[1], quantidade_separada: 99999 }, // estoura o maximo
+    ];
+    let erro = null;
+    try {
+      await requisitionService.separarRequisicao(db, reqId, payload, ALMOX_A);
+    } catch (e) { erro = e; }
+    assert.ok(erro, 'esperava 400 pelo item que estoura, mas separou');
+    assert.strictEqual(erro.status, 400, `status ${erro.status}: ${erro.message}`);
+    assert.ok(erro.message.startsWith('Material SEPDONO-F1N:'), `o 400 tem de citar o item que estourou: ${erro.message}`);
+
+    const critico = await dbGet(db, 'SELECT quantidade_separada FROM itens_requisicao_almoxarifado WHERE id = ?', [itemIds[0]]);
+    assert.strictEqual(Number(critico.quantidade_separada), 1,
+      `o item valido foi gravado apesar do 400 (quantidade_separada = ${critico.quantidade_separada})`);
+    const comum = await dbGet(db, 'SELECT quantidade_separada FROM itens_requisicao_almoxarifado WHERE id = ?', [itemIds[1]]);
+    assert.strictEqual(Number(comum.quantidade_separada), 0);
+    assert.strictEqual(await contarRodadas(db, reqId), 0, 'rodada gravada apesar do 400');
+    const row = await dbGet(db, 'SELECT status, conferido_por_id FROM requisicoes_almoxarifado WHERE id = ?', [reqId]);
+    assert.strictEqual(row.status, 'APROVADO', 'status mudou apesar do 400');
+    assert.strictEqual(row.conferido_por_id, 99, 'a conferencia preexistente foi apagada apesar do 400');
+    assert.strictEqual((await auditoriaSeparacao(db, reqId)).length, 0, 'auditou uma rodada que nao houve');
+
+    // Pela rota, o mesmo — e o status do 400 e o do servico, nao um 500.
+    setUser(ALMOX_A);
+    let res;
+    try {
+      res = await request(app).put(`/api/almoxarifado/requisicoes/${reqId}/separacao`).send({ itens_separados: payload });
+    } finally {
+      setUser(ADMIN_USER);
+    }
+    assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+    const criticoDepois = await dbGet(db, 'SELECT quantidade_separada FROM itens_requisicao_almoxarifado WHERE id = ?', [itemIds[0]]);
+    assert.strictEqual(Number(criticoDepois.quantidade_separada), 1, 'pela rota o item valido foi gravado apesar do 400');
+    assert.strictEqual(await contarRodadas(db, reqId), 0);
+  });
+
   // ── RN-02 ──────────────────────────────────────────────────────────────────────────────────
   await test('[RN-02] duas rodadas, duas pessoas, duas linhas — nenhuma apaga a outra', async () => {
     const matId = await criarMaterial('SEPDONO-03');
@@ -229,6 +282,57 @@ const auditoriaSeparacao = (db, reqId) => dbAll(db,
     assert.strictEqual(anteriores.conferencia.em, '2026-08-29 11:00:00');
   });
 
+  await test('[RN-07] compare-and-clear: conferencia que entra ENTRE a releitura e o UPDATE vai para dados_anteriores e e limpa (fix-round 1, F4)', async () => {
+    // Antes do fix-round a releitura "imediatamente antes do UPDATE" nao provava nada: uma
+    // conferencia que entrasse entre as duas era apagada com dados_anteriores null — e a mutacao
+    // "usar o reqRow inicial" passava 38/38. O UPDATE agora e compare-and-clear
+    // (`WHERE conferido_por_id IS <valor relido>`): se a linha mudou, changes = 0, rele e repete.
+    const matId = await criarMaterial('SEPDONO-F4');
+    const { id: reqId, itemIds } = await criarRequisicao(db, {
+      status: 'EM_SEPARACAO', itens: [{ material_id: matId, quantidade: 10, quantidade_separada: 1 }],
+    });
+    const CONFERENTE_C = 33;
+    const RELEITURA = 'SELECT conferido_por_id, conferido_por_nome, conferido_em FROM requisicoes_almoxarifado';
+
+    // Hook one-shot em db.get: na PRIMEIRA releitura (que ve NULL), C confere por UPDATE direto
+    // antes de a linha relida chegar ao servico — exatamente a janela do achado.
+    const origGet = db.get.bind(db);
+    let disparos = 0;
+    db.get = function (sql, params, cb) {
+      if (disparos === 0 && typeof sql === 'string' && sql.includes(RELEITURA)) {
+        disparos += 1;
+        return origGet(sql, params, (err, row) => {
+          dbRun(db, `UPDATE requisicoes_almoxarifado
+            SET conferido_por_id = ?, conferido_por_nome = 'Almox C', conferido_em = '2026-08-30 09:30:00' WHERE id = ?`,
+          [CONFERENTE_C, reqId]).then(() => cb(err, row), (e) => cb(e));
+        });
+      }
+      return origGet(sql, params, cb);
+    };
+
+    let r;
+    try {
+      r = await requisitionService.separarRequisicao(db, reqId, [{ item_id: itemIds[0], quantidade_separada: 1 }], ALMOX_A);
+    } finally {
+      db.get = origGet;
+    }
+    assert.strictEqual(disparos, 1, 'a releitura da conferencia nao aconteceu (o hook nao disparou)');
+    assert.ok(r.rodada_id, 'rodada gravada');
+
+    const row = await dbGet(db, 'SELECT conferido_por_id, conferido_por_nome, conferido_em FROM requisicoes_almoxarifado WHERE id = ?', [reqId]);
+    assert.strictEqual(row.conferido_por_id, null, 'estado final tem de ser limpo: a caixa mudou');
+    assert.strictEqual(row.conferido_por_nome, null);
+
+    const logs = await auditoriaSeparacao(db, reqId);
+    assert.strictEqual(logs.length, 1);
+    const anteriores = JSON.parse(logs[0].dados_anteriores || 'null');
+    assert.ok(anteriores && anteriores.conferencia,
+      `a conferencia de C foi apagada sem aparecer na trilha (dados_anteriores = ${logs[0].dados_anteriores})`);
+    assert.strictEqual(anteriores.conferencia.usuario_id, CONFERENTE_C, 'dados_anteriores tem de trazer a conferencia que entrou na janela');
+    assert.strictEqual(anteriores.conferencia.usuario_nome, 'Almox C');
+    assert.strictEqual(anteriores.conferencia.em, '2026-08-30 09:30:00');
+  });
+
   // ── RN-09 ──────────────────────────────────────────────────────────────────────────────────
   await test('[RN-09] GET /requisicoes/:id devolve separacoes, conferencia null e conferencia_obrigatoria=true com critico separado', async () => {
     const matCritico = await criarMaterial('SEPDONO-07C', 50, { critico: 1 });
@@ -273,13 +377,20 @@ const auditoriaSeparacao = (db, reqId) => dbAll(db,
     assert.deepStrictEqual(conferida.body.conferencia, { usuario_id: 33, usuario_nome: 'Conferente C', em: '2026-08-29 12:00:00' });
   });
 
-  await test('[RN-09] conferenciaObrigatoria(itens) e a regua unica: critico AND separado > 0', async () => {
+  await test('[RN-09] conferenciaObrigatoria(itens) e a regua unica: critico AND (separado - entregue) > 0', async () => {
     const { conferenciaObrigatoria } = requisitionService;
     assert.strictEqual(conferenciaObrigatoria([]), false);
     assert.strictEqual(conferenciaObrigatoria([{ material_critico: 1, quantidade_separada: 0 }]), false);
     assert.strictEqual(conferenciaObrigatoria([{ material_critico: 0, quantidade_separada: 3 }]), false);
     assert.strictEqual(conferenciaObrigatoria([{ material_critico: 1, quantidade_separada: 3 }]), true);
     assert.strictEqual(conferenciaObrigatoria([{ material_critico: '1', quantidade_separada: '2' }]), true, 'texto do sqlite conta');
+    // Fix-round 1 (F5): critico ja ENTREGUE nao esta mais na caixa — o universo e "critico ainda na caixa".
+    assert.strictEqual(conferenciaObrigatoria([{ material_critico: 1, quantidade_separada: 3, quantidade_entregue: 3 }]), false,
+      'critico separado 3 / entregue 3: nada na caixa');
+    assert.strictEqual(conferenciaObrigatoria([{ material_critico: 1, quantidade_separada: 3, quantidade_entregue: 2 }]), true,
+      'critico separado 3 / entregue 2: ainda ha 1 na caixa');
+    assert.strictEqual(conferenciaObrigatoria([{ material_critico: '1', quantidade_separada: '2', quantidade_entregue: '2' }]), false,
+      'texto do sqlite no entregue tambem conta');
   });
 
   await close();

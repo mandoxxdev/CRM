@@ -195,11 +195,13 @@ const nomeDoUsuario = (user) => user?.nome || user?.email || null;
 
 /**
  * Régua ÚNICA da segunda conferência (Etapa 28, D2): obrigatória quando há material crítico
- * SEPARADO — crítico com `quantidade_separada = 0` ainda não está na caixa. Para virar "sempre"
- * ou "nunca" muda-se esta linha, e só ela.
+ * AINDA NA CAIXA — separado e não entregue. Crítico com `quantidade_separada = 0` ainda não está
+ * na caixa; crítico com `separado == entregue` já saiu dela (fix-round 1, F5: antes o universo era
+ * "separado > 0" e um crítico já entregue continuava exigindo conferência para entregar o comum).
+ * Para virar "sempre" ou "nunca" muda-se esta linha, e só ela.
  */
 function conferenciaObrigatoria(itens) {
-  return (itens || []).some((i) => Number(i.material_critico) === 1 && num(i.quantidade_separada) > 0);
+  return (itens || []).some((i) => Number(i.material_critico) === 1 && (getSeparado(i) - getEntregue(i)) > 0);
 }
 
 /**
@@ -352,12 +354,14 @@ async function listarSeparacoes(db, requisicaoId) {
  *
  * Rodada com item efetivo LIMPA a segunda conferência (RN-07, D3): a conferência atesta o
  * conteúdo de uma caixa; se a caixa mudou, precisa ser atestada de novo. A conferência apagada
- * vai para `dados_anteriores` da auditoria. A releitura de `conferido_por_*` acontece
- * IMEDIATAMENTE antes do UPDATE, não no SELECT inicial — e mesmo assim NÃO é atômica: uma
- * conferência que entre entre a releitura e o UPDATE é apagada sem aparecer na trilha. A
- * consequência é segura (o estado final nunca é "conferida" com rodada nova sem registro na
- * requisição), só o rastro fica incompleto; fechar a janela exigiria RETURNING no UPDATE, e
- * ficou fora de propósito (achado 6 do plano).
+ * vai para `dados_anteriores` da auditoria. A limpeza é um COMPARE-AND-CLEAR (fix-round 1, F4):
+ * relê `conferido_por_id` e só limpa se a linha ainda for a relida; se alguém conferiu no meio,
+ * relê e repete (máx. 3). Antes era "releitura imediatamente antes do UPDATE", que só encolhia a
+ * janela — a conferência que entrasse nela era apagada com `dados_anteriores: null`.
+ *
+ * Tudo ou nada (fix-round 1, F1): TODAS as entradas são validadas antes da primeira escrita. O
+ * laço antigo gravava item a item e lançava 400 no meio, deixando `quantidade_separada` alterada
+ * sem rodada — sem dono, sem trilha, e sem limpar a conferência de uma caixa que mudou.
  */
 async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
   if (!user?.id) {
@@ -383,8 +387,13 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
   await valueApprovalService.verificarBloqueioLiberacao(db, requisicaoId);
 
   const itens = await carregarItensRequisicao(db, requisicaoId);
-  const tocados = []; // [{ item_id, material_id, quantidade }] — só item existente com qty > 0
 
+  // PASSADA 1 — validar TODAS as entradas antes de escrever qualquer coisa (fix-round 1, F1).
+  // Antes, o laço gravava item a item e lançava 400 no meio: o item válido ficava gravado SEM
+  // rodada — `quantidade_separada` mudava por um caminho que não deixava dono, e a barreira
+  // "quem separou não confere" (RN-03) ficava apoiada numa rodada que nunca foi gravada. A
+  // separação é tudo ou nada: ou todas as entradas cabem, ou nenhuma é gravada.
+  const validados = []; // [{ item, qty, novaSeparada }] — só item existente com qty > 0
   for (const entrada of itensSeparados) {
     const item = itens.find((i) => Number(i.id) === Number(entrada.item_id));
     if (!item) continue;
@@ -408,10 +417,18 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
       throw err;
     }
 
+    // Só em memória: o mesmo item duas vezes no payload é validado contra o acumulado, como antes.
     const novaSeparada = getSeparado(item) + qty;
+    item.quantidade_separada = novaSeparada;
+    validados.push({ item, qty, novaSeparada });
+  }
+
+  // PASSADA 2 — gravar. Daqui em diante nenhuma entrada pode falhar por regra de negócio.
+  const tocados = []; // [{ item_id, material_id, quantidade }]
+  for (const { item, qty, novaSeparada } of validados) {
+    // eslint-disable-next-line no-await-in-loop
     await dbRun(db, 'UPDATE itens_requisicao_almoxarifado SET quantidade_separada = ? WHERE id = ?',
       [novaSeparada, item.id]);
-    item.quantidade_separada = novaSeparada;
     tocados.push({ item_id: item.id, material_id: item.material_id, quantidade: qty });
   }
 
@@ -426,24 +443,40 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
       [requisicaoId, user.id, nomeDoUsuario(user), tocados.length, JSON.stringify(tocados)]);
     rodadaId = ins.lastID;
 
-    // RN-07: reler a conferência AGORA (não do reqRow do começo) — ver cabeçalho.
-    const conf = await dbGet(db,
-      'SELECT conferido_por_id, conferido_por_nome, conferido_em FROM requisicoes_almoxarifado WHERE id = ?',
-      [requisicaoId]);
-    if (conf && conf.conferido_por_id != null) {
-      conferenciaAnterior = {
-        usuario_id: conf.conferido_por_id,
-        usuario_nome: conf.conferido_por_nome,
-        em: conf.conferido_em,
-      };
+    // RN-07 como COMPARE-AND-CLEAR (fix-round 1, F4). Reler a conferência e limpar só se a linha
+    // ainda for a relida (`WHERE conferido_por_id IS ?`): se alguém conferiu entre a releitura e o
+    // UPDATE, `changes` vem 0, relê-se e repete-se. Antes, a "releitura imediatamente antes do
+    // UPDATE" era só uma janela menor — a conferência que entrasse nela era apagada com
+    // `dados_anteriores: null`, e a mutação "usar o reqRow inicial" não derrubava teste nenhum.
+    let limpou = false;
+    for (let tentativa = 0; tentativa < 3 && !limpou; tentativa++) {
+      // eslint-disable-next-line no-await-in-loop
+      const conf = await dbGet(db,
+        'SELECT conferido_por_id, conferido_por_nome, conferido_em FROM requisicoes_almoxarifado WHERE id = ?',
+        [requisicaoId]);
+      conferenciaAnterior = conf && conf.conferido_por_id != null
+        ? { usuario_id: conf.conferido_por_id, usuario_nome: conf.conferido_por_nome, em: conf.conferido_em }
+        : null;
+      // eslint-disable-next-line no-await-in-loop
+      const upd = await dbRun(db,
+        `UPDATE requisicoes_almoxarifado
+           SET status='EM_SEPARACAO', updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL,
+               conferido_por_id=NULL, conferido_por_nome=NULL, conferido_em=NULL
+         WHERE id=? AND conferido_por_id IS ?`,
+        [requisicaoId, conferenciaAnterior ? conferenciaAnterior.usuario_id : null]);
+      limpou = upd.changes > 0;
     }
-
-    await dbRun(db,
-      `UPDATE requisicoes_almoxarifado
-         SET status='EM_SEPARACAO', updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL,
-             conferido_por_id=NULL, conferido_por_nome=NULL, conferido_em=NULL
-       WHERE id=?`,
-      [requisicaoId]);
+    if (!limpou) {
+      // Três corridas seguidas na MESMA linha: o estado seguro (limpa) prevalece sobre o rastro —
+      // a última conferência a entrar fica fora de dados_anteriores, e isso fica avisado.
+      console.warn(`[almoxarifado-separacao] Requisição ${requisicaoId}: a conferência mudou 3 vezes durante a rodada ${rodadaId}; limpando sem compare.`);
+      await dbRun(db,
+        `UPDATE requisicoes_almoxarifado
+           SET status='EM_SEPARACAO', updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL,
+               conferido_por_id=NULL, conferido_por_nome=NULL, conferido_em=NULL
+         WHERE id=?`,
+        [requisicaoId]);
+    }
   } else {
     await dbRun(db,
       `UPDATE requisicoes_almoxarifado SET status='EM_SEPARACAO', updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL WHERE id=?`,
@@ -508,6 +541,26 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
   // rodada nova), e uma requisição antiga sem conferência volta a EM_SEPARACAO por "Iniciar
   // Separação" para alguém conferir.
   assertConferidaSeObrigatorio(reqRow, itens);
+
+  // Fix-round 1 (F2): material CRÍTICO só sai até o que está na caixa (separado − entregue).
+  // `maxEntregar` (Etapa 3) solta o teto do separado depois de uma entrega parcial — para
+  // material comum é o comportamento desejado (reposição chegou, entrega direta, sem nova
+  // rodada); para crítico era a barreira inteira furada: o que saía a mais nunca passou por
+  // rodada nem por conferência. Validação de TODOS os itens ANTES de qualquer baixa, porque o
+  // laço abaixo grava item a item. Material comum segue a Etapa 3 sem mudança.
+  for (const item of itens) {
+    if (Number(item.material_critico) !== 1) continue;
+    const entrada = itensAtendidos?.find((ia) => Number(ia.item_id) === Number(item.id));
+    const qty = entrada ? num(entrada.quantidade_atendida) : 0;
+    if (qty <= 0) continue;
+    const naCaixa = Math.max(0, getSeparado(item) - getEntregue(item));
+    if (qty > naCaixa) {
+      const err = new Error(`${item.material_nome}: material crítico só sai depois de separado e conferido — ${qty} excede `
+        + `o separado ainda não entregue (${naCaixa}). Separe o restante e peça a segunda conferência.`);
+      err.status = 400;
+      throw err;
+    }
+  }
 
   const entregas = [];
 

@@ -288,6 +288,16 @@ const conferirDireto = (db, reqId, user) => dbRun(db, `UPDATE requisicoes_almoxa
       assert.strictEqual(sep.status, 'fulfilled', `iteracao ${i}: separar falhou: ${sep.reason && sep.reason.message}`);
       if (conf.status === 'rejected') {
         assert.ok([403, 409].includes(conf.reason.status), `iteracao ${i}: conferir caiu com ${conf.reason.status}: ${conf.reason.message}`);
+      } else {
+        // Fix-round 1 (F6): "B conferiu com sucesso" so e aceitavel se a rodada de B REGISTROU a
+        // conferencia que apagou — o claim passou antes do INSERT da rodada, logo a releitura
+        // (compare-and-clear, F4) tem de ter visto B e posto B em dados_anteriores.
+        // eslint-disable-next-line no-await-in-loop
+        const logsB = (await auditoria(db, reqId, 'SEPARACAO')).filter((l) => l.usuario_id === ALMOX_B.id);
+        assert.strictEqual(logsB.length, 1, `iteracao ${i}: esperava 1 SEPARACAO de B, veio ${logsB.length}`);
+        const anteriores = JSON.parse(logsB[0].dados_anteriores || 'null');
+        assert.strictEqual(anteriores && anteriores.conferencia && anteriores.conferencia.usuario_id, ALMOX_B.id,
+          `iteracao ${i}: B conferiu (fulfilled) mas a rodada de B nao registrou a conferencia apagada: ${logsB[0].dados_anteriores}`);
       }
 
       // eslint-disable-next-line no-await-in-loop
@@ -458,6 +468,107 @@ const conferirDireto = (db, reqId, user) => dbRun(db, `UPDATE requisicoes_almoxa
     assert.strictEqual(await saldoDe(db, matC), 50);
   });
 
+  // ── Fix-round 1, F2: critico nao sai alem do separado (maxEntregar da Etapa 3 soltava o teto) ──
+  const msgF2 = (nome, qty, naCaixa) => `${nome}: material crítico só sai depois de separado e conferido — ${qty} excede `
+    + `o separado ainda não entregue (${naCaixa}). Separe o restante e peça a segunda conferência.`;
+
+  await test('[RN-06] critico nao sai alem do separado na segunda entrega -> 400 e saldo intacto (fix-round 1, F2)', async () => {
+    // maxEntregar (Etapa 3) solta o teto do separado depois de uma entrega parcial — para material
+    // comum e o comportamento desejado (reposicao chegou, entrega direta). Para critico isso
+    // furava a barreira inteira: 9 unidades saiam sem rodada e sem conferencia.
+    const matC = await criarMaterial('SEGCONF-24C', 50, { critico: 1 });
+    const { id: reqId, itemIds } = await criarRequisicao(db, { status: 'APROVADO', itens: [{ material_id: matC, quantidade: 10 }] });
+    await requisitionService.separarRequisicao(db, reqId, [{ item_id: itemIds[0], quantidade_separada: 1 }], ALMOX_A);
+    await requisitionService.conferirSeparacao(db, reqId, ALMOX_C);
+    const ent1 = await requisitionService.entregarRequisicao(db, reqId, [{ item_id: itemIds[0], quantidade_atendida: 1 }], ALMOX_A);
+    assert.strictEqual(ent1.status, 'PARCIALMENTE_ATENDIDA');
+    assert.strictEqual(await saldoDe(db, matC), 49);
+
+    let erro = null;
+    try {
+      await requisitionService.entregarRequisicao(db, reqId, [{ item_id: itemIds[0], quantidade_atendida: 9 }], ALMOX_A);
+    } catch (e) { erro = e; }
+    // Saldo ANTES do status, de proposito: sem a guarda o critico SAI do estoque.
+    assert.strictEqual(await saldoDe(db, matC), 49,
+      `o critico saiu sem ser separado (saldo ${await saldoDe(db, matC)}); resposta ${erro ? erro.status : '200'}`);
+    assert.ok(erro, 'esperava 400, entregou 9 criticos nunca separados');
+    assert.strictEqual(erro.status, 400, `${erro.status}: ${erro.message}`);
+    assert.strictEqual(erro.message, msgF2('Material SEGCONF-24C', 9, 0));
+    let item = await dbGet(db, 'SELECT quantidade_separada, quantidade_entregue FROM itens_requisicao_almoxarifado WHERE id = ?', [itemIds[0]]);
+    assert.strictEqual(Number(item.quantidade_entregue), 1);
+    assert.strictEqual(Number(item.quantidade_separada), 1);
+    assert.strictEqual((await linha(db, reqId)).status, 'PARCIALMENTE_ATENDIDA');
+    assert.strictEqual((await dbAll(db, 'SELECT id FROM movimentacoes_almoxarifado WHERE material_id = ?', [matC])).length, 1, 'saiu movimentacao');
+
+    // Pela rota, o mesmo 400 (a guarda mora no servico).
+    const res = await request(app).put(`/api/almoxarifado/requisicoes/${reqId}/entregar`)
+      .send({ itens_atendidos: [{ item_id: itemIds[0], quantidade_atendida: 9 }] });
+    assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+    assert.strictEqual(res.body.error, msgF2('Material SEGCONF-24C', 9, 0));
+    assert.strictEqual(await saldoDe(db, matC), 49);
+
+    // O caminho certo: separar o restante (rodada nova limpa a conferencia), C confere, sai SO o separado.
+    await requisitionService.separarRequisicao(db, reqId, [{ item_id: itemIds[0], quantidade_separada: 3 }], ALMOX_A);
+    assert.strictEqual((await linha(db, reqId)).conferido_por_id, null, 'RN-07: rodada nova limpa');
+    await requisitionService.conferirSeparacao(db, reqId, ALMOX_C);
+    erro = null;
+    try {
+      await requisitionService.entregarRequisicao(db, reqId, [{ item_id: itemIds[0], quantidade_atendida: 4 }], ALMOX_A);
+    } catch (e) { erro = e; }
+    assert.strictEqual(erro && erro.status, 400, `4 > 3 na caixa: ${erro && erro.message}`);
+    assert.strictEqual(erro.message, msgF2('Material SEGCONF-24C', 4, 3));
+    assert.strictEqual(await saldoDe(db, matC), 49);
+    const ent2 = await requisitionService.entregarRequisicao(db, reqId, [{ item_id: itemIds[0], quantidade_atendida: 3 }], ALMOX_A);
+    assert.strictEqual(ent2.status, 'PARCIALMENTE_ATENDIDA');
+    assert.strictEqual(await saldoDe(db, matC), 46, 'o separado e conferido sai');
+    item = await dbGet(db, 'SELECT quantidade_separada, quantidade_entregue FROM itens_requisicao_almoxarifado WHERE id = ?', [itemIds[0]]);
+    assert.strictEqual(Number(item.quantidade_entregue), 4);
+  });
+
+  await test('[RN-06] material COMUM na mesma situacao continua saindo alem do separado -> 200 (Etapa 3 preservada)', async () => {
+    const matN = await criarMaterial('SEGCONF-25N', 50);
+    const { id: reqId, itemIds } = await criarRequisicao(db, { status: 'APROVADO', itens: [{ material_id: matN, quantidade: 10 }] });
+    await requisitionService.separarRequisicao(db, reqId, [{ item_id: itemIds[0], quantidade_separada: 1 }], ALMOX_A);
+    const ent1 = await requisitionService.entregarRequisicao(db, reqId, [{ item_id: itemIds[0], quantidade_atendida: 1 }], ALMOX_A);
+    assert.strictEqual(ent1.status, 'PARCIALMENTE_ATENDIDA');
+    const ent2 = await requisitionService.entregarRequisicao(db, reqId, [{ item_id: itemIds[0], quantidade_atendida: 9 }], ALMOX_A);
+    assert.strictEqual(ent2.status, 'ENTREGUE', 'comum: a segunda rodada entrega direto, como na Etapa 3');
+    assert.strictEqual(await saldoDe(db, matN), 40);
+  });
+
+  // ── Fix-round 1, F5: o universo da conferencia e "critico AINDA NA CAIXA", nao "critico ja separado um dia" ──
+  await test('[RN-06] critico ja ENTREGUE nao esta mais na caixa: rodada nova so de comum -> conferencia_obrigatoria false e entregar o comum 200 (fix-round 1, F5)', async () => {
+    const matC = await criarMaterial('SEGCONF-26C', 50, { critico: 1 });
+    const matN = await criarMaterial('SEGCONF-26N', 50);
+    const { id: reqId, itemIds } = await criarRequisicao(db, {
+      status: 'APROVADO', itens: [{ material_id: matC, quantidade: 1 }, { material_id: matN, quantidade: 5 }],
+    });
+    await requisitionService.separarRequisicao(db, reqId, [
+      { item_id: itemIds[0], quantidade_separada: 1 }, { item_id: itemIds[1], quantidade_separada: 2 },
+    ], ALMOX_A);
+    await requisitionService.conferirSeparacao(db, reqId, ALMOX_C);
+    const ent1 = await requisitionService.entregarRequisicao(db, reqId, [
+      { item_id: itemIds[0], quantidade_atendida: 1 }, { item_id: itemIds[1], quantidade_atendida: 2 },
+    ], ALMOX_A);
+    assert.strictEqual(ent1.status, 'PARCIALMENTE_ATENDIDA');
+    assert.strictEqual(await saldoDe(db, matC), 49, 'o critico saiu todo');
+
+    // A separa mais comum: rodada nova, conferencia limpa (RN-07). O critico ja saiu — nao ha
+    // critico na caixa, entao a conferencia NAO e obrigatoria para entregar o comum.
+    await requisitionService.separarRequisicao(db, reqId, [{ item_id: itemIds[1], quantidade_separada: 3 }], ALMOX_A);
+    const det = await request(app).get(`/api/almoxarifado/requisicoes/${reqId}`);
+    assert.strictEqual(det.status, 200, JSON.stringify(det.body));
+    assert.strictEqual(det.body.conferencia, null, 'rodada nova limpa a conferencia');
+    assert.strictEqual(det.body.conferencia_obrigatoria, false,
+      'critico separado 1 / entregue 1 nao esta na caixa: a conferencia nao pode ser exigida pelo que ja saiu');
+
+    const res = await request(app).put(`/api/almoxarifado/requisicoes/${reqId}/entregar`)
+      .send({ itens_atendidos: [{ item_id: itemIds[1], quantidade_atendida: 3 }] });
+    assert.strictEqual(res.status, 200, `entregar so o comum: ${JSON.stringify(res.body)}`);
+    assert.strictEqual(res.body.status, 'ENTREGUE');
+    assert.strictEqual(await saldoDe(db, matN), 45);
+  });
+
   await test('[RN-06] assertConferidaSeObrigatorio e a funcao unica: lanca 400 literal so quando obrigatoria e nao conferida', async () => {
     const { assertConferidaSeObrigatorio } = requisitionService;
     assert.strictEqual(typeof assertConferidaSeObrigatorio, 'function');
@@ -465,6 +576,8 @@ const conferirDireto = (db, reqId, user) => dbRun(db, `UPDATE requisicoes_almoxa
     assert.doesNotThrow(() => assertConferidaSeObrigatorio({ conferido_por_id: 33 }, critico));
     assert.doesNotThrow(() => assertConferidaSeObrigatorio({ conferido_por_id: null }, [{ material_critico: 0, quantidade_separada: 2 }]));
     assert.doesNotThrow(() => assertConferidaSeObrigatorio({ conferido_por_id: null }, [{ material_critico: 1, quantidade_separada: 0 }]));
+    // Fix-round 1 (F5): critico separado e ja entregue nao esta na caixa.
+    assert.doesNotThrow(() => assertConferidaSeObrigatorio({ conferido_por_id: null }, [{ material_critico: 1, quantidade_separada: 2, quantidade_entregue: 2 }]));
     assert.throws(() => assertConferidaSeObrigatorio({ conferido_por_id: null }, critico), (e) => {
       assert.strictEqual(e.status, 400);
       assert.strictEqual(e.message, MSG_RN06);

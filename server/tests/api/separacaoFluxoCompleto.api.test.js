@@ -8,6 +8,17 @@
  * partes — e o que cada rota diz no meio do caminho. Nada aqui é INSERT direto em requisição,
  * item, rodada ou conferência: se uma rota discorda da outra, é aqui que aparece.
  *
+ * FIX-ROUND 1 (Fase 5) — POR QUE o Fluxo 2 mudou, e não é afrouxamento do teste: a versão da
+ * Task 4 entregava 3 críticos tendo só 2 separados-e-não-entregues e afirmava 200, porque
+ * `maxEntregar` (Etapa 3) solta o teto do separado depois de uma entrega parcial. Para material
+ * comum isso continua sendo o comportamento desejado (reposição chegou, entrega direta). Para
+ * material CRÍTICO era a barreira inteira furada: o que sai a mais nunca passou por rodada nem por
+ * conferência. Regra nova do fix-round (F2): crítico só sai até `separado − entregue`. O fluxo
+ * agora afirma o 400 nesse passo, entrega só o separado e fecha em ENTREGUE por uma rodada a mais
+ * (A separa +1, C confere, entrega 1) — os saldos finais são os mesmos (46/45); a trilha ganha
+ * duas linhas. E as contagens da rodada (`itens_tocados`, `itens.length`) passam a ser lidas do
+ * GET, não do retorno do PUT (F3): a mutação "sempre 1 no INSERT" sobrevivia 38/38.
+ *
  * Executar: cd server && node tests/api/separacaoFluxoCompleto.api.test.js
  */
 const assert = require('assert');
@@ -154,6 +165,13 @@ const VERBOS_ETAPA_28 = ['SEPARACAO', 'CONFERENCIA_SEPARACAO', 'LIBERACAO_RETIRA
     assert.strictEqual(det.body.status, 'EM_SEPARACAO');
     assert.strictEqual(det.body.separacoes.length, 2, `esperava 2 rodadas, veio ${det.body.separacoes.length}`);
     assert.deepStrictEqual(det.body.separacoes.map((s) => s.usuario_id), [ALMOX_A.id, ALMOX_B.id]);
+    // F3: as contagens da rodada lidas do GET (coluna itens_tocados + itens_json), nao do PUT.
+    assert.strictEqual(det.body.separacoes[0].itens_tocados, 2,
+      `a rodada de A tocou 2 itens; a coluna diz ${det.body.separacoes[0].itens_tocados}`);
+    assert.strictEqual(det.body.separacoes[0].itens.length, 2, JSON.stringify(det.body.separacoes[0].itens));
+    assert.deepStrictEqual(det.body.separacoes[0].itens.map((i) => i.item_id).sort(), [itemC, itemN].sort());
+    assert.strictEqual(det.body.separacoes[1].itens_tocados, 1);
+    assert.strictEqual(det.body.separacoes[1].itens.length, 1);
     assert.strictEqual(det.body.conferencia, null);
     assert.strictEqual(det.body.conferencia_obrigatoria, true, 'critico separado exige conferencia');
 
@@ -231,12 +249,38 @@ const VERBOS_ETAPA_28 = ['SEPARACAO', 'CONFERENCIA_SEPARACAO', 'LIBERACAO_RETIRA
     const confC2 = await conferir(ALMOX_C, reqId);
     assert.strictEqual(confC2.status, 200, `C de novo: ${JSON.stringify(confC2.body)}`);
 
-    // Entrega o resto: crítico pendente 3 (4 - 1), comum pendente 4 (5 - 1).
-    const ent4 = await entregar(ALMOX_A, reqId, [
+    // Crítico: pendente 3 (4 − 1), mas na caixa só 2 (separado 3 − entregue 1). Fix-round 1 (F2):
+    // crítico NÃO sai além do separado — a versão da Task 4 afirmava 200 aqui, e era o furo.
+    const entAlem = await entregar(ALMOX_A, reqId, [
       { item_id: itemC, quantidade_atendida: 3 }, { item_id: itemN, quantidade_atendida: 4 },
     ]);
+    assert.strictEqual(await saldoDe(matC), 49, `o critico saiu alem do separado (resposta ${entAlem.status})`);
+    assert.strictEqual(await saldoDe(matN), 49, 'nada pode ter saido: a validacao e antes de qualquer baixa');
+    assert.strictEqual(entAlem.status, 400, `esperava 400 (3 > 2 na caixa), veio ${entAlem.status}: ${JSON.stringify(entAlem.body)}`);
+    assert.strictEqual(entAlem.body.error,
+      'Material FLUXO2-C: material crítico só sai depois de separado e conferido — 3 excede o separado ainda não entregue (2). '
+      + 'Separe o restante e peça a segunda conferência.');
+
+    // Sai só o separado do crítico (2); o comum sai além do separado (4 > 2 na caixa) — Etapa 3 preservada.
+    const ent4 = await entregar(ALMOX_A, reqId, [
+      { item_id: itemC, quantidade_atendida: 2 }, { item_id: itemN, quantidade_atendida: 4 },
+    ]);
     assert.strictEqual(ent4.status, 200, JSON.stringify(ent4.body));
-    assert.strictEqual(ent4.body.status, 'ENTREGUE');
+    assert.strictEqual(ent4.body.status, 'PARCIALMENTE_ATENDIDA', 'falta 1 critico');
+    assert.strictEqual(await saldoDe(matC), 47);
+    assert.strictEqual(await saldoDe(matN), 45);
+
+    // O último crítico: A separa (+1, limpa a conferência), C confere, sai — ENTREGUE.
+    const rA3 = await separar(ALMOX_A, reqId, [{ item_id: itemC, quantidade_separada: 1 }]);
+    assert.strictEqual(rA3.status, 200, JSON.stringify(rA3.body));
+    det = await detalhe(ALMOX_B, reqId);
+    assert.strictEqual(det.body.conferencia, null, 'RN-07 de novo');
+    assert.strictEqual(det.body.separacoes.length, 4);
+    const confC3 = await conferir(ALMOX_C, reqId);
+    assert.strictEqual(confC3.status, 200, JSON.stringify(confC3.body));
+    const ent5 = await entregar(ALMOX_A, reqId, [{ item_id: itemC, quantidade_atendida: 1 }]);
+    assert.strictEqual(ent5.status, 200, JSON.stringify(ent5.body));
+    assert.strictEqual(ent5.body.status, 'ENTREGUE');
     assert.strictEqual(await saldoDe(matC), 46);
     assert.strictEqual(await saldoDe(matN), 45);
     det = await detalhe(ALMOX_A, reqId);
@@ -245,6 +289,7 @@ const VERBOS_ETAPA_28 = ['SEPARACAO', 'CONFERENCIA_SEPARACAO', 'LIBERACAO_RETIRA
     trilha = await trilhaEtapa28(reqId);
     assert.deepStrictEqual(trilha.map((t) => t.acao), [
       'SEPARACAO', 'SEPARACAO', 'CONFERENCIA_SEPARACAO', 'LIBERACAO_RETIRADA',
+      'SEPARACAO', 'CONFERENCIA_SEPARACAO',
       'SEPARACAO', 'CONFERENCIA_SEPARACAO',
     ], `trilha final: ${JSON.stringify(trilha)}`);
   });
