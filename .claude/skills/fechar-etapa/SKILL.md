@@ -174,6 +174,18 @@ aprendidas por falha silenciosa aqui:
 - `md5sum` **antes**, **depois da sabotagem** e **depois de restaurar**; `git diff --stat` tem de
   voltar vazio. Só o md5 pegou uma sabotagem que não fez nada.
 - **Sabotagem que não derruba nenhum teste é um achado**, não um detalhe: diga qual asserção falta.
+  **Mas há dois motivos diferentes para isso, e eles pedem respostas opostas.** (1) *Falta
+  asserção* — o caso comum: escreva o cenário. (2) **O defeito virou inalcançável** — o caso raro
+  e valioso: na Etapa 27, trocar o `INSERT` multi-linha por um laço **não derrubou nada**, porque
+  a validação completa antes do claim de saldo tornou impossível uma linha falhar no meio. O
+  executor provou a diferença com um `UNIQUE` artificial (laço deixa 1 medida órfã, multi-linha
+  deixa 0), **manteve** a forma segura e **declarou que a suíte não a protege**. Fingir que o
+  vermelho existe seria pior; remover a proteção porque "nada cai" seria muito pior.
+- **Numa régua com folga, sabotar o OPERADOR é invisível — sabote a POSIÇÃO.** Aconteceu duas
+  vezes na Etapa 27: trocar `<=` por `<` numa comparação com epsilon não derruba nada (nenhuma
+  medida cai exatamente em `limite + 1e-6`), e tirar só o `WHERE ativo = 1` de um índice único
+  parcial passa verde no cenário da duplicada. O que o teste ancora é **onde** a régua está, não
+  o sinal que a escreve.
 - **Leia QUAL asserção caiu, não só o placar.** Uma sabotagem que derruba o cenário certo pela
   asserção *errada* deixa a asserção que interessa sem prova nenhuma — e o placar vermelho faz
   parecer que está tudo coberto. Aconteceu **três vezes seguidas** nesta base, sempre com o
