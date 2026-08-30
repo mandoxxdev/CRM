@@ -506,13 +506,70 @@ nos quatro): md5 `9a8d9b44…` antes/restaurado nos quatro. (1) laço a uma pass
   `sqliteConcurrency`, e um erro de `finalize` não chega ao callback — padrão pré-existente de
   todo `get` da base, fora do escopo desta etapa.
 
-## Fechamento (Fase 6)
+## Fechamento (Fase 6) — ✅ FEITO (2026-08-29)
 
-Skill `fechar-etapa`: novidades (B62 = D2; C36 = "a conferência não existe para requisição sem
-tela de fila"; furos), spec 05 (marcar "responsável" e "segunda conferência", dizer o que fica),
-spec 23 (perna Segurança: dupla conferência em material crítico **pago** nesta forma), mapa, guia
-(seção Etapa 28 com roteiro: precisa de **dois** usuários com perfil ALMOXARIFE), retro de 4 números.
+Os 7 artefatos: novidades (seção Etapa 28, "Onde estamos", **B62** = D2, **B63** = conferir só em
+`EM_SEPARACAO`, nota na **B57**, furos **C37**/**C38**, fragilidade **G9**), spec 05 (status,
+checklist com hash, bloco "Etapa 28"), spec 23 (item da dupla conferência marcado "pago nesta
+forma"), mapa (cabeçalho + linha 05), guia (cabeçalho + seção com roteiro de dois logins), este
+plano, manual (§5.5 linha nova, §7.5 teto do crítico, §10.1-10.4 reescritos, §10.5 renumerado).
+O "C36" que esta seção previa **não foi criado**: C36 já existia (Etapa 27) e "a conferência não
+tem tela de fila" não é furo — a conferência mora no detalhe da requisição, onde a separação já
+morava. Os números da verificação final estão no commit de fechamento e no mapa.
+
+### Retro de 4 números
+
+1. **Rodadas de correção até verde:** 1 (fix-round único com seis achados; nenhum teste repetiu
+   vermelho em rodadas seguidas).
+2. **Achados da revisão:** Fase 2 (plano): 12, **2 bloqueantes reais** (barreira só na
+   liberação; teste de corrida vazio para o `NOT EXISTS`), 10 importantes/menores, todos
+   incorporados. Fase 5 (código): 11 achados de dois revisores, **6 reproduzidos e corrigidos**
+   (A1/A2 escrita parcial, A3 teto do crítico, A4 releitura, A5 universo, F3/F6 mutações
+   sobreviventes), **2 declarados sem código** (C37 legado, G9 `RETURNING` fora da fila),
+   **3 refutados/não-achados** (tipos de id, perfil, cópia). Ruído: 0 — todo achado veio com
+   reprodução.
+3. **Paralelismo:** 2 galhos rodaram em paralelo de fato (Task 1 backend × Task 3 front, na
+   mesma árvore, diretórios disjuntos), sem retrabalho; Tasks 2 e 4 sequenciais por dependerem
+   das funções da 1. A Task 3 trabalhou contra o contrato congelado antes de o backend existir e
+   **nada precisou mudar** quando ele chegou.
+4. **Defeito que escapou:** a preencher na Etapa 29.
 
 ## Próxima tarefa detalhada
 
-(preencher no fechamento)
+### A etapa escolhida: 29 — a tela das medidas de inspeção (feature 09, furos C34/C35, alerta B60)
+
+**Por quê esta:** é a "próxima tarefa detalhada" que a Etapa 27 deixou — ela entregou plano de
+inspeção, medidas e divergência derivada **sem tela**, e nomeou C34 (formulário sem campos de
+medida) e C35 (medidas gravadas sem quem as leia) como o que falta. A feature 05 acabou de ser
+tocada e o que resta nela (lista de separação, picking, kits) é fluxo inteiro novo, não
+fechamento. As outras 🟡 do mapa (00, 02, 06, 08, 21, 22) estão em "adiado por decisão" ou
+"segunda porta" (medido nas Fases 0 das Etapas 27 e 28).
+
+**Contrato que a tela consome (entregue na Etapa 27, `063f3ce..cdb64a6`):**
+- `GET /api/almoxarifado/planos-inspecao?material_id=<id>` → características ativas do material
+  (`id`, `caracteristica`, `unidade`, `valor_nominal`, `desvio_inferior`, `desvio_superior`).
+  Sem `material_id` → 400 *"Material é obrigatório"*.
+- `POST /api/almoxarifado/recebimentos/itens/:id/inspecionar` aceita
+  `medidas: [{ plano_id, valor_medido, ferramenta_id? }]` junto da decisão; responde
+  `divergencia_dimensional` (derivada) e `medidas_registradas`. Recusas literais: *"Valor medido
+  inválido para "<caracteristica>": informe um número (use ponto decimal)"*, *"Ferramenta com
+  calibração vencida ou sem calibração registrada (<nome>)"*, e medida de característica fora do
+  plano. Nenhuma recusa move saldo.
+- Gate `inspecionar` (ADMINISTRADOR, ALMOXARIFE, QUALIDADE); plano gerenciado por
+  `gerenciar_plano_inspecao` (ADMINISTRADOR, QUALIDADE, ENGENHARIA).
+
+**Pontos de atenção para a Fase 0 (medir antes de desenhar):**
+- **B60 é a regra da etapa:** com medidas na tela, a caixa *Divergência dimensional* tem de virar
+  **somente leitura e explicada** ("derivada das medidas") — senão a tela mostra uma coisa e o
+  banco grava outra. Sem plano para o material, a caixa continua manual.
+- **C35 pede leitura:** medir se existe `GET` das medidas de uma inspeção concluída. Pela Etapa 27
+  provavelmente **não existe** — e a fila `/inspecoes/pendentes` só traz o não decidido. Se não
+  houver, a etapa precisa do endpoint de leitura (aditivo) antes da tela de histórico.
+- **Instrumento:** o seletor precisa vir do cadastro de ferramentas com calibração (feature 16);
+  medir qual rota lista ferramentas e se ela expõe `calibracao_vencida`/próxima calibração — a
+  tela deve **mostrar** vencido, não só receber o 400.
+- **Plano por família (B59) continua aberta** — a tela não deve assumir herança.
+- **`InspecoesAlmoxarifado.js`** já tem `EPS` próprio (`:126`, citado no plano da 27): não
+  duplicar a régua no client; a derivação é do servidor, a tela só mostra o resultado.
+- Ler `specs/modulo-almoxarifado/09-inspecao-qualidade/README.md` e o bloco "Etapa 27" **antes**
+  de varrer o client — regra da skill: a spec já mediu.

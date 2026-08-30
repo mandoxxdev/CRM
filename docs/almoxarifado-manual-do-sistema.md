@@ -608,6 +608,7 @@ A separação entre **Almoxarife** e **Gestor** é intencional e é o desenho de
 | Remeter a terceiro | ● | ● | – | – | – | – | – | – |
 | Aprovar requisição | ● | ● | – | – | – | ● | – | – |
 | Separar / emitir | ● | ● | – | – | – | – | – | – |
+| Conferir separação (segunda conferência da caixa) | ● | ● | – | – | – | – | – | – |
 | Requisitar | ● | ● | – | ● | ● | – | – | – |
 | Receber material | ● | ● | ● | – | – | – | – | – |
 | Inspecionar | ● | ● | – | – | – | – | ● | – |
@@ -633,6 +634,7 @@ Seis leituras que essa tabela permite fazer, e que vale explicar a quem pergunta
   > *Sem permissão para ajustar saldo de estoque — seu perfil é Qualidade. Solicite acesso a um administrador.*
 
   Bloquear material por decisão de qualidade continua acontecendo **dentro da inspeção** (reprovar o item recebido), que é o que ele pode.
+- **Conferir separação é separado de Separar / emitir**, mesmo com os mesmos dois perfis hoje: a conferência é a segunda pessoa olhando a caixa (10.3), e a permissão existe à parte para poder ser restringida sem mexer na separação. Ter a permissão não basta: **quem separou não confere**, e isso vale para o Administrador também — a barreira é por pessoa, não por perfil.
 - **As duas aprovações de sucateamento são de balcões diferentes de propósito.** A perna do almoxarifado (Administrador, Almoxarife) e a perna da gestão (Administrador, Gestor) precisam **das duas assinaturas, de pessoas diferentes**, para uma baixa de sucata sair do estoque — e, embora o Administrador tenha as duas permissões, **a mesma pessoa nunca assina as duas pernas** (seção 20).
 
 E duas que a tabela **não** mostra: **Inspecionar** cobre as decisões de qualidade, mas anexar o certificado do fornecedor a um lote pertence a **Receber material** — é o pessoal que recebe a carga que tem o documento em mãos. E **a central de alertas não é filtrada por perfil**: quem tem *Ver a central de alertas* vê o registro inteiro, inclusive os alertas de estoque parado e de estoque excessivo, que trazem o **valor em dinheiro** parado. É por isso que o perfil **Qualidade** não a recebe — os quatro alertas que interessariam a ele (material reprovado, divergência de recebimento, lote sem certificado e fila de itens aguardando inspeção) só ficam acessíveis quando a central souber filtrar por perfil.
@@ -1002,7 +1004,9 @@ A entrega informa a quantidade atendida por item e é o **único momento em que 
 Regras:
 
 - Só é possível entregar a partir de **Em Separação**, **Pronta p/ Retirada** ou **Parcialmente Atendida** → *"Requisição deve estar em separação, pronta para retirada ou parcialmente atendida"*.
-- O teto por item é `mínimo(pendente de entrega, separado ainda não entregue, disponível)`. Acima disso, a recusa **nomeia o material e mostra a conta**: *"Chapa 3mm: não é possível entregar 15 KG. Máximo: 8 (pendente: 15, disponível: 8)"*.
+- O teto por item é `mínimo(pendente de entrega, separado ainda não entregue, disponível)`. Acima disso, a recusa **nomeia o material e mostra a conta**: *"Chapa 3mm: não é possível entregar 15 KG. Máximo: 8 (pendente: 15, disponível: 8)"*. Depois de uma entrega parcial do item, o teto de material **comum** passa a ser `mínimo(pendente, disponível)` — o restante pode sair sem nova separação.
+- **Material crítico só sai na quantidade separada e ainda não entregue**, sempre — inclusive depois de uma entrega parcial. Acima disso: *"Chapa 3mm: material crítico só sai depois de separado e conferido — 9 excede o separado ainda não entregue (0). Separe o restante e peça a segunda conferência."*
+- **Com material crítico na caixa, a entrega exige a conferência da separação** (10.3): *"Esta requisição tem material crítico separado e ainda não passou pela segunda conferência. Peça a outra pessoa do almoxarifado para conferir a separação antes de liberar ou entregar."* A recusa acontece antes de qualquer baixa.
 - Se nada foi informado → *"Informe ao menos uma quantidade maior que zero para entregar"*.
 - Se todos os itens foram atendidos por completo, o status vira **Entregue**; senão, **Parcialmente Atendida**.
 
@@ -1217,7 +1221,9 @@ Os avisos por situação são estes:
 | Aguard. Estoque | *"Sem saldo disponível no momento — inicie a separação assim que o estoque for reposto."* |
 | Aguard. Compra | *"Sem saldo disponível — há uma solicitação de compra em andamento para os materiais desta requisição."* |
 
-Os botões, na ordem do fluxo: **Iniciar Separação** (que vira **Ajustar Separação** quando a separação já começou), **Liberar para Retirada** — que só aparece se algum item tem quantidade separada — e **Confirmar Entrega e Baixar Estoque**. Sem nada separado, no lugar do botão de entrega a tela informa: *"Nenhuma quantidade separada disponível para entrega no momento."*
+Os botões, na ordem do fluxo: **Iniciar Separação** (que vira **Ajustar Separação** quando a separação já começou), **Conferir separação**, **Liberar para Retirada** — que só aparece se algum item tem quantidade separada — e **Confirmar Entrega e Baixar Estoque**. Sem nada separado, no lugar do botão de entrega a tela informa: *"Nenhuma quantidade separada disponível para entrega no momento."*
+
+Abaixo dos itens, o bloco **Separação (N)** lista cada rodada de separação com **quem separou, quando e quantos itens tocou**; e, quando a caixa já foi conferida, a linha **Conferida por … em …**.
 
 No modal de separação, cada item mostra **Solicitado · Já separado · Saldo**, com o campo de quantidade limitado ao saldo. No modal de entrega, cada item mostra **Solicitado · Separado · Entregue · Pendente · Saldo**, e a tela antecipa o resultado: *"Será entregue: 8 UN | Permanecerá pendente: 4 UN"*.
 
@@ -1225,20 +1231,37 @@ O "Saldo" mostrado é o **disponível do material somado ao que a própria requi
 
 ### 10.2 Iniciar separação
 
-Registra a quantidade separada por item e leva a requisição para **Em Separação**.
+Registra a quantidade separada por item e leva a requisição para **Em Separação**. Cada confirmação do formulário com pelo menos um item de quantidade maior que zero é uma **rodada de separação**, registrada com quem, quando e quais itens — a separação pode acontecer em várias rodadas, por pessoas diferentes, e cada rodada fica guardada; nenhuma apaga a anterior.
 
 - Pode começar a partir de **Aprovado**, **Aguard. Estoque**, **Aguard. Compra**, **Totalmente Reservada**, **Parcialmente Reservada**, **Em Separação** (repetir) e **Parcialmente Atendida**. Fora disso: *"Requisição deve estar aprovada, aguardando estoque/compra, em separação ou parcialmente atendida para separar"*.
 - O teto por item é `mínimo(pendente de separação, disponível)`. Acima disso a recusa mostra a conta inteira: *"Chapa 3mm: não é possível separar 20 KG. Máximo: 12 (pendente: 20, disponível: 12)"*.
 - A aprovação por valor é verificada aqui também: requisição travada por alçada não separa (8.3).
+- **Ou grava tudo, ou nada.** O sistema valida todos os itens do formulário antes de gravar o primeiro: se um item estiver acima do máximo, a recusa aparece e **nenhum** item é gravado.
+- Uma rodada nova **apaga a conferência** já feita (10.3): a caixa mudou e precisa ser conferida de novo. Confirmar o formulário **sem nenhuma quantidade** não é rodada — leva a requisição para *Em Separação*, mas não registra nada nem apaga a conferência.
 
-### 10.3 Liberar retirada
+### 10.3 Conferir separação — a segunda pessoa
+
+Depois de separada, a caixa pode ser **conferida por outra pessoa** — é o botão **Conferir separação**, disponível com a requisição *Em Separação* e ao menos um item separado. Quem confere precisa da permissão **Conferir separação** (Administrador e Almoxarife).
+
+**Quem separou não confere.** O sistema recusa a conferência de qualquer pessoa que apareça em **qualquer rodada** de separação daquela requisição — não só na última. Na tela, o botão fica desabilitado para essa pessoa, com o aviso *"Você separou esta requisição — a segunda conferência precisa ser feita por outra pessoa"*. Forçando por fora da tela, a recusa é: *"Quem separou não confere: você registrou a rodada de separação #12 desta requisição. A segunda conferência tem de ser de outra pessoa."* Isso vale para o Administrador também: a regra é por pessoa, não por perfil.
+
+- A conferência é **uma só** por caixa. Uma segunda tentativa — ou duas pessoas clicando ao mesmo tempo — recebe: *"Esta requisição não pode ser conferida agora: já foi conferida, saiu de EM_SEPARACAO, ou você separou uma rodada dela — outra pessoa (ou outra aba sua) agiu enquanto esta tela estava aberta. Recarregue e confira o estado atual."* A garantia contra o clique simultâneo é do banco de dados, não da tela.
+- Fora de *Em Separação* a conferência é recusada: *"Só é possível conferir uma requisição em separação (status atual: PARCIALMENTE_ATENDIDA)"*. Se uma requisição parcialmente atendida precisar de conferência, basta **Ajustar Separação** e confirmar sem mudar nada — ela volta a *Em Separação* sem apagar nada.
+- Uma **rodada nova** de separação apaga a conferência (a caixa mudou). A conferência apagada não se perde: fica registrada na Auditoria, na linha da rodada que a apagou.
+
+**Quando a conferência é obrigatória.** Para material comum ela é opcional — fica registrada, e só. Quando a caixa tem **material crítico** (a marca *Material crítico* do cadastro) **separado e ainda não entregue**, a requisição **não sai sem a conferência**: os botões **Liberar para Retirada** e **Confirmar Entrega e Baixar Estoque** ficam desabilitados com o aviso *"Esta requisição tem material crítico separado e precisa da segunda conferência antes de sair"*, e o servidor recusa as duas operações com: *"Esta requisição tem material crítico separado e ainda não passou pela segunda conferência. Peça a outra pessoa do almoxarifado para conferir a separação antes de liberar ou entregar."* Nenhum saldo se move numa recusa dessas. Material crítico já **totalmente entregue** não conta; material crítico **pedido mas ainda sem nada separado** também não — só o que está na caixa.
+
+Consequência prática: **material crítico exige duas pessoas** com permissão de almoxarifado para sair de uma requisição.
+
+### 10.4 Liberar retirada
 
 Leva de **Em Separação** para **Pronta p/ Retirada** — o aviso de que o material está no balcão.
 
 - Exige **ao menos um item com quantidade separada** → *"Nenhum item separado"*.
+- Exige a **conferência** quando há material crítico na caixa (10.3).
 - Transição fora do desenho é recusada com *"Transição inválida: ..."*.
 
-### 10.4 Em que momento o saldo realmente sai
+### 10.5 Em que momento o saldo realmente sai
 
 Esta é a pergunta mais importante do capítulo, e a resposta é: **na entrega, e só nela**.
 

@@ -277,7 +277,7 @@ servidor e a A7 não foi resolvida.
 
 ### B. Decisões de negócio
 
-### B. Decisões de negócio — B1 a B61; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B63; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(O título desta seção dizia "B1 a B24" — **estava defasado**: os itens já iam até B36 antes da
 Etapa 20. Corrigido em 2026-08-28 para B50, depois para B56 com as três da Etapa 24, para B57 com
@@ -318,6 +318,11 @@ não é pergunta e sim um **alerta para a etapa da tela** — a caixa "Divergên
 virar somente leitura quando a tela ganhar campos de medida, senão a tela mostra uma coisa e o
 banco guarda outra; e a **B61** (informar o instrumento é opcional) é decisão que **eu tomei**,
 escrita com o caminho de volta.
+As **duas da Etapa 28 são B62 e B63**, e **as duas eu tomei**, reversíveis: **B62** (a segunda
+conferência é obrigatória só quando há material crítico ainda na caixa — é a régua que responde
+parcialmente à B57) e **B63** (conferir só é possível com a requisição *Em Separação*). **A B57
+foi respondida PELA METADE pela Etapa 28**: a saída de material crítico da requisição agora exige
+duas pessoas; o restante da pergunta (quais *outras* operações) continua aberto.
 **B33 (quem lê a trilha de auditoria) SAIU da lista de em aberto** — a tela foi entregue na
 Etapa 22 (`8c6ffbe..169458d`). Ver o item B33 abaixo, que ficou no lugar com o desfecho escrito.
 **Resolvidas ou já decididas** — B1-B3 (Etapa 10), B4 (custo da transformação), B7 (lembrete de
@@ -931,6 +936,13 @@ ferramentas). É etapa curta, e depende da sua resposta.
 **B57 (NOVO, da Etapa 25, EM ABERTO — preciso da sua resposta) — quais operações sobre material
 crítico exigem duas assinaturas?**
 
+> **Respondida PELA METADE pela Etapa 28 (2026-08-29, `9cef003..62cb2b1`):** a **saída de material
+> crítico de uma requisição** — liberar para retirada e entregar — passou a exigir a **segunda
+> conferência por outra pessoa** (ver a Etapa 28 e a **B62**). O que continua aberto aqui é o
+> resto da pergunta: ajuste de estoque, transferência, sucata e devolução de material crítico
+> **não** ganharam dupla assinatura. Se a resposta for "as mesmas regras para todas", cada uma é
+> uma etapa pequena copiando o molde que a 28 deixou pronto.
+
 A spec do módulo pede *"dupla conferência em materiais críticos"* desde o começo, e é o **último**
 item da lista de segurança que continua sem construir. Ele não foi feito na Etapa 25 porque **não
 é falta de código: é falta de resposta sua.** As duas peças já existem e estão testadas:
@@ -1048,6 +1060,40 @@ rastreabilidade pela metade num processo que quer ser auditável), é meia hora 
 recusa passa a acontecer no mesmo lugar das outras — antes de o saldo se mover. **Diga e eu
 aperto.**
 
+
+
+**B62 (NOVO, da Etapa 28 — decisão que EU tomei, reversível numa linha) — a segunda conferência é
+obrigatória SÓ quando há material crítico ainda na caixa.**
+
+A segunda conferência (outra pessoa confere a separação antes de o material sair) existe para
+toda requisição, mas só **trava a saída** quando algum item **marcado como crítico** está
+**separado e ainda não entregue**. As opções eram:
+
+- **Sempre obrigatória** — toda requisição exige duas pessoas. **Descartado:** um almoxarifado
+  que trabalha com **uma pessoa** por turno pararia de conseguir liberar qualquer coisa. Mudança
+  de comportamento do fluxo inteiro, sem caminho de volta de manhã.
+- **Nunca obrigatória** (só registrar quem conferiu) — **Descartado:** barreira que ninguém é
+  obrigado a passar não é barreira, e a spec pede *dupla conferência em material crítico*.
+- **Só com crítico na caixa** — **escolhido.** Usa a marca *material crítico* que já existe no
+  cadastro e já decide outras duas coisas (risco de parada e retenção para inspeção).
+
+**Consequência que precisa estar clara:** material crítico passa a exigir **dois usuários com
+perfil Almoxarife (ou Administrador)** para sair. Se isso não servir, a régua é **uma função só**
+no serviço de requisições; virar "sempre" ou "nunca" é uma linha. Ver o furo **C38**.
+
+**B63 (NOVO, da Etapa 28 — decisão que EU tomei, reversível) — conferir só com a requisição "Em
+Separação".**
+
+A conferência só é aceita no status *Em Separação*; em qualquer outro a recusa é *"Só é possível
+conferir uma requisição em separação (status atual: ...)"*. O caso que isso aperta: requisição
+**Parcialmente Atendida** com crítico separado e **sem conferência** — não dá para entregar (falta
+conferência) nem para conferir (status errado). No fluxo normal esse estado **não é alcançável**:
+para chegar a *Parcialmente Atendida* com crítico separado, a entrega anterior já exigiu a
+conferência, e ela continua valendo enquanto não houver rodada nova. Ele existe só para **dado
+anterior à etapa** (C37). Saída: clicar **Ajustar Separação** e confirmar **sem mudar quantidade
+nenhuma** — a requisição volta a *Em Separação* sem rodada nova, e outra pessoa confere.
+**Descartado** aceitar conferência em *Parcialmente Atendida* antes de alguém precisar — é uma
+linha na lista de status, se precisar.
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -1384,6 +1430,24 @@ aperto.**
    **Foi verificado, não suposto** (o serviço de inspeção não chama a auditoria em ponto nenhum) e
    **ficou fora de propósito**: acrescentar auditoria a um ato que nunca a teve é mudança de
    escopo própria, com decisões de vocabulário e de volume que não cabiam nesta etapa.
+
+37. **(28) Requisição separada ANTES da Etapa 28 não tem rodada — e a barreira "quem separou não
+    confere" não tem como saber quem separou.** Toda requisição que já estava *Em Separação* (ou
+    *Parcialmente Atendida*) no dia do deploy tem quantidades separadas e **nenhuma rodada
+    registrada**. Para essas, **qualquer** Almoxarife confere — inclusive quem separou. Não há
+    como recuperar o separador (nunca foi gravado). **Descartado** recusar conferência de
+    requisição sem rodada: para material crítico legado isso seria beco sem saída, porque a
+    separação já está no máximo e não dá para abrir rodada nova. É fato de migração, some sozinho
+    conforme as requisições antigas fecham; se quiser, a consulta é
+    `SELECT r.numero FROM requisicoes_almoxarifado r WHERE r.status IN ('EM_SEPARACAO','PARCIALMENTE_ATENDIDA') AND NOT EXISTS (SELECT 1 FROM separacoes_requisicao_almoxarifado s WHERE s.requisicao_id = r.id)`.
+38. **(28) Almoxarifado com UMA pessoa não tira material crítico.** Com a B62 como está, material
+    marcado **crítico** só sai da requisição depois de **outra pessoa** com perfil Almoxarife ou
+    Administrador conferir a separação. Num turno com um Almoxarife só, a requisição fica em *Em
+    Separação* com os botões de saída cinza até alguém entrar. **Antes do deploy, confira quantos
+    usuários têm o perfil** em Almoxarifado → Configurações → aba *Perfis de Acesso*, e quantos materiais estão
+    marcados como críticos (`SELECT COUNT(*) FROM materiais_almoxarifado WHERE material_critico = 1 AND ativo = 1`).
+    Se for inviável, a régua da B62 vira "nunca obrigatória" numa linha, e a conferência continua
+    existindo como registro.
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -1894,6 +1958,18 @@ de propósito** em vez de divergir sozinha; o conserto certo é uniforme, nas ci
 (pendência nomeada na spec 24).
 
 ---
+
+
+**G9 (NOVO, medido na revisão adversarial da Etapa 28). Os claims `UPDATE ... RETURNING` lidos por
+`dbGet` rodam FORA da fila de escrita do `sqliteConcurrency`, e o erro do `finalize` não chega ao
+callback.** O padrão anti-corrida do módulo (sucateamento, cancelamento, e agora a conferência da
+separação) faz o claim com `dbGet` porque precisa do `RETURNING`. Medido: `patchedGet` não entra na
+`writeChain` (só `run` entra), e no `get` do node-sqlite3 o erro do `finalize` (o commit) é
+descartado. Em modo WAL isso não muda nada na prática; em modo rollback-journal (o aviso do
+OneDrive em `index.js:1002`), um `SQLITE_BUSY` no commit poderia deixar o claim não persistido com a
+rota respondendo 200. **Não é da Etapa 28** — é de todo `get` da base desde antes — e a saída é
+uma só para todos os claims (um `dbRunReturning` que passe pela fila), etapa própria. Fica aqui
+para ninguém "corrigir" um claim de cada vez.
 
 ## Etapa 0 — Fundação (2026-08-03)
 
@@ -4963,8 +5039,143 @@ rastro na Auditoria** — nunca teve, e ampliar isso é etapa própria (furo **C
 - **Nenhum plano foi cadastrado.** As tabelas nascem vazias; enquanto ninguém cadastrar
   característica nenhuma, o sistema se comporta exatamente como antes desta etapa.
 
+## Etapa 28 — A separação ganha dono, e quem separou não confere (2026-08-29)
+
+Quando falta material na caixa de uma requisição, a primeira pergunta do galpão é **"quem
+separou?"** — e até esta etapa o sistema **não sabia responder**. A separação gravava as
+quantidades e nada mais: nem quem, nem quando, nem rastro na Auditoria. E sem saber quem separou,
+a regra que a spec pede desde o começo — *"segunda conferência: quem confere não pode ser quem
+separou"* — **não tinha como existir**, porque não havia de onde tirar o separador para comparar.
+
+Esta etapa faz três coisas. **(1)** Cada rodada de separação passa a ser registrada com **quem,
+quando e quais itens** — e como a separação pode acontecer em várias rodadas por pessoas
+diferentes, cada rodada é uma linha própria: ninguém apaga a rodada de ninguém. **(2)** Nasce a
+**segunda conferência**: outra pessoa do almoxarifado confere a caixa antes de ela sair, e o
+sistema **recusa quem aparece em qualquer rodada** de separação daquela requisição. **(3)** Quando
+a caixa tem **material crítico**, a conferência deixa de ser opcional: **sem ela, o material não
+sai** — nem pela liberação para retirada, nem pela entrega direta. É a primeira resposta concreta à
+**B57**.
+
+> ⚠️ **Isto muda o dia a dia de um almoxarifado que trabalha com uma pessoa só.** Material
+> marcado como **crítico** passa a exigir **duas pessoas com perfil Almoxarife (ou Administrador)**
+> para sair. Material comum continua saindo como sempre saiu. Leia a **B62** (é a régua, e é
+> reversível numa linha) e o furo **C38** antes de apresentar.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A separação gravava as quantidades e **nada mais** — não existia "quem separou" em lugar nenhum | Cada rodada de separação fica registrada com **quem, quando e quais itens**; o detalhe da requisição mostra a lista **"Separação (N)"** |
+| Separar e liberar para retirada **não apareciam na Auditoria** (confirmar recebimento e rejeitar valor apareciam, no mesmo fluxo) | **Separação**, **Conferência da separação** e **Liberação para retirada** aparecem em **Almoxarifado → Auditoria**, na entidade *Requisição* |
+| Não existia segunda conferência | Botão **"Conferir separação"** no detalhe da requisição em separação; **quem separou vê o botão cinza** e, se insistir pela API, toma recusa |
+| Material crítico saía como qualquer outro | Com crítico **ainda na caixa** (separado e não entregue), **Liberar para Retirada** e **Confirmar Entrega** ficam cinza até a conferência — e o servidor recusa mesmo sem a tela |
+| Depois de uma entrega parcial, dava para entregar o resto do item **sem ter separado** (regra da Etapa 3) | Para material **crítico**, não mais: só sai o que foi separado e conferido. Material **comum** mantém a regra antiga |
+| Um erro num item do formulário de separação deixava os **outros itens gravados pela metade**, sem ninguém saber | Ou grava **tudo**, ou **nada**: o sistema valida todos os itens antes de escrever o primeiro |
+| — | Uma **rodada nova** de separação **apaga a conferência** (a caixa mudou, precisa ser conferida de novo) — e a conferência apagada fica guardada na Auditoria |
+
+### As regras, com o cenário exato
+
+**Para os cenários você precisa de DOIS usuários com perfil Almoxarife** (ou um Almoxarife e um
+Administrador), porque a regra central é justamente que uma pessoa só não fecha o ciclo. Chame-os
+de **A** e **C**.
+
+**1. Toda rodada de separação tem dono.**
+Como A, abra uma requisição aprovada em **Almoxarifado → Requisições**, clique **Iniciar
+Separação**, informe quantidades e confirme. No detalhe aparece o bloco **Separação (1)** com
+*A · dia/hora · N itens*. Clique **Ajustar Separação** e separe mais um item: vira **Separação
+(2)**, a primeira linha continua lá. Em **Auditoria**, filtre Entidade = *Requisição*: duas
+linhas **Separação**, com quem e o que.
+
+**2. Quem separou não confere — em NENHUMA rodada.**
+Ainda como A, o botão **Conferir separação** aparece **cinza**, com a explicação *"Você separou
+esta requisição — a segunda conferência precisa ser feita por outra pessoa"*. Se A forçar pela
+API, a recusa é: *"Quem separou não confere: você registrou a rodada de separação #12 desta
+requisição. A segunda conferência tem de ser de outra pessoa."* — e isso vale para quem separou na
+**primeira** rodada, não só na última (foi a decisão de desenho da etapa: guardar só "o último
+separador" deixaria o primeiro conferir a própria caixa).
+
+**3. Outra pessoa confere, e a conferência aparece.**
+Entre como C, abra a mesma requisição, clique **Conferir separação**: *"Separação conferida!"* e a
+linha **Conferida por C em dia/hora**. Clicar de novo (ou outra aba) → *"Esta requisição não pode
+ser conferida agora: já foi conferida, saiu de EM_SEPARACAO, ou você separou uma rodada dela —
+outra pessoa (ou outra aba sua) agiu enquanto esta tela estava aberta. Recarregue e confira o
+estado atual."* A garantia contra o clique duplo simultâneo é do banco, não da tela — o mesmo
+molde da dupla aprovação do sucateamento.
+
+**4. Com material crítico na caixa, nada sai sem a conferência.**
+Requisição com um material marcado **crítico**: como A, separe-o. Os botões **Liberar para
+Retirada** e **Confirmar Entrega e Baixar Estoque** ficam cinza com *"Esta requisição tem
+material crítico separado e precisa da segunda conferência antes de sair"*. Pela API, as duas
+rotas recusam com *"Esta requisição tem material crítico separado e ainda não passou pela
+segunda conferência. Peça a outra pessoa do almoxarifado para conferir a separação antes de
+liberar ou entregar."* — e o saldo **não se move**. Depois de C conferir, os dois botões voltam.
+**Sem material crítico, nada disso aparece**: a conferência existe, é opcional e fica registrada.
+
+**5. "Crítico na caixa" é separado E ainda não entregue.**
+Crítico já **totalmente entregue** não trava a entrega do resto da requisição. E crítico
+**aguardando estoque** (pedido, mas com zero separado) também não — ele não está na caixa. Isto
+foi um achado da revisão: a primeira régua contava "separado alguma vez" e travava a entrega de
+material comum por um crítico que já tinha saído.
+
+**6. Material crítico só sai na quantidade separada.**
+Desde a Etapa 3, depois de uma entrega parcial o item podia ser entregue até o pendente **sem
+nova separação**. Para material **crítico** isso furava a conferência: 1 separado e conferido, 9
+entregues sem ninguém olhar. Agora: *"Chapa 3mm: material crítico só sai depois de separado e
+conferido — 9 excede o separado ainda não entregue (0). Separe o restante e peça a segunda
+conferência."* Material **comum** mantém a regra da Etapa 3, de propósito.
+
+**7. Rodada nova apaga a conferência.**
+Depois de C conferir, se A separar mais qualquer coisa, a linha **Conferida por** some e os
+botões de saída voltam a ficar cinza (se houver crítico). A conferência apagada **não some do
+mundo**: a linha de Auditoria da rodada guarda *quem tinha conferido*. Isso também é o que fecha
+a brecha "separar e conferir ao mesmo tempo": em qualquer ordem, o estado final nunca é "conferida
+por A com rodada de A". **Ajustar Separação sem mudar quantidade nenhuma** não apaga a
+conferência — a caixa não mudou.
+
+**8. Ou tudo, ou nada.**
+Formulário de separação com um item válido e outro acima do máximo: a recusa vem (*"...não é
+possível separar 20 KG. Máximo: 12..."*) e **nenhum** dos itens é gravado. Antes desta etapa, o
+item válido ficava gravado e o erro só aparecia depois — e a revisão mostrou que isso deixava
+material separado **sem rodada**, o que permitia à mesma pessoa separar, conferir e entregar.
+
+**9. Perfil.**
+Conferir exige a permissão nova **Conferir separação**, de **Administrador e Almoxarife** — ação
+própria (não pega carona em *separar e emitir*) para poder ser restringida depois sem reescrever
+nada. Produção/Engenharia/Consulta/Qualidade/Gestor/Compras tomam recusa de permissão antes de
+qualquer regra. **Administrador que separou também não confere** — a barreira é por identidade,
+não por perfil.
+
+### O que esta etapa NÃO cobre (é decisão declarada, não esquecimento)
+
+- **Lista de separação como entidade** (agrupar itens de várias requisições), **rota de picking**
+  e **kits** — continuam sendo o "picking" propriamente dito, e dependem de endereçamento que a
+  feature 02 ainda não fecha.
+- **Localizações "Reservado" / "Kit" / "Aguardando retirada"** — a spec dizia que já existiam;
+  **não existem** (corrigido na Fase 0), e criá-las é mudança de contrato de API.
+- **Dupla conferência como máquina de estados** (quais *outras* operações exigem duas
+  assinaturas) — a B57 continua aberta para o restante; esta etapa respondeu **a saída de
+  material crítico da requisição**.
+- **Requisições separadas ANTES desta etapa** não têm rodada — furo **C37**.
+- **Divergência de separação com motivo** (separar menos que o pedido exigindo justificativa) —
+  item da spec 05 não tocado.
+
 ## Onde estamos e o que vem a seguir
 
+- **Etapa 28 entregue (2026-08-29):** **a separação ganha dono, e quem separou não confere**
+  (feature 05, `9cef003..62cb2b1`) — cada rodada de separação passa a ser registrada com **quem,
+  quando e quais itens** (linha própria por rodada: ninguém apaga a rodada de ninguém), a separação
+  e a liberação para retirada **passam a aparecer na Auditoria**, e nasce a **segunda conferência**:
+  outra pessoa do almoxarifado confere a caixa, e o sistema recusa **quem aparece em qualquer
+  rodada** — com a barreira repetida no banco, no molde da dupla aprovação do sucateamento. Com
+  **material crítico ainda na caixa**, a conferência é **obrigatória** para liberar **e** para
+  entregar (primeira resposta concreta à **B57**). **Dois achados da revisão mudaram o projeto:**
+  a entrega direta saía de *Em Separação* sem passar pela liberação — a barreira só na liberação
+  era barreira que ninguém era obrigado a passar; e o formulário de separação gravava os itens
+  **um a um antes de validar o próximo**, deixando material separado **sem rodada** — e sem rodada
+  a mesma pessoa separava, conferia e entregava. Agora é tudo ou nada. **O que é seu:** a **B62**
+  (a régua "só crítico" é decisão minha, reversível numa linha) e o furo **C38** (almoxarifado de
+  uma pessoa não tira crítico sozinho). Tela nova: bloco *Separação (N)*, linha *Conferida por*,
+  botão *Conferir separação*, e os botões de saída cinza enquanto a conferência falta.
 - **Etapa 27 entregue (2026-08-29):** **a divergência dimensional deixa de ser opinião e vira
   medição** (feature 09, `063f3ce..cdb64a6`) — a inspeção de recebimento ganhou **plano por
   material** (características com valor nominal e os dois desvios da tolerância, **com sinal**,

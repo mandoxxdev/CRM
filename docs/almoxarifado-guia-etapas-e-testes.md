@@ -2,9 +2,34 @@
 
 > Atualizado em 2026-08-29 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 27) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 28) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20.
 
-> ## Onde o desenvolvimento está — 2026-08-29 (Etapa 27 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-08-29 (Etapa 28 ENTREGUE · modo contínuo pelo mapa)
+>
+> **Etapas 1 a 20 e 22 a 28 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
+> A **Etapa 28 (a separação ganha dono, e quem separou não confere)** fechou em 2026-08-29
+> (`9cef003..62cb2b1`) e é da **feature 05 (separação e picking)**. Até ela, o sistema **não sabia
+> dizer quem separou** uma requisição — a separação gravava quantidades e nada mais, sem rastro na
+> Auditoria. Agora **cada rodada de separação tem dono, hora e itens**, a separação e a liberação
+> aparecem na Auditoria, e nasce a **segunda conferência**: outra pessoa confere a caixa, e o
+> sistema **recusa quem aparece em qualquer rodada** de separação. Com **material crítico ainda na
+> caixa**, a conferência é **obrigatória** para liberar **e** para entregar.
+>
+> **⚠️ ISTO MUDA O DIA A DIA de um almoxarifado com uma pessoa só:** material **crítico** passa a
+> exigir **dois usuários** com perfil Almoxarife (ou Administrador) para sair. Material comum não
+> muda. Leia a **B62** (a régua "só crítico" é decisão minha, reversível numa linha) e o furo
+> **C38** antes de subir. O roteiro desta etapa precisa de **dois logins**.
+>
+> **Duas coisas que a revisão mediu e mudaram o projeto:** a entrega direta saía de *Em Separação*
+> sem passar pela liberação (a barreira só na liberação era barreira opcional), e o formulário de
+> separação gravava os itens **um a um antes de validar o próximo** — um item errado deixava os
+> outros gravados **sem rodada**, e sem rodada a mesma pessoa separava, conferia e entregava.
+> Agora é **tudo ou nada**.
+> Ver a seção "Etapa 28" perto do fim deste guia, com o roteiro de teste.
+>
+> **Antes: Etapas 1 a 20 e 22 a 27 completas no módulo.**
+>
+> ## Onde o desenvolvimento estava — 2026-08-29 (Etapa 27 ENTREGUE)
 >
 > **Etapas 1 a 20 e 22 a 27 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
 > A **Etapa 27 (a divergência dimensional deixa de ser opinião e vira medição)** fechou em
@@ -3811,6 +3836,102 @@ recusa com 403.
   outra, edita-se material por material ou roda-se o `UPDATE` da A6.
 - **As 27 categorias do catálogo não foram revisadas com a GMP.** Estavam no banco desde o começo
   e foram assumidas como certas. Se alguma sobrar ou faltar, agora dá para arrumar pela tela.
+
+## Etapa 28 — A separação ganha dono, e quem separou não confere (ENTREGUE — 2026-08-29)
+
+**O que mudou, em uma frase:** cada rodada de separação passa a registrar **quem, quando e o quê**;
+nasce a **segunda conferência** por outra pessoa; e **material crítico não sai** da requisição
+sem ela.
+
+> ## ⚠️ LEIA ANTES DE TESTAR — precisa de DOIS usuários
+>
+> A regra central é que **uma pessoa só não fecha o ciclo** com material crítico. Para o roteiro
+> você precisa de **dois logins com perfil Almoxarife** (ou um Almoxarife e um Administrador).
+> Chame-os de **A** e **C**. Dá para fazer com duas janelas anônimas do navegador.
+>
+> **Material comum continua saindo exatamente como antes.** A conferência existe para toda
+> requisição, mas só **trava** quando há material **marcado como crítico** separado e ainda não
+> entregue. Se a sua base não tem nenhum material crítico, marque um em Almoxarifado → Materiais →
+> editar → *Material crítico*.
+
+### O problema que existia
+
+Quando falta material na caixa, a primeira pergunta é **"quem separou?"** — e o sistema não tinha
+resposta. A separação gravava as quantidades por item e **nada mais**: nem quem, nem quando, nem
+linha na Auditoria (curioso: no mesmo fluxo, *confirmar recebimento* e *rejeitar por valor* já
+auditavam). E sem saber quem separou, a regra *"quem confere não pode ser quem separou"* não tinha
+como existir.
+
+Dois detalhes que a revisão da etapa achou e mudaram o projeto:
+
+- **A entrega saía direto de *Em Separação***, sem passar por *Liberar para Retirada*. Uma
+  barreira colocada só na liberação seria barreira que ninguém é obrigado a passar. Por isso ela
+  está nas **duas** saídas.
+- **O formulário de separação gravava item a item antes de validar o próximo.** Um item acima do
+  máximo mostrava o erro, mas os anteriores **ficavam gravados** — e ficavam **sem rodada**, porque
+  a rodada só era registrada no fim. Sem rodada, a mesma pessoa separava, conferia e entregava.
+  Agora o sistema valida **tudo** antes de gravar **qualquer coisa**.
+
+### O que existe agora
+
+| Onde | O que mudou |
+|---|---|
+| **Detalhe da requisição** (modo almoxarifado) | Bloco **Separação (N)** com *quem · dia/hora · N itens* por rodada |
+| **Detalhe da requisição** | Linha **Conferida por X em …** e botão **Conferir separação** (cinza para quem separou) |
+| **Liberar para Retirada / Confirmar Entrega** | Ficam **cinza** enquanto há crítico na caixa sem conferência — e o servidor recusa mesmo sem a tela |
+| **Entrega de material crítico** | Só sai a quantidade **separada e ainda não entregue**; comum mantém a regra antiga |
+| **Auditoria** (Entidade = Requisição) | Ações novas: **Separação**, **Conferência da separação**, **Liberação para retirada** |
+| **Perfis** | Permissão nova **Conferir separação** (Administrador e Almoxarife) |
+
+### Roteiro de teste manual (15 minutos, dois logins)
+
+1. **Prepare:** um material **crítico** (Materiais → editar → marque *Material crítico*) com saldo,
+   e um material comum com saldo. Como qualquer requisitante, crie uma requisição com os dois,
+   envie e, como A, aprove.
+2. **Como A — separe.** Abra a requisição, **Iniciar Separação**, informe quantidade nos dois
+   itens, confirme. No detalhe aparece **Separação (1)** com o seu nome. Repare: **Liberar para
+   Retirada** e **Confirmar Entrega e Baixar Estoque** estão **cinza**; passe o mouse: *"Esta
+   requisição tem material crítico separado e precisa da segunda conferência antes de sair"*. O
+   botão **Conferir separação** também está cinza: *"Você separou esta requisição — a segunda
+   conferência precisa ser feita por outra pessoa"*.
+3. **Como A — tente sair mesmo assim** (opcional, pela API, para ver que a barreira é do servidor):
+   `PUT /api/almoxarifado/requisicoes/<id>/liberar-retirada` → *"Esta requisição tem material
+   crítico separado e ainda não passou pela segunda conferência. Peça a outra pessoa do
+   almoxarifado para conferir a separação antes de liberar ou entregar."* O mesmo em `/entregar`.
+   Confira em Materiais que o saldo **não mudou**.
+4. **Como C — confira.** Abra a mesma requisição: o botão **Conferir separação** está ativo.
+   Clique: *"Separação conferida!"* e a linha **Conferida por C em …**. Os botões de saída
+   ficaram ativos.
+5. **Como A — separe mais um pouco** (Ajustar Separação, aumente um item). A linha *Conferida por*
+   **some** e os botões de saída voltam a ficar cinza — a caixa mudou. Confirme **sem mudar
+   nada** outra vez: a conferência **não** some (a caixa não mudou).
+6. **Como C — confira de novo e libere.** Conferir separação → Liberar para Retirada → *"Requisição
+   liberada para retirada!"*.
+7. **Como A — entregue parte** do crítico (Confirmar Entrega, quantidade menor que a separada).
+   Vai para *Parcialmente Atendida*. Tente entregar **mais do que ficou separado** no crítico:
+   *"<material>: material crítico só sai depois de separado e conferido — 9 excede o separado
+   ainda não entregue (…). Separe o restante e peça a segunda conferência."* Entregue o **comum**
+   além do separado: passa (regra antiga, mantida para material comum).
+8. **Auditoria → Entidade = Requisição.** Para esta requisição: **Separação** (duas ou três,
+   com o de/para mostrando a conferência apagada na rodada que apagou), **Conferência da
+   separação** (duas), **Liberação para retirada**.
+9. **Perfil:** entre como um usuário **Produção** e tente `PUT .../conferir-separacao` pela API:
+   recusa de permissão nomeando *conferir_separacao*, antes de qualquer regra.
+
+### O que esta etapa NÃO cobre
+
+- **Lista de separação como entidade, rota de picking e kits** — o "picking" propriamente dito,
+  depende de endereçamento (feature 02).
+- **Localizações "Reservado"/"Kit"/"Aguardando retirada"** — a spec dizia que existiam; **não
+  existem** (corrigido na Fase 0); criá-las é mudança de contrato.
+- **Dupla conferência para outras operações** (ajuste, transferência, sucata de crítico) — a
+  **B57** continua aberta para essas; esta etapa respondeu a saída da requisição.
+- **Requisições separadas antes da etapa** não têm rodada: qualquer Almoxarife confere, inclusive
+  quem separou. Furo **C37**.
+- **Almoxarifado de uma pessoa** não tira crítico sozinho — **B62**/**C38**; reversível numa linha.
+- **Separar menos que o pedido com motivo obrigatório** — item da spec 05 não tocado.
+
+---
 
 ## Etapa 27 — A divergência dimensional deixa de ser opinião e vira medição (ENTREGUE — 2026-08-29)
 
