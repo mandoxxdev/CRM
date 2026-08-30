@@ -585,9 +585,9 @@ Corolário que vale conhecer: o perfil **Consulta** nunca acontece por omissão 
 | **Almoxarife** | Movimenta estoque, cadastra material, separa, entrega, aprova e inventaria — não ajusta saldo nem configura |
 | **Gestor** | Ajusta saldo, aprova requisição e inventaria — não movimenta nem cadastra material |
 | **Compras** | Consulta e recebe material |
-| **Engenharia** | Cadastra e edita material, requisita e reserva |
+| **Engenharia** | Cadastra e edita material, requisita, reserva e **define o plano de inspeção** (as tolerâncias que ela mesma especifica) |
 | **Produção** | Consulta, requisita e reserva material (é o padrão de quem não tem perfil definido) |
-| **Qualidade** | Consulta e decide inspeção: aprova/reprova item recebido, libera vencimento de lote e muda situação de lote e de série — não movimenta estoque, não ajusta saldo nem cadastra material |
+| **Qualidade** | Consulta, decide inspeção (aprova/reprova item recebido, libera vencimento de lote, muda situação de lote e de série) e **define o plano de inspeção** — as características a medir e suas tolerâncias. Não movimenta estoque, não ajusta saldo nem cadastra material |
 | **Consulta** | Somente leitura |
 
 A separação entre **Almoxarife** e **Gestor** é intencional e é o desenho de controle interno do módulo: quem **movimenta** o estoque não é quem **corrige** o saldo. O almoxarife lança entradas e saídas; o ajuste de inventário — o lançamento que faz o número bater sem que nada tenha entrado ou saído — pertence ao gestor.
@@ -611,6 +611,7 @@ A separação entre **Almoxarife** e **Gestor** é intencional e é o desenho de
 | Requisitar | ● | ● | – | ● | ● | – | – | – |
 | Receber material | ● | ● | ● | – | – | – | – | – |
 | Inspecionar | ● | ● | – | – | – | – | ● | – |
+| Gerenciar plano de inspeção (características a medir e tolerâncias) | ● | – | – | – | ● | – | ● | – |
 | Reservar | ● | ● | – | ● | ● | – | – | – |
 | Reservar para outra OS | ● | – | – | – | – | ● | – | – |
 | Inventariar | ● | ● | – | – | – | ● | – | – |
@@ -627,7 +628,8 @@ Seis leituras que essa tabela permite fazer, e que vale explicar a quem pergunta
 - **Ajustar material de cliente é mais restrito que ajustar o estoque próprio.** O Gestor ajusta o saldo da GMP; **apenas o Administrador** ajusta o saldo de material que pertence a um cliente. O motivo é direto: aquele número é o que o cliente vai conferir e cobrar.
 - **Reservar para outra OS** é separado de **Reservar**. Qualquer requisitante reserva material para a própria ordem; transferir uma reserva de uma OS para outra é decisão de priorização, e fica com o Administrador e o Gestor.
 - **Inspecionar** é o que autoriza aprovar, reprovar e liberar material da quarentena, e também mudar a situação de um lote ou de uma série, e liberar vencimento. Pertence ao Administrador, ao Almoxarife e ao **Qualidade**.
-- **O perfil Qualidade decide inspeção sem receber nada além disso.** Ele existe justamente para que a área de qualidade não precise pedir ao almoxarifado que decida por ela, nem receber um perfil largo. Consequência que quem for usá-lo precisa saber: **os botões "Bloquear Material" e "Desbloquear Material" da tela de Inspeções não são dele** — eles mexem em saldo e pertencem a **Ajustar estoque** (Administrador e Gestor). Clicando neles, o Qualidade recebe:
+- **Gerenciar plano de inspeção** é o que autoriza cadastrar, editar e desativar as características a medir de um material, com o valor nominal e a tolerância (15.2.1). Pertence ao Administrador, ao **Qualidade** e à **Engenharia** — quem especifica tolerância. **Ler** o plano é liberado a qualquer usuário do módulo, porque quem inspeciona precisa saber o que medir. É permissão **separada de Configurar** de propósito: *Configurar* é só do Administrador, e prendê-la ali deixaria a qualidade sem cadastrar o que ela mesma mede.
+- **O perfil Qualidade decide inspeção e define o plano de inspeção — e nada além disso.** Ele existe justamente para que a área de qualidade não precise pedir ao almoxarifado que decida por ela, nem receber um perfil largo. Além de *Inspecionar*, ele tem **Gerenciar plano de inspeção** (15.2.1), que é o cadastro das características a medir e das tolerâncias — não faria sentido a qualidade não poder cadastrar o que ela mesma vai medir. Consequência que quem for usá-lo precisa saber: **os botões "Bloquear Material" e "Desbloquear Material" da tela de Inspeções não são dele** — eles mexem em saldo e pertencem a **Ajustar estoque** (Administrador e Gestor). Clicando neles, o Qualidade recebe:
   > *Sem permissão para ajustar saldo de estoque — seu perfil é Qualidade. Solicite acesso a um administrador.*
 
   Bloquear material por decisão de qualidade continua acontecendo **dentro da inspeção** (reprovar o item recebido), que é o que ele pode.
@@ -1765,9 +1767,43 @@ Os três resultados possíveis:
 
 A quantidade física do material **não muda** em nenhum dos três casos — o material continua na prateleira; o que muda é o que se pode fazer com ele. E decidir é uma operação única: aprovar e reprovar acontecem juntos, nunca em dois passos que poderiam ficar pela metade.
 
-Uma decisão de inspeção **não pode ser estornada pelo livro de movimentações** — ela é o registro de um julgamento, não um lançamento de saldo a acertar. Para rever a decisão, use a própria tela de Inspeções.
+Uma decisão de inspeção **não pode ser estornada pelo livro de movimentações** — ela é o registro de um julgamento, não um lançamento de saldo a acertar. **E rever uma decisão já tomada não tem caminho no sistema:** a tela de Inspeções lista apenas o que **ainda não foi decidido**, então o item decidido some dela. O que continua recuperável é o **saldo**, por Bloquear/Desbloquear Material (15.3) — o **registro** da inspeção é imutável.
 
-Perfil exigido: **inspecionar** (Administrador e Almoxarife).
+Perfil exigido: **inspecionar** (Administrador, Almoxarife e Qualidade).
+
+### 15.2.1 Plano de inspeção e medidas dimensionais
+
+O sistema guarda, por material, um **plano de inspeção**: a lista de características a medir. Cada característica tem **nome** (ex.: *Diâmetro externo*), **unidade**, **valor nominal** e **dois desvios**.
+
+**Os desvios têm sinal, e não são "quanto para cada lado".** Uma tolerância simétrica de ±0,05 se escreve `-0,05` e `+0,05`. Uma tolerância **unilateral deslocada** — normal em ajuste de eixo — se escreve `+0,005` e `+0,021`, com os **dois** limites acima do nominal; nesse caso, uma peça no nominal exato está **fora**. A faixa aceita é `nominal + desvio inferior` até `nominal + desvio superior`, **incluindo os dois extremos**: peça no limite exato é conforme, que é o que a tolerância significa. O desvio inferior não pode ser maior que o superior — o sistema recusa com *"O desvio inferior não pode ser maior que o superior"*.
+
+Duas características com o mesmo nome no mesmo material são recusadas: *"Já existe esta característica no plano deste material"*. Desativar uma característica libera o nome para ser recriado.
+
+**Quando uma inspeção é registrada com medidas, a caixa "Divergência dimensional" deixa de ser opinião e passa a ser calculada:**
+
+| Situação | O que o sistema faz |
+|---|---|
+| Alguma medida **fora** da faixa | Liga a divergência dimensional, **mesmo que ninguém tenha marcado** |
+| Todas as medidas **dentro** da faixa | Desliga a divergência, **mesmo que a caixa tenha sido marcada** |
+| **Nenhuma medida** informada | A caixa marcada à mão continua valendo, como sempre valeu |
+
+Cada medida fica gravada com o valor medido, o veredito (conforme ou não), o instrumento usado e — importante — **o nominal e a tolerância que valiam no dia da inspeção**. Editar o plano depois **não** reescreve inspeções antigas: a medida continua contando a história do momento em que foi feita.
+
+**Instrumento com calibração vencida não mede.** Se a medida declarar um instrumento que exige calibração e ele não tiver calibração vigente, a inspeção inteira é recusada — *"Ferramenta com calibração vencida ou sem calibração registrada (⟨nome do instrumento⟩)"*. A mesma frase cobre o instrumento vencido e o nunca calibrado. Instrumento inexistente ou desativado responde *"Ferramenta não encontrada"*. **Declarar o instrumento é opcional**: a medida sem instrumento é aceita, e o que a regra garante é que um instrumento *declarado* e vencido não mede.
+
+Outras recusas de medida, todas antes de qualquer efeito no saldo:
+
+| Situação | Mensagem |
+|---|---|
+| Característica que não existe | *"Característica de plano de inspeção não encontrada: ⟨id⟩"* |
+| Característica que é do plano de **outro** material | *"A característica "⟨nome⟩" não pertence ao plano de inspeção deste material"* |
+| Valor com vírgula decimal, texto ou vazio | *"Valor medido inválido para "⟨característica⟩": informe um número (use ponto decimal)"* |
+
+**Toda recusa acontece antes de o saldo se mover.** Uma inspeção recusada por qualquer um dos motivos acima deixa o material exatamente como estava: ainda retido, ainda na fila.
+
+**Onde isto se faz hoje:** o plano de inspeção e o registro de medidas **não têm tela**. O formulário **Decidir Inspeção** continua com a caixa *Divergência dimensional* marcada à mão, e é assim que a inspeção é feita pelo navegador. As regras acima valem para quem registra a inspeção por integração, e são o comportamento que a tela vai seguir quando ganhar os campos de medida.
+
+**Quem pode mexer no plano:** a permissão é **Gerenciar plano de inspeção**, dos perfis **Administrador**, **Qualidade** e **Engenharia** — quem especifica tolerância. **Ler** o plano é liberado a qualquer usuário do módulo, porque quem inspeciona precisa saber o que medir. Criar, editar e desativar característica aparece na **Auditoria**, sob a entidade **Plano de inspeção**, com o de/para dos valores. A **decisão de inspeção em si não aparece na Auditoria** — o registro dela são a linha do livro de movimentações e o próprio registro da inspeção.
 
 ### 15.3 Bloqueio e desbloqueio avulso
 

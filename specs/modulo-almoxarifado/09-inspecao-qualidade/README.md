@@ -3,9 +3,17 @@
 > **Status:** 🟡 — quarentena e decisão de inspeção reais desde a Etapa 5; **o perfil QUALIDADE
 > existe desde a Etapa 24** (`a81e51a`) e alcança as quatro rotas de `inspecionar`, com a ressalva
 > de que bloqueio/desbloqueio **avulso** usa `ajustar_estoque` e ficou fora de propósito (**B56**);
-> faltam plano de inspeção com medidas, não conformidade formal numerada e desvio autorizado ·
+> **o plano de inspeção com medidas existe no BACKEND desde a Etapa 27** (`063f3ce..cdb64a6`) —
+> plano por material, régua da tolerância, medidas gravadas com instrumento e
+> `divergencia_dimensional` **derivada** —, mas **sem tela**: o formulário de decisão continua com
+> a caixa manual, e as medidas nascem sem leitor; faltam não conformidade formal numerada,
+> liberação sob desvio autorizado, anexos, encaminhamento com status e a UI ·
 > **Spec original:** seção 9
-> **Última atualização:** 2026-08-29 (**Etapa 24, `a81e51a`: o perfil QUALIDADE — pendência que
+> **Última atualização:** 2026-08-29 (**Etapa 27, `063f3ce..cdb64a6`: os DOIS PRIMEIROS itens do
+> checklist de backend saem** — planos de inspeção e registro de medidas + instrumento. A feature
+> **continua 🟡**, e o que falta para 🟢 está nomeado abaixo em "O que falta para 🟢". A correção
+> da Fase 0 sobre a feature 16 — que esta spec dizia não existir — **fica onde está, à vista**.)
+> Antes: 2026-08-29 (**Etapa 24, `a81e51a`: o perfil QUALIDADE — pendência que
 > esta spec nomeava desde a Etapa 5 — foi criado**, com `visualizar` e `inspecionar` e mais nada;
 > as quatro rotas de `inspecionar` medidas com um usuário QUALIDADE real no harness. A ressalva de
 > bloqueio avulso, que esta spec já nomeava em 2026-08-11, **continua valendo e agora tem
@@ -31,16 +39,26 @@ Inspeção de recebimento com plano, quarentena e bloqueio efetivos no saldo, n�
   - `GET /api/almoxarifado/inspecoes/pendentes` — só `auth` (qualquer usuário autenticado do módulo, sem checagem de perfil por ação — é leitura).
   - `POST /api/almoxarifado/materiais/:id/bloquear` e `POST /api/almoxarifado/materiais/:id/desbloquear` — permissão `ajustar_estoque` (perfis `ADMINISTRADOR`, `GESTOR`; **não** inclui `ALMOXARIFE` — quem decide inspeção não necessariamente pode bloquear/desbloquear material avulso pela tela nova, é uma permissão diferente da de inspecionar).
 - Tela `InspecoesAlmoxarifado.js` (`client/src/components/almoxarifado/`): fila de pendentes com material/quantidade retida/recebimento/dias em espera, modal de decisão (aprovar total ou parcial, reprovar com observação obrigatória e encaminhamento), e bloqueio/desbloqueio avulso com justificativa obrigatória. Rota `/almoxarifado/inspecoes`, item "Inspeções" no menu (`Layout.js`).
+- **Etapa 27 — `planos_inspecao_almoxarifado`** (`schema.js`): `material_id` (FK), `caracteristica`, `unidade`, `valor_nominal`, `desvio_inferior`/`desvio_superior` (**REAL COM SINAL**, default 0), `ativo`, `created_at`, mais `CREATE UNIQUE INDEX ... ON (material_id, caracteristica) WHERE ativo = 1` (**parcial**, porque o delete é soft). Nasce com o índice, então não houve `try/catch` na criação — ao contrário da Etapa 26, aqui não existe base legada com plano duplicado.
+- **Etapa 27 — `medidas_inspecao_almoxarifado`** (`schema.js`): `inspecao_id` (FK), `plano_id` **NOT NULL** (o plano nunca é apagado — o delete é soft), `caracteristica`, `unidade`, `valor_nominal`, `desvio_inferior`, `desvio_superior` (**os cinco CONGELADOS no ato**, RN-05), `valor_medido` NOT NULL, `conforme` NOT NULL, `ferramenta_id` **nullable**, `ferramenta_nome` (também congelado), `created_at`.
+- **Etapa 27 — `services/almoxarifado/toleranciaInspecao.js`** (**novo**): função **pura**, sem banco. `avaliarMedida({ nominal, desvioInf, desvioSup, medido }) -> { conforme, desvio, motivo }` com `inf = nominal + desvioInf`, `sup = nominal + desvioSup`, comparação **inclusiva com epsilon `1e-6`**, `desvio = medido - nominal` (**com sinal**), e os motivos `NAO_NUMERICO` (que o chamador transforma em 400, nunca em reprovação) e `FAIXA_INVALIDA`. Exporta também `paraNumeroFinito`, reusada pelo CRUD e pelo serviço de inspeção. 18 asserções em `toleranciaInspecao.api.test.js`.
+- **Etapa 27 — `decidirInspecao` aceita `medidas`** (`inspectionService.js`): `resolverMedidas` resolve o plano, avalia por `avaliarMedida`, checa `calibracaoVigente` e devolve as linhas prontas — **tudo isso ANTES da Fase 1 do claim de saldo**, de propósito (o comentário da guarda de fechamento promete que "o saldo não pode mudar quando isto recusa"). A gravação é um **único `INSERT` multi-linha**. O retorno ganhou `divergencia_dimensional` e `medidas_registradas` (aditivos), para que quem chamou saiba que a marcação manual foi ignorada.
+- **Etapa 27 — ação de perfil `gerenciar_plano_inspecao`** (`permissions.js:113`): `[ADMINISTRADOR, QUALIDADE, ENGENHARIA]`. Aparece de graça em `GET /almoxarifado/minhas-permissoes` (que itera `Object.keys(ACAO_PERFIS)`).
 - Tabela órfã `controle_qualidade` (`server/index.js`, `CREATE TABLE` perto da linha 19589): **verificado em 2026-08-08, continua órfã para escrita** — nenhum `INSERT`/`UPDATE` em todo o repositório grava nela. É lida (`SELECT`) só em cálculos de dashboard de produção/OEE (`server/index.js`, três consultas perto das linhas 22470/22557/22696), que referenciam `lote_id`/`os_id` — um domínio de qualidade de **produção**, não do almoxarifado — e por isso sempre retornam vazio (nada nunca insere ali). A Etapa 5 não tocou nessa tabela nem a reaproveitou: `inspecoes_recebimento_almoxarifado` é uma tabela diferente e é a que este README documenta. Ignorar continua sendo a recomendação — não há caminho de escrita para reaproveitar.
 
 ## Checklist
 
 ### Backend
-- [ ] Planos de inspeção (por material/família: o que medir, critérios) — **fora do escopo da Etapa 5** (decisão do design 2026-08-07).
-- [ ] Registro de medidas + instrumento de medição utilizado — **fora do escopo da Etapa 5**, mesmo motivo acima.
-  > **CORREÇÃO (Fase 0 da Etapa 27, medida em 2026-08-29): estas duas linhas diziam que a feature
-  > 16 (calibração de instrumentos) "também não existe ainda", e isso ESTÁ ERRADO desde
-  > 2026-08-22.** A feature 16 está **🟢** no mapa (`specs/modulo-almoxarifado/README.md:603`),
+- [x] Planos de inspeção (por material: o que medir, critérios) — **Etapa 27, Task 2 (`a15ac3b`)**: tabela `planos_inspecao_almoxarifado` (`schema.js`) e CRUD completo em `extended.js` (`GET|POST /planos-inspecao`, `PUT|DELETE /planos-inspecao/:id`), com **índice único parcial** `(material_id, caracteristica) WHERE ativo = 1` — a colisão é detectada **pelo banco**, como no molde de categorias, porque `SELECT`-antes-do-`INSERT` teria janela de corrida —, soft delete, `material_id` validado por existência (a FK **não** segura: o harness roda com `PRAGMA foreign_keys = 0` e produção com `1`) e rastro na auditoria com a entidade nova `plano_inspecao` (rótulo *"Plano de inspeção"* em `auditLabels.js`). Gate: a **ação própria** `gerenciar_plano_inspecao: [ADMINISTRADOR, QUALIDADE, ENGENHARIA]` — **não** `configurar`, que é `[ADMINISTRADOR]` sozinho e deixaria a QUALIDADE sem poder cadastrar o que ela mesma vai medir. 22 cenários em `planoInspecao.api.test.js`.
+  > **A PARTE "FAMÍLIA" DO ITEM NÃO FOI ENTREGUE, e o `[x]` é do resto.** A spec original diz "por material/**família**"; o plano é **por material** apenas. Foi corte deliberado, pelo caminho reversível: herdar da família é fácil de acrescentar depois, e nascer só na família seria difícil de desfazer. Está na letra **B59** das novidades, com três opções e recomendação. **Se você lê este `[x]` esperando herança de família, ela não existe.**
+- [x] Registro de medidas + instrumento de medição utilizado — **Etapa 27, Tasks 1 e 3 (`bae9350`, `964cf57`)**: tabela `medidas_inspecao_almoxarifado`, régua pura `toleranciaInspecao.avaliarMedida` (arquivo próprio, sem banco) e a gravação dentro de `inspectionService.decidirInspecao`, que passou a aceitar `medidas: [{ plano_id, valor_medido, ferramenta_id }]` — **opcional**: sem elas tudo segue exatamente como antes desta etapa. 21 cenários em `medidasInspecao.api.test.js` + 8 de integração ponta a ponta por HTTP em `inspecaoIntegracao.api.test.js` (`cdb64a6`). O instrumento entra por `calibracaoVigente` (`toolService.js:57`) — **é aqui que a integração com a feature 16 vira valor**, e é a integração que o `16-ferramentas-calibracao/README.md` já pedia dos dois lados.
+  > **Cinco decisões deste item, todas declaradas:** **(1)** os desvios são **COM SINAL** (`desvio_inferior <= desvio_superior`), não magnitudes — só assim a **tolerância unilateral deslocada** (ISO 286, eixo `+0,005 / +0,021`) é representável, e trocar depois seria migração de dado congelado; **(2)** a régua é **inclusiva nos extremos com epsilon `1e-6`** (o mesmo de `inspectionService.js:78` e `InspecoesAlmoxarifado.js:126`) — sem ele, **12,3% das peças no limite exato reprovariam** por ponto flutuante (6.132 falsos em 50.000 pares varridos), e com a RN-03 cada um ligaria `divergencia_dimensional` sozinho; **(3)** `valor_medido` não numérico é **400**, nunca reprovação — **e a razão medida contradiz o design**: na forma de guardas de rejeição, `Number('12,4')` **APROVA** a característica, com `valor_medido` nulo e a divergência apagada, em vez de reprovar como o design afirmava; **(4)** o plano é **congelado no ato** (RN-05): a medida copia caracteristica/unidade/nominal/desvios/nome do instrumento, e editar o plano depois não reescreve inspeção antiga; **(5)** **`ferramenta_id` é OPCIONAL** — ver a correção da RN-04 abaixo.
+  > **CORREÇÃO (Task 3): a regra "medida exige instrumento" ESTAVA IMPRECISA.** O que o código garante é *"instrumento **declarado** e vencido não mede"*, não *"toda medida tem instrumento"*: a coluna `medidas_inspecao_almoxarifado.ferramenta_id` é **nullable**, e exigir o campo em código contradiria o schema. Decidido seguir o schema porque é o caminho reversível (obrigar depois é uma linha; afrouxar depois exigiria migração de dado congelado). Letra **B61**. **Quem ler "exige instrumento" e escrever a tela contando com o campo sempre preenchido vai se enganar** — daí a correção estar aqui, e não só no plano da etapa.
+  > **A suíte NÃO protege a forma da gravação, e isso é achado, não omissão.** As medidas entram num **único `INSERT` multi-linha** de propósito (defesa contra o ato parcial que a Etapa 23 consertou no `PUT /configuracoes`). Trocá-lo por um laço **não derruba nenhum teste** — medido: com a validação completa rodando **antes** do claim de saldo, nenhuma linha do payload consegue mais falhar no `INSERT` (todo `valor_medido` já é número finito, todo `conforme` já é 0/1, e não há `UNIQUE` na tabela), então o ato parcial ficou **inalcançável pela porta da frente**. A diferença foi provada com um `UNIQUE (inspecao_id, plano_id)` artificial: o laço deixa **1 medida órfã**, o multi-linha deixa **0**. **A forma segura ficou** — é barata e vale para o dia em que alguém acrescentar uma constraint ou uma coluna `NOT NULL` —, mas **quem mexer ali precisa saber que nenhum teste vai avisar**.
+  > **CORREÇÃO (Fase 0 da Etapa 27, medida em 2026-08-29) — mantida à vista mesmo agora que os
+  > dois itens estão `[x]`, porque foi ela que destravou a etapa: enquanto estavam `[ ]`, estas
+  > duas linhas diziam que a feature 16 (calibração de instrumentos) "também não existe ainda", e
+  > isso ESTAVA ERRADO desde 2026-08-22.** A feature 16 está **🟢** no mapa (`specs/modulo-almoxarifado/README.md:603`),
   > entregue pela Etapa 9b (`d644827..b8e6f60`): `ferramentas_almoxarifado.exige_calibracao`
   > (`schema.js:1572`, rotulada na tela como *"Exige calibração (instrumento de medição)"*),
   > `calibracoes_ferramenta_almoxarifado` (`schema.js:1537`), `toolService.calibracaoVigente` e
@@ -97,8 +115,36 @@ Inspeção de recebimento com plano, quarentena e bloqueio efetivos no saldo, n�
 
 ### Frontend
 - [x] Fila de inspeções pendentes — **Etapa 5** (`dcee909`, `InspecoesAlmoxarifado.js`): lista o que está retido, de qual recebimento, há quantos dias.
-- [ ] Form de inspeção com plano/medidas/fotos — existe o form de **decisão** (aprovar total/parcial, reprovar com observação obrigatória, encaminhamento, flags de divergência/dano/certificado), mas sem plano de inspeção, medidas ou fotos — depende dos itens em aberto acima (planos/medidas ligam com feature 16; fotos com anexos).
+- [ ] Form de inspeção com plano/medidas/fotos — **CONTINUA DESMARCADO, e agora por um motivo diferente do anterior.** Existe o form de **decisão** (aprovar total/parcial, reprovar com observação obrigatória, encaminhamento, flags de divergência/dano/certificado), e ele segue **sem campos de medida**: quem inspeciona pela tela marca a caixa *Divergência dimensional* à mão, exatamente como antes da Etapa 27.
+  > **A frase antiga — "depende dos itens em aberto acima (planos/medidas ligam com feature 16)" — DEIXOU DE VALER**: o backend está pronto desde a Etapa 27 e a ligação com a feature 16 foi feita. **O que falta agora é só a tela.** Isso é a letra **C34** das novidades.
+  > **E há um requisito de projeto para essa etapa da UI, escrito enquanto o raciocínio estava fresco (letra B60):** quando a tela ganhar campos de medida, a caixa *Divergência dimensional* tem de virar **somente leitura, derivada e explicada**. Se ficar clicável ao lado dos campos, o usuário marca, o **servidor ignora** (RN-03: com medidas, a derivação vence o payload) e a tela passa a mostrar uma coisa enquanto o banco guarda outra — **exatamente o defeito que a Etapa 26 teve de consertar** no formulário de material. Sem medidas preenchidas, ela volta a ser clicável e manual.
+- [ ] **Tela para LER as medidas de uma inspeção já decidida** — item **novo**, criado pela Etapa 27. As medidas são gravadas completas (valor, tolerância do ato, veredito, instrumento) e **não há tela que as mostre**: `GET /inspecoes/pendentes` só traz o que **não** foi decidido, e "rever uma inspeção concluída não tem caminho no produto" já era limitação registrada nesta spec desde 2026-08-08. É a **terceira** ocorrência nesta base do padrão *calculado, gravado e sem quem leia*, e está declarada em vez de descoberta depois — letra **C35**.
 - [x] Gestão de bloqueios e quarentena (o mapa já mostra áreas — falta operação) — **Etapa 5** (`dcee909`): bloqueio/desbloqueio avulso de material agora tem botão e formulário na tela de Inspeções.
+
+## O que falta para 🟢 (nomeado em 2026-08-29, no fechamento da Etapa 27)
+
+**A feature NÃO muda de cor.** Ela continua **🟡**, e a razão é curta: a Etapa 27 pagou os **dois
+primeiros** itens do checklist de backend, e sobram **cinco**, dos quais três são fluxo inteiro.
+Sem esta lista escrita, a próxima leitura teria de refazer a conta — e nesta base isso já produziu
+"o que falta para 🟢" errado quatro vezes seguidas na feature 23.
+
+1. **Não conformidade formal** (número, descrição, ação, responsável) vinculada à inspeção — é uma
+   máquina de estados própria; o que existe hoje é o `encaminhamento` registrado na reprovação.
+2. **Liberação sob desvio autorizado** (quem autorizou, justificativa, histórico imutável) — idem.
+3. **Anexos** (certificado, relatório dimensional, fotos) — depende de
+   `anexos_documento_almoxarifado`, que é item próprio de outra spec.
+4. **Encaminhamento com status** (saber se a devolução/análise/substituição foi executada) — a
+   execução em si é a feature 12.
+5. **A TELA de medidas** — e junto dela a **tela de leitura** das medidas já gravadas. É o único
+   item dos cinco que é *só* trabalho de front: o contrato está pronto, testado e integrado.
+
+**O que NÃO conta para a cor, porque é decisão de negócio declarada e não funcionalidade
+faltante:** o plano por **família** (**B59**), a obrigatoriedade do instrumento (**B61**) e a
+ressalva do bloqueio avulso fora do perfil QUALIDADE (**B56**).
+
+**E dois itens antigos desta spec continuam abertos e não entraram na conta acima porque são
+pendências, não checklist:** reprovar por **lote** não está ligado à inspeção (seção abaixo) e
+material reprovado fica bloqueado sem vínculo ao recebimento de origem (seção abaixo).
 
 ## Pendência criada por esta etapa
 
@@ -173,6 +219,12 @@ do efeito de saldo. A reprovação parcial fica em aberto até alguém decidir s
   imutável é o **registro** da inspeção em `inspecoes_recebimento_almoxarifado`. É feature
   faltante, não inconsistência de saldo: uma correção de erro de inspeção hoje aparece como ajuste
   avulso, sem vínculo com a decisão que a originou.
+  **ADENDO (Etapa 27, 2026-08-29):** esta limitação ganhou peso. A partir de agora a inspeção pode
+  guardar **medidas dimensionais completas** (valor medido, tolerância do ato, veredito,
+  instrumento) — e, como não há caminho para reabrir uma inspeção concluída, **não há caminho para
+  ler as medidas** também. Elas nascem sem leitor. Foi **declarado antes de construir**, não
+  descoberto depois: está no design da etapa, na letra **C35** das novidades e como item próprio no
+  checklist de frontend acima.
 - **Retenção não pode nascer da rota genérica de movimentação.** `POST /movimentacoes/v2` tem gate
   `movimentar` (o mais amplo do módulo) e aceitava qualquer tipo do motor, o que tornava decorativo
   o gate das rotas específicas — um `ALMOXARIFE` que toma 403 em `POST /materiais/:id/bloquear`
@@ -208,8 +260,18 @@ do efeito de saldo. A reprovação parcial fica em aberto até alguém decidir s
 | `AJUSTE` por localização (e seu estorno) não zera a retenção do material | `AJUSTE por localizacao nao evapora a quarentena do material` + `estorno de AJUSTE por localizacao nao evapora a reserva do material` — `server/tests/api/ajusteLocalizacao.api.test.js` |
 | Quantidade não numérica é recusada com 400 (NaN não pode contornar a guarda de fechamento) | `POST inspecionar com quantidade nao numerica retorna 400...` + `POST bloquear/desbloquear com quantidade nao numerica retorna 400` — `server/tests/api/inspecaoRotas.api.test.js` |
 | Lote reprovado não sai para consumo | ✅ **no motor**: `saida de lote reprovado falha` + `saida de lote bloqueado falha, e liberar o lote destrava` — `server/tests/api/loteGuardasSaida.api.test.js` (Etapa 6, `65d78fd`). **Correção de 2026-08-09:** esta linha dizia *"não implementado — depende do controle de lote/série (feature 10), que ainda não existe"*. A feature 10 (lotes) **existe** desde a Etapa 6 e o motor recusa a saída. O que continua faltando é a **inspeção marcar o lote** — ver a pendência abaixo |
+| Medida fora da tolerância liga `divergencia_dimensional` **sozinha**, sem o payload marcar; todas dentro **zeram** a flag mesmo com o payload mandando 1 | `(1) RN-03 medida FORA da tolerancia liga divergencia_dimensional SEM o payload marcar` + `(2) RN-03 todas DENTRO zeram a flag mesmo com o payload mandando 1` — `server/tests/api/medidasInspecao.api.test.js` (Etapa 27, `964cf57`) |
+| Peça no limite **exato** da tolerância é conforme (epsilon `1e-6`; sem ele 12,3% reprovariam) | `limite inferior exato e conforme` / `limite superior exato e conforme` — `toleranciaInspecao.api.test.js` (`bae9350`), e `(4) RN-02 a medida no limite EXATO da tolerancia e conforme` — `medidasInspecao.api.test.js` |
+| Instrumento que exige calibração e não tem vigente **não mede** (400 com a literal do vizinho); vigente aceita; inexistente/inativo é **404**, não 500 | `(5)`, `(6)`, `(7)`, `(8)` — `medidasInspecao.api.test.js` |
+| Editar o plano depois **não** reescreve inspeção antiga (valores congelados no ato) | `(11) RN-05 ...` — `medidasInspecao.api.test.js`; e `(4)`/`(5)` de `inspecaoIntegracao.api.test.js` (`cdb64a6`), pela rota |
+| `valor_medido` não numérico (`'12,4'`) é **400** e **nada** é gravado — nunca reprovação com `NULL` | `(16)` — `medidasInspecao.api.test.js`; e `valor nao numerico ...` — `toleranciaInspecao.api.test.js` |
+| `medidas: []` **preserva** a marcação manual do payload (array vazio não ativa a derivação) | `(17)` — `medidasInspecao.api.test.js` |
+| Toda recusa nova acontece **antes** do claim de saldo (o item mantém `quantidade_em_inspecao`) | asserção presente em **todos** os cenários de recusa de `medidasInspecao.api.test.js` — é o que a sabotagem (d) da Task 3 derrubou em 6 cenários |
+| CRUD do plano: criar/listar/editar/desativar, duplicada recusada pelo índice, faixa invertida recusada, gate por perfil | 22 cenários em `server/tests/api/planoInspecao.api.test.js` (Etapa 27, `a15ac3b`) |
+| O plano deixa rastro na **tela-contrato** da auditoria (`entidade=plano_inspecao`, rótulo "Plano de inspeção", de/para do nominal) | `(7)` — `server/tests/api/inspecaoIntegracao.api.test.js` (`cdb64a6`) |
+| A decisão de inspeção **não** deixa rastro na auditoria (ausência declarada, com a metade positiva ao lado) | `(8)` — `server/tests/api/inspecaoIntegracao.api.test.js` |
 | Desvio autorizado exige responsável + justificativa e fica registrado | não implementado — fora do escopo da Etapa 5 |
 
 ## Dependências
 
-- 08 (recebimento dá entrada retida; este README decide o que a 08 apenas reteve) · 03 (efeitos no saldo via movimentação) · **10 (lotes existem desde a Etapa 6 e o motor recusa lote reprovado; ligar `decidirInspecao` ao lote é pendência DESTA feature — ver seção acima. Séries continuam ausentes, Etapa 6b)** · 12 (Devoluções — vai consumir o `encaminhamento` registrado aqui) · 16 (calibração de instrumentos — plano de inspeção com medidas depende disso).
+- 08 (recebimento dá entrada retida; este README decide o que a 08 apenas reteve) · 03 (efeitos no saldo via movimentação) · **10 (lotes existem desde a Etapa 6 e o motor recusa lote reprovado; ligar `decidirInspecao` ao lote é pendência DESTA feature — ver seção acima. Séries continuam ausentes, Etapa 6b)** · 12 (Devoluções — vai consumir o `encaminhamento` registrado aqui) · **16 (calibração de instrumentos — a ligação FOI FEITA na Etapa 27: `decidirInspecao` chama `toolService.calibracaoVigente` por require direto, sem ciclo, e instrumento vencido recusa a medida. A linha anterior desta spec dizia que "plano de inspeção com medidas depende disso" como se fosse bloqueio pendente; a dependência está SATISFEITA)**.

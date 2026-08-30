@@ -277,13 +277,15 @@ servidor e a A7 não foi resolvida.
 
 ### B. Decisões de negócio
 
-### B. Decisões de negócio — B1 a B58; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B61; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(O título desta seção dizia "B1 a B24" — **estava defasado**: os itens já iam até B36 antes da
 Etapa 20. Corrigido em 2026-08-28 para B50, depois para B56 com as três da Etapa 24, para B57 com
 a da Etapa 25, e **agora para B58**, com a da Etapa 26. Fica dito em vez de reescrito em silêncio,
 porque a contagem errada fazia parecer que as decisões novas não tinham sido registradas — e este
-título já esteve defasado duas vezes.)*
+título já esteve defasado duas vezes. **Atualizado de novo em 2026-08-29 para B61**, com as três
+da Etapa 27 — B59 (plano por família), B60 (o alerta para a etapa da tela) e B61 (instrumento
+opcional, decisão já tomada).)*
 
 **A B6 SAIU da lista de em aberto — foi respondida pela Etapa 26** (2026-08-29): vence o catálogo
 do cliente, e a lista genérica sai das telas. Ver o item B6 abaixo, que ficou no lugar com o
@@ -298,7 +300,9 @@ auditoria de export/gates antigos), B21-B24 (as quatro da Etapa 14 — **a B21 �
 acesso já em vigor, leia primeiro**), **B41 (o único item em aberto da Etapa 20: a contagem de
 permissões por setor que qualquer usuário do módulo lê)** e **B54 (o único item em aberto da
 Etapa 24: apertar o perfil padrão de quem não tem perfil definido)** e **B57 (o único item da
-Etapa 25: quais operações sobre material crítico exigem duas assinaturas)**.
+Etapa 25: quais operações sobre material crítico exigem duas assinaturas)** e **B58 (a única da
+Etapa 26: renomear categoria reclassifica?)** e **B59 (a da Etapa 27: plano de inspeção herdado da
+família?)**.
 As quatro decisões da Etapa 20 que **eu já tomei** e você pode reverter estão em B37-B40, as
 **cinco da Etapa 21** (a primeira etapa do núcleo do CRM) estão em **B42-B46**, e as **quatro da
 Etapa 22** estão em **B47-B50** — todas tomadas por mim, nenhuma esperando resposta, todas
@@ -309,6 +313,11 @@ em material crítico) e ela espera você** — está escrita com quatro opções
 uma, a minha recomendação e o comportamento de hoje declarado, para você arbitrar lendo.
 A **única da Etapa 26 é a B58 (renomear categoria deve reclassificar os materiais?) e ela espera
 você** — com as três opções, a consequência de cada uma e o comportamento de hoje declarado.
+As **três da Etapa 27 são B59, B60 e B61**: a **B59** (plano por família) espera você; a **B60**
+não é pergunta e sim um **alerta para a etapa da tela** — a caixa "Divergência dimensional" tem de
+virar somente leitura quando a tela ganhar campos de medida, senão a tela mostra uma coisa e o
+banco guarda outra; e a **B61** (informar o instrumento é opcional) é decisão que **eu tomei**,
+escrita com o caminho de volta.
 **B33 (quem lê a trilha de auditoria) SAIU da lista de em aberto** — a tela foi entregue na
 Etapa 22 (`8c6ffbe..169458d`). Ver o item B33 abaixo, que ficou no lugar com o desfecho escrito.
 **Resolvidas ou já decididas** — B1-B3 (Etapa 10), B4 (custo da transformação), B7 (lembrete de
@@ -977,6 +986,69 @@ documentos. **As três saídas:**
 que agora reescrito em massa por um campo que não parece perigoso. **Enquanto você não responder,
 vale a (a)**, com o aviso na tela. Nada foi implementado além do aviso.
 
+**B59 (NOVO, da Etapa 27, EM ABERTO — preciso da sua resposta) — o plano de inspeção deve ser
+herdado da FAMÍLIA do material?**
+
+Hoje o plano é **por material**: cada material tem a sua lista de características a medir. Se
+vocês têm 40 eixos usinados que compartilham o mesmo *Diâmetro externo* com a mesma tolerância,
+alguém cadastra isso **40 vezes**.
+
+O requisito original diz "plano por material/**família**", e começar por material foi escolha
+deliberada: **é o caminho reversível**. Herança de família é fácil de acrescentar depois; se o
+plano tivesse nascido só na família, tirar isso depois mexeria em dado já gravado.
+
+| Opção | O que acontece na prática | Custo |
+|---|---|---|
+| **(a) Continuar só por material** — como está | Cadastro repetido quando materiais parecidos compartilham tolerância. Em compensação, o que vale para cada material está escrito nele, sem indireção | Zero |
+| **(b) Plano da família, herdado pelos materiais** — o material sem plano próprio usa o da família | Cadastra-se uma vez para o grupo. **A pergunta difícil vem junto:** quando o material tem plano próprio E a família tem, quem vence? Somam ou substituem? | **Médio.** É a decisão de negócio que pesa, não o código |
+| **(c) Plano de família como MODELO de cópia** — cadastra na família e o sistema copia para o material no momento de criar | O material fica dono do que mediu, e mudar a família não mexe retroativamente em nada. É o mesmo espírito do congelamento que a etapa já usa nas medidas | **Médio-baixo** |
+
+**Minha recomendação: (c), quando alguém sentir o incômodo do cadastro repetido.** Ela dá o ganho
+da (b) sem a pergunta espinhosa de precedência, e combina com a regra que a etapa já adotou (o que
+foi medido guarda a tolerância do dia). **Enquanto você não responder, vale a (a)** — nada foi
+implementado além do plano por material.
+
+**B60 (NOVO, da Etapa 27, EM ABERTO — é um ALERTA para a próxima etapa, não uma pergunta sobre o
+que existe) — quando a tela ganhar campos de medida, a caixa "Divergência dimensional" TEM de
+virar somente leitura.**
+
+Está escrito aqui, e não só no plano técnico, porque é o tipo de detalhe que se perde entre uma
+etapa e a seguinte — e porque **o defeito que ele evita é exatamente o que a Etapa 26 teve de
+consertar**: uma tela mostrando uma coisa enquanto o banco guardava outra.
+
+Hoje o formulário de Inspeções tem a caixa **Divergência dimensional**, clicável, e ela vale —
+porque a tela não manda medida nenhuma. **No dia em que a tela mandar medidas**, a caixa passa a
+ser **ignorada pelo servidor**: quem manda é o número. Se ela continuar clicável ao lado dos
+campos de medida, acontece isto: o inspetor desmarca a caixa, o servidor marca sozinho porque a
+peça saiu da tolerância, a tela exibe *desmarcado* e o registro guarda *marcado*. **A tela
+mentindo, com o usuário achando que decidiu.**
+
+**A regra para a etapa da UI, em três partes:** a caixa vira **somente leitura** assim que houver
+pelo menos uma medida preenchida; ela mostra o resultado **derivado**, atualizado enquanto se
+digita; e ao lado dela fica a explicação — *"calculada a partir das medidas"* — para não parecer
+campo travado por defeito. **Sem medidas, ela volta a ser clicável e manual, como hoje.** Isso não
+é opinião de projeto: o servidor já se comporta assim, e é a tela que precisa contar a mesma
+história.
+
+**B61 (NOVO, da Etapa 27 — DECISÃO JÁ TOMADA, escrita para você poder desfazer) — informar o
+instrumento de medição é OPCIONAL.**
+
+O desenho desta etapa dizia *"medida exige instrumento"*. Ao implementar, a frase se mostrou
+**imprecisa**: o campo do instrumento foi gravado como opcional, e exigi-lo em código contradiria
+o próprio banco. **O que a regra de fato garante é "instrumento *declarado* e vencido não mede"**
+— não "toda medida tem instrumento". Uma medida sem instrumento informado é aceita e fica gravada
+com o campo vazio.
+
+**Escolhido seguir o banco, e a razão é a direção do arrependimento:** tornar o campo obrigatório
+depois é **uma linha de validação**; afrouxar depois exigiria mexer em medidas já gravadas —
+justamente o dado que a etapa promete não reescrever. Entre as duas, a reversível é esta.
+
+**Se vocês quiserem exigir o instrumento** (e há argumento: uma medida sem instrumento declarado é
+rastreabilidade pela metade num processo que quer ser auditável), é meia hora de trabalho e a
+recusa passa a acontecer no mesmo lugar das outras — antes de o saldo se mover. **Diga e eu
+aperto.**
+
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -1274,6 +1346,44 @@ vale a (a)**, com o aviso na tela. Nada foi implementado além do aviso.
    **O que NÃO é afetado:** nenhum material sumiu, nenhum foi reclassificado, e a lista sem filtro
    continua mostrando tudo. É só o filtro por categoria — e o mesmo vale para o filtro da tela de
    Conferência de Estoque.
+
+34. **(27) A tela de Inspeções NÃO ganhou campos de medida — quem inspeciona por ela continua
+   marcando "Divergência dimensional" à mão.** A Etapa 27 entregou o plano de inspeção, a régua da
+   tolerância, a gravação das medidas e a derivação da divergência — **tudo por baixo**. O
+   formulário **Decidir Inspeção** está exatamente como estava: as mesmas cinco caixas de
+   "problemas identificados", a mesma caixa **Divergência dimensional** clicável.
+   **Isto precisa ser dito antes de alguém procurar o campo e não achar.** Não é regressão nem
+   entrega pela metade: a régua era a parte com risco (ver o cenário 2 da Etapa 27 — 12,3% de
+   reprovação falsa por arredondamento) e foi feita primeiro, com teste, para que a tela seja só
+   tela quando chegar.
+   **O que isso significa na prática, hoje:** quem inspeciona pela tela **não registra medida
+   nenhuma**, e por isso a caixa marcada à mão **continua sendo o que vale** — a derivação só entra
+   em cena quando há medidas, e pela tela nunca há. Nenhum comportamento atual mudou.
+   **O caminho para acabar com o furo é a etapa da UI, e ela tem um alerta próprio: a B60.**
+
+35. **(27) As medidas nascem sem tela que as leia — e esta é a TERCEIRA vez que o módulo produz
+   dado calculado, gravado e sem leitor.** Uma inspeção feita com medidas guarda, para cada
+   característica, o valor medido, o nominal e a tolerância do dia, o veredito e o instrumento.
+   **Nada disso aparece em tela nenhuma.** A tela de Inspeções lista só o que **ainda não foi
+   decidido**, e rever uma inspeção já concluída **já não tinha caminho no produto** antes desta
+   etapa — a decisão some da fila e o livro recusa estornar.
+   **Consequência para quem opera:** o dia em que a tela de medidas existir e alguém quiser
+   conferir "o que essa peça mediu na entrada", a resposta hoje só sai por consulta ao banco.
+   **Está declarado aqui de propósito**, e não escondido, porque as duas vezes anteriores em que
+   isso aconteceu neste módulo (o rendimento da transformação, que aparece num aviso e some; e as
+   colunas de lote com escritor e sem leitor) só foram percebidas muito depois.
+   **Não é perda de dado:** as medidas ficam gravadas e completas. Falta a janela para olhá-las.
+
+36. **(27) A decisão de inspeção continua sem rastro na Auditoria — e isso é anterior a esta
+   etapa.** Filtrando a Auditoria por **Entidade = Plano de inspeção**, aparecem as criações,
+   edições e desativações de característica. Mas **decidir uma inspeção nunca gerou linha de
+   auditoria** — nem antes, nem agora com as medidas. O que existe do ato é a linha no **livro de
+   movimentações** (tipo *Decisão de inspeção*, com quem fez e de onde veio) e o registro da
+   própria inspeção; o que não existe é a entrada na tela de Auditoria, que é onde se procura
+   "quem decidiu o quê".
+   **Foi verificado, não suposto** (o serviço de inspeção não chama a auditoria em ponto nenhum) e
+   **ficou fora de propósito**: acrescentar auditoria a um ato que nunca a teve é mudança de
+   escopo própria, com decisões de vocabulário e de volume que não cabiam nesta etapa.
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -4702,8 +4812,180 @@ o que auditar.
   começo e foram assumidas como certas. Se alguma sobrar ou faltar, agora dá para arrumar pela
   tela — o que antes não dava.
 
+## Etapa 27 — A divergência dimensional deixa de ser opinião e vira medição (2026-08-29)
+
+Quando um material chega e vai para inspeção, o inspetor preenche um formulário com cinco caixas
+de "problemas identificados". Uma delas é **Divergência dimensional** — e ela é, hoje, só uma
+caixa que alguém marca. Não há em lugar nenhum do sistema o que a peça **deveria** medir, nem o
+que ela **mediu**, nem com que instrumento. Se o inspetor esquecer de marcar, a divergência
+desaparece do registro; se marcar por engano, ninguém consegue conferir. **É um julgamento sem
+prova por trás.**
+
+Esta etapa cria o **plano de inspeção**: por material, uma lista de características a medir
+(*Diâmetro externo*, *Comprimento*, *Espessura*…), cada uma com **valor nominal** e os **dois
+desvios** que a tolerância admite. Com o plano, a inspeção passa a poder registrar as **medidas de
+verdade** — e a partir daí a divergência dimensional **não é mais marcada, é calculada**: se
+alguma medida sai da tolerância, o sistema liga a divergência sozinho; se todas entram, ele a
+desliga, mesmo que o inspetor tenha marcado. Junto vem a amarra com o cadastro de instrumentos:
+**paquímetro com calibração vencida não mede** — a medida é recusada, não aceita com ressalva.
+
+> ⚠️ **Esta etapa é de fundação, e não tem tela.** O plano existe, a régua existe, as medidas são
+> gravadas e a divergência é derivada — **mas o formulário de Inspeções ainda não tem os campos de
+> medida**, e quem inspecionar pela tela continua marcando a caixa à mão exatamente como antes.
+> **Leia os furos C34, C35 e C36 antes de apresentar**, e a **B60**, que é o alerta para a etapa
+> da tela. Nada do que existe hoje mudou de comportamento: quem não usa plano nenhum não vê
+> diferença nenhuma.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| **Divergência dimensional** era uma caixa marcada à mão, sem número por trás | Quando há medidas, ela é **derivada**: fora da tolerância liga sozinha, dentro desliga — e a marcação manual é **ignorada** |
+| Não existia lugar nenhum para dizer **o que medir** num material | **Plano de inspeção por material**: N características, cada uma com nome, unidade, valor nominal e dois desvios |
+| Não existia lugar nenhum para guardar **quanto mediu** | Cada medida fica gravada com o valor medido, o veredito (conforme/não conforme) e **o instrumento usado** |
+| O cadastro de instrumentos com calibração (que existe desde as Ferramentas) **não conversava** com a inspeção | Medir com instrumento de **calibração vencida** é recusado, nomeando o instrumento |
+| — | Editar o plano depois **não reescreve** inspeção antiga: a medida guarda a tolerância **do dia em que foi feita** |
+| — | Criar, editar e desativar característica do plano aparece na **Auditoria**, com o rótulo **Plano de inspeção** |
+| Sem plano de inspeção, a inspeção funcionava assim | **Continua exatamente igual** — sem medidas, a caixa manual segue valendo |
+
+### As regras, com o cenário exato
+
+**Aviso de método:** esta etapa **não tem tela**, então os cenários abaixo não são cliques — são
+chamadas de API. Eles ficam aqui porque são o contrato que a tela vai consumir, e porque as
+mensagens literais são as que vão aparecer nela.
+
+**1. A tolerância tem DOIS desvios, e eles têm SINAL.**
+Uma característica é `valor_nominal` + `desvio_inferior` + `desvio_superior`, e os desvios são
+**números com sinal**, não "quanto para cada lado". O simétrico continua sendo `-0,05 / +0,05`.
+Mas o caso que só o sinal representa é o **unilateral deslocado**, normal em usinagem de eixo
+(ISO 286): `+0,005 / +0,021` — os **dois** limites acima do nominal. Nesse plano, uma peça no
+nominal exato **reprova**, e é isso que a tolerância quer dizer. Desvio inferior maior que o
+superior é recusado: *"O desvio inferior não pode ser maior que o superior"*.
+
+**2. A peça no limite EXATO da tolerância é conforme — e isso custou uma correção de projeto.**
+Nominal 0,7 com desvio ±0,1: uma peça de 0,800 está **dentro**. Parece óbvio, e não é: o
+computador calcula `0,7 + 0,1` como `0,7999999999999999`, e uma régua ingênua **reprovaria a peça
+no limite exato**. A revisão desta etapa varreu **50.000 pares** de nominal/tolerância com a
+medida exatamente no limite e mediu **6.132 reprovações falsas — 12,3%**. Com a divergência agora
+sendo derivada, cada uma delas ligaria a divergência dimensional sozinha: **a etapa fabricaria a
+divergência que ela existe para medir**. A régua usa uma folga de `0,000001` mm, que é três ordens
+de grandeza menor que o melhor instrumento do cadastro (comparador, 0,0001 mm) — ou seja, ela nunca
+alcança uma medida real, só o erro do próprio cálculo.
+
+**3. A divergência dimensional é derivada, e a derivação VENCE o que o inspetor marcou.**
+Plano: *Diâmetro externo*, nominal 10, desvios ±0,1 (faixa 9,9 a 10,1).
+- Inspeção com medida **10,5** e **nenhuma caixa marcada** → o registro sai com **divergência
+  dimensional ligada**.
+- Inspeção com medida **10,05** e a caixa **marcada** → o registro sai com a divergência
+  **desligada**.
+- Três características, uma fora → **liga**, e as **três** medidas ficam gravadas, não só a que
+  reprovou.
+- **Inspeção sem medida nenhuma → nada muda**: a caixa manual continua valendo como sempre valeu.
+**Descartado** manter as duas fontes lado a lado: seriam duas verdades para o mesmo fato, e a
+manual venceria por ser a que a tela mostra.
+
+**4. Instrumento com calibração vencida não mede.**
+Informar um instrumento que **exige calibração** e não tem calibração vigente recusa a inspeção
+inteira, com a literal: *"Ferramenta com calibração vencida ou sem calibração registrada
+(⟨nome do instrumento⟩)"*. Vale igual para calibração **vencida** e para instrumento **nunca
+calibrado** — a mesma frase cobre os dois de propósito, porque no caso da recusa não existe data
+para prometer. Instrumento inexistente ou desativado responde *"Ferramenta não encontrada"*.
+**Descartado** apenas avisar: medida feita com paquímetro descalibrado não é dado, é ruído com
+aparência de dado — e ficaria gravada como se fosse prova.
+
+**5. Informar o instrumento é OPCIONAL.**
+Medida sem instrumento declarado é aceita e fica gravada com o campo vazio. A regra é *"instrumento
+**declarado** e vencido não mede"*, não *"toda medida tem instrumento"* — ver a **B61**, que é a
+decisão e o caminho de volta.
+
+**6. A medida guarda a tolerância do DIA, não a de hoje.**
+Grave uma inspeção com o plano em nominal 25. Depois **edite o plano** para nominal 30. Releia a
+inspeção antiga: ela continua dizendo **25**, com os desvios antigos e o veredito antigo. Editar o
+plano **não reescreve a história**. É a mesma razão pela qual renomear uma categoria não
+reclassifica o acervo.
+
+**7. Medida sem característica, ou de outro material, é recusada.**
+Característica inexistente: *"Característica de plano de inspeção não encontrada: ⟨id⟩"*.
+Característica que pertence ao plano de **outro** material: *"A característica "⟨nome⟩" não
+pertence ao plano de inspeção deste material"*. Guardar "diâmetro = 12,4" sem uma característica
+que diga o que era esperado é guardar número sem significado.
+
+**8. Número escrito com vírgula é recusado — e este é o cenário que mais quase deu errado.**
+`12,4` (a vírgula decimal de um teclado brasileiro) é recusado com *"Valor medido inválido para
+"⟨característica⟩": informe um número (use ponto decimal)"*, e **nada** é gravado.
+A intuição — e o projeto desta etapa, por escrito — dizia que um valor assim faria a característica
+**reprovar**. A medição mostrou o contrário: ele **aprovava**. A peça saía **conforme**, com o
+valor medido **vazio** e a divergência **apagada**. Não seria falsa reprovação, seria falsa
+**aprovação com a prova em branco** — bem pior. Daí a recusa explícita.
+
+**9. Nada se move antes de tudo estar validado.**
+Todas as recusas acima acontecem **antes** de o sistema mexer no saldo. Uma inspeção recusada por
+característica errada ou instrumento vencido deixa o material **exatamente como estava**, ainda
+retido, ainda na fila. Foi o achado mais pesado da revisão: no lugar "natural" — junto da gravação
+das medidas — cada uma dessas recusas seria um erro devolvido **depois** de o saldo já ter se
+movido.
+
+**10. Duas características com o mesmo nome no mesmo material são recusadas.**
+*"Já existe esta característica no plano deste material"*. Sem isso, um material teria dois
+"Diâmetro externo" com nominais diferentes e a medida ficaria ambígua. Desativar libera o nome:
+dá para desativar a característica errada e recriá-la certa.
+
+**11. Quem mexe no plano é a Qualidade e a Engenharia — não só o Administrador.**
+Criar, editar e desativar característica exige a permissão nova **Gerenciar plano de inspeção**,
+que é de **Administrador, Qualidade e Engenharia**. **Descartado** usar a permissão de
+*Configurar*, que é só do Administrador: a Qualidade não poderia cadastrar o que ela mesma vai
+medir, nem a Engenharia definir a tolerância que ela especifica. **Ler** o plano continua liberado
+a qualquer usuário do módulo — quem inspeciona precisa saber o que medir. **O Almoxarife ficou de
+fora do gerenciamento de propósito** (ele inspeciona; quem especifica tolerância é engenharia ou
+qualidade), e isso é reversível numa linha se você quiser diferente.
+
+**12. Mexer no plano deixa rastro.**
+Em **Almoxarifado → Auditoria**, filtro **Entidade = Plano de inspeção**: aparecem a Criação, a
+Edição (com o de/para do nominal) e a Exclusão, com quem fez. **A decisão de inspeção continua sem
+rastro na Auditoria** — nunca teve, e ampliar isso é etapa própria (furo **C36**).
+
+### O que esta etapa NÃO cobre (é decisão declarada, não esquecimento)
+
+- **A TELA.** O formulário de Inspeções não ganhou campos de medida. Quem inspeciona pela tela
+  segue marcando a caixa **Divergência dimensional** à mão, e ela segue valendo, porque sem
+  medidas nada é derivado. Furo **C34**.
+- **Ler as medidas gravadas.** Não há tela que as mostre. A fila de Inspeções só traz o que
+  **ainda não foi decidido**, e rever uma inspeção concluída já não tinha caminho no produto antes
+  desta etapa. Furo **C35** — e é a terceira vez que este módulo produz um dado calculado, gravado
+  e sem quem leia; está escrito para não virar a quarta em silêncio.
+- **Plano por família.** O plano é **por material**. Herdar de família é a **B59**.
+- **Não conformidade formal** (número, ação, responsável, fluxo próprio) e **liberação sob desvio
+  autorizado** — são os outros dois itens em aberto da inspeção, e cada um é um fluxo inteiro.
+- **Anexos** (relatório dimensional, fotos) — dependem do módulo de anexos, que é item próprio.
+- **Encaminhamento com status** (saber se a devolução/análise/substituição já foi executada) —
+  segue como a intenção registrada no momento da reprovação.
+- **Reprovar por lote continua não ligado à inspeção** — pendência antiga, não tocada aqui.
+- **Nenhum plano foi cadastrado.** As tabelas nascem vazias; enquanto ninguém cadastrar
+  característica nenhuma, o sistema se comporta exatamente como antes desta etapa.
+
 ## Onde estamos e o que vem a seguir
 
+- **Etapa 27 entregue (2026-08-29):** **a divergência dimensional deixa de ser opinião e vira
+  medição** (feature 09, `063f3ce..cdb64a6`) — a inspeção de recebimento ganhou **plano por
+  material** (características com valor nominal e os dois desvios da tolerância, **com sinal**,
+  para o caso unilateral de usinagem), **registro de medidas com o instrumento usado**, e a caixa
+  *Divergência dimensional* passou a ser **derivada do número** quando há medidas: fora da
+  tolerância liga sozinha, dentro desliga, e a marcação manual é ignorada. Junto, a amarra com o
+  cadastro de instrumentos: **paquímetro com calibração vencida não mede** — a medida é recusada,
+  não aceita com ressalva. **Três coisas que a revisão da etapa mediu e mudaram o projeto:** sem a
+  folga de arredondamento, **12,3% das peças no limite exato da tolerância seriam reprovadas**
+  (6.132 falsos em 50.000 pares varridos) e cada uma ligaria a divergência sozinha — a etapa
+  fabricando a divergência que existe para medir; as recusas novas rodariam **depois** de o saldo
+  já ter se movido, e foram levadas para antes; e um número escrito com **vírgula** (`12,4`) não
+  reprovava como todo mundo supunha — ele **aprovava**, com o valor gravado em branco.
+  **Esta etapa é de fundação e NÃO tem tela** (furos **C34** e **C35**): quem inspeciona pelo
+  formulário segue marcando a caixa à mão, porque sem medidas nada é derivado, e as medidas
+  gravadas ainda não têm janela que as mostre. **Nenhum comportamento atual mudou** — as tabelas
+  nascem vazias e, sem plano cadastrado, tudo funciona como antes. **O que é seu:** decidir a
+  **B59** (plano herdado da família?) e ler a **B60**, que é o alerta a cumprir na etapa da tela —
+  a caixa *Divergência dimensional* tem de virar **somente leitura e explicada** ao lado dos campos
+  de medida, senão a tela mostra uma coisa e o banco guarda outra. A **B61** (informar o instrumento
+  é opcional) eu já decidi, com o caminho de volta escrito.
 - **Etapa 26 entregue (2026-08-29):** **uma lista de categorias só, e ela é da GMP** (feature 01,
   `1bca087..9d86a84`) — a dívida mais antiga do módulo ainda aberta: as categorias de material
   estavam **escritas dentro do código, repetidas em três telas**, desde a Etapa 2 (04/08). Agora as

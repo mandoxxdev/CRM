@@ -205,7 +205,7 @@ Test `server/tests/api/toleranciaInspecao.api.test.js`.
 > **poderiam ir em paralelo** (em worktrees). Serializar é barato porque a Task 1 é minúscula,
 > mas o rótulo importa: é ele que a Fase 3 usa para decidir paralelismo nas próximas etapas.
 
-- [ ] **Step 1: teste que falha** — só bordas, e **com os valores que hoje falham**:
+- [x] **Step 1: teste que falha** — só bordas, e **com os valores que hoje falham**:
   `nominal 0.7 / desvios ±0.1 / medido 0.8` e `nominal 2.675 / ±0.005 / medido 2.68` — os dois
   **reprovam** sem epsilon (medido pela Fase 2). **Não use `12.3/±0.1/12.4`**: esse par passa por
   acidente aritmético, e com ele o Step 1 fica **verde antes da implementação certa** e o
@@ -215,13 +215,13 @@ Test `server/tests/api/toleranciaInspecao.api.test.js`.
   nominal) → o nominal puro **reprova**; medida e nominal negativos; `desvio` com sinal certo;
   e **`valor_medido` não numérico** (`'12,4'`, `NaN`, `Infinity`) → `motivo: 'NAO_NUMERICO'`,
   nunca `conforme: true`.
-- [ ] **Step 2: implementar; verde.**
-- [ ] **Step 3: controle positivo** (commitar antes), **três**: (a) troque `<=` por `<` num dos
+- [x] **Step 2: implementar; verde.**
+- [x] **Step 3: controle positivo** (commitar antes), **três**: (a) troque `<=` por `<` num dos
   extremos → cai o cenário **daquele** limite, e só ele; (b) **remova o epsilon** → caem os
   cenários de `0.7/±0.1/0.8` e `2.675/±0.005/2.68`, nomeando o limite calculado
   (`0.7999999999999999`); (c) aceite não-numérico → cai o cenário do `'12,4'`. A (b) é a que
   prova que o teste não é vazio.
-- [ ] **Step 4:** `npm run test:api`; commit.
+- [x] **Step 4:** `npm run test:api`; commit.
 
 ---
 
@@ -448,9 +448,47 @@ Test `server/tests/api/medidasInspecao.api.test.js`.
 
 ---
 
-### Task 4: integração e fechamento
+### Task 4: integração e fechamento — FEITA (`cdb64a6` + o commit deste fecho)
 
-- [ ] **Step 1:** integração ponta a ponta — criar plano, receber material, inspecionar com
+> **Entregue.** `server/tests/api/inspecaoIntegracao.api.test.js`, **8 cenários, 8/8**, todos por
+> HTTP — as tasks 1 a 3 provaram as camadas, e 20 dos 21 cenários da Task 3 chamavam
+> `decidirInspecao` **direto**. O caminho de ponta a ponta pela porta da frente não existia.
+>
+> **Verificação final (números LIDOS, 2026-08-29):** `test:api` **159/159 arquivos**,
+> `test:almoxarifado` **42/42**, `test:validation` **4/4**, `test:safealter` **3/3**,
+> `test:sqlite` **5/5**, cliente com `TZ=UTC` **39 suítes / 582 testes**, `CI=true build` **OK**.
+>
+> **A integração usa tolerância UNILATERAL DESLOCADA de propósito** (25 mm, `+0,005 / +0,021`):
+> é o caso ISO 286 que o modelo de magnitudes da primeira versão do design **não representava**, e
+> que só o desvio com sinal (achado B7) tornou possível. Nele até a peça no **nominal puro**
+> reprova — então o cenário de peso mede a derivação com uma faixa que a versão antiga do design
+> nem saberia escrever.
+>
+> **UMA CORREÇÃO QUE ESTA TASK FEZ, pequena mas do tipo que engana:** o verbo gravado pelo `PUT`
+> do plano é **`EDICAO`**, não `ALTERACAO` — eu escrevi `ALTERACAO` de memória e o vermelho veio
+> pela asserção certa (`veio ["CRIACAO","EDICAO"]`). Corrigido no teste, não no código.
+>
+> **Controle positivo — três sabotagens, todas com alvo, `md5sum` antes/depois/restaurado
+> idênticos e `git diff --stat` vazio ao fim:**
+>
+> - **(a) a flag do payload no lugar da derivação** → cai **(3)**, e com ela (4), (5), (7) e (8)
+>   por guarda encadeada. **Medido em separado para não cair na armadilha da asserção errada:** o
+>   (3) cai primeiro pela asserção do **retorno da rota**; neutralizando só essa linha, ele cai
+>   pela asserção do **banco** — *"medida 24.998 fora de [25.005, 25.021] tinha de ligar a flag
+>   sozinha"*. As duas guardam o mesmo achado, e as duas foram vistas caindo;
+> - **(b) valores não congelados** (só o `plano_id` gravado, os cinco campos como `null`) → caem
+>   **(4)** e **(5)**, a segunda dizendo *"o nominal da medida virou null: o plano reescreveu a
+>   historia da inspecao antiga"*;
+> - **(c) a entidade da trilha gravada com outro nome** (`planoInspecao`) → cai **(7)** (o filtro
+>   `entidade=plano_inspecao` da tela não acha mais a CRIACAO) **e (8)**, que é o cenário da
+>   ausência — prova, de quebra, que (8) sabe ficar vermelho.
+>
+> **O cenário (8) é o que registra a ausência de auditoria na decisão**, com a metade positiva ao
+> lado (a trilha do plano existe no mesmo banco): sem ela, "não há rastro de inspeção" passaria
+> com a tabela vazia. Se um dia alguém acrescentar auditoria a `inspectionService`, este cenário
+> derruba a suíte em vez de a documentação envelhecer em silêncio.
+
+- [x] **Step 1:** integração ponta a ponta — criar plano, receber material, inspecionar com
   medida fora da tolerância, conferir que `divergencia_dimensional` saiu `1` **sem o payload
   marcar**, e que as medidas gravadas trazem os valores congelados.
   **A auditoria a conferir é a do CRUD do plano, NÃO a da inspeção** (achado B5): a versão
@@ -458,8 +496,8 @@ Test `server/tests/api/medidasInspecao.api.test.js`.
   **`inspectionService.js` não audita nada** — não há `registrarAuditoria` nem `auditar` entre os
   `require` dele. O único ato auditável desta etapa é a criação/edição do plano. **Não** espere
   total fixo; afirme a composição.
-- [ ] **Step 2:** os cinco comandos da suíte + o cliente com `TZ=UTC`, números **lidos**.
-- [ ] **Step 3:** skill `fechar-etapa` inteira, **incluindo o Passo 8**.
+- [x] **Step 2:** os cinco comandos da suíte + o cliente com `TZ=UTC`, números **lidos**.
+- [x] **Step 3:** skill `fechar-etapa` inteira, **incluindo o Passo 8**.
   - **Spec 09:** os dois primeiros itens do checklist saem; **e a afirmação de que a feature 16
     "não existe ainda" já foi corrigida na Fase 0 — confira que a correção está lá** e diga se a
     feature muda de cor.
@@ -471,6 +509,45 @@ Test `server/tests/api/medidasInspecao.api.test.js`.
     caixa "Divergência dimensional" tem de virar **somente leitura, derivada e explicada** — se
     ficar clicável ao lado dos campos, o usuário marca, o servidor ignora (RN-03) e a tela passa
     a mostrar uma coisa enquanto o banco guarda outra. É exatamente o defeito da Etapa 26.
+
+## Retrospectiva da etapa — quatro números que valem mais que o placar
+
+**1. A Fase 2 achou 15 problemas, 3 deles bloqueantes, e reescreveu o plano.** Os três: a régua
+reprovava **12,3%** das peças no limite por ponto flutuante (medido em **50.000 pares**,
+**6.132** falsos reprovados) — e, com a RN-03, cada falso reprovado **ligaria
+`divergencia_dimensional` sozinho**, ou seja, a etapa fabricaria o defeito que existe para medir;
+as três recusas novas rodariam **depois** de o saldo se mover, contra a promessa explícita do
+comentário de `inspectionService.js:74`; e as medidas gravadas **em laço** recriariam o ato
+parcial que a Etapa 23 consertou no `PUT /configuracoes`. Os outros 12 incluíam o gate excluindo
+quem define tolerância, o modelo de tolerância por magnitudes (que não representa o unilateral
+deslocado) e a ausência total de contrato de endpoint.
+
+**2. AS TRÊS TASKS CORRIGIRAM O PLANO. Nenhuma o executou como estava.** Este é o número que mais
+importa, porque diz o que esperar da próxima etapa:
+
+| Task | O que ela achou no plano que a Fase 2 já tinha revisado |
+|---|---|
+| **1** | Que **`NaN` APROVA, não reprova** — o design e o plano afirmavam o contrário. Na forma de guardas de rejeição (a natural quando se quer motivo específico), `Number('12,4')` não dispara guarda nenhuma e sai **conforme**, com `valor_medido` nulo e a divergência apagada. **Falsa aprovação é pior que falsa reprovação**, e a Task 3 não podia se apoiar na premissa errada. **E que um controle positivo prescrito por mim era no-op**: trocar `<=` por `<` mantendo o `+ EPS` é semanticamente invisível |
+| **2** | **Cinco lacunas no contrato C4** (não erros — buracos): GET sem `material_id`, `material_id` não editável no PUT, a literal `'Desvio inválido'`, validação por existência e não por `ativo = 1`, e o `try/catch` do índice. **E outra sabotagem no-op**: retirar só o `WHERE ativo = 1` do índice **passa verde** no cenário da duplicada |
+| **3** | **A terceira sabotagem no-op — com a explicação de por quê.** Trocar o `INSERT` multi-linha por laço passa **21/21**, não por teste fraco, mas porque a validação completa antes do claim tornou o ato parcial **inalcançável pela porta da frente**. Provado com um `UNIQUE` artificial (laço deixa 1 medida órfã; multi-linha deixa 0). **E que a RN-04 estava imprecisa**: `ferramenta_id` é nullable |
+
+**3. Três sabotagens prescritas por mim viraram no-op, por dois motivos opostos.** As duas
+primeiras eram **falta de asserção disfarçada de operador**: numa régua com folga, sabotar o
+`<=` ou o `WHERE ativo = 1` não move o comportamento — o que o teste ancora é a **posição** da
+régua, não o sinal que a escreve. A terceira era o oposto e é a valiosa: **o defeito ficou
+inalcançável**. A resposta certa foi manter a forma segura **e declarar que a suíte não a
+protege** — fingir o vermelho seria pior, e remover a proteção "porque nada cai" seria muito
+pior. As duas regras entraram na skill `fechar-etapa` (`050edc7`).
+
+**4. Zero regressão nos testes existentes.** `inspecaoDecisao` 15/15 e `inspecaoRotas` 12/12
+seguiram verdes em todas as tasks — a feature é inteiramente **aditiva**: sem `medidas` no
+payload, `decidirInspecao` se comporta exatamente como antes (`resolverMedidas` devolve `null`, e
+`null` é diferente de `[]` de propósito).
+
+**A lição de processo, escrita para a próxima etapa:** cinco tasks seguidas nesta base acharam
+defeito no que o plano trazia pronto, e nesta etapa foram **três de três**. O plano não é para ser
+obedecido — é para ser **medido contra o código** no Step 1 de cada task. Quem executar o plano
+sem medir vai entregar o defeito que ele descreve.
 
 ## Próxima tarefa detalhada
 

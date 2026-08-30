@@ -2,9 +2,38 @@
 
 > Atualizado em 2026-08-29 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 26) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 27) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20.
 
-> ## Onde o desenvolvimento está — 2026-08-29 (Etapa 26 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-08-29 (Etapa 27 ENTREGUE · modo contínuo pelo mapa)
+>
+> **Etapas 1 a 20 e 22 a 27 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
+> A **Etapa 27 (a divergência dimensional deixa de ser opinião e vira medição)** fechou em
+> 2026-08-29 (`063f3ce..cdb64a6`) e é da **feature 09 (inspeção e qualidade)**. Ela pagou os
+> **dois primeiros itens** que o checklist daquela feature listava como faltantes desde a Etapa 5:
+> **plano de inspeção por material** (características com valor nominal e os dois desvios da
+> tolerância, **com sinal**, para o caso unilateral de usinagem) e **registro de medidas com o
+> instrumento usado**. Com isso, a caixa *"Divergência dimensional"* deixou de ser marcada à mão e
+> passou a ser **derivada do número** quando há medidas: fora da tolerância liga sozinha, dentro
+> desliga, e a marcação manual é ignorada. Junto veio a amarra com o cadastro de instrumentos —
+> **paquímetro com calibração vencida não mede**.
+>
+> **⚠️ ESTA ETAPA NÃO TEM TELA, e é o que mais precisa ficar claro.** O formulário de Inspeções
+> está exatamente como estava: **nenhum campo de medida**, e a caixa *Divergência dimensional*
+> segue clicável e manual — o que está certo, porque sem medidas nada é derivado. Quem abrir a tela
+> procurando onde digitar a medida **não vai achar**. As medidas gravadas também **ainda não têm
+> tela que as mostre** (furos **C34** e **C35**). **Nada do comportamento atual mudou:** as tabelas
+> nascem vazias e, sem plano cadastrado, tudo funciona como antes.
+>
+> **O que é seu:** decidir a **B59** (o plano deve ser herdado da família do material?) e ler a
+> **B60**, que é o alerta a cumprir na etapa da tela — a caixa *Divergência dimensional* tem de
+> virar **somente leitura e explicada** ao lado dos campos de medida, senão a tela mostra uma coisa
+> e o banco guarda outra, que é exatamente o defeito que a Etapa 26 teve de consertar. A **B61**
+> (informar o instrumento é opcional) eu já decidi, com o caminho de volta escrito.
+> Ver a seção "Etapa 27" perto do fim deste guia, com o roteiro de teste.
+>
+> **Antes: Etapas 1 a 20 e 22 a 26 completas no módulo.**
+>
+> ## Onde o desenvolvimento estava — 2026-08-29 (Etapa 26 ENTREGUE)
 >
 > **Etapas 1 a 20 e 22 a 26 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
 > A **Etapa 26 (uma lista de categorias só, e ela é da GMP)** fechou em 2026-08-29
@@ -3782,6 +3811,151 @@ recusa com 403.
   outra, edita-se material por material ou roda-se o `UPDATE` da A6.
 - **As 27 categorias do catálogo não foram revisadas com a GMP.** Estavam no banco desde o começo
   e foram assumidas como certas. Se alguma sobrar ou faltar, agora dá para arrumar pela tela.
+
+## Etapa 27 — A divergência dimensional deixa de ser opinião e vira medição (ENTREGUE — 2026-08-29)
+
+**O que mudou, em uma frase:** a inspeção de recebimento ganhou **plano de medidas por material**,
+e a caixa *"Divergência dimensional"* passou a ser **calculada a partir dos números** em vez de
+marcada à mão — mas **isso ainda não aparece na tela**.
+
+> ## ⚠️ LEIA ANTES DE TESTAR — esta etapa não tem tela
+>
+> O formulário **Decidir Inspeção** está **exatamente como estava**: as mesmas cinco caixas de
+> "problemas identificados", a mesma caixa **Divergência dimensional** clicável, nenhum campo de
+> medida. **Se você abrir a tela procurando onde digitar a medida, não vai achar — e está certo.**
+>
+> A etapa entregou a **fundação**: o plano, a régua da tolerância, a gravação das medidas, a
+> derivação da divergência e a recusa de instrumento descalibrado. A tela é a etapa seguinte.
+> A razão da ordem: a régua era a parte com risco de verdade (ver "O problema que existia"), e ela
+> foi feita e testada primeiro para que a tela seja **só tela** quando chegar.
+>
+> **Nada do comportamento atual mudou.** As tabelas nascem vazias; enquanto ninguém cadastrar
+> característica nenhuma, tudo funciona como antes — inclusive a caixa marcada à mão, que continua
+> valendo.
+
+### O problema que existia
+
+Quando um material chega e vai para inspeção, o inspetor marca (ou não) a caixa **Divergência
+dimensional**. Só isso. Não existia em lugar nenhum do sistema:
+
+- **o que a peça deveria medir** (nenhum plano, nenhuma tolerância cadastrada);
+- **quanto ela mediu** (nenhum número gravado em lugar nenhum);
+- **com que instrumento** — mesmo o cadastro de instrumentos com calibração existindo desde as
+  Ferramentas, e mesmo a calibração vencida sendo justamente o defeito que uma medição de
+  recebimento precisa impedir.
+
+Ou seja: **um julgamento sem prova por trás**. Se o inspetor esquecia de marcar, a divergência
+desaparecia do registro. Se marcava por engano, ninguém tinha como conferir depois.
+
+**E o cuidado que quase deu errado, porque vale para entender a etapa inteira:** ao construir a
+régua que decide se uma medida está dentro da tolerância, a primeira versão reprovava a peça que
+estava **exatamente no limite**. Não por regra de negócio — por **arredondamento do computador**:
+`0,7 + 0,1` é calculado como `0,7999999999999999`, e uma peça de `0,800` caía fora por um fio
+inexistente. Varrendo 50.000 combinações de nominal e tolerância com a medida no limite exato,
+**12,3% eram reprovadas** (6.132 casos). Como a divergência agora é derivada, cada uma dessas
+ligaria a caixa sozinha: **o sistema fabricando a divergência que ele existe para medir.** A régua
+final trabalha com uma folga de `0,000001` mm, três ordens de grandeza abaixo do melhor
+instrumento do cadastro (comparador, 0,0001 mm) — ela nunca alcança uma medida real, só o erro do
+próprio cálculo.
+
+### O que existe agora
+
+| Onde | O que mudou |
+|---|---|
+| **Plano de inspeção** (por material) | Lista de características a medir: nome, unidade, valor nominal e **dois desvios com sinal**. Só por API — sem tela |
+| **Decisão de inspeção** | Aceita medidas junto com a decisão. Havendo medidas, a **divergência dimensional é derivada** e a marcação manual é ignorada |
+| **Instrumentos** | Medir com instrumento de **calibração vencida** é recusado, nomeando o instrumento |
+| **Auditoria** | Filtro **Entidade = Plano de inspeção** — Criação, Edição (com de/para) e Exclusão de característica |
+| **Tela de Inspeções** | **Sem mudança nenhuma** |
+
+**As tolerâncias têm sinal, e isso é o que importa para usinagem.** O simétrico continua sendo
+`-0,05 / +0,05`. O caso que só o sinal representa é o **unilateral deslocado** (ISO 286, ajuste de
+eixo): `+0,005 / +0,021`, os **dois** limites acima do nominal. Nesse plano, uma peça no nominal
+exato **reprova** — e é isso que a tolerância quer dizer.
+
+**O plano é congelado no ato.** A medida guarda o nominal e os desvios **do dia em que foi feita**.
+Editar o plano depois **não reescreve** inspeção antiga — mesma ideia de renomear categoria não
+reclassificar o acervo.
+
+### Roteiro de teste manual (10 minutos)
+
+**Metade deste roteiro não é clique, e isso é honesto:** os passos 1 e 2 confirmam pela tela que
+nada quebrou; os passos 3 a 6 exercitam a etapa pela API, porque **é onde ela está**; o passo 7
+volta para a tela, na Auditoria.
+
+Para os passos de API você precisa do token da sua sessão: abra o sistema logado, tecle `F12` →
+aba **Rede**, clique em qualquer tela do almoxarifado e copie o cabeçalho `Authorization` de uma
+requisição. Nos comandos abaixo ele é `$TOKEN`.
+
+1. **Almoxarifado → Inspeções.** A tela abre igual: fila de pendentes, botões *Bloquear Material* e
+   *Desbloquear Material* no topo. Abra o formulário de decisão de qualquer item retido: as cinco
+   caixas de "problemas identificados" estão lá, **Divergência dimensional** entre elas, clicável.
+   **É a confirmação de que a etapa não mexeu em nada do que já funcionava.** Feche sem salvar.
+2. **Almoxarifado → Auditoria → filtro Entidade.** Role a lista de entidades: **"Plano de inspeção"
+   ainda não aparece**, porque o filtro só oferece o que já foi gravado alguma vez. Volte aqui no
+   passo 7.
+3. **Cadastre uma característica** (precisa de perfil **Administrador**, **Qualidade** ou
+   **Engenharia** — os outros tomam recusa). Pegue o `id` de um material qualquer em
+   Almoxarifado → Materiais e rode:
+   ```
+   curl -X POST http://localhost:5000/api/almoxarifado/planos-inspecao \
+     -H "Authorization: $TOKEN" -H "Content-Type: application/json" \
+     -d '{"material_id": 1, "caracteristica": "Diâmetro externo", "unidade": "mm",
+          "valor_nominal": 25, "desvio_inferior": 0.005, "desvio_superior": 0.021}'
+   ```
+   Responde **201** com o `id` da característica. Rode o **mesmo comando de novo**: recusa com
+   *"Já existe esta característica no plano deste material"*.
+   Tente com os desvios trocados (`"desvio_inferior": 0.021, "desvio_superior": 0.005`): recusa com
+   *"O desvio inferior não pode ser maior que o superior"*.
+4. **Confira que a característica está no plano do material** — é a leitura que a futura tela vai
+   fazer:
+   ```
+   curl "http://localhost:5000/api/almoxarifado/planos-inspecao?material_id=1" -H "Authorization: $TOKEN"
+   ```
+   Sem o `material_id`, recusa com *"Material é obrigatório"*.
+5. **Deixe um item retido para inspecionar:** Almoxarifado → Recebimentos → novo recebimento do
+   **mesmo material** (ele precisa estar marcado como **crítico** e a retenção de material crítico
+   precisa estar ligada em Configurações) → aprovar. Ele aparece em **Inspeções → Pendentes**.
+   Anote o **id do item** (ele vem na fila; ou use `GET /api/almoxarifado/inspecoes/pendentes`).
+6. **Decida a inspeção mandando a medida, e NENHUMA caixa marcada.** Com o plano `+0,005/+0,021`
+   sobre nominal 25, a faixa é `[25,005 ; 25,021]` — mande `24.998`, que está fora:
+   ```
+   curl -X POST http://localhost:5000/api/almoxarifado/recebimentos/itens/<ID_DO_ITEM>/inspecionar \
+     -H "Authorization: $TOKEN" -H "Content-Type: application/json" \
+     -d '{"quantidade_aprovada": 12, "quantidade_reprovada": 0,
+          "medidas": [{"plano_id": <ID_DA_CARACTERISTICA>, "valor_medido": 24.998}]}'
+   ```
+   A resposta traz **`"divergencia_dimensional": 1`** e `"medidas_registradas": 1` — **sem que você
+   tenha marcado nada**. É o cenário central da etapa.
+   **Três variações que valem 30 segundos cada:**
+   - troque a medida por `25.01` (dentro da faixa) e mande `"divergencia_dimensional": 1` junto:
+     o resultado volta **0** — a medida vence a marcação manual;
+   - troque a medida por `"24,998"` (com **vírgula**): recusa com *"Valor medido inválido para
+     "Diâmetro externo": informe um número (use ponto decimal)"*, e **nada** é gravado;
+   - acrescente `"ferramenta_id"` de um instrumento que exige calibração e está vencido: recusa com
+     *"Ferramenta com calibração vencida ou sem calibração registrada (⟨nome⟩)"*.
+     **Em todos os três casos de recusa, volte à tela de Inspeções: o item continua na fila, com a
+     quantidade retida intacta.** Nenhuma recusa mexe no saldo — isso foi construído de propósito.
+7. **Almoxarifado → Auditoria → Entidade = "Plano de inspeção".** Agora a opção **existe** no
+   filtro, e a linha da **Criação** está lá, com o seu nome e o de/para. Se você editar a
+   característica (`PUT /planos-inspecao/<id>`), a **Edição** aparece com o nominal antigo → novo.
+   **E confira o outro lado:** a decisão de inspeção do passo 6 **não** aparece na Auditoria. Ela
+   nunca apareceu — é limitação anterior a esta etapa, e está declarada no furo **C36**.
+
+### O que esta etapa NÃO cobre
+
+- **A tela.** Nenhum campo de medida no formulário de inspeção. Furo **C34**.
+- **Ler as medidas gravadas.** Elas ficam completas no banco e **não há tela que as mostre** — a
+  fila de Inspeções só traz o que ainda não foi decidido, e rever uma inspeção concluída já não
+  tinha caminho no produto. Furo **C35**.
+- **Plano por família.** É por material; herdar da família é a decisão **B59**.
+- **Informar o instrumento é opcional** — decisão **B61**, com o caminho de volta escrito.
+- **Não conformidade formal**, **liberação sob desvio autorizado**, **anexos** (relatório
+  dimensional, fotos) e **encaminhamento com status** continuam em aberto na inspeção.
+- **Reprovar por lote continua não ligado à inspeção** — pendência antiga, não tocada aqui.
+- **Nenhum plano foi cadastrado.** As duas tabelas nascem vazias.
+
+---
 
 ## Correção — a posição por cliente não fechava a conta (2026-08-13)
 
