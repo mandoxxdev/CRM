@@ -215,7 +215,36 @@ conferência) e vão em sequência.
 
 ---
 
-## Task 1 — A separação ganha dono, rodada e rastro (tronco)
+## Task 1 — A separação ganha dono, rodada e rastro (tronco) — ✅ FEITA (`f298536`)
+
+> **Fechamento (2026-08-30).** Entregue como previsto: C1, C2 (parte de separação), C3
+> (`handleSeparacao` passa `req.user`; `GET /requisicoes/:id` devolve `separacoes`, `conferencia`,
+> `conferencia_obrigatoria` e `ma.material_critico` nos itens), C5 (os **três** rótulos, para a
+> Task 2 não reabrir `auditLabels.js`). Exportados de `requisitionService`: `separarRequisicao`
+> (agora com `user`), `listarSeparacoes(db, requisicaoId)`, `conferenciaObrigatoria(itens)`,
+> `nomeDoUsuario(user)`. Os 4 chamadores sem `user` passaram a passar `userAlmox`/`ADMIN`.
+> Teste `separacaoComDono.api.test.js`: 9 cenários, vermelhos por asserção nos 9 antes do
+> serviço (o schema entrou primeiro justamente para o vermelho não ser "no such table").
+> Placar: `test:api` 160/160 arquivos (separacaoComDono 9/9, auditLabels 14/14,
+> requisicaoEstados 25/25, serieControleObrigatorio 8/8); `test:almoxarifado` 42/42.
+>
+> **Controles positivos** (md5 `bffed7cf…` antes/restaurado, `git diff --stat` vazio):
+> (a) guarda de `user` removida → RN-01 cai, mas por `TypeError` no `user.id` do INSERT
+> (asserção `status 400` com `status undefined`); por isso rodei também **(a2)** guarda removida
+> **+** `user?.id || 0` no INSERT e na auditoria (o `|| null` silencioso que a RN-01 proíbe) →
+> cai a asserção "esperava erro sem usuario, mas separou" — é esta que prova a regra.
+> (b) INSERT da rodada vira no-op (`rodadaId = 1`) → caem RN-02 ("ids diferentes"), RN-01 pela
+> rota ("rodada gravada") e RN-09 (`separacoes.length`). (c) `conferido_por_*=NULL` fora do
+> UPDATE → cai RN-07 ("conferido_por_id tem de voltar a NULL: a caixa mudou").
+>
+> **Divergências do previsto:** nenhuma de contrato. Dois detalhes que a Task 2 precisa saber:
+> (1) a rodada é inserida **antes** da releitura da conferência e do UPDATE (ordem do C2), então
+> `claimConferencia` do mesmo usuário já encontra a rodada dele no `NOT EXISTS` mesmo se o UPDATE
+> de status ainda não rodou; (2) `conferenciaObrigatoria` aceita `material_critico`/`quantidade_separada`
+> como texto do SQLite (`Number(...)`), e o teste fixa isso — `carregarItensRequisicao` ainda **não**
+> traz `ma.material_critico` (é a Task 2 que acrescenta, para o `assertConferidaSeObrigatorio`
+> em `entregarRequisicao`).
+
 
 **Arquivos:** `server/services/almoxarifado/schema.js`, `requisitionService.js`, `auditLabels.js`,
 `routes/almoxarifado.js` (`handleSeparacao`, `GET /requisicoes/:id`),
