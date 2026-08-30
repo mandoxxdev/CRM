@@ -402,9 +402,80 @@ async function listarInspecoesPendentes(db, filtros = {}) {
   return dbAll(db, sql, params);
 }
 
+const HISTORICO_LIMITE_PADRAO = 100;
+const HISTORICO_LIMITE_TETO = 500;
+
+/**
+ * Etapa 29 (C35, contrato C1): historico das inspecoes DECIDIDAS. Ate aqui a Etapa 27 gravava as
+ * medidas congeladas e nada as lia — a prova da reprovacao existia no banco e era invisivel.
+ *
+ * Ordem `data_inspecao DESC, id DESC`: `data_inspecao` tem resolucao de SEGUNDO, entao duas
+ * decisoes seguidas empatam na data e, sem o `id DESC`, a ordem entre elas e a que o sorter do
+ * SQLite quiser (achado 5 do plano). O JOIN e o mesmo molde de alertRegistry.listarReprovados.
+ *
+ * As contagens sao subselects e nao JOIN + GROUP BY de proposito: uma inspecao sem medida (a
+ * maioria hoje) tem de aparecer com `medidas_total = 0`, nao sumir do historico.
+ *
+ * `limite` default 100, teto 500 — vai como parametro do SQL, nunca interpolado. O teto existe
+ * porque a tela nao pagina (Task 3) e um `?limite=99999` nao pode virar a tabela inteira na
+ * resposta.
+ */
+function limiteHistorico(valor) {
+  const n = Number(valor);
+  if (!Number.isFinite(n) || n <= 0) return HISTORICO_LIMITE_PADRAO;
+  return Math.min(Math.floor(n), HISTORICO_LIMITE_TETO);
+}
+
+async function listarHistorico(db, filtros = {}) {
+  let sql = `SELECT i.id, i.recebimento_item_id, ri.recebimento_id, r.numero AS recebimento_numero,
+      r.nota_fiscal,
+      ri.material_id, m.codigo AS material_codigo, m.nome AS material_nome, m.unidade AS material_unidade,
+      i.quantidade_aprovada, i.quantidade_reprovada, i.conforme, i.divergencia_quantidade,
+      i.divergencia_dimensional, i.certificado_ausente, i.dano_fisico, i.material_incorreto,
+      i.encaminhamento, i.observacoes, i.responsavel_nome, i.data_inspecao,
+      (SELECT COUNT(*) FROM medidas_inspecao_almoxarifado md WHERE md.inspecao_id = i.id) AS medidas_total,
+      (SELECT COUNT(*) FROM medidas_inspecao_almoxarifado md WHERE md.inspecao_id = i.id AND md.conforme = 0) AS medidas_nao_conformes
+    FROM inspecoes_recebimento_almoxarifado i
+    JOIN recebimentos_material_itens_almoxarifado ri ON ri.id = i.recebimento_item_id
+    JOIN recebimentos_material_almoxarifado r ON r.id = ri.recebimento_id
+    JOIN materiais_almoxarifado m ON m.id = ri.material_id
+    WHERE 1 = 1`;
+  const params = [];
+  // Filtro que nao e numero e IGNORADO (lista tudo), nunca 500 — mesma regua de `/pendentes`,
+  // que passa `req.query` direto e deixa o SQLite nao casar nada.
+  const materialId = Number(filtros.material_id);
+  if (filtros.material_id !== undefined && filtros.material_id !== '' && Number.isFinite(materialId)) {
+    sql += ' AND ri.material_id = ?';
+    params.push(materialId);
+  }
+  sql += ' ORDER BY i.data_inspecao DESC, i.id DESC LIMIT ?';
+  params.push(limiteHistorico(filtros.limite));
+  return dbAll(db, sql, params);
+}
+
+/**
+ * Contrato C2: as medidas de UMA inspecao, lidas das colunas CONGELADAS de
+ * `medidas_inspecao_almoxarifado` — nunca por JOIN em `planos_inspecao_almoxarifado` nem em
+ * `ferramentas_almoxarifado`. Editar o plano (ou renomear o instrumento) DEPOIS da decisao nao
+ * pode reescrever a historia da inspecao (RN-05; mesma razao da Etapa 22: a trilha nao muda
+ * retroativamente). Devolve `null` quando a inspecao nao existe, para a rota distinguir 404 de
+ * "decidida sem medida" (que e `[]`).
+ */
+async function listarMedidasDaInspecao(db, inspecaoId) {
+  const inspecao = await dbGet(db, 'SELECT id FROM inspecoes_recebimento_almoxarifado WHERE id = ?', [inspecaoId]);
+  if (!inspecao) return null;
+  return dbAll(db, `SELECT id, plano_id, caracteristica, unidade, valor_nominal, desvio_inferior,
+      desvio_superior, valor_medido, conforme, ferramenta_id, ferramenta_nome, created_at
+    FROM medidas_inspecao_almoxarifado WHERE inspecao_id = ? ORDER BY id`, [inspecaoId]);
+}
+
 module.exports = {
   decidirInspecao,
   bloquearMaterial,
   desbloquearMaterial,
   listarInspecoesPendentes,
+  listarHistorico,
+  listarMedidasDaInspecao,
+  HISTORICO_LIMITE_PADRAO,
+  HISTORICO_LIMITE_TETO,
 };

@@ -989,6 +989,35 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     catch (e) { handleError(res, e); }
   });
 
+  // Etapa 29 (C35, contratos C1/C2): leitura da inspecao DECIDIDA. Ate aqui a Etapa 27 gravava as
+  // medidas congeladas e nenhuma rota as lia. Sem gate novo de perfil (D6): mesma regua de
+  // `/pendentes` e do GET `/planos-inspecao` — `auth` + acesso ao modulo; quem abre a tela le.
+  // A ESCRITA (`/recebimentos/itens/:itemId/inspecionar`) continua gateada por `inspecionar`.
+  //
+  // Ordem de registro, para quem criar `GET /inspecoes/:id` no futuro: registre-a DEPOIS de
+  // `/historico` e `/pendentes`, senao `historico` vira um `:id` que nao e numero. Hoje nao ha
+  // colisao possivel — nenhuma `/inspecoes/:id` existe e `/:id/medidas` tem tres segmentos, que
+  // nunca casam com dois (medido com Express real na revisao do plano, achado 3).
+  app.get('/api/almoxarifado/inspecoes/historico', auth, async (req, res) => {
+    try { res.json(await inspectionService.listarHistorico(db, req.query)); }
+    catch (e) { handleError(res, e); }
+  });
+
+  app.get('/api/almoxarifado/inspecoes/:id/medidas', auth, async (req, res) => {
+    try {
+      // `paraNumeroFinito` recusa 'abc', 'NaN', 'Infinity', '' — todos viram o MESMO 404 de
+      // inspecao inexistente, porque para quem chama nao existe diferenca entre "esse id nao e
+      // numero" e "esse numero nao e inspecao". Sem isto o SQLite coagiria o texto e devolveria
+      // `[]` como se fosse decidida sem medida.
+      const inspecaoId = paraNumeroFinito(req.params.id);
+      const medidas = inspecaoId === null
+        ? null
+        : await inspectionService.listarMedidasDaInspecao(db, inspecaoId);
+      if (medidas === null) return res.status(404).json({ error: 'Inspeção não encontrada' });
+      res.json(medidas);
+    } catch (e) { handleError(res, e); }
+  });
+
   app.post('/api/almoxarifado/materiais/:id/bloquear', auth, requirePermission('ajustar_estoque'), async (req, res) => {
     try { res.json(await inspectionService.bloquearMaterial(db, req.user, req.params.id, req.body)); }
     catch (e) { handleError(res, e); }
