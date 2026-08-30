@@ -70,6 +70,18 @@ const ACAO_PERFIS = {
   gerenciar_ferramentas: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE],
   aprovar_requisicao: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE, PERFIS.GESTOR],
   separar_emitir: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE],
+  // Etapa 28 (C4): a SEGUNDA CONFERENCIA da separacao e acao propria, pelo mesmo criterio de
+  // remessar_terceiro/gerenciar_ferramentas: concedida hoje aos MESMOS perfis de `separar_emitir`,
+  // o ganho nao e restringir agora, e PODER restringir sem reescrever nada quando o cliente quiser
+  // (ex.: so ADMINISTRADOR confere material critico). Se pegasse carona em `separar_emitir`,
+  // restringir uma coisa restringiria a outra.
+  //
+  // A barreira que importa — QUEM SEPAROU NAO CONFERE (RN-03) — e por IDENTIDADE (user.id contra
+  // as rodadas de separacao da requisicao) e mora em requisitionService.conferirSeparacao, na
+  // checagem JS e repetida no WHERE do claim: permissao por perfil nao tem como saber quem separou.
+  // Mesmo desenho das duas pernas do sucateamento, acima. Entra de graca em
+  // GET /almoxarifado/minhas-permissoes — a rota itera Object.keys(ACAO_PERFIS).
+  conferir_separacao: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE],
   requisitar: [PERFIS.ADMINISTRADOR, PERFIS.PRODUCAO, PERFIS.ENGENHARIA, PERFIS.ALMOXARIFE],
   receber_material: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE, PERFIS.COMPRAS],
   // Etapa 24: QUALIDADE entra aqui — as quatro rotas gateadas por `inspecionar` sao atos de

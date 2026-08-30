@@ -97,7 +97,10 @@ const RESERVADO_PARA_ITEM_SQL = `COALESCE((
     ), 0)`;
 
 async function carregarItensRequisicao(db, requisicaoId) {
+  // Etapa 28: `ma.material_critico` entra para a régua da segunda conferência
+  // (assertConferidaSeObrigatorio em entregarRequisicao e no liberar-retirada).
   return dbAll(db, `SELECT ir.*, ma.quantidade_atual, ma.unidade, ma.nome as material_nome, ma.codigo as material_codigo,
+      ma.material_critico,
       ${custoUnitarioSql('ma')} as custo_unitario,
       ${RESERVADO_PARA_ITEM_SQL} as reservado_para_item,
       (${disponivelSql('ma')} + ${RESERVADO_PARA_ITEM_SQL}) as saldo_disponivel
@@ -197,6 +200,124 @@ const nomeDoUsuario = (user) => user?.nome || user?.email || null;
  */
 function conferenciaObrigatoria(itens) {
   return (itens || []).some((i) => Number(i.material_critico) === 1 && num(i.quantidade_separada) > 0);
+}
+
+/**
+ * RN-06 (Etapa 28): a barreira das DUAS saídas — `liberar-retirada` e `entregarRequisicao`.
+ * Uma função só porque a Fase 2 mediu que a entrega sai direto de EM_SEPARACAO sem passar pela
+ * liberação (PODE_ENTREGAR): barreira só na liberação era barreira que ninguém é obrigado a
+ * passar. Lança 400 com a mensagem literal do contrato C3 quando há material crítico SEPARADO e
+ * ninguém conferiu. Chamar DEPOIS da checagem de status e ANTES de qualquer escrita/baixa.
+ */
+function assertConferidaSeObrigatorio(reqRow, itens) {
+  if (conferenciaObrigatoria(itens) && !reqRow?.conferido_por_id) {
+    const err = new Error('Esta requisição tem material crítico separado e ainda não passou pela segunda '
+      + 'conferência. Peça a outra pessoa do almoxarifado para conferir a separação antes de liberar ou entregar.');
+    err.status = 400;
+    throw err;
+  }
+}
+
+/**
+ * O CLAIM da segunda conferência (Etapa 28, RN-03/RN-05). Exportado e provado direto, porque é a
+ * única forma determinística de provar o `NOT EXISTS` (achado 2 da Fase 2): com a D3 (rodada nova
+ * limpa a conferência), o estado final da corrida separar×conferir do mesmo usuário é seguro em
+ * quase toda intercalação MESMO sem ele — um teste de corrida ficaria verde com o WHERE sabotado.
+ *
+ * As três condições do WHERE são as três barreiras, e cada uma tem um teste com o seu nome:
+ *   - `status = 'EM_SEPARACAO'`     — conferir só em separação;
+ *   - `conferido_por_id IS NULL`    — uma vez só (duas conferências simultâneas: uma passa);
+ *   - `NOT EXISTS (rodada do user)` — QUEM SEPAROU NÃO CONFERE, em qualquer rodada, não só a
+ *                                     última. Molde: scrapDisposalService.aprovar (a barreira 3
+ *                                     repetida no WHERE), pelo mesmo TOCTOU: a checagem JS em
+ *                                     conferirSeparacao lê e decide, o claim escreve depois, e
+ *                                     entre as duas não há lock.
+ * Devolve a linha (`{ id, conferido_em }`) ou `undefined` quando nenhuma linha satisfez o WHERE.
+ */
+async function claimConferencia(db, requisicaoId, user) {
+  return dbGet(db, `UPDATE requisicoes_almoxarifado
+       SET conferido_por_id = ?, conferido_por_nome = ?, conferido_em = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+     WHERE id = ? AND status = 'EM_SEPARACAO' AND conferido_por_id IS NULL
+       AND NOT EXISTS (SELECT 1 FROM separacoes_requisicao_almoxarifado s
+                        WHERE s.requisicao_id = requisicoes_almoxarifado.id AND s.usuario_id = ?)
+     RETURNING id, conferido_em`, [user.id, nomeDoUsuario(user), requisicaoId, user.id]);
+}
+
+/**
+ * Segunda conferência da separação (Etapa 28, Task 2). Conferir é ato com dono (RN-05): exige
+ * `user.id` — a régua da RN-01, sem `|| null` silencioso. A checagem "quem separou não confere"
+ * (RN-03) aparece DUAS vezes de propósito: aqui em JS, pela MENSAGEM (diz ao operador qual rodada
+ * ele registrou), e dentro do WHERE de `claimConferencia`, pela GARANTIA. Se a checagem JS sair,
+ * o WHERE ainda segura — só a mensagem piora (403 com rodada vira 409 genérico).
+ */
+async function conferirSeparacao(db, requisicaoId, user) {
+  if (!user?.id) {
+    const err = new Error('Conferência exige usuário identificado');
+    err.status = 400;
+    throw err;
+  }
+
+  const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId]);
+  if (!reqRow) {
+    const err = new Error('Requisição não encontrada');
+    err.status = 404;
+    throw err;
+  }
+  if (reqRow.status !== 'EM_SEPARACAO') {
+    const err = new Error(`Só é possível conferir uma requisição em separação (status atual: ${reqRow.status})`);
+    err.status = 400;
+    throw err;
+  }
+
+  const separados = await dbGet(db,
+    'SELECT COUNT(*) AS n FROM itens_requisicao_almoxarifado WHERE requisicao_id = ? AND quantidade_separada > 0',
+    [requisicaoId]);
+  if (!separados || Number(separados.n) === 0) {
+    const err = new Error('Nenhum item separado');
+    err.status = 400;
+    throw err;
+  }
+
+  // RN-03, pela mensagem: QUALQUER rodada do usuário, não só a última (a separação acumula, e
+  // comparar só com o último separador deixaria quem separou primeiro conferir a própria caixa).
+  const rodada = await dbGet(db,
+    'SELECT id FROM separacoes_requisicao_almoxarifado WHERE requisicao_id = ? AND usuario_id = ? ORDER BY id ASC LIMIT 1',
+    [requisicaoId, user.id]);
+  if (rodada) {
+    const err = new Error(`Quem separou não confere: você registrou a rodada de separação #${rodada.id} desta requisição. `
+      + 'A segunda conferência tem de ser de outra pessoa.');
+    err.status = 403;
+    throw err;
+  }
+
+  const claim = await claimConferencia(db, requisicaoId, user);
+  if (!claim) {
+    const err = new Error('Esta requisição não pode ser conferida agora: já foi conferida, saiu de EM_SEPARACAO, '
+      + 'ou você separou uma rodada dela — outra pessoa (ou outra aba sua) agiu enquanto esta tela estava aberta. '
+      + 'Recarregue e confira o estado atual.');
+    err.status = 409;
+    throw err;
+  }
+
+  // RN-08: rastro pós-escrita, best-effort (Etapa 19: falha de log não desfaz o ato).
+  try {
+    await registrarAuditoria(db, {
+      entidade: 'requisicao',
+      entidade_id: Number(requisicaoId),
+      acao: 'CONFERENCIA_SEPARACAO',
+      usuario_id: user.id,
+      usuario_nome: nomeDoUsuario(user),
+      dados_novos: { conferido_por_id: user.id, conferido_por_nome: nomeDoUsuario(user) },
+    });
+  } catch (e) {
+    console.warn(`[almoxarifado-conferencia] Falha ao auditar a conferência da requisição ${requisicaoId}: ${e.message}`);
+  }
+
+  return {
+    success: true,
+    conferencia: { usuario_id: user.id, usuario_nome: nomeDoUsuario(user), em: claim.conferido_em },
+  };
 }
 
 /** Rodadas de separação de uma requisição, em ordem (Etapa 28, RN-02/RN-09). */
@@ -379,6 +500,15 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
   await valueApprovalService.verificarBloqueioLiberacao(db, requisicaoId);
 
   const itens = await carregarItensRequisicao(db, requisicaoId);
+
+  // RN-06 (Etapa 28, achado 1 da Fase 2): a entrega sai DIRETO de EM_SEPARACAO, sem passar pela
+  // liberação — então a barreira de material crítico tem de estar aqui também, depois da checagem
+  // de PODE_ENTREGAR e ANTES de qualquer baixa. Vale nos três status de entrega: em
+  // PARCIALMENTE_ATENDIDA a conferência da primeira rodada continua valendo (D3 só limpa com
+  // rodada nova), e uma requisição antiga sem conferência volta a EM_SEPARACAO por "Iniciar
+  // Separação" para alguém conferir.
+  assertConferidaSeObrigatorio(reqRow, itens);
+
   const entregas = [];
 
   for (const item of itens) {
@@ -591,4 +721,7 @@ module.exports = {
   nomeDoUsuario,
   conferenciaObrigatoria,
   listarSeparacoes,
+  assertConferidaSeObrigatorio,
+  claimConferencia,
+  conferirSeparacao,
 };

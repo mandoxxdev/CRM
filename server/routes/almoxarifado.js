@@ -3346,14 +3346,45 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         return res.status(400).json({ error: 'Nenhum item separado' });
       }
 
+      // Etapa 28 (RN-06): material crítico SEPARADO exige a segunda conferência antes de sair. A
+      // mesma função guarda a outra saída (entregarRequisicao) — a entrega sai direto de
+      // EM_SEPARACAO, então a barreira só aqui seria opcional.
+      const itens = await requisitionService.carregarItensRequisicao(db, req.params.id);
+      requisitionService.assertConferidaSeObrigatorio(reqRow, itens);
+
       await dbRun(db,
         `UPDATE requisicoes_almoxarifado SET status='PRONTA_PARA_RETIRADA', updated_at=CURRENT_TIMESTAMP WHERE id=?`,
         [req.params.id]);
+
+      // Etapa 28 (RN-08, D4): a liberação passa a auditar — pós-escrita, best-effort, como o resto
+      // do módulo (Etapa 19: falha de log não derruba o ato). `audit.registrarAuditoria` (namespace)
+      // para ser alcançável por stub, como as chamadas novas desde a Etapa 18.
+      try {
+        await audit.registrarAuditoria(db, {
+          entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'LIBERACAO_RETIRADA',
+          usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
+          dados_anteriores: { status: reqRow.status },
+          dados_novos: { status: 'PRONTA_PARA_RETIRADA', conferido_por_id: reqRow.conferido_por_id ?? null },
+        });
+      } catch (e) {
+        console.warn(`[almoxarifado-liberacao] Falha ao auditar a liberação da requisição ${req.params.id}: ${e.message}`);
+      }
 
       res.json({ success: true, status: 'PRONTA_PARA_RETIRADA' });
     } catch (e) {
       res.status(e.status || 500).json({ error: e.message });
     }
+  });
+
+  // PUT /api/almoxarifado/requisicoes/:id/conferir-separacao — SEGUNDA CONFERÊNCIA da separação
+  // (Etapa 28, C3). Rota própria, não campo no liberar-retirada (D1): a tela chama a liberação de
+  // um confirm sem corpo, e o almoxarife que separa é hoje o mesmo que libera — fundir os dois
+  // travaria um almoxarifado de uma pessoa só. Gate `conferir_separacao` (perfil); a barreira por
+  // identidade ("quem separou não confere", RN-03) mora no serviço, na checagem e no WHERE do claim.
+  app.put('/api/almoxarifado/requisicoes/:id/conferir-separacao', requirePermission('conferir_separacao'), (req, res) => {
+    requisitionService.conferirSeparacao(db, req.params.id, req.user)
+      .then((result) => res.json(result))
+      .catch((e) => res.status(e.status || 500).json({ error: e.message }));
   });
 
   // PUT /api/almoxarifado/requisicoes/:id/entregar — entrega parcial ou total e baixa estoque
