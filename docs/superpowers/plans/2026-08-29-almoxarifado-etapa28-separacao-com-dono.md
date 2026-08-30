@@ -34,9 +34,12 @@ almoxarife que separa é hoje o mesmo que libera. Fundir "conferir" com "liberar
 almoxarifado com **uma pessoa só** não conseguir liberar nada — mudança de comportamento do fluxo
 inteiro, irreversível de manhã. Rota própria é aditiva.
 
-**D2 — A conferência é OBRIGATÓRIA só quando há material crítico SEPARADO** (`material_critico`,
-`schema.js:776`, existe desde a Etapa 2; universo = itens com `material_critico = 1` **e**
-`quantidade_separada > 0` — item crítico ainda aguardando estoque não está na caixa, achado 7).
+**D2 — A conferência é OBRIGATÓRIA só quando há material crítico SEPARADO E AINDA NÃO ENTREGUE**
+(`material_critico`, `schema.js:776`, existe desde a Etapa 2; universo = itens com
+`material_critico = 1` **e** `quantidade_separada − quantidade_entregue > 0` — "crítico ainda na
+caixa": item crítico aguardando estoque não está na caixa (achado 7), e crítico já entregue **saiu**
+dela (fix-round 1, F5 — a versão original dizia só `quantidade_separada > 0` e estava errada:
+crítico entregue continuava exigindo conferência para entregar o comum).
 Sem material crítico ela é opcional e fica registrada. É a primeira resposta concreta à **B57**
 ("quais operações exigem duas assinaturas"): **sair com material crítico** — e "sair" são **duas
 rotas**, `liberar-retirada` **e** `entregar` (achado 1, bloqueante: a entrega sai direto de
@@ -94,7 +97,7 @@ responde. Uma coluna, aditiva.
 | RN-03b | Corrida separar×conferir pelo mesmo usuário: em qualquer ordem, o estado final nunca é "conferida por X **e** rodada de X" — **prova a D3 (estado final), não o `NOT EXISTS`** | `segundaConferencia` (`Promise.allSettled` no **serviço**) |
 | RN-04 | A separação deixa rastro: `entidade:'requisicao'`, `acao:'SEPARACAO'`, `dados_novos` com `rodada_id`, `itens` e, se limpou conferência, `dados_anteriores.conferencia` | `separacaoComDono` |
 | RN-05 | Conferir é ato com dono: exige `conferir_separacao` (perfil) **e** `user.id`; grava `conferido_por_*`; só em `EM_SEPARACAO` com ≥1 item separado; **uma vez** (segunda conferência → 409) | `segundaConferencia` |
-| RN-06 | `liberar-retirada` **e `entregar`** exigem conferência quando há material crítico **separado**; sem crítico, seguem como hoje | `segundaConferencia` (as duas rotas) |
+| RN-06 | `liberar-retirada` **e `entregar`** exigem conferência quando há material crítico **separado e ainda não entregue** (fix-round 1, F5: era "separado"); sem crítico, seguem como hoje. **E material crítico não sai além do separado** (`qty > separado − entregue` → 400, fix-round 1, F2); comum mantém a Etapa 3 | `segundaConferencia` (as duas rotas; F2 e F5 com nome) |
 | RN-07 | Nova rodada **com item efetivo** **limpa** `conferido_por_*` (a caixa mudou) e registra a conferência apagada em `dados_anteriores` — **relida imediatamente antes do UPDATE**, não do SELECT inicial (achado 6; não é atômico, e isso fica escrito no código) | `separacaoComDono` |
 | RN-08 | `liberar-retirada` audita (`LIBERACAO_RETIRADA`) e `conferir-separacao` audita (`CONFERENCIA_SEPARACAO`) — pós-escrita, best-effort | `separacaoComDono` + `segundaConferencia` |
 | RN-09 | `GET /requisicoes/:id` devolve `separacoes[]`, `conferencia` (ou `null`) e `conferencia_obrigatoria` — leitura sem gate novo, como `assinaturas_entrega` (Etapa 15) | `segundaConferencia` |
@@ -162,7 +165,8 @@ ALTER TABLE requisicoes_almoxarifado ADD COLUMN conferido_em DATETIME;
 //   retorna { success:true, conferencia:{ usuario_id, usuario_nome, em } }
 //   auditoria: { entidade:'requisicao', acao:'CONFERENCIA_SEPARACAO', dados_novos:{ conferido_por_id, conferido_por_nome } }
 //
-// conferenciaObrigatoria(itens) -> itens.some(i => Number(i.material_critico) === 1 && num(i.quantidade_separada) > 0)
+// conferenciaObrigatoria(itens) -> itens.some(i => Number(i.material_critico) === 1 && (separado(i) - entregue(i)) > 0)
+//   (fix-round 1, F5: era `num(i.quantidade_separada) > 0`; crítico já entregue não está na caixa)
 // assertConferidaSeObrigatorio(reqRow, itens) -> lanca 400 com a MENSAGEM de RN-06 (abaixo) quando
 //   conferenciaObrigatoria(itens) && !reqRow.conferido_por_id. Chamada em liberar-retirada E em
 //   entregarRequisicao (antes de qualquer escrita, depois da checagem de status).
@@ -453,6 +457,54 @@ rotas, achado 10), C confere → 200, liberar → 200 + auditoria com `SEPARACAO
 **limpa** (RN-07) → entregar → 400 de novo.
 
 Suíte completa serial (os cinco comandos da `fechar-etapa`).
+
+## Fix-round 1 (Fase 5) — ✅ FEITO (`5a3d593`)
+
+> **Contexto (2026-08-30).** Dois revisores adversariais (scripts `refuta28.js` e `repro28.js`)
+> acharam **seis** furos, um bloqueante. **A raiz comum dos dois graves:** `quantidade_separada`
+> mudava por **dois caminhos sem rodada** — a escrita parcial de `separarRequisicao` (F1) e a
+> entrega de crítico além do separado (F2). A barreira RN-03 e a régua RN-06 apoiam-se na rodada;
+> sem rodada, não há dono, e a conferência vira teatro. TDD em cada achado: vermelho **por
+> asserção** antes do fix (F1 "item válido gravado apesar do 400, quantidade_separada = 3"; F4
+> "dados_anteriores = null"; F2 "saldo 40; resposta 200"; F5 pelo GET e pela régua unitária), verde
+> depois. F3 e F6 já passavam com o código certo — são sobre **mutação**, provados nos controles.
+
+| # | Gravidade | Achado | Fix | Teste (nome) |
+|---|---|---|---|---|
+| F1 | **bloqueante** | laço de `separarRequisicao` gravava item a item e lançava 400 no meio: item válido gravado **sem rodada**; depois `[]` → `EM_SEPARACAO`, quem separou conferia (200) e entregava | duas passadas: validar **todas** as entradas (calcular `max` de cada) antes de qualquer escrita | `separacaoComDono` `[RN-01] payload misto valido+invalido -> 400 e NADA gravado` (serviço **e** rota) |
+| F2 | importante | `maxEntregar` (Etapa 3) solta o teto do separado após entrega parcial: crítico 10/sep 1/conf/ent 1 → `entregar 9` = 200 `ENTREGUE` sem rodada nem conferência | guarda em `entregarRequisicao`, só `material_critico = 1`, antes de qualquer baixa: `qty > max(0, separado − entregue)` → 400 `'<nome>: material crítico só sai depois de separado e conferido — <qty> excede o separado ainda não entregue (<n>). Separe o restante e peça a segunda conferência.'` | `segundaConferencia` `[RN-06] critico nao sai alem do separado na segunda entrega -> 400 e saldo intacto` + `material COMUM na mesma situacao ... -> 200 (Etapa 3 preservada)` |
+| F3 | importante | `itens_tocados` sem teste: mutação "sempre 1 no INSERT" sobrevivia 38/38 | (teste) contagens lidas do **GET** | `separacaoFluxoCompleto` Fluxo 2 |
+| F4 | importante | "releitura antes do UPDATE" não provada (mutação "usar `reqRow` inicial" sobrevivia) e janela real: conferência entre releitura e UPDATE apagada com `dados_anteriores: null` | **compare-and-clear**: `UPDATE ... WHERE id=? AND conferido_por_id IS <relido>`; `changes = 0` → relê e repete (máx. 3; depois limpa sem compare com `console.warn` — o estado seguro é "limpa") | `separacaoComDono` `[RN-07] compare-and-clear: conferencia que entra ENTRE a releitura e o UPDATE ...` (hook one-shot em `db.get`) |
+| F5 | menor | universo "crítico separado" incluía crítico **já entregue**: crítico 1 sep/conf/ent + rodada nova só de comum → `conferencia_obrigatoria: true`, entregar comum → 400 | `conferenciaObrigatoria` = `crítico && (separado − entregue) > 0`; D2 e RN-06 corrigidas acima | `segundaConferencia` `[RN-06] critico ja ENTREGUE nao esta mais na caixa ...` + régua unitária em `separacaoComDono` |
+| F6 | menor | RN-03b aceitava "B conferiu com sucesso" sem exigir que a rodada de B registrasse a conferência apagada | (teste) quando `conferir(B)` é fulfilled, a auditoria `SEPARACAO` de B tem `dados_anteriores.conferencia.usuario_id === B` | `segundaConferencia` `[RN-03b]` |
+
+**O Fluxo 2 mudou de propósito** (cabeçalho de `separacaoFluxoCompleto.api.test.js` explica):
+entregava 3 críticos com 2 separados-não-entregues e afirmava 200 — agora afirma o **400** de F2
+com saldos intactos, entrega só o separado (crítico 2 + comum 4 → `PARCIALMENTE_ATENDIDA`) e fecha
+em `ENTREGUE` por uma rodada a mais (A separa +1, C confere, entrega 1). Saldos finais iguais
+(46/45); trilha final com **8** linhas.
+
+**Scripts dos revisores depois do fix:** A1 crítico fica 0, conferir → 400 "Nenhum item separado",
+entregar → 400, saldo 50→50, GET sem conferência; A2 crítico 1→1, entregar 6 → 400, saldo intacto;
+A3/R2 `entregar 9` → 400, saldo 49→49, item 1/1; A9 `conferencia_obrigatoria: false`, comum sai
+200 `ENTREGUE`; R1 D recusado (400, sem item separado), trilha vazia; R1b conferência de C fica
+(a caixa **não** mudou — nada foi gravado) e `entregar 6` → 400 "excede o separado ainda não
+entregue (1)"; R3 `conferido_por_id` final NULL **e** a rodada de B traz
+`dados_anteriores.conferencia.usuario_id = 43` (o "409" que o script imprime é a **segunda**
+chamada do hook dele, que não é one-shot: a primeira conferência de C passou e está na trilha).
+
+**Placar** (suíte completa serial): `test:api` **162/162** arquivos (separacaoComDono **11/11**, segundaConferencia **29/29**, separacaoFluxoCompleto **3/3**); `test:almoxarifado` **42/42**; `test:validation` 4/4; `test:safealter` 3/3; `test:sqlite` 5/5; client **593/593** em 39 suítes; `CI=true build` compilado (o front não mudou).
+
+**Controles positivos** (depois do commit; md5 antes/sabotado/restaurado, `git diff --stat` vazio
+nos quatro): md5 `9a8d9b44…` antes/restaurado nos quatro. (1) laço a uma passada só (UPDATE do item dentro da passada 1) → separacaoComDono 10/11, cai **F1** com "o item valido foi gravado apesar do 400 (quantidade_separada = 3)". (2) guarda de crítico removida de `entregarRequisicao` → segundaConferencia 28/29, cai **F2** pela asserção de **saldo** ("o critico saiu sem ser separado (saldo 40); resposta 200"), e o Fluxo 2 cai em "o critico saiu alem do separado (resposta 200)". (3) `itens_tocados` sempre 1 no INSERT → Fluxo 2 cai em "a rodada de A tocou 2 itens; a coluna diz 1" — e separacaoComDono **continua 11/11** (é exatamente a mutação que sobrevivia antes de F3). (4) `reqRow` inicial na limpeza (a releitura acontece, mas é ignorada) → separacaoComDono cai **F4** com "a conferencia de C foi apagada sem aparecer na trilha (dados_anteriores = null)" **e** segundaConferencia cai **F6** (RN-03b, "B conferiu (fulfilled) mas a rodada de B nao registrou a conferencia apagada: null") — F6 não é vazio.
+
+**Dois achados que NÃO viraram código** (para o fechamento, letra B):
+- (a) requisição com item separado **antes** da Etapa 28 não tem rodada — qualquer ALMOXARIFE
+  confere, **inclusive quem separou**. Fato de migração; recusar travaria crítico legado, porque
+  `maxSeparar` é 0 (tudo já separado) e não há como abrir rodada nova. Fica escrito no guia.
+- (b) `dbGet` com `UPDATE ... RETURNING` (`claimConferencia`) roda **fora** da `writeChain` do
+  `sqliteConcurrency`, e um erro de `finalize` não chega ao callback — padrão pré-existente de
+  todo `get` da base, fora do escopo desta etapa.
 
 ## Fechamento (Fase 6)
 
