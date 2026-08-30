@@ -393,7 +393,53 @@ desabilita "Liberar para Retirada"; (5) sem `pode('conferir_separacao')` o botã
 
 **Commit:** `Almoxarifado Etapa 28 Task 3: a tela mostra quem separou e permite conferir`.
 
-## Task 4 — Integração cruzando as rotas (tronco)
+## Task 4 — Integração cruzando as rotas (tronco) — ✅ FEITA (`9b2f180`)
+
+> **Fechamento (2026-08-30).** `server/tests/api/separacaoFluxoCompleto.api.test.js`, **3
+> cenários** (Fluxo 1, Fluxo 2, Fluxo 3), tudo pela rota com `setUser` entre chamadas: a
+> requisição nasce por `POST /requisicoes` (PRODUCAO, rascunho) → `POST /enviar` (PRODUCAO) →
+> `PUT /aprovar` (ALMOX A, ≠ solicitante) com **reserva real** (`TOTALMENTE_RESERVADA`, 2
+> reservas); os `item_id` vêm do `GET /requisicoes/:id`. Só saldo inicial e `material_critico`
+> continuam UPDATE direto no material (não há rota de escrita para eles no harness).
+> Verdes de primeira — e o controle positivo abaixo prova que o teste sabe cair.
+>
+> **O que o Fluxo 2 mediu, na ordem** (o roteiro do plano, sem desvio): A separa crítico 2 +
+> comum 2; B separa comum 1 → `GET` com 2 `separacoes` (A, B), `conferencia: null`,
+> `conferencia_obrigatoria: true`; A confere → 403 citando `#<rodada de A>`; B → 403 `#<rodada de
+> B>`; `entregar` → 400 **mensagem literal da RN-06** e saldo 50 intacto; `liberar-retirada` →
+> 400 mesma mensagem; C confere → 200 e `GET conferencia.usuario_id === C`; liberar → 200
+> `PRONTA_PARA_RETIRADA`; trilha em ordem de id = `SEPARACAO(A), SEPARACAO(B),
+> CONFERENCIA_SEPARACAO(C), LIBERACAO_RETIRADA(A)`; entrega parcial (crítico 1) →
+> `PARCIALMENTE_ATENDIDA`, saldo 49; `entregar` de novo **sem rodada nova** (comum 1) → 200 e a
+> conferência de C continua no `GET`; A separa crítico +1 → `EM_SEPARACAO`, `conferencia: null`
+> (RN-07), 3 rodadas; `entregar` → 400 de novo, saldo 49; **C confere de novo → 200** (não é
+> 409: a conferência anterior foi apagada pela rodada, então o claim volta a passar); entrega o
+> resto (crítico 3, comum 4) → `ENTREGUE`, saldos 46/45; trilha final com 6 linhas.
+> Fluxo 1: crítico com `quantidade_separada = 0` + comum separado → `entregar` direto 200
+> (`PARCIALMENTE_ATENDIDA`), `GET conferencia_obrigatoria: false`. Fluxo 3: PRODUCAO → 403 do
+> `requirePermission` (`acao: conferir_separacao` / `separar_emitir`) numa requisição **sem
+> rodada** — se a regra falasse antes do perfil, viria 400 — e nada gravado.
+>
+> **Placar** (suíte completa serial): `test:api` **162/162** arquivos (novo 3/3);
+> `test:almoxarifado` **42/42**; `test:validation` 4/4; `test:safealter` 3/3; `test:sqlite` 5/5;
+> client **593/593** em 39 suites; `CI=true build` limpo.
+>
+> **Controle positivo** (md5 `feaf1caa…` antes/restaurado, `git diff --stat` vazio):
+> `assertConferidaSeObrigatorio` removido **só da rota `liberar-retirada`** → 2/3; cai o Fluxo 2
+> na asserção `liberar: esperava 400, veio 200: {"success":true,"status":"PRONTA_PARA_RETIRADA"}`
+> — o passo anterior (`entregar → 400`) **continuou verde**, porque essa barreira mora no serviço.
+> É a prova de que as duas saídas são guardadas separadamente, e de que o teste distingue uma da
+> outra.
+>
+> **Divergências / achados de integração: nenhuma de contrato.** O backend das Tasks 1 e 2 bateu
+> com o roteiro do plano sem ajuste de código. Duas medições que a Task 2 pediu, agora feitas
+> pela rota: (1) depois de `PARCIALMENTE_ATENDIDA`, a conferência **continua valendo** para a
+> entrega seguinte sem rodada nova (D3 só limpa com rodada), e uma rodada nova devolve a requisição
+> a `EM_SEPARACAO` com `conferencia: null` — onde a conferência é possível de novo, sem cair no
+> "só em `EM_SEPARACAO`"; (2) conferir de novo depois da limpeza é 200, não 409 — o `IS NULL` do
+> claim é sobre o estado atual, não sobre "já houve conferência um dia". Fica para o fechamento
+> (letra B): a conferência **repetida** (mesma pessoa C nas duas rodadas) é aceita — o critério é
+> "não separou", não "não conferiu antes".
 
 Arquivo próprio `separacaoFluxoCompleto.api.test.js`, **tudo pela rota** (`setUser` entre
 chamadas): material crítico + material comum na mesma requisição, aprovada por reserva real (rota
