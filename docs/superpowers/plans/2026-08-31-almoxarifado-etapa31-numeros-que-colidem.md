@@ -94,8 +94,9 @@ pontos de escrita. **Nenhuma mudança de schema, nenhuma migração de dado.**
 ```js
 carimboTempo(ms)                       // -> 'MTHK5F35'  (8 chars hoje; exportado para a RN-02)
 gerarNumeroDocumento(prefixo)          // -> 'REM-MTHK5F35ABC12345'  (prefixo + '-' + 8 + 8)
-inserirComNumeroUnico(db, prefixo, fn) // -> { numero, resultado }
+inserirComNumeroUnico(db, prefixo, fn) // -> { numero, resultado }; fn(numero, db)
 NUMERO_TENTATIVAS = 5
+RE_COLISAO_NUMERO                      // a regua, exportada para a Task 3 nao duplicar a regex
 ```
 
 - **Tempo:** `Date.now().toString(36).toUpperCase()`, **inteiro**, sem `slice` — é o `slice` que
@@ -120,7 +121,20 @@ NUMERO_TENTATIVAS = 5
   > seguindo a letra escreveria `const numero = gerarNumeroDocumento('REM')` antes e devolveria o
   > **primeiro** número enquanto o banco guardou o **terceiro**: o papel impresso deixaria de bater
   > com a linha. Virou a **RN-07**.
-- **A régua do erro é ANCORADA:** `/UNIQUE constraint failed:[^\n]*\.numero(\s|,|$)/i`.
+- **A régua do erro é ANCORADA:** `/UNIQUE constraint failed:\s*[A-Za-z0-9_]+\.numero\s*$/i`.
+  > **A Fase 2 corrigiu esta régua e a correção AINDA ESTAVA ERRADA.** A versão anterior era
+  > `/UNIQUE constraint failed:[^\n]*\.numero(\s|,|$)/i`, escrita para *excluir* a série — e ela
+  > **não exclui**, porque a mensagem real da série **termina** em `.numero`:
+  > `UNIQUE constraint failed: series_almoxarifado.material_id, series_almoxarifado.numero`. O
+  > `[^\n]*` atravessa a vírgula e casa. O executor da Task 1 mediu isso rodando a régua do plano
+  > como sétimo controle positivo: o cenário (8) — que a própria Task 1 exigia — **caía**.
+  > **A régua certa não tem `.*` entre o `failed:` e o nome da coluna**, o que exige UNIQUE de
+  > **coluna única**. Verificado nas três mensagens reais: casa remessa, **não** casa série, **não**
+  > casa `nota_fiscal`.
+  > **Por que isso importa e não é preciosismo:** com a régua frouxa, uma colisão de número de
+  > **série** — que é digitado pelo operador — entraria no retry, que gera número de **documento**
+  > novo e não resolve nada; cinco tentativas depois o erro sobe **traduzido**, escondendo a causa
+  > real atrás de "não foi possível gerar um número único".
   > A Fase 2 mediu a mensagem real: `SQLITE_CONSTRAINT: UNIQUE constraint failed:
   > remessas_terceiro_almoxarifado.numero` (com `err.code = 'SQLITE_CONSTRAINT'`, `errno 19`) —
   > **o retry dispara mesmo, não é código morto**. Mas um `/numero/i` solto casaria também
@@ -193,6 +207,28 @@ só; (8) erro `UNIQUE constraint failed: series_almoxarifado.material_id, series
 | régua `/numero/i` sem âncora | (8) | — |
 
 Commit: `Almoxarifado Etapa 31 Task 1: um gerador de numero que nao da a volta`.
+
+## Task 1 — O gerador (tronco) — ✅ FEITA (`8c162c8`)
+
+> **Fechamento (2026-08-31).** 8/8 no arquivo novo; `test:api` **165/165** arquivos. TDD real: o
+> teste foi rodado antes contra um stub que reproduzia o gerador **antigo** de propósito — 2/8, e
+> cada vermelho pela asserção certa. **Os 6 controles positivos caíram, nenhum sobreviveu**,
+> inclusive o do carimbo, que caiu **só no par `t` vs `t+1e8`** como o plano avisava.
+>
+> **Achado do executor, e ele corrigiu o plano:** a régua ancorada que a Fase 2 tinha congelado
+> **ainda casava a série** (acima, no C1). Ele mediu, propôs a régua sem `.*` e provou nas três
+> mensagens reais. Conferido de forma independente aqui antes de aceitar.
+>
+> **Divergências, todas para mais:** `fn` recebe `(numero, db)` — sem isso o parâmetro `db` da
+> assinatura congelada ficaria morto; `RE_COLISAO_NUMERO` também é exportada, para a Task 3 não
+> duplicar a regex; **as fixtures de erro são reais, não literais** — as três mensagens são
+> capturadas de INSERTs que falham de verdade num `:memory:`, e o setup afirma o texto delas antes
+> dos cenários, de modo que uma mudança de mensagem do `sqlite3` vira **vermelho** em vez de deixar
+> (7) e (8) passarem vazios; o cenário (1) ganhou os dois extremos de `Math.random` (0 e ~1), que é
+> o que torna testável a proibição do `Math.random().toString(36).slice(2, 10)`; o cenário (3)
+> ganhou uma guarda de que o stub do relógio **pegou** — sem ela, 1000 distintos poderiam vir do
+> relógio andando e o cenário mediria o relógio, não a entropia; e o (5) roda com relógio fixo,
+> para "três números distintos" provar que o **aleatório** foi regenerado.
 
 ## Task 2 — Ligar os quatro pontos (tronco)
 
