@@ -3,13 +3,24 @@
 > **Status:** 🟡 — quarentena e decisão de inspeção reais desde a Etapa 5; **o perfil QUALIDADE
 > existe desde a Etapa 24** (`a81e51a`) e alcança as quatro rotas de `inspecionar`, com a ressalva
 > de que bloqueio/desbloqueio **avulso** usa `ajustar_estoque` e ficou fora de propósito (**B56**);
-> **o plano de inspeção com medidas existe no BACKEND desde a Etapa 27** (`063f3ce..cdb64a6`) —
-> plano por material, régua da tolerância, medidas gravadas com instrumento e
-> `divergencia_dimensional` **derivada** —, mas **sem tela**: o formulário de decisão continua com
-> a caixa manual, e as medidas nascem sem leitor; faltam não conformidade formal numerada,
-> liberação sob desvio autorizado, anexos, encaminhamento com status e a UI ·
+> **o plano de inspeção com medidas existe desde a Etapa 27** (`063f3ce..cdb64a6`) — plano por
+> material, régua da tolerância, medidas gravadas com instrumento e `divergencia_dimensional`
+> **derivada** — e **desde a Etapa 29 tem TELA** (`d0a9f7c..75f183f`): o formulário de decisão
+> ganhou os campos de medida com a faixa e o instrumento, a caixa *Divergência dimensional* virou
+> somente leitura quando há medidas, e nasceu a aba **Histórico** com as inspeções decididas e suas
+> medidas congeladas.
+> **A frase "mas SEM TELA: o formulário de decisão continua com a caixa manual, e as medidas
+> nascem sem leitor", que este cabeçalho trouxe entre 2026-08-29 e 2026-08-30, DEIXOU DE VALER** —
+> ficava certa quando escrita e está corrigida aqui em vez de apagada em silêncio.
+> **Faltam para 🟢:** cadastro do plano **pela tela**, não conformidade formal numerada, liberação
+> sob desvio autorizado, anexos e encaminhamento com status ·
 > **Spec original:** seção 9
-> **Última atualização:** 2026-08-29 (**Etapa 27, `063f3ce..cdb64a6`: os DOIS PRIMEIROS itens do
+> **Última atualização:** 2026-08-30 (**Etapa 29, `d0a9f7c..75f183f`: os DOIS itens desmarcados do
+> checklist de frontend saem** — form de inspeção com plano/medidas e a tela de leitura das
+> medidas. A feature **continua 🟡** porque os cinco itens de "O que falta para 🟢" viraram
+> **quatro**, não zero. Os furos **C34** e **C35** das novidades estão **fechados**; a **B60** foi
+> cumprida em 2 de 3 partes, com a terceira **descartada** e justificada.)
+> Antes: 2026-08-29 (**Etapa 27, `063f3ce..cdb64a6`: os DOIS PRIMEIROS itens do
 > checklist de backend saem** — planos de inspeção e registro de medidas + instrumento. A feature
 > **continua 🟡**, e o que falta para 🟢 está nomeado abaixo em "O que falta para 🟢". A correção
 > da Fase 0 sobre a feature 16 — que esta spec dizia não existir — **fica onde está, à vista**.)
@@ -115,28 +126,43 @@ Inspeção de recebimento com plano, quarentena e bloqueio efetivos no saldo, n�
 
 ### Frontend
 - [x] Fila de inspeções pendentes — **Etapa 5** (`dcee909`, `InspecoesAlmoxarifado.js`): lista o que está retido, de qual recebimento, há quantos dias.
-- [ ] Form de inspeção com plano/medidas/fotos — **CONTINUA DESMARCADO, e agora por um motivo diferente do anterior.** Existe o form de **decisão** (aprovar total/parcial, reprovar com observação obrigatória, encaminhamento, flags de divergência/dano/certificado), e ele segue **sem campos de medida**: quem inspeciona pela tela marca a caixa *Divergência dimensional* à mão, exatamente como antes da Etapa 27.
-  > **A frase antiga — "depende dos itens em aberto acima (planos/medidas ligam com feature 16)" — DEIXOU DE VALER**: o backend está pronto desde a Etapa 27 e a ligação com a feature 16 foi feita. **O que falta agora é só a tela.** Isso é a letra **C34** das novidades.
-  > **E há um requisito de projeto para essa etapa da UI, escrito enquanto o raciocínio estava fresco (letra B60):** quando a tela ganhar campos de medida, a caixa *Divergência dimensional* tem de virar **somente leitura, derivada e explicada**. Se ficar clicável ao lado dos campos, o usuário marca, o **servidor ignora** (RN-03: com medidas, a derivação vence o payload) e a tela passa a mostrar uma coisa enquanto o banco guarda outra — **exatamente o defeito que a Etapa 26 teve de consertar** no formulário de material. Sem medidas preenchidas, ela volta a ser clicável e manual.
-- [ ] **Tela para LER as medidas de uma inspeção já decidida** — item **novo**, criado pela Etapa 27. As medidas são gravadas completas (valor, tolerância do ato, veredito, instrumento) e **não há tela que as mostre**: `GET /inspecoes/pendentes` só traz o que **não** foi decidido, e "rever uma inspeção concluída não tem caminho no produto" já era limitação registrada nesta spec desde 2026-08-08. É a **terceira** ocorrência nesta base do padrão *calculado, gravado e sem quem leia*, e está declarada em vez de descoberta depois — letra **C35**.
+- [x] Form de inspeção com plano/medidas/~~fotos~~ — **Etapa 29** (`75f1e24`, `InspecoesAlmoxarifado.js`): o formulário de decisão ganhou o bloco **Medidas do plano** — um campo por característica **ativa** do plano do material, com `caracteristica (unidade) — nominal N · faixa [inf ; sup]`, `input` de texto (nunca `number`: o valor vai ao servidor como **string crua**, porque converter faria `12,4` virar `12` em silêncio) e seletor de instrumento com o vencido **rotulado e desabilitado**. **Sem plano cadastrado, o formulário é idêntico ao de antes** e não faz chamada nenhuma a mais.
+  > **A frase antiga — "depende dos itens em aberto acima (planos/medidas ligam com feature 16)" — DEIXOU DE VALER** já em 2026-08-29 (Etapa 27), e **a frase que a substituiu — "o que falta agora é só a tela" — deixou de valer em 2026-08-30**: a tela existe. **As FOTOS ficaram de fora e por isso o item não está inteiro** — dependem de `anexos_documento_almoxarifado`, que é item de outra spec; estão nomeadas em "O que falta para 🟢" abaixo. O furo **C34** das novidades está **fechado**.
+  > **A B60 foi cumprida em 2 de 3 partes** (`75f1e24`): a caixa *Divergência dimensional* fica **desabilitada e desmarcada** com ≥1 medida preenchida, a flag manual **nem entra no envio**, e ao lado dela fica o texto *"Derivada das medidas ao salvar — fora da tolerância liga sozinha"*. **A terceira parte — "mostra o resultado derivado, atualizado enquanto se digita" — foi DESCARTADA de propósito**, e isto está aqui para ninguém a reabrir como esquecimento: pré-visualizar na tela exigiria uma **segunda cópia** da régua de tolerância, e a Etapa 27 mediu que a versão ingênua reprova **12,3%** das peças que caem no limite exato. Duas cópias divergem, e no dia em que divergirem a tela mente — que é o defeito que a B60 existe para evitar. O resultado vem do servidor, no aviso de sucesso (*"Inspeção registrada! Divergência dimensional: sim (2 medidas)"*), e a tela mostra a **faixa** ao lado do campo. Se um dia a pré-visualização for exigida, o caminho é um endpoint de avaliação sem gravação, usando a **mesma** função do servidor — nunca cálculo no client.
+- [x] **Tela para LER as medidas de uma inspeção já decidida** — item criado pela Etapa 27 e pago pela **Etapa 29** (`96525d5` backend, `38e74f4` componente, `cf49729` abas): `GET /almoxarifado/inspecoes/historico` (decididas, ordem `data_inspecao DESC, id DESC`, filtro por material, com `medidas_total`/`medidas_nao_conformes`) e `GET /almoxarifado/inspecoes/:id/medidas` (as medidas com a tolerância **congelada no ato** — editar o plano depois **não** muda a resposta, provado por teste), consumidos pela aba **Histórico** da tela de Inspeções. A **terceira** ocorrência do padrão *calculado, gravado e sem quem leia* está fechada — furo **C35**.
+  > **O que continua sem leitor não é a medida:** decidir inspeção ainda **não deixa linha na Auditoria** (furo **C36**, anterior a estas duas etapas e ainda aberto), e inspeção decidida **não pode ser reaberta nem corrigida** — a leitura é só leitura, e isso é limitação declarada, não pendência.
 - [x] Gestão de bloqueios e quarentena (o mapa já mostra áreas — falta operação) — **Etapa 5** (`dcee909`): bloqueio/desbloqueio avulso de material agora tem botão e formulário na tela de Inspeções.
 
-## O que falta para 🟢 (nomeado em 2026-08-29, no fechamento da Etapa 27)
+## O que falta para 🟢 (atualizado em 2026-08-30, no fechamento da Etapa 29)
 
-**A feature NÃO muda de cor.** Ela continua **🟡**, e a razão é curta: a Etapa 27 pagou os **dois
-primeiros** itens do checklist de backend, e sobram **cinco**, dos quais três são fluxo inteiro.
-Sem esta lista escrita, a próxima leitura teria de refazer a conta — e nesta base isso já produziu
-"o que falta para 🟢" errado quatro vezes seguidas na feature 23.
+**A feature NÃO muda de cor.** Ela continua **🟡**. A Etapa 27 pagou os dois primeiros itens do
+checklist de backend e a Etapa 29 pagou os **dois de frontend** — o item 5 da lista anterior (*"a
+TELA de medidas e a tela de leitura"*) **saiu**. Dos cinco, sobram **quatro**, e três deles são
+fluxo inteiro. Sem esta lista escrita, a próxima leitura teria de refazer a conta — e nesta base
+isso já produziu "o que falta para 🟢" errado quatro vezes seguidas na feature 23.
 
 1. **Não conformidade formal** (número, descrição, ação, responsável) vinculada à inspeção — é uma
    máquina de estados própria; o que existe hoje é o `encaminhamento` registrado na reprovação.
 2. **Liberação sob desvio autorizado** (quem autorizou, justificativa, histórico imutável) — idem.
 3. **Anexos** (certificado, relatório dimensional, fotos) — depende de
-   `anexos_documento_almoxarifado`, que é item próprio de outra spec.
+   `anexos_documento_almoxarifado`, que é item próprio de outra spec. **É o que impede o item
+   "form de inspeção com plano/medidas/fotos" de estar inteiro**, e não a falta de tela.
 4. **Encaminhamento com status** (saber se a devolução/análise/substituição foi executada) — a
    execução em si é a feature 12.
-5. **A TELA de medidas** — e junto dela a **tela de leitura** das medidas já gravadas. É o único
-   item dos cinco que é *só* trabalho de front: o contrato está pronto, testado e integrado.
+
+**E um item NOVO, criado pela Etapa 29** — não estava na lista antiga porque só passou a doer
+quando a tela existiu:
+
+5. **Cadastro do plano de inspeção PELA TELA.** O plano tem CRUD completo e testado desde a Etapa
+   27 (`POST/PUT/DELETE /almoxarifado/planos-inspecao`, gate `gerenciar_plano_inspecao`), e a tela
+   de Inspeções agora **lê** o plano — mas **criar** um continua sendo chamada de API. Na prática
+   isso significa que o bloco *Medidas do plano* **não aparece para ninguém** enquanto alguém não
+   cadastrar o primeiro plano por fora do produto. É *só* trabalho de front: o contrato está
+   pronto, testado e integrado. **É o próximo item de maior valor desta feature.**
+
+~~5. **A TELA de medidas** — e junto dela a **tela de leitura** das medidas já gravadas.~~
+**PAGO na Etapa 29** (`d0a9f7c..75f183f`). Riscado em vez de apagado, para quem tiver lido a lista
+anterior confirmar o que saiu.
 
 **O que NÃO conta para a cor, porque é decisão de negócio declarada e não funcionalidade
 faltante:** o plano por **família** (**B59**), a obrigatoriedade do instrumento (**B61**) e a

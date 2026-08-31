@@ -1,10 +1,45 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-08-29 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-08-30 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 28) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 29) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20.
 
-> ## Onde o desenvolvimento está — 2026-08-29 (Etapa 28 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-08-30 (Etapa 29 ENTREGUE · modo contínuo pelo mapa)
+>
+> **Etapas 1 a 20 e 22 a 29 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
+> A **Etapa 29 (a tela finalmente mede, e a medida finalmente tem quem leia)** fechou em
+> 2026-08-30 (`d0a9f7c..b20d056`) e é da **feature 09 (inspeção e qualidade)**. Ela pagou a dívida
+> que a Etapa 27 deixou declarada: a régua de tolerância existia inteira **por baixo**, sem tela
+> para digitar a medida (furo **C34**) e sem tela para ler as medidas gravadas (furo **C35**).
+> **Os dois estão fechados.** O formulário *Decidir Inspeção* ganhou o bloco **Medidas do plano**
+> (um campo por característica, com nominal, unidade e a faixa de tolerância já somada), o seletor
+> de instrumento — que mostra o **vencido rotulado e desabilitado** —, e a caixa *Divergência
+> dimensional* passou a **travar desmarcada** assim que há medida. A tela de Inspeções ganhou a
+> aba **Histórico**, com as inspeções decididas e a tabela de medidas de cada uma, com a
+> tolerância **do dia da medição**.
+>
+> **⚠️ Sem plano de inspeção cadastrado, a tela é a de sempre** — e o **cadastro do plano ainda é
+> por API**. Na prática, o bloco de medidas só aparece depois que alguém cadastrar o primeiro
+> plano; o roteiro da Etapa 29 traz o comando pronto. Isso é o principal item que falta para a
+> inspeção fechar no front.
+>
+> **O que a revisão adversarial mediu e mudou o projeto:** o Histórico renderizava
+> *"Nenhuma inspeção decidida ainda."* quando a **leitura falhava** — a tela afirmando que não há
+> inspeção quando na verdade não conseguiu perguntar; `?limite=0.5` fazia o servidor responder
+> **200 com lista vazia**; e a fórmula da faixa estava **duplicada em duas telas**, com as duas
+> cópias já divergindo. Além disso, cinco testes passavam com a feature quebrada — as fixtures
+> eram todas simétricas ou exatamente representáveis.
+>
+> **O que é seu:** a **B64** (ler o histórico não exige perfil — decisão minha, reversível numa
+> linha), o furo **C39** (o Histórico mostra no máximo 100 e não avisa que cortou) e o furo
+> **C40** (a divergência é derivada das medidas **que você informou**, não das características do
+> plano). A **B60** foi cumprida em **2 de 3 partes**, com a terceira descartada e o motivo
+> escrito.
+> Ver a seção "Etapa 29" perto do fim deste guia, com o roteiro de teste.
+>
+> **Antes: Etapas 1 a 20 e 22 a 28 completas no módulo.**
+>
+> ## Onde o desenvolvimento estava — 2026-08-29 (Etapa 28 ENTREGUE · modo contínuo pelo mapa)
 >
 > **Etapas 1 a 20 e 22 a 28 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
 > A **Etapa 28 (a separação ganha dono, e quem separou não confere)** fechou em 2026-08-29
@@ -4080,6 +4115,163 @@ requisição. Nos comandos abaixo ele é `$TOKEN`.
   dimensional, fotos) e **encaminhamento com status** continuam em aberto na inspeção.
 - **Reprovar por lote continua não ligado à inspeção** — pendência antiga, não tocada aqui.
 - **Nenhum plano foi cadastrado.** As duas tabelas nascem vazias.
+
+---
+
+## Etapa 29 — A tela finalmente mede, e a medida finalmente tem quem leia (ENTREGUE — 2026-08-30)
+
+**O que mudou, em uma frase:** o formulário **Decidir Inspeção** ganhou os **campos de medida** do
+plano do material, a caixa *Divergência dimensional* virou **somente leitura** quando há medidas, e
+a tela de Inspeções ganhou a aba **Histórico**, onde se lê o que cada inspeção já decidida mediu.
+
+> ## ⚠️ LEIA ANTES DE TESTAR — sem plano cadastrado, a tela é a de sempre
+>
+> O bloco **Medidas do plano** só aparece para material que **tem plano de inspeção cadastrado**, e
+> o **cadastro do plano ainda não tem tela** — é chamada de API (o roteiro abaixo traz o comando
+> pronto). Se você abrir o formulário de um material qualquer e não vir campo de medida nenhum,
+> **está certo**: aquele material não tem plano.
+>
+> Isto é o mesmo compromisso da Etapa 27 e continua valendo: **quem não usa plano não vê diferença
+> nenhuma**.
+>
+> A **aba Histórico**, essa aparece para todo mundo — e mostra as inspeções decididas mesmo as que
+> foram decididas **sem medida nenhuma** (aparecem com *"Sem medidas registradas"*).
+
+### O problema que existia
+
+A Etapa 27 tinha construído a régua inteira por baixo — plano por material, tolerância com sinal,
+medida gravada com o instrumento, divergência dimensional derivada do número — e entregado **sem
+tela**. Na prática:
+
+- quem inspecionava pelo sistema **não tinha onde digitar a medida** e continuava marcando
+  *Divergência dimensional* no olho (furo **C34**);
+- as medidas que a API sabia gravar **não apareciam em lugar nenhum** — nem a tela de Inspeções,
+  que só lista o que ainda **não** foi decidido, nem qualquer outra. Para saber "o que essa peça
+  mediu na entrada", só consulta ao banco (furo **C35**).
+
+Os dois furos estão fechados.
+
+### O que a etapa entregou
+
+| Onde | O que aparece agora |
+|---|---|
+| **Decidir Inspeção** (material com plano) | Bloco **Medidas do plano**: um campo por característica ativa, com `Diâmetro (mm) — nominal 12.3 · faixa [12.2 ; 12.4]` |
+| **Decidir Inspeção** | Seletor de instrumento por medida, opcional (*"— sem instrumento —"*); o de calibração vencida aparece rotulado e **não selecionável** |
+| **Decidir Inspeção** | A caixa *Divergência dimensional* fica **desabilitada e desmarcada** com ≥1 medida preenchida, com o texto *"Derivada das medidas ao salvar — fora da tolerância liga sozinha"* |
+| **Decidir Inspeção** | Aviso de sucesso com o resultado: *"Inspeção registrada! Divergência dimensional: sim (2 medidas)"* |
+| **Inspeções** | Duas abas — **Pendentes** (a de sempre) e **Histórico** (nova). O filtro de material do topo vale para as duas |
+| **Inspeções → Histórico** | Inspeções decididas, da mais recente para a mais antiga: data, material, *aprovada / reprovada*, problemas em etiquetas, responsável e **Medidas: `2 (1 fora)`** |
+| **Inspeções → Histórico** | Clicar na linha abre a tabela de medidas: *Característica · Nominal · Faixa · Medido · Conforme · Instrumento*, com a tolerância **do dia em que foi medido** |
+
+### Roteiro de teste manual
+
+Você precisa de um usuário com perfil **Administrador**, **Almoxarife** ou **Qualidade** para
+decidir inspeção, e de **Administrador**, **Qualidade** ou **Engenharia** para cadastrar o plano
+por API. Para os passos de API, o token sai do `F12` → aba **Rede** → cabeçalho `Authorization` de
+qualquer requisição do sistema logado; abaixo ele é `$TOKEN`.
+
+1. **Cadastre um plano com DUAS características**, uma simétrica e uma unilateral — a segunda é a
+   que prova a regra da faixa. Pegue o `id` de um material em Almoxarifado → Materiais:
+   ```
+   curl -X POST http://localhost:5000/api/almoxarifado/planos-inspecao \
+     -H "Authorization: $TOKEN" -H "Content-Type: application/json" \
+     -d '{"material_id": 1, "caracteristica": "Diâmetro", "unidade": "mm",
+          "valor_nominal": 12.3, "desvio_inferior": -0.1, "desvio_superior": 0.1}'
+
+   curl -X POST http://localhost:5000/api/almoxarifado/planos-inspecao \
+     -H "Authorization: $TOKEN" -H "Content-Type: application/json" \
+     -d '{"material_id": 1, "caracteristica": "Furo", "unidade": "mm",
+          "valor_nominal": 10, "desvio_inferior": 0.005, "desvio_superior": 0.021}'
+   ```
+2. **Deixe um item retido:** Almoxarifado → Recebimentos → novo recebimento **desse material** (ele
+   precisa estar marcado como **crítico**, e a retenção de material crítico ligada em
+   Configurações) → aprovar. Ele aparece em **Inspeções → Pendentes**.
+3. **Abra Decidir Inspeção.** Agora existe o bloco **Medidas do plano**, com duas linhas:
+   - *Diâmetro (mm) — nominal 12.3 · faixa **[12.2 ; 12.4]***
+   - *Furo (mm) — nominal 10 · faixa **[10.005 ; 10.021]***
+   **Olhe a segunda com atenção:** os dois limites ficam **acima** do nominal, porque a faixa é
+   `nominal + desvio`, **com sinal**. Se aparecer `[9.995 ; 10.021]`, é bug — essa leitura
+   reprovaria peça boa num plano de usinagem. E repare que não aparece nenhum `12.200000000000001`:
+   as casas decimais são as do plano.
+4. **A caixa que trava.** Marque *Divergência dimensional* à mão. Agora digite `12.35` no campo do
+   Diâmetro: **a caixa desmarca e fica cinza**, com o texto *"Derivada das medidas ao salvar — fora
+   da tolerância liga sozinha"* ao lado. Abaixo do bloco fica escrito, sempre: *"Com medidas
+   preenchidas, a divergência dimensional é calculada só pelas características que você mediu.
+   Divergência em algo que o plano não mede — ou numa característica do plano que você deixou em
+   branco — vai em Observações."*
+   **Apague o `12.35`**: a caixa volta a ser clicável **e volta marcada**. O que você tinha
+   escolhido não foi jogado fora.
+4b. **Meça só UMA das duas características e veja o que o sistema conclui.** Marque
+   *Divergência dimensional* à mão, digite `10.010` só no **Furo** (dentro da faixa), deixe o
+   Diâmetro em branco e salve. O aviso diz *"Divergência dimensional: não (1 medida)"* — a
+   marcação que você fez **não valeu**, porque a caixa trava na **primeira** medida preenchida.
+   **Isto é o furo C40 e o inspetor precisa saber antes**: divergência vista numa característica
+   que ele **não mediu** vai em **Observações** — ou ele mede aquela característica, que é o que o
+   plano existe para provocar. O texto abaixo do bloco diz isso na tela.
+
+5. **Vírgula é recusada — e nada é gravado.** Digite `12,4` no Diâmetro e salve:
+   *"Valor medido inválido para "Diâmetro": informe um número (use ponto decimal)"*. **O formulário
+   continua aberto com o que você digitou**, o item continua na fila e nenhum saldo se moveu.
+   Troque para `12.4` e siga. (A tela **não** converte a vírgula por conta própria de propósito:
+   converter faria `12,4` virar `12` em silêncio.)
+6. **Instrumento vencido.** Abra o seletor de instrumento de uma medida: um instrumento com
+   calibração vencida aparece como *"Paquímetro digital (PAT-014) (calibração vencida)"* e **não é
+   selecionável**. (Se não houver nenhum vencido no seu banco, dá para criar um em
+   Almoxarifado → Ferramentas, com calibração exigida e vencimento no passado.)
+7. **Salve com as duas medidas, uma fora da faixa** (ex.: Diâmetro `12.4`, Furo `10.03`). O aviso
+   diz: *"Inspeção registrada! Divergência dimensional: sim (2 medidas)"*. **O resultado vem do
+   servidor, não da tela** — a tela não calcula tolerância em lugar nenhum, de propósito.
+8. **Aba Histórico.** Clique em **Histórico**: a inspeção que você acabou de decidir está no topo,
+   com a etiqueta **Dimensional** em *Problemas* e **`2 (1 fora)`** na coluna Medidas. Uma inspeção
+   antiga, decidida sem medida, aparece com *"Sem medidas registradas"* e **não abre**.
+8b. **Derrube a rede e volte ao Histórico.** Com o servidor fora do ar (ou a sessão expirada), a
+   aba mostra *"Não foi possível carregar o histórico de inspeções."*, a mensagem do servidor e um
+   botão **Tentar de novo** — e **nunca** *"Nenhuma inspeção decidida ainda."*. Suba o servidor e
+   clique em **Tentar de novo**: a lista aparece.
+
+9. **Clique na linha.** Abre a tabela: *Diâmetro · 12.3 · [12.2 ; 12.4] · 12.4 · **Conforme** · —*
+   e *Furo · 10 · [10.005 ; 10.021] · 10.03 · **Não conforme** · Paquímetro …*.
+10. **A prova do congelamento — este é o passo que importa.** Mude o plano depois da inspeção:
+    ```
+    curl -X PUT http://localhost:5000/api/almoxarifado/planos-inspecao/<ID_DA_CARACTERISTICA> \
+      -H "Authorization: $TOKEN" -H "Content-Type: application/json" \
+      -d '{"caracteristica": "Diametro externo", "valor_nominal": 99}'
+    ```
+    Volte ao Histórico e abra a mesma linha: **nada mudou**. A tabela mostra *Diâmetro*, nominal
+    `12.3` e a faixa `[12.2 ; 12.4]` — o que valia no dia da medição. É isso que permite defender a
+    decisão meses depois.
+11. **Característica desativada some do formulário.** Desative uma característica
+    (`DELETE /api/almoxarifado/planos-inspecao/<id>`) e abra o formulário de um item novo do mesmo
+    material: a linha some do bloco. Mas o **Histórico** continua mostrando a medida antiga dela —
+    congelada.
+12. **Sem plano, sem bloco.** Abra o formulário de decisão de um item de material **sem plano**: é o
+    formulário de sempre, sem bloco de medidas. Nada mudou para ele.
+13. **Filtro.** Escolha um material no filtro do topo e troque para o Histórico: a lista respeita o
+    filtro.
+14. **Perfil.** Entre com um usuário **sem perfil de almoxarifado** que tenha acesso ao módulo: ele
+    **abre o Histórico e lê** as medidas normalmente, e **toma recusa de permissão** se tentar
+    decidir uma inspeção. É a decisão **B64**, reversível numa linha, e está escrita nas novidades.
+
+### O que esta etapa NÃO cobre
+
+- **Cadastrar plano de inspeção pela tela** — continua por API. É o maior item que falta para a
+  inspeção fechar no front, e na prática significa que o bloco de medidas **só aparece depois que
+  alguém cadastrar um plano por fora**.
+- **Pré-visualizar o resultado enquanto se digita** — descartado de propósito (a terceira parte da
+  **B60**): calcular a tolerância na tela seria uma **segunda cópia** da régua, e a Etapa 27 mediu
+  a versão ingênua reprovar 12,3% das peças no limite. O resultado vem do servidor, no aviso de
+  sucesso, e a tela mostra a **faixa** ao lado do campo.
+- **Fotos, certificado e relatório dimensional** anexados à inspeção — dependem do módulo de anexos.
+- **Reabrir ou corrigir uma inspeção decidida** — a leitura é só leitura; medida errada não tem
+  como ser corrigida pela tela (nem tinha antes).
+- **Paginação do Histórico** — a aba mostra no máximo as **100 mais recentes** e não avisa que
+  cortou (o servidor aceita até 500, mas a tela não pede). O filtro de material resolve o caso
+  prático; paginar de verdade é etapa própria, e tem de vir com um sinal de truncamento. Furo
+  **C39**.
+- **Decidir inspeção continua sem aparecer na Auditoria** — furo **C36**, anterior a esta etapa.
+- **Plano herdado da família** (**B59**) — a tela busca o plano **do material**.
+- **Não conformidade formal numerada** e **liberação sob desvio autorizado** — os dois fluxos
+  próprios que ainda faltam para a inspeção ficar completa.
 
 ---
 

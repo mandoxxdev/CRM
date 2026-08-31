@@ -224,7 +224,18 @@ instrumento; (3) `medidas_total === 0` mostra *"Sem medidas registradas"* sem ch
 
 Commit: `Almoxarifado Etapa 29 Task 3: a aba Historico mostra as medidas de cada inspecao`.
 
-## Task 3b — As abas (após 2 e 3)
+## Task 3b — As abas (após 2 e 3) — ✅ FEITA (`cf49729`)
+
+> **Fechamento (2026-08-30).** Estado `aba` (`pendentes`|`historico`), duas abas em
+> `.almox-abas` (hook de teste), e a aba Histórico renderiza `<HistoricoInspecoes
+> materialFilter={materialFilter} />` **no lugar** da tabela de pendentes. **Divergências
+> deliberadas:** o título da tela passou de *Inspeção de Recebimento* para **Inspeções**, com
+> subtítulo por aba (*"Inspeções decididas e as medidas registradas em cada uma"* no Histórico);
+> o botão de recarregar a fila só aparece na aba Pendentes. 4 cenários novos; os 20+7 anteriores
+> continuaram verdes.
+
+
+
 
 `InspecoesAlmoxarifado.js`: estado `aba` (`pendentes`|`historico`), duas abas no topo, e a aba
 Histórico renderiza `<HistoricoInspecoes materialFilter={materialFilter} />` **no lugar** da
@@ -275,6 +286,58 @@ rota → `historico` (`medidas_total 2`, `nao_conformes 1`, `divergencia_dimensi
 > ou `INSERT` com retry). `test:almoxarifado` 42/42, `test:validation` 4/4, `test:safealter`
 > 3/3, `test:sqlite` 5/5; client 40 suítes / 613 testes verdes e `CI=true build` compilou.
 
+## Fase 5 — Revisão adversarial (2026-08-30) — ✅ FEITA, e ela mudou a etapa
+
+**Duas lentes, dois revisores frescos em paralelo** (backend: exposição sob D6, bordas de
+`limite`/`material_id`, correção do SQL, congelamento, "este teste passaria com a feature
+quebrada?"; front: B60 na prática, formatação da faixa, corridas do modal, aba Histórico, mesma
+última pergunta). **Uma primeira tentativa, na véspera, morreu com `rate_limit` nos dois agentes e
+não produziu achado nenhum** — está dito aqui porque a alternativa seria a Fase 5 parecer feita.
+
+**Nenhum achado BLOQUEANTE nos dois.** Sete achados importantes viraram trabalho, em dois
+fix-rounds:
+
+### Fix-round backend — `f6b0e3d`
+
+| # | Achado | Virou |
+|---|---|---|
+| 1 | `limiteHistorico` guardava com `n <= 0`; `?limite=0.5` passava e `Math.floor` dava `LIMIT 0` — **200 com lista vazia**, o servidor afirmando "não há histórico" para quem tem | código (`n < 1`) + cenário na fronteira do SQL **e** pela rota |
+| 2 | **Teste vazio:** todo cenário com medida era simétrico (1 dentro / 1 fora), então `COUNT(conforme = 0)` e `= 1` davam o mesmo número — trocar o operador deixava 20 cenários verdes. É o número que a aba imprime (`2 (1 fora)`, badge vermelho) | cenário **assimétrico** (3 medidas, 1 fora) |
+| 3 | **Teste vazio:** `divergencia_quantidade`, `dano_fisico` e `material_incorreto` valiam 0 em todo lugar — cruzar as colunas no SELECT era invisível | três decisões com os padrões `1/0/0`, `0/1/0`, `0/0/1` |
+| 4 | Sem paginação, offset, janela de data ou sinal de truncamento: > 500 inspeções de um material deixa as antigas inalcançáveis, e a tela nem manda `limite` (teto prático 100) | **não virou código** — furo **C39** nas novidades, com o que foi descartado |
+
+**Não confirmados (e isso vale registrar):** exposição sob D6 — `GET /movimentacoes` já devolve
+`SELECT m.*` com `usuario_nome` e a `justificativa` (que **é** o `observacoes` da inspeção) ao
+mesmo público; nenhum campo do C1 é mais sensível que o que já sai. Bordas: ~20 formas de
+`limite` e `material_id` (array, objeto, `1e999`, `"1 OR 1=1"`) → 200 sem 500, tudo parametrizado;
+`:id` idem → 404 limpo. `conforme` NULL é impossível (`NOT NULL`). JOIN não duplica (três N:1 por
+PK). Sombreamento de rota: não existe `/inspecoes/:id` de dois segmentos.
+
+### Fix-round front — `b20d056`
+
+| # | Achado | Virou |
+|---|---|---|
+| 1 | Falha do C1 no Histórico renderizava *"Nenhuma inspeção decidida ainda."* — o toast some em segundos e a tela fica **afirmando que não há inspeção**. É o pecado que a RN-08 evita no modal; o teste (7) tinha *"sem virar lista vazia em silêncio"* no título e afirmava **só o toast** | estado de erro com mensagem do servidor + **Tentar de novo**, 2 cenários |
+| 2 | **A fórmula da faixa estava duplicada nas duas telas e as cópias já divergiam** (`null` → uma inventa `[10.000 ; …]`, a outra `—`; `'0,005'` → uma dá `NaN`) | módulo `faixaTolerancia.js`, uma cópia só |
+| 3 | **Teste vazio:** `.toFixed(casas)` não estava ancorado em **nenhum** dos dois arquivos — as fixtures (`12.3 ±0.1`, `10 +0.005/+0.021`) são exatamente representáveis | fixture `1.1 ±0.1` (`1.1 + 0.1` = `1.2000000000000002`) |
+| 4 | **Duas guardas load-bearing sem teste:** tirar `aberturaRef` ou `setMedidas({})` deixava 24/24 verde. O efeito real é medida do item A indo no payload do item B (mesmo material, `plano_id` válido — o servidor aceita) | 2 cenários |
+| 5 | Plano com 2 características e 1 medida conforme: a caixa trava, a flag manual some, o servidor deriva 0 — a divergência que o inspetor viu **desaparece** | **a régua NÃO mudou** (o servidor deriva por medida, não por característica; mudar seria contrato novo). Virou texto de ajuda nomeando o caso + cenário que congela a decisão + furo **C40** |
+| 6 | `unidade` é nullable e o modal renderizava `Diâmetro ()` | guarda |
+| 7 | `valor_medido` vai sem `trim` enquanto o filtro usa `.trim()` | **não virou código** — assimetria, não bug (`paraNumeroFinito` faz trim no servidor) |
+
+**Não confirmados no front:** a B60 no payload e na caixa (mutar qualquer um dos dois mata o
+cenário 3); faixa com sinal; string crua; a guarda de corrida **funciona** de fato; toda a aba
+Histórico (cache por id, `medidas_total === 0` não chama C2, `materialFilter`, substituir a
+tabela); e os contratos batem com o backend **real**, não só com o mock.
+
+### Lição da etapa, para a próxima
+
+**Fixture simétrica ou exatamente representável é teste vazio esperando ser descoberto.** Três dos
+sete achados são a mesma causa: `1 dentro / 1 fora` faz `COUNT(=0)` e `COUNT(=1)` empatarem;
+`12.3 + 0.1` dá `12.4` cravado e não exercita o `toFixed`; três flags em `0` não distinguem coluna
+nenhuma. **A fixture tem de ser assimétrica em toda dimensão que o código diferencia** — e essa
+pergunta ("o que nesta fixture é igual e não deveria ser?") custa segundos ao escrever o teste.
+
 ## Fechamento
 
 `fechar-etapa`: novidades (seção; C34 e C35 **fechados**, riscados no lugar; **B60 cumprida em 2
@@ -286,6 +349,72 @@ pré-visualização foi descartada; o que falta: cadastro do plano pela tela, fo
 desativada some do modal; com medidas não se flaga característica fora do plano), manual
 (§15.2.x), retro.
 
-## Próxima tarefa detalhada
+## Retro de 4 números (2026-08-30)
 
-(preencher no fechamento)
+1. **Rodadas de correção até verde: 2** (um fix-round por lente, nenhuma rodada repetida). Nenhum
+   teste falhou duas vezes seguidas; o detector de esteira não chegou a ser exercitado.
+2. **Achados da revisão: 7 reais, 0 ruído.** Os dois revisores reproduziram **tudo** que
+   reportaram (sabotagem com `md5sum`, ou probe com o mutante aplicado), e os dois disseram
+   explicitamente o que **tentaram refutar e não conseguiram** — que é o que dá para confiar no
+   "nenhum bloqueante". **1 achado (paginação) e 1 assimetria (`trim`) NÃO viraram código**, com o
+   motivo escrito. **Custo:** a primeira tentativa dos dois revisores morreu em `rate_limit` e
+   produziu zero — a Fase 5 real rodou um dia depois.
+3. **Paralelismo: 3 galhos em paralelo de fato** (Tasks 1, 2 e 3, arquivos disjuntos), mais 2
+   revisores em paralelo. **Zero retrabalho** por conflito entre galhos: a Task 4 (integração pela
+   rota) achou que "o backend se comportou como a tela assume em tudo — nenhuma linha de produção
+   mudou". O congelamento de contrato da Fase 2 pagou.
+4. **Defeito que escapou:** preencher na etapa seguinte. Candidatos conhecidos e declarados:
+   paginação do Histórico (**C39**) e a derivação por medida vs. por característica (**C40**).
+
+**Quinto número, não previsto pela retro mas que a etapa produziu:** **5 testes passavam com a
+feature quebrada** e só foram descobertos na Fase 5 — todos por fixture simétrica ou exatamente
+representável. É a maior fonte de falso verde desta base até agora, e virou lição escrita acima.
+
+## Próxima tarefa detalhada — Cadastro do plano de inspeção PELA TELA
+
+**Por que esta, e não outra.** É o item que o fechamento da 29 nomeou como *"o que falta para 🟢"*
+de maior valor na feature 09, e é o único que é **só front**: enquanto o plano nascer por API, o
+bloco *Medidas do plano* que a 29 entregou **não aparece para ninguém** — a etapa inteira fica
+inalcançável por quem opera. É também a Fase 0 já meio medida: os contratos abaixo foram lidos no
+código durante a 29.
+
+**O que já está pronto e NÃO precisa ser reaberto** (Etapa 27, testado em
+`server/tests/api/planoInspecao.api.test.js`, 22 cenários):
+
+- `GET /api/almoxarifado/planos-inspecao?material_id=` (`extended.js:292`) — `auth` só; **400
+  *"Material é obrigatório"*** sem o parâmetro; **`?todos=1` traz as inativas** (é o que a tela de
+  cadastro precisa, e a tela de decisão **não** usa).
+- `POST /api/almoxarifado/planos-inspecao` (`extended.js:312`, gate **`gerenciar_plano_inspecao`**
+  = `[ADMINISTRADOR, QUALIDADE, ENGENHARIA]`). Corpo: `{ material_id, caracteristica, unidade?,
+  valor_nominal, desvio_inferior?, desvio_superior? }`. Recusas literais: *"Material é
+  obrigatório"*, *"Material não encontrado"* (404), *"Característica é obrigatória"*, *"Valor
+  nominal é obrigatório"*, *"O desvio inferior não pode ser maior que o superior"*, *"Já existe
+  esta característica no plano deste material"*. **Zero é nominal legítimo** (batimento, planeza) —
+  a checagem é `=== null`, não falsy; a tela **não pode** recusar 0. Desvio omitido vira **0**, e
+  plano com os dois zerados é faixa de largura zero, que é **válido**.
+- `PUT /api/almoxarifado/planos-inspecao/:id` (`:360`) e `DELETE .../:id` (`:429`, **soft delete** —
+  `ativo = 0`; desativar **libera o nome** para ser recriado, por causa do índice único parcial
+  `(material_id, caracteristica) WHERE ativo = 1`). **Não há rota de REATIVAR** — medir isso na
+  Fase 0 antes de prometer o botão.
+- As três operações **deixam rastro na Auditoria**, entidade *Plano de inspeção*, com de/para.
+
+**Pontos de atenção, todos aprendidos na 29:**
+
+1. **A faixa exibida no formulário de cadastro tem de importar `formatarFaixa` de
+   `client/src/components/almoxarifado/faixaTolerancia.js`.** Não reescrever: esta etapa acabou de
+   fundir duas cópias que já divergiam. E **nenhuma comparação de tolerância no client**.
+2. **Desvio COM SINAL, e o formulário tem de deixar isso óbvio.** O caso unilateral
+   (`+0,005/+0,021`) é o que quebra a intuição de "±". Um rótulo que mostre a faixa resultante ao
+   digitar (`[10.005 ; 10.021]`) resolve — e aqui pré-visualizar é **legítimo**, ao contrário da
+   B60, porque é aritmética de exibição, não a régua de conformidade.
+3. **Onde pendurar a tela.** O cadastro é **por material**, então o lugar natural é a ficha do
+   material (`MateriaisAlmoxarifado`), não a tela de Inspeções — mas **medir antes**: uma sessão
+   desta base já desenhou uma etapa inteira sobre "esta tela não existe" e a tela existia. Procure
+   pelo nome do **contrato** (`planos-inspecao`), não pelo nome que você imagina.
+4. **Gate na tela e no botão.** `gerenciar_plano_inspecao` **não** é `inspecionar`: quem decide
+   inspeção (Almoxarife) **não** cadastra plano, e quem cadastra (Engenharia) **não** decide. A UI
+   tem de barrar antes do formulário via `useAlmoxPermissoes`, e o backend recusa de qualquer jeito.
+5. **Fixture assimétrica** — a lição da 29. Ao testar a lista do plano, não use duas características
+   com os mesmos desvios; ao testar o de/para da edição, não mude só um campo.
+6. **O que fica de fora, e diga que fica:** plano por família (**B59**), importar plano de outro
+   material, e anexar desenho técnico (depende do módulo de anexos).

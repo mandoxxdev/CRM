@@ -1790,7 +1790,9 @@ Os três resultados possíveis:
 
 A quantidade física do material **não muda** em nenhum dos três casos — o material continua na prateleira; o que muda é o que se pode fazer com ele. E decidir é uma operação única: aprovar e reprovar acontecem juntos, nunca em dois passos que poderiam ficar pela metade.
 
-Uma decisão de inspeção **não pode ser estornada pelo livro de movimentações** — ela é o registro de um julgamento, não um lançamento de saldo a acertar. **E rever uma decisão já tomada não tem caminho no sistema:** a tela de Inspeções lista apenas o que **ainda não foi decidido**, então o item decidido some dela. O que continua recuperável é o **saldo**, por Bloquear/Desbloquear Material (15.3) — o **registro** da inspeção é imutável.
+A tela de Inspeções tem duas abas: **Pendentes**, com a fila do que ainda não foi decidido, e **Histórico**, com o que já foi (15.2.2). O filtro de material do topo vale para as duas.
+
+Uma decisão de inspeção **não pode ser estornada pelo livro de movimentações** — ela é o registro de um julgamento, não um lançamento de saldo a acertar. **Uma decisão já tomada pode ser LIDA, na aba Histórico, mas não pode ser desfeita nem corrigida:** não há como reabrir uma inspeção, mudar uma medida ou apagar uma decisão. O que continua recuperável é o **saldo**, por Bloquear/Desbloquear Material (15.3) — o **registro** da inspeção é imutável.
 
 Perfil exigido: **inspecionar** (Administrador, Almoxarife e Qualidade).
 
@@ -1824,7 +1826,21 @@ Outras recusas de medida, todas antes de qualquer efeito no saldo:
 
 **Toda recusa acontece antes de o saldo se mover.** Uma inspeção recusada por qualquer um dos motivos acima deixa o material exatamente como estava: ainda retido, ainda na fila.
 
-**Onde isto se faz hoje:** o plano de inspeção e o registro de medidas **não têm tela**. O formulário **Decidir Inspeção** continua com a caixa *Divergência dimensional* marcada à mão, e é assim que a inspeção é feita pelo navegador. As regras acima valem para quem registra a inspeção por integração, e são o comportamento que a tela vai seguir quando ganhar os campos de medida.
+**Onde isto se faz hoje:** o **registro das medidas tem tela** — é o bloco **Medidas do plano**, dentro do formulário *Decidir Inspeção* (descrito logo abaixo). O **cadastro do plano** ainda não tem: criar, editar e desativar característica é feito por integração. Consequência prática: **o bloco de medidas só aparece para material cujo plano já foi cadastrado por fora** — material sem plano abre o formulário exatamente como sem esta seção existir.
+
+**O bloco "Medidas do plano" no formulário de decisão.** Quando o material tem plano, o formulário mostra **uma linha por característica ativa**, com o rótulo `Característica (unidade) — nominal N · faixa [inferior ; superior]` — a faixa já calculada como `nominal + desvio`, com o sinal de cada desvio, e escrita com as mesmas casas decimais do plano. Cada linha tem o campo do valor medido e um seletor de instrumento.
+
+**O valor medido é digitado com ponto decimal, e o sistema não converte por conta própria.** Digitar `12,4` faz a inspeção inteira ser recusada com *"Valor medido inválido para "⟨característica⟩": informe um número (use ponto decimal)"*, o formulário continua aberto com o que foi digitado, e **nada é gravado**. É deliberado: converter a vírgula sem avisar transformaria `12,4` em `12`, uma medida dez vezes menor aceita em silêncio.
+
+**Linha sem valor é ignorada.** Não é obrigatório medir todas as características para decidir: as linhas em branco simplesmente não entram, e o instrumento sem valor medido também não.
+
+**O seletor de instrumento mostra o vencido, rotulado e desabilitado.** Instrumento com calibração vencida aparece na lista com o sufixo *"(calibração vencida)"* e não pode ser escolhido — o sistema recusaria de qualquer forma, e a tela evita o erro previsível. Instrumento que não exige calibração aparece normal.
+
+**A caixa "Divergência dimensional" trava assim que há medida.** Com pelo menos um valor preenchido, ela fica **desabilitada e desmarcada**, com a explicação ao lado: *"Derivada das medidas ao salvar — fora da tolerância liga sozinha"*. A marcação manual **não é enviada** nesse caso. Apagando todas as medidas, ela volta a ser clicável — e volta ao estado em que estava. Abaixo do bloco fica escrito, sempre: *"Com medidas preenchidas, a divergência dimensional é calculada só pelas características que você mediu. Divergência em algo que o plano não mede — ou numa característica do plano que você deixou em branco — vai em Observações."*
+
+**Uma consequência que precisa ficar clara: a derivação olha as medidas informadas, não as características do plano.** Se o plano tem duas características e o inspetor mede apenas uma, dentro da tolerância, o sistema conclui que **não** houve divergência dimensional — mesmo que ele tenha visto a outra fora e marcado a caixa antes de digitar. A caixa trava com a **primeira** medida preenchida, não com a última. **Divergência em característica que não foi medida vai em Observações**, e é isso que o texto de ajuda diz.
+
+**A tela não calcula tolerância.** Ela mostra a faixa para quem digita conferir a olho, mas o veredito conforme/não conforme é sempre do servidor. Por isso o aviso de sucesso traz o resultado: *"Inspeção registrada! Divergência dimensional: sim (2 medidas)"* — ou *"não"*, ou apenas *"Inspeção registrada!"* quando não houve medida nenhuma.
 
 **Quem pode mexer no plano:** a permissão é **Gerenciar plano de inspeção**, dos perfis **Administrador**, **Qualidade** e **Engenharia** — quem especifica tolerância. **Ler** o plano é liberado a qualquer usuário do módulo, porque quem inspeciona precisa saber o que medir. Criar, editar e desativar característica aparece na **Auditoria**, sob a entidade **Plano de inspeção**, com o de/para dos valores. A **decisão de inspeção em si não aparece na Auditoria** — o registro dela são a linha do livro de movimentações e o próprio registro da inspeção.
 
