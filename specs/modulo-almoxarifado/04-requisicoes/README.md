@@ -1,6 +1,7 @@
 # 04 — Requisições de Materiais
 
 > **Status:** 🟢 — Etapa 3 entregue (2026-08-05); ciclo ponta a ponta rascunho→entrega→confirmação→encerramento · **Spec original:** seção 5
+> **Etapa 31 (2026-08-31, `1e6c9a9..67b6758`) — o NÚMERO deste documento mudou de forma, e só ele.** O `REQ-` era montado com os **últimos dígitos** do milissegundo mais um sorteio de 0 a 99, e por isso o carimbo **repetia** a cada **16,7 minutos** (era `slice(-6)`, o pior dos quatro). Agora vem do gerador único `services/almoxarifado/numeroDoc.js` (relógio inteiro em base36 + 8 aleatórios), com retry na colisão. **Nada mais desta feature mudou** — nem status, nem checklist, nem comportamento: o número passa de 12–14 caracteres só com dígitos para 20 com letras, os antigos **não** foram migrados e continuam legíveis (RN-05, testada). Furo **C41** das novidades.
 > **Última atualização:** 2026-08-11 (auditoria spec×código)
 
 ## Objetivo

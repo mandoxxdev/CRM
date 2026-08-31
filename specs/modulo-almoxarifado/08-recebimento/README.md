@@ -1,6 +1,7 @@
 # 08 — Entrada e Recebimento de Materiais
 
 > **Status:** 🟡 — workflow fiscal NF maduro, quarentena na entrada fechada (Etapa 5), **lote nasce aqui desde a Etapa 6**, entrada da nota **atômica e idempotente** desde o review final do branch (2026-08-10); faltam tipos de entrada, conferência física estruturada e etiqueta · **Spec original:** seção 8
+> **Etapa 31 (2026-08-31, `1e6c9a9..67b6758`) — o NÚMERO deste documento mudou de forma, e só ele.** O `REC-` era montado com os **últimos dígitos** do milissegundo mais um sorteio de 0 a 99, e por isso o carimbo **repetia** a cada **27,78 horas**. Agora vem do gerador único `services/almoxarifado/numeroDoc.js` (relógio inteiro em base36 + 8 aleatórios), com retry na colisão. **Nada mais desta feature mudou** — nem status, nem checklist, nem comportamento: o número passa de 12–14 caracteres só com dígitos para 20 com letras, os antigos **não** foram migrados e continuam legíveis (RN-05, testada). Furo **C41** das novidades.
 > **Última atualização:** 2026-08-11 (**auditoria spec×código**: corrigida a afirmação — que estava
 > errada — de que a rota de certificado não tinha tela; registradas a entrada atômica/idempotente e
 > a exigência de lote do review final de 2026-08-10, que só a spec 10 documentava; tabela de testes

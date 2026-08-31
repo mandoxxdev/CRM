@@ -277,7 +277,7 @@ servidor e a A7 não foi resolvida.
 
 ### B. Decisões de negócio
 
-### B. Decisões de negócio — B1 a B65; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B66; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(O título desta seção dizia "B1 a B24" — **estava defasado**: os itens já iam até B36 antes da
 Etapa 20. Corrigido em 2026-08-28 para B50, depois para B56 com as três da Etapa 24, para B57 com
@@ -325,6 +325,9 @@ conferência é obrigatória só quando há material crítico ainda na caixa —
 parcialmente à B57) e **B63** (conferir só é possível com a requisição *Em Separação*). **A B57
 foi respondida PELA METADE pela Etapa 28**: a saída de material crítico da requisição agora exige
 duas pessoas; o restante da pergunta (quais *outras* operações) continua aberto.
+A **única da Etapa 31 é a B66, e ela ESPERA VOCÊ**: numeração sequencial por ano
+(`REQ-2026-0001`)? Está escrita com o que ela dá a mais, o custo real e a pergunta de negócio que
+decide (reinicia a cada ano ou corre direto?).
 A **única da Etapa 30 é a B65**, e **eu a tomei**: a tela repete a régua de **nome duplicado** do
 servidor (só pela mensagem), e o item explica por que essa repetição é legítima enquanto a da
 tolerância — proibida pela B60 — não é.
@@ -1174,6 +1177,27 @@ nascer de outra pessoa enquanto a janela está aberta, a recusa do servidor apar
 **Descartado** deixar só o erro do banco aparecer (o usuário não saberia o que fazer) e
 **descartado** a tela deixar passar e "corrigir depois".
 
+**B66 (NOVA, da Etapa 31 — ESPERA VOCÊ) — você quer numeração sequencial por ano?**
+
+Hoje o número de documento é **gerado pelo sistema e não tem significado**: um carimbo de tempo
+mais um sorteio, como `REM-MTHK5F35ABC12345`. Ele serve para identificar, não para contar.
+
+**O que uma ERP madura costuma fazer no lugar** é numeração **sequencial por ano** —
+`REQ-2026-0001`, `REQ-2026-0002` — que dá três coisas que o formato atual **não** dá: dá para saber
+**quantos** documentos houve no ano só olhando o último; dá para perceber **buraco** na sequência
+(documento apagado ou perdido); e é o formato que contador e auditor esperam ver.
+
+**O custo, dito com honestidade:** exige uma **tabela de contador** e a resposta a uma pergunta de
+negócio que só você pode dar — **reinicia em 1 a cada ano ou continua correndo?** —, mais a decisão
+sobre o que fazer com os documentos já existentes (conviver com dois formatos, como hoje, ou
+renumerar). E introduz um ponto de disputa que o formato atual não tem: dois usuários criando ao
+mesmo tempo disputam **o mesmo próximo número**, então a sequência precisa de trava — que é
+exatamente o problema que esta etapa acabou de resolver por outro caminho.
+
+**Minha recomendação: só faça se alguém pedir**, e nesse caso a pergunta que decide é se o número
+precisa ser **contável** (aí é sequencial) ou só **único** (aí o de hoje já serve). **Enquanto você
+não responder, vale o que está** — nada foi implementado nessa direção.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -1575,6 +1599,21 @@ nascer de outra pessoa enquanto a janela está aberta, a recusa do servidor apar
     passaria a prometer uma régua diferente da que o banco aplica — que é exatamente o defeito que
     a B60 existe para evitar. **Descartado** também exigir todas as medidas para salvar: medir tudo
     nem sempre é possível, e transformar isso em bloqueio faria o inspetor não medir nada.
+
+41. **(31) A PARTIR DO DEPLOY, os números de documento ficam mais LONGOS e passam a ter letras —
+    e os antigos continuam como estavam.** Requisição, recebimento, remessa e conferência passam de
+    12–14 caracteres só com dígitos (`REM-0006800185`) para **20 com letras**
+    (`REM-MTHK5F35ABC12345`). **É a única coisa desta etapa que aparece na tela**, e quem opera vai
+    reparar no primeiro documento novo.
+    **Nada foi renumerado, de propósito:** o número aparece em impresso, e-mail e conversa de
+    galpão, e renumerar quebraria o rastro de tudo que já saiu. Os dois formatos **convivem**, e
+    documento antigo continua abrindo, listando, filtrando e imprimindo — verificado, não suposto:
+    nenhuma tela, relatório, PDF ou e-mail valida, corta ou ordena esses números.
+    **O que fazer:** avisar quem digita número em planilha ou anotação de que o campo ficou maior.
+    Se alguma planilha externa tiver coluna de largura fixa para esse número, ela precisa crescer.
+    **Por que o número mudou de forma:** era o formato antigo que causava a repetição — ele usava
+    só os **últimos dígitos** do relógio, e por isso dava a volta a cada 16,7 minutos (requisição)
+    ou 27,78 horas (os outros três). Ver a seção da Etapa 31.
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -5529,8 +5568,81 @@ concluir que o material não tem plano.
   superior"* é o servidor. Repetir a régua na tela seria a mesma duplicação que a **B60** recusou.
 - **Reabrir ou corrigir medida já gravada** — continua sendo só leitura.
 
+## Etapa 31 — Os números de documento paravam de ser únicos (2026-08-31)
+
+Toda requisição, recebimento, remessa a terceiros e conferência de inventário nasce com um
+**número** — `REQ-…`, `REC-…`, `REM-…`, `INV-…` — e esse número é único no sistema. Só que os
+quatro eram montados de um jeito que **acabava repetindo**, e quando repetia o usuário levava um
+erro de banco cru na cara, num fluxo que ele não tinha como refazer com sucesso garantido.
+
+Esta etapa não aparece em tela nenhuma. O que ela muda é que isso deixa de acontecer.
+
+> **Não foi uma suspeita: foi medido.** O número usava um pedaço do relógio — os **últimos
+> dígitos** do milissegundo — e um sorteio de 0 a 99. Pegar só os últimos dígitos faz o pedaço
+> **repetir**: a cada **16,7 minutos** na requisição, e a cada **27,78 horas** nos outros três. Não
+> era preciso duas pessoas clicarem ao mesmo tempo — bastava o relógio dar a volta.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Quatro geradores de número, um em cada canto do código, **nenhum igual ao outro** | Um gerador só, com as regras num lugar |
+| O pedaço do relógio **repetia** — 16,7 min na requisição, 27,78 h nos outros | O relógio inteiro entra no número: **não repete** |
+| Sobravam **100** sufixos por instante | Sobram **2,8 trilhões** |
+| A conferência de inventário (`INV-`) não tinha sorteio nenhum: duas criadas no mesmo instante colidiam **com certeza** | Tem a mesma proteção dos outros três |
+| Repetiu? O usuário via *"UNIQUE constraint failed: remessas_terceiro_almoxarifado.numero"* | O sistema **tenta de novo sozinho**, com um número novo, até 5 vezes |
+| Os números tinham 12 a 14 caracteres, só dígitos | Têm **20 caracteres, com letras** (ex.: `REM-MTHK5F35ABC12345`) |
+
+### As regras, com o cenário exato
+
+**1. Os números novos são mais longos e têm letras.**
+Crie uma requisição: o número sai como `REQ-` seguido de 16 caracteres entre letras e dígitos. Os
+documentos **antigos continuam como estavam** — nada foi renumerado, e nada precisa ser. Ver a
+letra **C** antes de apresentar, porque é a mudança que aparece na tela.
+
+**2. O número que a tela mostra é o que está gravado.**
+Isso parece óbvio e é justamente o que a etapa teve de garantir: quando o sistema tenta de novo,
+o número que vence nasce **dentro** da retentativa. Se a tela mostrasse o da primeira tentativa, o
+papel impresso deixaria de bater com o sistema. Vale para a resposta da tela, para a linha do banco
+e para a **Auditoria**.
+
+**3. Documento antigo continua abrindo, listando e imprimindo.**
+Abra uma remessa criada antes do deploy: ela abre normalmente, aparece nas listas, nos filtros e no
+PDF. Nenhuma tela valida o formato do número — foi verificado, não suposto.
+
+**4. Se colidir mesmo assim, o sistema resolve sozinho.**
+Com 2,8 trilhões de sufixos por instante isso não deve acontecer nunca. Mas se acontecer, a criação
+tenta de novo com um número novo, até 5 vezes, e **só então** desiste — e aí a mensagem é
+*"Não foi possível gerar um número único para o documento"*, não o erro de banco.
+
+### O que esta etapa NÃO cobre (é decisão declarada, não esquecimento)
+
+- **Numeração sequencial por ano** (`REQ-2026-0001`), que é o que uma ERP madura faz. Exige tabela
+  de contador e uma decisão sua sobre reinício anual — está na letra **B**.
+- **Renumerar os documentos existentes** — o número aparece em impresso, e-mail e conversa de
+  galpão; renumerar quebraria o rastro de tudo que já saiu.
+- **Números de outros módulos** — a varredura foi do almoxarifado.
+- **Número de série de material** continua sendo **digitado pelo operador** e não passa por este
+  gerador, de propósito.
+
 ## Onde estamos e o que vem a seguir
 
+- **Etapa 31 entregue (2026-08-31):** **os números de documento paravam de ser únicos** (defeito,
+  `1e6c9a9..67b6758`) — não é feature e não aparece em tela nenhuma. Os quatro números do módulo
+  (`REQ-`, `REC-`, `REM-`, `INV-`) eram montados por **quatro geradores diferentes**, cada um
+  pegando os **últimos dígitos** do milissegundo mais um sorteio de 0 a 99 — e pegar só os últimos
+  dígitos faz o pedaço **repetir**: a cada **16,7 minutos** na requisição, a cada **27,78 horas**
+  nos outros três. Não era preciso simultaneidade; bastava o relógio dar a volta. O `INV-` não
+  tinha sorteio nenhum, então a colisão dele em criação simultânea era **certa**. Quando repetia, o
+  usuário via *"UNIQUE constraint failed"* cru. Agora há um gerador só, o relógio **inteiro** entra
+  no número (não repete), os sufixos passaram de 100 para **2,8 trilhões** por instante, e há um
+  retry curto como cinto de segurança. **O que muda na tela:** os números novos têm **20
+  caracteres com letras** em vez de 12–14 só com dígitos — letra **C**. **Nada foi renumerado**, e
+  documento antigo continua abrindo, listando e imprimindo. **O que a revisão adversarial achou:**
+  nenhum bug, mas uma **fragilidade da prova** — a defesa do defeito central estava pendurada numa
+  asserção só, e um carimbo decimal do mesmo comprimento passava verde em quatro arquivos de teste;
+  virou um **invariante de reversibilidade**, impossível de satisfazer por acidente. **O que é
+  seu:** a **B66** — quer numeração **sequencial por ano** (`REQ-2026-0001`)?
 - **Etapa 30 entregue (2026-08-31):** **o plano de inspeção sai do `curl` e vira tela** (feature
   09, `af7adea..7982f18`) — a lista de **Materiais** ganhou o botão **Plano de inspeção**, que abre
   a janela de criar, editar, desativar e **reativar** característica, com a **faixa de tolerância

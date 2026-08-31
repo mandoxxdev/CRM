@@ -346,6 +346,100 @@ Commit: `Almoxarifado Etapa 31 Task 3: a colisao forcada prova o retry, pela rot
 > Restauração por `cp` nos dois casos, `md5sum` conferido antes/depois/restaurado
 > (`6cc2973d…` → sabotado → `6cc2973d…`) e `git diff --stat` vazio no fim.
 
+## Task 2 — fechamento (`d51bc51`)
+
+> 10/10 `conferenciaEscopo`, 27/27 `requisicaoCriacao`, 7/7 `recebimentoEntradaAtomica`,
+> 37/37 `remessaTerceiroRotas`; `test:api` 165/165. **Os quatro controles positivos caíram** —
+> revertendo cada ponto, o cenário de forma daquele fluxo cai (`"INV-01620967"`, `"REQ-63307073"`,
+> `"REC-0164236416"`, `"REM-0165164284"`). **Antes desta task, reverter qualquer um deles não
+> derrubava nada na suíte inteira**, que era exatamente o buraco que a Fase 2 apontou.
+> **Duas decisões do executor que valem registro:** ele **promoveu** a linha 103 do
+> `requisicaoCriacao` — o `startsWith('REQ-')` que o plano nomeia como a armadilha — em vez de
+> criar um cenário paralelo, porque deixar a asserção fraca ao lado de uma forte a manteria no
+> arquivo; e percebeu que os comentários "por que este gerador sumiu" citavam o código antigo
+> **literalmente** e sujavam a varredura da RN-06 com 5 linhas, então reescreveu os quatro em
+> palavras.
+> **Ressalva da RN-06, para quem repetir a verificação:** o `grep` cru dá **1 linha**, não zero —
+> o cabeçalho do próprio `numeroDoc.js`, que documenta o padrão que ele mata. Não é defeito, é
+> documentação; restrita a código, a varredura dá **zero** (conferido no fechamento).
+
+## Fase 5 — Revisão adversarial (2026-08-31) — ✅ FEITA
+
+Um revisor fresco, cinco lentes. **Nenhum bloqueante.** Dois achados importantes, os dois no
+fix-round `67b6758`.
+
+**Achado 1 — e é o mais útil que uma revisão produziu nesta base, porque não é um bug: é uma
+fragilidade da PROVA.** O revisor sabotou `carimboTempo` para `String(ms).slice(-8)` — o carimbo
+volta a **dar a volta**, o defeito central da etapa, mas continua com 8 caracteres, todos em
+`[0-9A-Z]`. Placar: **7/1** no arquivo do gerador (só o cenário 2) e **verde nos quatro arquivos de
+fluxo**. As regexes `/^INV-[0-9A-Z]{16}$/` distinguem o gerador **velho** (que tinha outro
+comprimento) e **não** distinguem base36 de decimal fatiado do mesmo tamanho. A defesa do defeito
+central estava pendurada numa asserção só, num arquivo só.
+
+**Achado 2 —** a régua do retry casa também `pedidos_compra.numero` (`server/index.js:19159`) e
+`cotacoes.numero` (`:19173`) do banco **core**. Hoje inalcançável — nenhum `fn` insere nelas —, mas
+esses números são **digitados pelo comprador**, igual ao de série: embrulhar a criação deles no
+helper faria o retry reescrever em silêncio uma escolha de gente, que é a falha que a exclusão da
+série existe para evitar. Virou aviso no cabeçalho, com a regra geral: documento que queira este
+helper precisa de número **gerado**, nunca digitado.
+
+**Não confirmado, e vale registrar o que ele mediu para não ser reaberto:** enumerou os **21**
+UNIQUE reais do schema via `PRAGMA index_list` e testou a mensagem de cada um contra a régua — casa
+exatamente as quatro tabelas de documento e deixa passar só a série; zero falso positivo, zero
+falso negativo. Não há `CREATE TRIGGER` em lugar nenhum do servidor, então nenhum INSERT colateral
+injeta UNIQUE de outra tabela dentro do `catch`. Os quatro `fn` são uma expressão única com o
+INSERT do cabeçalho e nada mais. Nenhuma variável `numero` sobrevive de antes do retry em nenhum
+dos quatro — ele checou os **dois** `return` do `REQ` e os **dois** ramos de resposta do `INV`.
+Nenhum stub vaza entre cenários. Nenhum quinto gerador sobrou.
+
+### Lição da etapa: exemplo prova exemplo; invariante prova a regra
+
+A correção do achado 1 **não foi acrescentar mais exemplos** — foi trocar o par de exemplos por um
+**invariante**: `parseInt(carimboTempo(ms), 36) === ms`. Se o milissegundo volta inteiro, nenhuma
+informação foi perdida — e "não perde informação" é exatamente o mesmo que "não dá a volta", só que
+**impossível de satisfazer por acidente**. Qualquer fatiamento reprova, em qualquer base e qualquer
+comprimento.
+
+**O padrão se repete há três etapas, e é sempre o mesmo:** *a asserção não consegue distinguir o
+certo do errado*. Na 29 foi fixture simétrica (5 testes); na 30, régua de texto sobre lista manual
+(1 teste); aqui, exemplos que só separavam por comprimento. **E nas três vezes o problema só
+apareceu sob sabotagem** — nenhuma delas se pega relendo o teste.
+
+## Retro de 4 números (2026-08-31)
+
+1. **Rodadas de correção até verde: 1.** Um fix-round, nenhum teste falhando duas vezes.
+2. **Achados: 8 na Fase 2 + 1 do executor da Task 1 + 2 na Fase 5 = 11 reais, 0 ruído.** A **Fase 2
+   foi de novo a mais lucrativa**: duas correções **travariam** a execução (o "pare e reporte"
+   sobre o `REQ`, e a receita de colisão que não podia dar certo) e duas deixariam passar defeito
+   silencioso (número devolvido ≠ gravado; Task 2 sem cenário que caísse).
+   **E a Fase 2 errou uma:** a régua "ancorada" que ela congelou **ainda casava a série**, e quem
+   pegou foi o **executor da Task 1**, rodando a régua do plano como sétimo controle positivo —
+   o que é um argumento a favor de mandar o executor testar o que o plano afirma, não só o que ele
+   pede.
+3. **Paralelismo: zero, declarado.** As três tasks são a mesma regra em sequência, e o plano diz
+   isso em vez de fingir galho. **Zero retrabalho.**
+4. **Defeito que escapou:** preencher na etapa seguinte.
+
+**Quinto número, o mesmo das duas etapas anteriores:** **1 teste passava com a feature quebrada** —
+e desta vez não era um teste periférico: era a defesa do **defeito central** da etapa, espalhada
+por cinco arquivos e cega em quatro deles.
+
+## Próxima tarefa detalhada
+
+**A escolher pelo mapa** (`specs/modulo-almoxarifado/README.md`), medindo antes de prometer. Duas
+observações que esta etapa deixa para quem escolher:
+
+1. **A feature 09 (inspeção) ficou sem nenhum item de UI.** Os quatro que restam — não conformidade
+   formal numerada, liberação sob desvio autorizado, anexos, encaminhamento com status — são
+   **fluxo de negócio com máquina de estados própria**, cada um do tamanho de uma etapa. **Anexos**
+   é o que destrava mais coisas (aparece como pendência em pelo menos três features), mas depende
+   de `anexos_documento_almoxarifado` — **medir se a tabela existe antes de desenhar**, porque a
+   spec 09 a cita como "item próprio de outra spec" e isso não é o mesmo que "existe".
+2. **Se for outra feature, o mapa é o critério** (🔴/🟡 de maior valor), com as duas regras que esta
+   base aprendeu por falha: **medir ausência pelo nome do CONTRATO**, não pelo nome que se imagina
+   que o consumidor usaria (Etapa 24); e **cruzar com a spec ANTES de varrer** (Etapa 26), porque
+   duas etapas seguidas desenharam sobre varredura minha que estava errada.
+
 ## Fechamento
 
 `fechar-etapa`: novidades (seção; **letra C** — a partir do deploy os números novos ficam **mais

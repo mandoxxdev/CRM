@@ -8,6 +8,7 @@
 > B11 do doc de novidades), e-mail · **Spec original:** seção 21 · **Designs:**
 > [Etapa 10](../../../docs/superpowers/specs/2026-08-22-almoxarifado-etapa10-inventario-avancado-design.md) ·
 > [Etapa 10b](../../../docs/superpowers/specs/2026-08-23-almoxarifado-etapa10b-inventario-avancado-2-design.md)
+> **Etapa 31 (2026-08-31, `1e6c9a9..67b6758`) — o NÚMERO deste documento mudou de forma, e só ele.** O `INV-` era montado com os **últimos dígitos** do milissegundo mais um sorteio de 0 a 99, e por isso o carimbo **repetia** a cada **27,78 horas**, e **sem sorteio nenhum**: a colisão em criação simultânea era CERTA. Agora vem do gerador único `services/almoxarifado/numeroDoc.js` (relógio inteiro em base36 + 8 aleatórios), com retry na colisão. **Nada mais desta feature mudou** — nem status, nem checklist, nem comportamento: o número passa de 12–14 caracteres só com dígitos para 20 com letras, os antigos **não** foram migrados e continuam legíveis (RN-05, testada). Furo **C41** das novidades.
 > **Última atualização:** 2026-08-23 (Etapa 10b fechada, `14f4458..7290481`)
 > Antes: 2026-08-22 (Etapa 10, `d644827..8db2671`) · 2026-08-11
 

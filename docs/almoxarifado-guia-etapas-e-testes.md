@@ -2,9 +2,34 @@
 
 > Atualizado em 2026-08-31 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 30) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 31) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20.
 
-> ## Onde o desenvolvimento está — 2026-08-31 (Etapa 30 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-08-31 (Etapa 31 ENTREGUE · modo contínuo pelo mapa)
+>
+> **Etapas 1 a 20 e 22 a 31 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
+> A **Etapa 31 (os números de documento paravam de ser únicos)** fechou em 2026-08-31
+> (`1e6c9a9..67b6758`) e **não é feature — é defeito**. Ela não aparece em tela nenhuma, e nenhuma
+> feature muda de cor.
+>
+> Os quatro números do módulo (`REQ-`, `REC-`, `REM-`, `INV-`) eram montados com os **últimos
+> dígitos** do relógio mais um sorteio de 0 a 99 — e pegar só os últimos dígitos faz o pedaço
+> **repetir**: a cada **16,7 minutos** na requisição, a cada **27,78 horas** nos outros três. Não
+> era preciso duas pessoas clicarem ao mesmo tempo. A conferência de inventário não tinha sorteio
+> nenhum, então a colisão dela em criação simultânea era **certa**. Quando colidia, o usuário via
+> *"UNIQUE constraint failed"* cru na tela.
+>
+> **⚠️ A ÚNICA COISA VISÍVEL:** a partir do deploy, os números novos têm **20 caracteres com
+> letras** (`REM-MTHK5F35ABC12345`) em vez de 12–14 só com dígitos. **Nada foi renumerado** e
+> documento antigo continua abrindo, listando e imprimindo. Leia o furo **C41** antes de
+> apresentar, e avise quem anota número em planilha de que o campo ficou maior.
+>
+> **O que é seu:** a **B66** — quer numeração **sequencial por ano** (`REQ-2026-0001`)? Está
+> escrita com o que ela dá a mais, o custo real e a pergunta de negócio que decide.
+> Ver a seção "Etapa 31" perto do fim deste guia, com o roteiro de teste.
+>
+> **Antes: Etapas 1 a 20 e 22 a 30 completas no módulo.**
+>
+> ## Onde o desenvolvimento estava — 2026-08-31 (Etapa 30 ENTREGUE · modo contínuo pelo mapa)
 >
 > **Etapas 1 a 20 e 22 a 30 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
 > A **Etapa 30 (o plano de inspeção sai do `curl` e vira tela)** fechou em 2026-08-31
@@ -4390,6 +4415,72 @@ galpão cadastra plano por `curl`. Esta etapa é a chave que abre as outras duas
 - **Não conformidade formal numerada**, **liberação sob desvio autorizado**, **anexos** e
   **encaminhamento com status** — os quatro fluxos que ainda faltam para a inspeção ficar completa.
   Nenhum deles é tela: são máquinas de estado próprias.
+
+---
+
+## Etapa 31 — Os números de documento paravam de ser únicos (ENTREGUE — 2026-08-31)
+
+**O que mudou, em uma frase:** os números `REQ-`, `REC-`, `REM-` e `INV-` deixam de repetir — e
+passam a ter **20 caracteres com letras** em vez de 12–14 só com dígitos.
+
+> ## ⚠️ LEIA ANTES DE TESTAR — esta etapa não tem tela
+>
+> Não há botão novo, campo novo nem menu novo. **A única coisa visível é o formato do número** nos
+> documentos criados a partir do deploy. Se você abrir o sistema procurando o que mudou, vai achar
+> só isso — e está certo.
+>
+> **Documentos antigos não foram tocados.** Eles continuam com o número que sempre tiveram, e
+> continuam abrindo, listando, filtrando e imprimindo normalmente.
+
+### O problema que existia
+
+Todo documento do módulo nasce com um número único: requisição (`REQ-`), recebimento (`REC-`),
+remessa a terceiros (`REM-`) e conferência de inventário (`INV-`). Os quatro eram montados assim:
+os **últimos dígitos** do relógio (em milissegundos) mais um sorteio de 0 a 99.
+
+**Pegar só os últimos dígitos faz o pedaço repetir.** Medido:
+
+- na **requisição**, o pedaço do relógio repetia a cada **16,7 minutos**;
+- nos outros três, a cada **27,78 horas**.
+
+Ou seja: duas requisições criadas com 16,7 minutos de diferença, caindo no mesmo instante do
+ciclo, disputavam **100** sufixos. **Não era preciso duas pessoas clicarem ao mesmo tempo.**
+
+E a **conferência de inventário não tinha sorteio nenhum** — só o relógio. Duas conferências
+criadas no mesmo instante colidiam **com certeza**.
+
+Quando colidia, o usuário via isto na tela:
+*"UNIQUE constraint failed: remessas_terceiro_almoxarifado.numero"* — erro de banco cru, num fluxo
+que ele não tinha como repetir com sucesso garantido.
+
+### Roteiro de teste manual
+
+1. **Crie uma requisição** em **Almoxarifado → Requisições → Nova**. Olhe o número: `REQ-` seguido
+   de 16 caracteres misturando letras e dígitos, algo como `REQ-MTHK5F35ABC12345`. **Antes eram 8
+   dígitos.**
+2. **Crie uma segunda requisição imediatamente depois.** Os dois números são diferentes — e, mais
+   que isso, o **começo** deles (a parte do relógio) é diferente, porque agora o relógio inteiro
+   entra no número.
+3. **Repita nos outros três:** um recebimento (`REC-`), uma remessa a terceiros (`REM-`) e uma
+   conferência de estoque (`INV-`). Os quatro seguem a mesma forma.
+4. **Abra um documento ANTIGO** — qualquer remessa ou requisição criada antes do deploy. Ela abre
+   normalmente, com o número curto de sempre. Confira também que ela aparece na lista, que o filtro
+   a encontra e que o **PDF** sai certo. **É este o passo que prova que nada quebrou** para o que
+   já existia.
+5. **Confira a Auditoria.** O número que aparece na trilha é o mesmo que aparece na tela e o mesmo
+   que está gravado. (Parece óbvio, e é justamente o que a etapa teve de garantir: quando o sistema
+   tenta de novo depois de uma colisão, o número que vence nasce **dentro** da retentativa — se a
+   tela mostrasse o da primeira, o papel impresso deixaria de bater com o sistema.)
+
+### O que esta etapa NÃO cobre
+
+- **Numeração sequencial por ano** (`REQ-2026-0001`) — é o que uma ERP madura faz, e exige tabela
+  de contador mais uma decisão sua sobre reinício anual. Está na **B66**, esperando você.
+- **Renumerar os documentos existentes** — o número aparece em impresso, e-mail e conversa de
+  galpão; renumerar quebraria o rastro de tudo que já saiu.
+- **Número de série de material** — continua sendo **digitado pelo operador** e de propósito não
+  passa por este gerador. Retentar com outro número gravaria algo que ninguém digitou.
+- **Números de outros módulos do CRM** — a varredura foi do almoxarifado.
 
 ---
 

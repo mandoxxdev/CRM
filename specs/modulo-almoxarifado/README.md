@@ -1,7 +1,51 @@
 # Módulo Almoxarifado — Planejamento Mestre
 
 > **Spec original:** [2026-08-02-requisitos-modulo-almoxarifado.md](2026-08-02-requisitos-modulo-almoxarifado.md) (34 seções)
-> **Última atualização:** 2026-08-31 (**Etapa 30 fechada — o plano de inspeção sai do `curl` e
+> **Última atualização:** 2026-08-31 (**Etapa 31 fechada — os números de documento paravam de ser
+> únicos, `1e6c9a9..67b6758`. NÃO é feature: é defeito, não aparece em tela nenhuma, e NENHUMA
+> feature muda de cor.** Os quatro números do módulo (`REQ-`, `REC-`, `REM-`, `INV-`) vinham de
+> **quatro geradores divergentes**, cada um com `Date.now().toString().slice(-N)` + sorteio 0–99.
+> **O defeito não era "mesmo milissegundo", que era como eu o tinha registrado nas Etapas 29 e 30 —
+> o carimbo DAVA A VOLTA:** `slice(-6)` repete a cada **16,7 minutos** (`REQ-`) e `slice(-8)` a
+> cada **27,78 horas** (os outros três). Não era preciso simultaneidade. E o `INV-`
+> (`routes/almoxarifado.js:1108`) **não tinha sorteio nenhum** — colisão em criação simultânea era
+> **certa**, não probabilística. Quando colidia, subia `UNIQUE constraint failed` cru ao usuário
+> (`handleError` devolve `err.message` sem tradução).
+> **Entregue:** `services/almoxarifado/numeroDoc.js` — `carimboTempo(ms)` (base36 do milissegundo
+> **inteiro**, sem `slice`), `gerarNumeroDocumento(prefixo)` (carimbo + **8** aleatórios base36,
+> ~2,8×10¹² por ms) e `inserirComNumeroUnico(db, prefixo, fn) → { numero, resultado }` com retry
+> ×5 e erro traduzido. Os quatro pontos ligados; `gerarNumeroReq` removida. **Nada migrado** (D4):
+> os dois formatos convivem, e a RN-05 (formato antigo continua legível) é testada nas quatro
+> tabelas.
+> **O que a Fase 2 pegou ANTES de executar (8 correções, duas travariam a execução e duas
+> deixariam passar defeito silencioso):** *"nos quatro pontos o INSERT é a primeira escrita"* é
+> **falso no `REQ`** (`ensureSetoresRequisicao` escreve antes) e o plano mandava **PARAR** nesse
+> caso; a receita de forçar a colisão **não podia dar certo** (com `Math.random` preso, as 5
+> tentativas geram o mesmo número e o fluxo acaba em erro, não em sucesso);
+> `inserirComNumeroUnico` **não devolvia o número**, e os quatro chamadores o usam **depois** do
+> INSERT — devolveriam o da 1ª tentativa com o banco guardando o da 3ª (virou a **RN-07**); e a
+> Task 2 **não tinha nenhum cenário que caísse**, porque a suíte inteira tinha **uma** asserção
+> sobre esses números (`startsWith('REQ-')`), que passa igual com o gerador velho.
+> **E duas contas minhas erradas:** base36 dá 8 chars até **2059**, não 5138; e os números ficam
+> **mais LONGOS** (12–14 → 20), não mais curtos — esse ia direto para o guia do usuário.
+> **O que a revisão adversarial achou (0 bloqueantes, 2 importantes):** a régua do retry casa
+> também `pedidos_compra.numero` e `cotacoes.numero` do banco core — hoje inalcançável, mas esses
+> números são **digitados** pelo comprador, e embrulhá-los faria o retry reescrever escolha de
+> gente (aviso no cabeçalho); e **a defesa do defeito central estava pendurada numa asserção só**.
+> **Regra que fica: exemplo prova exemplo; invariante prova a regra.** Sabotar `carimboTempo` para
+> um decimal fatiado do **mesmo comprimento** deixava os **quatro** arquivos de fluxo verdes — as
+> regexes `/^INV-[0-9A-Z]{16}$/` distinguem o gerador velho (outro comprimento) e **não**
+> distinguem base36 de decimal de mesmo tamanho. A correção não foi mais exemplos, foi um
+> **invariante**: `parseInt(carimbo, 36) === ms`. "Não perde informação" é o mesmo que "não dá a
+> volta", e é **impossível de satisfazer por acidente** — qualquer fatiamento reprova, em qualquer
+> base e qualquer comprimento. Fix-round `67b6758`.
+> **Decisão que ESPERA VOCÊ:** B66 (numeração sequencial por ano, `REQ-2026-0001`?). Furo: **C41**
+> (a partir do deploy os números novos ficam mais longos e com letras; os antigos não mudam).
+> **Números (fechamento, 2026-08-31):** `test:api` **165/165 arquivos** (164 → 165:
+> `numeroDocumento` 9), `test:almoxarifado` **42/0**, `test:validation` **4/0**, `test:safealter`
+> **3/0**, `test:sqlite` **5/0**; client **636 testes em 41 suítes** (intocado), build `CI=true`
+> **Compiled successfully**.
+> Antes: 2026-08-31 (**Etapa 30 fechada — o plano de inspeção sai do `curl` e
 > vira tela, `af7adea..7982f18`, feature 09, que CONTINUA 🟡.** O item que o fechamento da 29
 > nomeou como o de maior valor está pago: `PlanoInspecaoModal.js` (novo), aberto pelo botão **Plano
 > de inspeção** de cada linha de Materiais, com criar/editar/desativar/**reativar** característica

@@ -6,6 +6,7 @@
 > **transformação**: o que volta é **outra coisa** (cortar, dobrar, usinar). A chapa é baixada de
 > verdade (patrimônio **e** retenção) e as peças e a sobra entram como material próprio, herdando o
 > **dono** da chapa e o **custo** dela rateado por quantidade.
+> **Etapa 31 (2026-08-31, `1e6c9a9..67b6758`) — o NÚMERO deste documento mudou de forma, e só ele.** O `REM-` era montado com os **últimos dígitos** do milissegundo mais um sorteio de 0 a 99, e por isso o carimbo **repetia** a cada **27,78 horas** — é o número cuja colisão aparecia como flake de `remessaTerceiroCiclo` desde a Etapa 29. Agora vem do gerador único `services/almoxarifado/numeroDoc.js` (relógio inteiro em base36 + 8 aleatórios), com retry na colisão. **Nada mais desta feature mudou** — nem status, nem checklist, nem comportamento: o número passa de 12–14 caracteres só com dígitos para 20 com letras, os antigos **não** foram migrados e continuam legíveis (RN-05, testada). Furo **C41** das novidades.
 > **Spec original:** seção 18 · **Última atualização:** 2026-08-13
 >
 > | Etapa | Design | Plano |

@@ -72,6 +72,35 @@ As telas do módulo ficam em **Almoxarifado**, no menu lateral:
 
 **No celular**, o módulo funciona no próprio navegador, sem aplicativo: o menu vira o botão de três linhas no topo, as tabelas mostram **todas** as colunas (deslize para o lado para alcançar as ações) e as janelas de confirmação abrem em tela cheia. A leitura de etiquetas pela câmera está na tela **Scanner** (seção 4.9) — atenção ao requisito de HTTPS descrito lá.
 
+### 1.1 O número dos documentos
+
+Quatro documentos do módulo recebem um número automático ao serem criados, e esse número é **único
+no sistema**:
+
+| Documento | Prefixo | Onde nasce |
+|---|---|---|
+| Requisição de material | `REQ-` | ao criar a requisição (seção 7) |
+| Recebimento | `REC-` | ao registrar a entrada da nota (seção 12) |
+| Remessa a terceiros | `REM-` | ao abrir a remessa (seção 13) |
+| Conferência de estoque | `INV-` | ao criar a conferência (seção 11) |
+
+**O número é gerado pelo sistema, não digitado, e não tem significado contábil.** Ele serve para
+identificar e referenciar o documento — em conversa, em e-mail, no PDF —, não para contar quantos
+documentos houve. **Não é sequencial**: não dá para concluir nada olhando dois números lado a lado,
+nem esperar que o próximo seja "o seguinte".
+
+O formato é o prefixo, um hífen e 16 caracteres entre **letras maiúsculas e dígitos** — por
+exemplo, `REM-MTHK5F35ABC12345`. A primeira metade vem do relógio, a segunda é sorteada.
+
+> **Documentos criados antes de 31/08/2026 têm um número mais curto e só com dígitos** (por
+> exemplo, `REM-0006800185`). Os dois formatos **convivem**: nada foi renumerado, e nenhuma tela,
+> filtro, relatório ou PDF depende do formato. Um documento antigo abre, lista e imprime como
+> sempre.
+
+**Número de série de material é coisa diferente** e não segue esta regra: ele é **digitado pelo
+operador** (ou vem da etiqueta do fornecedor) e identifica a peça física, não o documento — ver
+seção 4.
+
 ---
 
 ## 2. Cadastro de materiais
@@ -2074,7 +2103,7 @@ Recusas:
 
 Essa última é a contrapartida de a remessa ser isenta da regra de OS/projeto: mandar galvanizar não é aplicar a chapa em ninguém, mas **o documento nomeia um proprietário**, e o dono fica gravado na remessa. Sem isso, a remessa seria um caminho para material de cliente sair do prédio sem rastro de propriedade.
 
-A remessa recebe um número automático (formato `REM-…`) e nasce na situação **ABERTA**.
+A remessa recebe um número automático (formato `REM-…`, ver 1.1) e nasce na situação **ABERTA**.
 
 O botão **PDF da remessa** gera o documento no navegador, para acompanhar o material.
 
@@ -2107,7 +2136,7 @@ Os movimentos de envio e de retorno de remessa também **não podem ser estornad
 
 O botão **Enviar** retém o saldo de **todos** os itens da remessa. Antes de mover qualquer coisa, o sistema soma o que a remessa pede **por material** (e não linha por linha) e compara com o disponível. Se faltar saldo em qualquer material, **a remessa inteira é recusada** e nada sai:
 
-> *"Nao foi possivel enviar a remessa REM-12345678: CHP-0001: disponivel 100 KG, a remessa pede 120 em 2 linhas; TB-0044: material inativo"*
+> *"Nao foi possivel enviar a remessa REM-MTHK5F35ABC12345: CHP-0001: disponivel 100 KG, a remessa pede 120 em 2 linhas; TB-0044: material inativo"*
 
 A soma é por material porque **duas linhas do mesmo material são caso normal** (duas chapas do mesmo código, com lotes e pesos diferentes). Checar cada linha isoladamente deixaria passar duas linhas de 60 contra um disponível de 100.
 
@@ -2148,7 +2177,7 @@ Botão **Encerrar**. Se ainda houver material no terceiro, o sistema **exige diz
 
 Mais **justificativa**, também obrigatória. Sem destino, a recusa **diz quanto está em jogo e abre item por item**:
 
-> *"A remessa REM-12345678 tem 75 KG que nunca voltaram (CHP-0001: 50 KG; CHP-0002: 25 KG). Para encerrar, informe o destino desse saldo: PERDA_NO_TERCEIRO ou CONSUMIDO_NO_PROCESSO, mais a justificativa."*
+> *"A remessa REM-MTHK5F35ABC12345 tem 75 KG que nunca voltaram (CHP-0001: 50 KG; CHP-0002: 25 KG). Para encerrar, informe o destino desse saldo: PERDA_NO_TERCEIRO ou CONSUMIDO_NO_PROCESSO, mais a justificativa."*
 
 Sem justificativa: *"Encerrar remessa com saldo pendente exige justificativa alem do destino"*. Destino fora da lista: *"Destino de encerramento invalido: … Validos: PERDA_NO_TERCEIRO, CONSUMIDO_NO_PROCESSO"*.
 
