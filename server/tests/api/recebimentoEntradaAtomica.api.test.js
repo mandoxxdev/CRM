@@ -14,6 +14,7 @@
  *     caso da marca sendo DEVOLVIDA quando a falha acontece antes da entrada fisica.
  */
 const assert = require('assert');
+const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbGet, dbAll } = require('../../services/almoxarifado/db');
 const receiptService = require('../../services/almoxarifado/receiptService');
@@ -50,6 +51,14 @@ async function recebimentoCom(db, itens) {
   return rec.lastID;
 }
 
+/** Recebimento gravado A MAO com um numero literal — usado pela RN-05 da Etapa 31. */
+async function recebimentoComNumero(db, numero) {
+  const r = await dbRun(db, `INSERT INTO recebimentos_material_almoxarifado
+    (numero, status, nota_fiscal, fornecedor_nome) VALUES (?, 'RECEBIDO', ?, 'Legado E31')`,
+  [numero, `NF-${numero}`]);
+  return r.lastID;
+}
+
 const qtdMaterial = async (db, id) => (await dbGet(db,
   'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [id])).quantidade_atual;
 const entradasDoRecebimento = (db, recId) => dbAll(db,
@@ -60,7 +69,7 @@ const itensDoRecebimento = (db, recId) => dbAll(db,
    WHERE recebimento_id = ? ORDER BY id`, [recId]);
 
 (async () => {
-  const { db, close } = await createTestApp({ user: ADMIN });
+  const { app, db, close } = await createTestApp({ user: ADMIN });
   const recRow = (id) => dbGet(db, 'SELECT * FROM recebimentos_material_almoxarifado WHERE id = ?', [id]);
 
   await test('nota com um item invalido e recusada INTEIRA — nada do primeiro item entra', async () => {
@@ -165,6 +174,41 @@ const itensDoRecebimento = (db, recId) => dbAll(db,
     const itens = await itensDoRecebimento(db, recId);
     assert.strictEqual(itens[0].entrada_estoque_em, null,
       'item sem quantidade nao move estoque, entao nao pode consumir a marca de entrada');
+  });
+
+  // ── Etapa 31, Task 2 — o numero do recebimento sai do gerador UNICO (numeroDoc.js) ──────────
+  //
+  // Ate a Etapa 31, `receiptService.gerarNumero('REC')` era `Date.now().toString().slice(-8)` +
+  // um sorteio de 0..99: o carimbo repetia a cada 27,78 horas e, no mesmo offset de ms, dois
+  // recebimentos disputavam 100 sufixos. A assercao e a FORMA COMPLETA, e nao `startsWith`, pelo
+  // motivo de sempre: o prefixo passa igual com o gerador velho.
+  await test('Etapa 31 RN-01: o numero do recebimento tem a forma REC-<8 tempo><8 aleatorio>, e e o mesmo da linha', async () => {
+    const mat = await novoMaterial(db);
+    const res = await request(app).post('/api/almoxarifado/recebimentos').send({
+      nota_fiscal: 'NF-E31-FORMA',
+      itens: [{ material_id: mat, quantidade: 5 }],
+    });
+    assert.strictEqual(res.status, 201, `POST recebimento falhou: ${res.status} ${JSON.stringify(res.body)}`);
+    assert.match(res.body.numero, /^REC-[0-9A-Z]{16}$/,
+      `numero fora do formato do gerador unico: ${JSON.stringify(res.body.numero)} — o formato ANTIGO `
+      + 'era REC- + 8..10 digitos, sem letra nenhuma');
+    // RN-07: o numero devolvido e o que ficou GRAVADO.
+    const linha = await recRow(res.body.id);
+    assert.strictEqual(linha.numero, res.body.numero,
+      `a rota devolveu ${res.body.numero} e o banco guardou ${linha.numero}`);
+  });
+
+  await test('Etapa 31 RN-05: recebimento gravado no formato ANTIGO continua sendo lido pela rota', async () => {
+    const recId = await recebimentoComNumero(db, 'REC-88548468');
+    const det = await request(app).get(`/api/almoxarifado/recebimentos/${recId}`);
+    assert.strictEqual(det.status, 200, `a rota recusou o numero antigo: ${det.status} ${JSON.stringify(det.body)}`);
+    assert.strictEqual(det.body.numero, 'REC-88548468', JSON.stringify(det.body).slice(0, 300));
+
+    const lista = await request(app).get('/api/almoxarifado/recebimentos');
+    assert.strictEqual(lista.status, 200, JSON.stringify(lista.body).slice(0, 200));
+    const linhas = Array.isArray(lista.body) ? lista.body : (lista.body.recebimentos || []);
+    assert.ok(linhas.some((r) => r.id === recId && r.numero === 'REC-88548468'),
+      'o recebimento de numero antigo sumiu da listagem');
   });
 
   await close();

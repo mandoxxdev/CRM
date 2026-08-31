@@ -20,6 +20,7 @@ const stockService = require('./stockService');
 const ownerRules = require('./ownerRules');
 const transformCost = require('./transformCost');
 const sm = require('./thirdPartyStateMachine');
+const { inserirComNumeroUnico } = require('./numeroDoc');
 
 const DESTINOS_ENCERRAMENTO = ['PERDA_NO_TERCEIRO', 'CONSUMIDO_NO_PROCESSO'];
 /** destino do encerramento -> tipo de movimento que o executa (Task 4). */
@@ -30,9 +31,11 @@ const TIPO_MOVIMENTO_DESTINO = {
 
 const erro = (msg, status = 400) => Object.assign(new Error(msg), { status });
 
-function gerarNumero() {
-  return `REM-${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 100)}`;
-}
+// Etapa 31: `gerarNumero()` SUMIU daqui — era o milissegundo fatiado em DECIMAL (os oito ultimos
+// digitos) mais um sorteio de 0..99, e fatiar em decimal faz o carimbo REPETIR a cada 27,78 horas.
+// Esta era a colisao MEDIDA do modulo: `UNIQUE constraint failed:
+// remessas_terceiro_almoxarifado.numero` chegava CRU na cara do operador. O numero passa a sair do
+// gerador unico (`numeroDoc.js`).
 
 function assertPodeRemessar(user) {
   if (!can(user, 'remessar_terceiro')) {
@@ -121,18 +124,23 @@ async function criarRemessa(db, user, data) {
 
   const fornecedor = await resolverFornecedor(db, data);
   const proprietario = await resolverProprietario(db, materiais);
-  const numero = gerarNumero();
 
-  const r = await dbRun(db, `INSERT INTO remessas_terceiro_almoxarifado
+  // Etapa 31 (RN-07): o numero nasce DENTRO do gerador, na tentativa que vencer o UNIQUE, e e ele
+  // que vai para a AUDITORIA (`dados_novos.numero`) e para o `return` la embaixo. Devolver um
+  // numero gerado por fora faria a trilha e o papel impresso apontarem para um documento que nao
+  // existe assim que o retry disparasse. O `fn` contem SO o INSERT do cabecalho — os itens sao
+  // inseridos DEPOIS, e entrariam em duplicata se estivessem aqui dentro.
+  const { numero, resultado: r } = await inserirComNumeroUnico(db, 'REM', (num) => dbRun(db,
+    `INSERT INTO remessas_terceiro_almoxarifado
     (numero, fornecedor_id, fornecedor_nome, tipo_servico, os_id, projeto_id, pedido_compra_id,
      proprietario_cliente_id, proprietario_cliente_nome, prazo_previsto, status, observacoes,
      criado_por, criado_por_nome)
     VALUES (?,?,?,?,?,?,?,?,?,?,'ABERTA',?,?,?)`, [
-    numero, fornecedor.fornecedor_id, fornecedor.fornecedor_nome, tipo_servico || null,
+    num, fornecedor.fornecedor_id, fornecedor.fornecedor_nome, tipo_servico || null,
     os_id || null, projeto_id || null, pedido_compra_id || null,
     proprietario.proprietario_cliente_id, proprietario.proprietario_cliente_nome,
     prazo_previsto || null, observacoes || null, user.id, user.nome || user.email,
-  ]);
+  ]));
   const remessaId = r.lastID;
 
   const criados = [];

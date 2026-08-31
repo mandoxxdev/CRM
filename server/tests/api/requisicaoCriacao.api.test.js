@@ -100,7 +100,18 @@ function test(name, fn) {
       });
       assert.strictEqual(res.status, 201, JSON.stringify(res.body));
       assert.strictEqual(res.body.status, 'PENDENTE');
-      assert.ok(String(res.body.numero).startsWith('REQ-'), `numero inesperado: ${res.body.numero}`);
+      // Etapa 31, Task 2: a FORMA COMPLETA, nao `startsWith('REQ-')`.
+      // Esta linha era, ate a Etapa 31, a UNICA assercao da suite inteira sobre os quatro numeros
+      // de documento do modulo — e ela passava IGUAL com o gerador velho (`REQ-` + 8 digitos).
+      // Ou seja: reverter qualquer um dos quatro pontos de escrita nao derrubava nada. A regex
+      // completa e o que faz a reversao aparecer, porque o formato antigo nao tinha letras.
+      assert.match(res.body.numero, /^REQ-[0-9A-Z]{16}$/,
+        `numero fora do formato do gerador unico (numeroDoc.js): ${JSON.stringify(res.body.numero)}`);
+      // RN-07: o numero devolvido e o que ficou GRAVADO (com retry, o vencedor nasce dentro de
+      // inserirComNumeroUnico — devolver o da 1a tentativa faria o impresso nao bater com a linha).
+      const linha = await dbGet(db, 'SELECT numero FROM requisicoes_almoxarifado WHERE id = ?', [res.body.id]);
+      assert.strictEqual(linha.numero, res.body.numero,
+        `a rota devolveu ${res.body.numero} e o banco guardou ${linha.numero}`);
     });
 
     await test(`[${rota.nome}] payload estilo form (strings) aceito — 201`, async () => {
@@ -189,6 +200,23 @@ function test(name, fn) {
     assert.strictEqual(itens[0].material_id, materialId);
     assert.strictEqual(Number(itens[0].quantidade_solicitada), 5);
     assert.strictEqual(itens[0].observacoes, 'obs teste');
+  });
+
+  // ── Etapa 31, Task 2 — RN-05: o formato ANTIGO continua legivel ────────────────────────────
+  await test('Etapa 31 RN-05: requisicao gravada no formato ANTIGO continua sendo lida pela rota', async () => {
+    // Regressao, nao descoberta: nada valida/parseia/ordena/fatia o numero da requisicao. O
+    // cenario existe para que quem um dia adicionar validacao de formato descubra AQUI que
+    // quebrou os documentos que ja estao no banco do cliente.
+    const ins = await dbRun(db, `INSERT INTO requisicoes_almoxarifado
+        (numero, solicitante_id, solicitante_nome, status) VALUES ('REQ-88548468', 1, 'Legado E31', 'PENDENTE')`);
+    const det = await request(app).get(`/api/almoxarifado/requisicoes/${ins.lastID}`);
+    assert.strictEqual(det.status, 200, `a rota recusou o numero antigo: ${det.status} ${JSON.stringify(det.body)}`);
+    assert.strictEqual(det.body.numero, 'REQ-88548468', JSON.stringify(det.body));
+
+    const lista = await request(app).get('/api/almoxarifado/requisicoes');
+    assert.strictEqual(lista.status, 200, JSON.stringify(lista.body).slice(0, 200));
+    assert.ok(lista.body.some((r) => r.id === ins.lastID && r.numero === 'REQ-88548468'),
+      'a requisicao de numero antigo sumiu da listagem');
   });
 
   await close();

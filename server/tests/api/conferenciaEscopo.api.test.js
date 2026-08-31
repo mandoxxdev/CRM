@@ -203,6 +203,41 @@ async function abrirConferencia(app, body = {}) {
     assert.strictEqual(linha.escopo_descricao, 'Categoria: CAT-DUPLA-CHEIA', JSON.stringify(linha));
   });
 
+  // ── Etapa 31, Task 2 — o numero da conferencia sai do gerador UNICO (numeroDoc.js) ──────────
+  //
+  // Ate a Etapa 31 a rota montava `INV-${Date.now().toString().slice(-8)}` inline, SEM aleatorio
+  // nenhum: duas conferencias abertas no mesmo milissegundo colidiam com CERTEZA, e o carimbo
+  // fatiado em decimal repetia a cada 27,78 horas. A assercao aqui e a FORMA COMPLETA, e nao
+  // `startsWith('INV-')`, porque o prefixo passa igual com o gerador velho — era exatamente a
+  // armadilha que deixava a suite inteira aprovar a reversao dos quatro pontos.
+  await test('Etapa 31 RN-01: o numero da conferencia tem a forma INV-<8 tempo><8 aleatorio>, e e o mesmo da linha', async () => {
+    const res = await abrirConferencia(app, { categoria: 'CAT-NUMERO-E31' });
+    assert.strictEqual(res.status, 201, JSON.stringify(res.body));
+    assert.match(res.body.numero, /^INV-[0-9A-Z]{16}$/,
+      `numero fora do formato do gerador unico: ${JSON.stringify(res.body.numero)} — o formato ANTIGO `
+      + 'era INV- + 8 digitos, sem letra e sem aleatorio');
+    // RN-07: o que a rota devolve tem de ser o que ficou gravado — com retry o vencedor nasce
+    // DENTRO de inserirComNumeroUnico, e devolver o da 1a tentativa faria o papel nao bater.
+    const linha = await dbGet(db, 'SELECT numero FROM conferencias_almoxarifado WHERE id = ?', [res.body.id]);
+    assert.strictEqual(linha.numero, res.body.numero,
+      `a rota devolveu ${res.body.numero} e o banco guardou ${linha.numero}`);
+  });
+
+  await test('Etapa 31 RN-05: conferencia gravada no formato ANTIGO continua sendo lida pela rota', async () => {
+    // Regressao, nao descoberta: nada valida/parseia/ordena/fatia este numero. O cenario existe
+    // para que quem um dia adicionar validacao de formato descubra AQUI que quebrou o legado.
+    const ins = await dbRun(db, `INSERT INTO conferencias_almoxarifado
+        (numero, status, responsavel_id, responsavel_nome) VALUES ('INV-88548468', 'ABERTO', 1, 'Legado E31')`);
+    const det = await request(app).get(`/api/almoxarifado/conferencias/${ins.lastID}`);
+    assert.strictEqual(det.status, 200, `a rota recusou o numero antigo: ${det.status} ${JSON.stringify(det.body)}`);
+    assert.strictEqual(det.body.numero, 'INV-88548468', JSON.stringify(det.body));
+
+    const lista = await request(app).get('/api/almoxarifado/conferencias');
+    assert.strictEqual(lista.status, 200, JSON.stringify(lista.body).slice(0, 200));
+    assert.ok(lista.body.some((c) => c.id === ins.lastID && c.numero === 'INV-88548468'),
+      'a conferencia de numero antigo sumiu da listagem');
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);

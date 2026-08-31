@@ -41,6 +41,11 @@ const { limparUploadOrfao } = require('../services/almoxarifado/uploadCleanup');
 const { validate } = require('../services/almoxarifado/validation');
 const { MaterialSchema, MaterialUpdateSchema, RequisicaoSchema } = require('../services/almoxarifado/schemas');
 const { registrarAuditoria } = require('../services/almoxarifado/audit');
+// Etapa 31: o numero de documento do modulo vem de UM gerador so (INV/REQ/REC/REM). Antes desta
+// etapa a rota de conferencia montava o `INV-` inline, com o milissegundo fatiado em DECIMAL (os
+// oito ultimos digitos) e SEM aleatorio nenhum: duas conferencias abertas no mesmo milissegundo
+// colidiam com CERTEZA.
+const { inserirComNumeroUnico } = require('../services/almoxarifado/numeroDoc');
 // Etapa 18 (C0): o binding desestruturado acima e resolvido no require e cacheado — um teste
 // nao consegue substituir `registrarAuditoria` por um stub que lanca, e a RN-02 ("auditoria
 // nunca derruba o ato") viraria um teste VAZIO: passaria verde sem jamais ter derrubado
@@ -1104,8 +1109,6 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         }
       }
 
-      // Gerar número único
-      const numero = `INV-${Date.now().toString().slice(-8)}`;
       const modoCegoValor = modo_cego ? 1 : 0;
       // RN-01: `tolerancia_percentual` no body manda quando informado (0 incluso — ver
       // toleranciaEfetiva); ausente, cai para a config global, e sem config nenhuma, para 2.
@@ -1132,12 +1135,17 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       const escopoDescricao = partesEscopo.length > 0 ? partesEscopo.join(' + ') : 'Geral';
       const duplaContagemValor = dupla_contagem ? 1 : 0;
 
-      const ins = await dbRun(db, `INSERT INTO conferencias_almoxarifado
+      // Etapa 31: o numero nasce DENTRO do gerador, na tentativa que vencer o UNIQUE — e e ele
+      // que segue para a auditoria e para a resposta (RN-07). O `fn` contem SO o INSERT do
+      // documento: ele e re-executado inteiro a cada tentativa, e o laco dos itens (abaixo) nao
+      // pode entrar aqui sob pena de duplicar item quando o retry disparar.
+      const { numero, resultado: ins } = await inserirComNumeroUnico(db, 'INV', (num) => dbRun(db,
+        `INSERT INTO conferencias_almoxarifado
               (numero, status, responsavel_id, responsavel_nome, observacoes, modo_cego,
                tolerancia_percentual, dupla_contagem, escopo_descricao)
               VALUES (?, 'ABERTO', ?, ?, ?, ?, ?, ?, ?)`,
-        [numero, req.user.id, req.user.nome || req.user.email, observacoes || null,
-         modoCegoValor, toleranciaValor, duplaContagemValor, escopoDescricao]);
+        [num, req.user.id, req.user.nome || req.user.email, observacoes || null,
+          modoCegoValor, toleranciaValor, duplaContagemValor, escopoDescricao]));
       const confId = ins.lastID;
 
       // Inserir todos os materiais ativos.

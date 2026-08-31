@@ -14,12 +14,12 @@ const sectorMaterialService = require('./sectorMaterialService');
 const requisitionNotificationService = require('./requisitionNotificationService');
 const purchaseNotifyService = require('./requisitionPurchaseNotifyService');
 const valueApprovalService = require('./requisitionValueApprovalService');
-
-function gerarNumeroReq() {
-  const ts = Date.now().toString().slice(-6);
-  const rand = Math.floor(Math.random() * 100).toString().padStart(2, '0');
-  return `REQ-${ts}${rand}`;
-}
+// Etapa 31: `gerarNumeroReq` SUMIU daqui. Ela era o milissegundo fatiado em DECIMAL (os seis
+// ultimos digitos) mais 2 digitos aleatorios — esse carimbo repetia a cada 16,7 MINUTOS (o pior
+// dos quatro), e duas requisicoes criadas nesse intervalo, no mesmo offset de ms, disputavam 100
+// sufixos. Era exportada mas nao importada em lugar nenhum, entao remove-la nao mexe em contrato
+// de ninguem.
+const { inserirComNumeroUnico } = require('./numeroDoc');
 
 /**
  * Dispara as notificações pós-criação (e-mail solicitantes/almoxarifado + alerta de
@@ -116,25 +116,29 @@ async function createRequisicao(db, user, payload, { modulo, skipNotificacoes = 
     await sectorMaterialService.validateMateriaisParaSetor(db, setorFinal, materialIds);
   }
 
-  const numero = gerarNumeroReq();
   const isRascunho = salvar_rascunho === true || salvar_rascunho === 1;
   const statusInicial = isRascunho ? 'RASCUNHO' : 'PENDENTE';
 
-  const insertResult = await dbRun(db, `INSERT INTO requisicoes_almoxarifado
+  // Etapa 31 (RN-07): o numero nasce DENTRO do gerador, na tentativa que vencer o UNIQUE, e e ele
+  // que volta nos dois `return` deste servico. O `fn` contem SO o INSERT da requisicao — o
+  // `ensureSetoresRequisicao` la em cima escreve ANTES e fica FORA do retry de proposito (e
+  // idempotente); os itens sao inseridos DEPOIS, e entrariam em duplicata se estivessem aqui.
+  const { numero, resultado: insertResult } = await inserirComNumeroUnico(db, 'REQ', (num) => dbRun(db,
+    `INSERT INTO requisicoes_almoxarifado
       (numero, solicitante_id, solicitante_nome, departamento, setor, os_referencia,
        urgencia, observacoes, justificativa_urgencia, modulo_origem, status,
        tipo_requisicao, centro_custo_id, local_entrega, projeto_id, cliente_id,
        equipamento, prioridade, data_necessidade, justificativa)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
-      numero, user.id, user.nome || user.email,
+      num, user.id, user.nome || user.email,
       setorFinal, setorFinal, os_referencia || null,
       urgencia || 'NORMAL', observacoes || null, justificativa_urgencia || null,
       modulo_origem || null, statusInicial,
       tipo_requisicao || 'CONSUMO', centro_custo_id || null, local_entrega || null,
       projeto_id || null, cliente_id || null, equipamento || null,
       prioridade || 'NORMAL', data_necessidade || null, justificativa || null,
-    ]);
+    ]));
 
   const reqId = insertResult.lastID;
 
@@ -158,4 +162,4 @@ async function createRequisicao(db, user, payload, { modulo, skipNotificacoes = 
   };
 }
 
-module.exports = { createRequisicao, dispararNotificacoesCriacao, gerarNumeroReq };
+module.exports = { createRequisicao, dispararNotificacoesCriacao };

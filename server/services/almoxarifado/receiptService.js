@@ -1,5 +1,6 @@
 const { dbRun, dbGet, dbAll } = require('./db');
 const { registrarAuditoria } = require('./audit');
+const { inserirComNumeroUnico } = require('./numeroDoc');
 const {
   registrarMovimentacao, resolveLocalizacaoEntrada, validarLocalizacaoParaMovimento,
 } = require('./stockService');
@@ -71,9 +72,10 @@ const STATUS_ETAPA = {
   [STATUS.APROVADO]: ETAPAS.CONCLUIDO,
 };
 
-function gerarNumero(prefix) {
-  return `${prefix}-${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 100)}`;
-}
+// Etapa 31: `gerarNumero(prefix)` SUMIU daqui — era o milissegundo fatiado em DECIMAL (os oito
+// ultimos digitos) mais um sorteio de 0..99, e fatiar em decimal faz o carimbo REPETIR a cada
+// 27,78 horas. O numero do recebimento passa a sair do gerador unico do modulo (`numeroDoc.js`),
+// com carimbo base36 INTEIRO (nao da a volta) e 8 caracteres de entropia.
 
 async function carregarItensPedidoCompra(db, pedidoCompraId) {
   const itens = await dbAll(db, `SELECT ipc.*, m.nome as material_nome, m.codigo as material_codigo
@@ -123,13 +125,16 @@ async function criarRecebimento(db, user, data) {
 
   if (!itens.length) throw Object.assign(new Error('Inclua ao menos um item'), { status: 400 });
 
-  const numero = gerarNumero('REC');
-  const r = await dbRun(db, `INSERT INTO recebimentos_material_almoxarifado
+  // Etapa 31 (RN-07): o numero nasce DENTRO do gerador, na tentativa que vencer o UNIQUE, e e ele
+  // que volta no `return` daqui. O `fn` contem SO o INSERT do cabecalho — os itens sao inseridos
+  // DEPOIS, e entrariam em duplicata se estivessem aqui dentro quando o retry disparasse.
+  const { numero, resultado: r } = await inserirComNumeroUnico(db, 'REC', (num) => dbRun(db,
+    `INSERT INTO recebimentos_material_almoxarifado
     (numero, pedido_compra_id, pedido_compra_numero, tipo_recebimento, nota_fiscal,
      fornecedor_id, fornecedor_nome, fornecedor_cnpj, status, etapa_atual,
      responsavel_id, responsavel_nome, observacoes)
     VALUES (?,?,?,?,?,?,?,?,'RECEBIDO','ALMOXARIFADO',?,?,?)`, [
-    numero,
+    num,
     pedido?.id || pedido_compra_id || null,
     pedido?.numero || pedido_compra_numero || null,
     tipo,
@@ -138,7 +143,7 @@ async function criarRecebimento(db, user, data) {
     pedido?.fornecedor_nome || fornecedor_nome || null,
     pedido?.fornecedor_cnpj || fornecedor_cnpj || null,
     user.id, user.nome || user.email, observacoes || null,
-  ]);
+  ]));
 
   for (const item of itens) {
     const qtd = item.quantidade_esperada || item.quantidade;

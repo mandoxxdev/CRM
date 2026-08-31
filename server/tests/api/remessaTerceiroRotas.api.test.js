@@ -476,6 +476,50 @@ const emTerceiros = async (db, id) => (await dbGet(db,
     assert.ok(daRota.body.remessas.length > 0, 'nenhuma vencida — o teste nao provaria nada');
   });
 
+  // ── Etapa 31, Task 2 — o numero da remessa sai do gerador UNICO (numeroDoc.js) ─────────────
+  //
+  // Ate a Etapa 31, `thirdPartyService.gerarNumero()` era `Date.now().toString().slice(-8)` + um
+  // sorteio de 0..99: o carimbo repetia a cada 27,78 horas e, no mesmo offset de ms, duas remessas
+  // disputavam 100 sufixos — e o UNIQUE de `numero` devolvia o `SQLITE_CONSTRAINT` CRU ao
+  // operador. A assercao e a FORMA COMPLETA e nao `assert.ok(res.body.numero)` (que e o que o
+  // [CONTROLE POSITIVO] do POST la em cima faz): so a regex distingue o gerador novo do velho.
+  await test('Etapa 31 RN-01: o numero da remessa tem a forma REM-<8 tempo><8 aleatorio>, e e o mesmo da linha', async () => {
+    const { body } = await corpoValido();
+    const res = await criar(body);
+    assert.strictEqual(res.status, 201, JSON.stringify(res.body));
+    assert.match(res.body.numero, /^REM-[0-9A-Z]{16}$/,
+      `numero fora do formato do gerador unico: ${JSON.stringify(res.body.numero)} — o formato ANTIGO `
+      + 'era REM- + 8..10 digitos, sem letra nenhuma');
+    // RN-07 nas TRES pontas: resposta, linha do banco e AUDITORIA. A remessa e o unico dos quatro
+    // que carimba o numero em `dados_novos` — se o chamador devolvesse o numero da 1a tentativa
+    // enquanto o retry gravou o da 3a, a trilha apontaria para um documento que nao existe.
+    const linha = await dbGet(db, 'SELECT numero FROM remessas_terceiro_almoxarifado WHERE id = ?', [res.body.id]);
+    assert.strictEqual(linha.numero, res.body.numero,
+      `a rota devolveu ${res.body.numero} e o banco guardou ${linha.numero}`);
+    const trilha = await dbGet(db,
+      `SELECT dados_novos FROM auditoria_log_almoxarifado
+       WHERE entidade = 'remessa_terceiro' AND entidade_id = ? AND acao = 'CRIACAO'`, [res.body.id]);
+    assert.ok(trilha, 'a criacao da remessa nao deixou rastro — sem ele a assercao abaixo passaria vazia');
+    assert.strictEqual(JSON.parse(trilha.dados_novos).numero, res.body.numero,
+      `a auditoria guardou ${trilha.dados_novos} para a remessa ${res.body.numero}`);
+  });
+
+  await test('Etapa 31 RN-05: remessa gravada no formato ANTIGO continua sendo lida pela rota', async () => {
+    // Regressao, nao descoberta: nada valida/parseia/ordena/fatia o numero da remessa.
+    const ins = await dbRun(db, `INSERT INTO remessas_terceiro_almoxarifado
+        (numero, fornecedor_nome, status, criado_por, criado_por_nome)
+       VALUES ('REM-885484687', 'Galvanizadora Legado', 'ABERTA', 1, 'Legado E31')`);
+    const det = await request(app).get(`${BASE}/${ins.lastID}`);
+    assert.strictEqual(det.status, 200, `a rota recusou o numero antigo: ${det.status} ${JSON.stringify(det.body)}`);
+    assert.strictEqual(det.body.numero, 'REM-885484687', JSON.stringify(det.body).slice(0, 300));
+
+    const lista = await request(app).get(BASE);
+    assert.strictEqual(lista.status, 200, JSON.stringify(lista.body).slice(0, 200));
+    const linhas = Array.isArray(lista.body) ? lista.body : (lista.body.remessas || []);
+    assert.ok(linhas.some((r) => r.id === ins.lastID && r.numero === 'REM-885484687'),
+      'a remessa de numero antigo sumiu da listagem');
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);
