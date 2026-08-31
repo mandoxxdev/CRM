@@ -11,6 +11,19 @@ pontos de escrita. **Nenhuma mudança de schema, nenhuma migração de dado.**
 
 **Spec:** `docs/superpowers/specs/2026-08-31-almoxarifado-etapa31-numeros-que-colidem-design.md`.
 
+> **REESCRITO PELA FASE 2** (8 correções obrigatórias + 7 melhorias, todas medidas contra o
+> código): (1) o base36 dá 8 chars até **2059**, não 5138 — 5138 era o 5188 mal copiado;
+> (2) os números novos ficam **mais LONGOS**, não mais curtos — todos crescem; (3) *"nos quatro
+> pontos o INSERT é a primeira escrita"* é **falso no `REQ`**, e como o plano mandava **parar**
+> nesse caso, ele travaria a Task 2 por um não-problema; (4) `inserirComNumeroUnico` **não devolvia
+> o número**, e os quatro chamadores precisam dele **depois** do INSERT — um executor seguindo a
+> letra devolveria o número da **primeira** tentativa enquanto o banco guardou o da terceira;
+> (5) a Task 3, como escrita, **passava com esse mesmo defeito**; (6) a receita de forçar a colisão
+> **não podia dar certo** (com `Math.random` preso, as 5 tentativas geram o mesmo número e o fluxo
+> termina em erro, não em sucesso); (7) a Task 2 **não tinha nenhum cenário que caísse** — o
+> controle positivo dela era no-op; (8) a régua do erro casa também `series_almoxarifado.numero`.
+> Onde diz "ESTAVA ERRADO", vale a versão atual.
+
 > **Esta etapa não é de feature — é de defeito.** Ela não aparece em nenhuma tela. O que ela muda é
 > que dois documentos criados no mesmo instante deixam de disputar 100 sufixos, e que o carimbo de
 > tempo deixa de repetir a cada 16,7 minutos (`REQ-`) ou 27,78 horas (os outros três).
@@ -35,44 +48,94 @@ pontos de escrita. **Nenhuma mudança de schema, nenhuma migração de dado.**
 7. **A asserção tem de conseguir distinguir o certo do errado.** É a lição comum das Etapas 29 e
    30: lá, fixture simétrica e régua de texto sobre lista manual deixaram 6 testes passarem com a
    feature quebrada. Aqui o risco equivalente é afirmar "o número tem o prefixo certo" — o que
-   passa igual com o gerador velho.
+   passa igual com o gerador velho. **E não é hipótese:** a suíte inteira tem **uma** asserção
+   sobre estes quatro números, `tests/api/requisicaoCriacao.api.test.js:103`, e ela é exatamente
+   essa (`startsWith('REQ-')`). Reverter qualquer um dos quatro pontos **hoje não derruba nada**.
+8. **Como se fixa o relógio neste harness** (medido pela Fase 2): `tests/api/run-all.js` roda
+   **um processo por arquivo**, em sequência, então um stub global fica contido no arquivo. Não há
+   jest aqui — o jeito limpo é:
+   ```js
+   const real = Date.now; Date.now = () => T_FIXO;
+   try { /* ... */ } finally { Date.now = real; }
+   ```
+   Use um epoch **realista** (`Date.now()` de verdade como base): com `t` pequeno o carimbo tem
+   menos de 8 caracteres e qualquer fatiamento por posição desalinha.
+9. **Nada de fatiar o número por posição no teste.** O `8` do carimbo é verdade até 2059; um teste
+   que faz `numero.slice(4, 12)` re-congela esse 8 em mais um lugar. C1 exporta `carimboTempo(ms)`
+   justamente para a RN-02 comparar carimbos sem fatiar string.
 
 ## Regras de negócio
 
 | RN | Enunciado | Onde é provada |
 |---|---|---|
-| RN-01 | `gerarNumeroDocumento(prefixo)` devolve `<PREFIXO>-<8 chars de tempo><6 aleatórios>`, tudo em maiúsculas, sem separador interno | `numeroDocumento.api.test.js` |
+| RN-01 | `gerarNumeroDocumento(prefixo)` devolve `<PREFIXO>-<8 chars de tempo><8 aleatórios>`, tudo em maiúsculas, sem separador interno — 20 caracteres com prefixo de 3. **Eram 6 aleatórios; com 6 o cenário da RN-03 colidiria 1 vez em ~4.358 execuções**, virando o flake que esta etapa existe para matar (`36^6 ≈ 2,2×10⁹`, P ≈ `2,3×10⁻⁴`); com 8, `1,8×10⁻⁷` | `numeroDocumento.api.test.js` |
 | RN-02 | O carimbo de tempo **não dá a volta**: dois instantes distintos **nunca** produzem o mesmo prefixo de tempo. **Prova direta** — comparar o carimbo de `t` com o de `t + 10⁶ ms` e `t + 10⁸ ms`, que é exatamente onde o gerador antigo repetia | idem (**peso**) |
 | RN-03 | **Mil chamadas no MESMO milissegundo** (relógio fixado) produzem **mil números distintos** | idem (**peso**) |
+| RN-07 | O `numero` que a rota **devolve** é o mesmo que ficou **gravado** na linha — e o mesmo que foi para a auditoria. Com retry, o número vencedor nasce **dentro** de `inserirComNumeroUnico`; devolver o da primeira tentativa faria o papel impresso não bater com o banco | Task 3 (**peso**) |
 | RN-04 | A criação dos quatro documentos retenta ao tomar `UNIQUE constraint` no `numero`, até **5** vezes com número novo a cada tentativa; esgotadas, sobe erro **traduzido** (`'Não foi possível gerar um número único para o documento'`, 500), nunca o texto cru do SQLite | teste com colisão **forçada** |
 | RN-05 | Documento gravado no formato **antigo** continua sendo lido, listado, filtrado e impresso — nenhuma tela nem rota valida o formato | teste que grava um `REM-885484687` à mão e o lê pela rota |
-| RN-06 | O gerador é **um só**: nenhum dos quatro pontos monta número por conta própria | `grep` no teste (ver a armadilha abaixo) |
+| RN-06 | O gerador é **um só**: nenhum dos quatro pontos monta número por conta própria | **verificação manual, NÃO teste** (abaixo) |
 
-> **A armadilha da RN-06, dita antes de alguém cair nela.** Provar "não existe outro gerador" com
-> `grep` dentro de um teste é frágil e já falhou nesta base (`grep -c` combinado com `wc -l` foi um
-> dos quatro testes vazios documentados). Se for feito, **tem de ter controle positivo**: a
-> varredura precisa **achar** a ocorrência quando ela é reintroduzida de propósito. Se não der para
-> fazer isso de forma limpa, **não escreva o teste** — escreva a ausência no plano e siga.
+> **A RN-06 NÃO vira teste, e a decisão é da Fase 2.** A versão anterior mandava provar "não existe
+> outro gerador" com `grep` dentro de um teste, avisando que era frágil. A Fase 2 mostrou que ela
+> ficou **redundante**: com a RN-01 aferida por **forma completa** em cada um dos quatro fluxos
+> (A7, abaixo), reverter qualquer ponto para a função antiga **já derruba um cenário**. Um teste de
+> `grep` só acrescentaria fragilidade — e `grep -c` combinado com `wc -l` foi um dos quatro testes
+> vazios documentados nesta base.
+> **No lugar dele, um passo de verificação manual na Task 2**, rodado uma vez com controle positivo
+> à mão: `grep -rn "Date.now().toString()" server/services/almoxarifado server/routes/almoxarifado.js`
+> tem de dar **zero linhas**, e reintroduzir uma de propósito tem de fazê-la aparecer. O resultado
+> vai escrito no fechamento da task.
 
 ## Contratos congelados
 
 **C1 — `server/services/almoxarifado/numeroDoc.js`** (novo):
 
 ```js
-gerarNumeroDocumento(prefixo)          // -> 'REM-M8K2P0X7A3F1'  (prefixo + '-' + 8 + 6)
-inserirComNumeroUnico(db, prefixo, fn) // fn(numero) faz o INSERT; retenta ate 5x no UNIQUE
+carimboTempo(ms)                       // -> 'MTHK5F35'  (8 chars hoje; exportado para a RN-02)
+gerarNumeroDocumento(prefixo)          // -> 'REM-MTHK5F35ABC12345'  (prefixo + '-' + 8 + 8)
+inserirComNumeroUnico(db, prefixo, fn) // -> { numero, resultado }
 NUMERO_TENTATIVAS = 5
 ```
 
 - **Tempo:** `Date.now().toString(36).toUpperCase()`, **inteiro**, sem `slice` — é o `slice` que
-  fazia o carimbo dar a volta. Hoje isso são 8 caracteres, e continuam 8 até o ano **5138**.
-- **Aleatório:** 6 caracteres base36 maiúsculos (~2,2 bilhões por milissegundo).
-- `inserirComNumeroUnico` só engole erro cujo texto case `/UNIQUE constraint/i` **e** mencione a
-  coluna `numero` — **qualquer outro erro sobe intacto**. Engolir `UNIQUE` genérico esconderia
-  colisão de outra coluna (`nota_fiscal`, por exemplo) atrás de um retry mudo.
-- `fn` tem de ser **só o INSERT do documento**, nada mais: nos quatro pontos ele é a **primeira
-  escrita** do fluxo (medido), então retentar é seguro. **Se algum executor achar um ponto em que
-  não é a primeira escrita, pare e reporte** — retentar depois de outra escrita duplicaria efeito.
+  fazia o carimbo dar a volta.
+  > **Isto dizia "continuam 8 até o ano 5138". ESTAVA ERRADO** (Fase 2): são 8 caracteres até
+  > **2059-05-25** (`36^8 = 2.821.109.907.456` ms); a fronteira 9→10 é que fica em **5188**, e o
+  > 5138 era esse número mal copiado. **O que continua verdadeiro é o que importa:** o carimbo
+  > **não dá a volta**. O que é falso é a durabilidade do comprimento fixo — daí a Global
+  > Constraint 9 proibir fatiar o número por posição no teste.
+- **Aleatório: 8 caracteres** base36 maiúsculos (~2,8×10¹² por milissegundo). **Congelado como se
+  produz**, porque deixar livre é onde as cópias divergentes recomeçam: **8 sorteios de
+  `Math.floor(Math.random() * 36).toString(36)`**. A forma idiomática
+  `Math.random().toString(36).slice(2, 10)` **pode devolver menos caracteres** (o double tem
+  representação base36 curta em ~2⁻⁴¹ dos sorteios), encurtando o número e derrubando a asserção de
+  comprimento sem ninguém entender por quê.
+- **`inserirComNumeroUnico` DEVOLVE `{ numero, resultado }`** — `numero` é o que **venceu** (pode
+  ser o da 3ª tentativa) e `resultado` é o `{ lastID, changes }` do `dbRun`.
+  > **A versão anterior devolvia só "o resultado do `fn`". ERA UM DEFEITO LATENTE**, e a Fase 2
+  > mediu: os **quatro** chamadores usam o `numero` **depois** do INSERT — `thirdPartyService.js`
+  > na auditoria (`dados_novos: { numero }`) e no retorno, `receiptService.js:157` e
+  > `requisitionCreateService.js:146` no retorno, e a rota do `INV` na resposta. Um executor
+  > seguindo a letra escreveria `const numero = gerarNumeroDocumento('REM')` antes e devolveria o
+  > **primeiro** número enquanto o banco guardou o **terceiro**: o papel impresso deixaria de bater
+  > com a linha. Virou a **RN-07**.
+- **A régua do erro é ANCORADA:** `/UNIQUE constraint failed:[^\n]*\.numero(\s|,|$)/i`.
+  > A Fase 2 mediu a mensagem real: `SQLITE_CONSTRAINT: UNIQUE constraint failed:
+  > remessas_terceiro_almoxarifado.numero` (com `err.code = 'SQLITE_CONSTRAINT'`, `errno 19`) —
+  > **o retry dispara mesmo, não é código morto**. Mas um `/numero/i` solto casaria também
+  > `series_almoxarifado.material_id, series_almoxarifado.numero`, que **não** é documento: o
+  > retry passaria a cobrir a série em silêncio. **Qualquer outro erro sobe intacto** — engolir
+  > `UNIQUE` genérico esconderia colisão de `nota_fiscal` atrás de um retry mudo.
+- **O que `fn` pode conter, dito com precisão** — a versão anterior dizia *"nos quatro pontos o
+  INSERT é a primeira escrita do fluxo"* e mandava **parar** se não fosse. **A afirmação é FALSA no
+  `REQ`**, e a instrução travaria a Task 2 por um não-problema:
+  `requisitionCreateService.js:100` chama `sectorMaterialService.ensureSetoresRequisicao`, que faz
+  `CREATE TABLE`, `INSERT` e `UPDATE` **antes** do INSERT da requisição.
+  **A regra correta:** `fn` contém **apenas o INSERT do documento**, e **nada é escrito entre a
+  geração do número e o INSERT**. Escritas **anteriores** ao `fn` ficam **fora** do retry e não são
+  repetidas. Medido nos quatro: o número é gerado na linha **imediatamente anterior** ao INSERT.
+  O `ensureSetoresRequisicao` do `REQ` é idempotente e fica fora — **isto NÃO é motivo de parada.**
 
 **C2 — Os quatro pontos de escrita** (medidos na Fase 0):
 
@@ -103,35 +166,68 @@ compartilhada, em sequência. Paralelizar aqui só criaria retrabalho — é o c
 Arquivos: `server/services/almoxarifado/numeroDoc.js` (novo) e
 `server/tests/api/numeroDocumento.api.test.js` (novo).
 
-Cenários: (1) formato da RN-01, com o prefixo e os comprimentos; (2) **RN-02, a prova que importa**
-— `Date.now` fixado em `t`, depois em `t + 1e6` e `t + 1e8`, e os três carimbos têm de ser
-**distintos entre si** (é exatamente onde o gerador antigo repetia; incluir no teste um comentário
-dizendo isso); (3) **RN-03** — relógio fixo, 1000 chamadas, `new Set(...).size === 1000`;
-(4) `inserirComNumeroUnico` devolve o resultado do `fn` quando não há colisão, chamando `fn`
-**uma vez**; (5) colisão nas 2 primeiras e sucesso na 3ª → `fn` chamado 3 vezes, **com números
-diferentes a cada vez** (guardar os argumentos e afirmar que são distintos — sem isso, um retry que
-reusa o mesmo número passaria); (6) 5 falhas → erro traduzido, e a mensagem crua do SQLite **não**
-aparece; (7) erro que **não** é UNIQUE de `numero` sobe intacto **na primeira**, com `fn` chamado
-uma vez só.
+Cenários: (1) forma da RN-01 por **regex completa** — `/^REM-[0-9A-Z]{16}$/` —, não só o prefixo;
+(2) **RN-02, a prova que importa** — `carimboTempo(t)`, `carimboTempo(t + 1e6)` e
+`carimboTempo(t + 1e8)` **distintos entre si**, com `t` sendo um epoch realista. São exatamente os
+dois pontos onde o gerador antigo repetia (16,7 min e 27,78 h); **escreva isso no comentário do
+cenário**; (3) **RN-03** — relógio fixo, 1000 chamadas, `new Set(...).size === 1000`;
+(4) `inserirComNumeroUnico` sem colisão → devolve **`{ numero, resultado }`**, com `numero` igual
+ao argumento que o `fn` recebeu e `resultado` sendo o `{ lastID }` que o `fn` retornou, e `fn`
+chamado **uma vez**; (5) colisão nas 2 primeiras e sucesso na 3ª → `fn` chamado 3 vezes, **com
+números diferentes a cada vez** (guardar os argumentos e afirmar que são distintos — sem isso, um
+retry que reusa o mesmo número passaria) **e o `numero` devolvido é o TERCEIRO**, não o primeiro
+(é a RN-07 na unidade); (6) 5 falhas → erro traduzido, e a mensagem crua do SQLite **não** aparece;
+(7) erro que **não** é UNIQUE de `numero` sobe intacto **na primeira**, com `fn` chamado uma vez
+só; (8) erro `UNIQUE constraint failed: series_almoxarifado.material_id, series_almoxarifado.numero`
+**sobe intacto** — a âncora da régua, sem a qual o retry cobriria a série.
 
-**Controles positivos:** `toString(36)` de volta para `slice(-8)` → (2) cai no carimbo repetido;
-aleatório de 6 para 1 char → (3) cai contando distintos; retry reusando o mesmo número → (5) cai
-na asserção dos argumentos distintos; `catch` engolindo qualquer erro → (7) cai.
+**Controles positivos:**
+
+| Sabotagem | Cai em | Observação |
+|---|---|---|
+| `toString(36)` → `slice(-8)` | (2) | **Só o par `t` vs `t + 1e8` colide**; `t + 1e6` continua distinto. Dito aqui porque quem sabotar e vir dois pares verdes acharia que sabotou errado |
+| aleatório de 8 para 1 char | (3) | contando distintos |
+| retry reusando o mesmo número | (5) | asserção dos argumentos distintos |
+| devolver o **primeiro** número em vez do vencedor | (5) | é o defeito latente que a Fase 2 pegou |
+| `catch` engolindo qualquer erro | (7) e (8) | — |
+| régua `/numero/i` sem âncora | (8) | — |
 
 Commit: `Almoxarifado Etapa 31 Task 1: um gerador de numero que nao da a volta`.
 
 ## Task 2 — Ligar os quatro pontos (tronco)
 
-Arquivos: os quatro da C2. Cada um passa a chamar `inserirComNumeroUnico`, e a função local some.
-**Confirme, ponto a ponto, que o INSERT do documento é a primeira escrita do fluxo** — está medido,
-mas medir de novo custa um `grep` e evita duplicar efeito.
-Cenário RN-05, um por tabela que já tenha teste: gravar à mão um registro com número no **formato
-antigo** (`REM-885484687`) e lê-lo pela rota — nenhuma leitura pode recusá-lo.
-**Rode a suíte inteira**: os quatro números aparecem em asserção de teste? Se algum teste afirmar
-comprimento ou formato, ele **é** o achado — ajuste o teste e diga no plano.
+Arquivos: os quatro da C2. Cada um passa a chamar `inserirComNumeroUnico`, usando o **`numero` que
+ela devolve** (RN-07) em tudo que vem depois — retorno, auditoria, resposta da rota. As funções
+locais somem; **`gerarNumeroReq` está em `module.exports` mas não é importado em lugar nenhum**
+(medido pela Fase 2: só as 3 auto-referências do próprio arquivo), então removê-la é seguro.
 
-**Controle positivo:** voltar **um** dos quatro para a função antiga → o cenário da RN-03 daquele
-fluxo cai. Se não houver cenário que caia, **é achado**: o ponto está sem cobertura.
+**Não confirme "é a primeira escrita do fluxo"** — o `REQ` não é, e isso está resolvido no C1. O
+que **tem** de ser confirmado, ponto a ponto: o `fn` contém **só o INSERT**, e nada é escrito entre
+a geração do número e o INSERT.
+
+**Cenário por fluxo, e é ele que dá o controle positivo (a versão anterior não tinha nenhum):**
+em cada uma das quatro rotas de criação, afirmar a **forma completa** do número devolvido —
+`/^INV-[0-9A-Z]{16}$/`, `/^REQ-…/`, `/^REC-…/`, `/^REM-…/`. O formato antigo era `PREFIXO-` +
+**só dígitos**, 8–10 deles: a regex cai na reversão de qualquer um dos quatro pontos.
+
+> **A suíte inteira tem HOJE uma única asserção sobre estes números** —
+> `tests/api/requisicaoCriacao.api.test.js:103`, `startsWith('REQ-')` — e ela é exatamente a
+> armadilha da Global Constraint 7: passa igual com o gerador velho. **Reverter qualquer um dos
+> quatro pontos hoje não derruba nada.** É por isso que os quatro cenários de forma são
+> obrigatórios, e não "bom ter".
+
+Cenário **RN-05**, um por tabela: gravar à mão um registro com número no **formato antigo**
+(`REM-885484687`) e lê-lo pela rota — nenhuma leitura pode recusá-lo. A Fase 2 já mediu que
+**nada** valida, faz parse, ordena ou fatia estes quatro números (os `numero LIKE`/`ORDER BY
+numero` que existem são de `pedidos_compra` e `series_almoxarifado`), então este cenário é de
+regressão, não de descoberta.
+
+**Verificação manual da RN-06**, uma vez, com controle positivo à mão:
+`grep -rn "Date.now().toString()" server/services/almoxarifado server/routes/almoxarifado.js` = 0
+linhas, e reintroduzir uma de propósito tem de fazê-la aparecer. Escreva o resultado no fechamento.
+
+**Controle positivo:** voltar **um** dos quatro para a função antiga → o cenário de forma daquele
+fluxo cai. Se não cair, **é achado**: o ponto está sem cobertura.
 
 Commit: `Almoxarifado Etapa 31 Task 2: os quatro documentos passam pelo mesmo gerador`.
 
@@ -140,20 +236,48 @@ Commit: `Almoxarifado Etapa 31 Task 2: os quatro documentos passam pelo mesmo ge
 O retry da RN-04 é código que, com a entropia da D2, **nunca deve disparar** — e por isso precisa
 de prova própria, senão é código que ninguém sabe se funciona.
 
-Cenário: pela rota real de um dos quatro fluxos, **force a colisão** — por exemplo, fixando
-`Date.now` e o aleatório para produzir o mesmo número duas vezes, ou pré-inserindo o número que a
-próxima chamada vai gerar. Duas criações seguidas têm de **as duas terem sucesso**, com números
-distintos, e **nenhuma** delas devolver erro de SQLite ao cliente.
+**Como forçar a colisão — a receita anterior NÃO PODIA dar certo.** Ela dizia *"fixando `Date.now`
+e o aleatório para produzir o mesmo número duas vezes"*. Com `Math.random` preso num valor, as
+**cinco** tentativas do retry geram o **mesmo** número, todas colidem, e o fluxo termina no erro
+traduzido da RN-04 — o oposto do critério de sucesso do próprio cenário, e o executor seguiria a
+letra.
 
-**Controle positivo:** remover o retry → o cenário cai com o `UNIQUE constraint` cru na resposta —
-que é exatamente o que o usuário vê hoje.
+**A receita correta:** congele `Date.now` para o arquivo inteiro e substitua `Math.random` por um
+stub de **uma chamada só** — ele devolve o valor que reproduz o número do documento 1 na primeira
+chamada do documento 2, e o `Math.random` **real** dali em diante. Restaure os dois no `finally`.
+Assim a 1ª tentativa colide, a 2ª vence, e o fluxo termina em **sucesso**, que é o que se quer
+provar.
+
+**Cenário:** duas criações seguidas pela rota real de um dos quatro fluxos. As duas têm sucesso,
+com números distintos, e nenhuma devolve erro de SQLite ao cliente. **E a asserção que a versão
+anterior não tinha (RN-07):**
+
+```js
+assert.strictEqual(res.body.numero,
+  (await dbGet(db, 'SELECT numero FROM <tabela> WHERE id = ?', [res.body.id])).numero);
+```
+
+— mais o mesmo para o `numero` que foi para a **auditoria** (`dados_novos`).
+
+> **Sem essa asserção a Task 3 passa com a feature quebrada**, e é o defeito do C1 (A4): se o
+> chamador devolver o número da **primeira** tentativa enquanto o banco guardou o da segunda, as
+> duas criações continuam sendo sucesso e continuam distintas — o cenário passa verde com o papel
+> impresso não batendo com a linha. É o mesmo padrão das 6 asserções cegas das Etapas 29 e 30.
+
+**Controle positivo:** **não** "remover o retry" — isso derrubaria também os cenários (5) e (6) da
+Task 1, e faria a Task 3 parecer duplicata. O que **isola** esta task é fazer **aquele único ponto
+de escrita** chamar `dbRun` direto, sem `inserirComNumeroUnico`: aí só o cenário desta task cai,
+com o `UNIQUE constraint` cru na resposta — que é exatamente o que o usuário vê hoje. E, para a
+RN-07, devolver o primeiro número em vez do vencedor → a asserção de igualdade com a linha cai.
 
 Commit: `Almoxarifado Etapa 31 Task 3: a colisao forcada prova o retry, pela rota`.
 
 ## Fechamento
 
-`fechar-etapa`: novidades (seção; **letra C** — a partir do deploy os números novos ficam mais
-curtos e **com letras**, e os antigos continuam válidos e legíveis, D4; **letra B** — perguntar se
+`fechar-etapa`: novidades (seção; **letra C** — a partir do deploy os números novos ficam **mais
+LONGOS** (de 12–14 para 20 caracteres) e **com letras**, e os antigos continuam válidos e legíveis,
+D4. *Isto dizia "mais curtos"; **estava errado**, medido na Fase 2 — todos os quatro crescem, e é o
+texto que vai para o guia do usuário;* **letra B** — perguntar se
 ele quer numeração **sequencial por ano** (`REQ-2026-0001`), que é o que uma ERP madura faz e exige
 tabela de contador mais decisão sobre reinício anual), spec da feature de cada documento tocado
 (requisições 03, recebimento 08, terceiros 8b, inventário 10) — **só a linha do número, não o

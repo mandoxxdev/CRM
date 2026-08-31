@@ -10,6 +10,12 @@ procurar irmãos antes de consertar um só. **Há quatro**, e o pior não é o q
 Varredura por `Date.now().toString().slice`, cruzada com as colunas `numero TEXT UNIQUE NOT NULL`
 de `schema.js`. **Quatro geradores, quatro tabelas com `UNIQUE`, nenhum deles compartilhado:**
 
+> **Ressalva medida pela Fase 2:** há **cinco** restrições `UNIQUE` sobre uma coluna chamada
+> `numero` no schema (`:329`, `:386`, `:1017`, `:1093`, `:1346`) — a quinta é
+> `series_almoxarifado (material_id, numero)`, que **não** é documento e **não** entra nesta etapa.
+> Ela importa por um motivo prático: a régua que o retry usa para reconhecer a colisão precisa
+> distinguir as duas, senão um retry mudo passaria a cobrir a série também.
+
 | # | Onde | Formato | Tabela (`numero` é `UNIQUE`) |
 |---|---|---|---|
 | 1 | `routes/almoxarifado.js:1108` | `INV-` + 8 dígitos de ms, **sem aleatório nenhum** | `conferencias_almoxarifado` |
@@ -60,12 +66,20 @@ Etapa 29 já pagou o preço de duas cópias da fórmula da faixa divergindo. **D
 o da remessa: os outros três têm o mesmo defeito, e o `INV-` é o pior.
 
 **D2 — Alargar a entropia; retry só como cinto de segurança.** O formato passa a ser
-`<PREFIXO>-<ms em base36><6 aleatórios em base36>`. Base36 porque encurta o carimbo sem perder
-dígitos — o milissegundo inteiro cabe em 8 caracteres e **não dá a volta** (dura até o ano 5138),
-e os 6 aleatórios dão ~2,2 bilhões de sufixos por milissegundo. **Descartado retry sorteando de
-novo sobre o espaço estreito de hoje:** com 99 dos 100 sufixos ocupados, o retry acha o livre com
-8% de chance em 8 tentativas — é exatamente onde nasceria um flake novo, trocando um defeito por
-outro mais difícil de ver.
+`<PREFIXO>-<ms em base36><8 aleatórios em base36>`. Base36 porque o milissegundo **inteiro** cabe
+em 8 caracteres — sem `slice`, que era a causa da volta —, e os 8 aleatórios dão ~2,8×10¹² sufixos
+por milissegundo. **Descartado retry sorteando de novo sobre o espaço estreito de hoje:** com 99
+dos 100 sufixos ocupados, o retry acha o livre com 8% de chance em 8 tentativas — é exatamente onde
+nasceria um flake novo, trocando um defeito por outro mais difícil de ver.
+
+> **Duas afirmações desta seção estavam ERRADAS e a Fase 2 mediu; ficam corrigidas à vista.**
+> **(1)** Dizia *"dura até o ano 5138"*. O carimbo continua com **8 caracteres até 2059-05-25**
+> (`36^8 = 2.821.109.907.456` ms); em **5188** vira 10. A afirmação de que **não dá a volta**
+> continua verdadeira — o que era falso é a durabilidade do comprimento fixo, e isso importa porque
+> a RN-01 congela "8 chars de tempo".
+> **(2)** Dizia que os aleatórios seriam **6**. Com 6 (`36^6 ≈ 2,2×10⁹`), o cenário de 1000 números
+> no mesmo milissegundo colidiria **1 vez em ~4.358 execuções** — um flake novo dentro do teste que
+> existe para matar um flake. Com **8**, a probabilidade cai para `1,8×10⁻⁷`.
 
 **D3 — O retry existe, é curto, e é do banco.** A escrita tenta até 5 vezes ao tomar
 `UNIQUE constraint`, gerando número novo a cada vez. Com a entropia da D2 ele nunca deve disparar —
@@ -75,19 +89,25 @@ funciona.
 **D4 — Números já gravados NÃO são migrados.** O formato antigo continua válido e legível; os dois
 convivem. **Descartado** renumerar: o número aparece em impresso, e-mail e conversa de galpão, e
 renumerar quebraria o rastro de tudo que já saiu. Registrar na letra **C**: a partir do deploy, os
-números novos ficam **mais curtos e com letras**.
+números novos ficam **mais longos e com letras**.
+
+> **Isto dizia "mais curtos". ESTAVA ERRADO** — a Fase 2 mediu: todos os quatro **crescem**.
+> `INV-`/`REQ-` vão de 12 para 20 caracteres; `REC-`/`REM-` de 13–14 para 20
+> (`REM-0006800185` → `REM-MTHK5F35ABC12345`). É o texto que vai para o guia do usuário, e "mais
+> curtos" é a primeira coisa que ele conferiria na tela.
 
 **D5 — `INV-` ganha aleatório junto, e é o primeiro a ser corrigido.** É o único sem nenhum, e a
 colisão dele em criação simultânea é **certa**, não probabilística.
 
 ## Regras de negócio
 
-- **RN-01** `gerarNumeroDocumento(prefixo)` devolve `<PREFIXO>-<8 chars de tempo><6 aleatórios>`,
+- **RN-01** `gerarNumeroDocumento(prefixo)` devolve `<PREFIXO>-<8 chars de tempo><8 aleatórios>`,
   sempre maiúsculo, sem caractere ambíguo de separador.
 - **RN-02** O carimbo de tempo **não dá a volta** dentro da vida útil do sistema — dois instantes
   distintos nunca produzem o mesmo prefixo de tempo.
-- **RN-03** Mil chamadas no **mesmo milissegundo** produzem mil números **distintos** (prova
-  determinística, com o relógio fixado — não por acaso).
+- **RN-03** Mil chamadas no **mesmo milissegundo** produzem mil números **distintos** (relógio
+  fixado — não por acaso). Com 8 aleatórios a chance de o próprio cenário colidir é `1,8×10⁻⁷`;
+  com 6 seria 1 em 4.358 execuções, e o teste viraria o flake que a etapa existe para matar.
 - **RN-04** A criação dos quatro documentos retenta ao tomar `UNIQUE constraint` no `numero`, até
   5 vezes, com número novo a cada tentativa; esgotadas, o erro sobe **traduzido**, não como erro
   de SQLite cru.
