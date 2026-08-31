@@ -30,12 +30,36 @@ jest.mock('react-toastify', () => ({
   toast: { success: jest.fn(), error: jest.fn(), info: jest.fn(), warn: jest.fn() },
 }));
 
-// Permissões liberadas: o alvo aqui é o que a tela mostra, e o gate real é do servidor.
+// Permissões liberadas POR PADRÃO: o alvo da maior parte deste arquivo é o que a tela mostra, e o
+// gate real é do servidor. Mas a Etapa 30 (Task 2) precisa da metade NEGATIVA — `bloquearSeNaoPode`
+// devolvendo `false` — para provar que a ação de plano de inspeção é barrada antes do modal. Por
+// isso a fábrica deixou de devolver `() => true` fixo e passou a delegar numa variável trocável
+// por teste (o prefixo `mock` é o que o hoist do jest permite referenciar de dentro da fábrica).
+let mockBloquearSeNaoPode = jest.fn(() => true);
 jest.mock('../../hooks/useAlmoxPermissoes', () => ({
   useAlmoxPermissoes: () => ({
-    perfil: 'ADMINISTRADOR', pode: () => true, bloquearSeNaoPode: () => true, loading: false,
+    perfil: 'ADMINISTRADOR', pode: () => true,
+    bloquearSeNaoPode: (...args) => mockBloquearSeNaoPode(...args), loading: false,
   }),
 }));
+
+// Etapa 30, Task 2 — o modal é escrito em paralelo (Task 1). O stub abaixo torna este teste
+// independente da implementação dele e ainda deixa a prop recebida à vista: o contrato C5 do plano
+// diz que a prop é o OBJETO `material` (código, nome e unidade vão para o cabeçalho do modal), e
+// não o `materialId` escalar dos outros seis modais desta base.
+const mockPlanoMateriaisRecebidos = [];
+jest.mock('./PlanoInspecaoModal', () => ({
+  __esModule: true,
+  default: (props) => {
+    const ReactStub = require('react');
+    mockPlanoMateriaisRecebidos.push(props.material);
+    return ReactStub.createElement(
+      'div',
+      { 'data-testid': 'plano-inspecao-modal' },
+      props.material ? String(props.material.codigo) : 'sem material',
+    );
+  },
+}), { virtual: true });
 
 const MATERIAL_NOSSO = {
   id: 1, codigo: 'CHP-001', nome: 'Chapa 3mm nossa', categoria: 'Chapas', unidade: 'PC',
@@ -70,6 +94,8 @@ let root;
 
 beforeEach(() => {
   global.IS_REACT_ACT_ENVIRONMENT = true;
+  mockBloquearSeNaoPode = jest.fn(() => true);
+  mockPlanoMateriaisRecebidos.length = 0;
   // Implementações aqui, não na fábrica do jest.mock: clearAllMocks apaga implementações e só o
   // primeiro teste teria dados.
   api.get.mockImplementation((url) => {
@@ -199,5 +225,75 @@ describe('MateriaisAlmoxarifado — RN-01: o filtro de categoria vem do catálog
     await act(async () => { await new Promise((r) => setTimeout(r, 350)); });
     const chamadas = api.get.mock.calls.filter((c) => c[0] === '/almoxarifado/materiais');
     expect(chamadas[chamadas.length - 1][1]).toEqual({ params: { categoria: 'Chapas' } });
+  });
+});
+
+/**
+ * Etapa 30, Task 2 — RN-01: a ação *Plano de inspeção* na lista de Materiais.
+ *
+ * Antes desta etapa o plano de inspeção só nascia por `curl`: o CRUD existe desde a Etapa 27 e a
+ * Etapa 29 entregou o bloco *Medidas do plano*, mas sem tela de cadastro esse bloco não aparecia
+ * para ninguém. Esta é a porta de entrada.
+ *
+ * Duas linhas de materiais DIFERENTES na fixture não são detalhe: com uma linha só, uma
+ * implementação que passasse um material fixo (o primeiro da lista, uma variável de fora do
+ * `map`) passaria idêntica.
+ */
+const clicar = (el) => act(() => {
+  el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+});
+
+const botaoPlano = (codigo) => linhaDe(codigo)?.querySelector('button[title="Plano de inspeção"]');
+
+describe('MateriaisAlmoxarifado — RN-01: a ação Plano de inspeção', () => {
+  test('o botão aparece em toda linha e abre o modal DO material daquela linha', async () => {
+    await renderizar();
+    expect(botaoPlano('CHP-001')).not.toBeNull();
+    expect(botaoPlano('CHP-002')).not.toBeNull();
+    expect(botaoPlano('CHP-003')).not.toBeNull();
+
+    // Fechado, o modal não está montado.
+    expect(container.querySelector('[data-testid="plano-inspecao-modal"]')).toBeNull();
+
+    clicar(botaoPlano('CHP-002'));
+
+    const modal = container.querySelector('[data-testid="plano-inspecao-modal"]');
+    expect(modal).not.toBeNull();
+    // O contrato C5 é o OBJETO material, não o id escalar — e tem de ser o da linha clicada.
+    const recebido = mockPlanoMateriaisRecebidos[mockPlanoMateriaisRecebidos.length - 1];
+    expect(recebido).toBeTruthy();
+    expect(recebido.id).toBe(MATERIAL_CLIENTE.id);
+    expect(recebido.codigo).toBe('CHP-002');
+    expect(recebido.nome).toBe(MATERIAL_CLIENTE.nome);
+    expect(recebido.unidade).toBe(MATERIAL_CLIENTE.unidade);
+    expect(modal.textContent).toContain('CHP-002');
+    expect(modal.textContent).not.toContain('CHP-001');
+  });
+
+  test('clicar noutra linha abre o modal daquele outro material', async () => {
+    // O par do cenário acima: sem ele, `material={materiais[1]}` cravado passaria.
+    await renderizar();
+    clicar(botaoPlano('CHP-001'));
+    const recebido = mockPlanoMateriaisRecebidos[mockPlanoMateriaisRecebidos.length - 1];
+    expect(recebido.id).toBe(MATERIAL_NOSSO.id);
+    expect(recebido.codigo).toBe('CHP-001');
+    expect(container.querySelector('[data-testid="plano-inspecao-modal"]').textContent)
+      .toContain('CHP-001');
+  });
+
+  test('sem gerenciar_plano_inspecao o modal NÃO abre — e o botão continua lá, barrado pelo gate', async () => {
+    // Global Constraint 9: a metade positiva anda no mesmo teste. "O modal não abre" passaria
+    // igual com o botão ausente, com o `onClick` vazio ou com a permissão errada no gate.
+    mockBloquearSeNaoPode = jest.fn(() => false);
+    await renderizar();
+
+    const botao = botaoPlano('CHP-002');
+    expect(botao).not.toBeNull();
+
+    clicar(botao);
+
+    expect(mockBloquearSeNaoPode).toHaveBeenCalledWith('gerenciar_plano_inspecao', expect.anything());
+    expect(container.querySelector('[data-testid="plano-inspecao-modal"]')).toBeNull();
+    expect(mockPlanoMateriaisRecebidos).toHaveLength(0);
   });
 });

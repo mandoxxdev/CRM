@@ -9,11 +9,13 @@ import { toast } from 'react-toastify';
 import { SkeletonTable } from '../SkeletonLoader';
 import {
   FiPlus, FiSearch, FiEdit, FiTrash2, FiImage, FiPackage,
-  FiArrowUp, FiArrowDown, FiAlertTriangle, FiRefreshCw, FiMap, FiClipboard, FiFileText, FiTag
+  FiArrowUp, FiArrowDown, FiAlertTriangle, FiRefreshCw, FiMap, FiClipboard, FiFileText, FiTag,
+  FiCheckSquare
 } from 'react-icons/fi';
 import AlmoxPageHeader from './AlmoxPageHeader';
 import ExtratoMaterialModal from './ExtratoMaterialModal';
 import EtiquetasPdfModal from './EtiquetasPdfModal';
+import PlanoInspecaoModal from './PlanoInspecaoModal';
 import SeloProprietario from './SeloProprietario';
 import { montarEtiquetaMaterial } from '../../utils/etiquetasPdf';
 import './Almoxarifado.css';
@@ -42,6 +44,10 @@ const MateriaisAlmoxarifado = () => {
   const [savingMov, setSavingMov] = useState(false);
   const [extratoMaterialId, setExtratoMaterialId] = useState(null);
   const [etiquetas, setEtiquetas] = useState(null);
+  // Etapa 30: guarda o OBJETO do material, não o id — o cabeçalho do modal mostra código, nome e
+  // unidade, e a linha da lista já tem os três (os outros modais desta tela recebem id escalar
+  // porque só precisam do id).
+  const [planoMaterial, setPlanoMaterial] = useState(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const materialIdAplicado = useRef(false);
@@ -326,6 +332,10 @@ const MateriaisAlmoxarifado = () => {
                           }}>
                           <FiTag />
                         </button>
+                        <button className="almox-btn-icon primary" title="Plano de inspeção"
+                          onClick={(e) => { if (!bloquearSeNaoPode('gerenciar_plano_inspecao', e)) return; setPlanoMaterial(m); }}>
+                          <FiCheckSquare />
+                        </button>
                         <button className="almox-btn-icon success" title="Entrada rápida de estoque neste material"
                           onClick={(e) => { if (!bloquearSeNaoPode('movimentar', e)) return; openMovModal(m, 'ENTRADA'); }}>
                           <FiArrowUp />
@@ -417,6 +427,11 @@ const MateriaisAlmoxarifado = () => {
 
       {/* Etiquetas PDF */}
       <EtiquetasPdfModal etiquetas={etiquetas} onClose={() => setEtiquetas(null)} />
+
+      {/* Plano de inspeção do material (Etapa 30) */}
+      {planoMaterial && (
+        <PlanoInspecaoModal material={planoMaterial} onClose={() => setPlanoMaterial(null)} />
+      )}
     </div>
   );
 };
