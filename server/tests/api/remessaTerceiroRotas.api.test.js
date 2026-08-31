@@ -24,6 +24,7 @@ const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbGet } = require('../../services/almoxarifado/db');
 const lotService = require('../../services/almoxarifado/lotService');
+const { carimboTempo } = require('../../services/almoxarifado/numeroDoc');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -518,6 +519,106 @@ const emTerceiros = async (db, id) => (await dbGet(db,
     const linhas = Array.isArray(lista.body) ? lista.body : (lista.body.remessas || []);
     assert.ok(linhas.some((r) => r.id === ins.lastID && r.numero === 'REM-885484687'),
       'a remessa de numero antigo sumiu da listagem');
+  });
+
+  // ── Etapa 31, Task 3 — a COLISAO FORCADA prova o retry da RN-04, pela rota ─────────────────
+  //
+  // Com a entropia da Etapa 31 (8 caracteres base36 = ~2,8x10^12 sufixos por milissegundo) o retry
+  // de `inserirComNumeroUnico` NUNCA deve disparar em uso real. Codigo que nunca roda e codigo que
+  // ninguem sabe se funciona: aqui a colisao e FABRICADA de proposito, para provar que a 2a
+  // tentativa SALVA a criacao em vez de devolver `SQLITE_CONSTRAINT` cru ao operador — que e
+  // exatamente o que ele via antes desta etapa.
+  //
+  // COMO A COLISAO E FORCADA, e por que a receita obvia NAO funciona: prender `Math.random` num
+  // valor fixo faria as CINCO tentativas gerarem o MESMO numero, todas colidiriam e o fluxo
+  // terminaria no erro traduzido da RN-04 — o OPOSTO do que este cenario quer provar. A receita
+  // certa e:
+  //   1. congelar `Date.now` (as duas remessas nascem com o MESMO carimbo de tempo);
+  //   2. substituir `Math.random` por um roteiro de EXATAMENTE 8 valores — os 8 sorteios que
+  //      reproduzem o sufixo da remessa 1 —, delegando ao `Math.random` REAL da 9a chamada em
+  //      diante. Assim a 1a tentativa da remessa 2 colide e a 2a vence, com aleatorio de verdade.
+  // O sufixo NAO e lido por posicao fixa (Global Constraint 9 do plano): o corte sai de
+  // `carimboTempo(T_FIXO)`, que o modulo exporta justamente para o teste nao re-congelar "8".
+  //
+  // E o cenario NAO se contenta com "as duas deram 201 com numeros distintos": isso passaria
+  // verde ate se o retry nunca tivesse disparado (bastaria o stub ser consumido por outro
+  // chamador de `Math.random`). Um espiao no `db.run` grava os numeros de CADA tentativa de
+  // INSERT, e o teste afirma que foram DUAS, que a 1a foi o numero da remessa 1 e que a 2a e o
+  // numero que a rota devolveu, que o banco guardou e que a auditoria registrou (RN-07).
+  await test('Etapa 31 RN-04+RN-07: colisao FORCADA na 1a tentativa — a 2a vence e a rota devolve o numero VENCEDOR', async () => {
+    const T_FIXO = 1788134400000; // 2026-08-31, epoch realista: carimbo de 8 chars, como em producao
+    const realNow = Date.now;
+    const realRandom = Math.random;
+    const realRun = db.run;
+    /** Numero de CADA tentativa de INSERT do cabecalho da remessa, na ordem. */
+    const tentativas = [];
+    let consumidos = 0;
+    try {
+      db.run = function espiaoDeInsert(...args) {
+        const [sql, params] = args;
+        if (typeof sql === 'string' && /INSERT INTO remessas_terceiro_almoxarifado/i.test(sql)
+            && Array.isArray(params)) tentativas.push(params[0]);
+        return realRun.apply(this, args);
+      };
+      Date.now = () => T_FIXO;
+
+      // Os materiais nascem ANTES de armar o roteiro do aleatorio: `novoMaterial` escreve no banco,
+      // e uma escrita entre a arma e o disparo gastaria os valores do roteiro no lugar errado.
+      const um = await corpoValido();
+      const dois = await corpoValido();
+
+      const r1 = await criar(um.body);
+      assert.strictEqual(r1.status, 201, JSON.stringify(r1.body));
+      const numero1 = r1.body.numero;
+      const prefixoTempo = `REM-${carimboTempo(T_FIXO)}`;
+      assert.ok(numero1.startsWith(prefixoTempo),
+        `o relogio congelado nao pegou: ${numero1} nao comeca por ${prefixoTempo}`);
+      const aleatorio1 = numero1.slice(prefixoTempo.length);
+      assert.strictEqual(aleatorio1.length, 8, `sufixo aleatorio inesperado: ${aleatorio1}`);
+
+      // (digito + 0,5) / 36 cai no MEIO da faixa do digito, entao `Math.floor(v * 36)` devolve
+      // exatamente ele — sem depender de arredondamento de borda.
+      const roteiro = [...aleatorio1].map((c) => (parseInt(c, 36) + 0.5) / 36);
+      Math.random = () => (consumidos < roteiro.length ? roteiro[consumidos++] : realRandom());
+
+      const r2 = await criar(dois.body);
+      assert.strictEqual(consumidos, roteiro.length,
+        `o roteiro do aleatorio nao foi consumido (${consumidos}/8) — a colisao nao chegou a ser forcada`);
+
+      // 1. As DUAS criacoes tem sucesso, e nenhuma vaza erro de SQLite para o cliente.
+      assert.strictEqual(r2.status, 201, JSON.stringify(r2.body));
+      for (const [nome, res] of [['remessa 1', r1], ['remessa 2', r2]]) {
+        assert.doesNotMatch(JSON.stringify(res.body), /UNIQUE constraint|SQLITE_/i,
+          `${nome} devolveu erro cru de SQLite ao cliente: ${JSON.stringify(res.body).slice(0, 300)}`);
+      }
+      assert.notStrictEqual(r2.body.numero, numero1, 'as duas remessas ficaram com o MESMO numero');
+
+      // 2. O retry DISPAROU mesmo: duas tentativas de INSERT para a remessa 2, a primeira com o
+      //    numero ja gravado pela remessa 1. Sem isto o cenario passaria verde com o retry morto.
+      assert.deepStrictEqual(tentativas, [numero1, numero1, r2.body.numero],
+        `tentativas de INSERT fora do esperado: ${JSON.stringify(tentativas)} — esperado `
+        + '[remessa 1, colisao da remessa 2, vencedor da remessa 2]');
+
+      // 3. RN-07 nas tres pontas do numero VENCEDOR: resposta, linha do banco e auditoria.
+      const linha = await dbGet(db, 'SELECT numero FROM remessas_terceiro_almoxarifado WHERE id = ?', [r2.body.id]);
+      assert.ok(linha, `a remessa ${r2.body.id} nao existe no banco`);
+      assert.strictEqual(r2.body.numero, linha.numero,
+        `a rota devolveu ${r2.body.numero} e o banco guardou ${linha.numero} — o papel impresso nao bate com a linha`);
+      const trilha = await dbGet(db,
+        `SELECT dados_novos FROM auditoria_log_almoxarifado
+         WHERE entidade = 'remessa_terceiro' AND entidade_id = ? AND acao = 'CRIACAO'`, [r2.body.id]);
+      assert.ok(trilha, 'a criacao da remessa 2 nao deixou rastro — sem a guarda a assercao abaixo passaria vazia');
+      assert.strictEqual(JSON.parse(trilha.dados_novos).numero, r2.body.numero,
+        `a auditoria guardou ${trilha.dados_novos} para a remessa ${r2.body.numero}`);
+
+      // 4. A remessa 1 continua com o numero dela: o retry da 2 nao pode ter sobrescrito nada.
+      const linha1 = await dbGet(db, 'SELECT numero FROM remessas_terceiro_almoxarifado WHERE id = ?', [r1.body.id]);
+      assert.strictEqual(linha1.numero, numero1, 'a remessa 1 mudou de numero por causa do retry da 2');
+    } finally {
+      Date.now = realNow;
+      Math.random = realRandom;
+      db.run = realRun;
+    }
   });
 
   await close();
