@@ -394,8 +394,16 @@ código durante a 29.
   plano com os dois zerados é faixa de largura zero, que é **válido**.
 - `PUT /api/almoxarifado/planos-inspecao/:id` (`:360`) e `DELETE .../:id` (`:429`, **soft delete** —
   `ativo = 0`; desativar **libera o nome** para ser recriado, por causa do índice único parcial
-  `(material_id, caracteristica) WHERE ativo = 1`). **Não há rota de REATIVAR** — medir isso na
-  Fase 0 antes de prometer o botão.
+  `(material_id, caracteristica) WHERE ativo = 1`).
+  > **Esta linha dizia "Não há rota de REATIVAR — medir isso na Fase 0 antes de prometer o botão".
+  > ESTAVA ERRADO**, e a Fase 0 da Etapa 30 mediu (2026-08-30, `af7adea`): o **`PUT` aceita
+  > `ativo`** (`extended.js:393`), com *preserve-when-omitted* declarado no próprio código —
+  > omitir mantém o valor atual, e `{ ativo: 1 }` **reativa**. Corrigido à vista em vez de apagado:
+  > foi a própria instrução "meça antes de prometer" que pegou o erro.
+  > **O que era verdade por trás da frase errada:** reativar **pode colidir**. Como o índice é
+  > parcial, desativar *Diâmetro* libera o nome; se alguém recriar *Diâmetro*, reativar a antiga
+  > responde **400 *"Já existe esta característica no plano deste material"*** — mensagem que, sob
+  > um botão "Reativar", não explica nada. Virou a RN-06 do design da Etapa 30.
 - As três operações **deixam rastro na Auditoria**, entidade *Plano de inspeção*, com de/para.
 
 **Pontos de atenção, todos aprendidos na 29:**
