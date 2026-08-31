@@ -308,6 +308,44 @@ RN-07, devolver o primeiro número em vez do vencedor → a asserção de iguald
 
 Commit: `Almoxarifado Etapa 31 Task 3: a colisao forcada prova o retry, pela rota`.
 
+## Task 3 — O retry provado pela rota (tronco) — ✅ FEITA (`54dad43`)
+
+> **Fechamento (2026-08-31).** O cenário entrou em
+> `server/tests/api/remessaTerceiroRotas.api.test.js` (arquivo que já cobria o fluxo, sem arquivo
+> novo): **38/38** ali, `test:api` **165/165** arquivos.
+>
+> **O stub do aleatório.** `Date.now` congelado em `1788134400000` (epoch realista, carimbo de 8
+> chars) para as duas remessas nascerem com o **mesmo** carimbo; `Math.random` trocado por um
+> roteiro de **exatamente 8 valores** — `(digito + 0,5) / 36` para cada caractere do sufixo da
+> remessa 1 —, delegando ao `Math.random` **real** da 9ª chamada em diante. A 1ª tentativa da
+> remessa 2 colide, a 2ª vence com aleatório de verdade, e o fluxo termina em **sucesso**. Os dois
+> globais são restaurados num `finally`. O sufixo da remessa 1 **não** é lido por posição fixa: o
+> corte sai de `carimboTempo(T_FIXO)` (Global Constraint 9).
+>
+> **Divergência para mais, e é ela que impede o teste vazio:** "as duas deram 201 com números
+> distintos" passaria verde **mesmo com o retry morto** — bastaria o roteiro ser consumido por
+> outro chamador de `Math.random` e nenhuma colisão aconteceria. Por isso um **espião no `db.run`**
+> grava o número de **cada** tentativa de INSERT do cabeçalho, e o teste afirma a sequência inteira:
+> `[numero1, numero1, vencedor]`. Prova medida: com o stub desarmado de propósito (cópia
+> descartável do arquivo), o cenário **cai** em `0 !== 8`.
+>
+> **Os dois controles positivos do plano caíram, e cada um numa asserção diferente** — o que
+> confirma que eles isolam coisas distintas:
+>
+> | Sabotagem | Caiu em | Mensagem |
+> |---|---|---|
+> | `criarRemessa` chamando `dbRun` direto, **sem** `inserirComNumeroUnico` | `assert.strictEqual(r2.status, 201)` | `{"error":"SQLITE_CONSTRAINT: UNIQUE constraint failed: remessas_terceiro_almoxarifado.numero"}` — o erro cru que o operador via antes desta etapa |
+> | o chamador devolvendo o **primeiro** número em vez do vencedor | `assert.notStrictEqual(r2.body.numero, numero1)` e, neutralizada essa, a **RN-07**: `a rota devolveu REM-MTGH1XC07AQWMPKT e o banco guardou REM-MTGH1XC0UCA56UKB` | 37/38 nos dois casos: **só** o cenário desta task cai, o da Task 2 fica verde |
+>
+> **Achado sobre a segunda sabotagem:** a primeira tentativa de escrevê-la trocou o número **do
+> INSERT** (e não só o do retorno), o que fez as 5 tentativas repetirem o mesmo número e o fluxo
+> terminar no erro traduzido da RN-04 — vermelho pelo motivo **errado**. A sabotagem só isola a
+> RN-07 quando o INSERT continua recebendo número novo a cada tentativa e **apenas o retorno** fica
+> preso no primeiro. Registrado porque é a mesma armadilha da receita do `Math.random` preso.
+>
+> Restauração por `cp` nos dois casos, `md5sum` conferido antes/depois/restaurado
+> (`6cc2973d…` → sabotado → `6cc2973d…`) e `git diff --stat` vazio no fim.
+
 ## Fechamento
 
 `fechar-etapa`: novidades (seção; **letra C** — a partir do deploy os números novos ficam **mais
