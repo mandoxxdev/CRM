@@ -235,6 +235,63 @@ async function decidir(app, itemId, payload) {
     assert.ok(lixo.body.length >= 2, 'material_id nao numerico nao filtra nada');
   });
 
+  // Dois achados da revisao adversarial da Etapa 29, no mesmo cenario porque tem a mesma causa:
+  // TODOS os cenarios com medida eram simetricos (1 dentro / 1 fora), entao trocar
+  // `md.conforme = 0` por `= 1` no subselect deixava os 20 cenarios VERDES — o numero que a aba
+  // Historico imprime ("2 (1 fora)") nao estava ancorado. E tres das sete flags do contrato C1
+  // (`divergencia_quantidade`, `dano_fisico`, `material_incorreto`) valiam 0 em todo lugar, entao
+  // trocar as colunas entre si no SELECT tambem passava verde.
+  await test('[RN-05] contagem ASSIMETRICA (3 medidas, 1 fora) e as tres flags que ninguem afirmava', async () => {
+    const { mat, itemId, qtd } = await itemRetido(db);
+    const p1 = await novoPlano(db, mat, { caracteristica: 'A', valor_nominal: 10 });
+    const p2 = await novoPlano(db, mat, { caracteristica: 'B', valor_nominal: 10 });
+    const p3 = await novoPlano(db, mat, { caracteristica: 'C', valor_nominal: 10 });
+
+    // 3 medidas, so a ultima fora: total 3 != nao_conformes 1 != conformes 2. Qualquer troca de
+    // operador no subselect muda um dos dois numeros.
+    const dec = await decidir(app, itemId, {
+      quantidade_aprovada: qtd, quantidade_reprovada: 0,
+      divergencia_quantidade: 1, dano_fisico: 0, material_incorreto: 0, certificado_ausente: 0,
+      medidas: [
+        { plano_id: p1, valor_medido: '10.05' },  // dentro
+        { plano_id: p2, valor_medido: '9.95' },   // dentro
+        { plano_id: p3, valor_medido: '10.5' },   // FORA
+      ],
+    });
+    const linha = (await request(app).get(HISTORICO).query({ material_id: mat }))
+      .body.find((l) => l.id === dec.id);
+    assert.ok(linha, 'a inspecao assimetrica tem de aparecer');
+    assert.strictEqual(linha.medidas_total, 3, `medidas_total tinha de ser 3, veio ${linha.medidas_total}`);
+    assert.strictEqual(linha.medidas_nao_conformes, 1,
+      `medidas_nao_conformes conta o que esta FORA da tolerancia: tinha de ser 1, veio ${linha.medidas_nao_conformes}`);
+
+    // As tres flags, uma ligada por vez, para pegar qualquer cruzamento de coluna no SELECT.
+    // Com as tres a 1 na mesma linha, trocar `i.dano_fisico` por `i.material_incorreto` seria
+    // invisivel; com o padrao 1/0/0, 0/1/0, 0/0/1 nenhuma troca sobrevive.
+    const padroes = [
+      { divergencia_quantidade: 1, dano_fisico: 0, material_incorreto: 0 },
+      { divergencia_quantidade: 0, dano_fisico: 1, material_incorreto: 0 },
+      { divergencia_quantidade: 0, dano_fisico: 0, material_incorreto: 1 },
+    ];
+    const mat2 = await novoMaterial(db);
+    for (const flags of padroes) {
+      const it = await itemRetido(db, { mat: mat2 });
+      const d = await decidir(app, it.itemId, {
+        quantidade_aprovada: it.qtd, quantidade_reprovada: 0,
+        certificado_ausente: 0, ...flags,
+      });
+      const l = (await request(app).get(HISTORICO).query({ material_id: mat2 }))
+        .body.find((x) => x.id === d.id);
+      assert.ok(l, 'a inspecao do padrao de flags tem de aparecer');
+      for (const [campo, esperado] of Object.entries(flags)) {
+        assert.strictEqual(l[campo], esperado,
+          `${campo} tinha de vir ${esperado} no padrao ${JSON.stringify(flags)}; veio ${l[campo]}`);
+      }
+      assert.strictEqual(l.certificado_ausente, 0,
+        'certificado_ausente tinha de continuar 0 — se ligou sozinho, alguma coluna esta cruzada');
+    }
+  });
+
   await test('[RN-05] limite: respeita o pedido, default 100 e teto 500', async () => {
     const mat = await novoMaterial(db);
     const ids = [];
@@ -259,10 +316,22 @@ async function decidir(app, itemId, payload) {
     await inspectionService.listarHistorico(dbFalso, { limite: 'abc' });
     await inspectionService.listarHistorico(dbFalso, { limite: 0 });
     await inspectionService.listarHistorico(dbFalso, { limite: -5 });
+    // Fracao entre 0 e 1: a guarda antiga era `n <= 0`, entao 0.5 passava e `Math.floor` virava
+    // LIMIT 0 — 200 com lista VAZIA, o servidor afirmando "nao ha historico" para quem tem.
+    // Achado da revisao adversarial da Etapa 29.
+    await inspectionService.listarHistorico(dbFalso, { limite: 0.5 });
+    await inspectionService.listarHistorico(dbFalso, { limite: '0.999999' });
     const limites = capturas.map((c) => c.params[c.params.length - 1]);
-    assert.deepStrictEqual(limites, [500, 100, 100, 100, 100],
-      `[9999, ausente, 'abc', 0, -5] tinham de virar [500, 100, 100, 100, 100]; vieram ${JSON.stringify(limites)}`);
+    assert.deepStrictEqual(limites, [500, 100, 100, 100, 100, 100, 100],
+      `[9999, ausente, 'abc', 0, -5, 0.5, '0.999999'] tinham de virar [500, 100, 100, 100, 100, 100, 100]; vieram ${JSON.stringify(limites)}`);
     assert.ok(capturas.every((c) => /LIMIT \?/.test(c.sql)), 'o limite vai como parametro, nao interpolado');
+
+    // E pela ROTA, porque o clamp com db falso nao ve o Express: `?limite=0.5` tem de devolver
+    // as tres linhas do material, nunca uma lista vazia com 200.
+    const fracao = await request(app).get(HISTORICO).query({ material_id: mat, limite: '0.5' });
+    assert.strictEqual(fracao.status, 200);
+    assert.strictEqual(fracao.body.length, 3,
+      `limite=0.5 tem de cair no default e devolver as 3, veio ${fracao.body.length}`);
   });
 
   await test('[RN-05] medidas da inspecao com tolerancia CONGELADA (PUT no plano depois nao muda)', async () => {

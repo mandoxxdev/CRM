@@ -422,7 +422,10 @@ const HISTORICO_LIMITE_TETO = 500;
  */
 function limiteHistorico(valor) {
   const n = Number(valor);
-  if (!Number.isFinite(n) || n <= 0) return HISTORICO_LIMITE_PADRAO;
+  // O piso e `< 1`, nao `<= 0`: com `<= 0` um `?limite=0.5` passava pela guarda e
+  // `Math.floor(0.5)` virava `LIMIT 0` — resposta 200 com lista VAZIA, ou seja, o servidor
+  // afirmando "nao ha historico" para quem tem. Achado da revisao adversarial da Etapa 29.
+  if (!Number.isFinite(n) || n < 1) return HISTORICO_LIMITE_PADRAO;
   return Math.min(Math.floor(n), HISTORICO_LIMITE_TETO);
 }
 
