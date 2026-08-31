@@ -105,6 +105,9 @@ function test(name, fn) {
       // de documento do modulo — e ela passava IGUAL com o gerador velho (`REQ-` + 8 digitos).
       // Ou seja: reverter qualquer um dos quatro pontos de escrita nao derrubava nada. A regex
       // completa e o que faz a reversao aparecer, porque o formato antigo nao tinha letras.
+      // MAS (revisao adversarial da Etapa 31): ela prova a RN-01, NAO a RN-02. Um decimal fatiado
+      // do MESMO comprimento reintroduz a colisao e deixa esta assercao verde. Quem prova a RN-02
+      // sao os cenarios (2) e (2b) de `numeroDocumento.api.test.js`.
       assert.match(res.body.numero, /^REQ-[0-9A-Z]{16}$/,
         `numero fora do formato do gerador unico (numeroDoc.js): ${JSON.stringify(res.body.numero)}`);
       // RN-07: o numero devolvido e o que ficou GRAVADO (com retry, o vencedor nasce dentro de

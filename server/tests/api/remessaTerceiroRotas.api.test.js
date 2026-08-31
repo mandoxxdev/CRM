@@ -484,6 +484,11 @@ const emTerceiros = async (db, id) => (await dbGet(db,
   // disputavam 100 sufixos — e o UNIQUE de `numero` devolvia o `SQLITE_CONSTRAINT` CRU ao
   // operador. A assercao e a FORMA COMPLETA e nao `assert.ok(res.body.numero)` (que e o que o
   // [CONTROLE POSITIVO] do POST la em cima faz): so a regex distingue o gerador novo do velho.
+  // NOTA (revisao adversarial da Etapa 31): esta regex prova a RN-01 (a forma), NAO a RN-02 (o
+  // carimbo nao dar a volta). Medido: trocar `carimboTempo` por um decimal fatiado do MESMO
+  // comprimento reintroduz a colisao e deixa este cenario VERDE. Quem prova a RN-02 sao os
+  // cenarios (2) e (2b) de `numeroDocumento.api.test.js` — o (2b) e um invariante de
+  // reversibilidade, impossivel de satisfazer por acidente. Nao afrouxe aqueles dois.
   await test('Etapa 31 RN-01: o numero da remessa tem a forma REM-<8 tempo><8 aleatorio>, e e o mesmo da linha', async () => {
     const { body } = await corpoValido();
     const res = await criar(body);

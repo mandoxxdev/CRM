@@ -40,6 +40,16 @@
  * Mensagens reais medidas (sqlite3 5.1.x):
  *   `SQLITE_CONSTRAINT: UNIQUE constraint failed: remessas_terceiro_almoxarifado.numero`
  *   `SQLITE_CONSTRAINT: UNIQUE constraint failed: series_almoxarifado.material_id, series_almoxarifado.numero`
+ *
+ * ⚠️ NAO EMBRULHE ESTAS ESCRITAS AQUI (achado da revisao adversarial da Etapa 31). A regua casa
+ * `numero` de coluna unica, e o banco CORE tem duas tabelas com exatamente essa forma que NAO sao
+ * documento deste modulo: `pedidos_compra.numero` (`server/index.js:19159`) e `cotacoes.numero`
+ * (`server/index.js:19173`). Hoje isso e INALCANCAVEL — nenhum `fn` passado a
+ * `inserirComNumeroUnico` insere nelas —, mas o numero de pedido de compra e de cotacao e
+ * DIGITADO pelo comprador, igual ao de serie. Embrulhar a criacao deles aqui faria o retry
+ * reescrever em silencio um numero que uma pessoa escolheu, que e exatamente a falha que a
+ * exclusao da serie existe para evitar. Documento novo que queira este helper precisa de numero
+ * GERADO pelo sistema, nunca digitado.
  */
 
 /** Tentativas de INSERT com numero novo antes de desistir (RN-04). */

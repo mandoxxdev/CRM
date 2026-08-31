@@ -176,6 +176,38 @@ function erroReal(db, sql, params = []) {
   });
 
   // ── (3) RN-03: mil no MESMO milissegundo, relogio FIXADO ──────────────────────────────────
+  /*
+   * (2b) nasceu da revisao adversarial da Etapa 31, e existe porque a defesa da RN-02 estava
+   * pendurada em UMA assercao so.
+   *
+   * O revisor sabotou `carimboTempo` para `String(ms).slice(-8)` — o carimbo VOLTA A DAR A VOLTA,
+   * mas continua com 8 caracteres, todos em [0-9A-Z]. Placar dessa sabotagem: 7/1 aqui (so o
+   * cenario (2)) e VERDE nos quatro arquivos de fluxo, porque as regexes /^INV-[0-9A-Z]{16}$/ e
+   * irmas distinguem o gerador VELHO (que tinha outro comprimento) e NAO distinguem base36 de
+   * decimal fatiado do mesmo tamanho. Quem um dia mexesse em `carimboTempo` e afrouxasse o (2)
+   * reintroduziria a colisao com a suite inteira verde.
+   *
+   * A regua aqui e um INVARIANTE, nao um par de exemplos: o carimbo tem de ser REVERSIVEL. Se
+   * `parseInt(carimbo, 36)` devolve o milissegundo de volta, nenhuma informacao foi perdida — e
+   * "nao perde informacao" e exatamente o mesmo que "nao da a volta", so que impossivel de
+   * satisfazer por acidente. Qualquer fatiamento reprova, em qualquer base e qualquer comprimento.
+   */
+  await test('(2b) RN-02 o carimbo e REVERSIVEL: parseInt(carimbo, 36) devolve o ms inteiro', async () => {
+    const base = Date.now();
+    const instantes = [base, base + 1, base + 1e6, base + 1e8, base + 4e10, 1e12, 2e12];
+    for (const ms of instantes) {
+      const carimbo = carimboTempo(ms);
+      assert.strictEqual(parseInt(carimbo, 36), ms,
+        `carimboTempo(${ms}) = ${JSON.stringify(carimbo)} nao volta para ${ms} — o carimbo perdeu `
+        + 'informacao, e carimbo que perde informacao da a volta');
+      assert.ok(/^[0-9A-Z]+$/.test(carimbo), `carimbo fora de base36 maiusculo: ${JSON.stringify(carimbo)}`);
+    }
+    // Metade positiva do invariante: dois instantes DIFERENTES nunca compartilham carimbo, e isso
+    // segue da reversibilidade — se seguissem, `parseInt` nao teria como devolver os dois.
+    assert.notStrictEqual(carimboTempo(base), carimboTempo(base + 1),
+      'dois milissegundos consecutivos com o mesmo carimbo');
+  });
+
   await test('(3) RN-03 mil chamadas no MESMO milissegundo produzem mil numeros distintos', async () => {
     const real = Date.now;
     const T = real(); // epoch realista, congelado

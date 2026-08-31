@@ -210,6 +210,11 @@ async function abrirConferencia(app, body = {}) {
   // fatiado em decimal repetia a cada 27,78 horas. A assercao aqui e a FORMA COMPLETA, e nao
   // `startsWith('INV-')`, porque o prefixo passa igual com o gerador velho — era exatamente a
   // armadilha que deixava a suite inteira aprovar a reversao dos quatro pontos.
+  // NOTA (revisao adversarial da Etapa 31): esta regex prova a RN-01 (a forma), NAO a RN-02 (o
+  // carimbo nao dar a volta). Medido: trocar `carimboTempo` por um decimal fatiado do MESMO
+  // comprimento reintroduz a colisao e deixa este cenario VERDE. Quem prova a RN-02 sao os
+  // cenarios (2) e (2b) de `numeroDocumento.api.test.js` — o (2b) e um invariante de
+  // reversibilidade, impossivel de satisfazer por acidente. Nao afrouxe aqueles dois.
   await test('Etapa 31 RN-01: o numero da conferencia tem a forma INV-<8 tempo><8 aleatorio>, e e o mesmo da linha', async () => {
     const res = await abrirConferencia(app, { categoria: 'CAT-NUMERO-E31' });
     assert.strictEqual(res.status, 201, JSON.stringify(res.body));

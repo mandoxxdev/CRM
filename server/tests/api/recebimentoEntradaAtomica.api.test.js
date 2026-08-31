@@ -182,6 +182,11 @@ const itensDoRecebimento = (db, recId) => dbAll(db,
   // um sorteio de 0..99: o carimbo repetia a cada 27,78 horas e, no mesmo offset de ms, dois
   // recebimentos disputavam 100 sufixos. A assercao e a FORMA COMPLETA, e nao `startsWith`, pelo
   // motivo de sempre: o prefixo passa igual com o gerador velho.
+  // NOTA (revisao adversarial da Etapa 31): esta regex prova a RN-01 (a forma), NAO a RN-02 (o
+  // carimbo nao dar a volta). Medido: trocar `carimboTempo` por um decimal fatiado do MESMO
+  // comprimento reintroduz a colisao e deixa este cenario VERDE. Quem prova a RN-02 sao os
+  // cenarios (2) e (2b) de `numeroDocumento.api.test.js` — o (2b) e um invariante de
+  // reversibilidade, impossivel de satisfazer por acidente. Nao afrouxe aqueles dois.
   await test('Etapa 31 RN-01: o numero do recebimento tem a forma REC-<8 tempo><8 aleatorio>, e e o mesmo da linha', async () => {
     const mat = await novoMaterial(db);
     const res = await request(app).post('/api/almoxarifado/recebimentos').send({
