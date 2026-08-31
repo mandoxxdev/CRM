@@ -26,6 +26,12 @@
  *      Por isso o cenario da duplicada tem dois irmaos — a MESMA caracteristica em OUTRO material
  *      PASSA (senao o indice seria global) e, depois de desativada, PODE ser recriada.
  *
+ * ── ETAPA 30, Task 3: o cenario (23) ────────────────────────────────────────────────────────
+ * O item 3 acima (indice PARCIAL) tem uma consequencia que a Etapa 27 nao exercitou: se o nome
+ * liberado pelo soft delete for REOCUPADO por uma linha nova, reativar a antiga (`PUT { ativo: 1 }`)
+ * colide — e quem barra e o indice, no `catch` do PUT. O (23) faz o ciclo inteiro por HTTP e afirma
+ * a MENSAGEM literal, nao so o 400: e ela que a tela de cadastro mostra ao usuario.
+ *
  * ── GUARDA ANTI-TESTE-VAZIO ──────────────────────────────────────────────────────────────────
  * "O plano do material A nao aparece no B" passaria identico se a criacao tivesse falhado, se o
  * GET devolvesse sempre lista vazia ou se a rota nem existisse. Por isso o cenario afirma
@@ -544,6 +550,66 @@ const uniq = (p) => `${p} ${Date.now() % 1000000}-${++seq}`;
     const ainda = await dbGet(db, 'SELECT valor_nominal, ativo FROM planos_inspecao_almoxarifado WHERE id = ?', [alvo.body.id]);
     assert.strictEqual(ainda.valor_nominal, 10, `o nominal mudou apesar dos 403: ${ainda.valor_nominal}`);
     assert.strictEqual(ainda.ativo, 1, `o plano foi desativado apesar dos 403: ativo = ${ainda.ativo}`);
+  });
+
+  // ── A colisao da REATIVACAO (Etapa 30, Task 3) ─────────────────────────────────────────────
+  // O cenario (13) prova que, depois de desativada, a caracteristica PODE ser recriada — e e
+  // exatamente essa liberdade que abre o buraco desta: com o nome ja reocupado por uma linha
+  // NOVA e ativa, reativar a ANTIGA colocaria DUAS linhas ativas com o mesmo par
+  // (material_id, caracteristica). Quem barra e o indice unico parcial, no `catch` do PUT, e a
+  // tela precisa da MENSAGEM literal para explicar o conflito ao usuario — um 500 generico ali
+  // viraria "erro inesperado" numa acao que tem explicacao exata.
+  await test('(23) reativar a ANTIGA depois de o nome ter sido recriado e 400 com a mensagem literal', async () => {
+    const mat = await novoMaterial('Reativa');
+    const caracteristica = uniq('Rugosidade');
+
+    const antiga = await criar({
+      material_id: mat, caracteristica, unidade: 'um',
+      valor_nominal: 1.6, desvio_inferior: -0.4, desvio_superior: 0.4,
+    });
+    assert.strictEqual(antiga.status, 201, `setup: 1a criacao falhou: ${antiga.status} ${JSON.stringify(antiga.body)}`);
+
+    const del = await request(app).delete(`${ROTA}/${antiga.body.id}`);
+    assert.strictEqual(del.status, 200, `setup: DELETE falhou: ${del.status} ${JSON.stringify(del.body)}`);
+    assert.strictEqual(del.body.ja_inativo, undefined, `setup: era para ser a 1a desativacao: ${JSON.stringify(del.body)}`);
+
+    // O indice e PARCIAL, entao desativar LIBERA o nome: esta recriacao TEM de passar. Se ela
+    // falhar, o vermelho e da CRIACAO e nao da reativacao — foi por isso que a sabotagem
+    // "tirar o WHERE ativo = 1" foi descartada como controle positivo desta task.
+    const nova = await criar({
+      material_id: mat, caracteristica, unidade: 'um',
+      valor_nominal: 3.2, desvio_inferior: -0.8, desvio_superior: 0.8,
+    });
+    assert.strictEqual(nova.status, 201,
+      `recriar a caracteristica desativada falhou (${nova.status} ${JSON.stringify(nova.body)}) — o indice unico `
+      + 'deixou de ser parcial, e o resto deste cenario estaria medindo a criacao, nao a reativacao');
+    assert.notStrictEqual(nova.body.id, antiga.body.id, 'a recriacao reaproveitou a linha antiga em vez de inserir outra');
+
+    const reativa = await request(app).put(`${ROTA}/${antiga.body.id}`).send({ ativo: 1 });
+    assert.strictEqual(reativa.status, 400,
+      `reativar a antiga com o nome ja reocupado deu ${reativa.status} ${JSON.stringify(reativa.body)} — duas linhas `
+      + 'ativas com a mesma caracteristica fariam a inspecao pedir a MESMA medida duas vezes');
+    assert.strictEqual(reativa.body.error, 'Já existe esta característica no plano deste material',
+      `o UNIQUE do PUT nao virou a mensagem literal: ${JSON.stringify(reativa.body)} — a tela nao tem como `
+      + 'explicar o conflito com um erro generico');
+
+    // A METADE POSITIVA, no MESMO cenario: sem ela o 400 acima passaria com a rota morta, com o
+    // PUT recusando qualquer `ativo`, ou ate com a recriacao nao tendo gravado nada.
+    const todos = await listar({ material_id: mat, todos: '1' });
+    assert.strictEqual(todos.status, 200, `GET ?todos=1 falhou: ${todos.status} ${JSON.stringify(todos.body)}`);
+    const linhaAntiga = todos.body.find((p) => p.id === antiga.body.id);
+    const linhaNova = todos.body.find((p) => p.id === nova.body.id);
+    assert.ok(linhaAntiga, `?todos=1 nao trouxe a linha antiga (${antiga.body.id}): ${JSON.stringify(todos.body.map((p) => p.id))}`);
+    assert.ok(linhaNova, `?todos=1 nao trouxe a linha nova (${nova.body.id}): ${JSON.stringify(todos.body.map((p) => p.id))}`);
+    assert.strictEqual(linhaAntiga.ativo, 0,
+      `a antiga ficou com ativo = ${linhaAntiga.ativo} apesar do 400 — o UPDATE gravou antes do UNIQUE estourar`);
+    assert.strictEqual(linhaNova.ativo, 1, `a nova deveria estar ativa: ativo = ${linhaNova.ativo}`);
+    assert.strictEqual(linhaNova.valor_nominal, 3.2,
+      `a linha ativa nao e a recriada: valor_nominal ${linhaNova.valor_nominal} (a antiga era 1.6)`);
+
+    const ativas = (await listar({ material_id: mat })).body.filter((p) => p.caracteristica === caracteristica);
+    assert.strictEqual(ativas.length, 1,
+      `${ativas.length} caracteristicas ATIVAS com o mesmo nome no material: ${JSON.stringify(ativas.map((p) => p.id))}`);
   });
 
   await close();
