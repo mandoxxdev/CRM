@@ -43,6 +43,17 @@ const ACOES = {
   // de labelAcao e mostraria "ver alertas" cru (mesmo buraco do achado 7 da Etapa 11).
   ver_alertas: 'ver a central de alertas',
 
+  // Etapa 30, fix-round da revisao adversarial: QUATRO acoes de ACAO_PERFIS nao tinham rotulo, e
+  // tres delas ja tinham call site de UI — o toast mostrava a chave crua ("gerenciar plano
+  // inspecao", "remessar terceiro", "conferir separacao"). E a QUARTA ocorrencia do mesmo buraco
+  // nesta base (achado 7 da Etapa 11, Etapa 12 Task 4, Etapa 16 Task 3), e desta vez o cenario
+  // que guarda o mapa foi reescrito para NAO deixar passar de novo: o `not.toContain('_')` de
+  // antes passava com o fallback, porque o fallback tambem troca `_` por espaco.
+  gerenciar_plano_inspecao: 'gerenciar o plano de inspeção',
+  conferir_separacao: 'conferir a separação de requisição',
+  remessar_terceiro: 'enviar material a terceiros',
+  ajustar_material_cliente: 'ajustar saldo de material de cliente',
+
   aprovar_sucateamento: 'aprovar sucateamento (almoxarifado)',
   aprovar_sucateamento_gestao: 'aprovar sucateamento (gestão)',
   // frota
@@ -82,6 +93,15 @@ const PERFIS = {
   SUPERVISOR: 'Supervisor',
   OPERADOR: 'Operador',
 };
+
+/**
+ * As chaves do mapa, para o teste poder exigir que TODA acao de `ACAO_PERFIS` (servidor) tenha
+ * rotulo proprio. Exportado na Etapa 30 porque a guarda anterior — "a mensagem nao contem `_`" —
+ * passava com o fallback (que tambem troca `_` por espaco) e deixou quatro acoes sem rotulo
+ * chegarem a tela. Comparar o TEXTO tambem nao serve: `criar_material` tem rotulo proprio
+ * ("criar material") que por acaso e igual ao fallback. O unico sinal confiavel e a presenca.
+ */
+export const ACOES_COM_ROTULO = Object.keys(ACOES);
 
 export function labelAcao(acao) {
   if (!acao) return '';

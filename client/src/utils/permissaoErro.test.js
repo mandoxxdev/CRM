@@ -8,7 +8,7 @@
  *
  * Executar: cd client && CI=true npx react-scripts test src/utils/permissaoErro.test.js --watchAll=false
  */
-import { formatarErroPermissao, labelAcao, labelPerfil } from './permissaoErro';
+import { ACOES_COM_ROTULO, formatarErroPermissao, labelAcao, labelPerfil } from './permissaoErro';
 
 describe('formatarErroPermissao', () => {
   test('403 de perfil do almoxarifado vira mensagem com ação e perfil', () => {
@@ -22,20 +22,54 @@ describe('formatarErroPermissao', () => {
     );
   });
 
-  test('cobre as ações do hardening, sem sobrar snake_case na tela', () => {
-    // Revisao da Task 4 da Etapa 12 (M3): esta lista parou nas 7 acoes do hardening e as acoes
-    // novas (gerenciar_reposicao na 11, gerenciar_notificacoes na 12) regrediram em silencio —
-    // apagar o rotulo delas deixava a suite inteira verde. Toda acao nova de ACAO_PERFIS
-    // (servidor) ENTRA AQUI junto com o rotulo em permissaoErro.js.
-    const acoes = [
-      'inventario', 'ajustar_estoque', 'separar_emitir',
-      'aprovar_requisicao', 'editar_material', 'requisitar', 'movimentar',
-      'gerenciar_reposicao', 'gerenciar_notificacoes',
-    ];
+  /*
+   * Etapa 30, fix-round da revisao adversarial. Este cenario existia e NAO SEGURAVA O QUE DIZIA.
+   *
+   * Ele afirmava `expect(msg).not.toContain('_')` — mas o FALLBACK de `labelAcao` tambem troca
+   * `_` por espaco, entao uma acao SEM rotulo passava verde mostrando a chave crua na tela. Foi
+   * assim que quatro acoes de ACAO_PERFIS (gerenciar_plano_inspecao, conferir_separacao,
+   * remessar_terceiro, ajustar_material_cliente) chegaram ate aqui sem rotulo, tres delas ja com
+   * botao na tela — a QUARTA ocorrencia deste mesmo buraco nesta base.
+   *
+   * A regua agora e a PRESENCA no mapa (`ACOES_COM_ROTULO`), nao o texto. Duas reguas de texto
+   * foram tentadas e as duas sao furadas: "a mensagem nao contem o fallback" da falso positivo
+   * (`movimentar` -> "movimentar estoque" CONTEM "movimentar"), e "a frase e diferente do
+   * fallback" tambem (`criar_material` tem rotulo PROPRIO que por acaso e igual ao fallback,
+   * "criar material" — medido, acusava cinco acoes inocentes).
+   *
+   * E a lista deixou de ser escrita a mao: ela vem de `ACAO_PERFIS` do SERVIDOR, importado
+   * direto. Antes o comentario PEDIA que toda acao nova entrasse aqui, e o pedido foi ignorado
+   * quatro vezes; agora acao nova sem rotulo derruba este teste sozinha.
+   */
+  test('toda acao de ACAO_PERFIS tem rotulo proprio — nenhuma cai no fallback', () => {
+    // eslint-disable-next-line global-require, import/no-unresolved
+    const { ACAO_PERFIS } = require('../../../server/services/almoxarifado/permissions');
+    const acoes = Object.keys(ACAO_PERFIS);
+    // Guarda da guarda: se o import quebrar e vier vazio, o filter passaria provando nada.
+    expect(acoes.length).toBeGreaterThanOrEqual(24);
+
+    const semRotulo = acoes.filter((a) => !ACOES_COM_ROTULO.includes(a));
+    expect(semRotulo).toEqual([]);
+
+    // E a mensagem inteira continua saindo legivel para todas elas.
     acoes.forEach((acao) => {
       const msg = formatarErroPermissao({ acao, perfil: 'PRODUCAO' });
       expect(msg).toContain('seu perfil é Produção');
-      expect(msg).not.toContain('_');
+      expect(msg).toMatch(/^Sem permissão para .+ — seu perfil é Produção\./);
+    });
+  });
+
+  test('as quatro acoes que estavam sem rotulo mostram a frase natural, acentuada', () => {
+    const esperado = {
+      gerenciar_plano_inspecao: 'gerenciar o plano de inspeção',
+      conferir_separacao: 'conferir a separação de requisição',
+      remessar_terceiro: 'enviar material a terceiros',
+      ajustar_material_cliente: 'ajustar saldo de material de cliente',
+    };
+    Object.entries(esperado).forEach(([acao, frase]) => {
+      expect(formatarErroPermissao({ acao, perfil: 'ALMOXARIFE' })).toBe(
+        `Sem permissão para ${frase} — seu perfil é Almoxarife. Solicite acesso a um administrador.`
+      );
     });
   });
 

@@ -24,15 +24,31 @@
  * o mesmo ponto flutuante que a Etapa 27 mediu na régua, agora na exibição.
  */
 
-/** Casas decimais como o número FOI ESCRITO: `"10"` → 0, `"0.005"` → 3, `1.1` → 1. */
+/**
+ * Casas decimais como o número FOI ESCRITO: `"10"` → 0, `"0.005"` → 3, `1.1` → 1.
+ *
+ * Duas correções da revisão adversarial da Etapa 30, que foi a primeira a passar **texto de
+ * formulário** por aqui (a Etapa 29 só passava números vindos do banco):
+ *
+ * - **`trim`**: `" 10,5 "` — o que sai de um copiar-e-colar de planilha — contava o espaço da
+ *   direita como casa decimal e a tela exibia `[10.50 ; 10.50]` para um valor que ia como `10.5`.
+ * - **notação científica**: `"1e-3"` não tem ponto, caía em 0 casas, e um plano
+ *   `nominal 100 / desvio 1e-3` exibia `[100 ; 100]` — uma faixa de largura zero no lugar de
+ *   `[99.999 ; 100.001]`. O expoente entra na conta.
+ */
 export const casasDecimais = (v) => {
   if (v === null || v === undefined) return 0;
-  const s = String(v).replace(',', '.');
+  const s = String(v).trim().replace(',', '.');
+  const exp = s.match(/^[+-]?(\d*)(?:\.(\d*))?[eE]([+-]?\d+)$/);
+  if (exp) {
+    const casasMantissa = (exp[2] || '').length;
+    return Math.max(0, casasMantissa - Number(exp[3]));
+  }
   const i = s.indexOf('.');
   return i < 0 ? 0 : s.length - i - 1;
 };
 
-const paraNumero = (v) => (v === null || v === undefined ? NaN : Number(String(v).replace(',', '.')));
+const paraNumero = (v) => (v === null || v === undefined ? NaN : Number(String(v).trim().replace(',', '.')));
 
 /** `[nominal + desvio_inferior ; nominal + desvio_superior]`, ou `—` se algum número não vier. */
 export const formatarFaixa = (nominal, desvioInferior, desvioSuperior) => {

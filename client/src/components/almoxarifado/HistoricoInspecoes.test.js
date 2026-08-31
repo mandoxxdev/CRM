@@ -17,6 +17,7 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import HistoricoInspecoes, { formatarFaixa } from './HistoricoInspecoes';
+import { casasDecimais } from './faixaTolerancia';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 
@@ -244,4 +245,23 @@ test('(9) formatarFaixa arredonda pelas casas do plano: 1.1 ±0.1 vira [1.0 ; 1.
   expect(formatarFaixa(10, null, 0.021)).toBe('—');
   expect(formatarFaixa(10, undefined, 0.021)).toBe('—');
   expect(formatarFaixa(null, -0.1, 0.1)).toBe('—');
+});
+
+/*
+ * Etapa 30, fix-round da revisao adversarial: `faixaTolerancia.js` nasceu na Etapa 29 recebendo
+ * NUMEROS do banco. A Etapa 30 passou a mandar TEXTO DE FORMULARIO por aqui, e dois casos que
+ * nenhum teste cobria saiam errados na tela.
+ */
+test('(10) formatarFaixa aceita texto de formulario: espaco nas pontas e notacao cientifica', () => {
+  // Copiar-e-colar de planilha traz espaco. Sem `trim`, o espaco da direita contava como casa
+  // decimal e a faixa saia `[10.50 ; 10.50]` — largura zero, para um valor que ia como 10.5.
+  expect(formatarFaixa(' 10,5 ', '-0,1', '0,1')).toBe('[10.4 ; 10.6]');
+  expect(casasDecimais(' 10,5 ')).toBe(1);
+
+  // Notacao cientifica nao tem ponto: caia em 0 casas e um plano `100 +-1e-3` exibia
+  // `[100 ; 100]`, escondendo a tolerancia inteira.
+  expect(formatarFaixa(100, '-1e-3', '1e-3')).toBe('[99.999 ; 100.001]');
+  expect(casasDecimais('1e-3')).toBe(3);
+  expect(casasDecimais('1.25e-3')).toBe(5);
+  expect(casasDecimais('1e3')).toBe(0);
 });
