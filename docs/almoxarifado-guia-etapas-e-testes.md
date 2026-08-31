@@ -1,10 +1,40 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-08-30 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-08-31 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 29) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 30) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20.
 
-> ## Onde o desenvolvimento está — 2026-08-30 (Etapa 29 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-08-31 (Etapa 30 ENTREGUE · modo contínuo pelo mapa)
+>
+> **Etapas 1 a 20 e 22 a 30 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
+> A **Etapa 30 (o plano de inspeção sai do `curl` e vira tela)** fechou em 2026-08-31
+> (`af7adea..7982f18`) e é da **feature 09 (inspeção e qualidade)**. A lista de **Materiais** ganhou
+> o botão **Plano de inspeção**, que abre a janela de criar, editar, desativar e **reativar**
+> característica, com a **faixa de tolerância calculada ao lado enquanto se digita**.
+>
+> **É a chave que abre as duas etapas anteriores.** As Etapas 27 e 29 construíram o ciclo inteiro
+> da inspeção dimensional, mas o formulário só mostra campos de medida para material **que tem
+> plano** — e o plano só nascia por API. Na prática, todo aquele trabalho era **invisível para quem
+> opera**. Agora não é mais, e **não falta nenhuma tela** no ciclo: cadastrar plano, medir e reler
+> as medidas são todos cliques.
+>
+> **Nenhuma linha de backend mudou nesta etapa** — o CRUD do plano existia e estava testado desde a
+> Etapa 27.
+>
+> **Duas coisas que a revisão mediu e viraram conserto:** quem não tinha permissão lia *"Sem
+> permissão para gerenciar plano inspecao"* — a chave crua do sistema —, e mais três ações tinham
+> o mesmo defeito (é a quarta vez que ele aparece nesta base); e a conta da faixa, que nasceu
+> recebendo números do banco, passou a receber texto de formulário e errava com espaço colado de
+> planilha e com notação científica.
+>
+> **O que é seu:** nada trava. A decisão desta etapa está na **B65** (a tela repete a régua de nome
+> duplicado, só pela mensagem, e o item explica por que essa repetição é legítima e a da tolerância
+> não era).
+> Ver a seção "Etapa 30" perto do fim deste guia, com o roteiro de teste **sem nenhum `curl`**.
+>
+> **Antes: Etapas 1 a 20 e 22 a 29 completas no módulo.**
+>
+> ## Onde o desenvolvimento estava — 2026-08-30 (Etapa 29 ENTREGUE · modo contínuo pelo mapa)
 >
 > **Etapas 1 a 20 e 22 a 29 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
 > A **Etapa 29 (a tela finalmente mede, e a medida finalmente tem quem leia)** fechou em
@@ -4272,6 +4302,94 @@ qualquer requisição do sistema logado; abaixo ele é `$TOKEN`.
 - **Plano herdado da família** (**B59**) — a tela busca o plano **do material**.
 - **Não conformidade formal numerada** e **liberação sob desvio autorizado** — os dois fluxos
   próprios que ainda faltam para a inspeção ficar completa.
+
+---
+
+## Etapa 30 — O plano de inspeção sai do `curl` e vira tela (ENTREGUE — 2026-08-31)
+
+**O que mudou, em uma frase:** a lista de **Materiais** ganhou o botão **Plano de inspeção**, e por
+ele se cria, edita, desativa e reativa característica — **sem nenhuma chamada de API**.
+
+> ## ⚠️ LEIA ANTES DE TESTAR — este é o roteiro SEM `curl`
+>
+> O roteiro da **Etapa 29** começava com dois comandos `curl` para cadastrar o plano, porque não
+> havia outro jeito. **Este não tem nenhum.** Se você quiser refazer o roteiro da 29 inteiro, faça
+> o passo 1 dele por aqui.
+>
+> **Quem pode:** *Gerenciar plano de inspeção* — **Administrador**, **Qualidade** ou
+> **Engenharia**. **Almoxarife não cadastra plano**; e quem cadastra plano não decide inspeção.
+> São ofícios diferentes, de propósito.
+
+### O problema que existia
+
+As Etapas 27 e 29 construíram o ciclo inteiro da inspeção dimensional: plano com tolerância por
+material, medida gravada com instrumento, divergência derivada do número, campos de medida no
+formulário e a aba Histórico para reler tudo depois. **Só que o plano continuava nascendo por
+API** — e o formulário de inspeção só mostra campos de medida para material **que tem plano**.
+
+Na prática: todo o trabalho das duas etapas era **invisível para quem opera**, porque ninguém no
+galpão cadastra plano por `curl`. Esta etapa é a chave que abre as outras duas.
+
+### Roteiro de teste manual
+
+1. **Entre como Administrador, Qualidade ou Engenharia** e vá em **Almoxarifado → Materiais**.
+2. **Na linha de um material, clique em `Plano de inspeção`.** A janela abre com o nome do material
+   no título; abaixo, o código, a unidade e a explicação de que *a faixa ao lado de cada
+   característica é **nominal + desvio**, com sinal*.
+3. **Cadastre a característica que ensina a regra.** Na linha em branco: característica `Furo`,
+   unidade `mm`, nominal `10`, desvio inferior `0,005`, desvio superior `0,021` → **Adicionar**.
+   *"Característica adicionada ao plano."*
+   **Olhe a faixa que apareceu: `[10.005 ; 10.021]`** — os dois limites **acima** do nominal.
+   Se você esperava `[9.995 ; 10.021]`, era exatamente esse mal-entendido que a faixa à vista
+   existe para desfazer: **desvio inferior não é "menos alguma coisa"**, é número com sinal. Para
+   uma tolerância simétrica, escreva `-0,1` e `0,1`.
+4. **Nominal zero é válido.** Cadastre `Planeza`, nominal `0`, desvios em branco. É aceito, e a
+   faixa fica `[0 ; 0]` — a medida tem de bater o nominal exatamente. Batimento e folga são assim.
+5. **Vírgula funciona; o que não é número é recusado com o motivo.** Tente nominal vazio:
+   *"Informe o valor nominal."* Tente `10,5,5`: *"Valor nominal inválido: "10,5,5". Use ponto ou
+   vírgula decimal (ex.: 10,5)."* Nos dois casos **nada é enviado** — o item não muda no banco.
+6. **Salvar sem mudar nada avisa em vez de gravar.** Clique **Salvar** numa linha intocada:
+   *"Nada mudou nesta característica."* Agora mude o nominal e salve: *"Característica
+   atualizada."*
+7. **Faixa invertida é recusada — pelo servidor.** Ponha desvio inferior `0,5` e superior `0,1` e
+   salve: *"O desvio inferior não pode ser maior que o superior"*. A tela **não** repete essa
+   conta de propósito; quem decide é o servidor.
+8. **Desativar, e a armadilha do nome.** Clique **Desativar** em `Furo`: *"Característica
+   desativada."*, e ela migra para o bloco **Inativas (1)** — abra o bloco. Dentro dele está
+   escrito: *"Desativar libera o nome: se a característica foi recriada depois, reativar a antiga é
+   recusado — renomeie ou desative a outra."*
+   Agora **cadastre `Furo` de novo** (é aceito — o nome ficou livre) e clique **Reativar** na
+   antiga: *"Já existe uma característica ativa chamada "Furo". Renomeie ou desative a outra antes
+   de reativar esta."*
+9. **Reativar sem conflito funciona.** Desative `Planeza` e reative em seguida: *"Característica
+   reativada."*, e ela volta ao bloco de ativas com os valores intactos.
+10. **Agora vá inspecionar.** Faça um recebimento desse material (crítico, com retenção ligada),
+    aprove, e em **Inspeções → Pendentes** abra **Decidir Inspeção**: o bloco **Medidas do plano**
+    está lá, com as características que você acabou de cadastrar. **É este o passo que prova por
+    que esta etapa existe** — antes dela, este bloco nunca aparecia para ninguém.
+11. **Editar o plano não reescreve o passado.** Depois de decidir a inspeção com medidas, volte ao
+    plano e mude o nominal de uma característica. Vá em **Inspeções → Histórico** e abra a linha:
+    as medidas continuam mostrando o nominal e a faixa **do dia da medição**.
+12. **Permissão.** Entre como **Almoxarife** e clique no mesmo botão: *"Sem permissão para
+    gerenciar o plano de inspeção — seu perfil é Almoxarife. Solicite acesso a um administrador."*
+    A janela **não abre**. (Até esta etapa essa frase saía como *"gerenciar plano inspecao"*, com a
+    chave crua do sistema — foi corrigido junto, e mais três ações que tinham o mesmo defeito.)
+13. **Se a janela não carregar, ela diz.** Com o servidor fora do ar, o botão abre a janela
+    mostrando *"Não foi possível carregar o plano de inspeção."*, a mensagem do servidor e um botão
+    **Tentar de novo** — nunca *"Nenhuma característica cadastrada ainda."*
+
+### O que esta etapa NÃO cobre
+
+- **Plano herdado da família** (**B59**) — continua por material.
+- **Copiar o plano de outro material** — hoje se cadastra característica por característica.
+- **Anexar desenho técnico** — depende do módulo de anexos.
+- **Editar característica inativa** — o bloco de inativas é somente leitura, com **Reativar**;
+  editar ali convidaria a reativação acidental que o servidor foi feito para impedir.
+- **Trocar o material de uma característica** — seria mover a característica deixando as medidas já
+  gravadas contando a história do material antigo. Errou o material? Desative e crie no certo.
+- **Não conformidade formal numerada**, **liberação sob desvio autorizado**, **anexos** e
+  **encaminhamento com status** — os quatro fluxos que ainda faltam para a inspeção ficar completa.
+  Nenhum deles é tela: são máquinas de estado próprias.
 
 ---
 

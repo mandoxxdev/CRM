@@ -1790,7 +1790,7 @@ Os três resultados possíveis:
 
 A quantidade física do material **não muda** em nenhum dos três casos — o material continua na prateleira; o que muda é o que se pode fazer com ele. E decidir é uma operação única: aprovar e reprovar acontecem juntos, nunca em dois passos que poderiam ficar pela metade.
 
-A tela de Inspeções tem duas abas: **Pendentes**, com a fila do que ainda não foi decidido, e **Histórico**, com o que já foi (15.2.2). O filtro de material do topo vale para as duas.
+A tela de Inspeções tem duas abas: **Pendentes**, com a fila do que ainda não foi decidido, e **Histórico**, com o que já foi (15.2.3). O filtro de material do topo vale para as duas.
 
 Uma decisão de inspeção **não pode ser estornada pelo livro de movimentações** — ela é o registro de um julgamento, não um lançamento de saldo a acertar. **Uma decisão já tomada pode ser LIDA, na aba Histórico, mas não pode ser desfeita nem corrigida:** não há como reabrir uma inspeção, mudar uma medida ou apagar uma decisão. O que continua recuperável é o **saldo**, por Bloquear/Desbloquear Material (15.3) — o **registro** da inspeção é imutável.
 
@@ -1826,7 +1826,7 @@ Outras recusas de medida, todas antes de qualquer efeito no saldo:
 
 **Toda recusa acontece antes de o saldo se mover.** Uma inspeção recusada por qualquer um dos motivos acima deixa o material exatamente como estava: ainda retido, ainda na fila.
 
-**Onde isto se faz hoje:** o **registro das medidas tem tela** — é o bloco **Medidas do plano**, dentro do formulário *Decidir Inspeção* (descrito logo abaixo). O **cadastro do plano** ainda não tem: criar, editar e desativar característica é feito por integração. Consequência prática: **o bloco de medidas só aparece para material cujo plano já foi cadastrado por fora** — material sem plano abre o formulário exatamente como sem esta seção existir.
+**Onde isto se faz hoje:** tudo por tela. O **cadastro do plano** é a janela **Plano de inspeção**, aberta pelo botão de mesmo nome em cada linha de **Almoxarifado → Materiais** (descrita em 15.2.2); o **registro das medidas** é o bloco **Medidas do plano**, dentro do formulário *Decidir Inspeção* (descrito logo abaixo); e a **leitura** do que já foi medido é a aba **Histórico** da tela de Inspeções (15.2.3). **O bloco de medidas só aparece para material cujo plano já foi cadastrado** — material sem plano abre o formulário exatamente como sem esta seção existir.
 
 **O bloco "Medidas do plano" no formulário de decisão.** Quando o material tem plano, o formulário mostra **uma linha por característica ativa**, com o rótulo `Característica (unidade) — nominal N · faixa [inferior ; superior]` — a faixa já calculada como `nominal + desvio`, com o sinal de cada desvio, e escrita com as mesmas casas decimais do plano. Cada linha tem o campo do valor medido e um seletor de instrumento.
 
@@ -1843,6 +1843,44 @@ Outras recusas de medida, todas antes de qualquer efeito no saldo:
 **A tela não calcula tolerância.** Ela mostra a faixa para quem digita conferir a olho, mas o veredito conforme/não conforme é sempre do servidor. Por isso o aviso de sucesso traz o resultado: *"Inspeção registrada! Divergência dimensional: sim (2 medidas)"* — ou *"não"*, ou apenas *"Inspeção registrada!"* quando não houve medida nenhuma.
 
 **Quem pode mexer no plano:** a permissão é **Gerenciar plano de inspeção**, dos perfis **Administrador**, **Qualidade** e **Engenharia** — quem especifica tolerância. **Ler** o plano é liberado a qualquer usuário do módulo, porque quem inspeciona precisa saber o que medir. Criar, editar e desativar característica aparece na **Auditoria**, sob a entidade **Plano de inspeção**, com o de/para dos valores. A **decisão de inspeção em si não aparece na Auditoria** — o registro dela são a linha do livro de movimentações e o próprio registro da inspeção.
+
+### 15.2.2 Cadastrar o plano de inspeção
+
+A janela **Plano de inspeção** abre pelo botão de mesmo nome em cada linha de **Almoxarifado → Materiais**. Ela lista as características **ativas** do material e, num bloco separado que abre e fecha, as **inativas**.
+
+Cada linha tem **característica**, **unidade**, **valor nominal**, **desvio inferior** e **desvio superior** — e, ao lado, a **faixa resultante já calculada**: `[valor nominal + desvio inferior ; valor nominal + desvio superior]`. A faixa aparece enquanto se digita, e existe para tornar visível a regra que mais se erra: **os desvios têm sinal**. Um plano unilateral escrito `+0,005` e `+0,021` sobre nominal `10` mostra `[10.005 ; 10.021]`, com os dois limites **acima** do nominal; uma tolerância simétrica se escreve `-0,1` e `+0,1`.
+
+**Valor nominal `0` é válido** (batimento, planeza, folga). **Desvio deixado em branco vale zero**, e uma característica com os dois desvios zerados é faixa de largura zero — a medida tem de bater o nominal exatamente. É plano válido, não plano vazio.
+
+**Vírgula decimal é aceita** e convertida (`10,5` vale `10.5`). O que não é número é recusado **antes de qualquer envio**, com o motivo: *"Informe o valor nominal."* para campo vazio, e *"Valor medido inválido..."* — no plano, *"Valor nominal inválido: "⟨o que foi digitado⟩". Use ponto ou vírgula decimal (ex.: 10,5)."*
+
+Recusas do sistema ao salvar:
+
+| Situação | Mensagem |
+|---|---|
+| Duas características com o mesmo nome, ativas, no mesmo material | *"Já existe esta característica no plano deste material"* |
+| Desvio inferior maior que o superior | *"O desvio inferior não pode ser maior que o superior"* |
+| Salvar uma linha que não mudou | *"Nada mudou nesta característica."* (aviso, não erro — nada é enviado) |
+
+**Desativar não apaga: libera o nome.** A característica sai da lista de ativas, deixa de aparecer no formulário de inspeção e **continua** aparecendo nas medidas já registradas. Como o nome fica livre, ele pode ser recriado — e aí **reativar a antiga é recusado**: *"Já existe uma característica ativa chamada "⟨nome⟩". Renomeie ou desative a outra antes de reativar esta."* Desativar algo que já estava inativo responde *"Esta característica já estava inativa."* — aviso, não erro.
+
+**Editar o plano não reescreve inspeção antiga.** Cada medida guarda o nominal e a tolerância que valiam no dia, e é por isso que o plano pode ser corrigido à vontade. Pela mesma razão, **o material de uma característica não pode ser trocado**: seria mover a característica deixando as medidas já gravadas contando a história do material antigo. Quem errou o material desativa e cria no certo.
+
+**Quem pode:** a permissão é **Gerenciar plano de inspeção**, dos perfis **Administrador**, **Qualidade** e **Engenharia** — quem especifica tolerância. Ela é **diferente** da de decidir inspeção: Almoxarife inspeciona e não cadastra plano; Engenharia cadastra plano e não inspeciona. Quem não tem a permissão vê *"Sem permissão para gerenciar o plano de inspeção — seu perfil é ⟨o seu⟩. Solicite acesso a um administrador."* e a janela não abre. **Ler** o plano é liberado a qualquer usuário do módulo, porque quem inspeciona precisa saber o que medir. Criar, editar e desativar característica aparece na **Auditoria**, sob a entidade **Plano de inspeção**, com o de/para dos valores.
+
+### 15.2.3 Reler uma inspeção já decidida
+
+A aba **Histórico**, na tela de Inspeções, lista as inspeções **já decididas**, da mais recente para a mais antiga: data, material (com código, recebimento e nota fiscal), quantidade aprovada e reprovada, os problemas identificados como etiquetas — ou **Conforme** quando não houve nenhum —, o responsável e a contagem de medidas no formato `2 (1 fora)`.
+
+**Clicar na linha abre as medidas daquela inspeção**, numa tabela com característica, nominal, faixa, valor medido, conforme ou não conforme, e o instrumento usado. Inspeção decidida sem medida mostra *"Sem medidas registradas"* e não abre.
+
+**Os valores são os do dia da medição, não os de hoje.** Cada medida guarda uma cópia do nominal e da tolerância que valiam no ato — mudar o plano depois não altera o que esta tabela mostra. É o que permite defender uma decisão meses depois.
+
+**A leitura é só leitura:** não há como reabrir uma inspeção, corrigir uma medida ou desfazer uma decisão. Ler o histórico e as medidas é liberado a qualquer usuário do módulo — inclusive quem não tem perfil atribuído —, enquanto **decidir** continua exigindo a permissão de inspecionar.
+
+**Limite da lista:** a aba mostra as **100 mais recentes** e não avisa quando há mais. Não há paginação nem filtro por data; o filtro de **material** do topo da tela é o caminho para chegar a uma inspeção antiga de uma peça específica.
+
+**Se a lista não carregar**, a aba mostra *"Não foi possível carregar o histórico de inspeções."*, a mensagem que o servidor devolveu e um botão **Tentar de novo** — nunca *"Nenhuma inspeção decidida ainda."*, que faria concluir que não há inspeções quando na verdade não foi possível perguntar.
 
 ### 15.3 Bloqueio e desbloqueio avulso
 

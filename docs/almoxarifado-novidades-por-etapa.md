@@ -277,7 +277,7 @@ servidor e a A7 não foi resolvida.
 
 ### B. Decisões de negócio
 
-### B. Decisões de negócio — B1 a B64; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B65; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(O título desta seção dizia "B1 a B24" — **estava defasado**: os itens já iam até B36 antes da
 Etapa 20. Corrigido em 2026-08-28 para B50, depois para B56 com as três da Etapa 24, para B57 com
@@ -325,6 +325,9 @@ conferência é obrigatória só quando há material crítico ainda na caixa —
 parcialmente à B57) e **B63** (conferir só é possível com a requisição *Em Separação*). **A B57
 foi respondida PELA METADE pela Etapa 28**: a saída de material crítico da requisição agora exige
 duas pessoas; o restante da pergunta (quais *outras* operações) continua aberto.
+A **única da Etapa 30 é a B65**, e **eu a tomei**: a tela repete a régua de **nome duplicado** do
+servidor (só pela mensagem), e o item explica por que essa repetição é legítima enquanto a da
+tolerância — proibida pela B60 — não é.
 A **única da Etapa 29 é a B64**, e **eu a tomei**, reversível numa linha: ler o histórico de
 inspeções e as medidas **não exige perfil** (decidir a inspeção continua exigindo). Junto dela, a
 **B60 saiu da lista de alertas em aberto** — foi cumprida em 2 de 3 partes, com a terceira
@@ -1147,6 +1150,29 @@ pedia. **A recusa continua onde importa:** o mesmo usuário sem perfil que abre 
 **Se você quiser apertar**, é uma linha: acrescentar `requirePermission('inspecionar')` às duas
 rotas de leitura. **Não** faça isso sem antes decidir a **B54** (o perfil padrão de quem não tem
 perfil), porque as duas mexem no mesmo público.
+
+**B65 (NOVO, da Etapa 30 — decisão que EU tomei, reversível) — a tela repete UMA régua do
+servidor: a de nome duplicado. E ela é diferente da régua que a B60 proibiu de repetir.**
+
+Ao clicar **Reativar** numa característica cujo nome foi recriado, quem recusa é o **índice do
+banco** — e a mensagem que ele produz (*"Já existe esta característica no plano deste material"*)
+não explica nada debaixo de um botão escrito "Reativar". Então **a tela verifica antes** e diz o
+que fazer: *"Já existe uma característica ativa chamada "Rugosidade". Renomeie ou desative a outra
+antes de reativar esta."*
+
+**Por que isto não contradiz a B60**, que proibiu a tela de calcular tolerância: a régua da
+tolerância **não é exatamente reproduzível** no client (tem folga de arredondamento, e a versão
+ingênua erra 12,3% no limite — medido na Etapa 27). Já a régua do nome é **igualdade de texto**
+sobre dados que a tela tem **inteiros** na mão, e é reproduzível ao caractere. **Para continuar
+sendo**, a comparação é texto **exato**, sem ignorar maiúsculas e sem ignorar acento — porque o
+banco também não ignora: `RUGOSIDADE` ao lado de `Rugosidade` é **aceito** pelo sistema. Se a tela
+"ajudasse" comparando de forma amigável, passaria a barrar o que o servidor aceita — e aí ela
+estaria mentindo, que é justamente o que a B60 existe para evitar.
+
+**O servidor continua sendo quem decide.** A checagem da tela é só pela mensagem; se o conflito
+nascer de outra pessoa enquanto a janela está aberta, a recusa do servidor aparece literal.
+**Descartado** deixar só o erro do banco aparecer (o usuário não saberia o que fazer) e
+**descartado** a tela deixar passar e "corrigir depois".
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -5403,8 +5429,121 @@ reversível numa linha — **B64**.
 - **Não conformidade formal numerada** e **liberação sob desvio autorizado** — os dois fluxos
   próprios que ainda faltam para a feature 09 virar 🟢.
 
+## Etapa 30 — O plano de inspeção sai do `curl` e vira tela (2026-08-31)
+
+A Etapa 27 construiu a régua da tolerância. A Etapa 29 deu à tela os campos de medida e a leitura
+das medidas. Faltava a ponta de trás: **cadastrar o plano continuava sendo chamada de API**. Na
+prática isso significava que todo o trabalho das duas etapas anteriores era **inalcançável por quem
+opera** — sem plano cadastrado, o formulário de inspeção não mostra campo de medida nenhum, e
+ninguém no galpão cadastra plano por `curl`.
+
+Agora a lista de **Materiais** tem, em cada linha, o botão **Plano de inspeção**. Ele abre a janela
+onde se **cria, edita, desativa e reativa** característica — com a **faixa de tolerância calculada
+ao lado enquanto se digita**, que é o que faz o operador enxergar que os desvios têm **sinal**.
+
+> **Esta etapa fecha o ciclo da inspeção dimensional.** Com ela, dá para cadastrar o plano, medir
+> na inspeção e ler as medidas depois — tudo por tela, sem tocar em API. **O que ainda falta para
+> a inspeção ficar completa** não é tela: é não conformidade formal numerada, liberação sob desvio
+> autorizado, anexos e encaminhamento com status.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Cadastrar característica do plano era `POST` por `curl` — **ninguém no galpão fazia** | Botão **Plano de inspeção** em cada linha de **Almoxarifado → Materiais** |
+| Não havia como ver o plano de um material sem chamar a API | A janela lista as **características ativas** e, num bloco separado, as **inativas** |
+| Os desvios com sinal só eram compreensíveis lendo a documentação | A **faixa aparece ao lado do campo enquanto se digita**: `[10.005 ; 10.021]` |
+| Desativar e reativar característica não tinha caminho | Botões **Desativar** e **Reativar** na própria janela |
+| Reativar uma característica cujo nome foi recriado dava erro de banco sem explicação | A tela **barra antes**, dizendo qual é o conflito e o que fazer |
+| Quem não tinha permissão via *"Sem permissão para gerenciar plano inspecao"* — a chave crua do sistema | *"Sem permissão para gerenciar o plano de inspeção — seu perfil é Almoxarife."* (e mais três ações que tinham o mesmo defeito foram corrigidas junto) |
+
+### As regras, com o cenário exato
+
+**Quem pode:** cadastrar plano exige **Administrador**, **Qualidade** ou **Engenharia** — é a
+permissão *Gerenciar plano de inspeção*. **Almoxarife não cadastra plano**, e quem cadastra não
+decide inspeção: são ofícios diferentes de propósito.
+
+**1. O botão, e onde ele está.**
+**Almoxarifado → Materiais**, na coluna de ações de cada linha: **Plano de inspeção**. A janela
+abre com o nome do material no título, e abaixo o código, a unidade e o lembrete de que *a faixa
+ao lado de cada característica é **nominal + desvio**, com sinal*.
+
+**2. A faixa aparece enquanto se digita — e é isso que evita o erro clássico.**
+Digite característica *Furo*, unidade *mm*, nominal `10`, desvio inferior `0,005` e superior
+`0,021`. Ao lado aparece **`[10.005 ; 10.021]`** — os dois limites **acima** do nominal, porque é
+um ajuste unilateral de usinagem. Se você esperava `[9.995 ; 10.021]`, é exatamente esse
+mal-entendido que a faixa à vista existe para desfazer: **desvio inferior não é "menos alguma
+coisa"**, é um número com sinal.
+
+**3. Vírgula funciona — e o que não é número é recusado com o motivo.**
+`10,5` é aceito e vira `10.5`. Um campo vazio no nominal recusa com *"Informe o valor nominal."*;
+algo que não é número recusa com *"Valor nominal inválido: "10,5,5". Use ponto ou vírgula decimal
+(ex.: 10,5)."* — e **nada é enviado ao servidor** nesses dois casos. Desvio deixado em branco vale
+**zero**.
+
+**4. Nominal zero é válido, e a tela não atrapalha.**
+Batimento, planeza e folga têm nominal **0**. A janela aceita, e com os dois desvios zerados a
+faixa fica de largura zero — a medida tem de bater o nominal exatamente. É plano válido, não plano
+vazio.
+
+**5. Salvar avisa quando não há o que salvar.**
+Clicar em **Salvar** numa linha que você não alterou responde *"Nada mudou nesta característica."*
+em vez de mandar uma escrita inútil. Alterou de verdade: *"Característica atualizada."*
+
+**6. Desativar libera o nome — e é aqui que mora a única armadilha.**
+**Desativar** move a característica para o bloco **Inativas (N)**, que abre e fecha. Dentro dele,
+escrito na tela: *"Desativar libera o nome: se a característica foi recriada depois, reativar a
+antiga é recusado — renomeie ou desative a outra."*
+Faça o teste: desative *Rugosidade*, crie *Rugosidade* de novo (é aceito, o nome ficou livre) e
+tente **Reativar** a antiga. A recusa é *"Já existe uma característica ativa chamada "Rugosidade".
+Renomeie ou desative a outra antes de reativar esta."* — **e a tela nem chega a chamar o
+servidor**, porque ela já tem a lista completa na mão. Se o conflito nascer de outra pessoa
+enquanto a sua janela está aberta, aí quem recusa é o servidor, e a mensagem dele aparece literal.
+
+**7. Desativar duas vezes não é erro.**
+Se a característica já estava inativa (outra aba, outra pessoa), a resposta é
+*"Esta característica já estava inativa."* — aviso, não erro. O sistema não inventa falha para um
+pedido que já estava atendido.
+
+**8. Editar o plano NÃO reescreve inspeção antiga.**
+Mude o nominal de uma característica e vá à aba **Histórico** das Inspeções: as medidas já feitas
+continuam mostrando o nominal e a faixa **do dia da medição**. É o congelamento que a Etapa 27
+construiu, e esta etapa não o afrouxa — por isso mesmo **o material da característica não pode ser
+trocado**: seria mover a característica para outro material deixando as medidas contando a história
+do material antigo. Errou o material? Desative e crie no certo.
+
+**9. Se a janela não carregar, ela diz isso.**
+Falha de rede mostra *"Não foi possível carregar o plano de inspeção."*, a mensagem do servidor e um
+botão **Tentar de novo** — nunca *"Nenhuma característica cadastrada ainda."*, que faria você
+concluir que o material não tem plano.
+
+### O que esta etapa NÃO cobre (é decisão declarada, não esquecimento)
+
+- **Plano herdado da família** (**B59**) — continua por material.
+- **Copiar o plano de outro material** — atalho útil, e vira escopo próprio; hoje se cadastra
+  característica por característica.
+- **Anexar desenho técnico** à característica — depende do módulo de anexos.
+- **Editar uma característica inativa** — o bloco de inativas é somente leitura, com **Reativar**.
+  Editar ali convidaria a reativação acidental, que o servidor foi construído para impedir.
+- **Validar a faixa invertida na tela** — quem recusa *"O desvio inferior não pode ser maior que o
+  superior"* é o servidor. Repetir a régua na tela seria a mesma duplicação que a **B60** recusou.
+- **Reabrir ou corrigir medida já gravada** — continua sendo só leitura.
+
 ## Onde estamos e o que vem a seguir
 
+- **Etapa 30 entregue (2026-08-31):** **o plano de inspeção sai do `curl` e vira tela** (feature
+  09, `af7adea..7982f18`) — a lista de **Materiais** ganhou o botão **Plano de inspeção**, que abre
+  a janela de criar, editar, desativar e **reativar** característica, com a **faixa de tolerância
+  calculada ao lado enquanto se digita**. **Isto é o que torna as Etapas 27 e 29 alcançáveis:** sem
+  plano cadastrado o formulário de inspeção não mostra campo de medida nenhum, e ninguém no galpão
+  cadastra plano por API. **Nenhuma linha de backend mudou** — o CRUD existia, testado, desde a 27.
+  **O que a revisão adversarial achou e virou código:** quatro ações do servidor **não tinham
+  rótulo** no client e três já tinham botão na tela, então quem não podia lia *"Sem permissão para
+  gerenciar plano inspecao"* — a chave crua; e a fórmula da faixa, que nasceu recebendo números do
+  banco, passou a receber **texto de formulário** e errava com espaço colado de planilha
+  (`[10.50 ; 10.50]`) e com notação científica (`100 ±1e-3` virava `[100 ; 100]`, escondendo a
+  tolerância inteira). **O que é seu:** nada trava — as decisões desta etapa estão em **B65**
+  (a régua de nome duplicado que a tela repete, e por que ela é diferente da que a B60 proibiu).
 - **Etapa 29 entregue (2026-08-30):** **a tela finalmente mede, e a medida finalmente tem quem
   leia** (feature 09, `d0a9f7c..75f183f`) — a Etapa 27 tinha entregado a régua inteira **sem
   tela**, e os dois furos que ela declarou na época, **C34** (o formulário não tinha campo de

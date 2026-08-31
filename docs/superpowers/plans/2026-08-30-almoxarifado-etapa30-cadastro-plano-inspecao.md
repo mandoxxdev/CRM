@@ -186,7 +186,25 @@ backend puro e independente das duas.
 > **Correção adicional:** o plano dizia "403 nas **quatro** escritas". São **três** rotas de
 > escrita (POST, PUT, DELETE).
 
-## Task 1 — `PlanoInspecaoModal` (galho)
+## Task 1 — `PlanoInspecaoModal` (galho) — ✅ FEITA (`dedb208`)
+
+> **Fechamento (2026-08-31).** 12/12. **As duas correções da Fase 2 sobre controles positivos
+> no-op se confirmaram na prática:** com a sabotagem do `toFixed`, a asserção da fixture unilateral
+> `[10.005 ; 10.021]` **passou na linha imediatamente anterior** à que caiu — sem o `1.1 ±0.1` o
+> controle teria sido no-op; e o mock params-aware fez a sabotagem do `todos: 1` derrubar **cinco**
+> cenários pelas inativas sumindo do DOM, não só a asserção de params. Oito sabotagens, **nenhuma
+> sobreviveu**, incluindo duas que o executor inventou (PUT mandando campo não alterado; tela
+> recusando nominal `0`).
+> **Divergências deliberadas, todas recusas de duplicar régua:** bloco de inativas **colapsado**
+> com contagem (o plano não dizia se nasce aberto); linha inativa **somente leitura** com apenas
+> *Reativar* (editar ali convidaria a reativação implícita que o `preserve-when-omitted` impede);
+> **sem `window.confirm`** no Desativar (é soft delete, e o Reativar está do lado); **nenhuma
+> validação de faixa invertida no client** (o servidor valida sobre a mistura — repetir seria a
+> duplicação que a B60 recusou); e após o PUT o estado local usa os **valores resolvidos**, não
+> `res.data`, porque POST/PUT montam a resposta à mão e não devolvem `created_at`.
+> **A RN-10 virou duas mensagens, não uma:** *"Informe o valor nominal."* e *"Valor nominal
+> inválido: "10,5,5". Use ponto ou vírgula decimal (ex.: 10,5)."* — pelo mesmo motivo que
+> justificou a RN-09: uma mensagem só diria "obrigatório" na frente de um campo preenchido.
 
 Arquivos novos: `client/src/components/almoxarifado/PlanoInspecaoModal.js` e `.test.js`.
 Jest: (1) abre chamando C1 com `todos: 1` e lista ativas e inativas separadas, com as faixas;
@@ -215,7 +233,18 @@ mostra mensagem própria.
 
 Commit: `Almoxarifado Etapa 30 Task 1: o plano de inspecao ganha tela de cadastro`.
 
-## Task 2 — A ação na lista de Materiais (galho)
+## Task 2 — A ação na lista de Materiais (galho) — ✅ FEITA (`6b84107`)
+
+> **Fechamento (2026-08-31).** 11/11 (os 8 cenários que já existiam continuaram verdes depois de a
+> fábrica de permissões virar variável por teste). **Um cenário a mais que o plano pedia**, com
+> razão medida: com só o "abre o modal do material da linha", `material={materiais[1]}` **cravado**
+> passaria — a fixture tem duas linhas, mas era preciso **clicar nas duas** para a assimetria virar
+> prova. O executor rodou também uma sabotagem não pedida — tirar o gate do `onClick` — e ela
+> derrubou exatamente a metade positiva da Global Constraint 9 (`bloquearSeNaoPode` chamado com
+> `'gerenciar_plano_inspecao'`, *Number of calls: 0*), provando que a metade positiva carrega peso.
+> **Consequência do paralelismo, esperada e registrada:** entre este commit e o `dedb208` o
+> `CI=true build` ficava vermelho, porque este arquivo já importava um componente que ainda não
+> existia. O teste não dependia dele (stub virtual). Verde no fechamento.
 
 Arquivo: `client/src/components/almoxarifado/MateriaisAlmoxarifado.js` + `.test.js`.
 Jest: (1) o botão aparece em toda linha e abre o modal **do material da linha** (afirmar o
@@ -235,7 +264,18 @@ Controle positivo: passar `m` fixo em vez do da linha → (1) cai; devolver `tru
 
 Commit: `Almoxarifado Etapa 30 Task 2: a lista de materiais abre o plano de inspecao`.
 
-## Task 3 — A colisão da reativação, pela rota (tronco curto)
+## Task 3 — A colisão da reativação, pela rota (tronco curto) — ✅ FEITA (`41b576c`)
+
+> **Fechamento (2026-08-31).** 23/23 no arquivo (era 22), `test:api` 164/164.
+> **O executor rodou as DUAS variantes do controle positivo e relatou a diferença, que é o ponto:**
+> desativar o `catch` do `UNIQUE` do PUT derruba o cenário pela asserção de **status** (500 no lugar
+> do 400) — uma linha **antes** da mensagem — e derruba **também o (15)**; manter o 400 com
+> mensagem genérica derruba **só o (23)**, e **exatamente na asserção da mensagem**. É a segunda
+> que prova o achado.
+> **Correção do que o corpo do commit `41b576c` afirma:** ele diz que a primeira sabotagem derruba
+> o (23) "na asserção da MENSAGEM ... e derruba só ele". **Está errado nas duas metades** — cai no
+> status e leva o (15) junto —, e a revisão adversarial mediu isso. Fica corrigido aqui, à vista,
+> porque a mensagem de commit não se reescreve.
 
 **Arquivo EXISTENTE**, não um novo: um cenário **(23)** em
 `server/tests/api/planoInspecao.api.test.js` (22 → 23). Tudo por HTTP:
@@ -253,6 +293,103 @@ usada por engano, o vermelho aparece no lugar errado — exatamente o modo de fa
 `fechar-etapa` descreve ("leia QUAL asserção caiu, não só o placar").
 
 Commit: `Almoxarifado Etapa 30 Task 3: a colisao da reativacao de caracteristica, pela rota`.
+
+## Fase 5 — Revisão adversarial (2026-08-31) — ✅ FEITA
+
+Um revisor fresco, cinco lentes (a assimetria POST/PUT da RN-09; a régua duplicada da RN-06; a
+vírgula da RN-10; estado do modal; "este teste passaria com a feature quebrada?"). **Nenhum
+bloqueante.** Dois achados reais viraram o fix-round `7982f18`, e um terceiro virou correção de
+documento (acima, na Task 3).
+
+| # | Achado | Virou |
+|---|---|---|
+| 1 | **Quatro** ações de `ACAO_PERFIS` sem rótulo em `permissaoErro.js` — e **três já tinham botão na tela**: o toast mostrava a chave crua (*"Sem permissão para gerenciar plano inspecao"*). Atinge 5 dos 8 perfis, pelas duas portas (gate do client e 403 do servidor) | código + a guarda reescrita |
+| 2 | `faixaTolerancia.js` nasceu recebendo **números do banco**; esta etapa é a primeira a passar **texto de formulário**. `" 10,5 "` (colado de planilha) contava o espaço como casa decimal → `[10.50 ; 10.50]`; notação científica não tem ponto → `100 ±1e-3` exibia `[100 ; 100]`, escondendo a tolerância inteira | código + cenário (10) |
+| 3 | O corpo do commit `41b576c` descreve o controle positivo com mais precisão do que ele tem | corrigido no plano, à vista |
+
+**Não confirmado, e isso vale registrar** — o revisor atacou as três lentes de maior risco e **não
+derrubou nenhuma**: não existe caminho em que a tela envie `''`/`null`/`NaN` num campo numérico do
+PUT (`lerLinha` é o único produtor de payload das três escritas, e ou devolve `{erro}` sem chamar a
+API, ou devolve números finitos); a régua da RN-06 reproduz o índice BINARY exatamente, inclusive
+no caso do espaço nas pontas (o nome preservado pelo PUT não passa por `trim` dos dois lados); e a
+tela nunca diverge de `paraNumeroFinito`, porque sempre envia **número**. Ele rodou 8 sabotagens na
+lente 5 e **todas** derrubaram cenário, na asserção certa.
+
+### Lição da etapa: pedido em comentário não é guarda
+
+O rótulo faltante é a **quarta** ocorrência do mesmo buraco nesta base (achado 7 da Etapa 11, Etapa
+12 Task 4, Etapa 16 Task 3, e agora). O cenário que devia guardá-lo tinha um comentário dizendo
+*"Toda acao nova de ACAO_PERFIS (servidor) ENTRA AQUI"* — e o pedido foi ignorado quatro vezes,
+porque a guarda real era `expect(msg).not.toContain('_')` sobre uma **lista escrita à mão**, e o
+**fallback também troca `_` por espaço**. Ação sem rótulo passava verde mostrando a chave na tela.
+
+**E duas réguas de TEXTO foram tentadas antes de acertar, as duas furadas — ficam registradas para
+não voltarem:** "a mensagem não contém o fallback" dá falso positivo (`movimentar` → *"movimentar
+estoque"* **contém** "movimentar"); e "a frase é diferente do fallback" também, porque
+`criar_material` tem rótulo **próprio** que por acaso é idêntico ao fallback (*"criar material"*) —
+medido, essa régua acusou **cinco** ações inocentes. O único sinal confiável é a **presença** no
+mapa, e por isso `ACOES_COM_ROTULO` passou a ser exportado.
+
+## Retro de 4 números (2026-08-31)
+
+1. **Rodadas de correção até verde: 1.** Um único fix-round, nenhum teste falhando duas vezes.
+2. **Achados: 7 na Fase 2 + 2 na Fase 5 reais, 0 ruído.** **A Fase 2 foi a fase mais lucrativa
+   desta etapa** — duas das sete teriam custado execução inteira: o plano montava sozinho a
+   armadilha do `''` no PUT (o formulário quebraria ao limpar um desvio para zerá-lo), e a
+   justificativa da Task 3 era **factualmente falsa**, o que teria produzido um arquivo de teste
+   duplicando 80% de um existente. Mais **dois controles positivos no-op** pegos antes de serem
+   escritos — e os dois se confirmaram na prática na Task 1.
+3. **Paralelismo: 2 galhos de front + 1 tronco curto, zero retrabalho.** O que evitou o retrabalho
+   foi **uma frase**: fixar no contrato C5 que a prop é o **objeto** `material`, divergindo dos
+   seis modais da base que recebem `materialId` escalar. Sem ela, um agente "seguindo o molde"
+   escreveria escalar e a Task 2 seria refeita.
+4. **Defeito que escapou:** preencher na etapa seguinte. Candidato conhecido, fora do escopo desta:
+   o flake de `thirdPartyService.gerarNumero()` (abaixo).
+
+**Quinto número, o mesmo da Etapa 29 e por isso preocupante:** **1 teste passava com a feature
+quebrada** (a guarda dos rótulos), e de novo por comparar a coisa errada. Na 29 foram 5, por
+fixture simétrica; aqui foi 1, por régua de texto sobre lista manual. **O padrão comum é
+"a asserção não tem como distinguir o certo do errado"** — e ele não se pega relendo o teste, se
+pega sabotando.
+
+## Próxima tarefa detalhada — o número da remessa a terceiros colide
+
+**Por que esta, e não a feature 09.** A 09 ficou sem nenhum item de UI pendente; o que resta dela
+são quatro fluxos de negócio com máquina de estados própria, cada um do tamanho de uma etapa. Antes
+de abrir um deles, há um **defeito de produção medido e pequeno** que já apareceu três vezes como
+"flake" e nunca foi consertado — e ele não é só de teste.
+
+**O defeito.** `server/services/almoxarifado/thirdPartyService.js:33`:
+```js
+function gerarNumero() {
+  return `REM-${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 100)}`;
+}
+```
+São **8 dígitos de milissegundo + sorteio de 0 a 99**. Duas remessas criadas no **mesmo
+milissegundo** com o mesmo sorteio colidem — 1 em 100 —, e a coluna `numero` tem `UNIQUE`. Em teste
+isso aparece como `remessaTerceiroCiclo` falhando com *"UNIQUE constraint failed:
+remessas_terceiro_almoxarifado.numero"* (visto na Etapa 29 e de novo na 30; passa 53/53 isolado, e
+rodei `test:api` 3× seguidas sem reproduzir — é raro, não é inexistente). **Em produção, dois
+usuários criando remessa ao mesmo tempo tomam erro de banco cru.**
+
+**Pontos de atenção:**
+
+1. **NÃO conserte com "retry sorteando de novo".** Com 99 dos 100 slots daquele milissegundo
+   ocupados, o retry aleatório acha o livre com 8% de chance em 8 tentativas — é exatamente onde
+   nasceria um teste intermitente novo. **Alargue a entropia** (mais dígitos aleatórios, ou um
+   sufixo derivado do `lastID`), e só então ponha um retry curto como cinto de segurança.
+2. **Meça quem depende do FORMATO antes de mudá-lo.** `REM-` + 10 caracteres é o que existe hoje;
+   procure por `REM-` e por `numero` em `thirdPartyService.js`, nas telas de remessa
+   (`RemessasTerceirosAlmoxarifado.js`), nos relatórios e nos PDFs (`remessaPdf.js`) — **pelo nome
+   do contrato, não pelo nome que você imagina**. Se algum lugar assume largura fixa, isso decide o
+   desenho.
+3. **O mesmo padrão existe noutros geradores?** Vale um `grep` por `Date.now().toString().slice`
+   antes de consertar só um — se houver irmãos, a correção é uma função só, não três.
+4. **O teste tem de ser determinístico.** Fixe `Date.now` e prove a colisão **de propósito**
+   (criar N remessas no mesmo milissegundo e exigir N números distintos), em vez de esperar o
+   acaso — teste que depende de relógio passa vazio na máquina rápida.
+5. **Não é do módulo almoxarifado sozinho:** confira se `numero` aparece em integrações antes de
+   assumir que é uma coluna interna.
 
 ## Fechamento
 
