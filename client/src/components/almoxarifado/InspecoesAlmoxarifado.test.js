@@ -339,7 +339,7 @@ describe('InspecoesAlmoxarifado — medidas do plano de inspeção (Etapa 29)', 
     expect(chamadasGet('/almoxarifado/ferramentas')).toHaveLength(1);
     expect(selectInstrumento(0).options[0].textContent).toBe('— sem instrumento —');
     // Texto de ajuda fixo (achado 8).
-    expect(textoModal()).toContain('Com medidas preenchidas, a divergência dimensional é calculada só pelas características do plano. Divergência em algo que o plano não mede vai em Observações.');
+    expect(textoModal()).toContain('Com medidas preenchidas, a divergência dimensional é calculada só pelas características que você mediu. Divergência em algo que o plano não mede — ou numa característica do plano que você deixou em branco — vai em Observações.');
   });
 
   test('(3) B60: medida preenchida desabilita E desmarca a divergência dimensional, o payload leva a string crua, e limpar devolve a caixa', async () => {
@@ -448,6 +448,114 @@ describe('InspecoesAlmoxarifado — medidas do plano de inspeção (Etapa 29)', 
     // Mock padrão: `{ success: true }`, sem `medidas_registradas` (achado 6).
     await clicarBotaoModal('Salvar');
     expect(toast.success).toHaveBeenCalledWith('Inspeção registrada!');
+  });
+
+  /*
+   * (9) a (12) nasceram da revisão adversarial da Etapa 29, que aplicou 19 sabotagens e achou
+   * três mutantes SOBREVIVENTES nesta suíte. Cada teste abaixo mata um deles.
+   */
+
+  // Mutante sobrevivente: trocar `.toFixed(casas)` por `String(...)` deixava os 24 cenários
+  // verdes, porque as duas fixtures (`12.3 ± 0.1` e `10 +0.005/+0.021`) são exatamente
+  // representáveis em ponto flutuante — `12.3 + 0.1` dá 12.4 cravado. A âncora do `toFixed` tem
+  // de ser um par que PRODUZ lixo: `1.1 − 0.1` é 1.0000000000000002 e `1.1 + 0.1` é
+  // 1.2000000000000002. Sem o `toFixed`, o rótulo sai com os dois lixos à vista.
+  test('(9) a faixa é formatada pelas casas do plano: 1.1 ±0.1 sai [1.0 ; 1.2], nunca 1.2000000000000002', async () => {
+    planoDoBanco = [{
+      id: 9, material_id: 10, caracteristica: 'Folga', unidade: 'mm',
+      valor_nominal: 1.1, desvio_inferior: -0.1, desvio_superior: 0.1, ativo: 1,
+    }];
+    await renderizar();
+    await abrirDecisao(0);
+    const rotulo = linhasMedida()[0].querySelector('label').textContent;
+    expect(rotulo).toContain('[1.0 ; 1.2]');
+    expect(rotulo).not.toContain('1.2000000000000002');
+    expect(rotulo).not.toContain('1.0000000000000002');
+  });
+
+  // Mutante sobrevivente: comentar `setMedidas({})` em `abrirDecisao` não derrubava nada. O
+  // efeito real é gravar a medida de um item NO OUTRO: mesmo material, `plano_id` válido, o
+  // servidor aceita sem pestanejar.
+  test('(10) as medidas NÃO sobrevivem de um item para o próximo (mesmo material)', async () => {
+    pendentesDoBanco = [PENDENTE, { ...PENDENTE, item_id: 2, recebimento_numero: 'REC-56' }];
+    planoDoBanco = [PLANO_DIAMETRO];
+    await renderizar();
+
+    await abrirDecisao(0);
+    preencher(inputMedida(0), '99.999');
+    expect(inputMedida(0).value).toBe('99.999');
+    await clicarBotaoModal('Cancelar');
+
+    await abrirDecisao(1);
+    expect(inputMedida(0).value).toBe('');
+    await clicarBotaoModal('Salvar');
+    expect(payloadEnviado().medidas).toBeUndefined();
+  });
+
+  // Mutante sobrevivente: trocar a guarda `abertura !== aberturaRef.current` por `if (false)`
+  // não derrubava nada. O efeito real é o plano de um modal JÁ FECHADO pousar no modal seguinte,
+  // de outro material — o operador mede contra a faixa da peça errada.
+  test('(11) o plano de um modal já fechado não pousa no modal seguinte (guarda de corrida)', async () => {
+    pendentesDoBanco = [PENDENTE, { ...PENDENTE, item_id: 2, material_id: 20, recebimento_numero: 'REC-56' }];
+    const PLANO_OUTRO = {
+      id: 3, material_id: 20, caracteristica: 'Largura', unidade: 'mm',
+      valor_nominal: 50, desvio_inferior: -0.5, desvio_superior: 0.5, ativo: 1,
+    };
+    let resolverPlanoDoPrimeiro;
+    api.get.mockImplementation((url, cfg) => {
+      if (url === '/almoxarifado/inspecoes/pendentes') return Promise.resolve({ data: pendentesDoBanco });
+      if (url === '/almoxarifado/ferramentas') return Promise.resolve({ data: FERRAMENTAS });
+      if (url === '/almoxarifado/planos-inspecao') {
+        if (cfg?.params?.material_id === 10) {
+          // Pendurado de propósito: só resolve depois de o modal ser fechado e outro abrir.
+          return new Promise((r) => { resolverPlanoDoPrimeiro = () => r({ data: [PLANO_DIAMETRO] }); });
+        }
+        return Promise.resolve({ data: [PLANO_OUTRO] });
+      }
+      return Promise.resolve({ data: [] });
+    });
+
+    await renderizar();
+    await abrirDecisao(0);                 // material 10 — plano pendurado
+    await clicarBotaoModal('Cancelar');
+    await abrirDecisao(1);                 // material 20 — plano resolve na hora
+    expect(linhasMedida()[0].querySelector('label').textContent).toContain('Largura (mm)');
+
+    await act(async () => { resolverPlanoDoPrimeiro(); });
+
+    // Metade positiva no mesmo teste: o modal continua ABERTO e com o plano CERTO — se a
+    // asserção fosse só "não contém Diâmetro", a tela vazia passaria.
+    expect(container.querySelector('.almox-modal')).not.toBeNull();
+    expect(linhasMedida()).toHaveLength(1);
+    const rotulo = linhasMedida()[0].querySelector('label').textContent;
+    expect(rotulo).toContain('Largura (mm)');
+    expect(rotulo).toContain('[49.5 ; 50.5]');
+    expect(rotulo).not.toContain('Diâmetro');
+  });
+
+  // Achado 4 da revisão: com plano de 2 características e só 1 medida preenchida, a caixa trava
+  // e a marcação manual some — a divergência que o inspetor viu na característica NÃO MEDIDA
+  // desaparece do registro estruturado. O servidor deriva POR MEDIDA, não por característica,
+  // então a régua não muda; o que muda é o texto nomear o caso em vez de deixar supor. Este
+  // teste congela a decisão: se alguém trocar a régua depois, ele cai e obriga a reler.
+  test('(12) plano com 2 características e 1 medida preenchida: a caixa trava e o texto nomeia o caso', async () => {
+    planoDoBanco = [PLANO_DIAMETRO, PLANO_ESPESSURA];
+    await renderizar();
+    await abrirDecisao(0);
+
+    const caixa = () => checkboxFlag('Divergência dimensional');
+    await clicar(caixa());
+    expect(caixa().checked).toBe(true);
+
+    preencher(inputMedida(0), '10.010');   // só o Diâmetro; a Espessura fica em branco
+    expect(caixa().disabled).toBe(true);
+    expect(caixa().checked).toBe(false);
+
+    expect(textoModal()).toContain('Com medidas preenchidas, a divergência dimensional é calculada só pelas características que você mediu. Divergência em algo que o plano não mede — ou numa característica do plano que você deixou em branco — vai em Observações.');
+
+    await clicarBotaoModal('Salvar');
+    expect(payloadEnviado().divergencia_dimensional).toBeUndefined();
+    expect(payloadEnviado().medidas).toEqual([{ plano_id: 1, valor_medido: '10.010' }]);
   });
 
   test('(8) falha ao carregar o plano avisa (toast.warn) e abre o modal sem o bloco — não vira "sem plano" em silêncio', async () => {

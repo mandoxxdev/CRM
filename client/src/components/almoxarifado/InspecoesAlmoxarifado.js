@@ -5,6 +5,7 @@ import { FiRefreshCw, FiCheckSquare, FiLock, FiUnlock } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import HistoricoInspecoes from './HistoricoInspecoes';
+import { formatarFaixa } from './faixaTolerancia';
 import './Almoxarifado.css';
 
 /**
@@ -61,33 +62,25 @@ const formatDataHora = (d) => (d ? new Date(d).toLocaleDateString('pt-BR') : '�
 /*
  * Etapa 29 — faixa de tolerância exibida no modal.
  *
- * A tela SÓ SOMA para mostrar a faixa; a comparação (conforme/não conforme) é do servidor, que
- * tem o epsilon e a régua congelada no ato (Etapa 27). Os desvios do plano são COM SINAL:
- * `inf = nominal + desvio_inferior`, `sup = nominal + desvio_superior`. Um plano unilateral
- * (+0.005/+0.021) tem a faixa inteira ACIMA do nominal — `nominal − |inf|` mostraria 9.995 e o
- * operador mediria contra uma faixa que não existe.
+ * A fórmula mora em `faixaTolerancia.js` e NÃO é copiada aqui: esta função existia duplicada com
+ * a da aba Histórico, e a revisão adversarial da Etapa 29 mediu as duas cópias divergirem em
+ * `null`/`undefined`/string com vírgula. Duas cópias de uma régua acabam divergindo — é o mesmo
+ * argumento pelo qual esta tela não copia a régua de tolerância do servidor.
  *
- * A formatação usa o número de casas do próprio plano (o maior entre nominal e desvios), senão
- * `12.3 + 0.1` vira `12.399999999999999` na tela.
+ * A tela SÓ SOMA para mostrar a faixa; a comparação (conforme/não conforme) é do servidor, que
+ * tem o epsilon e a régua congelada no ato (Etapa 27).
  */
-const casasDecimais = (v) => {
-  const s = String(v ?? '');
-  const ponto = s.indexOf('.');
-  return ponto < 0 ? 0 : s.length - ponto - 1;
-};
-
-const faixaDoPlano = (p) => {
-  const nominal = Number(p.valor_nominal);
-  const casas = Math.max(
-    casasDecimais(p.valor_nominal), casasDecimais(p.desvio_inferior), casasDecimais(p.desvio_superior));
-  const inf = (nominal + Number(p.desvio_inferior)).toFixed(casas);
-  const sup = (nominal + Number(p.desvio_superior)).toFixed(casas);
-  return `[${inf} ; ${sup}]`;
-};
+const faixaDoPlano = (p) => formatarFaixa(p.valor_nominal, p.desvio_inferior, p.desvio_superior);
 
 const TEXTO_DIVERGENCIA_DERIVADA = 'Derivada das medidas ao salvar — fora da tolerância liga sozinha';
+// O caso do meio — característica QUE ESTÁ no plano e que o inspetor NÃO mediu — é o que a
+// revisão adversarial da Etapa 29 achou: bastava uma medida conforme para a caixa travar e a
+// marcação manual sumir, mesmo com a divergência tendo sido vista noutra característica. O
+// servidor deriva por medida, não por característica, então a régua não muda; o que muda é o
+// texto dizer o caso em vez de deixar o inspetor supor.
 const TEXTO_AJUDA_MEDIDAS = 'Com medidas preenchidas, a divergência dimensional é calculada só pelas '
-  + 'características do plano. Divergência em algo que o plano não mede vai em Observações.';
+  + 'características que você mediu. Divergência em algo que o plano não mede — ou numa '
+  + 'característica do plano que você deixou em branco — vai em Observações.';
 
 // `data_entrada` vem de `recebimentos_material_almoxarifado.created_at`, sempre timestamp
 // completo (não a data "meio-dia local" que outras telas do módulo usam para campos DATE puro).
@@ -473,7 +466,7 @@ const InspecoesAlmoxarifado = () => {
                         <div key={p.id} className="almox-medida-linha"
                           style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px', marginBottom: 8 }}>
                           <label style={{ gridColumn: '1 / -1', fontWeight: 400, fontSize: '0.85rem' }}>
-                            {p.caracteristica} ({p.unidade}) — nominal {p.valor_nominal} · faixa {faixaDoPlano(p)}
+                            {p.caracteristica}{p.unidade ? ` (${p.unidade})` : ''} — nominal {p.valor_nominal} · faixa {faixaDoPlano(p)}
                           </label>
                           <input className="almox-input" type="text" inputMode="decimal"
                             placeholder="ex.: 12.40 (ponto decimal)" value={m.valor}

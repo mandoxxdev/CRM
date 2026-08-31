@@ -16,7 +16,7 @@
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
-import HistoricoInspecoes from './HistoricoInspecoes';
+import HistoricoInspecoes, { formatarFaixa } from './HistoricoInspecoes';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 
@@ -191,7 +191,13 @@ test('(6) expandir, recolher e expandir de novo chama C2 UMA vez (cache por id)'
   expect(chamadasMedidas(7)).toHaveLength(1);
 });
 
-test('(7) falha no C1 vai ao toast com a mensagem do servidor, sem virar lista vazia em silencio', async () => {
+/*
+ * O titulo deste teste dizia "sem virar lista vazia em silencio" e afirmava SO o toast — a
+ * propria alegacao do titulo nao estava ancorada, e a revisao adversarial da Etapa 29 mediu o
+ * componente renderizando "Nenhuma inspecao decidida ainda." no erro, indistinguivel de "nao ha
+ * inspecoes" depois de o toast sumir. E o mesmo pecado que a RN-08 evita no modal.
+ */
+test('(7) falha no C1 vai ao toast com a mensagem do servidor E mostra estado de ERRO, nunca "nenhuma inspecao decidida"', async () => {
   api.get.mockImplementation((url) => {
     if (url === '/almoxarifado/inspecoes/historico') {
       return Promise.reject({ response: { data: { error: 'Sem acesso ao módulo' } } });
@@ -200,4 +206,42 @@ test('(7) falha no C1 vai ao toast com a mensagem do servidor, sem virar lista v
   });
   await renderizar();
   expect(toast.error).toHaveBeenCalledWith('Sem acesso ao módulo');
+  // A metade positiva: o que TEM de estar na tela.
+  expect(container.textContent).toContain('Não foi possível carregar o histórico de inspeções.');
+  expect(container.textContent).toContain('Sem acesso ao módulo');
+  expect(container.textContent).toContain('Tentar de novo');
+  // E o que NAO pode estar: a frase que faz o operador concluir que o historico esta vazio.
+  expect(container.textContent).not.toContain('Nenhuma inspeção decidida ainda.');
+});
+
+test('(8) "Tentar de novo" refaz a chamada e a lista aparece', async () => {
+  let falhar = true;
+  api.get.mockImplementation((url) => {
+    if (url === '/almoxarifado/inspecoes/historico') {
+      if (falhar) return Promise.reject({ response: { data: { error: 'Sem acesso ao módulo' } } });
+      return Promise.resolve({ data: HISTORICO });
+    }
+    if (/\/inspecoes\/\d+\/medidas$/.test(url)) return Promise.resolve({ data: MEDIDAS });
+    return Promise.resolve({ data: [] });
+  });
+  await renderizar();
+  falhar = false;
+  const botao = [...container.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Tentar de novo');
+  await clicar(botao);
+  expect(container.textContent).not.toContain('Não foi possível carregar');
+  expect(linha(7)).not.toBeNull();
+});
+
+// Mutante que sobreviveu a suite de 7: trocar `.toFixed(casas)` por `String(...)` em
+// `formatarFaixa`. A fixture `10 +0.005/+0.021` e exatamente representavel; `1.1 ±0.1` nao e —
+// `1.1 + 0.1` da 1.2000000000000002. E o par que ancora a formatacao.
+test('(9) formatarFaixa arredonda pelas casas do plano: 1.1 ±0.1 vira [1.0 ; 1.2]', () => {
+  expect(formatarFaixa(1.1, -0.1, 0.1)).toBe('[1.0 ; 1.2]');
+  expect(formatarFaixa(10, 0.005, 0.021)).toBe('[10.005 ; 10.021]');
+  expect(formatarFaixa('12.3', '-0.1', '0.1')).toBe('[12.2 ; 12.4]');
+  // Numero que nao vem: a faixa nao pode ser INVENTADA tratando ausencia como zero — as duas
+  // telas divergiam nisto antes de a formula ser unificada em `faixaTolerancia.js`.
+  expect(formatarFaixa(10, null, 0.021)).toBe('—');
+  expect(formatarFaixa(10, undefined, 0.021)).toBe('—');
+  expect(formatarFaixa(null, -0.1, 0.1)).toBe('—');
 });

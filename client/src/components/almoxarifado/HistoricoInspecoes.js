@@ -3,6 +3,7 @@ import api from '../../services/api';
 import { toast } from 'react-toastify';
 import { FiChevronDown, FiChevronUp } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
+import { formatarFaixa } from './faixaTolerancia';
 import './Almoxarifado.css';
 
 /**
@@ -39,42 +40,36 @@ const FLAGS_CURTAS = [
 
 const formatDataHora = (d) => (d ? new Date(d).toLocaleDateString('pt-BR') : '—');
 
-/** Casas decimais como o número FOI ESCRITO (string do plano): "10" → 0, "0.005" → 3. */
-const casasDecimais = (v) => {
-  if (v === null || v === undefined) return 0;
-  const s = String(v).replace(',', '.');
-  const i = s.indexOf('.');
-  return i < 0 ? 0 : s.length - i - 1;
-};
-
-const paraNumero = (v) => Number(String(v).replace(',', '.'));
-
-/** `[nominal + desvio_inferior ; nominal + desvio_superior]` — soma COM SINAL, só para exibir. */
-export const formatarFaixa = (nominal, desvioInferior, desvioSuperior) => {
-  const casas = Math.max(casasDecimais(nominal), casasDecimais(desvioInferior), casasDecimais(desvioSuperior));
-  const n = paraNumero(nominal);
-  const inf = n + paraNumero(desvioInferior);
-  const sup = n + paraNumero(desvioSuperior);
-  if (!Number.isFinite(inf) || !Number.isFinite(sup)) return '—';
-  return `[${inf.toFixed(casas)} ; ${sup.toFixed(casas)}]`;
-};
+// A fórmula da faixa mora em `faixaTolerancia.js`: ela estava duplicada aqui e no modal de
+// decisão, e a revisão adversarial da Etapa 29 mediu as duas cópias divergindo. Reexportado
+// porque `HistoricoInspecoes.test.js` importa `formatarFaixa` deste módulo.
+export { formatarFaixa };
 
 const HistoricoInspecoes = ({ materialFilter }) => {
   const [historico, setHistorico] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Falha do C1 NAO pode virar estado vazio: "Nenhuma inspecao decidida ainda." e
+  // indistinguivel de "nao ha inspecoes", e o toast some em segundos — o operador conclui que o
+  // historico esta vazio quando na verdade nao carregou. Mesma regua da RN-08 no modal (falha ao
+  // ler o plano nao vira "sem plano"). Achado da revisao adversarial da Etapa 29.
+  const [erro, setErro] = useState(null);
   const [abertos, setAbertos] = useState({});          // { [inspecaoId]: boolean }
   const [medidasPorId, setMedidasPorId] = useState({}); // cache: { [inspecaoId]: medidas[] }
   const [carregandoMedidas, setCarregandoMedidas] = useState({});
 
   const loadHistorico = useCallback(async () => {
     setLoading(true);
+    setErro(null);
     try {
       const params = {};
       if (materialFilter) params.material_id = materialFilter;
       const res = await api.get('/almoxarifado/inspecoes/historico', { params });
       setHistorico(res.data || []);
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Erro ao carregar histórico de inspeções');
+      const msg = err.response?.data?.error || 'Erro ao carregar histórico de inspeções';
+      toast.error(msg);
+      setHistorico([]);
+      setErro(msg);
     } finally {
       setLoading(false);
     }
@@ -101,6 +96,18 @@ const HistoricoInspecoes = ({ materialFilter }) => {
   };
 
   if (loading) return <div className="almox-table-container"><SkeletonTable rows={6} columns={6} /></div>;
+
+  if (erro) {
+    return (
+      <div className="almox-table-container">
+        <div className="almox-empty">
+          <p>Não foi possível carregar o histórico de inspeções.</p>
+          <p style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>{erro}</p>
+          <button className="btn-almox-secondary" onClick={loadHistorico}>Tentar de novo</button>
+        </div>
+      </div>
+    );
+  }
 
   if (historico.length === 0) {
     return <div className="almox-table-container"><div className="almox-empty"><p>Nenhuma inspeção decidida ainda.</p></div></div>;
