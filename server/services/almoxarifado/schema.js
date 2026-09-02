@@ -1697,8 +1697,37 @@ async function initSchema(db) {
     arquivo_path TEXT NOT NULL,
     nome_original TEXT,
     uploaded_by INTEGER,
+    uploaded_by_nome TEXT,
+    descricao TEXT,
+    tamanho_bytes INTEGER,
+    mime_type TEXT,
+    ativo INTEGER DEFAULT 1,
+    deleted_by INTEGER,
+    deleted_at DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+
+  // Etapa 32: a tabela nasceu na Etapa 0 e ficou ORFA ate aqui — nenhum INSERT, nenhum SELECT,
+  // nenhum indice. As sete colunas acima sao novas; em banco NOVO o CREATE ja as traz, e os
+  // safeAlter abaixo viram no-op (o safeAlter engole `duplicate column name`). Em banco EXISTENTE
+  // — producao, que roda desde 2026-08-03 — o CREATE TABLE IF NOT EXISTS nao faz nada e sao os
+  // ALTERs que pagam. Sem os dois caminhos, uma das duas instalacoes fica sem as colunas.
+  // `ativo` com DEFAULT 1 para que qualquer linha legada nasca visivel.
+  for (const col of [
+    'uploaded_by_nome TEXT',
+    'descricao TEXT',
+    'tamanho_bytes INTEGER',
+    'mime_type TEXT',
+    'ativo INTEGER DEFAULT 1',
+    'deleted_by INTEGER',
+    'deleted_at DATETIME',
+  ]) await safeAlter(db, `ALTER TABLE anexos_documento_almoxarifado ADD COLUMN ${col}`);
+
+  // A listagem SEMPRE filtra por (entidade, entidade_id, ativo). Sem indice e full scan numa
+  // tabela que so cresce — mesmo raciocinio do indice da auditoria, logo abaixo. DEPOIS dos
+  // ALTERs, porque o indice cita `ativo`, que so existe apos a migracao em banco antigo.
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_anexos_almox_entidade
+    ON anexos_documento_almoxarifado (entidade, entidade_id, ativo)`);
 
   // ── Auditoria ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS auditoria_log_almoxarifado (

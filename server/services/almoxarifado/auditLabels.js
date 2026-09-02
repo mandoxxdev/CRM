@@ -46,6 +46,10 @@
  */
 const ROTULOS_ENTIDADE = Object.freeze({
   almoxarifado: 'Almoxarifado',
+  // Etapa 32: a tabela de anexos ficou orfa desde a Etapa 0 e ganhou dono aqui. Mesma regra da
+  // `categoria` abaixo: sem esta linha o teste de cobertura de entidades fica vermelho de
+  // proposito.
+  anexo: 'Anexo',
   // Etapa 26: o catalogo de categorias virou cadastro editavel e passou a auditar. Sem esta
   // linha o teste de cobertura de entidades deste vocabulario (auditLabels.api.test.js) fica
   // vermelho — de proposito: ele varre `entidade: '<nome>'` em routes/ e services/ e exige
@@ -160,6 +164,15 @@ const GRUPOS_ACAO = congelarGrupos([
   { rotulo: 'Reenvio', verbos: ['REENVIAR'] },
   { rotulo: 'Estorno de entrada', verbos: ['ESTORNO_ENTRADA'] },
   { rotulo: 'Estorno de saída', verbos: ['ESTORNO_SAIDA'] },
+
+  // Etapa 32 — anexos. Os verbos sao MAIUSCULOS e isso nao e estilo: a varredura de cobertura
+  // deste vocabulario (auditLabels.api.test.js:60-61) usa `acao: '\K[A-Z_]+` e SO enxerga
+  // maiuscula. Gravar 'anexar' minusculo no servico faria a acao escapar do `semRotulo`, o
+  // teste ficaria verde, e a tela de auditoria mostraria o verbo cru ao lado de 'Criação'.
+  // REMOVER_ANEXO em vez de REMOVER porque a trilha e lida meses depois: verbo generico nao diz
+  // o que foi removido.
+  { rotulo: 'Anexo enviado', verbos: ['ANEXAR'] },
+  { rotulo: 'Anexo removido', verbos: ['REMOVER_ANEXO'] },
 
   // Remessa a terceiro
   { rotulo: 'Envio', verbos: ['ENVIO'] },

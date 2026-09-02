@@ -54,6 +54,14 @@ const ACOES = {
   remessar_terceiro: 'enviar material a terceiros',
   ajustar_material_cliente: 'ajustar saldo de material de cliente',
 
+  // Etapa 32: as duas acoes de anexo. Escritas DEPOIS de ACAO_PERFIS, de proposito — o vermelho
+  // deste arquivo de teste foi medido antes deste commit, e ele nomeou as duas sozinho. Isso e o
+  // controle positivo de que a regua da Etapa 30 (a lista vem de ACAO_PERFIS do servidor, e o
+  // criterio e PRESENCA, nao formato do texto) esta viva: a quinta ocorrencia do buraco de rotulo
+  // foi barrada pela guarda em vez de descoberta por revisao.
+  anexar_documento: 'anexar documento',
+  remover_anexo: 'remover anexo',
+
   aprovar_sucateamento: 'aprovar sucateamento (almoxarifado)',
   aprovar_sucateamento_gestao: 'aprovar sucateamento (gestão)',
   // frota

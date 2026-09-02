@@ -82,6 +82,13 @@ um pegue arquivo do outro. Scratchpad com nome único por agente (`msg-rotas.txt
 
 ### Task 1: Schema, serviço e as duas ações de perfil  **(tronco)**
 
+> **FEITA** — commit abaixo. Medido: serviço **6/6**; `test:api` **166/166 arquivos** (165 → 166);
+> `auditLabels` 14/0; `permissoesRotas` 51/0; `permissaoErro.test.js` **vermelho antes** do rótulo
+> (nomeou `anexar_documento` e `remover_anexo` sozinho, sem asserção nova) e **9/9 depois**.
+> As quatro sabotagens derrubaram **exatamente** o cenário previsto, uma cada — inclusive a nº 4,
+> com tabela que **existe** mas é a errada, que a Fase 2 acrescentou porque a nº 3 sozinha só
+> provava que o teste pega erro de digitação.
+
 **Files:**
 - Create: `server/services/almoxarifado/anexoService.js`
 - Create: `server/tests/api/anexoService.api.test.js`
@@ -104,7 +111,7 @@ um pegue arquivo do outro. Scratchpad com nome único por agente (`msg-rotas.txt
   - `removerAnexo(db, user, id)` → `Promise<{ ok: true }>`
   - Todos lançam `Error` com `.status` (o `handleError` da extended usa `err.status || 500`).
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 Crie `server/tests/api/anexoService.api.test.js` no molde de runner desta base. **Use o molde colado abaixo** (array `testes` + laço final + `process.exit`), que é autossuficiente — o `toolCalibracao.api.test.js:16-19` usa outra forma (`await test(...)` inline) e misturar as duas não roda:
 
@@ -244,12 +251,12 @@ test('as seis entidades do mapa apontam para tabelas distintas que existem no sc
 })();
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `cd server && node tests/api/anexoService.api.test.js`
 Expected: FAIL — `Cannot find module '../../services/almoxarifado/anexoService'`.
 
-- [ ] **Step 3: As colunas novas e o índice**
+- [x] **Step 3: As colunas novas e o índice**
 
 Em `server/services/almoxarifado/schema.js`, **logo após** o `CREATE TABLE IF NOT EXISTS
 anexos_documento_almoxarifado (...)` que termina em `:1700`:
@@ -279,7 +286,7 @@ E acrescente as seis colunas ao `CREATE TABLE` acima, para que instalação nova
 `descricao TEXT`, `uploaded_by_nome TEXT`, `tamanho_bytes INTEGER`, `mime_type TEXT`,
 `ativo INTEGER DEFAULT 1`, `deleted_by INTEGER`, `deleted_at DATETIME`.
 
-- [ ] **Step 4: O serviço**
+- [x] **Step 4: O serviço**
 
 Crie `server/services/almoxarifado/anexoService.js`:
 
@@ -427,12 +434,12 @@ module.exports = {
 };
 ```
 
-- [ ] **Step 5: Rodar e ver passar**
+- [x] **Step 5: Rodar e ver passar**
 
 Run: `cd server && node tests/api/anexoService.api.test.js`
 Expected: `6 passed, 0 failed`.
 
-- [ ] **Step 6: Controle positivo — provar que os testes sabem falhar**
+- [x] **Step 6: Controle positivo — provar que os testes sabem falhar**
 
 Sabote **uma coisa por vez** e confirme o vermelho, revertendo depois de cada uma:
 
@@ -450,7 +457,7 @@ Sabote **uma coisa por vez** e confirme o vermelho, revertendo depois de cada um
 Se alguma sabotagem **não** derrubar teste nenhum, o teste correspondente é vazio — conserte-o
 antes de seguir. Registre no plano o que cada sabotagem derrubou.
 
-- [ ] **Step 7: As duas ações de perfil**
+- [x] **Step 7: As duas ações de perfil**
 
 Em `server/services/almoxarifado/permissions.js`, dentro de `ACAO_PERFIS`, depois de
 `gerenciar_plano_inspecao`:
@@ -469,7 +476,7 @@ Em `server/services/almoxarifado/permissions.js`, dentro de `ACAO_PERFIS`, depoi
   remover_anexo: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE],
 ```
 
-- [ ] **Step 8: Medir o vermelho do client ANTES de escrever o rótulo (RN-07)**
+- [x] **Step 8: Medir o vermelho do client ANTES de escrever o rótulo (RN-07)**
 
 Este passo **é** o controle positivo da correção que a Etapa 30 fez em `permissaoErro.test.js` —
 ela trocou a régua por **presença no mapa `ACAO_PERFIS` importado do servidor**. Se aquela
@@ -482,7 +489,7 @@ Expected: **FAIL**, nomeando `anexar_documento` e `remover_anexo` como ausentes 
 > Se **passar**, pare: a régua da Etapa 30 não está viva e o buraco de rótulo voltaria pela
 > quinta vez. Registre o achado no plano antes de continuar.
 
-- [ ] **Step 9: Os rótulos**
+- [x] **Step 9: Os rótulos**
 
 Em `client/src/utils/permissaoErro.js`, no mapa `ACOES`, depois de `ajustar_material_cliente`:
 
@@ -510,7 +517,7 @@ verbos**:
 > `permissaoErro`. E `REMOVER_ANEXO` em vez de `REMOVER` porque a trilha é lida meses depois, e
 > um verbo genérico não diz o que foi removido.
 
-- [ ] **Step 10: Rodar tudo o que a Task 1 toca**
+- [x] **Step 10: Rodar tudo o que a Task 1 toca**
 
 ```bash
 cd server && node tests/api/anexoService.api.test.js && npm run test:api
@@ -518,7 +525,7 @@ cd client && CI=true npx react-scripts test src/utils/permissaoErro.test.js --wa
 ```
 Expected: serviço `6 passed`; `test:api` **166/166 arquivos** (165 → 166); `permissaoErro` verde.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add server/services/almoxarifado/anexoService.js server/services/almoxarifado/schema.js \

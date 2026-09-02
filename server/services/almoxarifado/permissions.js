@@ -123,6 +123,19 @@ const ACAO_PERFIS = {
   //
   // Entra de graca em GET /almoxarifado/minhas-permissoes — a rota itera Object.keys(ACAO_PERFIS).
   gerenciar_plano_inspecao: [PERFIS.ADMINISTRADOR, PERFIS.QUALIDADE, PERFIS.ENGENHARIA],
+  // Etapa 32 (D3): anexar documento e ato de QUEM OPERA, e nao de um papel so — COMPRAS anexa a
+  // NF do recebimento, QUALIDADE anexa o certificado e o relatorio dimensional, PRODUCAO anexa o
+  // desenho da requisicao. Por isso a lista e larga: todos MENOS CONSULTA, cujo nome ja diz o que
+  // ele faz. Nao pega carona em `movimentar` porque anexar nao mexe em saldo, e nao pega carona
+  // em `visualizar` porque visualizar e leitura.
+  anexar_documento: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE, PERFIS.COMPRAS, PERFIS.PRODUCAO, PERFIS.ENGENHARIA, PERFIS.GESTOR, PERFIS.QUALIDADE],
+  // E a ASSIMETRIA e a decisao, nao um descuido: remover e estreita. Tirar um certificado de
+  // vista e apagar EVIDENCIA de qualidade — risco de natureza diferente de anexar —, e o criterio
+  // "quando a operacao muda a NATUREZA DO RISCO, ela ganha acao propria" e o mesmo ja escrito
+  // acima para ajustar_material_cliente, remessar_terceiro e conferir_separacao. A remocao e soft
+  // delete e auditada (o arquivo fica no disco); ainda assim, quem esconde documento e o balcao e
+  // o administrador. Reversivel numa linha se o cliente pedir.
+  remover_anexo: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE],
   // Etapa 12 (D7 do design): reenviar e-mail e drenar a fila e operacao administrativa da fila,
   // nao operacao de balcao — COMPRAS fica fora DE PROPOSITO (recebe e-mail, nao opera a fila).
   // Mesmo criterio de gerenciar_reposicao (Etapa 11, D9): reversivel, uma linha, registrado na
