@@ -277,7 +277,7 @@ servidor e a A7 não foi resolvida.
 
 ### B. Decisões de negócio
 
-### B. Decisões de negócio — B1 a B66; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B69; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(O título desta seção dizia "B1 a B24" — **estava defasado**: os itens já iam até B36 antes da
 Etapa 20. Corrigido em 2026-08-28 para B50, depois para B56 com as três da Etapa 24, para B57 com
@@ -1198,6 +1198,53 @@ exatamente o problema que esta etapa acabou de resolver por outro caminho.
 precisa ser **contável** (aí é sequencial) ou só **único** (aí o de hoje já serve). **Enquanto você
 não responder, vale o que está** — nada foi implementado nessa direção.
 
+**B67 (NOVA, da Etapa 32 — decisão que EU tomei, reversível) — remover um anexo esconde o
+documento, mas NÃO apaga o arquivo do disco.**
+
+Quando alguém remove um anexo, ele some da tela imediatamente e a remoção fica na trilha de
+auditoria (quem removeu, quando, o que era). **O arquivo em si continua no servidor.**
+
+**Por que assim:** anexo de qualidade é certificado, relatório dimensional, foto de recebimento —
+prova de que alguma coisa foi feita. Se o arquivo fosse apagado junto, a linha de auditoria viraria
+uma **promessa vazia**: ela diria que existiu um certificado que ninguém mais pode ver, e numa
+auditoria externa "o sistema registra que houve" vale muito menos do que "o sistema mostra qual
+era". Remover errado também é comum, e sem o arquivo não há como desfazer.
+
+**O que foi descartado:** apagar o arquivo junto com a remoção. Economiza disco e é o
+comportamento que mais gente espera de um botão "Remover" — mas é **irreversível**, e a etapa
+escolheu o caminho que dá para voltar atrás. **O custo desta escolha é disco**: nada expurga esses
+arquivos hoje (a retenção de uploads é corte declarado desde a feature 23). Se o volume incomodar,
+me diga e a rotina de expurgo vira uma etapa.
+
+**B68 (NOVA, da Etapa 32 — decisão que EU tomei, reversível numa linha) — quem VÊ o almoxarifado
+baixa qualquer anexo; quem REMOVE é só o administrador e o almoxarife.**
+
+São duas ações novas, e a assimetria é deliberada. **Anexar** é largo — todos os perfis menos
+`CONSULTA` —, porque anexar é ato de quem opera: compras anexa a nota fiscal do recebimento,
+qualidade anexa o certificado, produção anexa o desenho da requisição. **Baixar** exige só
+`visualizar`, a mesma permissão de abrir o módulo. **Remover** é estreito: `ADMINISTRADOR` e
+`ALMOXARIFE`.
+
+**O que isso significa na prática, dito claramente:** qualquer pessoa com acesso ao módulo — o que
+inclui o perfil `CONSULTA` — **baixa qualquer anexo de qualquer documento**. Não há régua por
+entidade: quem vê o almoxarifado vê o certificado do lote e a foto do recebimento.
+
+**O que foi descartado:** um gate por entidade (anexar em inspeção exigiria `inspecionar`, em
+recebimento exigiria `receber_material`). Ele é mais preciso, mas obriga a checar a permissão
+**depois** do upload — porque a entidade só é conhecida quando o formulário já chegou —, o que
+significa gravar o arquivo em disco para então recusar e apagar. Preferi a régua simples, que
+recusa na porta. **Se você quiser restringir o download, é uma linha** e eu faço na etapa seguinte.
+
+**B69 (NOVA, da Etapa 32 — decisão que EU tomei, reversível) — material desativado continua
+aceitando anexo.**
+
+Excluir material no sistema é **desativar** (a linha continua no banco). A checagem que impede
+anexar num registro inexistente **não** exige que o material esteja ativo — de propósito: ficha
+técnica e certificado de material aposentado são exatamente o tipo de documento que se precisa
+consultar depois. **O que foi descartado:** exigir `ativo = 1`, que além de bloquear esse caso
+funcionaria só para material — requisição, recebimento e devolução não têm essa coluna com esse
+sentido, e a régua ficaria diferente por entidade sem que ninguém entendesse por quê.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -1614,6 +1661,35 @@ não responder, vale o que está** — nada foi implementado nessa direção.
     **Por que o número mudou de forma:** era o formato antigo que causava a repetição — ele usava
     só os **últimos dígitos** do relógio, e por isso dava a volta a cada 16,7 minutos (requisição)
     ou 27,78 horas (os outros três). Ver a seção da Etapa 31.
+
+42. **(32) ⚠️ OS ARQUIVOS ANTIGOS DO ALMOXARIFADO ESTÃO PÚBLICOS NA INTERNET PARA QUEM TIVER O
+    LINK — e este furo é ANTERIOR a esta etapa, não criado por ela.** É o item mais importante
+    desta lista, e o único que expõe dado.
+
+    **O que está acontecendo:** certificado do fornecedor, comprovante de sucateamento,
+    certificado de calibração, foto de material, foto de ocorrência e **a imagem da assinatura de
+    quem retirou material** são servidos por um endereço que **não pede login**. Quem tiver a URL
+    — porque copiou, porque estava num e-mail encaminhado, porque o navegador guardou — abre o
+    arquivo **deslogado**, de qualquer lugar. A única proteção hoje é o endereço ser difícil de
+    adivinhar (o nome do arquivo tem um número aleatório). Isso é **obscuridade, não controle**:
+    protege contra quem chuta, não contra quem já tem o link.
+
+    **Isso vem desde o começo do módulo** — não foi esta etapa que criou. Foi esta etapa que
+    **mediu e escreveu**, ao construir os anexos novos.
+
+    **Os anexos NOVOS, desta etapa, NÃO têm esse problema.** Eles ficam numa pasta separada que
+    aquele endereço não alcança, e o download exige login e permissão. É por isso que a pasta é
+    **irmã** e não uma subpasta: subpasta continuaria pública, o que faria a etapa fabricar
+    exatamente o problema que ela veio evitar.
+
+    **Por que não foi corrigido junto:** as telas de Lotes e de Requisições **apontam direto** para
+    aquele endereço público. Fechá-lo sem reescrever as duas telas quebraria a exibição do
+    certificado e da assinatura para todo mundo, e os testes que congelam essas URLs cairiam
+    junto. É **etapa própria** — pequena, mas própria —, e ela está nomeada como a alternativa de
+    maior valor no fim do plano desta etapa.
+
+    **O que fazer enquanto isso:** trate link de arquivo do almoxarifado como link público. Não
+    encaminhe por fora, e não pressuponha que só quem tem login enxerga.
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
