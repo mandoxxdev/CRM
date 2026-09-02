@@ -16,6 +16,33 @@ import {
 } from 'recharts';
 import './Dashboard.css';
 
+// Atalhos de periodo. Devolvem sempre o PAR completo (inicio e fim) para nao deixar um
+// intervalo pela metade quando o usuario pula de um atalho para outro.
+const iso = (d) => d.toISOString().split('T')[0];
+const ATALHOS_PERIODO = [
+  {
+    rotulo: 'Este mês',
+    intervalo: () => {
+      const h = new Date();
+      return { inicio: iso(new Date(h.getFullYear(), h.getMonth(), 1)), fim: iso(h) };
+    },
+  },
+  {
+    rotulo: 'Últimos 3 meses',
+    intervalo: () => {
+      const h = new Date();
+      return { inicio: iso(new Date(h.getFullYear(), h.getMonth() - 2, 1)), fim: iso(h) };
+    },
+  },
+  {
+    rotulo: 'Este ano',
+    intervalo: () => {
+      const h = new Date();
+      return { inicio: iso(new Date(h.getFullYear(), 0, 1)), fim: iso(h) };
+    },
+  },
+];
+
 const Dashboard = () => {
   const [stats, setStats] = useState(null);
   const [historico, setHistorico] = useState([]);
@@ -27,6 +54,12 @@ const Dashboard = () => {
     totalProjetos: 0
   });
   const [viewMode, setViewMode] = useState('geral'); // 'geral' ou 'vendas'
+  // Filtros do cabecalho. O botao existia desde sempre, mas nunca tinha sido ligado a
+  // nada: nao havia estado, nem painel, nem parametro chegando na API.
+  const [filtrosAberto, setFiltrosAberto] = useState(false);
+  const [filtros, setFiltros] = useState({ inicio: '', fim: '', usuario: '' });
+  const [usuarios, setUsuarios] = useState([]);
+  const filtrosAtivos = [filtros.inicio, filtros.fim, filtros.usuario].filter(Boolean).length;
   const [modalGrafico, setModalGrafico] = useState({
     isOpen: false,
     titulo: '',
@@ -95,6 +128,17 @@ const Dashboard = () => {
   }, []);
 
   useEffect(() => {
+    // por-modulo/comercial, nao /usuarios: o endpoint generico traz TODO usuario ativo,
+    // inclusive quem nao tem acesso ao comercial e portanto nunca sera responsavel por
+    // uma proposta. Este endpoint existe exatamente para filtro de responsavel por modulo
+    // - so devolve quem tem permissao ao modulo (direta ou via grupo) e, para quem nao e
+    // admin, so do proprio setor.
+    api.get('/usuarios/por-modulo/comercial')
+      .then((res) => setUsuarios(Array.isArray(res.data) ? res.data : []))
+      .catch(() => setUsuarios([]));
+  }, []);
+
+  useEffect(() => {
     const loadLogos = async () => {
       try {
         const res = await api.get('/clientes/logos', { params: { limit: 300 } });
@@ -109,9 +153,15 @@ const Dashboard = () => {
   useEffect(() => {
     // Carregar em paralelo para melhor performance
     const loadData = async () => {
+      // So vai o que estiver preenchido: campo vazio nao vira parametro, e o servidor
+      // descarta qualquer valor fora do formato esperado.
+      const params = {};
+      if (filtros.inicio) params.inicio = filtros.inicio;
+      if (filtros.fim) params.fim = filtros.fim;
+      if (filtros.usuario) params.usuario = filtros.usuario;
       try {
         const [dashboardRes, historicoRes, avancadoRes] = await Promise.all([
-          api.get('/dashboard').catch(() => ({ 
+          api.get('/dashboard', { params }).catch(() => ({ 
             data: {
               totalClientes: 0,
               totalProjetos: 0,
@@ -121,7 +171,7 @@ const Dashboard = () => {
             }
           })),
           api.get('/dashboard/historico').catch(() => ({ data: [] })),
-          api.get('/dashboard/avancado').catch(() => ({ 
+          api.get('/dashboard/avancado', { params }).catch(() => ({ 
             data: {
               propostasPorEstado: [],
               volumeBuscaPorRegiao: [],
@@ -191,7 +241,7 @@ const Dashboard = () => {
       }
     };
     loadData();
-  }, []);
+  }, [filtros]);
 
   // Forçar re-renderização dos gráficos quando viewMode muda
   useEffect(() => {
@@ -511,9 +561,56 @@ const Dashboard = () => {
             </button>
           </div>
           <Notificacoes />
-          <button className="btn-filter">
-            <FiBarChart2 /> Filtros
-          </button>
+          <div className="dashboard-filtros">
+            <button
+              type="button"
+              className={`btn-filter ${filtrosAtivos ? 'com-filtro' : ''}`}
+              onClick={() => setFiltrosAberto((v) => !v)}
+              aria-expanded={filtrosAberto}
+            >
+              <FiBarChart2 /> Filtros
+              {filtrosAtivos > 0 && <span className="btn-filter-contador">{filtrosAtivos}</span>}
+            </button>
+            {filtrosAberto && (
+              <div className="dashboard-filtros-painel">
+                <div className="dashboard-filtros-atalhos">
+                  {ATALHOS_PERIODO.map((a) => (
+                    <button key={a.rotulo} type="button" onClick={() => setFiltros((f) => ({ ...f, ...a.intervalo() }))}>
+                      {a.rotulo}
+                    </button>
+                  ))}
+                </div>
+                <label>
+                  <span>De</span>
+                  <input type="date" value={filtros.inicio} onChange={(e) => setFiltros((f) => ({ ...f, inicio: e.target.value }))} />
+                </label>
+                <label>
+                  <span>Até</span>
+                  <input type="date" value={filtros.fim} onChange={(e) => setFiltros((f) => ({ ...f, fim: e.target.value }))} />
+                </label>
+                <label>
+                  <span>Responsável</span>
+                  <select value={filtros.usuario} onChange={(e) => setFiltros((f) => ({ ...f, usuario: e.target.value }))}>
+                    <option value="">Todos</option>
+                    {usuarios.map((u) => (
+                      <option key={u.id} value={u.id}>{u.nome || u.username || `#${u.id}`}</option>
+                    ))}
+                  </select>
+                </label>
+                <p className="dashboard-filtros-nota">
+                  O período considera a data de <strong>criação</strong> da proposta.
+                </p>
+                <button
+                  type="button"
+                  className="dashboard-filtros-limpar"
+                  onClick={() => setFiltros({ inicio: '', fim: '', usuario: '' })}
+                  disabled={!filtrosAtivos}
+                >
+                  Limpar filtros
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

@@ -13,6 +13,7 @@ const STATUS = {
   enviada: 'Enviada',
   visualizada: 'Visualizada',
   aceita: 'Aceita',
+  aprovada: 'Aprovada',
   rejeitada: 'Rejeitada',
   expirada: 'Expirada'
 };
@@ -286,7 +287,7 @@ export default function PropostaDetalhe() {
             <button type="button" className="btn btn-sec" onClick={() => setRejeitar(true)}><FiX /> Rejeitar</button>
           </>
         )}
-        {['enviada', 'visualizada', 'aceita', 'rejeitada', 'expirada'].includes(status) && (
+        {['enviada', 'visualizada', 'aceita', 'aprovada', 'rejeitada', 'expirada'].includes(status) && (
           <button type="button" className="btn btn-sec" onClick={() => acao('nova-revisao')}><FiRotateCcw /> Nova revisão</button>
         )}
         <button type="button" className="btn btn-sec" onClick={() => acao('clone')}><FiCopy /> Clonar</button>
