@@ -1570,3 +1570,46 @@
 
 /* Loading no tema escuro */
 .almox-mapa-page .almox-loading { color: var(--gmp-text-light); }
+
+/* ===== Anexos de documento (Etapa 32) — bloco generico por entidade =====
+   Sem estas regras o bloco cai no meio da linha expandida do historico sem borda nenhuma:
+   o componente e generico e nao pode depender do CSS da tela que o hospeda. */
+.almox-anexos {
+  border: 1px solid var(--gmp-border);
+  border-radius: 10px;
+  background: var(--gmp-surface);
+  padding: 0.75rem 0.9rem;
+  margin-top: 0.75rem;
+}
+.almox-anexos-titulo {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--gmp-text);
+}
+.almox-anexos-erro { margin: 0 0 0.5rem; font-size: 0.8rem; }
+.almox-anexos-vazio { margin: 0 0 0.5rem; font-size: 0.8rem; color: var(--gmp-text-light); }
+.almox-anexos-lista { list-style: none; margin: 0 0 0.6rem; padding: 0; }
+.almox-anexos-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--gmp-border);
+  font-size: 0.8rem;
+}
+.almox-anexos-item:last-child { border-bottom: none; }
+.almox-anexos-nome { font-weight: 600; color: var(--gmp-text); word-break: break-all; }
+.almox-anexos-meta { color: var(--gmp-text-light); font-size: 0.75rem; }
+.almox-anexos-desc { color: var(--gmp-text-light); font-size: 0.75rem; font-style: italic; }
+.almox-anexos-item .almox-btn-icon:first-of-type { margin-left: auto; }
+.almox-anexos-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.almox-anexos-form .almox-input { max-width: 220px; }
