@@ -86,6 +86,9 @@ beforeEach(() => {
     if (url === '/almoxarifado/inspecoes/historico') return Promise.resolve({ data: historicoDoBanco });
     if (url === '/almoxarifado/inspecoes/7/medidas') return Promise.resolve({ data: MEDIDAS_7 });
     if (url === '/almoxarifado/inspecoes/8/medidas') return Promise.resolve({ data: [] });
+    // Etapa 32: o bloco de anexos do `AnexosDocumento` consulta esta rota ao expandir a linha.
+    // Sem esta entrada o mock rejeitaria e o componente cairia no estado de erro dele.
+    if (url === '/almoxarifado/anexos') return Promise.resolve({ data: [] });
     return Promise.reject(new Error(`URL inesperada no teste: ${url}`));
   });
   container = document.createElement('div');
@@ -155,13 +158,19 @@ test('(2) expandir chama C2 e mostra caracteristica, faixa somada COM SINAL, med
   expect(comprimento[5]).toBe('—');
 });
 
+// Etapa 32: este cenário PERDEU uma asserção, de propósito, e a perda está dita em vez de
+// escondida. Ele afirmava também `expect(detalhe(8)).toBeNull()` — que era CONSEQUÊNCIA do
+// desenho da Etapa 29 (linha sem medida não expandia), não a regra que o teste existe para
+// guardar. A regra é **não buscar medida que não existe**, e ela continua aqui, intacta.
+// A Task 4 passou a expandir toda linha, porque o bloco de anexos precisa de um lugar e prendê-lo
+// à existência de medidas deixaria o anexo inalcançável na maioria das inspeções. O caso positivo
+// do novo comportamento é o cenário (13).
 test('(3) inspecao com medidas_total === 0 mostra "Sem medidas registradas" e NAO chama C2', async () => {
   await renderizar();
   expect(linha(8).textContent).toContain('Sem medidas registradas');
 
   await clicar(linha(8));
   expect(chamadasMedidas(8)).toHaveLength(0);
-  expect(detalhe(8)).toBeNull();
 });
 
 test('(4) materialFilter vai como material_id na chamada, e mudar a prop recarrega', async () => {
@@ -264,4 +273,53 @@ test('(10) formatarFaixa aceita texto de formulario: espaco nas pontas e notacao
   expect(casasDecimais('1e-3')).toBe(3);
   expect(casasDecimais('1.25e-3')).toBe(5);
   expect(casasDecimais('1e3')).toBe(0);
+});
+
+/* ── Etapa 32, Task 4 — o plug dos anexos ─────────────────────────────────────────────────────
+ *
+ * Por que é AQUI e não no formulário de decisão: `inspecoes_recebimento_almoxarifado` só ganha
+ * linha DENTRO da decisão (inspectionService.js:268), e a fila de pendentes devolve `item_id`,
+ * não `inspecao.id`. Este é o único ponto do client onde o `id` da inspeção existe — sem ele não
+ * há `entidade_id` para anexar nada.
+ */
+const blocoAnexos = (id) => {
+  const det = detalhe(id);
+  return det ? det.querySelector('[data-testid="anexos-documento"]') : null;
+};
+const chamadasAnexos = () => api.get.mock.calls.filter(([url]) => url === '/almoxarifado/anexos');
+
+test('(11) linha expandida mostra o bloco de anexos COM input de arquivo (nao e somenteLeitura)', async () => {
+  await renderizar();
+  await clicar(linha(7));
+
+  const bloco = blocoAnexos(7);
+  expect(bloco).not.toBeNull();
+  // `somenteLeitura` esconderia o input; o certificado e o relatorio dimensional chegam DEPOIS da
+  // decisao, entao e aqui que anexar tem sentido. Um plug somente-leitura deixaria a etapa com
+  // backend inteiro e ZERO superficie para anexar.
+  expect(bloco.querySelector('[data-testid="anexo-arquivo"]')).not.toBeNull();
+  // E o entidade_id e o id DA INSPECAO, nao o do material nem o do recebimento
+  expect(chamadasAnexos().some(([, cfg]) =>
+    cfg?.params?.entidade === 'inspecao' && cfg?.params?.entidade_id === 7)).toBe(true);
+});
+
+test('(12) linha fechada NAO chama a rota de anexos — 100 linhas nao viram 100 requisicoes', async () => {
+  await renderizar();
+  expect(chamadasAnexos()).toHaveLength(0);
+
+  // metade positiva no mesmo teste: depois de expandir, chama exatamente uma vez
+  await clicar(linha(7));
+  expect(chamadasAnexos()).toHaveLength(1);
+});
+
+test('(13) inspecao SEM medidas tambem expande, e mostra anexos sem a tabela de medidas', async () => {
+  await renderizar();
+  await clicar(linha(8));
+
+  // A linha 8 tem medidas_total === 0. Ate a Etapa 32 ela nao expandia de jeito nenhum — e com
+  // aquela guarda o anexo so existiria em inspecao com plano dimensional, que e a minoria.
+  expect(detalhe(8)).not.toBeNull();
+  expect(blocoAnexos(8)).not.toBeNull();
+  expect(chamadasMedidas(8)).toHaveLength(0); // continua NAO buscando medidas que nao existem
+  expect(detalhe(8).textContent).not.toContain('Característica');
 });

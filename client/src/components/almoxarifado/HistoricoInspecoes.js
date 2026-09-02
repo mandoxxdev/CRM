@@ -4,6 +4,7 @@ import { toast } from 'react-toastify';
 import { FiChevronDown, FiChevronUp } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
 import { formatarFaixa } from './faixaTolerancia';
+import AnexosDocumento from './AnexosDocumento';
 import './Almoxarifado.css';
 
 /**
@@ -78,11 +79,16 @@ const HistoricoInspecoes = ({ materialFilter }) => {
   useEffect(() => { loadHistorico(); }, [loadHistorico]);
 
   const alternar = async (row) => {
-    if (!(row.medidas_total > 0)) return; // servidor já disse que não há medidas: nada a buscar
     const id = row.id;
     const vaiAbrir = !abertos[id];
     setAbertos((s) => ({ ...s, [id]: vaiAbrir }));
-    if (!vaiAbrir || medidasPorId[id] || carregandoMedidas[id]) return;
+    // Etapa 32: a guarda `if (!(row.medidas_total > 0)) return` saiu daqui e virou a condição de
+    // BUSCA, logo abaixo. Ela impedia a linha sem medida de expandir — o que era correto enquanto
+    // a área expandida só continha medidas, e deixou de ser quando ela passou a conter os anexos:
+    // prender o anexo à existência de plano dimensional o tornaria inalcançável na maioria das
+    // inspeções, e a etapa entregaria backend inteiro com quase nenhuma superfície.
+    // O que a guarda protegia continua protegido: sem medidas, NENHUMA chamada ao C2.
+    if (!vaiAbrir || !(row.medidas_total > 0) || medidasPorId[id] || carregandoMedidas[id]) return;
     setCarregandoMedidas((s) => ({ ...s, [id]: true }));
     try {
       const res = await api.get(`/almoxarifado/inspecoes/${id}/medidas`);
@@ -129,7 +135,7 @@ const HistoricoInspecoes = ({ materialFilter }) => {
         <tbody>
           {historico.map((h) => {
             const temMedidas = h.medidas_total > 0;
-            const aberto = temMedidas && !!abertos[h.id];
+            const aberto = !!abertos[h.id];
             const flags = FLAGS_CURTAS.filter(({ key }) => !!h[key]);
             const medidas = medidasPorId[h.id];
             return (
@@ -188,7 +194,7 @@ const HistoricoInspecoes = ({ materialFilter }) => {
                 {aberto && (
                   <tr data-testid={`historico-medidas-${h.id}`}>
                     <td colSpan={6} style={{ background: 'var(--gmp-bg, #fafafa)', padding: '8px 12px' }}>
-                      {!medidas ? (
+                      {!temMedidas ? null : !medidas ? (
                         <span style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>Carregando medidas...</span>
                       ) : (
                         <table className="almox-table">
@@ -220,6 +226,17 @@ const HistoricoInspecoes = ({ materialFilter }) => {
                           </tbody>
                         </table>
                       )}
+
+                      {/* Etapa 32 — o plug dos anexos (certificado, relatório dimensional, fotos).
+                          `entidade_id` é o id DA INSPEÇÃO, e por isso o bloco vive aqui: a linha
+                          de `inspecoes_recebimento_almoxarifado` só nasce dentro da decisão
+                          (inspectionService.js), e a fila de pendentes trabalha com `item_id`.
+                          NÃO é `somenteLeitura`: o certificado e o relatório chegam DEPOIS da
+                          decisão, então é aqui que anexar tem sentido — e o único lugar onde é
+                          possível. Montado só quando a linha está aberta: no topo do
+                          `{aberto && ...}`, para que 100 linhas de histórico não virem 100
+                          requisições ao abrir a aba. */}
+                      <AnexosDocumento entidade="inspecao" entidadeId={h.id} titulo="Anexos" />
                     </td>
                   </tr>
                 )}
