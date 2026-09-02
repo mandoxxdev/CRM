@@ -1396,8 +1396,11 @@ import AnexosDocumento from './AnexosDocumento';
 furo **C42** — migrar os seis uploads legados para download autenticado e trocar os `<img src>` /
 `<a href>` do client por blob. É a única coisa do módulo que hoje **expõe dado**: certificado de
 fornecedor, comprovante de sucateamento e **a imagem da assinatura de quem retirou material**
-abrem deslogado para quem tiver o link. O trabalho é conhecido e pequeno, mas mexe em duas telas
-(`LotesAlmoxarifado.js`, `RequisicoesList.js`), em `resolveMaterialPhotoUrl.js` e nos testes que
+abrem deslogado para quem tiver o link. O trabalho é conhecido e pequeno, mas mexe em SEIS telas
+(medido na Fase 0 da etapa seguinte, 2026-09-02 — **esta frase dizia "duas telas" e estava
+ERRADA**: `resolveMaterialPhotoUrl.js` e consumido por **seis** componentes —
+`LotesAlmoxarifado`, `MateriaisAlmoxarifado`, `MaterialAlmoxarifadoForm`, `RequisicaoForm`,
+`RequisicaoMaterialCesta` e `RequisicoesList`), no proprio `resolveMaterialPhotoUrl.js` e nos testes que
 congelam essas URLs (`LotesAlmoxarifado.test.js:298`, `RequisicoesList.test.js:155,289`) — por
 isso é etapa própria e não um fix de uma linha.
 
