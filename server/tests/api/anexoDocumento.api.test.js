@@ -10,7 +10,7 @@ const fs = require('fs');
 const path = require('path');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
-const { dbRun } = require('../../services/almoxarifado/db');
+const { dbRun, dbAll } = require('../../services/almoxarifado/db');
 
 let passou = 0, falhou = 0;
 const testes = [];
@@ -252,6 +252,92 @@ test('linha viva com arquivo fora do disco: 404 proprio, nao 500', async () => {
     const res = await request(ctx.app).get(`/api/almoxarifado/anexos/${criado.body.id}/arquivo`);
     assert.strictEqual(res.status, 404);
     assert.strictEqual(res.body.error, 'Arquivo do anexo não encontrado');
+  } finally { await ctx.close(); }
+});
+
+// ── Etapa 32, Task 5 — INTEGRACAO, cruzando os galhos ───────────────────────────────────────
+//
+// Um cenario so, percorrendo o ciclo inteiro PELA ROTA e com DOIS perfis diferentes: quem anexa e
+// QUALIDADE, quem remove e ALMOXARIFE. Ele cruza a Task 1 (o servico e as duas acoes), a Task 2
+// (as quatro rotas e a fiacao do 5o parametro) e as regras de perfil — nenhuma suite de unidade
+// prova que as tres partes COMPOEM, e a Etapa 25 desta base morreu exatamente ai: 12 cenarios de
+// unidade verdes e a feature morta por fiacao.
+//
+// E ele carrega a UNICA assercao da suite que mede a metade "e no disco" da RN-05. Sem ela,
+// alguem que "limpe" o removerAnexo acrescentando um fs.unlinkSync nao derruba NENHUM dos outros
+// 13 cenarios: o teste de servico nao toca disco por construcao, e o 404 do "baixar de novo" sai
+// pela linha (ativo = 0) ANTES de o handler olhar o arquivo. A decisao que o design mais defende
+// (D5) cairia em silencio, e a letra B viraria promessa vazia.
+test('[INTEGRACAO] QUALIDADE anexa -> lista -> baixa o conteudo -> ALMOXARIFE remove -> some da lista, FICA no disco', async () => {
+  const ctx = await createTestApp();
+  try {
+    const materialId = await comMaterial(ctx);
+    // A tabela de inspecao amarra no ITEM do recebimento, nao no material — lido do CREATE TABLE
+    // (schema.js:1121), nao imaginado. `recebimento_item_id` e NOT NULL.
+    const rec = await dbRun(ctx.db,
+      `INSERT INTO inspecoes_recebimento_almoxarifado (recebimento_item_id, conforme, responsavel_nome)
+       VALUES (?,?,?)`, [materialId, 1, 'Ana Qualidade']);
+    const inspecaoId = rec.lastID;
+
+    // 1) QUALIDADE anexa o certificado. E o perfil que a Etapa 24 criou e que esta etapa passou a
+    //    contemplar em `anexar_documento` — quem inspeciona e quem tem o certificado na mao.
+    ctx.setUser({ id: 11, nome: 'Ana Qualidade', perfil_almoxarifado: 'QUALIDADE' });
+    const criado = await request(ctx.app).post('/api/almoxarifado/anexos')
+      .field('entidade', 'inspecao').field('entidade_id', String(inspecaoId))
+      .field('tipo', 'CERTIFICADO').field('descricao', 'Certificado do fornecedor')
+      .attach('arquivo', PDF, 'certificado-fornecedor.pdf');
+    assert.strictEqual(criado.status, 201, JSON.stringify(criado.body));
+    assert.strictEqual(criado.body.uploaded_by_nome, 'Ana Qualidade',
+      'o nome de quem anexou e gravado no ato, denormalizado');
+
+    // 2) A lista devolve o anexo, sem o nome do arquivo no disco
+    const lista = await request(ctx.app)
+      .get(`/api/almoxarifado/anexos?entidade=inspecao&entidade_id=${inspecaoId}`);
+    assert.strictEqual(lista.status, 200);
+    assert.strictEqual(lista.body.length, 1);
+    assert.strictEqual(lista.body[0].arquivo_path, undefined);
+
+    // 3) O download devolve o MESMO conteudo que subiu — nao so um 200
+    const baixado = await request(ctx.app).get(`/api/almoxarifado/anexos/${criado.body.id}/arquivo`);
+    assert.strictEqual(baixado.status, 200);
+    assert.ok(Buffer.from(baixado.body).equals(PDF), 'o conteudo baixado e o mesmo que subiu');
+
+    // 4) QUALIDADE NAO remove — a assimetria da B68, medida e nao suposta
+    const negado = await request(ctx.app).delete(`/api/almoxarifado/anexos/${criado.body.id}`);
+    assert.strictEqual(negado.status, 403);
+    assert.strictEqual(negado.body.acao, 'remover_anexo');
+
+    // 5) ALMOXARIFE remove
+    const noDiscoAntes = arquivosEm(ctx.uploadsAnexosDir);
+    assert.strictEqual(noDiscoAntes.length, 1);
+    ctx.setUser({ id: 12, nome: 'Beto Almoxarife', perfil_almoxarifado: 'ALMOXARIFE' });
+    const removido = await request(ctx.app).delete(`/api/almoxarifado/anexos/${criado.body.id}`);
+    assert.strictEqual(removido.status, 200);
+
+    // 6) Some da lista...
+    const listaDepois = await request(ctx.app)
+      .get(`/api/almoxarifado/anexos?entidade=inspecao&entidade_id=${inspecaoId}`);
+    assert.strictEqual(listaDepois.body.length, 0);
+
+    // ...mas o ARQUIVO FICA no disco (RN-05 / D5). Esta e a assercao que impede um fs.unlinkSync
+    // "de limpeza" de entrar sem ninguem perceber.
+    assert.deepStrictEqual(arquivosEm(ctx.uploadsAnexosDir), noDiscoAntes,
+      'D5: soft delete NAO apaga o arquivo do disco');
+
+    // 7) E o 404 do download tem de ser o da LINHA, nao o do arquivo ausente. A literal importa:
+    //    sem distinguir, este passo passaria igual com o unlink que o passo 6 existe para proibir.
+    const depois = await request(ctx.app).get(`/api/almoxarifado/anexos/${criado.body.id}/arquivo`);
+    assert.strictEqual(depois.status, 404);
+    assert.strictEqual(depois.body.error, 'Anexo não encontrado');
+
+    // 8) A trilha guardou os DOIS atos, com os dois autores e os verbos em caixa alta
+    const trilha = await dbAll(ctx.db,
+      `SELECT acao, usuario_nome FROM auditoria_log_almoxarifado
+       WHERE entidade = 'anexo' ORDER BY id`);
+    assert.deepStrictEqual(trilha, [
+      { acao: 'ANEXAR', usuario_nome: 'Ana Qualidade' },
+      { acao: 'REMOVER_ANEXO', usuario_nome: 'Beto Almoxarife' },
+    ]);
   } finally { await ctx.close(); }
 });
 
