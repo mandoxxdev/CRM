@@ -323,3 +323,25 @@ test('(13) inspecao SEM medidas tambem expande, e mostra anexos sem a tabela de 
   expect(chamadasMedidas(8)).toHaveLength(0); // continua NAO buscando medidas que nao existem
   expect(detalhe(8).textContent).not.toContain('Característica');
 });
+
+test('(14) a linha SEM medidas tem a mesma affordance da linha com medidas — senao a superficie e invisivel', async () => {
+  await renderizar();
+  // Achado da revisão adversarial: a Task 4 fez a linha sem medidas EXPANDIR, mas `style`,
+  // `title`, `aria-expanded` e o chevron continuavam presos a `temMedidas`. A área expandida
+  // existia e montava o bloco de anexos — descoberta só por clique às cegas, e para leitor de
+  // tela o `<tr>` não anunciava estado nenhum. Entregar sem affordance é outra forma de não
+  // entregar.
+  for (const id of [7, 8]) {
+    const tr = linha(id);
+    expect(tr.style.cursor).toBe('pointer');
+    expect(tr.getAttribute('title')).toBeTruthy();
+    expect(tr.getAttribute('aria-expanded')).toBe('false');
+    expect(tr.querySelectorAll('svg').length).toBeGreaterThan(0);
+  }
+
+  // E o estado muda ao abrir, nas duas — é o que o leitor de tela anuncia.
+  await clicar(linha(8));
+  expect(linha(8).getAttribute('aria-expanded')).toBe('true');
+  // O texto que explica por que não há tabela de medidas continua lá.
+  expect(linha(8).textContent).toContain('Sem medidas registradas');
+});

@@ -142,9 +142,9 @@ const HistoricoInspecoes = ({ materialFilter }) => {
               <React.Fragment key={h.id}>
                 <tr
                   data-testid={`historico-linha-${h.id}`}
-                  aria-expanded={temMedidas ? aberto : undefined}
-                  style={temMedidas ? { cursor: 'pointer' } : undefined}
-                  title={temMedidas ? 'Clique para ver as medidas' : undefined}
+                  aria-expanded={aberto}
+                  style={{ cursor: 'pointer' }}
+                  title={temMedidas ? 'Clique para ver as medidas e os anexos' : 'Clique para ver os anexos'}
                   onClick={() => alternar(h)}
                 >
                   <td style={{ whiteSpace: 'nowrap', fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>
@@ -187,7 +187,14 @@ const HistoricoInspecoes = ({ materialFilter }) => {
                         {aberto ? <FiChevronUp size={13} /> : <FiChevronDown size={13} />}
                       </span>
                     ) : (
-                      <span style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>Sem medidas registradas</span>
+                      // Etapa 32, fix-round: a linha SEM medidas tambem expande (para mostrar os anexos),
+                      // entao ela precisa da MESMA affordance. Sem o chevron aqui, a area
+                      // expandida existia mas so era descoberta por clique as cegas — a superficie
+                      // ficava invisivel, que e outra forma de nao entregar.
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>
+                        Sem medidas registradas
+                        {aberto ? <FiChevronUp size={13} /> : <FiChevronDown size={13} />}
+                      </span>
                     )}
                   </td>
                 </tr>
