@@ -106,9 +106,9 @@ código (`extended.js:1350`, decisão D3 da Etapa 9b: o primeiro upload numa sub
 armadilha já documentada em `uploadCleanup.js`.
 
 **Fiação, e é onde esta base já matou uma feature.** `uploadsAlmoxDir` nasce em
-`routes/almoxarifado.js:187` a partir do **parâmetro** `PERSISTENT_DATA_DIR` (4º argumento do
+`routes/almoxarifado.js:188` a partir do **parâmetro** `PERSISTENT_DATA_DIR` (4º argumento do
 registrador) e é **passado adiante** para `registerExtendedRoutes(app, db, auth, uploadsAlmoxDir)`
-— o comentário de `almoxarifado.js:3695` proíbe, com todas as letras, re-derivar de
+— o comentário de `almoxarifado.js:3702` proíbe, com todas as letras, re-derivar de
 `config/paths.js`, porque no harness o diretório seria o errado. `uploadsAnexosDir` segue
 exatamente o mesmo caminho e vira o **5º parâmetro** da extended. Se ele não for passado, o
 `destination` do multer recebe `undefined` e a rota morre em runtime **com toda a suíte de unidade
@@ -154,15 +154,23 @@ const ENTIDADES_ANEXO = {
   recebimento:      'recebimentos_material_almoxarifado',
   inspecao:         'inspecoes_recebimento_almoxarifado',
   devolucao:        'devolucoes_material_almoxarifado',
-  lote:             'lotes_almoxarifado',
-  remessa_terceiro: 'remessas_terceiro_almoxarifado',
   item_remessa:     'itens_remessa_terceiro_almoxarifado',
 };
 ```
 
-Oito entidades, uma por pendência medida na Fase 0 (a feature 14 pede o anexo no **item** da
-remessa, não na remessa — `14-materiais-terceiros/README.md:114`, por isso as duas entram). Os
-nomes das tabelas foram lidos do `CREATE TABLE` de `schema.js`, não imaginados: `recebimento` é
+**Seis** entidades, uma por pendência medida na Fase 0 — a feature 14 pede o anexo no **item** da
+remessa, não na remessa (`14-materiais-terceiros/README.md:114`).
+
+> *A versão anterior deste documento dizia **oito**, incluindo `lote` e `remessa_terceiro`, e
+> **estava errada** por dois motivos que a Fase 2 mediu. A própria justificativa se contradizia:
+> ela afirmava que a 14 pede o anexo no **item** e mesmo assim incluía a remessa. E `lote` não é
+> pedido por spec nenhuma — o certificado de lote **já tem dono desde a Etapa 6** (coluna própria
+> + `uploadCertificado`, `routes/almoxarifado.js:209`, item `[x]` em
+> `10-lotes-series-etiquetas/README.md:398`), então a entidade criaria um **segundo lugar para o
+> mesmo documento** e a tela teria de explicar qual dos dois lê. Acrescentar qualquer uma delas
+> depois é uma linha.*
+
+Os nomes das tabelas foram lidos do `CREATE TABLE` de `schema.js`, não imaginados: `recebimento` é
 `recebimentos_material_almoxarifado` e `inspecao` é `inspecoes_recebimento_almoxarifado` — os dois
 nomes que a intuição erraria.
 
@@ -196,17 +204,33 @@ documento do Office ficam fora — YAGNI até haver pedido, e ampliar depois é 
 ### D7 — Uma consumidora nesta etapa, e as outras declaradas
 
 Componente `client/src/components/almoxarifado/AnexosDocumento.js`, genérico por props
-(`entidade`, `entidadeId`, `titulo`, `somenteLeitura`), plugado **num lugar só**: o formulário de
-decisão de inspeção (feature 09), que é o item nomeado por `09-inspecao-qualidade/README.md:161`.
-As outras cinco telas (material, requisição, recebimento, devolução, item de remessa) ficam
-**declaradas como próximas**, não entregues — cada uma é um plug de poucas linhas depois que o
-componente existe, e prometer cinco telas nesta etapa é o jeito conhecido de entregar seis coisas
-pela metade.
+(`entidade`, `entidadeId`, `titulo`, `somenteLeitura`), plugado **num lugar só**: a **linha
+expandida da aba Histórico de inspeções** (`HistoricoInspecoes.js`), feature 09 — o item nomeado
+por `09-inspecao-qualidade/README.md:161`. As outras quatro telas (material, requisição,
+recebimento, devolução) e o item de remessa ficam **declarados como próximos**, não entregues:
+cada um é um plug de poucas linhas depois que o componente existe, e prometer cinco telas nesta
+etapa é o jeito conhecido de entregar seis coisas pela metade.
+
+> *A versão anterior deste documento dizia "plugado no **formulário de decisão** de inspeção", e
+> **estava errada** — medido na Fase 2. `inspecoes_recebimento_almoxarifado` só ganha linha no
+> `INSERT` de `inspectionService.js:268`, **dentro da decisão**; a fila de pendentes devolve
+> `item_id`, não `inspecao.id`, então no formulário de decisão **não existe `entidade_id`** para
+> anexar. O único ponto do client onde o `id` existe é o Histórico. E o plug é
+> `somenteLeitura={false}`: certificado e relatório dimensional chegam **depois** da decisão, e um
+> plug somente-leitura deixaria a etapa com backend inteiro e **zero superfície para anexar**.*
 
 **A diferença real com o legado, e que precisa estar no guia:** como a rota é autenticada, o
-download **não pode** ser `<img src>` nem `<a href>` direto. O componente faz `fetch` com o token,
-recebe `blob`, cria `URL.createObjectURL` e dispara um `<a download>` que ele mesmo revoga. É mais
-código que o legado — e é exatamente o preço de o arquivo não ser público.
+download **não pode** ser `<img src>` nem `<a href>` direto. O componente usa o `api` (axios, que
+carrega o token no interceptor) com `responseType: 'blob'`, cria `URL.createObjectURL` e dispara
+um `<a download>` que ele mesmo revoga. É mais código que o legado — e é exatamente o preço de o
+arquivo não ser público.
+
+**E há uma armadilha já paga por esta base:** com `responseType: 'blob'`, o axios entrega o
+**corpo do erro como Blob também**, então `e.response.data.error` é sempre `undefined` e 403, 400
+e 404 viram a mesma mensagem genérica. Está medido e documentado em
+`RelatoriosAlmoxarifado.js:325-333`; o `catch` de lá (`await blob.text()` → `JSON.parse`) é o
+molde a copiar. Sem ele, o 404 *"Arquivo do anexo não encontrado"* — que existe justamente para o
+usuário distinguir "sumiu do disco" de "sem permissão" — não chega à tela.
 
 ## Contratos de API (congelados)
 
@@ -220,7 +244,7 @@ Ordem obrigatória: `auth` → `requirePermission('anexar_documento')` → `uplo
 | Saída | Código | Corpo |
 |---|---|---|
 | sucesso | 201 | `{ id, entidade, entidade_id, tipo, descricao, nome_original, tamanho_bytes, mime_type, uploaded_by, uploaded_by_nome, created_at }` |
-| sem perfil | 403 | `{ error: "Sem permissão para anexar documento", acao: "anexar_documento" }` — **antes** do multer, sem arquivo em disco |
+| sem perfil | 403 | `{ error: "Sem permissão para esta operação", acao: "anexar_documento", perfil: "<PERFIL>" }` — **antes** do multer, sem arquivo em disco. *A versão anterior deste documento congelava aqui a frase `"Sem permissão para anexar documento"`; **estava errada**, medido na Fase 2: `requirePermission` (`permissions.js:155-160`) devolve a MESMA literal genérica para as 24 ações, e quem monta a frase legível é o client, em `permissaoErro.js` — que é justamente o que a RN-07 cobre.* |
 | sem arquivo | 400 | `{ error: "Arquivo é obrigatório" }` |
 | tipo recusado | 400 | `{ error: "Anexo deve ser PDF ou imagem" }` |
 | acima de 10 MB | 400 | `{ error: "Arquivo excede o limite de 10 MB" }` |
@@ -250,7 +274,7 @@ para já removido** — remover duas vezes não é sucesso silencioso.
 
 | ID | Enunciado | Cenário que a prova |
 |---|---|---|
-| **RN-01** | Anexo só existe preso a um registro que existe | `entidade_id` de material apagado → 404, e a tabela não ganha linha |
+| **RN-01** | Anexo só existe preso a um registro que existe | `entidade_id` que **nunca existiu** → 404, e a tabela não ganha linha. *A versão anterior dizia "material apagado"; **estava errada** — exclusão de material é soft delete (`routes/almoxarifado.js:667`), a linha permanece, e `assertPaiExiste` não filtra `ativo`: material desativado **continua aceitando anexo**, de propósito (documento histórico de material aposentado tem de continuar anexável). Registrado na letra B* |
 | **RN-02** | Entidade vem de mapa fechado, nunca de string livre | `entidade: 'qualquer_coisa'` → 400, upload limpo do disco |
 | **RN-03** | O arquivo do anexo **não** é servido estaticamente | `GET /api/uploads/almoxarifado/<nome do anexo>` → 404, com o mesmo arquivo baixando 200 pela rota autenticada |
 | **RN-04** | Sem `anexar_documento`, o arquivo não chega ao disco | 403 com `fs.readdirSync(dir)` do tamanho de antes |
@@ -263,14 +287,26 @@ para já removido** — remover duas vezes não é sucesso silencioso.
 - `server/tests/api/anexoDocumento.api.test.js` — RN-01 a RN-06, pela rota, com `supertest`
   `.attach('arquivo', Buffer.from('%PDF-1.4'), 'cert.pdf')`, molde de
   `tests/api/toolCalibracao.api.test.js:84`.
-- **Controle positivo obrigatório em RN-03**, que é a regra fácil de fingir: o teste tem de provar
-  que a régua **sabe reprovar** — com o arquivo movido para `uploadsAlmoxDir`, o `GET` estático
-  responde 200. Sem esse controle, "404 no estático" passa com o arquivo simplesmente não
-  existindo em lugar nenhum, e a etapa inteira seria um teste vazio — o quinto desta base.
+- **A RN-03 mede POSIÇÃO RELATIVA, não o `GET` pelo basename** — e esta é a correção mais
+  importante que a Fase 2 trouxe. A primeira versão assertava só `GET /api/uploads/almoxarifado/
+  <nome> → 404`, e ela é **cega exatamente para o erro que este design existe para evitar**: com o
+  diretório em `uploads/almoxarifado/anexos/`, aquele `GET` daria 404 **por caminho errado** (o
+  arquivo está um nível mais fundo) enquanto a URL real responderia **200 sem autenticação**. Os
+  cenários todos verdes, e o furo entregue — seria o quinto teste vazio desta base. A régua certa
+  é `path.relative(uploadsAlmoxDir, arquivoDoAnexo).startsWith('..')`, mais o `404` nos **dois**
+  mounts pelo caminho real.
+- **Controle positivo obrigatório em RN-03**: com um arquivo escrito dentro de `uploadsAlmoxDir`,
+  o `GET` estático responde 200 — sem isso, "404 no estático" passa com o arquivo simplesmente não
+  existindo em lugar nenhum.
+- **RN-05 tem de medir o disco**, não só o banco: sem uma asserção de contagem de arquivos depois
+  do `DELETE`, um `fs.unlinkSync` "de limpeza" implementaria em silêncio a alternativa que o D5
+  descartou, com a suíte inteira verde.
 - Integração cruzando galhos: anexar → listar → baixar (conferindo o **conteúdo** do corpo, não só
-  o 200) → remover → listar vazio.
-- Client: `AnexosDocumento.test.js` (lista, upload, erro de tipo, download por blob, remoção com
-  `somenteLeitura` escondendo o botão) e o plug em `InspecoesAlmoxarifado.test.js`.
+  o 200) → remover → listar vazio → baixar de novo, assertando a **literal** do 404 (tem de ser o
+  da linha, `"Anexo não encontrado"`, e não o do arquivo ausente).
+- Client: `AnexosDocumento.test.js` (7 cenários — lista com mock params-aware, guarda de
+  `entidadeId` com a metade positiva, upload, erro do `post`, download por blob, **erro do `get`
+  vindo do Blob**, e `somenteLeitura` com as duas metades) e o plug em `HistoricoInspecoes.test.js`.
 
 ## O que esta etapa NÃO cobre (declarado)
 

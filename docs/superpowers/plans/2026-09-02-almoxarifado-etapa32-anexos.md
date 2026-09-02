@@ -29,7 +29,7 @@ alcança; e um componente React genérico que baixa por `blob`, porque a rota é
 - **O diretório de upload é PARÂMETRO, nunca constante de módulo.** `uploadsAnexosDir` nasce em
   `routes/almoxarifado.js` a partir do 4º parâmetro `PERSISTENT_DATA_DIR` e desce para a extended
   como **5º parâmetro**. Re-derivar de `config/paths.js` aponta para o diretório errado no harness
-  — proibição já escrita em `almoxarifado.js:3695` e em `uploadCleanup.js`.
+  — proibição já escrita em `almoxarifado.js:3695-3702` e em `uploadCleanup.js`.
 - **Nunca `git add -A` na raiz** — há artefatos de runtime em `server/data/` e `server/uploads/`.
 - **Testes descobertos só em `server/tests/api/*.api.test.js`**, cada arquivo com runner próprio
   (`test()`, contador, `process.exit`). Harness: `server/tests/helpers/testApp.js`, que roda o
@@ -42,19 +42,19 @@ alcança; e um componente React genérico que baixa por `blob`, porque a rota é
 | Arquivo | Responsabilidade | Task |
 |---|---|---|
 | `server/services/almoxarifado/anexoService.js` **(criar)** | mapa de entidades, CRUD do anexo, auditoria | 1 |
-| `server/services/almoxarifado/schema.js` **(modificar)** | 5 colunas novas por `safeAlter` + índice | 1 |
+| `server/services/almoxarifado/schema.js` **(modificar)** | 7 colunas novas por `safeAlter` + índice | 1 |
 | `server/services/almoxarifado/permissions.js` **(modificar)** | `anexar_documento`, `remover_anexo` | 1 |
 | `server/services/almoxarifado/auditLabels.js` **(modificar)** | rótulo da entidade `anexo` | 1 |
 | `client/src/utils/permissaoErro.js` **(modificar)** | rótulo das duas ações novas | 1 |
 | `server/tests/api/anexoService.api.test.js` **(criar)** | RN-01, RN-02, RN-05 pelo serviço | 1 |
-| `server/routes/almoxarifado.js` **(modificar, `:187` e `:3695`)** | criar o diretório e passá-lo adiante | 2 |
+| `server/routes/almoxarifado.js` **(modificar, `:188` e `:3702`)** | criar o diretório e passá-lo adiante | 2 |
 | `server/routes/almoxarifado/extended.js` **(modificar)** | multer + 4 rotas | 2 |
 | `server/services/almoxarifado/schemas.js` **(modificar)** | `AnexoCreateSchema` | 2 |
 | `server/tests/helpers/testApp.js` **(modificar, `:80`)** | expor `uploadsAnexosDir` | 2 |
-| `server/tests/api/anexoDocumento.api.test.js` **(criar)** | RN-03, RN-04, RN-06 pela rota | 2 |
+| `server/tests/api/anexoDocumento.api.test.js` **(criar)** | RN-03, RN-04, RN-06 pela rota (13 cenarios) | 2 |
 | `client/src/components/almoxarifado/AnexosDocumento.js` **(criar)** | componente genérico | 3 |
-| `client/src/components/almoxarifado/AnexosDocumento.test.js` **(criar)** | 6 cenários | 3 |
-| `client/src/components/almoxarifado/InspecoesAlmoxarifado.js` **(modificar)** | plug da feature 09 | 4 |
+| `client/src/components/almoxarifado/AnexosDocumento.test.js` **(criar)** | 7 cenários | 3 |
+| `client/src/components/almoxarifado/HistoricoInspecoes.js` **(modificar)** | plug da feature 09 | 4 |
 | `server/tests/api/anexoDocumento.api.test.js` **(modificar)** | fluxo cruzando, pela rota | 5 |
 
 ## Sort topológico
@@ -64,8 +64,14 @@ alcança; e um componente React genérico que baixa por `blob`, porque a rota é
 | 1 — schema, serviço e permissões | **tronco** | — | mexe em `ACAO_PERFIS` e no schema: regra compartilhada |
 | 2 — fiação e rotas | **galho** | 1 | consome o serviço já congelado |
 | 3 — componente `AnexosDocumento` | **galho** | 1 (só o contrato) | client contra contrato HTTP congelado — mock legítimo, é a fronteira |
-| 4 — plug na inspeção | sequencial | 3 | importa o componente da Task 3 |
+| 4 — plug no Histórico de inspeções | sequencial | 3 | importa o componente da Task 3 |
 | 5 — integração + fechamento | sequencial | 2 e 4 | cruza os galhos |
+
+**Decisão que sobe para o tronco por causa da Fase 2:** `entidade_id` da inspeção é o **`id` da
+linha de `inspecoes_recebimento_almoxarifado`**, que só existe **depois da decisão** — não o
+`item_id` da fila de pendentes. Isso fica congelado aqui, na Task 1, junto com o mapa de
+entidades, porque a Task 3 escreve as props contra ele e a Task 4 depende da mesma leitura; se
+cada galho decidisse por conta, os dois divergiriam sem teste nenhum perceber.
 
 **Paralelismo real: 2 galhos** (Tasks 2 e 3), em **worktrees isoladas** — a Task 2 roda a suíte de
 servidor contra SQLite e a Task 3 roda a do client; árvores separadas evitam que um `git add` de
@@ -100,8 +106,7 @@ um pegue arquivo do outro. Scratchpad com nome único por agente (`msg-rotas.txt
 
 - [ ] **Step 1: Escrever o teste que falha**
 
-Crie `server/tests/api/anexoService.api.test.js` no molde de runner desta base (copie o cabeçalho
-de `server/tests/api/toolCalibracao.api.test.js` — `assert`, contador, `process.exit`):
+Crie `server/tests/api/anexoService.api.test.js` no molde de runner desta base. **Use o molde colado abaixo** (array `testes` + laço final + `process.exit`), que é autossuficiente — o `toolCalibracao.api.test.js:16-19` usa outra forma (`await test(...)` inline) e misturar as duas não roda:
 
 ```js
 const assert = require('assert');
@@ -162,12 +167,13 @@ test('material existente: grava, audita e devolve a linha SEM arquivo_path', asy
     assert.strictEqual(anexo.tamanho_bytes, 1234);
     assert.strictEqual(anexo.mime_type, 'application/pdf');
     assert.strictEqual(anexo.uploaded_by, 7);
+    assert.strictEqual(anexo.uploaded_by_nome, 'Qualidade Teste');
     assert.strictEqual(anexo.arquivo_path, undefined, 'arquivo_path NAO sai do servico');
 
     const aud = await dbGet(ctx.db,
       `SELECT * FROM auditoria_log_almoxarifado WHERE entidade = 'anexo' ORDER BY id DESC`);
     assert.ok(aud, 'anexar tem de auditar');
-    assert.strictEqual(aud.acao, 'anexar');
+    assert.strictEqual(aud.acao, 'ANEXAR');
   } finally { await ctx.close(); }
 });
 
@@ -205,18 +211,26 @@ test('remover ja removido: 404, nao 200', async () => {
   } finally { await ctx.close(); }
 });
 
-// As oito entidades do mapa apontam para tabela que EXISTE — a regua que pega nome imaginado
-test('as oito entidades do mapa apontam para tabelas que existem no schema', async () => {
+// As seis entidades do mapa apontam para tabela que EXISTE — a regua que pega nome imaginado.
+// A asserção de DISTINÇÃO (`new Set(...).size === 6`) é o que impede o teste de passar com um
+// mapa que aponte as seis chaves para `materiais_almoxarifado`: só "a tabela existe" seria
+// satisfeito por esse mapa errado, e o anexo do recebimento iria consultar material.
+test('as seis entidades do mapa apontam para tabelas distintas que existem no schema', async () => {
   const ctx = await createTestApp();
   try {
     const chaves = Object.keys(anexoService.ENTIDADES_ANEXO);
-    assert.strictEqual(chaves.length, 8, 'o mapa tem oito entidades');
+    assert.strictEqual(chaves.length, 6, 'o mapa tem seis entidades — uma por pendencia de spec');
+    const tabelas = chaves.map((c) => anexoService.ENTIDADES_ANEXO[c]);
+    assert.strictEqual(new Set(tabelas).size, 6, 'cada entidade tem a SUA tabela');
     for (const chave of chaves) {
       const tabela = anexoService.ENTIDADES_ANEXO[chave];
       const existe = await dbGet(ctx.db,
         `SELECT name FROM sqlite_master WHERE type='table' AND name = ?`, [tabela]);
       assert.ok(existe, `entidade ${chave} aponta para tabela inexistente: ${tabela}`);
     }
+    // As seis chaves sao exatamente as das specs — nem a mais (YAGNI) nem a menos
+    assert.deepStrictEqual(chaves.sort(),
+      ['devolucao', 'inspecao', 'item_remessa', 'material', 'recebimento', 'requisicao']);
   } finally { await ctx.close(); }
 });
 
@@ -247,6 +261,7 @@ anexos_documento_almoxarifado (...)` que termina em `:1700`:
   // faltam). `ativo` default 1 para que a linha legada — se algum dia houver — nasca visivel.
   for (const col of [
     'descricao TEXT',
+    'uploaded_by_nome TEXT',
     'tamanho_bytes INTEGER',
     'mime_type TEXT',
     'ativo INTEGER DEFAULT 1',
@@ -261,8 +276,8 @@ anexos_documento_almoxarifado (...)` que termina em `:1700`:
 ```
 
 E acrescente as seis colunas ao `CREATE TABLE` acima, para que instalação nova nasça pronta:
-`descricao TEXT`, `tamanho_bytes INTEGER`, `mime_type TEXT`, `ativo INTEGER DEFAULT 1`,
-`deleted_by INTEGER`, `deleted_at DATETIME`.
+`descricao TEXT`, `uploaded_by_nome TEXT`, `tamanho_bytes INTEGER`, `mime_type TEXT`,
+`ativo INTEGER DEFAULT 1`, `deleted_by INTEGER`, `deleted_at DATETIME`.
 
 - [ ] **Step 4: O serviço**
 
@@ -295,13 +310,18 @@ const ENTIDADES_ANEXO = {
   recebimento: 'recebimentos_material_almoxarifado',
   inspecao: 'inspecoes_recebimento_almoxarifado',
   devolucao: 'devolucoes_material_almoxarifado',
-  lote: 'lotes_almoxarifado',
-  remessa_terceiro: 'remessas_terceiro_almoxarifado',
   item_remessa: 'itens_remessa_terceiro_almoxarifado',
 };
+// SEIS entidades, uma por pendencia REALMENTE medida nas specs (01, 04, 08, 09, 12, 14). Nao ha
+// `lote` nem `remessa_terceiro`, e a ausencia e deliberada, nao esquecimento: nenhuma spec os
+// pede, e o certificado de lote JA TEM dono desde a Etapa 6 (coluna propria + `uploadCertificado`,
+// routes/almoxarifado.js:209) — uma entidade `lote` aqui criaria um SEGUNDO lugar para o mesmo
+// documento, e a tela teria de explicar qual dos dois ela le. A feature 14 pede o anexo no ITEM
+// da remessa (14-materiais-terceiros/README.md:114), nao na remessa. Acrescentar qualquer uma
+// delas depois e UMA LINHA.
 
 const CAMPOS_PUBLICOS = `id, entidade, entidade_id, tipo, descricao, nome_original,
-  tamanho_bytes, mime_type, uploaded_by, created_at`;
+  tamanho_bytes, mime_type, uploaded_by, uploaded_by_nome, created_at`;
 
 function erro(status, mensagem) {
   const e = new Error(mensagem);
@@ -331,10 +351,15 @@ async function registrarAnexo(db, user, { entidade, entidade_id, tipo, descricao
   if (!arquivo || !arquivo.filename) throw erro(400, 'Arquivo é obrigatório');
 
   const r = await dbRun(db, `INSERT INTO anexos_documento_almoxarifado
-    (entidade, entidade_id, tipo, arquivo_path, nome_original, tamanho_bytes, mime_type, uploaded_by, descricao, ativo)
-    VALUES (?,?,?,?,?,?,?,?,?,1)`, [
+    (entidade, entidade_id, tipo, arquivo_path, nome_original, tamanho_bytes, mime_type, uploaded_by, uploaded_by_nome, descricao, ativo)
+    VALUES (?,?,?,?,?,?,?,?,?,?,1)`, [
     entidade, paiId, tipo, arquivo.filename, arquivo.originalname || arquivo.filename,
-    arquivo.size ?? null, arquivo.mimetype || null, user?.id ?? null, descricao || null,
+    arquivo.size ?? null, arquivo.mimetype || null, user?.id ?? null,
+    // DENORMALIZADO de proposito: `usuarios` e tabela CORE, fora do initSchema do almoxarifado e
+    // fora do harness (testApp.js stuba so `clientes` e `fornecedores`) — um LEFT JOIN faria todo
+    // POST morrer com "no such table: usuarios" no teste. Precedente escrito da base:
+    // requisitionCreateService.js:31. E o nome do momento do upload e o que a trilha quer.
+    user?.nome || user?.email || null, descricao || null,
   ]);
 
   const linha = await dbGet(db,
@@ -344,7 +369,7 @@ async function registrarAnexo(db, user, { entidade, entidade_id, tipo, descricao
   // causa do log desfaria nada e devolveria erro para um ato que deu certo.
   try {
     await audit.registrarAuditoria(db, {
-      entidade: 'anexo', entidade_id: r.lastID, acao: 'anexar',
+      entidade: 'anexo', entidade_id: r.lastID, acao: 'ANEXAR',
       usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
       dados_novos: { entidade, entidade_id: paiId, tipo, nome_original: linha.nome_original },
     });
@@ -384,7 +409,7 @@ async function removerAnexo(db, user, id) {
 
   try {
     await audit.registrarAuditoria(db, {
-      entidade: 'anexo', entidade_id: n, acao: 'remover',
+      entidade: 'anexo', entidade_id: n, acao: 'REMOVER_ANEXO',
       usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
       dados_anteriores: antes,
     });
@@ -417,7 +442,10 @@ Sabote **uma coisa por vez** e confirme o vermelho, revertendo depois de cada um
    Esperado: **falha** o cenário do soft delete (`removido nao aparece na lista`).
 3. No mapa, troque `recebimento: 'recebimentos_material_almoxarifado'` por
    `recebimento: 'recebimentos_almoxarifado'` (o nome que a intuição erra).
-   Esperado: **falha** o cenário das oito entidades, nomeando a chave.
+   Esperado: **falha** o cenário das seis entidades, nomeando a chave.
+4. No mapa, troque `recebimento` para apontar para `'materiais_almoxarifado'` (tabela que
+   **existe**, mas é a errada). Esperado: **falha** pela asserção de tabelas distintas — é a
+   sabotagem que separa "o mapa existe" de "o mapa está certo".
 
 Se alguma sabotagem **não** derrubar teste nenhum, o teste correspondente é vazio — conserte-o
 antes de seguir. Registre no plano o que cada sabotagem derrubou.
@@ -448,7 +476,7 @@ ela trocou a régua por **presença no mapa `ACAO_PERFIS` importado do servidor*
 correção está viva, as duas ações novas derrubam o teste **sozinhas**, sem ninguém escrever
 asserção nova.
 
-Run: `cd client && CI=true npx react-scripts test --watchAll=false -t permissaoErro`
+Run: `cd client && CI=true npx react-scripts test src/utils/permissaoErro.test.js --watchAll=false`
 Expected: **FAIL**, nomeando `anexar_documento` e `remover_anexo` como ausentes do mapa.
 
 > Se **passar**, pare: a régua da Etapa 30 não está viva e o buraco de rótulo voltaria pela
@@ -466,15 +494,27 @@ Em `client/src/utils/permissaoErro.js`, no mapa `ACOES`, depois de `ajustar_mate
   remover_anexo: 'remover anexo',
 ```
 
-E em `server/services/almoxarifado/auditLabels.js`, acrescente a entidade `anexo` ao mapa de
-rótulos, no molde das entradas existentes (`categoria: 'Categoria'` foi a da Etapa 26):
-`anexo: 'Anexo'`.
+E em `server/services/almoxarifado/auditLabels.js`, **três** entradas — a entidade e os **dois
+verbos**:
+
+- em `ROTULOS_ENTIDADE`: `anexo: 'Anexo'` (molde de `categoria: 'Categoria'`, da Etapa 26);
+- em `ROTULOS_ACAO`: `ANEXAR: 'Anexo enviado'` e `REMOVER_ANEXO: 'Anexo removido'`.
+
+> **Por que os verbos são MAIÚSCULOS** (`'ANEXAR'`, não `'anexar'`), e isto não é estilo: a régua
+> de cobertura do vocabulário, `server/tests/api/auditLabels.api.test.js:60-61`, varre o código
+> com `acao: '\K[A-Z_]+` — **só maiúsculas**. Verbo minúsculo **não entra** no
+> `semRotulo = uniao.filter(v => labels.rotularAcao(v) === v)` (`:229-232`), então o teste que
+> existe exatamente para impedir verbo sem rótulo ficaria verde, e a tela de auditoria da Etapa 22
+> mostraria `anexar` cru no meio de `Criação`, `Exclusão`, `Calibração`. Com maiúscula, aquele
+> teste **exige** o rótulo sozinho — o mesmo mecanismo grátis que o Step 8 explora no
+> `permissaoErro`. E `REMOVER_ANEXO` em vez de `REMOVER` porque a trilha é lida meses depois, e
+> um verbo genérico não diz o que foi removido.
 
 - [ ] **Step 10: Rodar tudo o que a Task 1 toca**
 
 ```bash
 cd server && node tests/api/anexoService.api.test.js && npm run test:api
-cd client && CI=true npx react-scripts test --watchAll=false -t permissaoErro
+cd client && CI=true npx react-scripts test src/utils/permissaoErro.test.js --watchAll=false
 ```
 Expected: serviço `6 passed`; `test:api` **166/166 arquivos** (165 → 166); `permissaoErro` verde.
 
@@ -495,7 +535,7 @@ livre deixa anexo invisível, e que o vermelho do `permissaoErro` foi medido **a
 ### Task 2: Fiação do diretório e as quatro rotas  **(galho — worktree isolada)**
 
 **Files:**
-- Modify: `server/routes/almoxarifado.js` (`:187` bloco do diretório; `:3695` chamada da extended)
+- Modify: `server/routes/almoxarifado.js` (`:188` bloco do diretório; `:3702` chamada da extended)
 - Modify: `server/routes/almoxarifado/extended.js` (assinatura `:112` + rotas novas)
 - Modify: `server/services/almoxarifado/schemas.js`
 - Modify: `server/tests/helpers/testApp.js` (`:80`)
@@ -503,7 +543,9 @@ livre deixa anexo invisível, e que o vermelho do `permissaoErro` foi medido **a
 
 **Interfaces:**
 - Consumes: tudo o que a Task 1 exportou em `anexoService` (assinaturas acima, verbatim);
-  `limparUploadOrfaoEm(req, dir)` de `uploadCleanup.js`; `handleError(res, err)` e
+  `limparUploadOrfaoEm(req, dir)` — **atenção: o módulo `uploadCleanup.js` exporta
+  `limparUploadOrfao`; `...Em` é o alias local de `extended.js:28`**, criado de propósito para
+  obrigar a ler o 2º argumento. Dentro da extended o nome já está em escopo; `handleError(res, err)` e
   `formatZodError` já existentes na extended.
 - Produces: as quatro rotas do design, e `ctx.uploadsAnexosDir` no harness (a Task 5 usa as duas
   coisas).
@@ -515,6 +557,7 @@ Crie `server/tests/api/anexoDocumento.api.test.js` (mesmo molde de runner; use `
 ```js
 const assert = require('assert');
 const fs = require('fs');
+const path = require('path');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
 const { dbRun } = require('../../services/almoxarifado/db');
@@ -609,6 +652,25 @@ test('arquivo ausente: 400 com a literal', async () => {
   } finally { await ctx.close(); }
 });
 
+// RN-06, o ramo que os outros cenarios NAO alcancam: o Zod reprova DEPOIS de o multer ja ter
+// gravado. `tipo` vazio passa pelo multer (o arquivo e valido) e morre no safeParse — e este e
+// o unico cenario da suite que exercita o `limparUploadOrfaoEm` do ramo do Zod. Sem ele,
+// apagar aquela linha deixa a suite inteira verde e vaza orfao a cada formulario mal preenchido.
+test('Zod reprova o body: 400 e o disco volta ao tamanho de antes', async () => {
+  const ctx = await createTestApp();
+  try {
+    const materialId = await comMaterial(ctx);
+    const antes = arquivosEm(ctx.uploadsAnexosDir).length;
+    const res = await request(ctx.app).post('/api/almoxarifado/anexos')
+      .field('entidade', 'material').field('entidade_id', String(materialId))
+      .field('tipo', '')
+      .attach('arquivo', PDF, 'cert.pdf');
+    assert.strictEqual(res.status, 400);
+    assert.match(res.body.error, /^Dados inválidos —/);
+    assert.strictEqual(arquivosEm(ctx.uploadsAnexosDir).length, antes, 'orfao do ramo Zod');
+  } finally { await ctx.close(); }
+});
+
 test('tipo de arquivo recusado: 400 com a literal, e nada no disco', async () => {
   const ctx = await createTestApp();
   try {
@@ -636,9 +698,21 @@ test('RN-03: o anexo NAO sai pelo /api/uploads/almoxarifado, e SAI pela rota aut
     const nomeNoDisco = arquivosEm(ctx.uploadsAnexosDir)[0];
     assert.ok(nomeNoDisco, 'o multer gravou o arquivo');
 
-    // O mount estatico existe e serve uploadsAlmoxDir — o anexo mora no diretorio IRMAO
-    const estatico = await request(ctx.app).get(`/api/uploads/almoxarifado/${nomeNoDisco}`);
-    assert.strictEqual(estatico.status, 404, 'anexo NAO pode ser publico');
+    // A REGUA E A POSICAO RELATIVA, e nao o GET pelo basename. Sem esta assercao o cenario e
+    // CEGO justamente para o erro que o design existe para evitar: com o diretorio em
+    // `uploads/almoxarifado/anexos/`, o GET abaixo daria 404 POR CAMINHO ERRADO (o arquivo esta
+    // um nivel mais fundo) enquanto a URL real `/api/uploads/almoxarifado/anexos/<nome>`
+    // responderia 200 sem autenticacao nenhuma — 13 cenarios verdes e o furo entregue.
+    const rel = path.relative(ctx.uploadsAlmoxDir, path.join(ctx.uploadsAnexosDir, nomeNoDisco));
+    assert.ok(rel.startsWith('..'),
+      `o diretorio de anexos esta DENTRO de uploads/almoxarifado (${rel}) — express.static serve subpasta`);
+
+    // Os DOIS mounts de routes/almoxarifado.js:229-230, pelo caminho REAL do arquivo
+    for (const prefixo of ['/api/uploads/almoxarifado', '/uploads/almoxarifado']) {
+      const url = `${prefixo}/${rel.split(path.sep).join('/')}`;
+      const estatico = await request(ctx.app).get(url);
+      assert.strictEqual(estatico.status, 404, `anexo publico em ${url}`);
+    }
 
     const baixado = await request(ctx.app).get(`/api/almoxarifado/anexos/${criado.body.id}/arquivo`);
     assert.strictEqual(baixado.status, 200);
@@ -661,20 +735,34 @@ test('[CONTROLE POSITIVO] o mesmo arquivo DENTRO de uploads/almoxarifado sai pub
   } finally { await ctx.close(); }
 });
 
-test('GET /anexos lista so os ativos da entidade pedida', async () => {
+// O titulo promete DUAS coisas, entao o cenario tem de medir as duas. Com dois anexos no mesmo
+// material e mais nada, uma `listarAnexos` que ignore o WHERE INTEIRO passa igual, e uma que
+// ignore o `ativo = 1` tambem — por isso ha um anexo de OUTRO material e um REMOVIDO.
+test('GET /anexos lista so os ativos DA entidade pedida', async () => {
   const ctx = await createTestApp();
   try {
-    const materialId = await comMaterial(ctx);
-    for (const nome of ['a.pdf', 'b.pdf']) {
-      await request(ctx.app).post('/api/almoxarifado/anexos')
-        .field('entidade', 'material').field('entidade_id', String(materialId)).field('tipo', 'FICHA')
-        .attach('arquivo', PDF, nome);
-    }
+    const materialA = await comMaterial(ctx);
+    const rB = await dbRun(ctx.db,
+      `INSERT INTO materiais_almoxarifado (codigo, nome, unidade) VALUES (?,?,?)`,
+      ['MAT-2', 'Barra 1/2', 'M']);
+    const materialB = rB.lastID;
+
+    const anexar = (mid, nome) => request(ctx.app).post('/api/almoxarifado/anexos')
+      .field('entidade', 'material').field('entidade_id', String(mid)).field('tipo', 'FICHA')
+      .attach('arquivo', PDF, nome);
+
+    const fica = await anexar(materialA, 'fica.pdf');
+    const sai = await anexar(materialA, 'sai.pdf');
+    await anexar(materialB, 'outro-material.pdf');
+    await request(ctx.app).delete(`/api/almoxarifado/anexos/${sai.body.id}`);
+
     const res = await request(ctx.app)
-      .get(`/api/almoxarifado/anexos?entidade=material&entidade_id=${materialId}`);
+      .get(`/api/almoxarifado/anexos?entidade=material&entidade_id=${materialA}`);
     assert.strictEqual(res.status, 200);
-    assert.strictEqual(res.body.length, 2);
+    assert.strictEqual(res.body.length, 1, 'so o ativo do material A');
+    assert.strictEqual(res.body[0].id, fica.body.id);
     assert.strictEqual(res.body[0].arquivo_path, undefined);
+    assert.strictEqual(res.body[0].uploaded_by_nome, 'Admin Teste');
   } finally { await ctx.close(); }
 });
 
@@ -740,7 +828,7 @@ Expected: FAIL — `ctx.uploadsAnexosDir` é `undefined` e as rotas respondem 40
 
 - [ ] **Step 3: O diretório e a fiação**
 
-Em `server/routes/almoxarifado.js`, logo depois do bloco de `uploadsAlmoxDir` (`:187-188`):
+Em `server/routes/almoxarifado.js`, logo depois do bloco de `uploadsAlmoxDir` (`:188-189`):
 
 ```js
   // Etapa 32 (D1): os anexos vao para um diretorio IRMAO, nao para uma subpasta de
@@ -752,7 +840,7 @@ Em `server/routes/almoxarifado.js`, logo depois do bloco de `uploadsAlmoxDir` (`
   if (!fs.existsSync(uploadsAnexosDir)) fs.mkdirSync(uploadsAnexosDir, { recursive: true });
 ```
 
-E na chamada da extended (`:3695` e adiante), passe o novo diretório como **5º argumento**:
+E na chamada da extended (`:3702`), passe o novo diretório como **5º argumento**:
 
 ```js
     require('./almoxarifado/extended')(app, db, authenticateToken, uploadsAlmoxDir, uploadsAnexosDir);
@@ -775,7 +863,12 @@ Em `server/tests/helpers/testApp.js`, ao lado de `uploadsAlmoxDir` (`:80`):
 
 - [ ] **Step 4: O Zod**
 
-Em `server/services/almoxarifado/schemas.js`, no molde dos schemas existentes, e exportado:
+Em `server/services/almoxarifado/schemas.js`, no molde dos schemas existentes — **e acrescente
+`AnexoCreateSchema` à lista explícita de `module.exports` em `schemas.js:736-748`**. O arquivo
+exporta por lista fechada, item a item, **não** por spread: sem essa linha o binding na extended é
+`undefined` e **todo** `POST /anexos` morre em `Cannot read properties of undefined (reading
+'safeParse')` — 500 com stack, depois de o multer já ter gravado, e a causa não aparece na
+mensagem.
 
 ```js
 // Etapa 32: o body chega por multipart, entao TUDO e string — `entidade_id` vem como '12'.
@@ -819,8 +912,10 @@ ocorrência de ferramenta, que são o molde multipart mais recente):
   app.post('/api/almoxarifado/anexos', auth, requirePermission('anexar_documento'),
     (req, res, next) => uploadAnexo.single('arquivo')(req, res, (err) => {
       // O erro do fileFilter e do limite chegam como excecao do multer, nao como 400 do Zod.
-      // Sem este wrapper eles viram 500 com stack — e o `MulterError` de tamanho ainda deixa o
-      // arquivo parcial em disco.
+      // Sem este wrapper o `next(err)` cai no handler de erro do Express e vira 500 com stack.
+      // O `limparUploadOrfaoEm` daqui e defesa em profundidade e NO-OP no caminho normal: o
+      // multer 2.x ja apaga o parcial sozinho (`make-middleware.js:78-99`, removeUploadedFiles)
+      // e nunca seta `req.file` nos caminhos de erro — medido na revisao do plano.
       if (!err) return next();
       limparUploadOrfaoEm(req, uploadsAnexosDir);
       const msg = err.code === 'LIMIT_FILE_SIZE' ? 'Arquivo excede o limite de 10 MB' : err.message;
@@ -870,25 +965,39 @@ ocorrência de ferramenta, que são o molde multipart mais recente):
   });
 ```
 
-Acrescente `AnexoCreateSchema` à desestruturação do `require` de `schemas` (`extended.js:19`) e
+Acrescente `AnexoCreateSchema` à desestruturação do `require` de `schemas` (`extended.js:20`) e
 `const anexoService = require('../../services/almoxarifado/anexoService');` junto dos outros
 serviços.
 
 - [ ] **Step 6: Rodar e ver passar**
 
 Run: `cd server && node tests/api/anexoDocumento.api.test.js`
-Expected: `12 passed, 0 failed`.
+Expected: `13 passed, 0 failed`.
 
 - [ ] **Step 7: Controle positivo — as três sabotagens que importam**
 
 1. Troque `destination: (req, file, cb) => cb(null, uploadsAnexosDir)` por `uploadsAlmoxDir`.
-   Esperado: **falha a RN-03** (o anexo passa a sair 200 no estático). Esta é a sabotagem que
-   prova que a etapa inteira não é decorativa.
+   Esperado: **a RN-03 fica vermelha na âncora `o multer gravou o arquivo`** — o diretório de
+   anexos fica vazio e `nomeNoDisco` vem `undefined`, então o `assert.ok` estoura **antes** do
+   `GET` estático. É a sabotagem que prova que a etapa não é decorativa, mas **registre o motivo
+   real**: para observar o 200 no estático, troque durante a sabotagem por
+   `const nomeNoDisco = arquivosEm(ctx.uploadsAlmoxDir).find((f) => f.startsWith('anexo-'));`.
 2. Remova o 5º argumento da chamada em `routes/almoxarifado.js` (a fiação).
    Esperado: **falham todos os cenários de upload** — é o modo de falha da Etapa 25, e o teste
-   entra **pela rota** justamente para pegá-lo.
-3. Remova o `limparUploadOrfaoEm` do catch do POST.
+   entra **pela rota** justamente para pegá-lo. **O cenário da RN-04 (403) continua VERDE**, e
+   isso é correto, não falha da sabotagem: o 403 sai antes do multer, então ele não depende da
+   fiação. Registre assim, senão parece que a sabotagem vazou.
+3. Remova o `limparUploadOrfaoEm` do **catch** do POST.
    Esperado: **falha** o cenário do `entidade_id` inexistente (contagem de arquivos).
+4. **A sabotagem que exercita a asserção central**: aponte `uploadsAnexosDir` para
+   `path.join(PERSISTENT_DATA_DIR, 'uploads', 'almoxarifado', 'anexos')` **e** faça o mesmo em
+   `testApp.js`. Esperado: **falha em `rel.startsWith('..')`** e, se você remover essa asserção
+   para ver, os dois mounts respondem **200**. É o erro que o design nomeia como "o instinto
+   óbvio", e sem esta sabotagem ninguém sabe se o teste o pega.
+5. Remova o `limparUploadOrfaoEm` do **ramo do Zod** (o `if (!parsed.success)`).
+   Esperado: **falha só** o cenário `Zod reprova o body`. Se ele não existisse, esta linha poderia
+   ser apagada com a suíte inteira verde, vazando órfão a cada formulário mal preenchido — e a
+   sabotagem 3 **não** cobre este ramo, são dois `limparUploadOrfaoEm` diferentes.
 
 - [ ] **Step 8: Suíte de servidor inteira**
 
@@ -916,30 +1025,79 @@ git commit -F msg-rotas.txt
 
 **Interfaces:**
 - Consumes: **só o contrato HTTP congelado** no design — este é o único mock legítimo da etapa,
-  porque a fronteira HTTP existe de verdade. `jest.mock('../../services/api')` no molde de
-  `PlanoInspecaoModal.test.js`.
+  porque a fronteira HTTP existe de verdade. `jest.mock('../../services/api')`.
 - Produces, e a Task 4 depende disto:
   `<AnexosDocumento entidade="inspecao" entidadeId={id} titulo="Anexos" somenteLeitura={false} />`
 
+> ⚠️ **`@testing-library/react` NÃO está instalado neste projeto** — medido: não está em
+> `client/package.json`, não está em `client/node_modules/@testing-library`, e não está hoisted na
+> raiz. `LoteSeletor.test.js:10-12` já documenta essa pegadinha. Importá-lo derruba a suíte com
+> `Cannot find module`, que **parece** o `Cannot find module './AnexosDocumento'` esperado no Step
+> 2 e mascara o problema real. E instalar a biblioteca num galho paralelo commitaria um
+> `package-lock.json` alterado dentro da worktree — não faça.
+>
+> **O molde correto é `PlanoInspecaoModal.test.js:23-25` + `RelatoriosAlmoxarifado.test.js`:**
+> `import React, { act } from 'react'`, `createRoot` de `react-dom/client`,
+> `global.IS_REACT_ACT_ENVIRONMENT = true`, `container = document.createElement('div')`, e o
+> helper `esperarEfeitos = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); })`.
+
+**Três moldes que o executor DEVE abrir antes de escrever qualquer linha** — os três já resolvem
+problemas medidos nesta base, e reinventá-los custa um fix-round:
+
+| Molde | Onde | O que resolve |
+|---|---|---|
+| download por blob | `RelatoriosAlmoxarifado.js:308-340` | o fluxo `blob → anchor → revoke` **e** a leitura da mensagem de erro |
+| mock de `createObjectURL` | `RelatoriosAlmoxarifado.test.js:108-122` | jsdom **não implementa** `URL.createObjectURL` |
+| `File` num input | `LotesAlmoxarifado.test.js:240` | disparar `change` sem `fireEvent` |
+
 - [ ] **Step 1: Escrever o teste que falha**
 
-Crie `client/src/components/almoxarifado/AnexosDocumento.test.js` com **seis** cenários, no molde
-de `PlanoInspecaoModal.test.js` (mesmos imports de `@testing-library/react` e `jest.mock` de
-`../../services/api` e de `react-toastify`):
+Crie `client/src/components/almoxarifado/AnexosDocumento.test.js` com **sete** cenários. O
+`beforeEach` é obrigatório e não é boilerplate opcional — sem ele o cenário 5 passa com o
+componente quebrado:
 
-1. **lista o que o GET devolveu** — dois anexos, os dois nomes na tela.
-2. **`entidadeId` ausente não chama a API** — `expect(api.get).not.toHaveBeenCalled()`; sem isso o
-   componente dispara `GET /anexos?entidade=inspecao&entidade_id=undefined` ao abrir o formulário
-   de uma inspeção nova.
+```js
+beforeEach(() => {
+  jest.clearAllMocks();
+  // jsdom NAO implementa nenhum dos dois. Sem o stub, o handler de download lanca no meio e o
+  // catch engole: o cenario 5, que so olha `api.get`, passaria com o download quebrado.
+  window.URL.createObjectURL = jest.fn(() => 'blob:mock-url');
+  window.URL.revokeObjectURL = jest.fn();
+  container = document.createElement('div');
+  document.body.appendChild(container);
+});
+```
+
+Os sete cenários:
+
+1. **lista o que o GET devolveu** — e o mock é **params-aware** (GC 8 desta base, escrita em
+   `PlanoInspecaoModal.test.js:9-21`): com `mockResolvedValue` simples, o cenário passa mesmo que
+   o componente chame a rota **sem** `params` ou com a entidade trocada.
+   ```js
+   api.get.mockImplementation((url, cfg) =>
+     (url === '/almoxarifado/anexos' && cfg?.params?.entidade === 'inspecao'
+       && cfg?.params?.entidade_id === 7)
+       ? Promise.resolve({ data: [anexoA, anexoB] })
+       : Promise.resolve({ data: [] }));
+   ```
+2. **`entidadeId` ausente não chama a API — e com `entidadeId` chama, no mesmo teste** (GC 9): o
+   negativo sozinho passa idêntico com o componente retornando `null` ou com o `useEffect` nunca
+   escrito. Renderize duas vezes: sem `entidadeId` → `expect(api.get).not.toHaveBeenCalled()`;
+   com `entidadeId={7}` → uma chamada, com os params certos.
 3. **upload manda `FormData` com os quatro campos** — inspecione o `FormData` passado a
    `api.post`: `entidade`, `entidade_id`, `tipo`, `arquivo`.
-4. **erro do servidor aparece com a mensagem do servidor** — `api.post` rejeitando com
-   `{ response: { data: { error: 'Anexo deve ser PDF ou imagem' } } }` → o texto na tela é esse,
-   não um genérico.
-5. **download usa `responseType: 'blob'`** — `expect(api.get).toHaveBeenCalledWith(
-   '/almoxarifado/anexos/5/arquivo', { responseType: 'blob' })`. É o cenário que impede alguém de
-   "simplificar" para `<a href>`, que devolveria 401 porque a rota é autenticada.
-6. **`somenteLeitura` esconde upload e remoção** — nem o input de arquivo nem o botão de remover.
+4. **erro do `post` aparece com a mensagem do servidor** — `api.post` rejeitando com
+   `{ response: { data: { error: 'Anexo deve ser PDF ou imagem' } } }` → esse texto na tela.
+5. **download usa `responseType: 'blob'`** —
+   `expect(api.get).toHaveBeenCalledWith('/almoxarifado/anexos/5/arquivo', { responseType: 'blob' })`.
+   É o cenário que impede alguém de "simplificar" para `<a href>`, que tomaria 401 porque a rota
+   é autenticada.
+6. **erro do `get` de download vem do Blob, não de `data.error`** — `api.get` rejeitando com
+   `{ response: { data: new Blob([JSON.stringify({ error: 'Arquivo do anexo não encontrado' })]) } }`
+   → esse texto na tela. **Sem este cenário o defeito é invisível** (ver Step 3).
+7. **`somenteLeitura` esconde upload e remoção — e a metade positiva no mesmo teste** (GC 9):
+   renderize com `somenteLeitura={false}` (input **presente**, botão remover **presente**) e
+   depois com `true` (os dois ausentes).
 
 - [ ] **Step 2: Rodar e ver falhar**
 
@@ -955,11 +1113,18 @@ e o porquê de cada um (escreva-os como comentário no topo, no estilo desta pas
   `Authorization` do interceptor do axios e tomam 401. O fluxo é
   `api.get(url, { responseType: 'blob' })` → `URL.createObjectURL` → `<a download>` sintético →
   **`URL.revokeObjectURL` no fim** (sem revogar, cada download vaza o blob até o reload).
-- **`FormData` sem `Content-Type` manual** — o interceptor de `services/api.js` já remove o
+- **⚠️ Com `responseType: 'blob'`, `e.response?.data?.error` é SEMPRE `undefined`** — o axios
+  entrega o **corpo do erro como Blob também**. Este achado já foi medido e está documentado em
+  `RelatoriosAlmoxarifado.js:325-333`, onde custou uma rodada: 403, 400 e 404 apareciam todos
+  como a mesma mensagem genérica. **Copie aquele `catch`**: `await bruto.text()` → `JSON.parse` →
+  `corpo.error`, com fallback. O caso real que isto atende é o anexo cuja linha existe e o
+  arquivo sumiu (restore de banco sem restore de uploads), que a rota trata com 404 próprio — e
+  que o usuário precisa conseguir distinguir de "sem permissão".
+- **`FormData` sem `Content-Type` manual** — o interceptor de `services/api.js:43-49` já remove o
   header para o browser pôr o `boundary`. Definir `multipart/form-data` à mão quebra o upload.
 - **Guarda de `entidadeId` falsy antes de qualquer `useEffect`** — cenário 2.
-- **A mensagem de erro vem do servidor** (`e.response?.data?.error`), com fallback genérico. As
-  literais desta etapa são contrato; reescrevê-las no client faria a tela e o servidor divergirem.
+- **A mensagem de erro vem do servidor**, com fallback genérico. As literais desta etapa são
+  contrato; reescrevê-las no client faria a tela e o servidor divergirem.
 - **Sem cache de módulo na listagem** — mesma razão do `useCategoriasMaterial` da Etapa 26: com
   cache, o anexo recém-enviado não apareceria até um reload, que é o "a tela mente" que a etapa
   corrige.
@@ -967,12 +1132,17 @@ e o porquê de cada um (escreva-os como comentário no topo, no estilo desta pas
 - [ ] **Step 4: Rodar e ver passar**
 
 Run: `cd client && CI=true npx react-scripts test --watchAll=false AnexosDocumento`
-Expected: 6 testes verdes.
+Expected: 7 testes verdes.
 
 - [ ] **Step 5: Controle positivo**
 
-Troque o `responseType: 'blob'` por um `<a href>` direto e confirme que o cenário 5 **falha**;
-remova a guarda de `entidadeId` e confirme que o cenário 2 **falha**. Reverta as duas.
+Três sabotagens, uma por vez, revertendo depois de cada:
+
+1. Troque o `responseType: 'blob'` por um `<a href>` direto → o cenário 5 falha.
+2. Remova a guarda de `entidadeId` → o cenário 2 falha na metade negativa.
+3. Troque o `catch` do download por `e.response?.data?.error` → o cenário 6 falha, mostrando o
+   fallback genérico. **Se ele não falhar**, o mock do Blob não está representando o axios —
+   conserte o teste antes de seguir.
 
 - [ ] **Step 6: Commit**
 
@@ -984,34 +1154,54 @@ git commit -F msg-componente.txt
 
 ---
 
-### Task 4: Plug no formulário de inspeção (feature 09)
+### Task 4: Plug na aba Histórico de inspeções (feature 09)
 
 **Files:**
-- Modify: `client/src/components/almoxarifado/InspecoesAlmoxarifado.js`
-- Modify: `client/src/components/almoxarifado/InspecoesAlmoxarifado.test.js`
+- Modify: `client/src/components/almoxarifado/HistoricoInspecoes.js`
+- Modify: `client/src/components/almoxarifado/HistoricoInspecoes.test.js`
 
 **Interfaces:**
 - Consumes: `AnexosDocumento` da Task 3, com as props exatas ali declaradas.
 
+> **⚠️ Correção medida na Fase 2 — a versão anterior deste plano mandava plugar em
+> `InspecoesAlmoxarifado.js`, em `somenteLeitura`, e as duas coisas estavam erradas.**
+>
+> `inspecoes_recebimento_almoxarifado` só ganha linha no `INSERT` de `inspectionService.js:268`,
+> **dentro da decisão**. Logo, a fila de pendentes (`GET /inspecoes/pendentes`) devolve `item_id`,
+> **não** `inspecao.id` — não há `entidade_id` para usar ali. O único lugar do client onde o `id`
+> da inspeção existe é a **aba Histórico**, e ela é renderizada por `HistoricoInspecoes.js`
+> (`data-testid="historico-linha-${h.id}"`), não por `InspecoesAlmoxarifado.js`.
+>
+> E `somenteLeitura` deixaria a etapa **sem superfície nenhuma para anexar**: backend com 19
+> cenários verdes, ação `anexar_documento` criada, e zero botões. O certificado e o relatório
+> dimensional chegam **depois** da decisão — é exatamente ali que anexar tem sentido. Por isso o
+> plug é `somenteLeitura={false}`, na **linha expandida** do histórico, onde já mora o fetch de
+> `/inspecoes/${id}/medidas` (`HistoricoInspecoes.js:88`).
+
 - [ ] **Step 1: Teste que falha**
 
-Em `InspecoesAlmoxarifado.test.js`, dois cenários novos:
+Em `HistoricoInspecoes.test.js`, dois cenários novos:
 
-1. **inspeção já decidida (histórico) mostra os anexos em `somenteLeitura`** — o bloco aparece e
-   não tem input de arquivo.
-2. **inspeção pendente ainda NÃO decidida não renderiza o bloco** — porque `entidade_id` só existe
-   depois de a linha de inspeção existir. Anexar antes de decidir penduraria o arquivo num id que
-   ainda não há, e o 404 `"Registro não encontrado para anexar"` do servidor apareceria como erro
-   ao usuário no meio do fluxo.
+1. **linha expandida mostra o bloco de anexos COM input de arquivo** — `entidade="inspecao"`,
+   `entidadeId` igual ao `h.id` da linha, e o input presente (não é `somenteLeitura`).
+2. **linha fechada não monta o bloco** — o componente não deve disparar `GET /anexos` para todas
+   as linhas do histórico ao abrir a aba; com 100 linhas seriam 100 requisições. Asserte que
+   `api.get` não foi chamado com `/almoxarifado/anexos` antes do clique de expandir.
 
-- [ ] **Step 2: Rodar e ver falhar** — `CI=true npx react-scripts test --watchAll=false InspecoesAlmoxarifado`
+- [ ] **Step 2: Rodar e ver falhar**
+
+Run: `cd client && CI=true npx react-scripts test --watchAll=false HistoricoInspecoes`
 
 - [ ] **Step 3: Plugar**
 
-`import AnexosDocumento from './AnexosDocumento';` e renderizar o bloco onde a inspeção já tem
-`id`, com `entidade="inspecao"`. Comentário no ponto do plug explicando a decisão do cenário 2.
+`import AnexosDocumento from './AnexosDocumento';` e renderizar dentro do bloco expandido, ao lado
+das medidas. Comentário no ponto do plug com as duas razões acima: por que é aqui (é o único lugar
+com `id`) e por que não é `somenteLeitura` (senão a etapa não entrega superfície nenhuma).
 
 - [ ] **Step 4: Rodar e ver passar**
+
+Run: `cd client && CI=true npx react-scripts test --watchAll=false HistoricoInspecoes InspecoesAlmoxarifado`
+Expected: as duas suítes verdes — a segunda não deve ter mudado.
 
 - [ ] **Step 5: Commit** (`msg-plug.txt`)
 
@@ -1027,6 +1217,22 @@ Em `InspecoesAlmoxarifado.test.js`, dois cenários novos:
 Um cenário só, que percorre **anexar → listar → baixar conferindo o conteúdo → remover → listar
 vazio → baixar de novo (404)**, com dois perfis diferentes: quem anexa é `QUALIDADE`, quem remove
 é `ALMOXARIFE`. Cruza a Task 1 (serviço), a Task 2 (rotas e fiação) e as duas ações da Task 1.
+
+**E ele carrega a única asserção da suíte que mede a metade "e no disco" da RN-05.** Sem ela,
+alguém que "limpe" o `removerAnexo` acrescentando um `fs.unlinkSync` não derruba **nenhum** dos 19
+cenários — a decisão que o design mais defende (D5) cairia em silêncio. O teste de serviço não
+pode pegar (o serviço não toca disco por construção) e o `404` do "baixar de novo" é ambíguo:
+
+```js
+    const noDiscoAntes = arquivosEm(ctx.uploadsAnexosDir);
+    // ... DELETE como ALMOXARIFE ...
+    assert.deepStrictEqual(arquivosEm(ctx.uploadsAnexosDir), noDiscoAntes,
+      'D5: soft delete NAO apaga o arquivo do disco');
+    const depois = await request(ctx.app).get(`/api/almoxarifado/anexos/${id}/arquivo`);
+    assert.strictEqual(depois.status, 404);
+    // A LITERAL importa: tem de ser o 404 da LINHA (ativo = 0), nao o do arquivo sumido —
+    // senao o cenario passaria igual com o unlink que ele existe para proibir.
+    assert.strictEqual(depois.body.error, 'Anexo não encontrado');
 
 - [ ] **Step 2: A suíte inteira, serial**
 
