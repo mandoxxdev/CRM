@@ -121,6 +121,9 @@ test('Zod reprova o body: 400 e o disco volta ao tamanho de antes', async () => 
   } finally { await ctx.close(); }
 });
 
+// A contagem de arquivos AQUI e decorativa, e esta dito: o fileFilter recusa ANTES de o multer
+// escrever, entao ela e sempre 0 === 0 (medido na revisao adversarial). Quem carrega o cenario e
+// a literal. A contagem fica porque custa nada e documenta a expectativa.
 test('tipo de arquivo recusado: 400 com a literal, e nada no disco', async () => {
   const ctx = await createTestApp();
   try {
@@ -197,22 +200,43 @@ test('GET /anexos lista so os ativos DA entidade pedida', async () => {
       ['MAT-2', 'Barra 1/2', 'M']);
     const materialB = rB.lastID;
 
-    const anexar = (mid, nome) => request(ctx.app).post('/api/almoxarifado/anexos')
-      .field('entidade', 'material').field('entidade_id', String(mid)).field('tipo', 'FICHA')
+    // A INSPECAO COM O MESMO ID NUMERICO do materialA e o que faz este cenario valer alguma coisa.
+    // Sem ela, `listarAnexos` filtrando SO por entidade_id — sem a coluna `entidade` — deixava as
+    // 20 assercoes do servidor VERDES (medido na revisao adversarial, sabotagem S18). Em producao
+    // isso e vazamento entre entidades numa tabela polimorfica: `?entidade=inspecao&entidade_id=7`
+    // devolveria o certificado do MATERIAL 7 e a nota fiscal da REQUISICAO 7, e o componente
+    // renderiza tudo sem questionar. A escrita ja estava coberta; a LEITURA nao estava.
+    const insp = await dbRun(ctx.db,
+      `INSERT INTO inspecoes_recebimento_almoxarifado (id, recebimento_item_id, conforme)
+       VALUES (?,?,?)`, [materialA, 1, 1]);
+
+    const anexar = (entidade, eid, nome) => request(ctx.app).post('/api/almoxarifado/anexos')
+      .field('entidade', entidade).field('entidade_id', String(eid)).field('tipo', 'FICHA')
       .attach('arquivo', PDF, nome);
 
-    const fica = await anexar(materialA, 'fica.pdf');
-    const sai = await anexar(materialA, 'sai.pdf');
-    await anexar(materialB, 'outro-material.pdf');
+    const fica = await anexar('material', materialA, 'fica.pdf');
+    const sai = await anexar('material', materialA, 'sai.pdf');
+    await anexar('material', materialB, 'outro-material.pdf');
+    const outraEntidade = await anexar('inspecao', insp.lastID, 'da-inspecao.pdf');
     await request(ctx.app).delete(`/api/almoxarifado/anexos/${sai.body.id}`);
+
+    assert.strictEqual(outraEntidade.status, 201);
+    assert.strictEqual(insp.lastID, materialA,
+      'o cenario SO discrimina se os dois ids numericos forem iguais');
 
     const res = await request(ctx.app)
       .get(`/api/almoxarifado/anexos?entidade=material&entidade_id=${materialA}`);
     assert.strictEqual(res.status, 200);
-    assert.strictEqual(res.body.length, 1, 'so o ativo do material A');
+    assert.strictEqual(res.body.length, 1, 'so o ativo do material A — nem o removido, nem o da inspecao de mesmo id');
     assert.strictEqual(res.body[0].id, fica.body.id);
     assert.strictEqual(res.body[0].arquivo_path, undefined);
     assert.strictEqual(res.body[0].uploaded_by_nome, 'Admin Teste');
+
+    // E o lado da inspecao tambem so ve o dele
+    const daInspecao = await request(ctx.app)
+      .get(`/api/almoxarifado/anexos?entidade=inspecao&entidade_id=${insp.lastID}`);
+    assert.strictEqual(daInspecao.body.length, 1);
+    assert.strictEqual(daInspecao.body[0].id, outraEntidade.body.id);
   } finally { await ctx.close(); }
 });
 
@@ -252,6 +276,209 @@ test('linha viva com arquivo fora do disco: 404 proprio, nao 500', async () => {
     const res = await request(ctx.app).get(`/api/almoxarifado/anexos/${criado.body.id}/arquivo`);
     assert.strictEqual(res.status, 404);
     assert.strictEqual(res.body.error, 'Arquivo do anexo não encontrado');
+  } finally { await ctx.close(); }
+});
+
+// O limite de 10 MB tem literal CONGELADA no contrato e nao tinha cenario nenhum — achado da
+// revisao adversarial. Sem ele, trocar a mensagem por 'File too large' (o texto cru do multer)
+// nao derruba nada, e quem opera le um erro em ingles.
+test('arquivo acima de 10 MB: 400 com a literal do limite, e nada no disco', async () => {
+  const ctx = await createTestApp();
+  try {
+    const materialId = await comMaterial(ctx);
+    const antes = arquivosEm(ctx.uploadsAnexosDir).length;
+    const gigante = Buffer.alloc(11 * 1024 * 1024, 0x41);
+    const res = await request(ctx.app).post('/api/almoxarifado/anexos')
+      .field('entidade', 'material').field('entidade_id', String(materialId)).field('tipo', 'FICHA')
+      .attach('arquivo', gigante, 'grande.pdf');
+    assert.strictEqual(res.status, 400);
+    assert.strictEqual(res.body.error, 'Arquivo excede o limite de 10 MB');
+    assert.strictEqual(arquivosEm(ctx.uploadsAnexosDir).length, antes, 'nem parcial pode ficar');
+  } finally { await ctx.close(); }
+});
+
+// ── Fix-round da revisao adversarial (Etapa 32) ──────────────────────────────────────────────
+
+// [BLOQUEANTE] As chaves herdadas de Object.prototype NAO sao entidades. O cenario de entidade
+// invalida usava so 'qualquer_coisa', que nao e chave de prototipo — a RN-02 estava marcada como
+// provada sem estar. Com o mapa lido por acesso direto, `ENTIDADES_ANEXO['constructor']` devolve a
+// FUNCAO Object (truthy), a guarda nao lancava, e saia `SELECT id FROM function Object() {...}`:
+// 500 com a mensagem crua do SQLite no corpo, onde o contrato promete 400.
+test('RN-02: chave de Object.prototype como entidade da 400, nao 500 com SQL cru', async () => {
+  const ctx = await createTestApp();
+  try {
+    const materialId = await comMaterial(ctx);
+    for (const veneno of ['constructor', '__proto__', 'toString', 'valueOf', 'hasOwnProperty', 'isPrototypeOf']) {
+      const antes = arquivosEm(ctx.uploadsAnexosDir).length;
+      const res = await request(ctx.app).post('/api/almoxarifado/anexos')
+        .field('entidade', veneno).field('entidade_id', String(materialId)).field('tipo', 'X')
+        .attach('arquivo', PDF, 'cert.pdf');
+      assert.strictEqual(res.status, 400, `POST com entidade=${veneno} deu ${res.status}`);
+      assert.strictEqual(res.body.error, 'Entidade inválida para anexo', `POST ${veneno}`);
+      assert.ok(!/SQLITE|no such table|syntax error/i.test(JSON.stringify(res.body)),
+        `a mensagem do SQLite nao pode vazar (${veneno}): ${JSON.stringify(res.body)}`);
+      assert.strictEqual(arquivosEm(ctx.uploadsAnexosDir).length, antes, `orfao de ${veneno}`);
+
+      // A listagem usa a MESMA regua, e tambem devolvia 200 [] em vez de 400
+      const lista = await request(ctx.app)
+        .get(`/api/almoxarifado/anexos?entidade=${veneno}&entidade_id=1`);
+      assert.strictEqual(lista.status, 400, `GET com entidade=${veneno} deu ${lista.status}`);
+      assert.strictEqual(lista.body.error, 'Entidade inválida para anexo');
+    }
+  } finally { await ctx.close(); }
+});
+
+// [IMPORTANTE, par acoplado] O `filename` do multipart chega do busboy como LATIN1, e esta e a
+// primeira rota do modulo que PERSISTE esse campo. Sem a reinterpretacao, o nome ia para a tela,
+// para o Content-Disposition e para o <a download> em mojibake. E corrigir SO a gravacao teria
+// trocado o defeito por um pior: `res.setHeader` recusa caractere fora de \x20-\x7e\x80-\xff,
+// entao o travessao de "Relatório – dimensional.pdf" daria 500 no download.
+test('nome de arquivo acentuado: grava em UTF-8 e o download NAO quebra o header', async () => {
+  const ctx = await createTestApp();
+  try {
+    const materialId = await comMaterial(ctx);
+    const nomes = [
+      'Certificado nº 123 — aço.pdf',   // acento + ordinal + travessao U+2014
+      'Relatório – dimensional.pdf',    // travessao U+2013: o que dava 500
+      'medição 12,5mm.pdf',
+    ];
+    for (const nome of nomes) {
+      const criado = await request(ctx.app).post('/api/almoxarifado/anexos')
+        .field('entidade', 'material').field('entidade_id', String(materialId)).field('tipo', 'FICHA')
+        .attach('arquivo', PDF, nome);
+      assert.strictEqual(criado.status, 201, `upload de ${nome}: ${JSON.stringify(criado.body)}`);
+      assert.strictEqual(criado.body.nome_original, nome,
+        `gravado em mojibake: ${criado.body.nome_original}`);
+
+      const baixado = await request(ctx.app).get(`/api/almoxarifado/anexos/${criado.body.id}/arquivo`);
+      assert.strictEqual(baixado.status, 200, `download de ${nome} deu ${baixado.status}`);
+      const cd = baixado.headers['content-disposition'] || '';
+      // RFC 5987: o nome verdadeiro viaja no filename*, percent-encoded em UTF-8
+      assert.ok(cd.includes(`filename*=UTF-8''${encodeURIComponent(nome)}`),
+        `Content-Disposition sem o filename* correto: ${cd}`);
+      assert.ok(/filename="[\x20-\x7e]*"/.test(cd), `o filename ASCII precisa ser puro: ${cd}`);
+    }
+  } finally { await ctx.close(); }
+});
+
+// [MENOR] Pedido malformado devolvia 200 com lista VAZIA — impossivel distinguir "nao ha anexo"
+// de "chamei errado", que e a mesma classe de bug que o download desta etapa combate.
+test('GET sem entidade_id, ou com entidade_id nao numerico: 400, nao 200 vazio', async () => {
+  const ctx = await createTestApp();
+  try {
+    for (const qs of ['entidade=material', 'entidade=material&entidade_id=abc',
+      'entidade=material&entidade_id=0', 'entidade=material&entidade_id=-3']) {
+      const res = await request(ctx.app).get(`/api/almoxarifado/anexos?${qs}`);
+      assert.strictEqual(res.status, 400, `?${qs} deu ${res.status}`);
+      assert.strictEqual(res.body.error, 'Registro inválido');
+    }
+  } finally { await ctx.close(); }
+});
+
+// [MENOR] No ramo de ERRO do multer o `req.file` existe SEM `filename`, e o
+// `path.join(dir, undefined)` lancava — a limpeza virava um console.warn e a defesa em
+// profundidade que o comentario da rota promete nao existia.
+// A regua aqui e o console.warn, e nao o status — e isso foi MEDIDO. A primeira versao deste
+// cenario assertava status, mensagem e contagem de arquivos, e ficava VERDE com a guarda fraca de
+// volta: o multer ja limpou por conta propria, e o `path.join(dir, undefined)` que lancava era
+// engolido pelo try/catch da propria funcao, virando um console.warn. Ou seja, o unico efeito
+// observavel da correcao e o aviso NAO acontecer. Sem espionar o warn, este cenario nao provava
+// nada da correcao que ele existe para guardar.
+test('campo de arquivo repetido: 400 tratado, sem orfao e SEM aviso de falha na limpeza', async () => {
+  const ctx = await createTestApp();
+  const warnOriginal = console.warn;
+  const avisos = [];
+  console.warn = (...args) => { avisos.push(args.join(' ')); };
+  try {
+    const materialId = await comMaterial(ctx);
+    const antes = arquivosEm(ctx.uploadsAnexosDir).length;
+    const res = await request(ctx.app).post('/api/almoxarifado/anexos')
+      .field('entidade', 'material').field('entidade_id', String(materialId)).field('tipo', 'FICHA')
+      .attach('arquivo', PDF, 'um.pdf')
+      .attach('arquivo', PDF, 'dois.pdf');
+    assert.strictEqual(res.status, 400, `deu ${res.status}: ${JSON.stringify(res.body)}`);
+    assert.ok(!/undefined|path.*argument/i.test(res.body.error || ''),
+      `a mensagem nao pode ser o erro interno do path.join: ${res.body.error}`);
+    assert.strictEqual(arquivosEm(ctx.uploadsAnexosDir).length, antes);
+    const falhaNaLimpeza = avisos.filter((a) => /Falha ao limpar upload orfao/.test(a));
+    assert.deepStrictEqual(falhaNaLimpeza, [],
+      'a limpeza nao pode LANCAR — se lanca, a defesa em profundidade que a rota promete nao existe');
+  } finally { console.warn = warnOriginal; await ctx.close(); }
+});
+
+// [MENOR] O diretorio some DEPOIS do boot (rotacao de disco, container efemero): o multer dava
+// ENOENT e a rota devolvia 400 com o CAMINHO ABSOLUTO do servidor no corpo — erro de infra
+// vestido de erro do cliente, com path disclosure.
+test('diretorio de anexos apagado em runtime: o upload se recupera, sem vazar caminho', async () => {
+  const ctx = await createTestApp();
+  try {
+    const materialId = await comMaterial(ctx);
+    fs.rmSync(ctx.uploadsAnexosDir, { recursive: true, force: true });
+    assert.ok(!fs.existsSync(ctx.uploadsAnexosDir), 'o cenario precisa do diretorio ausente');
+
+    const res = await request(ctx.app).post('/api/almoxarifado/anexos')
+      .field('entidade', 'material').field('entidade_id', String(materialId)).field('tipo', 'FICHA')
+      .attach('arquivo', PDF, 'cert.pdf');
+    assert.strictEqual(res.status, 201, `deu ${res.status}: ${JSON.stringify(res.body)}`);
+    assert.ok(!/ENOENT|[A-Za-z]:\\|\/tmp\//.test(JSON.stringify(res.body)),
+      `o caminho do servidor nao pode ir no corpo: ${JSON.stringify(res.body)}`);
+    assert.strictEqual(arquivosEm(ctx.uploadsAnexosDir).length, 1);
+  } finally { await ctx.close(); }
+});
+
+// A extensao no disco vem do MIME ACEITO, e nao do nome enviado — achado da revisao adversarial.
+// O `fileFilter` confia no Content-Type que o cliente manda, entao `fatura-nov.exe` declarado como
+// `application/pdf` passava e ia para o disco COMO `.exe`. Duas consequencias medidas: executavel
+// no volume persistente, que o backup do modulo leva inteiro; e o `<a download>` do componente
+// salvando `fatura-nov.exe` na maquina de quem clica em "Baixar" numa linha rotulada "Nota fiscal".
+test('extensao no disco vem do MIME aceito, nunca do nome enviado', async () => {
+  const ctx = await createTestApp();
+  try {
+    const materialId = await comMaterial(ctx);
+    const casos = [
+      ['fatura-nov.exe', 'application/pdf', '.pdf'],
+      ['desenho.bat', 'image/png', '.png'],
+      ['x.pdf.exe', 'image/jpeg', '.jpg'],
+    ];
+    for (const [nome, contentType, esperado] of casos) {
+      const res = await request(ctx.app).post('/api/almoxarifado/anexos')
+        .field('entidade', 'material').field('entidade_id', String(materialId)).field('tipo', 'FICHA')
+        .attach('arquivo', PDF, { filename: nome, contentType });
+      assert.strictEqual(res.status, 201, JSON.stringify(res.body));
+
+      const nomes = arquivosEm(ctx.uploadsAnexosDir);
+      const gravado = nomes[nomes.length - 1];
+      assert.ok(gravado.endsWith(esperado),
+        nome + ' (' + contentType + ') virou ' + gravado + ', esperado ' + esperado);
+      assert.ok(!/\.(exe|bat|cmd|sh|ps1)$/i.test(gravado), 'executavel no disco: ' + gravado);
+      // O nome ORIGINAL continua guardado como veio — o que muda e so o nome no disco.
+      assert.strictEqual(res.body.nome_original, nome);
+    }
+  } finally { await ctx.close(); }
+});
+
+// Baixar AUDITA — controle compensatorio da B68. Com ids sequenciais e "todo mundo baixa", a
+// trilha e o que separa "aberto" de "aberto E INVISIVEL": a revisao adversarial mediu um laco
+// enumerando /anexos/1..N/arquivo que levou o acervo inteiro sem deixar uma linha de rastro.
+test('download deixa rastro na trilha, com verbo em caixa alta e o autor', async () => {
+  const ctx = await createTestApp();
+  try {
+    const materialId = await comMaterial(ctx);
+    const criado = await request(ctx.app).post('/api/almoxarifado/anexos')
+      .field('entidade', 'material').field('entidade_id', String(materialId)).field('tipo', 'FICHA')
+      .attach('arquivo', PDF, 'cert.pdf');
+    assert.strictEqual(criado.status, 201);
+
+    ctx.setUser({ id: 42, nome: 'Carla Consulta', perfil_almoxarifado: 'CONSULTA' });
+    const baixado = await request(ctx.app).get('/api/almoxarifado/anexos/' + criado.body.id + '/arquivo');
+    assert.strictEqual(baixado.status, 200);
+    assert.strictEqual(baixado.headers['x-content-type-options'], 'nosniff');
+
+    const trilha = await dbAll(ctx.db,
+      `SELECT acao, usuario_nome FROM auditoria_log_almoxarifado
+       WHERE entidade = 'anexo' AND acao = 'BAIXAR_ANEXO'`);
+    assert.deepStrictEqual(trilha, [{ acao: 'BAIXAR_ANEXO', usuario_nome: 'Carla Consulta' }],
+      'quem baixa fica registrado — inclusive o perfil de leitura pura');
   } finally { await ctx.close(); }
 });
 
@@ -334,8 +561,12 @@ test('[INTEGRACAO] QUALIDADE anexa -> lista -> baixa o conteudo -> ALMOXARIFE re
     const trilha = await dbAll(ctx.db,
       `SELECT acao, usuario_nome FROM auditoria_log_almoxarifado
        WHERE entidade = 'anexo' ORDER BY id`);
+    // O BAIXAR_ANEXO no meio e o passo 3 deste mesmo cenario, e ele estar aqui e a prova de que a
+    // trilha cobre o ciclo INTEIRO — inclusive a leitura, que e o controle compensatorio da B68.
+    // A ordem tambem importa: anexar, baixar, remover, na sequencia em que aconteceram.
     assert.deepStrictEqual(trilha, [
       { acao: 'ANEXAR', usuario_nome: 'Ana Qualidade' },
+      { acao: 'BAIXAR_ANEXO', usuario_nome: 'Ana Qualidade' },
       { acao: 'REMOVER_ANEXO', usuario_nome: 'Beto Almoxarife' },
     ]);
   } finally { await ctx.close(); }

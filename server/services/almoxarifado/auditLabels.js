@@ -173,6 +173,10 @@ const GRUPOS_ACAO = congelarGrupos([
   // o que foi removido.
   { rotulo: 'Anexo enviado', verbos: ['ANEXAR'] },
   { rotulo: 'Anexo removido', verbos: ['REMOVER_ANEXO'] },
+  // Fix-round da revisao adversarial: baixar tambem audita. E o controle compensatorio da B68 —
+  // com "todo mundo baixa" e ids sequenciais, a trilha e o que separa "aberto" de "aberto e
+  // invisivel". E o unico verbo do modulo que registra LEITURA.
+  { rotulo: 'Anexo baixado', verbos: ['BAIXAR_ANEXO'] },
 
   // Remessa a terceiro
   { rotulo: 'Envio', verbos: ['ENVIO'] },

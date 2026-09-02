@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { FiDownload, FiPaperclip, FiTrash2, FiUploadCloud } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import api from '../../services/api';
+import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import './Almoxarifado.css';
 
 /**
@@ -93,6 +94,16 @@ async function mensagemDoServidor(err, generica) {
 }
 
 function AnexosDocumento({ entidade, entidadeId, titulo = 'Anexos', somenteLeitura = false }) {
+  // A UI barra ANTES do formulario — achado IMPORTANTE da revisao adversarial, e nao e zelo: o
+  // CLAUDE.md diz, com todas as letras, que GET /almoxarifado/minhas-permissoes 'existe so para a
+  // UI barrar antes do formulario'. Sem isto, CONSULTA — o perfil cujo nome e leitura pura — via
+  // select de tipo, campo de descricao, input de arquivo e botao Anexar, e so descobria no 403; e
+  // QUALIDADE/PRODUCAO/COMPRAS/GESTOR viam a lixeira que a assimetria da B68 existe para negar.
+  // O hook falha ABERTO de proposito (documentado nele): quem decide continua sendo o backend, e
+  // esconder acao por erro de rede seria pior que mostrar uma que toma 403.
+  const { pode } = useAlmoxPermissoes();
+  const podeAnexar = !somenteLeitura && pode('anexar_documento');
+  const podeRemover = !somenteLeitura && pode('remover_anexo');
   const [anexos, setAnexos] = useState([]);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState('');
@@ -235,7 +246,7 @@ function AnexosDocumento({ entidade, entidadeId, titulo = 'Anexos', somenteLeitu
               >
                 <FiDownload />
               </button>
-              {!somenteLeitura && (
+              {podeRemover && (
                 <button
                   type="button"
                   className="almox-btn-icon danger"
@@ -251,7 +262,7 @@ function AnexosDocumento({ entidade, entidadeId, titulo = 'Anexos', somenteLeitu
         </ul>
       )}
 
-      {!somenteLeitura && (
+      {podeAnexar && (
         <div className="almox-anexos-form">
           <select
             className="almox-input"

@@ -44,6 +44,19 @@ jest.mock('react-toastify', () => ({
   toast: { success: jest.fn(), error: jest.fn(), info: jest.fn(), warn: jest.fn() },
 }));
 
+// O componente barra a UI pelo perfil (fix-round da revisão adversarial). O hook é mockado, e não
+// a rota, porque aqui a fronteira que interessa é a do CONTRATO de permissão — o hook já tem a
+// própria suíte. `mockPermissoes` é trocado por cenário.
+let mockPermissoes = { anexar_documento: true, remover_anexo: true };
+jest.mock('../../hooks/useAlmoxPermissoes', () => ({
+  useAlmoxPermissoes: () => ({
+    perfil: 'ADMINISTRADOR',
+    pode: (acao) => !!mockPermissoes[acao],
+    bloquearSeNaoPode: () => true,
+    loading: false,
+  }),
+}));
+
 // Ver o bloco ⚠️ do cabeçalho: repõe a API que o jsdom não tem e o navegador tem.
 if (typeof Blob.prototype.text !== 'function') {
   // eslint-disable-next-line no-extend-native
@@ -104,6 +117,7 @@ function mockarListagem() {
 beforeEach(() => {
   global.IS_REACT_ACT_ENVIRONMENT = true;
   anexosDoBanco = [ANEXO_A, ANEXO_B, ANEXO_DE_OUTRA_ENTIDADE];
+  mockPermissoes = { anexar_documento: true, remover_anexo: true };
   mockarListagem();
   api.post.mockImplementation(() => Promise.resolve({ data: { ...ANEXO_A, id: 77 } }));
   api.delete.mockResolvedValue({ data: { ok: true } });
@@ -239,17 +253,47 @@ describe('AnexosDocumento — upload', () => {
 });
 
 describe('AnexosDocumento — download autenticado', () => {
-  test('(5) baixa por blob pela rota autenticada, e revoga a URL depois', async () => {
-    await renderizar();
+  test('(5) baixa por blob pela rota autenticada, ENTREGA os bytes ao usuário, e revoga a URL', async () => {
+    // ⚠️ CORRIGIDO NA REVISÃO ADVERSARIAL — na versão anterior este cenário media só que
+    // `api.get` fora chamado com `responseType: 'blob'` e que `createObjectURL`/`revokeObjectURL`
+    // tinham rodado. Medido: ele ficava **7/7 verde** com o corpo baixado JOGADO FORA (blob vazio)
+    // e **7/7 verde sem nenhum `<a download>`** — o botão buscava os bytes, criava a URL, revogava,
+    // e o usuário não recebia arquivo nenhum. As duas asserções novas fecham isso: o blob que vai
+    // para `createObjectURL` tem de ser o corpo da resposta, e o link tem de ser clicado com o
+    // nome original.
+    const criados = [];
+    const criarOriginal = document.createElement.bind(document);
+    jest.spyOn(document, 'createElement').mockImplementation((tag, ...resto) => {
+      const el = criarOriginal(tag, ...resto);
+      if (tag === 'a') { jest.spyOn(el, 'click').mockImplementation(() => {}); criados.push(el); }
+      return el;
+    });
 
-    await clicar(botaoBaixar(5));
+    try {
+      await renderizar();
+      await clicar(botaoBaixar(5));
+      await esperarEfeitos();
 
-    // A régua que impede alguém de "simplificar" para `<a href>`: aquilo sai sem o
-    // `Authorization` do interceptor e toma 401.
-    expect(api.get).toHaveBeenCalledWith('/almoxarifado/anexos/5/arquivo', { responseType: 'blob' });
-    expect(window.URL.createObjectURL).toHaveBeenCalledTimes(1);
-    // Sem revogar, cada download vaza o blob até o reload.
-    expect(window.URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
+      // A régua que impede alguém de "simplificar" para `<a href>`: aquilo sai sem o
+      // `Authorization` do interceptor e toma 401.
+      expect(api.get).toHaveBeenCalledWith('/almoxarifado/anexos/5/arquivo', { responseType: 'blob' });
+      expect(window.URL.createObjectURL).toHaveBeenCalledTimes(1);
+
+      // Os BYTES: o que virou URL tem de ser o corpo que o servidor mandou, não um blob vazio.
+      const blobUsado = window.URL.createObjectURL.mock.calls[0][0];
+      await expect(blobUsado.text()).resolves.toBe('%PDF-1.4 conteudo');
+
+      // E o arquivo tem de CHEGAR ao usuário, com o nome original — não basta buscar e descartar.
+      const link = criados.find((el) => el.getAttribute('download'));
+      expect(link).toBeDefined();
+      expect(link.getAttribute('download')).toBe('certificado.pdf');
+      expect(link.click).toHaveBeenCalled();
+
+      // Sem revogar, cada download vaza o blob até o reload.
+      expect(window.URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
+    } finally {
+      document.createElement.mockRestore();
+    }
   });
 
   test('(6) erro do download vem do corpo do Blob, não de response.data.error', async () => {
@@ -294,5 +338,43 @@ describe('AnexosDocumento — somenteLeitura', () => {
     expect(botaoEnviar()).toBeNull();
     expect(botaoRemover(5)).toBeNull();
     expect(botaoBaixar(5)).not.toBeNull();
+  });
+});
+
+describe('AnexosDocumento — permissão de perfil', () => {
+  // Fix-round da revisão adversarial. O backend já negava (403 medido), então isto é
+  // LEGIBILIDADE, não segurança — mas é a metade não entregue da própria decisão que a etapa mais
+  // defende: a B68 desenha `anexar` largo e `remover` estreito, e sem este gate a lixeira aparecia
+  // para QUALIDADE/PRODUCAO/COMPRAS/GESTOR, e o formulário inteiro aparecia para CONSULTA — o
+  // perfil cujo nome é "leitura pura". O CLAUDE.md diz que `minhas-permissoes` existe exatamente
+  // para barrar antes do formulário.
+  test('(8) CONSULTA não vê o formulário nem a lixeira; ALMOXARIFE vê os dois; e baixar é de todos', async () => {
+    // Metade positiva primeiro (GC 9): sem ela, o negativo passaria com o componente nunca tendo
+    // desenhado botão nenhum.
+    mockPermissoes = { anexar_documento: true, remover_anexo: true };
+    await renderizar();
+    expect(inputArquivo()).not.toBeNull();
+    expect(botaoEnviar()).not.toBeNull();
+    expect(botaoRemover(5)).not.toBeNull();
+
+    // Quem pode anexar mas NÃO remover (QUALIDADE, PRODUCAO, COMPRAS, GESTOR): formulário sim,
+    // lixeira não. É a assimetria da B68 chegando à tela.
+    mockPermissoes = { anexar_documento: true, remover_anexo: false };
+    await renderizar();
+    expect(inputArquivo()).not.toBeNull();
+    expect(botaoEnviar()).not.toBeNull();
+    expect(botaoRemover(5)).toBeNull();
+
+    // CONSULTA: nada de escrita.
+    mockPermissoes = { anexar_documento: false, remover_anexo: false };
+    await renderizar();
+    expect(inputArquivo()).toBeNull();
+    expect(selectTipo()).toBeNull();
+    expect(botaoEnviar()).toBeNull();
+    expect(botaoRemover(5)).toBeNull();
+    // ...mas BAIXAR continua, porque o gate do download é `visualizar` (B68) e a lista é o
+    // que o perfil de consulta existe para ver.
+    expect(botaoBaixar(5)).not.toBeNull();
+    expect(texto()).toContain('certificado.pdf');
   });
 });

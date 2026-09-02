@@ -49,7 +49,18 @@ function erro(status, mensagem) {
 }
 
 function tabelaDe(entidade) {
-  const tabela = ENTIDADES_ANEXO[entidade];
+  // `hasOwnProperty` e nao `ENTIDADES_ANEXO[entidade]` — achado BLOQUEANTE da revisao adversarial,
+  // reproduzido pela rota. O mapa e objeto literal, entao herda de Object.prototype:
+  // ENTIDADES_ANEXO['constructor'] devolve a FUNCAO Object (truthy), a guarda nao lancava, e o
+  // valor caia na interpolacao do `SELECT id FROM ${tabela}` — saindo
+  // `SELECT id FROM function Object() { [native code] }` e um 500 com a mensagem crua do SQLite
+  // no corpo da resposta, onde o contrato promete 400. O mesmo valia para `__proto__`,
+  // `toString`, `valueOf`, `hasOwnProperty` e `isPrototypeOf`. O teste que devia pegar usava
+  // `'qualquer_coisa'`, que nao e chave de prototipo — a RN-02 estava marcada como provada sem
+  // estar.
+  const tabela = Object.prototype.hasOwnProperty.call(ENTIDADES_ANEXO, entidade)
+    ? ENTIDADES_ANEXO[entidade]
+    : null;
   if (!tabela) throw erro(400, 'Entidade inválida para anexo');
   return tabela;
 }
@@ -68,6 +79,33 @@ async function assertPaiExiste(db, entidade, entidadeId) {
   return id;
 }
 
+/**
+ * O `filename` do multipart chega do busboy decodificado como LATIN1, e esta etapa e a primeira do
+ * modulo que PERSISTE esse campo — as outras seis rotas de upload so usam `path.extname`, entao o
+ * defeito nasceria aqui. Medido na revisao adversarial: "Certificado nº 123 — aço.pdf" era gravado
+ * como "Certificado nÂº 123 â€” aÃ§o.pdf", e ia assim para a lista da tela, para o
+ * `Content-Disposition` e para o `<a download>`. Num chao de fabrica brasileiro esse e o caso
+ * comum, nao a excecao.
+ *
+ * A reinterpretacao so acontece quando o resultado ROUNDTRIPA — se `Buffer.from(x,'latin1')` nao
+ * volta ao original, o nome ja estava em UTF-8 correto (algum cliente que encodou certo) e
+ * reinterpretar o corromperia. Preferir o texto que sobrevive ao ciclo e mais seguro que assumir
+ * a origem.
+ */
+function nomeOriginalUtf8(bruto) {
+  const nome = String(bruto || '');
+  if (!nome) return nome;
+  try {
+    const buf = Buffer.from(nome, 'latin1');
+    if (buf.toString('latin1') !== nome) return nome; // nao era latin1 puro: deixa como veio
+    const utf8 = buf.toString('utf8');
+    // `�` = replacement char: a sequencia nao era UTF-8 valido, entao o nome ja estava certo.
+    return utf8.includes('�') ? nome : utf8;
+  } catch (e) {
+    return nome;
+  }
+}
+
 async function registrarAnexo(db, user, { entidade, entidade_id, tipo, descricao }, arquivo) {
   const paiId = await assertPaiExiste(db, entidade, entidade_id);
   if (!arquivo || !arquivo.filename) throw erro(400, 'Arquivo é obrigatório');
@@ -75,7 +113,8 @@ async function registrarAnexo(db, user, { entidade, entidade_id, tipo, descricao
   const r = await dbRun(db, `INSERT INTO anexos_documento_almoxarifado
     (entidade, entidade_id, tipo, arquivo_path, nome_original, tamanho_bytes, mime_type, uploaded_by, uploaded_by_nome, descricao, ativo)
     VALUES (?,?,?,?,?,?,?,?,?,?,1)`, [
-    entidade, paiId, tipo, arquivo.filename, arquivo.originalname || arquivo.filename,
+    entidade, paiId, tipo, arquivo.filename,
+    nomeOriginalUtf8(arquivo.originalname) || arquivo.filename,
     arquivo.size ?? null, arquivo.mimetype || null, user?.id ?? null,
     // DENORMALIZADO de proposito: `usuarios` e tabela CORE, fora do initSchema do almoxarifado e
     // fora do harness (testApp.js stuba so `clientes` e `fornecedores`) — um LEFT JOIN faria todo
@@ -109,9 +148,15 @@ async function registrarAnexo(db, user, { entidade, entidade_id, tipo, descricao
 
 async function listarAnexos(db, { entidade, entidade_id }) {
   tabelaDe(entidade); // 400 para entidade fora do mapa, mesma literal do POST
+  // `entidade_id` ausente ou nao numerico era `Number(x) || 0` e devolvia 200 com lista VAZIA —
+  // achado da revisao adversarial. Nao vazava nada, mas tornava impossivel distinguir "nao ha
+  // anexo" de "chamei errado", que e exatamente a classe de bug que o download desta etapa
+  // combate. 400 com a mesma literal do Zod do POST.
+  const id = Number(entidade_id);
+  if (!Number.isInteger(id) || id <= 0) throw erro(400, 'Registro inválido');
   return dbAll(db, `SELECT ${CAMPOS_PUBLICOS} FROM anexos_documento_almoxarifado
     WHERE entidade = ? AND entidade_id = ? AND ativo = 1
-    ORDER BY created_at DESC, id DESC`, [entidade, Number(entidade_id) || 0]);
+    ORDER BY created_at DESC, id DESC`, [entidade, id]);
 }
 
 async function getAnexoParaDownload(db, id) {

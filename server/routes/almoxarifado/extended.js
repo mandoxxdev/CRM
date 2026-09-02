@@ -1493,9 +1493,30 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
   // para o diretorio de producao enquanto os testes rodam.
   const uploadAnexo = multer({
     storage: multer.diskStorage({
-      destination: (req, file, cb) => cb(null, uploadsAnexosDir),
+      destination: (req, file, cb) => {
+        // `mkdirSync` aqui, alem do boot — achado da revisao adversarial. O diretorio e criado no
+        // registro das rotas; se sumir DEPOIS (rotacao de disco, container efemero, limpeza), o
+        // multer dava ENOENT e a rota devolvia **400 com o caminho absoluto do servidor no corpo**
+        // — erro de infra vestido de erro do cliente, com path disclosure de brinde. Recriar custa
+        // um syscall por upload e nao pode falhar de forma interessante.
+        try { fs.mkdirSync(uploadsAnexosDir, { recursive: true }); } catch (e) { /* ja existe */ }
+        cb(null, uploadsAnexosDir);
+      },
       filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname);
+        // A extensao vem do MIME ACEITO, e nao de `path.extname(file.originalname)` — achado da
+        // revisao adversarial, e a diferenca e concreta: o `fileFilter` confia no `Content-Type`
+        // que o cliente manda, entao `fatura-nov.exe` declarado como `application/pdf` passava e
+        // ia para o disco COMO `.exe`. Duas consequencias medidas: executavel no volume
+        // persistente, que o backup do modulo leva inteiro; e o `<a download>` do componente
+        // salvando `fatura-nov.exe` na maquina de quem clica em "Baixar" numa linha rotulada
+        // "Nota fiscal". Derivar do mime nao valida conteudo (magic bytes seria o passo
+        // seguinte), mas garante que nada executavel encoste no disco.
+        const porMime = {
+          'application/pdf': '.pdf',
+          'image/jpeg': '.jpg', 'image/jpg': '.jpg',
+          'image/png': '.png', 'image/webp': '.webp',
+        };
+        const ext = porMime[String(file.mimetype || '').toLowerCase()] || '.bin';
         cb(null, `anexo-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
       },
     }),
@@ -1551,9 +1572,35 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
       if (!fs.existsSync(arquivo)) {
         return res.status(404).json({ error: 'Arquivo do anexo não encontrado' });
       }
-      if (anexo.mime_type) res.type(anexo.mime_type);
+      // `|| 'application/octet-stream'` e nao `if (mime)` — sem o default, `mime_type` nulo (linha
+      // legada ou importada) deixava o `sendFile` adivinhar pela EXTENSAO do disco, e um `.html`
+      // saia como `text/html`. O `attachment` ja impede render, mas o nosniff fecha a porta que
+      // sobra: o app nao manda esse header em lugar nenhum (nao ha helmet no index.js).
+      // BAIXAR deixa rastro — e isto e o controle compensatorio da B68, nao zelo. A decisao da
+      // etapa e que QUALQUER pessoa com acesso ao modulo baixa QUALQUER anexo; a revisao
+      // adversarial mediu a consequencia que faltava dizer: os ids sao sequenciais, entao um laco
+      // `GET /anexos/1..N/arquivo` leva o acervo inteiro sem conhecer documento nenhum. Numa
+      // decisao desenhada assim, a trilha e a unica coisa que separa "aberto" de "aberto e
+      // invisivel" — sem ela nao ha prevencao NEM deteccao. Custo: uma linha de auditoria por
+      // download, numa tabela que nada expurga (retencao e corte declarado da feature 23).
+      // Reversivel apagando este bloco; registrado na letra B.
+      auditar(db, {
+        entidade: 'anexo', entidade_id: anexo.id, acao: 'BAIXAR_ANEXO', ...autorDe(req),
+        dados_novos: { nome_original: anexo.nome_original },
+      }, 'download de anexo');
+      res.type(anexo.mime_type || 'application/octet-stream');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      // RFC 5987, e nao so `filename="..."` — achado da revisao adversarial, ACOPLADO ao mojibake
+      // do `nome_original`. `res.setHeader` recusa qualquer caractere fora de \x20-\x7e\x80-\xff,
+      // entao "Relatório – dimensional.pdf" (travessao U+2013), nome em chines ou com emoji dava
+      // **500 "Invalid character in header content"**. Nao era alcancavel antes porque o latin1 do
+      // busboy segurava por acidente; corrigir a gravacao sozinha teria trocado "nome errado na
+      // tela" por "download quebrado". `filename` ASCII para o cliente burro, `filename*` UTF-8
+      // para o resto — e o encodeURIComponent tambem mata a injecao de header por CR/LF.
+      const nomeAnexo = String(anexo.nome_original || 'anexo');
+      const asciiSeguro = nomeAnexo.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '') || 'anexo';
       res.setHeader('Content-Disposition',
-        `attachment; filename="${String(anexo.nome_original || 'anexo').replace(/"/g, '')}"`);
+        `attachment; filename="${asciiSeguro}"; filename*=UTF-8''${encodeURIComponent(nomeAnexo)}`);
       res.sendFile(arquivo);
     } catch (e) { handleError(res, e); }
   });
