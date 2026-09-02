@@ -78,6 +78,11 @@ async function createTestApp(options = {}) {
     // gravou) em disco — ex.: permissoesRotas.api.test.js prova que um 403 na rota de
     // foto acontece ANTES do upload, sem deixar arquivo órfão.
     uploadsAlmoxDir: path.join(dataDir, 'uploads', 'almoxarifado'),
+    // Etapa 32: diretorio IRMAO, nunca subpasta de `uploadsAlmoxDir` — `express.static(root)`
+    // serve as subpastas de root, entao um anexo guardado la dentro sairia publico pelos dois
+    // mounts de routes/almoxarifado.js. O teste da RN-03 mede exatamente a POSICAO RELATIVA
+    // entre os dois caminhos expostos aqui, e nao um GET pelo basename.
+    uploadsAnexosDir: path.join(dataDir, 'uploads', 'almoxarifado-anexos'),
     setUser(user) { currentUser = user; },
     close() {
       return new Promise((resolve) => db.close(() => {

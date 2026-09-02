@@ -17,7 +17,7 @@ const { disponivelSql } = require('../../services/almoxarifado/availabilitySql')
 // reprovar depois, por comparacao com NaN.
 const { paraNumeroFinito } = require('../../services/almoxarifado/toleranciaInspecao');
 const { validate, formatZodError } = require('../../services/almoxarifado/validation');
-const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema, RemessaTerceiroSchema, RetornoRemessaSchema, TransformacaoRemessaSchema, EncerramentoRemessaSchema, CancelamentoRemessaSchema, SobraUpdateSchema, GerarRetalhoSchema, SucateamentoCreateSchema, SucateamentoDestinoFormSchema, FerramentaCreateSchema, FerramentaUpdateSchema, EmprestimoSchema, DevolucaoEmprestimoSchema, CalibracaoSchema, JustificativaSchema, ManutencaoSchema, ManutencaoConcluirSchema, OcorrenciaSchema, AssinaturaEntregaFormSchema } = require('../../services/almoxarifado/schemas');
+const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema, RemessaTerceiroSchema, RetornoRemessaSchema, TransformacaoRemessaSchema, EncerramentoRemessaSchema, CancelamentoRemessaSchema, SobraUpdateSchema, GerarRetalhoSchema, SucateamentoCreateSchema, SucateamentoDestinoFormSchema, FerramentaCreateSchema, FerramentaUpdateSchema, EmprestimoSchema, DevolucaoEmprestimoSchema, CalibracaoSchema, JustificativaSchema, ManutencaoSchema, ManutencaoConcluirSchema, OcorrenciaSchema, AssinaturaEntregaFormSchema, AnexoCreateSchema } = require('../../services/almoxarifado/schemas');
 // Etapa 20 (C1): a limpeza do upload orfao SAIU deste arquivo para um modulo compartilhado —
 // era uma `function` local do closure de `registerExtendedRoutes` e `routes/almoxarifado.js`
 // (rota de foto de material) nao a alcancava. Importada com ALIAS de proposito: o nome
@@ -51,6 +51,9 @@ const scrapService = require('../../services/almoxarifado/scrapService');
 const scrapDisposalService = require('../../services/almoxarifado/scrapDisposalService');
 const toolService = require('../../services/almoxarifado/toolService');
 const deliverySignatureService = require('../../services/almoxarifado/deliverySignatureService');
+// Etapa 32: anexos de documento. O servico NAO toca em disco — quem grava e o multer daqui, quem
+// apaga o orfao e o `limparUploadOrfaoEm`.
+const anexoService = require('../../services/almoxarifado/anexoService');
 const reportService = require('../../services/almoxarifado/reportService');
 const sectorMaterialService = require('../../services/almoxarifado/sectorMaterialService');
 const purchaseService = require('../../services/almoxarifado/purchaseService');
@@ -109,7 +112,7 @@ async function runInitSchemaWithRetry(db, retries = 3) {
   }
 }
 
-module.exports = function registerExtendedRoutes(app, db, authenticateToken, uploadsAlmoxDir) {
+module.exports = function registerExtendedRoutes(app, db, authenticateToken, uploadsAlmoxDir, uploadsAnexosDir) {
   runInitSchemaWithRetry(db).catch((e) => console.error('Falha definitiva schema almoxarifado v3:', e.message));
 
   const auth = authenticateToken;
@@ -1478,6 +1481,85 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
 
   app.get('/api/almoxarifado/ferramentas/:id/ocorrencias', auth, async (req, res) => {
     try { res.json(await toolService.listarOcorrencias(db, req.params.id)); }
+    catch (e) { handleError(res, e); }
+  });
+
+  // ── Anexos de documento (Etapa 32) ────────────────────────────────────────────
+  // Gravacao FLAT em uploadsAnexosDir — o diretorio IRMAO de uploads/almoxarifado (D1 do
+  // design). NAO trocar por subpasta de uploadsAlmoxDir: `express.static(root)` serve as
+  // subpastas de root tambem, e o anexo viraria publico pelos dois mounts de
+  // routes/almoxarifado.js:~236-237, que nao passam por auth nenhuma. O diretorio chega como 5o
+  // PARAMETRO desta funcao, pelo mesmo motivo do 4o: re-derivar de config/paths.js apontaria
+  // para o diretorio de producao enquanto os testes rodam.
+  const uploadAnexo = multer({
+    storage: multer.diskStorage({
+      destination: (req, file, cb) => cb(null, uploadsAnexosDir),
+      filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname);
+        cb(null, `anexo-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
+      },
+    }),
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+      if (/^(application\/pdf|image\/(jpeg|jpg|png|webp))$/i.test(file.mimetype)) return cb(null, true);
+      cb(new Error('Anexo deve ser PDF ou imagem'));
+    },
+  });
+
+  // Ordem canonica (D3 da Etapa 9b): auth -> requirePermission -> multer -> safeParse manual.
+  // O gate e UMA acao so, entao vai na PORTA: o 403 sai antes de o multer gravar qualquer coisa
+  // — precedente medido em permissoesRotas.api.test.js:515-534 e coberto aqui pela RN-04.
+  app.post('/api/almoxarifado/anexos', auth, requirePermission('anexar_documento'),
+    (req, res, next) => uploadAnexo.single('arquivo')(req, res, (err) => {
+      // O erro do fileFilter e do limite chegam como excecao do multer, nao como 400 do Zod.
+      // Sem este wrapper o `next(err)` cai no handler de erro do Express e vira 500 com stack.
+      // O `limparUploadOrfaoEm` daqui e defesa em profundidade e NO-OP no caminho normal: o
+      // multer ja apaga o parcial sozinho e nunca seta `req.file` nos caminhos de erro.
+      if (!err) return next();
+      limparUploadOrfaoEm(req, uploadsAnexosDir);
+      const msg = err.code === 'LIMIT_FILE_SIZE' ? 'Arquivo excede o limite de 10 MB' : err.message;
+      return res.status(400).json({ error: msg });
+    }),
+    async (req, res) => {
+      if (!req.file) return res.status(400).json({ error: 'Arquivo é obrigatório' });
+      const parsed = AnexoCreateSchema.safeParse(req.body);
+      if (!parsed.success) {
+        limparUploadOrfaoEm(req, uploadsAnexosDir);
+        return res.status(400).json({ error: `Dados inválidos — ${formatZodError(parsed.error)}` });
+      }
+      try {
+        res.status(201).json(await anexoService.registrarAnexo(db, req.user, parsed.data, req.file));
+      } catch (e) {
+        limparUploadOrfaoEm(req, uploadsAnexosDir);
+        handleError(res, e);
+      }
+    });
+
+  app.get('/api/almoxarifado/anexos', auth, requirePermission('visualizar'), async (req, res) => {
+    try { res.json(await anexoService.listarAnexos(db, req.query)); }
+    catch (e) { handleError(res, e); }
+  });
+
+  app.get('/api/almoxarifado/anexos/:id/arquivo', auth, requirePermission('visualizar'), async (req, res) => {
+    try {
+      const anexo = await anexoService.getAnexoParaDownload(db, req.params.id);
+      // `basename` e a guarda de travessia: mesmo que a coluna seja adulterada por outra via,
+      // o caminho nunca sai de uploadsAnexosDir.
+      const arquivo = path.join(uploadsAnexosDir, path.basename(anexo.arquivo_path));
+      // Linha viva com arquivo ausente e estado ESPERADO (restore de banco sem restore de
+      // uploads), nao erro de programa — 404 proprio, e nao o 500 do sendFile.
+      if (!fs.existsSync(arquivo)) {
+        return res.status(404).json({ error: 'Arquivo do anexo não encontrado' });
+      }
+      if (anexo.mime_type) res.type(anexo.mime_type);
+      res.setHeader('Content-Disposition',
+        `attachment; filename="${String(anexo.nome_original || 'anexo').replace(/"/g, '')}"`);
+      res.sendFile(arquivo);
+    } catch (e) { handleError(res, e); }
+  });
+
+  app.delete('/api/almoxarifado/anexos/:id', auth, requirePermission('remover_anexo'), async (req, res) => {
+    try { res.json(await anexoService.removerAnexo(db, req.user, req.params.id)); }
     catch (e) { handleError(res, e); }
   });
 
