@@ -188,6 +188,14 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   const uploadsAlmoxDir = path.join(PERSISTENT_DATA_DIR, 'uploads', 'almoxarifado');
   if (!fs.existsSync(uploadsAlmoxDir)) fs.mkdirSync(uploadsAlmoxDir, { recursive: true });
 
+  // Etapa 32 (D1): os anexos vao para um diretorio IRMAO, nao para uma subpasta de
+  // uploadsAlmoxDir. `express.static(root)` serve as subpastas de root tambem — guardar em
+  // uploads/almoxarifado/anexos deixaria todo anexo publico pelos mounts das linhas ~229-230,
+  // que nao passam por auth nenhuma. Criado explicitamente porque o multer NAO cria diretorio
+  // (D3 da Etapa 9b: o primeiro upload numa subpasta inexistente da ENOENT -> 500).
+  const uploadsAnexosDir = path.join(PERSISTENT_DATA_DIR, 'uploads', 'almoxarifado-anexos');
+  if (!fs.existsSync(uploadsAnexosDir)) fs.mkdirSync(uploadsAnexosDir, { recursive: true });
+
   const storageAlmox = multer.diskStorage({
     destination: (req, file, cb) => cb(null, uploadsAlmoxDir),
     filename: (req, file, cb) => {
@@ -3699,7 +3707,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     // (tests/helpers/testApp.js), apontaria para o diretorio ERRADO — o harness passa um
     // `dataDir` temporario como PERSISTENT_DATA_DIR so para ESTE arquivo, e `require('./config/paths')`
     // dentro da extended nao veria esse temporario nenhum.
-    require('./almoxarifado/extended')(app, db, authenticateToken, uploadsAlmoxDir);
+    // Etapa 32: `uploadsAnexosDir` desce como 5o parametro pelo MESMO motivo do 4o — e ele que a
+    // extended usa no `destination` do multer de anexo. Sem este argumento a rota registra
+    // normalmente e so morre no primeiro upload real, com a suite de unidade inteira verde: o
+    // modo de falha exato da Etapa 25.
+    require('./almoxarifado/extended')(app, db, authenticateToken, uploadsAlmoxDir, uploadsAnexosDir);
     console.log('✅ Módulo Almoxarifado registrado (v3 — controle completo de estoque)');
   });
 

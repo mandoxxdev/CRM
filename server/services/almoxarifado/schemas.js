@@ -733,6 +733,21 @@ const AssinaturaEntregaFormSchema = z.object({
   recebedor_nome: z.string().trim().min(1).max(120),
 });
 
+/**
+ * Anexo de documento (Etapa 32) — o body chega por multipart, entao TUDO e string:
+ * `entidade_id` vem como '12'. `coerce` aqui e o mesmo movimento que `numFromForm` faz nos
+ * schemas de formulario do modulo. A validacao da ENTIDADE contra o mapa fechado NAO esta aqui
+ * de proposito: ela e regra de negocio com literal propria ("Entidade inválida para anexo") e
+ * mora no servico, pelo mesmo motivo de CalibracaoSchema/OcorrenciaSchema — o Zod embrulharia
+ * em "Dados inválidos — ...".
+ */
+const AnexoCreateSchema = z.object({
+  entidade: z.string().min(1, 'Entidade é obrigatória'),
+  entidade_id: z.coerce.number().int().positive('Registro inválido'),
+  tipo: z.string().min(1, 'Tipo é obrigatório').max(60),
+  descricao: z.string().max(300).optional(),
+});
+
 module.exports = {
   CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, TIPOS_MOVIMENTO_ROTA,
   RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema,
@@ -745,4 +760,8 @@ module.exports = {
   FerramentaCreateSchema, FerramentaUpdateSchema, EmprestimoSchema, DevolucaoEmprestimoSchema,
   CalibracaoSchema, JustificativaSchema, ManutencaoSchema, ManutencaoConcluirSchema,
   OcorrenciaSchema, AssinaturaEntregaFormSchema,
+  // Etapa 32: este arquivo exporta por LISTA FECHADA, nao por spread — esquecer a linha aqui
+  // deixa o binding `undefined` na extended e faz TODO POST /anexos morrer em
+  // `undefined.safeParse`, 500 com stack, DEPOIS de o multer ja ter gravado.
+  AnexoCreateSchema,
 };
