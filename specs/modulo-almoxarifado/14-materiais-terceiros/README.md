@@ -111,7 +111,19 @@ assunto cada):
 
 ### Backend
 - [x] Tabela `remessas_terceiro_almoxarifado`: fornecedor, pedido/OS relacionado, prazo previsto, status (ABERTA → ENVIADA → RETORNO_PARCIAL → ENCERRADA / CANCELADA) (`258f5d2`)
-- [x] Itens da remessa: material, quantidade, peso, lote (`258f5d2`) — **desenhos anexos NÃO**: fora do escopo declarado (decisão 10 do design da 8b), não bloqueia o ciclo. **A 8b escreveu aqui que "a 8c é o consumidor natural dele". A 8c NÃO o consumiu** — o modal de transformação recebe material, quantidade e classificação, e nenhum anexo. O item **continua aberto** e não tem mais etapa natural marcada: quem quiser desenho no item da remessa abre uma etapa para isso
+- [x] Itens da remessa: material, quantidade, peso, lote (`258f5d2`)
+      **Etapa 32 (`e708125..fd71958`): o MECANISMO existe, está testado, e falta SÓ o plug desta
+      tela.** A entidade é `item_remessa` (tabela `itens_remessa_terceiro_almoxarifado`) — a spec pede o anexo no **item**, e é o item que está no mapa; `remessa_terceiro` ficou de fora de propósito.
+      A `anexos_documento_almoxarifado` era **órfã** — zero leitor, zero escritor, sem índice —,
+      e virou `services/almoxarifado/anexoService.js` (mapa fechado de seis entidades,
+      existência do registro-pai verificada, soft delete, auditoria) mais as rotas
+      `POST/GET/DELETE /almoxarifado/anexos` e `GET /almoxarifado/anexos/:id/arquivo`, esta com
+      **download autenticado** — o arquivo NÃO é servido estaticamente. No client existe o
+      componente genérico `client/src/components/almoxarifado/AnexosDocumento.js`.
+      **Plugar aqui é uma linha** — `<AnexosDocumento entidade="CHAVE" entidadeId={id} />` — mais
+      dois cenários de teste. **Ponto de atenção medido na Etapa 32:** confira QUANDO o `id`
+      existe nesta tela. Na inspeção o plug teve de ir para a aba Histórico, porque a linha só
+      nasce **depois** da decisão — anexar antes penduraria o arquivo num id inexistente. — **desenhos anexos NÃO**: fora do escopo declarado (decisão 10 do design da 8b), não bloqueia o ciclo. **A 8b escreveu aqui que "a 8c é o consumidor natural dele". A 8c NÃO o consumiu** — o modal de transformação recebe material, quantidade e classificação, e nenhum anexo. O item **continua aberto** e não tem mais etapa natural marcada: quem quiser desenho no item da remessa abre uma etapa para isso
 - [x] Envio = saldo visível mas **não disponível** (`0a01124`, `e0be211`, `257a444`) — **não** por localização virtual: a redação original desta spec propunha isso e **estava errada** (ver "Correção de spec declarada", abaixo)
 - [x] Documento de remessa (PDF) (`b176212`)
 - [x] Retorno parcial/total: entrada vinculada à remessa (`69d32a8`)

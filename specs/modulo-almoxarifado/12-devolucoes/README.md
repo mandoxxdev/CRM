@@ -142,6 +142,18 @@ vez de implícito.
 - [x] Condição → destino: boa → estoque · suspeita → quarentena · danificada → sucata — **`0722bfd`**, entregue **como sugestão na tela**. O backend aceita qualquer combinação **de propósito**: uma regra rígida no motor criaria um caso sem saída (material bom que precisa ir para inspeção por outro motivo). Trocar o destino à mão não é desfeito pela sugestão — quem decide é quem está com a peça na mão. "Suspeita → inspeção (feature 09)" foi implementada como **quarentena** (`ENTRADA_DEVOLUCAO` + `BLOQUEIO`): o físico volta, o disponível não sobe. Ligar isso à fila formal de inspeção da feature 09 continua aberto
 - [ ] Tipos de devolução (spec 16): produção, projeto, instalação externa, ferramenta (feature 16), não utilizado, ao fornecedor, do fornecedor, de cliente (feature 13), assistência técnica. **Continua aberto** — é uma **coluna a mais** nesta tabela, não tabela nova; conteúdo das features 13/16
 - [ ] Fotos da devolução (anexos) — **fora do escopo da Etapa 7, declarado**
+      **Etapa 32 (`e708125..fd71958`): o MECANISMO existe, está testado, e falta SÓ o plug desta
+      tela.** A entidade é `devolucao`, já no mapa fechado do serviço.
+      A `anexos_documento_almoxarifado` era **órfã** — zero leitor, zero escritor, sem índice —,
+      e virou `services/almoxarifado/anexoService.js` (mapa fechado de seis entidades,
+      existência do registro-pai verificada, soft delete, auditoria) mais as rotas
+      `POST/GET/DELETE /almoxarifado/anexos` e `GET /almoxarifado/anexos/:id/arquivo`, esta com
+      **download autenticado** — o arquivo NÃO é servido estaticamente. No client existe o
+      componente genérico `client/src/components/almoxarifado/AnexosDocumento.js`.
+      **Plugar aqui é uma linha** — `<AnexosDocumento entidade="CHAVE" entidadeId={id} />` — mais
+      dois cenários de teste. **Ponto de atenção medido na Etapa 32:** confira QUANDO o `id`
+      existe nesta tela. Na inspeção o plug teve de ir para a aba Histórico, porque a linha só
+      nasce **depois** da decisão — anexar antes penduraria o arquivo num id inexistente.
 - [ ] Atualizar custo do projeto (estorno de consumo — feature 22) — **fora do escopo da Etapa 7, declarado**
 - [ ] Devolução ao fornecedor: fluxo próprio com documento e e-mail — **fora do escopo da Etapa 7, declarado**. Não é "a mesma devolução com outro destino": tem documento fiscal e contraparte externa
 - [ ] E-mail automático (feature 19) — **fora do escopo da Etapa 7, declarado**

@@ -1901,7 +1901,7 @@ Recusas do sistema ao salvar:
 
 A aba **Histórico**, na tela de Inspeções, lista as inspeções **já decididas**, da mais recente para a mais antiga: data, material (com código, recebimento e nota fiscal), quantidade aprovada e reprovada, os problemas identificados como etiquetas — ou **Conforme** quando não houve nenhum —, o responsável e a contagem de medidas no formato `2 (1 fora)`.
 
-**Clicar na linha abre as medidas daquela inspeção**, numa tabela com característica, nominal, faixa, valor medido, conforme ou não conforme, e o instrumento usado. Inspeção decidida sem medida mostra *"Sem medidas registradas"* e não abre.
+**Clicar na linha abre o detalhe daquela inspeção**: as medidas, numa tabela com característica, nominal, faixa, valor medido, conforme ou não conforme e o instrumento usado; e, abaixo delas, os **anexos** (seção 15.2.4). Inspeção decidida sem medida também abre — ela mostra *"Sem medidas registradas"* no lugar da tabela, e o bloco de anexos do mesmo jeito.
 
 **Os valores são os do dia da medição, não os de hoje.** Cada medida guarda uma cópia do nominal e da tolerância que valiam no ato — mudar o plano depois não altera o que esta tabela mostra. É o que permite defender uma decisão meses depois.
 
@@ -1911,6 +1911,43 @@ A aba **Histórico**, na tela de Inspeções, lista as inspeções **já decidid
 
 **Se a lista não carregar**, a aba mostra *"Não foi possível carregar o histórico de inspeções."*, a mensagem que o servidor devolveu e um botão **Tentar de novo** — nunca *"Nenhuma inspeção decidida ainda."*, que faria concluir que não há inspeções quando na verdade não foi possível perguntar.
 
+
+### 15.2.4 Anexos da inspeção — certificado, relatório dimensional e fotos
+
+Dentro do detalhe de uma inspeção do Histórico há o bloco **Anexos**. É onde ficam o certificado do fornecedor, o relatório dimensional e as fotos daquele recebimento — presos à inspeção, e não a uma pasta de rede ou a um e-mail.
+
+Cada anexo aparece com o **tipo**, a descrição (se houver), o nome do arquivo, o tamanho, **quem enviou** e **quando**.
+
+**O que o sistema aceita:**
+
+| Regra | Comportamento |
+|---|---|
+| Formatos | PDF, JPG, PNG e WEBP. Outro formato é recusado com *"Anexo deve ser PDF ou imagem"* |
+| Tamanho | Até 10 MB por arquivo. Acima: *"Arquivo excede o limite de 10 MB"* |
+| Arquivo | Obrigatório. Enviar sem escolher devolve *"Arquivo é obrigatório"* |
+| Registro de destino | Tem de existir. Se a inspeção não existir mais, o envio é recusado com *"Registro não encontrado para anexar"* e o arquivo é descartado |
+
+**O nome que o sistema guarda no servidor não é o nome que você enviou.** O arquivo é gravado com um nome próprio e com a extensão correspondente ao **tipo real declarado no envio** — nunca a extensão que veio no nome. Um arquivo chamado `nota-fiscal.exe` enviado como PDF é guardado como PDF; nada com extensão executável chega ao servidor. O nome original continua guardado e é o que aparece na tela e o que você recebe ao baixar, **inclusive com acentos e traços longos**: `Certificado nº 123 — aço.pdf` volta exatamente assim.
+
+**Baixar exige estar logado.** O anexo não é um endereço público: quem não estiver autenticado no sistema não alcança o arquivo, mesmo com o endereço em mãos. Isso vale para os anexos — outros arquivos do módulo, como a foto do material e o certificado do lote, seguem regra diferente.
+
+**Remover esconde, não apaga.** O anexo removido some da lista imediatamente e a remoção fica na trilha de auditoria com quem removeu, mas **o arquivo continua guardado no servidor**. Isso é deliberado: uma linha de auditoria que aponta para um arquivo inexistente não prova nada. Tentar remover o mesmo anexo duas vezes devolve *"Anexo não encontrado"* em vez de repetir sucesso.
+
+**Se o registro existir mas o arquivo tiver se perdido** — restauração de banco sem restauração dos arquivos, por exemplo — o download responde *"Arquivo do anexo não encontrado"*, mensagem diferente de *"Anexo não encontrado"*. A distinção importa: uma coisa é o documento ter sido removido, outra é o arquivo ter sumido do disco.
+
+**Quem pode o quê:**
+
+| Perfil | Ver e baixar | Anexar | Remover |
+|---|---|---|---|
+| Administrador, Almoxarife | sim | sim | **sim** |
+| Compras, Produção, Engenharia, Gestor, Qualidade | sim | sim | não |
+| Consulta | sim | não | não |
+
+A permissão de **anexar** é larga porque anexar é ato de quem opera: compras anexa a nota fiscal do recebimento, a qualidade anexa o certificado e o relatório, a produção anexa o desenho. A de **remover** é estreita porque tirar um certificado de vista é apagar evidência. A tela **esconde** o que o perfil não pode — quem não anexa não vê o formulário, quem não remove não vê o botão de remover —, e mesmo que alguém alcance a operação por outro caminho o sistema recusa.
+
+**Baixar fica registrado.** Enviar, baixar e remover anexo aparecem na tela de Auditoria como **Anexo enviado**, **Anexo baixado** e **Anexo removido**, com o nome de quem fez e a hora. O download é a **única leitura registrada** do módulo inteiro, e o motivo é a permissão larga: como qualquer pessoa com acesso ao almoxarifado baixa qualquer anexo, o registro é o que permite saber depois quem viu o quê.
+
+**O que ainda não tem anexo:** hoje só a inspeção tem o bloco. Material, requisição, recebimento, devolução e item de remessa a terceiro ainda não oferecem o campo.
 ### 15.3 Bloqueio e desbloqueio avulso
 
 Nem todo bloqueio nasce da inspeção. Avaria encontrada na prateleira, material suspeito, material segurado por decisão da qualidade: para isso existem, no topo da tela de Inspeções, os botões **Bloquear Material** e **Desbloquear Material**.

@@ -41,6 +41,18 @@ Cadastro completo de materiais com todos os campos da spec, famílias/subfamíli
 - [x] Necessidade de inspeção no recebimento / de fotografia (flags `requer_inspecao`, `requer_foto`)
 - [x] Classe ABC (`classe_abc`, validado A/B/C) + último custo (`custo_unitario`, já existente, atualizado pelo motor da Etapa 1)
 - [ ] Ficha técnica e documentos anexos na tela do material (tabela `anexos_documento_almoxarifado` já existe, entidade `material`; não trabalhado nesta etapa)
+      **Etapa 32 (`e708125..fd71958`): o MECANISMO existe, está testado, e falta SÓ o plug desta
+      tela.** A entidade é `material`, já no mapa fechado do serviço.
+      A `anexos_documento_almoxarifado` era **órfã** — zero leitor, zero escritor, sem índice —,
+      e virou `services/almoxarifado/anexoService.js` (mapa fechado de seis entidades,
+      existência do registro-pai verificada, soft delete, auditoria) mais as rotas
+      `POST/GET/DELETE /almoxarifado/anexos` e `GET /almoxarifado/anexos/:id/arquivo`, esta com
+      **download autenticado** — o arquivo NÃO é servido estaticamente. No client existe o
+      componente genérico `client/src/components/almoxarifado/AnexosDocumento.js`.
+      **Plugar aqui é uma linha** — `<AnexosDocumento entidade="CHAVE" entidadeId={id} />` — mais
+      dois cenários de teste. **Ponto de atenção medido na Etapa 32:** confira QUANDO o `id`
+      existe nesta tela. Na inspeção o plug teve de ir para a aba Histórico, porque a linha só
+      nasce **depois** da decisão — anexar antes penduraria o arquivo num id inexistente.
 
 ### Famílias / subfamílias / grupos
 - [x] **Decisão tomada (2026-08-04):** subfamílias formalizadas via `parent_id` na própria `familias_material_almoxarifado` (máximo 2 níveis — subfamília não pode ter filhos). Material ganhou `subfamilia_id`, validado como filha da `familia_id` do material (400 caso contrário). `subcategoria_id`/categoria hierárquica não foram tocados — convivem sem relação formal com o novo `parent_id`.

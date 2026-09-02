@@ -43,6 +43,18 @@ Fluxo completo: rascunho → aprovação → disponibilidade → reserva → sep
 - [x] Campos: centro de custo, local de entrega (Etapa 3, Task 1 — `centro_custo_id`, `local_entrega`)
 - [ ] Campos: ordem de produção (vínculo estruturado — hoje só via `tipo_requisicao = ORDEM_PRODUCAO`), gestor responsável
 - [ ] Anexos (desenho/documento — `anexos_documento_almoxarifado` já existe) — fora da Etapa 3
+      **Etapa 32 (`e708125..fd71958`): o MECANISMO existe, está testado, e falta SÓ o plug desta
+      tela.** A entidade é `requisicao`, já no mapa fechado do serviço.
+      A `anexos_documento_almoxarifado` era **órfã** — zero leitor, zero escritor, sem índice —,
+      e virou `services/almoxarifado/anexoService.js` (mapa fechado de seis entidades,
+      existência do registro-pai verificada, soft delete, auditoria) mais as rotas
+      `POST/GET/DELETE /almoxarifado/anexos` e `GET /almoxarifado/anexos/:id/arquivo`, esta com
+      **download autenticado** — o arquivo NÃO é servido estaticamente. No client existe o
+      componente genérico `client/src/components/almoxarifado/AnexosDocumento.js`.
+      **Plugar aqui é uma linha** — `<AnexosDocumento entidade="CHAVE" entidadeId={id} />` — mais
+      dois cenários de teste. **Ponto de atenção medido na Etapa 32:** confira QUANDO o `id`
+      existe nesta tela. Na inspeção o plug teve de ir para a aba Histórico, porque a linha só
+      nasce **depois** da decisão — anexar antes penduraria o arquivo num id inexistente.
 - [x] Copiar requisição anterior (Etapa 3, Task 5 — `POST /:id/copiar`, gera novo RASCUNHO fiel com os mesmos itens/tipo/vínculos, sem quantidades entregues)
 - [ ] Importar itens de lista técnica / ordem de produção (depende da feature 22) — fora da Etapa 3
 - [x] Confirmação de recebimento pelo solicitante (fecha o ciclo) (Etapa 3, Task 5 — `PUT /:id/confirmar-recebimento`, só o solicitante, sem bypass de admin; campos `recebimento_confirmado_por/em`)

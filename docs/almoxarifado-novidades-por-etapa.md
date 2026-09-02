@@ -1227,7 +1227,27 @@ qualidade anexa o certificado, produção anexa o desenho da requisição. **Bai
 
 **O que isso significa na prática, dito claramente:** qualquer pessoa com acesso ao módulo — o que
 inclui o perfil `CONSULTA` — **baixa qualquer anexo de qualquer documento**. Não há régua por
-entidade: quem vê o almoxarifado vê o certificado do lote e a foto do recebimento.
+entidade: quem vê o almoxarifado vê o certificado da inspeção e a nota fiscal do recebimento.
+
+**E a revisão mediu duas consequências que faltavam nesta letra, porque são o que torna a decisão
+arbitrável:**
+
+1. **Não é preciso conhecer documento nenhum para baixar.** Os identificadores de anexo são
+   **sequenciais** (1, 2, 3...), então um programa que peça um por um leva o acervo inteiro sem
+   nunca abrir uma tela. Isso vale para qualquer pessoa com acesso ao módulo.
+2. **Por isso — e só por isso — baixar passou a ficar registrado.** É a única leitura auditada do
+   módulo inteiro. Numa decisão desenhada como "todo mundo baixa", a trilha é o que separa
+   *aberto* de *aberto e invisível*: sem ela não há prevenção **nem** detecção. Você vê quem
+   baixou o quê e quando, em Almoxarifado → Auditoria, como "Anexo baixado".
+   **O custo, dito com honestidade:** uma linha de auditoria por download, numa tabela que nada
+   expurga hoje. Se o volume incomodar, apagar esse registro é uma linha — mas aí a decisão de
+   deixar todo mundo baixar fica sem nenhum controle, e é você que arbitra esse par.
+
+**E uma consequência do fallback de perfil, que vale saber:** usuário do sistema **sem perfil de
+almoxarifado configurado** cai em `PRODUÇÃO` por padrão — e `PRODUÇÃO` **pode anexar**. Ou seja,
+alguém recém-cadastrado já anexa documento antes de qualquer configuração. Isso é o
+comportamento geral do módulo (está na regra das duas camadas), não uma escolha desta etapa, mas
+aqui ele encosta em arquivo e por isso está escrito.
 
 **O que foi descartado:** um gate por entidade (anexar em inspeção exigiria `inspecionar`, em
 recebimento exigiria `receber_material`). Ele é mais preciso, mas obriga a checar a permissão
@@ -5700,6 +5720,106 @@ tenta de novo com um número novo, até 5 vezes, e **só então** desiste — e 
 - **Números de outros módulos** — a varredura foi do almoxarifado.
 - **Número de série de material** continua sendo **digitado pelo operador** e não passa por este
   gerador, de propósito.
+
+## Etapa 32 — O papel que prova a qualidade finalmente tem onde ficar (2026-09-02)
+
+Toda inspeção de recebimento gera papel: o certificado do fornecedor, o relatório dimensional, a
+foto da peça danificada. Até aqui esse papel não tinha lugar nenhum no sistema — ficava no e-mail
+de quem recebeu, numa pasta da rede, ou impresso numa gaveta. Quando o cliente ou o auditor pedia
+"me mostre o certificado do material desta OS", alguém tinha de lembrar onde guardou.
+
+A partir desta etapa o documento fica **preso à inspeção**, dentro do sistema, e quem tem acesso ao
+almoxarifado baixa em dois cliques. E — isto é o que muda para a qualidade — **o arquivo não é
+público**: o download exige login, ao contrário de tudo que o módulo guardava até aqui.
+
+**Um detalhe de bastidor que vale contar, porque explica por que isto demorou 31 etapas:** o
+espaço para guardar anexo **já existia no banco desde o primeiro dia do módulo**, e nunca foi
+usado por ninguém — nenhuma tela gravava, nenhuma tela lia. Seis partes do sistema o citavam como
+"depende do módulo de anexos", e cada uma supunha que outra o construiria. Esta etapa construiu.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Certificado do fornecedor ficava no e-mail de quem recebeu | Fica preso à inspeção, na aba **Histórico**, e qualquer pessoa com acesso baixa |
+| Não havia como saber se uma inspeção tinha documento | A linha do histórico abre e mostra a lista de anexos, com quem enviou e quando |
+| Arquivo do almoxarifado abria sem login para quem tivesse o link | **Anexo novo exige login** para baixar (os arquivos antigos **não** mudaram — ver furo **C42**) |
+| Nada registrava quem viu qual documento | **Cada download fica na Auditoria**, com nome e hora |
+| Linha do histórico sem medidas não abria | Toda linha abre — as com medida mostram medida e anexos, as sem medida mostram só anexos |
+
+### As regras, com o cenário exato
+
+**1. O anexo pertence a um documento que existe — e o sistema confere.**
+Não há como anexar "solto". O sistema verifica se a inspeção existe antes de aceitar o arquivo, e
+se não existir devolve *"Registro não encontrado para anexar"* e **descarta o arquivo enviado**.
+Isso evita o problema que a própria tabela tinha: linha apontando para o nada.
+
+**2. Só PDF e imagem.**
+Anexe um arquivo `.docx` ou `.zip` e o sistema recusa com *"Anexo deve ser PDF ou imagem"*. São
+aceitos PDF, JPG, PNG e WEBP.
+**E há uma proteção que não aparece na tela:** mesmo que alguém renomeie um programa para
+`nota-fiscal.pdf`, o arquivo guardado no servidor **nunca** fica com extensão executável — o
+sistema grava a extensão pelo tipo do arquivo, não pelo nome enviado. Sem isso, um `.exe`
+disfarçado entraria no servidor e seria salvo com esse nome na máquina de quem clicasse em Baixar.
+
+**3. Limite de 10 MB por arquivo.**
+Acima disso: *"Arquivo excede o limite de 10 MB"*. Foto de celular cabe folgado; PDF de relatório
+completo também. Se precisar de mais, é uma linha de configuração.
+
+**4. Clicar em Anexar sem escolher arquivo dá *"Arquivo é obrigatório"*.**
+
+**5. Remover esconde o documento, mas não o apaga.**
+O anexo some da lista na hora, e a remoção fica registrada na Auditoria com quem removeu. **O
+arquivo continua no servidor** — decisão explicada na letra **B67**. Tentar remover duas vezes o
+mesmo anexo devolve *"Anexo não encontrado"*, não um sucesso silencioso.
+
+**6. Quem pode o quê** (detalhe e justificativa na letra **B68**):
+
+| Perfil | Ver e baixar | Anexar | Remover |
+|---|---|---|---|
+| Administrador, Almoxarife | sim | sim | **sim** |
+| Compras, Produção, Engenharia, Gestor, Qualidade | sim | sim | não |
+| Consulta | sim | **não** | não |
+
+A tela **esconde** o que o perfil não pode: quem não anexa não vê o formulário, quem não remove
+não vê a lixeira. Quem tentar mesmo assim (por outro caminho) toma a recusa do servidor.
+
+**7. Se o arquivo sumir do servidor mas o registro continuar, o sistema diz isso.**
+Baixar devolve *"Arquivo do anexo não encontrado"* — diferente de *"Anexo não encontrado"*, que é
+quando o registro é que não existe. A diferença importa: uma coisa é o documento ter sido
+removido, outra é o arquivo ter se perdido num restore de banco sem restore de arquivos.
+
+**8. Nome de arquivo com acento funciona.**
+`Certificado nº 123 — aço.pdf` é gravado e baixado exatamente assim. Parece óbvio; não era — o
+padrão da web entrega esse nome num formato antigo que corrompe acento, e o caminho ingênuo
+transformava o nome em `Certificado nÂº 123 â€” aÃ§o.pdf` na tela e no arquivo salvo.
+
+### Como testar ao vivo
+
+1. **Almoxarifado → Inspeções → aba Histórico.**
+2. **Clique numa linha** — ela abre. Se a inspeção tiver medidas, elas aparecem; abaixo, sempre, o
+   bloco **Anexos**.
+3. **Escolha o tipo, selecione um PDF e clique em Anexar.** Ele aparece na lista com o seu nome e a
+   data.
+4. **Clique em Baixar** — o arquivo desce com o nome original.
+5. **Tente anexar um `.txt`** → *"Anexo deve ser PDF ou imagem"*.
+6. **Clique na lixeira** → some da lista.
+7. **Vá em Almoxarifado → Auditoria** e filtre pela entidade **Anexo**: estão lá *Anexo enviado*,
+   *Anexo baixado* e *Anexo removido*, com nome e hora.
+
+### O que esta etapa NÃO cobre
+
+- **As outras cinco telas.** O mecanismo é genérico e já aceita anexo em material, requisição,
+  recebimento, devolução e item de remessa a terceiro — mas **só a inspeção tem o botão**. As
+  outras cinco são um plug de poucas linhas cada, e ficam para a etapa seguinte. Prometer seis
+  telas aqui seria entregar seis pela metade.
+- **Os arquivos antigos continuam públicos por link** (furo **C42**) — foto de material,
+  certificado de lote, comprovante de sucateamento, certificado de calibração, foto de ocorrência
+  e assinatura de entrega. É anterior a esta etapa e tem correção própria já desenhada.
+- **Nada é apagado automaticamente.** Anexo removido continua ocupando disco, e não há rotina de
+  expurgo — corte já declarado desde a feature de segurança.
+- **O sistema não lê o conteúdo do arquivo.** Ele confere o tipo declarado e a extensão que grava,
+  mas não abre o PDF para ver se é um PDF de verdade.
 
 ## Onde estamos e o que vem a seguir
 

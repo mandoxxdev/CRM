@@ -1,10 +1,31 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-08-31 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-09-02 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 31) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 32) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20.
 
-> ## Onde o desenvolvimento está — 2026-08-31 (Etapa 31 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-09-02 (Etapa 32 ENTREGUE · modo contínuo pelo mapa)
+>
+> **Etapas 1 a 20 e 22 a 32 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
+> A **Etapa 32 (anexos de documento)** fechou em 2026-09-02 (`e708125..fd71958`) e é a primeira
+> vez que um documento — certificado do fornecedor, relatório dimensional, foto — fica **preso**
+> a um registro do almoxarifado, dentro do sistema.
+>
+> **Onde aparece:** Almoxarifado → Inspeções → aba **Histórico** → clique numa linha. O bloco
+> **Anexos** está lá. É a **única** tela com o botão nesta etapa; o mecanismo é genérico e já
+> aceita material, requisição, recebimento, devolução e item de remessa, mas o plug de cada uma
+> fica para a etapa seguinte.
+>
+> **⚠️ Duas coisas para saber antes de apresentar:**
+> 1. **O anexo novo exige login para baixar** — e isso é diferente de tudo que o módulo guardava
+>    até aqui. Os arquivos **antigos** (foto de material, certificado de lote, comprovante de
+>    sucateamento, certificado de calibração, foto de ocorrência e **assinatura de entrega**)
+>    continuam abrindo **sem login** para quem tiver o link. Isso é anterior a esta etapa; leia o
+>    furo **C42** no documento de novidades.
+> 2. **Cada download fica registrado** na Auditoria, com nome e hora. É a única leitura auditada
+>    do módulo, e existe porque qualquer perfil com acesso baixa qualquer anexo.
+>
+> Antes disto: **Etapa 31 (os números de documento paravam de ser únicos)**, `1e6c9a9..67b6758`.
 >
 > **Etapas 1 a 20 e 22 a 31 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
 > A **Etapa 31 (os números de documento paravam de ser únicos)** fechou em 2026-08-31
@@ -1779,7 +1800,7 @@ aparecer na tela for diferente, é bug — reporte.
   transferência. Não há perda de saldo nem de rastreabilidade da peça — só o endereço da série fica
   desatualizado. O saldo real, que a transferência move corretamente, mora em outro lugar.
 - **Série no descarte de devolução** (Sucata/Retrabalho) — caminho de dois passos, ver R15.
-- **Fotos/anexos da devolução** — não implementado.
+- **Fotos/anexos da devolução** — o mecanismo de anexos **existe desde a Etapa 32** e já aceita a devolução; falta só o botão nesta tela (é um plug de poucas linhas). Hoje o anexo só tem botão na aba Histórico de Inspeções.
 - **Devolução ao fornecedor** — é fluxo próprio, com documento fiscal e contraparte externa; não é
   "a mesma devolução com outro destino".
 - **Estorno de custo de projeto** quando o material volta — depende da integração de custos.
@@ -4316,7 +4337,7 @@ qualquer requisição do sistema logado; abaixo ele é `$TOKEN`.
   **B60**): calcular a tolerância na tela seria uma **segunda cópia** da régua, e a Etapa 27 mediu
   a versão ingênua reprovar 12,3% das peças no limite. O resultado vem do servidor, no aviso de
   sucesso, e a tela mostra a **faixa** ao lado do campo.
-- **Fotos, certificado e relatório dimensional** anexados à inspeção — dependem do módulo de anexos.
+- ~~**Fotos, certificado e relatório dimensional** anexados à inspeção — dependem do módulo de anexos.~~ **ENTREGUE na Etapa 32:** estão na aba **Histórico**, na linha expandida da inspeção. Riscado em vez de apagado, para quem leu a versão anterior confirmar o que saiu.
 - **Reabrir ou corrigir uma inspeção decidida** — a leitura é só leitura; medida errada não tem
   como ser corrigida pela tela (nem tinha antes).
 - **Paginação do Histórico** — a aba mostra no máximo as **100 mais recentes** e não avisa que
@@ -4407,7 +4428,7 @@ galpão cadastra plano por `curl`. Esta etapa é a chave que abre as outras duas
 
 - **Plano herdado da família** (**B59**) — continua por material.
 - **Copiar o plano de outro material** — hoje se cadastra característica por característica.
-- **Anexar desenho técnico** — depende do módulo de anexos.
+- **Anexar desenho técnico** — o mecanismo de anexos **existe desde a Etapa 32** e já aceita a requisição; falta só o botão nesta tela.
 - **Editar característica inativa** — o bloco de inativas é somente leitura, com **Reativar**;
   editar ali convidaria a reativação acidental que o servidor foi feito para impedir.
 - **Trocar o material de uma característica** — seria mover a característica deixando as medidas já
@@ -4483,6 +4504,74 @@ que ele não tinha como repetir com sucesso garantido.
 - **Números de outros módulos do CRM** — a varredura foi do almoxarifado.
 
 ---
+
+## Etapa 32 — Anexar certificado, relatório e foto à inspeção (ENTREGUE — 2026-09-02)
+
+**O que mudou, em uma frase:** o papel que prova a qualidade — certificado do fornecedor,
+relatório dimensional, foto da peça — agora fica preso à inspeção dentro do sistema, e quem tem
+acesso ao almoxarifado baixa em dois cliques.
+
+Antes disso, esse documento vivia no e-mail de quem recebeu o material, numa pasta da rede ou
+impresso numa gaveta. Quando o cliente ou o auditor pedia "me mostre o certificado do material
+desta OS", alguém precisava lembrar onde tinha guardado.
+
+### Onde fica
+
+**Almoxarifado → Inspeções → aba Histórico → clique em qualquer linha.**
+
+A linha abre. Se aquela inspeção tiver medidas dimensionais, elas aparecem primeiro; **abaixo,
+sempre, o bloco Anexos**. Linha sem medida também abre agora — antes ela não abria de jeito
+nenhum.
+
+### Roteiro de teste manual
+
+1. Entre no sistema e vá em **Almoxarifado → Inspeções**.
+2. Clique na aba **Histórico**. Se não houver nenhuma inspeção decidida, faça uma primeiro (aba
+   Pendentes → decidir um item).
+3. **Clique numa linha da lista.** Ela expande. Repare no ícone de seta na última coluna — ele
+   agora aparece em todas as linhas, com medidas ou sem.
+4. No bloco **Anexos**, escolha o **tipo** (por exemplo *Certificado*), escreva uma descrição se
+   quiser, clique em **Escolher arquivo** e selecione um PDF.
+5. Clique em **Anexar**. Ele aparece na lista com o seu nome e a data.
+6. Clique no botão de **baixar** da linha do anexo. O arquivo desce com o nome original — inclusive
+   se o nome tiver acento ou traço longo (`Certificado nº 123 — aço.pdf` desce exatamente assim).
+7. **Teste a recusa:** tente anexar um arquivo `.txt` ou `.docx`. A tela mostra
+   *"Anexo deve ser PDF ou imagem"* e nada é enviado.
+8. **Teste o limite:** um arquivo acima de 10 MB devolve *"Arquivo excede o limite de 10 MB"*.
+9. Clique na **lixeira** do anexo. Ele some da lista na hora.
+10. Vá em **Almoxarifado → Auditoria** e filtre pela entidade **Anexo**. Estão lá as três linhas:
+    **Anexo enviado**, **Anexo baixado** e **Anexo removido**, cada uma com quem fez e quando.
+
+### O que muda conforme o perfil
+
+Faça o teste com um usuário de perfil **Consulta**: ele **vê** a lista de anexos e **baixa**, mas
+**não vê** o formulário de anexar nem a lixeira. Com **Qualidade** ou **Produção**: vê o formulário
+de anexar, mas **não** vê a lixeira. Só **Administrador** e **Almoxarife** removem.
+
+Isso é deliberado: tirar um certificado de vista é apagar evidência, e a permissão para isso é mais
+estreita que a de anexar. A explicação completa está na letra **B68** do documento de novidades.
+
+### Duas coisas que valem saber
+
+- **Remover não apaga o arquivo do servidor.** Ele some da tela e a remoção fica na trilha, mas o
+  arquivo continua guardado — de propósito, para que a linha de auditoria não vire uma promessa
+  vazia. Consequência: anexo removido continua ocupando disco, e não há rotina de limpeza.
+- **Baixar deixa rastro.** É a única leitura registrada no módulo inteiro. Existe porque qualquer
+  pessoa com acesso ao almoxarifado baixa qualquer anexo, e nessa situação a trilha é o que
+  permite saber depois quem viu o quê.
+
+### O que esta etapa NÃO cobre
+
+- **As outras cinco telas.** Material, requisição, recebimento, devolução e item de remessa a
+  terceiro **já são aceitos pelo mecanismo**, mas **não têm o botão** — só a inspeção tem. Cada
+  plug é pequeno e fica para a etapa seguinte.
+- **Os arquivos antigos continuam públicos por link** — foto de material, certificado de lote,
+  comprovante de sucateamento, certificado de calibração, foto de ocorrência e assinatura de
+  entrega abrem **sem login** para quem tiver a URL. É defeito **anterior** a esta etapa; a
+  correção é etapa própria, porque duas telas apontam direto para aqueles endereços. Ver furo
+  **C42**.
+- **O sistema não abre o arquivo para conferir o conteúdo.** Ele confere o tipo declarado e
+  controla a extensão que grava no servidor, mas não valida que o PDF é um PDF de verdade.
 
 ## Correção — a posição por cliente não fechava a conta (2026-08-13)
 

@@ -12,10 +12,16 @@
 > **A frase "mas SEM TELA: o formulário de decisão continua com a caixa manual, e as medidas
 > nascem sem leitor", que este cabeçalho trouxe entre 2026-08-29 e 2026-08-30, DEIXOU DE VALER** —
 > ficava certa quando escrita e está corrigida aqui em vez de apagada em silêncio.
-> **Faltam para 🟢:** cadastro do plano **pela tela**, não conformidade formal numerada, liberação
-> sob desvio autorizado, anexos e encaminhamento com status ·
+> **E desde a Etapa 32 (`e708125..fd71958`) a inspeção tem ANEXOS** — certificado, relatório
+> dimensional e fotos ficam presos à inspeção, na linha expandida da aba Histórico, com **download
+> autenticado** (o arquivo não é público, ao contrário de tudo que o módulo guardava até aqui) e
+> **cada download registrado na trilha**. A tabela `anexos_documento_almoxarifado` existia órfã
+> desde a Etapa 0 e era esperada por seis features ao mesmo tempo; esta etapa lhe deu dono.
+> **Faltam para 🟢 (agora TRÊS, todos fluxo de negócio):** não conformidade formal numerada,
+> liberação sob desvio autorizado e encaminhamento com status. *Este cabeçalho listava também
+> "cadastro do plano pela tela" (pago na Etapa 30) e "anexos" (pago na 32) — os dois saíram.* ·
 > **Spec original:** seção 9
-> **Última atualização:** 2026-08-31 (**Etapa 30, `af7adea..7982f18`: o cadastro do plano ganha
+> **Última atualização:** 2026-09-02 (**Etapa 32 — anexos**; antes: 2026-08-31 (**Etapa 30, `af7adea..7982f18`: o cadastro do plano ganha
 > tela** — o item 5 de "O que falta para 🟢", criado no fechamento da 29, está **pago**. Com ele
 > **não falta mais tela nenhuma** no ciclo dimensional: cadastrar plano, medir na inspeção e reler
 > as medidas são todos cliques. A feature **continua 🟡**, e os quatro itens restantes são **fluxo
@@ -104,7 +110,27 @@ Inspeção de recebimento com plano, quarentena e bloqueio efetivos no saldo, n�
 - [ ] Liberação sob desvio autorizado (quem autorizou, justificativa, histórico imutável) — **fora do escopo da Etapa 5** (decisão do design).
 - [x] Solicitar análise da Engenharia / devolução ao fornecedor / substituição (registrar o encaminhamento pretendido) — **Etapa 5** (`dc841f2`): o campo `encaminhamento` (`DEVOLVER` | `ANALISE_ENGENHARIA` | `SUBSTITUICAO`) é validado e gravado em `inspecoes_recebimento_almoxarifado` na reprovação.
 - [ ] Encaminhamentos **com status** (acompanhar se a devolução/análise/substituição já foi executada) — **não implementado**. O `encaminhamento` de hoje é só a intenção registrada no momento da reprovação; não há campo de status nem nada que marque quando ela é cumprida. É **a pendência que esta etapa cria**, ver seção própria abaixo — a execução em si é a feature 12 (Devoluções), que ainda não existe.
-- [ ] Anexos: certificado, relatório dimensional, fotos (`anexos_documento_almoxarifado`) — não implementado, fora do escopo da Etapa 5.
+- [x] Anexos: certificado, relatório dimensional, fotos (`anexos_documento_almoxarifado`) — **PAGO na Etapa 32** (`0bb9ab4` serviço e schema · `8a496e9` as quatro rotas · `59902a9` componente · `8847c7e` plug na aba Histórico · `dad6a84` integração · `2bad01b` e `fd71958` fix-rounds da revisão adversarial).
+      **⚠️ E esta linha da spec induzia ao erro, o que custou 31 etapas:** ela citava
+      `anexos_documento_almoxarifado` como se a tabela fosse a funcionalidade. A tabela **existia
+      como DDL desde a Etapa 0 e era órfã total** — medido na Fase 0 da Etapa 32: a varredura do
+      repositório inteiro achava **uma** ocorrência do nome em `server/`, o próprio `CREATE TABLE`,
+      e mais dez em documentação. Zero `INSERT`, zero `SELECT`, zero rota, zero componente, sem
+      índice e sem coluna de soft delete. **Seis specs (01, 04, 08, 09, 12, 14) a nomeavam como
+      pendência, e cada uma supunha que outra a pagaria** — é literalmente por isso que o item
+      nunca andou. "A tabela existe" não é o mesmo que "existe o módulo de anexos", e a redação
+      antiga não deixava isso claro para ninguém.
+      **O que a Etapa 32 entregou:** `services/almoxarifado/anexoService.js` com mapa **fechado**
+      de seis entidades (`material`, `requisicao`, `recebimento`, `inspecao`, `devolucao`,
+      `item_remessa`), existência do registro-pai verificada, soft delete e auditoria; as rotas
+      `POST/GET/DELETE /almoxarifado/anexos` e **`GET /almoxarifado/anexos/:id/arquivo` com
+      download autenticado**; duas ações de perfil novas (`anexar_documento`, `remover_anexo`); e o
+      componente `AnexosDocumento.js`, plugado na **linha expandida da aba Histórico**.
+      **O que NÃO entrou, e é corte declarado:** as outras cinco telas consumidoras — o componente
+      é genérico e o backend já as aceita, mas só a inspeção tem botão.
+      **E o arquivo do anexo NÃO é servido estaticamente** (RN-03): mora em diretório **irmão** de
+      `uploads/almoxarifado`, porque `express.static(root)` serve subpastas — guardar em
+      `uploads/almoxarifado/anexos/` os deixaria públicos, que é o furo **C42** herdado.
 - [x] Perfil QUALIDADE nas ações de inspeção — **PAGO na Etapa 24 (`a81e51a`)**, com **uma ressalva
       declarada que vale ler antes de acreditar no `[x]`**.
       ~~Fora do escopo da Etapa 5 (decisão do design), confirmado inalterado em `permissions.js`:
@@ -158,9 +184,16 @@ isso já produziu "o que falta para 🟢" errado quatro vezes seguidas na featur
 1. **Não conformidade formal** (número, descrição, ação, responsável) vinculada à inspeção — é uma
    máquina de estados própria; o que existe hoje é o `encaminhamento` registrado na reprovação.
 2. **Liberação sob desvio autorizado** (quem autorizou, justificativa, histórico imutável) — idem.
-3. **Anexos** (certificado, relatório dimensional, fotos) — depende de
-   `anexos_documento_almoxarifado`, que é item próprio de outra spec. **É o que impede o item
-   "form de inspeção com plano/medidas/fotos" de estar inteiro**, e não a falta de tela.
+3. ~~**Anexos** (certificado, relatório dimensional, fotos) — depende de
+   `anexos_documento_almoxarifado`, que é item próprio de outra spec.~~ **PAGO na Etapa 32**
+   (`e708125..fd71958`). Riscado em vez de apagado, para quem tiver lido a lista anterior
+   confirmar o que saiu. **E a justificativa desta linha estava errada de duas formas:** a tabela
+   não era "item próprio de outra spec" — era **órfã, sem dono em spec nenhuma**, esperada por
+   seis features ao mesmo tempo; e ela dizia que os anexos impediam o item
+   "form de inspeção com plano/medidas/fotos" de estar inteiro, o que era verdade, mas o item foi
+   pago **na aba Histórico**, não no formulário de decisão — porque a linha de inspeção só passa a
+   existir **depois** da decisão (`inspectionService.js:268`), e antes dela não há a que prender o
+   anexo.
 4. **Encaminhamento com status** (saber se a devolução/análise/substituição foi executada) — a
    execução em si é a feature 12.
 

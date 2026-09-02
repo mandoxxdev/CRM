@@ -557,7 +557,7 @@ livre deixa anexo invisível, e que o vermelho do `permissaoErro` foi medido **a
 - Produces: as quatro rotas do design, e `ctx.uploadsAnexosDir` no harness (a Task 5 usa as duas
   coisas).
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 Crie `server/tests/api/anexoDocumento.api.test.js` (mesmo molde de runner; use `supertest`):
 
@@ -828,12 +828,12 @@ test('linha viva com arquivo fora do disco: 404 proprio, nao 500', async () => {
 > `setUser` passam como ADMINISTRADOR, e todo `setUser` de perfil restrito **não pode** levar
 > `role: 'admin'` junto, ou o teste vira verde provando nada.
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `cd server && node tests/api/anexoDocumento.api.test.js`
 Expected: FAIL — `ctx.uploadsAnexosDir` é `undefined` e as rotas respondem 404.
 
-- [ ] **Step 3: O diretório e a fiação**
+- [x] **Step 3: O diretório e a fiação**
 
 Em `server/routes/almoxarifado.js`, logo depois do bloco de `uploadsAlmoxDir` (`:188-189`):
 
@@ -868,7 +868,7 @@ Em `server/tests/helpers/testApp.js`, ao lado de `uploadsAlmoxDir` (`:80`):
     uploadsAnexosDir: path.join(dataDir, 'uploads', 'almoxarifado-anexos'),
 ```
 
-- [ ] **Step 4: O Zod**
+- [x] **Step 4: O Zod**
 
 Em `server/services/almoxarifado/schemas.js`, no molde dos schemas existentes — **e acrescente
 `AnexoCreateSchema` à lista explícita de `module.exports` em `schemas.js:736-748`**. O arquivo
@@ -888,7 +888,7 @@ const AnexoCreateSchema = z.object({
 });
 ```
 
-- [ ] **Step 5: As quatro rotas**
+- [x] **Step 5: As quatro rotas**
 
 Em `server/routes/almoxarifado/extended.js`, num bloco próprio (sugestão: logo após as rotas de
 ocorrência de ferramenta, que são o molde multipart mais recente):
@@ -976,12 +976,12 @@ Acrescente `AnexoCreateSchema` à desestruturação do `require` de `schemas` (`
 `const anexoService = require('../../services/almoxarifado/anexoService');` junto dos outros
 serviços.
 
-- [ ] **Step 6: Rodar e ver passar**
+- [x] **Step 6: Rodar e ver passar**
 
 Run: `cd server && node tests/api/anexoDocumento.api.test.js`
 Expected: `13 passed, 0 failed`.
 
-- [ ] **Step 7: Controle positivo — as três sabotagens que importam**
+- [x] **Step 7: Controle positivo — as três sabotagens que importam**
 
 1. Troque `destination: (req, file, cb) => cb(null, uploadsAnexosDir)` por `uploadsAlmoxDir`.
    Esperado: **a RN-03 fica vermelha na âncora `o multer gravou o arquivo`** — o diretório de
@@ -1006,14 +1006,14 @@ Expected: `13 passed, 0 failed`.
    ser apagada com a suíte inteira verde, vazando órfão a cada formulário mal preenchido — e a
    sabotagem 3 **não** cobre este ramo, são dois `limparUploadOrfaoEm` diferentes.
 
-- [ ] **Step 8: Suíte de servidor inteira**
+- [x] **Step 8: Suíte de servidor inteira**
 
 ```bash
 cd server && npm run test:api && npm run test:almoxarifado
 ```
 Expected: `test:api` **167/167 arquivos**; `test:almoxarifado` `42 passou, 0 falhou`.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add server/routes/almoxarifado.js server/routes/almoxarifado/extended.js \
@@ -1057,7 +1057,7 @@ problemas medidos nesta base, e reinventá-los custa um fix-round:
 | mock de `createObjectURL` | `RelatoriosAlmoxarifado.test.js:108-122` | jsdom **não implementa** `URL.createObjectURL` |
 | `File` num input | `LotesAlmoxarifado.test.js:240` | disparar `change` sem `fireEvent` |
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 Crie `client/src/components/almoxarifado/AnexosDocumento.test.js` com **sete** cenários. O
 `beforeEach` é obrigatório e não é boilerplate opcional — sem ele o cenário 5 passa com o
@@ -1106,12 +1106,12 @@ Os sete cenários:
    renderize com `somenteLeitura={false}` (input **presente**, botão remover **presente**) e
    depois com `true` (os dois ausentes).
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `cd client && CI=true npx react-scripts test --watchAll=false AnexosDocumento`
 Expected: FAIL — `Cannot find module './AnexosDocumento'`.
 
-- [ ] **Step 3: Implementar o componente**
+- [x] **Step 3: Implementar o componente**
 
 `client/src/components/almoxarifado/AnexosDocumento.js`. Pontos que o código **tem** de respeitar,
 e o porquê de cada um (escreva-os como comentário no topo, no estilo desta pasta):
@@ -1136,12 +1136,12 @@ e o porquê de cada um (escreva-os como comentário no topo, no estilo desta pas
   cache, o anexo recém-enviado não apareceria até um reload, que é o "a tela mente" que a etapa
   corrige.
 
-- [ ] **Step 4: Rodar e ver passar**
+- [x] **Step 4: Rodar e ver passar**
 
 Run: `cd client && CI=true npx react-scripts test --watchAll=false AnexosDocumento`
 Expected: 7 testes verdes.
 
-- [ ] **Step 5: Controle positivo**
+- [x] **Step 5: Controle positivo**
 
 Três sabotagens, uma por vez, revertendo depois de cada:
 
@@ -1151,7 +1151,7 @@ Três sabotagens, uma por vez, revertendo depois de cada:
    fallback genérico. **Se ele não falhar**, o mock do Blob não está representando o axios —
    conserte o teste antes de seguir.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add client/src/components/almoxarifado/AnexosDocumento.js \
@@ -1185,7 +1185,7 @@ git commit -F msg-componente.txt
 > plug é `somenteLeitura={false}`, na **linha expandida** do histórico, onde já mora o fetch de
 > `/inspecoes/${id}/medidas` (`HistoricoInspecoes.js:88`).
 
-- [ ] **Step 1: Teste que falha**
+- [x] **Step 1: Teste que falha**
 
 Em `HistoricoInspecoes.test.js`, dois cenários novos:
 
@@ -1195,22 +1195,22 @@ Em `HistoricoInspecoes.test.js`, dois cenários novos:
    as linhas do histórico ao abrir a aba; com 100 linhas seriam 100 requisições. Asserte que
    `api.get` não foi chamado com `/almoxarifado/anexos` antes do clique de expandir.
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `cd client && CI=true npx react-scripts test --watchAll=false HistoricoInspecoes`
 
-- [ ] **Step 3: Plugar**
+- [x] **Step 3: Plugar**
 
 `import AnexosDocumento from './AnexosDocumento';` e renderizar dentro do bloco expandido, ao lado
 das medidas. Comentário no ponto do plug com as duas razões acima: por que é aqui (é o único lugar
 com `id`) e por que não é `somenteLeitura` (senão a etapa não entrega superfície nenhuma).
 
-- [ ] **Step 4: Rodar e ver passar**
+- [x] **Step 4: Rodar e ver passar**
 
 Run: `cd client && CI=true npx react-scripts test --watchAll=false HistoricoInspecoes InspecoesAlmoxarifado`
 Expected: as duas suítes verdes — a segunda não deve ter mudado.
 
-- [ ] **Step 5: Commit** (`msg-plug.txt`)
+- [x] **Step 5: Commit** (`msg-plug.txt`)
 
 ---
 
@@ -1219,7 +1219,7 @@ Expected: as duas suítes verdes — a segunda não deve ter mudado.
 **Files:**
 - Modify: `server/tests/api/anexoDocumento.api.test.js`
 
-- [ ] **Step 1: O fluxo inteiro, pela rota**
+- [x] **Step 1: O fluxo inteiro, pela rota**
 
 Um cenário só, que percorre **anexar → listar → baixar conferindo o conteúdo → remover → listar
 vazio → baixar de novo (404)**, com dois perfis diferentes: quem anexa é `QUALIDADE`, quem remove
@@ -1241,7 +1241,7 @@ pode pegar (o serviço não toca disco por construção) e o `404` do "baixar de
     // senao o cenario passaria igual com o unlink que ele existe para proibir.
     assert.strictEqual(depois.body.error, 'Anexo não encontrado');
 
-- [ ] **Step 2: A suíte inteira, serial**
+- [x] **Step 2: A suíte inteira, serial**
 
 ```bash
 cd server && npm run test:api
@@ -1251,14 +1251,14 @@ cd client && CI=true npx react-scripts test --watchAll=false
 cd client && CI=true npx react-scripts build
 ```
 
-- [ ] **Step 3: Fase 5 — revisão adversarial**
+- [x] **Step 3: Fase 5 — revisão adversarial**
 
 Revisores frescos em paralelo, lentes distintas: (a) correção das RN-01..RN-07; (b)
 autorização/perfil — inclusive *"o `visualizar` no download é largo demais? quem vê o almoxarifado
 vê o certificado de qualquer entidade"*; (c) *"este teste passaria com a feature quebrada?"*, com
 foco na RN-03 e no controle positivo dela. Achado só vale com cenário concreto e reproduzido.
 
-- [ ] **Step 4: Fechamento**
+- [x] **Step 4: Fechamento**
 
 Skill `fechar-etapa`, os 7 artefatos. Pontos que já estão decididos e **precisam** aparecer:
 
@@ -1278,18 +1278,128 @@ Skill `fechar-etapa`, os 7 artefatos. Pontos que já estão decididos e **precis
 - **guia do usuário**: roteiro clicável — abrir uma inspeção decidida, anexar um PDF, baixar,
   remover; e o aviso de que anexo removido some da tela mas fica na trilha.
 
-## Próxima tarefa detalhada (para quem retomar)
-
-**Plugar as outras cinco telas** — material (feature 01), requisição (04), recebimento (08),
-devolução (12) e item de remessa (14). O componente já é genérico e o contrato está congelado
-acima; cada plug é `<AnexosDocumento entidade="<chave>" entidadeId={id} />` mais dois cenários de
-teste. **Ponto de atenção:** em cada tela, medir **quando o `id` existe** — foi a decisão do
-cenário 2 da Task 4, e requisição em rascunho e recebimento em digitação têm o mesmo problema.
-
-**A alternativa de maior valor**, se o André preferir pagar risco antes de cobertura: **fechar o
-furo do estático legado** (letra C acima), que é o único item desta etapa que deixa dado exposto.
 
 ---
+
+---
+
+## Fechamento (2026-09-02)
+
+| Task | Commit | Medido |
+|---|---|---|
+| 1 — schema, serviço, 2 ações | `0bb9ab4` | serviço 6/6 · `test:api` 166/166 |
+| 2 — fiação e 4 rotas (galho) | `8a496e9` | rota 13/13 · `test:api` 167/167 |
+| 3 — componente (galho) | `59902a9` | 7/7 · client 42 suítes |
+| 4 — plug na aba Histórico | `8847c7e` | 13/13 |
+| 5 — integração | `dad6a84` | 14/14 |
+| fix-round adversarial | `2bad01b` | rota 22/22 · client 647 |
+| fix-round 2 (affordance) | `fd71958` | `HistoricoInspecoes` 14/14 · client 648 |
+
+> ⚠️ **O hash que a Task 3 reportou (`21bc179`) é ÓRFÃO.** Ela rodou em worktree e foi integrada
+> por `cherry-pick`, que reescreve o hash — `git show 21bc179` falha em qualquer clone. O commit
+> real é **`59902a9`**. Conferido com `git merge-base --is-ancestor` em todos os hashes citados;
+> é a terceira vez que esta armadilha aparece nesta base.
+
+### Onde a execução divergiu do plano
+
+1. **O cenário de integração montava a inspeção com `material_id`, coluna que não existe.** A
+   tabela amarra em `recebimento_item_id` (`schema.js:1123`). Mesma classe de erro que a Fase 2
+   pegou nos nomes de tabela do mapa: nome imaginado em vez de lido.
+2. **O `Blob` do jsdom não representa o do navegador.** O plano mandava montar o corpo de erro do
+   cenário (6) com `new Blob([...])` cru; jsdom 16.7 **não implementa** `Blob.prototype.text` nem
+   `.arrayBuffer`. Com o Blob cru, o `catch` **correto** cairia no fallback e o cenário ficaria
+   **vermelho com a implementação certa**. O executor repôs a API via `FileReader` e documentou.
+3. **Jest não roda em worktree sob `.claude/`** — o `\.` de `.claude` é lido pelo glob como
+   escape, e `testMatch` casa **zero** arquivos, inclusive os que já existiam. Contorno para quem
+   for executar em worktree: `--testMatch "**/src/**/*.test.js"`.
+4. **A Task 3 mexeu em `Almoxarifado.css`**, fora da lista de arquivos dela — o componente é
+   genérico e não pode herdar o CSS da tela que o hospeda. Aditivo, sem conflito.
+5. **A Task 4 mudou o comportamento de uma tela existente**, o que o plano não previa: a linha do
+   histórico **sem medidas** passou a expandir. Sem isso o anexo só existiria em inspeção com
+   plano dimensional. Custou uma asserção do teste da Etapa 29 (`detalhe(8) === null`), que era
+   consequência do desenho antigo e não a regra guardada — a perda está escrita no próprio teste.
+6. **Sabotar em worktree, não na árvore principal.** Rodei os controles positivos na árvore
+   enquanto os revisores adversariais liam o código, e **dois deles relataram medições
+   contaminadas** por sabotagens vivas que não estavam em `HEAD`. Nenhum resultado final foi
+   afetado (os dois refizeram contra `HEAD` limpo), mas é defeito de processo e o modo de falha
+   é sério: um `git add` no instante errado leva a sabotagem para o commit.
+
+### Retro de 4 números
+
+1. **Rodadas de correção até verde: 2.** Um fix-round dos achados adversariais e um segundo só
+   para a affordance. Nenhum teste falhou duas vezes.
+2. **Achados: 22 na Fase 2 + 25 na Fase 5 = 47 reais, 0 ruído.** A Fase 2 continua sendo a mais
+   lucrativa: **4 dos 22 travariam a execução**, e um deles faria o executor **abortar a etapa
+   inteira** por alarme falso. A Fase 5 achou **2 bloqueantes** que a Fase 2 não tinha como ver,
+   porque só aparecem executando.
+3. **Paralelismo: 2 galhos reais** (rotas e componente), em worktrees isoladas, **zero
+   retrabalho**. A independência só se sustentou porque a Fase 2 mandou `uploaded_by_nome` para o
+   tronco — era o único campo do contrato que os dois galhos podiam implementar de formas
+   incompatíveis sem teste nenhum perceber, nem o de integração.
+4. **Defeito que escapou:** preencher na etapa seguinte.
+
+**Quinto número, o mesmo das quatro etapas anteriores: 3 testes passavam com a feature
+quebrada** — e desta vez um deles era o **cenário-bandeira** (RN-03, cego para o erro que o
+design existe para evitar), outro era a **defesa central da listagem** (que não provava o "da
+entidade pedida"), e o terceiro era **meu, escrito no próprio fix-round** (o cenário do campo
+repetido ficava verde com a guarda fraca de volta, porque o único efeito observável da correção
+era um `console.warn` que ninguém espionava).
+
+### Lição da etapa: a régua tem de medir a POSIÇÃO, não o exemplo
+
+A RN-03 assertava `GET /api/uploads/almoxarifado/<basename> → 404`. Isso é um **exemplo**: com o
+diretório uma pasta mais fundo, o mesmo GET dá 404 **por caminho errado** e a URL real responde
+200 sem autenticação. A régua certa é o **invariante**: `path.relative(raizServida, arquivo)`
+começa com `..`. Não há como satisfazê-lo por acidente — qualquer diretório dentro da raiz
+reprova, em qualquer profundidade.
+
+É a terceira etapa seguida com a mesma forma: na 29 foi fixture simétrica, na 31 foram exemplos
+que só separavam por comprimento, aqui foi uma URL montada pelo nome do arquivo em vez do
+caminho. **O padrão que fica: quando o teste monta a entrada a partir de um pedaço do estado em
+vez do estado inteiro, ele mede o pedaço.**
+
+## Próxima tarefa detalhada
+
+**Plugar as outras cinco telas** — é o item de maior valor por unidade de trabalho, porque todo o
+custo já foi pago: backend testado, componente genérico pronto e contrato congelado.
+
+**O que ela consome, já pronto e sem precisar reabrir:**
+
+```jsx
+import AnexosDocumento from './AnexosDocumento';
+<AnexosDocumento entidade="material" entidadeId={id} titulo="Anexos" somenteLeitura={false} />
+```
+
+- `entidade` ∈ `material` · `requisicao` · `recebimento` · `devolucao` · `item_remessa`
+  (as chaves e as tabelas estão em `anexoService.ENTIDADES_ANEXO`, e o teste do serviço congela o
+  mapa inteiro com `deepStrictEqual` — mexer nele passa por lá).
+- `entidadeId` falsy ⇒ o componente **não** chama a API e renderiza `null`.
+- O componente já resolve permissão sozinho (`useAlmoxPermissoes`): esconde o formulário de quem
+  não tem `anexar_documento` e a lixeira de quem não tem `remover_anexo`.
+- `data-testid` disponíveis: `anexos-documento`, `anexo-arquivo`, `anexo-enviar`, `anexo-tipo`,
+  `anexo-linha-<id>`, `anexo-baixar-<id>`, `anexo-remover-<id>`, `anexo-erro`, `anexo-vazio`.
+
+**Pontos de atenção, medidos nesta etapa:**
+
+1. **Descubra QUANDO o `id` existe em cada tela — é o que derrubou a Task 4 no plano original.**
+   Requisição em rascunho e recebimento em digitação têm o mesmo problema da inspeção pendente: a
+   linha ainda não nasceu, então não há `entidade_id`. Onde isso acontecer, o bloco só pode
+   aparecer depois de salvar.
+2. **Monte o bloco só quando a área estiver aberta.** Em lista longa, montar por linha dispara uma
+   consulta por linha — o cenário (12) de `HistoricoInspecoes.test.js` é o molde da guarda.
+3. **No teste, mocke `/almoxarifado/anexos`** no `api.get` da tela, senão o mock rejeita e o
+   componente cai no estado de erro dele.
+4. **Se der affordance nova a alguma linha, dê a affordance INTEIRA** — cursor, `title`, chevron e
+   `aria-expanded`. O fix-round 2 existiu porque a linha passou a abrir sem dizer que abria.
+
+**A alternativa de maior valor, se o André preferir pagar risco antes de cobertura:** fechar o
+furo **C42** — migrar os seis uploads legados para download autenticado e trocar os `<img src>` /
+`<a href>` do client por blob. É a única coisa do módulo que hoje **expõe dado**: certificado de
+fornecedor, comprovante de sucateamento e **a imagem da assinatura de quem retirou material**
+abrem deslogado para quem tiver o link. O trabalho é conhecido e pequeno, mas mexe em duas telas
+(`LotesAlmoxarifado.js`, `RequisicoesList.js`), em `resolveMaterialPhotoUrl.js` e nos testes que
+congelam essas URLs (`LotesAlmoxarifado.test.js:298`, `RequisicoesList.test.js:155,289`) — por
+isso é etapa própria e não um fix de uma linha.
 
 ## Fase 2 — o que a revisão do plano pegou ANTES de executar
 
