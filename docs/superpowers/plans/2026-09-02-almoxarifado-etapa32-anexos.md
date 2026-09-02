@@ -1281,3 +1281,87 @@ cenário 2 da Task 4, e requisição em rascunho e recebimento em digitação t�
 
 **A alternativa de maior valor**, se o André preferir pagar risco antes de cobertura: **fechar o
 furo do estático legado** (letra C acima), que é o único item desta etapa que deixa dado exposto.
+
+---
+
+## Fase 2 — o que a revisão do plano pegou ANTES de executar
+
+Três revisores frescos em paralelo, lentes distintas (contratos/código pronto; RN contra spec e
+código; "este teste passaria com a feature quebrada?" + independência dos galhos).
+**22 achados, 0 ruído.** Placar por gravidade: **4 travariam a execução**, **11 deixariam passar
+defeito silencioso**, 7 menores.
+
+### Os quatro que travariam
+
+1. **`-t permissaoErro` não roda teste nenhum.** `-t` é `--testNamePattern`, não caminho: o
+   comando devolve `41 skipped, 636 skipped, exit 0`. Como o Step 8 manda **PARAR** se aquilo
+   passar, o executor abortaria a etapa inteira por um alarme falso — e o Step 10 usaria o mesmo
+   comando como confirmação final, ficando verde mesmo se o rótulo nunca fosse escrito. Os dois
+   revisores que olharam isso mediram a régua de verdade: **ela está viva** e falha nomeando
+   `anexar_documento` e `remover_anexo`. Só o comando estava errado.
+2. **`@testing-library/react` não está instalado neste projeto** — e a Task 3 mandava usá-lo. Não
+   está no `package.json`, nem em `client/node_modules`, nem hoisted; `LoteSeletor.test.js:10-12`
+   já documenta a pegadinha, e o próprio molde citado (`PlanoInspecaoModal.test.js`) usa
+   `createRoot`/`act`. O erro apareceria como `Cannot find module`, **parecido com o esperado no
+   Step 2**, mascarando a causa — ou o agente instalaria a lib e commitaria um `package-lock.json`
+   alterado dentro de uma worktree paralela.
+3. **A Task 4 plugava no componente errado, e em `somenteLeitura`.** `inspecoes_recebimento_almoxarifado`
+   só ganha linha no `INSERT` de `inspectionService.js:268`, **dentro da decisão** — a fila de
+   pendentes devolve `item_id`, não `inspecao.id`. O único ponto do client com o `id` é a aba
+   Histórico, em `HistoricoInspecoes.js`, **não** `InspecoesAlmoxarifado.js`. Executado como
+   estava, a etapa terminaria com backend completo, ação criada e **zero superfície para anexar**
+   — e o roteiro do guia (`"anexar um PDF"`) seria impossível de seguir.
+4. **`AnexoCreateSchema` fora do `module.exports`.** `schemas.js:736-748` exporta por lista
+   fechada, não por spread. Sem a linha, o binding é `undefined` e **todo** `POST /anexos` morre
+   em `undefined.safeParse` — 500 com stack, depois de o multer já ter gravado, e a causa não
+   aparece na mensagem.
+
+### O achado que mais ensina: o cenário-bandeira era cego
+
+**A RN-03 — a regra que justifica a etapa — não pegava o erro que o design existe para evitar.**
+A asserção era `GET /api/uploads/almoxarifado/<basename> → 404`. Com o diretório em
+`uploads/almoxarifado/anexos/` (o "instinto óbvio" que o próprio design nomeia), aquele `GET` dá
+**404 por caminho errado** — o arquivo está um nível mais fundo — enquanto
+`/api/uploads/almoxarifado/anexos/<nome>` responde **200 sem autenticação nenhuma**. O controle
+positivo também passaria. Treze cenários verdes, e a etapa entregando exatamente o furo que ela
+existe para não criar: o **quinto teste vazio** desta base.
+
+**A régua certa não é o `GET`, é a POSIÇÃO RELATIVA:**
+`path.relative(uploadsAlmoxDir, arquivoDoAnexo).startsWith('..')`, mais o 404 nos **dois** mounts
+pelo caminho real. É a mesma lição da Etapa 31 num vestido novo — *exemplo prova exemplo,
+invariante prova a regra*: "o `GET` daquela URL dá 404" é um exemplo, e "o arquivo não está sob a
+raiz servida" é o invariante.
+
+### Os outros defeitos silenciosos, agrupados
+
+- **Contrato que ninguém produziria:** o 403 congelado no design (`"Sem permissão para anexar
+  documento"`) **não é o que o `requirePermission` devolve** — ele manda a mesma literal genérica
+  para as 24 ações, e quem monta a frase é o client. E `uploaded_by_nome` estava no contrato do
+  201 sem existir em lugar nenhum: **é o único campo que quebrava a independência dos galhos** —
+  a Task 3 renderizaria `undefined` e nem a Task 5 pegaria, porque a integração é 100% servidor.
+  Resolvido subindo a coluna para o tronco, **denormalizada** (`usuarios` é tabela CORE e não
+  existe no harness; precedente em `requisitionCreateService.js:31`).
+- **Testes que não distinguiam:** o mapa de entidades passava com as chaves todas apontando para
+  `materiais_almoxarifado`; a listagem passava com o `WHERE` inteiro ignorado; a RN-05 prometia
+  "o arquivo sobrevive no disco" e **nenhum** cenário media disco, então um `fs.unlinkSync` "de
+  limpeza" implementaria em silêncio a alternativa que o D5 descartou; e o ramo do Zod do
+  `limparUploadOrfaoEm` não tinha cenário nenhum.
+- **Caixa alta que não é estilo:** `acao: 'anexar'` minúsculo **escapa da varredura** de
+  `auditLabels.api.test.js:60-61` (`acao: '\K[A-Z_]+`), então o teste que existe para impedir
+  verbo sem rótulo ficaria verde e a tela de auditoria mostraria `anexar` cru ao lado de
+  `Criação`. Com `ANEXAR`/`REMOVER_ANEXO`, aquele teste passa a exigir o rótulo sozinho — o mesmo
+  mecanismo grátis que o Step 8 explora no `permissaoErro`.
+- **`e.response?.data?.error` não funciona com `responseType: 'blob'`** — o axios entrega o corpo
+  do erro como Blob, e a base já pagou por isso uma vez (`RelatoriosAlmoxarifado.js:325-333`).
+- **Duas das três sabotagens não provavam o que prometiam:** a do `destination` derruba a RN-03
+  numa âncora anterior (o diretório fica vazio), e a do nome de tabela usava uma tabela
+  **inexistente**, provando só que o teste pega erro de digitação.
+
+### E uma coisa que os três confirmaram, e que sustenta a etapa
+
+A premissa está de pé: varredura independente achou **uma única** ocorrência de
+`anexos_documento_almoxarifado` em `server/` — o `CREATE TABLE` — e **nenhuma** referência a anexo
+de almoxarifado no client. As seis tabelas do mapa existem com o nome exato; nenhum
+`express.static` do repositório serve `PERSISTENT_DATA_DIR/uploads` inteiro, então o diretório
+irmão é defesa válida; `Buffer.from(res.body)` funciona para PDF no supertest **e** estoura se a
+rota devolver JSON; e a armadilha do `role === 'admin'` no harness estava medida corretamente.
