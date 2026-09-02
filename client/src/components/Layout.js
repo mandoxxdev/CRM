@@ -11,7 +11,8 @@ import {
   FiHome, FiUsers, FiBriefcase, FiFileText,
   FiCalendar, FiLogOut, FiMenu, FiX, FiUserPlus, FiPackage, FiBarChart2, FiMap, FiDollarSign, FiSettings, FiShield, FiMoon, FiSun, FiGrid,
   FiShoppingCart, FiTrendingDown, FiTrendingUp, FiCreditCard, FiTruck, FiFileText as FiFileText2, FiTool, FiCheckCircle,   FiSliders, FiCircle, FiDroplet, FiZap, FiLayers, FiClipboard,
-  FiArchive, FiActivity, FiList, FiMessageCircle, FiAlertTriangle, FiCheckSquare
+  FiArchive, FiActivity, FiList, FiMessageCircle, FiAlertTriangle, FiCheckSquare, FiLock, FiCornerUpLeft,
+  FiScissors, FiBell, FiMail, FiCamera
 } from 'react-icons/fi';
 import Notificacoes from './Notificacoes';
 import BuscaGlobal from './BuscaGlobal';
@@ -326,14 +327,69 @@ const Layout = () => {
   // Menu do módulo Almoxarifado
   const almoxarifadoMenuItems = [
     { path: '/almoxarifado', icon: FiArchive, label: 'Dashboard' },
+    // Etapa 15: ler o QR de uma etiqueta (6c) = navegar direto para a tela do item
+    { path: '/almoxarifado/scanner', icon: FiCamera, label: 'Scanner' },
     { path: '/almoxarifado/materiais', icon: FiList, label: 'Materiais' },
     { path: '/almoxarifado/requisicoes', icon: FiCheckCircle, label: 'Requisições (almox.)' },
     { path: '/almoxarifado/requisicoes-material/nova', icon: FiClipboard, label: 'Solicitar Material' },
     { path: '/almoxarifado/requisicoes-material', icon: FiList, label: 'Minhas Requisições' },
     { path: '/almoxarifado/recebimentos', icon: FiPackage, label: 'Recebimentos' },
+    { path: '/almoxarifado/inspecoes', icon: FiCheckSquare, label: 'Inspeções' },
     { path: '/almoxarifado/movimentacoes', icon: FiActivity, label: 'Movimentações' },
+    { path: '/almoxarifado/lotes', icon: FiLayers, label: 'Lotes e Séries' },
+    { path: '/almoxarifado/devolucoes', icon: FiCornerUpLeft, label: 'Devoluções' },
+    // Etapa 8: "Devoluções" acima é a da Etapa 7 (o material VOLTA para o estoque); a devolução
+    // AO cliente mora dentro desta tela, e é o movimento oposto. Nomes vizinhos de propósito
+    // separados por rótulo — "Materiais de Clientes" é onde se olha o que é de terceiro.
+    { path: '/almoxarifado/materiais-cliente', icon: FiBriefcase, label: 'Materiais de Clientes' },
+    // Etapa 8b: "Remessas a Terceiros" é material NOSSO que está FORA do prédio para beneficiar.
+    // Não confundir com "Devoluções" (Etapa 7, o material volta PARA o estoque) nem com "Materiais
+    // de Clientes" (Etapa 8, material que é de outro dono e está AQUI).
+    { path: '/almoxarifado/remessas-terceiros', icon: FiTruck, label: 'Remessas a Terceiros' },
+    // Etapa 9: "Sobras e Retalhos" e o pedaco que SOBROU de cortar uma chapa/tubo/barra — nao
+    // confundir com "Devoluções" (Etapa 7, a peça inteira que volta ao estoque) nem com "Materiais
+    // de Clientes" (Etapa 8, o dono e outro). O retalho pode ate ser de material de cliente (o
+    // dono e herdado), mas o que o separa das Devoluções e a ORIGEM: aqui nasceu de um corte, com
+    // dimensao remanescente registrada — la, voltou inteiro do chao de fabrica.
+    { path: '/almoxarifado/sobras', icon: FiScissors, label: 'Sobras e Retalhos' },
+    // Etapa 9b: ferramenta e PATRIMONIO emprestavel (furadeira, paquimetro...), nao estoque —
+    // tela nova para emprestimo/devolucao, manutencao, avaria/perda e calibracao (design D9).
+    { path: '/almoxarifado/ferramentas', icon: FiTool, label: 'Ferramentas' },
+    // Etapa 11: sugestao de compra por fornecedor, estoque parado e acompanhamento das
+    // solicitacoes — gate proprio (gerenciar_reposicao) resolvido pelo backend, sem adminOnly
+    // aqui (o perfil COMPRAS/GESTOR tambem acessa, nao so admin do modulo).
+    { path: '/almoxarifado/reposicao', icon: FiShoppingCart, label: 'Reposição e Compras' },
+    // Etapa 12: fila de notificacoes (e-mails de movimentacao, dividas das etapas 7-11 e
+    // alertas novos) — gate proprio (gerenciar_notificacoes) resolvido pelo backend, sem
+    // adminOnly aqui (o painel de erro por 403 e quem barra o restante do perfil, mesmo
+    // criterio de reposicao acima).
+    // Etapa 16: central de alertas AO VIVO (calibracao, quarentena, requisicao atrasada...) —
+    // gate proprio (ver_alertas) resolvido pelo backend, sem adminOnly aqui (mesmo criterio de
+    // reposicao/notificacoes: o painel de sem-permissao e quem barra o restante do perfil).
+    // FiAlertTriangle, nao um segundo sino — decisao da Etapa 12 mantida (dois sinos para
+    // coisas diferentes confundem); "Notificações" logo abaixo e a FILA de e-mails, esta tela
+    // e a CONDICAO atual.
+    { path: '/almoxarifado/alertas', icon: FiAlertTriangle, label: 'Alertas' },
+    // Icone de e-mail, nao FiBell — o sino ja e o do painel global de notificacoes no header
+    // (nit da revisao da Task 4: dois sinos para coisas diferentes confundem).
+    { path: '/almoxarifado/notificacoes', icon: FiMail, label: 'Notificações' },
+    // Etapa 13: registro único de relatórios (17 tipos + indicadores, Task 2) por trás de uma
+    // tela genérica dirigida pela lista — gate por relatório resolvido pelo backend (RN-01/02),
+    // sem adminOnly aqui (mesmo critério de reposicao/notificacoes acima: quem não pode ver um
+    // relatório gated simplesmente não o vê na lista). Ícone igual ao de "Relatórios" nos
+    // outros módulos (comercial/financeiro/frota) — ainda não usado dentro do menu do
+    // almoxarifado.
+    { path: '/almoxarifado/relatorios', icon: FiBarChart2, label: 'Relatórios' },
+    { path: '/almoxarifado/reservas', icon: FiLock, label: 'Reservas' },
     { path: '/almoxarifado/conferencias', icon: FiClipboard, label: 'Conferência' },
     { path: '/almoxarifado/mapa', icon: FiMap, label: 'Mapa de Áreas' },
+    // Etapa 22: trilha de auditoria (quem mexeu em que, quando, e o que mudou). COM adminOnly,
+    // ao contrario de alertas/notificacoes/relatorios: la o gate do backend e um perfil
+    // operacional (ver_alertas, gerenciar_notificacoes) e o chao de fabrica tem o que ver aqui
+    // dentro; aqui o gate e `configurar`, que e admin de fato, entao deixar o item visivel para
+    // os demais perfis so produziria 403. Vizinho de "Configuracoes" de proposito — os dois
+    // itens do menu que exigem `configurar` ficam juntos.
+    { path: '/almoxarifado/auditoria', icon: FiShield, label: 'Auditoria', adminOnly: true },
     { path: '/almoxarifado/configuracoes', icon: FiSettings, label: 'Configurações', adminOnly: true },
   ];
 

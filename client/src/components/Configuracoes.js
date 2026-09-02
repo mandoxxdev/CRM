@@ -16,6 +16,10 @@ const Configuracoes = () => {
   const [configs, setConfigs] = useState({});
   const [activeTab, setActiveTab] = useState('empresa');
   const [mensagem, setMensagem] = useState(null);
+  // Etapa 21 (RN-07): a senha do SMTP tem estado LOCAL e nasce vazia — nunca recebe o valor que
+  // vem do servidor. Molde: ConfiguracoesAlmoxarifado.js:2015/2193-2195.
+  const [senhaSmtp, setSenhaSmtp] = useState('');
+  const [senhaSmtpConfigurada, setSenhaSmtpConfigurada] = useState(false);
   const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
@@ -42,6 +46,13 @@ const Configuracoes = () => {
           empresa_telefone: mascararTelefoneCompleto(dados.empresa.empresa_telefone),
         };
       }
+      // Etapa 21 (RN-07): o GET agora devolve '********' (ou '') para `email_smtp_pass`. O campo
+      // NAO recebe esse valor — so o booleano que escolhe o placeholder. Testa por "nao vazio" e
+      // nao por igualdade com a mascara de proposito: a forma da mascara mora no servidor
+      // (`services/configSecrets.js`) e replica-la aqui criaria uma segunda fonte da verdade que
+      // sairia de sincronia em silencio.
+      setSenhaSmtpConfigurada(Boolean(dados?.email?.email_smtp_pass));
+      setSenhaSmtp('');
       setConfigs(dados);
     } catch (error) {
       console.error('Erro ao carregar configurações:', error);
@@ -51,7 +62,11 @@ const Configuracoes = () => {
     }
   };
 
-  const updateConfig = async (categoria, chave, valor) => {
+  // `naoGuardarNoEstado` (Etapa 21, RN-07): usado pela senha do SMTP. Sem ele o `setConfigs`
+  // abaixo guardaria a senha EM CLARO no estado do React logo depois de o servidor ter passado a
+  // mascara-la no GET — a exposicao voltaria pela porta dos fundos, num objeto que o React
+  // DevTools mostra inteiro. Devolve `true`/`false` para quem chama saber se limpa o campo.
+  const updateConfig = async (categoria, chave, valor, { naoGuardarNoEstado = false } = {}) => {
     try {
       setSaving(true);
       const config = configs[categoria]?.[chave];
@@ -60,20 +75,25 @@ const Configuracoes = () => {
         tipo: config?.tipo || 'text',
         categoria,
       });
-      
-      setConfigs(prev => ({
-        ...prev,
-        [categoria]: {
-          ...prev[categoria],
-          [chave]: valor
-        }
-      }));
-      
+
+      if (!naoGuardarNoEstado) {
+        setConfigs(prev => ({
+          ...prev,
+          [categoria]: {
+            ...prev[categoria],
+            [chave]: valor
+          }
+        }));
+      }
+
       setMensagem({ tipo: 'sucesso', texto: 'Configuração salva com sucesso!' });
       setTimeout(() => setMensagem(null), 3000);
+      return true;
     } catch (error) {
       console.error('Erro ao salvar configuração:', error);
-      setMensagem({ tipo: 'erro', texto: 'Erro ao salvar configuração' });
+      const detalhe = error?.response?.data?.error;
+      setMensagem({ tipo: 'erro', texto: detalhe || 'Erro ao salvar configuração' });
+      return false;
     } finally {
       setSaving(false);
     }
@@ -89,6 +109,34 @@ const Configuracoes = () => {
       }
     }
     updateConfig(categoria, chave, value);
+  };
+
+  // Etapa 21 (RN-07). Esta tela salva a CADA TECLA (`handleChange` -> PUT). Com a senha amarrada
+  // ao valor do servidor, o admin que clicasse no campo com '********' e digitasse mandaria
+  // '********N' — que nao e a mascara, passava em guarda de igualdade e SOBRESCREVIA a senha real
+  // com lixo; e como o GET remascara, o estrago ficava invisivel ate o e-mail nao sair. Um
+  // backspace acidental gravava '*******' e matava o SMTP em silencio.
+  //
+  // Por isso a senha e o UNICO campo desta tela que nao salva a cada tecla: o onChange so alimenta
+  // o estado local e o PUT sai no blur. Salvar por tecla aqui gravaria as senhas parciais 'N',
+  // 'No', 'Nov'...
+  //
+  // O que o blur GARANTE, e o que nao garante (achado A7 da revisao adversarial, reproduzido):
+  // ele reduz N gravacoes parciais para UMA, nao elimina a parcial. Quem digita metade da senha e
+  // clica no campo de cima para conferir o usuario dispara o blur e grava a metade. O 400 do
+  // servidor nao pega isso — 'Nov' e um valor legitimo do ponto de vista da guarda. Fechar de
+  // verdade exigiria botao de salvar explicito nesta tela, que salva tudo por tecla; fica
+  // declarado em vez de descrito como resolvido.
+  // Campo vazio nao dispara PUT nenhum — e assim que se mantem a senha atual (o servidor tambem
+  // recusa vazio com 400, RN-06; a tela so evita o erro desnecessario).
+  const salvarSenhaSmtp = async () => {
+    const valor = senhaSmtp.trim();
+    if (!valor) return;
+    const ok = await updateConfig('email', 'email_smtp_pass', valor, { naoGuardarNoEstado: true });
+    if (ok) {
+      setSenhaSmtp('');
+      setSenhaSmtpConfigurada(true);
+    }
   };
 
   if (loading) {
@@ -324,8 +372,12 @@ const Configuracoes = () => {
                 <label>Senha SMTP</label>
                 <input
                   type="password"
-                  value={configs.email?.email_smtp_pass || ''}
-                  onChange={(e) => handleChange('email', 'email_smtp_pass', e.target.value)}
+                  value={senhaSmtp}
+                  onChange={(e) => setSenhaSmtp(e.target.value)}
+                  onBlur={salvarSenhaSmtp}
+                  placeholder={senhaSmtpConfigurada
+                    ? 'Senha configurada — deixe em branco para manter'
+                    : 'Senha do e-mail ou app password'}
                 />
               </div>
               <div className="config-item full-width">

@@ -1,22 +1,33 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
 import { resolveMaterialPhotoUrl } from '../../utils/resolveMaterialPhotoUrl';
+import { prefixarAlmoxarifado } from '../../utils/localizacaoLabel';
+import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
+import { useCategoriasMaterial } from '../../hooks/useCategoriasMaterial';
 import { toast } from 'react-toastify';
 import { SkeletonTable } from '../SkeletonLoader';
 import {
   FiPlus, FiSearch, FiEdit, FiTrash2, FiImage, FiPackage,
-  FiArrowUp, FiArrowDown, FiAlertTriangle, FiRefreshCw, FiMap, FiClipboard
+  FiArrowUp, FiArrowDown, FiAlertTriangle, FiRefreshCw, FiMap, FiClipboard, FiFileText, FiTag,
+  FiCheckSquare
 } from 'react-icons/fi';
 import AlmoxPageHeader from './AlmoxPageHeader';
+import ExtratoMaterialModal from './ExtratoMaterialModal';
+import EtiquetasPdfModal from './EtiquetasPdfModal';
+import PlanoInspecaoModal from './PlanoInspecaoModal';
+import SeloProprietario from './SeloProprietario';
+import { montarEtiquetaMaterial } from '../../utils/etiquetasPdf';
 import './Almoxarifado.css';
 
-const CATEGORIAS = [
-  'CONSUMÍVEL', 'FERRAMENTA', 'EPI', 'ELÉTRICO', 'HIDRÁULICO',
-  'MECÂNICO', 'INSUMO', 'EMBALAGEM', 'ESCRITÓRIO', 'LIMPEZA', 'OUTROS'
-];
+// Etapa 26: a lista de categorias saiu daqui (era a TERCEIRA cópia hardcoded — a que a varredura
+// do design tinha deixado de fora) e passou a vir de GET /almoxarifado/categorias. Filtrar por
+// 'EPI' aqui devolvia zero linhas, porque nenhum material da GMP tem essa categoria — e zero
+// linhas parece estoque vazio, não filtro inútil.
 
 const MateriaisAlmoxarifado = () => {
+  const { bloquearSeNaoPode } = useAlmoxPermissoes();
+  const { categorias } = useCategoriasMaterial();
   const [materiais, setMateriais] = useState([]);
   const [familias, setFamilias] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,8 +42,15 @@ const MateriaisAlmoxarifado = () => {
   const [movMotivo, setMovMotivo] = useState('');
   const [movRef, setMovRef] = useState('');
   const [savingMov, setSavingMov] = useState(false);
+  const [extratoMaterialId, setExtratoMaterialId] = useState(null);
+  const [etiquetas, setEtiquetas] = useState(null);
+  // Etapa 30: guarda o OBJETO do material, não o id — o cabeçalho do modal mostra código, nome e
+  // unidade, e a linha da lista já tem os três (os outros modais desta tela recebem id escalar
+  // porque só precisam do id).
+  const [planoMaterial, setPlanoMaterial] = useState(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const materialIdAplicado = useRef(false);
 
   useEffect(() => {
     const s = searchParams.get('status');
@@ -41,6 +59,18 @@ const MateriaisAlmoxarifado = () => {
     if (f) setFamiliaFilter(f);
     loadFamilias();
   }, []);
+
+  useEffect(() => {
+    if (materialIdAplicado.current) return;
+    const material_id = searchParams.get('material_id');
+    if (material_id && materiais.length > 0) {
+      const material = materiais.find(m => m.id === parseInt(material_id));
+      if (material) {
+        setSearch(material.codigo);
+        materialIdAplicado.current = true;
+      }
+    }
+  }, [materiais, searchParams]);
 
   const loadFamilias = async () => {
     try {
@@ -139,7 +169,15 @@ const MateriaisAlmoxarifado = () => {
             <button className="btn-almox-secondary" onClick={loadMateriais}>
               <FiRefreshCw size={13} /> Atualizar
             </button>
-            <Link to="/almoxarifado/materiais/novo" className="btn-almox-primary">
+            {/* Continua sendo um Link (o botão aparece e o hover mostra a dica), mas quem não
+                pode criar material é barrado NO CLIQUE — sem isso ele só descobriria depois de
+                preencher as seis seções do formulário. O 403 do backend segue valendo. */}
+            <Link
+              to="/almoxarifado/materiais/novo"
+              className="btn-almox-primary"
+              title="Cadastra um novo material no almoxarifado (código, família, dados técnicos, unidades e localização)"
+              onClick={(e) => bloquearSeNaoPode('criar_material', e)}
+            >
               <FiPlus size={14} /> Novo Material
             </Link>
           </>
@@ -159,7 +197,7 @@ const MateriaisAlmoxarifado = () => {
         </div>
         <select className="almox-select" value={categoria} onChange={e => setCategoria(e.target.value)}>
           <option value="">Todas categorias</option>
-          {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
+          {categorias.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
         <select className="almox-select" value={familiaFilter} onChange={e => setFamiliaFilter(e.target.value)}>
           <option value="">Todas famílias</option>
@@ -221,7 +259,14 @@ const MateriaisAlmoxarifado = () => {
                       </span>
                     </td>
                     <td>
-                      <div style={{ fontWeight: 600, color: 'var(--gmp-text)' }}>{m.nome}</div>
+                      <div style={{ fontWeight: 600, color: 'var(--gmp-text)' }}>
+                        {m.nome}
+                        {/* Etapa 8: esta lista mistura material nosso e de cliente de propósito
+                            (classe C da auditoria da Task 1) — o selo é o que evita a confusão.
+                            Fica ao lado do NOME, e não do código, porque é o nome que o
+                            almoxarife lê ao procurar a chapa. */}
+                        <SeloProprietario material={m} />
+                      </div>
                       {m.fornecedor_principal && (
                         <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>{m.fornecedor_principal}</div>
                       )}
@@ -249,7 +294,9 @@ const MateriaisAlmoxarifado = () => {
                       </div>
                     </td>
                     <td>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>{m.localizacao || '—'}</span>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>
+                        {prefixarAlmoxarifado(m.localizacao, m.almoxarifado_codigo) || '—'}
+                      </span>
                     </td>
                     <td>
                       <span className={`almox-badge almox-badge-${status.cls}`}>
@@ -259,8 +306,12 @@ const MateriaisAlmoxarifado = () => {
                     </td>
                     <td>
                       <div className="almox-actions">
+                        <button className="almox-btn-icon primary" title="Extrato"
+                          onClick={() => setExtratoMaterialId(m.id)}>
+                          <FiFileText />
+                        </button>
                         <button className="almox-btn-icon primary" title="Requisitar"
-                          onClick={() => navigate(`/almoxarifado/requisicoes/nova?material_id=${m.id}`)}>
+                          onClick={(e) => { if (!bloquearSeNaoPode('requisitar', e)) return; navigate(`/almoxarifado/requisicoes/nova?material_id=${m.id}`); }}>
                           <FiClipboard />
                         </button>
                         {m.localizacao_padrao_id && (
@@ -269,16 +320,36 @@ const MateriaisAlmoxarifado = () => {
                             <FiMap />
                           </button>
                         )}
-                        <button className="almox-btn-icon success" title="Entrada" onClick={() => openMovModal(m, 'ENTRADA')}>
+                        <button className="almox-btn-icon primary"
+                          title={m.controle_serie === 1 || m.controle_lote === 1 ? 'Etiquetas de lote/série deste material (abre Lotes e Séries)' : 'Imprimir etiqueta do material'}
+                          onClick={(e) => {
+                            if (!bloquearSeNaoPode('visualizar', e)) return;
+                            if (m.controle_serie === 1 || m.controle_lote === 1) {
+                              navigate(`/almoxarifado/lotes?material_id=${m.id}${m.controle_serie === 1 ? '&aba=SERIES' : ''}`);
+                            } else {
+                              setEtiquetas([montarEtiquetaMaterial(m, window.location.origin)]);
+                            }
+                          }}>
+                          <FiTag />
+                        </button>
+                        <button className="almox-btn-icon primary" title="Plano de inspeção"
+                          onClick={(e) => { if (!bloquearSeNaoPode('gerenciar_plano_inspecao', e)) return; setPlanoMaterial(m); }}>
+                          <FiCheckSquare />
+                        </button>
+                        <button className="almox-btn-icon success" title="Entrada rápida de estoque neste material"
+                          onClick={(e) => { if (!bloquearSeNaoPode('movimentar', e)) return; openMovModal(m, 'ENTRADA'); }}>
                           <FiArrowUp />
                         </button>
-                        <button className="almox-btn-icon danger" title="Saída" onClick={() => openMovModal(m, 'SAIDA')}>
+                        <button className="almox-btn-icon danger" title="Saída rápida de estoque neste material"
+                          onClick={(e) => { if (!bloquearSeNaoPode('movimentar', e)) return; openMovModal(m, 'SAIDA'); }}>
                           <FiArrowDown />
                         </button>
-                        <button className="almox-btn-icon primary" title="Editar" onClick={() => navigate(`/almoxarifado/materiais/editar/${m.id}`)}>
+                        <button className="almox-btn-icon primary" title="Edita o cadastro deste material"
+                          onClick={(e) => { if (!bloquearSeNaoPode('editar_material', e)) return; navigate(`/almoxarifado/materiais/editar/${m.id}`); }}>
                           <FiEdit />
                         </button>
-                        <button className="almox-btn-icon danger" title="Inativar" onClick={() => handleDelete(m.id, m.nome)}>
+                        <button className="almox-btn-icon danger" title="Inativa o material (não apaga o histórico)"
+                          onClick={(e) => { if (!bloquearSeNaoPode('editar_material', e)) return; handleDelete(m.id, m.nome); }}>
                           <FiTrash2 />
                         </button>
                       </div>
@@ -324,8 +395,13 @@ const MateriaisAlmoxarifado = () => {
                       value={movQtd} onChange={e => setMovQtd(e.target.value)} placeholder="0" required />
                   </div>
                   <div className="almox-field">
-                    <label className="almox-label">Motivo</label>
-                    <input className="almox-input" value={movMotivo} onChange={e => setMovMotivo(e.target.value)} placeholder="Ex: Compra, Uso interno..." />
+                    <label className="almox-label">
+                      Motivo
+                      {(movTipo === 'SAIDA' || movTipo === 'AJUSTE') && <span className="required">*</span>}
+                    </label>
+                    <input className="almox-input" value={movMotivo} onChange={e => setMovMotivo(e.target.value)}
+                      placeholder="Ex: Compra, Uso interno..."
+                      required={movTipo === 'SAIDA' || movTipo === 'AJUSTE'} />
                   </div>
                   <div className="almox-field">
                     <label className="almox-label">Referência (OS/NF)</label>
@@ -342,6 +418,19 @@ const MateriaisAlmoxarifado = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Extrato do material */}
+      {extratoMaterialId && (
+        <ExtratoMaterialModal materialId={extratoMaterialId} onClose={() => setExtratoMaterialId(null)} />
+      )}
+
+      {/* Etiquetas PDF */}
+      <EtiquetasPdfModal etiquetas={etiquetas} onClose={() => setEtiquetas(null)} />
+
+      {/* Plano de inspeção do material (Etapa 30) */}
+      {planoMaterial && (
+        <PlanoInspecaoModal material={planoMaterial} onClose={() => setPlanoMaterial(null)} />
       )}
     </div>
   );

@@ -4,34 +4,34 @@ import { useAuth } from '../../context/AuthContext';
 import { getEffectiveUser } from '../../services/permissionsCache';
 import { canConfigureAlmox } from '../../utils/systemPermissions';
 import api from '../../services/api';
+import { useCategoriasMaterial } from '../../hooks/useCategoriasMaterial';
 import { resolveMaterialPhotoUrl } from '../../utils/resolveMaterialPhotoUrl';
+import { formatLocalizacaoLabel } from '../../utils/localizacaoLabel';
 import { toast } from 'react-toastify';
 import { FiSave, FiArrowLeft, FiImage, FiRefreshCw } from 'react-icons/fi';
 import './Almoxarifado.css';
 
-const CATEGORIAS = [
-  'CONSUMÍVEL', 'FERRAMENTA', 'EPI', 'ELÉTRICO', 'HIDRÁULICO',
-  'MECÂNICO', 'INSUMO', 'EMBALAGEM', 'ESCRITÓRIO', 'LIMPEZA', 'OUTROS'
-];
+// Etapa 26: a lista de categorias saiu daqui (era uma de três cópias hardcoded) e passou a vir
+// de GET /almoxarifado/categorias, via useCategoriasMaterial.
 
 const UNIDADES = ['UN', 'KG', 'G', 'L', 'ML', 'M', 'CM', 'M²', 'M³', 'CX', 'PC', 'PAR', 'ROLO', 'BALDE', 'TAMBOR', 'SACO'];
 
-const buildLocalizacaoPath = (loc, allLocs = []) => {
-  if (!loc) return '';
-  const parent = loc.parent_id ? allLocs.find(l => l.id === loc.parent_id) : null;
-  const parts = [];
-  if (loc.setor) parts.push(loc.setor);
-  if (parent) parts.push(parent.subgrupo || parent.descricao || parent.codigo);
-  if (loc.subgrupo) parts.push(loc.subgrupo);
-  else if (loc.descricao && !parent) parts.push(loc.descricao);
-  return parts.join(' / ');
-};
+const CLASSES_ABC = ['A', 'B', 'C'];
 
-const formatLocalizacaoLabel = (loc, allLocs = []) => {
-  if (!loc) return '';
-  const path = buildLocalizacaoPath(loc, allLocs);
-  return path ? `${loc.codigo} — ${path}` : loc.codigo;
-};
+// Cada seção do formulário é um "cartão" com o mesmo visual (Task 6 — reorganização em seções).
+const sectionCardStyle = { background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 12, padding: 24 };
+
+// Checkboxes de controle (Etapa 2, Task 4) — a API tolera boolean ou 0/1 (FlagSchema) e o PUT
+// normaliza via MATERIAL_BOOL_FIELDS; aqui guardamos boolean puro no state do form.
+const CONTROLE_CHECKS = [
+  { field: 'controle_lote', label: 'Controle por lote' },
+  { field: 'controle_serie', label: 'Controle por número de série', hint: 'Exigirá um número de série por unidade na entrada e na saída' },
+  { field: 'controle_validade', label: 'Controle de validade' },
+  { field: 'controle_corrida', label: 'Controle de corrida' },
+  { field: 'controle_certificado', label: 'Requer certificado' },
+  { field: 'requer_inspecao', label: 'Requer inspeção' },
+  { field: 'requer_foto', label: 'Requer foto' },
+];
 
 const MaterialAlmoxarifadoForm = () => {
   const { user } = useAuth();
@@ -45,6 +45,10 @@ const MaterialAlmoxarifadoForm = () => {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [localizacoes, setLocalizacoes] = useState([]);
+  const [almoxarifados, setAlmoxarifados] = useState([]);
+  // Filtro de apoio para achar a localização: NÃO vai no payload, só estreita o select
+  // abaixo. Localização continua opcional, então este campo também é.
+  const [almoxSelecionado, setAlmoxSelecionado] = useState('');
   const [familias, setFamilias] = useState([]);
   const [loadingFamilias, setLoadingFamilias] = useState(true);
   const [loadingLocalizacoes, setLoadingLocalizacoes] = useState(true);
@@ -53,14 +57,26 @@ const MaterialAlmoxarifadoForm = () => {
   const [fotoPreview, setFotoPreview] = useState(null);
   const [uploadingFoto, setUploadingFoto] = useState(false);
   const [savedId, setSavedId] = useState(null);
+  // Etapa 8: lista de clientes da seção "Propriedade". Vem de /clientes (rota core, fora do
+  // módulo) — por isso a falha é silenciosa: sem a lista o select fica só com "GMP (estoque
+  // próprio)" e o cadastro de material continua funcionando, que é o caminho comum.
+  const [clientes, setClientes] = useState([]);
+  // Etapa 26 (RN-01): o catálogo do cliente, ponto único de busca compartilhado com as duas
+  // telas de listagem.
+  const { categorias, erro: erroCategorias } = useCategoriasMaterial();
 
   const [form, setForm] = useState({
     codigo: '',
     nome: '',
     descricao: '',
-    categoria: 'CONSUMÍVEL',
+    // Etapa 26 (RN-07): NASCE VAZIO. O default era 'CONSUMÍVEL', que não está no catálogo —
+    // todo material criado sem tocar no campo nascia fora dele, em silêncio. Descartado usar a
+    // primeira do catálogo: classificaria material como 'Aço carbono' por acidente de ordenação
+    // alfabética, que é a mesma mentira com outra roupa.
+    categoria: '',
     unidade: 'UN',
     familia_id: searchParams.get('familia_id') || '',
+    subfamilia_id: '',
     localizacao_padrao_id: '',
     quantidade_atual: '',
     quantidade_minima: '',
@@ -70,11 +86,53 @@ const MaterialAlmoxarifadoForm = () => {
     codigo_fornecedor: '',
     ncm: '',
     especificacoes: '',
-    observacoes: ''
+    observacoes: '',
+
+    // ── Classificação adicional (Etapa 2, Task 4/6) ──
+    tipo_material: '',
+    material_critico: false,
+
+    // ── Propriedade (Etapa 8) ──
+    // '' = GMP (estoque próprio). O servidor guarda NULL nesse caso — proprietario_cliente_id
+    // é NÚMERO ou null, nunca uma flag 0/1 como os campos de controle acima.
+    proprietario_cliente_id: '',
+
+    // ── Dados técnicos ──
+    fabricante: '',
+    codigo_fabricante: '',
+    peso_unitario: '',
+    dimensoes: '',
+    material_construtivo: '',
+    norma: '',
+    marca: '',
+    modelo: '',
+    aplicacao: '',
+    descricao_tecnica: '',
+
+    // ── Estoque e reposição ──
+    ponto_reposicao: '',
+    lote_economico: '',
+
+    // ── Controles ──
+    controle_lote: false,
+    controle_serie: false,
+    controle_validade: false,
+    controle_corrida: false,
+    controle_certificado: false,
+    requer_inspecao: false,
+    requer_foto: false,
+
+    // ── Unidades e custos ──
+    classe_abc: '',
+    unidade_compra: '',
+    fator_conversao_compra: '',
+    unidade_consumo: '',
+    fator_conversao_consumo: ''
   });
 
   useEffect(() => {
     loadLocalizacoes();
+    loadAlmoxarifados();
     loadFamilias();
     if (isEdit) {
       loadMaterial();
@@ -84,6 +142,16 @@ const MaterialAlmoxarifadoForm = () => {
       loadProximoCodigo();
     }
   }, [id]);
+
+  // Flag `cancelado` (padrão do módulo): o material pode ser trocado pela navegação antes da
+  // resposta chegar, e um setState depois do unmount é warning — e com CI=true, erro de build.
+  useEffect(() => {
+    let cancelado = false;
+    api.get('/clientes')
+      .then((r) => { if (!cancelado) setClientes(Array.isArray(r.data) ? r.data : []); })
+      .catch(() => { if (!cancelado) setClientes([]); });
+    return () => { cancelado = true; };
+  }, []);
 
   const loadFamilias = async () => {
     setLoadingFamilias(true);
@@ -100,6 +168,13 @@ const MaterialAlmoxarifadoForm = () => {
     } finally {
       setLoadingFamilias(false);
     }
+  };
+
+  const loadAlmoxarifados = async () => {
+    try {
+      const res = await api.get('/almoxarifado/almoxarifados');
+      setAlmoxarifados(res.data || []);
+    } catch { /* silencioso: sem a lista o select fica vazio e a localização segue editável */ }
   };
 
   const loadLocalizacoes = async () => {
@@ -130,6 +205,60 @@ const MaterialAlmoxarifadoForm = () => {
     });
   }, [localizacoes, localizacaoInativa]);
 
+  const almoxarifadosAtivos = useMemo(
+    () => almoxarifados.filter(a => a.ativo !== 0),
+    [almoxarifados]
+  );
+
+  // Etapa 26, RN-04 — o cerne desta etapa, e o ponto onde ela pode estragar dado do cliente.
+  //
+  // O <select> é CONTROLADO por state. Quando o valor do state não está entre as opções, o React
+  // não dispara onChange e o navegador exibe a PRIMEIRA opção: a tela mostra 'Aço carbono'
+  // enquanto o payload segue mandando 'CONSUMÍVEL'. Reproduzido nesta base — o material 78 do
+  // teste (categoria 'MATERIAL DE SOLDA') exibia 'CONSUMÍVEL'. A tela mente sobre o que está no
+  // banco, o que é pior que trocar o valor: não deixa rastro de erro.
+  //
+  // Por isso o valor gravado entra na lista quando não está no catálogo, ROTULADO. Descartado
+  // bloquear o salvamento nesse caso: impediria corrigir o preço de um material só porque a
+  // categoria dele é antiga.
+  const categoriasOpcoes = useMemo(() => {
+    const opcoes = categorias.map((nome) => ({ valor: nome, rotulo: nome }));
+    const atual = form.categoria;
+    if (atual && !categorias.includes(atual)) {
+      opcoes.push({ valor: atual, rotulo: `${atual} (fora de catálogo)` });
+    }
+    return opcoes;
+  }, [categorias, form.categoria]);
+
+  // Sem categoria o cadastro não conclui (RN-07), então a falha de carga precisa ser dita — ao
+  // contrário dos filtros das listagens, onde o catálogo é conveniência.
+  useEffect(() => {
+    if (erroCategorias) toast.error('Erro ao carregar as categorias. Recarregue a página.');
+  }, [erroCategorias]);
+
+  // Opções estreitadas pelo almoxarifado escolhido. A localização já vinculada ao material
+  // entra sempre — mesmo inativa ou de outro almoxarifado — para a edição nunca perder o
+  // vínculo existente sem o usuário perceber.
+  const localizacoesVisiveis = useMemo(() => {
+    if (!almoxSelecionado) return localizacoesOptions;
+    return localizacoesOptions.filter(l =>
+      String(l.almoxarifado_id ?? '') === String(almoxSelecionado)
+      || String(l.id) === String(form.localizacao_padrao_id)
+    );
+  }, [localizacoesOptions, almoxSelecionado, form.localizacao_padrao_id]);
+
+  // Pré-seleciona o almoxarifado: o da localização do material em edição, ou o único
+  // cadastrado. Só age enquanto o usuário não escolheu nada.
+  useEffect(() => {
+    if (almoxSelecionado || !almoxarifados.length) return;
+    const locAtual = localizacoes.find(l => String(l.id) === String(form.localizacao_padrao_id));
+    if (locAtual?.almoxarifado_id != null) {
+      setAlmoxSelecionado(String(locAtual.almoxarifado_id));
+      return;
+    }
+    if (almoxarifadosAtivos.length === 1) setAlmoxSelecionado(String(almoxarifadosAtivos[0].id));
+  }, [almoxarifados, almoxarifadosAtivos, localizacoes, form.localizacao_padrao_id, almoxSelecionado]);
+
   useEffect(() => {
     if (!materialLocInfo || loadingLocalizacoes) return;
     const found = localizacoes.some(l => l.id === materialLocInfo.id);
@@ -155,9 +284,12 @@ const MaterialAlmoxarifadoForm = () => {
         codigo: m.codigo || '',
         nome: m.nome || '',
         descricao: m.descricao || '',
-        categoria: m.categoria || 'CONSUMÍVEL',
+        // Etapa 26: sem fallback para 'CONSUMÍVEL'. O material carregado mostra a categoria que
+        // ESTÁ gravada nele — inclusive fora do catálogo (RN-04) — e vazio continua vazio.
+        categoria: m.categoria || '',
         unidade: m.unidade || 'UN',
         familia_id: m.familia_id ? String(m.familia_id) : '',
+        subfamilia_id: m.subfamilia_id ? String(m.subfamilia_id) : '',
         localizacao_padrao_id: m.localizacao_padrao_id ? String(m.localizacao_padrao_id) : '',
         quantidade_atual: m.quantidade_atual ?? '',
         quantidade_minima: m.quantidade_minima ?? '',
@@ -167,7 +299,42 @@ const MaterialAlmoxarifadoForm = () => {
         codigo_fornecedor: m.codigo_fornecedor || '',
         ncm: m.ncm || '',
         especificacoes: m.especificacoes || '',
-        observacoes: m.observacoes || ''
+        observacoes: m.observacoes || '',
+
+        tipo_material: m.tipo_material || '',
+        material_critico: !!m.material_critico,
+
+        // Etapa 8: número ou null — NUNCA `!!m.…` nem `=== 1` (o padrão das flags acima não
+        // vale aqui; cliente de id 1 viraria `true` e cairia no ramo errado do select).
+        proprietario_cliente_id: m.proprietario_cliente_id ? String(m.proprietario_cliente_id) : '',
+
+        fabricante: m.fabricante || '',
+        codigo_fabricante: m.codigo_fabricante || '',
+        peso_unitario: m.peso_unitario ?? '',
+        dimensoes: m.dimensoes || '',
+        material_construtivo: m.material_construtivo || '',
+        norma: m.norma || '',
+        marca: m.marca || '',
+        modelo: m.modelo || '',
+        aplicacao: m.aplicacao || '',
+        descricao_tecnica: m.descricao_tecnica || '',
+
+        ponto_reposicao: m.ponto_reposicao ?? '',
+        lote_economico: m.lote_economico ?? '',
+
+        controle_lote: !!m.controle_lote,
+        controle_serie: !!m.controle_serie,
+        controle_validade: !!m.controle_validade,
+        controle_corrida: !!m.controle_corrida,
+        controle_certificado: !!m.controle_certificado,
+        requer_inspecao: !!m.requer_inspecao,
+        requer_foto: !!m.requer_foto,
+
+        classe_abc: m.classe_abc || '',
+        unidade_compra: m.unidade_compra || '',
+        fator_conversao_compra: m.fator_conversao_compra ?? '',
+        unidade_consumo: m.unidade_consumo || '',
+        fator_conversao_consumo: m.fator_conversao_consumo ?? ''
       });
       if (m.localizacao_padrao_id) {
         setMaterialLocInfo({ id: m.localizacao_padrao_id, label: m.localizacao });
@@ -195,8 +362,17 @@ const MaterialAlmoxarifadoForm = () => {
     }
   };
 
+  // Cascata família → subfamília (Etapa 2, Task 3/6): família select mostra só raízes
+  // (parent_id === null); subfamília mostra as filhas (parent_id === familia_id selecionada).
+  // Trocar a família invalida a subfamília escolhida anteriormente (pode não ser filha da nova).
+  const familiasRaiz = useMemo(() => familias.filter(f => f.parent_id === null || f.parent_id === undefined), [familias]);
+  const subfamiliasDisponiveis = useMemo(() => {
+    if (!form.familia_id) return [];
+    return familias.filter(f => String(f.parent_id) === String(form.familia_id));
+  }, [familias, form.familia_id]);
+
   const handleFamiliaChange = (familiaId) => {
-    set('familia_id', familiaId);
+    setForm(f => ({ ...f, familia_id: familiaId, subfamilia_id: '' }));
     if (!isEdit && familiaId) {
       loadProximoCodigo(familiaId);
     }
@@ -214,14 +390,49 @@ const MaterialAlmoxarifadoForm = () => {
       toast.error('Selecione a família do material');
       return;
     }
+    // Etapa 26, RN-07. Não basta o campo nascer vazio: `createMaterial` (materialService.js:179)
+    // faz `categoria: categoria || 'OUTROS'`, então mandar vazio trocaria "nasce CONSUMÍVEL" por
+    // "nasce OUTROS" — as duas fora do catálogo, e a segunda ainda por cima escolhida pelo
+    // servidor sem aparecer na tela. Nem o plano nem o design tinham visto esse fallback.
+    //
+    // A trava é só do vazio, e vale também na edição (o PUT grava o '' como está, deixando o
+    // material sem classificação nenhuma). Categoria FORA do catálogo continua salvando normal:
+    // a decisão 3 do design descartou de propósito bloquear o save por causa dela.
+    if (!form.categoria) {
+      toast.error('Selecione a categoria do material');
+      return;
+    }
+    // Fatores de conversão (Etapa 2, Task 4): espelha no cliente a invariante que o servidor
+    // valida via superRefine — evita um round-trip só para descobrir que faltou o fator.
+    if (form.unidade_compra && !(Number(form.fator_conversao_compra) > 0)) {
+      toast.error('Informe um fator de conversão de compra maior que zero');
+      return;
+    }
+    if (form.unidade_consumo && !(Number(form.fator_conversao_consumo) > 0)) {
+      toast.error('Informe um fator de conversão de consumo maior que zero');
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
         ...form,
         familia_id: form.familia_id ? parseInt(form.familia_id, 10) : null,
+        // null explícito (nunca ''): '' cairia no ramo "ausente" da coerção do servidor e
+        // preservaria a subfamília antiga no PUT em vez de limpar o vínculo.
+        subfamilia_id: form.subfamilia_id ? parseInt(form.subfamilia_id, 10) : null,
         localizacao_padrao_id: form.localizacao_padrao_id
           ? parseInt(form.localizacao_padrao_id, 10)
           : null,
+        // classe_abc é z.enum(['A','B','C']) no servidor — '' não é um valor válido do enum
+        // nem null, então precisa virar null explícito aqui (mesmo padrão dos FKs acima).
+        // Fix pós-review (Critical): sem isso, TODO submit — criar material sem escolher
+        // classe, ou editar qualquer material existente (nenhum tem classe ainda) — quebrava
+        // com 400, porque o form sempre manda a chave (default '' no state).
+        classe_abc: form.classe_abc || null,
+        // Etapa 8: null explícito (nunca ''), mesmo motivo dos FKs acima — '' cai no ramo
+        // "ausente" da coerção do servidor e o PUT PRESERVARIA o dono antigo, que é o oposto do
+        // que o usuário pediu ao escolher "GMP (estoque próprio)".
+        proprietario_cliente_id: form.proprietario_cliente_id ? Number(form.proprietario_cliente_id) : null,
       };
       delete payload.localizacao;
 
@@ -305,14 +516,46 @@ const MaterialAlmoxarifadoForm = () => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
             {/* Identificação */}
-            <div style={{ background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 12, padding: 24 }}>
+            <div style={sectionCardStyle}>
               <div className="almox-section-title">Identificação</div>
               <div className="almox-form-grid">
+                <div className="almox-field">
+                  <label className="almox-label">Código<span className="required">*</span></label>
+                  <input className="almox-input" value={form.codigo} onChange={e => set('codigo', e.target.value)}
+                    placeholder="PAR-001" required style={{ fontFamily: 'monospace' }} />
+                  {!isEdit && form.familia_id && (
+                    <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
+                      Código gerado com prefixo da família
+                    </small>
+                  )}
+                </div>
+                <div className="almox-field">
+                  <label className="almox-label">Nome do Material<span className="required">*</span></label>
+                  <input className="almox-input" value={form.nome} onChange={e => set('nome', e.target.value)}
+                    placeholder="Nome completo do material" required />
+                </div>
                 <div className="almox-field almox-form-full">
+                  <label className="almox-label">Descrição</label>
+                  <textarea className="almox-textarea" value={form.descricao} onChange={e => set('descricao', e.target.value)}
+                    placeholder="Descrição detalhada do material..." rows={3} />
+                </div>
+                <div className="almox-field almox-form-full">
+                  <label className="almox-label">Descrição Técnica</label>
+                  <textarea className="almox-textarea" value={form.descricao_tecnica} onChange={e => set('descricao_tecnica', e.target.value)}
+                    placeholder="Detalhamento técnico complementar..." rows={3} />
+                </div>
+              </div>
+            </div>
+
+            {/* Classificação */}
+            <div style={sectionCardStyle}>
+              <div className="almox-section-title">Classificação</div>
+              <div className="almox-form-grid">
+                <div className="almox-field">
                   <label className="almox-label">Família<span className="required">*</span></label>
                   {loadingFamilias ? (
                     <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', padding: '10px 0' }}>Carregando famílias...</div>
-                  ) : familias.length === 0 ? (
+                  ) : familiasRaiz.length === 0 ? (
                     <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', padding: '8px 12px', background: 'var(--gmp-bg)', border: '1px solid var(--gmp-border)', borderRadius: 8 }}>
                       Nenhuma família cadastrada
                       {isAdmin ? (
@@ -332,7 +575,7 @@ const MaterialAlmoxarifadoForm = () => {
                       disabled={isEdit && !!form.familia_id}
                     >
                       <option value="">Selecione a família...</option>
-                      {familias.map(fam => (
+                      {familiasRaiz.map(fam => (
                         <option key={fam.id} value={String(fam.id)}>
                           {fam.codigo} — {fam.nome}
                         </option>
@@ -346,16 +589,188 @@ const MaterialAlmoxarifadoForm = () => {
                   )}
                 </div>
                 <div className="almox-field">
-                  <label className="almox-label">Código<span className="required">*</span></label>
-                  <input className="almox-input" value={form.codigo} onChange={e => set('codigo', e.target.value)}
-                    placeholder="PAR-001" required style={{ fontFamily: 'monospace' }} />
-                  {!isEdit && form.familia_id && (
+                  <label className="almox-label">Subfamília</label>
+                  <select
+                    className="almox-form-select"
+                    value={form.subfamilia_id}
+                    onChange={e => set('subfamilia_id', e.target.value)}
+                    disabled={!form.familia_id || subfamiliasDisponiveis.length === 0}
+                  >
+                    <option value="">— nenhuma —</option>
+                    {subfamiliasDisponiveis.map(sub => (
+                      <option key={sub.id} value={String(sub.id)}>
+                        {sub.codigo} — {sub.nome}
+                      </option>
+                    ))}
+                  </select>
+                  {form.familia_id && subfamiliasDisponiveis.length === 0 && (
                     <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
-                      Código gerado com prefixo da família
+                      Esta família não tem subfamílias cadastradas.
                     </small>
                   )}
                 </div>
                 <div className="almox-field">
+                  <label className="almox-label" htmlFor="material-categoria">Categoria</label>
+                  <select
+                    id="material-categoria"
+                    className="almox-form-select"
+                    value={form.categoria}
+                    onChange={e => set('categoria', e.target.value)}
+                  >
+                    <option value="">Selecione…</option>
+                    {categoriasOpcoes.map(c => <option key={c.valor} value={c.valor}>{c.rotulo}</option>)}
+                  </select>
+                </div>
+                <div className="almox-field">
+                  <label className="almox-label">Tipo de Material</label>
+                  <input className="almox-input" value={form.tipo_material} onChange={e => set('tipo_material', e.target.value)}
+                    placeholder="Ex.: Ferramenta, Consumível..." />
+                </div>
+                <div className="almox-field almox-form-full">
+                  <label className="almox-checkbox-field">
+                    <input type="checkbox" checked={form.material_critico}
+                      onChange={e => set('material_critico', e.target.checked)} />
+                    Material crítico
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {/* Propriedade (Etapa 8) — é AQUI que o material de cliente nasce. Não há tela
+                separada de "cadastrar material de cliente": ele é material normal com dono. */}
+            <div style={sectionCardStyle}>
+              <div className="almox-section-title">Propriedade</div>
+              <div className="almox-form-grid">
+                <div className="almox-field">
+                  <label className="almox-label" htmlFor="material-proprietario">Proprietário</label>
+                  <select
+                    id="material-proprietario"
+                    className="almox-form-select"
+                    value={form.proprietario_cliente_id}
+                    onChange={e => set('proprietario_cliente_id', e.target.value)}
+                  >
+                    <option value="">GMP (estoque próprio)</option>
+                    {clientes.map(c => (
+                      <option key={c.id} value={String(c.id)}>{c.razao_social || c.nome_fantasia}</option>
+                    ))}
+                  </select>
+                  <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem', display: 'block', marginTop: 2 }}>
+                    Material de cliente só sai com OS ou projeto desse mesmo cliente, exige número
+                    de documento no recebimento e não entra na reposição, na sugestão de compra
+                    nem no valor do estoque próprio.
+                  </small>
+                </div>
+              </div>
+            </div>
+
+            {/* Dados técnicos */}
+            <div style={sectionCardStyle}>
+              <div className="almox-section-title">Dados Técnicos</div>
+              <div className="almox-form-grid">
+                <div className="almox-field">
+                  <label className="almox-label">Fabricante</label>
+                  <input className="almox-input" value={form.fabricante} onChange={e => set('fabricante', e.target.value)}
+                    placeholder="Nome do fabricante" />
+                </div>
+                <div className="almox-field">
+                  <label className="almox-label">Código no Fabricante</label>
+                  <input className="almox-input" value={form.codigo_fabricante} onChange={e => set('codigo_fabricante', e.target.value)}
+                    placeholder="Cód. do item no fabricante" />
+                </div>
+                <div className="almox-field">
+                  <label className="almox-label">Marca</label>
+                  <input className="almox-input" value={form.marca} onChange={e => set('marca', e.target.value)}
+                    placeholder="Marca" />
+                </div>
+                <div className="almox-field">
+                  <label className="almox-label">Modelo</label>
+                  <input className="almox-input" value={form.modelo} onChange={e => set('modelo', e.target.value)}
+                    placeholder="Modelo" />
+                </div>
+                <div className="almox-field">
+                  <label className="almox-label">Norma Técnica</label>
+                  <input className="almox-input" value={form.norma} onChange={e => set('norma', e.target.value)}
+                    placeholder="Ex.: NBR 1234" />
+                </div>
+                <div className="almox-field">
+                  <label className="almox-label">Material Construtivo</label>
+                  <input className="almox-input" value={form.material_construtivo} onChange={e => set('material_construtivo', e.target.value)}
+                    placeholder="Ex.: Aço inox 304" />
+                </div>
+                <div className="almox-field">
+                  <label className="almox-label">Peso Unitário (kg)</label>
+                  <input className="almox-input" type="number" min="0" step="0.001"
+                    value={form.peso_unitario} onChange={e => set('peso_unitario', e.target.value)} placeholder="0,000" />
+                </div>
+                <div className="almox-field">
+                  <label className="almox-label">Dimensões</label>
+                  <input className="almox-input" value={form.dimensoes} onChange={e => set('dimensoes', e.target.value)}
+                    placeholder="Ex.: 100x50x30mm" />
+                </div>
+                <div className="almox-field">
+                  <label className="almox-label">NCM</label>
+                  <input className="almox-input" value={form.ncm} onChange={e => set('ncm', e.target.value)}
+                    placeholder="0000.00.00" maxLength={10} />
+                </div>
+                <div className="almox-field almox-form-full">
+                  <label className="almox-label">Aplicação</label>
+                  <textarea className="almox-textarea" value={form.aplicacao} onChange={e => set('aplicacao', e.target.value)}
+                    placeholder="Onde e como o material é utilizado..." rows={2} />
+                </div>
+                <div className="almox-field almox-form-full">
+                  <label className="almox-label">Especificações Técnicas</label>
+                  <textarea className="almox-textarea" value={form.especificacoes} onChange={e => set('especificacoes', e.target.value)}
+                    placeholder="Dimensões, tensão, material, normas técnicas..." rows={3} />
+                </div>
+                <div className="almox-field almox-form-full">
+                  <label className="almox-label">Observações Gerais</label>
+                  <textarea className="almox-textarea" value={form.observacoes} onChange={e => set('observacoes', e.target.value)}
+                    placeholder="Instruções de armazenamento, validade, cuidados especiais..." rows={3} />
+                </div>
+              </div>
+            </div>
+
+            {/* Estoque e reposição */}
+            <div style={sectionCardStyle}>
+              <div className="almox-section-title">Estoque e Reposição</div>
+              <p style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', margin: '0 0 16px' }}>
+                O estoque mínimo gera alertas no dashboard e na lista quando o saldo ficar baixo.
+              </p>
+              <div className="almox-form-grid almox-form-grid-3">
+                <div className="almox-field">
+                  <label className="almox-label">Unidade de Medida</label>
+                  <select className="almox-form-select" value={form.unidade} onChange={e => set('unidade', e.target.value)}>
+                    {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </div>
+                <div className="almox-field">
+                  <label className="almox-label">{isEdit ? 'Quantidade Atual' : 'Saldo Inicial'}</label>
+                  <input className="almox-input" type="number" min="0" step="1"
+                    value={form.quantidade_atual} onChange={e => set('quantidade_atual', e.target.value)}
+                    placeholder="0" disabled={isEdit} title={isEdit ? 'Use Movimentações para alterar o saldo' : ''} />
+                  {isEdit && <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>Use "Movimentações" para ajustar</small>}
+                </div>
+                <div className="almox-field">
+                  <label className="almox-label">Estoque Mínimo</label>
+                  <input className="almox-input" type="number" min="0" step="1"
+                    value={form.quantidade_minima} onChange={e => set('quantidade_minima', e.target.value)} placeholder="0" />
+                </div>
+                <div className="almox-field">
+                  <label className="almox-label">Estoque Máximo</label>
+                  <input className="almox-input" type="number" min="0" step="1"
+                    value={form.quantidade_maxima} onChange={e => set('quantidade_maxima', e.target.value)} placeholder="0" />
+                </div>
+                <div className="almox-field">
+                  <label className="almox-label">Ponto de Reposição</label>
+                  <input className="almox-input" type="number" min="0" step="1"
+                    value={form.ponto_reposicao} onChange={e => set('ponto_reposicao', e.target.value)} placeholder="0" />
+                </div>
+                <div className="almox-field">
+                  <label className="almox-label">Lote Econômico</label>
+                  <input className="almox-input" type="number" min="0" step="1"
+                    value={form.lote_economico} onChange={e => set('lote_economico', e.target.value)} placeholder="0" />
+                </div>
+                <div className="almox-field almox-form-full">
                   <label className="almox-label">Localização no estoque</label>
                   {loadingLocalizacoes ? (
                     <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', padding: '10px 0' }}>
@@ -374,19 +789,46 @@ const MaterialAlmoxarifadoForm = () => {
                     </div>
                   ) : (
                     <>
+                      {almoxarifadosAtivos.length > 1 && (
+                        <select
+                          className="almox-form-select"
+                          style={{ marginBottom: 8 }}
+                          value={almoxSelecionado}
+                          onChange={e => {
+                            setAlmoxSelecionado(e.target.value);
+                            // a localização anterior é de outro depósito — não faz sentido manter
+                            set('localizacao_padrao_id', '');
+                          }}
+                        >
+                          <option value="">Selecione o almoxarifado...</option>
+                          {almoxarifadosAtivos.map(a => (
+                            <option key={a.id} value={String(a.id)}>{a.codigo} — {a.nome}</option>
+                          ))}
+                        </select>
+                      )}
                       <select
                         className="almox-form-select"
                         value={form.localizacao_padrao_id}
                         onChange={e => set('localizacao_padrao_id', e.target.value)}
+                        disabled={almoxarifadosAtivos.length > 1 && !almoxSelecionado}
                       >
-                        <option value="">Selecione uma localização...</option>
-                        {localizacoesOptions.map(loc => (
+                        <option value="">
+                          {almoxarifadosAtivos.length > 1 && !almoxSelecionado
+                            ? 'Escolha o almoxarifado primeiro...'
+                            : 'Selecione uma localização...'}
+                        </option>
+                        {localizacoesVisiveis.map(loc => (
                           <option key={loc.id} value={String(loc.id)}>
-                            {formatLocalizacaoLabel(loc, localizacoesOptions)}
+                            {formatLocalizacaoLabel(loc, localizacoesOptions, almoxarifados)}
                             {loc.ativo === 0 ? ' (inativa)' : ''}
                           </option>
                         ))}
                       </select>
+                      {almoxSelecionado && localizacoesVisiveis.length === 0 && (
+                        <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
+                          Este almoxarifado ainda não tem localizações cadastradas.
+                        </small>
+                      )}
                       {localizacaoInativa && localizacaoInativa.ativo === 0 && form.localizacao_padrao_id === String(localizacaoInativa.id) && (
                         <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
                           Localização atual está inativa — selecione outra ou mantenha.
@@ -395,78 +837,83 @@ const MaterialAlmoxarifadoForm = () => {
                     </>
                   )}
                 </div>
-                <div className="almox-field almox-form-full">
-                  <label className="almox-label">Nome do Material<span className="required">*</span></label>
-                  <input className="almox-input" value={form.nome} onChange={e => set('nome', e.target.value)}
-                    placeholder="Nome completo do material" required />
-                </div>
-                <div className="almox-field almox-form-full">
-                  <label className="almox-label">Descrição</label>
-                  <textarea className="almox-textarea" value={form.descricao} onChange={e => set('descricao', e.target.value)}
-                    placeholder="Descrição detalhada do material..." rows={3} />
-                </div>
               </div>
             </div>
 
-            {/* Classificação */}
-            <div style={{ background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 12, padding: 24 }}>
-              <div className="almox-section-title">Classificação</div>
-              <div className="almox-form-grid">
-                <div className="almox-field">
-                  <label className="almox-label">Categoria</label>
-                  <select className="almox-form-select" value={form.categoria} onChange={e => set('categoria', e.target.value)}>
-                    {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div className="almox-field">
-                  <label className="almox-label">Unidade de Medida</label>
-                  <select className="almox-form-select" value={form.unidade} onChange={e => set('unidade', e.target.value)}>
-                    {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            {/* Estoque */}
-            <div style={{ background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 12, padding: 24 }}>
-              <div className="almox-section-title">Controle de Estoque</div>
-              <p style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', margin: '0 0 16px' }}>
-                O estoque mínimo gera alertas no dashboard e na lista quando o saldo ficar baixo.
-              </p>
+            {/* Controles */}
+            <div style={sectionCardStyle}>
+              <div className="almox-section-title">Controles</div>
               <div className="almox-form-grid almox-form-grid-3">
-                <div className="almox-field">
-                  <label className="almox-label">{isEdit ? 'Quantidade Atual' : 'Saldo Inicial'}</label>
-                  <input className="almox-input" type="number" min="0" step="1"
-                    value={form.quantidade_atual} onChange={e => set('quantidade_atual', e.target.value)}
-                    placeholder="0" disabled={isEdit} title={isEdit ? 'Use Movimentações para alterar o saldo' : ''} />
-                  {isEdit && <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>Use "Movimentações" para ajustar</small>}
-                </div>
-                <div className="almox-field">
-                  <label className="almox-label">Estoque Mínimo</label>
-                  <input className="almox-input" type="number" min="0" step="1"
-                    value={form.quantidade_minima} onChange={e => set('quantidade_minima', e.target.value)} placeholder="0" />
-                </div>
-                <div className="almox-field">
-                  <label className="almox-label">Estoque Máximo</label>
-                  <input className="almox-input" type="number" min="0" step="1"
-                    value={form.quantidade_maxima} onChange={e => set('quantidade_maxima', e.target.value)} placeholder="0" />
-                </div>
+                {CONTROLE_CHECKS.map(({ field, label, hint }) => (
+                  <div key={field}>
+                    <label className="almox-checkbox-field">
+                      <input type="checkbox" checked={form[field]}
+                        onChange={e => set(field, e.target.checked)} />
+                      {label}
+                    </label>
+                    {hint && <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem', display: 'block', marginTop: 2 }}>{hint}</small>}
+                  </div>
+                ))}
               </div>
             </div>
 
-            {/* Custo e Fornecedor */}
-            <div style={{ background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 12, padding: 24 }}>
-              <div className="almox-section-title">Custo e Fornecimento</div>
+            {/* Unidades e custos */}
+            <div style={sectionCardStyle}>
+              <div className="almox-section-title">Unidades e Custos</div>
               <div className="almox-form-grid">
+                <div className="almox-field">
+                  <label className="almox-label">Classe ABC</label>
+                  <select className="almox-form-select" value={form.classe_abc} onChange={e => set('classe_abc', e.target.value)}>
+                    <option value="">— não classificado —</option>
+                    {CLASSES_ABC.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
                 <div className="almox-field">
                   <label className="almox-label">Custo Unitário (R$)</label>
                   <input className="almox-input" type="number" min="0" step="0.01"
                     value={form.custo_unitario} onChange={e => set('custo_unitario', e.target.value)} placeholder="0,00" />
                 </div>
                 <div className="almox-field">
-                  <label className="almox-label">NCM</label>
-                  <input className="almox-input" value={form.ncm} onChange={e => set('ncm', e.target.value)}
-                    placeholder="0000.00.00" maxLength={10} />
+                  <label className="almox-label">Unidade de Compra</label>
+                  <select className="almox-form-select" value={form.unidade_compra} onChange={e => set('unidade_compra', e.target.value)}>
+                    <option value="">— igual à unidade de medida —</option>
+                    {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </div>
+                <div className="almox-field">
+                  <label className="almox-label">
+                    Fator de Conversão (Compra)
+                    {form.unidade_compra && <span className="required">*</span>}
+                  </label>
+                  <input className="almox-input" type="number" min="0" step="0.0001"
+                    value={form.fator_conversao_compra} onChange={e => set('fator_conversao_compra', e.target.value)}
+                    placeholder="Ex.: 12 (1 CX = 12 UN)" />
+                  {form.unidade_compra && (
+                    <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
+                      Obrigatório e maior que zero quando a unidade de compra é informada.
+                    </small>
+                  )}
+                </div>
+                <div className="almox-field">
+                  <label className="almox-label">Unidade de Consumo</label>
+                  <select className="almox-form-select" value={form.unidade_consumo} onChange={e => set('unidade_consumo', e.target.value)}>
+                    <option value="">— igual à unidade de medida —</option>
+                    {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </div>
+                <div className="almox-field">
+                  <label className="almox-label">
+                    Fator de Conversão (Consumo)
+                    {form.unidade_consumo && <span className="required">*</span>}
+                  </label>
+                  <input className="almox-input" type="number" min="0" step="0.0001"
+                    value={form.fator_conversao_consumo} onChange={e => set('fator_conversao_consumo', e.target.value)}
+                    placeholder="Ex.: 1" />
+                  {form.unidade_consumo && (
+                    <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
+                      Obrigatório e maior que zero quando a unidade de consumo é informada.
+                    </small>
+                  )}
                 </div>
                 <div className="almox-field">
                   <label className="almox-label">Fornecedor Principal</label>
@@ -477,23 +924,6 @@ const MaterialAlmoxarifadoForm = () => {
                   <label className="almox-label">Código no Fornecedor</label>
                   <input className="almox-input" value={form.codigo_fornecedor} onChange={e => set('codigo_fornecedor', e.target.value)}
                     placeholder="Cód. do item no fornecedor" />
-                </div>
-              </div>
-            </div>
-
-            {/* Especificações */}
-            <div style={{ background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 12, padding: 24 }}>
-              <div className="almox-section-title">Especificações e Observações</div>
-              <div className="almox-form-grid">
-                <div className="almox-field almox-form-full">
-                  <label className="almox-label">Especificações Técnicas</label>
-                  <textarea className="almox-textarea" value={form.especificacoes} onChange={e => set('especificacoes', e.target.value)}
-                    placeholder="Dimensões, tensão, material, normas técnicas..." rows={3} />
-                </div>
-                <div className="almox-field almox-form-full">
-                  <label className="almox-label">Observações Gerais</label>
-                  <textarea className="almox-textarea" value={form.observacoes} onChange={e => set('observacoes', e.target.value)}
-                    placeholder="Instruções de armazenamento, validade, cuidados especiais..." rows={3} />
                 </div>
               </div>
             </div>

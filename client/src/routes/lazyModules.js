@@ -147,6 +147,20 @@ export const RequisicoesMaterialListaPage = page(
 export const ConfiguracoesAlmoxarifado = page(() => import('../components/almoxarifado/ConfiguracoesAlmoxarifado'));
 export const MapaLocalizacoesAlmoxarifado = page(() => import('../components/almoxarifado/MapaLocalizacoesAlmoxarifado'));
 export const RecebimentosAlmoxarifado = page(() => import('../components/almoxarifado/RecebimentosAlmoxarifado'));
+export const ScannerAlmoxarifado = page(() => import('../components/almoxarifado/ScannerAlmoxarifado'));
+export const ReservasAlmoxarifado = page(() => import('../components/almoxarifado/ReservasAlmoxarifado'));
+export const InspecoesAlmoxarifado = page(() => import('../components/almoxarifado/InspecoesAlmoxarifado'));
+export const LotesAlmoxarifado = page(() => import('../components/almoxarifado/LotesAlmoxarifado'));
+export const DevolucoesAlmoxarifado = page(() => import('../components/almoxarifado/DevolucoesAlmoxarifado'));
+export const MateriaisClienteAlmoxarifado = page(() => import('../components/almoxarifado/MateriaisClienteAlmoxarifado'));
+export const RemessasTerceirosAlmoxarifado = page(() => import('../components/almoxarifado/RemessasTerceirosAlmoxarifado'));
+export const SobrasAlmoxarifado = page(() => import('../components/almoxarifado/SobrasAlmoxarifado'));
+export const FerramentasAlmoxarifado = page(() => import('../components/almoxarifado/FerramentasAlmoxarifado'));
+export const ReposicaoAlmoxarifado = page(() => import('../components/almoxarifado/ReposicaoAlmoxarifado'));
+export const AlertasAlmoxarifado = page(() => import('../components/almoxarifado/AlertasAlmoxarifado'));
+export const NotificacoesAlmoxarifado = page(() => import('../components/almoxarifado/NotificacoesAlmoxarifado'));
+export const RelatoriosAlmoxarifado = page(() => import('../components/almoxarifado/RelatoriosAlmoxarifado'));
+export const AuditoriaAlmoxarifado = page(() => import('../components/almoxarifado/AuditoriaAlmoxarifado'));
 export const ChatPage = page(() => import('../components/chat/ChatPage'));
 export const TodolistBoard = page(() => import('../components/todolist/TodolistBoard'));
 
@@ -196,6 +210,13 @@ export const ROUTE_PREFETCH = {
   '/engenharia': () => import('../components/CalculosEngenharia'),
   '/engenharia-projetos': () => import('../components/engenhariaProjetos/EngenhariaProjetosHome'),
   '/almoxarifado': () => import('../components/almoxarifado/AlmoxarifadoDashboard'),
+  '/almoxarifado/sobras': () => import('../components/almoxarifado/SobrasAlmoxarifado'),
+  '/almoxarifado/ferramentas': () => import('../components/almoxarifado/FerramentasAlmoxarifado'),
+  '/almoxarifado/reposicao': () => import('../components/almoxarifado/ReposicaoAlmoxarifado'),
+  '/almoxarifado/alertas': () => import('../components/almoxarifado/AlertasAlmoxarifado'),
+  '/almoxarifado/notificacoes': () => import('../components/almoxarifado/NotificacoesAlmoxarifado'),
+  '/almoxarifado/relatorios': () => import('../components/almoxarifado/RelatoriosAlmoxarifado'),
+  '/almoxarifado/auditoria': () => import('../components/almoxarifado/AuditoriaAlmoxarifado'),
   '/configuracoes': () => import('../components/Configuracoes'),
   '/admin/usuarios': () => import('../components/Admin'),
 };

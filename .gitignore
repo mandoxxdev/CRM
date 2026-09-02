@@ -30,6 +30,11 @@ server/data/.runtime-secrets.json
 *.sqlite-shm
 *.sqlite-wal
 server/database.sqlite*
+# Os backups nomeiam o arquivo como "database-<timestamp>-shm/-wal", sem ".sqlite" no
+# meio, então os padrões acima não pegavam e eles ficavam untracked-mas-não-ignorados —
+# prontos para entrar num `git add -A` por acidente (megabytes de binário por commit).
+server/data/backups/*-shm
+server/data/backups/*-wal
 
 # A rotina de backup grava "database-2026-08-06T14-36-25-wal", SEM o .sqlite no
 # nome — os padroes acima nao pegavam, e 211 arquivos com dado de cliente
@@ -58,8 +63,12 @@ pm2-*.log
 .DS_Store
 Thumbs.db
 
-# Uploads (opcional - mantenha se quiser versionar)
-# server/uploads/
+# Uploads gerados em runtime pelo proprio app (foto de material, foto de
+# proposta). O padrao antigo apontava para "server/uploads/", que nao e o
+# caminho que o codigo usa — o multer grava em server/data/uploads/. Resultado:
+# arquivo enviado por usuario aparecia untracked-mas-nao-ignorado, pronto para
+# entrar num add por acidente. Mesma armadilha dos backups logo acima.
+server/data/uploads/
 
 # Deploy
 deploy/
@@ -68,3 +77,7 @@ deploy/
 .nixpacks/
 
 .superpowers/
+
+# Worktrees de agente (Claude Code). Sao copias completas do repo — 89 MB cada — e
+# carregam server/index.js com a credencial SMTP em claro. Nao versionar.
+.claude/worktrees/

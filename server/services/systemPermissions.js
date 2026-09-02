@@ -246,17 +246,20 @@ function syncModuleAdminProfiles(db, userId, adminModulos) {
     const almoxAdmin = mods.includes('almoxarifado');
     const frotaAdmin = mods.includes('frota');
 
+    // Ao revogar o módulo, remove APENAS o perfil que esta função concede
+    // (ADMINISTRADOR / ADMIN_FROTA). Perfis atribuídos manualmente
+    // (ex.: ALMOXARIFE, MOTORISTA) são preservados.
     const almoxSql = almoxAdmin
       ? `INSERT INTO perfil_almoxarifado_usuario (usuario_id, perfil, updated_at)
          VALUES (?, 'ADMINISTRADOR', CURRENT_TIMESTAMP)
          ON CONFLICT(usuario_id) DO UPDATE SET perfil='ADMINISTRADOR', updated_at=CURRENT_TIMESTAMP`
-      : null;
+      : `DELETE FROM perfil_almoxarifado_usuario WHERE usuario_id = ? AND perfil = 'ADMINISTRADOR'`;
 
     const frotaSql = frotaAdmin
       ? `INSERT INTO perfil_frota_usuario (usuario_id, perfil, updated_at)
          VALUES (?, 'ADMIN_FROTA', CURRENT_TIMESTAMP)
          ON CONFLICT(usuario_id) DO UPDATE SET perfil='ADMIN_FROTA', updated_at=CURRENT_TIMESTAMP`
-      : null;
+      : `DELETE FROM perfil_frota_usuario WHERE usuario_id = ? AND perfil = 'ADMIN_FROTA'`;
 
     const runQuery = (sql, params, cb) => {
       if (!sql) return cb();

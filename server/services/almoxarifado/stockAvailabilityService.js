@@ -41,7 +41,12 @@ const SENSITIVE_MATERIAL_FIELDS = [
   'quantidade_maxima',
   'quantidade_reservada',
   'quantidade_bloqueada',
+  // Etapa 8b: `quantidade_em_terceiros` entra aqui pelo mesmo motivo das outras tres retencoes —
+  // GET /api/requisicoes-material/materiais faz `SELECT m.*`, entao TODA coluna nova de
+  // materiais_almoxarifado vaza para o requisitante ate ser nomeada nesta lista. O solicitante
+  // ve disponibilidade (em_estoque/parcial/sem_estoque), nunca quantidade exata.
   'quantidade_em_inspecao',
+  'quantidade_em_terceiros',
   'custo_unitario',
   'custo_medio',
   'valor_estoque',

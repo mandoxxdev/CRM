@@ -102,6 +102,20 @@ import {
   ConfiguracoesAlmoxarifado,
   MapaLocalizacoesAlmoxarifado,
   RecebimentosAlmoxarifado,
+  ScannerAlmoxarifado,
+  ReservasAlmoxarifado,
+  InspecoesAlmoxarifado,
+  LotesAlmoxarifado,
+  DevolucoesAlmoxarifado,
+  MateriaisClienteAlmoxarifado,
+  RemessasTerceirosAlmoxarifado,
+  SobrasAlmoxarifado,
+  FerramentasAlmoxarifado,
+  ReposicaoAlmoxarifado,
+  AlertasAlmoxarifado,
+  NotificacoesAlmoxarifado,
+  RelatoriosAlmoxarifado,
+  AuditoriaAlmoxarifado,
   ChatPage,
   MinhaConta,
   TodolistBoard,
@@ -459,6 +473,7 @@ function AppRoutes() {
         }
       >
         <Route index element={<AlmoxarifadoDashboard />} />
+        <Route path="scanner" element={<ScannerAlmoxarifado />} />
         <Route path="materiais" element={<MateriaisAlmoxarifado />} />
         <Route path="materiais/novo" element={<MaterialAlmoxarifadoForm />} />
         <Route path="materiais/editar/:id" element={<MaterialAlmoxarifadoForm />} />
@@ -478,6 +493,22 @@ function AppRoutes() {
         <Route path="requisicoes-material" element={<RequisicoesMaterialListaPage moduloKey="almoxarifado" />} />
         <Route path="requisicoes-material/nova" element={<RequisicoesMaterialNovaPage moduloKey="almoxarifado" />} />
         <Route path="recebimentos" element={<RecebimentosAlmoxarifado />} />
+        <Route path="reservas" element={<ReservasAlmoxarifado />} />
+        <Route path="inspecoes" element={<InspecoesAlmoxarifado />} />
+        <Route path="lotes" element={<LotesAlmoxarifado />} />
+        <Route path="devolucoes" element={<DevolucoesAlmoxarifado />} />
+        <Route path="materiais-cliente" element={<MateriaisClienteAlmoxarifado />} />
+        <Route path="remessas-terceiros" element={<RemessasTerceirosAlmoxarifado />} />
+        <Route path="sobras" element={<SobrasAlmoxarifado />} />
+        <Route path="ferramentas" element={<FerramentasAlmoxarifado />} />
+        <Route path="reposicao" element={<ReposicaoAlmoxarifado />} />
+        <Route path="alertas" element={<AlertasAlmoxarifado />} />
+        <Route path="notificacoes" element={<NotificacoesAlmoxarifado />} />
+        <Route path="relatorios" element={<RelatoriosAlmoxarifado />} />
+        {/* Etapa 22: trilha de auditoria. Gate REAL e o requirePermission('configurar') do
+            backend (RN-01) — a tela ja barra visualmente pelo useAlmoxPermissoes, e o item de
+            menu e adminOnly. */}
+        <Route path="auditoria" element={<AuditoriaAlmoxarifado />} />
         <Route path="mapa" element={<MapaLocalizacoesAlmoxarifado />} />
         <Route path="configuracoes" element={<ProtectedAlmoxConfigRoute><ConfiguracoesAlmoxarifado /></ProtectedAlmoxConfigRoute>} />
       </Route>

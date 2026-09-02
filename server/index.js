@@ -7,7 +7,7 @@ const {
   isSqliteBusy,
   respondDbError,
 } = require('./services/sqliteConcurrency');
-const { prepareDatabaseOnStartup, pruneOldBackups, fileSizeIfExists } = require('./services/dbRecovery');
+const { prepareDatabaseOnStartup, pruneOldBackups, opcoesDeRetencao, fileSizeIfExists } = require('./services/dbRecovery');
 const { otimizarImagem, otimizarPasta } = require('./services/otimizarImagem');
 const { getClausulasHelices } = require('./clausulasHelices');
 
@@ -240,6 +240,15 @@ const {
   persistSeedAdmin,
   generatePassword,
 } = require('./services/runtimeSecrets');
+const { deveIncluirNoBackup, backupMaisRecente } = require('./services/backupPackage');
+const { validarTokenBackup } = require('./services/backupAuth');
+const {
+  mascararValorConfig,
+  podeGravarSegredo,
+  ehChaveSecretaCore,
+  MENSAGEM_SEGREDO_INVALIDO,
+} = require('./services/configSecrets');
+const { resolverEmailConfig } = require('./services/emailConfig');
 const {
   PERSISTENT_DATA_DIR,
   uploadsDir,
@@ -1066,9 +1075,13 @@ let dbReady = false; // Flag para indicar se o banco está totalmente pronto
 let dbStartupFailed = false;
 
 function beginDatabaseInitialization(onReadyCallback) {
+  // O BACKUP fica aqui (dentro de prepareDatabaseOnStartup): ele tem de acontecer ANTES das
+  // migrations, senao a copia de socorro ja nasce com o schema alterado.
+  // A LIMPEZA (prune), nao — ela mudou de lugar na Etapa 25 Task 2 e roda dentro de
+  // initializeDatabase, depois de inicializarConfiguracoesPadrao, porque so la a tabela
+  // `configuracoes` existe. Ver podarBackupsConformeConfiguracao().
   prepareDatabaseOnStartup(db, dbPath)
     .then(() => {
-      pruneOldBackups(dbPath, 10);
       initializeDatabase(onReadyCallback);
     })
     .catch((prepErr) => {
@@ -2130,6 +2143,9 @@ function initializeDatabase(onReadyCallback) {
     executeMigrations(() => {
       // Inicializar configurações padrão após migrações
       inicializarConfiguracoesPadrao(() => {
+        // A limpeza dos backups roda AQUI, e não junto do backup do boot: `configuracoes` só
+        // existe depois das migrations e a chave só é semeada por inicializarConfiguracoesPadrao.
+        podarBackupsConformeConfiguracao();
         // Verificar se o banco está realmente acessível
         db.get('SELECT 1', [], (err) => {
           if (err) {
@@ -2148,6 +2164,35 @@ function initializeDatabase(onReadyCallback) {
       });
     });
   }, 500);
+}
+
+/**
+ * Limpeza dos backups antigos, com a retencao que o usuario configurou na tela.
+ *
+ * Por que NAO fica junto do backup do boot (onde estava, `pruneOldBackups(dbPath, 10)` literal):
+ * quem cria a tabela `configuracoes` e semeia `backup_manter_dias` e o proprio
+ * initializeDatabase, que roda DEPOIS. No primeiro boot de uma instalacao nova (volume vazio,
+ * clone novo) o SELECT falharia com `no such table: configuracoes` — e ali dentro isso ou marca
+ * `dbStartupFailed` para sempre (o /health passa a mentir sobre a integridade do banco) ou vira
+ * rejeicao nao tratada, que no Node 24 encerra o processo, levando junto o backup do boot.
+ *
+ * Aqui a tabela ja existe. E, mesmo assim, o erro de leitura nao derruba nada:
+ * `opcoesDeRetencao` cai no padrao de 30 dias, e o proprio prune e protegido — a limpeza e
+ * conveniencia, nunca motivo para o servidor nao subir.
+ */
+function podarBackupsConformeConfiguracao() {
+  db.get('SELECT valor FROM configuracoes WHERE chave = ?', ['backup_manter_dias'], (cfgErr, row) => {
+    try {
+      const opcoes = opcoesDeRetencao(cfgErr, row);
+      const { apagados, motivo } = pruneOldBackups(dbPath, opcoes);
+      if (apagados.length) {
+        console.log(`[DB Recovery] retencao: ${apagados.length} arquivo(s) removido(s) `
+          + `(manter ${motivo.manterDias} dias, teto de ${motivo.tetoCopias} copias)`);
+      }
+    } catch (pruneErr) {
+      console.warn('[DB Recovery] limpeza de backups falhou (nao fatal):', pruneErr.message);
+    }
+  });
 }
 
 // Inicializar configurações padrão
@@ -2992,15 +3037,32 @@ function checkAnyModulePermission(requiredModules) {
   };
 }
 
+// Etapa 21 (RN-04). Precedencia: variaveis de ambiente `SMTP_*` -> valores abaixo.
+// A regua mora em `services/emailConfig.js` (funcao pura, testada em
+// `tests/api/emailConfigCore.api.test.js`); aqui fica so a fiacao.
+//
+// POR QUE O BANCO FICA FORA da precedencia: as chaves `email_smtp_host`/`email_smtp_pass` da
+// tabela `configuracoes` ESTAO preenchidas hoje, e o host gravado la (`smtplw.com.br`) e outro
+// produto da Locaweb, com outro esquema de credencial, diferente do `smtp.locaweb.com.br` que
+// esta funcionando. Uma regra "usa o banco quando estiver completo" nao seria salvaguarda —
+// seria um interruptor que trocaria o host de PRODUCAO sem ninguem pedir, e ainda poria no
+// `from` a lista de dois enderecos gravada la (que o servidor SMTP recusa). Adotar o banco exige
+// envio real verificado contra aquele host, impossivel de verificar daqui: esta na letra B.
+//
+// ATENCAO — os valores abaixo sao CREDENCIAL COMPROMETIDA A ESPERA DE ROTACAO. Estao no git
+// desde 2026-03-17: trocar ou apagar este arquivo NAO os remove de clone nenhum, so a rotacao na
+// Locaweb resolve. Ficam como ULTIMO RECURSO de proposito — sem eles, e sem `SMTP_PASS` no
+// ambiente, o envio de e-mail cai, inclusive na VPS de producao, que pode nao ter `.env`.
+// Definir `SMTP_USER`/`SMTP_PASS` no ambiente ja faz com que a senha daqui nunca seja usada.
+const SMTP_PADRAO = {
+  host: 'smtp.locaweb.com.br',
+  user: 'solicitacoes@gmp.ind.br',
+  pass: 'Solicitacoes123@',
+  from: 'solicitacoes@gmp.ind.br',
+};
+
 async function getEmailConfig() {
-  // HARD CODED (solicitado pelo usuário): SMTP Locaweb fixo no código
-  // Observação: isso grava credenciais no repositório/imagem. Mantido por solicitação explícita.
-  return {
-    host: 'smtp.locaweb.com.br',
-    user: 'solicitacoes@gmp.ind.br',
-    pass: 'Solicitacoes123@',
-    from: 'solicitacoes@gmp.ind.br',
-  };
+  return resolverEmailConfig(process.env, SMTP_PADRAO);
 }
 
 async function sendEmail({ to, cc, subject, html, text }) {
@@ -3533,16 +3595,34 @@ app.get('/api/health', (req, res) => {
 
 // ========== BACKUP DE DADOS (banco + uploads) ==========
 // Uso: GET /api/backup?token=SEU_BACKUP_TOKEN (defina BACKUP_TOKEN no .env do servidor)
+// A query string segue aceita, com aviso de depreciacao no log — ver services/backupAuth.js.
+// O zip NAO leva mais o diretorio de dados inteiro: services/backupPackage.js diz o que fica
+// de fora (`.runtime-secrets.json`, que entregava o jwtSecret e permitia forjar superadmin, e
+// as ~188 MB de copias historicas de `backups/`) e o que volta a entrar (a copia de backup
+// mais recente, o fallback que dbRecovery.js:86 manda usar).
 app.get('/api/backup', (req, res) => {
-  const token = process.env.BACKUP_TOKEN;
-  const provided = req.query.token || (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-  if (!token || provided !== token) {
+  // req.ip E x-forwarded-for: nao ha `trust proxy` configurado, entao atras do nginx o
+  // req.ip vira 127.0.0.1 e o log ficaria inutil justamente em producao.
+  const origem = `ip=${req.ip} xff=${req.headers['x-forwarded-for'] || '-'}`;
+  const auth = validarTokenBackup(
+    { authorization: req.headers.authorization, queryToken: req.query.token },
+    process.env.BACKUP_TOKEN
+  );
+  if (!auth.ok) {
+    console.warn(`[Backup] NEGADO ${origem} motivo=${auth.motivo}`);
+    // Mesmo corpo de antes: o motivo vai para o log, nunca para a resposta.
     return res.status(401).json({ error: 'Token de backup inválido ou não configurado' });
   }
+  if (auth.avisos.length) console.warn(`[Backup] ${origem} avisos=${auth.avisos.join(',')}`);
+
   const backupDir = PERSISTENT_DATA_DIR;
   if (!fs.existsSync(backupDir)) {
+    console.warn(`[Backup] NEGADO ${origem} motivo=PASTA_INEXISTENTE`);
     return res.status(404).json({ error: 'Pasta de dados não encontrada' });
   }
+  const copiaRecente = backupMaisRecente(backupDir);
+  console.log(`[Backup] ACEITO ${origem} fallback=${copiaRecente || 'nenhum'}`);
+
   const filename = `crm-backup-${new Date().toISOString().slice(0, 10)}.zip`;
   res.setHeader('Content-Type', 'application/zip');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -3551,7 +3631,22 @@ app.get('/api/backup', (req, res) => {
     if (!res.headersSent) res.status(500).json({ error: err.message });
   });
   archive.pipe(res);
-  archive.directory(backupDir, false);
+  // 3o argumento de Archiver.prototype.directory: recebe o entryData (com `name` relativo) e
+  // devolver `false` pula a entrada (archiver@7.0.1, lib/core.js:624-672). `entries` NAO e
+  // API de filtro, e so contador de progresso.
+  archive.directory(backupDir, false, (entry) => (deveIncluirNoBackup(entry.name) ? entry : false));
+  if (copiaRecente) {
+    // A copia mais recente volta ao zip sob o mesmo caminho de sempre, para a instrucao de
+    // dbRecovery ("restaure a partir de server/data/backups/ mais recente") continuar valendo.
+    // Os acompanhantes vao junto: `.sqlite` sem o `-wal` restaura SEM as transacoes que so
+    // existem no WAL — e o bug que dbRecoveryBackup.api.test.js congelou.
+    for (const sufixo of ['', '-wal', '-shm']) {
+      const origemArquivo = path.join(backupDir, 'backups', copiaRecente + sufixo);
+      if (fs.existsSync(origemArquivo)) {
+        archive.file(origemArquivo, { name: `backups/${copiaRecente}${sufixo}` });
+      }
+    }
+  }
   archive.finalize();
 });
 
@@ -18011,6 +18106,13 @@ app.get('/api/dashboard/vendas', authenticateToken, (req, res) => {
 
 // ========== ROTAS DE CONFIGURAÇÕES ==========
 // Obter todas as configurações
+//
+// Etapa 21 (RN-05): esta rota devolvia `email_smtp_pass` EM CLARO. O gate
+// (`requireAdministrativoConfig`) libera admin de administrativo OU comercial — grupo bem maior
+// que quem precisa da senha do SMTP. A mascara e a MESMA do almoxarifado
+// (`services/configSecrets.js` reusa `alertService.PASSWORD_MASK`): '********' quando ha valor,
+// '' quando nao ha. O '' importa: '********' para senha inexistente MENTIRIA "ja configurado".
+// Descartado omitir a chave — a tela itera as chaves da categoria e o campo sumiria.
 app.get('/api/configuracoes', authenticateToken, requireAdministrativoConfig, (req, res) => {
   db.all('SELECT * FROM configuracoes ORDER BY categoria, chave', [], (err, rows) => {
     if (err) {
@@ -18034,7 +18136,7 @@ app.get('/api/configuracoes', authenticateToken, requireAdministrativoConfig, (r
           valor = row.valor;
         }
       }
-      configs[row.categoria][row.chave] = valor;
+      configs[row.categoria][row.chave] = mascararValorConfig(row.chave, valor);
     });
     res.json(configs);
   });
@@ -18454,6 +18556,11 @@ app.post('/api/compras/solicitacoes-compra/:id/decisao', authenticateToken, chec
 });
 
 // Obter configuração específica
+//
+// Etapa 21 (RN-05): a MESMA mascara do GET plural. Mascarar so o plural deixaria duas portas
+// para o mesmo dado, uma trancada e outra nao — bastaria pedir `/api/configuracoes/email_smtp_pass`
+// para ter a senha em claro sob o mesmo gate. O `...row` abaixo espalha a coluna crua, entao o
+// `valor` mascarado precisa vir DEPOIS dele (e vem).
 app.get('/api/configuracoes/:chave', authenticateToken, requireAdministrativoConfig, (req, res) => {
   const { chave } = req.params;
   db.get('SELECT * FROM configuracoes WHERE chave = ?', [chave], (err, row) => {
@@ -18475,14 +18582,37 @@ app.get('/api/configuracoes/:chave', authenticateToken, requireAdministrativoCon
         valor = row.valor;
       }
     }
-    res.json({ ...row, valor });
+    res.json({ ...row, valor: mascararValorConfig(row.chave, valor) });
   });
 });
 
 // Atualizar configuração
+//
+// Etapa 21 (RN-06): chave secreta com valor vazio ou que CONTENHA a mascara vira 400, sem tocar
+// na coluna. O `contem` (nao `===`) e o ponto: a tela salva a cada tecla, entao clicar no campo
+// com '********' e digitar manda '********N' — que passa em guarda de igualdade e sobrescreve a
+// senha real com lixo, e o GET remascara, deixando o estrago invisivel ate o e-mail nao sair.
+// 400 e nao 200 silencioso (decisao A3): o analogo real e o PUT generico do almoxarifado
+// (`routes/almoxarifado.js`, congelado em `tests/api/configuracoesSegredo.api.test.js:200-231`).
+// Com 200 a tela diria "salvo com sucesso" para gravacao que nao aconteceu.
 app.put('/api/configuracoes/:chave', authenticateToken, requireAdministrativoConfig, (req, res) => {
   const { chave } = req.params;
   const { valor, tipo, categoria, descricao } = req.body;
+
+  // Achado A8 da revisao adversarial: `{"valor":{"a":"x"},"tipo":"json"}` passava na guarda e
+  // gravava `[object Object]` na coluna do segredo — `String({})` nao e vazio e nao contem a
+  // mascara. A correcao esta em `podeGravarSegredo`, que agora recusa o que nao e texto
+  // (motivo 'TIPO'). Julgar `valorFinal` em vez do cru NAO resolveria: `String(undefined)` e a
+  // string `'undefined'`, que passaria — o valor ausente deixaria de ser recusado.
+  if (ehChaveSecretaCore(chave)) {
+    const guarda = podeGravarSegredo(valor);
+    if (!guarda.ok) {
+      return res.status(400).json({
+        error: MENSAGEM_SEGREDO_INVALIDO,
+        motivo: guarda.motivo,
+      });
+    }
+  }
 
   let valorFinal = valor;
   if (tipo === 'json') {

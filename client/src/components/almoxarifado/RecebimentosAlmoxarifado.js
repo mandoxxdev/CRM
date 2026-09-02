@@ -6,8 +6,10 @@ import { SkeletonTable } from '../SkeletonLoader';
 import AlmoxPageHeader from './AlmoxPageHeader';
 import {
   FiPlus, FiRefreshCw, FiPackage, FiCheck, FiTruck, FiSearch, FiX,
-  FiArrowRight, FiFileText, FiDollarSign,
+  FiArrowRight, FiFileText, FiDollarSign, FiTag,
 } from 'react-icons/fi';
+import EtiquetasPdfModal from './EtiquetasPdfModal';
+import { montarEtiquetasDoRecebimento } from '../../utils/etiquetasPdf';
 import './Almoxarifado.css';
 
 const STATUS_INFO = {
@@ -54,6 +56,7 @@ const RecebimentosAlmoxarifado = () => {
   const [showNovo, setShowNovo] = useState(false);
   const [showFiscal, setShowFiscal] = useState(false);
   const [buscaMat, setBuscaMat] = useState('');
+  const [etiquetas, setEtiquetas] = useState(null);
   const [fiscalForm, setFiscalForm] = useState(EMPTY_FISCAL);
   const [form, setForm] = useState({
     tipo_recebimento: 'NOTA_FISCAL',
@@ -168,6 +171,11 @@ const RecebimentosAlmoxarifado = () => {
         reducao_icms_percent: item.reducao_icms_percent,
         conferencia_quantidade: item.conferencia_quantidade,
         conferencia_descricao: item.conferencia_descricao,
+        lote: item.lote,
+        data_validade_lote: item.data_validade_lote,
+        data_fabricacao_lote: item.data_fabricacao_lote,
+        corrida_lote: item.corrida_lote,
+        series: item.series,
       }));
       await api.put(`/almoxarifado/recebimentos/${detalhe.id}/fiscal`, {
         ...fiscalForm,
@@ -325,7 +333,24 @@ const RecebimentosAlmoxarifado = () => {
     : 0;
 
   const renderAcoes = () => {
-    if (!detalhe || ['PROCESSADO', 'APROVADO', 'REPROVADO'].includes(detalhe.status)) return null;
+    if (!detalhe) return null;
+
+    // Etiquetas dos itens processados/aprovados
+    if (['PROCESSADO', 'APROVADO'].includes(detalhe.status)) {
+      const etiquetasNota = montarEtiquetasDoRecebimento(detalhe.itens || [], materiais, window.location.origin);
+      return (
+        <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center' }}
+          disabled={etiquetasNota.length === 0}
+          title={etiquetasNota.length === 0 ? 'Nenhum item com entrada para etiquetar' : 'Gera o PDF de etiquetas dos itens desta nota'}
+          onClick={() => setEtiquetas(etiquetasNota)}>
+          <FiTag size={14} /> Imprimir etiquetas dos itens
+        </button>
+      );
+    }
+
+    // Early return para status finais que não têm ações
+    if (['REPROVADO'].includes(detalhe.status)) return null;
+
     const s = detalhe.status;
 
     return (
@@ -485,6 +510,11 @@ const RecebimentosAlmoxarifado = () => {
                 <div style={{ fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase', marginBottom: 10 }}>
                   Itens ({detalhe.itens?.length || 0})
                 </div>
+                {['EM_ENTRADA_NF', 'ENCAMINHADO_FATURAMENTO'].includes(detalhe.status) && (
+                  <div className="almox-hint-banner" style={{ marginBottom: 16, fontSize: '0.8rem' }}>
+                    Preencha lote e séries e clique em Salvar Dados Fiscais antes de Processar a Nota — o processamento lê o que está salvo, não o que está digitado.
+                  </div>
+                )}
                 {(detalhe.itens || []).map((item) => (
                   <div key={item.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--gmp-border)', fontSize: '0.85rem' }}>
                     <div style={{ display: 'flex', gap: 10 }}>
@@ -495,17 +525,51 @@ const RecebimentosAlmoxarifado = () => {
                       <div style={{ fontWeight: 700 }}>{item.quantidade_recebida || item.quantidade_esperada} {item.unidade}</div>
                     </div>
                     {['EM_ENTRADA_NF', 'ENCAMINHADO_FATURAMENTO'].includes(detalhe.status) && (
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginTop: 6 }}>
-                        <input className="almox-input" type="number" step="0.01" placeholder="Vlr. unit."
-                          value={item.valor_unitario ?? ''} style={{ fontSize: '0.75rem', padding: '4px 6px' }}
-                          onChange={(e) => atualizarItemDetalhe(item.id, 'valor_unitario', e.target.value)} />
-                        <input className="almox-input" type="number" step="0.01" placeholder="ICMS"
-                          value={item.valor_icms ?? ''} style={{ fontSize: '0.75rem', padding: '4px 6px' }}
-                          onChange={(e) => atualizarItemDetalhe(item.id, 'valor_icms', e.target.value)} />
-                        <input className="almox-input" type="number" step="0.01" placeholder="Red. ICMS %"
-                          value={item.reducao_icms_percent ?? ''} style={{ fontSize: '0.75rem', padding: '4px 6px' }}
-                          onChange={(e) => atualizarItemDetalhe(item.id, 'reducao_icms_percent', e.target.value)} />
-                      </div>
+                      <>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginTop: 6 }}>
+                          <input className="almox-input" type="number" step="0.01" placeholder="Vlr. unit."
+                            value={item.valor_unitario ?? ''} style={{ fontSize: '0.75rem', padding: '4px 6px' }}
+                            onChange={(e) => atualizarItemDetalhe(item.id, 'valor_unitario', e.target.value)} />
+                          <input className="almox-input" type="number" step="0.01" placeholder="ICMS"
+                            value={item.valor_icms ?? ''} style={{ fontSize: '0.75rem', padding: '4px 6px' }}
+                            onChange={(e) => atualizarItemDetalhe(item.id, 'valor_icms', e.target.value)} />
+                          <input className="almox-input" type="number" step="0.01" placeholder="Red. ICMS %"
+                            value={item.reducao_icms_percent ?? ''} style={{ fontSize: '0.75rem', padding: '4px 6px' }}
+                            onChange={(e) => atualizarItemDetalhe(item.id, 'reducao_icms_percent', e.target.value)} />
+                        </div>
+                        {/* Lote nasce aqui — na nota do fornecedor — não na movimentação. Sem estes
+                            campos era o único ponto do sistema onde a coluna existia no banco
+                            (Task 5) e o motor a lia (Task 6), mas ninguém conseguia preenchê-la.
+                            "Fabricação" entrou no review final da Etapa 6: `lotes_almoxarifado.
+                            data_fabricacao` existia desde a Task 1 sem NENHUM escritor — este
+                            campo é o escritor, e a tela de Lotes é o leitor. */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 6, marginTop: 6 }}>
+                          <input className="almox-input" placeholder="Lote"
+                            value={item.lote ?? ''} style={{ fontSize: '0.75rem', padding: '4px 6px' }}
+                            onChange={(e) => atualizarItemDetalhe(item.id, 'lote', e.target.value)} />
+                          <input className="almox-input" type="date" placeholder="Validade" title="Validade do lote"
+                            value={item.data_validade_lote ?? ''} style={{ fontSize: '0.75rem', padding: '4px 6px' }}
+                            onChange={(e) => atualizarItemDetalhe(item.id, 'data_validade_lote', e.target.value)} />
+                          <input className="almox-input" type="date" placeholder="Fabricação" title="Data de fabricação do lote"
+                            value={item.data_fabricacao_lote ?? ''} style={{ fontSize: '0.75rem', padding: '4px 6px' }}
+                            onChange={(e) => atualizarItemDetalhe(item.id, 'data_fabricacao_lote', e.target.value)} />
+                          <input className="almox-input" placeholder="Corrida"
+                            value={item.corrida_lote ?? ''} style={{ fontSize: '0.75rem', padding: '4px 6px' }}
+                            onChange={(e) => atualizarItemDetalhe(item.id, 'corrida_lote', e.target.value)} />
+                        </div>
+                        {materiais.find((m) => m.id === item.material_id)?.controle_serie === 1 && (() => {
+                          const seriesPreenchidas = String(item.series || '').split(/\r?\n/).filter((s) => s.trim()).length;
+                          const quantidadeEsperada = item.quantidade_recebida || item.quantidade_esperada || 0;
+                          return (
+                            <div className="almox-field" style={{ gridColumn: '1 / -1', marginTop: 6 }}>
+                              <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Séries (uma por linha) — <span style={{ color: seriesPreenchidas === quantidadeEsperada ? 'var(--gmp-text-light)' : 'var(--gmp-danger)' }}>{seriesPreenchidas}/{quantidadeEsperada}</span></label>
+                              <textarea className="almox-textarea" rows={2} value={item.series || ''}
+                                style={{ fontSize: '0.75rem', padding: '4px 6px' }}
+                                onChange={(e) => atualizarItemDetalhe(item.id, 'series', e.target.value)} />
+                            </div>
+                          );
+                        })()}
+                      </>
                     )}
                   </div>
                 ))}
@@ -725,6 +789,9 @@ const RecebimentosAlmoxarifado = () => {
           </div>
         </div>
       )}
+
+      {/* Etiquetas PDF */}
+      <EtiquetasPdfModal etiquetas={etiquetas} onClose={() => setEtiquetas(null)} />
     </div>
   );
 };

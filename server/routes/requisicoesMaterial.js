@@ -6,12 +6,6 @@
 
 const sectorMaterialService = require('../services/almoxarifado/sectorMaterialService');
 
-const requisitionNotificationService = require('../services/almoxarifado/requisitionNotificationService');
-
-const purchaseNotifyService = require('../services/almoxarifado/requisitionPurchaseNotifyService');
-
-const valueApprovalService = require('../services/almoxarifado/requisitionValueApprovalService');
-
 const {
 
   sanitizeMaterialForSector,
@@ -24,26 +18,24 @@ const {
 
 const { enrichMaterialRow } = require('../services/almoxarifado/materialPhoto');
 const requisitionService = require('../services/almoxarifado/requisitionService');
+const { disponivelSql } = require('../services/almoxarifado/availabilitySql');
+const requisitionCreateService = require('../services/almoxarifado/requisitionCreateService');
 const alertService = require('../services/almoxarifado/alertService');
 const { canDeleteAlmoxRequisicao } = require('../services/systemPermissions');
-
-
-
-function gerarNumeroReq() {
-
-  const ts = Date.now().toString().slice(-6);
-
-  const rand = Math.floor(Math.random() * 100).toString().padStart(2, '0');
-
-  return `REQ-${ts}${rand}`;
-
-}
-
-
+const { validate } = require('../services/almoxarifado/validation');
+const { RequisicaoSchema } = require('../services/almoxarifado/schemas');
 
 module.exports = function registerRequisicoesMaterialRoutes(app, db, authenticateToken) {
 
-  app.use('/api/requisicoes-material', authenticateToken);
+  // Etapa 25, Task 3: este prefixo NAO e `/api/almoxarifado`, entao o middleware de origem
+  // registrado la nao o alcanca — e o `DELETE /api/requisicoes-material/:id` chega em
+  // `requisitionService.excluirRequisicao`, que ESTORNA as entregas por
+  // `stockService.registrarMovimentacao` (requisitionService.js:415). Sem esta linha, a exclusao
+  // administrativa de requisicao seria o unico caminho de movimentacao de producao a gravar
+  // origem vazia — e em silencio, porque o mesmo servico entra tambem por
+  // `routes/almoxarifado.js:3544`, que fica coberto.
+  const { anexarOrigemAoUsuario } = require('../services/almoxarifado/origemRequisicao');
+  app.use('/api/requisicoes-material', authenticateToken, anexarOrigemAoUsuario);
 
 
 
@@ -271,7 +263,11 @@ module.exports = function registerRequisicoesMaterialRoutes(app, db, authenticat
 
           `SELECT ir.*, ma.nome as material_nome, ma.codigo as material_codigo,
 
-                  ma.unidade, ma.quantidade_atual as saldo_atual, ma.foto,
+                  ma.unidade,
+
+                  ${disponivelSql('ma')} as saldo_atual,
+
+                  ma.foto,
 
                   tm.icone as tipo_icone
 
@@ -305,193 +301,29 @@ module.exports = function registerRequisicoesMaterialRoutes(app, db, authenticat
 
 
 
-  app.post('/api/requisicoes-material', async (req, res) => {
+  app.post('/api/requisicoes-material', validate(RequisicaoSchema), async (req, res) => {
 
-    const {
-
-      departamento, setor, os_referencia, urgencia, observacoes,
-
-      justificativa_urgencia, itens, modulo_origem,
-
-    } = req.body;
-
-
-
-    const setorFinal = departamento || setor;
+    const setorFinal = req.body.departamento || req.body.setor;
 
     if (!setorFinal) return res.status(400).json({ error: 'Setor é obrigatório' });
-
-    if (!itens?.length) return res.status(400).json({ error: 'Inclua ao menos um item' });
 
 
 
     try {
 
-      await sectorMaterialService.ensureSetoresRequisicao(db);
+      const result = await requisitionCreateService.createRequisicao(
 
-      await sectorMaterialService.validateMateriaisParaSetor(
-
-        db, setorFinal, itens.map((i) => i.material_id)
+        db, req.user, req.body, { modulo: 'requisicoes-material' },
 
       );
 
+      res.status(201).json(result);
+
     } catch (e) {
 
-      return res.status(e.status || 500).json({ error: e.message });
+      res.status(e.status || 500).json({ error: e.message });
 
     }
-
-
-
-    const numero = gerarNumeroReq();
-
-
-
-    db.run(
-
-      `INSERT INTO requisicoes_almoxarifado
-
-       (numero, solicitante_id, solicitante_nome, departamento, setor, os_referencia,
-
-        urgencia, observacoes, justificativa_urgencia, modulo_origem, status)
-
-       VALUES (?,?,?,?,?,?,?,?,?,?,'PENDENTE')`,
-
-      [
-
-        numero, req.user.id, req.user.nome || req.user.email,
-
-        setorFinal, setorFinal, os_referencia || null,
-
-        urgencia || 'NORMAL', observacoes || null, justificativa_urgencia || null,
-
-        modulo_origem || null,
-
-      ],
-
-      function (err) {
-
-        if (err) return res.status(500).json({ error: err.message });
-
-        const reqId = this.lastID;
-
-
-
-        const inserts = itens.map((item) => new Promise((resolve, reject) => {
-
-          db.run(
-
-            `INSERT INTO itens_requisicao_almoxarifado
-
-             (requisicao_id, material_id, quantidade_solicitada, observacoes)
-
-             VALUES (?,?,?,?)`,
-
-            [reqId, item.material_id, item.quantidade, item.observacoes || null],
-
-            (e) => (e ? reject(e) : resolve())
-
-          );
-
-        }));
-
-
-
-        Promise.all(inserts)
-
-          .then(async () => {
-
-            const reqData = {
-
-              id: reqId,
-
-              numero,
-
-              setor: setorFinal,
-
-              departamento: setorFinal,
-
-              os_referencia: os_referencia || null,
-
-              solicitante_nome: req.user.nome || req.user.email,
-
-              observacoes: observacoes || null,
-
-            };
-
-            const itensParaNotificar = itens.map((i) => ({
-
-              material_id: i.material_id,
-
-              quantidade_solicitada: i.quantidade,
-
-            }));
-
-
-
-            requisitionNotificationService.notificarNovaRequisicao(db, reqData).catch((err) => {
-
-              console.warn('[requisicoes-material] Falha ao notificar por e-mail:', err.message);
-
-            });
-
-
-
-            purchaseNotifyService.notifyComprasItensSemEstoque(
-
-              db,
-
-              reqData,
-
-              itensParaNotificar,
-
-              req.user.email,
-
-            ).catch((err) => {
-
-              console.warn('[requisicoes-material] Falha ao notificar Compras:', err.message);
-
-            });
-
-
-
-            let avaliacaoValor;
-
-            try {
-
-              avaliacaoValor = await valueApprovalService.aplicarAvaliacaoNaCriacao(db, reqId);
-
-            } catch (valErr) {
-
-              console.warn('[requisicoes-material] Falha na avaliação de valor:', valErr.message);
-
-              avaliacaoValor = { status: 'PENDENTE' };
-
-            }
-
-
-
-            res.status(201).json({
-
-              id: reqId,
-
-              numero,
-
-              status: avaliacaoValor.status,
-
-              valor_total: avaliacaoValor.valor_total,
-
-              requer_aprovacao_valor: avaliacaoValor.status === valueApprovalService.STATUS_AGUARDANDO,
-
-            });
-
-          })
-
-          .catch((e) => res.status(500).json({ error: e.message }));
-
-      }
-
-    );
 
   });
 

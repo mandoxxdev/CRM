@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { formatarErroPermissao } from '../utils/permissaoErro';
 
 // Função para detectar automaticamente a URL da API
 function getApiBaseURL() {
@@ -143,6 +144,15 @@ api.interceptors.response.use(
         sessionStorage.removeItem('token');
         window.location.href = '/login?sessao_expirada=1';
         return Promise.reject(error);
+      }
+      // 403 de PERFIL (almoxarifado/frota/produção mandam { error, acao, perfil }): troca a
+      // mensagem genérica por uma que diz o que faltou e com que perfil o usuário entrou.
+      // Reescrevemos `data.error` de propósito: as telas já fazem
+      // `toast.error(err.response?.data?.error || ...)`, então todas ganham a mensagem boa
+      // sem precisar de alteração. Nada no client compara essa string (verificado).
+      const detalhado = formatarErroPermissao(error.response?.data);
+      if (detalhado) {
+        error.response.data.error = detalhado;
       }
       return Promise.reject(error);
     }

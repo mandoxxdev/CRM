@@ -1,0 +1,489 @@
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import api from '../../services/api';
+import { toast } from 'react-toastify';
+import { FiBarChart2, FiRefreshCw, FiAlertTriangle, FiDownload } from 'react-icons/fi';
+import { SkeletonTable } from '../SkeletonLoader';
+import './Almoxarifado.css';
+
+/**
+ * Etapa 13, Task 3 — tela `/almoxarifado/relatorios`, DIRIGIDA pelo registro do servidor
+ * (server/services/almoxarifado/reportRegistry.js) através de GET /almoxarifado/relatorios.
+ * Contrato: docs/superpowers/specs/2026-08-24-almoxarifado-etapa13-relatorios-design.md
+ * (RN-02/RN-03/RN-05, D6).
+ *
+ * ── Contrato da lista (realinhado pelos fix-rounds `cfdbbe5` e `bc1e2de`) ──────────────────────
+ *
+ * `GET /api/almoxarifado/relatorios` devolve, por relatório:
+ * `{ tipo, titulo, categoria, params, exportavel, limite, nota, colunas }`
+ * (`colunas: [{ chave, rotulo }] | null`). A primeira versão desta tela foi construída contra
+ * um shape mais estreito (só `tipo/titulo/categoria/params`, medido na Task 1 original) e teve
+ * de driblar a ausência desses campos com contornos declarados (proxy `Array.isArray` do
+ * payload, tabela local de limites espelhando `reportRegistry.js`, corte da régua/nota, e —
+ * achado C1 da revisão adversarial da tela — tabela genérica que renderizava a linha CRUA do
+ * SELECT * quando `colunas` não existia na lista: 6 colunas declaradas viravam 64 no
+ * `estoque-atual`, com `custo_medio`/`proprietario_cliente_id` virando cabeçalho NA TELA para
+ * qualquer usuário do módulo, desfazendo a decisão C2 do export — RN-03 projeta a planilha,
+ * mas a UI não projetava a tabela). Os dois fix-rounds alargaram a lista ADITIVAMENTE — a tela
+ * lê todos os campos direto dela, fonte única, sem duplicar dado do registro no cliente.
+ *
+ * ── Download do export ──────────────────────────────────────────────────────────────────────
+ * Usa o MESMO padrão já estabelecido no resto do cliente (PropostaForm.js, PropostasList.js,
+ * CustosViagens.js): `api.get(..., { responseType: 'blob' })` + link temporário com
+ * `URL.createObjectURL`. NÃO um `window.location.href`/anchor apontando direto pra rota: a
+ * autenticação deste app é por Bearer token em header (services/api.js interceptor), que uma
+ * navegação crua do browser não envia (o servidor até aceita `?token=` como fallback —
+ * `authenticateToken` em server/index.js — mas isso vazaria o token na URL/histórico/logs, e
+ * nenhum outro download do app faz isso). Usar a mesma instância do axios garante o header
+ * certo, mantém o download testável por mock e não abre uma exceção de segurança nova.
+ */
+
+// Mesmo painel de erro por estado da Etapa 11/12 (achado 1, Critical) — copiado de
+// ReposicaoAlmoxarifado.js/NotificacoesAlmoxarifado.js para o módulo não ganhar um terceiro
+// jeito de dizer "os dados não carregaram". Sabotagem-alvo: remover o `erro ? <Painel/> : (...)`
+// faz os testes de 403/rede desta tela caírem.
+const PainelErroCarga = ({ mensagem, onTentarNovamente }) => (
+  <div
+    style={{
+      marginBottom: 16,
+      padding: '14px 18px',
+      borderRadius: 10,
+      border: '1px solid rgba(239, 68, 68, 0.35)',
+      background: 'rgba(239, 68, 68, 0.08)',
+      color: 'var(--gmp-text)',
+      display: 'flex',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: 16,
+      flexWrap: 'wrap',
+    }}
+  >
+    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+      <FiAlertTriangle size={18} style={{ color: '#ef4444', flexShrink: 0, marginTop: 2 }} />
+      <div>
+        <strong style={{ display: 'block', marginBottom: 4 }}>Dados indisponíveis no momento</strong>
+        <span style={{ fontSize: '0.9rem', color: 'var(--gmp-text-light)' }}>{mensagem}</span>
+      </div>
+    </div>
+    <button type="button" className="btn-almox-secondary" onClick={onTentarNovamente}>
+      <FiRefreshCw size={14} /> Tentar novamente
+    </button>
+  </div>
+);
+
+// Heurística GENÉRICA (nunca por nome de coluna/tipo de relatório): valor bate um padrão de
+// data/data-hora do SQLite -> formata UTC-safe (mesma lição de ReposicaoAlmoxarifado.js —
+// sem o 'Z', o V8 lê como hora local). Data pura ("YYYY-MM-DD") usa timeZone:'UTC' explícito no
+// Intl — sem isso, um fuso negativo (Brasil) mostraria o dia ANTERIOR ao meio-dia UTC.
+const RE_DATA_HORA = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+const RE_DATA_SO = /^\d{4}-\d{2}-\d{2}$/;
+
+const formatCelula = (v) => {
+  if (v === null || v === undefined || v === '') return '—';
+  if (typeof v === 'string' && RE_DATA_HORA.test(v)) {
+    return new Date(`${v.replace(' ', 'T')}Z`).toLocaleString('pt-BR', {
+      day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit',
+    });
+  }
+  if (typeof v === 'string' && RE_DATA_SO.test(v)) {
+    return new Date(`${v}T00:00:00Z`).toLocaleDateString('pt-BR', {
+      day: '2-digit', month: '2-digit', year: '2-digit', timeZone: 'UTC',
+    });
+  }
+  if (typeof v === 'number') return v.toLocaleString('pt-BR', { maximumFractionDigits: 4 });
+  return String(v);
+};
+
+// Tabela genérica. Revisão da Task 3 (C1, Major): quando a lista declara `colunas` para o
+// relatório ([{chave, rotulo}]), a tabela PROJETA por elas — cabeçalho = rotulo, célula =
+// linha[chave] — igual ao que RN-03 já faz no export (server: nunca json_to_sheet com a linha
+// crua). Sem isso, um SELECT * com 20+ colunas (custo_medio, proprietario_cliente_id, ativo...)
+// vazava tudo pro <thead> pra qualquer usuário do módulo — a decisão C2 do export existia só no
+// XLSX, não na tela. Quando `colunas` é null/vazio (relatório sem declaração, ou array interno
+// de um payload objeto como `rupturas.materiais`, que a lista não descreve) cai no fallback de
+// sempre: cabeçalhos a partir das CHAVES do primeiro item.
+const TabelaGenerica = ({ linhas, colunas }) => {
+  if (!linhas || linhas.length === 0) {
+    return <div className="almox-empty"><p>Nenhum registro encontrado</p></div>;
+  }
+  const cols = (colunas && colunas.length > 0)
+    ? colunas
+    : Object.keys(linhas[0]).map((k) => ({ chave: k, rotulo: k }));
+  return (
+    <div className="almox-table-container">
+      <table className="almox-table">
+        <thead>
+          <tr>{cols.map((c) => <th key={c.chave}>{c.rotulo}</th>)}</tr>
+        </thead>
+        <tbody>
+          {linhas.map((linha, i) => (
+            // eslint-disable-next-line react/no-array-index-key
+            <tr key={i}>{cols.map((c) => <td key={c.chave}>{formatCelula(linha[c.chave])}</td>)}</tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+// Renderiza um VALOR qualquer de um payload objeto (indicadores hoje; qualquer outro relatório
+// que passe a devolver objeto amanhã, sem a tela precisar conhecer o tipo): array -> tabela
+// (ou lista simples se for array de primitivos), objeto -> grade de cards (recursiva), escalar
+// -> texto formatado.
+const ValorObjeto = ({ valor }) => {
+  if (Array.isArray(valor)) {
+    if (valor.length > 0 && (valor[0] === null || typeof valor[0] !== 'object')) {
+      return <span>{valor.map((v) => formatCelula(v)).join(', ') || '—'}</span>;
+    }
+    return <TabelaGenerica linhas={valor} />;
+  }
+  if (valor && typeof valor === 'object') {
+    return (
+      <div className="almox-kpis">
+        {Object.entries(valor).map(([k, v]) => {
+          const complexo = Array.isArray(v) || (v && typeof v === 'object');
+          return (
+            <div className="almox-kpi-card" key={k}>
+              <div className="almox-kpi-info">
+                <div className="almox-kpi-value" style={complexo ? { fontSize: '0.85rem' } : undefined}>
+                  {complexo ? <ValorObjeto valor={v} /> : formatCelula(v)}
+                </div>
+                <div className="almox-kpi-label">{k}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+  return <span>{formatCelula(valor)}</span>;
+};
+
+// Payload objeto de primeiro nível (D6/RN-05): escalares viram cards numa grade única no topo;
+// arrays e objetos viram seções tituladas com a chave, cada uma com seu próprio ValorObjeto.
+//
+// Revisão da Task 3 (C3): a chave `nota` — quando o PAYLOAD do relatório a traz de primeiro
+// nível (ex.: sucata-financeiro devolve `{ ..., nota: 'Valor estimado calculado...' }`) — é
+// tratada à parte, como texto de rodapé, no MESMO slot visual da nota do registro
+// (`entradaSelecionada.nota`, ver JSX principal). Sem isto ela caía na grade de escalares como
+// mais um card KPI com rótulo "nota", perdida no meio de valor_consumido/indice/etc. Regra por
+// NOME de chave, não por tipo de relatório: qualquer payload objeto que trouxer `nota` string
+// ganha o mesmo tratamento — genérico, sem a tela precisar saber qual relatório é.
+const SecoesObjeto = ({ dados }) => {
+  const { nota: notaPayload, ...resto } = dados;
+  const entradas = Object.entries(resto);
+  const escalares = entradas.filter(([, v]) => v === null || typeof v !== 'object');
+  const complexas = entradas.filter(([, v]) => v !== null && typeof v === 'object');
+  return (
+    <>
+      {escalares.length > 0 && (
+        <div className="almox-kpis" style={{ marginBottom: 16 }}>
+          {escalares.map(([k, v]) => (
+            <div className="almox-kpi-card" key={k}>
+              <div className="almox-kpi-info">
+                <div className="almox-kpi-value">{formatCelula(v)}</div>
+                <div className="almox-kpi-label">{k}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {complexas.map(([k, v]) => (
+        <div key={k} style={{ marginBottom: 20 }}>
+          <div className="almox-section-title">{k}</div>
+          <ValorObjeto valor={v} />
+        </div>
+      ))}
+      {typeof notaPayload === 'string' && notaPayload && (
+        <p data-testid="nota-payload" style={{ fontSize: '0.78rem', color: 'var(--gmp-text-light)', margin: '12px 0 0' }}>
+          {notaPayload}
+        </p>
+      )}
+    </>
+  );
+};
+
+const RelatoriosAlmoxarifado = () => {
+  const [listaRelatorios, setListaRelatorios] = useState(null);
+  const [loadingLista, setLoadingLista] = useState(true);
+  const [erroLista, setErroLista] = useState(null); // { status, mensagem }
+  const [reloadLista, setReloadLista] = useState(0);
+
+  const [tipoSelecionado, setTipoSelecionado] = useState(null);
+  const [valoresParams, setValoresParams] = useState({});
+  const [avisoObrigatorios, setAvisoObrigatorios] = useState(null);
+
+  const [dadosRelatorio, setDadosRelatorio] = useState(null);
+  const [loadingConsulta, setLoadingConsulta] = useState(false);
+  const [erroConsulta, setErroConsulta] = useState(null);
+  const [ultimaConsultaParams, setUltimaConsultaParams] = useState(null); // querystring da última consulta OK
+  const [exportando, setExportando] = useState(false);
+
+  const carregarLista = useCallback(() => {
+    let cancelado = false;
+    setLoadingLista(true);
+    setErroLista(null);
+    api.get('/almoxarifado/relatorios')
+      .then((r) => { if (!cancelado) setListaRelatorios(r.data?.relatorios || []); })
+      .catch((err) => {
+        if (cancelado) return;
+        // Mesma lição da Etapa 11 (achado 1): NAO grava []  — a tela renderizaria "nenhum
+        // relatório disponível" para um 403, que aqui nem existe (a lista é fail-closed, mas o
+        // ENDPOINT pode falhar por rede/sessão).
+        setListaRelatorios(null);
+        const mensagem = err.response?.data?.error || 'Não foi possível carregar a lista de relatórios';
+        setErroLista({ status: err.response?.status, mensagem });
+        toast.error(mensagem);
+      })
+      .finally(() => { if (!cancelado) setLoadingLista(false); });
+    return () => { cancelado = true; };
+  }, []);
+
+  useEffect(() => carregarLista(), [carregarLista, reloadLista]);
+
+  // Agrupamento por categoria — SÓ com o que a lista devolveu, nunca um catálogo fixo de tipos
+  // (sabotagem-alvo: hardcodar os 17 tipos aqui ignoraria 403 de perfil ou relatório novo/
+  // removido no servidor e o teste de "menu só com o listado" cai).
+  const categorias = useMemo(() => {
+    const mapa = new Map();
+    (listaRelatorios || []).forEach((r) => {
+      if (!mapa.has(r.categoria)) mapa.set(r.categoria, []);
+      mapa.get(r.categoria).push(r);
+    });
+    return [...mapa.entries()];
+  }, [listaRelatorios]);
+
+  const entradaSelecionada = useMemo(
+    () => (listaRelatorios || []).find((r) => r.tipo === tipoSelecionado) || null,
+    [listaRelatorios, tipoSelecionado],
+  );
+
+  const selecionarRelatorio = (tipo) => {
+    setTipoSelecionado(tipo);
+    setValoresParams({});
+    setAvisoObrigatorios(null);
+    setDadosRelatorio(null);
+    setErroConsulta(null);
+    setUltimaConsultaParams(null);
+  };
+
+  const handleConsultar = async () => {
+    if (loadingConsulta || !entradaSelecionada) return;
+    // Obrigatório bloqueia ANTES de qualquer chamada — o único obrigatório real hoje é
+    // cliente_id do materiais-cliente (RN-01), mas o formulário é genérico por declaração.
+    const faltando = (entradaSelecionada.params || [])
+      .filter((p) => p.obrigatorio && !String(valoresParams[p.nome] ?? '').trim())
+      .map((p) => p.rotulo);
+    if (faltando.length > 0) {
+      setAvisoObrigatorios(faltando);
+      return;
+    }
+    setAvisoObrigatorios(null);
+    // Vazios omitidos — não manda `param=` sem valor (o servidor trataria como filtro vazio,
+    // não como "sem filtro", em alguns relatórios).
+    const paramsPreenchidos = {};
+    (entradaSelecionada.params || []).forEach((p) => {
+      const v = valoresParams[p.nome];
+      if (v !== undefined && v !== null && String(v).trim() !== '') paramsPreenchidos[p.nome] = v;
+    });
+    setLoadingConsulta(true);
+    setErroConsulta(null);
+    try {
+      const res = await api.get(`/almoxarifado/relatorios/${entradaSelecionada.tipo}`, { params: paramsPreenchidos });
+      setDadosRelatorio(res.data);
+      setUltimaConsultaParams(paramsPreenchidos);
+    } catch (err) {
+      // Mesma lição das outras telas: 403/rede NUNCA vira resultado vazio.
+      setDadosRelatorio(null);
+      setUltimaConsultaParams(null);
+      const mensagem = err.response?.data?.error || 'Não foi possível consultar o relatório';
+      setErroConsulta({ status: err.response?.status, mensagem });
+      toast.error(mensagem);
+    } finally {
+      setLoadingConsulta(false);
+    }
+  };
+
+  const handleExportar = async () => {
+    if (exportando || !entradaSelecionada || ultimaConsultaParams === null) return;
+    setExportando(true);
+    try {
+      // MESMA querystring da última consulta bem-sucedida — nunca os valores "ao vivo" dos
+      // inputs (o usuário pode ter mudado um campo sem clicar Consultar de novo).
+      const response = await api.get(`/almoxarifado/relatorios/${entradaSelecionada.tipo}/export`, {
+        params: ultimaConsultaParams,
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      const data = new Date().toISOString().slice(0, 10);
+      link.setAttribute('download', `${entradaSelecionada.tipo}-${data}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      // Revisao final (lente B, minor 1): com responseType blob o axios entrega o CORPO DO
+      // ERRO como Blob tambem — err.response.data.error e sempre undefined e o usuario via o
+      // generico para 403/400/404 indistintamente (e o interceptor de 403 do api.js escrevia
+      // numa propriedade solta do Blob). Le o texto do Blob e recupera o literal do servidor.
+      let mensagem = 'Erro ao exportar relatório';
+      try {
+        const bruto = err.response?.data;
+        if (bruto && typeof bruto.text === 'function') {
+          const corpo = JSON.parse(await bruto.text());
+          if (corpo && corpo.error) mensagem = corpo.error;
+        } else if (bruto && bruto.error) {
+          mensagem = bruto.error;
+        }
+      } catch (parseErr) { /* corpo nao-JSON: fica o generico */ }
+      toast.error(mensagem);
+    } finally {
+      setExportando(false);
+    }
+  };
+
+  // Fonte é o campo `exportavel` da lista (não mais um proxy Array.isArray do payload — o
+  // proxy errava exatamente o caso "payload array mas exportavel:false" que não existe hoje
+  // mas o registro não impede de existir amanhã). Array.isArray fica só como guarda extra
+  // (defesa em profundidade: nunca oferece download de algo que a última consulta não trouxe
+  // como tabela, mesmo que `exportavel` diga true).
+  const podeExportar = !!entradaSelecionada?.exportavel && Array.isArray(dadosRelatorio) && ultimaConsultaParams !== null;
+  // Fonte é o campo `limite` da lista — sem tabela local duplicando reportRegistry.js.
+  const limiteDoTipo = entradaSelecionada?.limite;
+  const atingiuLimite = Array.isArray(dadosRelatorio) && !!limiteDoTipo && dadosRelatorio.length === limiteDoTipo;
+
+  return (
+    <div className="almox-page">
+      <div className="almox-header">
+        <div>
+          <h1><FiBarChart2 size={20} /> Relatórios</h1>
+          <p>Relatórios do almoxarifado agrupados por categoria, com exportação em XLSX</p>
+        </div>
+        <div className="almox-header-actions">
+          <button className="btn-almox-secondary" onClick={() => setReloadLista((t) => t + 1)}>
+            <FiRefreshCw size={13} /> Atualizar lista
+          </button>
+        </div>
+      </div>
+
+      {erroLista ? (
+        <PainelErroCarga mensagem={erroLista.mensagem} onTentarNovamente={() => setReloadLista((t) => t + 1)} />
+      ) : loadingLista ? (
+        <SkeletonTable rows={6} columns={3} />
+      ) : (
+        <div style={{ display: 'flex', gap: 28, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <nav aria-label="Categorias de relatórios" style={{ minWidth: 240 }}>
+            {categorias.length === 0 && (
+              <div className="almox-empty"><p>Nenhum relatório disponível</p></div>
+            )}
+            {categorias.map(([categoria, itens]) => (
+              <div key={categoria} style={{ marginBottom: 18 }}>
+                {/* Revisão da Task 3 (C5, nit): testid distinto do `almox-section-title` das
+                    seções internas de SecoesObjeto — mesma classe visual, mas sem isto um
+                    seletor por classe não distingue "título de grupo do menu" de "título de
+                    seção do resultado", e testes por substring de texto (ex.: 'Estoque' no
+                    container inteiro) passavam mesmo com o agrupamento quebrado. */}
+                <div className="almox-section-title" data-testid="menu-categoria-titulo">{categoria}</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {itens.map((r) => (
+                    <button
+                      key={r.tipo}
+                      type="button"
+                      data-testid={`menu-relatorio-${r.tipo}`}
+                      className={tipoSelecionado === r.tipo ? 'btn-almox-primary' : 'btn-almox-secondary'}
+                      style={{ textAlign: 'left', justifyContent: 'flex-start' }}
+                      onClick={() => selecionarRelatorio(r.tipo)}
+                    >
+                      {r.titulo}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </nav>
+
+          <div style={{ flex: 1, minWidth: 320 }}>
+            {!entradaSelecionada ? (
+              <div className="almox-empty"><p>Selecione um relatório à esquerda</p></div>
+            ) : (
+              <>
+                <h2 style={{ marginTop: 0 }}>{entradaSelecionada.titulo}</h2>
+
+                {entradaSelecionada.nota && (
+                  <p data-testid="nota-relatorio" style={{ fontSize: '0.78rem', color: 'var(--gmp-text-light)', margin: '0 0 12px' }}>
+                    {entradaSelecionada.nota}
+                  </p>
+                )}
+
+                {(entradaSelecionada.params || []).length > 0 && (
+                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', margin: '12px 0' }}>
+                    {entradaSelecionada.params.map((p) => (
+                      <div key={p.nome} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <label htmlFor={`param-${p.nome}`} style={{ fontSize: '0.8rem' }}>
+                          {p.rotulo}{p.obrigatorio ? ' *' : ''}
+                        </label>
+                        <input
+                          id={`param-${p.nome}`}
+                          type={p.tipo === 'date' ? 'date' : p.tipo === 'number' ? 'number' : 'text'}
+                          className="almox-select"
+                          value={valoresParams[p.nome] ?? ''}
+                          onChange={(e) => setValoresParams((s) => ({ ...s, [p.nome]: e.target.value }))}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {avisoObrigatorios && (
+                  <div
+                    data-testid="aviso-obrigatorios"
+                    style={{
+                      marginBottom: 12, padding: '8px 12px', borderRadius: 8,
+                      border: '1px solid rgba(239, 68, 68, 0.35)', background: 'rgba(239, 68, 68, 0.08)',
+                      fontSize: '0.82rem',
+                    }}
+                  >
+                    Preencha os campos obrigatórios: {avisoObrigatorios.join(', ')}
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                  <button className="btn-almox-primary" disabled={loadingConsulta} onClick={handleConsultar}>
+                    {loadingConsulta ? 'Consultando...' : 'Consultar'}
+                  </button>
+                  {podeExportar && (
+                    <button className="btn-almox-secondary" disabled={exportando} onClick={handleExportar}>
+                      <FiDownload size={13} /> {exportando ? 'Exportando...' : 'Exportar XLSX'}
+                    </button>
+                  )}
+                </div>
+
+                {erroConsulta ? (
+                  <PainelErroCarga mensagem={erroConsulta.mensagem} onTentarNovamente={handleConsultar} />
+                ) : loadingConsulta ? (
+                  <SkeletonTable rows={6} columns={5} />
+                ) : dadosRelatorio !== null ? (
+                  <>
+                    {Array.isArray(dadosRelatorio) ? (
+                      <TabelaGenerica linhas={dadosRelatorio} colunas={entradaSelecionada.colunas} />
+                    ) : (
+                      <SecoesObjeto dados={dadosRelatorio} />
+                    )}
+                    {atingiuLimite && (
+                      <p data-testid="aviso-limite" style={{ fontSize: '0.78rem', color: 'var(--gmp-text-light)', margin: '8px 0' }}>
+                        Mostrando os primeiros {limiteDoTipo} registros.
+                      </p>
+                    )}
+                  </>
+                ) : null}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default RelatoriosAlmoxarifado;

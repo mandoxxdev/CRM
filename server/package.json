@@ -8,6 +8,9 @@
     "start": "node index.js",
     "seed-variaveis": "node scripts/seed-variaveis-from-excel.js",
     "test:almoxarifado": "node tests/almoxarifado.test.js",
+    "test:validation": "node tests/validation.test.js",
+    "test:api": "node tests/api/run-all.js",
+    "test:safealter": "node tests/safeAlter.test.js",
     "test:familias": "node tests/familiaApagadaSomeDosSeletores.test.js",
     "test:familias-recriar": "node tests/recriarFamiliaApagada.test.js",
     "test:proposta-variaveis": "node tests/propostaNaoImprimeVariavelApagada.test.js",
@@ -21,7 +24,6 @@
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
-    "express-validator": "^7.0.1",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2",
     "nodemailer": "^6.10.1",
@@ -30,10 +32,12 @@
     "sharp": "^0.35.3",
     "socket.io": "^4.8.3",
     "sqlite3": "^5.1.6",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "nodemon": "^3.0.1",
-    "pngjs": "^7.0.0"
+    "pngjs": "^7.0.0",
+    "supertest": "^7.2.2"
   }
 }

@@ -2,7 +2,16 @@
  * Requisições de material — atendimento parcial com validação de estoque
  */
 const { dbRun, dbGet, dbAll } = require('./db');
+const { registrarAuditoria } = require('./audit');
+const { disponivelSql } = require('./availabilitySql');
+const { custoUnitarioSql } = require('./custoSql');
 const valueApprovalService = require('./requisitionValueApprovalService');
+const stockService = require('./stockService');
+// Sem ciclo: reservationService importa db/audit/stockService, nunca este arquivo.
+const reservationService = require('./reservationService');
+const {
+  PODE_SEPARAR, PODE_ENTREGAR, STATUS_PARCIALMENTE_RESERVADA, STATUS_TOTALMENTE_RESERVADA,
+} = require('./requisitionStateMachine');
 
 function num(v) {
   return Number(v) || 0;
@@ -24,6 +33,13 @@ function pendenteSeparacao(item) {
   return Math.max(0, num(item.quantidade_solicitada) - getSeparado(item));
 }
 
+/**
+ * `estoque` aqui é o saldo DISPONÍVEL (quantidade_atual − reservada − bloqueada −
+ * em_inspecao), não mais o físico (Etapa 3, Task 3 — fecha o bypass de
+ * entregarRequisicao/excluirRequisicao que baixava/estornava direto no físico sem passar
+ * pelo motor). Os chamadores (separarRequisicao/entregarRequisicao/normalizarItem) já
+ * calculam e passam o disponível.
+ */
 function maxSeparar(item, estoque) {
   return Math.min(pendenteSeparacao(item), num(estoque));
 }
@@ -43,7 +59,11 @@ function normalizarItem(item) {
   const entregue = getEntregue(item);
   const separado = getSeparado(item);
   const solicitado = num(item.quantidade_solicitada);
-  const estoque = num(item.saldo_atual ?? item.quantidade_atual);
+  // saldo_atual mantém o NOME por compat com o front, mas passa a carregar o DISPONÍVEL
+  // quando a query de origem já traz saldo_disponivel (carregarItensRequisicao) — mudança
+  // semântica documentada na Task 3. Se só o físico estiver disponível (chamador antigo),
+  // cai no físico como antes.
+  const estoque = num(item.saldo_atual ?? item.saldo_disponivel ?? item.quantidade_atual);
   const pendente = Math.max(0, solicitado - entregue);
   const entregavel = maxEntregar(item, estoque);
   return {
@@ -61,23 +81,305 @@ function todosItensCompletos(itens) {
   return itens.every((i) => getEntregue(i) >= num(i.quantidade_solicitada));
 }
 
+/**
+ * Saldo que a reserva da PRÓPRIA requisição ainda segura para um item (Etapa 4).
+ *
+ * `quantidade_reservada` do material entra como dedução no disponível, então sem somar de volta
+ * o hold do próprio item a reserva criada na aprovação viraria uma trava contra a requisição que
+ * a originou — exatamente a armadilha que a Etapa 4 fecha. Só reservas ATIVAS de origem
+ * REQUISICAO contam: reserva manual de terceiro continua sendo saldo de outro dono.
+ */
+const RESERVADO_PARA_ITEM_SQL = `COALESCE((
+      SELECT SUM(r.quantidade - COALESCE(r.quantidade_utilizada,0))
+      FROM reservas_material_almoxarifado r
+      WHERE r.item_requisicao_id = ir.id AND r.material_id = ir.material_id
+        AND r.status = 'ATIVA' AND r.origem = 'REQUISICAO'
+    ), 0)`;
+
 async function carregarItensRequisicao(db, requisicaoId) {
+  // Etapa 28: `ma.material_critico` entra para a régua da segunda conferência
+  // (assertConferidaSeObrigatorio em entregarRequisicao e no liberar-retirada).
   return dbAll(db, `SELECT ir.*, ma.quantidade_atual, ma.unidade, ma.nome as material_nome, ma.codigo as material_codigo,
-      COALESCE(ma.custo_medio, ma.custo_unitario, 0) as custo_unitario
+      ma.material_critico,
+      ${custoUnitarioSql('ma')} as custo_unitario,
+      ${RESERVADO_PARA_ITEM_SQL} as reservado_para_item,
+      (${disponivelSql('ma')} + ${RESERVADO_PARA_ITEM_SQL}) as saldo_disponivel
     FROM itens_requisicao_almoxarifado ir
     JOIN materiais_almoxarifado ma ON ir.material_id = ma.id
     WHERE ir.requisicao_id = ?`, [requisicaoId]);
 }
 
-async function separarRequisicao(db, requisicaoId, itensSeparados = []) {
+/**
+ * Disponível para UM item, já somando o hold da própria requisição (mesma conta do
+ * RESERVADO_PARA_ITEM_SQL). Usado nas leituras frescas de separar/entregar, que checam o saldo
+ * item a item imediatamente antes de agir.
+ */
+async function saldoDisponivelParaItem(db, item) {
+  const row = await dbGet(db, `SELECT
+      ${disponivelSql('ma')} as saldo_disponivel,
+      COALESCE((
+        SELECT SUM(r.quantidade - COALESCE(r.quantidade_utilizada,0))
+        FROM reservas_material_almoxarifado r
+        WHERE r.item_requisicao_id = ? AND r.material_id = ma.id
+          AND r.status = 'ATIVA' AND r.origem = 'REQUISICAO'
+      ), 0) as reservado_para_item
+    FROM materiais_almoxarifado ma WHERE ma.id = ?`, [item.id, item.material_id]);
+  return {
+    disponivel: num(row?.saldo_disponivel) + num(row?.reservado_para_item),
+    reservado_para_item: num(row?.reservado_para_item),
+  };
+}
+
+/**
+ * Reserva de material na APROVAÇÃO (Etapa 4, ligação 04→07 — design, decisão 2).
+ *
+ * Para cada item reserva `min(pendente de atendimento, disponível do material)` e devolve o
+ * status que a requisição deve assumir:
+ *  - `TOTALMENTE_RESERVADA` — todo item pendente saiu com o pedido inteiro reservado;
+ *  - `PARCIALMENTE_RESERVADA` — algo foi reservado, mas não tudo;
+ *  - `null` — nada foi reservado; quem chama mantém o status pós-aprovação de sempre
+ *    (APROVADO/AGUARDANDO_ESTOQUE/AGUARDANDO_COMPRA), que NÃO pode regredir por causa disto.
+ *
+ * As reservas são criadas uma a uma (`criarReserva` relê o disponível a cada chamada), então
+ * dois itens do MESMO material não reservam o mesmo saldo duas vezes.
+ *
+ * Falha de reserva de um item não derruba a aprovação: a decisão de aprovar já foi tomada e é
+ * independente de haver saldo (é justamente o caso AGUARDANDO_ESTOQUE). Um item que não
+ * conseguiu reservar conta como não reservado — no pior caso a requisição fica
+ * PARCIALMENTE_RESERVADA/sem reserva e a separação segue disputando o disponível como antes.
+ */
+async function reservarItensAprovacao(db, requisicaoId, user, reqRow = {}) {
+  const itens = await carregarItensRequisicao(db, requisicaoId);
+  const reservas = [];
+  let algumFaltou = false;
+
+  for (const item of itens) {
+    const pendente = pendenteEntrega(item);
+    if (pendente <= 0) continue; // item já atendido não precisa de hold
+
+    // eslint-disable-next-line no-await-in-loop
+    const { disponivel } = await saldoDisponivelParaItem(db, item);
+    const aReservar = Math.min(pendente, Math.max(0, disponivel));
+    if (aReservar <= 0) { algumFaltou = true; continue; }
+
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const r = await stockService.criarReserva(db, user, {
+        material_id: item.material_id,
+        quantidade: aReservar,
+        projeto_id: reqRow.projeto_id || null,
+        os_id: reqRow.os_id || null,
+        os_referencia: reqRow.os_referencia || null,
+        cliente_id: reqRow.cliente_id || null,
+        observacoes: `Reserva automática da requisição ${reqRow.numero || requisicaoId}`,
+      }, {
+        sistema: true,
+        requisicao_id: Number(requisicaoId),
+        item_requisicao_id: item.id,
+        motivo: `Reserva automática requisição ${reqRow.numero || requisicaoId}`,
+      });
+      reservas.push({ item_id: item.id, reserva_id: r.id, quantidade: aReservar });
+      if (aReservar < pendente) algumFaltou = true;
+    } catch (e) {
+      console.warn(`[almoxarifado-reservas] Falha ao reservar item ${item.id} da requisição ${requisicaoId}: ${e.message}`);
+      algumFaltou = true;
+    }
+  }
+
+  if (reservas.length === 0) return { status: null, reservas };
+  return { status: algumFaltou ? STATUS_PARCIALMENTE_RESERVADA : STATUS_TOTALMENTE_RESERVADA, reservas };
+}
+
+/** Molde: scrapDisposalService.js — nome para a trilha e para a rodada. */
+const nomeDoUsuario = (user) => user?.nome || user?.email || null;
+
+/**
+ * Régua ÚNICA da segunda conferência (Etapa 28, D2): obrigatória quando há material crítico
+ * AINDA NA CAIXA — separado e não entregue. Crítico com `quantidade_separada = 0` ainda não está
+ * na caixa; crítico com `separado == entregue` já saiu dela (fix-round 1, F5: antes o universo era
+ * "separado > 0" e um crítico já entregue continuava exigindo conferência para entregar o comum).
+ * Para virar "sempre" ou "nunca" muda-se esta linha, e só ela.
+ */
+function conferenciaObrigatoria(itens) {
+  return (itens || []).some((i) => Number(i.material_critico) === 1 && (getSeparado(i) - getEntregue(i)) > 0);
+}
+
+/**
+ * RN-06 (Etapa 28): a barreira das DUAS saídas — `liberar-retirada` e `entregarRequisicao`.
+ * Uma função só porque a Fase 2 mediu que a entrega sai direto de EM_SEPARACAO sem passar pela
+ * liberação (PODE_ENTREGAR): barreira só na liberação era barreira que ninguém é obrigado a
+ * passar. Lança 400 com a mensagem literal do contrato C3 quando há material crítico SEPARADO e
+ * ninguém conferiu. Chamar DEPOIS da checagem de status e ANTES de qualquer escrita/baixa.
+ */
+function assertConferidaSeObrigatorio(reqRow, itens) {
+  if (conferenciaObrigatoria(itens) && !reqRow?.conferido_por_id) {
+    const err = new Error('Esta requisição tem material crítico separado e ainda não passou pela segunda '
+      + 'conferência. Peça a outra pessoa do almoxarifado para conferir a separação antes de liberar ou entregar.');
+    err.status = 400;
+    throw err;
+  }
+}
+
+/**
+ * O CLAIM da segunda conferência (Etapa 28, RN-03/RN-05). Exportado e provado direto, porque é a
+ * única forma determinística de provar o `NOT EXISTS` (achado 2 da Fase 2): com a D3 (rodada nova
+ * limpa a conferência), o estado final da corrida separar×conferir do mesmo usuário é seguro em
+ * quase toda intercalação MESMO sem ele — um teste de corrida ficaria verde com o WHERE sabotado.
+ *
+ * As três condições do WHERE são as três barreiras, e cada uma tem um teste com o seu nome:
+ *   - `status = 'EM_SEPARACAO'`     — conferir só em separação;
+ *   - `conferido_por_id IS NULL`    — uma vez só (duas conferências simultâneas: uma passa);
+ *   - `NOT EXISTS (rodada do user)` — QUEM SEPAROU NÃO CONFERE, em qualquer rodada, não só a
+ *                                     última. Molde: scrapDisposalService.aprovar (a barreira 3
+ *                                     repetida no WHERE), pelo mesmo TOCTOU: a checagem JS em
+ *                                     conferirSeparacao lê e decide, o claim escreve depois, e
+ *                                     entre as duas não há lock.
+ * Devolve a linha (`{ id, conferido_em }`) ou `undefined` quando nenhuma linha satisfez o WHERE.
+ */
+async function claimConferencia(db, requisicaoId, user) {
+  return dbGet(db, `UPDATE requisicoes_almoxarifado
+       SET conferido_por_id = ?, conferido_por_nome = ?, conferido_em = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+     WHERE id = ? AND status = 'EM_SEPARACAO' AND conferido_por_id IS NULL
+       AND NOT EXISTS (SELECT 1 FROM separacoes_requisicao_almoxarifado s
+                        WHERE s.requisicao_id = requisicoes_almoxarifado.id AND s.usuario_id = ?)
+     RETURNING id, conferido_em`, [user.id, nomeDoUsuario(user), requisicaoId, user.id]);
+}
+
+/**
+ * Segunda conferência da separação (Etapa 28, Task 2). Conferir é ato com dono (RN-05): exige
+ * `user.id` — a régua da RN-01, sem `|| null` silencioso. A checagem "quem separou não confere"
+ * (RN-03) aparece DUAS vezes de propósito: aqui em JS, pela MENSAGEM (diz ao operador qual rodada
+ * ele registrou), e dentro do WHERE de `claimConferencia`, pela GARANTIA. Se a checagem JS sair,
+ * o WHERE ainda segura — só a mensagem piora (403 com rodada vira 409 genérico).
+ */
+async function conferirSeparacao(db, requisicaoId, user) {
+  if (!user?.id) {
+    const err = new Error('Conferência exige usuário identificado');
+    err.status = 400;
+    throw err;
+  }
+
   const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId]);
   if (!reqRow) {
     const err = new Error('Requisição não encontrada');
     err.status = 404;
     throw err;
   }
-  if (!['APROVADO', 'EM_SEPARACAO', 'PARCIALMENTE_ATENDIDA'].includes(reqRow.status)) {
-    const err = new Error('Requisição deve estar aprovada, em separação ou parcialmente atendida para separar');
+  if (reqRow.status !== 'EM_SEPARACAO') {
+    const err = new Error(`Só é possível conferir uma requisição em separação (status atual: ${reqRow.status})`);
+    err.status = 400;
+    throw err;
+  }
+
+  const separados = await dbGet(db,
+    'SELECT COUNT(*) AS n FROM itens_requisicao_almoxarifado WHERE requisicao_id = ? AND quantidade_separada > 0',
+    [requisicaoId]);
+  if (!separados || Number(separados.n) === 0) {
+    const err = new Error('Nenhum item separado');
+    err.status = 400;
+    throw err;
+  }
+
+  // RN-03, pela mensagem: QUALQUER rodada do usuário, não só a última (a separação acumula, e
+  // comparar só com o último separador deixaria quem separou primeiro conferir a própria caixa).
+  const rodada = await dbGet(db,
+    'SELECT id FROM separacoes_requisicao_almoxarifado WHERE requisicao_id = ? AND usuario_id = ? ORDER BY id ASC LIMIT 1',
+    [requisicaoId, user.id]);
+  if (rodada) {
+    const err = new Error(`Quem separou não confere: você registrou a rodada de separação #${rodada.id} desta requisição. `
+      + 'A segunda conferência tem de ser de outra pessoa.');
+    err.status = 403;
+    throw err;
+  }
+
+  const claim = await claimConferencia(db, requisicaoId, user);
+  if (!claim) {
+    const err = new Error('Esta requisição não pode ser conferida agora: já foi conferida, saiu de EM_SEPARACAO, '
+      + 'ou você separou uma rodada dela — outra pessoa (ou outra aba sua) agiu enquanto esta tela estava aberta. '
+      + 'Recarregue e confira o estado atual.');
+    err.status = 409;
+    throw err;
+  }
+
+  // RN-08: rastro pós-escrita, best-effort (Etapa 19: falha de log não desfaz o ato).
+  try {
+    await registrarAuditoria(db, {
+      entidade: 'requisicao',
+      entidade_id: Number(requisicaoId),
+      acao: 'CONFERENCIA_SEPARACAO',
+      usuario_id: user.id,
+      usuario_nome: nomeDoUsuario(user),
+      dados_novos: { conferido_por_id: user.id, conferido_por_nome: nomeDoUsuario(user) },
+    });
+  } catch (e) {
+    console.warn(`[almoxarifado-conferencia] Falha ao auditar a conferência da requisição ${requisicaoId}: ${e.message}`);
+  }
+
+  return {
+    success: true,
+    conferencia: { usuario_id: user.id, usuario_nome: nomeDoUsuario(user), em: claim.conferido_em },
+  };
+}
+
+/** Rodadas de separação de uma requisição, em ordem (Etapa 28, RN-02/RN-09). */
+async function listarSeparacoes(db, requisicaoId) {
+  const rows = await dbAll(db, `SELECT id, usuario_id, usuario_nome, itens_tocados, itens_json, created_at
+    FROM separacoes_requisicao_almoxarifado WHERE requisicao_id = ?
+    ORDER BY created_at ASC, id ASC`, [requisicaoId]);
+  return rows.map((r) => {
+    let itens = [];
+    try { itens = r.itens_json ? JSON.parse(r.itens_json) : []; } catch (e) { itens = []; }
+    return {
+      id: r.id,
+      usuario_id: r.usuario_id,
+      usuario_nome: r.usuario_nome,
+      itens_tocados: r.itens_tocados,
+      itens,
+      created_at: r.created_at,
+    };
+  });
+}
+
+/**
+ * Etapa 28 (Task 1): a separação passa a ter DONO. `user` é obrigatório (RN-01): sem `user.id`
+ * a operação não acontece — não é um `|| null` silencioso, porque a rodada é a base da barreira
+ * "quem separou não confere" (RN-03), e rodada sem dono é barreira furada.
+ *
+ * A separação ACUMULA (soma sobre quantidade_separada), então cada chamada com ≥1 item efetivo
+ * vira UMA linha append-only em `separacoes_requisicao_almoxarifado` (RN-02). Rodada sem item
+ * efetivo (`[]`, quantidades 0, item inexistente) não gera linha — mas o UPDATE de status para
+ * EM_SEPARACAO continua INCONDICIONAL, como sempre foi: "Iniciar Separação" com quantidades
+ * zeradas é caminho real da tela.
+ *
+ * Rodada com item efetivo LIMPA a segunda conferência (RN-07, D3): a conferência atesta o
+ * conteúdo de uma caixa; se a caixa mudou, precisa ser atestada de novo. A conferência apagada
+ * vai para `dados_anteriores` da auditoria. A limpeza é um COMPARE-AND-CLEAR (fix-round 1, F4):
+ * relê `conferido_por_id` e só limpa se a linha ainda for a relida; se alguém conferiu no meio,
+ * relê e repete (máx. 3). Antes era "releitura imediatamente antes do UPDATE", que só encolhia a
+ * janela — a conferência que entrasse nela era apagada com `dados_anteriores: null`.
+ *
+ * Tudo ou nada (fix-round 1, F1): TODAS as entradas são validadas antes da primeira escrita. O
+ * laço antigo gravava item a item e lançava 400 no meio, deixando `quantidade_separada` alterada
+ * sem rodada — sem dono, sem trilha, e sem limpar a conferência de uma caixa que mudou.
+ */
+async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
+  if (!user?.id) {
+    const err = new Error('Separação exige usuário identificado');
+    err.status = 400;
+    throw err;
+  }
+
+  const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId]);
+  if (!reqRow) {
+    const err = new Error('Requisição não encontrada');
+    err.status = 404;
+    throw err;
+  }
+  if (!PODE_SEPARAR.includes(reqRow.status)) {
+    const err = new Error(
+      'Requisição deve estar aprovada, aguardando estoque/compra, em separação ou parcialmente atendida para separar'
+    );
     err.status = 400;
     throw err;
   }
@@ -86,6 +388,12 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = []) {
 
   const itens = await carregarItensRequisicao(db, requisicaoId);
 
+  // PASSADA 1 — validar TODAS as entradas antes de escrever qualquer coisa (fix-round 1, F1).
+  // Antes, o laço gravava item a item e lançava 400 no meio: o item válido ficava gravado SEM
+  // rodada — `quantidade_separada` mudava por um caminho que não deixava dono, e a barreira
+  // "quem separou não confere" (RN-03) ficava apoiada numa rodada que nunca foi gravada. A
+  // separação é tudo ou nada: ou todas as entradas cabem, ou nenhuma é gravada.
+  const validados = []; // [{ item, qty, novaSeparada }] — só item existente com qty > 0
   for (const entrada of itensSeparados) {
     const item = itens.find((i) => Number(i.id) === Number(entrada.item_id));
     if (!item) continue;
@@ -93,41 +401,131 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = []) {
     const qty = num(entrada.quantidade_separada);
     if (qty <= 0) continue;
 
-    const mat = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [item.material_id]);
-    const estoque = num(mat?.quantidade_atual);
+    // Disponível + o hold da PRÓPRIA requisição (Etapa 4): a reserva criada na aprovação sai do
+    // disponível geral, então sem somá-la de volta a requisição não conseguiria separar o
+    // material que já está separado para ela.
+    // eslint-disable-next-line no-await-in-loop
+    const { disponivel: estoque } = await saldoDisponivelParaItem(db, item);
     const max = maxSeparar(item, estoque);
 
     if (qty > max) {
       const err = new Error(
         `${item.material_nome}: não é possível separar ${qty} ${item.unidade || ''}. `
-        + `Máximo: ${max} (pendente: ${pendenteSeparacao(item)}, estoque: ${estoque})`
+        + `Máximo: ${max} (pendente: ${pendenteSeparacao(item)}, disponível: ${estoque})`
       );
       err.status = 400;
       throw err;
     }
 
+    // Só em memória: o mesmo item duas vezes no payload é validado contra o acumulado, como antes.
     const novaSeparada = getSeparado(item) + qty;
-    await dbRun(db, 'UPDATE itens_requisicao_almoxarifado SET quantidade_separada = ? WHERE id = ?',
-      [novaSeparada, item.id]);
     item.quantidade_separada = novaSeparada;
+    validados.push({ item, qty, novaSeparada });
   }
 
-  await dbRun(db,
-    `UPDATE requisicoes_almoxarifado SET status='EM_SEPARACAO', updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL WHERE id=?`,
-    [requisicaoId]);
+  // PASSADA 2 — gravar. Daqui em diante nenhuma entrada pode falhar por regra de negócio.
+  const tocados = []; // [{ item_id, material_id, quantidade }]
+  for (const { item, qty, novaSeparada } of validados) {
+    // eslint-disable-next-line no-await-in-loop
+    await dbRun(db, 'UPDATE itens_requisicao_almoxarifado SET quantidade_separada = ? WHERE id = ?',
+      [novaSeparada, item.id]);
+    tocados.push({ item_id: item.id, material_id: item.material_id, quantidade: qty });
+  }
 
-  return { success: true, status: 'EM_SEPARACAO' };
+  let rodadaId = null;
+  let conferenciaAnterior = null;
+
+  if (tocados.length > 0) {
+    // RN-02: a rodada é append-only — nunca UPDATE/DELETE aqui.
+    const ins = await dbRun(db, `INSERT INTO separacoes_requisicao_almoxarifado
+      (requisicao_id, usuario_id, usuario_nome, itens_tocados, itens_json)
+      VALUES (?, ?, ?, ?, ?)`,
+      [requisicaoId, user.id, nomeDoUsuario(user), tocados.length, JSON.stringify(tocados)]);
+    rodadaId = ins.lastID;
+
+    // RN-07 como COMPARE-AND-CLEAR (fix-round 1, F4). Reler a conferência e limpar só se a linha
+    // ainda for a relida (`WHERE conferido_por_id IS ?`): se alguém conferiu entre a releitura e o
+    // UPDATE, `changes` vem 0, relê-se e repete-se. Antes, a "releitura imediatamente antes do
+    // UPDATE" era só uma janela menor — a conferência que entrasse nela era apagada com
+    // `dados_anteriores: null`, e a mutação "usar o reqRow inicial" não derrubava teste nenhum.
+    let limpou = false;
+    for (let tentativa = 0; tentativa < 3 && !limpou; tentativa++) {
+      // eslint-disable-next-line no-await-in-loop
+      const conf = await dbGet(db,
+        'SELECT conferido_por_id, conferido_por_nome, conferido_em FROM requisicoes_almoxarifado WHERE id = ?',
+        [requisicaoId]);
+      conferenciaAnterior = conf && conf.conferido_por_id != null
+        ? { usuario_id: conf.conferido_por_id, usuario_nome: conf.conferido_por_nome, em: conf.conferido_em }
+        : null;
+      // eslint-disable-next-line no-await-in-loop
+      const upd = await dbRun(db,
+        `UPDATE requisicoes_almoxarifado
+           SET status='EM_SEPARACAO', updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL,
+               conferido_por_id=NULL, conferido_por_nome=NULL, conferido_em=NULL
+         WHERE id=? AND conferido_por_id IS ?`,
+        [requisicaoId, conferenciaAnterior ? conferenciaAnterior.usuario_id : null]);
+      limpou = upd.changes > 0;
+    }
+    if (!limpou) {
+      // Três corridas seguidas na MESMA linha: o estado seguro (limpa) prevalece sobre o rastro —
+      // a última conferência a entrar fica fora de dados_anteriores, e isso fica avisado.
+      console.warn(`[almoxarifado-separacao] Requisição ${requisicaoId}: a conferência mudou 3 vezes durante a rodada ${rodadaId}; limpando sem compare.`);
+      await dbRun(db,
+        `UPDATE requisicoes_almoxarifado
+           SET status='EM_SEPARACAO', updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL,
+               conferido_por_id=NULL, conferido_por_nome=NULL, conferido_em=NULL
+         WHERE id=?`,
+        [requisicaoId]);
+    }
+  } else {
+    await dbRun(db,
+      `UPDATE requisicoes_almoxarifado SET status='EM_SEPARACAO', updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL WHERE id=?`,
+      [requisicaoId]);
+  }
+
+  // RN-04: rastro pós-escrita, best-effort (decisão da Etapa 19: falha de log não desfaz o ato).
+  // Só há linha quando houve rodada — "Iniciar Separação" sem quantidade não é evento da caixa.
+  if (rodadaId != null) {
+    try {
+      await registrarAuditoria(db, {
+        entidade: 'requisicao',
+        entidade_id: Number(requisicaoId),
+        acao: 'SEPARACAO',
+        usuario_id: user.id,
+        usuario_nome: nomeDoUsuario(user),
+        dados_anteriores: conferenciaAnterior ? { conferencia: conferenciaAnterior } : undefined,
+        dados_novos: {
+          rodada_id: rodadaId,
+          itens_tocados: tocados.length,
+          itens: tocados.map((t) => ({ item_id: t.item_id, quantidade: t.quantidade })),
+        },
+      });
+    } catch (e) {
+      console.warn(`[almoxarifado-separacao] Falha ao auditar a rodada ${rodadaId} da requisição ${requisicaoId}: ${e.message}`);
+    }
+  }
+
+  return {
+    success: true, status: 'EM_SEPARACAO', rodada_id: rodadaId, itens_tocados: tocados.length,
+  };
 }
 
-async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertService) {
+/**
+ * `alertService` é aceito e ignorado (Etapa 3, Task 3): a baixa agora passa por
+ * stockService.registrarMovimentacao, que já dispara a checagem de alerta internamente
+ * (stockService.js, pós-INSERT da movimentação). Chamar de novo aqui duplicaria o disparo.
+ * Mantido no parâmetro só para não quebrar as duas rotas que ainda o passam
+ * (routes/almoxarifado.js, routes/requisicoesMaterial.js).
+ */
+async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertService) { // eslint-disable-line no-unused-vars
   const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId]);
   if (!reqRow) {
     const err = new Error('Requisição não encontrada');
     err.status = 404;
     throw err;
   }
-  if (!['EM_SEPARACAO', 'PARCIALMENTE_ATENDIDA'].includes(reqRow.status)) {
-    const err = new Error('Requisição deve estar em separação ou parcialmente atendida');
+  if (!PODE_ENTREGAR.includes(reqRow.status)) {
+    const err = new Error('Requisição deve estar em separação, pronta para retirada ou parcialmente atendida');
     err.status = 400;
     throw err;
   }
@@ -135,6 +533,35 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
   await valueApprovalService.verificarBloqueioLiberacao(db, requisicaoId);
 
   const itens = await carregarItensRequisicao(db, requisicaoId);
+
+  // RN-06 (Etapa 28, achado 1 da Fase 2): a entrega sai DIRETO de EM_SEPARACAO, sem passar pela
+  // liberação — então a barreira de material crítico tem de estar aqui também, depois da checagem
+  // de PODE_ENTREGAR e ANTES de qualquer baixa. Vale nos três status de entrega: em
+  // PARCIALMENTE_ATENDIDA a conferência da primeira rodada continua valendo (D3 só limpa com
+  // rodada nova), e uma requisição antiga sem conferência volta a EM_SEPARACAO por "Iniciar
+  // Separação" para alguém conferir.
+  assertConferidaSeObrigatorio(reqRow, itens);
+
+  // Fix-round 1 (F2): material CRÍTICO só sai até o que está na caixa (separado − entregue).
+  // `maxEntregar` (Etapa 3) solta o teto do separado depois de uma entrega parcial — para
+  // material comum é o comportamento desejado (reposição chegou, entrega direta, sem nova
+  // rodada); para crítico era a barreira inteira furada: o que saía a mais nunca passou por
+  // rodada nem por conferência. Validação de TODOS os itens ANTES de qualquer baixa, porque o
+  // laço abaixo grava item a item. Material comum segue a Etapa 3 sem mudança.
+  for (const item of itens) {
+    if (Number(item.material_critico) !== 1) continue;
+    const entrada = itensAtendidos?.find((ia) => Number(ia.item_id) === Number(item.id));
+    const qty = entrada ? num(entrada.quantidade_atendida) : 0;
+    if (qty <= 0) continue;
+    const naCaixa = Math.max(0, getSeparado(item) - getEntregue(item));
+    if (qty > naCaixa) {
+      const err = new Error(`${item.material_nome}: material crítico só sai depois de separado e conferido — ${qty} excede `
+        + `o separado ainda não entregue (${naCaixa}). Separe o restante e peça a segunda conferência.`);
+      err.status = 400;
+      throw err;
+    }
+  }
+
   const entregas = [];
 
   for (const item of itens) {
@@ -142,37 +569,92 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
     const qtyEntregar = entrada ? num(entrada.quantidade_atendida) : 0;
     if (qtyEntregar <= 0) continue;
 
-    const mat = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [item.material_id]);
-    const estoque = num(mat?.quantidade_atual);
-    const max = maxEntregar(item, estoque);
+    // Ceiling é o DISPONÍVEL (Etapa 3, Task 3), não mais o físico — leitura fresca aqui é só
+    // uma checagem antecipada para uma mensagem de erro com nome do material/pendente; a
+    // validação que realmente vale é a atômica dentro de stockService.registrarMovimentacao
+    // logo abaixo (fecha a janela de corrida entre esta leitura e a baixa real).
+    // Etapa 4: o disponível soma o hold da própria requisição — o que a aprovação reservou é
+    // desta requisição e não pode barrá-la.
+    // eslint-disable-next-line no-await-in-loop
+    const { disponivel, reservado_para_item: reservadoItem } = await saldoDisponivelParaItem(db, item);
+    const max = maxEntregar(item, disponivel);
 
     if (qtyEntregar > max) {
       const err = new Error(
         `${item.material_nome}: não é possível entregar ${qtyEntregar} ${item.unidade || ''}. `
-        + `Máximo: ${max} (pendente: ${pendenteEntrega(item)}, estoque: ${estoque})`
+        + `Máximo: ${max} (pendente: ${pendenteEntrega(item)}, disponível: ${disponivel})`
       );
       err.status = 400;
       throw err;
     }
 
-    const entregueAtual = getEntregue(item);
-    const novaEntregue = entregueAtual + qtyEntregar;
-    const novaSeparada = Math.max(getSeparado(item), novaEntregue);
-    const saldoAnterior = estoque;
-    const saldoPosterior = saldoAnterior - qtyEntregar;
+    // Etapa 4 — a entrega consome a RESERVA da própria requisição (design, decisão 2): é isso
+    // que fecha a corrida aprovar→entregar, porque o saldo prometido na aprovação sai do hold
+    // desta requisição e não do disponível geral (que qualquer outra saída pode ter levado).
+    //
+    // Quando a entrega passa do que a reserva tem, a saída é DIVIDIDA: o excedente sai pelo
+    // caminho normal (sem reserva_id, validado contra o disponível) e a parte reservada é
+    // consumida citando a reserva. Recusar o excedente seria mais simples, mas quebraria um caso
+    // legítimo e comum: reserva parcial na aprovação (só havia parte do saldo), o resto do
+    // material chega depois e a entrega completa passa a caber. Recusar obrigaria a entregar em
+    // duas rodadas sem nenhum ganho de segurança — o excedente já é validado pelo motor.
+    //
+    // ORDEM: excedente PRIMEIRO. Ele é o único que disputa o disponível com o resto do mundo,
+    // logo é o que pode falhar; deixando-o na frente, a falha provável acontece ANTES de mexer na
+    // reserva — nada saiu do estoque. Com a reserva na frente, a mesma falha deixaria metade da
+    // baixa feita. Cada baixa bem-sucedida é registrada no item logo em seguida, então uma falha
+    // no meio ainda deixa item e estoque coerentes (o que saiu está contado como entregue).
+    const reservasItem = reservadoItem > 0
+      // eslint-disable-next-line no-await-in-loop
+      ? await dbAll(db, `SELECT id, (quantidade - COALESCE(quantidade_utilizada,0)) as saldo
+          FROM reservas_material_almoxarifado
+          WHERE item_requisicao_id = ? AND material_id = ? AND status = 'ATIVA' AND origem = 'REQUISICAO'
+            AND (quantidade - COALESCE(quantidade_utilizada,0)) > 0
+          ORDER BY id`, [item.id, item.material_id])
+      : [];
 
-    await dbRun(db,
-      'UPDATE materiais_almoxarifado SET quantidade_atual=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
-      [saldoPosterior, item.material_id]);
-    await dbRun(db, `INSERT INTO movimentacoes_almoxarifado
-      (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, referencia, usuario_id, usuario_nome, requisicao_id)
-      VALUES (?, 'SAIDA', ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [item.material_id, qtyEntregar, saldoAnterior, saldoPosterior,
-        `Requisição ${reqRow.numero}`, reqRow.os_referencia || reqRow.numero,
-        user.id, user.nome || user.email, requisicaoId]);
-    await dbRun(db,
-      'UPDATE itens_requisicao_almoxarifado SET quantidade_entregue=?, quantidade_atendida=?, quantidade_separada=? WHERE id=?',
-      [novaEntregue, novaEntregue, novaSeparada, item.id]);
+    const baixasReserva = [];
+    let restante = qtyEntregar;
+    for (const r of reservasItem) {
+      if (restante <= 0) break;
+      const usar = Math.min(restante, num(r.saldo));
+      if (usar <= 0) continue;
+      baixasReserva.push({ quantidade: usar, reserva_id: r.id });
+      restante -= usar;
+    }
+    const baixas = restante > 0
+      ? [{ quantidade: restante, reserva_id: undefined }, ...baixasReserva]
+      : baixasReserva;
+
+    let entregueAcumulado = getEntregue(item);
+    for (const baixa of baixas) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        await stockService.registrarMovimentacao(db, user, {
+          material_id: item.material_id,
+          tipo: 'SAIDA',
+          quantidade: baixa.quantidade,
+          reserva_id: baixa.reserva_id,
+          motivo: `Requisição ${reqRow.numero}`,
+          referencia: reqRow.os_referencia || reqRow.numero,
+          justificativa: `Entrega requisição ${reqRow.numero}`,
+          requisicao_id: requisicaoId,
+          projeto_id: reqRow.projeto_id || undefined,
+          cliente_id: reqRow.cliente_id || undefined,
+          centro_custo_id: reqRow.centro_custo_id || undefined,
+        });
+      } catch (e) {
+        const err = new Error(`${item.material_nome}: ${e.message}`);
+        err.status = e.status;
+        throw err;
+      }
+
+      entregueAcumulado += baixa.quantidade;
+      // eslint-disable-next-line no-await-in-loop
+      await dbRun(db,
+        'UPDATE itens_requisicao_almoxarifado SET quantidade_entregue=?, quantidade_atendida=?, quantidade_separada=? WHERE id=?',
+        [entregueAcumulado, entregueAcumulado, Math.max(getSeparado(item), entregueAcumulado), item.id]);
+    }
 
     entregas.push({ item_id: item.id, quantidade: qtyEntregar });
   }
@@ -197,18 +679,14 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
       [novoStatus, requisicaoId]);
   }
 
-  if (alertService) {
-    const materialIds = [...new Set(entregas.map((e) => {
-      const item = itens.find((i) => i.id === e.item_id);
-      return item?.material_id;
-    }).filter(Boolean))];
-    await Promise.all(materialIds.map((id) => alertService.verificarAlertaPorMaterialId(db, id).catch(() => null)));
-  }
-
   return { success: true, status: novoStatus, parcial: !completo, entregas };
 }
 
-async function excluirRequisicao(db, requisicaoId, user, justificativa, alertService) {
+/**
+ * `alertService` é aceito e ignorado (Etapa 3, Task 3) — mesmo motivo de entregarRequisicao:
+ * stockService.registrarMovimentacao já dispara a checagem de alerta internamente.
+ */
+async function excluirRequisicao(db, requisicaoId, user, justificativa, alertService) { // eslint-disable-line no-unused-vars
   const reqRow = await dbGet(db,
     'SELECT * FROM requisicoes_almoxarifado WHERE id = ? AND COALESCE(ativo, 1) = 1',
     [requisicaoId]);
@@ -220,42 +698,60 @@ async function excluirRequisicao(db, requisicaoId, user, justificativa, alertSer
 
   const itens = await carregarItensRequisicao(db, requisicaoId);
   const estornos = [];
+  // Calculado antes do loop (achado do fix round): o motor grava `justificativa` no livro/
+  // auditoria do estorno — sem isto o ENTRADA de estorno saía sem justificativa (ENTRADA não
+  // exige vínculo em movementRules.js, então passava despercebido, mas a rastreabilidade da
+  // exclusão ficava incompleta).
+  const motivo = justificativa?.trim() || 'Excluída pelo administrador';
 
   for (const item of itens) {
     const qtyEstorno = getEntregue(item);
     if (qtyEstorno <= 0) continue;
 
-    const mat = await dbGet(db, 'SELECT quantidade_atual, unidade FROM materiais_almoxarifado WHERE id = ?',
-      [item.material_id]);
-    const saldoAnterior = num(mat?.quantidade_atual);
-    const saldoPosterior = saldoAnterior + qtyEstorno;
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await stockService.registrarMovimentacao(db, user, {
+        material_id: item.material_id,
+        tipo: 'ENTRADA',
+        quantidade: qtyEstorno,
+        motivo: `Estorno exclusão requisição ${reqRow.numero}`,
+        referencia: reqRow.os_referencia || reqRow.numero,
+        justificativa: justificativa || motivo,
+        requisicao_id: requisicaoId,
+        projeto_id: reqRow.projeto_id || undefined,
+        cliente_id: reqRow.cliente_id || undefined,
+        centro_custo_id: reqRow.centro_custo_id || undefined,
+      });
+    } catch (e) {
+      const err = new Error(`${item.material_nome}: ${e.message}`);
+      err.status = e.status;
+      throw err;
+    }
 
-    await dbRun(db,
-      'UPDATE materiais_almoxarifado SET quantidade_atual=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
-      [saldoPosterior, item.material_id]);
-    await dbRun(db, `INSERT INTO movimentacoes_almoxarifado
-      (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, referencia, usuario_id, usuario_nome, requisicao_id)
-      VALUES (?, 'ENTRADA', ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [item.material_id, qtyEstorno, saldoAnterior, saldoPosterior,
-        `Estorno exclusão requisição ${reqRow.numero}`,
-        reqRow.os_referencia || reqRow.numero,
-        user.id, user.nome || user.email, requisicaoId]);
     estornos.push({ material_id: item.material_id, quantidade: qtyEstorno });
   }
 
-  const motivo = justificativa?.trim() || 'Excluída pelo administrador';
   await dbRun(db,
     `UPDATE requisicoes_almoxarifado
      SET ativo=0, status='CANCELADO', rejeicao_motivo=?, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
      WHERE id=?`,
     [motivo, requisicaoId]);
 
-  if (alertService && estornos.length > 0) {
-    const materialIds = [...new Set(estornos.map((e) => e.material_id))];
-    await Promise.all(materialIds.map((id) => alertService.verificarAlertaPorMaterialId(db, id).catch(() => null)));
-  }
+  // Task 6 — a exclusão deixava o hold preso. O /cancelar solta as reservas desde a Etapa 4;
+  // o DELETE não soltava, e as duas rotas terminam no mesmo status CANCELADO. Como a expiração
+  // é opt-in por config, na configuração padrão o saldo ficava reservado para uma requisição
+  // morta PARA SEMPRE — a mesma armadilha de saldo inutilizável que a etapa fecha.
+  //
+  // Best-effort, como no /cancelar: falha ao liberar não desfaz a exclusão, que é a ação que o
+  // usuário pediu (e cujo estorno de estoque já aconteceu acima).
+  const liberacao = await reservationService
+    .liberarReservasDaRequisicao(db, user, requisicaoId, motivo)
+    .catch((e) => {
+      console.warn(`[almoxarifado-reservas] Falha ao liberar reservas da requisição ${requisicaoId} na exclusão: ${e.message}`);
+      return { liberadas: [], erros: [{ erro: e.message }] };
+    });
 
-  return { success: true, estornos };
+  return { success: true, estornos, reservas_liberadas: liberacao.liberadas };
 }
 
 module.exports = {
@@ -269,7 +765,16 @@ module.exports = {
   normalizarItem,
   todosItensCompletos,
   carregarItensRequisicao,
+  saldoDisponivelParaItem,
+  reservarItensAprovacao,
   separarRequisicao,
   entregarRequisicao,
   excluirRequisicao,
+  // Etapa 28
+  nomeDoUsuario,
+  conferenciaObrigatoria,
+  listarSeparacoes,
+  assertConferidaSeObrigatorio,
+  claimConferencia,
+  conferirSeparacao,
 };

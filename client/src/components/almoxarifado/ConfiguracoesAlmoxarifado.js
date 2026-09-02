@@ -9,25 +9,20 @@ import {
   FiSave, FiPlus, FiTrash2, FiEdit2, FiCheck, FiX,
   FiPackage, FiSliders, FiMapPin, FiSettings,
   FiShield, FiRefreshCw, FiArrowLeft, FiArrowRight, FiMove,
-  FiLayers, FiChevronDown, FiChevronRight, FiGrid, FiBell, FiSend, FiMail, FiMessageCircle, FiUsers, FiClipboard, FiShoppingCart, FiDollarSign
+  FiLayers, FiChevronDown, FiChevronRight, FiGrid, FiBell, FiSend, FiMail, FiMessageCircle, FiUsers, FiClipboard, FiShoppingCart, FiDollarSign,
+  FiTag, FiAlertTriangle, FiRotateCcw
 } from 'react-icons/fi';
 import { useSearchParams } from 'react-router-dom';
+import { prefixarAlmoxarifado, buildLocalizacaoPath } from '../../utils/localizacaoLabel';
+import { invalidarAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import './Almoxarifado.css';
 
 const ICONES = ['📦', '🔧', '🪛', '⚙️', '🛡️', '🧰', '🪝', '💡', '🔩', '🪜', '🧪', '🏗️', '🔌', '🧲', '📋'];
 const CORES = ['#4facfe', '#00f2fe', '#43e97b', '#f9a825', '#ef5350', '#ab47bc', '#26c6da', '#ff7043', '#78909c', '#5c6bc0'];
 
-const buildLocalizacaoPath = (loc, allLocs = []) => {
-  if (!loc) return '';
-  const parent = loc.parent_id ? allLocs.find(l => l.id === loc.parent_id) : null;
-  const parts = [];
-  if (loc.setor) parts.push(loc.setor);
-  if (parent) parts.push(parent.subgrupo || parent.descricao || parent.codigo);
-  if (loc.subgrupo) parts.push(loc.subgrupo);
-  else if (loc.descricao && !parent) parts.push(loc.descricao);
-  return parts.join(' / ');
-};
-
+// Deliberadamente SEM o almoxarifado: esta tela já tem uma coluna dedicada
+// ("Almoxarifado", com loc.almoxarifado_codigo) ao lado da coluna "Caminho" — prefixar
+// aqui duplicaria o dado na mesma linha.
 const formatLocalizacaoPath = (loc, allLocs = []) => {
   const path = buildLocalizacaoPath(loc, allLocs);
   return path || '—';
@@ -87,6 +82,18 @@ const getCodigoPrefix = (codigo) => {
 };
 
 const TIPOS_AREA_RAIZ = ['Prateleira', 'Gaveta', 'Box', 'Rua', 'Almoxarifado', 'Área externa'];
+
+const formatTipoMaterial = (tipo) => String(tipo || '')
+  .replace(/_/g, ' ')
+  .replace(/^./, c => c.toUpperCase());
+
+const parseTiposPermitidos = (raw) => {
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch { return []; }
+};
 
 const generateNextCodigo = (localizacoes, { setor, parent_id, tipo }, setoresConfig = []) => {
   const parentId = parent_id ? parseInt(parent_id, 10) : null;
@@ -176,12 +183,14 @@ const RadioCard = ({ selected, onClick, title, subtitle, icon }) => (
 const TABS = [
   { id: 'tipos', label: 'Tipos de Material', icon: FiPackage },
   { id: 'familias', label: 'Famílias', icon: FiLayers },
+  { id: 'categorias', label: 'Categorias', icon: FiTag },
   { id: 'materiais-setor', label: 'Materiais por Setor', icon: FiUsers },
   { id: 'estoques', label: 'Estoques Mínimos', icon: FiSliders },
   { id: 'setores', label: 'Setores e Áreas', icon: FiGrid },
   { id: 'localizacoes', label: 'Localizações', icon: FiMapPin },
   { id: 'alertas', label: 'Alertas de Estoque', icon: FiBell },
   { id: 'liberacao-valor', label: 'Liberação por Valor', icon: FiDollarSign },
+  { id: 'perfis', label: 'Perfis de Acesso', icon: FiShield },
   { id: 'geral', label: 'Configurações Gerais', icon: FiSettings },
 ];
 
@@ -249,12 +258,14 @@ const ConfiguracoesAlmoxarifado = () => {
 
       {tab === 'tipos' && <TabTiposMaterial />}
       {tab === 'familias' && <TabFamilias />}
+      {tab === 'categorias' && <TabCategorias />}
       {tab === 'materiais-setor' && <TabMateriaisPorSetor />}
       {tab === 'estoques' && <TabEstoquesMinimos />}
       {tab === 'setores' && <TabSetores />}
       {tab === 'localizacoes' && <TabLocalizacoes />}
       {tab === 'alertas' && <TabAlertasEstoque />}
       {tab === 'liberacao-valor' && <TabLiberacaoValor />}
+      {tab === 'perfis' && <TabPerfisAcesso />}
       {tab === 'geral' && <TabConfiguracoes />}
     </div>
   );
@@ -646,7 +657,9 @@ const TabFamilias = () => {
                               <td><span style={{ fontFamily: 'monospace', color: '#4facfe' }}>{item.codigo}</span></td>
                               <td>{item.nome}</td>
                               <td>{item.quantidade_atual} {item.unidade}</td>
-                              <td style={{ color: 'var(--gmp-text-light)', fontSize: '0.8rem' }}>{item.localizacao || '—'}</td>
+                              <td style={{ color: 'var(--gmp-text-light)', fontSize: '0.8rem' }}>
+                                {prefixarAlmoxarifado(item.localizacao, item.almoxarifado_codigo) || '—'}
+                              </td>
                               <td>
                                 <Link to={`/almoxarifado/materiais/editar/${item.id}`} className="almox-btn-icon" title="Editar">
                                   <FiEdit2 size={13} />
@@ -663,6 +676,210 @@ const TabFamilias = () => {
             );
           })}
         </div>
+      )}
+    </div>
+  );
+};
+
+/* ===================== TAB CATEGORIAS DE MATERIAL ===================== */
+/**
+ * Etapa 26, Task 3 — o cadastro de categorias de material.
+ *
+ * FAMÍLIAS É O MOLDE DA UI (estados de carregamento/erro, formulário embutido, botões), mas NÃO
+ * do modelo: família tem `parent_id`, código automático e hierarquia; categoria é uma lista
+ * PLANA de nomes. A tabela `categorias_material_almoxarifado` tem uma coluna `parent_id` herdada
+ * da modelagem original e sem nenhum uso — esta aba a ignora de propósito, e tratá-la como
+ * árvore inventaria uma hierarquia que o servidor não valida.
+ *
+ * Três decisões que o servidor (Task 1) impõe e que a tela precisa respeitar:
+ *
+ *  1. o GET vai SEMPRE com `?todos=1`. Sem ele a resposta traz só `ativo = 1`, e a categoria que
+ *     acabou de ser desativada some da única tela capaz de reativá-la — "desativar não apaga"
+ *     ficaria verdadeiro no banco e falso para o usuário;
+ *  2. renomear manda `PUT` SEM `ativo`. A rota preserva o valor atual quando o campo é omitido;
+ *     mandar `ativo: 1` no rename ressuscitaria em silêncio uma categoria aposentada;
+ *  3. reativar manda `PUT { nome, ativo: 1 }` — pela mesma regra, um PUT sem `ativo` aqui seria
+ *     um no-op com toast de sucesso.
+ *
+ * RN-05: renomear NÃO reescreve `materiais.categoria` (a coluna é texto livre, não chave
+ * estrangeira). O aviso abaixo é a única vez em que o usuário fica sabendo disso ANTES de agir —
+ * sem ele, renomeia achando que reclassificou o acervo. Propagar o rename (ou promover a coluna
+ * a chave estrangeira) é decisão de outra etapa, registrada na letra B.
+ */
+const TabCategorias = () => {
+  const [categorias, setCategorias] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [editando, setEditando] = useState(null);
+  const [form, setForm] = useState({ nome: '' });
+
+  useEffect(() => { loadCategorias(); }, []);
+
+  const loadCategorias = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get('/almoxarifado/categorias?todos=1');
+      setCategorias(res.data);
+    } catch { toast.error('Erro ao carregar categorias'); }
+    finally { setLoading(false); }
+  };
+
+  const resetForm = () => {
+    setForm({ nome: '' });
+    setEditando(null);
+    setShowForm(false);
+  };
+
+  const handleEditar = (cat) => {
+    setForm({ nome: cat.nome });
+    setEditando(cat.id);
+    setShowForm(true);
+  };
+
+  const handleSalvar = async () => {
+    if (!form.nome.trim()) { toast.error('Nome é obrigatório'); return; }
+    setSaving(true);
+    try {
+      if (editando) {
+        // SEM `ativo`: a rota preserva o valor atual quando o campo é omitido.
+        await api.put(`/almoxarifado/categorias/${editando}`, { nome: form.nome });
+        toast.success('Categoria renomeada! Os materiais já classificados mantêm o nome antigo.');
+      } else {
+        await api.post('/almoxarifado/categorias', { nome: form.nome });
+        toast.success('Categoria criada!');
+      }
+      resetForm();
+      loadCategorias();
+    } catch (err) {
+      // A mensagem do servidor CRUA: ele já diz o que houve ("Já existe uma categoria com este
+      // nome"). Trocar por "Erro ao salvar" faria o usuário tentar o mesmo nome de novo.
+      toast.error(err.response?.data?.error || 'Erro ao salvar');
+    } finally { setSaving(false); }
+  };
+
+  const handleDesativar = async (cat) => {
+    if (!window.confirm(
+      `Desativar a categoria "${cat.nome}"? Ela sai das listas de novos materiais, mas os que já a usam continuam com ela.`
+    )) return;
+    try {
+      await api.delete(`/almoxarifado/categorias/${cat.id}`);
+      toast.success('Categoria desativada');
+      loadCategorias();
+    } catch (err) { toast.error(err.response?.data?.error || 'Erro ao desativar'); }
+  };
+
+  const handleReativar = async (cat) => {
+    try {
+      // `ativo: 1` EXPLÍCITO — omitir preservaria o 0 e o clique não faria nada.
+      await api.put(`/almoxarifado/categorias/${cat.id}`, { nome: cat.nome, ativo: 1 });
+      toast.success('Categoria reativada');
+      loadCategorias();
+    } catch (err) { toast.error(err.response?.data?.error || 'Erro ao reativar'); }
+  };
+
+  return (
+    <div>
+      <p style={{ fontSize: '0.85rem', color: 'var(--gmp-text-light)', marginBottom: 20 }}>
+        Classificação livre dos materiais (ex.: Consumível, Aço carbono). Desativar não apaga:
+        a categoria sai das listas de novos materiais e continua valendo nos que já a usam.
+      </p>
+
+      {!showForm && (
+        <button className="btn-almox-primary" style={{ marginBottom: 20 }} onClick={() => setShowForm(true)}>
+          <FiPlus size={14} /> Nova Categoria
+        </button>
+      )}
+
+      {showForm && (
+        <div style={{ background: 'var(--gmp-surface)', border: '1px solid rgba(79,172,254,0.25)', borderRadius: 12, padding: 24, marginBottom: 24 }}>
+          <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 18 }}>
+            {editando ? '✏️ Renomear Categoria' : '➕ Nova Categoria'}
+          </div>
+          <div className="almox-field" style={{ marginBottom: 16, maxWidth: 420 }}>
+            <label className="almox-label">Nome<span className="required">*</span></label>
+            <input className="almox-input" value={form.nome}
+              onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
+              placeholder="Ex: Consumível, Aço carbono..." />
+          </div>
+
+          {/* RN-05 — só no renomear: criar não tem este efeito colateral, e aviso permanente
+              vira ruído que o usuário para de ler. */}
+          {editando && (
+            <div style={{
+              display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 20,
+              background: 'rgba(249,168,37,0.08)', border: '1px solid rgba(249,168,37,0.3)',
+              borderRadius: 8, padding: '12px 14px', fontSize: '0.82rem', color: 'var(--gmp-text)',
+            }}>
+              <FiAlertTriangle size={16} style={{ color: '#f9a825', flexShrink: 0, marginTop: 1 }} />
+              <span>
+                Renomear <strong>não reclassifica</strong> os materiais: os que já usam esta
+                categoria continuam gravados com o <strong>nome antigo</strong>. Para movê-los,
+                edite cada material.
+              </span>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button className="btn-almox-primary" onClick={handleSalvar} disabled={saving}>
+              <FiSave size={14} /> {saving ? 'Salvando...' : 'Salvar Categoria'}
+            </button>
+            <button className="btn-almox-secondary" onClick={resetForm}>Cancelar</button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="almox-loading"><FiRefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} /> Carregando...</div>
+      ) : categorias.length === 0 ? (
+        <div className="almox-empty" style={{ padding: 40 }}>
+          <FiTag size={40} style={{ opacity: 0.3, display: 'block', margin: '0 auto 12px' }} />
+          <p>Nenhuma categoria cadastrada</p>
+        </div>
+      ) : (
+        <table className="almox-table">
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th style={{ width: 120 }}>Situação</th>
+              <th style={{ width: 140 }}>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {categorias.map(cat => (
+              <tr key={cat.id} style={{ opacity: cat.ativo ? 1 : 0.6 }}>
+                <td style={{ fontWeight: 600 }}>{cat.nome}</td>
+                <td>
+                  {cat.ativo ? (
+                    <span style={{ fontSize: '0.7rem', background: 'rgba(67,233,123,0.12)', color: '#27ae60', padding: '2px 10px', borderRadius: 20, fontWeight: 600 }}>Ativa</span>
+                  ) : (
+                    <span style={{ fontSize: '0.7rem', background: 'rgba(120,144,156,0.15)', color: 'var(--gmp-text-light)', padding: '2px 10px', borderRadius: 20, fontWeight: 600 }}>Inativa</span>
+                  )}
+                </td>
+                <td>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {cat.ativo ? (
+                      <>
+                        <button className="almox-btn-icon" title="Renomear" onClick={() => handleEditar(cat)}>
+                          <FiEdit2 size={13} />
+                        </button>
+                        <button className="almox-btn-icon danger" title="Desativar" onClick={() => handleDesativar(cat)}>
+                          <FiTrash2 size={13} />
+                        </button>
+                      </>
+                    ) : (
+                      <button className="btn-almox-secondary" title="Reativar"
+                        style={{ fontSize: '0.75rem', padding: '4px 12px' }}
+                        onClick={() => handleReativar(cat)}>
+                        <FiRotateCcw size={12} /> Reativar
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
     </div>
   );
@@ -788,6 +1005,165 @@ const TabEstoquesMinimos = () => {
   );
 };
 
+/* ===================== BLOCO ALMOXARIFADOS (topo da aba Setores e Áreas) ===================== */
+const ALMOXARIFADO_FORM_INITIAL = { codigo: '', nome: '', descricao: '' };
+
+const AlmoxarifadosSection = () => {
+  const [almoxarifados, setAlmoxarifados] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [editando, setEditando] = useState(null);
+  const [form, setForm] = useState(ALMOXARIFADO_FORM_INITIAL);
+
+  useEffect(() => { loadAlmoxarifados(); }, []);
+
+  const loadAlmoxarifados = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get('/almoxarifado/almoxarifados?todos=1');
+      setAlmoxarifados(res.data);
+    } catch { toast.error('Erro ao carregar almoxarifados'); }
+    finally { setLoading(false); }
+  };
+
+  const resetForm = () => {
+    setForm(ALMOXARIFADO_FORM_INITIAL);
+    setEditando(null);
+    setShowForm(false);
+  };
+
+  const handleEditar = (alm) => {
+    setForm({ codigo: alm.codigo, nome: alm.nome, descricao: alm.descricao || '' });
+    setEditando(alm.id);
+    setShowForm(true);
+  };
+
+  const handleSalvar = async () => {
+    if (!form.codigo.trim()) { toast.error('Código é obrigatório'); return; }
+    if (!form.nome.trim()) { toast.error('Nome é obrigatório'); return; }
+    setSaving(true);
+    try {
+      const payload = {
+        codigo: form.codigo.trim().toUpperCase(),
+        nome: form.nome.trim(),
+        descricao: form.descricao.trim() || null,
+      };
+      if (editando) {
+        await api.put(`/almoxarifado/almoxarifados/${editando}`, payload);
+        toast.success('Almoxarifado atualizado!');
+      } else {
+        await api.post('/almoxarifado/almoxarifados', payload);
+        toast.success('Almoxarifado criado!');
+      }
+      resetForm();
+      loadAlmoxarifados();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao salvar');
+    } finally { setSaving(false); }
+  };
+
+  const handleInativar = async (alm) => {
+    if (!window.confirm(`Inativar o almoxarifado "${alm.nome}"?`)) return;
+    try {
+      await api.put(`/almoxarifado/almoxarifados/${alm.id}`, { ativo: 0 });
+      toast.success('Almoxarifado inativado');
+      loadAlmoxarifados();
+    } catch (err) {
+      // Backend recusa (400) quando existem localizações ativas vinculadas — mensagem exibida direto no toast.
+      toast.error(err.response?.data?.error || 'Erro ao inativar');
+    }
+  };
+
+  return (
+    <div style={{ marginBottom: 32 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 12 }}>
+        <h3 style={{ margin: 0, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: 8, color: 'var(--gmp-text)' }}>
+          <FiPackage size={16} style={{ color: '#4facfe' }} /> Almoxarifados
+        </h3>
+        {!showForm && (
+          <button className="btn-almox-primary" onClick={() => setShowForm(true)}>
+            <FiPlus size={14} /> Novo Almoxarifado
+          </button>
+        )}
+      </div>
+      <p style={{ fontSize: '0.85rem', color: 'var(--gmp-text-light)', marginBottom: 16, maxWidth: 720 }}>
+        Cada almoxarifado é um depósito independente (ex.: unidade, obra, filial). Localizações são vinculadas a um almoxarifado.
+      </p>
+
+      {showForm && (
+        <div style={{ background: 'var(--gmp-surface)', border: '1px solid rgba(79,172,254,0.25)', borderRadius: 12, padding: 24, marginBottom: 20 }}>
+          <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 18, color: 'var(--gmp-text)' }}>
+            {editando ? '✏️ Editar Almoxarifado' : '➕ Novo Almoxarifado'}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+            <div className="almox-field">
+              <label className="almox-label">Código<span className="required">*</span></label>
+              <input className="almox-input" value={form.codigo}
+                onChange={e => setForm(f => ({ ...f, codigo: e.target.value.toUpperCase() }))}
+                placeholder="Ex: ALM-02" style={{ fontFamily: 'monospace' }} maxLength={20} />
+            </div>
+            <div className="almox-field">
+              <label className="almox-label">Nome<span className="required">*</span></label>
+              <input className="almox-input" value={form.nome}
+                onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
+                placeholder="Ex: Almoxarifado Filial Sul" />
+            </div>
+            <div className="almox-field" style={{ gridColumn: '1 / -1' }}>
+              <label className="almox-label">Descrição</label>
+              <input className="almox-input" value={form.descricao}
+                onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
+                placeholder="Descrição breve (opcional)" />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button className="btn-almox-primary" onClick={handleSalvar} disabled={saving}>
+              <FiSave size={14} /> {saving ? 'Salvando...' : 'Salvar'}
+            </button>
+            <button className="btn-almox-secondary" onClick={resetForm}><FiX size={14} /> Cancelar</button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="almox-loading"><FiRefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} /> Carregando...</div>
+      ) : (
+        <div className="almox-table-container">
+          <table className="almox-table">
+            <thead>
+              <tr><th>Código</th><th>Nome</th><th>Descrição</th><th>Status</th><th style={{ textAlign: 'right' }}>Ações</th></tr>
+            </thead>
+            <tbody>
+              {almoxarifados.map(a => (
+                <tr key={a.id} style={{ opacity: a.ativo ? 1 : 0.55 }}>
+                  <td><span style={{ fontFamily: 'monospace', color: '#4facfe', fontWeight: 700 }}>{a.codigo}</span></td>
+                  <td style={{ fontWeight: 600 }}>{a.nome}</td>
+                  <td style={{ color: 'var(--gmp-text-light)', fontSize: '0.85rem' }}>{a.descricao || '—'}</td>
+                  <td>
+                    <span className={`almox-badge almox-badge-${a.ativo ? 'ok' : 'critico'}`}>
+                      {a.ativo ? 'Ativo' : 'Inativo'}
+                    </span>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                      <button className="almox-btn-icon" onClick={() => handleEditar(a)} title="Editar"><FiEdit2 size={13} /></button>
+                      {!!a.ativo && (
+                        <button className="almox-btn-icon danger" onClick={() => handleInativar(a)} title="Inativar">
+                          <FiTrash2 size={13} />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
+
 /* ===================== TAB SETORES E ÁREAS ===================== */
 const SETOR_FORM_INITIAL = { nome: '', codigo_prefixo: '', tipo: 'corredor', ordem: 0 };
 
@@ -875,6 +1251,11 @@ const TabSetores = () => {
 
   return (
     <div>
+      <AlmoxarifadosSection />
+      <div style={{ borderTop: '1px solid var(--gmp-border)', margin: '0 0 24px' }} />
+      <h3 style={{ margin: '0 0 4px', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: 8, color: 'var(--gmp-text)' }}>
+        <FiGrid size={16} style={{ color: '#4facfe' }} /> Setores e Áreas
+      </h3>
       <p style={{ fontSize: '0.85rem', color: 'var(--gmp-text-light)', marginBottom: 20, maxWidth: 720 }}>
         Defina os corredores, bancadas e áreas disponíveis no cadastro guiado de localizações.
         O <strong>prefixo do código</strong> é usado na geração automática (ex.: Corredor D com prefixo &quot;D&quot; gera códigos D-01, D-02…).
@@ -986,6 +1367,7 @@ const TabSetores = () => {
 
 /* ===================== TAB LOCALIZAÇÕES ===================== */
 const WIZARD_INITIAL = {
+  almoxarifado_id: '',
   setor: '',
   estruturaTipo: '',
   parent_id: '',
@@ -1003,6 +1385,8 @@ const TabLocalizacoes = () => {
   const [localizacoes, setLocalizacoes] = useState([]);
   const [setoresConfig, setSetoresConfig] = useState([]);
   const [tiposLoc, setTiposLoc] = useState([]);
+  const [tiposMaterial, setTiposMaterial] = useState([]);
+  const [almoxarifados, setAlmoxarifados] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -1013,7 +1397,7 @@ const TabLocalizacoes = () => {
   const [showMapaStep, setShowMapaStep] = useState(false);
 
   const [editando, setEditando] = useState(null);
-  const [editForm, setEditForm] = useState({ descricao: '', tipo: 'Almoxarifado' });
+  const [editForm, setEditForm] = useState({ descricao: '', tipo: 'Almoxarifado', almoxarifado_id: '', bloqueada: false, tipos_material_permitidos: [] });
   const [showEdit, setShowEdit] = useState(false);
 
   const [moverLoc, setMoverLoc] = useState(null);
@@ -1021,7 +1405,7 @@ const TabLocalizacoes = () => {
   const [moverData, setMoverData] = useState({ setor: '', estruturaTipo: '', parent_id: '', subgrupo: '', codigo: '' });
   const [moverError, setMoverError] = useState('');
 
-  useEffect(() => { loadLocs(); loadTipos(); loadSetores(); }, []);
+  useEffect(() => { loadLocs(); loadTipos(); loadSetores(); loadAlmoxarifados(); }, []);
 
   const loadSetores = async () => {
     try {
@@ -1033,7 +1417,14 @@ const TabLocalizacoes = () => {
     try {
       const r = await api.get('/almoxarifado/meta/tipos-material');
       setTiposLoc(r.data.localizacoes_tipos || []);
+      setTiposMaterial(r.data.tipos || []);
     } catch { /* ignore */ }
+  };
+  const loadAlmoxarifados = async () => {
+    try {
+      const r = await api.get('/almoxarifado/almoxarifados');
+      setAlmoxarifados(r.data);
+    } catch { /* ignore — select fica vazio, PUT preserva o vínculo atual */ }
   };
   const loadLocs = async () => {
     setLoading(true);
@@ -1046,11 +1437,18 @@ const TabLocalizacoes = () => {
   );
   const setoresOptions = buildSetoresOptions(setoresConfig, localizacoes);
 
-  const parentOptionsForSetor = (setor, excludeId) => localizacoes.filter(l => {
+  // almoxarifadoId é opcional: o wizard passa (uma posição filha não pode ter pai em outro
+  // almoxarifado); o fluxo de "mover" omite, para não mudar o comportamento que já existia.
+  const parentOptionsForSetor = (setor, excludeId, almoxarifadoId) => localizacoes.filter(l => {
     if (excludeId && l.id === excludeId) return false;
     if (setor && l.setor !== setor) return false;
+    if (almoxarifadoId && String(l.almoxarifado_id ?? '') !== String(almoxarifadoId)) return false;
     return true;
   });
+
+  const wizardParentOptions = parentOptionsForSetor(wizard.setor, null, wizard.almoxarifado_id);
+  const almoxarifadosAtivos = almoxarifados.filter(a => a.ativo !== 0);
+  const almoxarifadoSelecionado = almoxarifados.find(a => String(a.id) === String(wizard.almoxarifado_id));
 
   const resetWizard = () => {
     setWizard(WIZARD_INITIAL);
@@ -1060,9 +1458,23 @@ const TabLocalizacoes = () => {
     setShowWizard(false);
   };
 
+  // Com um único almoxarifado cadastrado o passo 1 não tem escolha a fazer — pré-seleciona
+  // para não virar um clique obrigatório em quem nunca vai ter mais de um depósito.
+  const abrirWizard = () => {
+    const ativos = almoxarifados.filter(a => a.ativo !== 0);
+    setWizard({
+      ...WIZARD_INITIAL,
+      almoxarifado_id: ativos.length === 1 ? String(ativos[0].id) : '',
+    });
+    setWizardStep(1);
+    setWizardError('');
+    setShowMapaStep(false);
+    setShowWizard(true);
+  };
+
   const resetEdit = () => {
     setEditando(null);
-    setEditForm({ descricao: '', tipo: 'Almoxarifado' });
+    setEditForm({ descricao: '', tipo: 'Almoxarifado', almoxarifado_id: '', bloqueada: false, tipos_material_permitidos: [] });
     setShowEdit(false);
   };
 
@@ -1100,22 +1512,26 @@ const TabLocalizacoes = () => {
   const validateWizardStep = (step) => {
     setWizardError('');
     if (step === 1) {
-      if (!wizard.setor) { setWizardError('Selecione o setor ou corredor onde a localização fica.'); return false; }
+      if (!wizard.almoxarifado_id) { setWizardError('Selecione o almoxarifado onde a localização será criada.'); return false; }
       return true;
     }
     if (step === 2) {
+      if (!wizard.setor) { setWizardError('Selecione o setor ou corredor onde a localização fica.'); return false; }
+      return true;
+    }
+    if (step === 3) {
       if (!wizard.estruturaTipo) { setWizardError('Escolha se é uma posição raiz ou dentro de uma estrutura existente.'); return false; }
       if (wizard.estruturaTipo === 'child' && !wizard.parent_id) {
         setWizardError('Selecione a estrutura pai dentro do setor escolhido.');
         return false;
       }
-      if (wizard.estruturaTipo === 'child' && parentOptionsForSetor(wizard.setor).length === 0) {
-        setWizardError('Não há estruturas neste setor. Cadastre uma posição raiz primeiro.');
+      if (wizard.estruturaTipo === 'child' && wizardParentOptions.length === 0) {
+        setWizardError('Não há estruturas neste setor dentro deste almoxarifado. Cadastre uma posição raiz primeiro.');
         return false;
       }
       return true;
     }
-    if (step === 3) {
+    if (step === 4) {
       if (wizard.estruturaTipo === 'root' && !wizard.tipo) {
         setWizardError('Selecione o tipo de área.');
         return false;
@@ -1136,11 +1552,11 @@ const TabLocalizacoes = () => {
 
   const handleWizardNext = () => {
     if (!validateWizardStep(wizardStep)) return;
-    if (wizardStep === 2 || wizardStep === 3) {
+    if (wizardStep === 3 || wizardStep === 4) {
       const computed = computeWizardDetails(wizard);
       setWizard(w => ({ ...w, subgrupo: computed.subgrupo, codigo: computed.codigo, descricao: w.descricao || computed.descricao }));
     }
-    setWizardStep(s => Math.min(s + 1, 4));
+    setWizardStep(s => Math.min(s + 1, 5));
   };
 
   const handleWizardBack = () => {
@@ -1164,6 +1580,7 @@ const TabLocalizacoes = () => {
         subgrupo: subgrupo || null,
         parent_id: parentId,
         tipo: wizard.tipo || 'Almoxarifado',
+        almoxarifado_id: wizard.almoxarifado_id ? parseInt(wizard.almoxarifado_id, 10) : null,
         pos_x: wizard.pos_x !== '' && wizard.pos_x != null ? parseFloat(wizard.pos_x) : null,
         pos_y: wizard.pos_y !== '' && wizard.pos_y != null ? parseFloat(wizard.pos_y) : null,
         largura: parseFloat(wizard.largura) || 120,
@@ -1181,7 +1598,13 @@ const TabLocalizacoes = () => {
     resetWizard();
     resetMover();
     setEditando(loc.id);
-    setEditForm({ descricao: loc.descricao || '', tipo: loc.tipo || 'Almoxarifado' });
+    setEditForm({
+      descricao: loc.descricao || '',
+      tipo: loc.tipo || 'Almoxarifado',
+      almoxarifado_id: loc.almoxarifado_id != null ? String(loc.almoxarifado_id) : '',
+      bloqueada: !!loc.bloqueada,
+      tipos_material_permitidos: parseTiposPermitidos(loc.tipos_material_permitidos),
+    });
     setShowEdit(true);
   };
 
@@ -1201,6 +1624,9 @@ const TabLocalizacoes = () => {
         pos_y: loc.pos_y ?? null,
         largura: loc.largura ?? 120,
         altura: loc.altura ?? 80,
+        almoxarifado_id: editForm.almoxarifado_id ? parseInt(editForm.almoxarifado_id, 10) : null,
+        bloqueada: !!editForm.bloqueada,
+        tipos_material_permitidos: editForm.tipos_material_permitidos,
       });
       toast.success('Localização atualizada!');
       resetEdit();
@@ -1286,7 +1712,7 @@ const TabLocalizacoes = () => {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
         {!showWizard && !showEdit && !moverLoc && (
-          <button className="btn-almox-primary" onClick={() => { resetEdit(); resetMover(); setShowWizard(true); }}>
+          <button className="btn-almox-primary" onClick={() => { resetEdit(); resetMover(); abrirWizard(); }}>
             <FiPlus size={14} /> Nova Localização
           </button>
         )}
@@ -1301,9 +1727,44 @@ const TabLocalizacoes = () => {
             <h3>Nova Localização</h3>
             <button type="button" className="almox-btn-icon" onClick={resetWizard} title="Cancelar"><FiX size={16} /></button>
           </div>
-          <WizardProgress step={wizardStep} />
+          <WizardProgress step={wizardStep} total={5} />
 
           {wizardStep === 1 && (
+            <div className="almox-wizard-step">
+              <h4>Em qual almoxarifado?</h4>
+              <p className="almox-wizard-hint">
+                A localização nasce vinculada a este depósito. Para criar um novo, use o bloco
+                {' '}<strong>Almoxarifados</strong> na aba <strong>Setores e Áreas</strong>.
+              </p>
+              {almoxarifadosAtivos.length === 0 ? (
+                <p className="almox-wizard-error-inline">
+                  Nenhum almoxarifado ativo cadastrado. Cadastre um em &quot;Setores e Áreas&quot; antes de criar localizações.
+                </p>
+              ) : (
+                <div className="almox-wizard-setor-grid">
+                  {almoxarifadosAtivos.map(a => (
+                    <RadioCard
+                      key={a.id}
+                      selected={String(wizard.almoxarifado_id) === String(a.id)}
+                      onClick={() => setWizard(w => ({
+                        ...w,
+                        almoxarifado_id: String(a.id),
+                        // trocar de almoxarifado invalida o pai escolhido (ele é de outro depósito)
+                        parent_id: '',
+                        estruturaTipo: '',
+                        subgrupo: '',
+                      }))}
+                      title={a.codigo}
+                      subtitle={a.nome}
+                      icon="🏭"
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {wizardStep === 2 && (
             <div className="almox-wizard-step">
               <h4>Onde fica?</h4>
               <p className="almox-wizard-hint">
@@ -1325,10 +1786,13 @@ const TabLocalizacoes = () => {
             </div>
           )}
 
-          {wizardStep === 2 && (
+          {wizardStep === 3 && (
             <div className="almox-wizard-step">
               <h4>Tipo de estrutura</h4>
-              <p className="almox-wizard-hint">Setor selecionado: <strong>{wizard.setor}</strong></p>
+              <p className="almox-wizard-hint">
+                Almoxarifado: <strong>{almoxarifadoSelecionado?.codigo || '—'}</strong>
+                {' · '}Setor selecionado: <strong>{wizard.setor}</strong>
+              </p>
               <div className="almox-wizard-cards-row">
                 <RadioCard
                   selected={wizard.estruturaTipo === 'root'}
@@ -1354,21 +1818,21 @@ const TabLocalizacoes = () => {
                     onChange={e => setWizard(w => ({ ...w, parent_id: e.target.value, subgrupo: '' }))}
                   >
                     <option value="">Selecione a estrutura pai...</option>
-                    {parentOptionsForSetor(wizard.setor).map(l => (
+                    {wizardParentOptions.map(l => (
                       <option key={l.id} value={l.id}>
                         {l.codigo} — {l.subgrupo || l.descricao || l.tipo || 'Sem descrição'}
                       </option>
                     ))}
                   </select>
-                  {parentOptionsForSetor(wizard.setor).length === 0 && (
-                    <p className="almox-wizard-error-inline">Nenhuma estrutura neste setor. Volte e escolha &quot;Posição raiz&quot; ou outro setor.</p>
+                  {wizardParentOptions.length === 0 && (
+                    <p className="almox-wizard-error-inline">Nenhuma estrutura neste setor dentro deste almoxarifado. Volte e escolha &quot;Posição raiz&quot;, outro setor ou outro almoxarifado.</p>
                   )}
                 </div>
               )}
             </div>
           )}
 
-          {wizardStep === 3 && (
+          {wizardStep === 4 && (
             <div className="almox-wizard-step">
               <h4>Detalhes</h4>
               {wizard.estruturaTipo === 'root' && (
@@ -1414,7 +1878,7 @@ const TabLocalizacoes = () => {
             </div>
           )}
 
-          {wizardStep === 4 && (
+          {wizardStep === 5 && (
             <div className="almox-wizard-step">
               <h4>Confirmação</h4>
               <div className="almox-wizard-confirm-box">
@@ -1424,6 +1888,7 @@ const TabLocalizacoes = () => {
                 </div>
                 <dl className="almox-wizard-confirm-dl">
                   <dt>Código</dt><dd style={{ fontFamily: 'monospace', color: '#4facfe' }}>{preview.codigo}</dd>
+                  <dt>Almoxarifado</dt><dd>{almoxarifadoSelecionado ? `${almoxarifadoSelecionado.codigo} — ${almoxarifadoSelecionado.nome}` : '—'}</dd>
                   <dt>Setor</dt><dd>{preview.setor}</dd>
                   <dt>Tipo</dt><dd>{preview.tipo}</dd>
                   {preview.subgrupo && <><dt>Subgrupo</dt><dd>{preview.subgrupo}</dd></>}
@@ -1458,15 +1923,16 @@ const TabLocalizacoes = () => {
               </button>
             )}
             <div style={{ flex: 1 }} />
-            {wizardStep < 4 ? (
+            {wizardStep < 5 ? (
               <button
                 type="button"
                 className="btn-almox-primary"
                 onClick={handleWizardNext}
                 disabled={
-                  (wizardStep === 1 && !wizard.setor) ||
-                  (wizardStep === 2 && (!wizard.estruturaTipo || (wizard.estruturaTipo === 'child' && !wizard.parent_id))) ||
-                  (wizardStep === 3 && wizard.estruturaTipo === 'root' && !wizard.tipo)
+                  (wizardStep === 1 && !wizard.almoxarifado_id) ||
+                  (wizardStep === 2 && !wizard.setor) ||
+                  (wizardStep === 3 && (!wizard.estruturaTipo || (wizard.estruturaTipo === 'child' && !wizard.parent_id))) ||
+                  (wizardStep === 4 && wizard.estruturaTipo === 'root' && !wizard.tipo)
                 }
               >
                 Próximo <FiArrowRight size={14} />
@@ -1511,6 +1977,57 @@ const TabLocalizacoes = () => {
               <select className="almox-select" value={editForm.tipo} onChange={e => setEditForm(f => ({ ...f, tipo: e.target.value }))}>
                 {tiposEdit.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
+            </div>
+            <div className="almox-field">
+              <label className="almox-label">Almoxarifado</label>
+              <select className="almox-select" value={editForm.almoxarifado_id}
+                onChange={e => setEditForm(f => ({ ...f, almoxarifado_id: e.target.value }))}>
+                <option value="">— Selecione —</option>
+                {almoxarifados.map(a => (
+                  <option key={a.id} value={a.id}>{a.codigo} — {a.nome}</option>
+                ))}
+              </select>
+            </div>
+            <div className="almox-field">
+              <label className="almox-label" style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                <input type="checkbox" checked={editForm.bloqueada}
+                  onChange={e => setEditForm(f => ({ ...f, bloqueada: e.target.checked }))} />
+                🔒 Localização bloqueada
+              </label>
+              <span style={{ fontSize: '0.72rem', color: 'var(--gmp-text-light)' }}>
+                Impede movimentações de entrada e saída nesta posição.
+              </span>
+            </div>
+          </div>
+          <div className="almox-field" style={{ marginBottom: 16 }}>
+            <label className="almox-label">
+              Tipos de material permitidos{' '}
+              <span style={{ fontWeight: 400, color: 'var(--gmp-text-light)' }}>(nenhum selecionado = qualquer tipo)</span>
+            </label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
+              {tiposMaterial.map(t => {
+                const checked = editForm.tipos_material_permitidos.includes(t);
+                return (
+                  <label key={t} style={{
+                    display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78rem', cursor: 'pointer',
+                    background: checked ? 'rgba(79,172,254,0.12)' : 'var(--gmp-bg)',
+                    border: `1px solid ${checked ? '#4facfe' : 'var(--gmp-border)'}`,
+                    borderRadius: 20, padding: '4px 10px',
+                  }}>
+                    <input type="checkbox" checked={checked} style={{ margin: 0 }}
+                      onChange={() => setEditForm(f => ({
+                        ...f,
+                        tipos_material_permitidos: checked
+                          ? f.tipos_material_permitidos.filter(x => x !== t)
+                          : [...f.tipos_material_permitidos, t],
+                      }))} />
+                    {formatTipoMaterial(t)}
+                  </label>
+                );
+              })}
+              {tiposMaterial.length === 0 && (
+                <span style={{ fontSize: '0.78rem', color: 'var(--gmp-text-light)' }}>Nenhum tipo de material cadastrado.</span>
+              )}
             </div>
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -1640,16 +2157,20 @@ const TabLocalizacoes = () => {
       ) : (
         <div className="almox-table-container">
           <table className="almox-table">
-            <thead><tr><th>Código</th><th>Descrição</th><th>Subgrupo</th><th>Caminho</th><th>Tipo</th><th>Setor</th><th></th></tr></thead>
+            <thead><tr><th>Código</th><th>Descrição</th><th>Subgrupo</th><th>Caminho</th><th>Tipo</th><th>Setor</th><th>Almoxarifado</th><th></th></tr></thead>
             <tbody>
               {localizacoes.map(loc => (
                 <tr key={loc.id}>
-                  <td><span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#4facfe' }}>{loc.codigo}</span></td>
+                  <td>
+                    <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#4facfe' }}>{loc.codigo}</span>
+                    {!!loc.bloqueada && <span title="Localização bloqueada" style={{ marginLeft: 6 }}>🔒</span>}
+                  </td>
                   <td>{loc.descricao || '—'}</td>
                   <td>{loc.subgrupo ? <span style={{ fontFamily: 'monospace', fontSize: '0.85rem', fontWeight: 600 }}>{loc.subgrupo}</span> : '—'}</td>
                   <td style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>{formatLocalizacaoPath(loc, localizacoes)}</td>
                   <td><span style={{ fontSize: '0.8rem', background: 'rgba(79,172,254,0.1)', color: '#4facfe', padding: '2px 10px', borderRadius: 6 }}>{loc.tipo || 'Almoxarifado'}</span></td>
                   <td>{loc.setor ? <span style={{ fontSize: '0.8rem', background: 'var(--gmp-bg)', border: '1px solid var(--gmp-border)', borderRadius: 6, padding: '2px 10px' }}>{loc.setor}</span> : '—'}</td>
+                  <td style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>{loc.almoxarifado_codigo || '—'}</td>
                   <td>
                     <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                       <button className="almox-btn-icon" onClick={() => handleEditar(loc)} title="Editar"><FiEdit2 size={13} /></button>
@@ -2213,38 +2734,292 @@ const TabLiberacaoValor = () => {
   );
 };
 
+/* ===================== TAB PERFIS DE ACESSO ===================== */
+
+// Rótulo e o que cada perfil pode, em linguagem de usuário. As listas espelham
+// ACAO_PERFIS (server/services/almoxarifado/permissions.js) — se as regras mudarem lá,
+// atualize aqui: é texto de ajuda, não fonte de verdade (a decisão vem sempre do backend).
+const PERFIS_INFO = {
+  ADMINISTRADOR: { label: 'Administrador', desc: 'Acesso total, incluindo configurações do módulo' },
+  ALMOXARIFE: { label: 'Almoxarife', desc: 'Movimenta estoque, cadastra material, separa, entrega, aprova e inventaria — não ajusta saldo nem configura' },
+  GESTOR: { label: 'Gestor', desc: 'Ajusta saldo, aprova requisição e inventaria — não movimenta nem cadastra material' },
+  COMPRAS: { label: 'Compras', desc: 'Consulta e recebe material' },
+  ENGENHARIA: { label: 'Engenharia', desc: 'Cadastra e edita material, requisita e reserva' },
+  PRODUCAO: { label: 'Produção', desc: 'Consulta, requisita e reserva material (é o padrão de quem não tem perfil definido)' },
+  CONSULTA: { label: 'Consulta', desc: 'Somente leitura' },
+  QUALIDADE: { label: 'Qualidade', desc: 'Consulta e decide inspeção: aprova/reprova item recebido, libera vencimento de lote e muda status de lote e de série — não movimenta estoque, não ajusta saldo nem cadastra material' },
+};
+
+const TabPerfisAcesso = () => {
+  const [usuarios, setUsuarios] = useState([]);
+  const [perfis, setPerfis] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [salvandoId, setSalvandoId] = useState(null);
+  const [busca, setBusca] = useState('');
+
+  useEffect(() => { load(); }, []);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get('/almoxarifado/perfis-usuario');
+      setUsuarios(res.data.usuarios || []);
+      setPerfis(res.data.perfis || []);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao carregar perfis de acesso');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const alterar = async (usuarioId, perfil) => {
+    setSalvandoId(usuarioId);
+    try {
+      const res = await api.put(`/almoxarifado/perfis-usuario/${usuarioId}`, { perfil });
+      setUsuarios((lista) => lista.map((u) => (u.id === usuarioId
+        ? { ...u, perfil_explicito: res.data.perfil_explicito, perfil_efetivo: res.data.perfil_efetivo, origem: res.data.origem }
+        : u)));
+      // O hook de permissões guarda a resposta em cache de módulo; sem invalidar, quem
+      // acabou de ganhar perfil continuaria vendo os bloqueios até recarregar a página.
+      invalidarAlmoxPermissoes();
+      toast.success(perfil
+        ? `Perfil definido: ${PERFIS_INFO[perfil]?.label || perfil}`
+        : 'Perfil removido — o usuário volta ao padrão (Produção)');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao alterar o perfil');
+    } finally {
+      setSalvandoId(null);
+    }
+  };
+
+  const filtrados = usuarios.filter((u) => {
+    if (!busca.trim()) return true;
+    const q = busca.toLowerCase();
+    return (u.nome || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q);
+  });
+
+  if (loading) return <div className="almox-loading"><FiRefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} /> Carregando...</div>;
+
+  return (
+    <div>
+      <p style={{ color: 'var(--gmp-text-light)', fontSize: '0.875rem', marginBottom: 8 }}>
+        Define o que cada pessoa pode fazer <strong>dentro do almoxarifado</strong>. Ter acesso ao módulo
+        (no cadastro de usuário) permite <em>abrir</em> as telas; o perfil abaixo é o que permite <em>agir</em>.
+      </p>
+      <p style={{ color: 'var(--gmp-text-light)', fontSize: '0.8rem', marginBottom: 20 }}>
+        Quem não tem perfil definido entra como <strong>Produção</strong> — consulta e requisita, mas não
+        movimenta estoque, não cadastra material e não aprova.
+      </p>
+      <p style={{ color: 'var(--gmp-text-light)', fontSize: '0.8rem', marginBottom: 20 }}>
+        <strong>Administrador do módulo</strong> não é oferecido aqui: define-se no <strong>cadastro de usuário</strong>,
+        marcando o almoxarifado entre os módulos que a pessoa administra. Concedido por esta tela, seria apagado
+        no próximo salvamento daquele cadastro.
+      </p>
+
+      <div className="almox-field" style={{ maxWidth: 360, marginBottom: 16 }}>
+        <input
+          className="almox-input"
+          placeholder="Buscar por nome ou e-mail..."
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+        />
+      </div>
+
+      <div className="almox-table-container">
+        <table className="almox-table">
+          <thead>
+            <tr>
+              <th>Usuário</th>
+              <th style={{ width: 220 }}>Perfil no almoxarifado</th>
+              <th>O que isso permite</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtrados.length === 0 ? (
+              <tr><td colSpan={3} style={{ textAlign: 'center', color: 'var(--gmp-text-light)', padding: 24 }}>
+                Nenhum usuário encontrado.
+              </td></tr>
+            ) : filtrados.map((u) => {
+              const forcado = u.origem === 'forcado';
+              const info = PERFIS_INFO[u.perfil_efetivo];
+              return (
+                <tr key={u.id}>
+                  <td>
+                    <div style={{ fontWeight: 600 }}>{u.nome}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>{u.email}</div>
+                  </td>
+                  <td>
+                    {forcado ? (
+                      /* Administrador por superadmin/admin de sistema/admin de módulo: o perfil
+                         explícito seria ignorado em runtime e apagado no próximo save do
+                         usuário, então não oferecemos o select — o backend recusa com 409. */
+                      <span className="almox-badge almox-badge-ok" title="Definido no cadastro de usuário (superadmin, admin de sistema ou administrador do módulo)">
+                        <FiShield size={12} /> Administrador
+                      </span>
+                    ) : (
+                      <select
+                        className="almox-select"
+                        value={u.perfil_explicito || ''}
+                        disabled={salvandoId === u.id}
+                        onChange={(e) => alterar(u.id, e.target.value)}
+                      >
+                        <option value="">Produção (padrão)</option>
+                        {/* ADMINISTRADOR sai do seletor (Etapa 24, RN-07). A rota devolve
+                            PERFIS_VALIDOS inteiro, mas conceder este perfil AQUI é um erro por
+                            dois caminhos que se somam: (1) `hasAlmoxAdminPerfil` faz
+                            `canConfigureModule('almoxarifado')` valer para quem tem
+                            `perfil_almoxarifado === 'ADMINISTRADOR'` — quem recebesse por esta
+                            tela passaria a configurar o módulo e a promover outros, e
+                            `classificarPerfil` o marca como `explicito`, não `forcado`, então
+                            o 409 não protege; (2) `syncModuleAdminProfiles` roda em todo save de
+                            usuário e apaga essa linha quando `admin_modulos` não contém
+                            'almoxarifado' — a concessão evaporaria sozinha depois. Administrador
+                            do módulo se define no cadastro de usuário, e é só lá.
+                            PRODUCAO sai por outro motivo: é a opção vazia (RN-04). */}
+                        {perfis.filter((p) => p !== 'PRODUCAO' && p !== 'ADMINISTRADOR').map((p) => (
+                          <option key={p} value={p}>{PERFIS_INFO[p]?.label || p}</option>
+                        ))}
+                      </select>
+                    )}
+                  </td>
+                  <td style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>
+                    {info?.desc || '—'}
+                    {forcado && (
+                      <div style={{ marginTop: 4, fontSize: '0.75rem' }}>
+                        Para dar um perfil específico, remova a condição de administrador no cadastro de usuário.
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
 /* ===================== TAB CONFIGURAÇÕES GERAIS ===================== */
 const TabConfiguracoes = () => {
   const [configs, setConfigs] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  // ATENÇÃO — `chave` aqui NÃO é rótulo interno: é a chave literal que o servidor semeia em
+  // `configuracoes_almoxarifado` e lê em tempo de execução. Esta lista já mentiu: declarava
+  // `permitir_saida_saldo_negativo` enquanto o motor de estoque lia
+  // `permite_saldo_negativo_global` (stockService, guarda de saída), e mais cinco chaves que
+  // simplesmente não existiam do lado do servidor. O administrador ligava a opção e nada
+  // acontecia — um controle que mente é pior do que controle nenhum.
+  //
+  // Regra para adicionar um campo aqui: a chave precisa (1) estar semeada em
+  // `server/services/almoxarifado/schema.js` e (2) ter um leitor de verdade no servidor.
+  // `server/tests/api/configuracoesGerais.api.test.js` lê ESTE arquivo e reprova as duas
+  // condições — não adiante inventar a chave só na tela.
   const CAMPOS = [
     { chave: 'aprovacao_automatica', label: 'Aprovação Automática', tipo: 'boolean', descricao: 'Requisições normais são aprovadas automaticamente (exceto CRÍTICO)' },
-    { chave: 'prazo_atendimento_horas', label: 'Prazo de Atendimento (horas)', tipo: 'number', descricao: 'Tempo máximo para atender uma requisição normal' },
-    { chave: 'prazo_urgente_horas', label: 'Prazo Urgente (horas)', tipo: 'number', descricao: 'Tempo máximo para atender uma requisição urgente' },
-    { chave: 'prazo_critico_horas', label: 'Prazo Crítico (horas)', tipo: 'number', descricao: 'Tempo máximo para atender uma requisição crítica' },
-    { chave: 'alerta_estoque_email', label: 'E-mail para Alertas de Estoque', tipo: 'text', descricao: 'Será notificado quando estoque crítico for detectado' },
-    { chave: 'prefixo_codigo_material', label: 'Prefixo do Código de Material', tipo: 'text', descricao: 'Prefixo usado na geração automática de códigos (ex: MAT, ALM)' },
-    { chave: 'permitir_saida_saldo_negativo', label: 'Permitir Saída com Saldo Negativo', tipo: 'boolean', descricao: 'Permite registrar saída mesmo sem saldo disponível' },
-    { chave: 'requer_os_requisicao', label: 'OS Obrigatória na Requisição', tipo: 'boolean', descricao: 'Exige referência de Ordem de Serviço em toda requisição' },
+    { chave: 'permite_saldo_negativo_global', label: 'Permitir Saída com Saldo Negativo', tipo: 'boolean', descricao: 'Permite registrar saída mesmo sem saldo disponível' },
+    // Etapa 11: as tres chaves do motor de reposicao (purchaseService.calcularSugestoes/
+    // estoqueParado) — semeadas no schema.js, sem isto ficariam ineditaveis pela UI (Fase 2
+    // do design, mesma licao da Etapa 10).
+    { chave: 'reposicao_janela_consumo_dias', label: 'Janela do Consumo Médio (dias)', tipo: 'number', descricao: 'Período (dias) considerado para calcular o consumo médio diário na sugestão de reposição' },
+    { chave: 'reposicao_dias_sem_consumo', label: 'Dias Sem Consumo (estoque parado)', tipo: 'number', descricao: 'Dias sem saída para o material contar como parado/obsoleto' },
+    { chave: 'reposicao_horizonte_solicitacao_dias', label: 'Horizonte da Solicitação (dias)', tipo: 'number', descricao: 'Dias em que uma solicitação de compra aberta ainda conta como "a caminho" na sugestão' },
+    // Etapa 12 (RN-09): fila de notificacoes — as 10 chaves semeadas no schema.js (Task 1) com
+    // leitor real no worker/gancho/varreduras (Tasks 1-3). notificar_movimentacoes usa o mesmo
+    // padrao 'boolean' das duas primeiras linhas deste array (nasce '0' de proposito — D1 do
+    // design: ligar e-mail em toda movimentacao por default despejaria dezenas de e-mails sem
+    // ninguem ter escolhido; ligar e um clique aqui, reversivel).
+    { chave: 'notificar_movimentacoes', label: 'Notificar Movimentações por E-mail', tipo: 'boolean', descricao: 'Envia e-mail para toda movimentação confirmada (entrada, saída, ajuste, terceiro) — desligado por padrão' },
+    { chave: 'notificacoes_worker_intervalo_min', label: 'Intervalo do Worker (min)', tipo: 'number', descricao: 'Intervalo, em minutos, entre execuções do worker que envia a fila de notificações' },
+    { chave: 'notificacoes_max_tentativas', label: 'Máx. Tentativas de Envio', tipo: 'number', descricao: 'Número de tentativas de envio antes de marcar a notificação como FALHA' },
+    { chave: 'alerta_lote_vencendo_dias', label: 'Alerta de Lote Vencendo (dias)', tipo: 'number', descricao: 'Dias de antecedência para alertar lote próximo do vencimento' },
+    // Etapa 16 (C4): as 3 janelas dos alertas novos — semeadas no schema.js e lidas por
+    // alertRegistry.resolverDias (varredura diária E central de alertas, RN-01: mesma régua).
+    { chave: 'alerta_calibracao_dias', label: 'Alerta de Calibração (dias)', tipo: 'number', descricao: 'Dias de antecedência para alertar calibração de ferramenta vencendo' },
+    { chave: 'alerta_quarentena_dias', label: 'Alerta de Quarentena Parada (dias)', tipo: 'number', descricao: 'Dias aguardando inspeção para o item de recebimento contar como quarentena parada' },
+    { chave: 'alerta_reserva_parada_dias', label: 'Alerta de Reserva Parada (dias)', tipo: 'number', descricao: 'Dias com reserva ativa parada para gerar alerta de reserva esquecida' },
+    // Etapa 17 (C3): janela UNICA dos 3 alertas de evento (material reprovado, divergencia de
+    // recebimento, divergencia de inventario) — semeada no schema.js e lida pela mesma
+    // alertRegistry.resolverDias. O prefixo `alerta_` ja cai no guard do handleSalvar.
+    { chave: 'alerta_eventos_janela_dias', label: 'Alerta de Eventos (dias)', tipo: 'number', descricao: 'Janela em dias que os alertas de evento (reprovado, divergências) mostram na central' },
+    { chave: 'notificacoes_dest_entradas', label: 'Destinatários — Entradas', tipo: 'text', descricao: 'E-mails (lista) para notificação de entrada de material; vazio usa o e-mail de alertas' },
+    { chave: 'notificacoes_dest_saidas', label: 'Destinatários — Saídas', tipo: 'text', descricao: 'E-mails (lista) para notificação de saída de material; vazio usa o e-mail de alertas' },
+    { chave: 'notificacoes_dest_ajustes', label: 'Destinatários — Ajustes', tipo: 'text', descricao: 'E-mails (lista) para notificação de ajuste de estoque; vazio usa o e-mail de alertas' },
+    { chave: 'notificacoes_dest_terceiros', label: 'Destinatários — Terceiros', tipo: 'text', descricao: 'E-mails (lista) para notificação de movimentação de terceiro; vazio usa o e-mail de alertas' },
+    { chave: 'notificacoes_dest_compras', label: 'Destinatários — Compras', tipo: 'text', descricao: 'E-mails (lista) para notificação de solicitação de compra gerada; vazio usa compras_notificar_emails' },
   ];
+  // Saíram daqui por não ter leitor nenhum no servidor — nenhuma delas fazia coisa alguma:
+  // `prazo_atendimento_horas` (semeada, mas nada calcula prazo de atendimento),
+  // `prazo_urgente_horas` e `prazo_critico_horas` (nem semeadas), `alerta_estoque_email`
+  // (a aba "Alertas de Estoque" é quem configura destinatários, em `alertas_estoque_emails`),
+  // `prefixo_codigo_material` (a semeada chama-se `prefixo_material` e também não é lida por
+  // ninguém) e `requer_os_requisicao` (nenhuma validação exige OS). Voltar qualquer uma exige
+  // primeiro o leitor no servidor — senão o controle volta a mentir.
 
   useEffect(() => { loadConfigs(); }, []);
   const loadConfigs = async () => {
     setLoading(true);
     try {
+      // GET /almoxarifado/configuracoes devolve um MAPA { chave: { valor, descricao, id } },
+      // não um array. O `res.data.forEach` que estava aqui estourava TypeError em toda carga,
+      // caía no catch e a aba inteira aparecia vazia com "Erro ao carregar configurações" —
+      // por isso nem o campo de chave correta mostrava o valor gravado.
       const res = await api.get('/almoxarifado/configuracoes');
       const map = {};
-      res.data.forEach(c => { map[c.chave] = c.valor; });
+      Object.entries(res.data || {}).forEach(([chave, info]) => {
+        map[chave] = info && typeof info === 'object' ? info.valor : info;
+      });
       setConfigs(map);
     } catch { toast.error('Erro ao carregar configurações'); } finally { setLoading(false); }
   };
 
   const handleSalvar = async () => {
+    // Revisao final da Etapa 11 (achado 4, medido): o servidor recusa (400) as chaves
+    // `reposicao_*` que nao forem inteiro >= 1 (purchaseService.lerConfigNumero cai no default
+    // em silencio para qualquer outro valor). Sem o mesmo guard aqui, o clique em "Salvar"
+    // sempre disparava o PUT e so descobria o erro depois de ida e volta ao servidor — o
+    // literal do 400 e reaproveitado aqui de proposito (mesma frase, mesma chave) para o
+    // administrador nao ver duas mensagens diferentes para o mesmo problema.
+    //
+    // Etapa 12 (RN-09, Fase 2 do design): a fila de notificacoes trouxe chaves de TENTATIVAS e
+    // MINUTOS (`notificacoes_worker_*`, `notificacoes_max_*`) — reusar a mensagem "dias" para
+    // elas MENTIRIA. Mesmo par de prefixos/mensagens que a rota valida no servidor
+    // (routes/almoxarifado.js) — espelho de proposito, nao fonte unica.
+    //
+    // Etapa 16 (C4, achado da revisao do plano): `'alerta_lote_'` deixaria as 3 chaves novas
+    // (`alerta_calibracao_dias`, `alerta_quarentena_dias`, `alerta_reserva_parada_dias`) FORA
+    // do guard — o front deixaria o "0" ir ao servidor e a RN-06 "nos dois lados" falharia.
+    // Prefixo unico `'alerta_'`, a MESMA decisao da rota no servidor: `alertas_*` (emails,
+    // toggle) NAO casa com `alerta_` — o `_` na 7ª posicao nao e `s`.
+    const PREFIXOS_DIAS = ['reposicao_', 'alerta_'];
+    const PREFIXOS_INTEIRO = ['notificacoes_worker_', 'notificacoes_max_'];
+    const chaveInvalida = CAMPOS.find((c) => {
+      const ehDias = PREFIXOS_DIAS.some((p) => c.chave.startsWith(p));
+      const ehInteiro = PREFIXOS_INTEIRO.some((p) => c.chave.startsWith(p));
+      if (!ehDias && !ehInteiro) return false;
+      const n = Number(configs[c.chave]);
+      return !Number.isInteger(n) || n < 1;
+    });
+    if (chaveInvalida) {
+      const ehDias = PREFIXOS_DIAS.some((p) => chaveInvalida.chave.startsWith(p));
+      toast.error(ehDias
+        ? `Configuração "${chaveInvalida.chave}" deve ser um número de dias maior que zero`
+        : `Configuração "${chaveInvalida.chave}" deve ser um número inteiro maior que zero`);
+      return;
+    }
     setSaving(true);
     try {
-      await api.put('/almoxarifado/configuracoes', { configuracoes: Object.entries(configs).map(([chave, valor]) => ({ chave, valor: String(valor) })) });
+      // PUT espera o corpo achatado { chave: valor }. O envelope `{ configuracoes: [...] }` que
+      // estava aqui fazia o servidor gravar UMA linha de chave 'configuracoes' com
+      // "[object Object],[object Object]" — nenhuma configuração era salva.
+      // Só as chaves desta tela vão no corpo: o mapa `configs` carrega tudo o que o GET trouxe
+      // (SMTP, WhatsApp, liberação por valor) e reenviar isso reescreveria configuração de
+      // outras abas sem ninguém ter pedido.
+      const payload = {};
+      CAMPOS.forEach(c => { payload[c.chave] = String(configs[c.chave] ?? ''); });
+      await api.put('/almoxarifado/configuracoes', payload);
       toast.success('Configurações salvas!');
     } catch (err) { toast.error(err.response?.data?.error || 'Erro'); } finally { setSaving(false); }
   };
@@ -2269,6 +3044,8 @@ const TabConfiguracoes = () => {
             ) : (
               <input className="almox-input" style={{ width: 180, flexShrink: 0 }}
                 type={campo.tipo === 'number' ? 'number' : 'text'}
+                min={(campo.chave.startsWith('reposicao_') || campo.chave.startsWith('alerta_')
+                  || campo.chave.startsWith('notificacoes_worker_') || campo.chave.startsWith('notificacoes_max_')) ? 1 : undefined}
                 value={configs[campo.chave] || ''}
                 onChange={e => setConfigs(c => ({ ...c, [campo.chave]: e.target.value }))} />
             )}

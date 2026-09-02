@@ -5,22 +5,36 @@ import { resolveMaterialPhotoUrl } from '../../utils/resolveMaterialPhotoUrl';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
 import { canDeleteAlmoxRequisicao } from '../../utils/systemPermissions';
+import { prefixarAlmoxarifado } from '../../utils/localizacaoLabel';
 import { SkeletonTable } from '../SkeletonLoader';
 import AlmoxPageHeader, { REQUISICAO_FLOW, getRequisicaoStepIndex } from './AlmoxPageHeader';
 import { useRequisicoesMaterialContext } from './RequisicoesMaterialContext';
+import { TIPO_REQUISICAO_LABELS } from './requisicaoLabels';
+import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
+import AssinaturaCanvas from './AssinaturaCanvas';
 import {
   FiPlus, FiRefreshCw, FiEye, FiCheck, FiX, FiPackage,
-  FiAlertTriangle, FiClock, FiTruck, FiCheckCircle, FiFilter, FiMap, FiTrash2, FiDollarSign
+  FiAlertTriangle, FiClock, FiTruck, FiCheckCircle, FiFilter, FiMap, FiTrash2, FiDollarSign,
+  FiSend, FiArchive, FiShoppingCart, FiUserCheck, FiBox, FiEdit3, FiCopy, FiCheckSquare
 } from 'react-icons/fi';
 import './Almoxarifado.css';
 
 const STATUS_INFO = {
+  RASCUNHO:              { label: 'Rascunho',              cls: 'almox-badge-zerado',    icon: FiEdit3 },
   PENDENTE:              { label: 'Pendente',              cls: 'almox-badge-aberto',    icon: FiClock },
-  APROVADO:              { label: 'Aprovado',              cls: 'almox-badge-ok',        icon: FiCheck },
   AGUARDANDO_APROVACAO_VALOR: { label: 'Aguard. Aprov. Valor', cls: 'almox-badge-baixo', icon: FiDollarSign },
+  APROVADO:              { label: 'Aprovado',              cls: 'almox-badge-ok',        icon: FiCheck },
+  AGUARDANDO_ESTOQUE:    { label: 'Aguard. Estoque',        cls: 'almox-badge-critico',  icon: FiAlertTriangle },
+  AGUARDANDO_COMPRA:     { label: 'Aguard. Compra',         cls: 'almox-badge-devolucao', icon: FiShoppingCart },
+  // Etapa 4: aprovação com saldo cai num destes dois em vez de APROVADO (máquina de estados,
+  // requisitionStateMachine.js) — são o estado normal de requisição aprovada, não exceção.
+  PARCIALMENTE_RESERVADA: { label: 'Parcialmente Reservada', cls: 'almox-badge-baixo',   icon: FiBox },
+  TOTALMENTE_RESERVADA:  { label: 'Totalmente Reservada',   cls: 'almox-badge-ok',       icon: FiCheckSquare },
   EM_SEPARACAO:          { label: 'Em Separação',          cls: 'almox-badge-ajuste',    icon: FiPackage },
+  PRONTA_PARA_RETIRADA:  { label: 'Pronta p/ Retirada',     cls: 'almox-badge-entrada',  icon: FiBox },
   PARCIALMENTE_ATENDIDA: { label: 'Parcialmente Atendida', cls: 'almox-badge-baixo',     icon: FiTruck },
   ENTREGUE:              { label: 'Entregue',              cls: 'almox-badge-concluido', icon: FiCheckCircle },
+  ENCERRADA:             { label: 'Encerrada',             cls: 'almox-badge-cancelado', icon: FiArchive },
   REJEITADO:             { label: 'Rejeitado',             cls: 'almox-badge-saida',     icon: FiX },
   CANCELADO:             { label: 'Cancelado',             cls: 'almox-badge-cancelado', icon: FiX },
 };
@@ -59,6 +73,7 @@ const URGENCIA_INFO = {
 const formatMoeda = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 const RequisicoesList = () => {
+  const { pode, bloquearSeNaoPode } = useAlmoxPermissoes();
   const { user } = useAuth();
   const navigate = useNavigate();
   const ctx = useRequisicoesMaterialContext();
@@ -73,6 +88,7 @@ const RequisicoesList = () => {
   const [requisicoes, setRequisicoes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtroStatus, setFiltroStatus] = useState(searchParams.get('status') || '');
+  const [filtroTipo, setFiltroTipo] = useState(searchParams.get('tipo') || '');
   const [filtroAprovacoesValor, setFiltroAprovacoesValor] = useState(
     searchParams.get('aprovacoes_valor') === '1'
   );
@@ -99,10 +115,18 @@ const RequisicoesList = () => {
   const [showExcluir, setShowExcluir] = useState(false);
   const [excluirTarget, setExcluirTarget] = useState(null);
   const [justificativaExclusao, setJustificativaExclusao] = useState('');
+  const [showEncerrar, setShowEncerrar] = useState(false);
+  const [motivoEncerramento, setMotivoEncerramento] = useState('');
+  const [confirmDialog, setConfirmDialog] = useState(null);
   const [quantidadesEntrega, setQuantidadesEntrega] = useState({});
   const [quantidadesSeparacao, setQuantidadesSeparacao] = useState({});
   const [entregaAposSeparar, setEntregaAposSeparar] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Etapa 15: etapa opcional de assinatura do recebedor. Guarda reqId + numero (e não o
+  // detalhe) porque a entrega total fecha o painel de detalhe antes de a assinatura abrir.
+  const [assinaturaPos, setAssinaturaPos] = useState(null); // { reqId, numero } | null
+  const [assinaturaNome, setAssinaturaNome] = useState('');
+  const [enviandoAssinatura, setEnviandoAssinatura] = useState(false);
 
   const buildSearchParams = useCallback((id) => {
     const params = {};
@@ -113,9 +137,10 @@ const RequisicoesList = () => {
       params.status = filtroStatus;
     }
     if (filtroMinha) params.minha = '1';
+    if (filtroTipo) params.tipo = filtroTipo;
     if (id) params.id = String(id);
     return params;
-  }, [filtroStatus, filtroMinha, filtroAprovacoesValor]);
+  }, [filtroStatus, filtroMinha, filtroAprovacoesValor, filtroTipo]);
 
   const syncSearchParams = useCallback((id) => {
     const params = buildSearchParams(id);
@@ -158,7 +183,7 @@ const RequisicoesList = () => {
   useEffect(() => {
     syncSearchParams(selectedIdRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtroStatus, filtroMinha, filtroAprovacoesValor]);
+  }, [filtroStatus, filtroMinha, filtroAprovacoesValor, filtroTipo]);
 
   const aplicarDetalhe = useCallback((data, id) => {
     setDetalhe(data);
@@ -386,6 +411,7 @@ const RequisicoesList = () => {
     try {
       const res = await api.put(`/almoxarifado/requisicoes/${reqId}/entregar`, { itens_atendidos });
       setShowEntregar(false);
+      const numeroEntregue = detalhe?.numero || '';
       if (res.data?.parcial) {
         toast.success('Entrega parcial registrada. Saldo pendente permanece em aberto.');
         await abrirDetalhe(reqId, { force: true });
@@ -393,6 +419,10 @@ const RequisicoesList = () => {
         toast.success('Requisição entregue por completo! Estoque baixado.');
         fecharDetalhe();
       }
+      // Etapa 15 (RN-02): a entrega já está registrada — a assinatura é etapa POSTERIOR e
+      // opcional ("Pular" fecha sem POST). Nunca condiciona o sucesso da entrega.
+      setAssinaturaNome('');
+      setAssinaturaPos({ reqId, numero: numeroEntregue });
       await loadRequisicoes();
     } catch (err) {
       console.error('[RequisicoesList] Erro ao entregar requisição', err?.response?.data || err);
@@ -400,6 +430,42 @@ const RequisicoesList = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  // Etapa 15 — POST multipart do contrato C1 (recebedor_nome + arquivo `assinatura`).
+  // RN-02: falha aqui NÃO desfaz a entrega — a entrega é fato físico já registrado; a
+  // assinatura é documentação dele. Erro vira toast e a etapa continua aberta para tentar
+  // de novo (ou Pular).
+  const enviarAssinatura = async (blob) => {
+    if (!assinaturaPos || enviandoAssinatura) return;
+    const nome = assinaturaNome.trim();
+    if (!nome) {
+      toast.error('Informe o nome de quem recebeu o material');
+      return;
+    }
+    setEnviandoAssinatura(true);
+    try {
+      const fd = new FormData();
+      fd.append('recebedor_nome', nome);
+      fd.append('assinatura', blob, 'assinatura.png');
+      await api.post(`/almoxarifado/requisicoes/${assinaturaPos.reqId}/assinatura-entrega`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      toast.success('Assinatura do recebedor registrada!');
+      const reqId = assinaturaPos.reqId;
+      setAssinaturaPos(null);
+      setAssinaturaNome('');
+      if (selectedIdRef.current === reqId) await abrirDetalhe(reqId, { force: true });
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao registrar assinatura');
+    } finally {
+      setEnviandoAssinatura(false);
+    }
+  };
+
+  const abrirColherAssinatura = (fonte) => {
+    setAssinaturaNome('');
+    setAssinaturaPos({ reqId: fonte.id, numero: fonte.numero });
   };
 
   const abrirModalEntrega = (fonte = detalhe) => {
@@ -530,7 +596,115 @@ const RequisicoesList = () => {
     setShowExcluir(true);
   };
 
+  // Ações do ciclo completo (Task 6) — todas exclusivas de /almoxarifado/requisicoes;
+  // /requisicoes-material não tem essas rotas, por isso os botões só aparecem em
+  // warehouseMode (ver JSX abaixo).
+  const closeConfirmDialog = () => setConfirmDialog(null);
+
+  const handleEnviar = async (id) => {
+    setSaving(true);
+    try {
+      await api.post(`/almoxarifado/requisicoes/${id}/enviar`);
+      toast.success('Requisição enviada para aprovação!');
+      closeConfirmDialog();
+      await abrirDetalhe(id, { force: true });
+      await loadRequisicoes();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao enviar requisição');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleLiberarRetirada = async (id) => {
+    setSaving(true);
+    try {
+      await api.put(`/almoxarifado/requisicoes/${id}/liberar-retirada`);
+      toast.success('Requisição liberada para retirada!');
+      closeConfirmDialog();
+      await abrirDetalhe(id, { force: true });
+      await loadRequisicoes();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao liberar retirada');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Etapa 28 (C3/C6): segunda conferência da separação. Sem corpo — quem confere é o
+  // usuário logado, e o backend recusa (403) quem aparece em qualquer rodada de separação.
+  const handleConferirSeparacao = async (id) => {
+    setSaving(true);
+    try {
+      await api.put(`/almoxarifado/requisicoes/${id}/conferir-separacao`);
+      toast.success('Separação conferida!');
+      await abrirDetalhe(id, { force: true });
+      await loadRequisicoes();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao conferir separação');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleConfirmarRecebimento = async (id) => {
+    setSaving(true);
+    try {
+      await api.put(`/almoxarifado/requisicoes/${id}/confirmar-recebimento`);
+      toast.success('Recebimento confirmado!');
+      closeConfirmDialog();
+      await abrirDetalhe(id, { force: true });
+      await loadRequisicoes();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao confirmar recebimento');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleEncerrar = async () => {
+    if (!detalhe) return;
+    setSaving(true);
+    try {
+      await api.put(`/almoxarifado/requisicoes/${detalhe.id}/encerrar`, {
+        motivo: motivoEncerramento.trim() || undefined,
+      });
+      toast.success('Requisição encerrada!');
+      setShowEncerrar(false);
+      setMotivoEncerramento('');
+      await abrirDetalhe(detalhe.id, { force: true });
+      await loadRequisicoes();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao encerrar requisição');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCopiar = async (id) => {
+    setSaving(true);
+    try {
+      const res = await api.post(`/almoxarifado/requisicoes/${id}/copiar`);
+      toast.success(`Rascunho ${res.data.numero} criado a partir desta requisição!`);
+      closeConfirmDialog();
+      await loadRequisicoes();
+      await abrirDetalhe(res.data.id, { force: true });
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao copiar requisição');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const formatDate = (d) => d ? new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
+
+  // Etapa 28 (C6). `separacoes`/`conferencia`/`conferencia_obrigatoria` só vêm do
+  // GET /almoxarifado/requisicoes/:id — no modo não-warehouse (/requisicoes-material/:id)
+  // não existem, por isso os defaults: sem eles, a tela se comporta como antes.
+  const separacoes = detalhe?.separacoes || [];
+  const euSeparei = !!user?.id && separacoes.some((s) => Number(s.usuario_id) === Number(user.id));
+  const conferenciaPendente = !!detalhe?.conferencia_obrigatoria && !detalhe?.conferencia;
+  const TITLE_CONFERENCIA_PENDENTE = 'Esta requisição tem material crítico separado e precisa da segunda conferência antes de sair';
 
   const StatusBadge = ({ status }) => {
     const info = STATUS_INFO[status] || { label: status, cls: 'almox-badge-ajuste', icon: FiClock };
@@ -548,13 +722,19 @@ const RequisicoesList = () => {
     );
   };
 
+  // Filtro por tipo é só local (GET /almoxarifado/requisicoes não tem query param
+  // tipo_requisicao no server) — filtra o array já carregado, sem round-trip.
+  const requisicoesExibidas = filtroTipo
+    ? requisicoes.filter((r) => r.tipo_requisicao === filtroTipo)
+    : requisicoes;
+
   return (
     <div className="almox-page">
       <AlmoxPageHeader
         title={warehouseMode ? 'Requisições de Material' : 'Minhas Requisições de Material'}
         subtitle={warehouseMode
-          ? `${requisicoes.length} requisição${requisicoes.length !== 1 ? 'ões' : ''}`
-          : `Setor: ${ctx.setor} · ${requisicoes.length} registro${requisicoes.length !== 1 ? 's' : ''}`}
+          ? `${requisicoesExibidas.length} requisição${requisicoesExibidas.length !== 1 ? 'ões' : ''}`
+          : `Setor: ${ctx.setor} · ${requisicoesExibidas.length} registro${requisicoesExibidas.length !== 1 ? 's' : ''}`}
         breadcrumbs={[{ label: warehouseMode ? 'Requisições' : 'Minhas Requisições' }]}
         flowSteps={warehouseMode ? REQUISICAO_FLOW : undefined}
         currentStep={warehouseMode && detalhe ? getRequisicaoStepIndex(detalhe.status) : undefined}
@@ -589,12 +769,16 @@ const RequisicoesList = () => {
           <option value="">Todos os status</option>
           {Object.entries(STATUS_INFO).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
         </select>
+        <select className="almox-select" value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)}>
+          <option value="">Todos os tipos</option>
+          {Object.entries(TIPO_REQUISICAO_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.875rem', color: 'var(--gmp-text)' }}>
           <input type="checkbox" checked={filtroMinha} onChange={e => setFiltroMinha(e.target.checked)} />
           {warehouseMode ? 'Apenas minhas' : 'Somente minhas solicitações'}
         </label>
-        {(filtroStatus || filtroMinha || filtroAprovacoesValor) && (
-          <button className="btn-almox-secondary" onClick={() => { setFiltroStatus(''); setFiltroMinha(false); setFiltroAprovacoesValor(false); }}>
+        {(filtroStatus || filtroMinha || filtroAprovacoesValor || filtroTipo) && (
+          <button className="btn-almox-secondary" onClick={() => { setFiltroStatus(''); setFiltroMinha(false); setFiltroAprovacoesValor(false); setFiltroTipo(''); }}>
             <FiFilter size={13} /> Limpar
           </button>
         )}
@@ -603,7 +787,7 @@ const RequisicoesList = () => {
       <div style={{ display: 'grid', gridTemplateColumns: selectedId ? '1fr 420px' : '1fr', gap: 20 }}>
         {/* Tabela */}
         <div className="almox-table-container">
-          {loading ? <SkeletonTable rows={8} columns={6} /> : requisicoes.length === 0 ? (
+          {loading ? <SkeletonTable rows={8} columns={6} /> : requisicoesExibidas.length === 0 ? (
             <div className="almox-empty"><p>Nenhuma requisição encontrada</p></div>
           ) : (
             <table className="almox-table">
@@ -611,6 +795,7 @@ const RequisicoesList = () => {
                 <tr>
                   <th>Número</th>
                   <th>Solicitante</th>
+                  <th>Tipo</th>
                   <th>Urgência</th>
                   <th>OS / Ref.</th>
                   <th>Itens</th>
@@ -621,7 +806,7 @@ const RequisicoesList = () => {
                 </tr>
               </thead>
               <tbody>
-                {requisicoes.map(r => (
+                {requisicoesExibidas.map(r => (
                   <tr key={r.id} style={{ cursor: 'pointer', background: selectedId === r.id ? 'rgba(79,172,254,0.06)' : '' }}
                     onClick={() => abrirDetalhe(r.id, { force: true })}>
                     <td>
@@ -631,6 +816,7 @@ const RequisicoesList = () => {
                       <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{r.solicitante_nome}</div>
                       {r.departamento && <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>{r.departamento}</div>}
                     </td>
+                    <td style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>{TIPO_REQUISICAO_LABELS[r.tipo_requisicao] || r.tipo_requisicao || '—'}</td>
                     <td><UrgenciaBadge urgencia={r.urgencia} /></td>
                     <td style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>{r.os_referencia || '—'}</td>
                     <td style={{ fontWeight: 700 }}>{r.total_itens}</td>
@@ -694,6 +880,7 @@ const RequisicoesList = () => {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
                   {[
                     ['Solicitante', detalhe.solicitante_nome],
+                    ['Tipo', TIPO_REQUISICAO_LABELS[detalhe.tipo_requisicao] || detalhe.tipo_requisicao || '—'],
                     ['Departamento', detalhe.departamento || '—'],
                     ['OS / Referência', detalhe.os_referencia || '—'],
                     ['Urgência', URGENCIA_INFO[detalhe.urgencia]?.label || detalhe.urgencia],
@@ -716,6 +903,12 @@ const RequisicoesList = () => {
                 {detalhe.rejeicao_motivo && (
                   <div style={{ background: 'rgba(229,25,58,0.06)', border: '1px solid rgba(229,25,58,0.2)', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: '0.85rem', color: 'var(--gmp-error)' }}>
                     ❌ Motivo: {detalhe.rejeicao_motivo}
+                  </div>
+                )}
+                {detalhe.recebimento_confirmado_em && (
+                  <div style={{ background: 'rgba(26,163,74,0.08)', border: '1px solid rgba(26,163,74,0.25)', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: '0.85rem', color: 'var(--gmp-success)' }}>
+                    <FiUserCheck size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+                    Recebimento confirmado pelo solicitante em {formatDate(detalhe.recebimento_confirmado_em)}
                   </div>
                 )}
                 {detalhe.status === 'AGUARDANDO_APROVACAO_VALOR' && (
@@ -745,7 +938,7 @@ const RequisicoesList = () => {
                       <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>
                         {item.material_codigo} · Saldo: {item.saldo_atual} {item.unidade}
                         {item.localizacao && (
-                          <span> · 📍 {item.localizacao}</span>
+                          <span> · 📍 {prefixarAlmoxarifado(item.localizacao, item.almoxarifado_codigo)}</span>
                         )}
                       </div>
                       {item.localizacao_padrao_id && (
@@ -777,6 +970,65 @@ const RequisicoesList = () => {
                   </div>
                 ))}
 
+                {/* Rodadas de separação e segunda conferência (Etapa 28, C6) — leitura junto
+                    da requisição, sem gate novo, no mesmo molde das assinaturas de entrega. */}
+                {warehouseMode && (separacoes.length > 0 || detalhe.conferencia) && (
+                  <div style={{ marginTop: 16 }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--gmp-text)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                      Separação{separacoes.length > 0 ? ` (${separacoes.length})` : ''}
+                    </div>
+                    {separacoes.map((s) => (
+                      <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--gmp-border)', fontSize: '0.82rem' }}>
+                        <FiPackage size={12} style={{ color: 'var(--gmp-text-light)', flexShrink: 0 }} />
+                        <span style={{ fontWeight: 600 }}>{s.usuario_nome || `Usuário #${s.usuario_id}`}</span>
+                        <span style={{ color: 'var(--gmp-text-light)' }}>
+                          · {formatDate(s.created_at)} · {Number(s.itens_tocados) || 0} {Number(s.itens_tocados) === 1 ? 'item' : 'itens'}
+                        </span>
+                      </div>
+                    ))}
+                    {detalhe.conferencia && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', fontSize: '0.82rem', color: 'var(--gmp-success, #2e7d32)' }}>
+                        <FiCheckCircle size={13} style={{ flexShrink: 0 }} />
+                        <span>
+                          Conferida por <strong>{detalhe.conferencia.usuario_nome}</strong> em {formatDate(detalhe.conferencia.em)}
+                        </span>
+                      </div>
+                    )}
+                    {conferenciaPendente && (
+                      <div className="almox-hint-banner" style={{ marginTop: 8, fontSize: '0.78rem', borderColor: 'var(--gmp-warning)' }}>
+                        Há material crítico separado — outra pessoa do almoxarifado precisa conferir antes de liberar ou entregar.
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Assinaturas de entrega (Etapa 15, C2) — leitura junto da requisição,
+                    sem gate novo: quem vê a requisição vê as assinaturas dela. */}
+                {(detalhe.assinaturas_entrega || []).length > 0 && (
+                  <div style={{ marginTop: 16 }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--gmp-text)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                      Assinaturas de Entrega ({detalhe.assinaturas_entrega.length})
+                    </div>
+                    {detalhe.assinaturas_entrega.map((a) => (
+                      <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--gmp-border)' }}>
+                        <a href={resolveMaterialPhotoUrl(a.arquivo_url)} target="_blank" rel="noreferrer" title="Abrir assinatura em tamanho real">
+                          <img
+                            src={resolveMaterialPhotoUrl(a.arquivo_url)}
+                            alt={`Assinatura de ${a.recebedor_nome}`}
+                            style={{ width: 72, height: 36, objectFit: 'contain', background: '#fff', border: '1px solid var(--gmp-border)', borderRadius: 6, display: 'block' }}
+                          />
+                        </a>
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{a.recebedor_nome}</div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--gmp-text-light)' }}>
+                            {formatDate(a.criado_em)}{a.criado_por_nome ? ` · colhida por ${a.criado_por_nome}` : ''}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {/* Ações — aprovação de valor */}
                 {warehouseMode && detalhe.status === 'AGUARDANDO_APROVACAO_VALOR' && (souAprovadorValor || isAdmin) && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 20, flexWrap: 'wrap' }}>
@@ -796,30 +1048,65 @@ const RequisicoesList = () => {
                   </div>
                 )}
 
+                {/* Ação — rascunho: só sai do rascunho quando o solicitante (ou admin) envia */}
+                {warehouseMode && detalhe.status === 'RASCUNHO' && (
+                  <div style={{ marginTop: 20 }}>
+                    <div className="almox-hint-banner" style={{ marginBottom: 12, fontSize: '0.8rem' }}>
+                      Rascunho — a requisição só entra no fluxo de aprovação (e-mails, avaliação de valor) depois de enviada.
+                    </div>
+                    {(detalhe.solicitante_id === user?.id || isAdmin) && (
+                      <button className="btn-almox-primary" style={{ width: '100%', justifyContent: 'center' }}
+                        onClick={() => setConfirmDialog({
+                          title: 'Enviar Requisição',
+                          message: `Enviar a requisição ${detalhe.numero} para aprovação? Ela sai do rascunho e entra no fluxo normal.`,
+                          confirmLabel: 'Enviar',
+                          onConfirm: () => handleEnviar(detalhe.id),
+                        })}
+                        disabled={saving}>
+                        <FiSend size={14} /> Enviar Requisição
+                      </button>
+                    )}
+                  </div>
+                )}
+
                 {/* Ações — somente almoxarifado (aprovação/separação/entrega) */}
                 {warehouseMode && detalhe.status === 'PENDENTE' && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 20, flexWrap: 'wrap' }}>
                     <button className="btn-almox-primary" style={{ flex: 1, justifyContent: 'center', minWidth: 140 }}
-                      onClick={() => handleAprovar(detalhe.id, true)} disabled={saving}>
+                      onClick={(e) => { if (!bloquearSeNaoPode('aprovar_requisicao', e)) return; handleAprovar(detalhe.id, true); }} disabled={saving}
+                      title="Aprova a requisição e já abre a separação dos materiais">
                       <FiCheck size={14} /> Aprovar e Separar
                     </button>
                     <button className="btn-almox-secondary" style={{ flex: 1, justifyContent: 'center', minWidth: 120 }}
-                      onClick={() => handleAprovar(detalhe.id, false)} disabled={saving}>
+                      onClick={(e) => { if (!bloquearSeNaoPode('aprovar_requisicao', e)) return; handleAprovar(detalhe.id, false); }} disabled={saving}
+                      title="Aprova a requisição sem iniciar a separação agora">
                       <FiCheck size={14} /> Só Aprovar
                     </button>
                     <button className="btn-almox-danger" style={{ flex: 1, justifyContent: 'center', minWidth: 100 }}
-                      onClick={() => setShowRejeitar(true)}>
+                      onClick={(e) => {
+                        // espelha a regra do backend: rejeitar a PRÓPRIA é desistência e
+                        // qualquer solicitante pode; rejeitar a de outro exige o perfil.
+                        const propria = detalhe.solicitante_id === user?.id;
+                        if (!propria && !bloquearSeNaoPode('aprovar_requisicao', e)) return;
+                        setShowRejeitar(true);
+                      }}
+                      title="Recusa a requisição — exige um motivo, que fica registrado para o solicitante">
                       <FiX size={14} /> Rejeitar
                     </button>
                   </div>
                 )}
-                {warehouseMode && detalhe.status === 'APROVADO' && (
+                {warehouseMode && ['APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA', 'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA'].includes(detalhe.status) && (
                   <div style={{ marginTop: 20 }}>
                     <div className="almox-hint-banner" style={{ marginBottom: 12, fontSize: '0.8rem' }}>
-                      Próximo passo: separe os materiais (máximo disponível em estoque) e confirme a entrega.
+                      {detalhe.status === 'AGUARDANDO_ESTOQUE' && 'Sem saldo disponível no momento — inicie a separação assim que o estoque for reposto.'}
+                      {detalhe.status === 'AGUARDANDO_COMPRA' && 'Sem saldo disponível — há uma solicitação de compra em andamento para os materiais desta requisição.'}
+                      {detalhe.status === 'APROVADO' && 'Próximo passo: separe os materiais (máximo disponível em estoque) e confirme a entrega.'}
+                      {detalhe.status === 'PARCIALMENTE_RESERVADA' && 'Parte dos itens não tinha saldo e ficou sem reserva — separe o que está reservado e acompanhe a reposição do restante.'}
+                      {detalhe.status === 'TOTALMENTE_RESERVADA' && 'Todo o saldo desta requisição está reservado — inicie a separação.'}
                     </div>
                     <button className="btn-almox-primary" style={{ width: '100%', justifyContent: 'center' }}
-                      onClick={abrirModalSeparacao} disabled={saving}>
+                      onClick={(e) => { if (!bloquearSeNaoPode('separar_emitir', e)) return; abrirModalSeparacao(); }} disabled={saving}
+                      title="Registra quanto de cada item foi separado fisicamente, limitado ao saldo disponível">
                       <FiPackage size={14} /> Iniciar Separação
                     </button>
                   </div>
@@ -827,12 +1114,62 @@ const RequisicoesList = () => {
                 {warehouseMode && detalhe.status === 'EM_SEPARACAO' && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 20 }}>
                     <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center' }}
-                      onClick={abrirModalSeparacao}>
+                      onClick={(e) => { if (!bloquearSeNaoPode('separar_emitir', e)) return; abrirModalSeparacao(); }}
+                      title="Corrige as quantidades já registradas na separação">
                       <FiPackage size={14} /> Ajustar Separação
                     </button>
+                    {/* Etapa 28: segunda conferência — quem separou não confere (o backend
+                        dá 403 de qualquer jeito; aqui o botão já nasce desabilitado). */}
+                    {!detalhe.conferencia && detalhe.itens.some((i) => getSeparado(i) > 0) && (
+                      <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center' }}
+                        onClick={(e) => { if (!bloquearSeNaoPode('conferir_separacao', e)) return; handleConferirSeparacao(detalhe.id); }}
+                        disabled={saving || euSeparei}
+                        title={euSeparei
+                          ? 'Você separou esta requisição — a segunda conferência precisa ser feita por outra pessoa'
+                          : 'Confere fisicamente o que foi separado; obrigatória quando há material crítico'}>
+                        <FiUserCheck size={14} /> Conferir separação
+                      </button>
+                    )}
+                    {detalhe.itens.some((i) => getSeparado(i) > 0) && (
+                      <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center' }}
+                        onClick={(e) => {
+                          if (!bloquearSeNaoPode('separar_emitir', e)) return;
+                          setConfirmDialog({
+                            title: 'Liberar para Retirada',
+                            message: `Liberar a requisição ${detalhe.numero} para retirada? O solicitante poderá buscar os itens já separados.`,
+                            confirmLabel: 'Liberar',
+                            onConfirm: () => handleLiberarRetirada(detalhe.id),
+                          });
+                        }}
+                        disabled={saving || conferenciaPendente}
+                        title={conferenciaPendente ? TITLE_CONFERENCIA_PENDENTE : 'Marca a requisição como pronta para o solicitante buscar os itens já separados'}>
+                        <FiCheckSquare size={14} /> Liberar para Retirada
+                      </button>
+                    )}
                     {temEntregavel(detalhe.itens) ? (
                       <button className="btn-almox-primary" style={{ width: '100%', justifyContent: 'center' }}
-                        onClick={() => handleConfirmarEntrega({ direto: true })} disabled={saving}>
+                        onClick={(e) => { if (!bloquearSeNaoPode('separar_emitir', e)) return; handleConfirmarEntrega({ direto: true }); }}
+                        disabled={saving || conferenciaPendente}
+                        title={conferenciaPendente ? TITLE_CONFERENCIA_PENDENTE : 'Entrega os itens separados e dá baixa no estoque — a movimentação fica registrada no livro'}>
+                        <FiTruck size={14} /> {saving ? 'Confirmando...' : 'Confirmar Entrega e Baixar Estoque'}
+                      </button>
+                    ) : (
+                      <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', textAlign: 'center', padding: '8px 0' }}>
+                        Nenhuma quantidade separada disponível para entrega no momento.
+                      </div>
+                    )}
+                  </div>
+                )}
+                {warehouseMode && detalhe.status === 'PRONTA_PARA_RETIRADA' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 20 }}>
+                    <div className="almox-hint-banner" style={{ fontSize: '0.8rem' }}>
+                      Pronta para retirada — aguardando o solicitante buscar o material separado.
+                    </div>
+                    {temEntregavel(detalhe.itens) ? (
+                      <button className="btn-almox-primary" style={{ width: '100%', justifyContent: 'center' }}
+                        onClick={(e) => { if (!bloquearSeNaoPode('separar_emitir', e)) return; handleConfirmarEntrega({ direto: true }); }}
+                        disabled={saving || conferenciaPendente}
+                        title={conferenciaPendente ? TITLE_CONFERENCIA_PENDENTE : 'Entrega os itens separados e dá baixa no estoque — a movimentação fica registrada no livro'}>
                         <FiTruck size={14} /> {saving ? 'Confirmando...' : 'Confirmar Entrega e Baixar Estoque'}
                       </button>
                     ) : (
@@ -865,7 +1202,49 @@ const RequisicoesList = () => {
                     </div>
                   );
                 })()}
-                {['PENDENTE', 'APROVADO'].includes(detalhe.status) && (
+
+                {/* Encerramento — a partir de ENTREGUE/PARCIALMENTE_ATENDIDA (design: "cancela
+                    saldos pendentes, nenhuma entrega futura"). */}
+                {warehouseMode && ['ENTREGUE', 'PARCIALMENTE_ATENDIDA'].includes(detalhe.status) && (
+                  <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }}
+                    onClick={() => { setMotivoEncerramento(''); setShowEncerrar(true); }} disabled={saving}>
+                    <FiArchive size={14} /> Encerrar Requisição
+                  </button>
+                )}
+
+                {/* Assinatura avulsa (Etapa 15) — a entrega pode já ter acontecido sem
+                    assinatura (RN-02); só nos status entregues (RN-03) e para quem entrega
+                    (separar_emitir, RN-05 — mesmo perfil que colhe no fluxo da entrega). */}
+                {warehouseMode
+                  && ['ENTREGUE', 'PARCIALMENTE_ATENDIDA', 'ENCERRADA'].includes(detalhe.status)
+                  && pode('separar_emitir') && (
+                  <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
+                    onClick={() => abrirColherAssinatura(detalhe)} disabled={saving}>
+                    ＋ Assinatura de entrega
+                  </button>
+                )}
+
+                {/* Confirmação de recebimento — só o solicitante, não é status (design). */}
+                {warehouseMode
+                  && ['ENTREGUE', 'PARCIALMENTE_ATENDIDA', 'ENCERRADA'].includes(detalhe.status)
+                  && detalhe.solicitante_id === user?.id
+                  && !detalhe.recebimento_confirmado_em && (
+                  <button className="btn-almox-primary" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
+                    onClick={() => setConfirmDialog({
+                      title: 'Confirmar Recebimento',
+                      message: `Confirmar que você recebeu os materiais da requisição ${detalhe.numero}?`,
+                      confirmLabel: 'Confirmar Recebimento',
+                      onConfirm: () => handleConfirmarRecebimento(detalhe.id),
+                    })}
+                    disabled={saving}>
+                    <FiUserCheck size={14} /> Confirmar Recebimento
+                  </button>
+                )}
+
+                {(warehouseMode
+                  ? ['RASCUNHO', 'PENDENTE', 'APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA', 'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA']
+                  : ['PENDENTE', 'APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA', 'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA']
+                ).includes(detalhe.status) && (
                   detalhe.solicitante_id === user?.id || isAdmin
                 ) && (
                   <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
@@ -873,6 +1252,22 @@ const RequisicoesList = () => {
                     Cancelar Requisição
                   </button>
                 )}
+
+                {/* Copiar — qualquer requisição não-rascunho vira um novo rascunho fiel
+                    (itens/tipo/vínculos), atalho de preenchimento (design). */}
+                {warehouseMode && detalhe.status !== 'RASCUNHO' && (
+                  <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
+                    onClick={() => setConfirmDialog({
+                      title: 'Copiar Requisição',
+                      message: `Criar um novo rascunho com os mesmos itens da requisição ${detalhe.numero}?`,
+                      confirmLabel: 'Copiar',
+                      onConfirm: () => handleCopiar(detalhe.id),
+                    })}
+                    disabled={saving}>
+                    <FiCopy size={14} /> Copiar como Novo Rascunho
+                  </button>
+                )}
+
                 {isAdmin && (
                   <button className="btn-almox-danger" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
                     onClick={() => abrirExcluirModal(detalhe, {
@@ -897,15 +1292,15 @@ const RequisicoesList = () => {
             </div>
             <div className="almox-modal-body">
               <div className="almox-field">
-                <label className="almox-label">Justificativa da reprovação</label>
-                <textarea className="almox-textarea" rows={3} value={motivoRejeicaoValor}
+                <label className="almox-label">Justificativa da reprovação<span className="required">*</span></label>
+                <textarea className="almox-textarea" rows={3} value={motivoRejeicaoValor} required
                   onChange={e => setMotivoRejeicaoValor(e.target.value)}
                   placeholder="Informe o motivo para o solicitante..." />
               </div>
             </div>
             <div className="almox-modal-footer">
               <button className="btn-almox-secondary" onClick={() => setShowRejeitarValor(false)}>Cancelar</button>
-              <button className="btn-almox-danger" onClick={handleRejeitarValor} disabled={saving}>
+              <button className="btn-almox-danger" onClick={handleRejeitarValor} disabled={saving || !motivoRejeicaoValor.trim()}>
                 {saving ? 'Reprovando...' : 'Confirmar Reprovação'}
               </button>
             </div>
@@ -923,16 +1318,67 @@ const RequisicoesList = () => {
             </div>
             <div className="almox-modal-body">
               <div className="almox-field">
-                <label className="almox-label">Motivo da rejeição</label>
-                <textarea className="almox-textarea" rows={3} value={motivoRejeicao}
+                <label className="almox-label">Motivo da rejeição<span className="required">*</span></label>
+                <textarea className="almox-textarea" rows={3} value={motivoRejeicao} required
                   onChange={e => setMotivoRejeicao(e.target.value)}
                   placeholder="Informe o motivo para o solicitante..." />
               </div>
             </div>
             <div className="almox-modal-footer">
               <button className="btn-almox-secondary" onClick={() => setShowRejeitar(false)}>Cancelar</button>
-              <button className="btn-almox-danger" onClick={handleRejeitar} disabled={saving}>
+              <button className="btn-almox-danger" onClick={handleRejeitar} disabled={saving || !motivoRejeicao.trim()}>
                 {saving ? 'Rejeitando...' : 'Confirmar Rejeição'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal encerrar (motivo opcional, design: "body {motivo} opcional") */}
+      {showEncerrar && detalhe && (
+        <div className="almox-modal-overlay" onClick={() => !saving && setShowEncerrar(false)}>
+          <div className="almox-modal almox-modal-sm" onClick={e => e.stopPropagation()}>
+            <div className="almox-modal-header">
+              <h2>🔒 Encerrar Requisição</h2>
+              <button className="almox-modal-close" onClick={() => setShowEncerrar(false)}>✕</button>
+            </div>
+            <div className="almox-modal-body">
+              <p style={{ color: 'var(--gmp-text-light)', marginBottom: 12, fontSize: '0.875rem' }}>
+                Encerrar a requisição <strong>{detalhe.numero}</strong> cancela qualquer saldo pendente — não será mais possível
+                entregar itens desta requisição depois disso.
+              </p>
+              <div className="almox-field">
+                <label className="almox-label">Motivo (opcional)</label>
+                <textarea className="almox-textarea" rows={3} value={motivoEncerramento}
+                  onChange={e => setMotivoEncerramento(e.target.value)}
+                  placeholder="Observação sobre o encerramento (opcional)..." />
+              </div>
+            </div>
+            <div className="almox-modal-footer">
+              <button className="btn-almox-secondary" onClick={() => setShowEncerrar(false)} disabled={saving}>Cancelar</button>
+              <button className="btn-almox-primary" onClick={handleEncerrar} disabled={saving}>
+                {saving ? 'Encerrando...' : 'Confirmar Encerramento'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmação simples — Enviar, Liberar Retirada, Confirmar Recebimento, Copiar */}
+      {confirmDialog && (
+        <div className="almox-modal-overlay" onClick={() => !saving && setConfirmDialog(null)}>
+          <div className="almox-modal almox-modal-sm" onClick={e => e.stopPropagation()}>
+            <div className="almox-modal-header">
+              <h2>{confirmDialog.title}</h2>
+              <button className="almox-modal-close" onClick={() => setConfirmDialog(null)}>✕</button>
+            </div>
+            <div className="almox-modal-body">
+              <p style={{ color: 'var(--gmp-text-light)', fontSize: '0.875rem' }}>{confirmDialog.message}</p>
+            </div>
+            <div className="almox-modal-footer">
+              <button className="btn-almox-secondary" onClick={() => setConfirmDialog(null)} disabled={saving}>Cancelar</button>
+              <button className="btn-almox-primary" onClick={confirmDialog.onConfirm} disabled={saving}>
+                {saving ? 'Processando...' : (confirmDialog.confirmLabel || 'Confirmar')}
               </button>
             </div>
           </div>
@@ -1033,6 +1479,41 @@ const RequisicoesList = () => {
               <button className="btn-almox-secondary" onClick={() => setShowEntregar(false)}>Cancelar</button>
               <button className="btn-almox-primary" onClick={handleEntregar} disabled={saving || detalhe.itens.every(i => maxQtdEntrega(i) <= 0)}>
                 {saving ? 'Confirmando...' : '✅ Confirmar Entrega'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal assinatura do recebedor (Etapa 15) — etapa opcional depois da entrega e
+          também pelo botão avulso do detalhe. "Pular" fecha SEM POST (RN-02). */}
+      {assinaturaPos && (
+        <div className="almox-modal-overlay" onClick={() => !enviandoAssinatura && setAssinaturaPos(null)}>
+          <div className="almox-modal almox-modal-sm" onClick={e => e.stopPropagation()}>
+            <div className="almox-modal-header">
+              <h2>✍ Colher assinatura do recebedor{assinaturaPos.numero ? ` — ${assinaturaPos.numero}` : ''}</h2>
+              <button className="almox-modal-close" onClick={() => !enviandoAssinatura && setAssinaturaPos(null)} disabled={enviandoAssinatura}>✕</button>
+            </div>
+            <div className="almox-modal-body">
+              <p style={{ color: 'var(--gmp-text-light)', marginBottom: 12, fontSize: '0.85rem' }}>
+                Etapa opcional — a entrega já está registrada. Se o recebedor não puder assinar
+                agora, use <strong>Pular</strong>; dá para colher a assinatura depois pelo
+                detalhe da requisição.
+              </p>
+              <div className="almox-field">
+                <label className="almox-label">Nome do recebedor<span className="required">*</span></label>
+                <input className="almox-input" type="text" maxLength={120} value={assinaturaNome}
+                  onChange={e => setAssinaturaNome(e.target.value)}
+                  placeholder="Nome de quem recebeu o material..." />
+              </div>
+              <div className="almox-field">
+                <label className="almox-label">Assinatura</label>
+                <AssinaturaCanvas onConfirm={enviarAssinatura} height={180} />
+              </div>
+            </div>
+            <div className="almox-modal-footer">
+              <button className="btn-almox-secondary" onClick={() => setAssinaturaPos(null)} disabled={enviandoAssinatura}>
+                Pular
               </button>
             </div>
           </div>

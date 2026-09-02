@@ -1,6 +1,44 @@
 const { dbRun, dbGet, dbAll } = require('./db');
 const { registrarAuditoria } = require('./audit');
-const { registrarMovimentacao } = require('./stockService');
+const { inserirComNumeroUnico } = require('./numeroDoc');
+const {
+  registrarMovimentacao, resolveLocalizacaoEntrada, validarLocalizacaoParaMovimento,
+} = require('./stockService');
+const lotService = require('./lotService');
+// Etapa 14, Task 1 (RN-03): sem ciclo — purchaseService NAO requer receiptService. Chamado pelo
+// OBJETO do modulo (nao desestruturado) de proposito: o teste de sabotagem monkeypatcha
+// `purchaseService.fecharSolicitacoesDoPedido` em tempo de execucao, e uma desestruturacao no
+// require capturaria a funcao original antes do monkeypatch.
+const purchaseService = require('./purchaseService');
+// Etapa 17, Task 2 (gancho C4.2) — pelo OBJETO do modulo pelo MESMO motivo do purchaseService
+// acima: o teste de RN-02 monkeypatcha `dispararAlertaRegistrado` e uma desestruturacao
+// capturaria a funcao original. Sem ciclo (purchaseService/stockService ja carregam a fila).
+const notificationQueueService = require('./notificationQueueService');
+const alertRegistry = require('./alertRegistry');
+
+/**
+ * Etapa 17 (RN-04, gancho C4.2) — aviso pos-escrita da quantidade recebida, nos DOIS escritores
+ * reais (`conferirRecebimento` e `salvarDadosFiscal`; a UI de producao passa pelo fiscal, entao
+ * um gancho so na conferencia nunca dispararia de verdade — achado Critico da revisao do plano).
+ *
+ * A regua e a query compartilhada do registro (`listarDivergenciasRecebimento({ recebimentoId })`,
+ * float-safe por `divergenciaRealSql`): refazer a comparacao em JS aqui seria a segunda definicao
+ * de "item divergente" — a classe de bug que divergencia.js existe para matar.
+ *
+ * Roda mesmo quando a chamada nao trouxe itens: o dedupe por item (`receb-diverg-<item_id>`)
+ * torna o disparo repetido inofensivo e o gancho vira rede de seguranca a mais. Nunca derruba o
+ * ato (padrao pos-commit, stockService.js:1374-1405).
+ */
+async function avisarDivergenciasDoRecebimento(db, recebimentoId) {
+  try {
+    const itens = await alertRegistry.listarDivergenciasRecebimento(db, { recebimentoId });
+    for (const linha of itens) {
+      await notificationQueueService.dispararAlertaRegistrado(db, 'DIVERGENCIA_RECEBIMENTO', linha);
+    }
+  } catch (e) {
+    console.warn('[almoxarifado-alertas] Falha ao avisar divergencia de recebimento:', e.message);
+  }
+}
 
 const STATUS = {
   RECEBIDO: 'RECEBIDO',
@@ -34,9 +72,10 @@ const STATUS_ETAPA = {
   [STATUS.APROVADO]: ETAPAS.CONCLUIDO,
 };
 
-function gerarNumero(prefix) {
-  return `${prefix}-${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 100)}`;
-}
+// Etapa 31: `gerarNumero(prefix)` SUMIU daqui — era o milissegundo fatiado em DECIMAL (os oito
+// ultimos digitos) mais um sorteio de 0..99, e fatiar em decimal faz o carimbo REPETIR a cada
+// 27,78 horas. O numero do recebimento passa a sair do gerador unico do modulo (`numeroDoc.js`),
+// com carimbo base36 INTEIRO (nao da a volta) e 8 caracteres de entropia.
 
 async function carregarItensPedidoCompra(db, pedidoCompraId) {
   const itens = await dbAll(db, `SELECT ipc.*, m.nome as material_nome, m.codigo as material_codigo
@@ -86,13 +125,16 @@ async function criarRecebimento(db, user, data) {
 
   if (!itens.length) throw Object.assign(new Error('Inclua ao menos um item'), { status: 400 });
 
-  const numero = gerarNumero('REC');
-  const r = await dbRun(db, `INSERT INTO recebimentos_material_almoxarifado
+  // Etapa 31 (RN-07): o numero nasce DENTRO do gerador, na tentativa que vencer o UNIQUE, e e ele
+  // que volta no `return` daqui. O `fn` contem SO o INSERT do cabecalho — os itens sao inseridos
+  // DEPOIS, e entrariam em duplicata se estivessem aqui dentro quando o retry disparasse.
+  const { numero, resultado: r } = await inserirComNumeroUnico(db, 'REC', (num) => dbRun(db,
+    `INSERT INTO recebimentos_material_almoxarifado
     (numero, pedido_compra_id, pedido_compra_numero, tipo_recebimento, nota_fiscal,
      fornecedor_id, fornecedor_nome, fornecedor_cnpj, status, etapa_atual,
      responsavel_id, responsavel_nome, observacoes)
     VALUES (?,?,?,?,?,?,?,?,'RECEBIDO','ALMOXARIFADO',?,?,?)`, [
-    numero,
+    num,
     pedido?.id || pedido_compra_id || null,
     pedido?.numero || pedido_compra_numero || null,
     tipo,
@@ -101,18 +143,18 @@ async function criarRecebimento(db, user, data) {
     pedido?.fornecedor_nome || fornecedor_nome || null,
     pedido?.fornecedor_cnpj || fornecedor_cnpj || null,
     user.id, user.nome || user.email, observacoes || null,
-  ]);
+  ]));
 
   for (const item of itens) {
     const qtd = item.quantidade_esperada || item.quantidade;
     const vUnit = parseFloat(item.valor_unitario) || 0;
     const vTotal = parseFloat(item.valor_total) || (qtd * vUnit);
     await dbRun(db, `INSERT INTO recebimentos_material_itens_almoxarifado
-      (recebimento_id, material_id, quantidade_esperada, quantidade_recebida, lote, observacoes,
+      (recebimento_id, material_id, quantidade_esperada, quantidade_recebida, lote, series, observacoes,
        valor_unitario, valor_total, valor_icms, valor_ipi, reducao_icms_percent)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?)`, [
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, [
       r.lastID, item.material_id, qtd,
-      item.quantidade_recebida || qtd, item.lote || null, item.observacoes || null,
+      item.quantidade_recebida || qtd, item.lote || null, item.series || null, item.observacoes || null,
       vUnit, vTotal, parseFloat(item.valor_icms) || 0, parseFloat(item.valor_ipi) || 0,
       parseFloat(item.reducao_icms_percent) || 0,
     ]);
@@ -145,14 +187,18 @@ async function conferirRecebimento(db, user, recebimentoId, data) {
   if (itens) {
     for (const item of itens) {
       await dbRun(db, `UPDATE recebimentos_material_itens_almoxarifado SET
-        quantidade_recebida = ?, conferencia_quantidade = ?, conferencia_descricao = ?, observacoes = ?
+        quantidade_recebida = ?, conferencia_quantidade = ?, conferencia_descricao = ?, observacoes = ?,
+        series = COALESCE(?, series)
         WHERE id = ? AND recebimento_id = ?`, [
         item.quantidade_recebida, item.conferencia_quantidade ? 1 : 0,
         item.conferencia_descricao ? 1 : 0, item.observacoes || null,
+        item.series ?? null,
         item.id, recebimentoId,
       ]);
     }
   }
+
+  await avisarDivergenciasDoRecebimento(db, recebimentoId);
 
   return { success: true };
 }
@@ -279,16 +325,25 @@ async function salvarDadosFiscal(db, user, recebimentoId, data) {
         valor_ipi = COALESCE(?, valor_ipi),
         reducao_icms_percent = COALESCE(?, reducao_icms_percent),
         conferencia_quantidade = COALESCE(?, conferencia_quantidade),
-        conferencia_descricao = COALESCE(?, conferencia_descricao)
+        conferencia_descricao = COALESCE(?, conferencia_descricao),
+        lote = COALESCE(?, lote),
+        data_validade_lote = COALESCE(?, data_validade_lote),
+        data_fabricacao_lote = COALESCE(?, data_fabricacao_lote),
+        corrida_lote = COALESCE(?, corrida_lote),
+        series = COALESCE(?, series)
         WHERE id = ? AND recebimento_id = ?`, [
         item.quantidade_recebida ?? null, vUnit || null, vTotal || null,
         item.valor_icms ?? null, item.valor_ipi ?? null, item.reducao_icms_percent ?? null,
         item.conferencia_quantidade != null ? (item.conferencia_quantidade ? 1 : 0) : null,
         item.conferencia_descricao != null ? (item.conferencia_descricao ? 1 : 0) : null,
+        item.lote ?? null, item.data_validade_lote ?? null, item.data_fabricacao_lote ?? null,
+        item.corrida_lote ?? null, item.series ?? null,
         item.id, recebimentoId,
       ]);
     }
   }
+
+  await avisarDivergenciasDoRecebimento(db, recebimentoId);
 
   return { success: true };
 }
@@ -305,37 +360,286 @@ function validarDadosProcessamento(rec) {
   }
 }
 
+/**
+ * Quantidade que um item de recebimento leva para o estoque. Um lugar so — a pre-checagem e o
+ * laco de entrada TEM de concordar sobre quais itens movem estoque, senao a pre-checagem valida
+ * um conjunto e o laco move outro.
+ */
+function quantidadeDoItem(item) {
+  return item.quantidade_recebida || item.quantidade_esperada;
+}
+
+/**
+ * Numeros de serie digitados no item, um por linha (mesmo formato do campo `lote` de texto
+ * livre). Etapa 6b, Task 6 — o parser vive aqui porque so o recebimento tem essa entrada em
+ * texto; o motor (`stockService.registrarMovimentacao`) recebe `params.series` ja como array.
+ */
+function parseSeries(txt) {
+  return String(txt || '').split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+}
+
+/**
+ * Da entrada no estoque dos itens de um recebimento.
+ *
+ * ── Por que ha pre-checagem E marca de idempotencia (achado do review final da Etapa 6) ──
+ * Antes, esta funcao percorria os itens chamando `registrarMovimentacao` um a um, sem nenhuma das
+ * duas coisas. Se o item B falhasse, o item A JA tinha entrado, o recebimento continuava em
+ * `EM_ENTRADA_NF` e o botao "Processar Nota" continuava na tela. Reproduzido pelo revisor: 1a
+ * tentativa entrou 10 do A e falhou no B; corrigido o B, a 2a tentativa entrou MAIS 10 do A
+ * (total 20). Nao ha transacao neste modulo, entao "tudo ou nada" nao sai de graca — as duas
+ * pontas sao corrigidas separadamente:
+ *
+ *  1. **Pre-checagem**: tudo que da para saber por item ANTES de mover qualquer coisa (material
+ *     inativo, `controle_lote` sem lote digitado, localizacao de destino bloqueada ou que nao
+ *     aceita o tipo do material) e verificado para TODOS os itens primeiro. Uma nota com um item
+ *     ruim e recusada inteira, sem ter movido nada.
+ *  2. **Marca por item** (`entrada_estoque_em`): mesmo assim um passo posterior pode falhar (o
+ *     motor tem guardas que dependem de estado concorrente). Entao cada item e RECLAMADO com um
+ *     UPDATE condicional antes de mover — `WHERE entrada_estoque_em IS NULL` —, e o reprocessamento
+ *     pula quem ja entrou em vez de creditar de novo. A marca e liberada de volta se a falha
+ *     acontecer ANTES da entrada fisica; depois dela, nao: creditar duas vezes e pior do que
+ *     deixar a QUARENTENA daquele item por fazer, e a marca e o que impede isso.
+ *
+ * Coberto por `server/tests/api/recebimentoEntradaAtomica.api.test.js`, que mede os numeros da
+ * reproducao acima (A continua em 10 depois do reprocessamento, nao 20).
+ */
 async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id } = {}) {
-  const itens = await dbAll(db, `SELECT ri.*, m.material_critico, m.controle_certificado
+  const itens = await dbAll(db, `SELECT ri.*, m.material_critico, m.controle_certificado,
+      m.controle_lote, m.controle_serie, m.ativo as material_ativo, m.codigo as material_codigo,
+      m.tipo_material, m.localizacao_padrao_id,
+      -- Etapa 8: o dono do material entra na pre-checagem (recebimento de material de cliente
+      -- exige numero de documento) e a razao social entra na MENSAGEM de recusa.
+      m.proprietario_cliente_id, cli.razao_social as proprietario_cliente_nome
     FROM recebimentos_material_itens_almoxarifado ri
     JOIN materiais_almoxarifado m ON ri.material_id = m.id
+    LEFT JOIN clientes cli ON m.proprietario_cliente_id = cli.id
     WHERE ri.recebimento_id = ?`, [recebimentoId]);
 
+  // ── 1. Pre-checagem: nada se move enquanto houver item invalido ──
+  const problemas = [];
   for (const item of itens) {
-    if (item.material_critico) {
-      const insp = await dbGet(db,
-        'SELECT * FROM inspecoes_recebimento_almoxarifado WHERE recebimento_item_id = ? ORDER BY id DESC LIMIT 1',
-        [item.id]);
-      const cfg = await dbGet(db, "SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'inspecao_material_critico'");
-      if (cfg?.valor === '1' && !insp) {
-        throw Object.assign(new Error(`Item crítico #${item.id} requer inspeção`), { status: 400 });
-      }
-      if (insp && insp.acao === 'DEVOLVER') continue;
+    if (!(quantidadeDoItem(item) > 0)) continue; // item sem quantidade nao move estoque
+    if (item.entrada_estoque_em) continue;       // ja entrou numa tentativa anterior
+    if (!item.material_ativo) {
+      problemas.push(`${item.material_codigo}: material inativo nao pode ser movimentado`);
+      continue;
     }
+    // Etapa 8, decisao 8: material de cliente entra pelo Recebimento normal — a nota de remessa
+    // e o campo de nota que ja existe. O que muda e que para ele o documento e OBRIGATORIO: e o
+    // papel que prova que a chapa chegou, de quem, e em que quantidade. Material NOSSO continua
+    // podendo entrar sem nota (entrada manual, devolucao, ajuste de inventario) — travar isso
+    // para todo mundo quebraria todo recebimento do modulo, e ha teste de controle positivo
+    // exatamente para prender essa metade da guarda.
+    // Projeto NAO e exigido aqui: o mesmo cliente manda a mesma chapa para dois projetos, e
+    // exigir projeto na entrada obrigaria a criar dois materiais identicos para o mesmo item
+    // fisico do mesmo dono. O projeto e exigido na SAIDA (ownerRules.assertSaidaPermitida).
+    if (item.proprietario_cliente_id && !(rec.nota_fiscal && String(rec.nota_fiscal).trim())) {
+      problemas.push(`${item.material_codigo}: material do cliente `
+        + `${item.proprietario_cliente_nome || `#${item.proprietario_cliente_id}`} exige numero de `
+        + 'documento (nota de remessa) para dar entrada');
+      continue;
+    }
+    if (item.controle_lote && !(item.lote && String(item.lote).trim())) {
+      problemas.push(`${item.material_codigo}: preencha o campo Lote (o material tem controle por lote)`);
+      continue;
+    }
+    // Serie (Etapa 6b, Task 6): mesma cardinalidade que o motor vai exigir com `exigeSerie`,
+    // antecipada aqui pelo mesmo motivo do lote acima — a nota inteira e recusada de uma vez,
+    // em vez de entrar itens bons e travar no item ruim no meio do laco de efeito.
+    if (item.controle_serie) {
+      const qtdSerie = quantidadeDoItem(item);
+      if (!Number.isInteger(qtdSerie)) {
+        problemas.push(`${item.material_codigo}: quantidade fracionaria com controle de serie`);
+        continue;
+      }
+      const numerosInformados = parseSeries(item.series).length;
+      if (numerosInformados !== qtdSerie) {
+        problemas.push(`${item.material_codigo}: informe ${qtdSerie} serie(s) — recebidas ${numerosInformados}`);
+        continue;
+      }
+    }
+    // Mesma resolucao e mesma validacao que o motor fara — antecipada aqui para que a nota seja
+    // recusada inteira em vez de parar no meio.
+    const material = { localizacao_padrao_id: item.localizacao_padrao_id, tipo_material: item.tipo_material };
+    try {
+      await validarLocalizacaoParaMovimento(
+        db, resolveLocalizacaoEntrada(material, localizacao_id), material, 'destino');
+    } catch (e) {
+      problemas.push(`${item.material_codigo}: ${e.message}`);
+    }
+  }
+  if (problemas.length) {
+    throw Object.assign(
+      new Error(`Nao foi possivel dar entrada no estoque: ${problemas.join('; ')}`),
+      { status: 400 });
+  }
 
-    const qtd = item.quantidade_recebida || item.quantidade_esperada;
+  // ── 2. Entrada item a item, cada um reclamado antes de mover ──
+  for (const item of itens) {
+    // Etapa 5: a inspecao deixou de ser PRE-REQUISITO da entrada e passou a ser passo posterior.
+    // O material esta fisicamente no galpao desde o descarregamento — barrar a entrada fazia o
+    // sistema negar o que existe, e o bloqueio da inspecao recaia sobre saldo que ainda nao
+    // tinha entrado. Agora entra sempre; o que exige inspecao entra RETIDO.
+    const cfg = await dbGet(db, "SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'inspecao_material_critico'");
+    const reter = !!item.material_critico && cfg?.valor === '1';
+
+    const qtd = quantidadeDoItem(item);
     if (qtd > 0) {
-      await registrarMovimentacao(db, user, {
-        material_id: item.material_id,
-        tipo: 'ENTRADA_COMPRA',
-        quantidade: qtd,
-        motivo: `Recebimento ${rec.numero}`,
-        referencia: rec.nota_fiscal,
-        recebimento_id: recebimentoId,
-        localizacao_destino_id: localizacao_id,
-        lote: item.lote,
-        documento_vinculado: rec.numero,
-      });
+      // Claim no WHERE, padrao do modulo: de duas execucoes (reprocessamento, ou dois cliques
+      // simultaneos em "Processar Nota") so uma casa `entrada_estoque_em IS NULL` e move estoque.
+      const claim = await dbGet(db, `UPDATE recebimentos_material_itens_almoxarifado
+        SET entrada_estoque_em = CURRENT_TIMESTAMP
+        WHERE id = ? AND entrada_estoque_em IS NULL
+        RETURNING id`, [item.id]);
+      if (!claim) continue; // este item ja entrou — reprocessar nao credita de novo
+
+      let entrouFisicamente = false;
+      try {
+        // Etapa 6: o lote nasce aqui, herdando o que a NF ja sabe. Ate esta etapa, `controle_certificado`
+        // era selecionado nesta query (linha do SELECT acima) e NUNCA usado — quem auditasse por grep
+        // concluia que a entrada verificava certificado. Agora verifica. Dentro do `if (qtd > 0)` de
+        // proposito (fix round 1, achado do review): item com quantidade zero nao move estoque, entao
+        // nao devia criar lote nem gravar lote_id nele.
+        let loteId = null;
+        if (item.lote && String(item.lote).trim()) {
+          // So o controle do material decide o bloqueio. `certificado_arquivo` nao existe nesta
+          // query (as tres colunas de certificado vivem em lotes_almoxarifado, nao no item do
+          // recebimento) — testar por ele aqui sempre dava falso e acertava por constante, nao por
+          // semantica (fix round 1, achado do review).
+          const semCertificado = !!item.controle_certificado;
+          const lote = await lotService.criarOuObterLote(db, user, {
+            material_id: item.material_id,
+            codigo: item.lote,
+            fornecedor_id: rec.fornecedor_id,
+            fornecedor_nome: rec.fornecedor_nome,
+            corrida: item.corrida_lote,
+            // Review final da Etapa 6: `lotes_almoxarifado.data_fabricacao` existia desde a Task 1
+            // e NINGUEM a escrevia. Este e o escritor — o quarto campo de lote da tela do
+            // recebimento (Lote / Validade / Fabricacao / Corrida).
+            data_fabricacao: item.data_fabricacao_lote,
+            data_validade: item.data_validade_lote,
+            nota_fiscal: rec.nota_fiscal,
+            recebimento_id: recebimentoId,
+            recebimento_item_id: item.id,
+            // Entra bloqueado, nao barrado: o material esta fisicamente no galpao. Barrar a ENTRADA
+            // foi exatamente o erro corrigido na Etapa 5.
+            status: semCertificado ? 'BLOQUEADO' : 'ATIVO',
+            status_motivo: semCertificado ? 'Certificado do fornecedor nao anexado' : null,
+          });
+          loteId = lote.id;
+          await dbRun(db, 'UPDATE recebimentos_material_itens_almoxarifado SET lote_id = ? WHERE id = ?',
+            [loteId, item.id]);
+        }
+
+        const numerosSerie = parseSeries(item.series);
+
+        await registrarMovimentacao(db, user, {
+          material_id: item.material_id,
+          tipo: 'ENTRADA_COMPRA',
+          quantidade: qtd,
+          // Etapa 8c, decisao 5 do design: o custo do item da nota passa a ALIMENTAR o custo medio.
+          //
+          // Ate aqui o recebimento gravava valor_unitario/valor_total na linha do item (linha ~112)
+          // e NAO os passava adiante, entao o unico caminho que movia custo_medio no sistema
+          // inteiro era a movimentacao manual com custo digitado a mao. A Etapa 8c rateia o custo
+          // da chapa entre as pecas cortadas — com o custo medio quase nunca alimentado, o rateio
+          // distribuiria R$ 0,00, a conta fecharia (zero = zero) e o resultado seria inutil.
+          //
+          // `|| undefined` NAO e cosmetico e tem teste bilateral: nota SEM valor e caso normal
+          // (conserto, amostra, brinde, material de cliente). O motor so mexe em custo quando
+          // `custoInformado > 0` (stockService.js:1031); mandar 0 cai no ramo `else` (:1043) e o
+          // custo fica intocado — que e o comportamento certo. Mandar `undefined` explicitamente
+          // deixa isso legivel em vez de depender de o motor tratar o 0. A GUARDA REAL, porem, e a
+          // do motor: sabotar esta condicional para passar o custo cegamente NAO derruba nenhum
+          // teste (sabotagem S2 da Task 2), porque quem recusa o 0 e o `custoInformado > 0`.
+          //
+          // MUDANCA DE COMPORTAMENTO DECLARADA: material recebido por NF passa a ter custo medio
+          // real, e vale SO daqui para frente. NAO ha backfill: recalcular custo medio retroativo
+          // exigiria o custo POR MOVIMENTO, e movimentacoes_almoxarifado nao tem nenhuma coluna de
+          // custo (schema.js:205-219).
+          custo_unitario: (parseFloat(item.valor_unitario) || 0) > 0
+            ? parseFloat(item.valor_unitario)
+            : undefined,
+          motivo: `Recebimento ${rec.numero}`,
+          referencia: rec.nota_fiscal,
+          recebimento_id: recebimentoId,
+          localizacao_destino_id: localizacao_id,
+          lote_id: loteId,
+          documento_vinculado: rec.numero,
+          // Etapa 6b, Task 6: a serie nasce aqui. O motor (com exigeSerie) cria/reativa cada
+          // numero em series_almoxarifado vinculado ao loteIdFinal e a localizacao de entrada —
+          // o vinculo com ESTE recebimento/item e griffado logo abaixo, porque o motor nao
+          // conhece recebimento_id/recebimento_item_id (so o chamador conhece).
+          series: numerosSerie,
+        // O recebimento E um dos caminhos onde o operador tem como informar o lote (a tela tem os
+        // campos Lote/Validade/Fabricacao/Corrida por item), entao a exigencia de `controle_lote`
+        // vale aqui. A pre-checagem acima ja recusou a nota inteira nesse caso — esta declaracao
+        // e a rede: se um item escapar da pre-checagem, o motor ainda barra. Mesma logica para
+        // `exigeSerie`: o recebimento e um caminho onde o operador tem como informar as series.
+        }, { exigeLote: true, exigeSerie: true });
+        entrouFisicamente = true;
+
+        // Griffa a origem (Etapa 6b, Task 6, fix round 1 do review): as series que o motor acabou
+        // de criar/reativar para este material ainda nao sabem de qual recebimento/item elas
+        // vieram (o motor so grava movimentacao_entrada_id). Casa por numero+material — o unico
+        // jeito de saber QUAIS linhas de series_almoxarifado pertencem a ESTE item, ja que
+        // series_almoxarifado nao tem FK direta para recebimentos_material_itens_almoxarifado no
+        // momento da criacao.
+        //
+        // Gate por `item.controle_serie` (achado do review por sonda): sem ele, um item de
+        // material SEM controle de serie mas com texto residual no campo `series` (ex.: colado
+        // por engano, ou sobra de quando o material tinha controle_serie ligado) reescrevia
+        // recebimento_id/recebimento_item_id de series ORFAS/antigas daquele material que o motor
+        // nem tocou nesta chamada — corrupcao silenciosa de rastreabilidade.
+        //
+        // Roda DEPOIS de `entrouFisicamente = true` de proposito: o motor precisa ter criado as
+        // series antes de poder griffa-las. Por isso, se este UPDATE falhar, e tratado como
+        // NAO-FATAL (nao rethrow): devolver o claim `entrada_estoque_em` aqui reabriria o item
+        // para reprocessamento, e a segunda passada chamaria o motor de novo com as MESMAS series
+        // ja EM_ESTOQUE — o motor recusa ("serie ja esta em estoque") e o item ficaria travado
+        // para sempre, sem nenhum jeito de sair pelo fluxo normal. Preferimos perder a
+        // rastreabilidade de origem de 1 item numa falha rara de UPDATE (reparavel por SQL manual
+        // depois) a travar o recebimento inteiro por causa dela.
+        if (item.controle_serie && numerosSerie.length > 0) {
+          try {
+            await dbRun(db, `UPDATE series_almoxarifado
+                SET recebimento_id = ?, recebimento_item_id = ?
+              WHERE material_id = ? AND numero IN (${numerosSerie.map(() => '?').join(',')})`,
+              [recebimentoId, item.id, item.material_id, ...numerosSerie]);
+          } catch (eGriffagem) {
+            console.warn(`[recebimento] griffagem de origem da serie falhou (item ${item.id}, `
+              + `recebimento ${recebimentoId}): ${eGriffagem.message}`);
+          }
+        }
+
+        if (reter) {
+          await registrarMovimentacao(db, user, {
+            material_id: item.material_id,
+            tipo: 'QUARENTENA',
+            quantidade: qtd,
+            motivo: `Retido para inspeção — recebimento ${rec.numero}`,
+            justificativa: `Material crítico aguardando inspeção (recebimento ${rec.numero})`,
+            recebimento_id: recebimentoId,
+          });
+          // Etapa 5, correcao de review: quantidade_em_inspecao do MATERIAL e um pool
+          // compartilhado entre itens de recebimentos diferentes. Sem isto, inspectionService não
+          // tinha como saber quanto DESTE item especifico esta retido — inferia de
+          // quantidade_recebida, que conferirRecebimento pode sobrescrever sem guarda de status.
+          await dbRun(db, `UPDATE recebimentos_material_itens_almoxarifado
+            SET quantidade_em_inspecao = COALESCE(quantidade_em_inspecao,0) + ? WHERE id = ?`,
+            [qtd, item.id]);
+        }
+      } catch (e) {
+        // Compensacao explicita (nao ha transacao): a marca so e devolvida se NADA entrou. Se a
+        // entrada fisica ja aconteceu e o passo seguinte falhou, a marca FICA — reprocessar nao
+        // pode creditar o mesmo saldo duas vezes, que e o defeito que esta funcao passou a evitar.
+        if (!entrouFisicamente) {
+          await dbRun(db,
+            'UPDATE recebimentos_material_itens_almoxarifado SET entrada_estoque_em = NULL WHERE id = ?',
+            [item.id]);
+        }
+        throw e;
+      }
     }
   }
 }
@@ -393,29 +697,22 @@ async function processarNota(db, user, recebimentoId, { localizacao_id } = {}) {
     usuario_id: user.id, usuario_nome: user.nome || user.email,
   });
 
-  return { success: true, status: STATUS.PROCESSADO, contas_pagar_id: contasPagarId };
-}
-
-async function inspecionarItem(db, user, itemId, data) {
-  const item = await dbGet(db, 'SELECT ri.*, m.material_critico FROM recebimentos_material_itens_almoxarifado ri JOIN materiais_almoxarifado m ON ri.material_id = m.id WHERE ri.id = ?', [itemId]);
-  if (!item) throw Object.assign(new Error('Item não encontrado'), { status: 404 });
-
-  const r = await dbRun(db, `INSERT INTO inspecoes_recebimento_almoxarifado
-    (recebimento_item_id, conforme, divergencia_quantidade, divergencia_dimensional, certificado_ausente,
-     dano_fisico, material_incorreto, acao, responsavel_id, responsavel_nome, observacoes)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?)`, [
-    itemId, data.conforme ? 1 : 0, data.divergencia_quantidade ? 1 : 0,
-    data.divergencia_dimensional ? 1 : 0, data.certificado_ausente ? 1 : 0,
-    data.dano_fisico ? 1 : 0, data.material_incorreto ? 1 : 0,
-    data.acao || null, user.id, user.nome || user.email, data.observacoes || null,
-  ]);
-
-  if (data.acao === 'BLOQUEAR') {
-    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = COALESCE(quantidade_bloqueada,0) + ?, quantidade_em_inspecao = COALESCE(quantidade_em_inspecao,0) + ? WHERE id = ?',
-      [item.quantidade_recebida || 0, item.quantidade_recebida || 0, item.material_id]);
+  // RN-03 (D2, Etapa 14): a nota PROCESSADA fecha as solicitacoes VINCULADO do pedido que a
+  // originou. Roda DEPOIS do UPDATE que marca PROCESSADO e da auditoria acima, de proposito
+  // (padrao RN-01 da E12): falha do gancho NUNCA pode impedir o proprio processamento, que ja
+  // aconteceu quando chegamos aqui. Igualmente importante (Fase 2, controle i, medido): rodar
+  // DEPOIS de darEntradaEstoque garante que uma falha na entrada de estoque (nota recusada por
+  // item invalido, por exemplo) faz processarNota REJEITAR antes de chegar aqui — a solicitacao
+  // fica VINCULADO, nao RECEBIDA, porque o recebimento nunca chegou a PROCESSADO de verdade.
+  if (rec.pedido_compra_id) {
+    try {
+      await purchaseService.fecharSolicitacoesDoPedido(db, user, rec.pedido_compra_id);
+    } catch (e) {
+      console.warn('[almoxarifado-compras] Falha ao fechar solicitacoes do pedido apos processar nota:', e.message);
+    }
   }
 
-  return { id: r.lastID };
+  return { success: true, status: STATUS.PROCESSADO, contas_pagar_id: contasPagarId };
 }
 
 async function aprovarRecebimento(db, user, recebimentoId, opts = {}) {
@@ -433,6 +730,21 @@ async function aprovarRecebimento(db, user, recebimentoId, opts = {}) {
   await dbRun(db, `UPDATE recebimentos_material_almoxarifado
     SET status = 'APROVADO', etapa_atual = 'CONCLUIDO', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
     [recebimentoId]);
+
+  // RN-03 EMENDADA (Fase 2, C4 — medido): este ramo da entrada no estoque direto para APROVADO
+  // SEM passar por processarNota (ex.: recebimento de PEDIDO_COMPRA aprovado por
+  // POST /recebimentos/:id/aprovar) — o gancho tem de rodar AQUI TAMBEM, senao a solicitacao
+  // nunca fecha por este caminho. O ramo ACIMA que DELEGA para processarNota (linha ~668) NAO
+  // chama de novo: o gancho ja rodou la (I6) — chamar aqui tambem duplicaria a tentativa, e so
+  // nao duplicaria auditoria porque o `AND status='VINCULADO'` already fechou na 1a chamada.
+  if (rec.pedido_compra_id) {
+    try {
+      await purchaseService.fecharSolicitacoesDoPedido(db, user, rec.pedido_compra_id);
+    } catch (e) {
+      console.warn('[almoxarifado-compras] Falha ao fechar solicitacoes do pedido apos aprovar recebimento:', e.message);
+    }
+  }
+
   return { success: true };
 }
 
@@ -499,8 +811,11 @@ module.exports = {
   ETAPAS,
   criarRecebimento,
   conferirRecebimento,
-  inspecionarItem,
   aprovarRecebimento,
+  // Exportada para teste (review final da Etapa 6): a pre-checagem e a marca de idempotencia
+  // precisam ser exercitadas com um item que falha no meio, e chegar la pelo workflow inteiro do
+  // recebimento tornaria o teste sobre o workflow, nao sobre a entrada.
+  darEntradaEstoque,
   avancarWorkflow,
   salvarDadosFiscal,
   processarNota,

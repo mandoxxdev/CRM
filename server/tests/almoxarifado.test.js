@@ -8,7 +8,6 @@ const { initSchema } = require('../services/almoxarifado/schema');
 const { dbRun, dbGet, dbAll } = require('../services/almoxarifado/db');
 const stockService = require('../services/almoxarifado/stockService');
 const returnService = require('../services/almoxarifado/returnService');
-const clientMaterialService = require('../services/almoxarifado/clientMaterialService');
 const receiptService = require('../services/almoxarifado/receiptService');
 const requisitionService = require('../services/almoxarifado/requisitionService');
 const sectorMaterialService = require('../services/almoxarifado/sectorMaterialService');
@@ -42,7 +41,12 @@ async function setupDb() {
     quantidade_reservada REAL DEFAULT 0, quantidade_bloqueada REAL DEFAULT 0, quantidade_em_inspecao REAL DEFAULT 0,
     custo_unitario REAL DEFAULT 0, custo_medio REAL DEFAULT 0, ativo INTEGER DEFAULT 1, categoria TEXT DEFAULT 'OUTROS',
     material_critico INTEGER DEFAULT 0, controle_certificado INTEGER DEFAULT 0, permite_saldo_negativo INTEGER DEFAULT 0,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    -- Etapa 8: esta suíte monta materiais_almoxarifado à mão (não usa initSchema), então a
+    -- coluna nova precisa ser declarada aqui também — senão as leituras auditadas na Task 1
+    -- (purchaseService, reportService, alertService) estouram com "no such column".
+    -- NULL = material nosso, igual à produção.
+    proprietario_cliente_id INTEGER
   )`);
   await dbRun(db, `CREATE TABLE movimentacoes_almoxarifado (
     id INTEGER PRIMARY KEY AUTOINCREMENT, material_id INTEGER, tipo TEXT, quantidade REAL,
@@ -200,15 +204,10 @@ async function run() {
     assert.strictEqual(erro, true);
   });
 
-  await test('Material do cliente — consumo', async () => {
-    await dbRun(db, `INSERT INTO clientes (id, razao_social) VALUES (1, 'Cliente Teste')`);
-    const r = await clientMaterialService.registrarMaterialCliente(db, userAlmox, {
-      cliente_id: 1, descricao: 'Chapa cliente', quantidade_recebida: 100,
-    });
-    await clientMaterialService.consumirMaterialCliente(db, userAlmox, r.id, 30);
-    const m = await dbGet(db, 'SELECT quantidade_saldo FROM materiais_cliente_almoxarifado WHERE id = ?', [r.id]);
-    assert.strictEqual(m.quantidade_saldo, 70);
-  });
+  // Etapa 8, Task 7: o teste de clientMaterialService saiu junto com o servico. O comportamento
+  // que ele cobria ("consumir baixa o saldo") virou saida pelo motor, coberta por
+  // tests/api/materialClienteGuardaSaida.api.test.js — que testa tambem o que a ilha NAO testava:
+  // que o consumo respeita o cliente proprietario (OS/projeto tem de ser do dono do material).
 
   await test('Permissões — produção pode requisitar', async () => {
     assert.strictEqual(can(userProd, 'requisitar'), true);
@@ -284,7 +283,7 @@ async function run() {
       await requisitionService.separarRequisicao(db, reqRes.lastID, [{
         item_id: itemRes.lastID,
         quantidade_separada: 3,
-      }]);
+      }], userAlmox);
     } catch (e) {
       erro = e.status === 400 && /não é possível separar 3/i.test(e.message);
     }
@@ -349,7 +348,7 @@ async function run() {
     await requisitionService.separarRequisicao(db, reqRes.lastID, [{
       item_id: itemRes.lastID,
       quantidade_separada: 1,
-    }]);
+    }], userAlmox);
 
     const result = await requisitionService.entregarRequisicao(db, reqRes.lastID, [{
       item_id: itemRes.lastID,
@@ -663,7 +662,7 @@ async function run() {
     await dbRun(db, `UPDATE requisicoes_almoxarifado SET valor_total=250, requer_aprovacao_valor=1 WHERE id=?`, [reqId]);
     let bloqueado = false;
     try {
-      await requisitionService.separarRequisicao(db, reqId, []);
+      await requisitionService.separarRequisicao(db, reqId, [], userAlmox);
     } catch (e) {
       bloqueado = e.status === 403 && e.code === 'AGUARDANDO_APROVACAO_VALOR';
     }

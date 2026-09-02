@@ -6,6 +6,9 @@ import { useAuth } from '../../context/AuthContext';
 import { getEffectiveUser } from '../../services/permissionsCache';
 import { canConfigureAlmox } from '../../utils/systemPermissions';
 import {
+  buildLocalizacaoPath, formatLocalizacaoLabel, resolveAlmoxarifadoCodigo
+} from '../../utils/localizacaoLabel';
+import {
   FiMap, FiRefreshCw, FiFilter, FiMove, FiSave, FiX,
   FiPackage, FiAlertTriangle, FiSettings, FiInfo
 } from 'react-icons/fi';
@@ -65,15 +68,12 @@ function tamanhoTipo(tipo) {
   return TIPO_TAMANHOS[tipo] || TIPO_TAMANHOS.default;
 }
 
-function buildLocalizacaoPath(loc, allLocs = []) {
-  if (!loc) return '';
-  const parent = loc.parent_id ? allLocs.find(l => l.id === loc.parent_id) : null;
-  const parts = [];
-  if (loc.setor) parts.push(loc.setor);
-  if (parent) parts.push(parent.subgrupo || parent.descricao || parent.codigo);
-  if (loc.subgrupo) parts.push(loc.subgrupo);
-  else if (loc.descricao && !parent) parts.push(loc.descricao);
-  return parts.join(' / ');
+function parseTiposPermitidos(raw) {
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch { return []; }
 }
 
 function statusLocalizacao(loc) {
@@ -265,9 +265,11 @@ const MapaLocalizacoesAlmoxarifado = () => {
 
   const [localizacoes, setLocalizacoes] = useState([]);
   const [tiposLoc, setTiposLoc] = useState([]);
+  const [almoxarifados, setAlmoxarifados] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtroSetor, setFiltroSetor] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('');
+  const [filtroAlmoxarifado, setFiltroAlmoxarifado] = useState('');
   const [selecionada, setSelecionada] = useState(null);
   const [hoverId, setHoverId] = useState(null);
   const [modoEdicao, setModoEdicao] = useState(false);
@@ -280,12 +282,14 @@ const MapaLocalizacoesAlmoxarifado = () => {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [mapRes, metaRes] = await Promise.all([
+      const [mapRes, metaRes, almoxRes] = await Promise.all([
         api.get('/almoxarifado/mapa/localizacoes'),
         api.get('/almoxarifado/meta/tipos-material'),
+        api.get('/almoxarifado/almoxarifados'),
       ]);
       setLocalizacoes(mapRes.data);
       setTiposLoc(metaRes.data.localizacoes_tipos || []);
+      setAlmoxarifados(almoxRes.data);
     } catch {
       toast.error('Erro ao carregar mapa de localizações');
     } finally {
@@ -314,9 +318,10 @@ const MapaLocalizacoesAlmoxarifado = () => {
     return localizacoes.filter(l => {
       if (filtroSetor && l.setor !== filtroSetor) return false;
       if (filtroTipo && (l.tipo || 'Almoxarifado') !== filtroTipo) return false;
+      if (filtroAlmoxarifado && String(l.almoxarifado_id || '') !== filtroAlmoxarifado) return false;
       return true;
     });
-  }, [localizacoes, filtroSetor, filtroTipo]);
+  }, [localizacoes, filtroSetor, filtroTipo, filtroAlmoxarifado]);
 
   const layout = useMemo(() => computeLayout(filtradas), [filtradas]);
 
@@ -552,6 +557,10 @@ const MapaLocalizacoesAlmoxarifado = () => {
 
       <div className="almox-filters">
         <FiFilter size={14} style={{ color: 'var(--gmp-text-light)' }} />
+        <select className="almox-select" value={filtroAlmoxarifado} onChange={e => setFiltroAlmoxarifado(e.target.value)}>
+          <option value="">Todos os almoxarifados</option>
+          {almoxarifados.map(a => <option key={a.id} value={String(a.id)}>{a.codigo} — {a.nome}</option>)}
+        </select>
         <select className="almox-select" value={filtroSetor} onChange={e => setFiltroSetor(e.target.value)}>
           <option value="">Todos os setores</option>
           {setores.map(s => <option key={s} value={s}>{s}</option>)}
@@ -562,9 +571,9 @@ const MapaLocalizacoesAlmoxarifado = () => {
             <option key={t} value={t}>{TIPO_ICONES[t] || '📍'} {t}</option>
           ))}
         </select>
-        {(filtroSetor || filtroTipo) && (
+        {(filtroSetor || filtroTipo || filtroAlmoxarifado) && (
           <button className="btn-almox-secondary" style={{ padding: '6px 12px', fontSize: '0.8rem' }}
-            onClick={() => { setFiltroSetor(''); setFiltroTipo(''); }}>
+            onClick={() => { setFiltroSetor(''); setFiltroTipo(''); setFiltroAlmoxarifado(''); }}>
             Limpar filtros
           </button>
         )}
@@ -665,6 +674,7 @@ const MapaLocalizacoesAlmoxarifado = () => {
                 const icone = TIPO_ICONES[tipo] || '📍';
                 const pathLabel = buildLocalizacaoPath(loc, filtradas);
                 const subLabel = loc.subgrupo || (pathLabel && pathLabel !== loc.setor ? pathLabel.split(' / ').slice(-1)[0] : null);
+                const almCodigo = resolveAlmoxarifadoCodigo(loc, almoxarifados);
 
                 return (
                   <g
@@ -677,21 +687,25 @@ const MapaLocalizacoesAlmoxarifado = () => {
                     onClick={() => !arrastando && setSelecionada(loc)}
                     filter="url(#almox-shadow)"
                   >
-                    <title>{pathLabel ? `${loc.codigo} — ${pathLabel}` : loc.codigo}</title>
+                    <title>{`${formatLocalizacaoLabel(loc, filtradas, almoxarifados)}${loc.bloqueada ? ' (bloqueada)' : ''}`}</title>
                     <rect
                       width={pos.w}
                       height={pos.h}
                       rx="8"
                       fill={`${corTipo}22`}
-                      stroke={isSel ? '#1ED760' : isHover ? corSt : `${corTipo}88`}
+                      stroke={loc.bloqueada ? '#ef5350' : (isSel ? '#1ED760' : isHover ? corSt : `${corTipo}88`)}
                       strokeWidth={isSel ? 3 : isHover ? 2.5 : 1.5}
+                      strokeDasharray={loc.bloqueada ? '5 3' : undefined}
                     />
                     <rect x="0" y="0" width={pos.w} height="6" rx="8" fill={corSt} />
+                    {!!loc.bloqueada && (
+                      <text x={pos.w - 8} y={16} textAnchor="end" className="almox-mapa-zone-lock">🔒</text>
+                    )}
                     <text x={pos.w / 2} y={pos.h * 0.38} textAnchor="middle" className="almox-mapa-zone-icon">
                       {icone}
                     </text>
                     <text x={pos.w / 2} y={pos.h * 0.62} textAnchor="middle" className="almox-mapa-zone-code">
-                      {loc.codigo}
+                      {almCodigo ? `${almCodigo} / ${loc.codigo}` : loc.codigo}
                     </text>
                     {subLabel && (
                       <text x={pos.w / 2} y={pos.h * 0.74} textAnchor="middle" className="almox-mapa-zone-sub">
@@ -733,6 +747,12 @@ const MapaLocalizacoesAlmoxarifado = () => {
                 </div>
               ))}
             </div>
+            <div className="almox-mapa-legend-section">
+              <span className="almox-mapa-legend-title">Outros indicadores</span>
+              <div className="almox-mapa-legend-item">
+                <span>🔒</span> Localização bloqueada
+              </div>
+            </div>
           </div>
 
           {selecionada ? (
@@ -741,12 +761,20 @@ const MapaLocalizacoesAlmoxarifado = () => {
               <p className="almox-mapa-detail-desc">{selecionada.descricao || 'Sem descrição'}</p>
               <dl className="almox-mapa-detail-list">
                 <dt>Tipo</dt><dd>{selecionada.tipo || 'Almoxarifado'}</dd>
+                <dt>Almoxarifado</dt>
+                <dd>{almoxarifados.find(a => a.id === selecionada.almoxarifado_id)?.codigo || '—'}</dd>
                 <dt>Setor</dt><dd>{selecionada.setor || '—'}</dd>
                 {selecionada.subgrupo && <><dt>Subgrupo</dt><dd>{selecionada.subgrupo}</dd></>}
                 <dt>Caminho</dt><dd style={{ fontSize: '0.8rem' }}>{buildLocalizacaoPath(selecionada, localizacoes) || '—'}</dd>
                 <dt>Itens distintos</dt><dd>{selecionada.qtd_itens || 0}</dd>
                 <dt>Quantidade total</dt><dd>{Number(selecionada.quantidade_total || 0).toLocaleString('pt-BR')}</dd>
-                <dt>Reservado</dt><dd>{Number(selecionada.quantidade_reservada || 0).toLocaleString('pt-BR')}</dd>
+                {/* "Reservado" SAIU no review final da Etapa 6: mostrava sempre 0. A Etapa 6
+                    removeu `quantidade_reservada` de `estoque_saldo_almoxarifado` (coluna que
+                    nunca teve escritor), e o servidor passou a devolver um `0 as reservado` fixo —
+                    um mostrador que só podia dizer zero. Retenção não existe por localização: ela
+                    mora em `materiais_almoxarifado`, por material, ou no lote inteiro por status.
+                    Este era o terceiro mostrador zerado do mesmo lote; os dois irmãos já tinham
+                    saído do Extrato pelo mesmo motivo (fix round 1 da Task 9). */}
                 <dt>Status</dt>
                 <dd>
                   <span className={`almox-badge almox-badge-${statusLocalizacao(selecionada)}`}>
@@ -762,6 +790,20 @@ const MapaLocalizacoesAlmoxarifado = () => {
                       {selecionada.itens_criticos > 0 && `${selecionada.itens_criticos} crítico(s)`}
                       {selecionada.itens_criticos > 0 && selecionada.itens_baixo_minimo > 0 && ' · '}
                       {selecionada.itens_baixo_minimo > 0 && `${selecionada.itens_baixo_minimo} abaixo do mín.`}
+                    </dd>
+                  </>
+                )}
+                {!!selecionada.bloqueada && (
+                  <>
+                    <dt>Bloqueio</dt>
+                    <dd style={{ color: '#ef5350', fontWeight: 600 }}>🔒 Bloqueada para movimentações</dd>
+                  </>
+                )}
+                {parseTiposPermitidos(selecionada.tipos_material_permitidos).length > 0 && (
+                  <>
+                    <dt>Tipos permitidos</dt>
+                    <dd style={{ fontSize: '0.8rem' }}>
+                      {parseTiposPermitidos(selecionada.tipos_material_permitidos).join(', ')}
                     </dd>
                   </>
                 )}

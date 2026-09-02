@@ -10,6 +10,10 @@ const DEFAULT_DEBOUNCE_SECONDS = 60;
 const DEFAULT_APP_URL = 'https://systemgmp.online';
 const ESTADO_ACIMA = 'ACIMA';
 const ESTADO_ABAIXO = 'ABAIXO';
+// Etapa 12, Task 3 (RN-07): maquina de estado IRMA da ACIMA/ABAIXO, coluna propria
+// (`estado_zerado`) — ver a nota de `avaliarZerado` abaixo.
+const ESTADO_COM_SALDO = 'COM_SALDO';
+const ESTADO_ZERADO = 'ZERADO';
 const PASSWORD_MASK = '********';
 
 const SMTP_CONFIG_KEYS = {
@@ -529,6 +533,160 @@ async function marcarAlertaEnviado(db, materialId) {
   [materialId, ESTADO_ABAIXO, ESTADO_ABAIXO]);
 }
 
+/**
+ * RN-07 (Etapa 12, Task 3) — estoque ZERADO: função SEPARADA de `avaliarCruzamentoMinimo`, de
+ * propósito. Emendas da Fase 2, medidas: (1) a coluna `estado_estoque` é ÚNICA — um terceiro
+ * valor além de ACIMA/ABAIXO quebraria o alerta de mínimo nos dois sentidos; (2) a guarda
+ * `min <= 0` de `avaliarCruzamentoMinimo` retornaria cedo justamente nos materiais SEM mínimo
+ * configurado, onde o zerado mais vale (nada os cobre hoje); (3) a régua é
+ * `quantidade_atual <= 0`, NUNCA "disponível" — 100% reservado ainda está na prateleira, não
+ * zerado. Cliente sempre fora (quem chama já filtra `proprietario_cliente_id IS NULL`, mesmo
+ * padrão de `avaliarCruzamentoMinimo`). Só alerta na transição COM_SALDO -> ZERADO; enquanto
+ * ZERADO, no-op; repor (quantidade volta a ser > 0) rearma o estado para a próxima queda.
+ *
+ * Revisão da Task 3 (C1): a transição de estado É o claim contra corrida — um UPDATE atômico
+ * condicionado a `estado_zerado = 'COM_SALDO'`, e só quem viu `changes === 1` alerta. A versão
+ * anterior lia o estado (dbGet, cede o event loop) e marcava DEPOIS de enfileirar, com dedupe
+ * por `Date.now()` (nonce que nunca colide): duas chamadas concorrentes — reais, o
+ * PUT /configuracoes/estoques-minimos faz Promise.all pelos ids do payload — enfileiravam dois
+ * e-mails idênticos. Mesma classe do Critical da Task 1, do outro lado da fila. O claim
+ * carimba `ultimo_alerta_zerado` e um anti-flap fixo de 60s (material oscilando 0↔1 por
+ * movimentações em rajada não spamma; o debounce configurável do mínimo governa só o canal do
+ * mínimo). Custo aceito: o estado marca ANTES do enfileirar — se o enfileirar falhar, o
+ * episódio não re-alerta até rearmar; a alternativa (marcar depois) é o que duplicava.
+ *
+ * Revisão da Task 3 (I2, semeadura): material visto pela PRIMEIRA vez já zerado (linha de
+ * estado inexistente) é SEMEADO como ZERADO sem alertar — a máquina alerta transições que
+ * OBSERVOU, não estados pré-existentes. Sem isso, a primeira gravação em lote da tela de
+ * estoques-mínimos em produção despejava um aviso por material zerado do catálogo.
+ */
+async function avaliarZerado(db, material, opcoes = {}) {
+  const qtd = Number(material.quantidade_atual);
+
+  if (qtd > 0) {
+    // Semeia COM_SALDO se a linha ainda nao existe (a maquina precisa CONHECER o material com
+    // saldo para que o zeramento futuro seja uma transicao observada, nao "primeiro contato");
+    // se existe, rearma quando estava ZERADO.
+    await dbRun(db, `INSERT OR IGNORE INTO alertas_estoque_material_almoxarifado
+      (material_id, estado_zerado) VALUES (?, ?)`, [material.id, ESTADO_COM_SALDO]);
+    const rearme = await dbRun(db, `UPDATE alertas_estoque_material_almoxarifado
+      SET estado_zerado = ? WHERE material_id = ? AND estado_zerado = ?`,
+    [ESTADO_COM_SALDO, material.id, ESTADO_ZERADO]);
+    return { deveAlertar: false, motivo: rearme.changes > 0 ? 'com saldo (rearmado)' : 'com saldo' };
+  }
+
+  // Linha de estado ainda não existe. Revisão final (lente A, Critical 1): a heurística "a
+  // linha existe?" ESTAVA ERRADA como régua de transição — material sem mínimo (a população-
+  // alvo do zerado) nunca ganha linha por outro caminho, então a PRIMEIRA zeragem observada
+  // caía no ramo "primeiro contato" e era engolida (medido: transição 10->0 real, zero
+  // alertas; atinge toda a coorte do deploy e todo material criado com saldo inicial, cujo
+  // POST não passa pelo hook). O fato que decide é `saldo_anterior` do próprio motor: se ele
+  // era > 0, a zeragem FOI observada agora e alerta; sem essa evidência, semeia em silêncio.
+  const semente = await dbRun(db, `INSERT OR IGNORE INTO alertas_estoque_material_almoxarifado
+    (material_id, estado_zerado) VALUES (?, ?)`, [material.id, ESTADO_ZERADO]);
+  if (semente.changes === 1) {
+    if (Number(opcoes.saldo_anterior) > 0) {
+      await dbRun(db, `UPDATE alertas_estoque_material_almoxarifado
+        SET ultimo_alerta_zerado = CURRENT_TIMESTAMP WHERE material_id = ?`, [material.id]);
+      return { deveAlertar: true, motivo: null };
+    }
+    return { deveAlertar: false, motivo: 'primeiro contato já zerado — estado semeado sem alerta' };
+  }
+
+  // Claim atômico: só UM chamador concorrente vê changes === 1 (C1). O anti-flap de 60s lê
+  // `ultimo_alerta_zerado` (que sem isto seria write-only — M4 da revisão).
+  const claim = await dbRun(db, `UPDATE alertas_estoque_material_almoxarifado
+    SET estado_zerado = ?, ultimo_alerta_zerado = CURRENT_TIMESTAMP
+    WHERE material_id = ? AND estado_zerado = ?
+      AND (ultimo_alerta_zerado IS NULL OR ultimo_alerta_zerado <= datetime('now', '-60 seconds'))`,
+  [ESTADO_ZERADO, material.id, ESTADO_COM_SALDO]);
+  if (claim.changes === 0) {
+    return { deveAlertar: false, motivo: 'já alertado neste período zerado (ou anti-flap de 60s)' };
+  }
+
+  return { deveAlertar: true, motivo: null };
+}
+
+/**
+ * Revisão da Task 3 (I1): `alertas_estoque_notificar_email` é o checkbox "Notificar por
+ * e-mail" da tela de Alertas de Estoque, e a lista `alertas_estoque_emails` fica logo abaixo
+ * dele. DECISÃO: o toggle governa TODO aviso destinado a essa lista (zerado, lote vencendo,
+ * remessa vencida, lembrete de ferramenta, devolução parcial) — quem desligou "notificar por
+ * e-mail" não volta a receber e-mail nos mesmos endereços por um canal novo. Solicitações de
+ * compra ficam FORA (canal próprio: notificacoes_dest_compras/compras_notificar_emails).
+ * Default ligado (mesmo parseBool/fallback da máquina do mínimo).
+ */
+async function alertasEmailLigado(db) {
+  return parseBool(await getConfigValue(db, 'alertas_estoque_notificar_email'), true);
+}
+
+/**
+ * RN-07: monta o aviso de zerado e ENFILEIRA (nunca envia direto — RN-01). Destino
+ * `alertas_estoque_emails` (mesma chave da máquina do mínimo). Require LAZY do queue service:
+ * mesmo motivo/padrão documentado em `notificationQueueService.processarFila` — o queue service
+ * já requer este arquivo lazy (para `enviarEmail`); um require de topo aqui fecharia o ciclo na
+ * ordem errada dependendo de quem carrega primeiro (ver a nota no topo de
+ * `notificationQueueService.js`).
+ */
+async function processarAlertaZerado(db, material, opcoes = {}) {
+  // Revisão da Task 3 (I2): material INATIVO fica fora — catálogo desativado é justamente o
+  // que está zerado; alertar reposição de material morto é ruído puro.
+  if (material.ativo !== undefined && !material.ativo) {
+    return { material_id: material.id, enviado: false, motivo: 'material inativo' };
+  }
+  // Revisão da Task 3 (I3): material COM mínimo configurado fica fora — o canal do mínimo já
+  // alertou "abaixo do mínimo" antes de zerar (zerado ⊂ abaixo), e os dois canais mandavam
+  // dois e-mails do mesmo fato para a mesma lista. O zerado existe para o material SEM mínimo,
+  // que nada cobria (é o racional escrito do próprio design). Descartado: suprimir o mínimo
+  // quando zerar (inverteria a máquina estável da Etapa 4). Reversível, letra B.
+  if (Number(material.quantidade_minima) > 0) {
+    return { material_id: material.id, enviado: false, motivo: 'coberto pela máquina do mínimo' };
+  }
+  // Revisão da Task 3 (I1): respeita o toggle "Notificar por e-mail" dos alertas de estoque.
+  if (!(await alertasEmailLigado(db))) {
+    return { material_id: material.id, enviado: false, motivo: 'notificação por e-mail desligada' };
+  }
+
+  const cruzamento = await avaliarZerado(db, material, { saldo_anterior: opcoes.saldo_anterior });
+  if (!cruzamento.deveAlertar) {
+    return { material_id: material.id, enviado: false, motivo: cruzamento.motivo };
+  }
+
+  const queueService = require('./notificationQueueService');
+  const destinatarios = parseList(await getConfigValue(db, 'alertas_estoque_emails'));
+  const appUrlDb = await getConfigValue(db, APP_URL_CONFIG_KEY);
+  const appUrl = getAppAlmoxarifadoUrl(appUrlDb);
+  const geradoEm = formatDateTimePtBr();
+  const unidade = material.unidade ? ` ${material.unidade}` : '';
+  const assunto = `[Almoxarifado] Estoque zerado — ${material.codigo}`;
+  const linhas = [
+    `Material: ${material.nome}`,
+    `Código: ${material.codigo}`,
+    `Localização: ${material.localizacao || 'Não informada'}`,
+    `Saldo atual: 0${unidade}`,
+    `Gerado em: ${geradoEm}`,
+  ];
+  if (appUrl) linhas.push(`Acessar Almoxarifado: ${appUrl}`);
+  const corpo_texto = linhas.join('\n');
+  const corpo_html = `<div>${linhas.map((l) => `<p>${escapeHtml(l)}</p>`).join('\n')}</div>`;
+
+  const resultado = await queueService.enfileirar(db, {
+    evento: 'ESTOQUE_ZERADO',
+    // A unicidade e responsabilidade do CLAIM atomico em avaliarZerado (revisao C1) — quem
+    // chega aqui ja ganhou a transicao. Esta chave so precisa nao colidir entre EPISODIOS
+    // distintos do mesmo material (zera -> repoe -> zera de novo), por isso o timestamp; ela
+    // NAO e a guarda de duplicidade e um teste nao deve fixa-la.
+    dedupe_chave: `zerado-${material.id}-${Date.now()}`,
+    destinatarios,
+    assunto,
+    corpo_html,
+    corpo_texto,
+    payload: { material_id: material.id },
+  });
+
+  return { material_id: material.id, enviado: resultado.enfileirada, motivo: resultado.enfileirada ? null : resultado.motivo };
+}
+
 /** Sincroniza estado ACIMA para materiais repostos (verificação periódica). */
 async function sincronizarEstadoAcimaMinimo(db) {
   await dbRun(db, `UPDATE alertas_estoque_material_almoxarifado
@@ -536,6 +694,10 @@ async function sincronizarEstadoAcimaMinimo(db) {
     WHERE material_id IN (
       SELECT m.id FROM materiais_almoxarifado m
       WHERE m.ativo = 1 AND m.quantidade_minima > 0 AND m.quantidade_atual > m.quantidade_minima
+        -- Etapa 8, Task 1 (classe A): alerta de estoque e maquina de REPOSICAO. Material de
+        -- cliente (proprietario_cliente_id NOT NULL) nao se repoe: quem manda mais chapa e o
+        -- dono dela.
+        AND m.proprietario_cliente_id IS NULL
     ) AND estado_estoque = ?`, [ESTADO_ACIMA, ESTADO_ABAIXO]);
 }
 
@@ -596,7 +758,11 @@ async function verificarAlertasEstoque(db, opts = {}) {
   await sincronizarEstadoAcimaMinimo(db);
   const materiais = await dbAll(db, `SELECT id, codigo, nome, localizacao, unidade, quantidade_atual, quantidade_minima
     FROM materiais_almoxarifado
-    WHERE ativo = 1 AND quantidade_minima > 0 AND quantidade_atual <= quantidade_minima`);
+    WHERE ativo = 1 AND quantidade_minima > 0 AND quantidade_atual <= quantidade_minima
+      -- Etapa 8, Task 1 (classe A): ver a nota em sincronizarEstadoAcimaMinimo. Disparar
+      -- "acabando, compre mais" sobre material de terceiro manda o alerta errado para a
+      -- pessoa errada.
+      AND proprietario_cliente_id IS NULL`);
   const resultados = [];
   for (const material of materiais) {
     resultados.push(await processarAlertaMaterial(db, material, opts));
@@ -605,9 +771,33 @@ async function verificarAlertasEstoque(db, opts = {}) {
 }
 
 async function verificarAlertaPorMaterialId(db, materialId, opts = {}) {
-  const material = await dbGet(db, `SELECT id, codigo, nome, localizacao, unidade, quantidade_atual, quantidade_minima
-    FROM materiais_almoxarifado WHERE id = ?`, [materialId]);
+  // Etapa 8, excecao declarada da auditoria da Task 1: pela FORMA esta e uma leitura por id
+  // (classe B, nao filtraria). Pela SEMANTICA e alerta de reposicao (classe A). Quem manda
+  // aqui e a semantica: chamada depois de editar material (routes/almoxarifado.js), ela existe
+  // so para disparar o alerta de minimo. Material de cliente devolve null e nenhum alerta sai.
+  // E o unico ponto do modulo onde forma e semantica discordam — quem revisar por grep vai
+  // estranhar um IS NULL numa busca por id, e este comentario e a resposta.
+  // `ativo` entra no SELECT para a guarda do zerado (revisao da Task 3, I2) — o alerta de
+  // minimo abaixo nunca dispara para inativo de fato (quantidade_minima costuma ser 0), mas a
+  // guarda do zerado precisa do valor explicito.
+  const material = await dbGet(db, `SELECT id, codigo, nome, localizacao, unidade, quantidade_atual, quantidade_minima, ativo
+    FROM materiais_almoxarifado WHERE id = ? AND proprietario_cliente_id IS NULL`, [materialId]);
   if (!material) return null;
+  // RN-07 (Etapa 12, Task 3): mesmo hook em tempo real que o alerta de minimo ja usa — chamado
+  // depois de TODA movimentacao (stockService) e depois de editar material (routes) — e o que
+  // cobre material SEM minimo configurado (a query periodica de `verificarAlertasEstoque` exige
+  // `quantidade_minima > 0` e nunca o pegaria). RN-01: falha aqui nunca derruba quem chamou.
+  // Fora do modo `teste` (mesmo motivo do alerta de minimo: teste nao deve gerar fila real).
+  if (!opts.teste) {
+    try {
+      // `saldo_anterior` (quando o chamador e o motor de estoque) e o fato que decide a
+      // primeira zeragem observada — ver o comentario em avaliarZerado (Critical 1 da
+      // revisao final).
+      await processarAlertaZerado(db, material, { saldo_anterior: opts.saldo_anterior });
+    } catch (e) {
+      console.warn('[almoxarifado-alertas] Falha ao avaliar alerta de zerado:', e.message);
+    }
+  }
   return processarAlertaMaterial(db, material, opts);
 }
 
@@ -618,6 +808,7 @@ module.exports = {
   getWhatsappConfig,
   getConfigValue,
   enviarEmail,
+  parseList,
   escapeHtml,
   shouldUpdateSecret,
   PASSWORD_MASK,
@@ -632,4 +823,7 @@ module.exports = {
   processarAlertaMaterial,
   avaliarCruzamentoMinimo,
   marcarAlertaEnviado,
+  avaliarZerado,
+  alertasEmailLigado,
+  processarAlertaZerado,
 };

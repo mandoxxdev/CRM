@@ -5,7 +5,8 @@ import { resolveMaterialPhotoUrl } from '../../utils/resolveMaterialPhotoUrl';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
 import { useRequisicoesMaterialContext } from './RequisicoesMaterialContext';
-import { FiPlus, FiTrash2, FiArrowLeft, FiSend, FiSearch, FiPackage, FiAlertTriangle } from 'react-icons/fi';
+import { TIPO_REQUISICAO_LABELS } from './requisicaoLabels';
+import { FiPlus, FiTrash2, FiArrowLeft, FiSend, FiSearch, FiPackage, FiAlertTriangle, FiSave } from 'react-icons/fi';
 import { DisponibilidadeBadge } from '../../utils/disponibilidadeEstoque';
 import './Almoxarifado.css';
 
@@ -25,6 +26,7 @@ const RequisicaoForm = () => {
   const [busca, setBusca] = useState('');
   const [resultados, setResultados] = useState([]);
   const [showBusca, setShowBusca] = useState(false);
+  const [centrosCusto, setCentrosCusto] = useState([]);
 
   const [form, setForm] = useState({
     departamento: setorFixo,
@@ -32,10 +34,15 @@ const RequisicaoForm = () => {
     urgencia: 'NORMAL',
     observacoes: '',
     justificativa_urgencia: '',
+    tipo_requisicao: 'CONSUMO',
+    centro_custo_id: '',
+    local_entrega: '',
+    justificativa: '',
   });
 
   const [itens, setItens] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
   const [materiaisLoading, setMateriaisLoading] = useState(true);
   const [materiaisError, setMateriaisError] = useState(null);
 
@@ -65,6 +72,10 @@ const RequisicaoForm = () => {
     loadMateriais();
     if (warehouseMode) loadSetores();
   }, [setorFixo, warehouseMode, form.departamento]);
+
+  useEffect(() => {
+    loadCentrosCusto();
+  }, []);
 
   useEffect(() => {
     if (setorFixo) {
@@ -102,6 +113,13 @@ const RequisicaoForm = () => {
       const res = await api.get('/almoxarifado/setores-requisicao');
       setSetores(res.data);
     } catch { /* optional */ }
+  };
+
+  const loadCentrosCusto = async () => {
+    try {
+      const res = await api.get('/almoxarifado/centros-custo');
+      setCentrosCusto(Array.isArray(res.data) ? res.data : []);
+    } catch { /* opcional — campo continua funcional vazio */ }
   };
 
   const loadMateriais = async () => {
@@ -186,20 +204,37 @@ const RequisicaoForm = () => {
     setItens(prev => prev.map(i => i.material_id === material_id ? { ...i, [campo]: valor } : i));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!form.departamento) { toast.error('Setor é obrigatório'); return; }
-    if (itens.length === 0) { toast.error('Adicione ao menos um material'); return; }
-    if (form.urgencia !== 'NORMAL' && !form.justificativa_urgencia) {
+  const validarFormulario = (salvarRascunho) => {
+    // Setor continua exigido mesmo em rascunho: a whitelist de materiais por setor depende dele
+    // e o server também exige na criação (não é regra client-only) — decisão consciente do fix loop.
+    if (!form.departamento) { toast.error('Setor é obrigatório'); return false; }
+    if (itens.length === 0) { toast.error('Adicione ao menos um material'); return false; }
+    // Justificativa de urgência é regra client-only (server não exige nem no envio direto) — pulada
+    // ao salvar rascunho, já que rascunho existe justamente para permitir salvar incompleto.
+    if (!salvarRascunho && form.urgencia !== 'NORMAL' && !form.justificativa_urgencia) {
       toast.error('Justifique a urgência para requisições urgentes/críticas');
-      return;
+      return false;
     }
-    setSaving(true);
+    // EMERGENCIAL exige justificativa nos dois fluxos: o server valida isso independente de
+    // salvar_rascunho (RequisicaoSchema.superRefine), então bloquear aqui evita round-trip com 400.
+    if (form.tipo_requisicao === 'EMERGENCIAL' && !form.justificativa.trim()) {
+      toast.error('Justifique a requisição emergencial');
+      return false;
+    }
+    return true;
+  };
+
+  const enviarRequisicao = async (salvarRascunho) => {
+    if (!validarFormulario(salvarRascunho)) return;
+    const setSavingFlag = salvarRascunho ? setSavingDraft : setSaving;
+    setSavingFlag(true);
     try {
       const payload = {
         ...form,
+        centro_custo_id: form.centro_custo_id || undefined,
         setor: form.departamento,
         modulo_origem: ctx.moduloOrigem,
+        salvar_rascunho: salvarRascunho,
         itens: itens.map(i => ({
           material_id: i.material_id,
           quantidade: parseFloat(i.quantidade),
@@ -207,13 +242,26 @@ const RequisicaoForm = () => {
         }))
       };
       const res = await api.post(apiPrefix, payload);
-      toast.success(`Requisição ${res.data.numero} criada! ${res.data.aprovacao === 'automatica' ? '(Aprovação automática)' : 'Aguardando aprovação do almoxarifado.'}`);
+      if (salvarRascunho) {
+        toast.success(`Rascunho ${res.data.numero} salvo`);
+      } else {
+        toast.success(`Requisição ${res.data.numero} criada! ${res.data.aprovacao === 'automatica' ? '(Aprovação automática)' : 'Aguardando aprovação do almoxarifado.'}`);
+      }
       navigate(listPath);
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Erro ao criar requisição');
+      toast.error(err.response?.data?.error || (salvarRascunho ? 'Erro ao salvar rascunho' : 'Erro ao criar requisição'));
     } finally {
-      setSaving(false);
+      setSavingFlag(false);
     }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    await enviarRequisicao(false);
+  };
+
+  const handleSalvarRascunho = async () => {
+    await enviarRequisicao(true);
   };
 
   const totalItens = itens.length;
@@ -268,6 +316,31 @@ const RequisicaoForm = () => {
                     placeholder="Ex: OS-0042 / Proj-123" />
                 </div>
                 <div className="almox-field">
+                  <label className="almox-label">Tipo de requisição</label>
+                  <select className="almox-form-select" value={form.tipo_requisicao}
+                    onChange={e => setForm(f => ({ ...f, tipo_requisicao: e.target.value }))}>
+                    {Object.entries(TIPO_REQUISICAO_LABELS).map(([k, v]) => (
+                      <option key={k} value={k}>{v}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="almox-field">
+                  <label className="almox-label">Centro de custo</label>
+                  <select className="almox-form-select" value={form.centro_custo_id}
+                    onChange={e => setForm(f => ({ ...f, centro_custo_id: e.target.value }))}>
+                    <option value="">—</option>
+                    {centrosCusto.map(cc => (
+                      <option key={cc.id} value={cc.id}>{cc.codigo} — {cc.nome}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="almox-field">
+                  <label className="almox-label">Local de entrega</label>
+                  <input className="almox-input" value={form.local_entrega}
+                    onChange={e => setForm(f => ({ ...f, local_entrega: e.target.value }))}
+                    placeholder="Ex: Galpão 2 / Bancada 4" />
+                </div>
+                <div className="almox-field">
                   <label className="almox-label">Urgência<span className="required">*</span></label>
                   <select className="almox-form-select" value={form.urgencia} onChange={e => setForm(f => ({ ...f, urgencia: e.target.value }))}>
                     <option value="NORMAL">Normal — atendimento padrão</option>
@@ -281,6 +354,17 @@ const RequisicaoForm = () => {
                     <textarea className="almox-textarea" rows={2} value={form.justificativa_urgencia}
                       onChange={e => setForm(f => ({ ...f, justificativa_urgencia: e.target.value }))}
                       placeholder="Descreva o motivo da urgência..." />
+                  </div>
+                )}
+                {form.tipo_requisicao === 'EMERGENCIAL' && (
+                  <div className="almox-field almox-form-full">
+                    <label className="almox-label">Justificativa<span className="required">*</span></label>
+                    <textarea className="almox-textarea" rows={2} value={form.justificativa}
+                      onChange={e => setForm(f => ({ ...f, justificativa: e.target.value }))}
+                      placeholder="Descreva o motivo da requisição emergencial..." />
+                    <div className="almox-hint-banner" style={{ marginTop: 6, fontSize: '0.75rem' }}>
+                      Requisições emergenciais exigem justificativa para liberação imediata.
+                    </div>
                   </div>
                 )}
                 <div className="almox-field almox-form-full">
@@ -435,6 +519,7 @@ const RequisicaoForm = () => {
                 {[
                   ['Solicitante', user?.nome || '—'],
                   ['Setor', form.departamento || '—'],
+                  ['Tipo', TIPO_REQUISICAO_LABELS[form.tipo_requisicao] || form.tipo_requisicao],
                   ['Total de itens', totalItens],
                   ['Urgência', form.urgencia],
                   ['OS / Ref.', form.os_referencia || '—'],
@@ -453,10 +538,18 @@ const RequisicaoForm = () => {
               </div>
             )}
 
-            <button type="submit" className="btn-almox-primary" disabled={saving || itens.length === 0}
+            <button type="submit" className="btn-almox-primary" disabled={saving || savingDraft || itens.length === 0}
               style={{ justifyContent: 'center', padding: '12px' }}>
               <FiSend size={14} /> {saving ? 'Enviando...' : 'Enviar Requisição'}
             </button>
+            {/* Rascunho depende das rotas /enviar e /cancelar, exclusivas do almoxarifado. */}
+            {warehouseMode && (
+              <button type="button" className="btn-almox-secondary" disabled={saving || savingDraft || itens.length === 0}
+                style={{ justifyContent: 'center' }}
+                onClick={handleSalvarRascunho}>
+                <FiSave size={14} /> {savingDraft ? 'Salvando...' : 'Salvar Rascunho'}
+              </button>
+            )}
             <button type="button" className="btn-almox-secondary" style={{ justifyContent: 'center' }}
               onClick={() => navigate(listPath)}>
               Cancelar

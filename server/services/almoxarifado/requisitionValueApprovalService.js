@@ -3,6 +3,7 @@
  */
 const { dbRun, dbGet, dbAll } = require('./db');
 const alertService = require('./alertService');
+const { custoUnitarioSql } = require('./custoSql');
 
 const CONFIG_KEYS = {
   ativo: 'liberacao_valor_ativo',
@@ -59,9 +60,7 @@ async function getAprovadoresDetalhes(db) {
 
 async function calcularValorTotal(db, requisicaoId) {
   const row = await dbGet(db, `SELECT COALESCE(SUM(
-      ir.quantidade_solicitada * (
-        CASE WHEN COALESCE(ma.custo_medio, 0) > 0 THEN ma.custo_medio ELSE COALESCE(ma.custo_unitario, 0) END
-      )
+      ir.quantidade_solicitada * ${custoUnitarioSql('ma')}
     ), 0) as valor_total
     FROM itens_requisicao_almoxarifado ir
     JOIN materiais_almoxarifado ma ON ir.material_id = ma.id
@@ -175,6 +174,17 @@ async function aprovarValor(db, requisicaoId, user) {
     err.status = 404;
     throw err;
   }
+
+  // Segregação de funções (design, "Decisões aprovadas" #1): o solicitante não pode
+  // liberar por valor a própria requisição, mesmo quando também é um aprovador de valor
+  // configurado ou admin. NÃO se aplica a rejeitarValor (abaixo) — reprovar a própria
+  // requisição é desistência, decisão legítima do solicitante.
+  if (Number(user.id) === Number(reqRow.solicitante_id)) {
+    const err = new Error('Solicitante não pode aprovar a própria requisição');
+    err.status = 403;
+    throw err;
+  }
+
   if (reqRow.status !== STATUS_AGUARDANDO) {
     const err = new Error('Apenas requisições aguardando aprovação de valor podem ser liberadas');
     err.status = 400;
@@ -197,6 +207,11 @@ async function aprovarValor(db, requisicaoId, user) {
   return { success: true, status: 'APROVADO' };
 }
 
+// Sem segregação de funções aqui de propósito (design, "Decisões aprovadas" #1): um
+// solicitante que também seja aprovador de valor pode reprovar a própria requisição —
+// reprovar é desistência, decisão legítima do solicitante. O motivo em si é exigido na
+// rota (RejeicaoSchema/validate, server/routes/almoxarifado.js) antes de chegar aqui; o
+// fallback abaixo é só defesa para chamadas diretas ao serviço (ex.: testes/scripts).
 async function rejeitarValor(db, requisicaoId, user, motivo) {
   if (!(await isAprovadorValor(db, user))) {
     const err = new Error('Sem permissão para reprovar liberação por valor');
