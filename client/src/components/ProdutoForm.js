@@ -465,9 +465,22 @@ const ProdutoForm = () => {
         console.log('Família alterada para:', newValue);
       }
       
-      // Se mudou nome, família ou MODELO e não está editando, regenerar o código.
-      // O modelo entrou aqui porque agora faz parte do código do produto.
-      if ((name === 'nome' || name === 'familia_produto' || name === 'modelo') && !isEdit && !id) {
+      // Regenerar o código quando muda algo que ENTRA no código.
+      //
+      // No cadastro novo, vale para nome, família e modelo. Na EDIÇÃO, vale para família e
+      // modelo — pedido do usuário depois de clonar um produto: ele trocou o modelo de
+      // DHY-10 para DHY-80 e o código continuou 60-01-DHY-10-02, que descreve o modelo
+      // errado. O código tem o formato GRUPO-FAMÍLIA-MODELO-SEQUENCIAL, então modelo novo
+      // é série nova.
+      //
+      // O nome fica de fora na edição de propósito: no formato padrão ele não entra no
+      // código, e renumerar um produto porque alguém corrigiu um typo no nome seria
+      // gratuito. (Na família "Hélices e Acessórios" o nome entra, mas ali o código é
+      // montado por diâmetro/espessura/material e não por sequencial.)
+      const mudouAlgoDoCodigo = (!isEdit && !id)
+        ? (name === 'nome' || name === 'familia_produto' || name === 'modelo')
+        : (name === 'familia_produto' || name === 'modelo');
+      if (mudouAlgoDoCodigo) {
         // Usar setTimeout para garantir que o estado foi atualizado
         setTimeout(() => {
           const nomeAtual = name === 'nome' ? newValue : newData.nome || '';
