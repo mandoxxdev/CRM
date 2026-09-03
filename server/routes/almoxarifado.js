@@ -246,6 +246,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // O verificador vem ANTES do static e so olha `exp` + `sig` — sem banco e sem sessao, porque
   // roda em toda imagem de toda lista.
   const assinadorUpload = criarAssinadorUpload(resolveJwtSecret(PERSISTENT_DATA_DIR));
+  // Ponto unico de mintagem do modulo. Sem esta linha, materialPhotoUrl LANCA — de proposito:
+  // devolver URL sem assinatura seria o furo C42 de volta, e de volta em silencio.
+  require('../services/almoxarifado/materialPhoto').configurarAssinador(assinadorUpload);
   app.use('/api/uploads/almoxarifado', assinadorUpload.middleware, require('express').static(uploadsAlmoxDir));
   app.use('/uploads/almoxarifado', assinadorUpload.middleware, require('express').static(uploadsAlmoxDir));
   // FECHO obrigatorio. `express.static` chama `next()` quando o arquivo NAO existe, e em producao

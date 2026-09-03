@@ -10,6 +10,8 @@
  * duas vezes. O rastro vai para auditoria_log_almoxarifado com entidade = 'lote'.
  */
 const { dbRun, dbGet, dbAll } = require('./db');
+// Etapa 33: a URL do certificado passa a ser MINADA pelo servidor, no ponto unico do modulo.
+const { materialPhotoUrl } = require('./materialPhoto');
 const { registrarAuditoria } = require('./audit');
 
 const STATUS_LOTE = ['ATIVO', 'BLOQUEADO', 'REPROVADO'];
@@ -218,6 +220,11 @@ async function listarLotesDoMaterial(db, materialId, { apenasComSaldo = false } 
         vencido,
         vencimento_liberado: liberado,
         elegivel: l.status === 'ATIVO' && (!vencido || liberado),
+        // Etapa 33 (C42): a tela montava esta URL a partir de `certificado_arquivo` CRU, e URL
+        // montada no client nao tem assinatura — o link do certificado daria 404. Quem mina a URL
+        // e o servidor, sempre. `null` quando nao ha certificado: a tela ja testa a existencia
+        // antes de desenhar o link.
+        certificado_url: l.certificado_arquivo ? materialPhotoUrl(l.certificado_arquivo) : null,
       };
     })
     .filter((l) => !apenasComSaldo || l.saldo > 0);

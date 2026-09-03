@@ -95,7 +95,12 @@ function contarAssinaturasDisco(uploadsAlmoxDir) {
     assert.ok(a.criado_em, 'criado_em ausente');
     assert.strictEqual(a.criado_por_nome, 'Admin Teste');
 
-    const filename = a.arquivo_url.split('/').pop();
+    // ⚠️ Etapa 33: `arquivo_url` deixou de ser um caminho do qual se deriva o nome do arquivo —
+    // ele agora traz `?exp=&sig=` (o mount legado parou de ser público, furo C42), então o
+    // `split('/').pop()` de antes devolvia `assinatura-x.png?exp=…&sig=…` e o `existsSync`
+    // procurava um arquivo com esse nome literal. Tira-se a query antes de tocar em disco.
+    assert.match(a.arquivo_url, /[?&]sig=[0-9a-f]{32}/, 'arquivo_url sem assinatura');
+    const filename = a.arquivo_url.split('/').pop().split('?')[0];
     assert.ok(fs.existsSync(path.join(uploadsAlmoxDir, filename)),
       `arquivo não encontrado em ${path.join(uploadsAlmoxDir, filename)}`);
 

@@ -9,7 +9,11 @@
  */
 const { dbRun, dbGet, dbAll } = require('./db');
 const { registrarAuditoria } = require('./audit');
-const { MATERIAL_PHOTO_API_PREFIX } = require('./materialPhoto');
+// Etapa 33: este servico montava a URL com o PREFIXO importado, sem passar por materialPhotoUrl —
+// e por isso o guard de 'lancar sem assinador' daquele modulo nao o alcancava: a assinatura de
+// entrega continuaria saindo sem assinar, com a suite verde. Agora ele usa o MESMO ponto de
+// mintagem, e o prefixo deixou de ser exportavel de proposito.
+const { materialPhotoUrl } = require('./materialPhoto');
 
 const STATUS_ASSINAVEIS = ['ENTREGUE', 'PARCIALMENTE_ATENDIDA', 'ENCERRADA'];
 
@@ -17,7 +21,7 @@ function montarResposta(row) {
   return {
     id: row.id,
     recebedor_nome: row.recebedor_nome,
-    arquivo_url: `${MATERIAL_PHOTO_API_PREFIX}${row.arquivo}`,
+    arquivo_url: materialPhotoUrl(row.arquivo),
     criado_em: row.criado_em,
     criado_por_nome: row.criado_por_nome,
   };
