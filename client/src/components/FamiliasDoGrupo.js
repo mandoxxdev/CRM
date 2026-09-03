@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../services/api';
-import { FiPlus, FiEdit2, FiTrash2, FiPackage, FiChevronRight, FiArrowLeft } from 'react-icons/fi';
+import { FiPlus, FiEdit2, FiTrash2, FiPackage, FiChevronRight, FiArrowLeft, FiCopy } from 'react-icons/fi';
+import { useAuth } from '../context/AuthContext';
 import ModalFamiliaForm from './ModalFamiliaForm';
 import './FamiliasProdutos.css';
 import './Loading.css';
@@ -12,6 +13,10 @@ const FamiliasDoGrupo = () => {
   const [grupo, setGrupo] = useState(null);
   const [familias, setFamilias] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+  // Clonar e so para admin, por pedido do usuario. Esconder o botao e cortesia de
+  // interface; quem recusa de verdade e a rota no servidor.
+  const isAdmin = String(user?.role || '').toLowerCase() === 'admin';
   const [showModalFamilia, setShowModalFamilia] = useState(false);
   const [editingFamilia, setEditingFamilia] = useState(null);
 
@@ -58,6 +63,35 @@ const FamiliasDoGrupo = () => {
     } catch (error) {
       console.error('Erro ao desativar família:', error);
       alert(error.response?.data?.error || 'Erro ao desativar família');
+    }
+  };
+
+  // Clonar: famílias irmãs (mesmo equipamento, material diferente) repetem variáveis,
+  // opções e modelo de contrato. O clone traz tudo isso; os PRODUTOS não vêm junto,
+  // porque o código de produto é único e é a numeração da empresa.
+  const handleClonar = async (familia) => {
+    const sugestao = `${familia.nome} - Cópia`;
+    const nome = window.prompt('Nome da nova família:', sugestao);
+    if (nome === null) return;
+    const nomeLimpo = nome.trim();
+    if (!nomeLimpo) {
+      alert('Informe um nome para a nova família.');
+      return;
+    }
+    try {
+      const { data } = await api.post(`/familias/${familia.id}/clonar`, { nome: nomeLimpo });
+      loadFamilias();
+      alert(
+        `Família "${data.nome}" criada a partir de "${data.clonada_de}".
+
+`
+        + `${data.variaveis_copiadas} variável(is) e ${data.opcoes_copiadas} opção(ões) copiadas.
+`
+        + 'Os produtos não são clonados: cadastre-os na nova família.'
+      );
+    } catch (error) {
+      console.error('Erro ao clonar família:', error);
+      alert(error.response?.data?.error || 'Erro ao clonar família');
     }
   };
 
@@ -164,6 +198,16 @@ const FamiliasDoGrupo = () => {
                     >
                       <FiEdit2 />
                     </button>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        className="btn-icon-card"
+                        title="Clonar família (copia variáveis, opções e modelo de contrato)"
+                        onClick={() => handleClonar(f)}
+                      >
+                        <FiCopy />
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="btn-icon-card btn-danger"

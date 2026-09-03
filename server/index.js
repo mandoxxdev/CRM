@@ -4821,6 +4821,108 @@ app.delete('/api/familias/:id', authenticateToken, (req, res) => {
     res.json({ message: 'Família desativada' });
   });
 });
+// POST clonar familia: cria uma nova familia com TODA a configuracao de outra.
+//
+// Pedido do usuario: "as vezes o item é EXTREMAMENTE PARECIDO... um botao chamado clonar
+// para nao ter que refazer todo o processo de cadastro". O caso real sao familias irmas que
+// só mudam o material - "Tacho Móvel (Aço Carbono)" e "Tacho Móvel (TCRY)" - e que repetem
+// as mesmas variaveis, as mesmas opcoes e o mesmo modelo de contrato.
+//
+// O QUE VAI JUNTO: foto, esquematico, grupo, marcadores da vista, modelo de clausulas, as
+// variaveis da familia COM A ORDEM e as opcoes de cada variavel.
+//
+// O QUE NAO VAI: os PRODUTOS. produtos.codigo e UNIQUE e e a numeracao da empresa - clonar
+// produto exigiria inventar codigo novo, e chutar numeracao de catalogo e pior do que deixar
+// o cadastro para quem sabe qual e o codigo certo.
+//
+// A foto e o esquematico sao COMPARTILHADOS (mesmo caminho de arquivo), nao copiados. E
+// seguro porque a exclusao de familia e logica (ativo = 0) e nunca apaga o arquivo; e trocar
+// a foto de uma delas grava um arquivo novo, sem mexer no da outra.
+// SÓ ADMIN, por pedido do usuario. A checagem mora AQUI, nao so no botao: esconder o botao
+// e escolha de interface, nao permissao - a rota continua alcancavel por quem chamar a API
+// direto. O front esconde para nao oferecer o que nao pode; o servidor e quem recusa.
+app.post('/api/familias/:id/clonar', authenticateToken, (req, res) => {
+  if (!isAdminUser(req.user)) {
+    return res.status(403).json({ error: 'Apenas administradores podem clonar famílias' });
+  }
+  var origemId = req.params.id;
+  var nome = ((req.body || {}).nome || '').trim();
+  if (!nome) return res.status(400).json({ error: 'Nome da nova família é obrigatório' });
+
+  db.get('SELECT * FROM familias_produto WHERE id = ?', [origemId], function (errOrigem, origem) {
+    if (errOrigem) return res.status(500).json({ error: errOrigem.message });
+    if (!origem) return res.status(404).json({ error: 'Família de origem não encontrada' });
+
+    // Mesma comparacao do cadastro normal: exata, igual a do UNIQUE do banco.
+    db.get('SELECT id, ativo FROM familias_produto WHERE nome = ?', [nome], function (errNome, existente) {
+      if (errNome) return res.status(500).json({ error: errNome.message });
+      if (existente) {
+        return res.status(400).json({
+          error: existente.ativo === 1
+            ? 'Já existe uma família com este nome'
+            : 'Já existe uma família INATIVA com este nome. Reative-a ou escolha outro nome.'
+        });
+      }
+
+      db.get('SELECT COALESCE(MAX(codigo), 0) + 10 AS proximo FROM familias_produto', [], function (errCod, linhaCod) {
+        if (errCod) return res.status(500).json({ error: errCod.message });
+        var codigo = linhaCod && linhaCod.proximo != null ? linhaCod.proximo : 10;
+
+        db.run(
+          `INSERT INTO familias_produto
+             (nome, foto, ordem, ativo, marcadores_vista, grupo_id, codigo, esquematico, clausulas_modelo_id)
+           VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?)`,
+          [nome, origem.foto, origem.ordem, origem.marcadores_vista, origem.grupo_id, codigo,
+           origem.esquematico, origem.clausulas_modelo_id],
+          function (errIns) {
+            if (errIns) {
+              if (errIns.message && errIns.message.indexOf('UNIQUE') !== -1) {
+                return res.status(400).json({ error: 'Já existe uma família com este nome' });
+              }
+              return res.status(500).json({ error: errIns.message });
+            }
+            var novoId = this.lastID;
+
+            // As variaveis e as opcoes sao copiadas com INSERT ... SELECT: uma ida ao banco
+            // por tabela, e a copia nao tem como sair pela metade se a familia tiver muitas
+            // opcoes. So linhas ativas - o que foi desativado na origem nao deve reviver aqui.
+            db.run(
+              `INSERT INTO familia_variaveis (familia_id, variavel_chave, ordem, ativo)
+               SELECT ?, variavel_chave, ordem, 1
+                 FROM familia_variaveis WHERE familia_id = ? AND ativo = 1`,
+              [novoId, origemId],
+              function (errVars) {
+                if (errVars) return res.status(500).json({ error: errVars.message });
+                var totalVariaveis = this.changes;
+
+                db.run(
+                  `INSERT INTO familia_variavel_opcoes (familia_id, variavel_chave, valor, ordem, ativo)
+                   SELECT ?, variavel_chave, valor, ordem, 1
+                     FROM familia_variavel_opcoes WHERE familia_id = ? AND ativo = 1`,
+                  [novoId, origemId],
+                  function (errOpc) {
+                    if (errOpc) return res.status(500).json({ error: errOpc.message });
+                    var totalOpcoes = this.changes;
+
+                    db.get('SELECT * FROM familias_produto WHERE id = ?', [novoId], function (errNova, nova) {
+                      if (errNova) return res.status(500).json({ error: errNova.message });
+                      res.json(Object.assign({}, nova || {}, {
+                        clonada_de: origem.nome,
+                        variaveis_copiadas: totalVariaveis,
+                        opcoes_copiadas: totalOpcoes
+                      }));
+                    });
+                  }
+                );
+              }
+            );
+          }
+        );
+      });
+    });
+  });
+});
+
 app.post('/api/familias/:id/foto', authenticateToken, uploadFamilia.single('foto'), (req, res) => {
   var id = req.params.id;
   if (!req.file || !req.file.filename) return res.status(400).json({ error: 'Nenhuma imagem enviada' });
