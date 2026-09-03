@@ -9,6 +9,8 @@ const { canConfigureAlmox, isSystemAdmin } = require('../../services/systemPermi
 const { initSchema, TIPOS_MATERIAL_ENUM, TIPOS_LOCALIZACAO, SETORES_REQUISICAO } = require('../../services/almoxarifado/schema');
 const { requirePermission, can, getPerfilFromUser, ACAO_PERFIS, PERFIS } = require('../../services/almoxarifado/permissions');
 const { dbAll, dbGet, dbRun } = require('../../services/almoxarifado/db');
+// Etapa 33: a URL de arquivo e minada no ponto unico do modulo, nunca montada aqui.
+const { enrichMaterialRows } = require('../../services/almoxarifado/materialPhoto');
 const { disponivelSql } = require('../../services/almoxarifado/availabilitySql');
 // Etapa 27, Task 2: a MESMA conversao numerica que a regua da tolerancia aplica a medida, reusada
 // no CRUD do plano de proposito. Ela existe porque `Number(null)`, `Number('')` e `Number([])` sao
@@ -740,7 +742,10 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
   app.get('/api/almoxarifado/estoque', auth, async (req, res) => {
     try {
       const rows = await stockService.consultarEstoque(db, req.query);
-      res.json(rows);
+      // Etapa 33 (fix-round): devolvia `foto` CRU. Nenhuma tela atual renderiza a foto do estoque,
+      // entao nao ha defeito visivel hoje — mas a primeira que renderizar receberia '' do helper, e
+      // o defeito apareceria longe daqui. Assinar na fonte fecha a mina. Achado da revisao.
+      res.json(enrichMaterialRows(rows));
     } catch (e) { handleError(res, e); }
   });
 

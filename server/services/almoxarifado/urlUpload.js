@@ -29,8 +29,30 @@ const PREFIXO = '/api/uploads/almoxarifado';
 // fazia o `timingSafeEqual` lancar RangeError -> 500, violando a regra de "toda falha e 404".
 const HEX32 = /^[0-9a-f]{32}$/;
 
-function criarAssinadorUpload(segredo) {
-  if (!segredo) throw new Error('urlUpload: segredo obrigatorio');
+/**
+ * DERIVA a chave da assinatura a partir do segredo raiz, em vez de usar o segredo do JWT direto.
+ *
+ * Assinar URL de arquivo com a MESMA chave que assina sessao mistura dois dominios: qualquer
+ * fraqueza futura de um vira alavanca contra o outro, e a assinatura daqui e exposta em URL —
+ * muito mais visivel que um token em header. Derivar custa um hash no boot e nao muda contrato
+ * nenhum: as URLs continuam com a mesma forma.
+ *
+ * E EXPORTADA, e nao escondida no closure, por um motivo pratico: o cenario da RN-03 precisa
+ * construir uma assinatura CORRETA e VENCIDA — coisa que `assinar()` nao emite, porque ele so gera
+ * `exp` no futuro. Sem exportar, o teste duplicaria a string de dominio e as duas copias
+ * divergiriam na primeira mudanca.
+ */
+function derivarSegredoUpload(segredoRaiz) {
+  return crypto.createHash('sha256')
+    .update(`${segredoRaiz}:almoxarifado-uploads-v1`)
+    .digest();
+}
+
+function criarAssinadorUpload(segredoRaiz) {
+  if (!segredoRaiz) throw new Error('urlUpload: segredo obrigatorio');
+
+  // Achado da revisao adversarial — ver o cabecalho de `derivarSegredoUpload`.
+  const segredo = derivarSegredoUpload(segredoRaiz);
 
   // O NOME DO ARQUIVO entra no HMAC. Sem ele, uma assinatura valida para `material-1.png` serviria
   // para `assinatura-9.png` — o erro classico deste padrao, e o unico motivo da RN-02 existir.
@@ -90,4 +112,4 @@ function criarAssinadorUpload(segredo) {
   return { assinar, verificar, middleware, MINUTOS_VALIDADE };
 }
 
-module.exports = { criarAssinadorUpload, MINUTOS_VALIDADE, PREFIXO };
+module.exports = { criarAssinadorUpload, derivarSegredoUpload, MINUTOS_VALIDADE, PREFIXO };

@@ -161,7 +161,8 @@ test('RN-03: o anexo NAO sai pelo /api/uploads/almoxarifado, e SAI pela rota aut
       `o diretorio de anexos esta DENTRO de uploads/almoxarifado (${rel}) — express.static serve subpasta`);
 
     // Os DOIS mounts de routes/almoxarifado.js:229-230, pelo caminho REAL do arquivo
-    for (const prefixo of ['/api/uploads/almoxarifado', '/uploads/almoxarifado']) {
+    // O mount legado /uploads/almoxarifado foi removido na Etapa 33 — ver routes/almoxarifado.js.
+    for (const prefixo of ['/api/uploads/almoxarifado']) {
       const url = `${prefixo}/${rel.split(path.sep).join('/')}`;
       const estatico = await request(ctx.app).get(url);
       assert.strictEqual(estatico.status, 404, `anexo publico em ${url}`);

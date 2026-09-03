@@ -250,15 +250,28 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // devolver URL sem assinatura seria o furo C42 de volta, e de volta em silencio.
   require('../services/almoxarifado/materialPhoto').configurarAssinador(assinadorUpload);
   app.use('/api/uploads/almoxarifado', assinadorUpload.middleware, require('express').static(uploadsAlmoxDir));
-  app.use('/uploads/almoxarifado', assinadorUpload.middleware, require('express').static(uploadsAlmoxDir));
-  // FECHO obrigatorio. `express.static` chama `next()` quando o arquivo NAO existe, e em producao
-  // a requisicao continua descendo ate o catch-all do SPA (index.js monta o build do client na
-  // raiz, e este modulo e registrado ANTES) — uma assinatura VALIDA para um nome inexistente
-  // devolveria **200 com o HTML do SPA** dentro de um `<img>`. Medido na revisao do plano. E pior:
-  // no harness de teste, que nao tem catch-all, o comportamento seria OUTRO, entao o cenario
-  // passaria por um motivo que producao nao tem.
+  // FECHO obrigatorio. `express.static` chama `next()` quando o arquivo NAO existe, e a requisicao
+  // continuaria descendo — uma assinatura VALIDA para um nome inexistente cairia no proximo
+  // handler em vez de responder 404. Medido na revisao do plano.
   app.use('/api/uploads/almoxarifado', (req, res) => res.status(404).end());
-  app.use('/uploads/almoxarifado', (req, res) => res.status(404).end());
+
+  // ⚠️ O MOUNT LEGADO `/uploads/almoxarifado` (sem `/api`) FOI REMOVIDO — nao esqueca dele aqui.
+  //
+  // Ele existia desde a Etapa 2 e, em PRODUCAO, ja estava morto: `server/index.js` registra o
+  // catch-all do SPA (`app.get('*')`) ANTES deste modulo, e a lista de prefixos que ele deixa
+  // passar (`:23222-23228`) tem `/api`, `/health`, `/logo`, `/cabecalho` e `/Logo_` — **nao tem
+  // `/uploads`**. Ou seja: `/uploads/almoxarifado/x.png` nunca chegava aqui; devolvia o index.html
+  // do React com 200.
+  //
+  // Isso foi medido na revisao adversarial da Etapa 33, e derrubou uma afirmacao que ESTE
+  // COMENTARIO fazia: dizia que "este modulo e registrado ANTES" do build do client. E o
+  // CONTRARIO. A consequencia pratica era que a regra "os dois mounts exigem assinatura" so valia
+  // no `/api` — o outro nao exigia nada porque nunca era alcancado.
+  //
+  // Removido em vez de consertado (bastaria acrescentar `/uploads` a lista do catch-all) porque
+  // ninguem o usa: o client so aceita URL comecando em `/api/uploads/almoxarifado/`
+  // (`resolveMaterialPhotoUrl`), e o servidor so mina URLs com esse prefixo. Manter um mount morto
+  // que promete protecao e pior que nao ter mount.
 
   const almoxMiddleware = checkModulePermission
     ? [authenticateToken, checkModulePermission('almoxarifado')]
@@ -665,7 +678,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         stockService.syncSaldoLocalizacaoPadrao(db, materialId).catch(() => null),
         alertService.verificarAlertaPorMaterialId(db, materialId).catch(() => null),
       ]);
-      res.json(row);
+      // Etapa 33 (fix-round): este PUT devolvia `foto` CRU enquanto o GET irmao devolve assinada —
+      // dois contratos divergentes para a MESMA entidade. Inocuo hoje so porque o formulario navega
+      // embora depois de salvar; a primeira tela que consumir a resposta do PUT receberia '' do
+      // helper e perderia a foto. Achado da revisao adversarial.
+      res.json(enrichMaterialRow(row));
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }

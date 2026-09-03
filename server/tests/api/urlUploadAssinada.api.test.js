@@ -22,7 +22,13 @@ function test(nome, fn) { testes.push([nome, fn]); }
 
 const CONTEUDO_A = Buffer.from('PNG-FALSO-CONTEUDO-A');
 const CONTEUDO_B = Buffer.from('PNG-FALSO-CONTEUDO-B');
-const MOUNTS = ['/api/uploads/almoxarifado', '/uploads/almoxarifado'];
+// SO o mount /api. O legado /uploads/almoxarifado foi REMOVIDO na revisao adversarial da Etapa 33:
+// em producao ele ja era sombreado pelo catch-all do SPA (index.js registra o build do client ANTES
+// deste modulo, e a lista de prefixos ignorados nao tem /uploads), entao devolvia index.html com
+// 200 e a regra 'os dois mounts exigem assinatura' so valia no /api. Ver o comentario em
+// routes/almoxarifado.js.
+const MOUNTS = ['/api/uploads/almoxarifado'];
+const MOUNT_REMOVIDO = '/uploads/almoxarifado';
 
 function gravar(ctx, nome, conteudo) {
   fs.mkdirSync(ctx.uploadsAlmoxDir, { recursive: true });
@@ -88,8 +94,13 @@ test('RN-03: assinatura CORRETA mas vencida da 404; a mesma no futuro da 200', a
   try {
     const crypto = require('crypto');
     const nome = gravar(ctx, 'material-exp.png', CONTEUDO_A);
+    // A chave e DERIVADA do segredo raiz (dominio separado do JWT) — por isso o teste usa a
+    // mesma funcao do servico em vez de repetir a string de dominio, que divergiria na primeira
+    // mudanca. Este continua sendo o unico ponto do arquivo em que o teste assina por conta propria.
+    const { derivarSegredoUpload } = require('../../services/almoxarifado/urlUpload');
+    const chave = derivarSegredoUpload(process.env.JWT_SECRET);
     const sigDe = (arquivo, exp) => crypto
-      .createHmac('sha256', process.env.JWT_SECRET)
+      .createHmac('sha256', chave)
       .update(`${arquivo}:${String(exp)}`).digest('hex').slice(0, 32);
 
     const passado = Math.floor(Date.now() / 1000) - 60;
@@ -294,6 +305,27 @@ test('[INTEGRACAO] a URL do CERTIFICADO DE LOTE devolvida pela rota e aceita, e 
     assert.match(com.certificado_url, /[?&]sig=[0-9a-f]{32}/);
     const baixado = await request(ctx.app).get(com.certificado_url);
     assert.strictEqual(baixado.status, 200, `recusou a URL que minou: ${com.certificado_url}`);
+  } finally { await ctx.close(); }
+});
+
+
+// O mount legado NAO e caminho de entrada — nem com assinatura valida. Antes da Etapa 33 ele
+// servia o diretorio publicamente; agora nao existe mais. Este cenario existe para que ninguem o
+// recrie "por compatibilidade": recriar sem middleware reabriria o furo, e recriar COM middleware
+// devolveria uma promessa que producao nao cumpre (o catch-all do SPA o sombreia).
+test('o mount legado /uploads/almoxarifado NAO serve arquivo, nem com assinatura valida', async () => {
+  const ctx = await createTestApp();
+  try {
+    const nome = gravar(ctx, 'material-legado.png', CONTEUDO_A);
+    const url = assinada(ctx, nome);
+
+    // Controle: pelo mount vivo, a MESMA assinatura funciona.
+    assert.strictEqual((await request(ctx.app).get(url)).status, 200);
+
+    const legada = url.replace('/api/uploads/almoxarifado', MOUNT_REMOVIDO);
+    const res = await request(ctx.app).get(legada);
+    assert.notStrictEqual(res.status, 200,
+      'o mount legado nao pode servir arquivo: ' + legada);
   } finally { await ctx.close(); }
 });
 

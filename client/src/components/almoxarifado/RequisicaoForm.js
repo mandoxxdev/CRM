@@ -423,7 +423,7 @@ const RequisicaoForm = () => {
                           onMouseEnter={e => e.currentTarget.style.background = 'var(--gmp-bg)'}
                           onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                           <div className="almox-foto-placeholder" style={{ width: 32, height: 32, fontSize: 14 }}>
-                            {m.foto ? <img src={resolveMaterialPhotoUrl(m.foto)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 6 }} /> : <FiPackage />}
+                            {m.foto ? <img src={resolveMaterialPhotoUrl(m.foto)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 6 }} onError={(e) => { e.currentTarget.style.display = 'none'; }} /> : <FiPackage />}
                           </div>
                           <div style={{ flex: 1 }}>
                             <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{m.nome}</div>

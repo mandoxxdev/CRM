@@ -1016,6 +1016,7 @@ const RequisicoesList = () => {
                             src={resolveMaterialPhotoUrl(a.arquivo_url)}
                             alt={`Assinatura de ${a.recebedor_nome}`}
                             style={{ width: 72, height: 36, objectFit: 'contain', background: '#fff', border: '1px solid var(--gmp-border)', borderRadius: 6, display: 'block' }}
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
                           />
                         </a>
                         <div>
