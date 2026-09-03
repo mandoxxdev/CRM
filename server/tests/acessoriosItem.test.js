@@ -275,14 +275,14 @@ console.log('\n[secao 4: o escopo lista os acessorios]');
 const textoEscopo = htmlCom.replace(/<[^>]+>/g, '|').replace(/\|+/g, '|');
 t('a linha "Acessórios:" aparece no escopo',
   () => assert(/Acess[oó]rios: /.test(textoEscopo), 'nao encontrei a linha no escopo'));
-// Separador BULLET e nao virgula: nome de acessorio costuma ter virgula ("Bomba para
+// Separador "+" e nao virgula: nome de acessorio costuma ter virgula ("Bomba para
 // Transferencia, 3cv"), e com virgula os 2 acessorios do teste pareceriam 3.
-t('lista os nomes separados por bullet, nao por virgula', () => {
+t('lista os nomes separados por +, nao por virgula', () => {
   const m = /Acess[oó]rios: ([^|]+)/.exec(textoEscopo);
   assert(m, 'linha nao encontrada');
   assert(m[1].includes('TAMPA BIPARTIDA'), m[1]);
   assert(m[1].includes('PLATAFORMA'), m[1]);
-  assert(m[1].includes('•'), 'deveria separar por bullet: ' + m[1]);
+  assert(m[1].includes(' + '), 'deveria separar por +: ' + m[1]);
 });
 t('quantidade so aparece quando e mais de um', () => {
   const m = /Acess[oó]rios: ([^|]+)/.exec(textoEscopo);

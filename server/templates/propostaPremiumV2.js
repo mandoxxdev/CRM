@@ -648,7 +648,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
             // "Tampa (1x)" em toda linha vira ruído.
             const nomeAc = esc(ac.descricao);
             return ac.quantidade > 1 ? `${nomeAc} (${esc(ac.quantidade)}x)` : nomeAc;
-          }).join(' • ')}</p>`
+          }).join(' + ')}</p>`
         : '';
 
       // Sempre respeitar a seleção do admin (por família) — inclusive para as variáveis
@@ -832,7 +832,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         ? `<div class="acessorios-inclusos">Acessórios: ${acessoriosDaLinha.map((ac) => {
             const nomeAc = esc(ac.descricao);
             return ac.quantidade > 1 ? `${nomeAc} (${esc(ac.quantidade)}x)` : nomeAc;
-          }).join(' • ')}</div>`
+          }).join(' + ')}</div>`
         : '';
       const descHtml = descritivoTec
         ? `${nomeEditavel}<div class="tech-desc">${descritivoTec}</div>${acessoriosDescHtml}`
