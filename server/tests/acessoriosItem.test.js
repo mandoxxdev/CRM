@@ -241,17 +241,48 @@ t('nao sobrou calculo de subtotal de item sem os acessorios', () => {
     'ha ' + semAcessorios.length + ' subtotal(is) que ignoram os acessorios');
 });
 
+console.log('\n[descricao da tabela lista os acessorios]');
+// Sem isto o cliente via "TACHO MOVEL ... R$ 60.566,92" sem nada explicando o preco, ja que
+// o acessorio deixou de ter linha propria.
+t('a descricao do item cita os acessorios', () => {
+  const cel = celulasDaLinhaItem(htmlCom);
+  assert(/Acess[oó]rios:/.test(cel[1]), 'descricao: ' + cel[1]);
+  assert(cel[1].includes('TAMPA BIPARTIDA'), cel[1]);
+});
+t('a descricao NAO mostra preco por acessorio', () => {
+  const cel = celulasDaLinhaItem(htmlCom);
+  const depois = cel[1].slice(cel[1].indexOf('Acess'));
+  assert(!/R\$|4\.500|1\.200/.test(depois), 'preco vazou para a descricao: ' + depois);
+});
+t('a lista fica FORA do span editavel (senao a edicao do nome a apagaria)', () => {
+  const span = /<span class="descricao-item-tabela"[^>]*>([\s\S]*?)<\/span>/.exec(htmlCom);
+  assert(span, 'span editavel nao encontrado');
+  assert(!/Acess[oó]rios:/.test(span[1]), 'a lista entrou dentro do editavel: ' + span[1]);
+});
+t('item sem acessorio nao ganha a linha na descricao', () => {
+  const html = gerarHTMLPropostaPremiumV2(
+    { numero_proposta: 'X', titulo: 'T', razao_social: 'C' },
+    [{ id: 1, produto_nome: 'D', quantidade: 1, unidade: 'UN', valor_unitario: 1, valor_total: 1,
+       familia_produto: 'F' }],
+    { total: 1, dataEmissao: '02/08/2026' }, {}, null, false, true
+  );
+  // Procura a TAG, nao o nome da classe: ele tambem aparece no CSS do documento.
+  assert(!html.includes('<div class="acessorios-inclusos">'), 'apareceu bloco vazio');
+});
+
 console.log('\n[secao 4: o escopo lista os acessorios]');
 // Pedido do usuario depois de ver a tabela funcionando: "tem que aparecer ACESSORIOS: X, Y, Z".
 const textoEscopo = htmlCom.replace(/<[^>]+>/g, '|').replace(/\|+/g, '|');
 t('a linha "Acessórios:" aparece no escopo',
   () => assert(/Acess[oó]rios: /.test(textoEscopo), 'nao encontrei a linha no escopo'));
-t('lista os nomes separados por virgula', () => {
+// Separador BULLET e nao virgula: nome de acessorio costuma ter virgula ("Bomba para
+// Transferencia, 3cv"), e com virgula os 2 acessorios do teste pareceriam 3.
+t('lista os nomes separados por bullet, nao por virgula', () => {
   const m = /Acess[oó]rios: ([^|]+)/.exec(textoEscopo);
   assert(m, 'linha nao encontrada');
   assert(m[1].includes('TAMPA BIPARTIDA'), m[1]);
   assert(m[1].includes('PLATAFORMA'), m[1]);
-  assert(m[1].includes(','), 'deveria separar por virgula');
+  assert(m[1].includes('•'), 'deveria separar por bullet: ' + m[1]);
 });
 t('quantidade so aparece quando e mais de um', () => {
   const m = /Acess[oó]rios: ([^|]+)/.exec(textoEscopo);
