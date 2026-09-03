@@ -48,6 +48,54 @@ function derivarSegredoUpload(segredoRaiz) {
     .digest();
 }
 
+/**
+ * A extensao do arquivo em disco vem do MIME ACEITO, nunca do nome que o cliente mandou.
+ *
+ * ── O DEFEITO QUE ISTO FECHA (reproduzido contra o servidor real) ────────────────────────────
+ *
+ * Os `fileFilter` do modulo validam o `Content-Type` que o CLIENTE DECLARA, mas a extensao gravada
+ * vinha de `path.extname(file.originalname)` — outro campo, controlado pelo atacante de forma
+ * INDEPENDENTE. Entao `Content-Type: image/png` com `filename="payload.html"` passava no filtro e
+ * gravava `.html`.
+ *
+ * O `express.static` servia esse arquivo como `text/html` NA ORIGEM DO CRM, sem `nosniff` e sem
+ * CSP (nao ha helmet neste app). O caminho de vitima era um clique normal: "Ver certificado" em
+ * Lotes navega para a URL, mesma origem, com a sessao do usuario. XSS armazenado.
+ *
+ * `.svg` tem o mesmo efeito (`image/svg+xml` executa script ao navegar) e `.js` sai como
+ * `application/javascript`.
+ *
+ * A Etapa 32 ja tinha fechado exatamente isto nos ANEXOS; os uploads legados ficaram de fora, e a
+ * revisao adversarial da Etapa 33 mediu. Este helper existe para que a regra tenha UM lugar — seis
+ * multers repetindo o mapa divergiriam no primeiro tipo novo.
+ */
+const EXTENSAO_POR_MIME = Object.freeze({
+  'application/pdf': '.pdf',
+  'image/jpeg': '.jpg',
+  'image/jpg': '.jpg',
+  'image/png': '.png',
+  'image/gif': '.gif',
+  'image/webp': '.webp',
+});
+
+function extensaoSegura(mimetype) {
+  // `.bin` para o que passou pelo filtro mas nao esta no mapa: nao executa, nao renderiza, e o
+  // navegador baixa. Preferivel a confiar no nome — e se aparecer, e sinal de mapa desatualizado.
+  return EXTENSAO_POR_MIME[String(mimetype || '').toLowerCase()] || '.bin';
+}
+
+/**
+ * Cabecalhos do `express.static` dos uploads. `nosniff` impede o navegador de adivinhar tipo pelo
+ * conteudo, e a CSP `sandbox` neutraliza script mesmo que algum `.html` legado ja esteja no disco —
+ * porque fechar o upload NAO limpa o que ja foi gravado antes desta correcao.
+ */
+function cabecalhosUploadSeguro(res) {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+  // `private`: o conteudo e servido sob assinatura e nao deve ser guardado por cache compartilhado.
+  res.setHeader('Cache-Control', 'private, max-age=0, must-revalidate');
+}
+
 function criarAssinadorUpload(segredoRaiz) {
   if (!segredoRaiz) throw new Error('urlUpload: segredo obrigatorio');
 
@@ -79,8 +127,15 @@ function criarAssinadorUpload(segredoRaiz) {
   }
 
   function verificar(filename, exp, sig) {
+    // Formato ANTES da coercao: Number.isInteger(Number('9e99')) e TRUE, e o mesmo vale para
+    // hexadecimal, espaco em volta e sinal — o guard aceitava formas que a mintagem nunca emite.
+    // Nao era exploravel (trocar o exp invalida o sig), mas o guard nao expressava a intencao.
+    if (!/^[0-9]{1,10}$/.test(String(exp))) return false;
     const n = Number(exp);
-    if (!Number.isInteger(n) || n * 1000 < Date.now()) return false;
+    // TETO: nenhuma URL pode viver mais que a janela do balde (15 a 20 min). Se algum dia algo
+    // minar um exp distante, ele nao vira acesso perpetuo.
+    const agora = Math.floor(Date.now() / 1000);
+    if (n < agora || n > agora + (MINUTOS_VALIDADE + 5) * 60) return false;
     if (typeof sig !== 'string' || !HEX32.test(sig)) return false;
     const esperado = calcular(filename, exp);
     const recebido = Buffer.from(sig, 'utf8');
@@ -112,4 +167,7 @@ function criarAssinadorUpload(segredoRaiz) {
   return { assinar, verificar, middleware, MINUTOS_VALIDADE };
 }
 
-module.exports = { criarAssinadorUpload, derivarSegredoUpload, MINUTOS_VALIDADE, PREFIXO };
+module.exports = {
+  criarAssinadorUpload, derivarSegredoUpload, extensaoSegura, cabecalhosUploadSeguro,
+  MINUTOS_VALIDADE, PREFIXO,
+};

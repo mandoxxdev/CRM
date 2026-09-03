@@ -329,6 +329,67 @@ test('o mount legado /uploads/almoxarifado NAO serve arquivo, nem com assinatura
   } finally { await ctx.close(); }
 });
 
+
+// ── Fix-round da revisao adversarial: XSS armazenado ─────────────────────────────────────────
+//
+// O achado, reproduzido contra o servidor real: os `fileFilter` validam o Content-Type que o
+// CLIENTE DECLARA, mas a extensao gravada vinha de `path.extname(file.originalname)` — outro
+// campo, controlado de forma INDEPENDENTE. `Content-Type: image/png` com
+// `filename="payload.html"` passava e gravava `.html`, e o `express.static` servia como
+// `text/html` NA ORIGEM DO CRM. O caminho de vitima era um clique normal: "Ver certificado" em
+// Lotes navega para a URL, mesma origem, com a sessao do usuario.
+//
+// A Etapa 32 ja tinha fechado exatamente isto nos ANEXOS; os uploads legados ficaram de fora.
+
+test('XSS: extensao vem do MIME aceito, nunca do nome — .html declarado como imagem vira .png', async () => {
+  const ctx = await createTestApp();
+  try {
+    const mat = await dbRun(ctx.db,
+      `INSERT INTO materiais_almoxarifado (codigo, nome, unidade) VALUES (?,?,?)`,
+      ['MAT-XSS', 'Chapa', 'KG']);
+
+    const casos = [
+      ['payload.html', 'image/png', '.png'],
+      ['payload.svg', 'image/png', '.png'],
+      ['payload.js', 'image/jpeg', '.jpg'],
+      ['normal.png', 'image/png', '.png'],
+    ];
+    for (const [nome, contentType, esperado] of casos) {
+      const res = await request(ctx.app)
+        .post(`/api/almoxarifado/materiais/${mat.lastID}/foto`)
+        .attach('foto', Buffer.from('<script>alert(document.domain)</script>'),
+          { filename: nome, contentType });
+      assert.strictEqual(res.status, 200, `${nome}: ${JSON.stringify(res.body)}`);
+
+      const noDisco = res.body.foto;
+      assert.ok(noDisco.endsWith(esperado), `${nome} (${contentType}) virou ${noDisco}`);
+      assert.ok(!/\.(html?|svg|js|xhtml)$/i.test(noDisco),
+        `extensao executavel/renderizavel no disco: ${noDisco}`);
+    }
+  } finally { await ctx.close(); }
+});
+
+test('XSS: o arquivo servido nunca sai como text/html, e vem com nosniff + CSP', async () => {
+  const ctx = await createTestApp();
+  try {
+    // Planta um `.html` DIRETO no disco — simulando o que ja pode ter sido gravado ANTES desta
+    // correcao. Fechar o upload nao limpa o passado; por isso a defesa tem duas metades.
+    fs.mkdirSync(ctx.uploadsAlmoxDir, { recursive: true });
+    fs.writeFileSync(path.join(ctx.uploadsAlmoxDir, 'legado-perigoso.html'),
+      Buffer.from('<script>alert(document.domain)</script>'));
+
+    const res = await request(ctx.app).get(ctx.assinadorUpload.assinar('legado-perigoso.html'));
+    assert.strictEqual(res.status, 200, 'o arquivo legado continua acessivel — o ponto e COMO');
+
+    assert.strictEqual(res.headers['x-content-type-options'], 'nosniff',
+      'sem nosniff o navegador adivinha o tipo pelo conteudo');
+    assert.match(res.headers['content-security-policy'] || '', /sandbox/,
+      'a CSP sandbox e o que neutraliza script em arquivo legado ja gravado');
+    assert.match(res.headers['cache-control'] || '', /private/,
+      'conteudo sob assinatura nao pode ir para cache compartilhado');
+  } finally { await ctx.close(); }
+});
+
 (async () => {
   for (const [nome, fn] of testes) {
     try { await fn(); console.log(`  ✓ ${nome}`); passou++; }

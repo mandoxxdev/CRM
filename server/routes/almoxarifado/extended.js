@@ -11,6 +11,9 @@ const { requirePermission, can, getPerfilFromUser, ACAO_PERFIS, PERFIS } = requi
 const { dbAll, dbGet, dbRun } = require('../../services/almoxarifado/db');
 // Etapa 33: a URL de arquivo e minada no ponto unico do modulo, nunca montada aqui.
 const { enrichMaterialRows } = require('../../services/almoxarifado/materialPhoto');
+// Etapa 33 (fix-round da revisao adversarial): a extensao gravada vem do MIME ACEITO, nunca do
+// nome que o cliente mandou — ver o cabecalho de urlUpload.js.
+const { extensaoSegura } = require('../../services/almoxarifado/urlUpload');
 const { disponivelSql } = require('../../services/almoxarifado/availabilitySql');
 // Etapa 27, Task 2: a MESMA conversao numerica que a regua da tolerancia aplica a medida, reusada
 // no CRUD do plano de proposito. Ela existe porque `Number(null)`, `Number('')` e `Number([])` sao
@@ -140,7 +143,7 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     storage: multer.diskStorage({
       destination: (req, file, cb) => cb(null, uploadsAlmoxDir),
       filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname);
+        const ext = extensaoSegura(file.mimetype); // NUNCA do originalname — ver urlUpload.js
         cb(null, `comprovante-sucata-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
       },
     }),
@@ -1362,7 +1365,7 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     storage: multer.diskStorage({
       destination: (req, file, cb) => cb(null, uploadsAlmoxDir),
       filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname);
+        const ext = extensaoSegura(file.mimetype); // NUNCA do originalname — ver urlUpload.js
         cb(null, `calibracao-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
       },
     }),
@@ -1450,7 +1453,7 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     storage: multer.diskStorage({
       destination: (req, file, cb) => cb(null, uploadsAlmoxDir),
       filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname);
+        const ext = extensaoSegura(file.mimetype); // NUNCA do originalname — ver urlUpload.js
         cb(null, `ocorrencia-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
       },
     }),
@@ -1624,7 +1627,7 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     storage: multer.diskStorage({
       destination: (req, file, cb) => cb(null, uploadsAlmoxDir),
       filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname);
+        const ext = extensaoSegura(file.mimetype); // NUNCA do originalname — ver urlUpload.js
         cb(null, `assinatura-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
       },
     }),

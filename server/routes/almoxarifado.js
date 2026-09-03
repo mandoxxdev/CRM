@@ -48,7 +48,7 @@ const { registrarAuditoria } = require('../services/almoxarifado/audit');
 const { inserirComNumeroUnico } = require('../services/almoxarifado/numeroDoc');
 // Etapa 33 (C42): a assinatura dos uploads legados. O segredo vem de `resolveJwtSecret`, o mesmo
 // resolvedor do JWT — mas o que sai daqui NAO e o token de sessao (ver o cabecalho de urlUpload.js).
-const { criarAssinadorUpload } = require('../services/almoxarifado/urlUpload');
+const { criarAssinadorUpload, extensaoSegura, cabecalhosUploadSeguro } = require('../services/almoxarifado/urlUpload');
 const { resolveJwtSecret } = require('../services/runtimeSecrets');
 // Etapa 18 (C0): o binding desestruturado acima e resolvido no require e cacheado — um teste
 // nao consegue substituir `registrarAuditoria` por um stub que lanca, e a RN-02 ("auditoria
@@ -203,7 +203,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   const storageAlmox = multer.diskStorage({
     destination: (req, file, cb) => cb(null, uploadsAlmoxDir),
     filename: (req, file, cb) => {
-      const ext = path.extname(file.originalname);
+      const ext = extensaoSegura(file.mimetype); // NUNCA do originalname — ver urlUpload.js
       cb(null, `material-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
     }
   });
@@ -222,7 +222,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     storage: multer.diskStorage({
       destination: (req, file, cb) => cb(null, uploadsAlmoxDir),
       filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname);
+        const ext = extensaoSegura(file.mimetype); // NUNCA do originalname — ver urlUpload.js
         cb(null, `certificado-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
       },
     }),
@@ -249,7 +249,13 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // Ponto unico de mintagem do modulo. Sem esta linha, materialPhotoUrl LANCA — de proposito:
   // devolver URL sem assinatura seria o furo C42 de volta, e de volta em silencio.
   require('../services/almoxarifado/materialPhoto').configurarAssinador(assinadorUpload);
-  app.use('/api/uploads/almoxarifado', assinadorUpload.middleware, require('express').static(uploadsAlmoxDir));
+  app.use('/api/uploads/almoxarifado', assinadorUpload.middleware, require('express').static(uploadsAlmoxDir, {
+    index: false,
+    dotfiles: 'deny',
+    // nosniff + CSP sandbox: neutralizam script mesmo em arquivo .html/.svg que JA esteja no disco
+    // de antes desta correcao — fechar o upload nao limpa o que ja foi gravado.
+    setHeaders: cabecalhosUploadSeguro,
+  }));
   // FECHO obrigatorio. `express.static` chama `next()` quando o arquivo NAO existe, e a requisicao
   // continuaria descendo — uma assinatura VALIDA para um nome inexistente cairia no proximo
   // handler em vez de responder 404. Medido na revisao do plano.
