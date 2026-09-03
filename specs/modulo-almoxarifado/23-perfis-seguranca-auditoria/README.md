@@ -63,6 +63,44 @@ design dizia que `materialPhoto.js` era "o ponto único" da URL da foto. Não er
 que a tela de Minhas Requisições renderiza. Sem a correção, a miniatura de todo item sumiria em
 silêncio. Achado da revisão do plano.
 
+**Fix-rounds da revisão adversarial (`fd57af2`, `0d3f7fb`) — dois deles mudaram o desenho:**
+
+1. **O mount legado `/uploads/almoxarifado` (sem `/api`) foi REMOVIDO**, porque já estava morto:
+   `index.js` registra o catch-all do SPA **antes** deste módulo, e `/uploads` não está na lista de
+   prefixos que ele deixa passar — aquele caminho devolvia `index.html` com 200. O comentário que
+   eu havia escrito afirmava o contrário ("este módulo é registrado ANTES"), e a consequência era
+   que a regra "os dois mounts exigem assinatura" só valia no `/api`. Removido em vez de
+   consertado: ninguém o usa, e manter mount morto que **promete** proteção é pior que não ter.
+
+2. **XSS armazenado — a extensão vinha do nome que o atacante manda.** Os `fileFilter` validam o
+   `Content-Type` **declarado pelo cliente**, mas a extensão gravada vinha de
+   `path.extname(file.originalname)`, campo independente: `image/png` com
+   `filename="payload.html"` gravava `.html`, e o `express.static` o servia como `text/html` **na
+   origem do CRM**, sem `nosniff` e sem CSP. O caminho de vítima era um clique normal em
+   "Ver certificado" — navegação na mesma origem, com a sessão do usuário.
+   **A Etapa 32 já havia fechado exatamente isto nos anexos**; o mesmo defeito ficou aberto nos
+   seis uploads legados, e eu não levei a correção junto ao fechar o C42. Corrigido nas duas
+   metades: extensão derivada do mime aceito na gravação (`extensaoSegura`), e `nosniff` + CSP
+   `sandbox` no serviço. A segunda metade existe porque fechar o upload **não limpa o disco** —
+   arquivos gravados antes continuam lá, e viraram o furo **C44**.
+
+3. **Menores no mesmo round:** a chave da assinatura passou a ser **derivada** do segredo raiz
+   (`sha256(raiz + ':almoxarifado-uploads-v1')`) em vez de ser o próprio segredo do JWT — separação
+   de domínio, sem mudar contrato; o guard do `exp` ganhou formato (`/^[0-9]{1,10}$/`, porque
+   `Number.isInteger(Number('9e99'))` é `true`) e **teto**; e o `Cache-Control` virou `private`.
+   Dois endpoints que ainda devolviam nome cru (`GET /almoxarifado/estoque` e o `PUT` de material)
+   passaram a assinar — nenhum deles é renderizado hoje, mas a primeira tela que renderizasse
+   receberia string vazia e o defeito apareceria longe da causa.
+
+**O que a revisão atacou e RESISTIU:** replay e confusão de arquivo em 14 variantes — incluindo a
+case-insensitivity do Windows e nome curto 8.3, que produzem **alias do mesmo arquivo** e nunca
+cruzam a fronteira entre arquivos, porque o nome entra no HMAC; travessia em 21 variantes;
+ambiguidade do delimitador `NOME:EXP` (fechada porque um `exp` numérico não pode conter `:`); e
+**timing**, medido com bancada validada por controle positivo — um compare vazante deliberado deu
+correlação de Pearson **0,9995**, e o código real deu **0,357**, com o `sig` correto **abaixo** da
+média dos errados. Truncamento a 128 bits: 2^128 ≈ 3,4·10^38, ou 1,1·10^13 anos a 10^18 tentativas
+por segundo.
+
 **O que NÃO cobre:** quem já baixou continua com o arquivo (fechar a porta não recolhe o que
 saiu); não há registro de quem baixou esses arquivos (só os **anexos** têm, desde a Etapa 32); e
 tela aberta por mais de ~20 minutos mostra imagem em branco até recarregar — corte declarado.

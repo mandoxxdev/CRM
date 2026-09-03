@@ -47,6 +47,23 @@
 > `urlUploadAssinada` 12, `materialPhotoAssinada` 5), `test:almoxarifado` **42/0**,
 > `test:validation` **4/0**, `test:safealter` **3/0**, `test:sqlite` **5/0**; client **654 testes
 > em 43 suítes** (`resolveMaterialPhotoUrl` 5, novo), build `CI=true` **Compiled successfully**.
+> **E a REVISAO ADVERSARIAL achou 1 BLOQUEANTE que a Fase 2 nao tinha como ver, porque so aparece
+> executando: XSS ARMAZENADO.** Os `fileFilter` validam o `Content-Type` **declarado pelo
+> cliente**, mas a extensao gravada vinha de `path.extname(file.originalname)` — campo
+> independente: `image/png` com `filename="payload.html"` gravava `.html`, e o `express.static`
+> o servia como `text/html` **na origem do CRM**, sem `nosniff` e sem CSP. O caminho de vitima era
+> um clique normal em "Ver certificado". **A Etapa 32 ja havia fechado isto nos anexos** — o mesmo
+> defeito ficou aberto nos seis uploads legados, e eu nao levei a correcao junto. Fechado nas duas
+> metades (extensao pelo mime aceito + `nosniff`/CSP `sandbox`), porque fechar o upload nao limpa
+> o disco. Fix-rounds `fd57af2` e `0d3f7fb`.
+> **E o mount legado `/uploads/almoxarifado` foi REMOVIDO:** ele ja estava morto em producao (o
+> catch-all do SPA e registrado ANTES deste modulo e nao ignora `/uploads`), e o comentario que eu
+> escrevi afirmava o contrario — a regra "os dois mounts exigem assinatura" so valia no `/api`.
+> **O que a revisao atacou e RESISTIU:** replay/confusao de arquivo em 14 variantes, travessia em
+> 21, ambiguidade do delimitador, e timing medido com bancada validada por controle positivo
+> (compare vazante deu correlacao 0,9995; o codigo real deu 0,357). **Nenhuma imagem parou de
+> aparecer** — os oito pontos de exibicao do client foram rastreados ate o servico.
+> **Numeros (pos-revisao):** `test:api` **169/169**, `urlUploadAssinada` **15**; client **654**.
 > Antes: 2026-09-02 (**Etapa 32 fechada — a tabela de anexos, órfã desde a
 > Etapa 0, ganhou dono, `e708125..fd71958`. Feature 09, que CONTINUA 🟡.** `anexos_documento_almoxarifado`
 > existia como DDL desde 2026-08-03 e **nunca teve um `INSERT`, um `SELECT`, uma rota ou um

@@ -1742,6 +1742,40 @@ A assinatura desta etapa não é o seu login: ela vale para **um arquivo** por *
     Deixado aqui, riscado, em vez de apagado — para quem lembrar do furo confirmar que fechou,
     com o número da etapa que fechou.
 
+
+43. **(33) Os dois links de "abrir arquivo" não avisam quando o endereço expira — abrem uma aba
+    em branco.** São dois: **Lotes → Ver certificado** e a **assinatura de entrega em tamanho
+    real**, dentro do detalhe da requisição.
+
+    As **imagens** já degradam bem: quando o endereço expira, a foto simplesmente some, como se o
+    material não tivesse foto. Mas esses dois são **links**, e um link com endereço vencido abre
+    uma aba nova em branco, sem mensagem nenhuma. Quem clicar vai achar que o arquivo sumiu.
+
+    **Quando acontece:** só se a tela estiver aberta há mais de ~20 minutos sem recarregar.
+    Recarregar a tela resolve — o endereço é renovado a cada carga.
+
+    **Por que não foi corrigido junto:** consertar exige refazer a leitura daquela linha no momento
+    do clique, e o caminho é diferente para cada um dos dois (um vem da lista de lotes, o outro do
+    detalhe da requisição). É trabalho pequeno mas próprio, e preferi declarar a fazer às pressas
+    junto de uma correção de segurança.
+
+    **O que fazer enquanto isso:** se um link de arquivo abrir em branco, recarregue a tela e
+    clique de novo.
+
+44. **(33) Arquivos com extensão perigosa gravados ANTES desta etapa continuam no servidor.** A
+    Etapa 33 passou a gravar a extensão do arquivo a partir do **tipo real**, não do nome enviado —
+    antes, alguém podia enviar um arquivo chamado `nota.html` declarando ser uma imagem, e ele era
+    guardado como `.html`.
+
+    **Isso está fechado para o futuro**, e os arquivos que já estão lá foram **neutralizados** (o
+    servidor agora entrega esses arquivos com instruções que impedem o navegador de executá-los).
+    Mas eles continuam ocupando espaço no disco.
+
+    **O que fazer:** nada é urgente. Se você quiser limpar, é possível procurar no servidor por
+    arquivos com extensão diferente de PDF/JPG/PNG/WEBP dentro da pasta de uploads do almoxarifado
+    — mas **antes de apagar qualquer coisa, me avise**, porque um arquivo com extensão estranha
+    também pode ser um upload legítimo antigo.
+
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a

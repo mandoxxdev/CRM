@@ -4559,6 +4559,23 @@ de adivinhar, o que não protege contra quem já tem o link.
 - **Links antigos morrem.** Endereço de foto ou certificado guardado em planilha, documento ou
   e-mail para de funcionar. O caminho passa a ser abrir pelo sistema.
 
+### Um segundo problema que a revisão encontrou, e que já está corrigido
+
+Ao revisar a etapa, apareceu um defeito **anterior a ela** e mais sério que o original: era
+possível enviar um arquivo **dizendo** ser uma imagem, mas com nome terminado em `.html`, e o
+sistema o guardava assim. Quando alguém clicasse para abrir esse arquivo, o navegador o trataria
+como uma página do próprio CRM — o que permitiria a quem enviou o arquivo executar código na
+sessão de quem clicasse.
+
+**Está fechado, e em duas frentes:** o sistema passou a gravar a extensão pelo **tipo real** do
+arquivo, ignorando o nome enviado; e passou a entregar todo arquivo com instruções que impedem o
+navegador de executá-lo. A segunda frente existe porque a primeira não limpa o passado — arquivos
+gravados antes disso continuam no servidor, e agora estão neutralizados (furo **C44**).
+
+**Como conferir:** envie uma foto de material renomeando o arquivo para `teste.html` antes de
+enviar. O sistema aceita — é uma imagem de verdade — e o guarda como `.png`. Nada terminado em
+`.html` chega ao servidor.
+
 ### O que esta etapa NÃO cobre
 
 - **Quem já baixou continua com o arquivo** — fechar a porta não recolhe o que saiu.
