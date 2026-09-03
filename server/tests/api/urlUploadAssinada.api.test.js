@@ -218,6 +218,85 @@ test('assinatura VALIDA para nome inexistente: 404, e nunca HTML', async () => {
   } finally { await ctx.close(); }
 });
 
+
+// ── Etapa 33, Task 4 — INTEGRACAO: servidor -> tela, sem o teste montar URL nenhuma ──────────
+//
+// Estes cenarios sao os unicos que provam que as duas metades da etapa se ENCAIXAM. Os anteriores
+// provam que o middleware sabe recusar e que o servico sabe assinar; nenhum prova que a URL que o
+// servidor MANDA para a tela e aceita pelo middleware que ELE MESMO instalou.
+//
+// A regra e: pegar a URL do corpo da resposta e pedi-la de volta, crua. Se o teste montasse a URL
+// (nome + assinar()), ele provaria so que o teste sabe assinar — e um erro de encode, de prefixo ou
+// de ordem de query passaria despercebido.
+
+test('[INTEGRACAO] a URL que o servidor devolve para a FOTO e aceita pelo proprio middleware', async () => {
+  const ctx = await createTestApp();
+  try {
+    const mat = await dbRun(ctx.db,
+      `INSERT INTO materiais_almoxarifado (codigo, nome, unidade) VALUES (?,?,?)`,
+      ['MAT-INT', 'Chapa integracao', 'KG']);
+
+    // Sobe a foto pela rota real — o nome no disco e escolhido pelo multer.
+    const upload = await request(ctx.app)
+      .post(`/api/almoxarifado/materiais/${mat.lastID}/foto`)
+      .attach('foto', Buffer.from('PNG-BYTES-INTEGRACAO'), 'foto.png');
+    assert.strictEqual(upload.status, 200, JSON.stringify(upload.body));
+
+    const url = upload.body.foto_url;
+    assert.ok(url, 'a resposta do upload precisa trazer foto_url');
+    assert.match(url, /[?&]sig=[0-9a-f]{32}/, 'a URL do servidor tem de vir assinada');
+
+    // A URL EXATA, como veio. Nada de reconstruir.
+    const baixado = await request(ctx.app).get(url);
+    assert.strictEqual(baixado.status, 200, `o servidor recusou a URL que ele mesmo minou: ${url}`);
+    assert.ok(Buffer.from(baixado.body).equals(Buffer.from('PNG-BYTES-INTEGRACAO')));
+
+    // E a mesma URL sem a query nao passa — senao o 200 acima nao prova que a assinatura importa.
+    const semQuery = await request(ctx.app).get(url.split('?')[0]);
+    assert.strictEqual(semQuery.status, 404);
+
+    // A listagem devolve a MESMA forma: quem consome a lista tem de conseguir exibir a foto.
+    const lista = await request(ctx.app).get('/api/almoxarifado/materiais');
+    const naLista = (lista.body || []).find((m) => m.id === mat.lastID);
+    assert.ok(naLista, 'material nao apareceu na listagem');
+    assert.strictEqual((await request(ctx.app).get(naLista.foto_url)).status, 200,
+      'a URL da LISTAGEM tambem tem de ser aceita');
+    // `foto` e `foto_url` apontam para a mesma coisa — a tela usa ora um, ora outro.
+    assert.strictEqual(naLista.foto, naLista.foto_url);
+  } finally { await ctx.close(); }
+});
+
+test('[INTEGRACAO] a URL do CERTIFICADO DE LOTE devolvida pela rota e aceita, e some quando nao ha certificado', async () => {
+  const ctx = await createTestApp();
+  try {
+    const mat = await dbRun(ctx.db,
+      `INSERT INTO materiais_almoxarifado (codigo, nome, unidade) VALUES (?,?,?)`,
+      ['MAT-LOTE', 'Barra', 'M']);
+    const semCert = await dbRun(ctx.db,
+      `INSERT INTO lotes_almoxarifado (material_id, codigo) VALUES (?,?)`, [mat.lastID, 'L-SEM']);
+    const comCert = await dbRun(ctx.db,
+      `INSERT INTO lotes_almoxarifado (material_id, codigo, certificado_arquivo) VALUES (?,?,?)`,
+      [mat.lastID, 'L-COM', 'certificado-integracao.pdf']);
+
+    fs.mkdirSync(ctx.uploadsAlmoxDir, { recursive: true });
+    fs.writeFileSync(path.join(ctx.uploadsAlmoxDir, 'certificado-integracao.pdf'), Buffer.from('%PDF-1.4 cert'));
+
+    const res = await request(ctx.app).get(`/api/almoxarifado/materiais/${mat.lastID}/lotes`);
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+
+    const com = (res.body || []).find((l) => l.id === comCert.lastID);
+    const sem = (res.body || []).find((l) => l.id === semCert.lastID);
+    assert.ok(com && sem, 'os dois lotes tem de vir na listagem');
+
+    assert.strictEqual(sem.certificado_url, null,
+      'lote sem certificado nao pode ganhar URL — a tela usaria isso para desenhar um link morto');
+
+    assert.match(com.certificado_url, /[?&]sig=[0-9a-f]{32}/);
+    const baixado = await request(ctx.app).get(com.certificado_url);
+    assert.strictEqual(baixado.status, 200, `recusou a URL que minou: ${com.certificado_url}`);
+  } finally { await ctx.close(); }
+});
+
 (async () => {
   for (const [nome, fn] of testes) {
     try { await fn(); console.log(`  ✓ ${nome}`); passou++; }
