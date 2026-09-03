@@ -211,7 +211,10 @@ function AnexosDocumento({ entidade, entidadeId, titulo = 'Anexos', somenteLeitu
 
   return (
     <div className="almox-anexos" data-testid="anexos-documento">
-      <h4 className="almox-anexos-titulo"><FiPaperclip /> {titulo}</h4>
+      {/* Etapa 34: o título é opcional. Dentro do `AnexosModal` o cabeçalho do modal já o diz, e
+          repetir "Anexos" duas vezes seguidas é ruído. O default segue 'Anexos', então
+          `HistoricoInspecoes.js:246` não muda — e há cenário provando isso. */}
+      {titulo && <h4 className="almox-anexos-titulo"><FiPaperclip /> {titulo}</h4>}
 
       {erro && (
         <p className="almox-anexos-erro" data-testid="anexo-erro" style={{ color: 'var(--gmp-error)' }}>

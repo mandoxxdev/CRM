@@ -378,3 +378,22 @@ describe('AnexosDocumento — permissão de perfil', () => {
     expect(texto()).toContain('certificado.pdf');
   });
 });
+
+describe('AnexosDocumento — o título é opcional (Etapa 34)', () => {
+  test('por padrao o titulo aparece — e e o que HistoricoInspecoes usa', async () => {
+    // `HistoricoInspecoes.js:246` monta sem prop nenhuma de titulo. Se o default se perder, a
+    // aba Historico fica sem cabecalho e ninguem descobre pelo componente novo.
+    await renderizar({});
+    const h4 = container.querySelector('.almox-anexos-titulo');
+    expect(h4).not.toBeNull();
+    expect(h4.textContent).toContain('Anexos');
+  });
+
+  test('com titulo nulo o cabecalho some, mas a lista continua', async () => {
+    // É o que o `AnexosModal` compra: dentro dele o cabecalho do modal ja diz o que e.
+    await renderizar({ titulo: null });
+    expect(container.querySelector('.almox-anexos-titulo')).toBeNull();
+    expect(container.querySelector('[data-testid="anexos-documento"]')).not.toBeNull();
+    expect(texto()).toContain('certificado.pdf');
+  });
+});
