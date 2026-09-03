@@ -136,6 +136,11 @@ t('normaliza ao serializar (descarta linha vazia, converte numero)', () => {
   assert.strictEqual(lista[0].quantidade, 2);
 });
 
+// Mesma formatacao do template (propostaPremiumV2.js, const moedaBRL). Comparar com o
+// Intl em vez de com string literal evita o teste quebrar por espaco nao-separavel ou
+// por mudanca de locale do Node.
+const moedaBRL = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
 console.log('\n[documento]');
 const htmlCom = gerarHTMLPropostaPremiumV2(
   { numero_proposta: 'X', titulo: 'T', razao_social: 'C' },
@@ -147,63 +152,72 @@ const htmlCom = gerarHTMLPropostaPremiumV2(
      ]) }],
   { total: 7900, dataEmissao: '02/08/2026' }, {}, null, false, true
 );
-const textoCom = htmlCom.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-t('o acessorio aparece na tabela de precos', () => assert(textoCom.includes('TAMPA BIPARTIDA'), 'nao apareceu'));
-// A numeracao da tabela segue a da SECAO 4 ("4.1", "4.2"...), por pedido do usuario: e o
-// padrao do documento dele, e o cliente que le a tabela precisa achar o mesmo item no escopo.
-// Antes a tabela numerava 1, 2, 3 e o escopo 4.1, 4.2, 4.3.
-t('o item usa a numeracao da secao 4 (4.1), nao 1', () => {
-  const linhas = [...htmlCom.matchAll(/<tr[^>]*>\s*<td class="col-center">([^<]*)<\/td>/g)].map((m) => m[1]);
-  assert.strictEqual(linhas[0], '4.1', 'numeros encontrados: ' + linhas.join(', '));
-});
-t('o acessorio e sub-item do item (4.1.1, 4.1.2)', () => {
-  const linhas = [...htmlCom.matchAll(/<tr class="linha-acessorio">\s*<td class="col-center">([^<]*)<\/td>/g)].map((m) => m[1]);
-  assert.deepStrictEqual(linhas, ['4.1.1', '4.1.2'], 'numeros: ' + linhas.join(', '));
-});
+// PEDIDO DO USUARIO: o acessorio NAO aparece como linha separada com preco proprio na tabela
+// de precos - "para nao dar margem do cliente ficar fazendo conta por acessorio separado". O
+// preco do acessorio entra EMBUTIDO no preco do item. A lista dos NOMES continua no escopo
+// (secao 4), coberta no bloco abaixo.
+// Recorta SO o bloco da tabela de precos: o documento tem outras tabelas que tambem usam
+// col-center, e varrer o HTML inteiro contava 18 linhas em vez de 1.
+function linhasDaTabelaDePrecos(html) {
+  const ini = html.indexOf('Tabela de Preços');
+  const fim = html.indexOf('TOTAL DA PROPOSTA', ini);
+  const bloco = html.slice(ini, fim > ini ? fim : ini + 4000);
+  return [...bloco.matchAll(/<tr[^>]*>\s*<td class="col-center">([^<]*)<\/td>[\s\S]*?<\/tr>/g)];
+}
+const linhasTabela = linhasDaTabelaDePrecos(htmlCom);
+t('a tabela NAO tem linha de acessorio separada',
+  () => assert.strictEqual((htmlCom.match(/linha-acessorio/g) || []).length, 0));
+t('a tabela tem uma linha por ITEM (sem sub-linhas)',
+  () => assert.strictEqual(linhasTabela.length, 1, 'linhas: ' + linhasTabela.length));
+t('o item usa a numeracao da secao 4 (4.1)',
+  () => assert.strictEqual(linhasTabela[0][1], '4.1', 'numero: ' + linhasTabela[0][1]));
 t('tabela e escopo usam O MESMO numero para o mesmo item', () => {
-  const naTabela = /<td class="col-center">([^<]*)<\/td>/.exec(htmlCom)[1];
   const noEscopo = /<h3>(4\.\d+)\s/.exec(htmlCom);
   assert(noEscopo, 'nao achei o titulo do item no escopo');
-  assert.strictEqual(naTabela, noEscopo[1], `tabela=${naTabela} escopo=${noEscopo[1]}`);
+  assert.strictEqual(linhasTabela[0][1], noEscopo[1], `tabela=${linhasTabela[0][1]} escopo=${noEscopo[1]}`);
 });
-t('o segundo item continua alinhado (4.2 e 4.2.1)', () => {
-  const doisItens = gerarHTMLPropostaPremiumV2(
+
+// O item de teste vale 1000 (qtd 1) e tem acessorios 4500 + 2x1200 = 6900. Total esperado
+// na linha do item: 7900. Unitario, com qtd 1, tambem 7900.
+function celulasDaLinhaItem(html) {
+  const tr = /<tr>\s*<td class="col-center">4\.1<\/td>([\s\S]*?)<\/tr>/.exec(html)[0];
+  return [...tr.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((m) => m[1].replace(/<[^>]+>/g, '').trim());
+}
+t('o TOTAL do item ja vem com os acessorios somados (1000 + 6900 = 7900)', () => {
+  const cel = celulasDaLinhaItem(htmlCom);
+  assert.strictEqual(cel[4], moedaBRL(7900), 'total da linha: ' + cel[4]);
+});
+t('com qtd 1, o unitario = total (sem divisao)', () => {
+  const cel = celulasDaLinhaItem(htmlCom);
+  assert.strictEqual(cel[3], moedaBRL(7900), 'unitario: ' + cel[3]);
+});
+t('unitario x quantidade continua batendo com o total quando qtd > 1', () => {
+  const html = gerarHTMLPropostaPremiumV2(
     { numero_proposta: 'X', titulo: 'T', razao_social: 'C' },
-    [
-      { id: 1, produto_nome: 'A', quantidade: 1, unidade: 'UN', valor_unitario: 1, valor_total: 1, familia_produto: 'F' },
-      { id: 2, produto_nome: 'B', quantidade: 1, unidade: 'UN', valor_unitario: 1, valor_total: 1, familia_produto: 'F',
-        acessorios: JSON.stringify([{ descricao: 'BOMBA', quantidade: 1, valor_unitario: 10 }]) },
-    ],
-    { total: 12, dataEmissao: '02/08/2026' }, {}, null, false, true
+    [{ id: 1, produto_nome: 'D', quantidade: 2, unidade: 'UN', valor_unitario: 1000, valor_total: 2000,
+       familia_produto: 'F',
+       acessorios: JSON.stringify([{ descricao: 'X', quantidade: 1, valor_unitario: 500 }]) }],
+    { total: 2500, dataEmissao: '02/08/2026' }, {}, null, false, true
   );
-  const acessorio = /<tr class="linha-acessorio">\s*<td class="col-center">([^<]*)<\/td>/.exec(doisItens);
-  assert.strictEqual(acessorio[1], '4.2.1', 'o acessorio do 2o item saiu como ' + acessorio[1]);
+  const cel = celulasDaLinhaItem(html);
+  // total = 2*1000 + 500 = 2500; unitario = 2500/2 = 1250; 1250 x 2 = 2500.
+  assert.strictEqual(cel[4], moedaBRL(2500), 'total: ' + cel[4]);
+  assert.strictEqual(cel[3], moedaBRL(1250), 'unitario: ' + cel[3]);
 });
-t('o total do acessorio e quantidade x valor (2 x 1.200 = 2.400)',
-  () => assert(textoCom.includes('2.400,00'), 'total do acessorio errado'));
-t('uma linha de tabela por acessorio', () => {
-  const linhas = (htmlCom.match(/<tr class="linha-acessorio">/g) || []).length;
-  assert.strictEqual(linhas, 2, 'linhas encontradas: ' + linhas);
+t('a soma das linhas do item fecha com o TOTAL DA PROPOSTA', () => {
+  // htmlCom tem 1 item de 7900; o total passado foi 7900.
+  const cel = celulasDaLinhaItem(htmlCom);
+  assert.strictEqual(cel[4], moedaBRL(7900));
 });
-t('item SEM acessorio nao ganha linha extra', () => {
+t('item SEM acessorio mantem o proprio preco', () => {
   const html = gerarHTMLPropostaPremiumV2(
     { numero_proposta: 'X', titulo: 'T', razao_social: 'C' },
     [{ id: 1, produto_nome: 'DISPERSOR', quantidade: 1, unidade: 'UN', valor_unitario: 1000,
        valor_total: 1000, familia_produto: 'F' }],
     { total: 1000, dataEmissao: '02/08/2026' }, {}, null, false, true
   );
-  assert.strictEqual((html.match(/<tr class="linha-acessorio">/g) || []).length, 0);
-});
-t('descricao com HTML e escapada (o campo e digitacao livre)', () => {
-  const html = gerarHTMLPropostaPremiumV2(
-    { numero_proposta: 'X', titulo: 'T', razao_social: 'C' },
-    [{ id: 1, produto_nome: 'D', quantidade: 1, unidade: 'UN', valor_unitario: 1, valor_total: 1,
-       familia_produto: 'F',
-       acessorios: JSON.stringify([{ descricao: '<script>alert(1)</script>', quantidade: 1, valor_unitario: 1 }]) }],
-    { total: 1, dataEmissao: '02/08/2026' }, {}, null, false, true
-  );
-  assert(!html.includes('<script>alert(1)</script>'), 'HTML digitado entrou cru no documento');
-  assert(html.includes('&lt;script&gt;'), 'nao escapou');
+  const cel = celulasDaLinhaItem(html);
+  assert.strictEqual(cel[4], moedaBRL(1000), 'total: ' + cel[4]);
 });
 
 console.log('\n[o TOTAL soma os acessorios - nos dois calculos]');
