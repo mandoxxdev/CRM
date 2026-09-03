@@ -12,6 +12,14 @@ const { initSchema } = require('../../services/almoxarifado/schema');
 const { dbRun } = require('../../services/almoxarifado/db');
 
 async function createTestApp(options = {}) {
+  // Etapa 33: FIXA o segredo antes de qualquer registrador rodar. Sem isto, `resolveJwtSecret`
+  // GERA um segredo novo por `dataDir` — e o harness cria um `mkdtempSync` por app —, então dois
+  // apps vivos no mesmo processo assinam com chaves diferentes e o primeiro passa a devolver 404
+  // nas URLs que ele mesmo minou. 14 arquivos de `tests/api/` criam mais de um app por processo.
+  // De quebra, cala os `console.log` de `runtimeSecrets.js`, que ainda por cima imprimem um
+  // caminho errado (dizem `server/data/` quando o segredo foi para o temporário).
+  process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret-almoxarifado';
+
   const app = express();
   app.use(express.json());
 
@@ -83,6 +91,10 @@ async function createTestApp(options = {}) {
     // mounts de routes/almoxarifado.js. O teste da RN-03 mede exatamente a POSICAO RELATIVA
     // entre os dois caminhos expostos aqui, e nao um GET pelo basename.
     uploadsAnexosDir: path.join(dataDir, 'uploads', 'almoxarifado-anexos'),
+    // Etapa 33: o MESMO assinador que as rotas usam, para o teste poder minar uma URL válida sem
+    // reimplementar o HMAC — reimplementar provaria só que o teste sabe assinar.
+    assinadorUpload: require('../../services/almoxarifado/urlUpload')
+      .criarAssinadorUpload(process.env.JWT_SECRET),
     setUser(user) { currentUser = user; },
     close() {
       return new Promise((resolve) => db.close(() => {

@@ -177,13 +177,28 @@ test('RN-03: o anexo NAO sai pelo /api/uploads/almoxarifado, e SAI pela rota aut
 // [CONTROLE POSITIVO da RN-03] a regua sabe reprovar: com o MESMO nome de arquivo dentro do
 // diretorio estatico, o GET responde 200. Sem este cenario, "404 no estatico" passaria com o
 // arquivo simplesmente nao existindo em lugar nenhum — o teste vazio classico desta base.
-test('[CONTROLE POSITIVO] o mesmo arquivo DENTRO de uploads/almoxarifado sai publico (200)', async () => {
+// ⚠️ REESCRITO na Etapa 33, e a mudanca importa. Este cenario dizia
+// "o mesmo arquivo DENTRO de uploads/almoxarifado sai PUBLICO (200)" e afirmava, como contrato,
+// que o estatico respondia 200 SEM assinatura — o que era verdade e era o furo C42. A Etapa 33
+// fechou aquele mount, entao a afirmacao antiga deixou de valer.
+//
+// Ele NAO foi apagado, e nao pode ser: sem a metade positiva, o 404 do cenario anterior (RN-03)
+// volta a passar com o arquivo simplesmente nao existindo em lugar nenhum — o teste vazio que
+// aquela etapa inteira existiu para evitar. O que mudou e so a CONDICAO do 200: agora e preciso
+// assinatura valida, minada pelo mesmo assinador que as rotas usam.
+test('[CONTROLE POSITIVO] o mesmo arquivo DENTRO de uploads/almoxarifado sai COM assinatura (200)', async () => {
   const ctx = await createTestApp();
   try {
     fs.mkdirSync(ctx.uploadsAlmoxDir, { recursive: true });
     fs.writeFileSync(`${ctx.uploadsAlmoxDir}/prova-do-controle.pdf`, PDF);
-    const res = await request(ctx.app).get('/api/uploads/almoxarifado/prova-do-controle.pdf');
-    assert.strictEqual(res.status, 200,
+
+    // Sem assinatura continua fechado — e isto tambem e parte do controle.
+    const semAssinatura = await request(ctx.app).get('/api/uploads/almoxarifado/prova-do-controle.pdf');
+    assert.strictEqual(semAssinatura.status, 404, 'o mount legado nao pode mais ser publico');
+
+    const comAssinatura = await request(ctx.app)
+      .get(ctx.assinadorUpload.assinar('prova-do-controle.pdf'));
+    assert.strictEqual(comAssinatura.status, 200,
       'se isto nao der 200, o 404 do cenario anterior nao prova nada');
   } finally { await ctx.close(); }
 });

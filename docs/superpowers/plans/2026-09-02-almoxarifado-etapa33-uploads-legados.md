@@ -71,6 +71,15 @@ mesmo motivo.)
 
 ### Task 1: A assinatura e o middleware  **(tronco)**
 
+> **FEITA** — 10/10 no arquivo novo, `test:api` **168/168** (167 → 168). As CINCO sabotagens
+> derrubaram o cenário previsto. **E a RN-03 nasceu VAZIA:** a primeira versão usava um `sig`
+> inválido, então o 404 vinha da assinatura errada e não do tempo — a sabotagem que remove a
+> checagem de `exp` ficava verde. Corrigida para calcular o HMAC correto de um `exp` vencido, que é
+> o único ponto do arquivo em que o teste assina por conta própria, e está dito lá por quê.
+> **O controle positivo de `anexoDocumento.api.test.js` foi REESCRITO, não apagado** — ele afirmava
+> o furo como contrato ("sai público (200)"); apagá-lo faria o 404 da RN-03 daquele arquivo voltar
+> a não provar nada.
+
 **Files:**
 - Create: `server/services/almoxarifado/urlUpload.js`
 - Create: `server/tests/api/urlUploadAssinada.api.test.js`
@@ -83,7 +92,7 @@ mesmo motivo.)
   - `assinar(filename)` → `"<prefixo>/<filename>?exp=<unix>&sig=<hex>"` (URL relativa, pronta para `<img src>`)
   - `MINUTOS_VALIDADE = 15`
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 `server/tests/api/urlUploadAssinada.api.test.js`, molde de runner desta base (array `testes`, laço
 final, `process.exit`). Cenários:
@@ -113,11 +122,11 @@ final, `process.exit`). Cenários:
     (achado 6): prova que o fecho depois do `static` existe, e não o `next()` que em produção
     cairia no SPA.
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 `cd server && node tests/api/urlUploadAssinada.api.test.js` → FAIL (`Cannot find module`).
 
-- [ ] **Step 3: O módulo**
+- [x] **Step 3: O módulo**
 
 ```js
 /**
@@ -203,7 +212,7 @@ function criarAssinadorUpload(segredo) {
 module.exports = { criarAssinadorUpload, MINUTOS_VALIDADE, PREFIXO };
 ```
 
-- [ ] **Step 4: A fiação nos dois mounts**
+- [x] **Step 4: A fiação nos dois mounts**
 
 Em `routes/almoxarifado.js`, onde hoje estão os dois `express.static` (procure por
 `'/api/uploads/almoxarifado'`; confira a linha real antes de editar):
@@ -228,7 +237,7 @@ Em `routes/almoxarifado.js`, onde hoje estão os dois `express.static` (procure 
 E exponha `assinadorUpload` para a extended (6º parâmetro de `registerExtendedRoutes`) e para os
 serviços da Task 2 — **passando adiante**, nunca re-derivando.
 
-- [ ] **Step 5: Rodar, ver passar, e sabotar**
+- [x] **Step 5: Rodar, ver passar, e sabotar**
 
 Sabotagens, uma por vez, revertendo depois de cada:
 
@@ -238,7 +247,7 @@ Sabotagens, uma por vez, revertendo depois de cada:
 4. Remova o `middleware` de **um** dos dois mounts → **RN-01 cai no mount que ficou aberto**. Se
    cair só num, confirme que o cenário testa os dois.
 
-- [ ] **Step 6: Commit** (`msg-assinatura.txt`)
+- [x] **Step 6: Commit** (`msg-assinatura.txt`)
 
 ---
 

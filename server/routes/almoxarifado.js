@@ -46,6 +46,10 @@ const { registrarAuditoria } = require('../services/almoxarifado/audit');
 // oito ultimos digitos) e SEM aleatorio nenhum: duas conferencias abertas no mesmo milissegundo
 // colidiam com CERTEZA.
 const { inserirComNumeroUnico } = require('../services/almoxarifado/numeroDoc');
+// Etapa 33 (C42): a assinatura dos uploads legados. O segredo vem de `resolveJwtSecret`, o mesmo
+// resolvedor do JWT — mas o que sai daqui NAO e o token de sessao (ver o cabecalho de urlUpload.js).
+const { criarAssinadorUpload } = require('../services/almoxarifado/urlUpload');
+const { resolveJwtSecret } = require('../services/runtimeSecrets');
 // Etapa 18 (C0): o binding desestruturado acima e resolvido no require e cacheado — um teste
 // nao consegue substituir `registrarAuditoria` por um stub que lanca, e a RN-02 ("auditoria
 // nunca derruba o ato") viraria um teste VAZIO: passaria verde sem jamais ter derrubado
@@ -233,9 +237,25 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   const { initSchema } = require('../services/almoxarifado/schema');
   initSchema(db).catch((e) => console.error('❌ Erro no schema do almoxarifado:', e.message));
 
-  // Servir fotos — padrão /api/uploads/almoxarifado (compatível com proxy /api)
-  app.use('/api/uploads/almoxarifado', require('express').static(uploadsAlmoxDir));
-  app.use('/uploads/almoxarifado', require('express').static(uploadsAlmoxDir));
+  // ── Servir uploads legados — Etapa 33 (furo C42) ────────────────────────────────────────────
+  // Ate aqui estes dois mounts eram PUBLICOS: ficam em prefixo diferente do `/api/almoxarifado`
+  // autenticado logo abaixo, entao nao passavam por `authenticateToken` nem por
+  // `checkModulePermission`. Deslogado, com a URL na mao, qualquer um baixava certificado de
+  // fornecedor, comprovante de sucateamento e a imagem da assinatura de entrega.
+  //
+  // O verificador vem ANTES do static e so olha `exp` + `sig` — sem banco e sem sessao, porque
+  // roda em toda imagem de toda lista.
+  const assinadorUpload = criarAssinadorUpload(resolveJwtSecret(PERSISTENT_DATA_DIR));
+  app.use('/api/uploads/almoxarifado', assinadorUpload.middleware, require('express').static(uploadsAlmoxDir));
+  app.use('/uploads/almoxarifado', assinadorUpload.middleware, require('express').static(uploadsAlmoxDir));
+  // FECHO obrigatorio. `express.static` chama `next()` quando o arquivo NAO existe, e em producao
+  // a requisicao continua descendo ate o catch-all do SPA (index.js monta o build do client na
+  // raiz, e este modulo e registrado ANTES) — uma assinatura VALIDA para um nome inexistente
+  // devolveria **200 com o HTML do SPA** dentro de um `<img>`. Medido na revisao do plano. E pior:
+  // no harness de teste, que nao tem catch-all, o comportamento seria OUTRO, entao o cenario
+  // passaria por um motivo que producao nao tem.
+  app.use('/api/uploads/almoxarifado', (req, res) => res.status(404).end());
+  app.use('/uploads/almoxarifado', (req, res) => res.status(404).end());
 
   const almoxMiddleware = checkModulePermission
     ? [authenticateToken, checkModulePermission('almoxarifado')]
