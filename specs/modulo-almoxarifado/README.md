@@ -1,7 +1,53 @@
 # Módulo Almoxarifado — Planejamento Mestre
 
 > **Spec original:** [2026-08-02-requisitos-modulo-almoxarifado.md](2026-08-02-requisitos-modulo-almoxarifado.md) (34 seções)
-> **Última atualização:** 2026-09-02 (**Etapa 32 fechada — a tabela de anexos, órfã desde a
+> **Última atualização:** 2026-09-03 (**Etapa 33 fechada — os uploads legados param de ser
+> públicos, `13dfd4f..65811d2`. NÃO é feature: é o fechamento do furo C42**, que a Etapa 32 mediu
+> e declarou. Nenhuma feature muda de cor.
+> Os dois `express.static` de `uploads/almoxarifado` ficavam em prefixo **diferente** do
+> `/api/almoxarifado` autenticado: deslogado, com a URL na mão, qualquer um baixava certificado de
+> fornecedor, comprovante de sucateamento e **a imagem da assinatura de quem retirou material**.
+> **Entregue:** `urlUpload.js` (HMAC sobre `nome:exp`, 128 bits, validade de 15–20 min), o
+> middleware antes dos dois mounts, um **fecho 404** depois deles, e as três famílias exibidas
+> recebendo a URL já assinada — foto de material, certificado de lote e assinatura de entrega.
+> **`?token=` foi RECUSADO de propósito:** `authenticateToken` o aceita e seria uma linha, mas
+> esta base já havia recusado esse caminho com raciocínio escrito
+> (`RelatoriosAlmoxarifado.js:34-37`) — o JWT não expira em minutos e abre o CRM inteiro. A
+> assinatura desta etapa **não é credencial de sessão**.
+> **A Fase 0 só cortou a etapa pela metade porque mediu:** das seis famílias de upload, **três não
+> são exibidas em lugar nenhum** (comprovante de sucateamento, certificado de calibração e foto de
+> ocorrência têm **zero** consumidores no client) — fechar o estático não quebra nada nelas.
+> **O QUE A FASE 2 PEGOU (18 achados, 0 ruído, 6 travariam):** dois caminhos faziam a rota
+> responder **500** onde o contrato promete 404 — `timingSafeEqual` lançava `RangeError` porque o
+> guard contava **caracteres** e ele compara **bytes** (um `sig` com 32 acentos tem 64), e
+> `decodeURIComponent` lançava `URIError` para `%` solto; **e a sabotagem que o próprio plano
+> mandava fazer — "troque um caractere do `sig`" — ativava o primeiro** se o caractere fosse
+> acentuado, num plano escrito em português. Mais: uma assinatura **válida** para arquivo
+> inexistente caía no `next()` do `express.static` e, em produção, descia até o catch-all do SPA —
+> o `<img>` receberia **200 com HTML**. E um teste existente (`anexoDocumento.api.test.js:180`)
+> **afirmava o furo como contrato** ("sai público (200)"): foi reescrito, não apagado, senão o 404
+> da RN-03 daquele arquivo voltaria a não provar nada.
+> **E a Fase 2 derrubou uma afirmação da minha Fase 0:** eu escrevi que `materialPhoto.js` era "o
+> ponto único" da URL da foto. **Não era** — `requisicoesMaterial.js` devolvia `itens[].foto`
+> **cru**, e é o que a tela de Minhas Requisições renderiza; a Task 3 apagaria a miniatura de todo
+> item **em silêncio**.
+> **Regra que fica: quando o teste monta a entrada a partir de um PEDAÇO do estado em vez do
+> estado inteiro, ele mede o pedaço.** A RN-03 nasceu vazia (usava `sig` inválido, então o 404
+> vinha da assinatura errada e não do tempo — a sabotagem que remove a checagem de `exp` ficava
+> verde), e `RequisicoesList.test.js:289` passava **antes, depois e com a feature quebrada**,
+> porque usava `.includes()` sobre um fixture escrito à mão. É a terceira etapa seguida com essa
+> forma: na 29 foi fixture simétrica, na 31 exemplos que só separavam por comprimento, aqui uma
+> URL montada pelo nome em vez do caminho.
+> **Decisões minhas na letra B:** B70 (endereço assinado e temporário; descartado exigir login no
+> endereço, que não funciona para `<img>` e viraria N downloads na tela de montar requisição).
+> **Letra A:** A8 — avisar antes do deploy que **links copiados param de funcionar**. **Furo C42
+> RISCADO** na letra C, com o que fechar a porta **não** resolve: quem já baixou continua com o
+> arquivo.
+> **Números (fechamento, 2026-09-03):** `test:api` **169/169 arquivos** (167 → 169:
+> `urlUploadAssinada` 12, `materialPhotoAssinada` 5), `test:almoxarifado` **42/0**,
+> `test:validation` **4/0**, `test:safealter` **3/0**, `test:sqlite` **5/0**; client **654 testes
+> em 43 suítes** (`resolveMaterialPhotoUrl` 5, novo), build `CI=true` **Compiled successfully**.
+> Antes: 2026-09-02 (**Etapa 32 fechada — a tabela de anexos, órfã desde a
 > Etapa 0, ganhou dono, `e708125..fd71958`. Feature 09, que CONTINUA 🟡.** `anexos_documento_almoxarifado`
 > existia como DDL desde 2026-08-03 e **nunca teve um `INSERT`, um `SELECT`, uma rota ou um
 > componente**: a varredura do repositório inteiro achava **uma** ocorrência do nome em `server/`,

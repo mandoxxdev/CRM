@@ -1,10 +1,29 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-09-02 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-09-03 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 32) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 33) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20.
 
-> ## Onde o desenvolvimento está — 2026-09-02 (Etapa 32 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-09-03 (Etapa 33 ENTREGUE · modo contínuo pelo mapa)
+>
+> **Etapas 1 a 20 e 22 a 33 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
+> A **Etapa 33 (os arquivos param de abrir sem login)** fechou em 2026-09-03
+> (`13dfd4f..65811d2`) e **não é feature — é o fechamento de um furo de segurança** que a
+> Etapa 32 mediu e declarou.
+>
+> Todo arquivo guardado pelo almoxarifado — foto de material, certificado do fornecedor,
+> comprovante de sucateamento, certificado de calibração, foto de ocorrência e **a imagem da
+> assinatura de quem retirou material** — ficava num endereço que **abria sem login**, para
+> qualquer um com o link. Agora o endereço vem **assinado pelo servidor**, vale só para aquele
+> arquivo e expira em **15 a 20 minutos**.
+>
+> **⚠️ Duas coisas antes de apresentar:**
+> 1. **Links de imagem copiados antes do deploy param de funcionar** (letra **A8**). Se alguém
+>    guardou endereços em planilha ou e-mail, avise.
+> 2. **Quem já baixou continua com o arquivo.** Fechar a porta impede novos downloads; não
+>    recolhe o que saiu.
+>
+> Antes disto: **Etapa 32 (anexos de documento)**, `e708125..fd71958`.
 >
 > **Etapas 1 a 20 e 22 a 32 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
 > A **Etapa 32 (anexos de documento)** fechou em 2026-09-02 (`e708125..fd71958`) e é a primeira
@@ -4505,6 +4524,49 @@ que ele não tinha como repetir com sucesso garantido.
 
 ---
 
+## Etapa 33 — Os arquivos param de abrir sem login (ENTREGUE — 2026-09-03)
+
+**O que mudou, em uma frase:** o endereço de cada arquivo do almoxarifado agora vem assinado pelo
+sistema, vale só para aquele arquivo, e expira em 15 a 20 minutos.
+
+Antes, qualquer pessoa com o link abria o arquivo **deslogada**, de qualquer lugar — inclusive a
+imagem da assinatura de quem retirou material. A única proteção era o nome do arquivo ser difícil
+de adivinhar, o que não protege contra quem já tem o link.
+
+### Roteiro de teste manual
+
+1. Vá em **Almoxarifado → Materiais** e encontre um material com foto. A foto aparece normal.
+2. **Botão direito na foto → “Copiar endereço da imagem”**, e cole num bloco de notas. O endereço
+   termina com `?exp=...&sig=...` — essa parte é a assinatura.
+3. **Cole o endereço completo numa aba anônima**, sem estar logado: a imagem abre. É o que
+   permite a foto carregar dentro da tela.
+4. **Apague o `?exp=...&sig=...` e abra de novo:** dá “não encontrado”. Antes desta etapa, esse
+   endereço curto **abria** — é exatamente essa a mudança.
+5. **Troque o nome do arquivo no endereço** (mantendo a assinatura) por outro arquivo qualquer:
+   também dá “não encontrado”. Cada assinatura vale para um arquivo só.
+6. **Espere ~20 minutos** e recarregue a aba anônima com o endereço completo: para de funcionar.
+   Voltando ao sistema e recarregando a tela, a foto aparece de novo (com um endereço novo).
+7. Repita em **Lotes → Ver certificado** e na **assinatura de entrega** de uma requisição
+   entregue: as duas seguem a mesma regra.
+
+### O que esperar no dia a dia
+
+- **Nada muda para quem usa o sistema normalmente.** As fotos e os certificados aparecem como
+  sempre; o sistema pede o endereço assinado sozinho, a cada vez que carrega a tela.
+- **Tela aberta por muito tempo pode mostrar imagem em branco.** Recarregar resolve. Aparece mais
+  na tela de montar requisição, que é a de uso mais demorado e carrega as fotos conforme você
+  rola a lista.
+- **Links antigos morrem.** Endereço de foto ou certificado guardado em planilha, documento ou
+  e-mail para de funcionar. O caminho passa a ser abrir pelo sistema.
+
+### O que esta etapa NÃO cobre
+
+- **Quem já baixou continua com o arquivo** — fechar a porta não recolhe o que saiu.
+- **Não há registro de quem baixou** esses arquivos. O registro de download existe só para os
+  **anexos** (Etapa 32).
+- **Três tipos de arquivo continuam sem tela para vê-los** (comprovante de sucateamento,
+  certificado de calibração e foto de ocorrência) — são guardados e nunca exibidos. Ficaram
+  fechados junto com o resto.
 ## Etapa 32 — Anexar certificado, relatório e foto à inspeção (ENTREGUE — 2026-09-02)
 
 **O que mudou, em uma frase:** o papel que prova a qualidade — certificado do fornecedor,

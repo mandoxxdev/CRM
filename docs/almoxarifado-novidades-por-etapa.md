@@ -277,7 +277,13 @@ servidor e a A7 não foi resolvida.
 
 ### B. Decisões de negócio
 
-### B. Decisões de negócio — B1 a B69; as em aberto esperam você, as tomadas estão escritas com o descartado
+**A8 (NOVO, da Etapa 33 — NÃO é consulta, é aviso a dar antes do deploy).** A partir do deploy,
+**todo link de imagem ou certificado do almoxarifado copiado anteriormente para de funcionar**.
+Se alguém da equipe guardou esses endereços em planilha, documento ou e-mail, avise que o caminho
+passa a ser abrir pelo sistema. Nenhum arquivo foi apagado ou movido — só o endereço mudou de
+regra. Ver o item **42** da letra C.
+
+### B. Decisões de negócio — B1 a B70; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(O título desta seção dizia "B1 a B24" — **estava defasado**: os itens já iam até B36 antes da
 Etapa 20. Corrigido em 2026-08-28 para B50, depois para B56 com as três da Etapa 24, para B57 com
@@ -1265,6 +1271,32 @@ consultar depois. **O que foi descartado:** exigir `ativo = 1`, que além de blo
 funcionaria só para material — requisição, recebimento e devolução não têm essa coluna com esse
 sentido, e a régua ficaria diferente por entidade sem que ninguém entendesse por quê.
 
+**B70 (NOVA, da Etapa 33 — decisão que EU tomei, reversível) — o endereço do arquivo expira em
+15 a 20 minutos, e não usei o login para proteger.**
+
+Havia dois caminhos para fechar o furo dos arquivos públicos:
+
+- **Exigir login no próprio endereço.** É o mais óbvio — mas **não funciona para imagem**: quando
+  o navegador carrega uma foto dentro de uma tela, ele não manda o login junto. Para funcionar,
+  cada foto teria de ser baixada por dentro do sistema, uma por uma, e a tela de montar
+  requisição desenha **um cartão por material** — cinquenta materiais virariam cinquenta
+  downloads. Ficou **descartado**.
+- **Endereço assinado e temporário**, que é o que foi feito: o servidor entrega um endereço que
+  vale para **aquele arquivo** e por **15 a 20 minutos**.
+
+**O que se ganha e o que se paga.** Ganha-se que um endereço copiado não vira acesso permanente
+e que nada abre sem passar pelo sistema. Paga-se que **tela aberta por muito tempo mostra imagem
+em branco até recarregar** — e isso aparece mais na tela de montar requisição, que é a de uso
+mais demorado do módulo e carrega as fotos conforme você rola a lista.
+
+**Uma coisa que eu recusei de propósito, e vale você saber:** o sistema aceita receber o login
+no próprio endereço (`?token=...`), e usar isso teria sido a correção de uma linha. **Não usei**,
+porque o login do CRM não expira em minutos e dá acesso ao sistema inteiro — colocá-lo no
+endereço de uma imagem o joga no histórico do navegador e no registro de acesso do servidor.
+A assinatura desta etapa não é o seu login: ela vale para **um arquivo** por **poucos minutos**.
+
+**Se os 15 minutos incomodarem na prática**, aumentar é uma linha — me diga o número.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -1682,34 +1714,33 @@ sentido, e a régua ficaria diferente por entidade sem que ninguém entendesse p
     só os **últimos dígitos** do relógio, e por isso dava a volta a cada 16,7 minutos (requisição)
     ou 27,78 horas (os outros três). Ver a seção da Etapa 31.
 
-42. **(32) ⚠️ OS ARQUIVOS ANTIGOS DO ALMOXARIFADO ESTÃO PÚBLICOS NA INTERNET PARA QUEM TIVER O
-    LINK — e este furo é ANTERIOR a esta etapa, não criado por ela.** É o item mais importante
-    desta lista, e o único que expõe dado.
+42. **✅ RESOLVIDO NA ETAPA 33 — os arquivos antigos do almoxarifado NÃO são mais públicos.**
+    Este item dizia que certificado do fornecedor, comprovante de sucateamento, certificado de
+    calibração, foto de material, foto de ocorrência e **a imagem da assinatura de quem retirou
+    material** abriam **deslogado** para quem tivesse o link, protegidos apenas pelo nome do
+    arquivo ser difícil de adivinhar. **A Etapa 33 fechou** (`13dfd4f..65811d2`).
 
-    **O que está acontecendo:** certificado do fornecedor, comprovante de sucateamento,
-    certificado de calibração, foto de material, foto de ocorrência e **a imagem da assinatura de
-    quem retirou material** são servidos por um endereço que **não pede login**. Quem tiver a URL
-    — porque copiou, porque estava num e-mail encaminhado, porque o navegador guardou — abre o
-    arquivo **deslogado**, de qualquer lugar. A única proteção hoje é o endereço ser difícil de
-    adivinhar (o nome do arquivo tem um número aleatório). Isso é **obscuridade, não controle**:
-    protege contra quem chuta, não contra quem já tem o link.
+    **O que mudou:** o endereço do arquivo agora precisa vir **assinado pelo servidor**, e a
+    assinatura vale para **aquele arquivo** e por **15 a 20 minutos**. Quem pedir o endereço sem
+    assinatura — ou com a assinatura de outro arquivo, ou vencida, ou adulterada — recebe
+    **“não encontrado”**, sem nenhuma pista de que o arquivo existe.
 
-    **Isso vem desde o começo do módulo** — não foi esta etapa que criou. Foi esta etapa que
-    **mediu e escreveu**, ao construir os anexos novos.
+    **Duas consequências que você vai notar, e as duas são esperadas:**
+    1. **Links de imagem copiados antes do deploy param de funcionar.** Se alguém guardou o
+       endereço de uma foto ou de um certificado num documento, numa planilha ou num e-mail,
+       aquele link morre. O caminho é abrir pelo sistema de novo.
+    2. **Deixar uma tela aberta por mais de ~20 minutos e voltar a ela pode mostrar imagem em
+       branco.** Recarregar resolve. Isso acontece porque o endereço expira de propósito —
+       é o que impede um link copiado de virar acesso permanente.
 
-    **Os anexos NOVOS, desta etapa, NÃO têm esse problema.** Eles ficam numa pasta separada que
-    aquele endereço não alcança, e o download exige login e permissão. É por isso que a pasta é
-    **irmã** e não uma subpasta: subpasta continuaria pública, o que faria a etapa fabricar
-    exatamente o problema que ela veio evitar.
+    **⚠️ E o que fechar a porta NÃO resolve:** quem já **baixou** um arquivo antes do deploy
+    continua com ele. Fechar o acesso impede novos downloads; não recolhe o que saiu. Se algum
+    documento sensível pode ter vazado nesse período, tratar isso é decisão sua — o sistema não
+    tem como saber quem baixou o quê antes desta etapa (o registro de download só existe para os
+    anexos, e só a partir da Etapa 32).
 
-    **Por que não foi corrigido junto:** as telas de Lotes e de Requisições **apontam direto** para
-    aquele endereço público. Fechá-lo sem reescrever as duas telas quebraria a exibição do
-    certificado e da assinatura para todo mundo, e os testes que congelam essas URLs cairiam
-    junto. É **etapa própria** — pequena, mas própria —, e ela está nomeada como a alternativa de
-    maior valor no fim do plano desta etapa.
-
-    **O que fazer enquanto isso:** trate link de arquivo do almoxarifado como link público. Não
-    encaminhe por fora, e não pressuponha que só quem tem login enxerga.
+    Deixado aqui, riscado, em vez de apagado — para quem lembrar do furo confirmar que fechou,
+    com o número da etapa que fechou.
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -5820,6 +5851,76 @@ transformava o nome em `Certificado nÂº 123 â€” aÃ§o.pdf` na tela e no 
   expurgo — corte já declarado desde a feature de segurança.
 - **O sistema não lê o conteúdo do arquivo.** Ele confere o tipo declarado e a extensão que grava,
   mas não abre o PDF para ver se é um PDF de verdade.
+
+## Etapa 33 — Os arquivos do almoxarifado param de abrir sem login (2026-09-03)
+
+Desde o começo do módulo, todo arquivo guardado pelo almoxarifado — foto de material, certificado
+do fornecedor, comprovante de sucateamento, certificado de calibração, foto de ocorrência e **a
+imagem da assinatura de quem retirou material** — ficava num endereço que **abria sem login**.
+Quem tivesse o link abria de qualquer lugar, deslogado. A única proteção era o endereço ser difícil
+de adivinhar, o que protege contra quem chuta e não contra quem já tem o link.
+
+Isto não foi descoberto por acaso: a Etapa 32, ao construir os anexos, mediu o problema e o
+declarou por escrito como furo. **Esta etapa o fechou.**
+
+**O que mudou, em uma frase:** o endereço de cada arquivo agora vem **assinado pelo servidor**,
+vale só para **aquele arquivo** e expira em **15 a 20 minutos**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Link de foto ou certificado abria **sem login**, de qualquer lugar | Só abre com endereço assinado, emitido pelo sistema |
+| Um link copiado funcionava **para sempre** | O endereço expira em 15 a 20 minutos |
+| A assinatura de entrega de material abria para qualquer um com a URL | Só abre por dentro do sistema |
+| Endereço de um arquivo servia para pedir **outro** (bastava trocar o nome) | Cada assinatura vale para **um** arquivo |
+| Pedir um arquivo inexistente entregava a página do sistema dentro da imagem | Responde “não encontrado”, sem pista nenhuma |
+
+### As regras, com o cenário exato
+
+**1. Sem assinatura, o arquivo não sai — e o sistema não diz que ele existe.**
+Qualquer tentativa (sem assinatura, com assinatura de outro arquivo, vencida ou adulterada)
+responde **“não encontrado”**. Não responde “sem permissão”, de propósito: “sem permissão”
+confirmaria que o arquivo existe, que é justamente o que se quer esconder de quem está tentando
+adivinhar.
+
+**2. A assinatura vale para um arquivo só.**
+Pegar o endereço assinado de uma foto e trocar o nome por `assinatura-fulano.png` **não funciona** —
+o nome do arquivo faz parte da assinatura.
+
+**3. O endereço expira.**
+Entre 15 e 20 minutos. É o que impede um link copiado para uma planilha de virar acesso permanente.
+
+**4. Nada foi movido, renomeado ou apagado.**
+Os arquivos estão exatamente onde estavam. O que mudou é **como se chega até eles**.
+
+### Como testar ao vivo
+
+1. Abra **Almoxarifado → Materiais**, com um material que tenha foto. A foto aparece normalmente.
+2. **Clique com o botão direito na foto → “Copiar endereço da imagem”.** Cole num bloco de notas:
+   você vai ver o endereço terminando em algo como `?exp=...&sig=...`. Essa parte é a assinatura.
+3. **Abra esse endereço numa aba anônima** (sem estar logado): a imagem aparece — a assinatura vale
+   por si, é isso que permite a foto carregar na tela.
+4. **Agora apague o `?exp=...&sig=...` do fim e abra de novo:** o navegador diz que não encontrou.
+   É essa a diferença entre antes e agora — antes, esse endereço curto abria.
+5. **Espere ~20 minutos e recarregue a aba anônima** com o endereço completo: para de funcionar.
+   Voltando ao sistema e recarregando a tela, a foto aparece de novo.
+6. Repita com **Lotes → Ver certificado** e com a **assinatura de entrega** de uma requisição
+   entregue: os dois seguem a mesma regra.
+
+### O que esta etapa NÃO cobre
+
+- **Quem já baixou continua com o arquivo.** Fechar a porta impede novos downloads; não recolhe o
+  que saiu antes. Se algum documento sensível pode ter vazado, tratar isso é decisão sua.
+- **Não há registro de quem baixou** esses arquivos antigos. O registro de download existe só para
+  os **anexos** (da Etapa 32) — e continua só para eles.
+- **Tela aberta por mais de ~20 minutos mostra imagem em branco até recarregar.** É consequência
+  direta de o endereço expirar. Onde mais aparece é na tela de montar requisição, que carrega as
+  fotos conforme você rola.
+- **Três tipos de arquivo continuam sem tela para vê-los** — comprovante de sucateamento,
+  certificado de calibração e foto de ocorrência são guardados e nunca exibidos em lugar nenhum.
+  Eles agora estão fechados junto com o resto; quando alguma tela precisar deles, ela vai pedir o
+  endereço assinado ao servidor como as outras.
 
 ## Onde estamos e o que vem a seguir
 

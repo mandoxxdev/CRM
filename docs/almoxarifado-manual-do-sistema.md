@@ -761,6 +761,42 @@ O sistema **anota** a origem; ele não a usa para decidir nada. Não existe recu
 
 ---
 
+### 5.9 Como o sistema protege os arquivos guardados
+
+O almoxarifado guarda arquivos em vários pontos: a foto do material, o certificado do fornecedor
+no lote, o comprovante do sucateamento, o certificado de calibração da ferramenta, a foto da
+ocorrência e a imagem da assinatura de quem retirou material. Além deles, existem os **anexos**
+(seção 15.2.4), que seguem uma regra própria.
+
+**Todos esses arquivos só são alcançáveis por um endereço que o sistema emite na hora.** Esse
+endereço carrega uma assinatura e um prazo:
+
+| Regra | Comportamento |
+|---|---|
+| Endereço sem assinatura | Responde **não encontrado** |
+| Assinatura de **outro** arquivo | Responde **não encontrado** — a assinatura inclui o nome do arquivo |
+| Assinatura **vencida** | Responde **não encontrado**. O prazo é de 15 a 20 minutos |
+| Assinatura adulterada | Responde **não encontrado** |
+| Arquivo que não existe | Responde **não encontrado** |
+
+**A resposta é sempre a mesma — “não encontrado” — e isso é deliberado.** Responder “sem
+permissão” confirmaria que aquele arquivo existe, que é justamente o que não se quer entregar a
+quem está tentando adivinhar endereços.
+
+**Na prática, para quem opera, nada muda:** as fotos e os certificados aparecem normalmente,
+porque o sistema pede o endereço assinado sozinho toda vez que carrega a tela. Duas
+consequências aparecem no dia a dia:
+
+- **Endereço copiado não vira acesso permanente.** Guardar o link de uma foto ou de um
+  certificado numa planilha ou num e-mail não funciona: ele expira. Para consultar de novo,
+  abre-se pelo sistema.
+- **Tela aberta por muito tempo pode mostrar imagem em branco.** Recarregar resolve. Aparece mais
+  na tela de montar requisição, que carrega as fotos conforme se rola a lista.
+
+**Os anexos são diferentes, e mais restritos:** eles não usam endereço assinado — exigem estar
+logado no sistema no momento do download, e **cada download fica registrado** na trilha de
+auditoria com quem baixou e quando (seção 15.2.4). Os arquivos desta seção não têm esse
+registro.
 ## 6. Movimentações de estoque
 
 Toda mudança de saldo do almoxarifado passa por um único motor e vira uma linha no **livro de movimentações** (tela **Almoxarifado → Movimentações**). Não existe caminho que altere saldo sem deixar linha: quem, quando, quanto, saldo antes e saldo depois.

@@ -19,6 +19,54 @@
 > (**Etapa 24, `a81e51a..4680daa`: a perna *Perfis* COMECOU** — perfil `QUALIDADE` criado com `visualizar`+`inspecionar` e a lista negativa provada por controle positivo; a revogação de perfil passou a auditar e a concessão ganhou o `dados_anteriores`; `ADMINISTRADOR` saiu do seletor; e a aba, que tinha **zero** teste, ganhou 7 + a integração com a tela de auditoria. **A feature CONTINUA 🟡-forte.** ⚠️ **E esta spec ESTAVA ERRADA num item que custou caro:** o checklist trazia *"UI de atribuição de perfil por usuário"* desmarcado, e a tela **existe desde 2026-08-05** (`6018f0a`) — o design da Etapa 24 leu este item, somou a uma varredura incompleta do client e desenhou a etapa inteira sobre a premissa "a tela não existe", mandando construir uma segunda. A Fase 2 derrubou a premissa e o escopo foi reescrito no meio da etapa. Ver o bloco "Etapa 24" no fim. **O item 131 (perfil QUALIDADE) NÃO ficou integralmente pago e por isso continua desmarcado:** `bloquear/liberar sob desvio` usa `ajustar_estoque`, que o perfil não recebeu — dois dos três botões de `/almoxarifado/inspecoes` seguem barrados e `POST /materiais/:id/bloquear` dá 403, com a decisão declarada na letra **B56**) · antes 🟡-forte (**Etapa 23, `0fe8d02..4f1aeb9`: os DOIS buracos de rastro que a Etapa 22 nomeou como "o que falta para 🟢" estão PAGOS** — `PUT /configuracoes` virou tudo-ou-nada e `EXCLUSAO`/`DESATIVACAO` de linha já inativa parou de ser gravada, nas **cinco** rotas. **A feature CONTINUA 🟡-forte, e o que falta para 🟢 mudou de item OUTRA VEZ** — a decisão e a correção da afirmação anterior estão no bloco "Etapa 23" no fim. Em uma linha: a **perna de auditoria** desta feature não tem mais defeito conhecido, mas a feature são **três pernas** (Perfis, Segurança e Auditoria) e as duas primeiras têm **dez itens desmarcados** que não são decisão de negócio — são funcionalidade não construída. A Etapa 22 escreveu "o que falta para 🟢 são esses dois", e **isso estava incompleto: ela pesou só a perna de auditoria**) · antes 🟡-forte (**Etapa 22, `8c6ffbe..169458d`: a TELA de auditoria — o item que as etapas 18, 19, 20 e 21 nomearam como "o que falta para 🟢" — está ENTREGUE.** A feature **continua 🟡-forte e NÃO vira 🟢**, e a decisão está escrita no bloco "Etapa 22" abaixo: o que sobra não é mais "falta leitor", são quatro itens de **outra natureza** — dois deles decisão de negócio pendente do usuário (o volume do log G8, a normalização dos verbos antigos), um deles um buraco de rastro medido e não pago (`PUT /configuracoes` grava chave a chave sem transação; falha no meio deixa parte gravada **sem** linha de histórico) e o `EXCLUSAO` de linha já inativa. Um deles — o ato parcial sem rastro — é a trilha **mentindo por omissão**, e trilha que mente não fecha em 🟢) · antes 🟡-forte (inalterado pela Etapa 21, que é do **núcleo do CRM** e não desta feature — ver o bloco "Etapa 21" no fim; a feature continua com a TELA de auditoria como o que falta para 🟢) · antes 🟡-forte (Etapa 20: os **três** buracos de exposição que esta spec nomeava estão pagos; resta a TELA de auditoria e os itens nomeados abaixo) · antes 🟡-forte (Etapa 19: os 23 endpoints de cadastro/configuração auditam) · antes 🟡 — sistema de permissões robusto; auditoria em uso pelos fluxos principais desde as Etapas 3–6 (os dois buracos daquela auditoria foram PAGOS — Etapa 9 e Etapas 18/19) · **Spec original:** seções 28, 29
 > **Última atualização:** 2026-08-29 (**Etapa 24, `a81e51a..4680daa`: a perna Perfis começa** — `QUALIDADE` em `permissions.js` (`a81e51a`), a revogação auditando com `EXCLUSAO` e o `dados_anteriores` nos dois caminhos (`9f7c309`), `ADMINISTRADOR` fora do seletor com a razão visível e os 7 primeiros testes da aba (`b13de4a`), a integração que dá e tira perfil e lê pela tela-contrato (`b9a5848`) e o rótulo do perfil no 403 do client (`4680daa`); ver o bloco "Etapa 24" no fim). Antes: 2026-08-28 (**Etapa 23, `0fe8d02..4f1aeb9`: a trilha para de mentir por omissão e por excesso** — o retry de `SQLITE_BUSY` para de responder erro e gravar assim mesmo (`0fe8d02`), `PUT /configuracoes` vira um `UPDATE` único com `CASE` (`b6b7b24`/`d507ccc`), as **cinco** rotas de exclusão distinguem "não existe" de "já inativa" (`9858bec`) e a leitura pela tela-contrato prova que a trilha mostra **um** ato (`4f1aeb9`); ver o bloco "Etapa 23" no fim e o checklist "Trilha honesta"). Antes: 2026-08-28 (**Etapa 22, `8c6ffbe..169458d`: a trilha ganha leitor** — tela `/almoxarifado/auditoria` com os quatro filtros novos, o de/para calculado no servidor, a rota de opções alimentada pelo banco e os **três índices** que a tabela nunca teve; ver o bloco "Etapa 22" no fim e o checklist "Auditoria visível"). Antes: 2026-08-28 (Etapa 21, `d5c8d3a..07a4b1c`: **nada desta feature mudou** — a etapa é do núcleo do CRM e fecha os itens que a Etapa 20 empurrou para cá dizendo "é do core"; registrada no bloco "Etapa 21 — o que era do núcleo" no fim deste arquivo, e o item de backup do checklist de Segurança ganhou a medição que faltava). Antes: 2026-08-28 (Etapa 20, `1b0f0e9..a3f5135`: a rota de foto de material para de mentir sucesso, de deixar órfão e de não auditar; a leitura de configurações para de devolver segredo em claro e o PUT genérico para de aceitá-lo; ler o mapa de permissões por setor passa a exigir o mesmo que escrevê-lo). Antes: 2026-08-28 (Etapa 19, `a574b3a..55e4144`: os 23 endpoints de cadastro e configuração passam a auditar, com diff nas configurações, segredo mascarado e três correções de comportamento que o log exigia). Antes: 2026-08-28 (Etapa 18: a trilha do inventário). Antes: 2026-08-11 — auditoria de cauda: corrigida a afirmação "auditoria não é usada em produção" (era verdade em 2026-08-02, foi superada pelas Etapas 3–6 e ninguém atualizou aqui), corrigida a contagem de ações (14, não 15) e nomeados os dois buracos reais de auditoria que restam
 
+## Etapa 33 — os uploads legados param de ser públicos (`13dfd4f..65811d2`)
+
+**Furo fechado: C42.** Os dois `express.static` de `uploads/almoxarifado`
+(`routes/almoxarifado.js`) ficavam em prefixo **diferente** do `/api/almoxarifado` autenticado, e
+por isso não passavam por `authenticateToken` nem por `checkModulePermission`. Deslogado, com a
+URL na mão, qualquer um baixava certificado de fornecedor, comprovante de sucateamento,
+certificado de calibração, foto de material, foto de ocorrência e **a imagem da assinatura de
+quem retirou material**. A defesa era o nome do arquivo (`Date.now()` + `random*1e9`):
+obscuridade, não controle.
+
+**Entregue:** `services/almoxarifado/urlUpload.js` — HMAC-SHA256 sobre `nome:exp`, truncado em
+128 bits, com `exp` em balde de 5 min e validade efetiva de 15 a 20 minutos. Um middleware
+verifica antes dos dois `static`, e um **fecho 404** vem depois deles. As três famílias exibidas
+passam a receber a URL já assinada do servidor: foto de material (`materialPhoto.js`),
+certificado de lote (`lotService.listarLotesDoMaterial`) e assinatura de entrega
+(`deliverySignatureService`).
+
+**Decisões que precisam sobreviver a quem ler isto depois:**
+
+1. **`?token=` foi RECUSADO, e não por esquecimento.** `authenticateToken`
+   (`server/index.js:2874`) aceita o JWT na query, e usá-lo teria sido uma linha. Esta base já
+   havia recusado esse caminho com raciocínio escrito em
+   `client/src/components/almoxarifado/RelatoriosAlmoxarifado.js:34-37`: o JWT não expira em
+   minutos, abre o CRM inteiro, e iria para o histórico do navegador, o `Referer` e o log do
+   nginx. **A assinatura desta etapa não é credencial de sessão** — vale para um arquivo por
+   poucos minutos.
+2. **Toda falha responde 404, nunca 401 ou 403** (RN-07). Um 401 confirmaria a existência do
+   arquivo, que é exatamente a informação que a obscuridade protegia por acidente.
+3. **`MATERIAL_PHOTO_API_PREFIX` saiu do `module.exports` de `materialPhoto.js`.** Enquanto ele
+   fosse exportável, qualquer serviço montava `prefixo + nome` e devolvia URL sem assinatura com
+   a suíte verde — e era isso que `deliverySignatureService` fazia. Um guard de "lançar sem
+   assinador" só vale se ninguém puder contornar o assinador.
+4. **`materialPhotoUrl` LANÇA quando não há assinador configurado**, em vez de devolver URL crua.
+   Devolver crua seria o furo de volta, e de volta em silêncio.
+5. **O client parou de montar endereço.** `resolveMaterialPhotoUrl` devolve `''` para o que não
+   for URL do servidor: fabricar o endereço trocaria "sem foto" por "foto quebrada" — mesmo
+   resultado visual, impossível de rastrear.
+
+**⚠️ Uma afirmação da Fase 0 desta etapa estava ERRADA e foi corrigida durante a execução:** o
+design dizia que `materialPhoto.js` era "o ponto único" da URL da foto. Não era —
+`routes/requisicoesMaterial.js` devolvia `itens[].foto` **cru**, sem `enrichMaterialRow`, e é o
+que a tela de Minhas Requisições renderiza. Sem a correção, a miniatura de todo item sumiria em
+silêncio. Achado da revisão do plano.
+
+**O que NÃO cobre:** quem já baixou continua com o arquivo (fechar a porta não recolhe o que
+saiu); não há registro de quem baixou esses arquivos (só os **anexos** têm, desde a Etapa 32); e
+tela aberta por mais de ~20 minutos mostra imagem em branco até recarregar — corte declarado.
+
 ## Objetivo
 
 Perfis da spec cobertos, regras de segurança da seção 29 aplicadas (imutabilidade, estorno, histórico de cadastro, justificativas) e trilha de auditoria visível.

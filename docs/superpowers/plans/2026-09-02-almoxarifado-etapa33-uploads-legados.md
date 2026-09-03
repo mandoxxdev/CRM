@@ -337,12 +337,12 @@ Cenários novos:
 3. A assinatura de entrega devolve `arquivo_url` assinado, e ele responde 200.
 4. **Sem `configurarAssinador`, `materialPhotoUrl` lança** — não devolve URL crua.
 
-- [ ] **Antes de commitar, trate `server/tests/materialPhoto.test.js`.** Ele chama
+- [x] **Antes de commitar, trate `server/tests/materialPhoto.test.js`.** Ele chama
       `materialPhotoUrl` direto, sem configurar assinador, e **não é rodado por script nenhum** —
       o runner só descobre `tests/api/*.api.test.js`. Quando `materialPhotoUrl` passar a lançar,
       ele quebra **em silêncio**. Atualize-o para o contrato novo, ou apague-o dizendo no commit
       que estava órfão. Não deixe como está.
-- [ ] Steps: teste → falhar → implementar → passar → sabotar (devolver URL sem assinatura em cada
+- [x] Steps: teste → falhar → implementar → passar → sabotar (devolver URL sem assinatura em cada
       uma das três famílias tem de derrubar o cenário correspondente) → commit (`msg-familias.txt`).
 
 ---
@@ -386,34 +386,106 @@ importa mais do que parece porque `RequisicaoMaterialCesta` usa `loading="lazy"`
 o usuário rola **depois** de 15 minutos e pega 404 em imagens que nunca chegaram a carregar — e
 aquela tela é a de uso mais demorado do módulo.
 
-- [ ] Steps: teste → falhar → implementar → passar → sabotar (fazer o helper remontar a partir do
+- [x] Steps: teste → falhar → implementar → passar → sabotar (fazer o helper remontar a partir do
       nome tem de derrubar o cenário do `''`) → commit (`msg-client.txt`).
 
 ---
 
 ### Task 4: Integração e fechamento
 
-- [ ] Um cenário que percorre **servidor → tela**: pedir o material pela rota, pegar o `foto_url`
+- [x] Um cenário que percorre **servidor → tela**: pedir o material pela rota, pegar o `foto_url`
       que veio, e provar que **aquela URL exata** responde 200 no mount estático — sem o teste
       montar a URL por conta própria. É o único cenário que prova que as duas metades se encaixam.
-- [ ] As cinco suítes + client + build.
-- [ ] **Fase 5** — revisores frescos, lentes: (a) a assinatura resiste a replay, truncamento e
+- [x] As cinco suítes + client + build.
+- [x] **Fase 5** — revisores frescos, lentes: (a) a assinatura resiste a replay, truncamento e
       confusão de arquivo? (b) alguma tela ficou sem imagem sem ninguém notar? (c) "este teste
       passaria com a feature quebrada?", com foco no cenário que usa a URL **devolvida** em vez de
       montada.
-- [ ] `fechar-etapa` inteira. **Letra C: o C42 sai da lista** (riscado, não apagado, com o commit
+- [x] `fechar-etapa` inteira. **Letra C: o C42 sai da lista** (riscado, não apagado, com o commit
       que o fechou). **Letra B:** a validade de 15 minutos e o descarte do `fetch`+blob.
       **Letra A:** nenhuma consulta nova — mas **avise que URLs de imagem copiadas antes do deploy
       param de funcionar**, e que quem já baixou continua com o arquivo (fechar a porta não recolhe
       o que saiu).
 
+---
+
+## Fechamento (2026-09-03)
+
+| Task | Commit | Medido |
+|---|---|---|
+| 1 — assinatura e middleware | `666e80a` | 10/10 · `test:api` 168/168 |
+| 2 — as três famílias minando URL | `88b00ee` | `test:api` 169/169 |
+| 3 — client para de montar URL | `4531b1c` | client 43 suítes / 654 testes |
+| 4 — integração | `65811d2` | `urlUploadAssinada` 12/12 |
+
+### Onde a execução divergiu do plano
+
+1. **A RN-03 nasceu VAZIA, e o plano não previu.** O cenário usava um `sig` inválido para o `exp`
+   no passado, então o 404 vinha da assinatura errada e **não do tempo** — a sabotagem que remove
+   a checagem de `exp` ficava verde. Corrigido calculando o HMAC **correto** de um `exp` vencido,
+   que é o único ponto do arquivo em que o teste assina por conta própria, e está dito lá por quê.
+2. **Uma sabotagem prevista fica verde, e está CERTO.** Trocar o prefixo de `/api/uploads` para
+   `/uploads` em `assinar()` não derruba nada — os dois mounts servem o mesmo diretório com o
+   mesmo middleware, então não é defeito. É o caso "o defeito virou inalcançável" da skill:
+   registrado, não forçado.
+3. **A sabotagem que assina o CAMINHO em vez do nome também fica verde no arquivo de rota**,
+   porque o multer nunca gera nome com caminho. Quem a pega é `materialPhotoAssinada`, que cobre
+   a coluna legada. Duas suítes, dois recortes — está escrito nos dois.
+4. **A sabotagem da fiação DERRUBA O PROCESSO** em vez de derrubar um cenário: sem
+   `configurarAssinador`, `materialPhotoUrl` lança no primeiro upload. É o comportamento
+   desenhado (falhar alto em vez de devolver URL crua), e o "vermelho" dele é o stack trace.
+5. **`server/tests/materialPhoto.test.js` foi APAGADO, não corrigido.** Ele era órfão — nenhum
+   script npm o rodava — e congelava as URLs sem assinatura como contrato. Virou
+   `tests/api/materialPhotoAssinada.api.test.js`, onde o runner o enxerga. Resolver pelo sintoma
+   (atualizar o arquivo órfão) o deixaria órfão de novo.
+
+### Retro de 4 números
+
+1. **Rodadas de correção até verde: 0.** Nenhum fix-round: os 18 achados da Fase 2 entraram no
+   plano **antes** da execução, e a Fase 5 rodou depois do código pronto.
+2. **Achados: 18 na Fase 2, 0 ruído.** **Seis travariam a execução**, e dois deles são a mesma
+   classe: código que responde **500** onde o contrato promete 404. O mais instrutivo é que **a
+   sabotagem prescrita pelo próprio plano ativava um deles** — "troque um caractere do `sig`",
+   num plano escrito em português, com um caractere acentuado.
+3. **Paralelismo: ZERO, declarado desde o plano.** As quatro tasks são a mesma régua atravessando
+   as camadas. **Zero retrabalho** — e a decisão se pagou: a Task 2 mudou o contrato que a Task 3
+   consome (o `certificado_url`), o que teria custado uma rodada se as duas tivessem corrido em
+   paralelo.
+4. **Defeito que escapou:** preencher na etapa seguinte.
+
+**Quinto número: 3 testes passavam com a feature quebrada** — a RN-03 (achado meu, durante a
+execução), `RequisicoesList.test.js:289` (achado da Fase 2: `.includes()` sobre fixture escrito à
+mão passava **antes, depois e com a feature quebrada**) e `anexoDocumento.api.test.js:180`, que
+não passava por acidente: ele **afirmava o furo como contrato**.
+
+### Lição da etapa: o teste mede o pedaço do estado que ele usa para montar a entrada
+
+A RN-03 montava a URL com um `sig` qualquer e um `exp` vencido — dois pedaços, e só um deles era o
+que estava sob teste. O 404 chegava pelo pedaço errado. `RequisicoesList.test.js:289` montava a
+asserção com `.includes()` sobre um fixture escrito à mão: o pedaço verificado (o prefixo) não
+era o que a etapa mudou (a query).
+
+**É a terceira etapa seguida com a mesma forma** — na 29 foi fixture simétrica, na 31 foram
+exemplos que só separavam por comprimento, e na 32 foi uma URL montada pelo *basename* em vez do
+caminho. A regra que fica: **quando o teste constrói a entrada a partir de um pedaço do estado em
+vez do estado inteiro, ele mede o pedaço.** O antídoto é o mesmo das três: pedir ao sistema o
+estado inteiro (a URL que o servidor devolveu) e usá-lo cru.
+
 ## Próxima tarefa detalhada
 
 **Plugar os anexos nas outras cinco telas** — material, requisição, recebimento, devolução e item
-de remessa. Contrato congelado no plano da Etapa 32 (`docs/superpowers/plans/2026-09-02-almoxarifado-etapa32-anexos.md`,
-seção "Próxima tarefa detalhada"), com os `data-testid` e o ponto de atenção do `id`.
+de remessa. É o item de maior valor por unidade de trabalho no módulo: backend testado,
+componente genérico pronto, contrato congelado.
 
----
+O contrato completo está no plano da Etapa 32
+(`docs/superpowers/plans/2026-09-02-almoxarifado-etapa32-anexos.md`, seção "Próxima tarefa
+detalhada"): props, `data-testid`, e o ponto de atenção sobre **quando o `id` existe** em cada
+tela — foi o que derrubou a Task 4 daquela etapa no plano original.
+
+**Um ponto de atenção NOVO, desta etapa:** as telas que ganharem o bloco de anexos e também
+exibirem foto precisam receber a foto **já assinada** do servidor. Se o endpoint daquela tela não
+passar por `enrichMaterialRow`, a foto some — foi exatamente isso que aconteceu com
+`requisicoesMaterial.js`. Antes de plugar, confira o endpoint.
 
 ## Fase 2 — o que a revisão do plano pegou ANTES de executar
 
