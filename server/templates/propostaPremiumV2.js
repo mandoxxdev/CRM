@@ -633,6 +633,24 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       const variaveisList = variaveisListConfigurada
         .filter((k) => (chavesDoCadastro ? chavesDoCadastro.has(k) : true));
       const cortadasPeloCadastroDaFamilia = variaveisListConfigurada.length > 0 && variaveisList.length === 0;
+      // Acessórios digitados na proposta, listados no ESCOPO — pedido do usuário: "tem que
+      // aparecer ACESSÓRIOS: X, Y, Z". Fica no fim do bloco do equipamento, depois das
+      // características técnicas, porque acessório é o que acompanha o equipamento e não uma
+      // característica dele.
+      //
+      // Aqui vai só a lista de nomes: o PREÇO de cada um já aparece na tabela de preços,
+      // como sub-item (1.1, 1.2). Repetir valor nas duas seções é como o documento acaba
+      // saindo com dois números que discordam quando alguém mexe em um só lugar.
+      const acessoriosDoItem = lerAcessorios(it);
+      const acessoriosEscopoHtml = acessoriosDoItem.length > 0
+        ? `<p>Acessórios: ${acessoriosDoItem.map((ac) => {
+            // A quantidade entra só quando é mais de um: "Plataforma (2x)" informa, e
+            // "Tampa (1x)" em toda linha vira ruído.
+            const nomeAc = esc(ac.descricao);
+            return ac.quantidade > 1 ? `${nomeAc} (${esc(ac.quantidade)}x)` : nomeAc;
+          }).join(', ')}</p>`
+        : '';
+
       // Sempre respeitar a seleção do admin (por família) — inclusive para as variáveis
       // "Manual na Proposta": elas só aparecem nos itens de famílias em que o admin as
       // selecionou (a diferença é que aparecem MESMO sem valor, como campo em branco).
@@ -741,6 +759,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           ${categoria !== '—' ? `<p>Categoria: ${categoria}</p>` : ''}
           ${ncm !== '—' ? `<p>NCM: ${ncm}</p>` : ''}
           ${specRowsHtml}
+          ${acessoriosEscopoHtml}
           ${dicaVariaveis}
         </div>
       `;
@@ -768,7 +787,14 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     // Documento corporativo/jurídico: inserir bloco 5.* exatamente como fornecido.
     // Observação: a TABELA DE PREÇOS é gerada a partir dos itens selecionados na proposta (cadastro de produtos).
     const tabelaPrecosRows = (itens || []).map((it, idx) => {
-      const itemRef = esc(it.numero_item != null ? it.numero_item : (idx + 1));
+      // A tabela de preços usa a MESMA numeração da seção 4 ("4.1", "4.2"...), por pedido do
+      // usuário: é o padrão do documento dele, e o cliente que lê a tabela precisa achar o
+      // mesmo item no escopo. Antes a tabela numerava 1, 2, 3 e o escopo 4.1, 4.2, 4.3 — o
+      // leitor tinha que adivinhar a correspondência.
+      //
+      // Posicional, e não `numero_item`, porque é assim que a seção 4 numera (linha ~492).
+      // Se um dia o número passar a ser editável, os dois lugares têm de mudar juntos.
+      const itemRef = esc(`4.${idx + 1}`);
       // O MODELO entra aqui também, como no título da seção 4: "DISCO DISPERSOR" sozinho
       // não diz ao cliente qual peça é. Mesma regra de lá — se o nome já contém o modelo
       // (cadastros antigos costumam trazer), não repete.
@@ -802,7 +828,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       const acessoriosHtml = lerAcessorios(it).map((ac, i) => {
         const acTotal = ac.quantidade * ac.valor_unitario;
         return `<tr class="linha-acessorio">
-        <td class="col-center">${itemRef}.${i + 1}</td>
+        <td class="col-center">${itemRef}.${i + 1}</td>${/* 4.1 -> 4.1.1, 4.1.2 */''}
         <td class="acessorio-desc">${esc(ac.descricao)}</td>
         <td class="col-right">${esc(ac.quantidade)}</td>
         <td class="col-right">${esc(moedaBRL(ac.valor_unitario))}</td>

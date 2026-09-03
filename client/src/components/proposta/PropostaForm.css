@@ -879,3 +879,24 @@
     grid-template-columns: 1fr 60px 100px 32px;
   }
 }
+
+/* O R$ fica FORA do input, colado nele: dentro do campo ele seria selecionável junto com o
+   valor e atrapalharia a digitação, que aqui entra por centavos. */
+.proposta-form-acessorio-moeda {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.proposta-form-acessorio-moeda > span {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gmp-text-light, #94a3b8);
+}
+
+.proposta-form-acessorio-moeda .proposta-form-acessorio-valor {
+  flex: 1 1 auto;
+  min-width: 0;
+}

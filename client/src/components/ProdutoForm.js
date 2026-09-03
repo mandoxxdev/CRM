@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import api from '../services/api';
+import { formatarMoedaBR, digitadoParaValor } from '../utils/moeda';
 import { FiSave, FiX, FiCheck, FiInfo, FiCheckCircle, FiAlertCircle, FiSliders } from 'react-icons/fi';
 import './ProdutoForm.css';
 
@@ -430,15 +431,10 @@ const ProdutoForm = () => {
   // O estado guarda o NUMERO cru (ex.: "102308.91"); a exibicao e formatada.
   // Digitacao estilo caixa: os digitos entram pela direita e os dois ultimos sao os
   // centavos, entao "10230891" vira 102.308,91 sem o usuario posicionar a virgula.
-  const formatarMoedaBR = (valor) => {
-    const n = Number(valor);
-    if (valor === '' || valor == null || !isFinite(n)) return '';
-    return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  };
+  // A máscara mora em utils/moeda.js desde que o campo de valor dos acessórios da proposta
+  // passou a precisar do mesmo comportamento — uma implementação, dois usos.
   const handlePrecoBaseChange = (e) => {
-    const digitos = String(e.target.value).replace(/\D/g, '');
-    const numero = digitos ? String(Number(digitos) / 100) : '';
-    setFormData((prev) => ({ ...prev, preco_base: numero }));
+    setFormData((prev) => ({ ...prev, preco_base: digitadoParaValor(e.target.value) }));
   };
 
   const handleChange = (e) => {

@@ -16,6 +16,7 @@ import {
   STATUS_EXIGE_MOTIVO
 } from '../../constants/propostaComercial';
 import { nomeArquivoPdfProposta } from '../../utils/nomeArquivoPdf';
+import { formatarMoedaBR, digitadoParaValor } from '../../utils/moeda';
 import { lerAcessoriosParaEdicao, totalAcessoriosDosItens, serializarAcessorios } from '../../utils/acessoriosItem';
 import './PropostaForm.css';
 
@@ -244,7 +245,12 @@ export default function PropostaForm() {
             regiao_busca: i.regiao_busca ?? '',
             manual,
             preco_tabela: precoTabela,
-            desconto_percentual: 0
+            desconto_percentual: 0,
+            // Sem isto, reabrir a proposta traria os itens sem os acessórios na tela — e o
+            // save seguinte mandaria '[]', apagando de verdade o que estava gravado. Este
+            // mapeamento monta o item campo a campo, então todo campo novo precisa entrar
+            // aqui explicitamente.
+            acessorios: lerAcessoriosParaEdicao(i)
           };
         }));
       })
@@ -916,15 +922,18 @@ export default function PropostaForm() {
                               onChange={(e) => updateAcessorio(idx, acIdx, 'quantidade', e.target.value)}
                               className="proposta-form-acessorio-qtd"
                             />
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              placeholder="Valor unit."
-                              value={ac.valor_unitario ?? ''}
-                              onChange={(e) => updateAcessorio(idx, acIdx, 'valor_unitario', e.target.value)}
-                              className="proposta-form-acessorio-valor"
-                            />
+                            <div className="proposta-form-acessorio-moeda">
+                              <span aria-hidden="true">R$</span>
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                placeholder="0,00"
+                                value={formatarMoedaBR(ac.valor_unitario)}
+                                onChange={(e) => updateAcessorio(idx, acIdx, 'valor_unitario', digitadoParaValor(e.target.value))}
+                                className="proposta-form-acessorio-valor"
+                                aria-label="Valor unitário do acessório"
+                              />
+                            </div>
                             <button
                               type="button"
                               className="proposta-form-acessorio-remover"

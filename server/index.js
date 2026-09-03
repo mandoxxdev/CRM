@@ -9699,12 +9699,17 @@ app.get('/api/propostas/:id/premium', (req, res) => {
         const itensArray = Array.isArray(itens) ? itens : [];
         
         // Calcular subtotal somando todos os itens
+        //
+        // Os ACESSÓRIOS entram aqui também. Este é o total do PREVIEW, e o do PDF é montado
+        // noutro ponto do arquivo: são dois cálculos para a mesma conta, e foi por isso que
+        // o preview saiu somando só os equipamentos enquanto a tabela já listava os
+        // acessórios. Mexeu num, mexa no outro — os dois usam totalAcessoriosDosItens.
         const subtotal = itensArray.reduce((sum, item) => {
           const qtd = parseFloat(item.quantidade) || 1;
-          const preco = parseFloat(item.valor_unitario) || 
+          const preco = parseFloat(item.valor_unitario) ||
                        parseFloat(item.preco_base) || 0;
           return sum + (qtd * preco);
-        }, 0);
+        }, 0) + totalAcessoriosDosItens(itensArray);
         
         // Calcular ICMS e IPI
         const icms = itensArray.reduce((sum, item) => {
