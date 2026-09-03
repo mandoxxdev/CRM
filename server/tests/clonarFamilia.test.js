@@ -30,7 +30,14 @@ const { resolveJwtSecret } = require('../services/runtimeSecrets');
 const PORTA = 5123;
 const RAIZ = path.join(__dirname, '..');
 const BANCO = path.join(RAIZ, 'data', 'database.sqlite');
+// O diretorio vem de config/paths, nao montado a mao: o real e data/uploads/familias-produtos
+// (dentro de PERSISTENT_DATA_DIR), e existe TAMBEM um server/uploads/familias-produtos legado.
+// Escrevendo no diretorio errado o teste passa sem provar nada - foi o que aconteceu na
+// primeira versao desta secao.
+const DIR_UPLOADS = require('../config/paths').uploadsFamiliasDir;
 const MARCA = 'ZZTESTE-CLONE';
+const FOTO_ORIGEM = 'zzteste-clone-foto.png';
+const ESQ_ORIGEM = 'zzteste-clone-esq.png';
 
 let ok = 0, total = 0;
 const t = (nome, fn) => {
@@ -71,11 +78,23 @@ function pedir(caminho, token, corpo) {
 const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function limpar() {
-  const familias = await all('SELECT id FROM familias_produto WHERE nome LIKE ?', [MARCA + '%']);
+  const familias = await all('SELECT id, foto, esquematico FROM familias_produto WHERE nome LIKE ?', [MARCA + '%']);
+  const apagar = (arquivo) => {
+    if (!arquivo) return;
+    try {
+      const caminho = path.join(DIR_UPLOADS, arquivo);
+      if (fs.existsSync(caminho)) fs.unlinkSync(caminho);
+    } catch (_) { /* nao e motivo para derrubar a limpeza */ }
+  };
   for (const f of familias) {
     await run('DELETE FROM familia_variavel_opcoes WHERE familia_id = ?', [f.id]);
     await run('DELETE FROM familia_variaveis WHERE familia_id = ?', [f.id]);
+    // Inclui os arquivos que o clone duplicou e a foto trocada no meio do teste.
+    apagar(f.foto);
+    apagar(f.esquematico);
   }
+  apagar(FOTO_ORIGEM);
+  apagar(ESQ_ORIGEM);
   await run('DELETE FROM familias_produto WHERE nome LIKE ?', [MARCA + '%']);
   await run('DELETE FROM usuarios WHERE id IN (9101, 9102)');
 }
@@ -85,11 +104,17 @@ let servidor = null;
 (async () => {
   await limpar();
 
+  // Arquivos DE VERDADE no disco: o clone duplica o arquivo, entao sem eles a copia nao
+  // teria o que copiar e o teste passaria por engano.
+  if (!fs.existsSync(DIR_UPLOADS)) fs.mkdirSync(DIR_UPLOADS, { recursive: true });
+  fs.writeFileSync(path.join(DIR_UPLOADS, FOTO_ORIGEM), Buffer.from('foto da origem'));
+  fs.writeFileSync(path.join(DIR_UPLOADS, ESQ_ORIGEM), Buffer.from('esquematico da origem'));
+
   // --- origem, com configuracao para o clone ter o que copiar ---
   const origem = await run(
     `INSERT INTO familias_produto (nome, foto, ordem, ativo, marcadores_vista, grupo_id, codigo, esquematico, clausulas_modelo_id)
-     VALUES (?, 'foto-origem.png', 7, 1, 'vista-lateral', 3, 990, 'esq-origem.png', 2)`,
-    [MARCA + ' ORIGEM']
+     VALUES (?, ?, 7, 1, 'vista-lateral', 3, 990, ?, 2)`,
+    [MARCA + ' ORIGEM', FOTO_ORIGEM, ESQ_ORIGEM]
   );
   const origemId = origem.lastID;
   for (const [chave, ordem] of [['diametro', 0], ['motor', 1], ['tensao', 2]]) {
@@ -145,8 +170,8 @@ let servidor = null;
   t('admin consegue clonar', () => assert.strictEqual(r.status, 200, JSON.stringify(r.body)));
   const clone = await get('SELECT * FROM familias_produto WHERE nome = ?', [MARCA + ' CLONE']);
   t('a nova familia existe', () => assert(clone, 'clone nao encontrado'));
-  t('foto veio junto', () => assert.strictEqual(clone.foto, 'foto-origem.png'));
-  t('esquematico veio junto', () => assert.strictEqual(clone.esquematico, 'esq-origem.png'));
+  t('a foto veio junto', () => assert(clone.foto, 'clone ficou sem foto'));
+  t('o esquematico veio junto', () => assert(clone.esquematico, 'clone ficou sem esquematico'));
   t('grupo veio junto', () => assert.strictEqual(clone.grupo_id, 3));
   t('marcadores da vista vieram junto', () => assert.strictEqual(clone.marcadores_vista, 'vista-lateral'));
   t('modelo de contrato veio junto', () => assert.strictEqual(clone.clausulas_modelo_id, 2));
@@ -172,6 +197,31 @@ let servidor = null;
     assert.strictEqual(r.body.opcoes_copiadas, 4);
     assert.strictEqual(r.body.clonada_de, MARCA + ' ORIGEM');
   });
+
+  console.log('\n[imagem: cada familia com o SEU arquivo]');
+  // Esta secao existe por causa de um bug que chegou na mao do usuario: a primeira versao do
+  // clone compartilhava o caminho do arquivo, ele trocou a foto da copia e a ORIGINAL ficou
+  // com imagem quebrada - a rota de upload apaga o arquivo antigo, que era o mesmo arquivo.
+  t('o clone NAO aponta para o arquivo da origem',
+    () => assert.notStrictEqual(clone.foto, FOTO_ORIGEM));
+  t('o esquematico do clone tambem e proprio',
+    () => assert.notStrictEqual(clone.esquematico, ESQ_ORIGEM));
+  t('o arquivo duplicado existe no disco',
+    () => assert(fs.existsSync(path.join(DIR_UPLOADS, clone.foto)), 'arquivo do clone nao foi criado'));
+  t('e tem o mesmo conteudo da origem', () => assert.strictEqual(
+    fs.readFileSync(path.join(DIR_UPLOADS, clone.foto), 'utf8'), 'foto da origem'));
+
+  // A REGRESSAO PROPRIAMENTE DITA: trocar a foto do clone pela rota de verdade e conferir
+  // que a original continua com a imagem dela.
+  const pngMinimo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  const troca = await pedir(`/api/familias/${clone.id}/foto-base64`, tokenAdmin, { foto_base64: pngMinimo });
+  t('trocar a foto do clone funciona', () => assert.strictEqual(troca.status, 200, JSON.stringify(troca.body)));
+  t('A FOTO DA ORIGEM CONTINUA NO DISCO (era o bug)',
+    () => assert(fs.existsSync(path.join(DIR_UPLOADS, FOTO_ORIGEM)),
+      'a troca de foto do clone apagou o arquivo que a origem usa'));
+  const origemDepois = await get('SELECT foto FROM familias_produto WHERE id = ?', [origemId]);
+  t('e a origem continua apontando para ela',
+    () => assert.strictEqual(origemDepois.foto, FOTO_ORIGEM));
 
   console.log('\n[independencia: mexer no clone nao afeta a origem]');
   await run('UPDATE familia_variaveis SET ativo = 0 WHERE familia_id = ? AND variavel_chave = ?', [clone.id, 'motor']);

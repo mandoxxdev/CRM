@@ -4835,9 +4835,12 @@ app.delete('/api/familias/:id', authenticateToken, (req, res) => {
 // produto exigiria inventar codigo novo, e chutar numeracao de catalogo e pior do que deixar
 // o cadastro para quem sabe qual e o codigo certo.
 //
-// A foto e o esquematico sao COMPARTILHADOS (mesmo caminho de arquivo), nao copiados. E
-// seguro porque a exclusao de familia e logica (ativo = 0) e nunca apaga o arquivo; e trocar
-// a foto de uma delas grava um arquivo novo, sem mexer no da outra.
+// A foto e o esquematico sao DUPLICADOS EM DISCO, cada familia com o seu arquivo.
+//
+// A primeira versao compartilhava o caminho, e quebrou na mao do usuario: ele clonou, trocou
+// a foto da copia, e a ORIGINAL ficou com imagem quebrada. Motivo - a rota de upload apaga o
+// arquivo antigo, e o antigo era o arquivo que a original ainda usava. Eu tinha afirmado que
+// compartilhar era seguro sem conferir a rota de upload; era falso.
 // SÓ ADMIN, por pedido do usuario. A checagem mora AQUI, nao so no botao: esconder o botao
 // e escolha de interface, nao permissao - a rota continua alcancavel por quem chamar a API
 // direto. O front esconde para nao oferecer o que nao pode; o servidor e quem recusa.
@@ -4868,12 +4871,31 @@ app.post('/api/familias/:id/clonar', authenticateToken, (req, res) => {
         if (errCod) return res.status(500).json({ error: errCod.message });
         var codigo = linhaCod && linhaCod.proximo != null ? linhaCod.proximo : 10;
 
+        // Cada familia com o SEU arquivo. Se a copia falhar, a nova familia fica sem aquela
+        // imagem - o cadastro continua valendo e o usuario sobe outra foto; melhor do que
+        // apontar para um arquivo de terceiro.
+        var duplicarImagem = function (arquivo) {
+          if (!arquivo) return null;
+          try {
+            var origemCaminho = path.join(uploadsFamiliasDir, arquivo);
+            if (!fs.existsSync(origemCaminho)) return null;
+            var ext = path.extname(arquivo);
+            var novoNome = 'familia_clone_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) + ext;
+            fs.copyFileSync(origemCaminho, path.join(uploadsFamiliasDir, novoNome));
+            return novoNome;
+          } catch (_) {
+            return null;
+          }
+        };
+        var fotoClone = duplicarImagem(origem.foto);
+        var esquematicoClone = duplicarImagem(origem.esquematico);
+
         db.run(
           `INSERT INTO familias_produto
              (nome, foto, ordem, ativo, marcadores_vista, grupo_id, codigo, esquematico, clausulas_modelo_id)
            VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?)`,
-          [nome, origem.foto, origem.ordem, origem.marcadores_vista, origem.grupo_id, codigo,
-           origem.esquematico, origem.clausulas_modelo_id],
+          [nome, fotoClone, origem.ordem, origem.marcadores_vista, origem.grupo_id, codigo,
+           esquematicoClone, origem.clausulas_modelo_id],
           function (errIns) {
             if (errIns) {
               if (errIns.message && errIns.message.indexOf('UNIQUE') !== -1) {
@@ -4923,6 +4945,36 @@ app.post('/api/familias/:id/clonar', authenticateToken, (req, res) => {
   });
 });
 
+// Apaga o arquivo antigo de imagem de uma familia SOMENTE se ninguem mais apontar para ele.
+//
+// Antes isto era um unlinkSync direto, em quatro rotas, e quebrou de verdade: o clone de
+// familia nascia apontando para o MESMO arquivo da origem, entao trocar a foto da copia
+// apagava do disco a foto que a original ainda usava - a original ficava com imagem
+// quebrada. A causa foi corrigida (o clone agora duplica o arquivo), mas a trava fica aqui
+// porque protege tambem as familias que ja foram clonadas antes da correcao, e qualquer
+// outro caminho que venha a compartilhar arquivo.
+//
+// A contagem roda DEPOIS do UPDATE que troca a coluna, entao qualquer referencia que sobrar
+// e de outra familia - ou da outra coluna desta mesma, no caso de foto e esquematico
+// apontarem para o mesmo arquivo. Nao apaga em nenhum dos dois casos.
+function apagarArquivoDeFamiliaSeOrfao(arquivo, pronto) {
+  if (!arquivo) return pronto();
+  db.get(
+    'SELECT COUNT(*) AS n FROM familias_produto WHERE foto = ? OR esquematico = ?',
+    [arquivo, arquivo],
+    function (err, linha) {
+      // Na duvida, NAO apaga: arquivo orfao ocupa disco, arquivo apagado por engano vira
+      // imagem quebrada na tela do usuario.
+      if (err || (linha && linha.n > 0)) return pronto();
+      try {
+        var caminho = path.join(uploadsFamiliasDir, arquivo);
+        if (fs.existsSync(caminho)) fs.unlinkSync(caminho);
+      } catch (_) { /* arquivo ja sumiu, ou sem permissao: nao e motivo para falhar o upload */ }
+      pronto();
+    }
+  );
+}
+
 app.post('/api/familias/:id/foto', authenticateToken, uploadFamilia.single('foto'), (req, res) => {
   var id = req.params.id;
   if (!req.file || !req.file.filename) return res.status(400).json({ error: 'Nenhuma imagem enviada' });
@@ -4933,11 +4985,9 @@ app.post('/api/familias/:id/foto', authenticateToken, uploadFamilia.single('foto
     var oldFoto = familia.foto;
     db.run('UPDATE familias_produto SET foto = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [filename, id], function(updateErr) {
       if (updateErr) return res.status(500).json({ error: updateErr.message });
-      if (oldFoto) {
-        var oldPath = path.join(uploadsFamiliasDir, oldFoto);
-        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
-      }
-      res.json({ foto: filename, url: '/api/uploads/familias-produtos/' + filename });
+      apagarArquivoDeFamiliaSeOrfao(oldFoto, function () {
+        res.json({ foto: filename, url: '/api/uploads/familias-produtos/' + filename });
+      });
     });
   });
 });
@@ -4967,11 +5017,9 @@ app.post('/api/familias/:id/foto-base64', authenticateToken, (req, res) => {
         var oldFoto = familia.foto;
         db.run('UPDATE familias_produto SET foto = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [filename, id], function(updateErr) {
           if (updateErr) return res.status(500).json({ error: updateErr.message });
-          if (oldFoto) {
-            var oldPath = path.join(uploadsFamiliasDir, oldFoto);
-            if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
-          }
-          res.json({ foto: filename, url: '/api/uploads/familias-produtos/' + filename });
+          apagarArquivoDeFamiliaSeOrfao(oldFoto, function () {
+            res.json({ foto: filename, url: '/api/uploads/familias-produtos/' + filename });
+          });
         });
       });
     });
@@ -5021,11 +5069,9 @@ app.post('/api/familias/:id/esquematico', authenticateToken, uploadFamiliaEsquem
     var oldEsq = familia.esquematico;
     db.run('UPDATE familias_produto SET esquematico = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [filename, id], function(updateErr) {
       if (updateErr) return res.status(500).json({ error: updateErr.message });
-      if (oldEsq) {
-        var oldPath = path.join(uploadsFamiliasDir, oldEsq);
-        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
-      }
-      res.json({ esquematico: filename, url: '/api/uploads/familias-produtos/' + filename });
+      apagarArquivoDeFamiliaSeOrfao(oldEsq, function () {
+        res.json({ esquematico: filename, url: '/api/uploads/familias-produtos/' + filename });
+      });
     });
   });
 });
@@ -5059,11 +5105,9 @@ app.post('/api/familias/:id/esquematico-base64', authenticateToken, (req, res) =
         var oldEsq = familia.esquematico;
         db.run('UPDATE familias_produto SET esquematico = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [filename, id], function(updateErr) {
           if (updateErr) return res.status(500).json({ error: updateErr.message });
-          if (oldEsq) {
-            var oldPath = path.join(uploadsFamiliasDir, oldEsq);
-            if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
-          }
-          res.json({ esquematico: filename, url: '/api/uploads/familias-produtos/' + filename });
+          apagarArquivoDeFamiliaSeOrfao(oldEsq, function () {
+            res.json({ esquematico: filename, url: '/api/uploads/familias-produtos/' + filename });
+          });
         });
       });
     });
