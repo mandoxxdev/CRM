@@ -15,6 +15,7 @@ import {
   FAMILIAS_PRODUTO_PADRAO,
   STATUS_EXIGE_MOTIVO
 } from '../../constants/propostaComercial';
+import { nomeArquivoPdfProposta } from '../../utils/nomeArquivoPdf';
 import './PropostaForm.css';
 
 const TIPOS = [
@@ -434,11 +435,13 @@ export default function PropostaForm() {
         : 'Envie a proposta para gerar o PDF.');
       return;
     }
-    api.get(`/propostas/${id}/pdf`, { responseType: 'blob' }).then(({ data }) => {
-      const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
+    api.get(`/propostas/${id}/pdf`, { responseType: 'blob' }).then((res) => {
+      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
       const a = document.createElement('a');
       a.href = url;
-      a.download = `proposta-${id}.pdf`;
+      // Nome vindo do Content-Disposition (numero + cliente). Aqui o fallback era so o id,
+      // entao este era o download com o nome mais pobre dos tres.
+      a.download = nomeArquivoPdfProposta(res, form.numero_proposta, id);
       a.click();
       URL.revokeObjectURL(url);
       toast.success('PDF baixado.');

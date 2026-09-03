@@ -401,6 +401,30 @@ function isAdminUser(user) {
   return String(user?.role || '').toLowerCase() === 'admin';
 }
 
+/**
+ * Nome do arquivo do PDF da proposta: "proposta-<numero> - <CLIENTE>.pdf".
+ *
+ * Pedido do usuario: so o numero ("proposta-127-01-MH-2026-REV00") fica generico demais na
+ * pasta de downloads, onde as propostas se acumulam e todas se parecem.
+ *
+ * ESTA FUNCAO E A FONTE UNICA DO NOME. O cliente nao remonta a string: ele le o
+ * Content-Disposition da resposta. Antes eram cinco lugares montando o mesmo nome, cada um
+ * com uma sanitizacao diferente - e o do preview ja divergia do servidor.
+ */
+function nomeArquivoPdfProposta(proposta, idFallback) {
+  var p = proposta || {};
+  // Windows recusa \ / : * ? " < > | em nome de arquivo, e o Content-Disposition quebra com
+  // aspas e quebra de linha. Fora isso, deixa como esta: acento em nome de cliente e normal.
+  var limpar = (v) => String(v == null ? '' : v).replace(/[\\/:*?"<>|\r\n]+/g, '-').trim();
+  var numero = limpar(p.numero_proposta || idFallback || 'sem-numero');
+  // razao_social e o nome do contrato; nome_fantasia so entra se a razao estiver vazia.
+  var cliente = limpar(p.razao_social || p.nome_fantasia || '');
+  // Nome de arquivo tem limite (255 no Windows) e razao social pode ser enorme, entao o
+  // pedaco do cliente e cortado - o numero da proposta e que identifica, e ele vem inteiro.
+  if (cliente.length > 60) cliente = cliente.slice(0, 60).trim();
+  return cliente ? `proposta-${numero} - ${cliente}.pdf` : `proposta-${numero}.pdf`;
+}
+
 function podeInativarProposta(user, proposta) {
   if (isAdminUser(user)) return true;
   return proposta.status === 'rascunho';
@@ -10247,7 +10271,7 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
     }
     
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="proposta-${(proposta.numero_proposta || id).replace(/[/\\]/g, '-')}.pdf"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${nomeArquivoPdfProposta(proposta, id)}"`);
     res.end(pdfBuffer);
     
   } catch (error) {

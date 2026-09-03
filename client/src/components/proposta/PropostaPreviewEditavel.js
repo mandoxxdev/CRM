@@ -16,6 +16,7 @@ import {
   renumerarClausulas,
   ehClausulaNovaVazia,
 } from './clausulasInlineEditor';
+import { nomeArquivoPdfProposta } from '../../utils/nomeArquivoPdf';
 import { aplicarMascaraNoNoEditavel } from '../../utils/telefoneContentEditable';
 import './PropostaPreviewEditavel.css';
 
@@ -1349,12 +1350,11 @@ export default function PropostaPreviewEditavel() {
       const url = URL.createObjectURL(res.data);
       const a = document.createElement('a');
       a.href = url;
-      // O servidor manda o nome certo no Content-Disposition, mas baixamos via blob:
-      // nesse caminho o navegador ignora o cabeçalho e usa o `download` daqui. Sanitiza
-      // os caracteres que o Windows não aceita em nome de arquivo.
-      a.download = numeroProposta
-        ? `proposta-${numeroProposta.replace(/[\\/:*?"<>|]/g, '-')}.pdf`
-        : `proposta-${id}.pdf`;
+      // O servidor manda o nome certo no Content-Disposition — incluindo o nome do cliente —
+      // mas baixamos via blob, e nesse caminho o navegador ignora o cabeçalho e usa o
+      // `download` daqui. Então lemos o cabeçalho na mão em vez de remontar a string: antes
+      // este trecho montava um nome próprio e já tinha divergido do servidor.
+      a.download = nomeArquivoPdfProposta(res, numeroProposta, id);
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { nomeArquivoPdfProposta } from '../../utils/nomeArquivoPdf';
 import { toast } from 'react-toastify';
 import { FiArrowLeft, FiEye, FiDownload, FiEdit, FiSend, FiCheck, FiX, FiCopy, FiRotateCcw, FiClock, FiTrash2, FiFileText, FiUpload } from 'react-icons/fi';
 import { formatDateBR, formatDateTimeBR, isPropostaInativa } from '../../utils/formatDate';
@@ -112,11 +113,13 @@ export default function PropostaDetalhe() {
     }
     setPdfLoading(true);
     try {
-      const { data } = await api.get(`/propostas/${id}/pdf`, { responseType: 'blob' });
-      const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
+      const res = await api.get(`/propostas/${id}/pdf`, { responseType: 'blob' });
+      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
       const a = document.createElement('a');
       a.href = url;
-      a.download = `proposta-${proposta?.numero_proposta || id}.pdf`;
+      // Nome vem do Content-Disposition, que o servidor monta com numero + cliente. O
+      // download por blob ignora o cabecalho, por isso lemos ele na mao.
+      a.download = nomeArquivoPdfProposta(res, proposta?.numero_proposta, id);
       a.click();
       URL.revokeObjectURL(url);
       toast.success('PDF baixado.');
