@@ -757,3 +757,125 @@
   border-color: var(--gmp-primary);
   color: var(--gmp-primary);
 }
+
+/* ===== Acessórios do item =====
+   O mesmo equipamento sai com combinações demais para virar cadastro de produto, então o
+   vendedor escreve o acessório e o preço aqui, dentro do item. Fica visualmente contido no
+   cartão — recuado e com fundo próprio — para ler como parte daquele item, e não como uma
+   segunda lista de itens da proposta. */
+
+.proposta-form-acessorios {
+  margin-top: 12px;
+  padding: 10px 12px 12px;
+  border-top: 1px dashed var(--gmp-border, #e2e8f0);
+}
+
+.proposta-form-acessorios-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.proposta-form-acessorios-titulo {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gmp-text-light, #64748b);
+}
+
+/* O total dos acessórios ao lado do título: sem ele o vendedor só descobre quanto somou
+   olhando o subtotal geral e fazendo a conta de cabeça. */
+.proposta-form-acessorios-titulo em {
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--gmp-primary, #0066cc);
+}
+
+.proposta-form-acessorio-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border: 1px solid var(--gmp-border, #e2e8f0);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--gmp-text, #1e293b);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.proposta-form-acessorio-add:hover {
+  border-color: var(--gmp-primary, #0066cc);
+  color: var(--gmp-primary, #0066cc);
+}
+
+.proposta-form-acessorios-vazio {
+  margin: 0;
+  font-size: 12px;
+  color: var(--gmp-text-light, #94a3b8);
+}
+
+/* Larguras fixas em qtd/valor e 1fr na descrição: o nome do acessório é o campo que precisa
+   de espaço, e as colunas ficam alinhadas entre as linhas. */
+.proposta-form-acessorio-linha {
+  display: grid;
+  grid-template-columns: 1fr 72px 120px 32px;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.proposta-form-acessorio-linha input {
+  padding: 7px 9px;
+  border: 1px solid var(--gmp-border, #e2e8f0);
+  border-radius: 7px;
+  background: var(--gmp-surface, #fff);
+  color: var(--gmp-text, #1e293b);
+  font-size: 13px;
+  font-family: inherit;
+  min-width: 0;
+}
+
+.proposta-form-acessorio-linha input:focus {
+  outline: 2px solid var(--gmp-primary, #0066cc);
+  outline-offset: -1px;
+}
+
+.proposta-form-acessorio-qtd,
+.proposta-form-acessorio-valor {
+  text-align: right;
+}
+
+.proposta-form-acessorio-remover {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--gmp-text-light, #94a3b8);
+  cursor: pointer;
+}
+
+.proposta-form-acessorio-remover:hover {
+  border-color: #fca5a5;
+  color: #dc2626;
+}
+
+@media (max-width: 640px) {
+  .proposta-form-acessorio-linha {
+    grid-template-columns: 1fr 60px 100px 32px;
+  }
+}

@@ -16,6 +16,7 @@ import {
   STATUS_EXIGE_MOTIVO
 } from '../../constants/propostaComercial';
 import { nomeArquivoPdfProposta } from '../../utils/nomeArquivoPdf';
+import { lerAcessoriosParaEdicao, totalAcessoriosDosItens, serializarAcessorios } from '../../utils/acessoriosItem';
 import './PropostaForm.css';
 
 const TIPOS = [
@@ -114,8 +115,10 @@ export default function PropostaForm() {
   const [descontoModalOpen, setDescontoModalOpen] = useState(false);
   const [descontoEditValor, setDescontoEditValor] = useState('');
 
+  // Os acessórios entram no subtotal porque são linhas próprias da tabela de preços, com
+  // valor próprio — o mesmo cálculo que o servidor faz ao montar o documento.
   const subtotalItens = useMemo(
-    () => itens.reduce((s, i) => s + (Number(i.valor_total) || 0), 0),
+    () => itens.reduce((s, i) => s + (Number(i.valor_total) || 0), 0) + totalAcessoriosDosItens(itens),
     [itens]
   );
   const descontoPercentual = Number(form.margem_desconto) || 0;
@@ -151,7 +154,10 @@ export default function PropostaForm() {
   }, []);
 
   const recalcTotal = useCallback(() => {
-    const t = itens.reduce((s, i) => s + (Number(i.valor_total) || 0), 0);
+    // Os acessórios contam aqui também: este valor_total é o que vai para propostas e o que
+    // o dashboard soma como valor aprovado. Sem eles, uma proposta fechada apareceria nos
+    // números por menos do que foi vendida.
+    const t = itens.reduce((s, i) => s + (Number(i.valor_total) || 0), 0) + totalAcessoriosDosItens(itens);
     setForm((f) => ({ ...f, valor_total: t }));
   }, [itens]);
 
@@ -275,6 +281,28 @@ export default function PropostaForm() {
     setDescontoModalOpen(true);
   };
 
+  // ACESSORIOS DO ITEM. O mesmo equipamento sai com combinacoes demais para virar
+  // cadastro de produto, entao o vendedor escreve o acessorio e o preco aqui na proposta.
+  // Ficam no proprio item (campo `acessorios`, JSON) porque proposta_itens e apagada e
+  // reinserida a cada save - guardar em tabela filha por item_id perderia o vinculo.
+  const atualizarAcessorios = (idx, lista) =>
+    setItens((prev) => prev.map((item, i) => (i !== idx ? item : { ...item, acessorios: lista })));
+
+  const addAcessorio = (idx) => {
+    const atuais = lerAcessoriosParaEdicao(itens[idx]);
+    atualizarAcessorios(idx, [...atuais, { descricao: '', quantidade: 1, valor_unitario: 0 }]);
+  };
+
+  const updateAcessorio = (idx, acIdx, campo, valor) => {
+    const atuais = lerAcessoriosParaEdicao(itens[idx]);
+    atualizarAcessorios(idx, atuais.map((ac, i) => (i !== acIdx ? ac : { ...ac, [campo]: valor })));
+  };
+
+  const removeAcessorio = (idx, acIdx) => {
+    const atuais = lerAcessoriosParaEdicao(itens[idx]);
+    atualizarAcessorios(idx, atuais.filter((_, i) => i !== acIdx));
+  };
+
   const addManualItem = () => setItens((prev) => [...prev, emptyItem()]);
   const removeItem = (idx) => setItens((prev) => prev.filter((_, i) => i !== idx));
 
@@ -365,7 +393,12 @@ export default function PropostaForm() {
           familia_produto: i.familia_produto || null,
           regiao_busca: i.regiao_busca || null,
           desconto_percentual: 0,
-          preco_tabela: i.preco_tabela != null ? Number(i.preco_tabela) : null
+          preco_tabela: i.preco_tabela != null ? Number(i.preco_tabela) : null,
+          // Normaliza na saída: descarta linha sem descrição (o vendedor clicou em adicionar
+          // e desistiu) e converte os campos numéricos, que enquanto se digita são texto.
+          // Vai SEMPRE, inclusive '[]' — mandar vazio faria a mesclagem do servidor
+          // "restaurar" acessórios que ele acabou de apagar.
+          acessorios: serializarAcessorios(i.acessorios)
         }))
       };
       if (!payload.numero_proposta || payload.numero_proposta === 'Gerando...' || !String(payload.numero_proposta).trim()) {
@@ -840,6 +873,69 @@ export default function PropostaForm() {
                           ))}
                         </select>
                       </label>
+                    </div>
+
+                    {/* ACESSORIOS: o mesmo equipamento sai com combinacoes demais para
+                        virar cadastro de produto, entao entram escritos aqui, com preco. */}
+                    <div className="proposta-form-acessorios">
+                      <div className="proposta-form-acessorios-topo">
+                        <span className="proposta-form-acessorios-titulo">
+                          Acessórios
+                          {lerAcessoriosParaEdicao(item).length > 0 && (
+                            <em>{formatMoney(totalAcessoriosDosItens([item]))}</em>
+                          )}
+                        </span>
+                        <button
+                          type="button"
+                          className="proposta-form-acessorio-add"
+                          onClick={() => addAcessorio(idx)}
+                        >
+                          <FiPlus /> Acessório
+                        </button>
+                      </div>
+                      {lerAcessoriosParaEdicao(item).length === 0 ? (
+                        <p className="proposta-form-acessorios-vazio">
+                          Nenhum acessório. Use para itens que não valem cadastro próprio.
+                        </p>
+                      ) : (
+                        lerAcessoriosParaEdicao(item).map((ac, acIdx) => (
+                          <div key={acIdx} className="proposta-form-acessorio-linha">
+                            <input
+                              type="text"
+                              placeholder="Descrição do acessório"
+                              value={ac.descricao || ''}
+                              onChange={(e) => updateAcessorio(idx, acIdx, 'descricao', e.target.value)}
+                              className="proposta-form-acessorio-desc"
+                            />
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
+                              placeholder="Qtd"
+                              value={ac.quantidade ?? ''}
+                              onChange={(e) => updateAcessorio(idx, acIdx, 'quantidade', e.target.value)}
+                              className="proposta-form-acessorio-qtd"
+                            />
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              placeholder="Valor unit."
+                              value={ac.valor_unitario ?? ''}
+                              onChange={(e) => updateAcessorio(idx, acIdx, 'valor_unitario', e.target.value)}
+                              className="proposta-form-acessorio-valor"
+                            />
+                            <button
+                              type="button"
+                              className="proposta-form-acessorio-remover"
+                              title="Remover acessório"
+                              onClick={() => removeAcessorio(idx, acIdx)}
+                            >
+                              <FiTrash2 />
+                            </button>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
                 </div>

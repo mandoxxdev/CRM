@@ -83,6 +83,14 @@ const CAMPOS_PRESERVAR = [
   // Precisa estar AQUI: o formulário não envia este campo, e sem preservá-lo o salvamento
   // da proposta (que apaga e reinsere todos os itens) apagaria o texto digitado.
   'descricao_tabela',
+  // Acessórios do item (JSON). Precisa estar aqui pelo mesmo motivo do campo acima: o
+  // salvamento apaga e reinsere todos os itens, então qualquer caminho que salve sem mandar
+  // os acessórios os apagaria.
+  //
+  // ATENÇÃO ao apagar acessórios: a restauração abaixo só age quando o payload manda null ou
+  // string vazia. Por isso o servidor grava SEMPRE JSON, inclusive '[]' — se gravasse ''
+  // para lista vazia, apagar todos os acessórios de um item seria desfeito no save seguinte.
+  'acessorios',
 ];
 
 function mesclarItensPreservandoCampos(itensAtuais, itensNovos) {

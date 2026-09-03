@@ -210,6 +210,7 @@ const { gerarPDFProposta } = require('./gerarPDFProposta');
 const { getPropostaEquipamentosOnlyHTML } = require('./condicoesNano4You');
 const { getClausulasDefault, resolverClausulasParaPreview } = require('./clausulasDefault');
 const { diffItensParaLog, nomeDe, resumoLado, mesclarItensPreservandoCampos } = require('./propostaItensDiff');
+const { lerAcessorios, totalAcessoriosDosItens, serializarAcessorios } = require('./acessoriosItem');
 const { resolverCamposCustomizacao } = require('./propostaCustomizacoes');
 const propostaEngine = require('./propostaCompositionEngine');
 const {
@@ -1485,6 +1486,22 @@ function initializeDatabase(onReadyCallback) {
     const jaExiste = errDT && String(errDT.message || '').indexOf('duplicate column') !== -1;
     if (errDT && !jaExiste) console.error('❌ Erro ao adicionar descricao_tabela:', errDT.message);
     else if (!errDT) console.log('✅ Coluna descricao_tabela adicionada em proposta_itens');
+  });
+
+  // Acessorios do item, em JSON na propria linha do item.
+  //
+  // Pedido do usuario: o mesmo equipamento sai com combinacoes diferentes de acessorio, e
+  // nao da para cadastrar um produto para cada combinacao. Aqui o vendedor escreve o
+  // acessorio e o preco direto na proposta.
+  //
+  // JSON no item, e nao tabela filha com item_id, porque proposta_itens e APAGADA e
+  // reinserida a cada salvamento - o id do item troca sempre. Tabela filha perderia o
+  // vinculo, que foi o que aconteceu com as variaveis manuais. No item, os acessorios viajam
+  // junto com a linha e a mesclagem de CAMPOS_PRESERVAR ja cuida do resto.
+  db.run('ALTER TABLE proposta_itens ADD COLUMN acessorios TEXT', (errAc) => {
+    const jaExiste = errAc && String(errAc.message || '').indexOf('duplicate column') !== -1;
+    if (errAc && !jaExiste) console.error('❌ Erro ao adicionar acessorios:', errAc.message);
+    else if (!errAc) console.log('✅ Coluna acessorios adicionada em proposta_itens');
   });
 
   db.run('ALTER TABLE familias_produto ADD COLUMN clausulas_modelo_id INTEGER', (errFam) => {
@@ -8456,8 +8473,8 @@ app.post('/api/propostas', authenticateToken, (req, res) => {
               `INSERT INTO proposta_itens (proposta_id, descricao, quantidade, unidade,
                 valor_unitario, valor_total, codigo_produto, familia_produto, regiao_busca,
                 tag, modelo, categoria, descricao_resumida, descritivo_tecnico, dados_processo,
-                materiais_construtivos, utilidades_requeridas, opcionais, exclusoes, prazo_individual, numero_item, desconto_percentual, preco_tabela)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                materiais_construtivos, utilidades_requeridas, opcionais, exclusoes, prazo_individual, numero_item, desconto_percentual, preco_tabela, acessorios)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
             );
 
             itens.forEach((item, index) => {
@@ -8485,7 +8502,8 @@ app.post('/api/propostas', authenticateToken, (req, res) => {
                   item.prazo_individual || null,
                   item.numero_item != null ? item.numero_item : (index + 1),
                 Number(item.desconto_percentual) || 0,
-                (item.preco_tabela != null ? Number(item.preco_tabela) : null)
+                (item.preco_tabela != null ? Number(item.preco_tabela) : null),
+                serializarAcessorios(item.acessorios)
                 ]);
               } catch (itemErr) {
                 console.error(`❌ Erro ao inserir item ${index}:`, itemErr);
@@ -8809,8 +8827,8 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
                   `INSERT INTO proposta_itens (proposta_id, descricao, quantidade, unidade,
                     valor_unitario, valor_total, codigo_produto, familia_produto, regiao_busca,
                     tag, modelo, categoria, descricao_resumida, descritivo_tecnico, dados_processo,
-                    materiais_construtivos, utilidades_requeridas, opcionais, exclusoes, prazo_individual, numero_item, desconto_percentual, preco_tabela, descricao_tabela)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                    materiais_construtivos, utilidades_requeridas, opcionais, exclusoes, prazo_individual, numero_item, desconto_percentual, preco_tabela, descricao_tabela, acessorios)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
                 );
 
                 // Preserva campos que o formulário não envia (modelo, descritivo_tecnico,
@@ -8830,7 +8848,10 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
                   (item.preco_tabela != null ? Number(item.preco_tabela) : null),
                   // Vem da mesclagem (CAMPOS_PRESERVAR): o formulário não envia este campo,
                   // então sem grava-lo aqui o texto digitado no preview se perderia no save.
-                  (item.descricao_tabela != null ? item.descricao_tabela : null)
+                  (item.descricao_tabela != null ? item.descricao_tabela : null),
+                  // Sempre JSON, inclusive '[]'. Ver serializarAcessorios: string vazia faria
+                  // a mesclagem "restaurar" acessórios que o vendedor acabou de apagar.
+                  serializarAcessorios(item.acessorios)
                   ]);
                 });
 
@@ -9224,7 +9245,7 @@ app.post('/api/propostas/:id/clone', authenticateToken, (req, res) => {
           db.all('SELECT * FROM proposta_itens WHERE proposta_id = ?', [id], (errItens, itens) => {
             if (!errItens && itens && itens.length > 0) {
               const stmt = db.prepare(
-                `INSERT INTO proposta_itens (proposta_id, descricao, quantidade, unidade, valor_unitario, valor_total, codigo_produto, familia_produto, regiao_busca, tag, modelo, categoria, descricao_resumida, descritivo_tecnico, dados_processo, materiais_construtivos, utilidades_requeridas, opcionais, exclusoes, prazo_individual, numero_item, desconto_percentual, preco_tabela) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                `INSERT INTO proposta_itens (proposta_id, descricao, quantidade, unidade, valor_unitario, valor_total, codigo_produto, familia_produto, regiao_busca, tag, modelo, categoria, descricao_resumida, descritivo_tecnico, dados_processo, materiais_construtivos, utilidades_requeridas, opcionais, exclusoes, prazo_individual, numero_item, desconto_percentual, preco_tabela, descricao_tabela, acessorios) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
               );
               itens.forEach((item, idx) => {
                 stmt.run([
@@ -9236,7 +9257,11 @@ app.post('/api/propostas/:id/clone', authenticateToken, (req, res) => {
                   item.opcionais || null, item.exclusoes || null, item.prazo_individual || null,
                   item.numero_item != null ? item.numero_item : idx + 1,
                 Number(item.desconto_percentual) || 0,
-                (item.preco_tabela != null ? Number(item.preco_tabela) : null)
+                (item.preco_tabela != null ? Number(item.preco_tabela) : null),
+                // Clonar proposta tem que trazer o texto da tabela e os acessorios: sem eles
+                // a copia nasce mais pobre que a origem, e o vendedor redigita tudo.
+                (item.descricao_tabela != null ? item.descricao_tabela : null),
+                serializarAcessorios(item.acessorios)
                 ]);
               });
               stmt.finalize();
@@ -9961,7 +9986,9 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
       const qtd = parseFloat(item.quantidade) || 1;
       const preco = parseFloat(item.valor_unitario) || parseFloat(item.preco_base) || 0;
       return sum + (qtd * preco);
-    }, 0);
+      // Os acessórios entram logo abaixo, e não aqui dentro: eles são linhas próprias na
+      // tabela de preços, com quantidade e valor próprios, não parte do preço do equipamento.
+    }, 0) + totalAcessoriosDosItens(itensArray);
     const icms = itensArray.reduce((sum, item) => {
       const produto = item || {};
       const quantidade = parseFloat(item?.quantidade) || 1;

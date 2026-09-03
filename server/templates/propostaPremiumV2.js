@@ -9,6 +9,7 @@ const {
 } = require('../config/paths');
 const propostaEngine = require('../propostaCompositionEngine');
 const { getClausulasDefault, CLAUSULAS_INTRO, CLAUSULA_524_PRECO, CLAUSULA_524_CONDICAO, CLAUSULA_523_PRECO, CLAUSULA_523_CONDICAO } = require('../clausulasDefault');
+const { lerAcessorios } = require('../acessoriosItem');
 
 // Substitui placeholders (simples e avançados: {{#if}}, {{#each}}, etc.) — usa motor de composição
 function substituirPlaceholdersProposta(html, proposta, itens, totais) {
@@ -795,13 +796,26 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       const qtd = esc(Number(it.quantidade) || 1);
       const vUnitNum = Number(it.valor_unitario) || Number(it.preco_base) || 0;
       const vTotNum = Number(it.valor_total) || ((Number(it.quantidade) || 1) * vUnitNum);
+      // Acessórios: linhas próprias logo abaixo do equipamento, recuadas e numeradas como
+      // sub-itens (1.1, 1.2...). O vendedor os digita na proposta porque o mesmo equipamento
+      // sai com combinações demais para virar cadastro de produto.
+      const acessoriosHtml = lerAcessorios(it).map((ac, i) => {
+        const acTotal = ac.quantidade * ac.valor_unitario;
+        return `<tr class="linha-acessorio">
+        <td class="col-center">${itemRef}.${i + 1}</td>
+        <td class="acessorio-desc">${esc(ac.descricao)}</td>
+        <td class="col-right">${esc(ac.quantidade)}</td>
+        <td class="col-right">${esc(moedaBRL(ac.valor_unitario))}</td>
+        <td class="col-right">${esc(moedaBRL(acTotal))}</td>
+      </tr>`;
+      }).join('');
       return `<tr>
         <td class="col-center">${itemRef}</td>
         <td>${descHtml}</td>
         <td class="col-right">${qtd}</td>
         <td class="col-right">${esc(moedaBRL(vUnitNum))}</td>
         <td class="col-right">${esc(moedaBRL(vTotNum))}</td>
-      </tr>`;
+      </tr>${acessoriosHtml}`;
     }).join('');
 
     // ===== Helpers de cláusula compartilhados =====
@@ -1617,6 +1631,10 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       color: var(--blue-900);
     }
     .tech-desc { margin-top: 4px; font-size: 10pt; line-height: 1.15; color: var(--muted); text-align: justify; }
+    /* Acessório é sub-item do equipamento logo acima: o recuo e o corpo menor dizem isso sem
+       precisar de rótulo, e a numeração (1.1, 1.2) confirma a que item ele pertence. */
+    .linha-acessorio > td { font-size: 10pt; }
+    .acessorio-desc { padding-left: 18px; color: var(--muted); }
 
     /* Fotos avulsas: overlays em mm sobre a página (fora do fluxo — não afetam a
        paginação). O editor injeta os controles de arrastar/redimensionar/remover. */
