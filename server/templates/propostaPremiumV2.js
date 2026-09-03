@@ -816,27 +816,15 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       // contentEditable por este atributo). O PDF sai igual — lá o atributo é inerte.
       const idPersistencia = esc(it.id != null ? it.id : '');
       const nomeEditavel = `<span class="descricao-item-tabela" data-item-descricao="${idPersistencia}">${nome}</span>`;
-      // Os acessórios entram na DESCRIÇÃO, logo abaixo do nome do equipamento — pedido do
-      // usuário. Sem isso o preço da linha vinha inflado pelos acessórios e nada na tabela
-      // explicava o porquê: o cliente via "TACHO MÓVEL ... R$ 60.566,92" e não sabia o que
-      // estava incluso.
+      // A tabela de preços NAO lista os acessórios — pedido do usuário depois de ver o
+      // documento montado: "tire o acessório daqui, ele deve aparecer apenas no descritivo
+      // do item". A lista fica só na seção 4 (escopo), sob o mesmo número do item (4.1).
       //
-      // FORA do span editável, de propósito: o preview liga contentEditable pelo atributo
-      // data-item-descricao, e o vendedor edita ali o texto comercial do equipamento. Se a
-      // lista ficasse dentro, ela seria apagada na primeira edição do nome — e, pior,
-      // gravada como se fosse o texto digitado.
-      //
-      // Sem PREÇO por acessório: é a mesma razão de eles não terem mais linha própria.
-      const acessoriosDaLinha = lerAcessorios(it);
-      const acessoriosDescHtml = acessoriosDaLinha.length > 0
-        ? `<div class="acessorios-inclusos">Acessórios: ${acessoriosDaLinha.map((ac) => {
-            const nomeAc = esc(ac.descricao);
-            return ac.quantidade > 1 ? `${nomeAc} (${esc(ac.quantidade)}x)` : nomeAc;
-          }).join(' + ')}</div>`
-        : '';
+      // O PREÇO deles continua embutido no valor da linha: é a tabela que fecha o total, e
+      // era esse o pedido anterior — o cliente não deve somar acessório por acessório.
       const descHtml = descritivoTec
-        ? `${nomeEditavel}<div class="tech-desc">${descritivoTec}</div>${acessoriosDescHtml}`
-        : `${nomeEditavel}${acessoriosDescHtml}`;
+        ? `${nomeEditavel}<div class="tech-desc">${descritivoTec}</div>`
+        : `${nomeEditavel}`;
       const qtdNum = Number(it.quantidade) || 1;
       const qtd = esc(qtdNum);
       const vUnitBase = Number(it.valor_unitario) || Number(it.preco_base) || 0;
@@ -1673,9 +1661,6 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       color: var(--blue-900);
     }
     .tech-desc { margin-top: 4px; font-size: 10pt; line-height: 1.15; color: var(--muted); text-align: justify; }
-    /* Acessórios inclusos na linha da tabela: menor que o nome do equipamento, mas não
-       apagado como o descritivo técnico — é o que justifica o preço da linha. */
-    .acessorios-inclusos { margin-top: 4px; font-size: 10pt; line-height: 1.2; color: var(--blue-900); }
 
     /* Fotos avulsas: overlays em mm sobre a página (fora do fluxo — não afetam a
        paginação). O editor injeta os controles de arrastar/redimensionar/remover. */

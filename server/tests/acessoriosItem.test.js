@@ -241,33 +241,27 @@ t('nao sobrou calculo de subtotal de item sem os acessorios', () => {
     'ha ' + semAcessorios.length + ' subtotal(is) que ignoram os acessorios');
 });
 
-console.log('\n[descricao da tabela lista os acessorios]');
-// Sem isto o cliente via "TACHO MOVEL ... R$ 60.566,92" sem nada explicando o preco, ja que
-// o acessorio deixou de ter linha propria.
-t('a descricao do item cita os acessorios', () => {
+console.log('\n[a tabela de precos NAO lista os acessorios]');
+// O usuario viu o documento montado e mandou tirar: "tire o acessorio daqui, ele deve
+// aparecer apenas no descritivo do item, ex: 4.1". A lista fica so na secao 4; a tabela
+// mostra o equipamento e o preco JA com os acessorios embutidos.
+t('a descricao da linha NAO cita acessorios', () => {
   const cel = celulasDaLinhaItem(htmlCom);
-  assert(/Acess[oó]rios:/.test(cel[1]), 'descricao: ' + cel[1]);
-  assert(cel[1].includes('TAMPA BIPARTIDA'), cel[1]);
+  assert(!/Acess[oó]rios/i.test(cel[1]), 'a lista voltou para a tabela: ' + cel[1]);
 });
-t('a descricao NAO mostra preco por acessorio', () => {
+t('a descricao continua com o nome e o modelo do equipamento', () => {
   const cel = celulasDaLinhaItem(htmlCom);
-  const depois = cel[1].slice(cel[1].indexOf('Acess'));
-  assert(!/R\$|4\.500|1\.200/.test(depois), 'preco vazou para a descricao: ' + depois);
+  assert(cel[1].includes('DISPERSOR'), cel[1]);
+  assert(cel[1].includes('DHY-80'), cel[1]);
 });
-t('a lista fica FORA do span editavel (senao a edicao do nome a apagaria)', () => {
-  const span = /<span class="descricao-item-tabela"[^>]*>([\s\S]*?)<\/span>/.exec(htmlCom);
-  assert(span, 'span editavel nao encontrado');
-  assert(!/Acess[oó]rios:/.test(span[1]), 'a lista entrou dentro do editavel: ' + span[1]);
+t('nao sobrou o bloco de acessorios na tabela', () => {
+  // Procura a TAG, nao o nome da classe: ele tambem aparecia no CSS do documento.
+  assert(!htmlCom.includes('<div class="acessorios-inclusos">'), 'bloco ainda renderiza');
 });
-t('item sem acessorio nao ganha a linha na descricao', () => {
-  const html = gerarHTMLPropostaPremiumV2(
-    { numero_proposta: 'X', titulo: 'T', razao_social: 'C' },
-    [{ id: 1, produto_nome: 'D', quantidade: 1, unidade: 'UN', valor_unitario: 1, valor_total: 1,
-       familia_produto: 'F' }],
-    { total: 1, dataEmissao: '02/08/2026' }, {}, null, false, true
-  );
-  // Procura a TAG, nao o nome da classe: ele tambem aparece no CSS do documento.
-  assert(!html.includes('<div class="acessorios-inclusos">'), 'apareceu bloco vazio');
+t('o preco da linha CONTINUA com os acessorios embutidos', () => {
+  // 1.000 do equipamento + 4.500 + (2 x 1.200) = 7.900.
+  const cel = celulasDaLinhaItem(htmlCom);
+  assert.strictEqual(cel[4], moedaBRL(7900), 'total da linha: ' + cel[4]);
 });
 
 console.log('\n[secao 4: o escopo lista os acessorios]');
