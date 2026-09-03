@@ -285,9 +285,20 @@ describe('LotesAlmoxarifado', () => {
   // modal.
   // Review final da Etapa 6: nao basta AFIRMAR que ha certificado — ele tem de ser abrivel. Antes
   // o arquivo era gravado e nunca visualizavel: a tela so o lia como booleano.
-  test('lote com certificado ja anexado oferece um link para abrir o arquivo', async () => {
+  // ⚠️ Etapa 33: o fixture e a asserção MUDARAM, e a mudança é o ponto.
+  // Antes o fixture trazia `certificado_arquivo` (o NOME do arquivo) e o teste exigia
+  // `href === '/api/uploads/almoxarifado/certificado-123.pdf'` — ou seja, congelava como contrato
+  // que a tela MONTA o endereço a partir do nome. Desde a Etapa 33 o diretório exige assinatura e
+  // só o servidor a emite: uma URL montada aqui daria 404. A tela passou a consumir
+  // `certificado_url`, que vem pronto e assinado, e o teste passou a exigir que a **query seja
+  // preservada** — é isso que reprova se alguém voltar a mutilar a URL no helper.
+  test('lote com certificado ja anexado oferece um link para abrir o arquivo ASSINADO', async () => {
+    const URL_ASSINADA = '/api/uploads/almoxarifado/certificado-123.pdf?exp=99999999999&sig=abc123def456abc123def456abc12345';
     lotesDoBanco = [{
-      ...LOTE_ATIVO, certificado_arquivo: 'certificado-123.pdf', certificado_em: '2026-08-01T10:00:00Z',
+      ...LOTE_ATIVO,
+      certificado_arquivo: 'certificado-123.pdf',
+      certificado_url: URL_ASSINADA,
+      certificado_em: '2026-08-01T10:00:00Z',
     }];
     await renderizar();
     await selecionarMaterial();
@@ -295,8 +306,23 @@ describe('LotesAlmoxarifado', () => {
 
     const link = linhas()[0].querySelector('a[href*="certificado-123.pdf"]');
     expect(link).toBeTruthy();
-    expect(link.getAttribute('href')).toBe('/api/uploads/almoxarifado/certificado-123.pdf');
+    // Igualdade EXATA: a query não pode ser cortada, reordenada nem re-encodada no caminho.
+    expect(link.getAttribute('href')).toBe(URL_ASSINADA);
     expect(link.getAttribute('target')).toBe('_blank');
+  });
+
+  // Metade negativa do contrato novo, e ela não existia: com `certificado_arquivo` presente mas
+  // SEM `certificado_url`, a tela não pode inventar um link. Sem este cenário, um componente que
+  // voltasse a montar a URL a partir do nome passaria no teste acima (o `href*=` casaria) e só
+  // quebraria na tela do usuário, com 404.
+  test('lote com certificado mas SEM url assinada nao inventa link', async () => {
+    lotesDoBanco = [{
+      ...LOTE_ATIVO, certificado_arquivo: 'certificado-123.pdf', certificado_em: '2026-08-01T10:00:00Z',
+    }];
+    await renderizar();
+    await selecionarMaterial();
+    const link = linhas()[0].querySelector('a[href*="uploads/almoxarifado"]');
+    expect(link).toBeNull();
   });
 
   test('lote sem certificado nao afirma ter um anexado', async () => {

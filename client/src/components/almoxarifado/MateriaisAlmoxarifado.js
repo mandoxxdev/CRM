@@ -248,7 +248,7 @@ const MateriaisAlmoxarifado = () => {
                   <tr key={m.id}>
                     <td>
                       {m.foto ? (
-                        <img src={resolveMaterialPhotoUrl(m.foto)} alt={m.nome} className="almox-foto-thumb" />
+                        <img src={resolveMaterialPhotoUrl(m.foto)} alt={m.nome} className="almox-foto-thumb" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                       ) : (
                         <div className="almox-foto-placeholder"><FiImage /></div>
                       )}

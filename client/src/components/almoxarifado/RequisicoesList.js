@@ -926,7 +926,7 @@ const RequisicoesList = () => {
                 {detalhe.itens.map(item => (
                   <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderBottom: '1px solid var(--gmp-border)' }}>
                     {item.foto ? (
-                      <img src={resolveMaterialPhotoUrl(item.foto)} alt={item.material_nome} className="almox-foto-thumb" />
+                      <img src={resolveMaterialPhotoUrl(item.foto)} alt={item.material_nome} className="almox-foto-thumb" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                     ) : (
                       <div className="almox-foto-placeholder"><FiPackage size={16} /></div>
                     )}

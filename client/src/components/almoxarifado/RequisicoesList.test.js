@@ -152,7 +152,11 @@ describe('Etapa 15: colher assinatura do recebedor na entrega', () => {
   const ASSINATURA = {
     id: 1,
     recebedor_nome: 'Maria Recebedora',
-    arquivo_url: '/api/uploads/almoxarifado/assinatura-abc.png',
+    // Etapa 33: a URL vem do servidor JA ASSINADA. O fixture antigo era o endereco publico, e o
+    // cenario abaixo usava .includes() sobre ele — que continuava verdadeiro com a query como
+    // sufixo, entao o teste passava ANTES, DEPOIS, e com a feature quebrada. Agora ele exige a
+    // URL inteira, e reprova se o helper voltar a mutilar a query.
+    arquivo_url: '/api/uploads/almoxarifado/assinatura-abc.png?exp=99999999999&sig=abc123def456abc123def456abc12345',
     criado_em: '2026-08-28T14:00:00',
     criado_por_nome: 'Almoxarife Teste',
   };
@@ -286,8 +290,10 @@ describe('Etapa 15: colher assinatura do recebedor na entrega', () => {
     expect(container.textContent).toContain('Maria Recebedora');
     expect(container.textContent).toContain('28/08');
     const thumb = [...container.querySelectorAll('img')]
-      .find((img) => (img.getAttribute('src') || '').includes('/api/uploads/almoxarifado/assinatura-abc.png'));
+      .find((img) => (img.getAttribute('src') || '').startsWith('/api/uploads/almoxarifado/assinatura-abc.png'));
     expect(thumb).toBeTruthy();
+    // A assinatura tem de chegar INTEIRA ao src — sem ela o navegador toma 404 e a miniatura some.
+    expect(thumb.getAttribute('src')).toBe(ASSINATURA.arquivo_url);
   });
 
   test.each(['ENTREGUE', 'PARCIALMENTE_ATENDIDA', 'ENCERRADA'])(

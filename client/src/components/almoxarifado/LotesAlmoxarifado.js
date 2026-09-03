@@ -362,7 +362,11 @@ const LotesAlmoxarifado = () => {
                           {/* Review final da Etapa 6: o arquivo era gravado e NUNCA visualizável —
                               a tela só o lia como booleano. Quem precisasse conferir o certificado
                               do fornecedor tinha de adivinhar o nome do arquivo no servidor. */}
-                          <a href={resolveMaterialPhotoUrl(l.certificado_arquivo)}
+                          {/* Etapa 33: `certificado_url` vem do SERVIDOR, já assinado. Antes esta
+                              linha montava o endereço a partir de `certificado_arquivo` (o nome do
+                              arquivo), e URL montada no client não tem assinatura — o link daria
+                              404 desde que o diretório deixou de ser público. */}
+                          <a href={resolveMaterialPhotoUrl(l.certificado_url)}
                             target="_blank" rel="noopener noreferrer"
                             style={{ color: 'inherit', textDecoration: 'underline' }}
                             title="Abrir o certificado do fornecedor">

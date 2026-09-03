@@ -242,7 +242,7 @@ export default function RequisicaoMaterialCesta() {
                   <div key={m.id} className="engc-card">
                     <div className="engc-card-media">
                       {m.foto_url ? (
-                        <img className="engc-card-img" src={m.foto_url} alt={m.nome} loading="lazy" />
+                        <img className="engc-card-img" src={m.foto_url} alt={m.nome} loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                       ) : (
                         <div className="engc-card-imgPlaceholder">
                           {m.tipo_icone || 'Sem foto'}
@@ -291,7 +291,7 @@ export default function RequisicaoMaterialCesta() {
               <div key={m.id} className="engc-cart-item">
                 <div className="engc-cart-main">
                   <div className="engc-cart-thumb">
-                    {m.foto_url ? <img src={m.foto_url} alt={m.nome} loading="lazy" /> : <div className="engc-cart-thumbPlaceholder">—</div>}
+                    {m.foto_url ? <img src={m.foto_url} alt={m.nome} loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} /> : <div className="engc-cart-thumbPlaceholder">—</div>}
                   </div>
                   <div className="engc-cart-text">
                     <div className="engc-cart-name">{m.nome}</div>

@@ -938,7 +938,7 @@ const MaterialAlmoxarifadoForm = () => {
               <div className="almox-foto-upload-area">
                 <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFotoChange} />
                 {fotoPreview ? (
-                  <img src={fotoPreview} alt="Preview" className="almox-foto-preview" />
+                  <img src={fotoPreview} alt="Preview" className="almox-foto-preview" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                 ) : (
                   <div>
                     <FiImage size={32} style={{ opacity: 0.4, display: 'block', margin: '0 auto 8px' }} />
