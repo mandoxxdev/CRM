@@ -15301,6 +15301,105 @@ app.post('/api/produtos', authenticateToken, (req, res) => {
   doInsert();
 });
 
+// POST clonar produto: cria um produto novo a partir de outro, com CODIGO NOVO.
+//
+// Pedido do usuario, logo depois do clone de familia: "Na aba de produtos, tmb deve ter um
+// botao de clonar". Mesmo motivo - produtos irmaos que so mudam um detalhe.
+//
+// SO ADMIN, mesma regra que ele pediu para o clone de familia. A checagem esta na rota, nao
+// so no botao: esconder botao e escolha de interface, quem recusa e o servidor.
+//
+// O CODIGO NOVO SAI DA SERIE DO PROPRIO PRODUTO DE ORIGEM. O formato e
+// {grupo}-{posicao da familia}-{MODELO}-{sequencial}, por exemplo 60-01-DHY-10-01; o clone
+// pega tudo menos o sequencial e usa o MAIOR sequencial ja existente naquela serie + 1.
+// Poderia recalcular o prefixo pela familia, como faz /api/produtos/proximo-codigo, mas a
+// posicao da familia dentro do grupo muda quando familias sao criadas ou excluidas - e o
+// clone ficaria numa serie diferente da do irmao que ele copia. Sair da serie da origem e o
+// que a palavra "clone" promete.
+//
+// MAX + 1, nunca COUNT: produto excluido faria o COUNT reaproveitar um numero ja impresso em
+// proposta, criando dois produtos com o mesmo codigo. Mesma razao documentada em
+// /api/produtos/proximo-codigo.
+app.post('/api/produtos/:id/clonar', authenticateToken, (req, res) => {
+  if (!isAdminUser(req.user)) {
+    return res.status(403).json({ error: 'Apenas administradores podem clonar produtos' });
+  }
+  var origemId = req.params.id;
+  db.get('SELECT * FROM produtos WHERE id = ?', [origemId], function (errOrigem, origem) {
+    if (errOrigem) return res.status(500).json({ error: errOrigem.message });
+    if (!origem) return res.status(404).json({ error: 'Produto de origem não encontrado' });
+
+    var codigoOrigem = String(origem.codigo || '').trim().toUpperCase();
+    var casou = /^(.*)-(\d+)$/.exec(codigoOrigem);
+    // Codigo fora do padrao (cadastro antigo): em vez de inventar numeracao, a serie passa a
+    // ser o proprio codigo com sufixo. Continua unico e fica obvio na tela que precisa de
+    // revisao, em vez de entrar disfarcado no meio da numeracao boa.
+    var prefixo = casou ? casou[1] : codigoOrigem;
+    var forcado = !casou;
+    if (!prefixo) return res.status(400).json({ error: 'Produto de origem está sem código' });
+
+    db.all(
+      "SELECT codigo FROM produtos WHERE UPPER(TRIM(COALESCE(codigo,''))) LIKE ?",
+      [prefixo + '-%'],
+      function (errLista, linhas) {
+        if (errLista) return res.status(500).json({ error: errLista.message });
+        // O LIKE so pre-filtra; quem decide e a regex, que exige APENAS DIGITOS depois do
+        // prefixo. Sem isso "60-01-DHY-10" casaria com "60-01-DHY-10-2-01" de outra serie.
+        var prefixoRegex = prefixo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        var re = new RegExp('^' + prefixoRegex + '-(\\d+)$');
+        var maior = 0;
+        (linhas || []).forEach(function (l) {
+          var m = re.exec(String(l.codigo || '').trim().toUpperCase());
+          if (m) maior = Math.max(maior, parseInt(m[1], 10) || 0);
+        });
+        var novoCodigo = prefixo + '-' + String(maior + 1).padStart(2, '0');
+
+        // A imagem e DUPLICADA em disco, nunca compartilhada. Compartilhar ja quebrou no
+        // clone de familia: a rota de troca de imagem apaga o arquivo antigo, entao o
+        // produto de origem ficaria com imagem quebrada quando o clone trocasse a dele.
+        var imagemClone = null;
+        if (origem.imagem) {
+          try {
+            var caminhoOrigem = path.join(uploadsProdutosDir, origem.imagem);
+            if (fs.existsSync(caminhoOrigem)) {
+              var ext = path.extname(origem.imagem);
+              imagemClone = 'produto_clone_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) + ext;
+              fs.copyFileSync(caminhoOrigem, path.join(uploadsProdutosDir, imagemClone));
+            }
+          } catch (_) {
+            imagemClone = null; // sem imagem e melhor do que apontar para arquivo de terceiro
+          }
+        }
+
+        db.run(
+          `INSERT INTO produtos (codigo, nome, descricao, familia, modelo, preco_base, icms, ipi,
+                                 ncm, especificacoes_tecnicas, imagem, ativo, classificacao_area)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+          [novoCodigo, origem.nome, origem.descricao, origem.familia, origem.modelo,
+           origem.preco_base, origem.icms, origem.ipi, origem.ncm,
+           origem.especificacoes_tecnicas, imagemClone, origem.classificacao_area],
+          function (errIns) {
+            if (errIns) {
+              if (errIns.message && errIns.message.indexOf('UNIQUE') !== -1) {
+                return res.status(400).json({ error: 'Já existe produto com o código ' + novoCodigo });
+              }
+              return res.status(500).json({ error: errIns.message });
+            }
+            res.json({
+              id: this.lastID,
+              codigo: novoCodigo,
+              nome: origem.nome,
+              clonado_de: origem.codigo,
+              codigo_fora_do_padrao: forcado,
+              imagem_copiada: !!imagemClone
+            });
+          }
+        );
+      }
+    );
+  });
+});
+
 app.put('/api/produtos/:id', authenticateToken, (req, res) => {
   var id = req.params.id;
   var body = req.body || {};

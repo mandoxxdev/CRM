@@ -1,12 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
-import { FiPlus, FiSearch, FiEdit, FiTrash2, FiFileText, FiArrowLeft } from 'react-icons/fi';
+import { FiPlus, FiSearch, FiEdit, FiTrash2, FiFileText, FiArrowLeft, FiCopy } from 'react-icons/fi';
+import { useAuth } from '../context/AuthContext';
 import './Produtos.css';
 import './Loading.css';
 
 const Produtos = ({ familiaFromUrl, familiaNome, grupoId }) => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  // Clonar e so para admin, mesma regra combinada para o clone de familia. Esconder o
+  // botao e cortesia de interface; quem recusa de verdade e a rota no servidor.
+  const isAdmin = String(user?.role || '').toLowerCase() === 'admin';
   const [produtos, setProdutos] = useState([]);
   const [familias, setFamilias] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -56,6 +61,27 @@ const Produtos = ({ familiaFromUrl, familiaNome, grupoId }) => {
       } catch (error) {
         alert('Erro ao desativar produto');
       }
+    }
+  };
+
+  // Clonar produto: o codigo novo sai da serie do proprio produto de origem
+  // (60-01-DHY-10-01 vira 60-01-DHY-10-02), entao nao ha nada para o usuario digitar.
+  const handleClonar = async (produto) => {
+    const rotulo = produto.codigo || produto.nome;
+    if (!window.confirm(
+      `Clonar o produto ${rotulo}?\n\n`
+      + 'Será criado um produto novo com o mesmo cadastro e um código gerado na sequência.'
+    )) return;
+    try {
+      const { data } = await api.post(`/produtos/${produto.id}/clonar`);
+      await loadProdutos();
+      const aviso = data.codigo_fora_do_padrao
+        ? '\n\nAtenção: o código de origem está fora do padrão, então o novo código precisa de revisão.'
+        : '';
+      alert(`Produto clonado como ${data.codigo}.${aviso}`);
+    } catch (error) {
+      console.error('Erro ao clonar produto:', error);
+      alert(error.response?.data?.error || 'Erro ao clonar produto');
     }
   };
 
@@ -264,6 +290,15 @@ const Produtos = ({ familiaFromUrl, familiaNome, grupoId }) => {
                       >
                         <FiTrash2 />
                       </button>
+                      {isAdmin && (
+                        <button
+                          onClick={() => handleClonar(produto)}
+                          className="btn-icon"
+                          title="Clonar produto (cria um novo com o mesmo cadastro e código na sequência)"
+                        >
+                          <FiCopy />
+                        </button>
+                      )}
                       <Link
                         to={`/comercial/propostas/nova?produto=${produto.id}`}
                         className="btn-icon btn-success"
