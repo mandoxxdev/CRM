@@ -51,7 +51,7 @@ linhas depois** (`:454`). Não existe janela para anexar.
   sem criar a suíte entrega a única das cinco telas sem prova de que o bloco monta.
 - **Os quatro testes que existem têm fallback `Promise.resolve({ data: [] })`** —
   `MateriaisAlmoxarifado.test.js:106`, `DevolucoesAlmoxarifado.test.js:69`,
-  `RemessasTerceirosAlmoxarifado.test.js:105`, `RequisicoesList.test.js:82`. Nenhum rejeita URL
+  `RemessasTerceirosAlmoxarifado.test.js:106`, `RequisicoesList.test.js:82`. Nenhum rejeita URL
   desconhecida. **Isso corta um risco e cria outro:** plugar não quebra nada por rede, e por isso
   mesmo **nenhum deles ficaria vermelho se o bloco não montasse**. Cada plug precisa de cenário
   próprio; a suíte existente não é rede de segurança aqui.

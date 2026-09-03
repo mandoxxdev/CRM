@@ -36,7 +36,7 @@ está instalado** nesta base — `LoteSeletor.test.js:10-12` documenta a pegadin
 
 Os quatro arquivos de teste existentes têm fallback **`Promise.resolve({ data: [] })`** para URL
 desconhecida (`MateriaisAlmoxarifado.test.js:106`, `DevolucoesAlmoxarifado.test.js:69`,
-`RemessasTerceirosAlmoxarifado.test.js:105`, `RequisicoesList.test.js:82`). Consequência dupla:
+`RemessasTerceirosAlmoxarifado.test.js:106`, `RequisicoesList.test.js:82`). Consequência dupla:
 
 1. **Bom:** plugar o bloco não quebra nenhum teste existente por rede.
 2. **Ruim, e é o que importa:** um cenário que só afirme "a tela renderiza sem erro" fica **verde
@@ -58,6 +58,30 @@ chave é do client.
 **RN-02 tem cenário próprio, e é negativo com metade positiva:** com a lista carregada e nenhum
 modal aberto, `api.get` **não** foi chamado com `'/almoxarifado/anexos'` — e no mesmo teste,
 depois de clicar, **foi**. Cenário negativo sozinho passa com a tela vazia.
+
+### Três regras que a Fase 2 acrescentou, e valem para TODAS as tasks
+
+**(i) Nunca teste com `entidade_id: 1`, nem com o PRIMEIRO id da fixture.** É o achado mais caro da
+revisão. `entidade_id: 1` é **indistinguível** de três defeitos diferentes: `entidadeId={lista[0].id}`
+(índice zero), `entidadeId={1}` literal, e estado obsoleto que reabre sempre o primeiro registro.
+Em produção o usuário clica o clipe da 3ª linha e recebe os anexos do 1º material — **sem 400, sem
+erro**, que é o defeito mais caro possível num módulo de documentos. Onde a fixture já tem id alto,
+use-o (Materiais tem `id: 3`; Remessa tem `11`; Requisição tem `55`); onde não tem, **acrescente**
+(Devoluções: junte `{ id: 42, ... }`). E onde der, **abra o primeiro, feche, abra o terceiro e
+afirme que a ÚLTIMA chamada é a do terceiro** — é o único jeito de pegar estado obsoleto.
+
+**(ii) Conte as chamadas.** A RN-02 diz "**uma** requisição", e `toHaveBeenCalledWith` é satisfeito
+por 1, 2 ou 10. Todo cenário positivo leva também:
+```js
+expect(api.get.mock.calls.filter(([u]) => u === '/almoxarifado/anexos')).toHaveLength(1);
+```
+Sem isso, um remount por churn de `key` — ou o debounce de 350 ms de Materiais re-renderizando a
+lista com o modal aberto — dobra as requisições e nenhum cenário fica vermelho.
+
+**(iii) Sabotagem que derruba a suíte inteira por crash não é controle positivo.** Se a sabotagem
+faz o componente lançar `TypeError` no primeiro render, **todos** os cenários caem juntos e nenhum
+deles provou nada. A sabotagem tem de deixar os outros cenários verdes e derrubar **um**, pela
+asserção que guarda o achado.
 
 ## Estrutura de arquivos
 
@@ -123,20 +147,23 @@ e a Task 1 prova isso com cenário próprio, não por inspeção.
 
 - [ ] **Step 1: Escrever os cenários que falham** (`AnexosModal.test.js`)
 
-Molde de montagem: copie o topo de `AnexosDocumento.test.js:1-60` (mock de `api`, mock de
-`react-toastify`, mock de `useAlmoxPermissoes` com `pode: () => true`, `createRoot`/`act`).
+Molde de montagem, **com as faixas corrigidas pela Fase 2** (o boilerplate não está todo no topo):
+`AnexosDocumento.test.js:38-58` traz os três `jest.mock` (`api` `:38`, `react-toastify` `:44`,
+`useAlmoxPermissoes` com `pode: () => true` `:50-58`), e `:93` + `:117-129` trazem o `let container`
+e o `beforeEach` com `createRoot`. **O helper de montagem desta base chama-se `renderizar`** — nos
+cinco arquivos, sem exceção; `AnexosDocumento.test.js:142` é o único que aceita `props`.
 
 ```jsx
 // 1. entidadeId falsy: nao renderiza nada E nao chama a API (RN-01 na casca)
 test('sem entidadeId, o modal nao monta e nao consulta', async () => {
-  await montar({ entidade: 'material', entidadeId: null });
+  await renderizar({ entidade: 'material', entidadeId: null });
   expect(document.querySelector('[data-testid="anexos-modal"]')).toBeNull();
   expect(api.get).not.toHaveBeenCalledWith('/almoxarifado/anexos', expect.anything());
 });
 
 // 2. com id: monta a casca E o bloco dentro dela, com a entidade pedida
 test('com entidadeId, monta o bloco e consulta a entidade certa', async () => {
-  await montar({ entidade: 'material', entidadeId: 7 });
+  await renderizar({ entidade: 'material', entidadeId: 7 });
   expect(document.querySelector('[data-testid="anexos-modal"]')).not.toBeNull();
   expect(document.querySelector('[data-testid="anexos-documento"]')).not.toBeNull();
   expect(api.get).toHaveBeenCalledWith('/almoxarifado/anexos',
@@ -145,7 +172,7 @@ test('com entidadeId, monta o bloco e consulta a entidade certa', async () => {
 
 // 3. o titulo do modal aparece, e o <h4> interno NAO se repete
 test('o cabecalho do modal nao duplica o titulo do bloco', async () => {
-  await montar({ entidade: 'material', entidadeId: 7, titulo: 'Anexos do material' });
+  await renderizar({ entidade: 'material', entidadeId: 7, titulo: 'Anexos do material' });
   expect(document.body.textContent).toContain('Anexos do material');
   expect(document.querySelectorAll('.almox-anexos-titulo').length).toBe(0);
 });
@@ -194,7 +221,11 @@ function AnexosModal({ titulo = 'Anexos', subtitulo, entidade, entidadeId, onClo
     <div className="almox-modal-overlay" onClick={onClose} data-testid="anexos-modal">
       <div className="almox-modal" onClick={(e) => e.stopPropagation()}>
         <div className="almox-modal-header">
-          <h3><FiPaperclip /> {titulo}</h3>
+          {/* `h2` e nao `h3`: os 44 cabeçalhos de modal desta base usam `h2`, e o CSS estiliza
+              **só** `.almox-modal-header h2` (`Almoxarifado.css:432`). Com `h3` o título cai no
+              default do navegador (`margin: 1em 0`), empurra o header `flex`/`sticky` e desalinha
+              o `✕` — achado da Fase 2, que nenhum cenário desta etapa pegaria. */}
+          <h2><FiPaperclip /> {titulo}</h2>
           <button className="almox-modal-close" onClick={onClose} title="Fechar">✕</button>
         </div>
         <div className="almox-modal-body">
@@ -228,11 +259,11 @@ E em `AnexosDocumento.js`, trocar a linha do `<h4>` por:
 
 ```jsx
 test('por padrao o titulo aparece — e e o que HistoricoInspecoes usa', async () => {
-  await montar({});   // sem passar titulo
+  await renderizar({});   // sem passar titulo
   expect(document.querySelector('.almox-anexos-titulo').textContent).toContain('Anexos');
 });
 test('com titulo nulo o cabecalho some, mas a lista continua', async () => {
-  await montar({ titulo: null });
+  await renderizar({ titulo: null });
   expect(document.querySelector('.almox-anexos-titulo')).toBeNull();
   expect(document.querySelector('[data-testid="anexos-documento"]')).not.toBeNull();
 });
@@ -248,7 +279,7 @@ cd client && CI=true npx react-scripts test --watchAll=false src/components/almo
 
 | # | Sabotagem | Cenário que TEM de cair |
 |---|---|---|
-| 1 | trocar `if (!entidadeId) return null;` por `if (false) return null;` | cenário 1 (`sem entidadeId...`), pela asserção do `querySelector` **e** pela do `api.get` |
+| 1 | trocar `if (!entidadeId) return null;` por `if (false) return null;` | cenário 1, **só** pela asserção do `querySelector`. A do `api.get` **não cai**, e isso não é falha do cenário: a guarda própria de `AnexosDocumento.js:117` já barra a requisição. A guarda da casca serve para não desenhar overlay vazio, não para evitar a chamada — **não reporte cobertura que não existe** (correção da Fase 2). |
 | 2 | trocar `titulo={null}` por `titulo="Anexos"` na chamada interna | cenário 3, pela asserção `.almox-anexos-titulo.length === 0` |
 | 3 | trocar `{titulo && <h4...>}` por `<h4...>` (sem a guarda) | cenário do `titulo` nulo em `AnexosDocumento.test.js` |
 
@@ -284,22 +315,46 @@ por quê**, senão o próximo o "corrige".
 
 - [ ] **Step 1: Escrever os cenários que falham**
 
+⚠️ `renderizar()` deste arquivo **avança 350 ms de debounce** (`MateriaisAlmoxarifado.test.js:118-123`)
+— não o reescreva achando que é `await` comum.
+
+A fixture tem três materiais: `id 1`, `id 2`, `id 3` (`MateriaisAlmoxarifado.test.js:103`). **Use o
+3, nunca o 1** — regra (i) do topo: com `id: 1` a asserção não distingue o plug certo de
+`entidadeId={materiais[0].id}` nem de um literal.
+
 ```jsx
-test('o clipe abre o modal de anexos DO MATERIAL da linha', async () => {
-  await montarLista();                       // fixture ja existente do arquivo
-  const clipe = document.querySelector('[data-testid="anexos-material-1"]');
+test('o clipe abre o modal de anexos DO MATERIAL da linha — e nao do primeiro', async () => {
+  await renderizar();
+  const clipe = document.querySelector('[data-testid="anexos-material-3"]');   // o TERCEIRO
   expect(clipe).not.toBeNull();
   await act(async () => { clipe.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
   expect(document.querySelector('[data-testid="anexos-modal"]')).not.toBeNull();
   expect(api.get).toHaveBeenCalledWith('/almoxarifado/anexos',
-    { params: { entidade: 'material', entidade_id: 1 } });   // <- a chave, nao so o id
+    { params: { entidade: 'material', entidade_id: 3 } });   // a chave E o id certo
+  expect(api.get.mock.calls.filter(([u]) => u === '/almoxarifado/anexos')).toHaveLength(1);
+});
+
+// Estado obsoleto: abrir o 1, fechar, abrir o 3 — a ULTIMA chamada tem de ser a do 3.
+// Sem este cenario, um `anexosMaterial` que nao se atualiza passa em tudo acima.
+test('reabrir em outra linha consulta a linha nova, nao a anterior', async () => {
+  await renderizar();
+  const abrir = (id) => act(async () => {
+    document.querySelector(`[data-testid="anexos-material-${id}"]`)
+      .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
+  await abrir(1);
+  await act(async () => { document.querySelector('.almox-modal-close')
+    .dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+  await abrir(3);
+  const chamadas = api.get.mock.calls.filter(([u]) => u === '/almoxarifado/anexos');
+  expect(chamadas[chamadas.length - 1][1].params.entidade_id).toBe(3);
 });
 
 // RN-02: negativo COM a metade positiva no mesmo teste
 test('a lista sozinha nao consulta anexos; so o clique consulta', async () => {
-  await montarLista();
+  await renderizar();
   expect(api.get).not.toHaveBeenCalledWith('/almoxarifado/anexos', expect.anything());
-  await act(async () => { document.querySelector('[data-testid="anexos-material-1"]')
+  await act(async () => { document.querySelector('[data-testid="anexos-material-3"]')
     .dispatchEvent(new MouseEvent('click', { bubbles: true })); });
   expect(api.get).toHaveBeenCalledWith('/almoxarifado/anexos', expect.anything());
 });
@@ -359,16 +414,42 @@ e, junto dos outros modais (`:424-434`):
    Logo **não há `somenteLeitura`**: anexar em devolução antiga é legítimo (é onde o comprovante
    chega). Não invente gate por idade.
 
-- [ ] **Step 1: Escrever os cenários** (mesmo par da Task 2, com `entidade: 'devolucao'`)
+- [ ] **Step 1: Escrever os cenários** — o mesmo trio da Task 2 com `entidade: 'devolucao'`, **mais
+      o do esqueleto** (abaixo). Antes de tudo, **acrescente uma segunda devolução à fixture**:
+      `DevolucoesAlmoxarifado.test.js:49-53` hoje tem **uma** linha, `id: 1`, e a regra (i) do topo
+      proíbe testar com ela. Junte `{ id: 42, material_codigo: 'TUB-2', material_nome: 'Tubo 2"',
+      quantidade: 3, motivo: 'SOBRA', condicao: 'BOM', destino: 'ESTOQUE', created_at: ... }` e
+      faça as asserções com **42**.
+
+      **O cenário do esqueleto** (achado da Fase 2: sem ele, esquecer o `columns={9}` fica verde
+      **para sempre** — o arquivo não tem nenhuma referência a `SkeletonTable`, `columns` ou
+      contagem de `<th>`). `SkeletonLoader.js:21-27` renderiza um `.skeleton-table-header-cell` por
+      coluna, então dá para amarrar as duas pontas sem fixar número nenhum:
+
+```js
+test('o esqueleto tem tantas colunas quanto a tabela carregada', async () => {
+  let liberar;
+  const original = api.get.getMockImplementation();
+  api.get.mockImplementation((url, cfg) => (url === '/almoxarifado/devolucoes'
+    ? new Promise((r) => { liberar = () => r({ data: DEVOLUCOES }); })
+    : original(url, cfg)));
+  await renderizar();
+  const cols = container.querySelectorAll('.skeleton-table-header-cell').length;
+  expect(cols).toBeGreaterThan(0);                       // metade positiva
+  await act(async () => { liberar(); await new Promise((r) => setTimeout(r, 0)); });
+  expect(container.querySelectorAll('.almox-table thead th')).toHaveLength(cols);
+});
+```
+
 - [ ] **Step 2: Rodar e ver falhar**
 - [ ] **Step 3: Implementar** — `FiPaperclip` em `:4`; `const [anexosDevolucao, setAnexosDevolucao] = useState(null);`;
       `<th></th>` no fim de `:215`; a célula no fim da linha; `columns={9}`; o modal com
       `subtitulo={`${d.material_codigo} — ${d.material_nome} · ${formatData(d.created_at)}`}`.
 - [ ] **Step 4: Rodar e ver passar**
-- [ ] **Step 5: CONTROLE POSITIVO** — troque `entidade="devolucao"` por `entidade="material"`;
-      tem de cair pela asserção dos `params`. **E confira o `columns={9}`**: rode o cenário de
-      carregamento e veja se ele conta colunas; se não contar, diga isso no relatório em vez de
-      fingir cobertura.
+- [ ] **Step 5: CONTROLE POSITIVO** — duas sabotagens:
+      (a) troque `entidade="devolucao"` por `entidade="material"` → cai pela asserção dos `params`;
+      (b) volte o `columns={9}` para `columns={8}` → **tem de cair o cenário do esqueleto**, na
+      comparação final. Se não cair, o cenário está medindo outra coisa — conserte o cenário.
 - [ ] **Step 6: Commit**
 
 ---
@@ -391,9 +472,29 @@ e, junto dos outros modais (`:424-434`):
 3. Itens em digitação (`itensNovos`, `:215-226`) **não têm `id`** e são renderizados noutra tabela
    (`:734`). **Não** ponha o clipe lá — é a RN-01.
 
+- [ ] **Step 0 (ACHADO DA FASE 2 — sem isto o Step 1 é impossível): a fixture tem UM item, não dois.**
+      `RemessasTerceirosAlmoxarifado.test.js:53-61` — `DETALHE_1.itens` tem **um** item (`id: 11`);
+      `LISTA[0].itens_total: 2` é só o contador da linha da lista, não o array. O terceiro cenário
+      exige dois. Acrescente a `DETALHE_1.itens`:
+
+```js
+{ id: 12, material_id: 102, material_codigo: 'TUB-2', material_nome: 'Tubo 2"',
+  unidade: 'M', quantidade: 5, quantidade_retornada: 0, pendente: 5, peso: null }
+```
+
+      Medido como seguro: `linhasDetalhe()` (`:124`) só é usado como `[0]` em `:322` e `:333`, e
+      `celula(tr, 'retornado'|'transformado'|'baixado')` continua casando por `data-col`.
+
 - [ ] **Step 1: Escrever os cenários** — o par da Task 2 com `entidade: 'item_remessa'` e
-      `entidade_id: 11`, **mais um terceiro**: abrir o painel de uma remessa com 2 itens **não**
-      chama `/almoxarifado/anexos` nenhuma vez (RN-02 no caso que a justifica).
+      `entidade_id: 11` (mais a contagem `toHaveLength(1)` da regra (ii)), **mais um terceiro**:
+      abrir o painel de uma remessa com 2 itens **não** chama `/almoxarifado/anexos` nenhuma vez.
+
+      ⚠️ **O terceiro cenário precisa da metade positiva no MESMO teste** (achado da Fase 2: como
+      está, ele fica verde se o clique na linha da remessa falhar em silêncio e o painel nunca
+      abrir). Antes do negativo:
+      `expect(linhasDetalhe()).toHaveLength(2)` e
+      `expect(document.querySelector('[data-testid="anexos-item-11"]')).not.toBeNull()`;
+      depois do negativo, clicar o clipe e afirmar a chamada com `entidade_id: 11`.
 - [ ] **Step 2: Rodar e ver falhar**
 - [ ] **Step 3: Implementar** — `FiPaperclip` no import de `:4`;
       `const [anexosItem, setAnexosItem] = useState(null);`; `<th></th>` no cabeçalho; a célula com
@@ -401,10 +502,18 @@ e, junto dos outros modais (`:424-434`):
       `subtitulo={`${anexosItem.material_codigo} — ${anexosItem.material_nome}`}`.
 - [ ] **Step 4: Rodar e ver passar** (rode **também** `RemessasTerceirosTransformacao.test.js`)
 - [ ] **Step 5: CONTROLE POSITIVO** — duas sabotagens, e as duas importam:
-      (a) `entidadeId={aberta.id}` em vez de `{i.id}` → tem de cair pela asserção do
-      `entidade_id: 11`; (b) mover o bloco para fora do `{aberta && ...}` → tem de cair o terceiro
-      cenário. A (a) é a RN-05 e **é o defeito que produção mostraria como 400 numa remessa e
-      silêncio noutra**.
+
+      **(a)** `entidadeId={aberta.id}` em vez de `{i.id}` → tem de cair pela asserção do
+      `entidade_id: 11` (`aberta.id` é 1, `i.id` é 11 — valores distintos, confirmado). É a RN-05,
+      e **é o defeito que produção mostraria como 400 numa remessa e silêncio noutra**.
+
+      **(b)** ⚠️ **A sabotagem original ("mover o bloco para fora do `{aberta && ...}`") era NO-OP
+      e a Fase 2 pegou.** O modal é montado sob `{anexosItem && ...}`, condicionado ao **estado**,
+      não a `aberta`: com `anexosItem === null` no cenário 3 ele não renderiza dentro nem fora, e
+      o cenário ficava verde nos dois casos — e a regra do harness mandaria o executor "consertar"
+      um cenário saudável. **A sabotagem certa é trocar o botão+modal por bloco inline na linha do
+      item**: `<AnexosDocumento entidade="item_remessa" entidadeId={i.id} titulo={null} />` dentro
+      do `map` de `:602`. Com dois itens são duas chamadas, e o cenário 3 cai pelo motivo certo.
 - [ ] **Step 6: Commit**
 
 ---
@@ -421,17 +530,22 @@ e, junto dos outros modais (`:424-434`):
 **Pontos de atenção medidos:**
 1. O painel inteiro é `{selectedId && (...)}` (`:848`), então o bloco já nasce montado só com um
    detalhe aberto — a RN-02 sai de graça, **mas o cenário tem de existir mesmo assim**.
-2. `entidadeId={detalhe.id}` — **não** `selectedId`. São iguais no caminho feliz, e é justamente
-   por isso que a diferença passa despercebida: `selectedId` vem da URL (`:99-102`) e existe
-   **antes** de o detalhe carregar; usá-lo dispara a consulta de anexos com o painel ainda vazio.
-3. O teste renderiza sempre com `?id=55` (`:96-104`), então o painel já abre.
+2. `entidadeId={detalhe.id}` — **não** `selectedId`. ⚠️ **A justificativa que eu havia escrito aqui
+   estava ERRADA, e a Fase 2 a derrubou.** Eu disse que `selectedId` "existe antes de o detalhe
+   carregar, então dispararia a consulta com o painel vazio". **Isso não pode acontecer:** o ponto
+   de inserção está dentro do ramo `else` de `RequisicoesList.js:874`
+   (`{loadingDetalhe || !detalhe ? <loading> : <corpo>}`), então o bloco não renderiza enquanto
+   `detalhe` for `null`. E o `catch` de `abrirDetalhe` (`:246-252`) zera `selectedId` **e** `detalhe`
+   juntos — **não existe estado alcançável em que os dois divirjam**. `detalhe.id` continua sendo o
+   certo (é a leitura do dado carregado, não da URL), mas por higiene, não por defeito evitado.
+3. O teste renderiza sempre com `?id=55` (`:95-103`), então o painel já abre.
 4. **Rascunho não muda nada aqui:** um rascunho salvo JÁ é linha no banco, e o formulário
    (`RequisicaoForm.js`) não tem `id` nenhum — por isso o form **não** recebe bloco (RN-01).
 
 - [ ] **Step 1: Escrever os cenários**
 ```jsx
 test('o painel de detalhe mostra os anexos DA REQUISICAO aberta', async () => {
-  await montarComDetalhe();     // ja renderiza com ?id=55
+  await renderizar();     // ja renderiza com ?id=55
   expect(document.querySelector('[data-testid="anexos-documento"]')).not.toBeNull();
   expect(api.get).toHaveBeenCalledWith('/almoxarifado/anexos',
     { params: { entidade: 'requisicao', entidade_id: 55 } });
@@ -450,9 +564,16 @@ test('o painel de detalhe mostra os anexos DA REQUISICAO aberta', async () => {
 ```
 - [ ] **Step 4: Rodar e ver passar**
 - [ ] **Step 5: CONTROLE POSITIVO** — troque `entidade="requisicao"` por `entidade="material"`:
-      tem de cair pelos `params`. **A troca `detalhe.id` → `selectedId` NÃO derruba nada** (são
-      iguais na fixture) — **isso é um achado, não um detalhe**: registre no relatório que a suíte
-      não protege essa distinção, em vez de fingir que protege.
+      tem de cair pelos `params`.
+
+      **E trave a distinção `detalhe.id` vs `selectedId` em vez de declará-la como furo** — é o
+      conserto barato que a Fase 2 achou e que a versão anterior deste plano não viu (ela mandava
+      "registrar que a suíte não protege", o que faria a próxima sessão caçar um risco inexistente).
+      Force a divergência **na fixture**, sem tocar em produção: num cenário próprio, faça
+      `/almoxarifado/requisicoes/55` (`RequisicoesList.test.js:78`) devolver
+      `{ ...baseRequisicao('APROVADO'), id: 555 }` e afirme
+      `{ entidade: 'requisicao', entidade_id: 555 }`. Com `detalhe.id` fica verde; com `selectedId`
+      (55) fica vermelho. Uma linha, e documenta "o bloco lê do detalhe carregado, não da URL".
 - [ ] **Step 6: Commit**
 
 ---
@@ -476,19 +597,57 @@ e **nenhum arquivo de teste** — varredura do repositório inteiro confirma. N�
    `:303`. Ou seja, quem acabou de registrar um recebimento cai no painel e **já pode anexar a nota
    fiscal** — é o caso de uso real, e merece cenário.
 3. A tela **não renderiza foto** (grep vazio) — o ponto de atenção da Etapa 33 não se aplica.
-4. O molde de mock mais próximo é `HistoricoInspecoes.test.js:85-95`. **Escreva o fallback que
-   REJEITA** (`Promise.reject(new Error('URL inesperada no teste: ' + url))`) e liste as rotas
-   explicitamente — é a suíte nova, então não há legado a preservar, e o fallback que resolve é
-   exatamente o que deixa esta etapa cega nas outras quatro telas.
+4. O molde é `HistoricoInspecoes.test.js` — e são **quatro** faixas, não uma (correção da Fase 2,
+   que mediu duas dependências obrigatórias que a citação original omitia):
+   - **`:18` e `:103` — `MemoryRouter`.** `RecebimentosAlmoxarifado.js:6` renderiza
+     `AlmoxPageHeader`, que usa `<Link>` incondicional (`AlmoxPageHeader.js:2,13,20`). **Sem o
+     wrapper a suíte nova nem monta** — e o erro apareceria como falha do cenário, não da fiação.
+   - **`:33` — `jest.mock('../../hooks/useAlmoxPermissoes')`.** `RecebimentosAlmoxarifado.js` não
+     importa o hook, mas o `AnexosDocumento` importa. Com o fallback que rejeita (abaixo), o hook
+     real dispararia `/almoxarifado/minhas-permissoes` contra uma rejeição.
+   - **`:85-95` — o `api.get.mockImplementation`.**
+5. **Escreva o fallback que REJEITA** (`Promise.reject(new Error('URL inesperada no teste: ' + url))`)
+   e liste as rotas explicitamente: `/almoxarifado/recebimentos`, `/almoxarifado/recebimentos/:id`,
+   `/almoxarifado/materiais`, `/almoxarifado/recebimentos-aux/pedidos-compra`,
+   `/almoxarifado/recebimentos-aux/fornecedores` (`RecebimentosAlmoxarifado.js:77,94,102,103,113`)
+   **e `/almoxarifado/anexos`** — exatamente como `HistoricoInspecoes.test.js:91` faz, com o
+   comentário do porquê. É a suíte nova, então não há legado a preservar, e o fallback que resolve
+   é exatamente o que deixa esta etapa cega nas outras quatro telas.
 
-- [ ] **Step 1: Criar o arquivo com os cenários** — mínimo 4: (a) a lista renderiza; (b) clicar numa
-      linha abre o painel; (c) o painel mostra `anexos-documento` e consulta
-      `{ entidade: 'recebimento', entidade_id: <id> }`; (d) a lista sozinha **não** consulta anexos.
+6. ⚠️ **O mock precisa de igualdade + regex, nunca `startsWith`.** `/almoxarifado/recebimentos` é
+   **prefixo** de `/almoxarifado/recebimentos/:id` (`:77` e `:113`). Com `startsWith`, `abrirDetalhe`
+   recebe o **array da lista**, `setDetalhe([...])`, o painel renderiza sem `id`, e o `Number()` de
+   `AnexosDocumento.js:124` manda `entidade_id: NaN`. Use
+   `url === '/almoxarifado/recebimentos'` e `/^\/almoxarifado\/recebimentos\/\d+$/.test(url)`,
+   nessa ordem — molde `AnexosDocumento.test.js:112-125`.
+7. ⚠️ **O fallback que rejeita NÃO é ruidoso nesta tela — a Fase 2 mediu.** Os três `catch` de
+   `RecebimentosAlmoxarifado.js:74-84`, `:92-96` e `:99-108` **engolem** a rejeição (o `toast` é
+   mockado). Com uma URL mal escrita no mock, `recebimentos` fica `[]`, a tela renderiza
+   `"Nenhum recebimento registrado"` (`:447-455`), e os cenários (a) e (d) passam **com a tela
+   vazia**. Por isso o (a) tem de **contar linhas** e o (d) tem de ter metade positiva.
+
+- [ ] **Step 1: Criar o arquivo com os cenários** — mínimo 4, com as correções da Fase 2:
+      **(a)** a lista renderiza — e **conta linhas**:
+      `expect(container.querySelectorAll('.almox-table tbody tr')).toHaveLength(<n da fixture>)`,
+      nunca só "renderizou sem erro";
+      **(b)** clicar numa linha abre o painel;
+      **(c)** o painel mostra `anexos-documento` e consulta
+      `{ entidade: 'recebimento', entidade_id: <id> }` — **use um id que não seja 1 nem o primeiro
+      da fixture** (regra (i)), mais `toHaveLength(1)` da regra (ii);
+      **(d)** a lista sozinha não consulta anexos — **com a metade positiva no mesmo teste**:
+      depois do `not.toHaveBeenCalledWith`, clicar uma linha e afirmar que passou a chamar.
 - [ ] **Step 2: Rodar e ver falhar**
 - [ ] **Step 3: Implementar o plug**
 - [ ] **Step 4: Rodar e ver passar**
-- [ ] **Step 5: CONTROLE POSITIVO** — troque a chave; tem de cair pelos `params`. **E uma segunda:**
-      remova o `{detalhe && ...}` do painel; o cenário (d) tem de cair.
+- [ ] **Step 5: CONTROLE POSITIVO** — duas sabotagens:
+      **(a)** troque a chave; tem de cair pelos `params`.
+      **(b)** ⚠️ **A sabotagem original ("remova o `{detalhe && ...}` do painel") estava errada e a
+      Fase 2 pegou** — sem a guarda, o corpo desreferencia `detalhe.numero` (`:487`) no primeiro
+      render e lança `TypeError`, derrubando os **quatro** cenários juntos. Isso viola a regra (iii)
+      do topo: sabotagem que quebra tudo não prova nada. **Sabote só o bloco:** tire o
+      `<AnexosDocumento>` de dentro de `{detalhe && ...}` e pendure-o na lista, logo depois do
+      `</table>` (`:558`), com `entidadeId={recebimentos[0]?.id}`. Aí (a), (b) e (c) continuam
+      verdes e **o (d) cai sozinho** — que é o que a RN-02 precisa provar.
 - [ ] **Step 6: Commit**
 
 ---
@@ -553,13 +712,26 @@ test('as seis telas usam chaves que o servidor aceita, e cobrem o mapa inteiro',
 
 | # | Sabotagem | O que TEM de cair |
 |---|---|---|
-| 1 | trocar uma chave por `"materialX"` numa tela | `toContain(chave)` — chave inválida |
+| 1 | trocar uma chave por **`"material_x"`** (inválida, **toda minúscula**) | `toContain(chave)` — o ramo que valida contra o mapa do servidor |
 | 2 | trocar a chave de Devoluções por `"material"` (chave **válida**, tela errada) | `expect(achadas).toContain('devolucao')` |
 | 3 | apagar o plug de uma tela | `achadas.length > 0` |
 | 4 | apagar uma entrada de `ENTIDADES_ANEXO` no servidor | a guarda-da-guarda (`=== 6`) |
 
+⚠️ **A sabotagem nº 1 dizia `"materialX"` e estava ERRADA — a Fase 2 pegou.** A regex é
+`/entidade=["']([a-z_]+)["']/g`: `[a-z_]+` não casa o `X` maiúsculo e a classe exige a aspa
+**imediatamente** depois, então `entidade="materialX"` não dá match nenhum. `achadas` sairia `[]` e
+o teste morreria em `achadas.length > 0` — **a mesma asserção da sabotagem nº 3**, deixando o ramo
+`toContain(chave)` sem controle positivo nenhum. Com `"material_x"` (minúscula) o match acontece,
+`length > 0` passa, e a falha cai onde deve.
+
 A nº 2 é a que separa este teste de um `grep`: chave **válida** na tela **errada** passa por
 qualquer varredura de validade e só falha em produção.
+
+⚠️ **A nº 4 é a ÚNICA exceção autorizada à Global Constraint "nenhuma alteração em `server/`"** —
+ela existe para provar a guarda-da-guarda, e sem ela um import quebrado devolveria `undefined` e
+todo o resto passaria provando nada. Regras: temporária, `md5sum` antes/depois, `git diff --stat`
+de volta vazio, e **não rode a suíte do servidor enquanto ela estiver aplicada** (o
+`deepStrictEqual` que congela o mapa quebraria e viraria ruído).
 
 - [ ] **Step 4: Suíte completa e fechamento** — os cinco comandos da `fechar-etapa`, números reais.
 
@@ -574,3 +746,113 @@ qualquer varredura de validade e só falha em produção.
 - **Consistência de tipos:** `AnexosModal` é declarado uma vez (Task 1) e consumido com os mesmos
   cinco nomes de prop nas Tasks 2, 3 e 4. As Tasks 5 e 6 **não** o usam — usam `AnexosDocumento`
   direto, com as quatro props da Etapa 32.
+
+---
+
+## Fase 2 — o que a revisão do plano pegou ANTES de executar
+
+Dois revisores frescos em paralelo, lentes distintas (o código pronto do plano roda? / este teste
+passaria com a feature quebrada?). **14 achados, 0 ruído.** Placar: **2 travariam a execução**,
+**9 deixariam passar defeito silencioso**, 3 menores. Tudo reproduzido lendo ou rodando código.
+
+### Os dois que travariam
+
+1. **Os nomes dos helpers de montagem eram inventados.** O plano usava `montarLista()`,
+   `montarComDetalhe()` e `montar()`; nos cinco arquivos o helper chama-se **`renderizar`**
+   (`MateriaisAlmoxarifado.test.js:121`, `Devolucoes:83`, `RemessasTerceiros:117`,
+   `RequisicoesList:95`, `AnexosDocumento:142`). Seriam quatro `ReferenceError` — e o veneno é que
+   **cada task manda "rodar e ver falhar"**: a falha esperada viria substituída pelo
+   `ReferenceError`, e o executor poderia aceitá-la como "falhou como previsto". É assim que o
+   vermelho vira ruído.
+2. **A fixture da Task 4 tem UM item, e o cenário exigia dois.** `DETALHE_1.itens` tem só o
+   `id: 11` (`RemessasTerceirosAlmoxarifado.test.js:53-61`); `LISTA[0].itens_total: 2` é o contador
+   da linha da lista, não o array. O executor degradaria o cenário para 1 item — perdendo
+   justamente a demonstração de "N itens ⇒ 0 requisições" que a RN-02 existe para provar.
+
+### O achado que mais ensina: quatro das sabotagens não sabotavam
+
+Esta base tem três casos documentados de sabotagem que derruba o cenário certo **pela asserção
+errada**, deixando o achado sem prova. A revisão achou **quatro** de uma vez neste plano:
+
+- **Task 7, nº 1:** a régua é `/entidade=["']([a-z_]+)["']/g`, e a sabotagem prescrita era
+  `"materialX"`. `[a-z_]+` **não casa maiúscula**, então não haveria match, `achadas` sairia `[]` e
+  o teste morreria em `achadas.length > 0` — **a mesma asserção da sabotagem nº 3**. O ramo que
+  valida a chave contra o mapa do servidor ficaria **sem controle positivo nenhum**. Corrigida para
+  `"material_x"`.
+- **Task 4, (b):** "mover o bloco para fora do `{aberta && ...}`" é **no-op** — o modal é montado
+  sob `{anexosItem && ...}`, condicionado ao **estado**, e com `anexosItem === null` não renderiza
+  dentro nem fora. Verde nos dois casos, e a regra do harness mandaria o executor "consertar" um
+  cenário saudável.
+- **Task 6, (b):** remover o `{detalhe && ...}` faz o corpo desreferenciar `detalhe.numero`
+  (`:487`) e lançar `TypeError` no primeiro render — **os quatro cenários caem juntos**, e nenhum
+  provou nada. Virou regra geral no topo do plano: *sabotagem que quebra tudo não é controle
+  positivo*.
+- **Task 1, nº 1:** o plano prometia que ela cairia "pela asserção do `querySelector` **e** pela do
+  `api.get`". A segunda metade é **falsa** — a guarda própria de `AnexosDocumento.js:117` já barra
+  a requisição, então aquela asserção nunca cai. Reportar as duas seria reportar cobertura
+  inexistente.
+
+### O defeito silencioso mais caro: `entidade_id: 1` não distingue nada
+
+Nenhuma tela testava um id que não fosse "o primeiro da fixture, que por acaso é 1". Um plug com
+`entidadeId={materiais[0].id}`, com `entidadeId={1}` literal, ou com estado obsoleto que reabre
+sempre o primeiro registro **passaria em todos os cenários do plano**. Em produção o usuário clica
+o clipe da 3ª linha e recebe os anexos do 1º material — **sem 400, sem erro**, que é o defeito mais
+caro possível num módulo de documentos.
+
+Virou a **regra (i)** do topo: nunca testar com id 1 nem com o primeiro da fixture; onde a fixture
+já tem id alto usá-lo (Materiais tem `3`, Remessa `11`, Requisição `55`), onde não tem
+**acrescentar** (Devoluções ganhou `id: 42`); e onde der, abrir o primeiro, fechar, abrir o
+terceiro e afirmar que a **última** chamada é a do terceiro — o único jeito de pegar estado
+obsoleto.
+
+### Os outros silenciosos, agrupados
+
+- **A RN-02 dizia "uma requisição" e nada contava chamadas.** `toHaveBeenCalledWith` é satisfeito
+  por 1, 2 ou 10 — e o debounce de 350 ms de Materiais re-renderiza a lista com o modal aberto.
+  Virou a regra (ii): todo positivo leva `filter(([u]) => u === '/almoxarifado/anexos')` com
+  `toHaveLength(1)`.
+- **O fallback que rejeita NÃO é ruidoso na tela de Recebimentos.** Os três `catch` de
+  `RecebimentosAlmoxarifado.js:74-84`, `:92-96`, `:99-108` **engolem** a rejeição, a tela renderiza
+  "Nenhum recebimento registrado", e os cenários (a) e (d) passariam **com a tela vazia** — a forma
+  exata de teste vazio que esta etapa diz combater. O (a) passou a contar linhas; o (d) ganhou
+  metade positiva.
+- **`/almoxarifado/recebimentos` é PREFIXO de `/almoxarifado/recebimentos/:id`.** Um mock com
+  `startsWith` faria `abrirDetalhe` receber o array da lista, e o `Number()` de
+  `AnexosDocumento.js:124` mandaria `entidade_id: NaN`. Igualdade + regex, nessa ordem.
+- **O `columns={8}→{9}` do esqueleto ficaria sem cobertura para sempre** — o arquivo não tem
+  nenhuma referência a `SkeletonTable`, `columns` ou contagem de `<th>`. Ganhou cenário que amarra
+  as duas pontas (`.skeleton-table-header-cell` × `thead th`) sem fixar número nenhum.
+- **O `<h3>` do modal.** Os **44** cabeçalhos de modal desta base usam `<h2>`, e o CSS estiliza só
+  `.almox-modal-header h2` (`Almoxarifado.css:432`). Com `h3` o título cai no `margin: 1em 0` do
+  navegador e desalinha o `✕` — e nenhum cenário do plano olhava a tag.
+- **A citação do molde da Task 6 omitia duas dependências obrigatórias:** o `MemoryRouter` (sem ele
+  a suíte nova **nem monta**, porque `AlmoxPageHeader` usa `<Link>` incondicional) e o mock do
+  `useAlmoxPermissoes`.
+- **A sabotagem nº 4 da Task 7 violava a Global Constraint do próprio plano** ("nenhuma alteração
+  em `server/`"). Ficou declarada como a única exceção autorizada, com o cuidado de não rodar a
+  suíte do servidor enquanto aplicada.
+
+### E uma justificativa MINHA que era impossível
+
+O plano afirmava que usar `selectedId` em vez de `detalhe.id` "dispararia a consulta com o painel
+ainda vazio". **Não pode acontecer:** o ponto de inserção está dentro do ramo `else` de
+`RequisicoesList.js:874`, então o bloco não renderiza enquanto `detalhe` for `null`; e o `catch` de
+`abrirDetalhe` (`:246-252`) zera os dois juntos. Não existe estado alcançável em que divirjam.
+
+Pior: o plano mandava **registrar isso como furo de cobertura**, o que faria a próxima sessão
+gastar tempo caçando um risco inexistente. E havia um conserto barato que eu não tinha visto —
+forçar a divergência **na fixture** (`id: 555` no detalhe, `55` na URL), que trava a distinção com
+uma linha e sem tocar em produção.
+
+### O que os dois confirmaram, e sustenta o plano
+
+O teste de integração da Task 7 **roda** — verificado por execução, não por dedução: o `require` de
+quatro níveis resolve, `anexoService.js:199-201` exporta `ENTIDADES_ANEXO` com as seis chaves, e a
+cadeia não puxa `sqlite3` (`db.js` é promisificação pura, `audit.js` só requer `./db`). O
+precedente `permissaoErro.test.js` foi **rodado**: 9 passed. A regex foi medida contra
+`entidade={variavel}` — ignora a forma com chaves, sem falso negativo para as chaves literais. As
+cinco classes CSS do modal existem. Nenhum `data-testid` colide. Acrescentar coluna não quebra
+suíte nenhuma (`linhasDetalhe()` conta linhas; `celula()` usa `data-col`). A forma dos `params` que
+o plano assere é exatamente a de `AnexosDocumento.js:124`. Baseline dos seis arquivos tocados:
+**6 suítes / 93 testes**, verde.
