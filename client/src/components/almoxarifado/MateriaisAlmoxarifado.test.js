@@ -297,3 +297,65 @@ describe('MateriaisAlmoxarifado — RN-01: a ação Plano de inspeção', () => 
     expect(mockPlanoMateriaisRecebidos).toHaveLength(0);
   });
 });
+
+describe('MateriaisAlmoxarifado — anexos do material (Etapa 34)', () => {
+  const URL_ANEXOS = '/almoxarifado/anexos';
+  const chamadasDeAnexo = () => api.get.mock.calls.filter(([u]) => u === URL_ANEXOS);
+  const abrirAnexos = async (id) => {
+    await act(async () => {
+      container.querySelector(`[data-testid="anexos-material-${id}"]`)
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+  };
+
+  // O TERCEIRO material, nunca o primeiro. `entidade_id: 1` e indistinguivel de tres defeitos
+  // diferentes — `entidadeId={materiais[0].id}`, `entidadeId={1}` literal, e estado obsoleto que
+  // reabre sempre o primeiro. Em producao isso e o usuario clicar o clipe da terceira linha e
+  // receber os anexos do primeiro material, sem 400 e sem erro nenhum.
+  test('o clipe abre o modal de anexos DO material da linha — e nao do primeiro', async () => {
+    await renderizar();
+    const clipe = container.querySelector('[data-testid="anexos-material-3"]');
+    expect(clipe).not.toBeNull();
+
+    await abrirAnexos(3);
+
+    expect(container.querySelector('[data-testid="anexos-modal"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="anexos-documento"]')).not.toBeNull();
+    expect(api.get).toHaveBeenCalledWith(URL_ANEXOS,
+      { params: { entidade: 'material', entidade_id: 3 } });
+    // RN-02: "uma requisicao". `toHaveBeenCalledWith` sozinho aceitaria dez, e esta tela
+    // re-renderiza a lista a cada 300ms de debounce da busca.
+    expect(chamadasDeAnexo()).toHaveLength(1);
+  });
+
+  test('reabrir em outra linha consulta a linha nova, nao a anterior', async () => {
+    await renderizar();
+    await abrirAnexos(1);
+    await act(async () => {
+      container.querySelector('.almox-modal-close')
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await abrirAnexos(3);
+    const chamadas = chamadasDeAnexo();
+    expect(chamadas[chamadas.length - 1][1].params.entidade_id).toBe(3);
+  });
+
+  // RN-02, negativo COM a metade positiva no mesmo teste: sozinho, o negativo passaria com a
+  // tabela vazia. O `querySelector(...).dispatchEvent` lanca se a linha nao renderizou.
+  test('a lista sozinha nao consulta anexos; so o clique consulta', async () => {
+    await renderizar();
+    expect(chamadasDeAnexo()).toHaveLength(0);
+    await abrirAnexos(3);
+    expect(chamadasDeAnexo()).toHaveLength(1);
+  });
+
+  // O botao NAO passa por `bloquearSeNaoPode` — e a decisao da Fase 0, e sem cenario ela seria
+  // "corrigida" pelo proximo que passasse aqui e visse os seis vizinhos gateados.
+  test('o clipe nao e gateado por permissao de edicao', async () => {
+    await renderizar();
+    await abrirAnexos(3);
+    expect(mockBloquearSeNaoPode).not.toHaveBeenCalledWith('editar_material', expect.anything());
+    expect(mockBloquearSeNaoPode).not.toHaveBeenCalledWith('anexar_documento', expect.anything());
+    expect(container.querySelector('[data-testid="anexos-modal"]')).not.toBeNull();
+  });
+});

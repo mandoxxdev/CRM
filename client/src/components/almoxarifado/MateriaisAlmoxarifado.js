@@ -10,9 +10,10 @@ import { SkeletonTable } from '../SkeletonLoader';
 import {
   FiPlus, FiSearch, FiEdit, FiTrash2, FiImage, FiPackage,
   FiArrowUp, FiArrowDown, FiAlertTriangle, FiRefreshCw, FiMap, FiClipboard, FiFileText, FiTag,
-  FiCheckSquare
+  FiCheckSquare, FiPaperclip
 } from 'react-icons/fi';
 import AlmoxPageHeader from './AlmoxPageHeader';
+import AnexosModal from './AnexosModal';
 import ExtratoMaterialModal from './ExtratoMaterialModal';
 import EtiquetasPdfModal from './EtiquetasPdfModal';
 import PlanoInspecaoModal from './PlanoInspecaoModal';
@@ -48,6 +49,9 @@ const MateriaisAlmoxarifado = () => {
   // unidade, e a linha da lista já tem os três (os outros modais desta tela recebem id escalar
   // porque só precisam do id).
   const [planoMaterial, setPlanoMaterial] = useState(null);
+  // Etapa 34: como o `planoMaterial`, guarda o OBJETO — o subtítulo do modal mostra código e nome,
+  // e a linha da lista já tem os dois.
+  const [anexosMaterial, setAnexosMaterial] = useState(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const materialIdAplicado = useRef(false);
@@ -344,6 +348,19 @@ const MateriaisAlmoxarifado = () => {
                           onClick={(e) => { if (!bloquearSeNaoPode('movimentar', e)) return; openMovModal(m, 'SAIDA'); }}>
                           <FiArrowDown />
                         </button>
+                        {/* Etapa 34 — anexos do material (ficha técnica, certificado, desenho).
+                            SEM `bloquearSeNaoPode`, de propósito e ao contrário de todos os
+                            vizinhos: `anexar_documento` é de sete perfis e `editar_material` de
+                            três, e quem só tem `visualizar` precisa poder BAIXAR (decisão B68 da
+                            Etapa 32). Gatear aqui daria a COMPRAS, PRODUÇÃO, GESTOR e QUALIDADE a
+                            permissão sem nenhuma superfície para exercê-la — que é exatamente o
+                            defeito que a Fase 0 desta etapa mediu. Quem esconde enviar e remover é
+                            o próprio bloco. NÃO "corrija" isto acrescentando o gate. */}
+                        <button className="almox-btn-icon" title="Anexos e documentos deste material"
+                          data-testid={`anexos-material-${m.id}`}
+                          onClick={() => setAnexosMaterial(m)}>
+                          <FiPaperclip />
+                        </button>
                         <button className="almox-btn-icon primary" title="Edita o cadastro deste material"
                           onClick={(e) => { if (!bloquearSeNaoPode('editar_material', e)) return; navigate(`/almoxarifado/materiais/editar/${m.id}`); }}>
                           <FiEdit />
@@ -431,6 +448,19 @@ const MateriaisAlmoxarifado = () => {
       {/* Plano de inspeção do material (Etapa 30) */}
       {planoMaterial && (
         <PlanoInspecaoModal material={planoMaterial} onClose={() => setPlanoMaterial(null)} />
+      )}
+
+      {/* Anexos do material (Etapa 34) — a spec 01 pedia "ficha técnica e documentos anexos na
+          tela do material". Modal, e não bloco na página de edição, porque aquela página exige
+          `editar_material` e deixaria quatro dos sete perfis com a permissão e sem superfície. */}
+      {anexosMaterial && (
+        <AnexosModal
+          titulo="Anexos do material"
+          subtitulo={`${anexosMaterial.codigo} — ${anexosMaterial.nome}`}
+          entidade="material"
+          entidadeId={anexosMaterial.id}
+          onClose={() => setAnexosMaterial(null)}
+        />
       )}
     </div>
   );
