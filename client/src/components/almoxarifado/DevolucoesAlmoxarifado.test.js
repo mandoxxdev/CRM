@@ -50,6 +50,14 @@ const DEVOLUCOES = [{
   id: 1, material_id: 10, material_codigo: 'MAT-1', material_nome: 'Chapa 3mm',
   quantidade: 3, motivo: 'SOBRA_PROJETO', condicao: 'BOA', destino: 'ESTOQUE',
   movimentacao_saida_id: 501, responsavel_nome: 'Maria', created_at: '2026-08-11T10:00:00Z',
+}, {
+  // Etapa 34: a segunda linha existe para que os cenarios de anexo possam assertar um id que
+  // NAO seja 1. `entidade_id: 1` e indistinguivel de indice-zero, de literal e de estado
+  // obsoleto — em producao, o usuario clicaria o clipe da segunda linha e receberia os anexos
+  // da primeira, sem 400 e sem erro nenhum.
+  id: 42, material_id: 11, material_codigo: 'TUB-2', material_nome: 'Tubo 2 pol',
+  quantidade: 5, motivo: 'SOBRA_PROJETO', condicao: 'BOA', destino: 'ESTOQUE',
+  movimentacao_saida_id: null, responsavel_nome: 'Carlos', created_at: '2026-08-12T10:00:00Z',
 }];
 
 let container;
@@ -231,5 +239,73 @@ describe('DevolucoesAlmoxarifado — lote e série', () => {
     await esperarEfeitos();
     expect(container.querySelectorAll('.almox-modal input[type="checkbox"]')).toHaveLength(0);
     expect(container.querySelector('.almox-modal').textContent).toMatch(/Movimenta/);
+  });
+});
+
+describe('DevolucoesAlmoxarifado — anexos da devolução (Etapa 34)', () => {
+  const URL_ANEXOS = '/almoxarifado/anexos';
+  const chamadasDeAnexo = () => api.get.mock.calls.filter(([u]) => u === URL_ANEXOS);
+  const abrirAnexos = async (id) => {
+    await act(async () => {
+      container.querySelector(`[data-testid="anexos-devolucao-${id}"]`)
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await esperarEfeitos();
+  };
+
+  // O id 42, nunca o 1 — ver o comentario da fixture.
+  test('o clipe abre o modal de anexos DA devolucao da linha — e nao da primeira', async () => {
+    await renderizar();
+    await esperarEfeitos();
+    expect(container.querySelector('[data-testid="anexos-devolucao-42"]')).not.toBeNull();
+
+    await abrirAnexos(42);
+
+    expect(container.querySelector('[data-testid="anexos-modal"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="anexos-documento"]')).not.toBeNull();
+    expect(api.get).toHaveBeenCalledWith(URL_ANEXOS,
+      { params: { entidade: 'devolucao', entidade_id: 42 } });
+    expect(chamadasDeAnexo()).toHaveLength(1);
+  });
+
+  test('reabrir em outra linha consulta a linha nova, nao a anterior', async () => {
+    await renderizar();
+    await esperarEfeitos();
+    await abrirAnexos(1);
+    await act(async () => {
+      container.querySelector('.almox-modal-close')
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await abrirAnexos(42);
+    const chamadas = chamadasDeAnexo();
+    expect(chamadas[chamadas.length - 1][1].params.entidade_id).toBe(42);
+  });
+
+  // RN-02, negativo COM metade positiva: sozinho passaria com a tabela vazia.
+  test('a lista sozinha nao consulta anexos; so o clique consulta', async () => {
+    await renderizar();
+    await esperarEfeitos();
+    expect(chamadasDeAnexo()).toHaveLength(0);
+    await abrirAnexos(42);
+    expect(chamadasDeAnexo()).toHaveLength(1);
+  });
+
+  // A coluna nova mudou o `columns` do esqueleto de 8 para 9. Sem este cenario, esquecer o 9
+  // deixaria o esqueleto uma coluna mais estreito que a tabela carregada — e verde para sempre,
+  // porque este arquivo nao tinha nenhuma referencia a SkeletonTable, `columns` ou contagem de th.
+  // A regua nao fixa numero nenhum: amarra as DUAS pontas uma na outra.
+  test('o esqueleto tem tantas colunas quanto a tabela carregada', async () => {
+    let liberar;
+    const original = api.get.getMockImplementation();
+    api.get.mockImplementation((url, cfg) => (url === '/almoxarifado/devolucoes'
+      ? new Promise((r) => { liberar = () => r({ data: DEVOLUCOES }); })
+      : original(url, cfg)));
+
+    await renderizar();
+    const colsEsqueleto = container.querySelectorAll('.skeleton-table-header-cell').length;
+    expect(colsEsqueleto).toBeGreaterThan(0);   // metade positiva: o esqueleto existe mesmo
+
+    await act(async () => { liberar(); await new Promise((r) => setTimeout(r, 0)); });
+    expect(container.querySelectorAll('.almox-table thead th')).toHaveLength(colsEsqueleto);
   });
 });
