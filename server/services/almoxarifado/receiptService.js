@@ -15,6 +15,9 @@ const purchaseService = require('./purchaseService');
 // capturaria a funcao original. Sem ciclo (purchaseService/stockService ja carregam a fila).
 const notificationQueueService = require('./notificationQueueService');
 const alertRegistry = require('./alertRegistry');
+// Etapa 32 — implementador unico da leitura do pedido de compra (ver
+// getPedidoCompraParaRecebimento). Sem ciclo: pedidoLeitura so conhece o proprio db helper.
+const { carregarPedido: carregarPedidoCompra } = require('../compras/pedidoLeitura');
 
 /**
  * Etapa 17 (RN-04, gancho C4.2) — aviso pos-escrita da quantidade recebida, nos DOIS escritores
@@ -774,6 +777,39 @@ async function listarPedidosCompraAux(db, { search } = {}) {
   return dbAll(db, sql, params);
 }
 
+/**
+ * Etapa 32 — o pedido de compra INTEIRO para quem vai receber.
+ *
+ * Por que existe, se `GET /api/compras/pedidos/:id` ja devolve isto: aquela rota e guardada por
+ * `checkModulePermission('compras')` e o almoxarife NAO tem o modulo compras — ele tomaria 403
+ * bem no meio do lancamento. Mesma familia das outras `recebimentos-aux/*`: leitura, guardada
+ * so por `auth`.
+ *
+ * A leitura em si NAO e reimplementada aqui: delega para services/compras/pedidoLeitura, o mesmo
+ * implementador da rota do comprador. Uma segunda copia divergiria, e a divergencia apareceria
+ * como "o comprador ve um total e quem recebe ve outro".
+ */
+async function getPedidoCompraParaRecebimento(db, id) {
+  const tableExists = await dbGet(db,
+    "SELECT name FROM sqlite_master WHERE type='table' AND name='pedidos_compra'");
+  if (!tableExists) return null;
+
+  const pedido = await carregarPedidoCompra(db, id);
+  if (!pedido) return null;
+
+  // `recebivel` espelha o filtro de `carregarItensPedidoCompra` (item sem material_id e
+  // DESCARTADO no lancamento). Sem esta marca, o almoxarife ve 5 itens na tela e recebe 4,
+  // sem nada dizendo qual sumiu. Pedidos novos nao caem aqui (RN-09 barra no POST); pedidos
+  // antigos, sim.
+  const itens = pedido.itens.map((i) => ({ ...i, recebivel: !!i.material_id }));
+
+  return {
+    ...pedido,
+    itens,
+    itens_sem_material: itens.filter((i) => !i.recebivel).length,
+  };
+}
+
 async function listarFornecedoresAux(db, { search } = {}) {
   const tableExists = await dbGet(db,
     "SELECT name FROM sqlite_master WHERE type='table' AND name='fornecedores'");
@@ -821,6 +857,7 @@ module.exports = {
   processarNota,
   listarRecebimentos,
   listarPedidosCompraAux,
+  getPedidoCompraParaRecebimento,
   listarFornecedoresAux,
   getRecebimento,
 };

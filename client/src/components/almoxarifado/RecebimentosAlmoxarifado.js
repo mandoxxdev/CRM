@@ -57,6 +57,11 @@ const RecebimentosAlmoxarifado = () => {
   const [showFiscal, setShowFiscal] = useState(false);
   const [buscaMat, setBuscaMat] = useState('');
   const [etiquetas, setEtiquetas] = useState(null);
+  // Etapa 32 — o pedido de compra INTEIRO, para quem vai dar baixa conferir contra o que
+  // chegou sem sair da tela (antes daqui o almoxarife escolhia o pedido no escuro: o select
+  // só mostrava número e fornecedor).
+  const [pedidoDetalhe, setPedidoDetalhe] = useState(null);
+  const [loadingPedido, setLoadingPedido] = useState(false);
   const [fiscalForm, setFiscalForm] = useState(EMPTY_FISCAL);
   const [form, setForm] = useState({
     tipo_recebimento: 'NOTA_FISCAL',
@@ -239,7 +244,7 @@ const RecebimentosAlmoxarifado = () => {
     setForm((f) => ({ ...f, itens: f.itens.filter((i) => i.material_id !== material_id) }));
   };
 
-  const selecionarPedido = (pedidoId) => {
+  const selecionarPedido = async (pedidoId) => {
     const pedido = pedidos.find((p) => String(p.id) === String(pedidoId));
     setForm((f) => ({
       ...f,
@@ -248,6 +253,29 @@ const RecebimentosAlmoxarifado = () => {
       fornecedor_nome: pedido?.fornecedor_nome || f.fornecedor_nome,
       fornecedor_cnpj: pedido?.fornecedor_cnpj || f.fornecedor_cnpj,
     }));
+    setPedidoDetalhe(null);
+    if (!pedidoId) return;
+
+    // Rota do ALMOXARIFADO, não a de compras: `/api/compras/pedidos/:id` é guardada por
+    // checkModulePermission('compras') e o almoxarife levaria 403 bem aqui.
+    setLoadingPedido(true);
+    try {
+      const res = await api.get(`/almoxarifado/recebimentos-aux/pedidos-compra/${pedidoId}`);
+      setPedidoDetalhe(res.data);
+      // O documento vence a lista: o snapshot do fornecedor é o que foi congelado no pedido.
+      const forn = res.data?.fornecedor;
+      if (forn) {
+        setForm((f) => ({
+          ...f,
+          fornecedor_nome: forn.nome || f.fornecedor_nome,
+          fornecedor_cnpj: forn.cnpj || f.fornecedor_cnpj,
+        }));
+      }
+    } catch {
+      toast.error('Não foi possível carregar os dados do pedido');
+    } finally {
+      setLoadingPedido(false);
+    }
   };
 
   const selecionarFornecedor = (fornId) => {
@@ -295,6 +323,7 @@ const RecebimentosAlmoxarifado = () => {
       const res = await api.post('/almoxarifado/recebimentos', payload);
       toast.success(`Recebimento ${res.data.numero} registrado!`);
       setShowNovo(false);
+      setPedidoDetalhe(null);
       setForm({
         tipo_recebimento: 'NOTA_FISCAL', pedido_compra_id: '', nota_fiscal: '',
         fornecedor_nome: '', fornecedor_cnpj: '', observacoes: '', itens: [],
@@ -320,6 +349,25 @@ const RecebimentosAlmoxarifado = () => {
     : '—';
 
   const formatMoney = (v) => (v != null && v !== '' ? Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—');
+
+  // RN-12 — o unitario do pedido guarda ate 4 casas (o ERP de origem armazena 4 e imprime 3).
+  // `formatMoney` corta em 2 e faria 2,191 virar "R$ 2,19": quem confere contra a nota do
+  // fornecedor leria divergencia onde nao ha. Aqui o valor aparece como foi comprado.
+  const formatMoneyUnit = (v) => (v != null && v !== ''
+    ? Number(v).toLocaleString('pt-BR', {
+      style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 4,
+    })
+    : '—');
+
+  // Datas do pedido de compra sao DATE puro ('2025-12-16'), nao timestamp. `formatDate` acima
+  // passa pelo `new Date(...)`, que interpreta a string como UTC e, no fuso de Brasilia,
+  // imprime o DIA ANTERIOR ('16/12' vira '15/12'). Aqui a string e fatiada, sem fuso nenhum.
+  const formatDateOnly = (d) => {
+    if (!d) return '—';
+    const iso = String(d).slice(0, 10);
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+    return m ? `${m[3]}/${m[2]}/${m[1]}` : formatDate(d);
+  };
 
   const materiaisFiltrados = buscaMat.length >= 2
     ? materiais.filter((m) =>
@@ -408,7 +456,7 @@ const RecebimentosAlmoxarifado = () => {
             <button type="button" className="btn-almox-secondary" onClick={loadRecebimentos}>
               <FiRefreshCw size={13} />
             </button>
-            <button type="button" className="btn-almox-primary" onClick={() => setShowNovo(true)}>
+            <button type="button" className="btn-almox-primary" onClick={() => { setPedidoDetalhe(null); setShowNovo(true); }}>
               <FiPlus size={14} /> Novo Recebimento
             </button>
           </>
@@ -445,7 +493,7 @@ const RecebimentosAlmoxarifado = () => {
             <div className="almox-empty">
               <FiPackage size={40} style={{ opacity: 0.3, display: 'block', margin: '0 auto 12px' }} />
               <p>Nenhum recebimento registrado</p>
-              <button type="button" className="btn-almox-primary" style={{ marginTop: 12 }} onClick={() => setShowNovo(true)}>
+              <button type="button" className="btn-almox-primary" style={{ marginTop: 12 }} onClick={() => { setPedidoDetalhe(null); setShowNovo(true); }}>
                 Registrar primeiro recebimento
               </button>
             </div>
@@ -587,18 +635,19 @@ const RecebimentosAlmoxarifado = () => {
       </div>
 
       {showNovo && (
-        <div className="almox-modal-overlay" onClick={() => setShowNovo(false)}>
-          <div className="almox-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
+        <div className="almox-modal-overlay" onClick={() => { setShowNovo(false); setPedidoDetalhe(null); }}>
+          <div className="almox-modal" onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: pedidoDetalhe ? 920 : 560 }}>
             <div className="almox-modal-header">
               <h2>📥 Novo Recebimento — Almoxarifado</h2>
-              <button type="button" className="almox-modal-close" onClick={() => setShowNovo(false)}>✕</button>
+              <button type="button" className="almox-modal-close" onClick={() => { setShowNovo(false); setPedidoDetalhe(null); }}>✕</button>
             </div>
             <form onSubmit={handleCriar}>
               <div className="almox-modal-body">
                 <div className="almox-field almox-form-full">
                   <label className="almox-label">Forma de recebimento</label>
                   <select className="almox-select" value={form.tipo_recebimento}
-                    onChange={(e) => setForm((f) => ({ ...f, tipo_recebimento: e.target.value, pedido_compra_id: '', itens: [] }))}>
+                    onChange={(e) => { setPedidoDetalhe(null); setForm((f) => ({ ...f, tipo_recebimento: e.target.value, pedido_compra_id: '', itens: [] })); }}>
                     <option value="NOTA_FISCAL">Somente pela Nota Fiscal</option>
                     <option value="PEDIDO_COMPRA">Por Pedido de Compra</option>
                   </select>
@@ -614,6 +663,136 @@ const RecebimentosAlmoxarifado = () => {
                         <option key={p.id} value={p.id}>{p.numero} — {p.fornecedor_nome}</option>
                       ))}
                     </select>
+
+                    {loadingPedido && (
+                      <div className="ped-rec-loading">Carregando dados do pedido…</div>
+                    )}
+
+                    {pedidoDetalhe && !loadingPedido && (
+                      <div className="ped-rec-painel">
+                        {/* Fornecedor — do SNAPSHOT do pedido, nao do cadastro de hoje:
+                            o documento e o que foi combinado com o fornecedor. */}
+                        <div className="ped-rec-bloco">
+                          <div className="ped-rec-bloco-titulo">Fornecedor</div>
+                          <div className="ped-rec-forn-nome">{pedidoDetalhe.fornecedor?.nome || '—'}</div>
+                          <div className="ped-rec-grid">
+                            <div><span>CNPJ</span><strong>{pedidoDetalhe.fornecedor?.cnpj || '—'}</strong></div>
+                            <div><span>Inscrição Estadual</span><strong>{pedidoDetalhe.fornecedor?.inscricao_estadual || '—'}</strong></div>
+                            <div><span>Telefone</span><strong>{pedidoDetalhe.fornecedor?.telefone || pedidoDetalhe.fornecedor?.celular || '—'}</strong></div>
+                            <div><span>E-mail</span><strong>{pedidoDetalhe.fornecedor?.email || '—'}</strong></div>
+                            <div className="ped-rec-grid-full">
+                              <span>Endereço</span>
+                              <strong>
+                                {[pedidoDetalhe.fornecedor?.endereco,
+                                  pedidoDetalhe.fornecedor?.municipio,
+                                  pedidoDetalhe.fornecedor?.uf,
+                                  pedidoDetalhe.fornecedor?.cep].filter(Boolean).join(' — ') || '—'}
+                              </strong>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="ped-rec-bloco">
+                          <div className="ped-rec-bloco-titulo">Condições do pedido</div>
+                          <div className="ped-rec-grid">
+                            <div><span>Data do pedido</span><strong>{formatDateOnly(pedidoDetalhe.data_pedido)}</strong></div>
+                            <div><span>Previsão de entrega</span><strong>{formatDateOnly(pedidoDetalhe.previsao_entrega)}</strong></div>
+                            <div><span>Condição de pagamento</span><strong>{pedidoDetalhe.condicao_pagamento || '—'}</strong></div>
+                            <div><span>Frete</span><strong>{pedidoDetalhe.frete_modalidade || '—'}</strong></div>
+                            <div><span>Transportadora</span><strong>{pedidoDetalhe.transportadora || '—'}</strong></div>
+                            <div><span>Via de transporte</span><strong>{pedidoDetalhe.via_transporte || '—'}</strong></div>
+                            <div><span>Contato</span><strong>{pedidoDetalhe.contato || '—'}</strong></div>
+                            <div><span>Status</span><strong>{(pedidoDetalhe.status || '—').toUpperCase()}</strong></div>
+                            <div className="ped-rec-grid-full">
+                              <span>Local de entrega</span>
+                              <strong>{pedidoDetalhe.local_entrega || '—'}</strong>
+                            </div>
+                            {pedidoDetalhe.observacoes && (
+                              <div className="ped-rec-grid-full">
+                                <span>Observações do pedido</span>
+                                <strong>{pedidoDetalhe.observacoes}</strong>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="ped-rec-bloco">
+                          <div className="ped-rec-bloco-titulo">
+                            Itens do pedido ({pedidoDetalhe.itens?.length || 0})
+                          </div>
+                          <div className="ped-rec-tabela-wrap">
+                            <table className="ped-rec-tabela">
+                              <thead>
+                                <tr>
+                                  <th>#</th>
+                                  <th>Código</th>
+                                  <th>Descrição</th>
+                                  <th>NCM</th>
+                                  <th className="num">Qtd</th>
+                                  <th>Un</th>
+                                  <th className="num">Vl. unit.</th>
+                                  <th className="num">Total</th>
+                                  <th>Entrega</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {(pedidoDetalhe.itens || []).map((it, idx) => (
+                                  <tr key={it.id} className={it.recebivel === false ? 'ped-rec-item-bloqueado' : ''}>
+                                    <td>{it.item_numero || idx + 1}</td>
+                                    <td>{it.codigo || it.material_codigo || '—'}</td>
+                                    <td>
+                                      {it.descricao || it.material_nome || '—'}
+                                      {it.observacao && <div className="ped-rec-item-obs">{it.observacao}</div>}
+                                      {it.recebivel === false && (
+                                        <div className="ped-rec-item-obs ped-rec-alerta-inline">
+                                          sem material do cadastro — não entra na baixa
+                                        </div>
+                                      )}
+                                    </td>
+                                    <td>{it.ncm || '—'}</td>
+                                    <td className="num">{it.quantidade}</td>
+                                    <td>{it.unidade || 'UN'}</td>
+                                    <td className="num">{formatMoneyUnit(it.valor_unitario)}</td>
+                                    <td className="num">{formatMoney(it.valor_linha)}</td>
+                                    <td>{formatDateOnly(it.data_entrega)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          {pedidoDetalhe.itens_sem_material > 0 && (
+                            <div className="ped-rec-alerta">
+                              {pedidoDetalhe.itens_sem_material === 1
+                                ? '1 item do pedido não tem material do cadastro e não será lançado.'
+                                : `${pedidoDetalhe.itens_sem_material} itens do pedido não têm material do cadastro e não serão lançados.`}
+                              {' '}Peça ao Compras para vincular o material antes de dar baixa.
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="ped-rec-totais">
+                          <div><span>Produtos</span><strong>{formatMoney(pedidoDetalhe.totais?.total_produtos)}</strong></div>
+                          <div><span>IPI</span><strong>{formatMoney(pedidoDetalhe.totais?.total_ipi)}</strong></div>
+                          <div><span>ICMS ST</span><strong>{formatMoney(pedidoDetalhe.totais?.total_icms_st)}</strong></div>
+                          <div><span>Frete</span><strong>{formatMoney(pedidoDetalhe.totais?.valor_frete)}</strong></div>
+                          <div><span>Desconto</span><strong>{formatMoney(pedidoDetalhe.totais?.total_desconto)}</strong></div>
+                          <div className="ped-rec-total-geral">
+                            <span>Total do pedido</span>
+                            <strong>{formatMoney(pedidoDetalhe.totais?.total_geral)}</strong>
+                          </div>
+                        </div>
+
+                        {/* O recebimento grava quantidade x valor unitario, SEM IPI — a nota do
+                            fornecedor vira com IPI e a diferenca e esperada. Dizer isso aqui evita
+                            o almoxarife "corrigir" o valor achando que a tela errou. */}
+                        <div className="ped-rec-nota">
+                          A baixa lança <strong>{formatMoney(pedidoDetalhe.totais?.total_produtos)}</strong>{' '}
+                          (quantidade × valor unitário, sem IPI). As quantidades entram cheias e podem
+                          ser ajustadas na conferência.
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="almox-form-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
@@ -687,7 +866,7 @@ const RecebimentosAlmoxarifado = () => {
                 )}
               </div>
               <div className="almox-modal-footer">
-                <button type="button" className="btn-almox-secondary" onClick={() => setShowNovo(false)}>Cancelar</button>
+                <button type="button" className="btn-almox-secondary" onClick={() => { setShowNovo(false); setPedidoDetalhe(null); }}>Cancelar</button>
                 <button type="submit" className="btn-almox-primary"
                   disabled={saving || (form.tipo_recebimento === 'NOTA_FISCAL' && form.itens.length === 0)}>
                   {saving ? 'Salvando...' : 'Registrar Recebimento'}

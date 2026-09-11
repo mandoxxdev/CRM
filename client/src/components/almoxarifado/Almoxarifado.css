@@ -1570,3 +1570,177 @@
 
 /* Loading no tema escuro */
 .almox-mapa-page .almox-loading { color: var(--gmp-text-light); }
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Etapa 32 — Pedido de compra dentro do "Novo Recebimento"
+   Painel SOMENTE LEITURA: o almoxarife confere o que chegou contra o que
+   foi pedido sem sair da tela. Nada aqui e editavel de proposito — o pedido
+   e documento do Compras.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.ped-rec-loading {
+  padding: 14px;
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--gmp-text-light);
+}
+
+.ped-rec-painel {
+  margin-top: 12px;
+  border: 1px solid var(--gmp-border);
+  border-radius: 10px;
+  background: var(--gmp-bg);
+  overflow: hidden;
+}
+
+.ped-rec-bloco {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--gmp-border);
+}
+
+.ped-rec-bloco-titulo {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--gmp-text-light);
+  margin-bottom: 8px;
+}
+
+.ped-rec-forn-nome {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--gmp-text);
+  margin-bottom: 8px;
+}
+
+.ped-rec-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px 16px;
+}
+
+.ped-rec-grid > div { display: flex; flex-direction: column; min-width: 0; }
+.ped-rec-grid-full { grid-column: 1 / -1; }
+
+.ped-rec-grid span {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--gmp-text-light);
+}
+
+.ped-rec-grid strong {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--gmp-text);
+  word-break: break-word;
+}
+
+/* A tabela rola DENTRO do proprio container: com 9 colunas e descricao longa,
+   sem isto o modal inteiro ganha barra horizontal. */
+.ped-rec-tabela-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--gmp-border);
+  border-radius: 8px;
+}
+
+.ped-rec-tabela {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.ped-rec-tabela th {
+  text-align: left;
+  padding: 7px 9px;
+  background: var(--gmp-surface);
+  color: var(--gmp-text-light);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+  border-bottom: 1px solid var(--gmp-border);
+  position: sticky;
+  top: 0;
+}
+
+.ped-rec-tabela td {
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--gmp-border);
+  color: var(--gmp-text);
+  vertical-align: top;
+}
+
+.ped-rec-tabela tr:last-child td { border-bottom: none; }
+.ped-rec-tabela .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.ped-rec-tabela td:nth-child(3) { white-space: normal; min-width: 220px; }
+
+.ped-rec-item-obs {
+  font-size: 0.68rem;
+  color: var(--gmp-text-light);
+  margin-top: 2px;
+  white-space: normal;
+}
+
+.ped-rec-item-bloqueado { opacity: 0.6; }
+.ped-rec-alerta-inline { color: var(--gmp-warning); font-weight: 600; }
+
+.ped-rec-alerta {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--gmp-warning);
+  background: rgba(255, 179, 0, 0.12);
+  color: var(--gmp-text);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.ped-rec-totais {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px 16px;
+  padding: 12px 14px;
+  background: var(--gmp-surface);
+  border-bottom: 1px solid var(--gmp-border);
+}
+
+.ped-rec-totais > div { display: flex; flex-direction: column; }
+
+.ped-rec-totais span {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--gmp-text-light);
+}
+
+.ped-rec-totais strong {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--gmp-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.ped-rec-total-geral strong {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--spotify-green);
+}
+
+.ped-rec-nota {
+  padding: 10px 14px;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--gmp-text-light);
+}
+
+.ped-rec-nota strong { color: var(--gmp-text); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 640px) {
+  .ped-rec-grid { grid-template-columns: 1fr; }
+  .ped-rec-totais { grid-template-columns: 1fr 1fr; }
+}

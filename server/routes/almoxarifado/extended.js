@@ -1102,6 +1102,21 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     } catch (e) { handleError(res, e); }
   });
 
+  // Etapa 32 — o pedido INTEIRO (fornecedor, condicoes, itens com NCM/valores, totais) para a
+  // tela de recebimento. A rota equivalente de compras (`GET /api/compras/pedidos/:id`) e
+  // guardada por `checkModulePermission('compras')`, que o almoxarife nao tem: ele levaria 403
+  // no meio do lancamento. Por isso mora aqui, guardada so por `auth`, como as irmas acima.
+  // 404 com a MESMA literal usada em purchaseService/receiptService/routes-compras.
+  app.get('/api/almoxarifado/recebimentos-aux/pedidos-compra/:id', auth, async (req, res) => {
+    try {
+      const pedido = await receiptService.getPedidoCompraParaRecebimento(
+        db, parseInt(req.params.id, 10)
+      );
+      if (!pedido) return res.status(404).json({ error: 'Pedido de compra não encontrado' });
+      res.json(pedido);
+    } catch (e) { handleError(res, e); }
+  });
+
   app.get('/api/almoxarifado/recebimentos-aux/fornecedores', auth, async (req, res) => {
     try {
       res.json(await receiptService.listarFornecedoresAux(db, req.query));
