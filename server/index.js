@@ -19542,6 +19542,57 @@ db.run(`CREATE TABLE IF NOT EXISTS pedidos_compra (
   FOREIGN KEY (fornecedor_id) REFERENCES fornecedores(id)
 )`);
 
+// ── Etapa 32: pedido de compra completo (documento que vai ao fornecedor) ──
+// O pedido precisa carregar o que o ERP atual imprime: dados complementares, os cinco
+// totalizadores e o snapshot fiscal do fornecedor.
+//
+// O prefixo `snap_` NÃO é enfeite: receiptService faz
+// `SELECT p.*, f.razao_social as fornecedor_nome, f.cnpj as fornecedor_cnpj` em três pontos.
+// Colunas chamadas `fornecedor_nome`/`fornecedor_cnpj` aqui viriam no `p.*` e seriam
+// SOBRESCRITAS pelo alias do JOIN na mesma linha — o snapshot morreria em silêncio justo na
+// leitura que o recebimento usa. Ver RN-06 do plano da Etapa 32.
+const COLUNAS_PEDIDO_COMPRA_E32 = [
+  'condicao_pagamento TEXT',
+  'frete_modalidade TEXT',
+  'transportadora TEXT',
+  'transportadora_telefone TEXT',
+  'via_transporte TEXT',
+  'tabela_preco TEXT',
+  'contato TEXT',
+  'local_entrega TEXT',
+  'local_cobranca TEXT',
+  'total_produtos REAL DEFAULT 0',
+  'total_ipi REAL DEFAULT 0',
+  'total_icms_st REAL DEFAULT 0',
+  'total_desconto REAL DEFAULT 0',
+  'valor_frete REAL DEFAULT 0',
+  'snap_fornecedor_nome TEXT',
+  'snap_fornecedor_cnpj TEXT',
+  'snap_fornecedor_ie TEXT',
+  'snap_fornecedor_endereco TEXT',
+  'snap_fornecedor_municipio TEXT',
+  'snap_fornecedor_uf TEXT',
+  'snap_fornecedor_cep TEXT',
+  'snap_fornecedor_telefone TEXT',
+  'snap_fornecedor_email TEXT',
+];
+COLUNAS_PEDIDO_COMPRA_E32.forEach((col) => {
+  db.run(`ALTER TABLE pedidos_compra ADD COLUMN ${col}`, (e) => {
+    if (e && e.message.indexOf('duplicate') === -1) {
+      console.error(`Erro ao adicionar ${col.split(' ')[0]} em pedidos_compra:`, e.message);
+    }
+  });
+});
+
+// O bloco "Dados do Fornecedor" do documento mostra IE e celular; o cadastro não tinha.
+['inscricao_estadual TEXT', 'celular TEXT'].forEach((col) => {
+  db.run(`ALTER TABLE fornecedores ADD COLUMN ${col}`, (e) => {
+    if (e && e.message.indexOf('duplicate') === -1) {
+      console.error(`Erro ao adicionar ${col.split(' ')[0]} em fornecedores:`, e.message);
+    }
+  });
+});
+
 db.run(`CREATE TABLE IF NOT EXISTS cotacoes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   numero TEXT UNIQUE,
@@ -20300,33 +20351,11 @@ app.get('/api/compras/fornecedores', authenticateToken, checkModulePermission('c
 });
 
 // Pedidos de Compra
-app.get('/api/compras/pedidos', authenticateToken, checkModulePermission('compras'), (req, res) => {
-  const { search, status } = req.query;
-  let query = `SELECT p.*, f.razao_social as fornecedor_nome 
-               FROM pedidos_compra p 
-               LEFT JOIN fornecedores f ON p.fornecedor_id = f.id 
-               WHERE 1=1`;
-  const params = [];
-
-  if (search) {
-    query += ' AND (p.numero LIKE ? OR f.razao_social LIKE ?)';
-    const searchTerm = `%${search}%`;
-    params.push(searchTerm, searchTerm);
-  }
-  if (status) {
-    query += ' AND p.status = ?';
-    params.push(status);
-  }
-
-  query += ' ORDER BY p.created_at DESC';
-
-  db.all(query, params, (err, rows) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
-    res.json(rows);
-  });
-});
+// Pedido de compra (Etapa 32) — saiu daqui para `routes/compras/pedidos.js`, que o harness
+// de testes consegue montar. REGISTRADO AQUI, e não no rodapé junto dos outros módulos, por
+// um motivo concreto: precisa vir ANTES do `app.delete('/api/compras/:tipo/:id')` genérico
+// logo abaixo, senão o DELETE do módulo nunca roda.
+require('./routes/compras/pedidos')(app, db, authenticateToken, checkModulePermission);
 
 // Cotações
 app.get('/api/compras/cotacoes', authenticateToken, checkModulePermission('compras'), (req, res) => {
@@ -20360,9 +20389,13 @@ app.get('/api/compras/cotacoes', authenticateToken, checkModulePermission('compr
 // Delete genérico
 app.delete('/api/compras/:tipo/:id', authenticateToken, checkModulePermission('compras'), (req, res) => {
   const { tipo, id } = req.params;
+  // 'pedidos' SAIU daqui na Etapa 32: o pedido tem filhos (itens) e regra de bloqueio
+  // (RN-08 — recebimento ou solicitação vinculada), e o DELETE cru desta rota genérica
+  // apagaria o cabeçalho deixando os itens órfãos, ou estouraria FK em produção.
+  // Quem responde por DELETE /api/compras/pedidos/:id é routes/compras/pedidos.js,
+  // registrado ANTES desta rota.
   const tables = {
     'fornecedores': 'fornecedores',
-    'pedidos': 'pedidos_compra',
     'cotacoes': 'cotacoes'
   };
 

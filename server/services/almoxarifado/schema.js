@@ -1302,6 +1302,21 @@ async function initSchema(db) {
     FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
   )`);
 
+  // Etapa 32 — o que a linha do documento impresso mostra e a tabela não tinha.
+  // `valor_total` da linha NÃO entra aqui de propósito: é derivado de
+  // quantidade × valor_unitario (RN-03), e guardá-lo convida a divergir do cálculo.
+  const itensPedidoCompraColsE32 = [
+    'item_numero INTEGER',
+    'ncm TEXT',
+    'peso_unitario REAL DEFAULT 0',
+    'data_entrega DATE',
+    'ipi_percentual REAL DEFAULT 0',
+    'observacao TEXT',
+  ];
+  for (const col of itensPedidoCompraColsE32) {
+    await safeAlter(db, `ALTER TABLE itens_pedido_compra ADD COLUMN ${col}`);
+  }
+
   // ── Devoluções ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS devolucoes_material_almoxarifado (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
