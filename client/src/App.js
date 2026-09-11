@@ -41,6 +41,7 @@ import {
   OrdensServicoComercial,
   OSComercialForm,
   Compras,
+  PedidoCompraForm,
   ComprasSolicitacoesCompra,
   GruposFornecedores,
   FornecedoresDoGrupo,
@@ -338,6 +339,14 @@ function AppRoutes() {
         } />
         <Route path="pedidos" element={
           <Compras />
+        } />
+        {/* Sem estas duas, `pedidos/novo` e `pedidos/editar/:id` caem no `path="*"` acima e
+            re-renderizam a LISTA — era por isso que clicar em "Novo Pedido" nao fazia nada. */}
+        <Route path="pedidos/novo" element={
+          <PedidoCompraForm />
+        } />
+        <Route path="pedidos/editar/:id" element={
+          <PedidoCompraForm />
         } />
         <Route path="cotacoes" element={
           <Compras />

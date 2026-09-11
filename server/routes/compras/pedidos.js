@@ -14,7 +14,7 @@
  * Regras no plano: docs/superpowers/plans/2026-09-11-compras-etapa32-pedido-de-compra.md
  */
 
-const { dbRun, dbGet } = require('../../services/compras/db');
+const { dbRun, dbGet, dbAll } = require('../../services/compras/db');
 const { calcularTotaisPedido } = require('../../services/compras/pedidoTotais');
 const { carregarPedido: carregarPedidoDoBanco } = require('../../services/compras/pedidoLeitura');
 
@@ -138,6 +138,64 @@ module.exports = function (app, db, authenticateToken, checkModulePermission) {
   // Duas cópias divergiriam — e a divergência apareceria como "o comprador vê um total e
   // quem recebe vê outro".
   const carregarPedido = (id) => carregarPedidoDoBanco(db, id);
+
+  // ────────────── AUXILIARES DO FORMULÁRIO (G1) ──────────────
+  //
+  // Espelho exato do que a Etapa 32/G4 fez do outro lado: lá o almoxarife não tem o módulo
+  // `compras` e precisava ler o pedido; aqui o comprador não tem o módulo `almoxarifado` e
+  // precisa escolher o material. O prefixo `/api/almoxarifado` INTEIRO é guardado por
+  // `checkModulePermission('almoxarifado')` (routes/almoxarifado.js:233-235), então um
+  // `GET /api/almoxarifado/materiais` direto do formulário devolveria 403 — e a RN-09 exige
+  // `material_id` em TODO item, o que tornaria impossível salvar qualquer pedido.
+
+  app.get('/api/compras/pedidos-aux/materiais', ...guard, async (req, res) => {
+    try {
+      // Base core-only (sem o módulo almoxarifado instalado) não tem a tabela. Mesma checagem
+      // de `receiptService.listarFornecedoresAux`.
+      const existe = await dbGet(
+        db, "SELECT name FROM sqlite_master WHERE type='table' AND name='materiais_almoxarifado'"
+      );
+      if (!existe) return res.json([]);
+
+      const { search } = req.query;
+      let sql = `SELECT id, codigo, nome, unidade, ncm, custo_unitario
+                   FROM materiais_almoxarifado
+                  WHERE ativo = 1`;
+      const params = [];
+      if (search) {
+        sql += ' AND (codigo LIKE ? OR nome LIKE ?)';
+        params.push(`%${search}%`, `%${search}%`);
+      }
+      sql += ' ORDER BY nome LIMIT 50';
+
+      res.json(await dbAll(db, sql, params));
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  /**
+   * Prévia dos totais, para o formulário mostrar o valor ANTES de salvar.
+   *
+   * Existe para que o front NÃO reimplemente a conta. `pedidoTotais` é o implementador único
+   * da RN-03/04/05 e a ordem do arredondamento é normativa (cada linha arredonda antes de
+   * somar); uma segunda cópia em JS do navegador divergiria em centavos do que o servidor
+   * grava — o usuário veria um total na tela e outro depois de salvar.
+   *
+   * Não escreve nada e não valida: é calculadora.
+   */
+  app.post('/api/compras/pedidos/calcular', ...guard, (req, res) => {
+    const body = req.body || {};
+    try {
+      const { totais, itens } = calcularTotaisPedido(
+        Array.isArray(body.itens) ? body.itens : [],
+        body
+      );
+      res.json({ totais, itens });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
 
   // ───────────────────────────── LISTA ─────────────────────────────
   // Mantém TODAS as colunas de hoje (o front consome p.* e fornecedor_nome) e acrescenta

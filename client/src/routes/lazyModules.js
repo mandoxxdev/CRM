@@ -55,6 +55,7 @@ export const CustosViagens = page(() => import('../components/CustosViagens'));
 export const OrdensServicoComercial = page(() => import('../components/OrdensServicoComercial'));
 export const OSComercialForm = page(() => import('../components/OSComercialForm'));
 export const Compras = page(() => import('../components/Compras'));
+export const PedidoCompraForm = page(() => import('../components/compras/PedidoCompraForm'));
 export const ComprasSolicitacoesCompra = page(() => import('../components/ComprasSolicitacoesCompra'));
 export const GruposFornecedores = page(() => import('../components/GruposFornecedores'));
 export const FornecedoresDoGrupo = page(() => import('../components/FornecedoresDoGrupo'));

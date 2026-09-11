@@ -162,7 +162,7 @@ produção roda com `PRAGMA foreign_keys = ON` (`sqliteConcurrency.js:50`) e o h
 | T1b | Migration **almoxarifado** (`schema.js`, `safeAlter`): colunas de `itens_pedido_compra` | **tronco** | ⬜ |
 | T2 | `services/compras/pedidoTotais.js` — RN-03/04/05, função pura + testes com os 24 itens reais | **tronco** | ⬜ |
 | T3 | Rotas CRUD + status + RN-01/02/06/07/08/09/10 | **tronco** | ⬜ |
-| G1 | Tela: formulário (cabeçalho + grade + totais via `pedidoTotais`) | galho | ⬜ |
+| G1 | Tela: formulário (cabeçalho + grade + totais via `pedidoTotais`) | galho | ✅ |
 | G2 | Impressão HTML no layout do ERP | galho | ⬜ |
 | G3 | Backend do cadastro de fornecedor aceita `endereco/cidade/estado/cep/inscricao_estadual/celular` no POST e PUT | galho | ⬜ |
 | G4 | Pedido inteiro dentro do "Novo Recebimento" (quem dá baixa confere sem sair da tela) | galho | ✅ |
@@ -304,7 +304,60 @@ registro das rotas.
 client mas **não instalado** — o build do front estava quebrado nesta máquina, e nenhuma mudança
 de tela havia sido compilada. Mesma classe do `supertest` no tronco. Resolvido com `npm install`.
 
+### G1 — o formulário do pedido ✅
+
+Reportado pelo P.O.: *"ao clicar em novo pedido ele não abre a tela de fazer o pedido de compra"*.
+
+**Diagnóstico.** O botão apontava para `/compras/pedidos/novo`, que **não tinha rota**. O bloco
+`/compras` do `App.js` declara `<Route path="*" element={<Compras />} />`, então a URL casava com
+o catálogo e a aplicação re-renderizava a **mesma lista** — clicar parecia não fazer nada. Vale
+registrar: `/compras/fornecedores/novo` e `/compras/cotacoes/nova` têm o mesmo defeito, e o
+`Editar` de cada linha também. **Fora do escopo desta correção**; só o pedido foi consertado.
+
+| Arquivo | O que mudou |
+|---|---|
+| `client/.../compras/PedidoCompraForm.js` | **novo** — formulário completo (criar e editar) |
+| `client/.../compras/PedidoCompraForm.css` | **novo** |
+| `client/src/App.js` | rotas `pedidos/novo` e `pedidos/editar/:id` |
+| `client/src/routes/lazyModules.js` | registro do componente |
+| `server/routes/compras/pedidos.js` | `GET pedidos-aux/materiais` e `POST pedidos/calcular` |
+
+**RN-13 (nova) — o comprador escolhe material sem ter o módulo almoxarifado.** O prefixo
+`/api/almoxarifado` INTEIRO é guardado por `checkModulePermission('almoxarifado')`
+(`routes/almoxarifado.js:233-235`). Como a RN-09 exige `material_id` em todo item, um formulário
+consumindo `/almoxarifado/materiais` **não conseguiria salvar nenhum pedido** — 403 na busca.
+Resolvido com `/api/compras/pedidos-aux/materiais`, guardada pelo módulo `compras`. É o espelho
+exato do G4, que resolveu o mesmo problema na direção oposta.
+
+**RN-14 (nova) — o navegador não refaz a conta.** Os totais da tela vêm de
+`POST /api/compras/pedidos/calcular`, que roda o MESMO `pedidoTotais` que grava. Somar em JS no
+formulário seria a terceira implementação da RN-03/04/05 — e o usuário veria um total antes de
+salvar e outro depois. O invariante do teste (40 pedidos aleatórios, prévia comparada com o
+gravado) é o que trava isso.
+
+**Defeito achado na conferência visual — e só lá.** O seletor de material era um dropdown
+`position: absolute` dentro da célula. `.pcf-tabela-wrap` usa `overflow-x: auto` (a grade tem 11
+colunas), e **overflow-x:auto obriga o overflow-y a virar auto também** — o dropdown era cortado
+pelo container. Medido: **146px da lista ficavam fora da área visível**, deixando o seletor
+inutilizável. Virou modal `position: fixed`, imune ao recorte e melhor no celular. Nenhum teste
+de API pegaria isso; nenhuma leitura de código minha pegou também.
+
+**Medição:** `test:api` **168/168 arquivos** (167 → 168; `pedidoCompraFormulario` 10/0) · demais
+suítes exit 0 · `npm run build` do client **Compiled successfully** · servidor sobe logando o
+registro das rotas · ranking de rotas do React Router v6 **verificado contra o router instalado**
+(`matchRoutes` devolve `pedidos/novo` e não `*`, confirmando que especificidade vence ordem de
+declaração) · layout conferido em 1440px, tema claro e 375px (a página não rola lateralmente em
+nenhum; a grade rola dentro do próprio container).
+
+**Controle positivo (3 sabotagens, todas vermelhas):** calculadora reimplementando a conta (3
+cenários) · busca deixando de filtrar por `ativo` (1) · rota de materiais perdendo a guarda de
+módulo (1).
+
+**O que NÃO foi verificado:** a interação real do formulário no navegador (escolher material,
+debounce dos totais, salvar) nunca foi exercida ponta a ponta — a aplicação exige login e não
+há credencial disponível nesta sessão. O que existe é: rotas de API testadas, ranking de rota
+provado, build compilando e layout medido em harness estático com o CSS real.
+
 ### Galhos — a fazer
-G1 (formulário), G2 (impressão no layout do ERP), G3 (campos fiscais do fornecedor no cadastro).
-G1 e G2 consomem o contrato acima, que está congelado e provado por T4 — e agora também por G4,
-que já consome `pedidoLeitura` de fora do módulo de compras.
+G2 (impressão no layout do ERP) e G3 (campos fiscais do fornecedor no cadastro do fornecedor).
+O contrato está congelado e provado por T4, G4 e G1.
