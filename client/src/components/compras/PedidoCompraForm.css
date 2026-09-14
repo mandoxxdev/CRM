@@ -1,13 +1,29 @@
-/* Formulário do pedido de compra — Etapa 32 / G1.
-   Usa os tokens --gmp-* do design system, então acompanha o tema claro/escuro. */
+/* Formulário do pedido de compra — Etapa 32 / G1 + G1b.
+   Tokens --gmp-* do design system, então acompanha o tema claro/escuro.
 
-.pcf { padding: 8px 4px 40px; color: var(--gmp-text); }
+   A tela é de BOTÃO, não de campo: o alvo de clique mínimo é 36px de altura, porque quem
+   usa isto está no balcão de compras, às vezes no celular, e não digitando num teclado. */
 
-.pcf-carregando {
-  padding: 48px;
-  text-align: center;
-  color: var(--gmp-text-light);
+/* Acento LOCAL, com fallback duro.
+   `--spotify-green` NAO serve aqui: ele tem uma unica definicao no projeto, dentro de
+   `.almox-mapa-page` (Almoxarifado.css:1448), ou seja e escopado a pagina do mapa do
+   almoxarifado. Usa-lo nesta tela deixava o chip selecionado com fundo TRANSPARENTE e texto
+   preto — contraste 1.00, medido: invisivel. Aqui o acento sai dos tokens globais de
+   design-tokens.css, e o valor literal no fim garante que a tela nunca dependa de qual CSS
+   de modulo o usuario carregou antes. */
+.pcf {
+  --pcf-acento: var(--gmp-primary, #4facfe);
+  --pcf-acento-escuro: var(--gmp-primary-dark, #3b82f6);
+  --pcf-dinheiro: var(--gmp-success-light, #22c55e);
+  --pcf-sobre-acento: #06283d;
+
+  padding: 8px 4px 40px;
+  color: var(--gmp-text);
 }
+
+.pcf-carregando { padding: 48px; text-align: center; color: var(--gmp-text-light); }
+
+/* ── topo ───────────────────────────────────────────────────────── */
 
 .pcf-topo {
   display: flex;
@@ -38,18 +54,38 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 11px 20px;
+  padding: 12px 24px;
   border: none;
   border-radius: 999px;
-  background: var(--spotify-green);
-  color: #000;
+  background: var(--pcf-acento);
+  color: var(--pcf-sobre-acento);
   font-weight: 700;
-  font-size: 0.88rem;
+  font-size: 0.9rem;
   cursor: pointer;
 }
 
-.pcf-salvar:hover:not(:disabled) { background: var(--spotify-green-hover); }
+.pcf-salvar:hover:not(:disabled) { background: var(--pcf-acento-escuro); }
 .pcf-salvar:disabled { opacity: 0.6; cursor: default; }
+
+.pcf-rodape { display: flex; justify-content: flex-end; margin-top: 4px; }
+
+/* ── aviso que trava o pedido ───────────────────────────────────── */
+
+.pcf-bloqueio {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--gmp-warning);
+  background: rgba(255, 179, 0, 0.12);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.pcf-bloqueio svg { flex-shrink: 0; margin-top: 2px; color: var(--gmp-warning); }
+.pcf-bloqueio a { color: var(--pcf-acento); font-weight: 600; }
 
 /* ── blocos ─────────────────────────────────────────────────────── */
 
@@ -63,10 +99,10 @@
 
 .pcf-bloco h2 {
   margin: 0 0 14px;
-  font-size: 0.72rem;
-  font-weight: 700;
+  font-size: 0.78rem;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   color: var(--gmp-text-light);
 }
 
@@ -75,6 +111,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .pcf-bloco-topo h2 { margin-bottom: 14px; }
@@ -83,43 +120,89 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 14px;
+  padding: 9px 16px;
   border: 1px solid var(--gmp-border);
   border-radius: 999px;
   background: var(--gmp-bg);
   color: var(--gmp-text);
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   font-weight: 600;
   cursor: pointer;
 }
 
-.pcf-add:hover { border-color: var(--spotify-green); color: var(--spotify-green); }
+.pcf-add:hover:not(:disabled) { border-color: var(--pcf-acento); color: var(--pcf-acento); }
+.pcf-add:disabled { opacity: 0.45; cursor: default; }
 
-/* ── campos ─────────────────────────────────────────────────────── */
+/* ── chips: o controle padrão da tela ───────────────────────────── */
 
-.pcf-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 12px 14px;
-}
+.pcf-chips-bloco { margin-bottom: 16px; }
+.pcf-chips-bloco:last-child { margin-bottom: 0; }
 
-.pcf-campo { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.pcf-campo-2 { grid-column: span 2; }
-.pcf-campo-full { grid-column: 1 / -1; }
-
-.pcf-campo > span {
-  font-size: 0.68rem;
+.pcf-chips-label {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 0.72rem;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--gmp-text-light);
-  font-weight: 600;
 }
 
-.pcf-campo input,
-.pcf-campo select,
-.pcf-campo textarea {
-  width: 100%;
-  padding: 8px 10px;
+.pcf-chips-label em { color: var(--pcf-acento); font-style: normal; }
+
+.pcf-chips-label small {
+  margin-left: 6px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+  opacity: 0.8;
+}
+
+.pcf-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.pcf-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 8px 14px;
+  border: 1px solid var(--gmp-border);
+  border-radius: 999px;
+  background: var(--gmp-bg);
+  color: var(--gmp-text);
+  font-size: 0.82rem;
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.pcf-chip:hover { border-color: var(--pcf-acento); }
+
+.pcf-chip-ativo {
+  background: var(--pcf-acento);
+  border-color: var(--pcf-acento);
+  color: var(--pcf-sobre-acento);
+  font-weight: 700;
+}
+
+.pcf-chip svg { width: 14px; height: 14px; }
+
+.pcf-escolhido {
+  margin-top: 7px;
+  font-size: 0.78rem;
+  color: var(--gmp-text-light);
+}
+
+/* ── campos que sobraram de digitação ───────────────────────────── */
+
+.pcf-input-solto,
+.pcf-livres input,
+.pcf-livres textarea,
+.pcf-encargos input,
+.pcf-input-preco,
+.pcf-data-input {
+  padding: 9px 11px;
   border: 1px solid var(--gmp-border);
   border-radius: 8px;
   background: var(--gmp-bg);
@@ -128,124 +211,287 @@
   font-family: inherit;
 }
 
-.pcf-campo input:focus,
-.pcf-campo select:focus,
-.pcf-campo textarea:focus {
-  outline: none;
-  border-color: var(--spotify-green);
-}
+.pcf-input-solto { width: 100%; margin-top: 7px; }
+.pcf-input-numero { max-width: 200px; }
 
-.pcf-forn-resumo {
-  margin-top: 12px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: var(--gmp-bg);
-  border: 1px solid var(--gmp-border);
+.pcf-input-solto:focus,
+.pcf-livres input:focus,
+.pcf-livres textarea:focus,
+.pcf-encargos input:focus,
+.pcf-input-preco:focus,
+.pcf-data-input:focus { outline: none; border-color: var(--pcf-acento); }
+
+.pcf-data-input { min-height: 36px; }
+
+/* ── fornecedor e número ────────────────────────────────────────── */
+
+.pcf-escolher-grande {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 52px;
+  padding: 14px;
+  border: 1px dashed var(--gmp-border);
+  border-radius: 10px;
+  background: var(--gmp-bg);
+  color: var(--gmp-text-light);
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
 }
 
-.pcf-forn-resumo strong { font-size: 0.88rem; }
-.pcf-forn-resumo span { font-size: 0.75rem; color: var(--gmp-text-light); }
+.pcf-escolher-grande:hover:not(:disabled) {
+  border-color: var(--pcf-acento);
+  color: var(--pcf-acento);
+}
 
-/* ── grade de itens ─────────────────────────────────────────────── */
+.pcf-escolher-grande:disabled { opacity: 0.45; cursor: default; }
 
-/* A tabela rola DENTRO do container: com 11 colunas, sem isto a página inteira
-   ganha barra horizontal. */
-.pcf-tabela-wrap {
-  overflow-x: auto;
+.pcf-forn-card,
+.pcf-mat-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
   border: 1px solid var(--gmp-border);
   border-radius: 10px;
   background: var(--gmp-bg);
 }
 
-.pcf-tabela { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.pcf-forn-card > div,
+.pcf-mat-card > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pcf-forn-card strong { font-size: 0.92rem; }
+.pcf-mat-card strong { font-size: 0.86rem; }
 
-.pcf-tabela th {
-  text-align: left;
-  padding: 8px 8px;
+.pcf-forn-card span,
+.pcf-mat-card span { font-size: 0.75rem; color: var(--gmp-text-light); }
+
+.pcf-trocar {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  border: 1px solid var(--gmp-border);
+  border-radius: 999px;
   background: var(--gmp-surface);
-  border-bottom: 1px solid var(--gmp-border);
-  font-size: 0.66rem;
+  color: var(--gmp-text-light);
+  font-size: 0.76rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.pcf-trocar:hover { border-color: var(--pcf-acento); color: var(--pcf-acento); }
+
+.pcf-numero-linha { margin-top: 16px; }
+
+.pcf-numero {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.15rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.pcf-numero button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 11px;
+  border: 1px solid var(--gmp-border);
+  border-radius: 999px;
+  background: var(--gmp-bg);
+  color: var(--gmp-text-light);
+  font-size: 0.72rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.pcf-numero button:hover { border-color: var(--pcf-acento); color: var(--pcf-acento); }
+
+.pcf-numero-linha small {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.72rem;
+  color: var(--gmp-text-light);
+}
+
+/* ── item ───────────────────────────────────────────────────────── */
+
+.pcf-item {
+  border: 1px solid var(--gmp-border);
+  border-radius: 12px;
+  background: var(--gmp-bg);
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.pcf-item:last-child { margin-bottom: 0; }
+.pcf-item-vazio { border-style: dashed; }
+
+.pcf-item-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.pcf-item-num {
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--gmp-text-light);
+}
+
+.pcf-remover {
+  border: none;
+  background: none;
+  color: var(--gmp-text-light);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+}
+
+.pcf-remover:hover:not(:disabled) { color: var(--gmp-error); background: var(--gmp-surface); }
+.pcf-remover:disabled { opacity: 0.3; cursor: default; }
+
+.pcf-item-campos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 14px 0;
+  align-items: flex-end;
+}
+
+.pcf-stepper { display: flex; align-items: center; gap: 6px; }
+
+.pcf-stepper button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--gmp-border);
+  border-radius: 9px;
+  background: var(--gmp-surface);
+  color: var(--gmp-text);
+  cursor: pointer;
+}
+
+.pcf-stepper button:hover { border-color: var(--pcf-acento); color: var(--pcf-acento); }
+
+.pcf-stepper input {
+  width: 84px;
+  height: 38px;
+  text-align: center;
+  border: 1px solid var(--gmp-border);
+  border-radius: 9px;
+  background: var(--gmp-surface);
+  color: var(--gmp-text);
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.pcf-stepper input:focus { outline: none; border-color: var(--pcf-acento); }
+
+.pcf-input-preco { width: 130px; height: 38px; text-align: right; font-variant-numeric: tabular-nums; }
+
+.pcf-linha-total { display: flex; flex-direction: column; gap: 4px; }
+
+.pcf-linha-total strong {
+  font-size: 1.05rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 38px;
+}
+
+/* ── encargos e totais ──────────────────────────────────────────── */
+
+.pcf-encargos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px 14px;
+}
+
+.pcf-encargos label { display: flex; flex-direction: column; gap: 5px; }
+
+.pcf-encargos span,
+.pcf-livres span {
+  font-size: 0.72rem;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--gmp-text-light);
-  white-space: nowrap;
 }
 
-.pcf-tabela td {
-  padding: 7px 8px;
-  border-bottom: 1px solid var(--gmp-border);
-  vertical-align: top;
-}
-
-.pcf-tabela tr:last-child td { border-bottom: none; }
-.pcf-tabela .num { text-align: right; }
-.pcf-tabela th.num { text-align: right; }
-.pcf-col-mat { min-width: 260px; position: relative; }
-
-.pcf-linha-incompleta { background: rgba(255, 179, 0, 0.07); }
-
-.pcf-tabela input {
-  padding: 6px 7px;
+.pcf-totais {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px 16px;
+  margin-top: 16px;
+  padding: 14px;
+  border-radius: 10px;
+  background: var(--gmp-bg);
   border: 1px solid var(--gmp-border);
-  border-radius: 6px;
-  background: var(--gmp-surface);
-  color: var(--gmp-text);
-  font-size: 0.8rem;
-  font-family: inherit;
 }
 
-.pcf-tabela input:focus { outline: none; border-color: var(--spotify-green); }
+.pcf-totais > div { display: flex; flex-direction: column; }
 
-.pcf-in-sm { width: 92px; }
-.pcf-in-num { width: 86px; text-align: right; font-variant-numeric: tabular-nums; }
-.pcf-in-un { width: 56px; }
-.pcf-in-data { width: 130px; }
-.pcf-desc { width: 100%; margin-top: 5px; }
+.pcf-totais span {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--gmp-text-light);
+}
 
-.pcf-total-linha { font-variant-numeric: tabular-nums; white-space: nowrap; padding-top: 12px; }
+.pcf-totais strong { font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+.pcf-total-geral strong { font-size: 1.2rem; font-weight: 800; color: var(--pcf-dinheiro); }
 
-.pcf-mat-vazio,
-.pcf-mat-escolhido {
+/* ── mais opções ────────────────────────────────────────────────── */
+
+.pcf-mais {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   width: 100%;
-  padding: 7px 9px;
-  border-radius: 6px;
-  border: 1px dashed var(--gmp-border);
-  background: var(--gmp-surface);
-  color: var(--gmp-text-light);
-  font-size: 0.8rem;
+  padding: 4px 0;
+  border: none;
+  background: none;
+  color: var(--gmp-text);
+  font-size: 0.86rem;
+  font-weight: 700;
   font-family: inherit;
   cursor: pointer;
-  text-align: left;
 }
 
-.pcf-mat-escolhido {
-  border-style: solid;
-  color: var(--gmp-text);
-  font-weight: 600;
-  justify-content: space-between;
-}
-
-.pcf-mat-escolhido small,
-.pcf-busca-item small {
+.pcf-mais small {
   font-weight: 400;
-  font-size: 0.68rem;
+  font-size: 0.74rem;
   color: var(--gmp-text-light);
 }
 
-.pcf-mat-vazio:hover,
-.pcf-mat-escolhido:hover { border-color: var(--spotify-green); color: var(--spotify-green); }
+.pcf-mais-corpo { margin-top: 16px; }
 
-/* ── busca de material ──────────────────────────────────────────── */
+.pcf-livres {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px 14px;
+  margin-top: 16px;
+}
 
-/* Seletor de material em MODAL, nao em dropdown dentro da celula: `.pcf-tabela-wrap` usa
-   overflow-x:auto (grade de 11 colunas), e isso obriga overflow-y a virar auto tambem —
-   qualquer position:absolute dentro da tabela e cortado pelo container. */
+.pcf-livres label { display: flex; flex-direction: column; gap: 5px; }
+.pcf-livre-full { grid-column: 1 / -1; }
+.pcf-livres textarea { resize: vertical; }
+
+/* ── modais de escolha ──────────────────────────────────────────── */
+
 .pcf-modal-overlay {
   position: fixed;
   inset: 0;
@@ -287,7 +533,7 @@
   color: var(--gmp-text-light);
   font-size: 1rem;
   cursor: pointer;
-  padding: 4px 6px;
+  padding: 4px 8px;
 }
 
 .pcf-modal-busca {
@@ -301,7 +547,7 @@
 
 .pcf-modal-busca input {
   flex: 1;
-  padding: 8px 10px;
+  padding: 9px 11px;
   border: 1px solid var(--gmp-border);
   border-radius: 8px;
   background: var(--gmp-bg);
@@ -310,21 +556,21 @@
   font-family: inherit;
 }
 
-.pcf-modal-busca input:focus { outline: none; border-color: var(--spotify-green); }
+.pcf-modal-busca input:focus { outline: none; border-color: var(--pcf-acento); }
 
 .pcf-busca-lista { overflow-y: auto; padding: 8px; }
 
 .pcf-busca-item {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
   width: 100%;
-  padding: 7px 8px;
+  padding: 10px 10px;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   background: none;
   color: var(--gmp-text);
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   font-family: inherit;
   text-align: left;
   cursor: pointer;
@@ -332,69 +578,24 @@
 
 .pcf-busca-item:hover { background: var(--gmp-bg); }
 
+.pcf-busca-item small {
+  font-size: 0.7rem;
+  color: var(--gmp-text-light);
+}
+
 .pcf-busca-vazio {
-  padding: 12px 8px;
-  font-size: 0.76rem;
+  padding: 20px 8px;
+  font-size: 0.8rem;
   color: var(--gmp-text-light);
   text-align: center;
-}
-
-.pcf-remover {
-  border: none;
-  background: none;
-  color: var(--gmp-text-light);
-  cursor: pointer;
-  padding: 6px;
-  border-radius: 6px;
-}
-
-.pcf-remover:hover:not(:disabled) { color: var(--gmp-error); background: var(--gmp-surface); }
-.pcf-remover:disabled { opacity: 0.3; cursor: default; }
-
-.pcf-aviso {
-  margin-top: 10px;
-  padding: 9px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--gmp-warning);
-  background: rgba(255, 179, 0, 0.12);
-  font-size: 0.78rem;
-  line-height: 1.45;
-}
-
-/* ── totais ─────────────────────────────────────────────────────── */
-
-.pcf-totais {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: 10px 16px;
-  margin-top: 16px;
-  padding: 14px;
-  border-radius: 10px;
-  background: var(--gmp-bg);
-  border: 1px solid var(--gmp-border);
-}
-
-.pcf-totais > div { display: flex; flex-direction: column; }
-
-.pcf-totais span {
-  font-size: 0.68rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--gmp-text-light);
-}
-
-.pcf-totais strong { font-size: 0.9rem; font-variant-numeric: tabular-nums; }
-.pcf-total-geral strong { font-size: 1.15rem; font-weight: 800; color: var(--spotify-green); }
-
-.pcf-nota {
-  margin-top: 10px;
-  font-size: 0.73rem;
   line-height: 1.5;
-  color: var(--gmp-text-light);
 }
 
-@media (max-width: 720px) {
-  .pcf-campo-2 { grid-column: span 1; }
+/* ── telas estreitas ────────────────────────────────────────────── */
+
+@media (max-width: 640px) {
   .pcf-totais { grid-template-columns: 1fr 1fr; }
-  .pcf-topo { align-items: stretch; }
+  .pcf-item-campos { gap: 12px; }
+  .pcf-linha-total { width: 100%; }
+  .pcf-topo .pcf-salvar { width: 100%; justify-content: center; }
 }

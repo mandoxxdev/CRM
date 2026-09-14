@@ -1,29 +1,38 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import api from '../../services/api';
-import { FiPlus, FiTrash2, FiSearch, FiArrowLeft, FiSave } from 'react-icons/fi';
+import {
+  FiPlus, FiTrash2, FiSearch, FiArrowLeft, FiSave, FiEdit2, FiMinus,
+  FiCheck, FiChevronDown, FiChevronUp, FiAlertTriangle,
+} from 'react-icons/fi';
 import './PedidoCompraForm.css';
 
 /**
- * Formulário do pedido de compra (Etapa 32 / G1).
+ * Formulário do pedido de compra (Etapa 32 / G1 + G1b).
  *
- * Antes disto o botão "Novo Pedido" apontava para `/compras/pedidos/novo`, que NÃO tinha rota:
- * caía no `path="*"` do App.js e só re-renderizava a mesma lista — clicar não fazia nada.
+ * O P.O. definiu a regra desta tela em uma frase: *"todas as opções do formulário devem ser
+ * botões, não quero o usuário escrevendo nada"*. Na prática isso quer dizer:
  *
- * Duas regras do módulo aparecem como código aqui:
+ *  - Todo campo com conjunto conhecido de valores é BOTÃO (`Chips` abaixo), nunca `<input>`.
+ *    As listas vêm de `/compras/pedidos-aux/opcoes`, um lugar só, e crescem com o uso.
+ *  - O que sobra de digitação é o que é VALOR e não opção: quantidade (com + e −), preço
+ *    unitário e os encargos. Não dá para transformar preço em botão sem inventar preço.
+ *  - O número do pedido chega preenchido com a sugestão do servidor; digitar só se quiser
+ *    outro.
+ *  - O que quase nunca muda vive fechado em "Mais opções", porque a queixa recorrente do
+ *    P.O. nas telas anteriores foi excesso de campos visíveis, não falta.
  *
- *  - **A conta não é feita neste arquivo.** Os totais vêm de `POST /compras/pedidos/calcular`,
- *    que roda o mesmo `pedidoTotais` do que grava. Somar aqui seria uma segunda implementação
- *    da RN-03/04/05 — e o usuário veria um total na tela e outro depois de salvar.
- *  - **Material vem de `/compras/pedidos-aux/materiais`**, não de `/almoxarifado/materiais`:
- *    aquele prefixo é guardado por `checkModulePermission('almoxarifado')` e o comprador
- *    tomaria 403.
+ * Duas regras de módulo continuam valendo aqui, das versões anteriores:
+ *  - A conta NÃO é feita neste arquivo: os totais vêm de `POST /compras/pedidos/calcular`,
+ *    que roda o mesmo `pedidoTotais` que grava.
+ *  - Material vem de `/compras/pedidos-aux/materiais`, não de `/almoxarifado/materiais`:
+ *    aquele prefixo é guardado por `checkModulePermission('almoxarifado')`.
  */
 
 const LINHA_VAZIA = {
   material_id: '', material_nome: '', codigo: '', descricao: '', ncm: '',
-  quantidade: 1, unidade: 'UN', valor_unitario: '', ipi_percentual: '',
+  quantidade: 1, unidade: 'UN', valor_unitario: '', ipi_percentual: 0,
   peso_unitario: '', data_entrega: '', observacao: '',
 };
 
@@ -41,6 +50,13 @@ const TOTAIS_ZERO = {
   total_desconto: 0, valor_frete: 0, total_geral: 0,
 };
 
+const STATUS = [
+  { valor: 'pendente', rotulo: 'Pendente' },
+  { valor: 'aprovado', rotulo: 'Aprovado' },
+  { valor: 'finalizado', rotulo: 'Finalizado' },
+  { valor: 'cancelado', rotulo: 'Cancelado' },
+];
+
 const moeda = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 // O unitário guarda até 4 casas (RN-12: o ERP de origem armazena 4 e imprime 3). Cortar em 2
@@ -48,6 +64,45 @@ const moeda = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency',
 const moedaUnit = (v) => Number(v || 0).toLocaleString('pt-BR', {
   style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 4,
 });
+
+const hojeISO = () => new Date().toISOString().slice(0, 10);
+const emDias = (n) => {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+const dataCurta = (iso) => {
+  if (!iso) return '';
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso).slice(0, 10));
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
+};
+
+/** Grupo de botões de escolha única. É o controle padrão desta tela. */
+const Chips = ({ label, opcoes, valor, onChange, obrigatorio, ajuda }) => (
+  <div className="pcf-chips-bloco">
+    <span className="pcf-chips-label">
+      {label}{obrigatorio && <em> *</em>}
+      {ajuda && <small>{ajuda}</small>}
+    </span>
+    <div className="pcf-chips">
+      {opcoes.map((o) => {
+        const v = typeof o === 'object' ? o.valor : o;
+        const r = typeof o === 'object' ? (o.curto || o.rotulo || o.valor) : o;
+        const ativo = String(valor ?? '') === String(v);
+        return (
+          <button type="button" key={String(v)}
+            className={`pcf-chip${ativo ? ' pcf-chip-ativo' : ''}`}
+            aria-pressed={ativo}
+            // Reclicar no selecionado limpa: sem isto, um campo opcional escolhido por engano
+            // não teria como voltar a vazio sem recarregar a tela.
+            onClick={() => onChange(ativo ? '' : v)}>
+            {ativo && <FiCheck />}{r}
+          </button>
+        );
+      })}
+    </div>
+  </div>
+);
 
 const PedidoCompraForm = () => {
   const navigate = useNavigate();
@@ -57,50 +112,69 @@ const PedidoCompraForm = () => {
   const [cab, setCab] = useState(CABECALHO_VAZIO);
   const [itens, setItens] = useState([{ ...LINHA_VAZIA }]);
   const [fornecedores, setFornecedores] = useState([]);
+  const [opcoes, setOpcoes] = useState(null);
   const [totais, setTotais] = useState(TOTAIS_ZERO);
   const [linhas, setLinhas] = useState([]);
-  const [carregando, setCarregando] = useState(editando);
+  const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
 
-  // Busca de material por linha: qual linha está com o campo aberto e o que já veio
+  const [editandoNumero, setEditandoNumero] = useState(false);
+  const [maisOpcoes, setMaisOpcoes] = useState(false);
+  const [entregaOutro, setEntregaOutro] = useState(false);
+  const [cobrancaOutro, setCobrancaOutro] = useState(false);
+
+  // Modais de escolha
   const [buscaLinha, setBuscaLinha] = useState(null);
   const [busca, setBusca] = useState('');
   const [materiais, setMateriais] = useState([]);
+  const [escolhendoFornecedor, setEscolhendoFornecedor] = useState(false);
+  const [buscaForn, setBuscaForn] = useState('');
 
   const setCampo = (campo, valor) => setCab((c) => ({ ...c, [campo]: valor }));
 
   /* ── carga inicial ──────────────────────────────────────────────── */
   useEffect(() => {
-    api.get('/compras/fornecedores', { params: { status: 'ativo' } })
-      .then((r) => setFornecedores(r.data || []))
-      .catch(() => toast.error('Não foi possível carregar os fornecedores'));
-  }, []);
+    let vivo = true;
+    Promise.all([
+      api.get('/compras/fornecedores', { params: { status: 'ativo' } }).then((r) => r.data || []),
+      api.get('/compras/pedidos-aux/opcoes').then((r) => r.data),
+      editando ? api.get(`/compras/pedidos/${id}`).then((r) => r.data) : Promise.resolve(null),
+    ])
+      .then(([forns, ops, pedido]) => {
+        if (!vivo) return;
+        setFornecedores(forns);
+        setOpcoes(ops);
 
-  useEffect(() => {
-    if (!editando) return;
-    api.get(`/compras/pedidos/${id}`)
-      .then((r) => {
-        const p = r.data;
-        setCab({
-          ...CABECALHO_VAZIO,
-          ...Object.fromEntries(Object.keys(CABECALHO_VAZIO)
-            .map((k) => [k, p[k] != null ? p[k] : CABECALHO_VAZIO[k]])),
-          fornecedor_id: p.fornecedor_id || '',
-        });
-        setItens((p.itens || []).map((i) => ({
-          ...LINHA_VAZIA,
-          ...i,
-          material_nome: i.material_nome || i.descricao || '',
-          valor_unitario: i.valor_unitario ?? '',
-          ipi_percentual: i.ipi_percentual ?? '',
-          data_entrega: i.data_entrega || '',
-        })));
+        if (pedido) {
+          setCab({
+            ...CABECALHO_VAZIO,
+            ...Object.fromEntries(Object.keys(CABECALHO_VAZIO)
+              .map((k) => [k, pedido[k] != null ? pedido[k] : CABECALHO_VAZIO[k]])),
+            fornecedor_id: pedido.fornecedor_id || '',
+          });
+          setItens((pedido.itens || []).map((i) => ({
+            ...LINHA_VAZIA, ...i,
+            material_nome: i.material_nome || i.descricao || '',
+            valor_unitario: i.valor_unitario ?? '',
+            ipi_percentual: i.ipi_percentual ?? 0,
+            data_entrega: i.data_entrega || '',
+          })));
+        } else {
+          // Número já preenchido: o caminho normal não pede digitação nenhuma aqui.
+          setCab((c) => ({ ...c, numero: ops.proximo_numero || '' }));
+        }
       })
       .catch((e) => {
-        toast.error(e.response?.data?.error || 'Pedido não encontrado');
-        navigate('/compras/pedidos');
+        if (!vivo) return;
+        if (editando) {
+          toast.error(e.response?.data?.error || 'Pedido não encontrado');
+          navigate('/compras/pedidos');
+        } else {
+          toast.error('Não foi possível carregar as opções do formulário');
+        }
       })
-      .finally(() => setCarregando(false));
+      .finally(() => { if (vivo) setCarregando(false); });
+    return () => { vivo = false; };
   }, [id, editando, navigate]);
 
   /* ── busca de material (debounce) ───────────────────────────────── */
@@ -120,12 +194,14 @@ const PedidoCompraForm = () => {
 
   const recalcular = useCallback(() => {
     const { itens: its, cab: c } = pedidoRef.current;
-    const comValor = its.filter((i) => i.quantidade !== '' && i.valor_unitario !== '');
-    if (comValor.length === 0) {
-      setTotais({ ...TOTAIS_ZERO,
+    const temValor = its.some((i) => i.quantidade !== '' && i.valor_unitario !== '');
+    if (!temValor) {
+      setTotais({
+        ...TOTAIS_ZERO,
         valor_frete: Number(c.valor_frete) || 0,
         total_icms_st: Number(c.total_icms_st) || 0,
-        total_desconto: Number(c.total_desconto) || 0 });
+        total_desconto: Number(c.total_desconto) || 0,
+      });
       setLinhas([]);
       return;
     }
@@ -147,23 +223,34 @@ const PedidoCompraForm = () => {
   }, [itens, cab.valor_frete, cab.total_icms_st, cab.total_desconto, recalcular]);
 
   /* ── grade ──────────────────────────────────────────────────────── */
-  const mudarItem = (idx, campo, valor) => {
-    setItens((lista) => lista.map((it, i) => (i === idx ? { ...it, [campo]: valor } : it)));
-  };
+  const mudarItem = (idx, campo, valor) =>
+    setItens((l) => l.map((it, i) => (i === idx ? { ...it, [campo]: valor } : it)));
+
+  const somarQtd = (idx, delta) => setItens((l) => l.map((it, i) => {
+    if (i !== idx) return it;
+    const atual = Number(it.quantidade) || 0;
+    return { ...it, quantidade: Math.max(1, atual + delta) };
+  }));
 
   const escolherMaterial = (idx, m) => {
-    setItens((lista) => lista.map((it, i) => (i === idx ? {
+    setItens((l) => l.map((it, i) => (i === idx ? {
       ...it,
       material_id: m.id,
       material_nome: m.nome,
-      codigo: it.codigo || m.codigo || '',
+      codigo: m.codigo || it.codigo || '',
       descricao: it.descricao || m.nome || '',
       unidade: m.unidade || it.unidade,
-      ncm: it.ncm || m.ncm || '',
+      ncm: m.ncm || it.ncm || '',
       valor_unitario: it.valor_unitario !== '' ? it.valor_unitario : (m.custo_unitario || ''),
     } : it)));
     setBuscaLinha(null);
     setBusca('');
+  };
+
+  const escolherFornecedor = (f) => {
+    setCampo('fornecedor_id', f.id);
+    setEscolhendoFornecedor(false);
+    setBuscaForn('');
   };
 
   const adicionarLinha = () => setItens((l) => [...l, { ...LINHA_VAZIA }]);
@@ -172,13 +259,13 @@ const PedidoCompraForm = () => {
   /* ── salvar ─────────────────────────────────────────────────────── */
   const salvar = async (e) => {
     e.preventDefault();
-
-    // As mesmas recusas do servidor, ditas antes do round-trip. O servidor continua sendo a
-    // autoridade — isto é conveniência, não validação.
-    if (!cab.numero.trim()) return toast.error('Informe o número do pedido');
-    if (!cab.fornecedor_id) return toast.error('Selecione o fornecedor');
+    if (!String(cab.numero).trim()) return toast.error('Informe o número do pedido');
+    if (!cab.fornecedor_id) return toast.error('Escolha o fornecedor');
     if (itens.some((i) => !i.material_id)) {
       return toast.error('Todo item precisa de um material do cadastro');
+    }
+    if (itens.some((i) => !(Number(i.quantidade) > 0))) {
+      return toast.error('Todo item precisa de uma quantidade maior que zero');
     }
 
     setSalvando(true);
@@ -204,11 +291,9 @@ const PedidoCompraForm = () => {
           item_numero: idx + 1,
         })),
       };
-
       const r = editando
         ? await api.put(`/compras/pedidos/${id}`, payload)
         : await api.post('/compras/pedidos', payload);
-
       toast.success(`Pedido ${r.data.numero} ${editando ? 'atualizado' : 'criado'}!`);
       navigate('/compras/pedidos');
     } catch (err) {
@@ -218,9 +303,60 @@ const PedidoCompraForm = () => {
     }
   };
 
-  if (carregando) return <div className="pcf-carregando">Carregando pedido…</div>;
+  if (carregando) return <div className="pcf-carregando">Carregando…</div>;
 
   const fornecedorSel = fornecedores.find((f) => String(f.id) === String(cab.fornecedor_id));
+  const ops = opcoes || {};
+  const semMateriais = ops.total_materiais === 0;
+
+  const enderecoEmpresa = ops.empresa?.endereco || '';
+  const enderecoFornecedor = fornecedorSel
+    ? [fornecedorSel.endereco, fornecedorSel.cidade, fornecedorSel.estado, fornecedorSel.cep]
+      .filter(Boolean).join(' - ')
+    : '';
+
+  /** Botões de local: GMP, fornecedor, ou um endereço digitado. */
+  const BotoesLocal = ({ campo, outro, setOutro }) => {
+    const atual = cab[campo] || '';
+    const opcoesLocal = [
+      enderecoEmpresa && { valor: enderecoEmpresa, curto: `${ops.empresa?.nome || 'Nossa empresa'}` },
+      enderecoFornecedor && { valor: enderecoFornecedor, curto: 'Endereço do fornecedor' },
+    ].filter(Boolean);
+    const ehOutro = atual && !opcoesLocal.some((o) => o.valor === atual);
+
+    return (
+      <div className="pcf-chips-bloco">
+        <span className="pcf-chips-label">
+          {campo === 'local_entrega' ? 'Entregar em' : 'Cobrar em'}
+        </span>
+        <div className="pcf-chips">
+          {opcoesLocal.map((o) => (
+            <button type="button" key={o.valor}
+              className={`pcf-chip${atual === o.valor ? ' pcf-chip-ativo' : ''}`}
+              onClick={() => { setOutro(false); setCampo(campo, atual === o.valor ? '' : o.valor); }}>
+              {atual === o.valor && <FiCheck />}{o.curto}
+            </button>
+          ))}
+          <button type="button"
+            className={`pcf-chip${(outro || ehOutro) ? ' pcf-chip-ativo' : ''}`}
+            onClick={() => { setOutro(true); if (!ehOutro) setCampo(campo, ''); }}>
+            Outro endereço
+          </button>
+        </div>
+        {(outro || ehOutro) && (
+          <input className="pcf-input-solto" value={atual}
+            placeholder="Digite o endereço"
+            onChange={(e) => setCampo(campo, e.target.value)} />
+        )}
+        {atual && !outro && !ehOutro && <div className="pcf-escolhido">{atual}</div>}
+      </div>
+    );
+  };
+
+  const fornecedoresFiltrados = buscaForn.trim().length === 0
+    ? fornecedores
+    : fornecedores.filter((f) => `${f.razao_social} ${f.nome_fantasia || ''} ${f.cnpj || ''}`
+      .toLowerCase().includes(buscaForn.trim().toLowerCase()));
 
   return (
     <div className="pcf">
@@ -237,224 +373,201 @@ const PedidoCompraForm = () => {
           </button>
         </div>
 
-        {/* ── cabeçalho ─────────────────────────────────────────── */}
-        <section className="pcf-bloco">
-          <h2>Dados do pedido</h2>
-          <div className="pcf-grid">
-            <label className="pcf-campo">
-              <span>Número do pedido *</span>
-              <input value={cab.numero} onChange={(e) => setCampo('numero', e.target.value)}
-                placeholder="28433" required />
-            </label>
-            <label className="pcf-campo pcf-campo-2">
-              <span>Fornecedor *</span>
-              <select value={cab.fornecedor_id}
-                onChange={(e) => setCampo('fornecedor_id', e.target.value)} required>
-                <option value="">Selecione…</option>
-                {fornecedores.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.razao_social}{f.cnpj ? ` — ${f.cnpj}` : ''}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="pcf-campo">
-              <span>Status</span>
-              <select value={cab.status} onChange={(e) => setCampo('status', e.target.value)}>
-                <option value="pendente">Pendente</option>
-                <option value="aprovado">Aprovado</option>
-                <option value="finalizado">Finalizado</option>
-                <option value="cancelado">Cancelado</option>
-              </select>
-            </label>
-            <label className="pcf-campo">
-              <span>Data do pedido</span>
-              <input type="date" value={cab.data_pedido}
-                onChange={(e) => setCampo('data_pedido', e.target.value)} />
-            </label>
-            <label className="pcf-campo">
-              <span>Previsão de entrega</span>
-              <input type="date" value={cab.previsao_entrega}
-                onChange={(e) => setCampo('previsao_entrega', e.target.value)} />
-            </label>
-            <label className="pcf-campo">
-              <span>Condição de pagamento</span>
-              <input value={cab.condicao_pagamento}
-                onChange={(e) => setCampo('condicao_pagamento', e.target.value)}
-                placeholder="28 D.D.L." />
-            </label>
-            <label className="pcf-campo">
-              <span>Contato</span>
-              <input value={cab.contato} onChange={(e) => setCampo('contato', e.target.value)} />
-            </label>
-          </div>
-
-          {fornecedorSel && (
-            <div className="pcf-forn-resumo">
-              <strong>{fornecedorSel.razao_social}</strong>
-              <span>
-                {[fornecedorSel.cnpj, fornecedorSel.cidade, fornecedorSel.estado,
-                  fornecedorSel.telefone].filter(Boolean).join(' · ')}
-              </span>
+        {semMateriais && (
+          <div className="pcf-bloqueio">
+            <FiAlertTriangle />
+            <div>
+              <strong>Nenhum material cadastrado.</strong> Todo item do pedido precisa de um
+              material do cadastro, então não é possível salvar nada ainda.{' '}
+              <Link to="/almoxarifado/materiais">Cadastrar materiais</Link> primeiro.
             </div>
-          )}
-        </section>
+          </div>
+        )}
 
-        {/* ── transporte ────────────────────────────────────────── */}
+        {/* ── 1. fornecedor e número ────────────────────────────── */}
         <section className="pcf-bloco">
-          <h2>Transporte e entrega</h2>
-          <div className="pcf-grid">
-            <label className="pcf-campo pcf-campo-2">
-              <span>Modalidade do frete</span>
-              <input value={cab.frete_modalidade}
-                onChange={(e) => setCampo('frete_modalidade', e.target.value)}
-                placeholder="2-Contratação do Frete por conta de Terceiros" />
-            </label>
-            <label className="pcf-campo">
-              <span>Via de transporte</span>
-              <input value={cab.via_transporte}
-                onChange={(e) => setCampo('via_transporte', e.target.value)} placeholder="Rodoviário" />
-            </label>
-            <label className="pcf-campo">
-              <span>Transportadora</span>
-              <input value={cab.transportadora}
-                onChange={(e) => setCampo('transportadora', e.target.value)} />
-            </label>
-            <label className="pcf-campo">
-              <span>Telefone da transportadora</span>
-              <input value={cab.transportadora_telefone}
-                onChange={(e) => setCampo('transportadora_telefone', e.target.value)} />
-            </label>
-            <label className="pcf-campo">
-              <span>Tabela de preço</span>
-              <input value={cab.tabela_preco}
-                onChange={(e) => setCampo('tabela_preco', e.target.value)} />
-            </label>
-            <label className="pcf-campo pcf-campo-full">
-              <span>Local de entrega</span>
-              <input value={cab.local_entrega}
-                onChange={(e) => setCampo('local_entrega', e.target.value)} />
-            </label>
-            <label className="pcf-campo pcf-campo-full">
-              <span>Local de cobrança</span>
-              <input value={cab.local_cobranca}
-                onChange={(e) => setCampo('local_cobranca', e.target.value)} />
-            </label>
+          <h2>1. Fornecedor</h2>
+
+          {fornecedorSel ? (
+            <div className="pcf-forn-card">
+              <div>
+                <strong>{fornecedorSel.razao_social}</strong>
+                <span>
+                  {[fornecedorSel.cnpj, fornecedorSel.cidade, fornecedorSel.estado,
+                    fornecedorSel.telefone].filter(Boolean).join(' · ') || 'sem dados de contato'}
+                </span>
+              </div>
+              <button type="button" className="pcf-trocar"
+                onClick={() => setEscolhendoFornecedor(true)}>Trocar</button>
+            </div>
+          ) : (
+            <button type="button" className="pcf-escolher-grande"
+              onClick={() => setEscolhendoFornecedor(true)}>
+              <FiSearch /> Escolher fornecedor
+            </button>
+          )}
+
+          <div className="pcf-numero-linha">
+            <span className="pcf-chips-label">Número do pedido</span>
+            {editandoNumero ? (
+              <input className="pcf-input-solto pcf-input-numero" autoFocus value={cab.numero}
+                onChange={(e) => setCampo('numero', e.target.value)}
+                onBlur={() => setEditandoNumero(false)} />
+            ) : (
+              <span className="pcf-numero">
+                {cab.numero || '—'}
+                <button type="button" onClick={() => setEditandoNumero(true)} title="Alterar número">
+                  <FiEdit2 /> alterar
+                </button>
+              </span>
+            )}
+            {!editando && <small>sugerido pelo sistema, continuando a sua numeração</small>}
           </div>
         </section>
 
-        {/* ── itens ─────────────────────────────────────────────── */}
+        {/* ── 2. itens ──────────────────────────────────────────── */}
         <section className="pcf-bloco">
           <div className="pcf-bloco-topo">
-            <h2>Itens</h2>
-            <button type="button" className="pcf-add" onClick={adicionarLinha}>
+            <h2>2. O que está sendo comprado</h2>
+            <button type="button" className="pcf-add" onClick={adicionarLinha} disabled={semMateriais}>
               <FiPlus /> Adicionar item
             </button>
           </div>
 
-          <div className="pcf-tabela-wrap">
-            <table className="pcf-tabela">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th className="pcf-col-mat">Material *</th>
-                  <th>Código</th>
-                  <th>NCM</th>
-                  <th className="num">Qtd</th>
-                  <th>Un</th>
-                  <th className="num">Vl. unit.</th>
-                  <th className="num">IPI %</th>
-                  <th>Entrega</th>
-                  <th className="num">Total</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {itens.map((it, idx) => (
-                  <tr key={idx} className={!it.material_id ? 'pcf-linha-incompleta' : ''}>
-                    <td>{idx + 1}</td>
-                    <td className="pcf-col-mat">
-                      {it.material_id ? (
-                        <button type="button" className="pcf-mat-escolhido"
-                          onClick={() => { setBuscaLinha(idx); setBusca(''); }}>
-                          {it.material_nome || it.descricao}
-                          <small>trocar</small>
-                        </button>
-                      ) : (
-                        <button type="button" className="pcf-mat-vazio"
-                          onClick={() => { setBuscaLinha(idx); setBusca(''); }}>
-                          <FiSearch /> Escolher material
-                        </button>
-                      )}
+          {itens.map((it, idx) => (
+            <div key={idx} className={`pcf-item${!it.material_id ? ' pcf-item-vazio' : ''}`}>
+              <div className="pcf-item-topo">
+                <span className="pcf-item-num">Item {idx + 1}</span>
+                <button type="button" className="pcf-remover" title="Remover item"
+                  onClick={() => removerLinha(idx)} disabled={itens.length === 1}>
+                  <FiTrash2 />
+                </button>
+              </div>
 
-                      <input className="pcf-desc" placeholder="Descrição no pedido"
-                        value={it.descricao}
-                        onChange={(e) => mudarItem(idx, 'descricao', e.target.value)} />
-                    </td>
-                    <td><input className="pcf-in-sm" value={it.codigo}
-                      onChange={(e) => mudarItem(idx, 'codigo', e.target.value)} /></td>
-                    <td><input className="pcf-in-sm" value={it.ncm}
-                      onChange={(e) => mudarItem(idx, 'ncm', e.target.value)} /></td>
-                    <td><input className="pcf-in-num" type="number" min="0" step="any"
-                      value={it.quantidade}
-                      onChange={(e) => mudarItem(idx, 'quantidade', e.target.value)} /></td>
-                    <td><input className="pcf-in-un" value={it.unidade}
-                      onChange={(e) => mudarItem(idx, 'unidade', e.target.value)} /></td>
-                    <td><input className="pcf-in-num" type="number" min="0" step="0.0001"
-                      value={it.valor_unitario}
-                      onChange={(e) => mudarItem(idx, 'valor_unitario', e.target.value)} /></td>
-                    <td><input className="pcf-in-num" type="number" min="0" step="0.01"
-                      value={it.ipi_percentual}
-                      onChange={(e) => mudarItem(idx, 'ipi_percentual', e.target.value)} /></td>
-                    <td><input className="pcf-in-data" type="date" value={it.data_entrega}
-                      onChange={(e) => mudarItem(idx, 'data_entrega', e.target.value)} /></td>
-                    <td className="num pcf-total-linha">
-                      {linhas[idx] ? moeda(linhas[idx].valor_linha) : '—'}
-                    </td>
-                    <td>
-                      <button type="button" className="pcf-remover" title="Remover item"
-                        onClick={() => removerLinha(idx)} disabled={itens.length === 1}>
-                        <FiTrash2 />
+              {it.material_id ? (
+                <div className="pcf-mat-card">
+                  <div>
+                    <strong>{it.material_nome}</strong>
+                    <span>
+                      {it.codigo}{it.ncm ? ` · NCM ${it.ncm}` : ''}
+                    </span>
+                  </div>
+                  <button type="button" className="pcf-trocar"
+                    onClick={() => { setBuscaLinha(idx); setBusca(''); }}>Trocar</button>
+                </div>
+              ) : (
+                <button type="button" className="pcf-escolher-grande" disabled={semMateriais}
+                  onClick={() => { setBuscaLinha(idx); setBusca(''); }}>
+                  <FiSearch /> Escolher material
+                </button>
+              )}
+
+              <div className="pcf-item-campos">
+                <div className="pcf-qtd-bloco">
+                  <span className="pcf-chips-label">Quantidade</span>
+                  <div className="pcf-stepper">
+                    <button type="button" onClick={() => somarQtd(idx, -1)} title="Menos um">
+                      <FiMinus />
+                    </button>
+                    <input type="number" min="0" step="any" value={it.quantidade}
+                      onChange={(e) => mudarItem(idx, 'quantidade', e.target.value)} />
+                    <button type="button" onClick={() => somarQtd(idx, 1)} title="Mais um">
+                      <FiPlus />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="pcf-preco-bloco">
+                  <span className="pcf-chips-label">
+                    Preço unitário <small>o que o fornecedor cobrou</small>
+                  </span>
+                  <input className="pcf-input-preco" type="number" min="0" step="0.0001"
+                    placeholder="0,00" value={it.valor_unitario}
+                    onChange={(e) => mudarItem(idx, 'valor_unitario', e.target.value)} />
+                </div>
+
+                <div className="pcf-linha-total">
+                  <span className="pcf-chips-label">Total do item</span>
+                  <strong>{linhas[idx] ? moeda(linhas[idx].valor_linha) : '—'}</strong>
+                </div>
+              </div>
+
+              <Chips label="Unidade" opcoes={ops.unidades || []} valor={it.unidade}
+                onChange={(v) => mudarItem(idx, 'unidade', v || 'UN')} />
+
+              <Chips label="IPI" ajuda="em %" valor={it.ipi_percentual}
+                opcoes={(ops.ipi || []).map((v) => ({ valor: v, curto: `${String(v).replace('.', ',')}%` }))}
+                onChange={(v) => mudarItem(idx, 'ipi_percentual', v === '' ? 0 : v)} />
+
+              <div className="pcf-chips-bloco">
+                <span className="pcf-chips-label">Entrega deste item</span>
+                <div className="pcf-chips">
+                  {[['Hoje', hojeISO()], ['Em 7 dias', emDias(7)], ['Em 15 dias', emDias(15)],
+                    ['Em 30 dias', emDias(30)]].map(([rot, valor]) => (
+                      <button type="button" key={rot}
+                        className={`pcf-chip${it.data_entrega === valor ? ' pcf-chip-ativo' : ''}`}
+                        onClick={() => mudarItem(idx, 'data_entrega', it.data_entrega === valor ? '' : valor)}>
+                        {it.data_entrega === valor && <FiCheck />}{rot}
                       </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {itens.some((i) => !i.material_id) && (
-            <div className="pcf-aviso">
-              Todo item precisa de um material do cadastro — é o vínculo que permite dar baixa
-              no recebimento depois.
+                    ))}
+                  <input type="date" className="pcf-data-input" value={it.data_entrega || ''}
+                    onChange={(e) => mudarItem(idx, 'data_entrega', e.target.value)} />
+                </div>
+                {it.data_entrega && <div className="pcf-escolhido">{dataCurta(it.data_entrega)}</div>}
+              </div>
             </div>
-          )}
+          ))}
         </section>
 
-        {/* ── encargos e totais ─────────────────────────────────── */}
+        {/* ── 3. condições ──────────────────────────────────────── */}
         <section className="pcf-bloco">
-          <h2>Encargos e totais</h2>
-          <div className="pcf-grid">
-            <label className="pcf-campo">
-              <span>Frete (R$)</span>
-              <input type="number" min="0" step="0.01" value={cab.valor_frete}
-                onChange={(e) => setCampo('valor_frete', e.target.value)} />
-            </label>
-            <label className="pcf-campo">
-              <span>ICMS ST (R$)</span>
-              <input type="number" min="0" step="0.01" value={cab.total_icms_st}
-                onChange={(e) => setCampo('total_icms_st', e.target.value)} />
-            </label>
-            <label className="pcf-campo">
-              <span>Desconto (R$)</span>
-              <input type="number" min="0" step="0.01" value={cab.total_desconto}
-                onChange={(e) => setCampo('total_desconto', e.target.value)} />
-            </label>
-            <label className="pcf-campo pcf-campo-full">
-              <span>Observações</span>
-              <textarea rows="2" value={cab.observacoes}
-                onChange={(e) => setCampo('observacoes', e.target.value)} />
-            </label>
+          <h2>3. Condições</h2>
+
+          <Chips label="Condição de pagamento" opcoes={ops.condicao_pagamento || []}
+            valor={cab.condicao_pagamento}
+            onChange={(v) => setCampo('condicao_pagamento', v)} />
+
+          <Chips label="Quem paga o frete" opcoes={ops.frete_modalidade || []}
+            valor={cab.frete_modalidade}
+            onChange={(v) => setCampo('frete_modalidade', v)} />
+
+          <Chips label="Via de transporte" opcoes={ops.via_transporte || []}
+            valor={cab.via_transporte}
+            onChange={(v) => setCampo('via_transporte', v)} />
+
+          <div className="pcf-chips-bloco">
+            <span className="pcf-chips-label">Previsão de entrega do pedido</span>
+            <div className="pcf-chips">
+              {[['Em 7 dias', emDias(7)], ['Em 15 dias', emDias(15)], ['Em 30 dias', emDias(30)],
+                ['Em 45 dias', emDias(45)]].map(([rot, valor]) => (
+                  <button type="button" key={rot}
+                    className={`pcf-chip${cab.previsao_entrega === valor ? ' pcf-chip-ativo' : ''}`}
+                    onClick={() => setCampo('previsao_entrega', cab.previsao_entrega === valor ? '' : valor)}>
+                    {cab.previsao_entrega === valor && <FiCheck />}{rot}
+                  </button>
+                ))}
+              <input type="date" className="pcf-data-input" value={cab.previsao_entrega || ''}
+                onChange={(e) => setCampo('previsao_entrega', e.target.value)} />
+            </div>
+            {cab.previsao_entrega && <div className="pcf-escolhido">{dataCurta(cab.previsao_entrega)}</div>}
+          </div>
+
+          <BotoesLocal campo="local_entrega" outro={entregaOutro} setOutro={setEntregaOutro} />
+        </section>
+
+        {/* ── 4. totais ─────────────────────────────────────────── */}
+        <section className="pcf-bloco">
+          <h2>4. Total</h2>
+          <div className="pcf-encargos">
+            <label><span>Frete (R$)</span>
+              <input type="number" min="0" step="0.01" placeholder="0,00" value={cab.valor_frete}
+                onChange={(e) => setCampo('valor_frete', e.target.value)} /></label>
+            <label><span>ICMS ST (R$)</span>
+              <input type="number" min="0" step="0.01" placeholder="0,00" value={cab.total_icms_st}
+                onChange={(e) => setCampo('total_icms_st', e.target.value)} /></label>
+            <label><span>Desconto (R$)</span>
+              <input type="number" min="0" step="0.01" placeholder="0,00" value={cab.total_desconto}
+                onChange={(e) => setCampo('total_desconto', e.target.value)} /></label>
           </div>
 
           {/* Os números abaixo vêm do servidor, do MESMO cálculo que grava. */}
@@ -468,21 +581,61 @@ const PedidoCompraForm = () => {
               <span>Total do pedido</span><strong>{moeda(totais.total_geral)}</strong>
             </div>
           </div>
-          <div className="pcf-nota">
-            Totais calculados pelo servidor, com a mesma conta que grava o pedido — cada linha é
-            arredondada antes de somar. Unitário aceita até 4 casas
-            {itens.some((i) => i.valor_unitario !== '' && String(i.valor_unitario).includes('.'))
-              ? ` (ex.: ${moedaUnit(itens.find((i) => String(i.valor_unitario).includes('.')).valor_unitario)})`
-              : ''}.
-          </div>
         </section>
+
+        {/* ── 5. o que quase nunca muda ─────────────────────────── */}
+        <section className="pcf-bloco">
+          <button type="button" className="pcf-mais" onClick={() => setMaisOpcoes((v) => !v)}>
+            {maisOpcoes ? <FiChevronUp /> : <FiChevronDown />} Mais opções
+            <small>transportadora, cobrança, status, observações</small>
+          </button>
+
+          {maisOpcoes && (
+            <div className="pcf-mais-corpo">
+              <Chips label="Status do pedido" opcoes={STATUS} valor={cab.status}
+                onChange={(v) => setCampo('status', v || 'pendente')} />
+
+              {(ops.transportadoras || []).length > 0 && (
+                <Chips label="Transportadora" opcoes={ops.transportadoras} valor={cab.transportadora}
+                  onChange={(v) => setCampo('transportadora', v)} />
+              )}
+
+              {(ops.tabelas_preco || []).length > 0 && (
+                <Chips label="Tabela de preço" opcoes={ops.tabelas_preco} valor={cab.tabela_preco}
+                  onChange={(v) => setCampo('tabela_preco', v)} />
+              )}
+
+              <BotoesLocal campo="local_cobranca" outro={cobrancaOutro} setOutro={setCobrancaOutro} />
+
+              <div className="pcf-livres">
+                <label><span>Transportadora (outra)</span>
+                  <input value={cab.transportadora}
+                    onChange={(e) => setCampo('transportadora', e.target.value)} /></label>
+                <label><span>Telefone da transportadora</span>
+                  <input value={cab.transportadora_telefone}
+                    onChange={(e) => setCampo('transportadora_telefone', e.target.value)} /></label>
+                <label><span>Contato no fornecedor</span>
+                  <input value={cab.contato}
+                    onChange={(e) => setCampo('contato', e.target.value)} /></label>
+                <label className="pcf-livre-full"><span>Observações do pedido</span>
+                  <textarea rows="2" value={cab.observacoes}
+                    onChange={(e) => setCampo('observacoes', e.target.value)} /></label>
+              </div>
+            </div>
+          )}
+        </section>
+
+        <div className="pcf-rodape">
+          <button type="submit" className="pcf-salvar" disabled={salvando}>
+            <FiSave /> {salvando ? 'Salvando…' : 'Salvar pedido'}
+          </button>
+        </div>
       </form>
 
-      {/* O seletor mora AQUI, fora da tabela, e nao dentro da celula.
-          `.pcf-tabela-wrap` tem `overflow-x: auto` para a grade de 11 colunas rolar sozinha —
-          e overflow-x:auto obriga o overflow-y a virar auto tambem, entao um dropdown
-          `position:absolute` dentro da celula era CORTADO pelo container (medido: 146px da
-          lista ficavam fora). Em modal o problema nao existe, e ainda funciona no celular. */}
+      {/* ── modais de escolha ───────────────────────────────────── */}
+      {/* Ficam FORA do formulário e com position:fixed de propósito: na versão anterior o
+          seletor era um dropdown dentro da grade, e o `overflow-x:auto` do container cortava
+          146px da lista. */}
       {buscaLinha !== null && (
         <div className="pcf-modal-overlay" onClick={() => setBuscaLinha(null)}>
           <div className="pcf-modal" onClick={(e) => e.stopPropagation()}>
@@ -497,13 +650,48 @@ const PedidoCompraForm = () => {
             </div>
             <div className="pcf-busca-lista">
               {materiais.length === 0 && (
-                <div className="pcf-busca-vazio">Nenhum material encontrado</div>
+                <div className="pcf-busca-vazio">
+                  {semMateriais
+                    ? 'Nenhum material cadastrado no almoxarifado ainda.'
+                    : 'Nenhum material encontrado com esse termo.'}
+                </div>
               )}
               {materiais.map((m) => (
                 <button type="button" key={m.id} className="pcf-busca-item"
                   onClick={() => escolherMaterial(buscaLinha, m)}>
                   <strong>{m.codigo}</strong> {m.nome}
-                  <small>{m.unidade}{m.ncm ? ` · NCM ${m.ncm}` : ''}</small>
+                  <small>{m.unidade}{m.ncm ? ` · NCM ${m.ncm}` : ''}
+                    {m.custo_unitario ? ` · último custo ${moedaUnit(m.custo_unitario)}` : ''}</small>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {escolhendoFornecedor && (
+        <div className="pcf-modal-overlay" onClick={() => setEscolhendoFornecedor(false)}>
+          <div className="pcf-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="pcf-modal-topo">
+              <h3>Escolher fornecedor</h3>
+              <button type="button" onClick={() => setEscolhendoFornecedor(false)}>✕</button>
+            </div>
+            {fornecedores.length > 8 && (
+              <div className="pcf-modal-busca">
+                <FiSearch />
+                <input autoFocus placeholder="Buscar por nome ou CNPJ…"
+                  value={buscaForn} onChange={(e) => setBuscaForn(e.target.value)} />
+              </div>
+            )}
+            <div className="pcf-busca-lista">
+              {fornecedoresFiltrados.length === 0 && (
+                <div className="pcf-busca-vazio">Nenhum fornecedor ativo encontrado.</div>
+              )}
+              {fornecedoresFiltrados.map((f) => (
+                <button type="button" key={f.id} className="pcf-busca-item"
+                  onClick={() => escolherFornecedor(f)}>
+                  <strong>{f.razao_social}</strong>
+                  <small>{[f.cnpj, f.cidade, f.estado].filter(Boolean).join(' · ')}</small>
                 </button>
               ))}
             </div>

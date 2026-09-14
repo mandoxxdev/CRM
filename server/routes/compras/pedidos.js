@@ -17,6 +17,7 @@
 const { dbRun, dbGet, dbAll } = require('../../services/compras/db');
 const { calcularTotaisPedido } = require('../../services/compras/pedidoTotais');
 const { carregarPedido: carregarPedidoDoBanco } = require('../../services/compras/pedidoLeitura');
+const { carregarOpcoes } = require('../../services/compras/opcoesPedido');
 
 // RN-07 — enum fechado. Gravação sempre minúscula; leitura tolera maiúscula porque
 // outro caminho da base grava 'ABERTO' (tests/api/reposicaoJornada.api.test.js:61).
@@ -147,6 +148,15 @@ module.exports = function (app, db, authenticateToken, checkModulePermission) {
   // `checkModulePermission('almoxarifado')` (routes/almoxarifado.js:233-235), então um
   // `GET /api/almoxarifado/materiais` direto do formulário devolveria 403 — e a RN-09 exige
   // `material_id` em TODO item, o que tornaria impossível salvar qualquer pedido.
+
+  // Todas as opcoes que a tela desenha como botao, numa chamada so (G1b).
+  app.get('/api/compras/pedidos-aux/opcoes', ...guard, async (req, res) => {
+    try {
+      res.json(await carregarOpcoes(db));
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
 
   app.get('/api/compras/pedidos-aux/materiais', ...guard, async (req, res) => {
     try {

@@ -1587,6 +1587,11 @@
 }
 
 .ped-rec-painel {
+  /* `--spotify-green` so existe dentro de `.almox-mapa-page` neste arquivo; nesta tela ele
+     nao resolve e o `color` caia para heranca, tirando o destaque do total. Acento local com
+     fallback duro resolve sem depender de ordem de carga. */
+  --ped-rec-dinheiro: var(--gmp-success-light, #22c55e);
+
   margin-top: 12px;
   border: 1px solid var(--gmp-border);
   border-radius: 10px;
@@ -1728,7 +1733,7 @@
 .ped-rec-total-geral strong {
   font-size: 1rem;
   font-weight: 800;
-  color: var(--spotify-green);
+  color: var(--ped-rec-dinheiro);
 }
 
 .ped-rec-nota {
