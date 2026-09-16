@@ -115,7 +115,15 @@ const Compras = () => {
         toast.success('Item excluído com sucesso');
         loadData();
       } catch (error) {
-        toast.error('Erro ao excluir item');
+        // Etapa 38, Task 5: a literal passa a ser a DO SERVIDOR.
+        //
+        // Este `catch` trocava QUALQUER erro por 'Erro ao excluir item', e a Etapa 38 criou a
+        // recusa que isso esconde: `DELETE /api/compras/pedidos/:id` responde **409** com
+        // 'Pedido de compra <numero> ja teve recebimento — nao pode ser excluido' (RN-C08). Com a
+        // mensagem generica, o 409 que a regra congela ficava indistinguivel de um 500 para quem
+        // clica na lixeira — o comprador tentaria de novo sem nunca saber que existe recebimento
+        // vinculado. O fallback fica para o erro sem corpo (rede, 500 sem JSON).
+        toast.error(error.response?.data?.error || 'Erro ao excluir item');
       }
     }
   };

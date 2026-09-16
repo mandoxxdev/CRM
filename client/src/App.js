@@ -42,6 +42,7 @@ import {
   OSComercialForm,
   Compras,
   ComprasSolicitacoesCompra,
+  PedidoCompraForm,
   GruposFornecedores,
   FornecedoresDoGrupo,
   ItensFornecedor,
@@ -208,7 +209,15 @@ const PrivateRoute = ({ children }) => {
   return <ModuleLoading module="sistema" compact />;
 };
 
-function AppRoutes() {
+/**
+ * A tabela de rotas, exportada de proposito (Etapa 38, Task 5).
+ *
+ * Ela e EXPORTADA porque a regua das rotas novas depende de exercitar esta tabela: um teste que
+ * montasse a tela solta passaria com `App.js` sem rota nenhuma declarada — foi exatamente esse o
+ * furo da aba "Pedidos de Compra" do modulo Compras, cujos dois `<Link>` existiam sem rota que os
+ * casasse. Consumidor: `components/compras/PedidoCompraForm.test.js`.
+ */
+export function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
@@ -338,6 +347,18 @@ function AppRoutes() {
         } />
         <Route path="pedidos" element={
           <Compras />
+        } />
+        {/* Etapa 38, Task 5: as duas rotas que faltavam. `Compras.js` ja escrevia os dois `<Link>`
+            — o botao "Novo Pedido" (`/compras/pedidos/novo`) e o lapis de cada linha
+            (`/compras/pedidos/editar/:id`) — e nao havia rota que os casasse: clicar voltava para a
+            propria lista, e com isso a criacao de pedido (e a Etapa 37 inteira, que recebe contra
+            pedido) era inalcancavel por clique. `editar/:id` e nao `:id` de proposito: e o caminho
+            que o `<Link>` existente ja aponta, e `:id` casaria tambem `/novo`. */}
+        <Route path="pedidos/novo" element={
+          <PedidoCompraForm />
+        } />
+        <Route path="pedidos/editar/:id" element={
+          <PedidoCompraForm />
         } />
         <Route path="cotacoes" element={
           <Compras />

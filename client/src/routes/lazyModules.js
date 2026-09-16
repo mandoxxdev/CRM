@@ -56,6 +56,9 @@ export const OrdensServicoComercial = page(() => import('../components/OrdensSer
 export const OSComercialForm = page(() => import('../components/OSComercialForm'));
 export const Compras = page(() => import('../components/Compras'));
 export const ComprasSolicitacoesCompra = page(() => import('../components/ComprasSolicitacoesCompra'));
+// Etapa 38, Task 5: a tela de criacao/edicao de pedido de compra. Entra aqui, e nao por import
+// direto no App.js, para seguir o code-splitting de todas as outras paginas do modulo.
+export const PedidoCompraForm = page(() => import('../components/compras/PedidoCompraForm'));
 export const GruposFornecedores = page(() => import('../components/GruposFornecedores'));
 export const FornecedoresDoGrupo = page(() => import('../components/FornecedoresDoGrupo'));
 export const ItensFornecedor = page(() => import('../components/ItensFornecedor'));
