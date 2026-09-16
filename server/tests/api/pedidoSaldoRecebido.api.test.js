@@ -1,5 +1,6 @@
 /**
- * Etapa 37, Task 1 — a ESTRUTURA que faz o pedido de compra saber que foi recebido.
+ * Etapa 37, Tasks 1 e 3 — a ESTRUTURA que faz o pedido de compra saber que foi recebido, e o
+ * ACUMULADOR que a move.
  *
  * Achado medido na Fase 0 (sonda executada): `itens_pedido_compra` tem 8 colunas, **1 leitor e
  * ZERO escritores**. Um pedido de 10 unidades recebeu **25 em tres recebimentos** e continuou
@@ -20,6 +21,36 @@
  * ⚠️ Fragilidade declarada (letra G): a regua ESTRUTURAL destes cenarios nao protege o
  * anti-padrao `db.run(sql, () => {})` no lugar de `safeAlter` — medido pela sabotagem 1 desta
  * task, que NAO derrubou nenhuma assercao. Quem guarda o padrao e `npm run test:safealter`.
+ *
+ * ── TASK 3 (RN-22/RN-23): o acumulador, e POR QUE ele mora onde mora ──────────────────────────
+ * A Task 1 deixou a coluna com ZERO escritores. Os cenarios (4) a (9) sao os escritores, e cada um
+ * mede um lugar em que a soma pode estar errada com a suite inteira verde:
+ *
+ * - (4)/(4b) somar o numero certo, e o MESMO que moveu estoque (`quantidadeDoItem`);
+ * - (5)     nao somar DUAS vezes — e o defeito classico desta funcao, que ela ja pagou uma vez
+ *           ("a 1a tentativa entrou 10 do A e falhou no B; corrigido o B, a 2a entrou MAIS 10");
+ * - (6)     o OUTRO caminho de entrada: `aprovarRecebimento` chama `darEntradaEstoque` DIRETO
+ *           (ramo APROVADO, `POST /recebimentos/:id/aprovar`). Somar dentro de `processarNota`
+ *           deixaria esse caminho creditando estoque sem contar ao pedido, e NENHUM teste de hoje
+ *           pegaria — medido: `itens_pedido_compra` tem INSERT em 4 arquivos de teste e ZERO
+ *           SELECT depois de processar;
+ * - (7)     RN-23: documento CRIADO e nao processado nao consome saldo (nao existe status
+ *           CANCELADO de recebimento — medido; este e o equivalente alcancavel);
+ * - (8)     dois processados somam os dois;
+ * - (9)     a soma no pedido NAO pode derrubar a entrada de nota (o `try/catch` nao-fatal).
+ *
+ * ⚠️ Os cenarios (5) e (7) sao VERDES ANTES do conserto, por vacuidade: enquanto ninguem soma,
+ * "continua 6" e "nao entra na conta" sao verdadeiros com a coluna parada em 0. Eles so valem
+ * DEPOIS, e quem prova que sabem falhar sao as sabotagens 1 e 2 da Task 3.
+ *
+ * Por qual caminho cada cenario chega a entrada fisica, de proposito:
+ * (a) WORKFLOW REAL (`encaminhar_compras` → `finalizar_compras` → `iniciar_faturamento` →
+ *     `PUT /fiscal` → `processar`) nos cenarios (4), (4b), (7) e (9) — e o gesto do usuario, e
+ *     inventar um UPDATE de status a mao para pular o `/fiscal` foi o que escondeu o Critical da
+ *     Etapa 36;
+ * (b) `receiptService.darEntradaEstoque` DIRETO (exportada de proposito) nos cenarios (5) e (8),
+ *     que medem IDEMPOTENCIA e nao workflow;
+ * (c) `POST /recebimentos/:id/aprovar` no (6), que e o proprio objeto do cenario.
  */
 const assert = require('assert');
 const request = require('supertest');
@@ -27,6 +58,7 @@ const sqlite3 = require('sqlite3').verbose();
 const { createTestApp } = require('../helpers/testApp');
 const { initSchema } = require('../../services/almoxarifado/schema');
 const { dbRun, dbGet, dbAll } = require('../../services/almoxarifado/db');
+const receiptService = require('../../services/almoxarifado/receiptService');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -56,6 +88,84 @@ async function colunas(db, tabela) {
 
 (async () => {
   const { app, db, close } = await createTestApp({ user: ADMIN });
+
+  // ── Fixtures da Task 3 ──────────────────────────────────────────────────────────────────────
+  // `validarDadosProcessamento` exige fornecedor (CNPJ OU nome) para processar, e o `POST` por
+  // pedido herda o fornecedor DO PEDIDO — entao o pedido nasce com um fornecedor de verdade.
+  const forn = await dbRun(db, `INSERT INTO fornecedores (razao_social, cnpj)
+    VALUES ('Forn E37 T3','88.888.888/0001-88')`);
+
+  let seq = 0;
+  async function novoMaterial() {
+    seq += 1;
+    const codigo = `E37-T3-${seq}`;
+    const m = await dbRun(db, `INSERT INTO materiais_almoxarifado
+      (codigo, nome, unidade, quantidade_atual, ativo) VALUES (?,?,'UN',0,1)`,
+    [codigo, `Chapa acumulador ${seq}`]);
+    return { id: m.lastID, codigo };
+  }
+
+  /**
+   * Pedido de compra com as linhas que o cenario precisa. Se a linha trouxer a chave `recebida`, a
+   * coluna vai EXPLICITA no INSERT (inclusive `null` — e o que o cenario (4b) precisa, porque o
+   * DEFAULT 0 nunca produz NULL); sem a chave, a coluna nasce pelo DEFAULT da Task 1.
+   */
+  async function novoPedido(linhas) {
+    seq += 1;
+    const numero = `PC-E37-T3-${seq}`;
+    const p = await dbRun(db, `INSERT INTO pedidos_compra (numero, fornecedor_id, status)
+      VALUES (?,?,'pendente')`, [numero, forn.lastID]);
+    const ids = [];
+    for (const l of linhas) {
+      const explicita = Object.prototype.hasOwnProperty.call(l, 'recebida');
+      const cols = ['pedido_id', 'material_id', 'codigo', 'descricao', 'quantidade',
+        'valor_unitario', 'unidade'];
+      const vals = [p.lastID, l.material_id, l.codigo || null, l.descricao || 'Linha do pedido',
+        l.quantidade, l.valor_unitario != null ? l.valor_unitario : 10, 'UN'];
+      if (explicita) { cols.push('quantidade_recebida'); vals.push(l.recebida); }
+      const r = await dbRun(db, `INSERT INTO itens_pedido_compra (${cols.join(',')})
+        VALUES (${cols.map(() => '?').join(',')})`, vals);
+      ids.push(r.lastID);
+    }
+    return { id: p.lastID, numero, linhas: ids };
+  }
+
+  const post = (body) => request(app).post('/api/almoxarifado/recebimentos').send(body);
+  // ⚠️ MODO DE FALHA 3 DESTA ETAPA: todo cenario le a linha do pedido PELO ID que o INSERT
+  // devolveu e afirma o VALOR — nunca "nao deu erro".
+  const recebidaDaLinha = async (linhaId) => (await dbGet(db,
+    'SELECT quantidade_recebida FROM itens_pedido_compra WHERE id = ?', [linhaId])).quantidade_recebida;
+  const estoqueDoMaterial = async (matId) => (await dbGet(db,
+    'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [matId])).quantidade_atual;
+  const itensDo = (recId) => dbAll(db, `SELECT id, quantidade_esperada, quantidade_recebida,
+    pedido_item_id, entrada_estoque_em FROM recebimentos_material_itens_almoxarifado
+    WHERE recebimento_id = ? ORDER BY id`, [recId]);
+  const statusDo = async (recId) => (await dbGet(db,
+    'SELECT status FROM recebimentos_material_almoxarifado WHERE id = ?', [recId])).status;
+
+  // Caminho (a): o WORKFLOW REAL ate `processar`. Nenhum UPDATE de status a mao — e no `/fiscal`
+  // que vive a barreira da Etapa 36, e pular por ali foi o que escondeu o Critical dela.
+  async function processarPeloWorkflow(recId) {
+    const wf = (acao) => request(app).post(`/api/almoxarifado/recebimentos/${recId}/workflow`)
+      .send({ acao });
+    for (const acao of ['encaminhar_compras', 'finalizar_compras', 'iniciar_faturamento']) {
+      const r = await wf(acao);
+      assert.strictEqual(r.status, 200, `workflow ${acao}: ${JSON.stringify(r.body)}`);
+    }
+    const fiscal = await request(app).put(`/api/almoxarifado/recebimentos/${recId}/fiscal`).send({
+      nota_fiscal: `NF-E37T3-${recId}`, fornecedor_id: forn.lastID, fornecedor_nome: 'Forn E37 T3',
+      data_emissao_nf: '2026-09-10', data_entrada_nf: '2026-09-11', valor_total_nota: 600,
+    });
+    assert.strictEqual(fiscal.status, 200, JSON.stringify(fiscal.body));
+    return wf('processar');
+  }
+
+  // Caminho (b): `darEntradaEstoque` DIRETO, para medir idempotencia sem passar pelo workflow.
+  async function entrarDireto(recId) {
+    const rec = await dbGet(db,
+      'SELECT * FROM recebimentos_material_almoxarifado WHERE id = ?', [recId]);
+    return receiptService.darEntradaEstoque(db, ADMIN, rec, recId, {});
+  }
 
   await test('(1) depois do initSchema as duas colunas e o indice existem, e o DEFAULT 0 vale', async () => {
     const itensPedido = await colunas(db, 'itens_pedido_compra');
@@ -137,6 +247,201 @@ async function colunas(db, tabela) {
     const encontrado = res.body.find((p) => p.numero === 'PC-E37-SEM-FORN');
     assert.ok(encontrado, `o pedido inserido nao voltou na rota aux: ${JSON.stringify(res.body)}`);
     assert.strictEqual(encontrado.id, semFornecedor.lastID);
+  });
+
+  // ── (4) RN-22: o numero certo, no momento certo, pelo caminho do usuario ────────────────────
+  await test('(4) RN-22: pedido de 10, recebimento de 6 — 0 ANTES de processar, 6 DEPOIS, e o estoque concorda', async () => {
+    const mat = await novoMaterial();
+    const pedido = await novoPedido([{ material_id: mat.id, quantidade: 10 }]);
+
+    const criado = await post({
+      pedido_compra_id: pedido.id,
+      itens: [{ material_id: mat.id, quantidade: 6, quantidade_recebida: 6 }],
+    });
+    assert.strictEqual(criado.status, 201, JSON.stringify(criado.body));
+    const recId = criado.body.id;
+
+    const [item] = await itensDo(recId);
+    assert.strictEqual(item.pedido_item_id, pedido.linhas[0],
+      'sem o link da T2 nao ha onde somar — o cenario mediria outra coisa');
+    // A DIFERENCA que faz a sabotagem 3 legivel: a esperada e o saldo (10) e a recebida e 6. Somar
+    // a esperada em vez de `qtd` faria o pedido e o estoque discordarem em 4.
+    assert.strictEqual(item.quantidade_esperada, 10);
+    assert.strictEqual(item.quantidade_recebida, 6);
+
+    // ANTES: criar documento NAO consome saldo (RN-23). Quem consome e a entrada FISICA.
+    assert.strictEqual(await recebidaDaLinha(pedido.linhas[0]), 0,
+      'criar o recebimento nao pode somar no pedido — a soma e da entrada fisica');
+    const estoqueAntes = await estoqueDoMaterial(mat.id);
+
+    const proc = await processarPeloWorkflow(recId);
+    assert.strictEqual(proc.status, 200, JSON.stringify(proc.body));
+    assert.strictEqual(await statusDo(recId), 'PROCESSADO');
+
+    assert.strictEqual(await recebidaDaLinha(pedido.linhas[0]), 6,
+      'a linha do pedido tem de somar os 6 que entraram no estoque');
+    assert.strictEqual(await estoqueDoMaterial(mat.id) - estoqueAntes, 6,
+      'as DUAS contas tem de concordar: o pedido soma o MESMO numero que moveu estoque');
+  });
+
+  // ── (4b) a linha com `quantidade_recebida` NULL EXPLICITO ───────────────────────────────────
+  /**
+   * O unico produtor de NULL nesta base, e existe porque producao pode ter linha anterior ao ALTER
+   * da Task 1 (ou inserida a mao com NULL). Sem este cenario a sabotagem 4 (tirar o `COALESCE`)
+   * seria NO-OP: a coluna nasce com DEFAULT 0 e `0 + 6` nao precisa de COALESCE nenhum. Em SQLite
+   * `null + 6` e NULL — a linha ficaria com o saldo NULL para sempre, e o saldo NULL desliga a
+   * barreira da T2 em silencio (`Number.isFinite(NaN)` e falso, toda comparacao vira falsa).
+   */
+  await test('(4b) linha do pedido com quantidade_recebida NULL explicito: depois de processar vale 6, nao NULL', async () => {
+    const mat = await novoMaterial();
+    const pedido = await novoPedido([{ material_id: mat.id, quantidade: 10, recebida: null }]);
+    assert.strictEqual(await recebidaDaLinha(pedido.linhas[0]), null,
+      'controle: o cenario exige a coluna NULL de verdade, senao nao mede o COALESCE');
+
+    const criado = await post({
+      pedido_compra_id: pedido.id,
+      itens: [{ material_id: mat.id, quantidade: 6, quantidade_recebida: 6 }],
+    });
+    assert.strictEqual(criado.status, 201, JSON.stringify(criado.body));
+
+    const proc = await processarPeloWorkflow(criado.body.id);
+    assert.strictEqual(proc.status, 200, JSON.stringify(proc.body));
+    assert.strictEqual(await recebidaDaLinha(pedido.linhas[0]), 6,
+      'null + 6 em SQLite e NULL: sem COALESCE a linha mais antiga do acervo nunca soma');
+  });
+
+  // ── (5) IDEMPOTENCIA: o defeito classico desta funcao ───────────────────────────────────────
+  await test('(5) reprocessar a MESMA nota: continua 6, nao 12', async () => {
+    const mat = await novoMaterial();
+    const pedido = await novoPedido([{ material_id: mat.id, quantidade: 10 }]);
+    const criado = await post({
+      pedido_compra_id: pedido.id,
+      itens: [{ material_id: mat.id, quantidade: 6, quantidade_recebida: 6 }],
+    });
+    assert.strictEqual(criado.status, 201, JSON.stringify(criado.body));
+
+    // Caminho (b): duas passadas por `darEntradaEstoque`, que e exatamente o que o
+    // reprocessamento (ou dois cliques em "Processar Nota") faz.
+    await entrarDireto(criado.body.id);
+    assert.strictEqual(await recebidaDaLinha(pedido.linhas[0]), 6, 'a 1a passada soma 6');
+    const [item] = await itensDo(criado.body.id);
+    assert.ok(item.entrada_estoque_em, 'controle: a 1a passada tem de ter RECLAMADO o item');
+
+    await entrarDireto(criado.body.id);
+    assert.strictEqual(await recebidaDaLinha(pedido.linhas[0]), 6,
+      'somar FORA do claim `entrada_estoque_em IS NULL` faria 6 virar 12 — o defeito que esta '
+      + 'funcao ja pagou uma vez (10 viraram 20)');
+    // A metade que prova que o claim e quem segura: o estoque tambem nao dobrou.
+    assert.strictEqual(await estoqueDoMaterial(mat.id), 6,
+      'controle: se o estoque tivesse dobrado, o cenario mediria o claim e nao o acumulador');
+  });
+
+  // ── (6) O OUTRO caminho de entrada, o que nenhum teste de hoje cobria ───────────────────────
+  await test('(6) POST /recebimentos/:id/aprovar (sem processarNota): o pedido tambem soma', async () => {
+    const mat = await novoMaterial();
+    const pedido = await novoPedido([{ material_id: mat.id, quantidade: 10 }]);
+    const criado = await post({
+      pedido_compra_id: pedido.id,
+      itens: [{ material_id: mat.id, quantidade: 6, quantidade_recebida: 6 }],
+    });
+    assert.strictEqual(criado.status, 201, JSON.stringify(criado.body));
+
+    // Status nasce RECEBIDO (fora de [EM_ENTRADA_NF, ENCAMINHADO_FATURAMENTO]), entao
+    // `aprovarRecebimento` cai no ramo que chama `darEntradaEstoque` DIRETO e grava APROVADO.
+    const aprovado = await request(app)
+      .post(`/api/almoxarifado/recebimentos/${criado.body.id}/aprovar`).send({});
+    assert.strictEqual(aprovado.status, 200, JSON.stringify(aprovado.body));
+    assert.strictEqual(await statusDo(criado.body.id), 'APROVADO',
+      'controle: se este ramo delegasse para processarNota, o cenario nao mediria o OUTRO caminho');
+
+    assert.strictEqual(await recebidaDaLinha(pedido.linhas[0]), 6,
+      'somar dentro de processarNota deixaria ESTE caminho creditando estoque sem contar ao pedido');
+    assert.strictEqual(await estoqueDoMaterial(mat.id), 6);
+  });
+
+  // ── (7) RN-23: documento aberto nao consome saldo ───────────────────────────────────────────
+  await test('(7) RN-23: dois recebimentos de 5, so o primeiro processado — a linha soma 5, nao 10', async () => {
+    const mat = await novoMaterial();
+    const pedido = await novoPedido([{ material_id: mat.id, quantidade: 10 }]);
+    const corpo = { pedido_compra_id: pedido.id,
+      itens: [{ material_id: mat.id, quantidade: 5, quantidade_recebida: 5 }] };
+
+    const um = await post(corpo);
+    assert.strictEqual(um.status, 201, JSON.stringify(um.body));
+    const dois = await post(corpo);
+    assert.strictEqual(dois.status, 201,
+      'dois documentos de 5 contra um pedido de 10 sao legitimos: o saldo so anda na entrada fisica');
+
+    const proc = await processarPeloWorkflow(um.body.id);
+    assert.strictEqual(proc.status, 200, JSON.stringify(proc.body));
+
+    assert.strictEqual(await recebidaDaLinha(pedido.linhas[0]), 5,
+      'o segundo documento existe mas NAO entrou no estoque — ele nao pode entrar na conta');
+    assert.strictEqual(await statusDo(dois.body.id), 'RECEBIDO',
+      'controle: o segundo tem de estar parado em RECEBIDO (nao existe status CANCELADO de '
+      + 'recebimento — medido; este e o equivalente alcancavel)');
+    assert.strictEqual(await estoqueDoMaterial(mat.id), 5);
+  });
+
+  // ── (8) os dois processados somam os dois ───────────────────────────────────────────────────
+  await test('(8) dois recebimentos de 5, os DOIS processados: a linha do pedido fecha em 10', async () => {
+    const mat = await novoMaterial();
+    const pedido = await novoPedido([{ material_id: mat.id, quantidade: 10 }]);
+    const corpo = { pedido_compra_id: pedido.id,
+      itens: [{ material_id: mat.id, quantidade: 5, quantidade_recebida: 5 }] };
+
+    const um = await post(corpo);
+    const dois = await post(corpo);
+    assert.strictEqual(um.status, 201, JSON.stringify(um.body));
+    assert.strictEqual(dois.status, 201, JSON.stringify(dois.body));
+
+    // Caminho (b) nos dois: o que se mede aqui e a SOMA de duas entradas, nao o workflow.
+    await entrarDireto(um.body.id);
+    assert.strictEqual(await recebidaDaLinha(pedido.linhas[0]), 5);
+    await entrarDireto(dois.body.id);
+    assert.strictEqual(await recebidaDaLinha(pedido.linhas[0]), 10,
+      'o acumulador SOMA (`+ ?`); um UPDATE que SOBRESCREVE deixaria o pedido em 5 para sempre');
+    assert.strictEqual(await estoqueDoMaterial(mat.id), 10);
+  });
+
+  // ── (9) NAO-FATAL: a contagem do pedido nao pode derrubar a entrada de nota ─────────────────
+  /**
+   * O lugar combinado para o UPDATE e DEPOIS de `entrouFisicamente = true`, e dali para baixo o
+   * `catch` de `darEntradaEstoque` NAO devolve o claim. Se o UPDATE lancar — e o modulo ASSUME que
+   * as tabelas de compras podem nao existir (`listarPedidosCompraAux` e `gerarContaPagar` tem
+   * guarda de tabela ausente) —, o throw faria `processarNota` falhar DEPOIS de o estoque ter
+   * entrado: material no estoque, documento fora de PROCESSADO e o reprocessamento PULANDO o item
+   * pelo claim. Perder a contagem com um `warn` e reparavel por SQL; travar a nota nao e.
+   */
+  await test('(9) com itens_pedido_compra INDISPONIVEL o processar continua 200/PROCESSADO e o estoque sobe', async () => {
+    const mat = await novoMaterial();
+    const pedido = await novoPedido([{ material_id: mat.id, quantidade: 10 }]);
+    const criado = await post({
+      pedido_compra_id: pedido.id,
+      itens: [{ material_id: mat.id, quantidade: 6, quantidade_recebida: 6 }],
+    });
+    assert.strictEqual(criado.status, 201, JSON.stringify(criado.body));
+    const [item] = await itensDo(criado.body.id);
+    assert.strictEqual(item.pedido_item_id, pedido.linhas[0],
+      'controle: sem o link o UPDATE nem seria tentado e o cenario passaria por vacuidade');
+
+    // A tabela sai de cena DEPOIS da criacao (a criacao le o saldo) e ANTES do processar.
+    await dbRun(db, 'ALTER TABLE itens_pedido_compra RENAME TO itens_pedido_compra_off');
+    let proc;
+    try {
+      proc = await processarPeloWorkflow(criado.body.id);
+    } finally {
+      await dbRun(db, 'ALTER TABLE itens_pedido_compra_off RENAME TO itens_pedido_compra');
+    }
+
+    assert.strictEqual(proc.status, 200,
+      `a soma no pedido e NAO-FATAL: ${JSON.stringify(proc.body)}`);
+    assert.strictEqual(await statusDo(criado.body.id), 'PROCESSADO');
+    assert.strictEqual(await estoqueDoMaterial(mat.id), 6, 'o estoque entrou mesmo assim');
+    // O preco declarado (letra G): a contagem daquele pedido fica por fazer, com um `warn` no
+    // console — reparavel por SQL, ao contrario de uma nota travada.
+    assert.strictEqual(await recebidaDaLinha(pedido.linhas[0]), 0,
+      'o preco do nao-fatal e a contagem perdida, e ela e o que o warn anuncia');
   });
 
   await close();

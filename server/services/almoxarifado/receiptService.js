@@ -1152,6 +1152,48 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id 
           }
         }
 
+        // (Etapa 37, RN-22) O PEDIDO DE COMPRA passa a saber o que chegou. `itens_pedido_compra`
+        // tinha 8 colunas, 1 leitor e ZERO escritores: um pedido de 10 recebeu 25 em tres
+        // recebimentos e continuou `ABERTO` com `quantidade = 10` (sonda executada). Este e o
+        // escritor.
+        //
+        // AQUI, e nao em `processarNota`, porque ha DOIS caminhos de entrada fisica:
+        // `processarNota` e `aprovarRecebimento` (ramo APROVADO, `POST /recebimentos/:id/aprovar`,
+        // que chama esta funcao DIRETO). Somar la deixaria o segundo caminho creditando estoque
+        // sem contar ao pedido — e com a suite inteira verde, porque nenhum teste olhava
+        // `itens_pedido_compra` depois de processar.
+        //
+        // DENTRO do claim `entrada_estoque_em IS NULL` e DEPOIS de `entrouFisicamente = true`, de
+        // proposito pelos dois lados: fora do claim, reprocessar a mesma nota somaria DE NOVO (o
+        // defeito que esta funcao ja pagou — "a 2a tentativa entrou MAIS 10 do A"); antes da
+        // entrada fisica, uma falha do motor devolveria a marca (`entrada_estoque_em = NULL`) e o
+        // pedido ficaria creditado por material que nunca entrou.
+        //
+        // `qtd` (= `quantidadeDoItem`) e o MESMO numero que acabou de mover estoque: somar a
+        // esperada faria o pedido e o estoque discordarem. `COALESCE` porque producao pode ter
+        // linha com `quantidade_recebida` NULL (anterior ao ALTER da Task 1) e `null + 6` em
+        // SQLite e NULL — o saldo daquela linha ficaria NULL para sempre, e saldo NULL desliga a
+        // barreira do `POST` em silencio.
+        //
+        // NAO-FATAL, como a griffagem acima e por um motivo proprio: daqui para baixo o `catch`
+        // NAO devolve o claim, e o modulo ASSUME que as tabelas de compras podem nao existir
+        // (`listarPedidosCompraAux` e `gerarContaPagar` tem guarda de tabela ausente). Um `throw`
+        // aqui faria `processarNota` falhar DEPOIS de o estoque ter entrado: o recebimento ficaria
+        // fora de PROCESSADO e o reprocessamento PULARIA o item pelo claim — material no estoque,
+        // documento travado e o pedido sem contar. Perder a contagem de um pedido com um `warn` e
+        // reparavel por SQL; travar a nota nao e.
+        if (item.pedido_item_id) {
+          try {
+            await dbRun(db, `UPDATE itens_pedido_compra
+                SET quantidade_recebida = COALESCE(quantidade_recebida, 0) + ?
+              WHERE id = ?`, [qtd, item.pedido_item_id]);
+          } catch (ePedido) {
+            console.warn(`[recebimento] soma no saldo do pedido de compra falhou (item ${item.id}, `
+              + `linha do pedido ${item.pedido_item_id}, recebimento ${recebimentoId}): `
+              + `${ePedido.message}`);
+          }
+        }
+
         if (reter) {
           await registrarMovimentacao(db, user, {
             material_id: item.material_id,
