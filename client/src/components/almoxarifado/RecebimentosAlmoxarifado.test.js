@@ -68,6 +68,14 @@ const RECEBIMENTOS = [
     id: 77, numero: 'REC-2026-077', nota_fiscal: null, pedido_compra_numero: null,
     fornecedor_nome: 'Ferramentas Norte', status: 'CONFERIDO_ALMOX', created_at: '2026-09-14T16:45:00Z',
   },
+  // Revisão final (F2): o documento na etapa de FATURAMENTO — o único status em que o botão
+  // "Preencher Dados da NF" existe (`renderAcoes`) — e com `tipo_recebimento` FORA do enum, que é
+  // o estado de acervo que travava toda gravação fiscal. Ver o cenário (r).
+  {
+    id: 84, numero: 'REC-2026-084', nota_fiscal: 'NF-8400', pedido_compra_numero: null,
+    fornecedor_nome: 'Metais Legado', status: 'ENCAMINHADO_FATURAMENTO',
+    created_at: '2026-09-15T10:00:00Z',
+  },
 ];
 
 const DETALHES = {
@@ -107,6 +115,18 @@ const DETALHES = {
   77: {
     ...RECEBIMENTOS[2], fornecedor_cnpj: null, valor_total_nota: null, chave_nfe: null,
     nota_serie: null, observacoes: null, contas_pagar_id: null, itens: [],
+  },
+  // Revisão final (F2): `tipo_recebimento: 'legado'` — valor FORA do enum da RN-11, gravado antes
+  // de o enum existir. O modal fiscal não tem controle nenhum para esse campo, então ele só pode
+  // ser ecoado — e ecoado, o Zod da rota responde 400 em toda gravação.
+  84: {
+    ...RECEBIMENTOS[3], fornecedor_cnpj: '44.444.444/0001-44', tipo_recebimento: 'legado',
+    valor_total_nota: 2400, chave_nfe: null, nota_serie: '3', observacoes: null,
+    contas_pagar_id: null,
+    itens: [{
+      id: 841, material_id: 5, material_nome: 'Chapa Aço 3mm', material_codigo: 'ALM-0033',
+      unidade: 'KG', quantidade_esperada: 120, quantidade_recebida: 120,
+    }],
   },
   // O recebimento que o POST cria: quem acabou de registrar cai no painel por
   // `abrirDetalhe(res.data.id)` (`:303`) e já pode anexar a nota fiscal. Id fora da lista de
@@ -808,4 +828,48 @@ test('(q) item ja conferido com campo vazio nao manda conferencia_quantidade —
   // Metade POSITIVA, no mesmo save: quem tem o campo preenchido leva as duas chaves.
   const item411 = payload.itens.find((i) => i.id === 411);
   expect(item411).toEqual({ id: 411, quantidade_recebida: 50, conferencia_quantidade: true });
+});
+
+/* ── (r) revisão final, F2: o payload fiscal não pode ECOAR `tipo_recebimento` ─────────────────
+ * Achado Alto da revisão da branch. `abrirDetalhe` carregava `tipo_recebimento` do registro para
+ * dentro do `fiscalForm`, e `salvarFiscal` espalha o `fiscalForm` inteiro no `PUT /fiscal` — mas o
+ * modal de NF **não tem controle nenhum** para esse campo (o `<select>` de tipo vive no modal de
+ * *novo* recebimento, que usa outro estado, o `form`). Resultado: uma linha com
+ * `tipo_recebimento` fora do enum da RN-11 — acervo gravado antes de o enum existir — ecoava o
+ * valor inválido de volta e o Zod da rota respondia 400 em **toda** gravação fiscal, sem nenhum
+ * campo na tela que o operador pudesse corrigir.
+ *
+ * A correção é aqui e não no servidor: o servidor está certo em recusar valor fora do enum, e
+ * afrouxar o Zod desfaria a RN-11 inteira. Quem não edita um campo não o reenvia — o `COALESCE`
+ * do `salvarDadosFiscal` preserva a coluna de quem não manda o campo.
+ *
+ * `'tipo_recebimento' in payload` e não `toBeUndefined()`: a chave presente com `undefined` sai
+ * ausente do JSON, mas um `fiscalForm` que volte a carregar o campo entregaria a string de novo —
+ * é a PRESENÇA da chave que esta régua proíbe.
+ */
+test('(r) o payload fiscal sai SEM tipo_recebimento, mesmo com valor legado no registro', async () => {
+  await renderizar();
+  await clicar(linhaDe('REC-2026-084'));
+  expect(painel().textContent).toContain('REC-2026-084');
+
+  await clicar(botaoPorTexto('Preencher Dados da NF'));
+  const formFiscal = container.querySelector('.almox-modal form');
+  expect(formFiscal).not.toBeNull();                       // âncora: o modal montou mesmo
+
+  await act(async () => {
+    formFiscal.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  });
+  await esperarEfeitos();
+
+  const chamadas = api.put.mock.calls.filter(([url]) => url === '/almoxarifado/recebimentos/84/fiscal');
+  expect(chamadas).toHaveLength(1);
+  const payload = chamadas[0][1];
+  expect('tipo_recebimento' in payload).toBe(false);
+
+  // Metade POSITIVA: o resto do formulário continua indo, com os valores carregados do registro —
+  // sem isto, um payload vazio (ou um submit que nem disparou) passaria este cenário.
+  expect(payload.nota_serie).toBe('3');
+  expect(payload.nota_fiscal).toBe('NF-8400');
+  expect(payload.valor_total_nota).toBe(2400);
+  expect(payload.itens).toEqual([expect.objectContaining({ id: 841, quantidade_recebida: 120 })]);
 });

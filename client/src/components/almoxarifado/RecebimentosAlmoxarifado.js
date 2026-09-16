@@ -41,11 +41,16 @@ const FLOW_STEPS = [
   { label: 'Processado', desc: 'Estoque + Contas a Pagar' },
 ];
 
+// Revisão final (F2): `tipo_recebimento` SAIU daqui e do carregamento de `abrirDetalhe`. Este
+// objeto é espalhado inteiro no `PUT /fiscal` (`salvarFiscal`), e o modal de NF não tem controle
+// nenhum para o tipo — o `<select>` de tipo vive no modal de *novo* recebimento, que usa o `form`.
+// Ecoando a coluna, um registro de acervo com valor fora do enum da RN-11 levava 400 do Zod em
+// TODA gravação fiscal, sem nenhum campo na tela para o operador corrigir. Quem não edita não
+// reenvia: o `COALESCE` do `salvarDadosFiscal` preserva a coluna de quem não manda o campo.
 const EMPTY_FISCAL = {
   nota_fiscal: '', nota_serie: '', data_emissao_nf: '', data_entrada_nf: '',
   cfop_nota: '', cfop_entrada: '', chave_nfe: '',
   fornecedor_nome: '', fornecedor_cnpj: '', pedido_compra_numero: '',
-  tipo_recebimento: 'NOTA_FISCAL',
   base_icms: '', valor_icms: '', valor_produtos: '', frete: '', desconto: '',
   outras_despesas: '', valor_ipi: '', valor_total_nota: '',
 };
@@ -192,7 +197,7 @@ const RecebimentosAlmoxarifado = () => {
         fornecedor_nome: res.data.fornecedor_nome || '',
         fornecedor_cnpj: res.data.fornecedor_cnpj || '',
         pedido_compra_numero: res.data.pedido_compra_numero || '',
-        tipo_recebimento: res.data.tipo_recebimento || 'NOTA_FISCAL',
+        // `tipo_recebimento` NÃO entra aqui — ver o comentário de `EMPTY_FISCAL` (revisão final F2).
         base_icms: res.data.base_icms ?? '',
         valor_icms: res.data.valor_icms ?? '',
         valor_produtos: res.data.valor_produtos ?? '',
