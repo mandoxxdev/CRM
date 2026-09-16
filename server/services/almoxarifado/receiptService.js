@@ -144,29 +144,56 @@ async function resolverPedidoCompra(db, { pedido_compra_id, pedido_compra_numero
  * `razao_social` -> `fornecedor_nome` e `cnpj` -> `fornecedor_cnpj` (`selecionarFornecedor`).
  * Com a chave so em id/CNPJ, a guarda ficaria INALCANCAVEL pelo caminho real sempre que o
  * fornecedor nao tivesse CNPJ digitado — regra entregue e porta faltando, a classe de defeito que
- * esta etapa esta pagando do outro lado (a rota /conferir sem chamador). Comparado com
- * UPPER(TRIM(...)) pelo mesmo motivo da NF. Reversivel: e uma clausula do `where`.
+ * esta etapa esta pagando do outro lado (a rota /conferir sem chamador).
+ *
+ * ⚠️ (revisao final, R3/R4/R5) A COMPARACAO SAIU DO SQL. Ela era `UPPER(TRIM(coluna)) = UPPER(?)`
+ * sobre UMA perna escolhida por ordem de preferencia, e isso era contornavel de tres jeitos, os
+ * tres medidos por sonda:
+ * - `UPPER` do SQLite e ASCII-ONLY: 'José Aços Ltda' e 'JOSÉ AÇOS LTDA' entravam as DUAS (201 +
+ *   201), com o estoque creditado duas vezes. E o caminho real da tela, que manda nome digitado;
+ * - identificacao MISTA vencia a guarda inteira: A digitado a mao (so nome) e B escolhido no
+ *   `<select>` (nome E CNPJ) nunca se achavam, porque a ordem de preferencia escolhia UMA perna e
+ *   descartava as outras;
+ * - a perna do CNPJ fazia TRIM na coluna e nao no parametro, e ignorava pontuacao.
+ *
+ * Agora: busca os candidatos pela NF normalizada (`UPPER(TRIM(...))` basta para NF, que e ASCII) e
+ * compara o FORNECEDOR em JS, casando se QUALQUER perna casar — mesmo `fornecedor_id`, ou mesmo
+ * CNPJ so-digitos, ou mesmo nome sem acento/caixa/espaco duplo. Nenhuma perna vazia casa.
+ * DESCARTADO resolver no SQL: nao ha como tirar acento em SQLite sem extensao, e um REPLACE
+ * encadeado por acento seria ilegivel e incompleto. CONSEQUENCIA REGISTRADA: a consulta que mede
+ * duplicatas em PRODUCAO (letra A do fechamento) roda em SQL e NAO ve as duplicatas por acento —
+ * ela SUB-REPORTA, e isso esta dito no fechamento.
  */
+const digitosDe = (v) => (v == null ? '' : String(v).replace(/\D+/g, ''));
+const nomeChave = (v) => (typeof v === 'string'
+  // NFD separa a letra do acento; `\p{M}` apaga so as marcas. Depois caixa, bordas e espaco duplo
+  // (o Caps Lock e o espaco a mais sao os dois erros de digitacao que criavam documento novo).
+  ? v.normalize('NFD').replace(/\p{M}+/gu, '').toUpperCase().trim().replace(/\s+/g, ' ')
+  : '');
+
 async function assertNotaNaoDuplicada(db, { nota_fiscal, fornecedor_id, fornecedor_cnpj, fornecedor_nome }, recebimentoId = null) {
   const nf = typeof nota_fiscal === 'string' ? nota_fiscal.trim() : nota_fiscal;
   if (!nf) return;                                   // RN-13: sem NF nao ha duplicata
-  const nome = typeof fornecedor_nome === 'string' ? fornecedor_nome.trim() : null;
-  if (!fornecedor_id && !fornecedor_cnpj && !nome) return;  // RN-13: sem fornecedor, idem
+  const nome = nomeChave(fornecedor_nome);
+  const cnpj = digitosDe(fornecedor_cnpj);
+  if (!fornecedor_id && !cnpj && !nome) return;       // RN-13: sem fornecedor, idem
 
-  // Ordem de preferencia: id (canonico) > CNPJ (identidade fiscal) > nome (o que a tela manda).
-  let where; let chave;
-  if (fornecedor_id) { where = 'fornecedor_id = ?'; chave = fornecedor_id; }
-  else if (fornecedor_cnpj) { where = 'UPPER(TRIM(fornecedor_cnpj)) = UPPER(?)'; chave = fornecedor_cnpj; }
-  else { where = 'UPPER(TRIM(fornecedor_nome)) = UPPER(?)'; chave = nome; }
-  const params = [nf, chave];
+  const params = [nf];
   // (Fase 2) O filtro de CANCELADO saiu: `STATUS` do recebimento nao tem 'CANCELADO' (os 11 status
   // sao RECEBIDO..BLOQUEADO), entao a clausula era codigo morto que fazia o proximo leitor acreditar
   // num cancelamento que nao existe. Se um dia existir, ela volta COM o teste que a exercita.
-  let sql = `SELECT id, numero FROM recebimentos_material_almoxarifado
-    WHERE UPPER(TRIM(nota_fiscal)) = UPPER(?) AND ${where}`;
+  let sql = `SELECT id, numero, fornecedor_id, fornecedor_cnpj, fornecedor_nome
+    FROM recebimentos_material_almoxarifado WHERE UPPER(TRIM(nota_fiscal)) = UPPER(?)`;
   if (recebimentoId) { sql += ' AND id <> ?'; params.push(recebimentoId); }
 
-  const ja = await dbGet(db, `${sql} LIMIT 1`, params);
+  // A NF e seletiva: este `dbAll` traz 0 ou 1 linha no caso normal, e as duplicatas de acervo sao
+  // exatamente o que se quer ver. `LIMIT 1` aqui seria errado — o candidato certo pode ser o segundo.
+  const candidatos = await dbAll(db, sql, params);
+  const ja = candidatos.find((c) => (
+    (fornecedor_id && Number(c.fornecedor_id) === Number(fornecedor_id))
+    || (cnpj && digitosDe(c.fornecedor_cnpj) === cnpj)
+    || (nome && nomeChave(c.fornecedor_nome) === nome)
+  ));
   if (ja) {
     throw Object.assign(
       new Error(`Nota fiscal ${nf} já lançada no recebimento ${ja.numero} para este fornecedor`),

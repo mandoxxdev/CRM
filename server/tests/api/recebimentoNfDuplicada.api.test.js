@@ -237,6 +237,104 @@ const wf = (app, id, acao) => request(app)
     assert.strictEqual(proprio.status, 200, JSON.stringify(proprio.body));
   });
 
+  // ── (8)(9)(10) revisao final, R3/R4/R5 — a chave de fornecedor era contornavel de tres jeitos ──
+  /**
+   * Tres achados do segundo revisor, um conserto: a comparacao saiu do SQL e passou a ser feita em
+   * JS sobre os candidatos buscados pela NF normalizada, casando se QUALQUER perna casar (id, ou
+   * CNPJ so-digitos, ou nome sem acento/caixa/espaco duplo).
+   *
+   * R3 — `UPPER` do SQLite e ASCII-ONLY. Medido por sonda: 'José Aços Ltda' e 'JOSÉ AÇOS LTDA',
+   * mesma NF, sem id e sem CNPJ -> 201 + 201, dois documentos, estoque creditado duas vezes. E o
+   * caminho REAL da tela, que manda nome digitado a mao; basta o Caps Lock em uma das duas vezes.
+   *
+   * R4 — identificacao MISTA vencia a guarda inteira: o documento A digitado a mao (so nome) e o B
+   * escolhido no `<select>` (nome E CNPJ) nao se encontravam, porque a ordem de preferencia
+   * escolhia UMA perna e descartava as outras — o B comparava por CNPJ, e A nao tem CNPJ.
+   *
+   * R5 — a perna do CNPJ fazia `TRIM` na COLUNA mas nao no PARAMETRO, e nao normalizava
+   * pontuacao: ' 12.345.678/0001-00 ' nao achava '12345678000100'.
+   *
+   * DESCARTADO: resolver no SQL. Nao ha como tirar acento em SQLite sem extensao (o `UPPER` e
+   * ASCII-only justamente por isso), e um `REPLACE` encadeado por acento seria ilegivel e
+   * incompleto. ⚠️ CONSEQUENCIA REGISTRADA: a consulta da letra A do fechamento, que mede
+   * duplicatas em PRODUCAO, roda em SQL — ela NAO enxerga as duplicatas por acento e vai
+   * SUB-REPORTAR. Esta dito no doc de fechamento.
+   */
+  await test('(8) R3: acento e caixa no nome do fornecedor nao criam dois documentos', async () => {
+    const material = await novoMaterial('E36-DUP-8');
+    const itens = [{ material_id: material, quantidade: 5 }];
+    const r1 = await rec(app).send({ nota_fiscal: 'NF-ACENTO', fornecedor_nome: 'José Aços Ltda', itens });
+    assert.strictEqual(r1.status, 201, JSON.stringify(r1.body));
+    // Mesma empresa, digitada com Caps Lock ligado — e com espaco duplo, que a normalizacao colapsa.
+    // ESTA metade e a que o `UPPER` do SQLite perdia: em JS, `toUpperCase()` e Unicode-aware.
+    const r2 = await rec(app).send({ nota_fiscal: 'NF-ACENTO', fornecedor_nome: 'JOSÉ  AÇOS LTDA', itens });
+    assert.strictEqual(r2.status, 409, JSON.stringify(r2.body));
+    const primeiro = await dbGet(db,
+      'SELECT numero FROM recebimentos_material_almoxarifado WHERE id = ?', [r1.body.id]);
+    assert.strictEqual(r2.body.error,
+      `Nota fiscal NF-ACENTO já lançada no recebimento ${primeiro.numero} para este fornecedor`);
+
+    // ⚠️ E a metade que exige a REMOCAO DE ACENTO, e nao so a caixa — achado do controle positivo
+    // desta onda: a sabotagem que o revisor previu ("tirar o strip de diacriticos derruba (8)")
+    // NAO derrubava nada com as duas metades acima, porque `'José'.toUpperCase()` e `'JOSÉ'`
+    // casam sem strip nenhum. Quem digita sem acento (teclado, copiar/colar de sistema legado,
+    // importacao) e o caso que sobra — e sem esta linha a normalizacao NFD nao tem regua.
+    const semAcento = await rec(app).send({ nota_fiscal: 'NF-ACENTO', fornecedor_nome: 'Jose Acos Ltda', itens });
+    assert.strictEqual(semAcento.status, 409, JSON.stringify(semAcento.body));
+
+    // Metade POSITIVA, no mesmo cenario: fornecedor REALMENTE outro continua entrando — sem isto,
+    // "normalizar" poderia ter virado "achatar tudo" e a regua (3) e a unica a reclamar.
+    const outro = await rec(app).send({ nota_fiscal: 'NF-ACENTO', fornecedor_nome: 'Joana Ferro ME', itens });
+    assert.strictEqual(outro.status, 201, JSON.stringify(outro.body));
+  });
+
+  await test('(9) R4: identificacao MISTA (so nome x nome + CNPJ) tem de se encontrar', async () => {
+    const material = await novoMaterial('E36-DUP-9');
+    const itens = [{ material_id: material, quantidade: 5 }];
+    // A: digitado a mao, so nome.
+    const a = await rec(app).send({ nota_fiscal: 'NF-MISTA', fornecedor_nome: 'Metalurgica Sul', itens });
+    assert.strictEqual(a.status, 201, JSON.stringify(a.body));
+    // B: escolhido no <select>, que copia razao_social E cnpj. Pela ordem de preferencia antiga, o
+    // B comparava por CNPJ — e o A nao tem CNPJ, entao nunca se achavam.
+    const b = await rec(app).send({
+      nota_fiscal: 'NF-MISTA', fornecedor_nome: 'Metalurgica Sul',
+      fornecedor_cnpj: '99.888.777/0001-66', itens,
+    });
+    assert.strictEqual(b.status, 409, JSON.stringify(b.body));
+    const docA = await dbGet(db,
+      'SELECT numero FROM recebimentos_material_almoxarifado WHERE id = ?', [a.body.id]);
+    assert.strictEqual(b.body.error,
+      `Nota fiscal NF-MISTA já lançada no recebimento ${docA.numero} para este fornecedor`);
+  });
+
+  await test('(10) R5: CNPJ com espaco e pontuacao diferente e o MESMO CNPJ', async () => {
+    const material = await novoMaterial('E36-DUP-10');
+    const itens = [{ material_id: material, quantidade: 5 }];
+    const a = await rec(app).send({
+      nota_fiscal: 'NF-CNPJ', fornecedor_nome: 'Aluminio Norte SA',
+      fornecedor_cnpj: '12.345.678/0001-00', itens,
+    });
+    assert.strictEqual(a.status, 201, JSON.stringify(a.body));
+    // Nome DIFERENTE de proposito: assim o 409 so pode vir da perna do CNPJ. Com o nome igual, o
+    // cenario passaria mesmo com a perna do CNPJ quebrada.
+    const b = await rec(app).send({
+      nota_fiscal: 'NF-CNPJ', fornecedor_nome: 'Aluminio Norte (matriz)',
+      fornecedor_cnpj: ' 12345678000100 ', itens,
+    });
+    assert.strictEqual(b.status, 409, JSON.stringify(b.body));
+    const docA = await dbGet(db,
+      'SELECT numero FROM recebimentos_material_almoxarifado WHERE id = ?', [a.body.id]);
+    assert.strictEqual(b.body.error,
+      `Nota fiscal NF-CNPJ já lançada no recebimento ${docA.numero} para este fornecedor`);
+
+    // Metade POSITIVA: CNPJ de digitos DIFERENTES nao e o mesmo fornecedor (e o nome tambem difere).
+    const outro = await rec(app).send({
+      nota_fiscal: 'NF-CNPJ', fornecedor_nome: 'Aluminio Oeste',
+      fornecedor_cnpj: '12.345.678/0002-00', itens,
+    });
+    assert.strictEqual(outro.status, 201, JSON.stringify(outro.body));
+  });
+
   await close();
   console.log(`\n${passed} passou, ${failed} falhou`);
   process.exit(failed ? 1 : 0);
