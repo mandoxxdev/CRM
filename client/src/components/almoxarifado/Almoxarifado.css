@@ -306,6 +306,15 @@
   display: flex;
   gap: 6px;
   align-items: center;
+  /* Etapa 35: sem `flex-wrap`, a celula de acoes estourava a largura da tabela e o
+     `overflow: hidden` de `.almox-table-container` (:171, que existe pelo `border-radius`)
+     CORTAVA o excedente — sem barra de rolagem e sem sintoma. Acima de 768px nao ha
+     `overflow-x` em lugar nenhum (a regra de :1030 so vale abaixo). Pior caso medido:
+     Ferramentas com 5 botoes de TEXTO (`FerramentasAlmoxarifado.js:517-561`), que por serem
+     `white-space: nowrap` (:368) tem piso duro de ~684px numa largura util de 721px em 769px —
+     "Calibracao" ficava inalcancavel. Medicao e faixa em
+     docs/superpowers/specs/2026-09-16-almoxarifado-etapa35-vizinhas-da-34-design.md. */
+  flex-wrap: wrap;
 }
 
 .almox-btn-icon {
