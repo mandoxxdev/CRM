@@ -53,6 +53,12 @@
  */
 const path = require('path');
 const fs = require('fs');
+// Etapa 38: os primeiros Zod do modulo core Compras. `validate` vem do almoxarifado por `require`,
+// NAO por copia (decisao 7 do design) — duplicar o formatador daria dois "Dados invalidos" que
+// divergiriam na primeira edicao.
+const { validate } = require('../services/almoxarifado/validation');
+const { PedidoCompraCreateSchema } = require('../services/compras/schemas');
+const pedidoCompraService = require('../services/compras/pedidoCompraService');
 
 module.exports = (app, db, authenticateToken, checkModulePermission, uploads) => {
 const {
@@ -117,6 +123,40 @@ app.get('/api/compras/pedidos', authenticateToken, checkModulePermission('compra
     res.json(rows);
   });
 });
+
+/**
+ * Etapa 38 (RN-C02 a RN-C05, RN-C13) — a porta que CRIA o pedido de compra com os itens.
+ *
+ * Ate esta linha existir, o modulo tinha `app.get('/api/compras/pedidos')` e mais nada: nenhum
+ * `app.post`, nenhum `app.put`. `COUNT(pedidos_compra) = 0` em producao e a Etapa 37 inteira
+ * (recebimento contra pedido, saldo, excedente) era inalcancavel por um clique — o roteiro de
+ * teste dela comeca com "criar pedido no modulo Compras".
+ *
+ * ⚠️ POSICAO NO ARQUIVO E CONTRATO. Esta rota fica ACIMA de `app.delete('/api/compras/:tipo/:id')`
+ * junto das outras de pedido. Para o `POST` o metodo ja difere do generico, mas as rotas de pedido
+ * da Task 3 (`PUT`/`DELETE /api/compras/pedidos/:id`) **precisam** vir antes dele — registradas
+ * depois, `/api/compras/pedidos/7` seria capturado pelo generico e a regua de recebimento nunca
+ * seria alcancada. Manter as quatro juntas e aqui e o que impede o proximo de separa-las.
+ *
+ * ⚠️ VALIDACAO POR `validate()` DO ALMOXARIFADO, reusado por `require` e nao copiado (decisao 7):
+ * ele responde o 400 no formato da casa e **substitui `req.body` por `parsed.data`** — e e por isso
+ * que os schemas sao `z.looseObject`: com `z.object`, `itens` e `solicitacao_id` sumiriam do corpo
+ * antes de chegar aqui. Estes sao os primeiros schemas Zod do modulo core Compras.
+ *
+ * Gate: o mesmo das outras 23 — `authenticateToken` + `checkModulePermission('compras')`. O core
+ * tem UMA camada de autorizacao, nao duas (nenhum `requirePermission`): a porta de escrita nova
+ * herda exatamente o gate das de leitura, e isso esta declarado no fechamento da etapa.
+ */
+app.post('/api/compras/pedidos', authenticateToken, checkModulePermission('compras'),
+  validate(PedidoCompraCreateSchema), async (req, res) => {
+    try {
+      res.status(201).json(await pedidoCompraService.criarPedido(db, req.body, req.user));
+    } catch (e) {
+      // `e.status` vem do molde `erro()` do servico (400 nas guardas de fornecedor/material);
+      // qualquer outra coisa e defeito nosso e sai 500 com a mensagem, como nas demais rotas.
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
 
 // Cotações
 app.get('/api/compras/cotacoes', authenticateToken, checkModulePermission('compras'), (req, res) => {
