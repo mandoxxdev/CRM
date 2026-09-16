@@ -80,6 +80,18 @@ junto; as **RN-11 a RN-19**, as 11 decisões (com o descartado) e os 10 riscos e
     scratchpad**, e confira que o `md5sum` volta ao valor **pós-conserto**, não ao de HEAD.
   - Antes de cada sabotagem: `grep -cF '<ancora>' arquivo` **tem de dar exatamente 1**. Se der 0 ou
     mais de 1, **aborte** e escolha outra âncora.
+  - ⚠️ **(Fase 2) A âncora tem de ser contada DEPOIS do conserto, não no HEAD — e cinco âncoras
+    deste plano davam 1 no HEAD e passam a dar 2.** Medido com `grep -cF` no HEAD `8594d8c`:
+    `z.looseObject` em `schemas.js` = **0** hoje e **2** depois da T1 (os dois schemas);
+    `z.enum(TIPOS_RECEBIMENTO, …)` = **2** depois da T1;
+    `quantidade_recebida = COALESCE(?, quantidade_recebida)` em `receiptService.js` = **1** hoje
+    (`salvarDadosFiscal`) e **2** depois da T3; `await assertNotaNaoDuplicada(` = **2** depois da T2;
+    `assertExcedentePermitido(` = **3** depois da T3 (definição + duas chamadas);
+    `setLoadingDetalhe(false)` = **1** hoje em cada tela (o `finally` de `abrirDetalhe`) e **2**
+    depois da T6. Em todas essas, a âncora é o **bloco ancorado** que a tabela da task dá — não o
+    token solto. Onde a sabotagem é deliberadamente nos **dois** sítios (T1 nº 1 e nº 4), a regra
+    lida é **`grep -cF` = 2 e as duas ocorrências são as alvo**, e o `md5sum` pós-sabotagem prova
+    que as duas mudaram.
   - `md5sum` **antes**, **depois da sabotagem** e **depois de restaurar**; `git diff --stat` tem de
     voltar com **só** os arquivos da task.
   - **Leia QUAL asserção caiu, não só o placar.** Se a asserção que guarda o achado não caiu, o
@@ -158,6 +170,7 @@ aproximar, não reescrever.
 | **201** | `{ id, numero, status: 'RECEBIDO' }` (inalterado) |
 | **400 (enum)** | `{ error: 'Dados inválidos — tipo_recebimento: forma de recebimento inválida (use NOTA_FISCAL ou PEDIDO_COMPRA)' }` |
 | **409 (NF duplicada)** | `{ error: 'Nota fiscal <numero da NF> já lançada no recebimento <numero do REC> para este fornecedor' }` |
+| ⚠️ **(Fase 2) Chave da duplicata — CORRIGIDA** | `fornecedor_id` **ou** `fornecedor_cnpj` **ou** `UPPER(TRIM(fornecedor_nome))`, nessa ordem de preferência. **Medido:** a tela **nunca envia `fornecedor_id`** — `handleCriar` monta o payload com `tipo_recebimento`, `pedido_compra_id`, `nota_fiscal`, `fornecedor_nome`, `fornecedor_cnpj`, `observacoes`, `itens` (`RecebimentosAlmoxarifado.js:342-354`), e `fornecedor_id` **não existe no `form`** (`:86-93`); o `<select>` de fornecedores (`:761`) copia `razao_social` → `fornecedor_nome` e `cnpj` → `fornecedor_cnpj` (`selecionarFornecedor`, `:315-325`). Com a chave só em `id`/`cnpj`, **a guarda não dispararia pelo caminho real da tela** sempre que o fornecedor não tivesse CNPJ preenchido — a etapa entregaria a regra e ninguém a alcançaria, que é exatamente a classe de defeito que a T5 existe para pagar do outro lado |
 | **400 (sem item)** | `{ error: 'Inclua ao menos um item' }` (inalterado, `receiptService.js:126`) |
 | **403** | `{ error: 'Sem permissão para esta operação', acao: 'receber_material', perfil: 'PRODUCAO' }` (inalterado) |
 
@@ -166,6 +179,7 @@ aproximar, não reescrever.
 | | |
 |---|---|
 | **Gate** | idem acima (`receber_material`) |
+| ⚠️ **(Fase 2) Status exigido — MEDIDO, e é o que quebrava quatro cenários deste plano** | `salvarDadosFiscal` recusa **antes de tudo** quem não está em `[ENCAMINHADO_FATURAMENTO, EM_ENTRADA_NF, EM_COMPRAS, CONFERIDO_ALMOX, EM_CONFERENCIA]` (`receiptService.js:253-259`). **`RECEBIDO` NÃO está na lista.** Sonda executada contra o harness: `POST /recebimentos` → `PUT /:id/fiscal` no mesmo instante responde **`400 {"error":"Dados fiscais só podem ser editados antes do processamento"}`**, e depois de um `POST /workflow {acao:'iniciar_conferencia'}` responde **200**. **TODO cenário de `/fiscal` deste plano avança primeiro para `EM_CONFERENCIA`** — T1 (2), T2 (6), T3 (3), T7 passo 4. Sem isso o 400 vem do guard de status e o cenário mede outra coisa (T2 (6) e T7 passo 4 ficariam vermelhos **antes e depois** do conserto) |
 | **Validação nova** | `validate(RecebimentoFiscalSchema)`, **depois** do `requirePermission` |
 | **Payload** | inalterado, mais o campo opcional **`autorizar_excedente: boolean`** |
 | **200** | `{ success: true }` (inalterado) |
@@ -209,8 +223,29 @@ aproximar, não reescrever.
 
 A ação entra **de graça** em `GET /almoxarifado/minhas-permissoes` (a rota itera
 `Object.keys(ACAO_PERFIS)`), o que é o que permite a UI esconder a caixa de autorização.
-**`minhasPermissoes.api.test.js` afirma um booleano para CADA ação** — a ação nova entra nesse laço
-sem editar o teste; o que a T3 **acrescenta** lá é a linha negativa do ALMOXARIFE.
+**`minhasPermissoes.api.test.js` afirma um booleano para CADA ação** (`:38-40`) — a ação nova entra
+nesse laço sem editar o teste; o que a T3 **acrescenta** lá é a linha negativa do ALMOXARIFE.
+⚠️ **(Fase 2) e o cenário `admin de sistema pode tudo` (`minhasPermissoes.api.test.js:88-95`) afirma
+`true` para TODA ação** — `ADMINISTRADOR` está na lista nova, então ele continua verde. Verificado:
+**nenhum** teste congela o conjunto de CHAVES de `ACAO_PERFIS` (os 10 consumidores afirmam listas
+por ação, um por ação nova — `planoInspecao:107`, `segundaConferencia:102`, `sucateamento:423`,
+`toolFundacao:50`, `remessaTerceiroEstados:249`), logo **acrescentar a ação não quebra nenhum teste
+de servidor**. Pelo mesmo costume, a T3 **acrescenta** a asserção de congelamento da lista nova no
+arquivo dela (`assert.deepStrictEqual([...ACAO_PERFIS.autorizar_excedente].sort(), ['ADMINISTRADOR','COMPRAS','GESTOR'])`) — é a convenção de toda ação nova desde a Etapa 8, e sem ela a lista muda sem régua.
+
+### ⚠️ (Fase 2) TRÊS pontos de fiação que a ação nova e a auditoria nova QUEBRAM — e que este plano não tinha
+
+Medido por execução, não por leitura. Nenhum deles aparecia nos `Files` da T3, e os dois primeiros
+só estourariam **numa task depois** (a T5/T7, que rodam a suíte de client), parecendo regressão alheia:
+
+| # | Arquivo que a T3 TEM de tocar | Teste que cai sem isso | Prova |
+|---|---|---|---|
+| 1 | **`client/src/utils/permissaoErro.js`** — acrescentar `autorizar_excedente: 'autorizar recebimento acima do pedido'` no mapa `ACOES` | **`client/src/utils/permissaoErro.test.js:44`** — *"toda acao de ACAO_PERFIS tem rotulo proprio — nenhuma cai no fallback"*, que **importa `ACAO_PERFIS` do servidor** (`:46`) e afirma `expect(semRotulo).toEqual([])` | é o **mesmo defeito** do fix-round `7982f18` da Etapa 30, que achou quatro ações sem rótulo; o teste foi escrito exatamente para não deixar acontecer de novo |
+| 2 | **`server/services/almoxarifado/auditLabels.js`** — `EXCEDENTE_AUTORIZADO` num grupo de `GRUPOS_ACAO` (rótulo sugerido: `'Excedente autorizado'`) | **`server/tests/api/auditLabels.api.test.js`**, cenário *"as tres fontes cobertas: TODO verbo gravavel tem rotulo"* → `assert.deepStrictEqual(semRotulo, [])`. A varredura é `grep -rhoP "(?<![A-Za-z_])acao: '\K[A-Z_]+"` e **pega o literal novo** | medido: `rotularAcao('EXCEDENTE_AUTORIZADO')` devolve `'EXCEDENTE_AUTORIZADO'` (o próprio verbo = "sem rótulo") |
+| 3 | **`auditLabels.js`** — `recebimento_item` em `ROTULOS_ENTIDADE` (rótulo: `'Item do recebimento'`) | o **mesmo arquivo**, cenário *"cobertura das entidades: os 26 literais tem rotulo"* → `assert.deepStrictEqual(semRotulo, [])` | medido: `rotularEntidade('recebimento_item')` devolve `'recebimento_item'`; `'recebimento'` (sem `_item`) já tem rótulo `'Recebimento'`. **Alternativa descartada:** auditar como `entidade: 'recebimento'` com o id do item em `dados_novos` — perde a precisão que a trilha existe para dar, por uma linha de rótulo |
+
+**Logo o Step 4 da T3 passa a rodar TAMBÉM `auditLabels.api.test.js` e a suíte de client de
+`permissaoErro`** — está escrito lá.
 
 ### 6. Literais de tela (client, T5)
 
@@ -234,6 +269,8 @@ sem editar o teste; o que a T3 **acrescenta** lá é a linha negativa do ALMOXAR
 | `server/routes/almoxarifado/extended.js` **(modificar)** | `validate(...)` em `:973` e `:1098`, **depois** do `requirePermission` | 1 |
 | `server/services/almoxarifado/receiptService.js` **(modificar)** | `assertNotaNaoDuplicada` + chamada nos dois escritores; `assertExcedentePermitido` + chamada nas duas portas de quantidade; `COALESCE` no `UPDATE` de item do `/conferir`; `TIPOS_RECEBIMENTO` no lugar do literal de `:108` | 1, 2, 3 |
 | `server/services/almoxarifado/permissions.js` **(modificar)** | ação `autorizar_excedente` com o comentário do critério e da exclusão do ALMOXARIFE | 3 |
+| **(Fase 2)** `client/src/utils/permissaoErro.js` **(modificar)** | rótulo da ação nova — sem ele `permissaoErro.test.js:44` fica **vermelho**, e só na T5/T7 | 3 |
+| **(Fase 2)** `server/services/almoxarifado/auditLabels.js` **(modificar)** | verbo `EXCEDENTE_AUTORIZADO` + entidade `recebimento_item` — sem eles `auditLabels.api.test.js` fica **vermelho** | 3 |
 | `server/tests/api/recebimentoTipoEnum.api.test.js` **(criar)** | RN-11 | 1 |
 | `server/tests/api/recebimentoNfDuplicada.api.test.js` **(criar)** | RN-12, RN-13, RN-14 | 2 |
 | `server/tests/api/recebimentoExcedente.api.test.js` **(criar)** | RN-18 (nas duas portas, com 403 e 200) | 3 |
@@ -295,7 +332,7 @@ permissão para antecipar.
 
 | Não faça | Por quê | Cai em |
 |---|---|---|
-| `z.object` em vez de `z.looseObject` | `validate()` troca `req.body` por `parsed.data` e `z.object` descarta `nota_fiscal`/`itens` → **todo** POST válido responde `400 'Inclua ao menos um item'` | o cenário positivo de 4 colunas desta task (e, por tabela, `recebimentoCustoMedio`, `alertaEventoJornada`, `recebimentoEntradaAtomica`) |
+| `z.object` em vez de `z.looseObject` | `validate()` troca `req.body` por `parsed.data` e `z.object` descarta `nota_fiscal`/`itens` → **todo** POST válido responde `400 'Inclua ao menos um item'`; no `PUT /fiscal`, **todo campo fiscal some** e o `UPDATE` grava só o tipo | os cenários **(2)**, **(3)**, **(4)** e **(6)** desta task — **(Fase 2)**, o (2) inclusive, porque ele cria um recebimento válido antes de atacar a segunda porta (e, por tabela, `recebimentoCustoMedio`, `alertaEventoJornada`, `recebimentoEntradaAtomica`) |
 | tornar `tipo_recebimento` obrigatório | `criarRecebimento` **deriva** o default (`receiptService.js:108`) e dois testes chamam sem o campo | `recebimentoEntradaAtomica.api.test.js:192`, `alertaEventoJornada.api.test.js:82` |
 | `validate` **antes** do `requirePermission` | 400 antes de 403 inverte a ordem das camadas | o cenário (5) desta task |
 | deixar a mensagem padrão do `z.enum` | sai **em inglês** no Zod 4.4.3 e sem o valor recebido (medido) | o cenário (1), pela literal |
@@ -366,6 +403,13 @@ const LITERAL = 'Dados inválidos — tipo_recebimento: '
     assert.strictEqual(criado.status, 201, JSON.stringify(criado.body));
     const id = criado.body.id;
 
+    // (Fase 2) OBRIGATORIO: `salvarDadosFiscal` recusa status RECEBIDO antes de tudo
+    // (`receiptService.js:253-259`). Sem este avanco, o 400 vem do guard de status
+    // ("Dados fiscais so podem ser editados antes do processamento") e o cenario nao mede o enum.
+    const wf = await request(app).post(`/api/almoxarifado/recebimentos/${id}/workflow`)
+      .send({ acao: 'iniciar_conferencia' });
+    assert.strictEqual(wf.status, 200, JSON.stringify(wf.body));
+
     const res = await request(app).put(`/api/almoxarifado/recebimentos/${id}/fiscal`)
       .send({ tipo_recebimento: 'QUALQUER_COISA', nota_serie: '9' });
     assert.strictEqual(res.status, 400, JSON.stringify(res.body));
@@ -398,8 +442,23 @@ const LITERAL = 'Dados inválidos — tipo_recebimento: '
   });
 
   await test('(4) sem tipo no body, o default DERIVADO continua vivo', async () => {
+    // (Fase 2) MEDIDO: `pedidos_compra` NAO existe no harness — nem `initSchema` nem
+    // `testApp.js` a criam (so `itens_pedido_compra`, com FK para ela). Sonda executada:
+    // `INSERT INTO pedidos_compra ...` -> "SQLITE_ERROR: no such table: pedidos_compra".
+    // Cinco arquivos de tests/api/ a criam no proprio arquivo (molde:
+    // `solicitacaoCicloVida.api.test.js:103`); DDL de producao em `server/index.js:19230-19242`,
+    // onde `fornecedor_id` e NOT NULL. Sem este CREATE o cenario (4) nasce VERMELHO pelo motivo
+    // errado e continua vermelho depois do conserto.
+    await dbRun(db, `CREATE TABLE IF NOT EXISTS pedidos_compra (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, numero TEXT UNIQUE, fornecedor_id INTEGER NOT NULL,
+      valor_total REAL DEFAULT 0, data_pedido DATE, previsao_entrega DATE,
+      status TEXT DEFAULT 'pendente', observacoes TEXT
+    )`);
+    const forn = await dbRun(db,
+      `INSERT INTO fornecedores (razao_social, cnpj) VALUES ('Forn E36','44.444.444/0001-44')`);
     const pedido = await dbRun(db,
-      `INSERT INTO pedidos_compra (numero, status) VALUES ('PC-E36','ABERTO')`);
+      `INSERT INTO pedidos_compra (numero, fornecedor_id, status) VALUES ('PC-E36', ?, 'ABERTO')`,
+      [forn.lastID]);
     const res = await request(app).post('/api/almoxarifado/recebimentos').send({
       pedido_compra_id: pedido.lastID,
       itens: [{ material_id: material.lastID, quantidade: 3 }],
@@ -420,16 +479,45 @@ const LITERAL = 'Dados inválidos — tipo_recebimento: '
     setUser(ADMIN);
   });
 
+  // (Fase 2) CENARIO NOVO — a metade POSITIVA da SEGUNDA porta, que faltava.
+  // Sem ele, um `z.object` aplicado SO ao RecebimentoFiscalSchema nao derruba nada neste arquivo:
+  // o (3) cobre o strip do POST, e nenhum cenario cobria o strip do PUT. A sabotagem 1 da tabela
+  // troca os DOIS schemas, mas a regua tem de existir para cada porta separadamente.
+  await test('(6) CONTROLE DO STRIP NA SEGUNDA PORTA: PUT /fiscal valido grava os campos que nao estao no schema', async () => {
+    const criado = await request(app).post('/api/almoxarifado/recebimentos').send({
+      tipo_recebimento: 'NOTA_FISCAL', nota_fiscal: 'NF-E36-6',
+      itens: [{ material_id: material.lastID, quantidade: 4 }],
+    });
+    assert.strictEqual(criado.status, 201, JSON.stringify(criado.body));
+    const id = criado.body.id;
+    const wf = await request(app).post(`/api/almoxarifado/recebimentos/${id}/workflow`)
+      .send({ acao: 'iniciar_conferencia' });
+    assert.strictEqual(wf.status, 200, JSON.stringify(wf.body));
+
+    const res = await request(app).put(`/api/almoxarifado/recebimentos/${id}/fiscal`).send({
+      tipo_recebimento: 'PEDIDO_COMPRA',
+      nota_serie: '7', cfop_nota: '1102', valor_total_nota: 123.45,
+    });
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    const rec = await dbGet(db, `SELECT tipo_recebimento, nota_serie, cfop_nota, valor_total_nota
+      FROM recebimentos_material_almoxarifado WHERE id = ?`, [id]);
+    assert.strictEqual(rec.tipo_recebimento, 'PEDIDO_COMPRA');
+    assert.strictEqual(rec.nota_serie, '7', 'o PUT sobreviveu ao parse (looseObject, nao object)');
+    assert.strictEqual(rec.cfop_nota, '1102');
+    assert.strictEqual(rec.valor_total_nota, 123.45);
+  });
+
   await close();
   console.log(`\n${passed} passou, ${failed} falhou`);
   process.exit(failed ? 1 : 0);
 })();
 ```
 
-⚠️ **Confira o nome real da tabela de pedido de compra e suas colunas obrigatórias antes de rodar** —
-`resolverPedidoCompra` (`receiptService.js:88-95`) consulta `pedidos_compra`. Se o `INSERT` do cenário
-(4) falhar por coluna `NOT NULL`, **acrescente a coluna ao `INSERT`**; não troque o cenário por um que
-não exercite o default derivado.
+⚠️ **(Fase 2) MEDIDO, não "confira":** `resolverPedidoCompra` (`receiptService.js:88-95`) consulta
+`pedidos_compra`, e **essa tabela não existe no harness** — o `CREATE TABLE` está agora dentro do
+cenário (4), com `fornecedor_id NOT NULL` como em produção (`server/index.js:19230-19242`).
+`materiais_almoxarifado` tem `unidade` e `recebimentos_material_almoxarifado` tem `nota_serie`: os
+dois `INSERT`/`SELECT` do arquivo foram executados contra o harness e passam.
 
 - [ ] **Step 2: rodar e LER os números**
 
@@ -437,9 +525,12 @@ não exercite o default derivado.
 cd server && node tests/api/recebimentoTipoEnum.api.test.js
 ```
 
-Esperado **antes** do conserto: **(1) e (2) vermelhos** (a rota responde 201/200, não 400), **(3),
-(4) e (5) verdes**. Se (1) ou (2) já vier verde, **pare**: a rota está recusando por outro motivo e o
-cenário mede outra coisa. Cole aqui as duas linhas reais do `✗`.
+Esperado **antes** do conserto: **(1), (2) e o (6)… não** — leia com cuidado, porque a Fase 2
+corrigiu esta previsão. **(Fase 2) Previsão medida:** **(1) vermelho** (a rota responde 201, não
+400); **(2) vermelho** — mas **na asserção da literal, não na do status**: com o avanço para
+`EM_CONFERENCIA` o `PUT` responde **200** hoje, então cai em `assert.strictEqual(res.status, 400)`;
+**(3), (4), (5) e (6) verdes**. Se (1) ou (2) já vier verde, **pare**: a rota está recusando por
+outro motivo e o cenário mede outra coisa. Cole aqui as duas linhas reais do `✗`.
 
 - [ ] **Step 3: implementar**
 
@@ -509,7 +600,7 @@ const tipo = tipo_recebimento
 > `TIPO_RECEBIMENTO = { NOTA_FISCAL: 'NOTA_FISCAL', PEDIDO_COMPRA: 'PEDIDO_COMPRA' }` e use os nomes —
 > **mas não** reescreva as strings à mão aqui.
 
-- [ ] **Step 4: rodar e ver os cinco verdes**, e a suíte de API inteira
+- [ ] **Step 4: rodar e ver os SEIS verdes** (Fase 2: o (6) é novo), e a suíte de API inteira
 
 ```
 cd server && node tests/api/recebimentoTipoEnum.api.test.js
@@ -521,12 +612,17 @@ arquivo que hoje passa ficar vermelho, é quase certo o strip — releia o Step 
 
 - [ ] **Step 5: CONTROLE POSITIVO — três sabotagens, e leia QUAL asserção cai**
 
-| # | Sabotagem (`perl -0pi -e`, âncora com `grep -cF` = 1) | O que TEM de cair |
-|---|---|---|
-| 1 | trocar `z.looseObject` por `z.object` nos **dois** schemas | **o cenário (3)**, na asserção `assert.strictEqual(res.status, 201)` → recebe **400** com `'Inclua ao menos um item'`; e o (4) junto. Os negativos (1) e (2) **continuam verdes** — é exatamente por isso que o (3) existe. Fora deste arquivo, `recebimentoCustoMedio` e `alertaEventoJornada` também caem |
-| 2 | apagar `validate(RecebimentoFiscalSchema)` da rota do `PUT` (só ela) | **só o cenário (2)**, na asserção `assert.strictEqual(res.status, 400)` → recebe **200**. É o controle da "segunda porta": se ele não cair, a task fechou só metade |
-| 3 | apagar a linha `RecebimentoCreateSchema,` do `module.exports` de `schemas.js` | **o arquivo INTEIRO fica vermelho com 500** (`undefined.safeParse`). Aqui a leitura é "qual arquivo caiu", não "qual asserção" — e o achado é que a lista fechada de export é fiação sem rede: nenhum teste de hoje falha em *tempo de carga*, só em tempo de requisição |
-| 4 | trocar a mensagem própria por `z.enum(TIPOS_RECEBIMENTO).optional()` (padrão do Zod) | **(1) e (2)**, na asserção da literal — `Received: 'Dados inválidos — tipo_recebimento: Invalid option: expected one of …'`. Prova que a literal está congelada, e não só o status |
+**(Fase 2) A coluna da âncora foi reescrita:** `z.looseObject` dá **2** em `schemas.js` depois da T1,
+e a sabotagem 1 é deliberadamente nos dois sítios. Onde a sabotagem é de **um** sítio só, a âncora
+é o **bloco ancorado** da coluna, e ela tem de dar **1**.
+
+| # | Sabotagem (`perl -0pi -e`) | Âncora e contagem esperada | O que TEM de cair |
+|---|---|---|---|
+| 1 | trocar `z.looseObject` por `z.object` nos **dois** schemas | `grep -cF 'z.looseObject' schemas.js` = **2**, as duas alvo | **(Fase 2) previsão corrigida:** cai **(3)** em `assert.strictEqual(res.status, 201)` (recebe **400** `'Inclua ao menos um item'`), cai **(4)** pelo mesmo motivo, cai **(6)** (`nota_serie` volta `null`, porque o `PUT` só levou o tipo) — **e cai também o (2)**, no `assert.strictEqual(criado.status, 201)` do POST de preparação. A previsão anterior (*"os negativos (1) e (2) continuam verdes"*) **estava errada**: o (2) cria um recebimento válido antes de atacar a segunda porta. **Só o (1) e o (5) ficam verdes.** Fora deste arquivo caem `recebimentoCustoMedio`, `alertaEventoJornada` e `recebimentoEntradaAtomica` |
+| 1b | **(Fase 2) sabotagem nova:** trocar `z.looseObject` por `z.object` **só no `RecebimentoFiscalSchema`** | `grep -cF 'const RecebimentoFiscalSchema = z.looseObject({' schemas.js` = **1** | **só o (6)**, nas asserções de `nota_serie`/`cfop_nota`/`valor_total_nota`. Sem o cenário (6) esta sabotagem seria **no-op** — era o furo da régua desta task |
+| 2 | apagar `validate(RecebimentoFiscalSchema)` da rota do `PUT` (só ela) | `grep -cF 'validate(RecebimentoFiscalSchema)' extended.js` = **1** | **(Fase 2) previsão corrigida:** **só o cenário (2)**, e **na asserção `assert.strictEqual(res.body.error, LITERAL)`** — o status volta **200** (com o avanço para `EM_CONFERENCIA` o serviço aceita o PUT), então é o `assert.strictEqual(res.status, 400)` que cai primeiro. **Não** leia "recebeu 400, logo a guarda está de pé": sem o avanço de status, o 400 sairia do guard `'Dados fiscais só podem ser editados antes do processamento'` e esta sabotagem seria **invisível** |
+| 3 | apagar a linha `RecebimentoCreateSchema,` do `module.exports` de `schemas.js` | a âncora é `"\n  RecebimentoCreateSchema,\n"` (com a indentação), porque o identificador nu aparece **3x** no arquivo (declaração, export) e **1x** em `extended.js:25` | **o arquivo INTEIRO fica vermelho com 500** (`undefined.safeParse`). Aqui a leitura é "qual arquivo caiu", não "qual asserção" — e o achado é que a lista fechada de export é fiação sem rede: nenhum teste de hoje falha em *tempo de carga*, só em tempo de requisição |
+| 4 | trocar a mensagem própria por `z.enum(TIPOS_RECEBIMENTO).optional()` (padrão do Zod) | `grep -cF '{ message: TIPO_RECEBIMENTO_INVALIDO }' schemas.js` = **2**, as duas alvo | **(1) e (2)**, na asserção da literal. **Medido no `node -e` com o Zod 4.4.3 desta base**, e é a string exata que vai aparecer no `✗`: `Dados inválidos — tipo_recebimento: Invalid option: expected one of "NOTA_FISCAL"\|"PEDIDO_COMPRA"`. Prova que a literal está congelada, e não só o status |
 
 - [ ] **Step 6: commit** (um assunto: o enum)
 
@@ -570,6 +666,12 @@ Cenários do arquivo (todos com metade positiva):
 1. **`(1) dois POST com a mesma NF e o mesmo fornecedor: o segundo e recusado com 409`** — o primeiro
    **201**, o segundo **409** e `res.body.error` **igual** à literal, com o número do primeiro
    documento lido do banco (`SELECT numero ... WHERE id = <primeiro>`), nunca escrito à mão.
+   ⚠️ **(Fase 2) acrescente aqui `COUNT(*) FROM recebimentos_material_almoxarifado === 1`** — sem
+   essa asserção a **sabotagem 3** (mover a guarda para depois do `inserirComNumeroUnico`) é um
+   **no-op**: o documento duplicado é gravado, a recusa acontece, e nem o saldo nem o
+   `contas_pagar` do cenário (2) mudam, porque o teste nunca processa o segundo documento.
+   Verificado contra o código: não há transação, então o `INSERT` do cabeçalho **persiste** quando
+   o `throw` vem depois dele.
 2. **`(2) A ASSERCAO QUE MEDE O DANO: saldo 10 e UMA conta a pagar, nao 20 e duas`** — cria os dois
    (o segundo recusado), leva o primeiro pelo workflow até `processar`, e afirma
    `quantidade_atual === 10` **e** `COUNT(contas_pagar) === 1`. **Antes do conserto este cenário mede
@@ -579,12 +681,32 @@ Cenários do arquivo (todos com metade positiva):
 4. **`(4) sem nota fiscal: NULL nao e duplicata`** — dois `POST` sem `nota_fiscal`, mesmo fornecedor,
    201 nos dois.
 5. **`(5) fornecedor NAO identificado nao caracteriza duplicata`** — dois `POST` com a mesma NF e
-   `fornecedor_id`/`fornecedor_cnpj` ausentes, 201 nos dois. **Este cenário é o que protege os
-   arquivos existentes** que criam recebimento pela rota sem fornecedor.
+   `fornecedor_id`/`fornecedor_cnpj` **e `fornecedor_nome`** ausentes **(Fase 2: os três, agora que
+   o nome entrou na chave)**, 201 nos dois. **Este cenário é o que protege os arquivos existentes**
+   que criam recebimento pela rota sem fornecedor.
+   ⚠️ **(Fase 2) Regressão re-medida com o nome na chave, arquivo por arquivo:**
+   `alertaEventoGanchos` cria pela rota com `nota_fiscal: NF-GAN-${seq}` (**NF única por
+   recebimento**, `:60`) e faz os `PUT /fiscal` de `NF-A1-1..4`/`NF-A6`/`NF-RN02` **no mesmo**
+   documento → protegidos pelo `AND id <> ?`. `alertaEventoJornada` é o único que repete a mesma
+   literal `'NF-JOR17-1'` (`:83` e `:103`) — e é o **mesmo** `recId`, com `fornecedor_nome:
+   'Fornecedor Jornada 17'` nos dois: **autoacusação, coberta pela exclusão do próprio documento**.
+   `recebimentoCustoMedio`, `inspecao*`, `loteRecebimento` e `serieRecebimento` usam NF única ou
+   `INSERT` direto. **Nenhum arquivo de hoje cria DOIS documentos com a mesma NF e o mesmo
+   fornecedor pela rota** — grep executado sobre `nota_fiscal` em `server/tests/api/*.api.test.js`.
+6b. **`(7) a chave que a TELA usa: mesma NF e mesmo fornecedor_nome, sem id e sem CNPJ`** —
+   **(Fase 2) cenário novo**: dois `POST` com `nota_fiscal: 'NF-TELA-1'` e
+   `fornecedor_nome: 'Acos Vale Ltda'`, nada mais → **201** e **409**. É o cenário que corresponde
+   ao payload real de `handleCriar`, e é a régua da sabotagem 5.
 6. **`(6) a SEGUNDA porta: PUT /fiscal nao pode trazer a NF de outro documento`** (RN-14) — A com
    `NF-X`, B sem NF, `PUT /B/fiscal` com `nota_fiscal: 'NF-X'` e o mesmo fornecedor → **409** citando o
    número de **A**; e a metade positiva: `PUT /A/fiscal` com a **própria** `NF-X` → **200** (salvar os
    dados fiscais duas vezes não pode se autoacusar).
+   ⚠️ **(Fase 2) BLOQUEANTE se escrito como estava:** os dois documentos nascem em `RECEBIDO`, e
+   `salvarDadosFiscal` recusa `RECEBIDO` **antes** de olhar a NF (`receiptService.js:253-259`,
+   sonda executada: `400 'Dados fiscais só podem ser editados antes do processamento'`). **A e B
+   têm de passar por `POST /workflow {acao:'iniciar_conferencia'}` antes de qualquer `PUT /fiscal`**
+   — senão o cenário fica vermelho **antes e depois** do conserto, e a metade positiva
+   (`PUT /A/fiscal` → 200) é **inalcançável**.
 
 Preparação obrigatória no topo do arquivo:
 
@@ -594,10 +716,16 @@ Preparação obrigatória no topo do arquivo:
 // 0 desta etapa). Sem este CREATE, a asserção "1 conta a pagar" passaria com ZERO dos dois lados:
 // teste vazio, e o dano medido (2 contas para a mesma NF) ficaria sem prova. Subconjunto minimo das
 // colunas que o INSERT de `gerarContaPagar` usa.
+//
+// (Fase 2) O DDL abaixo espelha PRODUCAO (`server/index.js:19299-19311`), inclusive os dois
+// NOT NULL — `descricao` e `valor`. O molde do modulo e `server/tests/almoxarifado.test.js:240-243`
+// (que JA cria esta tabela, e por isso a afirmacao "nenhum arquivo de teste a cria" vale so para
+// `tests/api/`). Manter os NOT NULL importa: sem eles um `valor_total_nota` nulo passaria aqui e
+// estouraria em producao, e o teste teria provado o contrario do que existe.
 await dbRun(db, `CREATE TABLE IF NOT EXISTS contas_pagar (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  descricao TEXT, fornecedor TEXT, valor REAL, data_vencimento TEXT,
-  status TEXT, categoria TEXT, observacoes TEXT
+  descricao TEXT NOT NULL, fornecedor TEXT, valor REAL NOT NULL, data_vencimento DATE,
+  data_pagamento DATE, status TEXT DEFAULT 'pendente', categoria TEXT, observacoes TEXT
 )`);
 ```
 
@@ -614,9 +742,13 @@ fica vermelho **pelo motivo errado**.
 cd server && node tests/api/recebimentoNfDuplicada.api.test.js
 ```
 
-Esperado antes do conserto: **(1), (2) e (6) vermelhos**; **(3), (4) e (5) verdes**. No (2), a linha do
+Esperado antes do conserto: **(1), (2), (6) e (7) vermelhos**; **(3), (4) e (5) verdes**
+(**Fase 2**: o (7) é o cenário do caminho da tela). No (2), a linha do
 `✗` tem de trazer **20** (saldo) ou **2** (contas) — cole-a aqui. **Se o (2) vier verde, pare**: quase
 certo que a tabela `contas_pagar` não foi criada ou o recebimento não chegou a `processar`.
+⚠️ **(Fase 2)** e o (6) tem de cair pela literal do **409**, não por
+`'Dados fiscais só podem ser editados antes do processamento'` — se a mensagem do `✗` for essa, o
+avanço para `EM_CONFERENCIA` está faltando e o cenário não mede a segunda porta.
 
 - [ ] **Step 3: implementar a guarda**
 
@@ -641,18 +773,35 @@ certo que a tabela `contas_pagar` não foi criada ou o recebimento não chegou a
  * fechamento leva a consulta SQL que mede duplicatas em producao ANTES de qualquer deploy.
  *
  * Tres coisas NAO sao duplicata: NF vazia/nula, fornecedor diferente, e fornecedor nao identificado
- * (id e CNPJ os dois nulos) — sem fornecedor nao existe "mesmo fornecedor" a afirmar.
+ * (id, CNPJ e NOME os tres nulos) — sem fornecedor nao existe "mesmo fornecedor" a afirmar.
+ *
+ * (Fase 2) O `fornecedor_nome` E o terceiro identificador, e nao um detalhe: a TELA nunca manda
+ * `fornecedor_id` — `handleCriar` monta o payload sem ele e `form` nao tem esse campo
+ * (`RecebimentosAlmoxarifado.js:86-93` e `:342-354`); o `<select>` de fornecedores copia
+ * `razao_social` -> `fornecedor_nome` e `cnpj` -> `fornecedor_cnpj` (`selecionarFornecedor`).
+ * Com a chave so em id/CNPJ, a guarda ficaria INALCANCAVEL pelo caminho real sempre que o
+ * fornecedor nao tivesse CNPJ digitado — regra entregue e porta faltando, a classe de defeito que
+ * esta etapa esta pagando do outro lado (a rota /conferir sem chamador). Comparado com
+ * UPPER(TRIM(...)) pelo mesmo motivo da NF. Reversivel: e uma clausula do `where`.
  */
-async function assertNotaNaoDuplicada(db, { nota_fiscal, fornecedor_id, fornecedor_cnpj }, recebimentoId = null) {
+async function assertNotaNaoDuplicada(db, { nota_fiscal, fornecedor_id, fornecedor_cnpj, fornecedor_nome }, recebimentoId = null) {
   const nf = typeof nota_fiscal === 'string' ? nota_fiscal.trim() : nota_fiscal;
   if (!nf) return;                                   // RN-13: sem NF nao ha duplicata
-  if (!fornecedor_id && !fornecedor_cnpj) return;    // RN-13: sem fornecedor identificado, idem
+  const nome = typeof fornecedor_nome === 'string' ? fornecedor_nome.trim() : null;
+  if (!fornecedor_id && !fornecedor_cnpj && !nome) return;  // RN-13: sem fornecedor, idem
 
-  const where = fornecedor_id ? 'fornecedor_id = ?' : 'fornecedor_cnpj = ?';
-  const params = [nf, fornecedor_id || fornecedor_cnpj];
+  // Ordem de preferencia: id (canonico) > CNPJ (identidade fiscal) > nome (o que a tela manda).
+  let where; let chave;
+  if (fornecedor_id) { where = 'fornecedor_id = ?'; chave = fornecedor_id; }
+  else if (fornecedor_cnpj) { where = 'UPPER(TRIM(fornecedor_cnpj)) = UPPER(?)'; chave = fornecedor_cnpj; }
+  else { where = 'UPPER(TRIM(fornecedor_nome)) = UPPER(?)'; chave = nome; }
+  const params = [nf, chave];
+  // (Fase 2) O filtro de CANCELADO saiu: `STATUS` do recebimento nao tem 'CANCELADO'
+  // (`receiptService.js:43-55` — os 11 status sao RECEBIDO..BLOQUEADO), entao a clausula era
+  // codigo morto que fazia o proximo leitor acreditar num cancelamento que nao existe.
+  // Se um dia existir, ela volta COM o teste que a exercita.
   let sql = `SELECT id, numero FROM recebimentos_material_almoxarifado
-    WHERE UPPER(TRIM(nota_fiscal)) = UPPER(?) AND ${where}
-      AND COALESCE(status,'') NOT IN ('CANCELADO')`;
+    WHERE UPPER(TRIM(nota_fiscal)) = UPPER(?) AND ${where}`;
   if (recebimentoId) { sql += ' AND id <> ?'; params.push(recebimentoId); }
 
   const ja = await dbGet(db, `${sql} LIMIT 1`, params);
@@ -673,7 +822,10 @@ async function assertNotaNaoDuplicada(db, { nota_fiscal, fornecedor_id, forneced
   `pedido?.fornecedor_id ?? fornecedor_id ?? rec.fornecedor_id` que o `UPDATE` usa. ⚠️ **Ponto de
   atenção:** o `UPDATE` usa `COALESCE`, então um `PUT` que manda **só** a NF herda o fornecedor **do
   registro** (`rec`) — a guarda tem de olhar o mesmo valor efetivo, senão ela deixa passar a duplicata
-  do caso mais comum.
+  do caso mais comum. **(Fase 2)** e o **nome** entra no mesmo molde:
+  `pedido?.fornecedor_nome ?? fornecedor_nome ?? rec.fornecedor_nome` — é o `??` que
+  `receiptService.js:304-306` já usa, e a NF efetiva é `nota_fiscal ?? rec.nota_fiscal`, senão um
+  `PUT` que não manda NF se compara com `undefined` e a guarda sai pelo `if (!nf) return`.
 
 Índice em `schema.js`, **dentro do `initSchema`**, logo depois do bloco `recebCols` (`:1255`) — a
 forma da casa é `await dbRun(db, 'CREATE INDEX IF NOT EXISTS …')`, uma chamada por índice (molde
@@ -699,12 +851,17 @@ errado, não o teste.
 
 - [ ] **Step 5: CONTROLE POSITIVO — quatro sabotagens**
 
+**(Fase 2)** As âncoras: `await assertNotaNaoDuplicada(` dá **2** depois do conserto, então cada
+sabotagem usa o **bloco ancorado** da função onde ela mora (a linha anterior mais a chamada) e
+confere `grep -cF` = **1** desse bloco.
+
 | # | Sabotagem | O que TEM de cair |
 |---|---|---|
 | 1 | apagar a chamada de `assertNotaNaoDuplicada` em `criarRecebimento` | **(1)** pelo `assert.strictEqual(res2.status, 409)` → **201**, e **(2)** pelo saldo → **20**. Se só o (1) cair, o (2) não está chegando a `processar` |
 | 2 | apagar a chamada em `salvarDadosFiscal` (só ela) | **só o (6)** — o controle da segunda porta |
-| 3 | **sabotar a POSIÇÃO, não o operador**: mover a chamada em `criarRecebimento` para **depois** do `inserirComNumeroUnico` | **(1)** continua respondendo 409, **mas (2) cai**: o documento duplicado já foi gravado antes da recusa e o `COUNT` de recebimentos/contas não fecha. É a regra "numa régua com folga, sabote a posição" |
+| 3 | **sabotar a POSIÇÃO, não o operador**: mover a chamada em `criarRecebimento` para **depois** do `inserirComNumeroUnico` | **(Fase 2) previsão corrigida:** cai **o `COUNT(*) === 1` do cenário (1)** → **2**. O que a previsão anterior dizia (*"(2) cai, o `COUNT` de recebimentos/contas não fecha"*) **estava errado**: o cenário (2) só processa o **primeiro** documento, então saldo e `contas_pagar` **não mudam** e a sabotagem seria **no-op** sem a asserção nova de contagem. É a regra "numa régua com folga, sabote a posição" — e aqui a folga era da própria régua |
 | 4 | tirar o `AND id <> ?` da guarda | **a metade positiva do (6)**: `PUT /A/fiscal` com a própria NF passa a responder **409**. Prova que o documento não se autoacusa |
+| 5 | **(Fase 2) sabotagem nova:** tirar o ramo `UPPER(TRIM(fornecedor_nome))` da resolução da chave (voltar à versão só id/CNPJ) | o cenário que entra pelo **caminho da tela** — dois `POST` com a mesma NF, o mesmo `fornecedor_nome` e **sem** `fornecedor_id`/`fornecedor_cnpj` → o segundo volta a **201**. **Acrescente esse cenário ao arquivo** (é o `(7)`): sem ele, a etapa entrega a guarda e a tela não a alcança, e nenhuma régua acusa |
 
 - [ ] **Step 6: commit** — assunto único: a NF duplicada. Corpo com o dano medido (20 em vez de 10 e
       2 contas a pagar), a decisão (guarda em servico nos dois escritores + indice nao unico) e o
@@ -719,7 +876,19 @@ errado, não o teste.
 - Modify: `server/services/almoxarifado/receiptService.js` (`assertExcedentePermitido`, chamada em
   `conferirRecebimento` e `salvarDadosFiscal`; `COALESCE` no `UPDATE` de item do `/conferir`)
 - Modify: `server/tests/api/minhasPermissoes.api.test.js`
+- **(Fase 2)** Modify: `client/src/utils/permissaoErro.js` — rótulo `autorizar_excedente`
+- **(Fase 2)** Modify: `server/services/almoxarifado/auditLabels.js` — verbo
+  `EXCEDENTE_AUTORIZADO` (em `GRUPOS_ACAO`) e entidade `recebimento_item` (em `ROTULOS_ENTIDADE`)
 - Create: `server/tests/api/recebimentoExcedente.api.test.js`
+
+⚠️ **(Fase 2) Os três arquivos acima não estavam nesta lista, e sem eles a task deixa DOIS arquivos
+de teste vermelhos** — um de servidor (`auditLabels.api.test.js`, duas asserções
+`deepStrictEqual(semRotulo, [])`) e **um de client** (`permissaoErro.test.js:44`, que importa
+`ACAO_PERFIS` do servidor). O de client só apareceria na T5/T7, parecendo regressão de outra task.
+Medido: `rotularAcao('EXCEDENTE_AUTORIZADO')` → `'EXCEDENTE_AUTORIZADO'` e
+`rotularEntidade('recebimento_item')` → `'recebimento_item'` (os dois "sem rótulo"), enquanto
+`rotularEntidade('recebimento')` → `'Recebimento'`. Ver a tabela dos três pontos de fiação na seção
+de contratos.
 
 **MEDIDO: `autorizar_excedente` NÃO existe em `ACAO_PERFIS`** — `grep -rn autorizar_excedente
 server/ client/src` não devolve nenhuma ação de permissão. Portanto **esta task é tronco** (mexe em
@@ -747,7 +916,10 @@ Cenários de `recebimentoExcedente.api.test.js`:
    permissão). No 200, afirmar `quantidade_recebida === 999` **e** a linha de auditoria
    `EXCEDENTE_AUTORIZADO`.
 3. **`(3) a SEGUNDA porta: /fiscal repete os tres casos`** — 400 sem flag, 403 com flag e ALMOXARIFE,
-   200 com flag e GESTOR.
+   200 com flag e GESTOR. ⚠️ **(Fase 2)** o documento tem de estar em `EM_CONFERENCIA` (ou adiante):
+   `salvarDadosFiscal` recusa `RECEBIDO` **antes** de qualquer item (`receiptService.js:253-259`).
+   Avance por `POST /workflow {acao:'iniciar_conferencia'}` — sonda executada confirma 200 depois
+   disso e 400 do guard de status antes.
 4. **`(4) positivos que impedem o excesso de zelo`** — `recebida === esperada` → 200 sem flag;
    `recebida < esperada` → 200 sem flag **e** a divergência **registrada** (chamando
    `alertRegistry.listarDivergenciasRecebimento(db, { recebimentoId })` e afirmando 1 item) — é a
@@ -755,10 +927,33 @@ Cenários de `recebimentoExcedente.api.test.js`:
 5. **`(5) COALESCE: item enviado sem quantidade_recebida nao apaga a quantidade`** — `/conferir` com
    `{ id, conferencia_quantidade: true }` (sem quantidade) → 200 e a quantidade **preservada**. Hoje
    isto **zera a coluna**, e é o defeito que a rota carrega por nunca ter tido chamador.
+   ✅ **(Fase 2) medido por sonda executada, e é exatamente isto:** o `/conferir` responde **200** e
+   a coluna vai a **`null`** (não a `0`, e não estoura por `undefined` no bind) — item com
+   `quantidade_esperada: 10, quantidade_recebida: 10` fica `quantidade_recebida: null` e
+   `conferencia_quantidade: 1`. **A asserção é `=== 10`**, e a linha do `✗` antes do conserto vai
+   dizer `null`. `observacoes` sofre o mesmo (o parâmetro é `item.observacoes || null`), então
+   **acrescente a observação à asserção**: gravar uma observação, reenviar o item sem ela, e afirmar
+   que ela sobreviveu — são **duas** colunas apagadas hoje, e a régua do plano só cobria uma.
 
 Em `minhasPermissoes.api.test.js`, acrescentar `autorizar_excedente` à lista negativa do cenário do
 ALMOXARIFE (`assert.strictEqual(acoes.autorizar_excedente, false)`) e à positiva do GESTOR — o laço
 que exige "um booleano para CADA ação" já cobre a existência sozinho.
+
+**(Fase 2)** E no próprio `recebimentoExcedente.api.test.js`, a asserção de congelamento da lista,
+que é a convenção de **toda** ação nova deste módulo desde a Etapa 8 (`planoInspecao:107`,
+`segundaConferencia:102`, `sucateamento:423`, `toolFundacao:50`, `remessaTerceiroEstados:249`) e que
+o plano não pedia:
+
+```js
+const { ACAO_PERFIS, PERFIS } = require('../../services/almoxarifado/permissions');
+assert.ok(ACAO_PERFIS.autorizar_excedente,
+  'acao ausente de ACAO_PERFIS — o gate cairia em `|| []`, que nega tudo, e o 403 do ALMOXARIFE '
+  + 'ficaria verde pelo motivo errado');
+assert.deepStrictEqual([...ACAO_PERFIS.autorizar_excedente].sort(),
+  ['ADMINISTRADOR', 'COMPRAS', 'GESTOR']);
+assert.ok(!ACAO_PERFIS.autorizar_excedente.includes(PERFIS.ALMOXARIFE),
+  'a exclusao do ALMOXARIFE e a decisao desta etapa, e sem esta linha ela muda sem regua');
+```
 
 - [ ] **Step 2: rodar e LER** — esperado: (1), (2), (3) e (5) vermelhos, (4) verde. Atenção: no (2), a
       metade do **403** pode nascer **verde** (ação inexistente ⇒ `can()` falso) enquanto a do **200**
@@ -855,11 +1050,29 @@ chamador da vida, e item sem o campo apagava a quantidade e a observação*.
 `./permissions`. Se o arquivo ainda não os importa, acrescente — e confira que **não** há ciclo
 (`permissions.js` requer `../systemPermissions` dentro da função, de propósito).
 
-- [ ] **Step 4: rodar o arquivo, `minhasPermissoes`, `test:api` e `test:almoxarifado`**
+- [ ] **Step 4: rodar o arquivo, `minhasPermissoes`, `auditLabels`, `test:api`, `test:almoxarifado`
+      — e a suíte de client de `permissaoErro` (Fase 2)**
+
+```
+cd server && node tests/api/recebimentoExcedente.api.test.js
+cd server && node tests/api/minhasPermissoes.api.test.js
+cd server && node tests/api/auditLabels.api.test.js
+cd server && npm run test:api && npm run test:almoxarifado
+cd client && CI=true npx react-scripts test --watchAll=false src/utils/permissaoErro.test.js
+```
+
+**(Fase 2) O último comando é obrigatório NESTA task**, e não na T5: é a única task que muda
+`ACAO_PERFIS`, e `permissaoErro.test.js:44` importa esse mapa do servidor. Rodá-lo só na T5 faria o
+vermelho aparecer na task errada.
 
 Atenção nominal a `alertaEventoGanchos.api.test.js` (usa `/conferir` com `recebida 8` de `esperada 10`
 e `conferencia_quantidade: 1` — **não** é excedente, tem de continuar verde) e a
 `permissoesRotas.api.test.js` / `alertaCentral.api.test.js`, que importam `ACAO_PERFIS`.
+**(Fase 2) re-medido:** os dez consumidores de `ACAO_PERFIS` em `server/tests/` afirmam **listas por
+ação**, nenhum congela o conjunto de chaves; `minhasPermissoes.api.test.js:88-95` (*"admin de
+sistema pode tudo"*) exige `true` para **toda** ação e continua verde porque `ADMINISTRADOR` está na
+lista nova. **Nenhum teste de servidor cai pela ação nova** — o que cai é o de client e o dos
+rótulos de auditoria.
 
 - [ ] **Step 5: CONTROLE POSITIVO — quatro sabotagens**
 
@@ -868,8 +1081,9 @@ e `conferencia_quantidade: 1` — **não** é excedente, tem de continuar verde)
 | 1 | apagar a chamada em `conferirRecebimento` | **(1)** pelo `assert.strictEqual(res.status, 400)` → **200**, e **(2)** pela metade do 403 |
 | 2 | apagar a chamada em `salvarDadosFiscal` (só ela) | **só o (3)** — o controle da segunda porta |
 | 3 | **acrescentar `PERFIS.ALMOXARIFE`** à lista de `autorizar_excedente` | **a metade do 403 do cenário (2)** → **200**. É o **único** controle que prova a lista negativa: sem ele, "ALMOXARIFE não pode" ficaria verde pelo motivo errado (`can()` desconhece a ação) |
-| 4 | trocar `recebida > esperada` por `recebida >= esperada` (sabotar a **posição** da régua, não o operador) | **o positivo do (4)**, `recebida === esperada` → passa a responder 400. Prova que a régua está em "maior que", e não em "diferente de" |
-| 5 | reverter o `COALESCE` de `quantidade_recebida` no `/conferir` | **(5)**, pela quantidade que volta a ser apagada |
+| 4 | trocar `recebida > esperada` por `recebida >= esperada` (sabotar a **posição** da régua, não o operador) | **o positivo do (4)**, `recebida === esperada` → passa a responder 400. Prova que a régua está em "maior que", e não em "diferente de". **(Fase 2)** ela derruba **também** `alertaEventoGanchos` (`recebida 10 = esperada 10`, `:152` e `:181`) e `alertaEventoJornada` (`:108`) — é **esperado**, não é acoplamento: leia os três e restaure |
+| 5 | reverter o `COALESCE` de `quantidade_recebida` no `/conferir` | **(5)**, pela quantidade que volta a ser apagada (`null`). **(Fase 2) âncora:** `quantidade_recebida = COALESCE(?, quantidade_recebida)` dá **2** em `receiptService.js` depois desta task (o outro é `salvarDadosFiscal:321`) — a âncora é o bloco de cinco colunas do `UPDATE` do `/conferir`, com `conferencia_quantidade` ao lado, que dá **1** |
+| 6 | **(Fase 2) sabotagem nova:** apagar a entrada `EXCEDENTE_AUTORIZADO` de `auditLabels.js` | **`auditLabels.api.test.js`**, cenário *"TODO verbo gravavel tem rotulo"*. É o controle de que a fiação de rótulo existe — e ela é a que a Etapa 30 pagou num fix-round por não existir |
 
 - [ ] **Step 6: commit** — assunto único: a barreira de excedente e a ação de perfil. Corpo: o dano
       (999 de 10 entrava com 201), a decisão (acao propria `autorizar_excedente`, checada no servico,
@@ -913,11 +1127,14 @@ cd server && node tests/api/recebimentoWorkflowOrdem.api.test.js
 
 - [ ] **Step 3: CONTROLE POSITIVO — três sabotagens em `avancarWorkflow`**
 
+**(Fase 2) âncoras conferidas no HEAD, todas = 1:** `if (!t.de.includes(rec.status))`,
+`if (!t) throw`, `Ação de workflow inválida`, `processar: { de: [STATUS.EM_ENTRADA_NF]`.
+
 | # | Sabotagem | O que TEM de cair |
 |---|---|---|
-| 1 | apagar o `if (!t.de.includes(rec.status))` | **(1)**, pelo `assert.strictEqual(res.status, 400)` → 200/500 |
-| 2 | apagar o `if (!t)` (`'Ação de workflow inválida'`) | **(2)**, na primeira asserção — e leia se caiu pela literal ou por um 500: se foi 500, o cenário está medindo o crash, não a recusa |
-| 3 | acrescentar `STATUS.RECEBIDO` ao `de` da transição `processar` (**sabotar a POSIÇÃO da régua**) | **(1)** sozinho, com **(2) e (3) verdes**. É a assinatura de "a régua está no conjunto `de`", e não num `throw` genérico |
+| 1 | apagar o `if (!t.de.includes(rec.status))` | **(1)**. **(Fase 2) leia a asserção certa:** sem a barreira, `processar` em `RECEBIDO` cai em `processarNota`, que tem barreira PRÓPRIA (`statusPermitidos = [EM_ENTRADA_NF, ENCAMINHADO_FATURAMENTO]`, `receiptService.js:678-681`) e responde **400 `'Processe a nota somente após entrada no faturamento'`** — ou seja **o status continua 400** e só a asserção da **literal** cai. Se o cenário afirmasse apenas o status, esta sabotagem seria **no-op**: é a literal que carrega a régua |
+| 2 | ~~apagar o `if (!t)`~~ → **(Fase 2) trocada**: alterar a literal `'Ação de workflow inválida'` para outro texto | **(2)**, na asserção da literal, com o status ainda 400. **Por que a sabotagem anterior não servia:** apagar o `if (!t)` faz `t.de` estourar `TypeError` em `undefined` → `handleError` → **500 garantido**, e a própria tabela admitia que "se foi 500 o cenário está medindo o crash". Sabotagem que só sabe produzir crash não é controle positivo (regra (iv) deste plano) |
+| 3 | acrescentar `STATUS.RECEBIDO` ao `de` da transição `processar` (**sabotar a POSIÇÃO da régua**) | **(1)** sozinho, com **(2) e (3) verdes** — **(Fase 2)** e, de novo, **pela literal**, não pelo status: a resposta continua 400, vinda da barreira de `processarNota`. É a assinatura de "a régua está no conjunto `de`", e não num `throw` genérico |
 
 - [ ] **Step 4: commit** — assunto único: o teste do workflow. Corpo: a spec exigia este teste desde
       2026-08-11 e o manual 14.2 cita a literal; o servidor ja recusava (medido por sonda), o que
@@ -955,9 +1172,12 @@ por um instante e tomar **403 do servidor**, com a literal congelada — é o de
 - `api.put` é `jest.fn()` **sem implementação** no `beforeEach` atual: devolve `undefined`, o `await`
   passa, o `catch` não dispara e o cenário fica verde sem payload. **Dê-lhe
   `mockResolvedValue({ data: { success: true } })`.**
-- **Fixture nova obrigatória:** nenhum `DETALHES` de hoje tem status `EM_CONFERENCIA` com item — o
-  **58** é `EM_CONFERENCIA` na lista e tem item `581` com `quantidade_esperada: 200` / `recebida: 200`.
-  Confirme no arquivo e ajuste a fixture se o status do detalhe do 58 divergir do da lista.
+- ~~**Fixture nova obrigatória**~~ → **(Fase 2) NÃO É: a fixture já serve, e a frase estava errada.**
+  Lido no arquivo: `DETALHES[58]` faz `...RECEBIMENTOS[1]`, cujo `status` é **`EM_CONFERENCIA`**, e
+  o item `581` tem `quantidade_esperada: 200` / `quantidade_recebida: 200`, `unidade: 'PC'`,
+  `material_id: 9` (que existe em `MATERIAIS`, com `controle_serie: 0` — logo o bloco de séries não
+  entra no caminho). **Nada a criar; nada a ajustar.** O que a T5 acrescenta ao `beforeEach` é só o
+  `api.put.mockResolvedValue({ data: { success: true } })`.
 - **O bloco de itens vive DENTRO do ternário de `loadingDetalhe`**; o bloco de **anexos** vive **fora**
   (fix `c5d9e99`). Não mover nada: o cenário **(g)** trava a identidade do nó de anexos e cai se o
   bloco for tocado.
@@ -1063,7 +1283,34 @@ a caixa está marcada; chama `api.put`, e no sucesso faz `abrirDetalhe(detalhe.i
 `loadRecebimentos()` — o **mesmo** molde de `salvarFiscal`, que é o que mantém o cenário (g) verde
 (refetch do mesmo id não desmonta o bloco de anexos).
 
-- [ ] **Step 4: rodar o arquivo inteiro** — os 12 cenários existentes (a)–(l) **mais** (m), (n), (o).
+⚠️ **(Fase 2) CAMPO VAZIO NÃO PODE VIRAR ZERO.** `Number('')` é **0**, e o input nasce
+`value={item.quantidade_recebida ?? ''}` — então limpar o campo e salvar mandaria
+`quantidade_recebida: 0`, que o servidor grava (0 < esperada, sem excedente, **200**) e que
+**dispara o alerta de divergência** com "0 recebidos". `salvarConferencia` tem de **omitir** o campo
+quando o valor é `''`/`null`/não-finito — é exatamente o caso que o `COALESCE` da T3 existe para
+preservar, e o par (omitir + `COALESCE`) é o que faz "não digitei" ser diferente de "chegou zero".
+`avisoDivergencia(item)` devolve `null` no mesmo caso. **Cenário obrigatório no arquivo, o `(p)`:**
+limpar o campo, clicar `Salvar Conferência`, e afirmar que
+`api.put.mock.calls[0][1].itens[0]` **não tem** a chave `quantidade_recebida`
+(`expect('quantidade_recebida' in payload.itens[0]).toBe(false)`) — `toEqual` com o objeto
+`{ id: 581, conferencia_quantidade: false }`, que é a forma mais legível.
+
+⚠️ **(Fase 2) A troca da linha de quantidade tem âncora de DUAS ocorrências.**
+`grep -cF 'item.quantidade_recebida || item.quantidade_esperada'` em
+`RecebimentosAlmoxarifado.js` dá **2**: a linha da quantidade em negrito **e** o
+`quantidadeEsperada` do contador de séries. Troque **só** a primeira — a âncora que dá 1 é
+`{item.quantidade_recebida || item.quantidade_esperada} {item.unidade}` (com o `{item.unidade}`).
+E note que `??` no lugar de `||` **muda comportamento** quando a recebida é `0`: passa a mostrar
+`0` em vez da esperada, que é o certo, e é o que o cenário `(p)` protege por outro lado.
+
+⚠️ **(Fase 2) A asserção de "contém 187" lê o texto em NEGRITO, não o input.** `textContent` não
+inclui `value` de `<input>`; o `187` só aparece no DOM porque `atualizarItemDetalhe` atualiza
+`detalhe.itens` (`:372-377`) e a linha da quantidade em negrito re-renderiza com ele. Escreva isso
+no cabeçalho do cenário (n), senão a próxima sessão "conserta" a asserção achando que ela lia o
+input.
+
+- [ ] **Step 4: rodar o arquivo inteiro** — os 12 cenários existentes (a)–(l) **mais** (m), (n), (o)
+      **e (p) (Fase 2)**.
       Atenção nominal ao **(g)** (identidade do nó do bloco de anexos) e ao **(k)**/**(l)** (troca de
       linha e resposta fora de ordem): se algum deles cair, o bloco de itens foi movido de lugar.
 
@@ -1151,8 +1398,19 @@ cd client && CI=true npx react-scripts test --watchAll=false src/components/almo
 cd client && CI=true npx react-scripts test --watchAll=false src/components/almoxarifado/RequisicoesList.test.js
 ```
 
+⚠️ **(Fase 2) A âncora de `setLoadingDetalhe(false)` NÃO dá 1 depois do conserto.** Medido no HEAD:
+`grep -cF 'setLoadingDetalhe(false)'` dá **1** em cada tela **hoje** — e esse 1 é o `finally` de
+`abrirDetalhe` (`RecebimentosAlmoxarifado.js:192`; em Requisições, o equivalente). Depois da T6 dá
+**2**, e apagar "a" linha por token solto pode apagar **o `finally`**, que é o conserto da Etapa 34
+e derrubaria cenários de verdade — dando um falso "achado". Use o **bloco ancorado**, que dá 1:
+em Recebimentos `"idCarregadoRef.current = null;\n    setLoadingDetalhe(false);"`
+(⚠️ `idCarregadoRef.current = null;` sozinho dá **2** — ele também está no `catch` de
+`abrirDetalhe`), e em Requisições `"syncSearchParams(null);\n    setLoadingDetalhe(false);"`
+(ou a ordem que o conserto tiver adotado).
+
 - [ ] **Step 3: CONTROLE POSITIVO declarado como NO-OP, e executado de qualquer forma.** Apague a linha
-      `setLoadingDetalhe(false);` de **cada** tela (uma por vez, `grep -cF` = 1, `md5sum`
+      `setLoadingDetalhe(false);` de **cada** tela (uma por vez, `grep -cF` do **bloco ancorado** = 1
+      — ver o ⚠️ acima —, `md5sum`
       antes/depois/depois-de-restaurar, restauro por **perl inverso** — **nunca** `git checkout --`,
       que levaria o conserto embora junto) e rode as duas suítes. **Esperado: nada cai, nas duas.**
       Registre aqui o placar idêntico dos dois lados — é isso que transforma "não testei" em "não é
@@ -1192,7 +1450,7 @@ Passos, cada um com a sua asserção (e a contagem de documentos no fim de cada 
 | 1 | `POST /recebimentos` válido, `nota_fiscal: 'NF-INT-1'`, `fornecedor_id: F1`, item esperado **10** | **201**; `COUNT === 1` |
 | 2 | `POST /recebimentos` com a **mesma** NF e o mesmo fornecedor | **409** citando o número do documento do passo 1; `COUNT` continua **1** |
 | 3 | `POST /recebimentos` com a mesma NF e **F2** | **201**; `COUNT === 2` (a metade positiva dentro do fluxo) |
-| 4 | `PUT /<doc do passo 3>/fiscal` com `nota_fiscal: 'NF-INT-1'` e **F1** | **409** — a segunda porta, citando o número do passo 1 |
+| 4 | **(Fase 2)** `POST /<doc do passo 3>/workflow {acao:'iniciar_conferencia'}` → **200**; só então `PUT /<doc do passo 3>/fiscal` com `nota_fiscal: 'NF-INT-1'` e **F1** | **409** — a segunda porta, citando o número do passo 1. **Sem o avanço de status o passo responde 400 `'Dados fiscais só podem ser editados antes do processamento'`** (medido) e o cenário fica vermelho antes e depois do conserto |
 | 5 | `PUT /<doc do passo 1>/conferir` com `quantidade_recebida: 7` | **200**; coluna **7** no banco; `listarDivergenciasRecebimento` lista **1** item |
 | 6 | `PUT /<doc do passo 1>/conferir` com `quantidade_recebida: 99`, sem flag | **400** com a literal do excedente; a coluna **continua 7** |
 | 7 | idem, com `autorizar_excedente: true`, `setUser(ALMOXARIFE)` | **403** com a literal da permissão; a coluna **continua 7** |
@@ -1236,8 +1494,10 @@ cd client && CI=true npx react-scripts build
 Baseline da Etapa 35, para comparar: `test:api` **169/169 arquivos OK**; almoxarifado **42 passou, 0
 falhou**; validation/safealter/sqlite **4/3/5**; client **47 suítes / 699 testes**; build limpo.
 **Previsão desta etapa:** `test:api` **174/174** (+5 arquivos: enum, NF duplicada, excedente, workflow,
-integração), client **47 suítes / 702 testes** (+3 cenários em `RecebimentosAlmoxarifado.test.js`,
-nenhuma suíte nova). **Confira os números reais e registre — não confie nesta previsão.**
+integração — **169 confirmado no HEAD `8594d8c` por `ls tests/api/*.api.test.js | wc -l`**), client
+**47 suítes / 703 testes** (**Fase 2:** +4 cenários em `RecebimentosAlmoxarifado.test.js` — (m), (n),
+(o) e o **(p)** do campo vazio —, nenhuma suíte nova; `permissaoErro.test.js` ganha rótulo, não
+cenário). **Confira os números reais e registre — não confie nesta previsão.**
 
 - [ ] **Step 4: reexecutar contra ESTE arquivo as sabotagens que a T2 e a T3 registraram como "cai só
       no arquivo dela"** — em particular a nº 3 da T2 (posição da guarda de NF) e a nº 3 da T3
@@ -1360,7 +1620,11 @@ resposta certa até lá.
       decisão de quando o pedido fecha — atravessa Compras, **etapa própria**); (b) **divergência formal
       numerada**, que agora tem dado de entrada; (c) o **`UNIQUE` da NF** depois da consulta da letra A;
       (d) o campo de `tipo_recebimento` **no modal fiscal** (hoje o modal reescreve o valor sem
-      mostrá-lo); (e) a limpeza das ~15 citações por linha em `RecebimentosAlmoxarifado.test.js`
+      mostrá-lo); **(d2) (Fase 2) o `<select>` de fornecedores passar a mandar `fornecedor_id` no
+      payload do `POST`** — hoje `handleCriar` manda só nome e CNPJ
+      (`RecebimentosAlmoxarifado.js:342-354`), e é por isso que a chave da duplicata precisou da
+      perna do nome; com o id, a perna do nome vira retaguarda;
+      (e) a limpeza das ~15 citações por linha em `RecebimentosAlmoxarifado.test.js`
       (achado da T7 da 35); (f) o **teto da faixa do clipe** (F12, exige navegador) e os furos
       **C43/C44** da Etapa 33.
 - [ ] **Step 7: o checklist final da `fechar-etapa`** — os cinco comandos, com os números **lidos da
@@ -1418,3 +1682,103 @@ resposta certa até lá.
   existe para fazer, **antes** de qualquer decisão sobre o `UNIQUE`; (3) o `tipo_recebimento` inválido
   que já estiver gravado continua sem caminho de correção pela tela (o modal fiscal não tem o campo), e
   isso está na próxima tarefa detalhada, não escondido.
+
+---
+
+## Fase 2 — o que a revisão do plano pegou ANTES de executar
+
+> Revisor **fresco**, HEAD `8594d8c`, **só leitura de produção**. Editados apenas este plano e o
+> design. Ferramentas: leitura do código citado, `grep -cF` de cada âncora, **três sondas de Zod no
+> `node -e`** com o Zod real da base (4.4.3), **uma sonda executada contra o harness**
+> (`server/tests/helpers/testApp.js`, `requirePermission` real, SQLite `:memory:` — nunca o banco de
+> dev) e **uma rodada de `node tests/api/recebimentoEntradaAtomica.api.test.js`** para confirmar o
+> harness (**7 passed, 0 failed**). Total: **17 achados** — **7 travariam a execução**, **7
+> silenciosos** (verde vazio, previsão errada de qual asserção cai, ou defeito novo introduzido pelo
+> conserto), **3 de ruído**. E **9 afirmações do plano confirmadas**.
+
+### A. Os 7 que travariam a execução
+
+| # | Achado | Onde | Por que travava |
+|---|---|---|---|
+| **F1** | **`PUT /fiscal` recusa o status `RECEBIDO` antes de olhar qualquer coisa.** `salvarDadosFiscal` só aceita `[ENCAMINHADO_FATURAMENTO, EM_ENTRADA_NF, EM_COMPRAS, CONFERIDO_ALMOX, EM_CONFERENCIA]` | `server/services/almoxarifado/receiptService.js:253-259`; sonda: `POST` → `PUT /fiscal` = `400 {"error":"Dados fiscais só podem ser editados antes do processamento"}`, e `200` depois de `iniciar_conferencia` | **quatro** cenários do plano criavam o documento e atacavam a segunda porta na hora: **T1 (2)**, **T2 (6)**, **T3 (3)**, **T7 passo 4**. O T2 (6) e o T7 passo 4 ficariam **vermelhos antes e depois** do conserto (esperam 409/200, recebem 400), e a metade positiva do T2 (6) era **inalcançável**. Corrigido: todo cenário de `/fiscal` avança por `POST /workflow {acao:'iniciar_conferencia'}` |
+| **F2** | **`pedidos_compra` NÃO existe no harness** — nem `initSchema` nem `testApp.js` a criam; só `itens_pedido_compra`, com FK para ela | `server/services/almoxarifado/schema.js:1301` (só a FK); DDL real em `server/index.js:19230-19242`; sonda: `INSERT INTO pedidos_compra` → `SQLITE_ERROR: no such table` | o cenário **T1 (4)** fazia `INSERT` direto e era **previsto verde**. Nasceria vermelho e **continuaria** vermelho depois do conserto. O ⚠️ do plano falava em "coluna NOT NULL", que é o sintoma errado. Corrigido: `CREATE TABLE` no cenário, com `fornecedor_id NOT NULL` como em produção (molde: `solicitacaoCicloVida.api.test.js:103`) |
+| **F3** | **`ACAO_PERFIS` nova quebra a suíte de CLIENT.** `permissaoErro.test.js` importa `ACAO_PERFIS` do servidor e exige rótulo próprio para **toda** ação | `client/src/utils/permissaoErro.test.js:44-53` (`expect(semRotulo).toEqual([])`); mapa em `client/src/utils/permissaoErro.js:15+` | a T3 **não tocava** `permissaoErro.js` e **não rodava** suíte de client. O vermelho apareceria na **T5 ou T7**, parecendo regressão do client. É o mesmo defeito do fix-round `7982f18` da Etapa 30 |
+| **F4** | **a auditoria nova quebra `auditLabels.api.test.js` — em DUAS asserções.** A varredura com guarda de fronteira (`grep -rhoP "(?<![A-Za-z_])acao: '\K[A-Z_]+"`) pega o literal `EXCEDENTE_AUTORIZADO`, e a de entidades pega `recebimento_item` | `server/tests/api/auditLabels.api.test.js`, cenários *"TODO verbo gravavel tem rotulo"* e *"cobertura das entidades"*, os dois com `deepStrictEqual(semRotulo, [])`. Medido: `rotularAcao('EXCEDENTE_AUTORIZADO')` → o próprio verbo; `rotularEntidade('recebimento_item')` → o próprio nome; `rotularEntidade('recebimento')` → `'Recebimento'` | a T3 não tocava `auditLabels.js` nem rodava esse arquivo isoladamente. Corrigido: os dois rótulos entraram nos `Files` e o arquivo entrou no Step 4 |
+| **F5** | **T2 sabotagem 3 (posição da guarda) é NO-OP com a régua como estava escrita** | a régua do cenário (2) é `quantidade_atual === 10` + `COUNT(contas_pagar) === 1`; o segundo documento **nunca é processado** (o POST devolveu 409), então nem o saldo nem as contas mudam quando o `INSERT` do cabeçalho passa a acontecer antes da recusa | a sabotagem que o plano chamava de "a regra 'sabote a posição'" não derrubaria nada. Corrigido: o cenário (1) ganhou `COUNT(*) FROM recebimentos_material_almoxarifado === 1`, que é a asserção que a sabotagem 3 derruba |
+| **F6** | **cinco âncoras de sabotagem dão 2 (ou 3) DEPOIS do conserto, e a regra do plano manda abortar quando dá mais de 1** | contado com `grep -cF` no HEAD: `z.looseObject` em `schemas.js` **0→2**; `{ message: TIPO_RECEBIMENTO_INVALIDO }` **→2**; `quantidade_recebida = COALESCE(?, quantidade_recebida)` **1→2**; `await assertNotaNaoDuplicada(` **→2**; `assertExcedentePermitido(` **→3**; `setLoadingDetalhe(false)` **1→2** em cada tela | pior caso, o **T6**: `setLoadingDetalhe(false)` dá 1 **hoje** e esse 1 é o `finally` de `abrirDetalhe` (`:192`). Apagar "a linha" por token solto apagaria o **conserto da Etapa 34** e derrubaria cenários de verdade, produzindo um falso achado num controle declarado como no-op. Corrigido: bloco ancorado por sabotagem, contagem esperada explícita, e a nota de que a contagem é **pós-conserto** |
+| **F7** | **T4 sabotagem 2 só sabe produzir 500.** Apagar `if (!t)` faz `t.de.includes(...)` estourar `TypeError` em `undefined` | `receiptService.js:221-225`; o próprio plano admitia "se foi 500, o cenário está medindo o crash" | viola a regra (iv) deste plano ("sabotagem que derruba por `TypeError` não é controle positivo"). Corrigido: a sabotagem passou a alterar a **literal** `'Ação de workflow inválida'` |
+
+### B. Os 7 silenciosos (passariam verdes, ou mediriam outra coisa)
+
+| # | Achado | Evidência |
+|---|---|---|
+| **S1** | **a guarda de NF duplicada seria INALCANÇÁVEL pelo caminho real da tela.** `handleCriar` **nunca** manda `fornecedor_id`, e o `<select>` de fornecedores só copia nome e CNPJ — com a chave em id/CNPJ, todo lançamento por nome sem CNPJ digitado passa em silêncio | `client/src/components/almoxarifado/RecebimentosAlmoxarifado.js:86-93` (o `form`, sem `fornecedor_id`), `:342-354` (o payload), `:315-325` (`selecionarFornecedor`). **Decisão tomada e registrada na letra B:** terceira perna `UPPER(TRIM(fornecedor_nome))`, cenário `(7)` novo na T2 e sabotagem 5 que o prova. **Descartado:** mandar `fornecedor_id` no payload (acopla tronco de servidor a client, e não cobre o acervo). Regressão re-medida arquivo por arquivo: **nenhum** teste de hoje cria dois documentos com a mesma NF e o mesmo fornecedor pela rota — `alertaEventoJornada` repete `'NF-JOR17-1'` (`:83`/`:103`) no **mesmo** `recId`, coberto pelo `AND id <> ?` |
+| **S2** | **T1 não tinha metade positiva na SEGUNDA porta.** O cenário (3) cobre o strip do `POST`; **nenhum** cobria o strip do `PUT /fiscal`. Um `z.object` aplicado só ao `RecebimentoFiscalSchema` não derrubaria nada no arquivo | corrigido: cenário **(6)** (PUT válido grava `nota_serie`/`cfop_nota`/`valor_total_nota`) e sabotagem **1b** que o exercita |
+| **S3** | **previsão errada de qual asserção cai, em cinco sabotagens.** T1 nº1 dizia "(1) e (2) continuam verdes" — o **(2) cai**, porque cria um recebimento válido antes de atacar a segunda porta. T1 nº2 dizia que o status vira 200 — vira, mas só **com** a correção de F1. T4 nº1 e nº3 dizem "cai pelo status" — **caem pela literal**: `processarNota` tem barreira própria (`statusPermitidos`, `:678-681`) e devolve 400 de qualquer jeito. T2 nº3, ver F5 | `receiptService.js:678-681`; as cinco previsões foram reescritas com a asserção nomeada correta. É o mesmo tipo de achado que a Fase 2 da Etapa 35 pegou |
+| **S4** | **campo de conferência limpo gravaria ZERO.** `Number('')` é `0`, e o input nasce `value={item.quantidade_recebida ?? ''}`: limpar e salvar mandaria `quantidade_recebida: 0`, que o servidor grava (200) e que **dispara** `DIVERGENCIA_RECEBIMENTO` com "0 recebidos" | defeito **novo**, introduzido pela T5. Corrigido: `salvarConferencia` omite o campo vazio, `avisoDivergencia` devolve `null`, e o cenário **(p)** afirma que a chave não está no payload |
+| **S5** | **o `/conferir` apaga DUAS colunas hoje, não uma.** Sonda executada: item enviado com `{ id, conferencia_quantidade: true }` responde **200** e deixa `quantidade_recebida = null` **e** `observacoes = null` (o parâmetro é `item.observacoes \|\| null`) | `receiptService.js:189-197`; a régua do T3 (5) só media a quantidade. Corrigido: a observação entrou na asserção. **Confirmado de passagem:** não estoura por `undefined` no bind, e o valor vira `null`, não `0` — a literal do `✗` vai dizer `null` |
+| **S6** | **a asserção "o painel contém 187" lê o texto em negrito, não o input.** `textContent` não inclui `value` de `<input>`; o `187` só aparece porque `atualizarItemDetalhe` atualiza `detalhe.itens` e a linha da quantidade re-renderiza | `RecebimentosAlmoxarifado.js:372-377` e `:622`. Passaria — mas a próxima sessão "consertaria" a asserção achando que ela lia o input. Escrito no cabeçalho do cenário (n) |
+| **S7** | **a convenção de congelar a lista da ação nova não estava pedida.** Toda ação nova deste módulo desde a Etapa 8 ganha um `deepStrictEqual` da lista no arquivo dela | `planoInspecao.api.test.js:107`, `segundaConferencia:102`, `sucateamento:423`, `toolFundacao:50`, `remessaTerceiroEstados:249`. Sem isso a lista `[ADMINISTRADOR, GESTOR, COMPRAS]` e a **exclusão do ALMOXARIFE** (a decisão 7 do design) mudam sem régua. Corrigido: as três asserções entraram no T3 |
+
+### C. O que a revisão CONFIRMOU (nove afirmações, medidas)
+
+1. **A literal do enum sai exatamente como o plano congelou.** Sonda no `node -e` com o Zod da base:
+   `Dados inválidos — tipo_recebimento: forma de recebimento inválida (use NOTA_FISCAL ou PEDIDO_COMPRA)`.
+   E o padrão do `z.enum` sai em inglês, palavra por palavra:
+   `Invalid option: expected one of "NOTA_FISCAL"|"PEDIDO_COMPRA"`. Zod **4.4.3**, `z.looseObject` é
+   `function`.
+2. **O strip é real e o `looseObject` resolve.** `z.object(...).safeParse({tipo, nota_fiscal, itens})`
+   → `{"tipo_recebimento":"NOTA_FISCAL"}`; `z.looseObject(...)` → o payload inteiro.
+3. **O formato do 400 é `{ error }`, não `{ erros: [] }`** — `validation.js:26-28`,
+   `` `Dados inválidos — ${formatZodError(...)}` ``, e `formatZodError` junta `caminho: mensagem`
+   com `'; '`. As asserções do plano batem.
+4. **`can(user, acao)` recebe o USUÁRIO**, não o perfil (`permissions.js:162-166`), e os dois
+   escritores já recebem `req.user` (`extended.js:980` e `:1098`) — nenhuma assinatura muda.
+   `receiptService.js` ainda **não** importa `permissions`, e o `require` novo **não** fecha ciclo.
+5. **`autorizar_excedente` não existe em `ACAO_PERFIS`** (lidas as 27 ações, `permissions.js:21-150`),
+   e **nenhum teste de servidor congela o conjunto de chaves** — os dez consumidores afirmam listas
+   por ação. `minhasPermissoes.api.test.js:38-40` (booleano para cada ação) e `:88-95` (*"admin pode
+   tudo"*) continuam verdes com `ADMINISTRADOR` na lista nova. **A afirmação do plano estava certa.**
+6. **`PUT /conferir` é gateada por `receber_material`** — `extended.js:980`, lido, não suposto. E o
+   `UPDATE` de item **não tem `COALESCE`** em `quantidade_recebida`/`conferencia_*`/`observacoes`
+   (`:189-197`), só em `series`; o molde com `COALESCE` está em `salvarDadosFiscal:320-342`.
+7. **O workflow já recusa etapa fora de ordem** (`if (!t.de.includes(rec.status))`, `:223-225`), o
+   404 vem **antes** da validação da ação (`:207-208` vs `:222`), e a sequência positiva dá
+   exatamente os cinco status que o plano lista (`:211-216`). A T4 **nasce verde e prova algo** —
+   com as sabotagens corrigidas para nomear a **literal**.
+8. **A fixture do client já serve** (isto derruba a frase "fixture nova obrigatória" do plano, ver
+   R1 abaixo), `api.put` é `jest.fn()` sem implementação, `useAlmoxPermissoes` é mockado com
+   `pode: () => true`, `toast` é mock, e os helpers `digitar`/`botaoPorTexto`/`painel` existem —
+   logo a **T5 sabotagem 4 é mesmo no-op**, como o plano declara.
+9. **T6 é mesmo inalcançável.** `loadingDetalhe` tem 3 usos em Recebimentos (`:70`, `:192`, `:591`)
+   e 4 em Requisições (`:105`, `:902`, `:904`, `:911`), e **todos** vivem sob o painel aberto —
+   `RequisicoesList.js:902` (`disabled={loadingDetalhe}`) está no bloco que morre com o ✕.
+   `fecharDetalhe` de Requisições (`:320-326`) de fato **não** zera a flag: o defeito é **gêmeo**, e
+   a correção do plano da 35 está certa. **Não há render que leia `loadingDetalhe` com
+   `selectedId === null`.**
+   E os números de doc conferem: último **B79**, último **C47**, a linha da 08 no mapa é a **917**,
+   `tests/api/*.api.test.js` = **169**, e a T8 lista os **7** artefatos.
+
+### D. Ruído (mudado, mas não era defeito de contrato)
+
+- **R1** — *"fixture nova obrigatória: nenhum `DETALHES` tem `EM_CONFERENCIA` com item"*: **falso**.
+  `DETALHES[58]` herda `status: 'EM_CONFERENCIA'` de `RECEBIMENTOS[1]` e tem o item `581`
+  (`esperada: 200`, `recebida: 200`, `unidade: 'PC'`, `material_id: 9` com `controle_serie: 0`).
+  Nada a criar. Deixado escrito porque o plano mandava "confirmar e ajustar", e a próxima sessão
+  gastaria o ciclo.
+- **R2** — o `AND COALESCE(status,'') NOT IN ('CANCELADO')` da guarda: **código morto**. Não existe
+  status `'CANCELADO'` de recebimento (`STATUS`, `receiptService.js:43-55`). Removido, com o motivo.
+- **R3** — *"nenhum arquivo de teste cria `contas_pagar`"*: verdadeiro para `tests/api/`, mas
+  **`server/tests/almoxarifado.test.js:240-243` cria** — e é o molde. O DDL do plano também omitia
+  os dois `NOT NULL` de produção (`descricao`, `valor`, `server/index.js:19299-19311`), o que
+  deixaria o teste aceitar um `valor` nulo que produção rejeita. Alinhado com produção.
+
+### E. Veredito
+
+**O plano está pronto para executar**, com as correções acima aplicadas **neste arquivo e no
+design**. Nada foi mudado em código de produção. O único ponto que continua sendo **decisão
+reversível registrada** (letra B, sem consultar ninguém, como manda o CLAUDE.md) é a **terceira
+perna da chave de duplicata** (`fornecedor_nome`): escolhida porque sem ela a regra não é
+alcançável pela tela; descartada a alternativa de mandar `fornecedor_id` no payload, que acopla a T2
+tronco à T5 galho e não cobre o acervo. O item "o `<select>` passar a mandar `fornecedor_id`" entrou
+nas candidatas da **Etapa 37**.

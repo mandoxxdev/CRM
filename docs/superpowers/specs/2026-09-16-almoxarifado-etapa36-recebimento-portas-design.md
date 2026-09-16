@@ -99,7 +99,7 @@ existe em lugar nenhum do client um campo para dizer *quanto chegou de verdade*.
 | Método | Caminho | arquivo:linha | Gate hoje | Validação hoje | Depois da 36 |
 |---|---|---|---|---|---|
 | **POST** | `/api/almoxarifado/recebimentos` | `extended.js:973` | `receber_material` | **nenhuma** | `validate(RecebimentoCreateSchema)` + guarda de NF duplicada |
-| **PUT** | `/recebimentos/:id/fiscal` | `extended.js:1098` | `receber_material` | **nenhuma** | `validate(RecebimentoFiscalSchema)` + guarda de NF duplicada + guarda de excedente |
+| **PUT** | `/recebimentos/:id/fiscal` | `extended.js:1098` | `receber_material` | **nenhuma** ⚠️ **(Fase 2) mas há um guard de STATUS**: `salvarDadosFiscal` recusa quem não está em `[ENCAMINHADO_FATURAMENTO, EM_ENTRADA_NF, EM_COMPRAS, CONFERIDO_ALMOX, EM_CONFERENCIA]` com `400 'Dados fiscais só podem ser editados antes do processamento'` (`receiptService.js:253-259`). **`RECEBIDO` fica FORA** — medido por sonda: o `PUT` logo depois do `POST` responde 400, e só depois de `iniciar_conferencia` responde 200. Toda régua de `/fiscal` desta etapa avança o status primeiro | `validate(RecebimentoFiscalSchema)` + guarda de NF duplicada + guarda de excedente |
 | **PUT** | `/recebimentos/:id/conferir` | `extended.js:980` | `receber_material` | nenhuma | guarda de excedente (+ `COALESCE` na quantidade) · **ganha chamador no client** |
 | POST | `/recebimentos/:id/workflow` | `extended.js:1092` | `receber_material` | nenhuma | inalterado — só ganha teste |
 | POST | `/recebimentos/:id/processar` | `extended.js:1104` | `receber_material` | nenhuma | inalterado |
@@ -173,7 +173,22 @@ async function assertNotaNaoDuplicada(db, { nota_fiscal, fornecedor_id, forneced
 ```
 
 **Chave da duplicata:** `nota_fiscal` (comparada com `TRIM` e sem diferenciar caixa) **mais** o
-fornecedor, resolvido por `fornecedor_id` quando existe e por `fornecedor_cnpj` quando o id é nulo.
+fornecedor, resolvido por `fornecedor_id` quando existe, por `fornecedor_cnpj` quando o id é nulo e
+**(Fase 2)** por `UPPER(TRIM(fornecedor_nome))` quando os dois são nulos.
+
+**(Fase 2) A terceira perna da chave não é zelo: sem ela a guarda é INALCANÇÁVEL pela tela.**
+Medido: `handleCriar` monta o payload do `POST` com `tipo_recebimento`, `pedido_compra_id`,
+`nota_fiscal`, `fornecedor_nome`, `fornecedor_cnpj`, `observacoes` e `itens`
+(`RecebimentosAlmoxarifado.js:342-354`) — **`fornecedor_id` não existe no `form`** (`:86-93`), e o
+`<select>` de fornecedores copia `razao_social` → `fornecedor_nome` e `cnpj` → `fornecedor_cnpj`
+(`selecionarFornecedor`, `:315-325`). Com a chave só em id/CNPJ, todo recebimento lançado por nome
+de fornecedor sem CNPJ digitado passaria pela guarda em silêncio. **Seria a mesma classe de defeito
+que esta etapa está pagando do outro lado** (a rota `/conferir` completa e sem chamador): regra
+implementada, porta de entrada faltando. **Descartado: mandar `fornecedor_id` no payload da tela** —
+é mudança de client dentro de uma task **tronco** de servidor, acopla T2 à T5 e não resolve o
+acervo já lançado sem id; a cláusula no `where` é reversível numa linha e cobre os dois. Registrar
+na letra B. **Item para a Etapa 37:** o `<select>` passar a mandar `fornecedor_id`, e então a perna
+do nome ser apenas retaguarda.
 
 **NF vazia ou `null` NÃO é duplicata** — decisão, e é a metade que impede o excesso de zelo: o
 recebimento nasce legitimamente sem nota pelo caminho do pedido de compra (`fornecedor_nome` sem NF é
@@ -183,8 +198,8 @@ qualquer forma. Dois documentos sem NF do mesmo fornecedor continuam entrando.
 **Mesma NF de fornecedores diferentes passa** — dois fornecedores emitem nota com o mesmo número;
 barrar isso seria pior que o furo.
 
-**Fornecedor NÃO IDENTIFICADO (`fornecedor_id` e `fornecedor_cnpj` os dois nulos) também não
-caracteriza duplicata** — pelo mesmo raciocínio da NF vazia: sem fornecedor não existe "mesmo
+**Fornecedor NÃO IDENTIFICADO (`fornecedor_id`, `fornecedor_cnpj` **e `fornecedor_nome`** — os três
+nulos, **Fase 2**) também não caracteriza duplicata** — pelo mesmo raciocínio da NF vazia: sem fornecedor não existe "mesmo
 fornecedor" a afirmar, e tratar "sem fornecedor" como um fornecedor único juntaria documentos de
 origens diferentes. Isto também é o que **impede regressão**: os arquivos de teste que criam
 recebimento **pela rota** (`alertaEventoGanchos`, `alertaEventoJornada`, `recebimentoCustoMedio`) o
@@ -238,6 +253,27 @@ ALMOXARIFE, que é quem confere. A checagem é **condicional e mora no serviço*
 — precedente exato e já documentado: `ownerRules.assertAjustePermitido` (*"a checagem real acontece no
 MOTOR, não em requirePermission na rota"*), que também é o molde da mensagem (nomeia a ação e o
 perfil do usuário).
+
+**(Fase 2) Confirmado no código, os três pontos que o desenho precisava e que estavam supostos:**
+`can(user, acao)` recebe o **objeto do usuário**, não o perfil (`permissions.js:162-166`, e ele
+chama `getPerfilFromUser` por dentro) — logo `can(user, 'autorizar_excedente')` com o `user` que a
+rota injeta está certo; `conferirRecebimento(db, user, recebimentoId, data)` e
+`salvarDadosFiscal(db, user, recebimentoId, data)` **já recebem `req.user`** como segundo parâmetro
+(`extended.js:980-984` e `:1098-1102`), então nenhuma assinatura muda; e `receiptService.js` **não
+importa** `permissions` hoje (`:1-17`) — o `require('./permissions')` é novo e **não fecha ciclo**,
+porque `permissions.js` só requer `../systemPermissions`, e faz isso **dentro** da função
+(`:154`), de propósito.
+
+**(Fase 2) E três fiações que o desenho não previa, medidas por execução:**
+1. `client/src/utils/permissaoErro.js` — o teste `permissaoErro.test.js:44` importa `ACAO_PERFIS`
+   **do servidor** e exige rótulo para **toda** ação. Ação nova sem rótulo = **suíte de client
+   vermelha**, por uma mudança de servidor. É o defeito que o fix-round `7982f18` da Etapa 30 pagou.
+2. `auditLabels.js` — `auditLabels.api.test.js` varre `acao: '<VERBO>'` com guarda de fronteira e
+   exige rótulo para cada verbo literal. `EXCEDENTE_AUTORIZADO` é literal e **é pego**.
+3. `auditLabels.js` / `ROTULOS_ENTIDADE` — o mesmo arquivo exige rótulo para cada **entidade**
+   literal. `recebimento_item` é nova (`recebimento` já tem). **Descartado:** auditar como
+   `entidade: 'recebimento'` para não tocar o mapa — perderia a precisão de qual item foi
+   autorizado, que é a razão de a linha existir.
 
 **Descartado: só a flag no payload, sem ação de perfil** (o caminho que a medição propôs como
 reversível). Descartado porque uma flag que qualquer perfil pode ligar **não é barreira, é
@@ -337,12 +373,18 @@ vazio** que o CLAUDE.md manda desconfiar, e seria o quinto caso desta base.
 - **RN-13 — três coisas NÃO são duplicata: NF vazia, fornecedor diferente e fornecedor não
   identificado.** *Cenário:* dois `POST` com a mesma NF e **fornecedores diferentes** → **201** nos
   dois; dois `POST` **sem** `nota_fiscal` para o mesmo fornecedor → **201** nos dois; dois `POST` com
-  a mesma NF e **nenhum** identificador de fornecedor (`fornecedor_id` e `fornecedor_cnpj` nulos) →
-  **201** nos dois.
+  a mesma NF e **nenhum** identificador de fornecedor (`fornecedor_id`, `fornecedor_cnpj` **e
+  `fornecedor_nome`** nulos — **Fase 2**) → **201** nos dois. **(Fase 2) mais o cenário que fecha o
+  buraco:** dois `POST` com a mesma NF e **só** `fornecedor_nome` igual (o payload que a tela manda
+  de verdade) → **201** e **409**.
 - **RN-14 — a guarda vale na segunda porta, e não acusa o próprio documento.** *Cenário:* documento A
-  com `NF-X`; documento B sem NF; `PUT /B/fiscal` com `nota_fiscal: 'NF-X'` e o mesmo fornecedor →
-  **409** com a literal da RN-12 citando o número de A. Metade positiva: `PUT /A/fiscal` com a
-  **própria** `NF-X` → **200** (salvar os dados fiscais duas vezes não pode se autoacusar).
+  com `NF-X`; documento B sem NF; **(Fase 2) os dois avançados para `EM_CONFERENCIA` por
+  `POST /workflow {acao:'iniciar_conferencia'}`, porque `salvarDadosFiscal` recusa `RECEBIDO` antes
+  de olhar a NF** (`receiptService.js:253-259`, medido); `PUT /B/fiscal` com `nota_fiscal: 'NF-X'` e
+  o mesmo fornecedor → **409** com a literal da RN-12 citando o número de A. Metade positiva:
+  `PUT /A/fiscal` com a **própria** `NF-X` → **200** (salvar os dados fiscais duas vezes não pode se
+  autoacusar). **Sem o avanço de status, as duas metades respondem `400 'Dados fiscais só podem ser
+  editados antes do processamento'` e a RN-14 fica sem régua.**
 - **RN-15 — o workflow não pula etapas.** *Cenário:* `POST /:id/workflow {acao:'processar'}` num
   recebimento `RECEBIDO` → **400** e `error === 'Não é possível "processar" no status atual (RECEBIDO)'`;
   `{acao:'inexistente'}` → **400** e `'Ação de workflow inválida'`. Metade positiva: a sequência
@@ -355,6 +397,10 @@ vazio** que o CLAUDE.md manda desconfiar, e seria o quinto caso desta base.
   `{ itens: [{ id: 581, quantidade_recebida: 187, conferencia_quantidade: false }] }`. *Cenário
   (servidor):* `PUT /:id/conferir` com `quantidade_recebida` menor que a esperada → **200**, coluna
   gravada, e `alertRegistry.listarDivergenciasRecebimento({ recebimentoId })` **lista** aquele item.
+  **(Fase 2) mais a metade que impede o dano novo:** campo **limpo** → o payload sai **sem** a chave
+  `quantidade_recebida` (nunca `0`, que `Number('')` produziria), e o `COALESCE` do `/conferir`
+  preserva a coluna. Medido por sonda: hoje um item enviado sem o campo deixa
+  `quantidade_recebida = null` **e** `observacoes = null` — **duas** colunas apagadas, não uma.
 - **RN-17 — divergência aparece na tela, com as duas quantidades.** *Cenário:* com `187` digitado
   contra `200` esperados, o painel contém o texto literal
   **`Divergência: 13 a menos que o esperado (200)`** e as duas quantidades (`187` e `200`) estão no
@@ -393,7 +439,9 @@ ordem de execução:
 | 2 | **`z.looseObject`** nos dois schemas, com `.optional()` | `z.object` (descarta `nota_fiscal`/`itens` e derruba todo POST válido — medido); exigir o campo (quebra dois testes existentes que confiam no default derivado) |
 | 3 | **mensagem literal própria em português**, numa constante só para as duas portas | a mensagem padrão do `z.enum` (sai em inglês no Zod 4.4.3 e sem o valor recebido — medido); duas literais escritas à mão (divergem na primeira edição) |
 | 4 | NF duplicada: **guarda em serviço + índice NÃO único**, nos dois escritores | `UNIQUE(nota_fiscal, fornecedor_id)` — produção pode ter acervo sujo e o `safeAlter` falharia na subida; `NULL` não colide, então o índice seria parcial onde mais importa; e a recusa viria como `SQLITE_CONSTRAINT`, não como literal legível. **A letra A leva a consulta SQL de medição para antes do deploy** |
-| 5 | **NF vazia/`null` não é duplicata**; mesma NF de **fornecedor diferente** passa; **fornecedor não identificado** (id e CNPJ nulos) também não caracteriza duplicata | barrar os três casos — recebimento sem NF é legítimo pelo caminho do pedido, dois fornecedores emitem nota com o mesmo número, e tratar "sem fornecedor" como fornecedor único juntaria documentos de origens diferentes (e derrubaria os arquivos de teste que criam recebimento pela rota sem `fornecedor_id`) |
+| 5 | **NF vazia/`null` não é duplicata**; mesma NF de **fornecedor diferente** passa; **fornecedor não identificado** (id, CNPJ **e nome** nulos — **Fase 2**) também não caracteriza duplicata |
+| **5b (Fase 2)** | o fornecedor da chave é `fornecedor_id` → `fornecedor_cnpj` → **`UPPER(TRIM(fornecedor_nome))`** | parar em id/CNPJ: a tela **nunca** manda `fornecedor_id` (medido em `handleCriar`), então a guarda não dispararia pelo caminho real sem CNPJ digitado — regra entregue e porta faltando; e mandar `fornecedor_id` no payload da tela, que acopla a T2 (tronco de servidor) à T5 e não cobre o acervo |
+| **5c (Fase 2)** | o `WHERE` **não** filtra `status <> 'CANCELADO'` | manter a cláusula: `STATUS` do recebimento não tem `'CANCELADO'` (os 11 são `RECEBIDO`..`BLOQUEADO`, `receiptService.js:43-55`) — era código morto que fazia o próximo leitor acreditar num cancelamento inexistente | barrar os três casos — recebimento sem NF é legítimo pelo caminho do pedido, dois fornecedores emitem nota com o mesmo número, e tratar "sem fornecedor" como fornecedor único juntaria documentos de origens diferentes (e derrubaria os arquivos de teste que criam recebimento pela rota sem `fornecedor_id`) |
 | 6 | **ação nova `autorizar_excedente`** em `ACAO_PERFIS` `[ADMINISTRADOR, GESTOR, COMPRAS]`, checada **no serviço** por `can()` | só a flag no payload (o "reversível" da medição): flag que qualquer perfil liga não é barreira, é formulário; `requirePermission` na rota (quebraria o `/conferir` para o ALMOXARIFE, que é quem confere) |
 | 7 | **ALMOXARIFE fora** da ação de excedente, de propósito | incluí-lo pelo argumento de que ele "já tem `receber_material`" — quem recebe não autoriza o próprio excedente (mesmo critério escrito em `gerenciar_plano_inspecao`) |
 | 8 | quantidade conferida grava por **`PUT /conferir`** | `PUT /fiscal` (o que a medição propôs): renderiza só no Faturamento, três transições depois do gesto real, e deixaria a rota `/conferir` morta — a classe de defeito que as Etapas 6, 32 e 34 já pagaram |
@@ -415,6 +463,10 @@ ordem de execução:
 | R8 | o campo novo quebrar o cenário (g) da Etapa 34 (identidade do nó do bloco de anexos) | o input entra **dentro** do bloco de itens, que já vive sob o ternário de `loadingDetalhe`; o bloco de anexos **não** é tocado, e a suíte inteira do arquivo roda na T5 |
 | R9 | "verde de primeira" em qualquer cenário novo | controle positivo obrigatório em toda task, com `grep -cF` = 1, `perl -0pi -e`, `md5sum` antes/depois/depois-de-restaurar e **nunca** `git checkout --` |
 | R10 | `tipo_recebimento` inválido **já gravado** em produção ficar impossível de corrigir pela tela (o modal fiscal não tem o campo) | fora de escopo, mas **declarado**: medido `[]` recebimentos no banco de desenvolvimento, e a letra A leva a consulta para medir produção antes do deploy |
+| **R11 (Fase 2)** | a guarda de NF ficar **inalcançável pela tela** porque `handleCriar` não manda `fornecedor_id` | terceira perna da chave (`UPPER(TRIM(fornecedor_nome))`), com o cenário `(7)` da T2 que entra pelo payload real e a sabotagem 5 que o prova |
+| **R12 (Fase 2)** | a ação nova e a auditoria nova quebrarem **três** testes que a T3 não roda (`permissaoErro.test.js` de client, e as duas asserções de cobertura de `auditLabels.api.test.js`) | os três arquivos entraram nos `Files` da T3, e o Step 4 dela passou a rodar `auditLabels.api.test.js` **e** a suíte de client de `permissaoErro` |
+| **R13 (Fase 2)** | campo de quantidade limpo virar `quantidade_recebida: 0` (`Number('')`), gravar zero e disparar alerta de divergência falso | `salvarConferencia` **omite** o campo quando vazio, o `COALESCE` da T3 preserva, e o cenário `(p)` afirma que a chave **não** está no payload |
+| **R14 (Fase 2)** | sabotagem que só sabe produzir **500** passar por controle positivo (era o caso da nº 2 da T4: apagar `if (!t)` estoura `TypeError` em `t.de`) | trocada por alteração da **literal**; e as nº 1 e nº 3 da T4 tiveram a previsão corrigida — elas caem **pela literal**, porque `processarNota` tem barreira própria e o status continua 400 |
 
 ## O que esta etapa NÃO cobre
 
