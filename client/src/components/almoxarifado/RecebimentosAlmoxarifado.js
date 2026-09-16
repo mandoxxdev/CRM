@@ -714,7 +714,7 @@ const RecebimentosAlmoxarifado = () => {
     const diff = Number(bruto.toFixed(bruto < 0.005 ? 4 : 2));
     const sentido = recebida > esperada ? 'a mais' : 'a menos';
     return (
-      <div style={{ color: 'var(--gmp-danger)', fontSize: '0.72rem', marginTop: 4 }}>
+      <div style={{ color: 'var(--gmp-error)', fontSize: '0.72rem', marginTop: 4 }}>
         Divergência: {diff} {sentido} que o esperado ({esperada})
       </div>
     );
@@ -759,7 +759,7 @@ const RecebimentosAlmoxarifado = () => {
     const bruto = soma - saldo;
     const diff = Number(bruto.toFixed(bruto < 0.005 ? 4 : 2));
     return (
-      <div style={{ color: 'var(--gmp-danger)', fontSize: '0.72rem', marginTop: 4 }}>
+      <div style={{ color: 'var(--gmp-error)', fontSize: '0.72rem', marginTop: 4 }}>
         Acima do saldo: {diff} a mais que o saldo do pedido ({saldo})
       </div>
     );
@@ -1093,7 +1093,7 @@ const RecebimentosAlmoxarifado = () => {
                           const quantidadeEsperada = item.quantidade_recebida || item.quantidade_esperada || 0;
                           return (
                             <div className="almox-field" style={{ gridColumn: '1 / -1', marginTop: 6 }}>
-                              <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Séries (uma por linha) — <span style={{ color: seriesPreenchidas === quantidadeEsperada ? 'var(--gmp-text-light)' : 'var(--gmp-danger)' }}>{seriesPreenchidas}/{quantidadeEsperada}</span></label>
+                              <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Séries (uma por linha) — <span style={{ color: seriesPreenchidas === quantidadeEsperada ? 'var(--gmp-text-light)' : 'var(--gmp-error)' }}>{seriesPreenchidas}/{quantidadeEsperada}</span></label>
                               <textarea className="almox-textarea" rows={2} value={item.series || ''}
                                 style={{ fontSize: '0.75rem', padding: '4px 6px' }}
                                 onChange={(e) => atualizarItemDetalhe(item.id, 'series', e.target.value)} />
@@ -1124,7 +1124,7 @@ const RecebimentosAlmoxarifado = () => {
                     excedente" — um gesto impossível para o ALMOXARIFE, que não vê a caixa.) */}
                 {erroConferencia && (
                   <div className="almox-hint-banner" role="alert"
-                    style={{ marginTop: 12, fontSize: '0.8rem', color: 'var(--gmp-danger)' }}>
+                    style={{ marginTop: 12, fontSize: '0.8rem', color: 'var(--gmp-error)' }}>
                     {erroConferencia}
                   </div>
                 )}
@@ -1361,7 +1361,7 @@ const RecebimentosAlmoxarifado = () => {
                     Administrador"), e num toast de cinco segundos elas não chegam a ser lidas. */}
                 {erroCriacao && (
                   <div className="almox-hint-banner" role="alert"
-                    style={{ marginTop: 12, fontSize: '0.8rem', color: 'var(--gmp-danger)' }}>
+                    style={{ marginTop: 12, fontSize: '0.8rem', color: 'var(--gmp-error)' }}>
                     {erroCriacao}
                   </div>
                 )}

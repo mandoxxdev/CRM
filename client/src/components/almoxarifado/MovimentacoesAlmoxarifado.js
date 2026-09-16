@@ -824,7 +824,7 @@ const MovimentacoesAlmoxarifado = () => {
                       <label>Números de série (um por linha) *</label>
                       <textarea className="almox-textarea" rows={3} value={form.series}
                         onChange={(e) => setForm({ ...form, series: e.target.value })} />
-                      <small style={{ color: linhasSerie(form.series).length === Number(form.quantidade) ? 'var(--gmp-text-light)' : 'var(--gmp-danger)' }}>
+                      <small style={{ color: linhasSerie(form.series).length === Number(form.quantidade) ? 'var(--gmp-text-light)' : 'var(--gmp-error)' }}>
                         {linhasSerie(form.series).length}/{form.quantidade || 0} série(s)
                       </small>
                       <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
