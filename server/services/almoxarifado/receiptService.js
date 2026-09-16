@@ -1516,7 +1516,12 @@ async function listarItensPedidoCompraAux(db, pedidoId) {
         saldo_pendente: derivado.saldo_pendente,
         // O TETO que a porta aceita para este material, repetido em toda linha dele. Igual a
         // `saldo_pendente` no caso comum (uma linha por material); menor quando outra linha do
-        // mesmo material ja recebeu a mais. O client tem de limitar por ESTE campo.
+        // mesmo material ja recebeu a mais, e MAIOR quando o material tem duas linhas pendentes.
+        // Por isso o contrato do client e (fix 1 da T5): ele SOMA o que digitou por material e
+        // compara a soma com ESTE campo — nunca a quantidade de UMA linha contra o saldo DELA, que
+        // divergiria da regua da porta nos dois sentidos (`assertSaldoDoPedidoPermitido` agrupa o
+        // payload por material e mede a recebida TOTAL). `saldo_pendente` segue sendo exibido como
+        // informacao do que falta naquela linha.
         saldo_pendente_material: Math.max(0, saldoPorMaterial.get(String(linha.material_id))),
         valor_unitario: linha.valor_unitario,
       };

@@ -176,6 +176,22 @@ const PEDIDOS = [
     quantidade_pedida: 20, quantidade_recebida: 15, saldo_pendente: 5,
     situacao_recebimento: 'PARCIAL',
   },
+  // Fix 1 da T5, FACE A: duas linhas do MESMO material, as duas pendentes e nenhuma estourada.
+  // O agregado é 16 (10 + 6), e é contra ele que a porta compara a SOMA do que o payload declarou.
+  {
+    id: 315, numero: 'PC-2026-315', fornecedor_nome: 'Aços Vale Ltda',
+    fornecedor_cnpj: '11.111.111/0001-11', status: 'aprovado', valor_total: 560,
+    quantidade_pedida: 16, quantidade_recebida: 0, saldo_pendente: 16,
+    situacao_recebimento: 'ABERTO',
+  },
+  // Fix 1 da T5, FACE B: duas linhas de 5 pendentes do mesmo material, mas o agregado é 5 —
+  // uma TERCEIRA linha do material recebeu a mais e entra negativa (ela não volta na rota).
+  {
+    id: 316, numero: 'PC-2026-316', fornecedor_nome: 'Parafusos Sul',
+    fornecedor_cnpj: '22.222.222/0001-22', status: 'aprovado', valor_total: 420,
+    quantidade_pedida: 15, quantidade_recebida: 10, saldo_pendente: 5,
+    situacao_recebimento: 'PARCIAL',
+  },
 ];
 
 // A resposta de `GET /recebimentos-aux/pedidos-compra/:id/itens` (contrato congelado na T4 +
@@ -202,6 +218,38 @@ const ITENS_PEDIDO = {
     quantidade: 10, quantidade_recebida: 0, saldo_pendente: 10,
     saldo_pendente_material: 5, valor_unitario: 3.5,
   }],
+  // Fix 1, FACE A — a que o `Math.min(material, linha)` errava para MENOS: duas linhas do material
+  // 9 com saldo 10 e 6, agregado 16. O teto de CADA linha é 16, e quem decide é a SOMA das duas.
+  315: [
+    {
+      id: 9315, material_id: 9, material_nome: 'Parafuso M8', material_codigo: 'ALM-0100',
+      codigo: 'ALM-0100', descricao: 'Parafuso M8 zincado', unidade: 'PC',
+      quantidade: 10, quantidade_recebida: 0, saldo_pendente: 10,
+      saldo_pendente_material: 16, valor_unitario: 3.5,
+    },
+    {
+      id: 9316, material_id: 9, material_nome: 'Parafuso M8', material_codigo: 'ALM-0100',
+      codigo: 'ALM-0100', descricao: 'Parafuso M8 zincado', unidade: 'PC',
+      quantidade: 6, quantidade_recebida: 0, saldo_pendente: 6,
+      saldo_pendente_material: 16, valor_unitario: 3.5,
+    },
+  ],
+  // Fix 1, FACE B — a que o `Math.min` errava para MAIS: duas linhas de 5 com agregado 5. Cada
+  // linha, sozinha, cabe; as duas somadas estouram, e é a SOMA que a porta compara.
+  316: [
+    {
+      id: 9317, material_id: 9, material_nome: 'Parafuso M8', material_codigo: 'ALM-0100',
+      codigo: 'ALM-0100', descricao: 'Parafuso M8 zincado', unidade: 'PC',
+      quantidade: 5, quantidade_recebida: 0, saldo_pendente: 5,
+      saldo_pendente_material: 5, valor_unitario: 3.5,
+    },
+    {
+      id: 9318, material_id: 9, material_nome: 'Parafuso M8', material_codigo: 'ALM-0100',
+      codigo: 'ALM-0100', descricao: 'Parafuso M8 zincado', unidade: 'PC',
+      quantidade: 5, quantidade_recebida: 0, saldo_pendente: 5,
+      saldo_pendente_material: 5, valor_unitario: 3.5,
+    },
+  ],
 };
 
 let container; let root; let recebimentosDoBanco;
@@ -314,6 +362,9 @@ const chamadasItensPedido = (id) => api.get.mock.calls
   .filter(([url]) => url === `/almoxarifado/recebimentos-aux/pedidos-compra/${id}/itens`);
 const chamadasCriar = () => api.post.mock.calls
   .filter(([url]) => url === '/almoxarifado/recebimentos');
+// Quantas vezes a frase aparece: o aviso de excedente é do MATERIAL, então ele tem de sair em
+// TODAS as linhas dele — `toContain` sozinho não distingue "uma linha avisou" de "as duas".
+const ocorrencias = (texto, agulha) => texto.split(agulha).length - 1;
 // `<select>` controlado do React: mesmo motivo do helper `digitar` — setar `.value` direto não
 // dispara o `onChange`; o React ouve o evento `change` no select.
 async function selecionar(select, valor) {
@@ -1087,7 +1138,8 @@ test('(u) escolher o pedido carrega os itens com o saldo e o payload leva pedido
 
   const selPedido = selectPorLabel('Número do Pedido de Compra');
   expect(selPedido).not.toBeUndefined();
-  expect([...selPedido.options].map((o) => o.value)).toEqual(['', '312', '313', '314']);
+  expect([...selPedido.options].map((o) => o.value))
+    .toEqual(['', '312', '313', '314', '315', '316']);
   await selecionar(selPedido, '312');
 
   // UMA chamada à rota de itens, e com o id DO PEDIDO escolhido.
@@ -1253,6 +1305,108 @@ test('(w) 400 e 403 do servidor aparecem no modal com role=alert sem limpar o fo
   expect(inputQtdPedido(9314).value).toBe('5');                     // o campo nasce no TETO
   expect(modalNovo().textContent).not.toContain('Acima do saldo:');
 
+  digitar(inputQtdPedido(9314), '10');
+  await esperarEfeitos();
+  expect(modalNovo().textContent).toContain('Acima do saldo: 5 a mais que o saldo do pedido (5)');
+});
+
+/* ── (x) fix 1: o aviso compara a SOMA DIGITADA POR MATERIAL, como o servidor ──────────────────
+ * Achado Important da revisão da T5, e ele tinha DUAS faces opostas, as duas medidas:
+ *
+ * `assertSaldoDoPedidoPermitido` agrupa os itens do payload por `material_id`, soma a recebida
+ * DECLARADA de cada um (`recebidaTotal`) e compara com o saldo AGREGADO do material
+ * (`doMaterial.reduce((s, l) => s + l.saldo, 0)`, sem clamp por linha) — que é exatamente o
+ * `saldo_pendente_material` que a rota devolve. A tela comparava LINHA A LINHA contra
+ * `Math.min(saldo_pendente_material, saldo_pendente)`, e as duas contas divergem nos dois sentidos:
+ *
+ * - para MENOS (esta metade): duas linhas pendentes do mesmo material (10 e 6, agregado 16). O teto
+ *   da linha C virava `min(16, 10) = 10`, então digitar 12 só em C mostrava
+ *   "Acima do saldo: 2 a mais" e oferecia a caixa de autorização — enquanto o servidor somava 12
+ *   contra 16 e aceitava com 201. A tela pedia autorização de excedente para um recebimento que
+ *   excedente NÃO era, e treinava o operador a marcar a caixa por reflexo;
+ * - para MAIS: é o cenário (y), logo abaixo.
+ *
+ * Régua nova: `somaDigitada(material) > saldo_pendente_material`, e o aviso sai em TODAS as linhas
+ * do material (a condição é do material, não da linha). `saldo_pendente` continua EXIBIDO, como
+ * informação do que falta naquela linha — ele só deixou de governar o aviso.
+ */
+test('(x) o aviso compara a SOMA por material com o saldo agregado — 12 de 16 em duas linhas nao e excedente', async () => {
+  await renderizar();
+  await escolherPedido(315);
+
+  expect(chamadasItensPedido(315)).toHaveLength(1);
+  // As duas linhas nascem no que cabe em cada uma, e a SOMA (10 + 6) bate exatamente com o
+  // agregado: fronteira, e por isso nenhum aviso.
+  expect(inputQtdPedido(9315).value).toBe('10');
+  expect(inputQtdPedido(9316).value).toBe('6');
+  expect(modalNovo().textContent).not.toContain('Acima do saldo:');
+  expect(caixaExcedenteModal()).toBeUndefined();
+
+  // ── a SOMA estoura (12 + 6 = 18 contra 16): o aviso sai nas DUAS linhas do material ──────────
+  digitar(inputQtdPedido(9315), '12');
+  await esperarEfeitos();
+
+  const AVISO_16 = 'Acima do saldo: 2 a mais que o saldo do pedido (16)';
+  expect(ocorrencias(modalNovo().textContent, AVISO_16)).toBe(2);
+  expect(caixaExcedenteModal()).not.toBeUndefined();
+
+  // ── 12 SOZINHO cabe nos 16: sem a linha D informada, não há excedente nenhum ─────────────────
+  digitar(inputQtdPedido(9316), '');
+  await esperarEfeitos();
+  expect(modalNovo().textContent).not.toContain('Acima do saldo:');
+  expect(caixaExcedenteModal()).toBeUndefined();
+  // O saldo da LINHA continua na tela como informação — ele só não governa mais o aviso.
+  expect(modalNovo().textContent).toContain('Saldo pendente: 10');
+  expect(modalNovo().textContent).toContain('Saldo pendente: 6');
+
+  await submeterModal();
+
+  expect(chamadasCriar()).toHaveLength(1);
+  const payload = api.post.mock.calls[0][1];
+  expect(payload.autorizar_excedente).toBe(false);
+  // UM item: a linha limpa não vai (não é "chegou zero"), e a que vai leva os 12 que o servidor
+  // aceita com 201.
+  expect(payload.itens).toEqual([
+    { material_id: 9, pedido_item_id: 9315, quantidade: 12, quantidade_recebida: 12 },
+  ]);
+});
+
+/* ── (y) fix 1, a face OPOSTA: cada linha cabe, a soma estoura ─────────────────────────────────
+ * Duas linhas de 5 pendentes do mesmo material cujo agregado é 5 (uma terceira linha recebeu a
+ * mais e entra NEGATIVA na soma; ela não volta na rota, que só devolve `saldo_pendente > 0`).
+ *
+ * Comparando linha a linha, 5 contra `min(5, 5) = 5` não é excedente em NENHUMA das duas — a tela
+ * ficava calada e o payload somava 10 contra 5, tomando 400 "maior que o saldo do pedido (5)" na
+ * cara do operador, sem nenhum aviso antes. É o mesmo furo que o fix 1 da T4 fechou do lado da
+ * leitura, voltando pela soma.
+ *
+ * A segunda metade reafirma o caso de UMA linha (pedido 314): lá `somaDigitada` é a própria
+ * quantidade, então a régua nova continua dizendo a mesma coisa que a antiga — o que prova que o
+ * conserto não trocou uma conta errada por outra.
+ */
+test('(y) duas linhas que cabem sozinhas mas somam acima do agregado avisam DESDE o inicio', async () => {
+  await renderizar();
+  const selPedido = await escolherPedido(316);
+
+  expect(chamadasItensPedido(316)).toHaveLength(1);
+  expect(inputQtdPedido(9317).value).toBe('5');
+  expect(inputQtdPedido(9318).value).toBe('5');
+
+  // 5 + 5 = 10 contra o agregado 5: o aviso nasce com o bloco, nas DUAS linhas.
+  const AVISO_5 = 'Acima do saldo: 5 a mais que o saldo do pedido (5)';
+  expect(ocorrencias(modalNovo().textContent, AVISO_5)).toBe(2);
+  expect(caixaExcedenteModal()).not.toBeUndefined();
+
+  // ── metade POSITIVA: limpando uma das linhas, a soma volta a caber e o aviso sai das DUAS ────
+  digitar(inputQtdPedido(9318), '');
+  await esperarEfeitos();
+  expect(modalNovo().textContent).not.toContain('Acima do saldo:');
+  expect(caixaExcedenteModal()).toBeUndefined();
+
+  // ── e o caso de UMA linha (pedido 314) continua dizendo o mesmo: soma = a própria quantidade ─
+  await selecionar(selPedido, '314');
+  expect(inputQtdPedido(9314).value).toBe('5');
+  expect(modalNovo().textContent).not.toContain('Acima do saldo:');
   digitar(inputQtdPedido(9314), '10');
   await esperarEfeitos();
   expect(modalNovo().textContent).toContain('Acima do saldo: 5 a mais que o saldo do pedido (5)');

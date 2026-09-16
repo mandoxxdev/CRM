@@ -55,18 +55,6 @@ const EMPTY_FISCAL = {
   outras_despesas: '', valor_ipi: '', valor_total_nota: '',
 };
 
-/**
- * Etapa 37 (fix 1 da T4) — o TETO que a porta aceita para uma linha do pedido.
- *
- * `saldo_pendente_material` é o saldo AGREGADO POR MATERIAL, que é exatamente o número que
- * `assertSaldoDoPedidoPermitido` compara no servidor. `saldo_pendente` é o que falta NAQUELA
- * linha, e ele pode prometer mais do que a porta aceita: com duas linhas do mesmo material e uma
- * delas recebida a mais (excedente autorizado), a linha mostra saldo 10 e a porta aceita 5 —
- * o operador digitava 10 e tomava 400 sem nenhum aviso antes.
- *
- * O client LÊ o campo; não soma as linhas para chegar nele. Somar aqui seria uma segunda definição
- * de "saldo do pedido", escrita no lado que não decide.
- */
 // "Não digitei" ≠ "chegou zero": `Number('')` é ZERO, e ler o campo vazio como zero faria a tela
 // declarar uma chegada de zero unidade. Régua única do modal — o aviso de excedente e o payload
 // perguntam a MESMA coisa, e duas expressões disso divergiriam na primeira edição.
@@ -75,12 +63,37 @@ const quantidadeInformada = (valor) => {
   return Number.isFinite(Number(valor));
 };
 
-const tetoDaLinhaDoPedido = (linha) => {
+/**
+ * Etapa 37 (fix 1 da T4) — o TETO que a porta aceita para o MATERIAL da linha.
+ *
+ * `saldo_pendente_material` é o saldo AGREGADO POR MATERIAL, e é exatamente o número contra o qual
+ * `assertSaldoDoPedidoPermitido` compara a SOMA das recebidas declaradas no payload. O client LÊ o
+ * campo; não soma as linhas do pedido para chegar nele — isso seria uma segunda definição de
+ * "saldo do pedido", escrita no lado que não decide.
+ *
+ * `saldo_pendente` (o que falta NAQUELA linha) entra só como fallback de resposta antiga: ele
+ * continua EXIBIDO na tela como informação, mas deixou de governar o aviso de excedente (fix 1 da
+ * T5 — ver `avisoAcimaDoSaldo`).
+ */
+const tetoDoMaterial = (linha) => {
   const doMaterial = Number(linha.saldo_pendente_material);
-  const daLinha = Number(linha.saldo_pendente);
-  if (Number.isFinite(doMaterial) && Number.isFinite(daLinha)) return Math.min(doMaterial, daLinha);
   if (Number.isFinite(doMaterial)) return doMaterial;
+  const daLinha = Number(linha.saldo_pendente);
   return Number.isFinite(daLinha) ? daLinha : 0;
+};
+
+/**
+ * A quantidade com que a linha NASCE no formulário: o que falta nela, limitado ao teto do material.
+ *
+ * O `Math.min` aqui é correto e responde a outra pergunta — é o default de UMA linha, não a régua
+ * do excedente (que é a soma, por material). Nascer no saldo da linha daria, num material cujo
+ * agregado é menor, um default que a porta recusaria com 400; nascer no teto do material daria, num
+ * material com duas linhas pendentes, duas linhas somando o dobro do que cabe.
+ */
+const quantidadeInicialDaLinhaDoPedido = (linha) => {
+  const teto = tetoDoMaterial(linha);
+  const daLinha = Number(linha.saldo_pendente);
+  return Number.isFinite(daLinha) ? Math.min(daLinha, teto) : teto;
 };
 
 const RecebimentosAlmoxarifado = () => {
@@ -506,11 +519,10 @@ const RecebimentosAlmoxarifado = () => {
           unidade: l.unidade,
           saldo_pendente: l.saldo_pendente,
           saldo_pendente_material: l.saldo_pendente_material,
-          // Nasce no número que a PORTA aceita. No caso comum (uma linha por material) os dois
-          // saldos são iguais e isto é o saldo da linha; quando outra linha do mesmo material já
-          // recebeu a mais, o teto agregado é menor — e nascer no saldo da linha ofereceria um
-          // default que o servidor recusaria com 400.
-          quantidade: tetoDaLinhaDoPedido(l),
+          // Nasce no que falta na linha, limitado ao teto do material (ver
+          // `quantidadeInicialDaLinhaDoPedido`). No caso comum os dois saldos são iguais e isto é
+          // o saldo da linha.
+          quantidade: quantidadeInicialDaLinhaDoPedido(l),
         })),
       }));
     } catch (err) {
@@ -650,6 +662,19 @@ const RecebimentosAlmoxarifado = () => {
   };
 
   /**
+   * (fix 1 da T5) A SOMA do que o operador digitou para um material, em TODAS as linhas dele.
+   *
+   * É o que o servidor compara: `assertSaldoDoPedidoPermitido` agrupa os itens do payload por
+   * `material_id`, soma a recebida declarada de cada um e mede o total contra o saldo agregado.
+   * Linha com campo vazio não entra (ela não vai no payload), pela mesma régua do `handleCriar`.
+   */
+  const somaDigitadaDoMaterial = (materialId) => form.itens.reduce((soma, i) => (
+    String(i.material_id) === String(materialId) && quantidadeInformada(i.quantidade)
+      ? soma + Number(i.quantidade)
+      : soma
+  ), 0);
+
+  /**
    * Etapa 37 (RN-26) — o aviso de quantidade acima do SALDO DO PEDIDO DE COMPRA.
    *
    * Palavras DIFERENTES do `avisoDivergencia` acima (`Acima do saldo:` em vez de `Divergência:`)
@@ -657,18 +682,22 @@ const RecebimentosAlmoxarifado = () => {
    * gravada no item —, e reusar a frase faria o operador ler a mesma coisa para dois fatos
    * diferentes. A literal é a que vai no manual: não aproximar, não reescrever.
    *
-   * O saldo citado é o TETO AGREGADO POR MATERIAL (ver `tetoDaLinhaDoPedido`): tem de ser o MESMO
-   * número que a porta cita no 400, senão a tela promete um limite e o servidor recusa por outro.
+   * ⚠️ (fix 1 da T5) A comparação é `soma digitada do MATERIAL > saldo_pendente_material`, e a
+   * condição é do MATERIAL — o aviso sai em todas as linhas dele. Comparando LINHA A LINHA contra
+   * `Math.min(saldo do material, saldo da linha)`, como estava, a tela divergia da porta nos DOIS
+   * sentidos: com duas linhas pendentes (10 e 6, agregado 16), digitar 12 numa delas pedia
+   * autorização de excedente que o servidor não pedia (aceita 12 de 16 com 201) — treinando o
+   * operador a marcar a caixa por reflexo; e com duas linhas de 5 num material cujo agregado é 5,
+   * cada linha "cabia" e a tela ficava calada enquanto o payload somava 10 e tomava 400.
    */
   const avisoAcimaDoSaldo = (item) => {
-    if (!quantidadeInformada(item.quantidade)) return null;
-    const recebida = Number(item.quantidade);
-    const saldo = tetoDaLinhaDoPedido(item);
-    if (!(recebida > saldo)) return null;
+    const soma = somaDigitadaDoMaterial(item.material_id);
+    const saldo = tetoDoMaterial(item);
+    if (!(soma > saldo)) return null;
     // Mesmo arredondamento do `avisoDivergencia` (revisão final R7 da Etapa 36): duas casas
     // impedem `13.000000000000001`, e abaixo de meio centésimo o aviso mostra quatro — senão ele
     // diria "0 a mais" enquanto o servidor, que compara os números crus, barra o save.
-    const bruto = recebida - saldo;
+    const bruto = soma - saldo;
     const diff = Number(bruto.toFixed(bruto < 0.005 ? 4 : 2));
     return (
       <div style={{ color: 'var(--gmp-danger)', fontSize: '0.72rem', marginTop: 4 }}>
