@@ -1033,15 +1033,25 @@ const RequisicoesList = () => {
 
                 {/* Etapa 34 — anexos da requisição (desenho, documento). Mesmo molde dos dois
                     blocos aditivos acima (Separação, Assinaturas de entrega): leitura junto da
-                    requisição, sem gate novo.
+                    requisição.
+                    `warehouseMode` NÃO é zelo (achado F1 da revisão da branch): esta MESMA tela
+                    roda em `/comercial/requisicoes-material`, `/frota/…`, `/compras/…`,
+                    `/financeiro/…`, `/fabrica/…` e `/engenharia/…` (`App.js` →
+                    `RequisicoesMaterialPages.js`), onde `apiPrefix` é `/requisicoes-material` —
+                    servido SEM a permissão do módulo almoxarifado. Sem o gate, abrir o painel
+                    ali disparava `GET /almoxarifado/anexos`, que está atrás de
+                    `checkModulePermission('almoxarifado')`: 403 "Acesso negado ao módulo" em
+                    vermelho dentro do painel, formulário de upload morto (o hook de permissões
+                    falha ABERTO de propósito) e uma linha de auditoria de acesso negado por
+                    abertura de painel. Todo o resto deste painel já era gateado assim.
                     `detalhe.id` e NÃO `selectedId`: o bloco lê o registro carregado, não a URL.
-                    É higiene, não defeito evitado — aqui dentro `detalhe` nunca é null (este
-                    ramo é o `else` de `loadingDetalhe || !detalhe`) e o `catch` de `abrirDetalhe`
-                    zera os dois juntos. O cenário em que a fixture devolve `id: 555` para
+                    O cenário em que a fixture devolve `id: 555` para
                     `/almoxarifado/requisicoes/55` é o que trava a distinção. */}
-                <div style={{ marginTop: 16 }}>
-                  <AnexosDocumento entidade="requisicao" entidadeId={detalhe.id} titulo="Anexos" />
-                </div>
+                {warehouseMode && (
+                  <div style={{ marginTop: 16 }}>
+                    <AnexosDocumento entidade="requisicao" entidadeId={detalhe.id} titulo="Anexos" />
+                  </div>
+                )}
 
                 {/* Ações — aprovação de valor */}
                 {warehouseMode && detalhe.status === 'AGUARDANDO_APROVACAO_VALOR' && (souAprovadorValor || isAdmin) && (

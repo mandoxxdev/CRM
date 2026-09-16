@@ -42,8 +42,18 @@ jest.mock('../../context/AuthContext', () => ({
   useAuth: () => ({ user: { id: 99, nome: 'Almoxarife Teste', role: 'admin' } }),
 }));
 
+// `warehouseMode` MUTÁVEL, e não a constante `true` que este arquivo tinha: a MESMA tela roda em
+// modo não-almoxarifado em seis rotas de outros módulos (`App.js` →
+// `RequisicoesMaterialPages.js:24-33`; só `almoxarifado` tem `warehouseMode: true` em
+// `config/requisicoesMaterialConfig.js:55-61`), com `apiPrefix = '/requisicoes-material'` — rota
+// servida SEM a permissão do módulo almoxarifado. Com o mock preso em `true` nenhum cenário podia
+// ver um bloco de almoxarifado disparando `GET /almoxarifado/anexos` (403) nessas rotas, que é
+// exatamente o achado F1 da revisão da Etapa 34.
+let mockWarehouseMode = true;
 jest.mock('./RequisicoesMaterialContext', () => ({
-  useRequisicoesMaterialContext: () => ({ warehouseMode: true, basePath: '', setor: null }),
+  useRequisicoesMaterialContext: () => ({
+    warehouseMode: mockWarehouseMode, basePath: '', setor: null,
+  }),
 }));
 
 const ITEM = {
@@ -69,12 +79,16 @@ let detalheDoBanco;
 beforeEach(() => {
   global.IS_REACT_ACT_ENVIRONMENT = true;
   mockPode = () => true;
+  mockWarehouseMode = true;
   api.get.mockImplementation((url) => {
-    if (url === '/almoxarifado/requisicoes') {
+    // Os dois prefixos que a tela usa, conforme `warehouseMode` (`RequisicoesList.js:82`).
+    if (url === '/almoxarifado/requisicoes' || url === '/requisicoes-material') {
       const { itens, ...linha } = detalheDoBanco;
       return Promise.resolve({ data: [linha] });
     }
-    if (url === '/almoxarifado/requisicoes/55') return Promise.resolve({ data: detalheDoBanco });
+    if (url === '/almoxarifado/requisicoes/55' || url === '/requisicoes-material/55') {
+      return Promise.resolve({ data: detalheDoBanco });
+    }
     if (url === '/almoxarifado/configuracoes/liberacao-valor') {
       return Promise.resolve({ data: { souAprovador: false } });
     }
@@ -533,4 +547,29 @@ describe('Etapa 34: anexos da requisição no painel de detalhe', () => {
     expect(api.get.mock.calls.filter(([u]) => u === '/almoxarifado/anexos'))
       .toHaveLength(cargasDoDetalhe.length);
   });
+
+  // ── F1 da revisão da branch: o gate de `warehouseMode` ──────────────────────────────────────
+  // Sem ele, `/comercial/requisicoes-material` (e frota, compras, financeiro, fábrica,
+  // engenharia) abria o painel e disparava `GET /api/almoxarifado/anexos`, que está atrás de
+  // `checkModulePermission('almoxarifado')`: 403 "Acesso negado ao módulo" em vermelho DENTRO do
+  // painel, um formulário de upload morto (o hook de permissões falha ABERTO de propósito) e uma
+  // linha de auditoria de acesso negado por abertura de painel. Todos os outros blocos daquele
+  // painel já eram gateados (`:976`, `:1047`, `:1066`).
+  test('F1: fora do almoxarifado (warehouseMode=false) o bloco não existe e nada vai para /almoxarifado/anexos', async () => {
+    mockWarehouseMode = false;
+    detalheDoBanco = baseRequisicao('PENDENTE');
+    await renderizar();
+
+    // Metade POSITIVA primeiro: sem ela este cenário passaria com a tela vazia — que é a forma
+    // de teste vazio que esta base já pagou três vezes.
+    expect(container.textContent).toContain('REQ-055');
+    expect(api.get).toHaveBeenCalledWith('/requisicoes-material/55', expect.anything());
+    expect(api.get).not.toHaveBeenCalledWith('/almoxarifado/requisicoes/55', expect.anything());
+
+    // Metade negativa: painel aberto, e nenhuma superfície de almoxarifado nele.
+    expect(blocoDeAnexos()).toBeNull();
+    expect(chamadasDeAnexos()).toHaveLength(0);
+    expect(api.get).not.toHaveBeenCalledWith('/almoxarifado/anexos', expect.anything());
+  });
+
 });
