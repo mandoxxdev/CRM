@@ -3,9 +3,15 @@
 > **Status:** 🟡 — **continua 🟡, e a Etapa 26 não muda a cor**: ela fecha **um** item do
 > checklist de Frontend (as categorias hardcoded), e os outros quatro seguem abertos (tabela de
 > conversões genérica, grupo acima de família, motivos/transportadoras/tipos de documento,
-> `almoxarifadoApi.js`, ficha técnica/anexos na tela). Etapa 2 entregue (2026-08-04): ~21 colunas novas no material (técnicos, reposição, controles, ABC, unidades compra/consumo + fatores), subfamílias via `parent_id` em famílias, `MaterialSchema`/`MaterialUpdateSchema` (Zod) com validação e auditoria de criação/atualização, form em 6 seções.
+> `almoxarifadoApi.js` — e ~~ficha técnica/anexos na tela~~, que **saiu desta lista: foi paga na
+> Etapa 34 (`eb89b5e`)**). Etapa 2 entregue (2026-08-04): ~21 colunas novas no material (técnicos, reposição, controles, ABC, unidades compra/consumo + fatores), subfamílias via `parent_id` em famílias, `MaterialSchema`/`MaterialUpdateSchema` (Zod) com validação e auditoria de criação/atualização, form em 6 seções.
 > **Spec original:** seções 4.1, 4.2, 4.3
-> **Última atualização:** 2026-08-29 (**Etapa 26 (`1bca087..9d86a84`) — o catálogo de categorias
+> **Última atualização:** 2026-09-16 (**Etapa 34 (`746a106..054f727`) — a tela de materiais ganhou
+> anexos.** Clipe na coluna de ações de cada linha abrindo o modal **Anexos** (entidade `material`,
+> `eb89b5e`); zero linhas de servidor na etapa inteira. E a frase "plugar aqui é uma linha", que
+> esta spec repetia desde a Etapa 32, **estava errada** — ver a correção no item de checklist de
+> anexos.)
+> Antes: 2026-08-29 (**Etapa 26 (`1bca087..9d86a84`) — o catálogo de categorias
 > virou cadastro e as três telas pararam de hardcodar a lista.** Ver a seção "Entregue na Etapa
 > 26", no fim.)
 > Antes: 2026-08-13 (**Etapa 8c, Task 1 (`028da1e`) — criar material virou serviço
@@ -40,7 +46,7 @@ Cadastro completo de materiais com todos os campos da spec, famílias/subfamíli
   **Correção 2026-08-11:** esta spec afirmava que `controle_lote`/`controle_certificado` "continuam sem verificação efetiva na saída — a aplicação é da feature 10". Isso é **falso desde a Etapa 6** (2026-08-09/10): `stockService.registrarMovimentacao` recusa entrada/saída sem lote em material com `controle_lote` (com isenção declarada dos 4 fluxos internos — decisão de 2026-08-10), e o `receiptService` recusa item de nota sem lote e usa `controle_certificado` para mandar o item para quarentena. Teste dedicado: `server/tests/api/loteControleObrigatorio.api.test.js` (10 casos). A correção vale **só** para essas duas flags — `controle_validade`/`controle_serie`/`controle_corrida` seguem sem enforcement (Etapas 6b/6c).
 - [x] Necessidade de inspeção no recebimento / de fotografia (flags `requer_inspecao`, `requer_foto`)
 - [x] Classe ABC (`classe_abc`, validado A/B/C) + último custo (`custo_unitario`, já existente, atualizado pelo motor da Etapa 1)
-- [ ] Ficha técnica e documentos anexos na tela do material (tabela `anexos_documento_almoxarifado` já existe, entidade `material`; não trabalhado nesta etapa)
+- [x] Ficha técnica e documentos anexos na tela do material — **`eb89b5e`** (Etapa 34, 2026-09-16): cada linha da tabela de materiais ganhou um **botão de clipe** na coluna de ações (`title` "Anexos e documentos deste material") que abre o modal **Anexos** com o subtítulo `código — nome` e, dentro, o bloco completo (listar, enviar, baixar, remover) na entidade `material`. O botão **não** é gateado por perfil (RN-03 do design, decisão B68): quem enxerga a tela vê o clipe; quem pode *enviar* e *remover* é decidido **dentro** do bloco, pelo backend. A metade "ficha técnica" já estava paga pelos campos técnicos da Etapa 2 (itens acima) — o que faltava era só o anexo. *(Esta linha dizia, até 2026-09-16: "tabela `anexos_documento_almoxarifado` já existe, entidade `material`; não trabalhado nesta etapa" — era verdade na Etapa 2.)*
       **Etapa 32 (`e708125..fd71958`): o MECANISMO existe, está testado, e falta SÓ o plug desta
       tela.** A entidade é `material`, já no mapa fechado do serviço.
       A `anexos_documento_almoxarifado` era **órfã** — zero leitor, zero escritor, sem índice —,
@@ -53,6 +59,19 @@ Cadastro completo de materiais com todos os campos da spec, famílias/subfamíli
       dois cenários de teste. **Ponto de atenção medido na Etapa 32:** confira QUANDO o `id`
       existe nesta tela. Na inspeção o plug teve de ir para a aba Histórico, porque a linha só
       nasce **depois** da decisão — anexar antes penduraria o arquivo num id inexistente.
+
+      **⚠️ Correção da Etapa 34 (2026-09-16, `746a106..054f727`).** O parágrafo acima dizia que
+      **"plugar aqui é uma linha"**; isso **ESTAVA ERRADO**, e ficou errado nesta spec (e em mais
+      quatro) por duas semanas. O certo, medido no design `6ccaf40` e confirmado na execução: das
+      cinco telas que faltavam, **três — Materiais, Devoluções e o item da remessa a terceiros —
+      não tinham casa nenhuma para o bloco** (sem linha expansível, sem painel de detalhe), então
+      foi preciso construir antes uma **casca de modal** (`AnexosModal` + `titulo` opcional em
+      `AnexosDocumento`, `746a106`) e um **botão por linha**; esta tela é uma das três. E mesmo as
+      duas que tinham painel (requisição e recebimento) não foram uma linha: o bloco precisou
+      **sair do ternário de `loadingDetalhe`** (`c5d9e99`) para não remontar a cada refetch, e o da
+      requisição precisou de **gate por `warehouseMode`** (`a88d715`, decisão B71). O texto da
+      Etapa 32 fica acima **de propósito** — o mecanismo que ele descreve continua exato; errada
+      era só a estimativa do custo do plug.
 
 ### Famílias / subfamílias / grupos
 - [x] **Decisão tomada (2026-08-04):** subfamílias formalizadas via `parent_id` na própria `familias_material_almoxarifado` (máximo 2 níveis — subfamília não pode ter filhos). Material ganhou `subfamilia_id`, validado como filha da `familia_id` do material (400 caso contrário). `subcategoria_id`/categoria hierárquica não foram tocados — convivem sem relação formal com o novo `parent_id`.

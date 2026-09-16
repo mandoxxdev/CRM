@@ -1,10 +1,38 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-09-03 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-09-16 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 33) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 34) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20.
 
-> ## Onde o desenvolvimento está — 2026-09-03 (Etapa 33 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-09-16 (Etapa 34 ENTREGUE · modo contínuo pelo mapa)
+>
+> **Etapas 1 a 20 e 22 a 34 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
+> A **Etapa 34 (anexos nas cinco telas restantes)** fechou em 2026-09-16
+> (`746a106..054f727`) e **nenhuma linha do servidor mudou** — o mecanismo de anexos já aceitava
+> as seis entidades desde a Etapa 32; o que faltava era a tela.
+>
+> A Etapa 32 construiu o lugar de guardar documento e plugou **uma tela só** (a inspeção). Agora
+> **material, requisição, recebimento, devolução e cada ITEM de remessa a terceiros** também têm
+> onde guardar — com a inspeção, são **seis**.
+>
+> **Onde aparece:**
+> - **Materiais**, **Devoluções** e os **itens de uma remessa a terceiros**: um **clipe** na linha,
+>   que abre uma janela de anexos. Em Devoluções, essa é a **primeira coluna de ações** que a tela
+>   já teve.
+> - **Requisições** e **Recebimentos**: um bloco **Anexos** no **fim do painel de detalhe**, depois
+>   dos botões de ação.
+>
+> **⚠️ Duas coisas antes de apresentar:**
+> 1. **O bloco não aparece nas telas de requisição dos outros módulos** (Comercial, Frota, Compras,
+>    Financeiro, Fábrica, Engenharia) — é a decisão **B71**, e ela tem uma pergunta de negócio para
+>    você responder: o solicitante de fora do almoxarifado deve poder anexar o desenho na própria
+>    requisição?
+> 2. **Duas coisas que a revisão achou nas telas vizinhas continuam de pé**, e são anteriores a esta
+>    etapa: clicar numa requisição **busca o detalhe duas vezes** (furo **C45**, só lentidão) e a
+>    tela de Recebimentos **esconde falha de rede** atrás de *"Nenhum recebimento registrado"*
+>    (fragilidade **G10**). As duas são a Etapa 35.
+>
+> Antes disto: **Etapa 33 (os arquivos param de abrir sem login)**, `13dfd4f..65811d2`.
 >
 > **Etapas 1 a 20 e 22 a 33 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
 > A **Etapa 33 (os arquivos param de abrir sem login)** fechou em 2026-09-03
@@ -4523,6 +4551,117 @@ que ele não tinha como repetir com sucesso garantido.
 - **Números de outros módulos do CRM** — a varredura foi do almoxarifado.
 
 ---
+
+## Etapa 34 — Anexar documento em material, requisição, recebimento, devolução e item de remessa (ENTREGUE — 2026-09-16)
+
+**O que mudou, em uma frase:** o clipe de anexos, que existia só na inspeção, passou a existir em
+mais **cinco** lugares — e agora quase todo papel do galpão tem um registro a que se prender.
+
+Nenhuma regra de arquivo mudou: continuam valendo PDF ou imagem, até 10 MB, download registrado na
+Auditoria e o perfil decidindo quem anexa e quem remove. O que mudou é **onde** você encontra o
+clipe. E **nada mudou no servidor** — o mecanismo já aceitava as seis entidades; faltava a tela.
+
+### Onde fica cada um
+
+| Tela | Onde está | O que abre |
+|---|---|---|
+| **Almoxarifado → Materiais** | **clipe** na coluna de ações de cada linha da lista (*"Anexos e documentos deste material"*) | janela **Anexos do material**, com `CÓDIGO — Nome` abaixo do título |
+| **Almoxarifado → Requisições** | bloco **Anexos** no **fim do painel de detalhe**, depois dos botões de ação | o bloco inteiro, ali mesmo |
+| **Almoxarifado → Recebimentos** | bloco **Anexos** no **fim do painel de detalhe** | o bloco inteiro, ali mesmo |
+| **Almoxarifado → Devoluções** | **clipe** na coluna de ações — **a coluna é nova** (*"Anexos e documentos desta devolução"*) | janela **Anexos da devolução**, com material e data |
+| **Almoxarifado → Remessas a Terceiros** | abra a remessa: **clipe em cada linha da tabela de itens** (*"Anexos e documentos deste item"*) | janela **Anexos do item da remessa**, com o material do item |
+
+O sexto lugar, que já existia, é **Inspeções → aba Histórico → clicar na linha** (Etapa 32).
+
+### Roteiro de teste manual
+
+**Preparação**
+1. Entre no sistema com um usuário que tenha acesso ao módulo Almoxarifado. Tenha à mão um PDF
+   qualquer (uma ficha técnica, uma nota escaneada) e um arquivo `.txt`, para testar a recusa.
+
+**Materiais**
+2. **Almoxarifado → Materiais.** Na última coluna de qualquer linha, clique no **clipe**.
+3. A janela **Anexos do material** abre, com o código e o nome do material. Sem documento ainda,
+   ela diz *"Nenhum anexo."*.
+4. Escolha o tipo, selecione o PDF e clique em **Anexar**. Ele entra na lista com o seu nome, o
+   tamanho e a data, e aparece o aviso **Anexo enviado**.
+5. Clique em **Baixar**: o arquivo desce com o nome original.
+6. **Teste a recusa:** tente anexar o `.txt` → *"Anexo deve ser PDF ou imagem"*.
+7. Feche a janela (no ✕ ou clicando fora) e abra o clipe de **outro material**: o documento **não**
+   está lá. Volte ao primeiro: está.
+
+**Requisições**
+8. **Almoxarifado → Requisições** e clique numa requisição da lista. O painel de detalhe abre.
+9. **Role o painel até o fim**, passando pelos botões de ação: o bloco **Anexos** é a última coisa
+   do painel. Anexe um desenho.
+10. Clique em **outra requisição** da lista: o painel troca e os anexos mostrados são os **daquela**
+    requisição.
+11. **Confirme o corte deliberado (decisão B71):** abra **Comercial → Requisições de Material** e
+    clique numa requisição. O painel abre com os mesmos dados — e **sem** o bloco Anexos. Vale
+    também para Frota, Compras, Financeiro, Fábrica e Engenharia. **Isto é de propósito**, não é
+    falha: essas telas ficam fora da permissão do módulo Almoxarifado, e o bloco ali só saberia
+    mostrar um erro.
+
+**Recebimentos**
+12. **Almoxarifado → Recebimentos → Novo Recebimento** e registre um. Ao salvar, o sistema já abre
+    o detalhe dele.
+13. Sem sair da tela, role até o fim do painel e anexe a nota fiscal escaneada — é o caso de uso
+    real: a nota está na mão de quem acabou de registrar.
+14. Clique em **outro recebimento** da lista e volte: cada um mostra os próprios anexos.
+
+**Devoluções**
+15. **Almoxarifado → Devoluções.** Repare que a tabela agora tem uma **coluna de ações** à direita,
+    que antes não existia.
+16. Clique no clipe de uma devolução **antiga**, de semanas atrás. A janela abre normalmente e
+    aceita o anexo. **Devolução não se edita nem se cancela no sistema, mas recebe anexo a qualquer
+    momento** — é comum o comprovante assinado chegar dias depois.
+
+**Remessas a terceiros**
+17. **Almoxarifado → Remessas a Terceiros** e abra uma remessa (clique na linha).
+18. Na tabela de itens, clique no **clipe** de um item e anexe o certificado do serviço.
+19. Abra o clipe de **outro item da mesma remessa**: o certificado **não** está lá. O anexo é do
+    **item**, não da remessa.
+20. **Agora o contrário:** clique em **Nova remessa**, acrescente uma linha de item no formulário e
+    olhe a linha — ela **não tem clipe**. Só depois de salvar o item passa a existir para o sistema,
+    e só então pode receber documento.
+
+**O perfil, e a prova que vale para todas as telas**
+21. **Entre com um usuário de perfil Consulta** e repita os passos 2 e 8: o clipe aparece, a janela
+    abre, a lista de anexos aparece e **Baixar** funciona — mas o **formulário de enviar não
+    aparece**, e o botão de remover também não. Com **Qualidade** ou **Produção**, o formulário de
+    enviar aparece e o de remover não. Só **Administrador** e **Almoxarife** removem.
+22. **O teste do arquivo que não some:** no bloco de anexos de uma requisição (ou de um
+    recebimento), clique em escolher arquivo, selecione o PDF, **clique em outro programa fora do
+    navegador** e volte para a tela. O arquivo escolhido **continua escolhido**, e clicar em Anexar
+    envia normalmente.
+23. **Almoxarifado → Auditoria**, filtrando pela entidade **Anexo**: *Anexo enviado*, *Anexo
+    baixado* e *Anexo removido*, com quem fez e quando — agora vindos das seis telas.
+
+### O que esperar no dia a dia
+
+- **O clipe não diz quantos documentos tem.** A linha da lista não mostra um contador; é preciso
+  abrir para ver. Foi decisão: um contador obrigaria a consultar os anexos de **cada linha** ao
+  carregar a lista, e a lista de materiais ficaria lenta.
+- **Não dá para anexar enquanto está digitando.** É preciso salvar o registro primeiro. A exceção
+  prática é o recebimento: como ele já abre o detalhe assim que é salvo, o anexo vem no mesmo
+  fôlego.
+- **Na remessa, pense por item.** Um documento que vale para a remessa inteira não tem lugar
+  próprio — ou vai num item, ou é repetido em cada um.
+- **Remover não apaga o arquivo do servidor** (mesma regra da Etapa 32), e **baixar deixa rastro**.
+- **Quem requisita fora do Almoxarifado não vê anexo na requisição.** Se isso incomodar na
+  operação, é a decisão **B71** e tem correção própria.
+
+### O que esta etapa NÃO cobre
+
+- **Anexo na remessa inteira** — o clipe é por item, e acrescentar a remessa à lista do que aceita
+  anexo é mexer no mecanismo, não plugar uma tela.
+- **Anexar durante a criação** de material, requisição, recebimento, devolução ou item de remessa.
+- **Contador de anexos na linha da lista** ("3 📎").
+- **O bloco nas telas de requisição dos outros seis módulos** (decisão **B71**).
+- **Dois problemas anteriores, em telas vizinhas, que a revisão desta etapa descobriu e não
+  corrigiu:** clicar numa requisição **busca o detalhe duas vezes** (furo **C45** — só lentidão,
+  nenhum dado errado) e a tela de Recebimentos mostra *"Nenhum recebimento registrado"* quando o
+  que houve foi **falha de rede** (fragilidade **G10**). Os dois são a Etapa 35.
 
 ## Etapa 33 — Os arquivos param de abrir sem login (ENTREGUE — 2026-09-03)
 

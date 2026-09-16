@@ -7,7 +7,15 @@
 > verdade (patrimônio **e** retenção) e as peças e a sobra entram como material próprio, herdando o
 > **dono** da chapa e o **custo** dela rateado por quantidade.
 > **Etapa 31 (2026-08-31, `1e6c9a9..67b6758`) — o NÚMERO deste documento mudou de forma, e só ele.** O `REM-` era montado com os **últimos dígitos** do milissegundo mais um sorteio de 0 a 99, e por isso o carimbo **repetia** a cada **27,78 horas** — é o número cuja colisão aparecia como flake de `remessaTerceiroCiclo` desde a Etapa 29. Agora vem do gerador único `services/almoxarifado/numeroDoc.js` (relógio inteiro em base36 + 8 aleatórios), com retry na colisão. **Nada mais desta feature mudou** — nem status, nem checklist, nem comportamento: o número passa de 12–14 caracteres só com dígitos para 20 com letras, os antigos **não** foram migrados e continuam legíveis (RN-05, testada). Furo **C41** das novidades.
-> **Spec original:** seção 18 · **Última atualização:** 2026-08-13
+> **Etapa 34 (2026-09-16, `746a106..054f727`) — o ITEM da remessa ganhou ANEXOS** (`dd6e4c5`):
+> cada item da tabela do painel da remessa tem um clipe que abre o modal **Anexos** na entidade
+> `item_remessa`, com o id do **item** (RN-05) — o desenho é do item, nunca da remessa
+> (`remessa_terceiro` não está no mapa fechado do servidor, de propósito). Item ainda em digitação,
+> sem id, **não** tem clipe (RN-01). Zero linhas de servidor. E a frase "plugar aqui é uma linha",
+> que esta spec repetia desde a Etapa 32, **estava errada** — ver a correção no item "Itens da
+> remessa" do checklist.
+> **Spec original:** seção 18 · **Última atualização:** 2026-09-16 (Etapa 34 — anexos no item da
+> remessa; antes: 2026-08-13)
 >
 > | Etapa | Design | Plano |
 > |---|---|---|
@@ -124,6 +132,31 @@ assunto cada):
       dois cenários de teste. **Ponto de atenção medido na Etapa 32:** confira QUANDO o `id`
       existe nesta tela. Na inspeção o plug teve de ir para a aba Histórico, porque a linha só
       nasce **depois** da decisão — anexar antes penduraria o arquivo num id inexistente. — **desenhos anexos NÃO**: fora do escopo declarado (decisão 10 do design da 8b), não bloqueia o ciclo. **A 8b escreveu aqui que "a 8c é o consumidor natural dele". A 8c NÃO o consumiu** — o modal de transformação recebe material, quantidade e classificação, e nenhum anexo. O item **continua aberto** e não tem mais etapa natural marcada: quem quiser desenho no item da remessa abre uma etapa para isso
+
+      **✅ PAGO na Etapa 34 (2026-09-16, `dd6e4c5`).** O parágrafo imediatamente acima — "desenhos
+      anexos NÃO… o item continua aberto… quem quiser desenho no item da remessa abre uma etapa
+      para isso" — **deixou de valer**: a etapa foi aberta e é esta. Cada item da tabela do painel
+      da remessa (`RemessasTerceirosAlmoxarifado.js`) tem um botão de clipe (`title` "Anexos e
+      documentos deste item") que abre o modal **Anexos** na entidade `item_remessa`, com o **id do
+      item** (RN-05), e não o da remessa — `remessa_terceiro` continua **fora** do mapa fechado do
+      servidor, de propósito. Item ainda em digitação, que não tem id, **não** ganha clipe (RN-01):
+      anexar antes de gravar penduraria o arquivo num id inexistente.
+
+      **⚠️ Correção da Etapa 34.** O bloco da Etapa 32, acima, dizia que **"plugar aqui é uma
+      linha"**; isso **ESTAVA ERRADO**. O certo, medido no design `6ccaf40` e confirmado na
+      execução: esta tela **não tinha casa** para o bloco — o item da remessa é uma linha de tabela
+      dentro de um painel, sem linha expansível e sem detalhe próprio —, e foi preciso construir
+      antes a casca de modal (`AnexosModal` + `titulo` opcional em `AnexosDocumento`, `746a106`) e
+      um botão por linha. O mesmo valeu para Materiais e Devoluções; e mesmo nas duas telas com
+      painel (requisição e recebimento) o plug não foi uma linha — o bloco precisou sair do
+      ternário de `loadingDetalhe` (`c5d9e99`) e, na requisição, de gate por `warehouseMode`
+      (`a88d715`, B71). Divergência registrada na execução desta task: para medir o RN-02 (abrir a
+      remessa não pode virar N requisições de anexo) a fixture `DETALHE_1` precisou de um **segundo
+      item** — ela tinha um só, embora a linha da lista sempre dissesse `itens_total: 2` —, e com
+      isso o cenário do PDF, que **também** conta itens da fixture, passou de `toHaveLength(1)` a
+      `toHaveLength(2)`; o Step 0 do plano não previu esse acoplamento. O que aquele cenário afirma
+      continua o mesmo: o PDF recebe os itens **carregados**. O texto da Etapa 32 fica acima **de propósito** — o
+      mecanismo continua exato; errada era só a estimativa do custo do plug.
 - [x] Envio = saldo visível mas **não disponível** (`0a01124`, `e0be211`, `257a444`) — **não** por localização virtual: a redação original desta spec propunha isso e **estava errada** (ver "Correção de spec declarada", abaixo)
 - [x] Documento de remessa (PDF) (`b176212`)
 - [x] Retorno parcial/total: entrada vinculada à remessa (`69d32a8`)

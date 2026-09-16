@@ -2,7 +2,15 @@
 
 > **Status:** 🟡 — workflow fiscal NF maduro, quarentena na entrada fechada (Etapa 5), **lote nasce aqui desde a Etapa 6**, entrada da nota **atômica e idempotente** desde o review final do branch (2026-08-10); faltam tipos de entrada, conferência física estruturada e etiqueta · **Spec original:** seção 8
 > **Etapa 31 (2026-08-31, `1e6c9a9..67b6758`) — o NÚMERO deste documento mudou de forma, e só ele.** O `REC-` era montado com os **últimos dígitos** do milissegundo mais um sorteio de 0 a 99, e por isso o carimbo **repetia** a cada **27,78 horas**. Agora vem do gerador único `services/almoxarifado/numeroDoc.js` (relógio inteiro em base36 + 8 aleatórios), com retry na colisão. **Nada mais desta feature mudou** — nem status, nem checklist, nem comportamento: o número passa de 12–14 caracteres só com dígitos para 20 com letras, os antigos **não** foram migrados e continuam legíveis (RN-05, testada). Furo **C41** das novidades.
-> **Última atualização:** 2026-08-11 (**auditoria spec×código**: corrigida a afirmação — que estava
+> **Etapa 34 (2026-09-16, `746a106..054f727`) — o painel do recebimento ganhou ANEXOS, e a tela
+> ganhou a PRIMEIRA suíte de teste que já teve.** Bloco "Anexos" no fim do painel de detalhe
+> (entidade `recebimento`, id do detalhe) — `01dd3ce` + `c5d9e99` —, mais
+> `RecebimentosAlmoxarifado.test.js` com **7 cenários** (contados no arquivo). Zero linhas de
+> servidor. A frase "plugar aqui é uma linha", que esta spec repetia desde a Etapa 32, **estava
+> errada** — ver a correção no item de checklist de fotos/anexos, que também registra o defeito
+> **pré-existente** descoberto aqui (os três `catch` que engolem erro de carga).
+> **Última atualização:** 2026-09-16 (Etapa 34 — anexos no painel + primeira suíte da tela;
+> antes: 2026-08-11 — **auditoria spec×código**: corrigida a afirmação — que estava
 > errada — de que a rota de certificado não tinha tela; registradas a entrada atômica/idempotente e
 > a exigência de lote do review final de 2026-08-10, que só a spec 10 documentava; tabela de testes
 > ganhou coluna de estado porque cinco linhas citavam testes que não existem; refs de linha
@@ -128,7 +136,7 @@ Todos os tipos de entrada da spec, conferência documental e física estruturada
 - [ ] Recebimento parcial de pedido (validar suporte real + saldo pendente do pedido)
 - [ ] Recebimento excedente só com autorização
 - [ ] Conferência física estruturada (spec 8.3): contagem, pesagem, medição, checklist configurável por tipo de material. **Fora do escopo da Etapa 5**, mesma decisão acima.
-- [ ] Fotos do recebimento (`anexos_documento_almoxarifado` entidade `recebimento`)
+- [x] Fotos do recebimento (`anexos_documento_almoxarifado` entidade `recebimento`) — **`01dd3ce`** + **`c5d9e99`** (Etapa 34, 2026-09-16): bloco **Anexos** inline no fim do painel de detalhe do recebimento, entidade `recebimento` com o id do detalhe carregado. Quem acaba de registrar um recebimento cai no painel e já anexa a nota fiscal sem sair da tela (cenário testado). **Esta tela ganhou aqui a primeira suíte de teste que já teve** — `client/src/components/almoxarifado/RecebimentosAlmoxarifado.test.js`, **7 cenários**: (a) uma linha por recebimento, (b) o clique abre o painel do recebimento clicado, (c) o bloco consulta `entidade=recebimento` com o id DO DETALHE, uma vez, (d) lista fechada não consulta anexos (100 recebimentos ≠ 100 requisições — RN-02), (e) trocar de linha refaz a consulta com o novo id, (f) depois de registrar, o painel do recém-criado já traz o bloco com o id devolvido pelo POST, (g) refetch por ação de workflow não desmonta o bloco nem repete a consulta.
       **Etapa 32 (`e708125..fd71958`): o MECANISMO existe, está testado, e falta SÓ o plug desta
       tela.** A entidade é `recebimento` — e a tabela por trás é `recebimentos_material_almoxarifado`, não `recebimentos_almoxarifado`, que é o nome que a intuição erra.
       A `anexos_documento_almoxarifado` era **órfã** — zero leitor, zero escritor, sem índice —,
@@ -141,6 +149,30 @@ Todos os tipos de entrada da spec, conferência documental e física estruturada
       dois cenários de teste. **Ponto de atenção medido na Etapa 32:** confira QUANDO o `id`
       existe nesta tela. Na inspeção o plug teve de ir para a aba Histórico, porque a linha só
       nasce **depois** da decisão — anexar antes penduraria o arquivo num id inexistente.
+
+      **⚠️ Correção da Etapa 34 (2026-09-16, `746a106..054f727`).** O parágrafo acima dizia que
+      **"plugar aqui é uma linha"**; isso **ESTAVA ERRADO**. O certo, medido no design `6ccaf40` e
+      confirmado na execução: esta tela era uma das **duas** (com Requisições) que tinham painel
+      onde plugar inline — as outras três (Materiais, Devoluções, item de remessa) não tinham casa
+      nenhuma, nem linha expansível nem painel, e precisaram de uma casca de modal (`AnexosModal`,
+      `746a106`) e de um botão por linha. E nem aqui foi uma linha: o corpo do painel vivia dentro
+      do ternário de `loadingDetalhe` (`RecebimentosAlmoxarifado.js:496`), então **desmontava a
+      cada refetch** — foco da janela, que é exatamente o que acontece ao FECHAR o diálogo de
+      escolher arquivo; troca de filtro; ação de workflow ou fiscal —, e com ele sumia o arquivo
+      recém-escolhido, mais um GET de anexos a cada volta. O bloco teve de sair do ternário
+      (`c5d9e99`, cenário (g): identidade do nó DOM mais contagem `=== 1` depois do refetch). O
+      texto da Etapa 32 fica acima **de propósito** — o mecanismo que ele descreve continua exato;
+      errada era só a estimativa do custo do plug.
+
+      **Defeito PRÉ-EXISTENTE descoberto ao escrever a suíte desta tela (não é da Etapa 34, e
+      continua aberto):** os três carregamentos de `RecebimentosAlmoxarifado.js` **engolem o erro**
+      — `loadRecebimentos` (`:72-85`) só dispara um toast e cai no estado vazio, `loadMateriais`
+      (`:93-97`) e `loadAuxiliares` (`:99-108`) têm `catch { /* ignore */ }` literal. Falha de rede
+      ou 500 do servidor aparece para o operador como **"Nenhum recebimento registrado"**, isto é,
+      como se não houvesse recebimento nenhum — o mesmo pecado que a Etapa 29 corrigiu em
+      `HistoricoInspecoes`. É o item **(b) da Etapa 35**; o molde é o `HistoricoInspecoes` pós-29 e
+      a régua já está pronta, porque o `api.get` da suíte nova tem fallback que **rejeita**. Modal
+      fiscal, workflow e etiquetas desta tela **seguem sem teste**.
 - [ ] Divergências: registro formal (tipo, quantidade, ação) — parcial na inspeção
 - [ ] Ao aprovar: definir localização (sugestão da feature 02) + gerar etiqueta (feature 10) + **atualizar saldo via movimentação v2** — a entrada já passa pelo motor (`registrarMovimentacao`) desde antes da Etapa 5, e desde a Etapa 6 a movimentação vai com `lote_id` (`64686b1`). Continuam faltando a **etiqueta** (Etapa 6c, não a 6) e a sugestão de localização
 - [x] Quarentena: material aguardando inspeção não entra no disponível (`quantidade_em_inspecao`) — **Etapa 5 (2026-08-08)**. Três movimentos novos no motor (`QUARENTENA`, `LIBERACAO_INSPECAO`, `REPROVACAO_INSPECAO`) com guarda atômica (`c37b67e`); entrada retida em vez de barrada (`4db5e11`). A decisão de inspeção em si (aprovar/reprovar/parcial) é da feature 09 — ver aquele README para o motor real usado na decisão (`DECISAO_INSPECAO`, não os dois tipos separados acima).

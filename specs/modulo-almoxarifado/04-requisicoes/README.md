@@ -2,7 +2,14 @@
 
 > **Status:** 🟢 — Etapa 3 entregue (2026-08-05); ciclo ponta a ponta rascunho→entrega→confirmação→encerramento · **Spec original:** seção 5
 > **Etapa 31 (2026-08-31, `1e6c9a9..67b6758`) — o NÚMERO deste documento mudou de forma, e só ele.** O `REQ-` era montado com os **últimos dígitos** do milissegundo mais um sorteio de 0 a 99, e por isso o carimbo **repetia** a cada **16,7 minutos** (era `slice(-6)`, o pior dos quatro). Agora vem do gerador único `services/almoxarifado/numeroDoc.js` (relógio inteiro em base36 + 8 aleatórios), com retry na colisão. **Nada mais desta feature mudou** — nem status, nem checklist, nem comportamento: o número passa de 12–14 caracteres só com dígitos para 20 com letras, os antigos **não** foram migrados e continuam legíveis (RN-05, testada). Furo **C41** das novidades.
-> **Última atualização:** 2026-08-11 (auditoria spec×código)
+> **Etapa 34 (2026-09-16, `746a106..054f727`) — o painel de detalhe da requisição ganhou ANEXOS.**
+> Bloco "Anexos" no fim do painel, depois dos botões de ação, entidade `requisicao` com o `id` do
+> **detalhe carregado** (não o da URL) — `d5578e6`, `a88d715`, `c5d9e99`. **Só no modo
+> almoxarifado** (decisão **B71**): nas telas cross-módulo `/<modulo>/requisicoes-material` o bloco
+> não aparece. Zero linhas de servidor. A frase "plugar aqui é uma linha", que esta spec repetia
+> desde a Etapa 32, **estava errada** — ver a correção no item de checklist de anexos, que também
+> registra o defeito **pré-existente** descoberto aqui (o clique carrega o detalhe 2x).
+> **Última atualização:** 2026-09-16 (Etapa 34 — anexos no painel; antes: 2026-08-11, auditoria spec×código)
 
 ## Objetivo
 
@@ -42,7 +49,7 @@ Fluxo completo: rascunho → aprovação → disponibilidade → reserva → sep
 - [x] Tipo de requisição (14 tipos — spec 5.1) como campo estruturado (Etapa 3, Task 1 — `tipo_requisicao`, campo único com fluxo operacional único; decisão de escopo: fluxos específicos de EPI/ferramenta vêm com as features donas)
 - [x] Campos: centro de custo, local de entrega (Etapa 3, Task 1 — `centro_custo_id`, `local_entrega`)
 - [ ] Campos: ordem de produção (vínculo estruturado — hoje só via `tipo_requisicao = ORDEM_PRODUCAO`), gestor responsável
-- [ ] Anexos (desenho/documento — `anexos_documento_almoxarifado` já existe) — fora da Etapa 3
+- [x] Anexos (desenho/documento — `anexos_documento_almoxarifado` já existe) — **`d5578e6`** + **`a88d715`** + **`c5d9e99`** (Etapa 34, 2026-09-16): bloco **Anexos** inline no fim do painel de detalhe, **depois** dos botões de ação, entidade `requisicao` com `detalhe.id` (o id do detalhe **carregado**, não o `selectedId` da URL — abrir outra requisição com o painel antigo na tela penduraria o arquivo no registro errado). **Aparece só no modo almoxarifado** (`a88d715`, decisão **B71**): a mesma `RequisicoesList.js` roda em seis módulos (comercial, frota, compras, financeiro, fábrica, engenharia) que não têm permissão do módulo, e ali o bloco pedia `GET /api/almoxarifado/anexos` → 403 "Acesso negado ao módulo" em vermelho dentro do painel, formulário de upload morto e uma linha de auditoria de acesso negado **por painel aberto**. *Era fora da Etapa 3 — deixou de ser.*
       **Etapa 32 (`e708125..fd71958`): o MECANISMO existe, está testado, e falta SÓ o plug desta
       tela.** A entidade é `requisicao`, já no mapa fechado do serviço.
       A `anexos_documento_almoxarifado` era **órfã** — zero leitor, zero escritor, sem índice —,
@@ -55,6 +62,32 @@ Fluxo completo: rascunho → aprovação → disponibilidade → reserva → sep
       dois cenários de teste. **Ponto de atenção medido na Etapa 32:** confira QUANDO o `id`
       existe nesta tela. Na inspeção o plug teve de ir para a aba Histórico, porque a linha só
       nasce **depois** da decisão — anexar antes penduraria o arquivo num id inexistente.
+
+      **⚠️ Correção da Etapa 34 (2026-09-16, `746a106..054f727`).** O parágrafo acima dizia que
+      **"plugar aqui é uma linha"**; isso **ESTAVA ERRADO**. O certo, medido no design `6ccaf40` e
+      confirmado na execução: esta tela era uma das **duas** (com Recebimentos) que tinham painel
+      onde plugar inline — as outras três (Materiais, Devoluções, item de remessa) não tinham casa
+      nenhuma e precisaram de uma casca de modal (`AnexosModal`, `746a106`) e de um botão por
+      linha. E nem aqui foi uma linha, por **dois** motivos que só a execução mostrou: (1) o corpo
+      do painel vivia dentro do ternário de `loadingDetalhe` (`RequisicoesList.js:876`), então ele
+      **desmonta a cada refetch** — foco da janela, que é exatamente o que acontece ao FECHAR o
+      diálogo de escolher arquivo; troca de filtro; ação de workflow — e o arquivo recém-escolhido
+      sumia, mais um GET de anexos extra; o bloco teve de sair do ternário (`c5d9e99`); (2) a tela
+      roda em seis módulos sem permissão do almoxarifado, e o bloco precisou do gate por
+      `warehouseMode` (`a88d715`, B71). O texto da Etapa 32 fica acima **de propósito** — o
+      mecanismo que ele descreve continua exato; errada era só a estimativa do custo do plug.
+
+      **Defeito PRÉ-EXISTENTE descoberto ao medir isto (não é da Etapa 34, e continua aberto):**
+      abrir o detalhe **pelo clique** carrega a requisição **duas vezes**. `abrirDetalhe` chama
+      `syncSearchParams`, que reescreve `?id=` na URL, e isso reacende o efeito de deep-link
+      (`RequisicoesList.js:166-181`), que chama `abrirDetalhe` de novo — dois `GET` de detalhe por
+      clique, desde que o deep-link existe. Com o `c5d9e99` o **bloco de anexos** não remonta mais,
+      mas o detalhe continua vindo 2x. É o item **(a) da Etapa 35**. Régua pronta: o cenário
+      "RN-02: sem detalhe aberto não consulta anexos" (`RequisicoesList.test.js:528`) já mede o
+      caminho do clique e já trava a **relação** (uma consulta de anexos por carga do detalhe,
+      contagem `=== 1`); o que ele **não** trava é o número de `GET /almoxarifado/requisicoes/55`,
+      hoje **2**, documentado no comentário do próprio cenário. Endurecer é contar esse GET e
+      exigir `=== 1`.
 - [x] Copiar requisição anterior (Etapa 3, Task 5 — `POST /:id/copiar`, gera novo RASCUNHO fiel com os mesmos itens/tipo/vínculos, sem quantidades entregues)
 - [ ] Importar itens de lista técnica / ordem de produção (depende da feature 22) — fora da Etapa 3
 - [x] Confirmação de recebimento pelo solicitante (fecha o ciclo) (Etapa 3, Task 5 — `PUT /:id/confirmar-recebimento`, só o solicitante, sem bypass de admin; campos `recebimento_confirmado_por/em`)
@@ -68,7 +101,7 @@ Fluxo completo: rascunho → aprovação → disponibilidade → reserva → sep
 ### Frontend
 - [x] Novos status no `RequisicoesList.js` + `AlmoxPageHeader.js` (stepper `REQUISICAO_FLOW`) (Etapa 3, Task 6 — badges/filtros dos status e tipos novos, stepper com 6 passos). **Nota (2026-08-11): este item constava completo, mas ficou incompleto depois da Etapa 4** — os status `PARCIALMENTE/TOTALMENTE_RESERVADA` não entraram nas telas (badge cru, filtro sem as opções, botões "Iniciar Separação"/"Cancelar Requisição" invisíveis nesses status, stepper caindo no fallback "Criar"). Fechado em `92fe236`, com teste novo `client/src/components/almoxarifado/RequisicoesList.test.js` (badge, filtro, stepper, botões; controle positivo rodado)
 - [x] Botão "copiar requisição" · confirmação de recebimento pelo solicitante (Etapa 3, Task 6)
-- [ ] Anexos no form — fora da Etapa 3
+- [ ] Anexos no form — fora da Etapa 3, e **continua desmarcado DE PROPÓSITO depois da Etapa 34**. Não é esquecimento: a 34 entregou o bloco de anexos no **painel de detalhe** (item "Anexos (desenho/documento)" acima, `d5578e6`), e anexar **durante a criação** foi cortado com motivo escrito — **RN-01 do design `6ccaf40`: o bloco só existe onde o registro já tem `id`**. No formulário a requisição ainda não foi gravada, então o arquivo seria pendurado num id inexistente. Fazer isso exige upload em duas fases (guardar o arquivo antes do registro e adotá-lo depois) ou um rascunho gravado antes do envio — **mudança de contrato do servidor**, etapa própria. Hoje o caminho é: gravar a requisição, abrir o detalhe, anexar
 
 ## Regras essenciais + testes de API exigidos
 

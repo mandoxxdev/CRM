@@ -283,7 +283,7 @@ Se alguém da equipe guardou esses endereços em planilha, documento ou e-mail, 
 passa a ser abrir pelo sistema. Nenhum arquivo foi apagado ou movido — só o endereço mudou de
 regra. Ver o item **42** da letra C.
 
-### B. Decisões de negócio — B1 a B70; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B71; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(O título desta seção dizia "B1 a B24" — **estava defasado**: os itens já iam até B36 antes da
 Etapa 20. Corrigido em 2026-08-28 para B50, depois para B56 com as três da Etapa 24, para B57 com
@@ -1297,6 +1297,36 @@ A assinatura desta etapa não é o seu login: ela vale para **um arquivo** por *
 
 **Se os 15 minutos incomodarem na prática**, aumentar é uma linha — me diga o número.
 
+**B71 (NOVA, da Etapa 34 — decisão que EU tomei, reversível) — o bloco de anexos da requisição
+aparece SÓ dentro do módulo Almoxarifado.**
+
+A tela de requisição de material é **a mesma** em sete lugares: Almoxarifado → Requisições e as
+telas **Requisições de Material** do Comercial, da Frota, de Compras, do Financeiro, da Fábrica e
+da Engenharia. Quem abre pelo Comercial está vendo a mesma tela que o almoxarife vê, servida por
+um endereço diferente e **sem a permissão do módulo Almoxarifado**.
+
+**O que foi escolhido:** o bloco **Anexos** aparece no detalhe da requisição **apenas** quando a
+tela é aberta por dentro do Almoxarifado. Nas seis telas de requisição dos outros módulos, o bloco
+simplesmente não existe.
+
+**Por que.** O mecanismo de anexos vive atrás da permissão do módulo. Sem o corte, quem abrisse
+uma requisição pelo Comercial veria, dentro do painel, a mensagem vermelha *"Acesso negado ao
+módulo"*, um formulário de anexar que não funciona (a tela mostra o formulário porque a checagem
+de perfil **falha aberto** de propósito — quem decide é sempre o servidor) e uma linha de
+"acesso negado" na Auditoria **a cada painel aberto**. Ou seja: a alternativa não era "o solicitante
+anexa", era "o solicitante vê um erro".
+
+**O que foi descartado:** expor os anexos também nas telas dos outros módulos. Isso exige um
+endereço novo, próprio das requisições de material, fora da permissão do Almoxarifado — mudança de
+tronco, no servidor, com contrato novo. **E exige uma decisão sua**, que é a pergunta de negócio
+que arbitra este item: **o solicitante do Comercial ou da Engenharia deve poder anexar o desenho na
+própria requisição, de dentro da tela dele?** Se sim, isso é etapa própria e eu a desenho.
+
+**O custo se a escolha estiver errada:** quem requisita fora do almoxarifado **não vê nem anexa**
+documento na requisição — o desenho continua indo por e-mail — até essa etapa existir. Quem tem
+acesso ao módulo continua enxergando e anexando o mesmo documento por Almoxarifado → Requisições,
+inclusive nas requisições abertas pelos outros setores. Reverter é uma linha.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -1776,6 +1806,23 @@ A assinatura desta etapa não é o seu login: ela vale para **um arquivo** por *
     — mas **antes de apagar qualquer coisa, me avise**, porque um arquivo com extensão estranha
     também pode ser um upload legítimo antigo.
 
+45. **(34) Clicar numa requisição carrega o detalhe DUAS vezes.** Ao clicar numa linha da lista de
+    **Almoxarifado → Requisições**, o sistema busca o detalhe daquela requisição, atualiza o
+    endereço da página e, por causa dessa atualização, **busca o detalhe de novo**. São duas
+    consultas onde deveria haver uma.
+
+    **Isto é anterior à Etapa 34** — existe desde que a tela passou a aceitar link direto para uma
+    requisição (`?id=...`). Foi descoberto ao plugar os anexos, não causado por eles.
+
+    **O que quem opera percebe:** só **lentidão** ao abrir uma requisição, e às vezes um piscar do
+    aviso de "Carregando". **Nenhum dado fica errado**, nada é lançado duas vezes e nenhuma
+    consulta duplicada muda saldo — é leitura, não escrita. O bloco de anexos **não** é recarregado
+    junto (isso foi resolvido na própria Etapa 34), então um arquivo já escolhido não se perde.
+
+    **O que fazer:** nada. Está nomeado como a primeira tarefa da Etapa 35, com a régua pronta:
+    o cenário tem de passar a contar **uma** busca por clique, e abrir a tela por link colado tem
+    de continuar carregando **uma** vez.
+
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -2116,6 +2163,24 @@ se um PDF abre legível ou se um modal coube na largura. Ficaram, portanto, **se
    dos três que teve defeito real no fechamento**: o nome do perfil aparecia em caixa alta,
    `QUALIDADE`, no meio da frase, e foi corrigido.
 
+12. **(34) O clipe de anexos na tela de Materiais pode ficar cortado numa faixa de largura de
+   tela — não foi medido, porque medir exige navegador.** A lista de **Almoxarifado → Materiais**
+   passou a ter **um ícone a mais** na coluna de ações (o clipe), e essa coluna **não quebra em
+   duas linhas** quando falta espaço: o que não cabe é simplesmente cortado, sem barra de rolagem
+   e sem aviso. Em tela cheia de desktop sobra espaço e nada acontece; em celular a tela usa outro
+   desenho e também não acontece. **A dúvida é a faixa do meio.**
+
+   **O que conferir, e são dois minutos:** abra **Almoxarifado → Materiais** no computador e
+   **arraste a borda da janela** para diminuí-la aos poucos, entre mais ou menos **769 e 1100
+   pixels** de largura (uma janela de navegador ocupando meia tela, ou um notebook pequeno). Olhe a
+   **última coluna da tabela**, a dos ícones: o **clipe** e os ícones à direita dele têm de
+   continuar visíveis e clicáveis. Se algum ficar cortado pela borda da tabela, ou sumir, é o caso.
+
+   **Se cortar:** me diga em qual largura, e a correção é uma linha de estilo — deixar os ícones
+   quebrarem para uma segunda linha dentro da célula. Não mexi nisso antes de medir porque esse
+   estilo vale para **todas** as tabelas do módulo, e mudar o desenho de todas elas por uma suspeita
+   não medida é o tipo de "correção" que cria três problemas novos.
+
 *Por que isto está escrito aqui em vez de "está tudo certo": esta mesma lacuna já mordeu a Etapa 7 —
 uma classe de estilo inventada sai sem cor nenhuma e nenhum teste de comportamento percebe.*
 
@@ -2297,6 +2362,34 @@ OneDrive em `index.js:1002`), um `SQLITE_BUSY` no commit poderia deixar o claim 
 rota respondendo 200. **Não é da Etapa 28** — é de todo `get` da base desde antes — e a saída é
 uma só para todos os claims (um `dbRunReturning` que passe pela fila), etapa própria. Fica aqui
 para ninguém "corrigir" um claim de cada vez.
+
+---
+
+**G10 (NOVO, medido ao plugar os anexos na Etapa 34). A tela de Recebimentos mostra "Nenhum
+recebimento registrado" quando a falha é de rede — e três dos seus botões nunca tiveram teste.**
+
+São **dois problemas na mesma tela** (Almoxarifado → Recebimentos), e os dois são **anteriores** à
+Etapa 34; nada aqui os criou.
+
+1. **Falha silenciosa nas três cargas da tela** (a lista de recebimentos, a lista de materiais e o
+   detalhe de um recebimento). Quando qualquer uma delas falha — servidor fora, rede caindo, sessão
+   expirada —, a tela **não diz nada** e mostra *"Nenhum recebimento registrado"*, exatamente como
+   se não houvesse nenhum. Quem opera conclui que a lista está vazia e pode registrar de novo um
+   recebimento que já existe. **É o mesmo pecado que a Etapa 29 corrigiu na tela de Inspeções**, e
+   a saída é a mesma: mensagem de erro visível mais um botão de tentar de novo.
+2. **Três funções dessa tela seguem sem nenhum teste automático:** o formulário de dados fiscais, o
+   avanço de situação do recebimento e a impressão de etiquetas. A Etapa 34 criou a **primeira**
+   suíte que essa tela já teve (seis cenários), toda em volta do painel de detalhe e do bloco de
+   anexos — o resto continua descoberto.
+
+3. **Ao trocar de um recebimento para outro, o bloco de anexos do primeiro fica na tela até o
+   segundo terminar de carregar.** Achado na revisão final da Etapa 34, também anterior a ela (o
+   cabeçalho do painel já fazia o mesmo). É uma fração de segundo em rede boa; em rede lenta, um
+   arquivo escolhido nesse instante iria para o recebimento errado. Vai junto na Etapa 35.
+
+**Está nomeado como a segunda tarefa da Etapa 35**, e a régua já existe: a suíte nova recusa
+consultas que a tela não deveria fazer, então basta um cenário "a rede falha" que hoje lê *"Nenhum
+recebimento registrado"* e passará a exigir a mensagem de erro na tela.
 
 ## Etapa 0 — Fundação (2026-08-03)
 
@@ -5956,8 +6049,193 @@ Os arquivos estão exatamente onde estavam. O que mudou é **como se chega até 
   Eles agora estão fechados junto com o resto; quando alguma tela precisar deles, ela vai pedir o
   endereço assinado ao servidor como as outras.
 
+## Etapa 34 — O documento passa a ficar preso ao registro certo, em cinco lugares novos (2026-09-16)
+
+A Etapa 32 construiu o lugar para guardar documento dentro do sistema, e plugou **uma tela só**: a
+inspeção. Todo o resto do papel que circula no galpão continuou sem endereço. A ficha técnica e o
+desenho da chapa ficavam numa pasta da rede. A nota fiscal escaneada do recebimento ficava no
+e-mail do comprador. O comprovante da devolução ficava impresso numa gaveta. O certificado de
+galvanização do item que foi ao terceiro voltava junto com o material e sumia no dia seguinte.
+
+**A partir desta etapa, o documento fica preso ao registro a que ele pertence, em cinco lugares
+novos:** material, requisição, recebimento, devolução e **cada item** de uma remessa a terceiros.
+Com a inspeção, que já tinha, são **seis**. Nenhuma regra de arquivo mudou — são as mesmas da
+Etapa 32 (PDF ou imagem, até 10 MB, download registrado na Auditoria, perfil decidindo quem anexa
+e quem remove). O que mudou é **onde** você encontra o clipe.
+
+Nada mudou no servidor nesta etapa: **zero linha de backend**. O mecanismo já aceitava as seis
+entidades desde a Etapa 32 — faltava a tela.
+
+### Antes → Agora
+
+| Tela | Antes | Agora |
+|---|---|---|
+| **Materiais** | Ficha técnica, desenho e catálogo do material viviam em pasta de rede; o sistema só guardava **uma foto** | Cada linha da lista tem um **clipe** (*"Anexos e documentos deste material"*) que abre a janela **Anexos do material**, com o código e o nome do material no alto |
+| **Requisições** | O desenho da peça ia por e-mail ou impresso junto do pedido | O detalhe da requisição terminou em um bloco **Anexos**, depois dos botões de ação — **só por dentro do módulo Almoxarifado** (ver **B71**) |
+| **Recebimentos** | A nota fiscal escaneada e o boleto ficavam no e-mail de quem recebeu | O detalhe do recebimento terminou em um bloco **Anexos**. Quem acaba de registrar um recebimento **já cai nesse detalhe** e anexa a nota com ela ainda na mão |
+| **Devoluções** | A tabela era só leitura — **não tinha nenhuma coluna de ações**, e o comprovante da devolução não tinha onde ficar | A tabela ganhou uma coluna de ações (a primeira que ela já teve) com o **clipe** (*"Anexos e documentos desta devolução"*), que abre **Anexos da devolução** |
+| **Remessas a terceiros** | O certificado do serviço (galvanização, pintura, tratamento) voltava em papel e sumia | Dentro da remessa aberta, **cada item** da tabela tem o clipe (*"Anexos e documentos deste item"*), que abre **Anexos do item da remessa** |
+
+### As regras, com o cenário exato
+
+**1. Só existe anexo em registro que já foi salvo.**
+Abra **Remessas a Terceiros → Nova remessa** e acrescente uma linha de item no formulário: aquela
+linha **não tem clipe**. Salve a remessa, abra ela de novo, e o clipe está lá em cada item. Vale
+para todos os cinco: material em cadastro, requisição em rascunho, recebimento em digitação e
+devolução no formulário de criação **não** têm bloco de anexos — o documento precisa de um registro
+a que se prender, e ele só existe depois de salvo.
+
+**2. Abrir um registro consulta os anexos uma vez; abrir uma lista não consulta nada.**
+A lista de Materiais pode ter 500 linhas e nenhuma delas pergunta se tem anexo — é por isso que a
+lista continua abrindo na mesma velocidade de antes. A consulta acontece **quando você clica no
+clipe** ou **quando abre o detalhe**, uma vez, para aquele registro.
+**A consequência honesta disso:** a lista **não mostra quantos anexos cada linha tem**. Para saber,
+é preciso abrir. Foi decisão, não esquecimento — ver "O que esta etapa NÃO cobre".
+
+**3. Quem vê a tela vê o clipe; o que o clipe oferece depende do perfil.**
+Entre com um usuário de perfil **Consulta**: o clipe aparece, a janela abre, a lista de anexos
+aparece e o botão **Baixar** funciona. O que **não** aparece para ele é o formulário de enviar
+arquivo. Com **Qualidade**, **Produção**, **Compras**, **Engenharia** ou **Gestor**: aparece o
+formulário de enviar, mas **não** o botão de remover. Só **Administrador** e **Almoxarife** removem.
+É a decisão **B68**, da Etapa 32, aplicada sem mudança: esconder o clipe de quem só consulta seria
+tirar dele o direito de **baixar** o certificado, que é justamente o que ele precisa fazer.
+
+**4. Cada tela anexa no registro certo — e no item certo.**
+Na remessa a terceiros, o anexo é **do item**, não da remessa. Se a remessa tem três materiais, o
+certificado da galvanização entra no clipe da **linha daquele material**, e não aparece nas outras
+duas. Tanto faz a remessa: o que amarra o documento é o item.
+
+**5. As mensagens do bloco são as mesmas em todos os seis lugares.**
+Registro sem nenhum documento mostra *"Nenhum anexo."*. Enviar mostra o aviso **Anexo enviado** e
+a linha nova aparece com tipo, tamanho, quem enviou e quando. Remover mostra **Anexo removido**.
+Os dois botões de cada linha são **Baixar** e **Remover**. E as recusas continuam iguais às da
+Etapa 32: arquivo que não é PDF nem imagem dá *"Anexo deve ser PDF ou imagem"*, acima de 10 MB dá
+*"Arquivo excede o limite de 10 MB"*, clicar em Anexar sem escolher arquivo dá *"Arquivo é
+obrigatório"*.
+
+### Como testar ao vivo
+
+**Materiais**
+1. **Almoxarifado → Materiais.** Na coluna de ações de qualquer linha, clique no **clipe**.
+2. Abre a janela **Anexos do material**, com `CÓDIGO — Nome` logo abaixo do título. Sem nenhum
+   documento ainda, ela diz *"Nenhum anexo."*.
+3. Escolha o tipo, selecione um PDF (uma ficha técnica serve) e clique em **Anexar**. Ele aparece
+   na lista com o seu nome e a data.
+4. Feche a janela e abra o clipe **de outro material**: o documento **não** está lá. Volte ao
+   primeiro: está.
+
+**Requisições**
+5. **Almoxarifado → Requisições** e clique numa requisição. O painel abre.
+6. Role o painel até o fim, **depois dos botões de ação**: o bloco **Anexos** está lá. Anexe o
+   desenho da peça.
+7. **Confirme o corte da B71:** abra **Comercial → Requisições de Material** e clique na mesma
+   requisição. O painel abre igual, com os mesmos dados — e **sem** o bloco Anexos. É de propósito.
+
+**Recebimentos**
+8. **Almoxarifado → Recebimentos → Novo Recebimento**, registre um. Ao salvar, o sistema já abre o
+   detalhe dele.
+9. Role até o fim do painel: o bloco **Anexos** está lá. Anexe a nota fiscal escaneada, sem sair da
+   tela.
+10. Clique em **outro recebimento** da lista: o painel troca e os anexos mostrados são os **daquele**
+    recebimento.
+
+**Devoluções**
+11. **Almoxarifado → Devoluções.** Repare que a tabela agora tem uma **coluna de ações** à direita,
+    que não existia.
+12. Clique no clipe de uma devolução **antiga** — inclusive de meses atrás. Abre **Anexos da
+    devolução**, com o material e a data. Anexe o comprovante assinado.
+    Devolução não se edita nem se cancela no sistema, mas **aceita anexo a qualquer momento** — e é
+    normal que o comprovante chegue dias depois.
+
+**Remessas a terceiros**
+13. **Almoxarifado → Remessas a Terceiros** e abra uma remessa.
+14. Na tabela de itens, cada linha tem o **clipe**. Clique no do material que voltou galvanizado e
+    anexe o certificado do serviço.
+15. Abra o clipe de **outro item** da mesma remessa: o certificado **não** está lá. É anexo do item.
+
+**A prova que vale para todas**
+16. Escolha um arquivo no bloco de anexos de uma requisição ou de um recebimento, **clique fora da
+    janela do navegador** (em outro programa) e volte. O arquivo escolhido **continua escolhido**, e
+    o botão Anexar funciona. Isso não é detalhe — ver "O que a revisão encontrou".
+17. **Almoxarifado → Auditoria**, filtrando pela entidade **Anexo**: *Anexo enviado*, *Anexo
+    baixado* e *Anexo removido*, com nome e hora, agora vindos das seis telas.
+
+### O que esta etapa NÃO cobre
+
+- **Anexo na remessa inteira.** O clipe é **por item**. Um documento que vale para a remessa toda
+  (a nota de remessa, por exemplo) precisa ser anexado num item ou repetido em cada um. Ficou de
+  fora de propósito desde a Etapa 32: acrescentar "remessa" à lista de coisas que aceitam anexo é
+  mexer no tronco do mecanismo, não plugar uma tela.
+- **Anexar durante a criação.** Em nenhum dos cinco dá para anexar enquanto o registro está sendo
+  digitado — é preciso salvar primeiro e depois abrir. A exceção prática é o recebimento, que já
+  abre o detalhe assim que é salvo: ali o anexo vem no mesmo fôlego.
+- **Contador de anexos na lista.** A linha da lista não mostra "3 📎". Mostrar isso obrigaria a
+  perguntar por anexos **uma vez para cada linha** ao abrir a tela — exatamente o que a regra 2
+  evita para a lista continuar rápida.
+- **O bloco de anexos não aparece nas telas de requisição dos outros módulos** (Comercial, Frota,
+  Compras, Financeiro, Fábrica, Engenharia). É a decisão **B71**, e ela tem uma pergunta de negócio
+  para você responder.
+- **Os furos C43 e C44**, da Etapa 33, continuam abertos — nada aqui os toca.
+
+### O que a revisão encontrou
+
+A etapa passou por uma revisão adversarial antes de fechar, e ela achou **quatro coisas**: dois
+defeitos criados pela etapa, os dois corrigidos aqui, e dois problemas **anteriores**, em telas
+vizinhas, que ficaram registrados para a etapa seguinte.
+
+**Corrigido — 1. O arquivo escolhido sumia ao fechar o diálogo de escolher arquivo.**
+Este é o mais palpável dos quatro, porque acontecia na primeira vez que qualquer pessoa usasse o
+recurso. No detalhe da requisição e no do recebimento, clicar em *Escolher arquivo*, selecionar a
+nota fiscal e fechar o diálogo do Windows fazia o painel se **recarregar** — e o arquivo recém
+escolhido era esquecido no caminho. Quem clicasse em **Anexar** logo em seguida lia *"Arquivo é
+obrigatório"*, com o nome do arquivo ainda escrito ao lado do botão. O mesmo acontecia ao salvar os
+dados fiscais ou avançar a situação de um recebimento. Está resolvido: o bloco de anexos ficou
+**fora** da parte do painel que se recarrega, então nada do que você já escolheu ou digitou se
+perde.
+**De brinde, uma segunda coisa se resolveu junto:** o bloco de anexos da requisição, que tinha
+nascido **acima** dos botões de ação, foi para o fim do painel — que é onde ele já estava no
+recebimento.
+
+**Corrigido — 2. O bloco da requisição aparecia onde não podia funcionar.**
+A mesma tela de requisição roda em seis outros módulos, fora da permissão do Almoxarifado. Do jeito
+que nasceu, abrir uma requisição pelo Comercial mostrava o bloco Anexos com um erro vermelho
+*"Acesso negado ao módulo"* dentro do painel, um formulário de envio que não funcionava, e gravava
+uma linha de acesso negado na Auditoria **a cada painel aberto**. O bloco passou a existir só dentro
+do módulo — é a decisão **B71**.
+
+**Descoberto, não criado — 3. Abrir uma requisição busca o detalhe duas vezes** (furo **C45**).
+Quem opera percebe só lentidão e, às vezes, um piscar de "Carregando". Nenhum dado fica errado.
+
+**Descoberto, não criado — 4. A tela de Recebimentos esconde falha de rede** (fragilidade **G10**).
+Se o servidor não responder, ela mostra *"Nenhum recebimento registrado"* como se a lista estivesse
+vazia. É o mesmo defeito que a Etapa 29 corrigiu na tela de Inspeções, e está na fila da Etapa 35.
+
+**E uma observação sobre prova, que vale registrar:** a tela de **Recebimentos não tinha nenhum
+teste automático** — nenhum, desde que foi construída. Esta etapa escreveu a primeira suíte dela
+(seis cenários). Os dois defeitos corrigidos acima estavam justamente em caminhos que **nenhum teste
+existente percorria**.
+
 ## Onde estamos e o que vem a seguir
 
+- **Etapa 34 entregue (2026-09-16):** **o documento passa a ficar preso ao registro certo, em cinco
+  lugares novos** (features 01, 04, 08, 12 e 14, `746a106..054f727`) — a Etapa 32 tinha construído o
+  mecanismo de anexos inteiro e plugado **uma tela só**. Agora material, requisição, recebimento,
+  devolução e **cada item** de remessa a terceiros têm onde guardar documento; com a inspeção, são
+  **seis**. **Zero linha de servidor mudou** — o mecanismo já aceitava as seis desde a 32, faltava a
+  tela. Três delas (Materiais, Devoluções e itens de remessa) ganharam um **clipe na linha** que
+  abre uma janela; Devoluções ganhou com isso a **primeira coluna de ações que a tela já teve**. As
+  outras duas (Requisições e Recebimentos) ganharam um bloco **no fim do painel de detalhe**.
+  **O que a revisão adversarial achou:** dois defeitos reais, os dois em caminhos que nenhum teste
+  percorria — o **arquivo escolhido sumia** quando o painel se recarregava (fechar o diálogo de
+  escolher arquivo já bastava), e o bloco da requisição aparecia nas telas de requisição dos
+  **outros seis módulos**, onde só sabia mostrar *"Acesso negado ao módulo"*. Os dois corrigidos.
+  E achou **dois problemas anteriores** em telas vizinhas, que viraram a Etapa 35: o clique na
+  requisição **carrega o detalhe duas vezes** (furo **C45**) e a tela de Recebimentos **esconde
+  falha de rede** atrás de *"Nenhum recebimento registrado"* (fragilidade **G10**). A tela de
+  Recebimentos, que nunca tivera teste nenhum, ganhou a primeira suíte dela.
+  **O que é seu:** a **B71** — o solicitante do Comercial ou da Engenharia deve poder anexar o
+  desenho na própria requisição, de dentro da tela dele? — e a verificação manual **F12**, de dois
+  minutos: conferir se o clipe de Materiais fica cortado com a janela do navegador em meia tela.
 - **Etapa 31 entregue (2026-08-31):** **os números de documento paravam de ser únicos** (defeito,
   `1e6c9a9..67b6758`) — não é feature e não aparece em tela nenhuma. Os quatro números do módulo
   (`REQ-`, `REC-`, `REM-`, `INV-`) eram montados por **quatro geradores diferentes**, cada um

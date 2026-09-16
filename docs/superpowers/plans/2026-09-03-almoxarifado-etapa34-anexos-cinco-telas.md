@@ -145,7 +145,7 @@ mesmo cache do CRA) é o modo de falha que a Etapa 25 já pagou. **Sequencial, u
 preservado** (`titulo = 'Anexos'`), então `HistoricoInspecoes.js:246` não muda de comportamento —
 e a Task 1 prova isso com cenário próprio, não por inspeção.
 
-- [ ] **Step 1: Escrever os cenários que falham** (`AnexosModal.test.js`)
+- [x] **Step 1: Escrever os cenários que falham** (`AnexosModal.test.js`)
 
 Molde de montagem, **com as faixas corrigidas pela Fase 2** (o boilerplate não está todo no topo):
 `AnexosDocumento.test.js:38-58` traz os três `jest.mock` (`api` `:38`, `react-toastify` `:44`,
@@ -183,14 +183,14 @@ test('fecha pelo X e pelo overlay, mas nao pelo corpo', async () => { /* 3 cliqu
 // 5. subtitulo opcional aparece quando dado
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 ```
 cd client && CI=true npx react-scripts test --watchAll=false src/components/almoxarifado/AnexosModal.test.js
 ```
 Esperado: `Cannot find module './AnexosModal'`.
 
-- [ ] **Step 3: Escrever `AnexosModal.js`**
+- [x] **Step 3: Escrever `AnexosModal.js`**
 
 ```jsx
 import React from 'react';
@@ -255,7 +255,7 @@ E em `AnexosDocumento.js`, trocar a linha do `<h4>` por:
       {titulo && <h4 className="almox-anexos-titulo"><FiPaperclip /> {titulo}</h4>}
 ```
 
-- [ ] **Step 4: Acrescentar os 2 cenários do `titulo` em `AnexosDocumento.test.js`**
+- [x] **Step 4: Acrescentar os 2 cenários do `titulo` em `AnexosDocumento.test.js`**
 
 ```jsx
 test('por padrao o titulo aparece — e e o que HistoricoInspecoes usa', async () => {
@@ -269,13 +269,13 @@ test('com titulo nulo o cabecalho some, mas a lista continua', async () => {
 });
 ```
 
-- [ ] **Step 5: Rodar os dois arquivos e ver passar**
+- [x] **Step 5: Rodar os dois arquivos e ver passar**
 
 ```
 cd client && CI=true npx react-scripts test --watchAll=false src/components/almoxarifado/AnexosModal.test.js src/components/almoxarifado/AnexosDocumento.test.js src/components/almoxarifado/HistoricoInspecoes.test.js
 ```
 
-- [ ] **Step 6: CONTROLE POSITIVO — três sabotagens, e leia QUAL asserção cai**
+- [x] **Step 6: CONTROLE POSITIVO — três sabotagens, e leia QUAL asserção cai**
 
 | # | Sabotagem | Cenário que TEM de cair |
 |---|---|---|
@@ -287,7 +287,7 @@ Regras do harness: `md5sum` antes / depois da sabotagem / depois de restaurar; `
 tem de voltar vazio. **Se a sabotagem 2 não derrubar o cenário 3, o cenário está medindo outra
 coisa** — conserte o cenário, não troque a sabotagem.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit** — feito: `746a106`
 
 ```bash
 git add client/src/components/almoxarifado/AnexosModal.js \
@@ -313,7 +313,7 @@ aqui deixaria COMPRAS, PRODUÇÃO, GESTOR e QUALIDADE com a permissão e sem sup
 outros botões da linha usam `bloquearSeNaoPode`; **este é a exceção, e o comentário tem de dizer
 por quê**, senão o próximo o "corrige".
 
-- [ ] **Step 1: Escrever os cenários que falham**
+- [x] **Step 1: Escrever os cenários que falham**
 
 ⚠️ `renderizar()` deste arquivo **avança 350 ms de debounce** (`MateriaisAlmoxarifado.test.js:118-123`)
 — não o reescreva achando que é `await` comum.
@@ -360,8 +360,8 @@ test('a lista sozinha nao consulta anexos; so o clique consulta', async () => {
 });
 ```
 
-- [ ] **Step 2: Rodar e ver falhar** (esperado: `clipe` é `null`)
-- [ ] **Step 3: Implementar** — `FiPaperclip` no import de ícones; estado
+- [x] **Step 2: Rodar e ver falhar** (esperado: `clipe` é `null`)
+- [x] **Step 3: Implementar** — `FiPaperclip` no import de ícones; estado
   `const [anexosMaterial, setAnexosMaterial] = useState(null);`; o botão **antes** do de editar:
 
 ```jsx
@@ -389,11 +389,11 @@ e, junto dos outros modais (`:424-434`):
 )}
 ```
 
-- [ ] **Step 4: Rodar e ver passar**
-- [ ] **Step 5: CONTROLE POSITIVO** — troque `entidade="material"` por `entidade="requisicao"`.
+- [x] **Step 4: Rodar e ver passar**
+- [x] **Step 5: CONTROLE POSITIVO** — troque `entidade="material"` por `entidade="requisicao"`.
       **TEM de cair o primeiro cenário, na asserção dos `params`.** Se cair só o segundo, o
       primeiro não está provando a chave — conserte.
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit** — feito: `eb89b5e`
 
 ---
 
@@ -414,7 +414,7 @@ e, junto dos outros modais (`:424-434`):
    Logo **não há `somenteLeitura`**: anexar em devolução antiga é legítimo (é onde o comprovante
    chega). Não invente gate por idade.
 
-- [ ] **Step 1: Escrever os cenários** — o mesmo trio da Task 2 com `entidade: 'devolucao'`, **mais
+- [x] **Step 1: Escrever os cenários** — o mesmo trio da Task 2 com `entidade: 'devolucao'`, **mais
       o do esqueleto** (abaixo). Antes de tudo, **acrescente uma segunda devolução à fixture**:
       `DevolucoesAlmoxarifado.test.js:49-53` hoje tem **uma** linha, `id: 1`, e a regra (i) do topo
       proíbe testar com ela. Junte `{ id: 42, material_codigo: 'TUB-2', material_nome: 'Tubo 2"',
@@ -441,16 +441,16 @@ test('o esqueleto tem tantas colunas quanto a tabela carregada', async () => {
 });
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
-- [ ] **Step 3: Implementar** — `FiPaperclip` em `:4`; `const [anexosDevolucao, setAnexosDevolucao] = useState(null);`;
+- [x] **Step 2: Rodar e ver falhar**
+- [x] **Step 3: Implementar** — `FiPaperclip` em `:4`; `const [anexosDevolucao, setAnexosDevolucao] = useState(null);`;
       `<th></th>` no fim de `:215`; a célula no fim da linha; `columns={9}`; o modal com
       `subtitulo={`${d.material_codigo} — ${d.material_nome} · ${formatData(d.created_at)}`}`.
-- [ ] **Step 4: Rodar e ver passar**
-- [ ] **Step 5: CONTROLE POSITIVO** — duas sabotagens:
+- [x] **Step 4: Rodar e ver passar**
+- [x] **Step 5: CONTROLE POSITIVO** — duas sabotagens:
       (a) troque `entidade="devolucao"` por `entidade="material"` → cai pela asserção dos `params`;
       (b) volte o `columns={9}` para `columns={8}` → **tem de cair o cenário do esqueleto**, na
       comparação final. Se não cair, o cenário está medindo outra coisa — conserte o cenário.
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit** — feito: `67f2389`
 
 ---
 
@@ -472,7 +472,7 @@ test('o esqueleto tem tantas colunas quanto a tabela carregada', async () => {
 3. Itens em digitação (`itensNovos`, `:215-226`) **não têm `id`** e são renderizados noutra tabela
    (`:734`). **Não** ponha o clipe lá — é a RN-01.
 
-- [ ] **Step 0 (ACHADO DA FASE 2 — sem isto o Step 1 é impossível): a fixture tem UM item, não dois.**
+- [x] **Step 0 (ACHADO DA FASE 2 — sem isto o Step 1 é impossível): a fixture tem UM item, não dois.**
       `RemessasTerceirosAlmoxarifado.test.js:53-61` — `DETALHE_1.itens` tem **um** item (`id: 11`);
       `LISTA[0].itens_total: 2` é só o contador da linha da lista, não o array. O terceiro cenário
       exige dois. Acrescente a `DETALHE_1.itens`:
@@ -485,7 +485,7 @@ test('o esqueleto tem tantas colunas quanto a tabela carregada', async () => {
       Medido como seguro: `linhasDetalhe()` (`:124`) só é usado como `[0]` em `:322` e `:333`, e
       `celula(tr, 'retornado'|'transformado'|'baixado')` continua casando por `data-col`.
 
-- [ ] **Step 1: Escrever os cenários** — o par da Task 2 com `entidade: 'item_remessa'` e
+- [x] **Step 1: Escrever os cenários** — o par da Task 2 com `entidade: 'item_remessa'` e
       `entidade_id: 11` (mais a contagem `toHaveLength(1)` da regra (ii)), **mais um terceiro**:
       abrir o painel de uma remessa com 2 itens **não** chama `/almoxarifado/anexos` nenhuma vez.
 
@@ -495,13 +495,13 @@ test('o esqueleto tem tantas colunas quanto a tabela carregada', async () => {
       `expect(linhasDetalhe()).toHaveLength(2)` e
       `expect(document.querySelector('[data-testid="anexos-item-11"]')).not.toBeNull()`;
       depois do negativo, clicar o clipe e afirmar a chamada com `entidade_id: 11`.
-- [ ] **Step 2: Rodar e ver falhar**
-- [ ] **Step 3: Implementar** — `FiPaperclip` no import de `:4`;
+- [x] **Step 2: Rodar e ver falhar**
+- [x] **Step 3: Implementar** — `FiPaperclip` no import de `:4`;
       `const [anexosItem, setAnexosItem] = useState(null);`; `<th></th>` no cabeçalho; a célula com
       `data-testid={`anexos-item-${i.id}`}`; o modal com
       `subtitulo={`${anexosItem.material_codigo} — ${anexosItem.material_nome}`}`.
-- [ ] **Step 4: Rodar e ver passar** (rode **também** `RemessasTerceirosTransformacao.test.js`)
-- [ ] **Step 5: CONTROLE POSITIVO** — duas sabotagens, e as duas importam:
+- [x] **Step 4: Rodar e ver passar** (rode **também** `RemessasTerceirosTransformacao.test.js`)
+- [x] **Step 5: CONTROLE POSITIVO** — duas sabotagens, e as duas importam:
 
       **(a)** `entidadeId={aberta.id}` em vez de `{i.id}` → tem de cair pela asserção do
       `entidade_id: 11` (`aberta.id` é 1, `i.id` é 11 — valores distintos, confirmado). É a RN-05,
@@ -514,7 +514,7 @@ test('o esqueleto tem tantas colunas quanto a tabela carregada', async () => {
       um cenário saudável. **A sabotagem certa é trocar o botão+modal por bloco inline na linha do
       item**: `<AnexosDocumento entidade="item_remessa" entidadeId={i.id} titulo={null} />` dentro
       do `map` de `:602`. Com dois itens são duas chamadas, e o cenário 3 cai pelo motivo certo.
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit** — feito: `dd6e4c5` (divergência: o teste do PDF também contava itens, `toHaveLength(1)` → `2`; o Step 0 não previu)
 
 ---
 
@@ -542,7 +542,7 @@ test('o esqueleto tem tantas colunas quanto a tabela carregada', async () => {
 4. **Rascunho não muda nada aqui:** um rascunho salvo JÁ é linha no banco, e o formulário
    (`RequisicaoForm.js`) não tem `id` nenhum — por isso o form **não** recebe bloco (RN-01).
 
-- [ ] **Step 1: Escrever os cenários**
+- [x] **Step 1: Escrever os cenários**
 ```jsx
 test('o painel de detalhe mostra os anexos DA REQUISICAO aberta', async () => {
   await renderizar();     // ja renderiza com ?id=55
@@ -551,8 +551,8 @@ test('o painel de detalhe mostra os anexos DA REQUISICAO aberta', async () => {
     { params: { entidade: 'requisicao', entidade_id: 55 } });
 });
 ```
-- [ ] **Step 2: Rodar e ver falhar**
-- [ ] **Step 3: Implementar**
+- [x] **Step 2: Rodar e ver falhar**
+- [x] **Step 3: Implementar**
 ```jsx
 {/* Etapa 34 — anexos da requisição (desenho, documento). Mesmo molde dos dois blocos aditivos
     acima (Separação `:973`, Assinaturas `:1007`): leitura junto da requisição, sem gate novo.
@@ -562,8 +562,8 @@ test('o painel de detalhe mostra os anexos DA REQUISICAO aberta', async () => {
   <AnexosDocumento entidade="requisicao" entidadeId={detalhe.id} titulo="Anexos" />
 </div>
 ```
-- [ ] **Step 4: Rodar e ver passar**
-- [ ] **Step 5: CONTROLE POSITIVO** — troque `entidade="requisicao"` por `entidade="material"`:
+- [x] **Step 4: Rodar e ver passar**
+- [x] **Step 5: CONTROLE POSITIVO** — troque `entidade="requisicao"` por `entidade="material"`:
       tem de cair pelos `params`.
 
       **E trave a distinção `detalhe.id` vs `selectedId` em vez de declará-la como furo** — é o
@@ -574,7 +574,7 @@ test('o painel de detalhe mostra os anexos DA REQUISICAO aberta', async () => {
       `{ ...baseRequisicao('APROVADO'), id: 555 }` e afirme
       `{ entidade: 'requisicao', entidade_id: 555 }`. Com `detalhe.id` fica verde; com `selectedId`
       (55) fica vermelho. Uma linha, e documenta "o bloco lê do detalhe carregado, não da URL".
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit** — feito: `d5578e6` (achado: abrir detalhe pelo clique carrega 2x — pré-existente, `syncSearchParams` reacende o deep-link; o cenário RN-02 afirma `anexos === cargas do detalhe`)
 
 ---
 
@@ -626,7 +626,7 @@ e **nenhum arquivo de teste** — varredura do repositório inteiro confirma. N�
    `"Nenhum recebimento registrado"` (`:447-455`), e os cenários (a) e (d) passam **com a tela
    vazia**. Por isso o (a) tem de **contar linhas** e o (d) tem de ter metade positiva.
 
-- [ ] **Step 1: Criar o arquivo com os cenários** — mínimo 4, com as correções da Fase 2:
+- [x] **Step 1: Criar o arquivo com os cenários** — mínimo 4, com as correções da Fase 2:
       **(a)** a lista renderiza — e **conta linhas**:
       `expect(container.querySelectorAll('.almox-table tbody tr')).toHaveLength(<n da fixture>)`,
       nunca só "renderizou sem erro";
@@ -636,10 +636,10 @@ e **nenhum arquivo de teste** — varredura do repositório inteiro confirma. N�
       da fixture** (regra (i)), mais `toHaveLength(1)` da regra (ii);
       **(d)** a lista sozinha não consulta anexos — **com a metade positiva no mesmo teste**:
       depois do `not.toHaveBeenCalledWith`, clicar uma linha e afirmar que passou a chamar.
-- [ ] **Step 2: Rodar e ver falhar**
-- [ ] **Step 3: Implementar o plug**
-- [ ] **Step 4: Rodar e ver passar**
-- [ ] **Step 5: CONTROLE POSITIVO** — duas sabotagens:
+- [x] **Step 2: Rodar e ver falhar**
+- [x] **Step 3: Implementar o plug**
+- [x] **Step 4: Rodar e ver passar**
+- [x] **Step 5: CONTROLE POSITIVO** — duas sabotagens:
       **(a)** troque a chave; tem de cair pelos `params`.
       **(b)** ⚠️ **A sabotagem original ("remova o `{detalhe && ...}` do painel") estava errada e a
       Fase 2 pegou** — sem a guarda, o corpo desreferencia `detalhe.numero` (`:487`) no primeiro
@@ -648,7 +648,7 @@ e **nenhum arquivo de teste** — varredura do repositório inteiro confirma. N�
       `<AnexosDocumento>` de dentro de `{detalhe && ...}` e pendure-o na lista, logo depois do
       `</table>` (`:558`), com `entidadeId={recebimentos[0]?.id}`. Aí (a), (b) e (c) continuam
       verdes e **o (d) cai sozinho** — que é o que a RN-02 precisa provar.
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit** — feito: `01dd3ce` (6 cenários, não 4: (e) troca de linha → última chamada é o 2º id; (f) o formulário É dirigível no harness e cobre o pós-criação. Divergência: a sabotagem (b) derruba (c) **e** (d), porque (c) fixa `painel().contains(bloco)` — guarda mais forte que o plano supunha)
 
 ---
 
@@ -663,7 +663,7 @@ apareceria em produção como 400 *"Entidade inválida para anexo"*. É o cruzam
 Fase 3 exige, e a forma é a mesma que `permissaoErro.test.js:45-46` já usa nesta base: **importar
 o módulo do servidor no teste do client**, com guarda-da-guarda.
 
-- [ ] **Step 1: Escrever o teste**
+- [x] **Step 1: Escrever o teste**
 
 ```jsx
 const fs = require('fs');
@@ -707,8 +707,8 @@ test('as seis telas usam chaves que o servidor aceita, e cobrem o mapa inteiro',
 });
 ```
 
-- [ ] **Step 2: Rodar e ver passar**
-- [ ] **Step 3: CONTROLE POSITIVO — quatro sabotagens, e a nº 4 é a que interessa**
+- [x] **Step 2: Rodar e ver passar**
+- [x] **Step 3: CONTROLE POSITIVO — quatro sabotagens, e a nº 4 é a que interessa**
 
 | # | Sabotagem | O que TEM de cair |
 |---|---|---|
@@ -733,7 +733,7 @@ todo o resto passaria provando nada. Regras: temporária, `md5sum` antes/depois,
 de volta vazio, e **não rode a suíte do servidor enquanto ela estiver aplicada** (o
 `deepStrictEqual` que congela o mapa quebraria e viraria ruído).
 
-- [ ] **Step 4: Suíte completa e fechamento** — os cinco comandos da `fechar-etapa`, números reais.
+- [x] **Step 4: Suíte completa e fechamento** — feito em `656467c`: api 169/169 arquivos · almoxarifado 42/42 · validation 4, safealter 3, sqlite 5 · client 46 suítes / 686 testes · build limpo — os cinco comandos da `fechar-etapa`, números reais.
 
 ---
 
@@ -856,3 +856,192 @@ cinco classes CSS do modal existem. Nenhum `data-testid` colide. Acrescentar col
 suíte nenhuma (`linhasDetalhe()` conta linhas; `celula()` usa `data-col`). A forma dos `params` que
 o plano assere é exatamente a de `AnexosDocumento.js:124`. Baseline dos seis arquivos tocados:
 **6 suítes / 93 testes**, verde.
+
+---
+
+## Fase 4/5 — Integração e revisão adversarial (2026-09-16)
+
+As sete tasks foram aprovadas **de primeira** na revisão de task (zero rodadas de correção por
+task). A revisão final rodou com **três revisores em paralelo**, lentes distintas e sem conversa
+entre eles:
+
+| Revisor | Lente |
+|---|---|
+| 1 | **O gate da Task 7** — o teste de integração prova mesmo que as seis chaves do client batem com `ENTIDADES_ANEXO`, ou é vacuidade com outra roupa? |
+| 2 | **Regras de negócio e vacuidade** — RN-01 a RN-05 realmente travadas; cenário negativo com metade positiva; contagem de chamadas |
+| 3 | **Autorização e UX** — quem vê o botão, quem consegue agir, e o que a tela faz quando o backend nega |
+
+**5 achados, 0 ruído** (nenhum não reproduzido). Os dois Important estavam em caminhos que
+**nenhum teste exercitava** — não era asserção fraca, era ausência de cenário.
+
+1. **IMPORTANT (dois revisores acharam, independentes) — o bloco da requisição nascia SEM gate de
+   `warehouseMode`.** `RequisicoesList.js` é a mesma tela de `/almoxarifado/requisicoes` e de
+   `/<modulo>/requisicoes-material` em **seis** módulos (comercial, frota, compras, financeiro,
+   fábrica, engenharia), que **não** têm permissão do módulo almoxarifado. Fora do almoxarifado,
+   abrir o painel disparava `GET /api/almoxarifado/anexos`, que está atrás de
+   `checkModulePermission('almoxarifado')`: **403 "Acesso negado ao módulo"** em vermelho dentro do
+   painel, formulário de upload **morto** (o hook de `minhas-permissoes` falha **aberto** de
+   propósito) e **uma linha de auditoria de acesso negado por painel aberto**. Todos os outros
+   blocos daquele painel já eram gateados (`RequisicoesList.js:976`, `:1047`, `:1066`) — o novo era
+   a exceção.
+2. **IMPORTANT — o corpo dos dois painéis desmonta a cada refetch.** `RequisicoesList.js:876` e
+   `RecebimentosAlmoxarifado.js:496`: o bloco nasceu **dentro** do ternário de `loadingDetalhe`.
+   Qualquer refetch — foco da janela (**que é exatamente o que acontece ao FECHAR o diálogo de
+   escolher arquivo**), troca de filtro, ação de workflow ou fiscal — volta ao estado
+   "Carregando…", desmonta o bloco e leva junto o arquivo recém-escolhido no seletor, mais um
+   `GET /almoxarifado/anexos` a cada volta.
+3. **MINOR — o teste de integração da Task 7 lê TEXTO.** Um plug **comentado** continua casando com
+   a regex. Quem guarda o plug de verdade são os testes de montagem por tela; o de integração
+   guarda só a **coerência das chaves**.
+4. **MINOR (parked, → letra F) — o 10º ícone de Materiais pode ficar clipado.** `.almox-actions`
+   (`Almoxarifado.css:305`) não tem `flex-wrap` e `.almox-table-container` (`:167`) é
+   `overflow: hidden`; numa faixa de largura de desktop (≈769px até a largura em que a tabela
+   cabe) o ícone pode sair do contêiner. **Pré-existente**, agravado pelo clipe novo, e o
+   breakpoint **NÃO foi medido** — não há navegador neste ambiente. Parked de propósito: mudar o
+   CSS de todas as tabelas do módulo sem medir é pior que a falha.
+5. **MINOR (parked) — o bloco da requisição ficava acima dos botões de ação.** Resolvido **de
+   graça** pelo fix do achado 2: fora do ternário, o bloco cai depois de tudo.
+
+### A onda única de correção — três commits, e o que cada um PROVA
+
+| Commit | Achado | O que o cenário novo prova |
+|---|---|---|
+| `a88d715` | 1 | Cenário `warehouseMode: false` — o painel abre (**metade positiva**: `REQ-055` na tela, `GET /requisicoes-material/55` feito), e **nada** vai para `/almoxarifado/anexos`: bloco ausente e contagem 0 |
+| `c5d9e99` | 2 (e 5) | **Identidade do nó DOM** antes e depois do refetch (é o **mesmo** elemento, não um recriado) **e** contagem de `GET /almoxarifado/anexos` `=== 1`. Com isso a **regra (ii) estrita** — uma consulta por painel aberto — voltou a valer também no cenário do clique de `RequisicoesList`, onde antes o comentário precisava relaxá-la para "uma por carga do detalhe" |
+| `054f727` | 3 | Nada de novo no código: um comentário no teste de integração dizendo **o que ele não prova**, para que a próxima sessão não o trate como guarda do plug |
+
+### Teste VAZIO pego antes do commit — o 5º caso documentado nesta base
+
+O cenário **(g)** de `RecebimentosAlmoxarifado.test.js` ("refetch por ação de workflow não desmonta
+o bloco nem repete a consulta") **passou de primeira contra a colocação ANTIGA** — isto é, provava
+nada. Causa: o `act` coalescia o commit de `loadingDetalhe = true` com o da resposta, e a janela em
+que o painel mostra "Carregando…" **nunca chegava ao DOM**; o nó nunca era desmontado porque o
+React nunca renderizou o estado intermediário. A solução foi **adiar o GET do refetch** (resolver a
+promessa só depois da asserção), tornando a janela observável. Só então a colocação antiga ficou
+vermelha e a nova, verde. Regra que fica: **quando o cenário mede montagem/desmontagem, quem decide
+se o teste é vazio é o agendamento, não a asserção.**
+
+### Defeitos PRÉ-EXISTENTES descobertos (não são desta etapa, e continuam abertos)
+
+- **`RequisicoesList.js` — abrir o detalhe pelo CLIQUE carrega a requisição 2x.** `abrirDetalhe`
+  chama `syncSearchParams`, que reescreve `?id=`, e isso reacende o efeito de deep-link
+  (`:166-181`), que chama `abrirDetalhe` de novo. **Dois `GET` de detalhe por clique**, desde que o
+  deep-link existe. Com `c5d9e99` o bloco de anexos não remonta mais, mas o detalhe continua vindo
+  2x. → **item (a) da Etapa 35**.
+- **`RecebimentosAlmoxarifado.js` — os três `catch` de carga engolem o erro.**
+  `loadRecebimentos` (`:72-85`) só dispara um toast e cai no estado vazio; `loadMateriais`
+  (`:93-97`) e `loadAuxiliares` (`:99-108`) têm `catch { /* ignore */ }` literal. Falha de rede ou
+  500 aparece ao operador como **"Nenhum recebimento registrado"** — o mesmo pecado que a Etapa 29
+  corrigiu em `HistoricoInspecoes`. Modal fiscal, workflow e etiquetas desta tela seguem sem teste.
+  → **item (b) da Etapa 35**.
+- **Três arquivos grandes**, sem falha concreta — nota de manutenção:
+  `RemessasTerceirosAlmoxarifado.js` ≈1015 linhas com 5 modais, `RequisicoesList.js` ≈1575,
+  `RecebimentosAlmoxarifado.js` ≈814.
+
+### A Global Constraint "nenhuma alteração em `server/`" NÃO foi contradita
+
+Ela fica como está escrita. A Task 7 **lê** `server/` (o `require` de `ENTIDADES_ANEXO`) e o
+controle positivo dela sabotou o mapa do servidor **temporariamente**, restaurando-o — dois usos
+que o próprio plano autoriza. O que vale é o resultado, e ele foi medido:
+`git diff --stat 746a106^..054f727 -- server/` volta **vazio**.
+
+---
+
+## Fechamento — números medidos
+
+Os cinco comandos da skill `fechar-etapa`, rodados **depois** da onda de correção, com os números
+lidos da saída:
+
+| Comando | Resultado |
+|---|---|
+| `cd server && npm run test:api` | **169/169 arquivos OK** |
+| `cd server && npm run test:almoxarifado` | **42 passou, 0 falhou** |
+| `cd server && npm run test:validation && npm run test:safealter && npm run test:sqlite` | **4/4 · 3/3 · 5/5** |
+| `cd client && CI=true npx react-scripts test --watchAll=false` | **46 suítes / 690 testes**, todos passando |
+| `cd client && CI=true npx react-scripts build` | compilou **sem warning virar erro** |
+
+Na Task 7 o client marcava **686** testes; a onda de correção acrescentou **4** cenários — daí 690.
+
+---
+
+## Retro de 4 números
+
+1. **Rodadas de correção até verde: 0 por task** — as 7 tasks passaram de primeira na revisão de
+   task — e **1 onda** de correção depois da revisão final, com 3 commits (`a88d715`, `c5d9e99`,
+   `054f727`).
+2. **Achados da revisão final: 5** — 2 Important **reais** e 3 Minor; **ruído (não reproduzido):
+   0**. O dado que mais ensina: **os dois Important estavam em caminhos que nenhum teste
+   exercitava** (`warehouseMode: false`, foco da janela, refetch pós-ação) — não foram asserções
+   fracas, foram cenários ausentes.
+3. **Paralelismo: 0 galhos em paralelo.** Foi decisão **medida** do plano (mesma árvore, jest/CRA
+   compartilhados) e não omissão. Os **revisores** rodaram em paralelo, 3 de uma vez. **Nenhum
+   retrabalho por paralelismo.**
+4. **Defeito que escapou do fechamento: a preencher na Etapa 35.**
+
+---
+
+## Próxima tarefa detalhada — Etapa 35
+
+**Tema:** o que a revisão da 34 achou nas telas vizinhas. Três itens, todos **pré-existentes**,
+todos medidos com `file:line`, **nenhuma linha de servidor** e **nenhuma mudança de contrato de
+API** — por isso cabem numa etapa só.
+
+### (a) `RequisicoesList.js` — o clique carrega o detalhe 2x
+
+- **Hoje:** `abrirDetalhe` chama `syncSearchParams`, que reescreve `?id=` na URL; isso reacende o
+  efeito de deep-link em **`RequisicoesList.js:166-181`**, que chama `abrirDetalhe` de novo. Dois
+  `GET /almoxarifado/requisicoes/:id` por clique.
+- **Régua (o teste que hoje passa COM o defeito):** `RequisicoesList.test.js:528`, cenário *"RN-02:
+  sem detalhe aberto não consulta anexos; abrir a requisição consulta"*. Ele já exercita o caminho
+  do clique e já trava a contagem de **anexos** em `=== 1`. O que ele **não** conta é o `GET` do
+  **detalhe** — hoje **2**, fato registrado no comentário do próprio cenário. **Endurecer é
+  acrescentar `api.get.mock.calls.filter(([u]) => u === '/almoxarifado/requisicoes/55')` com
+  `toHaveLength(1)`**; esse `expect` tem de ficar **vermelho antes** do conserto — se ficar verde de
+  primeira, o cenário não está passando pelo caminho do clique e o teste é vazio.
+- **Molde do conserto (reversível, sem contrato novo):** um `ref` com o "último id aberto" lido
+  dentro do efeito de deep-link, ou marcar a navegação como **interna** antes de chamar
+  `syncSearchParams`. Não trocar o deep-link por outra coisa.
+- **Já pronto, não reabrir:** o cenário do clique existe e mede; os cenários de deep-link (URL
+  colada) existem e hoje carregam **1x** — são a metade positiva que impede "consertar" matando o
+  deep-link. O bloco de anexos já saiu do ternário de loading (`c5d9e99`).
+- **Pontos de atenção:** o deep-link tem **dois consumidores** (URL colada e clique) e o cenário de
+  URL colada **tem de continuar carregando 1x**; e o cenário RN-02 já afirma a contagem de anexos
+  `=== 1` — ela não pode regredir.
+
+### (b) `RecebimentosAlmoxarifado.js` — os três `catch` silenciosos viram erro visível
+
+- **Hoje:** `loadRecebimentos` (**`:72-85`**) chama `toast.error('Erro ao carregar recebimentos')`
+  e cai no estado vazio; `loadMateriais` (**`:93-97`**) e `loadAuxiliares` (**`:99-108`**) têm
+  `catch { /* ignore */ }` literal. Rede caída ou 500 aparece como **"Nenhum recebimento
+  registrado"** — indistinguível de "não há recebimento".
+- **Régua (pronta desde a Task 6):** o mock de `api.get` de `RecebimentosAlmoxarifado.test.js` tem
+  **fallback que REJEITA** (`:126` e `:133`) — basta um cenário "a rede falha" que hoje vê "Nenhum
+  recebimento registrado" e passa a ter de ver a **mensagem de erro**.
+- **Molde:** `HistoricoInspecoes` depois da Etapa 29 — estado de erro no componente, com botão de
+  tentar de novo se couber.
+- **Já pronto, não reabrir:** a suíte da tela existe (7 cenários) e o harness de fixtures também;
+  nada do bloco de anexos precisa ser tocado.
+- **Ponto de atenção que mata o cenário se ignorado:** **o `toast` é mockado nos testes** — um
+  conserto que só melhore o toast passa despercebido e não ajuda o operador. A mensagem tem de ir
+  para o **DOM**, e o cenário tem de afirmar o texto renderizado, não a chamada do toast. Vale a
+  metade positiva no mesmo teste (a tela montou, o cabeçalho está lá), senão "não mostra a lista"
+  passa com a tela vazia.
+
+- **Terceiro item, achado na re-revisão da onda de correção (parked, minor):** `abrirDetalhe`
+  (`:111-141`) **nunca anula `detalhe`**, nem ao **trocar de linha**. Com o bloco de anexos fora do
+  ternário de loading (fix `c5d9e99`), durante a carga do recebimento B o bloco continua mostrando
+  os anexos de A — mesmo padrão pré-existente do cabeçalho do painel. Janela pequena (latência da
+  rede), mas nela um arquivo escolhido "para A" seria enviado a B. Conserto no mesmo molde de
+  `RequisicoesList.js:227-235` (anular `detalhe` quando o id muda), com cenário: clicar A, clicar B
+  com o GET de B em suspenso, afirmar que o bloco de A **sumiu** antes de B chegar.
+
+### (c) Verificação manual do clipe de Materiais entre 769px e ≈1100px (letra F)
+
+- **Hoje:** `.almox-actions` (`Almoxarifado.css:305`) sem `flex-wrap`, `.almox-table-container`
+  (`:167`) com `overflow: hidden`, e Materiais passou a ter **10** ícones na coluna de ações.
+- **O que fazer:** abrir no navegador e varrer a faixa; **se** clipar, `flex-wrap: wrap` em
+  `.almox-actions`, com **screenshot antes/depois**.
+- **Por que não foi feito na 34:** o breakpoint não é dedutível sem renderizar, e mudar o CSS de
+  todas as tabelas do módulo sem medir troca um defeito possível por um certo.
+- **Ponto de atenção:** a mesma classe é usada por **todas** as tabelas do módulo — o antes/depois
+  precisa incluir pelo menos mais uma tela além de Materiais.

@@ -272,6 +272,12 @@ Toda criação e toda edição de material ficam registradas com **quem fez, qua
 
 Esse histórico é lido em **Almoxarifado → Auditoria**, filtrando a entidade **Material** (seção 5.8). Ele não aparece dentro da ficha do material — a consulta é sempre pela tela de Auditoria, e é restrita a quem administra o módulo.
 
+### 2.10 Anexos do material
+
+Além da foto, cada material guarda **documentos**. Na lista de **Almoxarifado → Materiais**, a coluna de ações de cada linha tem um ícone de **clipe** (*"Anexos e documentos deste material"*) que abre a janela **Anexos do material**, identificada pelo código e pelo nome. É onde ficam a **ficha técnica**, o **desenho** e o **catálogo do fabricante** — documentos que valem para o item, não para um lançamento dele.
+
+O clipe aparece para todo mundo que enxerga a tela, inclusive para quem só consulta: **ver e baixar** é liberado a qualquer perfil do módulo, e é **enviar** e **remover** que dependem do perfil. Material desativado continua aceitando anexo — ficha técnica de item aposentado é exatamente o tipo de documento que se precisa consultar depois. As regras completas de formato, tamanho, permissão e registro de download estão em **15.2.4**.
+
 ---
 
 ## 3. Localizações e endereçamento
@@ -1092,6 +1098,14 @@ Regras:
 - **Cancelar** é do solicitante (ou de administrador do sistema): sem permissão, *"Sem permissão"*; em status que não aceita, *"Não é possível cancelar neste status"*. Cancelar **libera as reservas** daquela requisição.
 - **Excluir** uma requisição **estorna as entregas já feitas** (devolve ao estoque, com linha no livro) e **libera as reservas** que ela ainda segurava. É restrito a administradores do almoxarifado ou super administrador: *"Apenas administradores do Almoxarifado ou Super Administrador podem excluir requisições"*.
 
+### 7.7 Anexos da requisição
+
+O painel de detalhe da requisição termina com o bloco **Anexos**, depois dos botões de ação. É onde fica o **desenho da peça**, a autorização ou qualquer documento que acompanhe o pedido — preso à requisição, e não no e-mail de quem pediu. O bloco só aparece com a requisição já criada; requisição em montagem, no formulário, não tem onde anexar.
+
+**Esse bloco existe apenas em Almoxarifado → Requisições.** A mesma tela de requisição de material é servida também pelos módulos **Comercial, Frota, Compras, Financeiro, Fábrica e Engenharia**, e nessas telas **o bloco de anexos não aparece** — elas ficam fora da permissão do módulo Almoxarifado, que é o que guarda os documentos. Na prática: quem requisita pelo próprio setor não anexa nem enxerga documento na requisição; quem tem acesso ao Almoxarifado anexa e enxerga, inclusive nas requisições abertas pelos outros setores.
+
+As regras de formato, tamanho, permissão e registro de download estão em **15.2.4**.
+
 ---
 
 ## 8. Aprovações
@@ -1472,6 +1486,12 @@ Uma trava específica protege esse caminho: **sucata com lote bloqueado é recus
 
 Toda devolução recebe uma referência própria no livro (no formato `DEV-<número>`), que amarra os lançamentos ao registro da devolução.
 
+### 12.7 Anexos da devolução
+
+A lista de **Almoxarifado → Devoluções** tem uma coluna de ações com um ícone de **clipe** (*"Anexos e documentos desta devolução"*), que abre a janela **Anexos da devolução**, identificada pelo material e pela data. É onde ficam o **comprovante assinado** e as **fotos do estado em que o material voltou**.
+
+**A devolução não se edita nem se cancela** — ela é um lançamento definitivo —, **mas aceita anexo a qualquer momento**, inclusive meses depois. Isso é deliberado, e é o caso normal: o comprovante costuma chegar dias depois do lançamento. As regras de formato, tamanho, permissão e registro de download estão em **15.2.4**.
+
 ---
 
 ## 13. Inventário e conferência de estoque
@@ -1810,6 +1830,14 @@ O efeito prático:
 
 O item retido aparece na tela **Inspeções Pendentes** com a quantidade retida, o recebimento de origem, a nota fiscal e **há quantos dias está esperando**.
 
+### 14.7 Anexos do recebimento
+
+O painel de detalhe do recebimento termina com o bloco **Anexos**. É onde fica a **nota fiscal digitalizada**, o boleto e o certificado que veio com a carga.
+
+O momento natural de usar é o do próprio registro: ao salvar um recebimento novo, o sistema **já abre o detalhe dele** — a nota ainda está na mão de quem recebeu, e o anexo entra sem trocar de tela. Trocar de recebimento na lista troca os anexos mostrados: o bloco sempre mostra os documentos do recebimento que está aberto no painel.
+
+As regras de formato, tamanho, permissão e registro de download estão em **15.2.4**.
+
 ---
 
 ## 15. Inspeção e qualidade
@@ -1948,11 +1976,25 @@ A aba **Histórico**, na tela de Inspeções, lista as inspeções **já decidid
 **Se a lista não carregar**, a aba mostra *"Não foi possível carregar o histórico de inspeções."*, a mensagem que o servidor devolveu e um botão **Tentar de novo** — nunca *"Nenhuma inspeção decidida ainda."*, que faria concluir que não há inspeções quando na verdade não foi possível perguntar.
 
 
-### 15.2.4 Anexos da inspeção — certificado, relatório dimensional e fotos
+### 15.2.4 Anexos de documento — onde existem, o que o sistema aceita e quem pode o quê
 
-Dentro do detalhe de uma inspeção do Histórico há o bloco **Anexos**. É onde ficam o certificado do fornecedor, o relatório dimensional e as fotos daquele recebimento — presos à inspeção, e não a uma pasta de rede ou a um e-mail.
+O bloco **Anexos** é o lugar onde um documento fica **preso ao registro a que ele pertence**, dentro do sistema, em vez de viver numa pasta de rede ou no e-mail de quem recebeu. Ele existe em **seis** lugares do módulo, e é **o mesmo bloco em todos**: mesma lista, mesmas regras de arquivo, mesmas permissões, mesmo registro de quem baixou. Esta seção descreve as regras de uma vez; as seções de cada tela apontam para cá.
 
-Cada anexo aparece com o **tipo**, a descrição (se houver), o nome do arquivo, o tamanho, **quem enviou** e **quando**.
+| Onde | Como chegar | O que costuma ficar ali |
+|---|---|---|
+| **Inspeção** | Inspeções → aba **Histórico** → clicar na linha; o bloco fica abaixo das medidas | certificado do fornecedor, relatório dimensional, fotos da peça |
+| **Material** | Materiais → **clipe** na coluna de ações da linha → janela **Anexos do material** | ficha técnica, desenho, catálogo do fabricante |
+| **Requisição** | Almoxarifado → Requisições → abrir a requisição; o bloco é o fim do painel de detalhe | desenho da peça, autorização, documento do pedido |
+| **Recebimento** | Recebimentos → abrir o recebimento; o bloco é o fim do painel de detalhe | nota fiscal digitalizada, boleto, certificado que veio com a carga |
+| **Devolução** | Devoluções → **clipe** na coluna de ações da linha → janela **Anexos da devolução** | comprovante assinado, foto do estado em que o material voltou |
+| **Item de remessa a terceiros** | Remessas a Terceiros → abrir a remessa → **clipe** na linha **do item** → janela **Anexos do item da remessa** | certificado do serviço (galvanização, pintura, tratamento), laudo |
+
+**Dois detalhes de comportamento que valem saber antes de procurar o bloco:**
+
+- **O bloco só existe em registro já salvo.** Material em cadastro, requisição em rascunho, recebimento em digitação, devolução no formulário de criação e item de remessa ainda não salvo **não** têm o bloco nem o clipe: o documento precisa de um registro a que se prender, e ele só existe depois de gravado. O recebimento é o caso mais confortável, porque o sistema abre o detalhe dele assim que é salvo — a nota pode ser anexada no mesmo fôlego.
+- **Na remessa a terceiros, o anexo é do ITEM, não da remessa.** Cada linha da tabela de itens tem o seu próprio clipe, e o documento anexado num item não aparece nos outros.
+
+Cada anexo aparece com o **tipo**, a descrição (se houver), o nome do arquivo, o tamanho, **quem enviou** e **quando**. Registro sem nenhum documento mostra *"Nenhum anexo."*.
 
 **O que o sistema aceita:**
 
@@ -1961,7 +2003,7 @@ Cada anexo aparece com o **tipo**, a descrição (se houver), o nome do arquivo,
 | Formatos | PDF, JPG, PNG e WEBP. Outro formato é recusado com *"Anexo deve ser PDF ou imagem"* |
 | Tamanho | Até 10 MB por arquivo. Acima: *"Arquivo excede o limite de 10 MB"* |
 | Arquivo | Obrigatório. Enviar sem escolher devolve *"Arquivo é obrigatório"* |
-| Registro de destino | Tem de existir. Se a inspeção não existir mais, o envio é recusado com *"Registro não encontrado para anexar"* e o arquivo é descartado |
+| Registro de destino | Tem de existir. Se o registro (a inspeção, o material, a requisição, o recebimento, a devolução ou o item de remessa) não existir mais, o envio é recusado com *"Registro não encontrado para anexar"* e o arquivo é descartado |
 
 **O nome que o sistema guarda no servidor não é o nome que você enviou.** O arquivo é gravado com um nome próprio e com a extensão correspondente ao **tipo real declarado no envio** — nunca a extensão que veio no nome. Um arquivo chamado `nota-fiscal.exe` enviado como PDF é guardado como PDF; nada com extensão executável chega ao servidor. O nome original continua guardado e é o que aparece na tela e o que você recebe ao baixar, **inclusive com acentos e traços longos**: `Certificado nº 123 — aço.pdf` volta exatamente assim.
 
@@ -1983,7 +2025,12 @@ A permissão de **anexar** é larga porque anexar é ato de quem opera: compras 
 
 **Baixar fica registrado.** Enviar, baixar e remover anexo aparecem na tela de Auditoria como **Anexo enviado**, **Anexo baixado** e **Anexo removido**, com o nome de quem fez e a hora. O download é a **única leitura registrada** do módulo inteiro, e o motivo é a permissão larga: como qualquer pessoa com acesso ao almoxarifado baixa qualquer anexo, o registro é o que permite saber depois quem viu o quê.
 
-**O que ainda não tem anexo:** hoje só a inspeção tem o bloco. Material, requisição, recebimento, devolução e item de remessa a terceiro ainda não oferecem o campo.
+**Onde anexo ainda NÃO existe, e é bom saber antes de procurar:**
+
+- **Na remessa a terceiros como um todo.** O clipe é **por item**; a remessa inteira não tem um lugar próprio. Um documento que vale para a remessa toda — a nota de remessa, por exemplo — ou é anexado num dos itens, ou é repetido em cada um.
+- **Durante a criação de qualquer registro.** Não há como anexar enquanto o material, a requisição, o recebimento, a devolução ou o item de remessa ainda está sendo digitado: é preciso salvar e abrir o registro.
+- **Na lista, não há contador de anexos.** Nenhuma tela mostra "3 anexos" ao lado da linha — para saber se um registro tem documento, é preciso abrir o bloco. Isso é deliberado: um contador obrigaria o sistema a consultar os anexos de **cada linha** ao carregar a lista, e uma lista de centenas de materiais ficaria lenta por um dado que quase nunca é olhado.
+- **Nas telas de Requisições de Material dos outros módulos** (Comercial, Frota, Compras, Financeiro, Fábrica e Engenharia). O bloco de anexos da requisição existe **apenas** em Almoxarifado → Requisições — ver 7.7.
 ### 15.3 Bloqueio e desbloqueio avulso
 
 Nem todo bloqueio nasce da inspeção. Avaria encontrada na prateleira, material suspeito, material segurado por decisão da qualidade: para isso existem, no topo da tela de Inspeções, os botões **Bloquear Material** e **Desbloquear Material**.
@@ -2292,6 +2339,14 @@ Essa é a única das quatro retenções que significa "não está no prédio", e
 A remessa com **prazo previsto de retorno** já vencido e material ainda lá fora recebe na lista o selo **Vencida**, com o texto explicativo:
 
 > *"O prazo combinado com o terceiro já passou e ainda há material lá fora"*
+
+### 17.10 Anexos do item da remessa
+
+Abrindo uma remessa, **cada linha da tabela de itens** tem um ícone de **clipe** (*"Anexos e documentos deste item"*), que abre a janela **Anexos do item da remessa**, identificada pelo material daquele item. É onde fica o **certificado do serviço** — galvanização, pintura, tratamento térmico — e o laudo que volta com a peça.
+
+**O anexo é do item, não da remessa.** Numa remessa com três materiais, o certificado anexado no primeiro item **não** aparece nos outros dois. E **item ainda não salvo não tem clipe**: as linhas que você acrescenta no formulário de uma remessa nova só passam a aceitar documento depois que a remessa é gravada e aberta de novo.
+
+**A remessa como um todo não tem anexo próprio.** Um documento que vale para o embarque inteiro ou é anexado em um dos itens, ou é repetido em cada um. As regras de formato, tamanho, permissão e registro de download estão em **15.2.4**.
 
 ---
 

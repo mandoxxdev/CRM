@@ -17,6 +17,13 @@
 > autenticado** (o arquivo não é público, ao contrário de tudo que o módulo guardava até aqui) e
 > **cada download registrado na trilha**. A tabela `anexos_documento_almoxarifado` existia órfã
 > desde a Etapa 0 e era esperada por seis features ao mesmo tempo; esta etapa lhe deu dono.
+> **Desde a Etapa 34 (2026-09-16, `746a106..054f727`) a inspeção deixou de ser a única tela com o
+> bloco:** o mesmo `AnexosDocumento` está nas outras **cinco** telas consumidoras — materiais,
+> requisição, recebimento, devolução e item de remessa a terceiros —, fechando as seis chaves do
+> mapa do servidor (há teste de integração cruzando as seis chaves do client com `ENTIDADES_ANEXO`,
+> `656467c`/`054f727`). O corte da Etapa 32 — **"só a inspeção tem botão"** — **deixou de valer**:
+> estava certo quando escrito, e está corrigido aqui em vez de apagado em silêncio. Nada do
+> comportamento desta feature mudou na 34 (zero linhas de servidor, zero na tela de inspeção).
 > **Faltam para 🟢 (agora TRÊS, todos fluxo de negócio):** não conformidade formal numerada,
 > liberação sob desvio autorizado e encaminhamento com status. *Este cabeçalho listava também
 > "cadastro do plano pela tela" (pago na Etapa 30) e "anexos" (pago na 32) — os dois saíram.* ·
