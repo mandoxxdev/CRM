@@ -147,6 +147,16 @@ E o caso degenerado é seguro por construção: se por algum motivo o efeito nã
 armar, a flag só pode ser consumida por uma query **idêntica** — isto é, pelo mesmo id e pelos
 mesmos filtros, um estado em que o detalhe **já está carregado** e pular a carga é o certo.
 
+⚠️ **(Fase 2) esse "seguro por construção" estava otimista demais, e o plano tinha transformado o
+otimismo numa sabotagem prevista como "nada cai".** A flag **não é desarmada quando não casa** — o
+desarme mora dentro do ramo que casa —, então ela **espera**. Se `syncSearchParams` armasse sem ter
+escrito (o defeito que o `if (escrita !== null)` evita), a flag `'id=55'` ficaria de pé durante uma
+troca de filtro (`'minha=1&id=55'`, não casa) e engoliria a **volta** do filtro (`'id=55'`, casa) —
+um refetch legítimo perdido, com o detalhe carregado em cima de uma lista filtrada diferente. O
+defeito é **alcançável**, tem quatro gestos, e o Passo 4 do cenário de integração da T6 é o controle
+positivo dele. O par "arma só quando escreveu" + "consome só a query idêntica" continua sendo o
+desenho certo — o que estava errado era dizer que a segunda metade sozinha bastava.
+
 **Onde a flag é desarmada** (a pergunta que o controlador mandou responder): **no próprio efeito, ao
 consumi-la** — e em nenhum outro lugar. O segundo ponto de desarme que ele sugeriu ("em
 `syncSearchParams`, quando ele decide NÃO escrever") foi **descartado com motivo**: quem chama
@@ -243,13 +253,25 @@ proibiu (regra iii). O molde de Requisições resolve isso com um **`selectedId`
 `loadingDetalhe || !detalhe`, e o cabeçalho usa `detalhe?.numero || '...'`. Então a etapa leva
 também o `selectedId` — cinco pontos, todos mecânicos:
 
-| Hoje | Passa a ser | Por quê |
-|---|---|---|
-| `:443` `gridTemplateColumns: detalhe ? '1fr 420px' : '1fr'` | `selectedId ? …` | senão o painel aberto em carga não tem coluna |
-| `:469` `background: detalhe?.id === r.id ? …` | `selectedId === r.id ? …` | a linha clicada continua marcada enquanto carrega |
-| `:485` `{detalhe && (` | `{selectedId && (` | o painel não pisca na troca de linha |
-| `:489-491` `{detalhe.numero}` / badge | `{detalhe?.numero \|\| '...'}` e `{detalhe && <badge/>}` | sem isso, `detalhe` nulo é `TypeError` |
-| `:494` `onClick={() => setDetalhe(null)}` | `onClick={fecharDetalhe}` | fechar tem de zerar `selectedId`, `idCarregadoRef` e **bumpar a seq** (resposta em voo não reabre o painel) |
+⚠️ **(Fase 2) Eram cinco e são SETE.** A revisão do plano mediu os pontos que desreferenciam
+`detalhe` fora de guarda com o gate em `selectedId`, e encontrou **dois** que nem este design nem o
+plano tinham na tabela — um deles o bloco de anexos, que o fix `c5d9e99` da Etapa 34 tirou do
+ternário de `loadingDetalhe` de propósito. Sem eles, a etapa inteira estoura por `TypeError` no
+primeiro clique de qualquer cenário.
+
+| # | Hoje | Passa a ser | Por quê |
+|---|---|---|---|
+| 1 | `:443` `gridTemplateColumns: detalhe ? '1fr 420px' : '1fr'` | `selectedId ? …` | senão o painel aberto em carga não tem coluna |
+| 2 | `:469` `background: detalhe?.id === r.id ? …` | `selectedId === r.id ? …` | a linha clicada continua marcada enquanto carrega |
+| 3 | `:485` `{detalhe && (` | `{selectedId && (` | o painel não pisca na troca de linha — **e é esta troca que torna 4, 5 e 6 obrigatórios** |
+| 4 | `:489-491` `{detalhe.numero}` / badge | `{detalhe?.numero \|\| '...'}` e `{detalhe && <badge/>}` | sem isso, `detalhe` nulo é `TypeError` |
+| **5** | **`:496` `{loadingDetalhe ? … : …}`** | **`{loadingDetalhe \|\| !detalhe ? … : …}`** | **(Fase 2)** este ternário é o único protetor do corpo (`detalhe.nota_fiscal` `:501`, `detalhe.itens` `:512`, `detalhe.status` `:514`). O texto do design já dizia "o corpo pelo par `loadingDetalhe \|\| !detalhe`"; **a tabela não tinha a linha**, e o plano copiou a tabela |
+| **6** | **`:607-609` `<AnexosDocumento … entidadeId={detalhe.id} …/>`** | **`{detalhe && (<div …><AnexosDocumento … entidadeId={detalhe.id} …/></div>)}`** | **(Fase 2) o bloqueador.** Este bloco vive **fora** do ternário de `loadingDetalhe` desde `c5d9e99`, e a única coisa que o protege hoje é o gate de `:485`. Trocando esse gate por `selectedId`, `detalhe.id` estoura. E a guarda não é só defesa: é a própria régua da RN-07 (`expect(blocoAnexos()).toBeNull()`) |
+| 7 | `:494` `onClick={() => setDetalhe(null)}` | `onClick={fecharDetalhe}` | fechar tem de zerar `selectedId`, `idCarregadoRef` e **bumpar a seq** (resposta em voo não reabre o painel) |
+
+**A RN-09 continua garantida com o ponto 6.** No refetch do **mesmo** id `detalhe` não é anulado,
+o `{detalhe && …}` permanece verdadeiro entre os dois commits e o React reconcilia o mesmo elemento
+na mesma posição — `blocoAnexos()` continua sendo o **mesmo nó** (`toBe(antes)`).
 
 **Descartado:** manter `{detalhe && …}` e aceitar o piscar. É mais barato de escrever e mais caro de
 olhar — duas reflows do grid por troca de linha —, e deixa o painel sem estado "carregando" logo no
@@ -282,15 +304,20 @@ ações de **Ferramentas** um **piso duro**, calculável:
 | Iniciar manutenção | ~118px | 54px | ~172px |
 | Ocorrência | ~65px | 54px | ~119px |
 | Calibração | ~65px | 54px | ~119px |
-| **soma + 4 × gap 6px + `td` padding 32px (`:194`)** | | | **≈ 685px** |
+| **soma + 4 × gap 6px + `td` padding 32px (`:194`)** | | | **≈ 683,5px** |
+
+⚠️ **(Fase 2) a soma dizia "≈685px" e o script da T5, rodado na revisão, devolve `683.5`.** A
+diferença é arredondamento por botão antes de somar (59+52+118+65+65 = 359 contra 58,5+52+117+65+65
+= 357,5). Não muda nada na conclusão — muda no fato de a saída que a T5 manda colar no plano ter de
+**bater** com o número documentado, senão a próxima sessão acha que o script está errado.
 
 Estimativa de texto a **6,5px/caractere** (conservadora para 14px = `0.875rem`; a real fica entre
 7,0 e 7,5). Largura útil da página: `min(viewport, 1400px) − 48px` de padding
 (`.almox-page`, `:7-9`).
 
 **A conclusão que não depende de estimativa nenhuma:** no piso do intervalo desktop — **769px** — a
-largura útil é **721px**, e a célula de ações **sozinha** pede ~685px. Sobram **36px** para as
-**seis** outras colunas da tela (`Código`, `Nome`, `Status`, `Série`, `Localização`, `Calibração` —
+largura útil é **721px**, e a célula de ações **sozinha** pede ~684px. Sobram **38px** (**(Fase 2)**,
+não 36) para as **seis** outras colunas da tela (`Código`, `Nome`, `Status`, `Série`, `Localização`, `Calibração` —
 `FerramentasAlmoxarifado.js:481-484`), cujo `td` padding já soma 6 × 32 = 192px **antes** de
 qualquer texto. Mesmo derrubando a estimativa de caractere pela metade, a tabela não cabe. Abaixo
 de 768px nada clipa, porque `:1030` dá `overflow-x: auto` à própria tabela; **entre 769px e a
@@ -339,14 +366,19 @@ piso duro de `nowrap` medido, "não mudar" é escolher o defeito certo em vez do
   → painel com `REQ-055`, contagem do detalhe **1**, contagem de `/almoxarifado/anexos` **1**. (Verde
   hoje; é a metade positiva que impede "consertar" a RN-01 matando o deep-link.)
 - **RN-03 — os refetches legítimos sobrevivem.** Foco/visibilidade da janela (`:268-284`) e troca de
-  filtro (`:183-186` → `:167-181`) continuam recarregando o detalhe. *Cenário:* clique → 1;
-  `window.dispatchEvent(new Event('focus'))` → 2; clicar o checkbox de filtro → 3. Uma carga por
-  gesto, e nenhuma flag armada sobrando.
+  filtro (`:183-186` → `:167-181`) continuam recarregando o detalhe. *Cenário* (**(Fase 2): quatro
+  passos, não três**): clique → 1; `window.dispatchEvent(new Event('focus'))` → 2; clicar o checkbox
+  de filtro → 3; **clicar de novo, desligando o filtro** → **4**. Uma carga por gesto, e nenhuma
+  flag armada sobrando. O quarto passo não é redundância: é o **único** que devolve a URL à query
+  que o passo 1 escreveu, e portanto o único que pega uma flag armada sem escrita no passo 2.
 - **RN-04 — falha de carga da lista é visível e distinguível de lista vazia.** *Cenário:* mock de
   `/almoxarifado/recebimentos` rejeitando com `{ response: { data: { error: 'Sem acesso ao módulo' } } }`
   → o DOM contém `Não foi possível carregar os recebimentos.`, contém `Sem acesso ao módulo`, contém
   `Tentar de novo`, **não** contém `Nenhum recebimento registrado`; e a metade positiva:
-  `Recebimentos NF` (o cabeçalho, `:404`) está na tela.
+  `Recebimentos NF` (o cabeçalho, `:404`) está na tela. **(Fase 2)** e o botão tem de **funcionar**,
+  não só existir: restaurar o mock, clicar `Tentar de novo` e ver as três linhas voltarem (molde
+  `HistoricoInspecoes.test.js:227-242`, que a medição da Fase 0 pediu e o plano tinha deixado cair).
+  Sem isso, um `<button>` sem `onClick` passa verde.
 - **RN-05 — um recarregamento que falha não deixa a lista obsoleta passando por fresca.** *Cenário:*
   lista carrega com 3 linhas → a rota passa a rejeitar → clique no botão de refresh (`:409`) → o DOM
   mostra o estado de erro e **nenhuma** linha de tabela (`.almox-table tbody tr` → 0).
@@ -398,6 +430,8 @@ piso duro de `nowrap` medido, "não mudar" é escolher o defeito certo em vez do
 | R7 | anular `detalhe` não fecha a corrida | RN-08 + decisão 4 |
 | R8 | `flex-wrap` global sem medição | medição por piso duro de `nowrap`, com o residual nomeado e o roteiro de F12 |
 | R9 | Ferramentas, a tela mais exposta, não tem suíte | o teste de drift congela as premissas; o roteiro manual cobre o visual; e está dito que o teste não prova o pixel |
+| **R11** | **(Fase 2)** trocar o gate do painel para `selectedId` deixando `:496` e `:607-609` sem guarda → `TypeError` no primeiro clique de **todos** os cenários de Recebimentos | pontos **5** e **6** da tabela de sete acima, obrigatórios e escritos como tal na T4 |
+| **R12** | **(Fase 2)** sabotagem de CSS ancorada em declaração (`gap: 6px`, `white-space: nowrap`) — 5 e 9 ocorrências no arquivo, logo âncora inválida ou aplicada na regra errada | âncora é o **seletor em início de linha** (`grep -cE '^\.almox-actions \{'` = 1) e o `perl` opera sobre o **bloco**; `md5sum` tem de **mudar** depois de cada sabotagem |
 | R10 | drift de linha em comentários e specs | T7 corrige `RequisicoesList.test.js:545-548`, `RecebimentosAlmoxarifado.js:600`, o cabeçalho `RecebimentosAlmoxarifado.test.js:78-81` e `08-recebimento/README.md:170`, **dizendo que estavam errados** |
 
 ## O que esta etapa NÃO cobre
