@@ -72,6 +72,8 @@ As telas do módulo ficam em **Almoxarifado**, no menu lateral:
 
 **No celular**, o módulo funciona no próprio navegador, sem aplicativo: o menu vira o botão de três linhas no topo, as tabelas mostram **todas** as colunas (deslize para o lado para alcançar as ações) e as janelas de confirmação abrem em tela cheia. A leitura de etiquetas pela câmera está na tela **Scanner** (seção 4.9) — atenção ao requisito de HTTPS descrito lá.
 
+**Uma regra de tela que vale para todas as tabelas do módulo:** a última coluna de cada tabela é a de **ações**, e os botões dela **quebram em mais de uma fileira** quando não cabem na largura disponível. Nenhum botão fica cortado pela borda da tabela nem escondido: se a janela for estreita — meia tela de monitor, notebook pequeno, celular —, a linha simplesmente fica mais alta e todos os botões continuam visíveis e clicáveis. As telas mais afetadas são as que têm botões com texto em vez de ícone, como **Ferramentas** e **Remessas a Terceiros**.
+
 ### 1.1 O número dos documentos
 
 Quatro documentos do módulo recebem um número automático ao serem criados, e esse número é **único
@@ -1005,6 +1007,8 @@ Em material com número de série há duas guardas a mais, ambas verificadas **a
 
 A requisição é o pedido formal: alguém precisa de material, o almoxarifado separa e entrega. A tela é **Almoxarifado → Requisições**.
 
+Clicar numa linha da lista abre o painel de detalhe à direita, com **uma única consulta** ao servidor, e o endereço da página passa a apontar para aquela requisição — dá para copiar e colar o link, ou abri-lo direto, e a requisição abre já no painel. O detalhe é buscado de novo quando você volta para a janela do navegador depois de sair dela, e quando troca o filtro da lista: é assim de propósito, para que quem retorna à tela veja a posição atual.
+
 ### 7.1 O ciclo completo
 
 | Passo | Status resultante | Quem faz | Permissão exigida |
@@ -1837,6 +1841,21 @@ O painel de detalhe do recebimento termina com o bloco **Anexos**. É onde fica 
 O momento natural de usar é o do próprio registro: ao salvar um recebimento novo, o sistema **já abre o detalhe dele** — a nota ainda está na mão de quem recebeu, e o anexo entra sem trocar de tela. Trocar de recebimento na lista troca os anexos mostrados: o bloco sempre mostra os documentos do recebimento que está aberto no painel.
 
 As regras de formato, tamanho, permissão e registro de download estão em **15.2.4**.
+
+### 14.8 Quando a tela não consegue carregar — e por que a diferença importa
+
+A tela de Recebimentos distingue, na cara, **"não existe nenhum"** de **"não consegui perguntar"**. São duas situações diferentes e duas telas diferentes, e confundi-las é o que leva alguém a lançar duas vezes a mesma nota fiscal.
+
+| O que a tela mostra | O que significa | O que fazer |
+|---|---|---|
+| *"Nenhum recebimento registrado"*, com o botão **Registrar primeiro recebimento** | A consulta funcionou e **não há recebimento nenhum** cadastrado | Registrar |
+| *"Não foi possível carregar os recebimentos."*, o motivo em letra menor e o botão **Tentar de novo** | A consulta **falhou** — servidor indisponível, rede caindo ou sessão expirada. **Nada se sabe** sobre o que existe ou não | Clicar em **Tentar de novo**. Se insistir, recarregar a tela: a sessão pode ter expirado |
+
+**Nunca conclua que um recebimento não foi lançado a partir de uma lista que falhou.** Quando a carga falha, a lista **fica vazia de propósito**: o sistema prefere não mostrar nada a mostrar uma posição antiga passando por atual. O botão de atualizar da tela (a dica dele é *"Atualizar lista"*) tenta de novo a qualquer momento.
+
+**No cadastro de um recebimento por nota fiscal**, a lista de materiais disponíveis para escolha é carregada junto com o formulário. Se essa carga falhar, aparece *"Não foi possível carregar a lista de materiais."* com um **Tentar de novo**, ao lado do campo de busca de material. **Isso avisa, não bloqueia:** o formulário continua utilizável e um recebimento **por pedido de compra** — em que os itens vêm do próprio pedido — pode ser registrado normalmente. O que não dá é digitar item à mão sem a lista, porque é dela que sai o material escolhido.
+
+**Ao trocar de recebimento no painel de detalhe**, o painel **esvazia** enquanto o novo carrega: o número no alto fica como **"..."** e o corpo mostra o aviso de carregamento. Ele nunca mostra os dados de um recebimento com o número de outro. E se você clicar em dois recebimentos em sequência rápida, **vale o último clique** — a resposta atrasada do anterior é descartada, mesmo que chegue depois.
 
 ---
 

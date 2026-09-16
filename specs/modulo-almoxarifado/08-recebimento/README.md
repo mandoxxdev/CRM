@@ -8,8 +8,27 @@
 > `RecebimentosAlmoxarifado.test.js` com **7 cenários** (contados no arquivo). Zero linhas de
 > servidor. A frase "plugar aqui é uma linha", que esta spec repetia desde a Etapa 32, **estava
 > errada** — ver a correção no item de checklist de fotos/anexos, que também registra o defeito
-> **pré-existente** descoberto aqui (os três `catch` que engolem erro de carga).
-> **Última atualização:** 2026-09-16 (Etapa 34 — anexos no painel + primeira suíte da tela;
+> **pré-existente** descoberto aqui (os três `catch` que engolem erro de carga — **fechado na
+> Etapa 35**, `22e1d9b`).
+> **Etapa 35 (2026-09-16, `6f6a8b0..2d5cd35`) — a tela passou a DIZER quando não conseguiu
+> carregar, e o painel parou de mostrar o recebimento anterior.** NÃO é feature nova: são defeitos
+> pré-existentes desta tela, achados pela revisão da Etapa 34 e pelas duas lentes da revisão final
+> desta. (1) **`22e1d9b`** — os três `catch` de carga engoliam o erro: falha de rede ou 500
+> aparecia como *"Nenhum recebimento registrado"*, indistinguível de "não há recebimento", com o
+> risco real de registrar de novo uma nota que já existe. Agora a falha vai para o **DOM**
+> (*"Não foi possível carregar os recebimentos."* + botão *"Tentar de novo"*), a lista é **zerada**
+> na falha (recarregamento que falha não deixa dado velho passando por fresco) e o erro de
+> materiais aparece **dentro** do modal de criar (*"Não foi possível carregar a lista de
+> materiais."*); `loadAuxiliares` **continua silencioso de propósito**, e o porquê está escrito no
+> próprio `catch`. (2) **`4681111`** — trocar de linha mostrava o registro **anterior** sob o id
+> novo, e resposta fora de ordem vencia o último clique: fechado com `selectedId` +
+> `idCarregadoRef` + `detalheFetchSeqRef`, o molde da tela irmã de Requisições. (3) **`29cbdfa`** —
+> consequência do (2) pega pela revisão final: a barra de etapas do cabeçalho piscava para o
+> **passo 1** durante a carga; agora fica **neutra**. (4) A tela ganhou aqui os cenários que
+> faltavam: `RecebimentosAlmoxarifado.test.js` foi de 7 para **12 cenários** (contados no arquivo,
+> `test(` de (a) a (l)). Zero linhas de servidor no range.
+> **Última atualização:** 2026-09-16 (Etapa 35 — erro de carga visível, painel que não mente e
+> barra de etapas neutra; antes: 2026-09-16, Etapa 34 — anexos no painel + primeira suíte da tela;
 > antes: 2026-08-11 — **auditoria spec×código**: corrigida a afirmação — que estava
 > errada — de que a rota de certificado não tinha tela; registradas a entrada atômica/idempotente e
 > a exigência de lote do review final de 2026-08-10, que só a spec 10 documentava; tabela de testes
@@ -136,7 +155,7 @@ Todos os tipos de entrada da spec, conferência documental e física estruturada
 - [ ] Recebimento parcial de pedido (validar suporte real + saldo pendente do pedido)
 - [ ] Recebimento excedente só com autorização
 - [ ] Conferência física estruturada (spec 8.3): contagem, pesagem, medição, checklist configurável por tipo de material. **Fora do escopo da Etapa 5**, mesma decisão acima.
-- [x] Fotos do recebimento (`anexos_documento_almoxarifado` entidade `recebimento`) — **`01dd3ce`** + **`c5d9e99`** (Etapa 34, 2026-09-16): bloco **Anexos** inline no fim do painel de detalhe do recebimento, entidade `recebimento` com o id do detalhe carregado. Quem acaba de registrar um recebimento cai no painel e já anexa a nota fiscal sem sair da tela (cenário testado). **Esta tela ganhou aqui a primeira suíte de teste que já teve** — `client/src/components/almoxarifado/RecebimentosAlmoxarifado.test.js`, **7 cenários**: (a) uma linha por recebimento, (b) o clique abre o painel do recebimento clicado, (c) o bloco consulta `entidade=recebimento` com o id DO DETALHE, uma vez, (d) lista fechada não consulta anexos (100 recebimentos ≠ 100 requisições — RN-02), (e) trocar de linha refaz a consulta com o novo id, (f) depois de registrar, o painel do recém-criado já traz o bloco com o id devolvido pelo POST, (g) refetch por ação de workflow não desmonta o bloco nem repete a consulta.
+- [x] Fotos do recebimento (`anexos_documento_almoxarifado` entidade `recebimento`) — **`01dd3ce`** + **`c5d9e99`** (Etapa 34, 2026-09-16): bloco **Anexos** inline no fim do painel de detalhe do recebimento, entidade `recebimento` com o id do detalhe carregado. Quem acaba de registrar um recebimento cai no painel e já anexa a nota fiscal sem sair da tela (cenário testado). **Esta tela ganhou aqui a primeira suíte de teste que já teve** — `client/src/components/almoxarifado/RecebimentosAlmoxarifado.test.js`, **7 cenários**: (a) uma linha por recebimento, (b) o clique abre o painel do recebimento clicado, (c) o bloco consulta `entidade=recebimento` com o id DO DETALHE, uma vez, (d) lista fechada não consulta anexos (100 recebimentos ≠ 100 requisições — RN-02), (e) trocar de linha refaz a consulta com o novo id, (f) depois de registrar, o painel do recém-criado já traz o bloco com o id devolvido pelo POST, (g) refetch por ação de workflow não desmonta o bloco nem repete a consulta. **Na Etapa 35 essa suíte foi de 7 para 12 cenários** — (h) a (l), ver o item de erro de carga abaixo.
       **Etapa 32 (`e708125..fd71958`): o MECANISMO existe, está testado, e falta SÓ o plug desta
       tela.** A entidade é `recebimento` — e a tabela por trás é `recebimentos_material_almoxarifado`, não `recebimentos_almoxarifado`, que é o nome que a intuição erra.
       A `anexos_documento_almoxarifado` era **órfã** — zero leitor, zero escritor, sem índice —,
@@ -164,15 +183,84 @@ Todos os tipos de entrada da spec, conferência documental e física estruturada
       texto da Etapa 32 fica acima **de propósito** — o mecanismo que ele descreve continua exato;
       errada era só a estimativa do custo do plug.
 
-      **Defeito PRÉ-EXISTENTE descoberto ao escrever a suíte desta tela (não é da Etapa 34, e
-      continua aberto):** os três carregamentos de `RecebimentosAlmoxarifado.js` **engolem o erro**
-      — `loadRecebimentos` (`:72-85`) só dispara um toast e cai no estado vazio, `loadMateriais`
-      (`:93-97`) e `loadAuxiliares` (`:99-108`) têm `catch { /* ignore */ }` literal. Falha de rede
-      ou 500 do servidor aparece para o operador como **"Nenhum recebimento registrado"**, isto é,
-      como se não houvesse recebimento nenhum — o mesmo pecado que a Etapa 29 corrigiu em
-      `HistoricoInspecoes`. É o item **(b) da Etapa 35**; o molde é o `HistoricoInspecoes` pós-29 e
-      a régua já está pronta, porque o `api.get` da suíte nova tem fallback que **rejeita**. Modal
-      fiscal, workflow e etiquetas desta tela **seguem sem teste**.
+      **Defeito PRÉ-EXISTENTE descoberto ao escrever a suíte desta tela (não era da Etapa 34) —
+      ✅ FECHADO NA ETAPA 35 (`22e1d9b`), fragilidade G10.** Os três carregamentos de
+      `RecebimentosAlmoxarifado.js` **engoliam o erro**: `loadRecebimentos` só disparava um toast e
+      caía no estado vazio, `loadMateriais` e `loadAuxiliares` tinham `catch { /* ignore */ }`
+      literal. Falha de rede ou 500 do servidor aparecia para o operador como **"Nenhum recebimento
+      registrado"**, isto é, como se não houvesse recebimento nenhum — o mesmo pecado que a Etapa 29
+      corrigiu em `HistoricoInspecoes`, e com risco de registrar de novo uma nota que já existe.
+
+      > ⚠️ **Correção da Etapa 35: a redação anterior deste parágrafo citava linhas, e uma delas
+      > ESTAVA ERRADA.** Isto dizia que `loadAuxiliares` ficava em `:99-108`; **estava errado**; o
+      > certo, na época, era **`:100-109`** — `:99` era **linha em branco**. E depois
+      > do `22e1d9b` e do `4681111` as três funções se deslocaram de novo, então **nenhum** dos
+      > três intervalos que este parágrafo citava (`:72-85`, `:93-97`, `:99-108` — **estava errado**
+      > o terceiro, e os outros dois apodreceram) aponta mais para o que descrevia.
+      > Por isso as referências desta spec passam a ser pelo **nome da função** —
+      > `loadRecebimentos`, `loadMateriais`, `loadAuxiliares` —, que é o que sobrevive a um commit.
+      > Fica registrado em vez de trocado em silêncio: já aconteceu duas vezes nesta base alguém
+      > confiar numa ref de linha apodrecida.
+
+      **Como ficou** (`22e1d9b`, molde do `HistoricoInspecoes` pós-Etapa 29, sem classe CSS nova):
+      `loadRecebimentos` grava estado de erro e a tela renderiza **"Não foi possível carregar os
+      recebimentos."** com botão **"Tentar de novo"** (RN-04), **zerando a lista** na falha para que
+      um refresh que falha não deixe linhas velhas passando por frescas (RN-05); `loadMateriais`
+      grava o seu próprio erro e a frase **"Não foi possível carregar a lista de materiais."**
+      aparece **dentro** do modal de novo recebimento, junto do campo de busca, onde ela atrapalha
+      (RN-06) — e só **avisa**, não bloqueia registrar. O botão de refresh do cabeçalho ganhou
+      `title="Atualizar lista"`, que era o que faltava para o cenário poder clicá-lo.
+      **`loadAuxiliares` continua silencioso, e isso é decisão, não esquecimento:** pedidos de
+      compra e fornecedores alimentam dois `<select>` **opcionais**, os dois têm entrada manual ao
+      lado, e o recebimento pode ser registrado inteiro sem eles — um terceiro estado de erro pagaria
+      uma superfície nova por uma falha que não bloqueia ninguém. O que era errado ali era o
+      `/* ignore */` **sem explicação**, que fazia parecer esquecimento; o porquê está escrito dentro
+      do próprio `catch`.
+
+      **Cenários que travam isto** (`RecebimentosAlmoxarifado.test.js`, o `api.get` da suíte tem
+      fallback que **rejeita**): **(h)** a lista que não carregou mostra erro, nunca "Nenhum
+      recebimento registrado" — com as duas metades positivas: a tela montada e o *"Tentar de novo"*
+      **restaurando** a lista (um `<button>` sem `onClick` passaria verde); **(i)** refresh que falha
+      não deixa a lista velha na tela; **(j)** falha ao carregar materiais aparece **dentro** do
+      modal.
+
+      **Dois itens que NENHUMA spec tinha, fechados aqui** (`4681111`) — registrados porque ficaram
+      sem número até esta etapa (letra C das novidades: **C46** e **C47**):
+      - **RN-07 — o painel mostrava o registro ANTERIOR sob o id novo.** `abrirDetalhe` nunca
+        anulava `detalhe`, nem ao trocar de linha: durante a carga do recebimento B o painel (e o
+        bloco de anexos, que desde `c5d9e99` vive **fora** do ternário de loading) continuava
+        exibindo A — e nessa janela um arquivo escolhido "para A" seria enviado a **B**. Conserto no
+        molde completo de Requisições: o painel passa a ser gatilhado por **`selectedId`** (não por
+        `detalhe`), `idCarregadoRef` diz qual id está **realmente** dentro de `detalhe` e o `detalhe`
+        é anulado **só na troca de id**. **Descartado:** apenas "anular `detalhe`" sem `selectedId` —
+        sem ele o painel inteiro desaparece e os pontos que desreferenciam `detalhe` lançam
+        `TypeError`. Sete pontos de render ganharam guarda explícita, e o cabeçalho mostra
+        `detalhe?.numero || '...'` enquanto carrega. Cenário **(k)**.
+      - **RN-08 — resposta fora de ordem vencia.** Dois cliques rápidos deixam dois `GET` em voo e o
+        que chegasse **por último** pintava o painel, mesmo sendo o do clique **anterior**.
+        `detalheFetchSeqRef` descarta a resposta atrasada. Cenário **(l)**.
+      - **RN-09 (não-regressão):** refetch do **mesmo** id (ação de workflow/fiscal) **não** desmonta
+        o bloco de anexos — é o cenário (g) da Etapa 34, que continua verde porque a anulação de
+        `detalhe` é condicionada a `idCarregadoRef.current !== id`.
+
+      **E a consequência que a revisão final pegou** (`29cbdfa`): `currentStep` era derivado de
+      `detalhe` e era o **oitavo** consumidor dele — a tabela de sete pontos do design **estava
+      incompleta**. Com `detalhe` anulado na troca de linha, o `: 0` fazia a **barra de etapas** do
+      cabeçalho acender o **passo 1** por um round-trip inteiro e pular de volta ao chegar o detalhe
+      novo (e acender "Almoxarifado" já na lista, sem nada aberto). Agora vale `undefined` enquanto
+      carrega e `AlmoxPageHeader` (`idx = currentStep ?? -1`) deixa a barra **neutra** em vez de
+      mentir; `currentStep = 0` legítimo continua acendendo. **Descartado:** congelar o último passo
+      num ref — mostraria o passo do recebimento **anterior** sob o id novo, exatamente a classe de
+      defeito que a RN-07 acabou de fechar.
+
+      **O que CONTINUA aberto nesta tela (residual da G10):** **modal fiscal, workflow e etiquetas
+      seguem sem teste** — a suíte cobre lista, painel, anexos, erro de carga e ordem de resposta, e
+      nada mais. E um resíduo inofensivo: `fecharDetalhe` **bumpa** a sequência (fechar é fechar),
+      mas **não zera `loadingDetalhe`** — fechar o painel com um `GET` em voo deixa a flag `true`,
+      e como o `finally` de `abrirDetalhe` só a desliga quando a sequência ainda é a dele, ela fica
+      pendurada. Hoje não tem sintoma (o painel inteiro depende de `selectedId`, que foi a `null`),
+      e não há cenário de "✕ em voo" nesta tela — o irmão em Requisições tem (`2817054`) e serve de
+      molde. É item da **Etapa 36**.
 - [ ] Divergências: registro formal (tipo, quantidade, ação) — parcial na inspeção
 - [ ] Ao aprovar: definir localização (sugestão da feature 02) + gerar etiqueta (feature 10) + **atualizar saldo via movimentação v2** — a entrada já passa pelo motor (`registrarMovimentacao`) desde antes da Etapa 5, e desde a Etapa 6 a movimentação vai com `lote_id` (`64686b1`). Continuam faltando a **etiqueta** (Etapa 6c, não a 6) e a sugestão de localização
 - [x] Quarentena: material aguardando inspeção não entra no disponível (`quantidade_em_inspecao`) — **Etapa 5 (2026-08-08)**. Três movimentos novos no motor (`QUARENTENA`, `LIBERACAO_INSPECAO`, `REPROVACAO_INSPECAO`) com guarda atômica (`c37b67e`); entrada retida em vez de barrada (`4db5e11`). A decisão de inspeção em si (aprovar/reprovar/parcial) é da feature 09 — ver aquele README para o motor real usado na decisão (`DECISAO_INSPECAO`, não os dois tipos separados acima).

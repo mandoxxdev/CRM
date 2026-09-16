@@ -2,9 +2,44 @@
 
 > Atualizado em 2026-09-16 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 34) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 35) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20.
 
-> ## Onde o desenvolvimento está — 2026-09-16 (Etapa 34 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-09-16 (Etapa 35 ENTREGUE · modo contínuo pelo mapa)
+>
+> **Etapas 1 a 20 e 22 a 35 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
+> A **Etapa 35 (as telas vizinhas param de esconder falha e de mostrar o registro errado)** fechou
+> em 2026-09-16 (`6f6a8b0..2d5cd35`) e **nenhuma linha do servidor mudou** — tudo o que ela fez
+> está nas telas.
+>
+> **Ela não é feature.** São os **três** problemas que a revisão da Etapa 34 achou nas telas
+> **vizinhas** às que ela mexeu, **dois deles anteriores a qualquer etapa recente**. Os três se
+> pareciam: a tela mostrava algo **plausível** em vez de dizer a verdade.
+>
+> **O que mudou:**
+> - **Requisições:** clicar numa linha faz **uma** consulta do detalhe, não duas (furo **C45**,
+>   fechado). Link direto, atualização ao voltar para a janela e troca de filtro continuam iguais.
+> - **Recebimentos:** falha de rede **para de se disfarçar de lista vazia** — a tela diz
+>   *"Não foi possível carregar os recebimentos."* com o botão **Tentar de novo**; um
+>   recarregamento que falha **zera** a lista em vez de deixar a antiga passando por fresca; e o
+>   modal de nota fiscal avisa *"Não foi possível carregar a lista de materiais."* sem bloquear o
+>   registro por pedido de compra (fragilidade **G10**, fechada nesta parte).
+> - **Recebimentos, trocar de linha:** o painel **não mostra mais o recebimento anterior** sob o
+>   número novo (o cabeçalho passa por *"..."*), e com duas respostas fora de ordem vence o
+>   **último clique** (furos **C46** e **C47**, os dois fechados).
+> - **As 11 telas com coluna de ações:** os botões **quebram em duas fileiras** em vez de serem
+>   cortados pela borda da tabela sem barra de rolagem. O pior caso medido não era Materiais, era
+>   **Ferramentas**.
+>
+> **⚠️ Duas coisas antes de apresentar:**
+> 1. **A verificação manual F12 foi reescrita, e é ela que falta.** A redação antiga estava
+>    **errada na tela** (mandava olhar Materiais; o pior caso é Ferramentas) e ficou **vencida**
+>    com a mudança de estilo. O que resta medir é o **teto** da faixa de largura (~1100 a ~1355
+>    pixels) e quais linhas passaram a ocupar **duas fileiras**. São cinco minutos, e o roteiro
+>    está na seção da Etapa 35 abaixo.
+> 2. **O modal de dados fiscais, o avanço de situação e a impressão de etiquetas de Recebimentos
+>    continuam sem teste automático** — é a parte da **G10** que **não** fechou.
+>
+> Antes disto: **Etapa 34 (anexos nas cinco telas restantes)**, `746a106..054f727`.
 >
 > **Etapas 1 a 20 e 22 a 34 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
 > A **Etapa 34 (anexos nas cinco telas restantes)** fechou em 2026-09-16
@@ -4549,6 +4584,175 @@ que ele não tinha como repetir com sucesso garantido.
 - **Número de série de material** — continua sendo **digitado pelo operador** e de propósito não
   passa por este gerador. Retentar com outro número gravaria algo que ninguém digitou.
 - **Números de outros módulos do CRM** — a varredura foi do almoxarifado.
+
+---
+
+## Etapa 35 — As telas vizinhas param de esconder falha e de mostrar o registro errado (ENTREGUE — 2026-09-16)
+
+**O que mudou, em uma frase:** três telas pararam de mostrar algo **plausível** em vez de dizer a
+verdade — a lista de recebimentos não finge mais estar vazia quando a rede caiu, o painel de detalhe
+não mostra mais o recebimento anterior sob o número novo, e os botões da coluna de ações não são mais
+cortados pela borda da tabela.
+
+**Esta etapa não é feature.** Não tem tela nova, campo novo nem botão novo. São os três problemas
+que a revisão da Etapa 34 achou nas telas **vizinhas** às que ela mexeu, e **dois deles são
+anteriores a qualquer etapa recente**: existiam desde que as telas foram construídas. **Nada mudou
+no servidor.**
+
+**O caso com consequência real de operação é um só:** com o servidor fora do ar, a tela de
+Recebimentos dizia *"Nenhum recebimento registrado"*. Quem operava concluía que a nota não havia
+sido lançada e **lançava de novo** — recebimento duplicado de material que já tinha entrado.
+
+### Onde se percebe cada mudança
+
+| Tela | O que você vai notar |
+|---|---|
+| **Almoxarifado → Requisições** | Abre mais rápido, e o piscar de *"Carregando"* ao clicar numa linha desapareceu — era uma consulta a mais, agora é uma só |
+| **Almoxarifado → Recebimentos** (lista) | Se a lista não carregar: *"Não foi possível carregar os recebimentos."*, o motivo em letra menor e o botão **Tentar de novo**. A lista de verdade vazia continua dizendo *"Nenhum recebimento registrado"*, com **Registrar primeiro recebimento** — são duas telas diferentes |
+| **Almoxarifado → Recebimentos** (novo, por nota fiscal) | Se a lista de materiais não carregar: *"Não foi possível carregar a lista de materiais."* junto do campo de busca, com **Tentar de novo**. **Não trava** o formulário: recebimento por pedido de compra continua funcionando |
+| **Almoxarifado → Recebimentos** (trocar de linha) | O painel esvazia na hora: cabeçalho em **"..."**, aviso de carregando, e o bloco de anexos do anterior sai da tela. Com dois cliques rápidos, vence o **último** |
+| **As 11 telas com coluna de ações** | Em janela estreita, os botões **quebram para uma segunda fileira** em vez de sumir na borda. O custo aceito: essas linhas ficam mais altas |
+
+### Roteiro de teste manual
+
+**Preparação**
+1. Entre no sistema com um usuário que tenha acesso ao módulo Almoxarifado. Você vai precisar de
+   **parar e subir o servidor** durante o roteiro (o `npm run dev`, ou desligar a rede da máquina),
+   e do **F12** do navegador.
+
+**Requisições — a consulta que era feita duas vezes**
+2. **Almoxarifado → Requisições.** Abra o **F12 → aba Rede**, filtre por `requisicoes` e limpe a
+   lista.
+3. **Clique numa linha da tabela.** Conte as consultas do detalhe daquela requisição: tem de ser
+   **uma**. (Antes desta etapa eram duas, e por isso o aviso de "Carregando" às vezes piscava.)
+4. Clique em **outra** linha: mais **uma**.
+5. **Confirme que as atualizações legítimas não morreram junto:** com uma requisição aberta, clique
+   em outro programa e volte para a janela do navegador → aparece **uma** consulta nova. Isso é de
+   propósito: quem volta para a tela quer o dado fresco.
+6. Ainda com ela aberta, ligue e desligue o filtro **Minhas requisições** → a lista e o detalhe são
+   buscados de novo. Também de propósito.
+7. **Copie o endereço da página** (ele tem `?id=...`), cole numa aba nova e entre: a requisição abre
+   no painel, com **uma** consulta.
+
+**Recebimentos — a falha de rede que era invisível**
+8. **Almoxarifado → Recebimentos** com o sistema no ar: a lista aparece normalmente.
+9. **Pare o servidor.**
+10. Clique no botão de **atualizar** da tela (passe o mouse: a dica diz *"Atualizar lista"*). A
+    lista **desaparece** e a tela passa a mostrar:
+    *"Não foi possível carregar os recebimentos."*, o motivo técnico em letra menor, e o botão
+    **Tentar de novo**.
+    **Repare no que NÃO aparece:** a frase *"Nenhum recebimento registrado"*. Era exatamente ela que
+    aparecia antes — e é ela que fazia alguém lançar a nota duas vezes.
+11. **Suba o servidor** e clique em **Tentar de novo**: a lista volta e a mensagem de erro sai.
+12. **Pare o servidor outra vez** e clique em atualizar: a mensagem volta. (Ela não "gasta": erra,
+    limpa no sucesso, erra de novo.)
+13. **Com o servidor ainda parado**, clique em **Novo Recebimento** e escolha o tipo **Nota fiscal**.
+    Junto do campo *Buscar material...* aparece *"Não foi possível carregar a lista de materiais."*
+    com **Tentar de novo**.
+14. **Confirme que isso é aviso e não barreira:** no mesmo modal, troque para o tipo **Pedido de
+    compra** — o caminho continua disponível. Feche o modal, suba o servidor, abra de novo: o aviso
+    não está mais lá.
+15. **E o contraste que prova a regra:** com o servidor no ar e a lista realmente sem nenhum
+    recebimento, a tela diz *"Nenhum recebimento registrado"* e oferece **Registrar primeiro
+    recebimento**. Lista vazia e falha de rede são duas telas diferentes.
+
+**Recebimentos — o painel que mostrava o recebimento anterior**
+16. Com o servidor no ar, abra **F12 → aba Rede** e ligue o estrangulamento **Slow 3G** (a caixa de
+    seleção de velocidade da rede).
+17. Clique num recebimento e espere ele abrir. Agora clique em **outro, sem esperar**.
+18. **Olhe o cabeçalho do painel:** ele passa por **"..."** e o corpo mostra o aviso de carregando.
+    Em nenhum instante o número do segundo recebimento aparece **em cima dos dados do primeiro**.
+    O bloco de anexos do primeiro também sai da tela.
+19. **Repita algumas vezes, invertendo a ordem dos dois.** O painel sempre acaba no recebimento do
+    **último** clique — mesmo que a resposta do primeiro chegue depois.
+20. **A não regressão que vale conferir:** com um recebimento aberto, escolha um arquivo no bloco de
+    anexos e **salve os dados fiscais** (ou avance a situação). O painel se atualiza, o bloco de
+    anexos **não** é desmontado e o arquivo escolhido **continua escolhido**.
+21. **O ✕ do painel:** clique numa linha e, imediatamente, no **✕** do painel. Ele fecha **e fica
+    fechado** — não reabre sozinho alguns instantes depois, e o endereço da página não volta a
+    apontar para a requisição/recebimento que você fechou.
+
+**Tabelas — os botões que eram cortados**
+22. **Almoxarifado → Ferramentas.** Arraste a borda da janela do navegador para estreitá-la aos
+    poucos.
+23. Olhe a última coluna: os botões **quebram para uma segunda fileira** dentro da mesma célula, e o
+    último continua inteiro e clicável. Antes, ele era cortado pela borda da tabela — sem barra de
+    rolagem e sem aviso nenhum.
+24. Repita em **Materiais** e em **Remessas a Terceiros**.
+
+### O roteiro do F12 — a única coisa desta etapa que ficou sem prova
+
+A mudança de estilo está feita e travada por teste automático, mas **medir pixel exige navegador**.
+Falta conferir duas coisas, e são cinco minutos.
+
+**Nota importante, porque a instrução anterior estava errada:** o roteiro antigo (letra **F12** do
+documento de novidades) mandava olhar **Materiais**. **Estava errado na tela** — os dez ícones de
+Materiais ocupam cerca de 374 pixels e cabem com folga. O pior caso é **Ferramentas**, que mostra
+**cinco botões com texto**, e texto não quebra no meio da palavra.
+
+**Como fazer:**
+1. Abra o **F12** e use o modo de dispositivo (ou arraste a borda da janela, acompanhando a largura
+   que o navegador mostra).
+2. Repita em **cada** uma destas larguras: **769, 820, 900, 1024, 1100, 1280 e 1400 pixels**, mais
+   **uma largura abaixo de 768 pixels** (celular — ali o desenho da tabela é outro, e a quebra de
+   linha muda a **altura** das linhas nas 11 telas).
+3. Em cada largura, olhe **três telas**:
+   - **Almoxarifado → Ferramentas**, numa linha de ferramenta **DISPONÍVEL que exige calibração** —
+     é a que mostra os **cinco** botões, o pior caso;
+   - **Almoxarifado → Materiais** — dez ícones na coluna de ações;
+   - **Almoxarifado → Remessas a Terceiros** — seis botões.
+4. **Confira duas coisas em cada uma:**
+   - **o ÚLTIMO botão da coluna está inteiro** e clicável — não cortado pela borda, não escondido;
+   - **a tabela não ganhou uma área escondida sem barra de rolagem.** Cole no console do F12:
+
+     ```js
+     const c = document.querySelector('.almox-table-container');
+     console.log(c.scrollWidth, c.clientWidth, c.scrollWidth > c.clientWidth);
+     ```
+
+     O terceiro valor tem de ser **`false`**. Se der `true`, há conteúdo fora da área visível e sem
+     barra para alcançá-lo — é o caso a relatar.
+5. **Anote também quais linhas passaram a ocupar duas fileiras** em cada largura. Esse é o custo
+   aceito da mudança, e é preciso ver se incomoda na prática.
+
+**Se algo estiver errado:** diga **qual largura, qual tela e qual botão**. O ajuste é de estilo e é
+de uma linha.
+
+### O que esperar no dia a dia
+
+- **Requisição abre mais rápido.** Metade das consultas ao abrir uma linha desapareceu. Nenhum dado
+  mudou — era leitura repetida, não lançamento duplicado.
+- **Mensagem de erro em Recebimentos é informação, não pânico.** Ela significa "não consegui
+  perguntar ao servidor", e quase sempre a causa é rede ou sessão expirada. Clicar em **Tentar de
+  novo** resolve; se não resolver, recarregue a tela (o login pode ter expirado).
+- **Lista vazia e falha de rede agora são distinguíveis** — e essa diferença é o ponto da etapa.
+  Nunca registre de novo um recebimento porque a lista "está vazia": confira qual das duas telas
+  você está vendo.
+- **O painel do recebimento pode "esvaziar" por um instante.** É de propósito: ele esvazia em vez de
+  mostrar o recebimento anterior com o número do novo. Em rede boa é imperceptível.
+- **Vale sempre o último clique.** Se você clicar em dois recebimentos em sequência, o painel acaba
+  no segundo, mesmo que a resposta do primeiro chegue atrasada.
+- **Tabelas mais altas em janela estreita.** Os botões que não cabem passam para uma segunda
+  fileira. Foi escolha: linha mais alta incomoda, botão cortado **não existe** para quem olha.
+
+### O que esta etapa NÃO cobre
+
+- **O teto da faixa de largura e as linhas que passaram a ocupar duas fileiras** — é o roteiro do
+  F12 acima, e é a única coisa desta etapa sem prova. Cinco minutos de navegador.
+- **Voltar e avançar do navegador na tela de Requisições.** As setas de histórico não têm prova
+  automática (exigiria um histórico de navegador real no teste). Pela leitura do código elas não
+  disparam consulta duplicada — mas é leitura, não medição.
+- **Anexar arquivo exatamente no instante em que você troca de recebimento.** O arquivo ainda pousa
+  no recebimento anterior. É uma janela de fração de segundo, e fechá-la exige mexer no envio do
+  arquivo, não na leitura do painel.
+- **O modal de dados fiscais, o avanço de situação e a impressão de etiquetas de Recebimentos
+  continuam sem teste automático.** A suíte dessa tela nasceu na Etapa 34 em volta dos anexos;
+  esta etapa somou erro de carga e troca de painel. O resto segue descoberto.
+- **As mensagens novas não são anunciadas por leitor de tela.** O aviso flutuante do sistema é o
+  único anúncio assistivo que o módulo tem — vale para o módulo inteiro, não é particularidade
+  desta etapa.
+- **Os furos C43 e C44**, da Etapa 33, seguem abertos.
+- **Nada no servidor.** Nenhuma rota, nenhum perfil, nenhuma permissão, nenhuma migration.
 
 ---
 

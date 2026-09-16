@@ -283,7 +283,7 @@ Se alguém da equipe guardou esses endereços em planilha, documento ou e-mail, 
 passa a ser abrir pelo sistema. Nenhum arquivo foi apagado ou movido — só o endereço mudou de
 regra. Ver o item **42** da letra C.
 
-### B. Decisões de negócio — B1 a B71; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B79; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(O título desta seção dizia "B1 a B24" — **estava defasado**: os itens já iam até B36 antes da
 Etapa 20. Corrigido em 2026-08-28 para B50, depois para B56 com as três da Etapa 24, para B57 com
@@ -292,7 +292,9 @@ porque a contagem errada fazia parecer que as decisões novas não tinham sido r
 título já esteve defasado duas vezes. **Atualizado de novo em 2026-08-29 para B61**, com as três
 da Etapa 27 — B59 (plano por família), B60 (o alerta para a etapa da tela) e B61 (instrumento
 opcional, decisão já tomada). **Atualizado para B63** com as duas da Etapa 28 e **para B64** com a
-da Etapa 29.)*
+da Etapa 29. **Atualizado em 2026-09-16 para B79**, com as oito da Etapa 35 — B72 a B78 são as
+sete decisões de desenho dela, e B79 é uma decisão sobre **como se prova** o que esta base entrega.
+O título vinha marcado "B1 a B71", que era o número correto ao fim da Etapa 34.)*
 
 **A B6 SAIU da lista de em aberto — foi respondida pela Etapa 26** (2026-08-29): vence o catálogo
 do cliente, e a lista genérica sai das telas. Ver o item B6 abaixo, que ficou no lugar com o
@@ -1327,6 +1329,137 @@ documento na requisição — o desenho continua indo por e-mail — até essa e
 acesso ao módulo continua enxergando e anexando o mesmo documento por Almoxarifado → Requisições,
 inclusive nas requisições abertas pelos outros setores. Reverter é uma linha.
 
+**B72 (NOVA, da Etapa 35 — decisão que EU tomei, reversível) — a consulta duplicada da requisição
+foi neutralizada marcando "este clique fui eu", e não bloqueando cliques repetidos.**
+
+O clique numa requisição fazia duas coisas: buscar o detalhe e **atualizar o endereço da página**
+(para o link poder ser copiado). A atualização do endereço acordava o mecanismo de link direto, que
+buscava o detalhe **de novo**.
+
+**O que foi escolhido:** o clique deixa um bilhete dizendo *"o endereço mudou porque fui eu"*, com o
+endereço exato a que o bilhete se refere — e o mecanismo de link direto, ao acordar, lê o bilhete,
+reconhece o endereço e **não repete** a consulta. Duas coisas foram deliberadas aqui: o bilhete
+guarda o endereço (não é um simples liga/desliga) e é escrito **só quando o endereço realmente
+muda**.
+
+**O que foi descartado, e por quê:**
+- **Um liga/desliga simples**, sem o endereço. Ele ficaria ligado nos casos em que o clique **não**
+  muda o endereço (clicar na linha que já está aberta, por exemplo), e a próxima abertura legítima
+  seria engolida. A medição desta etapa provou que esse caso é alcançável.
+- **"Se é o mesmo registro que já está aberto, não busque"** — a saída óbvia, e **errada**: ela
+  mataria a atualização do detalhe quando o usuário troca o filtro da lista, que é um recarregamento
+  legítimo e já era coberto por teste.
+- **Marcar o clique como "não force"** — mexeria numa regra compartilhada por **17** pontos do
+  código, incluindo telas de outros módulos. Risco desproporcional ao ganho.
+
+**O custo se a escolha estiver errada:** uma abertura de requisição deixaria de carregar o detalhe.
+É o defeito mais visível possível (o painel ficaria vazio), e há cenário automático contando as
+cargas em quatro momentos seguidos — clique, volta para a janela, filtro ligado, filtro desligado.
+
+**B73 (NOVA, da Etapa 35 — decisão que EU tomei, reversível) — o bilhete da B72 é descartado só por
+quem o lê.**
+
+**O que foi escolhido:** só o mecanismo de link direto apaga o bilhete, no instante em que o usa.
+**O que foi descartado:** apagá-lo também na função que atualiza o endereço quando ela não escreve
+nada. Essa função é chamada por **três** lugares diferentes da tela, e apagar o bilhete de terceiros
+ali seria decidir pelo comportamento de todos eles — enquanto guardar o endereço no bilhete (B72) já
+resolve o mesmo problema. **O custo:** um bilhete pode sobrar na memória depois de um caminho
+incomum; como ele só vale para um endereço específico, sobrar é inofensivo.
+
+**B74 (NOVA, da Etapa 35 — decisão que EU tomei, reversível) — ao trocar de recebimento, o painel
+esvazia; ele não fica mostrando o anterior.**
+
+**O que foi escolhido:** trocar de linha limpa os dados do painel na hora. O painel **continua
+aberto** (a coluna da direita não desaparece), o cabeçalho mostra **"..."** e o corpo mostra o aviso
+de carregando. É o mesmo desenho que a tela de Requisições já usava.
+**O que foi descartado:** deixar o recebimento anterior na tela até o novo chegar, como era. Além de
+mostrar um registro sob o número de outro, isso fazia a tela **redesenhar o layout duas vezes por
+clique** e não dava ao usuário nenhum sinal de "estou carregando".
+**O custo:** aparece um estado vazio de fração de segundo que antes não aparecia. Em rede boa é
+imperceptível; em rede lenta é exatamente a informação que faltava.
+
+**B75 (NOVA, da Etapa 35 — decisão que EU tomei, reversível) — a corrida entre duas respostas foi
+fechada junto, e não deixada para depois.**
+
+Esvaziar o painel (B74) resolve o painel mentiroso, mas **não** resolve o caso de duas respostas
+chegando fora de ordem. **O que foi escolhido:** fechar as duas coisas na mesma mudança — cada
+consulta recebe um número de ordem e só a mais recente pode escrever na tela.
+**O que foi descartado:** entregar só o esvaziamento e deixar a corrida para uma etapa futura. Eram
+**seis linhas** de um desenho já em uso na tela irmã, e a janela que sobraria é justamente a que
+manda o arquivo para o recebimento errado.
+**O custo:** nenhum de operação. É complexidade a mais no código, paga por cenários automáticos que
+suspendem uma resposta de propósito para provar que a mais nova vence.
+
+**B76 (NOVA, da Etapa 35 — decisão que EU tomei, reversível) — dois campos de apoio do recebimento
+continuam falhando em silêncio, e isso está escrito de propósito.**
+
+O modal de novo recebimento carrega, além dos materiais, duas listas de apoio (as duas caixas de
+seleção opcionais). **O que foi escolhido:** essas duas **continuam** sem mensagem de erro quando
+falham.
+**Por quê:** as duas são opcionais e têm digitação manual ao lado — quem precisa do valor consegue
+seguir sem a lista. Um terceiro aviso de erro no mesmo modal competiria com o aviso que **importa**
+(o dos materiais) e treinaria o usuário a ignorar avisos.
+**O que foi descartado:** um terceiro estado de erro para elas.
+**O custo:** se uma dessas duas listas vier vazia por falha de rede, o usuário vai achar que ela
+está vazia de verdade. Se isso acontecer na prática, acrescentar o aviso é uma linha — me diga.
+
+**B77 (NOVA, da Etapa 35 — decisão que EU tomei, reversível) — a coluna de ações passou a quebrar
+linha em TODAS as 11 telas de uma vez, e não só na tela que apertava.**
+
+A Etapa 34 tinha registrado a suspeita de corte na tela de **Materiais** e **não mexeu em nada
+antes de medir** — a medição desta etapa mostrou que a redação estava errada: o pior caso é
+**Ferramentas** (cinco botões de texto), não Materiais (dez ícones pequenos).
+
+**O que foi escolhido:** permitir a quebra de linha na coluna de ações **do módulo inteiro**, com um
+teste que congela as premissas da medição (se alguém mexer no estilo, o teste avisa) e um roteiro de
+navegador na letra **F12** para o que só o olho vê.
+**O que foi descartado:**
+- **Barra de rolagem horizontal na célula**, por tela. Esconde o botão atrás de uma barra que
+  quase ninguém vê, e multiplica desenhos diferentes pelas 11 telas.
+- **Não mexer.** Manteria um corte **certo, calculado**, na tela de Ferramentas.
+
+**O custo, e é real:** em janelas estreitas, linhas que antes cabiam numa fileira passam a ocupar
+**duas**, e a tabela fica mais alta — inclusive no celular, onde isso muda a altura das linhas nas
+11 telas. Foi aceito porque linha mais alta é um incômodo visível e botão cortado é um recurso que
+**não existe** para quem olha. Reverter é uma declaração de estilo.
+
+**B78 (NOVA, da Etapa 35 — decisão de método que EU tomei) — nenhum commit desta etapa deixa a
+suíte vermelha, mesmo tendo sido preciso medir o defeito antes de consertá-lo.**
+
+A primeira coisa que esta etapa fez foi escrever a régua que **mostra** as duas consultas por clique
+— e ela nasceu vermelha, provando que o defeito existia e que o teste sabia falhar. **O que foi
+escolhido:** essa régua viajou no **mesmo** commit do conserto, sem nunca ser publicada sozinha.
+**O que foi descartado:** commitar o vermelho "para registrar a medição". O histórico passaria a ter
+um ponto em que rodar os testes **mente** — e alguém que voltasse a esse ponto concluiria que a base
+estava quebrada. **O custo:** a medição inicial não tem commit próprio; ela está descrita no plano
+da etapa, com o número que foi lido.
+
+**B79 (NOVA, da Etapa 35 — decisão de método, e uma correção de instrução) — as sabotagens de
+controle desta etapa não usaram Python, e restaurar arquivo com o comando do Git seria um desastre
+silencioso.**
+
+Esta base tem uma regra de método: quando um teste novo passa de primeira, quebra-se a
+implementação de propósito para confirmar que o teste **fica vermelho**. Duas coisas foram
+descobertas ao fazer isso aqui, e as duas valem registro porque a instrução escrita estava errada
+**nesta máquina**:
+
+1. **O comando `python3` não existe neste ambiente** — o nome está reservado pela loja de
+   aplicativos do Windows e não executa nada. Um roteiro escrito com ele não falharia: ele
+   **passaria sem fazer nada**, que é exatamente o modo de falha que essa regra existe para
+   impedir. As sabotagens foram feitas com as ferramentas de texto do próprio terminal, e cada uma
+   foi conferida por **impressão digital do arquivo** antes, depois de sabotar e depois de
+   restaurar. A instrução do projeto continua certa no princípio (não confiar no comando ambíguo);
+   **ela está errada na escolha da ferramenta para esta máquina**, e isso está dito em vez de
+   corrigido em silêncio.
+2. **Restaurar o arquivo com o comando de descarte do Git apagaria o conserto.** As sabotagens
+   rodam **antes** do commit, então "voltar o arquivo ao que o Git tem" jogaria fora o trabalho da
+   task. Restauração passou a ser por desfazimento exato ou por cópia guardada fora do projeto — e
+   a conferência de "nada sobrou da sabotagem" passou a ser a impressão digital do arquivo, não a
+   ausência de diferença contra o Git (que, aqui, seria **sinal de erro**).
+
+**O custo:** nenhum para você. Registrado porque é o tipo de detalhe que, esquecido, faz a próxima
+sessão produzir um controle que não controla nada — já aconteceu quatro vezes nesta base.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -1806,22 +1939,61 @@ inclusive nas requisições abertas pelos outros setores. Reverter é uma linha.
     — mas **antes de apagar qualquer coisa, me avise**, porque um arquivo com extensão estranha
     também pode ser um upload legítimo antigo.
 
-45. **(34) Clicar numa requisição carrega o detalhe DUAS vezes.** Ao clicar numa linha da lista de
-    **Almoxarifado → Requisições**, o sistema busca o detalhe daquela requisição, atualiza o
-    endereço da página e, por causa dessa atualização, **busca o detalhe de novo**. São duas
-    consultas onde deveria haver uma.
+45. **✅ RESOLVIDO NA ETAPA 35 — clicar numa requisição carrega o detalhe UMA vez.**
+    Este item dizia que ~~ao clicar numa linha da lista de **Almoxarifado → Requisições**, o sistema
+    buscava o detalhe daquela requisição, atualizava o endereço da página e, por causa dessa
+    atualização, **buscava o detalhe de novo** — duas consultas onde deveria haver uma~~. **A Etapa
+    35 fechou** (`6f6a8b0..2d5cd35`).
 
-    **Isto é anterior à Etapa 34** — existe desde que a tela passou a aceitar link direto para uma
-    requisição (`?id=...`). Foi descoberto ao plugar os anexos, não causado por eles.
+    O defeito era **anterior à Etapa 34** — existia desde que a tela passou a aceitar link direto
+    para uma requisição (`?id=...`). Foi descoberto ao plugar os anexos, não causado por eles, e o
+    que quem operava percebia era só **lentidão** e, às vezes, um piscar do aviso de "Carregando".
+    Nenhum dado ficava errado: consulta duplicada é leitura, não escrita.
 
-    **O que quem opera percebe:** só **lentidão** ao abrir uma requisição, e às vezes um piscar do
-    aviso de "Carregando". **Nenhum dado fica errado**, nada é lançado duas vezes e nenhuma
-    consulta duplicada muda saldo — é leitura, não escrita. O bloco de anexos **não** é recarregado
-    junto (isso foi resolvido na própria Etapa 34), então um arquivo já escolhido não se perde.
+    **O que mudou:** o clique passou a marcar que foi ele quem mudou o endereço da página, e o
+    mecanismo de link direto reconhece essa marca e não repete a consulta (decisão **B72**). O que
+    **continua** acontecendo, de propósito, é o recarregamento legítimo: voltar para a janela do
+    navegador busca o dado fresco, e trocar o filtro da lista também. Abrir a tela por link colado
+    carrega **uma** vez, como antes.
 
-    **O que fazer:** nada. Está nomeado como a primeira tarefa da Etapa 35, com a régua pronta:
-    o cenário tem de passar a contar **uma** busca por clique, e abrir a tela por link colado tem
-    de continuar carregando **uma** vez.
+    **Como conferir:** F12 → aba Rede, clique numa linha da lista e conte as consultas do detalhe.
+    Uma.
+
+    Deixado aqui, riscado, em vez de apagado — para quem lembrar do furo confirmar que fechou, com
+    o número da etapa que fechou.
+
+46. **✅ RESOLVIDO NA ETAPA 35 — o painel de recebimento mostrava o registro ANTERIOR sob o número
+    novo.** Este furo **nunca esteve escrito em spec nenhuma**; está registrado aqui porque foi
+    medido e fechado na mesma etapa, e porque é o tipo de coisa que volta se ninguém souber que
+    existiu.
+
+    Em **Almoxarifado → Recebimentos**, clicar num recebimento com outro já aberto trocava o
+    **número no cabeçalho** na hora, mas os **dados e o bloco de anexos do anterior** ficavam na
+    tela até a resposta do novo chegar. Ou seja: o painel exibia o recebimento A rotulado como B.
+
+    **A consequência que importava:** em rede lenta, quem escolhesse um arquivo naquele instante o
+    estaria anexando ao recebimento **errado** — e sem nenhuma pista disso na tela.
+
+    **O que mudou:** trocar de linha **esvazia** o painel na hora (cabeçalho em *"..."*, aviso de
+    carregando no corpo, bloco de anexos do anterior fora da tela) e ele só se preenche com o
+    recebimento certo (decisão **B74**). O preço aceito é um estado vazio de fração de segundo que
+    antes não aparecia.
+
+47. **✅ RESOLVIDO NA ETAPA 35 — duas respostas fora de ordem trocavam o painel de recebimento pelo
+    registro errado.** Como o item 46, **não estava em spec nenhuma**.
+
+    Ainda em **Recebimentos**: clicando em dois recebimentos em sequência rápida, quem escrevia no
+    painel era a resposta que **chegasse por último** — que, com rede irregular, podia ser a do
+    **primeiro** clique. O usuário via, no painel, um recebimento que não era o que ele acabou de
+    clicar.
+
+    **O que mudou:** cada consulta do detalhe recebe um número de ordem, e só a mais recente pode
+    escrever na tela; a resposta atrasada é descartada e não deixa nenhum *"Carregando"* pendurado
+    (decisão **B75**). Vence sempre o **último clique**.
+
+    **Como conferir os dois:** F12 → Rede → estrangulamento *Slow 3G*, clique em dois recebimentos
+    sem esperar e repita invertendo a ordem. O painel sempre acaba no do último clique, e nunca
+    mostra um número em cima dos dados de outro.
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -2163,23 +2335,50 @@ se um PDF abre legível ou se um modal coube na largura. Ficaram, portanto, **se
    dos três que teve defeito real no fechamento**: o nome do perfil aparecia em caixa alta,
    `QUALIDADE`, no meio da frase, e foi corrigido.
 
-12. **(34) O clipe de anexos na tela de Materiais pode ficar cortado numa faixa de largura de
-   tela — não foi medido, porque medir exige navegador.** A lista de **Almoxarifado → Materiais**
-   passou a ter **um ícone a mais** na coluna de ações (o clipe), e essa coluna **não quebra em
-   duas linhas** quando falta espaço: o que não cabe é simplesmente cortado, sem barra de rolagem
-   e sem aviso. Em tela cheia de desktop sobra espaço e nada acontece; em celular a tela usa outro
-   desenho e também não acontece. **A dúvida é a faixa do meio.**
+12. **(34, REESCRITA na 35) Conferir o TETO da faixa de largura em que a coluna de ações apertava
+   — e quais linhas passaram a ocupar duas fileiras.**
 
-   **O que conferir, e são dois minutos:** abra **Almoxarifado → Materiais** no computador e
-   **arraste a borda da janela** para diminuí-la aos poucos, entre mais ou menos **769 e 1100
-   pixels** de largura (uma janela de navegador ocupando meia tela, ou um notebook pequeno). Olhe a
-   **última coluna da tabela**, a dos ícones: o **clipe** e os ícones à direita dele têm de
-   continuar visíveis e clicáveis. Se algum ficar cortado pela borda da tabela, ou sumir, é o caso.
+   > **⚠️ A redação anterior deste item estava errada e está vencida. As duas coisas, ditas em vez
+   > de apagadas.**
+   > Ela dizia: *"conferir se o clipe de **Materiais** fica cortado com a janela do navegador em
+   > meia tela"*. **Estava errada na tela:** a Etapa 35 mediu a coluna de ações das 11 telas do
+   > módulo, e o pior caso **não é Materiais** — os dez ícones de Materiais ocupam cerca de 374
+   > pixels e cabem com folga. O pior caso é **Ferramentas**, que mostra **cinco botões com texto**
+   > (e texto não quebra no meio da palavra): cerca de 683 pixels de célula contra 721 pixels úteis
+   > numa janela de 769, com **seis outras colunas** ainda por caber. **E está vencida** porque o
+   > estilo já foi mudado: a coluna de ações **passou a quebrar em mais de uma fileira** em vez de
+   > ser cortada (decisão **B77**). O corte que este item pedia para procurar **não existe mais**.
 
-   **Se cortar:** me diga em qual largura, e a correção é uma linha de estilo — deixar os ícones
-   quebrarem para uma segunda linha dentro da célula. Não mexi nisso antes de medir porque esse
-   estilo vale para **todas** as tabelas do módulo, e mudar o desenho de todas elas por uma suspeita
-   não medida é o tipo de "correção" que cria três problemas novos.
+   **O que resta medir, e é o que só o navegador sabe:** (a) o **teto** da faixa — entre mais ou
+   menos **1100 e 1355 pixels** o cálculo diz que a folga é pequena, e ninguém olhou; (b) quais
+   linhas, em cada largura, **passaram a ocupar duas fileiras** — esse é o custo aceito da mudança,
+   e é preciso ver se ele incomoda.
+
+   **Roteiro, e são cinco minutos.** Abra o F12, use a régua de largura da janela (ou o modo de
+   dispositivo) e repita em **cada** uma destas larguras: **769, 820, 900, 1024, 1100, 1280 e 1400
+   pixels**, mais **uma largura abaixo de 768 pixels** (celular — ali o desenho da tabela é outro, e
+   a quebra de linha muda a **altura** das linhas nas 11 telas).
+
+   Em cada largura, olhe **três telas**:
+   - **Almoxarifado → Ferramentas**, numa linha com ferramenta **DISPONÍVEL que exige calibração**
+     (é a que mostra os **cinco** botões — o pior caso);
+   - **Almoxarifado → Materiais** (dez ícones na coluna de ações);
+   - **Almoxarifado → Remessas a Terceiros** (seis botões).
+
+   **E confira duas coisas, sempre:**
+   1. **o ÚLTIMO botão da coluna está inteiro** e clicável — não cortado pela borda, não escondido;
+   2. **a tabela não ganhou barra de rolagem escondida.** Com a tela aberta, cole no console do F12:
+
+      ```js
+      const c = document.querySelector('.almox-table-container');
+      console.log(c.scrollWidth, c.clientWidth, c.scrollWidth > c.clientWidth);
+      ```
+
+      O terceiro valor tem de ser **`false`**. Se der `true`, há conteúdo fora da área visível sem
+      barra para alcançá-lo — é o caso a me relatar, com a largura e a tela.
+
+   **Se algo estiver errado:** me diga **qual largura, qual tela e qual botão**. O ajuste é de
+   estilo e é de uma linha; o que não dá é adivinhar a largura.
 
 *Por que isto está escrito aqui em vez de "está tudo certo": esta mesma lacuna já mordeu a Etapa 7 —
 uma classe de estilo inventada sai sem cor nenhuma e nenhum teste de comportamento percebe.*
@@ -2365,31 +2564,67 @@ para ninguém "corrigir" um claim de cada vez.
 
 ---
 
-**G10 (NOVO, medido ao plugar os anexos na Etapa 34). A tela de Recebimentos mostra "Nenhum
-recebimento registrado" quando a falha é de rede — e três dos seus botões nunca tiveram teste.**
+**G10 (medido ao plugar os anexos na Etapa 34). ✅ FECHADO EM DOIS TERÇOS PELA ETAPA 35 — o que
+continua de pé é que três botões dessa tela nunca tiveram teste.**
 
-São **dois problemas na mesma tela** (Almoxarifado → Recebimentos), e os dois são **anteriores** à
-Etapa 34; nada aqui os criou.
+Eram **três problemas na mesma tela** (Almoxarifado → Recebimentos), todos **anteriores** à Etapa
+34; nada nela os criou. **Dois deles a Etapa 35 fechou** (`6f6a8b0..2d5cd35`); o terceiro continua
+aberto, e por isso este item continua aqui.
 
-1. **Falha silenciosa nas três cargas da tela** (a lista de recebimentos, a lista de materiais e o
-   detalhe de um recebimento). Quando qualquer uma delas falha — servidor fora, rede caindo, sessão
-   expirada —, a tela **não diz nada** e mostra *"Nenhum recebimento registrado"*, exatamente como
-   se não houvesse nenhum. Quem opera conclui que a lista está vazia e pode registrar de novo um
-   recebimento que já existe. **É o mesmo pecado que a Etapa 29 corrigiu na tela de Inspeções**, e
-   a saída é a mesma: mensagem de erro visível mais um botão de tentar de novo.
-2. **Três funções dessa tela seguem sem nenhum teste automático:** o formulário de dados fiscais, o
-   avanço de situação do recebimento e a impressão de etiquetas. A Etapa 34 criou a **primeira**
-   suíte que essa tela já teve (seis cenários), toda em volta do painel de detalhe e do bloco de
-   anexos — o resto continua descoberto.
+1. **✅ FECHADO — falha silenciosa nas três cargas da tela.** Este ponto dizia que ~~quando a lista
+   de recebimentos, a lista de materiais ou o detalhe de um recebimento falhassem (servidor fora,
+   rede caindo, sessão expirada), a tela **não dizia nada** e mostrava *"Nenhum recebimento
+   registrado"*, exatamente como se não houvesse nenhum — e quem operava podia registrar de novo um
+   recebimento que já existia~~. A Etapa 35 pôs a mensagem na tela: *"Não foi possível carregar os
+   recebimentos."* com o botão **Tentar de novo**, *"Não foi possível carregar a lista de
+   materiais."* dentro do modal de cadastro, e um recarregamento que falha **zera** a lista em vez
+   de deixar a antiga passando por fresca. Era o mesmo pecado que a Etapa 29 corrigiu na tela de
+   Inspeções, e a saída foi a mesma. **Duas listas de apoio do modal continuam falhando em
+   silêncio de propósito** — é a decisão **B76**, escrita com o motivo.
+2. **⬜ CONTINUA ABERTO — três funções dessa tela seguem sem nenhum teste automático:** o
+   formulário de dados fiscais, o avanço de situação do recebimento e a impressão de etiquetas. A
+   Etapa 34 criou a **primeira** suíte que essa tela já teve (seis cenários), toda em volta do
+   painel de detalhe e do bloco de anexos; a Etapa 35 somou erro de carga e troca de painel (doze
+   cenários no total). **O resto continua descoberto** — e é a única parte deste item que segue de
+   pé.
+3. **✅ FECHADO — ao trocar de um recebimento para outro, o painel e o bloco de anexos do primeiro
+   ficavam na tela até o segundo terminar de carregar.** Achado na revisão final da Etapa 34,
+   também anterior a ela. Em rede boa era uma fração de segundo; em rede lenta, um arquivo escolhido
+   nesse instante ia para o recebimento errado. A Etapa 35 passou a **esvaziar** o painel na troca
+   (decisão **B74**) e a descartar resposta fora de ordem (decisão **B75**). Os dois furos ficaram
+   registrados na letra C como **C46** e **C47**, porque nenhuma spec os tinha.
 
-3. **Ao trocar de um recebimento para outro, o bloco de anexos do primeiro fica na tela até o
-   segundo terminar de carregar.** Achado na revisão final da Etapa 34, também anterior a ela (o
-   cabeçalho do painel já fazia o mesmo). É uma fração de segundo em rede boa; em rede lenta, um
-   arquivo escolhido nesse instante iria para o recebimento errado. Vai junto na Etapa 35.
+**G11 (NOVO, declarado pela revisão final da Etapa 35). Cinco residuais que ficaram escritos em vez
+de consertados às pressas.**
 
-**Está nomeado como a segunda tarefa da Etapa 35**, e a régua já existe: a suíte nova recusa
-consultas que a tela não deveria fazer, então basta um cenário "a rede falha" que hoje lê *"Nenhum
-recebimento registrado"* e passará a exigir a mensagem de erro na tela.
+Nenhum é visível para quem opera hoje. Estão aqui porque a revisão os achou, decidiu **não** mexer
+neles no fim de uma etapa, e essa decisão precisa deixar rastro — residual não declarado volta como
+surpresa.
+
+1. **O teste que congela o estilo da coluna de ações olha o PRIMEIRO bloco de regras que encontra.**
+   Ele lê o arquivo de estilo como texto e confere as declarações; mas, se alguém escrever mais
+   adiante no arquivo uma regra que **sobrescreva** a primeira com a mesma força, o teste continua
+   verde lendo a versão antiga. Ele protege contra apagar a regra, **não** contra sobrescrevê-la.
+2. **Uma das seis afirmações desse mesmo teste não prova que está no lugar certo.** Ela confirma que
+   a regra de celular mantém a barra de rolagem da tabela, mas não amarra essa confirmação ao bloco
+   de celular — e o texto que ela procura agora aparece **também num comentário** do arquivo de
+   estilo, o que enfraquece a âncora. Registrado, com a observação de que **comentário de estilo
+   nesta base não pode conter chaves** (uma chave dentro de comentário quebrou o teste durante a
+   etapa, e isso está escrito no próprio comentário).
+3. **Fechar o painel de recebimento no ✕ com a consulta em voo deixa o estado de "carregando"
+   preso.** A tela não mostra nada errado (o painel está fechado), mas o marcador interno fica
+   ligado. Inofensivo hoje; não há cenário automático para "fechar durante a carga" nessa tela — na
+   tela irmã (Requisições) há, e foi ele que achou o problema do ✕ que reabria a requisição.
+4. **Anexar arquivo com a troca de recebimento no mesmo instante ainda pousa no recebimento
+   anterior.** A Etapa 35 fechou a janela da **leitura** (o painel nunca mais mostra o registro
+   errado), mas não a do **envio**: se o clique em **Anexar** e o clique na outra linha acontecerem
+   na mesma fração de segundo, o arquivo vai para o de antes. Fechar isso exige mexer no envio, que
+   é outro caminho de código.
+5. **Nenhuma tela do módulo anuncia suas mensagens para leitor de tela.** O aviso flutuante do
+   sistema é o **único** anúncio sonoro/assistivo que existe; as mensagens de erro que a Etapa 35
+   acrescentou aparecem na tela, mas um leitor de tela não as lê sozinho. **Isso vale para o módulo
+   inteiro e não é regressão** desta etapa — é consistente com tudo o que já existia. Fica escrito
+   porque, se acessibilidade entrar no escopo algum dia, o trabalho é do módulo, não de uma tela.
 
 ## Etapa 0 — Fundação (2026-08-03)
 
@@ -6215,8 +6450,227 @@ teste automático** — nenhum, desde que foi construída. Esta etapa escreveu a
 (seis cenários). Os dois defeitos corrigidos acima estavam justamente em caminhos que **nenhum teste
 existente percorria**.
 
+## Etapa 35 — As telas vizinhas param de esconder falha de rede e de mostrar o registro errado (2026-09-16)
+
+**Esta etapa não é uma feature.** Nenhuma tela nova, nenhum campo novo, nenhum botão novo para
+apresentar. São **três defeitos** que a revisão da Etapa 34 encontrou nas telas **vizinhas** às que
+ela mexeu — e **dois deles são anteriores a qualquer etapa recente**: existem desde que as telas
+foram construídas, e ninguém os tinha medido porque nenhum teste percorria aquele caminho. O
+terceiro (a coluna de ações cortada) nasceu de uma suspeita que a própria Etapa 34 registrou sem
+medir.
+
+Os três se parecem: **a tela mostrava algo plausível em vez de dizer a verdade.** A lista de
+recebimentos dizia "não tem nenhum" quando a verdade era "não consegui perguntar". O painel de
+detalhe mostrava o recebimento anterior enquanto o novo carregava — com o número do novo já no alto.
+A coluna de botões era cortada pela borda da tabela sem barra de rolagem nenhuma, então o botão
+simplesmente **não existia** para quem olhava. E abrir uma requisição custava duas consultas onde
+uma bastava.
+
+**O caso que tem consequência real de operação é o primeiro.** Servidor fora do ar, sessão
+expirada ou rede caindo, e a tela de Recebimentos dizia *"Nenhum recebimento registrado"* — como se
+o galpão não tivesse recebido nada. Quem operasse concluía que a nota não havia sido lançada e
+**lançava de novo**, criando um recebimento duplicado de material que já tinha entrado.
+
+**Nada mudou no servidor:** zero rota, zero regra de permissão, zero migration. Tudo o que esta
+etapa fez está nas telas.
+
+### Antes → Agora
+
+| Tela | Antes | Agora |
+|---|---|---|
+| **Requisições** — abrir uma linha | Clicar numa requisição **buscava o detalhe duas vezes** (furo **C45**): latência dobrada e, às vezes, um piscar de *"Carregando"* a cada abertura pela lista | Clicar numa linha faz **uma** consulta. Link direto (`?id=...`), atualização ao voltar para a janela e troca de filtro continuam funcionando igual |
+| **Recebimentos** — lista não carrega | A tela mostrava *"Nenhum recebimento registrado"*, indistinguível de lista realmente vazia | A tela mostra *"Não foi possível carregar os recebimentos."*, o motivo em letra menor e o botão **Tentar de novo** |
+| **Recebimentos** — recarregar e falhar | A lista carregada antes **ficava na tela**, passando por fresca, enquanto a atualização falhava em silêncio | Falha no recarregamento **zera a lista** e mostra o erro: nada velho passa por atual |
+| **Recebimentos** — cadastrar por nota fiscal | Se a lista de materiais não carregasse, o campo de busca simplesmente **não achava nada** — parecia que o material não estava cadastrado | Aparece *"Não foi possível carregar a lista de materiais."* junto do campo, com **Tentar de novo**. É aviso, **não** trava: registrar por pedido de compra continua funcionando |
+| **Recebimentos** — trocar de recebimento | O painel continuava mostrando os dados **e os anexos do recebimento anterior** até o novo chegar — com o número do novo já no cabeçalho | O painel esvazia na hora: o cabeçalho mostra **"..."** até o novo chegar, e o bloco de anexos do anterior sai da tela |
+| **Recebimentos** — dois cliques rápidos | Se as duas respostas chegassem **fora de ordem**, vencia a que chegasse por último — podia ser a do **primeiro** clique | Vence sempre o **último clique**. A resposta atrasada do anterior é descartada |
+| **Todas as tabelas do módulo** (11 telas) | Os botões da coluna de ações que não cabiam na largura eram **cortados** pela borda da tabela, **sem barra de rolagem e sem aviso** — o botão sumia | Os botões **quebram para uma segunda fileira** dentro da célula. Nada é cortado. O efeito colateral aceito é o oposto: em janela estreita, linhas que antes cabiam numa fileira passam a ocupar duas e a tabela fica mais alta |
+
+### As regras, com o cenário exato
+
+**RN-01 — um clique numa requisição = uma consulta do detalhe.**
+**Almoxarifado → Requisições**, abra a aba **Rede** do navegador (F12) e limpe a lista. Clique numa
+linha da tabela. Passa a aparecer **uma** consulta do detalhe daquela requisição, não duas.
+
+**RN-02 — link direto continua abrindo, e também com uma consulta só.**
+Copie o endereço da página com uma requisição aberta (ele tem `?id=...`), cole numa aba nova e
+entre. A requisição abre no painel — **uma** consulta.
+
+**RN-03 — as atualizações legítimas continuam acontecendo.**
+Com uma requisição aberta: clique em outro programa e volte para a janela do navegador → o detalhe
+é **buscado de novo** (é assim de propósito: quem volta à tela quer o dado fresco). Ligue e desligue
+o filtro **Minhas requisições** → a lista e o detalhe são buscados de novo. Nada disso foi
+desligado junto com a consulta duplicada.
+
+**RN-04 — falha ao carregar a lista de recebimentos é visível, e distinguível de lista vazia.**
+**Almoxarifado → Recebimentos**, derrube o servidor e clique no botão de atualizar (a dica dele diz
+*"Atualizar lista"*). A tela passa a dizer, com estas palavras:
+
+> **"Não foi possível carregar os recebimentos."**
+> *(o motivo técnico em letra menor abaixo)*
+> **[ Tentar de novo ]**
+
+Suba o servidor e clique em **Tentar de novo** → a lista volta e a mensagem de erro sai. Derrube de
+novo e clique outra vez → a mensagem volta. **E o contraste que é o ponto da regra:** com o servidor
+no ar e nenhum recebimento cadastrado, a tela continua dizendo *"Nenhum recebimento registrado"*,
+com o botão **Registrar primeiro recebimento**. São duas telas diferentes para duas situações
+diferentes.
+
+**RN-05 — recarregamento que falha não deixa a lista antiga passando por fresca.**
+Abra Recebimentos com o servidor no ar (a lista aparece), **derrube o servidor** e clique em
+atualizar. A lista **desaparece** e dá lugar ao erro. Ela não fica na tela como se fosse a posição
+atual — que é o que faria alguém tomar decisão sobre um dado velho sem saber que é velho.
+
+**RN-06 — falha ao carregar materiais aparece onde ela atrapalha.**
+Com o servidor **derrubado**, clique em **Novo Recebimento** e escolha o tipo **Nota fiscal**. Junto
+do campo *Buscar material...* aparece:
+
+> **"Não foi possível carregar a lista de materiais."** **Tentar de novo**
+
+O formulário **não** é bloqueado: os outros campos funcionam, e um recebimento **por pedido de
+compra** (que traz os itens do pedido) continua podendo ser registrado normalmente. É aviso, não
+barreira — de propósito.
+
+**RN-07 — trocar de recebimento nunca mostra o registro anterior sob o número novo.**
+Clique no recebimento A → o painel abre com os dados dele. Clique em **B**: o cabeçalho passa a
+mostrar **"..."** e o corpo mostra o aviso de carregando; o bloco de anexos de A **sai da tela**.
+Quando B chega, ele aparece inteiro. Em nenhum instante o número de B aparece em cima dos dados de
+A. **Por que isso importa mais do que parece:** em rede lenta, quem escolhesse um arquivo naquele
+instante o estaria anexando ao recebimento **errado**.
+
+**RN-08 — resposta fora de ordem não vence.**
+Use o estrangulamento de rede do navegador (F12 → Rede → *Slow 3G*) e clique em **A** e depois
+rapidamente em **B**. Quando as duas respostas chegarem, em qualquer ordem, o painel mostra **B** —
+o último clique. A resposta atrasada de A é descartada e não há nenhum *"Carregando"* pendurado na
+tela.
+
+**RN-09 — reabrir o mesmo recebimento não derruba o bloco de anexos.**
+Com o recebimento B aberto, escolha um arquivo no bloco de anexos e **salve os dados fiscais** (ou
+avance a situação). O painel se atualiza, mas o bloco de anexos **não é desmontado** e o arquivo
+escolhido continua escolhido. É a não regressão do conserto da Etapa 34.
+
+**RN-10 — a coluna de ações quebra linha em vez de ser cortada.**
+**Almoxarifado → Ferramentas** (é o pior caso: uma ferramenta disponível que exige calibração mostra
+**cinco** botões com texto). Estreite a janela do navegador até por volta de 800 pixels de largura.
+Os botões **passam para uma segunda fileira** dentro da mesma célula; o último continua inteiro e
+clicável. Antes, ele era cortado pela borda da tabela, sem barra de rolagem.
+**O que ainda depende do seu olho:** a faixa de largura entre ~1100 e ~1355 pixels, e quais linhas
+passaram a ocupar duas fileiras. O roteiro está na letra **F12**, e são dois minutos.
+
+### Como testar ao vivo
+
+**Requisições — a consulta duplicada**
+1. **Almoxarifado → Requisições.** Abra o **F12 → aba Rede**, filtre por `requisicoes` e limpe a
+   lista de requisições da rede.
+2. Clique numa linha da tabela. Conte as consultas do detalhe: tem de ser **uma**.
+3. Clique em **outra** linha: mais **uma**. (Antes, cada clique somava duas.)
+4. Clique em outro programa e volte para o navegador: aparece **uma** consulta nova — essa é
+   legítima e continua acontecendo de propósito.
+
+**Recebimentos — a falha de rede que era invisível**
+5. **Almoxarifado → Recebimentos** com o sistema no ar: a lista aparece.
+6. **Derrube o servidor** (pare o `npm run dev`, ou desligue a rede da máquina).
+7. Clique no botão de atualizar da tela — a dica dele é *"Atualizar lista"*. A lista **sai** e
+   aparece *"Não foi possível carregar os recebimentos."* com o botão **Tentar de novo**.
+8. **Suba o servidor** e clique em **Tentar de novo**: a lista volta, o erro sai.
+9. Ainda com o servidor **parado**, clique em **Novo Recebimento** e escolha **Nota fiscal**: junto
+   do campo de buscar material aparece *"Não foi possível carregar a lista de materiais."*. Feche o
+   modal, suba o servidor e abra de novo: o aviso não está mais lá.
+
+**Recebimentos — o painel que mostrava o anterior**
+10. Com o servidor no ar, abra **F12 → Rede** e ligue o estrangulamento **Slow 3G**.
+11. Clique num recebimento e, **sem esperar**, clique em outro. Olhe o cabeçalho do painel: ele
+    passa por **"..."** e nunca mostra o número do segundo sobre os dados do primeiro.
+12. Repita algumas vezes, invertendo a ordem. O painel sempre acaba no recebimento do **último**
+    clique.
+
+**Tabelas — os botões que eram cortados**
+13. **Almoxarifado → Ferramentas** (ou **Materiais**, ou **Remessas a Terceiros**). Arraste a borda
+    da janela para estreitá-la.
+14. Olhe a última coluna: os botões **quebram para uma segunda fileira** em vez de desaparecer na
+    borda. O roteiro completo, com as larguras exatas, está na letra **F12**.
+
+### O que esta etapa NÃO cobre
+
+- **O teto da faixa de largura onde a coluna de ações apertava.** O cálculo foi feito no papel e a
+  mudança de estilo está feita e travada por teste, mas **medir pixel exige navegador** — e a
+  faixa de ~1100 a ~1355 pixels, mais as linhas que passaram a ocupar duas fileiras, continuam sem
+  o olho de ninguém. É a letra **F12**, reescrita nesta etapa.
+- **Voltar e avançar do navegador na tela de Requisições.** As setas de histórico não têm régua
+  automática (provar isso exigiria um histórico de navegador real no teste). Pela leitura do
+  código, elas **não** disparam consulta duplicada; mas é leitura, não medição.
+- **Anexar arquivo com a troca de recebimento em curso.** Se você clicar em **Anexar** e trocar de
+  recebimento **no mesmo instante**, o arquivo ainda pousa no recebimento anterior — é uma janela
+  de fração de segundo, e fechá-la exige mexer no envio, não na leitura. Ficou declarada.
+- **O modal de dados fiscais, o avanço de situação e a impressão de etiquetas de Recebimentos
+  continuam sem teste automático.** A suíte dessa tela nasceu na Etapa 34 em volta dos anexos;
+  esta etapa somou erro de carga e troca de painel. O resto segue descoberto — é a parte da
+  fragilidade **G10** que **continua aberta**.
+- **Os furos C43 e C44**, da Etapa 33, seguem abertos; nada aqui os toca.
+- **Nada em `server/`** — nenhuma rota, nenhum perfil, nenhuma migration. As duas camadas de
+  autorização do módulo não foram tocadas, e o corte da **B71** (anexo de requisição só dentro do
+  Almoxarifado) continua exatamente como estava.
+
+### O que a revisão encontrou
+
+Esta etapa passou por **duas revisões adversariais em paralelo** — uma olhando se as regras estavam
+mesmo provadas, outra olhando a experiência de quem usa e possíveis regressões. As duas deram
+veredito limpo, **nenhum alarme falso**, e convergiram nos **mesmos dois problemas de baixa
+gravidade**. Os dois foram corrigidos antes de fechar.
+
+**Corrigido — 1. Fechar o painel da requisição no ✕ podia reabri-lo sozinho.**
+Na tela de Requisições, clicar no **✕** do painel enquanto o detalhe ainda estava carregando deixava
+a resposta atrasada voltar e **reescrever o endereço da página** com a requisição que você acabou de
+fechar — e o painel **reabria**. Não é defeito criado por esta etapa: antes dela o painel reabria
+sozinho também. É a mesma regra que a etapa escreveu na tela irmã (Recebimentos), e faltava aplicar
+aqui.
+
+**Corrigido — 2. A barra de etapas do recebimento piscava para o primeiro passo.**
+Como o painel passou a esvaziar ao trocar de recebimento (a regra **RN-07**), a barrinha de passos
+do cabeçalho — *Registrado → Conferido → Inspecionado → Estoque* — voltava visualmente para o
+**passo 1** por uma fração de segundo a cada troca de linha, mesmo trocando entre dois recebimentos
+já no estoque. Agora ela simplesmente **não aparece** enquanto carrega, e reaparece no passo certo.
+Vale dizer o que isso revelou: a lista de lugares do painel que dependiam do detalhe, escrita no
+desenho da etapa, tinha **sete** itens e o correto eram **oito**. A lista estava incompleta, e a
+revisão de experiência foi quem achou o oitavo.
+
+**Registrado e não corrigido — cinco residuais.**
+Nenhum deles é visível para quem opera hoje; todos foram escritos na letra **G11** em vez de
+consertados às pressas. Em linguagem de usuário: fechar o painel de recebimento no ✕ com a consulta
+em voo deixa um estado de "carregando" preso na memória da tela (inofensivo, não aparece); anexar
+com a troca de recebimento no mesmo instante pousa no anterior; o teste que guarda a mudança de
+estilo olha **o primeiro** bloco de regras e passaria despercebido se alguém sobrescrevesse a regra
+depois; e **nenhuma** tela do módulo anuncia suas mensagens para leitor de tela — o aviso flutuante
+é o único anúncio, e isso vale para o módulo inteiro, não para esta etapa.
+
 ## Onde estamos e o que vem a seguir
 
+- **Etapa 35 entregue (2026-09-16):** **as telas vizinhas param de esconder falha de rede e de
+  mostrar o registro errado** (`6f6a8b0..2d5cd35`) — **não é feature**: são os três problemas que a
+  revisão da Etapa 34 achou nas telas ao lado das que ela mexeu, **dois deles anteriores a qualquer
+  etapa recente**. Em **Requisições**, clicar numa linha passou a custar **uma** consulta do
+  detalhe em vez de duas (furo **C45**, fechado) — link direto, atualização ao voltar para a janela
+  e troca de filtro continuam funcionando. Em **Recebimentos**, a falha de rede **para de se
+  disfarçar de lista vazia**: a tela diz *"Não foi possível carregar os recebimentos."* com
+  **Tentar de novo**, um recarregamento que falha **zera** a lista em vez de deixar a antiga
+  passando por fresca, e o modal de nota fiscal avisa *"Não foi possível carregar a lista de
+  materiais."* sem bloquear o registro por pedido de compra (fragilidade **G10**, fechada nesta
+  parte). Ainda em Recebimentos, trocar de linha **não mostra mais o recebimento anterior** sob o
+  número novo (o cabeçalho passa por *"..."*) e, com duas respostas fora de ordem, vence o
+  **último clique** — dois furos que nenhuma spec tinha, agora registrados como **C46** e **C47**,
+  os dois já fechados. E as **11 telas com coluna de ações** passaram a **quebrar os botões em
+  duas fileiras** em vez de deixá-los serem cortados pela borda sem barra de rolagem; o pior caso
+  medido não era Materiais, era **Ferramentas**. **Zero linha de servidor.**
+  **O que a revisão achou:** duas revisões em paralelo, veredito limpo nas duas, **zero alarme
+  falso**, convergindo nos mesmos **dois** problemas de baixa gravidade — o ✕ do painel de
+  requisição podia **reabrir** a requisição que você fechou (comportamento que já existia antes) e
+  a barra de passos do recebimento **piscava no passo 1** a cada troca de linha. Os dois
+  corrigidos; mais cinco residuais declarados em **G11**.
+  **O que é seu:** a verificação manual **F12**, que foi **reescrita** porque a redação anterior
+  estava errada na tela (dizia Materiais; o pior caso é Ferramentas) e ficou vencida com a mudança
+  de estilo — o que resta medir é o **teto** da faixa e as linhas que passaram a ocupar duas
+  fileiras. E as decisões **B72 a B79**, todas reversíveis, todas escritas com o que foi
+  descartado.
 - **Etapa 34 entregue (2026-09-16):** **o documento passa a ficar preso ao registro certo, em cinco
   lugares novos** (features 01, 04, 08, 12 e 14, `746a106..054f727`) — a Etapa 32 tinha construído o
   mecanismo de anexos inteiro e plugado **uma tela só**. Agora material, requisição, recebimento,

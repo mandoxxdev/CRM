@@ -220,7 +220,7 @@ vermelha, e em 2:
   `RequisicoesList.js:97-99`), `next = 'id=55'` ≠ `''` → **escreve** → efeito `:167` reacende →
   GET #2. **2, não 1 e não 3.**
 
-- [ ] **Step 1: acrescentar o helper e a asserção**
+- [x] **Step 1: acrescentar o helper e a asserção**
 
 Em `RequisicoesList.test.js`, junto de `chamadasDeAnexos` e `blocoDeAnexos` (`:500-501`):
 
@@ -247,7 +247,7 @@ seguinte; o `test(` do deep-link abre em `:503` e fecha em `:513`), a régua da 
   expect(cargasDoDetalhe()).toHaveLength(1);
 ```
 
-- [ ] **Step 2: rodar e LER o número**
+- [x] **Step 2: rodar e LER o número**
 
 ```
 cd client && CI=true npx react-scripts test --watchAll=false src/components/almoxarifado/RequisicoesList.test.js
@@ -256,12 +256,25 @@ cd client && CI=true npx react-scripts test --watchAll=false src/components/almo
 Esperado: **um** cenário vermelho — o do clique —, com `Expected length: 1 / Received length: 2`. O
 cenário de deep-link tem de ficar **verde** no mesmo rodada.
 
-- [ ] **Step 3: registrar o vermelho neste plano**, colando a linha real do `Received`. Se vier
+- [x] **Step 3: registrar o vermelho neste plano**, colando a linha real do `Received`. Se vier
       `Received length: 1`, **pare**: o cenário não está passando pelo caminho do clique (confira
       que ele usa `renderizarSemDetalhe()` e `container.querySelector('tbody tr').click()`), e a
       T2 não pode começar. Se vier 3 ou mais, também pare e reporte — o traçado da medição prevê
       exatamente 2.
-- [ ] **Step 4: NÃO commitar.** Deixe a árvore com a asserção nova e siga para a T2.
+
+      **Medido (execução da T1, antes de qualquer linha de produto mudar):** um único cenário
+      vermelho — `RN-02: sem detalhe aberto não consulta anexos; abrir a requisição consulta` —,
+      na asserção nova de `RequisicoesList.test.js:558`. Deep-link **verde** na mesma rodada.
+      `Tests: 1 failed, 32 passed, 33 total`. Linha literal do `Received`:
+
+      ```
+      Expected length: 1
+      Received length: 2
+      Received array:  [["/almoxarifado/requisicoes/55", {"headers": {"Cache-Control": "no-cache", "Pragma": "no-cache"}, "params": {"_t": 1789544536895}}], ["/almoxarifado/requisicoes/55", {"headers": {"Cache-Control": "no-cache", "Pragma": "no-cache"}, "params": {"_t": 1789544536908}}]]
+      ```
+
+      A previsão do traçado (**2, não 1 e não 3**) bateu exatamente.
+- [x] **Step 4: NÃO commitar.** Deixe a árvore com a asserção nova e siga para a T2.
 
 ---
 
@@ -286,7 +299,7 @@ cenário de deep-link tem de ficar **verde** no mesmo rodada.
 | gravar `loadedDetalheIdRef.current = id` antes do `await` | o ramo `if (!urlId)` (`:169-175`) passa a **fechar o painel** em navegação que limpa a URL | nenhum cenário cobre — é por isso que está proibido por escrito |
 | mexer em `:99-102` ou na ordem `:167` → `:183` | é o inicializador que impede o mount de apagar o `?id=` | `:503-526` (deep-link) |
 
-- [ ] **Step 1: implementar** — três edições cirúrgicas.
+- [x] **Step 1: implementar** — três edições cirúrgicas.
 
 Junto de `loadedDetalheIdRef` (`:106`) e `detalheFetchSeqRef` (`:107`):
 
@@ -351,12 +364,12 @@ E no topo do efeito de deep-link (`:167`), **antes de qualquer ramo**:
     // … resto igual a hoje …
 ```
 
-- [ ] **Step 2: reescrever o comentário de `RequisicoesList.test.js:540-548`**, que está duplamente
+- [x] **Step 2: reescrever o comentário de `RequisicoesList.test.js:540-548`**, que está duplamente
       vencido: ele aponta `RequisicoesList.js:232-234` para o `setDetalhe(null)` condicional (hoje
       `:234-236`) e narra o fato dos 2 GETs como se ele fosse permanente. O novo texto diz o que
       passou a valer (uma carga por clique, RN-01), **o que estava errado** (a linha) e o que a
       contagem de anexos continua guardando.
-- [ ] **Step 3: rodar o arquivo inteiro e ver passar**
+- [x] **Step 3: rodar o arquivo inteiro e ver passar**
 
 ```
 cd client && CI=true npx react-scripts test --watchAll=false src/components/almoxarifado/RequisicoesList.test.js
@@ -367,7 +380,7 @@ Tem de ficar verde **tudo**, com atenção nominal a quatro cenários que são o
 `:583-600` (foco da janela, `toBe(cargasAntes + 1)`), `:602-614` (troca de filtro,
 `toBeGreaterThan(1)`).
 
-- [ ] **Step 4: CONTROLE POSITIVO — três sabotagens, e leia QUAL asserção cai**
+- [x] **Step 4: CONTROLE POSITIVO — três sabotagens, e leia QUAL asserção cai**
 
 | # | Sabotagem (`perl -0pi -e`, com `grep -cF` da âncora dando 1) | O que TEM de cair |
 |---|---|---|
@@ -379,7 +392,7 @@ Regras do harness: `grep -cF` da âncora = 1, `md5sum` antes / depois / depois d
 `git diff --stat` vazio no fim. **Se a sabotagem 1 não derrubar o cenário do clique**, o cenário
 está medindo outra coisa — conserte o cenário, não troque a sabotagem.
 
-- [ ] **Step 5: commit** (leva a T1 junto)
+- [x] **Step 5: commit** (leva a T1 junto)
 
 ```bash
 git add client/src/components/almoxarifado/RequisicoesList.js \
@@ -392,6 +405,23 @@ toda abertura pela lista), o que foi decidido (flag de navegacao interna por ide
 armada so quando `syncSearchParams` escreve) e o que foi descartado (guarda de mesmo id no efeito,
 que mataria o refetch por troca de filtro; e `force: false` no clique, que e regra compartilhada de
 17 call sites).
+
+**Feito: `6f6a8b0`** — `Almoxarifado Etapa 35 T1+T2: dois GET do detalhe por clique na lista de
+requisicoes (furo C45)`. Suíte depois do conserto: `Tests: 33 passed, 33 total` (era
+`1 failed, 32 passed` na régua vermelha da T1). Saída limpa — só os dois avisos de future flag do
+React Router, pré-existentes.
+
+**Controles positivos, um a um (`md5` de `RequisicoesList.js` limpo:
+`50b1c0db8c89499af166989c16dcc841`):**
+
+| # | Âncora (`grep -cF`) | `md5` sabotado | O que caiu |
+|---|---|---|---|
+| 1 | `if (escrita !== null) navInternaRef.current = escrita;` = **1** | `0ca567d7ac44748648877b8ab8834642` | **Caiu como previsto.** Só o cenário do clique, na asserção `expect(cargasDoDetalhe()).toHaveLength(1)` (`:558`), `Received length: 2`. `1 failed, 32 passed`. Os três guardas (deep-link, foco, troca de filtro) verdes. |
+| 2 | consumo + arme (duas âncoras, cada uma = **1**) | `571bed1bb506945bd170c322e019814f` | **NÃO caiu nada** — `33 passed`. Esperado: o cenário que pega essa versão frouxa é o de integração da **T6**, que ainda não existe. A guarda fica; a suíte de hoje **não** a protege. |
+| 3 | `return null;       // nao escreveu — nada a consumir, e nada a armar` = **1** | `c4e9668a5475ad4274801bd860739cff` | **NÃO caiu nada** — `33 passed`. Mesma causa: o Passo 4 do cenário de integração da **T6** é o controle positivo dele (a Fase 2 já dizia isso). Não foi forjado vermelho. |
+
+Restauração confirmada nas três: `md5sum` de volta a `50b1c0db8c89499af166989c16dcc841` e
+`git diff --stat` com **só** os dois arquivos da task.
 
 ---
 
@@ -410,7 +440,7 @@ entrada, `:69-74` o `catch` (mensagem do servidor → toast → lista vazia → 
 ramo de erro **antes** do ramo de lista vazia, com `.almox-table-container` + `.almox-empty` e
 **nenhuma classe nova** (não existe `.almox-error` no CSS do módulo).
 
-- [ ] **Step 1: escrever os três cenários e ver falhar**
+- [x] **Step 1: escrever os três cenários e ver falhar**
 
 ```js
 /* ── (h) RN-04: rede caida NAO pode virar "Nenhum recebimento registrado" ────────────────────
@@ -495,7 +525,7 @@ test('(j) falha ao carregar materiais aparece DENTRO do modal de novo recebiment
 });
 ```
 
-- [ ] **Step 1b: resolver o seletor do botão de refresh antes de rodar o (i).** O botão de `:409`
+- [x] **Step 1b: resolver o seletor do botão de refresh antes de rodar o (i).** O botão de `:409`
       **não tem texto** — é só `<FiRefreshCw size={13} />` dentro de `btn-almox-secondary`, então
       `botaoPorTexto` não o acha (é o `TODO` marcado com ⚠ no trecho acima). Duas saídas, escolha a
       primeira que funcionar e **diga qual usou**: (1) dar `title="Atualizar lista"` ao botão no
@@ -510,14 +540,14 @@ test('(j) falha ao carregar materiais aparece DENTRO do modal de novo recebiment
       vermelho **pelo motivo errado** e a rodada TDD não provaria nada. O precedente citado é
       `RequisicoesList.js:864` (não `:863` — **(Fase 2)** off-by-one), `title="Atualizar detalhe e
       saldos"`.
-- [ ] **Step 2: rodar e ver falhar** — os três cenários vermelhos, cada um pela frase que ainda não
+- [x] **Step 2: rodar e ver falhar** — os três cenários vermelhos, cada um pela frase que ainda não
       existe no DOM (e o (h) também pelo `not.toContain`, que hoje encontra a frase).
 
 ```
 cd client && CI=true npx react-scripts test --watchAll=false src/components/almoxarifado/RecebimentosAlmoxarifado.test.js
 ```
 
-- [ ] **Step 3: implementar**
+- [x] **Step 3: implementar**
 
 Estados novos, junto de `loading` (`:51`):
 
@@ -606,10 +636,10 @@ E dentro do modal, acima da busca (depois do `<label>Materiais recebidos</label>
                     )}
 ```
 
-- [ ] **Step 4: rodar e ver passar** — o arquivo inteiro, com atenção ao **(a)** (`:177`), que
+- [x] **Step 4: rodar e ver passar** — o arquivo inteiro, com atenção ao **(a)** (`:177`), que
       afirma `not.toContain('Nenhum recebimento registrado')` e conta linhas: ele prova que o
       caminho feliz não virou estado de erro.
-- [ ] **Step 5: CONTROLE POSITIVO — três sabotagens**
+- [x] **Step 5: CONTROLE POSITIVO — três sabotagens**
 
 | # | Sabotagem | O que TEM de cair |
 |---|---|---|
@@ -619,7 +649,43 @@ E dentro do modal, acima da busca (depois do `<label>Materiais recebidos</label>
 | 3 | apagar `setErroMateriais` do `catch` de `loadMateriais` | **(j)**, e **só** o (j) — os outros cenários seguem verdes (o risco de a sabotagem derrubar tudo por `TypeError` não existe aqui). |
 | — | apagar `setRecebimentos([])` do `catch`, **sozinho** | **previsão: nada cai**, porque o ramo `erro ?` precede a tabela e a lista velha nunca chega a renderizar. **Mantenha** (é o molde de `HistoricoInspecoes.js:72` e a defesa em profundidade de RN-05) e **declare que a suíte não o protege sozinho** — caso (2) da regra da `fechar-etapa`. **(Fase 2)** o que a suíte protege é o PAR: a sabotagem 2b acima é a prova de que as duas linhas juntas são o conserto. |
 
-- [ ] **Step 6: commit**
+#### Medido na execução da T3 — e a 2b do plano **não funciona**
+
+Linha de base antes da task: `Tests: 7 passed, 7 total`. Rodada vermelha (Step 2):
+`Tests: 3 failed, 7 passed, 10 total`, os três cenários caindo cada um pela frase que ainda não
+existia no DOM — e o `Received string` do **(i)** trazendo as três linhas velhas (`REC-2026-041`,
+`058`, `077`) ainda na tela depois do refresh que falhou, que é o defeito da RN-05 observado
+diretamente. Depois do conserto: `Tests: 10 passed, 10 total`, saída com o ruído pré-existente
+**idêntico** à linha de base (1 `console.error` de jspdf/canvas + 2 `console.warn` de future flag do
+React Router). `CI=true npx react-scripts build` passou (exit 0). **Step 1b: usada a saída (1)** —
+`title="Atualizar lista"` no botão de refresh, aplicada **antes** da rodada vermelha.
+
+`md5` do produto **limpo com o conserto**: `34856bbf22610e81a1e626e3e6f2ece0` — restaurado e
+conferido depois de cada uma das seis sabotagens; `git diff --stat` no fim com só os dois arquivos
+da task.
+
+| # | Âncora (`grep -cF`) | `md5` sabotado | O que caiu, medido |
+|---|---|---|---|
+| 1 | `setErro(msg);` = **1** | `5c87a0fef6d12f7524a9af36554bf9d3` | **Como previsto.** `2 failed, 8 passed`: **(h)** e **(i)**, as duas por `toContain('Não foi possível carregar os recebimentos.')`. (j) verde. |
+| 2 | `) : recebimentos.length === 0 ? (` = **1** | `fbda8ffddb553969e30231e4f3cd6151` | **Como previsto.** `2 failed, 8 passed`: **(h)** e **(i)** por `toContain(...)`; o (i) **não** cai por `linhas()`. |
+| 2b | as duas = **1** | `21808ad783ad28f429b70f85fedeb7ab` | ⚠️ **A PREVISÃO DESTA LINHA ESTAVA ERRADA.** `1 failed, 9 passed` — **só (h)**; o **(i) fica VERDE**, ou seja a 2b é *mais fraca* que a 2 sozinha. Causa traçada: a sabotagem de posição **não remove** o ramo `erro ?`, só o desloca; com a lista velha não-vazia, `recebimentos.length === 0` é **falso** e o controle cai no ramo de erro **assim mesmo** — a tabela obsoleta nunca chega a renderizar. |
+| **2c** | **(NOVA, substitui a 2b:)** apagar `setErro(msg);` **+** `setRecebimentos([]);`, as duas âncoras = **1** | `7de93caaf4148bc57e5c484a2d76d329` | **É a que faz `linhas()` valer.** `2 failed, 8 passed`: **(i)** por `expect(linhas()).toHaveLength(0)` → **`Received length: 3`**, com as três `<tr>` no `Received array`. **(h)** também cai por `toContain`. |
+| 3 | `setErroMateriais(err.response` = **1** | `2fe6c0578a56bbd92fbd4c4fc578c553` | **Como previsto.** `1 failed, 9 passed` — **só (j)**, sem `TypeError`, sem derrubar mais nada. |
+| — | `setRecebimentos([]);` sozinho = **1** | `0dcc7b78fcceb46c8226ea515367d68b` | **Como previsto: `10 passed`, nada cai.** A linha fica por defesa em profundidade, e fica **declarado** que a suíte não a protege isolada — só em par com `setErro`, e quem prova o par é a 2c. |
+
+**Divergência aplicada no cenário (i), e o porquê.** Como a única sabotagem que renderiza a tabela
+velha é a 2c (`erro` não marcado **e** lista não zerada), e como na ordem original do cenário os
+dois `toContain` vinham **antes** de `linhas()`, o Jest estourava neles e
+`expect(linhas()).toHaveLength(0)` **nunca rodava** — a régua que nomeia a RN-05 era
+**inalcançável por controle positivo nenhum**, dominada pelas asserções anteriores (o achado nº 34
+do próprio plano, agora do lado de dentro do cenário). **Conserto:** no (i), `linhas()` passou a ser
+a **primeira** asserção depois do clique, com os dois `toContain` logo abaixo. O conjunto de
+asserções e os textos literais são os do plano — só a ordem mudou, e o comentário no teste registra
+por quê. Nada se perde (sob a sabotagem 2, `linhas()` continua 0 e quem cai é o `toContain`, como
+antes) e a 2c passa a derrubar o (i) com `Received length: 3`. **Para a letra B da T7:** é o segundo
+caso desta etapa em que a previsão do plano sobre *qual asserção cai* estava errada.
+
+- [x] **Step 6: commit**
 
 ```bash
 git add client/src/components/almoxarifado/RecebimentosAlmoxarifado.js \
@@ -632,6 +698,16 @@ consequencia (o operador conclui que nao ha recebimento, ou opera sobre dado vel
 (estado de erro no DOM no molde da Etapa 29, mais erro de materiais dentro do modal) e o descartado
 (terceiro estado de erro para `loadAuxiliares`, que alimenta selects opcionais com entrada manual
 ao lado).
+
+**Feito: `22e1d9b`** — `Almoxarifado Etapa 35 T3: falha de carga de Recebimentos virava "Nenhum
+recebimento registrado" (fragilidade G10)`. Dois arquivos, 141 inserções / 6 remoções. Relatório
+completo em `.superpowers/sdd/2026-09-16-almoxarifado-etapa35-vizinhas-da-34/task-3-report.md`.
+
+> **Para a T4, que mexe no MESMO arquivo:** o ternário da lista ganhou um ramo e o arquivo cresceu
+> ~30 linhas, então **todos os `arquivo:linha` citados no plano da T4 andaram** — remeça antes de
+> aplicar. O estado `erro` desta task é da **lista**, não do painel: `abrirDetalhe`, `detalhe`, o
+> gate do painel e o bloco de anexos ficaram **intocados**, e não há acoplamento com `selectedId` /
+> `idCarregadoRef` / `detalheFetchSeqRef`.
 
 ---
 
@@ -662,7 +738,7 @@ de `:501` — hoje protegido só pelo ternário `loadingDetalhe ?` de `:496` —
 painel por `{selectedId &&` (`:852`), corpo por `loadingDetalhe || !detalhe` (`:876`) e cabeçalho
 `detalhe?.numero || '...'` (`:856`).
 
-- [ ] **Step 1: escrever os dois cenários e ver falhar** (molde do GET deferido: `:351-359`, cujo
+- [x] **Step 1: escrever os dois cenários e ver falhar** (molde do GET deferido: `:351-359`, cujo
       porquê está escrito em `:326-338` — sem segurar a resposta, o `act` coalesce o commit
       intermediário e a janela **nunca chega ao DOM**; foi assim que o (g) passou provando nada)
 
@@ -741,12 +817,12 @@ test('(l) resposta fora de ordem nao vence — o ULTIMO clique manda', async () 
 });
 ```
 
-- [ ] **Step 2: rodar e ver falhar.** Previsão: **(k)** vermelho em
+- [x] **Step 2: rodar e ver falhar.** Previsão: **(k)** vermelho em
       `not.toContain('REC-2026-058')` (o painel segue mostrando o 58) e **(l)** vermelho em
       `toContain('REC-2026-041')` depois do `liberar58()` (o 58 atrasado venceu). Se **(k)** ficar
       verde de primeira, confira que o `liberar41` realmente segurou o GET — sem a suspensão a
       janela não existe no DOM e o cenário mede outra coisa.
-- [ ] **Step 3: implementar** — `abrirDetalhe` no molde de `RequisicoesList.js`, mais os cinco
+- [x] **Step 3: implementar** — `abrirDetalhe` no molde de `RequisicoesList.js`, mais os cinco
       pontos do `selectedId`
 
 ```js
@@ -809,7 +885,7 @@ fora:
 mesmo elemento na mesma posição — `blocoAnexos()` continua sendo o **mesmo nó** (`toBe(antes)`).
 Verificado por leitura de `:588-611` contra o cenário `:340-378`.
 
-- [ ] **Step 4: reescrever o comentário de `:588-606`** (**(Fase 2)** o bloco de comentário vai de
+- [x] **Step 4: reescrever o comentário de `:588-606`** (**(Fase 2)** o bloco de comentário vai de
       `:588` a `:606`; `:607-609` já é o JSX do bloco de anexos, que o ponto 6 da tabela acima
       envolve em `{detalhe && …}` — diga no comentário novo que a guarda agora é explícita e por
       quê). Ele diz hoje: *"o `id` não muda durante o
@@ -817,11 +893,11 @@ Verificado por leitura de `:588-611` contra o cenário `:340-378`.
       task `abrirDetalhe` **zera**, quando o id muda. A justificativa do F2 continua valendo, mas
       **por outro motivo**: a guarda `idCarregadoRef.current !== id`. Diga o que mudou e por quê;
       deixar a frase velha é plantar a terceira geração de referência errada nesta base.
-- [ ] **Step 5: rodar e ver passar** — o arquivo inteiro. Atenção nominal a **(e)** (`:268-282`, a
+- [x] **Step 5: rodar e ver passar** — o arquivo inteiro. Atenção nominal a **(e)** (`:268-282`, a
       troca de linha que afirma `.at(-1)`: continua verde, e agora com o painel honesto no meio) e
       a **(g)** (`:340-378`, identidade de nó no refetch do mesmo id: é a RN-09, e é o cenário que
       distingue "anular quando troca" de "anular sempre").
-- [ ] **Step 6: CONTROLE POSITIVO — três sabotagens, e a nº 3 é a que interessa**
+- [x] **Step 6: CONTROLE POSITIVO — três sabotagens, e a nº 3 é a que interessa**
 
 | # | Sabotagem | O que TEM de cair |
 |---|---|---|
@@ -839,7 +915,7 @@ mundos, então nenhuma delas cai antes. Na 3, o (g) passa por `:370`
 do achado F2. Nenhuma das três derruba a suíte por `TypeError`, **desde que os pontos 5 e 6 da
 tabela de render tenham sido feitos**; sem eles, as três "caem" por crash e não provam nada.
 
-- [ ] **Step 7: commit**
+- [x] **Step 7: commit**
 
 ```bash
 git add client/src/components/almoxarifado/RecebimentosAlmoxarifado.js \
@@ -852,6 +928,61 @@ arquivo escolhido nessa janela era anexado ao recebimento errado, sem erro nenhu
 decidido (anular `detalhe` so na troca de id + `selectedId` sincrono no molde de Requisicoes +
 contador de sequencia) e o descartado (manter `{detalhe && …}` e aceitar o painel piscando, com duas
 reflows do grid por clique e nenhum estado "carregando").
+
+**FEITO — commit `4681111`** (`Almoxarifado Etapa 35 T4: o painel de recebimento mostrava o
+registro ANTERIOR sob o id novo (RN-07/RN-08)`).
+
+**Mapa de linhas re-derivado** (o brief foi extraído ANTES da T3 `22e1d9b`, que deslocou ~30
+linhas; toda linha do brief foi re-conferida no arquivo de HEAD antes de editar):
+
+| Brief | Hoje (antes da T4) | O quê |
+|---|---|---|
+| `:53-56` | `:63-64` | `detalhe` / `loadingDetalhe` |
+| `:111-143` | `:135-166` | `abrirDetalhe` |
+| `:443` | `:470` | `gridTemplateColumns` |
+| `:469` | `:507` | `background` da linha |
+| `:485` | `:523` | gate do painel |
+| `:489-491` | `:527-530` | cabeçalho + badge |
+| `:494` | `:532` | botão ✕ |
+| `:496` | `:534` | ternário `loadingDetalhe` |
+| `:501` | `:539` | `detalhe.nota_fiscal` (corpo) |
+| `:588-606` | `:671-689` | comentário do bloco de anexos |
+| `:607-609` | `:690-692` | JSX do bloco de anexos |
+| `RequisicoesList.js:864` (citado) | `:892` | `title="Atualizar detalhe e saldos"` |
+
+Os **sete** pontos de render da tabela da Fase 2 foram todos aplicados; os dois que o plano
+original tinha perdido (o par `loadingDetalhe || !detalhe` e o `{detalhe && …}` do bloco de
+anexos) eram mesmo bloqueadores — sem eles a suíte inteira cairia por `TypeError`.
+
+**RED (literal, antes do conserto):** `Tests: 2 failed, 10 passed, 12 total`.
+- (k) caiu em `expect(painel().textContent).not.toContain('REC-2026-058')` —
+  `Received: "REC-2026-058Em Conferência✕ AnexosNenhum anexo.…"` (painel do 58 inteiro, com o
+  bloco de anexos dele, sob o clique no 41). As duas asserções anteriores (`painel()` não nulo,
+  `.almox-loading` presente) passaram, como a Fase 2 previu.
+- (l) caiu em `expect(painel().textContent).toContain('REC-2026-041')` depois do `liberar58()` —
+  `Received: "REC-2026-058…"`, a resposta atrasada vencendo.
+
+**GREEN:** `RecebimentosAlmoxarifado.test.js` **12/12** (era 10/10), `RequisicoesList.test.js`
+**33/33**, `CI=true npx react-scripts build` limpo. Saída sem ruído novo (só os warnings
+pré-existentes de React Router future flags e do canvas do jsdom via `jspdf`).
+
+**Controle positivo — 3 sabotagens** (`perl -0pi -e`, nunca `python3`; md5 do
+`RecebimentosAlmoxarifado.js`; base `d3c6c67ebc94f21fd1fdc82496b7f6d5`):
+
+| # | Âncora (`grep -cF`) | md5 sabotado | Caiu | Asserção exata | Restaurado |
+|---|---|---|---|---|---|
+| 1 | `if (idCarregadoRef.current !== id) setDetalhe(null);` = **1** | `5313a1e5abef98077b5dd902914c4c08` | só **(k)** (1 failed, 11 passed) | `not.toContain('REC-2026-058')` | `d3c6c67e…` ✓ |
+| 2 | `if (seq !== detalheFetchSeqRef.current) return;` = **2** (as duas, de propósito — `perl` com `/g`, 2 → 0) | `0151fcda138659e9709a327bbf08d5da` | só **(l)** (1 failed, 11 passed) | `toContain('REC-2026-041')` depois do `liberar58()` | `d3c6c67e…` ✓ |
+| 3 | guarda → `setDetalhe(null)` **incondicional** | `f53a3efc668a961550fd1875a6daf7db` | só **(g)** (1 failed, 11 passed) | `expect(blocoAnexos()).toBe(antes)` (`:371`), `Received: null` | `d3c6c67e…` ✓ |
+
+Nas três, os outros onze cenários ficaram **verdes** — nenhuma derrubou a suíte por `TypeError`,
+o que confirma que os pontos 5 e 6 da tabela de render foram feitos. `git diff --stat` no fim:
+só a mudança pretendida (`79 +/20 -` no `.js`, `81 +/1 -` no `.test.js`).
+
+**Sobra da T3 também corrigida:** os comentários de `RecebimentosAlmoxarifado.js` e do
+`.test.js` citavam `RequisicoesList.js:864` para o botão de refresh do detalhe, que está em
+`:892`. Substituídos pela referência ao `title="Atualizar detalhe e saldos"` — referência por
+título não apodrece, e foi exatamente o número que rotou entre a T3 e a T4 da mesma etapa.
 
 ---
 
@@ -887,8 +1018,20 @@ de rolagem e sem sintoma.
 Ou seja: a condição do R8 da medição ("se **nenhuma** tela clipa, não mudar e registrar") **não se
 cumpre**. Uma tela clipa por aritmética.
 
-- [ ] **Step 1: rodar a aritmética por script e guardar a saída** (é a medição, e ela vai para o
-      design/guia; `perl`, não `python3` — ver Global Constraints)
+- [x] **Step 1: rodar a aritmética por script e guardar a saída** (é a medição, e ela vai para o
+      design/guia; `perl`, não `python3` — ver Global Constraints) — commit `3b23f04`. **A saída
+      executada bate com a da Fase 2 CARACTERE POR CARACTERE** (683,5px / 38 / 88 / 168 / 292 / 368
+      / 548 / 668) e as onze referências `arquivo:linha` foram conferidas uma a uma no CSS real:
+      `.almox-actions` `:305-309` sem `flex-wrap`, `gap: 6px` em `:307`; `.almox-btn-icon` `:311-312`;
+      `.btn-almox-secondary` `:355-369` com `gap: 7px` `:358`, `padding: 9px 16px` `:359`,
+      `border: 1px` `:362`, `white-space: nowrap` `:368`; `.almox-table td` padding em `:194`;
+      `.almox-table-container` `:167-173` com `overflow: hidden` `:171`; `@media (max-width: 768px)`
+      `:1025` e `overflow-x: auto` da tabela em `:1030`; `.almox-page` padding 24px em `:7-9`.
+      **A contagem de 17 ocorrências em 11 telas também confere** (`ConferenciaEstoque`,
+      `FerramentasAlmoxarifado`, `InspecoesAlmoxarifado`, `LotesAlmoxarifado`, `MateriaisAlmoxarifado`,
+      `MateriaisClienteAlmoxarifado`, `MovimentacoesAlmoxarifado`, `RemessasTerceirosAlmoxarifado`,
+      `ReposicaoAlmoxarifado`, `ReservasAlmoxarifado`, `SobrasAlmoxarifado`) — a correção da Fase 2
+      (17, não 18) está certa.
 
 ```bash
 # Le os numeros REAIS do CSS em vez de confiar na memoria do plano.
@@ -935,7 +1078,15 @@ E os números do CSS que a conta usa, confirmados linha a linha nesta revisão: 
 (`FerramentasAlmoxarifado.js:519, :529, :539, :553, :557`), todos `btn-almox-secondary` com ícone
 `size={13}`, e a tabela tem 7 colunas (`:482-483`) — 6 além de "Ações".
 
-- [ ] **Step 2: escrever o teste de drift e ver falhar**
+- [x] **Step 2: escrever o teste de drift e ver falhar** — commit `3b23f04`. **VERMELHO na asserção
+      1 e só nela**, como a Fase 2 previu: o Jest parou em `almoxActionsCss.test.js:36` com
+      `Expected pattern: /flex-wrap:\s*wrap/` e o `Received string` mostrando o bloco real
+      (`display: flex; gap: 6px; align-items: center;`) — o que já prova, na própria mensagem de
+      falha, que o arquivo foi lido. Como o Jest aborta na primeira asserção da mesma `test()`, as
+      asserções 2 a 6 foram avaliadas à parte com `node` e o mesmo `bloco()`: **todas verdes**, e
+      `css.length` = **39606**, idêntico ao medido na Fase 2 (o `wc -c` dá 39900 porque conta bytes,
+      e o arquivo tem 294 caracteres acentuados multibyte; o arquivo é LF, sem CR nenhum — o que
+      importa porque as sabotagens casam `\n`).
 
 ```js
 /**
@@ -997,7 +1148,9 @@ confortável sobre o `> 20000` da guarda-da-guarda), asserção 1 **false** hoje
 **true**. Se ao rodar no Jest algo além da 1 vier vermelho, foi o CSS que mudou depois desta
 revisão — não conserte o teste, refaça a medição.
 
-- [ ] **Step 3: aplicar o conserto** — uma linha, com o porquê ao lado
+- [x] **Step 3: aplicar o conserto** — uma linha, com o porquê ao lado — commit `3b23f04`, aplicado
+      exatamente como abaixo (`Almoxarifado.css:305-317`); nenhuma outra regra do arquivo foi tocada
+      (`git diff --stat` = 1 arquivo, **9 inserções, 0 remoções**).
 
 ```css
 /* ── Ações de tabela ── */
@@ -1017,12 +1170,17 @@ revisão — não conserte o teste, refaça a medição.
 }
 ```
 
-- [ ] **Step 4: rodar o teste de drift e a suíte de client inteira** — o `wrap` muda a altura
+- [x] **Step 4: rodar o teste de drift e a suíte de client inteira** — o `wrap` muda a altura
       possível das linhas em 11 telas, então rode **tudo** (`cd client && CI=true npx react-scripts
       test --watchAll=false`) e o `build`. Nenhum cenário desta base afirma altura de linha, então
       a previsão é verde; se cair algo, é achado e vai para o relatório, não para um `snapshot`
-      atualizado às pressas.
-- [ ] **Step 5: CONTROLE POSITIVO — três sabotagens, uma por premissa que decide algo**
+      atualizado às pressas. — **VERDE, previsão confirmada:** teste de drift `2 passed`; suíte
+      inteira do client **47 suites / 697 testes, todos passando**; `CI=true npx react-scripts build`
+      limpo (`The build folder is ready to be deployed`, nenhum warning virando erro). **Nenhum teste
+      desta base cita `almox-actions`** (`grep -rn "almox-actions" --include=*.test.js client/src` =
+      0) **nem mede altura** (`offsetHeight`/`clientHeight`/`getBoundingClientRect` = 0 ocorrências
+      em testes) — o `wrap` não tinha como derrubar nada, e não derrubou.
+- [x] **Step 5: CONTROLE POSITIVO — três sabotagens, uma por premissa que decide algo**
 
 ⚠️ **(Fase 2) As três sabotagens originais eram INAPLICÁVEIS pela própria regra do harness** — e o
 plano não tinha percebido. Medido: `grep -cF 'flex-wrap: wrap'` = **6** (antes do conserto),
@@ -1042,7 +1200,45 @@ Depois de cada `perl`, **confirme que o md5 MUDOU** (uma regex que não casou é
 que esta regra existe para pegar) e, ao restaurar com `git checkout -- Almoxarifado.css`, que ele
 voltou ao valor inicial. `git diff --stat` vazio no fim.
 
-- [ ] **Step 6: commit**
+⚠️ **(T5, executando) `git checkout -- Almoxarifado.css` estava ERRADO aqui e teria apagado o
+conserto.** As sabotagens rodam **antes** do commit (a regra "nenhum commit com a suíte vermelha"
+exige ver o vermelho antes), então o `HEAD` ainda não tem o `flex-wrap` — `git checkout` restauraria
+o arquivo para a versão **sem** o conserto, com `md5` diferente do inicial, e o executor ficaria
+caçando um fantasma. **Restaurado por `perl` inverso**, conferindo que o md5 volta ao valor de
+antes da sabotagem, com cópia do arquivo consertado no scratchpad como rede. O `git diff --stat` no
+fim **não é vazio**: é `1 file changed, 9 insertions(+)` — o próprio conserto. Vazio seria sinal de
+que o conserto sumiu. *(Corrigir isto no texto da `fechar-etapa` junto com o `python3`, na T7.)*
+
+**Resultado executado** (`md5` inicial do arquivo consertado: `c32e61219a15d81d59639ea576bcdfa3`):
+
+| # | Âncora (contada antes) | `md5` sabotado | Asserção que caiu | Restaurado |
+|---|---|---|---|---|
+| 1 | `^\.almox-actions \{` → **1** | `adea2b724b0c973796ae9b4e80d65e66` | **asserção 1**, `almoxActionsCss.test.js:36`, `Expected pattern: /flex-wrap:\s*wrap/` | `c32e6121…` ✔ |
+| 2 | `^\.almox-actions \{` → **1** | `279e770ee6599d26745293bdc361f8e8` | **asserção 2**, `:38`, `/gap:\s*6px/` — e a **1 passou**, ou seja a sabotagem atingiu uma premissa só | `c32e6121…` ✔ |
+| 3 | `^\.btn-almox-secondary \{` → **1** (`grep -cF '.btn-almox-secondary {'` → **2**, confirmando o aviso da Fase 2) | `3f9f5e72980908c530bfbbcf253b3361` | **asserção 4**, `:42`, `/white-space:\s*nowrap/` | `c32e6121…` ✔ |
+
+A sabotagem 3 prova **duas** coisas de uma vez: que a premissa de piso duro está guardada, e que o
+`^` do `bloco()` lê a regra do módulo e **não** a de `.almox-mapa-page .btn-almox-secondary`
+(`:1486`) — se lesse a errada, tirar o `nowrap` de `:368` não teria derrubado nada. Os três md5
+mudaram (nenhum no-op silencioso) e os três voltaram ao valor inicial.
+
+- [x] **Fix round 1 — `8a84ad3`** (revisão da task, um Important). **O comentário do conserto citava
+      `:368` e `:1030`, que são os números de ANTES da própria inserção**: as 9 linhas que ele traz
+      empurraram os alvos para `:377` e `:1039` (conferido com `git show HEAD:…`; `:1030` no commit
+      é um `gap: 12px` de outra regra). Não foi corrigido para os números novos — **foi reescrito
+      sem número de linha nenhum**, citando seletor + declaração, que é a regra que a T2 e a T4 já
+      aplicaram nesta etapa; os quatro números ficam no texto só como relato do que apodreceu.
+      ⚠️ **E o teste de drift pegou um defeito meu na primeira tentativa:** a redação inicial
+      escrevia a regra do media query **com chaves**, e a chave de fechamento dentro do COMENTÁRIO
+      truncava o `[^}]*` do `bloco()` antes do `flex-wrap` — asserção 1 vermelha, `:36`. O CSS
+      seguia válido para o navegador; o teste é que passaria a ler um bloco cortado. Reescrito sem
+      chaves, com o porquê no próprio comentário. **Vale como quarto controle positivo, não
+      planejado, da asserção 1: o teste não estava passando por sorte.** Verificado: drift **2/2**,
+      suíte **47/697**, `build` "Compiled successfully", `grep -c '[{}]'` no comentário = **0**,
+      commit com **só** `Almoxarifado.css`.
+- [x] **Step 6: commit** — `3b23f04`, só os dois arquivos da task
+      (`git add` nominal; `server/data/database.sqlite.bak`, `server/nodemon.json` e
+      `docs/bkp_bancoprod.md` seguem fora do índice, como manda a Global Constraint).
 
 ```bash
 git add client/src/components/almoxarifado/Almoxarifado.css \
@@ -1072,7 +1268,12 @@ cenário **cada um**, isolado, com o componente remontado no meio. Nenhum deles 
 **sobrevivendo** de um gesto para o outro — que é exatamente o modo de falha do R2 da medição e o
 que a sabotagem 2 da T2 explora. Este é o cenário que só existe em integração.
 
-- [ ] **Step 1: escrever o cenário**
+- [x] **Step 1: escrever o cenário** — commit `d484458`, `RequisicoesList.test.js` (+50 linhas,
+      único arquivo do commit). Escrito verbatim do brief, com **duas adições**: metade positiva por
+      passo no 3 e no 4 (`expect(checkMinha.checked).toBe(true)` / `.toBe(false)`), exigida pela
+      Global Constraint "um passo que vira no-op não pode passar" — sem ela um clique que não
+      alternasse o filtro deixaria a contagem parada e o passo pareceria correto; e
+      `expect(blocoDeAnexos()).not.toBeNull()` no passo 2. Nenhuma linha de produto tocada.
 
 ```js
 /* ── Integração da Etapa 35: os três gestos em sequência, no MESMO componente montado ──────────
@@ -1126,20 +1327,53 @@ de detalhe')` (`RequisicoesList.test.js:499`), porque ele usa `blocoDeAnexos()`,
 `chamadasDeAnexos()` (`:500-501`) e o `cargasDoDetalhe()` que a T1 acrescenta ali. Fora do
 `describe`, os três helpers não existem e o arquivo nem compila.
 
-- [ ] **Step 2: rodar e ver passar.** Se o passo 3 devolver 2, a flag sobreviveu ao passo 2 — é o
-      defeito do R2 e o conserto da T2 não está completo (confira que `syncSearchParams` devolve
-      `null` quando não escreve **e** que a comparação do efeito é por igualdade de string). Se o
-      **passo 4** devolver 3, a flag foi armada sem escrita e sobreviveu ao passo 3 — mesmo
-      diagnóstico, outro sintoma.
-- [ ] **Step 3: reexecutar as sabotagens 2 **e 3** da T2 contra ESTE cenário** (**(Fase 2)** a 3
-      entrou nesta lista: ela é alcançável e este é o único cenário que a pega). A 2 tem de derrubar
-      o **passo 3** (`Expected length: 3 / Received length: 2`); a 3 tem de derrubar o **passo 4**
-      (`Expected length: 4 / Received length: 3`). São os dois controles positivos que a T2 não podia
-      ter sozinha, porque o cenário não existia ainda. Se alguma delas **não** derrubar o passo que
-      lhe cabe, o cenário está medindo outra coisa — conserte o cenário, não troque a sabotagem.
-- [ ] **Step 4: a suíte inteira, os cinco comandos da `fechar-etapa`**, com os números lidos da
-      saída (a Etapa 34 fechou em 169/169 arquivos, 42 do almoxarifado, 4/3/5 e 46 suítes / 690
-      testes de client):
+- [x] **Step 2: rodar e ver passar.** **Verde de primeira: `Tests: 34 passed, 34 total`** (era 33).
+      Nem o passo 3 devolveu 2 nem o passo 4 devolveu 3 — o conserto da T2 está completo nas duas
+      frentes. Saída limpa: só os dois `console.warn` de future flag do React Router
+      (`v7_startTransition`, `v7_relativeSplatPath`), pré-existentes. Verde de primeira é exatamente
+      o caso em que o CLAUDE.md manda desconfiar — daí o Step 3 abaixo ter sido o que fecha o
+      argumento.
+      *(Critério original, mantido como registro: se o passo 3 devolvesse 2, a flag teria
+      sobrevivido ao passo 2 — defeito do R2, conserto da T2 incompleto; se o **passo 4**
+      devolvesse 3, a flag teria sido armada sem escrita. Nenhum dos dois aconteceu no código
+      limpo — os dois aconteceram, cada um no seu passo, sob a sabotagem correspondente.)*
+
+- [x] **Step 3: reexecutar as sabotagens 2 **e 3** da T2 contra ESTE cenário** — **as duas caíram,
+      cada uma no passo que lhe cabe.** Harness: `grep -cF` da âncora = 1 antes de cada uma,
+      `perl -0pi -e` (nunca `python3`), `md5sum` antes/depois/depois de restaurar, backup do arquivo
+      limpo no scratchpad. `md5` do arquivo limpo: `50b1c0db8c89499af166989c16dcc841` (o mesmo
+      registrado pela T2), restaurado ao fim das duas por perl inverso.
+
+| # | Sabotagem | `md5` sabotado | Passo que caiu | Literal |
+|---|---|---|---|---|
+| 2 | booleano frouxo + arme incondicional (`if (navInternaRef.current) {…}` e `navInternaRef.current = new URLSearchParams(buildSearchParams(id)).toString();` sem checar retorno) | `571bed1bb506945bd170c322e019814f` *(idêntico ao da T2 — reprodução byte a byte)* | **Passo 3**, `expect(cargasDoDetalhe()).toHaveLength(3)` (`RequisicoesList.test.js:662`) | `Expected length: 3` / `Received length: 2` |
+| 3 | `syncSearchParams` devolvendo `next` também quando **não** escreve | `df02961fc575025ad6a9624cbedb58ef` | **Passo 4**, `expect(cargasDoDetalhe()).toHaveLength(4)` (`:670`) | `Expected length: 4` / `Received length: 3` |
+
+      Nas duas, `Tests: 1 failed, 33 passed, 34 total` — **só** o cenário de integração caiu; os
+      outros 33 do arquivo (inclusive os dois F2 de foco e de filtro) ficaram verdes. É o que
+      distingue "este cenário mede a flag" de "este cenário quebra junto com qualquer coisa". Na
+      T2 as duas passavam com `33 passed` e estava registrado que a suíte de então não as pegava:
+      **essa lacuna fechou aqui.** Sob a nº 3 o **passo 3 continua verde** e só o 4 cai — é a
+      assinatura exata da flag que não casa, não é desarmada e sobrevive um ciclo inteiro.
+      *(Critério original: a 2 tinha de derrubar o passo 3 e a 3 o passo 4, com esses literais
+      exatos — cumprido nos dois casos, sem trocar sabotagem nem afrouxar o cenário.)*
+
+- [x] **Step 4: a suíte inteira, os cinco comandos da `fechar-etapa`** — todos rodados, números
+      **lidos da saída**:
+
+| Comando | Resultado |
+|---|---|
+| `cd server && npm run test:api` | **169/169 arquivos de teste OK** — idêntico à Etapa 34 |
+| `cd server && npm run test:almoxarifado` | **42 passou, 0 falhou** — idêntico |
+| `test:validation` / `test:safealter` / `test:sqlite` | **4 / 3 / 5 passed, 0 failed** — idêntico |
+| `cd client && CI=true npx react-scripts test --watchAll=false` | **47 suites, 698 testes, 0 falhas** |
+| `cd client && CI=true npx react-scripts build` | limpo, "The build folder is ready to be deployed" |
+
+      O client subiu de 46/690 para **47/698**, exatamente a previsão do plano (+1 aqui, +3 na T3,
+      +2 na T4, +2 na suíte nova do CSS). `server/` intocado, provado por execução:
+      `git diff --stat 6f6a8b0..HEAD -- server/` **vazio** e `git diff --stat -- server/` **vazio**.
+      *(Texto original, como registro — a Etapa 34 fechou em 169/169 arquivos, 42 do almoxarifado,
+      4/3/5 e 46 suítes / 690 testes de client:)*
 
 ```
 cd server && npm run test:api
@@ -1157,7 +1391,13 @@ comandos de `server/` têm de ficar **idênticos** aos da 34 — qualquer mudan�
 task tocou o servidor, o que a Global Constraint proíbe. Prove com
 `git diff --stat <hash da T1..T6> -- server/` **vazio**.
 
-- [ ] **Step 5: commit** do cenário de integração, com os números reais da suíte no corpo.
+- [x] **Step 5: commit** — `d484458` *Almoxarifado Etapa 35 T6: cenario de integracao que prova a
+      flag de navegacao interna entre gestos*. **Um arquivo só** (`RequisicoesList.test.js`, +50);
+      `git add` por caminho, nunca `-A` — os três artefatos não versionados (`docs/bkp_bancoprod.md`,
+      `server/data/database.sqlite.bak`, `server/nodemon.json`) seguem não versionados. O corpo
+      explica por que o passo 4 existe (a flag que não casa sobrevive; ligar e desligar o filtro é o
+      caminho de dois cliques que a alcança), o que cada sabotagem derruba com os md5 e os literais,
+      e traz os números reais da suíte. Este plano **não** foi commitado, por instrução.
 
 ---
 
@@ -1186,21 +1426,21 @@ task tocou o servidor, o que a Global Constraint proíbe. Prove com
 Use a skill **`fechar-etapa`**; ela é a versão executável do contrato. O que é específico desta
 etapa:
 
-- [ ] **Step 1: as duas specs.** 04 fecha o furo **C45** (dois GETs por clique) — o aviso do topo
+- [x] **Step 1: as duas specs.** 04 fecha o furo **C45** (dois GETs por clique) — o aviso do topo
       (`:11`) sai e o parágrafo `:80-90` passa a dizer **como** foi consertado, com a asserção que
       trava. 08 fecha a fragilidade **G10** e ganha os dois itens que **nenhuma spec tinha**: o
       painel que mostrava o registro anterior (RN-07) e a resposta fora de ordem (RN-08).
-- [ ] **Step 2: dizer que a spec estava errada.** `08-recebimento/README.md:170` aponta
+- [x] **Step 2: dizer que a spec estava errada.** `08-recebimento/README.md:170` aponta
       `loadAuxiliares` em `:99-108`; o certo é **`:100-109`** (`:99` é linha em branco). Corrija
       **dizendo que estava errado** — a regra 5 do CLAUDE.md existe porque apagar em silêncio faz o
       próximo confiar de novo. Mesma coisa no cabeçalho de `RecebimentosAlmoxarifado.test.js:78-81`
       (terceira variante do mesmo off-by-one) e em `RequisicoesList.test.js:545-548`
       (`:232-234` → `:234-236`), se a T2 não os tiver pegado.
-- [ ] **Step 3: o item (c) entra na documentação, que hoje não o tem em lugar nenhum.** Nem
+- [x] **Step 3: o item (c) entra na documentação, que hoje não o tem em lugar nenhum.** Nem
       `04-requisicoes`, nem `08-recebimento`, nem o mapa mencionam o clipe de `.almox-actions`; ele
       só existia no plano da 34 (`:1035-1060`) como letra F. Vai para o **guia** (roteiro de F12) e
       para o **mapa**, com a faixa medida e o risco residual do `table-layout: auto`.
-- [ ] **Step 4: o roteiro de F12 no guia**, clicável e específico: larguras **769, 820, 900, 1024,
+- [x] **Step 4: o roteiro de F12 no guia**, clicável e específico: larguras **769, 820, 900, 1024,
       1100, 1280, 1400** px × **Ferramentas** (`:517`, uma ferramenta `DISPONIVEL` com
       `exige_calibracao = 1` — é o pior caso), **Materiais** (`:312`, 10 ícones) e **Remessas a
       Terceiros** (`:547`, 6 botões); em cada uma, conferir se o **último** botão da célula está
@@ -1208,7 +1448,7 @@ etapa:
       `document.querySelector('.almox-table-container').scrollWidth > clientWidth`. Dizer que **a
       mudança de CSS já foi feita** e que o roteiro serve para (1) confirmar o teto da faixa e (2)
       olhar as linhas que passaram a quebrar em duas fileiras.
-- [ ] **Step 5: letra B** do `almoxarifado-novidades-por-etapa.md` com as **sete** decisões do
+- [x] **Step 5: letra B** do `almoxarifado-novidades-por-etapa.md` com as **sete** decisões do
       design (a última decisão registrada é a **B71**, então esta etapa começa em **B72**), cada uma
       com o que foi escolhido e o que foi descartado. Marcar **C45** e **G10** como fechados, e
       numerar os dois itens novos que não tinham número (o painel mentiroso e a resposta fora de
@@ -1217,7 +1457,7 @@ etapa:
       nesta revisão:** a última decisão é mesmo a **B71** (`:6236`), **C45** existe (`:6206`),
       **G10** existe (`:2368`), e os números de C em uso hoje são C40, C42, C43, C44, C45 — logo
       C46/C47 estão livres.
-- [ ] **Step 5b (Fase 2, faltava): atualizar o item F12 da letra F.** Ele diz hoje
+- [x] **Step 5b (Fase 2, faltava): atualizar o item F12 da letra F.** Ele diz hoje
       (`docs/almoxarifado-novidades-por-etapa.md:6237-6238`): *"a verificação manual **F12**, de dois
       minutos: conferir se o clipe de **Materiais** fica cortado com a janela do navegador em meia
       tela"*. Depois desta etapa isso está **duplamente vencido**: (1) a tela do pior caso é
@@ -1226,21 +1466,42 @@ etapa:
       corta", é o **teto da faixa** (entre ~1100px e ~1355px) e as linhas que passaram a quebrar em
       duas fileiras. Reescreva o F12 dizendo isso, e **diga que a redação anterior estava errada na
       tela** (regra 5 do CLAUDE.md), em vez de trocar o texto em silêncio.
-- [ ] **Step 6: registrar a divergência do harness** na letra B: **`python3` não existe no Git Bash
+- [x] **Step 6: registrar a divergência do harness** na letra B: **`python3` não existe no Git Bash
       desta máquina** (é o alias da Microsoft Store, que imprime a mensagem da loja e não executa
       nada), enquanto `.claude/skills/fechar-etapa/SKILL.md:165-170` manda usar `python3` e explica
       que o problema era o alias `python`. A regra da skill está **certa no princípio e errada nesta
       máquina**: o que importa é que o interpretador exista. Propor a correção do texto da skill
       (`perl`/`sed` + `md5sum` como caminho padrão aqui) — e **não** editar a skill dentro desta
       task sem dizer que editou.
-- [ ] **Step 7: a próxima tarefa detalhada — Etapa 36**, no fim deste plano, no molde da seção
+- [x] **Step 7: a próxima tarefa detalhada — Etapa 36**, no fim deste plano, no molde da seção
       equivalente do plano da 34: o que sobrou nomeado (os três arquivos grandes; modal fiscal,
       workflow e etiquetas de Recebimentos sem teste; o teto da faixa do clipe pendente de F12; os
       furos C43/C44 da Etapa 33), com `arquivo:linha`, a régua de cada um e o que **não** reabrir.
-- [ ] **Step 8: o checklist final da `fechar-etapa`**, com os cinco comandos e os números **lidos
+- [x] **Step 8: o checklist final da `fechar-etapa`** — feito pelo controlador em HEAD `2d5cd35` antes do commit dos docs: api **169/169 arquivos OK** · almoxarifado **42 passou, 0 falhou** · validation **4/4** · safealter **3/3** · sqlite **5/5**; client **47 suítes / 699 testes** e build limpo (onda de correção); os 12 hashes citados são ancestrais de HEAD (`git merge-base --is-ancestor`), com os cinco comandos e os números **lidos
       da saída**, mais `git merge-base --is-ancestor <hash> HEAD` para cada hash citado nos
       documentos.
-- [ ] **Step 9: commit** dos documentos (um commit, assunto único: fechamento da etapa).
+- [x] **Step 9: commit** — feito: o commit de fechamento (hash no `git log`, assunto "Almoxarifado Etapa 35 fechamento") dos documentos (um commit, assunto único: fechamento da etapa).
+
+**COMO A T7 FOI EXECUTADA (2026-09-16).** O fechamento foi dividido em **dois redatores em
+paralelo** (documentos de desenvolvimento × documentos de usuário) mais o controlador, porque os
+dois conjuntos não se sobrepõem em arquivo nenhum:
+
+| Step | Quem | O que mudou |
+|---|---|---|
+| **1** | redator de docs de desenvolvimento | `04-requisicoes/README.md`: o aviso do topo virou *"fechado na Etapa 35, `6f6a8b0` + `d484458` + `2817054`"*, ganhou o parágrafo da Etapa 35 no cabeçalho e a `Última atualização` foi prefixada; o parágrafo do defeito pré-existente virou **✅ FECHADO**, dizendo **como** (flag de navegação interna por identidade de query, `syncSearchParams` devolvendo `string \| null`, desarme no consumo, `fecharDetalhe` bumpando a sequência), **o que foi descartado** (guarda de mesmo id; `force: false` em 17 call sites) e **quais asserções travam** (`expect(cargasDoDetalhe()).toHaveLength(1)` no cenário do clique; o cenário de integração de quatro passos; o cenário do ✕ em voo). `08-recebimento/README.md`: cabeçalho com a Etapa 35, G10 marcada fechada, os dois itens que **nenhuma spec tinha** (RN-07/C46 e RN-08/C47) escritos com escolhido/descartado, a barra de etapas neutra (`29cbdfa`) e a suíte da tela **de 7 para 12 cenários** (contados: `test(` de (a) a (l)) |
+| **2** | idem | a correção "estava errado" no `08-recebimento/README.md`: `loadAuxiliares` **não** estava em `:99-108` (o certo era `:100-109`, `:99` era linha em branco) e os três intervalos apodreceram de novo depois da T3/T4 — as refs desta spec passaram para **nome de função**. Os cabeçalhos de teste citados no enunciado (`RecebimentosAlmoxarifado.test.js:78-81` e `RequisicoesList.test.js:545-548`) **já tinham sido reescritos** pela T2/T4 e pelo F3 da onda de correção, então não foram tocados aqui — mas ver o achado no fim desta seção |
+| **3** | idem | o item **(c)** entrou no **mapa** (`specs/modulo-almoxarifado/README.md`), no cabeçalho e **como transversal às 11 telas** com coluna de ações, porque não pertence a feature nenhuma. Até aqui ele não existia em spec nenhuma: só no plano da Etapa 34, como letra F |
+| **4, 5, 5b, 6** | redator de docs de **usuário** | guia (`almoxarifado-guia-etapas-e-testes.md`, com o roteiro de F12), novidades (`almoxarifado-novidades-por-etapa.md`: seção da etapa, letra **B72+**, C45 fechado, **C46/C47** novos, F12 reescrito dizendo que a redação anterior estava errada, G10 fechada) e o **manual do sistema**. **Feitos pelo agente de docs de usuário — ver o commit do fechamento.** Não conferidos por este redator (não há leitura cruzada entre os dois) |
+| **7** | redator de docs de desenvolvimento | este plano: T7 marcada, as seções **Fase 4/5**, **Fechamento — números medidos**, **Retro de 4 números** e **Próxima tarefa detalhada — Etapa 36**, abaixo |
+| **8, 9** | **controlador** | deixados **desmarcados de propósito**: os cinco comandos da suíte e o commit único acontecem depois destas edições. Marcar `[x]` aqui seria um `[x]` falso — a regra zero da `fechar-etapa` |
+
+**Achado da T7, registrado porque não cabe em nenhum dos dois conjuntos de documento:**
+`RecebimentosAlmoxarifado.test.js` ainda carrega **cerca de quinze** citações por linha nos
+comentários narrativos (`:74-84`, `:92-96`, `:99-108`, `:112`, `:120`, `:409`, `:448`, `:496`,
+`:577-582`, `:303`, `:365-370`, …). A maioria descreve **o estado de ANTES** do conserto e por isso
+é história, não referência — mas nenhuma diz isso, e depois da T3/T4 nenhuma aponta mais para o que
+descreve. Não foram tocadas nesta task (o escopo eram os quatro documentos), e a limpeza é candidata
+à **Etapa 36**, no molde do F3 da onda de correção: trocar por **nome** de função/cenário.
 
 ---
 
@@ -1405,3 +1666,307 @@ T5 (suíte inteira) só roda depois da T4.
 **Veredito:** com as 11 correções aplicadas, **o plano está pronto para executar**. Sem o achado 1,
 a T4 derrubaria a suíte inteira de Recebimentos por `TypeError` e nenhum controle positivo da etapa
 teria valor.
+
+## Onda de correção da revisão final
+
+Revisão de branch inteira (`1cbcf2f..d484458`) voltou **Clean**, com cinco achados de severidade
+baixa. Todos consertados numa onda só, três commits:
+
+| Commit | Achado | O que provou |
+| --- | --- | --- |
+| `2817054` | **F1** — `fecharDetalhe` de `RequisicoesList.js` não bumpava `detalheFetchSeqRef` | Lista sem `?id=`, clique na linha com o GET do detalhe **deferido a mão**, ✕, e só então a resposta: sem o bump, o caminho de sucesso repunha `detalhe`/`loadedDetalheIdRef` e o `syncSearchParams(id)` **escrevia `?id=55` na URL depois do fechamento** — painel fechado, URL mentindo, e o F5 do usuário reabrindo a requisição que ele fechou. A régua discriminante é a URL (painel e bloco de anexos são nulos com e sem o defeito, porque dependem de `selectedId`), lida por uma sonda `useLocation` dentro do `MemoryRouter` — `window.location` não vê o histórico em memória. Vermelho literal: `Expected substring: not "id=" / Received string: "?id=55"`. Sabotagem (remover o bump) derruba **só** este cenário, por essa asserção. |
+| `29cbdfa` | **F2** — `currentStep` era o **8º** consumidor de `detalhe` em `RecebimentosAlmoxarifado.js` (o desenho da T4 mapeou 7) | Como a T4 anula `detalhe` na troca de linha (RN-07), o `: 0` fazia a barra de passos **acender o passo 1** durante todo o round-trip e pular de volta ao chegar o detalhe novo — e acendia "Almoxarifado" já na lista sem nada aberto. Conserto: `undefined`, o molde da tela irmã; `AlmoxPageHeader` faz `idx = currentStep ?? -1`, então a barra fica **neutra** (nenhum aceso, nenhum concluído) em vez de mentir, e `currentStep = 0` legítimo continua acendendo. Descartado: congelar o último passo num ref — mostraria o passo do recebimento **anterior** sob o id novo, a classe de defeito que a RN-07 fechou. Cenário (k) ganhou as três asserções (há passo aceso com o 58 → nenhum com o GET em voo → volta a acender com o 41). Vermelho literal: `Received: <div class="almox-flow-step  active">…1…Almoxarifado…`. Sabotagem (devolver o `: 0`) derruba só essa asserção. |
+| `2d5cd35` | **F3 + F4 + F5** (comentários/organização, sem mudança de comportamento) | **F3:** não sobrou citação a `RequisicoesList.js:864` — a T4 tinha mesmo trocado pelas do `title`. A varredura achou outras **duas** citações por linha já erradas antes desta onda (`RequisicoesList.test.js:214-220` para o helper `digitar`; `:976`/`:1047`/`:1066` para os blocos gateados por `warehouseMode`) e elas viraram referência por **nome**. **F4:** `almoxActionsCss.test.js` passou a registrar ao lado do `bloco()` os três limites — (a) `}` dentro de comentário CSS trunca o `[^}]*` (quebrou na T5 fix1), (b) `css.match` sem `/g` lê o primeiro bloco e não prova cascata, (c) a asserção 6 não prova contenção no media block e o literal `@media (max-width: 768px)` hoje aparece **duas** vezes no CSS, uma num comentário antes do bloco real. (b) e (c) ficam **parados de propósito**. **F5:** os cenários da Etapa 35 saíram de dentro do `describe` titulado "Etapa 34" para um `describe` aninhado "Etapa 35" — entregue junto do F1, porque o cenário novo tinha de nascer lá dentro. |
+
+**Verificação:** `client` inteiro **47 suites / 699 testes verdes** (módulo almoxarifado: 35 suites /
+562 testes) e `CI=true npx react-scripts build` → `Compiled successfully.` Suítes do servidor não
+foram rodadas: `server/` não foi tocado nesta onda.
+
+---
+
+## Fase 4/5 — Integração e revisão adversarial (2026-09-16)
+
+**Quem revisou, e com que lente.** Onze passagens de revisão no total, nenhuma delas do executor da
+própria task:
+
+| Passagem | Quantas | Lente |
+|---|---|---|
+| **Gate de task** | **6** (uma por task, T1 a T6) | a task fez o que o plano manda, a régua ficou vermelha antes e verde depois, e o controle positivo derrubou **a asserção que guarda o achado** — não outra |
+| **Revisão final de branch** | **2 lentes em paralelo**, sem conversa entre elas | (1) **RN e vacuidade** — RN-01 a RN-10 realmente travadas, cenário negativo com metade positiva, contagem de chamadas; (2) **UX e regressão** — o que o operador vê em cada janela de latência, e o que a etapa pode ter piorado nas telas vizinhas |
+| **Re-review da onda de correção** | **3** | um por commit da onda (`2817054`, `29cbdfa`, `2d5cd35`): o cenário novo cai com o fix revertido, e o comentário não cita linha que ele mesmo empurrou |
+
+**Veredito das duas lentes finais: CLEAN nas duas, com 0 ruído** — nenhum achado deixou de
+reproduzir. Elas **convergiram** em dois itens de severidade **Low**, e mais três de higiene. Isso
+está detalhado na seção `## Onda de correção da revisão final` acima (a tabela por commit, com o
+vermelho literal de cada sabotagem); aqui fica só o índice, com severidade e onde:
+
+| # | Sev. | Onde | O quê |
+|---|---|---|---|
+| **F1** | Low — **as duas lentes, independentes** | `client/src/components/almoxarifado/RequisicoesList.js`, `fecharDetalhe` | não incrementava `detalheFetchSeqRef`: o ✕ com o `GET` do detalhe em voo deixava a resposta morta repor `detalhe` e reescrever `?id=55` na URL com o painel **fechado** — e o **F5 do usuário reabria a requisição que ele fechou**. **Não é regressão desta etapa** (antes dela o painel **reabria sozinho**), e é **a mesma regra** que a T4 escreveu no irmão de Recebimentos. Conserto: **uma linha** + o cenário do ✕ |
+| **F2** | Low — lente de UX | `RecebimentosAlmoxarifado.js`, `currentStep` | derivado de `detalhe`, que a T4 passou a anular na troca de linha (RN-07): a **barra de etapas** do cabeçalho piscava para o **passo 1** por um round-trip. Era o **oitavo** consumidor de `detalhe` — **a tabela de sete pontos do design estava incompleta**, e isto fica dito |
+| **F3** | higiene | `RequisicoesList.test.js` | citações por linha; a varredura achou outras **duas** já erradas antes desta onda |
+| **F4** | higiene | `almoxActionsCss.test.js` | os limites do teste de drift não estavam escritos ao lado do helper `bloco()` |
+| **F5** | higiene | `RequisicoesList.test.js` | os cenários da Etapa 35 moravam dentro do `describe` titulado **"Etapa 34"** (o título mentia sobre a etapa) |
+
+Achados **F1** e **F2** estavam em caminhos que **nenhum teste exercitava** — não eram asserções
+fracas, eram cenários ausentes. É o mesmo dado que a retro da Etapa 34 registrou, repetido.
+
+### As duas previsões erradas do plano sobre QUAL asserção cai
+
+Vale mais que o placar, porque é o modo de falha que esta base já pagou três vezes ("cair pela
+asserção errada deixa a que interessa sem prova"):
+
+1. **Fase 2, sobre a T2.** O plano declarava a sabotagem nº 3 (armar a flag sem ter escrito na URL)
+   como *"provavelmente inalcançável"*, e o comentário do produto dizia *"a flag nunca sobrevive a
+   um ciclo do efeito"*. **As duas coisas eram falsas.** A flag só é zerada **dentro** do ramo que
+   casa, então uma flag armada sem escrita sobrevive indefinidamente; a sequência que a pega é
+   clique → **foco da janela** → filtro liga → filtro desliga. Consequência: o cenário de integração
+   da T6 nasceu com um **quarto passo** e a sabotagem virou controle positivo de verdade — na T2 ela
+   não derrubava **nada**, e contra o cenário da T6 derruba (`Received 2` no passo 3 e `Received 3`
+   no passo 4). O comentário falso foi reescrito.
+2. **T3, sobre o cenário (i).** O plano previa que apagar a **posição** do `setErro` derrubaria o
+   (i) *"por `linhas()` — com a lista velha em memória"*. Errado: a própria implementação da task põe
+   `setRecebimentos([])` no `catch`, então a lista fica **vazia**, não velha, e o cenário caía três
+   asserções antes, pela frase de erro — deixando `linhas()`, que é a metade "lista obsoleta" da
+   RN-05, **sem prova**. Corrigido em execução: a sabotagem **2c** (apagar `setErro` **e**
+   `setRecebimentos([])` juntos) é a única que faz `linhas()` dar `Received 3`, e a ordem das
+   asserções do (i) mudou para que o controle positivo alcance a que interessa.
+
+### O achado de harness da T5: `git checkout --` como "restore" apagaria o conserto
+
+As sabotagens rodam **antes** do commit da task (a regra "nenhum commit com a suíte vermelha").
+Logo, restaurar um arquivo sabotado com `git checkout -- <arquivo>` não desfaz a sabotagem: desfaz
+**o conserto inteiro**, que ainda não está no índice nem no HEAD. E o cheque que a `fechar-etapa`
+prescreve — *"`git diff --stat` tem de voltar vazio"* — aqui **inverte de sinal**: `git diff --stat`
+vazio significaria que o conserto foi perdido, e não que a restauração deu certo. O restore correto
+é **perl inverso** (aplicar a transformação oposta) ou **backup no scratchpad** antes de sabotar,
+com `md5sum` antes / depois da sabotagem / depois do restore. Dois achados colaterais da mesma task:
+o comentário do próprio conserto citava linhas que **ele mesmo empurrou** (fix-round `8a84ad3`), e
+uma **chave** dentro de um comentário CSS trunca o `[^}]*` do teste de drift — registrado no próprio
+comentário para que ninguém reintroduza.
+
+E a divergência de ambiente que vale para toda esta máquina: **`python3` não executa no Git Bash
+daqui** (é o alias da Microsoft Store: imprime a mensagem da loja e sai), enquanto
+`.claude/skills/fechar-etapa/SKILL.md` manda usar `python3` por causa de um incidente antigo com o
+alias `python`. **A regra da skill está certa no princípio e errada nesta máquina** — o que importa
+é que o interpretador **exista**. Todas as medições e sabotagens desta etapa usaram `perl`/`sed` +
+`md5sum`. A correção do texto da skill é item **(f)** da Etapa 36, e é **edição de skill**: por isso
+está proposta, não feita.
+
+### Parked — foram para a letra G, de propósito
+
+- `bloco()` do `almoxActionsCss.test.js` usa `css.match` **sem `/g`**: lê o **primeiro** bloco do
+  seletor, então um override posterior de mesma especificidade passaria verde.
+- A **asserção 6** do mesmo teste não prova **contenção** no media block, e o literal
+  `@media (max-width: 768px)` hoje aparece **duas** vezes no CSS (uma delas num comentário).
+- **Nenhum `role="alert"` / `aria-live` em todo o módulo almoxarifado.** O toast do `react-toastify`
+  é o único anúncio. É **consistente** com o resto do módulo e **não** é regressão desta etapa;
+  tratá-lo aqui seria mudar acessibilidade em 30+ telas dentro de uma etapa de três defeitos.
+- Botão **"Tentar de novo"** sem `marginTop` — igual ao molde do `HistoricoInspecoes`.
+- **Back/forward do navegador** em Requisições continua **sem régua**: exigiria histórico real, que o
+  `MemoryRouter` da suíte não dá. Verificado **por leitura** que não gera transição interna
+  (`syncSearchParams` navega com `replace: true`) — raciocínio, não teste, e está dito assim.
+- `fecharDetalhe` de **Recebimentos** deixa `loadingDetalhe` **true** quando fechado com `GET` em
+  voo (inofensivo hoje: o painel todo depende de `selectedId`). Item **(c)** da Etapa 36.
+- **POST de anexo em voo para A pousa em A** enquanto B já está na tela — janela de latência do
+  upload, fora do escopo desta etapa.
+- O `describe` que hospeda os cenários novos **foi** retitulado (F5), mas os helpers continuam
+  morando no bloco da Etapa 34 — dependência de arquivo, não defeito.
+
+---
+
+## Fechamento — números medidos
+
+Os cinco comandos da `fechar-etapa`, com os números **lidos da saída**. As suítes de `client`
+foram rodadas na onda de correção (HEAD `2d5cd35`); as de `server` foram rodadas na T6 (HEAD
+`d484458`) e **não** foram tocadas depois, porque `server/` não mudou uma linha em toda a etapa
+(medido: `git diff --stat 1cbcf2f..2d5cd35 -- server/` volta vazio).
+
+| Comando | Resultado | Quando |
+|---|---|---|
+| `cd server && npm run test:api` | **169/169 arquivos OK** | T6 (`d484458`) |
+| `cd server && npm run test:almoxarifado` | **42 passou, 0 falhou** | T6 (`d484458`) |
+| `cd server && npm run test:validation && npm run test:safealter && npm run test:sqlite` | **4/4 · 3/3 · 5/5** | T6 (`d484458`) |
+| `cd client && CI=true npx react-scripts test --watchAll=false` | **47 suítes / 699 testes**, todos passando (módulo almoxarifado: 35 suítes / 562 testes) | onda de correção (`2d5cd35`) |
+| `cd client && CI=true npx react-scripts build` | `Compiled successfully.` | onda de correção (`2d5cd35`) |
+
+> **Os cinco comandos são RE-RODADOS pelo controlador no commit do fechamento** — estes números são
+> os da última execução **antes** das edições de documentação. Documentação não muda suíte, mas a
+> regra zero da `fechar-etapa` é medir e não deduzir: **ver o commit do fechamento** para os números
+> lidos depois destas edições.
+
+**De onde vem o delta do client.** No fechamento da Etapa 34 eram **46 suítes / 690 testes**. Esta
+etapa somou **1 suíte** (`almoxActionsCss.test.js`, 2 asserções-cenário) e **9 cenários**:
+`RequisicoesList.test.js` de 32 para **34** contados pelo Jest (o arquivo tem 32 chamadas a `test(`,
+mas uma é `test.each` com três valores) e `RecebimentosAlmoxarifado.test.js` de 7 para **12**. 690 +
+8 = 698 ao fim da T6; a onda de correção somou **1** (o cenário do ✕) = **699**.
+
+**Hashes citados nos documentos desta etapa, todos conferidos** com
+`git merge-base --is-ancestor <hash> HEAD`: `7a67f16` (design), `2e24971` (plano), `1cbcf2f`
+(Fase 2), `6f6a8b0` (T1+T2), `22e1d9b` (T3), `4681111` (T4), `3b23f04` (T5), `8a84ad3` (T5 fix1),
+`d484458` (T6), `2817054` (F1+F5), `29cbdfa` (F2), `2d5cd35` (F3+F4) — **12/12 ancestrais de HEAD**.
+
+---
+
+## Retro de 4 números
+
+1. **Rodadas de correção até verde: 1 por task** — e só numa delas. **6 tasks, 5 aprovadas de
+   primeira**; a T5 levou um fix-round (`8a84ad3`), e o achado dele foi **documental**: o comentário
+   do próprio conserto citava os números de linha que o conserto havia empurrado. Depois da revisão
+   final, **1 onda** de correção com 3 commits (`2817054`, `29cbdfa`, `2d5cd35`).
+2. **Achados da revisão final: 5** — **2 reais, ambos Low** (F1 e F2, e o F1 foi achado pelas **duas**
+   lentes independentes) e **3 de higiene**; **ruído (não reproduzido): 0**; **7 parked**, todos
+   nomeados acima e endereçados à letra G. O dado que mais ensina, repetido da 34: os dois reais
+   estavam em **caminhos sem cenário**, não em asserções fracas.
+3. **Paralelismo: 0 galhos em paralelo** — decisão **medida** e declarada como divergência da skill
+   (mesma árvore, `node_modules` fora do git, jest/CRA compartilhados), não omissão. Em paralelo
+   rodaram os **revisores** (2 lentes finais simultâneas) e, no fechamento, **2 redatores** de
+   documentação (desenvolvimento × usuário), que não compartilham arquivo nenhum. **0 retrabalho por
+   paralelismo.**
+4. **Defeito que escapou do fechamento da Etapa 34 e foi pego aqui:** os **dois furos que a 34
+   documentou e deixou abertos** — o clique que carregava o detalhe 2x (C45) e os três `catch`
+   silenciosos (G10) — eram defeitos **de operação** que passaram por um fechamento inteiro apenas
+   anotados. E **dentro** desta etapa, o que escapou ao próprio plano: a afirmação *"a flag nunca
+   sobrevive a um ciclo do efeito"*, **falsa**, pega na **Fase 2** antes de executar, mais as **duas
+   previsões erradas sobre qual asserção cai** (Fase 2 e T3). Nenhum dos três teria sido pego pela
+   suíte verde.
+
+---
+
+## Próxima tarefa detalhada — Etapa 36
+
+**Nada aqui é feature nova.** São os seis resíduos **nomeados** desta etapa e da 33, cada um com a
+régua e o que **não** reabrir. A escolha de qual virar etapa vem no fim, com o mapa medido.
+
+### (a) O TETO da faixa do clipe — verificação manual F12 (a única coisa que exige navegador)
+
+- **Estado:** o CSS **já mudou** (`3b23f04`: `flex-wrap: wrap` em `.almox-actions`,
+  `client/src/components/almoxarifado/Almoxarifado.css`), e o **piso** está fechado por aritmética:
+  em **769px** a célula de **Ferramentas** pede ~**683,5px** de **721px** úteis, com seis colunas
+  ainda por caber. O teto — a largura a partir da qual a célula volta a caber numa fileira — **não é
+  dedutível** sem renderizar, porque a tabela é `table-layout: auto` e as outras colunas disputam a
+  largura.
+- **O que medir:** larguras **769, 820, 900, 1024, 1100, 1280, 1400** px × **Ferramentas** (uma
+  ferramenta `DISPONIVEL` com `exige_calibracao = 1` → 5 botões de texto, o pior caso),
+  **Materiais** (10 ícones) e **Remessas a Terceiros** (6 botões). Em cada uma: o **último** botão
+  da célula está **inteiro** (cortado ao meio ele ainda "aparece"), e
+  `document.querySelector('.almox-table-container').scrollWidth > clientWidth` é **falso**.
+  Incluir **uma largura abaixo de 768px**: no celular o `wrap` muda a **altura das linhas** nas 11
+  telas, efeito real que o design não descreveu.
+- **Não reabrir:** o `overflow: hidden` de `.almox-table-container` **fica** (ele existe pelo
+  `border-radius: 12px` da mesma regra); o piso de 769px está medido e travado pelo teste de drift
+  (`almoxActionsCss.test.js`, 6 asserções + guarda-da-guarda `css.length > 20000`); e **não** trocar
+  `flex-wrap` por scroll horizontal sem medir.
+- **Régua:** nenhuma automatizável — jsdom não faz layout, e nenhum teste desta base prova pixel.
+  O resultado é **screenshot antes/depois** e a atualização do item **F12** da letra F.
+
+### (b) Recebimentos: modal fiscal, workflow e etiquetas seguem sem teste
+
+- **Estado:** `client/src/components/almoxarifado/RecebimentosAlmoxarifado.js` (~939 linhas) tem
+  suíte desde a Etapa 34 e hoje **12 cenários**, que cobrem lista, painel, anexos, erro de carga e
+  ordem de resposta — **e nada mais**. Sem cenário: o **modal fiscal** (`salvarFiscal`), as ações de
+  **workflow** (`workflow`, `processarNota`) e a **etiqueta**.
+- **Régua pronta, não precisa construir:** o `api.get` da suíte tem **fallback que rejeita**, o
+  harness de fixtures existe (`RECEBIMENTOS` / `DETALHES`, com os ids `41`/`58`/`77`/`91` — nem o
+  primeiro da lista, nem `1`), e o molde de **GET deferido a mão** já está escrito no cenário (l),
+  que é o que torna observável a janela de latência.
+- **Ponto de atenção que mata o cenário se ignorado:** o `toast` é **mockado** — qualquer coisa que
+  o conserto só mande ao toast passa despercebida. A afirmação tem de ser sobre o **DOM**.
+- **Não reabrir:** o bloco de anexos (`c5d9e99` + cenário (g)), a anulação de `detalhe` por troca de
+  id (`4681111`), a barra de etapas neutra (`29cbdfa`) e os três estados de erro (`22e1d9b`) — os
+  quatro têm cenário e sabotagem registrados.
+
+### (c) `fecharDetalhe` de Recebimentos não zera `loadingDetalhe` — **uma linha**
+
+- **Estado:** `fecharDetalhe` já **bumpa** `detalheFetchSeqRef` (fechar é fechar), zera `selectedId`,
+  `detalhe` e `idCarregadoRef` — mas **não** chama `setLoadingDetalhe(false)`. Como o `finally` de
+  `abrirDetalhe` só desliga a flag quando a sequência ainda é a dele, fechar com um `GET` em voo
+  deixa `loadingDetalhe` **pendurado em `true`**. **Inofensivo hoje** (o painel inteiro depende de
+  `selectedId`, que foi a `null`), e por isso está parked — mas é dívida que some com uma linha.
+- **Molde exato:** o irmão em Requisições, `2817054`, inclusive o cenário
+  *"o ✕ descarta a resposta em voo"* com o **GET deferido a mão**. Nesta tela a régua discriminante
+  **não** é a URL (Recebimentos não tem deep-link por `?id=`): é o próprio `loadingDetalhe`,
+  observável por reabrir o painel e ver se ele nasce em "Carregando…" sem `GET` nenhum em voo.
+- **Não reabrir:** o bump da sequência já está lá e é o que fecha a RN-08; não trocá-lo por outra
+  coisa.
+
+### (d) Os três arquivos grandes — extração merece etapa própria, e medir vem antes
+
+- **Medido agora (`wc -l`):** `RemessasTerceirosAlmoxarifado.js` **1017**, `RequisicoesList.js`
+  **1628**, `RecebimentosAlmoxarifado.js` **939**. A 34 anotou ≈1015 / ≈1575 / ≈814 — os dois últimos
+  **cresceram** nesta etapa, e o número que importa é o de hoje.
+- **Sem falha concreta associada.** É nota de manutenção, e a etapa que a atacar tem de começar pela
+  **Fase 0**: medir quantos cenários cada suíte tem antes de mover código, porque extrair sem rede é
+  como se paga essa dívida duas vezes. `RequisicoesList.js` é a mais arriscada: roda em **sete**
+  contextos (almoxarifado + seis módulos), e o gate por `warehouseMode` (**B71**) atravessa o
+  arquivo.
+- **Não reabrir:** o gate `warehouseMode`, a flag de navegação interna e o par
+  `selectedId`/`idCarregadoRef` — qualquer extração tem de **preservá-los**, e os cenários da Etapa 35
+  são exatamente a rede que diz se ela preservou.
+- **Candidato de limpeza que vem de graça junto:** as ~15 citações por linha nos comentários de
+  `RecebimentosAlmoxarifado.test.js` (registradas no fim da T7), que descrevem o estado **de antes**
+  e não apontam mais para nada. Trocar por **nome**, no molde do F3.
+
+### (e) Os furos C43 e C44 da Etapa 33 continuam abertos
+
+- **C43 — link de arquivo com endereço expirado abre aba em branco.** São **dois**:
+  **Lotes → Ver certificado** e a **assinatura de entrega em tamanho real** (dentro do detalhe da
+  requisição). As **imagens** degradam bem (a foto simplesmente some); os **links** não avisam nada.
+  Acontece só com a tela aberta há mais de ~20 min sem recarregar. **Conserto:** refazer a leitura
+  daquela linha **no momento do clique** — e o caminho é **diferente** nos dois (um vem da lista de
+  lotes, o outro do detalhe da requisição), que é por que a 33 declarou em vez de fazer às pressas
+  junto de uma correção de segurança.
+- **C44 — arquivos com extensão perigosa gravados ANTES da Etapa 33 continuam no disco.** Já estão
+  **neutralizados** (servidos com cabeçalhos que impedem o navegador de executá-los) e a gravação
+  nova usa o **tipo real**, não o nome enviado. O que resta é **limpeza de disco** e é decisão do
+  André, não código.
+- **Não reabrir:** o `urlUpload.js` (HMAC sobre `nome:exp`, 15–20 min), o fecho 404 depois dos dois
+  mounts, e a recusa deliberada de `?token=` — esta última tem raciocínio escrito e **não** deve ser
+  revisitada como se fosse pendência.
+
+### (f) A correção do texto da skill `fechar-etapa` — precisa ser DITA, não feita em silêncio
+
+Duas frases da `.claude/skills/fechar-etapa/SKILL.md`, seção *"Desconfie de teste que passa de
+primeira"*, estão erradas **nesta máquina** e foram contornadas em todas as tasks desta etapa:
+
+1. *"Use `python3`, nunca `python`"* — no Git Bash daqui **`python3` é o alias da Microsoft Store**:
+   imprime a mensagem da loja e não executa nada. A regra está **certa no princípio** (o erro
+   original era o alias, não a linguagem) e **errada no ambiente**. Proposta: dizer que o requisito é
+   **um interpretador que exista**, e nomear `perl`/`sed` + `md5sum` como o caminho padrão **aqui**,
+   com a checagem `command -v` antes de escolher.
+2. *"`git diff --stat` tem de voltar vazio"* como prova de restauração — **inverte de sinal** quando a
+   sabotagem roda antes do commit da task, que é a regra desta base ("nenhum commit com a suíte
+   vermelha"): ali `git diff --stat` vazio significa **conserto perdido**. Proposta: prescrever
+   **perl inverso** ou **backup no scratchpad**, proibir `git checkout -- <arquivo>` como restore, e
+   manter o `md5sum` nos três momentos.
+
+**É edição de skill**, e por isso está **proposta, não aplicada**: alterar a skill dentro da task que
+a usa, sem dizer, é exatamente o que o CLAUDE.md proíbe.
+
+### E se a Etapa 36 tiver de ser uma etapa DE FEATURE: o que o mapa diz hoje
+
+Pela ordem da `fechar-etapa` (a "próxima tarefa detalhada" → o "falta para 🟢" → o mapa), os seis
+itens acima vêm primeiro porque são **resíduos nomeados**. Mas se a escolha for por **valor de
+feature**, estas são as **dez** 🟡 do mapa, com o que cada uma nomeia como falta — **medido no mapa,
+sem prometer nada** (o que vale antes de escolher é a **Fase 0** da
+`desenvolver-etapa-almoxarifado`, e nenhuma linha abaixo substitui isso):
+
+| Feature | Falta para 🟢, conforme o mapa |
+|---|---|
+| **00** Fundação técnica | **21 `ALTER TABLE` residuais com erro engolido** em `routes/almoxarifado.js` — pendência nomeada na spec |
+| **01** Cadastros de materiais | tabela de conversões de unidade; categorias hardcoded no front; `almoxarifadoApi.js`; `controle_validade`/`controle_serie`/`controle_corrida` seguem **flags mortas** (Etapas 6b/6c) |
+| **02** Localizações | enforcement de capacidade/peso; sugestão de localização; leitura por confirmação. **Não** propor segregação de saldo por almoxarifado — é decisão de negócio fechada (área física, não filial) |
+| **05** Separação e picking | lista de separação como **entidade**, rota de picking, registro por item (localização/lote), divergência com motivo, kits + localização de kit, tela de fila |
+| **06** Motor de aprovações | motor de regras **configuráveis** por tipo/valor/quantidade/projeto (`regras_aprovacao` + UI) — **adiado por decisão declarada** ("demanda real"), não por esquecimento |
+| **08** Recebimento | enum + validação de `tipo_recebimento` nas **duas** portas de escrita (`POST` e `PUT /:id/fiscal`); NF duplicada; recebimento parcial/excedente; conferência física estruturada; etiqueta; e o item **(b)** acima (modal fiscal/workflow/etiqueta sem teste) |
+| **09** Inspeção e qualidade | plano de inspeção com medidas, não conformidade formal, desvio autorizado |
+| **21** Relatórios e dashboards | as **4 réguas divergentes** de consumo documentadas (10 vs 18 medido) — unificar é a letra **B19** |
+| **22** Integrações | o resto da fatia integrável além de Compras e custo por projeto |
+| **23** Perfis, segurança e auditoria | 🟡-**forte**: as Etapas 18/19/20 pagaram os buracos históricos; o que resta é o inventário do que ainda não tem trilha |
+
+**Leitura honesta desta tabela:** as candidatas de **maior valor operacional** são a **05**
+(separação/picking — é a única lane do ciclo de requisição que ainda não tem entidade própria, e o
+almoxarife trabalha nela todos os dias) e a **08** (enum de `tipo_recebimento` + NF duplicada — duas
+portas de escrita hoje **sem validação nenhuma**, o que é furo de dado, não de conforto). A **00**
+(21 `ALTER TABLE` com erro engolido) é a de maior **risco silencioso** e a mais barata de medir.
+Nenhuma delas está prometida aqui: **medir antes** — Fase 0 — é o passo que decide.

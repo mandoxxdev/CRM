@@ -8,8 +8,23 @@
 > almoxarifado** (decisão **B71**): nas telas cross-módulo `/<modulo>/requisicoes-material` o bloco
 > não aparece. Zero linhas de servidor. A frase "plugar aqui é uma linha", que esta spec repetia
 > desde a Etapa 32, **estava errada** — ver a correção no item de checklist de anexos, que também
-> registra o defeito **pré-existente** descoberto aqui (o clique carrega o detalhe 2x).
-> **Última atualização:** 2026-09-16 (Etapa 34 — anexos no painel; antes: 2026-08-11, auditoria spec×código)
+> registra o defeito **pré-existente** descoberto aqui (o clique carrega o detalhe 2x —
+> **fechado na Etapa 35**, `6f6a8b0` + `d484458` + `2817054`).
+> **Etapa 35 (2026-09-16, `6f6a8b0..2d5cd35`) — o clique na linha voltou a carregar o detalhe UMA
+> vez, e fechar o painel passou a ser fechar.** NÃO é feature nova: são dois defeitos
+> pré-existentes desta tela, achados pela revisão da Etapa 34. (1) Abrir o detalhe **pelo clique**
+> disparava **dois** `GET /almoxarifado/requisicoes/:id` — latência dobrada e um piscar de
+> "Carregando" a cada abertura pela lista —, porque `abrirDetalhe` chamava `syncSearchParams`, a
+> URL mudava e o efeito de deep-link reabria o mesmo id. Fechado por **`6f6a8b0`** (flag de
+> navegação interna) + **`d484458`** (cenário de integração dos quatro gestos). (2) O **✕** com o
+> `GET` do detalhe em voo deixava a resposta morta reescrever `?id=` na URL com o painel já
+> fechado, e o F5 do usuário reabria a requisição que ele havia fechado — **`2817054`**. Zero
+> linhas de servidor no range (medido: `git diff --stat` do range restrito a `server/` vem vazio).
+> Detalhe do conserto, das asserções que o travam e do que ficou de fora: no item de checklist de
+> anexos, mais abaixo.
+> **Última atualização:** 2026-09-16 (Etapa 35 — uma carga do detalhe por gesto e ✕ que descarta a
+> resposta em voo; antes: 2026-09-16, Etapa 34 — anexos no painel; antes: 2026-08-11, auditoria
+> spec×código)
 
 ## Objetivo
 
@@ -69,7 +84,10 @@ Fluxo completo: rascunho → aprovação → disponibilidade → reserva → sep
       onde plugar inline — as outras três (Materiais, Devoluções, item de remessa) não tinham casa
       nenhuma e precisaram de uma casca de modal (`AnexosModal`, `746a106`) e de um botão por
       linha. E nem aqui foi uma linha, por **dois** motivos que só a execução mostrou: (1) o corpo
-      do painel vivia dentro do ternário de `loadingDetalhe` (`RequisicoesList.js:876`), então ele
+      do painel vivia dentro do ternário de `loadingDetalhe` (era `RequisicoesList.js:876`; a
+      citação por linha saiu na Etapa 35 — as linhas desta tela se deslocaram **duas** vezes só
+      naquela etapa, então o que vale é o **nome**: o ternário de `loadingDetalhe` que envolvia o
+      corpo do painel), então ele
       **desmonta a cada refetch** — foco da janela, que é exatamente o que acontece ao FECHAR o
       diálogo de escolher arquivo; troca de filtro; ação de workflow — e o arquivo recém-escolhido
       sumia, mais um GET de anexos extra; o bloco teve de sair do ternário (`c5d9e99`); (2) a tela
@@ -77,17 +95,46 @@ Fluxo completo: rascunho → aprovação → disponibilidade → reserva → sep
       `warehouseMode` (`a88d715`, B71). O texto da Etapa 32 fica acima **de propósito** — o
       mecanismo que ele descreve continua exato; errada era só a estimativa do custo do plug.
 
-      **Defeito PRÉ-EXISTENTE descoberto ao medir isto (não é da Etapa 34, e continua aberto):**
-      abrir o detalhe **pelo clique** carrega a requisição **duas vezes**. `abrirDetalhe` chama
-      `syncSearchParams`, que reescreve `?id=` na URL, e isso reacende o efeito de deep-link
-      (`RequisicoesList.js:166-181`), que chama `abrirDetalhe` de novo — dois `GET` de detalhe por
-      clique, desde que o deep-link existe. Com o `c5d9e99` o **bloco de anexos** não remonta mais,
-      mas o detalhe continua vindo 2x. É o item **(a) da Etapa 35**. Régua pronta: o cenário
-      "RN-02: sem detalhe aberto não consulta anexos" (`RequisicoesList.test.js:528`) já mede o
-      caminho do clique e já trava a **relação** (uma consulta de anexos por carga do detalhe,
-      contagem `=== 1`); o que ele **não** trava é o número de `GET /almoxarifado/requisicoes/55`,
-      hoje **2**, documentado no comentário do próprio cenário. Endurecer é contar esse GET e
-      exigir `=== 1`.
+      **Defeito PRÉ-EXISTENTE descoberto ao medir isto (não era da Etapa 34) — ✅ FECHADO NA
+      ETAPA 35 (`6f6a8b0` + `d484458` + `2817054`).** Abrir o detalhe **pelo clique** carregava a
+      requisição **duas vezes**: `abrirDetalhe` chama `syncSearchParams`, que reescreve `?id=` na
+      URL, e isso reacendia o **efeito de deep-link**, que chamava `abrirDetalhe` de novo — dois
+      `GET /almoxarifado/requisicoes/:id` por clique, desde que o deep-link existe. Régua vermelha
+      medida antes do conserto: `Received length: 2`.
+
+      **Como foi consertado** (`6f6a8b0`) — **flag de navegação interna por identidade de query**,
+      não guarda de "mesmo id" no efeito: `navInternaRef` guarda a query **que a própria tela
+      acabou de escrever**, e o efeito de deep-link só ignora o ciclo quando a query atual é
+      **idêntica** à guardada (e aí desarma a flag). Para que a flag nunca seja armada à toa,
+      `syncSearchParams` passou a devolver **`string | null`** — a query escrita, ou `null` quando
+      não houve escrita nenhuma —, e só `abrirDetalhe` usa esse retorno; o efeito de filtros e
+      `fecharDetalhe` continuam chamando `syncSearchParams` e **descartando** o retorno de
+      propósito. O desarme mora **no consumo**, não dentro de `syncSearchParams`: a função tem três
+      chamadores e desarmar ali seria decidir por conta de terceiros.
+      **Descartado:** guarda de "mesmo id" no efeito (quebraria o refetch legítimo por troca de
+      filtro) e `abrirDetalhe(id, { force: false })` no clique (a opção `force` é regra
+      compartilhada por 17 call sites — `force: true` em todos, `force: false` em nenhum).
+      E `fecharDetalhe` passou a **bumpar `detalheFetchSeqRef`** (`2817054`): sem o bump, a
+      resposta do `GET` que já estava em voo quando o usuário apertou o ✕ repunha `detalhe` e
+      reescrevia `?id=` na URL com o painel fechado — o F5 reabria a requisição fechada.
+
+      **Quais asserções travam isto** (`client/src/components/almoxarifado/RequisicoesList.test.js`):
+      (1) no cenário *"RN-02: sem detalhe aberto não consulta anexos; abrir a requisição
+      consulta"*, o helper `cargasDoDetalhe()` com `expect(cargasDoDetalhe()).toHaveLength(1)` —
+      era exatamente essa contagem que valia **2** antes; (2) o cenário de integração de **quatro
+      passos** (`describe('Etapa 35: uma carga por gesto, e fechar é fechar')` → *"integração:
+      clique, foco, troca de filtro e VOLTA do filtro — uma carga por gesto"*), que conta as cargas
+      **por passo** (`0 → 1 → 2 → 3 → 4`) e é o único ponto que prova que a flag **desarma**: uma
+      flag booleana armada pelo refetch por foco (que não escreve na URL) ficaria de pé e engoliria
+      a troca de filtro seguinte, e nada mais na suíte reclamaria; (3) o cenário do ✕ —
+      *"F1: o ✕ descarta a resposta em voo — nada de `id=` na URL depois de fechar"* —, com o `GET`
+      do detalhe **deferido a mão** e a URL lida por uma sonda `useLocation` dentro do
+      `MemoryRouter` (`window.location` não vê o histórico em memória).
+
+      **O que ficou de fora, de propósito:** **back/forward do navegador** nesta tela continua
+      **sem régua** — medi-lo exigiria histórico real, e o `MemoryRouter` da suíte não o fornece.
+      Foi verificado por leitura que back/forward **não** produz transição interna (o
+      `syncSearchParams` navega com `replace: true`), mas isso é raciocínio, não teste.
 - [x] Copiar requisição anterior (Etapa 3, Task 5 — `POST /:id/copiar`, gera novo RASCUNHO fiel com os mesmos itens/tipo/vínculos, sem quantidades entregues)
 - [ ] Importar itens de lista técnica / ordem de produção (depende da feature 22) — fora da Etapa 3
 - [x] Confirmação de recebimento pelo solicitante (fecha o ciclo) (Etapa 3, Task 5 — `PUT /:id/confirmar-recebimento`, só o solicitante, sem bypass de admin; campos `recebimento_confirmado_por/em`)
