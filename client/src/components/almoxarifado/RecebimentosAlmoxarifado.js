@@ -389,9 +389,19 @@ const RecebimentosAlmoxarifado = () => {
     ).slice(0, 6)
     : [];
 
+  // `undefined` e nao `0` quando nao ha detalhe (achado F2 da revisao final da Etapa 35): este e o
+  // 8o consumidor de `detalhe`, e ficou de fora da tabela de 7 do desenho da T4. Como a T4 passou a
+  // ANULAR `detalhe` na troca de linha (RN-07), com `0` a barra de passos desabava para o passo 1
+  // ACESO durante todo o round-trip e pulava de volta quando o detalhe novo chegava — e, na lista
+  // sem nenhuma linha aberta, ela ja acendia "Almoxarifado" sem haver recebimento algum.
+  // `AlmoxPageHeader` faz `idx = currentStep ?? -1`, entao `undefined` = nenhum passo aceso e
+  // nenhum concluido: durante a carga a barra fica NEUTRA em vez de mentir. Molde: `RequisicoesList.js`,
+  // `currentStep={warehouseMode && detalhe ? … : undefined}`.
+  // Descartado: guardar o ultimo passo num ref para "congelar" a barra — mostraria o passo do
+  // recebimento ANTERIOR sob o id novo, que e exatamente a classe de defeito que a RN-07 fechou.
   const currentStep = detalhe
     ? (STATUS_INFO[detalhe.status]?.etapa || 1) - 1
-    : 0;
+    : undefined;
 
   const renderAcoes = () => {
     if (!detalhe) return null;

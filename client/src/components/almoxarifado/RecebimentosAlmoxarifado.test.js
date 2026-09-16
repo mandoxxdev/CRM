@@ -169,6 +169,9 @@ const chamadasAnexos = () => api.get.mock.calls.filter(([url]) => url === '/almo
 const chamadasDetalhe = (id) => api.get.mock.calls.filter(([url]) => url === `/almoxarifado/recebimentos/${id}`);
 const botaoPorTexto = (texto) => [...container.querySelectorAll('button')]
   .find((b) => b.textContent.trim().includes(texto));
+// A barra de passos do `AlmoxPageHeader`: `active` e a classe que ele poe no passo corrente
+// (`AlmoxPageHeader.js`, `idx = currentStep ?? -1`). `null` aqui significa "nenhum passo aceso".
+const passoAtivo = () => container.querySelector('.almox-flow-step.active');
 
 /* ── (a) a lista ───────────────────────────────────────────────────────────────────────────────
  * Conta linhas contra a fixture, e não "renderizou sem erro": com uma URL errada no mock a tela
@@ -485,6 +488,10 @@ test('(k) trocar de linha nao mostra o recebimento anterior sob o id novo', asyn
   const blocoDo58 = blocoAnexos();
   expect(blocoDo58).not.toBeNull();                       // metade positiva
   expect(chamadasAnexos()).toHaveLength(1);
+  // Metade positiva do achado F2 da revisao final: com o 58 carregado a barra de passos TEM um
+  // passo aceso (EM_CONFERENCIA -> etapa 1 -> "Almoxarifado").
+  expect(passoAtivo()).not.toBeNull();
+  expect(passoAtivo().textContent).toContain('Almoxarifado');
 
   const original = api.get.getMockImplementation();
   let liberar41;
@@ -505,11 +512,17 @@ test('(k) trocar de linha nao mostra o recebimento anterior sob o id novo', asyn
   expect(painel().textContent).not.toContain('REC-2026-058');
   expect(blocoAnexos()).toBeNull();
   expect(chamadasAnexos()).toHaveLength(1);               // e nenhuma consulta nova ainda
+  // Achado F2 da revisao final: o 8o consumidor de `detalhe` era o `currentStep` do cabecalho, que
+  // ficava `0` com `detalhe` nulo — a barra desabava para o passo 1 ACESO durante a carga e
+  // voltava ao chegar o detalhe. Com `detalhe` nulo nenhum passo fica aceso: a barra congela em
+  // vez de mentir e piscar.
+  expect(passoAtivo()).toBeNull();
 
   // Metade positiva do outro lado: quando o 41 chega, o bloco volta com o id DELE.
   await act(async () => { liberar41(); });
   await esperarEfeitos();
   expect(painel().textContent).toContain('REC-2026-041');
+  expect(passoAtivo()).not.toBeNull();                    // e a barra volta a acender
   expect(blocoAnexos()).not.toBeNull();
   expect(chamadasAnexos().at(-1)[1].params).toEqual({ entidade: 'recebimento', entidade_id: 41 });
 });
