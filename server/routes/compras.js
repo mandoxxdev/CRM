@@ -163,6 +163,47 @@ app.post('/api/compras/pedidos', authenticateToken, checkModulePermission('compr
     }
   });
 
+// Pedido de compra — leitura, edicao e exclusao (Etapa 38, Task 3: RN-C06, RN-C07, RN-C08)
+//
+// ⚠️ ESTE BLOCO TEM DE FICAR ACIMA DE `app.delete('/api/compras/:tipo/:id')`, e a posicao e
+// COMPORTAMENTO, nao organizacao: `/api/compras/pedidos/7` tem DOIS segmentos e casa o padrao
+// `/:tipo/:id` do generico (medicao 2 da Fase 0 — o mesmo sombreamento que faz `DELETE
+// /api/compras/grupos/:id` responder `400 'Tipo inválido'` ate hoje). Registradas DEPOIS dele, as
+// rotas abaixo nunca seriam alcancadas: medido por sonda contra o codigo de hoje, o generico
+// respondeu `200 'Item excluído com sucesso'` a um pedido COM material recebido, apagou a cabeca e
+// deixou a linha de `itens_pedido_compra` orfa. Mover este bloco para baixo derruba os cenarios
+// (5) e (7) de `comprasPedidoEditarExcluir.api.test.js`.
+//
+// As tres respondem pelo servico (a rota nao faz SQL) e traduzem `e.status`: 404 (nao existe), 400
+// (`PUT` com recebimento), 409 (`DELETE` com recebimento).
+app.get('/api/compras/pedidos/:id', authenticateToken, checkModulePermission('compras'), async (req, res) => {
+  try {
+    res.json(await pedidoCompraService.obterPedido(db, req.params.id));
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+// `PUT` validado pelo MESMO `PedidoCompraCreateSchema` do `POST` (contrato 4: "o mesmo payload,
+// menos `solicitacao_id`"). Um schema proprio daria uma segunda lista de 7 status e uma segunda
+// literal de quantidade para a mesma regra — e o servico ignora `solicitacao_id` de proposito.
+app.put('/api/compras/pedidos/:id', authenticateToken, checkModulePermission('compras'),
+  validate(PedidoCompraCreateSchema), async (req, res) => {
+    try {
+      res.json(await pedidoCompraService.atualizarPedido(db, req.params.id, req.body));
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
+
+app.delete('/api/compras/pedidos/:id', authenticateToken, checkModulePermission('compras'), async (req, res) => {
+  try {
+    res.json(await pedidoCompraService.excluirPedido(db, req.params.id));
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
 // Cotações
 app.get('/api/compras/cotacoes', authenticateToken, checkModulePermission('compras'), (req, res) => {
   const { search, status } = req.query;

@@ -61,8 +61,45 @@
  *    etapa propria, e gatear a criacao do pedido por perfil do **almoxarifado** barraria o
  *    comprador no seu proprio modulo.
  *
- * Testes: `server/tests/api/comprasPedidoCriar.api.test.js`
- * Plano:  `docs/superpowers/plans/2026-09-16-crm-etapa38-pedido-de-compra.md` (Task 2)
+ * ── AS DUAS PERNAS DA REGUA DE EDICAO E EXCLUSAO (Task 3, RN-C07 e RN-C08) ────────────────────
+ *
+ * `atualizarPedido` e `excluirPedido` **perguntam ao recebimento** antes de mexer no pedido, e a
+ * pergunta tem DUAS pernas, porque elas medem coisas diferentes:
+ *
+ * - **Perna 1** — alguma linha com `COALESCE(quantidade_recebida, 0) > 0`: material que JA ENTROU
+ *   no estoque. Reinserir as linhas apagaria essa conta (perda de dado de estoque, irreversivel
+ *   sem SQL na mao), e apagar o pedido jogaria fora o documento que explica o saldo.
+ *
+ * - **Perna 2** — existe `recebimentos_material_almoxarifado WHERE pedido_compra_id = ?`: o
+ *   recebimento **criado e nao processado**. Pela RN-23 da Etapa 37 criar documento **nao consome
+ *   saldo**, entao esse recebimento tem `quantidade_recebida` ainda **0** na linha do pedido e
+ *   **passa pela perna 1**.
+ *
+ * ⚠️ **A perna 2 no `PUT` e o achado mais caro da revisao desta etapa, e foi MEDIDO por sonda
+ * executada antes de existir codigo:** o `PUT` apaga e reinsere as linhas, e os ids novos nao sao
+ * os antigos. O recebimento aberto guarda `pedido_item_id` (`schema.js:1306`, INTEGER **sem FK**
+ * de proposito) apontando para a linha **antiga**. Ao processar, o acumulador da 37 e
+ * `UPDATE itens_pedido_compra … WHERE id = ?` (`receiptService.js:1261-1268`) e **0 linhas
+ * alteradas nao e erro em SQLite**: nao ha excecao, o `catch` nao dispara e nao sai nem `warn`. A
+ * sonda mediu o fim da historia com o `PUT` de uma perna so: `processar` respondeu **200**, o
+ * estoque do material foi para **6** e a linha do pedido ficou `quantidade_recebida = 0` com
+ * `saldo_pendente = 10` — o pedido **ABERTO com o saldo cheio, para sempre**, oferecendo de novo
+ * ao operador um material que ja chegou. Por isso o `PUT` tem as **duas** pernas, nao so a
+ * primeira. Cenario (4b) de `comprasPedidoEditarExcluir.api.test.js`.
+ *
+ * As duas portas dao a **MESMA** frase ("ja teve recebimento") porque o fato e um so; o sufixo
+ * difere porque a acao recusada difere ("nao pode mais ser editado" / "nao pode ser excluido"), e
+ * o status difere por contrato: **400** no `PUT`, **409** no `DELETE`.
+ *
+ * Descartado: medir **so** a perna 1 (deixa apagar/editar o pedido debaixo de um recebimento
+ * aberto — os dois danos acima); e `ON DELETE CASCADE` no DDL de `itens_pedido_compra` (e tabela
+ * **core**, mexer no DDL dela e migration de outro modulo, e a Etapa 37 deixou `pedido_item_id`
+ * sem FK **de proposito** — o recebimento continua historico valido depois de o Compras apagar a
+ * linha). `excluirPedido` apaga os **filhos primeiro** e em codigo de aplicacao.
+ *
+ * Testes: `server/tests/api/comprasPedidoCriar.api.test.js` (Task 2),
+ *         `server/tests/api/comprasPedidoEditarExcluir.api.test.js` (Task 3)
+ * Plano:  `docs/superpowers/plans/2026-09-16-crm-etapa38-pedido-de-compra.md` (Tasks 2 e 3)
  */
 const { dbRun, dbGet, dbAll } = require('../almoxarifado/db');
 const { inserirComNumeroUnico } = require('../almoxarifado/numeroDoc');
@@ -86,6 +123,52 @@ const erroPermissao = (user, acao) => Object.assign(
 
 /** Colunas do cabecalho que o payload pode preencher — `numero` e `valor_total` NAO estao aqui. */
 const COLUNAS_CABECALHO = ['data_pedido', 'previsao_entrega', 'status', 'observacoes'];
+
+/**
+ * As literais da regua, UMA por fato (contratos 3 e 4 do plano).
+ *
+ * `PEDIDO_NAO_ENCONTRADO` e a MESMA frase de `routes/almoxarifado/extended.js` (rota de itens da
+ * Etapa 37) e de `purchaseService:62` — inventar uma segunda ("Pedido nao existe") daria duas
+ * frases para um fato so, e a tela teria de tratar as duas.
+ */
+const PEDIDO_NAO_ENCONTRADO = 'Pedido de compra não encontrado';
+const jaTeveRecebimentoEdicao = (numero) => `Pedido de compra ${numero} já teve recebimento — não pode mais ser editado`;
+const jaTeveRecebimentoExclusao = (numero) => `Pedido de compra ${numero} já teve recebimento — não pode ser excluído`;
+
+/** Perna 1 da regua: alguma linha deste pedido com material JA RECEBIDO (entrada fisica feita). */
+async function linhaComRecebimento(db, pedidoId) {
+  return dbGet(db, `SELECT id FROM itens_pedido_compra
+    WHERE pedido_id = ? AND COALESCE(quantidade_recebida, 0) > 0 LIMIT 1`, [pedidoId]);
+}
+
+/**
+ * Perna 2 da regua: existe documento de recebimento apontando para este pedido — inclusive o
+ * CRIADO E NAO PROCESSADO, que pela RN-23 da Etapa 37 nao mexeu em `quantidade_recebida` nenhuma.
+ *
+ * ⚠️ A GUARDA DE TABELA AUSENTE NAO E PARANOIA: `recebimentos_material_almoxarifado` e do
+ * ALMOXARIFADO e este e o modulo CORE Compras. Num banco que nunca subiu o modulo do almoxarifado
+ * (o `initSchema` dele e que cria a tabela) a consulta morreria com `no such table` e **todo**
+ * `DELETE`/`PUT` de pedido responderia 500. E o mesmo `SELECT name FROM sqlite_master` que
+ * `listarPedidosCompraAux` faz do lado de la (`receiptService.js:1475`) para o caso simetrico.
+ *
+ * UMA funcao para as duas portas de proposito: duas copias da mesma pergunta divergiriam na
+ * primeira edicao (e a re-revisao da Etapa 37 apontou justamente duplicacao de agregado como
+ * smell). Quem quiser provar que as pernas medem coisas diferentes derruba o `if` de CADA porta —
+ * e e assim que as sabotagens 3 e 5 da Task 3 foram feitas.
+ */
+async function recebimentoVinculadoAoPedido(db, pedidoId) {
+  const tabela = await dbGet(db,
+    "SELECT name FROM sqlite_master WHERE type='table' AND name='recebimentos_material_almoxarifado'");
+  if (!tabela) return null;
+  return dbGet(db,
+    'SELECT id FROM recebimentos_material_almoxarifado WHERE pedido_compra_id = ? LIMIT 1', [pedidoId]);
+}
+
+/** Guarda de banco compartilhada pelo `POST` e pelo `PUT`: o fornecedor tem de existir. */
+async function assertFornecedor(db, fornecedorId) {
+  const fornecedor = await dbGet(db, 'SELECT id FROM fornecedores WHERE id = ?', [fornecedorId]);
+  if (!fornecedor) throw erro('Fornecedor não encontrado');
+}
 
 /**
  * Le o pedido com o `fornecedor_nome` e as linhas, no formato que a rota devolve e a tela consome.
@@ -153,8 +236,7 @@ async function criarPedido(db, dados, user) {
   const querVincular = dados.solicitacao_id !== undefined && dados.solicitacao_id !== null;
   if (querVincular && !can(user, 'gerenciar_reposicao')) throw erroPermissao(user, 'gerenciar_reposicao');
 
-  const fornecedor = await dbGet(db, 'SELECT id FROM fornecedores WHERE id = ?', [dados.fornecedor_id]);
-  if (!fornecedor) throw erro('Fornecedor não encontrado');
+  await assertFornecedor(db, dados.fornecedor_id);
 
   const itensResolvidos = await resolverItens(db, dados.itens);
 
@@ -209,4 +291,115 @@ async function criarPedido(db, dados, user) {
   return pedido;
 }
 
-module.exports = { criarPedido, relerPedido };
+/**
+ * RN-C06 — le UM pedido, com o fornecedor resolvido e as linhas. E o que a tela de edicao carrega.
+ *
+ * ⚠️ OS DERIVADOS NAO SAO DAQUI. `saldo_pendente` e `situacao_recebimento` sao calculados por
+ * `derivarRecebimentoDoPedido` (`services/almoxarifado/receiptService.js`), que **nao e exportada**
+ * — e aquele arquivo e contrato de NAO-TOQUE nesta etapa. Recalcular a conta aqui daria uma segunda
+ * formula de saldo do pedido, que divergiria da do almoxarifado na primeira edicao; quem precisa do
+ * derivado consulta a rota que ja o publica
+ * (`GET /api/almoxarifado/recebimentos-aux/pedidos-compra/:id/itens`), e o cenario (1) do teste
+ * cruza as duas leituras pelo `id` da linha para provar que e o MESMO objeto. O que esta porta
+ * devolve por linha inclui `quantidade_recebida` crua, que e o que a tela precisa para saber se o
+ * pedido ainda e editavel.
+ */
+async function obterPedido(db, pedidoId) {
+  const pedido = await relerPedido(db, pedidoId);
+  if (!pedido) throw erro(PEDIDO_NAO_ENCONTRADO, 404);
+  return pedido;
+}
+
+/**
+ * RN-C07 — edita o pedido e SUBSTITUI as linhas, se e somente se o recebimento permitir.
+ *
+ * A ORDEM DAS OPERACOES E A REGRA, nao estilo (nao ha transacao neste modulo):
+ *   1. 404 se o pedido nao existe;
+ *   2. as DUAS pernas da regua (cabecalho deste arquivo) — recusa ANTES de qualquer escrita;
+ *   3. fornecedor e materiais resolvidos — tambem antes, senao um material inexistente na quarta
+ *      linha deixaria o pedido com o cabecalho novo e as linhas velhas apagadas;
+ *   4. UPDATE do cabecalho, DELETE + INSERT das linhas, UPDATE do `valor_total` derivado.
+ *
+ * SO OS CAMPOS PRESENTES no payload sao escritos no cabecalho (`undefined`/`null` nao mexem na
+ * coluna): o formulario da Task 5 manda o registro inteiro e limpar um campo de texto manda `''`,
+ * que **e** presente e grava vazio — enquanto um chamador de servico com payload parcial (Task 6)
+ * nao apaga o que nao conhece. `numero` **nao** e editavel (e do servidor desde a Task 2) e
+ * `solicitacao_id`, se vier, e IGNORADO: vincular solicitacao e ato da criacao, e e la que vive o
+ * gate de `gerenciar_reposicao` (fix 1 da Task 2) — aceitar o vinculo aqui abriria a mesma escrita
+ * em tabela do almoxarifado por uma porta sem gate.
+ *
+ * ⚠️ `quantidade_recebida` NAO e escrita: as linhas novas nascem 0 pelo DEFAULT do DDL. Isso e
+ * seguro exatamente porque a regua acima ja garantiu que **nao havia** recebimento nenhum.
+ */
+async function atualizarPedido(db, pedidoId, dados) {
+  const pedido = await dbGet(db, 'SELECT id, numero FROM pedidos_compra WHERE id = ?', [pedidoId]);
+  if (!pedido) throw erro(PEDIDO_NAO_ENCONTRADO, 404);
+
+  const linhaRecebida = await linhaComRecebimento(db, pedido.id);
+  const documentoVinculado = await recebimentoVinculadoAoPedido(db, pedido.id);
+  if (linhaRecebida || documentoVinculado) throw erro(jaTeveRecebimentoEdicao(pedido.numero));
+
+  await assertFornecedor(db, dados.fornecedor_id);
+  const itensResolvidos = await resolverItens(db, dados.itens);
+
+  const sets = ['fornecedor_id = ?'];
+  const valores = [dados.fornecedor_id];
+  for (const col of COLUNAS_CABECALHO) {
+    if (dados[col] !== undefined && dados[col] !== null) { sets.push(`${col} = ?`); valores.push(dados[col]); }
+  }
+  const total = itensResolvidos.reduce((soma, i) => soma + (i.quantidade * i.valor_unitario), 0);
+  sets.push('valor_total = ?'); valores.push(total);
+  sets.push('updated_at = CURRENT_TIMESTAMP');
+  valores.push(pedido.id);
+  await dbRun(db, `UPDATE pedidos_compra SET ${sets.join(', ')} WHERE id = ?`, valores);
+
+  // SUBSTITUICAO, nao merge: a tela manda a lista inteira e um `UPDATE` linha a linha exigiria que
+  // o client mandasse os ids e acertasse o que sumiu — e um item removido na tela ficaria no banco.
+  await dbRun(db, 'DELETE FROM itens_pedido_compra WHERE pedido_id = ?', [pedido.id]);
+  for (const item of itensResolvidos) {
+    await dbRun(db, `INSERT INTO itens_pedido_compra
+      (pedido_id, material_id, codigo, descricao, quantidade, valor_unitario, unidade)
+      VALUES (?,?,?,?,?,?,?)`,
+    [pedido.id, item.material_id, item.codigo, item.descricao, item.quantidade, item.valor_unitario, item.unidade]);
+  }
+
+  return relerPedido(db, pedido.id);
+}
+
+/**
+ * RN-C08 — exclui o pedido, se e somente se o recebimento permitir, e leva as LINHAS junto.
+ *
+ * ⚠️ OS FILHOS PRIMEIRO, e por dois motivos, nao um: no harness (`foreign_keys = 0`) apagar so a
+ * cabeca deixa **linha orfa** — medido por sonda contra o codigo de hoje: o `DELETE` generico
+ * respondeu `200 'Item excluído com sucesso'` e sobrou `itens_pedido_compra` apontando para pedido
+ * inexistente. Em PRODUCAO a FK esta **ON** (`sqliteConcurrency.js:50`) e `itens_pedido_compra`
+ * declara `FOREIGN KEY (pedido_id)` (`schema.js:1319`): la o mesmo `DELETE` **falha** com
+ * `FOREIGN KEY constraint failed` -> 500 `'Erro ao excluir item'` e o pedido nao sai nunca. Dois
+ * sintomas do mesmo defeito, um conserto.
+ *
+ * Sem transacao (o modulo nao tem): se o `DELETE` do cabecalho falhasse depois do dos itens, o
+ * pedido ficaria sem linhas. Assumido de propósito — o inverso (cabeca apagada, filhos vivos) e o
+ * que corrompe a leitura do almoxarifado, e a regua acima ja garantiu que **nada** foi recebido
+ * contra este pedido, entao nao ha conta de estoque a perder.
+ */
+async function excluirPedido(db, pedidoId) {
+  const pedido = await dbGet(db, 'SELECT id, numero FROM pedidos_compra WHERE id = ?', [pedidoId]);
+  if (!pedido) throw erro(PEDIDO_NAO_ENCONTRADO, 404);
+
+  const linhaRecebidaNoDelete = await linhaComRecebimento(db, pedido.id);
+  const documentoVinculadoNoDelete = await recebimentoVinculadoAoPedido(db, pedido.id);
+  if (linhaRecebidaNoDelete || documentoVinculadoNoDelete) throw erro(jaTeveRecebimentoExclusao(pedido.numero), 409);
+
+  await dbRun(db, 'DELETE FROM itens_pedido_compra WHERE pedido_id = ?', [pedido.id]);
+  await dbRun(db, 'DELETE FROM pedidos_compra WHERE id = ?', [pedido.id]);
+  return { message: 'Pedido de compra excluído com sucesso' };
+}
+
+module.exports = {
+  criarPedido,
+  relerPedido,
+  obterPedido,
+  atualizarPedido,
+  excluirPedido,
+  PEDIDO_NAO_ENCONTRADO,
+};
