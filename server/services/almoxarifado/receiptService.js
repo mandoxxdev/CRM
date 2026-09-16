@@ -105,6 +105,65 @@ async function resolverPedidoCompra(db, { pedido_compra_id, pedido_compra_numero
   return null;
 }
 
+/**
+ * RN-12/13/14 (Etapa 36) — a mesma nota fiscal do mesmo fornecedor nao entra duas vezes.
+ *
+ * Medido por sonda executada na Fase 0: dois POST com a mesma `nota_fiscal` e o mesmo
+ * `fornecedor_id` respondiam 201 + 201; processando as duas, o material era creditado DUAS VEZES
+ * (20 em vez de 10) e nasciam DUAS contas a pagar, com descricao identica exceto pelo numero do REC.
+ * Ninguem mais no sistema segurava essa porta: `gerarContaPagar` insere sem consultar duplicidade.
+ *
+ * Mora no SERVICO e e chamada pelos DOIS escritores — `criarRecebimento` e `salvarDadosFiscal` —
+ * porque o PUT /fiscal PREENCHE a NF depois, e uma guarda so no POST seria contornavel pelo mesmo
+ * caminho que tornava o enum contornavel (RN-11).
+ *
+ * NAO e `UNIQUE(nota_fiscal, fornecedor_id)` no banco, e isso e decisao reversivel registrada na
+ * letra B: producao pode ja ter duplicatas e o indice unico falharia na SUBIDA do servidor (o
+ * `numero TEXT UNIQUE` nasceu no CREATE TABLE, nao por safeAlter — nao ha precedente de unico
+ * aplicado a acervo aqui); `NULL` nunca colide, entao o indice seria silenciosamente parcial onde
+ * mais importa; e a recusa viria como SQLITE_CONSTRAINT, nao como literal legivel. A letra A do
+ * fechamento leva a consulta SQL que mede duplicatas em producao ANTES de qualquer deploy.
+ *
+ * Tres coisas NAO sao duplicata: NF vazia/nula, fornecedor diferente, e fornecedor nao identificado
+ * (id, CNPJ e NOME os tres nulos) — sem fornecedor nao existe "mesmo fornecedor" a afirmar.
+ *
+ * (Fase 2) O `fornecedor_nome` E o terceiro identificador, e nao um detalhe: a TELA nunca manda
+ * `fornecedor_id` — `handleCriar` monta o payload sem ele e `form` nao tem esse campo
+ * (`RecebimentosAlmoxarifado.js:86-93` e `:342-354`); o `<select>` de fornecedores copia
+ * `razao_social` -> `fornecedor_nome` e `cnpj` -> `fornecedor_cnpj` (`selecionarFornecedor`).
+ * Com a chave so em id/CNPJ, a guarda ficaria INALCANCAVEL pelo caminho real sempre que o
+ * fornecedor nao tivesse CNPJ digitado — regra entregue e porta faltando, a classe de defeito que
+ * esta etapa esta pagando do outro lado (a rota /conferir sem chamador). Comparado com
+ * UPPER(TRIM(...)) pelo mesmo motivo da NF. Reversivel: e uma clausula do `where`.
+ */
+async function assertNotaNaoDuplicada(db, { nota_fiscal, fornecedor_id, fornecedor_cnpj, fornecedor_nome }, recebimentoId = null) {
+  const nf = typeof nota_fiscal === 'string' ? nota_fiscal.trim() : nota_fiscal;
+  if (!nf) return;                                   // RN-13: sem NF nao ha duplicata
+  const nome = typeof fornecedor_nome === 'string' ? fornecedor_nome.trim() : null;
+  if (!fornecedor_id && !fornecedor_cnpj && !nome) return;  // RN-13: sem fornecedor, idem
+
+  // Ordem de preferencia: id (canonico) > CNPJ (identidade fiscal) > nome (o que a tela manda).
+  let where; let chave;
+  if (fornecedor_id) { where = 'fornecedor_id = ?'; chave = fornecedor_id; }
+  else if (fornecedor_cnpj) { where = 'UPPER(TRIM(fornecedor_cnpj)) = UPPER(?)'; chave = fornecedor_cnpj; }
+  else { where = 'UPPER(TRIM(fornecedor_nome)) = UPPER(?)'; chave = nome; }
+  const params = [nf, chave];
+  // (Fase 2) O filtro de CANCELADO saiu: `STATUS` do recebimento nao tem 'CANCELADO' (os 11 status
+  // sao RECEBIDO..BLOQUEADO), entao a clausula era codigo morto que fazia o proximo leitor acreditar
+  // num cancelamento que nao existe. Se um dia existir, ela volta COM o teste que a exercita.
+  let sql = `SELECT id, numero FROM recebimentos_material_almoxarifado
+    WHERE UPPER(TRIM(nota_fiscal)) = UPPER(?) AND ${where}`;
+  if (recebimentoId) { sql += ' AND id <> ?'; params.push(recebimentoId); }
+
+  const ja = await dbGet(db, `${sql} LIMIT 1`, params);
+  if (ja) {
+    throw Object.assign(
+      new Error(`Nota fiscal ${nf} já lançada no recebimento ${ja.numero} para este fornecedor`),
+      { status: 409 },
+    );
+  }
+}
+
 async function criarRecebimento(db, user, data) {
   const {
     pedido_compra_id, pedido_compra_numero, tipo_recebimento, nota_fiscal,
@@ -132,6 +191,18 @@ async function criarRecebimento(db, user, data) {
   }
 
   if (!itens.length) throw Object.assign(new Error('Inclua ao menos um item'), { status: 400 });
+
+  // RN-12 (Etapa 36): DEPOIS de resolver o pedido (e ele quem traz o fornecedor quando o
+  // recebimento nasce de um PEDIDO_COMPRA) e ANTES do `inserirComNumeroUnico` — se a guarda
+  // rodasse depois, o INSERT do cabecalho ja teria gravado e o `throw` deixaria o documento
+  // duplicado no banco (nao ha transacao neste modulo). Os tres identificadores sao os MESMOS
+  // valores efetivos que o INSERT abaixo grava.
+  await assertNotaNaoDuplicada(db, {
+    nota_fiscal,
+    fornecedor_id: pedido?.fornecedor_id || fornecedor_id || null,
+    fornecedor_cnpj: pedido?.fornecedor_cnpj || fornecedor_cnpj || null,
+    fornecedor_nome: pedido?.fornecedor_nome || fornecedor_nome || null,
+  });
 
   // Etapa 31 (RN-07): o numero nasce DENTRO do gerador, na tentativa que vencer o UNIQUE, e e ele
   // que volta no `return` daqui. O `fn` contem SO o INSERT do cabecalho — os itens sao inseridos
@@ -277,6 +348,20 @@ async function salvarDadosFiscal(db, user, recebimentoId, data) {
   if (pedido_compra_id || pedido_compra_numero) {
     pedido = await resolverPedidoCompra(db, { pedido_compra_id, pedido_compra_numero });
   }
+
+  // RN-14 (Etapa 36): a SEGUNDA porta. Roda DEPOIS de `resolverPedidoCompra` e ANTES do UPDATE,
+  // com `recebimentoId` — que exclui o proprio documento, senao salvar os dados fiscais duas vezes
+  // com a PROPRIA nota se autoacusaria com 409.
+  // Os valores olhados sao os EFETIVOS do UPDATE abaixo, que usa COALESCE: um `PUT` que manda so a
+  // NF herda o fornecedor DO REGISTRO (`rec`), e e esse o caso mais comum da tela — comparar com o
+  // que veio no body deixaria passar exatamente a duplicata mais provavel. Mesmo motivo para a NF:
+  // sem o `?? rec.nota_fiscal`, um PUT que nao manda NF cairia no `if (!nf) return`.
+  await assertNotaNaoDuplicada(db, {
+    nota_fiscal: nota_fiscal ?? rec.nota_fiscal,
+    fornecedor_id: pedido?.fornecedor_id ?? fornecedor_id ?? rec.fornecedor_id,
+    fornecedor_cnpj: pedido?.fornecedor_cnpj ?? fornecedor_cnpj ?? rec.fornecedor_cnpj,
+    fornecedor_nome: pedido?.fornecedor_nome ?? fornecedor_nome ?? rec.fornecedor_nome,
+  }, recebimentoId);
 
   await dbRun(db, `UPDATE recebimentos_material_almoxarifado SET
     nota_fiscal = COALESCE(?, nota_fiscal),

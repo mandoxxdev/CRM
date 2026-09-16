@@ -1261,6 +1261,12 @@ async function initSchema(db) {
   ];
   for (const col of recebCols) await safeAlter(db, `ALTER TABLE recebimentos_material_almoxarifado ADD COLUMN ${col}`);
 
+  // Etapa 36: a tabela de recebimentos nao tinha indice NENHUM alem do UNIQUE de `numero`
+  // (`grep "INDEX.*recebimentos"` voltava vazio), e a guarda de NF duplicada roda em TODA criacao.
+  // NAO e unico, de proposito — ver o comentario de `assertNotaNaoDuplicada` no receiptService.
+  // Vem DEPOIS do safeAlter de `recebCols` porque a ordem importa para banco antigo.
+  await dbRun(db, 'CREATE INDEX IF NOT EXISTS idx_receb_nf_fornecedor ON recebimentos_material_almoxarifado(nota_fiscal, fornecedor_id)');
+
   const recebItemCols = [
     'valor_unitario REAL DEFAULT 0',
     'valor_total REAL DEFAULT 0',
