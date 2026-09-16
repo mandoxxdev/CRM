@@ -499,6 +499,10 @@ describe('Etapa 28: rodadas de separação e segunda conferência', () => {
 describe('Etapa 34: anexos da requisição no painel de detalhe', () => {
   const chamadasDeAnexos = () => api.get.mock.calls.filter(([url]) => url === '/almoxarifado/anexos');
   const blocoDeAnexos = () => container.querySelector('[data-testid="anexos-documento"]');
+  // A carga do DETALHE, que nenhum cenário contava até a Etapa 35 — e era onde estava o defeito:
+  // o clique disparava DUAS (clique → `syncSearchParams` reescreve `?id=` → efeito de deep-link →
+  // `abrirDetalhe` de novo). Medido vermelho em 2 antes do conserto, na T1 da Etapa 35.
+  const cargasDoDetalhe = () => api.get.mock.calls.filter(([u]) => u === '/almoxarifado/requisicoes/55');
 
   test('o painel de detalhe mostra os anexos DA REQUISIÇÃO aberta', async () => {
     detalheDoBanco = baseRequisicao('APROVADO');
@@ -510,6 +514,8 @@ describe('Etapa 34: anexos da requisição no painel de detalhe', () => {
     expect(api.get).toHaveBeenCalledWith('/almoxarifado/anexos',
       { params: { entidade: 'requisicao', entidade_id: 55 } });
     expect(api.get.mock.calls.filter(([u]) => u === '/almoxarifado/anexos')).toHaveLength(1);
+    // RN-02: deep-link puro carrega UMA vez — verde antes e depois do conserto.
+    expect(cargasDoDetalhe()).toHaveLength(1);
   });
 
   test('o bloco lê o id do DETALHE CARREGADO, não o da URL', async () => {
@@ -536,18 +542,20 @@ describe('Etapa 34: anexos da requisição no painel de detalhe', () => {
     expect(blocoDeAnexos()).not.toBeNull();
     expect(api.get).toHaveBeenCalledWith('/almoxarifado/anexos',
       { params: { entidade: 'requisicao', entidade_id: 55 } });
-    // Aqui o contador NÃO é 1, e a razão é anterior à Etapa 34: abrir pelo CLIQUE roda
-    // `abrirDetalhe` duas vezes — o clique e, depois, o `syncSearchParams` que reescreve `?id=`
-    // e reacende o efeito de deep-link —, e o segundo passe volta ao estado "Carregando...",
-    // que desmonta e remonta o corpo do painel. Medido: 2 GETs de `/almoxarifado/requisicoes/55`
-    // neste caminho. O que este cenário trava é a RELAÇÃO (uma consulta de anexos por carga do
-    // detalhe, nunca duas por montagem), e não o número solto; nos dois cenários de deep-link
-    // acima, com uma carga só, o contador é exatamente 1.
-    // Com o bloco FORA do ternário de `loadingDetalhe` (achado F2), o segundo passe não desmonta
-    // mais o corpo do painel: `abrirDetalhe` só zera `detalhe` quando o id MUDA
-    // (`RequisicoesList.js:232-234`), então o bloco permanece montado e a contagem estrita vale
-    // aqui também — era 2 (uma por carga do detalhe) antes do fix.
+    // Uma consulta de anexos por carga do detalhe — e, desde a Etapa 35 (RN-01), UMA carga por
+    // clique. Até a 34 este contador era 2: o clique chamava `abrirDetalhe`, o `syncSearchParams`
+    // reescrevia `?id=` e o efeito de deep-link chamava `abrirDetalhe` de novo. A flag de
+    // navegação interna por identidade de query (`navInternaRef`) fecha esse segundo passe.
+    // O comentário antigo daqui estava ERRADO em duas frentes e ficou registrado para não voltar:
+    // (1) narrava os 2 GETs como fato permanente, quando eram o defeito; (2) apontava
+    // `RequisicoesList.js:232-234` para o `setDetalhe(null)` condicional, que já tinha andado de
+    // linha. Não repita número de linha em comentário — descreva a regra.
+    // O que continua travado aqui é a RELAÇÃO: uma consulta de anexos por carga do detalhe, nunca
+    // duas por montagem. Com o bloco FORA do ternário de `loadingDetalhe` (achado F2) e
+    // `abrirDetalhe` zerando `detalhe` só quando o id MUDA, o bloco permanece montado.
     expect(api.get.mock.calls.filter(([u]) => u === '/almoxarifado/anexos')).toHaveLength(1);
+    // RN-01 da Etapa 35: um clique, UMA carga do detalhe.
+    expect(cargasDoDetalhe()).toHaveLength(1);
   });
 
   // ── F1 da revisão da branch: o gate de `warehouseMode` ──────────────────────────────────────

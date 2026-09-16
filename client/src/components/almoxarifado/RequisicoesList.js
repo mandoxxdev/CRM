@@ -105,6 +105,16 @@ const RequisicoesList = () => {
   const [loadingDetalhe, setLoadingDetalhe] = useState(false);
   const loadedDetalheIdRef = useRef(null);
   const detalheFetchSeqRef = useRef(0);
+  // Etapa 35 (RN-01): a query que ESTA tela acabou de escrever na URL, aguardando o efeito de
+  // deep-link consumi-la. Existe porque `abrirDetalhe` chama `syncSearchParams`, que reescreve
+  // `?id=`, e isso reacende o efeito de deep-link — que chamava `abrirDetalhe` de novo: DOIS
+  // `GET /almoxarifado/requisicoes/:id` por clique, desde que o deep-link existe.
+  //
+  // Guarda a STRING, e não um booleano, por um motivo medido: `syncSearchParams` só escreve
+  // quando a query muda, então um booleano armado incondicionalmente (clique na linha já
+  // aberta, refetch por foco da janela) FICARIA armado e engoliria o próximo deep-link legítimo
+  // (back/forward). Com a string, a flag só é consumida pela query que ela mesma escreveu.
+  const navInternaRef = useRef(null);
   const selectedIdRef = useRef(selectedId);
   selectedIdRef.current = selectedId;
   const [showRejeitar, setShowRejeitar] = useState(false);
@@ -148,7 +158,9 @@ const RequisicoesList = () => {
     const next = new URLSearchParams(params).toString();
     if (next !== searchParams.toString()) {
       setSearchParams(params, { replace: true });
+      return next;     // escreveu: devolve a query escrita, para quem quiser marcar navegacao interna
     }
+    return null;       // nao escreveu — nada a consumir, e nada a armar
   }, [buildSearchParams, searchParams, setSearchParams]);
 
   useEffect(() => {
@@ -165,6 +177,17 @@ const RequisicoesList = () => {
 
   // Deep-link / browser back-forward: open panel when ?id= changes externally
   useEffect(() => {
+    // Consumo da flag: se a query atual é EXATAMENTE a que esta tela acabou de escrever, o detalhe
+    // já foi carregado pelo clique e um segundo GET é desperdício puro. Este é o ÚNICO ponto de
+    // desarme — e ele só desarma quando CASA. Uma flag que não casa SOBREVIVE ao ciclo do efeito
+    // (medido na Fase 2 da Etapa 35), e é exatamente por isso que armar sem ter escrito é um
+    // defeito de verdade e não um detalhe: a flag velha fica esperando a query voltar a ser aquela
+    // (trocar o filtro e destrocar) para engolir um refetch legítimo. Quem garante que isso não
+    // acontece é o `if (escrita !== null)` do `abrirDetalhe`, não este bloco.
+    if (navInternaRef.current !== null && navInternaRef.current === searchParams.toString()) {
+      navInternaRef.current = null;
+      return;
+    }
     const urlId = searchParams.get('id');
     if (!urlId) {
       if (loadedDetalheIdRef.current != null) {
@@ -243,7 +266,12 @@ const RequisicoesList = () => {
       if (fetchSeq !== detalheFetchSeqRef.current) return null;
 
       aplicarDetalhe(res.data, id);
-      if (!fromUrl) syncSearchParams(id);
+      if (!fromUrl) {
+        // Marca a navegação como INTERNA só quando a URL realmente mudou: o efeito de deep-link vai
+        // reacender por causa DESTA escrita, e não há segundo detalhe para buscar.
+        const escrita = syncSearchParams(id);
+        if (escrita !== null) navInternaRef.current = escrita;
+      }
       return res.data;
     } catch {
       if (fetchSeq !== detalheFetchSeqRef.current) return null;
