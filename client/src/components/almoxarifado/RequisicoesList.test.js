@@ -11,7 +11,7 @@
  */
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import RequisicoesList from './RequisicoesList';
 import { getRequisicaoStepIndex, REQUISICAO_FLOW } from './AlmoxPageHeader';
 import api from '../../services/api';
@@ -76,8 +76,20 @@ let container;
 let root;
 let detalheDoBanco;
 
+// A URL do `MemoryRouter` não é `window.location` — o histórico é em memória, então nenhuma
+// asserção sobre `window.location.search` veria o que a tela escreve. Esta sonda vive DENTRO do
+// router, ao lado do componente, e publica a query corrente em `buscaDaUrl()`. É a única forma
+// de um cenário afirmar "a URL NÃO tem `id=`" sem espiar estado interno do componente.
+let buscaCorrenteDaUrl = '';
+const SondaDeUrl = () => {
+  buscaCorrenteDaUrl = useLocation().search;
+  return null;
+};
+const buscaDaUrl = () => buscaCorrenteDaUrl;
+
 beforeEach(() => {
   global.IS_REACT_ACT_ENVIRONMENT = true;
+  buscaCorrenteDaUrl = '';
   mockPode = () => true;
   mockWarehouseMode = true;
   api.get.mockImplementation((url) => {
@@ -111,6 +123,7 @@ async function renderizar() {
     root.render(
       <MemoryRouter initialEntries={['/almoxarifado/requisicoes?id=55']}>
         <RequisicoesList />
+        <SondaDeUrl />
       </MemoryRouter>
     );
   });
@@ -123,6 +136,7 @@ async function renderizarSemDetalhe() {
     root.render(
       <MemoryRouter initialEntries={['/almoxarifado/requisicoes']}>
         <RequisicoesList />
+        <SondaDeUrl />
       </MemoryRouter>
     );
   });
@@ -624,6 +638,14 @@ describe('Etapa 34: anexos da requisição no painel de detalhe', () => {
     expect(chamadasDeAnexos()).toHaveLength(1);
   });
 
+  /* ── Etapa 35 ────────────────────────────────────────────────────────────────────────────────
+   * Os cenários abaixo são da Etapa 35, e não da 34: ficam num `describe` aninhado (e não em um
+   * arquivo/bloco próprio) porque dependem dos helpers `cargasDoDetalhe` / `blocoDeAnexos` /
+   * `chamadasDeAnexos` declarados acima — o achado F5 da revisão final era exatamente isto:
+   * cenários da 35 rodando sob um título que dizia "Etapa 34", o que faz `-t 'Etapa 35'` não
+   * achar nada e a próxima sessão procurar no arquivo errado.
+   */
+  describe('Etapa 35: uma carga por gesto, e fechar é fechar', () => {
   /* ── Integração da Etapa 35: os três gestos em sequência, no MESMO componente montado ──────────
    * Os dois cenários F2 acima (foco e filtro) remontam a tela antes de medir, então nenhum deles vê
    * o estado que a flag de navegação interna deixa para o gesto SEGUINTE. O defeito que este
@@ -672,5 +694,61 @@ describe('Etapa 34: anexos da requisição no painel de detalhe', () => {
     // E o bloco de anexos atravessou os quatro gestos sem remontar nem reconsultar (F2 da Etapa 34).
     expect(blocoDeAnexos()).not.toBeNull();
     expect(chamadasDeAnexos()).toHaveLength(1);
+  });
+
+  /* ── F1 da revisão final da branch: o ✕ tem de descartar a resposta em voo ────────────────────
+   * `fecharDetalhe` zerava painel, detalhe e `loadedDetalheIdRef`, mas NÃO bumpava
+   * `detalheFetchSeqRef`. Cenário: lista sem `?id=`, clique na linha 55 (GET em voo), ✕ — o
+   * `syncSearchParams(null)` não escreve nada porque a URL ainda não tinha `id=` — e então a
+   * resposta chega, passa o teste de sequência (nada a invalidou), `aplicarDetalhe` repõe
+   * `detalhe`/`loadedDetalheIdRef` e `syncSearchParams(55)` ESCREVE `?id=55` na URL, armando de
+   * quebra a flag de navegação interna. O painel fica fechado (`selectedId` é null e nada o
+   * repõe), então nada na tela denuncia: só o F5 do usuário, que reabre a requisição que ele
+   * acabou de fechar. É a MESMA regra que a T4 escreveu para o painel de recebimentos
+   * ("Fechar é fechar: além de zerar o painel, BUMPA a sequência").
+   *
+   * A régua discriminante é a URL: painel e bloco de anexos ficam nulos com e sem o conserto
+   * (ambos dependem de `selectedId`), então um cenário que só olhasse a tela passaria com o
+   * defeito de pé.
+   */
+  test('F1: o ✕ descarta a resposta em voo — nada de `id=` na URL depois de fechar', async () => {
+    detalheDoBanco = baseRequisicao('APROVADO');
+    const original = api.get.getMockImplementation();
+    let liberarDetalhe;
+    // GET do detalhe DEFERIDO a mão: sem segurar a resposta, o `act` do clique já a entrega e a
+    // janela em que o usuário aperta o ✕ nunca existe — o cenário ficaria verde medindo outra coisa.
+    api.get.mockImplementation((url, cfg) => {
+      if (url === '/almoxarifado/requisicoes/55') {
+        return new Promise((resolve) => { liberarDetalhe = () => resolve({ data: detalheDoBanco }); });
+      }
+      return original(url, cfg);
+    });
+
+    await renderizarSemDetalhe();
+    // Metades positivas do estado inicial: a lista montou, e a URL ainda NÃO tem `id=` (é essa
+    // ausência que faz o `syncSearchParams(null)` do ✕ devolver `null` sem escrever).
+    expect(container.textContent).toContain('REQ-055');
+    expect(buscaDaUrl()).not.toContain('id=');
+
+    await act(async () => { container.querySelector('tbody tr').click(); });
+    expect(liberarDetalhe).toBeInstanceOf(Function);     // âncora: o GET está EM VOO
+    // Metade positiva: o painel ABRIU (em carga) antes do ✕ — sem ela, um clique que não abrisse
+    // nada deixaria o resto do cenário verde provando nada.
+    expect(container.querySelector('.almox-loading')).not.toBeNull();
+    const fechar = container.querySelector('.almox-modal-close');
+    expect(fechar).not.toBeNull();
+
+    await act(async () => { fechar.click(); });
+    expect(container.querySelector('.almox-loading')).toBeNull();   // fechou de fato
+
+    // A resposta atrasada chega DEPOIS do ✕ e não pode ressuscitar nada.
+    await act(async () => { liberarDetalhe(); });
+
+    // A régua: a URL continua sem `id=`. Com o defeito, aqui vinha `?id=55` e o F5 reabria a
+    // requisição fechada.
+    expect(buscaDaUrl()).not.toContain('id=');
+    expect(blocoDeAnexos()).toBeNull();
+    expect(cargasDoDetalhe()).toHaveLength(1);           // e nenhum GET novo foi disparado
+  });
   });
 });

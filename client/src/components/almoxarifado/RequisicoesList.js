@@ -311,7 +311,14 @@ const RequisicoesList = () => {
     };
   }, [warehouseMode, selectedId, abrirDetalhe]);
 
+  // Fechar é fechar: além de zerar o painel, BUMPA a sequência para descartar a resposta em voo —
+  // senão o GET do clique anterior repõe `detalhe`/`loadedDetalheIdRef` e, pior, o
+  // `syncSearchParams(id)` do sucesso ESCREVE `?id=` de volta na URL depois do ✕ (a URL sem `id=`
+  // faz o `syncSearchParams(null)` daqui não escrever nada, então nada desfaz isso). O painel fica
+  // fechado — `selectedId` é null e nada o repõe —, então a tela não denuncia: só o F5 do usuário,
+  // que reabre a requisição que ele acabou de fechar. Mesma regra do painel de recebimentos.
   const fecharDetalhe = () => {
+    ++detalheFetchSeqRef.current;
     setSelectedId(null);
     setDetalhe(null);
     loadedDetalheIdRef.current = null;
