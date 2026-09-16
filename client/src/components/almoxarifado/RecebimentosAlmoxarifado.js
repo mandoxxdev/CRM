@@ -9,6 +9,7 @@ import {
   FiArrowRight, FiFileText, FiDollarSign, FiTag,
 } from 'react-icons/fi';
 import EtiquetasPdfModal from './EtiquetasPdfModal';
+import AnexosDocumento from './AnexosDocumento';
 import { montarEtiquetasDoRecebimento } from '../../utils/etiquetasPdf';
 import './Almoxarifado.css';
 
@@ -580,6 +581,20 @@ const RecebimentosAlmoxarifado = () => {
                     <Link to="/financeiro/contas-pagar">Contas a Pagar</Link>.
                   </div>
                 )}
+
+                {/* Etapa 34 — anexos do recebimento (NF digitalizada, certificado, boleto).
+                    INLINE, no fim do painel: o painel é o único lugar do client onde o `id` do
+                    recebimento existe, e é onde quem acabou de registrar cai
+                    (`handleCriar` → `abrirDetalhe(res.data.id)`), com a nota fiscal na mão.
+                    `detalhe.id` e NÃO o id da linha clicada: o bloco lê o REGISTRO CARREGADO —
+                    trocar de linha troca o `entidade_id`, e `recebimentos[0].id` mostraria os
+                    anexos de outro recebimento sem erro nenhum na tela.
+                    Sem gate novo: quem vê o recebimento vê os anexos dele; anexar/remover
+                    continua decidido pelo backend (requirePermission), com a UI barrando antes
+                    do formulário pelo próprio hook do componente. */}
+                <div style={{ marginTop: 16 }}>
+                  <AnexosDocumento entidade="recebimento" entidadeId={detalhe.id} titulo="Anexos" />
+                </div>
               </div>
             )}
           </div>
