@@ -22,7 +22,7 @@ const { disponivelSql } = require('../../services/almoxarifado/availabilitySql')
 // reprovar depois, por comparacao com NaN.
 const { paraNumeroFinito } = require('../../services/almoxarifado/toleranciaInspecao');
 const { validate, formatZodError } = require('../../services/almoxarifado/validation');
-const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema, RemessaTerceiroSchema, RetornoRemessaSchema, TransformacaoRemessaSchema, EncerramentoRemessaSchema, CancelamentoRemessaSchema, SobraUpdateSchema, GerarRetalhoSchema, SucateamentoCreateSchema, SucateamentoDestinoFormSchema, FerramentaCreateSchema, FerramentaUpdateSchema, EmprestimoSchema, DevolucaoEmprestimoSchema, CalibracaoSchema, JustificativaSchema, ManutencaoSchema, ManutencaoConcluirSchema, OcorrenciaSchema, AssinaturaEntregaFormSchema, AnexoCreateSchema } = require('../../services/almoxarifado/schemas');
+const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema, RemessaTerceiroSchema, RetornoRemessaSchema, TransformacaoRemessaSchema, EncerramentoRemessaSchema, CancelamentoRemessaSchema, SobraUpdateSchema, GerarRetalhoSchema, SucateamentoCreateSchema, SucateamentoDestinoFormSchema, FerramentaCreateSchema, FerramentaUpdateSchema, EmprestimoSchema, DevolucaoEmprestimoSchema, CalibracaoSchema, JustificativaSchema, ManutencaoSchema, ManutencaoConcluirSchema, OcorrenciaSchema, AssinaturaEntregaFormSchema, AnexoCreateSchema, RecebimentoCreateSchema, RecebimentoFiscalSchema } = require('../../services/almoxarifado/schemas');
 // Etapa 20 (C1): a limpeza do upload orfao SAIU deste arquivo para um modulo compartilhado —
 // era uma `function` local do closure de `registerExtendedRoutes` e `routes/almoxarifado.js`
 // (rota de foto de material) nao a alcancava. Importada com ALIAS de proposito: o nome
@@ -970,7 +970,10 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     } catch (e) { handleError(res, e); }
   });
 
-  app.post('/api/almoxarifado/recebimentos', auth, requirePermission('receber_material'), async (req, res) => {
+  // Etapa 36 (RN-11): `validate` DEPOIS do `requirePermission` — 403 antes de 400, como nas rotas
+  // de `configurar` (`:478`). Inverter deixaria um usuario sem perfil descobrir a forma do payload.
+  app.post('/api/almoxarifado/recebimentos', auth, requirePermission('receber_material'),
+    validate(RecebimentoCreateSchema), async (req, res) => {
     try {
       const result = await receiptService.criarRecebimento(db, req.user, req.body);
       res.status(201).json(result);
@@ -1095,7 +1098,10 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     } catch (e) { handleError(res, e); }
   });
 
-  app.put('/api/almoxarifado/recebimentos/:id/fiscal', auth, requirePermission('receber_material'), async (req, res) => {
+  // Etapa 36 (RN-11): a SEGUNDA porta de escrita de `tipo_recebimento` — sem este `validate` a
+  // regra valeria so no POST e o campo voltaria a aceitar qualquer string por aqui.
+  app.put('/api/almoxarifado/recebimentos/:id/fiscal', auth, requirePermission('receber_material'),
+    validate(RecebimentoFiscalSchema), async (req, res) => {
     try {
       res.json(await receiptService.salvarDadosFiscal(db, req.user, req.params.id, req.body));
     } catch (e) { handleError(res, e); }

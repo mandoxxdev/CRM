@@ -1,4 +1,12 @@
 const { dbRun, dbGet, dbAll } = require('./db');
+// Etapa 36 (RN-11): o enum de `tipo_recebimento` tem fonte UNICA em schema.js — quem grava (aqui) e
+// quem valida (schemas.js/Zod) leem a MESMA lista. Sem ciclo: schema.js so requer ./db.
+// Os dois nomes saem da PROPRIA lista por desestruturacao posicional em vez de `TIPOS_RECEBIMENTO[0]`
+// / `[1]` espalhados no default derivado abaixo: assim a leitura continua nominal, nenhuma string do
+// enum e reescrita a mao, e reordenar a lista em schema.js nao inverte o default em silencio (com
+// indice nu, inverteria — e nenhum teste de hoje pegaria, porque a coluna e write-only).
+const { TIPOS_RECEBIMENTO } = require('./schema');
+const [TIPO_NOTA_FISCAL, TIPO_PEDIDO_COMPRA] = TIPOS_RECEBIMENTO;
 const { registrarAuditoria } = require('./audit');
 const { inserirComNumeroUnico } = require('./numeroDoc');
 const {
@@ -105,9 +113,9 @@ async function criarRecebimento(db, user, data) {
 
   let pedido = null;
   let itens = itensInput || [];
-  const tipo = tipo_recebimento || (pedido_compra_id || pedido_compra_numero ? 'PEDIDO_COMPRA' : 'NOTA_FISCAL');
+  const tipo = tipo_recebimento || (pedido_compra_id || pedido_compra_numero ? TIPO_PEDIDO_COMPRA : TIPO_NOTA_FISCAL);
 
-  if (tipo === 'PEDIDO_COMPRA') {
+  if (tipo === TIPO_PEDIDO_COMPRA) {
     pedido = await resolverPedidoCompra(db, { pedido_compra_id, pedido_compra_numero });
     if (!pedido) throw Object.assign(new Error('Pedido de compra não encontrado'), { status: 400 });
     if (!itens.length) {

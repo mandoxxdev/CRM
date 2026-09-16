@@ -1,6 +1,6 @@
 /** Schemas Zod compartilhados do almoxarifado (padrão da fundação — ver validation.js). */
 const { z } = require('zod');
-const { TIPOS_REQUISICAO, TIPOS_MOVIMENTO, TIPOS_RETENCAO, TIPOS_DEDICADOS, TIPOS_RESULTADO, STATUS_SOBRA } = require('./schema');
+const { TIPOS_REQUISICAO, TIPOS_MOVIMENTO, TIPOS_RETENCAO, TIPOS_DEDICADOS, TIPOS_RESULTADO, STATUS_SOBRA, TIPOS_RECEBIMENTO } = require('./schema');
 // Etapa 9, Task 6: o enum dos destinos finais do sucateamento tem FONTE UNICA na maquina de
 // estados (ver o comentario de SucateamentoDestinoSchema no fim do arquivo). O modulo e puro —
 // nao requer nada — entao nao ha ciclo aqui.
@@ -748,6 +748,29 @@ const AnexoCreateSchema = z.object({
   descricao: z.string().max(300).optional(),
 });
 
+/**
+ * Recebimento (Etapa 36, RN-11) — `tipo_recebimento` nas DUAS portas de escrita
+ * (`POST /recebimentos` e `PUT /recebimentos/:id/fiscal`).
+ */
+// UMA literal para as DUAS portas: escrita a mao duas vezes, ela divergiria na primeira edicao e o
+// operador veria texto diferente dependendo de qual porta recusou. A mensagem e propria porque o
+// `z.enum` nu do Zod 4.4.3 responde EM INGLES e sem o valor recebido (medido na Fase 0), o que
+// quebra a convencao de mensagens em portugues deste modulo.
+const TIPO_RECEBIMENTO_INVALIDO = 'forma de recebimento inválida (use NOTA_FISCAL ou PEDIDO_COMPRA)';
+
+// `looseObject`, NUNCA `object`: `validate()` substitui `req.body` por `parsed.data` e `z.object`
+// descarta chave nao declarada — com `object`, `nota_fiscal` e `itens` SOMEM e todo POST valido
+// responde 400 "Inclua ao menos um item" (`receiptService.js:126`). Quarta encarnacao do defeito
+// ja comentado neste arquivo para `reserva_id`, `lote_id` e `series`.
+// `.optional()` nao e estilo: `criarRecebimento` DERIVA o tipo quando o body nao traz (`:108`), e
+// `recebimentoEntradaAtomica.api.test.js:192` / `alertaEventoJornada.api.test.js:82` chamam sem ele.
+const RecebimentoCreateSchema = z.looseObject({
+  tipo_recebimento: z.enum(TIPOS_RECEBIMENTO, { message: TIPO_RECEBIMENTO_INVALIDO }).optional(),
+});
+const RecebimentoFiscalSchema = z.looseObject({
+  tipo_recebimento: z.enum(TIPOS_RECEBIMENTO, { message: TIPO_RECEBIMENTO_INVALIDO }).optional(),
+});
+
 module.exports = {
   CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, TIPOS_MOVIMENTO_ROTA,
   RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema,
@@ -764,4 +787,9 @@ module.exports = {
   // deixa o binding `undefined` na extended e faz TODO POST /anexos morrer em
   // `undefined.safeParse`, 500 com stack, DEPOIS de o multer ja ter gravado.
   AnexoCreateSchema,
+  // Etapa 36 (RN-11): as DUAS portas do recebimento. Mesma lista fechada, mesmo risco de 500 —
+  // esquecer estas duas linhas deixa o binding `undefined` na extended e mata a rota em
+  // `undefined.safeParse`, DEPOIS do gate de permissao.
+  RecebimentoCreateSchema,
+  RecebimentoFiscalSchema,
 };

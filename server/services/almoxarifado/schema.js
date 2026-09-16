@@ -43,6 +43,13 @@ const TIPOS_REQUISICAO = [
   'ADMINISTRATIVO', 'EMERGENCIAL', 'FERRAMENTA', 'EPI', 'MATERIAL_CLIENTE',
 ];
 
+// Etapa 36 (RN-11): fonte UNICA dos valores de `tipo_recebimento`. A coluna existe desde sempre
+// (`recebCols`, "tipo_recebimento TEXT DEFAULT 'NOTA_FISCAL'") e aceitava QUALQUER string — medido
+// por sonda na Fase 0: 'BANANA<script>' entrava com 201. Mora aqui, e nao em schemas.js, pelo mesmo
+// motivo de TIPOS_REQUISICAO/TIPOS_MOVIMENTO: quem grava (receiptService) e quem valida (Zod) tem de
+// ler a MESMA lista, senao a etapa cria duas definicoes do mesmo enum.
+const TIPOS_RECEBIMENTO = ['NOTA_FISCAL', 'PEDIDO_COMPRA'];
+
 const TIPOS_MOVIMENTO = [
   'ENTRADA_COMPRA', 'ENTRADA_MANUAL', 'ENTRADA_DEVOLUCAO', 'SAIDA_PRODUCAO',
   'SAIDA_MONTAGEM', 'SAIDA_ASSISTENCIA', 'TRANSFERENCIA', 'RESERVA', 'LIBERACAO_RESERVA',
@@ -2103,5 +2110,6 @@ module.exports = {
   TIPOS_DEDICADOS,
   TIPOS_RESULTADO,
   TIPOS_REQUISICAO,
+  TIPOS_RECEBIMENTO,
   STATUS_SOBRA,
 };
