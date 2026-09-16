@@ -388,13 +388,30 @@ async function criarRecebimento(db, user, data) {
   const idsPorIndice = [];
   for (const [indice, item] of itens.entries()) {
     const qtd = item.quantidade_esperada || item.quantidade;
-    const vUnit = parseFloat(item.valor_unitario) || 0;
-    const vTotal = parseFloat(item.valor_total) || (qtd * vUnit);
     // (Etapa 37) `pedido_item_id` sai de `resolvidos`, NUNCA de `item.pedido_item_id`: e o link que
     // a Task 3 usa para somar na linha certa, e deixar o id do payload chegar ao INSERT faria a
     // contagem cair na linha de outro pedido. Sem linha resolvida, `null` — item fora do pedido
     // (decisao 9) nao inventa link.
     const linhaResolvida = resolvidos[indice] && resolvidos[indice].linha;
+    // ⚠️ (revisao final, U1) O PRECO da linha do pedido quando o payload OMITE o campo.
+    // Medido na revisao da branch: o payload da tela (T5) manda material, linha e quantidade e
+    // NAO manda `valor_unitario` — o preco nao e informacao do almoxarife, e sim do pedido. Com
+    // `parseFloat(item.valor_unitario) || 0` o item nascia 0/0, e na entrada fisica o
+    // `custo_unitario` da movimentacao so viaja quando > 0 (decisao 5 da Etapa 8c), entao o
+    // `custo_medio` do material deixou de ser alimentado por TODO recebimento contra pedido. Era
+    // REGRESSAO: antes da T5 a tela mandava `itens: []` e este servico preenchia o preco da linha
+    // (o caminho RN-25, acima). E o custo medio e a base do rateio da Etapa 8c — em 0, o rateio
+    // distribui R$ 0,00 e a conta "fecha" (zero = zero) sem ninguem perceber.
+    // Vale SO para o campo AUSENTE (`null`/`undefined`/`''`/ilegivel): `valor_unitario: 0`
+    // EXPLICITO e um fato (amostra, brinde, conserto, material de cliente — os casos que a 8c
+    // documentou), e herdar o preco do pedido ali inventaria valor que ninguem declarou.
+    const vUnitPayload = item.valor_unitario != null && item.valor_unitario !== ''
+      ? parseFloat(item.valor_unitario) : NaN;
+    const vUnit = Number.isFinite(vUnitPayload)
+      ? vUnitPayload
+      : (linhaResolvida ? parseFloat(linhaResolvida.valor_unitario) || 0 : 0);
+    const vTotal = parseFloat(item.valor_total) || (qtd * vUnit);
+    // `linhaResolvida` esta declarada ACIMA (o fallback de preco da U1 tambem precisa dela).
     const ins = await dbRun(db, `INSERT INTO recebimentos_material_itens_almoxarifado
       (recebimento_id, material_id, pedido_item_id, quantidade_esperada, quantidade_recebida,
        lote, series, observacoes,

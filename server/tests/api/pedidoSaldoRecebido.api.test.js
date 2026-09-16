@@ -137,6 +137,12 @@ async function colunas(db, tabela) {
     'SELECT quantidade_recebida FROM itens_pedido_compra WHERE id = ?', [linhaId])).quantidade_recebida;
   const estoqueDoMaterial = async (matId) => (await dbGet(db,
     'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [matId])).quantidade_atual;
+  // (U1) O custo medio do material e os valores gravados no item: e nesses dois campos que a
+  // regressao silenciosa aparecia.
+  const custoMedioDoMaterial = async (matId) => (await dbGet(db,
+    'SELECT custo_medio FROM materiais_almoxarifado WHERE id = ?', [matId])).custo_medio;
+  const valoresDosItens = (recId) => dbAll(db, 'SELECT id, valor_unitario, valor_total '
+    + 'FROM recebimentos_material_itens_almoxarifado WHERE recebimento_id = ? ORDER BY id', [recId]);
   const itensDo = (recId) => dbAll(db, `SELECT id, quantidade_esperada, quantidade_recebida,
     pedido_item_id, entrada_estoque_em FROM recebimentos_material_itens_almoxarifado
     WHERE recebimento_id = ? ORDER BY id`, [recId]);
@@ -503,6 +509,81 @@ async function colunas(db, tabela) {
     assert.strictEqual(proc2.status, 200, JSON.stringify(proc2.body));
     assert.strictEqual(await recebidaDaLinha(outroC), 4);
     assert.strictEqual(await recebidaDaLinha(outroD), 6);
+  });
+
+  // ── (11) (revisao final, U1) o PRECO da linha do pedido tem de chegar ao item e ao custo medio ─
+  /**
+   * Achado U1 da revisao da branch (lente de dado). A T5 passou a tela a mandar `itens`, e o
+   * payload dela NAO leva `valor_unitario` — o preco nao e informacao do almoxarife, e sim do
+   * pedido. `criarRecebimento` fazia `parseFloat(item.valor_unitario) || 0`, entao o item nascia
+   * com 0/0; e na entrada fisica o `custo_unitario` da movimentacao so viaja quando > 0
+   * (decisao 5 da Etapa 8c, `receiptService` :1159), logo o `custo_medio` do material NAO era
+   * alimentado. Regressao SILENCIOSA: antes da T5 a tela mandava `itens: []` e era o servidor que
+   * preenchia o preco DA LINHA do pedido, entao todo recebimento por pedido alimentava o custo.
+   * E o custo medio e a base do rateio da Etapa 8c — com ele em 0, o rateio distribui R$ 0,00 e a
+   * conta "fecha" (zero = zero) sem ninguem perceber.
+   *
+   * A correcao e no SERVIDOR (quem conhece o preco e o pedido, nao a tela) e so vale quando o
+   * payload OMITE o campo: `valor_unitario: 0` EXPLICITO continua sendo 0, que e o caso normal de
+   * amostra/brinde/conserto que a Etapa 8c documentou.
+   */
+  await test('(11) payload da tela (sem valor_unitario) herda o preco da linha do pedido e alimenta o custo medio', async () => {
+    const mat = await novoMaterial();
+    assert.strictEqual(await custoMedioDoMaterial(mat.id), 0,
+      'controle: o cenario exige custo_medio 0 no comeco, senao nao mede a alimentacao');
+    const pedido = await novoPedido([{ material_id: mat.id, quantidade: 10, valor_unitario: 50 }]);
+
+    // O payload LITERAL da tela depois da T5: material, linha, quantidade — e mais nada.
+    const criado = await post({
+      pedido_compra_id: pedido.id,
+      itens: [{
+        material_id: mat.id, pedido_item_id: pedido.linhas[0], quantidade: 10,
+        quantidade_recebida: 10,
+      }],
+    });
+    assert.strictEqual(criado.status, 201, JSON.stringify(criado.body));
+
+    const [item] = await valoresDosItens(criado.body.id);
+    assert.strictEqual(item.valor_unitario, 50,
+      'o preco da linha do pedido tem de chegar ao item — a tela nao tem esse numero para mandar');
+    assert.strictEqual(item.valor_total, 500);
+
+    const proc = await processarPeloWorkflow(criado.body.id);
+    assert.strictEqual(proc.status, 200, JSON.stringify(proc.body));
+    // A consequencia que importa: sem o preco no item, o `custo_unitario` da movimentacao nao
+    // viaja (so > 0 viaja) e o material fica com custo_medio 0 para sempre.
+    assert.strictEqual(await custoMedioDoMaterial(mat.id), 50,
+      'custo_medio em 0 e a regressao silenciosa: o rateio da Etapa 8c distribuiria R$ 0,00');
+
+    // ── metade POSITIVA: preco DECLARADO no payload vence o da linha ───────────────────────────
+    const mat2 = await novoMaterial();
+    const pedido2 = await novoPedido([{ material_id: mat2.id, quantidade: 4, valor_unitario: 25 }]);
+    const declarado = await post({
+      pedido_compra_id: pedido2.id,
+      itens: [{
+        material_id: mat2.id, pedido_item_id: pedido2.linhas[0], quantidade: 4,
+        quantidade_recebida: 4, valor_unitario: 30,
+      }],
+    });
+    assert.strictEqual(declarado.status, 201, JSON.stringify(declarado.body));
+    const [item2] = await valoresDosItens(declarado.body.id);
+    assert.strictEqual(item2.valor_unitario, 30, 'o fallback NAO pode sobrescrever o que veio');
+    assert.strictEqual(item2.valor_total, 120);
+
+    // ── metade NEGATIVA: `valor_unitario: 0` EXPLICITO e um fato (amostra/brinde), nao ausencia ─
+    const mat3 = await novoMaterial();
+    const pedido3 = await novoPedido([{ material_id: mat3.id, quantidade: 2, valor_unitario: 90 }]);
+    const zero = await post({
+      pedido_compra_id: pedido3.id,
+      itens: [{
+        material_id: mat3.id, pedido_item_id: pedido3.linhas[0], quantidade: 2,
+        quantidade_recebida: 2, valor_unitario: 0,
+      }],
+    });
+    assert.strictEqual(zero.status, 201, JSON.stringify(zero.body));
+    const [item3] = await valoresDosItens(zero.body.id);
+    assert.strictEqual(item3.valor_unitario, 0,
+      'zero declarado e o caso de amostra/brinde da Etapa 8c — herdar 90 ali inventaria valor');
   });
 
   await close();
