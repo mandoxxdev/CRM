@@ -514,6 +514,56 @@ const semPermissao = (perfil) => 'Autorizar recebimento acima do pedido exige a 
   });
 
 
+  // ── (16) (revisao final, F3) `pedido_item_id` DO PEDIDO mas de OUTRO MATERIAL ───────────────
+  /**
+   * Achado F3 da revisao da branch, medido por sonda. `resolverLinhaDoPedido` aceitava o
+   * `pedido_item_id` explicito so por ele PERTENCER ao pedido, sem olhar o material. O INSERT
+   * gravava o `material_id` DO PAYLOAD ao lado da linha de OUTRO material, e o resultado era um
+   * documento que mentia dos dois lados: o pedido passava a dizer que chegaram 5 do material Y
+   * (a T3 soma na linha gravada) enquanto o estoque creditava 5 do material X, e Y ficava em 0.
+   * Nao havia nenhuma porta no caminho: a regua do saldo agrupa o payload pelo material DA LINHA
+   * resolvida, entao ela media 5 contra o saldo de Y e aprovava.
+   *
+   * A recusa e 400 com literal PROPRIA (`Item do pedido #<id> nao e do material <COD>`), e nao a
+   * re-resolucao silenciosa por material: o payload afirmou DUAS coisas incompativeis, e escolher
+   * uma delas em silencio grava um documento que ninguem pediu. O cenario (6) continua valendo e
+   * mede o OUTRO caso — id de outro PEDIDO, que a rota nunca prometeu que existisse aqui e cai no
+   * fallback por material documentado na decisao 9.
+   */
+  await test('(16) pedido_item_id do pedido mas de outro material: 400 com literal propria, sem documento', async () => {
+    const matX = await novoMaterial();
+    const matY = await novoMaterial();
+    const pedido = await novoPedido([
+      { material_id: matX.id, codigo: matX.codigo, quantidade: 10 },
+      { material_id: matY.id, codigo: matY.codigo, quantidade: 10 },
+    ]);
+    const [linhaX, linhaY] = pedido.linhas;
+    const antes = await contarRecebimentos();
+
+    const forjado = await post({
+      pedido_compra_id: pedido.id,
+      itens: [{ material_id: matX.id, pedido_item_id: linhaY, quantidade: 5, quantidade_recebida: 5 }],
+    });
+    assert.strictEqual(forjado.status, 400, JSON.stringify(forjado.body));
+    assert.strictEqual(forjado.body.error,
+      `Item do pedido #${linhaY} não é do material ${matX.codigo}`);
+    // A assercao que mede o DANO: nao ha transacao, e recusar depois do INSERT deixaria o
+    // documento gravado. Antes do fix esta chamada devolvia 201 e creditava X somando em Y.
+    assert.strictEqual(await contarRecebimentos(), antes,
+      'a recusa tem de acontecer ANTES do INSERT do cabecalho');
+
+    // ── metade POSITIVA: o mesmo payload com o id CERTO entra, e grava a linha que ele declarou ─
+    const ok = await post({
+      pedido_compra_id: pedido.id,
+      itens: [{ material_id: matX.id, pedido_item_id: linhaX, quantidade: 5, quantidade_recebida: 5 }],
+    });
+    assert.strictEqual(ok.status, 201, JSON.stringify(ok.body));
+    const itens = await itensDo(ok.body.id);
+    assert.strictEqual(itens[0].pedido_item_id, linhaX);
+    assert.strictEqual(itens[0].material_id, matX.id);
+  });
+
+
   await close();
   console.log(`\n${passed} passou, ${failed} falhou`);
   process.exit(failed ? 1 : 0);

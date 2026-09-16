@@ -650,6 +650,27 @@ async function saldoDasLinhasDoPedido(db, pedidoId) {
 function resolverLinhaDoPedido(item, linhas) {
   if (item.pedido_item_id != null) {
     const daqui = linhas.find((l) => Number(l.id) === Number(item.pedido_item_id));
+    // ⚠️ (revisao final, F3) Pertencer ao pedido NAO basta: o material tem de ser o MESMO.
+    // Medido por sonda na revisao da branch: `{ material_id: X, pedido_item_id: <linha de Y> }`
+    // com o Y do MESMO pedido respondia 201, e o INSERT gravava o material X ao lado da linha de
+    // Y. O documento passava a mentir dos dois lados — a T3 somava 5 na linha de Y (o pedido
+    // dizia que chegou Y) e o estoque creditava 5 de X, com Y em 0 — e nenhuma porta pegava,
+    // porque a regua do saldo agrupa o payload pelo material DA LINHA RESOLVIDA e media 5 contra
+    // o saldo de Y.
+    // 400 e nao re-resolucao silenciosa: o payload afirmou DUAS coisas incompativeis, e escolher
+    // uma em silencio grava um documento que ninguem pediu. `item.material_id` ausente nao
+    // contradiz nada (a validacao da rota e quem exige o campo), entao so compara quando ele vem.
+    if (daqui && item.material_id != null
+      && Number(daqui.material_id) !== Number(item.material_id)) {
+      // O codigo que o operador reconhece, na MESMA convencao de `assertSaldoDoPedidoPermitido`:
+      // o do cadastro, senao o que o Compras digitou na linha, senao `#<id do material>`.
+      const doMaterial = linhas.find((l) => Number(l.material_id) === Number(item.material_id));
+      const codigo = (doMaterial && (doMaterial.material_codigo || doMaterial.codigo))
+        || `#${item.material_id}`;
+      throw Object.assign(new Error(
+        `Item do pedido #${item.pedido_item_id} não é do material ${codigo}`,
+      ), { status: 400 });
+    }
     if (daqui) return daqui;
   }
   const doMaterial = linhas.filter((l) => Number(l.material_id) === Number(item.material_id));
