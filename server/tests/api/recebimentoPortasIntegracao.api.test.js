@@ -61,7 +61,8 @@ const ENUM_INVALIDO = 'Dados inválidos — tipo_recebimento: '
 const nfDuplicada = (nf, numero) => `Nota fiscal ${nf} já lançada no recebimento ${numero} `
   + 'para este fornecedor';
 const semFlag = (recebida, esperada, itemId) => `Quantidade recebida (${recebida}) maior que a `
-  + `esperada (${esperada}) no item #${itemId} — marque a autorização de excedente para registrar`;
+  + `esperada (${esperada}) no item #${itemId} — a autorização de excedente é de Compras `
+  + 'ou do Administrador';
 const semPermissao = (perfil) => 'Autorizar recebimento acima do pedido exige a permissão '
   + `"autorizar_excedente" (seu perfil: ${perfil}).`;
 

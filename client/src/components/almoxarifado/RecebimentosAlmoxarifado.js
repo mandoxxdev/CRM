@@ -852,10 +852,12 @@ const RecebimentosAlmoxarifado = () => {
                   </label>
                 )}
                 {renderAcoes()}
-                {/* A recusa da conferência FICA na tela. As duas literais desta porta dizem o que
-                    fazer ("marque a autorização de excedente", "exige a permissão
-                    autorizar_excedente"), e num toast de cinco segundos elas não chegam a ser
-                    lidas — o operador fica com "não salvou" e nenhum motivo. */}
+                {/* A recusa da conferência FICA na tela. As duas literais desta porta dizem QUEM
+                    resolve ("a autorização de excedente é de Compras ou do Administrador", "exige
+                    a permissão autorizar_excedente"), e num toast de cinco segundos elas não
+                    chegam a ser lidas — o operador fica com "não salvou" e nenhum motivo.
+                    (Revisão final, F3: a literal do 400 mandava "marque a autorização de
+                    excedente" — um gesto impossível para o ALMOXARIFE, que não vê a caixa.) */}
                 {erroConferencia && (
                   <div className="almox-hint-banner" role="alert"
                     style={{ marginTop: 12, fontSize: '0.8rem', color: 'var(--gmp-danger)' }}>

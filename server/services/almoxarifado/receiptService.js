@@ -301,8 +301,12 @@ async function assertExcedentePermitido(db, user, recebimentoId, itens, autoriza
   const e = excedentes[0];
   if (!autorizado) {
     throw Object.assign(new Error(
+      // Revisão final (F3): a literal NOMEIA quem autoriza em vez de mandar marcar a caixa. Quem
+      // mais toma este 400 é o ALMOXARIFE, e ele NUNCA vê a caixa — ela é escondida por
+      // `pode('autorizar_excedente')`, e a ação é de [ADMINISTRADOR, COMPRAS]. A instrução antiga
+      // mandava um gesto impossível: o operador procurava um controle que não existe na tela dele.
       `Quantidade recebida (${e.recebida}) maior que a esperada (${e.esperada}) no item #${e.id}`
-      + ' — marque a autorização de excedente para registrar'), { status: 400 });
+      + ' — a autorização de excedente é de Compras ou do Administrador'), { status: 400 });
   }
   if (!can(user, 'autorizar_excedente')) {
     throw Object.assign(new Error(

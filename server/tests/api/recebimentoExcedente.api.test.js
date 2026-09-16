@@ -51,7 +51,8 @@ const COMPRAS = { id: 66, nome: 'Compras E36', role: 'usuario', perfil_almoxarif
 const GESTOR = { id: 67, nome: 'Gestor E36', role: 'usuario', perfil_almoxarifado: 'GESTOR' };
 
 const semFlag = (recebida, esperada, itemId) => `Quantidade recebida (${recebida}) maior que a `
-  + `esperada (${esperada}) no item #${itemId} — marque a autorização de excedente para registrar`;
+  + `esperada (${esperada}) no item #${itemId} — a autorização de excedente é de Compras `
+  + 'ou do Administrador';
 const semPermissao = (perfil) => 'Autorizar recebimento acima do pedido exige a permissão '
   + `"autorizar_excedente" (seu perfil: ${perfil}).`;
 
