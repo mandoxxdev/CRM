@@ -49,6 +49,15 @@ const RecebimentosAlmoxarifado = () => {
   const [pedidos, setPedidos] = useState([]);
   const [fornecedores, setFornecedores] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Etapa 35 (RN-04/RN-05): falha de carga NAO pode virar estado vazio. "Nenhum recebimento
+  // registrado" e indistinguivel de "nao ha recebimento", e o toast some em segundos — no teste
+  // ele e mockado, no navegador o operador ja saiu da tela. Mesma regua que a Etapa 29 aplicou em
+  // `HistoricoInspecoes.js:56`, achado da revisao adversarial de la.
+  const [erro, setErro] = useState(null);
+  // (RN-06) A lista de materiais alimenta a busca do modal de novo recebimento: falhando em
+  // silencio (`catch { /* ignore */ }`), o operador digita um material que existe e conclui que
+  // nao esta cadastrado.
+  const [erroMateriais, setErroMateriais] = useState(null);
   const [filtroStatus, setFiltroStatus] = useState('');
   const [filtroEtapa, setFiltroEtapa] = useState('');
   const [detalhe, setDetalhe] = useState(null);
@@ -71,14 +80,20 @@ const RecebimentosAlmoxarifado = () => {
 
   const loadRecebimentos = useCallback(async () => {
     setLoading(true);
+    setErro(null);
     try {
       const params = {};
       if (filtroStatus) params.status = filtroStatus;
       if (filtroEtapa) params.etapa = filtroEtapa;
       const res = await api.get('/almoxarifado/recebimentos', { params });
       setRecebimentos(res.data || []);
-    } catch {
-      toast.error('Erro ao carregar recebimentos');
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Erro ao carregar recebimentos';
+      toast.error(msg);
+      // Zerar a lista e marcar o erro andam juntos: sem o `setRecebimentos([])`, um refresh que
+      // falha deixaria as linhas velhas em memoria passando por frescas (RN-05).
+      setRecebimentos([]);
+      setErro(msg);
     } finally {
       setLoading(false);
     }
@@ -91,10 +106,13 @@ const RecebimentosAlmoxarifado = () => {
   }, [loadRecebimentos]);
 
   const loadMateriais = async () => {
+    setErroMateriais(null);
     try {
       const res = await api.get('/almoxarifado/materiais');
       setMateriais(res.data || []);
-    } catch { /* ignore */ }
+    } catch (err) {
+      setErroMateriais(err.response?.data?.error || 'Erro ao carregar materiais');
+    }
   };
 
   const loadAuxiliares = async () => {
@@ -105,7 +123,13 @@ const RecebimentosAlmoxarifado = () => {
       ]);
       setPedidos(pRes.data || []);
       setFornecedores(fRes.data || []);
-    } catch { /* ignore */ }
+    } catch {
+      // Tolerado de propósito (Etapa 35, decisão 5): pedidos de compra e fornecedores alimentam
+      // dois `<select>` OPCIONAIS, e os dois têm entrada manual ao lado — o recebimento pode ser
+      // registrado inteiro sem eles. Um terceiro estado de erro aqui pagaria o custo de uma
+      // superfície nova para uma falha que não bloqueia ninguém. O que era errado era o
+      // `/* ignore */` sem explicação, que fazia parecer esquecimento.
+    }
   };
 
   const abrirDetalhe = async (id) => {
@@ -406,7 +430,10 @@ const RecebimentosAlmoxarifado = () => {
         currentStep={currentStep}
         actions={
           <>
-            <button type="button" className="btn-almox-secondary" onClick={loadRecebimentos}>
+            {/* Etapa 35: o botão era só o ícone — sem texto e sem nome acessível, nenhum leitor
+                de tela o anunciava e nenhum teste conseguia selecioná-lo. Mesmo padrão do refresh
+                do detalhe de requisições (`RequisicoesList.js:864`). */}
+            <button type="button" className="btn-almox-secondary" title="Atualizar lista" onClick={loadRecebimentos}>
               <FiRefreshCw size={13} />
             </button>
             <button type="button" className="btn-almox-primary" onClick={() => setShowNovo(true)}>
@@ -442,7 +469,18 @@ const RecebimentosAlmoxarifado = () => {
 
       <div style={{ display: 'grid', gridTemplateColumns: detalhe ? '1fr 420px' : '1fr', gap: 20 }}>
         <div className="almox-table-container">
-          {loading ? <SkeletonTable rows={8} columns={6} /> : recebimentos.length === 0 ? (
+          {/* A ORDEM dos ramos é a regra, não estilo: com o ramo de `erro` DEPOIS do teste de
+              lista vazia, a rede caída volta a renderizar "Nenhum recebimento registrado" e o
+              conserto some. Molde: `HistoricoInspecoes.js:106-116`. */}
+          {loading ? <SkeletonTable rows={8} columns={6} /> : erro ? (
+            <div className="almox-empty">
+              <p>Não foi possível carregar os recebimentos.</p>
+              <p style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>{erro}</p>
+              <button type="button" className="btn-almox-secondary" onClick={loadRecebimentos}>
+                Tentar de novo
+              </button>
+            </div>
+          ) : recebimentos.length === 0 ? (
             <div className="almox-empty">
               <FiPackage size={40} style={{ opacity: 0.3, display: 'block', margin: '0 auto 12px' }} />
               <p>Nenhum recebimento registrado</p>
@@ -676,6 +714,14 @@ const RecebimentosAlmoxarifado = () => {
                 {form.tipo_recebimento === 'NOTA_FISCAL' && (
                   <div style={{ marginTop: 16 }}>
                     <label className="almox-label">Materiais recebidos</label>
+                    {erroMateriais && (
+                      <p style={{ fontSize: '0.8rem', color: 'var(--gmp-error)', margin: '0 0 8px' }}>
+                        Não foi possível carregar a lista de materiais.{' '}
+                        <button type="button" className="almox-link-btn" onClick={loadMateriais}>
+                          Tentar de novo
+                        </button>
+                      </p>
+                    )}
                     <div className="almox-search-wrapper" style={{ marginBottom: 8 }}>
                       <FiSearch className="almox-search-icon" />
                       <input className="almox-search-input" placeholder="Buscar material..."

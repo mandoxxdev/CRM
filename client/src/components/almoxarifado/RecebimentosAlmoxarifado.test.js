@@ -376,3 +376,92 @@ test('(g) refetch do detalhe por acao de workflow NAO desmonta o bloco nem repet
   expect(blocoAnexos()).toBe(antes);
   expect(chamadasAnexos()).toHaveLength(1);
 });
+
+/* ── (h) RN-04: rede caida NAO pode virar "Nenhum recebimento registrado" ────────────────────
+ * O `catch` de `:80-82` so dispara um toast — e o toast e MOCKADO aqui (`:42-44`), some em
+ * segundos no navegador e nao deixa rastro no DOM. Com `recebimentos` em `[]` (`:47`), a tela
+ * renderiza a frase de `:448` e o operador conclui que nao ha recebimento nenhum — e registra de
+ * novo um recebimento que ja existe.
+ * O fallback do mock NAO serve para este cenario: `/almoxarifado/recebimentos` esta mapeada em
+ * `:120` e RESOLVE. Tem de sobrescrever (molde `HistoricoInspecoes.test.js:211-216`).
+ */
+test('(h) a lista que NAO carregou mostra erro, nunca "Nenhum recebimento registrado"', async () => {
+  const original = api.get.getMockImplementation();
+  api.get.mockImplementation((url) => {
+    if (url === '/almoxarifado/recebimentos') {
+      return Promise.reject({ response: { data: { error: 'Sem acesso ao módulo' } } });
+    }
+    return original(url);
+  });
+  await renderizar();
+
+  // Metade POSITIVA: a tela montou (senao este cenario passaria com a tela vazia).
+  expect(container.textContent).toContain('Recebimentos NF');
+  // O que TEM de estar la:
+  expect(container.textContent).toContain('Não foi possível carregar os recebimentos.');
+  expect(container.textContent).toContain('Sem acesso ao módulo');
+  expect(container.textContent).toContain('Tentar de novo');
+  // E o que NAO pode estar — a frase que faz o operador concluir que a lista esta vazia:
+  expect(container.textContent).not.toContain('Nenhum recebimento registrado');
+
+  // O botao tem de FUNCIONAR, nao so existir: sem isto, um <button> sem `onClick` passa verde e a
+  // metade util do estado de erro fica sem prova. Molde: `HistoricoInspecoes.test.js:227-242`.
+  api.get.mockImplementation(original);
+  await clicar(botaoPorTexto('Tentar de novo'));
+  expect(linhas()).toHaveLength(RECEBIMENTOS.length);
+  expect(container.textContent).not.toContain('Não foi possível carregar os recebimentos.');
+});
+
+/* ── (i) RN-05: a lista OBSOLETA e o segundo caso, e o plano da 34 nao o nomeava ───────────────
+ * O `catch` nao zera `recebimentos`: um refresh que falha (botao `:409`, ou troca de filtro pela
+ * dep de `:85`) deixava as linhas antigas na tela sem nenhuma marca de que os dados sao velhos —
+ * pior que a lista vazia, porque parece fresco.
+ */
+test('(i) refresh que falha nao deixa a lista velha na tela', async () => {
+  await renderizar();
+  expect(linhas()).toHaveLength(RECEBIMENTOS.length);      // metade positiva: carregou mesmo
+
+  const original = api.get.getMockImplementation();
+  api.get.mockImplementation((url) => {
+    if (url === '/almoxarifado/recebimentos') {
+      return Promise.reject({ response: { data: { error: 'Timeout do servidor' } } });
+    }
+    return original(url);
+  });
+  // O botao de refresh do cabecalho (`:409`) e so um icone, sem texto nem nome acessivel — a
+  // Etapa 35 lhe deu `title="Atualizar lista"` no produto, que e o que torna este seletor
+  // possivel (e o botao, anunciavel por leitor de tela). Precedente:
+  // `RequisicoesList.js:864`, `title="Atualizar detalhe e saldos"`.
+  await clicar(container.querySelector('[title="Atualizar lista"]'));
+  // A ORDEM destas tres asserções é ela mesma um achado, medido no controle positivo desta task:
+  // `linhas()` VEM PRIMEIRO de propósito. O único jeito de a tabela velha voltar a renderizar é o
+  // par "`setErro` não acontece" + "`setRecebimentos([])` não acontece" — e com os `toContain` na
+  // frente, o Jest estoura neles e `linhas()` nunca chega a rodar. Era o que acontecia na ordem
+  // original: a régua que nomeia a RN-05 ("a lista obsoleta passando por fresca") ficava sem
+  // controle positivo nenhum, dominada pelas duas asserções anteriores. Com `linhas()` na frente,
+  // a sabotagem 2c derruba este cenário com `Received 3` — as três linhas velhas na tela.
+  expect(linhas()).toHaveLength(0);
+  expect(container.textContent).toContain('Não foi possível carregar os recebimentos.');
+  expect(container.textContent).toContain('Timeout do servidor');
+});
+
+/* ── (j) RN-06: o `catch` silencioso de `loadMateriais` (`:97`) ────────────────────────────────
+ * Ele alimenta a busca de material do modal "Novo Recebimento". Falhando em silencio, o operador
+ * digita o nome de um material que EXISTE e conclui que nao esta cadastrado. E a falha de um
+ * carregamento nao pode contaminar o outro: a lista continua resolvendo neste cenario.
+ */
+test('(j) falha ao carregar materiais aparece DENTRO do modal de novo recebimento', async () => {
+  const original = api.get.getMockImplementation();
+  api.get.mockImplementation((url) => {
+    if (url === '/almoxarifado/materiais') return Promise.reject(new Error('rede'));
+    return original(url);
+  });
+  await renderizar();
+  // Metade positiva dupla: a lista carregou e NAO esta em estado de erro.
+  expect(linhas()).toHaveLength(RECEBIMENTOS.length);
+  expect(container.textContent).not.toContain('Não foi possível carregar os recebimentos.');
+
+  await clicar(botaoPorTexto('Novo Recebimento'));
+  expect(container.querySelector('input.almox-search-input')).not.toBeNull();   // o modal montou
+  expect(container.textContent).toContain('Não foi possível carregar a lista de materiais.');
+});
