@@ -327,6 +327,77 @@ const COMPRAS = { id: 66, nome: 'Compras E37', role: 'usuario', perfil_almoxarif
       'recebida > pedida e RECEBIDO: o pedido excedido nao e pendencia');
   });
 
+  // ── (8) (fix 1) A LEITURA TEM DE MOSTRAR O NUMERO QUE A ESCRITA COMPARA ─────────────────────
+  /**
+   * Achado da revisao da T4 (Important): o `saldo_pendente` por LINHA pode PROMETER mais do que a
+   * porta aceita, porque a regua do `POST` (`assertSaldoDoPedidoPermitido`) e AGREGADA POR
+   * MATERIAL e soma o saldo das linhas SEM CLAMP:
+   *   linha A (material M, pedida 10, recebida 15 por excedente autorizado) -> saldo -5
+   *   linha B (material M, pedida 10, recebida  0)                          -> saldo  10
+   *   saldoMaterial = -5 + 10 = 5
+   * A rota mostrava B com `saldo_pendente: 10`, o operador digitava 10 e tomava 400 sem nenhum
+   * aviso antes. A decisao e expor TAMBEM `saldo_pendente_material` — o MESMO agregado da regua —,
+   * repetido em toda linha daquele material. A barreira NAO muda: quem decide continua sendo o
+   * backend, e o client passa a poder avisar antes (a T5 tem de limitar por este campo).
+   *
+   * A linha A NAO aparece na resposta, e isso e de proposito: o filtro da rota continua sendo
+   * `saldo_pendente > 0` e ela nao tem nada pendente DE SI (recebeu 5 a mais). Reabri-la
+   * contradiria o clamp (cenario (7)) e o contrato "pedido quitado -> 200 com []" — o que o
+   * operador precisa saber sobre ela e o efeito dela no agregado, e esse efeito chega pelo
+   * `saldo_pendente_material` da linha B.
+   */
+  await test('(8) duas linhas do MESMO material (A 10/15, B 10/0): B traz saldo 10 e saldo_material 5, e a porta recusa 10', async () => {
+    const mat = await novoMaterial();
+    const pedido = await novoPedido([
+      { material_id: mat.id, quantidade: 10, recebida: 15, codigo: 'LINHA-EXC' },
+      { material_id: mat.id, quantidade: 10, recebida: 0, codigo: 'LINHA-LIVRE' },
+    ], { tag: 'C8' });
+
+    const res = await itensDoPedido(pedido.id);
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(res.body.length, 1,
+      'a linha excedida (10/15) nao tem saldo PROPRIO e continua fora; o efeito dela no agregado '
+      + `chega pelo saldo_pendente_material da outra — veio ${
+        JSON.stringify(res.body.map((i) => i.codigo))}`);
+    const [b] = res.body;
+    assert.strictEqual(b.id, pedido.linhas[1]);
+    assert.strictEqual(b.saldo_pendente, 10, 'o saldo DA LINHA continua sendo 10, e e verdade');
+    assert.strictEqual(b.saldo_pendente_material, 5,
+      'o agregado POR MATERIAL e (10-15) + (10-0) = 5, sem clamp por linha: e EXATAMENTE o numero '
+      + 'que `assertSaldoDoPedidoPermitido` compara, e a leitura tem de mostrar o mesmo');
+
+    // A prova de que o numero e o MESMO da escrita, e nao um segundo calculo parecido: 10 (o
+    // saldo da linha) e recusado, 5 (o agregado) passa.
+    const acima = await request(app).post('/api/almoxarifado/recebimentos').send({
+      pedido_compra_id: pedido.id,
+      itens: [{ material_id: mat.id, pedido_item_id: b.id, quantidade: 10, quantidade_recebida: 10 }],
+    });
+    assert.strictEqual(acima.status, 400, JSON.stringify(acima.body));
+    assert.strictEqual(acima.body.error, `Quantidade recebida (10) maior que o saldo do pedido (5) `
+      + `para o material ${mat.codigo} — a autorização de excedente é de Compras ou do Administrador`,
+    'a porta fala em 5: prometer 10 na tela e mandar o operador digitar para tomar 400');
+
+    const noAgregado = await request(app).post('/api/almoxarifado/recebimentos').send({
+      pedido_compra_id: pedido.id,
+      itens: [{ material_id: mat.id, pedido_item_id: b.id, quantidade: 5, quantidade_recebida: 5 }],
+    });
+    assert.strictEqual(noAgregado.status, 201,
+      `o agregado exato tem de PASSAR: ${JSON.stringify(noAgregado.body)}`);
+
+    // Metade POSITIVA: no caso comum (uma linha por material) os dois campos sao iguais — o campo
+    // novo nao e um segundo numero para a tela escolher, e so DIVERGE quando o pedido tem duas
+    // linhas do mesmo material.
+    const simples = await novoPedido([{ material_id: mat.id, quantidade: 8, recebida: 3 }],
+      { tag: 'C8' });
+    const umaLinha = await itensDoPedido(simples.id);
+    assert.strictEqual(umaLinha.status, 200, JSON.stringify(umaLinha.body));
+    assert.strictEqual(umaLinha.body.length, 1);
+    assert.strictEqual(umaLinha.body[0].saldo_pendente, 5);
+    assert.strictEqual(umaLinha.body[0].saldo_pendente_material, 5,
+      'com uma linha por material os dois campos coincidem — divergir aqui seria o agregado '
+      + 'contando linha de outro pedido');
+  });
+
   // ── (6) (Fase 2) O FILTRO ANTES DO LIMIT ────────────────────────────────────────────────────
   /**
    * Ultimo de proposito: cria 50 pedidos e mexe na ordem global da rota, entao qualquer cenario

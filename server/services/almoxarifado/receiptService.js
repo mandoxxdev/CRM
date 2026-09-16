@@ -1462,6 +1462,12 @@ async function listarPedidosCompraAux(db, { search, pendentes } = {}) {
  * literal do `POST`. Pedido que existe e esta quitado devolve `[]` com 200 — nao e erro, e a
  * informacao de que nao ha o que receber.
  *
+ * Cada linha leva DOIS saldos, e os dois sao necessarios: `saldo_pendente` e o que falta NAQUELA
+ * linha, e `saldo_pendente_material` e o TETO que a porta aceita para aquele material (o agregado
+ * que `assertSaldoDoPedidoPermitido` compara). Eles so divergem quando o pedido tem duas linhas do
+ * mesmo material e uma delas recebeu a mais — e a divergencia era o furo: a tela prometia o saldo
+ * da linha e a porta recusava pelo agregado. A tela limita por `saldo_pendente_material`.
+ *
  * Quem filtra por saldo e ESTA funcao, e isso e contrato: o client renderiza o que vem e NAO
  * refiltra, senao passam a existir duas definicoes de "linha recebivel". O recorte por
  * `material_id` vem de `saldoDasLinhasDoPedido` -> `carregarItensPedidoCompra` (linha sem material
@@ -1476,6 +1482,22 @@ async function listarItensPedidoCompraAux(db, pedidoId) {
   if (!pedido) return null;
 
   const linhas = await saldoDasLinhasDoPedido(db, pedido.id);
+
+  // (fix 1 da T4, achado da revisao) O saldo AGREGADO POR MATERIAL, que e o numero que a ESCRITA
+  // compara: `assertSaldoDoPedidoPermitido` soma `l.saldo` das linhas do mesmo material
+  // (`doMaterial.reduce((s, l) => s + l.saldo, 0)`) e mede a recebida TOTAL contra ele.
+  //
+  // A soma e do saldo SEM CLAMP, de proposito, porque e assim que a regua soma: linha com
+  // `recebida > quantidade` (excedente autorizado) entra NEGATIVA e CONSOME o saldo das outras
+  // linhas do mesmo material. Sem este campo a rota prometia o saldo da linha (10) e a porta
+  // recusava com o agregado (5) — o operador digitava e tomava 400 sem aviso nenhum antes.
+  // O clamp final existe para nao devolver negativo quando o material todo esta estourado.
+  const saldoPorMaterial = new Map();
+  for (const linha of linhas) {
+    const chave = String(linha.material_id);
+    saldoPorMaterial.set(chave, (saldoPorMaterial.get(chave) || 0) + linha.saldo);
+  }
+
   return linhas
     .map((linha) => {
       const derivado = derivarRecebimentoDoPedido(linha.quantidade, linha.quantidade_recebida);
@@ -1492,6 +1514,10 @@ async function listarItensPedidoCompraAux(db, pedidoId) {
         quantidade: derivado.quantidade_pedida,
         quantidade_recebida: derivado.quantidade_recebida,
         saldo_pendente: derivado.saldo_pendente,
+        // O TETO que a porta aceita para este material, repetido em toda linha dele. Igual a
+        // `saldo_pendente` no caso comum (uma linha por material); menor quando outra linha do
+        // mesmo material ja recebeu a mais. O client tem de limitar por ESTE campo.
+        saldo_pendente_material: Math.max(0, saldoPorMaterial.get(String(linha.material_id))),
         valor_unitario: linha.valor_unitario,
       };
     })

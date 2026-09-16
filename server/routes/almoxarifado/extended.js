@@ -1119,6 +1119,13 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     } catch (e) { handleError(res, e); }
   });
 
+  // Resposta: `[{ id, material_id, material_nome, material_codigo, codigo, descricao, unidade,
+  //               quantidade, quantidade_recebida, saldo_pendente, saldo_pendente_material,
+  //               valor_unitario }]`, so linhas com `saldo_pendente > 0`. `id` e o id da LINHA do
+  // pedido. ⚠️ O client limita a digitacao por `saldo_pendente_material` (o teto que a porta
+  // aceita), NAO por `saldo_pendente` (o que falta naquela linha): eles divergem quando o pedido
+  // tem duas linhas do mesmo material e uma recebeu a mais, e foi esse o furo que o fix 1 fechou.
+  //
   // Etapa 37 (RN-24): as LINHAS do pedido com saldo, que a tela de recebimento carrega ao escolher
   // o pedido no `<select>` — ate aqui ela limpava `itens: []` e o recebimento PARCIAL era
   // impossivel pela tela, embora o manual 14.1 prometesse os itens "ja preenchidos".
