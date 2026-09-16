@@ -315,3 +315,64 @@ test('(f) depois de registrar, o painel do recem-criado ja traz o bloco de anexo
   expect(chamadasAnexos()).toHaveLength(1);
   expect(chamadasAnexos()[0][1].params).toEqual({ entidade: 'recebimento', entidade_id: 91 });
 });
+
+/* ── (g) F2 da revisão da branch: o refetch do detalhe não pode remontar o bloco ───────────────
+ * `workflow` (`:145-158`), `salvarFiscal` (`:195`) e `processarNota` (`:212`) terminam em
+ * `abrirDetalhe(detalhe.id)`, que começa com `setLoadingDetalhe(true)` (`:112`). Com o bloco
+ * DENTRO do ternário `{loadingDetalhe ? … : corpo}` (`:496`), cada uma dessas ações desmontava o
+ * corpo do painel: o `AnexosDocumento` perdia o arquivo já escolhido no input (estado local,
+ * `AnexosDocumento.js:110-112`) e remontava vazio, com um SEGUNDO GET. O usuário que escolheu a
+ * NF digitalizada, clicou em "Finalizar Conferência" e só então em "Anexar" recebia
+ * "Arquivo é obrigatório", sem nada na tela explicando o porquê.
+ *
+ * A régua é IDENTIDADE DE NÓ (`toBe`), não presença: presença não distingue "continua montado"
+ * de "remontou igual". E a contagem de `/almoxarifado/anexos` continua 1 — o `entidade_id` não
+ * mudou, então não existe motivo para reconsultar.
+ *
+ * Por que o GET do refetch é DEFERIDO à mão aqui:
+ * a primeira versão deste cenário só clicava e media no fim — e passava COM O BLOCO NO LUGAR
+ * ERRADO (medido). A razão é o `act`: com o refetch resolvendo dentro do mesmo `act`, o React
+ * coalesce o commit intermediário e o estado `loadingDetalhe === true` nunca chega ao DOM — ou
+ * seja, o teste nunca via a janela em que o navegador de verdade desmonta o corpo do painel.
+ * Segurando a resposta do detalhe, a janela fica observável e o cenário mede o que o usuário
+ * vive: o bloco tem de continuar montado ENQUANTO o detalhe recarrega.
+ */
+test('(g) refetch do detalhe por acao de workflow NAO desmonta o bloco nem repete a consulta', async () => {
+  await renderizar();
+  await clicar(linhaDe('REC-2026-058'));
+
+  const antes = blocoAnexos();
+  expect(antes).not.toBeNull();
+  expect(chamadasAnexos()).toHaveLength(1);
+
+  // Segura só o SEGUNDO GET do detalhe 58; todo o resto segue pela implementação original.
+  const original = api.get.getMockImplementation();
+  let liberarDetalhe;
+  api.get.mockImplementation((url) => {
+    if (url === '/almoxarifado/recebimentos/58') {
+      return new Promise((resolve) => { liberarDetalhe = () => resolve({ data: DETALHES[58] }); });
+    }
+    return original(url);
+  });
+
+  // REC-058 está em EM_CONFERENCIA: a ação disponível é "Finalizar Conferência" (`:365-370`).
+  await clicar(botaoPorTexto('Finalizar Conferência'));
+
+  // Ancora: a ação e o refetch REALMENTE aconteceram — senão o resto passaria por não ter havido
+  // nada para desmontar.
+  expect(api.post).toHaveBeenCalledWith('/almoxarifado/recebimentos/58/workflow',
+    { acao: 'finalizar_conferencia' });
+  expect(chamadasDetalhe(58)).toHaveLength(2);
+  expect(liberarDetalhe).toBeInstanceOf(Function);
+
+  // EM VOO, com `loadingDetalhe === true`: é aqui que o corpo do painel desmontava e levava o
+  // arquivo já escolhido no input embora. O bloco tem de ser o MESMO nó.
+  expect(painel().querySelector('.almox-loading')).not.toBeNull();
+  expect(blocoAnexos()).toBe(antes);
+
+  // E depois que o detalhe chega, continua o mesmo nó, sem segunda consulta de anexos.
+  await act(async () => { liberarDetalhe(); });
+  await esperarEfeitos();
+  expect(blocoAnexos()).toBe(antes);
+  expect(chamadasAnexos()).toHaveLength(1);
+});

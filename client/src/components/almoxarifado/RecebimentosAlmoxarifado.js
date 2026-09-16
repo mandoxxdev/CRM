@@ -582,21 +582,31 @@ const RecebimentosAlmoxarifado = () => {
                   </div>
                 )}
 
-                {/* Etapa 34 — anexos do recebimento (NF digitalizada, certificado, boleto).
-                    INLINE, no fim do painel: o painel é o único lugar do client onde o `id` do
-                    recebimento existe, e é onde quem acabou de registrar cai
-                    (`handleCriar` → `abrirDetalhe(res.data.id)`), com a nota fiscal na mão.
-                    `detalhe.id` e NÃO o id da linha clicada: o bloco lê o REGISTRO CARREGADO —
-                    trocar de linha troca o `entidade_id`, e `recebimentos[0].id` mostraria os
-                    anexos de outro recebimento sem erro nenhum na tela.
-                    Sem gate novo: quem vê o recebimento vê os anexos dele; anexar/remover
-                    continua decidido pelo backend (requirePermission), com a UI barrando antes
-                    do formulário pelo próprio hook do componente. */}
-                <div style={{ marginTop: 16 }}>
-                  <AnexosDocumento entidade="recebimento" entidadeId={detalhe.id} titulo="Anexos" />
-                </div>
               </div>
             )}
+
+            {/* Etapa 34 — anexos do recebimento (NF digitalizada, certificado, boleto).
+                INLINE, no fim do painel: o painel é o único lugar do client onde o `id` do
+                recebimento existe, e é onde quem acabou de registrar cai
+                (`handleCriar` → `abrirDetalhe(res.data.id)`), com a nota fiscal na mão.
+                FORA do ternário de `loadingDetalhe`, de propósito (achado F2 da revisão da
+                branch): o bloco guarda estado LOCAL do usuário — o arquivo escolhido no input,
+                o tipo e a descrição (`AnexosDocumento.js:110-112`) — e `workflow` (`:151`),
+                `salvarFiscal` (`:195`) e `processarNota` (`:212`) recarregam o detalhe com
+                `abrirDetalhe(detalhe.id)`, que começa em `setLoadingDetalhe(true)`. Dentro do
+                ternário, cada uma dessas ações desmontava o corpo e jogava fora o arquivo já
+                escolhido, com um segundo GET de anexos de brinde; "Anexar" respondia
+                "Arquivo é obrigatório" sem nada na tela explicando. Aqui fora o `id` não muda
+                durante o refetch (`abrirDetalhe` nunca zera `detalhe`), então o bloco não remonta.
+                `detalhe.id` e NÃO o id da linha clicada: o bloco lê o REGISTRO CARREGADO —
+                trocar de linha troca o `entidade_id`, e `recebimentos[0].id` mostraria os
+                anexos de outro recebimento sem erro nenhum na tela.
+                Sem gate novo: quem vê o recebimento vê os anexos dele; anexar/remover
+                continua decidido pelo backend (requirePermission), com a UI barrando antes
+                do formulário pelo próprio hook do componente. */}
+            <div style={{ padding: '0 20px 20px' }}>
+              <AnexosDocumento entidade="recebimento" entidadeId={detalhe.id} titulo="Anexos" />
+            </div>
           </div>
         )}
       </div>

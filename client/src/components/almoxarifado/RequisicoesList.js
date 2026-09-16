@@ -1031,28 +1031,6 @@ const RequisicoesList = () => {
                   </div>
                 )}
 
-                {/* Etapa 34 — anexos da requisição (desenho, documento). Mesmo molde dos dois
-                    blocos aditivos acima (Separação, Assinaturas de entrega): leitura junto da
-                    requisição.
-                    `warehouseMode` NÃO é zelo (achado F1 da revisão da branch): esta MESMA tela
-                    roda em `/comercial/requisicoes-material`, `/frota/…`, `/compras/…`,
-                    `/financeiro/…`, `/fabrica/…` e `/engenharia/…` (`App.js` →
-                    `RequisicoesMaterialPages.js`), onde `apiPrefix` é `/requisicoes-material` —
-                    servido SEM a permissão do módulo almoxarifado. Sem o gate, abrir o painel
-                    ali disparava `GET /almoxarifado/anexos`, que está atrás de
-                    `checkModulePermission('almoxarifado')`: 403 "Acesso negado ao módulo" em
-                    vermelho dentro do painel, formulário de upload morto (o hook de permissões
-                    falha ABERTO de propósito) e uma linha de auditoria de acesso negado por
-                    abertura de painel. Todo o resto deste painel já era gateado assim.
-                    `detalhe.id` e NÃO `selectedId`: o bloco lê o registro carregado, não a URL.
-                    O cenário em que a fixture devolve `id: 555` para
-                    `/almoxarifado/requisicoes/55` é o que trava a distinção. */}
-                {warehouseMode && (
-                  <div style={{ marginTop: 16 }}>
-                    <AnexosDocumento entidade="requisicao" entidadeId={detalhe.id} titulo="Anexos" />
-                  </div>
-                )}
-
                 {/* Ações — aprovação de valor */}
                 {warehouseMode && detalhe.status === 'AGUARDANDO_APROVACAO_VALOR' && (souAprovadorValor || isAdmin) && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 20, flexWrap: 'wrap' }}>
@@ -1300,6 +1278,36 @@ const RequisicoesList = () => {
                     <FiTrash2 size={14} /> Excluir Requisição
                   </button>
                 )}
+              </div>
+            )}
+
+            {/* Etapa 34 — anexos da requisição (desenho, documento). Mesmo molde dos blocos
+                aditivos que leem junto da requisição (Separação, Assinaturas de entrega).
+                FORA do ternário de `loadingDetalhe`, de propósito (achado F2 da revisão da
+                branch), e é a única coisa deste painel que precisa ficar fora: o bloco guarda
+                estado LOCAL do usuário — o arquivo escolhido no input, o tipo e a descrição
+                (`AnexosDocumento.js:110-112`) —, e o corpo do painel desmonta a cada refetch do
+                detalhe (`:270-284` refaz a cada `focus` da janela; trocar filtro também). O
+                cenário real: o usuário escolhe `nf.pdf` no diálogo do SO, fechar o diálogo
+                devolve o foco à janela, o corpo desmonta e "Anexar" responde
+                "Arquivo é obrigatório" — com um segundo GET de anexos de brinde. Aqui fora o
+                `id` não muda durante o refetch (`abrirDetalhe` só zera `detalhe` quando o id
+                MUDA, `:232-234`), então o bloco nunca remonta.
+                Ficar depois do corpo também o põe ABAIXO dos botões de ação, que era um achado
+                MENOR separado da mesma revisão (Recebimentos já estava nessa ordem).
+                `warehouseMode` (achado F1): esta MESMA tela roda em
+                `/comercial/requisicoes-material`, `/frota/…`, `/compras/…`, `/financeiro/…`,
+                `/fabrica/…` e `/engenharia/…` (`App.js` → `RequisicoesMaterialPages.js`), onde
+                `apiPrefix` é `/requisicoes-material` — servido SEM a permissão do módulo
+                almoxarifado, e `GET /almoxarifado/anexos` está atrás de
+                `checkModulePermission('almoxarifado')`: daria 403 em vermelho dentro do painel,
+                formulário de upload morto (o hook de permissões falha ABERTO de propósito) e uma
+                linha de auditoria por abertura de painel.
+                `detalhe.id` e NÃO `selectedId`: o bloco lê o registro carregado, não a URL — e
+                aqui fora o `{detalhe && …}` é o que garante que `detalhe.id` existe. */}
+            {warehouseMode && detalhe && (
+              <div style={{ padding: '0 20px 20px' }}>
+                <AnexosDocumento entidade="requisicao" entidadeId={detalhe.id} titulo="Anexos" />
               </div>
             )}
           </div>

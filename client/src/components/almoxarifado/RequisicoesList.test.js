@@ -543,9 +543,11 @@ describe('Etapa 34: anexos da requisição no painel de detalhe', () => {
     // neste caminho. O que este cenário trava é a RELAÇÃO (uma consulta de anexos por carga do
     // detalhe, nunca duas por montagem), e não o número solto; nos dois cenários de deep-link
     // acima, com uma carga só, o contador é exatamente 1.
-    const cargasDoDetalhe = api.get.mock.calls.filter(([u]) => u === '/almoxarifado/requisicoes/55');
-    expect(api.get.mock.calls.filter(([u]) => u === '/almoxarifado/anexos'))
-      .toHaveLength(cargasDoDetalhe.length);
+    // Com o bloco FORA do ternário de `loadingDetalhe` (achado F2), o segundo passe não desmonta
+    // mais o corpo do painel: `abrirDetalhe` só zera `detalhe` quando o id MUDA
+    // (`RequisicoesList.js:232-234`), então o bloco permanece montado e a contagem estrita vale
+    // aqui também — era 2 (uma por carga do detalhe) antes do fix.
+    expect(api.get.mock.calls.filter(([u]) => u === '/almoxarifado/anexos')).toHaveLength(1);
   });
 
   // ── F1 da revisão da branch: o gate de `warehouseMode` ──────────────────────────────────────
@@ -572,4 +574,45 @@ describe('Etapa 34: anexos da requisição no painel de detalhe', () => {
     expect(api.get).not.toHaveBeenCalledWith('/almoxarifado/anexos', expect.anything());
   });
 
+  // ── F2 da revisão da branch: o bloco não pode remontar a cada refetch do detalhe ────────────
+  // Cenário do revisor: o usuário abre a REQ-055, clica no input de arquivo e escolhe `nf.pdf`;
+  // ao fechar o diálogo do SO o foco volta para a janela → `refetchDetalhe` (`:270-284`) →
+  // `setLoadingDetalhe(true)` → o corpo do painel desmonta → o `AnexosDocumento` perde o arquivo
+  // escolhido (estado local, `AnexosDocumento.js:110-112`) e remonta vazio, com um SEGUNDO GET.
+  // "Anexar" então responde "Arquivo é obrigatório", sem nada na tela explicando o porquê.
+  test('F2: refetch do detalhe por foco da janela mantém o MESMO nó do bloco e não repete a consulta', async () => {
+    detalheDoBanco = baseRequisicao('APROVADO');
+    await renderizar();
+
+    const antes = blocoDeAnexos();
+    expect(antes).not.toBeNull();
+    expect(chamadasDeAnexos()).toHaveLength(1);
+    const cargasAntes = api.get.mock.calls.filter(([u]) => u === '/almoxarifado/requisicoes/55').length;
+
+    await act(async () => { window.dispatchEvent(new Event('focus')); });
+
+    // Ancora: o refetch REALMENTE aconteceu (senão as duas asserções abaixo provariam nada).
+    expect(api.get.mock.calls.filter(([u]) => u === '/almoxarifado/requisicoes/55').length)
+      .toBe(cargasAntes + 1);
+    // Identidade de nó, não presença: é o que distingue "continua montado" de "remontou igual".
+    expect(blocoDeAnexos()).toBe(antes);
+    expect(chamadasDeAnexos()).toHaveLength(1);
+  });
+
+  test('F2 (filtro): trocar um filtro refaz o detalhe sem remontar o bloco', async () => {
+    detalheDoBanco = baseRequisicao('APROVADO');
+    await renderizar();
+    const antes = blocoDeAnexos();
+    expect(antes).not.toBeNull();
+
+    // `filtroMinha` → `syncSearchParams` → efeito de deep-link → `abrirDetalhe(55, force)`.
+    const checkMinha = [...container.querySelectorAll('input[type="checkbox"]')][0];
+    expect(checkMinha).toBeTruthy();
+    await act(async () => { checkMinha.click(); });
+
+    expect(api.get.mock.calls.filter(([u]) => u === '/almoxarifado/requisicoes/55').length)
+      .toBeGreaterThan(1);
+    expect(blocoDeAnexos()).toBe(antes);
+    expect(chamadasDeAnexos()).toHaveLength(1);
+  });
 });
