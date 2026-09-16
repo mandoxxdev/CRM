@@ -102,6 +102,18 @@ async function renderizar() {
   });
 }
 
+// Sem `?id=` na URL: a lista abre sem painel de detalhe — é o estado que prova a metade
+// negativa da RN-02 da Etapa 34 (sem documento aberto, nenhuma consulta de anexos).
+async function renderizarSemDetalhe() {
+  await act(async () => {
+    root.render(
+      <MemoryRouter initialEntries={['/almoxarifado/requisicoes']}>
+        <RequisicoesList />
+      </MemoryRouter>
+    );
+  });
+}
+
 const botaoPorTexto = (texto) => [...container.querySelectorAll('button')]
   .find((b) => b.textContent.trim().includes(texto));
 
@@ -460,5 +472,65 @@ describe('Etapa 28: rodadas de separação e segunda conferência', () => {
     await renderizar();
     expect(container.textContent).toContain('REQ-055');
     expect(botaoPorTexto('Liberar para Retirada').disabled).toBe(false);
+  });
+});
+
+// ─── Etapa 34: anexos do documento no painel de detalhe da requisição ───────────────────────
+//
+// O bloco `AnexosDocumento` (Etapa 32) entra INLINE aqui, no mesmo molde dos dois blocos
+// aditivos que já leem junto da requisição (Separação, Assinaturas de entrega): sem gate novo,
+// sem modal. Mock só na fronteira HTTP — o `api.get` do fixture cai no fallback `{ data: [] }`
+// para `/almoxarifado/anexos`, então o cenário que só afirmasse "renderiza" ficaria verde COM E
+// SEM o bloco. A régua destes cenários é presença + `params`, não ausência de erro.
+describe('Etapa 34: anexos da requisição no painel de detalhe', () => {
+  const chamadasDeAnexos = () => api.get.mock.calls.filter(([url]) => url === '/almoxarifado/anexos');
+  const blocoDeAnexos = () => container.querySelector('[data-testid="anexos-documento"]');
+
+  test('o painel de detalhe mostra os anexos DA REQUISIÇÃO aberta', async () => {
+    detalheDoBanco = baseRequisicao('APROVADO');
+    await renderizar();
+    expect(blocoDeAnexos()).not.toBeNull();
+    // `entidade` errada é o defeito mais barato de cometer (o componente é genérico para seis
+    // entidades) e o mais invisível: com a chave trocada a tela lista os anexos de OUTRO
+    // registro sem nenhum sintoma visual.
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/anexos',
+      { params: { entidade: 'requisicao', entidade_id: 55 } });
+    expect(api.get.mock.calls.filter(([u]) => u === '/almoxarifado/anexos')).toHaveLength(1);
+  });
+
+  test('o bloco lê o id do DETALHE CARREGADO, não o da URL', async () => {
+    // Divergência forçada na fixture (produção não muda): a URL pede a requisição 55 e o
+    // servidor responde `id: 555`. Com `entidadeId={detalhe.id}` fica verde; com
+    // `entidadeId={selectedId}` (55) fica vermelho. É o que trava a distinção em vez de
+    // deixá-la como comentário.
+    detalheDoBanco = { ...baseRequisicao('APROVADO'), id: 555 };
+    await renderizar();
+    expect(blocoDeAnexos()).not.toBeNull();
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/anexos',
+      { params: { entidade: 'requisicao', entidade_id: 555 } });
+    expect(api.get.mock.calls.filter(([u]) => u === '/almoxarifado/anexos')).toHaveLength(1);
+  });
+
+  test('RN-02: sem detalhe aberto não consulta anexos; abrir a requisição consulta', async () => {
+    detalheDoBanco = baseRequisicao('APROVADO');
+    await renderizarSemDetalhe();
+    // Metade negativa: a lista inteira renderizada, nenhum painel — nenhuma consulta.
+    expect(blocoDeAnexos()).toBeNull();
+    expect(chamadasDeAnexos()).toHaveLength(0);
+    // Metade positiva: o clique na linha abre o detalhe e só então nasce o bloco.
+    await act(async () => { container.querySelector('tbody tr').click(); });
+    expect(blocoDeAnexos()).not.toBeNull();
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/anexos',
+      { params: { entidade: 'requisicao', entidade_id: 55 } });
+    // Aqui o contador NÃO é 1, e a razão é anterior à Etapa 34: abrir pelo CLIQUE roda
+    // `abrirDetalhe` duas vezes — o clique e, depois, o `syncSearchParams` que reescreve `?id=`
+    // e reacende o efeito de deep-link —, e o segundo passe volta ao estado "Carregando...",
+    // que desmonta e remonta o corpo do painel. Medido: 2 GETs de `/almoxarifado/requisicoes/55`
+    // neste caminho. O que este cenário trava é a RELAÇÃO (uma consulta de anexos por carga do
+    // detalhe, nunca duas por montagem), e não o número solto; nos dois cenários de deep-link
+    // acima, com uma carga só, o contador é exatamente 1.
+    const cargasDoDetalhe = api.get.mock.calls.filter(([u]) => u === '/almoxarifado/requisicoes/55');
+    expect(api.get.mock.calls.filter(([u]) => u === '/almoxarifado/anexos'))
+      .toHaveLength(cargasDoDetalhe.length);
   });
 });

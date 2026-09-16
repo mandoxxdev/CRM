@@ -12,6 +12,7 @@ import { useRequisicoesMaterialContext } from './RequisicoesMaterialContext';
 import { TIPO_REQUISICAO_LABELS } from './requisicaoLabels';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import AssinaturaCanvas from './AssinaturaCanvas';
+import AnexosDocumento from './AnexosDocumento';
 import {
   FiPlus, FiRefreshCw, FiEye, FiCheck, FiX, FiPackage,
   FiAlertTriangle, FiClock, FiTruck, FiCheckCircle, FiFilter, FiMap, FiTrash2, FiDollarSign,
@@ -1029,6 +1030,18 @@ const RequisicoesList = () => {
                     ))}
                   </div>
                 )}
+
+                {/* Etapa 34 — anexos da requisição (desenho, documento). Mesmo molde dos dois
+                    blocos aditivos acima (Separação, Assinaturas de entrega): leitura junto da
+                    requisição, sem gate novo.
+                    `detalhe.id` e NÃO `selectedId`: o bloco lê o registro carregado, não a URL.
+                    É higiene, não defeito evitado — aqui dentro `detalhe` nunca é null (este
+                    ramo é o `else` de `loadingDetalhe || !detalhe`) e o `catch` de `abrirDetalhe`
+                    zera os dois juntos. O cenário em que a fixture devolve `id: 555` para
+                    `/almoxarifado/requisicoes/55` é o que trava a distinção. */}
+                <div style={{ marginTop: 16 }}>
+                  <AnexosDocumento entidade="requisicao" entidadeId={detalhe.id} titulo="Anexos" />
+                </div>
 
                 {/* Ações — aprovação de valor */}
                 {warehouseMode && detalhe.status === 'AGUARDANDO_APROVACAO_VALOR' && (souAprovadorValor || isAdmin) && (
