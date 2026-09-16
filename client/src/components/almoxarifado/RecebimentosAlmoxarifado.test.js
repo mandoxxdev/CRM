@@ -144,6 +144,66 @@ const MATERIAIS = [
   { id: 9, codigo: 'ALM-0100', nome: 'Parafuso M8', unidade: 'PC', controle_serie: 0 },
 ];
 
+// Etapa 37 (T5, RN-26): a fixture do PEDIDO DE COMPRA, e ela tem de entrar nas DUAS URLs — a da
+// lista (que alimenta o `<select>`) e a de itens. Mockar só a de itens deixaria o `<select>` sem
+// opção nenhuma, o `change` nunca dispararia e os três cenários passariam por VACUIDADE (era o
+// estado do `beforeEach` até aqui: `data: []`).
+// Ids `312`/`313` e não `1` nem o primeiro de outra fixture: os recebimentos já usam 41/58/77/91,
+// e um id repetido faria a leitura do teste não distinguir pedido de recebimento.
+const PEDIDOS = [
+  {
+    id: 312, numero: 'PC-2026-312', fornecedor_nome: 'Aços Vale Ltda',
+    fornecedor_cnpj: '11.111.111/0001-11', status: 'aprovado', valor_total: 350,
+    quantidade_pedida: 10, quantidade_recebida: 0, saldo_pendente: 10,
+    situacao_recebimento: 'ABERTO',
+  },
+  // O pedido QUITADO continua na lista de propósito: `?pendentes=1` filtra no SERVIDOR, e a lista
+  // do modal foi carregada na montagem da tela — entre a carga e o clique do operador o pedido
+  // pode ter sido completado por outro recebimento. A tela tem de sobreviver a isso dizendo o que
+  // houve, e é essa a metade do cenário (w).
+  {
+    id: 313, numero: 'PC-2026-313', fornecedor_nome: 'Parafusos Sul',
+    fornecedor_cnpj: '22.222.222/0001-22', status: 'aprovado', valor_total: 900,
+    quantidade_pedida: 40, quantidade_recebida: 40, saldo_pendente: 0,
+    situacao_recebimento: 'RECEBIDO',
+  },
+  // O pedido do fix 1 da T4: DUAS linhas do mesmo material, uma delas recebida a mais (excedente
+  // autorizado). O saldo da LINHA que sobrou é 10, mas o teto que a porta aceita para o material é
+  // 5 — porque a linha estourada entra NEGATIVA no agregado.
+  {
+    id: 314, numero: 'PC-2026-314', fornecedor_nome: 'Aços Vale Ltda',
+    fornecedor_cnpj: '11.111.111/0001-11', status: 'aprovado', valor_total: 700,
+    quantidade_pedida: 20, quantidade_recebida: 15, saldo_pendente: 5,
+    situacao_recebimento: 'PARCIAL',
+  },
+];
+
+// A resposta de `GET /recebimentos-aux/pedidos-compra/:id/itens` (contrato congelado na T4 +
+// fix 1): `id` é o id da LINHA do pedido (`itens_pedido_compra.id`), que é o `pedido_item_id` que
+// o client devolve no POST; só saem linhas com `saldo_pendente > 0` (quem filtra é a ROTA); e
+// `saldo_pendente_material` é o TETO que a porta aceita para aquele material.
+const ITENS_PEDIDO = {
+  312: [{
+    id: 9312, material_id: 9, material_nome: 'Parafuso M8', material_codigo: 'ALM-0100',
+    codigo: 'ALM-0100', descricao: 'Parafuso M8 zincado', unidade: 'PC',
+    quantidade: 10, quantidade_recebida: 0, saldo_pendente: 10,
+    saldo_pendente_material: 10, valor_unitario: 3.5,
+  }],
+  // Pedido quitado: 200 com `[]`, que NÃO é erro — é a informação de que não há o que receber.
+  313: [],
+  // Fix 1 da T4: a linha A (10 pedidos, 15 recebidos) NÃO volta — a rota só devolve linha com
+  // `saldo_pendente > 0`. Volta a B, com `saldo_pendente: 10` (o que falta NELA) e
+  // `saldo_pendente_material: 5` (o teto que `assertSaldoDoPedidoPermitido` compara, porque a
+  // linha A entra NEGATIVA no agregado do material). Os dois números divergem aqui de propósito:
+  // é o único jeito de uma asserção distinguir qual deles a tela usou.
+  314: [{
+    id: 9314, material_id: 9, material_nome: 'Parafuso M8', material_codigo: 'ALM-0100',
+    codigo: 'ALM-0100', descricao: 'Parafuso M8 zincado', unidade: 'PC',
+    quantidade: 10, quantidade_recebida: 0, saldo_pendente: 10,
+    saldo_pendente_material: 5, valor_unitario: 3.5,
+  }],
+};
+
 let container; let root; let recebimentosDoBanco;
 
 beforeEach(() => {
@@ -160,7 +220,16 @@ beforeEach(() => {
         : Promise.reject(new Error(`Recebimento ${id} fora da fixture`));
     }
     if (url === '/almoxarifado/materiais') return Promise.resolve({ data: MATERIAIS });
-    if (url === '/almoxarifado/recebimentos-aux/pedidos-compra') return Promise.resolve({ data: [] });
+    if (url === '/almoxarifado/recebimentos-aux/pedidos-compra') return Promise.resolve({ data: PEDIDOS });
+    // Etapa 37 (T5): a rota de itens do pedido. Igualdade ANTES da regex (a linha de cima é
+    // PREFIXO desta), e a URL desconhecida continua REJEITANDO — sem esta linha os cenários do
+    // pedido mediriam o `catch` da tela, não o bloco de itens.
+    if (/^\/almoxarifado\/recebimentos-aux\/pedidos-compra\/\d+\/itens$/.test(url)) {
+      const id = Number(url.split('/')[4]);
+      return ITENS_PEDIDO[id]
+        ? Promise.resolve({ data: ITENS_PEDIDO[id] })
+        : Promise.reject(new Error(`Pedido ${id} fora da fixture`));
+    }
     if (url === '/almoxarifado/recebimentos-aux/fornecedores') return Promise.resolve({ data: [] });
     // Etapa 34: a rota que o bloco de anexos consulta ao montar dentro do painel.
     if (url === '/almoxarifado/anexos') return Promise.resolve({ data: [] });
@@ -223,6 +292,54 @@ const caixaExcedente = () => [...(painel()?.querySelectorAll('label') || [])]
   ?.querySelector('input[type="checkbox"]');
 const chamadasConferir = (id) => api.put.mock.calls
   .filter(([url]) => url === `/almoxarifado/recebimentos/${id}/conferir`);
+
+// ── Etapa 37 (T5): o modal de NOVO recebimento ────────────────────────────────────────────────
+// `.almox-modal` e não `container` inteiro: o texto da LISTA e o do painel também estão no
+// container, e uma asserção de literal medida no container passaria por achar a frase fora do
+// modal. Só um modal fica aberto por vez nesta tela.
+const modalNovo = () => container.querySelector('.almox-modal');
+// Referência por LABEL e não por posição: a ordem dos `<select>` do modal muda a cada etapa.
+const selectPorLabel = (texto) => [...container.querySelectorAll('.almox-field')]
+  .find((d) => d.querySelector('label')?.textContent.includes(texto))
+  ?.querySelector('select');
+// `data-testid` com o `pedido_item_id` (9312, nem `1` nem o primeiro de outra fixture): duas
+// linhas do MESMO material são caso legítimo do pedido, então a chave da linha não pode ser o
+// material.
+const inputQtdPedido = (pedidoItemId) => container
+  .querySelector(`[data-testid="qtd-pedido-${pedidoItemId}"]`);
+const caixaExcedenteModal = () => [...(modalNovo()?.querySelectorAll('label') || [])]
+  .find((l) => l.textContent.includes('Autorizo o recebimento acima do pedido'))
+  ?.querySelector('input[type="checkbox"]');
+const chamadasItensPedido = (id) => api.get.mock.calls
+  .filter(([url]) => url === `/almoxarifado/recebimentos-aux/pedidos-compra/${id}/itens`);
+const chamadasCriar = () => api.post.mock.calls
+  .filter(([url]) => url === '/almoxarifado/recebimentos');
+// `<select>` controlado do React: mesmo motivo do helper `digitar` — setar `.value` direto não
+// dispara o `onChange`; o React ouve o evento `change` no select.
+async function selecionar(select, valor) {
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
+  await act(async () => {
+    setter.call(select, valor);
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await esperarEfeitos();
+}
+async function submeterModal() {
+  await act(async () => {
+    modalNovo().querySelector('form')
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  });
+  await esperarEfeitos();
+}
+// O gesto completo até o bloco de itens: abrir o modal, trocar a forma de recebimento e escolher
+// o pedido. Devolve o `<select>` de pedidos, que os cenários reusam para TROCAR de pedido.
+async function escolherPedido(numeroId) {
+  await clicar(botaoPorTexto('Novo Recebimento'));
+  await selecionar(selectPorLabel('Forma de recebimento'), 'PEDIDO_COMPRA');
+  const selPedido = selectPorLabel('Número do Pedido de Compra');
+  await selecionar(selPedido, String(numeroId));
+  return selPedido;
+}
 
 /* ── (a) a lista ───────────────────────────────────────────────────────────────────────────────
  * Conta linhas contra a fixture, e não "renderizou sem erro": com uma URL errada no mock a tela
@@ -944,4 +1061,199 @@ test('(t) diferenca que arredonda para zero a duas casas aparece com 4 casas, nu
   digitar(inputConferida(), '187');
   await esperarEfeitos();
   expect(painel().textContent).toContain('Divergência: 13 a menos que o esperado (200)');
+});
+
+/* ── (u) RN-26: escolher o pedido CARREGA os itens, e o payload leva a linha do pedido ─────────
+ * O defeito que esta task paga: `selecionarPedido` limpava `itens: []` e `handleCriar` mandava a
+ * lista VAZIA no caminho `PEDIDO_COMPRA` — o servidor então preenchia os itens com o saldo INTEIRO
+ * do pedido, e o gesto "chegaram 6 dos 10" não existia na tela. O manual 14.1 promete o contrário
+ * ("o sistema traz os itens, as quantidades e os valores unitários já preenchidos").
+ *
+ * As três metades positivas do cenário, cada uma matando um jeito de ele ficar verde vazio:
+ * - as OPÇÕES do `<select>` conferidas contra a fixture (sem isso o `change` não dispara e o
+ *   cenário mede um select vazio);
+ * - `Saldo pendente: 10` no DOM (sem isso, "renderizou sem erro" passaria com o modal em branco);
+ * - o payload lido de `api.post.mock.calls[0][1]` com a chamada CONTADA — `toHaveBeenCalledWith`
+ *   solto é satisfeito por 1, 2 ou 10 chamadas.
+ *
+ * O payload NÃO leva `quantidade_esperada`: a esperada nasce do SALDO, no servidor (contrato 1 da
+ * etapa). Mandá-la daqui desligaria em silêncio a barreira da Etapa 36, que compara a contagem do
+ * `/conferir` com a esperada GRAVADA.
+ */
+test('(u) escolher o pedido carrega os itens com o saldo e o payload leva pedido_item_id — nunca itens vazio', async () => {
+  await renderizar();
+  await clicar(botaoPorTexto('Novo Recebimento'));
+  await selecionar(selectPorLabel('Forma de recebimento'), 'PEDIDO_COMPRA');
+
+  const selPedido = selectPorLabel('Número do Pedido de Compra');
+  expect(selPedido).not.toBeUndefined();
+  expect([...selPedido.options].map((o) => o.value)).toEqual(['', '312', '313', '314']);
+  await selecionar(selPedido, '312');
+
+  // UMA chamada à rota de itens, e com o id DO PEDIDO escolhido.
+  expect(chamadasItensPedido(312)).toHaveLength(1);
+  expect(chamadasItensPedido(313)).toHaveLength(0);
+
+  expect(modalNovo().textContent).toContain('Itens do pedido');
+  expect(modalNovo().textContent).toContain('Parafuso M8');
+  expect(modalNovo().textContent).toContain('ALM-0100');
+  expect(modalNovo().textContent).toContain('Saldo pendente: 10');
+  expect(modalNovo().textContent).not.toContain('Este pedido já foi recebido por completo.');
+
+  const input = inputQtdPedido(9312);
+  expect(input).not.toBeNull();
+  expect(input.value).toBe('10');            // a quantidade nasce igual ao saldo, e é EDITÁVEL
+
+  // FRONTEIRA: receber o saldo INTEIRO não é excedente. Com `>=` no lugar de `>` no aviso, o caso
+  // MAIS COMUM da tela (chegou tudo) nasceria acusado de estar acima do pedido, e a caixa de
+  // autorização apareceria por reflexo — é a única asserção que prende o comparador, porque
+  // `recebida >= saldo` só difere de `recebida > saldo` na IGUALDADE.
+  expect(modalNovo().textContent).not.toContain('Acima do saldo:');
+  expect(caixaExcedenteModal()).toBeUndefined();
+
+  digitar(input, '6');
+  await esperarEfeitos();
+
+  await submeterModal();
+
+  expect(chamadasCriar()).toHaveLength(1);
+  const payload = api.post.mock.calls[0][1];
+  expect(payload.tipo_recebimento).toBe('PEDIDO_COMPRA');
+  expect(payload.pedido_compra_id).toBe('312');
+  expect(payload.itens).toEqual([
+    { material_id: 9, pedido_item_id: 9312, quantidade: 6, quantidade_recebida: 6 },
+  ]);
+});
+
+/* ── (v) RN-26: o aviso de excedente do PEDIDO, e o teto é o saldo POR MATERIAL ────────────────
+ * A literal usa palavras DIFERENTES do painel da Etapa 36 (`Acima do saldo:` em vez de
+ * `Divergência:`) de propósito: são duas medidas distintas — saldo do pedido de compra × esperada
+ * gravada no item —, e reusar a frase faria o operador ler a mesma coisa para dois fatos
+ * diferentes.
+ *
+ * O teto é `saldo_pendente_material` (fix 1 da T4), que é o MESMO número que
+ * `assertSaldoDoPedidoPermitido` compara. O client não soma as linhas para chegar nele: isso seria
+ * uma segunda definição de saldo, do lado que não decide.
+ *
+ * `Number('')` é ZERO, e aí está a terceira metade: campo LIMPO não é "chegou zero", é "não
+ * digitei". A linha sai do payload, e um payload de pedido sem NENHUMA linha informada é RECUSADO
+ * antes do POST — mandá-lo vazio é exatamente o defeito que esta task paga (o servidor preencheria
+ * o saldo inteiro).
+ */
+test('(v) acima do saldo do material mostra o aviso e a caixa; bater com o saldo apaga o aviso; campo limpo nao vira zero', async () => {
+  await renderizar();
+  await escolherPedido(312);
+
+  const input = inputQtdPedido(9312);
+  digitar(input, '12');
+  await esperarEfeitos();
+
+  expect(modalNovo().textContent).toContain('Acima do saldo: 2 a mais que o saldo do pedido (10)');
+  expect(modalNovo().textContent).toContain('Autorizo o recebimento acima do pedido');
+  expect(modalNovo().textContent).not.toContain('Divergência:');
+  expect(caixaExcedenteModal()).not.toBeUndefined();
+
+  // ── metade POSITIVA: dentro do saldo, nem aviso nem caixa — e o saldo continua na tela ──────
+  digitar(inputQtdPedido(9312), '6');
+  await esperarEfeitos();
+  expect(modalNovo().textContent).not.toContain('Acima do saldo:');
+  expect(modalNovo().textContent).toContain('Saldo pendente: 10');
+  expect(caixaExcedenteModal()).toBeUndefined();
+
+  // ── campo LIMPO: nenhum aviso, e NADA é enviado (nunca `quantidade_recebida: 0`) ────────────
+  digitar(inputQtdPedido(9312), '');
+  await esperarEfeitos();
+  expect(modalNovo().textContent).not.toContain('Acima do saldo:');
+  await submeterModal();
+  expect(chamadasCriar()).toHaveLength(0);
+  expect(modalNovo()).not.toBeNull();        // o modal fica de pé para o operador digitar
+
+  // ── metade POSITIVA do excedente: marcada a caixa, a FLAG viaja com a quantidade digitada ───
+  digitar(inputQtdPedido(9312), '12');
+  await esperarEfeitos();
+  await clicar(caixaExcedenteModal());
+  await submeterModal();
+
+  expect(chamadasCriar()).toHaveLength(1);
+  const payload = api.post.mock.calls[0][1];
+  expect(payload.autorizar_excedente).toBe(true);
+  expect(payload.itens).toEqual([
+    { material_id: 9, pedido_item_id: 9312, quantidade: 12, quantidade_recebida: 12 },
+  ]);
+});
+
+/* ── (w) a recusa do SERVIDOR fica no DOM, e o pedido quitado avisa em vez de oferecer itens ───
+ * Quem decide é o backend: `pode('autorizar_excedente')` esconde a caixa por conveniência de
+ * interface e o hook FALHA ABERTO de propósito. Então a régua real desta tela são as duas recusas
+ * da porta, e as duas dizem QUEM resolve — num toast de cinco segundos elas não chegam a ser
+ * lidas, e o operador fica com "não salvou" e nenhum motivo.
+ *
+ * E o formulário NÃO pode ser limpo no `catch`: quem tomou 403 não pode perder o que digitou —
+ * ele precisa levar o número exato a quem autoriza.
+ *
+ * A terceira metade é o pedido QUITADO: a rota devolve `200 []` (não é erro), e a tela diz o que
+ * houve em vez de mostrar um bloco de itens vazio que pareceria "pedido sem material cadastrado".
+ * Ele continua no `<select>` porque a lista foi carregada na montagem da tela — `?pendentes=1`
+ * filtra no servidor, no momento da carga, não no momento do clique.
+ */
+test('(w) 400 e 403 do servidor aparecem no modal com role=alert sem limpar o formulario; pedido quitado avisa', async () => {
+  const LITERAL_400 = 'Quantidade recebida (12) maior que o saldo do pedido (10) para o material '
+    + 'ALM-0100 — a autorização de excedente é de Compras ou do Administrador';
+  const LITERAL_403 = 'Autorizar recebimento acima do pedido exige a permissão '
+    + '"autorizar_excedente" (seu perfil: ALMOXARIFE).';
+
+  await renderizar();
+  const selPedido = await escolherPedido(312);
+
+  digitar(inputQtdPedido(9312), '12');
+  await esperarEfeitos();
+
+  api.post.mockImplementation(() => Promise.reject({ response: { data: { error: LITERAL_400 } } }));
+  await submeterModal();
+
+  expect(chamadasCriar()).toHaveLength(1);
+  const alerta400 = modalNovo().querySelector('[role="alert"]');
+  expect(alerta400).not.toBeNull();
+  expect(alerta400.textContent).toContain(LITERAL_400);
+  // O modal continua de pé, COM o que foi digitado e com o saldo à vista.
+  expect(inputQtdPedido(9312).value).toBe('12');
+  expect(modalNovo().textContent).toContain('Saldo pendente: 10');
+
+  // ── marcar a caixa NÃO vence o backend: o 403 é dele, e chega ao DOM do mesmo jeito ──────────
+  api.post.mockImplementation(() => Promise.reject({ response: { data: { error: LITERAL_403 } } }));
+  await clicar(caixaExcedenteModal());
+  await submeterModal();
+
+  expect(chamadasCriar()).toHaveLength(2);
+  expect(api.post.mock.calls[1][1].autorizar_excedente).toBe(true);
+  expect(modalNovo().querySelector('[role="alert"]').textContent).toContain(LITERAL_403);
+  expect(inputQtdPedido(9312).value).toBe('12');
+
+  // ── pedido QUITADO: `200 []` vira aviso, não bloco vazio; e a recusa do outro pedido sai ────
+  await selecionar(selPedido, '313');
+
+  expect(chamadasItensPedido(313)).toHaveLength(1);
+  expect(modalNovo().textContent).toContain('Este pedido já foi recebido por completo.');
+  expect(modalNovo().textContent).not.toContain('Saldo pendente:');
+  expect(inputQtdPedido(9312)).toBeNull();
+  expect(modalNovo().querySelector('[role="alert"]')).toBeNull();
+
+  await submeterModal();
+  expect(chamadasCriar()).toHaveLength(2);   // nada é enviado para um pedido sem saldo
+
+  // ── o TETO é o saldo AGREGADO POR MATERIAL, nunca o da linha (fix 1 da T4) ──────────────────
+  // A linha B do pedido 314 tem `saldo_pendente: 10` e `saldo_pendente_material: 5`. Usar o saldo
+  // da LINHA faria a tela prometer 10, o operador digitar 10 e a porta recusar com
+  // "maior que o saldo do pedido (5)" — sem nenhum aviso antes, que é exatamente o furo que o
+  // fix 1 fechou do lado da leitura. Esta é a única asserção que distingue os dois campos.
+  await selecionar(selPedido, '314');
+
+  expect(chamadasItensPedido(314)).toHaveLength(1);
+  expect(modalNovo().textContent).toContain('Saldo pendente: 10');  // o saldo DA LINHA é exibido
+  expect(inputQtdPedido(9314).value).toBe('5');                     // o campo nasce no TETO
+  expect(modalNovo().textContent).not.toContain('Acima do saldo:');
+
+  digitar(inputQtdPedido(9314), '10');
+  await esperarEfeitos();
+  expect(modalNovo().textContent).toContain('Acima do saldo: 5 a mais que o saldo do pedido (5)');
 });

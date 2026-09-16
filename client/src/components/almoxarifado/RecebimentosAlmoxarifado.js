@@ -55,6 +55,34 @@ const EMPTY_FISCAL = {
   outras_despesas: '', valor_ipi: '', valor_total_nota: '',
 };
 
+/**
+ * Etapa 37 (fix 1 da T4) — o TETO que a porta aceita para uma linha do pedido.
+ *
+ * `saldo_pendente_material` é o saldo AGREGADO POR MATERIAL, que é exatamente o número que
+ * `assertSaldoDoPedidoPermitido` compara no servidor. `saldo_pendente` é o que falta NAQUELA
+ * linha, e ele pode prometer mais do que a porta aceita: com duas linhas do mesmo material e uma
+ * delas recebida a mais (excedente autorizado), a linha mostra saldo 10 e a porta aceita 5 —
+ * o operador digitava 10 e tomava 400 sem nenhum aviso antes.
+ *
+ * O client LÊ o campo; não soma as linhas para chegar nele. Somar aqui seria uma segunda definição
+ * de "saldo do pedido", escrita no lado que não decide.
+ */
+// "Não digitei" ≠ "chegou zero": `Number('')` é ZERO, e ler o campo vazio como zero faria a tela
+// declarar uma chegada de zero unidade. Régua única do modal — o aviso de excedente e o payload
+// perguntam a MESMA coisa, e duas expressões disso divergiriam na primeira edição.
+const quantidadeInformada = (valor) => {
+  if (valor === '' || valor == null) return false;
+  return Number.isFinite(Number(valor));
+};
+
+const tetoDaLinhaDoPedido = (linha) => {
+  const doMaterial = Number(linha.saldo_pendente_material);
+  const daLinha = Number(linha.saldo_pendente);
+  if (Number.isFinite(doMaterial) && Number.isFinite(daLinha)) return Math.min(doMaterial, daLinha);
+  if (Number.isFinite(doMaterial)) return doMaterial;
+  return Number.isFinite(daLinha) ? daLinha : 0;
+};
+
 const RecebimentosAlmoxarifado = () => {
   const { pode } = useAlmoxPermissoes();
   const [recebimentos, setRecebimentos] = useState([]);
@@ -99,6 +127,20 @@ const RecebimentosAlmoxarifado = () => {
   // trazem literal que explica o que fazer — um toast que some em segundos deixa o operador com
   // "não salvou" e nenhum motivo. Mesma régua da Etapa 35 para a lista que não carregou (RN-04).
   const [erroConferencia, setErroConferencia] = useState(null);
+  // Etapa 37 (RN-26): o estado do bloco de itens DO PEDIDO, dentro do modal de novo recebimento.
+  // Separado do `autorizarExcedente` do painel de propósito — são dois documentos e duas portas
+  // diferentes (`POST /recebimentos` × `PUT /recebimentos/:id/conferir`), e uma caixa só faria a
+  // marcação de um viajar para o outro.
+  const [autorizarExcedenteCriacao, setAutorizarExcedenteCriacao] = useState(false);
+  const [carregandoItensPedido, setCarregandoItensPedido] = useState(false);
+  // Três estados e não um: "carregando", "a rota falhou" e "o pedido não tem saldo" são fatos
+  // diferentes, e um só faria a tela dizer "já foi recebido por completo" quando a requisição
+  // caiu — mentindo sobre o pedido para esconder um erro de rede.
+  const [erroItensPedido, setErroItensPedido] = useState(null);
+  const [pedidoQuitado, setPedidoQuitado] = useState(false);
+  // A recusa do POST fica NA TELA, não só no toast: as duas literais desta porta dizem QUEM
+  // autoriza o excedente, e é o número digitado que o operador precisa levar a essa pessoa.
+  const [erroCriacao, setErroCriacao] = useState(null);
   const [showNovo, setShowNovo] = useState(false);
   const [showFiscal, setShowFiscal] = useState(false);
   const [buscaMat, setBuscaMat] = useState('');
@@ -154,7 +196,12 @@ const RecebimentosAlmoxarifado = () => {
   const loadAuxiliares = async () => {
     try {
       const [pRes, fRes] = await Promise.all([
-        api.get('/almoxarifado/recebimentos-aux/pedidos-compra'),
+        // Etapa 37 (RN-24): `pendentes=1` é o filtro que a T4 criou, e ele roda no SQL ANTES do
+        // `LIMIT 50` — sem ele, um banco com 50 pedidos quitados mais novos deixaria o `<select>`
+        // sem o pedido que o operador precisa receber. A lista continua podendo envelhecer (ela é
+        // carregada na montagem da tela), e é por isso que escolher um pedido sem saldo tem de
+        // avisar em vez de oferecer um bloco de itens vazio.
+        api.get('/almoxarifado/recebimentos-aux/pedidos-compra', { params: { pendentes: 1 } }),
         api.get('/almoxarifado/recebimentos-aux/fornecedores'),
       ]);
       setPedidos(pRes.data || []);
@@ -411,7 +458,27 @@ const RecebimentosAlmoxarifado = () => {
     setForm((f) => ({ ...f, itens: f.itens.filter((i) => i.material_id !== material_id) }));
   };
 
-  const selecionarPedido = (pedidoId) => {
+  // Etapa 37 (RN-26): trocar a forma de recebimento limpa TUDO o que era do pedido. Sem isto o
+  // aviso de excedente, a recusa da porta e a caixa marcada sobreviveriam à troca para NOTA_FISCAL
+  // e acusariam o documento novo de algo que não aconteceu nele.
+  const limparEstadoDoPedido = () => {
+    setErroItensPedido(null);
+    setPedidoQuitado(false);
+    setErroCriacao(null);
+    setAutorizarExcedenteCriacao(false);
+  };
+
+  /**
+   * Etapa 37 (RN-26) — escolher o pedido CARREGA as linhas com saldo, editáveis.
+   *
+   * Antes, esta função limpava `itens: []` e era o servidor que preenchia os itens com o saldo
+   * inteiro do pedido: o gesto "chegaram 6 dos 10" não existia na tela, e o mais próximo era
+   * registrar cheio e corrigir no `/conferir` — que gravava a esperada errada para sempre.
+   *
+   * O client NÃO refiltra as linhas: quem filtra é a ROTA (só devolve `saldo_pendente > 0`), e uma
+   * segunda peneira aqui criaria duas definições de "linha recebível".
+   */
+  const selecionarPedido = async (pedidoId) => {
     const pedido = pedidos.find((p) => String(p.id) === String(pedidoId));
     setForm((f) => ({
       ...f,
@@ -419,7 +486,38 @@ const RecebimentosAlmoxarifado = () => {
       tipo_recebimento: 'PEDIDO_COMPRA',
       fornecedor_nome: pedido?.fornecedor_nome || f.fornecedor_nome,
       fornecedor_cnpj: pedido?.fornecedor_cnpj || f.fornecedor_cnpj,
+      itens: [],
     }));
+    limparEstadoDoPedido();
+    if (!pedidoId) return;
+    setCarregandoItensPedido(true);
+    try {
+      const res = await api.get(`/almoxarifado/recebimentos-aux/pedidos-compra/${pedidoId}/itens`);
+      const linhas = res.data || [];
+      // Lista vazia é a informação de que não há o que receber — não é erro (a rota devolve 200).
+      setPedidoQuitado(linhas.length === 0);
+      setForm((f) => ({
+        ...f,
+        itens: linhas.map((l) => ({
+          pedido_item_id: l.id,
+          material_id: l.material_id,
+          material_nome: l.material_nome || l.descricao || l.codigo,
+          material_codigo: l.material_codigo || l.codigo,
+          unidade: l.unidade,
+          saldo_pendente: l.saldo_pendente,
+          saldo_pendente_material: l.saldo_pendente_material,
+          // Nasce no número que a PORTA aceita. No caso comum (uma linha por material) os dois
+          // saldos são iguais e isto é o saldo da linha; quando outra linha do mesmo material já
+          // recebeu a mais, o teto agregado é menor — e nascer no saldo da linha ofereceria um
+          // default que o servidor recusaria com 400.
+          quantidade: tetoDaLinhaDoPedido(l),
+        })),
+      }));
+    } catch (err) {
+      setErroItensPedido(err.response?.data?.error || 'Erro ao carregar os itens do pedido');
+    } finally {
+      setCarregandoItensPedido(false);
+    }
   };
 
   const selecionarFornecedor = (fornId) => {
@@ -448,7 +546,24 @@ const RecebimentosAlmoxarifado = () => {
       toast.error('Selecione o pedido de compra');
       return;
     }
+    // Etapa 37: pedido sem saldo não vai. O `<select>` é alimentado por uma lista carregada na
+    // montagem da tela, então ela pode ter envelhecido — e mandar o POST aqui tomaria o 400
+    // "já foi recebido por completo" do servidor para dizer o que a tela já sabe.
+    if (form.tipo_recebimento === 'PEDIDO_COMPRA' && pedidoQuitado) {
+      toast.error('Este pedido já foi recebido por completo');
+      return;
+    }
+    // Etapa 37 (RN-26): as linhas com quantidade INFORMADA. Campo limpo é "esta linha não chegou",
+    // e não "chegou zero" — `Number('')` é 0, e zero passaria pelo servidor como quantidade válida
+    // se a chave fosse enviada (é o mesmo defeito que o fix-round 1 da T5 da Etapa 36 pagou do
+    // outro lado, no `/conferir`).
+    const itensInformados = form.itens.filter((i) => quantidadeInformada(i.quantidade));
+    if (form.tipo_recebimento === 'PEDIDO_COMPRA' && itensInformados.length === 0) {
+      toast.error('Informe a quantidade recebida de ao menos um item do pedido');
+      return;
+    }
     setSaving(true);
+    setErroCriacao(null);
     try {
       const payload = {
         tipo_recebimento: form.tipo_recebimento,
@@ -457,16 +572,32 @@ const RecebimentosAlmoxarifado = () => {
         fornecedor_nome: form.fornecedor_nome || null,
         fornecedor_cnpj: form.fornecedor_cnpj || null,
         observacoes: form.observacoes || null,
-        itens: form.itens.map((i) => ({
-          material_id: i.material_id,
-          quantidade: parseFloat(i.quantidade),
-          quantidade_esperada: parseFloat(i.quantidade),
-          quantidade_recebida: parseFloat(i.quantidade),
-        })),
+        autorizar_excedente: autorizarExcedenteCriacao === true,
+        // Dois mapas e não um, porque os dois caminhos declaram coisas diferentes:
+        // - PEDIDO_COMPRA leva `pedido_item_id` (a LINHA do pedido, que o servidor confere antes
+        //   de aceitar) e NÃO leva `quantidade_esperada`: a esperada nasce do SALDO, no servidor.
+        //   Mandá-la daqui desligaria em silêncio a barreira da Etapa 36, que compara a contagem
+        //   do `/conferir` com a esperada GRAVADA — mandar 99 aceitaria qualquer contagem depois.
+        // - NOTA_FISCAL continua igual: sem pedido não há saldo, e a única referência é o que o
+        //   próprio operador declarou.
+        itens: form.tipo_recebimento === 'PEDIDO_COMPRA'
+          ? itensInformados.map((i) => ({
+            material_id: i.material_id,
+            pedido_item_id: i.pedido_item_id,
+            quantidade: parseFloat(i.quantidade),
+            quantidade_recebida: parseFloat(i.quantidade),
+          }))
+          : form.itens.map((i) => ({
+            material_id: i.material_id,
+            quantidade: parseFloat(i.quantidade),
+            quantidade_esperada: parseFloat(i.quantidade),
+            quantidade_recebida: parseFloat(i.quantidade),
+          })),
       };
       const res = await api.post('/almoxarifado/recebimentos', payload);
       toast.success(`Recebimento ${res.data.numero} registrado!`);
       setShowNovo(false);
+      limparEstadoDoPedido();
       setForm({
         tipo_recebimento: 'NOTA_FISCAL', pedido_compra_id: '', nota_fiscal: '',
         fornecedor_nome: '', fornecedor_cnpj: '', observacoes: '', itens: [],
@@ -474,7 +605,12 @@ const RecebimentosAlmoxarifado = () => {
       loadRecebimentos();
       abrirDetalhe(res.data.id);
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Erro ao registrar recebimento');
+      const msg = err.response?.data?.error || 'Erro ao registrar recebimento';
+      toast.error(msg);
+      // A recusa fica NA TELA e o formulário NÃO é limpo: as duas literais desta porta dizem quem
+      // autoriza o excedente, e quem tomou 403 precisa levar o número que digitou a essa pessoa.
+      // Limpar aqui faria o operador recomeçar a contagem inteira sem saber por quê.
+      setErroCriacao(msg);
     } finally {
       setSaving(false);
     }
@@ -512,6 +648,40 @@ const RecebimentosAlmoxarifado = () => {
       </div>
     );
   };
+
+  /**
+   * Etapa 37 (RN-26) — o aviso de quantidade acima do SALDO DO PEDIDO DE COMPRA.
+   *
+   * Palavras DIFERENTES do `avisoDivergencia` acima (`Acima do saldo:` em vez de `Divergência:`)
+   * de propósito: são duas medidas distintas — saldo do pedido de compra × quantidade esperada
+   * gravada no item —, e reusar a frase faria o operador ler a mesma coisa para dois fatos
+   * diferentes. A literal é a que vai no manual: não aproximar, não reescrever.
+   *
+   * O saldo citado é o TETO AGREGADO POR MATERIAL (ver `tetoDaLinhaDoPedido`): tem de ser o MESMO
+   * número que a porta cita no 400, senão a tela promete um limite e o servidor recusa por outro.
+   */
+  const avisoAcimaDoSaldo = (item) => {
+    if (!quantidadeInformada(item.quantidade)) return null;
+    const recebida = Number(item.quantidade);
+    const saldo = tetoDaLinhaDoPedido(item);
+    if (!(recebida > saldo)) return null;
+    // Mesmo arredondamento do `avisoDivergencia` (revisão final R7 da Etapa 36): duas casas
+    // impedem `13.000000000000001`, e abaixo de meio centésimo o aviso mostra quatro — senão ele
+    // diria "0 a mais" enquanto o servidor, que compara os números crus, barra o save.
+    const bruto = recebida - saldo;
+    const diff = Number(bruto.toFixed(bruto < 0.005 ? 4 : 2));
+    return (
+      <div style={{ color: 'var(--gmp-danger)', fontSize: '0.72rem', marginTop: 4 }}>
+        Acima do saldo: {diff} a mais que o saldo do pedido ({saldo})
+      </div>
+    );
+  };
+
+  // A caixa do MODAL segue a mesma regra da caixa do painel: só aparece quando existe DE FATO
+  // linha acima do saldo. E ela é derivada do PRÓPRIO aviso — uma segunda comparação aqui poderia
+  // divergir dele, e a tela mostraria a caixa sem aviso (ou o aviso sem caixa).
+  const temExcedenteNoPedido = form.tipo_recebimento === 'PEDIDO_COMPRA'
+    && form.itens.some((item) => avisoAcimaDoSaldo(item) !== null);
 
   // A caixa de autorização só aparece quando existe DE FATO item acima do pedido: caixa sempre
   // visível é formulário, não barreira, e treina o operador a marcá-la por reflexo.
@@ -930,7 +1100,10 @@ const RecebimentosAlmoxarifado = () => {
                 <div className="almox-field almox-form-full">
                   <label className="almox-label">Forma de recebimento</label>
                   <select className="almox-select" value={form.tipo_recebimento}
-                    onChange={(e) => setForm((f) => ({ ...f, tipo_recebimento: e.target.value, pedido_compra_id: '', itens: [] }))}>
+                    onChange={(e) => {
+                      setForm((f) => ({ ...f, tipo_recebimento: e.target.value, pedido_compra_id: '', itens: [] }));
+                      limparEstadoDoPedido();
+                    }}>
                     <option value="NOTA_FISCAL">Somente pela Nota Fiscal</option>
                     <option value="PEDIDO_COMPRA">Por Pedido de Compra</option>
                   </select>
@@ -1025,11 +1198,90 @@ const RecebimentosAlmoxarifado = () => {
                     ))}
                   </div>
                 )}
+
+                {/* Etapa 37 (RN-26): as linhas DO PEDIDO, com o saldo, editáveis. Este bloco é o
+                    que faltava para "chegaram 6 dos 10" existir na tela — antes o modal mostrava
+                    só o `<select>`, `handleCriar` mandava `itens: []` e o servidor preenchia o
+                    saldo inteiro. A chave é `pedido_item_id` e NÃO `material_id`: duas linhas do
+                    mesmo material são caso legítimo do pedido de compra, e o material como chave
+                    fundiria as duas (e o React reclamaria de chave repetida). */}
+                {form.tipo_recebimento === 'PEDIDO_COMPRA' && form.pedido_compra_id && (
+                  <div style={{ marginTop: 16 }}>
+                    <label className="almox-label">Itens do pedido</label>
+                    {carregandoItensPedido && (
+                      <p style={{ fontSize: '0.8rem', margin: '0 0 8px' }}>Carregando os itens do pedido...</p>
+                    )}
+                    {/* Falha de carga NÃO pode virar "pedido sem itens" (RN-04/05 da Etapa 35): as
+                        duas telas são indistinguíveis, e aqui a segunda acusaria o pedido. */}
+                    {erroItensPedido && (
+                      <p style={{ fontSize: '0.8rem', color: 'var(--gmp-error)', margin: '0 0 8px' }}>
+                        {erroItensPedido}{' '}
+                        <button type="button" className="almox-link-btn"
+                          onClick={() => selecionarPedido(form.pedido_compra_id)}>
+                          Tentar de novo
+                        </button>
+                      </p>
+                    )}
+                    {pedidoQuitado && (
+                      <p style={{ fontSize: '0.8rem', margin: '0 0 8px' }}>
+                        Este pedido já foi recebido por completo.
+                      </p>
+                    )}
+                    {form.itens.map((item) => (
+                      <div key={item.pedido_item_id}
+                        style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
+                        <div style={{ flex: 1, fontSize: '0.85rem' }}>
+                          <strong>{item.material_nome}</strong>
+                          <div style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
+                            {item.material_codigo} · Saldo pendente: {item.saldo_pendente}
+                          </div>
+                          {avisoAcimaDoSaldo(item)}
+                        </div>
+                        {/* Sem `required`: limpar o campo é "esta linha não chegou", e a linha sai
+                            do payload (nunca como zero). `step="any"` porque saldo de material a
+                            granel é decimal. */}
+                        <input className="almox-count-input" type="number" min="0" step="any"
+                          title="Qtd. recebida do pedido"
+                          data-testid={`qtd-pedido-${item.pedido_item_id}`}
+                          value={item.quantidade ?? ''}
+                          onChange={(e) => setForm((f) => ({
+                            ...f,
+                            itens: f.itens.map((i) => (i.pedido_item_id === item.pedido_item_id
+                              ? { ...i, quantidade: e.target.value } : i)),
+                          }))} />
+                        <span style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>{item.unidade}</span>
+                      </div>
+                    ))}
+                    {/* `pode(...)` aqui é conveniência de interface — esconder a caixa de quem não
+                        pode marcá-la —, NÃO segurança: o hook falha aberto de propósito e é o
+                        `POST /recebimentos` que checa a flag por `can()`, devolvendo o 403 que
+                        aparece no aviso abaixo. */}
+                    {temExcedenteNoPedido && pode('autorizar_excedente') && (
+                      <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: '0.78rem', marginTop: 8 }}>
+                        <input type="checkbox" checked={autorizarExcedenteCriacao}
+                          onChange={(e) => setAutorizarExcedenteCriacao(e.target.checked)} />
+                        Autorizo o recebimento acima do pedido
+                      </label>
+                    )}
+                  </div>
+                )}
+
+                {/* A recusa da criação FICA na tela, como a da conferência. As literais desta porta
+                    dizem QUEM autoriza o excedente ("a autorização de excedente é de Compras ou do
+                    Administrador"), e num toast de cinco segundos elas não chegam a ser lidas. */}
+                {erroCriacao && (
+                  <div className="almox-hint-banner" role="alert"
+                    style={{ marginTop: 12, fontSize: '0.8rem', color: 'var(--gmp-danger)' }}>
+                    {erroCriacao}
+                  </div>
+                )}
               </div>
               <div className="almox-modal-footer">
                 <button type="button" className="btn-almox-secondary" onClick={() => setShowNovo(false)}>Cancelar</button>
                 <button type="submit" className="btn-almox-primary"
-                  disabled={saving || (form.tipo_recebimento === 'NOTA_FISCAL' && form.itens.length === 0)}>
+                  disabled={saving
+                    || (form.tipo_recebimento === 'NOTA_FISCAL' && form.itens.length === 0)
+                    || (form.tipo_recebimento === 'PEDIDO_COMPRA' && (carregandoItensPedido || pedidoQuitado))}>
                   {saving ? 'Salvando...' : 'Registrar Recebimento'}
                 </button>
               </div>
