@@ -175,6 +175,11 @@ const RecebimentosAlmoxarifado = () => {
   // marcação de um viajar para o outro.
   const [autorizarExcedenteCriacao, setAutorizarExcedenteCriacao] = useState(false);
   const [carregandoItensPedido, setCarregandoItensPedido] = useState(false);
+  // (F4) `pedidoSeqRef`: `selecionarPedido` é `async` e sai do `onChange` do `<select>`, então duas
+  // escolhas rápidas deixam duas requisições em voo e, sem contador, a ÚLTIMA A RESPONDER vencia —
+  // escolher 313 e depois 312 deixava a tela do 312 dizendo "já foi recebido por completo", com os
+  // itens apagados e o submit bloqueado. Mesmo molde de `detalheFetchSeqRef` (Etapa 35).
+  const pedidoSeqRef = useRef(0);
   // Três estados e não um: "carregando", "a rota falhou" e "o pedido não tem saldo" são fatos
   // diferentes, e um só faria a tela dizer "já foi recebido por completo" quando a requisição
   // caiu — mentindo sobre o pedido para esconder um erro de rede.
@@ -539,10 +544,14 @@ const RecebimentosAlmoxarifado = () => {
       itens: [],
     }));
     limparEstadoDoPedido();
+    // Onda de correção da revisão final (F4): a sequência BUMPA sempre, inclusive na volta para
+    // "Selecione o pedido..." — senão a resposta em voo do pedido abandonado repovoaria o bloco.
+    const seq = ++pedidoSeqRef.current;
     if (!pedidoId) return;
     setCarregandoItensPedido(true);
     try {
       const res = await api.get(`/almoxarifado/recebimentos-aux/pedidos-compra/${pedidoId}/itens`);
+      if (seq !== pedidoSeqRef.current) return;   // chegou atrasada: outra escolha venceu
       const linhas = res.data || [];
       // Lista vazia é a informação de que não há o que receber — não é erro (a rota devolve 200).
       // Qual dos dois motivos, quem diz é a LINHA DO PEDIDO que veio da lista, não a rota de itens:
@@ -569,9 +578,14 @@ const RecebimentosAlmoxarifado = () => {
         })),
       }));
     } catch (err) {
+      // (F4) A falha do pedido ABANDONADO também não aparece: ela acusaria o pedido que está na
+      // tela de um erro que não foi dele, e o botão "Tentar de novo" recarregaria o outro.
+      if (seq !== pedidoSeqRef.current) return;
       setErroItensPedido(err.response?.data?.error || 'Erro ao carregar os itens do pedido');
     } finally {
-      setCarregandoItensPedido(false);
+      // (F4) Só a escolha VENCEDORA desliga o spinner — o `finally` de uma resposta atrasada
+      // apagaria o "carregando" da escolha que ainda está em voo (mesma regra de `abrirDetalhe`).
+      if (seq === pedidoSeqRef.current) setCarregandoItensPedido(false);
     }
   };
 

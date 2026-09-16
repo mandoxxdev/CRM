@@ -1477,3 +1477,43 @@ test('(z) pedido sem linhas lancadas diz a literal do servidor; o quitado mantem
   expect(inputQtdPedido(9312)).not.toBeNull();
   expect(botaoSubmitModal().disabled).toBe(false);
 });
+
+/* ── (aa) trocar de pedido rapido: a resposta ATRASADA nao pode vencer ─────────────────────────
+ * Onda de correção da revisão final (F4). `selecionarPedido` é `async` chamada do `onChange` do
+ * `<select>` e não tinha contador de sequência — o molde já existia nesta tela desde a Etapa 35
+ * (`detalheFetchSeqRef`, cenário (l)), e este caminho nasceu sem ele. Duas escolhas rápidas
+ * deixam duas requisições em voo, e a ÚLTIMA A RESPONDER vencia: escolher 313 (quitado) e depois
+ * 312 deixava a tela do 312 dizendo "já foi recebido por completo", com os itens do 312 apagados
+ * e o submit bloqueado — um pedido com saldo declarado quitado por causa de uma corrida.
+ *
+ * Aqui a resposta do 313 é SEGURADA e liberada por último, que é a ordem que produz o defeito.
+ */
+test('(aa) resposta atrasada do pedido anterior nao sobrescreve o pedido escolhido depois', async () => {
+  await renderizar();
+  const original = api.get.getMockImplementation();
+  let liberar313;
+  api.get.mockImplementation((url) => {
+    if (url === '/almoxarifado/recebimentos-aux/pedidos-compra/313/itens') {
+      return new Promise((resolve) => { liberar313 = () => resolve({ data: ITENS_PEDIDO[313] }); });
+    }
+    return original(url);
+  });
+
+  const selPedido = await escolherPedido(313);   // fica em voo
+  expect(liberar313).toBeInstanceOf(Function);
+  await selecionar(selPedido, '312');             // resolve normalmente
+
+  // metade POSITIVA: o pedido escolhido POR ÚLTIMO é o que está na tela.
+  expect(inputQtdPedido(9312)).not.toBeNull();
+  expect(modalNovo().textContent).toContain('Saldo pendente: 10');
+
+  await act(async () => { liberar313(); });       // a resposta ATRASADA do 313 chega por último
+  await esperarEfeitos();
+
+  expect(modalNovo().textContent).not.toContain('Este pedido já foi recebido por completo.');
+  expect(inputQtdPedido(9312)).not.toBeNull();
+  expect(inputQtdPedido(9312).value).toBe('10');
+  expect(botaoSubmitModal().disabled).toBe(false);
+  // O `finally` fora de ordem também não pode deixar o bloco em "carregando".
+  expect(modalNovo().textContent).not.toContain('Carregando os itens do pedido');
+});
