@@ -323,6 +323,21 @@ const RequisicoesList = () => {
     setDetalhe(null);
     loadedDetalheIdRef.current = null;
     syncSearchParams(null);
+    // Etapa 36 (RN-19): fechar tem de desligar o "carregando" TAMBEM. O `finally` de `abrirDetalhe`
+    // so desliga a flag quando a sequencia ainda e a dele, entao fechar com um GET em voo a deixava
+    // pendurada em `true` para sempre. O irmao em Recebimentos tinha o mesmo residuo — o plano da
+    // Etapa 35 dizia que este commit (`2817054`) servia de molde exato, mas estava errado: aquele
+    // commit acrescentou o bump da sequencia e o `syncSearchParams(null)` acima, e nao zerou a
+    // flag. O residuo era gemeo, nao moldado.
+    //
+    // SEM CENARIO DE TESTE, e isso e declaracao, nao esquecimento (caso 2 da skill fechar-etapa):
+    // todo consumidor de `loadingDetalhe` nesta tela so renderiza com o painel aberto, e abrir o
+    // painel passa por `abrirDetalhe`, que liga a flag na entrada — logo nao existe sequencia de
+    // gestos em que a flag pendurada apareca no DOM. Qualquer assercao escrita hoje passaria antes
+    // e depois desta linha (o controle positivo e um NO-OP declarado). A linha fica porque a forma
+    // segura e barata e porque o proximo consumidor de `loadingDetalhe` — o botao de atualizar o
+    // detalhe que esta tela ja tem, por exemplo — herdaria o defeito em silencio.
+    setLoadingDetalhe(false);
   };
 
   const handleAprovar = async (id, iniciarSeparacao = false) => {

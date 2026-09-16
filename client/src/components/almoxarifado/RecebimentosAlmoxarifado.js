@@ -224,6 +224,18 @@ const RecebimentosAlmoxarifado = () => {
     idCarregadoRef.current = null;
     setAutorizarExcedente(false);
     setErroConferencia(null);
+    // Etapa 36 (RN-19): fechar tem de desligar o "carregando" TAMBEM. O `finally` de `abrirDetalhe`
+    // so desliga a flag quando a sequencia ainda e a dele, entao fechar com um GET em voo a deixava
+    // pendurada em `true` para sempre.
+    //
+    // SEM CENARIO DE TESTE, e isso e declaracao, nao esquecimento (caso 2 da skill fechar-etapa):
+    // todo consumidor de `loadingDetalhe` nesta tela so renderiza com o painel aberto, e abrir o
+    // painel passa por `abrirDetalhe`, que liga a flag na entrada — logo nao existe sequencia de
+    // gestos em que a flag pendurada apareca no DOM. Qualquer assercao escrita hoje passaria antes
+    // e depois desta linha (o controle positivo e um NO-OP declarado). A linha fica porque a forma
+    // segura e barata e porque o proximo consumidor de `loadingDetalhe` — um botao de atualizar o
+    // detalhe, por exemplo — herdaria o defeito em silencio.
+    setLoadingDetalhe(false);
   };
 
   const workflow = async (acao, msg) => {
