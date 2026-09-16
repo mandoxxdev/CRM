@@ -23,6 +23,11 @@ const purchaseService = require('./purchaseService');
 // capturaria a funcao original. Sem ciclo (purchaseService/stockService ja carregam a fila).
 const notificationQueueService = require('./notificationQueueService');
 const alertRegistry = require('./alertRegistry');
+// Etapa 36 (RN-18): a barreira de excedente e CONDICIONAL (so quando o body traz a flag), entao a
+// checagem mora aqui e nao em `requirePermission` na rota — molde de
+// `ownerRules.assertAjustePermitido`. Sem ciclo: `permissions.js` nao requer nada no topo (o
+// `../systemPermissions` dele e requerido DENTRO de `getPerfilFromUser`, de proposito).
+const { can, getPerfilFromUser } = require('./permissions');
 
 /**
  * Etapa 17 (RN-04, gancho C4.2) — aviso pos-escrita da quantidade recebida, nos DOIS escritores
@@ -246,6 +251,61 @@ async function criarRecebimento(db, user, data) {
   return { id: r.lastID, numero, status: STATUS.RECEBIDO };
 }
 
+/**
+ * RN-18 (Etapa 36) — recebimento acima do esperado exige autorizacao EXPLICITA e PERMISSAO.
+ *
+ * Medido por sonda na Fase 0: `quantidade_esperada: 10, quantidade_recebida: 999` entrava com 201 e
+ * era gravado. O motor de DETECCAO ja existia inteiro (`alertRegistry.listarDivergenciasRecebimento`
+ * + `avisarDivergenciasDoRecebimento` nos dois escritores); o que nao existia era a BARREIRA.
+ *
+ * Duas condicoes, e as duas importam: a flag e a INTENCAO ("eu sei que estou recebendo a mais"), a
+ * permissao e a AUTORIDADE. Só a flag foi descartado no design: flag que qualquer perfil liga nao e
+ * barreira, e formulario — o mesmo usuario que digita 999 marca a caixa.
+ *
+ * Chamada ANTES de qualquer UPDATE nas DUAS portas: nao ha transacao neste modulo, entao recusar
+ * depois de gravar deixaria o excedente no banco com um 400 por cima (o mesmo defeito que a
+ * sabotagem 3 da Task 2 mede na guarda de NF duplicada).
+ *
+ * `parseFloat` + `Number.isFinite`, e nao `Number(...)`: item sem o campo (o caso do COALESCE
+ * abaixo) e item com `''` nao podem ser lidos como ZERO — `Number('')` e 0, e 0 > 10 e falso por
+ * acidente, nao por regra. O `continue` do `== null` e o que deixa o payload parcial passar.
+ */
+async function assertExcedentePermitido(db, user, recebimentoId, itens, autorizado) {
+  const excedentes = [];
+  for (const item of itens || []) {
+    if (item.quantidade_recebida == null) continue;
+    const atual = await dbGet(db, `SELECT id, quantidade_esperada FROM recebimentos_material_itens_almoxarifado
+      WHERE id = ? AND recebimento_id = ?`, [item.id, recebimentoId]);
+    if (!atual) continue;
+    const recebida = parseFloat(item.quantidade_recebida);
+    const esperada = parseFloat(atual.quantidade_esperada);
+    if (Number.isFinite(recebida) && Number.isFinite(esperada) && recebida > esperada) {
+      excedentes.push({ id: atual.id, recebida, esperada });
+    }
+  }
+  if (!excedentes.length) return;
+
+  const e = excedentes[0];
+  if (!autorizado) {
+    throw Object.assign(new Error(
+      `Quantidade recebida (${e.recebida}) maior que a esperada (${e.esperada}) no item #${e.id}`
+      + ' — marque a autorização de excedente para registrar'), { status: 400 });
+  }
+  if (!can(user, 'autorizar_excedente')) {
+    throw Object.assign(new Error(
+      'Autorizar recebimento acima do pedido exige a permissão "autorizar_excedente"'
+      + ` (seu perfil: ${getPerfilFromUser(user)}).`), { status: 403 });
+  }
+  for (const ex of excedentes) {
+    await registrarAuditoria(db, {
+      entidade: 'recebimento_item', entidade_id: ex.id, acao: 'EXCEDENTE_AUTORIZADO',
+      usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
+      dados_anteriores: { quantidade_esperada: ex.esperada },
+      dados_novos: { quantidade_recebida: ex.recebida },
+    });
+  }
+}
+
 async function conferirRecebimento(db, user, recebimentoId, data) {
   const { status, itens } = data;
   const validStatus = [
@@ -256,6 +316,10 @@ async function conferirRecebimento(db, user, recebimentoId, data) {
     throw Object.assign(new Error('Status inválido'), { status: 400 });
   }
 
+  // RN-18: a PRIMEIRA porta. Antes do UPDATE de status e do UPDATE de item — recusar depois de
+  // gravar deixaria o documento meio escrito com um 400 por cima.
+  await assertExcedentePermitido(db, user, recebimentoId, itens, data.autorizar_excedente === true);
+
   if (status) {
     const etapa = STATUS_ETAPA[status] || ETAPAS.ALMOXARIFADO;
     await dbRun(db, `UPDATE recebimentos_material_almoxarifado
@@ -265,12 +329,24 @@ async function conferirRecebimento(db, user, recebimentoId, data) {
 
   if (itens) {
     for (const item of itens) {
+      // Etapa 36 (T3): as CINCO colunas com COALESCE, no molde ja escrito em `salvarDadosFiscal`.
+      // Esta rota esta ganhando o PRIMEIRO chamador da vida (o painel de conferencia da T5), e
+      // enquanto ela nao tinha chamador o defeito ficou invisivel: com `quantidade_recebida = ?` e
+      // `observacoes = ?`, um item enviado SEM esses campos APAGAVA os dois (medido por sonda: a
+      // coluna ia a `null`, e 200 na resposta). Duas colunas, nao uma. Os booleanos so viram 0/1
+      // quando VIERAM (`!= null`), senao `false` e `ausente` seriam a mesma coisa e qualquer
+      // chamada parcial zeraria o que a conferencia anterior marcou.
       await dbRun(db, `UPDATE recebimentos_material_itens_almoxarifado SET
-        quantidade_recebida = ?, conferencia_quantidade = ?, conferencia_descricao = ?, observacoes = ?,
+        quantidade_recebida = COALESCE(?, quantidade_recebida),
+        conferencia_quantidade = COALESCE(?, conferencia_quantidade),
+        conferencia_descricao = COALESCE(?, conferencia_descricao),
+        observacoes = COALESCE(?, observacoes),
         series = COALESCE(?, series)
         WHERE id = ? AND recebimento_id = ?`, [
-        item.quantidade_recebida, item.conferencia_quantidade ? 1 : 0,
-        item.conferencia_descricao ? 1 : 0, item.observacoes || null,
+        item.quantidade_recebida ?? null,
+        item.conferencia_quantidade != null ? (item.conferencia_quantidade ? 1 : 0) : null,
+        item.conferencia_descricao != null ? (item.conferencia_descricao ? 1 : 0) : null,
+        item.observacoes ?? null,
         item.series ?? null,
         item.id, recebimentoId,
       ]);
@@ -362,6 +438,11 @@ async function salvarDadosFiscal(db, user, recebimentoId, data) {
     fornecedor_cnpj: pedido?.fornecedor_cnpj ?? fornecedor_cnpj ?? rec.fornecedor_cnpj,
     fornecedor_nome: pedido?.fornecedor_nome ?? fornecedor_nome ?? rec.fornecedor_nome,
   }, recebimentoId);
+
+  // RN-18 (Etapa 36): a SEGUNDA porta, e a que a UI de producao realmente usa para escrever
+  // quantidade (o mesmo motivo que colocou o gancho de divergencia nos dois escritores na Etapa
+  // 17). ANTES do UPDATE do cabecalho: recusar depois gravaria os dados fiscais e devolveria 400.
+  await assertExcedentePermitido(db, user, recebimentoId, itens, data.autorizar_excedente === true);
 
   await dbRun(db, `UPDATE recebimentos_material_almoxarifado SET
     nota_fiscal = COALESCE(?, nota_fiscal),

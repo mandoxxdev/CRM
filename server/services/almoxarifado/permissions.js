@@ -147,6 +147,32 @@ const ACAO_PERFIS = {
   // compra (mesmo criterio que a colocou em gerenciar_reposicao, Etapa 11 D9). Entra de graca
   // em GET /almoxarifado/minhas-permissoes — a rota itera Object.keys(ACAO_PERFIS).
   ver_alertas: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE, PERFIS.GESTOR, PERFIS.COMPRAS],
+  // Etapa 36 (RN-18): aceitar MAIS material do que foi pedido gera CONTA A PAGAR maior que o pedido
+  // de compra — risco financeiro, nao risco de prateleira. Mesmo criterio ja escrito acima para
+  // ajustar_material_cliente, remessar_terceiro e conferir_separacao: quando a operacao muda a
+  // NATUREZA DO RISCO, ela ganha acao propria em vez de pegar carona no gate existente
+  // (`receber_material`, que e de quem recebe).
+  //
+  // O ALMOXARIFE fica FORA de proposito, e essa e a exclusao que precisa de justificativa porque
+  // ele e o candidato obvio (tem `receber_material`): quem RECEBE nao autoriza o proprio excedente.
+  // Mesmo raciocinio, escrito, de gerenciar_plano_inspecao. COMPRAS entra porque negocia com o
+  // fornecedor e responde pelo pedido; GESTOR entra pelo precedente de ajustar_estoque.
+  // Reversivel numa linha se o cliente pedir; registrado na letra B do doc de novidades.
+  //
+  // ⚠️ MEDIDO na Task 3: pela ROTA, so ADMINISTRADOR e COMPRAS alcancam esta acao — as duas portas
+  // que escrevem quantidade (`/conferir` e `/fiscal`) sao gateadas por `receber_material`, que NAO
+  // tem GESTOR. O GESTOR na lista vale para a camada de SERVICO (e para o dia em que ele ganhar
+  // `receber_material`), e esta coberto por `recebimentoExcedente.api.test.js` cenario (2) chamando
+  // `conferirRecebimento` direto. Nao foi "consertado" alargando `receber_material`: isso daria ao
+  // GESTOR o recebimento inteiro para resolver uma autorizacao pontual.
+  //
+  // A checagem NAO e `requirePermission` na rota, e isso e decisao: o gate de rota faria o
+  // `PUT /conferir` inteiro exigir a acao, e o ALMOXARIFE — que e quem confere — perderia a
+  // conferencia normal. E condicional e mora no SERVICO, molde de
+  // `ownerRules.assertAjustePermitido` ("a checagem real acontece no MOTOR, nao em
+  // requirePermission na rota"). Entra de graca em GET /almoxarifado/minhas-permissoes — a rota
+  // itera Object.keys(ACAO_PERFIS).
+  autorizar_excedente: [PERFIS.ADMINISTRADOR, PERFIS.GESTOR, PERFIS.COMPRAS],
 };
 
 function getPerfilFromUser(user) {

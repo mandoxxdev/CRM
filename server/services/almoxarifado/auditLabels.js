@@ -73,6 +73,12 @@ const ROTULOS_ENTIDADE = Object.freeze({
   // `categoria` acima: sem esta linha o teste de cobertura de entidades fica vermelho de propósito.
   plano_inspecao: 'Plano de inspeção',
   recebimento: 'Recebimento',
+  // Etapa 36 (RN-18): o excedente autorizado e ato do ITEM, nao do documento — o id que importa na
+  // trilha e o do item que veio a mais. Auditar como `entidade: 'recebimento'` com o id do item em
+  // `dados_novos` foi DESCARTADO: perde a precisao que a trilha existe para dar, por uma linha de
+  // rotulo. Sem esta linha, `auditLabels.api.test.js` ("os 26 literais tem rotulo") fica vermelho
+  // de proposito e a entidade nova apareceria crua no filtro da tela.
+  recebimento_item: 'Item do recebimento',
   remessa_terceiro: 'Remessa a terceiro',
   requisicao: 'Requisição',
   reserva: 'Reserva',
@@ -142,6 +148,11 @@ const GRUPOS_ACAO = congelarGrupos([
   { rotulo: 'Início do faturamento', verbos: ['INICIAR_FATURAMENTO'] },
   { rotulo: 'Processamento da nota', verbos: ['PROCESSAR_NOTA'] },
   { rotulo: 'Recebida', verbos: ['RECEBIDA'] },
+  // Etapa 36 (RN-18): quem autorizou receber ACIMA do pedido, e em que item. Sem esta linha o
+  // cenario "TODO verbo gravavel tem rotulo" de `auditLabels.api.test.js` fica vermelho — a
+  // varredura le o literal `acao: 'EXCEDENTE_AUTORIZADO'` do receiptService. E o mesmo buraco de
+  // fiacao que a Etapa 30 pagou num fix-round por nao existir regua na epoca.
+  { rotulo: 'Excedente autorizado', verbos: ['EXCEDENTE_AUTORIZADO'] },
 
   // Conferência de inventário (routes/almoxarifado.js, ternário — invisível para a varredura)
   { rotulo: 'Contagem', verbos: ['CONTAGEM'] },

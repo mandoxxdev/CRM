@@ -68,6 +68,10 @@ const get = (app) => request(app).get('/api/almoxarifado/minhas-permissoes');
       .forEach(a => assert.strictEqual(acoes[a], true, `ALMOXARIFE deveria poder ${a}`));
     assert.strictEqual(acoes.ajustar_estoque, false);
     assert.strictEqual(acoes.configurar, false);
+    // Etapa 36 (RN-18): quem RECEBE nao autoriza o proprio excedente. O ALMOXARIFE tem
+    // `receber_material` e confere — e justamente por isso fica fora de `autorizar_excedente`.
+    // A UI usa este booleano para esconder a caixa "Autorizo o recebimento acima do pedido".
+    assert.strictEqual(acoes.autorizar_excedente, false);
   });
 
   await test('CONSULTA: só visualizar', async () => {
@@ -80,7 +84,11 @@ const get = (app) => request(app).get('/api/almoxarifado/minhas-permissoes');
 
   await test('GESTOR ajusta estoque; ALMOXARIFE não (segregação do inventário)', async () => {
     setUser(GESTOR);
-    assert.strictEqual((await get(app)).body.acoes.ajustar_estoque, true);
+    const gestor = (await get(app)).body.acoes;
+    assert.strictEqual(gestor.ajustar_estoque, true);
+    // Etapa 36 (RN-18): a metade POSITIVA da ação nova. Sem ela, "ALMOXARIFE não pode" ficaria
+    // verde mesmo se a ação não existisse em ACAO_PERFIS (`can()` nega ação desconhecida).
+    assert.strictEqual(gestor.autorizar_excedente, true);
     setUser(ALMOXARIFE);
     assert.strictEqual((await get(app)).body.acoes.ajustar_estoque, false);
   });

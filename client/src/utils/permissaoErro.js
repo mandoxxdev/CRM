@@ -42,6 +42,12 @@ const ACOES = {
   // Etapa 16, Task 3: sem a entrada, o gate visual da central de alertas cairia no fallback
   // de labelAcao e mostraria "ver alertas" cru (mesmo buraco do achado 7 da Etapa 11).
   ver_alertas: 'ver a central de alertas',
+  // Etapa 36, Task 3: a acao nova entra no mapa NO MESMO commit que a cria em ACAO_PERFIS. Sem
+  // esta linha, `permissaoErro.test.js:44` ("toda acao de ACAO_PERFIS tem rotulo proprio") fica
+  // vermelho — e ficaria vermelho na task do CLIENT, parecendo regressao de outra frente. O 403
+  // desta acao e o que a caixa "Autorizo o recebimento acima do pedido" produz quando o perfil
+  // nao pode: sem rotulo, o toast mostraria "autorizar excedente" cru.
+  autorizar_excedente: 'autorizar recebimento acima do pedido',
 
   // Etapa 30, fix-round da revisao adversarial: QUATRO acoes de ACAO_PERFIS nao tinham rotulo, e
   // tres delas ja tinham call site de UI — o toast mostrava a chave crua ("gerenciar plano
