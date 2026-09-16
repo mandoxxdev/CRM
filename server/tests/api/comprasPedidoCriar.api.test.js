@@ -20,8 +20,15 @@
  * ⚠️ GATE: o modulo core Compras tem **UMA** camada de autorizacao, nao duas — `authenticateToken`
  * + `checkModulePermission('compras')`, nenhum `requirePermission`, nenhum `ACAO_PERFIS` (medido
  * nas 26 rotas). O harness libera a camada 2 (`fakeCheckModulePermission` = `next()`), entao o
- * **unico gate exercitavel aqui e o 401 sem usuario** (cenario 8). Um cenario de 403 de perfil
- * mediria uma camada que este modulo nao tem.
+ * unico gate de ROTA exercitavel aqui e o **401 sem usuario** (cenario 8).
+ *
+ * ⚠️ **COM UMA EXCECAO, e ela e o fix 1 desta task:** quando o payload traz `solicitacao_id`, o
+ * `POST` escreve em `solicitacoes_compra_almoxarifado`, que **e** tabela do almoxarifado e **e**
+ * gateada por `gerenciar_reposicao` la (`extended.js:1743`). Como este servico chama
+ * `purchaseService.vincularPedidoCompra` direto, o gate daquele modulo nao se aplica sozinho — foi
+ * preciso cheque-lo no servico, com `can(user, 'gerenciar_reposicao')`, ANTES de qualquer escrita.
+ * Os cenarios (11) e (12) medem isso; o gate e **condicional** (so quando ha vinculo), e o `POST`
+ * sem `solicitacao_id` continua com a camada do modulo apenas.
  *
  * ⚠️ E O QUE A ETAPA 37 LE DESTAS LINHAS, para ninguem "simplificar" o INSERT: `material_id` e o
  * filtro `IS NOT NULL` de `listarPedidosCompraAux` (item sem material e INVISIVEL ao recebimento),
@@ -305,6 +312,65 @@ const contarPedidos = async (db) => (await dbGet(db, 'SELECT COUNT(*) as n FROM 
     assert.strictEqual(itens.body.length, 1, `esperava 1 linha com saldo, vieram ${itens.body.length}`);
     assert.strictEqual(itens.body[0].saldo_pendente, 10, 'saldo da linha errado');
     assert.strictEqual(itens.body[0].valor_unitario, 4, 'o preco da linha (U1 da E37) nao chegou ao recebimento');
+  });
+
+  // (11) e (12) -----------------------------------------------------------------------------
+  // FIX 1 (decisao do controlador, revertendo a decisao 10 do design): o vinculo de
+  // `solicitacao_id` e uma ESCRITA em `solicitacoes_compra_almoxarifado`, tabela que o almoxarifado
+  // gateia por `gerenciar_reposicao` (`extended.js:1743`). O gate daquele modulo vive na ROTA, e o
+  // `POST` do Compras chama `purchaseService.vincularPedidoCompra` DIRETO — sem checagem, qualquer
+  // usuario do modulo `compras`, inclusive o `PRODUCAO` do fallback de perfil, viraria uma
+  // solicitacao para `VINCULADO`. Autorizacao em duas camadas e a regra do projeto; o caminho
+  // barato e reversivel e o gate, nao a declaracao.
+  //
+  // ⚠️ O gate e CONDICIONAL, e isso e o contrato: so vale quando veio `solicitacao_id`. Um `POST`
+  // sem vinculo continua com a camada do modulo apenas — essa parte da decisao 10 continua de pe,
+  // e o modulo core Compras NAO ganha uma camada de perfil propria (isso e etapa propria).
+  const SEM_PERFIL = { id: 67, nome: 'Comprador sem perfil E38', role: 'user' };          // -> PRODUCAO (fallback)
+  const COM_REPOSICAO = { id: 68, nome: 'Comprador COMPRAS E38', role: 'user', perfil_almoxarifado: 'COMPRAS' };
+
+  await test('(11) vinculo sem gerenciar_reposicao: 403 nomeando a acao, e NADA e gravado', async () => {
+    const sol = await dbRun(db,
+      "INSERT INTO solicitacoes_compra_almoxarifado (material_id, quantidade, motivo, status) VALUES (?,?,'ESTOQUE_MINIMO','PENDENTE')",
+      [materialIdA, 5]);
+    const antes = await contarPedidos(db);
+
+    setUser(SEM_PERFIL);
+    const r = await request(app).post('/api/compras/pedidos').send(payloadValido({ solicitacao_id: sol.lastID }));
+    assert.strictEqual(r.status, 403, `esperava 403, veio ${r.status} ${JSON.stringify(r.body)}`);
+    // O 403 e o MESMO shape de `requirePermission` do almoxarifado — literal, acao e perfil.
+    assert.strictEqual(r.body.error, 'Sem permissão para esta operação', 'literal do 403 divergente');
+    assert.strictEqual(r.body.acao, 'gerenciar_reposicao', `o 403 tem de NOMEAR a acao, veio ${r.body.acao}`);
+    assert.strictEqual(r.body.perfil, 'PRODUCAO', `perfil derivado errado: ${r.body.perfil}`);
+
+    // A recusa acontece ANTES de qualquer escrita — cabecalho incluido.
+    assert.strictEqual(await contarPedidos(db), antes, 'o 403 gravou pedido mesmo assim');
+    const depois = await dbGet(db, 'SELECT status, pedido_compra_id FROM solicitacoes_compra_almoxarifado WHERE id = ?', [sol.lastID]);
+    assert.strictEqual(depois.status, 'PENDENTE', `a solicitacao virou ${depois.status} sem permissao`);
+    assert.strictEqual(depois.pedido_compra_id, null, 'a solicitacao ficou apontando para um pedido');
+
+    // METADE POSITIVA no mesmo test(): o MESMO usuario, SEM `solicitacao_id`, cria normalmente.
+    // E o que prova que o gate e condicional e que o Compras nao ganhou camada de perfil propria.
+    const semVinculo = await request(app).post('/api/compras/pedidos').send(payloadValido());
+    assert.strictEqual(semVinculo.status, 201, `POST sem vinculo deveria seguir 201, veio ${semVinculo.status} ${JSON.stringify(semVinculo.body)}`);
+    setUser(ADMIN);
+  });
+
+  await test('(12) com gerenciar_reposicao (perfil COMPRAS) o vinculo passa e a solicitacao fica VINCULADO', async () => {
+    const sol = await dbRun(db,
+      "INSERT INTO solicitacoes_compra_almoxarifado (material_id, quantidade, motivo, status) VALUES (?,?,'ESTOQUE_MINIMO','PENDENTE')",
+      [materialIdA, 5]);
+
+    // `gerenciar_reposicao` = [ADMINISTRADOR, GESTOR, COMPRAS] (ACAO_PERFIS, Etapa 11 D9). O
+    // ALMOXARIFE fica de fora la, de proposito: quem conta e movimenta nao decide pedido.
+    setUser(COM_REPOSICAO);
+    const r = await request(app).post('/api/compras/pedidos').send(payloadValido({ solicitacao_id: sol.lastID }));
+    assert.strictEqual(r.status, 201, `esperava 201, veio ${r.status} ${JSON.stringify(r.body)}`);
+    assert.strictEqual(r.body.vinculo_solicitacao, 'ok', `esperava 'ok', veio ${r.body.vinculo_solicitacao}`);
+    const depois = await dbGet(db, 'SELECT status, pedido_compra_id FROM solicitacoes_compra_almoxarifado WHERE id = ?', [sol.lastID]);
+    assert.strictEqual(depois.status, 'VINCULADO', `solicitacao ficou ${depois.status}`);
+    assert.strictEqual(depois.pedido_compra_id, r.body.id, 'pedido_compra_id nao aponta para o pedido criado');
+    setUser(ADMIN);
   });
 
   await close();

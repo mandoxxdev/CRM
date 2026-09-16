@@ -42,13 +42,24 @@
  *    com **201 assim mesmo**. O pedido ja existe no banco quando o vinculo e tentado; derrubar a
  *    resposta faria o comprador ver um erro e criar o pedido de novo — duplicando pedido real por
  *    causa de uma solicitacao que alguem cancelou no meio.
- *    ⚠️ **E aqui vai o fato incomodo, declarado (letra G):** `requirePermission('gerenciar_reposicao')`
- *    e o gate do modulo `almoxarifado` vivem na ROTA daquele modulo (`extended.js:1743`), **nao no
- *    servico**. Chamando `purchaseService.vincularPedidoCompra(db, …)` direto, como aqui, **nao ha
- *    gate nenhum**: qualquer usuario do modulo `compras` — inclusive o `PRODUCAO` do fallback de
- *    perfil — escreve em `solicitacoes_compra_almoxarifado` por esta porta. Descartado: aplicar
- *    `requirePermission` no core, porque isso inventaria a camada 3 que o modulo Compras nao tem
- *    (as 26 rotas medidas nao usam nenhuma) — decidir os perfis de Compras e etapa propria.
+ *
+ * 5. **O vinculo tem GATE DE PERFIL, e ele e CONDICIONAL** (fix 1 da Task 2, decisao do
+ *    controlador revertendo a decisao 10 do design). Escrever em
+ *    `solicitacoes_compra_almoxarifado` e operacao que o almoxarifado gateia por
+ *    `gerenciar_reposicao` (`extended.js:1743`) — mas aquele gate vive na **rota** daquele modulo,
+ *    e este servico chama `purchaseService.vincularPedidoCompra` **direto**. Sem checagem,
+ *    qualquer usuario do modulo `compras` — inclusive o `PRODUCAO` do fallback de
+ *    `getPerfilFromUser` — virava uma solicitacao para `VINCULADO` pela porta de Compras, e o
+ *    caminho era alcancavel pela UI (botao "Gerar pedido" da Reposicao, Task 6). Medido pelo
+ *    cenario (11): antes do fix, **201 com a solicitacao em `VINCULADO`**.
+ *    A checagem e `can(user, 'gerenciar_reposicao')` e roda **ANTES de qualquer escrita, cabecalho
+ *    incluido** — recusar depois do INSERT deixaria pedido gravado por uma chamada que foi negada.
+ *    ⚠️ **Condicional de proposito:** so vale quando veio `solicitacao_id`. `POST` sem vinculo
+ *    continua com a camada do modulo apenas — o modulo core Compras **nao ganha** camada de perfil
+ *    propria aqui, e essa parte da decisao 10 continua de pe. Descartado: inventar perfis de
+ *    Compras (`ACAO_PERFIS` proprio) para gatear a porta inteira — decidir os perfis do modulo e
+ *    etapa propria, e gatear a criacao do pedido por perfil do **almoxarifado** barraria o
+ *    comprador no seu proprio modulo.
  *
  * Testes: `server/tests/api/comprasPedidoCriar.api.test.js`
  * Plano:  `docs/superpowers/plans/2026-09-16-crm-etapa38-pedido-de-compra.md` (Task 2)
@@ -56,9 +67,22 @@
 const { dbRun, dbGet, dbAll } = require('../almoxarifado/db');
 const { inserirComNumeroUnico } = require('../almoxarifado/numeroDoc');
 const purchaseService = require('../almoxarifado/purchaseService');
+const { can, getPerfilFromUser } = require('../almoxarifado/permissions');
 
 /** Molde de erro traduzido (mesmo `erro()` dos servicos do almoxarifado: a rota le `.status`). */
 const erro = (msg, status = 400) => Object.assign(new Error(msg), { status });
+
+/**
+ * 403 no MESMO shape de `requirePermission` (`permissions.js`): `{ error, acao, perfil }`.
+ *
+ * Reusar o shape nao e cosmetica — a tela do almoxarifado ja sabe ler `acao` e `perfil` para dizer
+ * ao usuario QUAL permissao falta e com que perfil ele entrou. Um 403 so com `error` obrigaria o
+ * client a tratar duas formas para o mesmo fato, e a segunda seria a mais pobre.
+ */
+const erroPermissao = (user, acao) => Object.assign(
+  new Error('Sem permissão para esta operação'),
+  { status: 403, acao, perfil: getPerfilFromUser(user) },
+);
 
 /** Colunas do cabecalho que o payload pode preencher — `numero` e `valor_total` NAO estao aqui. */
 const COLUNAS_CABECALHO = ['data_pedido', 'previsao_entrega', 'status', 'observacoes'];
@@ -123,6 +147,12 @@ async function resolverItens(db, itens) {
  *                            `vinculo_solicitacao: 'ok' | 'falhou'`
  */
 async function criarPedido(db, dados, user) {
+  // ⚠️ ANTES DE QUALQUER ESCRITA, cabecalho incluido (decisao 5 do cabecalho deste arquivo). Nao e
+  // detalhe de ordem: recusar o vinculo depois do INSERT deixaria um pedido gravado por uma
+  // chamada que foi NEGADA, e o cenario (11) afirma `COUNT(pedidos_compra)` inalterado.
+  const querVincular = dados.solicitacao_id !== undefined && dados.solicitacao_id !== null;
+  if (querVincular && !can(user, 'gerenciar_reposicao')) throw erroPermissao(user, 'gerenciar_reposicao');
+
   const fornecedor = await dbGet(db, 'SELECT id FROM fornecedores WHERE id = ?', [dados.fornecedor_id]);
   if (!fornecedor) throw erro('Fornecedor não encontrado');
 
@@ -162,7 +192,7 @@ async function criarPedido(db, dados, user) {
 
   const pedido = await relerPedido(db, pedidoId);
 
-  if (dados.solicitacao_id !== undefined && dados.solicitacao_id !== null) {
+  if (querVincular) {
     try {
       await purchaseService.vincularPedidoCompra(db, dados.solicitacao_id, pedidoId);
       pedido.vinculo_solicitacao = 'ok';

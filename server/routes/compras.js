@@ -154,7 +154,12 @@ app.post('/api/compras/pedidos', authenticateToken, checkModulePermission('compr
     } catch (e) {
       // `e.status` vem do molde `erro()` do servico (400 nas guardas de fornecedor/material);
       // qualquer outra coisa e defeito nosso e sai 500 com a mensagem, como nas demais rotas.
-      res.status(e.status || 500).json({ error: e.message });
+      // `acao`/`perfil` so existem no 403 do gate condicional do vinculo (fix 1 da Task 2) e vao
+      // junto para o corpo ficar IDENTICO ao de `requirePermission` do almoxarifado — a tela ja
+      // sabe ler esses dois campos para dizer qual permissao falta.
+      const corpo = { error: e.message };
+      if (e.acao) { corpo.acao = e.acao; corpo.perfil = e.perfil; }
+      res.status(e.status || 500).json(corpo);
     }
   });
 
