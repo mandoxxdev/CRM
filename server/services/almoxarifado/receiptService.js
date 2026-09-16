@@ -276,15 +276,23 @@ async function criarRecebimento(db, user, data) {
  * abaixo) e item com `''` nao podem ser lidos como ZERO — `Number('')` e 0, e 0 > 10 e falso por
  * acidente, nao por regra. O `continue` do `== null` e o que deixa o payload parcial passar.
  *
- * `ignorarInalteradas` (revisao final, F1) — a barreira olha so os itens cuja quantidade ENVIADA
- * e DIFERENTE da GRAVADA. Ecoar uma quantidade que ja esta no banco nao e ato novo de autorizacao:
- * ou ela foi autorizada e auditada quando entrou, ou e acervo anterior a esta etapa. Sem isso, um
- * recebimento com excedente autorizado nunca mais salvava dados fiscais — `salvarFiscal` da tela
- * reenvia `quantidade_recebida` de todos os itens e nao tem caixa de autorizacao nenhuma, entao o
- * documento ficava PRESO (o `processar` seguinte morre em `validarDadosProcessamento`).
+ * A barreira exige AUMENTO (revisao final, F1 + R2): barra o item quando `recebida > esperada`
+ * **E** `recebida > quantidade_recebida GRAVADA`. Ecoar a quantidade que ja esta no banco nao e
+ * ato novo de autorizacao (ou ela foi autorizada e auditada quando entrou, ou e acervo anterior a
+ * esta etapa), e BAIXAR um excedente ja registrado nao pede autorizacao nenhuma. `> gravada`, e
+ * nao `!== gravada`: corrigir 25 para 20 num item de 10 esperados continua acima do pedido e
+ * continua sendo uma correcao para baixo.
+ *
+ * Sem isso, as DUAS telas travavam depois do primeiro excedente autorizado, porque as duas
+ * reenviam a quantidade JA GRAVADA de todos os itens que tem o campo preenchido e nenhuma manda
+ * `autorizar_excedente` fora da caixa da conferencia: (a) o modal de NF ficava preso em 400 para
+ * sempre — nao tem campo de quantidade nem caixa —, e o `processar` seguinte morria em
+ * `validarDadosProcessamento`; (b) na conferencia, o ALMOXARIFE nao conseguia mais salvar a
+ * contagem de NENHUM outro item do documento, e COMPRAS/ADMIN, remarcando a caixa para escapar do
+ * 400, gravavam uma linha nova de EXCEDENTE_AUTORIZADO A CADA SAVE. Como a trilha so e escrita
+ * quando a barreira DISPAROU, exigir aumento tambem conserta a auditoria inflada.
  */
-async function assertExcedentePermitido(db, user, recebimentoId, itens, autorizado, opcoes = {}) {
-  const { ignorarInalteradas = false } = opcoes;
+async function assertExcedentePermitido(db, user, recebimentoId, itens, autorizado) {
   const excedentes = [];
   for (const item of itens || []) {
     if (item.quantidade_recebida == null) continue;
@@ -294,11 +302,11 @@ async function assertExcedentePermitido(db, user, recebimentoId, itens, autoriza
     if (!atual) continue;
     const recebida = parseFloat(item.quantidade_recebida);
     const esperada = parseFloat(atual.quantidade_esperada);
-    if (ignorarInalteradas) {
-      const gravada = parseFloat(atual.quantidade_recebida);
-      if (Number.isFinite(gravada) && Number.isFinite(recebida) && gravada === recebida) continue;
-    }
-    if (Number.isFinite(recebida) && Number.isFinite(esperada) && recebida > esperada) {
+    const gravada = parseFloat(atual.quantidade_recebida);
+    // Coluna vazia (ou texto) NAO e "zero gravado": sem numero no banco nao existe "aumento sobre
+    // o que ja esta registrado", e a barreira volta a depender so de `recebida > esperada`.
+    const aumenta = !Number.isFinite(gravada) || recebida > gravada;
+    if (Number.isFinite(recebida) && Number.isFinite(esperada) && recebida > esperada && aumenta) {
       excedentes.push({ id: atual.id, recebida, esperada });
     }
   }
@@ -465,10 +473,10 @@ async function salvarDadosFiscal(db, user, recebimentoId, data) {
   // RN-18 (Etapa 36): a SEGUNDA porta, e a que a UI de producao realmente usa para escrever
   // quantidade (o mesmo motivo que colocou o gancho de divergencia nos dois escritores na Etapa
   // 17). ANTES do UPDATE do cabecalho: recusar depois gravaria os dados fiscais e devolveria 400.
-  // `ignorarInalteradas` (revisao final, F1): o modal de NF nao tem campo de quantidade nem caixa
-  // de autorizacao, e reenvia a quantidade de TODOS os itens — so quem MUDA a quantidade autoriza.
-  await assertExcedentePermitido(db, user, recebimentoId, itens, data.autorizar_excedente === true,
-    { ignorarInalteradas: true });
+  // A regra de AUMENTO (F1 + R2) mora dentro de `assertExcedentePermitido` e vale nas duas portas:
+  // o modal de NF nao tem campo de quantidade nem caixa de autorizacao, e reenvia a quantidade de
+  // TODOS os itens.
+  await assertExcedentePermitido(db, user, recebimentoId, itens, data.autorizar_excedente === true);
 
   await dbRun(db, `UPDATE recebimentos_material_almoxarifado SET
     nota_fiscal = COALESCE(?, nota_fiscal),

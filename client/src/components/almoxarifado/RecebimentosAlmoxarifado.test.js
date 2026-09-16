@@ -873,3 +873,49 @@ test('(r) o payload fiscal sai SEM tipo_recebimento, mesmo com valor legado no r
   expect(payload.valor_total_nota).toBe(2400);
   expect(payload.itens).toEqual([expect.objectContaining({ id: 841, quantidade_recebida: 120 })]);
 });
+
+/* ── (s) revisão final, R2: o caminho de recuperação do 400 — recusa, autorizo, salvo ──────────
+ * O cenário (o) prova a caixa marcada ANTES do primeiro save. Este prova o caminho que o operador
+ * real percorre: digita a contagem, salva, **toma 400**, lê na tela quem autoriza, marca a caixa e
+ * salva de novo. As duas coisas que podiam quebrar aqui e que nenhum cenário anterior cobria:
+ *
+ * 1. a quantidade digitada tem de SOBREVIVER ao 400 — o `catch` não pode refazer o detalhe (o
+ *    refetch zeraria o campo e o operador redigitaria a contagem inteira);
+ * 2. o segundo `PUT` tem de levar `autorizar_excedente: true` **e a mesma quantidade** — uma
+ *    tela que zerasse o `autorizarExcedente` no erro (como `abrirDetalhe` e `fecharDetalhe` fazem,
+ *    de propósito, na TROCA de painel) mandaria o segundo save idêntico ao primeiro e o operador
+ *    ficaria em loop de 400 sem nenhuma saída.
+ */
+test('(s) 400 de excedente, marcar a autorizacao e salvar de novo manda a flag com a MESMA quantidade', async () => {
+  await renderizar();
+  await clicar(linhaDe('REC-2026-058'));
+
+  const LITERAL_400 = 'Quantidade recebida (250) maior que a esperada (200) no item #581 '
+    + '— a autorização de excedente é de Compras ou do Administrador';
+  api.put.mockImplementation(() => Promise.reject({ response: { data: { error: LITERAL_400 } } }));
+
+  digitar(inputConferida(), '250');
+  await esperarEfeitos();
+  await clicar(botaoPorTexto('Salvar Conferência'));
+
+  // A recusa ficou na tela, e o payload do primeiro save NÃO levou a flag.
+  expect(chamadasConferir(58)).toHaveLength(1);
+  expect(painel().textContent).toContain(LITERAL_400);
+  expect('autorizar_excedente' in api.put.mock.calls[0][1]).toBe(false);
+  // E a contagem digitada sobreviveu ao 400: sem isto o operador redigita tudo.
+  expect(inputConferida().value).toBe('250');
+
+  // Agora o gesto que a literal manda: alguém de Compras marca a autorização e salva de novo.
+  api.put.mockImplementation(() => Promise.resolve({ data: { success: true } }));
+  await clicar(caixaExcedente());
+  await clicar(botaoPorTexto('Salvar Conferência'));
+
+  const chamadas = chamadasConferir(58);
+  expect(chamadas).toHaveLength(2);
+  expect(chamadas[1][1]).toEqual({
+    itens: [{ id: 581, quantidade_recebida: 250, conferencia_quantidade: false }],
+    autorizar_excedente: true,
+  });
+  // O sucesso limpa a recusa da tela — senão o banner vermelho fica mentindo depois de salvar.
+  expect(painel().textContent).not.toContain(LITERAL_400);
+});

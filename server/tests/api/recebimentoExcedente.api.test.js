@@ -373,6 +373,109 @@ const semPermissao = (perfil) => 'Autorizar recebimento acima do pedido exige a 
     setUser(ADMIN);
   });
 
+  // ── (9)(10)(11) revisao final, R2 — a MESMA regra na PRIMEIRA porta ──────────────────────────
+  /**
+   * Segundo revisor, mesma raiz do F1 mas na porta da CONFERENCIA. Depois de um excedente
+   * autorizado (COMPRAS autoriza 25 de 10), TODO "Salvar Conferência" seguinte tomava 400: o
+   * `salvarConferencia` da tela monta os itens a partir de `detalhe.itens` e reenvia a quantidade
+   * GRAVADA de cada item que tem o campo preenchido. Duas consequencias, as duas ruins:
+   * o ALMOXARIFE nao conseguia mais salvar a contagem de NENHUM outro item daquele documento; e
+   * COMPRAS/ADMIN, remarcando a caixa para escapar do 400, gravavam uma linha nova de
+   * EXCEDENTE_AUTORIZADO A CADA SAVE — trilha de auditoria inflada com autorizacoes que ninguem
+   * deu de novo.
+   *
+   * A regra unificada (as DUAS portas, uma implementacao): barra o item quando
+   * `recebida > esperada` **E** `recebida > quantidade_recebida gravada` — um AUMENTO sobre o que
+   * ja esta registrado. Ecoar nao barra (o item nao mudou), BAIXAR nao barra (ninguem pede
+   * autorizacao para receber menos), e a linha de auditoria so nasce quando a barreira disparou de
+   * verdade. O `ignorarInalteradas` do F1 saiu: era a mesma regra pela metade, e so na segunda
+   * porta.
+   *
+   * DESCARTADO: fazer a tela mandar so os itens ALTERADOS (o client teria de guardar o valor
+   * original de cada item para comparar — estado duplicado que dessincroniza no refetch, e a
+   * barreira continuaria furada para qualquer outro cliente da API).
+   */
+  async function novoRecebimentoDoisItens() {
+    const m1 = await novoMaterial();
+    const m2 = await novoMaterial();
+    seq += 1;
+    const res = await request(app).post('/api/almoxarifado/recebimentos').send({
+      tipo_recebimento: 'NOTA_FISCAL', nota_fiscal: `NF-EXC-2I-${seq}`,
+      itens: [{ material_id: m1, quantidade: 10 }, { material_id: m2, quantidade: 5 }],
+    });
+    assert.strictEqual(res.status, 201, JSON.stringify(res.body));
+    const itens = await dbAll(db, `SELECT id, quantidade_esperada FROM
+      recebimentos_material_itens_almoxarifado WHERE recebimento_id = ? ORDER BY id`, [res.body.id]);
+    assert.strictEqual(itens.length, 2, 'fixture: o documento tem DOIS itens');
+    return { recId: res.body.id, itemA: itens[0].id, itemB: itens[1].id };
+  }
+
+  await test('(9) R2: com excedente ja autorizado, o ALMOXARIFE salva a contagem dos OUTROS itens', async () => {
+    setUser(COMPRAS);
+    const { recId, itemA, itemB } = await novoRecebimentoDoisItens();
+    const aut = await conferir(recId, {
+      autorizar_excedente: true,
+      itens: [{ id: itemA, quantidade_recebida: 25, conferencia_quantidade: true }],
+    });
+    assert.strictEqual(aut.status, 200, JSON.stringify(aut.body));
+    const trilhaAntes = await auditoriaExcedente(itemA);
+    assert.strictEqual(trilhaAntes.length, 1, 'fixture: a autorizacao deixou UMA linha');
+
+    // O gesto real da tela: reenvia o item A com a quantidade JA GRAVADA (25) e muda o item B.
+    // Sem flag — o ALMOXARIFE nem ve a caixa.
+    setUser(ALMOXARIFE);
+    const res = await conferir(recId, {
+      itens: [
+        { id: itemA, quantidade_recebida: 25, conferencia_quantidade: true },
+        { id: itemB, quantidade_recebida: 4, conferencia_quantidade: true },
+      ],
+    });
+    assert.strictEqual(res.status, 200, `ecoar o excedente ja autorizado nao e ato novo: ${JSON.stringify(res.body)}`);
+    assert.strictEqual((await lerItem(itemB)).quantidade_recebida, 4, 'a contagem do OUTRO item tem de entrar');
+    assert.strictEqual((await lerItem(itemA)).quantidade_recebida, 25);
+    assert.strictEqual((await auditoriaExcedente(itemA)).length, 1,
+      'ecoar nao pode gravar linha NOVA de EXCEDENTE_AUTORIZADO');
+    setUser(ADMIN);
+  });
+
+  await test('(10) R2, metade positiva: AUMENTAR 25 -> 30 sem flag continua 400', async () => {
+    setUser(COMPRAS);
+    const { recId, itemA } = await novoRecebimentoDoisItens();
+    const aut = await conferir(recId, {
+      autorizar_excedente: true,
+      itens: [{ id: itemA, quantidade_recebida: 25, conferencia_quantidade: true }],
+    });
+    assert.strictEqual(aut.status, 200, JSON.stringify(aut.body));
+
+    setUser(ALMOXARIFE);
+    const res = await conferir(recId, { itens: [{ id: itemA, quantidade_recebida: 30 }] });
+    assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+    assert.strictEqual(res.body.error, semFlag(30, 10, itemA));
+    assert.strictEqual((await lerItem(itemA)).quantidade_recebida, 25, 'a recusa e ANTES do UPDATE');
+    assert.strictEqual((await auditoriaExcedente(itemA)).length, 1, 'a recusa nao deixa trilha');
+    setUser(ADMIN);
+  });
+
+  await test('(11) R2: BAIXAR 25 -> 20 (ainda acima da esperada) passa sem flag, e nao audita', async () => {
+    setUser(COMPRAS);
+    const { recId, itemA } = await novoRecebimentoDoisItens();
+    const aut = await conferir(recId, {
+      autorizar_excedente: true,
+      itens: [{ id: itemA, quantidade_recebida: 25, conferencia_quantidade: true }],
+    });
+    assert.strictEqual(aut.status, 200, JSON.stringify(aut.body));
+
+    // 20 ainda e MAIOR que a esperada (10), e mesmo assim nao e ato novo: corrigir para BAIXO um
+    // excedente ja autorizado nao pede autorizacao nenhuma. E por isso que a regua e
+    // `> gravada`, e nao `!== gravada`.
+    const res = await conferir(recId, { itens: [{ id: itemA, quantidade_recebida: 20 }] });
+    assert.strictEqual(res.status, 200, `baixar um excedente autorizado nao pede autorizacao: ${JSON.stringify(res.body)}`);
+    assert.strictEqual((await lerItem(itemA)).quantidade_recebida, 20);
+    assert.strictEqual((await auditoriaExcedente(itemA)).length, 1,
+      'baixar nao grava autorizacao nova');
+    setUser(ADMIN);
+  });
+
   await close();
   console.log(`\n${passed} passou, ${failed} falhou`);
   process.exit(failed ? 1 : 0);
