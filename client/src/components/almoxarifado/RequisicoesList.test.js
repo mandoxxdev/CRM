@@ -578,7 +578,10 @@ describe('Etapa 34: anexos da requisição no painel de detalhe', () => {
   // `checkModulePermission('almoxarifado')`: 403 "Acesso negado ao módulo" em vermelho DENTRO do
   // painel, um formulário de upload morto (o hook de permissões falha ABERTO de propósito) e uma
   // linha de auditoria de acesso negado por abertura de painel. Todos os outros blocos daquele
-  // painel já eram gateados (`:976`, `:1047`, `:1066`).
+  // painel já eram gateados por `warehouseMode &&` — o bloco de separação/conferência, o de
+  // aprovação por valor e o de assinaturas de entrega. (Referência por NOME e não por linha: os
+  // três números que estavam aqui — `:976`, `:1047`, `:1066` — já apontavam para o meio de outros
+  // JSX antes desta revisão. É o mesmo drift que a Etapa 35 teve de corrigir três vezes.)
   test('F1: fora do almoxarifado (warehouseMode=false) o bloco não existe e nada vai para /almoxarifado/anexos', async () => {
     mockWarehouseMode = false;
     detalheDoBanco = baseRequisicao('PENDENTE');

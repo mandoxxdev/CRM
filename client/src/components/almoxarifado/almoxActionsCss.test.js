@@ -19,6 +19,31 @@ const css = fs.readFileSync(path.join(__dirname, 'Almoxarifado.css'), 'utf8');
 // (Fase 2) `^` + flag 'm': sem a ancora de inicio de linha, `.btn-almox-secondary` tambem casa
 // dentro de `.almox-mapa-page .btn-almox-secondary {` (`:1486`). Hoje a regra do modulo vem antes e
 // o `match` acerta por sorte; com a ancora, acerta por construcao.
+//
+// Os LIMITES deste `bloco()`, escritos aqui porque dois deles ja custaram tempo e o terceiro
+// esta parado de proposito:
+//
+// (a) `[^}]*` para no PRIMEIRO `}` do arquivo, inclusive um que esteja dentro de um COMENTARIO
+//     CSS da regra ancorada — o bloco sai truncado e as assercoes que dependiam do resto passam a
+//     medir string vazia. Foi o que quebrou na T5 fix1: o comentario de `.almox-actions` citava
+//     uma chave de fechamento e cortava o bloco antes do `flex-wrap`. Por isso o comentario
+//     daquela regra tem a instrucao de nao escrever `}` no texto. Se algum dia precisar, o
+//     conserto e tirar os comentarios do CSS antes do `match`, nao relaxar a classe negada.
+//
+// (b) `css.match` SEM a flag 'g' devolve a PRIMEIRA ocorrencia. A ancora `^` garante que e a
+//     regra de topo do modulo e nao uma descendente (`.almox-mapa-page .btn-almox-secondary`),
+//     mas NAO garante que ela e a que vence na cascata: um override de MESMA especificidade
+//     escrito DEPOIS no arquivo mudaria o valor efetivo no navegador e este teste continuaria
+//     verde lendo o primeiro bloco. Limite ACEITO — provar cascata exige um parser de CSS, e a
+//     prova de que o botao nao e cortado e visual, no roteiro de F12 do guia.
+//
+// (c) A assercao 6 (`@media (max-width: 768px)[\s\S]*?.almox-table { … overflow-x: auto`) NAO
+//     prova CONTENCAO dentro do media block: e uma busca por proximidade textual no arquivo
+//     inteiro, sem contar chaves. E o literal `@media (max-width: 768px)` hoje aparece DUAS vezes
+//     no CSS — uma dentro de um comentario de `.almox-actions`, ANTES do media block de verdade
+//     —, entao o `[\s\S]*?` pode comecar pelo comentario. Ela vale como guarda de DRIFT (se o
+//     `overflow-x: auto` da tabela desaparecer, cai), nao como prova de escopo. Limite ACEITO
+//     pelo mesmo motivo do (b).
 const bloco = (seletor) => {
   const m = css.match(new RegExp(`^\\${seletor}\\s*\\{([^}]*)\\}`, 'm'));
   return m ? m[1] : null;

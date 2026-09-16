@@ -152,7 +152,9 @@ async function clicar(el) {
   await esperarEfeitos();
 }
 // Input controlado do React: setar `.value` direto não dispara o `onChange` — usa o setter nativo
-// + evento `input`, que é o que o React ouve (molde `RequisicoesList.test.js:214-220`).
+// + evento `input`, que é o que o React ouve (molde: o helper `digitar` de
+// `RequisicoesList.test.js` — referência por NOME, não por linha: o número já estava errado em ~15
+// linhas antes da revisão final desta etapa, e é o terceiro caso de drift dessa forma na branch).
 function digitar(input, valor) {
   const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
   act(() => {
