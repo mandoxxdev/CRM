@@ -156,15 +156,18 @@ const ACAO_PERFIS = {
   // O ALMOXARIFE fica FORA de proposito, e essa e a exclusao que precisa de justificativa porque
   // ele e o candidato obvio (tem `receber_material`): quem RECEBE nao autoriza o proprio excedente.
   // Mesmo raciocinio, escrito, de gerenciar_plano_inspecao. COMPRAS entra porque negocia com o
-  // fornecedor e responde pelo pedido; GESTOR entra pelo precedente de ajustar_estoque.
+  // fornecedor e responde pelo pedido.
   // Reversivel numa linha se o cliente pedir; registrado na letra B do doc de novidades.
   //
-  // ⚠️ MEDIDO na Task 3: pela ROTA, so ADMINISTRADOR e COMPRAS alcancam esta acao — as duas portas
-  // que escrevem quantidade (`/conferir` e `/fiscal`) sao gateadas por `receber_material`, que NAO
-  // tem GESTOR. O GESTOR na lista vale para a camada de SERVICO (e para o dia em que ele ganhar
-  // `receber_material`), e esta coberto por `recebimentoExcedente.api.test.js` cenario (2) chamando
-  // `conferirRecebimento` direto. Nao foi "consertado" alargando `receber_material`: isso daria ao
-  // GESTOR o recebimento inteiro para resolver uma autorizacao pontual.
+  // ⚠️ O GESTOR estava no design desta etapa (pelo precedente de ajustar_estoque) e FICOU DE FORA
+  // na execucao, porque MEDIDO: ele nao tem PORTA. As duas rotas que escrevem quantidade
+  // (`/conferir` e `/fiscal`) sao gateadas por `receber_material`, que nao tem GESTOR, e nao existe
+  // outro chamador das funcoes de servico — logo o GESTOR na lista seria configuracao MORTA. A
+  // regra e que o mapa nao pode listar quem nao consegue agir: quem le `minhas-permissoes` veria
+  // `true` para uma acao que nunca acontece. Fica de fora ATE existir uma porta. Descartado aqui:
+  // alargar `receber_material` (daria ao GESTOR o recebimento inteiro para resolver uma
+  // autorizacao pontual) e abrir uma rota de excecao (porta de autorizacao propria e questao de
+  // design, na letra B: "GESTOR deve autorizar excedente? Se sim, precisa de porta propria").
   //
   // A checagem NAO e `requirePermission` na rota, e isso e decisao: o gate de rota faria o
   // `PUT /conferir` inteiro exigir a acao, e o ALMOXARIFE — que e quem confere — perderia a
@@ -172,7 +175,7 @@ const ACAO_PERFIS = {
   // `ownerRules.assertAjustePermitido` ("a checagem real acontece no MOTOR, nao em
   // requirePermission na rota"). Entra de graca em GET /almoxarifado/minhas-permissoes — a rota
   // itera Object.keys(ACAO_PERFIS).
-  autorizar_excedente: [PERFIS.ADMINISTRADOR, PERFIS.GESTOR, PERFIS.COMPRAS],
+  autorizar_excedente: [PERFIS.ADMINISTRADOR, PERFIS.COMPRAS],
 };
 
 function getPerfilFromUser(user) {

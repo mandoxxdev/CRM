@@ -14,14 +14,18 @@
  * PAR no MESMO cenario: 403 de quem nao tem a acao E 200 de quem tem. Um sem o outro nao prova
  * nada — e e por isso que as duas metades moram no MESMO `test()`.
  *
- * ⚠️ DIVERGENCIA DECLARADA do plano/design, medida aqui: o design diz "com perfil GESTOR -> 200".
- * Pela ROTA isso e INALCANCAVEL — as duas portas sao gateadas por
- * `requirePermission('receber_material')`, que e `[ADMINISTRADOR, ALMOXARIFE, COMPRAS]`
- * (`permissions.js:86`), e GESTOR nao esta lá: ele toma 403 com `acao: 'receber_material'` ANTES
- * de o servico rodar. O unico perfil NAO-admin que tem as DUAS coisas e **COMPRAS**, e e ele que
- * faz a metade positiva pela rota. Para a lista de `autorizar_excedente` nao ficar sem regua do
- * lado do GESTOR, o cenario (2) tambem chama `conferirRecebimento` DIRETO no servico com um
- * usuario GESTOR — a camada que a decisao 6 do design escolheu para a checagem.
+ * ⚠️ O DESIGN ESTAVA ERRADO NUM PONTO, medido aqui e corrigido no fix-round 1: ele dizia
+ * `autorizar_excedente = [ADMINISTRADOR, GESTOR, COMPRAS]` e "com perfil GESTOR -> 200". Pela ROTA
+ * isso e INALCANCAVEL — as duas portas sao gateadas por `requirePermission('receber_material')`,
+ * que e `[ADMINISTRADOR, ALMOXARIFE, COMPRAS]` (`permissions.js:86`), e GESTOR nao esta la: ele
+ * toma 403 com `acao: 'receber_material'` ANTES de o servico rodar, e nao existe outro chamador das
+ * funcoes de servico. O GESTOR na lista seria configuracao MORTA, com `minhas-permissoes` dizendo
+ * `true` para uma acao que nunca acontece. A lista passou a ser `[ADMINISTRADOR, COMPRAS]`: o mapa
+ * nao pode listar quem nao consegue agir. COMPRAS e o unico perfil NAO-admin com as duas coisas, e
+ * e ele que faz a metade positiva; o cenario (2) fecha a regua do GESTOR pelo lado NEGATIVO,
+ * chamando `conferirRecebimento` DIRETO no servico (pela rota ele nem chegaria la).
+ * DESCARTADO: alargar `receber_material` (daria ao GESTOR o recebimento inteiro por uma autorizacao
+ * pontual) e abrir rota de excecao (porta propria e questao de design, ficou na letra B).
  *
  * Executar: cd server && node tests/api/recebimentoExcedente.api.test.js
  */
@@ -102,14 +106,20 @@ const semPermissao = (perfil) => 'Autorizar recebimento acima do pedido exige a 
   [itemId]);
 
   // ── (0) a regua da LISTA, convencao de toda acao nova deste modulo desde a Etapa 8 ──────────
-  await test('(0) autorizar_excedente existe em ACAO_PERFIS com a lista da decisao 6', async () => {
+  await test('(0) autorizar_excedente existe em ACAO_PERFIS, e a lista e so quem tem PORTA', async () => {
     assert.ok(ACAO_PERFIS.autorizar_excedente,
       'acao ausente de ACAO_PERFIS — o gate cairia em `|| []`, que nega tudo, e o 403 do '
       + 'ALMOXARIFE ficaria verde pelo motivo errado');
     assert.deepStrictEqual([...ACAO_PERFIS.autorizar_excedente].sort(),
-      ['ADMINISTRADOR', 'COMPRAS', 'GESTOR']);
+      ['ADMINISTRADOR', 'COMPRAS']);
     assert.ok(!ACAO_PERFIS.autorizar_excedente.includes(PERFIS.ALMOXARIFE),
       'a exclusao do ALMOXARIFE e a decisao desta etapa, e sem esta linha ela muda sem regua');
+    // (fix-round 1) O GESTOR estava no design e saiu na execucao: ele nao tem PORTA — as duas
+    // rotas que escrevem quantidade sao gateadas por `receber_material`, que nao o inclui, e nao ha
+    // outro chamador do servico. Listar quem nao consegue agir seria configuracao morta, e
+    // `minhas-permissoes` diria `true` para uma acao que nunca acontece.
+    assert.ok(!ACAO_PERFIS.autorizar_excedente.includes(PERFIS.GESTOR),
+      'o GESTOR nao tem porta para esta acao — o mapa nao pode listar quem nao consegue agir');
   });
 
   await test('(1) /conferir com recebida > esperada e sem flag: 400 com a literal', async () => {
@@ -162,16 +172,26 @@ const semPermissao = (perfil) => 'Autorizar recebimento acima do pedido exige a 
     assert.deepStrictEqual(JSON.parse(trilha[0].dados_novos), { quantidade_recebida: 999 });
     assert.deepStrictEqual(JSON.parse(trilha[0].dados_anteriores), { quantidade_esperada: 10 });
 
-    // A regua do GESTOR, na CAMADA onde a decisao 6 pos a checagem: o servico. Sem isto, o
-    // GESTOR estaria na lista de ACAO_PERFIS sem nenhum teste exercitando o `can()` com ele.
+    // (fix-round 1) A regua do GESTOR, na CAMADA onde a decisao 6 pos a checagem: o servico. Ela
+    // era POSITIVA e virou NEGATIVA, porque a lista mudou — o GESTOR estava no design e saiu na
+    // execucao por nao ter porta (ver o cenario (0)). Chamar o servico DIRETO e a unica forma de
+    // exercitar o `can()` com ele: pela rota ele nem chega aqui (403 de `receber_material`).
     setUser(ADMIN);
     const viaServico = await novoRecebimento();
-    const r = await receiptService.conferirRecebimento(db, GESTOR, viaServico.recId, {
-      autorizar_excedente: true,
-      itens: [{ id: viaServico.itemId, quantidade_recebida: 999, conferencia_quantidade: true }],
-    });
-    assert.deepStrictEqual(r, { success: true }, 'GESTOR tem a acao: o servico nao pode recusar');
-    assert.strictEqual((await lerItem(viaServico.itemId)).quantidade_recebida, 999);
+    await assert.rejects(
+      () => receiptService.conferirRecebimento(db, GESTOR, viaServico.recId, {
+        autorizar_excedente: true,
+        itens: [{ id: viaServico.itemId, quantidade_recebida: 999, conferencia_quantidade: true }],
+      }),
+      (e) => {
+        assert.strictEqual(e.status, 403, `status errado: ${e.status} — ${e.message}`);
+        assert.strictEqual(e.message, semPermissao('GESTOR'));
+        return true;
+      },
+      'GESTOR nao tem a acao: o servico TEM de recusar, nomeando a acao');
+    assert.strictEqual((await lerItem(viaServico.itemId)).quantidade_recebida, 10,
+      'a recusa do GESTOR e ANTES do UPDATE');
+    assert.strictEqual((await auditoriaExcedente(viaServico.itemId)).length, 0);
   });
 
   await test('(3) a SEGUNDA porta: /fiscal repete os tres casos', async () => {

@@ -23,6 +23,9 @@ const PRODUCAO = { id: 60, nome: 'Chão de Fábrica', role: 'usuario' };
 const ALMOXARIFE = { id: 61, nome: 'Almoxarife', role: 'usuario', perfil_almoxarifado: 'ALMOXARIFE' };
 const CONSULTA = { id: 62, nome: 'Consulta', role: 'usuario', perfil_almoxarifado: 'CONSULTA' };
 const GESTOR = { id: 63, nome: 'Gestor', role: 'usuario', perfil_almoxarifado: 'GESTOR' };
+// Etapa 36, fix-round 1: COMPRAS faltava nas fixtures, e é o único perfil NÃO-admin que tem
+// `autorizar_excedente` — sem ele a ação nova não teria metade positiva neste arquivo.
+const COMPRAS = { id: 68, nome: 'Compras', role: 'usuario', perfil_almoxarifado: 'COMPRAS' };
 const ADMIN = { id: 64, nome: 'Admin', role: 'admin' };
 
 const get = (app) => request(app).get('/api/almoxarifado/minhas-permissoes');
@@ -84,13 +87,30 @@ const get = (app) => request(app).get('/api/almoxarifado/minhas-permissoes');
 
   await test('GESTOR ajusta estoque; ALMOXARIFE não (segregação do inventário)', async () => {
     setUser(GESTOR);
-    const gestor = (await get(app)).body.acoes;
-    assert.strictEqual(gestor.ajustar_estoque, true);
-    // Etapa 36 (RN-18): a metade POSITIVA da ação nova. Sem ela, "ALMOXARIFE não pode" ficaria
-    // verde mesmo se a ação não existisse em ACAO_PERFIS (`can()` nega ação desconhecida).
-    assert.strictEqual(gestor.autorizar_excedente, true);
+    assert.strictEqual((await get(app)).body.acoes.ajustar_estoque, true);
     setUser(ALMOXARIFE);
     assert.strictEqual((await get(app)).body.acoes.ajustar_estoque, false);
+  });
+
+  // Etapa 36 (RN-18), fix-round 1: a metade POSITIVA da ação nova tem de existir e ser de um perfil
+  // NÃO-admin, senão "ALMOXARIFE não pode" ficaria verde mesmo se a ação não existisse em
+  // ACAO_PERFIS (`can()` nega ação desconhecida). O perfil é COMPRAS, e não GESTOR: o GESTOR estava
+  // no design e saiu na execução por não ter PORTA — as duas rotas que escrevem quantidade são
+  // gateadas por `receber_material`, que não o inclui. Listar quem não consegue agir faria este
+  // endpoint dizer `true` para uma ação que nunca acontece, que é justamente o que ele existe para
+  // não fazer (o front usa o booleano para mostrar a caixa de autorização).
+  await test('COMPRAS autoriza excedente; GESTOR e ALMOXARIFE não (Etapa 36 — quem tem porta)', async () => {
+    setUser(COMPRAS);
+    const compras = (await get(app)).body;
+    assert.strictEqual(compras.perfil, 'COMPRAS');
+    assert.strictEqual(compras.acoes.autorizar_excedente, true);
+    assert.strictEqual(compras.acoes.receber_material, true, 'COMPRAS tem a PORTA, e é isso que o habilita');
+    setUser(GESTOR);
+    const gestor = (await get(app)).body.acoes;
+    assert.strictEqual(gestor.autorizar_excedente, false);
+    assert.strictEqual(gestor.receber_material, false, 'e o motivo é este: o GESTOR não atravessa as rotas');
+    setUser(ALMOXARIFE);
+    assert.strictEqual((await get(app)).body.acoes.autorizar_excedente, false);
   });
 
   await test('admin de sistema pode tudo', async () => {
