@@ -34,11 +34,14 @@ editáveis.
 > ⚠️ **(Fase 2) Este plano foi escrito ANTES da onda de correção da revisão final da Etapa 36, e
 > quatro coisas que ele congela mudaram no código. Confira contra o código de HOJE
 > (`git log --oneline -8`) antes de cada task:**
-> 1. **A régua de excedente das duas portas da 36** passa a ser *"recebida > esperada **E** recebida
->    > quantidade JÁ ARMAZENADA"*. Em `aa39155` isso não existia; em `230baf6` existe como
->    `opcoes.ignorarInalteradas` (`receiptService.js:280-298`), passado **só** pelo `/fiscal`
->    (`:464`) e **não** pelo `/conferir` (`:334`). A onda está trocando as duas por uma regra só.
->    **Esta etapa depende disso** — ver o achado (2) da seção da Fase 2 no fim deste plano.
+> 1. **(correção pós-onda da 36) A régua de excedente das duas portas da 36** é *"recebida >
+>    esperada **E** recebida > quantidade JÁ ARMAZENADA"*. Em `aa39155` isso não existia; em
+>    `230baf6` chegou a existir como `opcoes.ignorarInalteradas`, passado só pelo `/fiscal` — mas
+>    esse flag foi **deletado** em `2d7787d` (revisão final R2). A regra hoje mora **dentro** de
+>    `assertExcedentePermitido` (`receiptService.js`, em torno de `aumenta`/`gravada`) e vale nas
+>    **duas** portas por construção, sem flag nenhum a passar. `grep -rn ignorarInalteradas server/`
+>    dá **vazio**. **Esta etapa depende disso** — ver o achado (2) da seção da Fase 2 no fim deste
+>    plano (a nota do achado ficou velha; a correção está anexada a ela).
 > 2. **A literal do 400 da 36** deixa de dizer *"marque a autorização de excedente para registrar"*
 >    e passa a **nomear quem autoriza** (achado F3). O 400 novo desta etapa **copia o sufixo do
 >    código pós-onda** — ver o contrato 1.
@@ -459,6 +462,18 @@ vence**. Se algum ficar vermelho, o achado é do stub (coluna faltando ou FK) �
 `saldoDasLinhasDoPedido(db, pedidoId)` são **internas** do `receiptService` (exportar **só** se a T7
 chamar direto, e então dizer por quê). Nada mais sai.
 
+⚠️ **A barreira desta task NÃO é a única que `criarRecebimento` ganha.** Um fix-round paralelo da
+onda da 36 (F5, em andamento — sem hash ainda, é mudança local não commitada em
+`receiptService.js` no momento em que este parágrafo foi escrito) está acrescentando **outra**
+barreira dentro do próprio `criarRecebimento`: `quantidade_recebida > quantidade_esperada` **do
+mesmo documento que está nascendo** (a RN-18 alcançando a terceira porta, que antes só entrava
+999 de 10 com 201). São **duas comparações diferentes que têm de conviver**: a F5 mede contra a
+esperada do próprio payload/documento; esta task mede contra o **saldo do pedido de compra**
+(agregado por material, RN-20). Nenhuma substitui a outra. **Antes de editar `criarRecebimento`
+nesta task, leia o estado ATUAL do arquivo** (a F5 pode já ter mudado a forma de `criarRecebimento`
+e introduzido `erroExcedenteSemFlag`/`erroExcedenteSemPermissao` — não assuma a forma descrita nos
+trechos de código abaixo sem conferir contra o arquivo real).
+
 **Restrições medidas, cada uma com o que cai se violada:**
 
 | Não faça | Por quê | Cai em |
@@ -522,10 +537,13 @@ chamar direto, e então dizer por quê). Nada mais sai.
        c. o documento chega a PROCESSADO pelo workflow e o pedido soma
      [este e o Critical da Etapa 36 reproduzido pela PORTA NOVA: o POST desta etapa CRIA
       documentos que nascem com recebida > esperada, populacao que antes so existia por
-      autorizacao no /conferir. Se a onda da 36 tiver aplicado a regra nova SO no /fiscal
-      (em 230baf6 o /conferir NAO recebe `ignorarInalteradas` — receiptService.js:334), este
-      cenario fica VERMELHO e o achado e da onda, nao desta task: nao conserte aqui por fora,
-      RELATE e passe a regra para as duas portas num commit proprio]
+      autorizacao no /conferir.
+      (correcao pos-onda da 36) A nota abaixo ficou velha: em 230baf6 a regra nova valia SO no
+      /fiscal via `opcoes.ignorarInalteradas`, mas esse flag foi DELETADO em 2d7787d — a regra
+      ("aumenta sobre a quantidade ja gravada") passou para DENTRO de assertExcedentePermitido e
+      vale nas DUAS portas sem flag nenhum. Este cenario (12) e o achado (2) da Fase 2 estao
+      RESOLVIDOS POR CONSTRUCAO: nao ha mais "SO no /fiscal" para medir. Se o cenario cair mesmo
+      assim, o defeito e outro — nao o que este comentario descrevia]
 
 (13) pedido SEM nenhuma linha lancada (COUNT itens_pedido_compra = 0), POST sem `itens` -> 400
      'Pedido de compra <numero> não tem itens lançados no módulo Compras'
@@ -1174,7 +1192,7 @@ sustentados. Todos com arquivo:linha; as correções estão **no lugar**, marcad
 | # | Achado | Onde | Correção aplicada |
 |---|---|---|---|
 | 1 | **RN-25 mente para o pedido que a RN-24 manda mostrar.** "Nenhuma linha com saldo → 400 *já foi recebido por completo*" trata igual dois casos diferentes: o pedido quitado e o pedido **cujo Compras nunca lançou as linhas** (`COUNT itens_pedido_compra = 0`). E é exatamente esse que a RN-24 classifica como `ABERTO` e **mantém** em `?pendentes=1`: a tela o oferece e a porta recusa com uma frase falsa | design RN-25 / plano contrato 1 · `receiptService.js:185-198` | literal **nova** para `COUNT = 0` (`'…não tem itens lançados no módulo Compras'`), cenário **(13)** na T2 com a metade positiva do `?pendentes=1`, e sabotagem **8** |
-| 2 | **O fluxo não era traçado até o fim — a lição da 36, repetida.** O `POST` desta etapa passa a **criar** documentos que nascem com `recebida > esperada` (excedente autorizado na criação): população que antes só existia por autorização no `/conferir`. Depois da criação vêm `/conferir`, `/fiscal` e `validarDadosProcessamento`, e a barreira da 36 lê a `quantidade_esperada` **gravada**. Em `230baf6` o `ignorarInalteradas` é passado **só** pelo `/fiscal` (`:464`) e **não** pelo `/conferir` (`:334`) — então, sem a regra nova nas duas portas, todo "Salvar Conferência" do documento criado por esta etapa toma **400**, e o ALMOXARIFE não consegue nem autorizar (403). O plano ia de "criar" a "processar" em um passo e não tocava nenhuma das três portas | `receiptService.js:280-334`, `:464` · plano T7 roteiro | cenário **(12)** na T2 (conferir → fiscal → processar no mesmo `test()`), passos **2** e **5b** do roteiro da T7 reescritos porta por porta, e a dependência declarada no cabeçalho do plano |
+| 2 | **O fluxo não era traçado até o fim — a lição da 36, repetida.** O `POST` desta etapa passa a **criar** documentos que nascem com `recebida > esperada` (excedente autorizado na criação): população que antes só existia por autorização no `/conferir`. Depois da criação vêm `/conferir`, `/fiscal` e `validarDadosProcessamento`, e a barreira da 36 lê a `quantidade_esperada` **gravada**. Em `230baf6` o `ignorarInalteradas` é passado **só** pelo `/fiscal` (`:464`) e **não** pelo `/conferir` (`:334`) — então, sem a regra nova nas duas portas, todo "Salvar Conferência" do documento criado por esta etapa toma **400**, e o ALMOXARIFE não consegue nem autorizar (403). O plano ia de "criar" a "processar" em um passo e não tocava nenhuma das três portas. ⚠️ **(correção pós-onda da 36) a nota acima ficou velha:** o `opcoes.ignorarInalteradas` de `230baf6` foi **deletado** em `2d7787d` (revisão final R2) — a regra ("aumenta sobre a quantidade já gravada") passou para **dentro** de `assertExcedentePermitido` e vale nas **duas** portas por construção, sem flag nenhum. `grep -rn ignorarInalteradas server/` dá vazio hoje. O achado (2) está **resolvido**: não há mais "só no `/fiscal`" para medir — o cenário (12) continua valendo como prova, mas a premissa que o motivou (a lacuna do `/conferir`) já não existe | `receiptService.js:280-334`, `:464` · plano T7 roteiro | cenário **(12)** na T2 (conferir → fiscal → processar no mesmo `test()`), passos **2** e **5b** do roteiro da T7 reescritos porta por porta, e a dependência declarada no cabeçalho do plano |
 | 3 | **"Os schemas Zod da 36 não mudam" está errado, e derruba a tela nova.** O achado R6 da onda acrescenta schema dos **itens** ao `POST` (`quantidade`/`quantidade_esperada` com `coerce.number().positive()`). O payload que a T5 monta no caminho do pedido **não leva `quantidade_esperada`** (ela nasce do saldo, no servidor) — com o campo obrigatório, **todo recebimento por pedido feito pela tela** responde 400 na validação, antes do serviço | plano Tech Stack + Global Constraints · `schemas.js:767-772` | a frase corrigida **dizendo que estava errada**, cenário **(11)** na T2 com o payload literal da tela, e sabotagem **7** (tornar o campo obrigatório) |
 | 4 | **A literal do 400 congelada é a que a 36 acabou de trocar.** O plano congela o sufixo "— marque a autorização de excedente para registrar"; o achado F3 da onda substitui isso por um texto que **nomeia quem autoriza**. Congelar o texto velho poria **duas instruções diferentes** para o mesmo ato nas duas portas, e o manual copiaria as duas | plano contrato 1 · `receiptService.js:303-305` | o sufixo virou `<SUFIXO>`, com a ordem de **copiar do código** no Step 3 da T2 e de escrever a literal final na própria tabela antes do commit |
 | 5 | **As letras dos cenários de client colidem.** O plano diz "17 cenários, o último é `(q)`" e chama os novos de `(r)(s)(t)`. Medido: **18** cenários, e o último é `(r)` — `(r) o payload fiscal sai SEM tipo_recebimento…`, da onda da 36 | `RecebimentosAlmoxarifado.test.js:850` · plano T5 | passam a ser **(s)(t)(u)**, com a ordem de recontar por `grep -c "^test("` (a onda pode acrescentar mais) |

@@ -118,14 +118,17 @@ já preenchidos".
 2. **NF duplicada** — guarda em serviço, **sem** `UNIQUE` no banco (`ffc5f47`). Decisão mantida.
 3. **Excedente no `/conferir` e no `/fiscal`** + ação `autorizar_excedente = [ADMINISTRADOR,
    COMPRAS]` (`f747df4` + `3e36af4`, fix-round que tirou o GESTOR por ele não ter porta).
-   ⚠️ **(Fase 2) mas a REGRA dessas duas portas mudou na onda de revisão final da 36, e esta etapa
-   DEPENDE da mudança:** a barreira só dispara quando `recebida > esperada` **E**
-   `recebida > quantidade JÁ ARMAZENADA` — ecoar ou diminuir não é ato novo de autorização. Em
-   `230baf6` isso existe como `opcoes.ignorarInalteradas` (`receiptService.js:280-298`) e é passado
-   **só** pelo `/fiscal` (`:464`), **não** pelo `/conferir` (`:334`). Como o `POST` desta etapa passa
-   a **criar** documentos que nascem com `recebida > esperada`, **a regra tem de valer nas duas
-   portas antes da T2** — senão o documento criado aqui não consegue nem salvar a conferência.
-   Não "reabrir" significa **não desfazer**; conferir que está aplicada é obrigação desta etapa.
+   ⚠️ **(Fase 2 — correção pós-onda da 36) a REGRA dessas duas portas mudou na onda de revisão
+   final da 36, e esta etapa DEPENDE da mudança:** a barreira só dispara quando `recebida >
+   esperada` **E** `recebida > quantidade JÁ ARMAZENADA` — ecoar ou diminuir não é ato novo de
+   autorização. Em `230baf6` isso chegou a existir como `opcoes.ignorarInalteradas`, passado **só**
+   pelo `/fiscal` — mas esse flag foi **deletado** em `2d7787d` (revisão final R2): a regra não é
+   mais um parâmetro por porta, é **incondicional**, vive **dentro** de `assertExcedentePermitido`
+   (`receiptService.js`, em torno das variáveis `aumenta`/`gravada`) e vale nas **duas** portas por
+   construção. `grep -rn ignorarInalteradas server/` dá **vazio** hoje. Como o `POST` desta etapa
+   passa a **criar** documentos que nascem com `recebida > esperada`, esta dependência **já está
+   satisfeita por construção** — não há mais um flag para ligar em duas portas antes da T2.
+   Não "reabrir" significa **não desfazer**; a regra já está aplicada nas duas portas.
 4. **Campo "Qtd. conferida"** no painel, inclusive o par "campo vazio omite o campo + `COALESCE` no
    serviço" (`e2a23a9` + `d02744a`) — é o que faz *"não contei"* ≠ *"chegou zero"*. **Não mexer.**
 5. **Régua de ordem do workflow** (`9d19e7d`) e o `loadingDetalhe` (`5ce3fdf`).
@@ -230,8 +233,15 @@ lugar** derruba o teste da 36 **e** o desta etapa — é a sabotagem 3 da Task 2
 ainda) e "esperada" não é o que se está medindo. A literal congelada é:
 
 ```
-Quantidade recebida (6) maior que o saldo do pedido (4) para o material ALM-0100 — marque a autorização de excedente para registrar
+Quantidade recebida (6) maior que o saldo do pedido (4) para o material ALM-0100 — a autorização de excedente é de Compras ou do Administrador
 ```
+
+⚠️ **(correção pós-onda da 36)** o sufixo acima (a partir do "—") era, nesta versão do design,
+`"marque a autorização de excedente para registrar"`. O fix-round F3 da revisão final da 36
+(`8d7e3b1`) trocou esse sufixo em TODAS as portas — a literal atual, copiada de
+`erroExcedenteSemFlag` em `receiptService.js`, nomeia quem autoriza em vez de mandar marcar uma
+caixa (o ALMOXARIFE, que mais recebe este 400, nunca vê a caixa). O trecho acima já está com o
+sufixo novo; confira contra o código antes de implementar, porque a onda pode trocar de novo.
 
 **Descartado:** parametrizar a literal da 36 com um pedaço variável ("no item #x" / "para o material
 y") — uma frase com dois buracos para dizer duas coisas diferentes fica pior de ler nas duas portas,
@@ -385,7 +395,10 @@ o boot muda a ordem de subida do servidor inteiro e é tronco de outra etapa.
 - **RN-20 — o `POST` recusa acima do SALDO do pedido, e não grava documento.** *Cenário:* pedido com
   uma linha de 10, já com 6 recebidos e processados (saldo 4); `POST /recebimentos` com
   `pedido_compra_id` e um item de `quantidade_recebida: 6` → **400** e
-  `error === 'Quantidade recebida (6) maior que o saldo do pedido (4) para o material <codigo> — marque a autorização de excedente para registrar'`,
+  `error === 'Quantidade recebida (6) maior que o saldo do pedido (4) para o material <codigo> — a autorização de excedente é de Compras ou do Administrador'`
+  (⚠️ **correção pós-onda da 36**: o sufixo era `'— marque a autorização de excedente para
+  registrar'` nesta versão do design; o F3 da revisão final (`8d7e3b1`) trocou o texto em todas as
+  portas — confira contra `receiptService.js` antes de implementar),
   **e `COUNT(recebimentos_material_almoxarifado)` não mudou** (a asserção que mede o dano).
   Metades positivas: `recebida === saldo` → **201**; `recebida < saldo` → **201**; e o mesmo `POST`
   contra um pedido **sem nenhuma entrada** (saldo cheio) → **201** — é o cenário que distingue esta
