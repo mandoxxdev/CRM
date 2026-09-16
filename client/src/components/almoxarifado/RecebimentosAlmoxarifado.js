@@ -317,10 +317,21 @@ const RecebimentosAlmoxarifado = () => {
         // o que faz "não digitei" ser diferente de "chegou zero".
         const preenchida = item.quantidade_recebida !== '' && item.quantidade_recebida != null
           && Number.isFinite(recebida);
+        // ⚠️ Fix-round 1: `conferencia_quantidade` sai pela MESMA porta, e não por fora dela.
+        // Mandar o booleano SEMPRE (era o que esta função fazia) deixava o `COALESCE` que a T3 pôs
+        // nessa coluna MORTO para este chamador — o serviço só preserva o valor gravado quando a
+        // chave vem ausente/nula, porque ele converte para 0/1 apenas quando o campo `!= null`.
+        // Dano medido pelo cenário (q): item conferido e marcado `true`; o operador reabre o
+        // painel, limpa (ou nunca digita) o campo daquele item e salva para gravar a contagem de
+        // OUTRO item — a quantidade era preservada pelo COALESCE, mas o `false` que ia junto
+        // DESMARCAVA a conferência anterior, em silêncio. Campo vazio é "não contei este item":
+        // não manda quantidade, e também não manda veredicto sobre ela.
         return {
           id: item.id,
-          ...(preenchida ? { quantidade_recebida: recebida } : {}),
-          conferencia_quantidade: preenchida && recebida === Number(item.quantidade_esperada),
+          ...(preenchida ? {
+            quantidade_recebida: recebida,
+            conferencia_quantidade: recebida === Number(item.quantidade_esperada),
+          } : {}),
         };
       });
       await api.put(`/almoxarifado/recebimentos/${detalhe.id}/conferir`, {

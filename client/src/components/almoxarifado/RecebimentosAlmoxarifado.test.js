@@ -74,10 +74,24 @@ const DETALHES = {
   41: {
     ...RECEBIMENTOS[0], fornecedor_cnpj: '11.111.111/0001-11', valor_total_nota: 1500,
     chave_nfe: null, nota_serie: '1', observacoes: null, contas_pagar_id: null,
-    itens: [{
-      id: 411, material_id: 5, material_nome: 'Chapa Aço 3mm', material_codigo: 'ALM-0033',
-      unidade: 'KG', quantidade_esperada: 50, quantidade_recebida: 50,
-    }],
+    // DOIS itens, e é o 41 que carrega o par do fix-round 1 da T5 (cenário (q)): um item já
+    // CONFERIDO (`conferencia_quantidade: true`, gravado por uma conferência anterior) ao lado de
+    // um item com a quantidade preenchida. Só com dois itens o cenário tem as duas metades no
+    // MESMO save — o item preenchido leva as duas chaves, o de campo vazio não leva nenhuma.
+    // O 41 e não o 58 de propósito: os cenários (m), (n), (o) e (p) leem
+    // `api.put.mock.calls[0][1]` com `toEqual` e um segundo item no 58 os quebraria — e o arnês
+    // das Etapas 34/35 que usa o 41 ((e), (k), (l)) não conta itens nem inputs.
+    itens: [
+      {
+        id: 411, material_id: 5, material_nome: 'Chapa Aço 3mm', material_codigo: 'ALM-0033',
+        unidade: 'KG', quantidade_esperada: 50, quantidade_recebida: 50,
+      },
+      {
+        id: 412, material_id: 5, material_nome: 'Chapa Aço 6mm', material_codigo: 'ALM-0034',
+        unidade: 'KG', quantidade_esperada: 30, quantidade_recebida: 30,
+        conferencia_quantidade: true,
+      },
+    ],
   },
   58: {
     ...RECEBIMENTOS[1], fornecedor_cnpj: '22.222.222/0001-22', valor_total_nota: 890.5,
@@ -726,6 +740,10 @@ test('(o) excedente oferece a autorizacao, manda a flag, e o 403 do servidor apa
  *
  * `'quantidade_recebida' in payload` e não `toBeUndefined()`: a chave presente com `undefined`
  * viraria `null` no JSON e apagaria a coluna do mesmo jeito.
+ *
+ * ⚠️ Fix-round 1: o `toEqual` deste cenário mudou de `{ id: 581, conferencia_quantidade: false }`
+ * para `{ id: 581 }`. O booleano segue a MESMA regra da quantidade — ver o cenário (q) logo
+ * abaixo, que é a régua do achado.
  */
 test('(p) campo limpo sai SEM a chave quantidade_recebida — nunca zero', async () => {
   await renderizar();
@@ -742,5 +760,52 @@ test('(p) campo limpo sai SEM a chave quantidade_recebida — nunca zero', async
   expect(chamadasConferir(58)).toHaveLength(1);
   const payload = api.put.mock.calls[0][1];
   expect('quantidade_recebida' in payload.itens[0]).toBe(false);
-  expect(payload).toEqual({ itens: [{ id: 581, conferencia_quantidade: false }] });
+  expect(payload).toEqual({ itens: [{ id: 581 }] });
+});
+
+/* ── (q) fix-round 1: o booleano da conferência NÃO pode desmarcar sozinho ─────────────────────
+ * Achado da revisão da T5, e ele é do mesmo tipo do (p) — um dano NOVO que o primeiro chamador da
+ * rota criava. `salvarConferencia` mandava `conferencia_quantidade` SEMPRE, com um booleano
+ * concreto (`preenchida && recebida === esperada`), então o `COALESCE` que a T3 pôs na coluna
+ * (`receiptService.js`, `conferirRecebimento`) estava MORTO para este chamador: ele só preserva o
+ * valor gravado quando o cliente OMITE a chave (o serviço só converte para 0/1 quando o campo
+ * `!= null`).
+ *
+ * O caminho do dano, com os dois lados: item conferido e marcado `true` num save; o operador
+ * reabre o painel, limpa o campo "Qtd. conferida" DAQUELE item (ou nunca o digita) e clica em
+ * "Salvar Conferência" para gravar a contagem de OUTRO item. O payload omitia
+ * `quantidade_recebida` (o COALESCE preservava a quantidade, certo) e mandava
+ * `conferencia_quantidade: false` — sobrescrevendo o `true` gravado. A conferência se desmarcava
+ * sozinha, em silêncio, por causa de um save de outro item.
+ *
+ * A régua tem as DUAS metades no MESMO save, e é por isso que o 41 tem dois itens:
+ * - item `412` (já `true`, campo vazio) → payload SEM as duas chaves;
+ * - item `411` (campo preenchido, 50 de 50) → payload COM as duas chaves, o booleano computado.
+ * Sem a metade positiva, omitir SEMPRE os dois campos passaria este cenário e quebraria a task
+ * inteira em silêncio.
+ */
+test('(q) item ja conferido com campo vazio nao manda conferencia_quantidade — e o item preenchido manda as duas chaves', async () => {
+  await renderizar();
+  await clicar(linhaDe('REC-2026-041'));
+
+  // O 41 tem dois campos de conferência; o do item 412 é o SEGUNDO.
+  const campos = [...painel().querySelectorAll('[title="Qtd. conferida"]')];
+  expect(campos).toHaveLength(2);
+  digitar(campos[1], '');
+  await esperarEfeitos();
+
+  await clicar(botaoPorTexto('Salvar Conferência'));
+
+  expect(chamadasConferir(41)).toHaveLength(1);
+  const payload = api.put.mock.calls[0][1];
+
+  const item412 = payload.itens.find((i) => i.id === 412);
+  expect(item412).not.toBeUndefined();
+  expect('conferencia_quantidade' in item412).toBe(false);
+  expect('quantidade_recebida' in item412).toBe(false);
+  expect(item412).toEqual({ id: 412 });
+
+  // Metade POSITIVA, no mesmo save: quem tem o campo preenchido leva as duas chaves.
+  const item411 = payload.itens.find((i) => i.id === 411);
+  expect(item411).toEqual({ id: 411, quantidade_recebida: 50, conferencia_quantidade: true });
 });
