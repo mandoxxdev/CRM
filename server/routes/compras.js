@@ -59,6 +59,18 @@ const fs = require('fs');
 const { validate } = require('../services/almoxarifado/validation');
 const { PedidoCompraCreateSchema } = require('../services/compras/schemas');
 const pedidoCompraService = require('../services/compras/pedidoCompraService');
+// Etapa 38, Task 4: os 5 leitores de planilha sairam do escopo deste registrador para
+// `services/compras/planilhaCompras.js` (movidos VERBATIM, md5 conferido) porque a importacao de
+// PEDIDOS tambem os usa e aqui dentro eles eram inalcancaveis por `require`. A rota de itens do
+// fornecedor la embaixo continua chamando os MESMOS quatro nomes — o cenario (5) de
+// `comprasPedidosRotas.api.test.js` e a regua de que a movimentacao nao mudou nada.
+// Sao requeridos os TRES que este arquivo chama: `normalizarCampo` (codigo morto desde antes da
+// extracao) e `parsePrecoBackend` (chamado so de dentro dos outros dois) ficam no modulo novo.
+const {
+  extrairDoRow,
+  extrairPrecoDoRow,
+  extrairDescricaoDoRow,
+} = require('../services/compras/planilhaCompras');
 
 module.exports = (app, db, authenticateToken, checkModulePermission, uploads) => {
 const {
@@ -199,6 +211,52 @@ app.put('/api/compras/pedidos/:id', authenticateToken, checkModulePermission('co
 app.delete('/api/compras/pedidos/:id', authenticateToken, checkModulePermission('compras'), async (req, res) => {
   try {
     res.json(await pedidoCompraService.excluirPedido(db, req.params.id));
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+/**
+ * Etapa 38, Task 4 (RN-C10, RN-C11) — IMPORTAR PEDIDOS DE PLANILHA, um pedido por ordem.
+ *
+ * Fica JUNTO das outras rotas de pedido e acima do `DELETE` generico. `POST` nao sofre o
+ * sombreamento de `/:tipo/:id` (metodo diferente), mas separar as rotas de pedido e exatamente o
+ * que o comentario do bloco acima pede para nao fazer — quem as espalhar perde a garantia de
+ * ordem que o `PUT`/`DELETE` dependem.
+ *
+ * ⚠️ SEM `validate()` AQUI, de proposito: o corpo e uma PLANILHA de forma desconhecida (o
+ * cabecalho vem em qualquer grafia) e a guarda e a MESMA do precedente de importacao de itens do
+ * fornecedor, com a MESMA literal de 400 — um schema Zod responderia `'Dados inválidos — …'` e
+ * daria duas frases para o mesmo fato. A validacao por linha e o `ignorados` da resposta.
+ *
+ * 201 mesmo com linhas recusadas (sucesso PARCIAL): `{ pedidos: [{id, numero, itens}], itens: N,
+ * ignorados: [{linha, motivo}] }`. Quem recusa a planilha inteira e so a guarda do corpo (400).
+ */
+app.post('/api/compras/pedidos/importar', authenticateToken, checkModulePermission('compras'), async (req, res) => {
+  try {
+    res.status(201).json(await pedidoCompraService.importarPedidos(db, req.body, req.user));
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+/**
+ * Etapa 38, Task 4 (RN-C09) — a BUSCA DE MATERIAL do proprio modulo Compras, somente leitura.
+ *
+ * ⚠️ ESTA ROTA EXISTE PORQUE O COMPRADOR NAO ALCANCA A DO ALMOXARIFADO:
+ * `app.use('/api/almoxarifado', authenticateToken, checkModulePermission('almoxarifado'))`
+ * (`routes/almoxarifado.js:282-285`) barra o prefixo INTEIRO antes de qualquer handler — quem tem
+ * o modulo `compras` e nao tem o `almoxarifado` toma 403 em `GET /api/almoxarifado/materiais`
+ * (`:353`) sem nunca chegar na rota. Sem esta porta o formulario de pedido (Task 5) nao escolhe
+ * material. Descartado: dar o modulo almoxarifado ao comprador para resolver um `<select>`.
+ *
+ * ⚠️ O harness de teste LIBERA a camada 2 (`fakeCheckModulePermission`), entao a suite **nao
+ * prova** o 403 de producao — a prova e a leitura daquelas quatro linhas. Declarado no cabecalho de
+ * `tests/api/comprasPedidoImportar.api.test.js`, cenario (5).
+ */
+app.get('/api/compras/materiais', authenticateToken, checkModulePermission('compras'), async (req, res) => {
+  try {
+    res.json(await pedidoCompraService.buscarMateriais(db, req.query.search));
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });
   }
@@ -573,54 +631,10 @@ app.get('/api/compras/fornecedores/:fornecedorId/planilha', authenticateToken, c
 
 // Importar itens do fornecedor via planilha (JSON de linhas ou arquivo)
 // Aceita qualquer formato: o backend tenta achar descrição, código, unidade e preço em várias chaves possíveis
-function normalizarCampo(s) {
-  if (s == null || s === '') return '';
-  return String(s).trim();
-}
-function parsePrecoBackend(val) {
-  if (val == null || val === '') return 0;
-  if (typeof val === 'number' && !isNaN(val)) return val;
-  const s = String(val).trim().replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
-  const n = parseFloat(s);
-  return isNaN(n) ? 0 : n;
-}
-function extrairDoRow(row, ...candidatos) {
-  for (const k of candidatos) {
-    const v = row[k];
-    if (v != null && String(v).trim() !== '') return String(v).trim();
-  }
-  return '';
-}
-function extrairPrecoDoRow(row) {
-  const chavesPreco = ['preco', 'preço', 'valor', 'valor unitario', 'valor unitário', 'price', 'vlr', 'preco unitario', 'preço unitário', 'valor unit', 'preco unit', 'valor_unitario', 'preco_unitario'];
-  for (const k of chavesPreco) {
-    const v = row[k];
-    if (v != null && v !== '') {
-      const n = parsePrecoBackend(v);
-      if (!isNaN(n)) return n;
-    }
-  }
-  for (const k of Object.keys(row || {})) {
-    const v = row[k];
-    if (v == null || v === '') continue;
-    if (typeof v === 'number' && !isNaN(v)) return v;
-    const n = parsePrecoBackend(v);
-    if (!isNaN(n)) return n;
-  }
-  return 0;
-}
-function extrairDescricaoDoRow(row) {
-  const desc = extrairDoRow(row, 'descricao', 'descrição', 'descricao_produto', 'descricao produto', 'produto', 'item', 'nome', 'designacao', 'designação', 'material', 'especificacao', 'denominacao', 'nome do produto', 'desc');
-  if (desc) return desc;
-  for (const k of Object.keys(row || {})) {
-    const v = row[k];
-    if (v == null) continue;
-    const s = String(v).trim();
-    if (s === '') continue;
-    if (isNaN(parsePrecoBackend(v))) return s;
-  }
-  return '';
-}
+// ⚠️ OS 5 HELPERS DE PLANILHA MORAM AGORA EM `services/compras/planilhaCompras.js` (Task 4),
+// requeridos no topo deste arquivo. Foram movidos VERBATIM (md5 das 48 linhas conferido) porque
+// a importacao de PEDIDOS precisa dos mesmos leitores e, presos no escopo deste registrador,
+// eles eram inalcancaveis por `require` — e exportar daqui criaria ciclo com o servico.
 app.post('/api/compras/fornecedores/:fornecedorId/itens/importar', authenticateToken, checkModulePermission('compras'), (req, res) => {
   const fornecedorId = req.params.fornecedorId;
   const body = req.body || {};

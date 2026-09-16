@@ -102,6 +102,9 @@
  * Plano:  `docs/superpowers/plans/2026-09-16-crm-etapa38-pedido-de-compra.md` (Tasks 2 e 3)
  */
 const { dbRun, dbGet, dbAll } = require('../almoxarifado/db');
+const {
+  extrairDoRow, normalizarChavesDaLinha, valorCruDoRow, numeroDaPlanilha,
+} = require('./planilhaCompras');
 const { inserirComNumeroUnico } = require('../almoxarifado/numeroDoc');
 const purchaseService = require('../almoxarifado/purchaseService');
 const { can, getPerfilFromUser } = require('../almoxarifado/permissions');
@@ -395,11 +398,287 @@ async function excluirPedido(db, pedidoId) {
   return { message: 'Pedido de compra excluído com sucesso' };
 }
 
+/**
+ * RN-C09 — a BUSCA DE MATERIAL do modulo core Compras. Somente leitura, quatro colunas.
+ *
+ * ⚠️ POR QUE ELA EXISTE EM COMPRAS, tendo o almoxarifado uma igual: `app.use('/api/almoxarifado',
+ * authenticateToken, checkModulePermission('almoxarifado'))` (`routes/almoxarifado.js:282-285`)
+ * barra o PREFIXO INTEIRO antes de qualquer handler. Um comprador com o modulo `compras` e sem o
+ * modulo `almoxarifado` toma 403 em `GET /api/almoxarifado/materiais` sem nunca chegar na rota, e
+ * o formulario de pedido (Task 5) nao teria como escolher material. Descartado: alargar a permissao
+ * do modulo almoxarifado para o comprador — daria a ele o modulo INTEIRO (estoque, movimentacao,
+ * requisicao, inventario) para resolver um `<select>`.
+ *
+ * ⚠️ `descricao` e `COALESCE(nome, descricao)`, nesta ordem (contrato 6): em
+ * `materiais_almoxarifado` quem e `NOT NULL` e **`nome`** (`schema.js:298-299`) e `descricao` e
+ * quase sempre nula no cadastro real. Selecionar `descricao` crua devolveria opcoes EM BRANCO no
+ * `<select>`. E a mesma ordem que `resolverItens` usa ao copiar a linha do pedido, e a mesma que o
+ * resto do modulo le (`m.nome as material_nome`, `receiptService.js:100`).
+ *
+ * `LIMIT 50` porque o destino e um `<select>`/autocomplete: sem ele a tela carregaria o cadastro
+ * inteiro. `ativo = 1` porque material desativado nao deve entrar em pedido novo — e a importacao
+ * (abaixo) aplica a MESMA regra, senao a planilha compraria o que a tela nao oferece.
+ */
+async function buscarMateriais(db, search) {
+  const termo = search == null ? '' : String(search).trim();
+  const like = `%${termo}%`;
+  return dbAll(db, `SELECT id, codigo, COALESCE(nome, descricao) as descricao, unidade
+    FROM materiais_almoxarifado
+    WHERE COALESCE(ativo, 1) = 1
+      AND (? = '' OR codigo LIKE ? OR COALESCE(nome, '') LIKE ? OR COALESCE(descricao, '') LIKE ?)
+    ORDER BY codigo
+    LIMIT 50`, [termo, like, like, like]);
+}
+
+/**
+ * ── RN-C10 e RN-C11 — A IMPORTACAO DE PEDIDOS POR PLANILHA (Task 4) ──────────────────────────
+ *
+ * O FURO: producao tem `COUNT(pedidos_compra) = 0`, 10 fornecedores e 3 materiais. A Task 2 deu a
+ * porta de criacao de **um** pedido; carregar o que ja existe em planilha por digitacao nao vai
+ * acontecer. Esta funcao recebe a planilha inteira (ja em JSON) e cria **um pedido por ordem**.
+ *
+ * ⚠️ CADA GRUPO PASSA PELO MESMO `criarPedido` DA TASK 2, nunca por `INSERT` direto. E exigencia
+ * de escopo e tem consequencia medida: e `criarPedido` quem gera o `numero` (`PC-…`), deriva
+ * `valor_total`, copia `codigo`/`descricao`/`unidade` do material e deixa `quantidade_recebida`
+ * nascer 0 pelo DEFAULT. Um `INSERT` na rota daria uma SEGUNDA regra de criacao de pedido, e a
+ * primeira edicao as separaria — com a importada sendo a que ninguem olha. O cenario (2) do teste
+ * afirma `/^PC-/` e `valor_total` = soma justamente para que essa separacao derrube a suite.
+ *
+ * ⚠️ A ENTRADA E JSON, NAO `.xlsx` — e o precedente medido desta base: quem le o arquivo e o
+ * NAVEGADOR (`XLSX.read` em `client/src/components/ItensFornecedor.js`, que monta `{ linhas }` e
+ * faz o POST) e o servidor recebe objetos com o cabecalho em qualquer grafia, como ja faz
+ * `POST /api/compras/fornecedores/:fornecedorId/itens/importar`. A literal do 400 e **copiada
+ * verbatim** dela. Descartado: multer + parse de planilha no servidor (dependencia nova, e o
+ * precedente ja tem um consumidor de client funcionando).
+ *
+ * ⚠️ LINHA RUIM VIRA `ignorados`, NUNCA linha com `material_id NULL`. As duas leituras da Etapa 37
+ * (`listarPedidosCompraAux` e `carregarItensPedidoCompra`) filtram `material_id IS NOT NULL`: uma
+ * linha sem material resolvido ficaria INVISIVEL ao recebimento e o pedido apareceria `ABERTO` com
+ * saldo 0, sem ninguem entender por que. Melhor recusar a linha na cara do operador.
+ *
+ * ⚠️ NAO HA IDEMPOTENCIA (contrato 5, decisao 8 do design): `numero` e GERADO e o agrupador e da
+ * planilha, entao nao existe chave para reconhecer o reenvio — **reimportar a mesma planilha cria
+ * pedidos novos e duplicados**. Descartado: idempotencia por `numero` (incompativel com numero
+ * gerado — o servidor nunca recebe o numero) e por hash das linhas (invisivel ao operador: o
+ * segundo envio responderia "0 importados" e ele nao saberia se falhou ou se ja estava lá). O que
+ * existe em troca: a resposta LISTA o que criou, e o cenario (7) do teste AFIRMA a duplicacao, para
+ * que a documentacao seja verdadeira e para que um "conserto" silencioso derrube um teste.
+ * O custo aceito: um duplo-clique no botao cria a planilha duas vezes, e quem reimportar tera de
+ * excluir os pedidos a mao (o `DELETE` da Task 3 existe, e recusa o que ja teve recebimento).
+ *
+ * ⚠️ MAIS DE 50 PEDIDOS NUMA IMPORTACAO NAO APARECEM TODOS no `<select>` do recebimento:
+ * `listarPedidosCompraAux` termina em `ORDER BY p.created_at DESC LIMIT 50`
+ * (`receiptService.js:1518`) e `created_at` tem resolucao de 1 segundo, entao uma importacao
+ * inteira EMPATA no `ORDER BY`. Esta e a primeira porta da base capaz de criar 60 pedidos num
+ * clique. **Nao se conserta aqui** (a paginacao e porta da Etapa 37, arquivo de nao-toque desta
+ * etapa): esta declarado no guia, na letra G do doc de novidades e o roteiro manual usa planilha
+ * pequena.
+ *
+ * @param {object} db     sqlite3.Database
+ * @param {object} corpo  `req.body`: `{ linhas: [...] }` ou `{ rows: [...] }`
+ * @param {object} user   usuario autenticado (repassado a `criarPedido`)
+ * @returns {Promise<{pedidos: Array<{id:number,numero:string,itens:number}>, itens:number,
+ *                    ignorados: Array<{linha:number,motivo:string}>}>}
+ */
+
+/** Literal do 400, COPIADA VERBATIM do precedente (`routes/compras.js`, importacao de itens). */
+const CORPO_PLANILHA_INVALIDO = 'Envie "linhas" ou "rows" com array de objetos (qualquer formato de planilha)';
+
+/** Os quatro motivos de `ignorados` (contrato 5), UM por fato. Cada um tem cenario proprio. */
+const MOTIVO_QUANTIDADE_INVALIDA = 'quantidade inválida';
+const MOTIVO_SEM_CODIGO = 'linha sem código de material';
+const MOTIVO_FORNECEDOR_NAO_ENCONTRADO = 'fornecedor não encontrado';
+
+/**
+ * As grafias de cabecalho aceitas, por campo (contrato 5, com as variantes de acento/caixa que o
+ * `normalizarChavesDaLinha` do chamador ja resolve em minuscula).
+ *
+ * `CHAVES_CODIGO` NAO inclui `material`/`descricao` de proposito: a resolucao aqui e por CODIGO
+ * (`materiais_almoxarifado.codigo` e UNIQUE) e aceitar a coluna de descricao faria a importacao
+ * casar material por texto livre — exatamente o erro que o `material_id IS NOT NULL` da Etapa 37
+ * pune depois, e em silencio.
+ */
+const CHAVES_GRUPO = ['pedido', 'numero', 'número', 'oc', 'ordem', 'ordem de compra', 'pedido de compra'];
+const CHAVES_FORNECEDOR_ID = ['fornecedor_id', 'fornecedor id', 'id do fornecedor'];
+const CHAVES_FORNECEDOR_TEXTO = ['cnpj', 'fornecedor', 'razao_social', 'razao social', 'razão social', 'fornecedor_nome'];
+const CHAVES_CODIGO = ['codigo', 'código', 'cod', 'sku', 'codigo_material', 'codigo do material'];
+const CHAVES_QUANTIDADE = ['quantidade', 'qtd', 'qtde', 'quant', 'qtd.'];
+const CHAVES_VALOR = ['valor_unitario', 'valor unitario', 'valor unitário', 'preco', 'preço',
+  'preco unitario', 'preço unitario', 'preco unitário', 'preço unitário', 'preco_unitario',
+  'valor', 'valor unit', 'preco unit', 'vlr'];
+const CHAVES_PREVISAO = ['previsao', 'previsão', 'previsao_entrega', 'previsão_entrega',
+  'entrega', 'data de entrega', 'previsao de entrega'];
+
+/**
+ * Planilha sem coluna de ordem: TUDO vira um pedido so (e a observacao diz isso).
+ *
+ * `Symbol` e nao string porque a chave do `Map` de grupos vem da PLANILHA: qualquer sentinela de
+ * texto (`''`, `'__sem__'`) poderia colidir com uma ordem chamada assim e juntar duas ordens numa.
+ * (E a primeira forma tentada foi um escape de NUL dentro da string, que o editor gravou como BYTE
+ * NUL DE VERDADE no arquivo: o `grep` passou a tratar o fonte como BINARIO e a regra de ancoragem
+ * das sabotagens desta base — `grep -cF '<ancora>'` — deixa de ser confiavel. Registrado aqui, em
+ * palavras e sem o escape, para ninguem tentar de novo.)
+ */
+const SEM_AGRUPADOR = Symbol('sem-agrupador');
+
+/**
+ * O material e resolvido pelo CODIGO, e so se estiver ATIVO — a mesma regra de `buscarMateriais`.
+ * Material desativado da o MESMO motivo de "nao encontrado": para o comprador o fato e um so (esse
+ * codigo nao entra em pedido novo), e duas frases para um fato e o que esta base aprendeu a nao
+ * fazer. `COALESCE(ativo, 1)` porque a coluna e `DEFAULT 1` e linhas antigas podem ter NULL.
+ */
+async function resolverMaterialPorCodigo(db, codigo) {
+  return dbGet(db, `SELECT id FROM materiais_almoxarifado
+    WHERE UPPER(codigo) = UPPER(?) AND COALESCE(ativo, 1) = 1`, [codigo]);
+}
+
+/**
+ * Resolve o fornecedor de UMA linha: por `fornecedor_id` se vier numero, senao pelo CNPJ (somente
+ * digitos dos dois lados — a planilha traz mascara e o cadastro nem sempre) ou pela razao
+ * social/nome fantasia exatos, sem distincao de caixa.
+ *
+ * `ORDER BY id LIMIT 1` resolve o empate (dois fornecedores com a mesma razao social) pelo mais
+ * antigo, de proposito e declarado: recusar a linha por ambiguidade travaria a importacao inteira
+ * de quem tem cadastro duplicado, e o pedido importado e editavel (Task 3) enquanto nao houver
+ * recebimento.
+ */
+async function resolverFornecedorDaLinha(db, row) {
+  const idDaPlanilha = numeroDaPlanilha(valorCruDoRow(row, ...CHAVES_FORNECEDOR_ID));
+  if (idDaPlanilha != null && Number.isInteger(idDaPlanilha) && idDaPlanilha > 0) {
+    const porId = await dbGet(db, 'SELECT id FROM fornecedores WHERE id = ?', [idDaPlanilha]);
+    if (porId) return porId;
+  }
+  const texto = extrairDoRow(row, ...CHAVES_FORNECEDOR_TEXTO);
+  if (!texto) return null;
+  const digitos = texto.replace(/\D/g, '');
+  return dbGet(db, `SELECT id FROM fornecedores
+    WHERE (? <> '' AND REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(cnpj, ''), '.', ''), '/', ''), '-', ''), ' ', '') = ?)
+       OR UPPER(razao_social) = UPPER(?)
+       OR UPPER(COALESCE(nome_fantasia, '')) = UPPER(?)
+    ORDER BY id LIMIT 1`, [digitos, digitos, texto, texto]);
+}
+
+async function importarPedidos(db, corpo, user) {
+  // A MESMA guarda e a MESMA literal do precedente: corpo sem `linhas`/`rows`, com valor que nao e
+  // array, ou com array vazio -> 400. Zod ficou FORA desta porta de proposito: o payload e uma
+  // planilha de forma desconhecida (e por isso ha 7 listas de grafias acima), e um schema aqui
+  // responderia `'Dados inválidos — …'` no lugar da literal congelada que o client ja mostra.
+  const linhas = (corpo && (corpo.linhas || corpo.rows)) || null;
+  if (!Array.isArray(linhas) || linhas.length === 0) throw erro(CORPO_PLANILHA_INVALIDO);
+
+  const ignorados = [];
+  // `Map` e nao objeto: a ordem de insercao e a ordem das ORDENS na planilha, e e ela que a
+  // resposta devolve (o cenario (2) afirma `pedidos[0]` = OC-A, a primeira que apareceu).
+  const grupos = new Map();
+
+  for (let i = 0; i < linhas.length; i++) {
+    const numeroDaLinha = i + 1; // 1-based: a linha 1 e a PRIMEIRA DE DADOS — o cabecalho foi
+    // consumido pelo `XLSX` do navegador e nunca chega aqui. E o numero que a resposta devolve em
+    // `ignorados`, e o guia diz ao operador que ele conta a partir da primeira linha de dados.
+    const row = normalizarChavesDaLinha(linhas[i]);
+
+    // ⚠️ O AGRUPADOR E A COLUNA DA PLANILHA, nunca o `numero` gerado: o `PC-…` sai do servidor
+    // DEPOIS, um por grupo — agrupar por ele daria um pedido por LINHA (e a sabotagem 2 desta task
+    // mede exatamente isso: `pedidos.length` iria de 2 para 5).
+    const chaveGrupo = extrairDoRow(row, ...CHAVES_GRUPO) || SEM_AGRUPADOR;
+
+    const codigo = extrairDoRow(row, ...CHAVES_CODIGO);
+    if (!codigo) { ignorados.push({ linha: numeroDaLinha, motivo: MOTIVO_SEM_CODIGO }); continue; }
+
+    // ⚠️ QUANTIDADE LIDA CRUA (`valorCruDoRow` + `numeroDaPlanilha`), NUNCA por `extrairDoRow` +
+    // `parsePrecoBackend`: aqueles dois sao de PRECO em pt-BR e transformariam `1.5` em **15** na
+    // coluna que a Etapa 37 le como `quantidade_pedida`. Cenario (6) do teste.
+    const quantidade = numeroDaPlanilha(valorCruDoRow(row, ...CHAVES_QUANTIDADE));
+    if (quantidade == null || !(quantidade > 0)) {
+      ignorados.push({ linha: numeroDaLinha, motivo: MOTIVO_QUANTIDADE_INVALIDA }); continue;
+    }
+
+    const material = await resolverMaterialPorCodigo(db, codigo);
+    if (!material) {
+      ignorados.push({ linha: numeroDaLinha, motivo: `material não encontrado pelo código ${codigo}` });
+      continue;
+    }
+
+    // Preco AUSENTE nao recusa a linha (pedido sem preco fechado e caso real, decisao da Task 2) —
+    // vira 0, e a tela avisa que sem preco o custo medio do material nao e alimentado no
+    // recebimento. Negativo tambem vira 0: `PedidoCompraItemSchema` recusaria o grupo INTEIRO por
+    // uma celula, e perder 30 linhas boas por um sinal de menos e pior que zerar uma.
+    const valorLido = numeroDaPlanilha(valorCruDoRow(row, ...CHAVES_VALOR));
+    const valorUnitario = valorLido != null && valorLido > 0 ? valorLido : 0;
+
+    if (!grupos.has(chaveGrupo)) grupos.set(chaveGrupo, { chave: chaveGrupo, linhas: [] });
+    grupos.get(chaveGrupo).linhas.push({
+      numeroDaLinha,
+      row,
+      item: { material_id: material.id, quantidade, valor_unitario: valorUnitario },
+    });
+  }
+
+  const pedidos = [];
+  let itensImportados = 0;
+
+  for (const grupo of grupos.values()) {
+    // O fornecedor e do GRUPO, resolvido pela PRIMEIRA linha que consiga resolve-lo: e comum a
+    // planilha trazer o CNPJ so na primeira linha da ordem e deixar as outras em branco. Se
+    // nenhuma resolver, o grupo nao nasce e TODAS as suas linhas aparecem em `ignorados` — uma
+    // entrada por linha, para o operador achar cada uma na planilha dele.
+    let fornecedor = null;
+    for (const l of grupo.linhas) {
+      fornecedor = await resolverFornecedorDaLinha(db, l.row);
+      if (fornecedor) break;
+    }
+    if (!fornecedor) {
+      for (const l of grupo.linhas) {
+        ignorados.push({ linha: l.numeroDaLinha, motivo: MOTIVO_FORNECEDOR_NAO_ENCONTRADO });
+      }
+      continue;
+    }
+
+    const previsao = grupo.linhas.map((l) => extrairDoRow(l.row, ...CHAVES_PREVISAO)).find((v) => v) || null;
+    // A observacao registra o agrupador da planilha: e a UNICA pista de qual ordem virou qual
+    // `PC-…` depois da importacao, e o roteiro de teste manual confere por ela.
+    const observacoes = grupo.chave === SEM_AGRUPADOR
+      ? 'Importado de planilha (sem coluna de pedido)'
+      : `Planilha: ${grupo.chave}`;
+
+    try {
+      const pedido = await criarPedido(db, {
+        fornecedor_id: fornecedor.id,
+        itens: grupo.linhas.map((l) => l.item),
+        observacoes,
+        ...(previsao ? { previsao_entrega: previsao } : {}),
+      }, user);
+      pedidos.push({ id: pedido.id, numero: pedido.numero, itens: (pedido.itens || []).length });
+      itensImportados += (pedido.itens || []).length;
+    } catch (e) {
+      // Caminho de defesa, nao caminho de contrato: fornecedor e materiais do grupo acabaram de ser
+      // resolvidos, entao as guardas de `criarPedido` ja passaram. Se ainda assim ele recusar (um
+      // material apagado no meio da importacao, uma coluna que mudou), o grupo vira `ignorados` com
+      // a mensagem do servico — e os OUTROS grupos continuam. Derrubar a resposta inteira faria o
+      // operador perder o que ja gravou e reimportar tudo (e sem idempotencia, duplicando).
+      for (const l of grupo.linhas) ignorados.push({ linha: l.numeroDaLinha, motivo: e.message });
+    }
+  }
+
+  // `ignorados` sai na ORDEM DA PLANILHA: as recusas de linha nascem no primeiro laco e as de
+  // grupo (fornecedor) no segundo, entao sem esta ordenacao a lista sairia fora de ordem e o
+  // operador teria de caçar as linhas na planilha dele.
+  ignorados.sort((a, b) => a.linha - b.linha);
+
+  return { pedidos, itens: itensImportados, ignorados };
+}
+
 module.exports = {
   criarPedido,
   relerPedido,
   obterPedido,
   atualizarPedido,
   excluirPedido,
+  buscarMateriais,
+  importarPedidos,
   PEDIDO_NAO_ENCONTRADO,
+  CORPO_PLANILHA_INVALIDO,
+  MOTIVO_QUANTIDADE_INVALIDA,
+  MOTIVO_SEM_CODIGO,
+  MOTIVO_FORNECEDOR_NAO_ENCONTRADO,
 };
