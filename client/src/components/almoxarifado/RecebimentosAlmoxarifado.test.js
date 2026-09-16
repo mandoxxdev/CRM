@@ -133,6 +133,12 @@ beforeEach(() => {
     return Promise.reject(new Error(`URL inesperada no teste: ${url}`));
   });
   api.post.mockImplementation(() => Promise.resolve({ data: { id: 91, numero: 'REC-2026-091' } }));
+  // Etapa 36 (T5): `api.put` era um `jest.fn()` SEM implementação — devolvia `undefined`, o
+  // `await undefined` passava, o `catch` da tela nunca disparava e um cenário de conferência
+  // ficaria verde sem nunca ter havido payload. Implementação aqui e não na fábrica do
+  // `jest.mock` pelo mesmo motivo do `api.get`: o `resetMocks` do react-scripts apaga
+  // implementações entre cenários.
+  api.put.mockImplementation(() => Promise.resolve({ data: { success: true } }));
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -174,6 +180,15 @@ const botaoPorTexto = (texto) => [...container.querySelectorAll('button')]
 // A barra de passos do `AlmoxPageHeader`: `active` e a classe que ele poe no passo corrente
 // (`AlmoxPageHeader.js`, `idx = currentStep ?? -1`). `null` aqui significa "nenhum passo aceso".
 const passoAtivo = () => container.querySelector('.almox-flow-step.active');
+// Etapa 36 (T5): o campo de quantidade conferida. Referência por TÍTULO e não por posição —
+// `querySelectorAll('input')` no painel casaria os inputs fiscais e o input de arquivo do bloco
+// de anexos, e a ordem entre eles muda a cada etapa.
+const inputConferida = () => container.querySelector('[title="Qtd. conferida"]');
+const caixaExcedente = () => [...(painel()?.querySelectorAll('label') || [])]
+  .find((l) => l.textContent.includes('Autorizo o recebimento acima do pedido'))
+  ?.querySelector('input[type="checkbox"]');
+const chamadasConferir = (id) => api.put.mock.calls
+  .filter(([url]) => url === `/almoxarifado/recebimentos/${id}/conferir`);
 
 /* ── (a) a lista ───────────────────────────────────────────────────────────────────────────────
  * Conta linhas contra a fixture, e não "renderizou sem erro": com uma URL errada no mock a tela
@@ -559,4 +574,173 @@ test('(l) resposta fora de ordem nao vence — o ULTIMO clique manda', async () 
   expect(painel().textContent).not.toContain('REC-2026-058');
   expect(painel().querySelector('.almox-loading')).toBeNull();   // o `finally` fora de ordem nao deixa o painel girando
   expect(chamadasAnexos().at(-1)[1].params).toEqual({ entidade: 'recebimento', entidade_id: 41 });
+});
+
+/* ── (m) RN-16: o campo que faltava — quantidade conferida → PUT /conferir ─────────────────────
+ * Medido na Fase 0 da Etapa 36: NÃO existia, em lugar nenhum do client, campo para dizer quanto
+ * chegou de verdade. `atualizarItemDetalhe` era chamado em 8 pontos e `quantidade_recebida` não
+ * estava entre os campos; o painel mostrava UMA quantidade só (`recebida || esperada`); no modal
+ * de criar, `quantidade_recebida` nascia IGUAL a `quantidade_esperada`; e
+ * `PUT /almoxarifado/recebimentos/:id/conferir` — a rota que existe exatamente para isto — não
+ * tinha chamador nenhum (achado Crítico registrado em `alertaEventoGanchos.api.test.js:9`).
+ * Consequência: o alerta `DIVERGENCIA_RECEBIMENTO` tinha consumidor, dedupe, e-mail e central de
+ * alertas, e ZERO produtor alcançável pela tela — enquanto o manual descrevia o alerta e até o
+ * dedupe ("corrigir a quantidade e errar de novo"), texto que só faz sentido se houvesse onde
+ * corrigir a quantidade.
+ *
+ * O que cada asserção guarda:
+ * - `toHaveLength(1)` guarda o PUT duplicado por re-render (`toHaveBeenCalledWith` solto é
+ *   satisfeito por 1, 2 ou 10 chamadas);
+ * - o `toEqual` (e não `toMatchObject`) guarda a AUSÊNCIA de `status` no payload, que é contrato
+ *   congelado: salvar a contagem não avança o workflow — conferir e finalizar a conferência
+ *   continuam sendo dois gestos;
+ * - `quantidade_recebida: 187` NÚMERO, não `'187'`: o input devolve string e o contrato congelado
+ *   pede número (o servidor faz `parseFloat`, mas o payload do manual é o desta asserção);
+ * - o id `581` é o do item da fixture — nem `1`, nem o item do primeiro recebimento da lista.
+ *
+ * CONTROLE POSITIVO declarado antes do código: sem o input, o payload levaria **200** (a recebida
+ * nasce igual à esperada na fixture, como nascia no produto). É o `187` deste `toEqual` que
+ * distingue "leu o que o usuário digitou" de "repetiu a quantidade esperada".
+ */
+test('(m) digitar a quantidade conferida chama PUT /conferir uma vez, com o payload literal e SEM status', async () => {
+  await renderizar();
+  await clicar(linhaDe('REC-2026-058'));
+
+  const input = inputConferida();
+  expect(input).not.toBeNull();
+  digitar(input, '187');
+  await esperarEfeitos();
+
+  const botao = botaoPorTexto('Salvar Conferência');
+  expect(botao).not.toBeUndefined();
+  await clicar(botao);
+
+  expect(chamadasConferir(58)).toHaveLength(1);
+  expect(api.put.mock.calls[0][1]).toEqual({
+    itens: [{ id: 581, quantidade_recebida: 187, conferencia_quantidade: false }],
+  });
+});
+
+/* ── (n) RN-17: a divergência aparece na tela, com as DUAS quantidades ─────────────────────────
+ * ⚠️ A asserção de "contém 187" lê o texto em NEGRITO da linha do item, NÃO o input: `textContent`
+ * não inclui o `value` de um `<input>`. O `187` só chega ao DOM porque `atualizarItemDetalhe`
+ * atualiza `detalhe.itens` e a linha da quantidade re-renderiza com ele. Quem "consertar" esta
+ * asserção achando que ela lia o input vai derrubar a régua da RN-17 sem perceber.
+ *
+ * A literal é a MESMA que vai para o manual — daí ser comparada por inteiro, com a diferença e a
+ * esperada entre parênteses, e não por pedaços ("Divergência" + "13").
+ */
+test('(n) divergencia aparece com as DUAS quantidades, e bater com a esperada apaga o aviso', async () => {
+  await renderizar();
+  await clicar(linhaDe('REC-2026-058'));
+
+  const input = inputConferida();
+  expect(input).not.toBeNull();
+  digitar(input, '187');
+  await esperarEfeitos();
+
+  expect(painel().textContent).toContain('Divergência: 13 a menos que o esperado (200)');
+  expect(painel().textContent).toContain('187');
+  expect(painel().textContent).toContain('Esperada: 200');
+
+  // Metade POSITIVA no mesmo cenário: sem ela, um `avisoDivergencia` que devolvesse sempre o
+  // aviso passaria a primeira parte, e um que nunca renderizasse a esperada passaria a segunda.
+  digitar(input, '200');
+  await esperarEfeitos();
+  expect(painel().textContent).not.toContain('Divergência:');
+  expect(painel().textContent).toContain('Esperada: 200');
+});
+
+/* ── (o) RN-18: excedente pede autorização, e a recusa do servidor chega ao DOM ────────────────
+ * Duas coisas distintas, de propósito no mesmo cenário:
+ *
+ * 1. A UI OFERECE a caixa quando algum item passa da quantidade esperada, e manda
+ *    `autorizar_excedente: true` só quando ela está marcada.
+ * 2. Quem DECIDE é o backend. A caixa é escondida por `pode('autorizar_excedente')`, e esse hook
+ *    FALHA ABERTO de propósito (`useAlmoxPermissoes.js`) — então quem não tem a ação pode ver a
+ *    caixa por um instante e tomar 403 do servidor. É o desenho, não defeito.
+ *
+ * ⚠️ Achado declarado do controle positivo (sabotagem 4 da T5): esta suíte NÃO protege o
+ * esconder-por-permissão. O mock do hook no topo devolve `pode: () => true`, então remover o
+ * `&& pode('autorizar_excedente')` da caixa não derruba nada aqui. Não se forja vermelho para
+ * isso: a barreira real é o 403 do servidor, travado por `recebimentoExcedente.api.test.js`.
+ *
+ * A metade negativa afirma a literal congelada da T3 NO DOM, e não no toast: o `toast` é mockado
+ * nesta suíte e, no navegador, ele some em segundos — um operador que tomou 403 e virou a cabeça
+ * fica sem nenhum rastro do motivo na tela. Mesma régua que a Etapa 35 aplicou à lista que não
+ * carregou (RN-04).
+ */
+test('(o) excedente oferece a autorizacao, manda a flag, e o 403 do servidor aparece no painel', async () => {
+  await renderizar();
+  await clicar(linhaDe('REC-2026-058'));
+
+  const input = inputConferida();
+  expect(input).not.toBeNull();
+  digitar(input, '250');
+  await esperarEfeitos();
+
+  expect(painel().textContent).toContain('Divergência: 50 a mais que o esperado (200)');
+  expect(painel().textContent).toContain('Autorizo o recebimento acima do pedido');
+
+  const caixa = caixaExcedente();
+  expect(caixa).not.toBeUndefined();
+  await clicar(caixa);
+  await clicar(botaoPorTexto('Salvar Conferência'));
+
+  expect(chamadasConferir(58)).toHaveLength(1);
+  expect(api.put.mock.calls[0][1]).toEqual({
+    itens: [{ id: 581, quantidade_recebida: 250, conferencia_quantidade: false }],
+    autorizar_excedente: true,
+  });
+
+  // ── metade negativa: o servidor recusa, com a literal congelada na T3 ──────────────────────
+  const LITERAL_403 = 'Autorizar recebimento acima do pedido exige a permissão '
+    + '"autorizar_excedente" (seu perfil: ALMOXARIFE).';
+  api.put.mockClear();
+  api.put.mockImplementation(() => Promise.reject({ response: { data: { error: LITERAL_403 } } }));
+
+  const input2 = inputConferida();
+  expect(input2).not.toBeNull();       // âncora: o refetch do sucesso não desmontou o campo
+  digitar(input2, '250');
+  await esperarEfeitos();
+  await clicar(caixaExcedente());
+  await clicar(botaoPorTexto('Salvar Conferência'));
+
+  expect(chamadasConferir(58)).toHaveLength(1);
+  expect(painel()).not.toBeNull();
+  expect(painel().textContent).toContain('Parafuso M8');      // o painel continua de pé
+  expect(painel().textContent).toContain(LITERAL_403);
+});
+
+/* ── (p) campo LIMPO não pode virar zero ───────────────────────────────────────────────────────
+ * `Number('')` é **0**, e o input nasce `value={item.quantidade_recebida ?? ''}`. Com um
+ * `Number(...)` ingênuo, limpar o campo e salvar mandaria `quantidade_recebida: 0` — que o
+ * servidor GRAVA (0 é menor que a esperada, não é excedente, responde 200) e que DISPARA o alerta
+ * de divergência com "0 recebidos". É o dano novo que esta task poderia ter criado ao destravar a
+ * rota.
+ *
+ * O par que faz "não digitei" ser diferente de "chegou zero" tem dois lados, e este cenário é o
+ * lado do client: aqui o campo é OMITIDO do payload; no servidor, o `COALESCE` da T3 preserva a
+ * coluna de quem não mandou o campo (antes dela, `quantidade_recebida = ?` e `observacoes = ?`
+ * sobrescreviam com nulo — duas colunas apagadas, medido por sonda).
+ *
+ * `'quantidade_recebida' in payload` e não `toBeUndefined()`: a chave presente com `undefined`
+ * viraria `null` no JSON e apagaria a coluna do mesmo jeito.
+ */
+test('(p) campo limpo sai SEM a chave quantidade_recebida — nunca zero', async () => {
+  await renderizar();
+  await clicar(linhaDe('REC-2026-058'));
+
+  const input = inputConferida();
+  expect(input).not.toBeNull();
+  digitar(input, '');
+  await esperarEfeitos();
+  expect(painel().textContent).not.toContain('Divergência:');   // campo vazio não é divergência
+
+  await clicar(botaoPorTexto('Salvar Conferência'));
+
+  expect(chamadasConferir(58)).toHaveLength(1);
+  const payload = api.put.mock.calls[0][1];
+  expect('quantidade_recebida' in payload.itens[0]).toBe(false);
+  expect(payload).toEqual({ itens: [{ id: 581, conferencia_quantidade: false }] });
 });

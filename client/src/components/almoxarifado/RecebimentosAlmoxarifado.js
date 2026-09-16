@@ -10,6 +10,13 @@ import {
 } from 'react-icons/fi';
 import EtiquetasPdfModal from './EtiquetasPdfModal';
 import AnexosDocumento from './AnexosDocumento';
+// Etapa 36 (RN-18): usado SÓ para esconder a caixa de autorização de excedente antes do
+// formulário. O hook FALHA ABERTO de propósito (`useAlmoxPermissoes.js`): se o
+// `GET /almoxarifado/minhas-permissoes` não carregar, `pode()` deixa passar. Quem DECIDE é o
+// backend — `conferirRecebimento` checa `autorizar_excedente` por `can()` e devolve 403 com a
+// literal congelada. Consequência declarada e aceita: quem não tem a ação pode ver a caixa por um
+// instante e tomar 403 do servidor; é o desenho, não defeito.
+import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import { montarEtiquetasDoRecebimento } from '../../utils/etiquetasPdf';
 import './Almoxarifado.css';
 
@@ -44,6 +51,7 @@ const EMPTY_FISCAL = {
 };
 
 const RecebimentosAlmoxarifado = () => {
+  const { pode } = useAlmoxPermissoes();
   const [recebimentos, setRecebimentos] = useState([]);
   const [materiais, setMateriais] = useState([]);
   const [pedidos, setPedidos] = useState([]);
@@ -77,6 +85,15 @@ const RecebimentosAlmoxarifado = () => {
   // ÚLTIMA A RESPONDER vencia — o painel terminava no registro que o usuário já tinha abandonado.
   const detalheFetchSeqRef = useRef(0);
   const [saving, setSaving] = useState(false);
+  // Etapa 36 (RN-18): a caixa "Autorizo o recebimento acima do pedido". Estado do PAINEL e não do
+  // item: a autorização vale para o documento (o servidor recebe uma flag por requisição), e
+  // marcar item por item daria a impressão de granularidade que a rota não tem.
+  const [autorizarExcedente, setAutorizarExcedente] = useState(false);
+  // Etapa 36 (RN-16): a recusa da conferência tem de ficar NA TELA, não só no toast. As duas
+  // recusas desta porta são 400 de excedente sem flag e 403 de flag sem permissão, e as duas
+  // trazem literal que explica o que fazer — um toast que some em segundos deixa o operador com
+  // "não salvou" e nenhum motivo. Mesma régua da Etapa 35 para a lista que não carregou (RN-04).
+  const [erroConferencia, setErroConferencia] = useState(null);
   const [showNovo, setShowNovo] = useState(false);
   const [showFiscal, setShowFiscal] = useState(false);
   const [buscaMat, setBuscaMat] = useState('');
@@ -150,6 +167,11 @@ const RecebimentosAlmoxarifado = () => {
     const seq = ++detalheFetchSeqRef.current;
     setSelectedId(id);
     setLoadingDetalhe(true);
+    // Etapa 36: abrir (ou recarregar) o painel zera a autorização de excedente e a recusa da
+    // conferência anterior — senão a caixa marcada no recebimento A viajaria para o B, e a
+    // mensagem de erro de A ficaria acusando o B de algo que não aconteceu nele.
+    setAutorizarExcedente(false);
+    setErroConferencia(null);
     // Só na TROCA de id (ver `idCarregadoRef`): no refetch do mesmo id o `detalhe` fica de pé e o
     // bloco de anexos não remonta.
     if (idCarregadoRef.current !== id) setDetalhe(null);
@@ -200,6 +222,8 @@ const RecebimentosAlmoxarifado = () => {
     setSelectedId(null);
     setDetalhe(null);
     idCarregadoRef.current = null;
+    setAutorizarExcedente(false);
+    setErroConferencia(null);
   };
 
   const workflow = async (acao, msg) => {
@@ -256,6 +280,65 @@ const RecebimentosAlmoxarifado = () => {
       loadRecebimentos();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erro ao salvar dados fiscais');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Etapa 36 (RN-16) — o PRIMEIRO chamador de `PUT /almoxarifado/recebimentos/:id/conferir`.
+  //
+  // A rota existia completa (gate `receber_material`, gravação por item, disparo do alerta
+  // `DIVERGENCIA_RECEBIMENTO` no fim) e NUNCA teve chamador no client — achado Crítico registrado
+  // em `alertaEventoGanchos.api.test.js`. Sem ela, `quantidade_recebida` nunca diferia de
+  // `quantidade_esperada` por gesto de tela (o modal de criar nasce com as duas iguais), então o
+  // alerta de divergência tinha consumidor, dedupe, e-mail e central, e ZERO produtor alcançável.
+  //
+  // Por que `/conferir` e NÃO `/fiscal` (decisão 8 do desenho da etapa): (1) o `/fiscal` só
+  // renderiza no Faturamento, três transições DEPOIS do gesto real — a divergência só seria
+  // registrável quando o material já tivesse passado pelo almoxarifado e por Compras; (2) o
+  // `/conferir` é a rota que existe para isto, e usar a outra a deixaria morta; (3) o `/conferir`
+  // grava `conferencia_quantidade`, que o `/fiscal` não grava.
+  //
+  // SEM `status` no payload, de propósito: salvar a contagem não avança o workflow. Conferir e
+  // "Finalizar Conferência" continuam sendo dois gestos — avançar o status por dentro do salvar
+  // seria mudança de comportamento invisível para quem só quis corrigir um número.
+  const salvarConferencia = async () => {
+    if (!detalhe) return;
+    setSaving(true);
+    setErroConferencia(null);
+    try {
+      const itens = (detalhe.itens || []).map((item) => {
+        const recebida = Number(item.quantidade_recebida);
+        // ⚠️ `Number('')` é 0. O input nasce `value={item.quantidade_recebida ?? ''}`, então sem
+        // esta guarda limpar o campo e salvar mandaria `quantidade_recebida: 0` — que o servidor
+        // GRAVA (0 é menor que a esperada, não é excedente, responde 200) e que dispara o alerta
+        // de divergência com "0 recebidos". O campo é OMITIDO quando está vazio: é o caso que o
+        // `COALESCE` do `/conferir` existe para preservar, e o par (omitir aqui + `COALESCE` lá) é
+        // o que faz "não digitei" ser diferente de "chegou zero".
+        const preenchida = item.quantidade_recebida !== '' && item.quantidade_recebida != null
+          && Number.isFinite(recebida);
+        return {
+          id: item.id,
+          ...(preenchida ? { quantidade_recebida: recebida } : {}),
+          conferencia_quantidade: preenchida && recebida === Number(item.quantidade_esperada),
+        };
+      });
+      await api.put(`/almoxarifado/recebimentos/${detalhe.id}/conferir`, {
+        itens,
+        // A flag só vai quando a caixa está marcada: mandar `false` sempre faria o serviço
+        // exercitar o caminho da autorização (e do 403) em toda conferência normal.
+        ...(autorizarExcedente ? { autorizar_excedente: true } : {}),
+      });
+      toast.success('Conferência salva');
+      // Mesmo molde de `salvarFiscal`: refetch do MESMO id + recarga da lista. O refetch do mesmo
+      // id não anula `detalhe` (guarda `idCarregadoRef`), então o bloco de anexos continua
+      // montado com o arquivo já escolhido no input.
+      abrirDetalhe(detalhe.id);
+      loadRecebimentos();
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Erro ao salvar a conferência';
+      toast.error(msg);
+      setErroConferencia(msg);
     } finally {
       setSaving(false);
     }
@@ -376,6 +459,35 @@ const RecebimentosAlmoxarifado = () => {
     }));
   };
 
+  // Etapa 36 (RN-17): o aviso de divergência, com as DUAS quantidades e a diferença. A literal é
+  // a MESMA que vai para o manual — não aproximar nem reescrever.
+  // `null` quando o campo está vazio (não é divergência, é "ainda não contei") e quando as
+  // quantidades batem. `Number(diff.toFixed(2))` para que 13 não apareça como
+  // 13.000000000000001, que é o que a subtração de decimais produz.
+  const avisoDivergencia = (item) => {
+    const recebida = Number(item.quantidade_recebida);
+    if (item.quantidade_recebida === '' || item.quantidade_recebida == null
+      || !Number.isFinite(recebida)) return null;
+    const esperada = Number(item.quantidade_esperada);
+    if (!Number.isFinite(esperada) || recebida === esperada) return null;
+    const diff = Number(Math.abs(recebida - esperada).toFixed(2));
+    const sentido = recebida > esperada ? 'a mais' : 'a menos';
+    return (
+      <div style={{ color: 'var(--gmp-danger)', fontSize: '0.72rem', marginTop: 4 }}>
+        Divergência: {diff} {sentido} que o esperado ({esperada})
+      </div>
+    );
+  };
+
+  // A caixa de autorização só aparece quando existe DE FATO item acima do pedido: caixa sempre
+  // visível é formulário, não barreira, e treina o operador a marcá-la por reflexo.
+  const temExcedente = (detalhe?.itens || []).some((item) => {
+    const recebida = Number(item.quantidade_recebida);
+    if (item.quantidade_recebida === '' || item.quantidade_recebida == null
+      || !Number.isFinite(recebida)) return false;
+    return recebida > Number(item.quantidade_esperada);
+  });
+
   const formatDate = (d) => d
     ? new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
     : '—';
@@ -426,6 +538,15 @@ const RecebimentosAlmoxarifado = () => {
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
+        {/* Etapa 36 (RN-16): ANTES do botão de workflow, de propósito — salvar a contagem é o
+            gesto anterior a finalizar a conferência. Nos dois status em que o almoxarifado ainda
+            tem o material na mão: `RECEBIDO` (acabou de chegar) e `EM_CONFERENCIA`. */}
+        {['RECEBIDO', 'EM_CONFERENCIA'].includes(s) && (
+          <button type="button" className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center' }}
+            onClick={salvarConferencia} disabled={saving}>
+            <FiCheck size={14} /> Salvar Conferência
+          </button>
+        )}
         {s === 'RECEBIDO' && (
           <button type="button" className="btn-almox-primary" style={{ width: '100%', justifyContent: 'center' }}
             onClick={() => workflow('iniciar_conferencia', 'Conferência iniciada')} disabled={saving}>
@@ -618,8 +739,30 @@ const RecebimentosAlmoxarifado = () => {
                         <div style={{ fontWeight: 600 }}>{item.material_nome}</div>
                         <div style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>{item.material_codigo}</div>
                       </div>
-                      <div style={{ fontWeight: 700 }}>{item.quantidade_recebida || item.quantidade_esperada} {item.unidade}</div>
+                      {/* Etapa 36 (RN-16/RN-17): até aqui o painel mostrava UMA quantidade —
+                          `recebida || esperada` —, e não havia campo nenhum para dizer quanto
+                          chegou de verdade. As duas, agora, porque a conferência é a comparação:
+                          sem a esperada ao lado, "187" não é informação, é um número.
+                          `??` e não `||`: com `||`, uma recebida de `0` (nada chegou) exibia a
+                          ESPERADA, escondendo exatamente o caso mais grave. */}
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontWeight: 700 }}>{item.quantidade_recebida ?? item.quantidade_esperada} {item.unidade}</div>
+                        <div style={{ color: 'var(--gmp-text-light)', fontSize: '0.7rem' }}>Esperada: {item.quantidade_esperada}</div>
+                      </div>
                     </div>
+                    {/* O campo de contagem só nos dois status em que o material está com o
+                        almoxarifado. Depois disso a quantidade já virou base de custo médio e de
+                        conta a pagar, e corrigi-la aqui seria mexer no passado sem trilha. */}
+                    {['RECEBIDO', 'EM_CONFERENCIA'].includes(detalhe.status) && (
+                      <div style={{ marginTop: 6 }}>
+                        <input className="almox-input" type="number" step="0.01" min="0"
+                          title="Qtd. conferida" placeholder="Qtd. conferida"
+                          value={item.quantidade_recebida ?? ''}
+                          style={{ fontSize: '0.75rem', padding: '4px 6px', maxWidth: 160 }}
+                          onChange={(e) => atualizarItemDetalhe(item.id, 'quantidade_recebida', e.target.value)} />
+                        {avisoDivergencia(item)}
+                      </div>
+                    )}
                     {['EM_ENTRADA_NF', 'ENCAMINHADO_FATURAMENTO'].includes(detalhe.status) && (
                       <>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginTop: 6 }}>
@@ -669,7 +812,28 @@ const RecebimentosAlmoxarifado = () => {
                     )}
                   </div>
                 ))}
+                {/* Etapa 36 (RN-18): a autorização de excedente. `pode(...)` aqui é conveniência
+                    de interface — esconder a caixa de quem não pode marcá-la —, NÃO segurança: o
+                    hook falha aberto e é o `conferirRecebimento` que checa `autorizar_excedente`
+                    por `can()`, devolvendo 403 com a literal que aparece no aviso abaixo. */}
+                {temExcedente && pode('autorizar_excedente') && (
+                  <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: '0.78rem', marginTop: 8 }}>
+                    <input type="checkbox" checked={autorizarExcedente}
+                      onChange={(e) => setAutorizarExcedente(e.target.checked)} />
+                    Autorizo o recebimento acima do pedido
+                  </label>
+                )}
                 {renderAcoes()}
+                {/* A recusa da conferência FICA na tela. As duas literais desta porta dizem o que
+                    fazer ("marque a autorização de excedente", "exige a permissão
+                    autorizar_excedente"), e num toast de cinco segundos elas não chegam a ser
+                    lidas — o operador fica com "não salvou" e nenhum motivo. */}
+                {erroConferencia && (
+                  <div className="almox-hint-banner" role="alert"
+                    style={{ marginTop: 12, fontSize: '0.8rem', color: 'var(--gmp-danger)' }}>
+                    {erroConferencia}
+                  </div>
+                )}
                 {detalhe.contas_pagar_id && (
                   <div className="almox-hint-banner" style={{ marginTop: 12, fontSize: '0.8rem' }}>
                     Conta a pagar #{detalhe.contas_pagar_id} gerada. Verifique em{' '}
