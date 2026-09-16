@@ -202,6 +202,22 @@ async function assertNotaNaoDuplicada(db, { nota_fiscal, fornecedor_id, forneced
   }
 }
 
+/**
+ * (Etapa 37) A recebida que o operador DECLAROU, lida do payload CRU — antes de a esperada ser
+ * trocada pelo saldo. A ordem de preferencia e a mesma que o INSERT dos itens usa
+ * (`quantidade_recebida`, senao a esperada, senao a quantidade), e `parseFloat` +
+ * `Number.isFinite` pelo motivo ja comentado na barreira da Etapa 36: `''` nao pode ser lido como
+ * ZERO, senao a comparacao ficaria falsa por acidente e nao por regra.
+ */
+const recebidaDeclaradaNoPayload = (item) => {
+  for (const v of [item.quantidade_recebida, item.quantidade_esperada, item.quantidade]) {
+    if (v == null || v === '') continue;
+    const n = parseFloat(v);
+    if (Number.isFinite(n)) return n;
+  }
+  return 0;
+};
+
 async function criarRecebimento(db, user, data) {
   const {
     pedido_compra_id, pedido_compra_numero, tipo_recebimento, nota_fiscal,
@@ -210,21 +226,68 @@ async function criarRecebimento(db, user, data) {
 
   let pedido = null;
   let itens = itensInput || [];
+  // (Etapa 37) As linhas do pedido COM o saldo de cada uma, e a ligacao item -> linha resolvida
+  // pelo SERVIDOR. Ficam vazias no caminho NF puro (e ai nao ha saldo a medir: o unico "esperado"
+  // e o que o proprio operador digitou, e quem governa e a barreira da Etapa 36).
+  let linhasDoPedido = [];
+  let resolvidos = [];
   const tipo = tipo_recebimento || (pedido_compra_id || pedido_compra_numero ? TIPO_PEDIDO_COMPRA : TIPO_NOTA_FISCAL);
 
   if (tipo === TIPO_PEDIDO_COMPRA) {
     pedido = await resolverPedidoCompra(db, { pedido_compra_id, pedido_compra_numero });
     if (!pedido) throw Object.assign(new Error('Pedido de compra não encontrado'), { status: 400 });
+    linhasDoPedido = await saldoDasLinhasDoPedido(db, pedido.id);
+
     if (!itens.length) {
-      const itensPedido = await carregarItensPedidoCompra(db, pedido.id);
-      itens = itensPedido.map((i) => ({
-        material_id: i.material_id,
-        quantidade: i.quantidade,
-        quantidade_esperada: i.quantidade,
-        quantidade_recebida: i.quantidade,
-        valor_unitario: i.valor_unitario || 0,
-        valor_total: (i.quantidade || 0) * (i.valor_unitario || 0),
+      // RN-25 — DUAS contagens, DUAS literais (decisao 14). "Nenhuma linha com saldo" abrigava
+      // dois fatos diferentes: o pedido QUITADO e o pedido cujo Compras ainda NAO LANCOU as
+      // linhas. Dizer "ja foi recebido por completo" ao segundo e MENTIRA — e ele e justamente o
+      // pedido que a RN-24 manda manter visivel em `?pendentes=1` como ABERTO: a tela o oferece e
+      // a porta o recusaria mentindo. Nenhuma das duas e 'Inclua ao menos um item', que e a recusa
+      // do caminho NF e nao explica nada ao operador do pedido.
+      if (!linhasDoPedido.length) {
+        throw Object.assign(new Error(
+          `Pedido de compra ${pedido.numero} não tem itens lançados no módulo Compras`,
+        ), { status: 400 });
+      }
+      const comSaldo = linhasDoPedido.filter((l) => l.saldo > 0);
+      if (!comSaldo.length) {
+        throw Object.assign(new Error(
+          `Pedido de compra ${pedido.numero} já foi recebido por completo`,
+        ), { status: 400 });
+      }
+      // RN-25, caminho SEM `itens` (o que a tela usa hoje): o item nasce do SALDO, e nao da
+      // quantidade original. Antes nascia `esperada = recebida = quantidade` — um pedido de 10 com
+      // 6 ja recebidos gerava um recebimento de 10/10, e o `/conferir` da Etapa 36 passava a medir
+      // a contagem contra o pedido INTEIRO: recebimento parcial era impossivel de registrar certo.
+      itens = comSaldo.map((l) => ({
+        material_id: l.material_id,
+        pedido_item_id: l.id,
+        quantidade: l.saldo,
+        quantidade_esperada: l.saldo,
+        quantidade_recebida: l.saldo,
+        valor_unitario: l.valor_unitario || 0,
+        valor_total: l.saldo * (l.valor_unitario || 0),
       }));
+      resolvidos = comSaldo.map((l, indice) => ({ indice, linha: l, recebida: l.saldo }));
+    } else if (linhasDoPedido.length) {
+      // (Fase 2) O caminho COM `itens` e o que a TELA usa depois da T5, e o unico em que o payload
+      // traz `quantidade_esperada`. A esperada GRAVADA tem de ser o SALDO e nao o payload: a
+      // barreira da Etapa 36 no `/conferir`/`/fiscal` compara a contagem com a ESPERADA GRAVADA,
+      // entao uma esperada vinda do payload a desligaria EM SILENCIO (mandar 99 aceitaria qualquer
+      // contagem depois). A recebida declarada e lida ANTES da troca, pelo mesmo motivo.
+      resolvidos = itens.map((item, indice) => ({
+        indice,
+        linha: resolverLinhaDoPedido(item, linhasDoPedido),
+        recebida: recebidaDeclaradaNoPayload(item),
+      }));
+      itens = itens.map((item, indice) => {
+        const { linha } = resolvidos[indice];
+        // Linha quitada (saldo 0) nao tem saldo a congelar, e gravar `quantidade_esperada = 0`
+        // seria pior que nao gravar: o `||` do INSERT abaixo leria 0 como "campo ausente".
+        if (!linha || !(linha.saldo > 0)) return item;
+        return { ...item, quantidade_esperada: linha.saldo };
+      });
     }
   }
 
@@ -246,7 +309,21 @@ async function criarRecebimento(db, user, data) {
   // ninguem checava — a regra da barreira "so o AUMENTO sobre a gravada" tirou o bloqueio
   // ACIDENTAL que o `/fiscal` fazia, e a RN-18 passou a ser contornavel por um payload de criacao.
   // ANTES do INSERT do cabecalho, DEPOIS da guarda de NF (que mantem a precedencia do 409).
-  const excedentesDaCriacao = assertExcedenteNaCriacaoPermitido(user, itens, data.autorizar_excedente === true);
+  // ⚠️ Mede o payload CRU (`itensInput`), e nao `itens`: no caminho do pedido a esperada de `itens`
+  // ja foi trocada pelo SALDO, e comparar contra ela barraria um recebimento LEGITIMO de duas
+  // linhas do mesmo material (saldo agregado 10 dividido em 6 e 4 — a regua do pedido, abaixo, e
+  // quem julga esse caso). O que esta barreira mede continua sendo o que a Etapa 36 mediu: a
+  // coerencia do payload consigo mesmo, com `#` = POSICAO no payload. No caminho SEM `itens`
+  // `itensInput` e vazio, e nao ha payload de item nenhum a medir.
+  const excedentesDaCriacao = assertExcedenteNaCriacaoPermitido(user, itensInput || [], data.autorizar_excedente === true);
+
+  // RN-20/RN-21 (Etapa 37) — a SEGUNDA comparacao da criacao, e ela nao substitui a de cima: a da
+  // 36 mede o documento contra a esperada que ele mesmo declarou; esta mede contra o SALDO DO
+  // PEDIDO DE COMPRA, agregado por material. Antes desta linha, `POST` de 999 contra um pedido de
+  // 10 entrava com 201, porque a unica referencia do excedente era o numero que o operador digitou.
+  // ANTES do `inserirComNumeroUnico`, DEPOIS da guarda de NF (que mantem a precedencia do 409).
+  const excedentesDoPedido = assertSaldoDoPedidoPermitido(user, resolvidos, linhasDoPedido,
+    data.autorizar_excedente === true);
 
   // Etapa 31 (RN-07): o numero nasce DENTRO do gerador, na tentativa que vencer o UNIQUE, e e ele
   // que volta no `return` daqui. O `fn` contem SO o INSERT do cabecalho — os itens sao inseridos
@@ -275,11 +352,17 @@ async function criarRecebimento(db, user, data) {
     const qtd = item.quantidade_esperada || item.quantidade;
     const vUnit = parseFloat(item.valor_unitario) || 0;
     const vTotal = parseFloat(item.valor_total) || (qtd * vUnit);
+    // (Etapa 37) `pedido_item_id` sai de `resolvidos`, NUNCA de `item.pedido_item_id`: e o link que
+    // a Task 3 usa para somar na linha certa, e deixar o id do payload chegar ao INSERT faria a
+    // contagem cair na linha de outro pedido. Sem linha resolvida, `null` — item fora do pedido
+    // (decisao 9) nao inventa link.
+    const linhaResolvida = resolvidos[indice] && resolvidos[indice].linha;
     const ins = await dbRun(db, `INSERT INTO recebimentos_material_itens_almoxarifado
-      (recebimento_id, material_id, quantidade_esperada, quantidade_recebida, lote, series, observacoes,
+      (recebimento_id, material_id, pedido_item_id, quantidade_esperada, quantidade_recebida,
+       lote, series, observacoes,
        valor_unitario, valor_total, valor_icms, valor_ipi, reducao_icms_percent)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, [
-      r.lastID, item.material_id, qtd,
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+      r.lastID, item.material_id, linhaResolvida ? linhaResolvida.id : null, qtd,
       item.quantidade_recebida || qtd, item.lote || null, item.series || null, item.observacoes || null,
       vUnit, vTotal, parseFloat(item.valor_icms) || 0, parseFloat(item.valor_ipi) || 0,
       parseFloat(item.reducao_icms_percent) || 0,
@@ -291,6 +374,25 @@ async function criarRecebimento(db, user, data) {
   // auditar a posicao do payload deixaria `entidade_id` apontando para lugar nenhum.
   for (const ex of excedentesDaCriacao) {
     await auditarExcedenteAutorizado(db, user, idsPorIndice[ex.indice], ex);
+  }
+
+  // (Etapa 37) A trilha do excedente CONTRA O PEDIDO, uma linha por item excedente, DEPOIS dos
+  // INSERT (antes do INSERT o item nao tem id, e auditar a posicao do payload deixaria
+  // `entidade_id` apontando para lugar nenhum). Verbo e entidade sao os MESMOS da Etapa 36 — os
+  // rotulos ja existem em `auditLabels.js` e esta etapa nao os toca.
+  // `dados_anteriores` guarda `saldo_pedido` e nao `quantidade_esperada`: a medida desta porta e
+  // outra, e chamar as duas pelo mesmo nome faria a leitura da trilha mentir sobre o que foi
+  // comparado. Por isso NAO reusa `auditarExcedenteAutorizado`.
+  for (const ex of excedentesDoPedido) {
+    for (const indice of ex.indices) {
+      await registrarAuditoria(db, {
+        entidade: 'recebimento_item', entidade_id: idsPorIndice[indice],
+        acao: 'EXCEDENTE_AUTORIZADO',
+        usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
+        dados_anteriores: { saldo_pedido: ex.saldoMaterial },
+        dados_novos: { quantidade_recebida: resolvidos[indice].recebida },
+      });
+    }
   }
 
   await registrarAuditoria(db, {
@@ -313,13 +415,48 @@ async function criarRecebimento(db, user, data) {
  * ALMOXARIFE, e ele NUNCA ve a caixa — ela e escondida por `pode('autorizar_excedente')` e a acao e
  * de [ADMINISTRADOR, COMPRAS]. A instrucao antiga mandava um gesto impossivel.
  */
-const erroExcedenteSemFlag = (recebida, esperada, referencia) => Object.assign(new Error(
-  `Quantidade recebida (${recebida}) maior que a esperada (${esperada}) no item #${referencia}`
-  + ' — a autorização de excedente é de Compras ou do Administrador'), { status: 400 });
+// (Etapa 37) O SUFIXO e UMA constante para as TRES portas. Escrito de novo no 400 do saldo, o F3
+// se repetiria: a instrucao ao operador divergiria entre as portas na primeira edicao, e foi
+// exatamente por estar copiada em cinco lugares que ela precisou de um fix-round.
+const SUFIXO_AUTORIZACAO_EXCEDENTE = ' — a autorização de excedente é de Compras ou do Administrador';
 
-const erroExcedenteSemPermissao = (user) => Object.assign(new Error(
-  'Autorizar recebimento acima do pedido exige a permissão "autorizar_excedente"'
-  + ` (seu perfil: ${getPerfilFromUser(user)}).`), { status: 403 });
+const mensagemExcedenteSemFlag = (recebida, esperada, referencia) => `Quantidade recebida `
+  + `(${recebida}) maior que a esperada (${esperada}) no item #${referencia}`
+  + SUFIXO_AUTORIZACAO_EXCEDENTE;
+
+/**
+ * (Etapa 37, RN-20) O 400 do caminho do PEDIDO tem literal PROPRIA, e isso e decisao (a 10 do
+ * design). A da Etapa 36 diz "maior que a esperada (10) no item #58": no `POST` nao existe id de
+ * item (nada foi inserido ainda) e "esperada" nao e o que se esta medindo — a medida e o SALDO do
+ * pedido de compra, agregado por material.
+ * DESCARTADO parametrizar a literal da 36 com dois buracos ("no item #x" / "para o material y"):
+ * uma frase com dois buracos para dizer duas coisas diferentes fica pior de ler nas duas portas, e
+ * a regua deixaria de poder afirmar texto literal.
+ */
+const mensagemAcimaDoSaldoDoPedido = (recebida, saldo, codigo) => `Quantidade recebida `
+  + `(${recebida}) maior que o saldo do pedido (${saldo}) para o material ${codigo}`
+  + SUFIXO_AUTORIZACAO_EXCEDENTE;
+
+/**
+ * (Etapa 37, decisao 7) A metade DECISORIA, compartilhada pelas TRES portas: a INTENCAO (a flag) e
+ * a AUTORIDADE (a acao). Só a metade, e nao a funcao inteira: `assertExcedentePermitido` compara o
+ * payload com a linha JA GRAVADA e e INALCANCAVEL no `POST` por construcao (medido na Fase 0 — no
+ * `POST` os itens ainda nao existem, e ela da `continue`). Cada porta COLETA os excedentes e
+ * formata o PROPRIO 400, porque "excedente" mede coisas diferentes em cada uma — contra a esperada
+ * do item (36) e contra o saldo do pedido (37).
+ *
+ * O 403, ao contrario, e o MESMO fato nas tres portas ("voce nao tem a acao"), e por isso a literal
+ * mora AQUI, em UM lugar: mudar uma palavra dela derruba o teste da Etapa 36 E o da 37 ao mesmo
+ * tempo, que e a prova EXECUTADA de que o reuso existe (sabotagem 3 da Task 2).
+ */
+function assertAutorizacaoExcedente(user, autorizado, mensagem400) {
+  if (!autorizado) throw Object.assign(new Error(mensagem400), { status: 400 });
+  if (!can(user, 'autorizar_excedente')) {
+    throw Object.assign(new Error(
+      'Autorizar recebimento acima do pedido exige a permissão "autorizar_excedente"'
+      + ` (seu perfil: ${getPerfilFromUser(user)}).`), { status: 403 });
+  }
+}
 
 const auditarExcedenteAutorizado = (db, user, itemId, { esperada, recebida }) => registrarAuditoria(db, {
   entidade: 'recebimento_item', entidade_id: itemId, acao: 'EXCEDENTE_AUTORIZADO',
@@ -384,8 +521,8 @@ async function assertExcedentePermitido(db, user, recebimentoId, itens, autoriza
   if (!excedentes.length) return;
 
   const e = excedentes[0];
-  if (!autorizado) throw erroExcedenteSemFlag(e.recebida, e.esperada, e.id);
-  if (!can(user, 'autorizar_excedente')) throw erroExcedenteSemPermissao(user);
+  assertAutorizacaoExcedente(user, autorizado,
+    mensagemExcedenteSemFlag(e.recebida, e.esperada, e.id));
   for (const ex of excedentes) {
     await auditarExcedenteAutorizado(db, user, ex.id, ex);
   }
@@ -427,8 +564,108 @@ function assertExcedenteNaCriacaoPermitido(user, itens, autorizado) {
   if (!excedentes.length) return excedentes;
 
   const e = excedentes[0];
-  if (!autorizado) throw erroExcedenteSemFlag(e.recebida, e.esperada, e.posicao);
-  if (!can(user, 'autorizar_excedente')) throw erroExcedenteSemPermissao(user);
+  assertAutorizacaoExcedente(user, autorizado,
+    mensagemExcedenteSemFlag(e.recebida, e.esperada, e.posicao));
+  return excedentes;
+}
+
+/**
+ * RN-20 (Etapa 37) — o SALDO de cada linha do pedido de compra.
+ *
+ * `saldo = quantidade - COALESCE(quantidade_recebida, 0)`, e o `COALESCE` em JS (`Number.isFinite`)
+ * pelo mesmo motivo do SQL: producao pode ter linha com `quantidade_recebida` NULL (anterior ao
+ * ALTER da Task 1), e `10 - null` viraria `NaN` — com `NaN` toda comparacao e falsa e a barreira
+ * ficaria DESLIGADA em silencio, exatamente na linha mais antiga do acervo.
+ *
+ * Ordenado por `id` porque a resolucao da linha (abaixo) e "menor id primeiro", e
+ * `carregarItensPedidoCompra` nao tem `ORDER BY` — ordenar aqui evita mudar a query compartilhada.
+ * "Linhas lancadas" aqui sao as linhas COM material: `carregarItensPedidoCompra` filtra as sem
+ * `material_id` (sem material nao ha o que dar entrada no estoque), e e o mesmo filtro do resto do
+ * modulo.
+ */
+async function saldoDasLinhasDoPedido(db, pedidoId) {
+  const linhas = await carregarItensPedidoCompra(db, pedidoId);
+  return linhas
+    .map((l) => {
+      const pedida = parseFloat(l.quantidade);
+      const recebida = parseFloat(l.quantidade_recebida);
+      return {
+        ...l,
+        saldo: (Number.isFinite(pedida) ? pedida : 0) - (Number.isFinite(recebida) ? recebida : 0),
+      };
+    })
+    .sort((a, b) => a.id - b.id);
+}
+
+/**
+ * Decisao 9 + risco R5 — o SERVIDOR escolhe a linha do pedido; o payload nunca decide.
+ *
+ * `pedido_item_id` do payload vale se, e SO SE, ele pertence ao pedido resolvido — um id de outra
+ * linha (ou de outro pedido) escolheria a linha errada e a Task 3 somaria no pedido alheio. Senao:
+ * a linha do mesmo material com menor id e saldo > 0; senao a linha do mesmo material com menor
+ * id; sem linha nenhuma, `null` — e ai o item mantem o que o payload mandou e NAO tem regua de
+ * saldo (decisao 9: material fora do pedido e caso legitimo, e recusa-lo e regra NOVA).
+ *
+ * Omitir o campo tambem nao contorna nada, porque a regua e o saldo AGREGADO POR MATERIAL: o id do
+ * payload nunca decide se o `POST` passa.
+ */
+function resolverLinhaDoPedido(item, linhas) {
+  if (item.pedido_item_id != null) {
+    const daqui = linhas.find((l) => Number(l.id) === Number(item.pedido_item_id));
+    if (daqui) return daqui;
+  }
+  const doMaterial = linhas.filter((l) => Number(l.material_id) === Number(item.material_id));
+  if (!doMaterial.length) return null;
+  return doMaterial.find((l) => l.saldo > 0) || doMaterial[0];
+}
+
+/**
+ * RN-20/RN-21 (Etapa 37) — a regua do `POST` contra o saldo do pedido, AGREGADA POR MATERIAL.
+ *
+ * Decisao 3: agregada, e nao por linha. Duas linhas do mesmo material no mesmo pedido (precos ou
+ * prazos diferentes, caso legitimo) fariam um recebimento LEGITIMO tomar 400 so por o operador ter
+ * digitado na "linha errada". O saldo do material e a soma do saldo de TODAS as linhas dele no
+ * pedido, e a recebida e a soma do que o payload declarou para aquele material.
+ *
+ * A recebida DECLARADA vem do payload cru (`quantidade_recebida`, senao `quantidade_esperada`,
+ * senao `quantidade`) e e medida ANTES de a esperada ser trocada pelo saldo: medir depois faria um
+ * payload de `quantidade: 999` sem `quantidade_recebida` ser silenciosamente reduzido ao saldo em
+ * vez de recusado.
+ *
+ * Roda ANTES de `inserirComNumeroUnico` (nao ha transacao neste modulo: recusar depois deixaria o
+ * documento gravado com um 400 por cima) e DEVOLVE os excedentes para `criarRecebimento` auditar
+ * DEPOIS dos INSERT, quando o item ja tem id real.
+ */
+function assertSaldoDoPedidoPermitido(user, resolvidos, linhas, autorizado) {
+  const porMaterial = new Map();
+  for (const r of resolvidos) {
+    if (!r.linha) continue;
+    const chave = String(r.linha.material_id);
+    const g = porMaterial.get(chave) || { recebidaTotal: 0, indices: [] };
+    g.recebidaTotal += r.recebida;
+    g.indices.push(r.indice);
+    porMaterial.set(chave, g);
+  }
+
+  const excedentes = [];
+  for (const [chave, grupo] of porMaterial) {
+    const doMaterial = linhas.filter((l) => String(l.material_id) === chave);
+    const saldoMaterial = doMaterial.reduce((s, l) => s + l.saldo, 0);
+    const { recebidaTotal } = grupo;
+    if (recebidaTotal > saldoMaterial) {
+      // O codigo que o operador reconhece: o do cadastro do material, senao o que o Compras
+      // digitou na linha do pedido, senao o id — nunca uma mensagem sem referencia nenhuma.
+      const codigo = doMaterial[0].material_codigo || doMaterial[0].codigo || `#${chave}`;
+      excedentes.push({
+        codigo, recebidaTotal, saldoMaterial, indices: grupo.indices,
+      });
+    }
+  }
+  if (!excedentes.length) return excedentes;
+
+  const e = excedentes[0];
+  assertAutorizacaoExcedente(user, autorizado,
+    mensagemAcimaDoSaldoDoPedido(e.recebidaTotal, e.saldoMaterial, e.codigo));
   return excedentes;
 }
 
