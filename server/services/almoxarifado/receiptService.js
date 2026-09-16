@@ -242,6 +242,12 @@ async function criarRecebimento(db, user, data) {
     fornecedor_nome: pedido?.fornecedor_nome || fornecedor_nome || null,
   });
 
+  // RN-18, TERCEIRA porta (fix-round 2, F5): o item NASCE com `quantidade_recebida`, e ate aqui
+  // ninguem checava — a regra da barreira "so o AUMENTO sobre a gravada" tirou o bloqueio
+  // ACIDENTAL que o `/fiscal` fazia, e a RN-18 passou a ser contornavel por um payload de criacao.
+  // ANTES do INSERT do cabecalho, DEPOIS da guarda de NF (que mantem a precedencia do 409).
+  const excedentesDaCriacao = assertExcedenteNaCriacaoPermitido(user, itens, data.autorizar_excedente === true);
+
   // Etapa 31 (RN-07): o numero nasce DENTRO do gerador, na tentativa que vencer o UNIQUE, e e ele
   // que volta no `return` daqui. O `fn` contem SO o INSERT do cabecalho — os itens sao inseridos
   // DEPOIS, e entrariam em duplicata se estivessem aqui dentro quando o retry disparasse.
@@ -262,11 +268,14 @@ async function criarRecebimento(db, user, data) {
     user.id, user.nome || user.email, observacoes || null,
   ]));
 
-  for (const item of itens) {
+  // (F5) O id de cada item inserido, por POSICAO no payload: e o que deixa a trilha do excedente
+  // autorizado nascer com o id REAL do item, e nao com a posicao que a literal do 400 usa.
+  const idsPorIndice = [];
+  for (const [indice, item] of itens.entries()) {
     const qtd = item.quantidade_esperada || item.quantidade;
     const vUnit = parseFloat(item.valor_unitario) || 0;
     const vTotal = parseFloat(item.valor_total) || (qtd * vUnit);
-    await dbRun(db, `INSERT INTO recebimentos_material_itens_almoxarifado
+    const ins = await dbRun(db, `INSERT INTO recebimentos_material_itens_almoxarifado
       (recebimento_id, material_id, quantidade_esperada, quantidade_recebida, lote, series, observacoes,
        valor_unitario, valor_total, valor_icms, valor_ipi, reducao_icms_percent)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, [
@@ -275,6 +284,13 @@ async function criarRecebimento(db, user, data) {
       vUnit, vTotal, parseFloat(item.valor_icms) || 0, parseFloat(item.valor_ipi) || 0,
       parseFloat(item.reducao_icms_percent) || 0,
     ]);
+    idsPorIndice[indice] = ins.lastID;
+  }
+
+  // (F5) A trilha DEPOIS do INSERT, e nao dentro da barreira: antes do INSERT o item nao tem id, e
+  // auditar a posicao do payload deixaria `entidade_id` apontando para lugar nenhum.
+  for (const ex of excedentesDaCriacao) {
+    await auditarExcedenteAutorizado(db, user, idsPorIndice[ex.indice], ex);
   }
 
   await registrarAuditoria(db, {
@@ -283,6 +299,34 @@ async function criarRecebimento(db, user, data) {
   });
   return { id: r.lastID, numero, status: STATUS.RECEBIDO };
 }
+
+/**
+ * RN-18 — as DUAS recusas e a trilha, em UM lugar para as TRES portas (criacao, conferencia e
+ * fiscal). Escritas de novo em cada porta, divergiriam na primeira edicao e o operador veria texto
+ * diferente dependendo de qual porta recusou — foi o que aconteceu com a literal do F3, que estava
+ * copiada em cinco lugares.
+ *
+ * `referencia` e o id do item nas portas de UPDATE e a POSICAO no payload (1-based) na criacao,
+ * onde o item ainda nao existe. Quem chama diz qual; a frase e a mesma.
+ *
+ * (F3) A literal NOMEIA quem autoriza em vez de mandar marcar a caixa: quem mais toma este 400 e o
+ * ALMOXARIFE, e ele NUNCA ve a caixa — ela e escondida por `pode('autorizar_excedente')` e a acao e
+ * de [ADMINISTRADOR, COMPRAS]. A instrucao antiga mandava um gesto impossivel.
+ */
+const erroExcedenteSemFlag = (recebida, esperada, referencia) => Object.assign(new Error(
+  `Quantidade recebida (${recebida}) maior que a esperada (${esperada}) no item #${referencia}`
+  + ' — a autorização de excedente é de Compras ou do Administrador'), { status: 400 });
+
+const erroExcedenteSemPermissao = (user) => Object.assign(new Error(
+  'Autorizar recebimento acima do pedido exige a permissão "autorizar_excedente"'
+  + ` (seu perfil: ${getPerfilFromUser(user)}).`), { status: 403 });
+
+const auditarExcedenteAutorizado = (db, user, itemId, { esperada, recebida }) => registrarAuditoria(db, {
+  entidade: 'recebimento_item', entidade_id: itemId, acao: 'EXCEDENTE_AUTORIZADO',
+  usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
+  dados_anteriores: { quantidade_esperada: esperada },
+  dados_novos: { quantidade_recebida: recebida },
+});
 
 /**
  * RN-18 (Etapa 36) — recebimento acima do esperado exige autorizacao EXPLICITA e PERMISSAO.
@@ -340,28 +384,52 @@ async function assertExcedentePermitido(db, user, recebimentoId, itens, autoriza
   if (!excedentes.length) return;
 
   const e = excedentes[0];
-  if (!autorizado) {
-    throw Object.assign(new Error(
-      // Revisão final (F3): a literal NOMEIA quem autoriza em vez de mandar marcar a caixa. Quem
-      // mais toma este 400 é o ALMOXARIFE, e ele NUNCA vê a caixa — ela é escondida por
-      // `pode('autorizar_excedente')`, e a ação é de [ADMINISTRADOR, COMPRAS]. A instrução antiga
-      // mandava um gesto impossível: o operador procurava um controle que não existe na tela dele.
-      `Quantidade recebida (${e.recebida}) maior que a esperada (${e.esperada}) no item #${e.id}`
-      + ' — a autorização de excedente é de Compras ou do Administrador'), { status: 400 });
-  }
-  if (!can(user, 'autorizar_excedente')) {
-    throw Object.assign(new Error(
-      'Autorizar recebimento acima do pedido exige a permissão "autorizar_excedente"'
-      + ` (seu perfil: ${getPerfilFromUser(user)}).`), { status: 403 });
-  }
+  if (!autorizado) throw erroExcedenteSemFlag(e.recebida, e.esperada, e.id);
+  if (!can(user, 'autorizar_excedente')) throw erroExcedenteSemPermissao(user);
   for (const ex of excedentes) {
-    await registrarAuditoria(db, {
-      entidade: 'recebimento_item', entidade_id: ex.id, acao: 'EXCEDENTE_AUTORIZADO',
-      usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
-      dados_anteriores: { quantidade_esperada: ex.esperada },
-      dados_novos: { quantidade_recebida: ex.recebida },
-    });
+    await auditarExcedenteAutorizado(db, user, ex.id, ex);
   }
+}
+
+/**
+ * RN-18 na TERCEIRA porta (fix-round 2, F5) — o item NASCE com a quantidade recebida.
+ *
+ * `criarRecebimento` grava `quantidade_recebida = item.quantidade_recebida || qtd` e nunca chamou
+ * a barreira: a RN-18 tinha duas portas, nao tres. Antes da onda de correcao, a barreira do
+ * `/fiscal` parava esse documento por ACIDENTE — qualquer edicao fiscal reenviava 999 sobre uma
+ * esperada de 10 e tomava 400 (era exatamente o F1, o defeito que TRAVAVA o documento). Com a
+ * regra correta (barra so o AUMENTO sobre a quantidade gravada), ecoar deixou de barrar e o
+ * bloqueio acidental caiu junto: medido por sonda, um POST como ALMOXARIFE com
+ * `quantidade: 10, quantidade_recebida: 999` entrava com 201, sem trilha, e depois atravessava
+ * `/fiscal`, `/conferir` e `finalizar_conferencia` com 200. Nao e alcancavel pela TELA
+ * (`handleCriar` manda `quantidade_recebida = quantidade`) — basta um payload de API.
+ *
+ * ⚠️ Na criacao NAO EXISTE id de item, e o `#` da literal leva a POSICAO DO ITEM NO PAYLOAD
+ * (1-based) — a unica referencia que quem chamou tem. E a MESMA literal das outras portas (os
+ * helpers acima existem para isso: escrita de novo aqui, ela divergiria na primeira edicao).
+ *
+ * Roda ANTES do INSERT (nao ha transacao neste modulo, entao recusar depois deixaria o documento
+ * gravado com um 400 por cima) e DEVOLVE os excedentes para `criarRecebimento` auditar DEPOIS do
+ * INSERT, quando o item ja tem id real. Auditar aqui gravaria a posicao no lugar do id.
+ */
+function assertExcedenteNaCriacaoPermitido(user, itens, autorizado) {
+  const excedentes = [];
+  (itens || []).forEach((item, i) => {
+    if (item.quantidade_recebida == null) return;
+    const recebida = parseFloat(item.quantidade_recebida);
+    // A esperada EFETIVA e a mesma expressao que o INSERT abaixo usa (`quantidade_esperada ||
+    // quantidade`): comparar com outra coisa barraria um item e gravaria outro.
+    const esperada = parseFloat(item.quantidade_esperada || item.quantidade);
+    if (Number.isFinite(recebida) && Number.isFinite(esperada) && recebida > esperada) {
+      excedentes.push({ indice: i, posicao: i + 1, recebida, esperada });
+    }
+  });
+  if (!excedentes.length) return excedentes;
+
+  const e = excedentes[0];
+  if (!autorizado) throw erroExcedenteSemFlag(e.recebida, e.esperada, e.posicao);
+  if (!can(user, 'autorizar_excedente')) throw erroExcedenteSemPermissao(user);
+  return excedentes;
 }
 
 async function conferirRecebimento(db, user, recebimentoId, data) {

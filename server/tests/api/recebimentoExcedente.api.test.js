@@ -476,6 +476,115 @@ const semPermissao = (perfil) => 'Autorizar recebimento acima do pedido exige a 
     setUser(ADMIN);
   });
 
+  // ── (12)..(15) fix-round 2, F5 — a TERCEIRA porta: o item nasce com o excedente ──────────────
+  /**
+   * Quebra introduzida pela propria regra de AUMENTO (R2), achada na re-revisao da onda.
+   *
+   * `criarRecebimento` grava `quantidade_recebida = item.quantidade_recebida || qtd`
+   * (`receiptService.js:266-268`) e NUNCA chamou `assertExcedentePermitido` — a RN-18 sempre teve
+   * duas portas, nao tres. Antes da onda, a barreira do `/fiscal` PARAVA esse documento por
+   * ACIDENTE: qualquer edicao fiscal reenviava 999 sobre uma esperada de 10 e tomava 400 (era o
+   * F1, o defeito que travava o documento). Com a regra correta — barra so o AUMENTO sobre a
+   * quantidade gravada —, ecoar 999 deixou de barrar, e o bloqueio acidental caiu junto: a RN-18
+   * passou a ser contornavel de ponta a ponta por UM payload de criacao.
+   *
+   * Sonda executada como ALMOXARIFE: `POST /recebimentos` com
+   * `itens: [{ material_id, quantidade: 10, quantidade_recebida: 999 }]` -> 201, item gravado com
+   * esperada 10 / recebida 999 e ZERO linhas de auditoria; depois `/fiscal` ecoando 999 -> 200,
+   * `/conferir` ecoando 999 -> 200, `finalizar_conferencia` -> 200. Nao e alcancavel pela TELA
+   * (`handleCriar` manda `quantidade_recebida = quantidade`), mas basta um payload de API de
+   * qualquer portador de `receber_material`.
+   *
+   * Conserto: a barreira fecha ONDE O ITEM NASCE, com as MESMAS duas metades das outras portas
+   * (flag = intencao, permissao = autoridade) e as MESMAS literais — que sairam para helpers
+   * compartilhados justamente para nao poderem divergir. Na criacao NAO EXISTE id de item ainda,
+   * entao o `#` da literal leva a POSICAO DO ITEM NO PAYLOAD (1-based), que e a unica referencia
+   * que quem chamou tem; esta dito no comentario do servico e e o que o cenario (12) afirma.
+   * A recusa e ANTES do INSERT (nao ha transacao neste modulo) e a AUDITORIA e DEPOIS, para a
+   * trilha nascer com o id real do item.
+   *
+   * DESCARTADO: ignorar `quantidade_recebida` no POST (forcar recebida = esperada). Seria mudanca
+   * silenciosa de contrato de uma coluna que o caminho do PEDIDO_COMPRA usa de proposito, e
+   * apagaria um dado que quem chamou informou -- a mesma classe de defeito que o COALESCE da T3
+   * existe para matar.
+   */
+  const semFlagNaCriacao = (recebida, esperada, posicao) => semFlag(recebida, esperada, posicao);
+
+  await test('(12) F5: POST com recebida > esperada e sem flag: 400 com a literal, e NADA criado', async () => {
+    setUser(ALMOXARIFE);
+    const material = await novoMaterial();
+    const antes = (await dbGet(db, 'SELECT COUNT(*) AS n FROM recebimentos_material_almoxarifado')).n;
+    const res = await request(app).post('/api/almoxarifado/recebimentos').send({
+      tipo_recebimento: 'NOTA_FISCAL', nota_fiscal: 'NF-EXC-F5-400',
+      itens: [{ material_id: material, quantidade: 10, quantidade_recebida: 999 }],
+    });
+    assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+    // O `#1` e a POSICAO do item no payload, nao um id: na criacao o item ainda nao existe.
+    assert.strictEqual(res.body.error, semFlagNaCriacao(999, 10, 1));
+    const depois = (await dbGet(db, 'SELECT COUNT(*) AS n FROM recebimentos_material_almoxarifado')).n;
+    assert.strictEqual(depois, antes, 'a recusa e ANTES do INSERT do cabecalho');
+    setUser(ADMIN);
+  });
+
+  await test('(13) F5: POST com a flag mas perfil ALMOXARIFE: 403 nomeando a acao, e NADA criado', async () => {
+    setUser(ALMOXARIFE);
+    const material = await novoMaterial();
+    const antes = (await dbGet(db, 'SELECT COUNT(*) AS n FROM recebimentos_material_almoxarifado')).n;
+    const res = await request(app).post('/api/almoxarifado/recebimentos').send({
+      tipo_recebimento: 'NOTA_FISCAL', nota_fiscal: 'NF-EXC-F5-403',
+      autorizar_excedente: true,
+      itens: [{ material_id: material, quantidade: 10, quantidade_recebida: 999 }],
+    });
+    assert.strictEqual(res.status, 403, JSON.stringify(res.body));
+    assert.strictEqual(res.body.error, semPermissao('ALMOXARIFE'));
+    const depois = (await dbGet(db, 'SELECT COUNT(*) AS n FROM recebimentos_material_almoxarifado')).n;
+    assert.strictEqual(depois, antes, 'o 403 tambem e ANTES do INSERT');
+    setUser(ADMIN);
+  });
+
+  await test('(14) F5: COMPRAS com a flag: 201, coluna gravada e UMA linha de trilha por item excedente', async () => {
+    setUser(COMPRAS);
+    const material = await novoMaterial();
+    const res = await request(app).post('/api/almoxarifado/recebimentos').send({
+      tipo_recebimento: 'NOTA_FISCAL', nota_fiscal: 'NF-EXC-F5-201',
+      autorizar_excedente: true,
+      itens: [{ material_id: material, quantidade: 10, quantidade_recebida: 999 }],
+    });
+    assert.strictEqual(res.status, 201, JSON.stringify(res.body));
+    const item = await dbGet(db, `SELECT id, quantidade_esperada, quantidade_recebida FROM
+      recebimentos_material_itens_almoxarifado WHERE recebimento_id = ?`, [res.body.id]);
+    assert.strictEqual(item.quantidade_esperada, 10);
+    assert.strictEqual(item.quantidade_recebida, 999, 'com flag E permissao, o excedente e gravado');
+    // A trilha nasce DEPOIS do INSERT, com o id REAL do item — nao com a posicao do payload.
+    const trilha = await auditoriaExcedente(item.id);
+    assert.strictEqual(trilha.length, 1, 'o excedente autorizado na criacao tem de deixar trilha');
+    assert.strictEqual(trilha[0].usuario_id, COMPRAS.id);
+    assert.deepStrictEqual(JSON.parse(trilha[0].dados_novos), { quantidade_recebida: 999 });
+    assert.deepStrictEqual(JSON.parse(trilha[0].dados_anteriores), { quantidade_esperada: 10 });
+    setUser(ADMIN);
+  });
+
+  await test('(15) F5, metade positiva: recebida IGUAL e recebida MENOR entram sem flag e sem trilha', async () => {
+    setUser(ALMOXARIFE);
+    // Este e o payload que a TELA manda (`handleCriar`: recebida = quantidade). Se a barreira da
+    // criacao fosse `!==` em vez de `>`, TODO recebimento da tela passaria a tomar 400 — e e por
+    // isso que esta metade mora no mesmo lote de cenarios.
+    for (const recebida of [10, 4]) {
+      const material = await novoMaterial();
+      const res = await request(app).post('/api/almoxarifado/recebimentos').send({
+        tipo_recebimento: 'NOTA_FISCAL', nota_fiscal: `NF-EXC-F5-OK-${recebida}`,
+        itens: [{ material_id: material, quantidade: 10, quantidade_recebida: recebida }],
+      });
+      assert.strictEqual(res.status, 201, `recebida ${recebida}: ${JSON.stringify(res.body)}`);
+      const item = await dbGet(db, `SELECT id, quantidade_recebida FROM
+        recebimentos_material_itens_almoxarifado WHERE recebimento_id = ?`, [res.body.id]);
+      assert.strictEqual(item.quantidade_recebida, recebida);
+      assert.strictEqual((await auditoriaExcedente(item.id)).length, 0,
+        'sem excedente nao existe autorizacao a auditar');
+    }
+    setUser(ADMIN);
+  });
+
   await close();
   console.log(`\n${passed} passou, ${failed} falhou`);
   process.exit(failed ? 1 : 0);
