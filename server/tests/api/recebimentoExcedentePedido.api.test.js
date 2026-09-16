@@ -450,6 +450,70 @@ const semPermissao = (perfil) => 'Autorizar recebimento acima do pedido exige a 
       'o pedido sem linhas e oferecido pela rota aux — por isso a porta nao pode recusa-lo mentindo');
   });
 
+  // ── (14) (revisao final, F2) o POST SEM `itens` tem de montar um payload que ELE MESMO aceita ─
+  /**
+   * Achado F2 da revisao da branch. O caminho sem `itens` (RN-25) montava cada item com o saldo da
+   * LINHA (`recebida: l.saldo`), e logo abaixo `assertSaldoDoPedidoPermitido` media a soma contra o
+   * saldo AGREGADO POR MATERIAL — que e MENOR quando outra linha do mesmo material ja recebeu a
+   * mais (ela entra NEGATIVA no agregado, e e o estado que o excedente autorizado desta etapa
+   * CRIA). O servidor se oferecia 10 e se recusava com 400 "saldo do pedido (5)": o operador que
+   * apertasse "Registrar" num pedido assim tomava uma recusa que ninguem no sistema tinha como
+   * evitar, porque o payload nao era dele.
+   *
+   * A correcao clampa o que o proprio servidor gera: por material, a soma distribuida nunca passa
+   * do agregado (e o agregado nunca e lido como negativo). Nao e a mesma conta de
+   * `quantidadeInicialDaLinhaDoPedido` no client - la o default e de UMA linha; aqui e o RATEIO
+   * das linhas na ordem de id.
+   */
+  await test('(14) linha estourada derruba o agregado: o POST sem itens oferece 5 (o que cabe), nao 10', async () => {
+    const mat = await novoMaterial();
+    // A: 10 pedidos com 15 recebidos (saldo -5, e ela NAO volta em `comSaldo`).
+    // B: 10 pedidos com 0 recebidos (saldo 10). Agregado do material: 5.
+    const pedido = await novoPedido([
+      { material_id: mat.id, quantidade: 10, recebida: 15 },
+      { material_id: mat.id, quantidade: 10, recebida: 0 },
+    ]);
+
+    const res = await post({ pedido_compra_id: pedido.id });
+    assert.strictEqual(res.status, 201,
+      `o servidor nao pode montar um payload que ele mesmo recusa: ${JSON.stringify(res.body)}`);
+
+    const itens = await itensDo(res.body.id);
+    assert.strictEqual(itens.length, 1, 'so a linha B tem saldo — a A entra negativa e nao volta');
+    assert.strictEqual(itens[0].pedido_item_id, pedido.linhas[1]);
+    // O NUMERO e a prova: 10 (o saldo da linha) passaria a ser recusado pela regua logo abaixo, e
+    // 5 e o teto agregado do material. Os dois campos, porque a esperada gravada e a regua que a
+    // barreira da Etapa 36 usa depois no /conferir.
+    assert.strictEqual(itens[0].quantidade_esperada, 5);
+    assert.strictEqual(itens[0].quantidade_recebida, 5);
+  });
+
+  // ── (15) (F2) e quando o agregado inteiro esta estourado, a literal e a do QUITADO ───────────
+  /**
+   * Metade que impede a correcao de virar "mande zero": clampar sem descartar a linha faria nascer
+   * um item de 0 (ou, pior, `Inclua ao menos um item` — a recusa do caminho NF, que nao explica
+   * nada a quem escolheu um pedido). Com o agregado <= 0 nao ha o que receber, e isso e exatamente
+   * o que a literal do quitado diz.
+   */
+  await test('(15) agregado do material <= 0 com linha de saldo positivo: 400 do QUITADO, nunca "Inclua ao menos um item"', async () => {
+    const mat = await novoMaterial();
+    // A: 10 pedidos com 25 recebidos (saldo -15). B: 10 com 0 (saldo 10). Agregado: -5.
+    const pedido = await novoPedido([
+      { material_id: mat.id, quantidade: 10, recebida: 25 },
+      { material_id: mat.id, quantidade: 10, recebida: 0 },
+    ]);
+    const antes = await contarRecebimentos();
+
+    const res = await post({ pedido_compra_id: pedido.id });
+    assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+    assert.strictEqual(res.body.error,
+      `Pedido de compra ${pedido.numero} já foi recebido por completo`);
+    assert.notStrictEqual(res.body.error, 'Inclua ao menos um item');
+    assert.strictEqual(await contarRecebimentos(), antes,
+      'a recusa continua ANTES do INSERT do cabecalho');
+  });
+
+
   await close();
   console.log(`\n${passed} passou, ${failed} falhou`);
   process.exit(failed ? 1 : 0);

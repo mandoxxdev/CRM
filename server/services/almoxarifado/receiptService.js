@@ -256,20 +256,58 @@ async function criarRecebimento(db, user, data) {
           `Pedido de compra ${pedido.numero} já foi recebido por completo`,
         ), { status: 400 });
       }
+      // ⚠️ (revisao final, F2) O RATEIO, e nao o saldo da linha. Medido na revisao da branch: um
+      // pedido com a linha A (10 pedidos, 15 recebidos — saldo -5, estado que o excedente
+      // autorizado desta etapa CRIA) e a linha B (10 pedidos, 0 recebidos) fazia este caminho
+      // oferecer 10 para B e, seis linhas abaixo, `assertSaldoDoPedidoPermitido` recusar com 400
+      // "saldo do pedido (5)": a regua e o agregado POR MATERIAL, e a linha A entra NEGATIVA nele.
+      // O SERVIDOR montava um payload que o SERVIDOR recusa — e o operador nao tinha como evitar,
+      // porque o payload nao era dele (a tela manda `itens` desde a T5, mas este caminho e
+      // contrato publico da rota e o fallback de qualquer chamador sem itens).
+      // Por material, `restante` comeca no agregado (nunca negativo) e cada linha leva o que ainda
+      // cabe; linha que nao leva nada SAI (gravar 0 seria pior: o `||` do INSERT abaixo le 0 como
+      // "campo ausente", e `Inclua ao menos um item` e a recusa do caminho NF, que nao explica
+      // nada a quem escolheu um pedido).
+      const restantePorMaterial = new Map();
+      for (const l of linhasDoPedido) {
+        const chave = String(l.material_id);
+        restantePorMaterial.set(chave, (restantePorMaterial.get(chave) || 0) + l.saldo);
+      }
+      for (const [chave, total] of restantePorMaterial) {
+        restantePorMaterial.set(chave, Math.max(0, total));
+      }
+      const rateadas = [];
+      for (const l of comSaldo) {
+        const chave = String(l.material_id);
+        const restante = restantePorMaterial.get(chave) || 0;
+        const quantidade = Math.min(l.saldo, restante);
+        if (!(quantidade > 0)) continue;
+        restantePorMaterial.set(chave, restante - quantidade);
+        rateadas.push({ linha: l, quantidade });
+      }
+      // Agregado inteiro <= 0 com linha de saldo positivo: nao ha o que receber, e e isso que a
+      // literal do quitado diz. A mesma frase do `if` acima, de proposito — o fato e o mesmo.
+      if (!rateadas.length) {
+        throw Object.assign(new Error(
+          `Pedido de compra ${pedido.numero} já foi recebido por completo`,
+        ), { status: 400 });
+      }
       // RN-25, caminho SEM `itens` (o que a tela usa hoje): o item nasce do SALDO, e nao da
       // quantidade original. Antes nascia `esperada = recebida = quantidade` — um pedido de 10 com
       // 6 ja recebidos gerava um recebimento de 10/10, e o `/conferir` da Etapa 36 passava a medir
       // a contagem contra o pedido INTEIRO: recebimento parcial era impossivel de registrar certo.
-      itens = comSaldo.map((l) => ({
-        material_id: l.material_id,
-        pedido_item_id: l.id,
-        quantidade: l.saldo,
-        quantidade_esperada: l.saldo,
-        quantidade_recebida: l.saldo,
-        valor_unitario: l.valor_unitario || 0,
-        valor_total: l.saldo * (l.valor_unitario || 0),
+      itens = rateadas.map(({ linha, quantidade }) => ({
+        material_id: linha.material_id,
+        pedido_item_id: linha.id,
+        quantidade,
+        quantidade_esperada: quantidade,
+        quantidade_recebida: quantidade,
+        valor_unitario: linha.valor_unitario || 0,
+        valor_total: quantidade * (linha.valor_unitario || 0),
       }));
-      resolvidos = comSaldo.map((l, indice) => ({ indice, linha: l, recebida: l.saldo }));
+      resolvidos = rateadas.map(({ linha, quantidade }, indice) => ({
+        indice, linha, recebida: quantidade,
+      }));
     } else if (linhasDoPedido.length) {
       // (Fase 2) O caminho COM `itens` e o que a TELA usa depois da T5, e o unico em que o payload
       // traz `quantidade_esperada`. A esperada GRAVADA tem de ser o SALDO e nao o payload: a
