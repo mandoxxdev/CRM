@@ -672,7 +672,7 @@ As leituras que essa tabela permite fazer, e que vale explicar a quem pergunta:
   > *Sem permissão para ajustar saldo de estoque — seu perfil é Qualidade. Solicite acesso a um administrador.*
 
   Bloquear material por decisão de qualidade continua acontecendo **dentro da inspeção** (reprovar o item recebido), que é o que ele pode.
-- **Autorizar recebimento acima do pedido é separado de Receber material, e o Almoxarife não a tem.** Quem recebe a carga registra quanto chegou; autorizar que **entre mais do que o esperado** é decisão de **Compras** ou do **Administrador** (14.2b). É o mesmo critério das duas assinaturas de sucateamento: quem executa não aprova a própria exceção. Consequência prática para quem usa: a caixa *"Autorizo o recebimento acima do pedido"* **não aparece** na tela do Almoxarife, e por isso a recusa que ele recebe nomeia quem resolve em vez de mandá-lo marcar algo. O **Gestor** não tem esta ação — e não teria como usá-la, porque ele não tem *Receber material* e não abre o recebimento.
+- **Autorizar recebimento acima do pedido é separado de Receber material, e o Almoxarife não a tem.** Quem recebe a carga registra quanto chegou; autorizar que **entre mais do que o esperado — ou mais do que o saldo do pedido de compra** — é decisão de **Compras** ou do **Administrador** (14.1c e 14.2b). É o mesmo critério das duas assinaturas de sucateamento: quem executa não aprova a própria exceção. Consequência prática para quem usa: a caixa *"Autorizo o recebimento acima do pedido"* **não aparece** na tela do Almoxarife, e por isso a recusa que ele recebe nomeia quem resolve em vez de mandá-lo marcar algo. O **Gestor** não tem esta ação — e não teria como usá-la, porque ele não tem *Receber material* e não abre o recebimento.
 - **Conferir separação é separado de Separar / emitir**, mesmo com os mesmos dois perfis hoje: a conferência é a segunda pessoa olhando a caixa (10.3), e a permissão existe à parte para poder ser restringida sem mexer na separação. Ter a permissão não basta: **quem separou não confere**, e isso vale para o Administrador também — a barreira é por pessoa, não por perfil.
 - **As duas aprovações de sucateamento são de balcões diferentes de propósito.** A perna do almoxarifado (Administrador, Almoxarife) e a perna da gestão (Administrador, Gestor) precisam **das duas assinaturas, de pessoas diferentes**, para uma baixa de sucata sair do estoque — e, embora o Administrador tenha as duas permissões, **a mesma pessoa nunca assina as duas pernas** (seção 20).
 
@@ -1739,8 +1739,12 @@ Um recebimento é o documento que registra a chegada física do material no galp
 
 | Forma de recebimento | O que o sistema faz |
 |---|---|
-| **Pedido de compra** | Você informa o número do pedido; o sistema traz os itens, as quantidades e os valores unitários já preenchidos, e herda fornecedor e CNPJ do pedido |
+| **Pedido de compra** | Você escolhe o pedido numa lista; o sistema carrega **as linhas daquele pedido** com o **saldo que ainda falta receber** de cada material, e você ajusta a quantidade que chegou de verdade. Fornecedor, CNPJ e o **valor unitário** vêm do pedido |
 | **Nota fiscal (sem pedido)** | Você informa a nota, o fornecedor e digita os itens um a um |
+
+> **O pedido de compra precisa existir no módulo Compras.** A lista da forma *Pedido de compra*
+> mostra os pedidos já lançados lá — se nenhum pedido tiver sido lançado, a lista aparece **vazia**.
+> Hoje o lançamento do pedido é feito **fora desta tela**.
 
 **São só essas duas, e o sistema recusa qualquer outra.** A forma de recebimento é um de dois valores — *Nota fiscal* ou *Pedido de compra* — e nada além disso é aceito, nem ao criar o recebimento nem ao preencher os dados fiscais depois. Quem enviar outro valor por fora da tela (uma integração, um script) recebe:
 
@@ -1783,6 +1787,53 @@ Casar por **qualquer** uma é o que faz a regra valer no caminho real: um docume
 **Uma consequência que parece erro e não é:** se você **alterar o fornecedor** de um recebimento (ao preencher os dados fiscais) para o mesmo fornecedor de outro documento que já tem aquela nota, a partir dali ele passa a receber a recusa citando o outro documento. É o comportamento correto — os dois passaram a ser a mesma nota do mesmo fornecedor.
 
 **O limite desta regra:** ela consulta e depois grava. Dois lançamentos **exatamente simultâneos** da mesma nota — duas pessoas salvando no mesmo instante — ainda podem passar os dois. O caso do dia a dia (a mesma pessoa lançando duas vezes, ou dois operadores em minutos diferentes) está coberto.
+
+### 14.1c Receber contra um pedido de compra — parcial, saldo e excedente
+
+Quando a forma é **Pedido de compra**, o recebimento deixa de ser uma digitação livre e passa a ser medido contra o pedido.
+
+**O que a tela carrega.** Escolhido o pedido, aparece o bloco **"Itens do pedido"** com uma linha para cada item daquele pedido: o nome e o código do material, o texto **"Saldo pendente: N"** e um campo de quantidade ao lado, já editável.
+
+**Recebimento parcial é o caso normal.** Digite em cada linha **a quantidade que realmente chegou**. Se um material do pedido não veio nesta carga, **deixe o campo vazio** — campo vazio significa *"esta linha não chegou"*, e a linha simplesmente não entra no recebimento. Ela **não** é registrada como zero. O que faltou continua como saldo do pedido e pode ser recebido depois, em outro documento.
+
+**Como o saldo é calculado.** O saldo de um material num pedido é:
+
+> **saldo = quantidade pedida − quantidade já recebida**, somando **todas as linhas daquele material** naquele pedido.
+
+A soma por material é deliberada: um pedido pode ter **duas linhas do mesmo material** (preços ou prazos diferentes), e o que limita o recebimento é o total do material, não cada linha isolada. Por isso, quando você digita quantidade em duas linhas do mesmo material, o sistema **soma as duas** antes de comparar com o saldo — e, se a soma passar, o aviso aparece nas **duas** linhas.
+
+**Só o que entra no estoque consome o saldo.** Criar o recebimento **não** muda o saldo do pedido. O pedido só passa a contar quando o material **entra fisicamente no estoque**, o que acontece no **Processar Nota** (ou na aprovação direta do recebimento). Consequências práticas:
+
+- um recebimento criado e ainda não processado **não** reduz o saldo — o pedido continua oferecendo o mesmo saldo até a entrada acontecer;
+- processar a mesma nota duas vezes **não** conta duas vezes;
+- **dois recebimentos criados contra o mesmo pedido, antes de qualquer um ser processado, são aceitos os dois** — cada um é medido contra o saldo que existia quando foi criado. Quem lança recebimento em duplicata contra o mesmo pedido precisa saber disso.
+
+**O aviso que aparece enquanto você digita.** Passando do saldo, aparece embaixo da linha, em vermelho:
+
+> *"Acima do saldo: 1 a mais que o saldo do pedido (4)"*
+
+É só um aviso — ele não impede de digitar. Quem decide é o servidor, ao salvar.
+
+**O que o sistema recusa, e com que mensagem.**
+
+| Situação | O que acontece |
+|---|---|
+| Quantidade acima do saldo do material no pedido, **sem autorização** | Recusado: *"Quantidade recebida (5) maior que o saldo do pedido (4) para o material ⟨código⟩ — a autorização de excedente é de Compras ou do Administrador"*. **Nada é gravado**, e o que você digitou continua na tela |
+| Marcar a autorização **sem ter a permissão** | Recusado: *"Autorizar recebimento acima do pedido exige a permissão "autorizar_excedente" (seu perfil: ⟨seu perfil⟩)."* |
+| Pedido **sem itens lançados** no módulo Compras | A tela informa *"Pedido de compra ⟨número⟩ não tem itens lançados no módulo Compras."* e o botão de salvar fica desabilitado. O que falta é o Compras preencher as linhas do pedido |
+| Pedido **já totalmente recebido** | A tela informa *"Este pedido já foi recebido por completo."* e o botão de salvar fica desabilitado |
+| Item apontando para a **linha de outro material** do pedido | Recusado: *"Item do pedido #⟨número⟩ não é do material ⟨código⟩"*. Pela tela isso não acontece — ela sempre aponta para a linha certa |
+| Pedido informado que **não existe** | Recusado: *"Pedido de compra não encontrado"* |
+
+**Receber acima do pedido, quando é legítimo.** Se o fornecedor mandou mais do que o pedido e a empresa vai aceitar, quem tem **Autorizar recebimento acima do pedido** — **Compras** ou **Administrador** — vê a caixa **"Autorizo o recebimento acima do pedido"** no formulário. Ela **só aparece quando existe de fato uma linha acima do saldo**, e só para quem pode marcá-la. Marcada, o recebimento entra e a trilha de auditoria registra **"Excedente autorizado"**, **uma linha por item** excedente. O **Almoxarife** não vê essa caixa — é por isso que a recusa dele nomeia quem resolve, em vez de mandá-lo marcar algo (ver 5.5).
+
+**O pedido some da lista quando fecha.** A lista da forma *Pedido de compra* mostra os pedidos que **ainda têm saldo a receber** — e também os pedidos que o Compras abriu e ainda **não preencheu** (que aparecem porque existem, mas não podem ser recebidos, conforme a tabela acima). **Pedido totalmente recebido não aparece mais na lista.**
+
+**O preço vem do pedido.** A tela de recebimento por pedido **não pergunta o valor unitário** — preço é informação do pedido, não de quem descarrega a carga. Quando o valor não é informado, o sistema usa o **valor unitário da linha do pedido**, e é esse valor que entra no cálculo do **custo médio** do material na hora da entrada (ver 6.8). Se a nota vier com preço diferente do pedido, quem corrige é a **entrada fiscal**, antes de processar.
+
+**Material que chega fora do pedido.** Um item cujo material **não está** no pedido não tem saldo contra o que ser medido, e por isso **não** é barrado nem avisado. Pela tela isso não se produz — ela oferece apenas as linhas do próprio pedido.
+
+**Duas réguas, dois momentos.** O limite do **saldo do pedido** vale quando o recebimento é **criado**. Já o campo **"Qtd. conferida"** do painel de detalhe (14.2b) compara a contagem física com a **quantidade esperada daquele documento**. São medidas diferentes, em momentos diferentes, e cada uma tem a sua mensagem.
 
 ### 14.2 O caminho do recebimento até o estoque
 

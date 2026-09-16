@@ -94,12 +94,12 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Oito consultas para rodar em produção ANTES do deploy — duas ações fora do sistema, e uma limpeza de disco que roda sozinha
+### A. Dez consultas para rodar em produção ANTES do deploy — duas ações fora do sistema, e uma limpeza de disco que roda sozinha
 
 *(Este título dizia "Duas consultas" — **passou a três com a A4, da Etapa 24**, ganhou a
 **limpeza de disco A5 na Etapa 25** e **passou a cinco com a A6 e a A7, da Etapa 26**. Corrigido
 aqui em vez de deixado defasado, porque a contagem no título é o que faz alguém parar de
-procurar. **Atualizado em 2026-09-16 para oito**, com a **A9**, a **A10** e a **A11** da Etapa 36
+procurar. **Atualizado em 2026-09-16 para oito**, com a **A9**, a **A10** e a **A11** da Etapa 36, e **para dez** com a **A12** e a **A13** da Etapa 37
 — e as "duas ações fora do sistema" são a **A3** (rotacionar a senha do SMTP) e a **A8** (avisar a
 equipe de que links antigos de arquivo param de funcionar), que não são consulta nenhuma e estavam
 sendo contadas como se fossem. **Correção de estrutura, dita em vez de silenciosa:** havia aqui um
@@ -351,8 +351,77 @@ SELECT r.numero, r.status, i.id AS item_id, i.quantidade_recebida, i.quantidade_
 - **Qualquer resultado** — só anotar. Se aparecerem muitas linhas, é sinal de que receber acima do
   pedido é **rotina** no galpão, e aí vale conversar sobre quem deve autorizar (ver **B82**): hoje
   são Administrador e Compras, e o Almoxarife **não** autoriza o próprio excedente.
+**A12 (NOVA, da Etapa 37 — opcional, e só faz sentido DEPOIS do deploy).** A Etapa 37 passou a
+contar, em cada linha do pedido de compra, quanto daquele material já chegou — mas **só a partir de
+agora**: não houve recálculo do passado (decisão **B93**). Hoje isso não custa nada, porque o banco
+de produção tem **zero** pedidos e **zero** itens de pedido; a consulta fica escrita porque, quando
+houver movimento, **é a mesma consulta que repara a janela de falha da decisão B90** (se o processo
+morrer entre creditar o estoque e somar no pedido, a linha fica sub-contada **e sem aviso no log**).
 
-### B. Decisões de negócio — B1 a B88; as em aberto esperam você, as tomadas estão escritas com o descartado
+```sql
+SELECT ip.id            AS pedido_item_id,
+       pc.numero        AS pedido,
+       ip.material_id,
+       ip.quantidade    AS pedida,
+       COALESCE(ip.quantidade_recebida, 0) AS contada_hoje,
+       COALESCE(SUM(COALESCE(NULLIF(ri.quantidade_recebida, 0), ri.quantidade_esperada, 0)), 0)
+                        AS recebida_de_verdade
+  FROM itens_pedido_compra ip
+  JOIN pedidos_compra pc ON pc.id = ip.pedido_id
+  LEFT JOIN recebimentos_material_itens_almoxarifado ri
+         ON ri.pedido_item_id = ip.id
+        AND ri.entrada_estoque_em IS NOT NULL
+ GROUP BY ip.id
+HAVING contada_hoje <> recebida_de_verdade;
+```
+
+- **Zero linhas** — a contagem do pedido bate com os recebimentos processados. Nada a fazer.
+- **Alguma linha** — a diferença é o que não foi contado (ou foi contado a mais). O reparo é um
+  `UPDATE itens_pedido_compra SET quantidade_recebida = ⟨recebida_de_verdade⟩ WHERE id = ⟨id⟩`, uma
+  linha por vez, **decisão sua**: eu deliberadamente **não** rodo recálculo automático, porque
+  reescrever contagem em massa sem trilha é decidir pelo passado.
+- **Ressalva honesta (1):** a consulta conta **só os itens que já entraram no estoque** (é isso que
+  a marca de entrada física significa), que é exatamente a régua que o sistema usa. Recebimento
+  criado e não processado **não** deve aparecer na contagem — se aparecesse, seria o defeito.
+- **Ressalva honesta (2):** esta consulta só enxerga recebimentos que **guardaram a linha do pedido** —
+  ou seja, os criados de agora em diante. Recebimento antigo ligado ao pedido só pelo número do
+  pedido não entra na conta, e **não há como reconstruí-lo** (ninguém guardou qual linha ele
+  abatia). Hoje isso é inofensivo porque o acervo é zero.
+
+**A13 (NOVA, da Etapa 37 — confirmação de que a limpeza dos 21 comandos foi segura).** A Etapa 37
+apagou 21 comandos de criação de coluna que nunca criaram nada. A prova de que são mesmo
+desnecessários é que **todas as 21 colunas existem**, criadas pelo criador de esquema do módulo. Já
+foi medido no banco de desenvolvimento de 161 MB — **0 colunas ausentes** —, e vale repetir no banco
+de produção **antes** de subir, porque é uma medição de 30 segundos contra o risco de uma tela
+quebrar por coluna faltando.
+
+São **quatro tabelas** e **21 colunas**. Rode no banco de produção e confira que cada uma da lista
+aparece:
+
+```sql
+PRAGMA table_info(materiais_almoxarifado);
+-- esperadas: familia_id, tipo_material_id, ponto_pedido, prazo_reposicao_dias
+
+PRAGMA table_info(requisicoes_almoxarifado);
+-- esperadas: ativo, valor_total, requer_aprovacao_valor, aprovador_valor_id,
+--            aprovador_valor_nome, data_aprovacao_valor, rejeicao_valor_motivo,
+--            ultimo_lembrete_enviado
+
+PRAGMA table_info(itens_requisicao_almoxarifado);
+-- esperadas: quantidade_separada, quantidade_entregue
+
+PRAGMA table_info(localizacoes_almoxarifado);
+-- esperadas: parent_id, tipo, subgrupo, pos_x, pos_y, largura, altura
+```
+
+- **Nenhuma coluna ausente** — que é o resultado esperado e o que foi medido: a limpeza é
+  puramente de legibilidade, e nada muda em produção.
+- **Alguma coluna ausente** — **não suba antes de me avisar.** Seria a única hipótese em que os 21
+  comandos apagados estariam fazendo alguma coisa, e a correção é acrescentá-la ao criador de
+  esquema (não ressuscitar os comandos, que falhavam de qualquer jeito).
+
+
+### B. Decisões de negócio — B1 a B99; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(O título desta seção dizia "B1 a B24" — **estava defasado**: os itens já iam até B36 antes da
 Etapa 20. Corrigido em 2026-08-28 para B50, depois para B56 com as três da Etapa 24, para B57 com
@@ -1672,6 +1741,173 @@ asserção que interessa sem prova nenhuma, com o placar vermelho dando a impres
 **O custo:** nenhum para você. Está aqui porque é a quinta vez nesta base que um controle positivo
 passa sem controlar nada, e cada vez foi por um motivo diferente.
 
+**B89 (NOVA, da Etapa 37) — a situação do pedido de compra é CALCULADA na hora de ler, e o pedido
+NUNCA é reescrito.**
+
+**O que foi escolhido:** quanto foi pedido, quanto já chegou, o saldo e a situação
+(**ABERTO / PARCIAL / RECEBIDO**) são **derivados** das linhas do pedido a cada leitura. O campo de
+situação do **pedido**, que é do módulo **Compras**, não é tocado.
+**O que foi descartado:** gravar `PARCIAL`/`RECEBIDO` no campo de situação do pedido. Isso seria
+mudança de contrato de um módulo do núcleo feita de dentro do almoxarifado, com três consequências
+visíveis na tela de **Compras**: o selo de situação sairia **cinza com a palavra crua** (o mapa de
+cores de lá conhece nove valores, todos em minúscula, e nenhum desses dois), o filtro por situação
+**nunca casaria**, e nasceria uma **segunda grafia** de "recebido", que já existe no vocabulário de
+lá.
+**O custo:** o cálculo é refeito a cada leitura (barato, e o volume é pequeno), e **nenhuma tela do
+Compras mostra esses números hoje** — quem os consome é o formulário de recebimento. Está declarado
+na letra **D**.
+
+**B90 (NOVA, da Etapa 37) — somar a chegada no pedido é NÃO-FATAL: se falhar, a nota entra assim
+mesmo e a contagem se perde.**
+
+**O que foi escolhido:** a soma acontece **no exato instante em que o material entra fisicamente no
+estoque**, e uma falha ali vira **aviso no log**, não erro para o operador. A nota processa.
+**O que foi descartado:** deixar a falha derrubar o processamento. Ela mora **depois** de o estoque
+já ter sido creditado — derrubar ali deixaria **material no estoque com o documento travado fora de
+PROCESSADO**, e o reprocessamento **pularia** aquele item (ele já está marcado como entrado). Perder
+a contagem de um pedido é reparável por SQL (é a consulta **A12**); travar a nota com o estoque já
+creditado não é.
+**O custo, e este é o ponto honesto:** há uma janela pior que a falha comum. Se o **processo morrer**
+entre creditar o estoque e somar no pedido — queda de energia, reinício —, **não há exceção, logo
+não há nem o aviso no log**: a linha do pedido fica sub-contada para sempre e **em silêncio**. É a
+fragilidade **G19**, e a consulta **A12** é o que a detecta. O fechamento definitivo é a migração
+para um banco com transações, já planejada.
+
+**B91 (NOVA, da Etapa 37) — o saldo é medido POR MATERIAL, somando as linhas, e a tela mostra
+exatamente o mesmo número que a porta cobra.**
+
+**O que foi escolhido:** o teto de quanto se pode receber é o saldo **agregado** daquele material no
+pedido (todas as linhas somadas), e a leitura que alimenta a tela devolve **esse mesmo agregado**,
+repetido em cada linha do material.
+**O que foi descartado:** medir linha a linha. Um pedido de compra pode legitimamente ter **duas
+linhas do mesmo material** (preços ou prazos diferentes), e medindo por linha um recebimento correto
+tomaria recusa por o operador ter digitado "na linha errada".
+**Por que a segunda metade da decisão existe:** a primeira versão devolvia à tela o saldo **da
+linha** e cobrava o **agregado** — a tela prometia 10 e a porta recusava 5. Foi corrigido dentro da
+própria etapa, e a tela também passou a **somar o que você digitou em todas as linhas do material**
+antes de avisar, senão ela pediria autorização que o servidor não pede (treinando o operador a
+marcar a caixa por reflexo) ou ficaria calada enquanto a soma estourava.
+**O custo:** com duas linhas do mesmo material, o aviso "Acima do saldo" aparece em **todas** as
+linhas daquele material — porque a condição é do material, não da linha.
+
+**B92 (NOVA, da Etapa 37) — material que chega FORA do pedido é aceito, sem régua de saldo e sem
+aviso.**
+
+**O que foi escolhido:** um item cujo material não está no pedido entra normalmente. Ele não tem
+saldo contra o que ser medido, e o fornecedor mandar algo a mais é caso legítimo do galpão.
+**O que foi descartado:** recusá-lo. Barrar "item fora do pedido" é **regra nova**, não consequência
+desta: mudaria o comportamento de recebimentos que hoje funcionam e quebraria um cenário existente
+(pedido sem linhas lançadas). Se você quiser essa barreira, ela é etapa própria.
+**O custo, e o tamanho real dele:** hoje o caso é **alcançável só por API** — a tela de recebimento
+por pedido oferece **apenas** as linhas do próprio pedido, e a busca livre de material só existe na
+forma "Nota fiscal". Está também na letra **D** e na letra **G**.
+
+**B93 (NOVA, da Etapa 37) — a coluna nova nasceu zerada, e NÃO houve recálculo do passado.**
+
+**O que foi escolhido:** as duas colunas novas (quanto já chegou em cada linha do pedido, e a qual
+linha do pedido cada item de recebimento se refere) entraram pelo mecanismo seguro de migração, com
+valor inicial zero, **sem** recálculo retroativo.
+**O que foi descartado:** varrer os recebimentos antigos e recalcular. Primeiro porque **não há o
+que recalcular** — o banco de produção tem **zero** pedidos e **zero** itens de pedido —; segundo
+porque, mesmo que houvesse, os recebimentos antigos **não guardaram a qual linha do pedido cada item
+se referia**, então o recálculo teria de adivinhar.
+**O custo:** se algum dia houver acervo, o reparo é manual e a consulta está pronta na letra **A12**.
+*(Nota de correção: o desenho e o plano desta etapa chamavam **as duas tabelas** do pedido de compra
+de "tabelas do núcleo do CRM". **Estava errado:** a tabela de **itens** do pedido é do
+**almoxarifado**; só a do **pedido** é do núcleo. Não muda o que foi feito — a migração já usava o
+mecanismo do módulo —, mas muda o custo da Etapa 38, e a afirmação errada ficaria enganando a
+próxima sessão.)*
+
+**B94 (NOVA, da Etapa 37) — os 21 comandos mortos foram APAGADOS; a causa de eles falharem foi só
+documentada.**
+
+**O que foi escolhido:** apagar os 21 comandos de criação de coluna do arquivo de rotas do
+almoxarifado (21 → 0), depois de medir que **todas as 21 colunas** já vêm do criador de esquema do
+módulo. O que eles produziam era **21 falhas silenciosas a cada arranque** e uma leitura enganosa do
+código (quem auditasse veria 21 "migrações" que não são a origem de coluna nenhuma).
+**O que foi descartado:** consertar a **causa** — o criador de esquema é disparado sem esperar o
+término, e por isso os 21 rodavam antes de a tabela existir. Consertar isso muda a **ordem de subida
+do servidor inteiro**, muito além da feature de recebimento: é tronco de outra etapa.
+**O custo:** qualquer comando desse tipo escrito no futuro, fora do mecanismo seguro, falharia do
+mesmo jeito e do mesmo silêncio. Está na letra **G**. E os **51** comandos iguais no arquivo
+principal do servidor (núcleo do CRM) **continuam lá**, fora do escopo do módulo.
+
+**B95 (NOVA, da Etapa 37 — correção de uma spec que estava ERRADA) — a pendência dos ALTER estava
+descrita com três afirmações falsas.**
+
+A spec de fundação do módulo dizia que "**vários** duplicam colunas que o criador de esquema já
+cria", apontava o bloco em "linhas ~1018-1038" e justificava a pendência com o risco de "coluna
+ausente em produção → erro 500 na primeira leitura".
+**As três estavam erradas, e ficam ditas em vez de apagadas:** eram **todos os 21**, não "vários"; o
+bloco estava em **1775-1796** (as linhas ~1018-1038 hoje são as rotas de conferência, então quem
+seguisse a referência não acharia nada e concluiria que a pendência já tinha sido paga); e o risco
+imaginado **não existe** — o banco real tem as 21 colunas, e o modo de falha verdadeiro era outro (os
+comandos rodam antes de a tabela existir e falham todos, sempre). A spec foi corrigida dizendo que
+estava errada.
+
+**B96 (NOVA, da Etapa 37 — e é a PERGUNTA da B82 de novo, agora com uma porta a mais) — quem
+autoriza excedente continua sendo Administrador e Compras.**
+
+**O que foi escolhido:** a terceira porta (o excedente **contra o pedido**) usa **a mesma permissão
+e a mesma lista** da Etapa 36 — **Administrador** e **Compras**. O **Gestor** continua fora, e o
+**Almoxarife** continua fora de propósito (quem recebe não autoriza o próprio excedente).
+**O que foi descartado:** aproveitar a etapa para mexer na lista. Mexer nela sem você decidir seria
+decidir por você numa regra de alçada — e, no caso do Gestor, seria **configuração morta**: ele não
+tem *Receber material* e não chega à tela.
+**O que ainda é seu:** a pergunta da **B82** continua de pé, e agora vale para **três** portas em vez
+de duas. Se a resposta for "o Gestor deve autorizar", isso é etapa própria (dar-lhe acesso à tela é
+o trabalho, não a permissão).
+
+**B97 (NOVA, da Etapa 37 — PERGUNTA em aberto) — mandar a linha de OUTRO pedido continua sendo
+aceito, e o sistema re-resolve em silêncio.**
+
+A revisão final fechou um furo real: a linha informada tem de ser do **mesmo material** do item
+(senão o pedido creditava um material e o estoque creditava outro). **Mas ela só olha dentro do
+pedido escolhido.** Se a linha informada for de **outro pedido**, o sistema a ignora e escolhe
+sozinho a linha certa dentro do pedido escolhido.
+**O que foi escolhido:** manter esse comportamento. Ele é **contrato entregue** desta etapa, tem
+cenário próprio de teste, e a tela nunca produz o caso (ela só oferece as linhas do pedido
+escolhido).
+**O que foi descartado:** recusar também esse caso. É **regra nova sobre contrato já entregue**, e
+mudá-la depois de fechada exige decisão sua.
+**A pergunta:** você quer que o sistema **recuse** um recebimento que aponte para a linha de outro
+pedido, em vez de corrigir sozinho? O argumento a favor é que o envio afirmou duas coisas
+incompatíveis; o argumento contra é que, corrigindo, o resultado gravado é o certo. **Nada urge** —
+o caso é inalcançável pela tela.
+
+**B98 (NOVA, da Etapa 37 — da revisão final; corrigiu uma regressão silenciosa) — quando a tela não
+informa preço, vale o preço da LINHA DO PEDIDO.**
+
+**O que foi escolhido:** a tela de recebimento por pedido, corretamente, **não pergunta o preço ao
+almoxarife** — preço é informação do pedido, não de quem descarrega. O servidor passou a preencher o
+**valor unitário da linha do pedido** quando o envio omite o campo. Um **zero explícito** continua
+sendo zero.
+**O que foi descartado:** pôr o campo de preço na tela de recebimento (transformaria o almoxarife em
+digitador de valor, e o número certo já está no pedido) e deixar como estava.
+**Por que virou decisão, e não só conserto:** sem isso, o item entrava a **R$ 0,00** e a entrada
+física **não alimentava o custo médio do material** — regressão silenciosa de um comportamento que
+existe desde a Etapa 8c, introduzida pela própria tela desta etapa e pega só na revisão final.
+**O custo:** o preço gravado é o do **pedido**, não o da nota. Se a nota vier com preço diferente, é
+a entrada fiscal que corrige — e ela já fazia isso.
+
+**B99 (NOVA, da Etapa 37 — a decisão mais consequente desta etapa) — a tela de CRIAÇÃO de pedido de
+compra ficou FORA, e por isso a funcionalidade nasce sem origem em produção.**
+
+**O que foi escolhido:** entregar o recebimento contra o pedido **sem** entregar a criação do pedido.
+A feature está completa, testada e demonstrável **desde que exista um pedido**.
+**O que foi descartado:** esticar esta etapa para incluir a criação de pedido no módulo **Compras**.
+Isso é **módulo do núcleo**, com rotas que hoje não têm nenhum teste automático e nenhuma validação
+de entrada — é etapa inteira, não apêndice.
+**O custo, e ele é grande e tem de ser dito:** **nenhum lugar do sistema grava um pedido de compra**
+(as três abas do Compras não têm tela de criação, e o banco de produção tem zero pedidos). Em
+produção, portanto, a forma *"Pedido de compra"* **abre com o campo vazio** e o operador não
+consegue fazer nada com ela. Para demonstrar hoje, é preciso inserir um pedido **por SQL** — o
+comando pronto está na letra **F13**, e **esse item fica aberto até a Etapa 38**.
+**O que fecha isso:** a **Etapa 38**, já desenhada — *o pedido de compra ganha criação*, com
+importação de planilha como carga inicial e o botão **"Gerar pedido"** na Reposição, fechando o elo
+que hoje morre na solicitação de compra (a Reposição gera a solicitação, e **ninguém a converte em
+pedido**).
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -2269,6 +2505,27 @@ passa sem controlar nada, e cada vez foi por um motivo diferente.
     nota. Se você corrigir esse e reenviar, pode tomar uma recusa nova pelo **segundo** item — a
     trilha, ao contrário, escreve **uma linha por item**.
 
+50. **✅ RESOLVIDO NA ETAPA 37 — o pedido de compra não sabia quanto já tinha chegado, e receber
+    parte do pedido não era possível pela tela.** Este era o furo, medido e não suposto: **um pedido
+    de 10 unidades podia receber 25 em três recebimentos e continuar marcado como 10 e ABERTO.**
+    Nada no sistema escrevia quanto de cada linha do pedido já tinha sido recebido — a tabela tinha
+    as colunas, **um** leitor e **nenhum** escritor. E do outro lado, escolher a forma
+    *"Por Pedido de Compra"* abria a lista de itens **vazia**: o operador não tinha como dizer
+    "chegaram 6 dos 10, o resto vem depois", e o servidor completava sozinho o **pedido inteiro**,
+    fechando de uma vez um pedido que tinha chegado pela metade.
+
+    **A Etapa 37 fechou os dois lados.** A tela carrega as linhas do pedido com **"Saldo pendente:
+    N"** e campo editável (o parcial existe); o pedido passa a contar **o que entrou fisicamente no
+    estoque**, nos dois caminhos de entrada, sem contar duas vezes quando se reprocessa; e receber
+    acima do saldo do pedido é recusado com *"Quantidade recebida (5) maior que o saldo do pedido
+    (4) para o material ⟨código⟩ — a autorização de excedente é de Compras ou do Administrador"*,
+    liberável por **Compras** ou **Administrador** com trilha **"Excedente autorizado"**.
+
+    **O que continua valendo para quem opera:** **dois recebimentos criados e ainda não processados**
+    contra o mesmo pedido passam os dois (o saldo só conta o que entrou), e o excesso resultante
+    **não deixa linha de auditoria nenhuma** — ver a letra **D**. E, hoje, **não existe tela para
+    criar um pedido de compra**: em produção o campo de pedidos abre **vazio** até a Etapa 38.
+
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -2477,13 +2734,14 @@ passa sem controlar nada, e cada vez foi por um motivo diferente.
   recebida com a **esperada daquele item, naquele recebimento**. Um pedido de 10 pode receber 25 em
   três recebimentos, cada um "dentro do esperado" do próprio documento, e o pedido continua marcado
   como 10 e **ABERTO**. Fechar isso exige guardar quanto de cada item de pedido já foi recebido — a
-  tabela tem as colunas, **um** leitor e **nenhum** escritor. **É a Etapa 37**, já desenhada.
+  tabela tem as colunas, **um** leitor e **nenhum** escritor. ✅ **Fechado na Etapa 37** — o saldo do
+  pedido virou régua, medido por material.
 
 - **(36) Recebimento PARCIAL não existe pela tela.** A tela de Recebimentos **nunca carrega os
   itens do pedido de compra** — ela abre a lista de itens vazia —, então registrar "chegaram 6 dos
   10 do pedido, o resto vem depois" não é um gesto disponível hoje. O que existe é registrar um
-  recebimento com a quantidade que chegou; o pedido, do lado dele, não é atualizado. **É a Etapa
-  37.**
+  recebimento com a quantidade que chegou; o pedido, do lado dele, não é atualizado. ✅ **Fechado na
+  Etapa 37** — a tela carrega as linhas do pedido com o saldo pendente e campo editável.
 
 - **(36) A conferência física registra a QUANTIDADE, não um laudo de divergência.** O campo
   "Qtd. conferida" grava quanto chegou, o aviso mostra a diferença na tela e o alerta
@@ -2499,6 +2757,52 @@ passa sem controlar nada, e cada vez foi por um motivo diferente.
   cliente externo; mas **se houver**, é aqui que ele muda. Foi aceito porque o campo em texto era
   literalmente a forma de **desligar** a barreira de excedente daquele item, em silêncio e para
   sempre. Ver **B87**.
+
+- **(37) ⚠️ NÃO EXISTE TELA PARA CRIAR UM PEDIDO DE COMPRA — e por isso, em produção, a forma
+  "Pedido de compra" abre com o campo VAZIO.** É o corte mais consequente desta etapa e tem de ser
+  lido antes de apresentar. O módulo **Compras** tem três abas (pedidos, fornecedores, cotações) e
+  **nenhuma tem tela de criação**; o botão "Novo Pedido" volta para a lista. Nenhum ponto do sistema
+  grava um pedido, e o banco de produção tem **zero** pedidos e **zero** itens de pedido. Tudo o que
+  a Etapa 37 entregou funciona e está coberto por teste — mas só é **usável** depois que existir um
+  pedido. Para demonstrar hoje, é preciso inserir um por SQL (letra **F13**). **É a Etapa 38**, já
+  desenhada: *o pedido de compra ganha criação*, com importação de planilha como carga inicial e o
+  botão **"Gerar pedido"** na Reposição — que hoje gera solicitação de compra e **para ali**, porque
+  ninguém converte solicitação em pedido. Ver **B99**.
+
+- **(37) Nenhuma TELA mostra quanto do pedido já chegou.** A quantidade pedida, a recebida, o saldo
+  pendente e a situação (**ABERTO / PARCIAL / RECEBIDO**) são calculados e existem — mas hoje são
+  informação **da API**, consumida pelo formulário de recebimento. A tela de **Compras** não foi
+  tocada e continua mostrando só o status dela; o campo de escolha do pedido mostra número e
+  fornecedor, e nada mais. Quem quiser ver o saldo de um pedido olha pela tela de recebimento (linha
+  a linha) ou pelo banco. Dar a esses números um lugar visual é escopo de outra etapa. Ver **B89**.
+
+- **(37) Material que chega FORA do pedido entra sem régua de saldo e sem aviso.** Um item cujo
+  material não está no pedido não tem contra o que ser medido, e é aceito. O fornecedor mandar algo
+  a mais é caso legítimo do galpão; barrar isso é **regra nova**. Hoje o caso é **alcançável só por
+  API** — a tela de recebimento por pedido oferece apenas as linhas do próprio pedido. Ver **B92**.
+
+- **(37) Dois recebimentos criados e não processados contra o mesmo pedido passam os dois — e o
+  excesso não deixa trilha.** Como o saldo do pedido só conta o que **entrou fisicamente no
+  estoque**, dois documentos de 10 criados antes de processar qualquer um deles são aceitos, e o
+  pedido de 10 termina com 20 contados. Conferir de novo no processamento seria **pior**: travaria
+  uma nota com o **estoque já creditado**. O detalhe que importa para quem for reconciliar: esse
+  excesso **não gera nenhuma linha de "Excedente autorizado"** na auditoria, porque nenhuma barreira
+  disparou — a reconciliação da consulta **A12** trabalha sem trilha para se apoiar.
+
+- **(37) Não existe estorno nem cancelamento de recebimento — e portanto a contagem do pedido também
+  não se desfaz.** Um recebimento processado por engano soma no pedido e fica somado. Recebimento
+  não tem situação "cancelado" (os estados vão de RECEBIDO a BLOQUEADO), então o cenário
+  "recebimento cancelado devolve saldo ao pedido" **não é escrevível** hoje. O reparo é por SQL
+  (consulta **A12**). É assunto da feature de estorno.
+
+- **(37) Os 51 comandos de criação de coluna do NÚCLEO continuam lá.** A limpeza dos 21 valeu para o
+  arquivo de rotas do almoxarifado. O arquivo principal do servidor tem **51** do mesmo tipo, com o
+  mesmo defeito potencial, e está fora do escopo do módulo. Ver **B94**.
+
+- **(37) O aviso "Acima do saldo" não é anunciado por leitor de tela.** Ele aparece em vermelho
+  embaixo da linha, visualmente, mas não é marcado como aviso para tecnologia assistiva — quem usa
+  leitor de tela não o ouve ao digitar. O **banner de recusa** do servidor, esse sim, é anunciado.
+  Corte pequeno e declarado; o conserto é de uma linha e cabe na próxima etapa que tocar a tela.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -2680,6 +2984,54 @@ se um PDF abre legível ou se um modal coube na largura. Ficaram, portanto, **se
 
    **Se algo estiver errado:** me diga **qual largura, qual tela e qual botão**. O ajuste é de
    estilo e é de uma linha; o que não dá é adivinhar a largura.
+
+13. **(37) Testar o recebimento contra o pedido exige inserir um pedido POR SQL — porque não existe
+    tela que crie pedido de compra. Este item fica ABERTO até a Etapa 38.**
+
+    Não é uma verificação que ficou de fora por descuido: **nenhum lugar do sistema grava um pedido
+    de compra**, e o banco de produção tem zero pedidos. Toda a Etapa 37 está coberta por testes
+    automáticos ponta a ponta, mas o **roteiro clicável** precisa de um pedido para existir, e o
+    único jeito hoje é inserir um à mão. Quando a **Etapa 38** entregar a criação de pedido no
+    Compras, este item vira um roteiro normal e sai daqui.
+
+    **Passo 1 — descubra dois ids reais** (um fornecedor e um material que existam no seu banco):
+
+    ```sql
+    SELECT id, nome FROM fornecedores LIMIT 3;
+    SELECT id, codigo FROM materiais_almoxarifado LIMIT 3;
+    ```
+
+    **Passo 2 — insira o pedido de teste**, trocando `F1` pelo id do fornecedor e `M1` pelo id do
+    material escolhidos acima (e `'COD-M1'` pelo código desse material, para a mensagem de recusa
+    sair legível):
+
+    ```sql
+    INSERT INTO pedidos_compra (numero, fornecedor_id, valor_total, data_pedido, status, observacoes)
+    VALUES ('PC-TESTE-37', F1, 500, date('now'), 'aprovado', 'pedido de teste da Etapa 37 - apagar depois');
+
+    INSERT INTO itens_pedido_compra (pedido_id, material_id, codigo, descricao, quantidade, valor_unitario, unidade)
+    SELECT id, M1, 'COD-M1', 'item de teste', 10, 50, 'UN'
+      FROM pedidos_compra WHERE numero = 'PC-TESTE-37';
+    ```
+
+    **Passo 3 — rode o roteiro** da seção *Como testar ao vivo* da **Etapa 37**: o pedido
+    `PC-TESTE-37` passa a aparecer no campo *Número do Pedido de Compra*, com uma linha de **10
+    unidades**.
+
+    **Passo 4 — apague o pedido de teste depois.** São **dois** comandos, e a ordem importa: apagar
+    o pedido **não** apaga as linhas dele (quem apaga pedido no Compras deixa os itens órfãos — é um
+    dos pontos que a Etapa 38 vai ter de resolver).
+
+    ```sql
+    DELETE FROM itens_pedido_compra
+     WHERE pedido_id = (SELECT id FROM pedidos_compra WHERE numero = 'PC-TESTE-37');
+    DELETE FROM pedidos_compra WHERE numero = 'PC-TESTE-37';
+    ```
+
+    **Duas observações que evitam confusão:** a situação `'aprovado'` foi escolhida porque é uma das
+    que a tela de Compras sabe pintar (o padrão da tabela é `'pendente'`); e **a situação do pedido
+    não influencia nada** no recebimento — o almoxarifado lê o **saldo** das linhas, nunca o status
+    do Compras (decisão **B89**).
 
 *Por que isto está escrito aqui em vez de "está tudo certo": esta mesma lacuna já mordeu a Etapa 7 —
 uma classe de estilo inventada sai sem cor nenhuma e nenhum teste de comportamento percebe.*
@@ -3005,6 +3357,151 @@ e a tela nunca produz o caso — o campo é numérico. Mas é a mesma classe de 
 final encontrou no **cadastro** (onde a quantidade esperada em texto **desligava** a barreira, e
 onde foi consertado com a exigência de número maior que zero): a porta da conferência não recebeu a
 mesma exigência nesta etapa, e fica escrita para não ser descoberta de novo.
+
+---
+
+**G19 (NOVO, da Etapa 37). Se o processo MORRER entre creditar o estoque e somar no pedido, a linha
+do pedido fica sub-contada para sempre — e sem nem um aviso no log.**
+
+A soma no pedido é deliberadamente **não-fatal** (decisão **B90**): se ela falhar, a falha vira aviso
+no log e a nota processa. Isso cobre a falha comum. **O que não cobre é a queda:** se o processo for
+morto — energia, reinício, encerramento forçado — **entre** o estoque ser creditado e a soma
+acontecer, não há exceção para capturar, logo **não há nem o aviso**. A linha do pedido fica
+contando menos do que realmente chegou, em silêncio, e a tela passa a oferecer saldo de material que
+já entrou no galpão.
+
+**Como se detecta:** é exatamente a consulta **A12**, que compara a contagem gravada no pedido com a
+soma dos recebimentos que já entraram no estoque. **Como se conserta de verdade:** com transações de
+banco — a migração já planejada. Não se conserta com uma linha, e por isso está escrito aqui em vez
+de prometido.
+
+---
+
+**G20 (NOVO, da Etapa 37). Dois recebimentos abertos contra o mesmo pedido passam os dois, e o
+excesso que resulta disso não deixa NENHUM rastro de autorização.**
+
+O saldo do pedido só conta o que **entrou fisicamente no estoque**. Dois documentos de 10 criados
+contra um pedido de 10, antes de qualquer um deles ser processado, são aceitos os dois — e, quando
+os dois forem processados, o pedido terá 20 contados contra 10 pedidos. **A decisão de não conferir
+de novo no processamento é declarada** (conferir lá travaria uma nota com o estoque já creditado, o
+que é pior).
+
+**O que se acrescenta aqui, e é o detalhe que muda o trabalho de quem for reconciliar:** esse excesso
+**não gera nenhuma linha de "Excedente autorizado"** na auditoria, porque nenhuma barreira disparou —
+os dois documentos eram legítimos quando foram criados. Quem for auditar "por que este pedido tem
+mais do que pediu" **não encontra nada na trilha**: só a consulta **A12** mostra.
+
+---
+
+**G21 (NOVO, da Etapa 37). A regra "quais pedidos ainda têm saldo" está escrita DUAS vezes, em duas
+linguagens.**
+
+O filtro que decide quais pedidos aparecem no campo de escolha é escrito uma vez em SQL (para o
+banco peneirar) e outra vez na linguagem do sistema (para calcular a situação de cada pedido). **As
+duas precisam concordar em todas as bordas** — e nada obriga isso: durante a execução elas
+divergiram, e nenhum teste caiu (a asserção que pega isso foi acrescentada depois, na fronteira).
+Uma edição futura em uma delas pode reabrir a divergência do mesmo jeito silencioso. A mesma classe
+de problema aparece no **agregado por material**, que também está escrito em dois lugares (**G25**).
+
+---
+
+**G22 (NOVO, da Etapa 37 — é o G14 num lugar novo). Esconder a caixa de autorização de quem não pode
+autorizar continua sem régua automática.**
+
+Os testes da tela de Recebimentos substituem a checagem de permissão por um "pode sempre" — é o que
+o **G14** já registrava para a caixa do painel de conferência, e vale igualmente para a caixa nova
+**"Autorizo o recebimento acima do pedido"** do formulário de criação. Se alguém a trocar por
+"sempre visível", **nenhum teste cai**. O que está protegido é o que importa: quem decide é o
+servidor, e essa parte tem cenário com perfil real (Almoxarife toma 403, Compras recebe 201). A
+caixa escondida é conveniência de interface, não segurança.
+
+---
+
+**G23 (NOVO, da Etapa 37). A varredura que garante "nenhum comando de criação de coluna solto" lê o
+código LINHA A LINHA.**
+
+A prova de que os 21 comandos não voltam é uma varredura do arquivo. Ela é **linha a linha**, e por
+isso erra em dois casos conhecidos: uma chamada legítima do mecanismo seguro **quebrada em várias
+linhas** pode ser contada como violação, e um **comentário** que contenha o texto do comando também.
+Hoje nenhum dos dois ocorre; a régua funciona e tem controle positivo (reintroduzir um comando
+derruba a contagem). Está escrito porque é o tipo de régua que começa a dar alarme falso na primeira
+refatoração e aí alguém a desliga.
+
+---
+
+**G24 (NOVO, da Etapa 37 — é a CAUSA dos 21 comandos terem falhado, e ela continua de pé).
+O criador de esquema do módulo é disparado sem que ninguém espere ele terminar.**
+
+Era isto que fazia os 21 comandos apagados falharem **todos, a cada arranque**: eles rodavam na
+mesma passada, muito antes de as tabelas existirem, e o erro era engolido. Os 21 foram apagados
+(**B94**), mas a causa **não** foi consertada — consertá-la muda a ordem de subida do servidor
+inteiro, e é tronco de outra etapa. **Qualquer comando desse tipo escrito no futuro, fora do
+mecanismo seguro, falha do mesmo jeito e no mesmo silêncio.**
+
+**E há uma segunda consequência, nova desta etapa, que vale para o PRIMEIRO arranque depois do
+deploy:** a leitura que alimenta o campo de pedidos consulta a coluna nova (quanto já chegou em cada
+linha) e pode chegar lá **antes** de a migração tê-la criado. Nessa janela — segundos, uma única
+vez — a consulta falha em silêncio e o campo de pedidos **abre vazio, sem nenhuma mensagem**. Um
+recarregamento resolve. Hoje isso é invisível na prática, porque o campo abre vazio de qualquer jeito
+(não há pedidos); passa a importar depois da Etapa 38.
+
+---
+
+**G25 (NOVO, da Etapa 37). O saldo agregado por material está calculado em DOIS lugares do servidor.**
+
+A barreira que recusa o excesso e o preenchimento automático dos itens (quando o recebimento é criado
+sem lista) calculam o **mesmo** agregado, cada um por sua conta. Hoje eles concordam — e foi
+justamente uma divergência entre eles que a revisão final pegou: o servidor oferecia um número e
+recusava esse mesmo número. O conserto foi alinhar os dois; **extrair o cálculo para um lugar só
+continua por fazer**, e enquanto isso a próxima edição pode desalinhá-los de novo.
+
+---
+
+**G26 (NOVO na descrição, PRÉ-EXISTENTE no código). O valor total gravado no item usa a quantidade
+ESPERADA, não a que chegou.**
+
+Num recebimento **parcial**, o valor total de cada item fica calculado sobre o saldo esperado, e não
+sobre o que efetivamente chegou — ou seja, **acima** do valor real daquela entrega. Isso não é desta
+etapa, mas ficou **visível** agora, porque antes o preço vinha zerado (era o defeito que a **B98**
+consertou) e zero vezes qualquer coisa é zero. **O dano é limitado e medido:** o **custo médio** do
+material usa o valor **unitário** (que está certo), e a **conta a pagar** usa o total da **nota**
+(que também está certo). Nenhum consumidor interno lê esse total do item hoje. Fica escrito para não
+ser descoberto de novo por alguém que confie nele.
+
+---
+
+**G27 (NOVO, da Etapa 37). A lista de itens do pedido devolve o PREÇO por linha a qualquer perfil
+que abra o módulo.**
+
+A consulta que a tela usa para carregar as linhas do pedido inclui o **valor unitário** de cada
+linha. Ela está atrás do acesso ao módulo, mas não de um perfil específico — então qualquer usuário
+que abra o almoxarifado consegue ler preço de compra por item, pela rede, mesmo que a tela não o
+mostre. **Não é estreia:** a lista de pedidos já expunha o **valor total** do pedido do mesmo jeito.
+É a mesma classe do **G1** (o padrão é expor, e esconder depende de alguém lembrar), e está escrito
+porque preço de compra é o tipo de dado sobre o qual a empresa pode ter opinião.
+
+---
+
+**G28 (NOVO, da Etapa 37 — CORREÇÃO de uma regra de método que este próprio documento deu como
+certa).** A Etapa 36 registrou, como regra para consertos em massa por script, que **"os arquivos
+desta base são CRLF"**. **Estava errado: são LF.** Agir sobre a afirmação errada sujou **112 linhas**
+de um arquivo de teste (e uma do serviço) com marcas de fim de linha estranhas, que precisaram ser
+normalizadas antes do commit. A regra correta é: ao **procurar**, tolerar os dois formatos; ao
+**escrever**, nunca inserir a marca do Windows. Fica dito em vez de corrigido em silêncio porque a
+afirmação errada já foi copiada para o plano da etapa seguinte.
+
+---
+
+**G29 (NOVO, da Etapa 37 — resíduo conhecido, com o conserto já nomeado). Voltar de "Pedido de
+compra" para "Nota fiscal" enquanto os itens do pedido ainda estão carregando repovoa a lista.**
+
+A proteção contra troca rápida cobre **pedido → pedido** (foi o conserto da revisão final). O que
+ela não cobre é **trocar a forma de recebimento** — ou cancelar — com a resposta do pedido ainda em
+voo: a resposta atrasada chega e repõe os itens do pedido **debaixo da forma "Nota fiscal"**. O
+operador vê linhas que não pediu; nada é gravado sem ele salvar. **O conserto é de uma linha** (marcar
+a resposta como descartada também ao limpar o estado do pedido), está nomeado, e ficou fora da onda
+porque a onda já tinha fechado nove achados.
+
 
 ## Etapa 0 — Fundação (2026-08-03)
 
@@ -7307,7 +7804,318 @@ concedida. A lista ficou **Administrador e Compras**, o Almoxarife ficou fora de
 recebe não autoriza o próprio excedente), e **se você quiser que o Gestor autorize, isso precisa de
 uma etapa própria** — está na letra **B82**.
 
+## Etapa 37 — O pedido de compra passa a saber quanto já chegou (2026-09-16)
+
+**Esta etapa É feature** — a **08 (Recebimento)**, a mesma da Etapa 36, e ela fecha exatamente o que
+a 36 declarou que não cobria: **receber contra o PEDIDO DE COMPRA**. Três coisas nasceram aqui:
+**recebimento parcial pela tela** ("chegaram 6 dos 10, o resto vem depois"), **o saldo do pedido por
+material** como régua de quanto ainda cabe, e o **excedente sobre o pedido** exigindo a mesma
+autorização de Compras ou do Administrador. De quebra, **21 comandos mortos** de criação de coluna
+que falhavam em silêncio a cada arranque do servidor foram apagados.
+
+O problema era concreto e foi medido, não suposto: **um pedido de 10 unidades podia receber 25 em
+três recebimentos e continuar marcado como 10 e ABERTO.** A tabela de itens do pedido tinha as
+colunas, **um** leitor e **nenhum** escritor — ninguém nunca escrevia quanto de cada linha já tinha
+chegado. E pela tela o parcial era impossível: escolher "Por Pedido de Compra" abria a lista de
+itens **vazia**, e o servidor completava sozinho o pedido inteiro.
+
+> ### ⚠️ Leia isto antes de abrir a tela em produção: hoje não existe pedido nenhum, e nenhuma tela cria pedido
+>
+> **Nenhum lugar do sistema grava um pedido de compra.** O módulo **Compras** tem as três abas
+> (pedidos, fornecedores, cotações) e **nenhuma delas tem tela de criação** — o botão "Novo Pedido"
+> volta para a lista. O banco de produção tem **zero** pedidos e **zero** itens de pedido.
+> **Consequência direta:** ao escolher a forma **"Pedido de compra"**, o campo *Número do Pedido de
+> Compra* **abre vazio**, e vai continuar vazio até a **Etapa 38** entregar a criação de pedido no
+> Compras.
+>
+> **Isto não é defeito desta etapa** — é o que ela declaradamente não cobre, e é a primeira coisa a
+> saber antes de apresentar. Tudo o que está descrito abaixo funciona e está coberto por testes
+> automáticos; o que falta é a **origem** do pedido. Para testar ao vivo hoje, o roteiro começa
+> inserindo um pedido por SQL — o comando pronto está na letra **F13**.
+
+### Antes → Agora
+
+| Onde | Antes | Agora |
+|---|---|---|
+| **Novo recebimento → "Por Pedido de Compra"** | Escolher o pedido abria a lista de itens **vazia**; o servidor completava sozinho o pedido inteiro. Registrar "chegaram 6 dos 10" **não era um gesto possível** | O bloco **"Itens do pedido"** carrega cada linha do pedido com **"Saldo pendente: N"** e um campo editável. Digite 6 numa linha de 10 → entra 6, e o pedido continua aberto com 4 |
+| **Campo do pedido** | Listava os pedidos sem nenhum critério | Lista os pedidos que ainda têm **saldo a receber** — e também os que o Compras abriu e **ainda não lançou as linhas**. Pedido **totalmente recebido some da lista** |
+| **Receber acima do pedido** | Ninguém media: o pedido de 10 aceitava 25 em três recebimentos, cada um "dentro do esperado" do próprio documento | Recusado com *"Quantidade recebida (5) maior que o saldo do pedido (4) para o material COD-M1 — a autorização de excedente é de Compras ou do Administrador"*, comparando com o **saldo do pedido por material** |
+| **Aviso na hora de digitar** | Não existia | *"Acima do saldo: 1 a mais que o saldo do pedido (4)"*, em vermelho, embaixo da linha, enquanto você digita |
+| **Autorizar o excedente do pedido** | Não havia o que autorizar | A caixa **"Autorizo o recebimento acima do pedido"** aparece no formulário para quem pode autorizar (**Compras** ou **Administrador**), e a trilha registra **"Excedente autorizado"** por item |
+| **Pedido sem linhas lançadas no Compras** | Ficava indistinguível de um pedido quitado | A tela diz *"Pedido de compra ⟨número⟩ não tem itens lançados no módulo Compras."* e o botão de salvar fica desabilitado — separado de *"Este pedido já foi recebido por completo."* |
+| **Depois de processar a nota** | O pedido não sabia de nada | Cada linha do pedido passa a guardar **quanto já chegou**, contado no momento em que o material **entra fisicamente no estoque** — pelo *Processar Nota* **e** pela aprovação direta |
+| **Preço do item recebido por pedido** | O item entrava a **R$ 0,00** e **não alimentava o custo médio** do material (regressão silenciosa introduzida pela própria tela desta etapa, pega na revisão final) | Quando a tela não informa preço, o sistema usa o **valor unitário da linha do pedido** — e o custo médio volta a ser alimentado |
+| **Arranque do servidor** | 21 comandos de criação de coluna rodavam e **falhavam todos, a cada boot, em silêncio** — e quem auditava o código via 21 "migrações" que não eram a origem de coluna nenhuma | Os 21 foram **apagados**. Todas as 21 colunas já nascem do criador de esquema do módulo — medido coluna por coluna no banco real |
+
+### As regras, com o cenário exato
+
+**RN-20 — o saldo do pedido é por MATERIAL, e é o que limita o recebimento.**
+O saldo de um material no pedido é **o que foi pedido menos o que já chegou**, somando **todas** as
+linhas daquele material naquele pedido. Num pedido de **10** do material `COD-M1` em que já entraram
+**6**, tentar receber **5** é recusado com **400**:
+
+> **"Quantidade recebida (5) maior que o saldo do pedido (4) para o material COD-M1 — a autorização de excedente é de Compras ou do Administrador"**
+
+**Por que por material e não por linha:** um pedido de compra pode ter **duas linhas do mesmo
+material** (preços ou prazos diferentes), e isso é legítimo. Medindo linha a linha, um recebimento
+correto tomaria recusa por o operador ter digitado "na linha errada". **E a tela mostra o mesmo
+número que a porta cobra** — foi assim que um defeito da execução foi pego: a leitura prometia 10 e
+a porta recusava 5.
+
+**RN-21 — autorizar o excedente do pedido é de Compras ou do Administrador, e o 403 nomeia a ação.**
+Quem marca a autorização sem ter a permissão (caso alcançável por fora da tela) recebe **403**:
+
+> **"Autorizar recebimento acima do pedido exige a permissão "autorizar_excedente" (seu perfil: ALMOXARIFE)."**
+
+É **a mesma permissão e a mesma lista** da Etapa 36 — nada mudou em quem pode autorizar. Com a caixa
+marcada **e** a permissão, o recebimento entra (**201**) e a trilha de auditoria ganha
+**"Excedente autorizado"**, uma linha por item.
+
+**RN-22 — quem escolhe a linha do pedido é o SERVIDOR, e ela tem de ser do mesmo material.**
+A tela manda qual linha do pedido cada item está abatendo, mas **o servidor confere**: a linha tem
+de pertencer ao pedido **e** ser do **mesmo material** do item. Mandar a linha do material `Y` para
+um item do material `X` é recusado com **400**:
+
+> **"Item do pedido #⟨id⟩ não é do material ⟨COD⟩"**
+
+**Este cenário é um achado da revisão final, e o dano era real:** antes dele, o pedido passava a
+dizer que chegaram 5 de **Y**, o estoque creditava 5 de **X**, e **Y ficava em zero**. Nenhuma outra
+porta pegava, porque a régua do saldo agrupa pelo material da linha resolvida — media 5 contra o
+saldo de Y e aprovava.
+
+**RN-23 — só o que ENTROU no estoque consome saldo do pedido.**
+Criar o recebimento **não** move o saldo do pedido. O pedido só passa a contar quando o material
+**entra fisicamente** — e isso vale nos **dois** caminhos de entrada: o *Processar Nota* e a
+aprovação direta do recebimento. **Processar duas vezes não conta duas vezes.** Cenário: pedido de
+10, recebimento de 6 criado → o saldo do pedido ainda é **10**; processado → o saldo vira **4** e a
+situação do pedido vira **PARCIAL**.
+
+**RN-24 — pedido que o Compras abriu e ainda não preencheu continua aparecendo.**
+Um pedido **sem nenhuma linha lançada** aparece no campo de escolha de propósito — esconder seria
+mentir que o pedido não existe. O que ele não faz é **ser recebido**.
+
+**RN-25 — duas recusas diferentes para dois fatos diferentes.**
+Escolhendo um pedido **sem linhas lançadas**, a tela diz:
+
+> **"Pedido de compra ⟨número⟩ não tem itens lançados no módulo Compras."**
+
+Escolhendo um pedido **totalmente recebido**, a tela diz:
+
+> **"Este pedido já foi recebido por completo."**
+
+Nos dois casos o botão de salvar fica desabilitado. **Foram duas frases de propósito** — juntar as
+duas mentiria ao operador justamente no pedido que o Compras ainda não preencheu, que é o pedido que
+a RN-24 manda continuar mostrando. *(A tela dizia "já foi recebido por completo" para os dois até a
+revisão final; ver "O que a revisão encontrou".)*
+
+**RN-26 — a tela carrega as linhas do pedido com o saldo, e avisa ao passar dele.**
+**Almoxarifado → Recebimentos → Novo Recebimento → Por Pedido de Compra**. Escolhido o pedido,
+aparece o bloco **"Itens do pedido"**: cada linha com o nome do material, o código e
+**"Saldo pendente: N"**, e um campo de quantidade ao lado. Digitando acima do saldo, aparece embaixo
+da linha, em vermelho:
+
+> **"Acima do saldo: 1 a mais que o saldo do pedido (4)"**
+
+**Limpar o campo é "esta linha não chegou"** — a linha sai do envio e **não** entra como zero. E o
+aviso soma o que você digitou **em todas as linhas daquele material** antes de comparar, porque é
+assim que o servidor mede: com duas linhas do mesmo material, medir uma a uma pediria autorização
+que o servidor não pede (e treinaria o operador a marcar a caixa por reflexo) ou ficaria calada
+enquanto a soma estourava.
+
+**RN-27 — os 21 comandos mortos do arranque.**
+Não é regra de negócio, é limpeza de código com efeito medido: `server/routes/almoxarifado.js` tinha
+**21** comandos de criação de coluna que **nunca** criaram nada — todas as 21 colunas já vêm do
+criador de esquema do módulo, verificado coluna por coluna no banco real. Pior: eles são disparados
+antes de o esquema terminar de subir, então **falhavam os 21, a cada arranque, com o erro
+engolido**. Foram apagados (21 → 0). **A causa raiz continua de pé e está declarada na letra G**:
+qualquer comando desses escrito no futuro, fora do mecanismo seguro, falharia do mesmo jeito.
+
+### Como testar ao vivo
+
+> **Comece por aqui:** **não há tela para criar um pedido de compra**, então o roteiro precisa de um
+> pedido inserido **por SQL**. O comando pronto (com o de limpeza depois) está na letra **F13**
+> deste documento. Sem esse passo, o campo *Número do Pedido de Compra* abre vazio e não há o que
+> demonstrar. **Isso deixa de ser necessário na Etapa 38.**
+
+1. **Insira o pedido de teste** — copie os dois comandos da letra **F13**, trocando `F1` pelo id de
+   um fornecedor real e `M1` pelo id de um material real. É um pedido `PC-TESTE-37` com **uma linha
+   de 10 unidades**.
+2. **Almoxarifado → Recebimentos → Novo Recebimento**, forma **Por Pedido de Compra**. Abra o campo
+   *Número do Pedido de Compra* → **`PC-TESTE-37` está na lista**.
+3. Escolha o pedido → aparece o bloco **"Itens do pedido"** com a linha do material e
+   **"Saldo pendente: 10"**.
+4. **O parcial, que é o coração da etapa:** digite **6** e salve. O recebimento entra. **Reabra o
+   Novo Recebimento e escolha o mesmo pedido** → ele **continua na lista**, e o saldo pendente
+   continua **10**: o pedido só conta quando o material entra no estoque, não quando o documento
+   nasce.
+5. **Leve o recebimento até o estoque:** abra o documento e avance **Iniciar Conferência →
+   Finalizar Conferência → Encaminhar para Compras → Encaminhar para Faturamento → Iniciar Entrada
+   de NF → Preencher Dados da NF → Processar Nota**.
+6. **Agora o pedido sabe:** volte ao **Novo Recebimento → Por Pedido de Compra → `PC-TESTE-37`** →
+   a linha mostra **"Saldo pendente: 4"**.
+7. **A recusa, como Almoxarife:** digite **5** → aparece *"Acima do saldo: 1 a mais que o saldo do
+   pedido (4)"*. Salve mesmo assim → a recusa aparece na tela: *"Quantidade recebida (5) maior que
+   o saldo do pedido (4) para o material ⟨código⟩ — a autorização de excedente é de Compras ou do
+   Administrador"*. **Repare que o 5 que você digitou continua lá.**
+8. **A autorização, como Compras (ou Administrador):** o mesmo passo, e agora aparece a caixa
+   **"Autorizo o recebimento acima do pedido"** — ela **não** aparece para o Almoxarife e **não**
+   aparece se nenhuma linha estiver acima do saldo. Marque e salve → entra. Confira em
+   **Almoxarifado → Auditoria** a linha **"Excedente autorizado"**.
+9. **O pedido some quando fecha:** receba as **4** restantes e processe a nota. Volte ao campo de
+   pedidos → **`PC-TESTE-37` não está mais lá**, e escolhê-lo por outro caminho diria *"Este pedido
+   já foi recebido por completo."*
+10. **Conferindo pelo banco** (opcional, e é a prova do que a tela não mostra): rode
+    `SELECT quantidade, quantidade_recebida FROM itens_pedido_compra WHERE pedido_id = (SELECT id FROM pedidos_compra WHERE numero='PC-TESTE-37');`
+    → `10 | 10`. **Apague o pedido de teste** com os dois comandos de limpeza da letra **F13** (são
+    dois porque apagar o pedido não apaga as linhas dele).
+
+### O que esta etapa NÃO cobre
+
+- **Não existe tela para CRIAR um pedido de compra — e por isso, em produção, o campo de pedidos
+  abre vazio.** É o limite mais importante desta etapa. O módulo Compras não tem tela de criação em
+  nenhuma das três abas, e nenhum ponto do sistema grava um pedido. Tudo o que esta etapa entregou
+  só é usável depois que existir um pedido. **É a Etapa 38**, já desenhada: *o pedido de compra
+  ganha criação*, com importação de planilha como carga inicial e o botão **"Gerar pedido"**
+  fechando o elo com a Reposição — que hoje gera solicitação de compra e **para ali**, porque
+  ninguém converte solicitação em pedido.
+- **Cotações e fornecedores continuam sem tela de criação também.** A mesma medição que achou a
+  ausência da tela de pedido achou a das outras duas. Fora do escopo daqui.
+- **Item que chega FORA do pedido entra sem régua de saldo.** Se o fornecedor mandar um material que
+  não está no pedido, ele é aceito e **não** há aviso — a régua do saldo só governa o que está no
+  pedido. É decisão declarada (letra **B92**), e hoje o caso **só é alcançável por API**: a tela de
+  recebimento por pedido só oferece as linhas do próprio pedido.
+- **Dois recebimentos abertos contra o mesmo pedido passam os dois.** Como o saldo só conta o que
+  **entrou no estoque**, dois documentos de 10 criados antes de processar qualquer um deles são
+  aceitos, e o pedido de 10 termina com 20 contados. É decisão declarada: conferir de novo no
+  processamento seria pior — travaria uma nota com o **estoque já creditado**. E há um detalhe que
+  importa para quem for reconciliar: esse excesso **não deixa nenhuma linha de "Excedente
+  autorizado"** na auditoria, porque nenhuma barreira disparou.
+- **Não existe estorno nem cancelamento de recebimento.** Um recebimento processado por engano não
+  se desfaz, e portanto o que ele somou ao pedido também não. Recebimento não tem situação
+  "cancelado" — os 11 estados vão de RECEBIDO a BLOQUEADO. É a feature 12.
+- **A conferência física continua sendo a da Etapa 36.** O campo "Qtd. conferida" no painel de
+  detalhe mede a quantidade contra a **esperada daquele documento**; o saldo do pedido é medido na
+  **criação** do recebimento. São duas réguas em dois momentos, de propósito.
+- **A divergência continua sem virar documento.** Receber menos do que o pedido deixa saldo em
+  aberto e nada mais: não há registro formal de divergência com número, dono, prazo e desfecho
+  (aceitar, devolver, cobrar do fornecedor).
+- **Nenhuma TELA mostra quanto do pedido já chegou.** A quantidade pedida, a recebida, o saldo e a
+  situação (**ABERTO / PARCIAL / RECEBIDO**) existem e são calculados — mas hoje são informação
+  **da API**, consumida pelo formulário de recebimento. A tela de Compras **não** foi tocada e
+  continua mostrando só o status dela. Está na letra **D**.
+- **Os 51 comandos iguais aos 21 apagados continuam no núcleo do CRM.** A limpeza valeu para o
+  arquivo do almoxarifado. O arquivo principal do servidor tem **51** do mesmo tipo, fora do escopo
+  do módulo, e continuam lá.
+
+### O que a revisão encontrou
+
+Esta etapa passou pelas **duas revisões adversariais** de sempre — uma medindo se cada regra estava
+mesmo provada, outra olhando a experiência de quem usa e o risco para o dado — e por uma **re-revisão
+da onda de correção**. O veredito somou **4 problemas importantes e 6 menores, com zero alarme
+falso**, todos corrigidos em **nove commits** antes de fechar.
+
+**Corrigido — 1. A tela chamava de "pedido quitado" um pedido que o Compras nunca preencheu.** Um
+pedido **sem linhas lançadas** e um pedido **totalmente recebido** chegavam à tela do mesmo jeito
+(uma lista vazia de itens), e ela dizia *"Este pedido já foi recebido por completo."* para os dois,
+com o botão desabilitado. **É a mesma mentira que o desenho tinha tirado do servidor, renascida na
+tela** — e a recusa correta, que o servidor já sabia dizer, era **inalcançável** porque o
+recebimento nunca chegava a ser enviado. Agora são duas frases, e a segunda é a literal do próprio
+servidor.
+
+**Corrigido — 2. O servidor montava um pedido que ele mesmo recusava.** No caminho em que o
+recebimento é criado **sem** a lista de itens (o servidor completa sozinho), ele oferecia o saldo de
+cada **linha**, enquanto a barreira mede o saldo **agregado do material**. Num pedido com uma linha
+já excedida (saldo negativo) e outra pendente, o servidor oferecia 10 e respondia **400** dizendo
+que o saldo era 5. **O operador não tinha como evitar: o envio não era dele.** E é justamente o
+excedente autorizado desta etapa que produz o estado que disparava isso. Agora o servidor rateia o
+saldo agregado entre as linhas, e a linha que não leva nada sai do envio.
+
+**Corrigido — 3. O item entrava com o material X ao lado da linha do material Y.** Descrito na
+RN-22: o pedido dizia que chegaram 5 de Y, o estoque creditava 5 de X, Y ficava em zero e **nenhuma
+porta pegava**. A linha do pedido agora tem de ser do mesmo material do item.
+
+**Corrigido — 4. O recebimento por pedido parou de alimentar o custo médio do material.** A tela
+nova, corretamente, **não** pede preço ao almoxarife — preço é informação do pedido, não de quem
+recebe. Só que o servidor lia o preço do envio e, não achando nada, gravava **R$ 0,00**: o item
+entrava zerado e a entrada física **não movia o custo médio**. Era regressão silenciosa de um
+comportamento que existia desde a Etapa 8c. Agora, quando a tela não informa preço, vale o
+**valor unitário da linha do pedido**; um zero **explícito** continua sendo zero.
+
+**Corrigido — 5 (menor, mas visível). Trocar de pedido rápido deixava o pedido novo marcado como
+quitado.** Escolher um pedido quitado e, antes da resposta chegar, escolher outro podia terminar com
+a tela do pedido **novo** dizendo *"já foi recebido por completo"*, com os itens apagados e o botão
+travado. Vence agora a **última escolha**, não a última resposta. *(Um resíduo desta mesma classe
+ficou declarado na letra **G**: voltar para "Nota fiscal" com a resposta do pedido ainda em voo.)*
+
+**Corrigido — 6 (menor). Os avisos vermelhos não eram vermelhos.** O aviso *"Acima do saldo"* e o
+banner de recusa usavam um nome de cor que **nunca existiu** no sistema — saíam na cor herdada do
+texto. Quatro ocorrências, duas delas anteriores a esta etapa.
+
+**Mais quatro menores**, todos fechados: dois contratos que os testes exercitavam sem afirmar (a
+tela manda a linha do pedido em todo item, e o campo que filtra os pedidos com saldo); a proteção
+contra troca rápida de pedido; e uma referência de commit que a spec apontava por vizinhança em vez
+de por identificador.
+
+**E duas afirmações do próprio desenho que estavam ERRADAS, ditas em vez de apagadas:**
+
+- O desenho dizia que *"o servidor valida a linha do pedido contra o pedido"*. **Estava incompleto:**
+  validar contra o pedido não impede a linha de ser de **outro material** — foi exatamente o furo do
+  item 3 acima.
+- O desenho e o plano chamavam **as duas tabelas do pedido de compra** de "tabelas do núcleo do
+  CRM". **Estava errado:** a tabela de **itens** do pedido é do **almoxarifado**; só a tabela do
+  **pedido** é do núcleo. Não muda nada do que foi feito (a migração já usava o mecanismo seguro do
+  módulo), mas muda o custo da Etapa 38 — e ficaria enganando a próxima sessão.
+- A regra de método registrada na Etapa 36 dizia que **os arquivos desta base são CRLF**. **Estava
+  errada: são LF** — e a "correção" baseada nela sujou 112 linhas de um arquivo de teste antes de
+  ser percebida. Está na letra **G**.
+
+**Números lidos ao fim da onda** (`ea0aa4f..13ad237`, onda de correção `4007344..13ad237`):
+**178/178 arquivos** da suíte de API, **42 de 42** no serviço do almoxarifado, **4/4**, **3/3** e
+**5/5** nas suítes de validação, migração e banco, **47 suítes / 714 testes** no cliente, e o
+empacotamento do cliente **limpo**.
+
 ## Onde estamos e o que vem a seguir
+
+- **Etapa 37 entregue (2026-09-16):** **o pedido de compra passa a saber quanto já chegou**
+  (`ea0aa4f..13ad237`, onda de correção da revisão final `4007344..13ad237`, nove commits) — **é
+  feature**, a **08 (Recebimento)**, e fecha exatamente o que a Etapa 36 declarou que não cobria.
+  Nasceram três coisas: **recebimento parcial pela tela** (escolher o pedido agora carrega as
+  linhas com **"Saldo pendente: N"** e campo editável — antes a lista abria vazia e o servidor
+  completava o pedido inteiro), **o saldo do pedido por material** como régua (um pedido de 10
+  recebia 25 em três recebimentos e continuava marcado como 10 e ABERTO — medido, não suposto), e
+  o **excedente sobre o pedido** exigindo **Compras ou Administrador**, com aviso na hora de
+  digitar (*"Acima do saldo: 1 a mais que o saldo do pedido (4)"*), recusa literal
+  (*"Quantidade recebida (5) maior que o saldo do pedido (4) para o material ⟨código⟩ — a
+  autorização de excedente é de Compras ou do Administrador"*) e trilha **"Excedente autorizado"**
+  por item. O pedido só conta o que **entrou fisicamente no estoque**, pelos **dois** caminhos de
+  entrada, e processar duas vezes não conta duas vezes. De quebra, **21 comandos mortos** de
+  criação de coluna que falhavam a cada arranque em silêncio foram apagados (21 → 0).
+  **⚠️ O limite que importa antes de apresentar:** **nenhuma tela do sistema cria um pedido de
+  compra**, e o banco de produção tem **zero** pedidos — então a forma *"Pedido de compra"* abre
+  com o campo **vazio** até a Etapa 38. Para demonstrar hoje, é preciso inserir um pedido por SQL:
+  o comando pronto está na letra **F13**.
+  Números **lidos**: **178/178 arquivos** da suíte de API, **42/42** no serviço do almoxarifado,
+  **4/4 · 3/3 · 5/5** nas suítes de validação, migração e banco, **47 suítes / 714 testes** no
+  cliente, empacotamento **limpo**.
+  **O que a revisão achou:** duas revisões adversariais mais uma re-revisão da onda, **zero alarme
+  falso**, **4 importantes** e **6 menores**, todos corrigidos. Os quatro importantes: a tela
+  chamava de "pedido quitado" o pedido que o **Compras nunca preencheu** (e assim a recusa correta
+  do servidor era inalcançável); **o servidor montava um envio que ele mesmo recusava** quando uma
+  linha do pedido estava excedida; **o item entrava com o material X ao lado da linha do material
+  Y** (o pedido creditava Y, o estoque creditava X, e nenhuma porta pegava); e o **recebimento por
+  pedido parou de alimentar o custo médio**, gravando o item a R$ 0,00 — regressão silenciosa de um
+  comportamento da Etapa 8c, agora com o preço vindo da linha do pedido.
+  **O que é seu:** as consultas **A12** (reconciliação opcional do quanto já chegou por linha de
+  pedido, que só faz sentido **depois** do deploy e é a mesma que repara a janela de falha da
+  **B90**) e **A13** (conferir que as 21 colunas dos comandos apagados existem mesmo — deve dar
+  zero ausentes); as decisões **B89 a B99**, todas escritas com o que foi descartado — e duas delas
+  são **pergunta** para você: a **B96** (a lista de quem autoriza excedente **não mudou**, e o
+  Gestor continua fora — é a mesma pergunta da B82) e a **B97** (mandar a linha de **outro pedido**
+  continua sendo aceito e re-resolvido em silêncio; recusar é regra nova sobre contrato já
+  entregue); a verificação manual **F13**, que **fica aberta até a Etapa 38** porque depende de um
+  pedido inserido à mão; e o furo **C50**, já fechado. **A Etapa 38 já está desenhada:** *o pedido
+  de compra ganha criação* no módulo Compras — com importação de planilha como carga inicial e o
+  botão **"Gerar pedido"** na Reposição, fechando o elo que hoje morre na solicitação de compra.
 
 - **Etapa 36 entregue (2026-09-16):** **o recebimento para de aceitar qualquer coisa, e a
   conferência física ganha campo** (`d02b9f4..e287a06`, onda de correção da revisão final a partir

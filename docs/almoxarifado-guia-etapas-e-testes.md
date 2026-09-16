@@ -2,47 +2,73 @@
 
 > Atualizado em 2026-09-16 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 36) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 37) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20.
 
-> ## Onde o desenvolvimento está — 2026-09-16 (Etapa 36 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-09-16 (Etapa 37 ENTREGUE · modo contínuo pelo mapa)
 >
-> **Etapas 1 a 20 e 22 a 36 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
-> A **Etapa 36 (o recebimento para de aceitar qualquer coisa, e a conferência física ganha campo)**
-> fechou em 2026-09-16 (`d02b9f4..e287a06`, mais a onda de correção da revisão final). **É
-> feature** — a **08 (Recebimento)** — e **mexeu no servidor de propósito**.
+> **Etapas 1 a 20 e 22 a 37 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
+> A **Etapa 37 (o pedido de compra passa a saber quanto já chegou)** fechou em 2026-09-16
+> (`ea0aa4f..13ad237`, mais a onda de correção da revisão final `4007344..13ad237`). **É feature** —
+> a **08 (Recebimento)**, a mesma da 36 — e fecha exatamente o que a Etapa 36 declarou que não
+> cobria.
 >
-> **O problema era que as duas portas por onde um recebimento é escrito aceitavam praticamente
-> qualquer coisa.** Eram quatro problemas no mesmo documento, e três mexiam em **saldo de estoque**
-> e em **conta a pagar**.
+> **O problema era que o pedido de compra não sabia que tinha sido recebido.** Um pedido de 10
+> unidades podia receber **25 em três recebimentos** e continuar marcado como **10 e ABERTO** —
+> medido, não suposto. E, do outro lado, escolher *"Por Pedido de Compra"* abria a lista de itens
+> **vazia**: dizer "chegaram 6 dos 10, o resto vem depois" **não era um gesto possível**.
 >
 > **O que mudou:**
-> - **A forma de recebimento** é **Nota fiscal** ou **Pedido de compra**, e nada mais — antes o
->   campo gravava qualquer texto que chegasse por fora da tela.
-> - **A mesma nota fiscal do mesmo fornecedor não entra duas vezes.** Antes entrava: dois
->   documentos, estoque **dobrado** (20 onde entraram 10) e **duas** contas a pagar. Agora a
->   recusa diz **em qual documento** a nota já está, e vale tanto ao cadastrar como ao preencher os
->   dados fiscais depois. O sistema reconhece o mesmo fornecedor pelo cadastro, pelo **CNPJ só
->   dígitos** ou pelo **nome ignorando acento**, maiúsculas e espaços repetidos.
-> - **A conferência física ganhou o campo que faltava:** cada item em **RECEBIDO** ou
->   **EM_CONFERENCIA** tem **"Qtd. conferida"**, o aviso *"Divergência: N a menos/a mais que o
->   esperado (E)"* e o botão **Salvar Conferência**. Antes o painel mostrava **uma** quantidade e
->   não havia onde dizer quanto chegou de verdade.
-> - **Receber acima do esperado exige autorização de Compras ou do Administrador**, em qualquer
->   momento em que a quantidade recebida é informada, com a caixa **"Autorizo o recebimento acima
->   do pedido"** para quem pode e a trilha **"Excedente autorizado"** por item. Antes entrava em
->   silêncio.
-> - **Cada item exige quantidade numérica maior que zero** — texto, zero e negativo são recusados.
+> - **Recebimento parcial existe.** Escolher o pedido carrega as linhas dele com
+>   **"Saldo pendente: N"** e um campo editável em cada uma. Campo vazio é *"esta linha não
+>   chegou"* — não entra como zero.
+> - **O pedido passa a contar o que chegou**, no instante em que o material **entra fisicamente no
+>   estoque** (pelo *Processar Nota* e pela aprovação direta). Reprocessar não conta duas vezes.
+> - **Receber acima do saldo do pedido é recusado**, com o número na frente:
+>   *"Quantidade recebida (5) maior que o saldo do pedido (4) para o material ⟨código⟩ — a
+>   autorização de excedente é de Compras ou do Administrador"* — e a tela avisa antes, enquanto
+>   você digita: *"Acima do saldo: 1 a mais que o saldo do pedido (4)"*.
+> - **O saldo é por MATERIAL**, somando as linhas daquele material no pedido — e a tela mostra
+>   exatamente o número que o servidor cobra.
+> - **Pedido totalmente recebido some do campo de escolha**; pedido que o Compras abriu e ainda não
+>   preencheu continua aparecendo, com a mensagem certa (*"não tem itens lançados no módulo
+>   Compras"*), que é diferente de *"já foi recebido por completo"*.
+> - **21 comandos mortos** de criação de coluna, que falhavam a cada arranque do servidor em
+>   silêncio, foram **apagados**.
 >
 > **⚠️ Três coisas antes de apresentar:**
-> 1. **Rode as consultas A9, A10 e A11 do documento de novidades antes do deploy.** A **A9** acha
->    notas repetidas **que já estão no banco** (a guarda nova não limpa o passado, e essa consulta
->    **sub-reporta**: ela não consegue ignorar acento); a **A10** acha formas de recebimento fora
->    dos dois valores; a **A11** é informativa.
-> 2. **A decisão B82 espera você: o Gestor deve poder autorizar recebimento acima do pedido?** Hoje
->    é **Administrador e Compras**. O Gestor ficou fora porque ele **nem abre** a tela de
->    recebimento — habilitá-lo é etapa própria, não configuração.
-> 3. **O passo 9 do roteiro abaixo é o furo que a revisão final pegou** — um recebimento com
->    excedente autorizado ficava **preso** e nunca chegava ao estoque. Vale testar até o fim.
+> 1. **NÃO EXISTE TELA PARA CRIAR UM PEDIDO DE COMPRA — e por isso, em produção, o campo de pedidos
+>    abre VAZIO.** O módulo Compras não tem tela de criação em nenhuma das três abas, e o banco de
+>    produção tem **zero** pedidos. Tudo o que a Etapa 37 entregou funciona e está coberto por
+>    testes, mas só é **usável** depois que existir um pedido. **Para testar hoje, o roteiro da
+>    Etapa 37 começa inserindo um pedido por SQL** (o comando está no passo 1 do roteiro e na letra
+>    **F13** do documento de novidades). **É a Etapa 38 que resolve isto.**
+> 2. **Rode as consultas A12 e A13 do documento de novidades.** A **A13** confirma, em 30 segundos,
+>    que as 21 colunas dos comandos apagados existem mesmo no banco de produção (deve dar **zero**
+>    ausentes) — é a única verificação que a limpeza pede. A **A12** só faz sentido **depois** do
+>    deploy, quando houver pedido: ela reconcilia a contagem do pedido com os recebimentos já
+>    processados, e é a mesma consulta que repara a janela de falha da decisão **B90**.
+> 3. **Duas decisões esperam você:** a **B96** (a lista de quem autoriza excedente **não mudou** —
+>    continua Administrador e Compras, e o Gestor segue fora; é a pergunta da **B82**, agora valendo
+>    para três portas) e a **B97** (mandar a linha de **outro** pedido continua sendo aceito e
+>    corrigido em silêncio — recusar é regra nova sobre contrato já entregue).
+>
+> **Antes disto: a Etapa 36 (o recebimento para de aceitar qualquer coisa, e a conferência física
+> ganha campo)** fechou no mesmo dia (`d02b9f4..e287a06`, mais a onda de correção da revisão final).
+> **É feature** — a **08 (Recebimento)** — e **mexeu no servidor de propósito**. Eram quatro
+> problemas no mesmo documento: a **forma de recebimento** gravava qualquer texto que chegasse por
+> fora da tela; **a mesma nota fiscal do mesmo fornecedor entrava duas vezes** (dois documentos,
+> estoque **dobrado** e **duas** contas a pagar), e agora é recusada dizendo **em qual documento** a
+> nota já está, reconhecendo o fornecedor pelo cadastro, pelo **CNPJ só dígitos** ou pelo **nome
+> ignorando acento**; **a conferência física ganhou o campo que faltava** (**"Qtd. conferida"**, com
+> o aviso *"Divergência: N a menos/a mais que o esperado (E)"* e o botão **Salvar Conferência**); e
+> **receber acima do esperado passou a exigir autorização de Compras ou do Administrador**, em
+> qualquer momento em que a quantidade recebida é informada, com a caixa **"Autorizo o recebimento
+> acima do pedido"** e a trilha **"Excedente autorizado"** por item. **Três pendências dela
+> continuam suas:** as consultas **A9** (notas repetidas já no banco — e ela **sub-reporta**, porque
+> não ignora acento), **A10** (formas de recebimento fora dos dois valores) e **A11** (informativa);
+> a decisão **B82** (o Gestor deve poder autorizar excedente?); e o **passo 9** do roteiro da Etapa
+> 36, que é o furo crítico que a revisão final pegou — um recebimento com excedente autorizado
+> ficava **preso** e nunca chegava ao estoque. Vale testar até o fim.
 >
 > **Antes disto: a Etapa 35 (as telas vizinhas param de esconder falha e de mostrar o registro
 > errado)** fechou no mesmo dia (`6f6a8b0..2d5cd35`), **sem uma linha de servidor** — em
@@ -4601,6 +4627,194 @@ que ele não tinha como repetir com sucesso garantido.
 - **Número de série de material** — continua sendo **digitado pelo operador** e de propósito não
   passa por este gerador. Retentar com outro número gravaria algo que ninguém digitou.
 - **Números de outros módulos do CRM** — a varredura foi do almoxarifado.
+
+---
+
+## Etapa 37 — O pedido de compra passa a saber quanto já chegou (ENTREGUE — 2026-09-16)
+
+**O que mudou, em uma frase:** receber **parte** de um pedido de compra virou um gesto possível na
+tela — o sistema passou a guardar quanto de cada linha do pedido já chegou, a mostrar o **saldo
+pendente** de cada material e a **recusar** o que passa desse saldo sem autorização de Compras ou do
+Administrador.
+
+**Esta é feature**, a do **Recebimento** — a mesma da Etapa 36 —, e ela fecha exatamente o que a 36
+declarou que não cobria. O problema era medido, não suposto: **um pedido de 10 unidades podia receber
+25 em três recebimentos e continuar marcado como 10 e ABERTO.** Nada no sistema escrevia quanto de
+cada linha do pedido já tinha chegado. E, do outro lado, escolher *"Por Pedido de Compra"* abria a
+lista de itens **vazia**: o operador não conseguia dizer "chegaram 6 dos 10, o resto vem depois", e o
+servidor completava sozinho o **pedido inteiro**. De quebra, **21 comandos mortos** que falhavam em
+silêncio a cada arranque do servidor foram apagados.
+
+> ### ⚠️ Leia antes de abrir a tela: NÃO existe tela para criar um pedido de compra
+>
+> **Nenhum lugar do sistema grava um pedido de compra.** O módulo **Compras** tem as três abas
+> (pedidos, fornecedores, cotações) e **nenhuma tem tela de criação** — o botão "Novo Pedido" volta
+> para a lista. O banco de produção tem **zero** pedidos.
+>
+> **Consequência prática:** ao escolher a forma **"Por Pedido de Compra"**, o campo *Número do
+> Pedido de Compra* **abre vazio**. Não é defeito — é o que esta etapa declaradamente não cobre, e é
+> a **Etapa 38** que resolve.
+>
+> **Por isso o roteiro abaixo começa inserindo um pedido por SQL.** O comando pronto está na letra
+> **F13** do documento de novidades (`docs/almoxarifado-novidades-por-etapa.md`) e está repetido no
+> passo 1. **Sem esse passo não há nada para demonstrar.**
+
+### Onde se percebe cada mudança
+
+| Tela | O que você vai notar |
+|---|---|
+| **Recebimentos → Novo Recebimento → Por Pedido de Compra** | O campo do pedido lista os pedidos que **ainda têm saldo** — e também os que o Compras abriu e ainda não preencheu. Pedido totalmente recebido **some da lista** |
+| **Ao escolher o pedido** | Aparece o bloco **"Itens do pedido"**: cada linha com o material, o código e **"Saldo pendente: N"**, e um campo de quantidade editável ao lado |
+| **Ao digitar acima do saldo** | Aparece em vermelho, embaixo da linha: *"Acima do saldo: 1 a mais que o saldo do pedido (4)"* |
+| **Ao salvar acima do saldo, como Almoxarife** | Recusado: *"Quantidade recebida (5) maior que o saldo do pedido (4) para o material ⟨código⟩ — a autorização de excedente é de Compras ou do Administrador"*. O que você digitou **continua lá** |
+| **Como Compras ou Administrador** | Aparece a caixa **"Autorizo o recebimento acima do pedido"**. Marcada, o recebimento entra e a auditoria registra **"Excedente autorizado"** |
+| **Pedido que o Compras ainda não preencheu** | *"Pedido de compra ⟨número⟩ não tem itens lançados no módulo Compras."* — mensagem **diferente** da do pedido quitado |
+| **Pedido totalmente recebido** | *"Este pedido já foi recebido por completo."* |
+| **Depois de Processar Nota** | O saldo pendente do pedido **cai**. Antes de processar, ele não se mexe — o pedido só conta o que **entrou no estoque** |
+
+### Roteiro de teste manual
+
+**Preparação — e este passo é obrigatório hoje**
+
+1. **Insira um pedido de compra por SQL.** Não há tela que faça isso. Abra o banco e rode, trocando
+   `F1` pelo id de um fornecedor real e `M1` pelo id de um material real (e `'COD-M1'` pelo código
+   desse material, para a mensagem de recusa sair legível):
+
+   ```sql
+   SELECT id, nome FROM fornecedores LIMIT 3;
+   SELECT id, codigo FROM materiais_almoxarifado LIMIT 3;
+
+   INSERT INTO pedidos_compra (numero, fornecedor_id, valor_total, data_pedido, status, observacoes)
+   VALUES ('PC-TESTE-37', F1, 500, date('now'), 'aprovado', 'pedido de teste da Etapa 37 - apagar depois');
+
+   INSERT INTO itens_pedido_compra (pedido_id, material_id, codigo, descricao, quantidade, valor_unitario, unidade)
+   SELECT id, M1, 'COD-M1', 'item de teste', 10, 50, 'UN'
+     FROM pedidos_compra WHERE numero = 'PC-TESTE-37';
+   ```
+
+   Você acabou de criar um pedido de **10 unidades** de um material. Para os passos 8 e 9 vai
+   precisar de um segundo usuário com perfil **Compras** (ou do **Administrador**).
+
+**O pedido aparece, e as linhas vêm com o saldo**
+
+2. Entre como **Almoxarife** (ou Administrador) e vá em **Almoxarifado → Recebimentos → Novo
+   Recebimento**. Em *Forma de recebimento*, escolha **Por Pedido de Compra**.
+3. Abra o campo *Número do Pedido de Compra* → **`PC-TESTE-37` está na lista**, com o nome do
+   fornecedor ao lado.
+4. Escolha o pedido → aparece o bloco **"Itens do pedido"** com a linha do material e
+   **"Saldo pendente: 10"**, e um campo de quantidade ao lado. **Antes desta etapa esse bloco não
+   existia: a tela mostrava só o campo do pedido, e o servidor recebia o pedido inteiro.**
+
+**O parcial — é o coração da etapa**
+
+5. Digite **6** no campo da linha e salve. O recebimento entra normalmente.
+6. **A verificação que surpreende, e está certa:** abra **Novo Recebimento** de novo e escolha o
+   mesmo `PC-TESTE-37` → ele **continua na lista** e o saldo pendente **continua 10**. O pedido só
+   passa a contar quando o material **entra no estoque**, não quando o documento nasce. Feche sem
+   salvar.
+7. **Leve o recebimento do passo 5 até o estoque:** abra o documento na lista e avance
+   **Iniciar Conferência → Finalizar Conferência → Encaminhar para Compras → Encaminhar para
+   Faturamento → Iniciar Entrada de NF → Preencher Dados da NF** (preencha número, série, datas e
+   valor total) **→ Processar Nota**.
+   Agora volte a **Novo Recebimento → Por Pedido de Compra → `PC-TESTE-37`** → a linha mostra
+   **"Saldo pendente: 4"**.
+
+**A recusa, e a autorização**
+
+8. **Como Almoxarife**, digite **5** na linha (o saldo é 4) → aparece embaixo, em vermelho:
+   *"Acima do saldo: 1 a mais que o saldo do pedido (4)"*. Salve mesmo assim → a recusa aparece na
+   tela:
+   *"Quantidade recebida (5) maior que o saldo do pedido (4) para o material ⟨código⟩ — a
+   autorização de excedente é de Compras ou do Administrador"*.
+   **Repare em duas coisas:** o **5** que você digitou continua lá (nada é perdido), e a mensagem diz
+   **quem resolve** — não manda você marcar uma caixa que o seu perfil não tem.
+9. **Entre como Compras** (ou **Administrador**) e repita o passo 8. Agora, junto com o aviso,
+   aparece a caixa **"Autorizo o recebimento acima do pedido"**.
+   **Duas verificações negativas que valem o clique:** a caixa **não** aparece para o Almoxarife, e
+   **não** aparece enquanto nenhuma linha estiver acima do saldo.
+   **Marque a caixa** e salve → o recebimento entra. Vá em **Almoxarifado → Auditoria** e confirme a
+   linha **"Excedente autorizado"** com o seu nome.
+
+**O pedido fecha e some**
+
+10. Crie mais um recebimento contra o `PC-TESTE-37` com as **4** restantes e leve-o até
+    **Processar Nota** (mesma sequência do passo 7).
+11. Volte a **Novo Recebimento → Por Pedido de Compra** → **`PC-TESTE-37` não está mais na lista.**
+    Pedido totalmente recebido sai do campo de escolha.
+12. **A conferência final, pelo banco** (é a prova do que nenhuma tela mostra hoje):
+
+    ```sql
+    SELECT quantidade, quantidade_recebida
+      FROM itens_pedido_compra
+     WHERE pedido_id = (SELECT id FROM pedidos_compra WHERE numero = 'PC-TESTE-37');
+    ```
+
+    Tem de vir `10 | 10` (mais o que você tiver autorizado de excedente no passo 9).
+
+**Limpeza**
+
+13. **Apague o pedido de teste.** São **dois** comandos, e os dois são necessários: apagar o pedido
+    **não** apaga as linhas dele.
+
+    ```sql
+    DELETE FROM itens_pedido_compra
+     WHERE pedido_id = (SELECT id FROM pedidos_compra WHERE numero = 'PC-TESTE-37');
+    DELETE FROM pedidos_compra WHERE numero = 'PC-TESTE-37';
+    ```
+
+### O que esperar no dia a dia
+
+- **Limpar o campo de uma linha é "esta linha não chegou".** A linha sai do recebimento e **não**
+  entra como zero. Recebeu só dois dos cinco materiais do pedido? Preencha dois e deixe os outros
+  três vazios.
+- **O saldo é por MATERIAL, não por linha.** Se o pedido tiver duas linhas do mesmo material (preços
+  ou prazos diferentes — é legítimo), o teto é a **soma** das duas, e o aviso "Acima do saldo"
+  aparece nas **duas** linhas quando a soma do que você digitou passa do teto. É de propósito: a
+  tela mostra exatamente o número que o servidor cobra.
+- **O saldo só cai quando o material entra no estoque.** Criar o recebimento não mexe no pedido —
+  quem mexe é o **Processar Nota** (ou a aprovação direta). Isso é o que permite corrigir um
+  recebimento antes de processá-lo sem bagunçar o pedido.
+- **Processar duas vezes não conta duas vezes.** O reprocessamento de uma nota não soma de novo no
+  pedido.
+- **Duas mensagens parecidas dizem coisas diferentes.** *"não tem itens lançados no módulo Compras"*
+  é o pedido que o Compras abriu e ainda não preencheu — o problema está **lá**, não aqui.
+  *"Este pedido já foi recebido por completo"* é pedido fechado. Nos dois casos o botão de salvar
+  fica desabilitado.
+- **Quem autoriza o excedente é Compras ou o Administrador — a mesma lista da Etapa 36.** Nada mudou
+  em quem pode. Se você é Almoxarife e leu a recusa, o caminho é chamar Compras: não há controle
+  escondido na sua tela.
+- **O preço do item vem do pedido.** A tela não pergunta preço a quem recebe (preço é informação do
+  pedido, não de quem descarrega), e o sistema usa o valor unitário da linha do pedido — é ele que
+  alimenta o custo médio do material. Se a nota vier com preço diferente, quem corrige é a **entrada
+  fiscal**, como sempre foi.
+
+### O que esta etapa NÃO cobre
+
+- **Criar um pedido de compra.** Não existe tela, em nenhuma das três abas do Compras, e nenhum
+  ponto do sistema grava um pedido. Em produção o campo de pedidos abre **vazio**. **É a Etapa 38**,
+  já desenhada: o pedido de compra ganha criação, com importação de planilha como carga inicial e o
+  botão **"Gerar pedido"** na Reposição — que hoje gera solicitação de compra e **para ali**, porque
+  ninguém converte solicitação em pedido. **Enquanto isso, o teste manual depende do SQL do passo
+  1.**
+- **Ver o saldo do pedido em alguma TELA.** A quantidade pedida, a recebida, o saldo e a situação
+  (**ABERTO / PARCIAL / RECEBIDO**) são calculados e existem — mas hoje só aparecem linha a linha no
+  formulário de recebimento. A tela de **Compras** não foi tocada.
+- **Material que chega FORA do pedido.** Ele é aceito, sem régua de saldo e **sem aviso** — não há
+  saldo contra o que medir. Pela tela o caso nem se produz (ela só oferece as linhas do pedido); é
+  alcançável só por integração.
+- **Dois recebimentos abertos contra o mesmo pedido.** Como o saldo só conta o que entrou no
+  estoque, dois documentos de 10 criados antes de processar qualquer um passam os dois, e o pedido
+  de 10 termina com 20 contados. Conferir de novo no processamento seria pior (travaria uma nota com
+  o estoque já creditado). E esse excesso **não deixa linha de auditoria nenhuma**.
+- **Estorno ou cancelamento de recebimento.** Não existe — e portanto o que um recebimento somou ao
+  pedido também não se desfaz. É outra feature.
+- **A conferência física continua sendo a da Etapa 36.** O campo "Qtd. conferida" do painel mede
+  contra a **esperada daquele documento**; o saldo do pedido é medido na **criação** do recebimento.
+  São duas réguas, em dois momentos, de propósito.
+- **Divergência formal.** Receber menos do que o pedido deixa saldo em aberto e nada mais: não há
+  registro de divergência com número, dono, prazo e desfecho.
+- **Os 51 comandos iguais aos 21 apagados, no núcleo do CRM.** A limpeza valeu para o arquivo do
+  almoxarifado. O arquivo principal do servidor tem 51 do mesmo tipo, fora do escopo do módulo.
 
 ---
 

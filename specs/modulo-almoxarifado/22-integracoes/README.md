@@ -3,17 +3,56 @@
 > **Status:** 🟡 — a fatia de **Compras e custo por projeto foi entregue na Etapa 14** (range
 > `b276dca..2de7944`, 2026-08-25); Engenharia/BOM e Produção/OP seguem **bloqueadas por
 > dependência, com a medição escrita** (ver abaixo) · **Spec original:** seções 23, 24, 25
-> **Última atualização:** 2026-08-25 — fechamento da Etapa 14
+> **Última atualização:** 2026-09-16 — a correção medida na Fase 0 da Etapa 38 (Compras **não**
+> está maduro: não há como criar pedido) · antes: 2026-08-25 — fechamento da Etapa 14
 
 ## Contexto importante
 
+> ⚠️ **CORREÇÃO (2026-09-16, Fase 0 da Etapa 38): as duas frases seguintes ESTAVAM ERRADAS, e o
+> erro custou caro — ele fez a Etapa 37 inteira ser construída sobre um dado que ninguém consegue
+> criar.** Ficam escritas, riscadas, em vez de apagadas em silêncio:
+> 1. ~~*"o gargalo é os outros módulos serem usados"*~~ — **não é desuso, é impossibilidade.**
+>    Medido: **nenhum código da aplicação insere `pedidos_compra` nem `itens_pedido_compra`**. A
+>    rota core `server/index.js:20002` é **GET-only**, não existe `POST` em lugar nenhum, e o único
+>    escritor de produção dessas tabelas é o acumulador da Etapa 37
+>    (`receiptService.js`, `UPDATE itens_pedido_compra SET quantidade_recebida = …`). Dos 12
+>    arquivos que tocam as tabelas, **11 são de teste**. Ninguém deixou de usar a tela: **não há
+>    tela.**
+> 2. ~~*"o módulo Compras está maduro (pedidos, itens, `receiptService` com workflow até PROCESSADO
+>    integrado a contas a pagar)"*~~ — **estava errado: a Fase 0 da Etapa 14 mediu a maturidade do
+>    módulo ERRADO.** O que ela mediu maduro foi o `receiptService`, que é **do almoxarifado**, e atribuiu
+>    o resultado ao **Compras**. O core Compras **não tem UMA tela de criação nas três abas**:
+>    "Novo Pedido", "Editar", `fornecedores/novo` e `cotacoes/nova` caem todos no `path="*"` de
+>    `client/src/App.js` e **voltam para a lista** (`client/src/components/Compras.js`). Acervo do
+>    dump de produção (161 MB): `pedidos_compra = 0`, `itens_pedido_compra = 0`, `cotacoes = 0` — o
+>    vocabulário de status do pedido **nunca foi exercido**.
+>
+> **O elo quebrado, nomeado:** a reposição (Etapa 11) gera `solicitacoes_compra_almoxarifado`, e
+> `vincularPedidoCompra` (`purchaseService.js:52`) exige que o pedido **já exista** e não tem
+> consumidor no client — **ninguém converte solicitação em pedido**.
+>
+> **Quem fecha isto: a Etapa 38** — *"o pedido de compra ganha criação"*, já decidida e desenhada
+> (`docs/superpowers/specs/2026-09-16-crm-etapa38-pedido-de-compra-design.md` +
+> `docs/superpowers/plans/2026-09-16-crm-etapa38-pedido-de-compra.md`; medição em
+> `.superpowers/sdd/etapa38-fase0-pedido-de-compra.md`). Escopo: extrair `/api/compras/*` de
+> `index.js` para `routes/compras.js` e montá-lo no harness (hoje **zero** testes batem em
+> `/api/compras` e o core tem **0** Zod), `POST`/`PUT` com itens, formulário e rotas **antes** do
+> `path="*"`, importação de planilha como carga inicial, e "Gerar pedido" na Reposição fechando o
+> elo acima. **É a etapa que tira a Etapa 37 de inerte.** Uma ressalva de escopo, já decidida pelo
+> caminho reversível: a tela é do módulo **core Compras**, mas a spec dela vive **aqui**, nesta
+> feature 22, como "fatia Compras" — e `itens_pedido_compra`, ao contrário do que o design da 37
+> dizia, **não é tabela do core**: o `CREATE TABLE` está em
+> `server/services/almoxarifado/schema.js:1311`.
+
 As integrações dependem de dados que hoje **não existem em produção**: `projetos` (0 registros),
 `pedidos_compra` (0), `producao_ops` (0), `ordens_servico` (1). O almoxarifado já tem as colunas
-de vínculo (`projeto_id`, `os_id`) — o gargalo é os outros módulos serem usados.
+de vínculo (`projeto_id`, `os_id`) — ~~o gargalo é os outros módulos serem usados~~ *(errado — ver
+a correção acima: no caso de Compras, o gargalo é não haver como criar o dado)*.
 
-**Medição da Fase 0 da Etapa 14 (2026-08-24), que definiu o escopo real:** o módulo **Compras
+**Medição da Fase 0 da Etapa 14 (2026-08-24), que definiu o escopo real:** ~~o módulo **Compras
 está maduro** (pedidos, itens, `receiptService` com workflow até PROCESSADO integrado a contas a
-pagar) e foi integrado de verdade; **BOM não existe em lugar nenhum do sistema** (nem tabela,
+pagar)~~ *(**estava errado** — ver a correção acima; maduro era o `receiptService`, que é do
+almoxarifado)* e foi integrado de verdade; **BOM não existe em lugar nenhum do sistema** (nem tabela,
 nem tela, nem spec de Engenharia implementada) e o **MES existe sem uso real** (schema próprio,
 0 OPs). Integrar com isso seria stub fingindo feature — os blocos correspondentes ficaram
 **bloqueados por dependência**, não prometidos.
@@ -21,9 +60,18 @@ nem tela, nem spec de Engenharia implementada) e o **MES existe sem uso real** (
 ## O que já existe
 
 - Colunas de vínculo em movimentações, requisições, reservas, recebimentos (projeto/OS/cliente).
-- Compras: fornecedores + rotas de pedidos/cotações (`index.js`), workflow de recebimento NF
-  integrado a contas a pagar (feature 08), `itens_pedido_compra`, solicitações automáticas por
-  mínimo (feature 18), aviso por e-mail a Compras de itens sem estoque.
+- Compras: fornecedores + rotas de pedidos/cotações (`index.js`) — **e "rotas" aqui quer dizer
+  LEITURA: são GET-only, não há `POST` de pedido** (medido na Fase 0 da Etapa 38; a única escrita
+  do core é o `DELETE /api/compras/:tipo/:id` genérico, que apaga o pedido e **deixa os itens
+  órfãos**) —, workflow de recebimento NF integrado a contas a pagar (feature 08),
+  `itens_pedido_compra` (tabela do **almoxarifado**, `schema.js:1311`, hoje com saldo por linha
+  desde a Etapa 37), solicitações automáticas por mínimo (feature 18), aviso por e-mail a Compras
+  de itens sem estoque.
+- **Recebimento contra o pedido de compra — ENTREGUE na Etapa 37** (`ea0aa4f..13ad237`, feature
+  08): `itens_pedido_compra.quantidade_recebida`, o elo `pedido_item_id` no item do recebimento,
+  saldo e situação (`ABERTO`/`PARCIAL`/`RECEBIDO`) derivados na leitura sem tocar o `status` do
+  core, e a recusa de receber acima do saldo. **Inerte em produção até a Etapa 38**, pelo motivo da
+  correção acima.
 - Produção (MES): módulo `services/producao/` com schema próprio (`producao_ops`) — sem ponte
   com almoxarifado.
 - Relatório "consumo por OS" no dashboard: o dashboard usa `GET /relatorios/consumo-os`, que
@@ -113,5 +161,9 @@ módulo que ninguém opera criaria contrato contra comportamento não exercitado
 ## Dependências
 
 - Praticamente todas as features anteriores; e maturidade dos módulos
-  Compras/Produção/Projetos fora do almoxarifado. **Compras provou maturidade e foi integrado
-  (Etapa 14); Produção e Engenharia continuam sendo o bloqueio dos itens abertos.**
+  Compras/Produção/Projetos fora do almoxarifado. ~~**Compras provou maturidade e foi integrado
+  (Etapa 14)**~~ — **esta frase ESTAVA ERRADA e foi corrigida em 2026-09-16** (ver "Contexto
+  importante"): o que a Etapa 14 integrou foram as **solicitações** e o **custo por projeto**; o
+  **pedido** de compra continua sem criador, e é a Etapa 38 que fecha isso. **Produção e Engenharia
+  continuam sendo o bloqueio dos itens abertos** — e por motivo diferente: lá o dado não existe
+  como entidade, aqui existe a tabela e falta a porta.
