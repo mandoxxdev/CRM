@@ -1,10 +1,16 @@
 const { dbRun, dbGet, dbAll } = require('./db');
 // Etapa 36 (RN-11): o enum de `tipo_recebimento` tem fonte UNICA em schema.js — quem grava (aqui) e
 // quem valida (schemas.js/Zod) leem a MESMA lista. Sem ciclo: schema.js so requer ./db.
-// Os dois nomes saem da PROPRIA lista por desestruturacao posicional em vez de `TIPOS_RECEBIMENTO[0]`
-// / `[1]` espalhados no default derivado abaixo: assim a leitura continua nominal, nenhuma string do
-// enum e reescrita a mao, e reordenar a lista em schema.js nao inverte o default em silencio (com
-// indice nu, inverteria — e nenhum teste de hoje pegaria, porque a coluna e write-only).
+// Os dois nomes saem da PROPRIA lista, sem reescrever nenhuma string do enum a mao, e o default
+// derivado abaixo le por NOME em vez de `TIPOS_RECEBIMENTO[0]` / `[1]` espalhados.
+//
+// ⚠️ Mas a ligacao e POSICIONAL, e isso NAO e seguro a reordenacao (revisao final, F4 — o
+// comentario anterior afirmava o contrario, que e o oposto da verdade): se `TIPOS_RECEBIMENTO`
+// mudar de ordem em schema.js, `TIPO_NOTA_FISCAL` passa a valer 'PEDIDO_COMPRA' e vice-versa, em
+// silencio. Nenhum teste de hoje pega: a coluna e write-only e o unico ramo de comportamento
+// compara com `TIPO_PEDIDO_COMPRA`, entao o enum continua valido e o ramo troca sozinho.
+// Fica assim de proposito: exportar dois nomes proprios de schema.js foi declarado FORA DE ESCOPO
+// na T1 desta etapa. Quem reordenar a lista tem de vir ate aqui.
 const { TIPOS_RECEBIMENTO } = require('./schema');
 const [TIPO_NOTA_FISCAL, TIPO_PEDIDO_COMPRA] = TIPOS_RECEBIMENTO;
 const { registrarAuditoria } = require('./audit');
