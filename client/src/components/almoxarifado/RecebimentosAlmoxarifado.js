@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
@@ -61,7 +61,21 @@ const RecebimentosAlmoxarifado = () => {
   const [filtroStatus, setFiltroStatus] = useState('');
   const [filtroEtapa, setFiltroEtapa] = useState('');
   const [detalhe, setDetalhe] = useState(null);
+  // Etapa 35 (RN-07/RN-08). `selectedId` é a linha que o usuário clicou — setado SINCRONAMENTE,
+  // antes do GET. É ele que sustenta o painel enquanto o detalhe carrega: sem ele o painel teria
+  // de continuar gatilhado por `detalhe`, e anular `detalhe` na troca faria a coluna de 420px
+  // sumir e voltar a cada clique. Molde: `RequisicoesList.js`, o trio `selectedId` /
+  // `loadedDetalheIdRef` / `detalheFetchSeqRef` de `abrirDetalhe`.
+  const [selectedId, setSelectedId] = useState(null);
   const [loadingDetalhe, setLoadingDetalhe] = useState(false);
+  // `idCarregadoRef`: qual id está REALMENTE dentro de `detalhe`. É a guarda que faz
+  // `setDetalhe(null)` acontecer só na TROCA de linha, nunca no refetch do mesmo id — anular
+  // sempre desmontaria o bloco de anexos e jogaria fora o arquivo já escolhido no input (o fix F2
+  // da Etapa 34, travado pelo cenário (g) da suíte).
+  const idCarregadoRef = useRef(null);
+  // `detalheFetchSeqRef`: dois cliques rápidos deixam duas requisições em voo, e sem contador a
+  // ÚLTIMA A RESPONDER vencia — o painel terminava no registro que o usuário já tinha abandonado.
+  const detalheFetchSeqRef = useRef(0);
   const [saving, setSaving] = useState(false);
   const [showNovo, setShowNovo] = useState(false);
   const [showFiscal, setShowFiscal] = useState(false);
@@ -133,10 +147,17 @@ const RecebimentosAlmoxarifado = () => {
   };
 
   const abrirDetalhe = async (id) => {
+    const seq = ++detalheFetchSeqRef.current;
+    setSelectedId(id);
     setLoadingDetalhe(true);
+    // Só na TROCA de id (ver `idCarregadoRef`): no refetch do mesmo id o `detalhe` fica de pé e o
+    // bloco de anexos não remonta.
+    if (idCarregadoRef.current !== id) setDetalhe(null);
     try {
       const res = await api.get(`/almoxarifado/recebimentos/${id}`);
+      if (seq !== detalheFetchSeqRef.current) return;   // chegou atrasada: outro clique venceu
       setDetalhe(res.data);
+      idCarregadoRef.current = id;
       setFiscalForm({
         ...EMPTY_FISCAL,
         nota_fiscal: res.data.nota_fiscal || '',
@@ -160,10 +181,25 @@ const RecebimentosAlmoxarifado = () => {
         valor_total_nota: res.data.valor_total_nota ?? '',
       });
     } catch {
+      if (seq !== detalheFetchSeqRef.current) return;
       toast.error('Erro ao carregar recebimento');
+      setSelectedId(null);
+      setDetalhe(null);
+      idCarregadoRef.current = null;
     } finally {
-      setLoadingDetalhe(false);
+      // Só a requisição VENCEDORA desliga o spinner: o `finally` de uma resposta atrasada
+      // apagaria o "carregando" do clique que ainda está em voo.
+      if (seq === detalheFetchSeqRef.current) setLoadingDetalhe(false);
     }
+  };
+
+  // Fechar é fechar: além de zerar o painel, BUMPA a sequência para descartar a resposta em voo —
+  // senão o GET do clique anterior reabriria o painel sozinho depois do ✕.
+  const fecharDetalhe = () => {
+    ++detalheFetchSeqRef.current;
+    setSelectedId(null);
+    setDetalhe(null);
+    idCarregadoRef.current = null;
   };
 
   const workflow = async (acao, msg) => {
@@ -432,7 +468,9 @@ const RecebimentosAlmoxarifado = () => {
           <>
             {/* Etapa 35: o botão era só o ícone — sem texto e sem nome acessível, nenhum leitor
                 de tela o anunciava e nenhum teste conseguia selecioná-lo. Mesmo padrão do refresh
-                do detalhe de requisições (`RequisicoesList.js:864`). */}
+                do detalhe de requisições, o botão `title="Atualizar detalhe e saldos"` de
+                `RequisicoesList.js` (referência por título, não por linha: o número rotou entre a
+                T3 e a T4 desta mesma etapa). */}
             <button type="button" className="btn-almox-secondary" title="Atualizar lista" onClick={loadRecebimentos}>
               <FiRefreshCw size={13} />
             </button>
@@ -467,7 +505,9 @@ const RecebimentosAlmoxarifado = () => {
         </select>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: detalhe ? '1fr 420px' : '1fr', gap: 20 }}>
+      {/* `selectedId` e NÃO `detalhe` (Etapa 35): o painel em carga já precisa da coluna de
+          420px, senão o grid reflui duas vezes a cada clique. */}
+      <div style={{ display: 'grid', gridTemplateColumns: selectedId ? '1fr 420px' : '1fr', gap: 20 }}>
         <div className="almox-table-container">
           {/* A ORDEM dos ramos é a regra, não estilo: com o ramo de `erro` DEPOIS do teste de
               lista vazia, a rede caída volta a renderizar "Nenhum recebimento registrado" e o
@@ -504,7 +544,7 @@ const RecebimentosAlmoxarifado = () => {
                 {recebimentos.map((r) => {
                   const st = STATUS_INFO[r.status] || { label: r.status, cls: 'ajuste' };
                   return (
-                    <tr key={r.id} style={{ cursor: 'pointer', background: detalhe?.id === r.id ? 'rgba(79,172,254,0.06)' : '' }}
+                    <tr key={r.id} style={{ cursor: 'pointer', background: selectedId === r.id ? 'rgba(79,172,254,0.06)' : '' }}
                       onClick={() => abrirDetalhe(r.id)}>
                       <td style={{ fontWeight: 700, fontFamily: 'monospace', color: '#4facfe' }}>{r.numero}</td>
                       <td>{r.nota_fiscal || '—'}</td>
@@ -520,18 +560,25 @@ const RecebimentosAlmoxarifado = () => {
           )}
         </div>
 
-        {detalhe && (
+        {/* Gatilhado por `selectedId`, não por `detalhe` (Etapa 35, RN-07): o painel é do CLIQUE,
+            o conteúdo é do registro carregado. Como `detalhe` agora é nulo enquanto o novo
+            carrega, tudo aqui dentro que desreferencia `detalhe` precisa da própria guarda — o
+            cabeçalho por `?.`, o corpo pelo par `loadingDetalhe || !detalhe`, e o bloco de anexos
+            pelo `{detalhe && …}` do fim. */}
+        {selectedId && (
           <div className="almox-detail-panel">
             <div className="almox-detail-panel-header">
               <div>
-                <div style={{ fontWeight: 700, fontFamily: 'monospace', color: '#4facfe' }}>{detalhe.numero}</div>
-                <span className={`almox-badge almox-badge-${STATUS_INFO[detalhe.status]?.cls || 'ajuste'}`}>
-                  {STATUS_INFO[detalhe.status]?.label || detalhe.status}
-                </span>
+                <div style={{ fontWeight: 700, fontFamily: 'monospace', color: '#4facfe' }}>{detalhe?.numero || '...'}</div>
+                {detalhe && (
+                  <span className={`almox-badge almox-badge-${STATUS_INFO[detalhe.status]?.cls || 'ajuste'}`}>
+                    {STATUS_INFO[detalhe.status]?.label || detalhe.status}
+                  </span>
+                )}
               </div>
-              <button type="button" className="almox-modal-close" onClick={() => setDetalhe(null)}>✕</button>
+              <button type="button" className="almox-modal-close" onClick={fecharDetalhe}>✕</button>
             </div>
-            {loadingDetalhe ? (
+            {loadingDetalhe || !detalhe ? (
               <div className="almox-loading"><FiRefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} /></div>
             ) : (
               <div style={{ padding: 20, maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
@@ -634,17 +681,29 @@ const RecebimentosAlmoxarifado = () => {
                 `abrirDetalhe(detalhe.id)`, que começa em `setLoadingDetalhe(true)`. Dentro do
                 ternário, cada uma dessas ações desmontava o corpo e jogava fora o arquivo já
                 escolhido, com um segundo GET de anexos de brinde; "Anexar" respondia
-                "Arquivo é obrigatório" sem nada na tela explicando. Aqui fora o `id` não muda
-                durante o refetch (`abrirDetalhe` nunca zera `detalhe`), então o bloco não remonta.
-                `detalhe.id` e NÃO o id da linha clicada: o bloco lê o REGISTRO CARREGADO —
-                trocar de linha troca o `entidade_id`, e `recebimentos[0].id` mostraria os
-                anexos de outro recebimento sem erro nenhum na tela.
+                "Arquivo é obrigatório" sem nada na tela explicando. ⚠️ Etapa 35: a frase antiga
+                ("`abrirDetalhe` nunca zera `detalhe`, então o bloco não remonta") FICOU ERRADA —
+                `abrirDetalhe` agora ZERA, quando o id muda (RN-07). A justificativa do F2
+                continua de pé, mas por outro motivo: a guarda `idCarregadoRef.current !== id`.
+                No refetch do MESMO id o `detalhe` não é anulado, o `{detalhe && …}` abaixo segue
+                verdadeiro entre os dois commits e o React reconcilia o mesmo elemento na mesma
+                posição — o bloco continua montado com o arquivo já escolhido (cenário (g), que
+                mede IDENTIDADE de nó, não presença).
+                E esse `{detalhe && …}` é obrigatório agora, não decorativo: o painel passou a ser
+                gatilhado por `selectedId`, então sem ele `detalhe.id` estouraria na troca de
+                linha. Ele é também a régua da RN-07 (cenário (k)) — trocar de linha tira o bloco
+                de cena em vez de deixá-lo oferecendo upload com o `entidade_id` ANTIGO.
+                `detalhe.id` e NÃO o id da linha clicada (`selectedId`): o bloco lê o REGISTRO
+                CARREGADO — `selectedId` aqui anexaria a um detalhe que ainda nem chegou, e
+                `recebimentos[0].id` mostraria os anexos de outro recebimento sem erro na tela.
                 Sem gate novo: quem vê o recebimento vê os anexos dele; anexar/remover
                 continua decidido pelo backend (requirePermission), com a UI barrando antes
                 do formulário pelo próprio hook do componente. */}
-            <div style={{ padding: '0 20px 20px' }}>
-              <AnexosDocumento entidade="recebimento" entidadeId={detalhe.id} titulo="Anexos" />
-            </div>
+            {detalhe && (
+              <div style={{ padding: '0 20px 20px' }}>
+                <AnexosDocumento entidade="recebimento" entidadeId={detalhe.id} titulo="Anexos" />
+              </div>
+            )}
           </div>
         )}
       </div>

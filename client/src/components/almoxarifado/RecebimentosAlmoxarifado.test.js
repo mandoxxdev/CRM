@@ -431,7 +431,8 @@ test('(i) refresh que falha nao deixa a lista velha na tela', async () => {
   // O botao de refresh do cabecalho (`:409`) e so um icone, sem texto nem nome acessivel — a
   // Etapa 35 lhe deu `title="Atualizar lista"` no produto, que e o que torna este seletor
   // possivel (e o botao, anunciavel por leitor de tela). Precedente:
-  // `RequisicoesList.js:864`, `title="Atualizar detalhe e saldos"`.
+  // o botao `title="Atualizar detalhe e saldos"` de `RequisicoesList.js` (referência por título,
+  // não por linha — o número citado aqui antes já estava errado).
   await clicar(container.querySelector('[title="Atualizar lista"]'));
   // A ORDEM destas tres asserções é ela mesma um achado, medido no controle positivo desta task:
   // `linhas()` VEM PRIMEIRO de propósito. O único jeito de a tabela velha voltar a renderizar é o
@@ -464,4 +465,83 @@ test('(j) falha ao carregar materiais aparece DENTRO do modal de novo recebiment
   await clicar(botaoPorTexto('Novo Recebimento'));
   expect(container.querySelector('input.almox-search-input')).not.toBeNull();   // o modal montou
   expect(container.textContent).toContain('Não foi possível carregar a lista de materiais.');
+});
+
+/* ── (k) RN-07: trocar de linha nao pode mostrar o registro anterior sob o id novo ─────────────
+ * `abrirDetalhe` nunca anulava `detalhe` (hoje ele anula, sob a guarda de `idCarregadoRef`): so
+ * chamava `setLoadingDetalhe(true)` e
+ * `setDetalhe(res.data)` no SUCESSO. Com o bloco de anexos FORA do ternario de `loadingDetalhe`
+ * (fix `c5d9e99` da Etapa 34, cenario (g) acima), clicar em B deixava o painel exibindo A inteiro
+ * — cabecalho, itens e `AnexosDocumento` com o `entidade_id` de A — ate o GET de B chegar. Um
+ * arquivo escolhido nessa janela era anexado a A, sem erro nenhum na tela.
+ *
+ * O GET de B e DEFERIDO a mao pelo mesmo motivo do (g) — ver o porque escrito no cabecalho
+ * daquele cenario: sem segurar a resposta, o `act` coalesce o commit intermediario e a janela
+ * que o usuario vive nunca chega ao DOM — o cenario ficaria verde medindo outra coisa.
+ */
+test('(k) trocar de linha nao mostra o recebimento anterior sob o id novo', async () => {
+  await renderizar();
+  await clicar(linhaDe('REC-2026-058'));
+  const blocoDo58 = blocoAnexos();
+  expect(blocoDo58).not.toBeNull();                       // metade positiva
+  expect(chamadasAnexos()).toHaveLength(1);
+
+  const original = api.get.getMockImplementation();
+  let liberar41;
+  api.get.mockImplementation((url) => {
+    if (url === '/almoxarifado/recebimentos/41') {
+      return new Promise((resolve) => { liberar41 = () => resolve({ data: DETALHES[41] }); });
+    }
+    return original(url);
+  });
+
+  await clicar(linhaDe('REC-2026-041'));
+  expect(liberar41).toBeInstanceOf(Function);             // ancora: o GET do 41 esta EM VOO
+
+  // A janela que o usuario vive: o painel existe (nao pisca — `selectedId` o sustenta), mas nao
+  // mostra mais o 58, e o bloco de anexos do 58 saiu de cena.
+  expect(painel()).not.toBeNull();
+  expect(painel().querySelector('.almox-loading')).not.toBeNull();
+  expect(painel().textContent).not.toContain('REC-2026-058');
+  expect(blocoAnexos()).toBeNull();
+  expect(chamadasAnexos()).toHaveLength(1);               // e nenhuma consulta nova ainda
+
+  // Metade positiva do outro lado: quando o 41 chega, o bloco volta com o id DELE.
+  await act(async () => { liberar41(); });
+  await esperarEfeitos();
+  expect(painel().textContent).toContain('REC-2026-041');
+  expect(blocoAnexos()).not.toBeNull();
+  expect(chamadasAnexos().at(-1)[1].params).toEqual({ entidade: 'recebimento', entidade_id: 41 });
+});
+
+/* ── (l) RN-08: resposta fora de ordem ────────────────────────────────────────────────────────
+ * Anular `detalhe` fecha a janela do painel mentiroso, mas NAO a corrida: sem contador de
+ * sequencia, dois cliques rapidos deixam duas requisicoes em voo e a ULTIMA A RESPONDER vence.
+ * Se o 58 (clicado primeiro) responder depois do 41, o painel termina no 58 com o usuario tendo
+ * clicado no 41 — e o `AnexosDocumento` anexaria ao 58. Molde: `RequisicoesList.js`, o par
+ * `fetchSeq`/`detalheFetchSeqRef` de `abrirDetalhe`.
+ */
+test('(l) resposta fora de ordem nao vence — o ULTIMO clique manda', async () => {
+  await renderizar();
+  const original = api.get.getMockImplementation();
+  let liberar58;
+  api.get.mockImplementation((url) => {
+    if (url === '/almoxarifado/recebimentos/58') {
+      return new Promise((resolve) => { liberar58 = () => resolve({ data: DETALHES[58] }); });
+    }
+    return original(url);
+  });
+
+  await clicar(linhaDe('REC-2026-058'));     // fica em voo
+  await clicar(linhaDe('REC-2026-041'));     // resolve normalmente
+  expect(painel().textContent).toContain('REC-2026-041');    // metade positiva
+  expect(liberar58).toBeInstanceOf(Function);
+
+  await act(async () => { liberar58(); });   // a resposta ATRASADA do 58 chega por ultimo
+  await esperarEfeitos();
+
+  expect(painel().textContent).toContain('REC-2026-041');
+  expect(painel().textContent).not.toContain('REC-2026-058');
+  expect(painel().querySelector('.almox-loading')).toBeNull();   // o `finally` fora de ordem nao deixa o painel girando
+  expect(chamadasAnexos().at(-1)[1].params).toEqual({ entidade: 'recebimento', entidade_id: 41 });
 });
