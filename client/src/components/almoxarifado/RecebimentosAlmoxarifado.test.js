@@ -1157,6 +1157,13 @@ test('(u) escolher o pedido carrega os itens com o saldo e o payload leva pedido
   expect(selPedido).not.toBeUndefined();
   expect([...selPedido.options].map((o) => o.value))
     .toEqual(['', '312', '313', '314', '315', '316', '317']);
+  // (revisão final, F6) O `<select>` é alimentado por `?pendentes=1` — o filtro que a T4 criou e
+  // que roda no SQL ANTES do `LIMIT 50` (RN-24). Sem esta asserção, perder o `params` seria
+  // invisível para a suíte: o mock responde a mesma fixture com ou sem ele, e o efeito real (um
+  // banco com 50 pedidos quitados mais novos escondendo o pedido que o operador precisa receber)
+  // só apareceria em produção.
+  expect(api.get).toHaveBeenCalledWith('/almoxarifado/recebimentos-aux/pedidos-compra',
+    { params: { pendentes: 1 } });
   await selecionar(selPedido, '312');
 
   // UMA chamada à rota de itens, e com o id DO PEDIDO escolhido.

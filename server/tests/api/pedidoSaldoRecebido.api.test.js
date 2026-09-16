@@ -444,6 +444,67 @@ async function colunas(db, tabela) {
       'o preco do nao-fatal e a contagem perdida, e ela e o que o warn anuncia');
   });
 
+  // ── (10) (revisao final, F5) o `pedido_item_id` HONRADO: a soma cai na linha que o payload disse ─
+  /**
+   * Achado F5 da revisao da branch: nenhum cenario da etapa media o `pedido_item_id` explicito
+   * sendo OBEDECIDO. Os que existiam mediam o contrario — id forjado de outro pedido (cenario (6)
+   * de `recebimentoExcedentePedido`) e id de outro material (cenario (16), da mesma onda) — e o
+   * caminho normal da tela (a T5 manda `pedido_item_id` em toda linha) ficava sem prova. Com duas
+   * linhas PENDENTES do mesmo material, uma regressao para "menor id com saldo" poria as duas
+   * contagens na linha C e ficaria VERDE em tudo: a regua do saldo e agregada por material, e o
+   * estoque sobe igual. Quem sente e o PEDIDO — a linha D nunca fecharia, e a tela continuaria
+   * oferecendo 6 de um material que ja chegou.
+   *
+   * As duas metades (um item explicito na linha D; e dois itens com ids DISTINTOS) porque a
+   * primeira sozinha nao distingue "obedeceu o id" de "resolveu pelo unico item do payload".
+   */
+  await test('(10) RN-22 com duas linhas pendentes do mesmo material: a soma cai na linha do pedido_item_id enviado', async () => {
+    const mat = await novoMaterial();
+    // C (menor id, saldo 10) e D (saldo 6). "Menor id com saldo" sempre escolheria C.
+    const pedido = await novoPedido([
+      { material_id: mat.id, quantidade: 10 },
+      { material_id: mat.id, quantidade: 6 },
+    ]);
+    const [linhaC, linhaD] = pedido.linhas;
+
+    const criado = await post({
+      pedido_compra_id: pedido.id,
+      itens: [{ material_id: mat.id, pedido_item_id: linhaD, quantidade: 6, quantidade_recebida: 6 }],
+    });
+    assert.strictEqual(criado.status, 201, JSON.stringify(criado.body));
+    const [item] = await itensDo(criado.body.id);
+    assert.strictEqual(item.pedido_item_id, linhaD,
+      'o link gravado tem de ser a linha que o payload declarou, nao a de menor id com saldo');
+
+    const proc = await processarPeloWorkflow(criado.body.id);
+    assert.strictEqual(proc.status, 200, JSON.stringify(proc.body));
+    assert.strictEqual(await recebidaDaLinha(linhaD), 6, 'a linha D e que recebeu os 6');
+    assert.strictEqual(await recebidaDaLinha(linhaC), 0,
+      'somar em C fecharia a linha errada: D continuaria sendo oferecida com saldo que ja chegou');
+
+    // ── segunda metade: DOIS itens, ids DISTINTOS, cada um na sua linha ────────────────────────
+    const outro = await novoPedido([
+      { material_id: mat.id, quantidade: 10 },
+      { material_id: mat.id, quantidade: 6 },
+    ]);
+    const [outroC, outroD] = outro.linhas;
+    const dois = await post({
+      pedido_compra_id: outro.id,
+      itens: [
+        { material_id: mat.id, pedido_item_id: outroC, quantidade: 4, quantidade_recebida: 4 },
+        { material_id: mat.id, pedido_item_id: outroD, quantidade: 6, quantidade_recebida: 6 },
+      ],
+    });
+    assert.strictEqual(dois.status, 201, JSON.stringify(dois.body));
+    assert.deepStrictEqual((await itensDo(dois.body.id)).map((i) => i.pedido_item_id),
+      [outroC, outroD], 'dois itens do MESMO material tem de guardar DOIS links diferentes');
+
+    const proc2 = await processarPeloWorkflow(dois.body.id);
+    assert.strictEqual(proc2.status, 200, JSON.stringify(proc2.body));
+    assert.strictEqual(await recebidaDaLinha(outroC), 4);
+    assert.strictEqual(await recebidaDaLinha(outroD), 6);
+  });
+
   await close();
   console.log(`\n${passed} passou, ${failed} falhou`);
   process.exit(failed ? 1 : 0);
