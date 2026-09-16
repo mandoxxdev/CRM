@@ -2,42 +2,59 @@
 
 > Atualizado em 2026-09-16 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 35) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 36) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20.
 
-> ## Onde o desenvolvimento está — 2026-09-16 (Etapa 35 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-09-16 (Etapa 36 ENTREGUE · modo contínuo pelo mapa)
 >
-> **Etapas 1 a 20 e 22 a 35 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
-> A **Etapa 35 (as telas vizinhas param de esconder falha e de mostrar o registro errado)** fechou
-> em 2026-09-16 (`6f6a8b0..2d5cd35`) e **nenhuma linha do servidor mudou** — tudo o que ela fez
-> está nas telas.
+> **Etapas 1 a 20 e 22 a 36 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
+> A **Etapa 36 (o recebimento para de aceitar qualquer coisa, e a conferência física ganha campo)**
+> fechou em 2026-09-16 (`d02b9f4..e287a06`, mais a onda de correção da revisão final). **É
+> feature** — a **08 (Recebimento)** — e **mexeu no servidor de propósito**.
 >
-> **Ela não é feature.** São os **três** problemas que a revisão da Etapa 34 achou nas telas
-> **vizinhas** às que ela mexeu, **dois deles anteriores a qualquer etapa recente**. Os três se
-> pareciam: a tela mostrava algo **plausível** em vez de dizer a verdade.
+> **O problema era que as duas portas por onde um recebimento é escrito aceitavam praticamente
+> qualquer coisa.** Eram quatro problemas no mesmo documento, e três mexiam em **saldo de estoque**
+> e em **conta a pagar**.
 >
 > **O que mudou:**
-> - **Requisições:** clicar numa linha faz **uma** consulta do detalhe, não duas (furo **C45**,
->   fechado). Link direto, atualização ao voltar para a janela e troca de filtro continuam iguais.
-> - **Recebimentos:** falha de rede **para de se disfarçar de lista vazia** — a tela diz
->   *"Não foi possível carregar os recebimentos."* com o botão **Tentar de novo**; um
->   recarregamento que falha **zera** a lista em vez de deixar a antiga passando por fresca; e o
->   modal de nota fiscal avisa *"Não foi possível carregar a lista de materiais."* sem bloquear o
->   registro por pedido de compra (fragilidade **G10**, fechada nesta parte).
-> - **Recebimentos, trocar de linha:** o painel **não mostra mais o recebimento anterior** sob o
->   número novo (o cabeçalho passa por *"..."*), e com duas respostas fora de ordem vence o
->   **último clique** (furos **C46** e **C47**, os dois fechados).
-> - **As 11 telas com coluna de ações:** os botões **quebram em duas fileiras** em vez de serem
->   cortados pela borda da tabela sem barra de rolagem. O pior caso medido não era Materiais, era
->   **Ferramentas**.
+> - **A forma de recebimento** é **Nota fiscal** ou **Pedido de compra**, e nada mais — antes o
+>   campo gravava qualquer texto que chegasse por fora da tela.
+> - **A mesma nota fiscal do mesmo fornecedor não entra duas vezes.** Antes entrava: dois
+>   documentos, estoque **dobrado** (20 onde entraram 10) e **duas** contas a pagar. Agora a
+>   recusa diz **em qual documento** a nota já está, e vale tanto ao cadastrar como ao preencher os
+>   dados fiscais depois. O sistema reconhece o mesmo fornecedor pelo cadastro, pelo **CNPJ só
+>   dígitos** ou pelo **nome ignorando acento**, maiúsculas e espaços repetidos.
+> - **A conferência física ganhou o campo que faltava:** cada item em **RECEBIDO** ou
+>   **EM_CONFERENCIA** tem **"Qtd. conferida"**, o aviso *"Divergência: N a menos/a mais que o
+>   esperado (E)"* e o botão **Salvar Conferência**. Antes o painel mostrava **uma** quantidade e
+>   não havia onde dizer quanto chegou de verdade.
+> - **Receber acima do esperado exige autorização de Compras ou do Administrador**, em qualquer
+>   momento em que a quantidade recebida é informada, com a caixa **"Autorizo o recebimento acima
+>   do pedido"** para quem pode e a trilha **"Excedente autorizado"** por item. Antes entrava em
+>   silêncio.
+> - **Cada item exige quantidade numérica maior que zero** — texto, zero e negativo são recusados.
 >
-> **⚠️ Duas coisas antes de apresentar:**
-> 1. **A verificação manual F12 foi reescrita, e é ela que falta.** A redação antiga estava
->    **errada na tela** (mandava olhar Materiais; o pior caso é Ferramentas) e ficou **vencida**
->    com a mudança de estilo. O que resta medir é o **teto** da faixa de largura (~1100 a ~1355
->    pixels) e quais linhas passaram a ocupar **duas fileiras**. São cinco minutos, e o roteiro
->    está na seção da Etapa 35 abaixo.
-> 2. **O modal de dados fiscais, o avanço de situação e a impressão de etiquetas de Recebimentos
->    continuam sem teste automático** — é a parte da **G10** que **não** fechou.
+> **⚠️ Três coisas antes de apresentar:**
+> 1. **Rode as consultas A9, A10 e A11 do documento de novidades antes do deploy.** A **A9** acha
+>    notas repetidas **que já estão no banco** (a guarda nova não limpa o passado, e essa consulta
+>    **sub-reporta**: ela não consegue ignorar acento); a **A10** acha formas de recebimento fora
+>    dos dois valores; a **A11** é informativa.
+> 2. **A decisão B82 espera você: o Gestor deve poder autorizar recebimento acima do pedido?** Hoje
+>    é **Administrador e Compras**. O Gestor ficou fora porque ele **nem abre** a tela de
+>    recebimento — habilitá-lo é etapa própria, não configuração.
+> 3. **O passo 9 do roteiro abaixo é o furo que a revisão final pegou** — um recebimento com
+>    excedente autorizado ficava **preso** e nunca chegava ao estoque. Vale testar até o fim.
+>
+> **Antes disto: a Etapa 35 (as telas vizinhas param de esconder falha e de mostrar o registro
+> errado)** fechou no mesmo dia (`6f6a8b0..2d5cd35`), **sem uma linha de servidor** — em
+> Requisições, clicar numa linha passou a fazer **uma** consulta em vez de duas; em Recebimentos, a
+> falha de rede parou de se disfarçar de lista vazia e o painel parou de mostrar o recebimento
+> anterior sob o número novo; e as 11 telas com coluna de ações passaram a **quebrar os botões em
+> duas fileiras** em vez de deixá-los cortados. **Duas pendências dela continuam suas:** a
+> verificação manual **F12** (o teto da faixa de ~1100 a ~1355 pixels e quais linhas passaram a
+> ocupar duas fileiras — cinco minutos, roteiro na seção da Etapa 35) e o fato de que **o avanço de
+> situação e a impressão de etiquetas de Recebimentos continuam sem teste automático**, que é a
+> parte da **G10** que não fechou. *(O modal de dados fiscais, que também estava nessa lista, passou
+> a ter cenário automático na Etapa 36.)*
 >
 > Antes disto: **Etapa 34 (anexos nas cinco telas restantes)**, `746a106..054f727`.
 >
@@ -4584,6 +4601,152 @@ que ele não tinha como repetir com sucesso garantido.
 - **Número de série de material** — continua sendo **digitado pelo operador** e de propósito não
   passa por este gerador. Retentar com outro número gravaria algo que ninguém digitou.
 - **Números de outros módulos do CRM** — a varredura foi do almoxarifado.
+
+---
+
+## Etapa 36 — O recebimento para de aceitar qualquer coisa, e a conferência física ganha campo (ENTREGUE — 2026-09-16)
+
+**O que mudou, em uma frase:** as duas portas por onde um recebimento é escrito pararam de aceitar
+qualquer coisa — a mesma nota fiscal do mesmo fornecedor não entra mais duas vezes dobrando o
+estoque, receber acima do esperado passou a exigir autorização de Compras ou do Administrador, e a
+conferência física finalmente tem **onde digitar quanto chegou**.
+
+**Esta é feature**, a do **Recebimento**, e o servidor mudou de propósito. Eram quatro problemas no
+mesmo documento:
+
+1. **A "forma de recebimento" aceitava qualquer texto.** A tela oferece dois valores; o sistema
+   aceitava infinitos, para quem mandasse por fora dela.
+2. **A mesma nota fiscal do mesmo fornecedor entrava duas vezes.** Dois documentos, material
+   creditado **duas vezes** (20 onde entraram 10) e **duas contas a pagar** para a mesma nota.
+3. **Receber mais do que o esperado entrava em silêncio.** Um item de 10 podia ser registrado como
+   999, por quem estava no balcão.
+4. **O campo de contagem não existia.** O sistema tem alerta de *"Divergência de recebimento"*, a
+   tela tem a etapa **Conferência** — e o painel mostrava **uma** quantidade só. A conferência
+   existia como situação no fluxo e não existia como gesto.
+
+### Onde se percebe cada mudança
+
+| Tela | O que você vai notar |
+|---|---|
+| **Recebimentos → Novo Recebimento** | Lançar a mesma nota do mesmo fornecedor de novo é recusado: *"Nota fiscal ⟨número⟩ já lançada no recebimento REC-… para este fornecedor"* — com o número do documento que já tem a nota |
+| **Recebimentos → painel de detalhe** (RECEBIDO ou EM_CONFERENCIA) | Cada item mostra a quantidade em cima e **"Esperada: N"** embaixo, tem o campo **"Qtd. conferida"** e um botão **Salvar Conferência** |
+| **Ao digitar quantidade diferente da esperada** | Aparece em vermelho, na hora: *"Divergência: 13 a menos que o esperado (200)"* |
+| **Ao digitar quantidade acima da esperada** | Como **Almoxarife**, a recusa fica **fixa na tela** e **nomeia quem autoriza**. Como **Compras** ou **Administrador**, aparece a caixa **"Autorizo o recebimento acima do pedido"** |
+| **Almoxarifado → Auditoria** | Linha **"Excedente autorizado"**, uma por item, com quem autorizou |
+| **Preencher Dados da NF** | A mesma recusa de nota repetida vale aqui. E salvar duas vezes a **própria** nota do documento continua funcionando |
+
+### Roteiro de teste manual
+
+**Preparação**
+1. Entre no sistema com um usuário **Almoxarife** (ou Administrador) e vá em **Almoxarifado →
+   Recebimentos**. Para os passos 7 em diante você vai precisar de um segundo usuário com perfil
+   **Compras** (ou do **Administrador**).
+
+**A nota repetida — inclusive com o nome escrito diferente**
+2. **Novo Recebimento**, tipo **Nota fiscal**. Nota `12345`, fornecedor `José Aços Ltda` (**com**
+   acento), um item com quantidade **10**. Salvar → entra normalmente.
+3. **Novo Recebimento** outra vez: nota `12345`, e agora digite o fornecedor **sem acento** —
+   `Jose Acos Ltda` — e o mesmo item. Salvar → recusado com *"Nota fiscal 12345 já lançada no
+   recebimento REC-… para este fornecedor"*.
+   **É este o passo que interessa:** com acento e sem acento, para o sistema é o **mesmo**
+   fornecedor. Anote o número `REC-…` que a mensagem cita e confirme na lista que é o documento do
+   passo 2.
+4. **O contraste que prova a regra:** nota `12345` com o fornecedor `Metalúrgica Outra Ltda` →
+   **entra**. Duas empresas podem emitir nota com o mesmo número, e isso continua sendo legítimo.
+
+**O campo "Qtd. conferida" e a divergência**
+5. Abra o recebimento do passo 2 (situação **RECEBIDO**). Cada item agora mostra a quantidade em
+   cima e **"Esperada: 10"** embaixo, e tem o campo **"Qtd. conferida"**.
+6. Digite **7** → aparece *"Divergência: 3 a menos que o esperado (10)"*. Clique em **Salvar
+   Conferência** → o aviso *"Conferência salva"* e o número gravado no painel.
+   **Confira que o campo vazio é diferente de zero:** limpe o campo e salve de novo — o `7`
+   continua gravado. Campo vazio significa "não contei este item", não "chegou zero".
+
+**O excedente recusado, e o excedente autorizado até o fim**
+7. Ainda como **Almoxarife**, digite **12** no mesmo item → o aviso vira *"Divergência: 2 a mais que
+   o esperado (10)"*. Clique em **Salvar Conferência**. A recusa aparece **na tela**, em vermelho:
+   *"Quantidade recebida (12) maior que a esperada (10) no item #⟨id⟩ — a autorização de excedente é
+   de Compras ou do Administrador"*.
+   **Repare em duas coisas:** o `12` que você digitou **continua lá** (nada é perdido), e a mensagem
+   diz **quem resolve** — não manda você marcar uma caixa que o seu perfil não tem.
+8. Entre como **Compras** (ou **Administrador**) e abra o mesmo recebimento. Com `12` no campo,
+   aparece a caixa **"Autorizo o recebimento acima do pedido"**. **Marque a caixa** e clique em
+   **Salvar Conferência** → *"Conferência salva"*. Vá em **Almoxarifado → Auditoria** e confirme a
+   linha **"Excedente autorizado"** com o seu nome.
+   **Duas verificações negativas que valem o clique:** essa caixa **não** aparece para o Almoxarife,
+   e **não** aparece se nenhum item estiver acima do esperado.
+9. **Este é o passo mais importante do roteiro — é o furo que a revisão final pegou, e ele TEM de
+   funcionar até o fim.** Com o excedente já autorizado, avance o documento: **Finalizar
+   Conferência → Encaminhar para Compras → Encaminhar para Faturamento → Iniciar Entrada de NF**.
+   Clique em **Preencher Dados da NF**, preencha número da nota, série, data de emissão, data de
+   entrada e valor total, e **Salvar Dados Fiscais** → tem de **salvar**. Depois **Processar Nota**
+   → estoque creditado e conta a pagar gerada.
+   **Por que isto é o teste que importa:** antes da correção, este documento ficava **preso**.
+   Salvar os dados fiscais respondia com a recusa de excedente — pedindo uma autorização que o
+   formulário de nota fiscal nem tem como mandar — e o processar morria em seguida. Nota conferida,
+   autorizada, e sem caminho para o estoque.
+10. **A diferença pequena que a tela mentia:** num item de `200` esperados, digite `200,001`. O
+    aviso mostra *"Divergência: 0.001 a mais que o esperado (200)"*. Antes ele arredondava e dizia
+    *"0 a mais"* — afirmando que não havia diferença enquanto o servidor recusava o salvamento.
+
+**A forma de recebimento (este não se demonstra pela tela)**
+11. Pela tela você só consegue escolher **Nota fiscal** ou **Pedido de compra**, então não há como
+    produzir o caso clicando. Se quiser demonstrar, é por `curl` ou pela aba de rede do navegador:
+    um cadastro de recebimento com a forma fora desses dois valores responde *"Dados inválidos —
+    tipo_recebimento: forma de recebimento inválida (use NOTA_FISCAL ou PEDIDO_COMPRA)"*.
+    **E é exatamente por isso que o problema passou tanto tempo sem ninguém ver.**
+
+### O que esperar no dia a dia
+
+- **A recusa de nota repetida cita OUTRO documento — e é para ir nele.** A mensagem traz o número
+  `REC-…` de onde a nota já está. Se for engano seu, o trabalho já está feito lá; se forem cargas
+  diferentes com a mesma nota, alguma das duas tem o número errado.
+- **Trocar o fornecedor de um recebimento pode fazer nascer a recusa.** Se você alterar o
+  fornecedor (nos dados fiscais) para o mesmo de outro documento que já tem aquela nota, ele passa a
+  tomar a recusa a partir dali. **Não é bug** — os dois passaram a ser a mesma nota do mesmo
+  fornecedor.
+- **A recusa de excedente nomeia SÓ O PRIMEIRO item acima do esperado.** Se a nota tiver dois itens
+  excedentes, você corrige o primeiro, reenvia e pode tomar uma recusa nova pelo segundo. A trilha
+  de auditoria, ao contrário, escreve **uma linha por item**.
+- **A recusa de excedente recusa o salvamento INTEIRO, não só o item problemático.** Nada é gravado
+  enquanto houver um item acima do esperado sem autorização — mesmo critério do processamento da
+  nota: metade gravada é pior que nada gravado.
+- **A caixa de autorização só aparece para quem pode autorizar, e só quando há excedente de fato.**
+  Se você é Almoxarife e a mensagem fala de autorização, o caminho é chamar Compras — não existe
+  controle escondido na sua tela.
+- **Autorizado uma vez, o sistema não pede de novo.** Reenviar a mesma quantidade (ao preencher a
+  nota, ao reconferir outro item) **não** é um ato novo de autorização, e **não** gera outra linha de
+  auditoria. Só **aumentar** sobre o que já está gravado pede autorização outra vez.
+- **Campo "Qtd. conferida" vazio não é zero.** Vazio é "não contei este item": o sistema preserva o
+  que estava gravado e não desmarca a conferência que outra pessoa fez naquele item.
+- **Notas repetidas que já existem no banco continuam lá.** A guarda impede novas; ela não limpa o
+  passado. É a consulta **A9** do documento de novidades, e ela precisa ser rodada antes do deploy.
+
+### O que esta etapa NÃO cobre
+
+- **O saldo do pedido de compra.** A autorização de excedente compara a quantidade com a
+  **esperada daquele item, naquele recebimento** — não com quanto o pedido ainda tem a receber. Um
+  pedido de 10 pode receber 25 em três recebimentos, cada um "dentro do esperado" do próprio
+  documento, e o pedido continua marcado como 10 e **ABERTO**. **É a Etapa 37**, já desenhada.
+- **Recebimento parcial pela tela.** A tela **nunca carrega os itens do pedido de compra**, então
+  registrar "chegaram 6 dos 10, o resto vem depois" não é um gesto disponível hoje. Também é a
+  Etapa 37.
+- **Dois lançamentos exatamente simultâneos da mesma nota.** A guarda pergunta ao banco e depois
+  grava; duas pessoas salvando a mesma nota no mesmo décimo de segundo ainda passam as duas. O caso
+  realista (a mesma pessoa duas vezes, ou dois operadores em minutos diferentes) está coberto.
+- **Nada do histórico foi limpo.** Notas repetidas e formas de recebimento fora dos dois valores
+  que já existam no banco ficam como estão. As consultas **A9** e **A10** existem para medir isso.
+- **A divergência não virou documento.** Ela aparece na tela, dispara o alerta e entra no
+  relatório — mas não existe um registro formal de divergência com número, dono e desfecho
+  (aceitar, devolver, cobrar do fornecedor).
+- **O campo "Qtd. conferida" só existe em RECEBIDO e EM_CONFERENCIA.** Depois disso a quantidade já
+  virou base de custo médio e de conta a pagar, e corrigi-la pelo painel seria mexer no passado sem
+  trilha.
+- **O campo "Qtd. conferida" não tem rótulo visível** — só o texto dentro dele, que desaparece ao
+  digitar, e a dica ao passar o mouse.
+- **A recusa de nota repetida ao salvar os dados fiscais só sai no aviso flutuante**, que passa em
+  alguns segundos — diferente da conferência, onde a recusa fica fixa na tela. O formulário continua
+  aberto e nada é perdido.
 
 ---
 

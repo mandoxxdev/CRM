@@ -231,8 +231,23 @@ criação de recebimento.
 **A ação não existe hoje** (medido) e entra em `ACAO_PERFIS`:
 
 ```js
-autorizar_excedente: [PERFIS.ADMINISTRADOR, PERFIS.GESTOR, PERFIS.COMPRAS],
+autorizar_excedente: [PERFIS.ADMINISTRADOR, PERFIS.COMPRAS],
 ```
+
+⚠️ **(execução, fix-round 1 da T3) A lista acima ESTAVA ERRADA neste documento** — dizia
+`[PERFIS.ADMINISTRADOR, PERFIS.GESTOR, PERFIS.COMPRAS]`, e o `GESTOR` era **configuração morta**.
+Medido: as duas portas que escrevem quantidade são gateadas por
+`requirePermission('receber_material')` = `[ADMINISTRADOR, ALMOXARIFE, COMPRAS]`
+(`permissions.js:86`), o `GESTOR` **não está lá** e toma `403 { acao: 'receber_material' }` **antes**
+de o serviço rodar, e **não existe outro chamador** de `conferirRecebimento`/`salvarDadosFiscal`. Pior
+que inútil: `GET /minhas-permissoes` devolveria `autorizar_excedente: true` para o gestor e a tela
+**mostraria** a caixa de autorização, que ele marcaria para tomar 403 de outra ação — **o mapa não
+pode listar quem não consegue agir**. Corrigido para `[ADMINISTRADOR, COMPRAS]` em `3e36af4`.
+**Descartado, com o custo:** alargar `receber_material` (daria ao GESTOR o recebimento inteiro por uma
+autorização pontual) e abrir rota de exceção (porta nova, com contrato, tela e auditoria — questão de
+design). **Custo da escolha:** hoje a gestão não autoriza excedente; se o cliente quiser, precisa de
+**porta própria**, e isso está na **letra B** como *"GESTOR deve autorizar excedente? Se sim, precisa
+de uma porta própria — etapa própria"*.
 
 **Por que ação própria, e não carona no `receber_material`:** o critério já escrito três vezes em
 `permissions.js` (`ajustar_material_cliente`, `remessar_terceiro`, `conferir_separacao`) — *quando a
@@ -244,8 +259,10 @@ prateleira.
 óbvio, tem `receber_material`): quem recebe não autoriza o próprio excedente. Mesmo raciocínio,
 escrito, de `gerenciar_plano_inspecao` ("quem RECEBE o material não define o critério pelo qual o
 próprio recebimento será julgado"). COMPRAS entra porque é quem negocia com o fornecedor e responde
-pelo pedido; GESTOR entra pelo precedente do `ajustar_estoque`. **Reversível numa linha** se o cliente
-pedir o contrário, e registrado na letra B.
+pelo pedido. ~~GESTOR entra pelo precedente do `ajustar_estoque`.~~ **(execução) esta frase estava
+errada** — o GESTOR entrou por precedente e saiu por **medição**: sem `receber_material` ele não tem
+porta (ver o bloco acima). **Reversível numa linha** se o cliente pedir o contrário, e registrado na
+letra B.
 
 **A checagem NÃO é `requirePermission` na rota** — seria errado e quebraria tudo: a rota inteira
 passaria a exigir a ação, e um `PUT /conferir` **sem** excedente deixaria de funcionar para o
@@ -370,6 +387,21 @@ vazio** que o CLAUDE.md manda desconfiar, e seria o quinto caso desta base.
   `error === 'Nota fiscal NF-DUP-1 já lançada no recebimento <numero> para este fornecedor'`. A
   asserção que mede o **dano**, não a porta: processando as duas tentativas, o saldo do material fica
   **10** (não 20) e `contas_pagar` tem **1** linha (não 2).
+  ⚠️ **(revisão final)** a régua deste cenário **estava incompleta**, e a implementação que ela
+  aprovou era contornável de **três** jeitos, os três medidos por sonda:
+  **(R3)** `UPPER` do SQLite é **ASCII-only** — `'José Aços Ltda'` e `'JOSÉ AÇOS LTDA'` com a mesma
+  NF e sem id/CNPJ entravam as duas (**201 + 201**, estoque creditado duas vezes), e é o caminho
+  real da tela, que manda nome digitado à mão;
+  **(R4)** a **ordem de preferência** escolhia UMA perna e descartava as outras, então o documento A
+  digitado à mão (só nome) e o B escolhido no `<select>` (nome **e** CNPJ) nunca se encontravam;
+  **(R5)** a perna do CNPJ fazia `TRIM` na **coluna** e não no **parâmetro**, e ignorava pontuação.
+  Regra correta: buscar os candidatos pela **NF normalizada** (`UPPER(TRIM(...))` basta — NF é
+  ASCII) com `id <> ?`, e comparar o fornecedor **em JS**, casando se **QUALQUER** perna casar —
+  mesmo `fornecedor_id`; ou mesmo **CNPJ só-dígitos** (não vazio); ou mesmo **nome normalizado**
+  (NFD, `\p{M}` removido, upper, trim, espaços colapsados; não vazio). Os *skips* da RN-13 ficam.
+  ⚠️ **Consequência assumida:** a consulta da **letra A** do fechamento, que mede duplicatas em
+  produção, roda em SQL e **não** consegue remover acento em SQLite — ela **sub-reporta** as
+  duplicatas por acento. Réguas: cenários (8), (9) e (10) de `recebimentoNfDuplicada.api.test.js`.
 - **RN-13 — três coisas NÃO são duplicata: NF vazia, fornecedor diferente e fornecedor não
   identificado.** *Cenário:* dois `POST` com a mesma NF e **fornecedores diferentes** → **201** nos
   dois; dois `POST` **sem** `nota_fiscal` para o mesmo fornecedor → **201** nos dois; dois `POST` com
@@ -408,12 +440,28 @@ vazio** que o CLAUDE.md manda desconfiar, e seria o quinto caso desta base.
   visíveis.
 - **RN-18 — excedente exige `autorizar_excedente`, nas DUAS portas.** *Cenário:* `PUT /:id/conferir`
   com `quantidade_recebida: 999` contra `quantidade_esperada: 10` → **400** e
-  `error === 'Quantidade recebida (999) maior que a esperada (10) no item #<id> — marque a autorização de excedente para registrar'`;
+  `error === 'Quantidade recebida (999) maior que a esperada (10) no item #<id> — a autorização de excedente é de Compras ou do Administrador'`;
   com `autorizar_excedente: true` e perfil **ALMOXARIFE** → **403** e
   `error === 'Autorizar recebimento acima do pedido exige a permissão "autorizar_excedente" (seu perfil: ALMOXARIFE).'`;
-  com `autorizar_excedente: true` e perfil **GESTOR** → **200**, coluna gravada e **linha de
+  com `autorizar_excedente: true` e perfil **COMPRAS** → **200**, coluna gravada e **linha de
   auditoria** `EXCEDENTE_AUTORIZADO`. Mesmos três casos pela porta do `PUT /:id/fiscal`. Metades
   positivas: `recebida === esperada` e `recebida < esperada` continuam **200** sem flag nenhuma.
+  ⚠️ **(execução, fix-round 1) este cenário dizia "perfil GESTOR → 200", e estava errado:** pela rota
+  o GESTOR nem chega ao serviço (403 de `receber_material`). O perfil da metade positiva é **COMPRAS**,
+  o único não-admin com as duas coisas, e o **GESTOR virou caso NEGATIVO** — `conferirRecebimento`
+  chamado direto no serviço responde **403** com a literal nomeando `autorizar_excedente`. Ver o bloco
+  corrigido da seção (c).
+  ⚠️ **(revisão final)** este cenário **estava incompleto**: ele descrevia a barreira sobre o valor
+  ABSOLUTO (`recebida > esperada`), e com isso um recebimento com excedente **já autorizado** nunca
+  mais conseguia salvar dados fiscais nem uma nova conferência — as duas telas **reenviam a
+  quantidade já gravada** de todos os itens, e nenhuma das duas manda `autorizar_excedente` no
+  modal de NF. O documento ficava **preso** (o `processar` seguinte morre em
+  `validarDadosProcessamento`), e toda linha de **acervo** com `recebida > esperada` tomava 400 no
+  deploy. A regra correta tem **duas** condições: barreira só quando `recebida > esperada` **E**
+  `recebida > quantidade_recebida gravada` — um **aumento** sobre o que já está registrado. Ecoar
+  ou **baixar** nunca barra, e a linha de auditoria `EXCEDENTE_AUTORIZADO` só nasce quando a
+  barreira realmente disparou (antes, re-marcar a caixa gravava uma linha nova por save).
+  Réguas: cenários (6) a (11) de `recebimentoExcedente.api.test.js`.
 - **RN-19 — fechar o painel desliga o "carregando", nas duas telas.**
   **Declaradamente SEM régua automatizável**, com a razão escrita no código: todo consumidor de
   `loadingDetalhe` só renderiza com o painel aberto, e abrir o painel passa por `abrirDetalhe`, que
@@ -442,7 +490,7 @@ ordem de execução:
 | 5 | **NF vazia/`null` não é duplicata**; mesma NF de **fornecedor diferente** passa; **fornecedor não identificado** (id, CNPJ **e nome** nulos — **Fase 2**) também não caracteriza duplicata |
 | **5b (Fase 2)** | o fornecedor da chave é `fornecedor_id` → `fornecedor_cnpj` → **`UPPER(TRIM(fornecedor_nome))`** | parar em id/CNPJ: a tela **nunca** manda `fornecedor_id` (medido em `handleCriar`), então a guarda não dispararia pelo caminho real sem CNPJ digitado — regra entregue e porta faltando; e mandar `fornecedor_id` no payload da tela, que acopla a T2 (tronco de servidor) à T5 e não cobre o acervo |
 | **5c (Fase 2)** | o `WHERE` **não** filtra `status <> 'CANCELADO'` | manter a cláusula: `STATUS` do recebimento não tem `'CANCELADO'` (os 11 são `RECEBIDO`..`BLOQUEADO`, `receiptService.js:43-55`) — era código morto que fazia o próximo leitor acreditar num cancelamento inexistente | barrar os três casos — recebimento sem NF é legítimo pelo caminho do pedido, dois fornecedores emitem nota com o mesmo número, e tratar "sem fornecedor" como fornecedor único juntaria documentos de origens diferentes (e derrubaria os arquivos de teste que criam recebimento pela rota sem `fornecedor_id`) |
-| 6 | **ação nova `autorizar_excedente`** em `ACAO_PERFIS` `[ADMINISTRADOR, GESTOR, COMPRAS]`, checada **no serviço** por `can()` | só a flag no payload (o "reversível" da medição): flag que qualquer perfil liga não é barreira, é formulário; `requirePermission` na rota (quebraria o `/conferir` para o ALMOXARIFE, que é quem confere) |
+| 6 | **ação nova `autorizar_excedente`** em `ACAO_PERFIS` ~~`[ADMINISTRADOR, GESTOR, COMPRAS]`~~ → **(execução, fix-round 1)** `[ADMINISTRADOR, COMPRAS]`: **o GESTOR aqui estava errado**, ele não tem porta (nenhuma das duas rotas o deixa passar, e não há outro chamador do serviço), então seria configuração morta que o `minhas-permissoes` reportaria como `true`. Checada **no serviço** por `can()` | só a flag no payload (o "reversível" da medição): flag que qualquer perfil liga não é barreira, é formulário; `requirePermission` na rota (quebraria o `/conferir` para o ALMOXARIFE, que é quem confere); **e, no fix-round: alargar `receber_material`** (permissão larga para problema estreito) **e abrir rota de exceção** (porta nova — foi para a letra B como etapa própria) |
 | 7 | **ALMOXARIFE fora** da ação de excedente, de propósito | incluí-lo pelo argumento de que ele "já tem `receber_material`" — quem recebe não autoriza o próprio excedente (mesmo critério escrito em `gerenciar_plano_inspecao`) |
 | 8 | quantidade conferida grava por **`PUT /conferir`** | `PUT /fiscal` (o que a medição propôs): renderiza só no Faturamento, três transições depois do gesto real, e deixaria a rota `/conferir` morta — a classe de defeito que as Etapas 6, 32 e 34 já pagaram |
 | 9 | `COALESCE` na quantidade do `/conferir`, junto | deixar como está e confiar no payload: a rota está ganhando o **primeiro** chamador da vida, e item sem o campo apagaria a quantidade |

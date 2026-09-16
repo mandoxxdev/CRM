@@ -648,6 +648,7 @@ A separação entre **Almoxarife** e **Gestor** é intencional e é o desenho de
 | Conferir separação (segunda conferência da caixa) | ● | ● | – | – | – | – | – | – |
 | Requisitar | ● | ● | – | ● | ● | – | – | – |
 | Receber material | ● | ● | ● | – | – | – | – | – |
+| Autorizar recebimento acima do pedido | ● | – | ● | – | – | – | – | – |
 | Inspecionar | ● | ● | – | – | – | – | ● | – |
 | Gerenciar plano de inspeção (características a medir e tolerâncias) | ● | – | – | – | ● | – | ● | – |
 | Reservar | ● | ● | – | ● | ● | – | – | – |
@@ -657,7 +658,7 @@ A separação entre **Almoxarife** e **Gestor** é intencional e é o desenho de
 | Ver a central de alertas | ● | ● | ● | – | – | ● | – | – |
 | Configurar o módulo | ● | – | – | – | – | – | – | – |
 
-Seis leituras que essa tabela permite fazer, e que vale explicar a quem pergunta:
+As leituras que essa tabela permite fazer, e que vale explicar a quem pergunta:
 
 - **Gerenciar ferramentas é independente de movimentar estoque**, mesmo com os mesmos dois perfis
   hoje: ferramenta é patrimônio emprestável, não estoque (seção 21), e a permissão existe separada
@@ -671,6 +672,7 @@ Seis leituras que essa tabela permite fazer, e que vale explicar a quem pergunta
   > *Sem permissão para ajustar saldo de estoque — seu perfil é Qualidade. Solicite acesso a um administrador.*
 
   Bloquear material por decisão de qualidade continua acontecendo **dentro da inspeção** (reprovar o item recebido), que é o que ele pode.
+- **Autorizar recebimento acima do pedido é separado de Receber material, e o Almoxarife não a tem.** Quem recebe a carga registra quanto chegou; autorizar que **entre mais do que o esperado** é decisão de **Compras** ou do **Administrador** (14.2b). É o mesmo critério das duas assinaturas de sucateamento: quem executa não aprova a própria exceção. Consequência prática para quem usa: a caixa *"Autorizo o recebimento acima do pedido"* **não aparece** na tela do Almoxarife, e por isso a recusa que ele recebe nomeia quem resolve em vez de mandá-lo marcar algo. O **Gestor** não tem esta ação — e não teria como usá-la, porque ele não tem *Receber material* e não abre o recebimento.
 - **Conferir separação é separado de Separar / emitir**, mesmo com os mesmos dois perfis hoje: a conferência é a segunda pessoa olhando a caixa (10.3), e a permissão existe à parte para poder ser restringida sem mexer na separação. Ter a permissão não basta: **quem separou não confere**, e isso vale para o Administrador também — a barreira é por pessoa, não por perfil.
 - **As duas aprovações de sucateamento são de balcões diferentes de propósito.** A perna do almoxarifado (Administrador, Almoxarife) e a perna da gestão (Administrador, Gestor) precisam **das duas assinaturas, de pessoas diferentes**, para uma baixa de sucata sair do estoque — e, embora o Administrador tenha as duas permissões, **a mesma pessoa nunca assina as duas pernas** (seção 20).
 
@@ -1740,7 +1742,47 @@ Um recebimento é o documento que registra a chegada física do material no galp
 | **Pedido de compra** | Você informa o número do pedido; o sistema traz os itens, as quantidades e os valores unitários já preenchidos, e herda fornecedor e CNPJ do pedido |
 | **Nota fiscal (sem pedido)** | Você informa a nota, o fornecedor e digita os itens um a um |
 
+**São só essas duas, e o sistema recusa qualquer outra.** A forma de recebimento é um de dois valores — *Nota fiscal* ou *Pedido de compra* — e nada além disso é aceito, nem ao criar o recebimento nem ao preencher os dados fiscais depois. Quem enviar outro valor por fora da tela (uma integração, um script) recebe:
+
+> *"Dados inválidos — tipo_recebimento: forma de recebimento inválida (use NOTA_FISCAL ou PEDIDO_COMPRA)"*
+
+**Cada item exige quantidade numérica maior que zero.** Item sem quantidade, com quantidade zero, negativa ou com texto no lugar do número é recusado, e a recusa nomeia o item e o campo:
+
+> *"Dados inválidos — itens.0.quantidade: quantidade do item deve ser um número maior que zero"*
+
+A mesma regra vale para a quantidade esperada, quando ela é informada: *"quantidade esperada do item deve ser um número maior que zero"*.
+
 Se o pedido informado não existir, o sistema responde *"Pedido de compra não encontrado"*. Um recebimento sem nenhum item é recusado com *"Inclua ao menos um item"*.
+
+### 14.1b A mesma nota do mesmo fornecedor não entra duas vezes
+
+Duas entradas da mesma nota fiscal do mesmo fornecedor significariam o material creditado duas vezes no estoque e duas contas a pagar para a mesma nota. O sistema **recusa** a segunda, e diz **em qual documento** a nota já está:
+
+> *"Nota fiscal 12345 já lançada no recebimento REC-… para este fornecedor"*
+
+A recusa acontece nos **dois** momentos em que uma nota pode ser informada: ao **criar** o recebimento e ao **preencher os dados fiscais** depois. E um documento nunca acusa a si mesmo — salvar os dados fiscais duas vezes com a **própria** nota funciona normalmente.
+
+**Como o sistema decide que é "o mesmo fornecedor".** Ele compara **três** identificações e considera o mesmo fornecedor se **qualquer uma** delas casar:
+
+| Identificação | Como é comparada |
+|---|---|
+| Fornecedor escolhido no cadastro | pelo próprio registro do fornecedor |
+| CNPJ | **só pelos dígitos** — `12.345.678/0001-00` e ` 12345678000100 ` são o mesmo |
+| Nome digitado | **ignorando acento, maiúsculas e espaços repetidos** — `José Aços Ltda`, `JOSÉ  AÇOS LTDA` e `Jose Acos Ltda` são o mesmo |
+
+Casar por **qualquer** uma é o que faz a regra valer no caminho real: um documento lançado com o fornecedor escolhido no cadastro (que traz nome **e** CNPJ) e outro com o nome digitado à mão são reconhecidos como o mesmo fornecedor. O número da nota também é comparado ignorando maiúsculas e espaços nas pontas.
+
+**Três situações NÃO são nota repetida, de propósito:**
+
+| Situação | Por que passa |
+|---|---|
+| Mesma nota, **fornecedores diferentes** | Duas empresas podem emitir nota com o mesmo número |
+| Dois recebimentos **sem número de nota**, mesmo fornecedor | Receber por pedido de compra sem nota é legítimo |
+| Mesma nota, **fornecedor não identificado** nos dois (sem cadastro, sem CNPJ e sem nome) | Tratar "sem fornecedor" como um fornecedor único juntaria documentos de origens diferentes |
+
+**Uma consequência que parece erro e não é:** se você **alterar o fornecedor** de um recebimento (ao preencher os dados fiscais) para o mesmo fornecedor de outro documento que já tem aquela nota, a partir dali ele passa a receber a recusa citando o outro documento. É o comportamento correto — os dois passaram a ser a mesma nota do mesmo fornecedor.
+
+**O limite desta regra:** ela consulta e depois grava. Dois lançamentos **exatamente simultâneos** da mesma nota — duas pessoas salvando no mesmo instante — ainda podem passar os dois. O caso do dia a dia (a mesma pessoa lançando duas vezes, ou dois operadores em minutos diferentes) está coberto.
 
 ### 14.2 O caminho do recebimento até o estoque
 
@@ -1763,6 +1805,60 @@ ALMOXARIFADO  →  COMPRAS  →  FATURAMENTO  →  CONCLUÍDO
 Tentar pular etapa é recusado com a mensagem nomeando a situação atual — por exemplo *"Não é possível "processar" no status atual (EM_COMPRAS)"*.
 
 **A entrada no estoque acontece em um único momento: no botão "Processar Nota".** Antes dele, o recebimento existe como documento, mas o saldo do material ainda não mudou.
+
+### 14.2b Conferir a quantidade que chegou
+
+Enquanto o recebimento está com o almoxarifado — situações **RECEBIDO** e **EM_CONFERENCIA** —, cada item do painel de detalhe mostra **duas** quantidades e tem um campo para registrar a contagem física:
+
+- em cima, a quantidade **recebida** (ou a esperada, enquanto ninguém contou);
+- embaixo, **"Esperada: N"**;
+- e o campo **"Qtd. conferida"**, onde se digita quanto chegou de verdade.
+
+O botão **Salvar Conferência**, no fim do painel, grava as contagens digitadas. Ao terminar, aparece *"Conferência salva"*.
+
+**A divergência aparece na hora de digitar**, embaixo do campo, em vermelho:
+
+> *"Divergência: 13 a menos que o esperado (200)"*
+
+Ela mostra a diferença e a quantidade esperada entre parênteses, e diz *a menos* ou *a mais*. Diferença muito pequena também aparece com precisão — `200,001` contra `200` mostra *"Divergência: 0.001 a mais que o esperado (200)"* — porque o sistema compara os números crus, não o número arredondado que a tela mostraria.
+
+Registrar quantidade diferente da esperada também **dispara o aviso de divergência de recebimento** (21c), no mesmo instante.
+
+**Campo vazio não é zero.** Deixar "Qtd. conferida" em branco significa *"não contei este item"*: o sistema preserva a quantidade que já estava gravada e **não** desmarca a conferência que outra pessoa já tenha feito naquele item. Isso importa quando se salva a contagem de um item e os outros ficam em branco — os outros não são zerados nem desmarcados.
+
+**O campo só existe nessas duas situações.** Depois que o documento sai do almoxarifado, a quantidade já é base de custo médio e de conta a pagar, e corrigi-la pelo painel seria mexer no passado sem deixar rastro.
+
+#### Receber mais do que o esperado exige autorização
+
+Quantidade recebida **acima** da esperada é recusada, e a recusa vale em **qualquer momento em que a quantidade recebida é informada** — ao criar o recebimento, ao salvar a conferência e ao salvar os dados fiscais:
+
+> *"Quantidade recebida (12) maior que a esperada (10) no item #11 — a autorização de excedente é de Compras ou do Administrador"*
+
+A autorização é de **Administrador** e **Compras**. Quem tem essa permissão vê, no painel, a caixa:
+
+> **"Autorizo o recebimento acima do pedido"**
+
+Ela aparece **somente** quando existe de fato um item acima do esperado, e **somente** para quem pode marcá-la — quem não tem a permissão não vê controle nenhum, e é por isso que a mensagem de recusa nomeia **quem resolve** em vez de mandar marcar uma caixa. Marcada, o salvamento é aceito e o sistema escreve na trilha de auditoria o evento **"Excedente autorizado"**, **uma linha por item** excedente, com quem autorizou.
+
+Quem envia a autorização sem ter a permissão (possível por fora da tela) recebe:
+
+> *"Autorizar recebimento acima do pedido exige a permissão "autorizar_excedente" (seu perfil: ALMOXARIFE)."*
+
+**O Almoxarife recebe material mas não autoriza o próprio excedente** — mesmo critério das duas assinaturas de sucateamento (seção 20): quem executa não é quem aprova a exceção.
+
+**Como a regra decide, com precisão.** A recusa acontece quando **as duas** condições valem ao mesmo tempo:
+
+```
+quantidade recebida > quantidade esperada
+        E
+quantidade recebida > quantidade recebida já gravada no item
+```
+
+A segunda condição é o que faz a autorização valer **uma vez**: depois de autorizado, reenviar a **mesma** quantidade — ao preencher os dados fiscais, ao salvar a conferência de outro item, ao reabrir o painel — não é um ato novo de autorização, não pede a caixa de novo e **não** gera outra linha de auditoria. **Baixar** a quantidade também nunca pede autorização. Só **aumentar** sobre o que já está registrado pede.
+
+**A recusa recusa o salvamento inteiro, não apenas o item problemático**, e nomeia **só o primeiro** item acima do esperado. Se a nota tiver dois itens excedentes, corrigir o primeiro e salvar de novo pode trazer a recusa do segundo. A trilha, ao contrário, escreve uma linha por item.
+
+**O que esta autorização NÃO mede:** ela compara a quantidade com a **esperada daquele item, naquele recebimento** — não com o saldo do pedido de compra. Um pedido de 10 unidades pode receber 25 em três recebimentos diferentes, cada um dentro do esperado do próprio documento.
 
 ### 14.3 O que é obrigatório para processar
 
@@ -1789,11 +1885,11 @@ Todas as recusas vêm juntas, dentro de uma frase única que começa com *"Nao f
 
 > **Atenção operacional:** lote e séries são lidos **do que está salvo**, não do que está digitado na tela. Preencha lote/séries e clique em **Salvar Dados Fiscais** antes de **Processar Nota**.
 
-### 14.4 Reprocessar a mesma nota não duplica estoque
+### 14.4 A mesma nota não duplica estoque — nem no mesmo documento, nem entre documentos
 
-Cada item da nota é "carimbado" no momento exato em que entra no estoque. Quando você processa a nota de novo — por dois cliques seguidos, por recarregar a tela, ou porque a primeira tentativa parou no meio — o sistema **pula os itens que já foram carimbados** e só trabalha nos que faltam.
+São **duas** proteções diferentes, nas duas formas de a mesma nota entrar duas vezes.
 
-Na prática:
+**1. Dentro do mesmo recebimento: o carimbo por item.** Cada item da nota é "carimbado" no momento exato em que entra no estoque. Quando você processa a nota de novo — por dois cliques seguidos, por recarregar a tela, ou porque a primeira tentativa parou no meio — o sistema **pula os itens que já foram carimbados** e só trabalha nos que faltam.
 
 | Cenário | Resultado |
 |---|---|
@@ -1803,6 +1899,10 @@ Na prática:
 | Nota já concluída | *"Nota já processada"* |
 
 O carimbo só é devolvido quando **nada** chegou a entrar naquele item. Depois que o saldo foi creditado, o carimbo fica — creditar duas vezes é um engano que não tem como ser desfeito sem rastro, e o sistema prefere recusar a repetir.
+
+**2. Entre documentos diferentes: a mesma nota do mesmo fornecedor não é lançada duas vezes.** O carimbo acima protege o documento contra si mesmo, e nada mais — dois recebimentos *diferentes* com a mesma nota seriam duas entradas legítimas aos olhos dele. É a regra de **14.1b** que fecha esse caminho: a segunda tentativa é recusada com *"Nota fiscal ⟨número⟩ já lançada no recebimento REC-… para este fornecedor"*, tanto ao criar o recebimento como ao preencher os dados fiscais, e o sistema reconhece o mesmo fornecedor pelo cadastro, pelo CNPJ só-dígitos ou pelo nome ignorando acento.
+
+**O que essa segunda proteção NÃO faz:** ela impede lançamentos **novos**; ela não corrige nota repetida que já esteja no sistema de antes. Se houver suspeita de que a mesma nota entrou duas vezes no passado, o saldo daquele material precisa ser conferido por inventário (seção 13) e corrigido por ajuste (6.2), com o motivo registrado.
 
 ### 14.5 O que a entrada cria junto com o saldo
 
@@ -3034,11 +3134,11 @@ A tela **Almoxarifado → Alertas** reúne, num lugar só, as condições que o 
 | Requisição atrasada | requisição ativa, em qualquer status em que ainda possa ser atendida, com a data de necessidade no passado — só entra quem **preencheu** a data de necessidade |
 | Reserva parada | reserva ativa criada há mais dias que a janela configurada, ou com a data de expiração vencida |
 | Material reprovado | inspeção de recebimento com quantidade reprovada, dentro da janela de eventos |
-| Divergência de recebimento | item cuja quantidade recebida difere da esperada, dentro da janela de eventos |
+| Divergência de recebimento | item cuja quantidade recebida difere da esperada, dentro da janela de eventos. **Quem produz esse número é o campo "Qtd. conferida"** do painel do recebimento (14.2b) — digitar uma quantidade diferente da esperada e salvar a conferência é o gesto que cria a divergência; a entrada fiscal, quando altera a quantidade, também |
 | Divergência de inventário | conferência concluída com pelo menos um item divergente, dentro da janela de eventos — **uma linha por conferência**, com a contagem de itens (nunca o valor em reais) |
 | Lotes sem certificado | resumo dos lotes com saldo cujo material exige certificado do fornecedor e que estão sem o arquivo — inclui lote bloqueado (o caso mais comum, porque o lote que exige certificado nasce travado) e material de cliente |
 
-**Quatro desses avisos nascem no ATO, não na varredura.** Reprovar material numa inspeção, registrar quantidade diferente da esperada (tanto na conferência quanto na entrada fiscal) e concluir uma conferência com divergência disparam o e-mail no mesmo instante do fato; a varredura diária continua olhando a janela de eventos como rede de segurança, e o mesmo fato **não** é avisado duas vezes. Se o envio falhar, o ato acontece do mesmo jeito — a inspeção é gravada, o estoque se move, a conferência conclui: o aviso nunca segura a operação.
+**Quatro desses avisos nascem no ATO, não na varredura.** Reprovar material numa inspeção, registrar quantidade diferente da esperada — no campo **"Qtd. conferida"** ao salvar a conferência, ou na entrada fiscal — e concluir uma conferência com divergência disparam o e-mail no mesmo instante do fato; a varredura diária continua olhando a janela de eventos como rede de segurança, e o mesmo fato **não** é avisado duas vezes. Se o envio falhar, o ato acontece do mesmo jeito — a inspeção é gravada, o estoque se move, a conferência conclui: o aviso nunca segura a operação.
 
 Um detalhe que o operador precisa entender: a janela de eventos olha a **última atualização** do documento. Mexer num recebimento antigo que tem divergência nunca comunicada faz o aviso nascer ali — é a rede de segurança, não repetição.
 

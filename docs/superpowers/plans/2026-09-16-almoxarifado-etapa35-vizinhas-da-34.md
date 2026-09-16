@@ -1890,6 +1890,21 @@ régua e o que **não** reabrir. A escolha de qual virar etapa vem no fim, com o
 - **Não reabrir:** o bump da sequência já está lá e é o que fecha a RN-08; não trocá-lo por outra
   coisa.
 
+> ⚠️ **Correção escrita no fechamento da Etapa 36 (2026-09-16, item entregue em `5ce3fdf`): as DUAS
+> frases do bullet "Molde exato" acima ESTAVAM ERRADAS.**
+> **(1) `2817054` não é molde de nada aqui.** Aquele commit **não** chama `setLoadingDetalhe(false)`
+> em `fecharDetalhe`, e `RequisicoesList.js` tinha **o mesmo** resíduo: o defeito era **gêmeo, não
+> moldado**. Na Etapa 36 as duas telas foram consertadas **juntas**, com a mesma linha em cada
+> `fecharDetalhe`. Quem lesse este item confiaria num molde inexistente e gastaria o ciclo
+> procurando por ele.
+> **(2) A régua proposta — *"reabrir o painel e ver se ele nasce em Carregando…"* — não funciona**,
+> porque `abrirDetalhe` **religa** a flag em toda abertura: o painel nasce em "Carregando…" com ou
+> sem o conserto. E não há render que leia `loadingDetalhe` com `selectedId === null` (3 usos em
+> Recebimentos, 4 em Requisições, todos sob o painel aberto). Por isso a Etapa 36 entregou a linha
+> **declaradamente sem régua** (caso 2 da `fechar-etapa`: defeito inalcançável pelo harness), com
+> **controle positivo executado** e placar **idêntico** com e sem a linha — 17/17 e 35/35. Fingir um
+> vermelho seria pior; remover a proteção porque nada cai seria muito pior.
+
 ### (d) Os três arquivos grandes — extração merece etapa própria, e medir vem antes
 
 - **Medido agora (`wc -l`):** `RemessasTerceirosAlmoxarifado.js` **1017**, `RequisicoesList.js`
@@ -1958,7 +1973,21 @@ sem prometer nada** (o que vale antes de escolher é a **Fase 0** da
 | **02** Localizações | enforcement de capacidade/peso; sugestão de localização; leitura por confirmação. **Não** propor segregação de saldo por almoxarifado — é decisão de negócio fechada (área física, não filial) |
 | **05** Separação e picking | lista de separação como **entidade**, rota de picking, registro por item (localização/lote), divergência com motivo, kits + localização de kit, tela de fila |
 | **06** Motor de aprovações | motor de regras **configuráveis** por tipo/valor/quantidade/projeto (`regras_aprovacao` + UI) — **adiado por decisão declarada** ("demanda real"), não por esquecimento |
-| **08** Recebimento | enum + validação de `tipo_recebimento` nas **duas** portas de escrita (`POST` e `PUT /:id/fiscal`); NF duplicada; recebimento parcial/excedente; conferência física estruturada; etiqueta; e o item **(b)** acima (modal fiscal/workflow/etiqueta sem teste) |
+| **08** Recebimento | enum + validação de `tipo_recebimento` nas **duas** portas de escrita (`POST` e `PUT /:id/fiscal`); NF duplicada; recebimento parcial/excedente; conferência física estruturada; ~~etiqueta~~ **(esta palavra ESTAVA ERRADA — ver a correção abaixo)**; e o item **(b)** acima (modal fiscal/workflow/etiqueta sem teste) |
+
+> ⚠️ **Correção escrita no fechamento da Etapa 36 (2026-09-16): esta tabela listava "etiqueta" como
+> falta da feature 08, e ESTAVA ERRADA.** A etiqueta foi entregue em 2026-08-11, na **Etapa 6c**,
+> commit **`4ebd1ce`** — o botão *"Imprimir etiquetas dos itens"* está em
+> `RecebimentosAlmoxarifado.js` (status `PROCESSADO`/`APROVADO`) e o montador do PDF em
+> `client/src/utils/etiquetasPdf.js`; **a spec 10 já registrava a entrega**. O erro não nasceu aqui:
+> foi **copiado** da spec 08, que o afirmava desde a Etapa 6 — e é por isso que ele aparece em dois
+> documentos. Os dois foram corrigidos **dizendo que estavam errados**, porque apagar em silêncio
+> faria a próxima sessão planejar uma etapa para construir o que existe. O que de fato falta naquele
+> item da 08 é a **sugestão de localização** (feature 02) e a etiqueta **automática ao aprovar**, que
+> é decisão de negócio. **O resto da linha continua valendo, com o estado de 2026-09-16:** o enum nas
+> duas portas, a NF duplicada e o excedente **foram entregues na Etapa 36** (`d02b9f4..e287a06`); o
+> recebimento **parcial/excedente contra o pedido** é a **Etapa 37** (design `5f03afc`); a
+> conferência física estruturada continua aberta.
 | **09** Inspeção e qualidade | plano de inspeção com medidas, não conformidade formal, desvio autorizado |
 | **21** Relatórios e dashboards | as **4 réguas divergentes** de consumo documentadas (10 vs 18 medido) — unificar é a letra **B19** |
 | **22** Integrações | o resto da fatia integrável além de Compras e custo por projeto |

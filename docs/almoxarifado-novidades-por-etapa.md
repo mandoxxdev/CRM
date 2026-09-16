@@ -94,12 +94,18 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Cinco consultas para rodar em produção ANTES do deploy — uma ação no provedor de e-mail, e uma limpeza de disco que roda sozinha
+### A. Oito consultas para rodar em produção ANTES do deploy — duas ações fora do sistema, e uma limpeza de disco que roda sozinha
 
 *(Este título dizia "Duas consultas" — **passou a três com a A4, da Etapa 24**, ganhou a
 **limpeza de disco A5 na Etapa 25** e **passou a cinco com a A6 e a A7, da Etapa 26**. Corrigido
 aqui em vez de deixado defasado, porque a contagem no título é o que faz alguém parar de
-procurar.)*
+procurar. **Atualizado em 2026-09-16 para oito**, com a **A9**, a **A10** e a **A11** da Etapa 36
+— e as "duas ações fora do sistema" são a **A3** (rotacionar a senha do SMTP) e a **A8** (avisar a
+equipe de que links antigos de arquivo param de funcionar), que não são consulta nenhuma e estavam
+sendo contadas como se fossem. **Correção de estrutura, dita em vez de silenciosa:** havia aqui um
+título `### B. Decisões de negócio` **duplicado e vazio** imediatamente antes da A8, o que jogava a
+A8 visualmente para dentro da letra B. O título sobrando foi removido; a letra B continua uma
+só, logo abaixo.)*
 
 | # | Por quê | Consulta |
 |---|---|---|
@@ -275,15 +281,78 @@ SELECT nome, COUNT(*) FROM categorias_material_almoxarifado GROUP BY nome HAVING
 — tem de aparecer `idx_categorias_almox_nome`. Se não aparecer, o aviso está no registro do
 servidor e a A7 não foi resolvida.
 
-### B. Decisões de negócio
-
 **A8 (NOVO, da Etapa 33 — NÃO é consulta, é aviso a dar antes do deploy).** A partir do deploy,
 **todo link de imagem ou certificado do almoxarifado copiado anteriormente para de funcionar**.
 Se alguém da equipe guardou esses endereços em planilha, documento ou e-mail, avise que o caminho
 passa a ser abrir pelo sistema. Nenhum arquivo foi apagado ou movido — só o endereço mudou de
 regra. Ver o item **42** da letra C.
 
-### B. Decisões de negócio — B1 a B79; as em aberto esperam você, as tomadas estão escritas com o descartado
+**A9 (NOVA, da Etapa 36) — procure notas fiscais já repetidas no banco. A guarda nova NÃO limpa o
+passado: ela só impede notas novas.** A partir do deploy, lançar a mesma nota do mesmo fornecedor é
+recusado com **409**. As repetições **que já existem** ficam exatamente como estão — e quem opera
+precisa saber disso **antes** de estranhar uma recusa nova numa nota que "já foi lançada assim
+outras vezes". Cada linha que a consulta devolver é uma nota fiscal que gerou **mais de um
+documento** — e, se os dois foram processados, saldo creditado em dobro e conta a pagar duplicada.
+
+```sql
+SELECT UPPER(TRIM(nota_fiscal)) AS nf,
+       COALESCE(fornecedor_id, UPPER(TRIM(COALESCE(fornecedor_cnpj, fornecedor_nome)))) AS forn,
+       COUNT(*) AS n, GROUP_CONCAT(numero) AS documentos
+  FROM recebimentos_material_almoxarifado
+ WHERE nota_fiscal IS NOT NULL AND TRIM(nota_fiscal) <> ''
+ GROUP BY nf, forn HAVING n > 1;
+```
+
+- **Zero linhas** — só anotar e seguir. A guarda passa a valer para tudo o que for lançado daqui
+  para frente.
+- **Alguma linha** — **não desfaça nada por conta própria.** Cada par precisa ser olhado: se os
+  dois documentos foram **processados**, o saldo daquele material está **a mais** e há duas contas a
+  pagar para a mesma nota. Me avise com o resultado e a correção entra como trabalho próprio, com
+  ajuste rastreado.
+
+> ⚠️ **Esta consulta SUB-REPORTA, e o número que ela devolver é PISO, não total.** Ela roda em SQL,
+> e o banco do sistema **não sabe ignorar acento** — `José Aços Ltda` e `Jose Acos Ltda` com a
+> mesma nota **não aparecem** como par aqui, embora a guarda nova (que compara em outro lugar, sem
+> acento) os trate como o mesmo fornecedor. Também não cruza um documento identificado **só pelo
+> CNPJ** com outro identificado **só pelo nome**. Ou seja: **zero linhas não garante que não haja
+> repetição**; garante apenas que não há repetição detectável em SQL puro.
+
+**A10 (NOVA, da Etapa 36) — procure formas de recebimento fora dos dois valores.** A validação nova
+vale para **escritas novas**; **não houve limpeza do histórico** (decisão **B85**). Se o banco tiver
+linhas com a forma de recebimento vazia ou com qualquer outro texto, elas continuam lá.
+
+```sql
+SELECT id, numero, tipo_recebimento, data_recebimento, created_at
+  FROM recebimentos_material_almoxarifado
+ WHERE tipo_recebimento IS NULL OR tipo_recebimento NOT IN ('NOTA_FISCAL','PEDIDO_COMPRA');
+```
+
+- **Zero linhas** — fechado, nada a fazer.
+- **Alguma linha** — nada quebra por causa disso hoje (o formulário de nota fiscal **parou de
+  devolver** esse campo ao servidor, justamente para que uma linha antiga não tomasse recusa para
+  sempre). A decisão é sua: deixar como está, ou normalizar com um `UPDATE` pondo
+  `'NOTA_FISCAL'` onde houver número de nota e `'PEDIDO_COMPRA'` onde houver pedido. **É a B85** —
+  eu deliberadamente **não** normalizei nada.
+
+**A11 (NOVA, da Etapa 36 — informativa, e só depois do conserto da revisão final).** Esta consulta
+existe porque ela mede a população que o **defeito crítico** da revisão final teria travado no
+primeiro dia de deploy: recebimentos **ainda abertos** cujos itens têm quantidade recebida **acima**
+da esperada. Depois do conserto, eles andam normalmente (reenviar o mesmo número não é ato novo de
+autorização). Vale rodar para você saber **quantos** são, e não para agir.
+
+```sql
+SELECT r.numero, r.status, i.id AS item_id, i.quantidade_recebida, i.quantidade_esperada
+  FROM recebimentos_material_itens_almoxarifado i
+  JOIN recebimentos_material_almoxarifado r ON r.id = i.recebimento_id
+ WHERE i.quantidade_recebida > i.quantidade_esperada
+   AND r.status NOT IN ('PROCESSADO','REPROVADO');
+```
+
+- **Qualquer resultado** — só anotar. Se aparecerem muitas linhas, é sinal de que receber acima do
+  pedido é **rotina** no galpão, e aí vale conversar sobre quem deve autorizar (ver **B82**): hoje
+  são Administrador e Compras, e o Almoxarife **não** autoriza o próprio excedente.
+
+### B. Decisões de negócio — B1 a B88; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(O título desta seção dizia "B1 a B24" — **estava defasado**: os itens já iam até B36 antes da
 Etapa 20. Corrigido em 2026-08-28 para B50, depois para B56 com as três da Etapa 24, para B57 com
@@ -294,7 +363,9 @@ da Etapa 27 — B59 (plano por família), B60 (o alerta para a etapa da tela) e 
 opcional, decisão já tomada). **Atualizado para B63** com as duas da Etapa 28 e **para B64** com a
 da Etapa 29. **Atualizado em 2026-09-16 para B79**, com as oito da Etapa 35 — B72 a B78 são as
 sete decisões de desenho dela, e B79 é uma decisão sobre **como se prova** o que esta base entrega.
-O título vinha marcado "B1 a B71", que era o número correto ao fim da Etapa 34.)*
+O título vinha marcado "B1 a B71", que era o número correto ao fim da Etapa 34. **Atualizado de
+novo em 2026-09-16 para B88**, com as nove da Etapa 36 — B80 a B85 são as decisões de desenho, e
+B86 a B88 vieram da onda de correção da revisão final.)*
 
 **A B6 SAIU da lista de em aberto — foi respondida pela Etapa 26** (2026-08-29): vence o catálogo
 do cliente, e a lista genérica sai das telas. Ver o item B6 abaixo, que ficou no lugar com o
@@ -311,7 +382,8 @@ permissões por setor que qualquer usuário do módulo lê)** e **B54 (o único 
 Etapa 24: apertar o perfil padrão de quem não tem perfil definido)** e **B57 (o único item da
 Etapa 25: quais operações sobre material crítico exigem duas assinaturas)** e **B58 (a única da
 Etapa 26: renomear categoria reclassifica?)** e **B59 (a da Etapa 27: plano de inspeção herdado da
-família?)**.
+família?)** e **B82 (a da Etapa 36: o Gestor deve poder autorizar recebimento acima do pedido?
+Hoje não pode, e habilitá-lo é etapa própria)**.
 As quatro decisões da Etapa 20 que **eu já tomei** e você pode reverter estão em B37-B40, as
 **cinco da Etapa 21** (a primeira etapa do núcleo do CRM) estão em **B42-B46**, e as **quatro da
 Etapa 22** estão em **B47-B50** — todas tomadas por mim, nenhuma esperando resposta, todas
@@ -1460,6 +1532,146 @@ descobertas ao fazer isso aqui, e as duas valem registro porque a instrução es
 **O custo:** nenhum para você. Registrado porque é o tipo de detalhe que, esquecido, faz a próxima
 sessão produzir um controle que não controla nada — já aconteceu quatro vezes nesta base.
 
+**B80 (NOVA, da Etapa 36) — a nota fiscal repetida é barrada pelo SISTEMA, e não por uma trava no
+banco.**
+
+**O que foi escolhido:** o sistema pergunta ao banco se aquela nota daquele fornecedor já existe,
+e recusa com uma mensagem legível (*"Nota fiscal … já lançada no recebimento … para este
+fornecedor"*) dizendo **em qual** documento ela está. O banco ganhou apenas um índice de **busca**,
+não de **unicidade**.
+**O que foi descartado:** a trava de unicidade no banco (`UNIQUE`). Dois motivos medidos: **(1)** se
+o banco de produção já tiver notas repetidas de antes — e é o que a consulta **A9** vai dizer —, a
+trava **não é criada** e a subida do módulo falha ou o aviso se perde; **(2)** a recusa viria como
+erro técnico de banco, não como frase que o operador entende.
+**O custo, e é real:** a guarda **não é à prova de simultaneidade**. Ela pergunta e depois grava;
+dois lançamentos **exatamente simultâneos** da mesma nota ainda passam os dois. Está também na
+letra **G12**. O fechamento definitivo é a migração para um banco com transações, já planejada —
+não é uma linha que se acrescenta aqui.
+
+**B81 (NOVA, da Etapa 36 — reescrita pela revisão final) — "o mesmo fornecedor" casa por QUALQUER
+identificação, e o nome é comparado sem acento.**
+
+**O que foi escolhido:** o sistema compara o fornecedor cadastrado, o **CNPJ só pelos dígitos** e o
+**nome sem acento, em maiúsculas, com espaços colapsados** — e considera o mesmo fornecedor se
+**qualquer uma** das três casar.
+**O que foi descartado (e era o desenho original desta etapa — ele estava incompleto):** escolher
+**uma** identificação por ordem de preferência (cadastro → CNPJ → nome). A revisão final provou por
+sonda que isso era contornável de três jeitos, dois deles pelo caminho normal da tela: a nota
+digitada à mão (só nome) nunca encontrava a mesma nota com o fornecedor escolhido no cadastro; e
+`José Aços Ltda` × `JOSÉ AÇOS LTDA` entravam as duas, porque o banco **não** ignora acento. Também
+foi descartado resolver isso dentro do banco: não há como remover acento em SQLite sem extensão.
+**O custo:** a consulta **A9**, que roda em SQL, **sub-reporta** — ver a ressalva ao lado dela.
+
+**B82 (NOVA, da Etapa 36 — e é a que espera resposta sua) — autorizar recebimento acima do pedido é
+de ADMINISTRADOR e COMPRAS. O GESTOR ficou de fora.**
+
+**O que foi escolhido:** a permissão nova ficou com **Administrador e Compras**. O **Almoxarife**
+ficou fora **de propósito**: quem recebe não autoriza o próprio excedente, o mesmo critério já
+usado no plano de inspeção.
+**O que foi descartado, e por quê:** o desenho desta etapa dizia **Administrador, Gestor e
+Compras** — e **estava errado, de forma verificável**: as duas telas onde a autorização é exigida
+só abrem para quem tem *Receber material* (Administrador, Almoxarife, Compras), então **o Gestor
+nem chega ao ponto da autorização**. Seria configuração morta, que a tela reportaria como permissão
+concedida. Também foram descartados **alargar *Receber material*** (permissão larga para problema
+estreito — entregaria o fluxo inteiro de recebimento ao Gestor) e **abrir uma rota de exceção** só
+para ele.
+**A pergunta que é sua: o Gestor deve poder autorizar excedente?** Se sim, **não é uma linha de
+configuração** — ele precisa de uma porta própria para essa ação, e isso é etapa própria. Hoje o
+caminho prático é o almoxarife chamar Compras.
+
+**B83 (NOVA, da Etapa 36) — o campo de contagem grava pela CONFERÊNCIA, não pelo formulário de nota
+fiscal.**
+
+**O que foi escolhido:** "Qtd. conferida" e **Salvar Conferência** aparecem nas duas situações em
+que o material ainda está com o almoxarifado (**RECEBIDO** e **EM_CONFERENCIA**), e gravam pela rota
+da conferência — que existia no sistema e **nunca tinha tido um único chamador**.
+**O que foi descartado:** pendurar o campo no formulário de **dados fiscais**, que era a proposta
+inicial. Ele só aparece no **Faturamento**, três transições depois do gesto real de contar a carga,
+e deixaria a conferência morta — a mesma classe de defeito que as Etapas 6, 32 e 34 já pagaram
+nesta base.
+**O custo:** depois que o documento sai do almoxarifado, corrigir a contagem pelo painel deixa de
+ser possível — e isso é intencional: dali para frente a quantidade já é base de custo médio e de
+conta a pagar.
+
+**B84 (NOVA, da Etapa 36 — e esta decisão foi REVISADA dentro da própria etapa; o que ficou é a
+segunda versão) — a autorização de excedente passou a valer TAMBÉM no cadastro do recebimento; o
+que continua fora é a comparação contra o SALDO DO PEDIDO DE COMPRA.**
+
+**A primeira versão desta decisão dizia** que a barreira valeria só nas duas portas onde existe uma
+quantidade **já gravada** para comparar (conferência e dados fiscais), e que o cadastro com 999 de
+um item de 10 continuaria entrando — declarado como corte de escopo. **Isso não sobreviveu à onda de
+correção, e o motivo é honesto:** quando a regra passou a exigir **aumento** sobre a quantidade
+gravada (**B86**), o bloqueio que existia no cadastro deixou de existir. Ele nunca tinha sido
+barreira — era **acidental**: quem recusava era o formulário de nota fiscal, ao devolver o mesmo
+número. Com a regra nova, um recebimento **criado** já acima do esperado (caso que a tela não
+produz, mas que a API produz) iria até o **processamento** sem autorização e sem trilha.
+**O que foi escolhido:** fechar a terceira porta. Criar um recebimento com quantidade recebida acima
+da esperada exige a mesma autorização — 400 sem ela, 403 nomeando a ação sem o perfil, 201 com
+trilha *"Excedente autorizado"* por item.
+**O que foi descartado:** manter o corte declarado. Uma limitação declarada continua sendo decisão
+enquanto o furo é **inalcançável ou inofensivo**; este passou a ser alcançável por HTTP **e** a
+chegar ao estoque, e aí "declarar" seria só um jeito elegante de deixar aberto.
+**O que continua fora, e isso sim é corte:** a comparação com o **saldo do pedido de compra**.
+A barreira compara com a **esperada daquele item**, não com quanto o pedido ainda tem a receber —
+então um pedido de 10 pode receber 25 em três recebimentos, cada um "dentro do esperado" do próprio
+documento. Fechar isso exige guardar o acumulado recebido por item de pedido (a tabela tem colunas,
+um leitor e **nenhum** escritor). **É a Etapa 37**, já desenhada. Também está na letra **D**.
+
+**B85 (NOVA, da Etapa 36) — nenhum dado histórico foi normalizado.**
+
+**O que foi escolhido:** as regras novas valem para o que for escrito **de agora em diante**.
+Formas de recebimento fora dos dois valores e notas repetidas que já existam no banco **ficam como
+estão**, e as consultas **A9** e **A10** existem para você medir o tamanho disso antes de subir.
+**O que foi descartado:** rodar uma normalização automática no arranque do sistema. Reescrever em
+massa a forma de recebimento de documentos antigos é decidir, por conta própria, o que aconteceu
+naquelas entradas — e sem trilha, porque um `UPDATE` de arranque não deixa auditoria.
+**O custo:** a decisão de limpar (ou não) fica com você, com a consulta pronta.
+
+**B86 (NOVA, da Etapa 36 — da revisão final; corrigiu um defeito CRÍTICO) — a barreira de excedente
+só dispara quando a quantidade AUMENTA sobre a que já está gravada.**
+
+**O que foi escolhido:** a recusa acontece quando a quantidade é **maior que a esperada E maior que
+a já gravada**. Reenviar o mesmo número, ou baixá-lo, nunca é ato novo de autorização — e a linha de
+auditoria *"Excedente autorizado"* só nasce quando a barreira realmente disparou.
+**O que foi descartado:** fazer a **tela** mandar a autorização junto do formulário de nota fiscal.
+Isso ligaria a autorização em **toda** gravação fiscal, por quem não tem a permissão — esvaziaria a
+regra —, e não cobriria os recebimentos **antigos** do banco, que a tela não controla. Também foi
+descartado fazer a tela mandar só os itens alterados: ela teria de guardar o valor original de cada
+item (estado duplicado que dessincroniza) e a barreira continuaria furada para qualquer outro
+programa que use a API.
+**O custo:** zero para o operador. Foi este conserto que fez o documento autorizado voltar a andar
+até o estoque.
+
+**B87 (NOVA, da Etapa 36 — da revisão final) — cada item do cadastro passou a exigir quantidade
+numérica maior que zero. É MUDANÇA DE CONTRATO para quem integrar por API.**
+
+**O que foi escolhido:** na criação de um recebimento, `quantidade` é obrigatória e tem de ser
+número **maior que zero**, e `quantidade_esperada`, quando vem, também. Texto (`"abc"`), `0` e
+números negativos são recusados com *"quantidade do item deve ser um número maior que zero"*. Texto
+numérico continua valendo (`"5"` é aceito e convertido) — a tela manda os números como texto, e
+quebrar isso quebraria a tela.
+**Por que virou decisão, e não só conserto:** mandar a quantidade esperada como texto era a forma
+de **desligar a barreira de excedente** daquele item, para sempre e em silêncio.
+**O custo, e é o único que sai do sistema:** **se algum dia alguém integrar por API** e mandar item
+sem quantidade, ou com quantidade zero, a chamada passa a ser recusada com 400 onde antes entrava.
+Os nove pontos internos que criam recebimento foram todos verificados e nenhum manda item sem
+quantidade — mas cliente externo não existe hoje, e se existir amanhã este é o ponto que muda.
+
+**B88 (NOVA, da Etapa 36 — decisão de método, e uma lição do controle positivo) — a sabotagem
+prevista para o conserto do acento NÃO derrubava nada, e o motivo importa.**
+
+Esta base tem a regra de quebrar a implementação de propósito para confirmar que o teste **fica
+vermelho**. O cenário do acento nasceu escrito com o par `José Aços Ltda` × `JOSÉ AÇOS LTDA`; com
+ele, **remover** a normalização de acento deixava a suíte **verde**. O motivo: o comando de
+maiúsculas da **linguagem do sistema** já casa letra acentuada (`José` → `JOSÉ`), e o do **banco**
+não — e o defeito estava no do banco. A régua só existe com o par **sem acento × com acento**
+(`Jose Acos Ltda` × `José Aços Ltda`), que foi acrescentado ao cenário.
+**O que foi escolhido:** acrescentar o par que falta e **dizer** que a primeira sabotagem era
+inútil. **O que foi descartado:** trocar por outra sabotagem que "funcionasse" — isso deixaria a
+asserção que interessa sem prova nenhuma, com o placar vermelho dando a impressão contrária.
+**O custo:** nenhum para você. Está aqui porque é a quinta vez nesta base que um controle positivo
+passa sem controlar nada, e cada vez foi por um motivo diferente.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -1995,6 +2207,68 @@ sessão produzir um controle que não controla nada — já aconteceu quatro vez
     sem esperar e repita invertendo a ordem. O painel sempre acaba no do último clique, e nunca
     mostra um número em cima dos dados de outro.
 
+48. **✅ RESOLVIDO NA ETAPA 36 — a mesma nota fiscal do mesmo fornecedor entrava DUAS VEZES e
+    dobrava o estoque.** Este furo **nunca esteve escrito em spec nenhuma**, e é o mais caro que
+    apareceu no módulo em muitas etapas, porque ele mexia em **saldo** e em **dinheiro**.
+
+    Este item dizia que ~~lançar a mesma nota fiscal do mesmo fornecedor duas vezes criava **dois
+    recebimentos**, e que nada no sistema reclamava — nem ao cadastrar, nem ao preencher a nota
+    depois. Processando os dois, o material era creditado **duas vezes** (20 onde entraram 10) e o
+    sistema gerava **duas contas a pagar** para a mesma nota~~. **A Etapa 36 fechou**
+    (`d02b9f4..e287a06`).
+
+    **Como acontecia na prática, sem má-fé nenhuma:** dúvida sobre se a nota já foi lançada (e a
+    tela de Recebimentos, até a Etapa 35, dizia *"Nenhum recebimento registrado"* quando a rede
+    caía — ver o item **45** e a **G10**), dois operadores conferindo a mesma carga, ou recarregar
+    a tela depois de um salvamento lento.
+
+    **O que mudou:** a segunda tentativa é recusada com *"Nota fiscal ⟨número⟩ já lançada no
+    recebimento REC-… para este fornecedor"*, **nas duas portas** — ao cadastrar e ao preencher os
+    dados fiscais depois —, dizendo qual documento já tem a nota. O sistema considera "o mesmo
+    fornecedor" quando **qualquer** identificação casa: o fornecedor escolhido no cadastro, o CNPJ
+    só pelos dígitos, ou o nome digitado **ignorando acento**, maiúsculas e espaços repetidos
+    (decisões **B80** e **B81**). Nota **sem número** e fornecedor **não identificado** continuam
+    livres de propósito (**RN-13**), e salvar duas vezes a **própria** nota do mesmo documento não
+    se autoacusa.
+
+    **⚠️ E o que fechar a porta NÃO resolve — leia antes do deploy:** a guarda **não limpa o
+    passado**. Se o banco de produção já tiver notas repetidas, elas continuam lá, com o saldo já
+    creditado em dobro. **A consulta é a A9** — e ela **sub-reporta**, porque não consegue ignorar
+    acento em SQL. Rode antes de subir.
+
+    **Um efeito de borda que parece bug e não é:** se você **trocar o fornecedor** de um recebimento
+    (ao preencher os dados fiscais) para o mesmo fornecedor de outro documento que já tem aquela
+    nota, a partir daí ele passa a tomar a recusa **citando o outro documento**. É o comportamento
+    correto — os dois passaram a ser a mesma nota do mesmo fornecedor.
+
+    Deixado aqui, riscado, em vez de apagado — para quem lembrar do furo confirmar que fechou, com
+    o número da etapa que fechou.
+
+49. **✅ RESOLVIDO NA ETAPA 36 — receber ACIMA do pedido entrava sem ninguém autorizar.** Também
+    **nunca esteve em spec nenhuma**.
+
+    Este item dizia que ~~um item de 10 unidades podia ser registrado como 999 recebidas, em
+    silêncio, por qualquer perfil que receba material — sem autorização, sem aviso e sem trilha~~.
+    **A Etapa 36 fechou** (`d02b9f4..e287a06`, mais o conserto final da onda de correção).
+
+    **O que mudou:** quantidade acima da esperada é recusada com *"Quantidade recebida (999) maior
+    que a esperada (10) no item #⟨id⟩ — a autorização de excedente é de Compras ou do
+    Administrador"*, **em qualquer momento em que a quantidade recebida é informada** — no cadastro,
+    na conferência e nos dados fiscais. Quem pode autorizar (**Administrador** e **Compras**) vê a
+    caixa **"Autorizo o recebimento acima do pedido"**, e cada item autorizado deixa a linha
+    **"Excedente autorizado"** na trilha de auditoria. O **Almoxarife** recebe material mas **não**
+    autoriza o próprio excedente (decisão **B82**).
+
+    **⚠️ O que essa autorização NÃO mede, e é corte declarado:** ela compara a quantidade com a
+    **esperada daquele item, naquele documento** — não com o **saldo do pedido de compra**. Um
+    pedido de 10 pode receber 25 em três recebimentos, cada um "dentro do esperado" do próprio
+    documento, e o pedido continua marcado como 10 e **ABERTO**. É a decisão **B84** e o assunto da
+    **Etapa 37**, já desenhada.
+
+    **O que quem opera precisa saber:** a recusa nomeia **só o primeiro** item acima do esperado da
+    nota. Se você corrigir esse e reenviar, pode tomar uma recusa nova pelo **segundo** item — a
+    trilha, ao contrário, escreve **uma linha por item**.
+
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -2198,6 +2472,33 @@ sessão produzir um controle que não controla nada — já aconteceu quatro vez
   **"Exclusão"** desde a Etapa 22 (item **B48**), então **para quem audita isso já está resolvido**
   — o que continua é o dado bruto. Padronizar a gravação é o mesmo trabalho de ~45 pontos do item
   acima, e segue declarado desde a Etapa 22.
+
+- **(36) A autorização de excedente NÃO mede o saldo do pedido de compra.** Ela compara a quantidade
+  recebida com a **esperada daquele item, naquele recebimento**. Um pedido de 10 pode receber 25 em
+  três recebimentos, cada um "dentro do esperado" do próprio documento, e o pedido continua marcado
+  como 10 e **ABERTO**. Fechar isso exige guardar quanto de cada item de pedido já foi recebido — a
+  tabela tem as colunas, **um** leitor e **nenhum** escritor. **É a Etapa 37**, já desenhada.
+
+- **(36) Recebimento PARCIAL não existe pela tela.** A tela de Recebimentos **nunca carrega os
+  itens do pedido de compra** — ela abre a lista de itens vazia —, então registrar "chegaram 6 dos
+  10 do pedido, o resto vem depois" não é um gesto disponível hoje. O que existe é registrar um
+  recebimento com a quantidade que chegou; o pedido, do lado dele, não é atualizado. **É a Etapa
+  37.**
+
+- **(36) A conferência física registra a QUANTIDADE, não um laudo de divergência.** O campo
+  "Qtd. conferida" grava quanto chegou, o aviso mostra a diferença na tela e o alerta
+  *"Divergência de recebimento"* é disparado — mas **não existe um registro formal de divergência**
+  com número próprio, dono, prazo e desfecho (aceitar, devolver ao fornecedor, cobrar). Quem trata a
+  divergência hoje trata por fora do sistema; o sistema avisa e guarda os dois números.
+
+- **(36) A exigência de quantidade numérica maior que zero por item é MUDANÇA DE CONTRATO para
+  integrações externas.** Criar um recebimento passou a recusar item sem quantidade, com quantidade
+  zero, negativa ou em texto não numérico (*"quantidade do item deve ser um número maior que
+  zero"*). Texto numérico — `"5"` — continua valendo, porque é o que a tela manda. **Nenhum ponto
+  interno do sistema foi afetado** (os nove que criam recebimento foram verificados), e hoje não há
+  cliente externo; mas **se houver**, é aqui que ele muda. Foi aceito porque o campo em texto era
+  literalmente a forma de **desligar** a barreira de excedente daquele item, em silêncio e para
+  sempre. Ver **B87**.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -2625,6 +2926,85 @@ surpresa.
    acrescentou aparecem na tela, mas um leitor de tela não as lê sozinho. **Isso vale para o módulo
    inteiro e não é regressão** desta etapa — é consistente com tudo o que já existia. Fica escrito
    porque, se acessibilidade entrar no escopo algum dia, o trabalho é do módulo, não de uma tela.
+
+**G12 (NOVO, da Etapa 36). A guarda de nota fiscal repetida NÃO é à prova de simultaneidade.**
+
+Ela pergunta ao banco se aquela nota daquele fornecedor já existe e, se não existir, grava. Entre a
+pergunta e a gravação há um instante — e **dois lançamentos exatamente simultâneos** da mesma nota
+ainda passam os dois. Na prática do galpão isso exige duas pessoas salvando a mesma nota no mesmo
+décimo de segundo; o caso realista que a guarda fecha (a mesma pessoa lançando duas vezes, ou dois
+operadores em minutos diferentes) está coberto.
+
+**Não foi fechado com uma trava de unicidade no banco de propósito** — é a decisão **B80**: se o
+banco de produção já tiver notas repetidas de antes, a trava não é criada e o problema passa a ser
+outro, pior. O fechamento definitivo vem com a migração para um banco com transações, já planejada;
+**não se conserta isto com uma linha**, e é por isso que está escrito aqui em vez de prometido.
+
+---
+
+**G13 (NOVO, da Etapa 36). A forma de recebimento é conferida na PORTA, não no motor.**
+
+Os dois valores válidos são exigidos nas duas rotas por onde a tela escreve. **O motor interno que
+grava o recebimento não repete a checagem** — quem o chamar por dentro, sem passar pelas rotas,
+grava o que quiser. Hoje **os únicos chamadores são as duas rotas validadas**, então o furo é
+inalcançável; ele está escrito porque uma função nova que chame o motor direto reabre o buraco sem
+nada avisar, e porque a barreira certa, no fim, é no motor.
+
+---
+
+**G14 (NOVO, da Etapa 36). A suíte da tela de Recebimentos finge que o usuário pode tudo.**
+
+Os testes automáticos dessa tela substituem a checagem de permissão por um "pode sempre". Isso é
+prático (não precisam montar um usuário com perfil), mas significa que **esconder a caixa
+"Autorizo o recebimento acima do pedido" de quem não pode autorizar não tem régua automática** — é
+verificação de olho. **O que está protegido é o que importa:** quem decide é o servidor, e essa
+parte tem cenários com perfil real (Almoxarife recebe 403, Compras recebe 200). A caixa escondida é
+conveniência de interface, não segurança — mas se alguém a trocar por "sempre visível", nenhum
+teste cai.
+
+---
+
+**G15 (NOVO, da Etapa 36). A recusa de nota repetida ao SALVAR DADOS FISCAIS só aparece no aviso
+flutuante, e ele passa.**
+
+Na **conferência**, a recusa do servidor fica **fixa na tela**, em vermelho, até você resolver. No
+formulário de **dados fiscais**, a mesma classe de recusa (a nota já lançada em outro documento) sai
+só no aviso flutuante de alguns segundos — o formulário continua aberto, nada é perdido, mas quem
+não estava olhando fica com "não salvou" e nenhum motivo. É assimetria entre dois lugares que
+deveriam avisar igual, e o conserto é do tamanho do que já foi feito na conferência.
+
+---
+
+**G16 (NOVO, da Etapa 36). O campo "Qtd. conferida" não tem rótulo visível.**
+
+O que identifica o campo é o texto **dentro** dele e a dica ao passar o mouse — e o texto de dentro
+**desaparece assim que você digita**. Com o painel cheio de campos numéricos, quem chega depois no
+mesmo recebimento vê um número sem nome ao lado. Um rótulo acima do campo resolve, e não foi feito
+aqui para não mexer no desenho do painel no fim de uma etapa.
+
+---
+
+**G17 (NOVO, da Etapa 36). A consulta A9 sub-reporta notas repetidas, e o número dela é PISO.**
+
+A consulta da letra **A9** mede notas repetidas em produção, e ela roda no banco — que **não sabe
+ignorar acento**. `José Aços Ltda` e `Jose Acos Ltda` com a mesma nota **não** aparecem como par,
+embora a guarda nova (que compara fora do banco) trate os dois como o mesmo fornecedor. Ela também
+não cruza um documento identificado só pelo **CNPJ** com outro identificado só pelo **nome**.
+**Consequência prática: zero linhas na A9 não prova que não há repetição** — prova que não há
+repetição detectável em SQL puro. Está dito ao lado da própria consulta, e repetido aqui porque é o
+tipo de ressalva que se perde ao copiar a query.
+
+---
+
+**G18 (da Etapa 36, mas PRÉ-EXISTENTE — não foi criado aqui). O salvamento da conferência não
+confere o TIPO do campo de quantidade.**
+
+A rota que grava a conferência aceita a quantidade recebida **em texto** e a grava como texto. A
+barreira de excedente **não** é afetada por isso (ela trata o valor como número antes de comparar),
+e a tela nunca produz o caso — o campo é numérico. Mas é a mesma classe de problema que a revisão
+final encontrou no **cadastro** (onde a quantidade esperada em texto **desligava** a barreira, e
+onde foi consertado com a exigência de número maior que zero): a porta da conferência não recebeu a
+mesma exigência nesta etapa, e fica escrita para não ser descoberta de novo.
 
 ## Etapa 0 — Fundação (2026-08-03)
 
@@ -6643,8 +7023,325 @@ estilo olha **o primeiro** bloco de regras e passaria despercebido se alguém so
 depois; e **nenhuma** tela do módulo anuncia suas mensagens para leitor de tela — o aviso flutuante
 é o único anúncio, e isso vale para o módulo inteiro, não para esta etapa.
 
+## Etapa 36 — O recebimento para de aceitar qualquer coisa, e a conferência física ganha campo (2026-09-16)
+
+**Esta etapa É feature** — a **08 (Recebimento)**, a mesma que a Etapa 35 tinha só consertado por
+fora. Aqui o servidor mudou de propósito, e por um motivo simples: **as duas portas por onde um
+recebimento é escrito aceitavam praticamente qualquer coisa.**
+
+Eram **quatro problemas no mesmo documento**, e três deles mexiam em saldo de estoque e em conta a
+pagar:
+
+1. **A "forma de recebimento" aceitava qualquer texto.** O campo que diz se a entrada veio por
+   **nota fiscal** ou por **pedido de compra** não era conferido em lugar nenhum: mandado por fora
+   da tela, ele gravava o que viesse — inclusive texto com código dentro. A tela oferece dois
+   valores; o sistema aceitava infinitos.
+2. **A mesma nota fiscal do mesmo fornecedor entrava duas vezes, e o estoque dobrava.** Não havia
+   nenhuma checagem de nota repetida. Lançar a mesma NF duas vezes — por dúvida, por dois
+   operadores, por recarregar a tela — criava **dois documentos**, e processar os dois creditava
+   **20 onde entraram 10** e gerava **duas contas a pagar** para a mesma nota do fornecedor.
+3. **Receber mais do que o pedido entrava sem ninguém autorizar.** Um item de 10 unidades podia ser
+   registrado como 999 recebidas, em silêncio, por quem estava no balcão.
+4. **O campo de contagem que este manual prometia não existia.** O sistema tem alerta de
+   *"Divergência de recebimento"*, a tela tem a etapa **Conferência**, e o painel mostrava **uma**
+   quantidade só — a esperada. **Não havia onde digitar quanto chegou de verdade**, e a rota que
+   grava essa contagem nunca teve um único chamador na vida. A conferência existia como situação no
+   fluxo e não existia como gesto.
+
+Agora a forma de recebimento é um de dois valores e nada mais; a nota repetida do mesmo fornecedor
+é recusada nas duas portas, dizendo em qual documento ela já está; cada item em conferência tem o
+campo **"Qtd. conferida"** com o aviso de divergência ao lado; e receber acima do esperado exige a
+autorização de **Compras** ou do **Administrador**, com trilha de auditoria por item.
+
+### Antes → Agora
+
+| Onde | Antes | Agora |
+|---|---|---|
+| **Novo recebimento** — forma de recebimento | Gravava **qualquer** texto que chegasse (a tela oferecia dois valores; o servidor não conferia nenhum) | Só **Nota fiscal** ou **Pedido de compra**. Qualquer outra coisa é recusada com *"Dados inválidos — tipo_recebimento: forma de recebimento inválida (use NOTA_FISCAL ou PEDIDO_COMPRA)"* |
+| **Novo recebimento** — nota repetida | A mesma NF do mesmo fornecedor entrava **duas vezes**: dois documentos, estoque **dobrado** e **duas** contas a pagar | Recusado com *"Nota fiscal ⟨número⟩ já lançada no recebimento REC-… para este fornecedor"*, dizendo **qual** documento já tem a nota |
+| **Salvar Dados Fiscais** — nota repetida | A guarda não existia nem aqui: dava para chegar ao mesmo resultado preenchendo a NF depois | Mesma recusa, com a mesma mensagem, nesta segunda porta — e salvar duas vezes a **própria** nota continua funcionando (o documento não se autoacusa) |
+| **Novo recebimento** — quantidade do item | `quantidade: "abc"`, `0` ou `-3` eram aceitos e gravados como vieram | Cada item exige **número maior que zero**: *"Dados inválidos — itens.0.quantidade: quantidade do item deve ser um número maior que zero"* |
+| **Painel do recebimento** (RECEBIDO / EM_CONFERENCIA) | Mostrava **uma** quantidade e **nenhum campo** para registrar a contagem física | Cada item mostra **a recebida e a esperada**, tem o campo **"Qtd. conferida"** e o botão **Salvar Conferência** |
+| **Conferência com diferença** | Nada aparecia, porque não havia o que comparar | Aparece *"Divergência: 13 a menos que o esperado (200)"* embaixo do campo, na hora de digitar |
+| **Receber acima do esperado** | Entrava, em silêncio, por qualquer perfil que receba material | Recusado com *"Quantidade recebida (999) maior que a esperada (10) no item #11 — a autorização de excedente é de Compras ou do Administrador"* — **em qualquer momento em que a quantidade recebida é informada**, inclusive no cadastro. Quem pode autorizar vê a caixa **"Autorizo o recebimento acima do pedido"** |
+| **Trilha de auditoria** | Excedente não deixava rastro nenhum | **"Excedente autorizado"**, uma linha por item, com quem autorizou |
+| **Pular etapa do fluxo** | Já era recusado, mas **nenhum teste** guardava isso — a régua do fluxo que a spec exigia desde agosto não existia | Recusado com *"Não é possível "processar" no status atual (RECEBIDO)"*, e agora com régua automática |
+
+### As regras, com o cenário exato
+
+**RN-11 — a forma de recebimento é um de dois valores, nas DUAS portas.**
+Pela tela você só consegue escolher **Nota fiscal** ou **Pedido de compra**, então este é o cenário
+de quem manda por fora (integração, `curl`, um script). Mandando `tipo_recebimento` com qualquer
+outro valor — inclusive `BANANA<script>`, que foi o que a sonda gravou antes do conserto —, a
+resposta é **400** e esta mensagem:
+
+> **"Dados inválidos — tipo_recebimento: forma de recebimento inválida (use NOTA_FISCAL ou PEDIDO_COMPRA)"**
+
+A mesma recusa vale ao **Salvar Dados Fiscais**, e ali a coluna fica **inalterada** no banco. E as
+duas metades positivas que provam que a barreira não pegou o caminho normal: um recebimento válido
+continua gravando nota, observações, CNPJ do fornecedor e lote do item; e um recebimento **sem** o
+campo, criado a partir de um pedido de compra, continua entrando como **Pedido de compra**.
+
+**RN-12 — a mesma nota fiscal do mesmo fornecedor não entra duas vezes.**
+**Almoxarifado → Recebimentos → Novo Recebimento**, tipo **Nota fiscal**. Lance a nota `12345` do
+fornecedor `José Aços Ltda` com um item. Repita **o mesmo lançamento**. O segundo é recusado com
+**409**:
+
+> **"Nota fiscal 12345 já lançada no recebimento REC-… para este fornecedor"**
+
+— onde `REC-…` é o número do documento que **já** tem a nota, para você ir direto nele. **A
+asserção que mede o dano, e não a porta:** processando as duas tentativas, o saldo do material fica
+**10** e não 20, e a nota gera **uma** conta a pagar e não duas.
+
+**Como o sistema decide que é "o mesmo fornecedor"** — e isto é o que a revisão final reescreveu,
+porque a primeira versão era contornável de três jeitos: ele compara **todas** as identificações e
+casa se **qualquer uma** delas casar — o **fornecedor escolhido no cadastro**, o **CNPJ só pelos
+dígitos** (`12.345.678/0001-00` e ` 12345678000100 ` são o mesmo) ou o **nome digitado ignorando
+acento, maiúsculas e espaços repetidos** (`José Aços Ltda`, `JOSÉ  AÇOS LTDA` e `Jose Acos Ltda`
+são o mesmo fornecedor). É o caminho real da tela, que manda **nome digitado à mão**.
+
+**RN-13 — três coisas NÃO são nota repetida, de propósito.**
+Duas notas com o **mesmo número e fornecedores diferentes** entram as duas (dois fornecedores podem
+emitir a NF 100). Dois recebimentos **sem número de nota** para o mesmo fornecedor entram os dois
+(receber por pedido de compra sem nota é legítimo). E dois recebimentos com a mesma nota e
+**nenhuma** identificação de fornecedor — sem cadastro, sem CNPJ e sem nome — também entram os
+dois: tratar "sem fornecedor" como um fornecedor único juntaria documentos de origens diferentes.
+
+**RN-14 — a guarda vale também ao preencher a nota depois, e o documento não se autoacusa.**
+Documento **A** com a nota `NF-X`; documento **B** sem nota, os dois já em conferência. Em **B**,
+**Preencher Dados da NF** com `NF-X` e o mesmo fornecedor → **409** citando **A**. Metade positiva:
+em **A**, salvar os dados fiscais de novo com a **própria** `NF-X` → **200**. Salvar duas vezes o
+mesmo documento nunca pode acusá-lo de duplicar a si mesmo.
+
+**RN-15 — o fluxo não pula etapas.**
+Num recebimento em **RECEBIDO**, tentar **processar** direto (por fora da tela, porque a tela não
+oferece o botão ali) responde **400**:
+
+> **"Não é possível "processar" no status atual (RECEBIDO)"**
+
+Uma ação inexistente responde *"Ação de workflow inválida"*; um recebimento inexistente,
+*"Recebimento não encontrado"*. E a metade positiva: a sequência inteira — iniciar conferência →
+finalizar conferência → encaminhar para Compras → finalizar Compras → iniciar faturamento —
+responde **200** cinco vezes. Esta regra **já valia**; o que esta etapa entregou foi a **régua** que
+a spec pedia desde 11/08 e que não existia.
+
+**RN-16 — a conferência grava quanto chegou de verdade.**
+Abra um recebimento em **RECEBIDO** ou **EM_CONFERENCIA**. Cada item passa a mostrar a quantidade
+**recebida** em cima e **"Esperada: 200"** embaixo, e ganha o campo **"Qtd. conferida"**. Digite
+`187` e clique em **Salvar Conferência** → o aviso *"Conferência salva"* aparece e o número fica
+gravado. **O detalhe que evita um dano novo:** deixar o campo **vazio** significa *"não contei este
+item"* — o sistema não grava zero (que dispararia alerta de divergência com "0 recebidos") e
+**não** desmarca a conferência que outra pessoa já tinha feito naquele item.
+
+**RN-17 — a divergência aparece na hora, com as duas quantidades.**
+Com `187` digitado contra `200` esperados, aparece embaixo do campo, em vermelho:
+
+> **"Divergência: 13 a menos que o esperado (200)"**
+
+Digitando `200`, o aviso **não** aparece. Diferença pequena também aparece: `200,001` contra `200`
+mostra **"Divergência: 0.001 a mais que o esperado (200)"** — e isso é conserto da revisão final,
+porque antes o aviso arredondava para *"0 a mais"* enquanto o servidor barrava o salvamento.
+
+**RN-18 — receber acima do esperado exige autorização de Compras ou do Administrador.**
+Com um item de **10** esperadas, digite **12** em "Qtd. conferida" e clique em **Salvar
+Conferência** como **Almoxarife**. A recusa fica **na tela** (não é um aviso que passa):
+
+> **"Quantidade recebida (12) maior que a esperada (10) no item #⟨id⟩ — a autorização de excedente é de Compras ou do Administrador"**
+
+A quantidade digitada **não** é apagada. Entrando como **Compras** (ou **Administrador**), aparece
+a caixa **"Autorizo o recebimento acima do pedido"** — ela só aparece quando existe **de fato** um
+item acima do esperado, e só para quem pode marcá-la. Marcada, o salvamento responde **200**, grava
+a quantidade e escreve na trilha de auditoria **"Excedente autorizado"**, **uma linha por item
+excedente**. Quem tem a caixa mas não a permissão (caso alcançável por fora da tela) recebe **403**:
+
+> **"Autorizar recebimento acima do pedido exige a permissão "autorizar_excedente" (seu perfil: ALMOXARIFE)."**
+
+**E a regra que a revisão final reescreveu:** a barreira só dispara quando a quantidade é **maior
+que a esperada E maior do que a que já está gravada**. Reenviar o mesmo número, ou **baixar**, nunca
+é um ato novo de autorização — é isso que faz o documento já autorizado continuar andando até o
+fim, e é isso que impede que linhas antigas do banco com recebida acima da esperada travem no
+primeiro dia depois do deploy.
+
+**E a exigência vale em QUALQUER momento em que a quantidade recebida é informada — inclusive no
+cadastro do recebimento.** Esse fechamento veio no último conserto da onda de correção: com a regra
+do parágrafo acima, um recebimento **criado** já com quantidade recebida acima da esperada (caso que
+a tela nunca produz — ela manda a recebida igual à quantidade do item) passaria a andar até o
+processamento **sem autorização e sem trilha**, porque o bloqueio que existia ali era **acidental**
+(quem recusava era o formulário de nota fiscal, ao devolver o mesmo número). Agora a criação
+responde **400** com a mesma mensagem sem a autorização, **403** nomeando a ação quando o perfil não
+pode, e **201** com a trilha *"Excedente autorizado"* por item quando pode.
+
+**RN-19 — fechar o painel desliga o "carregando", nas duas telas.**
+Resíduo das telas de **Recebimentos** e **Requisições**: fechar o painel no **✕** deixava o
+marcador interno de "carregando" ligado. **Não tem cenário demonstrável** — nenhum lugar da tela
+mostra esse marcador com o painel fechado —, e está aqui porque foi consertado e porque a decisão
+de não inventar um teste que passa dos dois lados é declarada, não esquecida.
+
+### Como testar ao vivo
+
+**A nota repetida — inclusive com o nome escrito diferente**
+1. **Almoxarifado → Recebimentos → Novo Recebimento**, tipo **Nota fiscal**. Nota `12345`,
+   fornecedor `José Aços Ltda` (**com** acento), um item com quantidade 10. Salvar → entra.
+2. **Novo Recebimento** outra vez: nota `12345`, e agora digite o fornecedor **sem acento** —
+   `Jose Acos Ltda` —, o mesmo item. Salvar → recusado com *"Nota fiscal 12345 já lançada no
+   recebimento REC-… para este fornecedor"*. **É este o passo que interessa:** para o sistema, com
+   acento e sem acento é o mesmo fornecedor.
+3. **O contraste que prova a regra:** nota `12345` com o fornecedor `Metalúrgica Outra Ltda` →
+   **entra**. Fornecedor diferente com a mesma nota é legítimo.
+
+**A conferência e a divergência**
+4. Abra o recebimento do passo 1 (situação **RECEBIDO**). Cada item mostra a quantidade em cima e
+   **"Esperada: 10"** embaixo, e tem o campo **"Qtd. conferida"**.
+5. Digite `7` → aparece *"Divergência: 3 a menos que o esperado (10)"*. Clique em **Salvar
+   Conferência** → *"Conferência salva"*, e o número fica no painel.
+
+**O excedente recusado, e o excedente autorizado até o fim**
+6. Ainda como **Almoxarife**, digite `12` no mesmo item → o aviso vira *"Divergência: 2 a mais que o
+   esperado (10)"*. Clique em **Salvar Conferência** → a recusa aparece na tela: *"Quantidade
+   recebida (12) maior que a esperada (10) no item #⟨id⟩ — a autorização de excedente é de Compras
+   ou do Administrador"*. **Repare que o `12` continua digitado.**
+7. Entre como **Compras** (ou **Administrador**) e abra o mesmo recebimento. Com `12` no campo,
+   aparece a caixa **"Autorizo o recebimento acima do pedido"** — ela **não** aparece para o
+   Almoxarife, e **não** aparece se nenhum item estiver acima do esperado.
+8. **Marque a caixa** e clique em **Salvar Conferência** → *"Conferência salva"*. Confira em
+   **Almoxarifado → Auditoria** a linha **"Excedente autorizado"** com o seu nome.
+9. **Este passo é o furo que a revisão final pegou, e ele TEM de funcionar:** avance o documento —
+   **Finalizar Conferência → Encaminhar para Compras → Encaminhar para Faturamento → Iniciar
+   Entrada de NF** —, clique em **Preencher Dados da NF**, preencha número, série, datas e valor
+   total, e **Salvar Dados Fiscais** → **200**. Depois **Processar Nota** → estoque creditado e
+   conta a pagar gerada. Antes da onda de correção, este documento ficava **preso**: salvar os
+   dados fiscais respondia 400 pedindo uma autorização que o modal de nota fiscal não tem como
+   mandar, e o processar morria em seguida.
+
+**A forma de recebimento (é o cenário de quem integra por fora, não da tela)**
+10. Se você quiser demonstrar a RN-11, é por `curl` ou pela ferramenta de rede do navegador: um
+    `POST` de recebimento com `tipo_recebimento` fora dos dois valores responde **400** com
+    *"Dados inválidos — tipo_recebimento: forma de recebimento inválida (use NOTA_FISCAL ou
+    PEDIDO_COMPRA)"*. Pela tela não há como produzir o caso — e é exatamente por isso que ele
+    passou tanto tempo sem ninguém ver.
+
+### O que esta etapa NÃO cobre
+
+- **Recebimento parcial e excedente contra o PEDIDO DE COMPRA.** A autorização de excedente compara
+  a quantidade recebida com a **esperada do item daquele recebimento** — **não** com o saldo do
+  pedido de compra. Nada nesta etapa olha esse saldo: um pedido de 10 pode receber 25 em três
+  recebimentos e continuar **ABERTO** marcado como 10. A tabela de itens do pedido tem colunas,
+  **um** leitor e **nenhum** escritor, e a tela nunca carrega os itens do pedido — então
+  recebimento **parcial** pela tela é impossível hoje. **É a Etapa 37**, já desenhada, com uma
+  migração aditiva do acumulado recebido por item de pedido. Ver a decisão **B84**.
+- **A guarda de nota repetida não é à prova de simultaneidade.** Ela pergunta ao banco e depois
+  grava; **dois lançamentos exatamente simultâneos** da mesma nota ainda podem passar os dois. Não
+  foi fechada com uma trava única no banco de propósito (decisão **B80**) — a trava impediria a
+  subida se o banco de produção já tiver notas repetidas de antes. O fechamento definitivo é a
+  migração para um banco com transações, já planejada.
+- **Nada do histórico foi limpo.** A validação da forma de recebimento e a guarda de nota repetida
+  valem para o que for escrito **de agora em diante**. Notas repetidas e formas de recebimento fora
+  dos dois valores que já existam no banco **ficam como estão** — as consultas **A9** e **A10**
+  existem para você saber o tamanho disso antes de subir. É a decisão **B85**.
+- **O campo "Qtd. conferida" só existe em RECEBIDO e EM_CONFERENCIA.** Depois disso a quantidade já
+  virou base de custo médio e de conta a pagar, e corrigi-la pelo painel seria mexer no passado sem
+  trilha.
+- **A divergência não virou documento.** Ela aparece na tela, alimenta o alerta *"Divergência de
+  recebimento"* e o relatório — mas não existe um registro formal de divergência com número, dono e
+  desfecho (aceitar, devolver, cobrar do fornecedor). É limitação declarada na letra **D**.
+- **O campo "Qtd. conferida" não tem rótulo visível** — só a dica ao passar o mouse e o texto de
+  dentro do campo, que desaparece ao digitar. Está na letra **G**.
+
+### O que a revisão encontrou
+
+Esta etapa passou por **duas revisões adversariais** — uma olhando a experiência de quem usa e o
+risco para o dado, outra olhando se cada regra estava mesmo provada. **As duas convergiram no mesmo
+problema mais grave**, e o veredito somou **1 crítico, 4 importantes e 4 menores, com zero alarme
+falso**. Todos foram corrigidos antes de fechar, em oito commits.
+
+**Corrigido — 1 (o crítico, achado pelas duas revisões). O recebimento com excedente autorizado
+ficava PRESO e nunca mais chegava ao estoque.** Autorizado o excedente na conferência, o documento
+andava normalmente até o faturamento — e ali **Salvar Dados Fiscais** respondia 400 pedindo a
+autorização de excedente, que o formulário de nota fiscal não tem como mandar. Com os dados fiscais
+não salvos, **Processar Nota** também recusava. Resultado: nota conferida, autorizada, e **sem
+caminho para o estoque**. Pior: o mesmo 400 travaria, no primeiro dia depois do deploy, **todo
+recebimento antigo** que já tivesse quantidade recebida acima da esperada. A regra passou a exigir
+**aumento** sobre o que já está gravado: reenviar o mesmo número não é ato novo de autorização.
+
+**Corrigido — 2. Depois do primeiro excedente autorizado, a conferência travava para todo mundo.**
+Mesma raiz: a tela manda **todos** os itens a cada salvamento, então qualquer conferência seguinte
+levava o item já autorizado junto e tomava 400 — e o almoxarife não conseguia mais gravar a contagem
+de **nenhum outro item** daquele documento. De quebra, cada novo salvamento com a caixa marcada
+gravava uma linha nova de auditoria para o mesmo fato.
+
+**Corrigido — 3. A nota repetida era contornável de três jeitos, e um deles era o caminho normal da
+tela.** O mais grave: a comparação do **nome** do fornecedor **não tirava acento** — `José Aços
+Ltda` e `JOSÉ AÇOS LTDA` com a mesma nota entravam as duas, estoque creditado duas vezes. O
+segundo: o sistema escolhia **uma** identificação e descartava as outras, então a nota digitada à
+mão (só nome) e a mesma nota com o fornecedor escolhido no cadastro (nome **e** CNPJ) nunca se
+encontravam. O terceiro: o CNPJ era comparado com pontuação e espaços. Agora casa por **qualquer**
+identificação, e o nome é comparado sem acento.
+
+**Corrigido — 4. Um campo de texto era a forma de DESLIGAR a barreira de excedente.** Mandando a
+quantidade esperada do item como texto (`"abc"`) na criação, ela era gravada como texto — e a
+barreira, que compara números, simplesmente **não disparava** para aquele item, para sempre. Agora
+cada item exige **número maior que zero**, na quantidade e na esperada. *(Isto é **mudança de
+contrato** para quem integrar por API — está na letra **B**.)*
+
+**Corrigido — 5. O aviso da tela dizia "0 a mais" enquanto o servidor barrava o salvamento.** Com
+`200,001` contra `200`, a diferença arredondava para zero em duas casas e o aviso afirmava que não
+havia diferença — mas o servidor, que compara os números crus, recusava como excedente. O aviso
+passou a mostrar até quatro casas quando o arredondamento daria zero.
+
+**Corrigido — 6. A mensagem de recusa mandava um gesto impossível.** A literal antiga dizia *"marque
+a autorização de excedente"* — e quem mais recebe essa recusa é justamente o **Almoxarife**, que
+**não vê** a caixa. Ela passou a dizer **quem resolve**: *"a autorização de excedente é de Compras
+ou do Administrador"*.
+
+**Corrigido — 7. O formulário de nota fiscal devolvia ao servidor uma forma de recebimento que ele
+não consegue editar.** Um recebimento antigo com a forma fora dos dois valores tomaria 400 para
+sempre ao salvar dados fiscais, sem nada na tela explicando por quê. O formulário parou de mandar
+esse campo.
+
+**Achado durante a execução, e o desenho estava ERRADO.** O desenho desta etapa dizia que a
+autorização de excedente seria de **Administrador, Gestor e Compras**, e que o Gestor responderia
+200. **Estava errado, e de forma interna:** as duas portas onde a autorização é exigida são
+liberadas para *Receber material* — Administrador, Almoxarife e Compras —, e o **Gestor não passa
+nem chega ao ponto da autorização**. Seria configuração morta, que a tela reportaria como permissão
+concedida. A lista ficou **Administrador e Compras**, o Almoxarife ficou fora de propósito (quem
+recebe não autoriza o próprio excedente), e **se você quiser que o Gestor autorize, isso precisa de
+uma etapa própria** — está na letra **B82**.
+
 ## Onde estamos e o que vem a seguir
 
+- **Etapa 36 entregue (2026-09-16):** **o recebimento para de aceitar qualquer coisa, e a
+  conferência física ganha campo** (`d02b9f4..e287a06`, onda de correção da revisão final a partir
+  de `230baf6`, mais um conserto final da onda que fechou a autorização de excedente **também no
+  cadastro**) — **é feature**, a **08 (Recebimento)**, e mexeu no servidor de propósito.
+  Eram quatro problemas no mesmo documento: a **forma de recebimento** aceitava qualquer texto; **a
+  mesma nota fiscal do mesmo fornecedor entrava duas vezes e dobrava o estoque** (dois documentos,
+  20 onde entraram 10, duas contas a pagar); **receber acima do pedido entrava sem ninguém
+  autorizar**; e **o campo de contagem que o manual prometia não existia** — a rota que grava a
+  conferência nunca tivera um chamador. Agora a forma é um de dois valores nas duas portas; a nota
+  repetida é recusada dizendo **em qual documento** ela já está (casando o fornecedor por cadastro,
+  CNPJ só-dígitos **ou** nome sem acento); cada item em conferência tem **"Qtd. conferida"** com o
+  aviso *"Divergência: N a menos/a mais que o esperado (E)"*; e o excedente exige **Compras ou
+  Administrador** em **qualquer** momento em que a quantidade recebida é informada — cadastro,
+  conferência e dados fiscais —, com trilha **"Excedente autorizado"** por item. Dois furos novos ficaram
+  registrados como **C48** e **C49**, os dois já fechados. Números **lidos** ao fim da onda de
+  correção: **174/174 arquivos** da suíte de API, **47 suítes / 707 testes** no cliente, build
+  limpo — o conserto final (a barreira no cadastro) acrescenta cenários a esses números.
+  **O que a revisão achou:** duas revisões adversariais, **zero alarme falso**, e **as duas
+  convergiram no mesmo problema crítico** — o recebimento com excedente **autorizado** ficava
+  **preso** e nunca chegava ao estoque (e o mesmo 400 travaria todo recebimento antigo com
+  quantidade acima da esperada no primeiro dia de deploy). Mais 4 importantes e 4 menores, entre
+  eles a nota repetida **contornável por acento no nome do fornecedor** — o caminho normal da tela.
+  Todos corrigidos em oito commits.
+  **O que é seu:** as consultas **A9** (notas repetidas já no banco — e ela **sub-reporta**, porque
+  não consegue ignorar acento em SQL), **A10** (formas de recebimento fora dos dois valores) e
+  **A11** (recebimentos abertos com quantidade acima da esperada, informativa depois do conserto);
+  a decisão **B82** — **o Gestor deve poder autorizar excedente?** Hoje não pode, e habilitá-lo
+  exige uma etapa própria porque ele nem chega à tela de recebimento; e as decisões **B80 a B88**,
+  todas escritas com o que foi descartado (a **B84** foi **revisada dentro da própria etapa**: o
+  corte de escopo que ela declarava deixou de ser defensável quando a regra nova tornou o furo
+  alcançável, e a barreira foi para o cadastro também). **A Etapa 37 já está desenhada:**
+  recebimento **parcial** e excedente **contra o saldo do pedido de compra**, que é o que esta
+  etapa declaradamente não mede.
 - **Etapa 35 entregue (2026-09-16):** **as telas vizinhas param de esconder falha de rede e de
   mostrar o registro errado** (`6f6a8b0..2d5cd35`) — **não é feature**: são os três problemas que a
   revisão da Etapa 34 achou nas telas ao lado das que ela mexeu, **dois deles anteriores a qualquer
