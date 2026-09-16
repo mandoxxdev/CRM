@@ -21,6 +21,17 @@ test('guarda da guarda: o mapa do servidor foi mesmo importado', () => {
   expect(Object.keys(ENTIDADES_ANEXO || {}).length).toBe(6);
 });
 
+// O ALCANCE desta varredura, dito por extenso porque ela é fácil de superestimar (achado MENOR
+// da revisão da branch): ela é TEXTUAL — lê o fonte e casa `entidade="..."`. Um plug
+// COMENTADO, ou dentro de um ramo que nunca renderiza, continua casando. Então o que ela prova é
+// só isto: as chaves escritas nas telas são chaves que o servidor aceita, e as seis do mapa estão
+// cobertas. Quem prova que o bloco REALMENTE monta, no registro certo, são os testes de montagem
+// por tela — os que afirmam os `params` do `GET /almoxarifado/anexos`
+// (`MateriaisAlmoxarifado.test.js`, `RequisicoesList.test.js`,
+// `RecebimentosAlmoxarifado.test.js`, `DevolucoesAlmoxarifado.test.js`,
+// `RemessasTerceirosAlmoxarifado.test.js` e `HistoricoInspecoes.test.js` — uma por entidade do
+// mapa). Esta varredura é a guarda da NOMENCLATURA; aqueles
+// são a guarda do comportamento.
 test('as seis telas usam chaves que o servidor aceita, e cobrem o mapa inteiro', () => {
   const dir = __dirname;
   const usadas = new Set();
