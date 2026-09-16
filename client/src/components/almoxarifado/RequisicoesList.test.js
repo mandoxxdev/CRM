@@ -623,4 +623,54 @@ describe('Etapa 34: anexos da requisição no painel de detalhe', () => {
     expect(blocoDeAnexos()).toBe(antes);
     expect(chamadasDeAnexos()).toHaveLength(1);
   });
+
+  /* ── Integração da Etapa 35: os três gestos em sequência, no MESMO componente montado ──────────
+   * Os dois cenários F2 acima (foco e filtro) remontam a tela antes de medir, então nenhum deles vê
+   * o estado que a flag de navegação interna deixa para o gesto SEGUINTE. O defeito que este
+   * cenário pega: uma flag booleana armada no refetch por foco (que NÃO escreve na URL) fica de pé
+   * e ENGOLE a troca de filtro seguinte — o detalhe deixa de recarregar e nada mais nesta suíte
+   * reclama. Por isso a contagem é por PASSO, e não no fim.
+   */
+  test('integração: clique, foco, troca de filtro e VOLTA do filtro — uma carga por gesto', async () => {
+    detalheDoBanco = baseRequisicao('APROVADO');
+    await renderizarSemDetalhe();
+
+    // Passo 0 — metade positiva: a lista montou e nada foi buscado ainda.
+    expect(container.textContent).toContain('REQ-055');
+    expect(cargasDoDetalhe()).toHaveLength(0);
+
+    // Passo 1 — o clique (RN-01): UMA carga, e não duas.
+    await act(async () => { container.querySelector('tbody tr').click(); });
+    expect(cargasDoDetalhe()).toHaveLength(1);
+    expect(blocoDeAnexos()).not.toBeNull();
+
+    // Passo 2 — o foco da janela (RN-03): o refetch pós-diálogo continua existindo. Ele NÃO muda a
+    // URL, então `syncSearchParams` devolve `null` e a flag NÃO é armada.
+    await act(async () => { window.dispatchEvent(new Event('focus')); });
+    expect(cargasDoDetalhe()).toHaveLength(2);
+    expect(blocoDeAnexos()).not.toBeNull();
+
+    // Passo 3 — a troca de filtro (RN-03): escreve `minha=1` na URL, o efeito de deep-link reacende
+    // e o detalhe É recarregado. É aqui que uma flag BOOLEANA armada no passo 2 apareceria
+    // (sabotagem 2 da T2: `Received 2`).
+    const checkMinha = [...container.querySelectorAll('input[type="checkbox"]')][0];
+    expect(checkMinha).toBeTruthy();
+    await act(async () => { checkMinha.click(); });
+    // Metade positiva do passo: o filtro REALMENTE ligou (sem isto, um clique que não faz nada
+    // deixaria a contagem parada e o passo ainda pareceria correto).
+    expect(checkMinha.checked).toBe(true);
+    expect(cargasDoDetalhe()).toHaveLength(3);
+
+    // Passo 4 — a VOLTA do filtro, que devolve a URL a `id=55`: exatamente a query que o passo 1
+    // escreveu. É o único passo que pega a flag armada SEM escrita (sabotagem 3 da T2): uma flag
+    // que não casa NÃO é desarmada, fica esperando a query voltar a ser aquela, e engole este
+    // refetch (`Received 3`). Sem este passo, a sabotagem 3 é um falso "nada cai".
+    await act(async () => { checkMinha.click(); });
+    expect(checkMinha.checked).toBe(false);
+    expect(cargasDoDetalhe()).toHaveLength(4);
+
+    // E o bloco de anexos atravessou os quatro gestos sem remontar nem reconsultar (F2 da Etapa 34).
+    expect(blocoDeAnexos()).not.toBeNull();
+    expect(chamadasDeAnexos()).toHaveLength(1);
+  });
 });
