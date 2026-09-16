@@ -269,16 +269,29 @@ async function criarRecebimento(db, user, data) {
  * `parseFloat` + `Number.isFinite`, e nao `Number(...)`: item sem o campo (o caso do COALESCE
  * abaixo) e item com `''` nao podem ser lidos como ZERO — `Number('')` e 0, e 0 > 10 e falso por
  * acidente, nao por regra. O `continue` do `== null` e o que deixa o payload parcial passar.
+ *
+ * `ignorarInalteradas` (revisao final, F1) — a barreira olha so os itens cuja quantidade ENVIADA
+ * e DIFERENTE da GRAVADA. Ecoar uma quantidade que ja esta no banco nao e ato novo de autorizacao:
+ * ou ela foi autorizada e auditada quando entrou, ou e acervo anterior a esta etapa. Sem isso, um
+ * recebimento com excedente autorizado nunca mais salvava dados fiscais — `salvarFiscal` da tela
+ * reenvia `quantidade_recebida` de todos os itens e nao tem caixa de autorizacao nenhuma, entao o
+ * documento ficava PRESO (o `processar` seguinte morre em `validarDadosProcessamento`).
  */
-async function assertExcedentePermitido(db, user, recebimentoId, itens, autorizado) {
+async function assertExcedentePermitido(db, user, recebimentoId, itens, autorizado, opcoes = {}) {
+  const { ignorarInalteradas = false } = opcoes;
   const excedentes = [];
   for (const item of itens || []) {
     if (item.quantidade_recebida == null) continue;
-    const atual = await dbGet(db, `SELECT id, quantidade_esperada FROM recebimentos_material_itens_almoxarifado
-      WHERE id = ? AND recebimento_id = ?`, [item.id, recebimentoId]);
+    const atual = await dbGet(db, `SELECT id, quantidade_esperada, quantidade_recebida
+      FROM recebimentos_material_itens_almoxarifado WHERE id = ? AND recebimento_id = ?`,
+    [item.id, recebimentoId]);
     if (!atual) continue;
     const recebida = parseFloat(item.quantidade_recebida);
     const esperada = parseFloat(atual.quantidade_esperada);
+    if (ignorarInalteradas) {
+      const gravada = parseFloat(atual.quantidade_recebida);
+      if (Number.isFinite(gravada) && Number.isFinite(recebida) && gravada === recebida) continue;
+    }
     if (Number.isFinite(recebida) && Number.isFinite(esperada) && recebida > esperada) {
       excedentes.push({ id: atual.id, recebida, esperada });
     }
@@ -442,7 +455,10 @@ async function salvarDadosFiscal(db, user, recebimentoId, data) {
   // RN-18 (Etapa 36): a SEGUNDA porta, e a que a UI de producao realmente usa para escrever
   // quantidade (o mesmo motivo que colocou o gancho de divergencia nos dois escritores na Etapa
   // 17). ANTES do UPDATE do cabecalho: recusar depois gravaria os dados fiscais e devolveria 400.
-  await assertExcedentePermitido(db, user, recebimentoId, itens, data.autorizar_excedente === true);
+  // `ignorarInalteradas` (revisao final, F1): o modal de NF nao tem campo de quantidade nem caixa
+  // de autorizacao, e reenvia a quantidade de TODOS os itens — so quem MUDA a quantidade autoriza.
+  await assertExcedentePermitido(db, user, recebimentoId, itens, data.autorizar_excedente === true,
+    { ignorarInalteradas: true });
 
   await dbRun(db, `UPDATE recebimentos_material_almoxarifado SET
     nota_fiscal = COALESCE(?, nota_fiscal),

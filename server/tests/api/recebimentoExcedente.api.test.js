@@ -276,6 +276,102 @@ const semPermissao = (perfil) => 'Autorizar recebimento acima do pedido exige a 
     assert.strictEqual(depois.conferencia_quantidade, 1, 'o campo que VEIO no payload tem de ser gravado');
   });
 
+  // ── (6)(7)(8) revisao final, F1 — ECOAR nao e AUTORIZAR ──────────────────────────────────────
+  /**
+   * Achado Critico da revisao da branch: um recebimento com excedente JA autorizado nunca mais
+   * conseguia salvar dados fiscais. `salvarFiscal` da tela reenvia `quantidade_recebida` de TODOS
+   * os itens (montado de `detalhe.itens`) e NUNCA manda `autorizar_excedente` — nao existe caixa
+   * nem campo de quantidade no modal de NF. Caminho medido: COMPRAS autoriza 999 de 10 no
+   * `/conferir`, o documento anda ate ENCAMINHADO_FATURAMENTO, "Preencher Dados da NF" → Salvar →
+   * 400 com a literal do excedente. `processar` depois morre em `validarDadosProcessamento`, porque
+   * os dados fiscais nunca entraram: o documento fica PRESO.
+   *
+   * A regra: a barreira olha so os itens cuja `quantidade_recebida` ENVIADA e DIFERENTE da
+   * GRAVADA. Ecoar uma quantidade que ja esta no banco — e que ja foi autorizada e auditada — nao
+   * e um ato novo de autorizacao; MUDAR a quantidade e, e para esses a barreira continua inteira
+   * (cenario (7)). DESCARTADO: mandar a tela reenviar `autorizar_excedente: true` no fiscal (seria
+   * a flag ligada por quem nao tem a acao, em toda gravacao, esvaziando a RN-18) e tirar
+   * `quantidade_recebida` do payload fiscal (o modal grava valor_unitario/lote item a item e o
+   * `COALESCE` precisa do item; e o fiscal e o escritor real de quantidade em producao).
+   *
+   * O cenario (8) e o ACERVO: linha que ja esta no banco com recebida > esperada, gravada ANTES
+   * desta etapa existir (sem trilha de autorizacao nenhuma). No deploy, essas linhas tomariam 400
+   * em qualquer edicao fiscal — a regra por DIFERENCA as destrava sem anistiar aumento novo.
+   */
+  await test('(6) F1: /fiscal que ECOA a quantidade ja gravada passa SEM a flag', async () => {
+    setUser(COMPRAS);
+    const { recId, itemId } = await novoRecebimento();
+    await emConferencia(recId);
+    const aut = await conferir(recId, {
+      autorizar_excedente: true,
+      itens: [{ id: itemId, quantidade_recebida: 999, conferencia_quantidade: true }],
+    });
+    assert.strictEqual(aut.status, 200, JSON.stringify(aut.body));
+    assert.strictEqual((await lerItem(itemId)).quantidade_recebida, 999, 'fixture: o excedente entrou autorizado');
+
+    // O caminho REAL da tela: o modal de dados fiscais aparece na etapa de FATURAMENTO.
+    for (const acao of ['finalizar_conferencia', 'encaminhar_compras', 'finalizar_compras']) {
+      const wf = await request(app).post(`/api/almoxarifado/recebimentos/${recId}/workflow`).send({ acao });
+      assert.strictEqual(wf.status, 200, `${acao}: ${JSON.stringify(wf.body)}`);
+    }
+
+    // Quem preenche a NF e o faturamento — aqui o ALMOXARIFE, que NAO tem `autorizar_excedente`.
+    // Se a barreira olhasse o valor absoluto, nem o ADMIN escaparia: sem flag, 400 sempre.
+    setUser(ALMOXARIFE);
+    const res = await fiscal(recId, {
+      nota_serie: '77', itens: [{ id: itemId, quantidade_recebida: 999 }],
+    });
+    assert.strictEqual(res.status, 200, `ecoar a quantidade ja gravada nao e ato novo: ${JSON.stringify(res.body)}`);
+    const rec = await dbGet(db,
+      'SELECT nota_serie FROM recebimentos_material_almoxarifado WHERE id = ?', [recId]);
+    assert.strictEqual(rec.nota_serie, '77', 'os dados fiscais TEM de ter sido gravados');
+    assert.strictEqual((await lerItem(itemId)).quantidade_recebida, 999);
+    setUser(ADMIN);
+  });
+
+  await test('(7) F1, metade positiva: /fiscal que AUMENTA a quantidade sem flag continua 400', async () => {
+    setUser(COMPRAS);
+    const { recId, itemId } = await novoRecebimento();
+    await emConferencia(recId);
+    const aut = await conferir(recId, {
+      autorizar_excedente: true,
+      itens: [{ id: itemId, quantidade_recebida: 999, conferencia_quantidade: true }],
+    });
+    assert.strictEqual(aut.status, 200, JSON.stringify(aut.body));
+
+    // 999 -> 1000 e um ATO NOVO, e a autorizacao anterior nao o cobre.
+    const res = await fiscal(recId, {
+      nota_serie: '78', itens: [{ id: itemId, quantidade_recebida: 1000 }],
+    });
+    assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+    assert.strictEqual(res.body.error, semFlag(1000, 10, itemId));
+    assert.strictEqual((await lerItem(itemId)).quantidade_recebida, 999, 'a recusa e ANTES do UPDATE');
+    const rec = await dbGet(db,
+      'SELECT nota_serie FROM recebimentos_material_almoxarifado WHERE id = ?', [recId]);
+    assert.strictEqual(rec.nota_serie, null, 'a recusa e do PUT INTEIRO');
+    setUser(ADMIN);
+  });
+
+  await test('(8) F1: linha de ACERVO (excedente gravado sem trilha) nao trava a edicao fiscal', async () => {
+    const { recId, itemId } = await novoRecebimento();
+    // Direto no banco, sem passar por nenhuma das portas: e exatamente o estado de producao no
+    // dia do deploy — recebida > esperada e ZERO linhas de EXCEDENTE_AUTORIZADO.
+    await dbRun(db, `UPDATE recebimentos_material_itens_almoxarifado
+      SET quantidade_recebida = 42 WHERE id = ?`, [itemId]);
+    assert.strictEqual((await auditoriaExcedente(itemId)).length, 0, 'fixture: acervo nao tem trilha');
+    await emConferencia(recId);
+
+    setUser(ALMOXARIFE);
+    const res = await fiscal(recId, {
+      nota_serie: '79', itens: [{ id: itemId, quantidade_recebida: 42 }],
+    });
+    assert.strictEqual(res.status, 200, `acervo ecoado nao pode tomar 400: ${JSON.stringify(res.body)}`);
+    assert.strictEqual((await lerItem(itemId)).quantidade_recebida, 42);
+    assert.strictEqual((await auditoriaExcedente(itemId)).length, 0,
+      'ecoar acervo nao inventa autorizacao que ninguem deu');
+    setUser(ADMIN);
+  });
+
   await close();
   console.log(`\n${passed} passou, ${failed} falhou`);
   process.exit(failed ? 1 : 0);
