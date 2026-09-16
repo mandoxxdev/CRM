@@ -919,3 +919,29 @@ test('(s) 400 de excedente, marcar a autorizacao e salvar de novo manda a flag c
   // O sucesso limpa a recusa da tela — senão o banner vermelho fica mentindo depois de salvar.
   expect(painel().textContent).not.toContain(LITERAL_400);
 });
+
+/* ── (t) revisão final, R7: a divergência não pode dizer "0" quando existe ─────────────────────
+ * O aviso arredondava a diferença para DUAS casas (`Number(diff.toFixed(2))`), para não mostrar
+ * `13.000000000000001`. Mas com `200.001` contra `200` esperados o mesmo arredondamento produzia
+ * **"Divergência: 0 a mais que o esperado (200)"** — a tela afirmando que a diferença é zero
+ * enquanto o servidor, que compara os números crus, barra o save com 400 de excedente. O operador
+ * lia "0 a mais" e não tinha o que corrigir.
+ *
+ * Régua: abaixo de meio centésimo, o aviso mostra até QUATRO casas. O formato é o número cru do
+ * JS (ponto decimal), igual ao resto deste aviso — congelado aqui.
+ */
+test('(t) diferenca que arredonda para zero a duas casas aparece com 4 casas, nunca como "0"', async () => {
+  await renderizar();
+  await clicar(linhaDe('REC-2026-058'));
+
+  digitar(inputConferida(), '200.001');
+  await esperarEfeitos();
+
+  expect(painel().textContent).toContain('Divergência: 0.001 a mais que o esperado (200)');
+  expect(painel().textContent).not.toContain('Divergência: 0 a mais');
+  // Metade POSITIVA: a diferença NORMAL continua em duas casas, sem cauda binária — sem isto,
+  // "sempre 4 casas" passaria este cenário e encheria o aviso de zeros.
+  digitar(inputConferida(), '187');
+  await esperarEfeitos();
+  expect(painel().textContent).toContain('Divergência: 13 a menos que o esperado (200)');
+});

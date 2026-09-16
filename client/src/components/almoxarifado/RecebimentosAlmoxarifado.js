@@ -498,7 +498,13 @@ const RecebimentosAlmoxarifado = () => {
       || !Number.isFinite(recebida)) return null;
     const esperada = Number(item.quantidade_esperada);
     if (!Number.isFinite(esperada) || recebida === esperada) return null;
-    const diff = Number(Math.abs(recebida - esperada).toFixed(2));
+    // Revisão final (R7): duas casas era o arredondamento errado no caso pequeno. Com `200.001`
+    // contra `200`, o aviso dizia "Divergência: 0 a mais que o esperado (200)" — a tela afirmando
+    // que a diferença é ZERO enquanto o servidor, que compara os números crus, barra o save com
+    // 400 de excedente. Abaixo de meio centésimo o aviso mostra até QUATRO casas; acima, segue em
+    // duas (que é o que impede `13.000000000000001` de aparecer).
+    const bruto = Math.abs(recebida - esperada);
+    const diff = Number(bruto.toFixed(bruto < 0.005 ? 4 : 2));
     const sentido = recebida > esperada ? 'a mais' : 'a menos';
     return (
       <div style={{ color: 'var(--gmp-danger)', fontSize: '0.72rem', marginTop: 4 }}>
