@@ -1298,6 +1298,12 @@ async function initSchema(db) {
     // e quem cria/reativa as linhas em series_almoxarifado. Este texto e so o que o operador
     // digitou — a fonte de verdade de "quais series existem" continua sendo series_almoxarifado.
     'series TEXT',
+    // Etapa 37: QUAL linha do pedido de compra este item atendeu. Sem ela o recebimento sabia o
+    // MATERIAL mas nao a linha, e duas linhas do mesmo material no mesmo pedido (precos ou prazos
+    // diferentes, caso legitimo) eram indistinguiveis — nem depois dava para reconstruir a conta.
+    // INTEGER SOLTO, sem FK, no padrao do modulo: o pedido e tabela CORE e a linha pode ser
+    // apagada pelo Compras sem que o recebimento deixe de ser historico valido.
+    'pedido_item_id INTEGER',
   ];
   for (const col of recebItemCols) await safeAlter(db, `ALTER TABLE recebimentos_material_itens_almoxarifado ADD COLUMN ${col}`);
   await migrateBackfillItemQuantidadeEmInspecao(db);
@@ -1314,6 +1320,23 @@ async function initSchema(db) {
     FOREIGN KEY (pedido_id) REFERENCES pedidos_compra(id),
     FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
   )`);
+
+  // Etapa 37: a coluna que faz o PEDIDO saber quanto dele ja chegou. Medido na Fase 0 por sonda
+  // executada: a tabela tinha 8 colunas, UM leitor e ZERO escritores, e um pedido de 10 unidades
+  // recebeu 25 em tres recebimentos continuando `ABERTO` com `quantidade = 10` — nao havia onde
+  // guardar o recebido. Aditiva, por `safeAlter`, e SEM ledger de proposito (decisao 2 do design):
+  // os 4 ids de `schema_migrations_almoxarifado` sao reconstrucao/backfill/seed, as ~40 chamadas de
+  // `safeAlter` deste arquivo nao tem ledger, e `COUNT(itens_pedido_compra) = 0` — nao existe
+  // backfill a marcar. `REAL DEFAULT 0` e NAO `NOT NULL`: a aritmetica do saldo
+  // (`quantidade - COALESCE(quantidade_recebida, 0)`) nao pode virar NaN na primeira leitura, e um
+  // `NOT NULL` sem default faria o ALTER FALHAR em banco de producao com linhas.
+  const itensPedidoCols = [
+    'quantidade_recebida REAL DEFAULT 0',
+  ];
+  for (const col of itensPedidoCols) await safeAlter(db, `ALTER TABLE itens_pedido_compra ADD COLUMN ${col}`);
+  // Indice em `pedido_id`: a tabela nao tinha NENHUM indice, e a partir desta etapa toda leitura
+  // de saldo do pedido (rota aux, rota de itens e o acumulador da entrada) filtra por pedido_id.
+  await dbRun(db, 'CREATE INDEX IF NOT EXISTS idx_itens_pedido_compra_pedido ON itens_pedido_compra(pedido_id)');
 
   // ── Devoluções ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS devolucoes_material_almoxarifado (

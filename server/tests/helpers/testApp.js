@@ -56,6 +56,33 @@ async function createTestApp(options = {}) {
     status TEXT DEFAULT 'ativo'
   )`);
 
+  // `pedidos_compra` é tabela CORE (criada por server/index.js:19230 no boot), fora do initSchema
+  // do almoxarifado — mesmo caso de `clientes` (Etapa 8) e `fornecedores` (Etapa 8b). Entra no
+  // harness na Etapa 37 porque SETE arquivos de teste a criavam por conta própria, com DDLs
+  // DIVERGENTES, e `CREATE TABLE IF NOT EXISTS` faz "quem cria primeiro vence": o de
+  // `recebimentoTipoEnum` não declara `created_at`, e `listarPedidosCompraAux` termina em
+  // `ORDER BY p.created_at DESC` — com o DDL dele valendo, a rota aux morria com "no such column".
+  // Este stub roda ANTES de qualquer arquivo de teste (o DDL deles corre depois de
+  // `createTestApp()` retornar), então os sete viram no-op e a forma é UMA só.
+  // Espelha a DDL de produção MENOS a FOREIGN KEY para `fornecedores`, e a FK fica fora DE
+  // PROPÓSITO: `solicitacaoCicloVida`, `reposicaoJornada`, `reposicaoGerarSolicitacoes` e
+  // `integracaoComprasJornada` inserem `fornecedor_id: 1` sem linha de fornecedor, e duas
+  // migrações de `schema.js` terminam em `PRAGMA foreign_keys=ON` — com a FK, os quatro cairiam
+  // de uma vez. `fornecedor_id` também é NULÁVEL aqui (NOT NULL em produção):
+  // `tests/almoxarifado.test.js:247` declara a tabela sem ele.
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS pedidos_compra (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    numero TEXT UNIQUE,
+    fornecedor_id INTEGER,
+    valor_total REAL DEFAULT 0,
+    data_pedido DATE,
+    previsao_entrega DATE,
+    status TEXT DEFAULT 'pendente',
+    observacoes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
   // Diretório temporário para uploads (multer do módulo exige um PERSISTENT_DATA_DIR)
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'almox-test-'));
 
