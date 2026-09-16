@@ -98,8 +98,31 @@ const OPCOES = '/api/compras/pedidos-aux/opcoes';
 
   await test('unidade usada num material entra na lista de unidades', async () => {
     const r = await request(app).get(OPCOES);
-    assert.ok(r.body.unidades.includes('BR'), 'unidade do cadastro não apareceu');
-    assert.ok(r.body.unidades.includes('PC'), 'a lista fixa sumiu ao unir com a do banco');
+    // A lista mistura objetos (as fixas, com rótulo) e strings (as que vieram do banco);
+    // o que importa é o VALOR, que é o que vai ser gravado no item.
+    const valores = r.body.unidades.map((u) => (typeof u === 'object' ? u.valor : u));
+    assert.ok(valores.includes('BR'), 'unidade do cadastro não apareceu');
+    assert.ok(valores.includes('PC'), 'a lista fixa sumiu ao unir com a do banco');
+  });
+
+  await test('unidade ambígua tem rótulo explicativo, mas o valor gravado não muda', async () => {
+    // A Gerente de Compras não conseguia distinguir G, M e L no botão. A correção é de
+    // RÓTULO: se o valor mudasse para 'GR', todo material já cadastrado com 'G' deixaria de
+    // casar com qualquer botão e a lista mostraria os dois como se fossem unidades diferentes.
+    const r = await request(app).get(OPCOES);
+    [['G', 'grama'], ['M', 'metro'], ['L', 'litro']].forEach(([valor, palavra]) => {
+      const u = r.body.unidades.find((x) => typeof x === 'object' && x.valor === valor);
+      assert.ok(u, `a unidade ${valor} sumiu da lista`);
+      assert.ok(u.curto.toLowerCase().includes(palavra),
+        `o botão de ${valor} voltou a ser ambíguo: "${u.curto}"`);
+    });
+  });
+
+  await test('as condições que a Compras pediu estão na lista', async () => {
+    const r = await request(app).get(OPCOES);
+    ['PIX', 'Cartão de crédito', '30/60/60/90/120'].forEach((c) => {
+      assert.ok(r.body.condicao_pagamento.includes(c), `"${c}" não virou botão`);
+    });
   });
 
   await test('condição de pagamento nunca vista antes entra na lista', async () => {

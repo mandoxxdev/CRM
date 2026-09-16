@@ -27,22 +27,54 @@ const FRETE_MODALIDADES = [
   { valor: '9-Sem Ocorrência de Transporte', curto: 'Sem transporte' },
 ];
 
+// Pedido da Gerente de Compras (e-mail 15/09/2026): PIX, cartão de crédito e prazos mais
+// longos. Ela também perguntou como cadastraria NOVAS condições — a resposta é que não
+// precisa de cadastro: qualquer condição digitada uma vez no pedido volta como botão nos
+// próximos, pela união com o DISTINCT lá embaixo.
 const CONDICOES_PAGAMENTO = [
-  'À vista', '7 D.D.L.', '14 D.D.L.', '21 D.D.L.', '28 D.D.L.', '30 D.D.L.',
-  '30/60', '30/60/90', 'Antecipado',
+  'À vista', 'PIX', 'Cartão de crédito', 'Boleto',
+  '7 D.D.L.', '14 D.D.L.', '21 D.D.L.', '28 D.D.L.', '30 D.D.L.',
+  '30/60', '30/60/90', '30/60/90/120', '30/60/60/90/120', 'Antecipado',
 ];
 
 const VIAS_TRANSPORTE = ['Rodoviário', 'Aéreo', 'Marítimo', 'Ferroviário', 'Retirada no fornecedor'];
 
-const UNIDADES = ['PC', 'UN', 'KG', 'G', 'M', 'M²', 'M³', 'L', 'CX', 'BR', 'PAR', 'RL', 'JG', 'MIL'];
+/**
+ * Unidades. O `valor` é o que vai para o banco e para o documento; o `curto` é o que aparece
+ * no botão.
+ *
+ * A Gerente de Compras avisou que "G", "M" e "L" sozinhos não se distinguem. A correção NÃO é
+ * mudar o valor gravado — material já cadastrado com 'G' passaria a não casar com nenhum botão
+ * e a lista mostraria 'G' e 'GR' como se fossem coisas diferentes. O que muda é só o rótulo.
+ */
+const UNIDADES = [
+  { valor: 'PC', curto: 'PC' },
+  { valor: 'UN', curto: 'UN' },
+  { valor: 'KG', curto: 'KG' },
+  { valor: 'G', curto: 'G (grama)' },
+  { valor: 'M', curto: 'M (metro)' },
+  { valor: 'M²', curto: 'M²' },
+  { valor: 'M³', curto: 'M³' },
+  { valor: 'L', curto: 'L (litro)' },
+  { valor: 'CX', curto: 'CX (caixa)' },
+  { valor: 'BR', curto: 'BR (barra)' },
+  { valor: 'PAR', curto: 'PAR' },
+  { valor: 'RL', curto: 'RL (rolo)' },
+  { valor: 'JG', curto: 'JG (jogo)' },
+  { valor: 'MIL', curto: 'MIL' },
+];
 
 // Alíquotas que aparecem na prática. O campo continua aceitando qualquer número no backend —
 // isto é a lista de atalhos da tela, não uma validação.
 const IPI_SUGERIDO = [0, 3.25, 5, 6.5, 10, 15];
 
-/** Une a lista fixa com o que já foi usado, sem duplicar e sem perder a ordem da fixa. */
+/**
+ * Une a lista fixa com o que já foi usado, sem duplicar e sem perder a ordem da fixa.
+ * Aceita lista de strings ou de `{ valor, curto }` — compara sempre pelo VALOR.
+ */
 function unir(fixas, usadas) {
-  const vistos = new Set(fixas.map((f) => String(f).trim().toLowerCase()));
+  const valorDe = (f) => (f && typeof f === 'object' ? f.valor : f);
+  const vistos = new Set(fixas.map((f) => String(valorDe(f)).trim().toLowerCase()));
   const extras = (usadas || [])
     .map((u) => (u == null ? '' : String(u).trim()))
     .filter((u) => u && !vistos.has(u.toLowerCase()));

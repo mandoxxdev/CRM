@@ -320,64 +320,157 @@
   color: var(--gmp-text-light);
 }
 
-/* ── item ───────────────────────────────────────────────────────── */
+/* ── item: LINHA compacta ───────────────────────────────────────────
+   A Gerente de Compras relatou pedidos de mais de 50 itens sendo inviaveis porque cada item
+   pedia todos os campos. A linha agora mostra so o que muda item a item — material,
+   quantidade, preco e total — e o resto (unidade, IPI, entrega, descricao) fica em
+   "detalhes", fechado. */
+
+.pcf-acoes-itens { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.pcf-add-destaque {
+  border-color: var(--pcf-acento);
+  color: var(--pcf-acento);
+  font-weight: 700;
+}
+
+.pcf-add kbd {
+  margin-left: 2px;
+  padding: 1px 5px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font-size: 0.66rem;
+  font-family: inherit;
+  opacity: 0.75;
+}
+
+.pcf-itens-lista { margin-top: 16px; }
 
 .pcf-item {
   border: 1px solid var(--gmp-border);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--gmp-bg);
-  padding: 14px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .pcf-item:last-child { margin-bottom: 0; }
 .pcf-item-vazio { border-style: dashed; }
 
-.pcf-item-topo {
+.pcf-item-linha {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
+  gap: 8px;
+  padding: 8px 10px;
+  flex-wrap: wrap;
 }
 
 .pcf-item-num {
-  font-size: 0.7rem;
+  flex-shrink: 0;
+  width: 26px;
+  text-align: center;
+  font-size: 0.74rem;
   font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
   color: var(--gmp-text-light);
+  font-variant-numeric: tabular-nums;
 }
 
-.pcf-remover {
-  border: none;
-  background: none;
-  color: var(--gmp-text-light);
-  cursor: pointer;
-  padding: 6px;
-  border-radius: 6px;
-}
-
-.pcf-remover:hover:not(:disabled) { color: var(--gmp-error); background: var(--gmp-surface); }
-.pcf-remover:disabled { opacity: 0.3; cursor: default; }
-
-.pcf-item-campos {
+.pcf-item-material {
+  flex: 1 1 220px;
+  min-width: 0;
   display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-  margin: 14px 0;
-  align-items: flex-end;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  color: var(--gmp-text);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
-.pcf-stepper { display: flex; align-items: center; gap: 6px; }
+.pcf-item-material:hover:not(:disabled) {
+  border-color: var(--pcf-acento);
+  background: var(--gmp-surface);
+}
+
+.pcf-item-material strong {
+  font-size: 0.84rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pcf-item-material small { font-size: 0.68rem; color: var(--gmp-text-light); }
+
+.pcf-item-material-vazio {
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  border-style: dashed;
+  border-color: var(--gmp-border);
+  color: var(--gmp-text-light);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.pcf-item-material-vazio:disabled { opacity: 0.45; cursor: default; }
+
+.pcf-item-total {
+  flex-shrink: 0;
+  min-width: 96px;
+  text-align: right;
+  font-size: 0.9rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.pcf-item-detalhes {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid var(--gmp-border);
+  border-radius: 8px;
+  background: var(--gmp-surface);
+  color: var(--gmp-text-light);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.pcf-item-detalhes:hover { border-color: var(--pcf-acento); color: var(--pcf-acento); }
+
+/* Um IPI diferente do padrao do pedido fica VISIVEL na linha fechada: se ficasse so dentro
+   de "detalhes", ninguem repararia que um item entre cinquenta saiu com outra aliquota. */
+.pcf-item-detalhes em {
+  font-style: normal;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--gmp-warning);
+}
+
+.pcf-item-extra {
+  padding: 4px 12px 14px 44px;
+  border-top: 1px solid var(--gmp-border);
+  margin-top: 2px;
+}
+
+.pcf-item-extra .pcf-chips-bloco { margin-top: 14px; margin-bottom: 0; }
+.pcf-item-extra .pcf-livres { margin-top: 14px; }
+
+.pcf-stepper { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
 
 .pcf-stepper button {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
+  width: 34px;
+  height: 34px;
   border: 1px solid var(--gmp-border);
-  border-radius: 9px;
+  border-radius: 8px;
   background: var(--gmp-surface);
   color: var(--gmp-text);
   cursor: pointer;
@@ -386,14 +479,14 @@
 .pcf-stepper button:hover { border-color: var(--pcf-acento); color: var(--pcf-acento); }
 
 .pcf-stepper input {
-  width: 84px;
-  height: 38px;
+  width: 72px;
+  height: 34px;
   text-align: center;
   border: 1px solid var(--gmp-border);
-  border-radius: 9px;
+  border-radius: 8px;
   background: var(--gmp-surface);
   color: var(--gmp-text);
-  font-size: 0.95rem;
+  font-size: 0.88rem;
   font-weight: 700;
   font-family: inherit;
   font-variant-numeric: tabular-nums;
@@ -401,15 +494,109 @@
 
 .pcf-stepper input:focus { outline: none; border-color: var(--pcf-acento); }
 
-.pcf-input-preco { width: 130px; height: 38px; text-align: right; font-variant-numeric: tabular-nums; }
-
-.pcf-linha-total { display: flex; flex-direction: column; gap: 4px; }
-
-.pcf-linha-total strong {
-  font-size: 1.05rem;
-  font-weight: 800;
+.pcf-input-preco {
+  flex-shrink: 0;
+  width: 110px;
+  height: 34px;
+  text-align: right;
   font-variant-numeric: tabular-nums;
-  line-height: 38px;
+}
+
+.pcf-remover {
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  color: var(--gmp-text-light);
+  cursor: pointer;
+  padding: 7px;
+  border-radius: 7px;
+}
+
+.pcf-remover:hover:not(:disabled) { color: var(--gmp-error); background: var(--gmp-surface); }
+.pcf-remover:disabled { opacity: 0.3; cursor: default; }
+
+.pcf-input-outro { max-width: 240px; }
+.pcf-dica { font-size: 0.68rem; color: var(--gmp-text-light); text-transform: none; letter-spacing: 0; }
+
+/* ── inclusao em lote (F2) ──────────────────────────────────────── */
+
+.pcf-modal-largo { max-width: 720px; }
+
+.pcf-lote-lista { overflow-y: auto; padding: 8px; flex: 1; }
+
+.pcf-lote-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+
+.pcf-lote-item:hover { background: var(--gmp-bg); }
+.pcf-lote-marcado { background: var(--gmp-bg); }
+
+.pcf-lote-check {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--gmp-border);
+  border-radius: 8px;
+  background: var(--gmp-surface);
+  color: var(--gmp-text-light);
+  cursor: pointer;
+}
+
+.pcf-lote-marcado .pcf-lote-check {
+  background: var(--pcf-acento);
+  border-color: var(--pcf-acento);
+  color: var(--pcf-sobre-acento);
+}
+
+.pcf-lote-nome {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border: none;
+  background: none;
+  color: var(--gmp-text);
+  font-size: 0.82rem;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pcf-lote-nome small { font-size: 0.69rem; color: var(--gmp-text-light); }
+
+.pcf-lote-qtd {
+  flex-shrink: 0;
+  width: 78px;
+  height: 34px;
+  text-align: center;
+  border: 1px solid var(--gmp-border);
+  border-radius: 8px;
+  background: var(--gmp-surface);
+  color: var(--gmp-text);
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-family: inherit;
+}
+
+.pcf-lote-qtd:focus { outline: none; border-color: var(--pcf-acento); }
+
+.pcf-modal-rodape {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--gmp-border);
+  font-size: 0.8rem;
+  color: var(--gmp-text-light);
 }
 
 /* ── encargos e totais ──────────────────────────────────────────── */
@@ -595,6 +782,8 @@
 
 @media (max-width: 640px) {
   .pcf-totais { grid-template-columns: 1fr 1fr; }
+  .pcf-item-material { flex-basis: 100%; }
+  .pcf-item-total { min-width: 0; flex: 1; }
   .pcf-item-campos { gap: 12px; }
   .pcf-linha-total { width: 100%; }
   .pcf-topo .pcf-salvar { width: 100%; justify-content: center; }
