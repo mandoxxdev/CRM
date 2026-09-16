@@ -95,7 +95,7 @@ const VERBOS_ETAPA_28 = ['SEPARACAO', 'CONFERENCIA_SEPARACAO', 'LIBERACAO_RETIRA
     const criacao = await como(PRODUCAO, () => request(app).post(base).send({
       salvar_rascunho: true,
       setor: null,
-      itens: [{ material_id: matC, quantidade: qtdC }, { material_id: matN, quantidade: qtdN }],
+      os_referencia: 'OS-TESTE', itens: [{ material_id: matC, quantidade: qtdC }, { material_id: matN, quantidade: qtdN }],
     }));
     assert.strictEqual(criacao.status, 201, `criar: ${JSON.stringify(criacao.body)}`);
     assert.strictEqual(criacao.body.status, 'RASCUNHO');

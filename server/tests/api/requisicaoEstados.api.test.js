@@ -34,8 +34,11 @@ function numero() {
 }
 
 async function criarRequisicao(db, { status, itens, solicitanteId = 1 }) {
+  // RN-A (Etapa 33): a fixture nasce COM OS. Sem isso, a rota /enviar recusa o rascunho e
+  // estes testes — que sao sobre QUEM pode enviar — passariam a medir a regra de OS.
   const reqRes = await dbRun(db, `INSERT INTO requisicoes_almoxarifado
-    (numero, solicitante_id, solicitante_nome, status) VALUES (?, ?, 'Solicitante Teste', ?)`,
+    (numero, solicitante_id, solicitante_nome, status, os_referencia)
+    VALUES (?, ?, 'Solicitante Teste', ?, 'OS-TESTE')`,
     [numero(), solicitanteId, status]);
   const reqId = reqRes.lastID;
   const itemIds = [];
@@ -105,7 +108,7 @@ async function criarRequisicao(db, { status, itens, solicitanteId = 1 }) {
     const matId = await criarMaterial('MATEST-03', 10);
     const criacao = await request(app).post('/api/almoxarifado/requisicoes').send({
       salvar_rascunho: true,
-      itens: [{ material_id: matId, quantidade: 1 }],
+      os_referencia: 'OS-TESTE', itens: [{ material_id: matId, quantidade: 1 }],
     });
     assert.strictEqual(criacao.status, 201, JSON.stringify(criacao.body));
     assert.strictEqual(criacao.body.status, 'RASCUNHO');

@@ -60,9 +60,11 @@ async function criarMaterial(db, { qtd = 100 } = {}) {
 
 async function criarRequisicao(db, { status, itens = [], solicitanteId = 999 }) {
   seqReq += 1;
+  // RN-A (Etapa 33): a fixture nasce COM OS. Sem isso, a rota /enviar recusa o rascunho e
+  // estes testes — que sao sobre QUEM pode enviar — passariam a medir a regra de OS.
   const r = await dbRun(db,
-    `INSERT INTO requisicoes_almoxarifado (numero, solicitante_id, solicitante_nome, status)
-     VALUES (?,?,'Solicitante Perm',?)`,
+    `INSERT INTO requisicoes_almoxarifado (numero, solicitante_id, solicitante_nome, status, os_referencia)
+     VALUES (?,?,'Solicitante Perm',?,'OS-TESTE')`,
     [`REQ-PERM-${seqReq}`, solicitanteId, status]);
   const reqId = r.lastID;
   const itemIds = [];
@@ -571,7 +573,7 @@ const saldoDe = (db, matId) => dbGet(db, 'SELECT quantidade_atual FROM materiais
 
     setUser(CONSULTA);
     const res = await request(app).post('/api/almoxarifado/requisicoes')
-      .send({ itens: [{ material_id: matId, quantidade: 1 }] });
+      .send({ os_referencia: 'OS-TESTE', itens: [{ material_id: matId, quantidade: 1 }] });
     assert.strictEqual(res.status, 403, `esperava 403, veio ${res.status}: ${JSON.stringify(res.body)}`);
     assert.strictEqual(res.body.acao, 'requisitar', JSON.stringify(res.body));
 
@@ -583,7 +585,7 @@ const saldoDe = (db, matId) => dbGet(db, 'SELECT quantidade_atual FROM materiais
     const matId = await criarMaterial(db);
     setUser(PRODUCAO_FALLBACK);
     const res = await request(app).post('/api/almoxarifado/requisicoes')
-      .send({ itens: [{ material_id: matId, quantidade: 1 }] });
+      .send({ os_referencia: 'OS-TESTE', itens: [{ material_id: matId, quantidade: 1 }] });
     assert.strictEqual(res.status, 201, `esperava 201, veio ${res.status}: ${JSON.stringify(res.body)}`);
   });
 

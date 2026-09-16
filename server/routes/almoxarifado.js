@@ -3096,6 +3096,14 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         return res.status(400).json({ error: 'Apenas rascunhos podem ser enviados' });
       }
 
+      // RN-A (Etapa 33): o rascunho pode ter sido salvo sem OS, mas enviar significa pedir
+      // material de verdade. A regra e a MESMA funcao usada na criacao, nao uma copia.
+      try {
+        requisitionCreateService.exigirOS(reqRow.os_referencia);
+      } catch (e) {
+        return res.status(e.status || 400).json({ error: e.message });
+      }
+
       await dbRun(db,
         `UPDATE requisicoes_almoxarifado SET status='PENDENTE', updated_at=CURRENT_TIMESTAMP WHERE id=?`,
         [req.params.id]);

@@ -47,7 +47,7 @@ function test(name, fn) {
     await test(`[${rota.nome}] quantidade 0 rejeitada — 400 (bug conhecido fechado)`, async () => {
       const res = await request(app).post(rota.url).send({
         ...rota.extra,
-        itens: [{ material_id: materialId, quantidade: 0 }],
+        os_referencia: 'OS-TESTE', itens: [{ material_id: materialId, quantidade: 0 }],
       });
       assert.strictEqual(res.status, 400, JSON.stringify(res.body));
     });
@@ -55,20 +55,20 @@ function test(name, fn) {
     await test(`[${rota.nome}] quantidade negativa rejeitada — 400`, async () => {
       const res = await request(app).post(rota.url).send({
         ...rota.extra,
-        itens: [{ material_id: materialId, quantidade: -5 }],
+        os_referencia: 'OS-TESTE', itens: [{ material_id: materialId, quantidade: -5 }],
       });
       assert.strictEqual(res.status, 400, JSON.stringify(res.body));
     });
 
     await test(`[${rota.nome}] sem itens — 400`, async () => {
-      const res = await request(app).post(rota.url).send({ ...rota.extra, itens: [] });
+      const res = await request(app).post(rota.url).send({ ...rota.extra, os_referencia: 'OS-TESTE', itens: [] });
       assert.strictEqual(res.status, 400, JSON.stringify(res.body));
     });
 
     await test(`[${rota.nome}] material inexistente/inativo — 400`, async () => {
       const res = await request(app).post(rota.url).send({
         ...rota.extra,
-        itens: [{ material_id: materialInativoId, quantidade: 1 }],
+        os_referencia: 'OS-TESTE', itens: [{ material_id: materialInativoId, quantidade: 1 }],
       });
       assert.strictEqual(res.status, 400, JSON.stringify(res.body));
     });
@@ -77,7 +77,7 @@ function test(name, fn) {
       const res = await request(app).post(rota.url).send({
         ...rota.extra,
         tipo_requisicao: 'EMERGENCIAL',
-        itens: [{ material_id: materialId, quantidade: 1 }],
+        os_referencia: 'OS-TESTE', itens: [{ material_id: materialId, quantidade: 1 }],
       });
       assert.strictEqual(res.status, 400, JSON.stringify(res.body));
     });
@@ -87,7 +87,7 @@ function test(name, fn) {
         ...rota.extra,
         tipo_requisicao: 'EMERGENCIAL',
         justificativa: 'Linha parada — falta crítica do material',
-        itens: [{ material_id: materialId, quantidade: 1 }],
+        os_referencia: 'OS-TESTE', itens: [{ material_id: materialId, quantidade: 1 }],
       });
       assert.strictEqual(res.status, 201, JSON.stringify(res.body));
       assert.strictEqual(res.body.status, 'PENDENTE');
@@ -96,7 +96,7 @@ function test(name, fn) {
     await test(`[${rota.nome}] criação normal — 201 PENDENTE com numero REQ-`, async () => {
       const res = await request(app).post(rota.url).send({
         ...rota.extra,
-        itens: [{ material_id: materialId, quantidade: 3 }],
+        os_referencia: 'OS-TESTE', itens: [{ material_id: materialId, quantidade: 3 }],
       });
       assert.strictEqual(res.status, 201, JSON.stringify(res.body));
       assert.strictEqual(res.body.status, 'PENDENTE');
@@ -120,7 +120,7 @@ function test(name, fn) {
     await test(`[${rota.nome}] payload estilo form (strings) aceito — 201`, async () => {
       const res = await request(app).post(rota.url).send({
         ...rota.extra,
-        itens: [{ material_id: String(materialId), quantidade: '2', observacoes: '' }],
+        os_referencia: 'OS-TESTE', itens: [{ material_id: String(materialId), quantidade: '2', observacoes: '' }],
       });
       assert.strictEqual(res.status, 201, JSON.stringify(res.body));
     });
@@ -130,7 +130,7 @@ function test(name, fn) {
       const res = await request(app).post(rota.url).send({
         ...rota.extra,
         salvar_rascunho: true,
-        itens: [{ material_id: materialId, quantidade: 1 }],
+        os_referencia: 'OS-TESTE', itens: [{ material_id: materialId, quantidade: 1 }],
       });
       assert.strictEqual(res.status, 201, JSON.stringify(res.body));
       assert.strictEqual(res.body.status, 'RASCUNHO');
@@ -152,7 +152,7 @@ function test(name, fn) {
         tipo_requisicao: 'ORDEM_PRODUCAO',
         centro_custo_id: 7,
         local_entrega: 'Bancada 3',
-        itens: [{ material_id: materialId, quantidade: 1 }],
+        os_referencia: 'OS-TESTE', itens: [{ material_id: materialId, quantidade: 1 }],
       });
       assert.strictEqual(res.status, 201, JSON.stringify(res.body));
 
@@ -167,7 +167,7 @@ function test(name, fn) {
     await test(`[${rota.nome}] tipo_requisicao ausente persiste default CONSUMO`, async () => {
       const res = await request(app).post(rota.url).send({
         ...rota.extra,
-        itens: [{ material_id: materialId, quantidade: 1 }],
+        os_referencia: 'OS-TESTE', itens: [{ material_id: materialId, quantidade: 1 }],
       });
       assert.strictEqual(res.status, 201, JSON.stringify(res.body));
       const row = await dbGet(db, 'SELECT tipo_requisicao FROM requisicoes_almoxarifado WHERE id = ?', [res.body.id]);
@@ -178,7 +178,7 @@ function test(name, fn) {
       const res = await request(app).post(rota.url).send({
         ...rota.extra,
         tipo_requisicao: 'NAO_EXISTE',
-        itens: [{ material_id: materialId, quantidade: 1 }],
+        os_referencia: 'OS-TESTE', itens: [{ material_id: materialId, quantidade: 1 }],
       });
       assert.strictEqual(res.status, 400, JSON.stringify(res.body));
     });
@@ -186,14 +186,14 @@ function test(name, fn) {
 
   await test('[requisicoes-material] sem setor — 400 Setor é obrigatório', async () => {
     const res = await request(app).post('/api/requisicoes-material').send({
-      itens: [{ material_id: materialId, quantidade: 1 }],
+      os_referencia: 'OS-TESTE', itens: [{ material_id: materialId, quantidade: 1 }],
     });
     assert.strictEqual(res.status, 400, JSON.stringify(res.body));
   });
 
   await test('[almoxarifado] itens inserido corretamente (SELECT confirma quantidade_solicitada)', async () => {
     const res = await request(app).post('/api/almoxarifado/requisicoes').send({
-      itens: [{ material_id: materialId, quantidade: 5, observacoes: 'obs teste' }],
+      os_referencia: 'OS-TESTE', itens: [{ material_id: materialId, quantidade: 5, observacoes: 'obs teste' }],
     });
     assert.strictEqual(res.status, 201, JSON.stringify(res.body));
     const itens = await dbAll(db,

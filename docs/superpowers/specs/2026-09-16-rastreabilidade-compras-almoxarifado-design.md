@@ -3,7 +3,7 @@
 **Origem:** e-mail de Sheila Machado (Gerente de Compras) para Matheus, 15/09/2026 16:13,
 assunto "RES: SISTEMA - MELHORIAS PARA O DEPRATAMENTO DE COMPRAS".
 
-**Estado deste documento:** desenho e medição. **Nada aqui foi implementado.** Serve para
+**Estado deste documento:** desenho e medição. **A RN-A já foi implementada** (16/09/2026); o resto, não. Serve para
 responder à pergunta literal do e-mail — *"me informe o que é possível atender"* — com base no
 que o sistema já tem, e para virar plano de execução depois.
 
@@ -17,7 +17,7 @@ falta é, em boa medida, **regra e ligação**, não tabela nova.
 
 | O que o e-mail pede | O que já existe | O que falta |
 |---|---|---|
-| OS obrigatória na saída | `requisicoes_almoxarifado.os_referencia` **já existe**; `ordens_servico` também | Tornar obrigatório e **validar contra a OS cadastrada** (hoje é texto livre) |
+| OS obrigatória na saída | `requisicoes_almoxarifado.os_referencia` **já existe** | Só tornar obrigatório — o número segue digitado, sem validar cadastro (decisão do P.O.). **Feito em 16/09/2026** |
 | Etiqueta de ativo GMP | `ferramentas_almoxarifado.codigo_patrimonio` | Nada na ferramenta; falta estender a equipamentos |
 | Nº de série do fabricante | — | Coluna nova em `ferramentas_almoxarifado` |
 | Retirada de ferramenta + devolução | `emprestimos_ferramenta_almoxarifado` (retirada, prevista, devolução real, status) | Distinguir **definitiva** de **reserva** |
@@ -41,14 +41,26 @@ registros **antigos**, que não têm OS preenchida.
 > para quem realiza a liberação. Caso não exista uma OS cadastrada, o sistema deverá impedir a
 > liberação."*
 
-- A requisição **não é criada** sem OS; a liberação **não acontece** sem OS.
-- A OS deixa de ser texto livre e passa a ser **escolhida de `ordens_servico`**. Texto livre
-  não dá rastreabilidade: "1714", "OS 1714" e "os1714" viram três serviços diferentes no
-  relatório, e foi exatamente para evitar isso que ela pediu a regra.
-- **Exceção obrigatória (RN-B):** reposição de peça de equipamento não tem OS — vincula ao
-  ativo. Sem essa exceção, a regra trava a manutenção.
+**IMPLEMENTADA** em 16/09/2026 — ver `server/tests/api/requisicaoExigeOS.api.test.js`.
+
+- A requisição **não é criada** sem OS, e o rascunho **não é enviado** sem OS.
+- **O número é DIGITADO, não escolhido de um cadastro.** Decisão do P.O., 16/09/2026, que
+  corrige a primeira versão deste desenho: eu havia proposto validar contra `ordens_servico`,
+  o que foi recusado. Só é obrigatório **existir um número**. Um cenário de teste trava isso
+  de propósito — se alguém "melhorar" a regra para validar o cadastro, o teste fica vermelho.
+- Único tratamento aplicado ao texto: **remover o espaço em volta**, para " OS 1714 " e
+  "OS 1714" não virarem dois serviços no relatório. Nada de maiúsculas, prefixo ou formato.
+- A regra é cobrada **antes** da validação de itens e setor: o motivo da recusa é a
+  requisição em si. Na ordem inversa, quem esquecesse a OS receberia "material não permitido
+  para este setor" e iria mexer no lugar errado.
+- **Rascunho pode ficar sem OS** — é trabalho pela metade por definição. A cobrança acontece
+  no envio, que é quando a requisição passa a valer. Sem isso, o rascunho seria a porta dos
+  fundos da regra.
 - **Requisições antigas sem OS:** continuam válidas e legíveis. A obrigatoriedade vale para
   o que for criado a partir da mudança. Migração retroativa inventaria dado que ninguém tem.
+- **Exceção ainda pendente (RN-B):** reposição de peça de equipamento não tem OS — vincula ao
+  ativo. Enquanto a RN-B não existir, esse caso precisa de um número de OS como qualquer
+  outro.
 
 ### RN-B — Saída vinculada ao ATIVO, alternativa à OS
 
@@ -95,9 +107,9 @@ Campos que ela nomeou: ativo/equipamento, problema, serviço necessário, priori
 
 Estas não são dúvidas técnicas — são escolhas do negócio, e errar qualquer uma faz retrabalho:
 
-1. **A OS vem de onde?** `ordens_servico` é a tabela do Comercial. A OS de fábrica que a
-   Sheila usa ("OS 1714") é a mesma entidade? Se não for, o seletor apontaria para o lugar
-   errado e a rastreabilidade nasceria torta.
+1. ~~**A OS vem de onde?**~~ **RESPONDIDA em 16/09/2026:** de lugar nenhum — é digitada. O
+   P.O. decidiu que só a obrigatoriedade importa, não o vínculo com cadastro. Isso elimina a
+   pergunta sobre qual tabela de OS usar e foi o que permitiu implementar a RN-A no mesmo dia.
 2. **Ativo é a ferramenta, ou é uma entidade própria?** Hoje `codigo_patrimonio` mora em
    `ferramentas_almoxarifado`. Torno e máquina de solda são "ferramenta" nesse cadastro, ou
    precisam de um cadastro de ativos separado?
@@ -114,7 +126,7 @@ Não cabe numa etapa. Sugestão de corte, em ordem de valor por esforço:
 
 | Etapa | Escopo | Por quê nesta ordem |
 |---|---|---|
-| 33 | RN-A + RN-B — OS obrigatória e vínculo com ativo | É o pedido nº 1 dela, e o que mais rende: rastreabilidade imediata sobre estrutura que já existe |
+| 33 | ~~RN-A~~ **feita** + RN-B — OS obrigatória e vínculo com ativo | É o pedido nº 1 dela, e o que mais rende: rastreabilidade imediata sobre estrutura que já existe |
 | 34 | RN-C + RN-D — ferramenta, os dois fluxos e o termo | Segunda maior dor; a tabela de empréstimo já está lá |
 | 35 | RN-E — equipamento, setor e operador | Depende do cadastro de ativos decidido na 33 |
 | 36 | RN-F — requisição de manutenção e o ciclo do equipamento | O maior, e o que mais depende das decisões acima |

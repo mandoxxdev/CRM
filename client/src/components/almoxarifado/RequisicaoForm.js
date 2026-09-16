@@ -209,6 +209,12 @@ const RequisicaoForm = () => {
     // e o server também exige na criação (não é regra client-only) — decisão consciente do fix loop.
     if (!form.departamento) { toast.error('Setor é obrigatório'); return false; }
     if (itens.length === 0) { toast.error('Adicione ao menos um material'); return false; }
+    // RN-A (Etapa 33): toda saida de material precisa de OS. Pulada no rascunho, igual ao
+    // servidor — quem cobra de verdade e o backend, na criacao e no envio do rascunho.
+    if (!salvarRascunho && !String(form.os_referencia || '').trim()) {
+      toast.error('Informe o numero da OS: toda saida de material precisa estar vinculada a uma OS');
+      return false;
+    }
     // Justificativa de urgência é regra client-only (server não exige nem no envio direto) — pulada
     // ao salvar rascunho, já que rascunho existe justamente para permitir salvar incompleto.
     if (!salvarRascunho && form.urgencia !== 'NORMAL' && !form.justificativa_urgencia) {
@@ -311,9 +317,12 @@ const RequisicaoForm = () => {
                   )}
                 </div>
                 <div className="almox-field">
-                  <label className="almox-label">OS / Referência</label>
+                  <label className="almox-label">Número da OS *</label>
                   <input className="almox-input" value={form.os_referencia} onChange={e => setForm(f => ({ ...f, os_referencia: e.target.value }))}
-                    placeholder="Ex: OS-0042 / Proj-123" />
+                    placeholder="Ex: OS 1714" />
+                  <small style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)' }}>
+                    obrigatório — é o que permite saber depois em qual serviço o material foi usado
+                  </small>
                 </div>
                 <div className="almox-field">
                   <label className="almox-label">Tipo de requisição</label>

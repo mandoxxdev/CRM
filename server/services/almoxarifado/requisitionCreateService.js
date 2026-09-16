@@ -82,6 +82,33 @@ async function dispararNotificacoesCriacao(db, requisicaoId, solicitanteEmail = 
  *
  * @returns {{id:number, numero:string, status:string, valor_total?:number, requer_aprovacao_valor?:boolean}}
  */
+/**
+ * RN-A (Etapa 33) — nenhuma saiída de material sem OS.
+ *
+ * Pedido da Gerência de Compras (e-mail 15/09/2026): *"preciso que a informação do número da
+ * OS seja obrigatória, tanto para quem solicita quanto para quem realiza a liberação. Caso não
+ * exista uma OS cadastrada, o sistema deverá impedir a liberação"*. O objetivo dela é saber,
+ * depois, em qual serviço cada material foi usado.
+ *
+ * O número é DIGITADO, não escolhido de um cadastro — decisão do P.O., 16/09/2026. Ou seja,
+ * aqui não existe validação contra `ordens_servico`: basta existir um número.
+ *
+ * Duas coisas que esta função NÃO faz, de propósito:
+ *  - não exige OS no RASCUNHO. Rascunho é trabalho pela metade por definição; a cobrança
+ *    acontece no envio (rota `/enviar`), que é quando a requisição passa a valer.
+ *  - não mexe em requisição ANTIGA sem OS. Preencher retroativamente seria inventar dado que
+ *    ninguém tem; a regra vale do que for criado daqui para a frente.
+ */
+function exigirOS(osReferencia) {
+  const numero = String(osReferencia == null ? '' : osReferencia).trim();
+  if (!numero) {
+    const err = new Error('Informe o número da OS: toda saída de material precisa estar vinculada a uma OS');
+    err.status = 400;
+    throw err;
+  }
+  return numero;
+}
+
 // eslint-disable-next-line no-unused-vars -- `modulo` faz parte do contrato da interface
 // (identifica a rota chamadora para uso futuro/auditoria); nenhuma regra de Task 1 depende dele.
 async function createRequisicao(db, user, payload, { modulo, skipNotificacoes = false } = {}) {
@@ -92,6 +119,16 @@ async function createRequisicao(db, user, payload, { modulo, skipNotificacoes = 
     projeto_id, cliente_id, equipamento, prioridade, data_necessidade,
     justificativa, salvar_rascunho,
   } = payload;
+
+  const isRascunho = salvar_rascunho === true || salvar_rascunho === 1;
+
+  // RN-A cobrada ANTES da validação de itens/setor: o motivo da recusa é a requisição em si,
+  // não o que veio na lista de materiais. Com a ordem invertida, quem esquecesse a OS receberia
+  // "material não permitido para este setor" e iria mexer no lugar errado.
+  // Rascunho pode ficar sem OS; a cobrança acontece no envio.
+  const osFinal = isRascunho
+    ? (os_referencia == null ? null : String(os_referencia).trim() || null)
+    : exigirOS(os_referencia);
 
   const setorFinal = departamento || setor || null;
 
@@ -116,7 +153,6 @@ async function createRequisicao(db, user, payload, { modulo, skipNotificacoes = 
     await sectorMaterialService.validateMateriaisParaSetor(db, setorFinal, materialIds);
   }
 
-  const isRascunho = salvar_rascunho === true || salvar_rascunho === 1;
   const statusInicial = isRascunho ? 'RASCUNHO' : 'PENDENTE';
 
   // Etapa 31 (RN-07): o numero nasce DENTRO do gerador, na tentativa que vencer o UNIQUE, e e ele
@@ -132,7 +168,7 @@ async function createRequisicao(db, user, payload, { modulo, skipNotificacoes = 
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       num, user.id, user.nome || user.email,
-      setorFinal, setorFinal, os_referencia || null,
+      setorFinal, setorFinal, osFinal,
       urgencia || 'NORMAL', observacoes || null, justificativa_urgencia || null,
       modulo_origem || null, statusInicial,
       tipo_requisicao || 'CONSUMO', centro_custo_id || null, local_entrega || null,
@@ -162,4 +198,7 @@ async function createRequisicao(db, user, payload, { modulo, skipNotificacoes = 
   };
 }
 
-module.exports = { createRequisicao, dispararNotificacoesCriacao };
+module.exports = {
+  // Exportada para a rota /enviar cobrar a MESMA regra no envio do rascunho — duas
+  // cópias da condição divergiriam e o rascunho viraria a porta dos fundos da RN-A.
+  exigirOS, createRequisicao, dispararNotificacoesCriacao };

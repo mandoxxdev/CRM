@@ -102,7 +102,7 @@ const setConfig = (db, chave, valor) => dbRun(db,
   async function requisicaoAprovadaComReserva(db, mat, qtd) {
     setUser(SOLICITANTE);
     const req1 = await request(app).post('/api/almoxarifado/requisicoes')
-      .send({ setor: 'Almoxarifado', departamento: 'Almoxarifado', itens: [{ material_id: mat, quantidade: qtd }] });
+      .send({ setor: 'Almoxarifado', departamento: 'Almoxarifado', os_referencia: 'OS-TESTE', itens: [{ material_id: mat, quantidade: qtd }] });
     assert.ok(req1.status < 400, `criação falhou: ${JSON.stringify(req1.body)}`);
     const reqId = req1.body.id || req1.body.requisicao?.id;
     assert.ok(reqId, `id da requisição não veio: ${JSON.stringify(req1.body)}`);
