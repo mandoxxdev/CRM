@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import { FiShoppingCart, FiRefreshCw, FiAlertTriangle } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
+import { useAuth } from '../../context/AuthContext';
+import { getCachedUserPermissions, hasModuleAccess } from '../../services/permissionsCache';
 import './Almoxarifado.css';
 
 /**
@@ -162,7 +165,9 @@ const PainelContextoMaterial = ({ estado, onTentarNovamente }) => {
 };
 
 const ReposicaoAlmoxarifado = () => {
-  const { bloquearSeNaoPode } = useAlmoxPermissoes();
+  const { pode, bloquearSeNaoPode } = useAlmoxPermissoes();
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [aba, setAba] = useState('SUGESTOES');
 
   // ── Aba Sugestões de Compra ──
@@ -357,6 +362,62 @@ const ReposicaoAlmoxarifado = () => {
       setCancelandoId(null);
     }
   };
+
+  /**
+   * Etapa 38, Task 6 — "Gerar pedido": o primeiro consumidor de client do vínculo
+   * solicitação → pedido de compra.
+   *
+   * ── O FURO QUE ISTO FECHA ─────────────────────────────────────────────────────────────────
+   * A Reposição gera solicitações desde a Etapa 11 e **ninguém as convertia em pedido**:
+   * `purchaseService.vincularPedidoCompra` existe desde a Etapa 14 e não tinha um único
+   * consumidor no client. A solicitação nascia PENDENTE e morria PENDENTE.
+   *
+   * ── POR QUE NAVEGA E NÃO POSTA ────────────────────────────────────────────────────────────
+   * Criar o pedido daqui exigiria escolher **fornecedor e preço** — trabalho do comprador, na
+   * tela dele. O botão leva ao formulário do módulo Compras já pré-preenchido; é lá que o
+   * `POST /compras/pedidos` sai, com `solicitacao_id`, e é o SERVIÇO
+   * (`services/compras/pedidoCompraService.js`, fix 1 da Task 2) que gateia o vínculo por
+   * `gerenciar_reposicao` antes de qualquer escrita. O gate de tela aqui é conveniência.
+   *
+   * ── POR QUE OS DADOS VÃO NA QUERY STRING ──────────────────────────────────────────────────
+   * **Não existe porta** que resolva UMA solicitação a partir do módulo Compras: a listagem da
+   * Reposição está toda atrás de `checkModulePermission('almoxarifado')` (o comprador tomaria
+   * 403) e `GET /api/compras/solicitacoes-compra/:id` é a tabela `solicitacoes_compra` do
+   * CORE — outra tabela, que traria o registro errado em silêncio. A linha desta tabela já tem
+   * tudo que o formulário precisa. Descartado: abrir uma porta nova só para pré-preencher.
+   * `URLSearchParams` (e não template string) porque `material_nome` tem espaço e acento.
+   */
+  const handleGerarPedido = (s, evento) => {
+    if (!bloquearSeNaoPode('gerenciar_reposicao', evento)) return;
+    const query = new URLSearchParams({
+      solicitacao: String(s.id),
+      material: String(s.material_id),
+      quantidade: String(s.quantidade ?? ''),
+      material_nome: s.material_nome || '',
+      codigo: s.material_codigo || '',
+    });
+    navigate(`/compras/pedidos/novo?${query.toString()}`);
+  };
+
+  /**
+   * O destino do botão é do módulo **Compras** (`<ProtectedModuleRoute modulo="compras">` em
+   * `App.js`): um almoxarife SEM esse módulo clicaria e bateria no `AcessoNegado`. Esta tela
+   * usa a MESMA fonte da barreira (`permissionsCache` + `hasModuleAccess`) para não oferecer um
+   * caminho que ela já sabe que termina em recusa — e não custa porta nova: o cache está quente
+   * porque o `ProtectedModuleRoute` do próprio almoxarifado acabou de carregá-lo para deixar
+   * esta tela abrir.
+   *
+   * Cache frio (ou sem usuário) **falha ABERTO**, igual ao `useAlmoxPermissoes`: esconder ação
+   * de quem pode, por causa de um cache vazio, é pior do que deixar clicar e receber a recusa.
+   */
+  const temModuloCompras = useMemo(() => {
+    if (!user?.id) return true;
+    const cached = getCachedUserPermissions(user.id);
+    if (!cached) return true;
+    return hasModuleAccess(cached.permissoes, 'compras', user);
+  }, [user]);
+
+  const podeGerarPedido = pode('gerenciar_reposicao') && temModuloCompras;
 
   // Etapa 14, Task 4 (RN-04): busca o contexto do comprador para UM material — chamada pelo
   // toggle do painel e pelo "Tentar novamente" do erro localizado.
@@ -782,6 +843,19 @@ const ReposicaoAlmoxarifado = () => {
                           <td>{formatData(s.created_at)}</td>
                           <td>
                             <div className="almox-actions">
+                              {/* Etapa 38, Task 6 — só a solicitação PENDENTE oferece "Gerar
+                                  pedido": a VINCULADO já tem pedido, e um segundo pedido para a
+                                  mesma solicitação sobrescreveria o vínculo do primeiro. */}
+                              {s.status === 'PENDENTE' && podeGerarPedido && (
+                                <button
+                                  type="button"
+                                  className="btn-almox-primary"
+                                  onClick={(e) => handleGerarPedido(s, e)}
+                                  title="Abre o pedido de compra já preenchido com este material"
+                                >
+                                  <FiShoppingCart size={14} /> Gerar pedido
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 className="btn-almox-danger"

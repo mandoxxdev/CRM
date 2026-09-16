@@ -25,6 +25,28 @@ jest.mock('../../services/api', () => ({
 jest.mock('react-toastify', () => ({
   toast: Object.assign(jest.fn(), { success: jest.fn(), error: jest.fn(), info: jest.fn(), warn: jest.fn() }),
 }));
+// Etapa 38, Task 6 — o botao "Gerar pedido" NAVEGA (nao posta): ele leva os dados que a propria
+// linha ja tem para o formulario do modulo Compras. O `useNavigate` e mockado; o resto do
+// `react-router-dom` (MemoryRouter) continua REAL, senao a arvore nem monta.
+const mockNavigate = jest.fn();
+jest.mock('react-router-dom', () => ({
+  ...jest.requireActual('react-router-dom'),
+  useNavigate: () => mockNavigate,
+}));
+// Etapa 38, Task 6 — o destino do botao e do modulo COMPRAS (`<ProtectedModuleRoute
+// modulo="compras">`). A tela esconde o botao de quem nao tem esse modulo usando a MESMA fonte da
+// barreira (`permissionsCache` + `hasModuleAccess`); `hasModuleAccess` vem REAL de proposito (e o
+// predicado que decide de verdade), so o cache e trocado por cenario.
+let mockPermissoesCache = () => ({
+  permissoes: [{ modulo: 'almoxarifado', permissao: 1 }, { modulo: 'compras', permissao: 1 }],
+});
+jest.mock('../../context/AuthContext', () => ({
+  useAuth: () => ({ user: { id: 64, nome: 'Almoxarife Teste', role: 'user' }, loading: false }),
+}));
+jest.mock('../../services/permissionsCache', () => ({
+  ...jest.requireActual('../../services/permissionsCache'),
+  getCachedUserPermissions: () => mockPermissoesCache(),
+}));
 // Permissoes: por padrao tudo liberado. mockPode troca em runtime (mesmo padrao de
 // ConferenciaEstoque.test.js / SobrasAlmoxarifado.test.js) — o gate REAL continua no servidor.
 let mockPode = () => true;
@@ -204,6 +226,9 @@ const mockarApi = (overrides = {}) => {
 beforeEach(() => {
   global.IS_REACT_ACT_ENVIRONMENT = true;
   mockPode = () => true;
+  mockPermissoesCache = () => ({
+    permissoes: [{ modulo: 'almoxarifado', permissao: 1 }, { modulo: 'compras', permissao: 1 }],
+  });
   mockarApi();
   api.post.mockResolvedValue({ data: { criadas: [{ material_id: 10, solicitacao_id: 99, quantidade: 16 }], puladas: [] } });
   // handleGerar agora confirma antes do POST — default true, testes de cancelamento sobrescrevem.
@@ -961,5 +986,120 @@ describe('ReposicaoAlmoxarifado — aba Sugestões — contexto do material', ()
     expect(chamadasContexto10).toBe(2); // a chamada foi REFEITA, não serviu do cache velho
     // O painel continua aberto no MESMO material (não fechou) e mostra o número novo.
     expect(container.querySelector('[data-testid="contexto-disponivel"]').textContent).toBe('999');
+  });
+});
+
+// ── Etapa 38, Task 6 — "Gerar pedido" na aba Solicitações ─────────────────────────────────────
+//
+// O FURO QUE ESTES CENÁRIOS PAGAM: a Reposição gera solicitações de compra desde a Etapa 11 e
+// **ninguém as convertia em pedido**. `purchaseService.vincularPedidoCompra` existe desde a
+// Etapa 14 e, até a Task 6, não tinha **um único consumidor no client** — a solicitação nascia
+// PENDENTE e morria PENDENTE (ou cancelada à mão).
+//
+// POR QUE O BOTÃO NAVEGA E NÃO POSTA (decisão medida na Fase 2 do plano da Etapa 38): criar o
+// pedido daqui exigiria escolher **fornecedor e preço**, que é trabalho do comprador, na tela
+// dele. E o pré-preenchimento vai pela **query string** porque não existe porta que resolva UMA
+// solicitação a partir do módulo Compras: a listagem da Reposição está toda atrás de
+// `checkModulePermission('almoxarifado')` (o comprador tomaria 403) e
+// `GET /api/compras/solicitacoes-compra/:id` é a tabela `solicitacoes_compra` do CORE, **outra
+// tabela**, que traria o registro errado em silêncio. A linha já tem tudo que o formulário
+// precisa.
+//
+// Fixture própria (ids 641/642, material 907): a `SOLICITACOES_FIXTURE` do resto do arquivo usa
+// ids `1` e `2`, e um `solicitacao_id` de valor `1` passaria por acidente em qualquer implementação
+// que mandasse o índice, o primeiro da lista ou um literal.
+const SOLICITACOES_GERAR_PEDIDO = [
+  { id: 641, material_id: 907, material_codigo: 'ALM-0907', material_nome: 'Chapa Aço 3mm',
+    quantidade: 16, motivo: 'PONTO_REPOSICAO', status: 'PENDENTE', created_at: '2026-09-10 10:00:00' },
+  { id: 642, material_id: 908, material_codigo: 'ALM-0908', material_nome: 'Perfil U 50mm',
+    quantidade: 4, motivo: 'ESTOQUE_MINIMO', status: 'VINCULADO', pedido_compra_id: 418,
+    created_at: '2026-09-09 09:00:00' },
+];
+
+// A URL do contrato congelado (Task 5, cenário (l)): os cinco parâmetros, nesta ordem, com o nome
+// do material **codificado** — `Chapa Aço 3mm` tem espaço e cedilha, e um template string cru
+// produziria uma URL quebrada que o `useSearchParams` leria pela metade.
+const URL_GERAR_PEDIDO_641 = '/compras/pedidos/novo?solicitacao=641&material=907&quantidade=16'
+  + '&material_nome=Chapa+A%C3%A7o+3mm&codigo=ALM-0907';
+
+describe('ReposicaoAlmoxarifado — aba Solicitações — Gerar pedido (Etapa 38)', () => {
+  const abrirSolicitacoes = async () => {
+    mockarApi({ solicitacoes: SOLICITACOES_GERAR_PEDIDO });
+    await renderizar();
+    await clicar(botao('Solicitações'));
+  };
+
+  test('(h) linha PENDENTE tem "Gerar pedido" ao lado de "Cancelar" e navega com os dados DA LINHA', async () => {
+    await abrirSolicitacoes();
+
+    // Metade positiva: a linha da solicitação está mesmo na tela (sem isto, "não achei o botão"
+    // seria indistinguível de "não achei a linha").
+    const linhaPendente = linhaMaterial('ALM-0907');
+    expect(linhaPendente).toBeTruthy();
+    expect(linhaPendente.textContent).toContain('Chapa Aço 3mm');
+    expect(botao('Cancelar', linhaPendente)).toBeTruthy();
+
+    const btn = botao('Gerar pedido', linhaPendente);
+    expect(btn).toBeTruthy();
+
+    // Metade negativa: a solicitação JÁ VINCULADA não oferece o botão (o pedido dela existe) —
+    // e continua oferecendo "Cancelar", que é o que prova que a linha inteira não sumiu.
+    const linhaVinculada = linhaMaterial('ALM-0908');
+    expect(linhaVinculada.textContent).toContain('Perfil U 50mm');
+    expect(linhaVinculada.textContent).toContain('VINCULADO');
+    expect(botao('Gerar pedido', linhaVinculada)).toBeUndefined();
+    expect(botao('Cancelar', linhaVinculada)).toBeTruthy();
+
+    await clicar(btn);
+
+    // Conta as chamadas (um `toHaveBeenCalledWith` solto é satisfeito por 1, 2 ou 10) e lê o
+    // argumento: o `solicitacao=641` é o id DA LINHA, não `1` nem o primeiro da lista.
+    expect(mockNavigate.mock.calls).toHaveLength(1);
+    expect(mockNavigate.mock.calls[0][0]).toBe(URL_GERAR_PEDIDO_641);
+    // Nada é postado daqui: quem cria o pedido é o formulário do Compras.
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  test('(h2) sem gerenciar_reposicao o botao some; com a permissao ele volta', async () => {
+    mockPode = (acao) => acao !== 'gerenciar_reposicao';
+    await abrirSolicitacoes();
+
+    expect(linhaMaterial('ALM-0907')).toBeTruthy();
+    expect(botao('Gerar pedido', linhaMaterial('ALM-0907'))).toBeUndefined();
+    // O "Cancelar" continua (ele é barrado no clique, não escondido) — a linha não sumiu.
+    expect(botao('Cancelar', linhaMaterial('ALM-0907'))).toBeTruthy();
+
+    // Metade positiva NO MESMO cenário: com a permissão, o mesmo render mostra o botão. Sem
+    // isto, uma tela que nunca desenhasse o botão passaria aqui.
+    mockPode = () => true;
+    await renderizar();
+    expect(botao('Gerar pedido', linhaMaterial('ALM-0907'))).toBeTruthy();
+  });
+
+  test('(h3) sem o modulo Compras o botao some; com o modulo ele volta', async () => {
+    mockPermissoesCache = () => ({ permissoes: [{ modulo: 'almoxarifado', permissao: 1 }] });
+    await abrirSolicitacoes();
+
+    // Um almoxarife SEM o módulo Compras bateria no `AcessoNegado` depois do clique — a tela
+    // não oferece o caminho que ela sabe que termina em barreira.
+    expect(linhaMaterial('ALM-0907')).toBeTruthy();
+    expect(botao('Gerar pedido', linhaMaterial('ALM-0907'))).toBeUndefined();
+    expect(botao('Cancelar', linhaMaterial('ALM-0907'))).toBeTruthy();
+
+    mockPermissoesCache = () => ({
+      permissoes: [{ modulo: 'almoxarifado', permissao: 1 }, { modulo: 'compras', permissao: 1 }],
+    });
+    await renderizar();
+    expect(botao('Gerar pedido', linhaMaterial('ALM-0907'))).toBeTruthy();
+  });
+
+  test('(h4) cache de permissoes frio NAO esconde o botao (falha ABERTO, quem decide e a barreira)', async () => {
+    // Mesma política do `useAlmoxPermissoes` (e escrita lá): esconder ação de quem PODE por causa
+    // de um cache vazio é pior do que deixar clicar e receber a recusa. O cache aqui está
+    // quente na prática — o `ProtectedModuleRoute` do almoxarifado acabou de carregá-lo.
+    mockPermissoesCache = () => null;
+    await abrirSolicitacoes();
+
+    expect(botao('Gerar pedido', linhaMaterial('ALM-0907'))).toBeTruthy();
   });
 });

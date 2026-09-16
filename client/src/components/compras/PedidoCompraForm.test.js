@@ -658,3 +658,41 @@ test('(n) observacoes preenchido viaja no payload e continua sem chave numero', 
   expect(chamadasPost()[0][1].status).toBe('aprovado');
   expect('numero' in chamadasPost()[0][1]).toBe(false);
 });
+
+// ── (o) Etapa 38, Task 6 — o vínculo NÃO-FATAL do servidor tem de chegar a quem clicou ────────
+//
+// Decisão 10 do design (corrigida pelo fix 1 da Task 2): o `POST` com `solicitacao_id` cria o
+// pedido e SÓ DEPOIS chama `vincularPedidoCompra`, em `try/catch` — falhar ali responde **201**
+// com `vinculo_solicitacao: 'falhou'`. Sem este cenário, o único consumidor do campo era uma
+// linha de código que ninguém exercitava: o pedido nasceria, a solicitação continuaria PENDENTE
+// e quem clicou em "Gerar pedido" na Reposição iria embora achando que o ciclo fechou.
+test('(o) vinculo_solicitacao "falhou" avisa quem criou o pedido', async () => {
+  api.post.mockImplementation(() => Promise.resolve({
+    data: { id: 640, numero: 'PC-2026-640', vinculo_solicitacao: 'falhou' },
+  }));
+  await renderizarEm('/compras/pedidos/novo?solicitacao=641&material=907&quantidade=16');
+  await selecionar(porTestId('pedido-fornecedor'), '312');
+  digitar(porTestId('valor-item-907'), '25');
+  await esperarEfeitos();
+  await submeter();
+
+  expect(chamadasPost()).toHaveLength(1);
+  expect(chamadasPost()[0][1].solicitacao_id).toBe(641);
+  expect(toast.success).toHaveBeenCalledWith('Pedido PC-2026-640 criado');
+  expect(toast.warn).toHaveBeenCalledWith('O pedido foi criado, mas a solicitação não pôde ser vinculada.');
+});
+
+test('(o2) vinculo_solicitacao "ok" NAO avisa nada (metade positiva do (o))', async () => {
+  api.post.mockImplementation(() => Promise.resolve({
+    data: { id: 640, numero: 'PC-2026-640', vinculo_solicitacao: 'ok' },
+  }));
+  await renderizarEm('/compras/pedidos/novo?solicitacao=641&material=907&quantidade=16');
+  await selecionar(porTestId('pedido-fornecedor'), '312');
+  digitar(porTestId('valor-item-907'), '25');
+  await esperarEfeitos();
+  await submeter();
+
+  expect(chamadasPost()).toHaveLength(1);
+  expect(toast.success).toHaveBeenCalledWith('Pedido PC-2026-640 criado');
+  expect(toast.warn).not.toHaveBeenCalled();
+});
