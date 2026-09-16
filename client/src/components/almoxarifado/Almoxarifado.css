@@ -307,12 +307,18 @@
   gap: 6px;
   align-items: center;
   /* Etapa 35: sem `flex-wrap`, a celula de acoes estourava a largura da tabela e o
-     `overflow: hidden` de `.almox-table-container` (:171, que existe pelo `border-radius`)
-     CORTAVA o excedente — sem barra de rolagem e sem sintoma. Acima de 768px nao ha
-     `overflow-x` em lugar nenhum (a regra de :1030 so vale abaixo). Pior caso medido:
-     Ferramentas com 5 botoes de TEXTO (`FerramentasAlmoxarifado.js:517-561`), que por serem
-     `white-space: nowrap` (:368) tem piso duro de ~684px numa largura util de 721px em 769px —
-     "Calibracao" ficava inalcancavel. Medicao e faixa em
+     `overflow: hidden` de `.almox-table-container` (que existe pelo `border-radius: 12px` da
+     mesma regra) CORTAVA o excedente — sem barra de rolagem e sem sintoma. Acima de 768px nao
+     ha `overflow-x` em lugar nenhum: a declaracao `overflow-x: auto` de `.almox-table` vive
+     dentro de `@media (max-width: 768px)` e so vale abaixo dele. Pior caso medido: Ferramentas
+     em DISPONIVEL + exige_calibracao, com 5 botoes de TEXTO (`.btn-almox-secondary` em
+     `FerramentasAlmoxarifado.js`), que por serem `white-space: nowrap` tem piso duro de ~684px
+     numa largura util de 721px em 769px — "Calibracao" ficava inalcancavel.
+     Duas regras que este comentario aprendeu apanhando: referencias por SELETOR e nao por
+     numero de linha (ele nasceu citando `:368` e `:1030`, e as proprias 9 linhas dele
+     empurraram os alvos para `:377` e `:1039`); e nenhuma chave de fechamento no texto, porque
+     o `bloco()` do teste de drift casa `[^` mais chave `]*` e encerraria o bloco antes do
+     `flex-wrap` — o teste pegou isso na primeira tentativa desta correcao. Medicao e faixa em
      docs/superpowers/specs/2026-09-16-almoxarifado-etapa35-vizinhas-da-34-design.md. */
   flex-wrap: wrap;
 }
