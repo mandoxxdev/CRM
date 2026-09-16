@@ -96,6 +96,35 @@ const quantidadeInicialDaLinhaDoPedido = (linha) => {
   return Number.isFinite(daLinha) ? Math.min(daLinha, teto) : teto;
 };
 
+/**
+ * Onda de correção da revisão final (F1) — por que a rota de itens NÃO responde "pedido quitado".
+ *
+ * `GET /recebimentos-aux/pedidos-compra/:id/itens` devolve `200 []` em dois casos diferentes, e
+ * ela não tem como distingui-los na resposta sem trocar o contrato (array) que a T5 consome:
+ * - pedido QUITADO: tinha linhas, todas já recebidas;
+ * - pedido SEM LINHAS lançadas no Compras: `COUNT(itens) = 0`. A RN-24 o mantém visível em
+ *   `?pendentes=1` como ABERTO (`pedida > 0` é o que impede 0 de 0 de virar 'RECEBIDO'), então a
+ *   tela O OFERECE — e o `POST` tem, desde a T2, uma literal PRÓPRIA para ele.
+ *
+ * Quem distingue é `quantidade_pedida` da LINHA DO PEDIDO na lista (campo derivado da T4). A frase
+ * do segundo caso é COPIADA do servidor (`receiptService.criarRecebimento`, RN-25) para que a tela
+ * e a porta digam a MESMA coisa — antes dela o operador via "já foi recebido por completo" num
+ * pedido que nunca recebeu nada, e o submit bloqueado impedia a literal certa de chegar até ele.
+ *
+ * Retorna `null` quando há linhas — "há o que receber" é a ausência de motivo, não um terceiro
+ * texto.
+ */
+const mensagemPedidoSemSaldo = (linhas, pedido, pedidoId) => {
+  if (linhas.length) return null;
+  const pedida = pedido ? pedido.quantidade_pedida : null;
+  // `!= null` e não truthy: o fato que interessa é ZERO, e `0` é falsy. Sem o campo, cai no
+  // quitado — afirmar "o Compras não lançou" sem o número seria inventar.
+  if (pedida != null && Number(pedida) === 0) {
+    return `Pedido de compra ${pedido.numero || pedidoId} não tem itens lançados no módulo Compras.`;
+  }
+  return 'Este pedido já foi recebido por completo.';
+};
+
 const RecebimentosAlmoxarifado = () => {
   const { pode } = useAlmoxPermissoes();
   const [recebimentos, setRecebimentos] = useState([]);
@@ -150,7 +179,15 @@ const RecebimentosAlmoxarifado = () => {
   // diferentes, e um só faria a tela dizer "já foi recebido por completo" quando a requisição
   // caiu — mentindo sobre o pedido para esconder um erro de rede.
   const [erroItensPedido, setErroItensPedido] = useState(null);
-  const [pedidoQuitado, setPedidoQuitado] = useState(false);
+  // Onda de correção da revisão final (F1): a FRASE, e não um booleano. `200 []` da rota de itens
+  // abriga DOIS fatos — o pedido quitado e o pedido cujas linhas o Compras nunca lançou —, e um
+  // booleano só sabia dizer o primeiro. O segundo é oferecido ao operador de propósito (RN-24 o
+  // mantém ABERTO em `?pendentes=1`), e chamá-lo de "recebido por completo" é mentira: ele nunca
+  // recebeu nada. Enquanto a tela dizia isso, a literal certa do servidor era INALCANÇÁVEL, porque
+  // o submit ficava bloqueado e o POST nunca saía.
+  // `null` = há o que receber; string = não há, e a string É o motivo que vai para o DOM e para o
+  // toast do `handleCriar`.
+  const [avisoPedidoSemSaldo, setAvisoPedidoSemSaldo] = useState(null);
   // A recusa do POST fica NA TELA, não só no toast: as duas literais desta porta dizem QUEM
   // autoriza o excedente, e é o número digitado que o operador precisa levar a essa pessoa.
   const [erroCriacao, setErroCriacao] = useState(null);
@@ -476,7 +513,7 @@ const RecebimentosAlmoxarifado = () => {
   // e acusariam o documento novo de algo que não aconteceu nele.
   const limparEstadoDoPedido = () => {
     setErroItensPedido(null);
-    setPedidoQuitado(false);
+    setAvisoPedidoSemSaldo(null);
     setErroCriacao(null);
     setAutorizarExcedenteCriacao(false);
   };
@@ -508,7 +545,13 @@ const RecebimentosAlmoxarifado = () => {
       const res = await api.get(`/almoxarifado/recebimentos-aux/pedidos-compra/${pedidoId}/itens`);
       const linhas = res.data || [];
       // Lista vazia é a informação de que não há o que receber — não é erro (a rota devolve 200).
-      setPedidoQuitado(linhas.length === 0);
+      // Qual dos dois motivos, quem diz é a LINHA DO PEDIDO que veio da lista, não a rota de itens:
+      // `quantidade_pedida` (campo derivado da T4) é 0 no pedido sem linhas lançadas. O contrato da
+      // rota de itens continua sendo um ARRAY — trocá-lo por `{ itens, total_linhas }` quebraria a
+      // T5 e os testes dela por um fato que a tela já tem em mãos.
+      // O default é o QUITADO: se `quantidade_pedida` não vier (lista antiga, pedido fora do
+      // `<select>`), afirmar "não tem itens lançados" seria inventar um fato sobre o Compras.
+      setAvisoPedidoSemSaldo(mensagemPedidoSemSaldo(linhas, pedido, pedidoId));
       setForm((f) => ({
         ...f,
         itens: linhas.map((l) => ({
@@ -561,8 +604,10 @@ const RecebimentosAlmoxarifado = () => {
     // Etapa 37: pedido sem saldo não vai. O `<select>` é alimentado por uma lista carregada na
     // montagem da tela, então ela pode ter envelhecido — e mandar o POST aqui tomaria o 400
     // "já foi recebido por completo" do servidor para dizer o que a tela já sabe.
-    if (form.tipo_recebimento === 'PEDIDO_COMPRA' && pedidoQuitado) {
-      toast.error('Este pedido já foi recebido por completo');
+    // (F1) O toast repete a MESMA frase que está no bloco de itens — as duas razões de "não há o
+    // que receber" são diferentes, e um toast fixo contaria a errada em uma delas.
+    if (form.tipo_recebimento === 'PEDIDO_COMPRA' && avisoPedidoSemSaldo) {
+      toast.error(avisoPedidoSemSaldo);
       return;
     }
     // Etapa 37 (RN-26): as linhas com quantidade INFORMADA. Campo limpo é "esta linha não chegou",
@@ -1251,9 +1296,11 @@ const RecebimentosAlmoxarifado = () => {
                         </button>
                       </p>
                     )}
-                    {pedidoQuitado && (
+                    {/* (F1) A frase vem do ESTADO: "quitado" e "o Compras não lançou as linhas"
+                        são dois fatos, e a segunda é a literal do próprio servidor. */}
+                    {avisoPedidoSemSaldo && (
                       <p style={{ fontSize: '0.8rem', margin: '0 0 8px' }}>
-                        Este pedido já foi recebido por completo.
+                        {avisoPedidoSemSaldo}
                       </p>
                     )}
                     {form.itens.map((item) => (
@@ -1310,7 +1357,8 @@ const RecebimentosAlmoxarifado = () => {
                 <button type="submit" className="btn-almox-primary"
                   disabled={saving
                     || (form.tipo_recebimento === 'NOTA_FISCAL' && form.itens.length === 0)
-                    || (form.tipo_recebimento === 'PEDIDO_COMPRA' && (carregandoItensPedido || pedidoQuitado))}>
+                    || (form.tipo_recebimento === 'PEDIDO_COMPRA'
+                      && (carregandoItensPedido || !!avisoPedidoSemSaldo))}>
                   {saving ? 'Salvando...' : 'Registrar Recebimento'}
                 </button>
               </div>

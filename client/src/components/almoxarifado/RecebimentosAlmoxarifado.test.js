@@ -192,6 +192,17 @@ const PEDIDOS = [
     quantidade_pedida: 15, quantidade_recebida: 10, saldo_pendente: 5,
     situacao_recebimento: 'PARCIAL',
   },
+  // Onda de correção da revisão final (F1): o pedido que o Compras abriu e NUNCA lançou as linhas.
+  // `quantidade_pedida: 0` é o que o distingue do 313 na LISTA — a rota de itens responde `200 []`
+  // para os dois, e é por isso que a tela não pode decidir só por `linhas.length === 0`.
+  // A RN-24 o mantém visível como ABERTO de propósito (`pedida > 0` é o que impede 0 de 0 de
+  // nascer 'RECEBIDO'), então ele É oferecido ao operador no `<select>`.
+  {
+    id: 317, numero: 'PC-2026-317', fornecedor_nome: 'Parafusos Sul',
+    fornecedor_cnpj: '22.222.222/0001-22', status: 'aprovado', valor_total: 0,
+    quantidade_pedida: 0, quantidade_recebida: 0, saldo_pendente: 0,
+    situacao_recebimento: 'ABERTO',
+  },
 ];
 
 // A resposta de `GET /recebimentos-aux/pedidos-compra/:id/itens` (contrato congelado na T4 +
@@ -250,6 +261,9 @@ const ITENS_PEDIDO = {
       saldo_pendente_material: 5, valor_unitario: 3.5,
     },
   ],
+  // F1: MESMA resposta do 313 (`200 []`) para um fato COMPLETAMENTE diferente — o pedido sem
+  // nenhuma linha lançada. A distinção não está aqui, está na linha do pedido na LISTA.
+  317: [],
 };
 
 let container; let root; let recebimentosDoBanco;
@@ -375,6 +389,9 @@ async function selecionar(select, valor) {
   });
   await esperarEfeitos();
 }
+// O botão de submit do modal, por TIPO e não por texto: o rótulo troca para "Salvando..." durante
+// o POST, e uma referência por texto perderia o botão justamente enquanto ele importa.
+const botaoSubmitModal = () => modalNovo()?.querySelector('.almox-modal-footer button[type="submit"]');
 async function submeterModal() {
   await act(async () => {
     modalNovo().querySelector('form')
@@ -1139,7 +1156,7 @@ test('(u) escolher o pedido carrega os itens com o saldo e o payload leva pedido
   const selPedido = selectPorLabel('Número do Pedido de Compra');
   expect(selPedido).not.toBeUndefined();
   expect([...selPedido.options].map((o) => o.value))
-    .toEqual(['', '312', '313', '314', '315', '316']);
+    .toEqual(['', '312', '313', '314', '315', '316', '317']);
   await selecionar(selPedido, '312');
 
   // UMA chamada à rota de itens, e com o id DO PEDIDO escolhido.
@@ -1410,4 +1427,53 @@ test('(y) duas linhas que cabem sozinhas mas somam acima do agregado avisam DESD
   digitar(inputQtdPedido(9314), '10');
   await esperarEfeitos();
   expect(modalNovo().textContent).toContain('Acima do saldo: 5 a mais que o saldo do pedido (5)');
+});
+
+/* ── (z) `200 []` tem DOIS significados, e chamar os dois de "quitado" MENTE ───────────────────
+ * Onda de correção da revisão final (F1). A rota de itens responde `200 []` para dois pedidos que
+ * não têm nada em comum: o QUITADO (tudo já recebido) e o que o Compras abriu e NUNCA lançou as
+ * linhas — e a RN-24 mantém o segundo visível em `?pendentes=1` como ABERTO, justamente para ele
+ * ser oferecido ao operador. Decidindo por `linhas.length === 0`, a tela dizia "já foi recebido
+ * por completo" a um pedido que nunca recebeu NADA, e bloqueava o submit com a explicação errada:
+ * a literal certa do servidor (`... não tem itens lançados no módulo Compras`) existe desde a T2 e
+ * era INALCANÇÁVEL pela tela, porque o submit nunca chegava a sair.
+ *
+ * Quem distingue os dois é a LINHA DO PEDIDO que a tela já tem da lista: `quantidade_pedida` (campo
+ * derivado da T4) é 40 no 313 e 0 no 317. O contrato da rota de itens NÃO muda — ela continua
+ * devolvendo um array, que é o que a T5 e os testes dela consomem.
+ *
+ * As duas metades no mesmo `test()`: sem a do 313 a correção poderia ter trocado UMA frase pela
+ * outra e ficado verde.
+ */
+test('(z) pedido sem linhas lancadas diz a literal do servidor; o quitado mantem a dele; os dois bloqueiam o submit', async () => {
+  const LITERAL_SEM_ITENS = 'Pedido de compra PC-2026-317 não tem itens lançados no módulo Compras';
+  const LITERAL_QUITADO = 'Este pedido já foi recebido por completo.';
+
+  await renderizar();
+  const selPedido = await escolherPedido(313);
+
+  // ── metade de CONTROLE: o pedido quitado continua dizendo o que sempre disse ────────────────
+  expect(chamadasItensPedido(313)).toHaveLength(1);
+  expect(modalNovo().textContent).toContain(LITERAL_QUITADO);
+  expect(modalNovo().textContent).not.toContain('não tem itens lançados');
+  expect(botaoSubmitModal().disabled).toBe(true);
+
+  // ── metade NOVA: `200 []` com `quantidade_pedida: 0` é outro fato, e tem outra frase ────────
+  await selecionar(selPedido, '317');
+
+  expect(chamadasItensPedido(317)).toHaveLength(1);
+  expect(modalNovo().textContent).toContain(LITERAL_SEM_ITENS);
+  expect(modalNovo().textContent).not.toContain(LITERAL_QUITADO);
+  // O bloco de itens não aparece, e o submit continua barrado — não há o que enviar nos DOIS casos.
+  expect(modalNovo().textContent).not.toContain('Saldo pendente:');
+  expect(botaoSubmitModal().disabled).toBe(true);
+  await submeterModal();
+  expect(chamadasCriar()).toHaveLength(0);
+
+  // ── e voltar para um pedido COM saldo limpa o aviso: ele é do pedido, não da tela ───────────
+  await selecionar(selPedido, '312');
+  expect(modalNovo().textContent).not.toContain(LITERAL_SEM_ITENS);
+  expect(modalNovo().textContent).not.toContain(LITERAL_QUITADO);
+  expect(inputQtdPedido(9312)).not.toBeNull();
+  expect(botaoSubmitModal().disabled).toBe(false);
 });
