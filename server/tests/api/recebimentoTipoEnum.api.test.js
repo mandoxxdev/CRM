@@ -160,6 +160,83 @@ const LITERAL = 'Dados inválidos — tipo_recebimento: '
     assert.strictEqual(rec.valor_total_nota, 123.45);
   });
 
+  // ── (7) revisao final, R6 — quantidade nao numerica desligava a barreira de excedente ─────────
+  /**
+   * Achado do segundo revisor. SQLite tem tipagem fraca: `quantidade_esperada: 'abc'` era GRAVADO
+   * como TEXTO, e a barreira da RN-18 le a coluna com `parseFloat` + `Number.isFinite` — com
+   * `NaN`, ela dava `continue` e o item ficava SEM barreira nenhuma. Ou seja: mandar `'abc'` na
+   * criacao era a forma de desligar a RN-18 para aquele item, e depois receber qualquer
+   * quantidade. Consertar dentro da barreira seria errado (ela nao pode inventar um numero que
+   * ninguem informou); o lugar e a PORTA, que nunca deveria ter deixado a coluna virar texto.
+   *
+   * `z.coerce.number({ message })`, e nao `z.number()`: a tela manda `quantidade` de `<input>` e
+   * `'5'` (string numerica) e payload legitimo — `coerce` converte e o schema segue recusando o
+   * que nao vira numero. A mensagem vai nas DUAS pontas (o construtor e o `.positive()`) porque
+   * `'abc'` falha no `number` (vira `NaN`) e `0`/`-3` falham no `positive`, e sem as duas o
+   * operador veria a mensagem em INGLES do Zod num dos dois casos.
+   *
+   * `looseObject` TAMBEM no item, pelo mesmo motivo do objeto de fora: `z.object` descartaria
+   * `material_id`, `lote`, `series`, `observacoes` — quinta encarnacao do defeito comentado em
+   * schemas.js. E `itens` continua `.optional()`: no caminho PEDIDO_COMPRA o body nao traz itens.
+   */
+  const QTD_ITEM_INVALIDA = 'Dados inválidos — itens.0.quantidade: '
+    + 'quantidade do item deve ser um número maior que zero';
+  const QTD_ESPERADA_INVALIDA = 'Dados inválidos — itens.0.quantidade_esperada: '
+    + 'quantidade esperada do item deve ser um número maior que zero';
+
+  await test('(7) R6: quantidade de item nao numerica e recusada na porta, com literal em portugues', async () => {
+    const antes = (await dbGet(db, 'SELECT COUNT(*) AS n FROM recebimentos_material_almoxarifado')).n;
+    const res = await request(app).post('/api/almoxarifado/recebimentos').send({
+      tipo_recebimento: 'NOTA_FISCAL', nota_fiscal: 'NF-E36-7',
+      itens: [{ material_id: material.lastID, quantidade: 'abc' }],
+    });
+    assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+    assert.strictEqual(res.body.error, QTD_ITEM_INVALIDA);
+
+    // Zero e negativo pela MESMA literal: sem isto, `quantidade: 0` continuaria entrando e
+    // gravando item que nao move nada.
+    for (const valor of [0, -3]) {
+      const r = await request(app).post('/api/almoxarifado/recebimentos').send({
+        tipo_recebimento: 'NOTA_FISCAL', nota_fiscal: `NF-E36-7-${valor}`,
+        itens: [{ material_id: material.lastID, quantidade: valor }],
+      });
+      assert.strictEqual(r.status, 400, `quantidade ${valor}: ${JSON.stringify(r.body)}`);
+      assert.strictEqual(r.body.error, QTD_ITEM_INVALIDA);
+    }
+
+    // `quantidade_esperada` e o campo que a sonda usou para desligar a barreira: opcional, mas
+    // quando vem TEM de ser numero.
+    const esperada = await request(app).post('/api/almoxarifado/recebimentos').send({
+      tipo_recebimento: 'NOTA_FISCAL', nota_fiscal: 'NF-E36-7-esp',
+      itens: [{ material_id: material.lastID, quantidade: 5, quantidade_esperada: 'abc' }],
+    });
+    assert.strictEqual(esperada.status, 400, JSON.stringify(esperada.body));
+    assert.strictEqual(esperada.body.error, QTD_ESPERADA_INVALIDA);
+
+    const depois = (await dbGet(db, 'SELECT COUNT(*) AS n FROM recebimentos_material_almoxarifado')).n;
+    assert.strictEqual(depois, antes, 'nenhuma das recusas pode ter criado documento');
+
+    // ── metade POSITIVA: o POST valido continua entrando INTEIRO ────────────────────────────────
+    // Sem ela, um schema que recusasse TUDO passaria as assercoes acima. `quantidade: '7'` de
+    // proposito: e o que um `<input type="number">` manda, e `coerce` tem de aceitar.
+    const ok = await request(app).post('/api/almoxarifado/recebimentos').send({
+      tipo_recebimento: 'NOTA_FISCAL', nota_fiscal: 'NF-E36-7-ok',
+      itens: [{
+        material_id: material.lastID, quantidade: '7', quantidade_esperada: 7,
+        lote: 'L-R6', observacoes: 'item com lote',
+      }],
+    });
+    assert.strictEqual(ok.status, 201, JSON.stringify(ok.body));
+    const item = await dbGet(db, `SELECT material_id, quantidade_esperada, quantidade_recebida,
+      lote, observacoes FROM recebimentos_material_itens_almoxarifado WHERE recebimento_id = ?`,
+    [ok.body.id]);
+    assert.strictEqual(item.material_id, material.lastID);
+    assert.strictEqual(item.quantidade_esperada, 7, 'a string numerica tem de ter virado numero');
+    assert.strictEqual(item.quantidade_recebida, 7);
+    assert.strictEqual(item.lote, 'L-R6', 'looseObject no ITEM: nada e descartado');
+    assert.strictEqual(item.observacoes, 'item com lote');
+  });
+
   await close();
   console.log(`\n${passed} passou, ${failed} falhou`);
   process.exit(failed ? 1 : 0);

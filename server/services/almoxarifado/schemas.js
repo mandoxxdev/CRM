@@ -764,8 +764,29 @@ const TIPO_RECEBIMENTO_INVALIDO = 'forma de recebimento inválida (use NOTA_FISC
 // ja comentado neste arquivo para `reserva_id`, `lote_id` e `series`.
 // `.optional()` nao e estilo: `criarRecebimento` DERIVA o tipo quando o body nao traz (`:108`), e
 // `recebimentoEntradaAtomica.api.test.js:192` / `alertaEventoJornada.api.test.js:82` chamam sem ele.
+//
+// (revisao final, R6) `itens` GANHOU schema, e o motivo e uma barreira que ficava desligada:
+// SQLite tem tipagem fraca, entao `quantidade_esperada: 'abc'` era GRAVADO COMO TEXTO e a barreira
+// de excedente da RN-18 — que le a coluna com `parseFloat` + `Number.isFinite` — dava `continue`
+// naquele item. Mandar `'abc'` na criacao era a forma de desligar a RN-18 e depois receber
+// qualquer quantidade. O conserto e na PORTA e nao na barreira: a barreira nao pode inventar um
+// numero que ninguem informou.
+// `z.coerce.number`, e nao `z.number()`: a tela manda `quantidade` de `<input>`, e `'5'` e payload
+// legitimo. A mensagem vai nas DUAS pontas (construtor e `.positive()`) porque `'abc'` falha no
+// `number` (vira NaN) e `0`/`-3` falham no `positive` — sem as duas, um dos casos sai em INGLES.
+// `looseObject` no ITEM pelo mesmo motivo do objeto de fora: `z.object` descartaria `material_id`,
+// `lote`, `series` e `observacoes`. E `itens` segue `.optional()`: no caminho PEDIDO_COMPRA o body
+// nao traz itens, `criarRecebimento` os deriva do pedido.
+const QTD_ITEM_INVALIDA = 'quantidade do item deve ser um número maior que zero';
+const QTD_ESPERADA_ITEM_INVALIDA = 'quantidade esperada do item deve ser um número maior que zero';
+const RecebimentoItemSchema = z.looseObject({
+  quantidade: z.coerce.number({ message: QTD_ITEM_INVALIDA }).positive(QTD_ITEM_INVALIDA),
+  quantidade_esperada: z.coerce.number({ message: QTD_ESPERADA_ITEM_INVALIDA })
+    .positive(QTD_ESPERADA_ITEM_INVALIDA).optional(),
+});
 const RecebimentoCreateSchema = z.looseObject({
   tipo_recebimento: z.enum(TIPOS_RECEBIMENTO, { message: TIPO_RECEBIMENTO_INVALIDO }).optional(),
+  itens: z.array(RecebimentoItemSchema).optional(),
 });
 const RecebimentoFiscalSchema = z.looseObject({
   tipo_recebimento: z.enum(TIPOS_RECEBIMENTO, { message: TIPO_RECEBIMENTO_INVALIDO }).optional(),
