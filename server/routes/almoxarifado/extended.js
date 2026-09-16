@@ -1119,6 +1119,24 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     } catch (e) { handleError(res, e); }
   });
 
+  // Etapa 37 (RN-24): as LINHAS do pedido com saldo, que a tela de recebimento carrega ao escolher
+  // o pedido no `<select>` — ate aqui ela limpava `itens: []` e o recebimento PARCIAL era
+  // impossivel pela tela, embora o manual 14.1 prometesse os itens "ja preenchidos".
+  // Gate: so `auth`, ESPELHANDO as outras duas `-aux` (medido, nao suposto: nenhuma delas tem
+  // `requirePermission`). A camada do modulo cobre estas rotas pelo `app.use` de
+  // `routes/almoxarifado.js:282-285`; quem abre a tela de recebimento le o saldo do pedido.
+  // Registrada COLADA na rota de lista para que nenhuma `/pedidos-compra/:id` futura capture este
+  // caminho antes (o Express casa na ordem de registro).
+  app.get('/api/almoxarifado/recebimentos-aux/pedidos-compra/:id/itens', auth, async (req, res) => {
+    try {
+      const itens = await receiptService.listarItensPedidoCompraAux(db, req.params.id);
+      // `null` e "o pedido nao existe" — a MESMA literal do POST. Pedido quitado devolve `[]` com
+      // 200 de proposito: nao e erro, e a informacao de que nao ha o que receber.
+      if (itens === null) return res.status(404).json({ error: 'Pedido de compra não encontrado' });
+      res.json(itens);
+    } catch (e) { handleError(res, e); }
+  });
+
   app.get('/api/almoxarifado/recebimentos-aux/fornecedores', auth, async (req, res) => {
     try {
       res.json(await receiptService.listarFornecedoresAux(db, req.query));

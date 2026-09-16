@@ -1339,21 +1339,163 @@ async function listarRecebimentos(db, filters = {}) {
   return dbAll(db, sql, params);
 }
 
-async function listarPedidosCompraAux(db, { search } = {}) {
+/**
+ * `parseFloat` + `Number.isFinite` (e nao `Number(...)`) pelo mesmo motivo de
+ * `saldoDasLinhasDoPedido`: producao pode ter `quantidade_recebida` NULL (linha anterior ao ALTER
+ * da Task 1) e `10 - null` viraria `NaN` — com `NaN` a situacao derivada seria sempre 'PARCIAL' e
+ * o `saldo_pendente` sairia `NaN` no JSON (que `JSON.stringify` escreve como `null`).
+ */
+function quantidadeFinita(valor) {
+  const n = parseFloat(valor);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * RN-24 (Etapa 37) — a SITUACAO do pedido de compra, em UMA funcao.
+ *
+ * `ABERTO` quando nada chegou (INCLUSIVE o pedido cujas linhas o Compras ainda nao lancou:
+ * `COUNT(itens_pedido_compra) = 0`, que a RN-24 manda manter visivel); `PARCIAL` quando
+ * `0 < recebida < pedida`; `RECEBIDO` quando `pedida > 0 && recebida >= pedida`.
+ *
+ * `>=` e nao `>` de proposito: a IGUALDADE EXATA e o caso comum (o pedido que chegou inteiro), e
+ * com `>` ele ficaria `PARCIAL` para sempre e a tela pediria para receber o que ja chegou. O
+ * `pedida > 0` na mesma condicao e o que impede um pedido SEM linhas (0 de 0) de nascer
+ * "RECEBIDO" — ele nunca foi recebido, so nao foi lancado.
+ *
+ * UMA funcao, consumida pelas DUAS rotas de leitura (lista e itens): duas copias divergiriam na
+ * primeira edicao, e e a classe de bug que `divergencia.js` existe para matar neste modulo.
+ */
+function situacaoRecebimentoPedido(quantidadePedida, quantidadeRecebida) {
+  const pedida = quantidadeFinita(quantidadePedida);
+  const recebida = quantidadeFinita(quantidadeRecebida);
+  if (pedida > 0 && recebida >= pedida) return 'RECEBIDO';
+  if (recebida <= 0) return 'ABERTO';
+  return 'PARCIAL';
+}
+
+/**
+ * Os quatro campos derivados, num lugar so — e o `Math.max(0, ...)` mora AQUI, para as duas rotas.
+ *
+ * O clamp NAO e cosmetico: a Task 2 permite excedente autorizado e a Task 3 soma o que ENTROU no
+ * estoque, entao uma linha pode terminar com `quantidade_recebida > quantidade` (medido: 12 de 10
+ * no cenario (12) de `recebimentoExcedentePedido`, e duas linhas do mesmo material dividindo um
+ * recebimento pela regua agregada produzem o mesmo efeito). Sem o clamp a rota devolveria
+ * `saldo_pendente: -2`, a tela escreveria "Saldo pendente: -2", a linha VOLTARIA a ser oferecida
+ * ao operador (o filtro da rota de itens e `saldo_pendente > 0`) e a assercao da RN-24
+ * ("saldo 0 no pedido completado") ficaria falsa exatamente no caso que esta etapa CRIA.
+ */
+function derivarRecebimentoDoPedido(quantidadePedida, quantidadeRecebida) {
+  const pedida = quantidadeFinita(quantidadePedida);
+  const recebida = quantidadeFinita(quantidadeRecebida);
+  return {
+    quantidade_pedida: pedida,
+    quantidade_recebida: recebida,
+    saldo_pendente: Math.max(0, pedida - recebida),
+    situacao_recebimento: situacaoRecebimentoPedido(pedida, recebida),
+  };
+}
+
+async function listarPedidosCompraAux(db, { search, pendentes } = {}) {
   const tableExists = await dbGet(db,
     "SELECT name FROM sqlite_master WHERE type='table' AND name='pedidos_compra'");
   if (!tableExists) return [];
 
+  // A soma por pedido vem de uma SUBQUERY AGRUPADA, e nao de um `.filter()`/`reduce` em JS depois
+  // da consulta, porque o filtro de `?pendentes=1` tem de rodar ANTES do `LIMIT 50` (ver abaixo)
+  // — e para isso a soma precisa existir dentro do SQL.
+  //
+  // `material_id IS NOT NULL` e o MESMO recorte de `carregarItensPedidoCompra`: sem material nao
+  // ha o que dar entrada no estoque, e e o recorte que a regua de saldo do `POST` usa. Contar
+  // linhas de texto livre aqui faria a rota dizer "PARCIAL" num pedido que ja chegou inteiro.
   let sql = `SELECT p.id, p.numero, p.valor_total, p.status, p.data_pedido,
-    f.razao_social as fornecedor_nome, f.cnpj as fornecedor_cnpj
-    FROM pedidos_compra p LEFT JOIN fornecedores f ON p.fornecedor_id = f.id WHERE 1=1`;
+    f.razao_social as fornecedor_nome, f.cnpj as fornecedor_cnpj,
+    COALESCE(i.total_pedido, 0) as total_pedido,
+    COALESCE(i.soma_recebida, 0) as soma_recebida
+    FROM pedidos_compra p
+    LEFT JOIN fornecedores f ON p.fornecedor_id = f.id
+    LEFT JOIN (SELECT pedido_id,
+        SUM(COALESCE(quantidade, 0)) as total_pedido,
+        SUM(COALESCE(quantidade_recebida, 0)) as soma_recebida
+      FROM itens_pedido_compra WHERE material_id IS NOT NULL GROUP BY pedido_id) i
+      ON i.pedido_id = p.id
+    WHERE 1=1`;
   const params = [];
   if (search) {
     sql += ' AND (p.numero LIKE ? OR f.razao_social LIKE ?)';
     params.push(`%${search}%`, `%${search}%`);
   }
+  // `?pendentes=1` — a clausula e a NEGACAO da derivacao, escrita no `WHERE`, e a POSICAO dela e
+  // contrato, nao detalhe: esta query termina em `ORDER BY p.created_at DESC LIMIT 50`, entao
+  // filtrar DEPOIS aplicaria a regua aos 50 pedidos MAIS NOVOS. Num banco onde os 50 mais novos
+  // estejam quitados, `?pendentes=1` devolveria `[]` COM pedidos abertos existindo, e a tela
+  // ficaria sem o unico pedido que o operador precisa receber (cenario (6) da T4).
+  //
+  // NAO e `saldo_pendente > 0`: o pedido cujas linhas o Compras ainda nao lancou tem total 0 e
+  // saldo 0, e desapareceria — e ele e exatamente o pedido que a RN-24 manda mostrar (`ABERTO`),
+  // porque e o que o operador precisa cobrar.
+  const apenasPendentes = pendentes === '1' || pendentes === 'true' || pendentes === true;
+  if (apenasPendentes) {
+    sql += ` AND (i.soma_recebida IS NULL OR i.soma_recebida = 0
+      OR i.total_pedido IS NULL OR i.total_pedido = 0
+      OR i.soma_recebida < i.total_pedido)`;
+  }
   sql += ' ORDER BY p.created_at DESC LIMIT 50';
-  return dbAll(db, sql, params);
+  const linhas = await dbAll(db, sql, params);
+  // Os campos NOVOS ficam AO LADO de `status` (o status CORE, ecoado como sempre) e nunca no lugar
+  // dele: `pedidos_compra` nao e escrita por nenhuma linha desta etapa.
+  return linhas.map((linha) => ({
+    id: linha.id,
+    numero: linha.numero,
+    valor_total: linha.valor_total,
+    status: linha.status,
+    data_pedido: linha.data_pedido,
+    fornecedor_nome: linha.fornecedor_nome,
+    fornecedor_cnpj: linha.fornecedor_cnpj,
+    ...derivarRecebimentoDoPedido(linha.total_pedido, linha.soma_recebida),
+  }));
+}
+
+/**
+ * RN-24 (Etapa 37) — as LINHAS do pedido com saldo, para a tela de recebimento (T5).
+ *
+ * `null` (e nao `[]`) quando o pedido NAO EXISTE: e a rota que traduz isso no 404 com a MESMA
+ * literal do `POST`. Pedido que existe e esta quitado devolve `[]` com 200 — nao e erro, e a
+ * informacao de que nao ha o que receber.
+ *
+ * Quem filtra por saldo e ESTA funcao, e isso e contrato: o client renderiza o que vem e NAO
+ * refiltra, senao passam a existir duas definicoes de "linha recebivel". O recorte por
+ * `material_id` vem de `saldoDasLinhasDoPedido` -> `carregarItensPedidoCompra` (linha sem material
+ * nao tem o que dar entrada no estoque), que e o mesmo do resto do modulo, e a ordem por `id` vem
+ * de la tambem — a mesma ordem que resolve a linha no `POST`.
+ */
+async function listarItensPedidoCompraAux(db, pedidoId) {
+  const tableExists = await dbGet(db,
+    "SELECT name FROM sqlite_master WHERE type='table' AND name='pedidos_compra'");
+  if (!tableExists) return null;
+  const pedido = await dbGet(db, 'SELECT id FROM pedidos_compra WHERE id = ?', [pedidoId]);
+  if (!pedido) return null;
+
+  const linhas = await saldoDasLinhasDoPedido(db, pedido.id);
+  return linhas
+    .map((linha) => {
+      const derivado = derivarRecebimentoDoPedido(linha.quantidade, linha.quantidade_recebida);
+      return {
+        // `id` e o id da LINHA do pedido (`itens_pedido_compra.id`) — e o `pedido_item_id` que o
+        // client devolve no `POST`, e o que a T3 usa para somar na linha certa.
+        id: linha.id,
+        material_id: linha.material_id,
+        material_nome: linha.material_nome,
+        material_codigo: linha.material_codigo,
+        codigo: linha.codigo,
+        descricao: linha.descricao,
+        unidade: linha.unidade,
+        quantidade: derivado.quantidade_pedida,
+        quantidade_recebida: derivado.quantidade_recebida,
+        saldo_pendente: derivado.saldo_pendente,
+        valor_unitario: linha.valor_unitario,
+      };
+    })
+    .filter((item) => item.saldo_pendente > 0);
 }
 
 async function listarFornecedoresAux(db, { search } = {}) {
@@ -1403,6 +1545,7 @@ module.exports = {
   processarNota,
   listarRecebimentos,
   listarPedidosCompraAux,
+  listarItensPedidoCompraAux,
   listarFornecedoresAux,
   getRecebimento,
 };
