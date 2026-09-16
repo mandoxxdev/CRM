@@ -8,6 +8,11 @@ const sqlite3 = require('sqlite3').verbose();
 const os = require('os');
 const path = require('path');
 const fs = require('fs');
+// Etapa 38: `multer` passa a ser requerido AQUI porque o registrador de Compras recebe as duas
+// instancias de upload por DI (elas ficam em `server/index.js`, fechando sobre os diretorios de
+// upload de producao). Sem este require o harness INTEIRO quebra no carregamento e todos os
+// arquivos de `tests/api/` caem juntos — nao so os de Compras.
+const multer = require('multer');
 const { initSchema } = require('../../services/almoxarifado/schema');
 const { dbRun } = require('../../services/almoxarifado/db');
 
@@ -48,12 +53,34 @@ async function createTestApp(options = {}) {
   // esconderia em teste um erro que existiria em produção — foi a lição registrada na Etapa 8.
   // Subconjunto mínimo das colunas de index.js: o módulo só lê razao_social, nome_fantasia, cnpj
   // e filtra por status (ver receiptService.listarFornecedoresAux).
+  // Etapa 38: o stub deixou de ser "subconjunto minimo" e passou a espelhar a forma de PRODUCAO
+  // (`index.js:19213` + os 5 `ALTER TABLE` de `:19269-19281`). Motivo medido: com o registrador de
+  // Compras montado no harness, `GET /api/compras/fornecedores` termina em `ORDER BY created_at
+  // DESC` e morria com "no such column: created_at" — um erro que NAO existe em producao, que era
+  // exatamente o que a licao da Etapa 8 (escrita no paragrafo acima) mandou evitar. As colunas
+  // novas sao anulaveis e todos os INSERT dos testes sao NOMEADOS, entao nada mais muda.
+  // A FK de `grupo_id` para `grupos_compras` fica FORA: essa tabela e core e nao existe aqui — os
+  // testes que precisam dela a criam por conta propria.
   await dbRun(db, `CREATE TABLE IF NOT EXISTS fornecedores (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     razao_social TEXT NOT NULL,
     nome_fantasia TEXT,
     cnpj TEXT,
-    status TEXT DEFAULT 'ativo'
+    contato TEXT,
+    email TEXT,
+    telefone TEXT,
+    endereco TEXT,
+    cidade TEXT,
+    estado TEXT,
+    cep TEXT,
+    status TEXT DEFAULT 'ativo',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    grupo_id INTEGER,
+    planilha_dados TEXT,
+    planilha_nome TEXT,
+    planilha_atualizado_em DATETIME,
+    foto TEXT
   )`);
 
   // `pedidos_compra` é tabela CORE (criada por server/index.js:19230 no boot), fora do initSchema
@@ -99,6 +126,23 @@ async function createTestApp(options = {}) {
 
   require('../../routes/almoxarifado')(app, db, fakeAuth, dataDir, fakeCheckModulePermission);
   require('../../routes/requisicoesMaterial')(app, db, fakeAuth);
+
+  // Etapa 38: o modulo CORE Compras. Ate aqui o harness montava DOIS registradores e nenhum era
+  // Compras — as 26 rotas de `/api/compras/*` viviam soltas em `server/index.js`, que nenhum teste
+  // carrega, e por isso ZERO testes batiam nelas. Esta linha e o que torna a suite de Compras
+  // possivel; removida, todo cenario de `comprasPedidosRotas.api.test.js` volta a 404.
+  // Os uploads sao STUB: em producao as duas instancias de multer gravam em
+  // `uploadsGruposComprasDir`/`uploadsFornecedoresDir` (variaveis de modulo do `index.js`); aqui
+  // gravam no diretorio temporario deste app. As duas rotas de foto nao tem cenario — o stub
+  // existe para o registrador poder ser montado, nao para ser exercido.
+  const uploadsComprasDir = path.join(dataDir, 'uploads', 'compras');
+  const uploadComprasStub = multer({ dest: uploadsComprasDir });
+  require('../../routes/compras')(app, db, fakeAuth, fakeCheckModulePermission, {
+    uploadGrupoCompras: uploadComprasStub,
+    uploadFornecedor: uploadComprasStub,
+    uploadsGruposComprasDir: uploadsComprasDir,
+    uploadsFornecedoresDir: uploadsComprasDir,
+  });
 
   // O registrador principal agenda a extended num callback do sqlite
   // (almoxarifado.js:1663). Roundtrip no sqlite: garante que a extended
