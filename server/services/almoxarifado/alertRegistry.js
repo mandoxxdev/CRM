@@ -489,8 +489,27 @@ const ALERT_REGISTRY = Object.freeze([
     listar: async (db) => {
       const { hojeLocalISO, derivarAtraso } = require('../compras/pedidoCompraService');
       const hoje = hojeLocalISO();
+      // ⚠️ COLUNAS NOMEADAS, nunca `SELECT p.*` — e a onda de correcao (F3) trocou justamente
+      // isso. `montarCentral` devolve as linhas CRUAS (ate 50) na resposta de
+      // `GET /api/almoxarifado/alertas/central`, cujo gate e `requirePermission('ver_alertas')` —
+      // que NAO inclui `checkModulePermission('compras')`. Com `p.*`, um ALMOXARIFE (que recebe
+      // 403 em `GET /api/compras/pedidos`) recebia `valor_total`, `observacoes` e `fornecedor_id`
+      // de pedidos CORE na aba Network, ainda que a tela desenhe so 4 colunas.
+      //
+      // O time JA decidiu este trade-off por escrito no arquivo ao lado (`permissions.js:92-95`):
+      // PRODUCAO/ENGENHARIA/CONSULTA saíram de `ver_alertas` na Etapa 16 porque
+      // `ESTOQUE_SEM_CONSUMO`/`ESTOQUE_EXCESSIVO` carregam `valor_parado` (CUSTO). Valor de pedido
+      // e observacao de negociacao com fornecedor sao a mesma classe de dado.
+      //
+      // O risco maior nem e o de hoje: com `p.*`, QUALQUER coluna acrescentada a `pedidos_compra`
+      // amanha passa a viajar para a central sem revisao nenhuma. A lista abaixo e exatamente o
+      // que a entrada le — `derivarAtraso` (previsao_entrega, status), `dedupeChave`
+      // (id, previsao_entrega), `payload` (id), assunto/corpo (numero, fornecedor_nome,
+      // previsao_entrega, dias_atraso, status) e o cartao da central (id, numero, fornecedor_nome,
+      // previsao_entrega, dias_atraso). `data_pedido` NAO entra: nada o le (divergencia declarada
+      // do brief, que o listava; vale o medido).
       const linhas = await dbAll(db, `
-        SELECT p.*, f.razao_social AS fornecedor_nome
+        SELECT p.id, p.numero, p.status, p.previsao_entrega, f.razao_social AS fornecedor_nome
         FROM pedidos_compra p
         LEFT JOIN fornecedores f ON f.id = p.fornecedor_id
         WHERE p.previsao_entrega IS NOT NULL

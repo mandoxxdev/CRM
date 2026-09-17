@@ -297,6 +297,53 @@ function resultadoDe(resultados, chave) {
     assert.ok(v3.duplicadas >= 1, `esperava duplicadas na varredura seguinte: ${JSON.stringify(v3)}`);
   });
 
+  // ── (10) F3: a central nao carrega coluna de pedido que a entrada nao usa ───────────────────
+  await test('(10) F3 o cartao da central nao leva valor_total nem observacoes do pedido (e leva numero)', async () => {
+    // ── O DEFEITO QUE ESTE CENARIO EXISTE PARA PEGAR (I1 da revisao de UX) ─────────────────────
+    // `montarCentral` devolve as linhas CRUAS na resposta de `/almoxarifado/alertas/central`, e o
+    // gate dessa rota e `requirePermission('ver_alertas')` — SEM `checkModulePermission('compras')`.
+    // Com `SELECT p.*`, um ALMOXARIFE (403 em `GET /api/compras/pedidos`) recebia `valor_total` e
+    // `observacoes` do pedido na aba Network. A tela desenha 4 colunas; o payload nao.
+    //
+    // ⚠️ O FIXTURE PRECISA TER OS CAMPOS PREENCHIDOS, senao este cenario e vazio: com
+    // `valor_total` NULL e `observacoes` NULL o `SELECT p.*` ainda TRARIA as chaves, mas quem
+    // lesse o teste acharia que ele mede ausencia de dado e nao ausencia de coluna.
+    const SIGILO = 'Desconto de 12% negociado com o dono — nao repassar';
+    await dbRun(db, 'UPDATE pedidos_compra SET valor_total = ?, observacoes = ? WHERE id = ?',
+      [98765.43, SIGILO, P1.id]);
+
+    const resp = await request(app).get('/api/almoxarifado/alertas/central');
+    assert.strictEqual(resp.status, 200, `central respondeu ${resp.status}: ${JSON.stringify(resp.body)}`);
+    const cartao = (resp.body.alertas || []).find((a) => a.chave === 'PEDIDO_COMPRA_ATRASADO');
+    assert.ok(cartao, 'a central nao trouxe o cartao PEDIDO_COMPRA_ATRASADO');
+    assert.strictEqual(cartao.erro, undefined, `listar lancou: ${cartao.erro_mensagem}`);
+    assert.ok(cartao.linhas.length > 0, 'fixture vazia: este cenario nao mediria nada');
+
+    const doP1 = cartao.linhas.find((l) => l.id === P1.id);
+    assert.ok(doP1, `o pedido ${P1.numero} sumiu do cartao`);
+
+    // O DANO: nenhuma linha pode carregar coluna que a entrada nao usa.
+    for (const l of cartao.linhas) {
+      for (const coluna of ['valor_total', 'observacoes', 'fornecedor_id', 'created_at', 'updated_at']) {
+        assert.ok(!(coluna in l),
+          `a central esta levando \`${coluna}\` de pedidos_compra: ${JSON.stringify(l)}`);
+      }
+    }
+    // E a prova de que o vazamento seria REAL e nao teorico: o texto sigiloso nao aparece em
+    // lugar nenhum da resposta inteira (nem numa chave que este loop nao conheca).
+    assert.ok(!JSON.stringify(resp.body).includes(SIGILO),
+      'a observacao do pedido apareceu no corpo da central');
+
+    // METADE POSITIVA: as colunas que o cartao DESENHA continuam chegando — sem isto, uma
+    // projecao que esquecesse `numero` deixaria a tela mostrando `#id` e a suite verde.
+    for (const campo of ['id', 'numero', 'status', 'previsao_entrega', 'fornecedor_nome',
+      'atrasado', 'dias_atraso']) {
+      assert.ok(campo in doP1, `a projecao derrubou o campo \`${campo}\`: ${JSON.stringify(doP1)}`);
+    }
+    assert.strictEqual(doP1.numero, P1.numero, `numero divergiu: ${JSON.stringify(doP1.numero)}`);
+    assert.strictEqual(doP1.fornecedor_nome, 'Acos Vale E39', JSON.stringify(doP1.fornecedor_nome));
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);
