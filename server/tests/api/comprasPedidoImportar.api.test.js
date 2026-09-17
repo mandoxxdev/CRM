@@ -134,8 +134,15 @@ const AVISO_PREVISAO = 'previsão de entrega não reconhecida (use AAAA-MM-DD ou
       valor_unitario, unidade, quantidade_recebida FROM itens_pedido_compra WHERE pedido_id = ? ORDER BY id`,
   [pedidoId]);
   const cabecalho = (pedidoId) => dbGet(db, 'SELECT * FROM pedidos_compra WHERE id = ?', [pedidoId]);
-  const contarLinhasOrfas = async () => (await dbGet(db,
-    'SELECT COUNT(*) as n FROM itens_pedido_compra WHERE material_id IS NULL')).n;
+  /**
+   * ⚠️ ESCOPADA POR `pedido_id`, e a correcao e do F4 (achado I3 da revisao final): sem o escopo
+   * esta contagem era GLOBAL — `COUNT(*) … WHERE material_id IS NULL` passa numa tabela VAZIA e
+   * nao distingue "o importador pulou a linha certa" de "o importador nao inseriu nada em lugar
+   * nenhum". Por pedido, ela so pode passar se AQUELE pedido existir com as linhas dele.
+   */
+  const contarLinhasOrfas = async (pedidoId) => (await dbGet(db,
+    'SELECT COUNT(*) as n FROM itens_pedido_compra WHERE material_id IS NULL AND pedido_id = ?',
+    [pedidoId])).n;
   const contarPedidos = async () => (await dbGet(db, 'SELECT COUNT(*) as n FROM pedidos_compra')).n;
 
   const linha = (pedido, codigo, extra = {}) => ({
@@ -239,8 +246,10 @@ const AVISO_PREVISAO = 'previsão de entrega não reconhecida (use AAAA-MM-DD ou
     const itensB = await linhasDoPedido(b.id);
     assert.strictEqual(itensB.length, 2, `esperava 2 linhas em OC-B, veio ${itensB.length}`);
     // E nenhuma linha sem material — `listarPedidosCompraAux` filtra `material_id IS NOT NULL` e
-    // uma linha nula deixaria o pedido ABERTO com saldo 0 no `<select>` do recebimento.
-    assert.strictEqual(await contarLinhasOrfas(), 0, 'nenhuma linha pode ficar sem material_id');
+    // uma linha nula deixaria o pedido ABERTO com saldo 0 no `<select>` do recebimento. POR PEDIDO
+    // (F4): a contagem global passava numa tabela vazia.
+    assert.strictEqual(await contarLinhasOrfas(a.id), 0, 'OC-A: nenhuma linha pode ficar sem material_id');
+    assert.strictEqual(await contarLinhasOrfas(b.id), 0, 'OC-B: nenhuma linha pode ficar sem material_id');
   });
 
   // (3) ------------------------------------------------------------------------------------
@@ -265,8 +274,15 @@ const AVISO_PREVISAO = 'previsão de entrega não reconhecida (use AAAA-MM-DD ou
     // A alternativa errada e gravar a linha com `material_id NULL`: ela ficaria invisivel ao
     // recebimento (`material_id IS NOT NULL` nas duas leituras da E37) e o pedido apareceria
     // ABERTO com saldo 0 sem ninguem entender por que.
-    assert.strictEqual(await contarLinhasOrfas(), 0,
-      'linha sem material resolvido NAO pode ser gravada — tem de ir para `ignorados`');
+    // Os dois pedidos e os ids vem ANTES agora porque a contagem de orfas passou a ser POR PEDIDO
+    // (F4) — e um `pedidos.length` errado e outro defeito, nao este, entao a assercao da linha orfa
+    // continua sendo a que fala primeiro sobre o achado.
+    assert.strictEqual(r.body.pedidos.length, 2, `esperava 2 pedidos, veio ${r.body.pedidos.length}`);
+    const [c, d] = r.body.pedidos;
+    assert.strictEqual(await contarLinhasOrfas(c.id), 0,
+      'OC-C: linha sem material resolvido NAO pode ser gravada — tem de ir para `ignorados`');
+    assert.strictEqual(await contarLinhasOrfas(d.id), 0,
+      'OC-D: linha sem material resolvido NAO pode ser gravada — tem de ir para `ignorados`');
     // A soma do que ENTROU: 4 linhas, nao 5 e nao 0 (esta sozinha seria satisfeita por "ignorou
     // tudo"; e por isso que a metade positiva la embaixo conta as linhas de cada pedido).
     assert.strictEqual(r.body.itens, 4, `esperava 4 itens importados, veio ${r.body.itens}`);
@@ -275,8 +291,6 @@ const AVISO_PREVISAO = 'previsão de entrega não reconhecida (use AAAA-MM-DD ou
       `ignorados divergente: ${JSON.stringify(r.body.ignorados)}`);
 
     // METADE POSITIVA: o pedido incompleto ainda nasce (com as 2 linhas boas) e o outro esta INTEIRO.
-    assert.strictEqual(r.body.pedidos.length, 2, `esperava 2 pedidos, veio ${r.body.pedidos.length}`);
-    const [c, d] = r.body.pedidos;
     assert.strictEqual(c.itens, 2, `OC-C perdeu 1 das 3 linhas: esperava 2, veio ${c.itens}`);
     assert.strictEqual(d.itens, 2, `OC-D esta completo: esperava 2, veio ${d.itens}`);
     assert.strictEqual((await linhasDoPedido(c.id)).length, 2, 'linhas gravadas de OC-C');
@@ -316,6 +330,19 @@ const AVISO_PREVISAO = 'previsão de entrega não reconhecida (use AAAA-MM-DD ou
     // tudo" satisfaria as quatro asserçoes acima.
     assert.strictEqual(r.body.pedidos.length, 1, `esperava 1 pedido, veio ${r.body.pedidos.length}`);
     assert.strictEqual(r.body.itens, 1, `esperava 1 item importado, veio ${r.body.itens}`);
+    // ⚠️ A REGUA QUE FALTAVA (F4, achado I3): as tres asserçoes anteriores leem a RESPOSTA HTTP e a
+    // linha de CABECALHO — nenhuma lia `itens_pedido_compra`. E `valor_total` e calculado EM
+    // MEMORIA antes de qualquer leitura das linhas (`pedidoCompraService`), entao um importador que
+    // gravasse a cabeca e engolisse o INSERT das linhas passaria por elas; o `r.body.itens` so nao
+    // passaria por ACIDENTE, porque `relerPedido` reconsulta. Este e o modo de falha numero 1 desta
+    // etapa ("o 201 que nao gravou item nenhum"), e ele estava sem regua justamente no unico
+    // cenario POSITIVO deste arquivo que sobrava sem ela.
+    const linhasDoUnico = await linhasDoPedido(r.body.pedidos[0].id);
+    assert.strictEqual(linhasDoUnico.length, 1,
+      `o pedido criado tem de ter 1 LINHA gravada, veio ${linhasDoUnico.length}`);
+    assert.strictEqual(linhasDoUnico[0].material_id, materialIdA, 'e a linha gravada e a da unica linha boa');
+    assert.strictEqual(linhasDoUnico[0].quantidade, 2, 'com a quantidade da planilha');
+    assert.strictEqual(await contarLinhasOrfas(r.body.pedidos[0].id), 0, 'e sem linha sem material_id');
     assert.strictEqual((await cabecalho(r.body.pedidos[0].id)).valor_total, 20, '2x10 = 20');
 
     // O 400 do corpo invalido, com a literal COPIADA VERBATIM do precedente (`index.js:20451`).
