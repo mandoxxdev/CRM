@@ -620,8 +620,12 @@ const CHAVES_QUANTIDADE = ['quantidade', 'qtd', 'qtde', 'quant', 'qtd.'];
 const CHAVES_VALOR = ['valor_unitario', 'valor unitario', 'valor unitário', 'preco', 'preço',
   'preco unitario', 'preço unitario', 'preco unitário', 'preço unitário', 'preco_unitario',
   'valor', 'valor unit', 'preco unit', 'vlr'];
+// ⚠️ `'previsão entrega'`/`'previsao entrega'` estao aqui por causa do F6: e a grafia EXATA do
+// cabecalho que o "Exportar Excel" da aba Pedidos produz (`Compras.js`), e sem elas o proprio
+// export do CRM nao se reimportaria com a previsao — o arquivo que o operador tem em maos.
 const CHAVES_PREVISAO = ['previsao', 'previsão', 'previsao_entrega', 'previsão_entrega',
-  'entrega', 'data de entrega', 'previsao de entrega'];
+  'entrega', 'data de entrega', 'previsao de entrega', 'previsão de entrega',
+  'previsao entrega', 'previsão entrega'];
 
 /**
  * ⚠️ A CHAVE DO GRUPO E O PAR (ORDEM DA PLANILHA, FORNECEDOR RESOLVIDO) — achado C1 da revisao

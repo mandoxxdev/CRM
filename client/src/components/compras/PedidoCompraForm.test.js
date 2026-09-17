@@ -48,11 +48,16 @@ import * as XLSX from 'xlsx';
 import { AppRoutes } from '../../App';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
+import { exportToExcel } from '../../utils/exportExcel';
 
 jest.mock('../../services/api', () => ({
   __esModule: true,
   default: { get: jest.fn(), post: jest.fn(), put: jest.fn(), delete: jest.fn() },
 }));
+// Onda de correcao, F6: a exportacao da aba Pedidos passou a ser uma linha por ITEM, com a coluna
+// `Código` — sem ela o export do proprio CRM nao se reimportava. O mock intercepta a planilha para
+// que o cenario (p) possa AFIRMAR as colunas, em vez de provar que "nao deu erro".
+jest.mock('../../utils/exportExcel', () => ({ exportToExcel: jest.fn() }));
 jest.mock('react-toastify', () => ({
   toast: { success: jest.fn(), error: jest.fn(), info: jest.fn(), warn: jest.fn(), warning: jest.fn() },
   ToastContainer: () => null,
@@ -152,6 +157,8 @@ const LITERAL_400_ZOD = 'Dados inválidos — itens.0.quantidade: quantidade do 
 const LITERAL_SEM_ITEM = 'Inclua ao menos um item no pedido de compra';
 const LITERAL_AVISO_PRECO = 'Sem preço o custo médio do material não é alimentado no recebimento.';
 const LITERAL_AVISO_NUMERO = 'O número do pedido é gerado pelo sistema.';
+// Onda de correcao, F6: a literal do fracasso total da importacao (201 com `pedidos: []`).
+const LITERAL_NADA_IMPORTADO = 'Nenhum pedido importado — veja os motivos abaixo';
 
 let container; let root; let pedidosDoBanco;
 
@@ -230,6 +237,24 @@ async function submeter() {
       .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
   });
   await esperarEfeitos();
+}
+
+/**
+ * A planilha é DE VERDADE (workbook `xlsx` escrito e lido), como no cenário (k): um mock de `xlsx`
+ * provaria o POST e não a leitura. O `FileReader` do jsdom é assíncrono — uma volta de microtasks
+ * não basta, daí as seis.
+ */
+async function importarPlanilha(aoa) {
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Pedidos');
+  const bytes = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+  const arquivo = new File([bytes], 'pedidos.xlsx', {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+  const input = porTestId('importar-planilha');
+  Object.defineProperty(input, 'files', { value: [arquivo], configurable: true });
+  await act(async () => { input.dispatchEvent(new Event('change', { bubbles: true })); });
+  for (let i = 0; i < 6; i += 1) await esperarEfeitos();
 }
 
 // NBSP → espaço: ver o cabeçalho. Toda asserção de literal passa por aqui.
@@ -680,6 +705,107 @@ test('(o) vinculo_solicitacao "falhou" avisa quem criou o pedido', async () => {
   expect(chamadasPost()[0][1].solicitacao_id).toBe(641);
   expect(toast.success).toHaveBeenCalledWith('Pedido PC-2026-640 criado');
   expect(toast.warn).toHaveBeenCalledWith('O pedido foi criado, mas a solicitação não pôde ser vinculada.');
+});
+
+// ── (k3) ONDA DE CORREÇÃO, F6 — a importação 100% recusada era anunciada em VERDE ─────────────
+//
+// A porta responde **201 com sucesso parcial** por contrato, inclusive com `pedidos: []`. A tela
+// mostrava `toast.success('0 pedido(s) importado(s)')`. E o caso é o mais provável de todos: uma
+// planilha com a coluna `Material`/`Item`/`Cód.` recusa TODAS as linhas — inclusive o export da
+// própria aba Pedidos, que até este fix-round não tinha coluna de código (cenário (p) abaixo).
+test('(k3) 201 com pedidos: [] mostra toast de ERRO e o motivo no DOM, nao sucesso verde', async () => {
+  const MOTIVO = 'linha sem código de material';
+  api.post.mockImplementation((url) => {
+    if (url !== '/compras/pedidos/importar') return Promise.reject(new Error(`POST inesperado: ${url}`));
+    return Promise.resolve({
+      data: { pedidos: [], itens: 0, ignorados: [{ linha: 1, motivo: MOTIVO }, { linha: 2, motivo: MOTIVO }] },
+    });
+  });
+  await renderizarEm('/compras/pedidos/novo');
+  await importarPlanilha([['material', 'quantidade'], ['Chapa', 2]]);
+
+  expect(chamadasImportar()).toHaveLength(1);
+  // ⚠️ AS ASSERÇÕES QUE MEDEM O DANO: o toast é de ERRO e o de sucesso NÃO foi chamado.
+  expect(toast.error).toHaveBeenCalledWith(LITERAL_NADA_IMPORTADO);
+  expect(toast.success).not.toHaveBeenCalled();
+  // E o motivo chega ao DOM, que é o que diz ao operador o que arrumar na planilha.
+  const resultado = porTestId('resultado-importacao').textContent;
+  expect(resultado).toContain(LITERAL_NADA_IMPORTADO);
+  expect(resultado).toContain(`Linha 1: ${MOTIVO}`);
+  expect(resultado).not.toContain('Importação concluída');
+
+  // METADE POSITIVA no mesmo cenário: com UM pedido criado, o mesmo gesto volta a ser sucesso
+  // (senão "sempre erro" passaria nas asserções acima).
+  api.post.mockImplementation(() => Promise.resolve({
+    data: { pedidos: [{ id: 700, numero: 'PC-2026-700', itens: 1 }], itens: 1, ignorados: [] },
+  }));
+  await importarPlanilha([['codigo', 'quantidade'], ['ALM-0907', 2]]);
+  expect(toast.success).toHaveBeenCalledWith('1 pedido(s) importado(s)');
+  expect(porTestId('resultado-importacao').textContent).toContain('Importação concluída');
+});
+
+// ── (k4) o teto da lista de recusas: 5.000 `<li>` travavam a aba ──────────────────────────────
+test('(k4) 25 ignorados renderizam 20 <li> e a linha "e mais 5"', async () => {
+  const ignorados = Array.from({ length: 25 }, (_, i) => ({
+    linha: i + 1, motivo: 'linha sem código de material',
+  }));
+  api.post.mockImplementation(() => Promise.resolve({
+    data: {
+      pedidos: [{ id: 701, numero: 'PC-2026-701', itens: 1 }],
+      itens: 1,
+      ignorados,
+      avisos: [{ linha: 3, campo: 'previsao_entrega', motivo: 'previsão de entrega não reconhecida (use AAAA-MM-DD ou DD/MM/AAAA)' }],
+    },
+  }));
+  await renderizarEm('/compras/pedidos/novo');
+  await importarPlanilha([['codigo', 'quantidade'], ['ALM-0907', 2]]);
+
+  // ⚠️ A CONTAGEM É NA LISTA DE IGNORADOS (`data-testid` próprio): um `querySelectorAll('li')` no
+  // container inteiro pegaria também o `<li>` do pedido criado e mediria 21 sem que nada estivesse
+  // errado.
+  const itensLista = porTestId('ignorados-lista').querySelectorAll('li');
+  expect(itensLista).toHaveLength(20);
+  expect(porTestId('ignorados-restantes').textContent).toContain('e mais 5');
+  // A primeira e a vigésima estão lá, a vigésima primeira não — o corte é no fim, não no meio.
+  expect(itensLista[0].textContent).toContain('Linha 1:');
+  expect(itensLista[19].textContent).toContain('Linha 20:');
+  expect(porTestId('resultado-importacao').textContent).not.toContain('Linha 21:');
+
+  // E os `avisos` do F3 são OUTRA lista, com o nome do campo: a linha do aviso ENTROU no pedido.
+  const avisos = porTestId('avisos-lista').querySelectorAll('li');
+  expect(avisos).toHaveLength(1);
+  expect(avisos[0].textContent).toContain('Linha 3 (previsao_entrega)');
+  expect(avisos[0].textContent).toContain('previsão de entrega não reconhecida');
+});
+
+// ── (p) F6 — o Excel exportado da aba Pedidos tem de ser REIMPORTÁVEL ─────────────────────────
+//
+// O export era uma linha por PEDIDO e **sem coluna de código**: reimportar o próprio arquivo do CRM
+// recusava todas as linhas com `linha sem código de material` (e, antes do F6, num toast verde).
+test('(p) exportar a aba Pedidos gera UMA LINHA POR ITEM, com Codigo, Quantidade e Valor Unitario', async () => {
+  pedidosDoBanco = [PEDIDO_418_LISTA];
+  await renderizarEm('/compras/pedidos');
+
+  await clicar(botaoPorTexto('Exportar Excel'));
+
+  expect(exportToExcel).toHaveBeenCalledTimes(1);
+  const [linhas, arquivo] = exportToExcel.mock.calls[0];
+  expect(arquivo).toBe('pedidos_compra');
+  // Uma linha por ITEM do pedido — os itens vieram do `GET /compras/pedidos/418`.
+  expect(chamadasDetalhe(418)).toHaveLength(1);
+  expect(linhas).toHaveLength(1);
+  // ⚠️ AS ASSERÇÕES QUE MEDEM O DANO: as colunas que a importação LÊ.
+  expect(linhas[0]['Código']).toBe('ALM-0907');
+  expect(linhas[0]['Número']).toBe('PC-2026-418');
+  expect(linhas[0]['Fornecedor']).toBe('Aços Vale Ltda');
+  // Número, e não texto formatado: `R$ 35,00` viraria 0 na reimportação, em silêncio, e o pedido
+  // reimportado nasceria sem preço (desfazendo o custo médio do recebimento na Etapa 37).
+  expect(linhas[0]['Quantidade']).toBe(9);
+  expect(linhas[0]['Valor Unitário']).toBe(35);
+  expect(typeof linhas[0]['Valor Unitário']).toBe('number');
+  // E as colunas de leitura humana continuam lá.
+  expect(linhas[0]['Status']).toBe('aprovado');
+  expect(String(linhas[0]['Valor Total'])).toContain('315');
 });
 
 test('(o2) vinculo_solicitacao "ok" NAO avisa nada (metade positiva do (o))', async () => {

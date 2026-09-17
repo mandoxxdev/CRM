@@ -55,6 +55,29 @@ const STATUS = [
 const LITERAL_SEM_ITEM = 'Inclua ao menos um item no pedido de compra';
 const LITERAL_AVISO_PRECO = 'Sem preço o custo médio do material não é alimentado no recebimento.';
 
+/**
+ * ── A IMPORTAÇÃO 100% RECUSADA ERA ANUNCIADA EM VERDE (onda de correção, F6 — achado I3/UX) ───
+ *
+ * A porta responde **201 com sucesso parcial** por contrato, inclusive quando `pedidos: []` e todas
+ * as linhas foram para `ignorados`. A tela não distinguia: mostrava `toast.success` escrito
+ * `0 pedido(s) importado(s)`.
+ *
+ * E o caso é o MAIS provável de todos: `CHAVES_CODIGO` aceita só `codigo/código/cod/sku/…`, então
+ * uma planilha com a coluna `Material`, `Item` ou `Cód.` recusa TODAS as linhas. Inclusive — até
+ * este mesmo fix-round — a planilha que o próprio módulo produz: o "Exportar Excel" da aba Pedidos
+ * não tinha coluna de código (corrigido em `Compras.js` na mesma passada), e reimportar o export do
+ * próprio CRM é o primeiro arquivo que qualquer operador vai tentar.
+ */
+const LITERAL_NADA_IMPORTADO = 'Nenhum pedido importado — veja os motivos abaixo';
+
+/**
+ * Teto de renderização da lista de recusas: 5.000 linhas recusadas eram 5.000 `<li>`, e travar a
+ * aba é o resultado do erro mais comum. O resto vira UMA linha que diz quantas ficaram de fora —
+ * para o operador saber que a lista está cortada, em vez de achar que são só 20.
+ */
+const TETO_LISTA = 20;
+const literalRestantes = (n) => `… e mais ${n} linha(s)`;
+
 const formatCurrency = (valor) => new Intl.NumberFormat('pt-BR', {
   style: 'currency', currency: 'BRL',
 }).format(Number(valor) || 0);
@@ -280,7 +303,11 @@ const PedidoCompraForm = () => {
       api.post('/compras/pedidos/importar', { linhas })
         .then((res) => {
           setResultadoImportacao(res.data || {});
-          toast.success(`${(res.data?.pedidos || []).length} pedido(s) importado(s)`);
+          const criados = (res.data?.pedidos || []).length;
+          // O 201 pode ser um FRACASSO TOTAL (ver `LITERAL_NADA_IMPORTADO`): quando nada entrou, a
+          // tela diz isso, e em vermelho.
+          if (criados === 0) toast.error(LITERAL_NADA_IMPORTADO);
+          else toast.success(`${criados} pedido(s) importado(s)`);
         })
         .catch((err) => {
           setErro(mensagemDeErro(err, 'Não foi possível importar a planilha.'));
@@ -332,38 +359,65 @@ const PedidoCompraForm = () => {
         </div>
       )}
 
-      {resultadoImportacao && (
-        <div
-          data-testid="resultado-importacao"
-          style={{
-            background: 'rgba(46, 204, 113, 0.10)', border: '1px solid #2ecc71',
-            borderRadius: 8, padding: '10px 14px', marginBottom: 16,
-          }}
-        >
-          <strong>Importação concluída</strong>
-          <p>
-            {(resultadoImportacao.pedidos || []).length} pedidos criados,{' '}
-            {resultadoImportacao.itens || 0} itens.
-          </p>
-          <ul>
-            {(resultadoImportacao.pedidos || []).map((p) => (
-              <li key={p.id}>{p.numero} — {p.itens} itens</li>
-            ))}
-          </ul>
-          {(resultadoImportacao.ignorados || []).length > 0 ? (
-            <>
-              <strong>Linhas ignoradas</strong>
-              <ul>
-                {resultadoImportacao.ignorados.map((ig, i) => (
-                  <li key={`${ig.linha}-${i}`}>Linha {ig.linha}: {ig.motivo}</li>
-                ))}
-              </ul>
-            </>
-          ) : (
-            <p>Nenhuma linha ignorada.</p>
-          )}
-        </div>
-      )}
+      {resultadoImportacao && (() => {
+        const pedidosCriados = resultadoImportacao.pedidos || [];
+        const ignorados = resultadoImportacao.ignorados || [];
+        const avisos = resultadoImportacao.avisos || [];
+        // Nada criado = fracasso, e a caixa tem de PARECER um fracasso: o verde num "0 pedidos
+        // criados" é o que fazia o operador ir embora achando que a carga funcionou.
+        const nadaCriado = pedidosCriados.length === 0;
+        return (
+          <div
+            data-testid="resultado-importacao"
+            style={{
+              background: nadaCriado ? 'rgba(231, 76, 60, 0.10)' : 'rgba(46, 204, 113, 0.10)',
+              border: `1px solid ${nadaCriado ? '#e74c3c' : '#2ecc71'}`,
+              borderRadius: 8, padding: '10px 14px', marginBottom: 16,
+            }}
+          >
+            <strong>{nadaCriado ? LITERAL_NADA_IMPORTADO : 'Importação concluída'}</strong>
+            <p>
+              {pedidosCriados.length} pedidos criados,{' '}
+              {resultadoImportacao.itens || 0} itens.
+            </p>
+            <ul>
+              {pedidosCriados.map((p) => (
+                <li key={p.id}>{p.numero} — {p.itens} itens</li>
+              ))}
+            </ul>
+            {ignorados.length > 0 ? (
+              <>
+                <strong>Linhas ignoradas</strong>
+                <ul data-testid="ignorados-lista">
+                  {ignorados.slice(0, TETO_LISTA).map((ig, i) => (
+                    <li key={`${ig.linha}-${i}`}>Linha {ig.linha}: {ig.motivo}</li>
+                  ))}
+                </ul>
+                {ignorados.length > TETO_LISTA && (
+                  <p data-testid="ignorados-restantes">{literalRestantes(ignorados.length - TETO_LISTA)}</p>
+                )}
+              </>
+            ) : (
+              <p>Nenhuma linha ignorada.</p>
+            )}
+            {/* `avisos` (F3) é IRMÃO de `ignorados`, não substituto: a linha ENTROU no pedido e só
+                o campo ficou em branco — por isso a lista é outra, com o nome do campo. */}
+            {avisos.length > 0 && (
+              <>
+                <strong>Linhas importadas com aviso</strong>
+                <ul data-testid="avisos-lista">
+                  {avisos.slice(0, TETO_LISTA).map((av, i) => (
+                    <li key={`${av.linha}-${av.campo}-${i}`}>Linha {av.linha} ({av.campo}): {av.motivo}</li>
+                  ))}
+                </ul>
+                {avisos.length > TETO_LISTA && (
+                  <p data-testid="avisos-restantes">{literalRestantes(avisos.length - TETO_LISTA)}</p>
+                )}
+              </>
+            )}
+          </div>
+        );
+      })()}
 
       {carregando ? (
         <div className="loading"><p>Carregando pedido...</p></div>

@@ -128,7 +128,41 @@ const Compras = () => {
     }
   };
 
-  const handleExportExcel = () => {
+  /**
+   * A linha do Excel da aba Pedidos — UMA POR ITEM, e as colunas são as que a importação LÊ.
+   *
+   * ── POR QUE MUDOU (onda de correção, F6 — achado I3/UX) ─────────────────────────────────────
+   * O export era uma linha por PEDIDO, com `Número`, `Fornecedor`, `Valor Total`, `Status`, `Data`
+   * e `Previsão Entrega` — e **nenhuma coluna de código de material**. Reimportar o próprio export
+   * do CRM (o primeiro arquivo que qualquer operador vai tentar, porque é o único que ele tem em
+   * mãos) recusava TODAS as linhas com `linha sem código de material` e — até o F6 — anunciava isso
+   * num toast VERDE. As colunas abaixo casam com as grafias que `pedidoCompraService` aceita:
+   * `Número` (agrupador), `Fornecedor` (razão social exata), `Código`, `Quantidade`,
+   * `Valor Unitário`, `Data` e `Previsão Entrega`.
+   *
+   * ⚠️ `Quantidade` e `Valor Unitário` saem como NÚMERO, nunca formatados: `formatCurrency` produz
+   * `R$ 1.234,50`, que o leitor de número da importação não entende (viraria 0 em silêncio e o
+   * pedido reimportado nasceria sem preço, desfazendo o custo médio do recebimento). `Valor Total`
+   * continua formatado porque é coluna de leitura humana — a importação não a lê.
+   *
+   * Pedido sem item vira UMA linha com as colunas de item vazias: perder o pedido do relatório
+   * seria pior, e a importação já recusa a linha dizendo por quê.
+   */
+  const linhaExportPedido = (pedido, item) => ({
+    'Número': pedido.numero || '',
+    'Fornecedor': pedido.fornecedor_nome || '',
+    'Código': item ? (item.codigo || '') : '',
+    'Descrição': item ? (item.descricao || '') : '',
+    'Unidade': item ? (item.unidade || '') : '',
+    'Quantidade': item ? item.quantidade : '',
+    'Valor Unitário': item ? item.valor_unitario : '',
+    'Valor Total': formatCurrency(pedido.valor_total),
+    'Status': pedido.status || '',
+    'Data': formatDate(pedido.data_pedido),
+    'Previsão Entrega': formatDate(pedido.previsao_entrega)
+  });
+
+  const handleExportExcel = async () => {
     try {
       let dadosExport = [];
       let nomeArquivo = '';
@@ -147,17 +181,29 @@ const Compras = () => {
           }));
           nomeArquivo = 'fornecedores';
           break;
-        case 'pedidos':
-          dadosExport = pedidos.map(p => ({
-            'Número': p.numero || '',
-            'Fornecedor': p.fornecedor_nome || '',
-            'Valor Total': formatCurrency(p.valor_total),
-            'Status': p.status || '',
-            'Data': formatDate(p.data_pedido),
-            'Previsão Entrega': formatDate(p.previsao_entrega)
-          }));
+        case 'pedidos': {
+          // A lista da aba traz só o CABEÇALHO (`GET /compras/pedidos` não devolve itens), então as
+          // linhas de item vêm de um `GET /compras/pedidos/:id` por pedido. É sequencial de
+          // propósito: a alternativa (uma porta nova que devolvesse os itens de todos) é mudança de
+          // contrato de API, e o acervo desta aba é pequeno (produção tem 0 pedidos hoje).
+          // Um pedido que falhe na leitura entra com as colunas de item vazias em vez de derrubar
+          // a exportação inteira.
+          const linhas = [];
+          for (const p of pedidos) {
+            let itens = [];
+            try {
+              const detalhe = await api.get(`/compras/pedidos/${p.id}`);
+              itens = (detalhe.data && detalhe.data.itens) || [];
+            } catch (e) {
+              itens = [];
+            }
+            if (itens.length === 0) linhas.push(linhaExportPedido(p, null));
+            else itens.forEach(item => linhas.push(linhaExportPedido(p, item)));
+          }
+          dadosExport = linhas;
           nomeArquivo = 'pedidos_compra';
           break;
+        }
         case 'cotacoes':
           dadosExport = cotacoes.map(c => ({
             'Número': c.numero || '',
