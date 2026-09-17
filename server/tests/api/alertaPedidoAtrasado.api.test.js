@@ -111,7 +111,7 @@ function resultadoDe(resultados, chave) {
   });
 
   // ── (2) RN-D10: a segunda varredura e DUPLICADA ─────────────────────────────────────────────
-  await test('(2) RN-D10 segunda varredura nao cresce a fila e o hash de dedupe e pedido-atrasado-<id>', async () => {
+  await test('(2) RN-D10 segunda varredura nao cresce a fila e o hash de dedupe e pedido-atrasado-<id>-<previsao>', async () => {
     const r = resultadoDe(await queueService.varrerAlertasRegistrados(db), 'PEDIDO_COMPRA_ATRASADO');
     assert.deepStrictEqual({ enfileiradas: r.enfileiradas, duplicadas: r.duplicadas },
       { enfileiradas: 0, duplicadas: 2 }, JSON.stringify(r));
@@ -119,8 +119,16 @@ function resultadoDe(resultados, chave) {
     assert.strictEqual(fila.length, 2, `2a varredura nao pode duplicar: ${fila.length} linha(s)`);
 
     const doP1 = fila.find((l) => JSON.parse(l.payload).pedido_compra_id === P1.id);
-    assert.strictEqual(doP1.hash_dedupe, hashDedupe('PEDIDO_COMPRA_ATRASADO', `pedido-atrasado-${P1.id}`),
-      'dedupe deveria ser pedido-atrasado-<id>');
+    // Onda de correcao F2: a `previsao_entrega` entra na chave. O cenario (9) mede o PORQUE.
+    assert.strictEqual(doP1.hash_dedupe,
+      hashDedupe('PEDIDO_COMPRA_ATRASADO', `pedido-atrasado-${P1.id}-${previsaoP1}`),
+      'dedupe deveria ser pedido-atrasado-<id>-<previsao_entrega>');
+    // Metade negativa: a chave ANTIGA (so o id) nao pode mais ser a gravada — sem esta linha, um
+    // `dedupeChave` que voltasse ao formato antigo so derrubaria a assercao acima se o hash mudasse
+    // por acidente, e o cenario (9) e quem provaria o dano. Aqui fica explicito.
+    assert.notStrictEqual(doP1.hash_dedupe,
+      hashDedupe('PEDIDO_COMPRA_ATRASADO', `pedido-atrasado-${P1.id}`),
+      'o dedupe voltou a ser so o id do pedido — prazo renegociado nunca mais alertaria');
   });
 
   // ── (3) RN-D09: assunto e corpo ─────────────────────────────────────────────────────────────
@@ -220,6 +228,73 @@ function resultadoDe(resultados, chave) {
     const medido = JSON.parse(saida.trim().split('\n').pop());
     assert.deepStrictEqual(medido, { total: 12, tem: true, listar: 'function' },
       `carga a frio devolveu ${saida.trim()}`);
+  });
+
+  // ── (9) F2: prazo RENEGOCIADO e furado de novo volta a alertar ──────────────────────────────
+  await test('(9) F2 prazo renegociado que vence de novo gera um SEGUNDO alerta (e a chave antiga segue duplicada)', async () => {
+    // ── O DEFEITO QUE ESTE CENARIO EXISTE PARA PEGAR (I2 das duas revisoes finais) ─────────────
+    // Com `dedupeChave = pedido-atrasado-<id>`, o `hash_dedupe` do primeiro aviso ficava gravado
+    // num indice UNIQUE e o `INSERT OR IGNORE` do `enfileirar` devolvia DUPLICADA para sempre:
+    // o comprador recebia o alerta, ligava para o fornecedor, renegociava o prazo — e quando o
+    // prazo NOVO vencia, nenhum e-mail saia, nunca mais, por mais prazos que aquele pedido
+    // quebrasse. Nao ha expurgo da fila, entao o silencio era permanente.
+    //
+    // O gesto do meio e o PUT REAL (`/api/compras/pedidos/:id`), nao um UPDATE a mao: renegociar
+    // e exatamente o que o comprador faz pela tela, e e o PUT que prova que a porta permite (nao
+    // ha recebimento neste pedido) e que a previsao nova chega gravada.
+    const mat = await dbRun(db, `INSERT INTO materiais_almoxarifado
+      (codigo, nome, unidade, quantidade_atual, ativo) VALUES ('E39-F2-001','Chapa renegociada','UN',0,1)`);
+
+    const previsaoVelha = diasDeHoje(-10);
+    const PR = await novoPedido({ previsao: previsaoVelha, status: 'pendente' });
+
+    // 1a varredura: o pedido novo entra, os que ja foram avisados repetem DUPLICADA.
+    const v1 = resultadoDe(await queueService.varrerAlertasRegistrados(db), 'PEDIDO_COMPRA_ATRASADO');
+    assert.strictEqual(v1.enfileiradas, 1, `1a varredura devia enfileirar 1: ${JSON.stringify(v1)}`);
+    const doPR = (await filaPorEvento(db, 'PEDIDO_COMPRA_ATRASADO'))
+      .filter((l) => JSON.parse(l.payload).pedido_compra_id === PR.id);
+    assert.strictEqual(doPR.length, 1, `esperava 1 linha na fila para o pedido renegociado, veio ${doPR.length}`);
+
+    // ── RENEGOCIACAO pela porta real: prazo novo, ainda no FUTURO ──────────────────────────────
+    const previsaoNova = diasDeHoje(-1);
+    const corpo = (previsao) => ({
+      fornecedor_id: forn.lastID,
+      previsao_entrega: previsao,
+      status: 'pendente',
+      itens: [{ material_id: mat.lastID, quantidade: 2, valor_unitario: 7 }],
+    });
+    const futuro = await request(app).put(`/api/compras/pedidos/${PR.id}`).send(corpo(diasDeHoje(30)));
+    assert.strictEqual(futuro.status, 200, `PUT de renegociacao falhou: ${JSON.stringify(futuro.body)}`);
+    // Saiu da regua — metade positiva de que a renegociacao de fato tirou o pedido do atraso.
+    const saiu = resultadoDe(await queueService.varrerAlertasRegistrados(db), 'PEDIDO_COMPRA_ATRASADO');
+    assert.strictEqual(saiu.enfileiradas, 0, `com previsao no futuro nada pode ser enfileirado: ${JSON.stringify(saiu)}`);
+
+    // ── O PRAZO NOVO VENCE ────────────────────────────────────────────────────────────────────
+    const vencido = await request(app).put(`/api/compras/pedidos/${PR.id}`).send(corpo(previsaoNova));
+    assert.strictEqual(vencido.status, 200, `PUT do prazo vencido falhou: ${JSON.stringify(vencido.body)}`);
+
+    const v2 = resultadoDe(await queueService.varrerAlertasRegistrados(db), 'PEDIDO_COMPRA_ATRASADO');
+    assert.strictEqual(v2.enfileiradas, 1,
+      `o prazo renegociado e furado tinha de gerar um SEGUNDO aviso: ${JSON.stringify(v2)}`);
+
+    const linhas = (await filaPorEvento(db, 'PEDIDO_COMPRA_ATRASADO'))
+      .filter((l) => JSON.parse(l.payload).pedido_compra_id === PR.id);
+    assert.strictEqual(linhas.length, 2,
+      `o pedido renegociado tinha de ter 2 linhas na fila (uma por prazo), veio ${linhas.length}`);
+    assert.deepStrictEqual(
+      linhas.map((l) => l.hash_dedupe).sort(),
+      [hashDedupe('PEDIDO_COMPRA_ATRASADO', `pedido-atrasado-${PR.id}-${previsaoVelha}`),
+        hashDedupe('PEDIDO_COMPRA_ATRASADO', `pedido-atrasado-${PR.id}-${previsaoNova}`)].sort(),
+      'as duas linhas tinham de ser uma por prazo prometido',
+    );
+
+    // ⚠️ A METADE QUE IMPEDE O CONSERTO DE VIRAR "avisa todo dia": a chave ANTIGA continua
+    // duplicando. Uma varredura a mais, com a MESMA previsao, nao pode enfileirar nada — e este e
+    // o objetivo declarado da RN-D10 que a correcao tinha de preservar inteiro.
+    const v3 = resultadoDe(await queueService.varrerAlertasRegistrados(db), 'PEDIDO_COMPRA_ATRASADO');
+    assert.strictEqual(v3.enfileiradas, 0,
+      `pedido que segue atrasado no MESMO prazo nao pode ser relembrado: ${JSON.stringify(v3)}`);
+    assert.ok(v3.duplicadas >= 1, `esperava duplicadas na varredura seguinte: ${JSON.stringify(v3)}`);
   });
 
   await close();

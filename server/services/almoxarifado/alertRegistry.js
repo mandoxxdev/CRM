@@ -499,9 +499,27 @@ const ALERT_REGISTRY = Object.freeze([
         .map((l) => ({ ...l, ...derivarAtraso(l, hoje) }))
         .filter((l) => l.atrasado === 1);
     },
-    // RN-D10: UM aviso por pedido, para sempre — nao por dia de atraso. O dedupe sem o id faria
+    // RN-D10: UM aviso por PERIODO DE ATRASO — nao um por dia de atraso. O dedupe sem o id faria
     // o primeiro pedido atrasado calar todos os outros.
-    dedupeChave: (linha) => `pedido-atrasado-${linha.id}`,
+    //
+    // ⚠️ A `previsao_entrega` ENTRA NA CHAVE, e a onda de correcao (F2) a acrescentou porque a
+    // chave so com o id calava o pedido para SEMPRE. Cenario reproduzido por sonda na revisao
+    // final: pedido atrasado -> e-mail sai e grava `hash_dedupe` num indice UNIQUE; o comprador
+    // liga para o fornecedor e RENEGOCIA (PUT com previsao nova — permitido, e e o gesto canonico
+    // DEPOIS de receber o primeiro alerta); o prazo NOVO vence -> o `listar` acha a linha, mas o
+    // `enfileirar` recalcula o MESMO hash, bate no UNIQUE e devolve DUPLICADA. Nenhum e-mail,
+    // nunca mais, por mais prazos que aquele pedido quebre — e nao ha expurgo da fila, entao o
+    // silencio e permanente.
+    //
+    // Com a data prometida na chave, o objetivo declarado fica inteiro: a previsao NAO muda dia a
+    // dia (muda quando e renegociada), entao o pedido que segue atrasado no MESMO prazo continua
+    // avisando UMA vez. E o formato ja e o das irmas que dependem de uma data prometida:
+    // `calibracao-${id}-${data_validade}` (:201), `lote-vencendo-${id}-${data_validade}` e
+    // `remessa-vencida-${id}-${prazo_previsto}` (notificationQueueService :515/:554).
+    //
+    // DESCARTADO: expurgo/retencao da fila de notificacoes — e contrato da feature 19 e mudaria o
+    // dedupe das 11 entradas anteriores junto.
+    dedupeChave: (linha) => `pedido-atrasado-${linha.id}-${linha.previsao_entrega}`,
     payload: (linha) => ({ pedido_compra_id: linha.id, dias_atraso: linha.dias_atraso }),
     // Prefixo `[Compras]`, NAO `[Almoxarifado]`: o documento e de Compras e a lista de
     // destinatarios e compartilhada — o prefixo e o que permite ao leitor filtrar (D5).
