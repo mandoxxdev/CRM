@@ -103,7 +103,7 @@
  */
 const { dbRun, dbGet, dbAll } = require('../almoxarifado/db');
 const {
-  extrairDoRow, normalizarChavesDaLinha, valorCruDoRow, numeroDaPlanilha,
+  extrairDoRow, normalizarChavesDaLinha, valorCruDoRow, numeroDaPlanilha, dataDaPlanilha,
 } = require('./planilhaCompras');
 const { inserirComNumeroUnico } = require('../almoxarifado/numeroDoc');
 const purchaseService = require('../almoxarifado/purchaseService');
@@ -126,6 +126,48 @@ const erroPermissao = (user, acao) => Object.assign(
 
 /** Colunas do cabecalho que o payload pode preencher — `numero` e `valor_total` NAO estao aqui. */
 const COLUNAS_CABECALHO = ['data_pedido', 'previsao_entrega', 'status', 'observacoes'];
+
+/** As duas colunas `DATE` do cabecalho — ver `camposDoCabecalho`. */
+const COLUNAS_DATA = ['data_pedido', 'previsao_entrega'];
+
+/**
+ * Os campos do cabecalho que ESTA chamada escreve, com uma regra a mais para as colunas `DATE`.
+ *
+ * ── POR QUE `''` NAO PODE CHEGAR AO `INSERT` (onda de correcao, F3: achados I1/UX e I2/RN) ────
+ * A guarda original pulava `undefined` e `null` e **nao** pulava `''` — e o formulario manda `''`
+ * SEMPRE (`PedidoCompraForm.js:85` nasce vazio e o payload inclui o campo sem condicao). Sonda
+ * executada: gravava TEXT `''` numa coluna declarada `DATE`, e o efeito nao e cosmetico:
+ * `WHERE previsao_entrega < date('now')` **inclui** `''` (o alerta de atraso, que e etapa propria,
+ * nasceria acusando justamente os pedidos SEM previsao) e `WHERE previsao_entrega IS NULL` **nao**
+ * o pega. Na migracao para Postgres do roadmap, `date` recusa `''` com erro de sintaxe.
+ *
+ * `''` numa coluna de data vira **NULL** (e nao "campo ausente") de proposito: no `PUT` e assim que
+ * o comprador LIMPA a previsao pela tela. Para `observacoes`/`status`, `''` continua sendo valor
+ * presente — limpar um texto e apaga-lo, e essa parte do contrato da Task 3 nao muda.
+ *
+ * O schema (`schemas.js`) ja faz `'' -> null` na porta HTTP; esta e a mesma regra para quem chama o
+ * SERVICO direto (importacao da T4, Reposicao da T6). Duas entradas, duas guardas.
+ */
+function camposDoCabecalho(dados) {
+  const campos = [];
+  for (const col of COLUNAS_CABECALHO) {
+    const bruto = dados[col];
+    // AUSENTE nunca mexe na coluna — e o que permite ao chamador de servico com payload parcial
+    // (Reposicao, importacao) nao apagar o que ele nao conhece.
+    if (bruto === undefined) continue;
+    const ehData = COLUNAS_DATA.includes(col);
+    // ⚠️ NUMA COLUNA DE DATA, `''` e `null` significam a MESMA coisa — LIMPAR —, e as duas gravam
+    // NULL. E o gesto da tela: o schema converte o `''` do `<input type="date">` vazio em `null`
+    // (`schemas.js`), entao se `null` fosse tratado como "ausente" o comprador NAO CONSEGUIRIA
+    // apagar uma previsao pelo `PUT` — o campo voltaria com o valor antigo e ninguem entenderia.
+    if (ehData) { campos.push([col, bruto === '' ? null : bruto]); continue; }
+    // Fora das datas, `null` continua sendo "nao mexe": `status = NULL` sobrescreveria o
+    // `DEFAULT 'pendente'` do DDL, e a tela de Compras filtra por essa coluna.
+    if (bruto === null) continue;
+    campos.push([col, bruto]);
+  }
+  return campos;
+}
 
 /**
  * As literais da regua, UMA por fato (contratos 3 e 4 do plano).
@@ -289,9 +331,7 @@ async function criarPedido(db, dados, user) {
   // `DEFAULT 'pendente'` do DDL com NULL, e a tela de Compras filtra por essa coluna.
   const colunas = ['numero', 'fornecedor_id'];
   const valores = [null, dados.fornecedor_id];
-  for (const col of COLUNAS_CABECALHO) {
-    if (dados[col] !== undefined && dados[col] !== null) { colunas.push(col); valores.push(dados[col]); }
-  }
+  for (const [col, valor] of camposDoCabecalho(dados)) { colunas.push(col); valores.push(valor); }
 
   // O `numero` e gerado DENTRO do retry (Etapa 31): o `fn` contem APENAS o INSERT do cabecalho, e
   // nada e escrito entre a geracao e ele — se o UNIQUE recusar, a tentativa seguinte repete o
@@ -365,10 +405,16 @@ async function obterPedido(db, pedidoId) {
  *      linha deixaria o pedido com o cabecalho novo e as linhas velhas apagadas;
  *   4. UPDATE do cabecalho, DELETE + INSERT das linhas, UPDATE do `valor_total` derivado.
  *
- * SO OS CAMPOS PRESENTES no payload sao escritos no cabecalho (`undefined`/`null` nao mexem na
- * coluna): o formulario da Task 5 manda o registro inteiro e limpar um campo de texto manda `''`,
- * que **e** presente e grava vazio — enquanto um chamador de servico com payload parcial (Task 6)
- * nao apaga o que nao conhece. `numero` **nao** e editavel (e do servidor desde a Task 2) e
+ * SO OS CAMPOS PRESENTES no payload sao escritos no cabecalho — quem decide e `camposDoCabecalho`:
+ * `undefined` nunca mexe na coluna (e o que protege o chamador de servico com payload parcial, como
+ * a Task 6), `''` num campo de TEXTO grava vazio (limpar a observacao pela tela), e `''`/`null`
+ * numa coluna de DATA gravam **NULL**.
+ *
+ * ⚠️ Esta ultima frase CORRIGE o que este comentario dizia ate a onda de correcao ("`undefined`/
+ * `null` nao mexem na coluna"): virou falsa no F3 e a diferenca e visivel na tela. Com `null`
+ * tratado como ausente, o comprador NAO conseguiria apagar uma previsao de entrega — o
+ * `<input type="date">` vazio manda `''`, o schema o converte em `null`, e o `PUT` devolveria o
+ * valor ANTIGO sem erro nenhum. `numero` **nao** e editavel (e do servidor desde a Task 2) e
  * `solicitacao_id`, se vier, e IGNORADO: vincular solicitacao e ato da criacao, e e la que vive o
  * gate de `gerenciar_reposicao` (fix 1 da Task 2) — aceitar o vinculo aqui abriria a mesma escrita
  * em tabela do almoxarifado por uma porta sem gate.
@@ -389,9 +435,7 @@ async function atualizarPedido(db, pedidoId, dados) {
 
   const sets = ['fornecedor_id = ?'];
   const valores = [dados.fornecedor_id];
-  for (const col of COLUNAS_CABECALHO) {
-    if (dados[col] !== undefined && dados[col] !== null) { sets.push(`${col} = ?`); valores.push(dados[col]); }
-  }
+  for (const [col, valor] of camposDoCabecalho(dados)) { sets.push(`${col} = ?`); valores.push(valor); }
   const total = itensResolvidos.reduce((soma, i) => soma + (i.quantidade * i.valor_unitario), 0);
   sets.push('valor_total = ?'); valores.push(total);
   sets.push('updated_at = CURRENT_TIMESTAMP');
@@ -532,7 +576,10 @@ async function buscarMateriais(db, search) {
  * @param {object} corpo  `req.body`: `{ linhas: [...] }` ou `{ rows: [...] }`
  * @param {object} user   usuario autenticado (repassado a `criarPedido`)
  * @returns {Promise<{pedidos: Array<{id:number,numero:string,itens:number}>, itens:number,
- *                    ignorados: Array<{linha:number,motivo:string}>}>}
+ *                    ignorados: Array<{linha:number,motivo:string}>,
+ *                    avisos: Array<{linha:number,campo:string,motivo:string}>}>}
+ *          `ignorados` = a linha NAO entrou; `avisos` = a linha entrou com um campo em branco
+ *          (onda de correcao, F3).
  */
 
 /** Literal do 400, COPIADA VERBATIM do precedente (`routes/compras.js`, importacao de itens). */
@@ -542,6 +589,19 @@ const CORPO_PLANILHA_INVALIDO = 'Envie "linhas" ou "rows" com array de objetos (
 const MOTIVO_QUANTIDADE_INVALIDA = 'quantidade inválida';
 const MOTIVO_SEM_CODIGO = 'linha sem código de material';
 const MOTIVO_FORNECEDOR_NAO_ENCONTRADO = 'fornecedor não encontrado';
+
+/**
+ * ── `avisos`: A LINHA ENTROU, MAS UM CAMPO NAO FOI ENTENDIDO (onda de correcao, F3) ────────────
+ *
+ * Terceiro array da resposta, ao lado de `pedidos` e `ignorados`, e a separacao e a regra: a data e
+ * INFORMATIVA. Recusar a linha porque a celula de previsao veio `'a combinar'` jogaria fora o item
+ * comprado — e mandar a celula crua para a coluna `DATE` era o defeito que o F3 conserta. Entao a
+ * linha entra, o campo vira `null`, e o operador **sabe qual celula arrumar**.
+ *
+ * Um motivo por CAMPO, e o `campo` vem na entrada: a tela lista `{linha, campo, motivo}` e o
+ * comprador acha a celula na planilha dele sem adivinhar.
+ */
+const AVISO_PREVISAO_NAO_RECONHECIDA = 'previsão de entrega não reconhecida (use AAAA-MM-DD ou DD/MM/AAAA)';
 
 /**
  * As grafias de cabecalho aceitas, por campo (contrato 5, com as variantes de acento/caixa que o
@@ -649,6 +709,9 @@ async function importarPedidos(db, corpo, user) {
   if (!Array.isArray(linhas) || linhas.length === 0) throw erro(CORPO_PLANILHA_INVALIDO);
 
   const ignorados = [];
+  // `avisos` e IRMAO de `ignorados`, nao substituto: a linha do aviso ENTROU no pedido (ver o
+  // comentario de AVISO_PREVISAO_NAO_RECONHECIDA).
+  const avisos = [];
   // `Map` e nao objeto: a ordem de insercao e a ordem das ORDENS na planilha, e e ela que a
   // resposta devolve (o cenario (2) afirma `pedidos[0]` = OC-A, a primeira que apareceu).
   const grupos = new Map();
@@ -699,6 +762,16 @@ async function importarPedidos(db, corpo, user) {
       continue;
     }
 
+    // ⚠️ A DATA E LIDA CRUA e convertida aqui (`dataDaPlanilha`), nunca por `extrairDoRow`: aquele
+    // devolve String, e a celula de data do `.xlsx` chega como SERIAL NUMERICO (45000) porque o
+    // client le a planilha com `raw` no default. `'45000'` na coluna `DATE` era o achado I2.
+    // Nao reconhecida -> `null` + AVISO (a linha entra: a data e informativa).
+    const previsaoCrua = valorCruDoRow(row, ...CHAVES_PREVISAO);
+    const previsaoDaLinha = dataDaPlanilha(previsaoCrua);
+    if (previsaoCrua != null && previsaoDaLinha == null) {
+      avisos.push({ linha: numeroDaLinha, campo: 'previsao_entrega', motivo: AVISO_PREVISAO_NAO_RECONHECIDA });
+    }
+
     if (!grupos.has(chaveGrupo)) grupos.set(chaveGrupo, new Map());
     const porFornecedor = grupos.get(chaveGrupo);
     if (!porFornecedor.has(fornecedor.id)) {
@@ -707,6 +780,7 @@ async function importarPedidos(db, corpo, user) {
     porFornecedor.get(fornecedor.id).linhas.push({
       numeroDaLinha,
       row,
+      previsao: previsaoDaLinha,
       item: { material_id: material.id, quantidade, valor_unitario: valorUnitario },
     });
   }
@@ -720,7 +794,10 @@ async function importarPedidos(db, corpo, user) {
   // planilha virou qual `PC-…`.
   for (const porFornecedor of grupos.values()) {
     for (const grupo of porFornecedor.values()) {
-      const previsao = grupo.linhas.map((l) => extrairDoRow(l.row, ...CHAVES_PREVISAO)).find((v) => v) || null;
+      // A previsao do grupo e a PRIMEIRA linha que trouxe uma data valida (a planilha costuma
+      // repeti-la ou traze-la so na primeira linha da ordem); as ja convertidas para
+      // `AAAA-MM-DD` — nunca a celula crua.
+      const previsao = grupo.linhas.map((l) => l.previsao).find((v) => v) || null;
       // A observacao registra o agrupador da planilha: e a UNICA pista de qual ordem virou qual
       // `PC-…` depois da importacao, e o roteiro de teste manual confere por ela.
       const observacoes = grupo.chave === SEM_AGRUPADOR
@@ -752,8 +829,10 @@ async function importarPedidos(db, corpo, user) {
   // grupo (fornecedor) no segundo, entao sem esta ordenacao a lista sairia fora de ordem e o
   // operador teria de caçar as linhas na planilha dele.
   ignorados.sort((a, b) => a.linha - b.linha);
+  // Mesma regra para os avisos: a lista sai na ordem da planilha do operador.
+  avisos.sort((a, b) => a.linha - b.linha);
 
-  return { pedidos, itens: itensImportados, ignorados };
+  return { pedidos, itens: itensImportados, ignorados, avisos };
 }
 
 module.exports = {
@@ -769,4 +848,5 @@ module.exports = {
   MOTIVO_QUANTIDADE_INVALIDA,
   MOTIVO_SEM_CODIGO,
   MOTIVO_FORNECEDOR_NAO_ENCONTRADO,
+  AVISO_PREVISAO_NAO_RECONHECIDA,
 };

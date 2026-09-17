@@ -83,6 +83,9 @@ const MOTIVO_QTD = 'quantidade inválida';
 const MOTIVO_SEM_CODIGO = 'linha sem código de material';
 const MOTIVO_FORNECEDOR = 'fornecedor não encontrado';
 const motivoMaterial = (codigo) => `material não encontrado pelo código ${codigo}`;
+// Onda de correcao, F3: `avisos` e o terceiro array da resposta — a linha ENTROU, o campo nao foi
+// entendido. Literal verbatim de `AVISO_PREVISAO_NAO_RECONHECIDA` do servico.
+const AVISO_PREVISAO = 'previsão de entrega não reconhecida (use AAAA-MM-DD ou DD/MM/AAAA)';
 
 (async () => {
   const { app, db, setUser, close } = await createTestApp({ user: ADMIN });
@@ -496,6 +499,57 @@ const motivoMaterial = (codigo) => `material não encontrado pelo código ${codi
     assert.strictEqual(semCnpj.body.pedidos.length, 1, 'a linha boa ainda cria o pedido dela');
     assert.strictEqual((await linhasDoPedido(semCnpj.body.pedidos[0].id)).length, 1,
       'o pedido nasce com UMA linha — a linha sem fornecedor nao entrou por heranca');
+  });
+
+  // (9) ------------------------------------------------------------------------------------
+  //
+  // ONDA DE CORRECAO, F3 — achado I2: o client le a planilha com `XLSX.utils.sheet_to_json(sheet,
+  // { defval: '' })`, SEM `cellDates` e com `raw` no default `true`, entao a celula formatada como
+  // data chega como SERIAL NUMERICO. A importacao lia a previsao por `extrairDoRow` (que devolve
+  // sempre String) e gravava `previsao_entrega = '45000'` numa coluna `DATE` — sem 400, sem
+  // `ignorados`, e INVISIVEL na tela (o `<input type="date">` renderiza vazio para esse valor, e o
+  // comprador que reabrisse o pedido nao veria o valor torto).
+  //
+  // A conversao e do SERVIDOR (e nao `raw: false` no navegador): `raw: false` devolveria quantidade
+  // e preco como texto FORMATADO pela planilha e mataria a regra "cru primeiro" do cenario (6) —
+  // alem de que a rota recebe linhas de qualquer origem.
+  await test('(9) celula de data: serial do Excel e DD/MM/AAAA convertidos; texto solto vira AVISO, nao recusa', async () => {
+    const r = await importar({
+      linhas: [
+        // 45000 = 2023-03-15 (epoch 1899-12-30, o "bug de 1900" da Lotus embutido).
+        linha('OC-DATA1', 'MAT-IMP-A', { qtd: 1, preco: 2, previsao: 45000 }),
+        linha('OC-DATA2', 'MAT-IMP-A', { qtd: 1, preco: 2, previsao: '05/09/2026' }),
+        linha('OC-DATA3', 'MAT-IMP-A', { qtd: 1, preco: 2, previsao: '2026-10-07' }),
+        linha('OC-DATA4', 'MAT-IMP-A', { qtd: 1, preco: 2, previsao: 'a combinar' }),
+      ],
+    });
+    assert.strictEqual(r.status, 201, `esperava 201, veio ${r.status} ${JSON.stringify(r.body)}`);
+    assert.strictEqual(r.body.pedidos.length, 4, `esperava 4 pedidos, veio ${r.body.pedidos.length}`);
+    // ⚠️ AS ASSERCOES QUE MEDEM O DANO: antes do conserto a primeira gravava a string '45000'.
+    const [d1, d2, d3, d4] = r.body.pedidos;
+    assert.strictEqual((await cabecalho(d1.id)).previsao_entrega, '2023-03-15',
+      'serial 45000 do Excel tinha de virar 2023-03-15');
+    assert.strictEqual((await cabecalho(d2.id)).previsao_entrega, '2026-09-05',
+      "'05/09/2026' tinha de virar 2026-09-05 (dia/mes na ordem brasileira)");
+    assert.strictEqual((await cabecalho(d3.id)).previsao_entrega, '2026-10-07',
+      'a data ja em AAAA-MM-DD tinha de passar inteira');
+
+    // A LINHA NAO RECONHECIDA ENTRA (a data e informativa — recusar a linha jogaria fora o item
+    // comprado), com a previsao NULA e um AVISO que diz qual celula arrumar.
+    assert.strictEqual((await cabecalho(d4.id)).previsao_entrega, null,
+      "'a combinar' tinha de virar NULL — nunca texto na coluna DATE");
+    assert.strictEqual((await linhasDoPedido(d4.id)).length, 1, 'a linha do aviso TEM de ter entrado');
+    assert.deepStrictEqual(r.body.avisos, [{ linha: 4, campo: 'previsao_entrega', motivo: AVISO_PREVISAO }],
+      `avisos divergente: ${JSON.stringify(r.body.avisos)}`);
+    // E `ignorados` continua vazio: aviso NAO e recusa, e a resposta nao mistura as duas coisas.
+    assert.deepStrictEqual(r.body.ignorados, [], `ignorados tinha de ficar vazio: ${JSON.stringify(r.body.ignorados)}`);
+
+    // METADE NEGATIVA do aviso: sem celula de previsao nenhuma, `avisos` fica VAZIO (um aviso
+    // permanente nao avisa nada).
+    const semData = await importar({ linhas: [linha('OC-DATA5', 'MAT-IMP-A', { qtd: 1, preco: 2 })] });
+    assert.deepStrictEqual(semData.body.avisos, [], `sem coluna de previsao nao ha aviso: ${JSON.stringify(semData.body.avisos)}`);
+    assert.strictEqual((await cabecalho(semData.body.pedidos[0].id)).previsao_entrega, null,
+      'sem coluna de previsao a coluna fica NULL');
   });
 
   await close();

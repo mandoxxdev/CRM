@@ -164,6 +164,74 @@ function numeroDaPlanilha(valor) {
   return Number.isFinite(n) ? n : null;
 }
 
+/**
+ * ── A CELULA DE DATA DA PLANILHA -> `AAAA-MM-DD`, ou `null` (onda de correcao, F3) ────────────
+ *
+ * O FURO, tracado linha a linha e confirmado por sonda: o client chama
+ * `XLSX.utils.sheet_to_json(sheet, { defval: '' })` — **sem `cellDates`** e com `raw` no default
+ * `true` —, entao uma celula formatada como data volta como **SERIAL NUMERICO** (`45000`, nao
+ * `'2023-03-15'`). A importacao lia a previsao por `extrairDoRow`, que devolve **sempre String**, e
+ * gravava `previsao_entrega = '45000'` numa coluna `DATE`, sem 400 e sem entrada em `ignorados`. O
+ * `<input type="date">` do formulario renderiza vazio para esse valor: o comprador que reabrisse o
+ * pedido **nao veria** o valor torto — ele sai da tela e continua no banco.
+ *
+ * ⚠️ A CONVERSAO E DO SERVIDOR, e nao do navegador. `raw: false` no `sheet_to_json` resolveria a
+ * data e estragaria o RESTO: quantidade e preco voltariam como texto FORMATADO pela planilha
+ * (`'1.234,50'`, `'1,5'`), e a regra "cru primeiro" de `numeroDaPlanilha` — que existe porque
+ * `'1.5'` virava **15** — perderia a forma numerica que ela protege. Alem disso a rota recebe linhas
+ * de QUALQUER origem (outro client, script de carga): o servidor e a verdade, o navegador nao.
+ *
+ * As tres formas que entram, e a quarta que sai como `null` (o chamador a transforma em AVISO, nao
+ * em recusa — a data e informativa; recusar a linha por causa dela jogaria fora o item comprado):
+ * 1. `number` -> SERIAL do Excel, epoch **1899-12-30 UTC** (o "bug de 1900" da Lotus ja embutido:
+ *    serial 1 = 1900-01-01 e o ano 1900 conta como bissexto, e e por isso que a base e dia 30 e nao
+ *    31). Tudo em UTC: usar hora local faria a data virar o dia anterior a oeste de Greenwich.
+ * 2. `Date` (o caso de quem passar `cellDates: true` amanha) -> os componentes UTC.
+ * 3. `AAAA-MM-DD` e `DD/MM/AAAA` (tambem com `-` ou `.`) -> normalizados, com o dia CONFERIDO:
+ *    `'2026-02-31'` volta `null`, porque `Date.UTC` o aceitaria como 03/03.
+ * 4. qualquer outra coisa -> `null`.
+ *
+ * ⚠️ String numerica so vale como serial a partir de **20000** (1954-10-03): sem esse piso, uma
+ * celula `'2026'` (ano digitado sozinho, caso banal) viraria uma data de 1905 em silencio.
+ */
+const RE_DATA_ISO = /^(\d{4})-(\d{2})-(\d{2})$/;
+const RE_DATA_BR = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/;
+const RE_SO_NUMERO = /^\d+([.,]\d+)?$/;
+const EPOCH_EXCEL_UTC = Date.UTC(1899, 11, 30);
+const SERIAL_MINIMO = 20000;
+const MS_POR_DIA = 86400000;
+
+function isoDeUTC(ano, mes, dia) {
+  // Conferencia de dia real: `Date.UTC(2026, 1, 31)` devolve 03/03 em silencio.
+  const d = new Date(Date.UTC(ano, mes - 1, dia));
+  if (!Number.isFinite(d.getTime())) return null;
+  if (d.getUTCFullYear() !== ano || d.getUTCMonth() + 1 !== mes || d.getUTCDate() !== dia) return null;
+  if (ano < 1900 || ano > 2200) return null;
+  return `${String(ano).padStart(4, '0')}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+}
+
+function dataDaPlanilha(valor) {
+  if (valor == null || valor === '') return null;
+  if (valor instanceof Date) {
+    if (!Number.isFinite(valor.getTime())) return null;
+    return isoDeUTC(valor.getUTCFullYear(), valor.getUTCMonth() + 1, valor.getUTCDate());
+  }
+  if (typeof valor === 'number') {
+    if (!Number.isFinite(valor) || valor < SERIAL_MINIMO) return null;
+    const d = new Date(EPOCH_EXCEL_UTC + Math.round(valor) * MS_POR_DIA);
+    return isoDeUTC(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
+  }
+  const texto = String(valor).trim();
+  if (texto === '') return null;
+  const iso = RE_DATA_ISO.exec(texto);
+  if (iso) return isoDeUTC(Number(iso[1]), Number(iso[2]), Number(iso[3]));
+  const br = RE_DATA_BR.exec(texto);
+  if (br) return isoDeUTC(Number(br[3]), Number(br[2]), Number(br[1]));
+  // Serial que chegou como texto (CSV, ou client que serializou o numero).
+  if (RE_SO_NUMERO.test(texto)) return dataDaPlanilha(Number(texto.replace(',', '.')));
+  return null;
+}
+
 module.exports = {
   normalizarCampo,
   parsePrecoBackend,
@@ -173,4 +241,5 @@ module.exports = {
   normalizarChavesDaLinha,
   valorCruDoRow,
   numeroDaPlanilha,
+  dataDaPlanilha,
 };

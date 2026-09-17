@@ -67,6 +67,40 @@ const VALOR_UNITARIO_ITEM_NEGATIVO = 'valor unitário do item não pode ser nega
 const STATUS_PEDIDO_INVALIDO = `status do pedido inválido (use ${STATUS_PEDIDO_COMPRA.slice(0, -1).join(', ')} ou ${STATUS_PEDIDO_COMPRA[STATUS_PEDIDO_COMPRA.length - 1]})`;
 
 /**
+ * ── AS DUAS COLUNAS `DATE` PASSAM A SER VALIDADAS (onda de correcao, F3: achados I2/RN e I1/UX) ─
+ *
+ * O QUE ESTAVA FURADO, medido nas duas pontas:
+ * - `previsao_entrega` e `data_pedido` NAO estavam declaradas aqui, e o `z.looseObject` as passava
+ *   adiante de proposito. `criarPedido` copiava `dados[col]` para o `INSERT` **sem validar nada**:
+ *   `previsao_entrega: 'blah'` respondia **201** e o `GET` devolvia `"blah"` numa coluna `DATE`.
+ * - O formulario manda `''` SEMPRE (`PedidoCompraForm.js:85` nasce `''` e o payload o inclui sem
+ *   condicao), e a guarda do laco do cabecalho pulava `undefined`/`null` mas **nao** `''`. Sonda
+ *   executada: `previsao_entrega` gravado como TEXT `''` numa coluna `DATE` —
+ *   `WHERE previsao_entrega < date('now')` **acusa** essas linhas (o alerta de atraso que e etapa
+ *   propria nasceria apontando justamente os pedidos SEM previsao) e `IS NULL` **nao** as pega.
+ *   E na migracao para Postgres do roadmap, `date` **recusa** `''`.
+ *
+ * A REGRA: `null`, ausente ou `''` -> **null**; `AAAA-MM-DD` -> passa; QUALQUER outra coisa -> 400.
+ * O `z.preprocess` e o que transforma `''` em `null` ANTES do union, e e por isso que a porta HTTP
+ * nunca mais grava string vazia. O servico tem a MESMA regra para quem o chama sem passar por aqui
+ * (importacao, Reposicao) — duas guardas para o mesmo fato, porque sao duas entradas.
+ *
+ * ⚠️ REGEX, e nao `z.iso.date()`: o `z.iso.date()` do Zod 4 aceita a forma, mas a mensagem dele
+ * sairia **em ingles** no caminho de tipo (a armadilha 2 do cabecalho deste arquivo), e a literal
+ * tem de ser a nossa nos DOIS lugares. Descartado tambem `z.coerce.date()`: devolveria um `Date`
+ * para o `INSERT`, e o driver gravaria o timestamp inteiro (ou o ISO com `T00:00:00.000Z`) numa
+ * coluna que o resto do modulo le como `AAAA-MM-DD`.
+ */
+const RE_DATA_ISO = /^\d{4}-\d{2}-\d{2}$/;
+const PREVISAO_ENTREGA_INVALIDA = 'previsão de entrega inválida (use AAAA-MM-DD)';
+const DATA_PEDIDO_INVALIDA = 'data do pedido inválida (use AAAA-MM-DD)';
+
+const dataIsoOpcional = (msg) => z.preprocess(
+  (v) => (v === '' ? null : v),
+  z.union([z.null(), z.string().regex(RE_DATA_ISO, msg)], { error: msg }),
+).optional();
+
+/**
  * A linha do pedido. `material_id` e OBRIGATORIO e isso vem de fora do modulo: as duas leituras da
  * Etapa 37 (`listarPedidosCompraAux` e `carregarItensPedidoCompra`) filtram
  * `material_id IS NOT NULL`, entao uma linha de texto livre seria **invisivel ao recebimento** —
@@ -86,6 +120,10 @@ const PedidoCompraItemSchema = z.looseObject({
 const PedidoCompraCreateSchema = z.looseObject({
   fornecedor_id: z.number({ error: FORNECEDOR_PEDIDO_OBRIGATORIO }).int(FORNECEDOR_PEDIDO_OBRIGATORIO).positive(FORNECEDOR_PEDIDO_OBRIGATORIO),
   status: z.enum(STATUS_PEDIDO_COMPRA, { error: STATUS_PEDIDO_INVALIDO }).optional(),
+  // As duas colunas `DATE` do cabecalho (onda de correcao, F3 — ver o comentario acima). O `PUT`
+  // usa o MESMO schema, entao a regra vale nas duas portas por construcao.
+  data_pedido: dataIsoOpcional(DATA_PEDIDO_INVALIDA),
+  previsao_entrega: dataIsoOpcional(PREVISAO_ENTREGA_INVALIDA),
   itens: z.array(PedidoCompraItemSchema, { error: ITENS_PEDIDO_VAZIO }).min(1, ITENS_PEDIDO_VAZIO),
 });
 
@@ -99,4 +137,6 @@ module.exports = {
   QTD_ITEM_PEDIDO_INVALIDA,
   VALOR_UNITARIO_ITEM_NEGATIVO,
   STATUS_PEDIDO_INVALIDO,
+  PREVISAO_ENTREGA_INVALIDA,
+  DATA_PEDIDO_INVALIDA,
 };

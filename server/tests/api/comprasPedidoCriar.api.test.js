@@ -42,6 +42,9 @@ const assert = require('assert');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbGet, dbAll } = require('../../services/almoxarifado/db');
+// Onda de correcao, F3: o cenario (13) chama o servico DIRETO para provar que a regra do `''`
+// tambem vale para quem entra sem `validate()` (a importacao da T4 e a Reposicao da T6).
+const pedidoCompraService = require('../../services/compras/pedidoCompraService');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -62,6 +65,9 @@ const ERRO_MATERIAL_ITEM = 'Dados inválidos — itens.0.material_id: material d
 const ERRO_QTD = 'Dados inválidos — itens.0.quantidade: quantidade do item do pedido deve ser um número maior que zero';
 const ERRO_VALOR = 'Dados inválidos — itens.0.valor_unitario: valor unitário do item não pode ser negativo';
 const ERRO_STATUS = 'Dados inválidos — status: status do pedido inválido (use pendente, aprovado, rejeitado, em_analise, enviado, recebido ou cancelado)';
+// Onda de correcao, F3: as duas colunas `DATE` passaram a ser declaradas no schema.
+const ERRO_PREVISAO = 'Dados inválidos — previsao_entrega: previsão de entrega inválida (use AAAA-MM-DD)';
+const ERRO_DATA_PEDIDO = 'Dados inválidos — data_pedido: data do pedido inválida (use AAAA-MM-DD)';
 
 const contarPedidos = async (db) => (await dbGet(db, 'SELECT COUNT(*) as n FROM pedidos_compra')).n;
 
@@ -371,6 +377,92 @@ const contarPedidos = async (db) => (await dbGet(db, 'SELECT COUNT(*) as n FROM 
     assert.strictEqual(depois.status, 'VINCULADO', `solicitacao ficou ${depois.status}`);
     assert.strictEqual(depois.pedido_compra_id, r.body.id, 'pedido_compra_id nao aponta para o pedido criado');
     setUser(ADMIN);
+  });
+
+  // (13) -----------------------------------------------------------------------------------
+  //
+  // ONDA DE CORRECAO, F3 — achados I2 (RN) e I1 (UX), os dois medidos por sonda executada:
+  //  - `previsao_entrega: 'blah'` respondia **201** e o `GET` devolvia `"blah"` numa coluna `DATE`
+  //    (o campo nao era declarado no schema e o `looseObject` o passava adiante de proposito);
+  //  - o formulario manda `''` SEMPRE (`PedidoCompraForm.js:85` nasce vazio e o payload inclui o
+  //    campo sem condicao) e a guarda do laco do cabecalho pulava `undefined`/`null` mas **nao**
+  //    `''`: gravava TEXT vazio na coluna `DATE`. E o dano e do futuro que esta etapa prepara —
+  //    `WHERE previsao_entrega < date('now')` **inclui** `''` (o alerta de atraso nasceria
+  //    acusando justamente os pedidos SEM previsao) e `IS NULL` **nao** o pega. Em Postgres, `date`
+  //    recusa `''`.
+  await test('(13) as duas colunas DATE: "" vira NULL, texto invalido -> 400, e o SQL de atraso nao acusa', async () => {
+    const r = await request(app).post('/api/compras/pedidos').send(payloadValido({
+      data_pedido: '', previsao_entrega: '', observacoes: '',
+    }));
+    assert.strictEqual(r.status, 201, `esperava 201, veio ${r.status} ${JSON.stringify(r.body)}`);
+    const cab = await dbGet(db,
+      'SELECT data_pedido, previsao_entrega, observacoes FROM pedidos_compra WHERE id = ?', [r.body.id]);
+    // ⚠️ AS ASSERCOES QUE MEDEM O DANO: `strictEqual(null)` distingue `null` de `''` (o
+    // `deepStrictEqual` de um objeto inteiro tambem, mas estas nomeiam a coluna).
+    assert.strictEqual(cab.previsao_entrega, null,
+      `previsao_entrega tinha de ser NULL, veio ${JSON.stringify(cab.previsao_entrega)}`);
+    assert.strictEqual(cab.data_pedido, null,
+      `data_pedido tinha de ser NULL, veio ${JSON.stringify(cab.data_pedido)}`);
+    // `observacoes` NAO segue a mesma regra, e isso e contrato: `''` num campo de TEXTO e o
+    // comprador limpando a observacao pela tela.
+    assert.strictEqual(cab.observacoes, '', `observacoes com '' tem de continuar '', veio ${JSON.stringify(cab.observacoes)}`);
+
+    // ⇐ O NUMERO QUE PROVA A CONSEQUENCIA, e nao so a forma: a consulta natural do alerta de
+    // atraso (etapa propria) nao pode acusar um pedido SEM previsao.
+    const atrasados = await dbAll(db,
+      "SELECT id FROM pedidos_compra WHERE previsao_entrega < date('now') AND id = ?", [r.body.id]);
+    assert.deepStrictEqual(atrasados, [],
+      'o pedido sem previsao apareceu como ATRASADO — e exatamente o que o "" fazia');
+    const nulos = await dbAll(db,
+      'SELECT id FROM pedidos_compra WHERE previsao_entrega IS NULL AND id = ?', [r.body.id]);
+    assert.strictEqual(nulos.length, 1, 'e ele tem de aparecer no filtro IS NULL (o "" nao aparecia)');
+
+    // O 400 do texto que nao e data, com a literal em PORTUGUES (a armadilha 2 do schema: sem o
+    // `error` no construtor do tipo, o Zod 4 responderia em ingles).
+    const antes = await contarPedidos(db);
+    for (const [campo, valor, literal] of [
+      ['previsao_entrega', 'blah', ERRO_PREVISAO],
+      ['previsao_entrega', '2026-10-1', ERRO_PREVISAO],
+      ['previsao_entrega', 45000, ERRO_PREVISAO],
+      ['data_pedido', '16/09/2026', ERRO_DATA_PEDIDO],
+    ]) {
+      const ruim = await request(app).post('/api/compras/pedidos').send(payloadValido({ [campo]: valor }));
+      assert.strictEqual(ruim.status, 400,
+        `${campo}=${JSON.stringify(valor)}: esperava 400, veio ${ruim.status} ${JSON.stringify(ruim.body)}`);
+      assert.strictEqual(ruim.body.error, literal, `${campo}=${JSON.stringify(valor)}: literal divergente`);
+    }
+    assert.strictEqual(await contarPedidos(db), antes, 'o 400 do Zod nao pode ter criado pedido nenhum');
+
+    // METADE POSITIVA: a data valida continua passando e sendo gravada (senao "recusa toda data"
+    // passaria nas quatro asserçoes acima), e o `null` explicito tambem.
+    const boa = await request(app).post('/api/compras/pedidos').send(payloadValido({
+      data_pedido: '2026-09-16', previsao_entrega: '2026-10-01',
+    }));
+    assert.strictEqual(boa.status, 201, `data valida: esperava 201, veio ${JSON.stringify(boa.body)}`);
+    assert.strictEqual((await dbGet(db, 'SELECT previsao_entrega FROM pedidos_compra WHERE id = ?',
+      [boa.body.id])).previsao_entrega, '2026-10-01', 'a data valida nao foi gravada');
+    const nula = await request(app).post('/api/compras/pedidos').send(payloadValido({ previsao_entrega: null }));
+    assert.strictEqual(nula.status, 201, `previsao_entrega null: esperava 201, veio ${JSON.stringify(nula.body)}`);
+
+    // E PELO SERVICO, sem HTTP (a importacao e a Reposicao o chamam direto, sem `validate()`): a
+    // mesma regra vale — o servico nunca grava `''` numa coluna de data.
+    const pedidoServico = await pedidoCompraService.criarPedido(db, {
+      fornecedor_id: fornecedorId,
+      itens: [{ material_id: materialIdA, quantidade: 1, valor_unitario: 1 }],
+      previsao_entrega: '', data_pedido: '',
+    }, ADMIN);
+    const cabServico = await dbGet(db,
+      'SELECT data_pedido, previsao_entrega FROM pedidos_compra WHERE id = ?', [pedidoServico.id]);
+    assert.strictEqual(cabServico.previsao_entrega, null, 'pelo servico o "" virou texto na coluna DATE');
+    assert.strictEqual(cabServico.data_pedido, null, 'pelo servico o "" virou texto na coluna DATE');
+
+    // E o `PUT` LIMPA a previsao com `''` (e assim que a tela apaga o campo) — a mesma regra na
+    // porta de edicao, que usa o MESMO schema.
+    const put = await request(app).put(`/api/compras/pedidos/${boa.body.id}`)
+      .send(payloadValido({ previsao_entrega: '' }));
+    assert.strictEqual(put.status, 200, `PUT: esperava 200, veio ${put.status} ${JSON.stringify(put.body)}`);
+    assert.strictEqual((await dbGet(db, 'SELECT previsao_entrega FROM pedidos_compra WHERE id = ?',
+      [boa.body.id])).previsao_entrega, null, 'o PUT com "" tinha de LIMPAR a previsao, nao gravar texto');
   });
 
   await close();
