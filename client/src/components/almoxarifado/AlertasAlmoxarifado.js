@@ -175,6 +175,16 @@ const COLUNAS_POR_CHAVE = {
         .join('; ') || '—',
     },
   ],
+  // Etapa 39 (RN-D09): a linha crua vem de `pedidos_compra` (SELECT p.*), então o fallback
+  // genérico mostraria `id`, `fornecedor_id` e `valor_total` crus — e nenhum deles é a história
+  // do alerta. Espelha as cinco linhas do corpo do e-mail, menos o `Status` (que o cartão já
+  // qualifica: o alerta só existe para pedido ainda não recebido).
+  PEDIDO_COMPRA_ATRASADO: [
+    { titulo: 'Pedido', render: (l) => l.numero || `#${l.id}` },
+    { titulo: 'Fornecedor', render: (l) => l.fornecedor_nome || '—' },
+    { titulo: 'Previsão', render: (l) => (l.previsao_entrega ? formatData(l.previsao_entrega) : '—') },
+    { titulo: 'Dias de atraso', render: (l) => (l.dias_atraso ?? '—') },
+  ],
 };
 
 // Alerta que o registro do servidor ganhar amanhã e esta tabela ainda não conhecer não pode

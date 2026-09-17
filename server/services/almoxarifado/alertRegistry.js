@@ -458,6 +458,62 @@ const ALERT_REGISTRY = Object.freeze([
       ...linha.lotes.map((l) => `- ${l.codigo} · ${l.material_codigo} — ${l.material_nome} · saldo ${l.saldo} ${l.material_unidade || ''} · ${l.status}`.trim()),
     ].join('\n'),
   },
+  {
+    chave: 'PEDIDO_COMPRA_ATRASADO',
+    titulo: 'Pedido de compra atrasado',
+    descricao: 'Pedidos de compra com previsão de entrega vencida e ainda não recebidos.',
+    configDias: null,
+    // Etapa 39, Task 4 (RN-D09, RN-D10, RN-D11).
+    //
+    // Regua UNICA, importada do modulo Compras (services/compras/pedidoCompraService): a tela e o
+    // alerta nao podem ter duas definicoes de "atrasado" (RN-D11). O SQL so PRE-FILTRA pelo unico
+    // termo que ja e da propria regua (`previsao_entrega IS NOT NULL`) — e um SUPERCONJUNTO, nao
+    // uma segunda formula: quem decide linha a linha e o `derivarAtraso`. Escrever
+    // `AND previsao_entrega < date('now') AND status NOT IN (...)` aqui seria a segunda regua (e
+    // `date('now')` ainda por cima e UTC, ~3h adiantado no fuso do Brasil).
+    //
+    // ⚠️ CONSULTA CROSS-MODULO: `pedidos_compra`/`fornecedores` sao tabelas CORE
+    // (`server/index.js:19230`), e as 11 entradas anteriores so leem tabelas `*_almoxarifado`.
+    // Mesmo handle, mesmo arquivo SQLite; decisao de arquitetura declarada na letra B.
+    //
+    // ⚠️ REQUIRE **LAZY**, e nao e estilo — e a convencao escrita no cabecalho deste arquivo
+    // (`:9-13`) para purchaseService/inspectionService/toolService. MEDIDO na Etapa 39: hoje o
+    // ciclo NAO fecha (notificationQueueService requer ESTE arquivo lazy, em `:581` e `:647`),
+    // entao um require de topo funcionaria — e e exatamente por isso que ele e perigoso: o
+    // ciclo esta a UM require de distancia (`receiptService.js:26` requer purchaseService e
+    // `:31` requer este arquivo, os dois no topo), e quando fechar, um dos lados captura `{}`
+    // mid-load, `derivarAtraso` vem `undefined` e o cartao aparece com `erro: true` em vez de
+    // quebrar a suite. Falha silenciosa; o require lazy custa nada.
+    //
+    // LEFT JOIN, nao JOIN: pedido orfao de fornecedor tambem atrasa (R9).
+    listar: async (db) => {
+      const { hojeLocalISO, derivarAtraso } = require('../compras/pedidoCompraService');
+      const hoje = hojeLocalISO();
+      const linhas = await dbAll(db, `
+        SELECT p.*, f.razao_social AS fornecedor_nome
+        FROM pedidos_compra p
+        LEFT JOIN fornecedores f ON f.id = p.fornecedor_id
+        WHERE p.previsao_entrega IS NOT NULL
+        ORDER BY p.previsao_entrega ASC`);
+      return linhas
+        .map((l) => ({ ...l, ...derivarAtraso(l, hoje) }))
+        .filter((l) => l.atrasado === 1);
+    },
+    // RN-D10: UM aviso por pedido, para sempre — nao por dia de atraso. O dedupe sem o id faria
+    // o primeiro pedido atrasado calar todos os outros.
+    dedupeChave: (linha) => `pedido-atrasado-${linha.id}`,
+    payload: (linha) => ({ pedido_compra_id: linha.id, dias_atraso: linha.dias_atraso }),
+    // Prefixo `[Compras]`, NAO `[Almoxarifado]`: o documento e de Compras e a lista de
+    // destinatarios e compartilhada — o prefixo e o que permite ao leitor filtrar (D5).
+    assunto: (linha) => `[Compras] Pedido de compra atrasado — ${linha.numero}`,
+    corpo: (linha) => [
+      `Pedido: ${linha.numero}`,
+      `Fornecedor: ${linha.fornecedor_nome || '-'}`,
+      `Previsão de entrega: ${linha.previsao_entrega}`,
+      `Atraso: ${linha.dias_atraso} dia(s)`,
+      `Status: ${linha.status}`,
+    ].join('\n'),
+  },
 ]);
 
 /** Corte de linhas por alerta na central (C1) — o `total` continua sendo o numero cheio. */

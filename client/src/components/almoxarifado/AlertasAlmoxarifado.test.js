@@ -155,6 +155,27 @@ const CENTRAL_FIXTURE = {
         },
       ],
     },
+    // Etapa 39: a 12a entrada do registro, e a PRIMEIRA que lê tabela CORE (`pedidos_compra`).
+    // A linha é `SELECT p.*` + `fornecedor_nome`, então o fallback genérico mostraria `id`,
+    // `fornecedor_id` e `valor_total` crus. `fornecedor_nome` null de propósito na 2a linha:
+    // pedido órfão de fornecedor TAMBÉM atrasa (LEFT JOIN, R9) e não pode virar "null" na tela.
+    {
+      chave: 'PEDIDO_COMPRA_ATRASADO', titulo: 'Pedido de compra atrasado',
+      descricao: 'Pedidos de compra com previsão de entrega vencida e ainda não recebidos.',
+      dias: null, total: 2,
+      linhas: [
+        {
+          id: 31, numero: 'PC-2026-031', fornecedor_id: 4, fornecedor_nome: 'Aços Vale',
+          valor_total: 12500, data_pedido: '2026-09-01', previsao_entrega: '2026-09-25',
+          status: 'pendente', atrasado: 1, dias_atraso: 3,
+        },
+        {
+          id: 32, numero: 'PC-2026-032', fornecedor_id: null, fornecedor_nome: null,
+          valor_total: 800, data_pedido: '2026-09-02', previsao_entrega: '2026-09-20',
+          status: 'aprovado', atrasado: 1, dias_atraso: 8,
+        },
+      ],
+    },
   ],
 };
 
@@ -200,6 +221,7 @@ test('um cartao por alerta, na ordem do array do C1 (a tela nao reordena)', asyn
     'alerta-card-DIVERGENCIA_RECEBIMENTO',
     'alerta-card-DIVERGENCIA_INVENTARIO',
     'alerta-card-LOTE_SEM_CERTIFICADO',
+    'alerta-card-PEDIDO_COMPRA_ATRASADO',
   ]);
   expect(texto()).toContain('Calibração vencendo');
   expect(texto()).toContain('Requisição atrasada');
@@ -356,6 +378,29 @@ test('LOTE_SEM_CERTIFICADO: resumo agregado com o total e os lotes, com o status
   // um lote disponível.
   expect(t).toContain('BLOQUEADO');
   expect(t).not.toMatch(/material id/i);
+});
+
+test('PEDIDO_COMPRA_ATRASADO: pedido, fornecedor, previsao e dias de atraso — nao os campos crus', async () => {
+  await renderizar();
+  await expandir('PEDIDO_COMPRA_ATRASADO');
+
+  expect(cabecalhos('PEDIDO_COMPRA_ATRASADO')).toEqual([
+    'Pedido', 'Fornecedor', 'Previsão', 'Dias de atraso',
+  ]);
+  const t = card('PEDIDO_COMPRA_ATRASADO').textContent;
+  expect(t).toContain('PC-2026-031');
+  expect(t).toContain('Aços Vale');
+  // ⚠️ `formatData` deste arquivo imprime ANO COM DOIS DÍGITOS (`year: '2-digit'`, :68-78) — a
+  // célula da aba Pedidos mostra `25/09/2026`, a central mostra `25/09/26`. A diferença é
+  // PRÉ-EXISTENTE (vale para as 11 entradas anteriores) e está declarada; não é bug desta etapa.
+  expect(t).toContain('25/09/26');
+  expect(t).toContain('3');
+  // Pedido órfão de fornecedor entra no alerta (LEFT JOIN, R9) e a tela mostra o travessão.
+  expect(t).toContain('PC-2026-032');
+  expect(t).not.toMatch(/null/);
+  // O fallback genérico mostraria as chaves cruas do SELECT p.* nos primeiros 6 campos.
+  expect(t).not.toMatch(/fornecedor id/i);
+  expect(t).not.toMatch(/valor total/i);
 });
 
 test('gate visual: sem ver_alertas o painel de sem-permissao aparece sem nem chamar o GET', async () => {
