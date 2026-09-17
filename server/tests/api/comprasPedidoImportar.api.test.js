@@ -96,6 +96,15 @@ const motivoMaterial = (codigo) => `material não encontrado pelo código ${codi
   // A planilha traz o CNPJ COM mascara — a resolucao compara somente digitos dos dois lados.
   const cnpjPlanilha = '55.666.777/0001-88';
 
+  // ONDA DE CORRECAO, F1 (achado C1 da revisao final): o SEGUNDO fornecedor existe para que a
+  // MISTURA de fornecedores na mesma ordem possa ser medida. Sem ele o arquivo nao tinha como
+  // escrever o cenario (8) — e era exatamente por isso que o defeito estava sem regua: o helper
+  // `linha()` injeta SEMPRE o mesmo `cnpj`, entao nenhuma fixture tinha dois fornecedores.
+  const forn2 = await dbRun(db, `INSERT INTO fornecedores (razao_social, nome_fantasia, cnpj, status)
+    VALUES ('Fornecedor Divergente E38','Divergente E38','99111222000133','ativo')`);
+  const fornecedorId2 = forn2.lastID;
+  const cnpjPlanilha2 = '99.111.222/0001-33';
+
   // `descricao` fica NULL de proposito em A: `materiais_almoxarifado` tem `nome` NOT NULL e
   // `descricao` quase sempre vazia, e por isso as duas portas desta task leem
   // `COALESCE(nome, descricao)`. Selecionar `descricao` crua devolveria opcao em branco no
@@ -399,6 +408,94 @@ const motivoMaterial = (codigo) => `material não encontrado pelo código ${codi
     // E as linhas duplicaram junto — quem "consertar" com idempotencia derruba esta asserçao em
     // vez de descobrir a mudanca de contrato em producao.
     assert.strictEqual((await linhasDoPedido(segunda.body.pedidos[0].id)).length, 2, 'linhas do reenvio');
+  });
+
+  // (8) ------------------------------------------------------------------------------------
+  //
+  // ONDA DE CORRECAO, F1 — o achado C1 da revisao final, reproduzido por sonda executada DUAS
+  // vezes antes de existir este cenario:
+  //   {pedido:'OC-1', codigo:'P-A', fornecedor:'ACME'}, {pedido:'OC-1', codigo:'P-B',
+  //    fornecedor:'BETA'}  ->  201 {"pedidos":[{"id":2,"itens":2}],"ignorados":[]}
+  //   pedidos_compra id 2: razao_social 'ACME SA', com a linha da BETA dentro.
+  // O operador recebia SUCESSO TOTAL (um pedido, dois itens, zero ignorados) e o erro propagava
+  // para o financeiro: `receiptService.js:376` grava o `fornecedor_id` do pedido no cabecalho do
+  // recebimento e a conta a pagar nasce dele — material da BETA lancado a pagar PARA A ACME.
+  // A regua NAO EXISTIA (nao e que falhou): o helper `linha()` injeta sempre o MESMO `cnpj`.
+  await test('(8) MESMA ordem com fornecedores DIFERENTES vira DOIS pedidos, cada um com o SEU fornecedor', async () => {
+    const r = await importar({
+      linhas: [
+        { pedido: 'OC-MIX', cnpj: cnpjPlanilha, 'código': 'MAT-IMP-A', qtd: 10, preco: 5 },
+        { pedido: 'OC-MIX', cnpj: cnpjPlanilha2, 'código': 'MAT-IMP-B', qtd: 20, preco: 7 },
+      ],
+    });
+    assert.strictEqual(r.status, 201, `esperava 201, veio ${r.status} ${JSON.stringify(r.body)}`);
+    assert.deepStrictEqual(r.body.ignorados, [], `nada devia ser ignorado: ${JSON.stringify(r.body.ignorados)}`);
+    // ⚠️ AS ASSERCOES QUE MEDEM O DANO. Com a chave de grupo antiga (so a ordem da planilha) isto
+    // vinha 1, e o `fornecedor_id` do unico pedido era o da primeira linha.
+    assert.strictEqual(r.body.pedidos.length, 2,
+      `mesma OC com dois fornecedores tem de virar 2 pedidos, veio ${JSON.stringify(r.body.pedidos)}`);
+    const [pA, pB] = r.body.pedidos;
+    const cabA = await cabecalho(pA.id);
+    const cabB = await cabecalho(pB.id);
+    assert.strictEqual(cabA.fornecedor_id, fornecedorId, 'o 1o pedido tem de ser do fornecedor da 1a linha');
+    assert.strictEqual(cabB.fornecedor_id, fornecedorId2, 'o 2o pedido tem de ser do fornecedor da 2a linha');
+    // Regua POR PEDIDO (e nao COUNT global): cada um com a SUA linha, e a linha certa.
+    const linhasA = await linhasDoPedido(pA.id);
+    const linhasB = await linhasDoPedido(pB.id);
+    assert.strictEqual(linhasA.length, 1, `esperava 1 linha no pedido da ACME, veio ${linhasA.length}`);
+    assert.strictEqual(linhasB.length, 1, `esperava 1 linha no pedido do divergente, veio ${linhasB.length}`);
+    assert.strictEqual(linhasA[0].material_id, materialIdA, 'a linha do 1o pedido e a do material A');
+    assert.strictEqual(linhasB[0].material_id, materialIdB, 'a linha do 2o pedido e a do material B');
+    assert.strictEqual(cabA.valor_total, 50, `10x5 = 50, veio ${cabA.valor_total}`);
+    assert.strictEqual(cabB.valor_total, 140, `20x7 = 140, veio ${cabB.valor_total}`);
+    // A ORDEM DE ORIGEM fica registrada nos DOIS: e o que permite achar a OC-MIX depois.
+    assert.ok(String(cabA.observacoes || '').includes('Planilha: OC-MIX'), `observacoes do 1o: ${cabA.observacoes}`);
+    assert.ok(String(cabB.observacoes || '').includes('Planilha: OC-MIX'), `observacoes do 2o: ${cabB.observacoes}`);
+
+    // O MESMO defeito pela planilha SEM coluna de ordem (o caso (a) da sonda: tudo caia no
+    // `SEM_AGRUPADOR` e virava um pedido so, do primeiro fornecedor que resolvesse).
+    const semOrdem = await importar({
+      linhas: [
+        { cnpj: cnpjPlanilha, 'código': 'MAT-IMP-A', qtd: 1, preco: 5 },
+        { cnpj: cnpjPlanilha2, 'código': 'MAT-IMP-B', qtd: 2, preco: 7 },
+      ],
+    });
+    assert.strictEqual(semOrdem.status, 201, `esperava 201, veio ${semOrdem.status}`);
+    assert.strictEqual(semOrdem.body.pedidos.length, 2,
+      `planilha sem ordem e com dois fornecedores tem de virar 2 pedidos, veio ${semOrdem.body.pedidos.length}`);
+    assert.strictEqual((await cabecalho(semOrdem.body.pedidos[0].id)).fornecedor_id, fornecedorId);
+    assert.strictEqual((await cabecalho(semOrdem.body.pedidos[1].id)).fornecedor_id, fornecedorId2);
+    assert.strictEqual((await linhasDoPedido(semOrdem.body.pedidos[0].id)).length, 1, 'uma linha por pedido');
+    assert.strictEqual((await linhasDoPedido(semOrdem.body.pedidos[1].id)).length, 1, 'uma linha por pedido');
+
+    // ⚠️ METADE POSITIVA, e ela e obrigatoria: agrupar por (ordem, fornecedor) NAO pode ter virado
+    // "um pedido por linha". Mesma OC, MESMO fornecedor, duas linhas -> UM pedido com DUAS linhas.
+    const mesmoForn = await importar({
+      linhas: [
+        { pedido: 'OC-JUNTA', cnpj: cnpjPlanilha, 'código': 'MAT-IMP-A', qtd: 3, preco: 2 },
+        { pedido: 'OC-JUNTA', cnpj: cnpjPlanilha, 'código': 'MAT-IMP-B', qtd: 4, preco: 1 },
+      ],
+    });
+    assert.strictEqual(mesmoForn.body.pedidos.length, 1,
+      `mesmo fornecedor continua UM pedido, veio ${mesmoForn.body.pedidos.length}`);
+    assert.strictEqual((await linhasDoPedido(mesmoForn.body.pedidos[0].id)).length, 2,
+      'as duas linhas tem de estar no MESMO pedido');
+
+    // E a linha cujo fornecedor NAO resolve nunca herda o do grupo: vai para `ignorados`, e o
+    // pedido nasce so com a linha boa. (Custo declarado: a planilha que traz o CNPJ so na primeira
+    // linha da ordem perde as outras — ver o comentario da chave de grupo no servico.)
+    const semCnpj = await importar({
+      linhas: [
+        { pedido: 'OC-HERDA', cnpj: cnpjPlanilha, 'código': 'MAT-IMP-A', qtd: 5, preco: 2 },
+        { pedido: 'OC-HERDA', 'código': 'MAT-IMP-B', qtd: 6, preco: 2 },
+      ],
+    });
+    assert.strictEqual(semCnpj.status, 201, `esperava 201, veio ${semCnpj.status}`);
+    assert.deepStrictEqual(semCnpj.body.ignorados, [{ linha: 2, motivo: MOTIVO_FORNECEDOR }],
+      `a linha sem fornecedor tem de ser recusada, nunca herdar: ${JSON.stringify(semCnpj.body.ignorados)}`);
+    assert.strictEqual(semCnpj.body.pedidos.length, 1, 'a linha boa ainda cria o pedido dela');
+    assert.strictEqual((await linhasDoPedido(semCnpj.body.pedidos[0].id)).length, 1,
+      'o pedido nasce com UMA linha — a linha sem fornecedor nao entrou por heranca');
   });
 
   await close();

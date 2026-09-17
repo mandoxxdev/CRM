@@ -510,6 +510,34 @@ const CHAVES_PREVISAO = ['previsao', 'previsão', 'previsao_entrega', 'previsão
   'entrega', 'data de entrega', 'previsao de entrega'];
 
 /**
+ * ⚠️ A CHAVE DO GRUPO E O PAR (ORDEM DA PLANILHA, FORNECEDOR RESOLVIDO) — achado C1 da revisao
+ * final desta etapa, reproduzido por sonda executada DUAS vezes.
+ *
+ * Ate a onda de correcao a chave era SO o agrupador da planilha e o fornecedor do grupo era "a
+ * primeira linha que conseguisse resolver": duas linhas da MESMA OC (ou de uma planilha sem coluna
+ * de ordem, que caia toda no `SEM_AGRUPADOR`) com fornecedores DIFERENTES viravam **um** pedido, do
+ * fornecedor da primeira, com `ignorados: []` — sucesso total na cara do operador. E o erro
+ * PROPAGAVA para o financeiro: `receiptService.js:376` grava o `fornecedor_id` do pedido no
+ * cabecalho do recebimento e a conta a pagar da Etapa 8/37 nasce dele, entao material da BETA era
+ * recebido e lancado a pagar PARA A ACME, sem um sinal em nenhuma das duas telas.
+ *
+ * Mapa de mapas, e nao chave de texto concatenada (`ordem|id`), pelo MESMO motivo que o
+ * `SEM_AGRUPADOR` abaixo e `Symbol`: a ordem vem da planilha e uma ordem chamada `'OC-1|3'`
+ * colidiria com o par (OC-1, fornecedor 3). O mapa externo guarda a ordem de aparicao das ORDENS
+ * (que e a ordem da resposta, afirmada pelo cenario 2) e o interno a dos fornecedores dentro dela.
+ *
+ * Descartado: recusar a planilha inteira com 400 quando houver mistura (perde 300 linhas boas por
+ * causa de uma), e manter a heranca de fornecedor do grupo com aviso (o dano e no dado gravado, nao
+ * na mensagem).
+ *
+ * ⚠️ O CUSTO ACEITO, declarado: a planilha que traz o CNPJ **so na primeira linha da ordem** deixa
+ * as outras em `ignorados` com `fornecedor não encontrado`, porque linha nenhuma herda o fornecedor
+ * de outra. Era o caso que a heranca servia — e nao ha como distinguir "celula em branco" de
+ * "fornecedor divergente" sem adivinhar qual das duas o operador quis. Recusar a linha e visivel e
+ * reversivel (ele preenche a coluna e reimporta); gravar o pedido no fornecedor errado, nao.
+ */
+
+/**
  * Planilha sem coluna de ordem: TUDO vira um pedido so (e a observacao diz isso).
  *
  * `Symbol` e nao string porque a chave do `Map` de grupos vem da PLANILHA: qualquer sentinela de
@@ -579,7 +607,8 @@ async function importarPedidos(db, corpo, user) {
 
     // ⚠️ O AGRUPADOR E A COLUNA DA PLANILHA, nunca o `numero` gerado: o `PC-…` sai do servidor
     // DEPOIS, um por grupo — agrupar por ele daria um pedido por LINHA (e a sabotagem 2 desta task
-    // mede exatamente isso: `pedidos.length` iria de 2 para 5).
+    // mede exatamente isso: `pedidos.length` iria de 2 para 5). Ele e METADE da chave: a outra e o
+    // fornecedor resolvido DA LINHA (achado C1 — ver o comentario da chave de grupo acima).
     const chaveGrupo = extrairDoRow(row, ...CHAVES_GRUPO) || SEM_AGRUPADOR;
 
     const codigo = extrairDoRow(row, ...CHAVES_CODIGO);
@@ -606,8 +635,22 @@ async function importarPedidos(db, corpo, user) {
     const valorLido = numeroDaPlanilha(valorCruDoRow(row, ...CHAVES_VALOR));
     const valorUnitario = valorLido != null && valorLido > 0 ? valorLido : 0;
 
-    if (!grupos.has(chaveGrupo)) grupos.set(chaveGrupo, { chave: chaveGrupo, linhas: [] });
-    grupos.get(chaveGrupo).linhas.push({
+    // ⚠️ FORNECEDOR POR LINHA, nunca herdado do grupo (achado C1 — ver o comentario da chave de
+    // grupo acima). Fica DEPOIS da resolucao do material de proposito: a precedencia dos motivos
+    // de `ignorados` e a mesma de antes da correcao (codigo, quantidade, material, fornecedor), e
+    // o cenario (4) a congela linha por linha.
+    const fornecedor = await resolverFornecedorDaLinha(db, row);
+    if (!fornecedor) {
+      ignorados.push({ linha: numeroDaLinha, motivo: MOTIVO_FORNECEDOR_NAO_ENCONTRADO });
+      continue;
+    }
+
+    if (!grupos.has(chaveGrupo)) grupos.set(chaveGrupo, new Map());
+    const porFornecedor = grupos.get(chaveGrupo);
+    if (!porFornecedor.has(fornecedor.id)) {
+      porFornecedor.set(fornecedor.id, { chave: chaveGrupo, fornecedorId: fornecedor.id, linhas: [] });
+    }
+    porFornecedor.get(fornecedor.id).linhas.push({
       numeroDaLinha,
       row,
       item: { material_id: material.id, quantidade, valor_unitario: valorUnitario },
@@ -617,46 +660,37 @@ async function importarPedidos(db, corpo, user) {
   const pedidos = [];
   let itensImportados = 0;
 
-  for (const grupo of grupos.values()) {
-    // O fornecedor e do GRUPO, resolvido pela PRIMEIRA linha que consiga resolve-lo: e comum a
-    // planilha trazer o CNPJ so na primeira linha da ordem e deixar as outras em branco. Se
-    // nenhuma resolver, o grupo nao nasce e TODAS as suas linhas aparecem em `ignorados` — uma
-    // entrada por linha, para o operador achar cada uma na planilha dele.
-    let fornecedor = null;
-    for (const l of grupo.linhas) {
-      fornecedor = await resolverFornecedorDaLinha(db, l.row);
-      if (fornecedor) break;
-    }
-    if (!fornecedor) {
-      for (const l of grupo.linhas) {
-        ignorados.push({ linha: l.numeroDaLinha, motivo: MOTIVO_FORNECEDOR_NAO_ENCONTRADO });
+  // Laco de DOIS niveis: a ordem da planilha por fora, o fornecedor por dentro (ver o comentario
+  // da chave de grupo). Duas linhas da mesma OC com fornecedores diferentes viram DOIS pedidos, e
+  // os dois registram a MESMA ordem de origem em `observacoes` — e a unica pista de qual linha da
+  // planilha virou qual `PC-…`.
+  for (const porFornecedor of grupos.values()) {
+    for (const grupo of porFornecedor.values()) {
+      const previsao = grupo.linhas.map((l) => extrairDoRow(l.row, ...CHAVES_PREVISAO)).find((v) => v) || null;
+      // A observacao registra o agrupador da planilha: e a UNICA pista de qual ordem virou qual
+      // `PC-…` depois da importacao, e o roteiro de teste manual confere por ela.
+      const observacoes = grupo.chave === SEM_AGRUPADOR
+        ? 'Importado de planilha (sem coluna de pedido)'
+        : `Planilha: ${grupo.chave}`;
+
+      try {
+        const pedido = await criarPedido(db, {
+          fornecedor_id: grupo.fornecedorId,
+          itens: grupo.linhas.map((l) => l.item),
+          observacoes,
+          ...(previsao ? { previsao_entrega: previsao } : {}),
+        }, user);
+        pedidos.push({ id: pedido.id, numero: pedido.numero, itens: (pedido.itens || []).length });
+        itensImportados += (pedido.itens || []).length;
+      } catch (e) {
+        // Caminho de defesa, nao caminho de contrato: fornecedor e materiais do grupo acabaram de
+        // ser resolvidos, entao as guardas de `criarPedido` ja passaram. Se ainda assim ele recusar
+        // (um material apagado no meio da importacao, uma coluna que mudou), o grupo vira
+        // `ignorados` com a mensagem do servico — e os OUTROS grupos continuam. Derrubar a resposta
+        // inteira faria o operador perder o que ja gravou e reimportar tudo (e sem idempotencia,
+        // duplicando).
+        for (const l of grupo.linhas) ignorados.push({ linha: l.numeroDaLinha, motivo: e.message });
       }
-      continue;
-    }
-
-    const previsao = grupo.linhas.map((l) => extrairDoRow(l.row, ...CHAVES_PREVISAO)).find((v) => v) || null;
-    // A observacao registra o agrupador da planilha: e a UNICA pista de qual ordem virou qual
-    // `PC-…` depois da importacao, e o roteiro de teste manual confere por ela.
-    const observacoes = grupo.chave === SEM_AGRUPADOR
-      ? 'Importado de planilha (sem coluna de pedido)'
-      : `Planilha: ${grupo.chave}`;
-
-    try {
-      const pedido = await criarPedido(db, {
-        fornecedor_id: fornecedor.id,
-        itens: grupo.linhas.map((l) => l.item),
-        observacoes,
-        ...(previsao ? { previsao_entrega: previsao } : {}),
-      }, user);
-      pedidos.push({ id: pedido.id, numero: pedido.numero, itens: (pedido.itens || []).length });
-      itensImportados += (pedido.itens || []).length;
-    } catch (e) {
-      // Caminho de defesa, nao caminho de contrato: fornecedor e materiais do grupo acabaram de ser
-      // resolvidos, entao as guardas de `criarPedido` ja passaram. Se ainda assim ele recusar (um
-      // material apagado no meio da importacao, uma coluna que mudou), o grupo vira `ignorados` com
-      // a mensagem do servico — e os OUTROS grupos continuam. Derrubar a resposta inteira faria o
-      // operador perder o que ja gravou e reimportar tudo (e sem idempotencia, duplicando).
-      for (const l of grupo.linhas) ignorados.push({ linha: l.numeroDaLinha, motivo: e.message });
     }
   }
 
