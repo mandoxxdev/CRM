@@ -132,7 +132,14 @@ app.get('/api/compras/pedidos', authenticateToken, checkModulePermission('compra
     if (err) {
       return res.status(500).json({ error: err.message });
     }
-    res.json(rows);
+    // Etapa 39 (RN-D04/RN-D06): `atrasado` e `dias_atraso` são DERIVADOS na leitura, nunca
+    // gravados — apagar estas quatro linhas apaga a feature inteira, sem migration nem coluna
+    // órfã. `hoje` é calculado UMA vez para a resposta toda: chamar `hojeLocalISO()` por linha
+    // faria duas linhas da mesma resposta caírem em dias diferentes na virada da meia-noite.
+    const hoje = pedidoCompraService.hojeLocalISO();
+    const comAtraso = rows.map((linha) => ({ ...linha, ...pedidoCompraService.derivarAtraso(linha, hoje) }));
+    // Só a string '1' liga o filtro: `if (req.query.atrasados)` ligaria com '0' também.
+    res.json(req.query.atrasados === '1' ? comAtraso.filter((l) => l.atrasado === 1) : comAtraso);
   });
 });
 

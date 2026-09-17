@@ -619,6 +619,50 @@ function hojeLocalISO() {
   return `${agora.getFullYear()}-${mes}-${dia}`;
 }
 
+/** `AAAA-MM-DD` -> instante UTC de meia-noite, para subtrair data-only de data-only. */
+const meiaNoiteUTC = (iso) => {
+  const [ano, mes, dia] = iso.split('-').map(Number);
+  return Date.UTC(ano, mes - 1, dia);
+};
+
+/**
+ * Etapa 39 (D3, RN-D04/RN-D05/RN-D11) — a régua ÚNICA de atraso do sistema.
+ *
+ * DOIS consumidores, e é por isso que ela mora aqui e não na rota: `GET /api/compras/pedidos`
+ * (routes/compras.js) e a entrada PEDIDO_COMPRA_ATRASADO do `alertRegistry` do almoxarifado.
+ * Escrever a lista de status duas vezes é o erro que a RN-D11 existe para pegar — a tela diria
+ * "atrasado" para um conjunto e o e-mail sairia para outro, e ninguém cruzaria os dois.
+ *
+ * ⚠️ `hoje` é LOCAL (`hojeLocalISO`), NUNCA `date('now')` do SQLite nem `toISOString()`: os dois
+ * dão UTC e, no fuso do Brasil, acusariam atraso ~3h antes da meia-noite local. As 4 varreduras
+ * da feature 20 que ainda usam `date('now')` estão nomeadas no design (seção 8) e NÃO são
+ * consertadas aqui — esta entrada apenas não as imita.
+ *
+ * ⚠️ `<` e não `<=`: "vence hoje" NÃO está atrasado (RN-D05b). Mesmo precedente de
+ * `FerramentasAlmoxarifado.js:416-422` (achado F4 da revisão de branch).
+ *
+ * `dias_atraso` é `null` — nunca 0 — quando não há atraso: "0 dias de atraso" e "não atrasado"
+ * não podem ser o mesmo valor, ou o badge da tela renderiza "Atrasado há 0 dias".
+ *
+ * ⚠️ O guarda de `previsao_entrega` é a REGEX, e não um `IS NOT NULL`: a base tem linhas com a
+ * string VAZIA gravada numa coluna `DATE` (até a onda F3 da Etapa 38 o formulário mandava `''`
+ * sempre). `''` e `null` são o mesmo caso aqui — sem previsão, sem atraso.
+ */
+const STATUS_PEDIDO_FORA_DO_ATRASO = ['recebido', 'cancelado', 'rejeitado'];
+
+function derivarAtraso(pedido, hoje = hojeLocalISO()) {
+  const semAtraso = { atrasado: 0, dias_atraso: null };
+  if (!pedido) return semAtraso;
+  const previsao = String(pedido.previsao_entrega || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(previsao)) return semAtraso;
+  if (STATUS_PEDIDO_FORA_DO_ATRASO.includes(String(pedido.status || '').toLowerCase())) return semAtraso;
+  if (!(previsao < hoje)) return semAtraso;
+  return {
+    atrasado: 1,
+    dias_atraso: Math.round((meiaNoiteUTC(hoje) - meiaNoiteUTC(previsao)) / 86400000),
+  };
+}
+
 /**
  * As grafias de cabecalho aceitas, por campo (contrato 5, com as variantes de acento/caixa que o
  * `normalizarChavesDaLinha` do chamador ja resolve em minuscula).
@@ -897,4 +941,7 @@ module.exports = {
   MOTIVO_FORNECEDOR_NAO_ENCONTRADO,
   AVISO_PREVISAO_NAO_RECONHECIDA,
   AVISO_DATA_PEDIDO_NAO_RECONHECIDA,
+  hojeLocalISO,
+  derivarAtraso,
+  STATUS_PEDIDO_FORA_DO_ATRASO,
 };
