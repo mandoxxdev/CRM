@@ -86,6 +86,8 @@ const motivoMaterial = (codigo) => `material não encontrado pelo código ${codi
 // Onda de correcao, F3: `avisos` e o terceiro array da resposta — a linha ENTROU, o campo nao foi
 // entendido. Literal verbatim de `AVISO_PREVISAO_NAO_RECONHECIDA` do servico.
 const AVISO_PREVISAO = 'previsão de entrega não reconhecida (use AAAA-MM-DD ou DD/MM/AAAA)';
+// Onda de correcao, F7: o aviso da coluna de data do pedido.
+const AVISO_DATA_PEDIDO = 'data do pedido não reconhecida (use AAAA-MM-DD ou DD/MM/AAAA)';
 
 (async () => {
   const { app, db, setUser, close } = await createTestApp({ user: ADMIN });
@@ -577,6 +579,64 @@ const AVISO_PREVISAO = 'previsão de entrega não reconhecida (use AAAA-MM-DD ou
     assert.deepStrictEqual(semData.body.avisos, [], `sem coluna de previsao nao ha aviso: ${JSON.stringify(semData.body.avisos)}`);
     assert.strictEqual((await cabecalho(semData.body.pedidos[0].id)).previsao_entrega, null,
       'sem coluna de previsao a coluna fica NULL');
+  });
+
+  // (10) -----------------------------------------------------------------------------------
+  //
+  // ONDA DE CORRECAO, F7 — achado I4 da revisao de UX: `data_pedido` nao era passada no
+  // `criarPedido` da importacao e nao havia lista de grafias para ela. O DDL nao tem DEFAULT
+  // (`index.js:19235`), entao a coluna ficava NULL e `Compras.js:273` renderizava `'-'`: uma
+  // importacao de 60 pedidos produzia 60 linhas com "Data Pedido: -" na aba e no Excel — e a unica
+  // ordenacao da lista e `created_at DESC`, que o operador nao ve. Justamente no caso que a Task 4
+  // existe para atender (carga do acervo), onde a data ANTIGA de cada ordem e o que importa saber.
+  await test('(10) data_pedido: da planilha quando ha coluna (serial ou DD/MM/AAAA), HOJE quando nao ha', async () => {
+    const hoje = (() => {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    })();
+
+    // ⚠️ SEM COLUNA DE DATA: nasce com HOJE, nunca NULL. A assercao que mede o dano.
+    const semColuna = await importar({ linhas: [linha('OC-DT-A', 'MAT-IMP-A', { qtd: 1, preco: 2 })] });
+    assert.strictEqual(semColuna.status, 201, `esperava 201, veio ${semColuna.status}`);
+    const cabSem = await cabecalho(semColuna.body.pedidos[0].id);
+    assert.strictEqual(cabSem.data_pedido, hoje,
+      `sem coluna de data o pedido tinha de nascer com hoje (${hoje}), veio ${JSON.stringify(cabSem.data_pedido)}`);
+    // ⚠️ A DATA LOCAL, e nao a UTC: `toISOString()`/`date('now')` dariam o dia de AMANHA depois das
+    // 21h no fuso do Brasil. Esta assercao so difere da de cima nesse intervalo — e e nele que o
+    // defeito apareceria.
+    assert.notStrictEqual(cabSem.data_pedido, null, 'data_pedido NULL e o defeito que o F7 conserta');
+
+    // COM COLUNA `data` em DD/MM/AAAA (a grafia do export da propria aba Pedidos).
+    const comData = await importar({
+      linhas: [linha('OC-DT-B', 'MAT-IMP-A', { qtd: 1, preco: 2, data: '05/09/2026' })],
+    });
+    assert.strictEqual((await cabecalho(comData.body.pedidos[0].id)).data_pedido, '2026-09-05',
+      "'05/09/2026' na coluna `data` tinha de virar 2026-09-05");
+
+    // E as outras grafias, cada uma com o seu formato de celula (serial do Excel incluso).
+    const outras = await importar({
+      linhas: [
+        linha('OC-DT-C', 'MAT-IMP-A', { qtd: 1, preco: 2, 'data do pedido': '2026-01-31' }),
+        linha('OC-DT-D', 'MAT-IMP-A', { qtd: 1, preco: 2, 'emissão': 45000 }),
+        linha('OC-DT-E', 'MAT-IMP-A', { qtd: 1, preco: 2, data_pedido: '2025-12-01' }),
+      ],
+    });
+    const [c, d, e] = outras.body.pedidos;
+    assert.strictEqual((await cabecalho(c.id)).data_pedido, '2026-01-31', '`data do pedido` nao foi lida');
+    assert.strictEqual((await cabecalho(d.id)).data_pedido, '2023-03-15', '`emissão` com serial do Excel nao foi lida');
+    assert.strictEqual((await cabecalho(e.id)).data_pedido, '2025-12-01', '`data_pedido` nao foi lida');
+
+    // Celula irreconhecivel: AVISO com o campo `data_pedido`, a linha ENTRA, e a data cai para hoje
+    // (a alternativa — NULL — e o proprio defeito).
+    const ruim = await importar({
+      linhas: [linha('OC-DT-F', 'MAT-IMP-A', { qtd: 1, preco: 2, data: 'setembro' })],
+    });
+    assert.deepStrictEqual(ruim.body.avisos, [{ linha: 1, campo: 'data_pedido', motivo: AVISO_DATA_PEDIDO }],
+      `avisos divergente: ${JSON.stringify(ruim.body.avisos)}`);
+    assert.deepStrictEqual(ruim.body.ignorados, [], 'aviso NAO e recusa');
+    assert.strictEqual((await linhasDoPedido(ruim.body.pedidos[0].id)).length, 1, 'a linha do aviso TEM de ter entrado');
+    assert.strictEqual((await cabecalho(ruim.body.pedidos[0].id)).data_pedido, hoje,
+      'data irreconhecivel cai para hoje, nunca NULL nem texto');
   });
 
   await close();

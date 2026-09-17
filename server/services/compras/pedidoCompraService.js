@@ -602,6 +602,22 @@ const MOTIVO_FORNECEDOR_NAO_ENCONTRADO = 'fornecedor não encontrado';
  * comprador acha a celula na planilha dele sem adivinhar.
  */
 const AVISO_PREVISAO_NAO_RECONHECIDA = 'previsão de entrega não reconhecida (use AAAA-MM-DD ou DD/MM/AAAA)';
+const AVISO_DATA_PEDIDO_NAO_RECONHECIDA = 'data do pedido não reconhecida (use AAAA-MM-DD ou DD/MM/AAAA)';
+
+/**
+ * HOJE, em data LOCAL do servidor — o `data_pedido` de quem importa sem coluna de data.
+ *
+ * ⚠️ NAO e `new Date().toISOString().slice(0,10)` e nao e o `date('now')` do SQLite: os dois dao
+ * **UTC**, e no fuso do Brasil (UTC-3) uma importacao feita depois das 21h gravaria o pedido com a
+ * data de AMANHA. A coluna e lida por gente (a aba Pedidos mostra `Data Pedido`), entao o dia tem
+ * de ser o dia de quem clicou.
+ */
+function hojeLocalISO() {
+  const agora = new Date();
+  const mes = String(agora.getMonth() + 1).padStart(2, '0');
+  const dia = String(agora.getDate()).padStart(2, '0');
+  return `${agora.getFullYear()}-${mes}-${dia}`;
+}
 
 /**
  * As grafias de cabecalho aceitas, por campo (contrato 5, com as variantes de acento/caixa que o
@@ -623,6 +639,20 @@ const CHAVES_VALOR = ['valor_unitario', 'valor unitario', 'valor unitário', 'pr
 // ⚠️ `'previsão entrega'`/`'previsao entrega'` estao aqui por causa do F6: e a grafia EXATA do
 // cabecalho que o "Exportar Excel" da aba Pedidos produz (`Compras.js`), e sem elas o proprio
 // export do CRM nao se reimportaria com a previsao — o arquivo que o operador tem em maos.
+/**
+ * ── A COLUNA DE DATA DO PEDIDO (onda de correcao, F7 — achado I4/UX) ──────────────────────────
+ *
+ * `data_pedido` NAO era passada no `criarPedido` da importacao e nao havia lista de grafias para
+ * ela: o DDL nao tem DEFAULT (`index.js:19235`: `data_pedido DATE`), entao a coluna ficava **NULL**
+ * e `Compras.js:273` renderizava `'-'`. Uma importacao de 60 pedidos produzia 60 linhas com
+ * "Data Pedido: -" na aba e no Excel — no caso que a Task 4 existe para atender (carga do acervo),
+ * onde a data ANTIGA de cada ordem e justamente o que importa saber. A unica ordenacao da lista e
+ * `created_at DESC`, que o operador nao ve.
+ *
+ * `emissao`/`emissão` estao na lista porque e como a planilha de compras costuma chamar a coluna.
+ */
+const CHAVES_DATA_PEDIDO = ['data', 'data_pedido', 'data do pedido', 'data pedido',
+  'emissao', 'emissão', 'data de emissao', 'data de emissão'];
 const CHAVES_PREVISAO = ['previsao', 'previsão', 'previsao_entrega', 'previsão_entrega',
   'entrega', 'data de entrega', 'previsao de entrega', 'previsão de entrega',
   'previsao entrega', 'previsão entrega'];
@@ -776,6 +806,14 @@ async function importarPedidos(db, corpo, user) {
       avisos.push({ linha: numeroDaLinha, campo: 'previsao_entrega', motivo: AVISO_PREVISAO_NAO_RECONHECIDA });
     }
 
+    // A DATA DO PEDIDO, pela mesma regra (F7): a planilha do acervo traz a data ANTIGA da ordem, e
+    // e ela que o operador precisa ver na lista. Nao reconhecida -> AVISO e a linha entra.
+    const dataPedidoCrua = valorCruDoRow(row, ...CHAVES_DATA_PEDIDO);
+    const dataPedidoDaLinha = dataDaPlanilha(dataPedidoCrua);
+    if (dataPedidoCrua != null && dataPedidoDaLinha == null) {
+      avisos.push({ linha: numeroDaLinha, campo: 'data_pedido', motivo: AVISO_DATA_PEDIDO_NAO_RECONHECIDA });
+    }
+
     if (!grupos.has(chaveGrupo)) grupos.set(chaveGrupo, new Map());
     const porFornecedor = grupos.get(chaveGrupo);
     if (!porFornecedor.has(fornecedor.id)) {
@@ -785,6 +823,7 @@ async function importarPedidos(db, corpo, user) {
       numeroDaLinha,
       row,
       previsao: previsaoDaLinha,
+      dataPedido: dataPedidoDaLinha,
       item: { material_id: material.id, quantidade, valor_unitario: valorUnitario },
     });
   }
@@ -802,6 +841,9 @@ async function importarPedidos(db, corpo, user) {
       // repeti-la ou traze-la so na primeira linha da ordem); as ja convertidas para
       // `AAAA-MM-DD` — nunca a celula crua.
       const previsao = grupo.linhas.map((l) => l.previsao).find((v) => v) || null;
+      // ⚠️ SEM COLUNA DE DATA O PEDIDO NASCE COM A DE HOJE, nunca NULL (F7): `data_pedido` nao tem
+      // DEFAULT no DDL, e NULL virava "Data Pedido: -" em toda linha importada.
+      const dataPedido = grupo.linhas.map((l) => l.dataPedido).find((v) => v) || hojeLocalISO();
       // A observacao registra o agrupador da planilha: e a UNICA pista de qual ordem virou qual
       // `PC-…` depois da importacao, e o roteiro de teste manual confere por ela.
       const observacoes = grupo.chave === SEM_AGRUPADOR
@@ -813,6 +855,7 @@ async function importarPedidos(db, corpo, user) {
           fornecedor_id: grupo.fornecedorId,
           itens: grupo.linhas.map((l) => l.item),
           observacoes,
+          data_pedido: dataPedido,
           ...(previsao ? { previsao_entrega: previsao } : {}),
         }, user);
         pedidos.push({ id: pedido.id, numero: pedido.numero, itens: (pedido.itens || []).length });
@@ -853,4 +896,5 @@ module.exports = {
   MOTIVO_SEM_CODIGO,
   MOTIVO_FORNECEDOR_NAO_ENCONTRADO,
   AVISO_PREVISAO_NAO_RECONHECIDA,
+  AVISO_DATA_PEDIDO_NAO_RECONHECIDA,
 };
