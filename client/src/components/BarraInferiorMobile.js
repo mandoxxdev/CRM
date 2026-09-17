@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router-dom';
 import { FiMoreHorizontal } from 'react-icons/fi';
 import './BarraInferiorMobile.css';
@@ -17,6 +18,14 @@ import './BarraInferiorMobile.css';
  *
  * Cabem 4 destinos mais o "Menu". O corte não esconde nada: o que não coube continua na
  * gaveta, que o quinto botão abre.
+ *
+ * **Por que um portal para o `body`, e não a árvore normal.** A primeira versão renderizava
+ * dentro de `.main-content`, e no iPad a barra apareceu no TOPO, rolando com a página. O
+ * motivo, medido depois: `.layout` tem `overflow: hidden` e `.main-content` tem
+ * `overflow-y: auto` — ou seja, a barra estava dentro de um container de ROLAGEM, e é
+ * justamente aí que o WebKit trata `position: fixed` como se não fosse fixo. O portal tira a
+ * barra de qualquer ancestral com overflow e o `fixed` volta a se ancorar na viewport, em
+ * todos os navegadores.
  */
 
 const MAX_ATALHOS = 4;
@@ -34,7 +43,7 @@ const BarraInferiorMobile = ({ itens = [], aoAbrirMenu, chatUnread = 0, menuAber
     location.pathname === path || location.pathname.startsWith(`${path}/`)
   );
 
-  return (
+  const barra = (
     <nav className="bim" aria-label="Navegação principal">
       {atalhos.map((item) => {
         const Icon = item.icon;
@@ -68,6 +77,8 @@ const BarraInferiorMobile = ({ itens = [], aoAbrirMenu, chatUnread = 0, menuAber
       </button>
     </nav>
   );
+
+  return createPortal(barra, document.body);
 };
 
 export default BarraInferiorMobile;

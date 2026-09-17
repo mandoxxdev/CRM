@@ -102,7 +102,10 @@
     padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)) !important;
   }
 
-  /* O hambúrguer sai: quem abre a gaveta agora é o botão "Menu" da barra. Dois convites
-     para a mesma coisa, um deles no canto superior, é o que o pedido quis remover. */
-  .mobile-menu-toggle { display: none !important; }
+  /* O hambúrguer sai: quem abre a gaveta agora é o botão "Menu" da barra.
+     `body` na frente NÃO é enfeite: o Layout.css tem `.mobile-menu-toggle{display:flex
+     !important}` e, com a mesma especificidade, quem vence é quem vem depois no bundle —
+     que é ele. Medido: a regra dele cai na posição 50982 do CSS gerado e a minha na 3726.
+     Com `body` a especificidade sobe e a ordem deixa de importar. */
+  body .mobile-menu-toggle { display: none !important; }
 }
