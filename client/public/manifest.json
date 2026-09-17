@@ -1,0 +1,61 @@
+{
+  "id": "/",
+  "name": "Orion — GMP Industriais",
+  "short_name": "Orion",
+  "description": "Sistema de gestão da GMP Industriais: comercial, compras, almoxarifado, fábrica e financeiro.",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "background_color": "#10141D",
+  "theme_color": "#10141D",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Nova requisição de material",
+      "short_name": "Requisitar",
+      "url": "/almoxarifado/requisicoes/nova",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Recebimentos",
+      "short_name": "Receber",
+      "url": "/almoxarifado/recebimentos",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Pedidos de compra",
+      "short_name": "Compras",
+      "url": "/compras/pedidos",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

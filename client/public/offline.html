@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#10141D">
+<title>Sem conexão — Orion</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: #10141D;
+    color: #fff;
+    font-family: Inter, system-ui, -apple-system, sans-serif;
+    text-align: center;
+  }
+  .caixa { max-width: 380px; }
+  img { width: 88px; height: 88px; border-radius: 20px; margin-bottom: 20px; }
+  h1 { margin: 0 0 10px; font-size: 1.25rem; font-weight: 800; }
+  p { margin: 0 0 22px; font-size: 0.92rem; line-height: 1.6; color: #b3b3b3; }
+  button {
+    padding: 12px 26px;
+    border: none;
+    border-radius: 999px;
+    background: #4facfe;
+    color: #06283d;
+    font-size: 0.92rem;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .nota { margin-top: 22px; font-size: 0.76rem; color: #7a7a7a; line-height: 1.5; }
+</style>
+</head>
+<body>
+  <div class="caixa">
+    <img src="/icon-192.png" alt="Orion">
+    <h1>Sem conexão</h1>
+    <p>
+      O Orion precisa de internet para funcionar — os dados ficam no servidor da empresa,
+      não no celular.
+    </p>
+    <button type="button" onclick="location.reload()">Tentar de novo</button>
+    <div class="nota">
+      Se estiver na fábrica, verifique o Wi-Fi ou os dados móveis.
+    </div>
+  </div>
+  <script>
+    // Volta sozinho assim que a conexão retornar, para ninguém ficar preso nesta tela.
+    window.addEventListener('online', () => location.reload());
+  </script>
+</body>
+</html>
