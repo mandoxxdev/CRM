@@ -57,7 +57,7 @@ const fs = require('fs');
 // NAO por copia (decisao 7 do design) — duplicar o formatador daria dois "Dados invalidos" que
 // divergiriam na primeira edicao.
 const { validate } = require('../services/almoxarifado/validation');
-const { PedidoCompraCreateSchema } = require('../services/compras/schemas');
+const { PedidoCompraCreateSchema, PedidoStatusSchema } = require('../services/compras/schemas');
 const pedidoCompraService = require('../services/compras/pedidoCompraService');
 // Etapa 38, Task 4: os 5 leitores de planilha sairam do escopo deste registrador para
 // `services/compras/planilhaCompras.js` (movidos VERBATIM, md5 conferido) porque a importacao de
@@ -222,6 +222,47 @@ app.delete('/api/compras/pedidos/:id', authenticateToken, checkModulePermission(
     res.status(e.status || 500).json({ error: e.message });
   }
 });
+
+/**
+ * Etapa 39, onda de correcao F4 — A SAIDA DO BECO DA RN-D12, e ela e uma porta propria.
+ *
+ * O FURO: todo pedido que o almoxarifado recebe DEPOIS da data prometida ficava "Atrasado" para
+ * sempre (o `processar` da Etapa 37 nao escreve `status` no pedido CORE, decisao 4/RN-24) e o
+ * comprador nao tinha gesto de tela que corrigisse — o `PUT` com `status:'recebido'` bate na
+ * guarda da Etapa 38 e volta 400. Nao e canto raro: e o caminho normal de TODO pedido recebido
+ * com atraso, ou seja, exatamente o caso que o filtro `Só atrasados` existe para mostrar.
+ *
+ * ⚠️ PORTA NOVA, e nao guarda afrouxada, porque `atualizarPedido` faz DELETE+INSERT das linhas e
+ * zeraria `quantidade_recebida` (estoque recebido duas vezes) — o raciocinio inteiro esta no
+ * cabecalho de `alterarStatusPedido`. Aqui o servico escreve UMA coluna e nunca toca
+ * `itens_pedido_compra`, entao a porta e permitida COM ou SEM recebimento: o pedido preso no beco
+ * e, por definicao, um pedido COM recebimento.
+ *
+ * ⚠️ `PATCH`, nao `PUT`: o corpo e um DELTA (`{ status }`), nao a representacao inteira do pedido.
+ * Um segundo `PUT` na mesma URL do outro confundiria os dois contratos.
+ *
+ * POSICAO: junto das outras quatro de pedido e ACIMA do generico `/:tipo/:id`. Nao ha `PUT`/`PATCH`
+ * generico hoje (o generico e so `app.delete`) e esta URL tem TRES segmentos, entao o sombreamento
+ * medido na Etapa 38 nao a alcanca — mas manter as rotas de pedido juntas e o que impede o proximo
+ * de separa-las, e e contrato escrito desde a Task 3 da 38.
+ *
+ * VALIDACAO pelo MESMO `STATUS_PEDIDO_COMPRA` do `POST`/`PUT`, via schema proprio de UM campo: e a
+ * mesma literal (`status do pedido inválido (…)`) nas tres portas, e uma segunda lista de 7 status
+ * divergiria na primeira edicao. `z.object` (e nao `looseObject`) de proposito: `validate()`
+ * SUBSTITUI `req.body` por `parsed.data`, entao o `strip` do Zod e o que garante que nada alem de
+ * `status` chegue ao servico por esta porta.
+ *
+ * Gate: o mesmo das outras 24 — `authenticateToken` + `checkModulePermission('compras')`. O core
+ * tem UMA camada de autorizacao, nao duas (B101 da Etapa 38): nenhum `requirePermission` novo.
+ */
+app.patch('/api/compras/pedidos/:id/status', authenticateToken, checkModulePermission('compras'),
+  validate(PedidoStatusSchema), async (req, res) => {
+    try {
+      res.json(await pedidoCompraService.alterarStatusPedido(db, req.params.id, req.body.status));
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
 
 /**
  * Etapa 38, Task 4 (RN-C10, RN-C11) — IMPORTAR PEDIDOS DE PLANILHA, um pedido por ordem.

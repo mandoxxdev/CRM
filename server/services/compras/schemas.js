@@ -127,10 +127,30 @@ const PedidoCompraCreateSchema = z.looseObject({
   itens: z.array(PedidoCompraItemSchema, { error: ITENS_PEDIDO_VAZIO }).min(1, ITENS_PEDIDO_VAZIO),
 });
 
+/**
+ * Etapa 39, onda de correcao F4 — o corpo de `PATCH /api/compras/pedidos/:id/status`.
+ *
+ * UM campo, OBRIGATORIO (aqui, ao contrario do `PedidoCompraCreateSchema`, `status` ausente nao
+ * tem default possivel: a porta existe SO para muda-lo), validado pelo MESMO
+ * `STATUS_PEDIDO_COMPRA` e com a MESMA literal `STATUS_PEDIDO_INVALIDO` das outras duas portas —
+ * uma segunda lista de 7 status divergiria na primeira edicao e daria dois textos de 400 para o
+ * mesmo fato.
+ *
+ * ⚠️ `z.object` e nao `z.looseObject` (os outros dois schemas deste arquivo sao loose, e o motivo
+ * esta la: `validate()` SUBSTITUI `req.body` por `parsed.data`, e `itens`/`solicitacao_id`
+ * sumiriam). Aqui a substituicao e justamente o que se quer: o `strip` do Zod garante que um corpo
+ * com `itens`, `fornecedor_id` ou `quantidade_recebida` chegue ao servico como `{ status }` e mais
+ * nada — a porta que promete "so o status" nao pode depender de o servico ignorar o resto.
+ */
+const PedidoStatusSchema = z.object({
+  status: z.enum(STATUS_PEDIDO_COMPRA, { error: STATUS_PEDIDO_INVALIDO }),
+});
+
 module.exports = {
   STATUS_PEDIDO_COMPRA,
   PedidoCompraItemSchema,
   PedidoCompraCreateSchema,
+  PedidoStatusSchema,
   FORNECEDOR_PEDIDO_OBRIGATORIO,
   ITENS_PEDIDO_VAZIO,
   MATERIAL_ITEM_OBRIGATORIO,

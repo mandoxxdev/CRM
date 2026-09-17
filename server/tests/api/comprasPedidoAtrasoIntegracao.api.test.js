@@ -23,15 +23,30 @@
  * O plano original mandava, no passo 9, fechar o ciclo com `PUT … status: 'recebido'` **no pedido
  * do BLOCO D**. Medido na revisão (Fase 2, C1): `atualizarPedido` recusa com 400 quando há linha
  * recebida OU documento vinculado (`pedidoCompraService.js:425-431`), e o pedido do BLOCO D tem as
- * duas coisas. Logo o único pedido que a RN-D12 descreve **não tem saída**: fica atrasado para
- * sempre, com `dias_atraso` crescendo, dentro de `?atrasados=1` e com o cartão da central de pé.
- * Trocar por "um segundo pedido, para o PUT passar" contornaria o beco em vez de medi-lo. Então:
- * - **9a** afirma o BECO como beco (400 com a literal, e o pedido CONTINUA atrasado). É ele, e não
- *   o passo 8, que transforma a limitação D6 em régua: o 8 mostra que RECEBER não muda o atraso; o
- *   9a mostra que o usuário TAMBÉM não consegue mudá-lo. Juntos são "para sempre".
- * - **9b** é a metade positiva: um pedido atrasado e SEM recebimento nenhum fecha o ciclo por PUT.
- * Se um dia a feature 08 fizer o `processar` gravar `status`, ou liberar `status` no PUT com
- * recebimento, é o 8 ou o 9a que cai — e o aviso é de que a limitação acabou, não de que quebrou.
+ * duas coisas. Trocar por "um segundo pedido, para o PUT passar" contornaria o beco em vez de
+ * medi-lo. Então:
+ * - **9a** afirma o beco E A SUA SAÍDA: o `PUT` continua 400 com a literal (a guarda da Etapa 38
+ *   NÃO foi afrouxada — afrouxá-la zeraria `quantidade_recebida` no DELETE+INSERT das linhas), o
+ *   pedido continua atrasado depois do 400, e é o **`PATCH …/status`** da onda de correção (F4)
+ *   que o tira de `?atrasados=1` — sem tocar em nenhuma linha de item.
+ * - **9b** é a metade positiva pelo caminho normal: um pedido atrasado e SEM recebimento nenhum
+ *   fecha o ciclo por PUT.
+ * - **9c** repete a saída pelo SERVIÇO (`alterarStatusPedido`), sem HTTP: a Reposição e a
+ *   importação chamam o serviço direto e a porta nova tem de ser alcançável do mesmo jeito.
+ *
+ * ⚠️ **ESTA PROSA MUDOU NA ONDA DE CORREÇÃO, e o que ela dizia estava certo para o código de
+ * então:** até `fc84e09` o 9a afirmava que o pedido recebido com atraso ficava atrasado **para
+ * sempre**, porque não havia gesto de tela nenhum que escrevesse `status` num pedido com
+ * recebimento. O achado I1 da revisão final julgou que isso não é canto raro — é o caminho normal
+ * de TODO pedido que o almoxarifado recebe depois da data prometida —, e a F4 abriu a porta. Agora
+ * é **"atrasado até o PATCH"**: o passo 8 continua mostrando que RECEBER não muda o atraso (a
+ * limitação D6 segue de pé, e é fatia da feature 08 fazer o `processar` gravar `status`), e o 9a
+ * mostra que o usuário **agora consegue** mudá-lo à mão. Se um dia a 08 fizer o `processar` gravar
+ * `status`, é o **passo 8** que cai — e o aviso é de que a limitação acabou, não de que quebrou.
+ *
+ * ⚠️ O 9a e o 9c DEVOLVEM o pedido do BLOCO D para `pendente` no fim, e isso é medição, não
+ * higiene: o BLOCO F conta `duplicadas: 1` justamente porque aquele pedido continua na régua. O
+ * ida-e-volta ainda prova, de graça, que a porta escreve nos DOIS sentidos.
  *
  * ⚠️ O TERCEIRO PEDIDO DO BLOCO E (previsão = HOJE) não é enfeite: sem ele, trocar `<` por `<=` em
  * `derivarAtraso` não derruba NENHUM passo desta integração (ontem continua sendo ontem) e a
@@ -278,23 +293,52 @@ function diasDeHoje(n) {
   // ─────────────────────────────────────────────────────────────────────────────────────────────
   // BLOCO E — o status fecha o ciclo: 9a o BECO, 9b a saida, e a FRONTEIRA
   // ─────────────────────────────────────────────────────────────────────────────────────────────
-  await test('(E.9a) RN-D12 o BECO afirmado como beco: o PUT do pedido JA RECEBIDO e recusado e ele continua atrasado', async () => {
+  await test('(E.9a) RN-D12 o PUT do pedido JA RECEBIDO continua 400 — e agora o PATCH .../status tira o pedido do atraso', async () => {
     const put = await request(app).put(`/api/compras/pedidos/${HIST.id}`)
       .send(corpoDoPut(HIST, { status: 'recebido' }));
     assert.strictEqual(put.status, 400, `esperava 400 da RN-C07: ${put.status} ${JSON.stringify(put.body)}`);
     assert.strictEqual(put.body.error, jaTeveRecebimento(HIST.numero),
       `literal da RN-C07 divergiu: ${JSON.stringify(put.body.error)}`);
 
-    // E ESTE o par do passo 8: receber nao muda o atraso, e o usuario TAMBEM nao consegue muda-lo.
-    // Juntos sao "para sempre" — e e isso que a letra B do doc de novidades registra como
-    // limitacao conhecida, nao como bug.
+    // O par do passo 8, ainda de pe: receber nao muda o atraso, e o PUT tambem nao consegue
+    // muda-lo — e nao pode mesmo, porque ele faz DELETE+INSERT das linhas e zeraria os 10
+    // recebidos do BLOCO D (o `INSERT` omite `quantidade_recebida`, que e `REAL DEFAULT 0`).
     const linha = await naLista('', HIST.id);
     assert.strictEqual(linha.atrasado, 1,
       `depois do 400 o pedido tinha de continuar atrasado: ${JSON.stringify(linha)}`);
     assert.ok((await listar('?atrasados=1')).body.some((p) => p.id === HIST.id),
-      'o pedido sem saida tinha de continuar dentro de ?atrasados=1');
+      'depois do 400 o pedido tinha de continuar dentro de ?atrasados=1');
     assert.strictEqual(await statusCoreDoPedido(HIST.id), 'pendente',
       'o PUT recusado NAO pode ter escrito o status');
+
+    // ── A SAIDA, aberta pela onda de correcao (F4) ────────────────────────────────────────────
+    const recebidoAntes = await dbGet(db,
+      'SELECT id, quantidade_recebida FROM itens_pedido_compra WHERE pedido_id = ? ORDER BY id LIMIT 1', [HIST.id]);
+    assert.ok(recebidoAntes.quantidade_recebida > 0,
+      `fixture: a linha do BLOCO D tinha de ter recebido > 0, veio ${JSON.stringify(recebidoAntes)}`);
+
+    const patch = await request(app).patch(`/api/compras/pedidos/${HIST.id}/status`).send({ status: 'recebido' });
+    assert.strictEqual(patch.status, 200, `o PATCH devia passar no pedido recebido: ${patch.status} ${JSON.stringify(patch.body)}`);
+    assert.strictEqual(await statusCoreDoPedido(HIST.id), 'recebido', 'o PATCH nao escreveu o status');
+    const semAtraso = await naLista('', HIST.id);
+    assert.strictEqual(semAtraso.atrasado, 0, `o PATCH nao tirou o pedido do atraso: ${JSON.stringify(semAtraso)}`);
+    assert.ok(!(await listar('?atrasados=1')).body.some((p) => p.id === HIST.id),
+      '?atrasados=1 continua trazendo o pedido cujo status ja foi corrigido');
+
+    // ⚠️ E A ASSERCAO QUE SEPARA ESTA PORTA DE UM `PUT` DISFARCADO: o recebimento fica INTACTO.
+    // Se ela cair, o `?pendentes=1` da Etapa 37 volta a mostrar o pedido ABERTO com o saldo
+    // inteiro e o operador recebe o mesmo material duas vezes.
+    const recebidoDepois = await dbGet(db,
+      'SELECT id, quantidade_recebida FROM itens_pedido_compra WHERE pedido_id = ? ORDER BY id LIMIT 1', [HIST.id]);
+    assert.deepStrictEqual(recebidoDepois, recebidoAntes,
+      'o PATCH tocou em itens_pedido_compra — id ou quantidade_recebida mudaram');
+
+    // Volta para `pendente`: o BLOCO F conta `duplicadas: 1` porque este pedido segue na regua, e
+    // o ida-e-volta prova de graca que a porta escreve nos DOIS sentidos.
+    const volta = await request(app).patch(`/api/compras/pedidos/${HIST.id}/status`).send({ status: 'pendente' });
+    assert.strictEqual(volta.status, 200, JSON.stringify(volta.body));
+    assert.strictEqual((await naLista('', HIST.id)).atrasado, 1,
+      'voltar para `pendente` tinha de devolver o pedido ao atraso');
   });
 
   let LIMPO;
@@ -320,6 +364,30 @@ function diasDeHoje(n) {
       `esperava dias_atraso null, veio ${JSON.stringify(depois.dias_atraso)}`);
     assert.ok(!(await listar('?atrasados=1')).body.some((p) => p.id === LIMPO.id),
       '?atrasados=1 continua trazendo o pedido ja recebido');
+  });
+
+  await test('(E.9c) F4 a mesma saida PELO SERVICO, sem HTTP: alterarStatusPedido tira o pedido recebido do atraso', async () => {
+    // A Reposicao e a importacao chamam `pedidoCompraService` DIRETO, sem passar por rota — a
+    // porta nova tem de ser alcancavel do mesmo jeito que `criarPedido`/`atualizarPedido`, senao
+    // metade dos chamadores do modulo fica sem a saida do beco.
+    const antes = await dbAll(db,
+      'SELECT id, quantidade_recebida FROM itens_pedido_compra WHERE pedido_id = ? ORDER BY id', [HIST.id]);
+    assert.ok(antes.some((l) => l.quantidade_recebida > 0),
+      `fixture: o pedido do BLOCO D tinha de ter linha recebida: ${JSON.stringify(antes)}`);
+    assert.strictEqual((await naLista('', HIST.id)).atrasado, 1,
+      'fixture: o pedido tinha de estar atrasado de novo depois do 9a');
+
+    const r = await pedidoCompraService.alterarStatusPedido(db, HIST.id, 'cancelado');
+    assert.deepStrictEqual(r, { id: HIST.id, numero: HIST.numero, status: 'cancelado' }, JSON.stringify(r));
+    assert.strictEqual((await naLista('', HIST.id)).atrasado, 0,
+      'o servico nao tirou o pedido do atraso');
+    assert.deepStrictEqual(
+      await dbAll(db, 'SELECT id, quantidade_recebida FROM itens_pedido_compra WHERE pedido_id = ? ORDER BY id', [HIST.id]),
+      antes, 'o servico tocou em itens_pedido_compra');
+
+    // Restaura, pelo mesmo motivo do 9a: o BLOCO F conta `duplicadas: 1` com este pedido na regua.
+    await pedidoCompraService.alterarStatusPedido(db, HIST.id, 'pendente');
+    assert.strictEqual((await naLista('', HIST.id)).atrasado, 1, JSON.stringify(await naLista('', HIST.id)));
   });
 
   let HOJE_PEDIDO;

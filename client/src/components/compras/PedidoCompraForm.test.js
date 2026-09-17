@@ -52,7 +52,7 @@ import { exportToExcel } from '../../utils/exportExcel';
 
 jest.mock('../../services/api', () => ({
   __esModule: true,
-  default: { get: jest.fn(), post: jest.fn(), put: jest.fn(), delete: jest.fn() },
+  default: { get: jest.fn(), post: jest.fn(), put: jest.fn(), patch: jest.fn(), delete: jest.fn() },
 }));
 // Onda de correcao, F6: a exportacao da aba Pedidos passou a ser uma linha por ITEM, com a coluna
 // `Código` — sem ela o export do proprio CRM nao se reimportava. O mock intercepta a planilha para
@@ -139,11 +139,25 @@ const PEDIDO_418 = {
   previsao_entrega: '2026-09-25',
   status: 'aprovado',
   observacoes: 'Entregar no portão 2',
+  // Onda de correção, F4: o `GET /:id` passou a devolver `teve_recebimento` (0|1, número — o
+  // SQLite não tem boolean), derivado pelas MESMAS duas pernas da guarda do servidor. `0` aqui é
+  // explícito de propósito: o contrato existe, e este pedido é o editável.
+  teve_recebimento: 0,
   itens: [{
     id: 4181, material_id: 907, codigo: 'ALM-0907', descricao: 'Chapa Aço 3mm',
     unidade: 'KG', quantidade: 9, valor_unitario: 35, quantidade_recebida: 0,
   }],
 };
+
+/**
+ * O MESMO pedido, depois de recebido pelo almoxarifado (onda de correção, F4).
+ *
+ * ⚠️ `quantidade_recebida` na linha continua **0** de propósito: este fixture representa o
+ * recebimento CRIADO E NÃO PROCESSADO (perna 2 da régua do servidor, RN-23 da Etapa 37), que é
+ * justamente o caso que uma tela olhando só para `quantidade_recebida` perderia. Quem decide é o
+ * `teve_recebimento` do servidor, não uma conta local.
+ */
+const PEDIDO_418_RECEBIDO = { ...PEDIDO_418, teve_recebimento: 1 };
 
 // A linha da LISTA (aba Pedidos de `Compras.js`) usada pelos cenários de clique e da lixeira.
 const PEDIDO_418_LISTA = {
@@ -159,12 +173,22 @@ const LITERAL_AVISO_PRECO = 'Sem preço o custo médio do material não é alime
 const LITERAL_AVISO_NUMERO = 'O número do pedido é gerado pelo sistema.';
 // Onda de correcao, F6: a literal do fracasso total da importacao (201 com `pedidos: []`).
 const LITERAL_NADA_IMPORTADO = 'Nenhum pedido importado — veja os motivos abaixo';
+// Onda de correcao F4 (Etapa 39): as duas literais da faixa do pedido ja recebido. Escritas AQUI e
+// nao importadas do componente, como todas as outras deste arquivo — uma literal importada do
+// proprio codigo que ela mede afirma "o componente concorda consigo mesmo" e nao o contrato.
+const LITERAL_SO_STATUS = 'Este pedido já teve recebimento — só o status pode ser alterado';
+const LITERAL_STATUS_ATUALIZADO = 'Status do pedido atualizado';
 
 let container; let root; let pedidosDoBanco;
+// Onda de correcao, F4: o detalhe do 418 passou a ser TROCAVEL por cenario — o unico que o troca e
+// o (r), que precisa de `teve_recebimento: 1`. Restaurado a cada `beforeEach`, e nao no proprio
+// cenario, para um `expect` que falhe no meio nao vazar o fixture recebido para os outros 22.
+let detalhe418;
 
 beforeEach(() => {
   global.IS_REACT_ACT_ENVIRONMENT = true;
   pedidosDoBanco = [];
+  detalhe418 = PEDIDO_418;
   // Implementação aqui e não na fábrica do `jest.mock`: o `resetMocks` do react-scripts apaga
   // implementações entre cenários.
   api.get.mockImplementation((url) => {
@@ -177,7 +201,7 @@ beforeEach(() => {
     if (/^\/compras\/pedidos\/\d+$/.test(url)) {
       const id = Number(url.split('/').pop());
       return id === PEDIDO_418.id
-        ? Promise.resolve({ data: PEDIDO_418 })
+        ? Promise.resolve({ data: detalhe418 })
         : Promise.reject(new Error(`Pedido ${id} fora da fixture`));
     }
     if (url === '/compras/materiais') return Promise.resolve({ data: MATERIAIS_CHAPA });
@@ -185,6 +209,10 @@ beforeEach(() => {
   });
   api.post.mockImplementation(() => Promise.resolve({ data: { id: 640, numero: 'PC-2026-640' } }));
   api.put.mockImplementation(() => Promise.resolve({ data: { id: 418, numero: 'PC-2026-418' } }));
+  // Onda de correcao, F4: a porta nova `PATCH /compras/pedidos/:id/status`. O `api` e um instance
+  // do axios (que TEM `patch`); o mock precisava ganhar a chave, senao o cenario novo mediria
+  // `undefined is not a function` e nao o contrato.
+  api.patch.mockImplementation(() => Promise.resolve({ data: { id: 418, numero: 'PC-2026-418', status: 'recebido' } }));
   api.delete.mockImplementation(() => Promise.resolve({ data: { message: 'Pedido de compra excluído com sucesso' } }));
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -264,6 +292,8 @@ const alertas = () => [...container.querySelectorAll('[role="alert"]')]
   .map((el) => el.textContent.replace(/ /g, ' ')).join(' | ');
 const chamadasPost = () => api.post.mock.calls.filter(([url]) => url === '/compras/pedidos');
 const chamadasPut = (id) => api.put.mock.calls.filter(([url]) => url === `/compras/pedidos/${id}`);
+const chamadasPatchStatus = (id) => api.patch.mock.calls
+  .filter(([url]) => url === `/compras/pedidos/${id}/status`);
 const chamadasMateriais = () => api.get.mock.calls.filter(([url]) => url === '/compras/materiais');
 const chamadasDetalhe = (id) => api.get.mock.calls.filter(([url]) => url === `/compras/pedidos/${id}`);
 const chamadasLista = () => api.get.mock.calls.filter(([url]) => url === '/compras/pedidos');
@@ -851,4 +881,80 @@ test('(q) o formulario nasce com a data LOCAL, nao com a de amanha', async () =>
   } finally {
     global.Date = DateReal;
   }
+});
+
+// ── (r) F4 pedido JA RECEBIDO: a faixa, os campos travados e o PATCH de status ────────────────
+//
+// Etapa 39, onda de correcao F4 (achado I1 da revisao de regra de negocio). ATE AQUI a tela nao
+// sabia que o pedido tinha recebimento: o comprador preenchia o formulario inteiro, clicava em
+// "Salvar pedido" e so entao levava o 400 do cenario (g2) — e era justamente o pedido preso no
+// beco da RN-D12 (recebido com atraso, "Atrasado" para sempre) cujo conserto a tela nao deixava
+// completar. Agora o `GET /:id` devolve `teve_recebimento` e o mesmo botao vira `PATCH .../status`.
+test('(r) com teve_recebimento 1 a tela mostra a faixa, trava os campos e salva por PATCH de status', async () => {
+  detalhe418 = PEDIDO_418_RECEBIDO;
+  await renderizarEm('/compras/pedidos/editar/418');
+
+  // A FAIXA, literal exata e em `role="alert"` (o comprador precisa saber POR QUE travou).
+  expect(alertas()).toContain(LITERAL_SO_STATUS);
+
+  // OS CAMPOS TRAVADOS — fornecedor, as duas datas e os itens.
+  expect(porTestId('pedido-fornecedor').disabled).toBe(true);
+  expect(porTestId('pedido-data').disabled).toBe(true);
+  expect(porTestId('pedido-previsao').disabled).toBe(true);
+  expect(porTestId('pedido-observacoes').disabled).toBe(true);
+  expect(porTestId('qtd-item-907').disabled).toBe(true);
+  expect(porTestId('valor-item-907').disabled).toBe(true);
+  expect(porTestId('remover-item-907').disabled).toBe(true);
+  expect(porTestId('busca-material').disabled).toBe(true);
+  // ⚠️ E O STATUS **NAO** trava: e o unico campo que a porta nova escreve, e travar tudo deixaria
+  // o pedido preso no beco com uma faixa explicando que ele esta preso.
+  expect(porTestId('pedido-status').disabled).toBe(false);
+
+  await selecionar(porTestId('pedido-status'), 'recebido');
+  await submeter();
+
+  // URL e corpo EXATOS: um `PUT` com corpo de pedido inteiro nesta porta seria a mentira que o
+  // `strip` do Zod conserta do lado do servidor.
+  expect(chamadasPatchStatus(418)).toHaveLength(1);
+  expect(chamadasPatchStatus(418)[0][1]).toEqual({ status: 'recebido' });
+  // A METADE QUE MEDE O DANO: o `PUT` NAO pode ser chamado. Ele faz DELETE+INSERT das linhas no
+  // servidor e zeraria `quantidade_recebida` — o operador receberia o mesmo material duas vezes.
+  expect(chamadasPut(418)).toHaveLength(0);
+  expect(toast.success).toHaveBeenCalledWith(LITERAL_STATUS_ATUALIZADO);
+});
+
+// ── (r2) F4 a metade negativa: com teve_recebimento 0 nada muda ───────────────────────────────
+//
+// Sem este cenario, um `soStatus` que nascesse `true` (ou um `Boolean(p.teve_recebimento)` sobre
+// um contrato que devolvesse a string '0') travaria o formulario de TODO pedido e o (r) continuaria
+// verde — o defeito mais caro possivel, porque a tela pararia de salvar pedido nenhum.
+test('(r2) com teve_recebimento 0 nao ha faixa, os campos ficam livres e o salvar continua sendo PUT', async () => {
+  await renderizarEm('/compras/pedidos/editar/418');
+
+  expect(texto()).not.toContain(LITERAL_SO_STATUS);
+  expect(porTestId('pedido-fornecedor').disabled).toBe(false);
+  expect(porTestId('pedido-previsao').disabled).toBe(false);
+  expect(porTestId('qtd-item-907').disabled).toBe(false);
+
+  await submeter();
+
+  expect(chamadasPut(418)).toHaveLength(1);
+  expect(api.patch.mock.calls).toHaveLength(0);
+  expect(toast.success).toHaveBeenCalledWith('Pedido de compra atualizado');
+});
+
+// ── (r3) F4 o erro do PATCH chega ao DOM, como o do PUT ──────────────────────────────────────
+test('(r3) a recusa do PATCH aparece em role=alert e o formulario fica de pe', async () => {
+  detalhe418 = PEDIDO_418_RECEBIDO;
+  const LITERAL_400_STATUS = 'status do pedido inválido (use pendente, aprovado, rejeitado, em_analise, enviado, recebido ou cancelado)';
+  api.patch.mockImplementation(() => Promise.reject({
+    response: { status: 400, data: { error: LITERAL_400_STATUS } },
+  }));
+  await renderizarEm('/compras/pedidos/editar/418');
+  await submeter();
+
+  expect(chamadasPatchStatus(418)).toHaveLength(1);
+  expect(alertas()).toContain(LITERAL_400_STATUS);
+  expect(texto()).toContain('Editar pedido de compra');
+  expect(toast.success).not.toHaveBeenCalled();
 });

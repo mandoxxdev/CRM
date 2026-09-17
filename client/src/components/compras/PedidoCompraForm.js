@@ -56,6 +56,23 @@ const LITERAL_SEM_ITEM = 'Inclua ao menos um item no pedido de compra';
 const LITERAL_AVISO_PRECO = 'Sem preço o custo médio do material não é alimentado no recebimento.';
 
 /**
+ * Etapa 39, onda de correção F4 — a faixa do pedido que JÁ TEVE RECEBIMENTO.
+ *
+ * O comprador preenchia o formulário inteiro de um pedido já recebido, clicava em "Salvar pedido"
+ * e só então levava o 400 `… já teve recebimento — não pode mais ser editado` (guarda da Etapa 38,
+ * que existe porque o `PUT` faz DELETE+INSERT das linhas e zeraria `quantidade_recebida`). Pior:
+ * era justamente o pedido preso no beco da RN-D12 — recebido com atraso, marcado "Atrasado" para
+ * sempre — e o gesto que o corrigiria era o único que a tela não deixava completar.
+ *
+ * Agora o `GET /compras/pedidos/:id` devolve `teve_recebimento` (0|1, derivado pelas MESMAS duas
+ * pernas da guarda do servidor) e a tela diz ANTES: o que continua editável é só o status, e o
+ * "Salvar pedido" vira `PATCH …/status`. Quem decide continua sendo o backend — esta faixa evita a
+ * viagem perdida, não substitui a régua.
+ */
+const LITERAL_SO_STATUS = 'Este pedido já teve recebimento — só o status pode ser alterado';
+const LITERAL_STATUS_ATUALIZADO = 'Status do pedido atualizado';
+
+/**
  * ── A IMPORTAÇÃO 100% RECUSADA ERA ANUNCIADA EM VERDE (onda de correção, F6 — achado I3/UX) ───
  *
  * A porta responde **201 com sucesso parcial** por contrato, inclusive quando `pedidos: []` e todas
@@ -124,6 +141,8 @@ const PedidoCompraForm = () => {
   const [erro, setErro] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [carregando, setCarregando] = useState(edicao);
+  // 0|1 do servidor -> boolean local. Só existe no modo edição (a criação não tem recebimento).
+  const [soStatus, setSoStatus] = useState(false);
 
   const [termoMaterial, setTermoMaterial] = useState('');
   const [materiais, setMateriais] = useState([]);
@@ -176,6 +195,9 @@ const PedidoCompraForm = () => {
         setPrevisaoEntrega((p.previsao_entrega || '').slice(0, 10));
         setStatus(p.status || 'pendente');
         setObservacoes(p.observacoes || '');
+        // `=== 1` estrito: o contrato é NÚMERO 0|1 (o SQLite não tem boolean). Um `Boolean(p.x)`
+        // aceitaria a string '0' de um contrato futuro e travaria o formulário de todo pedido.
+        setSoStatus(p.teve_recebimento === 1);
         setItens((p.itens || []).map((item) => novaLinha({
           material_id: item.material_id,
           codigo: item.codigo || '',
@@ -231,6 +253,27 @@ const PedidoCompraForm = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErro('');
+
+    // ── Etapa 39, F4: pedido JÁ RECEBIDO — o "Salvar pedido" é um PATCH de status ─────────────
+    //
+    // Sai ANTES da recusa de "sem item" e antes de montar o payload, e essa ordem é a regra: o
+    // corpo do `PUT` não serve aqui (ele traz `itens`, e mandá-los para uma porta que promete
+    // só-status seria a mentira que o `strip` do Zod conserta no servidor). O que este ramo manda
+    // é `{ status }` e nada mais.
+    if (edicao && soStatus) {
+      setSalvando(true);
+      try {
+        await api.patch(`/compras/pedidos/${id}/status`, { status });
+        toast.success(LITERAL_STATUS_ATUALIZADO);
+        navigate('/compras/pedidos');
+      } catch (err) {
+        setErro(mensagemDeErro(err, 'Não foi possível atualizar o status do pedido.'));
+      } finally {
+        setSalvando(false);
+      }
+      return;
+    }
+
     // A ÚNICA recusa local, e a literal é a do servidor (`inclua ao menos um item no pedido de
     // compra`, com a inicial maiúscula da frase de tela). Vale a pena ser local porque um pedido
     // sem linha é o defeito que a Fase 0 mediu em produção: cabeça gravada, item nenhum.
@@ -435,6 +478,13 @@ const PedidoCompraForm = () => {
         <div className="loading"><p>Carregando pedido...</p></div>
       ) : (
         <form data-testid="form-pedido-compra" onSubmit={handleSubmit} className="module-content">
+          {/* `role="alert"` como as demais mensagens desta tela: o comprador precisa saber POR QUE
+              os campos estão travados antes de tentar mexer neles. */}
+          {soStatus && (
+            <p data-testid="aviso-so-status" role="alert" style={{ color: '#b9770e' }}>
+              {LITERAL_SO_STATUS}
+            </p>
+          )}
           <div className="filters" style={{ flexWrap: 'wrap', gap: 12 }}>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               Fornecedor
@@ -442,6 +492,7 @@ const PedidoCompraForm = () => {
                 data-testid="pedido-fornecedor"
                 value={fornecedorId}
                 onChange={(ev) => setFornecedorId(ev.target.value)}
+                disabled={soStatus}
                 className="filter-select"
               >
                 <option value="">Selecione o fornecedor</option>
@@ -457,6 +508,7 @@ const PedidoCompraForm = () => {
                 type="date"
                 value={dataPedido}
                 onChange={(ev) => setDataPedido(ev.target.value)}
+                disabled={soStatus}
               />
             </label>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -466,6 +518,7 @@ const PedidoCompraForm = () => {
                 type="date"
                 value={previsaoEntrega}
                 onChange={(ev) => setPrevisaoEntrega(ev.target.value)}
+                disabled={soStatus}
               />
             </label>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -487,6 +540,7 @@ const PedidoCompraForm = () => {
               data-testid="pedido-observacoes"
               value={observacoes}
               onChange={(ev) => setObservacoes(ev.target.value)}
+              disabled={soStatus}
               rows={2}
               style={{ width: '100%' }}
             />
@@ -499,6 +553,7 @@ const PedidoCompraForm = () => {
               <input
                 data-testid="busca-material"
                 type="text"
+                disabled={soStatus}
                 placeholder="Buscar material por código ou descrição..."
                 value={termoMaterial}
                 onChange={(ev) => setTermoMaterial(ev.target.value)}
@@ -516,7 +571,7 @@ const PedidoCompraForm = () => {
               type="button"
               className="btn-secondary"
               onClick={buscarMateriais}
-              disabled={buscando}
+              disabled={buscando || soStatus}
             >
               <FiSearch /> {buscando ? 'Buscando...' : 'Buscar material'}
             </button>
@@ -538,6 +593,7 @@ const PedidoCompraForm = () => {
                         <button
                           data-testid={`adicionar-material-${m.id}`}
                           type="button"
+                          disabled={soStatus}
                           className="btn-icon"
                           title="Adicionar ao pedido"
                           onClick={() => adicionarMaterial(m)}
@@ -572,6 +628,7 @@ const PedidoCompraForm = () => {
                       <input
                         data-testid={`qtd-item-${it.material_id}`}
                         type="number"
+                        disabled={soStatus}
                         min="0"
                         step="any"
                         value={it.quantidade}
@@ -583,6 +640,7 @@ const PedidoCompraForm = () => {
                       <input
                         data-testid={`valor-item-${it.material_id}`}
                         type="number"
+                        disabled={soStatus}
                         min="0"
                         step="any"
                         value={it.valor_unitario}
@@ -595,6 +653,7 @@ const PedidoCompraForm = () => {
                       <button
                         data-testid={`remover-item-${it.material_id}`}
                         type="button"
+                        disabled={soStatus}
                         className="btn-icon btn-danger"
                         title="Remover item"
                         onClick={() => removerItem(it.chave)}

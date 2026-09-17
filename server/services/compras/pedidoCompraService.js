@@ -392,7 +392,65 @@ async function criarPedido(db, dados, user) {
 async function obterPedido(db, pedidoId) {
   const pedido = await relerPedido(db, pedidoId);
   if (!pedido) throw erro(PEDIDO_NAO_ENCONTRADO, 404);
-  return pedido;
+  // Etapa 39, onda de correcao F4 — `teve_recebimento` e o que a TELA precisa saber ANTES de
+  // montar o formulario de edicao. Ate aqui ela so tinha `quantidade_recebida` por linha, que e a
+  // perna 1 da regua e NAO cobre a perna 2 (documento de recebimento criado e ainda nao
+  // processado, que pela RN-23 da Etapa 37 nao mexeu em `quantidade_recebida` nenhuma): o
+  // comprador preenchia o formulario inteiro, clicava em Salvar e so entao levava o 400.
+  //
+  // ⚠️ DERIVADO das MESMAS duas funcoes que a guarda do `PUT`/`DELETE` chama, nunca uma terceira
+  // consulta parecida — se as pernas divergissem, a tela habilitaria o que o servidor recusa (ou
+  // o contrario, que e pior: campo desabilitado sem motivo). Quem decide continua sendo o backend.
+  // 0|1 NUMERO, nao boolean: e o mesmo contrato de `atrasado`/`dias_atraso` da rota de listagem, e
+  // o SQLite nao tem boolean.
+  const linhaRecebida = await linhaComRecebimento(db, pedido.id);
+  const documentoVinculado = await recebimentoVinculadoAoPedido(db, pedido.id);
+  return { ...pedido, teve_recebimento: (linhaRecebida || documentoVinculado) ? 1 : 0 };
+}
+
+/**
+ * Etapa 39, onda de correcao F4 (achado I1 da revisao de regra de negocio) — a ÚNICA saida do beco
+ * da RN-D12: escrever `status` sem tocar em NENHUMA linha de item.
+ *
+ * ── O BECO ────────────────────────────────────────────────────────────────────────────────────
+ * Todo pedido recebido pelo almoxarifado depois da data prometida fica "Atrasado" PARA SEMPRE: o
+ * `processar` da Etapa 37 nao escreve `pedidos_compra.status` (decisao 4 da E37, RN-24), entao o
+ * CORE continua `pendente`, o badge cresce sem teto, o pedido mora dentro de `?atrasados=1` (que e
+ * a feature-titulo da etapa) e o cartao da central nunca esvazia. E o usuario NAO tinha gesto de
+ * tela que corrigisse: o `PUT` com `status:'recebido'` bate na guarda da Etapa 38 e volta 400.
+ *
+ * ── POR QUE UMA PORTA NOVA E NAO AFROUXAR A GUARDA ────────────────────────────────────────────
+ * `atualizarPedido` faz, incondicionalmente e DEPOIS da guarda, `DELETE FROM itens_pedido_compra`
+ * + `INSERT` das linhas — e o `INSERT` omite `quantidade_recebida`, que e `REAL DEFAULT 0`. Um
+ * `PUT` que apenas pulasse a guarda, mesmo com corpo "so status", zeraria o recebido: o
+ * `?pendentes=1` da Etapa 37 voltaria a mostrar o pedido ABERTO com o saldo inteiro, o operador
+ * receberia o mesmo material DUAS vezes (estoque dobrado, conta a pagar duplicada) e os ids de
+ * linha novos deixariam o acumulador da 37 fazendo `UPDATE … WHERE id = ?` em 0 linhas — que em
+ * SQLite nao e erro, nao lanca e nao loga. Reproduzido pelo revisor; e o achado C1 da Etapa 38
+ * voltando inteiro.
+ *
+ * Havia ainda um obstaculo de contrato: o `PUT` usa o `PedidoCompraCreateSchema`, que exige
+ * `fornecedor_id` e `itens.min(1)` — "corpo que muda so o status" NAO e detectavel por quais
+ * chaves vieram. Seria codigo novo de comparacao de multiconjunto, nao um relaxamento.
+ *
+ * ── O CONTRATO DESTA FUNCAO ───────────────────────────────────────────────────────────────────
+ * UM `UPDATE` de UMA coluna (mais `updated_at`), permitido COM ou SEM recebimento — e essa
+ * permissao e o ponto: o pedido preso no beco e, por definicao, um pedido COM recebimento.
+ * `itens_pedido_compra` nao e lida nem escrita aqui, e e isso que torna a saida reversivel.
+ * 404 `Pedido de compra não encontrado` (a MESMA literal das outras portas). Resposta enxuta
+ * `{ id, numero, status }`: quem precisa do pedido inteiro ja tem o `GET /:id`, e devolver o
+ * `relerPedido` daria a impressao de que esta porta escreve mais do que escreve.
+ *
+ * ⚠️ A VALIDACAO DO `status` E DA PORTA (Zod, `STATUS_PEDIDO_COMPRA`), nao daqui — mesma divisao
+ * do `criarPedido`/`atualizarPedido`. Nao ha segunda lista de 7 status neste arquivo de proposito:
+ * duas listas divergiriam na primeira edicao e a literal do 400 sairia diferente em cada porta.
+ */
+async function alterarStatusPedido(db, pedidoId, status) {
+  const pedido = await dbGet(db, 'SELECT id, numero FROM pedidos_compra WHERE id = ?', [pedidoId]);
+  if (!pedido) throw erro(PEDIDO_NAO_ENCONTRADO, 404);
+  await dbRun(db, 'UPDATE pedidos_compra SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+    [status, pedido.id]);
+  return { id: pedido.id, numero: pedido.numero, status };
 }
 
 /**
@@ -956,6 +1014,7 @@ module.exports = {
   relerPedido,
   obterPedido,
   atualizarPedido,
+  alterarStatusPedido,
   excluirPedido,
   buscarMateriais,
   importarPedidos,
