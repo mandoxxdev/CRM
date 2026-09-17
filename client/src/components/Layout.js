@@ -7,6 +7,7 @@ import api from '../services/api';
 import { fetchUserPermissions, getCachedUserPermissions, getEffectiveUser, seedPermissionsFromAuthUser } from '../services/permissionsCache';
 import { bypassModuleRestrictions, isSystemAdmin } from '../utils/systemPermissions';
 import { MODULOS_META, modulosDoUsuario, nivelAcessoUsuario } from '../constants/modulosMeta';
+import BotaoInstalarApp from './BotaoInstalarApp';
 import {
   FiHome, FiUsers, FiBriefcase, FiFileText,
   FiCalendar, FiLogOut, FiMenu, FiX, FiUserPlus, FiPackage, FiBarChart2, FiMap, FiDollarSign, FiSettings, FiShield, FiMoon, FiSun, FiGrid,
@@ -551,6 +552,10 @@ const Layout = () => {
               </div>
             )}
           </div>
+          {/* Instalar o app: fica aqui porque e o rodape que o usuario ja conhece (Minha
+              Conta / Sair). O proprio componente se esconde quando ja esta instalado ou
+              quando o navegador nao oferece instalacao. */}
+          <BotaoInstalarApp compacto={!sidebarOpen} />
           {(isSystemAdmin(user) || user?.pode_editar_conta !== 0) && (
             <Link to="/minha-conta" className="account-button">
               <FiSettings />

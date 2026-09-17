@@ -1,0 +1,130 @@
+/* Botão "Instalar aplicativo" — mora no rodapé da sidebar, junto de Minha Conta e Sair.
+   Tokens globais com valor de reserva: este componente aparece em qualquer módulo, e não
+   pode depender de qual CSS de módulo foi carregado antes. */
+
+.bia-botao {
+  --bia-acento: var(--gmp-primary, #4facfe);
+  --bia-sobre-acento: #06283d;
+
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 42px;
+  padding: 11px 14px;
+  margin-bottom: 8px;
+  border: 1px solid var(--bia-acento);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--bia-acento);
+  font-size: 0.86rem;
+  font-weight: 700;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.14s, color 0.14s;
+}
+
+.bia-botao:hover {
+  background: var(--bia-acento);
+  color: var(--bia-sobre-acento);
+}
+
+.bia-botao svg { flex-shrink: 0; width: 18px; height: 18px; }
+
+/* Sidebar recolhida: só o ícone, centralizado. */
+.bia-compacto { justify-content: center; padding: 11px 0; }
+
+/* ── instruções do iPhone ───────────────────────────────────────── */
+
+.bia-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.bia-modal {
+  width: 100%;
+  max-width: 420px;
+  max-height: 85vh;
+  overflow-y: auto;
+  padding: 20px 22px 18px;
+  border-radius: 16px;
+  background: var(--gmp-surface, #181818);
+  color: var(--gmp-text, #fff);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+}
+
+.bia-modal-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.bia-modal-topo h3 { margin: 0; font-size: 1.02rem; font-weight: 800; }
+
+.bia-modal-topo button {
+  display: flex;
+  border: none;
+  background: none;
+  color: var(--gmp-text-light, #b3b3b3);
+  cursor: pointer;
+  padding: 4px;
+}
+
+.bia-modal p {
+  margin: 0 0 14px;
+  font-size: 0.86rem;
+  line-height: 1.6;
+  color: var(--gmp-text-light, #b3b3b3);
+}
+
+.bia-modal ol {
+  margin: 0 0 14px;
+  padding-left: 20px;
+  font-size: 0.88rem;
+  line-height: 1.85;
+}
+
+.bia-modal ol strong { color: var(--gmp-text, #fff); }
+.bia-modal ol svg { vertical-align: -3px; width: 15px; height: 15px; }
+
+.bia-nota {
+  padding: 10px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--gmp-warning, #ffb300);
+  background: rgba(255, 179, 0, 0.12);
+  font-size: 0.8rem !important;
+  margin-bottom: 16px !important;
+}
+
+.bia-modal-acoes { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+
+.bia-modal-acoes button {
+  min-height: 40px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.bia-secundario {
+  border: 1px solid var(--gmp-border, rgba(255, 255, 255, 0.1));
+  background: none;
+  color: var(--gmp-text-light, #b3b3b3);
+}
+
+.bia-primario {
+  border: none;
+  background: var(--gmp-primary, #4facfe);
+  color: #06283d;
+}
