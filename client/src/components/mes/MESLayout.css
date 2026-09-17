@@ -202,7 +202,13 @@
     transform: translateX(0);
   }
 
-  .mes-main {
+  /* Especificidade alta de proposito: `.mes-sidebar.closed ~ .mes-main` (0,2,1) vence um
+     `.mes-main` (0,1,0) mesmo dentro desta media query, e o conteudo ficava empurrado 70px
+     para a direita no celular, sem sidebar nenhuma ocupando esse espaco. */
+  .mes-layout .mes-sidebar ~ .mes-main,
+  .mes-layout .mes-sidebar.closed ~ .mes-main {
     margin-left: 0;
+    /* Espaco para a barra inferior, senao o ultimo elemento fica debaixo dela. */
+    padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
   }
 }

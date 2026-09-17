@@ -1,5 +1,6 @@
 import React, { useState, Suspense } from 'react';
 import { useLocation, useNavigate, Outlet } from 'react-router-dom';
+import BarraInferiorMobile from '../BarraInferiorMobile';
 import ErrorBoundary from '../ErrorBoundary';
 import { RouteLoading } from '../LazyPage';
 import { useAuth } from '../../context/AuthContext';
@@ -15,7 +16,12 @@ import './MESLayout.css';
 const MESLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // No celular a sidebar comeca FECHADA. Com `true` fixo ela abria por cima do conteudo
+  // toda vez que o modulo carregava — no desktop ela ocupa a coluna da esquerda, mas no
+  // celular o `.mes-sidebar.open` a traz para cima da tela inteira.
+  const [sidebarOpen, setSidebarOpen] = useState(() => (
+    typeof window === 'undefined' || window.innerWidth > 768
+  ));
   const { user } = useAuth();
   const canConfigureMes = canConfigureModule(getEffectiveUser(user), 'operacional');
 
@@ -40,6 +46,13 @@ const MESLayout = () => {
     { id: 'requisicoes-lista', label: 'Minhas Requisições', icon: FiList, path: '/fabrica/requisicoes-material' },
     { id: 'configuracoes', label: 'Configurações', icon: FiSettings, path: '/fabrica/configuracoes', adminOnly: true },
   ];
+
+  // A barra inferior usa a MESMA `menuItems` da sidebar, tirando o que nao e destino:
+  // separadores (`type: 'divider'`) e itens de admin quando o usuario nao pode configurar.
+  // Sem esse filtro, um separador viraria botao na barra.
+  const itensNavegaveis = menuItems.filter(
+    (i) => i.type !== 'divider' && (!i.adminOnly || canConfigureMes),
+  );
 
   const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + '/');
 
@@ -93,6 +106,12 @@ const MESLayout = () => {
           })}
         </nav>
       </aside>
+
+      <BarraInferiorMobile
+        itens={itensNavegaveis}
+        menuAberto={sidebarOpen}
+        aoAbrirMenu={() => setSidebarOpen((v) => !v)}
+      />
 
       <main className="mes-main">
         <ErrorBoundary>
