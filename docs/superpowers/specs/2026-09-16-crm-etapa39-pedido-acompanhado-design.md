@@ -304,13 +304,42 @@ auto-`recebido` no recebimento, o alerta "Pedido recebido parcialmente" e as **4
   *Este cenário é a limitação declarada virando régua:* se um dia a feature 08 fizer o recebimento
   gravar `status`, é **ele** que cai e avisa que a limitação acabou.
 
+  > ⚠️ **(corrigido na Fase 2) A segunda metade deste cenário está ERRADA: esse `PUT` não passa.**
+  > Medido: `atualizarPedido` (`server/services/compras/pedidoCompraService.js:425-431`) lança
+  > **400** `'Pedido de compra <numero> já teve recebimento — não pode mais ser editado'` (literal em
+  > `:180`) quando há **linha com recebimento** *ou* **documento de recebimento vinculado** — a
+  > RN-C07 da Etapa 38. O pedido deste cenário acabou de ser recebido por inteiro pelas portas da 37,
+  > portanto **ele é precisamente o pedido que não pode ter o `status` editado**.
+  >
+  > **O que isto significa, e é limitação de produto, não detalhe de teste:** um pedido recebido
+  > fica **atrasado para sempre** — `dias_atraso` cresce sem teto, ele aparece em toda listagem
+  > `?atrasados=1`, o cartão da central continua de pé, e **nenhum gesto de tela apaga o badge**. O
+  > texto `Atrasado há N dias` promete um estado transitório e entrega um estado permanente.
+  >
+  > **Correção do cenário (o plano já a incorporou no BLOCO E, passos 9a/9b):** o pedido recebido é
+  > afirmado com o **400** e com `atrasado: 1` que não muda (é ele quem prova "para sempre"); a
+  > metade positiva do `PUT → atrasado: 0` usa um **segundo** pedido, atrasado e **sem** recebimento.
+  > **Correção da frase de usuário (D6, seção 9 e manual):** não mandar "mude o status na tela de
+  > edição" — dizer que, uma vez recebido, o pedido não é mais editável, e que o comprador deve
+  > marcar `recebido` **antes** da entrada no almoxarifado. **Caminho reversível, fatia da feature
+  > 08:** liberar `status` no `PUT` mesmo com recebimento, ou o `processar` da 37 gravar o status.
+
 ### Transversais
 
 - **RN-D13 — autorização: o campo derivado herda o gate da rota, e o job não tem usuário.**
   *Cenário (API):* `GET /api/compras/pedidos?atrasados=1` **sem token** → **401**; com token e
   **sem** o módulo `compras` → **403**; com o módulo → **200** com os campos novos, **qualquer que
   seja o perfil do almoxarifado** (inclusive o `PRODUCAO` do fallback de `getPerfilFromUser`) —
-  porque o core Compras tem **uma** camada (B101). *Metade que fecha o outro lado:* o `listar` da
+  porque o core Compras tem **uma** camada (B101).
+  > ⚠️ **(corrigido na Fase 2) O 403 "sem o módulo" NÃO é exercitável, e esta RN não pode pedi-lo.**
+  > Medido: `server/tests/helpers/testApp.js` monta o registrador de Compras com
+  > `const fakeCheckModulePermission = () => (req, res, next) => next();` — o gate de módulo está
+  > **liberado no harness de propósito** (só a camada 3, `requirePermission`, roda o código real).
+  > Um cenário que afirmasse 403 ou **não existe** ou **passa por acidente**. A RN-D13 exercita
+  > **401 sem token** e **200 com o módulo, qualquer que seja o perfil**, e a linha do 403 fica
+  > escrita como **nota** no arquivo de teste, dizendo por que não há cenário — que é como o plano
+  > (cenário (9) da T1) já a escreveu. A tabela de 7.1, linha (9), lê-se da mesma forma.
+  *Metade que fecha o outro lado:* o `listar` da
   entrada do registro é chamado por `varrerAlertasRegistrados(db)` **sem `req`**, e o teste o chama
   assim — se alguém acrescentar `req.user` ali, **o teste cai** com `undefined`.
 - **RN-D14 — o ciclo inteiro, pela ROTA e pelo JOB (o aceite da etapa).**
@@ -692,6 +721,21 @@ B113).
 
 1. **Pedido recebido por inteiro mas com `status` desatualizado continua atrasado** (D6, provado
    pela RN-D12). O caminho reversível é da feature 08.
+   > ⚠️ **(corrigido na Fase 2) — e continua atrasado PARA SEMPRE.** Esta limitação estava escrita
+   > como "até alguém editar o status", e **não há como editar**: a RN-C07 da Etapa 38
+   > (`pedidoCompraService.js:425-431`) recusa com **400** o `PUT` de pedido que já teve
+   > recebimento. Logo, `dias_atraso` cresce sem teto, o pedido fica permanentemente em
+   > `?atrasados=1` e o cartão da central não sai. O e-mail **não** é repetido (dedupe por pedido,
+   > RN-D10), então o dano é de tela e de filtro, não de caixa de entrada. Reversível pela feature
+   > 08 das duas formas já nomeadas.
+   >
+   > **(corrigido na Fase 2) A "varredura diária" não tem hora.** `routes/almoxarifado.js:3785-3797`
+   > é `setTimeout(..., 30s).unref()` + `setInterval(..., 24h).unref()` — sem cron, sem hora
+   > configurada: a hora do dia **muda a cada restart**. O dedupe impede e-mail duplicado num
+   > restart; o efeito residual é que um pedido que venceu pode esperar até ~24 h pelo primeiro
+   > aviso, conforme o instante em que o processo subiu. Declarado, não consertado (feature 20).
+   > **E a letra A é UMA pergunta, não duas:** job e rota vivem no **mesmo processo**, então o
+   > `hojeLocalISO()` dos dois não pode divergir entre si — o que falta medir é só o fuso do host.
 2. **O alerta avisa UMA vez por pedido, para sempre** (RN-D10). Pedido que segue atrasado não é
    relembrado.
 3. **A lista in-app de alertas é do almoxarifado.** Um usuário só de Compras toma **403** em

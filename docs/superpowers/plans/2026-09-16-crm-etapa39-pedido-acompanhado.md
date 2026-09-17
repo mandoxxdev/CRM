@@ -131,6 +131,18 @@ Copiadas do design (seções 3, 5, 8, 10 e 11) e do `CLAUDE.md`. **Valem em toda
 A Etapa 38 tinha o "201 que não gravou item nenhum". Esta tem **o teste de data que passa por
 acidente**. Quatro modos, todos medidos ou nomeados por regra da `fechar-etapa`:
 
+> ✅ **(Fase 2) A PREMISSA A0 FOI REEXECUTADA E ESTÁ CERTA — o deslocamento acontece mesmo.** Sonda
+> rodada nesta árvore, Node **v24.18.0**, ICU completo, fuso resolvido `America/Sao_Paulo`:
+> ```
+> new Date('2026-09-16').toLocaleDateString('pt-BR')  ->  15/09/2026
+> new Date('2026-09-10').toLocaleDateString('pt-BR')  ->  09/09/2026
+> new Date('2026-09-25').toLocaleDateString('pt-BR')  ->  24/09/2026
+> ```
+> As **três** são exatamente as literais que o RED do `(a)` e do `(h)` prevê. A fatia A0 não é
+> hipótese: `formatDate` (`Compras.js:91-94`) mostra o dia anterior em `Data Pedido`, `Previsão
+> Entrega`, `Cadastrado em` e `Data`/`Validade`, **e no Excel exportado**. Nada a mudar no plano por
+> este eixo.
+
 1. **O cenário de data passa num worker em UTC e não prova nada.** Se o processo não estiver em -03,
    `16/09/2026` sai do código **velho** também, e o cenário fica verde com o bug no lugar. Por isso
    **todo cenário de data desta etapa carrega um controle positivo** que afirma o fuso:
@@ -185,6 +197,39 @@ correção começa editando spec + teste, **nunca** o código primeiro.
 | **RN-D10** | **dedupe por pedido**: varrer duas vezes não manda dois e-mails — e o aviso é **um por pedido, para sempre** | `alertaPedidoAtrasado.api.test.js` · `(2) RN-D10 a segunda varredura e DUPLICADA, a fila nao cresce` | *"O aviso de atraso é enviado uma vez por pedido. O sistema não repete o e-mail nos dias seguintes enquanto o pedido continuar atrasado."* |
 | **RN-D11** | a régua do alerta e a da tela são **a mesma**, e o teste prova (`deepStrictEqual` dos ids) | `alertaPedidoAtrasado.api.test.js` · `(5) RN-D11 os ids do alerta sao os MESMOS ids de atrasado=1 na rota` | *"O que a tela chama de atrasado é exatamente o que dispara o e-mail — não existem duas contas diferentes."* |
 | **RN-D12** | a limitação do D6, **provada**: pedido fisicamente recebido por inteiro mas com `status = 'pendente'` **continua atrasado** até alguém editar o status | `server/tests/api/comprasPedidoAtrasoIntegracao.api.test.js` · `(D) RN-D12 receber pelas portas da Etapa 37 NAO muda o atraso` | *"Receber a mercadoria no almoxarifado não muda sozinho o status do pedido em Compras. Enquanto o status não for 'recebido', o pedido continua marcado como atrasado — mude o status na tela de edição do pedido."* |
+
+> ⚠️ **(Fase 2) A frase de manual da RN-D12 está ERRADA, e é a correção mais cara desta revisão.**
+> **Medido:** `atualizarPedido` (`server/services/compras/pedidoCompraService.js:425-431`) recusa o
+> `PUT` com **400** `'Pedido de compra <numero> já teve recebimento — não pode mais ser editado'`
+> (a literal está em `:180`) quando existe **linha recebida** (`linhaComRecebimento`) **ou**
+> documento de recebimento vinculado (`recebimentoVinculadoAoPedido`) — a RN-C07 da Etapa 38. Ou
+> seja: **exatamente a população que a RN-D12 descreve — o pedido recebido pelas portas da Etapa
+> 37 — é a que NÃO pode ter o status editado.** O conserto que o manual manda o usuário fazer é
+> recusado pela API.
+>
+> **Consequência real, que é o que o comprador vê:** um pedido recebido por inteiro fica
+> **atrasado para sempre**; `dias_atraso` cresce todo dia sem teto; ele entra em toda listagem
+> `?atrasados=1`; o cartão da central (avaliado ao vivo) nunca some; e **não existe gesto de tela
+> que limpe o badge**. O texto `Atrasado há N dias` promete um estado transitório e entrega um
+> estado permanente. A T5 BLOCO E **já sabia disso** e contornou com um segundo pedido — contornar
+> no teste transformou um beco sem saída do produto em conveniência de suíte.
+>
+> **O que muda, e é reversível (não precisa de decisão de fora):**
+> 1. **A frase do manual** (coluna direita desta linha, e a T6 Step 7) passa a ser:
+>    *"Receber a mercadoria no almoxarifado não muda sozinho o status do pedido em Compras — e, uma
+>    vez recebido, o pedido **não pode mais ser editado** (regra da Etapa 38). Na prática: pedido
+>    recebido pelo almoxarifado continua aparecendo como atrasado, e hoje não há tela que apague
+>    esse aviso. Marque o pedido como 'recebido' **antes** de dar entrada no almoxarifado, ou
+>    ignore o aviso desses pedidos."*
+> 2. **A T5 BLOCO E** afirma o **400 como o beco**, não como um detalhe de fixture (ver a emenda
+>    `(Fase 2)` lá).
+> 3. **Vai para a letra D/G** como limitação nº 1, no lugar da redação de hoje: *"pedido recebido
+>    por inteiro fica atrasado PARA SEMPRE, porque a régua de edição da Etapa 38 fecha a única
+>    saída. Caminho reversível (fatia da feature 08): liberar `status` no `PUT` mesmo com
+>    recebimento, ou o `processar` da 37 gravar `status='recebido'`."*
+>
+> Isto **não** muda o escopo A0/A1/A2 nem uma linha de código desta etapa: muda o que a etapa
+> **promete por escrito**, que é o que o `CLAUDE.md` chama de documentação que engana ativamente.
 | **RN-D13** | autorização: o campo derivado herda o gate da rota (401 sem token, 403 sem o módulo, 200 com o módulo **qualquer que seja o perfil**), e o `listar` do registro é chamado **sem `req`** | `comprasPedidoAtraso.api.test.js` · `(9) RN-D13 401 sem token, 200 com o modulo` + `alertaPedidoAtrasado.api.test.js` · `(7) RN-D13 o listar e chamado SEM req` | *"Quem tem acesso ao módulo Compras vê o atraso de todos os pedidos — o módulo não separa por perfil."* |
 | **RN-D14** | o ciclo inteiro, **pela ROTA e pelo JOB** (o aceite da etapa) | `comprasPedidoAtrasoIntegracao.api.test.js` · blocos `(A)`…`(F)` | *(o roteiro de teste manual do guia da etapa é a versão em linguagem de usuário desta RN)* |
 
@@ -219,6 +264,16 @@ Literais entre aspas são **as que vão no código e no manual** — não aproxi
 - **Aditivo por construção:** `comprasPedidosRotas.api.test.js` lê a resposta **por nome de campo** e
   o cabeçalho dele (`:29`) declara que campo a mais não derruba asserção. **Nenhum teste da 38 pode
   cair.**
+- ⚠️ **(Fase 2) `previsao_entrega = ''` (string vazia) → `atrasado: 0`, `dias_atraso: null`.** Isto
+  faltava no contrato e **precisa estar escrito**, porque a base tem essas linhas: até a onda de
+  correção F3 da Etapa 38 o formulário mandava `''` sempre e o serviço gravava TEXT `''` numa coluna
+  `DATE` (medido e documentado em `pedidoCompraService.js:139-142` e `schemas.js:79`). Duas
+  consequências que o próximo leitor precisa ver juntas: (a) o guarda real é a **regex**
+  `^\d{4}-\d{2}-\d{2}$` de `derivarAtraso`, não o `IS NOT NULL`; (b) o `WHERE p.previsao_entrega IS
+  NOT NULL` do `listar` da T4 **não** exclui `''` — e está certo assim, é pré-filtro superconjunto,
+  quem decide linha a linha é a régua. **Não “conserte” nenhum dos dois para `<> ''`**: mexer só num
+  deles cria a divergência que a RN-D11 existe para pegar. O cenário **(4)** da T1 já afirma o `''`
+  (metade positiva) — o que faltava era a linha do contrato.
 
 ### 2. A régua de atraso — **uma função, um lugar** (`server/services/compras/pedidoCompraService.js`)
 
@@ -275,6 +330,29 @@ varredura diária (`routes/almoxarifado.js:3791` → `notificationQueueService.j
 in-app (`alertRegistry.js:480-500` → `routes/almoxarifado/extended.js:1859-1863`). Disparo no ato
 (`notificationQueueService.js:645-667`) **não é usado** — atraso não tem ato (D5, descartado (d)).
 
+> ⚠️ **(Fase 2) "Varredura diária" NÃO tem hora, e isso precisa estar escrito — o guia vai
+> descrevê-la para o usuário.** Medido em `routes/almoxarifado.js:3785-3797`: não há cron, não há
+> hora configurada; é
+> `setTimeout(runDailyNotificationScans, 30 * 1000).unref()` **mais**
+> `setInterval(runDailyNotificationScans, 24 * 60 * 60 * 1000).unref()`. Ou seja, a varredura roda
+> **30 segundos depois de o processo subir e a cada 24 h contadas a partir daquele instante** — a
+> hora do dia **muda a cada deploy ou restart**. Três consequências:
+> 1. **O guia do usuário (T6 Step 6) não pode dizer "todo dia às N horas".** Diga: *"uma vez por
+>    dia, a partir do momento em que o servidor foi iniciado — e logo depois de cada reinício"*.
+> 2. **Um restart não duplica e-mail:** o dedupe é por pedido e `INSERT OR IGNORE`
+>    (`notificationQueueService.js:41-43`, `:70-80`), então varrer 5 vezes num dia enfileira uma vez
+>    só. Está certo por construção — e é por isso que o modo de agendamento pode ficar como está.
+> 3. ⚠️ **Mas a fronteira do `<` fica exposta ao instante do restart:** um pedido que vence hoje é
+>    alertado na primeira varredura **depois** da virada do dia local. Se o processo subir às 23h58,
+>    a varredura das 23h58m30s ainda vê "hoje" e o pedido só entra 24 h depois. Limitação real,
+>    **declare na letra G** — não é conserto desta etapa (mudar o agendamento é etapa da feature 20).
+>
+> ✅ **E isto responde metade da letra A:** o job e a rota `GET /api/compras/pedidos` vivem **no
+> mesmo processo Node** (o registrador do almoxarifado agenda o `setInterval` dentro do mesmo
+> `app`), então `hojeLocalISO()` do job e o da rota usam **o mesmo** `process.env.TZ` e o mesmo V8 —
+> **não podem divergir entre si**. A letra A é **uma** pergunta, não duas: *qual o fuso do host de
+> produção?*. Se ele for UTC, os **dois** erram junto (~3 h por dia), nunca um contra o outro.
+
 ### 4. Colunas da exportação (`client/src/components/Compras.js`, `linhaExportPedido` `:151-163`)
 
 Ordem final — **as 11 existentes intactas + 2 no fim**:
@@ -288,6 +366,18 @@ Ordem final — **as 11 existentes intactas + 2 no fim**:
   todas as linhas do mesmo pedido. **Declarado.**
 - A importação lê por **grafia conhecida de cabeçalho** — as duas colunas novas são **ignoradas** na
   reimportação, como já acontece com `Status` e `Valor Total`.
+- ✅ **(Fase 2) Round-trip MEDIDO, e a posição "no fim" é contrato, não estética.** A importação de
+  pedidos lê **só** por lista fechada de grafias: `valorCruDoRow(row, ...CHAVES_*)` +
+  `numeroDaPlanilha`/`dataDaPlanilha` (`pedidoCompraService.js:632-658`, `:722`, `:771`, `:786`) e
+  `extrairDoRow` casa por **igualdade** de chave normalizada (`planilhaCompras.js:64-70`). Logo:
+  coluna desconhecida é **ignorada**, a planilha **não** é recusada, e `atrasado` / `dias de atraso`
+  não colidem com nenhuma das listas (`CHAVES_VALOR` tem `'valor'`, não `'dias de atraso'`).
+  **O que exige as colunas no FIM:** existe um segundo leitor, **guloso**, que percorre **todas** as
+  chaves da linha em ordem de inserção e devolve o primeiro valor numérico
+  (`planilhaCompras.extrairPrecoDoRow:71-90`, auto-documentado em `:36`). Ele **não** está no
+  caminho do pedido — roda só na planilha de itens do fornecedor (`routes/compras.js:694`) —, mas
+  `Dias de atraso` é **número**, e mover as duas colunas para antes de `Quantidade`/`Valor Unitário`
+  as poria na frente numa varredura gulosa. **Não reordene o objeto.**
 
 ### 5. Literais de tela (client) — **verbatim**
 
@@ -492,6 +582,28 @@ Os dez cenários (cada `test()` com o **nome que a tabela de RN cita**):
       assert.deepStrictEqual(ids, [...ids].sort((a,b) => b - a).length ? ids : ids)
       -> na pratica: reler `created_at DESC` afirmando que o ULTIMO inserido vem primeiro
 
+    ⚠️ (Fase 2) A LINHA ACIMA E UM TESTE VAZIO — NAO A ESCREVA. Os dois lados do
+    `deepStrictEqual` sao o MESMO array `ids`: o ternario devolve `ids` nos dois ramos, entao a
+    assercao NAO PODE FALHAR. E exatamente o modo de falha que o CLAUDE.md nomeia ("ja aconteceu
+    tres vezes nesta base") e que este plano trouxe pronto. Escreva ESTA, que sabe falhar:
+
+      // `?atrasados=1` filtra DEPOIS do SQL, entao o `ORDER BY p.created_at DESC` da 38 tem de
+      // sobreviver nas DUAS respostas. Comparar contra o array ordenado e o que cai se alguem
+      // trocar o ORDER BY ou reordenar o array derivado.
+      const idsTodos     = (await listar('')).body.map((p) => p.id);
+      const idsAtrasados = (await listar('?atrasados=1')).body.map((p) => p.id);
+      assert.deepStrictEqual(idsTodos, [...idsTodos].sort((a, b) => b - a),
+        'ORDER BY p.created_at DESC quebrou na lista completa: ' + idsTodos.join(','));
+      assert.deepStrictEqual(idsAtrasados, [...idsAtrasados].sort((a, b) => b - a),
+        'a derivacao reordenou a resposta filtrada: ' + idsAtrasados.join(','));
+
+    ⚠️ E A CONDICAO QUE FAZ ESSA ASSERCAO VALER, escrita para ninguem a quebrar: `id` AUTOINCREMENT
+    cresce junto com `created_at` NESTE arquivo porque todos os pedidos sao inseridos aqui, em
+    sequencia. Se um dia o arquivo inserir pedido com `created_at` explicito fora de ordem, a
+    assercao passa a medir outra coisa — troque por comparacao dos proprios `created_at`.
+    CONTROLE POSITIVO DESTA ASSERCAO (rode uma vez, a mao): inverter para `(a,b) => a - b` tem de
+    derrubar o cenario. Se nao derrubar, e porque ha 0 ou 1 pedido na resposta — insira mais.
+
 (9) RN-D13 401 sem token, 200 com o modulo
     setUser(null)     -> 401
     setUser(PRODUCAO) -> 200 e os campos novos presentes (o core tem UMA camada: perfil nao decide)
@@ -504,6 +616,27 @@ Os dez cenários (cada `test()` com o **nome que a tabela de RN cita**):
     const antes = (await request(app).get('/api/almoxarifado/recebimentos-aux/pedidos-compra?pendentes=1')).body
     ... (os pedidos desta suite ja foram criados) ...
     assert.deepStrictEqual(depois, antes)   // NAO-TOQUE, R12
+
+    ⚠️ (Fase 2) ESTE CENARIO NAO PROVA O QUE O NOME PROMETE, e o nome tem de mudar. Duas chamadas
+    da MESMA rota no MESMO processo, depois da Etapa 39 ja aplicada, provam DETERMINISMO — nao
+    "identico antes e depois da etapa". Nenhum teste em execucao consegue comparar com o codigo de
+    HEAD~. As reguas que de fato guardam o `?pendentes=1` sao TRES, e o cenario declara as tres:
+      (i)  R12: NENHUM arquivo da Etapa 37 e tocado (`git diff --name-only` no fim da task e a
+           regua — `receiptService.js` e `routes/almoxarifado/extended.js` nao podem aparecer);
+      (ii) `recebimentoContraPedidoIntegracao.api.test.js` e `pedidosCompraSaldoAux.api.test.js`
+           continuam verdes (ja estao no Step 5);
+      (iii) o que ESTE cenario mede de util e que os campos NOVOS **nao vazaram** para a rota aux:
+    ENTAO ESCREVA ASSIM, com o nome `(10) RN-D06 ?pendentes=1 nao ganhou os campos da Etapa 39`:
+      const linhas = (await request(app).get('/api/almoxarifado/recebimentos-aux/pedidos-compra?pendentes=1')).body;
+      assert.ok(linhas.length > 0, 'fixture vazia: este cenario nao mediria nada');
+      for (const l of linhas) {
+        assert.ok(!('atrasado' in l), 'a rota aux da 37 ganhou `atrasado` — R12 violado');
+        assert.ok(!('dias_atraso' in l), 'a rota aux da 37 ganhou `dias_atraso` — R12 violado');
+        assert.ok(!('previsao_entrega' in l), 'a rota aux da 37 passou a devolver previsao_entrega');
+      }
+    (`listarPedidosCompraAux` NAO seleciona `previsao_entrega` — `receiptService.js:1486-1488`,
+    medido na Fase 2; a terceira linha e o que acusa alguem "aproveitando a viagem" para
+    acrescenta-la.)
 ```
 
 - [ ] **Step 2: rodar e LER os números**
@@ -719,6 +852,30 @@ const LITERAL_FUSO = 'o fuso do processo nao e -03; este cenario nao prova nada 
   + '(client/jest.globalSetup.js deveria ter fixado America/Sao_Paulo)';
 ```
 
+> ⚠️ **(Fase 2) FALTA A FIXTURE DA METADE POSITIVA DO `(b)`, e sem ela o meio-cenário mede `'-'`.**
+> A metade *"valor com hora → 10 primeiros caracteres"* roda na aba **Fornecedores**
+> (`Compras.js:180`, `'Cadastrado em': formatDate(f.created_at)` — é a **única** chamada de
+> `formatDate` com um `DATETIME` nesta tela). **Medido:** o `FORNECEDORES` que o plano manda copiar
+> de `PedidoCompraForm.test.js:119-122` é
+> `[{ id: 355, razao_social: 'Parafusos Sul', status: 'ativo' }, { id: 312, razao_social: 'Aços Vale
+> Ltda', status: 'ativo' }]` — **sem `created_at`**. Copiado como está, `formatDate(undefined)`
+> devolve `'-'`, a metade positiva fica verde provando o ramo do `-` **duas vezes** e o ramo dos 10
+> caracteres **nunca é executado**. Use esta fixture no arquivo novo (e **não** edite a do outro
+> arquivo, que 21 cenários já usam):
+> ```jsx
+> // Etapa 39 (RN-D01, metade positiva do (b)): `created_at` e DATETIME do SQLite ('AAAA-MM-DD
+> // HH:MM:SS'), e e o UNICO valor com hora que passa por `formatDate` nesta tela (Compras.js:180).
+> // Sem a hora aqui, a metade positiva do (b) mediria o ramo do '-' de novo.
+> const FORNECEDORES_E39 = [
+>   { id: 355, razao_social: 'Parafusos Sul', status: 'ativo', created_at: '2026-09-16 10:33:00' },
+>   { id: 312, razao_social: 'Aços Vale Ltda', status: 'ativo', created_at: '2026-09-10 21:40:00' },
+> ];
+> ```
+> e no cenário: `await renderizarEm('/compras/fornecedores')` →
+> `expect(texto()).toContain('16/09/2026')` **e** `expect(texto()).not.toContain('15/09/2026')`.
+> A segunda linha (`21:40`) é de propósito: às 21:40 locais o instante UTC já é o **dia seguinte**,
+> então ela é a que separa "cortar 10 caracteres" de "converter fuso".
+
 Cenários desta task (a T3 acrescenta `(c)`…`(i)` **no mesmo arquivo**):
 
 ```
@@ -775,6 +932,12 @@ test('(q) o formulario nasce com a data LOCAL, nao com a de amanha', async () =>
 > não tiver `data-testid` nenhum, acrescente um (é o único toque em `PedidoCompraForm.js` além do
 > `hojeISO`). Ancorar por `querySelector('input[type="date"]')` é aceitável e mais barato; o que
 > **não** vale é afirmar sobre o primeiro input da tela.
+>
+> ✅ **(Fase 2) MEDIDO: `data-testid="pedido-data"` EXISTE** — `PedidoCompraForm.js:444`, no
+> `<input type="date">` de "Data do pedido", com `value={dataPedido}` e
+> `const [dataPedido, setDataPedido] = useState(hojeISO())` em `:107`. **Não há toque a acrescentar
+> em `PedidoCompraForm.js` além do `hojeISO` (`:85`).** (E o vizinho `pedido-previsao` é `:453` —
+> não confunda os dois: o de previsão nasce `''`, não com `hojeISO()`.)
 
 - [ ] **Step 2: rodar e LER os números — o RED tem de ser observado CONTRA O CÓDIGO VELHO**
 
@@ -1367,6 +1530,16 @@ renderiza **`Pedido`**, **`Fornecedor`**, **`Previsão`** e **`Dias de atraso`**
 linha — **em vez** do fallback genérico (`colunasGenericas`, `:182-193`), que mostraria `id`,
 `fornecedor_id` e `valor_total` crus.
 
+> ⚠️ **(Fase 2) `formatData` deste arquivo imprime ANO COM DOIS DÍGITOS — a asserção do cenário não
+> pode ser `25/09/2026`.** Medido em `AlertasAlmoxarifado.js:68-78`: para `AAAA-MM-DD` puro ele faz
+> `new Date(\`${d}T00:00:00Z\`).toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit',
+> year:'2-digit', timeZone:'UTC' })` → **`25/09/26`**. Afirme **`25/09/26`**.
+> Duas notas que evitam "consertos" errados: (a) o `timeZone:'UTC'` + sufixo `Z` desta função já
+> resolve o mesmo defeito que a RN-D01 conserta em `Compras.js` — **são componentes diferentes, e
+> esta já está certa**: não unifique as duas nesta etapa; (b) por isso a coluna `Previsão` da
+> central e a célula da aba Pedidos mostram **formatos diferentes** (`25/09/26` × `25/09/2026`), o
+> que é pré-existente e vale para as 11 entradas anteriores — **declare na letra G**, não mude.
+
 - [ ] **Step 6: rodar de novo, e rodar TUDO que toca o registro e a fila**
 
 ```
@@ -1382,6 +1555,33 @@ cd client && CI=true npx react-scripts test --watchAll=false src/components/almo
 ⚠️ `alertaCentral.api.test.js` pode afirmar o **número** de cartões da central. Se cair por `11 !== 12`,
 **é achado esperado**: atualize o número **e diga no plano que atualizou**, porque essa asserção é
 justamente a que prova que a entrada nova entrou.
+
+> ⚠️ **(Fase 2) A instrução acima aponta para a asserção ERRADA — medido, e a diferença importa.**
+> `alertaCentral.api.test.js` **não tem** contador de cartões: a asserção de forma é
+> `assert.deepStrictEqual(res.body.alertas.map((a) => a.chave),
+> alertRegistry.ALERT_REGISTRY.map((e) => e.chave), 'ordem da central tem de ser a ordem do
+> registro')` (**`:123-126`**) — derivada do próprio registro, portanto **não pode cair** por
+> entrada nova; e o mapa `diasEsperados` (`:130-138`) é iterado por `Object.entries` das **suas**
+> chaves, então chave nova também não o derruba. Quem vai cair, se cair, é **`:226`**:
+> ```js
+> assert.ok(res.body.alertas.every((a) => a.erro === undefined),
+>   'registro real nao pode ter entrada com erro aqui');
+> ```
+> **E isso muda o que a task tem de fazer:** não há "número para atualizar". Se `:226` cair, o
+> `listar` da entrada nova **lançou** dentro do harness (tabela ausente, coluna ausente, require
+> lazy quebrado, `{}` mid-load) — **é defeito da T4, não contador desatualizado**, e corrigir o
+> teste seria apagar o sinal. Leia o `console.error` que `montarCentral` imprime
+> (`alertRegistry.js:497`: *"Central de alertas: falha no listar de PEDIDO_COMPRA_ATRASADO"*) e
+> conserte a entrada.
+>
+> **Bônus medido, e ele reescreve a sabotagem 5 do Step 7:** `:226` **é** o sentinela de ciclo que a
+> divergência declarada diz não existir. Um `{}` capturado mid-load faz `derivarAtraso` vir
+> `undefined`, o `listar` lança `TypeError`, o `try/catch` por entrada (R8) o converte em
+> `erro: true` — e `:226` **cai**, num arquivo que já existe. Some-se a isso o fato de que
+> `alertaCentral`/`alertaRegistro`/`alertaEvento*`/`alertaJornada` **não inserem nenhuma linha em
+> `pedidos_compra`** (medido: `grep -c "INSERT INTO pedidos_compra"` = **0** nos seis arquivos que
+> chamam `varrerAlertasRegistrados`), então a entrada nova devolve `[]` neles e **nenhum contador de
+> fila muda** — o risco desses seis arquivos é só o do `erro: true`.
 
 - [ ] **Step 7: sabotagens**
 
@@ -1461,6 +1661,33 @@ BLOCO E — o status fecha o ciclo
         PUT passar — e o pedido do BLOCO D fica com o 400 AFIRMADO, que e a composicao das duas
         regras e vale como cenario proprio.
  10. GET /api/compras/pedidos -> aquele pedido com atrasado: 0 e dias_atraso: null
+
+  ⚠️ (Fase 2) O PASSO 9 ESTA CERTO NO MECANISMO E ERRADO NA MORAL — e a ordem dos passos muda.
+  Medido: `atualizarPedido` (pedidoCompraService.js:425-431) lanca o 400 de `:180` quando ha linha
+  recebida OU documento vinculado. Logo o pedido do BLOCO D — o UNICO que a RN-D12 descreve — NAO
+  TEM SAIDA: fica atrasado para sempre, `dias_atraso` crescendo, dentro de `?atrasados=1`, com o
+  cartao da central de pe e sem gesto de tela que o limpe. Usar um segundo pedido "para o PUT
+  passar" e contornar o beco em vez de mede-lo. O BLOCO E passa a ter DOIS passos, nesta ordem,
+  e o PRIMEIRO e o que a etapa precisa provar:
+
+  9a. O BECO, AFIRMADO COMO BECO (e o cenario que carrega a RN-D12 inteira):
+      PUT /api/compras/pedidos/<id do BLOCO D> { …o pedido…, status: 'recebido' }
+        -> 400, e `body.error` === `Pedido de compra ${numero} ja teve recebimento — nao pode mais
+           ser editado`  (literal de pedidoCompraService.js:180, COM acentos)
+      GET /api/compras/pedidos -> ELE CONTINUA com atrasado: 1
+      ⇐ E ESTE PASSO, e nao o 8, que prova a limitacao: o 8 mostra que receber nao muda o atraso;
+        o 9a mostra que o usuario TAMBEM nao consegue muda-lo. Juntos sao "para sempre".
+      ⇐ Se um dia a feature 08 liberar `status` no PUT com recebimento, ou o `processar` gravar
+        `status`, e ELE que cai e avisa que o beco acabou.
+
+  9b. A METADE POSITIVA (o ciclo que DE FATO fecha): um SEGUNDO pedido, atrasado e SEM nenhum
+      recebimento -> PUT com status: 'recebido' -> 200
+ 10.  GET /api/compras/pedidos -> esse segundo pedido com atrasado: 0 e dias_atraso: null
+
+  ⚠️ E A FRONTEIRA, que a sabotagem 1 do Step 3 cobra: o BLOCO E cria TAMBEM um terceiro pedido
+  com previsao = HOJE e status 'pendente', e afirma atrasado: 0. Sem ele, `<` -> `<=` nao derruba
+  nenhum passo desta integracao (ontem continua sendo ontem) e a sabotagem 1 vira "nada cai" por
+  falta de cenario, nao por robustez.
 
 BLOCO F — a varredura de novo
  11. varrerAlertasRegistrados(db) -> o resultado da entrada traz enfileiradas: 0
