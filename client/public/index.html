@@ -3,7 +3,9 @@
   <head>
     <meta charset="utf-8" />
     <base href="/" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- `viewport-fit=cover` e o que faz `env(safe-area-inset-*)` valer no iPhone com
+         entalhe: sem ele a barra inferior fica debaixo da barra de gestos. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="description" content="Orion - GMP - Sistema de Gestão da GMP Industriais" />
 
     <!-- PWA ------------------------------------------------------------------

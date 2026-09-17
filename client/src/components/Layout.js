@@ -8,6 +8,7 @@ import { fetchUserPermissions, getCachedUserPermissions, getEffectiveUser, seedP
 import { bypassModuleRestrictions, isSystemAdmin } from '../utils/systemPermissions';
 import { MODULOS_META, modulosDoUsuario, nivelAcessoUsuario } from '../constants/modulosMeta';
 import BotaoInstalarApp from './BotaoInstalarApp';
+import BarraInferiorMobile from './BarraInferiorMobile';
 import {
   FiHome, FiUsers, FiBriefcase, FiFileText,
   FiCalendar, FiLogOut, FiMenu, FiX, FiUserPlus, FiPackage, FiBarChart2, FiMap, FiDollarSign, FiSettings, FiShield, FiMoon, FiSun, FiGrid,
@@ -579,6 +580,14 @@ const Layout = () => {
           </button>
         )}
         {/* Overlay para fechar sidebar no mobile */}
+        {/* Barra inferior: so aparece no celular (media query no CSS). Recebe os MESMOS
+            `menuItems` da sidebar — uma segunda lista divergiria das permissoes. */}
+        <BarraInferiorMobile
+          itens={menuItems}
+          chatUnread={chatUnread}
+          menuAberto={sidebarOpen}
+          aoAbrirMenu={() => setSidebarOpen((v) => !v)}
+        />
         {sidebarOpen && (
           <div 
             className="sidebar-overlay"
