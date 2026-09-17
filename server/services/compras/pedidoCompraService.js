@@ -167,6 +167,48 @@ async function recebimentoVinculadoAoPedido(db, pedidoId) {
     'SELECT id FROM recebimentos_material_almoxarifado WHERE pedido_compra_id = ? LIMIT 1', [pedidoId]);
 }
 
+/**
+ * TERCEIRA PONTA DO `DELETE`, e ela foi criada por esta etapa: a SOLICITACAO da reposicao.
+ *
+ * ── O QUE ESTAVA FURADO (achado I1 da revisao final, reproduzido por sonda executada) ─────────
+ * `criarPedido` com `solicitacao_id` poe a solicitacao em `VINCULADO` com `pedido_compra_id = N`.
+ * `excluirPedido` apagava o pedido N e **nao tocava** na solicitacao: ela ficava `VINCULADO`
+ * apontando para um id que nao existe mais. Consequencias tracadas nas duas pontas:
+ * - `ReposicaoAlmoxarifado.js:849` so oferece "Gerar pedido" em `status === 'PENDENTE'`, entao a
+ *   solicitacao pendurada **nao tinha mais como virar outro pedido**;
+ * - `:839` pinta o badge VERDE para `VINCULADO` — a tela AFIRMAVA que ela tem pedido, e nao tinha;
+ * - `purchaseService.fecharSolicitacoesDoPedido` nunca dispara para um pedido inexistente, entao
+ *   ela **nunca** chegaria a `RECEBIDA`;
+ * - a unica recuperacao era o almoxarife CANCELAR a solicitacao e esperar a reposicao regerar, e
+ *   nada na tela dizia isso.
+ *
+ * ── A DECISAO: liberar, nao recusar ───────────────────────────────────────────────────────────
+ * O `DELETE` devolve a solicitacao ao pipeline (`PENDENTE`, `pedido_compra_id = NULL`) e a resposta
+ * conta quantas (`solicitacoes_liberadas`). Descartado: uma TERCEIRA perna de 409 recusando o
+ * `DELETE` — forcaria o comprador a cancelar a solicitacao do almoxarifado para poder desfazer um
+ * pedido que ele acabou de criar errado, e cancelar e ato de outro modulo e de outro perfil.
+ *
+ * ⚠️ `AND status NOT IN ('RECEBIDA','CANCELADA')`: estado TERMINAL nao ressuscita. Uma solicitacao
+ * `CANCELADA` que aponte para este pedido voltaria a `PENDENTE` e a reposicao ofereceria de novo
+ * um pedido que o almoxarife tinha cancelado a mao. `RECEBIDA` e inalcancavel por aqui (para
+ * chegar la houve recebimento processado, e a perna 2 da regua recusa o `DELETE` para sempre) —
+ * a clausula cobre as duas pelo mesmo motivo: o ponteiro pendurado de uma linha terminal e
+ * HISTORICO, e o que esta perna conserta e o ciclo travado, nao a coluna.
+ *
+ * ⚠️ A GUARDA DE TABELA AUSENTE, pelo mesmo motivo de `recebimentoVinculadoAoPedido`: este e o
+ * modulo CORE e `solicitacoes_compra_almoxarifado` e do almoxarifado. Num banco que nunca subiu o
+ * modulo, todo `DELETE` de pedido responderia 500 `no such table`.
+ */
+async function liberarSolicitacoesDoPedido(db, pedidoId) {
+  const tabela = await dbGet(db,
+    "SELECT name FROM sqlite_master WHERE type='table' AND name='solicitacoes_compra_almoxarifado'");
+  if (!tabela) return 0;
+  const r = await dbRun(db, `UPDATE solicitacoes_compra_almoxarifado
+    SET status = 'PENDENTE', pedido_compra_id = NULL
+    WHERE pedido_compra_id = ? AND status NOT IN ('RECEBIDA','CANCELADA')`, [pedidoId]);
+  return r.changes || 0;
+}
+
 /** Guarda de banco compartilhada pelo `POST` e pelo `PUT`: o fornecedor tem de existir. */
 async function assertFornecedor(db, fornecedorId) {
   const fornecedor = await dbGet(db, 'SELECT id FROM fornecedores WHERE id = ?', [fornecedorId]);
@@ -370,7 +412,10 @@ async function atualizarPedido(db, pedidoId, dados) {
 }
 
 /**
- * RN-C08 — exclui o pedido, se e somente se o recebimento permitir, e leva as LINHAS junto.
+ * RN-C08 — exclui o pedido, se e somente se o recebimento permitir, e leva as LINHAS junto — e
+ * LIBERA a solicitacao da reposicao (`liberarSolicitacoesDoPedido`, achado I1 da revisao final:
+ * antes disso a solicitacao ficava `VINCULADO` apontando para o pedido apagado e nunca mais virava
+ * pedido nenhum).
  *
  * ⚠️ OS FILHOS PRIMEIRO, e por dois motivos, nao um: no harness (`foreign_keys = 0`) apagar so a
  * cabeca deixa **linha orfa** — medido por sonda contra o codigo de hoje: o `DELETE` generico
@@ -394,8 +439,17 @@ async function excluirPedido(db, pedidoId) {
   if (linhaRecebidaNoDelete || documentoVinculadoNoDelete) throw erro(jaTeveRecebimentoExclusao(pedido.numero), 409);
 
   await dbRun(db, 'DELETE FROM itens_pedido_compra WHERE pedido_id = ?', [pedido.id]);
+  // ⚠️ AS SOLICITACOES ANTES DO CABECALHO, e a ordem e a mesma regra dos filhos: em PRODUCAO a FK
+  // esta ON e a sequencia itens -> solicitacoes -> cabecalho e a unica que nao deixa nada
+  // apontando para um pedido que ja nao existe no meio do caminho.
+  const solicitacoesLiberadas = await liberarSolicitacoesDoPedido(db, pedido.id);
   await dbRun(db, 'DELETE FROM pedidos_compra WHERE id = ?', [pedido.id]);
-  return { message: 'Pedido de compra excluído com sucesso' };
+  return {
+    message: 'Pedido de compra excluído com sucesso',
+    // A contagem sai na resposta porque apagar um pedido MUDA o estado de outro modulo: quem clicou
+    // na lixeira precisa saber que a solicitacao da reposicao voltou para a fila.
+    solicitacoes_liberadas: solicitacoesLiberadas,
+  };
 }
 
 /**

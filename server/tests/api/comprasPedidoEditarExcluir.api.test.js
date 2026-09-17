@@ -60,6 +60,9 @@ const assert = require('assert');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbGet, dbAll } = require('../../services/almoxarifado/db');
+// Onda de correcao, F2: o servico e chamado DIRETO no cenario (11) porque a perna que libera a
+// solicitacao mora nele, e ha chamadores sem HTTP (a importacao da T4 e a Reposicao da T6).
+const pedidoCompraService = require('../../services/compras/pedidoCompraService');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -506,6 +509,92 @@ const ERRO_STATUS = 'Dados inválidos — status: status do pedido inválido (us
       .send(payload([{ material_id: materialIdA, quantidade: 2, valor_unitario: 1 }]))).status, 200, 'PUT com usuario');
     assert.strictEqual((await request(app).delete(`/api/compras/pedidos/${pedido.id}`)).status, 200, 'DELETE com usuario');
     setUser(ADMIN);
+  });
+
+  // (11) -----------------------------------------------------------------------------------
+  //
+  // ONDA DE CORRECAO, F2 — achado I1 da revisao final, reproduzido por sonda executada:
+  //   POST /api/compras/pedidos {…, solicitacao_id: 1}  -> 201, solicitacao VINCULADO/pedido 1
+  //   DELETE /api/compras/pedidos/1                     -> 200 "excluido com sucesso"
+  //   solicitacao 1: status VINCULADO, pedido_compra_id 1  <- PENDURADA no vazio
+  // O dano nao e a coluna: `ReposicaoAlmoxarifado.js:849` so oferece "Gerar pedido" em
+  // `PENDENTE`, e `:839` pinta o badge VERDE para `VINCULADO` — a tela AFIRMAVA que a solicitacao
+  // tinha pedido, ela nao tinha mais, e nao havia como gerar outro. A unica saida era o almoxarife
+  // CANCELAR e esperar a reposicao regerar, e nada na tela dizia isso.
+  //
+  // Esta etapa e a PRIMEIRA consumidora de `vincularPedidoCompra` pela porta do Compras (T6),
+  // entao esta terceira ponta foi criada por ela — nao e divida antiga.
+  await test('(11) DELETE de pedido vinculado LIBERA a solicitacao da reposicao (rota e servico)', async () => {
+    const mat = await dbRun(db, `INSERT INTO materiais_almoxarifado
+      (codigo, nome, unidade, quantidade_atual, ativo) VALUES ('MAT-T3-SOL','Chapa da reposicao T3','UN',0,1)`);
+    const sol = await dbRun(db, `INSERT INTO solicitacoes_compra_almoxarifado
+      (material_id, quantidade, motivo, status) VALUES (?,?,'ESTOQUE_MINIMO','PENDENTE')`, [mat.lastID, 12]);
+    const leSolicitacao = () => dbGet(db,
+      'SELECT status, pedido_compra_id FROM solicitacoes_compra_almoxarifado WHERE id = ?', [sol.lastID]);
+
+    // `ADMIN` e `role: 'admin'` -> perfil ADMINISTRADOR, que tem `gerenciar_reposicao` (o gate
+    // condicional do vinculo, fix 1 da Task 2). Sem isso o POST responderia 403 e o cenario
+    // mediria o gate, nao a liberacao.
+    const pedido = await novoPedido([{ material_id: mat.lastID, quantidade: 12, valor_unitario: 3 }],
+      { solicitacao_id: sol.lastID });
+
+    // ⚠️ A METADE POSITIVA VEM PRIMEIRO, e ela e a fixture do achado: sem este par de asserçoes,
+    // "voltou para PENDENTE" passaria numa solicitacao que nunca foi vinculada.
+    const antes = await leSolicitacao();
+    assert.strictEqual(antes.status, 'VINCULADO', `fixture: a solicitacao ficou ${antes.status}`);
+    assert.strictEqual(antes.pedido_compra_id, pedido.id, 'fixture: o vinculo tem de apontar para o pedido criado');
+
+    const r = await request(app).delete(`/api/compras/pedidos/${pedido.id}`);
+    assert.strictEqual(r.status, 200, `esperava 200, veio ${r.status} ${JSON.stringify(r.body)}`);
+    assert.strictEqual(r.body.message, EXCLUIDO, 'literal do 200 divergente');
+    // A resposta CONTA quantas voltaram para a fila: apagar um pedido muda o estado de outro
+    // modulo, e quem clicou na lixeira precisa saber.
+    assert.strictEqual(r.body.solicitacoes_liberadas, 1,
+      `esperava solicitacoes_liberadas 1, veio ${JSON.stringify(r.body.solicitacoes_liberadas)}`);
+
+    // ⚠️ AS DUAS ASSERCOES QUE MEDEM O DANO.
+    const depois = await leSolicitacao();
+    assert.strictEqual(depois.status, 'PENDENTE',
+      `a solicitacao tinha de voltar para PENDENTE (ficou ${depois.status}) — em VINCULADO ela nunca `
+      + 'mais vira pedido: a Reposicao so oferece "Gerar pedido" em PENDENTE');
+    assert.strictEqual(depois.pedido_compra_id, null,
+      'o ponteiro tinha de ser limpo: ele aponta para um pedido que nao existe mais');
+    assert.strictEqual(await cabecalho(pedido.id), undefined, 'o pedido tinha de ter sido apagado');
+
+    // PELO SERVICO, sem HTTP: a perna mora nele, e a importacao/Reposicao o chamam direto.
+    const sol2 = await dbRun(db, `INSERT INTO solicitacoes_compra_almoxarifado
+      (material_id, quantidade, motivo, status) VALUES (?,?,'ESTOQUE_MINIMO','PENDENTE')`, [mat.lastID, 7]);
+    const pedido2 = await pedidoCompraService.criarPedido(db, {
+      fornecedor_id: fornecedorId,
+      itens: [{ material_id: mat.lastID, quantidade: 7, valor_unitario: 1 }],
+      solicitacao_id: sol2.lastID,
+    }, ADMIN);
+    assert.strictEqual((await dbGet(db, 'SELECT status FROM solicitacoes_compra_almoxarifado WHERE id = ?',
+      [sol2.lastID])).status, 'VINCULADO', 'fixture do servico: o vinculo tem de ter acontecido');
+    const resultado = await pedidoCompraService.excluirPedido(db, pedido2.id);
+    assert.strictEqual(resultado.solicitacoes_liberadas, 1,
+      `pelo servico tambem: esperava 1, veio ${resultado.solicitacoes_liberadas}`);
+    const depois2 = await dbGet(db,
+      'SELECT status, pedido_compra_id FROM solicitacoes_compra_almoxarifado WHERE id = ?', [sol2.lastID]);
+    assert.strictEqual(depois2.status, 'PENDENTE', `pelo servico a solicitacao ficou ${depois2.status}`);
+    assert.strictEqual(depois2.pedido_compra_id, null, 'pelo servico o ponteiro nao foi limpo');
+
+    // METADE NEGATIVA: estado TERMINAL nao ressuscita. Uma solicitacao CANCELADA que aponte para o
+    // pedido apagado continua CANCELADA — senao a reposicao ofereceria de novo um pedido que o
+    // almoxarife cancelou a mao.
+    const sol3 = await dbRun(db, `INSERT INTO solicitacoes_compra_almoxarifado
+      (material_id, quantidade, motivo, status) VALUES (?,?,'ESTOQUE_MINIMO','PENDENTE')`, [mat.lastID, 4]);
+    const pedido3 = await novoPedido([{ material_id: mat.lastID, quantidade: 4, valor_unitario: 1 }],
+      { solicitacao_id: sol3.lastID });
+    await dbRun(db, "UPDATE solicitacoes_compra_almoxarifado SET status = 'CANCELADA' WHERE id = ?", [sol3.lastID]);
+    const r3 = await request(app).delete(`/api/compras/pedidos/${pedido3.id}`);
+    assert.strictEqual(r3.status, 200, `esperava 200, veio ${r3.status}`);
+    assert.strictEqual(r3.body.solicitacoes_liberadas, 0, 'a CANCELADA nao conta como liberada');
+    const depois3 = await dbGet(db,
+      'SELECT status, pedido_compra_id FROM solicitacoes_compra_almoxarifado WHERE id = ?', [sol3.lastID]);
+    assert.strictEqual(depois3.status, 'CANCELADA', `a solicitacao terminal virou ${depois3.status}`);
+    assert.strictEqual(depois3.pedido_compra_id, pedido3.id,
+      'o ponteiro da terminal e HISTORICO: fica como estava (declarado no servico)');
   });
 
   await close();
