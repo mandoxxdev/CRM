@@ -74,6 +74,9 @@ function test(name, fn) {
 const ADMIN = { id: 90, nome: 'Admin Int E38', role: 'admin' };
 const ALMOXARIFE = { id: 91, nome: 'Almoxarife Int E38', role: 'usuario', perfil_almoxarifado: 'ALMOXARIFE' };
 const COMPRAS = { id: 92, nome: 'Compras Int E38', role: 'usuario', perfil_almoxarifado: 'COMPRAS' };
+// Onda de correcao, F8: usuario SEM perfil de almoxarifado — `getPerfilFromUser` faz fallback para
+// PRODUCAO, que NAO tem `gerenciar_reposicao`. E o usuario do bloco E2.
+const SEM_PERFIL = { id: 93, nome: 'Producao Int E38', role: 'usuario' };
 
 // ── As literais dos DOIS modulos, congeladas em constante: o `grep` de uma frase acha o dono e o
 // teste na mesma varredura, e a igualdade literal e o que impede "a mensagem mudou e ninguem viu".
@@ -151,6 +154,9 @@ const semPermissao = (perfil) => 'Autorizar recebimento acima do pedido exige a 
     'SELECT COUNT(*) as n FROM itens_pedido_compra WHERE pedido_id = ?', [pedidoId])).n;
   const contarPedidoPorId = async (pedidoId) => (await dbGet(db,
     'SELECT COUNT(*) as n FROM pedidos_compra WHERE id = ?', [pedidoId])).n;
+  // Onda de correcao, F8: o COUNT GLOBAL, para o bloco E2 poder afirmar que o 403 nao gravou nada
+  // (aqui o escopo certo e o global — o pedido negado nao tem id para escopar).
+  const contarPedidos = async () => (await dbGet(db, 'SELECT COUNT(*) as n FROM pedidos_compra')).n;
   const contarRecebimentos = async () => (await dbGet(db,
     'SELECT COUNT(*) AS n FROM recebimentos_material_almoxarifado')).n;
   const statusDoRecebimento = async (recId) => (await dbGet(db,
@@ -548,6 +554,75 @@ const semPermissao = (perfil) => 'Autorizar recebimento acima do pedido exige a 
     assert.strictEqual(resultado.message, EXCLUIDO, 'literal do sucesso divergente');
     assert.strictEqual(await contarPedidoPorId(limpo.id), 0, 'o pedido limpo tinha de sumir');
     assert.strictEqual(await contarItens(limpo.id), 0, 'e as linhas junto');
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════════════════════
+  // BLOCO E2 — ONDA DE CORRECAO, F8: o gate condicional de `gerenciar_reposicao` NUNCA foi
+  // exercitado pela entrada de SERVICO.
+  //
+  // O gate (fix 1 da Task 2) mora em `criarPedido`, **nao na rota** — e e a Task 6 (botao "Gerar
+  // pedido" da Reposicao) e a importacao que chamam o servico direto. O cenario (11) de
+  // `comprasPedidoCriar` o mede pela ROTA; nenhum cenario o media pelo SERVICO, e mover a checagem
+  // para o handler (por parecer o lugar "certo" de uma regra de permissao) deixaria os dois
+  // chamadores sem gate com a suite INTEIRA verde. E o mesmo argumento do bloco E para as duas
+  // pernas da regua, aplicado a terceira regra que vive no servico.
+  // ═══════════════════════════════════════════════════════════════════════════════════════════════
+  await test('(E2) pelo SERVICO: solicitacao_id sem `gerenciar_reposicao` lanca 403 ANTES de qualquer escrita', async () => {
+    const mat = await novoMaterial();
+    const sol = await dbRun(db, `INSERT INTO solicitacoes_compra_almoxarifado
+      (material_id, quantidade, motivo, status) VALUES (?,?,'ESTOQUE_MINIMO','PENDENTE')`, [mat.id, 9]);
+
+    const pedidosAntes = await contarPedidos();
+    await assert.rejects(
+      () => pedidoCompraService.criarPedido(db, {
+        fornecedor_id: fornecedorId,
+        itens: [{ material_id: mat.id, quantidade: 9, valor_unitario: 2 }],
+        solicitacao_id: sol.lastID,
+      }, SEM_PERFIL),
+      (e) => {
+        assert.strictEqual(e.status, 403, `status errado: ${e.status} — ${e.message}`);
+        assert.strictEqual(e.acao, 'gerenciar_reposicao', `acao errada: ${e.acao}`);
+        // O corpo tem o MESMO shape de `requirePermission` (`permissions.js:200`), e e isso que
+        // permite a tela dizer QUAL permissao falta e com que perfil o usuario entrou.
+        assert.strictEqual(e.perfil, 'PRODUCAO', `perfil errado: ${e.perfil} (o fallback e PRODUCAO)`);
+        assert.strictEqual(e.message, 'Sem permissão para esta operação', 'literal do 403 divergente');
+        return true;
+      },
+      'o gate do vinculo mora no SERVICO: sem a rota ele TEM de continuar existindo');
+
+    // ⚠️ AS ASSERCOES QUE MEDEM O DANO: o 403 vem ANTES da primeira escrita — nenhum pedido
+    // gravado (recusar depois do INSERT deixaria pedido criado por uma chamada NEGADA) e a
+    // solicitacao intacta em PENDENTE.
+    assert.strictEqual(await contarPedidos(), pedidosAntes,
+      'o 403 do gate nao pode ter gravado pedido nenhum');
+    const depois = await dbGet(db,
+      'SELECT status, pedido_compra_id FROM solicitacoes_compra_almoxarifado WHERE id = ?', [sol.lastID]);
+    assert.strictEqual(depois.status, 'PENDENTE', `a solicitacao virou ${depois.status} sem permissao`);
+    assert.strictEqual(depois.pedido_compra_id, null, 'a solicitacao ficou apontando para um pedido');
+
+    // METADE POSITIVA 1: o MESMO usuario, o MESMO payload SEM `solicitacao_id`, CRIA — o gate e
+    // CONDICIONAL por contrato (o core Compras nao ganha camada de perfil propria nesta etapa).
+    const semVinculo = await pedidoCompraService.criarPedido(db, {
+      fornecedor_id: fornecedorId,
+      itens: [{ material_id: mat.id, quantidade: 9, valor_unitario: 2 }],
+    }, SEM_PERFIL);
+    assert.ok(semVinculo.id, 'o MESMO usuario tem de criar pedido SEM vinculo');
+    assert.strictEqual(await contarItens(semVinculo.id), 1, 'e com a linha gravada');
+    assert.strictEqual(await contarPedidos(), pedidosAntes + 1, 'e o COUNT tem de ter andado UM');
+
+    // METADE POSITIVA 2: com perfil COMPRAS (`gerenciar_reposicao` = [ADMINISTRADOR, GESTOR,
+    // COMPRAS]) o MESMO vinculo passa — senao "recusa todo vinculo" passaria neste cenario.
+    const comPermissao = await pedidoCompraService.criarPedido(db, {
+      fornecedor_id: fornecedorId,
+      itens: [{ material_id: mat.id, quantidade: 9, valor_unitario: 2 }],
+      solicitacao_id: sol.lastID,
+    }, COMPRAS);
+    assert.strictEqual(comPermissao.vinculo_solicitacao, 'ok',
+      `esperava vinculo 'ok', veio ${comPermissao.vinculo_solicitacao}`);
+    const vinculada = await dbGet(db,
+      'SELECT status, pedido_compra_id FROM solicitacoes_compra_almoxarifado WHERE id = ?', [sol.lastID]);
+    assert.strictEqual(vinculada.status, 'VINCULADO', `solicitacao ficou ${vinculada.status}`);
+    assert.strictEqual(vinculada.pedido_compra_id, comPermissao.id, 'o vinculo nao aponta para o pedido criado');
   });
 
   await close();
