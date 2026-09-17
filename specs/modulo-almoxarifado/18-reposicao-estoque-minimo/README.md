@@ -6,7 +6,10 @@
 > cancelar solicitação no recebimento, itens por material), declarada fora com porquê abaixo ·
 > **Spec original:** seção 22 · **Design da etapa:**
 > [`docs/superpowers/specs/2026-08-23-almoxarifado-etapa11-reposicao-compras-design.md`](../../../docs/superpowers/specs/2026-08-23-almoxarifado-etapa11-reposicao-compras-design.md)
-> **Última atualização:** 2026-08-24 (Etapa 11 fechada) · Antes: 2026-08-02
+> **Última atualização:** 2026-09-16 — **Etapa 38**: a solicitação PENDENTE ganhou o botão
+> **"Gerar pedido"** (`727ee29`) e apagar o pedido **libera** a solicitação de volta (`ca7956c`);
+> `vincularPedidoCompra` finalmente tem chamador · Antes: 2026-08-24 (Etapa 11 fechada) ·
+> Antes: 2026-08-02
 
 ## Objetivo
 
@@ -42,6 +45,19 @@ de compra considerando pedidos abertos e reservas, e identificação de excessos
   erro/permissão por aba com retry.
 - **Legado intocado**: `verificarEstoqueMinimo` (gate `configurar`, dedupe por PENDENTE) e
   `vincular-pedido` continuam como eram; `alertService` segue dono do alerta de mínimo.
+- **"Gerar pedido" na aba Solicitações — ENTREGUE na Etapa 38** (`727ee29`, só client; feature
+  [22](../22-integracoes/README.md)). É o **primeiro consumidor que `purchaseService.vincularPedidoCompra`
+  já teve** — a spec dizia, com razão, que a função exigia um pedido que ninguém criava.
+  O botão aparece em cada solicitação **PENDENTE** e **não** aparece em VINCULADO/CANCELADO, nem
+  sem `pode('gerenciar_reposicao')`, nem sem o módulo **Compras** (lido do mesmo cache do menu;
+  cache frio **falha aberto**, com atraso de TTL de 5 min). O clique **navega, não posta**
+  (`/compras/pedidos/novo?solicitacao=…&material=…&quantidade=…`) — descartado criar um
+  `GET /api/almoxarifado/solicitacoes/:id` só para pré-preencher (B107). Quem decide é o
+  **servidor**: o `POST` do Compras exige `gerenciar_reposicao` **antes de escrever** quando vem
+  `solicitacao_id`, e a linha da Reposição só muda para `VINCULADO` ao **reabrir** a tela.
+  **E apagar o pedido devolve a solicitação para a fila** (`ca7956c`): `PENDENTE` com
+  `pedido_compra_id NULL`, exceto `RECEBIDA`/`CANCELADA`. Antes disso ela ficava `VINCULADO`
+  apontando para um id apagado e **nunca mais virava pedido**.
 
 ## Checklist
 
@@ -96,7 +112,9 @@ de compra considerando pedidos abertos e reservas, e identificação de excessos
   o design D2 original dizia que a tabela não existia; **estava errado** e foi corrigido).
   Até lá, o **horizonte de 60 dias** é a aproximação de "aberta", e não existe cancelamento
   (item B14 do doc de novidades).
-- **Criar pedido de compra real** — features 22/24 (integração com Compras).
+- ~~**Criar pedido de compra real** — features 22/24 (integração com Compras).~~ **Entregue na
+  Etapa 38** (`727ee29` + `ca7956c`; o pedido em si em `be71754..0a7e5c6`, feature 22): a
+  solicitação PENDENTE vira pedido por clique, e a exclusão do pedido a libera de volta.
 - **"Projetos futuros" no cálculo** — exigiria BOM/OP (features 22/23).
 - **Alerta de máximo na entrada** e **e-mail de sugestão** — cortes declarados (D5/D8).
 - **Indicadores na listagem geral de materiais** — ver checklist.
@@ -104,5 +122,7 @@ de compra considerando pedidos abertos e reservas, e identificação de excessos
 ## Dependências
 
 - 01 (campos de reposição — **consumidos nesta etapa**) · 07 (reservas — via `disponivelSql`,
-  fonte única) · 22/24 (pedidos de compra por material — ainda não existem; é o que falta
-  para fechar o ciclo).
+  fonte única) · 22/24 (pedidos de compra por material — ~~ainda não existem; é o que falta
+  para fechar o ciclo~~ **passaram a existir na Etapa 38**: há criação de pedido com linha por
+  material. O que ainda falta para fechar o ciclo é o **elo por material** entre
+  `solicitacoes_compra_itens` do core e a solicitação do almoxarifado — ver "O que ficou de fora").

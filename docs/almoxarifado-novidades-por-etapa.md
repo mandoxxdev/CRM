@@ -55,6 +55,10 @@
 | 22 | A trilha de auditoria ganha uma tela | 2026-08-28 | Três etapas anotaram quem mexeu em quê e **nada disso tinha leitor**; agora há a tela **Auditoria**, com filtro de tipo, ação, pessoa e período, o de/para campo a campo ao expandir a linha, e os três índices que a tabela nunca teve |
 | 23 | O histórico para de mentir por omissão e por excesso | 2026-08-28 | **Sem tela nova:** o que muda é a confiança no que a tela da 22 mostra. Salvar configurações virou tudo-ou-nada (falha no meio deixava parte gravada **sem nenhuma linha de histórico**), excluir o que já está inativo parou de virar uma segunda linha de "Exclusão" indistinguível da real, e o mecanismo de "tenta de novo" parou de responder erro e gravar assim mesmo |
 
+*(A tabela acima para na **Etapa 23**: as etapas 24 a 38 têm seção própria mais abaixo e não foram
+acrescentadas ao resumo. **Atualizado em 2026-09-16 — a última etapa entregue é a 38, "Pedido de
+compra".**)*
+
 Com a 6c, a feature 10 (lotes, séries e etiquetas) ficou **completa por inteiro**; com a 7, as
 features 11 (transferências) e 12 (devoluções) também; com a 8, a feature 13 (materiais de
 clientes).
@@ -421,7 +425,39 @@ PRAGMA table_info(localizacoes_almoxarifado);
   esquema (não ressuscitar os comandos, que falhavam de qualquer jeito).
 
 
-### B. Decisões de negócio — B1 a B99; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+**A14 (NOVA, da Etapa 38 — o retrato do acervo de pedidos ANTES de a tela existir).** A Etapa 38
+entrega a criação de pedido de compra, e a primeira coisa a saber é **o que já existe no banco de
+produção**. Na medição feita para desenhar a etapa, eram **zero pedidos e zero itens** — mas essa
+medição é de um dump, não do banco ao vivo, e vale repetir **antes** do deploy: se alguém tiver
+carregado pedido por fora nesse meio tempo, a tela nova vai listá-lo e o comprador poderá **editá-lo
+ou excluí-lo**.
+
+```sql
+SELECT (SELECT COUNT(*) FROM pedidos_compra)      AS pedidos,
+       (SELECT COUNT(*) FROM itens_pedido_compra) AS itens_de_pedido;
+
+SELECT status, COUNT(*) AS quantos
+  FROM pedidos_compra
+ GROUP BY status
+ ORDER BY quantos DESC;
+```
+
+- **`0 | 0`** — é o resultado esperado e o que foi medido. Nada a fazer: a tela nasce numa lista
+  vazia, e o primeiro pedido do sistema será criado pela tela.
+- **Pedidos > 0** — olhe a segunda consulta antes de subir. A tela nova **só sabe pintar sete
+  status** (`pendente`, `aprovado`, `rejeitado`, `em_analise`, `enviado`, `recebido`, `cancelado`).
+  Um status fora dessa lista aparece como texto cru na lista de pedidos e, ao **abrir o pedido para
+  editar**, o seletor de status mostra a primeira opção — salvar ali **reescreveria** o status
+  antigo. Se aparecer algum valor estranho, me avise antes do deploy em vez de subir e descobrir
+  pela tela.
+- **Itens > 0 com pedidos = 0** — são **linhas órfãs** de pedido apagado, e o motivo delas está na
+  letra **C51**: a lixeira antiga apagava o cabeçalho e deixava os itens. A partir desta etapa isso
+  não acontece mais; as antigas podem ser apagadas com
+  `DELETE FROM itens_pedido_compra WHERE pedido_id NOT IN (SELECT id FROM pedidos_compra);`
+  **depois** de você confirmar a contagem.
+
+### B. Decisões de negócio — B1 a B113; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(O título desta seção dizia "B1 a B24" — **estava defasado**: os itens já iam até B36 antes da
 Etapa 20. Corrigido em 2026-08-28 para B50, depois para B56 com as três da Etapa 24, para B57 com
@@ -434,7 +470,10 @@ da Etapa 29. **Atualizado em 2026-09-16 para B79**, com as oito da Etapa 35 — 
 sete decisões de desenho dela, e B79 é uma decisão sobre **como se prova** o que esta base entrega.
 O título vinha marcado "B1 a B71", que era o número correto ao fim da Etapa 34. **Atualizado de
 novo em 2026-09-16 para B88**, com as nove da Etapa 36 — B80 a B85 são as decisões de desenho, e
-B86 a B88 vieram da onda de correção da revisão final.)*
+B86 a B88 vieram da onda de correção da revisão final. **Atualizado em 2026-09-16 para B99**,
+com as onze da Etapa 37 — o título do bloco já dizia B99 e esta nota, não; e **para B113**, com as
+catorze da Etapa 38 (B100 a B106 são as decisões de desenho, B107 e B108 as do botão "Gerar
+pedido", e B109 a B113 vieram da onda de correção da revisão final).)*
 
 **A B6 SAIU da lista de em aberto — foi respondida pela Etapa 26** (2026-08-29): vence o catálogo
 do cliente, e a lista genérica sai das telas. Ver o item B6 abaixo, que ficou no lugar com o
@@ -1902,11 +1941,226 @@ de entrada — é etapa inteira, não apêndice.
 (as três abas do Compras não têm tela de criação, e o banco de produção tem zero pedidos). Em
 produção, portanto, a forma *"Pedido de compra"* **abre com o campo vazio** e o operador não
 consegue fazer nada com ela. Para demonstrar hoje, é preciso inserir um pedido **por SQL** — o
-comando pronto está na letra **F13**, e **esse item fica aberto até a Etapa 38**.
+comando pronto está na letra **F13**, e esse item ficou aberto até a Etapa 38.
+**Fechou:** a Etapa 38 (2026-09-16) entregou a criação de pedido no módulo Compras — a forma
+*"Pedido de compra"* deixa de abrir vazia, e o roteiro de teste não usa mais SQL.
 **O que fecha isso:** a **Etapa 38**, já desenhada — *o pedido de compra ganha criação*, com
 importação de planilha como carga inicial e o botão **"Gerar pedido"** na Reposição, fechando o elo
 que hoje morre na solicitação de compra (a Reposição gera a solicitação, e **ninguém a converte em
 pedido**).
+
+
+**As catorze da Etapa 38 (B100 a B113) — todas tomadas por mim, nenhuma esperando resposta, todas
+reversíveis.** Sete são decisões de desenho (B100 a B106), duas nasceram do botão "Gerar pedido"
+(B107 e B108) e cinco vieram da onda de correção da revisão final (B109 a B113).
+
+**B100 (NOVA, da Etapa 38) — o número do pedido de compra é GERADO pelo sistema, nunca digitado.**
+
+**O que foi escolhido:** o servidor gera o número no padrão `PC-…`, com o mesmo gerador de números
+de documento da Etapa 31 (que tenta de novo em caso de colisão). Não existe campo de número na tela,
+e o número mandado por fora dela é ignorado.
+**O que foi descartado:** deixar o comprador digitar o número do pedido, como a empresa faria numa
+planilha.
+**Por quê:** número digitado exige unicidade garantida no banco, e o gerador da Etapa 31 **reescreve
+em silêncio** o número em caso de colisão — o que é correto quando ninguém escolheu o número, e
+inaceitável quando uma pessoa escolheu. Com o número gerado, a repetição fica inofensiva.
+**O custo, e ele é real:** sem número digitado, **a importação de planilha não tem como ser
+idempotente** — não há chave que diga "esta ordem de compra já entrou". Reimportar duplica (letra
+**D** e **G38**). O número da ordem de compra da planilha é guardado nas **observações** do pedido
+(*"Planilha: OC-1234"*), que é a única pista de qual linha virou qual `PC-…`.
+**Como reverter:** dar campo de número ao comprador é etapa própria — exige índice único, tratamento
+do conflito na tela e uma decisão sobre o acervo já importado.
+
+**B101 (NOVA, da Etapa 38) — o módulo Compras continua com UMA camada de autorização (acesso ao
+módulo) e as portas novas herdaram isso; a ÚNICA exceção é o vínculo com a Reposição, e essa exceção
+contraria o desenho de propósito.**
+
+**O que foi escolhido:** criar, editar, excluir e importar pedido de compra exigem **acesso ao
+módulo Compras** e nada mais. Medido antes de decidir: as 26 rotas do core Compras têm **uma** camada
+(módulo), **zero** verificações de perfil e **zero** validação de entrada. As portas novas herdaram a
+camada existente — **e são as primeiras do módulo com validação de entrada**.
+**O que foi descartado:** inventar perfis do Compras (um "Comprador" que cria e um "Consulta" que só
+lê) nesta etapa.
+**Por quê:** perfil de verdade é um sistema — tabela de ações, tela de atribuição, mensagem de
+recusa, testes negativos —, exatamente o que o almoxarifado levou várias etapas para ganhar. Fazer
+meio perfil só para o pedido de compra deixaria o módulo com **dois** modelos de permissão e nenhum
+completo.
+**A consequência, escrita para você arbitrar:** hoje **qualquer usuário com acesso ao módulo Compras
+faz tudo dentro dele** — criar, editar e excluir pedido, fornecedor e cotação. Está na letra **G30**.
+
+**A exceção, e ela foi uma REVERSÃO do desenho durante a execução:** o desenho dizia para deixar o
+vínculo com a solicitação da Reposição **sem** permissão própria, declarando a herança acima. Medido,
+isso significava que **qualquer** usuário do módulo Compras — inclusive o perfil de **chão de
+fábrica**, que é o padrão de quem não tem perfil definido — mudava o estado de uma solicitação do
+**almoxarifado** para VINCULADO com um clique. Não é herança frouxa: é **escalação alcançável por
+clique** entre módulos, e a própria tela de Reposição barra essa ação. Agora o serviço verifica
+`gerenciar_reposicao` **antes de qualquer escrita** e responde **403** nomeando a ação e o perfil.
+**O custo da exceção:** um comprador **sem** `gerenciar_reposicao` que chegue ao formulário pelo
+endereço de "Gerar pedido" toma 403; o pedido **sem** vínculo ele cria normalmente.
+
+**B102 (NOVA, da Etapa 38) — as recusas de editar e excluir pedido recebido têm DUAS pernas, não
+uma.**
+
+**O que foi escolhido:** recusar quando (1) alguma linha do pedido já tem quantidade recebida **ou**
+(2) existe documento de recebimento apontando para uma linha do pedido, **mesmo que nada tenha
+entrado no estoque ainda**.
+**O que foi descartado:** medir só a quantidade recebida, que é a pergunta óbvia.
+**Por quê:** pela regra da Etapa 37, o recebimento **criado e não processado** tem quantidade
+recebida **zero** e **já guarda o elo** com a linha do pedido. Só com a perna (1), editar o pedido
+nessa janela trocaria as linhas e deixaria o recebimento apontando para linha inexistente — **sem
+erro, sem aviso e sem chave estrangeira para acusar**. Sonda executada: a edição respondia 200,
+trocava a linha e o pedido ficava com saldo pendente para sempre.
+**O custo:** um recebimento aberto por engano **tranca** o pedido até alguém resolver aquele
+recebimento. Como não existe cancelamento de recebimento (feature 12), o destravamento é por SQL.
+
+**B103 (NOVA, da Etapa 38) — a tela de pedido não mostra saldo nem situação do recebimento.**
+
+**O que foi escolhido:** a leitura de um pedido devolve cabeçalho e itens, **sem** saldo pendente e
+**sem** a situação derivada (ABERTO/PARCIAL/RECEBIDO).
+**O que foi descartado:** fazer o Compras chamar o cálculo do almoxarifado para mostrar isso.
+**Por quê:** o cálculo vive no serviço de recebimento do almoxarifado, que é código que esta etapa
+declarou **não tocar** (é o que a Etapa 37 acabou de entregar e estabilizar). Chamá-lo de outro
+módulo exigiria expô-lo, e expor esse cálculo é decisão de arquitetura, não de tela.
+**O custo:** continua verdadeiro o que a Etapa 37 declarou — **nenhuma tela mostra quanto do pedido
+já chegou**. Ver a letra **D**.
+
+**B104 (NOVA, da Etapa 38) — o status do pedido fica com os sete valores que já existiam; PARCIAL
+nunca entra nele.**
+
+**O que foi escolhido:** `pendente, aprovado, rejeitado, em_analise, enviado, recebido, cancelado` —
+o vocabulário que a tela de Compras já pintava e filtrava.
+**O que foi descartado:** acrescentar PARCIAL/RECEBIDO (os da derivação do almoxarifado) a este
+campo.
+**Por quê:** *ABERTO / PARCIAL / RECEBIDO* é **calculado** a partir do que chegou em cada linha.
+Gravá-lo aqui faria o Compras **afirmar** um fato que só as linhas do pedido podem dizer, e as duas
+fontes divergiriam na primeira edição manual do status. O `recebido` minúsculo daqui é outra coisa —
+o comprador declarando o pedido encerrado — e ficou como estava.
+
+**B105 (NOVA, da Etapa 38) — a spec desta fatia vive em `specs/modulo-almoxarifado/22-integracoes/`.**
+
+**O que foi escolhido:** documentar o pedido de compra como "fatia Compras" da feature de
+integrações do almoxarifado.
+**O que foi descartado:** abrir uma árvore de specs para o módulo core Compras.
+**Por quê:** o módulo Compras não tem spec própria, e criar uma por causa de uma etapa deixaria o
+resto dele (fornecedores, cotações, grupos) fora de qualquer mapa — parecendo documentado quando não
+está. A fatia fica onde o **consumidor** dela está descrito.
+**Como reverter:** mover a pasta quando o Compras ganhar mapa próprio; é mudança de arquivo, sem
+efeito em código.
+
+**B106 (NOVA, da Etapa 38) — preço zero no item do pedido é ACEITO, e quem avisa é a tela.**
+
+**O que foi escolhido:** `valor unitário` é opcional no item, e zero é valor válido.
+**O que foi descartado:** exigir preço em todo item do pedido.
+**Por quê:** pedido aberto **antes de fechar a cotação** é caso real do galpão, e recusar obrigaria
+o comprador a inventar um preço — o que é pior que não ter preço, porque número inventado alimenta
+o custo médio.
+**O custo, e ele desfaz uma melhoria da Etapa 37:** o recebimento herda o preço da linha do pedido,
+e o custo unitário só viaja quando é maior que zero — então **item de pedido sem preço não alimenta
+o custo médio do material** na entrada. É por isso que a tela avisa:
+*"Sem preço o custo médio do material não é alimentado no recebimento."* A decisão fica com a
+**pessoa**, não com o sistema.
+
+**B107 (NOVA, da Etapa 38) — o botão "Gerar pedido" navega com os dados da LINHA da Reposição, sem
+consultar o servidor.**
+
+**O que foi escolhido:** o botão monta o endereço do formulário do Compras com material, código e
+quantidade **da própria linha da tabela**, que já tem tudo o que o formulário precisa.
+**O que foi descartado:** abrir uma porta nova (obter **uma** solicitação) só para pré-preencher.
+**Por quê:** a listagem da Reposição está toda atrás do acesso ao **almoxarifado** — um comprador que
+só tem o módulo Compras tomaria recusa ao consultá-la. E a porta que **existe** com nome parecido, no
+núcleo, lê **outra tabela**: traria o registro errado em silêncio.
+**O custo:** se a solicitação mudar entre a abertura da tela da Reposição e o clique, o formulário
+nasce com o número antigo. O comprador vê e corrige antes de salvar, e o vínculo é validado pelo
+servidor de qualquer jeito.
+
+**B108 (NOVA, da Etapa 38) — o botão "Gerar pedido" é escondido pelo cache de módulos do menu, em
+vez de uma consulta nova por linha.**
+
+**O que foi escolhido:** a Reposição esconde o botão de quem **não tem o módulo Compras**, usando o
+mesmo cache que o menu já carregou.
+**O que foi descartado:** consultar as permissões do Compras a cada linha da tabela.
+**Por quê:** o destino do botão está atrás da barreira do módulo Compras — oferecer um caminho que
+termina em "acesso negado" é pior que não oferecer. E o cache está quente, porque a própria tela
+dependeu dele para abrir.
+**O custo, declarado:** o cache tem validade de **5 minutos**, então uma permissão recém-concedida
+pode levar até isso para o botão aparecer. E **cache frio falha aberto** — o botão aparece, e quem
+não puder toma a recusa ao clicar. Esconder ação de quem pode, por causa de cache vazio, é o pior
+dos dois erros.
+
+**B109 (NOVA, da Etapa 38 — da onda de correção) — a importação agrupa por ORDEM DE COMPRA *e*
+FORNECEDOR.**
+
+**O que foi escolhido:** cada combinação **ordem × fornecedor** vira um pedido. A mesma ordem com
+dois fornecedores produz **dois** pedidos, e os dois registram a ordem de origem nas observações.
+**O que foi descartado:** recusar a planilha inteira quando houver mistura (perde 300 linhas boas por
+causa de uma) e manter a herança do fornecedor do grupo com um aviso (o dano é no **dado gravado**,
+não na mensagem).
+**Por quê, e o cenário é grave:** antes disso o fornecedor do pedido era "a primeira linha que
+conseguisse resolver", então duas linhas da mesma ordem com fornecedores diferentes viravam **um**
+pedido — item da BETA gravado no pedido da ACME, com **zero linha ignorada**, sucesso total na tela.
+E o erro **propagava para o financeiro**: o recebimento copia o fornecedor do pedido, e a conta a
+pagar nasce dele.
+**O custo, declarado em G34:** planilha que traz o CNPJ **só na primeira linha** da ordem perde as
+demais linhas, que vão para "ignoradas" com *"fornecedor não encontrado"* — porque nenhuma linha
+herda o fornecedor de outra. Recusar a linha é **visível e reversível** (o operador preenche a coluna
+e reimporta); gravar o pedido no fornecedor errado, não.
+
+**B110 (NOVA, da Etapa 38 — da onda de correção) — excluir o pedido LIBERA as solicitações da
+Reposição.**
+
+**O que foi escolhido:** apagado o pedido, as solicitações vinculadas a ele voltam a **PENDENTE** e
+soltam o vínculo (exceto as já RECEBIDA ou CANCELADA), e a resposta informa **quantas**.
+**O que foi descartado:** recusar a exclusão de um pedido que tenha solicitação vinculada (uma
+terceira perna de recusa, além das duas da **B102**).
+**Por quê:** a solicitação ficava **VINCULADO apontando para um pedido apagado** — e, nesse estado,
+ela não conta como "a caminho" para a régua de sugestão, não aparece para "Gerar pedido" e **nunca
+mais vira pedido nenhum**. Liberar é o comportamento que o operador espera: o pedido foi desfeito, a
+necessidade continua.
+**O custo:** quem apagar o pedido vê a solicitação reaparecer na fila de compras. É o certo, mas
+surpreende quem não sabia.
+
+**B111 (NOVA, da Etapa 38 — da onda de correção) — as duas datas do pedido só aceitam `AAAA-MM-DD`
+ou vazio.**
+
+**O que foi escolhido:** na porta de dados, campo vazio vira **nulo** e qualquer texto que não seja
+`AAAA-MM-DD` é recusado com *"previsão de entrega inválida (use AAAA-MM-DD)"* ou *"data do pedido
+inválida (use AAAA-MM-DD)"*. Na **importação**, datas em `DD/MM/AAAA` e a data numérica que o Excel
+guarda por baixo são **convertidas**, e o irreconhecível vira **nulo + aviso** (a linha entra: data
+é informativa).
+**O que foi descartado:** aceitar o que viesse (era o comportamento — texto livre entrava numa
+coluna de data) e recusar a linha da planilha por causa da data.
+**Por quê:** a tela mandava texto vazio **sempre**, e o banco gravava `''` numa coluna de data.
+Consequência medida: uma consulta de "previsão vencida" **acusa** essas linhas — o alerta de atraso
+nasceria apontando justamente os pedidos **sem** previsão —, e "é nulo" **não** as encontra. E, na
+migração de banco já planejada, coluna de data **recusa** texto vazio.
+**Efeito colateral aproveitado:** na edição, mandar a data explicitamente nula agora **limpa** a
+data — apagar virou gesto possível.
+
+**B112 (NOVA, da Etapa 38 — da onda de correção) — fornecedor que tem pedido de compra não é
+excluível.**
+
+**O que foi escolhido:** recusar com *"Fornecedor possui pedidos de compra — não pode ser excluído"*,
+verificando **antes** de apagar.
+**O que foi descartado:** apagar em cascata (levaria os pedidos embora) e traduzir o erro do banco
+**depois** da falha (a frase certa só apareceria no ambiente que tem a chave estrangeira ligada, e o
+teste não poderia provar a outra metade).
+**Por quê:** este caminho era **inalcançável** antes desta etapa — não havia pedido nenhum para
+referenciar fornecedor —, e passou a poder falhar com o **500** genérico *"Erro ao excluir item"*,
+que não diz nada a quem clicou na lixeira.
+**O custo:** para apagar o fornecedor mesmo assim é preciso apagar os pedidos dele primeiro — e os
+que já tiveram recebimento não são apagáveis (**B102**).
+
+**B113 (NOVA, da Etapa 38 — da onda de correção) — sem coluna de data, o pedido importado nasce com
+a data de HOJE.**
+
+**O que foi escolhido:** usar a coluna de data da planilha quando existir (`Data`, `Data Pedido`,
+`Data do Pedido`, `Emissão`) e, ausente, **a data de hoje do servidor**.
+**O que foi descartado:** deixar a data em branco.
+**Por quê:** a coluna não tem valor padrão no banco, e o branco aparecia como **"Data Pedido: -"** em
+**toda** linha da carga — na lista da aba Pedidos e no Excel exportado. A data da ordem antiga é
+justamente o que o comprador precisa ver.
+**O custo:** a data de hoje é a do **relógio do servidor**, então uma carga feita perto da
+meia-noite pode nascer com a data do dia seguinte para quem está em outro fuso. Ver **G37**.
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -2526,6 +2780,38 @@ pedido**).
     **não deixa linha de auditoria nenhuma** — ver a letra **D**. E, hoje, **não existe tela para
     criar um pedido de compra**: em produção o campo de pedidos abre **vazio** até a Etapa 38.
 
+
+51. **✅ RESOLVIDO NA ETAPA 38 — nenhuma tela do sistema criava um pedido de compra, e a lixeira da
+    aba Pedidos deixava as linhas do pedido órfãs.** Medido, não suposto: o banco de produção tinha
+    **zero** pedidos e **zero** itens de pedido, e **nenhum ponto do sistema gravava um pedido**. A
+    aba **Pedidos de Compra** mostrava os botões **"Novo Pedido"** e **"Editar"**, e os dois
+    **voltavam para a lista** — o endereço não tinha tela do outro lado. A consequência era que a
+    **Etapa 37 inteira** (recebimento contra pedido, saldo pendente, excedente autorizado) era
+    **inalcançável por um clique em qualquer ambiente**, e a **Reposição** gerava solicitações desde
+    a Etapa 11 que **ninguém convertia em pedido**: a solicitação nascia PENDENTE e morria PENDENTE.
+
+    **E havia um segundo furo no mesmo lugar:** a lixeira da aba Pedidos usava a rota genérica de
+    exclusão do módulo, que apaga **só o cabeçalho**. Como a chave estrangeira está **ligada em
+    produção**, o mesmo clique tinha dois desfechos possíveis, os dois ruins: **500** *"Erro ao
+    excluir item"* (e o pedido não saía nunca), ou — em banco sem a chave ligada — pedido apagado com
+    as **linhas órfãs** apontando para um pedido que já não existe.
+
+    **A Etapa 38 fechou os três lados.** Existe tela de **criar, editar e excluir** pedido de compra;
+    a exclusão leva as linhas junto e **libera as solicitações** da Reposição de volta para PENDENTE;
+    o botão **"Gerar pedido"** na aba Solicitações fecha o elo que morria ali; e a **importação de
+    planilha** sobe o acervo que já existe em Excel.
+
+    **O que quem opera precisa saber a partir de agora:** (a) **pedido que já teve recebimento não é
+    mais editável nem excluível** — a recusa diz o número do pedido; (b) **excluir um fornecedor que
+    tenha pedido é recusado** (*"Fornecedor possui pedidos de compra — não pode ser excluído"*), o que
+    **não acontecia antes** simplesmente porque não havia pedido nenhum; (c) **reimportar a mesma
+    planilha duplica os pedidos** — não há idempotência (letra **D**); e (d) **qualquer usuário com
+    acesso ao módulo Compras cria, edita e exclui pedido** — o módulo core não tem perfis (letra
+    **G30**).
+
+    Deixado aqui, com o número da etapa que fechou, em vez de apagado — para quem lembrar do furo
+    confirmar que ele fechou e com o quê.
+
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -2804,6 +3090,53 @@ pedido**).
   leitor de tela não o ouve ao digitar. O **banner de recusa** do servidor, esse sim, é anunciado.
   Corte pequeno e declarado; o conserto é de uma linha e cabe na próxima etapa que tocar a tela.
 
+
+- **(38) Cotações e fornecedores continuam SEM tela de criação.** A Etapa 38 entregou a criação de
+  **pedido**; as outras duas abas do módulo Compras seguem como estavam — os botões "Novo Fornecedor"
+  e "Nova Cotação" continuam sem tela do outro lado. A única coisa que mudou nelas é a recusa da
+  lixeira do fornecedor que tem pedido. É corte declarado: a etapa foi desenhada em torno do laço
+  pedido → recebimento → reposição, que é o que estava aberto.
+
+- **(38) Não existe aprovação nem alçada de pedido de compra.** O status do pedido é um campo que o
+  comprador escolhe à mão entre os sete valores; não há "enviar para aprovação", ninguém é
+  notificado, e **nenhum valor exige segunda assinatura**. A aprovação por valor que existe nas
+  **requisições** do almoxarifado não vale aqui — são documentos de módulos diferentes. Um pedido de
+  R$ 500.000 é criado com um clique por qualquer usuário do módulo Compras.
+
+- **(38) Reimportar a mesma planilha DUPLICA os pedidos.** Não há idempotência, e a razão é
+  estrutural: o número do pedido é **gerado pelo sistema** (**B100**), então não existe chave
+  digitada que diga "esta ordem de compra já entrou". A importação foi desenhada como **carga inicial
+  do acervo**, uma vez. Quem reimportar por engano apaga os duplicados um a um — e a exclusão recusa,
+  corretamente, os que já tiverem recebimento. A única pista de qual linha virou qual pedido é a
+  observação **"Planilha: ⟨ordem⟩"**.
+
+- **(38) Pedido que já teve recebimento não é editável — em campo nenhum.** A régua é do **pedido
+  inteiro**: depois que a primeira caixa chega, não dá para corrigir só a previsão de entrega, só a
+  observação ou só o status. É decisão (**B102**), e afrouxá-la exige separar cabeçalho de itens na
+  porta de edição, que é etapa própria. Vale também para o recebimento **criado e ainda não
+  processado**: ele já tranca o pedido.
+
+- **(38) A tela de pedido não sabe do recebimento antes do clique.** O botão de salvar e a lixeira
+  **não** ficam desabilitados num pedido já recebido — a recusa (400 na edição, 409 na exclusão) vem
+  do servidor e aparece depois da tentativa. Saber antes exigiria uma porta nova só para isso.
+  Diferente da tela de recebimento, que **desabilita** o salvar quando o pedido não serve.
+
+- **(38) Nenhuma tela mostra quanto do pedido já chegou** — a mesma limitação que a Etapa 37 declarou,
+  e esta etapa **não** a fechou (**B103**). A lista da aba Pedidos mostra número, fornecedor, valor
+  total, datas e status; o saldo e a situação (**ABERTO / PARCIAL / RECEBIDO**) só aparecem linha a
+  linha no formulário de recebimento.
+
+- **(38) Linha de pedido sem material cadastrado não existe, e pedido de serviço não é escrevível.**
+  O material é **obrigatório** em todo item, porque as duas leituras do recebimento ignoram linha sem
+  material — uma linha de texto livre viraria pedido **invisível** ao recebimento, aparecendo aberto
+  com saldo zero sem ninguém entender por quê. Frete, serviço e despesa acessória não têm como ser
+  lançados como linha do pedido hoje.
+
+- **(38) Os 51 comandos de criação de coluna do NÚCLEO continuam lá.** Mesma pendência que a Etapa 37
+  declarou — a limpeza dos 21 valeu para o arquivo do almoxarifado, e o arquivo principal do servidor
+  tem 51 do mesmo tipo. A Etapa 38 mexeu nesse arquivo (**moveu 23 rotas do Compras para fora dele**,
+  byte a byte), mas **não** tocou nos 51. Ver **B94**.
+
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
 **"Uma remessa não pode misturar materiais de donos diferentes."** O sistema hoje **recusa** montar
@@ -2985,42 +3318,43 @@ se um PDF abre legível ou se um modal coube na largura. Ficaram, portanto, **se
    **Se algo estiver errado:** me diga **qual largura, qual tela e qual botão**. O ajuste é de
    estilo e é de uma linha; o que não dá é adivinhar a largura.
 
-13. **(37) Testar o recebimento contra o pedido exige inserir um pedido POR SQL — porque não existe
-    tela que crie pedido de compra. Este item fica ABERTO até a Etapa 38.**
+13. **✅ RESOLVIDO NA ETAPA 38 — testar o recebimento contra o pedido NÃO exige mais inserir pedido
+    por SQL.** Este item dizia que ~~não existe tela que crie pedido de compra, e por isso o roteiro
+    da Etapa 37 precisa de um `INSERT` à mão~~. **A Etapa 38 entregou a tela** (2026-09-16):
+    **Compras → Pedidos de Compra → "Novo Pedido"** cria o pedido, e ele aparece no campo *Número do
+    Pedido de Compra* do recebimento. O roteiro da Etapa 38 no guia começa pela tela, do login à
+    verificação, e **não usa SQL em nenhum passo**.
 
-    Não é uma verificação que ficou de fora por descuido: **nenhum lugar do sistema grava um pedido
-    de compra**, e o banco de produção tem zero pedidos. Toda a Etapa 37 está coberta por testes
-    automáticos ponta a ponta, mas o **roteiro clicável** precisa de um pedido para existir, e o
-    único jeito hoje é inserir um à mão. Quando a **Etapa 38** entregar a criação de pedido no
-    Compras, este item vira um roteiro normal e sai daqui.
+    **O que sobrou de verificação manual aqui: nada.** O que este item pedia — provar o ciclo do
+    recebimento contra pedido por clique — passou a ser o roteiro normal da Etapa 38. Os comandos
+    abaixo ficam **só como ferramenta de apoio**, para quem quiser montar um caso de teste sem passar
+    pela tela (por exemplo, um pedido com data antiga). **Preferir sempre a tela**, que é o caminho
+    que o usuário usa e o que gera o número corretamente.
 
-    **Passo 1 — descubra dois ids reais** (um fornecedor e um material que existam no seu banco):
+    **Para descobrir dois ids reais** (um fornecedor e um material que existam no seu banco):
 
     ```sql
     SELECT id, nome FROM fornecedores LIMIT 3;
     SELECT id, codigo FROM materiais_almoxarifado LIMIT 3;
     ```
 
-    **Passo 2 — insira o pedido de teste**, trocando `F1` pelo id do fornecedor e `M1` pelo id do
+    **Para inserir um pedido de apoio**, trocando `F1` pelo id do fornecedor e `M1` pelo id do
     material escolhidos acima (e `'COD-M1'` pelo código desse material, para a mensagem de recusa
     sair legível):
 
     ```sql
     INSERT INTO pedidos_compra (numero, fornecedor_id, valor_total, data_pedido, status, observacoes)
-    VALUES ('PC-TESTE-37', F1, 500, date('now'), 'aprovado', 'pedido de teste da Etapa 37 - apagar depois');
+    VALUES ('PC-TESTE-37', F1, 500, date('now'), 'aprovado', 'pedido de teste - apagar depois');
 
     INSERT INTO itens_pedido_compra (pedido_id, material_id, codigo, descricao, quantidade, valor_unitario, unidade)
     SELECT id, M1, 'COD-M1', 'item de teste', 10, 50, 'UN'
       FROM pedidos_compra WHERE numero = 'PC-TESTE-37';
     ```
 
-    **Passo 3 — rode o roteiro** da seção *Como testar ao vivo* da **Etapa 37**: o pedido
-    `PC-TESTE-37` passa a aparecer no campo *Número do Pedido de Compra*, com uma linha de **10
-    unidades**.
-
-    **Passo 4 — apague o pedido de teste depois.** São **dois** comandos, e a ordem importa: apagar
-    o pedido **não** apaga as linhas dele (quem apaga pedido no Compras deixa os itens órfãos — é um
-    dos pontos que a Etapa 38 vai ter de resolver).
+    **Para apagar o pedido de apoio depois.** *(Este texto dizia que são dois comandos porque
+    "apagar o pedido não apaga as linhas dele, e é um dos pontos que a Etapa 38 vai ter de
+    resolver" — **isso deixou de valer**: a exclusão pela tela agora apaga as linhas junto. Os dois
+    comandos continuam necessários **aqui** porque o SQL direto não passa pela tela.)*
 
     ```sql
     DELETE FROM itens_pedido_compra
@@ -3032,6 +3366,9 @@ se um PDF abre legível ou se um modal coube na largura. Ficaram, portanto, **se
     que a tela de Compras sabe pintar (o padrão da tabela é `'pendente'`); e **a situação do pedido
     não influencia nada** no recebimento — o almoxarifado lê o **saldo** das linhas, nunca o status
     do Compras (decisão **B89**).
+
+    Deixado aqui, riscado e com a etapa que fechou, em vez de apagado — para quem lembrar da
+    pendência confirmar que ela fechou e com o quê.
 
 *Por que isto está escrito aqui em vez de "está tudo certo": esta mesma lacuna já mordeu a Etapa 7 —
 uma classe de estilo inventada sai sem cor nenhuma e nenhum teste de comportamento percebe.*
@@ -3502,6 +3839,111 @@ operador vê linhas que não pediu; nada é gravado sem ele salvar. **O conserto
 a resposta como descartada também ao limpar o estado do pedido), está nomeado, e ficou fora da onda
 porque a onda já tinha fechado nove achados.
 
+
+
+---
+
+**G30 (NOVO, da Etapa 38 — é a fragilidade mais consequente dela). O módulo Compras tem UMA camada
+de autorização: quem abre o módulo faz tudo dentro dele.**
+
+Medido antes de decidir: as **26 rotas** do core Compras exigem **acesso ao módulo** e nada mais —
+**zero** verificações de perfil. Isso significa que qualquer usuário com o módulo Compras marcado
+**cria, edita e exclui pedido de compra, fornecedor e cotação**, sem distinção entre quem compra e
+quem consulta, e sem alçada por valor. As portas novas desta etapa **herdaram** a camada existente,
+de propósito (**B101**) — a única exceção é o vínculo com a Reposição, que exige
+`gerenciar_reposicao`. Não é regressão: é o desenho do módulo, escrito aqui porque a partir desta
+etapa ele passa a gravar **documento de compra**, e não só a listá-lo.
+
+---
+
+**G31 (NOVO, da Etapa 38). Criar e excluir pedido não são operações atômicas, e a guarda do "já teve
+recebimento" não é à prova de corrida.**
+
+O módulo não tem transações (é a dívida que a migração de banco planejada paga). Duas consequências
+concretas: (1) se a gravação do cabeçalho do pedido ou das linhas falhar no meio, sobra pedido
+parcialmente escrito; (2) a verificação de "este pedido já teve recebimento" **lê** antes de
+**escrever**, fora da fila de escrita — um recebimento criado exatamente nessa janela (milissegundos)
+reproduz o problema que a guarda existe para impedir: a edição passa e o recebimento fica apontando
+para uma linha que já não existe. A guarda cobre o caso real (a pessoa que clica), não o caso
+concorrente. Está escrito para não ser descoberto como "o conserto não funcionou".
+
+---
+
+**G32 (NOVO, da Etapa 38). A chave estrangeira do item de pedido está LIGADA em produção e
+DESLIGADA no ambiente de teste automático.**
+
+A exclusão de pedido apaga **as linhas antes do cabeçalho**, que é a ordem segura nos dois
+ambientes. Mas a diferença de configuração significa que **o teste automático não prova a chave
+estrangeira** — ele prova que não sobra linha órfã, o que é o sintoma do ambiente de teste; o
+sintoma de produção (a exclusão falhar com erro do banco) só o ambiente real produz. Vale para
+qualquer exclusão que este módulo venha a ganhar: a ordem dos comandos tem de ser pensada olhando
+produção, não a suíte.
+
+---
+
+**G33 (NOVO na descrição, PRÉ-EXISTENTE no código). A exclusão genérica do módulo Compras sombreia a
+exclusão de grupos de fornecedores.**
+
+A rota genérica de exclusão do módulo captura o endereço de grupos antes da rota específica, e
+responde *"Tipo inválido"*. É **anterior** a esta etapa e continua igual — a Etapa 38 apenas
+**congelou o comportamento num teste**, para que uma reordenação futura das rotas seja percebida em
+vez de descoberta pelo usuário. Não foi consertado porque consertar muda o comportamento de uma
+porta que não é desta etapa.
+
+---
+
+**G34 (NOVO, da Etapa 38 — é o custo declarado da B109). Planilha com o CNPJ só na PRIMEIRA linha da
+ordem perde as demais linhas.**
+
+Cada linha da planilha precisa do **seu** fornecedor: nenhuma linha herda o fornecedor de outra. A
+planilha que traz o CNPJ (ou a razão social) apenas na primeira linha de cada ordem terá as outras
+linhas recusadas com *"fornecedor não encontrado"*. **Era exatamente o caso que a herança servia** —
+e não há como distinguir "célula em branco" de "fornecedor divergente" sem adivinhar. Recusar é
+**visível e reversível** (preencher a coluna e reimportar); gravar o pedido no fornecedor errado, não
+(ver **B109**). O que o operador tem de saber: **preencha a coluna de fornecedor em todas as
+linhas**.
+
+---
+
+**G35 (NOVO, da Etapa 38). Preço negativo na planilha vira ZERO, em silêncio.**
+
+Uma célula de preço com valor negativo **não** recusa a linha: ela entra com preço **0**. A
+alternativa seria a recusa do **grupo inteiro** — perder 30 linhas boas por um sinal de menos —,
+porque a régua de preço não negativo vale para o pedido todo. A consequência prática é a mesma da
+**B106**: item sem preço não alimenta o custo médio do material no recebimento. **E não há aviso
+para esse caso** (as listas de "ignoradas" e "com aviso" não o mencionam), diferente da tela de
+criação manual, que avisa. É o único ajuste silencioso da importação.
+
+---
+
+**G36 (NOVO, da Etapa 38). Exportar o Excel da aba Pedidos faz uma consulta por pedido.**
+
+Para trazer as colunas de item (Código, Descrição, Unidade, Quantidade, Valor Unitário), o export
+busca os itens de **cada** pedido separadamente. Com 20 pedidos na lista são 20 consultas; com 500,
+são 500 — e o botão fica pensando. Foi o preço aceito para o arquivo exportado voltar a ser
+**reimportável** (antes ele não tinha coluna de código e recusava todas as linhas na volta). O
+conserto é uma porta que devolva pedidos com itens de uma vez, e está nomeado.
+
+---
+
+**G37 (NOVO, da Etapa 38). A data que a tela sugere e a data que o servidor usa vêm de relógios
+diferentes.**
+
+O formulário de novo pedido já vem com a **Data do pedido** preenchida, calculada em horário
+universal — então, para quem está no Brasil, entre as 21h e a meia-noite ela sugere **o dia
+seguinte**. Já a importação sem coluna de data usa a **data local do servidor**. As duas são
+corrigíveis à mão (o campo é editável), e nenhuma regra de negócio depende delas hoje, mas quem
+apresentar o sistema à noite vai ver a data "errada" no formulário.
+
+---
+
+**G38 (NOVO, da Etapa 38). A importação não tem idempotência, e isso é estrutural, não esquecimento.**
+
+Reimportar a mesma planilha cria os pedidos **de novo**. Como o número do pedido é gerado pelo
+sistema (**B100**), não existe chave digitada para comparar, e o agrupador da planilha fica apenas
+nas **observações** (*"Planilha: ⟨ordem⟩"*) — texto livre, sem índice. Qualquer idempotência futura
+passa por decidir **qual** campo identifica uma ordem de compra externa, e isso muda o contrato de
+entrada. Ver a letra **D**.
 
 ## Etapa 0 — Fundação (2026-08-03)
 
@@ -8074,8 +8516,314 @@ de por identificador.
 **5/5** nas suítes de validação, migração e banco, **47 suítes / 714 testes** no cliente, e o
 empacotamento do cliente **limpo**.
 
+## Etapa 38 — Pedido de compra (2026-09-16)
+
+**Esta etapa é do módulo CORE Compras**, não do almoxarifado — e ela existe porque as duas etapas
+anteriores terminaram com o mesmo laço aberto: **nenhuma tela do sistema criava um pedido de
+compra.** Desde a **Etapa 11** a Reposição calcula o que falta e gera **solicitações de compra**, e
+desde a **Etapa 37** o recebimento sabe medir o que chegou contra um **pedido** — mas ninguém
+convertia solicitação em pedido, e o banco de produção tinha **zero** pedidos e **zero** itens de
+pedido. A aba **Pedidos de Compra** já mostrava os botões **"Novo Pedido"** e **"Editar"**, e os
+dois **voltavam para a lista**, porque o endereço não tinha tela do outro lado. Agora o comprador
+**cria, edita, exclui e importa** pedido de compra numa tela própria, a **Reposição gera o pedido
+com um clique** já preenchido com o material da solicitação, e tudo o que a Etapa 37 entregou passa
+a ser demonstrável **sem uma linha de SQL** — é o que fecha a verificação **F13**.
+
+### Antes → Agora
+
+| Onde | Antes | Agora |
+|---|---|---|
+| **Compras → Pedidos de Compra → "Novo Pedido"** | O botão existia e **caía de volta na lista** — o endereço não tinha tela | Abre **"Novo pedido de compra"**: fornecedor, **Data do pedido**, **Previsão de entrega**, status, observações e os itens (busca de material, quantidade, valor unitário), com **"Total: R$ …"** somado na tela |
+| **O número do pedido** | Não havia de onde vir | **Gerado pelo sistema** (padrão `PC-…`), e a tela diz **"O número do pedido é gerado pelo sistema."**. Na edição: **"o número não é editável."** |
+| **Editar um pedido** | O lápis da lista caía na lista de novo | Abre **"Editar pedido de compra"** com os itens carregados. Permitido **enquanto nenhum recebimento tocou o pedido** |
+| **Excluir um pedido** | A lixeira usava a rota genérica: apagava o cabeçalho e **deixava as linhas do pedido órfãs** (e, com a chave estrangeira ligada como está em produção, falhava com **500** *"Erro ao excluir item"*) | Rota própria: apaga **as linhas junto**, **libera as solicitações** da Reposição de volta para PENDENTE e recusa se o pedido já teve recebimento |
+| **Erro na lixeira da aba** | Qualquer falha virava o toast genérico *"Erro ao excluir item"* — o comprador tentava de novo sem nunca saber o motivo | A mensagem passa a ser **a do servidor**, inclusive a recusa de pedido já recebido |
+| **Reposição → Solicitações** | A solicitação nascia **PENDENTE e morria PENDENTE**: nada no sistema a convertia em pedido | Cada solicitação PENDENTE ganha o botão **"Gerar pedido"**, que abre o formulário do Compras **já preenchido** com aquele material e quantidade; salvo o pedido, a solicitação passa a **VINCULADO** |
+| **Carga do acervo de pedidos** | Não havia como subir os pedidos que já existem em planilha | Botão **"Importar planilha"** (`.xlsx`, `.xls`, `.csv`) na tela de novo pedido: as linhas são agrupadas em pedidos, e a resposta diz quantos entraram, quais linhas foram **ignoradas** e quais entraram **com aviso** |
+| **"Exportar Excel" da aba Pedidos** | Uma linha por **pedido**, **sem coluna de código de material** — o próprio arquivo que o sistema produz **não se reimportava** (recusava todas as linhas) | Uma linha por **item**, com as colunas **Número, Fornecedor, Código, Descrição, Unidade, Quantidade, Valor Unitário, Valor Total, Status, Data, Previsão Entrega** — o export volta a entrar pela importação |
+| **Recebimento por pedido (Etapa 37)** | Em produção o campo *Número do Pedido de Compra* **abria vazio**, e o roteiro de teste começava inserindo um pedido **por SQL** | O pedido criado na tela **aparece no campo** e o ciclo inteiro (parcial, saldo, excedente) roda por clique |
+| **Excluir um fornecedor que tem pedido** | Caso **inalcançável** antes desta etapa (não havia pedido nenhum); a partir dela estouraria a chave estrangeira com **500** *"Erro ao excluir item"* | Recusa explicada, **antes** de tentar apagar |
+
+### As regras, com o cenário exato
+
+**RN-C01 — o número do pedido é do sistema, e o payload não decide nada.**
+**Compras → Pedidos de Compra → "Novo Pedido"**. O cabeçalho da tela diz
+**"O número do pedido é gerado pelo sistema."** — não existe campo de número. O servidor gera no
+padrão `PC-…` (o mesmo gerador de números de documento da Etapa 31, com nova tentativa em caso de
+colisão), e mandar `numero` por fora da tela **não muda nada**: o campo é ignorado. Idem
+`valor_total`, que é **derivado** da soma `quantidade × valor unitário` dos itens — é o que a tela
+mostra em **"Total: R$ …"**.
+
+**RN-C02 — pedido sem fornecedor e pedido sem item são recusados, cada um com a sua frase.**
+Salvar sem escolher fornecedor:
+
+> **"Dados inválidos — fornecedor_id: fornecedor do pedido é obrigatório"**
+
+Salvar sem nenhum item — a tabela de itens mostrando **"Nenhum item adicionado"** — a tela recusa
+**antes** de chamar o servidor, com a mesma frase que ele diria:
+
+> **"Inclua ao menos um item no pedido de compra"**
+
+**Foi de propósito ter as duas réguas:** um pedido com cabeçalho gravado e **nenhuma linha** é
+**invisível** para o recebimento — ele apareceria na lista de pedidos a receber com saldo zero e
+ninguém entenderia por quê.
+
+**RN-C03 — cada item do pedido tem três réguas.**
+Material, quantidade e preço, cada um com a literal do servidor (a recusa nomeia a **posição** do
+item na lista — `itens.0`, `itens.1`, …):
+
+> **"material do item é obrigatório"**
+> **"quantidade do item do pedido deve ser um número maior que zero"**
+> **"valor unitário do item não pode ser negativo"**
+
+**Preço é opcional, e zero é aceito de propósito** (pedido aberto antes de fechar a cotação é caso
+real) — mas a tela **avisa**, embaixo da tabela de itens:
+
+> **"Sem preço o custo médio do material não é alimentado no recebimento."**
+
+É a contrapartida declarada da Etapa 37: o recebimento herda o preço da linha do pedido, e preço 0
+não alimenta o custo médio do material.
+
+**RN-C04 — material e fornecedor são resolvidos ANTES de gravar qualquer coisa.**
+Fornecedor ou material inexistentes (caso alcançável por fora da tela, ou por planilha) param o
+pedido inteiro, e **nada é gravado**:
+
+> **"Fornecedor não encontrado"** · **"Material não encontrado"**
+
+**RN-C05 — o status do pedido tem sete valores, e nenhum deles é "parcial".**
+O seletor **Status** oferece *Pendente, Aprovado, Rejeitado, Em Análise, Enviado, Recebido* e
+*Cancelado*. Qualquer outro valor é recusado com a lista na frente:
+
+> **"status do pedido inválido (use pendente, aprovado, rejeitado, em_analise, enviado, recebido ou cancelado)"**
+
+**Por que PARCIAL não entra:** *ABERTO / PARCIAL / RECEBIDO* é a **derivação** que o almoxarifado
+calcula a partir do que já chegou em cada linha (Etapa 37). Gravar "parcial" neste campo faria o
+Compras **afirmar** um fato que só as linhas do pedido podem dizer. E o *Recebido* daqui é outra
+coisa: é o **comprador declarando o pedido encerrado**.
+
+**RN-C06 — as duas datas do pedido só aceitam data de verdade.**
+**Data do pedido** e **Previsão de entrega** são campos de calendário na tela, e o servidor só
+aceita `AAAA-MM-DD` ou **vazio**. Campo em branco vira **nulo** — antes desta etapa a tela mandava
+texto vazio e o banco gravava `''` numa coluna de data, e uma consulta de "previsão vencida"
+acusaria justamente os pedidos **sem** previsão. Qualquer outra coisa é recusada:
+
+> **"previsão de entrega inválida (use AAAA-MM-DD)"** · **"data do pedido inválida (use AAAA-MM-DD)"**
+
+Na **edição**, mandar a data explicitamente nula **limpa** a data — apagar é gesto possível, não
+acidente.
+
+**RN-C07 — vincular a solicitação da Reposição exige a permissão de reposição, e o 403 nomeia qual.**
+Quando o pedido nasce **a partir de uma solicitação** (é o caminho do botão "Gerar pedido"), o
+servidor exige a ação **`gerenciar_reposicao`** — a mesma da tela de Reposição — **antes de escrever
+qualquer coisa**. Sem ela, o formulário mostra:
+
+> **"Sem permissão para gerenciar reposição e compras — seu perfil é Produção. Solicite acesso a um administrador."**
+
+**Isto foi uma decisão revertida durante a execução, e vale contar:** o desenho dizia para deixar o
+vínculo **sem** permissão própria. Medido, isso significava que **qualquer** usuário com acesso ao
+módulo Compras — inclusive o perfil de chão de fábrica, que é o padrão de quem não tem perfil
+definido — flipava uma solicitação da Reposição para VINCULADO com um clique. Criar pedido **sem**
+vínculo continua exigindo apenas o acesso ao módulo Compras.
+
+**RN-C08 — editar um pedido que já teve recebimento é recusado, e a régua tem DUAS pernas.**
+Tentar salvar a edição de um pedido já recebido:
+
+> **"Pedido de compra PC-0001 já teve recebimento — não pode mais ser editado"** *(400)*
+
+E a exclusão, do mesmo jeito:
+
+> **"Pedido de compra PC-0001 já teve recebimento — não pode ser excluído"** *(409)*
+
+A recusa dispara em **duas** situações, e a segunda é a que ninguém esperaria: (1) alguma linha do
+pedido já tem quantidade recebida; **(2) existe documento de recebimento apontando para uma linha
+deste pedido, mesmo que ele ainda não tenha entrado no estoque.** A perna (2) existe porque um
+recebimento **aberto** tem zero recebido e **já carrega o elo** — trocar as linhas do pedido
+deixaria esse elo apontando para linha que não existe mais, **em silêncio**. Sonda executada: sem
+ela, a edição respondia **200**, trocava a linha, e o pedido ficava com saldo pendente **para
+sempre**, sem nunca poder ser recebido.
+
+**RN-C09 — excluir o pedido devolve as solicitações para a fila.**
+Excluído o pedido, as solicitações que estavam **VINCULADO** a ele voltam a **PENDENTE** e soltam o
+vínculo (as já **RECEBIDA** ou **CANCELADA** não se mexem — são estados finais). O servidor responde
+**"Pedido de compra excluído com sucesso"** e informa **quantas** solicitações foram liberadas.
+*(A contagem vem na resposta da API; a lista da aba Pedidos mostra o toast de sucesso dela,
+**"Item excluído com sucesso"**, e não o número — quem quiser confirmar olha a aba Solicitações da
+Reposição, onde a linha volta a oferecer "Gerar pedido".)* Sem isso, a solicitação ficava
+**VINCULADO apontando para um pedido apagado** e nunca mais virava pedido nenhum.
+
+**RN-C10 — pedido inexistente tem UMA frase, nas três portas.**
+Abrir, editar ou excluir um pedido que não existe responde sempre a mesma coisa:
+
+> **"Pedido de compra não encontrado"**
+
+**RN-C11 — fornecedor que tem pedido não pode ser excluído.**
+**Compras → Fornecedores → lixeira**, num fornecedor com pedido de compra:
+
+> **"Fornecedor possui pedidos de compra — não pode ser excluído"** *(409)*
+
+**Este caso era inalcançável até esta etapa** — não existia pedido nenhum para referenciar
+fornecedor. A partir dela, a lixeira da aba Fornecedores **pode** falhar, e sem esta recusa ela
+falharia pela chave estrangeira do banco: **500** *"Erro ao excluir item"*, a frase genérica que não
+diz nada. A verificação é feita **antes** do apagamento, para a mensagem ser a mesma em qualquer
+banco.
+
+**RN-C12 — a importação agrupa por ORDEM DE COMPRA *e* FORNECEDOR.**
+**Novo pedido de compra → "Importar planilha"**. A planilha é lida no navegador e as linhas são
+agrupadas: cada combinação de **ordem de compra × fornecedor** vira **um** pedido. O cabeçalho é
+lido sem diferenciar maiúsculas de minúsculas, e cada campo tem uma lista de grafias aceitas (com e
+sem acento): `Pedido`/`Número`/`OC`/`Ordem` para agrupar,
+`CNPJ`/`Fornecedor`/`Razão Social` para o fornecedor, `Código`/`Codigo`/`Cod`/`SKU` para o material,
+`Quantidade`/`Qtd`, `Valor Unitário`/`Preço`, `Data`/`Emissão` e `Previsão`/`Entrega`.
+
+**O cenário que isto conserta é grave e foi reproduzido por sonda:** duas linhas da **mesma OC** com
+fornecedores **diferentes** viravam **um** pedido, do fornecedor da **primeira linha** — item da
+BETA gravado no pedido da ACME, com **zero linha ignorada**, sucesso total na cara do operador. E o
+erro **propagava**: o recebimento copia o fornecedor do pedido, e a **conta a pagar** nasceria para o
+fornecedor errado, sem sinal em nenhuma das duas telas. Agora a mesma OC com dois fornecedores
+produz **dois pedidos**, e cada um registra em observações a ordem de origem:
+**"Planilha: OC-1234"**. Planilha **sem** coluna de ordem cai toda num pedido só, e a observação diz
+isso: **"Importado de planilha (sem coluna de pedido)"**.
+
+**RN-C13 — linha ruim é IGNORADA com motivo; campo ruim entra com AVISO.**
+São duas listas diferentes na resposta, e a diferença é o que aconteceu com a linha.
+**Ignorada = a linha não entrou**, com um destes quatro motivos:
+
+> **"linha sem código de material"** · **"quantidade inválida"** ·
+> **"material não encontrado pelo código ⟨código⟩"** · **"fornecedor não encontrado"**
+
+**Aviso = a linha entrou, e só o campo ficou em branco** — vale para as duas datas:
+
+> **"previsão de entrega não reconhecida (use AAAA-MM-DD ou DD/MM/AAAA)"** ·
+> **"data do pedido não reconhecida (use AAAA-MM-DD ou DD/MM/AAAA)"**
+
+A caixa de resultado mostra **"Linhas ignoradas"** com **"Linha ⟨n⟩: ⟨motivo⟩"** (a linha 1 é a
+**primeira linha de dados**, não o cabeçalho) e, embaixo, **"Linhas importadas com aviso"** com
+**"Linha ⟨n⟩ (⟨campo⟩): ⟨motivo⟩"**. Sem nenhuma recusa, ela diz **"Nenhuma linha ignorada."**
+
+Datas em **DD/MM/AAAA** e a data numérica que o Excel guarda por baixo são convertidas
+automaticamente; só o irreconhecível vira aviso. E **preço negativo na planilha vira zero**, sem
+recusar a linha: recusar derrubaria o **grupo inteiro** (30 linhas boas por causa de um sinal de
+menos). Está declarado na letra **G**.
+
+**RN-C14 — a importação que não criou nada é anunciada em VERMELHO.**
+A porta responde sucesso parcial por contrato — inclusive quando **nenhum** pedido entrou. A tela
+distingue: com pedidos criados, a caixa é verde e diz **"Importação concluída"**; com **zero**
+criados, a caixa é **vermelha** e diz
+
+> **"Nenhum pedido importado — veja os motivos abaixo"**
+
+**Era o caso mais provável de todos:** a coluna de código só é reconhecida em algumas grafias, então
+uma planilha com a coluna chamada `Material` ou `Item` recusa **todas** as linhas — e o export da
+própria aba Pedidos era um desses arquivos até esta etapa. Antes, isso aparecia como um **verde**
+escrito *"0 pedido(s) importado(s)"*, e o operador ia embora achando que a carga tinha funcionado.
+
+Um corpo que não seja lista de linhas é recusado com **400**:
+
+> **`Envie "linhas" ou "rows" com array de objetos (qualquer formato de planilha)`**
+
+**RN-C15 — a lista de recusas tem teto de 20 linhas na tela.**
+Uma planilha com 5.000 linhas recusadas renderizava 5.000 itens e travava a aba. A tela mostra as
+**20 primeiras** de cada lista e, embaixo, **"… e mais N linha(s)"** — para ficar claro que a lista
+está **cortada**, e não que são só 20.
+
+**RN-C16 — sem coluna de data, o pedido importado nasce com a data de hoje.**
+A coluna de data (`Data`, `Data Pedido`, `Emissão`) é usada quando existe; ausente, o pedido nasce
+com **a data de hoje do servidor**, nunca em branco. Antes disso, todo pedido importado aparecia na
+lista e no Excel com **"Data Pedido: -"**.
+
+**RN-C17 — "Gerar pedido" na Reposição navega, não posta.**
+**Almoxarifado → Reposição e Compras → aba Solicitações.** Cada solicitação **PENDENTE** ganha o
+botão **"Gerar pedido"** (a dica do botão é *"Abre o pedido de compra já preenchido com este
+material"*). Ele **não cria** o pedido ali: leva ao formulário do Compras com **o material, o código
+e a quantidade já preenchidos** — porque escolher **fornecedor e preço** é trabalho do comprador, na
+tela dele. Salvo o pedido, a solicitação vira **VINCULADO**.
+
+**O botão não aparece** em três situações, e cada uma é deliberada: na solicitação **VINCULADO** ou
+**CANCELADO** (a VINCULADO já tem pedido, e um segundo sobrescreveria o vínculo do primeiro); para
+quem **não tem `gerenciar_reposicao`**; e para quem **não tem acesso ao módulo Compras** — clicar
+levaria a uma tela de acesso negado. A verificação do módulo usa o mesmo cache do menu: **cache frio
+falha aberto** (é melhor deixar clicar e receber a recusa do que esconder a ação de quem pode), e
+ele pode levar até **5 minutos** para refletir uma permissão recém-concedida.
+
+**RN-C18 — quem abre o módulo Compras faz tudo dentro dele. Isto é herdado e está declarado.**
+As portas novas do pedido de compra exigem **acesso ao módulo Compras** e nada mais — o módulo core
+não tem perfis como o almoxarifado (não existe "Compras pode criar, Produção só lê"). A **única**
+exceção é a RN-C07. Não é decisão desta etapa: é o desenho que as 26 rotas do Compras já tinham, e
+as portas novas o **herdaram** para não inventar um segundo modelo de permissão em cima de um módulo
+que ainda não tem o primeiro. Está na letra **G**.
+
+### Como testar ao vivo
+
+O roteiro clicável, do login à verificação, está no guia
+(`docs/almoxarifado-guia-etapas-e-testes.md`, seção da Etapa 38). Em resumo: criar o pedido em
+**Compras → Pedidos de Compra → Novo Pedido**, achá-lo em **Almoxarifado → Recebimentos → Novo
+Recebimento → Por Pedido de Compra**, receber, tentar **editar** (recusa de 400) e **excluir**
+(recusa de 409), depois **Reposição → Solicitações → Gerar pedido**, e por fim uma **importação de
+planilha** com duas ordens de compra. **O passo de SQL que a Etapa 37 exigia não é mais
+necessário.**
+
+### O que esta etapa NÃO cobre
+
+- **Cotações e fornecedores continuam sem tela de criação.** A mesma medição que achou a ausência da
+  tela de pedido achou a das outras duas abas do Compras. O que mudou nelas foi só a recusa do
+  fornecedor com pedido (RN-C11).
+- **Não há aprovação nem alçada de pedido de compra.** O status é um campo que o comprador escolhe à
+  mão; não existe "enviar para aprovação", ninguém é notificado e nenhum valor exige segunda
+  assinatura. A aprovação por valor das requisições do almoxarifado **não** vale aqui.
+- **Reimportar a mesma planilha DUPLICA os pedidos.** Não há idempotência: não existe chave que diga
+  "esta ordem de compra já foi importada". A importação foi desenhada como **carga inicial do
+  acervo**, e o número do pedido é gerado pelo sistema justamente para não haver número digitado a
+  conferir. Quem reimportar por engano apaga os duplicados um a um — e a exclusão recusa,
+  corretamente, os que já tiverem recebimento.
+- **Pedido que já teve recebimento não é editável — em campo nenhum.** A régua é do **pedido
+  inteiro**, não campo a campo: não dá para corrigir só a previsão de entrega ou só a observação
+  depois que a primeira caixa chegou. É decisão declarada; afrouxá-la exige separar cabeçalho de
+  itens, que é etapa própria.
+- **Nenhuma tela mostra o saldo do pedido.** Continua valendo o que a Etapa 37 declarou: pedido,
+  recebido, saldo e situação (**ABERTO / PARCIAL / RECEBIDO**) são calculados, mas só aparecem
+  **linha a linha no formulário de recebimento**. A lista da aba Pedidos mostra número, fornecedor,
+  valor total, datas e status — nada do que já chegou.
+- **A tela de pedido não sabe do recebimento antes do clique.** O botão de salvar e a lixeira não
+  ficam desabilitados num pedido já recebido: a recusa (400 ou 409) vem do servidor e aparece
+  depois. Saber antes exigiria uma porta nova só para isso.
+- **Item que chega FORA do pedido continua entrando sem régua** (decisão da Etapa 37, **B92**), e
+  **linha de pedido sem material cadastrado não existe** — o material é obrigatório, porque as duas
+  leituras do recebimento ignoram linha sem material. Pedido de serviço, ou de texto livre, não é
+  escrevível aqui.
+- **Os 51 comandos mortos de criação de coluna do núcleo do CRM continuam lá** — mesma pendência da
+  Etapa 37, fora do escopo.
+
+**Números lidos ao fim da onda** (`6d1da15..0a7e5c6`, onda de correção `dc60507..0a7e5c6`):
+**183/183 arquivos** da suíte de API (eram 178), **42 de 42** no serviço do almoxarifado, **4/4**, **3/3** e
+**5/5** nas suítes de validação, migração e banco, **48 suítes / 739 testes** no cliente (eram 47 / 714), e o
+empacotamento do cliente **limpo**.
+
 ## Onde estamos e o que vem a seguir
 
+
+- **Etapa 38 entregue (2026-09-16):** **o pedido de compra ganha criação, e o laço que vinha aberto
+  desde a Etapa 11 fecha.** É a primeira etapa no módulo **CORE Compras**, e ela existe porque
+  **nenhuma tela do sistema criava um pedido de compra** — medido: zero pedidos e zero itens de
+  pedido em produção, e os botões "Novo Pedido" e "Editar" da aba Pedidos **voltavam para a lista**.
+  Agora o comprador **cria, edita, exclui e importa** pedido numa tela própria; a **Reposição** gera
+  o pedido com um clique (**"Gerar pedido"**, na aba Solicitações), fechando o elo que morria na
+  solicitação; e a **Etapa 37 inteira** — recebimento parcial, saldo pendente, excedente autorizado
+  — passa a ser demonstrável **sem uma linha de SQL** (é o que **fecha a verificação F13**).
+  O número do pedido é **gerado pelo sistema**; o total é **derivado** dos itens; as duas datas só
+  aceitam `AAAA-MM-DD`; **editar ou excluir pedido que já teve recebimento é recusado** com a
+  literal do servidor (e a régua tem **duas pernas** — inclusive o recebimento aberto que ainda não
+  entrou no estoque); **excluir o pedido devolve as solicitações para PENDENTE**; e **excluir
+  fornecedor com pedido é recusado** (*"Fornecedor possui pedidos de compra — não pode ser
+  excluído"*), caso que era inalcançável antes desta etapa.
+  **O que é seu:** a consulta **A14** (o retrato do acervo de pedidos antes do deploy — e conferir se
+  algum status fora dos sete conhecidos existe no banco); as decisões **B100 a B113**, todas tomadas
+  por mim, todas com o descartado escrito e **nenhuma esperando resposta**; o furo **C51**, já
+  fechado; e as fragilidades **G30 a G38** — sendo as duas para ler com atenção a **G30** (no módulo
+  Compras, **quem abre o módulo faz tudo dentro dele**: não há perfis nem alçada por valor) e a
+  **G34** (planilha com o CNPJ só na primeira linha da ordem **perde as demais linhas**).
+  **A revisão adversarial achou sete problemas reais**, todos reproduzidos por sonda e corrigidos em
+  oito commits antes de fechar — o mais grave: a importação **fundia linhas de fornecedores
+  diferentes num pedido só**, e a conta a pagar nasceria para o fornecedor errado.
 - **Etapa 37 entregue (2026-09-16):** **o pedido de compra passa a saber quanto já chegou**
   (`ea0aa4f..13ad237`, onda de correção da revisão final `4007344..13ad237`, nove commits) — **é
   feature**, a **08 (Recebimento)**, e fecha exatamente o que a Etapa 36 declarou que não cobria.

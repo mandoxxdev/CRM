@@ -438,7 +438,7 @@ Critério da Fase 3 da skill: **motor, migration, `ACAO_PERFIS` ou regra compart
 | 7 | **reusar** `validate()` de `services/almoxarifado/validation.js` no core, por `require` | as duas saídas que a Fase 0 via: **mover** o arquivo (mexe em ~40 rotas do almoxarifado numa etapa que não é de refator) ou **duplicar** (duas cópias de `formatZodError` divergem na primeira edição). O arquivo tem 34 linhas e zero dependência do módulo. **Reversível**: quando o core tiver mais Zod, move-se para `server/services/validation.js` com um re-export |
 | 8 | a importação agrupa pela **coluna da planilha**; reimportar **cria pedidos novos** | idempotência por `numero` (B2 da Fase 0): incompatível com a decisão 5 — o número é gerado, então o `UNIQUE` não identifica a planilha. Custo declarado: reimportar duplica. Mitigação: a resposta lista os pedidos criados, e o `DELETE` da RN-C08 apaga cabeça **e** itens |
 | 9 | `valor_total` **derivado** da soma dos itens, no servidor | aceitar do payload: a lista de Compras (`Compras.js:262`) mostra esse número em destaque, e ele passaria a não bater com item nenhum. Custo: não há como registrar frete/desconto de cabeçalho — fica em `observacoes` (e é etapa própria) |
-| 10 | `vincularPedidoCompra` é **não-fatal** no `POST` do pedido (`warn` + `vinculo_solicitacao: 'falhou'`) — **(Fase 2) pelo motivo corrigido:** o serviço lança 404 (solicitação inexistente) e 400 (solicitação já `RECEBIDA`/`CANCELADA`), e nenhum dos dois deve custar o pedido. **O gate NÃO está no caminho** (ele vive na rota `extended.js:1743`), então o efeito colateral real é que **a porta do Compras escreve em `solicitacoes_compra_almoxarifado` sem `gerenciar_reposicao` e sem o módulo `almoxarifado`** — letra G, em destaque | deixar o erro subir (perder o pedido por um vínculo informativo). ⚠️ **Descartado também o motivo que estava escrito aqui** — *"um comprador sem o módulo perderia o pedido inteiro"* — **medido como falso**: não há módulo nem perfil no caminho do serviço. E descartado aplicar `requirePermission` no core: seria inventar a camada 3 que esta etapa declara **não** decidir |
+| 10 | `vincularPedidoCompra` é **não-fatal** no `POST` do pedido (`warn` + `vinculo_solicitacao: 'falhou'`) — **(Fase 2) pelo motivo corrigido:** o serviço lança 404 (solicitação inexistente) e 400 (solicitação já `RECEBIDA`/`CANCELADA`), e nenhum dos dois deve custar o pedido. **(execução — fix 1 da T2) A segunda metade desta decisão foi REVERTIDA pelo controlador, e o que estava escrito aqui estava errado.** O texto anterior dizia que o efeito colateral — *"a porta do Compras escreve em `solicitacoes_compra_almoxarifado` sem `gerenciar_reposicao` e sem o módulo `almoxarifado`"* — seria apenas **declarado na letra G**. Estava errado porque **autorização em duas camadas é regra do projeto, não preferência de módulo**: a escrita é a mesma que o almoxarifado gateia por `gerenciar_reposicao` (`extended.js:1743`), o buraco era **alcançável pela UI** (botão "Gerar pedido" da Reposição, T6) e **medido** (cenário (11) da T2: antes do fix, `201` com a solicitação em `VINCULADO` para um usuário de perfil `PRODUCAO` do fallback) — declarar um furo alcançável não é o caminho reversível; fechá-lo com uma linha é. **O que passou a valer:** `criarPedido` chama `can(user, 'gerenciar_reposicao')` **antes de qualquer escrita** quando vem `solicitacao_id`, e responde **403 `{ error: 'Sem permissão para esta operação', acao: 'gerenciar_reposicao', perfil }`** — o mesmo shape de `requirePermission`. O gate é **condicional**: `POST` **sem** `solicitacao_id` continua só com a camada do módulo, e essa parte da decisão (o core não ganha camada de perfil própria) **continua de pé**. O não-fatal do `try/catch` também continua: ele cobre solicitação inexistente/terminal, não falta de permissão | deixar o erro subir (perder o pedido por um vínculo informativo). ⚠️ **Descartado também o motivo que estava escrito aqui** — *"um comprador sem o módulo perderia o pedido inteiro"* — **medido como falso**: não há módulo nem perfil no caminho do serviço. **(execução) Descartado no fix 1:** (a) manter "declarar sem gatear" — o furo é real e alcançável por clique; (b) inventar uma camada de perfil para o módulo Compras (`ACAO_PERFIS` próprio) — decidir os perfis de Compras continua sendo etapa própria, e gatear a **criação do pedido** por perfil do **almoxarifado** barraria o comprador no seu próprio módulo; (c) chamar a rota do almoxarifado por HTTP a partir do core, que duplicaria a autenticação e acoplaria os dois módulos por rede |
 | 11 | a spec vive em `specs/modulo-almoxarifado/22-integracoes/` como **a fatia Compras**, com `specs/modulo-compras/README.md` **mínimo** apontando para lá | criar `specs/modulo-compras/` completo (estrutura nova sem dono, numa etapa) ou escrever a tela de Compras como feature do almoxarifado sem dizer (mentira estrutural — o erro que o CLAUDE.md nomeia como o mais caro). **Reversível**: quando Compras ganhar spec própria, a fatia migra e o stub vira índice |
 | 12 | a branch continua **`desenvolvimento-almoxarifado`** | abrir branch de Compras: a etapa depende do harness e das tabelas da 37 e o valor só aparece com as duas juntas. Custo declarado: uma fatia de módulo core fica represada até o almoxarifado fechar — **registrar na letra B para o usuário arbitrar**, é a decisão dele |
 
@@ -457,7 +457,7 @@ Critério da Fase 3 da skill: **motor, migration, `ACAO_PERFIS` ou regra compart
 | R7 | a etapa mudar comportamento da Etapa 37 sem notar | **nenhuma linha toca `receiptService.js`, `extended.js` ou `schema.js`** (ver "Estrutura de arquivos" do plano); a T7 roda `recebimentoContraPedidoIntegracao.api.test.js` e `pedidoSaldoRecebido.api.test.js` **inteiros** |
 | R8 | cenário de client verde com o formulário vazio | metade positiva em todos: `api.post.mock.calls` **contado** (`toHaveLength(1)`), payload lido de `calls[0][1]`, o `Total: R$ 100,00` no DOM, e o caso "sem item" afirmando `toHaveLength(0)` |
 | R9 | "verde de primeira" | controle positivo em toda task, com `grep -cF` da âncora **contado depois do conserto**, `perl -0pi -e`, `md5sum` antes/depois/depois-de-restaurar e **nunca** `git checkout --` |
-| R10 | o vínculo da solicitação derrubar a criação do pedido para quem não tem o módulo almoxarifado | decisão 10 (não-fatal), com cenário próprio: usuário sem o módulo cria o pedido e recebe `vinculo_solicitacao: 'falhou'` |
+| R10 | o vínculo da solicitação derrubar a criação do pedido para quem não tem o módulo almoxarifado | decisão 10 (não-fatal), com cenário próprio: usuário sem o módulo cria o pedido e recebe `vinculo_solicitacao: 'falhou'`. ⚠️ **(execução — fix 1 da T2)** com o gate condicional, quem **pede** vínculo sem `gerenciar_reposicao` recebe **403 e nenhum pedido** — não `'falhou'`. O não-fatal continua valendo para o que ele sempre cobriu: solicitação inexistente ou já terminal. Quem não quer o risco manda o `POST` **sem** `solicitacao_id` e cria o pedido normalmente |
 | R11 | `numeroDoc.js` continuar afirmando que a escrita em `pedidos_compra` é inalcançável | a T2 **corrige o comentário dizendo que era verdade até esta etapa** (regra 5), e o teste de número do pedido afirma o prefixo `PC-` |
 
 ## O que esta etapa NÃO cobre
@@ -501,3 +501,66 @@ Critério da Fase 3 da skill: **motor, migration, `ACAO_PERFIS` ou regra compart
   (`RecebimentosAlmoxarifado.js:1207`): com o `numero` **gerado** (decisão 5), dois pedidos do mesmo
   fornecedor ficam **indistinguíveis** para quem recebe. O número da OC do fornecedor vai em
   `observacoes`, que o `<select>` **não mostra**. Custo declarado da decisão 5, letra G.
+
+---
+
+## Como foi executado — onde a execução divergiu deste design
+
+> Escrito no fechamento da etapa (2026-09-16, `be71754..0a7e5c6`). **Design errado é dado, não
+> vergonha** — o que não se faz é apagar a versão errada em silêncio, porque o próximo confia nela
+> de novo.
+
+1. **Decisão 10 — o gate do vínculo mudou de lugar e de natureza.** O design dizia "declarar sem
+   gatear" e a segunda metade da decisão foi **revertida pelo controlador** no fix 1 da T2
+   (`3e43069`). O motivo está na própria célula da tabela de decisões, corrigido lá: autorização em
+   duas camadas é **regra do projeto**, não preferência de módulo, e o furo era **alcançável por
+   clique** — medido (`201` com a solicitação em `VINCULADO` para um usuário do fallback
+   `PRODUCAO`). O que passou a valer: `can(user, 'gerenciar_reposicao')` **dentro do serviço**
+   (`criarPedido`), **antes de qualquer escrita**, com 403 no formato de `requirePermission`. O gate
+   é **condicional**: `POST` sem `solicitacao_id` segue só com a camada do módulo, e essa metade da
+   decisão continua de pé. **Descartado:** dar `ACAO_PERFIS` próprio ao core (etapa própria) e
+   chamar a rota do almoxarifado por HTTP (duplicaria autenticação e acoplaria os módulos por rede).
+2. **T5 — "a rota tem de vir ANTES do `path="*"`" era falso.** O react-router 6 casa por **ranking
+   de especificidade**, não por ordem de declaração: o que importa é a rota **existir**. A intuição
+   vinha do Express, onde a ordem **é** contrato — e é contrato de verdade do lado do servidor
+   (as rotas de pedido **precisam** ficar acima de `app.delete('/api/compras/:tipo/:id')`). Duas
+   regras opostas nos dois lados do mesmo commit, e é por isso que a confusão era fácil.
+3. **T6 — "Gerar pedido" NAVEGA, não posta.** O design supunha que o botão dispararia o `POST` do
+   Compras da própria tela da Reposição. A execução (`727ee29`) o fez **navegar** para
+   `/compras/pedidos/novo?solicitacao=…&material=…&quantidade=…`, e quem posta é o formulário da T5
+   — que já lia a query. Ganho: os três erros do servidor (400 de schema, 403 do gate do vínculo,
+   403 de módulo) aparecem **onde o usuário pode corrigi-los**, em vez de num toast de outra tela.
+   Custo declarado: a linha da Reposição só muda para `VINCULADO` ao **reabrir** a aba.
+   **Descartado:** criar `GET /api/almoxarifado/solicitacoes/:id` só para pré-preencher (B107) e
+   consultar `minhas-permissoes` do Compras por linha (B108 — o botão se esconde pelo cache de
+   módulos do menu, que **falha aberto**).
+4. **Os rulings da onda de correção (B109–B113), todos posteriores a este design.** A revisão final
+   (2 lentes, BASE `dc60507`) achou 1 Critical + 7 Important, e cinco deles exigiram decisão que
+   este documento não tinha:
+   **B109** — a importação agrupa por **(ordem da planilha, fornecedor DA LINHA)**, nunca só pela
+   coluna de pedido; **descartado:** recusar a planilha inteira. Antes disso o item da BETA era
+   gravado no pedido da ACME e a conta a pagar da Etapa 37 nasceria para o fornecedor **errado**.
+   **Regressão declarada:** planilha com CNPJ só na 1ª linha da OC perde as demais.
+   **B110** — `DELETE` do pedido **libera** as solicitações de volta a `PENDENTE` e devolve
+   `solicitacoes_liberadas: N`; **descartado:** 409 (recusar a exclusão), que trancaria o comprador
+   por causa de um vínculo informativo.
+   **B111** — `previsao_entrega` e `data_pedido` só `null` ou `AAAA-MM-DD`; `''` vira `null`, texto
+   inválido é 400. Na importação, serial do Excel e `DD/MM/AAAA` convertem e o irreconhecível vira
+   `null` + `avisos[]` — a data é **informativa**, então recusar a linha jogaria fora o item
+   comprado. **E `null` explícito no `PUT` passou a significar LIMPAR** a data, senão não haveria
+   como apagar uma previsão (o comentário que dizia o contrário foi corrigido dizendo que mudou).
+   **B112** — fornecedor com pedidos → **409** `Fornecedor possui pedidos de compra — não pode ser
+   excluído`; **descartado:** cascade. Este caso **só se tornou alcançável nesta etapa**, porque
+   antes dela não existia pedido nenhum.
+   **B113** — `data_pedido` da importação vem da coluna `data`/`emissão` se houver, senão **hoje**
+   (data local do servidor); sem isso a aba mostrava `Data Pedido: -` em toda linha da carga.
+5. **Um item que este design listou como "NÃO cobre" e a execução TOCOU:** a seção acima diz que a
+   etapa não mexe em fornecedores. O F5 (`59abaea`) mexeu — no **ramo `fornecedores` do `DELETE`
+   genérico**, e só nele, para trocar um 500 por FK por um 409 com literal. Está registrado como
+   B112 em vez de ficar como contradição silenciosa: a etapa criou o dado que torna aquela falha
+   alcançável, então consertá-la é escopo dela.
+6. **O que este design previu e se confirmou, sem ajuste:** a extração byte-fiel (md5 idêntico), o
+   sombreamento de `grupos/:id` congelado como caracterização, o `z.looseObject` (com o dano
+   **diferente** do previsto — quem sumia era `solicitacao_id`, não `itens`), a guarda de duas
+   pernas do `PUT`/`DELETE` (provada por sonda executada), os schemas Zod reusando o `validate()` do
+   almoxarifado, e o contrato de **não-toque** em `receiptService.js`/`extended.js`/`schema.js`.

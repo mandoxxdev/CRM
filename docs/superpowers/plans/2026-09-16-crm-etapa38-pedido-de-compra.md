@@ -387,7 +387,7 @@ chamadores fora do bloco (medido, um a um).
 | aproveitar para "consertar" o `if (!campo) return 400` na mão | esta task é **só mover**. Zod entra na T2, e só no pedido | o `git diff` da T1 deixa de ser movimentação pura |
 | "limpar" os 51 `ALTER TABLE` de `index.js` | nota explícita da Etapa 37 (letra G): é core, fora de escopo | — |
 
-- [ ] **Step 1: escrever o teste e ver os quatro cenários vermelhos** (leia **qual** asserção cai)
+- [x] **Step 1: escrever o teste e ver os quatro cenários vermelhos** (leia **qual** asserção cai)
 
 `server/tests/api/comprasPedidosRotas.api.test.js` — cabeçalho com o achado medido (zero testes batem
 em `/api/compras/*`; o harness monta dois registradores e nenhum é Compras), e nesta task **só** os
@@ -417,7 +417,7 @@ cenários da extração:
 > apagar um grupo responde 400. **Não é o que queremos; é o que existe.** Consertar é etapa própria
 > (é comportamento de outra aba); o cenário existe para detectar **reordenação** na extração.
 
-- [ ] **Step 2: rodar e LER os números**
+- [x] **Step 2: rodar e LER os números**
 
 ```
 cd server && node tests/api/comprasPedidosRotas.api.test.js
@@ -427,7 +427,7 @@ Previsão: **os quatro vermelhos**, todos com **404** (`Cannot GET /api/compras/
 não monta Compras. Se algum vier verde, **pare**: alguém já montou o registrador e o cenário mede
 outra coisa. Cole aqui as linhas reais do `✗`.
 
-- [ ] **Step 3: implementar** — criar `server/routes/compras.js` com o cabeçalho explicando **por
+- [x] **Step 3: implementar** — criar `server/routes/compras.js` com o cabeçalho explicando **por
       quê** (a régua não existia; o harness não montava; a ordem é contrato), mover o bloco
       **verbatim**, trocar em `index.js` o bloco pela chamada do registrador **no mesmo ponto**, e
       acrescentar a linha no `testApp.js` ao lado de `:100-101` com o stub de upload
@@ -435,7 +435,7 @@ outra coisa. Cole aqui as linhas reais do `✗`.
       **não requer `multer` hoje** (os requires estão em `:6-12`) — acrescente o `require('multer')`
       junto, senão o harness inteiro quebra no carregamento e **todos** os arquivos de teste caem.
 
-- [ ] **Step 4: provar que a movimentação foi movimentação**
+- [x] **Step 4: provar que a movimentação foi movimentação**
 
 ```
 cd server && node tests/api/comprasPedidosRotas.api.test.js
@@ -450,7 +450,7 @@ grep -c "'/api/compras" server/routes/compras.js   # 23
 > 26**, e os **3** que ficam têm de ser **nominalmente** os de `solicitacoes-compra` — confira com
 > `grep -n "'/api/compras" server/index.js`, lendo os três, não só contando.
 
-- [ ] **Step 5: sabotagens**
+- [x] **Step 5: sabotagens**
 
 | # | Sabotagem | Âncora (`grep -cF` = 1 **pós-conserto**) | Qual asserção tem de cair |
 |---|---|---|---|
@@ -458,11 +458,85 @@ grep -c "'/api/compras" server/routes/compras.js   # 23
 | 2 | remover a linha do registrador no `testApp.js` | `require('../../routes/compras')` | **os quatro cenários**, com 404. Prova que a montagem no harness é o que torna a suíte possível — e é o achado que a task inteira existe para pagar |
 | 3 | trocar o `LEFT JOIN fornecedores` por `JOIN` na `GET /api/compras/pedidos` | `LEFT JOIN fornecedores f ON p.fornecedor_id = f.id` | **nada cai** se o cenário (1) tiver fornecedor — **e esse é o achado**: acrescente ao (1) um segundo pedido com `fornecedor_id` de fornecedor **inexistente** e afirme que ele **continua aparecendo** com `fornecedor_nome: null`. Só então a sabotagem derruba. (O stub do harness não tem FK — Etapa 37, decisão 8 — então a linha órfã é inserível) |
 
-- [ ] **Step 6: commit** — `git add` só dos quatro caminhos. Mensagem: qual era o furo (as rotas de
+- [x] **Step 6: commit** — `git add` só dos quatro caminhos. Mensagem: qual era o furo (as rotas de
       Compras não tinham onde ser testadas: o harness monta dois registradores e nenhum é Compras, e
       zero testes batiam em `/api/compras/*`), o que foi decidido (extrair as 23 contíguas + os 5
       helpers, multer por DI, ordem preservada) e o descartado (mover as 3 de `solicitacoes-compra`;
       mover as instâncias de multer; consertar o sombreamento do `DELETE` de grupo).
+
+#### ✅ Task 1 fechada — commit `be71754`
+
+**O que rodou.** RED antes de mover: **5 cenários, os 5 com 404** (`404 !== 200`, `404 !== 401`,
+`404 !== 400` — o harness não montava Compras). GREEN depois: **5 passou, 0 falhou**.
+`npm run test:api` → **179/179 arquivos OK** (era 178; o arquivo novo é o +1).
+`npm run test:almoxarifado` → **42 passou, 0 falhou**. `node --check` OK em `server/index.js`,
+`server/routes/compras.js` e `server/tests/helpers/testApp.js`. Servidor real subido uma vez
+(`CRM_DATA_DIR` de scratch, `PORT=5099`): `/api/compras/pedidos`, `/fornecedores`, `/cotacoes` e
+`/grupos` → **401**; `/solicitacoes-compra` → **401** (continua em `index.js`); caminho inexistente
+→ **404** (prova que os 401 são acerto de rota, não resposta em bloco).
+
+**A régua da movimentação.** `grep -c "'/api/compras"`: `server/index.js` **26 → 3** (os três são
+nominalmente `solicitacoes-compra`, lidos um a um com `grep -n`), `server/routes/compras.js` = **23**.
+3 + 23 = 26. E a prova mais forte: `md5sum` do bloco movido **idêntico** ao das 498 linhas originais
+(`7b290cc1ad5a233231cdeda6b4edcc83`) — a indentação original foi preservada de propósito (o corpo
+**não** foi re-indentado para dentro da função), porque reindentar 498 linhas tornaria impossível
+auditar linha a linha que nada mudou.
+
+**Dependências de escopo do `index.js` passadas ao registrador** (a lista completa, medida):
+
+| Símbolo | Como entrou | Por quê |
+|---|---|---|
+| `app`, `db`, `authenticateToken`, `checkModulePermission` | parâmetros posicionais | assinatura do registrador |
+| `uploadGrupoCompras`, `uploadFornecedor` | `uploads.*` (DI) | multer de `index.js:807` / `:826` — decisão 2 |
+| `uploadsGruposComprasDir`, `uploadsFornecedoresDir` | `uploads.*` (DI) | **divergência declarada**: o brief listava só os dois multer, mas as rotas de foto e foto-base64 usam os **diretórios direto** (`path.join(dir, oldFoto)`, `fs.mkdirSync(dir)`, `fs.writeFile(path.join(dir, …))`). O design já previa (`:75-77`: *"passá-las por DI não muda nada"*). Movê-los mudaria **onde o arquivo é gravado** |
+| `path`, `fs` | `require` no topo de `routes/compras.js` | builtins do Node, sem estado |
+
+Nenhum outro símbolo de escopo do `index.js` é referenciado no bloco. Os **5 helpers** de planilha
+(`normalizarCampo`, `parsePrecoBackend`, `extrairDoRow`, `extrairPrecoDoRow`,
+`extrairDescricaoDoRow`) vieram junto — zero chamadores fora do bloco, confirmado.
+
+**Sabotagens — as três derrubaram a asserção que guardam:**
+
+| # | Sabotagem | Asserção que caiu | Placar |
+|---|---|---|---|
+| 1 | `app.delete('/api/compras/:tipo/:id'` movido para **depois** do bloco de grupos | cenário (4): `400 'Tipo inválido'` **virou `200 {"message":"Grupo desativado"}`** — o específico de grupos passou a vencer | 3 passou, 2 falhou |
+| 2 | linha do registrador removida do `testApp.js` | **os 5 cenários**, todos com **404** — é o achado que a task inteira existe para pagar | 0 passou, 5 falhou |
+| 3 | `LEFT JOIN fornecedores f ON p.fornecedor_id = f.id` → `JOIN` | cenário (1): *"esperava os dois pedidos, veio 1"* — o pedido **órfão** sumiu | 3 passou, 2 falhou |
+
+⚠️ A sabotagem 3 **só** derruba porque o cenário (1) insere um segundo pedido com `fornecedor_id`
+inexistente, exatamente como o Step 5 mandou. Sem essa linha, trocar o `LEFT JOIN` por `JOIN` não
+quebraria asserção nenhuma. `md5sum` conferido antes, depois de cada sabotagem e depois de cada
+restauração (restauro por cópia do scratchpad, nunca `git checkout --`); `git diff --stat` voltou
+com só os arquivos da task.
+
+**Divergências do plano, todas reversíveis e nenhuma de comportamento:**
+
+1. **Cinco cenários, não quatro.** O (5) foi acrescentado: exercita `GET/POST fornecedores`,
+   `GET/POST grupos`, `GET/POST itens` e a **importação por planilha** — esta última é a única
+   asserção que prova que os 5 helpers vieram junto (se um tivesse ficado para trás, o handler
+   morreria de `ReferenceError` → 500, e nenhum outro cenário perceberia).
+2. **O stub de `fornecedores` no harness deixou de ser "subconjunto mínimo".** Com Compras montado,
+   `GET /api/compras/fornecedores` termina em `ORDER BY created_at DESC` e morria com
+   `no such column: created_at` — erro que **não existe em produção**, que é justamente o que a lição
+   da Etapa 8 (escrita nesse mesmo comentário) mandou evitar. O stub passou a espelhar
+   `index.js:19213` + os 5 `ALTER TABLE` de `:19269-19281`. Colunas anuláveis, todos os `INSERT` dos
+   testes são nomeados: 179/179 confirma que nada mais mudou.
+3. **`grupos_compras` e `itens_fornecedor` são criadas pelo próprio arquivo de teste**, não pelo
+   harness. São tabelas core que só as rotas de Compras usam; pôr no harness custaria a todos os
+   outros 33 arquivos. **Ponto de atenção para a T4** (importação): se ela precisar delas, o mesmo
+   DDL está em `comprasPedidosRotas.api.test.js:58-68` e `:216-227`.
+4. **Duas ocorrências de `'/api/compras/…'` no cabeçalho do `routes/compras.js` foram escritas com
+   aspas duplas** para não contaminar a régua `grep -c "'/api/compras"` — sem isso ela lia **25**.
+   Quem editar o cabeçalho, mantenha.
+
+**Próxima tarefa detalhada — Task 2.** O registrador já está montado no harness; o `POST` novo entra
+em `server/routes/compras.js` **antes** de `app.delete('/api/compras/:tipo/:id')` (linha **150** do
+arquivo hoje, marcada pelo comentário `// Delete genérico`), senão `/api/compras/pedidos` com dois
+segmentos cai no genérico. O contrato que ela consome está em "Contratos de API congelados" § 2.
+⚠️ Âncora de sabotagem da T2 — CORRIGINDO O PLANO: `grep -cF "routes/compras" server/index.js` dá
+**2** agora, não 1. O plano previa 1 (a linha do `require`), mas o comentário que explica a extração
+cita o caminho na linha de cima. `grep -cF` conta LINHAS: quem usar essa âncora, use
+`grep -cF "require('./routes/compras')"`, que dá **1**.
 
 ---
 
@@ -502,7 +576,7 @@ async function criarPedido(db, dados, user)  // -> { id, numero, …, itens: [..
 | **(Fase 2)** deixar o preço nascer 0 em silêncio | `valor_unitario = 0` na linha do pedido desfaz a **U1 da Etapa 37**: `criarRecebimento` herda o preço da linha quando o payload omite (`receiptService.js:398-412`) e `custo_unitario` só viaja quando `> 0` (`:1176`) — com preço 0 o `custo_medio` do material **deixa de ser alimentado** e o rateio da Etapa 8c distribui R$ 0,00. A decisão (preço opcional) **fica**; o que muda é que a tela **avisa** (contrato 7) e a letra **G** registra | nada cai — é fragilidade **declarada**, como a sabotagem 6 |
 | apagar em silêncio o comentário de `numeroDoc.js` | regra 5 do CLAUDE.md: a frase "hoje isso é INALCANÇÁVEL" era **verdadeira** e deixa de ser. Apagar faz o próximo confiar de novo | nada cai — está **exigido por escrito**, e a T8 confere |
 
-- [ ] **Step 1: escrever o teste e ver os cenários vermelhos** (leia **qual** asserção cai)
+- [x] **Step 1: escrever o teste e ver os cenários vermelhos** (leia **qual** asserção cai)
 
 `server/tests/api/comprasPedidoCriar.api.test.js` — fixtures: `fornecedores` e
 `materiais_almoxarifado` inseridos no `beforeEach`, **ids lidos do `INSERT`**; usuários `64` (ADMIN),
@@ -550,7 +624,7 @@ async function criarPedido(db, dados, user)  // -> { id, numero, …, itens: [..
 > O cenário (9) é o que dá o **primeiro consumidor** a `vincularPedidoCompra` desde a Etapa 14 — e a
 > segunda metade dele é a decisão 10 sob régua: sem ela, "não-fatal" seria só uma frase no design.
 
-- [ ] **Step 2: rodar e LER os números**
+- [x] **Step 2: rodar e LER os números**
 
 ```
 cd server && node tests/api/comprasPedidoCriar.api.test.js
@@ -560,14 +634,14 @@ Previsão: **todos vermelhos com 404** (`Cannot POST /api/compras/pedidos`). Col
 `✗`. Se **algum** cenário vier verde, pare: 404 não satisfaz nenhuma asserção deste arquivo, então
 verde aqui significa que o cenário não afirma nada.
 
-- [ ] **Step 3: implementar** — `schemas.js` (com o comentário explicando `looseObject` e a literal
+- [x] **Step 3: implementar** — `schemas.js` (com o comentário explicando `looseObject` e a literal
       própria da quantidade), `pedidoCompraService.criarPedido` (fornecedor → materiais → `numero` por
       `inserirComNumeroUnico(db, 'PC', …)` → `INSERT` cabeçalho → `INSERT` dos itens → `UPDATE
       valor_total` → vínculo em `try/catch` → reler e devolver), a rota **antes** do `DELETE`
       genérico, e **o comentário de `numeroDoc.js` corrigido dizendo que a afirmação era verdadeira
       até esta etapa**.
 
-- [ ] **Step 4: rodar de novo, e rodar quem toca as mesmas tabelas**
+- [x] **Step 4: rodar de novo, e rodar quem toca as mesmas tabelas**
 
 ```
 cd server && node tests/api/comprasPedidoCriar.api.test.js
@@ -577,7 +651,7 @@ cd server && node tests/api/pedidoSaldoRecebido.api.test.js   # E37: a coluna qu
 cd server && npm run test:validation
 ```
 
-- [ ] **Step 5: sabotagens**
+- [x] **Step 5: sabotagens**
 
 | # | Sabotagem | Âncora (`grep -cF` = 1 **pós-conserto**) | Qual asserção tem de cair |
 |---|---|---|---|
@@ -588,11 +662,131 @@ cd server && npm run test:validation
 | 5 | tirar o `try/catch` do vínculo | `vinculo_solicitacao` | a **segunda metade** do (9): o 201 do vínculo falho vira 400/500 |
 | 6 | escrever `quantidade_recebida: 0` explicitamente no `INSERT` | o bloco do `INSERT INTO itens_pedido_compra` | **nada cai** — **e esse é o achado**: o valor é o mesmo. Registre como fragilidade (letra G): a suíte **não** distingue "não escreve" de "escreve 0", e a proteção real é a proibição escrita aqui e na T8. **Mantenha o INSERT sem a coluna** |
 
-- [ ] **Step 6: commit** — `git add` só dos cinco caminhos. Mensagem: qual era o furo (o módulo core
+- [x] **Step 6: commit** — `git add` só dos cinco caminhos. Mensagem: qual era o furo (o módulo core
       Compras não conseguia criar um pedido, e por isso a Etapa 37 inteira era inalcançável), o que
       foi decidido (Zod reusando `validate()`, serviço separado da rota, `numero` gerado, `valor_total`
       derivado, enum de 7 status, vínculo não-fatal) e o descartado (`numero` digitado + 409;
       `valor_total` do payload; enum de 6; duplicar `validation.js`).
+
+#### ✅ Task 2 fechada — commit `fa410ce`
+
+**O que rodou.** RED antes de implementar: **10 cenários, os 10 vermelhos com 404**
+(`Cannot POST /api/compras/pedidos` — `404 !== 201`, `404 !== 400`, `404 !== 401`). GREEN depois:
+**10 passou, 0 falhou**. Vizinhos que tocam as mesmas tabelas: `comprasPedidosRotas` **5/5**,
+`numeroDocumento` **9/9** (o helper ganhou o quinto chamador), `pedidoSaldoRecebido` **12/12**,
+`pedidosCompraSaldoAux` **8/8**, `recebimentoExcedentePedido` **16/16**,
+`recebimentoContraPedidoIntegracao` **5/5**, `npm run test:validation` **4/4**.
+`npm run test:api` → **180/180 arquivos OK** (era 179; o arquivo novo é o +1).
+`npm run test:almoxarifado` → **42 passou, 0 falhou**. `node --check` OK nos quatro arquivos de
+código.
+
+**Sabotagens — e a tabela do Step 5 errou duas previsões, as duas registradas:**
+
+| # | Sabotagem | Asserção que caiu | Placar |
+|---|---|---|---|
+| 1 | laço `for (const item of itensResolvidos)` apagado | cenário (1): *"esperava 2 linhas de item, vieram 0"* — **a sabotagem que a base exige**, e ela derrubou | 6 passou, 4 falhou |
+| 2 | `z.looseObject(` → `z.object(` no `PedidoCompraCreateSchema` | cenário (9) (*"solicitação ficou PENDENTE"*) e cenário (1) (*"data_pedido não foi gravada: null"*) — **não** o 201 do (1) que o plano previa | 8 passou, 2 falhou |
+| 3 | `valores[0] = dados.numero \|\| numeroGerado` | cenário (3): *"o numero do payload venceu o do servidor"* | 9 passou, 1 falhou |
+| 4 | `SET valor_total = ?` com `dados.valor_total \|\| total` | cenário (5): *"2x50 + 3x10 = 130, veio 999"* | 9 passou, 1 falhou |
+| 5 | `try/catch` do vínculo removido (chamada direta) | cenário (9), 2ª metade: *"vinculo falho deveria manter 201, veio 404"* | 9 passou, 1 falhou |
+| 6 | `quantidade_recebida` escrita como `0` no `INSERT` | **nada caiu** — previsto, e é o achado: o valor gravado é o mesmo | 10 passou, 0 falhou |
+
+⚠️ **A previsão da sabotagem 2 estava errada, e o erro é instrutivo.** O plano dizia que `z.object`
+faria `itens` sumir e todo POST válido virar 400. **Não faz:** `itens` está **declarado** no schema,
+então sobrevive ao `z.object` e o cenário (1) continuava respondendo **201**. Quem some são as
+chaves **não declaradas** — `solicitacao_id` (o vínculo com a reposição vira **no-op silencioso**: a
+solicitação fica `PENDENTE`, o `POST` responde 201 e ninguém vê erro), `data_pedido`,
+`previsao_entrega` e `observacoes` (gravados `NULL`). Na primeira rodada a sabotagem derrubou
+**só** o (9); o cenário (1) ganhou então a asserção dos três campos opcionais do cabeçalho, e a
+sabotagem passou a derrubar **dois** cenários. Sem essa emenda, trocar `looseObject` por `object`
+passaria com **10/10** em tudo menos o vínculo. O comentário de `schemas.js` foi reescrito com o
+dano **medido**, não com o previsto.
+
+⚠️ **Modo de falha do harness de sabotagem, novo e caro:** `perl -0pi -e "s/\Q…\E/…/"` com `\n`
+**dentro** do `\Q…\E` **não casa nada** — `\Q` literaliza a barra invertida e o `n` vira dois
+caracteres, não uma quebra de linha. A primeira tentativa da sabotagem 6 saiu com `md5sum`
+**inalterado** e placar 10/10, o que se leria como "nada caiu" — a conclusão certa pelo motivo
+errado. Só o `md5sum` pós-sabotagem (obrigatório pelas Global Constraints) pegou. **Regra para as
+próximas tasks: dentro de `\Q…\E` só texto de uma linha; quebra de linha só em regex escapada à
+mão.** `md5sum` conferido antes, depois de cada sabotagem e depois de cada restauração; restauro
+por cópia do scratchpad, nunca `git checkout --`.
+
+**Divergências do plano, todas reversíveis:**
+
+1. **Dez cenários, não nove.** O (10) foi acrescentado: o pedido criado pela porta nova aparece em
+   `GET /almoxarifado/recebimentos-aux/pedidos-compra?pendentes=1` com `quantidade_pedida: 10`,
+   `saldo_pendente: 10`, `situacao_recebimento: 'ABERTO'`, e a rota de itens da 37 devolve a linha
+   com `valor_unitario: 4`. É a **composição com a Etapa 37** medida em vez de prometida — é o que
+   prova que `material_id` resolvido e `valor_unitario` copiado tornam a linha visível ao
+   recebimento (o recorte `material_id IS NOT NULL` das duas leituras de lá).
+2. **`status` não entra na lista de colunas do `INSERT` quando não vem no payload.** Bindar `null`
+   sobrescreveria o `DEFAULT 'pendente'` do DDL com NULL, e a tela de Compras filtra por essa
+   coluna. O cenário (6) afirma `'pendente'` vindo do DEFAULT, como o (2) faz com
+   `quantidade_recebida`.
+3. **`vinculo_solicitacao: 'ok'`** existe além do `'falhou'` do contrato — só aparece quando veio
+   `solicitacao_id`, e é o que deixa a Task 6 saber se o botão "Gerar pedido" fechou o ciclo.
+4. **Sem auditoria.** `registrarAuditoria` é do almoxarifado e o core não tem ledger; nenhuma RN
+   pediu. Fica como lacuna declarada: quem criou o pedido só aparece no `warn` do vínculo.
+5. **`relerPedido` é exportado** ao lado de `criarPedido` — a T3 monta `obterPedido` sobre ela em
+   vez de reescrever o `SELECT` com `fornecedor_nome` e os itens `ORDER BY id`.
+
+**Fragilidades declaradas (vão para a letra G da T8):**
+
+- **A suíte não distingue "não escreve `quantidade_recebida`" de "escreve 0"** (sabotagem 6). A
+  proteção é a proibição escrita no cabeçalho de `pedidoCompraService.js` e aqui.
+- **`valor_unitario: 0` é aceito e tem custo silencioso:** a U1 da Etapa 37 herda o preço da linha
+  no recebimento e `custo_unitario` só viaja quando `> 0` — preço 0 no pedido = custo médio não
+  alimentado = rateio da Etapa 8c distribuindo R$ 0,00. A decisão (preço opcional) fica; quem avisa
+  é a tela da T5 (contrato 7).
+- ~~**O gate de camada única foi herdado, e o vínculo não tem gate nenhum.**~~ **FECHADO pelo fix 1
+  — ver abaixo.** O registro fica porque o furo era real e foi medido: `POST /api/compras/pedidos`
+  é `authenticateToken` + `checkModulePermission('compras')`, sem `requirePermission`, e chamava
+  `purchaseService.vincularPedidoCompra` **direto**, enquanto o `requirePermission('gerenciar_reposicao')`
+  daquela operação vive na **rota** do almoxarifado (`extended.js:1743`) — qualquer usuário do
+  módulo `compras`, inclusive o `PRODUCAO` do fallback, virava uma solicitação para `VINCULADO`.
+
+#### ✅ Task 2 — fix round 1: o vínculo ganhou gate (`gerenciar_reposicao`)
+
+**A decisão do controlador, e ela reverte a decisão 10 do design.** "Declarar sem gatear" estava
+errado: autorização em duas camadas é **regra do projeto**, o buraco era **alcançável pela UI** (o
+botão "Gerar pedido" da T6) e o caminho reversível e barato é o gate, não o parágrafo. O design foi
+corrigido **no lugar** (decisão 10 e risco R10, com `**(execução)**` e o motivo do erro).
+
+**O que passou a valer.** Em `criarPedido`, quando vem `solicitacao_id` e **antes de qualquer
+escrita** (cabeçalho incluído): `can(user, 'gerenciar_reposicao')` de
+`services/almoxarifado/permissions.js`. Recusa com **403** no **mesmo shape** de `requirePermission`:
+
+```
+{ error: 'Sem permissão para esta operação', acao: 'gerenciar_reposicao', perfil: 'PRODUCAO' }
+```
+
+`gerenciar_reposicao` = `[ADMINISTRADOR, GESTOR, COMPRAS]` (`ACAO_PERFIS`, Etapa 11 D9 — o
+ALMOXARIFE fica fora de propósito lá). O gate é **condicional**: `POST` **sem** `solicitacao_id`
+segue com a camada do módulo apenas, e o core **não** ganhou camada de perfil própria.
+
+**RED → GREEN.** RED: cenário (11) em **201** com `vinculo_solicitacao: 'ok'` e a solicitação em
+`VINCULADO` — o furo acontecendo sob régua (o (12) já nascia verde: é a metade positiva, e ela
+existe para que "403 sempre" não passasse). GREEN: **12 passou, 0 falhou**.
+`comprasPedidosRotas` 5/5; `npm run test:api` **180/180**.
+
+**Sabotagem do fix** (âncora `if (querVincular && !can(user, 'gerenciar_reposicao')) throw …`,
+`grep -cF` = 1; md5 `f4f874…` → `470055…` → `f4f874…`): linha do `can()` removida → cenário (11)
+cai em **`esperava 403, veio 201`**, com o corpo mostrando `vinculo_solicitacao: 'ok'`.
+11 passou, 1 falhou.
+
+**Decisão de forma:** a checagem mora no **serviço**, não num `requirePermission` na rota, pelo
+precedente escrito em `ACAO_PERFIS` para `autorizar_excedente` (Etapa 36) e
+`ajustar_material_cliente` (Etapa 8): *"a checagem real acontece no MOTOR, não em
+`requirePermission` na rota"* — gate de rota aqui exigiria a ação de **todo** `POST` de pedido e
+barraria o comprador sem perfil de almoxarifado de criar pedido nenhum. O `acao`/`perfil` viajam
+para o corpo pelo `catch` da rota.
+
+**Ponto de atenção para a Task 3** (contrato que ela consome): `criarPedido(db, dados, user)` e
+`relerPedido(db, pedidoId)` de `services/compras/pedidoCompraService.js`; o molde de erro é
+`Object.assign(new Error(msg), { status })` e a rota traduz com `res.status(e.status || 500)`. O
+`POST` foi registrado **logo depois** de `GET /api/compras/pedidos` e **antes** de
+`app.delete('/api/compras/:tipo/:id')` (`routes/compras.js`) — o `PUT`/`DELETE`/`GET /:id` da T3
+entram **coladas nele**, e para os dois últimos a posição é obrigatória, não estética.
 
 ---
 
@@ -614,7 +808,7 @@ cd server && npm run test:validation
 | apagar o pedido sem apagar os itens | é o defeito de hoje (R3 da Fase 0), e a partir da 38 há itens de verdade para ficar órfãos | cenário (7) |
 | inventar uma segunda literal de "não existe" | já há uma: `'Pedido de compra não encontrado'`, em `extended.js` (E37) e `purchaseService:62` | cenário (2) |
 
-- [ ] **Step 1: escrever o teste e ver os cenários vermelhos**
+- [x] **Step 1: escrever o teste e ver os cenários vermelhos**
 
 ```
 (1) GET /api/compras/pedidos/:id -> 200 com itens
@@ -652,16 +846,16 @@ cd server && npm run test:validation
     DELETE /api/compras/cotacoes/<id> -> 200   (metade positiva da ordem de registro)
 ```
 
-- [ ] **Step 2: rodar e LER os números** — `cd server && node tests/api/comprasPedidoEditarExcluir.api.test.js`.
+- [x] **Step 2: rodar e LER os números** — `cd server && node tests/api/comprasPedidoEditarExcluir.api.test.js`.
       Previsão: (1)(2)(3)(4) **404** (rota não existe); (5)(6) **200** (o genérico responde e apaga!);
       (7) **falha na segunda asserção** (itens órfãos — o comportamento de hoje); (8) **verde**.
       ⚠️ **O (8) nasce verde de propósito** e não é teste vazio: é a metade positiva que a sabotagem 1
       derruba. Cole as linhas reais do `✗`.
 
-- [ ] **Step 3: implementar** — as três funções no serviço, as três rotas **antes** do genérico, com o
+- [x] **Step 3: implementar** — as três funções no serviço, as três rotas **antes** do genérico, com o
       comentário do **por quê** da posição (uma linha citando a medição 2).
 
-- [ ] **Step 4: rodar de novo**
+- [x] **Step 4: rodar de novo**
 
 ```
 cd server && node tests/api/comprasPedidoEditarExcluir.api.test.js
@@ -671,7 +865,7 @@ cd server && node tests/api/pedidoSaldoRecebido.api.test.js
 cd server && node tests/api/recebimentoContraPedidoIntegracao.api.test.js
 ```
 
-- [ ] **Step 5: sabotagens**
+- [x] **Step 5: sabotagens**
 
 | # | Sabotagem | Âncora (`grep -cF` = 1 **pós-conserto**) | Qual asserção tem de cair |
 |---|---|---|---|
@@ -681,11 +875,120 @@ cd server && node tests/api/recebimentoContraPedidoIntegracao.api.test.js
 | 4 | apagar o `DELETE FROM itens_pedido_compra` do `excluirPedido` | `DELETE FROM itens_pedido_compra WHERE pedido_id = ?` | a **segunda** asserção do cenário (7) (`COUNT(itens) === 0`) — e só ela: o pedido some do mesmo jeito. É o defeito de hoje, reproduzido sob régua. ⚠️ **(Fase 2)** isso vale **no harness**, que roda `foreign_keys = 0`; em produção (`sqliteConcurrency.js:50` liga a FK) o mesmo código **falharia** com `FOREIGN KEY constraint failed`. Declare no arquivo de teste, em duas linhas |
 | **5 (Fase 2)** | tirar a **segunda perna do `PUT`** (a consulta a `recebimentos_material_almoxarifado` em `atualizarPedido`) | `WHERE pedido_compra_id = ?` em `atualizarPedido` | o **400** do cenário (4b), e **só** ele — o (4) continua passando pela primeira perna. É o que prova que as duas pernas medem coisas diferentes **também no `PUT`**, e é o achado F1 sob régua |
 
-- [ ] **Step 6: commit** — qual era o furo (o `DELETE` genérico apagava a cabeça e deixava os itens
+- [x] **Step 6: commit** — qual era o furo (o `DELETE` genérico apagava a cabeça e deixava os itens
       órfãos, e não havia como editar nem ler um pedido só), o decidido (409 com duas pernas; PUT
       barrado por qualquer item recebido; itens apagados junto; rotas antes do genérico) e o
       descartado (medir só `quantidade_recebida`; `ON DELETE CASCADE` no DDL — é tabela core e a
       Etapa 37 deixou `pedido_item_id` sem FK **de propósito**).
+
+#### ✅ Task 3 fechada — commit `6c21e89`
+
+**O que rodou.** RED antes de implementar: **1 passou, 10 falhou**, e os números saíram exatamente
+como o Step 2 previu — `(1)(2)(3)(4)(4b)(9)(10)` em **404** (`404 !== 200`, `404 !== 400`,
+`404 !== 401`; no (2) o `body.error` veio `undefined`), `(5)` e `(6)` em **200
+`{"message":"Item excluído com sucesso"}`** (o genérico respondeu **e apagou**), `(7)` caiu na
+literal (`'Item excluído com sucesso'` no lugar de `'Pedido de compra excluído com sucesso'`) e
+`(8)` **verde de propósito** (é a metade positiva que a sabotagem 1 derruba). GREEN depois:
+**11 passou, 0 falhou**.
+
+Vizinhos: `comprasPedidoCriar` **12/12**, `comprasPedidosRotas` **5/5** (a caracterização do
+`grupos/:id` **continua** valendo), `pedidoSaldoRecebido` **12/12**, `pedidosCompraSaldoAux`
+**8/8**, `recebimentoExcedentePedido` **16/16**, `recebimentoContraPedidoIntegracao` **5/5**.
+`npm run test:api` → **181/181 arquivos OK** (era 180; o arquivo novo é o +1).
+`npm run test:almoxarifado` → **42 passou, 0 falhou**. `node --check` OK nos dois arquivos de
+código; árvore em LF (`grep -cP '\r'` = 0 nos três arquivos).
+
+**A SONDA EXECUTADA antes de implementar** (o RED do (7) parou na literal e não chegou à asserção
+do órfão, então o dano foi medido fora do teste, contra o código de hoje):
+
+```
+A) DELETE respondeu 200 {"message":"Item excluído com sucesso"}
+   cabeca depois = undefined | linhas ORFAS = [{"id":1,"pedido_id":1}]
+B) elo gravado: pedido_item_id = 2 (linha do pedido = 2)
+   linha do pedido ANTES de processar: quantidade_recebida 0   <- PASSA pela perna 1
+   linhas DEPOIS do PUT de uma perna: id NOVO 3; o recebimento aponta para 2 (inexistente)
+   PROCESSAR respondeu: 200 (sem erro, sem warn)
+   estoque do material DEPOIS de processar: 6   <- o material ENTROU
+   linha do pedido depois de processar: quantidade_recebida CONTINUA 0
+   a E37 ve o pedido como: saldo_pendente 10   <- ABERTO com o saldo CHEIO, para sempre
+```
+
+**Sabotagens — as cinco derrubaram a asserção que guardam, e as duas previsões da tabela estavam
+certas** (`md5sum` antes/depois/restauro conferido em todas; restauro por cópia do scratchpad,
+nunca `git checkout --`; `git diff --stat` voltou só com os arquivos da task):
+
+| # | Sabotagem | Asserção que caiu | Placar |
+|---|---|---|---|
+| 1 | as três rotas de pedido movidas para **depois** do `DELETE` genérico (bloco 166-206 reinserido após `:272`) | **quatro**: (5) `409 → 200`, (6) `409 → 200`, (7) literal `'Item excluído com sucesso'`, (2) literal `'Item não encontrado'` no DELETE | 7 passou, 4 falhou |
+| 2 | `COALESCE(quantidade_recebida, 0) > 0` → `>= 0` | a **metade POSITIVA**, como previsto: (3) *"esperava 200, veio 400 … já teve recebimento"*, e com ela (2)(4)(4b)(5)(7)(9)(10). As negativas (6) e (8) **ficaram verdes** | 3 passou, 8 falhou |
+| 3 | segunda perna fora **só do `DELETE`** | (6) **e só ela** — *"esperava 409, veio 200 Pedido de compra excluído com sucesso"*; o (5) seguiu passando pela perna 1 | 10 passou, 1 falhou |
+| 4 | `DELETE FROM itens_pedido_compra` removido de `excluirPedido` | a **segunda** asserção do (7) e só ela (*"as linhas do pedido tinham de sumir junto"*); o pedido sumiu igual | 10 passou, 1 falhou |
+| 5 | segunda perna fora **só do `PUT`** | (4b) **e só ela** — *"esperava 400, veio 200"*, e o corpo mostra o órfão nascendo (linha `id 12` nova enquanto o recebimento aponta para a antiga); o (4) seguiu passando pela perna 1 | 10 passou, 1 falhou |
+| 6 (extra) | a âncora **literal do plano** (`WHERE pedido_compra_id = ?`, no helper compartilhado) apagada | (4b) **e** (6) juntas — é a prova de que o helper é a fonte única das duas pernas 2 | 9 passou, 2 falhou |
+
+**Divergência de âncora, declarada.** O plano mandava ancorar as sabotagens 3 e 5 em
+`WHERE pedido_compra_id = ?` "em `excluirPedido`" / "em `atualizarPedido`". A consulta ficou em
+**um** helper (`recebimentoVinculadoAoPedido`) e não duplicada nas duas funções — duplicar o
+agregado é o smell que a re-revisão da 37 acusou, e a guarda de tabela ausente teria de existir
+duas vezes. Consequência: aquela âncora conta **1** e apagá-la derruba **as duas** pernas 2 (é a
+sabotagem 6 extra acima). Para provar que as pernas medem coisas diferentes **por porta**, as
+sabotagens 3 e 5 ancoraram na linha `if (…) throw erro(…)` de cada função (`grep -cF` = **1** cada,
+conferido). Contagens pós-conserto: `já teve recebimento` = **2** (as duas literais, sufixos
+diferentes), `'Pedido de compra não encontrado'` = **1** no serviço (as três portas usam a mesma).
+
+**Outras divergências do plano, todas reversíveis e nenhuma de contrato:**
+
+1. **Onze cenários, não oito.** Acrescentados: **(9)** o `PUT` reusando o vocabulário de **7**
+   status do `POST` (`PARCIAL`/`RECEBIDO` recusados com a literal do contrato 2, e os sete válidos
+   gravando em laço) e **(10)** o **401** nas três portas com a metade positiva — o único gate
+   exercitável no harness. O `(4b)` do plano virou cenário próprio, como ele pedia.
+2. **`GET /:id` NÃO devolve `saldo_pendente`/`situacao_recebimento`.** Quem os calcula é
+   `derivarRecebimentoDoPedido` (`receiptService.js`), que **não é exportada** — e aquele arquivo é
+   contrato de **não-toque** nas Global Constraints. Exportá-la seria achado de plano; duplicar a
+   conta daria duas fórmulas de saldo do pedido. O cenário (1) então **cruza** a leitura do Compras
+   com as **duas** rotas aux da 37 pelo `id` da linha (`saldo_pendente` na de itens,
+   `situacao_recebimento` na de lista — medido: os derivados **não** têm a mesma forma nas duas),
+   provando que é o mesmo objeto. A tela recebe `quantidade_recebida` crua, que é o que ela precisa.
+3. **O `PUT` escreve só os campos PRESENTES no cabeçalho** (`undefined`/`null` não mexem na coluna;
+   `''` grava vazio, que é como o formulário limpa um campo). Um payload parcial de serviço (T6)
+   não apaga o que não conhece. `fornecedor_id` e `valor_total` são sempre escritos (o segundo
+   derivado), `numero` nunca, `updated_at = CURRENT_TIMESTAMP` no padrão das outras rotas do módulo.
+4. **`solicitacao_id` no `PUT` é ignorado**, de propósito: vincular é ato da criação, e é lá que
+   vive o gate de `gerenciar_reposicao` (fix 1 da T2). Aceitá-lo aqui abriria a mesma escrita em
+   tabela do almoxarifado por uma porta **sem** gate.
+5. **`assertFornecedor` extraída** e reusada pelo `POST` (o `criarPedido` perdeu o `SELECT` inline).
+   Movimento puro; `comprasPedidoCriar` 12/12 confirma.
+6. **O `PUT` reusa `PedidoCompraCreateSchema`** em vez de um schema próprio — contrato 4 diz "o
+   mesmo payload, menos `solicitacao_id`", e um schema novo daria uma segunda lista de 7 status.
+
+**Fragilidades declaradas (vão para a letra G da T8):**
+
+- **O cenário (7) mede o harness, não a produção.** Com `foreign_keys = 0` o defeito aparece como
+  linha órfã; em produção (`sqliteConcurrency.js:50`) o mesmo código falharia com
+  `FOREIGN KEY constraint failed` → 500. A suíte **não** exercita o caminho da FK ligada — está
+  dito no cabeçalho do arquivo de teste e no de `excluirPedido`.
+- **`excluirPedido` não tem transação** (o módulo não tem): se o `DELETE` do cabeçalho falhasse
+  depois do dos itens, sobraria pedido sem linhas. Assumido — o inverso é o que corrompe a leitura
+  do almoxarifado, e a régua já garantiu que nada foi recebido.
+- **A guarda de tabela ausente não tem cenário.** `recebimentos_material_almoxarifado` sempre
+  existe no harness (o `initSchema` a cria), então o caminho `if (!tabela) return null` não é
+  exercitado por asserção nenhuma. A proteção é a simetria com `listarPedidosCompraAux` e este
+  registro.
+
+**Próxima tarefa detalhada — Task 4** (galho A: busca de material + importação por planilha).
+Contratos que ela consome, já prontos: `criarPedido(db, dados, user)`, `relerPedido(db, id)`,
+`obterPedido`, `atualizarPedido(db, id, dados)` e `excluirPedido(db, id)` em
+`services/compras/pedidoCompraService.js`, todos com o molde de erro
+`Object.assign(new Error(msg), { status })` traduzido pela rota com `res.status(e.status || 500)`.
+`resolverItens` e `assertFornecedor` são internas e é **nelas** que a importação deve se apoiar (a
+resolução por **código** de material é o que a T4 acrescenta — hoje só há por `material_id`).
+Pontos de atenção: (a) `GET /api/compras/materiais` precisa de `descricao = COALESCE(nome,
+descricao)` (contrato 6) senão o `<select>` do formulário sai em branco; (b) a rota de importação
+entra **junto do bloco de pedido**, acima do `DELETE` genérico — `POST` não sofre sombreamento, mas
+separar as rotas de pedido é o que o comentário do bloco pede para não fazer; (c) `grupos_compras`
+e `itens_fornecedor` não estão no harness (DDL em `comprasPedidosRotas.api.test.js:58-68` e
+`:216-227`), e `cotacoes` também não — o DDL dela está agora em
+`comprasPedidoEditarExcluir.api.test.js`.
 
 ---
 
@@ -707,7 +1010,7 @@ cd server && node tests/api/recebimentoContraPedidoIntegracao.api.test.js
 | **(Fase 2)** ler a **quantidade** com `extrairDoRow` + `parsePrecoBackend` | ⚠️ **os dois helpers são de PREÇO em pt-BR e estragam quantidade fracionária.** `extrairDoRow` (`index.js:20410-20416`) devolve **sempre `String`**, e `parsePrecoBackend` (`:20403-20409`) **apaga todos os pontos** antes do `parseFloat` (`'1.5'` → `15`, medido na leitura). Uma planilha com `1.5` gravaria **15** em `itens_pedido_compra.quantidade` — que é o total que a 37 lê como `quantidade_pedida`. Leia `row[k]` **cru** e só caia no parse pt-BR quando o valor for string **com vírgula** | cenário (6) |
 | **(Fase 2)** importar mais de 50 pedidos e prometer que aparecem | `listarPedidosCompraAux` termina em `ORDER BY p.created_at DESC **LIMIT 50**` (`receiptService.js:1518`). A 38 é a **primeira** porta capaz de criar 60 pedidos num clique: os 10 mais antigos somem do `<select>` do recebimento **sem mensagem nenhuma**. E `created_at` é `DEFAULT CURRENT_TIMESTAMP` (resolução de **1 segundo**), então uma importação inteira empata no `ORDER BY`. **Não se conserta aqui** (é porta da 37): declarar na letra G e no guia, e o roteiro manual usa planilha pequena | — (declarado) |
 
-- [ ] **Step 1: escrever o teste e ver os cenários vermelhos**
+- [x] **Step 1: escrever o teste e ver os cenários vermelhos**
 
 ```
 (1) GET /api/compras/materiais?search=<codigo> -> 200, [{ id, codigo, descricao, unidade }]
@@ -739,12 +1042,12 @@ cd server && node tests/api/recebimentoContraPedidoIntegracao.api.test.js
     e que a suite NAO protege esse gate. (caso 2 da `fechar-etapa`: declarar, nao forjar)
 ```
 
-- [ ] **Step 2: rodar e LER os números** — previsão: (1) a (4) **404**; (5) **verde** (e declarado).
-- [ ] **Step 3: implementar** — `importarPedidos` agrupando pela coluna da planilha e chamando
+- [x] **Step 2: rodar e LER os números** — previsão: (1) a (4) **404**; (5) **verde** (e declarado).
+- [x] **Step 3: implementar** — `importarPedidos` agrupando pela coluna da planilha e chamando
       `criarPedido` por grupo; os 5 helpers de `routes/compras.js` reusados (eles já estão lá desde a
       T1); a rota de materiais com `LIMIT 50`.
-- [ ] **Step 4: rodar de novo** + `node tests/api/comprasPedidoCriar.api.test.js` (o serviço mudou).
-- [ ] **Step 5: sabotagens**
+- [x] **Step 4: rodar de novo** + `node tests/api/comprasPedidoCriar.api.test.js` (o serviço mudou).
+- [x] **Step 5: sabotagens**
 
 | # | Sabotagem | Âncora | Qual asserção tem de cair |
 |---|---|---|---|
@@ -752,14 +1055,151 @@ cd server && node tests/api/recebimentoContraPedidoIntegracao.api.test.js
 | 2 | agrupar por `numero` gerado em vez da coluna da planilha | o bloco `const chaveGrupo =` | `pedidos.length === 2` do (2) vira 5 (um pedido por linha) |
 | 3 | `INSERT` direto na rota, sem o serviço | `await criarPedido(db,` dentro de `importarPedidos` | `numeros casam /^PC-/` e `valor_total === soma` do (2) |
 
-- [ ] **Step 6: commit** — o furo (o acervo é 0/0 com 10 fornecedores e 3 materiais: ninguém vai
+- [x] **Step 6: commit** — o furo (o acervo é 0/0 com 10 fornecedores e 3 materiais: ninguém vai
       digitar histórico), o decidido (agrupador da planilha; `ignorados` em vez de `material_id NULL`;
       mesmo serviço; porta de busca de material no core) e o descartado (idempotência por `numero` —
       incompatível com número gerado; alargar a permissão do módulo almoxarifado).
 
+#### ✅ Task 4 fechada — commit `877ef23`
+
+**⚠️ O commit foi AMENDADO uma vez** (`6e0091f` -> `877ef23`, mesma mensagem): o comentario do
+`SEM_AGRUPADOR` tinha sido escrito com um escape de NUL que o editor gravou como **byte NUL de
+verdade** no fonte, e o `grep` passava a tratar o arquivo como binario — o que quebra a regra de
+ancoragem das sabotagens. Um commit por assunto foi preservado de proposito; o unico byte alterado
+esta em comentario.
+
+**O que rodou.** RED antes de implementar: **0 passou, 7 falhou**, os sete com **404**
+(`404 !== 200` no (1) e no (5), `404 !== 201` nos outros). ⚠️ **Divergência da previsão do Step 2:**
+o plano previa o (5) **verde**, mas ele começa afirmando `GET /api/compras/materiais` → 200 (a porta
+nova, que é o ponto do cenário) e só depois bate no almoxarifado — então ele também saiu 404. A
+asserção do almoxarifado, isolada, já era verde desde sempre. GREEN depois: **7 passou, 0 falhou**.
+
+Vizinhos: `comprasPedidoCriar` **12/12**, `comprasPedidoEditarExcluir` **11/11**,
+`comprasPedidosRotas` **5/5** (é a régua de que a mudança de `routes/compras.js` não mexeu nas 23
+rotas movidas na T1 — o cenário (5) dele exercita a importação de itens do fornecedor, o único
+chamador dos 5 helpers). `npm run test:api` → **182/182 arquivos OK** (era 181; o arquivo novo é o
++1). `npm run test:almoxarifado` → **42 passou, 0 falhou**. `node --check` OK nos três arquivos de
+código; árvore em LF (`grep -acP '\r'` = 0 nos quatro arquivos).
+
+**Contratos entregues, verbatim.**
+
+- `GET /api/compras/materiais?search=` → 200 `[{ id, codigo, descricao, unidade }]`, com
+  `descricao = COALESCE(nome, descricao)`, `COALESCE(ativo, 1) = 1`, `ORDER BY codigo LIMIT 50`.
+  Casa `codigo` **ou** `nome` **ou** `descricao` (`LIKE %…%`); `?search=` ausente devolve os 50
+  primeiros. 401 sem usuário.
+- `POST /api/compras/pedidos/importar` → **201** `{ pedidos: [{ id, numero, itens }], itens: N,
+  ignorados: [{ linha, motivo }] }`; 400 `'Envie "linhas" ou "rows" com array de objetos (qualquer
+  formato de planilha)'` (copiada do precedente) para corpo sem `linhas`/`rows`, não-array ou vazio.
+  Motivos: `'material não encontrado pelo código <cod>'` · `'quantidade inválida'` ·
+  `'linha sem código de material'` · `'fornecedor não encontrado'`. `linha` é **1-based sobre as
+  linhas de DADOS** (o cabeçalho foi consumido pelo `XLSX` do navegador). `observacoes` do pedido =
+  `Planilha: <agrupador>`.
+
+**Sabotagens — cada uma derrubou a asserção que guarda, e as duas do plano que precisavam de
+desdobramento estão declaradas** (`md5sum` antes/depois/restauro conferido em todas — pós-conserto
+`0c3cc676a2622208cc2ed4d63d861592` no serviço e `b3cd883e3386e2daf001f6cecfcf78da` nas rotas;
+restauro por cópia do scratchpad, nunca `git checkout --`; `git diff --stat` voltou só com os
+arquivos da task):
+
+| # | Sabotagem | Âncora (`grep -cF` = 1 pós-conserto) | Asserção que caiu | Placar |
+|---|---|---|---|---|
+| 1a | linha sem material vai para o grupo com `material_id: null` em vez de `ignorados` | o bloco `motivo: \`material não encontrado pelo código` | (3) *"esperava 4 itens importados, veio 2"* — o grupo inteiro caiu no `catch` defensivo | 6 passou, 1 falhou |
+| 1b | 1a **+** `resolverItens` tolerando material nulo (é o único caminho em que a linha NULA é de fato GRAVADA) | `if (!material) throw erro('Material não encontrado');` | (3) *"linha sem material resolvido NAO pode ser gravada"* — o `WHERE material_id IS NULL -> 0` | 6 passou, 1 falhou |
+| 2 | agrupar por chave única por linha (o que "agrupar pelo `numero` gerado" produz) | `const chaveGrupo =` | (2) `pedidos.length === 2` **virou 5**, um pedido por linha; e com ela (3), (6) e (7) | 3 passou, 4 falhou |
+| 3a | `INSERT` direto no lugar do serviço | `await criarPedido(db,` | (2) *"numero fora do padrao PC-: null"* | 3 passou, 4 falhou |
+| 3b | `INSERT` direto **gerando** o `numero`, sem o `UPDATE` do total | idem | o `valor_total` derivado em **(3)**, **(4)** e **(6)** (*"2x10 + 1x5 = 25"*, *"2x10 = 20"*, *"34,5"*) e o `previsao_entrega` em (2) | 3 passou, 4 falhou |
+| 4 (extra) | quantidade lida com `parsePrecoBackend(extrairDoRow(…))` — o defeito exato da marca (Fase 2) | `const quantidade = numeroDaPlanilha(valorCruDoRow(row, ...CHAVES_QUANTIDADE));` | (6) **e só ela**: *"numero 1.5 -> 15"* — até a célula NUMÉRICA estraga, porque `extrairDoRow` stringifica | 6 passou, 1 falhou |
+| 5 (extra) | `COALESCE(ativo, 1) = 1` fora da busca de material | `    WHERE COALESCE(ativo, 1) = 1` | (1) *"material inativo apareceu"* | 6 passou, 1 falhou |
+
+⚠️ **A sabotagem 1 obrigou a CORRIGIR A ORDEM DAS ASSERÇÕES do cenário (3), e isso é achado.** Com o
+`deepStrictEqual` de `ignorados` na frente, a sabotagem derrubava **ele** e as duas asserções que
+guardam o dano (`WHERE material_id IS NULL -> 0` e a contagem) **nunca rodavam** — `assert` para no
+primeiro. As duas passaram para o começo do cenário. Lição: asserção que guarda um achado não pode
+ficar atrás de outra que a mesma sabotagem derruba.
+
+⚠️ **A sabotagem 1 sozinha, como o plano a escreveu, NÃO grava a linha nula** — `resolverItens` (T2)
+recusa `material_id` nulo e o grupo inteiro cai no `catch`. Por isso ela virou **1a/1b**: a asserção
+do órfão só é alcançável se a guarda da T2 também cair. Está registrado porque significa que a linha
+com `material_id NULL` tem **duas** defesas, não uma.
+
+**Divergências do plano, todas reversíveis:**
+
+1. **Quinto arquivo: `server/services/compras/planilhaCompras.js` (novo).** Os 5 helpers de planilha
+   estavam presos no escopo do registrador de `routes/compras.js` — **inalcançáveis por `require`**.
+   Copiá-los daria duas regras de leitura de planilha no mesmo módulo; exportá-los de
+   `routes/compras.js` criaria **ciclo de require** com o serviço. Foram movidos **verbatim** (md5
+   das 48 linhas: `15ab9fe8d229e46240a508848efb5546`, conferido dentro do arquivo novo) e
+   `routes/compras.js` passou a requerer os **três** que ele chama. `normalizarCampo` veio junto e
+   **não tem chamador** — já era código morto antes da extração da T1; está escrito no arquivo.
+2. **O preço segue a MESMA regra crua da quantidade** (`numeroDaPlanilha`), em vez de
+   `extrairPrecoDoRow`. Dois motivos medidos: (a) `extrairPrecoDoRow` tem fallback **guloso** e
+   `parsePrecoBackend` **nunca devolve NaN**, então para `{ pedido: 'OC-A', qtd: 3, 'preço unitario':
+   10 }` ele devolveria **0** (lido de `'OC-A'`) — a grafia `'preço unitario'` não está na lista
+   dele; (b) `'10.50'` viraria **1050**. O cenário (6) afirma `'10,50'` → 10,5 **e** `'10.50'` → 10,5.
+3. **Chaves do cabeçalho normalizadas** (trim + minúscula, `normalizarChavesDaLinha`) antes de
+   `extrairDoRow`, que casa chave por igualdade exata: sem isso `'Código'` (grafia absolutamente
+   normal) não casaria candidato nenhum e a linha sairia como "linha sem código de material".
+4. **Sete cenários, não seis.** Acrescentado o **(7)**: reimportar a mesma planilha **duplica** — a
+   asserção existe para que a frase "não há idempotência" seja verdadeira e para que um "conserto"
+   silencioso derrube um teste. E o (3) ganhou a meia-asserção do material **inativo**, que dá o
+   **mesmo** motivo de "não encontrado" (um fato, uma frase).
+5. **Fornecedor é do GRUPO, resolvido pela primeira linha que consiga resolvê-lo** (é comum a
+   planilha trazer o CNPJ só na primeira linha da ordem). Se nenhuma resolver, **todas** as linhas do
+   grupo entram em `ignorados`, uma entrada por linha. `ignorados` sai **ordenado por `linha`**, e
+   sem isso as recusas de grupo sairiam depois das de linha.
+6. **`catch` por grupo em volta de `criarPedido`**: se ele recusar (material apagado no meio da
+   importação), o grupo vira `ignorados` com a mensagem do serviço e os **outros grupos continuam**.
+   É caminho de defesa, não de contrato — as guardas do serviço já foram satisfeitas antes.
+7. **Preço ausente ou negativo vira 0, não recusa a linha.** `PedidoCompraItemSchema` recusaria o
+   **grupo inteiro** por uma célula com sinal de menos, e perder 30 linhas boas por causa de uma é
+   pior. Pedido sem preço fechado já era caso aceito na T2 (a tela avisa sobre o custo médio).
+8. **`SEM_AGRUPADOR` é `Symbol`**, não string: a chave do `Map` vem da planilha e qualquer sentinela
+   de texto poderia colidir com uma ordem chamada assim. ⚠️ A primeira forma tentada foi
+   um escape de NUL na string (`backslash-u-0000`), e o editor gravou **byte NUL de verdade** no arquivo — o `grep` passou a tratar o
+   fonte como **binário** ("Binary file matches"), o que quebra a regra de ancoragem das sabotagens
+   desta base. Registrado no código e aqui.
+
+**Fragilidades declaradas (vão para a letra G da T8 e para o guia):**
+
+- **O 403 de produção do gate do almoxarifado NÃO é provado pela suíte.** O harness stuba
+  `checkModulePermission` (aberto), então `GET /api/almoxarifado/materiais` responde **200** ali. A
+  prova é a **leitura** de `server/routes/almoxarifado.js:282-285`. Quem apagar aquele `app.use` não
+  derruba asserção nenhuma. Está escrito no cabeçalho do arquivo de teste e no cenário (5).
+- **Mais de 50 pedidos numa importação não aparecem todos no `<select>` do recebimento.**
+  `listarPedidosCompraAux` termina em `ORDER BY p.created_at DESC LIMIT 50`
+  (`receiptService.js:1518`) e `created_at` tem resolução de 1 segundo — uma importação inteira
+  **empata** no `ORDER BY`. Esta é a primeira porta da base capaz de criar 60 pedidos num clique.
+  **Não consertado aqui**: a paginação é porta da Etapa 37, arquivo de não-toque. Roteiro manual usa
+  planilha pequena.
+- **Sem idempotência, por contrato.** Duplo-clique no botão importa duas vezes; desfazer é excluir
+  os pedidos a mão (o `DELETE` da T3 existe e recusa o que já teve recebimento).
+- **Ambiguidade de fornecedor resolve pelo `id` menor** (`ORDER BY id LIMIT 1`): cadastro com razão
+  social duplicada importa para o mais antigo, sem aviso. O pedido é editável enquanto não houver
+  recebimento.
+
+**Próxima tarefa detalhada — Task 5** (galho B: o formulário e as rotas no `App.js`). Contratos que
+ela consome, **já prontos e sob régua**: `GET /api/compras/materiais?search=` →
+`[{ id, codigo, descricao, unidade }]` (é a porta do `<select>`/autocomplete de material — e
+`descricao` já vem de `COALESCE(nome, descricao)`, então a opção nunca sai em branco);
+`GET /api/compras/pedidos/:id` para o modo edição; `POST`/`PUT /api/compras/pedidos`. Pontos de
+atenção: (a) o schema **não coage** — o formulário tem de mandar `Number()` em `fornecedor_id`,
+`material_id`, `quantidade` e `valor_unitario`, senão todo submit real toma 400 (`<input
+type="number">` e `<select>` mandam **string**); (b) as rotas novas (`/compras/materiais`,
+`/compras/pedidos/:id`) **têm de entrar no `mockImplementation`** do `beforeEach`, senão o cenário
+mede o `catch` da tela; (c) a literal do erro da lixeira em `Compras.js` passa a ser a **do
+servidor** (`error.response?.data?.error || 'Erro ao excluir item'`), para o 409 da RN-C08 chegar ao
+usuário; (d) se a T5 quiser o **botão de importar planilha**, o precedente de client é
+`client/src/components/ItensFornecedor.js:208` (`XLSX.read` no navegador → POST de `{ linhas }`), e
+a porta que o recebe é `POST /api/compras/pedidos/importar`, que devolve `ignorados` para a tela
+mostrar linha por linha.
+
 ---
 
-### Task 5: o formulário de pedido, e as rotas ANTES do `path="*"` **(galho B)**
+### Task 5: o formulário de pedido, e as rotas que faltavam **(galho B)**
+
+> ⚠️ **(execução) O título desta task era "e as rotas ANTES do `path="*"`" e estava ERRADO** — pelo
+> mesmo motivo que a Fase 2 já havia registrado na restrição refutada abaixo: o v6 casa por
+> **ranking**, não por ordem. Corrigido no título para não sobreviver como resumo.
 
 **Files:**
 - Create: `client/src/components/compras/PedidoCompraForm.js`
@@ -781,7 +1221,7 @@ cd server && node tests/api/recebimentoContraPedidoIntegracao.api.test.js
 | mandar `valor_total` no payload | RN-C04 | cenário (c) |
 | esquecer as URLs novas no `mockImplementation` | o mock de `api` **rejeita** URL desconhecida por padrão: o cenário mediria o `catch` da tela | todos |
 
-- [ ] **Step 1: escrever o teste e ver os cenários vermelhos**
+- [x] **Step 1: escrever o teste e ver os cenários vermelhos**
 
 ```
 (a) renderizar a rota /compras/pedidos/novo mostra 'Novo pedido de compra' no DOM
@@ -823,15 +1263,18 @@ cd server && node tests/api/recebimentoContraPedidoIntegracao.api.test.js
        T3 congela seria indistinguivel de um 500 para quem clica
 ```
 
-- [ ] **Step 2: rodar e LER os números** —
+- [x] **Step 2: rodar e LER os números** —
       `cd client && CI=true npx react-scripts test --watchAll=false src/components/compras/PedidoCompraForm.test.js`.
       ⚠️ **caminho, nunca `-t`** (devolve `N skipped, exit 0`).
-- [ ] **Step 3: implementar** — o componente, e as duas `<Route>` em `App.js` **imediatamente antes**
-      do `<Route path="*">` de `:333`, com um comentário de uma linha dizendo por que a posição
-      importa.
-- [ ] **Step 4: rodar de novo** + a suíte de client inteira (`CI=true npx react-scripts test
+- [x] **Step 3: implementar** — o componente, e as duas `<Route>` em `App.js` ~~**imediatamente
+      antes** do `<Route path="*">` de `:333`, com um comentário de uma linha dizendo por que a
+      posição importa~~ → **(execução) ESTE TEXTO ESTAVA ERRADO e contradizia a própria restrição
+      refutada acima:** a posição **não** importa (v6 casa por ranking). As duas entraram **junto
+      das outras rotas de `/compras`**, logo depois de `path="pedidos"`, e o comentário de uma linha
+      diz **por que `editar/:id` e não `:id`** — que é a escolha que importa de verdade.
+- [x] **Step 4: rodar de novo** + a suíte de client inteira (`CI=true npx react-scripts test
       --watchAll=false`) + `CI=true npx react-scripts build` (**`CI=true` faz warning virar erro**).
-- [ ] **Step 5: sabotagens**
+- [x] **Step 5: sabotagens**
 
 | # | Sabotagem | Âncora | Qual asserção tem de cair |
 |---|---|---|---|
@@ -840,10 +1283,138 @@ cd server && node tests/api/recebimentoContraPedidoIntegracao.api.test.js
 | 3 | trocar `editar/:id` por `:id` | `path="pedidos/editar/:id"` | o (e), com `api.get` não chamado (a rota não casa). ⚠️ **(Fase 2) previsão corrigida: o (a) NÃO cai.** No ranking do v6 o segmento **estático** `novo` vence o dinâmico `:id`, então `/compras/pedidos/novo` continua no formulário certo. Cai **um** cenário, e é o (e) |
 | 4 | remover a guarda do submit sem item | `if (itens.length === 0)` | o `toHaveLength(0)` do (d) |
 
-- [ ] **Step 6: commit** — o furo (as três abas do Compras não tinham tela de criação e os dois
-      `<Link>` da aba Pedidos caíam no `path="*"`), o decidido (`editar/:id` para casar o link
-      existente; sem campo de número; total calculado) e o descartado (`/compras/pedidos/:id` do
-      escopo; campo de `valor_total`).
+- [x] **Step 6: commit** — o furo (as três abas do Compras não tinham tela de criação e os dois
+      `<Link>` da aba Pedidos ~~caíam no `path="*"`~~ → **(execução) a frase correta é "não tinham
+      rota que os casasse"; o `*` era só quem sobrava** — e é assim que ela está no commit), o
+      decidido (`editar/:id` para casar o link existente; sem campo de número; total calculado) e o
+      descartado (`/compras/pedidos/:id` do escopo; campo de `valor_total`).
+
+#### ✅ Task 5 fechada — commit `9f1a3da`
+
+**O que rodou.** RED: **16 cenários, 16 vermelhos** — e o vermelho foi *legível*, que era o ponto: o
+`Received string` do cenário (a) veio literalmente
+`"ComprasGestão de fornecedores, pedidos e cotações … Nenhum pedido encontrado"`, ou seja, o
+`path="*"` sobrando e renderizando `<Compras/>` na URL `/compras/pedidos/novo`. GREEN depois:
+**16 passou, 0 falhou**. Suíte de client inteira: **48 arquivos / 730 testes** verdes (era **47 /
+714** — +1 arquivo, +16 cenários). `CI=true npx react-scripts build` → **Compiled successfully**
+(nenhum warning novo; o único ruído é o `DEP0176 fs.F_OK` do próprio toolchain, pré-existente).
+Ruído de console do arquivo novo: **os dois avisos de future flag do `react-router`**, idênticos aos
+que `RecebimentosAlmoxarifado.test.js` já imprime — medido lado a lado, é baseline da base e não
+foi silenciado (silenciar exigiria ligar `v7_relativeSplatPath`, que **muda** a resolução relativa e
+faria o teste medir semântica diferente da produção).
+
+**O que as telas mostram, verbatim.**
+
+| Onde | Literal |
+|---|---|
+| título (novo) | `Novo pedido de compra` |
+| título (edição) | `Editar pedido de compra` |
+| aviso do número (novo) | `O número do pedido é gerado pelo sistema.` |
+| linha do número (edição) | `Pedido PC-2026-418 — o número não é editável.` |
+| tabela de itens vazia | `Nenhum item adicionado` |
+| submit sem item | `Inclua ao menos um item no pedido de compra` (cópia da literal do servidor) |
+| total | `Total: R$ 100,00` |
+| aviso de preço 0 | `Sem preço o custo médio do material não é alimentado no recebimento.` |
+| botões | `Voltar para pedidos` · `Importar planilha` · `Buscar material` · `Salvar pedido` |
+| importação | `Importação concluída` · `2 pedidos criados, 3 itens.` · `PC-2026-640 — 2 itens` · `Linhas ignoradas` · `Linha 4: material não encontrado pelo código ALM-9999` · `Nenhuma linha ignorada.` |
+| erros do servidor | em `role="alert"`, **a literal dele** (Zod 400, `Fornecedor não encontrado`, 400 do `PUT`, 400 da importação) — e o 403 de `gerenciar_reposicao` já rotulado por `formatarErroPermissao`: `Sem permissão para gerenciar reposição e compras — seu perfil é Produção.` |
+
+**Sabotagens — seis, cada uma derrubou a asserção que guarda** (`md5sum` antes/depois/restauro
+conferido em todas; pós-conserto `e4bd93df3e480a53d369f4c67858c6a1` em `App.js`,
+`6cc2318794d2fe7769dfe318c2a873d2` em `Compras.js`, `a20f2f6ffc34157a25dbb40380b3b40e` em
+`PedidoCompraForm.js`; restauro por cópia do scratchpad, **nunca** `git checkout --`; âncoras
+contadas com `grep -cF` = **1** pós-conserto; `git diff --stat` voltou só com os arquivos da task;
+árvore em LF, `grep -acP '\r'` = 0 nos quatro arquivos):
+
+| # | Sabotagem | Asserção que caiu | Placar |
+|---|---|---|---|
+| 1 | **remover** a `<Route path="pedidos/novo">` de `App.js` | (a) `'Novo pedido de compra'` — e o `Received string` mostrou `<Compras/>` de volta | 3 passou, 13 falhou |
+| 2 | `valor_total: total` acrescentado ao `const payload = {` | (c) o `toEqual` (`+ "valor_total": 100,`) e o do `PUT` em (e) (`+ "valor_total": 315,`) | 14 passou, 2 falhou |
+| 3 | `path="pedidos/editar/:id"` → `path="pedidos/:id"` | (e) `chamadasDetalhe(418)` **1 → 0**; e (g2) e (i) | 13 passou, 3 falhou |
+| 4 | remover `if (itens.length === 0) { setErro(…); return; }` | (d) `api.post.mock.calls` **0 → 1** | 15 passou, 1 falhou |
+| 5 (extra) | tirar o `Number()` das quatro chaves do payload | os `typeof` de (c), (j) (`Expected: 0 / Received: "0"`) e (l), mais (e) | 12 passou, 4 falhou |
+| 6 (extra) | devolver `toast.error('Erro ao excluir item')` em `Compras.js` | (h2) `Expected: "Pedido de compra PC-2026-418 já teve recebimento — não pode ser excluído" / Received: "Erro ao excluir item"` | 15 passou, 1 falhou |
+
+⚠️ **A previsão corrigida da Fase 2 para a sabotagem 3 CONFIRMOU-SE por medição:** o cenário (a)
+**não** caiu. No ranking do v6 o segmento **estático** `novo` vence o dinâmico `:id`, então
+`/compras/pedidos/novo` continuou no formulário certo mesmo com a rota de edição virando `:id`.
+A sabotagem original do plano (*mover* as `<Route>` para depois do `*`) teria derrubado **nada** —
+achado já pago na Fase 2 e agora também **executado**.
+
+⚠️ **As sabotagens 5 e 6 foram acrescentadas por não existirem no plano**, e as duas guardam achados
+que a suíte de servidor **não** alcança: a 5 é o R13 (o formulário mandar string onde o schema quer
+número — a suíte de API fica verde e todo submit real toma 400) e a 6 é o R12 (o 409 da RN-C08 não
+chegar a quem clica). Sem elas, as duas asserções mais caras desta task ficariam sem controle
+positivo.
+
+**Divergências do plano, todas reversíveis e nenhuma de comportamento de servidor:**
+
+1. **`AppRoutes` passou a ser EXPORTADO de `App.js`** (com comentário dizendo por quê). Sem isso a
+   régua desta task era inalcançável: um cenário que montasse `<PedidoCompraForm/>` solto passaria
+   com `App.js` **sem rota nenhuma declarada** — exatamente o furo que a task existe para tapar. O
+   teste renderiza a **tabela real** em `MemoryRouter` e navega por URL, e é o que torna as
+   sabotagens 1 e 3 possíveis.
+2. **Quinto arquivo: `client/src/routes/lazyModules.js`** ganhou
+   `export const PedidoCompraForm = page(…)`. A alternativa (import direto em `App.js`) quebraria o
+   code-splitting que **todas** as outras ~150 páginas seguem.
+3. **O mock de `routes/lazyModules` no teste é um `Proxy`**, não 150 linhas de stub: `Compras` e
+   `PedidoCompraForm` vêm **reais**, `Layout` vira um `<Outlet/>` nu e todo o resto vira caixa
+   vazia. Sem o Proxy, **cada página nova do sistema** quebraria este arquivo de teste.
+4. **16 cenários, não os 8 do plano.** Além de (a)–(g) e (h2), entraram: **(g2)** o 400 do `PUT` da
+   Task 3 chegando ao DOM com a metade positiva do `PUT` que passa; **(i)** os dois `<Link>` de
+   `Compras.js` **clicados** (é a única asserção que prova que o link morto agora *chega*);
+   **(k)/(k2)** a importação de planilha (workbook XLSX **de verdade**, construído no teste — um
+   mock de `xlsx` provaria o POST e não a leitura) e o 400 dela; **(l)** a pré-carga por query que a
+   Task 6 vai consumir; **(m)** o 403 de `gerenciar_reposicao` virando frase; **(n)** observações e
+   status viajando, e a ausência de `numero`.
+5. **A busca de material é por AÇÃO (botão "Buscar material" ou Enter), não por tecla digitada.** A
+   porta tem `LIMIT 50` e um `GET` por caractere seria uma consulta por letra; e `Enter` no campo de
+   busca faz `preventDefault` de propósito — um submit implícito ali **gravaria o pedido** no
+   primeiro Enter da busca.
+6. **Linhas repetidas do mesmo material são permitidas** (a importação da Task 4 as cria
+   legitimamente): a chave de React é um id **local** crescente, nunca o `material_id`. Colapsá-las
+   apagaria linha no `PUT` de um pedido importado. Os `data-testid` usam o `material_id` por
+   legibilidade da régua — com duas linhas do mesmo material o seletor pega a primeira, e isso está
+   escrito no cabeçalho do componente.
+7. **Sem arquivo CSS novo:** a tela importa `../Compras.css` e usa estilo inline para o resto, como
+   `ItensFornecedor.js` faz. Um `PedidoCompraForm.css` seria um sexto arquivo para 20 linhas.
+8. **Não há `Compras.test.js`**, então o cenário (h2) renderiza `<Compras />` dentro de
+   `PedidoCompraForm.test.js` — o caminho que o próprio plano previu para este caso.
+9. **`quantidade: 0` / `valor_unitario` negativo NÃO são recusados localmente.** Quem decide é o
+   backend, e a literal que aparece é a **dele** (a tela só copia a de "sem item", para não haver
+   duas frases para o mesmo fato). Custa uma ida ao servidor; ganha uma fonte de verdade.
+
+**Fragilidades declaradas (vão para a letra G da T8 e para o guia):**
+
+- **O total da tela e o `valor_total` do banco podem divergir na exibição.** O total mostrado é
+  calculado no navegador; o gravado é derivado pelo serviço. São a mesma soma hoje, mas nada na
+  suíte compara os dois — e não deve: mandar `valor_total` no payload é justamente a sabotagem 2.
+- **A tela não sabe se o pedido já teve recebimento antes de tentar salvar.** `GET /:id` não devolve
+  campo de saldo (contrato da Task 3), então o botão "Salvar pedido" fica habilitado e a recusa
+  chega como 400 depois do clique. Barrar antes exigiria porta nova; a recusa **chega legível**, que
+  é o requisito.
+- **A importação não tem idempotência** (contrato da Task 4): duplo-clique importa duas vezes. A
+  tela mostra os pedidos criados justamente para o comprador saber o que desfazer.
+- **O 403 do gate de módulo (`checkModulePermission('compras')`) não é exercitado aqui:** o teste
+  stuba `ProtectedModuleRoute`. A prova daquele gate é do servidor, e ele não muda nesta etapa.
+
+**Próxima tarefa detalhada — Task 6** (galho C: o botão "Gerar pedido" na aba "Solicitações" da
+Reposição). O contrato de client que ela consome **já está pronto e sob régua** (cenário (l) de
+`PedidoCompraForm.test.js`): navegar para
+**`/compras/pedidos/novo?solicitacao=<id>&material=<material_id>&quantidade=<qtd>&material_nome=<nome>`**
+faz o formulário **nascer com o item já na tabela** (sem consultar `/compras/materiais`, porque não
+existe porta de material por id no módulo Compras) e faz o submit mandar
+**`solicitacao_id: Number(<id>)`** no `POST /compras/pedidos`. Parâmetros opcionais também aceitos:
+`codigo` e `unidade` (sem eles a linha sai com `codigo` vazio e `unidade: 'UN'`, e a descrição cai
+para `Material #<id>` se `material_nome` não vier — a Reposição **tem** `material_nome` na linha, use
+sempre). Pontos de atenção: (a) o `POST` com `solicitacao_id` passa pelo gate condicional
+`gerenciar_reposicao` (fix 1 da Task 2) e responde **403 `{ error, acao, perfil }}`** quando o perfil
+não pode — a tela nova já traduz isso por `formatarErroPermissao`, então o botão da Reposição deve
+seguir a mesma fonte de permissão do menu (ou o fato vai para a letra G); (b) o destino é do módulo
+**`compras`** (`<ProtectedModuleRoute modulo="compras">`), então um almoxarife **sem** esse módulo
+bate na barreira **depois** do clique — decisão reversível a registrar; (c) `ReposicaoAlmoxarifado.js`
+é o único arquivo de almoxarifado que esta etapa toca, e `ReposicaoAlmoxarifado.test.js` já existe:
+o cenário entra nele, não em arquivo novo.
 
 ---
 
@@ -853,7 +1424,7 @@ cd server && node tests/api/recebimentoContraPedidoIntegracao.api.test.js
 - Modify: `client/src/components/almoxarifado/ReposicaoAlmoxarifado.js` (`:747-800`, a aba `SOLICITACOES`)
 - Modify: `client/src/components/almoxarifado/ReposicaoAlmoxarifado.test.js`
 
-- [ ] **Step 1: escrever o cenário e vê-lo vermelho**
+- [x] **Step 1: escrever o cenário e vê-lo vermelho**
 
 ```
 (h) a linha PENDENTE tem o botao 'Gerar pedido' ao lado de 'Cancelar'
@@ -881,12 +1452,12 @@ cd server && node tests/api/recebimentoContraPedidoIntegracao.api.test.js
 >    (a mesma fonte que o menu usa), **ou** — se isso custar uma porta nova — aparece para todos e o
 >    fato vai para a letra **G** e para o guia. Escolha o reversível e **registre**.
 
-- [ ] **Step 2: rodar e LER o número** (caminho, não `-t`).
-- [ ] **Step 3: implementar** — o botão, e no `PedidoCompraForm` a leitura de
+- [x] **Step 2: rodar e LER o número** (caminho, não `-t`).
+- [x] **Step 3: implementar** — o botão, e no `PedidoCompraForm` a leitura de
       `?solicitacao=&material=&quantidade=` para pré-preencher material e quantidade e mandar
       `solicitacao_id` no `POST` (o servidor já aceita desde a T2, cenário (9)).
-- [ ] **Step 4: rodar de novo** + `ReposicaoAlmoxarifado.test.js` inteiro + a suíte de client.
-- [ ] **Step 5: sabotagens**
+- [x] **Step 4: rodar de novo** + `ReposicaoAlmoxarifado.test.js` inteiro + a suíte de client.
+- [x] **Step 5: sabotagens**
 
 | # | Sabotagem | Âncora | Qual asserção tem de cair |
 |---|---|---|---|
@@ -894,11 +1465,141 @@ cd server && node tests/api/recebimentoContraPedidoIntegracao.api.test.js
 | 2 | mostrar o botão também em `VINCULADO` | `s.status === 'PENDENTE'` na condição do botão | a metade negativa do (h) |
 | 3 | não mandar `solicitacao_id` no payload do `POST` | `solicitacao_id:` em `PedidoCompraForm.js` | ⚠️ **previsão: nada cai no client** (o `toEqual` do cenário (c) não tem a chave, porque o (c) é o caminho sem solicitação) — **acrescente um cenário (i)** no `PedidoCompraForm.test.js` que renderiza com `?solicitacao=55` e afirma `calls[0][1].solicitacao_id === 55`. Só então a sabotagem derruba |
 
-- [ ] **Step 6: commit** — o furo (a reposição gerava solicitações desde a Etapa 11 e ninguém as
+- [x] **Step 6: commit** — o furo (a reposição gerava solicitações desde a Etapa 11 e ninguém as
       convertia em pedido; `vincularPedidoCompra` existia desde a Etapa 14 **sem um único consumidor
       no client**), o decidido (botão que leva ao formulário do Compras pré-preenchido; vínculo
       não-fatal no servidor) e o descartado (criar o pedido direto da Reposição sem tela — o comprador
       precisa escolher fornecedor e preço).
+
+#### ✅ Task 6 fechada — commit `727ee29`
+
+**Divergência do dispatch, resolvida pelo BRIEF (registrada a pedido do controlador).** O dispatch
+desta task dizia que o botão **posta** `POST /api/compras/pedidos` da própria Reposição. Está
+errado, e o brief/plano vencem: a decisão **(Fase 2)** é que o botão **NAVEGA** para o formulário do
+Compras com os dados que a linha já tem. Postar daqui exigiria escolher **fornecedor e preço** — e
+foi exatamente isso que o Step 6 mandou registrar como **descartado**. Consequência para a régua:
+o 403 de `gerenciar_reposicao`, o 400 do Zod e o 403 do gate de módulo aparecem **no formulário**
+(cenários (m), (g) e a barreira do `App.js`), não nesta tela; aqui a régua é o botão e a **URL**.
+
+**O que rodou.** RED: **4 cenários, 4 vermelhos**, todos em
+`expect(botao('Gerar pedido', …)).toBeTruthy()` → `Received: undefined` (não havia botão) — e os
+**40** cenários que já existiam no arquivo continuaram verdes, o que prova que os três `jest.mock`
+novos (`useNavigate`, `AuthContext`, `permissionsCache`) não mexeram em nada de antes. GREEN:
+**44 passou, 0 falhou** em `ReposicaoAlmoxarifado.test.js`; **18 passou, 0 falhou** em
+`PedidoCompraForm.test.js`. Suíte de client inteira: **48 arquivos / 736 testes** verdes (era
+**48 / 730** — +6 cenários, nenhum arquivo novo). `CI=true npx react-scripts build` →
+**Compiled successfully** (só o `DEP0176 fs.F_OK` do toolchain, pré-existente).
+**Ruído de console medido contra o baseline:** os **2** avisos de future flag do `react-router` —
+`grep -c` deu **2** com a mudança e **2** com os três arquivos em `git stash`. Nada novo.
+
+**O que a tela mostra, verbatim.**
+
+| Onde | Literal |
+|---|---|
+| botão da linha PENDENTE | `Gerar pedido` (ícone `FiShoppingCart`, `btn-almox-primary`, ao lado de `Cancelar`) |
+| `title` do botão | `Abre o pedido de compra já preenchido com este material` |
+| URL de destino | `/compras/pedidos/novo?solicitacao=641&material=907&quantidade=16&material_nome=Chapa+A%C3%A7o+3mm&codigo=ALM-0907` |
+| linha `VINCULADO` | **sem** o botão (só `Cancelar`); o badge `VINCULADO` continua o da Etapa 11 |
+
+Nenhuma literal de erro nova: esta tela não fala com o servidor no clique. O que o usuário vê
+depois do clique é do formulário (Task 5) — inclusive `Sem permissão para gerenciar reposição e
+compras — seu perfil é Produção.` (403 do gate condicional do vínculo, via `formatarErroPermissao`)
+e o aviso novo do vínculo não-fatal
+(`O pedido foi criado, mas a solicitação não pôde ser vinculada.`).
+
+**Decisão registrada: o gate de módulo do destino (medição 2 da Fase 2).** `/compras/*` está dentro
+de `<ProtectedModuleRoute modulo="compras">`; um almoxarife **sem** o módulo Compras clicaria e
+bateria no `AcessoNegado`. **Escolhido o caminho que esconde o botão**, usando a **mesma fonte da
+barreira** (`permissionsCache.getCachedUserPermissions` + `hasModuleAccess`) — e ele **não custou
+porta nova**: o cache está quente porque o `ProtectedModuleRoute` do próprio almoxarifado acabou de
+carregá-lo para esta tela abrir. **Cache frio (ou sem `user.id`) falha ABERTO**, igual ao
+`useAlmoxPermissoes`, e o cenário (h4) é a régua disso. Descartado: mostrar para todos e deixar a
+barreira recusar (o plano permitia, com registro na letra G) — esconder custou 8 linhas e um
+`useMemo`, e oferecer um caminho que termina em `AcessoNegado` é o defeito que a Etapa 11 já pagou
+uma vez nesta mesma tela.
+
+**Sabotagens — seis, cada uma derrubou a asserção que guarda** (`md5sum` antes/depois/restauro em
+todas; pós-conserto `8415119aef3886f6f4f4f432c02a148b` em `ReposicaoAlmoxarifado.js` e
+`a20f2f6ffc34157a25dbb40380b3b40e` em `PedidoCompraForm.js` — este último **idêntico ao registrado
+na Task 5**, que é a prova de que o arquivo da T5 voltou intacto; restauro por cópia do scratchpad,
+**nunca** `git checkout --`; âncoras contadas com `grep -cF` = **1** pós-conserto; árvore em LF,
+`grep -acP '\r'` = 0 nos três arquivos; `git diff --stat` voltou só com os arquivos da task):
+
+| # | Sabotagem | Asserção que caiu | Placar |
+|---|---|---|---|
+| 1 | remover a chave `solicitacao` do `URLSearchParams` | (h) `mockNavigate.mock.calls[0][0]` — `Received: "/compras/pedidos/novo?material=907&…"`, **sem** o `solicitacao=641` | 43 passou, 1 falhou |
+| 2 | `{s.status === 'PENDENTE' && podeGerarPedido && (` → `{podeGerarPedido && (` | (h) a **metade negativa**: `botao('Gerar pedido', linhaVinculada)` deixou de ser `undefined` e veio o `<button>` | 43 passou, 1 falhou |
+| 3 | remover `if (!edicao && solicitacaoId) payload.solicitacao_id = …` de `PedidoCompraForm.js` | **(l) e (o)**: `Expected: 77 / Received: undefined` e `Expected: 641 / Received: undefined` | 16 passou, 2 falhou |
+| 4 (extra) | `vinculo_solicitacao === 'falhou'` → `=== 'jamais'` | (o) `Expected: "O pedido foi criado, mas a solicitação não pôde ser vinculada." / Number of calls: 0` | 17 passou, 1 falhou |
+| 5 (extra) | `return hasModuleAccess(cached.permissoes, 'compras', user)` → `return true` | (h3) o botão apareceu para quem **não** tem o módulo Compras | 43 passou, 1 falhou |
+| 6 (extra) | `podeGerarPedido = pode('gerenciar_reposicao') && temModuloCompras` → só `temModuloCompras` | (h2) o botão apareceu sem a permissão | 43 passou, 1 falhou |
+
+⚠️ **A âncora da sabotagem 1 não é a do plano, e o motivo é de código.** O plano previa
+`/compras/pedidos/novo?solicitacao=` como literal; a query é montada por `URLSearchParams` (um
+template string cru emitiria `Chapa Aço 3mm` com espaço e cedilha **não codificados**, e o
+`useSearchParams` do formulário leria o nome pela metade). A âncora efetiva é
+`solicitacao: String(s.id),` — **mesmo defeito, mesma asserção derrubada**.
+
+⚠️ **Os cenários (o)/(o2) nasceram VERDES** (a implementação é da Task 5) — e é exatamente o caso
+que o CLAUDE.md manda desconfiar. A sabotagem **4** é o controle positivo: com ela o (o) cai, então
+a asserção sabe falhar. Sem esses dois cenários, o `vinculo_solicitacao: 'falhou'` — **o único
+sinal de que o ciclo NÃO fechou** — não tinha régua nenhuma no client.
+
+**Divergências do plano, todas reversíveis:**
+
+1. **Quatro cenários nesta tela, não um.** Além do (h) previsto: **(h2)** o gate de perfil escondendo
+   o botão *com a metade positiva no mesmo `test()`* (re-render com `mockPode = () => true`),
+   **(h3)** o gate de módulo (a decisão que o plano mandou registrar, agora sob régua nas duas
+   pontas) e **(h4)** o **falha-aberto** do cache frio — sem ele, trocar o fallback para `false`
+   esconderia o botão de todo mundo no primeiro render e nada cairia.
+2. **Dois cenários novos em `PedidoCompraForm.test.js` ((o) e (o2))**, arquivo da Task 5. A Task 6 é
+   quem tem interesse neles: o aviso do vínculo não-fatal só existe porque a Reposição manda
+   `solicitacao_id`. Nenhuma linha de `PedidoCompraForm.js` foi tocada — **o formulário já estava
+   pronto desde a T5** (cenário (l)), então o Step 3 do plano ("implementar … no `PedidoCompraForm`
+   a leitura de `?solicitacao=&material=&quantidade=`") já estava **feito**, e a T6 só consome.
+3. **Fixture própria (ids 641/642, materiais 907/908)** em vez de reusar a `SOLICITACOES_FIXTURE`
+   do arquivo (ids `1` e `2`): um `solicitacao_id` de valor `1` passaria por acidente em qualquer
+   implementação que mandasse o índice, o primeiro da lista ou um literal — regra (iii) das Global
+   Constraints. E a fixture nova não toca os 40 cenários que já existiam.
+4. **A URL leva CINCO parâmetros, não três.** `material_nome` e `codigo` são os opcionais que a T5
+   documentou: sem `material_nome` a linha do formulário sairia como `Material #907`, e a Reposição
+   **tem** o nome na linha. **`unidade` não vai** porque o relatório
+   (`relatorioSolicitacoesCompraPendentes`) não seleciona `m.unidade` — o formulário cai para `'UN'`
+   e **o servidor copia a unidade real do material** no `INSERT`, então o efeito é só visual.
+5. **`useNavigate` mockado com `jest.requireActual` do resto do `react-router-dom`** — mockar o
+   módulo inteiro derrubaria o `MemoryRouter` e a árvore nem montaria. `hasModuleAccess` também vem
+   **real** no teste (é o predicado que decide de verdade); só o cache é trocado por cenário.
+6. **Nenhum arquivo de servidor foi tocado.** O gate do vínculo já vive no **serviço**
+   (`can(user,'gerenciar_reposicao')`, fix 1 da T2), antes de qualquer escrita; o gate desta tela é
+   conveniência de interface, e está dito no comentário do componente.
+
+**Fragilidades declaradas (vão para a letra G da T8 e para o guia):**
+
+- **O botão esconde, mas quem decide continua sendo o backend.** Um usuário com o módulo Compras e
+  sem `gerenciar_reposicao` que chegue ao formulário **por outro caminho** (URL colada, ou o "Novo
+  Pedido" do próprio Compras com `?solicitacao=`) toma o **403 do serviço** — e a frase chega
+  legível (cenário (m) da T5). Isso é o desenho, não uma brecha.
+- **A linha não vira `VINCULADO` na hora.** O vínculo acontece no `POST` do formulário, em outra
+  tela; a Reposição só mostra o novo status na próxima carga da aba. Refletir na hora exigiria a
+  tela de origem saber o desfecho da tela de destino.
+- **Duas solicitações do mesmo material geram dois pedidos independentes** — não há agrupamento por
+  fornecedor no botão (o formulário aceita várias linhas, mas quem clica parte de **uma** linha).
+  Agrupar é decisão de produto, não de implementação.
+- **O esconde-botão depende de um cache com TTL de 5 min.** Se o administrador tirar o módulo
+  Compras do usuário, o botão pode continuar aparecendo até o cache expirar — e aí a barreira
+  recusa. É o mesmo atraso que o menu inteiro já tem.
+
+**Próxima tarefa detalhada — Task 7** (a integração que cruza galhos, `server/tests/api/
+comprasPedidoIntegracao.api.test.js`). Nada do client entra nela: o que a T6 acrescentou ao
+contrato **de servidor** é **zero** — a Reposição só navega. O que a T7 deve saber desta task:
+o caminho completo que agora existe por clique é `Reposição → GET /almoxarifado/relatorios/
+solicitacoes-compra → (clique) → POST /api/compras/pedidos { …, solicitacao_id }`, e o BLOCO A do
+roteiro já cobre a segunda metade. ⚠️ Se a T7 quiser provar o ciclo inteiro **pelo serviço**, o
+cenário é `criarPedido(db, { …, solicitacao_id }, user)` e depois `SELECT status, pedido_compra_id
+FROM solicitacoes_compra_almoxarifado WHERE id = ?` → `'VINCULADO'` e o id do pedido — mas os
+cenários (11)/(12) de `comprasPedidoCriar.api.test.js` já fazem isso pela rota, então na T7 vale
+mais o **passo 3 do BLOCO A** (o pedido aparecendo no aux de recebimento) do que repetir o vínculo.
+
 
 ---
 
@@ -909,7 +1610,7 @@ cd server && node tests/api/recebimentoContraPedidoIntegracao.api.test.js
 > É o **aceite da etapa**. Quando este arquivo ficar verde, o roteiro de teste manual da **Etapa 37**
 > (`plano:~1806`) passa a ser executável por clique pela primeira vez.
 
-- [ ] **Step 1: escrever o roteiro inteiro, em blocos, no mesmo `test()` quando a ordem importar**
+- [x] **Step 1: escrever o roteiro inteiro, em blocos, no mesmo `test()` quando a ordem importar** — `server/tests/api/comprasPedidoIntegracao.api.test.js`, commit `dc60507`. Seis blocos (A, B, C, D, D2, E), um `test()` por bloco; A-D compartilham o MESMO pedido. **Divergência declarada 1:** o BLOCO D2 ganhou um **passo 11b** (o `DELETE` do pedido com recebimento aberto -> **409 só pela perna 2**), que o roteiro não pedia — sem ele a **sabotagem 2** não tinha onde cair neste arquivo (no pedido do BLOCO D a perna 1 já recusa). **Divergência declarada 2:** o BLOCO E acrescentou a rejeição de `atualizarPedido` ao lado da de `excluirPedido` — é o que faz a sabotagem 4 cair TAMBÉM pelo serviço, e não só pela rota.
 
 ```
 BLOCO A — o pedido nasce pela porta do Compras
@@ -953,30 +1654,68 @@ BLOCO E — pelo SERVICO, sem HTTP
      ⇐ a regra vale nas DUAS entradas, nao so na rota
 ```
 
-- [ ] **Step 2: rodar e LER os números.** ⚠️ **Previsão: verde de primeira** (T2–T6 entregaram cada
+- [x] **Step 2: rodar e LER os números.** ⚠️ **Previsão: verde de primeira** (T2–T6 entregaram cada
       peça). **Isto é suspeito por regra desta base** (`fechar-etapa`, "desconfie de teste que passa de
       primeira"): rode as **três** sabotagens de composição do Step 3 **antes** de considerar o
       arquivo pronto.
-- [ ] **Step 3: sabotagens de composição** (no código de produção, uma de cada vez)
+      **A previsão se confirmou: `6 passou, 0 falhou` de primeira** — e por isso as **quatro**
+      sabotagens do Step 3 foram rodadas antes de o arquivo ser considerado pronto.
+- [x] **Step 3: sabotagens de composição** (no código de produção, uma de cada vez) — as quatro
+      rodadas, `md5sum` antes/depois/restauro, base LF preservada (`file` → `Unicode text, UTF-8
+      text`), restauro por backup e md5 conferido idêntico ao original em `pedidoCompraService.js`
+      (`0c3cc676a2622208cc2ed4d63d861592`) e `schemas.js` (`0f48b49907a27410a246824974c497c6`).
 
-| # | Sabotagem | Qual passo tem de cair |
-|---|---|---|
-| 1 | no `criarPedido`, não copiar `material_id` do item (gravar `null`) | o **passo 3**: o pedido some do `?pendentes=1` (`listarPedidosCompraAux` filtra `material_id IS NOT NULL`) — é o mesmo dano que a RN-C11 mede na importação, agora pela porta manual |
-| 2 | no `excluirPedido`, medir `quantidade_recebida` **antes** de o recebimento processar | o **passo 11** vira 200 e o **passo 3** de um segundo pedido passa a listar um pedido apagado |
-| 3 | no `criarPedido`, gravar `status: 'RECEBIDO'` quando o payload mandar | o cenário (6) da T2 — e, se não cair, a RN-C05 não protege a decisão 4 da Etapa 37 e isso é achado |
-| **4 (Fase 2)** | no `atualizarPedido`, tirar a **segunda perna** (a consulta a `recebimentos_material_almoxarifado`) | o **passo 10b** (novo, abaixo). É a composição que nenhuma task sozinha vê: o `PUT` passa, os itens ganham ids novos, o recebimento aberto fica órfão e o acumulador da 37 alteraria **0 linhas sem erro** |
+| # | Sabotagem | Qual passo tem de cair | **Resultado real — qual asserção caiu** |
+|---|---|---|---|
+| 1 | no `criarPedido`, não copiar `material_id` do item (gravar `null`) | o **passo 3**: o pedido some do `?pendentes=1` (`listarPedidosCompraAux` filtra `material_id IS NOT NULL`) — é o mesmo dano que a RN-C11 mede na importação, agora pela porta manual | **CAIU — `0 passou, 6 falhou`.** Passo 3 (BLOCO A): `quantidade_pedida deveria ser 10, veio 0`. ⚠️ **Divergência do prognóstico:** o pedido **não some** do `?pendentes=1` — a cláusula do filtro é a **negação** da derivação (`i.total_pedido IS NULL OR = 0 OR …`), então pedido sem linha visível **continua listado**, só que com `quantidade_pedida 0`. O dano é o mesmo (a tela oferece um pedido sem nada a receber) e o passo 3 acusa; o que não acontece é o "sumir". Caíram também (B), (C), (D), (D2) e (E) |
+| 2 | no `excluirPedido`, medir `quantidade_recebida` **antes** de o recebimento processar | o **passo 11** vira 200 e o **passo 3** de um segundo pedido passa a listar um pedido apagado | **CAIU — `4 passou, 2 falhou`.** (D2) **passo 11b**: `esperava 409, veio 200 {"message":"Pedido de compra excluído com sucesso"}`; (E) **passo 14**: `Missing expected rejection: a regua da exclusao mora no SERVICO`. As **duas entradas caem juntas** — que é o ponto do bloco E |
+| 3 | no `criarPedido`, gravar `status: 'RECEBIDO'` quando o payload mandar | o cenário (6) da T2 — e, se não cair, a RN-C05 não protege a decisão 4 da Etapa 37 e isso é achado | **NÃO caiu neste arquivo** (`6 passou, 0 falhou`) — **declarado, não disfarçado**. **Caiu no dono da regra**, como o plano previa: `comprasPedidoCriar.api.test.js` → `(6) status: … status PARCIAL: esperava 400, veio 201` (`11 passou, 1 falhou`). A **RN-C05 está protegida** — pela T2. A T7 não duplica o cenário de propósito: duas réguas para o mesmo fato divergiriam na primeira edição |
+| **4 (Fase 2)** | no `atualizarPedido`, tirar a **segunda perna** (a consulta a `recebimentos_material_almoxarifado`) | o **passo 10b** (novo, abaixo). É a composição que nenhuma task sozinha vê: o `PUT` passa, os itens ganham ids novos, o recebimento aberto fica órfão e o acumulador da 37 alteraria **0 linhas sem erro** | **CAIU — `4 passou, 2 falhou`.** (D2) **passo 10b**: `esperava 400, veio 200`; (E): `Missing expected rejection: a regua da edicao tambem mora no SERVICO`. **Sonda executada** sob a sabotagem (o número final do D2, que a asserção do PUT esconde porque estoura antes): `PUT -> 200`, `linha antes: 1 | ids depois do PUT: [2]`, `processar -> 200`, **estoque do material: 6**, `quantidade_recebida das linhas: [{id:2, quantidade_recebida:0}]`, aux: `saldo_pendente:10, situacao_recebimento:"ABERTO"`. Confirmado **literalmente**: o material entra no estoque e o pedido fica ABERTO com o saldo cheio **para sempre** |
 
-- [ ] **Step 4: os cinco comandos da suíte, com os números REAIS colados aqui**
+- [x] **Step 4: os cinco comandos da suíte, com os números REAIS colados aqui** — tails crus em
+      `scratchpad/verificacao-e38-t7.txt`.
 
 ```
 cd server && npm run test:api
+   183/183 arquivos de teste OK      (era 182/182: +1, o arquivo novo)
 cd server && npm run test:almoxarifado
+   42 passou, 0 falhou
 cd server && npm run test:validation && npm run test:safealter && npm run test:sqlite
+   validation 4 passed / 0 failed · safealter 3 passed / 0 failed · sqlite 5 passed / 0 failed
 cd client && CI=true npx react-scripts test --watchAll=false
+   Test Suites: 48 passed, 48 total · Tests: 736 passed, 736 total · 10.282 s
 cd client && CI=true npx react-scripts build
+   Compiled successfully. — 109.26 kB main.95e53c98.js · 17.06 kB main.d5a87844.css
 ```
 
-- [ ] **Step 5: commit** — a integração e os números.
+- [x] **Step 5: commit** — a integração e os números. **`dc60507`** — *"Compras Etapa 38 Task 7: sete
+      arquivos de teste da Etapa 37 verdes e ninguem tinha percorrido a historia de UM pedido"*.
+      **Nenhuma linha de código de produção foi alterada por esta task** (as quatro sabotagens se
+      comportaram como previsto; nenhum defeito encontrado).
+
+**Próxima tarefa detalhada — Task 8** (o fechamento, abaixo). O que a T8 herda da T7, e que muda o
+texto que ela tem de escrever:
+
+1. **A frase "a Etapa 37 deixou de ser inerte" virou número, e o número tem endereço.** É o passo 3
+   do BLOCO A de `server/tests/api/comprasPedidoIntegracao.api.test.js`: um pedido criado por
+   `POST /api/compras/pedidos` aparecendo em
+   `GET /api/almoxarifado/recebimentos-aux/pedidos-compra?pendentes=1` com `quantidade_pedida 10`,
+   `saldo_pendente 10`, `situacao_recebimento 'ABERTO'`. **O roteiro de teste manual da Etapa 37
+   (`plano da 37:~1806`) passa a ser executável por clique** — é isso que vai para o guia do usuário
+   e para a letra **A** do doc de novidades.
+2. **A régua do pedido vale nas DUAS entradas, e isso é contrato, não detalhe.** O BLOCO E prova
+   `criarPedido`/`atualizarPedido`/`excluirPedido` **sem HTTP** — os chamadores sem rota são a
+   importação de planilha (T4) e o "Gerar pedido" da Reposição (T6). Quem mover qualquer régua para
+   o handler derruba só o bloco E.
+3. **Para a letra G (fragilidades declaradas):** (a) o módulo core Compras continua com **UMA**
+   camada de autorização — não há 403 de perfil nas portas de pedido, e o único gate condicional é
+   o `gerenciar_reposicao` do vínculo de `solicitacao_id` (fix 1 da T2); (b) a **divergência medida
+   na sabotagem 1**: um pedido cuja linha ficasse sem `material_id` **não some** do `?pendentes=1`
+   — ele aparece com `quantidade_pedida 0`, porque a cláusula do filtro é a negação da derivação.
+   O plano dizia "some"; **a medição vale, e a afirmação anterior estava errada**.
+4. **Nada a corrigir em código.** A T7 não encontrou defeito de produção, então a T8 não herda
+   fix-round: ela é documentação e fechamento. ⚠️ **Meça as letras de novo** (`grep` do Step 1 da
+   T8) — o fechamento da Etapa 37 já avançou todas uma vez.
 
 ---
 
@@ -1013,7 +1752,20 @@ grep -o "\*\*G[0-9]\+" docs/almoxarifado-novidades-por-etapa.md | sort -u -V | t
       com o número **gerado** dois pedidos do mesmo fornecedor ficam indistinguíveis para o
       almoxarife; (v) `LIMIT 50` no aux vs. importação em massa; (vi) **FK ligada em produção e
       desligada no harness** — a suíte não prova o comportamento de exclusão que produção terá.
-- [ ] **Step 3: `specs/modulo-almoxarifado/22-integracoes/README.md`** — ⚠️ **(Fase 2) LEIA O
+- [x] **Step 3: `specs/modulo-almoxarifado/22-integracoes/README.md`** — **feito.** A previsão da
+      Fase 2 se confirmou: as correções 1 e 3 já estavam no arquivo (fechamento da 37) e **não
+      foram repetidas**. O que entrou: status e range no topo; `"quem fecha isto: a Etapa 38"` →
+      `"✅ FECHADO PELA ETAPA 38"` com os hashes por task; a subseção de checklist nova
+      **"Fatia Compras — o pedido ganha criação"** (11 itens `[x]` com hash, 4 itens `[ ]` com o
+      porquê escrito no lugar); a seção **"Contratos da fatia Compras — as 6 rotas novas"** com
+      payload, resposta, códigos e **literais verbatim**, mais o gate condicional, a guarda de duas
+      pernas, `solicitacoes_liberadas`, `avisos[]` e a 7ª mudança de contrato (`59abaea`); 7 linhas
+      novas na tabela de regras↔teste; e a seção **"O que a Etapa 38 NÃO mudou"**.
+      **Duas correções "estava errado" novas, visíveis:** (a) *"'rotas' aqui quer dizer LEITURA: são
+      GET-only"* — era verdade até 2026-09-16 e **deixou de ser**; (b) *"o genérico apaga o pedido e
+      **deixa os itens órfãos**"* — **errado na consequência**: com `foreign_keys = ON` em produção
+      ele **falhava** com 500 `'Erro ao excluir item'`; o órfão é sintoma do **harness**.
+      **Brief original do Step 3, mantido para conferência:** ⚠️ **(Fase 2) LEIA O
       ARQUIVO ANTES DE ESCREVER: o fechamento da Etapa 37 já fez as correções 1 e 3.** Medido
       durante a revisão deste plano: o README já traz, em `:9-28`, o bloco *"CORREÇÃO (2026-09-16,
       Fase 0 da Etapa 38): as duas frases seguintes ESTAVAM ERRADAS"*, com *"o gargalo é os outros
@@ -1034,12 +1786,22 @@ grep -o "\*\*G[0-9]\+" docs/almoxarifado-novidades-por-etapa.md | sort -u -V | t
          culpava o operador por uma tela que não existia, e por isso o item ficou parado desde a
          Etapa 14.
       Mais o checklist marcado item por item, cada `[x]` com o hash.
-- [ ] **Step 4: `specs/modulo-compras/README.md`** (criar, **mínimo**) — o que existe hoje no módulo
-      core Compras (as três abas, o que cada uma faz e **não** faz), o ponteiro para a fatia em
-      `22-integracoes/`, e a nota de que fornecedores e cotações **seguem sem tela de criação**.
-- [ ] **Step 5: `specs/modulo-almoxarifado/README.md`** — a linha da feature 22 no mapa de status,
-      dizendo que a fatia Compras saiu de "entregue na Etapa 14" (que estava errado) para
-      "criação de pedido entregue na Etapa 38; cotações e fornecedores seguem sem tela".
+- [x] **Step 4: `specs/modulo-compras/README.md`** (criado, **mínimo**) — o ponteiro para a fatia em
+      `22-integracoes/` com o porquê (B105) e o descartado; onde o código mora (incluindo as **3**
+      rotas de `solicitacoes-compra` que ficaram em `index.js` e a nota de que `itens_pedido_compra`
+      **não é** tabela do core); a tabela das três abas (lista / cria / apaga) deixando explícito
+      que **a 38 consertou UMA das três**; a camada única de autorização com a exceção condicional;
+      e o sombreamento de `grupos/:id` como defeito **congelado**.
+- [x] **Step 5: `specs/modulo-almoxarifado/README.md`** — **feito, e em quatro lugares, não um.**
+      (a) o cabeçalho "onde estamos" passou a abrir pela Etapa 38, com o range, os sete blocos
+      entregues, o placar da revisão final, os números medidos, a letra A14, as decisões B100–B113 e
+      as fragilidades da letra G — e o bloco da 37 virou `Antes:`; (b) a linha da **22** ganhou
+      `✅ Etapa 38 ENTREGUE` com as 6 rotas e um "falta para 🟢" reescrito (os bloqueios por
+      dependência **mais** os cortes declarados dentro da própria fatia Compras); (c) a linha da
+      **18** ganhou o "Gerar pedido" e a liberação da solicitação, e o `criar pedido de compra real`
+      do "fica de fora" foi **riscado**; (d) a linha da **08** ganhou a nota de que a etapa não lhe
+      deu código e sim **dado** — e o item (1) do "o que falta para 🟢" foi **riscado**, porque o
+      workaround do `INSERT` por SQL (letra **F13** da 37) **fecha**: o pedido nasce por clique.
 - [ ] **Step 6: `docs/almoxarifado-guia-etapas-e-testes.md`** — seção da Etapa 38 em linguagem de
       usuário, tabela **Antes → Agora**, roteiro de teste manual clicável (**e dizer, na primeira
       linha, que a tela é do módulo Compras, não do almoxarifado**), e o que a etapa **não** cobre.
@@ -1049,10 +1811,19 @@ grep -o "\*\*G[0-9]\+" docs/almoxarifado-novidades-por-etapa.md | sort -u -V | t
       importar planilha, editar enquanto nada chegou, excluir); e corrigir `:1742`
       (*"Você informa o número do pedido"* — hoje é um `<select>`, e desde a 38 há pedido para
       selecionar) **dizendo que estava desatualizado**.
-- [ ] **Step 8: este plano** — tasks marcadas, hashes, divergências do previsto, **retro de 4
-      números** e a **próxima tarefa detalhada**.
-- [ ] **Step 9: verificação final da `fechar-etapa`** — os cinco comandos, números reais, e o
-      `git log --oneline` do range citado nas specs.
+- [x] **Step 8: este plano** — feito: T1–T7 e a onda F1–F8 marcadas pelos executores, mais as
+      **Fases 4 e 5** abaixo (números de integração, revisão final, verificação medida), a **retro
+      de 4 números** e a **próxima tarefa detalhada (Etapa 39)** no fim deste arquivo.
+- [ ] **Step 2 / Step 6 / Step 7** (`almoxarifado-novidades-por-etapa.md`,
+      `almoxarifado-guia-etapas-e-testes.md`, `almoxarifado-manual-do-sistema.md`) — **não
+      executados por este escritor**, e a razão está declarada: o fechamento foi partido em dois
+      escritores paralelos (docs de usuário / docs de dev) e estes três são do outro. **Se ficarem
+      desmarcados no commit, a etapa NÃO está fechada** — é o item mais importante do `CLAUDE.md`.
+- [ ] **Step 9: verificação final da `fechar-etapa`** — os cinco comandos e o
+      `git log --oneline` do range. **Números da Fase 5 abaixo: lidos ao fim da onda de correção
+      (BASE `0a7e5c6`), não re-rodados por este escritor** — depois da onda **nenhuma linha de
+      código mudou**, só documentação, mas a re-rodada de fechamento é do controlador, e ela é que
+      pode marcar este passo.
 
 ---
 
@@ -1287,3 +2058,265 @@ ter terminado antes da **T7** (ela roda `recebimentoContraPedidoIntegracao.api.t
 | **RN-C12** formulário | o primeiro clique em "Novo Pedido" que não pisca | nada | **F3**: o defeito é "nenhuma rota casa", não "o `*` vence por ordem" |
 | **RN-C13** Gerar pedido | clicar "Gerar pedido" na Reposição | `solicitacoes_compra_almoxarifado.status`/`pedido_compra_id`, e depois o gancho RN-03 marca `RECEBIDA` | **F10** (vínculo sem gate) e **F11** (não há porta para pré-preencher; o destino exige o módulo `compras`) |
 | **RN-C14** integração | o roteiro manual da Etapa 37, por clique | tudo acima, encadeado | é a tabela inteira, executada — com o bloco **D2** novo |
+
+---
+
+## Onda de correção final (pós-review, BASE `dc60507`)
+
+> Fonte: `.superpowers/sdd/2026-09-16-crm-etapa38-pedido-de-compra/fix-wave-brief.md`, que consolida
+> `final-review-rn.md` (C1, I1, I2, I3) e `final-review-ux.md` (I1..I4). Um commit por item, cada um
+> com TDD e **sabotagem executada** (a asserção que caiu está no corpo do commit e no
+> `fix-wave-report.md`). Relatório completo: `fix-wave-report.md` no mesmo diretório.
+
+| item | achado | o que mudou | commit |
+|---|---|---|---|
+| **F1** | RN **C1** | chave do grupo da importação passa a ser o par (ordem da planilha, fornecedor **da linha**); linha sem fornecedor vai para `ignorados` e **nunca herda** o do grupo | `4a41119` |
+| **F2** | RN **I1** | `excluirPedido` **libera** as solicitações da reposição (`PENDENTE`, `pedido_compra_id` NULL) antes de apagar o cabeçalho; resposta ganha `solicitacoes_liberadas` | `ca7956c` |
+| **F3** | RN **I2** + UX **I1** | `data_pedido`/`previsao_entrega` declaradas no schema (`''`→null, `AAAA-MM-DD`, senão 400); serviço nunca grava `''` em coluna `DATE`; importação converte serial do Excel e `DD/MM/AAAA`, com o array novo `avisos` | `2fb9f68` |
+| **F4** | RN **I3** | cenário (4) da importação passa a contar `itens_pedido_compra WHERE pedido_id = ?`; `contarLinhasOrfas` escopada por pedido | `9d07dd1` |
+| **F5** | UX **I2** | `DELETE /api/compras/:tipo/:id` (ramo `fornecedores`) responde **409** quando o fornecedor tem pedidos, em vez de 500 por FK | `59abaea` |
+| **F6** | UX **I3** | importação 100% recusada vira `toast.error` + caixa vermelha; `ignorados`/`avisos` com teto de 20 e "… e mais N linha(s)"; export da aba Pedidos passa a ser **uma linha por item, com `Código`** (reimportável) | `ba6278e` |
+| **F7** | UX **I4** | importação reconhece a coluna de data (`data`, `data_pedido`, `emissão`, …) e, sem ela, grava **hoje** (data **local**) | `d9181e3` |
+| **F8** | T7 minor | gate `gerenciar_reposicao` passa a ter régua pela entrada de **serviço** (bloco E2 do integração) | `0a7e5c6` |
+
+**Verificação final (rodada ao fim da onda, tails em `scratchpad/verificacao-e38-fix.txt`):**
+`test:api` **183/183 arquivos, 15 passed no último** · `test:almoxarifado` **42/42** ·
+`test:validation` **4** / `test:safealter` **3** / `test:sqlite` **5** ·
+client **48 suites, 739 testes** (eram 736: +3 cenários de client) · `react-scripts build` limpo
+(`Compiled successfully.`, `CI=true`).
+
+**Divergências do brief, todas registradas no `fix-wave-report.md`:** o motivo de `ignorados` do F1
+continua sendo `fornecedor não encontrado` (sem `(linha N)` no texto — a entrada já tem o campo
+`linha`, e a tela renderiza "Linha 5: …"); a `observacoes` do pedido importado continua
+`Planilha: <OC>` (a frase do exemplo do brief quebraria o cenário (2), que a congela); o schema do
+`PUT` é o **mesmo** `PedidoCompraCreateSchema` do `POST` (não há "schema de update" separado); e no
+F3 o `null` numa coluna de data passou a significar **limpar**, senão o `PUT` não conseguiria apagar
+uma previsão (o comentário que dizia o contrário foi corrigido dizendo que mudou).
+
+**Próxima tarefa detalhada:** fechamento documental da onda (skill `fechar-etapa`) — a letra **B** de
+`docs/almoxarifado-novidades-por-etapa.md` (as decisões desta onda: agrupamento por par
+ordem+fornecedor, liberação da solicitação no `DELETE`, 409 do fornecedor com pedidos, teto de 20
+linhas, `data_pedido` = hoje), a letra **G** (o custo declarado: planilha com CNPJ só na primeira
+linha perde as demais; preço negativo continua virando 0 — M5 da revisão de RN, ainda **não**
+documentado), a seção da etapa em `docs/almoxarifado-guia-etapas-e-testes.md` (tabela "Antes →
+Agora" com os oito itens e roteiro clicável: importar planilha sem coluna de código → toast
+vermelho; importar com dois CNPJs na mesma OC → dois pedidos; apagar pedido gerado pela Reposição →
+solicitação volta a "Pendente"; apagar fornecedor com pedido → 409) e a linha da feature no mapa
+`specs/modulo-almoxarifado/README.md`. Contrato de API que o fechamento precisa citar:
+`POST /api/compras/pedidos/importar` agora responde `{pedidos, itens, ignorados, avisos}` e
+`DELETE /api/compras/pedidos/:id` responde `{message, solicitacoes_liberadas}`.
+
+---
+
+## Fase 4 — a integração, e o que ela mediu
+
+A T7 (`dc60507`, mais o bloco E2 em `0a7e5c6`) é o **aceite da etapa**, e o número que interessa
+não é o placar, é **um passo**: o passo 3 do BLOCO A de
+`server/tests/api/comprasPedidoIntegracao.api.test.js`. Um pedido criado por
+`POST /api/compras/pedidos` aparece em
+`GET /api/almoxarifado/recebimentos-aux/pedidos-compra?pendentes=1` com `quantidade_pedida 10`,
+`quantidade_recebida 0`, `saldo_pendente 10` e `situacao_recebimento 'ABERTO'`. **É isso que quer
+dizer "a Etapa 37 deixou de ser inerte"**, e por isso o roteiro de teste manual dela passou a ser
+executável por clique — o `INSERT` por SQL da letra **F13** fecha.
+
+**Números da integração:** 6 blocos (A, B, C, D, D2, E), `6 passou, 0 falhou` **de primeira** — o
+que a regra desta base manda tratar como suspeito. As **quatro sabotagens de composição** foram
+rodadas antes de o arquivo ser considerado pronto, com `md5sum` antes/depois/restauro e base LF
+preservada; três derrubaram o passo previsto, e a quarta (`status: 'RECEBIDO'` gravado pelo payload)
+**não caiu neste arquivo** — declarado, não disfarçado: ela cai no **dono da regra**
+(`comprasPedidoCriar.api.test.js` cenário 6), porque duas réguas para o mesmo fato divergiriam na
+primeira edição.
+
+**Duas afirmações do plano que a execução mediu como ERRADAS, e ficam escritas:**
+
+1. *"o pedido sem `material_id` **some** do `?pendentes=1`"* — **não some.** A cláusula do filtro é a
+   **negação** da derivação, então ele **aparece** com `quantidade_pedida 0`. O dano é o mesmo (a
+   tela oferece um pedido sem nada a receber), mas quem o acusa é o valor, não a ausência. Isso é o
+   que torna a linha sem material da **importação** um "pedido vazio listável" — e é por isso que a
+   RN-C11 afirma *"nenhuma linha com `material_id IS NULL`"* como terceira asserção.
+2. *"a rota tem de ser registrada **antes** do `path="*"`"* (T5) — **falso no react-router 6**, que
+   casa por **ranking de especificidade**. O que importa é a rota **existir**. A afirmação vinha da
+   intuição de middleware do Express, onde a ordem **é** contrato — e é contrato de verdade no
+   servidor: as rotas de pedido **precisam** vir antes de `app.delete('/api/compras/:tipo/:id')`.
+   Duas regras opostas, nos dois lados do mesmo commit.
+
+## Fase 5 — revisão final, onda de correção e verificação medida
+
+**Revisão final: duas lentes independentes** (`final-review-rn.md`, `final-review-ux.md`), cada uma
+sobre o diff de produto e o de testes da etapa inteira, BASE `dc60507`.
+
+| lente | Critical | Important | Minor |
+|---|---|---|---|
+| RN (regra de negócio / integridade de dado) | 1 | 3 | 5 |
+| UX (o que chega à tela) | 0 | 4 | 6 |
+| **total** | **1** | **7** | **11** |
+
+**8 achados reais, 0 ruído** — *reproduzido por sonda* é o critério, e todos os 8 foram. Os **11
+Minor não foram acionados** (decisão de escopo: nenhum deles muda comportamento observável, e a onda
+existia para os 8; o único Minor que virou commit foi o herdado da T7, o **F8**, porque era
+**ausência de régua** num gate de permissão — a categoria que esta base já entregou sem prova antes).
+
+**Uma onda única**, 8 commits, um por assunto, cada um com TDD e **sabotagem executada**
+(`4a41119`, `ca7956c`, `2fb9f68`, `9d07dd1`, `59abaea`, `ba6278e`, `d9181e3`, `0a7e5c6` — a tabela
+item-achado-commit está na seção "Onda de correção final" acima). **Re-revisão depois da onda:
+limpa.**
+
+**Verificação final medida (fim da onda, BASE `0a7e5c6`; tails em `scratchpad/verificacao-e38-fix.txt`):**
+
+```
+cd server && npm run test:api            -> 183/183 arquivos de teste OK   (era 182 antes da etapa: +1)
+cd server && npm run test:almoxarifado   -> 42 passou, 0 falhou
+cd server && npm run test:validation     -> 4 passed, 0 failed
+cd server && npm run test:safealter      -> 3 passed, 0 failed
+cd server && npm run test:sqlite         -> 5 passed, 0 failed
+cd client && CI=true npx react-scripts test --watchAll=false
+                                         -> Test Suites: 48 passed, 48 total
+                                         -> Tests: 739 passed, 739 total
+                                            (eram 47 / 714 ao fechar a Etapa 37)
+cd client && CI=true npx react-scripts build
+                                         -> Compiled successfully.
+```
+
+⚠️ **De onde vêm estes números:** foram **lidos** ao fim da onda de correção. Entre aquele ponto e
+este fechamento **nenhuma linha de código mudou** (só documentação), mas quem re-roda os cinco
+comandos no fechamento é o controlador — e é ele quem pode marcar o Step 9.
+
+## Retro — os 4 números
+
+**1. Rodadas de conserto até o verde: 2 no total**, e em níveis diferentes: **1 fix-round de task**
+(T2 `fa410ce` → fix 1 `3e43069`, o gate do vínculo) e **1 onda final** de 8 commits. As outras seis
+tasks fecharam em uma rodada. O fix-round da T2 é o mais barato que esta etapa teve e o mais
+valioso: foi um **ruling contra o próprio design** (a decisão 10 dizia "declarar sem gatear"), e foi
+disparado por um cenário que **mediu** a escalação — `201` com a solicitação em `VINCULADO` para um
+usuário de perfil `PRODUCAO` do fallback.
+
+**2. Achados reais × ruído: 8 reais / 0 ruído** entre Critical e Important — todos reproduzidos por
+sonda antes de virar commit, e nenhum descartado como falso positivo. **11 Minor levantados e não
+acionados**, por decisão declarada. As duas lentes **não colidiram** em nenhum achado (interseção
+vazia: a de RN olhou regra de negócio e integridade de dado, a de UX olhou o que chega à tela) — é o
+argumento a favor de manter duas lentes em vez de uma mais longa.
+**Onde os achados moram:** 6 dos 8 estão na **importação e nas datas** — a superfície que nasceu
+inteira nesta etapa e que nenhuma task anterior podia ter revisado. O C1 (fundir fornecedores) é
+composição pura: a T4 agrupava pela coluna de pedido, e ninguém tinha perguntado o que acontece
+quando **duas linhas da mesma OC têm CNPJ diferente**.
+
+**3. Paralelismo: zero nas tasks — T1 a T7 rodaram SEQUENCIAIS, no mesmo tree.** A divergência da
+skill está declarada na seção "Divergência declarada da skill" (`:337`), e o motivo é que a T1 é uma
+extração de 498 linhas de `server/index.js`: qualquer galho paralelo faria merge contra um arquivo
+que se moveu inteiro. **O paralelismo ficou nos revisores**: as duas lentes finais rodaram
+concorrentes sobre o mesmo diff congelado. **Retrabalho causado por paralelismo: nenhum** — e não
+por sorte: revisor não escreve código, e o diff estava congelado em `dc60507`.
+
+**4. Defeito escapado** (o que só apareceu depois de a etapa ser declarada pronta): **a preencher na
+etapa seguinte.** Deixar em branco seria mentira por omissão; escrever `0` seria pior, porque este
+número só pode ser preenchido **de fora**, por quem for fechar a Etapa 39 olhando para trás. Os
+candidatos já declarados (letra **G**) são onde eu apostaria: a planilha com CNPJ só na primeira
+linha da OC, o `hojeISO` em UTC do formulário, e a exportação da aba Pedidos fazendo **1 GET por
+pedido**.
+
+---
+
+## Próxima tarefa detalhada — **Etapa 39: o pedido de compra passa a ser ACOMPANHADO (prazo, atraso e os resíduos da 38)**
+
+**Por que esta, e pela ordem do `CLAUDE.md`.** A regra manda pegar (1) a próxima tarefa detalhada do
+plano que fecha → não havia nenhuma além do próprio fechamento; (2) **o "o que falta para 🟢" da
+feature que esta etapa tocou** → é daqui que ela sai. Dos abertos da feature **22**, quase todos
+continuam **bloqueados por dependência** com a medição escrita (BOM/Engenharia, OP/Produção, centro
+de custo, previsto×realizado) — e **um deixou de estar bloqueado nesta etapa**: *"acompanhamento de
+pedido e prazo com alerta de atraso"*, aberto desde a Etapa 14 com o motivo *"exigiria ler prazo
+prometido do pedido (dado que Compras hoje não preenche com disciplina)"*. A 38 entregou exatamente
+esse dado, e **validado** (`2fb9f68`). O item que sobra sem dependência externa é este.
+
+> ⚠️ **Fase 0 OBRIGATÓRIA antes de prometer qualquer coisa deste escopo.** Uma sessão desta base já
+> desenhou uma etapa inteira sobre "esta tela não existe" e a tela existia. **Medir ausência exige
+> procurar pelo nome do CONTRATO, não pelo nome que você imagina que o consumidor usaria.** Três
+> medições que esta etapa **não** fez e que a Fase 0 da 39 tem de fazer: (a) o que o `alertService`
+> já sabe fazer e por qual canal — o mapa diz que *"alerta ativo com canal fica com as features
+> 19/20"*, e atropelar isso criaria a segunda fila de alertas do sistema; (b) se já existe algum
+> lugar que compara data prometida com hoje — **existe, e é o precedente certo**:
+> `client/src/components/almoxarifado/FerramentasAlmoxarifado.js:423` monta o ISO **local** e
+> compara com `data_prevista_devolucao`; (c) o acervo em produção, que a letra **A14** manda
+> consultar: sem pedido com `previsao_entrega` preenchida, um alerta de atraso nasce apontando para
+> o vazio.
+
+### O contrato de API que ela consome — já existe, já está testado, **não reabrir**
+
+| Rota | O que dá | Dono |
+|---|---|---|
+| `GET /api/compras/pedidos?search=&status=` | `pedidos_compra.*` + `fornecedor_nome`, `ORDER BY p.created_at DESC`. **Traz `data_pedido` e `previsao_entrega`**, porque é `SELECT p.*` — **e não tem `LIMIT`** (medido: `server/routes/compras.js:111-137`) | inalterada pela 38; é a **régua da extração** |
+| `GET /api/compras/pedidos/:id` | cabeçalho + `itens[]` com `quantidade_recebida` **crua** | `6c21e89` |
+| `PUT /api/compras/pedidos/:id` | mesmo schema do `POST`; **`null` numa coluna de data LIMPA a data** | `6c21e89` + `2fb9f68` |
+| `GET /api/almoxarifado/recebimentos-aux/pedidos-compra?pendentes=1` | `saldo_pendente` e `situacao_recebimento` (`ABERTO`/`PARCIAL`/`RECEBIDO`) **derivados na leitura** | Etapa 37 — **NÃO-TOQUE** |
+
+**A regra que decide o formato do dado, e que a 39 herda por construção:** `data_pedido` e
+`previsao_entrega` são **`null` ou `AAAA-MM-DD`, nunca outra coisa** (`schemas.js`,
+`dataIsoOpcional`). `''` é convertido em `null` **antes** do union; texto inválido é **400** com
+`data do pedido inválida (use AAAA-MM-DD)` / `previsão de entrega inválida (use AAAA-MM-DD)`. Vale
+nas **três** entradas: `POST`, `PUT` e importação (que ainda converte serial do Excel e
+`DD/MM/AAAA`, e o que não reconhece vira `null` + `avisos[]`). **É isso que permite que um
+`WHERE previsao_entrega < ?` signifique algo** — antes da 38 ele acusaria justamente os pedidos
+**sem** previsão, gravados como `''` numa coluna `DATE`.
+
+### O que já está pronto e a Etapa 39 NÃO precisa reabrir
+
+1. **A derivação de situação do pedido** (`ABERTO`/`PARCIAL`/`RECEBIDO`, `saldo_pendente`,
+   `saldo_pendente_material`) — é da Etapa 37, mora em `receiptService.js`,
+   `derivarRecebimentoDoPedido` **não é exportada**, e o arquivo é **contrato de não-toque**. Quem
+   precisar do derivado **consome a rota aux**, não recalcula: uma segunda fórmula de saldo
+   divergiria da primeira na primeira edição.
+2. **A guarda de duas pernas do `PUT`/`DELETE`** e a ordem de registro das rotas de pedido **acima**
+   do `DELETE /api/compras/:tipo/:id` genérico. Mover qualquer uma derruba os cenários (5) e (7) de
+   `comprasPedidoEditarExcluir.api.test.js` e os blocos D/D2/E do integração — de propósito.
+3. **O gate condicional `gerenciar_reposicao`** do vínculo de `solicitacao_id`, provado pelas **duas**
+   entradas (rota e serviço).
+4. **O `numero` gerado** (`PC-…`) e o **`valor_total` derivado** da soma das linhas.
+5. **A caracterização do sombreamento de `DELETE /api/compras/grupos/:id`** (400 `'Tipo inválido'`).
+   Ela existe para **detectar reordenação**; quem "consertar" o sombreamento tem de atualizar o
+   cenário **dizendo** que consertou.
+
+### Pontos de atenção — os resíduos declarados da 38 (letra G), cada um com o dano
+
+1. **`hojeISO` do formulário é UTC** (`client/src/components/compras/PedidoCompraForm.js:85`:
+   `new Date().toISOString().slice(0, 10)`). Entre 21h e meia-noite no fuso de Brasília o formulário
+   nasce com a data de **amanhã**. Uma etapa de **atraso** compara datas: é o primeiro lugar onde a
+   diferença de um dia deixa de ser cosmética. **O precedente certo já existe na base**, medido:
+   `FerramentasAlmoxarifado.js:423` monta o ISO por `getFullYear/getMonth/getDate` (**local**), e o
+   servidor já usa `hojeLocalISO()` (`pedidoCompraService.js:615`) — **o client é que divergiu**.
+2. **Preço negativo vira 0** (Minor **M5** da revisão de RN, **não documentado em lugar nenhum** até
+   aqui). O schema recusa `valor_unitario < 0` na **porta HTTP**, mas a importação e o serviço
+   normalizam. Se a 39 for mostrar valor em aberto por fornecedor, é o furo que faz a soma mentir
+   sem ninguém ver.
+3. **A exportação da aba Pedidos faz 1 GET por pedido** (`ba6278e`): ela passou a ser **uma linha por
+   item, com coluna `Código`**, para que o Excel que o módulo exporta **se reimporte** — e o preço
+   disso é N+1 requisições. Com o acervo em 0/0 é irrelevante; a 39 é a primeira etapa que pode
+   fazer o acervo crescer (e a **A14** é a consulta que diz se cresceu).
+4. **Planilha com CNPJ só na primeira linha da OC perde as demais linhas** — regressão **declarada**
+   e deliberada do F1 (`4a41119`): o agrupamento passou a ser pelo par (ordem, fornecedor **da
+   linha**) porque o alternativo era gravar o item de um fornecedor no pedido de outro. Cada linha
+   precisa do próprio fornecedor; as demais vão para `ignorados` com `fornecedor não encontrado`.
+   **Se a 39 mexer na importação, é a primeira coisa a decidir** — e a decisão reversível é
+   *preencher para baixo* (herdar o último fornecedor **explicitamente**, dizendo na resposta que
+   herdou), nunca voltar a fundir.
+5. **A importação não é idempotente: reimportar DUPLICA.** Por decisão (B100 — idempotência por
+   `numero` é incompatível com número gerado pelo servidor), e os cenários **afirmam** a duplicação.
+   Qualquer etapa que prometa "reprocessar a carga" precisa de uma chave nova; `observacoes` já
+   guarda `Planilha: <OC>` e é o candidato **reversível** (um índice único ali seria mudança de
+   contrato).
+6. **`?pendentes=1` não filtra `status`**, o `LIMIT 50` do aux corta a lista, `created_at` tem 1 s de
+   resolução, e o `<select>` do recebimento mostra só `numero — fornecedor`, o que torna
+   **indistinguíveis** dois pedidos do mesmo fornecedor. **As três são portas da Etapa 37** e foram
+   **proibidas por contrato** na 38. Mexer nelas é escopo **da feature 08**, com a suíte da 37
+   rodada inteira — não um ajuste de passagem.
+7. **O core Compras tem UMA camada de autorização.** Se a 39 criar qualquer porta nova em
+   `/api/compras/*`, ela **herda** `checkModulePermission('compras')` e nada mais. Isso é decisão
+   declarada (B101) e **não** é licença para parar de declarar: toda porta nova tem de reaparecer na
+   letra **G** até o módulo ganhar `ACAO_PERFIS` próprio — que é **etapa própria**, porque exige
+   decidir os perfis do módulo inteiro.
+
+### O corte que a Etapa 39 tem de declarar antes de começar
+
+**Ela não é a etapa das outras duas abas.** `/compras/fornecedores/novo` e `/compras/cotacoes/nova`
+continuam caindo no `path="*"` — a 38 consertou **uma** das três abas, e isso está escrito em
+`specs/modulo-compras/README.md`. É o candidato **alternativo** de maior valor se a Fase 0 medir que
+o alerta de atraso depende das features 19/20 para ter canal: nesse caso, **troque o tema e diga por
+quê no plano**, em vez de entregar meio alerta.

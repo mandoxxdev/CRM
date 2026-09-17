@@ -2,22 +2,66 @@
 
 > Atualizado em 2026-09-16 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 37) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 37) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. A **Etapa 38 também não é do módulo** — ela é do **módulo Compras** —, e está aqui pelo mesmo motivo: é ela que fecha o laço que a Etapa 37 deixou aberto.
 
-> ## Onde o desenvolvimento está — 2026-09-16 (Etapa 37 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-09-16 (Etapa 38 ENTREGUE · modo contínuo pelo mapa)
 >
-> **Etapas 1 a 20 e 22 a 37 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
-> A **Etapa 37 (o pedido de compra passa a saber quanto já chegou)** fechou em 2026-09-16
-> (`ea0aa4f..13ad237`, mais a onda de correção da revisão final `4007344..13ad237`). **É feature** —
-> a **08 (Recebimento)**, a mesma da 36 — e fecha exatamente o que a Etapa 36 declarou que não
-> cobria.
+> **Etapas 1 a 20 e 22 a 38 completas; a Etapa 21 foi entregue no NÚCLEO do CRM e a 38 no módulo
+> COMPRAS.** A **Etapa 38 (o pedido de compra ganha criação)** fechou em 2026-09-16, com uma onda de
+> correção da revisão final. **Próxima etapa: 39 — o pedido de compra passa a ser ACOMPANHADO (prazo prometido, atraso e os resíduos da 38)**, detalhada no fim do plano da 38 (`docs/superpowers/plans/2026-09-16-crm-etapa38-pedido-de-compra.md`).
 >
-> **O problema era que o pedido de compra não sabia que tinha sido recebido.** Um pedido de 10
-> unidades podia receber **25 em três recebimentos** e continuar marcado como **10 e ABERTO** —
-> medido, não suposto. E, do outro lado, escolher *"Por Pedido de Compra"* abria a lista de itens
-> **vazia**: dizer "chegaram 6 dos 10, o resto vem depois" **não era um gesto possível**.
+> **O problema era que nenhuma tela do sistema criava um pedido de compra.** Medido, não suposto: o
+> banco de produção tinha **zero** pedidos e **zero** itens de pedido, e os botões **"Novo Pedido"**
+> e **"Editar"** da aba *Pedidos de Compra* **voltavam para a lista** — o endereço não tinha tela do
+> outro lado. Consequência: a **Reposição** gerava solicitações de compra desde a Etapa 11 que
+> **ninguém convertia em pedido** (nasciam PENDENTE e morriam PENDENTE), e tudo o que a **Etapa 37**
+> entregou — recebimento parcial, saldo do pedido, excedente autorizado — era **inalcançável por um
+> clique**.
 >
 > **O que mudou:**
+> - **Compras → Pedidos de Compra → "Novo Pedido"** abre o formulário **"Novo pedido de compra"**:
+>   fornecedor, datas, status, observações e itens com busca de material, quantidade e valor
+>   unitário, com **"Total: R$ …"** somado na tela. O **número do pedido é gerado pelo sistema**.
+> - **Editar e excluir** existem — **enquanto nenhum recebimento tocou o pedido**. Depois disso, a
+>   recusa diz o número do pedido, e a lixeira mostra **a mensagem do servidor** em vez do antigo
+>   *"Erro ao excluir item"* genérico.
+> - **Excluir o pedido devolve as solicitações da Reposição para PENDENTE** — antes elas ficavam
+>   vinculadas a um pedido apagado, para sempre.
+> - **Almoxarifado → Reposição e Compras → Solicitações** ganhou o botão **"Gerar pedido"**, que abre
+>   o formulário do Compras **já preenchido** com o material e a quantidade da solicitação. Salvo o
+>   pedido, a solicitação vira **VINCULADO**.
+> - **"Importar planilha"** sobe o acervo de pedidos que já existe em Excel, agrupando as linhas por
+>   **ordem de compra × fornecedor**, com lista de **linhas ignoradas** (com o motivo) e de **linhas
+>   importadas com aviso**.
+> - **"Exportar Excel" da aba Pedidos** passou a sair **uma linha por item, com a coluna Código** —
+>   antes o próprio arquivo do sistema não voltava pela importação.
+> - **Excluir um fornecedor que tem pedido é recusado** com *"Fornecedor possui pedidos de compra —
+>   não pode ser excluído"*. Esse caminho era inalcançável antes desta etapa.
+>
+> **⚠️ Três coisas antes de apresentar:**
+> 1. **O roteiro da Etapa 37 não precisa mais de SQL.** Ele começava inserindo um pedido à mão,
+>    porque não havia tela que criasse pedido. **Agora começa em Compras → Pedidos de Compra → Novo
+>    pedido de compra**, e o pedido criado aparece no campo *Número do Pedido de Compra* do
+>    recebimento. A verificação **F13** do documento de novidades **fechou**.
+> 2. **Rode a consulta A14 do documento de novidades antes do deploy.** Ela mostra quantos pedidos e
+>    itens existem em produção (esperado: **zero**) e quais status aparecem no banco. Se houver
+>    pedido com status fora dos **sete** que a tela conhece, ele aparece como texto cru na lista — e
+>    abrir esse pedido para editar e salvar **reescreveria** o status. Vale os 30 segundos.
+> 3. **No módulo Compras, quem abre o módulo faz tudo dentro dele.** Não há perfis como no
+>    almoxarifado, nem alçada por valor: qualquer usuário com acesso a Compras cria, edita e exclui
+>    pedido, fornecedor e cotação. É herança declarada (fragilidade **G30**), não regressão. A
+>    **única** porta com permissão própria é o **vínculo com a Reposição**, que exige *gerenciar
+>    reposição e compras*.
+>
+> **Antes disto: a Etapa 37 (o pedido de compra passa a saber quanto já chegou)** fechou no mesmo dia
+> (`ea0aa4f..13ad237`, mais a onda de correção da revisão final `4007344..13ad237`). **É feature** —
+> a **08 (Recebimento)**, a mesma da 36 — e fecha exatamente o que a Etapa 36 declarou que não
+> cobria. **O problema era que o pedido de compra não sabia que tinha sido recebido:** um pedido de
+> 10 unidades podia receber **25 em três recebimentos** e continuar marcado como **10 e ABERTO** —
+> medido, não suposto. E escolher *"Por Pedido de Compra"* abria a lista de itens **vazia**: dizer
+> "chegaram 6 dos 10, o resto vem depois" **não era um gesto possível**.
+>
+> **O que a 37 mudou:**
 > - **Recebimento parcial existe.** Escolher o pedido carrega as linhas dele com
 >   **"Saldo pendente: N"** e um campo editável em cada uma. Campo vazio é *"esta linha não
 >   chegou"* — não entra como zero.
@@ -35,22 +79,22 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 > - **21 comandos mortos** de criação de coluna, que falhavam a cada arranque do servidor em
 >   silêncio, foram **apagados**.
 >
-> **⚠️ Três coisas antes de apresentar:**
-> 1. **NÃO EXISTE TELA PARA CRIAR UM PEDIDO DE COMPRA — e por isso, em produção, o campo de pedidos
->    abre VAZIO.** O módulo Compras não tem tela de criação em nenhuma das três abas, e o banco de
->    produção tem **zero** pedidos. Tudo o que a Etapa 37 entregou funciona e está coberto por
->    testes, mas só é **usável** depois que existir um pedido. **Para testar hoje, o roteiro da
->    Etapa 37 começa inserindo um pedido por SQL** (o comando está no passo 1 do roteiro e na letra
->    **F13** do documento de novidades). **É a Etapa 38 que resolve isto.**
-> 2. **Rode as consultas A12 e A13 do documento de novidades.** A **A13** confirma, em 30 segundos,
+> **⚠️ Duas pendências da 37 continuam suas:**
+> 1. **Rode as consultas A12 e A13 do documento de novidades.** A **A13** confirma, em 30 segundos,
 >    que as 21 colunas dos comandos apagados existem mesmo no banco de produção (deve dar **zero**
->    ausentes) — é a única verificação que a limpeza pede. A **A12** só faz sentido **depois** do
->    deploy, quando houver pedido: ela reconcilia a contagem do pedido com os recebimentos já
->    processados, e é a mesma consulta que repara a janela de falha da decisão **B90**.
-> 3. **Duas decisões esperam você:** a **B96** (a lista de quem autoriza excedente **não mudou** —
+>    ausentes). A **A12** só faz sentido **depois** do deploy, quando houver pedido: ela reconcilia a
+>    contagem do pedido com os recebimentos já processados, e é a mesma consulta que repara a janela
+>    de falha da decisão **B90**.
+> 2. **Duas decisões esperam você:** a **B96** (a lista de quem autoriza excedente **não mudou** —
 >    continua Administrador e Compras, e o Gestor segue fora; é a pergunta da **B82**, agora valendo
 >    para três portas) e a **B97** (mandar a linha de **outro** pedido continua sendo aceito e
 >    corrigido em silêncio — recusar é regra nova sobre contrato já entregue).
+>
+> *(Este cabeçalho dizia que **não existe tela para criar um pedido de compra** e que, por isso, o
+> roteiro da Etapa 37 começava inserindo um pedido **por SQL**. **Deixou de valer com a Etapa 38** —
+> a tela existe, o campo de pedidos deixa de abrir vazio em produção, e nenhum roteiro deste guia
+> usa SQL para criar pedido. Corrigido dizendo o que estava escrito antes, em vez de reescrito em
+> silêncio.)*
 >
 > **Antes disto: a Etapa 36 (o recebimento para de aceitar qualquer coisa, e a conferência física
 > ganha campo)** fechou no mesmo dia (`d02b9f4..e287a06`, mais a onda de correção da revisão final).
@@ -4630,6 +4674,173 @@ que ele não tinha como repetir com sucesso garantido.
 
 ---
 
+## Etapa 38 — O pedido de compra ganha criação (ENTREGUE — 2026-09-16)
+
+**O que mudou, em uma frase:** o comprador passou a **criar, editar, excluir e importar** pedido de
+compra numa tela do sistema, e a Reposição passou a **gerar o pedido com um clique** — o que fecha o
+laço que estava aberto desde a Etapa 11 e torna a Etapa 37 usável sem SQL.
+
+**Esta etapa é do módulo Compras**, não do almoxarifado. Ela está neste guia porque é ela que fecha o
+que as Etapas 11 e 37 deixaram pela metade. O problema era medido, não suposto: **nenhum lugar do
+sistema gravava um pedido de compra**. O banco de produção tinha **zero** pedidos e **zero** itens de
+pedido; os botões **"Novo Pedido"** e **"Editar"** da aba *Pedidos de Compra* **voltavam para a
+lista**, porque o endereço não tinha tela do outro lado. Consequência dupla: a **Reposição** gerava
+solicitações de compra que **ninguém convertia em pedido** (nasciam PENDENTE e morriam PENDENTE), e
+todo o recebimento contra pedido da **Etapa 37** era **inalcançável por um clique**.
+
+### Onde se percebe cada mudança
+
+| Tela | Antes | Agora |
+|---|---|---|
+| **Compras → Pedidos de Compra → "Novo Pedido"** | Voltava para a lista | Abre **"Novo pedido de compra"**: fornecedor, **Data do pedido**, **Previsão de entrega**, **Status**, **Observações** e os **Itens do pedido** (buscar material, quantidade, valor unitário), com **"Total: R$ …"** somado na tela |
+| **Número do pedido** | Não havia de onde vir | **Gerado pelo sistema** — a tela diz *"O número do pedido é gerado pelo sistema."*, e na edição *"o número não é editável."* |
+| **Lápis da lista** | Voltava para a lista | Abre **"Editar pedido de compra"** com os itens carregados |
+| **Lixeira da lista** | Apagava o cabeçalho e deixava as **linhas órfãs** — ou falhava com **500** *"Erro ao excluir item"* | Apaga as linhas junto, **libera as solicitações** da Reposição, e recusa se o pedido já teve recebimento |
+| **Erro na lixeira** | Qualquer falha virava *"Erro ao excluir item"* | Mostra **a mensagem do servidor** |
+| **Reposição → Solicitações** | Só **Cancelar** | Cada solicitação **PENDENTE** ganha **"Gerar pedido"** (dica: *"Abre o pedido de compra já preenchido com este material"*) |
+| **Carga do acervo** | Não existia | Botão **"Importar planilha"** na tela de novo pedido, com **"Importação concluída"** / **"Nenhum pedido importado — veja os motivos abaixo"**, **"Linhas ignoradas"** e **"Linhas importadas com aviso"** |
+| **"Exportar Excel" da aba Pedidos** | Uma linha por pedido, **sem coluna de código** — não voltava pela importação | Uma linha por **item**, com a coluna **Código** |
+| **Compras → Fornecedores → lixeira** | Estouraria a chave estrangeira com **500** *"Erro ao excluir item"* (caso inalcançável antes, porque não havia pedido) | **409**: *"Fornecedor possui pedidos de compra — não pode ser excluído"* |
+
+### Roteiro de teste manual
+
+**Nada aqui usa SQL.** Você precisa de um usuário com acesso ao **módulo Compras** e, para os passos
+7 a 9, também ao **Almoxarifado** com a permissão de **gerenciar reposição** (Administrador, Gestor
+ou Compras).
+
+**Criar o pedido**
+
+1. Entre no sistema e vá em **Compras → Pedidos de Compra**. Clique em **Novo Pedido** (botão do
+   alto, à direita) → abre **"Novo pedido de compra"**, com a frase *"O número do pedido é gerado
+   pelo sistema."* no cabeçalho.
+2. **Duas recusas para ver primeiro.** Sem escolher nada, clique em **Salvar pedido** → aparece a
+   faixa vermelha *"Inclua ao menos um item no pedido de compra"*. Agora adicione um item (passo 3)
+   e salve **sem escolher fornecedor** → *"Dados inválidos — fornecedor_id: fornecedor do pedido é
+   obrigatório"*.
+3. Em **Itens do pedido**, digite parte do código ou da descrição de um material no campo *Buscar
+   material por código ou descrição...* e clique em **Buscar material**. Na tabela de resultados,
+   clique no **+** da linha para adicionar ao pedido.
+4. Na linha adicionada, ponha **quantidade 10** e deixe o **valor unitário vazio** → aparece o aviso
+   laranja *"Sem preço o custo médio do material não é alimentado no recebimento."* Preencha o valor
+   com **50** → o aviso desaparece e **"Total: R$ 500,00"** aparece embaixo da tabela.
+5. Escolha o **Fornecedor**, confira a **Data do pedido** (vem preenchida) e clique em **Salvar
+   pedido** → a tela volta para a lista, com o aviso *"Pedido PC-… criado"*. **A linha nova mostra o
+   número gerado, o fornecedor, o valor total, a data e o status.**
+
+**O pedido chega ao recebimento — é o que a Etapa 37 esperava**
+
+6. Vá em **Almoxarifado → Recebimentos → Novo Recebimento** e escolha a forma **Por Pedido de
+   Compra**. Abra o campo *Número do Pedido de Compra* → **o pedido que você acabou de criar está na
+   lista**. Escolha-o → aparece o bloco **"Itens do pedido"** com **"Saldo pendente: 10"**.
+   Digite **10**, salve, e leve o recebimento até o estoque: **Iniciar Conferência → Finalizar
+   Conferência → Encaminhar para Compras → Encaminhar para Faturamento → Iniciar Entrada de NF →
+   Preencher Dados da NF → Processar Nota**.
+
+**As duas recusas do pedido já recebido**
+
+7. Volte em **Compras → Pedidos de Compra**, clique no **lápis** do pedido e mude qualquer coisa
+   (por exemplo a observação). Clique em **Salvar pedido** → recusa em faixa vermelha:
+   *"Pedido de compra PC-… já teve recebimento — não pode mais ser editado"*.
+8. Na lista, clique na **lixeira** do mesmo pedido e confirme → o aviso mostra
+   *"Pedido de compra PC-… já teve recebimento — não pode ser excluído"*. **Repare que a lista não
+   se recarrega e o pedido continua lá.** *(Antes desta etapa esta mensagem seria o genérico "Erro ao
+   excluir item".)*
+
+**Da Reposição ao pedido, com um clique**
+
+9. Vá em **Almoxarifado → Reposição e Compras → aba Sugestões de Compra**, marque um material e
+   clique em **Gerar solicitações**. Depois abra a aba **Solicitações** → a linha nova está
+   **PENDENTE** e tem o botão **Gerar pedido**.
+10. Clique em **Gerar pedido** → abre **"Novo pedido de compra"** com **o material da solicitação já
+    na tabela de itens**, com o código e a quantidade preenchidos. Escolha o fornecedor, ponha o
+    valor unitário e **Salvar pedido**.
+11. **A verificação que importa:** volte em **Almoxarifado → Reposição e Compras → Solicitações** →
+    a linha daquela solicitação agora está **VINCULADO**, e o botão **Gerar pedido** **não aparece
+    mais** nela. *(A tela da Reposição não se atualiza sozinha enquanto você está no Compras — é ao
+    reabri-la que a mudança aparece.)*
+12. **Uma verificação negativa que vale o clique:** exclua esse pedido em **Compras → Pedidos de
+    Compra → lixeira** (ele ainda não teve recebimento, então a exclusão passa) e volte à aba
+    **Solicitações** → a solicitação **voltou para PENDENTE** e oferece **Gerar pedido** de novo.
+
+**A importação de planilha — inclusive o caso da mesma ordem com dois fornecedores**
+
+13. Monte uma planilha (`.xlsx` ou `.csv`) com estas colunas na primeira linha:
+    **Pedido | CNPJ | Código | Quantidade | Valor Unitário | Data | Previsão Entrega**.
+    Preencha **três linhas**: duas com a ordem `OC-1` e o CNPJ do **fornecedor A**, e uma **terceira
+    também com `OC-1`** mas com o CNPJ do **fornecedor B** — use códigos de materiais que existam no
+    cadastro. **Preencha o CNPJ em todas as linhas** (nenhuma linha herda o fornecedor de outra).
+14. Em **Compras → Pedidos de Compra → Novo Pedido**, clique em **Importar planilha** e escolha o
+    arquivo. A caixa verde mostra **"Importação concluída"**, **"2 pedidos criados, 3 itens."** e a
+    lista dos números criados, mais **"Nenhuma linha ignorada."**
+    **É aqui que está o conserto mais importante da etapa:** a mesma ordem com dois fornecedores
+    produz **dois pedidos** — antes virava **um só**, com o item de um fornecedor gravado no pedido
+    do outro, e a conta a pagar nasceria para o fornecedor errado.
+15. Volte à lista de pedidos → os dois pedidos novos aparecem **com data** (nunca *"Data Pedido:
+    -"*), e abrindo cada um em **Editar** você vê em **Observações** a origem: **"Planilha: OC-1"**.
+16. **A importação que recusa tudo.** Renomeie a coluna **Código** para **Material** e importe de
+    novo → a caixa fica **vermelha** com **"Nenhum pedido importado — veja os motivos abaixo"**, o
+    aviso de topo também é vermelho, e cada linha aparece em **"Linhas ignoradas"** como
+    *"Linha 1: linha sem código de material"*. **A linha 1 é a primeira linha de DADOS**, não o
+    cabeçalho. *(Antes desta etapa isso aparecia como um aviso VERDE escrito "0 pedido(s)
+    importado(s)" — e o operador ia embora achando que a carga funcionou.)*
+17. **A ida e volta pelo Excel do próprio sistema.** Na aba **Pedidos de Compra**, clique em
+    **Exportar Excel** → o arquivo sai **uma linha por item**, com a coluna **Código**. Importe esse
+    mesmo arquivo → ele é aceito (e cria pedidos **novos**: veja a última observação abaixo).
+
+**A recusa do fornecedor**
+
+18. Vá em **Compras → Fornecedores** e clique na **lixeira** do fornecedor que você usou nos pedidos
+    → *"Fornecedor possui pedidos de compra — não pode ser excluído"*. Apague os pedidos dele
+    primeiro, se quiser mesmo excluí-lo.
+
+**Limpeza**
+
+19. Apague pelas **lixeiras da aba Pedidos de Compra** os pedidos que você criou para o teste. O
+    pedido do passo 6 **não sai** (já teve recebimento) — isso é o comportamento correto.
+
+### O que esperar no dia a dia
+
+- **Reimportar a mesma planilha DUPLICA os pedidos.** Não há como o sistema saber que aquela ordem
+  já entrou (o número do pedido é dele, não da planilha). Importe **uma vez**; se errar, apague os
+  duplicados pela lixeira.
+- **Preencha a coluna de fornecedor em TODAS as linhas da planilha.** Planilha com o CNPJ só na
+  primeira linha da ordem tem as demais recusadas com *"fornecedor não encontrado"*.
+- **Preço negativo na planilha entra como zero**, sem aviso. Só a tela de criação manual avisa sobre
+  preço ausente.
+- **Depois do primeiro recebimento, o pedido está congelado.** Não dá para corrigir só a previsão de
+  entrega ou só a observação — a recusa é do pedido inteiro. E **um recebimento apenas criado, ainda
+  não processado, já tranca o pedido**: ele guarda o elo com a linha desde que nasce.
+- **Excluir o pedido devolve a solicitação para a fila de compras.** É o certo, mas surpreende: o
+  material volta a ser sugerido e a solicitação volta a oferecer "Gerar pedido".
+- **O botão "Gerar pedido" não aparece para todo mundo.** Precisa da permissão de **gerenciar
+  reposição** **e** de acesso ao módulo **Compras** — e a verificação do módulo usa o cache do menu,
+  que pode levar até **5 minutos** para refletir uma permissão recém-concedida.
+- **Item sem preço é aceito, e a tela diz o que você está deixando de acontecer:** *"Sem preço o
+  custo médio do material não é alimentado no recebimento."*
+- **No módulo Compras não há perfis.** Quem tem acesso ao módulo cria, edita e exclui pedido,
+  fornecedor e cotação — sem alçada por valor. A única exceção é o vínculo com a Reposição.
+
+### O que a Etapa 38 NÃO cobre
+
+- **Criar fornecedor e criar cotação.** As outras duas abas do Compras continuam sem tela de
+  criação — os botões "Novo Fornecedor" e "Nova Cotação" seguem sem destino.
+- **Aprovação de pedido de compra.** O status é escolhido à mão pelo comprador; não há "enviar para
+  aprovação", ninguém é notificado e nenhum valor exige segunda assinatura.
+- **Ver quanto do pedido já chegou, em alguma tela.** Continua como a Etapa 37 deixou: pedido,
+  recebido, saldo e situação (**ABERTO / PARCIAL / RECEBIDO**) existem, mas só aparecem linha a linha
+  no formulário de recebimento. A lista da aba Pedidos mostra o status do Compras, e nada do que
+  chegou.
+- **Idempotência da importação.** Ver acima: reimportar duplica.
+- **Pedido de serviço, frete ou despesa.** Todo item do pedido exige **material cadastrado** — linha
+  de texto livre não existe, porque o recebimento ignoraria essa linha e o pedido apareceria aberto
+  com saldo zero sem ninguém entender por quê.
+- **Saber antes de clicar que o pedido está travado.** O salvar e a lixeira não ficam desabilitados
+  num pedido já recebido: a recusa vem do servidor depois da tentativa.
+- **Excluir pedido com recebimento, nem por SQL seguro.** Não há caminho de tela para isso, e é
+  deliberado — o recebimento ficaria apontando para linhas que não existem.
+
+---
+
 ## Etapa 37 — O pedido de compra passa a saber quanto já chegou (ENTREGUE — 2026-09-16)
 
 **O que mudou, em uma frase:** receber **parte** de um pedido de compra virou um gesto possível na
@@ -4645,19 +4856,21 @@ lista de itens **vazia**: o operador não conseguia dizer "chegaram 6 dos 10, o 
 servidor completava sozinho o **pedido inteiro**. De quebra, **21 comandos mortos** que falhavam em
 silêncio a cada arranque do servidor foram apagados.
 
-> ### ⚠️ Leia antes de abrir a tela: NÃO existe tela para criar um pedido de compra
+> ### ✅ RESOLVIDO PELA ETAPA 38 — este aviso não vale mais
 >
-> **Nenhum lugar do sistema grava um pedido de compra.** O módulo **Compras** tem as três abas
-> (pedidos, fornecedores, cotações) e **nenhuma tem tela de criação** — o botão "Novo Pedido" volta
-> para a lista. O banco de produção tem **zero** pedidos.
+> **Este bloco dizia:** ~~"nenhum lugar do sistema grava um pedido de compra; o módulo Compras tem
+> as três abas e nenhuma tem tela de criação, o botão 'Novo Pedido' volta para a lista, e por isso o
+> roteiro abaixo começa inserindo um pedido por SQL"~~. **Era verdade quando a Etapa 37 fechou, e
+> deixou de ser em 2026-09-16, com a Etapa 38.**
 >
-> **Consequência prática:** ao escolher a forma **"Por Pedido de Compra"**, o campo *Número do
-> Pedido de Compra* **abre vazio**. Não é defeito — é o que esta etapa declaradamente não cobre, e é
-> a **Etapa 38** que resolve.
+> **O que vale agora:** o pedido de compra é criado em **Compras → Pedidos de Compra → "Novo
+> Pedido"** (formulário **"Novo pedido de compra"**), ou pelo botão **"Gerar pedido"** da aba
+> Solicitações da Reposição. **Faça o passo 1 do roteiro abaixo por ali** — os comandos SQL do passo
+> 1 continuam escritos só como apoio, para quem quiser montar um caso sem passar pela tela. A
+> verificação **F13** do documento de novidades **fechou**.
 >
-> **Por isso o roteiro abaixo começa inserindo um pedido por SQL.** O comando pronto está na letra
-> **F13** do documento de novidades (`docs/almoxarifado-novidades-por-etapa.md`) e está repetido no
-> passo 1. **Sem esse passo não há nada para demonstrar.**
+> Ficou dito em vez de apagado: quem leu este guia antes e decorou "não existe tela de pedido"
+> precisa ver **onde** e **quando** isso mudou.
 
 ### Onde se percebe cada mudança
 

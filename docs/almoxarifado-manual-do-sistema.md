@@ -25,6 +25,7 @@ explicada logo abaixo dela.
 12. [Devoluções ao estoque](#12-devoluções-ao-estoque)
 13. [Inventário e conferência de estoque](#13-inventário-e-conferência-de-estoque)
 14. [Recebimento de material](#14-recebimento-de-material)
+14b. [Pedido de compra](#14b-pedido-de-compra)
 15. [Inspeção e qualidade](#15-inspeção-e-qualidade)
 16. [Materiais de clientes](#16-materiais-de-clientes)
 17. [Material enviado a terceiros](#17-material-enviado-a-terceiros)
@@ -1743,8 +1744,9 @@ Um recebimento é o documento que registra a chegada física do material no galp
 | **Nota fiscal (sem pedido)** | Você informa a nota, o fornecedor e digita os itens um a um |
 
 > **O pedido de compra precisa existir no módulo Compras.** A lista da forma *Pedido de compra*
-> mostra os pedidos já lançados lá — se nenhum pedido tiver sido lançado, a lista aparece **vazia**.
-> Hoje o lançamento do pedido é feito **fora desta tela**.
+> mostra os pedidos lançados lá — se nenhum pedido tiver sido lançado, a lista aparece **vazia**.
+> Quem cria, edita e exclui pedido de compra é o comprador, em **Compras → Pedidos de Compra**:
+> **ver a seção 14b**.
 
 **São só essas duas, e o sistema recusa qualquer outra.** A forma de recebimento é um de dois valores — *Nota fiscal* ou *Pedido de compra* — e nada além disso é aceito, nem ao criar o recebimento nem ao preencher os dados fiscais depois. Quem enviar outro valor por fora da tela (uma integração, um script) recebe:
 
@@ -2007,6 +2009,227 @@ A tela de Recebimentos distingue, na cara, **"não existe nenhum"** de **"não c
 **No cadastro de um recebimento por nota fiscal**, a lista de materiais disponíveis para escolha é carregada junto com o formulário. Se essa carga falhar, aparece *"Não foi possível carregar a lista de materiais."* com um **Tentar de novo**, ao lado do campo de busca de material. **Isso avisa, não bloqueia:** o formulário continua utilizável e um recebimento **por pedido de compra** — em que os itens vêm do próprio pedido — pode ser registrado normalmente. O que não dá é digitar item à mão sem a lista, porque é dela que sai o material escolhido.
 
 **Ao trocar de recebimento no painel de detalhe**, o painel **esvazia** enquanto o novo carrega: o número no alto fica como **"..."** e o corpo mostra o aviso de carregamento. Ele nunca mostra os dados de um recebimento com o número de outro. E se você clicar em dois recebimentos em sequência rápida, **vale o último clique** — a resposta atrasada do anterior é descartada, mesmo que chegue depois.
+
+---
+
+## 14b. Pedido de compra
+
+O pedido de compra é o documento do comprador: ele diz **o que** a empresa pediu, **de quem** e **por
+quanto**. É contra ele que o almoxarifado recebe (seção 14), e é ele que fecha a solicitação nascida
+da Reposição (seção 21b). A tela é **Compras → Pedidos de Compra**.
+
+### 14b.1 A lista de pedidos
+
+A aba mostra, por pedido: **Número**, **Fornecedor**, **Valor Total**, **Data Pedido**, **Previsão
+Entrega**, **Status** e os botões de **editar** e **excluir**. Há busca por número do pedido ou razão
+social do fornecedor, filtro por status, e o botão **Exportar Excel**. Sem nenhum pedido cadastrado,
+a lista mostra *"Nenhum pedido encontrado"*.
+
+**A lista não mostra quanto do pedido já chegou.** Quantidade pedida, quantidade recebida, saldo
+pendente e a situação do recebimento (**ABERTO / PARCIAL / RECEBIDO**) são calculados pelo sistema,
+mas aparecem **linha a linha no formulário de recebimento** (14.1c), não aqui. O **Status** desta
+lista é outra coisa: é a declaração do comprador sobre o andamento do pedido.
+
+### 14b.2 Criar um pedido
+
+**Compras → Pedidos de Compra → Novo Pedido** abre a tela **"Novo pedido de compra"**, com:
+
+| Campo | O que é |
+|---|---|
+| **Fornecedor** | Obrigatório. Lista de razões sociais cadastradas; o padrão é *"Selecione o fornecedor"* |
+| **Data do pedido** | Calendário, já preenchido com a data corrente |
+| **Previsão de entrega** | Calendário, opcional |
+| **Status** | *Pendente, Aprovado, Rejeitado, Em Análise, Enviado, Recebido, Cancelado* — o padrão é *Pendente* |
+| **Observações** | Texto livre |
+| **Itens do pedido** | Um ou mais materiais, cada um com **Quantidade** e **Valor unitário** |
+
+**O número do pedido não é digitado: o sistema o gera.** A tela diz
+*"O número do pedido é gerado pelo sistema."*, e ao abrir um pedido existente para editar diz
+*"o número não é editável."*. O número segue o padrão dos documentos do sistema (seção 1.1) e é
+garantidamente único, mesmo que duas pessoas salvem ao mesmo tempo.
+
+**Os itens entram pela busca de material.** No campo *"Buscar material por código ou descrição..."*,
+digite parte do código ou da descrição e clique em **Buscar material**; a tabela de resultados traz
+**Código, Descrição e Unidade**, e o botão **+** (*"Adicionar ao pedido"*) põe o material na tabela
+de itens. A busca traz no máximo **50** materiais **ativos** por vez — busca mais específica, lista
+mais curta. Sem nenhum item, a tabela mostra *"Nenhum item adicionado"*.
+
+**O total é do sistema, não seu.** Cada linha mostra o **Subtotal** (`quantidade × valor unitário`) e
+embaixo da tabela aparece **"Total: R$ …"**, que é a soma dos subtotais. Não existe campo de valor
+total para digitar: o valor gravado é sempre o derivado dos itens.
+
+> **Item sem preço é aceito — e a tela avisa o que você está deixando de acontecer:**
+> *"Sem preço o custo médio do material não é alimentado no recebimento."*
+>
+> A razão é a da seção 6.8: quando o recebimento é feito contra o pedido, o valor unitário da
+> **linha do pedido** é o que entra no cálculo do custo médio do material. Linha com preço **zero**
+> não alimenta esse cálculo. Pedido aberto antes de fechar a cotação é caso legítimo — o aviso
+> existe para a decisão ser sua, não do sistema.
+
+Salvo o pedido, a tela volta para a lista e o número gerado aparece na mensagem de sucesso.
+
+### 14b.3 O que o sistema recusa, e com que mensagem
+
+| Situação | O que acontece |
+|---|---|
+| Salvar **sem nenhum item** | A tela recusa antes mesmo de chamar o servidor: *"Inclua ao menos um item no pedido de compra"* |
+| Salvar **sem fornecedor** | *"Dados inválidos — fornecedor_id: fornecedor do pedido é obrigatório"* |
+| Item **sem material** | *"material do item é obrigatório"* |
+| Quantidade **zero, negativa ou não numérica** | *"quantidade do item do pedido deve ser um número maior que zero"* |
+| Valor unitário **negativo** | *"valor unitário do item não pode ser negativo"* |
+| **Status** fora dos sete valores | *"status do pedido inválido (use pendente, aprovado, rejeitado, em_analise, enviado, recebido ou cancelado)"* |
+| **Data do pedido** que não seja uma data | *"data do pedido inválida (use AAAA-MM-DD)"* |
+| **Previsão de entrega** que não seja uma data | *"previsão de entrega inválida (use AAAA-MM-DD)"* |
+| Fornecedor que **não existe** | *"Fornecedor não encontrado"* — e **nada** é gravado |
+| Material que **não existe** | *"Material não encontrado"* — e **nada** é gravado |
+| Pedido que **não existe** (abrir, editar ou excluir) | *"Pedido de compra não encontrado"* |
+
+**As duas datas só aceitam o formato `AAAA-MM-DD` ou nada.** Campo de data em branco é gravado como
+**vazio de verdade** (e não como texto vazio), o que importa para qualquer consulta que procure
+pedidos com previsão vencida. Ao **editar**, apagar a data é gesto válido: ela volta a ficar em
+branco.
+
+**A recusa nomeia a posição do item.** Num pedido com três itens, o erro do segundo vem como
+`itens.1` (a contagem começa em zero) — é assim que você sabe **qual** linha corrigir.
+
+### 14b.4 Editar e excluir — e o que trava o pedido
+
+Editar substitui os itens do pedido e **recalcula o valor total**. Excluir apaga o pedido **com os
+itens dele**.
+
+> **Os dois só valem enquanto nenhum recebimento tocou o pedido.** Depois disso:
+>
+> - editar é recusado com *"Pedido de compra ⟨número⟩ já teve recebimento — não pode mais ser
+>   editado"*;
+> - excluir é recusado com *"Pedido de compra ⟨número⟩ já teve recebimento — não pode ser
+>   excluído"*.
+
+**"Tocou o pedido" é mais amplo do que parece, e é deliberado.** A trava dispara em **duas**
+situações:
+
+1. alguma linha do pedido já tem **quantidade recebida** (o material entrou no estoque);
+2. existe **documento de recebimento** apontando para uma linha deste pedido — **mesmo que esse
+   recebimento ainda não tenha entrado no estoque**.
+
+A segunda é a que surpreende: um recebimento **apenas criado**, ainda em conferência, já guarda o
+elo com a linha do pedido. Trocar as linhas do pedido nessa janela deixaria o recebimento apontando
+para uma linha que não existe mais, **sem nenhum aviso**. Por isso a trava é do **pedido inteiro**:
+não há como corrigir só a observação ou só a previsão de entrega depois que a primeira carga chegou.
+
+**O botão de salvar e a lixeira não ficam desabilitados** num pedido travado — a recusa aparece
+depois da tentativa, com a frase acima. Nada é gravado.
+
+**Excluir o pedido devolve a solicitação para a fila de compras.** As solicitações de compra que
+estavam **vinculadas** a ele voltam para **Pendente** e soltam o vínculo; as que já estavam
+**Recebida** ou **Cancelada** não se mexem, porque são estados finais (seção 21b.3b). O material
+volta a ser sugerido pela régua normal da Reposição, e a solicitação volta a oferecer **Gerar
+pedido**.
+
+### 14b.5 Fornecedor com pedido não pode ser excluído
+
+Na aba **Fornecedores**, a lixeira de um fornecedor que tenha **qualquer** pedido de compra é
+recusada:
+
+> *"Fornecedor possui pedidos de compra — não pode ser excluído"*
+
+Para excluí-lo mesmo assim é preciso apagar os pedidos dele primeiro — e os que já tiveram
+recebimento **não são apagáveis** (14b.4). A verificação é feita **antes** de qualquer tentativa de
+apagar, então a mensagem é a mesma em qualquer instalação.
+
+### 14b.6 Importar uma planilha de pedidos
+
+O botão **Importar planilha** (na tela de **novo** pedido) sobe de uma vez os pedidos que a empresa
+já tem em Excel. Aceita `.xlsx`, `.xls` e `.csv`; a planilha é lida no próprio navegador.
+
+**Como as linhas se transformam em pedidos.** Cada combinação de **ordem de compra × fornecedor**
+vira **um** pedido. Duas linhas da mesma ordem com fornecedores **diferentes** viram **dois**
+pedidos — nunca um só, porque o fornecedor do pedido é quem o recebimento copia para o documento de
+entrada e para a conta a pagar.
+
+O cabeçalho é lido sem diferenciar maiúsculas de minúsculas, e cada campo tem uma lista de grafias
+aceitas:
+
+| O que o sistema procura | Grafias aceitas no cabeçalho |
+|---|---|
+| Agrupador do pedido | `Pedido`, `Numero`, `Número`, `OC`, `Ordem`, `Ordem de compra`, `Pedido de compra` |
+| Fornecedor | `CNPJ`, `Fornecedor`, `Razao social`, `Razão social`, `Razao_social`, `Fornecedor_nome` (e `Fornecedor_id`, `Id do fornecedor`) |
+| Material | `Codigo`, `Código`, `Cod`, `SKU`, `Codigo_material`, `Codigo do material` |
+| Quantidade | `Quantidade`, `Qtd`, `Qtde`, `Quant`, `Qtd.` |
+| Valor unitário | `Valor unitario`, `Valor unitário`, `Preco`, `Preço`, `Valor`, `Vlr`, `Valor unit`, `Preco unit` (e as formas com acento) |
+| Data do pedido | `Data`, `Data pedido`, `Data do pedido`, `Data_pedido`, `Emissao`, `Emissão`, `Data de emissão` |
+| Previsão de entrega | `Previsao`, `Previsão`, `Entrega`, `Data de entrega`, `Previsao entrega`, `Previsão entrega`, `Previsao de entrega` |
+
+**Coluna com outro nome não é lida.** Uma planilha cuja coluna de código se chame `Material` ou
+`Item` tem **todas** as linhas recusadas. O caminho seguro é partir do **Exportar Excel** da própria
+aba Pedidos (14b.7), cujo cabeçalho é exatamente o que a importação lê.
+
+**O fornecedor é resolvido linha por linha, e nenhuma linha herda o fornecedor de outra.** Ele é
+reconhecido pelo **CNPJ** (ignorando ponto, barra, traço e espaço), pela **razão social** exata
+(ignorando maiúsculas) ou pelo **nome fantasia** exato. **Preencha a coluna de fornecedor em todas
+as linhas:** a planilha que traz o CNPJ só na primeira linha da ordem tem as demais recusadas.
+
+**O resultado vem em duas listas, e a diferença entre elas é o que importa:**
+
+| Lista | O que significa | Mensagens |
+|---|---|---|
+| **Linhas ignoradas** | A linha **não entrou** em nenhum pedido | *"linha sem código de material"* · *"quantidade inválida"* · *"material não encontrado pelo código ⟨código⟩"* · *"fornecedor não encontrado"* |
+| **Linhas importadas com aviso** | A linha **entrou**, e só um campo ficou em branco | *"previsão de entrega não reconhecida (use AAAA-MM-DD ou DD/MM/AAAA)"* · *"data do pedido não reconhecida (use AAAA-MM-DD ou DD/MM/AAAA)"* |
+
+Cada recusa aparece como **"Linha ⟨n⟩: ⟨motivo⟩"** e cada aviso como
+**"Linha ⟨n⟩ (⟨campo⟩): ⟨motivo⟩"**. **A linha 1 é a primeira linha de dados**, não o cabeçalho.
+Sem nenhuma recusa, a caixa diz *"Nenhuma linha ignorada."*; as listas mostram no máximo **20**
+itens cada, e o resto vira **"… e mais N linha(s)"**, para ficar claro que a lista está cortada.
+
+**A caixa de resultado tem duas caras, e a cor é informação:**
+
+- com pedidos criados, ela é **verde** e diz **"Importação concluída"**, seguida de quantos pedidos e
+  quantos itens entraram e da lista dos números gerados;
+- com **nenhum** pedido criado, ela é **vermelha** e diz
+  **"Nenhum pedido importado — veja os motivos abaixo"**.
+
+**Datas da planilha.** `AAAA-MM-DD`, `DD/MM/AAAA` e a data numérica que o Excel guarda por baixo são
+convertidas automaticamente. O que não for reconhecido vira **vazio + aviso** (a linha entra: data é
+informação, não regra). **Sem coluna de data, o pedido nasce com a data corrente**, nunca em branco.
+
+**Preço.** Ausente, entra como **zero** (vale o aviso de 14b.2). **Negativo também entra como
+zero**, e este é o único ajuste que a importação faz **sem avisar** — a alternativa seria recusar o
+pedido inteiro por causa de uma célula.
+
+**A origem fica registrada no pedido.** As observações de cada pedido importado dizem
+**"Planilha: ⟨ordem de compra⟩"** — ou **"Importado de planilha (sem coluna de pedido)"**, quando a
+planilha não tem coluna de ordem e tudo cai num pedido só. É a única pista de qual linha da planilha
+virou qual número de pedido.
+
+> **⚠️ Importar a mesma planilha duas vezes cria os pedidos duas vezes.** O sistema não tem como
+> saber que aquela ordem já entrou, porque o número do pedido é gerado por ele e não vem da planilha.
+> **Importe uma vez.** Se duplicar, apague os pedidos repetidos pela lixeira — e note que os que já
+> tiverem recebimento não sairão (14b.4).
+
+### 14b.7 Exportar
+
+**Exportar Excel**, na aba Pedidos, gera **uma linha por item de pedido**, com as colunas **Número,
+Fornecedor, Código, Descrição, Unidade, Quantidade, Valor Unitário, Valor Total, Status, Data,
+Previsão Entrega**. Pedido sem item sai como uma linha com as colunas de item vazias.
+
+**Quantidade e Valor Unitário saem como número**, não como texto formatado — é o que permite que o
+arquivo exportado seja **reimportado** pela própria tela (14b.6). O **Valor Total** sai formatado,
+porque é coluna de leitura humana e a importação não a lê.
+
+### 14b.8 Quem pode trabalhar com pedido de compra
+
+**Quem tem acesso ao módulo Compras faz tudo dentro dele**: criar, editar e excluir pedido,
+fornecedor e cotação. O módulo Compras **não tem perfis** como o Almoxarifado (seção 5) e **não tem
+alçada por valor** — um pedido de qualquer valor é criado com um clique, e não existe fluxo de
+aprovação de pedido.
+
+**A única exceção** é o pedido criado **a partir de uma solicitação da Reposição** (seção 21b.3d):
+esse exige, além do acesso ao módulo, a permissão de **gerenciar reposição e compras**. Sem ela, a
+recusa é:
+
+> *"Sem permissão para gerenciar reposição e compras — seu perfil é ⟨seu perfil⟩. Solicite acesso a
+> um administrador."*
+
+Quem decide é sempre o servidor (seção 5.2): o botão escondido na tela é conveniência, não barreira.
 
 ---
 
@@ -2985,7 +3208,8 @@ Uma solicitação de compra passa por, no máximo, três estados:
 
 - **Pendente** — recém-criada. Enquanto pendente (ou vinculada), ela conta como "a caminho" na
   matemática da sugestão, dentro do horizonte configurado.
-- **Vinculada** — alguém a amarrou a um **pedido de compra** do módulo Compras. O vínculo é
+- **Vinculada** — alguém a amarrou a um **pedido de compra** do módulo Compras, normalmente pelo
+  botão **Gerar pedido** desta mesma aba (seção 21b.3d). O vínculo é
   validado nas duas pontas: pedido inexistente é recusado com "Pedido de compra não
   encontrado", e solicitação já finalizada, com "Solicitação já finalizada (RECEBIDA ou
   CANCELADA) — não pode ser vinculada a um pedido". Vincular de novo a **outro** pedido
@@ -3001,6 +3225,11 @@ na auditoria. Isso acontece na **primeira** nota do pedido, mesmo que a entrega 
 o sistema não confere quantidade nesse fechamento. Se a entrega parcial deixar o material
 ainda abaixo do ponto de reposição, ele simplesmente **volta a ser sugerido** pela régua
 normal.
+
+**Volta a Pendente (automático).** Se o **pedido de compra** ao qual ela estava vinculada for
+**excluído** no módulo Compras, a solicitação volta a **Pendente** e solta o vínculo — o material
+voltará a ser sugerido pela régua normal, e a linha volta a oferecer **Gerar pedido**. Solicitação
+já **Recebida** ou **Cancelada** não é afetada: são estados finais.
 
 **Cancelada (manual).** Na aba **Solicitações**, o botão **Cancelar** pede confirmação —
 "Cancelar esta solicitação de compra? A justificativa ficará registrada." — e em seguida a
@@ -3027,6 +3256,42 @@ O painel guarda o resultado em memória para não reconsultar a cada clique — 
 solicitações** e **Atualizar** descartam essa memória na hora: um painel aberto reconsulta
 sozinho e mostra os números novos. O botão vira **Ocultar contexto** enquanto o painel está
 aberto.
+
+### 21b.3d Gerar o pedido de compra a partir da solicitação
+
+Na aba **Solicitações**, cada solicitação **Pendente** tem o botão **Gerar pedido** (a dica do botão
+é *"Abre o pedido de compra já preenchido com este material"*). É o caminho que transforma a
+necessidade calculada aqui em documento de compra.
+
+**O botão não cria o pedido nesta tela — ele leva você ao formulário do comprador.** O pedido abre
+em **"Novo pedido de compra"** (seção 14b.2) com **o material, o código e a quantidade da
+solicitação já preenchidos** na tabela de itens. O que falta é o que só o comprador decide:
+**fornecedor** e **valor unitário**. Salvo o pedido, a solicitação passa a **Vinculada**.
+
+**A linha da Reposição só muda quando você volta.** A tela de Reposição não se atualiza enquanto
+você está no módulo Compras: reabra a aba **Solicitações** para ver o status novo. Se o vínculo não
+puder ser feito, o formulário avisa que **o pedido foi criado mas a solicitação não pôde ser
+vinculada** — o pedido existe, e a solicitação continua Pendente.
+
+**Quando o botão não aparece**, e cada caso é deliberado:
+
+| Situação | Por quê |
+|---|---|
+| Solicitação **Vinculada** | Ela já tem pedido; um segundo pedido sobrescreveria o vínculo do primeiro, e a chegada do pedido antigo deixaria de fechá-la |
+| Solicitação **Recebida** ou **Cancelada** | São estados finais, e nem aparecem nesta aba |
+| Você **não tem** a permissão de gerenciar reposição | É a mesma permissão de toda esta tela |
+| Você **não tem acesso ao módulo Compras** | O destino do botão está atrás desse acesso: clicar terminaria numa tela de acesso negado |
+
+A verificação do módulo Compras usa a mesma informação de permissões que monta o menu, que é
+guardada por alguns minutos — uma permissão **recém-concedida** pode levar até **cinco minutos**
+para o botão aparecer. E quando essa informação ainda não está carregada, o botão **aparece**: é
+melhor deixar clicar e receber a recusa do servidor do que esconder a ação de quem pode.
+
+**Vincular é ato de quem tem a permissão desta tela, não só do módulo Compras.** Mesmo salvando o
+pedido pelo formulário do comprador, é a permissão de **gerenciar reposição e compras** que autoriza
+mexer na solicitação — sem ela a recusa é *"Sem permissão para gerenciar reposição e compras — seu
+perfil é ⟨seu perfil⟩. Solicite acesso a um administrador."*, e **nada** é gravado: nem o pedido, nem
+o vínculo.
 
 ### 21b.4 Estoque Parado
 
