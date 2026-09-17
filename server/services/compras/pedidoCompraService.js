@@ -605,18 +605,41 @@ const AVISO_PREVISAO_NAO_RECONHECIDA = 'previsão de entrega não reconhecida (u
 const AVISO_DATA_PEDIDO_NAO_RECONHECIDA = 'data do pedido não reconhecida (use AAAA-MM-DD ou DD/MM/AAAA)';
 
 /**
- * HOJE, em data LOCAL do servidor — o `data_pedido` de quem importa sem coluna de data.
+ * HOJE, no FUSO DO NEGOCIO (`America/Sao_Paulo`) — o `data_pedido` de quem importa sem coluna de
+ * data, e o `hoje` da regua de atraso (`derivarAtraso`).
  *
  * ⚠️ NAO e `new Date().toISOString().slice(0,10)` e nao e o `date('now')` do SQLite: os dois dao
  * **UTC**, e no fuso do Brasil (UTC-3) uma importacao feita depois das 21h gravaria o pedido com a
  * data de AMANHA. A coluna e lida por gente (a aba Pedidos mostra `Data Pedido`), entao o dia tem
  * de ser o dia de quem clicou.
+ *
+ * ⚠️ ESTA FUNCAO NAO USA MAIS OS GETTERS LOCAIS (`getFullYear`/`getMonth`/`getDate`), e o motivo e
+ * medido, nao estetico (achado C1 da revisao final da Etapa 39). O comentario antigo dizia "data
+ * LOCAL do servidor" e a premissa era que o servidor roda no fuso do Brasil — **em producao ele nao
+ * roda**: o runtime e `node:20-alpine` (`Dockerfile:24`) **sem `tzdata` e sem `ENV TZ`**, e a
+ * `DEPLOY_COOLIFY.md:137` diz com todas as letras que nao ha variavel de ambiente a configurar.
+ * Sem base de fusos e sem `TZ`, o Node resolve o fuso local como **UTC** — e ai os getters locais
+ * viravam, caractere por caractere, o `toISOString().slice(0,10)` que o paragrafo acima proibe.
+ * Consequencia reproduzida: as 21:30 BRT de 16/09 o contêiner ja acha que e 17/09, e um pedido que
+ * vence HOJE aparece "Atrasado ha 1 dia" na aba, entra no filtro `Só atrasados`, sai no Excel que
+ * vai para o fornecedor e dispara e-mail — que, pelo dedupe, e o UNICO que aquele pedido geraria.
+ *
+ * O recorte agora e por `Intl.DateTimeFormat` com `timeZone: FUSO_PADRAO`, cuja base de fusos vem
+ * do **ICU embutido no Node**, nao do sistema de arquivos: a regua passa a independer do relogio e
+ * do `TZ` do processo. `en-CA` porque e o locale cujo formato numerico ja e `AAAA-MM-DD`.
+ * O `ENV TZ=America/Sao_Paulo` + `tzdata` do `Dockerfile` continua sendo feito (belt-and-braces,
+ * para logs e para qualquer outro `new Date()` do processo), mas esta funcao nao depende dele.
+ *
+ * ⚠️ `require` LAZY de `auditFiltros`: mesma convencao do `alertRegistry`, e aqui ha um motivo a
+ * mais — este e o modulo CORE Compras requerendo uma constante do ALMOXARIFADO. Medido hoje o ciclo
+ * NAO fecha (`auditFiltros` nao requer nada), mas o require de topo e que congelaria a ordem de
+ * carga entre os dois modulos. O custo do lazy e o cache do `require`, ou seja, nenhum.
  */
-function hojeLocalISO() {
-  const agora = new Date();
-  const mes = String(agora.getMonth() + 1).padStart(2, '0');
-  const dia = String(agora.getDate()).padStart(2, '0');
-  return `${agora.getFullYear()}-${mes}-${dia}`;
+function hojeLocalISO(agora = new Date()) {
+  const { FUSO_PADRAO } = require('../almoxarifado/auditFiltros');
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: FUSO_PADRAO, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(agora);
 }
 
 /** `AAAA-MM-DD` -> instante UTC de meia-noite, para subtrair data-only de data-only. */
@@ -633,8 +656,10 @@ const meiaNoiteUTC = (iso) => {
  * Escrever a lista de status duas vezes é o erro que a RN-D11 existe para pegar — a tela diria
  * "atrasado" para um conjunto e o e-mail sairia para outro, e ninguém cruzaria os dois.
  *
- * ⚠️ `hoje` é LOCAL (`hojeLocalISO`), NUNCA `date('now')` do SQLite nem `toISOString()`: os dois
- * dão UTC e, no fuso do Brasil, acusariam atraso ~3h antes da meia-noite local. As 4 varreduras
+ * ⚠️ `hoje` vem de `hojeLocalISO`, que recorta o dia em `America/Sao_Paulo` por `Intl` — NUNCA
+ * `date('now')` do SQLite, nem `toISOString()`, nem os getters locais de `Date` (o contêiner de
+ * produção não tem `TZ`: ver o cabeçalho de `hojeLocalISO`). Os três dão UTC lá, e no fuso do
+ * Brasil acusariam atraso ~3h antes da meia-noite local. As 4 varreduras
  * da feature 20 que ainda usam `date('now')` estão nomeadas no design (seção 8) e NÃO são
  * consertadas aqui — esta entrada apenas não as imita.
  *

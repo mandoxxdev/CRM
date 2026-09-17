@@ -267,6 +267,66 @@ function diasDeHoje(n) {
     }
   });
 
+  await test('(11) C1 hojeLocalISO recorta o dia no fuso do NEGOCIO, nao no do processo', async () => {
+    // ── O DEFEITO QUE ESTE CENARIO EXISTE PARA PEGAR (achado C1 da revisao final) ──────────────
+    // Producao e `node:20-alpine` (Dockerfile:24) SEM `tzdata` e SEM `ENV TZ`, entao o fuso local
+    // do processo la e **UTC**. Com os getters locais de `Date`, `hojeLocalISO()` virava o
+    // `toISOString().slice(0,10)` que o proprio comentario da funcao proibia, e as 21:30 BRT o
+    // pedido que vence HOJE ja aparecia "Atrasado ha 1 dia" na aba, no filtro, no Excel e no e-mail.
+    //
+    // ⚠️ POR QUE ESTE CENARIO NAO DEPENDE DO `TZ` DE QUEM RODA A SUITE. O instante e fixado por
+    // subclasse de `Date` (mesma tecnica do cenario (q) do client — `setSystemTime` do Jest 27.5.1
+    // fakeia `setTimeout` junto e o harness HTTP morreria por timeout; aqui nao ha Jest, mas a
+    // subclasse e igualmente barata). O instante escolhido, `2026-09-17T02:30:00Z`, e 23:30 de
+    // 16/09 em `America/Sao_Paulo`: o dia do negocio e 16, o dia em UTC e 17. Logo:
+    //   - rodado com TZ=UTC        -> so passa se a funcao recortar por `Intl`+FUSO_PADRAO;
+    //   - rodado com TZ=America/Sao_Paulo -> passa nos dois casos (por isso o TZ=UTC e citado no
+    //     relatorio da onda, e por isso o controle positivo abaixo existe).
+    //
+    // CONTROLE POSITIVO, dentro do proprio cenario: reproduz a implementacao antiga (getters
+    // locais) sobre o MESMO instante e afirma que ela diverge quando o processo esta em UTC. Sem
+    // ele, alguem rodando so em BRT concluiria que este cenario "passa" e nao saberia que, no fuso
+    // da suite dele, ele nao sabe falhar.
+    const { hojeLocalISO: real } = require('../../services/compras/pedidoCompraService');
+    const DateReal = global.Date;
+    const INSTANTE = new DateReal('2026-09-17T02:30:00Z');
+    class DataFixa extends DateReal {
+      constructor(...args) { super(...(args.length ? args : [INSTANTE.getTime()])); }
+      static now() { return INSTANTE.getTime(); }
+    }
+    global.Date = DataFixa;
+    try {
+      assert.strictEqual(real(), '2026-09-16',
+        `hojeLocalISO no instante 2026-09-17T02:30:00Z (23:30 BRT de 16/09) tem de ser 2026-09-16, veio ${real()}`);
+
+      // A implementacao ANTIGA, sobre o mesmo instante.
+      const agora = new Date();
+      const antiga = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')}`;
+      const fusoDoProcesso = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (antiga === '2026-09-17') {
+        console.log(`    (controle positivo ativo: processo em ${fusoDoProcesso}, a implementacao antiga daria ${antiga})`);
+      } else {
+        console.log(`    (⚠ processo em ${fusoDoProcesso}: a implementacao antiga tambem daria ${antiga} — rode com TZ=UTC para este cenario saber falhar)`);
+      }
+
+      // E a regua inteira anda junto: no dia do NEGOCIO, o pedido que vence hoje NAO atrasa.
+      const { derivarAtraso } = require('../../services/compras/pedidoCompraService');
+      assert.deepStrictEqual(
+        derivarAtraso({ previsao_entrega: '2026-09-16', status: 'pendente' }),
+        { atrasado: 0, dias_atraso: null },
+        'pedido que vence no dia do negocio (16/09) nao pode estar atrasado as 23:30 daquele dia',
+      );
+      // Metade negativa: o dia anterior atrasa, e atrasa UM dia (nao dois).
+      assert.deepStrictEqual(
+        derivarAtraso({ previsao_entrega: '2026-09-15', status: 'pendente' }),
+        { atrasado: 1, dias_atraso: 1 },
+        'pedido de 15/09 tem de estar atrasado 1 dia no dia do negocio 16/09',
+      );
+    } finally {
+      global.Date = DateReal;
+    }
+  });
+
   await close();
   console.log(`\n${passed} passou, ${failed} falhou`);
   process.exit(failed === 0 ? 0 : 1);
