@@ -325,3 +325,11 @@
 }
 
 
+
+/* Etapa 39 (RN-D07): o badge de atraso mora DENTRO da celula de previsao — a informacao e sobre
+   a previsao, e uma coluna a mais afastaria a causa do efeito. Mesmo #e74c3c que `getStatusColor`
+   ja usa para `rejeitado`/`cancelado`. Nenhuma biblioteca, nenhum icone. */
+.pedido-atrasado { color: #e74c3c; font-weight: 600; font-size: .78rem; display: block; }
+
+/* O checkbox "So atrasados" alinha com os outros controles de `.filters`. */
+.filter-atrasados { cursor: pointer; gap: 0.5rem; }

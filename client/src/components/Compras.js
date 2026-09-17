@@ -32,6 +32,10 @@ const Compras = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  // Etapa 39 (RN-D07): viaja como `params.atrasados` e entra nas dependencias do efeito que ja
+  // re-dispara por `search` e `status` — um `param` a mais e uma dependencia a mais, zero
+  // refatoracao (`loadData` ja passa params no mesmo `api.get`).
+  const [soAtrasados, setSoAtrasados] = useState(false);
 
   const tabs = [
     { id: 'fornecedores', label: 'Fornecedores', icon: FiShoppingCart },
@@ -48,7 +52,7 @@ const Compras = () => {
 
   useEffect(() => {
     loadData();
-  }, [activeSection, search, filterStatus]);
+  }, [activeSection, search, filterStatus, soAtrasados]);
 
   const loadData = async () => {
     setLoading(true);
@@ -61,8 +65,13 @@ const Compras = () => {
           setFornecedores(fornecedoresRes.data || []);
           break;
         case 'pedidos':
+          // Etapa 39 (RN-D07): a chave `atrasados` so entra quando o checkbox esta marcado.
+          // Manda-la sempre faria `?atrasados=0` viajar em TODA listagem — e o servidor so liga
+          // o filtro com a string '1', entao seria ruido de contrato que nao faz nada.
           const pedidosRes = await api.get('/compras/pedidos', {
-            params: { search, status: filterStatus }
+            params: soAtrasados
+              ? { search, status: filterStatus, atrasados: 1 }
+              : { search, status: filterStatus }
           });
           setPedidos(pedidosRes.data || []);
           break;
@@ -116,6 +125,12 @@ const Compras = () => {
     const [ano, mes, dia] = iso.split('-');
     return `${dia}/${mes}/${ano}`;
   };
+
+  /**
+   * Etapa 39 (RN-D07) — a literal do contrato e `Atrasado há N dia(s)` **RESOLVIDA**: o
+   * parenteses e notacao do contrato, nunca texto de tela. 1 -> "1 dia"; 3 -> "3 dias".
+   */
+  const rotuloAtraso = (dias) => `Atrasado há ${dias} ${Number(dias) === 1 ? 'dia' : 'dias'}`;
 
   const getStatusColor = (status) => {
     const colors = {
@@ -183,7 +198,13 @@ const Compras = () => {
     'Valor Total': formatCurrency(pedido.valor_total),
     'Status': pedido.status || '',
     'Data': formatDate(pedido.data_pedido),
-    'Previsão Entrega': formatDate(pedido.previsao_entrega)
+    'Previsão Entrega': formatDate(pedido.previsao_entrega),
+    // Etapa 39 (RN-D08). Campos do CABECALHO: repetem-se em todas as linhas do mesmo pedido, e
+    // isso e declarado. A importacao le por grafia conhecida de cabecalho e IGNORA as duas, como
+    // ja faz com `Status` e `Valor Total`. `Dias de atraso` vazio (nunca 0, nunca '-') quando o
+    // pedido esta no prazo: `0` mentiria ("zero dias de atraso" nao e "nao esta atrasado").
+    'Atrasado': pedido.atrasado === 1 ? 'Sim' : 'Não',
+    'Dias de atraso': pedido.atrasado === 1 ? pedido.dias_atraso : ''
   });
 
   const handleExportExcel = async () => {
@@ -341,7 +362,17 @@ const Compras = () => {
                   <td>{pedido.fornecedor_nome || '-'}</td>
                   <td><strong>{formatCurrency(pedido.valor_total)}</strong></td>
                   <td>{formatDate(pedido.data_pedido)}</td>
-                  <td>{formatDate(pedido.previsao_entrega)}</td>
+                  {/* Etapa 39 (RN-D07): o badge mora DENTRO da celula de previsao — a informacao
+                      e SOBRE a previsao, e uma coluna a mais afastaria a causa do efeito. A
+                      comparacao e ESTRITA com 1 (o contrato da rota devolve 0|1, nunca boolean):
+                      se um dia a rota passar a devolver `null`, `null &&` renderizaria vazio mas
+                      qualquer outro truthy acenderia o badge sem dias. */}
+                  <td>
+                    {formatDate(pedido.previsao_entrega)}
+                    {pedido.atrasado === 1 && (
+                      <span className="pedido-atrasado">{rotuloAtraso(pedido.dias_atraso)}</span>
+                    )}
+                  </td>
                   <td>
                     <span 
                       className="status-badge" 
@@ -494,6 +525,19 @@ const Compras = () => {
             <option value="em_analise">Em Análise</option>
           </select>
         </div>
+        {/* Etapa 39 (RN-D07): CONDICIONAL a aba Pedidos. O bloco `.filters` e renderizado FORA do
+            switch de abas e e compartilhado pelas tres — um checkbox incondicional apareceria na
+            aba de Fornecedores sem fazer nada. */}
+        {activeSection === 'pedidos' && (
+          <label className="filter-group filter-atrasados">
+            <input
+              type="checkbox"
+              checked={soAtrasados}
+              onChange={(e) => setSoAtrasados(e.target.checked)}
+            />
+            Só atrasados
+          </label>
+        )}
       </div>
 
       <div className="module-content">

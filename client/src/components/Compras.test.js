@@ -95,12 +95,27 @@ const FORNECEDORES_E39 = [
   { id: 312, razao_social: 'Aços Vale Ltda', status: 'ativo', created_at: '2026-09-10 21:40:00' },
 ];
 
-let container; let root; let pedidosDoBanco; let fornecedoresDoBanco;
+// Etapa 39 (T3) — pedidos ATRASADOS, como a rota passou a devolve-los na T1 (`437aed2`):
+// `atrasado` e 0|1 (numero, nunca boolean) e `dias_atraso` e inteiro positivo ou `null`.
+const PEDIDO_420_ATRASADO_3 = {
+  id: 420, numero: 'PC-2026-420', fornecedor_nome: 'Parafusos Sul', valor_total: 90,
+  data_pedido: '2026-09-10', previsao_entrega: '2026-09-25', status: 'pendente',
+  atrasado: 1, dias_atraso: 3,
+};
+const PEDIDO_421_ATRASADO_1 = { ...PEDIDO_420_ATRASADO_3, id: 421, numero: 'PC-2026-421', dias_atraso: 1 };
+// Itens do 420, para o export (uma linha por ITEM — contrato do F6 da 38).
+const ITENS_420 = [{
+  id: 4201, material_id: 907, codigo: 'ALM-0907', descricao: 'Chapa Aço 3mm',
+  unidade: 'KG', quantidade: 3, valor_unitario: 30, quantidade_recebida: 0,
+}];
+
+let container; let root; let pedidosDoBanco; let fornecedoresDoBanco; let itensDoBanco;
 
 beforeEach(() => {
   global.IS_REACT_ACT_ENVIRONMENT = true;
   pedidosDoBanco = [];
   fornecedoresDoBanco = FORNECEDORES_E39;
+  itensDoBanco = {};
   // Implementação aqui e não na fábrica do `jest.mock`: o `resetMocks` do react-scripts apaga
   // implementações entre cenários.
   //
@@ -111,8 +126,14 @@ beforeEach(() => {
     if (url === '/compras/fornecedores') return Promise.resolve({ data: fornecedoresDoBanco });
     if (url === '/compras/pedidos') return Promise.resolve({ data: pedidosDoBanco });
     if (url === '/compras/cotacoes') return Promise.resolve({ data: [] });
+    // Igualdade ANTES da regex (molde de `compras/PedidoCompraForm.test.js:177-182`):
+    // `/compras/pedidos` e PREFIXO de `/compras/pedidos/:id`. A exportacao faz 1 GET por pedido
+    // desde o F6 da 38 (`ba6278e`) — sem este ramo o fallback REJEITA e os cenarios de export
+    // mediriam o `catch` da tela (itens = []), nao a tela.
     if (/^\/compras\/pedidos\/\d+$/.test(url)) {
-      return Promise.resolve({ data: { id: Number(url.split('/').pop()), itens: [] } });
+      const id = Number(url.split('/').pop());
+      const daLista = pedidosDoBanco.find((p) => p.id === id) || { id };
+      return Promise.resolve({ data: { ...daLista, itens: itensDoBanco[id] || [] } });
     }
     return Promise.reject(new Error(`URL inesperada no teste: ${url}`));
   });
@@ -158,6 +179,14 @@ const celulasDaLinha = (i = 0) => [
 ];
 const botaoPorTexto = (t) => [...container.querySelectorAll('button')]
   .find((b) => b.textContent.trim().includes(t));
+// O checkbox mora DENTRO do `<label>` (nao ha `htmlFor`/`id`), entao o rotulo e o caminho ate ele.
+// Devolve `null` quando nao existe — de proposito: o RED do cenario (f) tem de ser "clicar em
+// null", visivel, e nao um seletor que silenciosamente acha outra coisa.
+const checkboxPorRotulo = (t) => {
+  const rotulo = [...container.querySelectorAll('label')].find((l) => l.textContent.includes(t));
+  return rotulo ? rotulo.querySelector('input[type="checkbox"]') : null;
+};
+const chamadasDePedidos = () => api.get.mock.calls.filter((c) => c[0] === '/compras/pedidos');
 
 // ── (a) RN-D01 a data exibida e a do banco, nao a do fuso ─────────────────────────────────────
 //
@@ -207,4 +236,133 @@ test('(b) previsao null e data vazia mostram "-", e o valor com hora vira DD/MM/
   expect(linhas[0]['Cadastrado em']).toBe('16/09/2026'); // '2026-09-16 10:33:00'
   // 21:40 locais ja e 2026-09-11 em UTC: esta linha separa "cortar 10 caracteres" de "converter fuso".
   expect(linhas[1]['Cadastrado em']).toBe('10/09/2026'); // '2026-09-10 21:40:00'
+}, 10000);
+
+// ── (c) RN-D07 pedido com dias_atraso 3 mostra "Atrasado ha 3 dias" ───────────────────────────
+//
+// A literal do contrato e `Atrasado há N dia(s)` RESOLVIDA: o parenteses e notacao do contrato,
+// nunca texto de tela.
+test('(c) pedido com dias_atraso 3 mostra "Atrasado ha 3 dias" na celula da previsao', async () => {
+  pedidosDoBanco = [PEDIDO_420_ATRASADO_3];
+
+  await renderizarEm('/compras/pedidos');
+
+  expect(texto()).toContain('Atrasado há 3 dias');
+  // e a data continua na MESMA celula (o badge nao SUBSTITUI a previsao — a informacao e SOBRE
+  // ela; trocar uma pela outra tiraria do comprador o dado que ele usa para cobrar o fornecedor):
+  expect(texto()).toContain('25/09/2026');
+  const cels = celulasDaLinha(0);
+  expect(cels[4].textContent).toContain('25/09/2026');
+  expect(cels[4].textContent).toContain('Atrasado há 3 dias');
+}, 10000);
+
+// ── (d) RN-D07 singular ───────────────────────────────────────────────────────────────────────
+test('(d) dias_atraso 1 mostra "Atrasado ha 1 dia" (singular), e nunca a literal com parenteses', async () => {
+  pedidosDoBanco = [PEDIDO_421_ATRASADO_1];
+
+  await renderizarEm('/compras/pedidos');
+
+  expect(texto()).toContain('Atrasado há 1 dia');
+  expect(texto()).not.toContain('Atrasado há 1 dias');
+  expect(texto()).not.toContain('dia(s)'); // a literal e RESOLVIDA, nao copiada do contrato
+}, 10000);
+
+// ── (e) RN-D07 metade positiva de (c)/(d): no prazo nao mostra a frase ────────────────────────
+//
+// Nasce VERDE (a frase nao existia em lugar nenhum antes desta task) — e e exatamente por isso
+// que nao basta sozinha: sem (c)/(d) ela ficaria verde com a feature inteira ausente.
+test('(e) pedido no prazo NAO mostra a frase de atraso', async () => {
+  pedidosDoBanco = [PEDIDO_419_NO_PRAZO]; // atrasado: 0, dias_atraso: null
+
+  await renderizarEm('/compras/pedidos');
+
+  expect(texto()).toContain('PC-2026-419'); // ancora: a linha do pedido esta na tela
+  expect(texto()).not.toContain('Atrasado há');
+  expect(texto()).not.toContain('null');
+}, 10000);
+
+// ── (f) RN-D07 o checkbox "So atrasados" manda `atrasados=1` — e so quando marcado ────────────
+test('(f) marcar "So atrasados" dispara UMA listagem com atrasados=1; desmarcar dispara outra SEM a chave', async () => {
+  pedidosDoBanco = [PEDIDO_420_ATRASADO_3];
+
+  await renderizarEm('/compras/pedidos');
+
+  const antes = chamadasDePedidos().length; // 1: a listagem da montagem
+  expect(antes).toBe(1);
+  expect('atrasados' in chamadasDePedidos()[0][1].params).toBe(false);
+
+  await clicar(checkboxPorRotulo('Só atrasados'));
+
+  const chamadas = chamadasDePedidos();
+  expect(chamadas).toHaveLength(antes + 1); // UMA a mais, nao duas
+  expect(chamadas[antes][1].params.atrasados).toBe(1);
+
+  await clicar(checkboxPorRotulo('Só atrasados'));
+
+  const depois = chamadasDePedidos();
+  expect(depois).toHaveLength(antes + 2);
+  // A chave NAO viaja com `0`: o servidor so liga com a string '1', entao `atrasados=0` seria
+  // ruido de contrato viajando em toda listagem.
+  expect('atrasados' in depois[antes + 1][1].params).toBe(false);
+}, 10000);
+
+// ── (g) RN-D07 o checkbox e CONDICIONAL a aba Pedidos ─────────────────────────────────────────
+//
+// O `<div className="filters">` e renderizado FORA do switch de abas e e COMPARTILHADO pelas
+// tres: um controle incondicional apareceria na aba de Fornecedores fazendo NADA.
+test('(g) na aba Fornecedores o checkbox nao existe, e a chave nunca viaja para a rota dela', async () => {
+  await renderizarEm('/compras/fornecedores');
+
+  expect(texto()).toContain('Parafusos Sul'); // ancora: a aba carregou de verdade
+  expect(texto()).not.toContain('Só atrasados');
+  expect(container.querySelector('input[type="checkbox"]')).toBeNull();
+
+  const f = api.get.mock.calls.filter((c) => c[0] === '/compras/fornecedores');
+  expect(f.length).toBeGreaterThan(0);
+  f.forEach((c) => expect('atrasados' in c[1].params).toBe(false));
+}, 10000);
+
+// ── (h) RN-D02/RN-D08 o Excel leva a data do banco e as duas colunas novas ────────────────────
+test('(h) o Excel exportado leva a data do banco e as colunas Atrasado/Dias de atraso NO FIM', async () => {
+  pedidosDoBanco = [PEDIDO_420_ATRASADO_3];
+  itensDoBanco[420] = ITENS_420;
+
+  await renderizarEm('/compras/pedidos');
+  await clicar(botaoPorTexto('Exportar Excel'));
+
+  expect(exportToExcel).toHaveBeenCalledTimes(1);
+  const [linhas, arquivo] = exportToExcel.mock.calls[0];
+  expect(arquivo).toBe('pedidos_compra');
+  expect(linhas).toHaveLength(1);
+  expect(linhas[0]['Data']).toBe('10/09/2026');             // RN-D02: NAO 09/09/2026
+  expect(linhas[0]['Previsão Entrega']).toBe('25/09/2026'); //         NAO 24/09/2026
+  expect(linhas[0]['Atrasado']).toBe('Sim');
+  expect(linhas[0]['Dias de atraso']).toBe(3);
+  expect(typeof linhas[0]['Dias de atraso']).toBe('number'); // numero, nao '3': a planilha soma
+  // AS 11 COLUNAS DA ETAPA 38 CONTINUAM IDENTICAS (e a assercao que protege o cenario (p) de
+  // `compras/PedidoCompraForm.test.js:785` de cair por causa desta task):
+  expect(linhas[0]['Código']).toBe('ALM-0907');
+  expect(linhas[0]['Quantidade']).toBe(3);
+  expect(linhas[0]['Valor Unitário']).toBe(30);
+  expect(Object.keys(linhas[0])).toEqual([
+    'Número', 'Fornecedor', 'Código', 'Descrição', 'Unidade', 'Quantidade', 'Valor Unitário',
+    'Valor Total', 'Status', 'Data', 'Previsão Entrega', 'Atrasado', 'Dias de atraso',
+  ]); // ORDEM congelada: as duas novas NO FIM
+}, 10000);
+
+// ── (i) RN-D08 metade negativa do (h): no prazo exporta "Nao" e a coluna de dias VAZIA ────────
+test('(i) pedido no prazo exporta "Nao" e a coluna de dias vazia (nunca 0, nunca "-")', async () => {
+  pedidosDoBanco = [PEDIDO_419_NO_PRAZO]; // dias_atraso: null
+
+  await renderizarEm('/compras/pedidos');
+  await clicar(botaoPorTexto('Exportar Excel'));
+
+  expect(exportToExcel).toHaveBeenCalledTimes(1);
+  const [linhas] = exportToExcel.mock.calls[0];
+  expect(linhas).toHaveLength(1);
+  expect(linhas[0]['Atrasado']).toBe('Não');
+  // `''` e nao `null`/`0`/`'-'`: `null` sai como celula com a palavra em alguns leitores, `0`
+  // mente ("zero dias de atraso" e diferente de "nao esta atrasado") e `'-'` quebraria a coluna
+  // como numerica para quem filtrar a planilha.
+  expect(linhas[0]['Dias de atraso']).toBe('');
 }, 10000);
