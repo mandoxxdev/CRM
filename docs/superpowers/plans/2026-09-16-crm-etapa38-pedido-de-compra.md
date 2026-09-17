@@ -2207,12 +2207,14 @@ que se moveu inteiro. **O paralelismo ficou nos revisores**: as duas lentes fina
 concorrentes sobre o mesmo diff congelado. **Retrabalho causado por paralelismo: nenhum** — e não
 por sorte: revisor não escreve código, e o diff estava congelado em `dc60507`.
 
-**4. Defeito escapado** (o que só apareceu depois de a etapa ser declarada pronta): **a preencher na
-etapa seguinte.** Deixar em branco seria mentira por omissão; escrever `0` seria pior, porque este
-número só pode ser preenchido **de fora**, por quem for fechar a Etapa 39 olhando para trás. Os
-candidatos já declarados (letra **G**) são onde eu apostaria: a planilha com CNPJ só na primeira
-linha da OC, o `hojeISO` em UTC do formulário, e a exportação da aba Pedidos fazendo **1 GET por
-pedido**.
+**4. Defeito escapado** (o que só apareceu depois de a etapa ser declarada pronta): **1, preenchido
+pela Fase 0 da Etapa 39** (`.superpowers/sdd/etapa39-fase0-acompanhamento.md`, mesmo dia): a aba Pedidos
+formata `data_pedido`/`previsao_entrega` com `new Date(str).toLocaleDateString` (`Compras.js:91-94`) e a
+exportação usa o mesmo caminho (`:160-162`); em `America/Sao_Paulo`, `2026-09-16` vira **15/09/2026**, e o
+importador relê `DD/MM/AAAA` — **exportar e reimportar move as datas um dia para trás**, quebrando no valor a
+promessa do F6 (`ba6278e`). Não era nenhum dos três candidatos da letra G (o `hojeISO` UTC é primo, não
+o mesmo defeito). A revisão final leu a exportação e não executou a formatação num fuso negativo —
+é o mesmo padrão da Etapa 37: leitura não pega o que a execução pega. Corrigido na Etapa 39 (tarefa A0).
 
 ---
 
