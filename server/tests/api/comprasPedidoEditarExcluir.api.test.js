@@ -81,6 +81,8 @@ const NAO_ENCONTRADO = 'Pedido de compra não encontrado';
 const jaRecebeuEdicao = (numero) => `Pedido de compra ${numero} já teve recebimento — não pode mais ser editado`;
 const jaRecebeuExclusao = (numero) => `Pedido de compra ${numero} já teve recebimento — não pode ser excluído`;
 const EXCLUIDO = 'Pedido de compra excluído com sucesso';
+// Onda de correcao, F5: a literal do 409 do DELETE generico de fornecedor.
+const FORNECEDOR_COM_PEDIDOS = 'Fornecedor possui pedidos de compra — não pode ser excluído';
 // A MESMA literal de status do contrato 2 (o `PUT` reusa o schema do `POST`): os 7 valores, e
 // `PARCIAL`/`RECEBIDO` de fora porque sao a DERIVACAO do almoxarifado, nao valor gravavel.
 const ERRO_STATUS = 'Dados inválidos — status: status do pedido inválido (use pendente, aprovado, rejeitado, em_analise, enviado, recebido ou cancelado)';
@@ -595,6 +597,71 @@ const ERRO_STATUS = 'Dados inválidos — status: status do pedido inválido (us
     assert.strictEqual(depois3.status, 'CANCELADA', `a solicitacao terminal virou ${depois3.status}`);
     assert.strictEqual(depois3.pedido_compra_id, pedido3.id,
       'o ponteiro da terminal e HISTORICO: fica como estava (declarado no servico)');
+  });
+
+  // (12) -----------------------------------------------------------------------------------
+  //
+  // ONDA DE CORRECAO, F5 — achado I2 da revisao de UX, reproduzido por sonda contra o esquema de
+  // PRODUCAO (`PRAGMA foreign_keys = ON`): `DELETE FROM fornecedores` com pedido vinculado morria
+  // com `SQLITE_CONSTRAINT: FOREIGN KEY constraint failed`, caia no `catch` do generico e respondia
+  // **500 'Erro ao excluir item'**. O comprador lia a frase generica e nunca ficava sabendo que
+  // existe pedido vinculado — e foi ESTA etapa que tornou o caminho alcancavel (antes dela
+  // `COUNT(pedidos_compra) = 0` e nenhum codigo inseria pedido, entao nenhuma linha referenciava
+  // `fornecedores`).
+  //
+  // ⚠️ O QUE ESTE CENARIO PODE E NAO PODE PROVAR: o harness roda `foreign_keys = 0` e o stub de
+  // `pedidos_compra` nem declara a FK, entao aqui o `DELETE` sem a guarda NAO daria 500 — daria
+  // 200, apagando o fornecedor e deixando o pedido apontando para o vazio. Sao dois sintomas do
+  // mesmo defeito (500 em producao, referencia quebrada no harness) e o conserto e um: o 409 vem
+  // ANTES do `DELETE`, e por isso a MESMA frase chega ao operador nos dois ambientes.
+  await test('(12) DELETE de fornecedor COM pedido -> 409 com literal propria (nao 500 generico)', async () => {
+    const fornF5 = await dbRun(db,
+      "INSERT INTO fornecedores (razao_social, cnpj, status) VALUES ('Fornecedor com pedido F5','33444555000166','ativo')");
+    const fornecedorF5 = fornF5.lastID;
+    const criado = await request(app).post('/api/compras/pedidos').send({
+      fornecedor_id: fornecedorF5,
+      itens: [{ material_id: materialIdA, quantidade: 2, valor_unitario: 3 }],
+    });
+    assert.strictEqual(criado.status, 201, `fixture: POST do pedido falhou ${JSON.stringify(criado.body)}`);
+
+    const r = await request(app).delete(`/api/compras/fornecedores/${fornecedorF5}`);
+    assert.strictEqual(r.status, 409, `esperava 409, veio ${r.status} ${JSON.stringify(r.body)}`);
+    assert.strictEqual(r.body.error, FORNECEDOR_COM_PEDIDOS, 'literal do 409 divergente');
+    assert.notStrictEqual(r.body.error, 'Erro ao excluir item',
+      'a frase generica do 500 e exatamente o que este conserto tira do caminho do comprador');
+    // ⚠️ AS ASSERCOES QUE MEDEM O DANO: o fornecedor FICA, e o pedido continua com um
+    // `fornecedor_id` que resolve (no harness, sem FK, o `DELETE` cru teria apagado o fornecedor e
+    // deixado o pedido orfao; em producao teria dado 500).
+    assert.ok(await dbGet(db, 'SELECT id FROM fornecedores WHERE id = ?', [fornecedorF5]),
+      'o fornecedor com pedido NAO pode ter sido apagado');
+    const cab = await cabecalho(criado.body.id);
+    assert.strictEqual(cab.fornecedor_id, fornecedorF5, 'o pedido continua apontando para o fornecedor');
+    assert.ok(await dbGet(db, 'SELECT id FROM fornecedores WHERE id = ?', [cab.fornecedor_id]),
+      'o fornecedor apontado pelo pedido tem de existir');
+
+    // METADE POSITIVA 1: fornecedor SEM pedido continua apagavel pelo generico (senao "recusa todo
+    // fornecedor" passaria nas asserçoes acima).
+    const fornLimpo = await dbRun(db,
+      "INSERT INTO fornecedores (razao_social, cnpj, status) VALUES ('Fornecedor sem pedido F5','33444555000267','ativo')");
+    const semPedido = await request(app).delete(`/api/compras/fornecedores/${fornLimpo.lastID}`);
+    assert.strictEqual(semPedido.status, 200, `fornecedor sem pedido: ${semPedido.status} ${JSON.stringify(semPedido.body)}`);
+    assert.strictEqual(semPedido.body.message, 'Item excluído com sucesso', 'a literal do generico mudou de dono');
+    assert.strictEqual(await dbGet(db, 'SELECT id FROM fornecedores WHERE id = ?', [fornLimpo.lastID]), undefined,
+      'o fornecedor sem pedido tinha de ter sido apagado');
+
+    // METADE POSITIVA 2: apagado o pedido, o MESMO fornecedor passa a ser apagavel — a recusa e
+    // sobre a referencia, nao sobre o fornecedor.
+    assert.strictEqual((await request(app).delete(`/api/compras/pedidos/${criado.body.id}`)).status, 200,
+      'fixture: o DELETE do pedido tinha de passar');
+    const depois = await request(app).delete(`/api/compras/fornecedores/${fornecedorF5}`);
+    assert.strictEqual(depois.status, 200, `sem pedidos o fornecedor tem de sair: ${JSON.stringify(depois.body)}`);
+    assert.strictEqual(await dbGet(db, 'SELECT id FROM fornecedores WHERE id = ?', [fornecedorF5]), undefined,
+      'o fornecedor tinha de ter sido apagado depois que o pedido saiu');
+
+    // E o 404 do generico continua sendo 404 (id que nao existe), nao 409.
+    const inexistente = await request(app).delete(`/api/compras/fornecedores/${fornecedorF5 + 9876}`);
+    assert.strictEqual(inexistente.status, 404, `esperava 404, veio ${inexistente.status}`);
+    assert.strictEqual(inexistente.body.error, 'Item não encontrado', 'literal do 404 do generico divergente');
   });
 
   await close();

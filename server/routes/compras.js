@@ -317,7 +317,7 @@ app.delete('/api/compras/:tipo/:id', authenticateToken, checkModulePermission('c
   }
 
   // Usar prepared statement para prevenir SQL injection
-  db.run(`DELETE FROM ${table} WHERE id = ?`, [idNum], function(err) {
+  const apagar = () => db.run(`DELETE FROM ${table} WHERE id = ?`, [idNum], function(err) {
     if (err) {
       console.error('Erro ao deletar:', err);
       return res.status(500).json({ error: 'Erro ao excluir item' });
@@ -327,6 +327,47 @@ app.delete('/api/compras/:tipo/:id', authenticateToken, checkModulePermission('c
     }
     res.json({ message: 'Item excluído com sucesso' });
   });
+
+  /**
+   * ⚠️ FORNECEDOR COM PEDIDO NAO E APAGAVEL, e foi ESTA ETAPA que tornou o caminho alcancavel
+   * (onda de correcao, F5 — achado I2 da revisao de UX, reproduzido por sonda contra o esquema de
+   * PRODUCAO com `PRAGMA foreign_keys = ON`).
+   *
+   * `pedidos_compra` declara `FOREIGN KEY (fornecedor_id) REFERENCES fornecedores(id)`
+   * (`index.js:19241`) e producao roda com a FK LIGADA (`sqliteConcurrency.js:50`). O generico faz
+   * `DELETE FROM fornecedores WHERE id = ?` sem checar referencia: com pedido vinculado a sonda
+   * mediu `SQLITE_CONSTRAINT: FOREIGN KEY constraint failed`, que cai no `catch` acima e responde
+   * **500 'Erro ao excluir item'**. O comprador clica na lixeira, le uma frase generica, tenta de
+   * novo e NUNCA fica sabendo que existe pedido vinculado — e o conserto da Task 5
+   * (`Compras.js:126`, que passou a mostrar a literal do servidor) mostra justamente essa frase.
+   *
+   * Por que e achado desta etapa e nao divida antiga: a Fase 0 mediu `COUNT(pedidos_compra) = 0` e
+   * **zero** codigo que inserisse um pedido. Antes da Etapa 38 nenhuma linha podia referenciar
+   * `fornecedores`, entao o caminho era INALCANCAVEL. Esta e a primeira etapa que cria essas
+   * linhas — e a primeira em que a lixeira da aba Fornecedores pode falhar.
+   *
+   * 409 ANTES do `DELETE`, e nao traducao da constraint no `catch`: a mensagem passa a ser a mesma
+   * no harness (`foreign_keys = 0`, onde a FK nao dispararia e o fornecedor seria apagado deixando
+   * o pedido apontando para o vazio) e em producao (onde a FK dispara). Um `catch` traduzido diria
+   * a frase certa so no ambiente que tem a FK, e o teste nao poderia prova-la.
+   *
+   * Nenhum outro ramo do generico muda: `cotacoes` tem a MESMA FK e continua com `COUNT = 0` (sem
+   * porta de criacao, sem risco), e `pedidos` aqui esta sombreado pela rota propria da Task 3.
+   */
+  if (tipo === 'fornecedores') {
+    return db.get('SELECT COUNT(*) AS n FROM pedidos_compra WHERE fornecedor_id = ?', [idNum], (err, row) => {
+      if (err) {
+        console.error('Erro ao checar pedidos do fornecedor:', err);
+        return res.status(500).json({ error: 'Erro ao excluir item' });
+      }
+      if ((row && row.n) > 0) {
+        return res.status(409).json({ error: 'Fornecedor possui pedidos de compra — não pode ser excluído' });
+      }
+      return apagar();
+    });
+  }
+
+  apagar();
 });
 
 // ---------- Grupos de fornecedores homologados (Compras) ----------
