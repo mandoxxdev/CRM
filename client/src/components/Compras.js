@@ -88,9 +88,33 @@ const Compras = () => {
     }).format(value || 0);
   };
 
+  /**
+   * Etapa 39 (D2, RN-D01/RN-D02) — a data e formatada A PARTIR DA STRING, sem `new Date`.
+   *
+   * O QUE ESTAVA ERRADO (defeito ESCAPADO da Etapa 38): esta funcao era
+   * `new Date(date).toLocaleDateString('pt-BR')`. `new Date('2026-09-16')` e meia-noite **UTC** e
+   * `toLocaleDateString` renderiza no fuso local, entao em America/Sao_Paulo saia **15/09/2026** —
+   * o dia ANTERIOR ao que esta no banco. Valia para `Data Pedido`, `Previsao Entrega`,
+   * `Cadastrado em` dos fornecedores e `Data`/`Validade` das cotacoes.
+   *
+   * E A METADE CARA: a EXPORTACAO usa esta MESMA funcao, e a importacao le `DD/MM/AAAA` — entao
+   * exportar e reimportar o proprio Excel do CRM movia as duas datas um dia para tras. A promessa
+   * do F6 da Etapa 38 (`ba6278e`) estava cumprida na estrutura e falha no valor.
+   *
+   * NAO troque por `new Date(str + 'T00:00:00')`: funciona, mas continua criando um `Date` para
+   * nao usar nenhum campo dele — e e a forma que o proximo "simplifica" de volta para
+   * `new Date(str)`. NAO use `{ timeZone: 'America/Sao_Paulo' }`: acerta hoje e finge que uma
+   * data-only tem fuso.
+   *
+   * Valor com hora (`created_at`, `'2026-09-16 10:33:00'`) -> os 10 primeiros caracteres.
+   * Valor que nao casa `AAAA-MM-DD` -> devolvido COMO VEIO, sem `new Date`.
+   */
   const formatDate = (date) => {
     if (!date) return '-';
-    return new Date(date).toLocaleDateString('pt-BR');
+    const iso = String(date).slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return String(date);
+    const [ano, mes, dia] = iso.split('-');
+    return `${dia}/${mes}/${ano}`;
   };
 
   const getStatusColor = (status) => {

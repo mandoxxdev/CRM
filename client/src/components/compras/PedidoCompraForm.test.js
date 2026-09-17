@@ -822,3 +822,33 @@ test('(o2) vinculo_solicitacao "ok" NAO avisa nada (metade positiva do (o))', as
   expect(toast.success).toHaveBeenCalledWith('Pedido PC-2026-640 criado');
   expect(toast.warn).not.toHaveBeenCalled();
 });
+
+// ── (q) RN-D03 o formulario nasce com a data LOCAL, nao com a de amanha ───────────────────────
+//
+// Etapa 39, Task 2 (defeito ESCAPADO da Etapa 38). 23:30 em -03 e 02:30 do DIA SEGUINTE em UTC:
+// `new Date().toISOString().slice(0,10)` (a implementacao antiga de `hojeISO`) devolve 2026-09-17
+// e o comprador que abre o formulario depois das 21h ja nasce com a data errada — e grava com ela.
+//
+// ⚠️ POR QUE NAO `jest.useFakeTimers().setSystemTime(...)` (o que o design §7.4 mandava): o Jest
+// desta base e 27.5.1, onde os timers modernos fakeiam TAMBEM o `setTimeout` — e `esperarEfeitos()`
+// espera um `setTimeout(0)`, que nunca resolveria (o `doNotFake` so existe do Jest 28 em diante);
+// o cenario morreria por timeout dos 5s em vez de medir a data. Trocar `global.Date` por uma
+// subclasse fixa o relogio sem tocar nos timers, e o construtor continua sendo o LOCAL que a
+// RN-D03 exige. Restaurado no `finally` para nao vazar para os outros cenarios.
+test('(q) o formulario nasce com a data LOCAL, nao com a de amanha', async () => {
+  const DateReal = global.Date;
+  const INSTANTE = new DateReal(2026, 8, 16, 23, 30); // construtor LOCAL, de proposito
+  // CONTROLE POSITIVO: prova que o fuso esta aplicado E que a implementacao antiga erraria.
+  expect(INSTANTE.toISOString().slice(0, 10)).toBe('2026-09-17');
+  class DataFixa extends DateReal {
+    constructor(...args) { super(...(args.length ? args : [INSTANTE.getTime()])); }
+    static now() { return INSTANTE.getTime(); }
+  }
+  global.Date = DataFixa;
+  try {
+    await renderizarEm('/compras/pedidos/novo');
+    expect(porTestId('pedido-data').value).toBe('2026-09-16');
+  } finally {
+    global.Date = DateReal;
+  }
+});

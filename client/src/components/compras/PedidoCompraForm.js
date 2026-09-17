@@ -82,7 +82,19 @@ const formatCurrency = (valor) => new Intl.NumberFormat('pt-BR', {
   style: 'currency', currency: 'BRL',
 }).format(Number(valor) || 0);
 
-const hojeISO = () => new Date().toISOString().slice(0, 10);
+/**
+ * Etapa 39 (D2, RN-D03) — HOJE no fuso de quem clica.
+ *
+ * Era `new Date().toISOString().slice(0, 10)`, que e **UTC**: das 21h a meia-noite no fuso do
+ * Brasil o formulario nascia com a data de AMANHA, e o pedido era gravado com ela. Mesma forma de
+ * `FerramentasAlmoxarifado.js:417-424` (client) e de `hojeLocalISO` (`pedidoCompraService.js:615`,
+ * servidor) — os tres dizem a mesma coisa, e agora dizem do mesmo jeito.
+ */
+const hojeISO = () => {
+  const agora = new Date();
+  return [agora.getFullYear(), String(agora.getMonth() + 1).padStart(2, '0'),
+    String(agora.getDate()).padStart(2, '0')].join('-');
+};
 
 // Mensagem de erro do servidor, com o 403 de perfil já rotulado por `permissaoErro` (o mesmo
 // utilitário que o almoxarifado usa): o 403 condicional do vínculo de solicitação (fix 1 da Task 2)
