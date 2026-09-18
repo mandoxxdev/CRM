@@ -124,6 +124,61 @@
   .page, .pagina, [class*='-page']:not(.almox-mapa-page) {
     padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   }
+
+  /* ── 9. LINHAS QUE NÃO QUEBRAM — a causa dominante ───────────────────────
+     Auditoria das 114 folhas: **247 ocorrências** de `display: flex` em cabeçalho,
+     barra de ferramentas, área de ações e filtros, SEM `flex-wrap`. Uma linha assim
+     não quebra: título, badges e três botões ficam lado a lado e empurram a página
+     para além da tela. É de longe o padrão mais frequente, muito acima de largura
+     fixa (11) e grade (10).
+
+     A regra é segura por construção, e isso importa: `flex-wrap: wrap` **não faz
+     nada** enquanto o conteúdo couber. Ele só age no momento em que agiria o
+     estouro. E aplicado a um elemento que não é flex, é inerte.
+
+     Os nomes abaixo saíram da auditoria, não de palpite. */
+  [class*='header'], [class*='cabecalho'],
+  [class*='toolbar'], [class*='barra'],
+  [class*='actions'], [class*='acoes'],
+  [class*='filters'], [class*='filtros'],
+  [class*='buttons'], [class*='botoes'],
+  [class*='-top'], [class*='-topo'] {
+    flex-wrap: wrap;
+  }
+
+  /* Filho de flex também precisa poder encolher, pelo mesmo motivo do item 7:
+     `min-width: auto` faz um título longo empurrar a linha inteira. */
+  [class*='header'] > *, [class*='toolbar'] > *,
+  [class*='actions'] > *, [class*='acoes'] > * {
+    min-width: 0;
+  }
+
+  /* ── 10. grades largas viram uma coluna ──────────────────────────────────
+     `minmax(350px…)` até cabe em 375px; `minmax(500px…)` não cabe nunca. Estes são
+     os nove casos REAIS da auditoria, tratados pelo nome — e não uma regra no
+     atacado, que quebraria as grades de duas colunas já pensadas para o celular. */
+  .charts-section, .marketing-section, .insights-grid,
+  .os-cards-grid, .oportunidades-grid, .projetos-grid,
+  .preview-os-info, .mes-charts-grid, .mes-alerts-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* ── 11. painéis de largura fixa ─────────────────────────────────────────
+     O resto da auditoria. Os `.shape-*` e `.glow-*` ficaram de fora de propósito:
+     são manchas decorativas de fundo na tela de login, posicionadas em absoluto,
+     e encolhê-las só estragaria o efeito sem ganhar espaço nenhum. */
+  .chat-sidebar,
+  .bolinhas-premium-list-panel,
+  .marcadores-step-panel {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .marcadores-step-vista-wrap,
+  .proposta-detalhe-modal,
+  .propostas-list-modal {
+    min-width: 0 !important;
+  }
 }
 
 /* ── Acabamento de aplicativo ──────────────────────────────────────────────
