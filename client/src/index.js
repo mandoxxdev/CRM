@@ -12,6 +12,9 @@ import './styles/layout.css';
 import './styles/utilities.css';
 import './styles/glassmorphism.css';
 import './styles/modern-layout.css';
+// POR ULTIMO entre os globais: e uma camada de correcao que precisa vir depois das
+// folhas que ela corrige. Tudo la dentro esta em @media (max-width: 768px).
+import './styles/mobile-app.css';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 import { markChunkRecoveryReady } from './utils/chunkLoadRecovery';

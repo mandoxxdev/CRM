@@ -1,0 +1,158 @@
+/* ============================================================================
+   APARÊNCIA DE APLICATIVO NO CELULAR — camada global
+   ============================================================================
+
+   Por que uma camada global e não 257 telas editadas uma a uma: as queixas de tela
+   "desenquadrada" vêm de POUCOS padrões repetidos, e foram medidos antes de escrever
+   qualquer regra aqui:
+
+     · 106 regras em 52 arquivos davam `font-size` menor que 16px a campos de formulário.
+       No iOS, focar um campo assim faz o Safari DAR ZOOM na página — e ele não desfaz o
+       zoom ao sair do campo. É a causa número um da sensação de "escala errada".
+     · 65 arquivos renderizam `<table>`. Uma tabela de 6+ colunas nunca cabe em 375px, e
+       sem um container que role, quem rola é a PÁGINA inteira — de lado.
+     · 32 declarações de largura fixa acima de 360px, que estouram a tela sozinhas.
+
+   Editar cada tela seria mais arriscado e menos completo: as telas que ninguém lembrou de
+   citar continuariam quebradas. Aqui a regra alcança todas, inclusive as futuras.
+
+   REGRA DESTE ARQUIVO: tudo dentro de `@media (max-width: 768px)`. Nada daqui pode mudar
+   um pixel do desktop.
+
+   Este arquivo é importado por ÚLTIMO em `src/index.js`, mas isso não basta: o CSS de
+   componente é empacotado depois do global pelo CRA. Por isso as regras que precisam
+   vencer usam `!important` — não por preguiça, e sim porque a alternativa (subir
+   especificidade para cada um dos 114 seletores possíveis) seria pior de manter.
+   ========================================================================== */
+
+@media (max-width: 768px) {
+
+  /* ── 1. o zoom do iOS ────────────────────────────────────────────────────
+     16px é o limiar exato do WebKit: com menos, ele amplia a página no foco.
+     Não é preferência de tamanho — é o que impede a tela de "sair do lugar".
+     O tamanho visual continua controlado pelo padding de cada campo. */
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  /* ── 2. a página não rola de lado ────────────────────────────────────────
+     Vale para o documento. Quem precisa rolar horizontalmente é o componente
+     (tabela), dentro do próprio container — nunca a tela toda. */
+  html, body {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  /* ── 3. tabelas rolam DENTRO de si ───────────────────────────────────────
+     `display: block` + `overflow-x: auto` transforma a própria tabela no container
+     de rolagem, sem precisar de um `<div>` extra em cada uma das 65 telas. O
+     conteúdo interno continua sendo desenhado como tabela.
+     `width: max-content` (com `min-width: 100%`) evita que as colunas se espremam
+     até ficarem ilegíveis: a tabela fica do tamanho que precisa e rola. */
+  table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+    width: max-content;
+    min-width: 100%;
+  }
+
+  /* Cabeçalho de tabela não quebra palavra no meio — rola junto. */
+  table th { white-space: nowrap; }
+
+  /* ── 4. larguras fixas não estouram a tela ───────────────────────────────
+     Rede de segurança para as 32 declarações medidas e para o que vier depois.
+     Não força largura: só impede de passar da tela. */
+  .card, .modal, .modal-content, .dialog, .panel, .painel,
+  [class*='-card'], [class*='-modal'], [class*='-panel'] {
+    max-width: 100% !important;
+    box-sizing: border-box;
+  }
+
+  /* Os dois casos REAIS de largura fixa que sobram depois que as tabelas passaram a
+     rolar sozinhas — medidos, não supostos. As outras 8 ocorrências acima de 400px
+     eram `min-width` de tabela, resolvidas pela regra 3. */
+  .ppe-painel { width: 100% !important; }
+  .notificacoes-dropdown {
+    width: auto !important;
+    max-width: calc(100vw - 24px) !important;
+    right: 12px;
+    left: 12px;
+  }
+
+  /* ── 5. imagens e mídia se ajustam ──────────────────────────────────────── */
+  img, video, canvas, svg:not([width]) {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* ── 6. alvo de toque ────────────────────────────────────────────────────
+     44px é o mínimo recomendado pela Apple e pelo Material. Abaixo disso erra-se
+     de botão — e quem usa isto está de luva, no chão de fábrica.
+     `:not()` protege os casos em que o botão é um ícone dentro de outro controle. */
+  /* `:where()` tem especificidade ZERO — e isso aqui é o ponto, não estilo.
+     Com `:not()` direto, este seletor valeria (0,4,1) e a exceção de tabela logo
+     abaixo, que vale (0,0,2), PERDERIA. Foi o que aconteceu na primeira versão:
+     medido, o botão dentro da tabela veio com 44px do mesmo jeito. Dentro de
+     `:where()` as exclusões não contam, o seletor vale (0,0,1), e a exceção vence. */
+  button:where(:not(.bim-item):not(.pcf-chip):not([class*='icon']):not([class*='close'])),
+  .btn, [class*='btn-']:where(:not([class*='btn-icon'])) {
+    min-height: 44px;
+  }
+
+  /* Dentro de tabela, 44px por botão transforma cada linha num bloco e a lista fica
+     ilegível. Ali o alvo continua sendo a própria célula. */
+  table button, table .btn, table [class*='btn-'] { min-height: 0; }
+
+  /* ── 7. filho de grid/flex encolhe ───────────────────────────────────────
+     A causa real de grade estourada NÃO é o número de colunas: é o filho que se
+     recusa a encolher. Um item de grid/flex tem `min-width: auto` por padrão, ou
+     seja, nunca fica menor que o conteúdo — um texto longo ou uma tabela dentro
+     dele empurram a coluna para fora da tela.
+
+     A primeira versão desta regra forçava `grid-template-columns: 1fr` em tudo.
+     Foi descartada: quebraria as grades de duas colunas que já são intencionais no
+     celular, e trataria o sintoma em vez da causa. */
+  .grid > *, [class*='-grid'] > * { min-width: 0; }
+
+  /* ── 8. o conteúdo respira a barra inferior ──────────────────────────────
+     A regra específica de cada layout mora no CSS da barra; esta é a rede para
+     telas que renderizam fora dos dois layouts conhecidos. */
+  .page, .pagina, [class*='-page']:not(.almox-mapa-page) {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* ── Acabamento de aplicativo ──────────────────────────────────────────────
+   Detalhes pequenos que separam "site aberto no celular" de "aplicativo":
+   o flash cinza do toque, o texto que seleciona sozinho ao segurar um botao e a
+   rolagem que treme no fim da lista. */
+@media (max-width: 768px) {
+  /* O retangulo cinza que o Android pisca a cada toque denuncia navegador. */
+  a, button, [role='button'], .bim-item, .pcf-chip {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Segurar um botao selecionava o rotulo e abria a lupa de copiar. Campos de
+     texto continuam selecionaveis, senao o usuario nao consegue corrigir o que digitou. */
+  button, [role='button'], nav, .bim-rotulo {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Impede o "puxa e balanca" que expoe o fundo branco do navegador atras da tela. */
+  body { overscroll-behavior-y: contain; }
+
+  /* Texto mais limpo em tela de alta densidade. */
+  body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+}
+
+/* ── Telas bem estreitas ──────────────────────────────────────────────────── */
+@media (max-width: 400px) {
+  /* Títulos gigantes de desktop ocupam três linhas no celular. */
+  h1 { font-size: 1.45rem; }
+  h2 { font-size: 1.2rem; }
+}

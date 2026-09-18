@@ -21,7 +21,11 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- `default`, e nao `black-translucent`: com translucent o iOS desenha a pagina POR
+         BAIXO do relogio e da bateria em modo aplicativo, e o cabecalho fica escondido
+         atras deles. Com `default` o sistema reserva a faixa e nada precisa de calculo
+         de safe-area no topo. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Orion" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
