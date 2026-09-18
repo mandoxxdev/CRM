@@ -18,6 +18,7 @@ import './styles/mobile-app.css';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 import { markChunkRecoveryReady } from './utils/chunkLoadRecovery';
+import { iniciarTabelasComoCartoes } from './utils/tabelasComoCartoes';
 import { registerServiceWorker } from './utils/pushNotifications';
 
 if (process.env.NODE_ENV === 'development' && 'serviceWorker' in navigator) {
@@ -40,6 +41,9 @@ try {
 }
 
 markChunkRecoveryReady();
+
+// Tabelas viram cartoes no celular. No desktop o utilitario nao faz nada.
+iniciarTabelasComoCartoes();
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(

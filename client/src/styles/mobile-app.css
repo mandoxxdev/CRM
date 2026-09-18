@@ -63,6 +63,74 @@
   /* Cabeçalho de tabela não quebra palavra no meio — rola junto. */
   table th { white-space: nowrap; }
 
+  /* ── 3b. tabela vira LISTA DE CARTÕES ────────────────────────────────────
+     Rolar de lado faz a tabela caber, mas não faz ela ser legível: ao rolar, o
+     cabeçalho sai de vista e o usuário perde de qual coluna é cada valor. Em
+     celular, a forma certa é um cartão por linha, com o rótulo ao lado do valor.
+
+     A classe `tabela-cartoes` é posta por `utils/tabelasComoCartoes.js`, e SÓ quando
+     ele conseguiu copiar os nomes das colunas para `data-label`. Tabela que ele não
+     soube tratar não recebe a classe e continua no modo de rolagem acima — nunca
+     fica pela metade. */
+  table.tabela-cartoes {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    overflow: visible;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  table.tabela-cartoes thead { display: none; }
+  table.tabela-cartoes tbody { display: block; }
+
+  table.tabela-cartoes tbody tr {
+    display: block;
+    margin-bottom: 10px;
+    padding: 4px 14px;
+    border: 1px solid var(--gmp-border);
+    border-radius: 12px;
+    background: var(--gmp-surface);
+  }
+
+  table.tabela-cartoes tbody tr:last-child { margin-bottom: 0; }
+
+  table.tabela-cartoes tbody td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    width: auto;
+    padding: 9px 0;
+    border: none;
+    border-bottom: 1px solid var(--gmp-border);
+    text-align: right;
+    white-space: normal;
+  }
+
+  table.tabela-cartoes tbody td:last-child { border-bottom: none; }
+
+  /* O rótulo vem do `data-label`, escrito pelo utilitário a partir do <th>. */
+  table.tabela-cartoes tbody td::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    max-width: 45%;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--gmp-text-light);
+    text-align: left;
+  }
+
+  /* Célula vazia vira linha em branco no cartão — some. */
+  table.tabela-cartoes tbody td:empty { display: none; }
+
+  /* A célula de ações fica confortável: botões à direita, com espaço de toque. */
+  table.tabela-cartoes tbody td [class*='action'],
+  table.tabela-cartoes tbody td [class*='acoes'],
+  table.tabela-cartoes tbody td [class*='btn'] { flex-shrink: 0; }
+
   /* ── 4. larguras fixas não estouram a tela ───────────────────────────────
      Rede de segurança para as 32 declarações medidas e para o que vier depois.
      Não força largura: só impede de passar da tela. */
