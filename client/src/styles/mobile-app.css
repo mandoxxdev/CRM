@@ -331,6 +331,107 @@
   .sidebar.open { transform: translateX(0) !important; }
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   CAMADA PREMIUM — acabamento de aplicativo de consumo (celular)
+   ───────────────────────────────────────────────────────────────────────────
+   Corrigir o que quebrava deixou o app funcional, mas ainda com cara de
+   "ferramenta". Esta camada eleva o VISUAL para o padrao de apps premium: fundo
+   com profundidade, cartoes que flutuam com sombra suave, campos arredondados e
+   uma barra inferior FLUTUANTE. Tudo em @media (max-width: 768px) — o desktop
+   nao muda. Reversivel: e so esta secao.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  /* 1. Fundo com profundidade — off-white para o branco dos cartoes "subir".
+     Um app premium quase nunca usa branco puro no fundo: sem contraste, nada
+     flutua. */
+  body { background: #EDF1F7 !important; }
+
+  /* 2. Cartoes flutuam: raio generoso, sombra em duas camadas (contato + eleva-
+     cao) e borda fina. Nao forco a cor de fundo para nao apagar cartoes que sao
+     coloridos de proposito (tiles de modulo, KPIs com acento). */
+  .card, [class*='-card'], .modal-content,
+  .panel, .painel, [class*='-panel'],
+  .filters, [class*='-filtros'], [class*='filter-'] {
+    border-radius: 20px !important;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04),
+                0 12px 28px -14px rgba(16, 24, 40, 0.16) !important;
+    border: 1px solid rgba(16, 24, 40, 0.06) !important;
+  }
+
+  /* 3. Cada linha da lista (tabela -> cartoes) vira um cartao branco que flutua. */
+  table.tabela-cartoes tbody tr {
+    background: #FFFFFF !important;
+    border: 1px solid rgba(16, 24, 40, 0.06) !important;
+    border-radius: 18px !important;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04),
+                0 12px 26px -16px rgba(16, 24, 40, 0.18) !important;
+    padding: 6px 16px !important;
+    margin-bottom: 14px !important;
+  }
+
+  /* 4. Campos arredondados e preenchidos, sem borda dura — o padrao dos apps
+     premium. A borda so aparece (em azul) no foco. Mantem 16px (regra 1 do topo)
+     para nao dar zoom no iOS. */
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  select, textarea {
+    border-radius: 14px !important;
+    background: #F1F4F9 !important;
+    border: 1px solid transparent !important;
+    padding-top: 13px !important;
+    padding-bottom: 13px !important;
+  }
+  input:focus, select:focus, textarea:focus {
+    background: #FFFFFF !important;
+    border-color: var(--gmp-primary, #4facfe) !important;
+    box-shadow: 0 0 0 4px rgba(79, 172, 254, 0.14) !important;
+  }
+
+  /* 5. Botoes com raio de app e sombra suave; o halo laranja do btn-premium
+     baixa de intensidade (era forte demais para um visual premium). */
+  .btn, [class*='btn-']:where(:not([class*='btn-icon'])) { border-radius: 14px !important; }
+  .btn-premium {
+    border-radius: 16px !important;
+    box-shadow: 0 8px 18px -8px rgba(245, 130, 40, 0.55) !important;
+  }
+
+  /* 6. Barra inferior FLUTUANTE — o sinal visual mais forte de "app". Descola das
+     bordas, ganha cantos arredondados e sombra elevada (como na referencia). */
+  .bim {
+    left: 14px !important;
+    right: 14px !important;
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px)) !important;
+    padding-bottom: 0 !important;
+    border: 1px solid rgba(16, 24, 40, 0.06) !important;
+    border-radius: 26px !important;
+    box-shadow: 0 10px 34px -10px rgba(16, 24, 40, 0.30) !important;
+  }
+  /* O tracinho do item ativo seguia a borda reta antiga; some para nao "furar" o
+     canto arredondado — o realce de cor + peso ja marca o item ativo. */
+  .bim-ativo::before { display: none !important; }
+  /* Conteudo respira a barra que agora flutua mais alto. */
+  .layout .main-content,
+  .page, .pagina, [class*='-page']:not(.almox-mapa-page) {
+    padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  /* 6b. O botao flutuante de ajuda (?) ficava EM CIMA do item "Menu" depois que a
+     barra passou a flutuar. Sobe para acima da barra, no canto. */
+  .help-guide-button {
+    bottom: calc(94px + env(safe-area-inset-bottom, 0px)) !important;
+    right: 16px !important;
+  }
+
+  /* 7. Chips/badges/status em pilula — detalhe pequeno, leitura premium. */
+  [class*='chip'], [class*='badge'], [class*='pill'], [class*='tag'] {
+    border-radius: 999px !important;
+  }
+
+  /* 8. Cabecalho de pagina com hierarquia: subtitulo mais leve e espacado. */
+  .page-header p, [class*='header'] > p, [class*='-subtitle'] {
+    color: var(--gmp-text-light, #6A6A6A) !important;
+  }
+}
+
 /* ── Telas bem estreitas ──────────────────────────────────────────────────── */
 @media (max-width: 400px) {
   /* Títulos gigantes de desktop ocupam três linhas no celular. */

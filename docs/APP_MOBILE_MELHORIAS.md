@@ -14,6 +14,7 @@
 | Cabeçalho do seletor de módulos | Pássaro decorativo cobria o selo "ADMINISTRADOR" | Pássaro escondido no celular; selo inteiro e legível |
 | Selo "Orion-BETA-V0" | Flutuava sobre o conteúdo no topo | Escondido no celular |
 | Gaveta de navegação ("Menu") | Abria PRESA fora da tela — o toque parecia não fazer nada | Abre de verdade, estilo app (~86% da tela, conteúdo espiando sob o overlay) |
+| **Visual geral (premium)** | Cartões cinza chapados, barra colada na borda, campos com borda dura, badges retangulares | Fundo com profundidade, **cartões brancos flutuando** com sombra suave, **barra inferior flutuante** arredondada, campos preenchidos/arredondados, chips em pílula |
 
 ## O que já estava bom (mantido, não mexi)
 - Barra inferior de navegação (tipo app), que troca de itens conforme o módulo.
