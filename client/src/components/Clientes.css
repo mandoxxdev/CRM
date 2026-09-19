@@ -433,3 +433,108 @@
   }
 }
 
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LISTA DE CLIENTES — layout proprio de aplicativo (so no celular)
+   Redesenho real: em vez da tabela achatada em cartoes genericos, cada cliente
+   e um item de lista rico (avatar com iniciais, nome, subtitulo, chips e acoes),
+   como num app de consumo. No desktop isto fica escondido e a tabela aparece.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.clientes-mobile { display: none; }
+
+@media (max-width: 768px) {
+  .clientes .table-container { display: none !important; }
+
+  .clientes-mobile { display: flex; flex-direction: column; gap: 12px; }
+
+  .cliitem {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #FFFFFF;
+    border: 1px solid rgba(16, 24, 40, 0.06);
+    border-radius: 20px;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04),
+                0 14px 28px -18px rgba(16, 24, 40, 0.22);
+    padding: 12px;
+  }
+
+  .cliitem__hit {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .cliitem__ava {
+    flex: 0 0 auto;
+    width: 48px; height: 48px;
+    border-radius: 15px;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 700; font-size: 0.95rem; letter-spacing: 0.02em;
+    box-shadow: 0 6px 14px -6px rgba(16, 24, 40, 0.4);
+  }
+  .cliitem__ava.tom-0 { background: linear-gradient(135deg, #4f46e5, #6366f1); }
+  .cliitem__ava.tom-1 { background: linear-gradient(135deg, #0ea5e9, #38bdf8); }
+  .cliitem__ava.tom-2 { background: linear-gradient(135deg, #059669, #10b981); }
+  .cliitem__ava.tom-3 { background: linear-gradient(135deg, #d97706, #f59e0b); }
+  .cliitem__ava.tom-4 { background: linear-gradient(135deg, #db2777, #f472b6); }
+  .cliitem__ava.tom-5 { background: linear-gradient(135deg, #475569, #64748b); }
+
+  .cliitem__txt { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .cliitem__name {
+    font-weight: 700; font-size: 1rem; color: #111827;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cliitem__desc {
+    font-size: 0.8rem; color: #6A6A6A;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cliitem__meta { display: flex; align-items: center; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+  .cliitem__seg {
+    font-size: 0.68rem; font-weight: 600; padding: 3px 9px;
+    border-radius: 999px; background: rgba(79, 172, 254, 0.12); color: #2563EB;
+  }
+  .cliitem__stat { font-size: 0.68rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
+  .cliitem__stat.is-ativo   { background: rgba(26, 163, 74, 0.12); color: #1AA34A; }
+  .cliitem__stat.is-inativo { background: rgba(148, 163, 184, 0.18); color: #64748b; }
+
+  .cliitem__acts { flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; }
+  .cliitem__act {
+    width: 38px; height: 38px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid rgba(16, 24, 40, 0.08);
+    background: #F5F8FC; color: #475569; cursor: pointer;
+  }
+  .cliitem__act.is-danger { color: #E5193A; }
+
+  .cm-empty {
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+    text-align: center; color: #6A6A6A; padding: 48px 16px;
+  }
+  .cm-empty__icon {
+    width: 60px; height: 60px; border-radius: 20px;
+    display: flex; align-items: center; justify-content: center;
+    background: #F1F4F9; color: #94a3b8; font-size: 26px;
+  }
+}
+
+/* Uma regra global de mobile encolhe svg sem width; fixamos o icone das acoes. */
+@media (max-width: 768px) {
+  .cliitem__act svg { width: 18px !important; height: 18px !important; flex: 0 0 auto; }
+  .cliitem__acts { flex-direction: row; align-items: center; }
+}
+
+@media (max-width: 768px) {
+  /* O svg dentro do <button> era esmagado pelo flex-shrink (min-width auto).
+     Travar min-width impede o encolhimento e o icone volta ao tamanho certo. */
+  .cliitem__act { font-size: 18px; }
+  .cliitem__act svg {
+    width: 18px !important; height: 18px !important;
+    min-width: 18px !important; min-height: 18px !important;
+    flex: 0 0 auto !important;
+  }
+}

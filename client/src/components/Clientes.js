@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 import { toast } from 'react-toastify';
-import { FiPlus, FiSearch, FiEdit, FiTrash2, FiEye, FiDownload } from 'react-icons/fi';
+import { FiPlus, FiSearch, FiEdit, FiTrash2, FiEye, FiDownload, FiUsers } from 'react-icons/fi';
 import { exportToExcel } from '../utils/exportExcel';
 import { SkeletonTable } from './SkeletonLoader';
 import './Clientes.css';
@@ -128,6 +128,7 @@ const Clientes = () => {
       {loading ? (
         <SkeletonTable rows={8} columns={7} />
       ) : (
+        <>
         <div className="table-container">
           <table className="data-table">
             <thead>
@@ -186,6 +187,54 @@ const Clientes = () => {
             </tbody>
           </table>
         </div>
+
+        {/* Lista rica para celular — layout proprio de aplicativo (nao a tabela
+            achatada). So aparece no mobile; no desktop o CSS a esconde e mostra a
+            tabela acima. */}
+        <div className="clientes-mobile">
+          {clientes.length === 0 ? (
+            <div className="cm-empty">
+              <span className="cm-empty__icon"><FiUsers /></span>
+              Nenhum cliente encontrado
+            </div>
+          ) : (
+            clientes.map(cliente => {
+              const titulo = cliente.nome_fantasia || cliente.razao_social || 'Cliente';
+              const sub = (cliente.nome_fantasia && cliente.razao_social)
+                ? cliente.razao_social
+                : (cliente.cnpj || '');
+              const iniciais = titulo.trim().split(/\s+/).slice(0, 2)
+                .map(w => w[0]).join('').toUpperCase() || 'C';
+              const tom = (iniciais.charCodeAt(0) + (iniciais.charCodeAt(1) || 0)) % 6;
+              return (
+                <div className="cliitem" key={cliente.id}>
+                  <Link to={`/comercial/clientes/editar/${cliente.id}`} className="cliitem__hit">
+                    <span className={`cliitem__ava tom-${tom}`}>{iniciais}</span>
+                    <span className="cliitem__txt">
+                      <span className="cliitem__name">{titulo}</span>
+                      {sub && <span className="cliitem__desc">{sub}</span>}
+                      <span className="cliitem__meta">
+                        {cliente.segmento && <span className="cliitem__seg">{cliente.segmento}</span>}
+                        <span className={`cliitem__stat is-${cliente.status}`}>
+                          {cliente.status === 'ativo' ? 'Ativo' : 'Inativo'}
+                        </span>
+                      </span>
+                    </span>
+                  </Link>
+                  <div className="cliitem__acts">
+                    <Link to={`/comercial/clientes/editar/${cliente.id}`} className="cliitem__act" title="Editar" aria-label="Editar">
+                      <FiEdit />
+                    </Link>
+                    <button onClick={() => handleDelete(cliente.id)} className="cliitem__act is-danger" title="Desativar" aria-label="Desativar">
+                      <FiTrash2 />
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+        </>
       )}
     </div>
   );
