@@ -430,6 +430,41 @@
   .page-header p, [class*='header'] > p, [class*='-subtitle'] {
     color: var(--gmp-text-light, #6A6A6A) !important;
   }
+
+  /* 9. ACENTOS SOBRIOS (direcao "mais ousado"): os gradientes gritantes puxavam o
+     visual para baixo. O CTA principal vira um botao INK escuro, discreto e caro
+     (padrao Apple/Stripe/Linear e da referencia), no lugar do laranja com halo.
+     Vale para todo `.btn-premium`; os botoes azuis/ciano (btn-primary) ficam. */
+  .btn-premium {
+    background: #111827 !important;
+    background-image: none !important;
+    color: #FFFFFF !important;
+    box-shadow: 0 10px 22px -10px rgba(17, 24, 39, 0.55) !important;
+  }
+  .btn-premium,
+  .btn-premium * { color: #FFFFFF !important; }
+  .btn-premium-icon {
+    background: rgba(255, 255, 255, 0.16) !important;
+    box-shadow: none !important;
+  }
+
+  /* O selo de nivel de acesso ("FULL ACCESS" etc.) era um pill rosa/roxo chamativo.
+     Vira um pill neutro e sobrio — o texto ja diz o nivel. */
+  .tipo-selecao__access-tier,
+  .tipo-selecao__access-tier.tier-basic,
+  .tipo-selecao__access-tier.tier-standard,
+  .tipo-selecao__access-tier.tier-premium,
+  .tipo-selecao__access-tier.tier-full {
+    background: rgba(17, 24, 39, 0.06) !important;
+    color: #334155 !important;
+    box-shadow: none !important;
+    border: 1px solid rgba(17, 24, 39, 0.08) !important;
+  }
+
+  /* 10. Mais respiro e tipografia refinada. */
+  .page-header, [class*='-header']:not(.bim):not(.sidebar-header) { margin-bottom: 18px; }
+  h1 { letter-spacing: -0.015em; }
+  .card, [class*='-card'] { padding: 18px !important; }
 }
 
 /* ── Telas bem estreitas ──────────────────────────────────────────────────── */
