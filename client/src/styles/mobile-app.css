@@ -306,6 +306,31 @@
   .btn-premium-icon { width: 26px !important; height: 26px !important; min-height: 0 !important; }
 }
 
+/* ── A gaveta de navegação (Menu) abria PRESA ──────────────────────────────
+   Medido: ao tocar "Menu", a `.sidebar.open` ficava travada a ~translateX(-127px)
+   (parte fora da tela) e NUNCA chegava a translateX(0) — o toque parecia não fazer
+   nada, só escurecia um pouco. O valor de repouso (com a transição desligada) é
+   translateX(0) correto; ou seja, é a própria TRANSIÇÃO de transform que congela no
+   meio (a `.sidebar` tem backdrop-filter + will-change e é re-renderizada, e a
+   animação de transform emperra). A largura estável abaixo não bastou.
+
+   Correção: no celular a gaveta não anima o transform — ela assenta na hora no estado
+   final (translateX(0) aberta, -100% fechada). Sem animação, mas confiável: abre de
+   verdade. E vira uma gaveta estilo app (~86% da tela, conteúdo espiando sob o
+   overlay) em vez de cobrir tudo. */
+@media (max-width: 768px) {
+  .sidebar,
+  .sidebar.closed,
+  .sidebar.open {
+    width: min(86vw, 340px) !important;
+    max-width: 340px;
+    transition: none !important;
+  }
+  .sidebar,
+  .sidebar.closed { transform: translateX(-100%) !important; }
+  .sidebar.open { transform: translateX(0) !important; }
+}
+
 /* ── Telas bem estreitas ──────────────────────────────────────────────────── */
 @media (max-width: 400px) {
   /* Títulos gigantes de desktop ocupam três linhas no celular. */

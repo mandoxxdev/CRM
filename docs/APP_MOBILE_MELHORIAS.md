@@ -13,6 +13,7 @@
 | Botão de ação principal (`.btn-premium`, ex.: "+") | 72px de altura, virava um bloco laranja gigante | 48px — alvo de toque correto, alinhado aos demais botões |
 | Cabeçalho do seletor de módulos | Pássaro decorativo cobria o selo "ADMINISTRADOR" | Pássaro escondido no celular; selo inteiro e legível |
 | Selo "Orion-BETA-V0" | Flutuava sobre o conteúdo no topo | Escondido no celular |
+| Gaveta de navegação ("Menu") | Abria PRESA fora da tela — o toque parecia não fazer nada | Abre de verdade, estilo app (~86% da tela, conteúdo espiando sob o overlay) |
 
 ## O que já estava bom (mantido, não mexi)
 - Barra inferior de navegação (tipo app), que troca de itens conforme o módulo.
