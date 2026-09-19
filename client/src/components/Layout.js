@@ -445,6 +445,11 @@ const Layout = () => {
   return (
     <div className="layout">
       <div className="orion-version-badge" aria-hidden="true">Orion-BETA-V0</div>
+      {/* Barra de topo do celular: a marca (logo GMP) sempre visivel, como num app.
+          No desktop a marca ja esta na sidebar, entao o CSS esconde esta. */}
+      <header className="mobile-topbar">
+        <img src="/logo.png" alt="GMP INDUSTRIAIS" className="mobile-topbar__logo" />
+      </header>
       {animatedBackgroundEnabled && <AnimatedBackground />}
       <div className={`sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
         <div className="sidebar-header">

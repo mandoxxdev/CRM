@@ -691,3 +691,30 @@
     font-size: 18px;
   }
 }
+
+/* ── Barra de topo do celular (marca sempre visivel) ─────────────────────── */
+.mobile-topbar { display: none; }
+
+@media (max-width: 768px) {
+  .mobile-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 1150;
+    height: 56px;
+    padding: 0 16px;
+    padding-top: env(safe-area-inset-top, 0px);
+    background: rgba(255, 255, 255, 0.9);
+    -webkit-backdrop-filter: blur(14px) saturate(160%);
+    backdrop-filter: blur(14px) saturate(160%);
+    border-bottom: 1px solid rgba(16, 24, 40, 0.06);
+  }
+  .mobile-topbar__logo { height: 30px; width: auto; display: block; }
+
+  /* O conteudo comeca abaixo da barra fixa. */
+  .layout .main-content {
+    padding-top: calc(62px + env(safe-area-inset-top, 0px)) !important;
+  }
+}
