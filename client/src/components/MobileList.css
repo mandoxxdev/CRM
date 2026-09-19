@@ -1,0 +1,105 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   MobileList — cartoes de lista estilo app (SO no celular)
+   Compartilhado por varias telas (produtos, propostas, materiais...). No desktop
+   fica escondido e a <table> de sempre aparece; no celular a <table> some.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.mlist { display: none; }
+
+@media (max-width: 768px) {
+  /* Some com a tabela quando a tela tem a lista mobile como irma (mesmo pai). */
+  .table-container:has(~ .mlist) { display: none !important; }
+
+  .mlist { display: flex; flex-direction: column; gap: 12px; }
+
+  .mcard {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #FFFFFF;
+    border: 1px solid rgba(16, 24, 40, 0.06);
+    border-radius: 20px;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04),
+                0 14px 28px -18px rgba(16, 24, 40, 0.22);
+    padding: 12px;
+  }
+
+  .mcard__hit {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none;
+    color: inherit;
+    background: none;
+    border: none;
+    padding: 0;
+    text-align: left;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .mcard__ava {
+    flex: 0 0 auto;
+    width: 48px; height: 48px;
+    border-radius: 15px;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 700; font-size: 0.95rem; letter-spacing: 0.02em;
+    box-shadow: 0 6px 14px -6px rgba(16, 24, 40, 0.4);
+    overflow: hidden;
+  }
+  .mcard__ava--img { object-fit: cover; background: #EEF1F7; }
+  .mcard__ava--img.is-broken { display: none; }
+  .mcard__ava.tom-0 { background: linear-gradient(135deg, #4f46e5, #6366f1); }
+  .mcard__ava.tom-1 { background: linear-gradient(135deg, #0ea5e9, #38bdf8); }
+  .mcard__ava.tom-2 { background: linear-gradient(135deg, #059669, #10b981); }
+  .mcard__ava.tom-3 { background: linear-gradient(135deg, #d97706, #f59e0b); }
+  .mcard__ava.tom-4 { background: linear-gradient(135deg, #db2777, #f472b6); }
+  .mcard__ava.tom-5 { background: linear-gradient(135deg, #475569, #64748b); }
+
+  .mcard__body { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .mcard__title {
+    font-weight: 700; font-size: 1rem; color: #111827;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .mcard__sub {
+    font-size: 0.8rem; color: #6A6A6A;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .mcard__meta { display: flex; align-items: center; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+  .mcard__chip {
+    font-size: 0.68rem; font-weight: 600; padding: 3px 9px;
+    border-radius: 999px; background: rgba(79, 172, 254, 0.12); color: #2563EB;
+    white-space: nowrap;
+  }
+  .mcard__chip.is-price   { background: rgba(17, 24, 39, 0.06); color: #111827; font-weight: 700; }
+  .mcard__chip.is-success { background: rgba(26, 163, 74, 0.12); color: #1AA34A; font-weight: 700; }
+  .mcard__chip.is-danger  { background: rgba(229, 25, 58, 0.12); color: #E5193A; font-weight: 700; }
+  .mcard__chip.is-warn    { background: rgba(229, 152, 0, 0.14); color: #B45309; font-weight: 700; }
+  .mcard__chip.is-muted   { background: rgba(148, 163, 184, 0.18); color: #64748b; }
+
+  .mcard__acts { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; }
+  .mcard__act {
+    width: 38px; height: 38px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid rgba(16, 24, 40, 0.08);
+    background: #F5F8FC; color: #475569; cursor: pointer;
+  }
+  .mcard__act.is-danger  { color: #E5193A; }
+  .mcard__act.is-success { color: #1AA34A; }
+  .mcard__act svg {
+    width: 18px !important; height: 18px !important;
+    min-width: 18px !important; min-height: 18px !important;
+    flex: 0 0 auto !important;
+  }
+
+  .mlist-empty {
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+    text-align: center; color: #6A6A6A; padding: 48px 16px;
+  }
+  .mlist-empty__icon {
+    width: 60px; height: 60px; border-radius: 20px;
+    display: flex; align-items: center; justify-content: center;
+    background: #F1F4F9; color: #94a3b8; font-size: 26px;
+  }
+}
