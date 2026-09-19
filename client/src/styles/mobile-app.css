@@ -273,6 +273,39 @@
   body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 }
 
+/* ── Aparência de aplicativo: fundo, cromo e botão ─────────────────────────
+   Medido no app rodando a 375px (não suposto):
+
+   · A malha animada (`.animated-background`, `position:fixed; z-index:0`) fica ATRÁS
+     de todo o conteúdo — e os cartões do app são glassmorphism (fundo translúcido),
+     então a malha aparece ATRAVÉS de cada tela. No desktop é um detalhe sutil; no
+     celular vira um emaranhado de linhas cobrindo a tela inteira, e é o que mais
+     denuncia "site" em vez de "app". Some no celular; o `body` já é sólido (branco no
+     claro, escuro no dark), então o fundo fica limpo. Continua ligada no desktop e o
+     interruptor do usuário segue mandando lá.
+   · O selo "Orion-BETA-V0" flutua sobre o canto e encosta no conteúdo — fora no celular.
+   · `.btn-premium` mede 72px de altura no celular (padding 14/28 desenhado para o
+     desktop) — o "botão gigante" da queixa. Só o padding não basta: dentro dele há um
+     `.btn-premium-icon` de 44px que sozinho puxa a altura para 68px. Encolhemos os dois
+     para chegar a um alvo de ~48px, que é o certo para o polegar. O horizontal cai um
+     pouco para não estourar telas de 360px. `!important` porque o seletor de componente
+     tem a mesma especificidade e vem depois no bundle. */
+@media (max-width: 768px) {
+  .animated-background { display: none !important; }
+
+  .orion-version-badge { display: none !important; }
+
+  /* No seletor de módulos, o pássaro decorativo do cabeçalho (`aria-hidden`) encosta e
+     cobre o badge "Administrador" em 375px — o logo GMP à esquerda já marca a tela. Fora. */
+  .tipo-selecao__bird-logo { display: none !important; }
+
+  .btn-premium { padding: 10px 18px !important; min-height: 48px; }
+  /* O `.btn-premium-icon` casa com a regra de alvo de toque (`[class*='btn-']`) e herda
+     `min-height: 44px` — por isso zeramos aqui, senão o ícone sozinho segura 44px e o
+     botão volta a 64px. O alvo de 48px continua garantido pelo `.btn-premium` acima. */
+  .btn-premium-icon { width: 26px !important; height: 26px !important; min-height: 0 !important; }
+}
+
 /* ── Telas bem estreitas ──────────────────────────────────────────────────── */
 @media (max-width: 400px) {
   /* Títulos gigantes de desktop ocupam três linhas no celular. */
