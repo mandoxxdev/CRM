@@ -6,7 +6,7 @@ import { getEffectiveUser } from '../../services/permissionsCache';
 import { canAccessAdministrativoConfig } from '../../utils/systemPermissions';
 import { useComercialResponsaveis } from '../../hooks/useComercialResponsaveis';
 import { toast } from 'react-toastify';
-import { FiPlus, FiSearch, FiSettings, FiEye, FiDownload, FiEdit, FiTrash2, FiSend, FiCheck, FiX, FiCopy, FiRotateCcw } from 'react-icons/fi';
+import { FiPlus, FiSearch, FiSettings, FiEye, FiDownload, FiEdit, FiTrash2, FiSend, FiCheck, FiX, FiCopy, FiRotateCcw, FiFileText, FiMoreHorizontal } from 'react-icons/fi';
 import { formatDateBR, formatDateTimeBR, normalizePropostasResponse, isPropostaInativa } from '../../utils/formatDate';
 import './PropostasList.css';
 
@@ -33,6 +33,9 @@ export default function PropostasList() {
   const isAdmin = String(user?.role || '').toLowerCase() === 'admin';
   const { usuarios, loading: usuariosLoading, ready: usuariosReady } = useComercialResponsaveis(user, authLoading);
   const [list, setList] = useState([]);
+  // Celular: qual proposta abriu o "…", e se a folha de filtros está aberta.
+  const [acoesDe, setAcoesDe] = useState(null);
+  const [filtrosAbertos, setFiltrosAbertos] = useState(false);
   const [oportunidades, setOportunidades] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -220,6 +223,266 @@ export default function PropostasList() {
           </label>
         )}
       </div>
+
+      {/* ══ CELULAR ══════════════════════════════════════════════════════════
+          A tabela e a barra de filtros do desktop somem por CSS em ≤768px; isto
+          entra no lugar. Os dados, as permissões e TODAS as ações vêm dos mesmos
+          handlers usados pela tabela — nenhuma regra é reescrita aqui. */}
+      <div className="plm">
+        <div className="plm-topo">
+          <span className="plm-contagem">
+            {loading ? 'Carregando…'
+              : `${list.length} ${list.length === 1 ? 'proposta' : 'propostas'}`}
+          </span>
+          <Link to="/comercial/propostas/nova" className="plm-nova">
+            <FiPlus size={16} /> Nova
+          </Link>
+        </div>
+
+        <div className="plm-busca">
+          <FiSearch size={17} />
+          <input
+            type="text"
+            placeholder="Buscar proposta, cliente…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          {search && (
+            <button type="button" onClick={() => setSearch('')} aria-label="Limpar busca">
+              <FiX size={16} />
+            </button>
+          )}
+        </div>
+
+        {/* O filtro mais usado vira fileira de chips; o resto fica atrás do botão.
+            Era o bloco de quatro selects empilhados que comia a tela inteira. */}
+        <div className="plm-chips">
+          <button
+            type="button"
+            className={`plm-chip${filterStatus === '' ? ' is-on' : ''}`}
+            onClick={() => setFilterStatus('')}
+          >
+            Todas
+          </button>
+          {['rascunho', 'enviada', 'aceita', 'rejeitada'].map((k) => (
+            <button
+              key={k}
+              type="button"
+              className={`plm-chip${filterStatus === k ? ' is-on' : ''}`}
+              onClick={() => setFilterStatus(filterStatus === k ? '' : k)}
+            >
+              {STATUS[k]}
+            </button>
+          ))}
+          <button
+            type="button"
+            className="plm-chip plm-chip-filtros"
+            onClick={() => setFiltrosAbertos(true)}
+          >
+            <FiSettings size={14} /> Filtros
+            {(() => {
+              const n = [filterTipo, filterOportunidade, filterResponsavel].filter(Boolean).length
+                + (showInativas ? 1 : 0);
+              return n > 0 ? <span className="plm-qtd">{n}</span> : null;
+            })()}
+          </button>
+        </div>
+
+        <div className="plm-lista">
+          {loading ? null : list.length === 0 ? (
+            <div className="plm-vazio">
+              <FiFileText size={28} />
+              <span>Nenhuma proposta encontrada.</span>
+            </div>
+          ) : list.map((p, index) => {
+            const bloqueado = documentoBloqueado(p.status);
+            return (
+              <article
+                className={`plm-card${isInativa(p) ? ' is-inativa' : ''}`}
+                key={p.id ?? `pm-${index}`}
+              >
+                {/* O cartão inteiro leva ao detalhe — na tabela só o número levava. */}
+                <Link to={`/comercial/propostas/detalhe/${p.id}`} className="plm-toque">
+                  <div className="plm-linha1">
+                    <span className="plm-numero">{p.numero_proposta || '—'}</span>
+                    <span className="plm-status" data-status={p.status}>
+                      {isInativa(p) ? 'Inativa' : (STATUS[p.status] || p.status || '—')}
+                    </span>
+                  </div>
+
+                  <div className="plm-titulo">{p.titulo || 'Sem título'}</div>
+                  <span className="plm-cliente">
+                    {p.cliente_nome || p.cliente_nome_fantasia || 'Sem cliente'}
+                  </span>
+
+                  <div className="plm-valor">{renderValorComDesconto(p)}</div>
+                  <div className="plm-meta">
+                    {TIPOS[p.tipo_proposta] || 'Sem tipo'}
+                    {' · Validade '}{formatDateBR(p.validade) || '—'}
+                    {p.enviada_em ? ` · Enviada ${formatDateTimeBR(p.enviada_em)}` : ''}
+                  </div>
+                </Link>
+
+                <div className="plm-acts">
+                  <button
+                    type="button"
+                    className="plm-act is-destaque"
+                    onClick={() => abrirPreview(p.id, p.status)}
+                    disabled={bloqueado}
+                    title={bloqueado ? 'Disponível após enviar a proposta' : 'Ver proposta'}
+                  >
+                    <FiEye size={16} /> Ver
+                  </button>
+                  <button
+                    type="button"
+                    className="plm-act"
+                    onClick={() => baixarPdf(p.id, p.numero_proposta, p.status)}
+                    disabled={bloqueado || pdfId === p.id}
+                  >
+                    <FiDownload size={16} /> {pdfId === p.id ? '…' : 'PDF'}
+                  </button>
+                  <button
+                    type="button"
+                    className="plm-act plm-act-mais"
+                    onClick={() => setAcoesDe(p)}
+                    aria-label="Mais ações"
+                  >
+                    <FiMoreHorizontal size={19} />
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── folha de ações ──────────────────────────────────────────────────
+          Cada ação aparece sob a MESMA condição da tabela (podeEnviar,
+          podeAceitarRejeitar, podeNovaRevisao, podeExcluir) — e agora com
+          TEXTO, não sete ícones de 20px lado a lado. */}
+      {acoesDe && (
+        <div className="plm-fundo" onClick={() => setAcoesDe(null)}>
+          <div className="plm-folha" onClick={(e) => e.stopPropagation()}>
+            <div className="plm-puxador" />
+            <div className="plm-folha-tit">
+              {acoesDe.numero_proposta || 'Proposta'} · {acoesDe.titulo || 'Sem título'}
+            </div>
+
+            {podeEnviar(acoesDe.status) && (
+              <button type="button" className="plm-op"
+                onClick={() => { const x = acoesDe; setAcoesDe(null); acao('enviar', x.id); }}>
+                <FiSend size={18} /> Enviar proposta
+              </button>
+            )}
+            {podeAceitarRejeitar(acoesDe.status) && (
+              <>
+                <button type="button" className="plm-op"
+                  onClick={() => { const x = acoesDe; setAcoesDe(null); acao('aceitar', x.id); }}>
+                  <FiCheck size={18} /> Marcar como aceita
+                </button>
+                <button type="button" className="plm-op"
+                  onClick={() => { const x = acoesDe; setAcoesDe(null); setRejeitarId(x); }}>
+                  <FiX size={18} /> Marcar como rejeitada
+                </button>
+              </>
+            )}
+            {podeNovaRevisao(acoesDe.status) && (
+              <button type="button" className="plm-op"
+                onClick={() => { const x = acoesDe; setAcoesDe(null); acao('nova-revisao', x.id); }}>
+                <FiRotateCcw size={18} /> Criar nova revisão
+              </button>
+            )}
+            {!isInativa(acoesDe) && (
+              <Link to={`/comercial/propostas/editar/${acoesDe.id}`} className="plm-op"
+                onClick={() => setAcoesDe(null)}>
+                <FiEdit size={18} /> Editar
+              </Link>
+            )}
+            <button type="button" className="plm-op"
+              onClick={() => { const x = acoesDe; setAcoesDe(null); acao('clone', x.id); }}>
+              <FiCopy size={18} /> Duplicar
+            </button>
+            {podeExcluir(acoesDe) && !isInativa(acoesDe) && (
+              <button type="button" className="plm-op is-danger"
+                onClick={() => {
+                  const x = acoesDe;
+                  setAcoesDe(null);
+                  if (confirmExcluir(x)) acao('excluir', x.id);
+                }}>
+                <FiTrash2 size={18} /> Inativar proposta
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── folha de filtros ───────────────────────────────────────────────── */}
+      {filtrosAbertos && (
+        <div className="plm-fundo" onClick={() => setFiltrosAbertos(false)}>
+          <div className="plm-folha" onClick={(e) => e.stopPropagation()}>
+            <div className="plm-puxador" />
+            <div className="plm-folha-tit">Filtros</div>
+
+            <label className="plm-campo">
+              <span>Tipo</span>
+              <select value={filterTipo} onChange={(e) => setFilterTipo(e.target.value)}>
+                <option value="">Todos os tipos</option>
+                {Object.entries(TIPOS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </label>
+
+            <label className="plm-campo">
+              <span>Oportunidade</span>
+              <select value={filterOportunidade} onChange={(e) => setFilterOportunidade(e.target.value)}>
+                <option value="">Todas</option>
+                {oportunidades.map((o) => (
+                  <option key={o.id} value={o.id}>{o.titulo || `#${o.id}`}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="plm-campo">
+              <span>Responsável</span>
+              <select
+                value={filterResponsavel}
+                onChange={(e) => setFilterResponsavel(e.target.value)}
+                disabled={!usuariosReady || usuariosLoading}
+              >
+                <option value="">{usuariosLoading ? 'Carregando…' : 'Todos'}</option>
+                {usuariosReady && usuarios.map((u) => (
+                  <option key={u.id} value={u.id}>{u.nome}</option>
+                ))}
+              </select>
+            </label>
+
+            {isAdmin && (
+              <label className="plm-check">
+                <input
+                  type="checkbox"
+                  checked={showInativas}
+                  onChange={(e) => setShowInativas(e.target.checked)}
+                />
+                Mostrar propostas inativas
+              </label>
+            )}
+
+            <div className="plm-folha-rodape">
+              <button type="button" className="plm-limpar"
+                onClick={() => {
+                  setFilterTipo('');
+                  setFilterOportunidade('');
+                  setFilterResponsavel('');
+                  setShowInativas(false);
+                }}>
+                Limpar
+              </button>
+              <button type="button" className="plm-aplicar" onClick={() => setFiltrosAbertos(false)}>
+                Ver resultados
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="propostas-list-table-wrap">
         {loading ? (

@@ -398,3 +398,270 @@
   gap: 0.75rem;
   justify-content: flex-end;
 }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PROPOSTAS NO CELULAR — lista de aplicativo
+   ═══════════════════════════════════════════════════════════════════════════
+
+   O que estava errado, pelos prints do P.O.:
+
+   1. Os filtros comiam a TELA INTEIRA. Dois botões grandes, busca e quatro
+      selects empilhados em largura total — era preciso rolar uma tela cheia
+      antes de ver a primeira proposta. Nenhum aplicativo de lista faz isso:
+      busca fica no topo, o filtro mais usado vira fileira de chips que rola
+      na horizontal, e o resto se esconde atrás de um botão.
+
+   2. O cartão era `RÓTULO: valor` repetido nove vezes — a tabela virada de
+      lado. Isso é legível, mas não é escaneável: tudo tem o mesmo peso e o
+      olho não encontra o que procura. Num app, o cartão tem hierarquia:
+      título forte, cliente discreto, valor grande, situação colorida.
+
+   3. Sete ícones minúsculos e sem rótulo na linha "AÇÕES". No toque, ícone
+      sem texto é adivinhação. Duas ações ficam visíveis e nomeadas; o resto
+      vai para uma folha que sobe de baixo, com texto.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.plm { display: none; }
+
+@media (max-width: 768px) {
+  /* A tabela e a barra de filtros do desktop somem por completo. */
+  .propostas-list .propostas-list-table-wrap,
+  .propostas-list .propostas-list-filters,
+  .propostas-list .propostas-list-actions { display: none !important; }
+
+  .plm { display: block; }
+
+  .propostas-list { padding: 0 14px 14px; }
+
+  /* ── topo: título + ação principal na MESMA linha ──────────────────────── */
+  .propostas-list-header { display: block; margin-bottom: 12px; }
+  .propostas-list-header h1 { font-size: 1.6rem; font-weight: 800; margin: 0; }
+
+  .plm-topo {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; margin: 2px 0 12px;
+  }
+  .plm-contagem { font-size: .82rem; color: #667085; }
+
+  .plm-nova {
+    flex: 0 0 auto;
+    display: inline-flex; align-items: center; gap: 6px;
+    min-height: 40px; padding: 0 16px;
+    border-radius: 999px; border: none;
+    background: #0B6BCB; color: #fff;
+    font-size: .86rem; font-weight: 700; font-family: inherit;
+    text-decoration: none;
+    box-shadow: 0 6px 16px -6px rgba(11, 107, 203, .7);
+  }
+
+  /* ── busca ─────────────────────────────────────────────────────────────── */
+  .plm-busca {
+    display: flex; align-items: center; gap: 9px;
+    height: 44px; padding: 0 14px; margin-bottom: 10px;
+    border-radius: 12px;
+    background: #F1F3F6; border: 1px solid transparent;
+    color: #667085;
+  }
+  .plm-busca:focus-within { background: #fff; border-color: #0B6BCB; }
+  .plm-busca input {
+    flex: 1; min-width: 0; border: none; background: none; outline: none;
+    font-size: 16px; /* 16px impede o zoom do iOS ao focar */
+    font-family: inherit; color: #101828;
+  }
+  .plm-busca button {
+    border: none; background: none; color: #98A2B3; padding: 4px; cursor: pointer;
+    display: flex;
+  }
+
+  /* ── chips de situação: rolam na horizontal ────────────────────────────── */
+  .plm-chips {
+    display: flex; gap: 8px; margin: 0 -14px 12px; padding: 2px 14px 2px;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .plm-chips::-webkit-scrollbar { display: none; }
+
+  .plm-chip {
+    flex: 0 0 auto;
+    min-height: 34px; padding: 0 14px;
+    display: inline-flex; align-items: center; gap: 6px;
+    border-radius: 999px; border: 1px solid #E4E7EC;
+    background: #fff; color: #475467;
+    font-size: .82rem; font-weight: 600; font-family: inherit;
+    white-space: nowrap; cursor: pointer;
+  }
+  .plm-chip.is-on { background: #101828; border-color: #101828; color: #fff; }
+
+  .plm-chip-filtros { margin-left: auto; }
+  .plm-chip-filtros .plm-qtd {
+    min-width: 18px; height: 18px; padding: 0 5px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 999px; background: #0B6BCB; color: #fff;
+    font-size: .66rem; font-weight: 800;
+  }
+
+  /* ── cartão ────────────────────────────────────────────────────────────── */
+  .plm-lista { display: flex; flex-direction: column; gap: 10px; }
+
+  .plm-card {
+    background: #fff;
+    border: 1px solid #EAECF0;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, .06);
+  }
+  .plm-card.is-inativa { opacity: .62; }
+
+  /* A área de leitura inteira é o alvo — não só o número, como era na tabela. */
+  .plm-toque {
+    display: block; padding: 14px 14px 12px;
+    text-decoration: none; color: inherit;
+  }
+
+  .plm-linha1 {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; margin-bottom: 7px;
+  }
+  .plm-numero {
+    font-size: .74rem; font-weight: 700; color: #667085;
+    letter-spacing: .01em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .plm-status {
+    flex: 0 0 auto;
+    font-size: .68rem; font-weight: 700; padding: 4px 10px;
+    border-radius: 999px; background: #EFF8FF; color: #175CD3;
+    white-space: nowrap;
+  }
+  .plm-status[data-status="aceita"]    { background: #ECFDF3; color: #027A48; }
+  .plm-status[data-status="rejeitada"] { background: #FEF3F2; color: #B42318; }
+  .plm-status[data-status="rascunho"]  { background: #F2F4F7; color: #475467; }
+  .plm-status[data-status="expirada"]  { background: #FFFAEB; color: #B54708; }
+
+  .plm-titulo {
+    font-size: 1rem; font-weight: 700; color: #101828; line-height: 1.32;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .plm-cliente {
+    display: block; margin-top: 3px;
+    font-size: .84rem; color: #667085;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  .plm-valor {
+    margin-top: 10px;
+    font-size: 1.32rem; font-weight: 800; color: #101828;
+    letter-spacing: -.02em; font-variant-numeric: tabular-nums;
+  }
+  .plm-valor small { font-size: .8rem; font-weight: 600; color: #667085; }
+
+  .plm-meta {
+    margin-top: 4px;
+    font-size: .76rem; color: #98A2B3;
+  }
+
+  /* ── ações ─────────────────────────────────────────────────────────────── */
+  .plm-acts {
+    display: flex; align-items: stretch; gap: 0;
+    border-top: 1px solid #F2F4F7;
+  }
+  .plm-act {
+    flex: 1 1 0; min-height: 46px;
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    border: none; background: none; color: #344054;
+    font-size: .85rem; font-weight: 600; font-family: inherit;
+    text-decoration: none; cursor: pointer;
+  }
+  .plm-act + .plm-act { border-left: 1px solid #F2F4F7; }
+  .plm-act:disabled { color: #C0C6D0; cursor: not-allowed; }
+  .plm-act.is-destaque { color: #0B6BCB; font-weight: 700; }
+  .plm-act-mais { flex: 0 0 56px; border-left: 1px solid #F2F4F7; color: #667085; }
+
+  /* ── folha inferior (ações e filtros) ──────────────────────────────────── */
+  .plm-fundo {
+    position: fixed; inset: 0; z-index: 2400;
+    background: rgba(16, 24, 40, .5);
+    display: flex; align-items: flex-end;
+  }
+  .plm-folha {
+    width: 100%; max-height: 82vh; overflow-y: auto;
+    background: #fff; border-radius: 20px 20px 0 0;
+    padding: 8px 14px calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+  .plm-puxador {
+    width: 38px; height: 4px; border-radius: 999px;
+    background: #E4E7EC; margin: 6px auto 12px;
+  }
+  .plm-folha-tit {
+    font-size: .76rem; font-weight: 700; color: #98A2B3;
+    text-transform: uppercase; letter-spacing: .05em;
+    padding: 0 4px 10px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .plm-op {
+    width: 100%; min-height: 52px;
+    display: flex; align-items: center; gap: 13px;
+    padding: 0 6px; border: none; background: none; border-radius: 12px;
+    color: #101828; font-size: .95rem; font-weight: 600; font-family: inherit;
+    text-align: left; text-decoration: none; cursor: pointer;
+  }
+  .plm-op:active { background: #F9FAFB; }
+  .plm-op.is-danger { color: #D92D20; }
+  .plm-op:disabled { color: #C0C6D0; }
+  .plm-op svg { flex: 0 0 auto; }
+
+  .plm-campo { margin-bottom: 14px; }
+  .plm-campo > span {
+    display: block; margin-bottom: 6px;
+    font-size: .74rem; font-weight: 700; color: #475467;
+    text-transform: uppercase; letter-spacing: .04em;
+  }
+  .plm-campo select {
+    width: 100%; height: 46px; padding: 0 12px;
+    border: 1px solid #E4E7EC; border-radius: 12px;
+    background: #fff; color: #101828; font-size: 16px; font-family: inherit;
+  }
+  .plm-check {
+    display: flex; align-items: center; gap: 10px;
+    min-height: 46px; font-size: .92rem; color: #344054;
+  }
+  .plm-folha-rodape { display: flex; gap: 10px; margin-top: 6px; }
+  .plm-folha-rodape button {
+    flex: 1 1 0; min-height: 48px; border-radius: 12px;
+    font-size: .9rem; font-weight: 700; font-family: inherit; cursor: pointer;
+  }
+  .plm-limpar { border: 1px solid #E4E7EC; background: #fff; color: #475467; }
+  .plm-aplicar { border: none; background: #0B6BCB; color: #fff; }
+
+  /* ── vazio ─────────────────────────────────────────────────────────────── */
+  .plm-vazio {
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    padding: 56px 20px; text-align: center; color: #98A2B3;
+    background: #fff; border: 1px dashed #EAECF0; border-radius: 16px;
+  }
+
+  /* ── tema escuro ───────────────────────────────────────────────────────── */
+  [data-theme="dark"] .plm-busca { background: #1f1f1f; }
+  [data-theme="dark"] .plm-busca:focus-within { background: #181818; border-color: #4facfe; }
+  [data-theme="dark"] .plm-busca input { color: #fff; }
+  [data-theme="dark"] .plm-chip { background: #181818; border-color: rgba(255,255,255,.1); color: #cbd5e1; }
+  [data-theme="dark"] .plm-chip.is-on { background: #fff; border-color: #fff; color: #101828; }
+  [data-theme="dark"] .plm-card { background: #181818; border-color: rgba(255,255,255,.09); box-shadow: none; }
+  [data-theme="dark"] .plm-titulo { color: #fff; }
+  [data-theme="dark"] .plm-valor { color: #fff; }
+  [data-theme="dark"] .plm-cliente, [data-theme="dark"] .plm-numero { color: #98A2B3; }
+  [data-theme="dark"] .plm-acts, [data-theme="dark"] .plm-act + .plm-act,
+  [data-theme="dark"] .plm-act-mais { border-color: rgba(255,255,255,.08); }
+  [data-theme="dark"] .plm-act { color: #e5e7eb; }
+  [data-theme="dark"] .plm-act.is-destaque { color: #4facfe; }
+  [data-theme="dark"] .plm-folha { background: #181818; }
+  [data-theme="dark"] .plm-op { color: #f1f5f9; }
+  [data-theme="dark"] .plm-op:active { background: #242424; }
+  /* Depois da regra acima e com a mesma especificidade: sem isto o vermelho some. */
+  [data-theme="dark"] .plm-op.is-danger { color: #FF6B81; }
+  [data-theme="dark"] .plm-campo select { background: #1f1f1f; border-color: rgba(255,255,255,.1); color: #fff; }
+  [data-theme="dark"] .plm-limpar { background: #1f1f1f; border-color: rgba(255,255,255,.12); color: #cbd5e1; }
+  [data-theme="dark"] .plm-vazio { background: #181818; border-color: rgba(255,255,255,.12); }
+}
