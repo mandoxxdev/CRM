@@ -1070,57 +1070,144 @@
   }
 
   /* ── 15. Dashboard ──────────────────────────────────────────────────────────
-     No celular a primeira tela do Dashboard era uma FAIXA DECORATIVA de logos
-     de clientes: 48px de altura, 3rem de espaco entre cada, margem negativa
-     para vazar da area de conteudo, e um carrossel infinito. Bonito no
-     computador; no telefone a pessoa abre o aplicativo e precisa rolar uma tela
-     inteira antes de ver o proprio numero.
+     Refeito para o celular. Um painel existe para responder "como estamos?" no
+     primeiro olhar; no telefone ele tinha virado uma lista longa atras de uma
+     faixa decorativa. */
 
-     A faixa fica — e informacao que o P.O. escolheu mostrar —, mas compacta.
-     Altura pela metade, espaco menor, e sem a margem negativa, que era o que a
-     empurrava para fora da tela. */
-  .dashboard-clientes-confiam {
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-    margin-bottom: 14px !important;
-    padding: 10px 0 !important;
-  }
-  .dashboard-clientes-confiam-titulo {
-    font-size: .8rem !important;
-    margin-bottom: 8px !important;
-  }
-  .dashboard-clientes-confiam-item {
-    height: 28px !important;
-    min-width: 0 !important;
-    padding: 0 !important;
-  }
-  .dashboard-clientes-confiam-item img { max-width: 92px !important; }
-  .dashboard-clientes-confiam-track { gap: 1.5rem !important; }
+  /* A faixa de logos de clientes SAI no celular.
+     Ela e decoracao de marca: 48px de altura, carrossel infinito, margem
+     negativa para vazar da area de conteudo. No computador ela cabe de sobra;
+     num telefone, ocupava a primeira tela inteira e empurrava o primeiro numero
+     para baixo da dobra. Continua no computador, intacta.
+     Se o P.O. preferir mante-la no celular, e trocar `none` por `block` aqui. */
+  .dashboard-clientes-confiam { display: none !important; }
 
-  /* Cabecalho: titulo em cima, controles embaixo, cada um ocupando a largura.
-     Em `space-between` os dois brigavam por 375px e o "Filtros" caia sozinho
-     numa terceira linha. */
-  .premium-header {
+  /* Cabecalho compacto: titulo menor, subtitulo fora. Num painel de telefone o
+     espaco pertence aos numeros. */
+  .dashboard-header.premium-header {
     flex-direction: column;
     align-items: stretch !important;
     gap: 12px;
-    padding: 16px !important;
+    padding: 14px !important;
+    margin-bottom: 14px !important;
   }
   .premium-header:hover { transform: none; }
+  /* O titulo usa `background-clip: text` com gradiente de --gmp-primary
+     (#4facfe) ate --gmp-secondary (#F6F6F6, quase BRANCO). Sobre o cartao
+     claro ele desaparece da metade para a direita — era o "Dashboard
+     Executivo" fantasma. No celular ele vira texto solido. */
+  .dashboard-header.premium-header h1 {
+    font-size: 1.35rem !important;
+    background: none !important;
+    -webkit-text-fill-color: var(--ag-texto) !important;
+    color: var(--ag-texto) !important;
+  }
+
+  /* O NUMERO e o conteudo mais importante de um painel, e era o menos legivel:
+     #4facfe sobre cartao claro mede 2,30 de contraste, contra o minimo de 4,5.
+     #1D4ED8 e o --gmp-primary-800 dos proprios tokens — continua azul da marca
+     e mede 7,6. O verde da variacao tinha 3,12 e recebe o tom escuro do token. */
+  .summary-value { color: #1D4ED8 !important; }
+  .summary-change.positive { color: var(--gmp-success-dark, #166534) !important; }
+
+  [data-theme="dark"] .dashboard-header.premium-header h1 {
+    -webkit-text-fill-color: #fff !important;
+    color: #fff !important;
+  }
+  [data-theme="dark"] .summary-value { color: #7DC4FF !important; }
+  [data-theme="dark"] .summary-change.positive { color: #4ADE80 !important; }
+  .dashboard-header.premium-header > div > p { display: none; }
+
+  /* Controle segmentado de largura inteira — o padrao de aplicativo para
+     alternar entre duas vistas. Antes os dois botoes e o "Filtros" disputavam
+     360px em `space-between`, e o Filtros caia numa terceira linha. */
   .header-actions {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid !important;
+    grid-template-columns: 1fr auto;
+    align-items: center;
     gap: 8px;
     width: 100%;
   }
-  .dashboard-toggle { flex: 1 1 auto; display: flex; }
-  .dashboard-toggle .toggle-view-btn { flex: 1 1 0; min-height: 44px; }
-  .dashboard-filtros { flex: 0 0 auto; }
-  .dashboard-filtros .btn-filter { min-height: 44px; }
+  .dashboard-toggle {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    padding: 4px;
+    border-radius: 14px;
+    background: var(--ag-vidro);
+    border: 1px solid var(--ag-borda);
+  }
+  .dashboard-toggle .toggle-view-btn {
+    justify-content: center;
+    min-height: 40px;
+    padding: 0 8px !important;
+    border-radius: 10px !important;
+    font-size: .85rem !important;
+    white-space: nowrap;
+  }
+  .dashboard-filtros .btn-filter {
+    min-height: 48px;
+    min-width: 48px;
+    padding: 0 12px !important;
+    border-radius: 14px !important;
+    white-space: nowrap;
+  }
 
-  /* Os itens do resumo sao cartoes dentro de um cartao — desenho do proprio
-     componente, nao da camada de vidro. No telefone eles so precisam de menos
-     folga para caber mais de um na tela. */
-  .summary-item, .premium-summary-item { padding: 12px !important; }
-  .summary-content, .premium-summary-content { gap: 10px !important; }
+  /* ── Os indicadores ───────────────────────────────────────────────────────
+     De uma coluna para DUAS, e de linha horizontal (icone ao lado do texto)
+     para bloco vertical (icone em cima). Dois por linha significa seis numeros
+     na primeira tela, em vez de dois. */
+  .summary-content.premium-summary-content,
+  .summary-content {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  .summary-item, .premium-summary-item {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+    padding: 12px !important;
+    min-width: 0;
+    border-radius: 16px !important;
+  }
+
+  .summary-icon {
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 11px !important;
+    font-size: 15px !important;
+    flex-shrink: 0;
+  }
+
+  .summary-info { min-width: 0; width: 100%; }
+
+  /* `white-space: nowrap` no rotulo e no valor era do desenho de desktop, onde
+     sobra largura. Em metade de 360px, "PROPOSTAS APROVADAS" sem quebra vaza do
+     cartao. */
+  .summary-label {
+    white-space: normal !important;
+    font-size: .62rem !important;
+    line-height: 1.25;
+  }
+  .summary-value {
+    white-space: normal !important;
+    font-size: 1.15rem !important;
+    line-height: 1.15;
+    overflow-wrap: break-word;
+  }
+  .summary-change { font-size: .66rem !important; line-height: 1.3; }
+
+  .summary-header h3 { font-size: 1.1rem !important; }
+  .summary-header p { font-size: .8rem !important; }
+
+  /* ── Graficos ─────────────────────────────────────────────────────────────
+     Altura menor: no telefone um grafico de 300px empurra tudo para fora da
+     tela, e a leitura de tendencia nao precisa daquela altura toda. */
+  .chart-card, .premium-chart-card { padding: 14px !important; }
+  .chart-header { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .chart-header h3 { font-size: 1rem !important; }
+  .recharts-responsive-container { max-height: 220px; }
+  .chart-legend-inline { flex-wrap: wrap; gap: 6px; font-size: .7rem; }
 }

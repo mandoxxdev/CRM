@@ -514,11 +514,29 @@ a.btn-danger:hover svg {
     font-size: 16px !important;
   }
 
-  /* Botões maiores para touch */
-  button, .btn-primary, .btn-secondary {
+  /* Botões maiores para touch.
+     A EXCLUSÃO é obrigatória. Sem ela, este `padding: 12px 20px` num botão de
+     ícone de 36px com `box-sizing: border-box` deixa a caixa de conteúdo com
+     largura ZERO, e o ícone — que é um SVG flexível — encolhe para 0px e some.
+     Foi o botão branco sem nada dentro que apareceu nos cartões de Produtos, e
+     valia para TODO botão de ícone do sistema, não só aquele.
+     Botão de ícone continua com alvo de toque: ele ganha 44px pelos dois lados
+     na regra seguinte, onde o padding é simétrico e não achata nada. */
+  button:not([class*='icon']):not([class*='close']):not(.bim-item),
+  .btn-primary, .btn-secondary {
     min-height: 44px;
     padding: 12px 20px;
   }
+
+  /* Botão de ícone: alvo de toque por tamanho, não por padding lateral. */
+  button[class*='icon'], button[class*='close'] {
+    min-width: 40px;
+    min-height: 40px;
+    padding: 6px;
+  }
+
+  /* Um SVG dentro de botão nunca deve encolher: ele É o conteúdo. */
+  button > svg { flex-shrink: 0; }
 }
 
 @media (max-width: 480px) {
