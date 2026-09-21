@@ -234,8 +234,18 @@
   /* ── 4. Superfícies ─────────────────────────────────────────────────────────
      As mesmas famílias de seletor que o mobile-app.css já normalizou. É isto que
      faz TODO módulo receber a pele nova sem reescrever componente nenhum. */
-  .card, .modal, .modal-content, .dialog, .panel, .painel,
-  [class*='-card'], [class*='-modal'], [class*='-panel'],
+  /* `:not([class*='-card'] *)` = so o cartao MAIS EXTERNO.
+     Sem isso, um `.grupo-card` com dez filhos chamados `grupo-card-header`,
+     `grupo-card-body`, `grupo-card-numero`... virava dez caixas de vidro
+     aninhadas, cada uma com borda, raio e sombra. Era o amontoado de bolhas
+     que o P.O. fotografou na tela de Produtos.
+     A familia de nome continua valendo — ela e o que faz tela nova receber a
+     pele de graca. O que muda e que ela para no primeiro nivel. */
+  .card:not(.card *),
+  .modal, .modal-content, .dialog, .panel, .painel,
+  [class*='-card']:not([class*='-card'] *),
+  [class*='-modal']:not([class*='-modal'] *),
+  [class*='-panel']:not([class*='-panel'] *),
   .plm-card, .cliitem, .filters, [class*='-filtros'] {
     background: var(--ag-vidro) !important;
     border: 1px solid var(--ag-borda) !important;
@@ -264,8 +274,11 @@
 
   /* Brilho na borda superior — o detalhe que separa "div translúcida" de
      "vidro". Um pseudo-elemento genérico, nenhum componente tocado. */
-  .plm-card, .cliitem, .card, [class*='-card'] { position: relative; }
-  .plm-card::after, .cliitem::after, .card::after, [class*='-card']::after {
+  .plm-card, .cliitem, .card:not(.card *),
+  [class*='-card']:not([class*='-card'] *) { position: relative; }
+  .plm-card::after, .cliitem::after,
+  .card:not(.card *)::after,
+  [class*='-card']:not([class*='-card'] *)::after {
     content: '';
     position: absolute;
     top: 0; left: 12%; right: 12%;
@@ -390,18 +403,18 @@
 
   .main-content .plm-card,
   .main-content .cliitem,
-  .main-content .card,
-  .main-content [class*='-card'] {
+  .main-content .card:not(.card *),
+  .main-content [class*='-card']:not([class*='-card'] *) {
     animation: ag-sobe .5s cubic-bezier(.16, 1.06, .3, 1) backwards;
   }
-  .main-content .plm-card:nth-child(1), .main-content [class*='-card']:nth-child(1) { animation-delay: .02s; }
-  .main-content .plm-card:nth-child(2), .main-content [class*='-card']:nth-child(2) { animation-delay: .06s; }
-  .main-content .plm-card:nth-child(3), .main-content [class*='-card']:nth-child(3) { animation-delay: .10s; }
-  .main-content .plm-card:nth-child(4), .main-content [class*='-card']:nth-child(4) { animation-delay: .14s; }
-  .main-content .plm-card:nth-child(5), .main-content [class*='-card']:nth-child(5) { animation-delay: .18s; }
-  .main-content .plm-card:nth-child(6), .main-content [class*='-card']:nth-child(6) { animation-delay: .22s; }
-  .main-content .plm-card:nth-child(7), .main-content [class*='-card']:nth-child(7) { animation-delay: .26s; }
-  .main-content .plm-card:nth-child(8), .main-content [class*='-card']:nth-child(8) { animation-delay: .30s; }
+  .main-content .plm-card:nth-child(1), .main-content [class*='-card']:not([class*='-card'] *):nth-child(1) { animation-delay: .02s; }
+  .main-content .plm-card:nth-child(2), .main-content [class*='-card']:not([class*='-card'] *):nth-child(2) { animation-delay: .06s; }
+  .main-content .plm-card:nth-child(3), .main-content [class*='-card']:not([class*='-card'] *):nth-child(3) { animation-delay: .10s; }
+  .main-content .plm-card:nth-child(4), .main-content [class*='-card']:not([class*='-card'] *):nth-child(4) { animation-delay: .14s; }
+  .main-content .plm-card:nth-child(5), .main-content [class*='-card']:not([class*='-card'] *):nth-child(5) { animation-delay: .18s; }
+  .main-content .plm-card:nth-child(6), .main-content [class*='-card']:not([class*='-card'] *):nth-child(6) { animation-delay: .22s; }
+  .main-content .plm-card:nth-child(7), .main-content [class*='-card']:not([class*='-card'] *):nth-child(7) { animation-delay: .26s; }
+  .main-content .plm-card:nth-child(8), .main-content [class*='-card']:not([class*='-card'] *):nth-child(8) { animation-delay: .30s; }
   /* Daqui em diante o atraso para de crescer: a nona linha já está fora da tela,
      e continuar somando faria esperar por algo que ninguém está vendo. */
   /* A partir do nono, o cartao NAO anima. Nao e so o atraso que para de
@@ -412,7 +425,7 @@
   .main-content .plm-card:nth-child(n+9),
   .main-content .cliitem:nth-child(n+9),
   .main-content .card:nth-child(n+9),
-  .main-content [class*='-card']:nth-child(n+9) {
+  .main-content [class*='-card']:not([class*='-card'] *):nth-child(n+9) {
     animation: none !important;
   }
 
@@ -1055,4 +1068,59 @@
     backdrop-filter: none !important;
     background: var(--ag-solido) !important;
   }
+
+  /* ── 15. Dashboard ──────────────────────────────────────────────────────────
+     No celular a primeira tela do Dashboard era uma FAIXA DECORATIVA de logos
+     de clientes: 48px de altura, 3rem de espaco entre cada, margem negativa
+     para vazar da area de conteudo, e um carrossel infinito. Bonito no
+     computador; no telefone a pessoa abre o aplicativo e precisa rolar uma tela
+     inteira antes de ver o proprio numero.
+
+     A faixa fica — e informacao que o P.O. escolheu mostrar —, mas compacta.
+     Altura pela metade, espaco menor, e sem a margem negativa, que era o que a
+     empurrava para fora da tela. */
+  .dashboard-clientes-confiam {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    margin-bottom: 14px !important;
+    padding: 10px 0 !important;
+  }
+  .dashboard-clientes-confiam-titulo {
+    font-size: .8rem !important;
+    margin-bottom: 8px !important;
+  }
+  .dashboard-clientes-confiam-item {
+    height: 28px !important;
+    min-width: 0 !important;
+    padding: 0 !important;
+  }
+  .dashboard-clientes-confiam-item img { max-width: 92px !important; }
+  .dashboard-clientes-confiam-track { gap: 1.5rem !important; }
+
+  /* Cabecalho: titulo em cima, controles embaixo, cada um ocupando a largura.
+     Em `space-between` os dois brigavam por 375px e o "Filtros" caia sozinho
+     numa terceira linha. */
+  .premium-header {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 12px;
+    padding: 16px !important;
+  }
+  .premium-header:hover { transform: none; }
+  .header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+  }
+  .dashboard-toggle { flex: 1 1 auto; display: flex; }
+  .dashboard-toggle .toggle-view-btn { flex: 1 1 0; min-height: 44px; }
+  .dashboard-filtros { flex: 0 0 auto; }
+  .dashboard-filtros .btn-filter { min-height: 44px; }
+
+  /* Os itens do resumo sao cartoes dentro de um cartao — desenho do proprio
+     componente, nao da camada de vidro. No telefone eles so precisam de menos
+     folga para caber mais de um na tela. */
+  .summary-item, .premium-summary-item { padding: 12px !important; }
+  .summary-content, .premium-summary-content { gap: 10px !important; }
 }

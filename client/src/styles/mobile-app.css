@@ -349,8 +349,9 @@
   /* 2. Cartoes flutuam: raio generoso, sombra em duas camadas (contato + eleva-
      cao) e borda fina. Nao forco a cor de fundo para nao apagar cartoes que sao
      coloridos de proposito (tiles de modulo, KPIs com acento). */
-  .card, [class*='-card'], .modal-content,
-  .panel, .painel, [class*='-panel'],
+  .card:not(.card *),
+  [class*='-card']:not([class*='-card'] *), .modal-content,
+  .panel, .painel, [class*='-panel']:not([class*='-panel'] *),
   .filters, [class*='-filtros'], [class*='filter-'] {
     border-radius: 20px !important;
     box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04),
@@ -464,7 +465,10 @@
   /* 10. Mais respiro e tipografia refinada. */
   .page-header, [class*='-header']:not(.bim):not(.sidebar-header) { margin-bottom: 18px; }
   h1 { letter-spacing: -0.015em; }
-  .card, [class*='-card'] { padding: 18px !important; }
+  /* So o cartao externo: ver a nota em app-glass.css. Aplicar 18px de padding
+     em `grupo-card-numero` empurrava o numero para o meio de uma bolha. */
+  .card:not(.card *),
+  [class*='-card']:not([class*='-card'] *) { padding: 18px !important; }
 }
 
 /* ── Telas bem estreitas ──────────────────────────────────────────────────── */

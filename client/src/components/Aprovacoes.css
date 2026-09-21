@@ -53,7 +53,7 @@
   align-items: center;
   gap: 12px;
   padding: 14px 28px;
-  background: linear-gradient(135deg, #ff6b35 0%, #f7931e 50%, #ffa726 100%);
+  background: linear-gradient(135deg, #2563EB 0%, #22D3EE 50%, #ffa726 100%);
   color: white;
   border: none;
   border-radius: 12px;
@@ -63,8 +63,8 @@
   letter-spacing: 0.3px;
   overflow: hidden;
   transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  box-shadow: 0 8px 25px rgba(255, 107, 53, 0.4),
-              0 4px 10px rgba(247, 147, 30, 0.3);
+  box-shadow: 0 8px 25px rgba(37, 99, 235, 0.4),
+              0 4px 10px rgba(34, 211, 238, 0.3);
   z-index: 1;
 }
 
@@ -86,14 +86,14 @@
 
 .btn-nova-solicitacao-premium:hover {
   transform: translateY(-3px) scale(1.02);
-  box-shadow: 0 12px 35px rgba(255, 107, 53, 0.5),
-              0 6px 15px rgba(247, 147, 30, 0.4);
+  box-shadow: 0 12px 35px rgba(37, 99, 235, 0.5),
+              0 6px 15px rgba(34, 211, 238, 0.4);
 }
 
 .btn-nova-solicitacao-premium:active {
   transform: translateY(-1px) scale(0.98);
-  box-shadow: 0 6px 20px rgba(255, 107, 53, 0.4),
-              0 3px 8px rgba(247, 147, 30, 0.3);
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4),
+              0 3px 8px rgba(34, 211, 238, 0.3);
 }
 
 .btn-nova-solicitacao-icon {
@@ -154,12 +154,12 @@
 /* Efeito de pulso sutil */
 @keyframes pulseGlow {
   0%, 100% {
-    box-shadow: 0 8px 25px rgba(255, 107, 53, 0.4),
-                0 4px 10px rgba(247, 147, 30, 0.3);
+    box-shadow: 0 8px 25px rgba(37, 99, 235, 0.4),
+                0 4px 10px rgba(34, 211, 238, 0.3);
   }
   50% {
-    box-shadow: 0 8px 30px rgba(255, 107, 53, 0.6),
-                0 4px 15px rgba(247, 147, 30, 0.5);
+    box-shadow: 0 8px 30px rgba(37, 99, 235, 0.6),
+                0 4px 15px rgba(34, 211, 238, 0.5);
   }
 }
 
@@ -169,14 +169,14 @@
 
 /* Dark mode support */
 [data-theme="dark"] .btn-nova-solicitacao-premium {
-  background: linear-gradient(135deg, #ff6b35 0%, #f7931e 50%, #ffa726 100%);
-  box-shadow: 0 8px 25px rgba(255, 107, 53, 0.5),
-              0 4px 10px rgba(247, 147, 30, 0.4);
+  background: linear-gradient(135deg, #2563EB 0%, #22D3EE 50%, #ffa726 100%);
+  box-shadow: 0 8px 25px rgba(37, 99, 235, 0.5),
+              0 4px 10px rgba(34, 211, 238, 0.4);
 }
 
 [data-theme="dark"] .btn-nova-solicitacao-premium:hover {
-  box-shadow: 0 12px 35px rgba(255, 107, 53, 0.6),
-              0 6px 15px rgba(247, 147, 30, 0.5);
+  box-shadow: 0 12px 35px rgba(37, 99, 235, 0.6),
+              0 6px 15px rgba(34, 211, 238, 0.5);
 }
 
 /* Responsive */

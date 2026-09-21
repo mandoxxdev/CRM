@@ -306,9 +306,9 @@
   display: grid;
   place-items: center;
   border-radius: 10px;
-  border: 1px solid rgba(255, 107, 53, 0.25);
-  background: rgba(255, 107, 53, 0.10);
-  color: #ff6b35;
+  border: 1px solid rgba(37, 99, 235, 0.25);
+  background: rgba(37, 99, 235, 0.10);
+  color: #2563EB;
   cursor: pointer;
 }
 

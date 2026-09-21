@@ -152,8 +152,8 @@
 
 /* ========== Variáveis técnicas – bloco premium ========== */
 .produto-form-variaveis-vista {
-  background: linear-gradient(135deg, rgba(255, 107, 53, 0.06) 0%, rgba(247, 147, 30, 0.04) 100%);
-  border: 1px solid rgba(255, 107, 53, 0.25);
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.06) 0%, rgba(34, 211, 238, 0.04) 100%);
+  border: 1px solid rgba(37, 99, 235, 0.25);
   border-radius: var(--border-radius);
   padding: var(--spacing-lg);
   margin-bottom: var(--spacing-xl);
@@ -570,9 +570,9 @@
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+  background: linear-gradient(135deg, #2563EB 0%, #22D3EE 100%);
   color: white;
-  box-shadow: 0 4px 15px rgba(255, 107, 53, 0.3);
+  box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3);
 }
 
 .btn-primary::before {
@@ -592,13 +592,13 @@
 
 .btn-primary:hover:not(:disabled) {
   transform: translateY(-3px);
-  box-shadow: 0 8px 25px rgba(255, 107, 53, 0.4);
+  box-shadow: 0 8px 25px rgba(37, 99, 235, 0.4);
   background: linear-gradient(135deg, #ff7a4a 0%, #ffa726 100%);
 }
 
 .btn-primary:active:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 4px 15px rgba(255, 107, 53, 0.3);
+  box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3);
 }
 
 .btn-primary:disabled {
@@ -616,10 +616,10 @@
 
 .btn-secondary:hover {
   background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  border-color: #ff6b35;
-  color: #ff6b35;
+  border-color: #2563EB;
+  color: #2563EB;
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.2);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
 }
 
 /* Indicador de Progresso */
@@ -777,14 +777,14 @@
 
 .tecnica-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 12px 28px rgba(255, 107, 53, 0.2);
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.2);
   background: linear-gradient(135deg, #fff5f2 0%, #ffe8e0 100%);
 }
 
 .tecnica-card.selecionado {
-  background: linear-gradient(135deg, #ff6b35 0%, #f7931e 50%, #ff8a65 100%);
+  background: linear-gradient(135deg, #2563EB 0%, #22D3EE 50%, #ff8a65 100%);
   color: #fff;
-  box-shadow: 0 10px 30px rgba(255, 107, 53, 0.4);
+  box-shadow: 0 10px 30px rgba(37, 99, 235, 0.4);
   transform: translateY(-2px);
 }
 
@@ -796,7 +796,7 @@
   height: 32px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.95);
-  color: #ff6b35;
+  color: #2563EB;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -807,7 +807,7 @@
 
 .tecnica-card.selecionado .tecnica-card-check {
   background: rgba(255, 255, 255, 0.95);
-  color: #ff6b35;
+  color: #2563EB;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
 }
 
@@ -840,12 +840,12 @@
 }
 .tecnica-card.tecnica-card-outro:hover {
   background: linear-gradient(135deg, #fff5f2 0%, #ffe8e0 100%);
-  border-color: rgba(255, 107, 53, 0.4);
+  border-color: rgba(37, 99, 235, 0.4);
 }
 .tecnica-card.tecnica-card-outro.selecionado {
   border-style: solid;
   border-color: transparent;
-  background: linear-gradient(135deg, #ff6b35 0%, #f7931e 50%, #ff8a65 100%);
+  background: linear-gradient(135deg, #2563EB 0%, #22D3EE 50%, #ff8a65 100%);
 }
 
 /* Classificação de Área - Gradientes no mesmo estilo */

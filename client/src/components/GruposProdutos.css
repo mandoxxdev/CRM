@@ -23,20 +23,20 @@
   align-items: center;
   gap: 8px;
   padding: 12px 20px;
-  background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+  background: linear-gradient(135deg, #2563EB 0%, #22D3EE 100%);
   color: #fff;
   border: none;
   border-radius: 12px;
   font-weight: 600;
   font-size: 0.95rem;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(255, 107, 53, 0.35);
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
   transition: transform 0.2s, box-shadow 0.2s;
 }
 
 .btn-novo-grupo:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(255, 107, 53, 0.4);
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
 }
 
 .grupos-grid {

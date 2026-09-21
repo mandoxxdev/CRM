@@ -111,8 +111,8 @@
 }
 
 .engp-mat-toggle.off {
-  border-color: rgba(255, 107, 53, 0.35);
-  color: #ff6b35;
+  border-color: rgba(37, 99, 235, 0.35);
+  color: #2563EB;
 }
 
 .engp-mat-btn {
@@ -254,8 +254,8 @@
 }
 
 .engp-mat-pill.off {
-  border-color: rgba(255, 107, 53, 0.35);
-  color: #ff6b35;
+  border-color: rgba(37, 99, 235, 0.35);
+  color: #2563EB;
 }
 
 .engp-mat-loading,

@@ -105,19 +105,19 @@
 }
 
 .mes-nav-module-selector {
-  background: linear-gradient(135deg, rgba(255, 107, 53, 0.3) 0%, rgba(255, 107, 53, 0.15) 100%) !important;
-  border: 1px solid rgba(255, 107, 53, 0.4) !important;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.3) 0%, rgba(37, 99, 235, 0.15) 100%) !important;
+  border: 1px solid rgba(37, 99, 235, 0.4) !important;
   font-weight: 600 !important;
   margin-bottom: 1rem !important;
-  box-shadow: 0 2px 8px rgba(255, 107, 53, 0.2) !important;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2) !important;
   border-radius: 8px;
   margin: 0 10px 1rem 10px;
 }
 
 .mes-nav-module-selector:hover {
-  background: linear-gradient(135deg, rgba(255, 107, 53, 0.4) 0%, rgba(255, 107, 53, 0.25) 100%) !important;
-  border-color: rgba(255, 107, 53, 0.6) !important;
-  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3) !important;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.4) 0%, rgba(37, 99, 235, 0.25) 100%) !important;
+  border-color: rgba(37, 99, 235, 0.6) !important;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3) !important;
   transform: translateX(4px);
 }
 
