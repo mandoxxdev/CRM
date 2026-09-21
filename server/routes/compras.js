@@ -57,7 +57,7 @@ const fs = require('fs');
 // NAO por copia (decisao 7 do design) — duplicar o formatador daria dois "Dados invalidos" que
 // divergiriam na primeira edicao.
 const { validate } = require('../services/almoxarifado/validation');
-const { PedidoCompraCreateSchema, PedidoStatusSchema } = require('../services/compras/schemas');
+const { PedidoCompraCreateSchema, PedidoStatusSchema, FornecedorSchema, CotacaoSchema } = require('../services/compras/schemas');
 const pedidoCompraService = require('../services/compras/pedidoCompraService');
 // Etapa 38, Task 4: os 5 leitores de planilha sairam do escopo deste registrador para
 // `services/compras/planilhaCompras.js` (movidos VERBATIM, md5 conferido) porque a importacao de

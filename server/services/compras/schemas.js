@@ -146,6 +146,74 @@ const PedidoStatusSchema = z.object({
   status: z.enum(STATUS_PEDIDO_COMPRA, { error: STATUS_PEDIDO_INVALIDO }),
 });
 
+/**
+ * ── Etapa 40 — fornecedor e cotacao ganham schema ────────────────────────────────────────────
+ *
+ * `FornecedorSchema` e um RETROFIT sobre duas portas que ja existiam sem Zod (`POST`/`PUT
+ * /api/compras/fornecedores`), e o contrato dele e NAO RECUSAR o que o unico consumidor de escrita
+ * ja manda: `client/src/components/FornecedoresDoGrupo.js` (`:217` POST com 4 chaves; `:131`,
+ * `:167`, `:191` PUT com 7 textos `''` + `grupo_id` STRING de `useParams` ou `null`). Por isso:
+ *   - textos sao `z.string().nullable()` com trim, e `''` PASSA (sem `.email()`, sem regex de
+ *     CNPJ — validar formato e regra nova sobre acervo, letra D da etapa);
+ *   - `grupo_id` e preprocessado: numero, string numerica, `null`, `''` e ausente sao todos
+ *     validos. AUSENTE fica `undefined` (o `PUT` nao mexe na coluna); `null`/`''`/`0`/`NaN` viram
+ *     `null` (o `PUT` LIMPA — e isso conserta o botao "Remover do grupo", que mandava `null` e o
+ *     servidor ignorava, `routes/compras.js:563`); qualquer outra coisa e 400 com literal propria.
+ *   - `status` so faz sentido no `PUT` (o `POST` grava 'ativo' fixo e ignora a chave).
+ *
+ * `CotacaoSchema`: `numero` e DIGITADO (contrato de `numeroDoc.js:44-64` — `cotacoes.numero` e
+ * escolha humana, nunca embrulhar em `inserirComNumeroUnico`), `fornecedor_id` sem coercao (a tela
+ * coage com `Number()`, como o pedido), datas por `dataIsoOpcional`, `valor_total` e campo de
+ * entrada porque nao ha itens de cotacao para somar (medido: zero `cotacao_itens` no sistema).
+ */
+const STATUS_FORNECEDOR = ['ativo', 'inativo'];
+const RAZAO_SOCIAL_OBRIGATORIA = 'Razão social é obrigatória'; // a literal que a rota ja usava (:544/:564)
+const GRUPO_FORNECEDOR_INVALIDO = 'grupo do fornecedor inválido';
+const STATUS_FORNECEDOR_INVALIDO = `status do fornecedor inválido (use ${STATUS_FORNECEDOR.join(' ou ')})`;
+
+const textoOpcional = z.preprocess(
+  (v) => (v == null ? null : String(v).trim()),
+  z.string().nullable(),
+).optional();
+
+const grupoIdOpcional = z.preprocess((v) => {
+  if (v === null || v === '') return null;
+  if (typeof v === 'number' && Number.isNaN(v)) return null;
+  if (typeof v === 'number') return Number.isInteger(v) ? (v > 0 ? v : null) : String(v);
+  if (typeof v === 'string' && /^\s*-?\d+\s*$/.test(v)) { const n = parseInt(v, 10); return n > 0 ? n : null; }
+  return v; // string nao numerica, objeto etc.: cai no union e sai com a literal
+}, z.union([z.null(), z.number().int()], { error: GRUPO_FORNECEDOR_INVALIDO })).optional();
+
+const FornecedorSchema = z.looseObject({
+  razao_social: z.string({ error: RAZAO_SOCIAL_OBRIGATORIA }).trim().min(1, RAZAO_SOCIAL_OBRIGATORIA),
+  nome_fantasia: textoOpcional,
+  cnpj: textoOpcional,
+  contato: textoOpcional,
+  email: textoOpcional,
+  telefone: textoOpcional,
+  endereco: textoOpcional,
+  grupo_id: grupoIdOpcional,
+  status: z.enum(STATUS_FORNECEDOR, { error: STATUS_FORNECEDOR_INVALIDO }).optional(),
+});
+
+const STATUS_COTACAO = ['em_analise', 'aprovado', 'rejeitado', 'cancelado'];
+const NUMERO_COTACAO_OBRIGATORIO = 'número da cotação é obrigatório';
+const FORNECEDOR_COTACAO_OBRIGATORIO = 'fornecedor da cotação é obrigatório';
+const STATUS_COTACAO_INVALIDO = `status da cotação inválido (use ${STATUS_COTACAO.slice(0, -1).join(', ')} ou ${STATUS_COTACAO[STATUS_COTACAO.length - 1]})`;
+const VALOR_COTACAO_NEGATIVO = 'valor total da cotação não pode ser negativo';
+const DATA_COTACAO_INVALIDA = 'data da cotação inválida (use AAAA-MM-DD)';
+const VALIDADE_COTACAO_INVALIDA = 'validade da cotação inválida (use AAAA-MM-DD)';
+
+const CotacaoSchema = z.looseObject({
+  numero: z.string({ error: NUMERO_COTACAO_OBRIGATORIO }).trim().min(1, NUMERO_COTACAO_OBRIGATORIO),
+  fornecedor_id: z.number({ error: FORNECEDOR_COTACAO_OBRIGATORIO }).int(FORNECEDOR_COTACAO_OBRIGATORIO).positive(FORNECEDOR_COTACAO_OBRIGATORIO),
+  valor_total: z.number({ error: VALOR_COTACAO_NEGATIVO }).min(0, VALOR_COTACAO_NEGATIVO).optional(),
+  data_cotacao: dataIsoOpcional(DATA_COTACAO_INVALIDA),
+  validade: dataIsoOpcional(VALIDADE_COTACAO_INVALIDA),
+  status: z.enum(STATUS_COTACAO, { error: STATUS_COTACAO_INVALIDO }).optional(),
+  observacoes: textoOpcional,
+});
+
 module.exports = {
   STATUS_PEDIDO_COMPRA,
   PedidoCompraItemSchema,
@@ -159,4 +227,18 @@ module.exports = {
   STATUS_PEDIDO_INVALIDO,
   PREVISAO_ENTREGA_INVALIDA,
   DATA_PEDIDO_INVALIDA,
+  // Etapa 40, Task 1 — os 13 nomes que T2 (fornecedor), T3 (cotacao) e T6 importam.
+  FornecedorSchema,
+  CotacaoSchema,
+  STATUS_FORNECEDOR,
+  STATUS_COTACAO,
+  RAZAO_SOCIAL_OBRIGATORIA,
+  GRUPO_FORNECEDOR_INVALIDO,
+  STATUS_FORNECEDOR_INVALIDO,
+  NUMERO_COTACAO_OBRIGATORIO,
+  FORNECEDOR_COTACAO_OBRIGATORIO,
+  STATUS_COTACAO_INVALIDO,
+  VALOR_COTACAO_NEGATIVO,
+  DATA_COTACAO_INVALIDA,
+  VALIDADE_COTACAO_INVALIDA,
 };

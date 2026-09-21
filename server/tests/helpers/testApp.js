@@ -110,6 +110,23 @@ async function createTestApp(options = {}) {
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
+  // `cotacoes` é tabela CORE (`server/index.js:19244`). Entra no harness na Etapa 40 porque a
+  // etapa cria as portas de escrita dela; até aqui só `comprasPedidoEditarExcluir.api.test.js:93-108`
+  // a declarava, com DDL local — que vira no-op com este stub (mesma forma: SEM a FK para
+  // `fornecedores` e com `fornecedor_id` NULÁVEL, pelos mesmos motivos do stub de `pedidos_compra`).
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS cotacoes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    numero TEXT UNIQUE,
+    fornecedor_id INTEGER,
+    valor_total REAL DEFAULT 0,
+    data_cotacao DATE,
+    validade DATE,
+    status TEXT DEFAULT 'em_analise',
+    observacoes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
   // Diretório temporário para uploads (multer do módulo exige um PERSISTENT_DATA_DIR)
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'almox-test-'));
 

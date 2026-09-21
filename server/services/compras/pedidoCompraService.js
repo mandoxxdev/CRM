@@ -251,10 +251,11 @@ async function liberarSolicitacoesDoPedido(db, pedidoId) {
   return r.changes || 0;
 }
 
-/** Guarda de banco compartilhada pelo `POST` e pelo `PUT`: o fornecedor tem de existir. */
+const FORNECEDOR_NAO_ENCONTRADO = 'Fornecedor não encontrado';
+/** Guarda de banco compartilhada pelo `POST` e pelo `PUT` (e, desde a Etapa 40, pela cotacao): o fornecedor tem de existir. */
 async function assertFornecedor(db, fornecedorId) {
   const fornecedor = await dbGet(db, 'SELECT id FROM fornecedores WHERE id = ?', [fornecedorId]);
-  if (!fornecedor) throw erro('Fornecedor não encontrado');
+  if (!fornecedor) throw erro(FORNECEDOR_NAO_ENCONTRADO);
 }
 
 /**
@@ -1028,4 +1029,10 @@ module.exports = {
   hojeLocalISO,
   derivarAtraso,
   STATUS_PEDIDO_FORA_DO_ATRASO,
+  // Etapa 40, Task 1 — o molde de erro e a guarda de fornecedor passam a servir `cotacaoService.js`
+  // (T3): um segundo `erro()` e um segundo `SELECT id FROM fornecedores` divergiriam na primeira
+  // edicao, e a literal do 400 tem de ser UMA para pedido e cotacao.
+  erro,
+  assertFornecedor,
+  FORNECEDOR_NAO_ENCONTRADO,
 };
