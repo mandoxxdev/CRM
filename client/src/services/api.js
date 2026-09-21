@@ -68,28 +68,50 @@ const retryCache = new Map();
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    // Erro de rede (servidor não está rodando ou não acessível)
+    // Erro de rede (servidor fora do ar, ou aparelho ainda sem conexão)
     if (!error.response) {
-      console.error('Erro de rede:', error.message);
-      if (error.code === 'ECONNREFUSED' || error.message.includes('Network Error') || error.message.includes('Failed to fetch')) {
+      const ehFalhaDeRede = error.code === 'ECONNREFUSED'
+        || error.message.includes('Network Error')
+        || error.message.includes('Failed to fetch');
+
+      if (ehFalhaDeRede) {
+        // Diagnóstico completo continua existindo — no CONSOLE, para quem desenvolve.
         const apiUrl = getApiBaseURL();
-        const healthUrl = apiUrl.replace('/api', '') + '/health';
-        const errorMsg = `Erro de conexão: O servidor não está rodando ou não está acessível.\n\n` +
-          `URL tentada: ${apiUrl}\n\n` +
-          `Verifique:\n` +
-          `1. Se o servidor está rodando na porta 5000\n` +
-          `2. Execute: npm run dev (no diretório server/)\n` +
-          `3. Se estiver acessando de outro PC, verifique:\n` +
-          `   - O IP do servidor está correto?\n` +
-          `   - O firewall permite conexões na porta 5000?\n` +
-          `   - Ambos os PCs estão na mesma rede?\n` +
-          `4. Teste acessar: ${healthUrl} no navegador\n` +
-          `   Se funcionar no navegador, o problema é no frontend\n` +
-          `   Se não funcionar, o problema é no servidor/firewall\n\n` +
-          `5. No servidor, verifique se está rodando: npm run dev (na pasta server/)\n\n` +
-          `Se o problema persistir, verifique os logs do servidor.`;
-        alert(errorMsg);
+        console.error(
+          `[api] falha de rede ao chamar ${apiUrl}. Verifique se o servidor responde em `
+          + `${apiUrl.replace('/api', '')}/health, se a porta 5000 está aberta e se o `
+          + `aparelho tem conexão.`,
+          error.message,
+        );
+
+        /*
+         * O QUE MUDOU E POR QUÊ.
+         *
+         * Aqui havia um `alert()` com instruções de desenvolvedor — "execute npm run dev",
+         * "verifique o firewall na porta 5000". Ele aparecia para QUALQUER usuário, e no
+         * celular aparecia em toda abertura do aplicativo: o PWA dispara a primeira
+         * chamada antes de o aparelho terminar de restabelecer a rede, essa chamada falha,
+         * e o alerta bloqueava a tela. Fechar e abrir "resolvia" porque na segunda vez a
+         * conexão já estava de pé.
+         *
+         * Duas correções:
+         *  1. Nada de `alert()`. Ele é bloqueante, some sem contexto e fala com o
+         *     desenvolvedor, não com quem usa.
+         *  2. A PRIMEIRA falha de rede é silenciosa e o pedido é repetido uma vez, depois
+         *     de um instante. É exatamente o caso do início a frio, e é o motivo de o
+         *     alerta nunca ter significado nada de útil para o usuário.
+         *
+         * Se a repetição também falhar, aí sim houve queda de verdade — e quem avisa é a
+         * tela que fez a chamada, com a mensagem dela, não esta camada.
+         */
+        const req = error.config || {};
+        if (!req.__tentouDeNovo) {
+          req.__tentouDeNovo = true;
+          await new Promise((r) => setTimeout(r, 1200));
+          return api(req);
+        }
       }
+
       return Promise.reject(error);
     }
 

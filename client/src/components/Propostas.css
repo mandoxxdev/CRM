@@ -673,3 +673,208 @@
   color: var(--gmp-text-light);
   line-height: 1.4;
 }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LISTA DE PROPOSTAS — layout próprio de aplicativo (só no celular)
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Mesmo caminho do painel de clientes (`.cliitem`): no celular a tabela SOME e
+   entra uma lista desenhada para o polegar. Não é a tabela achatada — é outro
+   componente, com hierarquia própria.
+
+   A decisão do P.O. foi "tem que aparecer todas as informações": as sete colunas
+   continuam no cartão. O que muda é o PESO de cada uma — número e título mandam,
+   valor e status têm destaque, validade e criação ficam no rodapé miúdo. Uma
+   tabela dá o mesmo peso a tudo; é por isso que ela confunde no telefone.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.propostas-mobile { display: none; }
+
+@media (max-width: 768px) {
+  .propostas .table-container { display: none !important; }
+
+  .propostas-mobile { display: flex; flex-direction: column; gap: 12px; }
+
+  .propitem {
+    background: #FFFFFF;
+    border: 1px solid rgba(16, 24, 40, 0.06);
+    border-radius: 20px;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04),
+                0 14px 28px -18px rgba(16, 24, 40, 0.22);
+    padding: 14px 14px 8px;
+  }
+
+  /* ── linha 1: número + título + descritivo ── */
+  .propitem__topo { display: flex; align-items: flex-start; gap: 11px; }
+
+  .propitem__num {
+    flex: 0 0 auto;
+    min-width: 52px;
+    height: 44px;
+    padding: 0 9px;
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, #0f766e, #14b8a6);
+    color: #fff; font-weight: 800; font-size: 0.92rem;
+    box-shadow: 0 6px 14px -6px rgba(15, 118, 110, 0.55);
+  }
+
+  .propitem__ident { flex: 1 1 auto; min-width: 0; }
+
+  .propitem__titulo {
+    font-weight: 700; font-size: 0.98rem; color: #111827; line-height: 1.3;
+    /* Duas linhas e corta: título de proposta é longo, e uma linha só esconderia
+       justamente o que diferencia duas propostas do mesmo cliente. */
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .propitem__cliente {
+    display: block; margin-top: 3px;
+    font-size: 0.82rem; color: #6A6A6A;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  .propitem__info {
+    flex: 0 0 auto;
+    width: 32px; height: 32px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid rgba(16, 24, 40, 0.08);
+    background: #F5F8FC; color: #475569;
+    cursor: pointer; padding: 0;
+  }
+  .propitem__info:disabled { opacity: .45; cursor: default; }
+
+  /* ── linha 2: dinheiro e situação, o par que decide ── */
+  .propitem__linha {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; margin-top: 12px;
+  }
+
+  .propitem__valor {
+    font-size: 1.22rem; font-weight: 800; color: #0f766e;
+    font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
+  }
+
+  .propitem__status {
+    flex: 0 0 auto;
+    font-size: 0.66rem; font-weight: 800; letter-spacing: 0.05em;
+    padding: 5px 11px; border-radius: 999px; color: #fff; text-transform: uppercase;
+  }
+
+  /* ── linha 3: as datas, em voz baixa ── */
+  .propitem__datas {
+    display: flex; flex-wrap: wrap; gap: 4px 14px;
+    margin-top: 10px;
+    font-size: 0.72rem; color: #94a3b8;
+  }
+  .propitem__datas strong { color: #64748b; font-weight: 600; }
+
+  /* ── ações ── */
+  .propitem__acts {
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 12px; padding-top: 10px;
+    border-top: 1px solid rgba(16, 24, 40, 0.07);
+  }
+
+  .propitem__bt {
+    flex: 1 1 0;
+    min-height: 42px;
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    border-radius: 12px; border: 1px solid rgba(16, 24, 40, 0.08);
+    background: #F5F8FC; color: #334155;
+    font-size: 0.84rem; font-weight: 700; font-family: inherit;
+    text-decoration: none; cursor: pointer;
+  }
+
+  .propitem__bt-ver { background: #0f766e; border-color: #0f766e; color: #fff; }
+  .propitem__bt:disabled { opacity: .45; cursor: not-allowed; }
+
+  .propitem__mais {
+    flex: 0 0 auto;
+    width: 42px; min-height: 42px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 12px; border: 1px solid rgba(16, 24, 40, 0.08);
+    background: #F5F8FC; color: #475569; cursor: pointer;
+  }
+
+  /* ── folha de ações (o "...") ────────────────────────────────────────────
+     Sobe de baixo, como em aplicativo — não é dropdown de desktop. */
+  .propsheet__fundo {
+    position: fixed; inset: 0; z-index: 2400;
+    background: rgba(2, 6, 23, 0.5);
+    display: flex; align-items: flex-end;
+  }
+
+  .propsheet {
+    width: 100%;
+    background: #fff;
+    border-radius: 22px 22px 0 0;
+    padding: 8px 12px calc(14px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -10px 40px rgba(2, 6, 23, 0.3);
+  }
+
+  .propsheet__puxador {
+    width: 40px; height: 4px; border-radius: 999px;
+    background: #d8dee9; margin: 6px auto 10px;
+  }
+
+  .propsheet__titulo {
+    font-size: 0.78rem; font-weight: 700; color: #94a3b8;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    padding: 4px 8px 10px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  .propsheet__op {
+    width: 100%; min-height: 52px;
+    display: flex; align-items: center; gap: 12px;
+    padding: 0 10px; border: none; background: none;
+    color: #1f2937; font-size: 0.94rem; font-weight: 600; font-family: inherit;
+    text-align: left; cursor: pointer; border-radius: 12px;
+  }
+  .propsheet__op:active { background: #f1f5f9; }
+  .propsheet__op.is-danger { color: #E5193A; }
+  .propsheet__op svg { flex: 0 0 auto; }
+
+  .propsheet__cancelar {
+    width: 100%; min-height: 48px; margin-top: 6px;
+    border-radius: 14px; border: 1px solid rgba(16, 24, 40, 0.1);
+    background: #F5F8FC; color: #475569;
+    font-size: 0.9rem; font-weight: 700; font-family: inherit; cursor: pointer;
+  }
+
+  /* ── lista vazia ── */
+  .propostas-mobile .pm-vazio {
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    padding: 48px 20px; text-align: center; color: #94a3b8;
+    background: #fff; border: 1px dashed rgba(16, 24, 40, 0.12); border-radius: 20px;
+  }
+
+  /* Tema escuro: o cartão acompanha. */
+  [data-theme="dark"] .propitem {
+    background: #181818;
+    border-color: rgba(255, 255, 255, 0.09);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 14px 28px -18px rgba(0, 0, 0, 0.7);
+  }
+  [data-theme="dark"] .propitem__titulo { color: #fff; }
+  [data-theme="dark"] .propitem__cliente { color: #b3b3b3; }
+  [data-theme="dark"] .propitem__valor { color: #22c55e; }
+  [data-theme="dark"] .propitem__info,
+  [data-theme="dark"] .propitem__bt,
+  [data-theme="dark"] .propitem__mais {
+    background: #242424; border-color: rgba(255, 255, 255, 0.1); color: #e5e7eb;
+  }
+  [data-theme="dark"] .propitem__bt-ver { background: #0f766e; border-color: #0f766e; color: #fff; }
+  [data-theme="dark"] .propitem__acts { border-top-color: rgba(255, 255, 255, 0.08); }
+  [data-theme="dark"] .propsheet { background: #181818; }
+  [data-theme="dark"] .propsheet__op { color: #f1f5f9; }
+  /* Precisa vir DEPOIS e com a mesma especificidade da regra acima: sem esta linha,
+     a cor do tema escuro vence a de perigo (empate de especificidade, ganha a ultima)
+     e "Excluir" aparece branco, igual as demais opcoes. */
+  [data-theme="dark"] .propsheet__op.is-danger { color: #FF6B81; }
+  [data-theme="dark"] .propsheet__op:active { background: #242424; }
+  [data-theme="dark"] .propsheet__cancelar { background: #242424; border-color: rgba(255,255,255,.1); color: #cbd5e1; }
+  [data-theme="dark"] .propostas-mobile .pm-vazio { background: #181818; border-color: rgba(255,255,255,.12); }
+}

@@ -29,6 +29,8 @@ const Propostas = () => {
   const [itensPopoverId, setItensPopoverId] = useState(null);
   const [itensCache, setItensCache] = useState({});
   const [loadingItensId, setLoadingItensId] = useState(null);
+  // Folha de ações do cartão no celular: guarda a proposta escolhida no "…".
+  const [acoesDe, setAcoesDe] = useState(null);
   const [popoverAnchor, setPopoverAnchor] = useState(null); // { left, top } para posicionar o popover
   const loadDataRequestId = useRef(0);
 
@@ -231,6 +233,34 @@ const Propostas = () => {
     }
   };
 
+  /**
+   * Abre o preview premium da proposta.
+   *
+   * Extraído do `onClick` da tabela para o cartão do celular usar EXATAMENTE o mesmo
+   * caminho — inclusive a recusa por desconto sem aprovação. Duas cópias divergiriam
+   * no dia em que uma delas fosse corrigida.
+   */
+  const abrirPreviewPremium = async (proposta) => {
+    const podeGerar = !(proposta.margem_desconto > 5 && !aprovacoesMap[proposta.id]);
+    if (!podeGerar) {
+      toast.warning('Esta proposta precisa de aprovação de desconto antes de gerar o preview premium. Solicite a aprovação na aba "Aprovações".');
+      return;
+    }
+    try {
+      const response = await api.get(`/propostas/${proposta.id}/premium`, { responseType: 'text' });
+      const blob = new Blob([response.data], { type: 'text/html; charset=utf-8' });
+      const url = window.URL.createObjectURL(blob);
+      const novaJanela = window.open(url, '_blank');
+      if (!novaJanela) alert('Por favor, permita pop-ups para visualizar o preview');
+    } catch (error) {
+      console.error('Erro ao carregar preview:', error);
+      alert('Erro ao carregar preview da proposta: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
+  /** Mesma regra usada pela tabela: desconto acima de 5% exige aprovação registrada. */
+  const podeVerPremium = (proposta) => !(proposta.margem_desconto > 5 && !aprovacoesMap[proposta.id]);
+
   const handleDelete = async (id, numeroProposta) => {
     if (window.confirm(`Tem certeza que deseja excluir a proposta ${numeroProposta}?\n\nEsta ação não pode ser desfeita.`)) {
       try {
@@ -399,32 +429,14 @@ const Propostas = () => {
                         <div className="action-buttons">
                           {(() => {
                             // Verificar se pode gerar preview premium
-                            const podeGerarPreview = !(proposta.margem_desconto > 5 && !aprovacoesMap[proposta.id]);
+                            // MESMA regra do cartao do celular — uma funcao so.
+                            const podeGerarPreview = podeVerPremium(proposta);
                             
                             return (
                               <>
                                 <button
                                   className="btn-icon"
-                                  onClick={async () => {
-                                    if (!podeGerarPreview) {
-                                      toast.warning('Esta proposta precisa de aprovação de desconto antes de gerar o preview premium. Solicite a aprovação na aba "Aprovações".');
-                                      return;
-                                    }
-                                    try {
-                                      const response = await api.get(`/propostas/${proposta.id}/premium`, {
-                                        responseType: 'text'
-                                      });
-                                      const blob = new Blob([response.data], { type: 'text/html; charset=utf-8' });
-                                      const url = window.URL.createObjectURL(blob);
-                                      const newWindow = window.open(url, '_blank');
-                                      if (!newWindow) {
-                                        alert('Por favor, permita pop-ups para visualizar o preview');
-                                      }
-                                    } catch (error) {
-                                      console.error('Erro ao carregar preview:', error);
-                                      alert('Erro ao carregar preview da proposta: ' + (error.response?.data?.error || error.message));
-                                    }
-                                  }}
+                                  onClick={() => abrirPreviewPremium(proposta)}
                                   title={podeGerarPreview ? "Visualizar Proposta Premium" : "Esta proposta precisa de aprovação de desconto antes de gerar o preview premium"}
                                   style={{ 
                                     background: podeGerarPreview ? '#FF6B35' : '#ccc',
@@ -490,6 +502,145 @@ const Propostas = () => {
           </tbody>
         </table>
       </div>
+      )}
+
+      {/* ── LISTA DE APLICATIVO (só no celular) ───────────────────────────────
+          A tabela acima some por CSS em ≤768px e esta lista entra no lugar. Não é
+          a tabela reformatada: é outro componente, com as mesmas sete informações
+          mas com pesos diferentes — o que a tabela não consegue dar. */}
+      {!loading && (
+        <div className="propostas-mobile">
+          {(!Array.isArray(propostas) || propostas.length === 0) ? (
+            <div className="pm-vazio">
+              <FiFileText size={30} />
+              <span>Nenhuma proposta encontrada</span>
+            </div>
+          ) : propostas.map((proposta) => {
+            const podeVer = podeVerPremium(proposta);
+            const carregandoItens = loadingItensId === proposta.id;
+            return (
+              <article className="propitem" key={`m-${proposta.id}`}>
+                <div className="propitem__topo">
+                  <span className="propitem__num">{proposta.numero_proposta || 'N/A'}</span>
+                  <div className="propitem__ident">
+                    <div className="propitem__titulo">{proposta.titulo || 'Sem título'}</div>
+                    <span className="propitem__cliente">
+                      {proposta.cliente_nome || 'Cliente não encontrado'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="propitem__info"
+                    title="Ver descritivo dos itens orçados"
+                    aria-label="Ver descritivo dos itens orçados"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (carregandoItens) return;
+                      if (itensPopoverId === proposta.id) fecharPopoverItens();
+                      else carregarItensProposta(proposta.id, e);
+                    }}
+                    disabled={!!loadingItensId && !carregandoItens}
+                  >
+                    {carregandoItens
+                      ? <span className="proposta-titulo-info-spinner" />
+                      : <FiInfo size={15} />}
+                  </button>
+                </div>
+
+                <div className="propitem__linha">
+                  <span className="propitem__valor">{formatCurrency(proposta.valor_total || 0)}</span>
+                  <span
+                    className="propitem__status"
+                    style={{ background: getStatusColor(proposta.status || 'rascunho') }}
+                  >
+                    {(proposta.status || 'rascunho').toUpperCase()}
+                  </span>
+                </div>
+
+                <div className="propitem__datas">
+                  <span>
+                    <strong>Validade</strong>{' '}
+                    {proposta.validade ? format(new Date(proposta.validade), 'dd/MM/yyyy') : '—'}
+                  </span>
+                  <span>
+                    <strong>Criada</strong>{' '}
+                    {proposta.created_at ? format(new Date(proposta.created_at), 'dd/MM/yyyy') : '—'}
+                  </span>
+                </div>
+
+                <div className="propitem__acts">
+                  <button
+                    type="button"
+                    className="propitem__bt propitem__bt-ver"
+                    onClick={() => abrirPreviewPremium(proposta)}
+                    disabled={!podeVer}
+                    title={podeVer
+                      ? 'Visualizar proposta premium'
+                      : 'Precisa de aprovação de desconto antes de gerar o preview'}
+                  >
+                    <FiEye size={16} /> Ver
+                  </button>
+                  <Link
+                    to={`/comercial/propostas/editar/${proposta.id}`}
+                    className="propitem__bt"
+                  >
+                    <FiEdit size={15} /> Editar
+                  </Link>
+                  <button
+                    type="button"
+                    className="propitem__mais"
+                    onClick={() => setAcoesDe(proposta)}
+                    title="Mais ações"
+                    aria-label="Mais ações"
+                  >
+                    <FiSettings size={17} />
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Folha de ações do celular. Assinar aparece sob a MESMA condição da tabela:
+          status enviada ou rascunho, e preview liberado. */}
+      {acoesDe && (
+        <div className="propsheet__fundo" onClick={() => setAcoesDe(null)}>
+          <div className="propsheet" onClick={(e) => e.stopPropagation()}>
+            <div className="propsheet__puxador" />
+            <div className="propsheet__titulo">
+              {acoesDe.numero_proposta || 'Proposta'} · {acoesDe.titulo || 'Sem título'}
+            </div>
+
+            {(acoesDe.status === 'enviada' || acoesDe.status === 'rascunho')
+              && podeVerPremium(acoesDe) && (
+              <button
+                type="button"
+                className="propsheet__op"
+                onClick={() => { const p = acoesDe; setAcoesDe(null); handleAssinar(p); }}
+              >
+                <FiCheckCircle size={19} /> Assinar digitalmente
+              </button>
+            )}
+
+            <button
+              type="button"
+              className="propsheet__op is-danger"
+              onClick={() => {
+                const p = acoesDe;
+                setAcoesDe(null);
+                handleDelete(p.id, p.numero_proposta);
+              }}
+            >
+              <FiTrash2 size={19} /> Excluir proposta
+            </button>
+
+            <button type="button" className="propsheet__cancelar" onClick={() => setAcoesDe(null)}>
+              Cancelar
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Popover descritivo dos itens orçados */}
