@@ -206,10 +206,26 @@ const Clientes = () => {
               const iniciais = titulo.trim().split(/\s+/).slice(0, 2)
                 .map(w => w[0]).join('').toUpperCase() || 'C';
               const tom = (iniciais.charCodeAt(0) + (iniciais.charCodeAt(1) || 0)) % 6;
+              const logoUrl = cliente.logo_url
+                ? (String(cliente.logo_url).startsWith('http')
+                    ? cliente.logo_url
+                    : `${api.defaults.baseURL}/uploads/logos/${cliente.logo_url}`)
+                : null;
               return (
                 <div className="cliitem" key={cliente.id}>
                   <Link to={`/comercial/clientes/editar/${cliente.id}`} className="cliitem__hit">
-                    <span className={`cliitem__ava tom-${tom}`}>{iniciais}</span>
+                    <span className={`cliitem__ava tom-${tom}`}>
+                      {iniciais}
+                      {logoUrl && (
+                        <img
+                          className="cliitem__ava-logo"
+                          src={logoUrl}
+                          alt=""
+                          loading="lazy"
+                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                        />
+                      )}
+                    </span>
                     <span className="cliitem__txt">
                       <span className="cliitem__name">{titulo}</span>
                       {sub && <span className="cliitem__desc">{sub}</span>}
