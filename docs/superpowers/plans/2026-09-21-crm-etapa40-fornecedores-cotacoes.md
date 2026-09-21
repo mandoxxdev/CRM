@@ -149,11 +149,15 @@ numeroDuplicado(numero) => `Já existe uma cotação com o número ${numero}`
 | T6 integração | tronco | T2 + T3 integrados | teste novo |
 | T7 fechamento | tronco | T6 | docs |
 
-**Conflitos previstos na integração (Fase 4):** T2 e T3 editam `routes/compras.js` em blocos
-distantes (`:313-340` vs `:534-577`/`:402-416`) — merge limpo esperado. T4 e T5 editam `App.js` e
-`lazyModules.js` em âncoras distintas (T4 após `:362`/`:61`; T5 após `:374`/`:63`) — conflito de
-linhas adjacentes é **possível** e o integrador resolve mantendo as duas inserções. Ordem de merge:
-T2 → T3 → T4 → T5, rodando a suíte inteira depois de cada um.
+**Conflitos previstos na integração (Fase 4)** *(corrigido pela Fase 2, I3)*: T2 e T3 editam
+`routes/compras.js` em blocos distantes (`:313-340` vs `:534-577`/`:402-416`), e **a linha `:60` do
+`require` dos schemas é editada pela T1** (tronco) com os dois nomes — T2 e T3 **não a tocam**; a T3
+acrescenta só o `require` de `cotacaoService` numa linha nova após `:61`. T4 e T5 editam `App.js` em
+**dois** lugares cada: as rotas (T4 após `:362`; T5 após `:374`) **e o `import` de `./routes/lazyModules`
+(`:43-46`)** — este segundo **vai conflitar** (as duas acrescentam um nome ao mesmo bloco); e
+`lazyModules.js` (T4 após `:61`; T5 após `:63`) pode conflitar por adjacência. Resolução: manter as
+duas inserções. **Ordem de merge T2 → T3 → T4 → T5**, rodando a suíte inteira depois de cada um, e
+**recontando as âncoras da T5 depois do merge da T4** (a inserção da T4 desloca `:374` em 3 linhas).
 
 **Worktrees com `node_modules` por junction** (D14). Para cada galho, a partir da branch, no commit da T1:
 
@@ -406,10 +410,23 @@ STATUS_COTACAO, RAZAO_SOCIAL_OBRIGATORIA, GRUPO_FORNECEDOR_INVALIDO, STATUS_FORN
 NUMERO_COTACAO_OBRIGATORIO, FORNECEDOR_COTACAO_OBRIGATORIO, STATUS_COTACAO_INVALIDO,
 VALOR_COTACAO_NEGATIVO, DATA_COTACAO_INVALIDA, VALIDADE_COTACAO_INVALIDA`.
 
-⚠️ **Sonda antes de fechar o step:** `z.preprocess(...).optional()` com `undefined` — confirme por
-`node -e` que `FornecedorSchema.safeParse({razao_social:'A'}).data` **não** tem a chave `grupo_id`
-(o cenário (d) mede isso). Se o Zod 4 desta base rodar o preprocess mesmo com `undefined`, troque
-para `z.optional(z.preprocess(...))` e registre a divergência aqui.
+**Medido na Fase 2 (sonda 1.1, `zod@4.4.3`):** o preprocess **roda** com `undefined`, mas
+`.optional()` devolve `undefined` e a chave **não entra** em `parsed.data` — o cenário (d) passa como
+está, e `z.optional(z.preprocess(...))` daria o mesmo resultado. **Nada a trocar.** Com `null`, o
+preprocess devolve `null` e a chave fica presente (`'grupo_id' in data` — cenário (c)).
+
+**Também da Fase 2 (M5):** o design (RN-E03) diz que `NaN` limpa; o preprocess acima, sem a linha
+abaixo, responderia 400 (`String(NaN)` cai no union). Inalcançável por JSON, mas o design e o código
+têm de dizer a mesma coisa — acrescente **antes** do `typeof v === 'number'`:
+
+```js
+  if (typeof v === 'number' && Number.isNaN(v)) return null;
+```
+
+**E (I3):** ainda na T1, acrescente `FornecedorSchema, CotacaoSchema` ao `require` de
+`routes/compras.js:60` — `const { PedidoCompraCreateSchema, PedidoStatusSchema, FornecedorSchema, CotacaoSchema } = require('../services/compras/schemas');`.
+Os dois nomes existem depois deste step; `require` de nome ainda não usado não quebra nada, e é o
+que evita T2 e T3 reescreverem a mesma linha em paralelo. Inclua o arquivo no `git add` do Step 9.
 
 - [ ] **Step 5: `pedidoCompraService.js`** — em `:255-258`, extrair a literal:
 
@@ -447,8 +464,8 @@ Rode `node tests/api/comprasPedidoCriar.api.test.js` — a literal não mudou, t
 ```
 
 - [ ] **Step 7: rodar** — o arquivo novo (`15 passou, 0 falhou`), `comprasPedidoEditarExcluir.api.test.js`
-(12 — o (8) usa a tabela agora vinda do harness), `comprasPedidosRotas`, `comprasPedidoCriar`, depois
-`npm run test:api` (esperado **188/188**).
+(**13** — medido na Fase 2; o (8) usa a tabela agora vinda do harness), `comprasPedidosRotas` (5),
+`comprasPedidoCriar`, depois `npm run test:api` (esperado **188/188**).
 
 - [ ] **Step 8: sabotagens** (md5 antes/depois/pós-restauro):
 
@@ -460,7 +477,7 @@ Rode `node tests/api/comprasPedidoCriar.api.test.js` — a literal não mudou, t
 | 4 | remover `.trim()` de `razao_social` | 1 | **(e)** `'   '` passou; **(i)** |
 | 5 | `valor_total: z.number().min(0)` sem `{ error }` | 1 | **(o)** `'10'` sai em inglês |
 
-- [ ] **Step 9: commit** — `git add server/services/compras/schemas.js server/services/compras/pedidoCompraService.js server/tests/helpers/testApp.js server/tests/api/comprasSchemasFornecedorCotacao.api.test.js`. Mensagem em `msg-e40-t1.txt`: o que existia (duas portas sem Zod com um único `if`; zero código de cotação; harness sem `cotacoes`), o que os quatro payloads do modal exigem do schema, por que `null` limpa (o botão que não removia), e o descartado (email/CNPJ, `z.number()` puro em `grupo_id`, número gerado).
+- [ ] **Step 9: commit** — `git add server/services/compras/schemas.js server/services/compras/pedidoCompraService.js server/routes/compras.js server/tests/helpers/testApp.js server/tests/api/comprasSchemasFornecedorCotacao.api.test.js`. Mensagem em `msg-e40-t1.txt`: o que existia (duas portas sem Zod com um único `if`; zero código de cotação; harness sem `cotacoes`), o que os quatro payloads do modal exigem do schema, por que `null` limpa (o botão que não removia), e o descartado (email/CNPJ, `z.number()` puro em `grupo_id`, número gerado).
 
 ---
 
@@ -666,7 +683,9 @@ harness (FK desligada) — **leia qual asserção**; (10) 201 já hoje (verde �
 
 - [ ] **Step 4: implementar** — em `routes/compras.js`:
 
-(a) `:60`: `const { PedidoCompraCreateSchema, PedidoStatusSchema, FornecedorSchema } = require('../services/compras/schemas');`
+(a) `:60` **já traz `FornecedorSchema`** desde a T1 (Fase 2, I3) — **não edite essa linha**. E use
+`pedidoCompraService.FORNECEDOR_NAO_ENCONTRADO` (já `require` em `:61`) nos dois 404 abaixo, em vez da
+string inline (M3): a constante existe para a frase ter **um** dono.
 
 (b) o `GET /:id`, **antes** do `PUT` (`:553`), e as duas portas com `validate(FornecedorSchema)`:
 
@@ -680,7 +699,7 @@ app.get('/api/compras/fornecedores/:id', authenticateToken, checkModulePermissio
                  status, grupo_id, foto, created_at, updated_at
           FROM fornecedores WHERE id = ?`, [req.params.id], (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
-    if (!row) return res.status(404).json({ error: 'Fornecedor não encontrado' });
+    if (!row) return res.status(404).json({ error: pedidoCompraService.FORNECEDOR_NAO_ENCONTRADO });
     res.json(row);
   });
 });
@@ -722,7 +741,7 @@ app.put('/api/compras/fornecedores/:id', authenticateToken, checkModulePermissio
   params.push(id);
   db.run('UPDATE fornecedores SET ' + updates.join(', ') + ' WHERE id = ?', params, function(err) {
     if (err) return res.status(500).json({ error: err.message });
-    if (this.changes === 0) return res.status(404).json({ error: 'Fornecedor não encontrado' });
+    if (this.changes === 0) return res.status(404).json({ error: pedidoCompraService.FORNECEDOR_NAO_ENCONTRADO });
     res.json({ message: 'Fornecedor atualizado' });
   });
 });
@@ -757,7 +776,7 @@ coluna no `POST`, e está no cenário (1)? **Não**: o (1) não manda `endereco`
   }
 ```
 
-- [ ] **Step 5: rodar** — o arquivo (**11 passou**); `comprasPedidoEditarExcluir.api.test.js` (12 — o (12) é a F5 e tem de seguir verde); `comprasPedidosRotas` (5); depois `npm run test:api`.
+- [ ] **Step 5: rodar** — o arquivo (**11 passou**); `comprasPedidoEditarExcluir.api.test.js` (**13** — o cenário (12) é a F5 e tem de seguir verde); `comprasPedidosRotas` (5); depois `npm run test:api`.
 
 - [ ] **Step 6: sabotagens**
 
@@ -1065,10 +1084,11 @@ app.put('/api/compras/cotacoes/:id', authenticateToken, checkModulePermission('c
   });
 ```
 
-E `:60`: acrescentar `CotacaoSchema` ao require dos schemas. (O `require` de `cotacaoService` pode
-ficar no topo com os outros, `:54-60` — escolha o topo; o bloco acima o mostra junto só para leitura.)
+`:60` **já traz `CotacaoSchema`** desde a T1 (Fase 2, I3) — **não edite essa linha**. O `require` de
+`cotacaoService` vai numa **linha nova após `:61`** (o `require` de `pedidoCompraService`), no topo com
+os outros; o bloco acima o mostra junto só para leitura. `respondeErro` fica onde o bloco mostra.
 
-- [ ] **Step 5: rodar** — o arquivo (**10 passou**); `comprasPedidoEditarExcluir` (12); `npm run test:api`.
+- [ ] **Step 5: rodar** — o arquivo (**10 passou**); `comprasPedidoEditarExcluir` (**13**); `npm run test:api`.
 
 - [ ] **Step 6: sabotagens**
 
@@ -1334,7 +1354,10 @@ const FornecedorForm = () => {
             {CAMPOS.map((nome) => (
               <label key={nome} style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: nome === 'endereco' ? '100%' : 220 }}>
                 {rotulo[nome]}{nome === 'razao_social' ? ' *' : ''}
-                <input data-testid={testId[nome]} type={nome === 'email' ? 'email' : 'text'} value={form[nome]} onChange={campo(nome)} />
+                {/* `type="text"` TAMBEM no e-mail (Fase 2, M9): `type="email"` faria o navegador
+                    bloquear o submit com tooltip nativa, e o servidor NAO valida formato (D3) —
+                    o modal de FornecedoresDoGrupo, na mesma porta, aceita qualquer texto. */}
+                <input data-testid={testId[nome]} type="text" value={form[nome]} onChange={campo(nome)} />
               </label>
             ))}
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -1369,8 +1392,16 @@ export default FornecedorForm;
 ```
 
 ⚠️ Confirme o nome do export de `client/src/utils/telefone.js` (`mascararTelefoneDigitando`, Fase 0
-cliente §4) por `grep -n "export" client/src/utils/telefone.js` antes de importar. O `type="email"`
-não valida nada no jsdom e o servidor não valida formato (D3) — é só teclado no celular.
+cliente §4) por `grep -n "export" client/src/utils/telefone.js` antes de importar.
+
+**RN-E05 até o último gesto (Fase 2, I4 — registrar, não codar aqui):** um fornecedor **inativado**
+por esta tela continua aparecendo no `<select>` "Adicionar existente" de `FornecedoresDoGrupo.js`
+(`:72`, lista sem filtro) e pode ser vinculado com `PUT` 200 + toast de sucesso — e **não aparece** no
+grupo, porque `GET /grupos/:id/fornecedores` filtra `status='ativo'` (`routes/compras.js:528`). É
+sucesso silencioso da mesma classe do "Remover do grupo" que esta etapa conserta, e era inalcançável
+antes dela (nenhuma porta escrevia `status`). Fica em **letra C/G** e no roteiro do guia (T7); o
+conserto de uma linha (`FornecedoresDoGrupo.js:154`, filtrar `status !== 'inativo'`) fica **fora**
+porque o arquivo não tem suíte — decisão reversível, registrada na letra B.
 
 - [ ] **Step 4: rotas e lazy**
 
@@ -1501,20 +1532,29 @@ test('(f) 409 do numero vai para role=alert com a literal', async () => {
   expect(toast.error).not.toHaveBeenCalled();
 });
 
-test('(g) RN-E16 o select de status mostra so as opcoes da aba', async () => {
-  const opcoes = () => [...container.querySelectorAll('select.filter-select option')].map((o) => o.value);
-  await renderizarEm('/compras/cotacoes');
-  expect(opcoes()).toEqual(['', 'em_analise', 'aprovado', 'rejeitado', 'cancelado']);
-  await act(async () => { root.unmount(); }); container.remove();
-  container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container);
+test('(g) RN-E16 o select de status mostra so as opcoes da aba, e trocar de aba SEM remontar nao leva o filtro junto', async () => {
+  // ⚠️ SEM remontar a raiz entre as abas (Fase 2, I1): as tres rotas renderizam o MESMO <Compras/>
+  // e o state sobrevive a troca. O stub do Layout deste arquivo tem dois <Link> justamente para
+  // navegar como o menu navega.
+  const select = () => porTestId('filtro-status');
+  const opcoes = () => [...select().querySelectorAll('option')].map((o) => o.value);
+  const chamadas = (url) => api.get.mock.calls.filter(([u]) => u === url);
   await renderizarEm('/compras/fornecedores');
   expect(opcoes()).toEqual(['', 'ativo', 'inativo']);
+  await selecionar(select(), 'inativo');
+  expect(chamadas('/compras/fornecedores').at(-1)[1].params.status).toBe('inativo');
+  await clicar(linkPorTexto('ir-cotacoes'));
+  expect(opcoes()).toEqual(['', 'em_analise', 'aprovado', 'rejeitado', 'cancelado']);
+  expect(select().value).toBe('');
+  expect(chamadas('/compras/cotacoes').at(-1)[1].params.status).toBe('');
 });
 ```
 
-⚠️ O (g) assume que o **único** `select.filter-select` da lista é o de status. Confira em
-`Compras.js:502-541`; se houver outro, use `porTestId` — acrescente `data-testid="filtro-status"`
-ao `<select>` (`:513`).
+Para o (g): o stub do `Layout` no Proxy deste arquivo ganha dois links —
+`Layout: () => ReactMock.createElement(ReactMock.Fragment, null, ReactMock.createElement(Link, { to: '/compras/cotacoes' }, 'ir-cotacoes'), ReactMock.createElement(Link, { to: '/compras/fornecedores' }, 'ir-fornecedores'), ReactMock.createElement(Outlet))`
+(com `const { Outlet, Link } = require('react-router-dom')`). E o `<select>` de status de `Compras.js`
+(`:513`) ganha `data-testid="filtro-status"`. Confira antes que `loadData` manda `params: { search, status }`
+(`:62-64`, `:79-81`) — o `[1].params.status` da asserção depende dessa forma.
 
 - [ ] **Step 2: rodar e ver vermelho** (arquivo vazio exportando `() => null` para chegar às asserções).
 
@@ -1696,9 +1736,19 @@ const OPCOES_STATUS = {
 <option value="">Todos os status</option>
 {(OPCOES_STATUS[activeSection] || []).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
 ```
-E, ao trocar de aba, zerar `filterStatus` se o valor atual não pertence à aba (senão a aba Cotações
-herda `ativo` do filtro anterior e mostra vazio): no `useEffect` de `activeSection` (ou no `getActiveSection`),
-`if (filterStatus && !(OPCOES_STATUS[activeSection] || []).some(([v]) => v === filterStatus)) setFilterStatus('');`.
+⚠️ **Ao trocar de aba, `<Compras/>` NÃO remonta** (Fase 2, sonda 1.6: as três rotas renderizam o
+mesmo elemento, e o React Router v6 preserva o state). Com `filterStatus='inativo'` vindo da aba
+Fornecedores, a aba Cotações mandaria `GET /compras/cotacoes?status=inativo` (lista vazia) enquanto o
+`<select>`, sem `<option value="inativo">`, **exibiria "Todos os status"** — pior que hoje. **Não use
+efeito nem `setState` no render.** Derive:
+
+```jsx
+const statusValido = (OPCOES_STATUS[activeSection] || []).some(([v]) => v === filterStatus) ? filterStatus : '';
+```
+
+e use `statusValido` **nos dois lugares**: no `value` do `<select>` (`:515`) **e** nos três
+`params.status` de `loadData` (`:63`, `:73-74`, `:80`) — o `useEffect` de `loadData` continua
+dependendo de `filterStatus`, sem requisição dupla.
 
 - [ ] **Step 5: rodar** — o arquivo (7); `PedidoCompraForm.test.js` (25 — o (i) usa `'Novo Pedido'`, que continua); `Compras.test.js` (9); suíte inteira; build.
 
@@ -1711,6 +1761,7 @@ herda `ativo` do filtro anterior e mostra vazio): no `useEffect` de `activeSecti
 | 3 | rótulo de volta para `'Novo Cotação'` | **(b)** |
 | 4 | `OPCOES_STATUS.cotacoes` com `'pendente'` | **(g)** |
 | 5 | `if (!fornecedorId)` removido | **(c)** segunda metade |
+| 6 | `statusValido` → `filterStatus` nos `params` de `loadData` (deixando o `value` do select) | **(g)** *"params.status … toBe('')"* recebe `'inativo'` — é o controle positivo do I1 da Fase 2 |
 
 - [ ] **Step 7: commit** — `git add client/src/components/compras/CotacaoForm.js client/src/components/compras/CotacaoForm.test.js client/src/routes/lazyModules.js client/src/App.js client/src/components/Compras.js`. Mensagem em `msg-e40-t5.txt`.
 
@@ -1720,8 +1771,9 @@ herda `ativo` do filtro anterior e mostra vazio): no `useEffect` de `activeSecti
 
 **Files:**
 - Test: `server/tests/api/comprasFornecedorCotacaoIntegracao.api.test.js` (novo)
+- Modify: `server/routes/compras.js` (o 409 por cotação no genérico — trocar a string inline que a T2 escreveu por `cotacaoService.FORNECEDOR_COM_COTACOES`, agora que a T3 está integrada e `cotacaoService` já é `require` do arquivo; Fase 2, M3)
 
-**Interfaces:** consome tudo de T1–T3 e a rota aux do almoxarifado `GET /api/almoxarifado/recebimentos-aux/fornecedores` (`routes/almoxarifado/extended.js:1147`, gate só `auth`).
+**Interfaces:** consome tudo de T1–T3 e a rota aux do almoxarifado `GET /api/almoxarifado/recebimentos-aux/fornecedores` (`routes/almoxarifado/extended.js:1147`, gate só `auth`; devolve `[{ id, razao_social, nome_fantasia, cnpj }]` com `WHERE status='ativo'`, `LIMIT 50`).
 
 - [ ] **Step 1: o teste**
 
@@ -1756,7 +1808,9 @@ const ADMIN = { id: 99, nome: 'Admin E40 T6', role: 'admin', is_superadmin: 1, e
     });
     assert.strictEqual(f.status, 201, JSON.stringify(f.body));
     const fid = f.body.id;
-    assert.strictEqual((await dbGet(db, 'SELECT grupo_id, endereco FROM fornecedores WHERE id = ?', [fid])).grupo_id, null);
+    const l0 = await dbGet(db, 'SELECT grupo_id, endereco FROM fornecedores WHERE id = ?', [fid]);
+    assert.strictEqual(l0.grupo_id, null);
+    assert.strictEqual(l0.endereco, 'Rua I', 'o POST passou a gravar endereco (era ignorado ate a 39) — Fase 2, M7');
     // (2) o payload EXATO da tela de cotacao (T5)
     const c = await request(app).post('/api/compras/cotacoes').send({
       numero: 'COT-E40-INT', fornecedor_id: fid, valor_total: 99.9, data_cotacao: '2026-09-21', validade: '', status: 'em_analise', observacoes: '',
@@ -1766,15 +1820,20 @@ const ADMIN = { id: 99, nome: 'Admin E40 T6', role: 'admin', is_superadmin: 1, e
     // (3) RN-E12
     const d1 = await request(app).delete(`/api/compras/fornecedores/${fid}`);
     assert.strictEqual(d1.status, 409);
-    assert.strictEqual(d1.body.error, cotacaoService.FORNECEDOR_COM_COTACOES, 'a literal da rota (T2) e a do servico (T3) tem de ser a MESMA string');
+    assert.strictEqual(d1.body.error, cotacaoService.FORNECEDOR_COM_COTACOES, 'a rota usa a CONSTANTE do servico (Fase 2, M3): identidade, nao igualdade');
     // (4) RN-E04 + RN-E05: inativa pelo PUT da tela (todos os campos), aux esconde, pedido aceita
+    // CONTROLE POSITIVO PRIMEIRO (Fase 2, I2): o ATIVO tem de aparecer no aux, senao a negativa
+    // abaixo passaria com o aux devolvendo [] por qualquer motivo (tableExists, LIMIT 50, regressao).
+    const aux0 = await request(app).get('/api/almoxarifado/recebimentos-aux/fornecedores');
+    assert.strictEqual(aux0.status, 200, JSON.stringify(aux0.body));
+    assert.ok((aux0.body || []).some((x) => x.id === fid), 'controle positivo: ATIVO tem de aparecer no aux antes de inativar');
     const p = await request(app).put(`/api/compras/fornecedores/${fid}`).send({
       razao_social: 'Integração E40', nome_fantasia: '', cnpj: '55666777000188', contato: '', email: '', telefone: '', endereco: 'Rua I', grupo_id: '', status: 'inativo',
     });
     assert.strictEqual(p.status, 200, JSON.stringify(p.body));
     const aux = await request(app).get('/api/almoxarifado/recebimentos-aux/fornecedores');
     assert.strictEqual(aux.status, 200, JSON.stringify(aux.body));
-    assert.ok(!(aux.body || []).some((x) => x.id === fid), 'fornecedor inativo NAO pode aparecer no seletor do recebimento');
+    assert.ok(!(aux.body || []).some((x) => x.id === fid), 'fornecedor inativo NAO pode aparecer no seletor do recebimento (a negativa so vale por causa do aux0 acima)');
     const ped = await request(app).post('/api/compras/pedidos').send({ fornecedor_id: fid, itens: [{ material_id: material, quantidade: 1 }] });
     assert.strictEqual(ped.status, 201, 'RN-E05: o pedido continua aceitando fornecedor inativo (declarado, D5)');
     // (5) precedencia e liberacao
@@ -1821,11 +1880,11 @@ const ADMIN = { id: 99, nome: 'Admin E40 T6', role: 'admin', is_superadmin: 1, e
 })();
 ```
 
-- [ ] **Step 2: rodar** — (A)(B)(C) verdes de primeira é **esperado** (é integração de código já testado); o controle positivo é a sabotagem 4 da T2 (ordem das contagens) rodada **aqui**: tem de derrubar (A) em *"vale a de pedido"*.
+- [ ] **Step 2: rodar** — (A)(B)(C) verdes de primeira é **esperado** (é integração de código já testado). Controles positivos rodados **aqui**: (i) a sabotagem 4 da T2 (ordem das contagens) tem de derrubar (A) em *"vale a de pedido"*; (ii) trocar `'ativo'` por `'inativo'` no `WHERE` de `listarFornecedoresAux` (`receiptService.js:1613-1614`) tem de derrubar (A) no **controle positivo** (`aux0`), não na negativa — se cair na negativa, o `aux0` não está antes do `PUT`.
 
 - [ ] **Step 3: os cinco comandos** (`test:api` esperado **191/191**: 187 + 4 arquivos novos — T1, T2, T3, T6; client **51 suítes**), `git status` limpo.
 
-- [ ] **Step 4: commit** — `git add server/tests/api/comprasFornecedorCotacaoIntegracao.api.test.js`. Mensagem em `msg-e40-t6.txt`.
+- [ ] **Step 4: commit** — `git add server/tests/api/comprasFornecedorCotacaoIntegracao.api.test.js server/routes/compras.js`. Mensagem em `msg-e40-t6.txt`.
 
 ---
 
@@ -1841,9 +1900,9 @@ do plano da 39** (defeito escapado — preencher com o que a Fase 0 desta etapa 
 handoff da 39: as quatro correções da seção 11 do design).
 
 - [ ] **Step 1: medir as letras** (`grep -o "\*\*A[0-9]\+" …` para A, B, C, F, G) — a 39 fechou em A15 · B122 · C53 · F13 · G43.
-- [ ] **Step 2: novidades** — seção da Etapa 40 antes de `## Onde estamos`, com Antes → Agora, os cenários com literal (design §6), "NÃO cobre" (design §8); letras: **A** (as duas consultas do design §9), **B123–B136** (D1–D14), **C54** ("Remover do grupo" não removia — e a partir de agora remove), **G44+** (lista `SELECT *`; `assertFornecedor` sem status; tradução do `UNIQUE` só por corrida). E o item da 40 em "Onde estamos".
+- [ ] **Step 2: novidades** — seção da Etapa 40 antes de `## Onde estamos`, com Antes → Agora, os cenários com literal (design §6), "NÃO cobre" (design §8); letras: **A** (as duas consultas do design §9 — a A(i) com `WHERE status IS NULL OR status NOT IN ('ativo','inativo')`, Fase 2 M6), **B123–B137** (D1–D14 **mais** a decisão de deixar o "Adicionar existente" com inativo fora, I4), **C54** ("Remover do grupo" não removia — e a partir de agora remove) e **C55** (inativo pode ser "adicionado" a um grupo e não aparece — I4), **G44+** (lista `SELECT *`; `assertFornecedor` sem status; tradução do `UNIQUE` só por corrida; `dataIsoOpcional` aceita `2026-13-45` — regra de forma, não de calendário, vale para pedido e cotação, M8; as frases de recusa local da tela de cotação e as do servidor diferem na inicial porque o client não importa o servidor, M4). E o item da 40 em "Onde estamos".
 - [ ] **Step 3: specs** — `modulo-compras/README.md` linhas das abas; `22-integracoes/README.md:211`; mapa.
-- [ ] **Step 4: guia** — seção da Etapa 40 com roteiro clicável (criar fornecedor → editar → inativar → ver sumir do recebimento; criar cotação → repetir número → 409; lixeira com cotação) e o cabeçalho "Onde o desenvolvimento está".
+- [ ] **Step 4: guia** — seção da Etapa 40 com roteiro clicável (criar fornecedor → editar → inativar → ver sumir do recebimento; criar cotação → repetir número → 409; lixeira com cotação; e o aviso *"inativo some do grupo e da lista de disponíveis do recebimento; para tirá-lo de um grupo use a tela de edição, Sem grupo"*) e o cabeçalho "Onde o desenvolvimento está".
 - [ ] **Step 5: manual** — enxertar em "Compras": como cadastrar/editar fornecedor, o que Inativo faz, cotação (número único, o que cada status significa), a frase literal de cada recusa.
 - [ ] **Step 6: este plano** — tasks com hash (**os hashes pós-cherry-pick**, conferidos com `git merge-base --is-ancestor`), divergências, retro de 4 números, **próxima tarefa detalhada** (pela ordem do `CLAUDE.md`: o que este fechamento nomear como "falta para 🟢"; senão o mapa — medir antes).
 - [ ] **Step 7: verificação medida** (os cinco comandos, números reais) e **commit** (`msg-e40-t7.txt`).

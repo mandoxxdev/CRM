@@ -353,7 +353,7 @@ direto com `fornecedor_id` de fornecedor apagado → `erro` 400.
 
 ### 7.6 Suítes que precisam continuar verdes (citar o real no fechamento)
 
-`comprasPedidosRotas` (5), `comprasPedidoEditarExcluir` (12 — o (8) e o (12) tocam nas tabelas
+`comprasPedidosRotas` (5), `comprasPedidoEditarExcluir` (**13**, medido na Fase 2 — o (8) e o (12) tocam nas tabelas
 desta etapa), `comprasPedidoCriar`, `pedidosCompraSaldoAux`, `recebimentoContraPedidoIntegracao`,
 `comprasPedidoAtraso` (11), `comprasPedidoStatus` (7); client `PedidoCompraForm.test.js` (25 — o (i)
 depende de `linkPorTexto('Novo Pedido')`, que **não muda**) e `Compras.test.js` (9 — o (g) mede
@@ -373,13 +373,17 @@ API **187/187**, client **49 / 753**.
 - **`DELETE` próprio** de fornecedor/cotação: o genérico serve.
 - **Paginação/`LIMIT` da lista de fornecedores** e o `planilha_dados` que ela carrega (`:87`).
 - **`assertFornecedor` checando `status`** (D5): pedido com fornecedor inativo continua 201.
+- **"Adicionar existente" de `FornecedoresDoGrupo` filtrando inativos** *(Fase 2, I4)*: um inativo
+  pode ser vinculado a um grupo com sucesso e não aparecer nele (o `GET` do grupo filtra `ativo`).
+  Fica em letra C/G e no guia; o conserto de uma linha espera um cenário, porque o arquivo não tem
+  suíte.
 - **Prefetch errado** em `lazyModules.js:203` (inócuo).
 
 ---
 
 ## 9. Letras para o fechamento
 
-- **A:** (i) `SELECT COUNT(*) FROM fornecedores WHERE status NOT IN ('ativo','inativo')` — deve dar 0
+- **A:** (i) `SELECT COUNT(*) FROM fornecedores WHERE status IS NULL OR status NOT IN ('ativo','inativo')` *(o `IS NULL` entrou pela Fase 2, M6: `NOT IN` com `NULL` não conta)* — deve dar 0
   antes do deploy (o `PUT` passa a validar o enum, mas só no que a tela manda; um valor estranho no
   banco não quebra, só não é escolhível); (ii) `SELECT numero, COUNT(*) FROM cotacoes GROUP BY numero
   HAVING COUNT(*) > 1` — deve dar 0 (a coluna já é `UNIQUE`; a consulta é confirmação).
