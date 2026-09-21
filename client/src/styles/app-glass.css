@@ -862,8 +862,25 @@
   .cartao-auto > [data-papel="foto"] img {
     width: 46px; height: 46px;
     border-radius: 12px;
-    object-fit: cover;
+    /* `contain` e nao `cover`: estas miniaturas sao foto de material e logo de
+       fornecedor, muitas em formato largo. `cover` corta as bordas e, quando a
+       proporcao e muito diferente, o que sobra e um pedaco do meio sem
+       significado. `contain` mostra a imagem inteira sobre um fundo neutro. */
+    object-fit: contain;
+    background: rgba(127, 127, 127, .10);
     display: block;
+  }
+
+  /* Valor composto (barra de estoque + numero + unidade + "Min/Max") numa
+     celula so. Em 308px ele nao cabe ao lado do rotulo: a linha passa a
+     empilhar, rotulo em cima e conteudo embaixo. */
+  .cartao-auto > [data-papel="meta"]:has(> div) {
+    display: block;
+    padding: 6px 0;
+  }
+  .cartao-auto > [data-papel="meta"]:has(> div)::before {
+    margin-bottom: 4px;
+    max-width: 100%;
   }
 
   /* ── código ── */
@@ -1222,4 +1239,49 @@
   .chart-header h3 { font-size: 1rem !important; }
   .recharts-responsive-container { max-height: 220px; }
   .chart-legend-inline { flex-wrap: wrap; gap: 6px; font-size: .7rem; }
+
+  /* ── 16. Legibilidade do NUMERO, em todo o sistema ──────────────────────────
+     O Dashboard mostrou o padrao: o valor principal estava em #4facfe sobre
+     cartao claro, contraste 2,30, quando o minimo legivel e 4,5. O dado mais
+     importante da tela era o menos legivel.
+
+     A varredura achou o mesmo em mais cinco lugares, em quatro modulos. Todos
+     recebem o --gmp-primary-800 (#1D4ED8), que continua azul da marca e mede
+     7,6 sobre branco. O tema escuro leva um azul claro, que ali e o lado certo.
+
+     Nao mexo nos arquivos de origem: a cor do desktop e uma escolha de desenho
+     de quem fez, e no computador o cartao e maior e o texto respira. A troca
+     vale so no telefone. */
+  .valor-cell,
+  .valor-visita-principal,
+  .marcador-numero,
+  .preview-valor-container h3,
+  .mudanca-valor.novo {
+    color: #1D4ED8 !important;
+  }
+  [data-theme="dark"] .valor-cell,
+  [data-theme="dark"] .valor-visita-principal,
+  [data-theme="dark"] .marcador-numero,
+  [data-theme="dark"] .preview-valor-container h3,
+  [data-theme="dark"] .mudanca-valor.novo {
+    color: #7DC4FF !important;
+  }
+
+  /* `white-space: nowrap` em codigo e nome de material: no desktop sobra
+     largura, em 360px o texto vaza do cartao. Era o mesmo defeito do
+     "PROPOSTAS APROVADAS" no painel. */
+  .proposta-form-item-code span,
+  .pcf-item-material strong {
+    white-space: normal !important;
+    overflow-wrap: break-word;
+  }
+
+  /* Titulo com `background-clip: text` cujo gradiente termina em cor clara
+     desaparece da metade para a direita — o mesmo caso do "Dashboard
+     Executivo". No telefone eles viram texto solido. */
+  .login-header-content h1 {
+    background: none !important;
+    -webkit-text-fill-color: var(--ag-texto) !important;
+    color: var(--ag-texto) !important;
+  }
 }
