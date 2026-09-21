@@ -18,7 +18,7 @@ const ModalSelecaoTipoProduto = ({ isOpen, onClose, familiaNome }) => {
       descricao: 'Máquinas, sistemas e grandes componentes industriais',
       icon: FiTool,
       rota: `/comercial/produtos/novo?tipo=equipamentos${queryFamilia}`,
-      gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      gradient: 'linear-gradient(135deg, #1E40AF 0%, #2563EB 100%)',
       glowColor: 'rgba(102, 126, 234, 0.4)'
     },
     {
@@ -27,7 +27,7 @@ const ModalSelecaoTipoProduto = ({ isOpen, onClose, familiaNome }) => {
       descricao: 'Peças menores, consumíveis e complementos',
       icon: FiPackage,
       rota: `/comercial/produtos/novo?tipo=discos-acessorios${queryFamilia}`,
-      gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+      gradient: 'linear-gradient(135deg, #0E7490 0%, #22D3EE 100%)',
       glowColor: 'rgba(245, 87, 108, 0.4)'
     },
     {

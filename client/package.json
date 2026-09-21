@@ -32,7 +32,8 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "check:mobile": "node scripts/verificar-mobile.js"
   },
   "devDependencies": {
     "react-scripts": "5.0.1"

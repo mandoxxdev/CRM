@@ -71,7 +71,7 @@ const DashboardVendas = () => {
       {/* KPIs Principais */}
       <div className="vendas-kpis">
         <div className="kpi-card">
-          <div className="kpi-icon" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+          <div className="kpi-icon" style={{ background: 'linear-gradient(135deg, #2563EB 0%, #1E40AF 100%)' }}>
             <FiDollarSign />
           </div>
           <div className="kpi-content">
@@ -132,7 +132,7 @@ const DashboardVendas = () => {
                 }}
               />
               <Legend />
-              <Bar dataKey="quantidade" name="Quantidade de Propostas" fill="#667eea" radius={[0, 8, 8, 0]}>
+              <Bar dataKey="quantidade" name="Quantidade de Propostas" fill="#2563EB" radius={[0, 8, 8, 0]}>
                 {dados.funilVendas.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={coresFunil[entry.etapa] || '#95a5a6'} />
                 ))}

@@ -70,19 +70,24 @@
   box-shadow: var(--card-shadow-hover);
 }
 
+/* Os tres temas sao variacoes de AZUL, e isso foi corrigido depois de o P.O.
+   apontar que o aplicativo estava roxo. O tema 1 era #2563EB -> #1E40AF
+   (violeta) e o tema 2 era #22D3EE -> #0E7490 (rosa): como o indice cicla a
+   cada tres, DOIS DE CADA TRES cartoes de grupo destoavam da marca. Agora a
+   variacao e de temperatura dentro do azul, como nos blobs do fundo. */
 .grupo-card-theme-0 {
   --card-accent: #0066cc;
   --card-accent-light: #4facfe;
 }
 
 .grupo-card-theme-1 {
-  --card-accent: #667eea;
-  --card-accent-light: #764ba2;
+  --card-accent: #1E40AF;
+  --card-accent-light: #60A5FA;
 }
 
 .grupo-card-theme-2 {
-  --card-accent: #f093fb;
-  --card-accent-light: #f5576c;
+  --card-accent: #0E7490;
+  --card-accent-light: #22D3EE;
 }
 
 .grupo-card-header {
@@ -232,4 +237,76 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CELULAR
+   ───────────────────────────────────────────────────────────────────────────
+   Esta e a tela em que a aba "Produtos" do dock cai — e ela nao tinha UMA
+   media query. A grade `auto-fill, minmax(260px, 1fr)` caia para uma coluna no
+   telefone por acaso, nao por desenho: cartoes de 280px de altura minima, um
+   por linha, e era preciso rolar para ver quatro grupos.
+
+   Duas colunas e cartao mais baixo: a tela passa a mostrar seis grupos de uma
+   vez, que e o que torna a escolha rapida.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .grupos-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .grupo-card {
+    min-height: 0;
+    border-radius: 18px;
+  }
+
+  /* O cabecalho era quadrado (aspect-ratio: 1) com ate 220px. Em duas colunas
+     isso deixaria o cartao mais alto que largo por um exagero. */
+  .grupo-card-header {
+    aspect-ratio: 4 / 3;
+    min-height: 0;
+    max-height: none;
+    border-radius: 18px 18px 0 0;
+  }
+
+  .grupo-card-body { padding: 10px 12px 12px; }
+
+  .grupo-card-nome {
+    font-size: .88rem;
+    line-height: 1.25;
+    /* Duas linhas no maximo: nome longo nao pode esticar so um cartao da
+       dupla e desalinhar a grade. */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .grupo-card-numero { font-size: .68rem; }
+
+  /* "Ver familias" com a seta some: em duas colunas nao cabe, e o cartao
+     inteiro ja e o toque. */
+  .grupo-card-cta-label { display: none; }
+
+  /* O hover de -8px nao existe no dedo, e deixava o cartao "preso" para cima
+     depois do toque em alguns Android. */
+  .grupo-card:hover { transform: none; }
+  .grupo-card:active { transform: scale(.97); }
+
+  /* O botao de editar do canto vira alvo de dedo. */
+  .grupo-card-actions .btn-icon-grupo {
+    min-width: 38px;
+    min-height: 38px;
+  }
+
+  .grupos-header-actions { flex-wrap: wrap; gap: 8px; }
+}
+
+/* Telas bem estreitas (360px e menos) voltam para uma coluna: com duas, o nome
+   do grupo quebra em tres linhas e o cartao vira uma tira ilegivel. */
+@media (max-width: 360px) {
+  .grupos-grid { grid-template-columns: 1fr; }
+  .grupo-card-header { aspect-ratio: 16 / 9; }
 }

@@ -549,9 +549,9 @@
     inset: 0;
     z-index: 1400;
     align-items: flex-end;
-    background: rgba(4, 10, 22, .55);
-    -webkit-backdrop-filter: blur(8px);
-    backdrop-filter: blur(8px);
+    /* Sem desfoque de tela inteira: e o item mais caro, e aparece justamente
+       enquanto a folha desliza. Um preto a 62% esconde o fundo igual. */
+    background: rgba(4, 10, 22, .62);
   }
   .prm-folha {
     width: 100%;

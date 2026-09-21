@@ -51,6 +51,8 @@
 
     --ag-vidro:        rgba(255, 255, 255, 0.72);
     --ag-vidro-forte:  rgba(255, 255, 255, 0.86);
+    /* Para o que se move: opaco o bastante para dispensar o desfoque. */
+    --ag-solido:       rgba(252, 253, 255, 0.97);
     --ag-borda:        rgba(255, 255, 255, 0.85);
     --ag-borda-sutil:  rgba(17, 24, 39, 0.07);
     --ag-texto:        #14182B;
@@ -67,6 +69,7 @@
 
     --ag-vidro:        rgba(255, 255, 255, 0.055);
     --ag-vidro-forte:  rgba(12, 24, 43, 0.84);
+    --ag-solido:       rgba(10, 20, 37, 0.97);
     --ag-borda:        rgba(255, 255, 255, 0.11);
     --ag-borda-sutil:  rgba(255, 255, 255, 0.07);
     --ag-texto:        #F3F4FA;
@@ -242,11 +245,21 @@
   }
 
   /* Modais e folhas ganham o desfoque de verdade: são poucos e ficam por cima. */
-  .modal, .modal-content, .dialog,
-  .plm-folha, .prm-folha, .propsheet__folha, [class*='-sheet'], [class*='-drawer'] {
+  /* Modais ficam PARADOS depois de abrir, entao podem manter o desfoque.
+     As FOLHAS, nao: elas deslizam de baixo, e desfoque que se move e
+     re-amostrado a cada quadro. Elas usam fundo solido — ver a nota no topo
+     do bloco 12. */
+  .modal, .modal-content, .dialog {
     background: var(--ag-vidro-forte) !important;
-    -webkit-backdrop-filter: blur(30px) saturate(180%);
-    backdrop-filter: blur(30px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(170%);
+    backdrop-filter: blur(24px) saturate(170%);
+  }
+
+  .plm-folha, .prm-folha, .propsheet__folha,
+  [class*='-sheet'], [class*='-drawer'] {
+    background: var(--ag-solido) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
   }
 
   /* Brilho na borda superior — o detalhe que separa "div translúcida" de
@@ -391,8 +404,17 @@
   .main-content .plm-card:nth-child(8), .main-content [class*='-card']:nth-child(8) { animation-delay: .30s; }
   /* Daqui em diante o atraso para de crescer: a nona linha já está fora da tela,
      e continuar somando faria esperar por algo que ninguém está vendo. */
+  /* A partir do nono, o cartao NAO anima. Nao e so o atraso que para de
+     crescer: a animacao inteira sai. Cada elemento em animacao vira uma camada
+     de composicao, e um painel com trinta cartoes criava trinta camadas no
+     mesmo quadro — era o travamento ao entrar no Dashboard. Do nono em diante
+     o cartao ja esta fora da tela; ninguem ve a entrada dele. */
   .main-content .plm-card:nth-child(n+9),
-  .main-content [class*='-card']:nth-child(n+9) { animation-delay: .32s; }
+  .main-content .cliitem:nth-child(n+9),
+  .main-content .card:nth-child(n+9),
+  .main-content [class*='-card']:nth-child(n+9) {
+    animation: none !important;
+  }
 
   /* Folhas que sobem de baixo */
   @keyframes ag-folha { from { transform: translate3d(0, 100%, 0); } to { transform: none; } }
@@ -515,9 +537,7 @@
     inset: 0;
     z-index: 1400;
     align-items: flex-end;
-    background: rgba(4, 10, 22, .55);
-    -webkit-backdrop-filter: blur(8px);
-    backdrop-filter: blur(8px);
+    background: rgba(4, 10, 22, .62);
     animation: ag-fundo .2s ease;
   }
   .ppe-folha {
@@ -526,9 +546,8 @@
     overflow-y: auto;
     padding: 10px 14px calc(env(safe-area-inset-bottom, 0px) + 18px);
     border-radius: 24px 24px 0 0;
-    background: var(--ag-vidro-forte);
-    -webkit-backdrop-filter: blur(30px) saturate(180%);
-    backdrop-filter: blur(30px) saturate(180%);
+    /* Sem desfoque: esta folha DESLIZA. Ver a nota das folhas acima. */
+    background: var(--ag-solido);
     animation: ag-folha .3s cubic-bezier(.22, 1, .36, 1);
   }
   .ppe-puxador {
@@ -591,9 +610,13 @@
      do usuário a forma mais óbvia de voltar. */
   .sidebar-overlay {
     z-index: 1240 !important;
-    background: rgba(4, 10, 22, 0.55) !important;
-    -webkit-backdrop-filter: blur(10px) saturate(140%) !important;
-    backdrop-filter: blur(10px) saturate(140%) !important;
+    /* Cortina SEM desfoque. Desfocar a tela inteira e o item mais caro da
+       folha, e ela aparece exatamente no momento em que a gaveta esta
+       deslizando — os dois custos se somavam no mesmo quadro. Um preto a 62%
+       esconde o fundo igual. */
+    background: rgba(4, 10, 22, 0.62) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
   }
 
   .sidebar {
@@ -606,9 +629,12 @@
     height: auto !important;
     border-radius: 0 24px 24px 0 !important;
     border-right: 1px solid var(--ag-borda) !important;
-    background: var(--ag-vidro-forte) !important;
-    -webkit-backdrop-filter: blur(30px) saturate(180%) !important;
-    backdrop-filter: blur(30px) saturate(180%) !important;
+    /* Sem desfoque: a gaveta DESLIZA, e desfoque em movimento e recalculado a
+       cada quadro. Era a causa do travamento ao tocar em MENU. Com 96% de
+       opacidade nao se perde nada — atras dela ha uma cortina escura. */
+    background: var(--ag-solido) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
     box-shadow: var(--ag-sombra-alta) !important;
   }
 
@@ -718,11 +744,16 @@
     animation: ag-folha .34s cubic-bezier(.16, 1.06, .3, 1);
   }
 
-  /* Barra de topo e dock entram junto com a tela. */
-  .mobile-topbar { animation: ag-desce .4s cubic-bezier(.22, 1, .36, 1); }
-  .bim { animation: ag-sobe-dock .44s cubic-bezier(.16, 1.06, .3, 1); }
-  @keyframes ag-desce    { from { transform: translate3d(0, -100%, 0); } to { transform: none; } }
-  @keyframes ag-sobe-dock{ from { opacity: 0; transform: translate3d(0, 110%, 0); } to { opacity: 1; transform: none; } }
+  /* Barra de topo e dock entram junto com a tela — mas SEM deslocamento.
+     Os dois sao os unicos elementos que mantem `backdrop-filter`, e desfoque
+     que se move e re-amostrado a cada quadro. Entrada em opacidade custa nada
+     e, num elemento que ja esta no lugar certo, a diferenca para o olho e
+     minima. Quem apontou isto foi o proprio guarda (scripts/verificar-mobile.js),
+     depois de eu ter dado a correcao por concluida — a medicao que eu tinha
+     feito no navegador cobria as folhas e a gaveta, e nao estes dois. */
+  .mobile-topbar { animation: ag-aparece .38s ease-out; }
+  .bim { animation: ag-aparece .44s ease-out; }
+  @keyframes ag-aparece { from { opacity: 0; } to { opacity: 1; } }
 
   /* Brilho que percorre o que está carregando. `transform` num pseudo-elemento,
      e não `background-position`, que repinta. */
@@ -758,5 +789,171 @@
     .bim-item:active, .plm-card:active, .cliitem:active, .nav-item:active {
       transform: none;
     }
+  }
+
+  /* ── 11. Tabela vira cartão de aplicativo, automaticamente ──────────────────
+     Estas regras desenham a hierarquia que `utils/tabelasComoCartoes.js` deduz
+     e grava em `data-papel`. Junto com ele, isto é o que faz as 52 tabelas do
+     sistema — e toda tabela que ainda vai ser escrita — terem cartão decente no
+     celular sem ninguém escrever CSS para elas.
+
+     A reordenação é por `order`. NENHUM elemento é movido no DOM: mexer num
+     <td> que contém botão de React arriscaria evento e estado. O CSS reordena o
+     desenho; a árvore continua sendo a que o React montou. */
+
+  table.tabela-cartoes-rica tbody tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 8px;
+    padding: 14px !important;
+    border-radius: 22px !important;
+    border: 1px solid var(--ag-borda) !important;
+    background: var(--ag-vidro) !important;
+    box-shadow: var(--ag-sombra) !important;
+    margin-bottom: 12px;
+  }
+
+  table.tabela-cartoes-rica tbody td {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: none !important;
+    text-align: left;
+    white-space: normal;
+  }
+
+  /* Por padrão o rótulo some; volta só nas linhas de meta, mais abaixo. */
+  table.tabela-cartoes-rica tbody td::before { display: none; }
+
+  /* ── foto ── */
+  table.tabela-cartoes-rica tbody td[data-papel="foto"] {
+    order: 1;
+    width: 46px;
+    flex: 0 0 46px;
+  }
+  table.tabela-cartoes-rica tbody td[data-papel="foto"] img {
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+    object-fit: cover;
+    display: block;
+  }
+
+  /* ── código ── */
+  table.tabela-cartoes-rica tbody td[data-papel="id"] {
+    order: 2;
+    width: auto;
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .03em;
+    color: var(--ag-texto-fraco);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ── situação ── */
+  table.tabela-cartoes-rica tbody td[data-papel="situacao"] {
+    order: 3;
+    width: auto;
+    flex: 0 0 auto;
+    /* empurra para o canto direito mesmo quando não há código à esquerda */
+    margin-left: auto;
+    font-size: .72rem;
+  }
+
+  /* ── título ── */
+  table.tabela-cartoes-rica tbody td[data-papel="titulo"] {
+    order: 4;
+    margin-top: 6px;
+    font-size: .98rem;
+    font-weight: 700;
+    line-height: 1.3;
+    color: var(--ag-texto);
+  }
+
+  /* ── valor ── */
+  table.tabela-cartoes-rica tbody td[data-papel="valor"] {
+    order: 5;
+    margin-top: 8px;
+    font-size: 1.2rem;
+    font-weight: 800;
+    letter-spacing: -.02em;
+    color: var(--ag-texto);
+  }
+
+  /* ── meta: o resto, em voz baixa, ainda com o nome da coluna ── */
+  table.tabela-cartoes-rica tbody td[data-papel="meta"] {
+    order: 6;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 3px 0;
+    font-size: .78rem;
+    color: var(--ag-texto-fraco);
+  }
+  table.tabela-cartoes-rica tbody td[data-papel="meta"]::before {
+    content: attr(data-label);
+    display: block;
+    flex: 0 0 auto;
+    max-width: 48%;
+    font-size: .68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--ag-texto-fraco);
+    opacity: .75;
+  }
+  /* A primeira linha de meta ganha o respiro que separa do valor. */
+  table.tabela-cartoes-rica tbody td[data-papel="valor"] + td[data-papel="meta"] {
+    margin-top: 6px;
+  }
+
+  /* ── ações ── */
+  table.tabela-cartoes-rica tbody td[data-papel="acoes"] {
+    order: 9;
+    margin-top: 10px;
+    padding-top: 10px !important;
+    border-top: 1px solid var(--ag-borda-sutil) !important;
+  }
+  table.tabela-cartoes-rica tbody td[data-papel="acoes"] > * {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+  /* Alvo de toque: 44px é o mínimo confortável para o dedo, e os ícones das
+     tabelas foram desenhados para o mouse, com 24px. */
+  table.tabela-cartoes-rica tbody td[data-papel="acoes"] :where(button, a) {
+    min-height: 44px;
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+  }
+
+  /* Célula vazia não vira linha em branco. `:empty` não pega célula com só um
+     espaço, então o traço de "sem valor" também sai. */
+  table.tabela-cartoes-rica tbody td[data-papel="meta"]:empty { display: none; }
+
+  /* Entrada escalonada, igual à das listas feitas à mão. */
+  table.tabela-cartoes-rica tbody tr {
+    animation: ag-sobe .5s cubic-bezier(.16, 1.06, .3, 1) backwards;
+  }
+  table.tabela-cartoes-rica tbody tr:nth-child(1) { animation-delay: .02s; }
+  table.tabela-cartoes-rica tbody tr:nth-child(2) { animation-delay: .06s; }
+  table.tabela-cartoes-rica tbody tr:nth-child(3) { animation-delay: .10s; }
+  table.tabela-cartoes-rica tbody tr:nth-child(4) { animation-delay: .14s; }
+  table.tabela-cartoes-rica tbody tr:nth-child(5) { animation-delay: .18s; }
+  table.tabela-cartoes-rica tbody tr:nth-child(6) { animation-delay: .22s; }
+  table.tabela-cartoes-rica tbody tr:nth-child(n+7) { animation: none !important; }
+
+  @media (prefers-reduced-motion: reduce) {
+    table.tabela-cartoes-rica tbody tr { animation: none !important; }
   }
 }

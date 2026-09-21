@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import api from '../../services/api';
+import { mascararTelefoneDigitando, mascararTelefoneCompleto } from '../../utils/telefone';
 import {
   FiPlus, FiTrash2, FiSearch, FiArrowLeft, FiSave, FiEdit2, FiMinus,
   FiCheck, FiChevronDown, FiChevronUp, FiAlertTriangle, FiLayers,
@@ -764,8 +765,15 @@ const PedidoCompraForm = () => {
 
               <div className="pcf-livres">
                 <label><span>Telefone da transportadora</span>
-                  <input value={cab.transportadora_telefone}
-                    onChange={(e) => setCampo('transportadora_telefone', e.target.value)} /></label>
+                  <input
+                    value={cab.transportadora_telefone}
+                    /* Mascara compartilhada, e nao uma propria: o telefone da
+                       transportadora vai para o mesmo lugar que os demais, e
+                       dois formatos diferentes no banco quebram a busca. */
+                    onChange={(e) => setCampo('transportadora_telefone', mascararTelefoneDigitando(e.target.value))}
+                    onBlur={(e) => setCampo('transportadora_telefone', mascararTelefoneCompleto(e.target.value))}
+                    inputMode="tel"
+                  /></label>
                 <label><span>Contato no fornecedor</span>
                   <input value={cab.contato}
                     onChange={(e) => setCampo('contato', e.target.value)} /></label>

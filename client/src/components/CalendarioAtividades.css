@@ -38,7 +38,7 @@
 
 .calendario-filtro-tipo select:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: #2563EB;
 }
 
 .calendario-legenda {
@@ -137,15 +137,15 @@
 
 .rbc-toolbar button:hover {
   background: #f8f9fa;
-  border-color: #667eea;
-  color: #667eea;
+  border-color: #2563EB;
+  color: #2563EB;
 }
 
 .rbc-toolbar button:active,
 .rbc-toolbar button.rbc-active {
-  background: #667eea;
+  background: #2563EB;
   color: white;
-  border-color: #667eea;
+  border-color: #2563EB;
 }
 
 .rbc-toolbar-label {

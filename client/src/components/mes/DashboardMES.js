@@ -94,7 +94,7 @@ const DashboardMES = () => {
       {/* KPIs Principais */}
       <div className="mes-kpis-grid">
         <div className="mes-kpi-card primary">
-          <div className="mes-kpi-icon" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+          <div className="mes-kpi-icon" style={{ background: 'linear-gradient(135deg, #2563EB 0%, #1E40AF 100%)' }}>
             <FiZap />
           </div>
           <div className="mes-kpi-content">
