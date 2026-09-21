@@ -271,11 +271,30 @@
     border-radius: 18px 18px 0 0;
   }
 
-  .grupo-card-body { padding: 10px 12px 12px; }
+  .grupo-card-body {
+    padding: 10px 12px 12px;
+    /* O `min-height: 120px` do desktop foi desenhado para cartao de 260px de
+       largura. Num cartao de 139px ele vira um vao branco embaixo do nome. */
+    min-height: 0;
+  }
 
   .grupo-card-nome {
     font-size: .88rem;
     line-height: 1.25;
+    /* `break-word` e nao `anywhere`. Os dois quebram palavra longa, mas
+       `anywhere` tambem entra no calculo de largura minima e quebrava
+       "Dispersores" no meio ("Disperso / res") mesmo havendo espaco. Com
+       `break-word` a palavra so quebra quando de fato nao cabe sozinha.
+       O padding lateral sai: 16px de folga num cartao de 139px e o que fazia
+       a palavra nao caber. */
+    overflow-wrap: break-word;
+    padding: 0 2px;
+    /* O corpo do cartao e flex com `align-items: center`, entao o nome encolhia
+       ate o proprio conteudo: medido, 77px de 111 disponiveis. "Dispersores"
+       mede exatamente 77px e quebrava no limite, jogando o "s" para a segunda
+       linha. Com a largura toda, ele cabe. */
+    width: 100%;
+    align-self: stretch;
     /* Duas linhas no maximo: nome longo nao pode esticar so um cartao da
        dupla e desalinhar a grade. */
     display: -webkit-box;
@@ -306,7 +325,18 @@
 
 /* Telas bem estreitas (360px e menos) voltam para uma coluna: com duas, o nome
    do grupo quebra em tres linhas e o cartao vira uma tira ilegivel. */
-@media (max-width: 360px) {
+/* 330px, e nao 360px. O corte anterior era um erro de premissa: eu tratei
+   360px como "tela estreita, caso de exceção" quando 360px e a largura MAIS
+   COMUM do Android (Galaxy A e a maior parte dos aparelhos intermediarios).
+   A regra que existia para a borda pegava o caso principal, e o aparelho do
+   P.O. — 360px — caia em uma coluna sozinho.
+
+   Em 360px, duas colunas dao (360 - 32 de margem - 12 de gap) / 2 = 158px por
+   cartao, que acomoda a foto e o nome em duas linhas sem apertar.
+
+   330px cobre o iPhone SE de primeira geracao (320px), que e onde duas colunas
+   realmente deixam de caber. */
+@media (max-width: 330px) {
   .grupos-grid { grid-template-columns: 1fr; }
   .grupo-card-header { aspect-ratio: 16 / 9; }
 }
