@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
-import { FiPlus, FiSearch, FiEdit, FiTrash2, FiFileText, FiArrowLeft, FiCopy } from 'react-icons/fi';
+import {
+  FiPlus, FiSearch, FiEdit, FiTrash2, FiFileText, FiArrowLeft, FiCopy,
+  FiMoreHorizontal, FiX, FiPackage,
+} from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 import './Produtos.css';
 import './Loading.css';
@@ -13,6 +16,8 @@ const Produtos = ({ familiaFromUrl, familiaNome, grupoId }) => {
   // botao e cortesia de interface; quem recusa de verdade e a rota no servidor.
   const isAdmin = String(user?.role || '').toLowerCase() === 'admin';
   const [produtos, setProdutos] = useState([]);
+  // Celular: qual produto abriu o menu de mais ações.
+  const [acoesDe, setAcoesDe] = useState(null);
   const [familias, setFamilias] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -193,6 +198,196 @@ const Produtos = ({ familiaFromUrl, familiaNome, grupoId }) => {
           ))}
         </select>
       </div>
+
+      {/* ══ CELULAR ══════════════════════════════════════════════════════════
+          A tabela tem ONZE colunas. No telefone ela vira rolagem lateral e nada
+          fica legível. Aqui entra uma lista feita para o polegar, com as MESMAS
+          onze informações — o que muda é o peso de cada uma, não o conteúdo.
+
+          Todos os handlers (handleDelete, handleClonar, formatCurrency,
+          getDescritivoTecnico, getImagemUrl, isAdmin) são os da tabela: as regras
+          existem uma vez só, e mudam nos dois lugares ao mesmo tempo. */}
+      <div className="prm">
+        <div className="prm-topo">
+          <span className="prm-contagem">
+            {`${produtos.length} ${produtos.length === 1 ? 'produto' : 'produtos'}`}
+          </span>
+          <Link to="/comercial/produtos/novo" className="prm-novo">
+            <FiPlus size={16} /> Novo
+          </Link>
+        </div>
+
+        <div className="prm-busca">
+          <FiSearch size={17} />
+          <input
+            type="text"
+            placeholder="Buscar por nome ou código…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          {search && (
+            <button type="button" onClick={() => setSearch('')} aria-label="Limpar busca">
+              <FiX size={16} />
+            </button>
+          )}
+        </div>
+
+        {/* Os chips de família só aparecem quando a tela NÃO foi aberta a partir
+            de uma família. Vindo de lá o filtro já está decidido, e oferecer a
+            troca confundiria: a pessoa acha que está numa família e está noutra. */}
+        {!familiaFromUrl && familias.length > 0 && (
+          <div className="prm-chips">
+            <button
+              type="button"
+              className={`prm-chip${filterFamilia === '' ? ' is-on' : ''}`}
+              onClick={() => setFilterFamilia('')}
+            >
+              Todas
+            </button>
+            {familias.map((f) => (
+              <button
+                key={f}
+                type="button"
+                className={`prm-chip${filterFamilia === f ? ' is-on' : ''}`}
+                onClick={() => setFilterFamilia(filterFamilia === f ? '' : f)}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="prm-lista">
+          {produtos.length === 0 ? (
+            <div className="prm-vazio">
+              <FiPackage size={28} />
+              <span>Nenhum produto encontrado.</span>
+            </div>
+          ) : produtos.map((produto) => {
+            const classificacao = produto.classificacao_area || (() => {
+              try {
+                const raw = produto.especificacoes_tecnicas;
+                const spec = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : {};
+                return spec.classificacao_area || null;
+              } catch (e) { return null; }
+            })();
+            const descritivo = getDescritivoTecnico(produto);
+            const foto = getImagemUrl(produto.imagem);
+            return (
+              <article className="prm-card" key={produto.id}>
+                <Link to={`/comercial/produtos/editar/${produto.id}`} className="prm-toque">
+                  <div className="prm-linha1">
+                    {foto ? (
+                      <img
+                        src={foto}
+                        alt=""
+                        className="prm-foto"
+                        loading="lazy"
+                        onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
+                      />
+                    ) : (
+                      <div className="prm-foto prm-foto-vazia"><FiPackage size={18} /></div>
+                    )}
+                    <div className="prm-ident">
+                      <span className="prm-codigo">{produto.codigo || '—'}</span>
+                      <div className="prm-nome">{produto.nome}</div>
+                    </div>
+                  </div>
+
+                  {classificacao && (
+                    <span className={`class-area-selo ${
+                      classificacao.toLocaleUpperCase('pt-BR').includes('ATEX')
+                        ? 'class-area-atex'
+                        : classificacao.toLocaleUpperCase('pt-BR').includes('SEGURA')
+                          ? 'class-area-segura'
+                          : 'class-area-outro'
+                    }`}>
+                      {classificacao}
+                    </span>
+                  )}
+
+                  {descritivo && <div className="prm-descritivo">{descritivo}</div>}
+
+                  <div className="prm-preco">{formatCurrency(produto.preco_base)}</div>
+                  <div className="prm-meta">
+                    {produto.familia || 'Sem família'}
+                    {produto.modelo ? ` · ${produto.modelo}` : ''}
+                    {` · ${produto.unidade || '—'}`}
+                    {` · ICMS ${produto.icms}% · IPI ${produto.ipi}%`}
+                  </div>
+                </Link>
+
+                <div className="prm-acts">
+                  <Link
+                    to={`/comercial/produtos/editar/${produto.id}`}
+                    className="prm-act is-destaque"
+                  >
+                    <FiEdit size={16} /> Editar
+                  </Link>
+                  <Link
+                    to={`/comercial/propostas/nova?produto=${produto.id}`}
+                    className="prm-act"
+                  >
+                    <FiFileText size={16} /> Proposta
+                  </Link>
+                  <button
+                    type="button"
+                    className="prm-act prm-act-mais"
+                    onClick={() => setAcoesDe(produto)}
+                    aria-label="Mais ações"
+                  >
+                    <FiMoreHorizontal size={19} />
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Folha de ações. Clonar aparece sob a MESMA condição da tabela (isAdmin),
+          e desativar chama o mesmo handleDelete, com a mesma confirmação. */}
+      {acoesDe && (
+        <div className="prm-fundo" onClick={() => setAcoesDe(null)}>
+          <div className="prm-folha" onClick={(e) => e.stopPropagation()}>
+            <div className="prm-puxador" />
+            <div className="prm-folha-tit">
+              {acoesDe.codigo || 'Produto'} · {acoesDe.nome}
+            </div>
+
+            <Link
+              to={`/comercial/produtos/editar/${acoesDe.id}`}
+              className="prm-op"
+              onClick={() => setAcoesDe(null)}
+            >
+              <FiEdit size={18} /> Editar produto
+            </Link>
+            <Link
+              to={`/comercial/propostas/nova?produto=${acoesDe.id}`}
+              className="prm-op"
+              onClick={() => setAcoesDe(null)}
+            >
+              <FiFileText size={18} /> Gerar proposta
+            </Link>
+            {isAdmin && (
+              <button
+                type="button"
+                className="prm-op"
+                onClick={() => { const x = acoesDe; setAcoesDe(null); handleClonar(x); }}
+              >
+                <FiCopy size={18} /> Clonar produto
+              </button>
+            )}
+            <button
+              type="button"
+              className="prm-op is-danger"
+              onClick={() => { const x = acoesDe; setAcoesDe(null); handleDelete(x.id); }}
+            >
+              <FiTrash2 size={18} /> Desativar produto
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="table-container">
         <table className="data-table">

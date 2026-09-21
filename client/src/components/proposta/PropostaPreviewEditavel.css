@@ -195,3 +195,10 @@
   background: #f1f5f9;
   color: #1e293b;
 }
+
+/* Cabecalho compacto do celular — nasce ESCONDIDO.
+   Quem liga e o app-glass.css, dentro de @media (max-width: 768px). Sem estas
+   duas linhas, a div e o botao apareceriam no computador, onde a barra completa
+   ja mostra todas as acoes. Mesmo padrao de `.bim`, `.plm` e `.agfx`. */
+.ppe-mob { display: none; }
+.ppe-fundo { display: none; }

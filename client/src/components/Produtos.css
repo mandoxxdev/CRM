@@ -327,3 +327,280 @@
 [data-theme="dark"] .class-area-segura { background: rgba(34, 197, 94, 0.2); color: #86efac; }
 [data-theme="dark"] .class-area-atex { background: rgba(248, 113, 113, 0.2); color: #fca5a5; }
 [data-theme="dark"] .class-area-outro { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LISTA DE CELULAR (.prm)
+   ───────────────────────────────────────────────────────────────────────────
+   Nasce ESCONDIDA e só existe abaixo de 768px. O computador continua com a
+   tabela de onze colunas, intocada. Mesmo padrão de `.plm` em PropostasList.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.prm { display: none; }
+.prm-fundo { display: none; }
+
+@media (max-width: 768px) {
+  /* A tabela e a barra de filtros do computador saem de cena. */
+  .produtos .table-container,
+  .produtos > .filters { display: none !important; }
+
+  .prm { display: block; }
+
+  .prm-topo {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .prm-contagem {
+    font-size: .82rem;
+    font-weight: 600;
+    color: var(--gmp-text-light, #5B627A);
+  }
+  .prm-novo {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 40px;
+    padding: 0 16px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #4facfe, #2563EB);
+    color: #fff;
+    font-size: .88rem;
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .prm-busca {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 14px;
+    min-height: 46px;
+    border-radius: 16px;
+    margin-bottom: 12px;
+    color: var(--gmp-text-light, #5B627A);
+  }
+  .prm-busca input {
+    flex: 1 1 auto;
+    min-width: 0;
+    /* 16px para o iOS não dar zoom ao focar. O app-glass tira a caixa própria
+       deste input; aqui só garantimos o tamanho. */
+    font-size: 16px;
+    font-family: inherit;
+  }
+  .prm-busca button {
+    flex: 0 0 auto;
+    border: none;
+    background: none;
+    color: inherit;
+    padding: 4px;
+    display: flex;
+  }
+
+  .prm-chips {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    /* A fileira rola na horizontal; a barra some para não cortar o desenho. */
+    scrollbar-width: none;
+    margin-bottom: 14px;
+    padding-bottom: 2px;
+  }
+  .prm-chips::-webkit-scrollbar { display: none; }
+  .prm-chip {
+    flex: 0 0 auto;
+    min-height: 36px;
+    padding: 0 14px;
+    border-radius: 999px;
+    font-size: .82rem;
+    font-weight: 600;
+    font-family: inherit;
+    white-space: nowrap;
+  }
+
+  .prm-lista { display: flex; flex-direction: column; gap: 12px; }
+
+  .prm-card { padding: 14px !important; }
+
+  /* O cartao INTEIRO e um <a>, e a cor global de link (#4facfe) vence um
+     `color: inherit` — medido: nome e preco saiam AZUIS, com cara de link, e a
+     hierarquia do cartao se perdia porque tudo tinha o mesmo destaque. Por isso
+     a cor e declarada explicitamente aqui e nos dois filhos que mais pesam. */
+  .prm-card .prm-toque,
+  .prm-card .prm-nome,
+  .prm-card .prm-preco {
+    color: var(--gmp-text, #14182B) !important;
+  }
+  .prm-toque {
+    display: block;
+    text-decoration: none;
+  }
+
+  .prm-linha1 {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .prm-foto {
+    flex: 0 0 auto;
+    width: 46px; height: 46px;
+    border-radius: 12px;
+    object-fit: cover;
+    background: rgba(127, 127, 127, .12);
+  }
+  .prm-foto-vazia {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--gmp-text-light, #8A90A6);
+  }
+  /* min-width: 0 — sem isto um nome longo empurra o cartão e cria rolagem
+     lateral, porque item de flex não encolhe abaixo do conteúdo por padrão. */
+  .prm-ident { flex: 1 1 auto; min-width: 0; }
+  .prm-codigo {
+    display: block;
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .03em;
+    color: var(--gmp-text-light, #8A90A6);
+  }
+  .prm-nome {
+    font-size: .98rem;
+    font-weight: 700;
+    line-height: 1.3;
+    margin-top: 2px;
+  }
+
+  .prm-descritivo {
+    margin-top: 8px;
+    font-size: .78rem;
+    line-height: 1.45;
+    color: var(--gmp-text-light, #5B627A);
+    /* Duas linhas bastam para dar o teor; o resto está na tela de edição. */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .prm-preco {
+    margin-top: 10px;
+    font-size: 1.22rem;
+    font-weight: 800;
+    letter-spacing: -.02em;
+  }
+
+  .prm-meta {
+    margin-top: 4px;
+    font-size: .74rem;
+    line-height: 1.45;
+    color: var(--gmp-text-light, #8A90A6);
+  }
+
+  .prm-card .class-area-selo {
+    display: inline-block;
+    margin-top: 8px;
+    font-size: .68rem;
+  }
+
+  .prm-acts {
+    display: flex;
+    align-items: stretch;
+    gap: 4px;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--gmp-border, rgba(17, 24, 39, .08));
+  }
+  .prm-act {
+    flex: 1 1 0;
+    min-height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: none;
+    border-radius: 12px;
+    background: none;
+    color: var(--gmp-text-light, #5B627A);
+    font-family: inherit;
+    font-size: .82rem;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .prm-act.is-destaque { color: #2563EB; }
+  .prm-act-mais { flex: 0 0 46px; }
+
+  .prm-vazio {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 40px 16px;
+    color: var(--gmp-text-light, #8A90A6);
+    font-size: .9rem;
+  }
+
+  /* ── Folha de ações ─────────────────────────────────────────────────────── */
+  .prm-fundo {
+    display: flex;
+    position: fixed;
+    inset: 0;
+    z-index: 1400;
+    align-items: flex-end;
+    background: rgba(4, 10, 22, .55);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+  }
+  .prm-folha {
+    width: 100%;
+    max-height: 82vh;
+    overflow-y: auto;
+    padding: 10px 14px calc(env(safe-area-inset-bottom, 0px) + 18px);
+    border-radius: 24px 24px 0 0;
+  }
+  .prm-puxador {
+    width: 40px; height: 4px;
+    margin: 4px auto 12px;
+    border-radius: 999px;
+    background: var(--gmp-border, rgba(17, 24, 39, .18));
+  }
+  .prm-folha-tit {
+    font-size: .78rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--gmp-text-light, #8A90A6);
+    margin-bottom: 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .prm-op {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 52px;
+    padding: 0 12px;
+    margin-bottom: 4px;
+    border: none;
+    border-radius: 14px;
+    background: transparent;
+    color: var(--gmp-text, #14182B);
+    font-family: inherit;
+    font-size: .95rem;
+    font-weight: 500;
+    text-align: left;
+    text-decoration: none;
+  }
+  .prm-op svg { flex: 0 0 auto; }
+  .prm-op.is-danger { color: var(--gmp-error, #E5193A); }
+
+  /* O tema escuro pinta texto depois desta regra e com a mesma especificidade;
+     sem repetir o vermelho aqui, "Desativar" sai branco como as demais. Foi
+     exatamente o defeito corrigido na folha de propostas. */
+  [data-theme="dark"] .prm-op { color: #F3F4FA; }
+  [data-theme="dark"] .prm-op.is-danger { color: #FF6B81; }
+}

@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { FiSave, FiClock, FiX, FiDownload, FiRefreshCw, FiImage, FiTag } from 'react-icons/fi';
+import {
+  FiSave, FiClock, FiX, FiDownload, FiRefreshCw, FiImage, FiTag, FiMoreHorizontal,
+} from 'react-icons/fi';
 import api from '../../services/api';
 import HistoricoEdicoes from './HistoricoEdicoes';
 import {
@@ -80,6 +82,8 @@ export default function PropostaPreviewEditavel() {
   const iframeRef = useRef(null);
 
   const [html, setHtml] = useState('');
+  // Celular: a folha de acoes que substitui a parede de seis botoes.
+  const [acoesAbertas, setAcoesAbertas] = useState(false);
 
   // Girar o aparelho muda a largura disponivel: sem isto o documento continuaria
   // na escala do retrato, sobrando faixa branca na direita no modo paisagem.
@@ -1438,9 +1442,64 @@ export default function PropostaPreviewEditavel() {
     }
   }
 
+  // Fonte unica das acoes da proposta (ver comentario no JSX).
+  const acoes = [
+    {
+      chave: 'reset',
+      icone: <FiRefreshCw />,
+      rotulo: 'Resetar cláusulas',
+      dica: 'Resetar cláusulas para o padrão',
+      onClick: resetarClausulas,
+    },
+    {
+      chave: 'foto',
+      icone: <FiImage />,
+      rotulo: enviandoFotos ? 'Enviando...' : 'Adicionar foto',
+      dica: 'Adicionar foto(s) à proposta — depois arraste para posicionar onde quiser',
+      onClick: () => fotoInputRef.current && fotoInputRef.current.click(),
+      desabilitada: enviandoFotos,
+    },
+    {
+      chave: 'historico',
+      icone: <FiClock />,
+      rotulo: 'Histórico',
+      dica: 'Ver histórico de edições',
+      onClick: () => setMostrarHistorico(true),
+    },
+    {
+      chave: 'pdf',
+      icone: <FiDownload />,
+      rotulo: baixandoPdf ? 'Gerando...' : 'Baixar PDF',
+      dica: 'Baixar PDF desta proposta',
+      onClick: baixarPdf,
+      desabilitada: baixandoPdf,
+    },
+    {
+      chave: 'revisao',
+      icone: <FiTag />,
+      rotulo: emitindoRevisao ? 'Emitindo...' : 'Emitir revisão',
+      dica: 'Fecha a versão atual para o cliente: avança o número da proposta e registra no histórico',
+      onClick: emitirRevisao,
+      desabilitada: emitindoRevisao || salvando,
+      classe: 'ppe-btn-revisao',
+    },
+    {
+      chave: 'salvar',
+      icone: <FiSave />,
+      rotulo: salvando ? 'Salvando...' : 'Salvar alterações',
+      dica: 'Grava as alterações sem mexer no número da proposta',
+      onClick: salvar,
+      desabilitada: !mudancasPendentes || salvando,
+      classe: `ppe-btn-salvar ${!mudancasPendentes ? 'ppe-btn-disabled' : ''}`,
+    },
+  ];
+
   return (
     <div className="ppe-container">
       {/* Toolbar */}
+      {/* As acoes sao definidas UMA vez e renderizadas em dois lugares: a barra do
+          computador e a folha do celular. Nao e economia de codigo — e a regra de
+          nao ter duas listas que divergem no dia em que uma acao mudar. */}
       <div className="ppe-toolbar">
         <div className="ppe-toolbar-left">
           <span className="ppe-titulo">
@@ -1448,63 +1507,75 @@ export default function PropostaPreviewEditavel() {
           </span>
           {mudancasPendentes && <span className="ppe-badge-pendente">Alterações não salvas</span>}
         </div>
+
+        <input
+          ref={fotoInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/gif,image/webp"
+          multiple
+          style={{ display: 'none' }}
+          onChange={enviarFotos}
+        />
+
+        {/* Computador: todas as acoes visiveis, como sempre foi. */}
         <div className="ppe-toolbar-actions">
+          {acoes.map((a) => (
+            <button
+              key={a.chave}
+              className={`ppe-btn ${a.classe || ''}`}
+              onClick={a.onClick}
+              disabled={a.desabilitada}
+              title={a.dica}
+            >
+              {a.icone} {a.rotulo}
+            </button>
+          ))}
+        </div>
+
+        {/* Celular: so o que decide. Antes, seis botoes grandes empurravam o
+            documento para fora da primeira tela — abria-se a proposta e via-se
+            uma parede de botoes. */}
+        <div className="ppe-mob">
           <button
-            className="ppe-btn"
-            onClick={resetarClausulas}
-            title="Resetar cláusulas para o padrão"
-          >
-            <FiRefreshCw /> Resetar cláusulas
-          </button>
-          <button
-            className="ppe-btn"
-            onClick={() => fotoInputRef.current && fotoInputRef.current.click()}
-            disabled={enviandoFotos}
-            title="Adicionar foto(s) à proposta — depois arraste para posicionar onde quiser"
-          >
-            <FiImage /> {enviandoFotos ? 'Enviando...' : 'Adicionar foto'}
-          </button>
-          <input
-            ref={fotoInputRef}
-            type="file"
-            accept="image/png,image/jpeg,image/gif,image/webp"
-            multiple
-            style={{ display: 'none' }}
-            onChange={enviarFotos}
-          />
-          <button
-            className="ppe-btn"
-            onClick={() => setMostrarHistorico(true)}
-            title="Ver histórico de edições"
-          >
-            <FiClock /> Histórico
-          </button>
-          <button
-            className="ppe-btn"
-            onClick={baixarPdf}
-            disabled={baixandoPdf}
-            title="Baixar PDF desta proposta"
-          >
-            <FiDownload /> {baixandoPdf ? 'Gerando...' : 'Baixar PDF'}
-          </button>
-          <button
-            className="ppe-btn ppe-btn-revisao"
-            onClick={emitirRevisao}
-            disabled={emitindoRevisao || salvando}
-            title="Fecha a versão atual para o cliente: avança o número da proposta e registra no histórico"
-          >
-            <FiTag /> {emitindoRevisao ? 'Emitindo...' : 'Emitir revisão'}
-          </button>
-          <button
-            className={`ppe-btn ppe-btn-salvar ${!mudancasPendentes ? 'ppe-btn-disabled' : ''}`}
+            type="button"
+            className="ppe-mob-acao"
             onClick={salvar}
             disabled={!mudancasPendentes || salvando}
-            title="Grava as alterações sem mexer no número da proposta"
           >
-            <FiSave /> {salvando ? 'Salvando...' : 'Salvar alterações'}
+            <FiSave /> {salvando ? 'Salvando...' : 'Salvar'}
+          </button>
+          <button
+            type="button"
+            className="ppe-mob-mais"
+            onClick={() => setAcoesAbertas(true)}
+            aria-label="Mais ações"
+          >
+            <FiMoreHorizontal />
           </button>
         </div>
       </div>
+
+      {acoesAbertas && (
+        <div className="ppe-fundo" onClick={() => setAcoesAbertas(false)}>
+          <div className="ppe-folha" onClick={(e) => e.stopPropagation()}>
+            <div className="ppe-puxador" />
+            <div className="ppe-folha-tit">
+              {numeroProposta ? `Proposta Nº ${numeroProposta}` : `Proposta #${id}`}
+            </div>
+            {acoes.map((a) => (
+              <button
+                key={a.chave}
+                type="button"
+                className={`ppe-op ${a.classe || ''}`}
+                onClick={() => { setAcoesAbertas(false); a.onClick(); }}
+                disabled={a.desabilitada}
+              >
+                {a.icone} {a.rotulo}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Preview */}
       <div className="ppe-preview-wrapper">
