@@ -799,3 +799,140 @@ B113).
 `routes/almoxarifado.js:3791` como varredura, `permissions.js:149` com COMPRAS em `ver_alertas`,
 `20-alertas/README.md:27` ainda `[ ]`, e `PEDIDO_COMPRA_ATRASADO`/`?atrasados=` inexistentes em
 `server/` e `client/src`.)*
+
+---
+
+## 12. Como foi executado — o que este design previu errado (escrito no fechamento, 2026-09-17)
+
+> **Range da etapa:** `39ea9d2..19ebf7d` — T1 `437aed2`, T2 `235c067`, T3 `833850e`, T4 `ddbc18f`,
+> T5 `fc84e09`, e a onda de correção F1 `45bda69`, F2 `33031ac`, F3 `8f3db94`, F4 `19ebf7d`.
+>
+> **Design errado é dado, não vergonha** — o que não se faz é apagar a versão errada em silêncio,
+> porque a próxima sessão confia nela de novo (regra 5 do `CLAUDE.md`). As seis correções abaixo
+> ficam **ao lado** do texto original das seções 3, 5, 7 e 10, que **não foi apagado**.
+
+### 12.1 A premissa da D3 sobre o fuso do servidor **era falsa em produção** *(corrigido no fechamento)*
+
+**O design dizia** (D3, descartado (b), e a letra A): que a régua devia usar `hojeLocalISO()` — a
+data **local do host** por `getFullYear/getMonth/getDate` — em vez de `date('now')` do SQLite,
+*"porque `date('now')` é UTC"*; e tratava o fuso do host como **pergunta para a letra A**, a ser
+confirmada em produção.
+
+**Estava errado no ponto que importa:** a alternativa escolhida também era UTC lá. A revisão final
+mediu (C1, lente UX) que produção roda `node:20-alpine` no Coolify **sem `TZ` e sem `tzdata`** —
+então `getFullYear()` **é** UTC, e às 21:30 BRT o pedido que vence **hoje** já acusava atraso no
+badge, no filtro `?atrasados=1`, no Excel e no e-mail. As suítes não viam nada: elas rodam com `TZ`
+fixo, e o harness passava idêntico nos dois mundos. A letra A não era uma pergunta a fazer — era um
+defeito a consertar.
+
+**O que vale hoje** (`45bda69`): `hojeLocalISO(agora = new Date())` recorta o dia por
+`Intl.DateTimeFormat('en-CA', { timeZone: FUSO_PADRAO })` — `America/Sao_Paulo`, o mesmo fuso de
+`auditFiltros` e de `client/jest.globalSetup.js` —, com require **lazy** de `auditFiltros`. O dia do
+sistema deixou de depender do relógio do contêiner. O `Dockerfile` ganhou `tzdata` +
+`ENV TZ=America/Sao_Paulo` **além** disso: as duas, nunca uma só — a variável sozinha não resolve
+sem o pacote de fusos, e o código sozinho deixaria qualquer outro `new Date().getHours()` errado.
+O cenário **(11)** de `comprasPedidoAtraso.api.test.js` fixa o instante `2026-09-17T02:30:00Z` e
+exige `'2026-09-16'`; rodado também com `TZ=UTC`: **11/0**.
+
+### 12.2 O §7.4 mandava `jest.useFakeTimers().setSystemTime(...)`, e isso TRAVA esta base *(corrigido no fechamento)*
+
+**O design dizia** (§7.4 e RN-D03): *"relógio fixo em `jest.useFakeTimers().setSystemTime(new
+Date(2026, 8, 16, 23, 30))`"*.
+
+**Estava errado nesta base:** o Jest daqui é **27.5.1** (medido por `require('jest/package.json')`),
+onde `useFakeTimers()` é "modern" e **fake também o `setTimeout`** — a opção `doNotFake` só existe a
+partir do Jest 29. Com os timers falsos, o harness de render (`createRoot` + `act`, sem
+`@testing-library`) **trava**.
+
+**O que vale hoje** (`235c067`): o cenário `(q)` substitui `global.Date` por uma **subclasse** que
+fixa o instante e restaura no `finally` — fixa o relógio **sem tocar nos timers**. Descartado:
+injetar um relógio no componente (provaria o relógio injetado, não a tela). O mesmo padrão foi
+reusado no cenário (11) do servidor (§12.1).
+
+### 12.3 O R9b: o ciclo de módulos **não fecha hoje**, e o lazy fica por CONVENÇÃO *(corrigido no fechamento)*
+
+**O design dizia** (R9b): que o require de topo fecharia um ciclo — `pedidoCompraService` →
+`purchaseService` → `notificationQueueService` → `alertRegistry` — e que por isso o require da régua
+precisava ser lazy.
+
+**Estava impreciso, e a diferença muda o que a suíte prova:** medido na T4, hoje o ciclo **não
+fecha**, porque `notificationQueueService` requer o `alertRegistry` **lazy** (`:581` e `:647`). Um
+require de topo **funcionaria** — e é exatamente por isso que ele é perigoso: o ciclo está a **um**
+require de distância (`receiptService.js:26` requer `purchaseService` e `:31` requer o
+`alertRegistry`, os dois no topo). Quando fechar, um dos lados captura `{}` mid-load, `derivarAtraso`
+vem `undefined` e o cartão da central aparece com `erro: true` **em vez de quebrar a suíte**.
+
+**Consequência declarada, e é a parte incômoda:** como o ciclo não fecha, **nenhum teste falha se
+alguém trocar o require lazy por um de topo**. O lazy fica por **convenção escrita no próprio
+arquivo** (`alertRegistry.js`), não por régua executável. Fingir que a suíte protege isso seria pior
+que declarar que não protege.
+
+### 12.4 A D6 foi **parcialmente superada** pela porta de status *(corrigido no fechamento)*
+
+**O design dizia** (D6 e RN-D12): *"vocabulário de status: nada muda"*, e que o pedido fisicamente
+recebido por inteiro mas ainda `pendente` **continuaria atrasado até alguém editar o status** — uma
+limitação assumida, a ser provada por teste.
+
+**A parte que estava errada é a saída, não a limitação:** a Fase 2 já havia medido que a guarda da
+Etapa 38 recusa o `PUT` com 400 para **exatamente** essa população, e a revisão final (I1, lente
+regra de negócio) mostrou que isso não é um canto — é **o caminho normal de todo pedido recebido
+pelo almoxarifado**. Ou seja: o conserto que o manual mandava fazer era recusado pela API, e o
+pedido ficava "Atrasado" **para sempre**, com `dias_atraso` crescendo sem teto e sem gesto de tela
+que limpasse.
+
+**O que vale hoje** (`19ebf7d`, decisão **B117**): existe `PATCH /api/compras/pedidos/:id/status` —
+corpo `{ status }` pelo enum, 200 `{ id, numero, status }`, 400 com a literal do enum, 404
+`Pedido de compra não encontrado`, gate só de módulo. O serviço faz **um** `UPDATE ... SET status` e
+nada mais. `GET /:id` passa a devolver `teve_recebimento: 0|1` (as mesmas duas pernas da guarda), e
+o formulário em modo edição mostra *"Este pedido já teve recebimento — só o status pode ser
+alterado"*, desabilita fornecedor/itens/datas e salva por `PATCH`. **Descartado: afrouxar a guarda
+do `PUT`** — `atualizarPedido` faz `DELETE` + `INSERT` das linhas e as novas nascem com
+`quantidade_recebida = 0`, então o operador receberia o mesmo material duas vezes; o cenário (5) de
+`comprasPedidoStatus.api.test.js` é a régua de que a guarda **não** foi afrouxada.
+
+**O que da D6 CONTINUA de pé:** o recebimento **não** marca `status = 'recebido'` sozinho. A saída
+existe, mas é **manual**. Automatizar é fatia da feature 08 — e o teste de integração desta etapa já
+tem os sensores (a sabotagem que faz o `processar` gravar status derruba os blocos D/9a/F).
+
+**Declarado junto:** o `PATCH` aceita **qualquer** dos 7 status, inclusive em pedido já recebido —
+não há máquina de estados no módulo Compras, e a porta nova herdou isso em vez de inventar uma régua
+que só ela conheceria.
+
+### 12.5 A chave de dedupe do §5.3 **mudou** *(corrigido no fechamento)*
+
+**O design congelava** `dedupeChave: (linha) => ` + o template `pedido-atrasado-${linha.id}`, com o
+objetivo declarado *"um aviso por pedido, para sempre"*.
+
+**Estava errado no efeito** (I2 nas **duas** lentes da revisão final, reproduzido por sonda): o
+comprador recebe o aviso, liga para o fornecedor e **renegocia** o prazo pelo `PUT` — que é o gesto
+canônico *depois* do alerta e é permitido. O prazo novo vence, o `listar` acha a linha, mas o
+`enfileirar` recalcula o **mesmo** hash, bate no `UNIQUE` e devolve DUPLICADA. Nenhum e-mail, nunca
+mais, por mais prazos que aquele pedido quebre — e não há expurgo da fila, então o silêncio é
+permanente.
+
+**O que vale hoje** (`33031ac`, decisão **B115**): a chave é
+`pedido-atrasado-${linha.id}-${linha.previsao_entrega}`. O objetivo original fica inteiro (a
+previsão não muda dia a dia, muda quando é renegociada), e o formato é o das irmãs que dependem de
+uma data prometida: `calibracao-${id}-${data_validade}`, `lote-vencendo-${id}-${data_validade}`,
+`remessa-vencida-${id}-${prazo_previsto}`. **Descartado:** expurgo/retenção da fila — é contrato da
+feature 19 e mudaria o dedupe das 11 entradas anteriores junto. Cenário **(9)** de
+`alertaPedidoAtrasado.api.test.js` percorre a renegociação pelo `PUT` real.
+
+### 12.6 O `listar` do §5.3 **não seleciona `p.*`** *(corrigido no fechamento)*
+
+**O design não nomeava as colunas** do `SELECT` da entrada de alerta, e a execução da T4 entregou
+`SELECT p.*`.
+
+**Estava errado, e o vazamento é medível** (I1, lente UX): `montarCentral` devolve as linhas
+**cruas** (até 50) na resposta de `GET /api/almoxarifado/alertas/central`, cujo gate é
+`requirePermission('ver_alertas')` — **sem** `checkModulePermission('compras')`. Um ALMOXARIFE ou
+GESTOR, que toma **403** em `GET /api/compras/pedidos`, recebia `valor_total`, `observacoes` e
+`fornecedor_id` de pedidos CORE na aba Network, ainda que a tela desenhe só 4 colunas. É a mesma
+classe de dado que tirou PRODUÇÃO/ENGENHARIA/CONSULTA de `ver_alertas` na Etapa 16 (`valor_parado`).
+
+**O que vale hoje** (`8f3db94`, decisão **B116**):
+`SELECT p.id, p.numero, p.status, p.previsao_entrega, f.razao_social AS fornecedor_nome`, com
+`LEFT JOIN` (pedido órfão de fornecedor também atrasa). `data_pedido` **não** entra — nada o lê, e
+isso é divergência declarada do brief da onda, que o listava. **Descartado:** manter `p.*` "como a
+rota aux da 37 faz" — o risco maior nem é o de hoje: com `p.*`, qualquer coluna acrescentada a
+`pedidos_compra` amanhã passa a viajar para a central sem revisão nenhuma.

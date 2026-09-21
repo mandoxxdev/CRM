@@ -457,7 +457,40 @@ SELECT status, COUNT(*) AS quantos
   `DELETE FROM itens_pedido_compra WHERE pedido_id NOT IN (SELECT id FROM pedidos_compra);`
   **depois** de você confirmar a contagem.
 
-### B. Decisões de negócio — B1 a B113; as em aberto esperam você, as tomadas estão escritas com o descartado
+**A15 (NOVA, da Etapa 39 — quantos pedidos têm prazo prometido, e em que fuso o servidor acha que
+está).** A Etapa 39 liga um aviso por e-mail e um cartão de alerta que só existem para pedidos
+**com previsão de entrega preenchida**. Enquanto esse número for **zero**, o alerta nasce **inerte**:
+ele não some da central, aparece com total **0** e nunca manda e-mail — o que é o esperado, e não um
+defeito a caçar depois do deploy.
+
+```sql
+SELECT COUNT(*)                                                      AS pedidos,
+       SUM(CASE WHEN previsao_entrega IS NOT NULL
+                 AND previsao_entrega <> ''      THEN 1 ELSE 0 END)  AS com_previsao,
+       SUM(CASE WHEN previsao_entrega IS NOT NULL
+                 AND previsao_entrega <> ''
+                 AND previsao_entrega < date('now')
+                 AND status NOT IN ('recebido','cancelado','rejeitado')
+                                                 THEN 1 ELSE 0 END)  AS ja_atrasados
+  FROM pedidos_compra;
+```
+
+- **`com_previsao = 0`** — nada a fazer: o cartão **"Pedido de compra atrasado"** aparece zerado e
+  nenhum e-mail sai até o primeiro pedido com prazo ser criado pela tela.
+- **`ja_atrasados > 0`** — **saiba o número antes de subir.** Na primeira varredura depois do
+  deploy (30 segundos após o arranque do servidor), **sai um e-mail por pedido** dessa contagem, de
+  uma vez, para a lista de alertas de estoque. Se o número for grande, desligue o checkbox
+  **"Notificar por e-mail"** da tela de Alertas antes do deploy, confira o cartão da central e
+  religue. *(A terceira coluna é uma aproximação: ela usa a data do servidor em horário universal,
+  então perto da meia-noite pode contar um pedido a mais. A régua real é a de Brasília — **B114**.)*
+
+**E uma verificação fora do banco, depois do deploy:** confirme que o processo em produção está em
+**America/Sao_Paulo**. A imagem passou a instalar a base de fusos e a declarar o fuso do Brasil nesta
+etapa; se por algum motivo isso não pegar, o dia de referência volta a ser o universal e o pedido que
+vence **hoje** passa a acusar atraso a partir das **21h**. O jeito de conferir sem SQL é olhar a
+aba Pedidos depois das 21h: nenhum pedido com previsão de **hoje** pode estar com o selo vermelho.
+
+### B. Decisões de negócio — B1 a B122; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(O título desta seção dizia "B1 a B24" — **estava defasado**: os itens já iam até B36 antes da
 Etapa 20. Corrigido em 2026-08-28 para B50, depois para B56 com as três da Etapa 24, para B57 com
@@ -2161,6 +2194,136 @@ a data de HOJE.**
 justamente o que o comprador precisa ver.
 **O custo:** a data de hoje é a do **relógio do servidor**, então uma carga feita perto da
 meia-noite pode nascer com a data do dia seguinte para quem está em outro fuso. Ver **G37**.
+*(A Etapa 39 fechou este custo: o "hoje" do servidor passou a ser o dia de **Brasília** — **B114**.)*
+
+**B114 (NOVA, da Etapa 39 — da onda de correção) — o dia que decide o atraso é o de BRASÍLIA, não o
+do relógio da máquina.**
+
+**O que foi escolhido:** calcular o dia de referência sempre no fuso **America/Sao_Paulo**,
+independentemente de como o servidor está configurado — **e**, por segurança dupla, instalar a base
+de fusos na imagem e declarar o fuso do Brasil nela.
+**O que foi descartado:** confiar no relógio do sistema operacional (era o que havia) e usar a data
+do próprio banco de dados (que também é universal).
+**Por quê:** o servidor de produção sobe sem fuso definido, ou seja, em **horário universal** — 3
+horas à frente do Brasil. Medido: às **21h30** de Brasília, o pedido que vence **hoje** já aparecia
+com o selo vermelho, entrava no filtro "Só atrasados", saía como *Sim* no Excel e **gerava e-mail**.
+Nenhum teste via isso, porque a máquina de testes também roda em horário universal. Só a imagem não
+bastaria: se alguém subir o sistema em outra máquina, a conta voltaria a errar em silêncio.
+**O custo:** o sistema passa a ter **uma** verdade de "hoje" — a de Brasília — inclusive para a
+empresa que um dia opere em outro fuso. Para este cliente, que tem um site só, é o que se quer.
+
+**B115 (NOVA, da Etapa 39 — da onda de correção) — prazo renegociado e furado de novo volta a
+avisar.**
+
+**O que foi escolhido:** a chave que impede o e-mail repetido passa a incluir **a data prometida**,
+não só o pedido. Enquanto o prazo for o mesmo, o aviso sai **uma vez**; renegociou o prazo e o prazo
+novo venceu, sai **outro**.
+**O que foi descartado:** apagar avisos antigos da fila depois de um tempo (mexeria no comportamento
+dos onze alertas já entregues) e mandar um e-mail por dia de atraso (é a rajada que a régua existe
+para evitar).
+**Por quê:** com a chave só do pedido, o **primeiro** e-mail calava aquele pedido **para sempre** —
+o comprador liga para o fornecedor, combina uma data nova, ela também vence, e o sistema não avisa
+nunca mais. Reproduzido antes de consertar. Renegociar prazo é justamente o gesto normal depois de
+receber o primeiro aviso.
+**O custo:** um pedido cujo prazo seja renegociado muitas vezes gera um e-mail por prazo quebrado.
+É o que se quer: cada e-mail é um fato novo.
+
+**B116 (NOVA, da Etapa 39 — da onda de correção) — a central de alertas para de carregar valor e
+observação do pedido.**
+
+**O que foi escolhido:** o cartão de pedido atrasado leva apenas **número, fornecedor, previsão,
+dias de atraso e status**.
+**O que foi descartado:** mandar a linha inteira do pedido, que é como a tela de recebimento por
+pedido (Etapa 37) faz.
+**Por quê:** a central de alertas é vista por **Almoxarife e Gestor**, que **não** têm acesso à tela
+de pedidos de compra. Com a linha inteira, **valor total** e **observações de negociação com o
+fornecedor** chegavam ao navegador deles — ainda que a tela desenhe só quatro colunas. É a mesma
+classe de dado que fez o time tirar Produção e Engenharia da central na Etapa 16 (valor parado).
+**O custo:** uma coluna nova que alguém queira mostrar nesse cartão amanhã precisa ser acrescentada
+à lista — de propósito: o padrão passa a ser **não expor**.
+
+**B117 (NOVA, da Etapa 39 — da onda de correção) — pedido já recebido ganha uma porta que muda SÓ o
+status.**
+
+**O que foi escolhido:** uma porta separada, que grava **apenas o status** e não encosta nos itens,
+permitida **mesmo depois do recebimento**; o formulário de edição, num pedido já recebido, mostra a
+faixa *"Este pedido já teve recebimento — só o status pode ser alterado"*, desabilita todo o resto e
+salva por ela.
+**O que foi descartado:** afrouxar a recusa da Etapa 38 para deixar o formulário inteiro salvar
+(**e este descarte é o ponto**), e adiar o assunto para a etapa do status automático.
+**Por quê:** salvar o formulário inteiro apaga e regrava as linhas do pedido — e a regravação
+**zera a quantidade já recebida**. O pedido voltaria a aparecer **aberto com o saldo inteiro** no
+recebimento, o operador receberia **o mesmo material duas vezes**, com estoque dobrado e conta a
+pagar duplicada, e sem nenhum erro na tela. Sem porta nenhuma, porém, **todo pedido recebido com
+atraso ficava "Atrasado" para sempre** — dentro do filtro que é a feature-título desta etapa. Adiar
+seria entregar a feature com o caso mais comum quebrado.
+**O custo:** a porta aceita **qualquer** dos sete status, inclusive num pedido já recebido — não
+existe máquina de estados no módulo Compras (ver **G39**). Quem clicar errado marca o pedido como
+*Cancelado* depois de recebido, e o sistema aceita.
+
+**B118 (NOVA, da Etapa 39) — o corte de escopo: prazo primeiro, abas de Fornecedores e Cotações
+depois.**
+
+**O que foi escolhido:** gastar a etapa inteira no **prazo do pedido** (atraso na tela, filtro,
+Excel, e-mail) e deixar as abas **Fornecedores** e **Cotações** — que continuam sem tela de criação —
+como o próximo candidato declarado.
+**O que foi descartado:** abrir as três frentes e entregar as três pela metade.
+**Por quê:** o pedido criado pela 38 é o documento que já existe e já está sendo usado; o que faltava
+nele era **alguém olhar o prazo**. Fornecedor se cadastra uma vez por fornecedor; prazo se cobra
+todo dia.
+**O custo:** quem precisar de um fornecedor novo continua dependendo de quem tem acesso ao banco.
+
+**B119 (NOVA, da Etapa 39) — atraso é DERIVADO na leitura, nunca gravado.**
+
+**O que foi escolhido:** calcular "atrasado" e "dias de atraso" toda vez que a lista é lida.
+**O que foi descartado:** gravar uma marca de atraso no pedido, atualizada por uma rotina diária.
+**Por quê:** marca gravada fica velha. Corrigir a previsão de entrega, receber o pedido ou cancelá-lo
+teria de disparar a atualização da marca em cada um desses caminhos, e o primeiro caminho esquecido
+mentiria em silêncio — exatamente o tipo de defeito que este documento já registrou três vezes.
+Derivado, o número **nunca** diverge do que está gravado.
+**O custo:** nada a consultar por SQL ("me dá a lista de atrasados do banco" não existe como coluna),
+e o filtro é aplicado depois da consulta — o que só passa a importar se a listagem um dia ganhar
+paginação (**G40**).
+
+**B120 (NOVA, da Etapa 39) — o aviso de pedido atrasado entra no mecanismo de alertas que já existe,
+e nasce inerte.**
+
+**O que foi escolhido:** acrescentar o pedido atrasado à mesma varredura diária e à mesma central que
+já cuidam de lote vencendo, remessa vencida e requisição atrasada — reaproveitando fila de e-mail,
+destinatários, interruptor geral e o cartão da central.
+**O que foi descartado:** um mecanismo de aviso próprio do módulo Compras.
+**Por quê:** um segundo mecanismo significaria uma segunda fila, uma segunda lista de destinatários e
+um segundo interruptor — e o operador teria de aprender dois lugares para desligar e-mail.
+**O custo:** é a **primeira** vez que a varredura do almoxarifado lê tabelas do **núcleo** do CRM
+(pedidos e fornecedores). Está declarado; o banco é o mesmo arquivo, então não há custo técnico, mas
+a fronteira entre módulos ficou um pouco mais fina.
+
+**B121 (NOVA, da Etapa 39) — o status do pedido continua sendo escolhido à mão; o recebimento não o
+muda.**
+
+**O que foi escolhido:** manter os **sete** status da 38, sem acrescentar "parcial" e sem fazer o
+recebimento marcar o pedido como *Recebido*.
+**O que foi descartado:** o status automático no recebimento (que resolveria sozinho o caso do
+pedido recebido com atraso).
+**Por quê:** automatizar exige decidir antes o que fazer com recebimento **parcial**, com
+**excedente autorizado** e com o pedido que o comprador já marcou à mão como *Cancelado* — três
+regras novas sobre um documento que acabou de nascer. E o mesmo efeito prático foi entregue de forma
+**reversível** pelo **B117**, que é um clique.
+**O custo:** enquanto isso não existir, **pedido recebido só sai da lista de atrasados quando alguém
+mudar o status pelo lápis** (ver **C52**).
+
+**B122 (NOVA, da Etapa 39) — uma afirmação ERRADA da especificação de alertas foi corrigida.**
+
+A especificação de alertas dizia que o aviso de **"Pedido recebido parcialmente"** estava bloqueado
+**por falta de dado**. **Estava desatualizado:** o dado existe desde a Etapa 37 — o pedido sabe
+quanto de cada linha já chegou.
+**O que foi escolhido:** corrigir a afirmação e **manter o alerta fora** desta etapa, agora pelo
+motivo verdadeiro: a conta de "quanto falta" é feita **dentro** do formulário de recebimento e não é
+publicada para a varredura usar.
+**O que foi descartado:** publicar essa conta agora, só para o alerta.
+**Por quê:** publicar um derivado que hoje tem **um** consumidor, para servir a um alerta que ninguém
+pediu, é criar uma segunda régua de saldo de pedido — o erro que a Etapa 37 evitou de propósito.
+**O custo:** o alerta continua não existindo; a diferença é que agora está escrito **por quê**.
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -2812,6 +2975,33 @@ meia-noite pode nascer com a data do dia seguinte para quem está em outro fuso.
     Deixado aqui, com o número da etapa que fechou, em vez de apagado — para quem lembrar do furo
     confirmar que ele fechou e com o quê.
 
+
+52. **NOVO, da Etapa 39 — o pedido que o almoxarifado recebeu continua marcado como "Atrasado" até
+    alguém mudar o status pelo lápis.** Receber o material e processar a nota **não** mexe no status
+    do pedido de compra: quem passa a saber que o material chegou é o **recebimento**, e o status do
+    pedido continua sendo a declaração do **comprador** (decisão **B121**). Na prática, um pedido
+    entregue **com atraso** continua com o selo vermelho na aba Pedidos, continua dentro do filtro
+    **"Só atrasados"** e continua no cartão da central de alertas — com os dias crescendo todo dia.
+
+    **O gesto que resolve é um clique, e quem opera precisa saber que ele existe:** **Compras →
+    Pedidos de Compra → lápis** do pedido → a faixa laranja *"Este pedido já teve recebimento — só o
+    status pode ser alterado"* aparece, todo o resto do formulário fica travado → mude o **Status**
+    para *Recebido* → **Salvar pedido** → *"Status do pedido atualizado"*, e o selo some.
+
+    **O e-mail não repete** por causa disso (o aviso de um mesmo prazo sai uma vez só), mas a tela e
+    o cartão continuam acusando. Combine com o comprador **quem** fecha o status do pedido depois de
+    receber — senão a lista de atrasados vira uma lista de pedidos já entregues, e deixa de ser
+    olhada.
+
+
+53. **NOVO, da Etapa 39 — o e-mail de pedido atrasado pode levar até 24 horas para sair, e a hora
+    dele é a hora em que o servidor foi reiniciado.** A varredura diária roda **30 segundos depois
+    de o servidor subir** e **a cada 24 horas** a partir daí. Não há como escolher o horário. Duas
+    consequências práticas: (a) um prazo que venceu hoje de manhã pode virar e-mail só amanhã —
+    quem quiser ver na hora olha o cartão em **Almoxarifado → Alertas**, que é leitura **ao vivo**;
+    (b) para forçar a varredura numa demonstração, **reinicie o servidor e espere 30 segundos**.
+    Ver **G41**.
+
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -3136,6 +3326,35 @@ meia-noite pode nascer com a data do dia seguinte para quem está em outro fuso.
   declarou — a limpeza dos 21 valeu para o arquivo do almoxarifado, e o arquivo principal do servidor
   tem 51 do mesmo tipo. A Etapa 38 mexeu nesse arquivo (**moveu 23 rotas do Compras para fora dele**,
   byte a byte), mas **não** tocou nos 51. Ver **B94**.
+
+- **(39) Receber o material não fecha o pedido — o status continua sendo escolhido à mão.** Não há
+  status automático no recebimento, nem status "parcial": um pedido totalmente recebido continua
+  *Pendente* até o comprador mudá-lo. É decisão (**B121**), e a consequência operacional está na
+  letra **C52**: pedido recebido com atraso continua aparecendo como atrasado até alguém trocar o
+  status pelo lápis.
+
+- **(39) Não existe alerta de "pedido recebido parcialmente".** A especificação de alertas o previa e
+  dizia que faltava dado — **estava desatualizada** (o dado existe desde a Etapa 37). Ele segue fora
+  pelo motivo verdadeiro: a conta de quanto falta é feita dentro do formulário de recebimento e não é
+  publicada para a varredura. Ver **B122**.
+
+- **(39) A hora da varredura diária não é escolhível.** Ela roda 30 segundos depois de o servidor
+  subir e a cada 24 horas — então o horário do e-mail é o horário do último reinício, e um prazo que
+  vence hoje pode levar até **24 horas** para virar aviso. A central de alertas, por ser leitura ao
+  vivo, não tem essa espera. Ver **C53** e **G41**.
+
+- **(39) As abas Fornecedores e Cotações continuam sem tela de criação.** Mesmo corte da Etapa 38,
+  renovado por decisão (**B118**): a etapa foi gasta no prazo do pedido. É o próximo candidato
+  declarado.
+
+- **(39) A aba Pedidos mostra PRAZO, não QUANTIDADE.** O que já chegou de cada linha (saldo pendente,
+  **ABERTO / PARCIAL / RECEBIDO**) continua aparecendo só no formulário de recebimento — a limitação
+  que a Etapa 37 declarou e a 38 manteve (**B103**) **não** foi fechada aqui.
+
+- **(39) O pedido já recebido continua congelado em tudo, menos no status.** A porta nova (**B117**)
+  muda **apenas** o status; fornecedor, datas, observações e itens continuam recusados depois do
+  primeiro recebimento — e é essa recusa que impede a quantidade já recebida de ser zerada. Corrigir
+  a previsão de entrega de um pedido já recebido continua sem caminho de tela.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -3926,14 +4145,20 @@ conserto é uma porta que devolva pedidos com itens de uma vez, e está nomeado.
 
 ---
 
-**G37 (NOVO, da Etapa 38). A data que a tela sugere e a data que o servidor usa vêm de relógios
-diferentes.**
+**G37 (NOVO, da Etapa 38 — ✅ RESOLVIDO NA ETAPA 39). A data que a tela sugere e a data que o
+servidor usa vêm de relógios diferentes.**
 
 O formulário de novo pedido já vem com a **Data do pedido** preenchida, calculada em horário
 universal — então, para quem está no Brasil, entre as 21h e a meia-noite ela sugere **o dia
 seguinte**. Já a importação sem coluna de data usa a **data local do servidor**. As duas são
 corrigíveis à mão (o campo é editável), e nenhuma regra de negócio depende delas hoje, mas quem
 apresentar o sistema à noite vai ver a data "errada" no formulário.
+
+> **A Etapa 39 fechou os dois lados**, porque a partir dela uma regra de negócio **passou** a
+> depender do "hoje": o formulário passou a sugerir a data de **quem está clicando** (não mais a
+> universal), e o "hoje" do servidor passou a ser o dia de **Brasília**, independentemente do
+> relógio da máquina — o mesmo dia que decide o atraso (**B114**). Deixado aqui, com o número da
+> etapa que fechou, em vez de apagado.
 
 ---
 
@@ -3944,6 +4169,60 @@ sistema (**B100**), não existe chave digitada para comparar, e o agrupador da p
 nas **observações** (*"Planilha: ⟨ordem⟩"*) — texto livre, sem índice. Qualquer idempotência futura
 passa por decidir **qual** campo identifica uma ordem de compra externa, e isso muda o contrato de
 entrada. Ver a letra **D**.
+
+---
+
+**G39 (NOVO, da Etapa 39). A porta que muda o status aceita QUALQUER um dos sete status, inclusive
+num pedido já recebido.**
+
+O módulo Compras **não tem máquina de estados**: nada impede marcar como *Cancelado* um pedido cujo
+material já entrou no estoque, nem voltar de *Recebido* para *Pendente*. A porta nova (**B117**) faz
+o que promete — grava só o status, sem encostar nos itens — mas não julga **qual** status faz
+sentido. Ela herda também o modelo de permissão do módulo: **quem tem acesso a Compras pode usá-la**,
+sem perfil próprio (é a mesma fragilidade **G30**). Enquanto não houver máquina de estados, o único
+efeito de um status errado é cosmético (o selo de atraso e os filtros), mas ele **mente para quem lê
+a lista**.
+
+---
+
+**G40 (NOVO, da Etapa 39). O filtro "Só atrasados" é aplicado DEPOIS da consulta ao banco.**
+
+A lista de pedidos é lida inteira e o atraso é calculado linha a linha na memória, porque a régua de
+atraso tem de ser **uma só** para a tela e para o e-mail (**B119**). Hoje isso é correto e barato: a
+consulta não tem corte de quantidade. **Se um dia alguém puser paginação ou um limite de linhas na
+listagem de pedidos, o filtro passa a mentir em silêncio** — mostrará só os atrasados **da página
+lida**, e o usuário concluirá que não há mais nenhum. Quem mexer nessa consulta precisa mover o
+filtro para dentro dela, ou o que a tela promete deixa de ser verdade sem nenhum erro aparecer.
+
+---
+
+**G41 (NOVO, da Etapa 39). A varredura diária é ancorada na hora em que o servidor subiu.**
+
+Ela roda 30 segundos depois do arranque e a cada 24 horas — não há horário configurável, e um
+reinício do servidor **reancora** o ciclo. Consequências: o e-mail de pedido atrasado pode sair a
+qualquer hora do dia; um prazo vencido pode esperar **até 24 horas**; e um servidor reiniciado várias
+vezes no mesmo dia dispara a varredura em cada arranque (os avisos não se repetem, porque a régua de
+"um aviso por situação" segura). Vale para **todos** os avisos da varredura, não só o desta etapa.
+
+---
+
+**G42 (NOVO, da Etapa 39). A mesma data aparece em formatos diferentes na central e na aba.**
+
+O cartão **"Pedido de compra atrasado"** mostra a previsão como **25/09/26** (ano com dois dígitos),
+e a aba Pedidos mostra **25/09/2026**. É a formatação que a central de alertas já usava para as
+outras onze condições — não foi introduzida aqui —, mas agora as duas telas mostram **o mesmo
+campo do mesmo documento**, e a diferença fica visível. É cosmético; está anotado para não ser
+"descoberto" de novo numa apresentação.
+
+---
+
+**G43 (NOVO, da Etapa 39). O filtro sem resultado diz "Nenhum pedido encontrado", sem dizer que há
+um filtro ligado.**
+
+Marcar **"Só atrasados"** numa base sem nenhum pedido atrasado deixa a tabela com a mesma frase de
+uma lista vazia: *"Nenhum pedido encontrado"*. Quem chegar na tela com o filtro já marcado — ele
+continua marcado enquanto você fica na aba — pode concluir que **não há pedido nenhum** cadastrado. A
+caixa fica visível logo acima, então o sinal existe; o texto é que não ajuda.
 
 ## Etapa 0 — Fundação (2026-08-03)
 
@@ -8798,9 +9077,252 @@ necessário.**
 **5/5** nas suítes de validação, migração e banco, **48 suítes / 739 testes** no cliente (eram 47 / 714), e o
 empacotamento do cliente **limpo**.
 
+## Etapa 39 — O pedido de compra passa a ser acompanhado (2026-09-17)
+
+**Esta etapa é do módulo CORE Compras**, como a 38 — e ela existe porque a 38 entregou **a tela que
+cria o pedido** e nada que **olhasse** para ele depois. Desde a 38 o comprador grava uma **Previsão
+de entrega** em cada pedido; a partir daí a data ficava parada na tela, e **nenhum lugar do sistema
+comparava essa promessa com o calendário**: um pedido prometido para a semana passada e nunca
+entregue tinha exatamente a mesma cara de um pedido prometido para o mês que vem. Descobrir o atraso
+dependia de alguém abrir a lista, ler data por data e lembrar de olhar de novo amanhã. Agora a aba
+**Pedidos de Compra** mostra **há quantos dias** cada pedido está atrasado, **filtra** só os
+atrasados com um clique, leva o atraso para o **Excel exportado**, e o sistema **manda um e-mail para
+Compras** quando um prazo vence — na mesma varredura diária que já avisa lote vencendo e remessa
+vencida. Junto vão os dois resíduos que a 38 deixou: **as datas do pedido apareciam um dia atrás** no
+fuso do Brasil (na tela **e** no Excel, o que fazia exportar e reimportar andar um dia para trás a
+cada volta), e **um pedido já recebido não tinha como ter o status corrigido** — agora tem, por uma
+porta que só mexe no status e não encosta nos itens.
+
+### Antes → Agora
+
+| Onde | Antes | Agora |
+|---|---|---|
+| **Compras → Pedidos de Compra**, coluna *Previsão Entrega* | Só a data. Um pedido vencido há 40 dias era visualmente idêntico a um pedido no prazo | A data e, ao lado, o selo vermelho **"Atrasado há 1 dia"** / **"Atrasado há 12 dias"** |
+| **Achar os pedidos atrasados** | Ler a lista inteira data a data | A caixa **"Só atrasados"**, ao lado da busca e do filtro de status, deixa na tela **só** os atrasados — e ela compõe com a busca e com o status |
+| **"Exportar Excel" da aba Pedidos** | Onze colunas, nenhuma sobre prazo | Duas colunas novas no fim: **"Atrasado"** (*Sim* / *Não*) e **"Dias de atraso"** (o número, vazio quando o pedido está no prazo). O arquivo respeita o filtro da tela |
+| **Alguém ser avisado do atraso** | Ninguém era avisado. O pedido esquecido ficava esquecido | A varredura diária do sistema manda **um e-mail para a lista de Compras** por pedido atrasado, com assunto **"[Compras] Pedido de compra atrasado — ⟨número⟩"** |
+| **Almoxarifado → Alertas** | Onze cartões, nenhum sobre pedido de compra | Um cartão novo, **"Pedido de compra atrasado"**, com **Pedido, Fornecedor, Previsão e Dias de atraso** linha a linha |
+| **A data do pedido na tela** | **Aparecia um dia antes** da data gravada — *Previsão Entrega* e *Data Pedido* de um pedido de 16/09 apareciam como **15/09** para quem está no Brasil | Aparece **a data que está no pedido**, em qualquer fuso e a qualquer hora |
+| **Exportar e reimportar o Excel do próprio sistema** | Cada volta **andava um dia para trás** nas duas datas — três voltas, três dias | O arquivo leva a data do pedido; reimportar devolve a **mesma** data |
+| **A data que o formulário sugere** | Calculada em horário universal: das 21h à meia-noite o "Novo pedido" nascia com **a data de amanhã** | O dia de quem está clicando |
+| **Corrigir o status de um pedido já recebido** | **Impossível pela tela.** O lápis abria o formulário, e salvar era recusado com *"já teve recebimento — não pode mais ser editado"*. O pedido ficava **Atrasado para sempre** | O formulário abre com a faixa **"Este pedido já teve recebimento — só o status pode ser alterado"**: fornecedor, datas, observações e itens ficam travados, o **Status** continua editável, e **Salvar pedido** grava só ele |
+
+### As regras, com o cenário exato
+
+**RN-D01 — a data que a tela mostra é a data que está no pedido. (Este é um defeito ESCAPADO da
+Etapa 38, e vale dizer com todas as letras.)**
+Crie um pedido com **Previsão de entrega 16/09/2026** e volte para **Compras → Pedidos de Compra**.
+Até esta etapa, a coluna *Previsão Entrega* mostrava **15/09/2026** — **um dia a menos** — e o mesmo
+acontecia com *Data Pedido*. A causa era o fuso: a data do pedido não tem hora, e a tela a
+interpretava como **meia-noite em horário universal**, que no Brasil ainda é **o dia anterior**. O
+sintoma não aparecia em nenhum teste porque a máquina de testes roda em horário universal. Agora a
+data é escrita **a partir do texto gravado**, sem passar por relógio nenhum: `2026-09-16` vira
+**16/09/2026** em qualquer fuso e a qualquer hora do dia.
+
+**RN-D02 — e o Excel exportado leva a mesma data, o que conserta a ida e volta.**
+A exportação usava exatamente a mesma conta da tela. Ou seja: **exportar e reimportar o próprio
+arquivo do CRM movia as duas datas um dia para trás, a cada volta.** Duas voltas, dois dias. Como a
+importação lê `DD/MM/AAAA`, o erro entrava de novo no banco silenciosamente — nenhuma linha
+recusada, nenhum aviso. Teste ao vivo: **Exportar Excel**, conferir a coluna *Previsão Entrega*
+contra a tela, reimportar o arquivo e conferir a data do pedido novo.
+
+**RN-D03 — o "Novo pedido" nasce com a data de HOJE de quem está clicando.**
+Abra **Novo Pedido** depois das 21h. A **Data do pedido** vem preenchida com **hoje**, não com
+amanhã — antes ela era calculada em horário universal, e das 21h à meia-noite sugeria o dia
+seguinte. O campo sempre foi editável; o problema é que ninguém confere um campo que já vem
+preenchido.
+
+**RN-D04 — "atrasado" é uma conta feita na hora de ler, e nada é gravado no pedido.**
+Não existe campo "atrasado" no pedido, não há coluna nova no banco e nenhuma rotina escreve nada:
+toda vez que a lista é carregada, o sistema compara a **previsão de entrega** com **o dia de hoje** e
+calcula a diferença. Um pedido com previsão de **três dias atrás** mostra **"Atrasado há 3 dias"**;
+corrigir a previsão para uma data futura faz o selo **sumir na hora**, sem nenhum outro gesto.
+Consequência boa e declarada: **nada a reprocessar, nada a corrigir em massa** — a informação nunca
+fica velha porque nunca é guardada.
+
+**O dia de referência é o dia do calendário de Brasília** (fuso `America/Sao_Paulo`), calculado
+**independentemente do relógio da máquina onde o sistema roda**. Isto foi corrigido na onda desta
+etapa e importa em operação: o servidor de produção roda em horário universal, que está **3 horas à
+frente** do Brasil — às 21h30 de Brasília ele já acha que é o dia seguinte, e o pedido que vence
+**hoje** apareceria atrasado no selo, no filtro, no Excel e no e-mail. Ver **B114**.
+
+**RN-D05 — o que NUNCA conta como atraso. São quatro casos, e cada um tem um motivo.**
+
+1. **Pedido sem previsão de entrega.** O campo é opcional desde a 38; sem promessa não há promessa
+   quebrada. (Vale também para os pedidos antigos, que têm a data gravada como texto vazio.)
+2. **Previsão de hoje.** *Vence hoje* **não** está atrasado — o fornecedor tem o dia inteiro. O selo
+   aparece só a partir de amanhã.
+3. **Previsão de amanhã ou depois.** Óbvio, e está dito porque é a metade positiva do teste.
+4. **Pedido com status *Recebido*, *Cancelado* ou *Rejeitado*.** São os três desfechos em que a
+   cobrança não faz mais sentido. Os outros quatro status (*Pendente*, *Aprovado*, *Em Análise*,
+   *Enviado*) **atrasam** — inclusive *Pendente*, que é o padrão.
+
+**RN-D06 — o filtro é uma composição, não uma tela separada.**
+Marcar **"Só atrasados"** mantém a busca por número/fornecedor e o filtro de status: dá para pedir
+"atrasados **do fornecedor ACME** com status **Enviado**". Desmarcada, a caixa **não** viaja nada
+para o servidor — a listagem volta a ser exatamente a de antes. E a caixa só existe na aba
+**Pedidos**: nas abas Fornecedores e Cotações ela não aparece (o bloco de filtros é o mesmo para as
+três). Filtro sem nenhum resultado mostra a frase de lista vazia que a aba já tinha:
+*"Nenhum pedido encontrado"* — ver **G43**.
+
+**RN-D07 — o selo diz o número de dias, e concorda com o singular.**
+Um dia de atraso: **"Atrasado há 1 dia"**. Três: **"Atrasado há 3 dias"**. Nunca *"1 dia(s)"*. O
+selo mora **dentro** da célula de *Previsão Entrega*, colado à data que ele explica.
+
+**RN-D08 — as duas colunas novas do Excel, e por que a de dias fica VAZIA e não zero.**
+**Exportar Excel** na aba Pedidos passa a trazer, depois das onze colunas que a 38 já tinha,
+**"Atrasado"** (*Sim* ou *Não*) e **"Dias de atraso"**. No pedido em dia, a coluna de dias sai
+**vazia** — nunca `0` e nunca `-`: "zero dias de atraso" não é a mesma afirmação que "não está
+atrasado", e a planilha seria lida errado num filtro. As duas colunas são do **cabeçalho** do
+pedido, então se repetem em todas as linhas de itens daquele pedido, e a importação as **ignora**
+(como já ignora *Status* e *Valor Total*).
+
+**RN-D09 — o cartão na central de alertas.**
+**Almoxarifado → Alertas** ganha o cartão **"Pedido de compra atrasado"**, descrito como
+*"Pedidos de compra com previsão de entrega vencida e ainda não recebidos."*. Abrindo **Detalhes**,
+as colunas são **Pedido**, **Fornecedor**, **Previsão** e **Dias de atraso**. Pedido sem fornecedor
+cadastrado aparece do mesmo jeito, com um travessão no lugar do nome — atraso é atraso.
+
+**RN-D10 — o e-mail: um aviso por PRAZO PROMETIDO, não um por dia de atraso.**
+Assunto:
+
+> **`[Compras] Pedido de compra atrasado — PC-2026-0007`**
+
+Corpo (uma linha cada):
+
+> **Pedido: PC-2026-0007** · **Fornecedor: ⟨razão social⟩** · **Previsão de entrega: 2026-09-10** ·
+> **Atraso: 7 dia(s)** · **Status: pendente**
+
+O aviso sai **uma vez** e não volta a sair enquanto o prazo for o mesmo — senão um pedido esquecido
+há 40 dias renderia 40 e-mails. **E se o comprador renegociar o prazo, o pedido volta a avisar**:
+ligar para o fornecedor, gravar a previsão nova e essa data nova também vencer gera **um segundo
+e-mail**. Este segundo comportamento foi acrescentado na onda desta etapa — a chave do aviso levava
+só o pedido, e por isso o primeiro e-mail **calava aquele pedido para sempre**, por mais prazos que
+ele quebrasse depois. Ver **B115**. Os destinatários são os da lista de alertas de estoque (a mesma
+que recebe os alertas do almoxarifado), e o interruptor geral de e-mail dos alertas desliga este
+também — a central continua mostrando o cartão.
+
+**RN-D11 — a tela e o e-mail usam a MESMA régua. Não há duas definições de "atrasado".**
+Quem entra no cartão da central e quem recebe o e-mail é **exatamente** o mesmo conjunto que o filtro
+**"Só atrasados"** mostra na aba Pedidos: mesma comparação de datas, mesma lista de três status
+poupados, mesmo dia de Brasília. Isso é verificável ao vivo: marque "Só atrasados", conte as linhas
+e compare com o total do cartão em **Almoxarifado → Alertas**.
+
+**RN-D12 — receber o material NÃO muda o status do pedido, e por isso o pedido recebido continua
+aparecendo como atrasado até alguém mudar o status à mão.**
+Este é o ponto que mais surpreende, e é **comportamento declarado**, não defeito: quando o
+almoxarifado recebe contra o pedido e processa a nota, quem passa a saber que o material chegou é o
+**recebimento** (saldo pendente, ABERTO/PARCIAL/RECEBIDO — seção da Etapa 37). O **status do pedido**
+continua *Pendente*, porque ele é a declaração do **comprador**, e nenhuma etapa entregou ainda o
+status automático. Resultado: um pedido entregue com atraso continua no selo, no filtro e no cartão.
+
+**A saída existe e é um clique** — e foi a última correção desta etapa. Clique no **lápis** do
+pedido: o formulário abre com a faixa laranja
+
+> **"Este pedido já teve recebimento — só o status pode ser alterado"**
+
+com **fornecedor, datas, observações, busca de material e todas as linhas de item desabilitados**.
+Troque o **Status** para *Recebido* e clique em **Salvar pedido** → aviso verde
+**"Status do pedido atualizado"**, a tela volta para a lista e **o selo de atraso sumiu**. Se o
+salvamento falhar, a faixa vermelha diz **"Não foi possível atualizar o status do pedido."**.
+Pedido apagado nesse meio tempo responde **"Pedido de compra não encontrado"**, e um status fora da
+lista responde a mesma frase das outras portas:
+*"status do pedido inválido (use pendente, aprovado, rejeitado, em_analise, enviado, recebido ou
+cancelado)"*. Ver **B117**.
+
+**O que essa porta NÃO faz, e é o motivo de ela existir separada:** ela **não toca em nenhum item do
+pedido**. Afrouxar a recusa da 38 para deixar o formulário inteiro salvar teria zerado a quantidade
+já recebida de cada linha — o pedido voltaria a aparecer **aberto com o saldo inteiro** no
+recebimento, e o operador receberia **o mesmo material duas vezes**, com estoque dobrado e conta a
+pagar duplicada. A recusa da 38 continua valendo para tudo o mais: **num pedido já recebido, os
+itens, o fornecedor e as datas continuam congelados**.
+
+**RN-D13 — quem vê o quê.**
+A aba **Pedidos de Compra**, o filtro e o Excel exigem **acesso ao módulo Compras** — o mesmo de
+antes, sem permissão nova. O **cartão da central** segue a regra da central de alertas: Administrador,
+Almoxarife, Gestor e Compras. Um almoxarife, que não entra na tela de pedidos, **vê o cartão** com
+número do pedido, fornecedor, previsão e dias de atraso — e **só isso**: valor do pedido e observações
+de negociação **não** viajam para a central. Isso também foi corrigido na onda desta etapa
+(**B116**).
+
+**RN-D14 — o ciclo inteiro, para demonstrar de uma vez.**
+Criar o pedido com previsão de ontem → ele aparece com o selo → **"Só atrasados"** o isola →
+**Exportar Excel** traz *Sim* e o número de dias → a varredura enfileira o e-mail e o cartão da
+central mostra a linha → receber pelo almoxarifado até **Processar Nota** → **o pedido continua
+atrasado** (RN-D12) → lápis → faixa → **Status: Recebido** → **Salvar pedido** → o selo some, a linha
+sai do filtro e o cartão esvazia. O roteiro clicável está no guia
+(`docs/almoxarifado-guia-etapas-e-testes.md`, seção da Etapa 39).
+
+### O que esta etapa NÃO cobre
+
+- **As abas Fornecedores e Cotações continuam sem tela de criação.** É o mesmo corte que a 38
+  declarou, e continua sendo o próximo candidato: os botões "Novo Fornecedor" e "Nova Cotação"
+  seguem sem destino. A etapa foi desenhada em torno do **prazo do pedido**, que é o que a 38 deixou
+  sem dono.
+- **A aba Pedidos continua sem mostrar quanto do pedido já chegou.** Pedido, recebido, saldo e
+  situação (**ABERTO / PARCIAL / RECEBIDO**) continuam aparecendo **só linha a linha no formulário de
+  recebimento**. O que a lista ganhou foi **prazo**, não **quantidade** — são duas perguntas
+  diferentes, e a segunda continua valendo como pendência (**B103**).
+- **O status do pedido continua sendo escolhido à mão.** Receber o material **não** marca o pedido
+  como *Recebido*, nem como *Parcial* — o sistema não fecha pedido sozinho. Fazer isso é etapa
+  própria (é a decisão **D6** desta etapa), porque envolve decidir o que acontece quando o
+  recebimento é parcial, quando há excedente e quando o comprador já tinha marcado outro status à
+  mão.
+- **Não há alerta de "pedido recebido parcialmente".** Existe a ideia registrada na especificação de
+  alertas, mas a conta de "quanto falta" hoje é calculada **dentro** do formulário de recebimento e
+  não é publicada para a varredura. Segue fora, deliberadamente.
+- **A hora da varredura diária não é escolhível.** Ela roda **30 segundos depois de o servidor
+  subir** e **a cada 24 horas** a partir daí — ou seja, o horário do e-mail é o horário em que o
+  servidor foi reiniciado pela última vez. Um prazo que vence hoje pode levar **até 24 horas** para
+  virar e-mail. Ver **C53** e **G41**.
+- **A exportação do Excel continua fazendo uma consulta por pedido** (resíduo da 38, **G36**): as
+  duas colunas novas não pioraram nem melhoraram isso, e o conserto continua nomeado e fora do
+  escopo.
+
+**Números lidos ao fim da onda** (`39ea9d2..19ebf7d`, onda de correção `fc84e09..19ebf7d`):
+**187/187 arquivos** da suíte de API (eram 183), **42 de 42** no serviço do almoxarifado, **4/4**,
+**3/3** e **5/5** nas suítes de validação, migração e banco, **49 suítes / 753 testes** no cliente
+(eram 48 / 739), e o empacotamento do cliente **limpo**.
+
 ## Onde estamos e o que vem a seguir
 
-
+- **Etapa 39 entregue (2026-09-17; documentação fechada em 2026-09-21):** **o pedido de compra
+  passa a ser acompanhado** (`39ea9d2..19ebf7d`, onda de correção da revisão final
+  `45bda69..19ebf7d`, quatro commits). Segunda etapa seguida no módulo **Compras**, com **um**
+  alerta novo na central do almoxarifado. **O problema era que ninguém olhava o prazo**: a 38
+  passou a gravar a *Previsão de entrega*, e nada comparava a promessa com o calendário — um
+  pedido prometido para a semana passada tinha a mesma cara de um prometido para o mês que vem.
+  Agora a aba Pedidos mostra o selo **"Atrasado há N dias"** (com o singular certo), tem a caixa
+  **"Só atrasados"** e exporta as colunas **"Atrasado"** e **"Dias de atraso"**; a varredura
+  diária manda **um e-mail por pedido atrasado** para a lista de Compras e a central de alertas
+  ganhou o cartão **"Pedido de compra atrasado"**; **as datas do pedido pararam de aparecer um
+  dia atrás** (na tela e no Excel — exportar e reimportar movia as datas um dia para trás a cada
+  volta, o defeito escapado da 38); e o **pedido que já teve recebimento pode ter o status
+  corrigido** pelo lápis, com tudo travado menos o Status. O atraso é **calculado na leitura,
+  nunca gravado**; a fronteira é **vence hoje NÃO está atrasado**; e o "hoje" é o dia de
+  **Brasília**, independentemente do relógio do servidor.
+  **O que é seu:** a consulta **A15** (quantos pedidos têm prazo e quantos já estariam atrasados
+  no primeiro dia — se o número for alto, **a primeira varredura manda um e-mail por pedido, de
+  uma vez**) e a confirmação do fuso do processo em produção; as decisões **B114 a B122**, todas
+  tomadas por mim com o descartado escrito, **nenhuma esperando resposta** — as duas para ler com
+  atenção são a **B121** (receber o material **não** fecha o pedido; o status continua sendo
+  escolhido à mão) e a **B117** (o pedido recebido ganhou uma porta que muda **só** o status, em
+  vez de afrouxar a trava de edição — afrouxar zeraria o quanto já chegou e faria o operador
+  receber o mesmo material duas vezes); o furo **C53** e as fragilidades **G41 a G43** — a que
+  importa para demonstrar é a hora da varredura, que é a hora em que o servidor subiu e **anda a
+  cada deploy**. **Enquanto nenhum pedido tiver previsão preenchida em produção, o alerta é
+  inerte** — cartão zerado e nenhum e-mail é o esperado, não defeito.
+  **A revisão adversarial (duas lentes) achou 1 crítico e 4 importantes, todos reproduzidos por
+  sonda, zero alarme falso**, corrigidos em quatro commits — o crítico: em produção o contêiner
+  roda em **UTC**, então às 21h30 de Brasília o pedido que vence **hoje** já aparecia atrasado no
+  selo, no filtro, no Excel e no e-mail, e as suítes não viam porque rodam em fuso fixo.
+  Números **lidos** no fechamento: **187/187 arquivos** da suíte de API, **42 de 42** no serviço do
+  almoxarifado, **4/4 · 3/3 · 5/5** nas suítes de validação, migração e banco, **49 suítes / 753
+  testes** no cliente, empacotamento **limpo**.
+  **A Etapa 40 já está escolhida:** *Fornecedores e Cotações ganham tela* no módulo Compras — os
+  botões "Novo Fornecedor" e "Nova Cotação" e os dois lápis dessas abas ainda voltam para a lista
+  (**B118**). É o mesmo candidato que a 38 e a 39 nomearam, e o desenho inicial está no fim do
+  plano da 39.
 - **Etapa 38 entregue (2026-09-16):** **o pedido de compra ganha criação, e o laço que vinha aberto
   desde a Etapa 11 fecha.** É a primeira etapa no módulo **CORE Compras**, e ela existe porque
   **nenhuma tela do sistema criava um pedido de compra** — medido: zero pedidos e zero itens de

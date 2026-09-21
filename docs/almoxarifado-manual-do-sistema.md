@@ -2022,13 +2022,69 @@ da Reposição (seção 21b). A tela é **Compras → Pedidos de Compra**.
 
 A aba mostra, por pedido: **Número**, **Fornecedor**, **Valor Total**, **Data Pedido**, **Previsão
 Entrega**, **Status** e os botões de **editar** e **excluir**. Há busca por número do pedido ou razão
-social do fornecedor, filtro por status, e o botão **Exportar Excel**. Sem nenhum pedido cadastrado,
-a lista mostra *"Nenhum pedido encontrado"*.
+social do fornecedor, filtro por status, a caixa **"Só atrasados"** e o botão **Exportar Excel**. Sem
+nenhum pedido cadastrado — e também quando um filtro não deixa nenhuma linha —, a lista mostra
+*"Nenhum pedido encontrado"*.
+
+Na coluna **Previsão Entrega**, o pedido em atraso mostra, ao lado da data, um selo vermelho com o
+tamanho do atraso (14b.1b).
+
+**As datas são mostradas exatamente como estão gravadas no pedido**, sem conversão de fuso: um pedido
+com previsão `2026-09-16` aparece como **16/09/2026** em qualquer horário e em qualquer máquina.
 
 **A lista não mostra quanto do pedido já chegou.** Quantidade pedida, quantidade recebida, saldo
 pendente e a situação do recebimento (**ABERTO / PARCIAL / RECEBIDO**) são calculados pelo sistema,
 mas aparecem **linha a linha no formulário de recebimento** (14.1c), não aqui. O **Status** desta
 lista é outra coisa: é a declaração do comprador sobre o andamento do pedido.
+
+### 14b.1b Atraso — quando o sistema marca um pedido como atrasado
+
+Um pedido está **atrasado** quando as duas condições valem ao mesmo tempo:
+
+1. a **Previsão de entrega** está preenchida e é **anterior a hoje**; e
+2. o **Status** do pedido **não** é *Recebido*, *Cancelado* nem *Rejeitado*.
+
+Os **dias de atraso** são a diferença, em dias inteiros, entre hoje e a previsão: previsão de ontem =
+**1**; previsão de três dias atrás = **3**.
+
+**O "hoje" é o dia do calendário de Brasília** (fuso *America/Sao_Paulo*), calculado
+independentemente do relógio da máquina em que o sistema roda. Isso importa porque o servidor pode
+estar configurado em horário universal, que está três horas à frente — sem essa regra, às 21h de
+Brasília o sistema já acharia que é o dia seguinte e acusaria atraso em pedido que vence hoje.
+
+**O que nunca atrasa, e por quê:**
+
+| Situação | Por quê |
+|---|---|
+| Pedido **sem** previsão de entrega | O campo é opcional; sem promessa não há promessa quebrada |
+| Previsão **igual a hoje** | *Vence hoje* não está atrasado — o fornecedor tem o dia inteiro. O selo aparece a partir de amanhã |
+| Status *Recebido*, *Cancelado* ou *Rejeitado* | São os desfechos em que a cobrança não faz mais sentido |
+
+Os outros quatro status — *Pendente* (o padrão), *Aprovado*, *Em Análise* e *Enviado* — **atrasam**.
+
+**O atraso não é gravado em lugar nenhum.** Ele é calculado toda vez que a lista é lida: mudar a
+previsão de entrega ou o status faz o selo aparecer ou sumir **imediatamente**, sem nenhuma rotina
+intermediária e sem nada a reprocessar.
+
+**Na tela.** Na coluna *Previsão Entrega*, ao lado da data, aparece o selo vermelho com o texto
+**"Atrasado há 1 dia"** (um dia) ou **"Atrasado há 3 dias"** (dois ou mais).
+
+**O filtro.** A caixa **"Só atrasados"**, na barra de filtros, deixa na lista apenas os pedidos
+atrasados. Ela **combina** com a busca e com o filtro de status — dá para pedir os atrasados de um
+fornecedor com um status específico — e vale também para o **Exportar Excel**, que sai com o que
+está na tela. A caixa existe apenas na aba **Pedidos de Compra**; nas abas Fornecedores e Cotações
+ela não aparece.
+
+**No Excel.** A exportação traz duas colunas sobre isto (14b.7): **Atrasado**, com *Sim* ou *Não*, e
+**Dias de atraso**, com o número — **vazio**, nunca zero, quando o pedido está no prazo.
+
+**E o sistema avisa por e-mail.** O pedido atrasado gera um aviso na varredura diária de alertas,
+descrito na seção 21c-bis.
+
+> **Receber o material não tira o pedido da lista de atrasados.** Quem passa a saber que o material
+> chegou é o recebimento (14.1c); o **Status** do pedido continua sendo a declaração do comprador, e
+> nenhum recebimento o altera. Um pedido entregue com atraso continua com o selo até alguém mudar o
+> status — o que se faz pelo caminho da seção 14b.4b.
 
 ### 14b.2 Criar um pedido
 
@@ -2115,15 +2171,51 @@ A segunda é a que surpreende: um recebimento **apenas criado**, ainda em confer
 elo com a linha do pedido. Trocar as linhas do pedido nessa janela deixaria o recebimento apontando
 para uma linha que não existe mais, **sem nenhum aviso**. Por isso a trava é do **pedido inteiro**:
 não há como corrigir só a observação ou só a previsão de entrega depois que a primeira carga chegou.
+**A única exceção é o Status**, que tem caminho próprio (14b.4b).
 
-**O botão de salvar e a lixeira não ficam desabilitados** num pedido travado — a recusa aparece
-depois da tentativa, com a frase acima. Nada é gravado.
+**A lixeira não fica desabilitada** num pedido travado — a recusa de exclusão aparece depois da
+tentativa, com a frase acima, e nada é gravado. Já o **formulário de edição avisa antes**: ao abrir
+um pedido que já teve recebimento, ele mostra a faixa de aviso e desabilita os campos travados
+(14b.4b).
 
 **Excluir o pedido devolve a solicitação para a fila de compras.** As solicitações de compra que
 estavam **vinculadas** a ele voltam para **Pendente** e soltam o vínculo; as que já estavam
 **Recebida** ou **Cancelada** não se mexem, porque são estados finais (seção 21b.3b). O material
 volta a ser sugerido pela régua normal da Reposição, e a solicitação volta a oferecer **Gerar
 pedido**.
+
+### 14b.4b Alterar o status de um pedido que já teve recebimento
+
+O **Status** é o único campo que continua editável depois do primeiro recebimento — e é o que tira o
+pedido entregue da lista de atrasados (14b.1b).
+
+Clique no **lápis** do pedido na aba Pedidos de Compra. Se ele já teve recebimento, o formulário abre
+com uma faixa de aviso no topo:
+
+> *"Este pedido já teve recebimento — só o status pode ser alterado"*
+
+Com a faixa na tela, ficam **desabilitados**: **Fornecedor**, **Data do pedido**, **Previsão de
+entrega**, **Observações**, a **busca de material** e **todos os campos das linhas de item**
+(quantidade, valor unitário e o botão de remover). Só o seletor **Status** continua ativo.
+
+Escolha o status e clique em **Salvar pedido**:
+
+- deu certo: aparece *"Status do pedido atualizado"* e a tela volta para a lista;
+- falhou: a faixa vermelha diz *"Não foi possível atualizar o status do pedido."*;
+- pedido apagado nesse meio tempo: *"Pedido de compra não encontrado"*;
+- status fora dos sete valores (só alcançável fora da tela): *"status do pedido inválido (use
+  pendente, aprovado, rejeitado, em_analise, enviado, recebido ou cancelado)"*.
+
+**O que esse salvamento faz, exatamente: grava o status e nada mais.** Nenhuma linha de item é
+tocada, o **valor total não é recalculado** e a quantidade já recebida de cada linha permanece
+intacta. É por isso que ele é permitido onde a edição completa é recusada: a edição completa
+substitui as linhas do pedido, e substituí-las **zeraria a quantidade recebida** — o pedido voltaria
+a aparecer aberto, com o saldo inteiro, e o mesmo material poderia ser recebido duas vezes.
+
+> **O sistema não julga qual status faz sentido.** Qualquer um dos sete é aceito, inclusive marcar
+> como *Cancelado* um pedido cujo material já entrou no estoque. Não há fluxo de aprovação nem
+> sequência obrigatória de status no módulo Compras (14b.8) — a escolha é do comprador, e o efeito
+> visível é a coluna **Status**, o selo de atraso e os filtros.
 
 ### 14b.5 Fornecedor com pedido não pode ser excluído
 
@@ -2209,7 +2301,20 @@ virou qual número de pedido.
 
 **Exportar Excel**, na aba Pedidos, gera **uma linha por item de pedido**, com as colunas **Número,
 Fornecedor, Código, Descrição, Unidade, Quantidade, Valor Unitário, Valor Total, Status, Data,
-Previsão Entrega**. Pedido sem item sai como uma linha com as colunas de item vazias.
+Previsão Entrega, Atrasado** e **Dias de atraso**. Pedido sem item sai como uma linha com as colunas
+de item vazias.
+
+**As duas últimas colunas descrevem o prazo** (14b.1b): **Atrasado** traz *Sim* ou *Não*, e **Dias de
+atraso** traz o número de dias — **em branco**, nunca zero, quando o pedido está no prazo, porque
+"zero dias de atraso" não é a mesma afirmação que "não está atrasado" e seria lida errado num filtro
+da planilha. As duas são do cabeçalho do pedido, então se repetem em todas as linhas de itens dele, e
+a importação (14b.6) **as ignora**, como já ignora *Status* e *Valor Total*.
+
+**O arquivo sai com o que está na tela:** busca, filtro de status e a caixa **"Só atrasados"** valem
+para a exportação.
+
+**As datas saem como estão gravadas no pedido** — é o que permite exportar e reimportar o mesmo
+arquivo sem que *Data* e *Previsão Entrega* mudem de dia.
 
 **Quantidade e Valor Unitário saem como número**, não como texto formatado — é o que permite que o
 arquivo exportado seja **reimportado** pela própria tela (14b.6). O **Valor Total** sai formatado,
@@ -3346,6 +3451,9 @@ falha do servidor de e-mail nunca trava uma movimentação, uma devolução ou u
   por validade: mudou a validade do lote, pode avisar de novo; no mesmo dia seguinte, não.
   Lote cujo vencimento foi **liberado** por decisão registrada não entra.
 - **Remessa a terceiro vencida** — varredura diária pela mesma régua da tela de remessas.
+- **Pedido de compra atrasado** — varredura diária dos pedidos de compra com previsão de entrega
+  vencida e status que ainda cobra entrega (14b.1b). Um aviso por **prazo prometido**: enquanto a
+  previsão for a mesma, não repete; renegociado o prazo e vencido de novo, avisa outra vez.
 
 O que **não** gera aviso de movimentação, de propósito: reservas e liberações, envio e retorno
 de remessa a terceiro (a remessa tem o aviso próprio de vencida) e os ajustes aplicados pela

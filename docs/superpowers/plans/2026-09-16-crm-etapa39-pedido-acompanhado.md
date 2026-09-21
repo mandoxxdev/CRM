@@ -476,7 +476,7 @@ Etapa 38 (worktree nova não tem `node_modules`, e a T2 e a T3 tocam **o mesmo a
 | ler `req.query.atrasados` como booleano (`if (req.query.atrasados)`) | `?atrasados=0` ligaria o filtro (string `'0'` é truthy) | cenário (8) |
 | tocar `receiptService.js` ou `?pendentes=1` | NÃO-TOQUE (R12) | cenário (10) |
 
-- [ ] **Step 1: escrever o teste e ver os cenários vermelhos** (leia **qual** asserção cai)
+- [x] **Step 1: escrever o teste e ver os cenários vermelhos** (leia **qual** asserção cai)
 
 `server/tests/api/comprasPedidoAtraso.api.test.js` — runner próprio no molde de
 `alertaRegistro.api.test.js`. Cabeçalho, fixtures e helpers:
@@ -639,7 +639,7 @@ Os dez cenários (cada `test()` com o **nome que a tabela de RN cita**):
     acrescenta-la.)
 ```
 
-- [ ] **Step 2: rodar e LER os números**
+- [x] **Step 2: rodar e LER os números**
 
 ```
 cd server && node tests/api/comprasPedidoAtraso.api.test.js
@@ -651,7 +651,7 @@ tudo, porque a query string é ignorada). O (9) e o (10) **nascem verdes** — s
 provam que a rota já existia; se **qualquer** um de (1)–(8) vier verde, **pare**: `undefined` não
 satisfaz nenhuma das asserções, então verde ali significa que o cenário não afirma nada.
 
-- [ ] **Step 3: implementar a régua** — `server/services/compras/pedidoCompraService.js`, logo
+- [x] **Step 3: implementar a régua** — `server/services/compras/pedidoCompraService.js`, logo
       depois de `hojeLocalISO` (`:615-620`)
 
 ```js
@@ -706,7 +706,7 @@ E no `module.exports` (`:885-900`), acrescente as três chaves ao final da lista
 };
 ```
 
-- [ ] **Step 4: implementar a rota** — `server/routes/compras.js`, **só** o callback do `db.all`
+- [x] **Step 4: implementar a rota** — `server/routes/compras.js`, **só** o callback do `db.all`
       (`:131-137`). A query e os `params` **não mudam**.
 
 ```js
@@ -725,7 +725,7 @@ E no `module.exports` (`:885-900`), acrescente as três chaves ao final da lista
   });
 ```
 
-- [ ] **Step 5: rodar de novo, e rodar quem lê as mesmas tabelas**
+- [x] **Step 5: rodar de novo, e rodar quem lê as mesmas tabelas**
 
 ```
 cd server && node tests/api/comprasPedidoAtraso.api.test.js
@@ -737,7 +737,7 @@ cd server && node tests/api/recebimentoContraPedidoIntegracao.api.test.js
 cd server && npm run test:api
 ```
 
-- [ ] **Step 6: sabotagens** (`md5sum` antes / depois / depois de restaurar; restauro por cópia do
+- [x] **Step 6: sabotagens** (`md5sum` antes / depois / depois de restaurar; restauro por cópia do
       scratchpad, **nunca** `git checkout --`)
 
 | # | Sabotagem | Âncora (`grep -cF` = **1**, contado **depois** do conserto) | Qual asserção tem de cair |
@@ -748,7 +748,7 @@ cd server && npm run test:api
 | 4 | trocar o filtro por `req.query.atrasados ?` | `req.query.atrasados === '1' ? comAtraso.filter` em `routes/compras.js` | cenário **(8)**: `?atrasados=0` passa a devolver 1 linha em vez de 3 |
 | 5 | usar `new Date().toISOString().slice(0,10)` em vez de `hojeLocalISO()` na rota | `const hoje = pedidoCompraService.hojeLocalISO();` em `routes/compras.js` | **provavelmente nada cai**, e isso é **previsto**: rodando antes das 21h locais as duas datas coincidem. **Declare o resultado** (letra G) — a proteção real é o comentário e a RN-D11, não a suíte. Se a sabotagem rodar entre 21h e a meia-noite, o (7) cai com `dias_atraso === 2` |
 
-- [ ] **Step 7: commit** — `git add server/services/compras/pedidoCompraService.js
+- [x] **Step 7: commit** — `git add server/services/compras/pedidoCompraService.js
       server/routes/compras.js server/tests/api/comprasPedidoAtraso.api.test.js`.
       Mensagem em `…\scratchpad\msg-e39-t1.txt`: qual era o furo (o pedido tinha `previsao_entrega`
       validada desde a 38 e **ninguém** comparava com hoje — `WHERE previsao_entrega < …` não existia
@@ -758,6 +758,62 @@ cd server && npm run test:api
       descartado (coluna `atrasado` gravada + job — migration, varredura de escrita e erro à
       meia-noite; `date('now')` do SQLite — UTC, erra ~3 h por dia; `CASE WHEN` no SQL — binds
       posicionais virando contrato implícito).
+
+#### ✅ Task 1 FECHADA — `437aed2` (`Compras Etapa 39 T1: o pedido passa a saber que esta atrasado, derivado na leitura`)
+
+**Resultado.** `comprasPedidoAtraso.api.test.js` **10 passou, 0 falhou**; suíte completa
+**184/184 arquivos** (era 183 — este é o novo). `comprasPedidosRotas`, `comprasPedidoCriar`,
+`comprasPedidoEditarExcluir`, `pedidosCompraSaldoAux` e `recebimentoContraPedidoIntegracao`
+verdes. **R12 respeitado:** o `git diff --name-only` do commit traz **só**
+`server/services/compras/pedidoCompraService.js`, `server/routes/compras.js` e o teste novo —
+nenhum arquivo da Etapa 37.
+
+**O que a T4 e a T3 consomem** (`server/services/compras/pedidoCompraService.js`, `module.exports`):
+
+```js
+hojeLocalISO(): string                                    // 'AAAA-MM-DD' LOCAL
+derivarAtraso(pedido, hoje = hojeLocalISO()): { atrasado: 0|1, dias_atraso: number|null }
+STATUS_PEDIDO_FORA_DO_ATRASO: ['recebido', 'cancelado', 'rejeitado']
+```
+
+`derivarAtraso` lê **só** `pedido.previsao_entrega` e `pedido.status` — serve qualquer linha de
+`pedidos_compra`, venha de `SELECT p.*` ou de um `SELECT` recortado. `pedido` nulo devolve
+`{ atrasado: 0, dias_atraso: null }`.
+
+**Sabotagens (6; `md5sum` antes/depois/pós-restauro, restauro por cópia do scratchpad):**
+
+| # | Sabotagem | Caiu |
+|---|---|---|
+| 1 | `<` → `<=` | **(2)** — *"vence hoje virou atrasado: esperava atrasado 0, veio 1"* |
+| 2 | `STATUS_PEDIDO_FORA_DO_ATRASO = []` | **(5)** em `'recebido'`; **(6) seguiu verde** — é o que distingue "lista vazia" de "lista errada" |
+| 3 | `dias_atraso: null` → `0` | **(2)(3)(4)(5)** — 4 cenários, `=== null` esperado, veio `0` |
+| 4 | `req.query.atrasados ?` | **(8)** — *"'?atrasados=0' NAO liga o filtro, mas PC-E39-016 sumiu"* |
+| 5 | `toISOString().slice(0,10)` no lugar de `hojeLocalISO()` | **NADA CAIU, e estava previsto**: rodou às **00:43 local**, quando UTC e local caem no mesmo dia. A janela de divergência é 21h–meia-noite. A proteção real é o comentário no código e a RN-D11, não a suíte. |
+| 6 (extra) | `ORDER BY p.created_at DESC` → `ASC` | **(8)** — controle positivo da asserção de ordem |
+
+**Duas divergências, as duas medidas, as duas com o plano errado:**
+
+1. ⚠️ **A asserção de ordem que o plano trazia pronta caía com a rota CORRETA.**
+   `created_at DATETIME DEFAULT CURRENT_TIMESTAMP` tem resolução de **um segundo**: todos os
+   fixtures de um arquivo nascem no mesmo segundo, empatam no `ORDER BY` e o SQLite devolve o
+   desempate em ordem de **rowid — id CRESCENTE**. `deepStrictEqual(ids, [...ids].sort((a,b)=>b-a))`
+   era vermelho no primeiro GREEN. **Conserto:** os quatro pedidos do cenário (8) recebem
+   `created_at` **explícito e distinto** (derivado de `hojeLocalISO()`, sem literal), e a asserção
+   compara a **subsequência** dos meus ids contra a ordem esperada — nas duas respostas, filtrada e
+   completa. Vale para a T4/T5 se elas afirmarem ordenação.
+2. ⚠️ **`comprasPedidosRotas.api.test.js` NÃO guarda o `ORDER BY`.** O plano (tabela de restrições
+   da T1, e de novo em `:1069`) afirma que mexer no `ORDER BY` derruba esse arquivo. **Medido pela
+   sabotagem 6: com a rota em `ASC` ele dá `5 passou, 0 falhou`.** O único guarda dessa ordenação na
+   base passa a ser o cenário **(8)** deste arquivo. **Não confie na afirmação do plano em T3/T5.**
+3. (menor) O sufixo do `numero` do fixture é `PC-E39-001` e não `PC-E39-${seq}`: `?search=` é
+   `numero LIKE '%x%'`, então `PC-E39-1` casaria com `PC-E39-10` e o *"exatamente 1 linha"* do (8)
+   viraria 2 assim que a suíte passasse de nove pedidos.
+
+**Nota de método:** o RED teve **duas rodadas**. Na primeira, o arquivo inteiro morria com
+`hojeLocalISO is not a function` (a função existia mas não era exportada) e nenhum cenário dizia
+qual asserção caía. Exportar **só** `hojeLocalISO` (uma linha, sem `derivarAtraso` e sem a rota)
+deu o RED legível que o Step 2 pedia: (1)–(7) com `undefined` onde devia haver `0`/`1`, (8) com
+`?atrasados=1` devolvendo quem está no prazo, (9) sem os campos, **(10) nascido verde**.
 
 ---
 
@@ -805,7 +861,7 @@ cd server && npm run test:api
 | `process.env.TZ` no topo do arquivo de teste | **medido como no-op nesta base** quando o processo já tem `TZ` (achado A1 da Etapa 22, escrito em `client/jest.globalSetup.js`) | o **controle positivo** do cenário `(a)` é justamente o que detecta que o fuso não é -03 |
 | mexer nos 21 cenários existentes de `PedidoCompraForm.test.js` | o fixture `PEDIDO_418_LISTA` (`:149-152`) tem previsão **futura** e o cenário `(p)` (`:785`) **não afirma datas** — nada desta etapa os derruba (medição nova 4) | se algum cair, é **achado**: pare e registre |
 
-- [ ] **Step 1: escrever `Compras.test.js` com os cenários (a) e (b), e o `(q)` em
+- [x] **Step 1: escrever `Compras.test.js` com os cenários (a) e (b), e o `(q)` em
       `PedidoCompraForm.test.js`** — e ver o vermelho **contra o código velho**
 
 `client/src/components/Compras.test.js` (novo). O bloco de mocks e os helpers são **copiados** de
@@ -939,7 +995,7 @@ test('(q) o formulario nasce com a data LOCAL, nao com a de amanha', async () =>
 > em `PedidoCompraForm.js` além do `hojeISO` (`:85`).** (E o vizinho `pedido-previsao` é `:453` —
 > não confunda os dois: o de previsão nasce `''`, não com `hojeISO()`.)
 
-- [ ] **Step 2: rodar e LER os números — o RED tem de ser observado CONTRA O CÓDIGO VELHO**
+- [x] **Step 2: rodar e LER os números — o RED tem de ser observado CONTRA O CÓDIGO VELHO**
 
 ```
 cd client && CI=true npx react-scripts test --watchAll=false src/components/Compras.test.js
@@ -953,7 +1009,7 @@ com **`Expected substring: "16/09/2026"`** — o DOM traz `15/09/2026` e `09/09/
 A linha do controle positivo (`15/09/2026`) tem de estar **verde** nas duas rodadas: ela é a que
 diz que o fuso é -03. Se **ela** cair, pare — o problema é o ambiente, não o código.
 
-- [ ] **Step 3: implementar `formatDate`** — `client/src/components/Compras.js:91-94`
+- [x] **Step 3: implementar `formatDate`** — `client/src/components/Compras.js:91-94`
 
 ```js
   /**
@@ -986,7 +1042,7 @@ diz que o fuso é -03. Se **ela** cair, pare — o problema é o ambiente, não 
   };
 ```
 
-- [ ] **Step 4: implementar `hojeISO`** — `client/src/components/compras/PedidoCompraForm.js:85`
+- [x] **Step 4: implementar `hojeISO`** — `client/src/components/compras/PedidoCompraForm.js:85`
 
 ```js
 /**
@@ -1004,7 +1060,7 @@ const hojeISO = () => {
 };
 ```
 
-- [ ] **Step 5: rodar de novo, e rodar a suíte de client inteira**
+- [x] **Step 5: rodar de novo, e rodar a suíte de client inteira**
 
 ```
 cd client && CI=true npx react-scripts test --watchAll=false src/components/Compras.test.js
@@ -1016,7 +1072,7 @@ Os **21** cenários de `PedidoCompraForm.test.js` têm de continuar verdes (agor
 Se algum cair, **é achado** — o design mediu que nenhum afirma datas e que o fixture tem previsão
 futura; medição errada é dado, registre-a.
 
-- [ ] **Step 6: sabotagens**
+- [x] **Step 6: sabotagens**
 
 | # | Sabotagem | Âncora (`grep -cF` = **1**, **pós-conserto**) | Qual asserção tem de cair |
 |---|---|---|---|
@@ -1025,7 +1081,7 @@ futura; medição errada é dado, registre-a.
 | 3 | trocar `if (!date) return '-';` por `if (date == null) return '-';` | `if (!date) return '-';` em `Compras.js` | cenário **(b)**: `data_pedido: ''` passa a renderizar `''` em vez de `-`. Se **nada** cair, o `(b)` não está afirmando a célula certa — conserte o cenário, não a sabotagem |
 | 4 | apagar a linha do controle positivo do cenário (a) | `expect(new Date('2026-09-16').toLocaleDateString('pt-BR')).toBe('15/09/2026');` | **nada cai, e é o ponto**: o controle positivo não protege o código, protege **o cenário**. Restaure e declare — é a resposta a "e se o worker estiver em UTC" |
 
-- [ ] **Step 7: commit** — `git add client/src/components/Compras.js
+- [x] **Step 7: commit** — `git add client/src/components/Compras.js
       client/src/components/compras/PedidoCompraForm.js client/src/components/Compras.test.js
       client/src/components/compras/PedidoCompraForm.test.js`.
       Mensagem em `…\scratchpad\msg-e39-t2.txt`: qual era o bug (`formatDate` usava
@@ -1038,6 +1094,72 @@ futura; medição errada é dado, registre-a.
       (`new Date(str+'T00:00:00')`, `timeZone` no `toLocaleDateString`, consertar so a exibicao).
       **Diga no corpo que este é o "defeito escapado" da Etapa 38** — a T6 liga o hash à retro nº 4
       daquele plano.
+
+> ### ✅ Task 2 FEITA — `235c067` (*"Compras Etapa 39 T2: as datas da aba Compras param de andar um
+> dia para tras"*)
+>
+> **RED observado contra o código velho** (é a razão de a task existir, e as duas linhas são reais):
+> - `(a)` — `Expected substring: "16/09/2026"` · `Received string: "…R$ 315,00` **`09/09/2026`**
+>   **`15/09/2026`** `aprovado"`
+> - `(q)` — `Expected: "2026-09-16"` · `Received: "2026-09-17"`
+> - O controle positivo (`new Date('2026-09-16').toLocaleDateString('pt-BR') === '15/09/2026'`)
+>   ficou **verde** nas duas rodadas: o fuso do worker é -03, como o `jest.globalSetup.js` promete.
+>
+> **Verde:** `Compras.test.js` 2/2 e `PedidoCompraForm.test.js` **22/22** (os 21 antigos + o `(q)`;
+> **nenhum** dos 21 caiu, como o design tinha medido). Suíte inteira do client: **49 suites / 742
+> testes** (era 48/739 — +1 suíte, +3 cenários). `CI=true npx react-scripts build`: limpo.
+> Nenhuma mudança em `server/`.
+>
+> **Sabotagens (4/4, `md5sum` antes/depois/restaurado; restauro por cópia, nunca `git checkout --`;
+> base LF preservada, `CR: 0` medido com `perl -ne '$c++ if /\r/'` em cada passo):**
+>
+> | # | Sabotagem | Caiu | Asserção |
+> |---|---|---|---|
+> | 1 | `formatDate` de volta para `new Date(date).toLocaleDateString('pt-BR')` | **(a)** | `Expected substring: "16/09/2026"`, DOM com `15/09/2026` — 1 failed / 1 passed |
+> | 2 | `hojeISO` de volta para `new Date().toISOString().slice(0, 10)` | **(q)** | `Expected: "2026-09-16"` · `Received: "2026-09-17"` — 1 failed / 21 passed |
+> | 3 | `if (!date)` → `if (date == null)` | **(b)** | `expect(cels[3].textContent).toBe('-')` → `Expected: "-"` · `Received: ""` (o `data_pedido: ''`) |
+> | 4 | apagar a linha do controle positivo do `(a)` | **nada cai, e é o ponto** | 2 passed / 2 total. O controle positivo não protege o **código**, protege o **cenário**: ele é a resposta a "e se o worker estiver em UTC" — sem ele o `(a)` ficaria verde com o bug no lugar, e nenhuma outra asserção notaria |
+>
+> As quatro âncoras `grep -cF` deram **1** pós-conserto, e os três arquivos voltaram ao md5 original
+> (`Compras.js ce0021ec…`, `PedidoCompraForm.js 9eea46ce…`, `Compras.test.js 171ede6f…`).
+>
+> **Divergências do plano — todas medidas, e a T3 herda as duas primeiras:**
+> 1. **(medição nova 10) A metade positiva do `(b)` NÃO pode ser afirmada por `texto()` na aba
+>    Fornecedores.** O plano mandava `renderizarEm('/compras/fornecedores')` →
+>    `expect(texto()).toContain('16/09/2026')`. **A tabela de fornecedores não renderiza
+>    `created_at`** — as colunas são `Razão Social | CNPJ | Contato | Email | Telefone | Status |
+>    Ações` (`Compras.js`, `renderFornecedores`). A **única** chamada de `formatDate` com um
+>    `DATETIME` nesta tela é a coluna `Cadastrado em` da **EXPORTAÇÃO** (`handleExportExcel`). Como
+>    está escrito, o cenário mediria `'-'`/nada e ficaria verde provando o ramo errado — exatamente o
+>    risco que a emenda (Fase 2) I2 levantou, uma casa adiante. **Feito:** a metade positiva clica
+>    em *Exportar Excel* e afirma `linhas[0]['Cadastrado em'] === '16/09/2026'` e
+>    `linhas[1]['Cadastrado em'] === '10/09/2026'` (a linha das `21:40`, que é a que separa "cortar
+>    10 caracteres" de "converter fuso"). A fixture `FORNECEDORES_E39` com `created_at` entrou como
+>    a emenda mandava.
+> 2. **(medição nova 11) `root.render` com outro `initialEntries` NÃO troca de rota.** `MemoryRouter`
+>    só lê `initialEntries` na montagem: a segunda renderização do cenário `(b)` continuou na aba
+>    **Pedidos** e o teste exportou linhas de pedido achando que exportava fornecedores (medido:
+>    `Expected length: 2 · Received length: 1`, com `Código`/`Previsão Entrega` no array). O arquivo
+>    ganhou o helper **`remontarEm(rota)`** — desmonta, recria `container` e `root`, renderiza. **A
+>    T3 tem de usar `remontarEm` em qualquer cenário que troque de aba**; `renderizarEm` só serve
+>    para a primeira rota do cenário.
+> 3. **`LITERAL_FUSO` virou comentário, não constante.** O `toBe` do Jest não carrega mensagem, e a
+>    constante ficaria **não usada** (ruído de lint no arquivo novo). O texto dela está inteiro no
+>    comentário de quatro linhas em cima do controle positivo, que é onde quem lê o vermelho vai
+>    olhar. A âncora da sabotagem 4 continua sendo a linha do `expect`, e continua única.
+> 4. **Os fake timers do `(q)`** — divergência **já prevista** neste plano e confirmada na execução:
+>    `global.Date` substituído por subclasse, restaurado no `finally`. **O design (§7.4, RN-D03)
+>    continua errado e tem de ser corrigido no fechamento** (regra 5 do `CLAUDE.md`, Task 6).
+>
+> **Ruído de console:** nenhum novo. Os dois `console.warn` de *React Router Future Flag* já saíam
+> em `PedidoCompraForm.test.js` antes desta task (são do `react-router-dom` 6.30.4 ao montar
+> `AppRoutes`), e `Compras.test.js` os herda por montar a mesma árvore.
+>
+> **O que a T3 compõe em cima:** `formatDate` mantém **nome e assinatura** e continua sendo a função
+> usada pela tabela **e** pelo export — a T3 mexe no `<tbody>` da aba Pedidos e acrescenta colunas a
+> `linhaExportPedido`, sem tocar no formatador. Os cenários `(c)`…`(i)` entram **no mesmo**
+> `Compras.test.js`, reaproveitando `PEDIDO_419_NO_PRAZO`, `FORNECEDORES_E39`, `celulasDaLinha()`,
+> `botaoPorTexto()`, `texto()` e `remontarEm()`.
 
 ---
 
@@ -1069,7 +1191,7 @@ futura; medição errada é dado, registre-a.
 | ordenar os atrasados no topo | mudaria `ORDER BY p.created_at DESC`, contrato congelado da extração da 38 (D4, descartado (d)) | `comprasPedidosRotas.api.test.js` |
 | mexer nas 11 colunas existentes do export | a asserção do cenário `(p)` de `PedidoCompraForm.test.js:785` **não pode cair** (RN-D08) | aquele cenário |
 
-- [ ] **Step 1: escrever os cenários (c) a (i) em `Compras.test.js`**
+- [x] **Step 1: escrever os cenários (c) a (i) em `Compras.test.js`**
 
 Fixtures acrescentadas ao arquivo criado na T2:
 
@@ -1155,7 +1277,7 @@ const ITENS_420 = [{
 > **igualdade antes da regex**, e devolva `{ ...PEDIDO_420_ATRASADO_3, itens: ITENS_420 }`. Sem esse
 > ramo o fallback **rejeita** e os cenários `(h)`/`(i)` medem o `catch` da tela, não a tela.
 
-- [ ] **Step 2: rodar e LER os números**
+- [x] **Step 2: rodar e LER os números**
 
 ```
 cd client && CI=true npx react-scripts test --watchAll=false src/components/Compras.test.js
@@ -1166,7 +1288,7 @@ frase); `(f)` cai com `Cannot read properties of null` no checkbox (ele não exi
 `toHaveLength(2)` recebendo `1`; `(h)` cai em `Object.keys` com **11** chaves em vez de 13. `(e)` e
 `(g)` **nascem verdes** — são as metades negativas, e é por isso que não bastam sozinhas.
 
-- [ ] **Step 3: implementar o badge e o rótulo** — `client/src/components/Compras.js`
+- [x] **Step 3: implementar o badge e o rótulo** — `client/src/components/Compras.js`
 
 Ao lado de `getStatusColor` (`:96-108`):
 
@@ -1198,7 +1320,7 @@ E em `client/src/components/Compras.css`:
 .pedido-atrasado { color: #e74c3c; font-weight: 600; font-size: .78rem; display: block; }
 ```
 
-- [ ] **Step 4: implementar o filtro** — estado, efeito e `loadData`
+- [x] **Step 4: implementar o filtro** — estado, efeito e `loadData`
 
 ```js
   const [filterStatus, setFilterStatus] = useState('');
@@ -1246,7 +1368,7 @@ status:
         )}
 ```
 
-- [ ] **Step 5: implementar as duas colunas** — `linhaExportPedido` (`:151-163`), **no fim do
+- [x] **Step 5: implementar as duas colunas** — `linhaExportPedido` (`:151-163`), **no fim do
       objeto**, sem mexer nas 11 existentes
 
 ```js
@@ -1260,7 +1382,7 @@ status:
   });
 ```
 
-- [ ] **Step 6: rodar de novo, e a suíte de client inteira + o build**
+- [x] **Step 6: rodar de novo, e a suíte de client inteira + o build**
 
 ```
 cd client && CI=true npx react-scripts test --watchAll=false src/components/Compras.test.js
@@ -1271,7 +1393,7 @@ cd client && CI=true npx react-scripts build
 
 ⚠️ `CI=true` no build faz **warning virar erro** — uma variável não usada derruba a rodada.
 
-- [ ] **Step 7: sabotagens**
+- [x] **Step 7: sabotagens**
 
 | # | Sabotagem | Âncora (`grep -cF` = **1**, **pós-conserto**) | Qual asserção tem de cair |
 |---|---|---|---|
@@ -1281,7 +1403,7 @@ cd client && CI=true npx react-scripts build
 | 4 | `'Dias de atraso': pedido.dias_atraso` (sem o ternário) | `pedido.atrasado === 1 ? pedido.dias_atraso : ''` em `Compras.js` | cenário **(i)**: `''` esperado, veio `null` |
 | 5 | trocar `pedido.atrasado === 1` por `pedido.atrasado` no badge | `{pedido.atrasado === 1 && (` em `Compras.js` | **provavelmente nada cai** (o contrato garante `0`/`1`, e `0` é falsy). **Previsto:** declare, e mantenha a forma estrita — ela é o que protege de um dia a rota devolver `null` |
 
-- [ ] **Step 8: commit** — `git add client/src/components/Compras.js
+- [x] **Step 8: commit** — `git add client/src/components/Compras.js
       client/src/components/Compras.css client/src/components/Compras.test.js`.
       Mensagem em `…\scratchpad\msg-e39-t3.txt`: qual era o furo (a aba **já mostrava** a previsão de
       entrega e não tinha nenhuma nocao de que a data passou — sem badge, sem filtro, sem cor; o
@@ -1337,7 +1459,7 @@ cd client && CI=true npx react-scripts build
 > silencioso. **O design tem de ser corrigido no fechamento**, dizendo que a afirmação estava errada
 > no mecanismo e certa na conclusão (regra 5 do `CLAUDE.md`).
 
-- [ ] **Step 1: escrever o teste** — `server/tests/api/alertaPedidoAtrasado.api.test.js`
+- [x] **Step 1: escrever o teste** — `server/tests/api/alertaPedidoAtrasado.api.test.js`
 
 **Molde:** `server/tests/api/alertaRegistro.api.test.js` — copie `hashDedupe(evento, chave)`
 (`:28-30`), o runner, o `ADMIN`, `filaPorEvento(db, evento)` e `resultadoDe(resultados, chave)`.
@@ -1429,7 +1551,7 @@ const { hojeLocalISO } = require('../../services/compras/pedidoCompraService');
     // se alguem acrescentar `req.user` ali, isto cai com TypeError de undefined
 ```
 
-- [ ] **Step 2: escrever o CONTROLE DE CICLO** — no mesmo arquivo, como último `test()`
+- [x] **Step 2: escrever o CONTROLE DE CICLO** — no mesmo arquivo, como último `test()`
 
 ```js
   await test('(8) R9b o alertRegistry carrega de um processo FRIO e traz a entrada nova', async () => {
@@ -1448,7 +1570,7 @@ const { hojeLocalISO } = require('../../services/compras/pedidoCompraService');
   });
 ```
 
-- [ ] **Step 3: rodar e LER os números**
+- [x] **Step 3: rodar e LER os números**
 
 ```
 cd server && node tests/api/alertaPedidoAtrasado.api.test.js
@@ -1459,7 +1581,7 @@ cartao novo`** e com `alertas.length === 11`; `(5)` cai com `doAlerta` sendo `un
 não existe); `(8)` cai com `{"total":11,"tem":false,"listar":"undefined"}`. `(6)` e `(7)` podem
 nascer verdes — leia **qual** asserção caiu.
 
-- [ ] **Step 4: implementar a entrada** — `server/services/almoxarifado/alertRegistry.js`, **antes do
+- [x] **Step 4: implementar a entrada** — `server/services/almoxarifado/alertRegistry.js`, **antes do
       `]);` de `:461`**, depois da entrada `LOTE_SEM_CERTIFICADO`
 
 ```js
@@ -1513,7 +1635,7 @@ nascer verdes — leia **qual** asserção caiu.
   },
 ```
 
-- [ ] **Step 5: a central in-app** — `client/src/components/almoxarifado/AlertasAlmoxarifado.js`,
+- [x] **Step 5: a central in-app** — `client/src/components/almoxarifado/AlertasAlmoxarifado.js`,
       em `COLUNAS_POR_CHAVE` (`:88`)
 
 ```jsx
@@ -1540,7 +1662,7 @@ linha — **em vez** do fallback genérico (`colunasGenericas`, `:182-193`), que
 > central e a célula da aba Pedidos mostram **formatos diferentes** (`25/09/26` × `25/09/2026`), o
 > que é pré-existente e vale para as 11 entradas anteriores — **declare na letra G**, não mude.
 
-- [ ] **Step 6: rodar de novo, e rodar TUDO que toca o registro e a fila**
+- [x] **Step 6: rodar de novo, e rodar TUDO que toca o registro e a fila**
 
 ```
 cd server && node tests/api/alertaPedidoAtrasado.api.test.js
@@ -1583,7 +1705,7 @@ justamente a que prova que a entrada nova entrou.
 > chamam `varrerAlertasRegistrados`), então a entrada nova devolve `[]` neles e **nenhum contador de
 > fila muda** — o risco desses seis arquivos é só o do `erro: true`.
 
-- [ ] **Step 7: sabotagens**
+- [x] **Step 7: sabotagens**
 
 | # | Sabotagem | Âncora (`grep -cF` = **1**, **pós-conserto**) | Qual asserção tem de cair |
 |---|---|---|---|
@@ -1593,7 +1715,7 @@ justamente a que prova que a entrada nova entrou.
 | 4 | `dedupeChave: () => 'pedido-atrasado'` (sem o id) | `` `pedido-atrasado-${linha.id}` `` | cenário **(1)** com dois pedidos atrasados: só **1** linha na fila para **2** pedidos |
 | 5 | **mover o require da régua para o topo do arquivo** (require de topo em vez de lazy) | `const { hojeLocalISO, derivarAtraso } = require('../compras/pedidoCompraService');` | ⚠️ **PREVISÃO: NADA CAI** — medido, o ciclo não fecha hoje (ver a divergência declarada acima). O candidato a cair seria o **(4)** (`cartao.erro === true`, porque `derivarAtraso` viria `undefined`) e o **(8)** (`{"tem":false}` ou `listar: "undefined"`). **Se nada cair, declare** na letra G: *a suíte não protege a convenção do require lazy; a proteção é o comentário do código e esta linha do plano*. **Mantenha o require lazy de qualquer forma** |
 
-- [ ] **Step 8: commit** — `git add server/services/almoxarifado/alertRegistry.js
+- [x] **Step 8: commit** — `git add server/services/almoxarifado/alertRegistry.js
       server/tests/api/alertaPedidoAtrasado.api.test.js
       client/src/components/almoxarifado/AlertasAlmoxarifado.js
       client/src/components/almoxarifado/AlertasAlmoxarifado.test.js` (+ o arquivo de teste de alerta
@@ -1606,6 +1728,32 @@ justamente a que prova que a entrada nova entrou.
       a base usa `setInterval().unref()`; `configDias` — seria uma segunda regua; disparo no ato —
       atraso nao tem ato). **Diga que o alerta nasce INERTE** (`previsao_entrega` preenchida em 0
       pedidos no dump medido) — isso vai para o guia do usuário, não só para a letra B.
+
+> **(resultado T4 — commit `ddbc18f`)** 8 cenários, RED observado em **0/8** (`(1)` em *"esperava 1
+> alerta, veio 0"*, `(4)` em *"a central nao tem o cartao novo"*, `(8)` em
+> `{"total":11,"tem":false,"listar":"undefined"}`), GREEN em **8/8**. `alertaCentral` **5/5** — o
+> `every(a => a.erro === undefined)` de `:226` (o sentinela de `{}` mid-load medido na Fase 2)
+> continua verde e **não houve contador para atualizar**, como a emenda `(Fase 2)` previa.
+> `alertaRegistro` 10/10, `alertaEvento` 6/6, `comprasPedidoAtraso` 10/10. Suíte de API:
+> **185/185 arquivos** (era 184). Cliente: 49 suítes / **750 testes** e `build` limpo.
+>
+> **Sabotagens** (md5 `8c9c22a7…` antes e depois de cada restauro; base LF preservada, 0 linhas com
+> CR; `grep -cF` de cada âncora = 1 pós-conserto): **1** → `(1)` *"esperava 1 alerta, veio 4"*
+> (e `(5)` junto, como previsto); **2** → `(5)` *"a regua do alerta divergiu da regua da tela"* — o
+> pedido `rejeitado` vencido entra no alerta e não na rota, exatamente o que a RN-D11 existe para
+> pegar; **3** → só `(3)`, na literal do assunto; **4** → `(1)` com **1** linha na fila para **2**
+> pedidos; **5 (require no topo) → NADA CAI**, confirmando a divergência declarada. Sondei além do
+> previsto: `node -e "require('./services/almoxarifado/receiptService'); require('…/alertRegistry')"`
+> — a ordem de carga mais arriscada, porque `receiptService` requer `purchaseService` (`:26`) **e**
+> o registro (`:31`) no topo — e mesmo assim a entrada carrega intacta
+> (`{"total":12,"tem":true,"listar":"function"}`). **Declarado: a suíte não protege a convenção do
+> require lazy; a proteção é o comentário do código e esta linha.** O require lazy fica.
+> Controle positivo do lado do cliente (a única metade que nasceu verde de primeira): apagando a
+> entrada de `COLUNAS_POR_CHAVE`, cai **exatamente** o cenário novo e mais nenhum (12/13).
+>
+> **Divergência do brief (números da fila):** o brief mandava semear o SEXTO pedido (sem
+> fornecedor) dentro do cenário `(1)` e **ainda assim** afirmar `1` na fila em `(2)`, `(4)` e `(5)`.
+> Com o sexto enfileirado a fila tem **duas** linhas — os cenários contam **2**. Vale o medido.
 
 ---
 
@@ -1625,7 +1773,7 @@ justamente a que prova que a entrada nova entrou.
   `PUT /api/compras/pedidos/:id` (Etapa 38).
 - **Produces:** nada de código — produz o **número** que o fechamento cita.
 
-- [ ] **Step 1: escrever o roteiro inteiro, em blocos, na ordem da RN-D14**
+- [x] **Step 1: escrever o roteiro inteiro, em blocos, na ordem da RN-D14**
 
 ```
 BLOCO A — o pedido nasce ATRASADO, pelo SERVICO real
@@ -1695,7 +1843,7 @@ BLOCO F — a varredura de novo
      ⇐ fila e HISTORICO, nao estado: a linha antiga fica: o que nao pode e nascer linha nova
 ```
 
-- [ ] **Step 2: rodar e LER os números**
+- [x] **Step 2: rodar e LER os números**
 
 ```
 cd server && node tests/api/comprasPedidoAtrasoIntegracao.api.test.js
@@ -1705,7 +1853,7 @@ cd server && node tests/api/comprasPedidoAtrasoIntegracao.api.test.js
 base** — a `fechar-etapa` documenta quatro casos de teste vazio. Rode as sabotagens do Step 3
 **antes** de considerar o arquivo pronto.
 
-- [ ] **Step 3: sabotagens de composição** (as âncoras são as **mesmas** das tasks anteriores — a
+- [x] **Step 3: sabotagens de composição** (as âncoras são as **mesmas** das tasks anteriores — a
       pergunta aqui é se a composição também cai)
 
 | # | Sabotagem | Âncora | Qual asserção tem de cair |
@@ -1715,7 +1863,7 @@ base** — a `fechar-etapa` documenta quatro casos de teste vazio. Rode as sabot
 | 3 | tirar `'recebido'` de `STATUS_PEDIDO_FORA_DO_ATRASO` | `const STATUS_PEDIDO_FORA_DO_ATRASO = ['recebido', 'cancelado', 'rejeitado'];` | passo **10**: `atrasado: 0` esperado, veio `1` — **e é a sabotagem que prova que o BLOCO E mede alguma coisa** |
 | 4 | fazer o `processar` da 37 gravar `status='recebido'` no pedido (simular a feature 08) | — (edição pontual em `receiptService`, **restaurada imediatamente**; **não commitável**, é só sonda) | passo **8**: `atrasado: 1` esperado, veio `0`. ⚠️ **Toca arquivo NÃO-TOQUE**: faça **só** se a cópia de segurança estiver no scratchpad e o `md5sum` voltar ao valor de HEAD. **Se preferir não tocar, pule e declare** — o passo 8 já é afirmado, e a sabotagem 3 cobre o mesmo eixo |
 
-- [ ] **Step 4: rodar os CINCO comandos do fechamento, serial, e anotar os números reais**
+- [x] **Step 4: rodar os CINCO comandos do fechamento, serial, e anotar os números reais**
 
 ```
 cd server && npm run test:api
@@ -1728,10 +1876,47 @@ cd client && CI=true npx react-scripts build
 Anote **os números**, não "passou": `N/N arquivos OK`, `N passou, 0 falhou`, `Suites: N passed`,
 `Compiled successfully`. A T6 cita esses números; inventá-los é o defeito que a `fechar-etapa` nomeia.
 
-- [ ] **Step 5: commit** — `git add server/tests/api/comprasPedidoAtrasoIntegracao.api.test.js`.
+- [x] **Step 5: commit** — `git add server/tests/api/comprasPedidoAtrasoIntegracao.api.test.js`.
       Mensagem em `…\scratchpad\msg-e39-t5.txt`: por que a integração existe (verde por unidade não
       prova composição, e aqui o caminho passa por **rota**, **serviço** e **job**), e o que ela
       **prova**: que a limitação D6 é limitação e não bug (RN-D12).
+
+> ### ✅ Task 5 FEITA — `fc84e09` (*"Compras Etapa 39 T5: a integracao que prova que o atraso e
+> regua, e que o beco e limitacao"*)
+>
+> **Arquivo:** `server/tests/api/comprasPedidoAtrasoIntegracao.api.test.js` — **8 cenários, 8
+> passed / 0 failed**, verde de primeira (previsto). Nenhuma mudança de código de produto: nenhum
+> defeito novo apareceu.
+>
+> **Divergência declarada do roteiro do Step 1:** o BLOCO E ficou com **três** pedidos, não um.
+> `9a` afirma o beco (PUT do pedido do BLOCO D recusado com **400** e a literal exata de
+> `pedidoCompraService.js:180`, e ele **continua** `atrasado: 1` e dentro de `?atrasados=1`); `9b`
+> é a metade positiva (pedido atrasado e **sem** recebimento -> PUT `status: 'recebido'` -> **200**
+> -> `atrasado: 0`, `dias_atraso: null`); e o terceiro, com `previsao = HOJE`, é a **fronteira** —
+> sem ele a sabotagem 1 não derruba nada nesta integração. O BLOCO F fecha com
+> `enfileiradas: 0, duplicadas: 1` e as linhas antigas **idênticas** (fila é histórico, não estado).
+>
+> **Sabotagens — as QUATRO derrubaram asserção** (`md5sum` antes/depois, restauração conferida,
+> base LF preservada, `grep -cF` da âncora = 1 depois de restaurar):
+>
+> | # | Sabotagem | Asserções que caíram |
+> |---|---|---|
+> | 1 | `<` -> `<=` em `derivarAtraso` | `(E.fronteira)` *vence HOJE virou atrasado: veio 1* **e** `(F)` *enfileiradas 1* |
+> | 2 | remover o `.filter` da entrada do registro | `(C)` *esperava 1 alerta, veio 2* **e** `(F)` *enfileiradas 2* |
+> | 3 | tirar `'recebido'` de `STATUS_PEDIDO_FORA_DO_ATRASO` | `(E.9b)` *esperava atrasado 0, veio 1* **e** `(F)` |
+> | 4 | `processar` da 37 gravando `status='recebido'` (sonda em arquivo **NÃO-TOQUE**) | `(D)` *o `processar` passou a gravar `status`*, `(E.9a)` e `(F)` |
+>
+> A sabotagem 4 **foi feita** (com backup no scratchpad; `md5 e54df6371dadeb4470d682c75d3158dc`
+> conferido idêntico ao de HEAD depois de restaurar, e `git status` limpo em `server/services/`) e é
+> a que mais importa: ela prova que os passos **8** e **9a** são exatamente os sensores da feature
+> 08 — quando ela chegar, é por eles que o CRM avisa que o beco acabou.
+>
+> **Os cinco comandos do fechamento (números reais):** `test:api` **186/186 arquivos OK** (era
+> 185/185; +1 arquivo, o desta task); `test:almoxarifado` **42 passou, 0 falhou**;
+> `test:validation` **4 passed, 0 failed**; `test:safealter` **3 passed, 0 failed**; `test:sqlite`
+> **5 passed, 0 failed**; client **49 suites / 750 testes**; `CI=true npx react-scripts build`
+> **Compiled successfully.** Tails em
+> `…\scratchpad\verificacao-e39-t5.txt`.
 
 ---
 
@@ -1739,7 +1924,18 @@ Anote **os números**, não "passou": `N/N arquivos OK`, `N passou, 0 falhou`, `
 
 **Files (os 7 artefatos + os dois planos):** ver a tabela da Estrutura de arquivos.
 
-- [ ] **Step 1: medir as letras ANTES de escrever.** A 38 fechou em **B113**; os outros prefixos
+> **(fechamento 2026-09-17) O fechamento foi dividido entre DOIS escritores em paralelo**, porque os
+> artefatos não se sobrepõem: um escreve os documentos **de usuário** (`almoxarifado-novidades-por-
+> etapa.md`, `almoxarifado-guia-etapas-e-testes.md`, `almoxarifado-manual-do-sistema.md` — Steps 2,
+> 6 e 7) e o outro os documentos **de desenvolvedor** (specs de feature, mapa de status, design e
+> este plano — Steps 3, 4, 5, 8a, 9 e 10). **Os checkboxes abaixo são marcados por quem executou o
+> passo**, então um Step desmarcado quer dizer "o outro escritor ainda não reportou", não
+> "esquecido". Step 8(b) — a retro nº 4 do plano da **Etapa 38** — é do escritor de usuário, porque
+> depende da redação do defeito escapado que ele escreve na letra do doc de novidades.
+
+- [x] **Step 1: medir as letras ANTES de escrever.** *(Medido de novo no fechamento final,
+      2026-09-21, com os cinco `grep` abaixo: a etapa fechou em **A15 · B122 · C53 · F13 · G43**;
+      a 38 tinha fechado em B113 — a 39 somou B114–B122.)* A 38 fechou em **B113**; os outros prefixos
       avançaram no fechamento dela. **Não deduza — rode:**
 
 ```
@@ -1755,7 +1951,12 @@ grep -o "\*\*G[0-9]\+" docs/almoxarifado-novidades-por-etapa.md | sort -u -V | t
 "previs"` não acha "previsão" se a raiz truncar na cedilha/til — teste a régua contra um caso que
 você **sabe** que existe antes de concluir que algo não existe.)
 
-- [ ] **Step 2: `docs/almoxarifado-novidades-por-etapa.md`** — a seção da Etapa 39 no formato do
+- [x] **Step 2 (escritor de usuário, 2026-09-17; conferido e completado em 2026-09-21): `docs/almoxarifado-novidades-por-etapa.md`** — a seção
+      `## Etapa 39 — O pedido de compra passa a ser acompanhado (2026-09-17)` existe com Antes → Agora,
+      regras com cenário exato e "O que esta etapa NÃO cobre"; as letras entraram como **A15**,
+      **B114–B122**, **C53** e **G41–G43**. **O que faltava em 2026-09-21 e foi escrito neste
+      fechamento:** o item da Etapa 39 em `## Onde estamos e o que vem a seguir` — a seção terminava
+      na 38. *(Texto original do passo, preservado:)* a seção da Etapa 39 no formato do
       documento de apresentação (o que o usuário vê, **Antes → Agora**), mais:
       - **letra A (duas):** (i) **confirmar o `TZ` do processo Node em PRODUÇÃO** — medido que **não
         existe** configuração de `TZ` no repositório, então o "hoje" de `hojeLocalISO()` é o fuso do
@@ -1788,7 +1989,16 @@ você **sabe** que existe antes de concluir que algo não existe.)
         nasce **inerte**; as 4 varreduras UTC; `created_at` em UTC agora visível na coluna
         `Cadastrado em`; o core Compras com **uma** camada; o tema B aberto) **mais** as fragilidades
         que as sabotagens declararem (T1 sab. 5, T3 sab. 5, T4 sab. 5).
-- [ ] **Step 3: `specs/modulo-almoxarifado/20-alertas/README.md` — a correção de spec, VISÍVEL.**
+- [x] **Step 3: `specs/modulo-almoxarifado/20-alertas/README.md` — a correção de spec, VISÍVEL.**
+      **(feito no fechamento, 2026-09-17.** A correção saiu **mais forte** que a literal sugerida
+      pelo D7: o item `:27` passou a dizer que o motivo *"falta noção de saldo do pedido"* **estava
+      desatualizado desde as Etapas 37/38** e que o bloqueio real é outro — `derivarRecebimentoDoPedido`
+      **não é exportada** e a única fonte que é tem `LIMIT 50` e não devolve `previsao_entrega` —,
+      com o follow-up nomeado como fatia da feature 08. **A mesma correção foi feita na linha gêmea
+      de Infra (`:48`)**, que repetia o motivo caducado e enganaria quem lesse só ela. O item novo
+      `PEDIDO_COMPRA_ATRASADO` entrou `[x]` com `ddbc18f`, `33031ac` e `8f3db94`, e com o contrato
+      inteiro: colunas projetadas, dedupe com a previsão, assunto `[Compras]`, canal/toggle
+      compartilhados, as 4 colunas da central e as três limitações declaradas.)
       O item *"Pedido recebido parcialmente"* (`:27`) está `[ ]` com o motivo `:48` *"falta noção de
       saldo do pedido"* — e **o motivo caducou**. Escreva, **sem apagar a frase errada**, a literal
       sugerida pelo design (D7):
@@ -1796,48 +2006,82 @@ você **sabe** que existe antes de concluir que algo não existe.)
       > (situação) e na 38 (previsão validada). O que falta agora é a porta: a fonte exportada tem
       > `LIMIT 50` e não devolve `previsao_entrega` — fatia da feature 08."*
       E acrescente o item **novo** `[x]` do `PEDIDO_COMPRA_ATRASADO`, com o hash da T4.
-- [ ] **Step 4: `specs/modulo-almoxarifado/22-integracoes/README.md`** — marcar o item *"acompanhamento
+- [x] **Step 4 (feito no fechamento, 2026-09-17): `specs/modulo-almoxarifado/22-integracoes/README.md`**
+      — o item ficou `[x]` com os **nove** hashes (T1–T5 + F1–F4), e a feature ganhou os contratos
+      **8 a 13**: os dois campos derivados + `?atrasados=1`, a régua única, o `PATCH …/status`, o
+      `teve_recebimento` no `GET /:id`, o ponteiro para a entrada de alerta e o defeito escapado da
+      38. O que continua fora foi escrito **com o motivo** (`situacao_recebimento` na aba, alerta de
+      parcial, status automático). **Nada da spec da 38 precisou ser marcado como errado aqui** — o
+      que havia de desatualizado era o *motivo* do item aberto, e ele foi riscado no lugar.
+      *(Texto original do passo, preservado:)* — marcar o item *"acompanhamento
       de pedido e prazo com alerta de atraso"* (`:217-219`, aberto desde a Etapa 14) como `[x]` com os
       hashes por task, e o que **continua** fora (`situacao_recebimento` na aba, alerta parcial).
       **Item que ficar desmarcado leva o porquê escrito ali** — desmarcado sem explicação parece
       esquecimento.
-- [ ] **Step 5: `specs/modulo-almoxarifado/README.md` e `specs/modulo-compras/README.md`** — a linha
+- [x] **Step 5 (feito no fechamento, 2026-09-17): `specs/modulo-almoxarifado/README.md` e
+      `specs/modulo-compras/README.md`** — o cabeçalho do mapa abre pela Etapa 39 (a 38 virou
+      `Antes:`), e as linhas das features **22**, **20** e **08** ganharam o que a etapa mudou e o
+      que falta para 🟢. Em `modulo-compras`: a aba Pedidos na tabela das três abas, a seção nova
+      "O que a Etapa 39 mudou nesta aba", a contagem de rotas **medida** (30, não 23) e o
+      `PATCH …/status` na seção de autorização. **Uma correção de spec a mais, não prevista:** o
+      caminho da tela estava escrito como `client/src/components/PedidoCompraForm.js` e o arquivo
+      está em `client/src/components/compras/` — **estava errado**, e ficou dito.
+      *(Texto original do passo, preservado:)* — a linha
       da feature no mapa de status, o cabeçalho "onde estamos" abrindo pela Etapa 39 (o da 38 vira
       `Antes:`), e em `modulo-compras` a tabela das três abas com a nota de que a 39 **não** é a etapa
       das outras duas (tema B segue aberto, 4 caminhos mortos).
-- [ ] **Step 6: `docs/almoxarifado-guia-etapas-e-testes.md`** — seção da Etapa 39 em linguagem de
+- [x] **Step 6 (escritor de usuário, 2026-09-17; cabeçalho ajustado em 2026-09-21 para nomear a
+      Etapa 40): `docs/almoxarifado-guia-etapas-e-testes.md`** — seção da Etapa 39 em linguagem de
       usuário, com: **(a)** a tabela **Antes → Agora** da seção 6.1 do design (as quatro linhas);
       **(b)** roteiro de teste manual clicável, dizendo na primeira linha que **a tela é do módulo
       Compras, não do almoxarifado**; **(c)** o que a etapa **não** cobre; **(d)** o aviso de que **o
       alerta nasce inerte** — ele varre o vazio enquanto ninguém preencher previsão de entrega, e a
       consulta da letra A é a que mede. **O cabeçalho do guia tem de deixar óbvio onde o
       desenvolvimento parou.**
-- [ ] **Step 7: `docs/almoxarifado-manual-do-sistema.md`** — as **frases da coluna direita da tabela
+- [x] **Step 7 (escritor de usuário, 2026-09-17; conferido em 2026-09-21 — o manual traz a literal
+      `Atrasado há 1 dia`/`Atrasado há 3 dias`, a caixa `Só atrasados`, as duas colunas do Excel e a
+      faixa do pedido recebido): `docs/almoxarifado-manual-do-sistema.md`** — as **frases da coluna direita da tabela
       de RN** deste plano, uma por RN, com a **literal do badge** (`Atrasado há 3 dias`), o rótulo
       **`Só atrasados`** e as colunas **`Atrasado`** / **`Dias de atraso`** escritas como o usuário as
       vê. E a frase da RN-D12, que é a que evita chamado: *"receber no almoxarifado não muda sozinho o
       status do pedido"*.
-- [ ] **Step 8: os dois planos.** (a) **este** plano: marcar as tasks feitas com hash e o estado real
+- [x] **Step 8(a) feito no fechamento (2026-09-17)** — este plano tem as tasks marcadas com hash, a
+      seção **Fase 4/5** no fim, a retro de 4 números preenchida e a próxima tarefa detalhada. **O
+      design também foi corrigido** (seção 12 nova, seis correções marcadas *(corrigido no
+      fechamento)*), o que o passo original não previa mas a regra 5 do `CLAUDE.md` exige.
+      **8(b) FEITO** (conferido em 2026-09-21): a retro nº 4 do plano da Etapa 38 está preenchida
+      com o defeito escapado — `formatDate` por `new Date(str)`, `Compras.js:91-94` e `:160-162`,
+      `2026-09-16` virando `15/09/2026` — apontando a Fase 0 desta etapa e o commit da T2 (`235c067`).
+      *(Texto original do passo, preservado:)* (a) **este** plano: marcar as tasks feitas com hash e o estado real
       (divergências incluídas), e escrever a **próxima tarefa detalhada**; (b)
       `docs/superpowers/plans/2026-09-16-crm-etapa38-pedido-de-compra.md`: preencher a **retro nº 4
       ("defeito escapado")**, que ficou em branco de propósito, **nomeando o commit da T2 desta
       etapa** — `formatDate` com `new Date(string)`, a data um dia atrás em quatro telas e o
       round-trip do Excel quebrado no valor.
-- [ ] **Step 9: a retro de 4 números**, no fim deste plano: rodadas de correção até verde; achados da
+- [x] **Step 9 (feito em 2026-09-21, lendo `progress.md` e os relatórios em `.superpowers/sdd/`): a retro de 4 números**, no fim deste plano: rodadas de correção até verde; achados da
       revisão (reais vs. ruído não reproduzido); paralelismo (nesta etapa: **zero galhos em paralelo**,
       por decisão — registre se isso custou tempo); defeito escapado (**em branco**, preenchido pela
       Etapa 40 olhando para trás — é o mesmo contrato que a 38 deixou para esta).
-- [ ] **Step 10: a próxima tarefa detalhada.** Pela ordem do `CLAUDE.md`: (1) o que este fechamento
+- [x] **Step 10 (feito em 2026-09-21 — ver "Próxima etapa: Etapa 40" no fim deste plano; a feature
+      22 NÃO nomeia um "falta para 🟢" alcançável, então vale o tema B): a próxima tarefa detalhada.** Pela ordem do `CLAUDE.md`: (1) o que este fechamento
       nomear como "o que falta para 🟢" na feature 22; senão (2) **o tema B** — as duas abas de
       Compras sem tela de criação (`/compras/fornecedores/novo`, `/compras/cotacoes/nova` e os **dois**
       lápis de `Compras.js:270` e `:392`: são **4 caminhos mortos**, medidos na Fase 0 §6.1), que o D1
       já declara como **o próximo candidato**, com o tamanho medido em Fase 0 §6.3 (~4 rotas de client
       + ~4 de servidor + 2 schemas Zod + 2 telas + 4 suítes). **Escreva o contrato de API que a
       próxima task consome e os pontos de atenção** — é o que permite retomar sem reler o código.
-- [ ] **Step 11: verificação final medida** — rode os cinco comandos de novo e **cite os números
+- [x] **Step 11: verificação final medida** *(rodado em 2026-09-21 em `19ebf7d` + docs: `test:api`
+      **187/187 arquivos**; almoxarifado **42 passou, 0 falhou**; validation **4/0**; safealter
+      **3/0**; sqlite **5/0**; client **49 suites / 753 tests**; build **Compiled successfully**.
+      `git status`: só os 9 arquivos de documentação, mais `server/data/database.sqlite.bak`,
+      `server/nodemon.json` e `docs/bkp_bancoprod.md` **não versionados e não adicionados** — os
+      dois primeiros são runtime; o terceiro é um documento do usuário que não foi pedido para
+      entrar. CR=0 em todos os arquivos tocados, medido com `perl`.)* — rode os cinco comandos de novo e **cite os números
       reais** (não "passou"). Confira com `git status` que nada de `server/data/` ou `server/uploads/`
       entrou, e com `git log --oneline` que há **um commit por assunto**.
-- [ ] **Step 12: commit do fechamento** — `git add` só dos caminhos de documentação tocados.
+- [x] **Step 12: commit do fechamento** (2026-09-21 — é o commit que contém esta marcação; o hash
+      está no `git log` como *"Compras Etapa 39 T6: fecha a documentacao…"*, e um commit não pode
+      conter o próprio hash) — `git add` só dos 9 caminhos de documentação tocados.
       Mensagem em `…\scratchpad\msg-e39-t6.txt`.
 
 ---
@@ -1918,10 +2162,134 @@ de novidades na T6 Step 1 (com os comandos).
 
 ## Retro de 4 números (preencher na T6)
 
-1. **Rodadas de correção até verde:** …
-2. **Achados da revisão (Fase 2 + Fase 5):** reais … / ruído não reproduzido …
-3. **Paralelismo:** **0 galhos em paralelo por decisão** (T2 e T3 tocam o mesmo arquivo; worktree
-   exigiria `npm install`). Registrar se a serialização custou tempo de parede.
+*(Preenchida em 2026-09-21, lendo `.superpowers/sdd/2026-09-16-crm-etapa39-pedido-acompanhado/progress.md`
+e os `task-N-report.md` — não de memória.)*
+
+1. **Rodadas de correção até verde:** **T1–T5: zero rodadas de correção** — as cinco revisões
+   por task saíram *Approved* na primeira passada (T1 com 3 Minor declarados, T4 com 2, T2/T3/T5
+   sem achado). **Fase 5: UMA onda de correção** (F1–F4, `45bda69..19ebf7d`), e a re-revisão da
+   onda **não achou nada novo**. Total: **1 rodada** para a etapa inteira (a 38 precisou de 8
+   commits de onda; esta, de 4).
+2. **Achados da revisão (Fase 2 + Fase 5):** **Fase 2 (revisão do plano/design, antes de codar):
+   2 Critical + 6 Important + 5 Minor, os 13 aplicados ao plano e ao design em `39ea9d2`** — o mais
+   caro, o C2, reescreveu o cenário (8) da T1 antes de existir código. **Fase 5 (duas lentes
+   independentes sobre `39ea9d2..fc84e09`): 1 Critical + 4 Important + 13 Minor, TODOS reais e
+   reproduzidos por sonda; ruído não reproduzido: 0.** As duas lentes **convergiram** na dedupe
+   permanente (UX I2 = RN I2). Dos 13 Minor, **três seguem abertos e nomeados** (M1 vazio do filtro
+   mente, M2 assunto com `numero` nulo, M3 hora da varredura ancorada no boot — letra G).
+3. **Paralelismo:** **0 galhos em paralelo por decisão** nas tasks (T2 e T3 tocam o mesmo
+   `Compras.js`; worktree exigiria `npm install`). **Custou tempo de parede, medível:** T2 e T3
+   são pequenas (um `formatDate` e um badge) e a serialização foi de cinco tasks em fila. O que
+   **foi** paralelo e pagou: a revisão final em 2 lentes rodou **junto** com o gate da T5, e o
+   fechamento com **2 escritores** (usuário / desenvolvedor). **Lição:** quando duas tasks tocam o
+   mesmo arquivo em faixas disjuntas, o custo do worktree é menor que o da fila — na Etapa 40, os
+   dois pares (fornecedor / cotação) são disjuntos por natureza e **devem** ir em paralelo.
 4. **Defeito escapado:** *(em branco de propósito — só pode ser preenchido **de fora**, por quem
    fechar a Etapa 40 olhando para trás. É o mesmo contrato que a 38 deixou para esta, e que a T6
-   Step 8(b) cumpre.)*
+   Step 8(b) cumpriu.)*
+
+---
+
+## Onda de correção final (pós-revisão de branch, BASE `fc84e09`)
+
+Executada em 2026-09-17 a partir de `.superpowers/sdd/2026-09-16-crm-etapa39-pedido-acompanhado/
+fix-wave-brief.md`, que consolida `final-review-ux.md` (C1, I1, I2) e `final-review-rn.md` (I1, I2).
+Um commit por item, cada um com sabotagem e a asserção derrubada registrada. Relatório completo em
+`fix-wave-report.md`, no mesmo diretório.
+
+- [x] **F1 (UX C1) — `hojeLocalISO()` era UTC em produção** — `45bda69`.
+  `hojeLocalISO()` passou a recortar o dia por `Intl.DateTimeFormat('en-CA', { timeZone:
+  FUSO_PADRAO })` (require **lazy** de `auditFiltros`), e o `Dockerfile` ganhou `tzdata` +
+  `ENV TZ=America/Sao_Paulo` (as duas, nunca uma). Cenário **(11)** de
+  `comprasPedidoAtraso.api.test.js`, com instante fixo por subclasse de `Date`. Rodado também com
+  `TZ=UTC`: **11/0**.
+- [x] **F2 (UX I2 = RN I2) — dedupe permanente** — `33031ac`.
+  `dedupeChave` virou `pedido-atrasado-${id}-${previsao_entrega}`. Cenário **(9)** de
+  `alertaPedidoAtrasado.api.test.js` percorre renegociação pelo `PUT` real.
+- [x] **F3 (UX I1) — `SELECT p.*` na central** — `8f3db94`. Projeção nomeada
+  (`id, numero, status, previsao_entrega, fornecedor_nome`; **sem** `data_pedido` — nada o lê).
+  Cenário **(10)** do mesmo arquivo.
+- [x] **F4 (RN I1) — o beco da RN-D12** — `19ebf7d`. `PATCH /api/compras/pedidos/:id/status` +
+  `alterarStatusPedido` + `teve_recebimento` no `GET /:id` + faixa e `PATCH` no formulário. Arquivo
+  novo `comprasPedidoStatus.api.test.js` (7), `E.9a` reescrito e `E.9c` novo na integração, `(r)`,
+  `(r2)` e `(r3)` no client. **A guarda do `PUT` NÃO foi afrouxada** — cenário (5) do arquivo novo
+  é a régua disso.
+
+**Correção ao mapa de nomes acima:** a linha `pedido-atrasado-${id} (dedupe)` da tabela vale para o
+código até `fc84e09`; desde `33031ac` a chave é `pedido-atrasado-${id}-${previsao_entrega}`.
+
+**Verificação final da onda:** API **187/187** arquivos (era 186 — `comprasPedidoStatus` é novo);
+almoxarifado **42/0**; validation **4/0**; safealter **3/0**; sqlite **5/0**; client **49 suítes /
+753 testes** (eram 750 — os três cenários do `PedidoCompraForm`); `CI=true npx react-scripts build`
+**Compiled successfully**.
+
+**Próxima tarefa detalhada (para quem retomar):** fechar a documentação da onda pela skill
+`fechar-etapa` — letra **B** de `docs/almoxarifado-novidades-por-etapa.md` com as quatro decisões e
+o descartado de cada uma (em especial: `TZ` no `Dockerfile`, a exclusão de `data_pedido` da projeção
+e a escolha do `PATCH` contra o afrouxamento da guarda), o guia do usuário
+(`docs/almoxarifado-guia-etapas-e-testes.md`) com o roteiro clicável do novo gesto "abrir o pedido
+recebido → mudar o status → Salvar" e o aviso de que o alerta sai na **varredura diária** (M3), e o
+README da feature 22 com os quatro hashes. Contrato de API que a documentação consome:
+`PATCH /api/compras/pedidos/:id/status`, corpo `{ status }` (enum `STATUS_PEDIDO_COMPRA`), resposta
+`{ id, numero, status }`, 400 com `status do pedido inválido (…)`, 404 com
+`Pedido de compra não encontrado`, gate só de módulo (`compras`). Pontos de atenção: os Minor M1
+(vazio do filtro mente), M2 (assunto com `numero` nulo) e M3 (hora da varredura ancorada no boot)
+**não** foram tratados nesta onda e seguem abertos.
+
+> **(2026-09-21) A tarefa acima FOI FEITA** — documentação da onda fechada pelos dois escritores em
+> 2026-09-17 e completada em 2026-09-21 (retro, item de "Onde estamos", cabeçalho do guia, este
+> bloco). O que vale a partir daqui é a seção seguinte.
+
+---
+
+## Próxima etapa: Etapa 40 — Fornecedores e Cotações ganham tela (o tema B, medido)
+
+**Por que esta e não outra.** Pela ordem do `CLAUDE.md`: (1) a feature 22 **não nomeia** um "falta
+para 🟢" alcançável — os 18 itens abertos dela são BOM/OP (entidades que não existem em lugar
+nenhum do sistema) ou cortes **declarados por decisão** (B101, idempotência da importação,
+aprovação do pedido); (2) o fechamento da 38 e o da 39 nomearam **o mesmo** próximo candidato, e
+o design desta etapa o declara em **D1**: as abas **Fornecedores** e **Cotações** de Compras têm
+botão "Novo" e lápis de editar que **voltam para a lista** — **4 caminhos mortos**, medidos na Fase
+0 §6.1 (`.superpowers/sdd/etapa39-fase0-acompanhamento.md`). Depois da 38 e da 39, é a última coisa
+em Compras que o comprador **clica e não acontece nada**. Escolha reversível, registrada em
+**B118** (o corte "prazo primeiro, abas depois").
+
+**Tamanho já medido (Fase 0 §6.3, 2026-09-16 — REMEDIR antes de prometer, pela Fase 0 da skill):**
+~4 rotas de client (+2 entradas em `routes/lazyModules.js`) · ~4 rotas de servidor novas · 2
+schemas Zod novos + retrofit de Zod nas duas portas de fornecedor · 2 telas (+CSS) · 4 suítes (2
+client no molde `PedidoCompraForm.test.js`, 2 API). **Comparável à Etapa 38, um pouco menor.**
+
+**O que já existe e a etapa NÃO reabre** (medido em §6.2; conferir linha a linha na Fase 0):
+
+| Porta | Estado em 2026-09-16 | Consequência para a 40 |
+|---|---|---|
+| `POST /api/compras/fornecedores` | existe, **sem Zod** (`if (!razao_social)` → 400), grava `status='ativo'` fixo | retrofit de `FornecedorSchema` (Zod) **sem mudar o contrato** dos consumidores que já postam: `FornecedoresDoGrupo.js:208-234` posta 3 campos + grupo |
+| `PUT /api/compras/fornecedores/:id` | existe, sem Zod; aceita `endereco`, que o `POST` **não** aceita | igualar os dois (o `POST` passa a aceitar `endereco`) — é o tipo de assimetria que a tela nova expõe |
+| `GET /api/compras/fornecedores/:id` | **não existe** (só a lista) | criar — o formulário de edição precisa dela |
+| `POST` / `PUT` / `GET /api/compras/cotacoes(/:id)` | **não existem** | criar as três; `cotacoes` é tabela chapada (`fornecedor_id NOT NULL` + FK), **sem `cotacao_itens`** — não inventar itens de cotação nesta etapa |
+| `DELETE /api/compras/:tipo/:id` genérico | existe; 409 só para fornecedor **com pedido** | as rotas novas têm de ficar **acima** dele em `routes/compras.js` (sombreamento medido, `:147-151`); criar cotação **invalida** a justificativa de `compras.js:354-355` ("cotacoes … COUNT = 0, sem risco") e reabre o 409 de exclusão de fornecedor, agora por cotação |
+| `PedidoCompraForm.js` | molde de tela e de teste da 38 | copiar a forma, não o código: busca de fornecedor, `hojeISO` local, toast com a literal do servidor |
+
+**Contrato que a Etapa 40 deve congelar no design (proposta, a confirmar na Fase 0):**
+`FornecedorSchema` = `{ razao_social: string min 1, nome_fantasia?, cnpj?, telefone?, email?,
+endereco?, contato?, grupo_id?: int }` com `status` **fora do payload** (segue `'ativo'` no
+`POST`; mudar status é `PUT`); `CotacaoSchema` = `{ fornecedor_id: int, ...colunas chapadas de
+`cotacoes` }` — ler o `CREATE TABLE` em `server/index.js:19244-19256` **antes** de escrever o
+schema. Respostas de erro no padrão da 38: 400 com a mensagem do Zod, 404 `Fornecedor não
+encontrado` / `Cotação não encontrada`, 409 do `DELETE` nomeando o motivo.
+
+**Pontos de atenção herdados:**
+- **Autorização:** o core Compras tem **uma** camada (módulo) — G30. A 40 **não** cria perfil em
+  Compras; se algum gesto exigir alçada, o caminho reversível é o mesmo da 38 (gate condicional,
+  403 antes de escrever), registrado na letra B.
+- **`cotacoes` não está no harness** (`testApp.js` não a cria): a suíte de API sobe a DDL local,
+  padrão de `testApp.js:93-97`.
+- **Testes hoje:** `POST`/`PUT` de fornecedor **não têm um único teste**; cotação tem **uma**
+  asserção (o `DELETE`). A T1 da 40 começa por **caracterizar** as duas portas de fornecedor como
+  estão, antes do retrofit de Zod — para o Zod não virar 400 silencioso em consumidor existente
+  (o mesmo modo de falha do `z.object` que fazia *strip* na Etapa 36).
+- **Paralelismo:** fornecedor e cotação são **disjuntos** (arquivos, tabelas, telas). Os dois
+  galhos **devem** rodar em worktrees paralelas — a retro nº 3 desta etapa mede o custo da fila.
+- **Retro nº 4 desta etapa (defeito escapado)** é preenchida pela Fase 0 da 40 olhando para trás.
+- **Os três Minor abertos da 39** (M1, M2, M3) **não** são da 40; seguem na letra G até uma etapa
+  de alertas os reabrir.

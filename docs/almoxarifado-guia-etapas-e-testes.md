@@ -1,16 +1,59 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-09-16 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-09-17 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 37) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. A **Etapa 38 também não é do módulo** — ela é do **módulo Compras** —, e está aqui pelo mesmo motivo: é ela que fecha o laço que a Etapa 37 deixou aberto.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 39) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 e 39 também não são do módulo** — as duas são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, e a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado).
 
-> ## Onde o desenvolvimento está — 2026-09-16 (Etapa 38 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-09-21 (Etapa 39 FECHADA · Etapa 40 começando)
 >
-> **Etapas 1 a 20 e 22 a 38 completas; a Etapa 21 foi entregue no NÚCLEO do CRM e a 38 no módulo
-> COMPRAS.** A **Etapa 38 (o pedido de compra ganha criação)** fechou em 2026-09-16, com uma onda de
-> correção da revisão final. **Próxima etapa: 39 — o pedido de compra passa a ser ACOMPANHADO (prazo prometido, atraso e os resíduos da 38)**, detalhada no fim do plano da 38 (`docs/superpowers/plans/2026-09-16-crm-etapa38-pedido-de-compra.md`).
+> **Etapas 1 a 20 e 22 a 39 completas; a Etapa 21 foi entregue no NÚCLEO do CRM e as 38 e 39 no
+> módulo COMPRAS.** A **Etapa 39 (o pedido de compra passa a ser acompanhado)** fechou em
+> 2026-09-17, com uma onda de correção da revisão final; a documentação do fechamento foi
+> completada em 2026-09-21. **Próxima etapa: Etapa 40 — Fornecedores e Cotações ganham tela**
+> (módulo Compras): hoje os botões **"Novo Fornecedor"** e **"Nova Cotação"** e os dois lápis de
+> editar dessas abas **voltam para a lista** sem fazer nada — é o mesmo corte que a 38 e a 39
+> declararam, e a última coisa em Compras que se clica e não acontece. O desenho está no fim do
+> plano da 39 (`docs/superpowers/plans/2026-09-16-crm-etapa39-pedido-acompanhado.md`, seção
+> "Próxima etapa: Etapa 40").
 >
-> **O problema era que nenhuma tela do sistema criava um pedido de compra.** Medido, não suposto: o
+> **O problema era que ninguém olhava o prazo do pedido.** A Etapa 38 passou a gravar uma **Previsão
+> de entrega** em cada pedido — e nada no sistema comparava essa promessa com o calendário. Um pedido
+> prometido para a semana passada tinha exatamente a mesma cara de um prometido para o mês que vem, e
+> descobrir o atraso dependia de alguém ler a lista data a data.
+>
+> **O que mudou:**
+> - **A coluna *Previsão Entrega* ganhou o selo vermelho "Atrasado há N dias"** (com o singular
+>   certo: *"Atrasado há 1 dia"*), e a aba ganhou a caixa **"Só atrasados"**, que compõe com a busca
+>   e com o filtro de status.
+> - **"Exportar Excel" da aba Pedidos** passou a trazer as colunas **"Atrasado"** (*Sim*/*Não*) e
+>   **"Dias de atraso"** — e respeita o filtro da tela.
+> - **A varredura diária passou a mandar e-mail para a lista de Compras** por pedido atrasado
+>   (assunto *"[Compras] Pedido de compra atrasado — ⟨número⟩"*), e **Almoxarifado → Alertas** ganhou
+>   o cartão **"Pedido de compra atrasado"** com *Pedido, Fornecedor, Previsão e Dias de atraso*.
+> - **As datas do pedido pararam de aparecer um dia atrás.** Na tela **e** no Excel: exportar e
+>   reimportar o próprio arquivo do sistema movia as duas datas um dia para trás a cada volta. E o
+>   "hoje" que decide o atraso passou a ser o dia de **Brasília**, independentemente do relógio da
+>   máquina onde o sistema roda.
+> - **Um pedido que já teve recebimento pode ter o status corrigido.** O lápis abre o formulário com
+>   a faixa *"Este pedido já teve recebimento — só o status pode ser alterado"*: tudo travado, menos
+>   o **Status**. Salvar mostra *"Status do pedido atualizado"* e o selo de atraso some.
+>
+> **⚠️ Três coisas antes de apresentar a 39:**
+> 1. **Enquanto não houver pedido com previsão de entrega em produção, o alerta novo é INERTE.** O
+>    cartão aparece zerado e nenhum e-mail sai — é o esperado, não defeito. A consulta **A15** do
+>    documento de novidades conta, em 30 segundos, quantos pedidos têm prazo e quantos já estariam
+>    atrasados no primeiro dia (se esse número for alto, **a primeira varredura manda um e-mail por
+>    pedido, de uma vez**).
+> 2. **Receber o material NÃO fecha o pedido.** Um pedido entregue com atraso continua com o selo, no
+>    filtro e no cartão até alguém trocar o status pelo lápis. É decisão declarada (**B121**), e o
+>    gesto que resolve é um clique — está no roteiro, passo 9.
+> 3. **Para ver o e-mail numa demonstração, reinicie o servidor e espere 30 segundos.** A varredura
+>    roda 30 s depois do arranque e depois a cada 24 h; não há horário configurável. O cartão da
+>    central, por ser leitura **ao vivo**, não espera nada.
+>
+> **Antes disto: a Etapa 38 (o pedido de compra ganha criação)** fechou em 2026-09-16, com uma onda de
+> correção da revisão final. **O problema era que nenhuma tela do sistema criava um pedido de
+> compra.** Medido, não suposto: o
 > banco de produção tinha **zero** pedidos e **zero** itens de pedido, e os botões **"Novo Pedido"**
 > e **"Editar"** da aba *Pedidos de Compra* **voltavam para a lista** — o endereço não tinha tela do
 > outro lado. Consequência: a **Reposição** gerava solicitações de compra desde a Etapa 11 que
@@ -18,7 +61,7 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 > entregou — recebimento parcial, saldo do pedido, excedente autorizado — era **inalcançável por um
 > clique**.
 >
-> **O que mudou:**
+> **O que a 38 mudou:**
 > - **Compras → Pedidos de Compra → "Novo Pedido"** abre o formulário **"Novo pedido de compra"**:
 >   fornecedor, datas, status, observações e itens com busca de material, quantidade e valor
 >   unitário, com **"Total: R$ …"** somado na tela. O **número do pedido é gerado pelo sistema**.
@@ -38,7 +81,7 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 > - **Excluir um fornecedor que tem pedido é recusado** com *"Fornecedor possui pedidos de compra —
 >   não pode ser excluído"*. Esse caminho era inalcançável antes desta etapa.
 >
-> **⚠️ Três coisas antes de apresentar:**
+> **⚠️ Três coisas da 38 antes de apresentar:**
 > 1. **O roteiro da Etapa 37 não precisa mais de SQL.** Ele começava inserindo um pedido à mão,
 >    porque não havia tela que criasse pedido. **Agora começa em Compras → Pedidos de Compra → Novo
 >    pedido de compra**, e o pedido criado aparece no campo *Número do Pedido de Compra* do
@@ -4671,6 +4714,147 @@ que ele não tinha como repetir com sucesso garantido.
 - **Número de série de material** — continua sendo **digitado pelo operador** e de propósito não
   passa por este gerador. Retentar com outro número gravaria algo que ninguém digitou.
 - **Números de outros módulos do CRM** — a varredura foi do almoxarifado.
+
+---
+
+## Etapa 39 — O pedido de compra passa a ser acompanhado (ENTREGUE — 2026-09-17)
+
+**O que mudou, em uma frase:** o pedido de compra passou a ter **prazo cobrado** — a aba Pedidos
+mostra há quantos dias cada um está atrasado, filtra só os atrasados, leva o atraso para o Excel, e o
+sistema manda e-mail para Compras quando um prazo vence.
+
+**Esta etapa é do módulo Compras**, como a 38. Ela está neste guia porque o aviso de atraso nasce na
+**varredura diária do almoxarifado** e aparece em **Almoxarifado → Alertas**, junto com lote vencendo
+e remessa vencida.
+
+O problema era simples e inteiro: a Etapa 38 passou a gravar uma **Previsão de entrega** em cada
+pedido, e **nada no sistema comparava essa data com o calendário**. Um pedido prometido para a semana
+passada era visualmente idêntico a um prometido para o mês que vem. Junto vieram os dois resíduos que
+a 38 deixou: **as datas apareciam um dia antes** do que está gravado (na tela e no Excel), e **um
+pedido já recebido não tinha como ter o status corrigido** — ficava marcado como atrasado para
+sempre.
+
+### Onde se percebe cada mudança
+
+| Tela | Antes | Agora |
+|---|---|---|
+| **Compras → Pedidos de Compra**, coluna *Previsão Entrega* | Só a data | A data e, ao lado, o selo vermelho **"Atrasado há 1 dia"** / **"Atrasado há 12 dias"** |
+| **Filtros da aba Pedidos** | Busca e status | Mais a caixa **"Só atrasados"** — e ela compõe com a busca e com o status. A caixa **não** aparece nas abas Fornecedores e Cotações |
+| **"Exportar Excel" da aba Pedidos** | Onze colunas | Mais **"Atrasado"** (*Sim*/*Não*) e **"Dias de atraso"** (vazio quando o pedido está no prazo). O arquivo respeita o filtro da tela |
+| **Almoxarifado → Alertas** | Onze cartões | Mais o cartão **"Pedido de compra atrasado"** (*"Pedidos de compra com previsão de entrega vencida e ainda não recebidos."*), com **Pedido, Fornecedor, Previsão, Dias de atraso** |
+| **E-mail** | Nenhum aviso de prazo de pedido | Um e-mail por pedido atrasado, para a lista de alertas: **"[Compras] Pedido de compra atrasado — ⟨número⟩"** |
+| **Datas do pedido na tela e no Excel** | **Um dia atrás** do que está gravado — e exportar/reimportar andava mais um dia a cada volta | A data do pedido, em qualquer fuso e a qualquer hora |
+| **Data sugerida no "Novo Pedido"** | Depois das 21h vinha **a de amanhã** | A de hoje |
+| **Lápis de um pedido já recebido** | Abria o formulário e o salvar era recusado — sem saída | Abre com a faixa **"Este pedido já teve recebimento — só o status pode ser alterado"**, tudo travado menos o **Status**, e salvar mostra **"Status do pedido atualizado"** |
+
+### Roteiro de teste manual
+
+**Nada aqui usa SQL.** Você precisa de um usuário com acesso ao **módulo Compras** e, para os passos
+6 a 8, também ao **Almoxarifado** (perfil Administrador, Almoxarife, Gestor ou Compras — o cartão de
+alertas é desses quatro).
+
+**O pedido que já nasce atrasado**
+
+1. Entre em **Compras → Pedidos de Compra → Novo Pedido**. Escolha o fornecedor, adicione um item
+   (busque o material, clique no **+**, ponha quantidade **10** e valor unitário **50**) e, em
+   **Previsão de entrega**, escolha **ontem**. Clique em **Salvar pedido**.
+2. Na lista, olhe a coluna **Previsão Entrega** do pedido novo: a data de ontem aparece **igual à que
+   você escolheu** (é o conserto das datas), e ao lado dela o selo vermelho **"Atrasado há 1 dia"**.
+   *Se você tivesse escolhido três dias atrás, diria "Atrasado há 3 dias" — o singular e o plural
+   estão certos.*
+3. **A fronteira que vale demonstrar:** clique no **lápis**, troque a previsão para **hoje** e salve
+   → o selo **some**. *Vence hoje não está atrasado.* Volte a previsão para **ontem** e o selo
+   retorna.
+4. **O filtro.** Marque a caixa **"Só atrasados"**, ao lado da busca → a lista mostra **só** os
+   atrasados. Combine com a busca por número ou com o filtro de status: os três funcionam juntos.
+   Desmarque para voltar à lista inteira.
+5. **O Excel.** Com o filtro marcado, clique em **Exportar Excel** → o arquivo sai com as duas
+   colunas novas no fim: **Atrasado** = *Sim* e **Dias de atraso** = o número. Exporte de novo **sem**
+   o filtro e confira um pedido no prazo: **Atrasado** = *Não* e **Dias de atraso** **vazio** (não
+   zero). Confira também que a coluna **Previsão Entrega** do arquivo bate com a tela — e, se quiser
+   a prova completa, reimporte o arquivo em **Novo Pedido → Importar planilha** e veja que as datas
+   voltam **iguais**.
+
+**O alerta e o e-mail**
+
+6. **Para a varredura rodar agora, reinicie o servidor e espere 30 segundos.** (Ela roda 30 s depois
+   de cada arranque e, depois, a cada 24 h — não há horário configurável. Sem reiniciar, o e-mail
+   pode levar até um dia para sair.)
+7. Vá em **Almoxarifado → Alertas** → o cartão **"Pedido de compra atrasado"** mostra o total, e
+   **Detalhes** abre as linhas com **Pedido, Fornecedor, Previsão e Dias de atraso**. *O cartão é
+   leitura ao vivo: ele não depende da varredura nem do e-mail.*
+8. O e-mail vai para a lista de **Alertas de Estoque** (Configurações), com assunto
+   **"[Compras] Pedido de compra atrasado — PC-…"** e corpo com **Pedido, Fornecedor, Previsão de
+   entrega, Atraso: N dia(s)** e **Status**. Em **Almoxarifado → Notificações** dá para ver o aviso
+   enfileirado mesmo sem servidor de e-mail configurado. **Ele sai uma vez por prazo prometido:**
+   rodar a varredura de novo **não** duplica. Mas se você **renegociar** (mudar a previsão para outra
+   data passada) e rodar de novo, **sai um segundo e-mail** — porque é outro prazo quebrado.
+
+**Receber não fecha o pedido — e o clique que fecha**
+
+9. Receba o pedido pelo almoxarifado: **Almoxarifado → Recebimentos → Novo Recebimento → Por Pedido
+   de Compra**, escolha o pedido, digite a quantidade e leve até o fim (**Iniciar Conferência →
+   Finalizar Conferência → Encaminhar para Compras → Encaminhar para Faturamento → Iniciar Entrada de
+   NF → Preencher Dados da NF → Processar Nota**).
+10. Volte em **Compras → Pedidos de Compra** → **o pedido continua com o selo "Atrasado há N dias"**,
+    e continua dentro de **"Só atrasados"**. **Isto é o comportamento correto**, não um defeito:
+    receber o material não muda o **status** do pedido, que é a declaração do comprador.
+11. **O gesto que resolve.** Clique no **lápis** desse pedido → o formulário abre com a faixa laranja
+    **"Este pedido já teve recebimento — só o status pode ser alterado"**, e fornecedor, datas,
+    observações, a busca de material e todas as linhas de item estão **desabilitados**. Troque o
+    **Status** para **Recebido** e clique em **Salvar pedido** → aviso verde
+    **"Status do pedido atualizado"**.
+12. **A verificação final:** na lista, o pedido **não tem mais o selo**, some do filtro
+    **"Só atrasados"** e desaparece do cartão em **Almoxarifado → Alertas**. *(Status **Cancelado** e
+    **Rejeitado** têm o mesmo efeito — são os três desfechos em que a cobrança não faz sentido.)*
+
+**Limpeza**
+
+13. O pedido do passo 9 **não sai** pela lixeira (já teve recebimento) — é o comportamento correto.
+    Os demais pedidos de teste você apaga normalmente.
+
+### O que esperar no dia a dia
+
+- **O alerta nasce inerte enquanto ninguém preencher previsão de entrega.** Em produção, hoje, não há
+  pedido com prazo: o cartão aparece **zerado** e nenhum e-mail sai. Não é defeito — é a ausência de
+  dado. Rode a consulta **A15** do documento de novidades antes do deploy: ela diz quantos pedidos
+  têm prazo e quantos já estariam atrasados no primeiro dia. Se esse segundo número for alto, **a
+  primeira varredura manda um e-mail por pedido**, de uma vez.
+- **Pedido recebido continua "Atrasado" até alguém mudar o status.** Combine com o comprador quem faz
+  isso — senão a lista de atrasados vira uma lista de pedidos já entregues e deixa de ser olhada.
+- **O e-mail pode levar até 24 horas.** A varredura é ancorada na hora em que o servidor subiu. Para
+  ver na hora, use o cartão da central (ao vivo).
+- **O atraso não fica gravado em lugar nenhum.** É calculado toda vez que a lista é lida: corrigiu a
+  previsão, o selo some na hora; não há nada a reprocessar.
+- **Pedido sem previsão de entrega nunca atrasa** — o campo continua opcional, e sem promessa não há
+  promessa quebrada. Vale também para os pedidos antigos.
+- **O "hoje" é o de Brasília**, independentemente do relógio da máquina onde o sistema roda. Depois
+  do deploy vale conferir: **depois das 21h, nenhum pedido com previsão de hoje pode estar com o
+  selo vermelho**.
+- **O status pode ser trocado para qualquer um dos sete, mesmo depois do recebimento.** Não há
+  travas de fluxo no módulo Compras: dá para marcar como *Cancelado* um pedido cujo material já
+  entrou no estoque. O sistema aceita e só o texto da lista fica errado.
+- **Filtro marcado numa base sem atrasados mostra "Nenhum pedido encontrado"** — a mesma frase da
+  lista vazia. Se a tela parecer vazia, confira a caixa **"Só atrasados"** logo acima.
+
+### O que a Etapa 39 NÃO cobre
+
+- **Criar fornecedor e criar cotação.** As outras duas abas do Compras continuam sem tela de
+  criação — é o próximo candidato declarado.
+- **Ver quanto do pedido já chegou, na aba Pedidos.** A lista ganhou **prazo**, não **quantidade**:
+  saldo pendente e situação (**ABERTO / PARCIAL / RECEBIDO**) continuam só no formulário de
+  recebimento.
+- **Status automático no recebimento.** Receber não marca o pedido como *Recebido* nem como
+  "parcial"; é sempre o comprador quem declara. Fazer isso é etapa própria — envolve decidir o que
+  acontece no recebimento parcial, no excedente e no pedido já cancelado à mão.
+- **Aviso de "pedido recebido parcialmente".** Não existe: a conta de quanto falta é feita dentro do
+  formulário de recebimento e não é publicada para a varredura.
+- **Escolher a hora da varredura.** Não há configuração de horário para nenhum dos avisos diários.
+- **Editar qualquer outra coisa num pedido já recebido.** Só o **status**. Fornecedor, datas,
+  observações e itens continuam congelados — é o que impede a quantidade já recebida de ser zerada e
+  o mesmo material de ser recebido duas vezes.
+- **Atraso na tela de recebimento.** Quem recebe não vê que o pedido está atrasado; a informação está
+  na aba Pedidos e na central de alertas.
 
 ---
 

@@ -1,11 +1,17 @@
 # 22 — Integrações (Engenharia, Produção, Compras, Projetos e Custos)
 
 > **Status:** 🟡 — a fatia de **solicitação de compra e custo por projeto foi entregue na Etapa 14**
-> (range `b276dca..2de7944`, 2026-08-25) e a **fatia Compras / criação do pedido de compra foi
-> entregue na Etapa 38** (range `be71754..0a7e5c6`, 2026-09-16 — T1–T7 + onda de correção F1–F8);
+> (range `b276dca..2de7944`, 2026-08-25), a **fatia Compras / criação do pedido de compra foi
+> entregue na Etapa 38** (range `be71754..0a7e5c6`, 2026-09-16 — T1–T7 + onda de correção F1–F8) e o
+> **acompanhamento de prazo com alerta de atraso foi entregue na Etapa 39** (range
+> `39ea9d2..19ebf7d`, 2026-09-17 — T1–T5 + onda de correção F1–F4);
 > Engenharia/BOM e Produção/OP seguem **bloqueadas por dependência, com a medição escrita**
 > (ver abaixo) · **Spec original:** seções 23, 24, 25
-> **Última atualização:** 2026-09-16 — **Etapa 38 fechada**: o pedido de compra ganhou criação,
+> **Última atualização:** 2026-09-17 — **Etapa 39 fechada**: `GET /api/compras/pedidos` passou a
+> devolver `atrasado`/`dias_atraso` derivados na leitura, a aba Pedidos ganhou badge, filtro
+> `Só atrasados` e duas colunas no Excel, o alerta `PEDIDO_COMPRA_ATRASADO` entrou no registro, e o
+> `PATCH /api/compras/pedidos/:id/status` abriu a **única** saída do "atrasado para sempre" do pedido
+> já recebido · antes: 2026-09-16 — **Etapa 38 fechada**: o pedido de compra ganhou criação,
 > edição, exclusão e importação por planilha no módulo **core Compras**, e a Etapa 37 deixou de ser
 > inerte · antes: 2026-09-16 — a correção medida na Fase 0 da Etapa 38 (Compras **não** está maduro:
 > não há como criar pedido) · antes: 2026-08-25 — fechamento da Etapa 14
@@ -105,6 +111,12 @@ nem tela, nem spec de Engenharia implementada) e o **MES existe sem uso real** (
   feature): seis rotas novas, formulário `/compras/pedidos/novo` e `/compras/pedidos/editar/:id`,
   importação por planilha, e "Gerar pedido" na aba Solicitações da Reposição — **o primeiro
   consumidor que `purchaseService.vincularPedidoCompra` já teve** (`727ee29`).
+- **Acompanhamento do prazo do pedido — ENTREGUE na Etapa 39** (`39ea9d2..19ebf7d`, esta feature):
+  `atrasado`/`dias_atraso` derivados em `GET /api/compras/pedidos` (`437aed2`), badge + filtro
+  `Só atrasados` + duas colunas no Excel (`833850e`), o alerta `PEDIDO_COMPRA_ATRASADO` na varredura
+  diária e na central (`ddbc18f`, `33031ac`, `8f3db94`), e `PATCH /api/compras/pedidos/:id/status`
+  (`19ebf7d`) — a única porta que muda o status de um pedido que já teve recebimento. Contratos
+  completos abaixo.
 - Produção (MES): módulo `services/producao/` com schema próprio (`producao_ops`) — sem ponte
   com almoxarifado.
 - Relatório "consumo por OS" no dashboard: o dashboard usa `GET /relatorios/consumo-os`, que
@@ -214,14 +226,36 @@ módulo que ninguém opera criaria contrato contra comportamento não exercitado
   contexto" na tela de Reposição com disponível/reservado/em terceiros, consumo médio diário,
   último custo de entrada por NF (par movimentação×item, última linha da NF vence — limitação
   do caso degenerado declarada no código) e solicitações abertas do material.
-- [ ] Acompanhamento de pedido e prazo com alerta de atraso — **fora da Etapa 14 por decisão**:
-  exigiria ler prazo prometido do pedido (dado que Compras hoje não preenche com disciplina) e
-  criar alerta novo na fila; ficou para quando houver dado confiável de prazo.
-  ⚠️ **A Etapa 38 entregou o DADO, não o alerta** (`2fb9f68`): `previsao_entrega` passou a ser
-  preenchível pelo formulário e pela importação, e — o que o alerta precisa — passou a ser
-  **validada**: só `null` ou `AAAA-MM-DD`. Antes dela a coluna `DATE` aceitava `''` e serial do
-  Excel, então um `WHERE previsao_entrega < date('now')` acusaria justamente os pedidos **sem**
-  previsão. O alerta continua sendo **etapa própria** — e agora tem insumo confiável.
+- [x] **Acompanhamento de pedido e prazo com alerta de atraso — ENTREGUE na Etapa 39**
+  (`39ea9d2..19ebf7d`, 2026-09-17). O item ficou aberto desde a Etapa 14 e a razão de então
+  (*"exigiria ler prazo prometido do pedido — dado que Compras hoje não preenche com disciplina"*)
+  deixou de valer em dois passos: a **Etapa 38 entregou o DADO** (`2fb9f68` — `previsao_entrega`
+  preenchível pelo formulário e pela importação e, o que o alerta precisa, **validada**: só `null`
+  ou `AAAA-MM-DD`; antes a coluna `DATE` aceitava `''` e serial do Excel, então um
+  `WHERE previsao_entrega < date('now')` acusaria justamente os pedidos **sem** previsão), e a
+  **Etapa 39 entregou a régua, a tela e o aviso**:
+  - `437aed2` — `derivarAtraso` + `STATUS_PEDIDO_FORA_DO_ATRASO` + `hojeLocalISO` exportados de
+    `pedidoCompraService.js`, e `GET /api/compras/pedidos` devolvendo `atrasado`/`dias_atraso`
+    **derivados na leitura** mais o filtro `?atrasados=1` (contrato 1 abaixo).
+  - `235c067` — o **defeito escapado da Etapa 38**: `formatDate` da aba Compras mostrava e exportava
+    o **dia anterior** (ver abaixo).
+  - `833850e` — badge `Atrasado há N dias`, checkbox `Só atrasados` e as colunas `Atrasado` /
+    `Dias de atraso` no Excel.
+  - `ddbc18f` + `33031ac` + `8f3db94` — a entrada `PEDIDO_COMPRA_ATRASADO` no registro de alertas
+    (feature [20](../20-alertas/README.md)), com a **mesma** `derivarAtraso` por require lazy.
+  - `fc84e09` — a integração rota → varredura → recebimento real da Etapa 37.
+  - `19ebf7d` — `PATCH /api/compras/pedidos/:id/status`, a saída do beco descrito abaixo.
+
+  **O que CONTINUA fora, e por quê:**
+  - **`situacao_recebimento` na aba Pedidos** (D3 da Etapa 39): a única fonte exportada é
+    `listarPedidosCompraAux`, que **não devolve `previsao_entrega`** (`receiptService.js:1486-1488`)
+    e tem **`LIMIT 50`** (`:1518`) — consumi-la faria a aba divergir da rota core (sem limite) e
+    recalcular a derivação criaria a **segunda fórmula de saldo** que o plano da 38 proibiu.
+  - **Alerta de "pedido recebido parcialmente"**: segue `[ ]` na feature 20, agora por outro motivo
+    — ver a correção visível lá.
+  - **Status automático no recebimento** (D6): receber pelas portas da Etapa 37 **não** marca o
+    pedido como `recebido`; quem tira o "atrasado" é o `PATCH` de status, feito à mão. É fatia da
+    feature [08](../08-recebimento/README.md).
 - [ ] Divergência e rejeição da Qualidade informadas ao comprador — **fora da Etapa 14 por
   decisão**: o fluxo de quarentena (feature 09) registra a rejeição, mas não há canal
   comprador-específico; entra junto com os e-mails de compra quando o negócio pedir (D7 do
@@ -416,6 +450,120 @@ reordenação** das rotas. Nenhuma linha toca `receiptService.js`, `extended.js`
 `<select>` do recebimento (porta da Etapa 37, proibida por contrato nesta etapa), e o `LIMIT 50` +
 `created_at` com resolução de 1 s fazem uma importação grande **sumir** desse select sem mensagem.
 
+## Contratos da fatia Compras — o acompanhamento de prazo (Etapa 39, `39ea9d2..19ebf7d`)
+
+Mesmo gate das outras: `authenticateToken` + `checkModulePermission('compras')` e **nada mais** — o
+core continua com **uma** camada (B101). Nenhuma coluna nova, nenhuma migration, nenhum `UPDATE` de
+varredura: o atraso é **derivado na leitura** e some junto com o código que o deriva.
+
+### 8. `GET /api/compras/pedidos` — dois campos acrescentados e um filtro (`437aed2`)
+
+| | Antes (Etapa 38) | Depois (Etapa 39) |
+|---|---|---|
+| Query | `search`, `status` | `search`, `status`, **`atrasados`** |
+| Ordenação | `ORDER BY p.created_at DESC` | **inalterada** (o filtro é pós-SQL; a query não mudou) |
+| `LIMIT` | não tem | **continua sem** |
+| Resposta 200 | `[{ …pedidos_compra.*, fornecedor_nome }]` | `[{ …, fornecedor_nome, atrasado, dias_atraso }]` |
+| Erros | 401 sem token, 403 sem o módulo, 500 `{ error }` | **inalterados** |
+
+- **`atrasado`**: `0` ou `1` — **número, nunca booleano** (espelha `ativo`/`evento` do resto da base).
+- **`dias_atraso`**: inteiro **positivo** quando `atrasado === 1`; **`null`** quando `atrasado === 0`.
+  **Nunca `0`**, porque "0 dias de atraso" e "não atrasado" não podem ser o mesmo valor — o badge da
+  tela renderizaria `Atrasado há 0 dias`.
+- **`atrasados`**: só a **string `'1'`** liga o filtro (`req.query` do Express é sempre string).
+  Ausente, `''`, `'0'` ou `'sim'` = sem filtro. Compõe com `search` e `status`.
+- **`previsao_entrega = ''`** (legado anterior ao F3 da Etapa 38) → `atrasado: 0`, `dias_atraso: null`.
+  O guarda real é a **regex** `^\d{4}-\d{2}-\d{2}$` de `derivarAtraso`, não o `IS NOT NULL`.
+- ⚠️ **`GET /api/compras/pedidos/:id` NÃO deriva atraso** — só a listagem. Assimetria declarada
+  (Minor M5 da revisão final, não acionado): a primeira tela que quiser o badge no detalhe deve
+  chamar `derivarAtraso`, **nunca** recalcular.
+- ⚠️ **Se um dia esta rota ganhar `LIMIT`, o filtro pós-SQL quebra em silêncio** (o `LIMIT` cortaria
+  antes da derivação). Declarado na T1.
+
+### 9. A régua de atraso — **uma função, um lugar** (`server/services/compras/pedidoCompraService.js`)
+
+```js
+const STATUS_PEDIDO_FORA_DO_ATRASO = ['recebido', 'cancelado', 'rejeitado'];
+derivarAtraso(pedido, hoje = hojeLocalISO()) → { atrasado: 0|1, dias_atraso: number|null }
+hojeLocalISO(agora = new Date()) → 'AAAA-MM-DD'
+```
+
+Atrasado é `previsao_entrega` casando a regex **E** `previsao_entrega < hoje` **E** `status` fora de
+`STATUS_PEDIDO_FORA_DO_ATRASO`. A fronteira é `<`, nunca `<=`: **vence hoje não está atrasado**.
+`dias_atraso` é `(meiaNoiteUTC(hoje) - meiaNoiteUTC(previsao)) / 86400000` — `Date.UTC` nas duas
+pontas, a única aritmética de datas da fatia.
+
+**Dois consumidores e um só lugar, e isso é o ponto:** a rota acima e a entrada
+`PEDIDO_COMPRA_ATRASADO` do `alertRegistry` do almoxarifado (require **lazy**, feature 20). Escrever
+a lista de status duas vezes faria a tela dizer "atrasado" para um conjunto e o e-mail sair para
+outro — o teste `alertaPedidoAtrasado.api.test.js (5)` cruza os dois conjuntos de ids com
+`deepStrictEqual`.
+
+⚠️ **`hojeLocalISO` NÃO é o relógio do contêiner** (`45bda69`, achado Critical da revisão final):
+ela recorta o dia por `Intl.DateTimeFormat('en-CA', { timeZone: FUSO_PADRAO })` —
+`America/Sao_Paulo`, o mesmo fuso de `auditFiltros` e de `client/jest.globalSetup.js`. **Isto
+corrige a premissa do design desta etapa** (*"o servidor usa a data local do host, então nunca é
+UTC"*), que **estava errada em produção**: o contêiner é `node:20-alpine` sem `TZ` e sem `tzdata`,
+e às 21:30 BRT o pedido que vence **hoje** já acusava atraso no badge, no filtro, no Excel e no
+e-mail. O `Dockerfile` ganhou `tzdata` + `ENV TZ=America/Sao_Paulo` como segunda trava — as duas,
+nunca uma só. **Nunca use `date('now')` do SQLite nesta régua**: é UTC.
+
+### 10. `PATCH /api/compras/pedidos/:id/status` — a porta que só escreve status (`19ebf7d`)
+
+**Payload:** `{ status }`, validado por `PedidoStatusSchema` (`z.object`, com *strip* deliberado: um
+corpo com `itens`/`fornecedor_id`/`quantidade_recebida` chega ao serviço como `{ status }` e mais
+nada — a porta que promete "só o status" não pode depender de o serviço ignorar o resto).
+
+| Código | Corpo |
+|---|---|
+| **200** | `{ id, numero, status }` |
+| **400** | `Dados inválidos — status: status do pedido inválido (use pendente, aprovado, rejeitado, em_analise, enviado, recebido ou cancelado)` |
+| **404** | `Pedido de compra não encontrado` (a **mesma** constante das outras três portas) |
+
+O serviço (`alterarStatusPedido`) faz **um** `UPDATE pedidos_compra SET status = ?, updated_at =
+CURRENT_TIMESTAMP` e nada mais: **não toca `itens_pedido_compra`**, não recomputa `valor_total`, não
+mexe em vínculo de solicitação.
+
+**Por que ela existe, e o que foi descartado:** a guarda de duas pernas do `PUT` (Etapa 38, RN-C07)
+recusa com 400 qualquer edição de pedido que já teve recebimento — e essa é **exatamente** a
+população que o recebimento do almoxarifado produz. Resultado medido antes do conserto: **todo
+pedido recebido pelo almoxarifado ficava "Atrasado" para sempre**, no badge, no filtro `?atrasados=1`
+e no cartão da central, sem gesto de tela que limpasse. **Descartado: afrouxar a guarda do `PUT`** —
+`atualizarPedido` faz `DELETE` + `INSERT` das linhas e as novas nascem com `quantidade_recebida = 0`
+pelo `DEFAULT`, então o operador receberia o mesmo material duas vezes. O cenário (5) de
+`comprasPedidoStatus.api.test.js` é a régua de que a guarda do `PUT` **não** foi afrouxada.
+
+⚠️ **Declarado:** o `PATCH` aceita **qualquer** dos 7 status, inclusive em pedido já recebido — não
+há máquina de estados no módulo Compras (o `status` é campo livre dentro do enum desde a Etapa 38).
+
+### 11. `GET /api/compras/pedidos/:id` ganhou `teve_recebimento` (`19ebf7d`)
+
+**200** = o mesmo objeto de antes **mais** `teve_recebimento: 0|1`, derivado pelas **mesmas duas
+pernas** da guarda do `PUT` (linha com `quantidade_recebida > 0` **ou** recebimento apontando para
+uma linha por `pedido_item_id`). Existe porque a tela precisa saber **antes** de montar o formulário:
+com `1`, o `PedidoCompraForm` em modo edição mostra *"Este pedido já teve recebimento — só o status
+pode ser alterado"*, desabilita fornecedor, itens e datas, e salva por `PATCH` em vez de `PUT`
+(toasts `Status do pedido atualizado` / `Não foi possível atualizar o status do pedido.`). Sem esse
+campo a tela só descobriria a recusa **depois** de o comprador preencher tudo e tomar 400.
+
+### 12. A entrada de alerta `PEDIDO_COMPRA_ATRASADO` (`ddbc18f`, `33031ac`, `8f3db94`)
+
+Vive no `alertRegistry` do **almoxarifado** e é a **primeira entrada do registro que lê tabelas
+CORE** (`pedidos_compra`, `fornecedores`) — as 11 anteriores só leem `*_almoxarifado`. Contrato
+completo (colunas projetadas, chave de dedupe com a previsão, assunto `[Compras] …`, canal e
+central) na feature [20](../20-alertas/README.md).
+
+### 13. O defeito escapado da Etapa 38, corrigido aqui (`235c067`)
+
+`formatDate` (`client/src/components/Compras.js`) era `new Date(date).toLocaleDateString('pt-BR')` —
+e `new Date('2026-09-16')` é **meia-noite UTC**, renderizada em `America/Sao_Paulo` como
+**`15/09/2026`**. Como a **exportação usa a mesma função** e a importação lê `DD/MM/AAAA`, exportar e
+reimportar o próprio Excel do CRM **movia as duas datas um dia para trás** a cada volta. Agora
+`formatDate` formata a **string** `AAAA-MM-DD` por `split('-')`, sem `new Date`, e vale para exibição
+**e** export; `hojeISO` do formulário passou a ser local (era UTC: entre 21h e 0h o formulário nascia
+com a data de **amanhã**). Régua geral da casa, escrita aqui porque custou uma etapa: **data não
+passa por `new Date(str)`** — nem no client, nem no servidor, nem em fixture de teste.
+
 ## Regras essenciais + testes de API exigidos
 
 | Regra | Teste | Estado |
@@ -430,6 +578,14 @@ reordenação** das rotas. Nenhuma linha toca `receiptService.js`, `extended.js`
 | Importação não grava linha sem `material_id` (pedido fantasma no `<select>`) | `contarLinhasOrfas` escopada **por pedido** | ✅ `9d07dd1` |
 | Coluna `DATE` só recebe `null` ou `AAAA-MM-DD` | cenários de `data_pedido`/`previsao_entrega` no `POST`, no `PUT` e na importação | ✅ `2fb9f68` |
 | `DELETE` do pedido libera a solicitação da Reposição | cenário de `solicitacoes_liberadas` | ✅ `ca7956c` |
+| Atraso é derivado na leitura e nada é gravado | `comprasPedidoAtraso.api.test.js` (1)–(8) (a coluna não existe; `updated_at` não muda) | ✅ `437aed2` |
+| Vence hoje NÃO está atrasado (fronteira `<`) | `comprasPedidoAtraso.api.test.js` (2) | ✅ `437aed2` |
+| A régua do alerta é a MESMA da tela | `alertaPedidoAtrasado.api.test.js` (5) — `deepStrictEqual` dos ids do alerta contra os `atrasado=1` da rota | ✅ `ddbc18f` |
+| O dia é o de `America/Sao_Paulo`, não o do relógio do contêiner | `comprasPedidoAtraso.api.test.js` (11), rodado também com `TZ=UTC` | ✅ `45bda69` |
+| Prazo renegociado e furado de novo volta a avisar | `alertaPedidoAtrasado.api.test.js` (9) — renegociação pelo `PUT` real | ✅ `33031ac` |
+| A central de alertas não carrega valor nem observação do pedido | `alertaPedidoAtrasado.api.test.js` (10) | ✅ `8f3db94` |
+| Pedido já recebido pode ter o status mudado, e só ele | `comprasPedidoStatus.api.test.js` (7 cenários; o (5) prova que a guarda do `PUT` **não** foi afrouxada) | ✅ `19ebf7d` |
+| Receber pelas portas da Etapa 37 não muda o atraso sozinho | `comprasPedidoAtrasoIntegracao.api.test.js` blocos D / 9a / 9c | ✅ `fc84e09`/`19ebf7d` |
 | Revisão de BOM recalcula reservas | `nova revisao ajusta reservas dos itens alterados` | ⛔ bloqueado (BOM inexistente) |
 | Encerramento de OP bloqueia novos consumos nela | `consumo em OP encerrada falha` | ⛔ bloqueado (MES sem uso) |
 
