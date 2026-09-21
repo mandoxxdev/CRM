@@ -10,7 +10,7 @@
   padding: 24px;
   background:
     radial-gradient(circle at 15% 20%, rgba(79, 172, 254, .18), transparent 45%),
-    radial-gradient(circle at 85% 80%, rgba(124, 92, 255, .18), transparent 45%),
+    radial-gradient(circle at 85% 80%, rgba(37, 99, 235, .18), transparent 45%),
     var(--gmp-bg, #fff);
 }
 
@@ -34,7 +34,7 @@
   font-weight: 800;
   line-height: 1;
   letter-spacing: -4px;
-  background: linear-gradient(135deg, #4facfe 0%, #7c5cff 55%, #ff4d9d 100%);
+  background: linear-gradient(135deg, #4facfe 0%, #2563EB 55%, #22D3EE 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -47,7 +47,7 @@
 .p404-bussola {
   width: 66px;
   height: 66px;
-  color: #7c5cff;
+  color: #2563EB;
   stroke-width: 1.6;
   animation: p404-gira 9s linear infinite;
 }
@@ -125,7 +125,7 @@
 .p404-btn:active { transform: scale(.965); }
 
 .p404-btn-primario {
-  background: linear-gradient(135deg, #4facfe 0%, #7c5cff 100%);
+  background: linear-gradient(135deg, #4facfe 0%, #2563EB 100%);
   border-color: transparent;
   color: #fff;
   box-shadow: 0 6px 18px -6px rgba(79, 172, 254, .65);
@@ -138,7 +138,8 @@
 }
 
 [data-theme="dark"] .p404-cartao {
-  background: rgba(22, 20, 45, .86);
+  /* Azul-marinho, o mesmo do vidro do app — não índigo. */
+  background: rgba(12, 24, 43, .86);
   border-color: rgba(255, 255, 255, .11);
 }
 
@@ -154,7 +155,7 @@
 }
 
 [data-theme="dark"] .p404-btn-primario {
-  background: linear-gradient(135deg, #4facfe 0%, #7c5cff 100%);
+  background: linear-gradient(135deg, #4facfe 0%, #2563EB 100%);
   border-color: transparent;
 }
 

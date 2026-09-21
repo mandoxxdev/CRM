@@ -29,17 +29,25 @@
 @media (max-width: 768px) {
 
   /* ── 1. Paleta ──────────────────────────────────────────────────────────────
-     A referência do P.O. é roxo/magenta; a marca da GMP é o azul #4facfe. O que
-     foi copiado é o ESTILO (vidro, blobs, profundidade), não a cor: o azul da
-     marca lidera e o magenta entra como acento. Trocar a cara inteira é editar
-     as três variáveis `--ag-blob-*` abaixo. */
-  :root {
-    --ag-blob-1: #4facfe;   /* ciano da marca */
-    --ag-blob-2: #7c5cff;   /* violeta de ligação */
-    --ag-blob-3: #ff4d9d;   /* magenta de acento */
+     A referência do P.O. é roxo/magenta; a marca da GMP é AZUL. O que foi
+     copiado é o ESTILO (vidro, blobs, profundidade, movimento) — a cor é a da
+     marca, e só ela.
 
-    --ag-base-1: #EEF3FF;
-    --ag-base-2: #F7F1FF;
+     Primeira versão usava violeta como cor de ligação e magenta de acento, com
+     o azul só liderando. Não funcionou: violeta e magenta têm mais saturação que
+     o azul e dominaram o conjunto, e o aplicativo saiu ROXO. Os três blobs agora
+     ficam dentro da família azul, e a variação é de TEMPERATURA (ciano → azul
+     forte → ciano claro), não de matiz. Profundidade sem trocar a marca.
+
+     Estas três variáveis são o único lugar onde a cor do aplicativo é decidida:
+     os gradientes de botão, chip ativo e halo do dock derivam delas. */
+  :root {
+    --ag-blob-1: #4facfe;   /* azul-ciano da marca */
+    --ag-blob-2: #2563EB;   /* azul forte (--gmp-primary-700) */
+    --ag-blob-3: #22D3EE;   /* ciano claro, o respiro do conjunto */
+
+    --ag-base-1: #EFF5FF;
+    --ag-base-2: #F6FAFF;
 
     --ag-vidro:        rgba(255, 255, 255, 0.72);
     --ag-vidro-forte:  rgba(255, 255, 255, 0.86);
@@ -52,11 +60,13 @@
   }
 
   [data-theme="dark"] {
-    --ag-base-1: #0B0A1F;
-    --ag-base-2: #14102E;
+    /* Azul-marinho, não índigo: o fundo é o que mais pesa na leitura da cor, e
+       era daqui que vinha metade do "ficou roxo". */
+    --ag-base-1: #050B18;
+    --ag-base-2: #0A1729;
 
     --ag-vidro:        rgba(255, 255, 255, 0.055);
-    --ag-vidro-forte:  rgba(22, 20, 45, 0.82);
+    --ag-vidro-forte:  rgba(12, 24, 43, 0.84);
     --ag-borda:        rgba(255, 255, 255, 0.11);
     --ag-borda-sutil:  rgba(255, 255, 255, 0.07);
     --ag-texto:        #F3F4FA;
