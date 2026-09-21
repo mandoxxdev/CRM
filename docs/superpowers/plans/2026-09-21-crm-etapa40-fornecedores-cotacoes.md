@@ -187,9 +187,9 @@ worktree não existe fora do reflog local).
 - Consumes: `dataIsoOpcional` (`schemas.js:97-100`), `z` (`zod`).
 - Produces: os 13 exports de `schemas.js` e os 3 de `pedidoCompraService.js` listados nos contratos 1 e 2. **T2, T3, T6 importam por esses nomes.**
 
-- [ ] **Step 1: ler o DDL local de `cotacoes` que já existe** — `server/tests/api/comprasPedidoEditarExcluir.api.test.js:93-108`. O stub do harness tem de ser **compatível** com ele (mesmas colunas, `fornecedor_id` nulável, sem FK), porque `CREATE TABLE IF NOT EXISTS` faz "quem cria primeiro vence" e o harness roda antes.
+- [x] **Step 1: ler o DDL local de `cotacoes` que já existe** — `server/tests/api/comprasPedidoEditarExcluir.api.test.js:93-108`. O stub do harness tem de ser **compatível** com ele (mesmas colunas, `fornecedor_id` nulável, sem FK), porque `CREATE TABLE IF NOT EXISTS` faz "quem cria primeiro vence" e o harness roda antes.
 
-- [ ] **Step 2: escrever o teste dos schemas (vermelho: `FornecedorSchema is not a function`)**
+- [x] **Step 2: escrever o teste dos schemas (vermelho: `FornecedorSchema is not a function`)**
 
 `server/tests/api/comprasSchemasFornecedorCotacao.api.test.js`:
 
@@ -332,9 +332,9 @@ const msgs = (r) => r.error.issues.map((i) => `${i.path.join('.')}: ${i.message}
 })();
 ```
 
-- [ ] **Step 3: rodar e ver vermelho** — `cd server && node tests/api/comprasSchemasFornecedorCotacao.api.test.js`. Esperado: os 15 caem com `S.FornecedorSchema is not a function` / `Cannot read properties of undefined (reading 'safeParse')`.
+- [x] **Step 3: rodar e ver vermelho** — `cd server && node tests/api/comprasSchemasFornecedorCotacao.api.test.js`. Esperado: os 15 caem com `S.FornecedorSchema is not a function` / `Cannot read properties of undefined (reading 'safeParse')`.
 
-- [ ] **Step 4: implementar em `schemas.js`**, entre o `PedidoStatusSchema` e o `module.exports`:
+- [x] **Step 4: implementar em `schemas.js`**, entre o `PedidoStatusSchema` e o `module.exports`:
 
 ```js
 /**
@@ -428,7 +428,7 @@ têm de dizer a mesma coisa — acrescente **antes** do `typeof v === 'number'`:
 Os dois nomes existem depois deste step; `require` de nome ainda não usado não quebra nada, e é o
 que evita T2 e T3 reescreverem a mesma linha em paralelo. Inclua o arquivo no `git add` do Step 9.
 
-- [ ] **Step 5: `pedidoCompraService.js`** — em `:255-258`, extrair a literal:
+- [x] **Step 5: `pedidoCompraService.js`** — em `:255-258`, extrair a literal:
 
 ```js
 const FORNECEDOR_NAO_ENCONTRADO = 'Fornecedor não encontrado';
@@ -442,7 +442,7 @@ async function assertFornecedor(db, fornecedorId) {
 e no `module.exports` (`:1012-1031`) acrescentar `erro, assertFornecedor, FORNECEDOR_NAO_ENCONTRADO`.
 Rode `node tests/api/comprasPedidoCriar.api.test.js` — a literal não mudou, tem de seguir verde.
 
-- [ ] **Step 6: `cotacoes` no harness** — em `testApp.js`, logo após o stub de `pedidos_compra` (`:100-111`):
+- [x] **Step 6: `cotacoes` no harness** — em `testApp.js`, logo após o stub de `pedidos_compra` (`:100-111`):
 
 ```js
   // `cotacoes` é tabela CORE (`server/index.js:19244`). Entra no harness na Etapa 40 porque a
@@ -463,11 +463,11 @@ Rode `node tests/api/comprasPedidoCriar.api.test.js` — a literal não mudou, t
   )`);
 ```
 
-- [ ] **Step 7: rodar** — o arquivo novo (`15 passou, 0 falhou`), `comprasPedidoEditarExcluir.api.test.js`
+- [x] **Step 7: rodar** — o arquivo novo (`15 passou, 0 falhou`), `comprasPedidoEditarExcluir.api.test.js`
 (**13** — medido na Fase 2; o (8) usa a tabela agora vinda do harness), `comprasPedidosRotas` (5),
 `comprasPedidoCriar`, depois `npm run test:api` (esperado **188/188**).
 
-- [ ] **Step 8: sabotagens** (md5 antes/depois/pós-restauro):
+- [x] **Step 8: sabotagens** (md5 antes/depois/pós-restauro):
 
 | # | Sabotagem | Âncora | Cai |
 |---|---|---|---|
@@ -477,7 +477,62 @@ Rode `node tests/api/comprasPedidoCriar.api.test.js` — a literal não mudou, t
 | 4 | remover `.trim()` de `razao_social` | 1 | **(e)** `'   '` passou; **(i)** |
 | 5 | `valor_total: z.number().min(0)` sem `{ error }` | 1 | **(o)** `'10'` sai em inglês |
 
-- [ ] **Step 9: commit** — `git add server/services/compras/schemas.js server/services/compras/pedidoCompraService.js server/routes/compras.js server/tests/helpers/testApp.js server/tests/api/comprasSchemasFornecedorCotacao.api.test.js`. Mensagem em `msg-e40-t1.txt`: o que existia (duas portas sem Zod com um único `if`; zero código de cotação; harness sem `cotacoes`), o que os quatro payloads do modal exigem do schema, por que `null` limpa (o botão que não removia), e o descartado (email/CNPJ, `z.number()` puro em `grupo_id`, número gerado).
+- [x] **Step 9: commit** — `git add server/services/compras/schemas.js server/services/compras/pedidoCompraService.js server/routes/compras.js server/tests/helpers/testApp.js server/tests/api/comprasSchemasFornecedorCotacao.api.test.js`. Mensagem em `msg-e40-t1.txt`: o que existia (duas portas sem Zod com um único `if`; zero código de cotação; harness sem `cotacoes`), o que os quatro payloads do modal exigem do schema, por que `null` limpa (o botão que não removia), e o descartado (email/CNPJ, `z.number()` puro em `grupo_id`, número gerado).
+
+#### ✅ Task 1 FECHADA — `008a041` (Compras Etapa 40 T1: FornecedorSchema e CotacaoSchema, erro/assertFornecedor exportados e cotacoes no harness)
+
+**Números lidos (não previstos):**
+
+| Suíte | Antes (Step 3) | Depois |
+|---|---|---|
+| `comprasSchemasFornecedorCotacao.api.test.js` | `0 passou, 15 falhou` — todos com `Cannot read properties of undefined (reading 'safeParse')` | **`15 passou, 0 falhou`** |
+| `comprasPedidoEditarExcluir.api.test.js` | — | **13 passou** (o DDL local de `cotacoes` virou no-op sobre o stub do harness) |
+| `comprasPedidosRotas.api.test.js` | — | **5 passou** |
+| `comprasPedidoCriar.api.test.js` | — | **13 passou** (a literal `Fornecedor não encontrado` não mudou, só foi extraída) |
+| `npm run test:api` | — | **188/188 arquivos de teste OK** |
+
+`zod@4.4.3` confirmado por `require('zod/package.json').version`. CR = 0 nos cinco arquivos tocados
+depois de cada edição.
+
+**Sabotagens (md5 de `schemas.js` antes `a2e42458…`, sabotado ≠, pós-restauro `a2e42458…` nas cinco;
+restauro por `cp` do scratchpad; âncora contada com `grep -cF` = 1 nas cinco):**
+
+| # | Sabotagem | Placar | QUAL asserção caiu |
+|---|---|---|---|
+| 1 | `if (v === null \|\| v === '') return null;` → `return undefined;` | 13/2 | **(c)** `grupo_id: grupo do fornecedor inválido` (o `undefined` do preprocess caiu no union em vez de sair como ausente); **(f)** `"": grupo_id: grupo do fornecedor inválido` |
+| 2 | `const FornecedorSchema = z.looseObject({` → `z.object({` | 14/1 | **(h)** `cidade`: `+ undefined / - 'Joinville'` (strip silencioso) |
+| 3 | `'rejeitado', 'cancelado']` → `'rejeitado']` | 14/1 | **(n)** a literal: `+ '…(use em_analise, aprovado ou rejeitado)' / - '…(use em_analise, aprovado, rejeitado ou cancelado)'` — caiu no `strictEqual` da literal antes de chegar ao `deepStrictEqual` da lista |
+| 4 | remover `.trim()` de `razao_social` | 13/2 | **(e)** `devia recusar {"razao_social":"   "}`; **(i)** `razao_social` veio `'  ACME  '` |
+| 5 | `valor_total: z.number().min(0).optional()` sem `{ error }` | 14/1 | **(o)** `+ 'valor_total: Invalid input: expected number, received string' / - 'valor_total: valor total da cotação não pode ser negativo'` — a armadilha 2 do cabeçalho de `schemas.js`, em inglês, medida |
+
+Controle positivo: os cinco cortes cortaram **exatamente** o cenário que a tabela do Step 8 previa, e
+o arquivo voltou a `15 passou` com o md5 original depois do último restauro.
+
+**Divergências entre o plano e o que o código exigiu:**
+
+1. **O teste do plano tinha um bug, não o schema.** `msgs(r)` era `r.error.issues.map(…)` sem guarda, e
+   `assert.ok(r.success, msgs(r))` avalia o segundo argumento **antes** de olhar o primeiro — nos quatro
+   cenários verdes do modal (a)–(d) `r.error` é `undefined` e o teste caía com
+   `Cannot read properties of undefined (reading 'issues')` (`11 passou, 4 falhou` na primeira rodada
+   verde do schema). O cenário (j) já usava `r.success ? '' : msgs(r)`; a guarda foi para dentro de
+   `msgs` (`r.success ? '' : …`) para todos os call sites. Registrado no teste e na mensagem do commit.
+2. **Contagem da âncora da sabotagem 2:** o plano dizia "são 2 `looseObject` novos + 2 antigos";
+   `grep -cF 'z.looseObject' schemas.js` dá **7** — 4 construções + 3 menções em comentário (o
+   cabeçalho do arquivo e o comentário do `PedidoStatusSchema`). Âncora usada:
+   `const FornecedorSchema = z.looseObject({` (1 ocorrência).
+3. **Mensagem do vermelho do Step 3:** o plano previa `FornecedorSchema is not a function` **ou**
+   `Cannot read properties of undefined (reading 'safeParse')`; saiu só a segunda, nos 15.
+4. **`comprasPedidoCriar`** não tinha número no plano; medido: **13 passou**.
+5. Linhas citadas (`:60`, `:113`, `:255-258`, `:1012-1031`, `:100-111`, `:93-108`, `index.js:19244`)
+   **bateram** todas em `90597c7`/`84ace0b` — nenhuma reconta necessária antes da edição. Depois da T1,
+   `schemas.js` cresceu 82 linhas (o `module.exports` agora começa em `:217`), `testApp.js` 17 linhas
+   (o stub de `cotacoes` ocupa `:113-128`; o que vinha depois desloca +17) e `pedidoCompraService.js`
+   11 linhas (`FORNECEDOR_NAO_ENCONTRADO` em `:254`, `assertFornecedor` em `:256-259`; `module.exports` em `:1013-1038`). **T2 e T3 recontem**
+   `routes/compras.js` antes de editar — a T1 só mudou a `:60`, sem deslocar nada.
+6. Não houve conflito de DDL: o stub do harness e o DDL local de `comprasPedidoEditarExcluir:93-108`
+   são idênticos coluna a coluna (Step 1 conferido por leitura), e a produção (`index.js:19244-19256`)
+   difere só pelo `NOT NULL` + FK em `fornecedor_id`, omitidos de propósito (mesma razão do stub de
+   `pedidos_compra`).
 
 ---
 
