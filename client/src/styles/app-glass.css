@@ -452,4 +452,117 @@
 
   .ppe-container { background: transparent !important; }
   .ppe-preview-wrapper { background: #fff; }
+
+  /* ── 9. A gaveta lateral ────────────────────────────────────────────────────
+     O menu abria PRETO E SUJO, com o topo decepado e o rodapé ("Minha Conta")
+     escondido. Não era cor: era a PILHA de camadas, inteira invertida.
+
+     Como estava, medido no CSS:
+        .sidebar           z-index: 1000
+        .sidebar-overlay   z-index: 1000   ← mesma altura da gaveta, e DEPOIS dela
+                                             no DOM, então a cortina era pintada
+                                             POR CIMA do próprio menu. Os 65% de
+                                             preto e o blur(4px) que deveriam
+                                             escurecer o FUNDO escureciam a gaveta.
+        .mobile-topbar     z-index: 1150   ← cobria o cabeçalho da gaveta, e era
+                                             por isso que sobrava só uma engrenagem
+                                             solta no topo.
+        .bim (dock)        z-index: 1200   ← cobria o rodapé da gaveta.
+        .help-guide-button z-index: 9998   ← flutuava por cima de tudo.
+
+     A ordem certa é: cortina, gaveta, e o dock ACIMA dos dois — porque é no dock
+     que fica o botão "Menu", o mesmo que fecha. Enterrá-lo sob a cortina tiraria
+     do usuário a forma mais óbvia de voltar. */
+  .sidebar-overlay {
+    z-index: 1240 !important;
+    background: rgba(4, 10, 22, 0.55) !important;
+    -webkit-backdrop-filter: blur(10px) saturate(140%) !important;
+    backdrop-filter: blur(10px) saturate(140%) !important;
+  }
+
+  .sidebar {
+    z-index: 1250 !important;
+    /* Termina acima do dock em vez de passar por baixo dele: assim "Minha Conta"
+       e o botão de sair ficam alcançáveis. `bottom` + `top` no lugar de height,
+       para não depender de vh — que no celular ainda conta a barra do navegador. */
+    top: 0 !important;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 78px) !important;
+    height: auto !important;
+    border-radius: 0 24px 24px 0 !important;
+    border-right: 1px solid var(--ag-borda) !important;
+    background: var(--ag-vidro-forte) !important;
+    -webkit-backdrop-filter: blur(30px) saturate(180%) !important;
+    backdrop-filter: blur(30px) saturate(180%) !important;
+    box-shadow: var(--ag-sombra-alta) !important;
+  }
+
+  /* A animação de abrir precisa de seletor PRÓPRIO e mais específico. O
+     mobile-app.css declara `.sidebar, .sidebar.closed, .sidebar.open` com
+     `transition: none !important`, e numa lista de seletores vale a
+     especificidade do compound que casa: com a gaveta aberta é `.sidebar.open`,
+     (0,2,0) — que ganha de um `.sidebar` (0,1,0) por mais !important que tenha.
+     `body .sidebar.open` vale (0,2,1) e resolve sem depender da ordem de carga.
+
+     E é só `transform`: a animação foi removida de lá porque a transição era em
+     `width` e a gaveta às vezes não abria. Em transform isso não acontece — e
+     transform é justamente o que o abrir/fechar alterna. */
+  body .sidebar,
+  body .sidebar.closed,
+  body .sidebar.open {
+    transition: transform .28s cubic-bezier(.22, 1, .36, 1) !important;
+  }
+
+  .bim { z-index: 1260 !important; }
+
+  /* Enquanto a gaveta está aberta: o botão de ajuda sai da frente e a página
+     atrás para de rolar — rolar o fundo com uma gaveta aberta é o defeito
+     clássico de gaveta em celular. */
+  body.menu-lateral-aberto .help-guide-button {
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+  body.menu-lateral-aberto .main-content { overflow: hidden !important; }
+
+  /* O item ativo era LARANJA (#ff6b35) — sobra de outro tema, e gritando contra
+     o azul da marca em todo o resto do aplicativo. */
+  .sidebar .nav-item.active {
+    background: linear-gradient(135deg,
+                rgba(79, 172, 254, .22), rgba(37, 99, 235, .16)) !important;
+    border-color: rgba(79, 172, 254, .35) !important;
+    border-left: 3px solid var(--ag-blob-1) !important;
+    box-shadow: 0 4px 16px rgba(79, 172, 254, .20),
+                inset 0 1px 0 rgba(255, 255, 255, .07) !important;
+    color: #fff !important;
+  }
+
+  /* Contraste dos acentos no TEMA CLARO.
+     Os três acentos da gaveta — item ativo, "Minha Conta" e "Selecionar Módulo"
+     — são #4facfe, cor escolhida quando a gaveta era sempre escura. Sobre o
+     vidro claro isso dá contraste medido de 2,4:1, e o mínimo legível é 4,5.
+
+     Cheguei a resolver deixando a gaveta escura nos dois temas, e foi PIOR: o
+     texto normal do menu e o nome do usuário são quase pretos (vêm do
+     glass-override com var(--gmp-text)), e caíram para 1,43 e 1,28. Trocar um
+     problema de contraste por dois maiores. O ajuste certo é pontual — só os
+     três acentos, só no tema claro. #1D4ED8 é o --gmp-primary-800 dos tokens,
+     ou seja, continua sendo azul da marca, e mede 7,6:1. */
+  html:not([data-theme="dark"]) .sidebar .nav-item.active,
+  html:not([data-theme="dark"]) .sidebar .nav-item.active .nav-text,
+  html:not([data-theme="dark"]) .sidebar .account-button,
+  html:not([data-theme="dark"]) .sidebar .nav-item-module-selector {
+    color: #1D4ED8 !important;
+  }
+
+  .sidebar .nav-item {
+    border-radius: 14px;
+    transition: transform .12s cubic-bezier(.2, .8, .3, 1), background .18s ease;
+  }
+  .sidebar .nav-item:active { transform: scale(.975); }
+
+  @media (prefers-reduced-motion: reduce) {
+    body .sidebar,
+    body .sidebar.closed,
+    body .sidebar.open { transition: none !important; }
+    .sidebar .nav-item:active { transform: none; }
+  }
 }

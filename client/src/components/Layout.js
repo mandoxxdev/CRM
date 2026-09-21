@@ -58,6 +58,25 @@ const Layout = () => {
     return true;
   });
 
+  // Marca no <body> que a gaveta esta aberta.
+  //
+  // Precisa ser no body, e nao uma classe em algum pai, porque as tres coisas que
+  // reagem a isso NAO sao irmas da sidebar no DOM: a barra inferior vive num portal
+  // para o body, o botao flutuante de ajuda idem, e o travamento da rolagem e do
+  // documento. Sem esse gancho, cada um exigiria a sua propria prop.
+  //
+  // No desktop a sidebar fica permanentemente aberta (ver o efeito de resize abaixo),
+  // e ali a classe nao significa "gaveta aberta" — significaria "trave a pagina".
+  // Por isso a marca so vale abaixo de 768px, que e onde a gaveta existe.
+  useEffect(() => {
+    const ehCelular = window.innerWidth <= 768;
+    const marcar = sidebarOpen && ehCelular;
+    document.body.classList.toggle('menu-lateral-aberto', marcar);
+    // Limpeza obrigatoria: sem isto, desmontar o Layout com a gaveta aberta (logout,
+    // por exemplo) deixaria o body travado sem nada para destravar.
+    return () => document.body.classList.remove('menu-lateral-aberto');
+  }, [sidebarOpen]);
+
   // Manter sidebar sempre aberta no desktop
   useEffect(() => {
     const handleResize = () => {

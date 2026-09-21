@@ -27,6 +27,26 @@ const estaInstalado = () => (
   || window.navigator.standalone === true
 );
 
+/**
+ * O aparelho e de toque?
+ *
+ * `pointer: coarse` pergunta ao sistema se o apontador principal e impreciso —
+ * dedo, nao mouse. E a pergunta certa, e nao a largura da janela: uma janela de
+ * navegador estreita no PC continua sendo um PC, e um tablet grande continua
+ * sendo um aparelho de toque.
+ *
+ * Existe porque o botao passou a aparecer no navegador do COMPUTADOR. Quando eu
+ * tirei a exigencia de iOS para mostrar a instrucao manual (para atender os
+ * Android que nao oferecem a instalacao sozinhos), tirei junto a unica coisa que
+ * mantinha o botao fora do desktop. O Orion e instalado no celular dos usuarios;
+ * no PC o sistema e usado pelo navegador mesmo, e o convite ali so atrapalha.
+ */
+const ehAparelhoDeToque = () => (
+  typeof window !== 'undefined'
+  && typeof window.matchMedia === 'function'
+  && window.matchMedia('(pointer: coarse)').matches
+);
+
 const ehIOS = () => (
   /iphone|ipad|ipod/i.test(window.navigator.userAgent)
   // iPad recente se declara como Mac; o toque é o que o entrega.
@@ -71,6 +91,10 @@ const BotaoInstalarApp = ({ compacto = false }) => {
     // Uso único: o mesmo evento não pode ser disparado duas vezes.
     setEvento(null);
   };
+
+  // No computador o botao nao aparece NUNCA — nem com o evento do navegador, que
+  // o Chrome de desktop tambem dispara. Ver `ehAparelhoDeToque` acima.
+  if (!ehAparelhoDeToque() && !ehIOS()) return null;
 
   if (instalado || dispensado) return null;
 
