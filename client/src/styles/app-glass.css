@@ -1,0 +1,445 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   APP-GLASS — a pele do aplicativo de celular
+   ═══════════════════════════════════════════════════════════════════════════
+
+   TUDO neste arquivo vive dentro de `@media (max-width: 768px)`. Acima disso não
+   existe uma única regra — o sistema no computador continua exatamente como está.
+   Essa é a regra de ouro do arquivo: quem precisar acrescentar algo, acrescenta
+   DENTRO do media query.
+
+   Ordem de carga: este arquivo entra em App.js DEPOIS de `glass-override.css`.
+   Isso é proposital e necessário — o glass-override usa `!important` em body,
+   inputs e tabelas; empate de `!important` se resolve por ordem no pacote, então
+   quem chega por último ganha. Mudar a ordem do import quebra esta folha.
+
+   Por que NÃO tem `backdrop-filter` em tudo: desfoque de fundo é caro, e a lista
+   de materiais do almoxarifado põe dezenas de cartões na tela. O desfoque fica
+   onde de fato passa conteúdo por trás (topo, dock, folhas, modais); os cartões
+   usam camada translúcida sobre o fundo já desfocado — visualmente igual, sem
+   uma composição por cartão.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ÚNICA regra fora do media query, e ela existe justamente para proteger o
+   computador: `.agfx` é uma div que o React monta sempre, e sem estilo nenhum
+   ela seria um `display: block` vazio no meio do fluxo da página. O mesmo padrão
+   que `.bim` e `.plm` já usam neste projeto — esconde por padrão, o media query
+   liga. Nada mais pode sair daqui de fora. */
+.agfx { display: none; }
+
+@media (max-width: 768px) {
+
+  /* ── 1. Paleta ──────────────────────────────────────────────────────────────
+     A referência do P.O. é roxo/magenta; a marca da GMP é o azul #4facfe. O que
+     foi copiado é o ESTILO (vidro, blobs, profundidade), não a cor: o azul da
+     marca lidera e o magenta entra como acento. Trocar a cara inteira é editar
+     as três variáveis `--ag-blob-*` abaixo. */
+  :root {
+    --ag-blob-1: #4facfe;   /* ciano da marca */
+    --ag-blob-2: #7c5cff;   /* violeta de ligação */
+    --ag-blob-3: #ff4d9d;   /* magenta de acento */
+
+    --ag-base-1: #EEF3FF;
+    --ag-base-2: #F7F1FF;
+
+    --ag-vidro:        rgba(255, 255, 255, 0.72);
+    --ag-vidro-forte:  rgba(255, 255, 255, 0.86);
+    --ag-borda:        rgba(255, 255, 255, 0.85);
+    --ag-borda-sutil:  rgba(17, 24, 39, 0.07);
+    --ag-texto:        #14182B;
+    --ag-texto-fraco:  #5B627A;
+    --ag-sombra:      0 1px 2px rgba(16, 24, 40, .05), 0 12px 28px -12px rgba(16, 24, 40, .22);
+    --ag-sombra-alta: 0 8px 40px -8px rgba(16, 24, 40, .28);
+  }
+
+  [data-theme="dark"] {
+    --ag-base-1: #0B0A1F;
+    --ag-base-2: #14102E;
+
+    --ag-vidro:        rgba(255, 255, 255, 0.055);
+    --ag-vidro-forte:  rgba(22, 20, 45, 0.82);
+    --ag-borda:        rgba(255, 255, 255, 0.11);
+    --ag-borda-sutil:  rgba(255, 255, 255, 0.07);
+    --ag-texto:        #F3F4FA;
+    --ag-texto-fraco:  #A7ACC4;
+    --ag-sombra:      0 2px 6px rgba(0, 0, 0, .28), 0 16px 40px -16px rgba(0, 0, 0, .7);
+    --ag-sombra-alta: 0 10px 50px -10px rgba(0, 0, 0, .8);
+  }
+
+  /* ── 2. O fundo ─────────────────────────────────────────────────────────────
+     `html body` (0,0,2) ganha dos dois `body { background: ... !important }`
+     globais (0,0,1) — com !important dos dois lados, decide a especificidade.
+
+     O tema escuro precisa de uma regra PRÓPRIA, e mais específica: existe um
+     `[data-theme=dark] body { background:#121212 !important }` que vale (0,1,1)
+     e portanto GANHA de `html body` (0,0,2), por mais tarde que este venha no
+     pacote — ordem só desempata especificidade igual. Medido no bundle: a regra
+     do tema fica na posição 93290 e esta em 94438, e mesmo assim o fundo saía
+     #121212 chapado. `html[data-theme="dark"] body` vale (0,1,2) e resolve. */
+  html body {
+    background: linear-gradient(170deg, var(--ag-base-1) 0%, var(--ag-base-2) 100%) !important;
+    color: var(--ag-texto) !important;
+  }
+
+  html[data-theme="dark"] body {
+    background: linear-gradient(170deg, var(--ag-base-1) 0%, var(--ag-base-2) 100%) !important;
+    color: var(--ag-texto) !important;
+  }
+
+  /* Os blobs moram num elemento próprio (componente FundoAppMobile), fixo e
+     atrás de tudo. `pointer-events: none` porque ele cobre a tela inteira. */
+  .agfx {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+    /* contain evita que a animação dos blobs peça recálculo de layout da página */
+    contain: strict;
+  }
+
+  .agfx-blob {
+    position: absolute;
+    display: block;
+    border-radius: 50%;
+    /* O desfoque é o que transforma o círculo em névoa. É UM filtro para a tela
+       inteira, não um por cartão — por isso pode ser generoso. */
+    filter: blur(58px);
+    opacity: .5;
+    will-change: transform;
+  }
+
+  [data-theme="dark"] .agfx-blob { opacity: .58; }
+
+  .agfx-b1 {
+    width: 62vw; height: 62vw;
+    top: -16vw; right: -20vw;
+    background: var(--ag-blob-1);
+    animation: ag-flutua-1 22s ease-in-out infinite;
+  }
+  .agfx-b2 {
+    width: 70vw; height: 70vw;
+    top: 32vh; left: -30vw;
+    background: var(--ag-blob-2);
+    animation: ag-flutua-2 27s ease-in-out infinite;
+  }
+  .agfx-b3 {
+    width: 54vw; height: 54vw;
+    bottom: -14vw; right: -12vw;
+    background: var(--ag-blob-3);
+    animation: ag-flutua-3 19s ease-in-out infinite;
+  }
+
+  @keyframes ag-flutua-1 {
+    0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+    50%      { transform: translate3d(-8vw, 6vh, 0) scale(1.12); }
+  }
+  @keyframes ag-flutua-2 {
+    0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+    50%      { transform: translate3d(10vw, -7vh, 0) scale(.9); }
+  }
+  @keyframes ag-flutua-3 {
+    0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+    50%      { transform: translate3d(-6vw, -5vh, 0) scale(1.15); }
+  }
+
+  /* A casca precisa ficar ACIMA do fundo e deixá-lo aparecer. */
+  .layout,
+  .layout .main-content,
+  .page, .pagina, [class*='-page']:not(.almox-mapa-page) {
+    background: transparent !important;
+  }
+  .layout { position: relative; z-index: 1; }
+
+  /* ── 3. Topo e dock ─────────────────────────────────────────────────────────
+     Aqui o desfoque vale: o conteúdo passa por baixo enquanto rola. */
+  .mobile-topbar {
+    background: var(--ag-vidro-forte) !important;
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
+    backdrop-filter: blur(22px) saturate(180%);
+    border-bottom: 1px solid var(--ag-borda-sutil) !important;
+    box-shadow: none !important;
+  }
+
+  /* O dock deixa de ser barra colada na borda e vira pílula flutuante, que é o
+     formato da referência. */
+  .bim {
+    left: 10px !important;
+    right: 10px !important;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 10px) !important;
+    padding-bottom: 0 !important;
+    border-radius: 26px !important;
+    border: 1px solid var(--ag-borda) !important;
+    border-top: 1px solid var(--ag-borda) !important;
+    background: var(--ag-vidro-forte) !important;
+    -webkit-backdrop-filter: blur(26px) saturate(180%);
+    backdrop-filter: blur(26px) saturate(180%);
+    box-shadow: var(--ag-sombra-alta) !important;
+    overflow: hidden;
+  }
+
+  .bim-item { color: var(--ag-texto-fraco) !important; }
+  .bim-ativo { color: var(--ag-blob-1) !important; }
+
+  /* O traço no topo do item ativo foi desenhado para uma barra colada embaixo;
+     numa pílula flutuante ele fica solto. Vira um halo atrás do ícone. */
+  .bim-ativo::before {
+    top: 4px !important;
+    left: 50% !important;
+    right: auto !important;
+    width: 40px; height: 40px;
+    margin-left: -20px;
+    border-radius: 50% !important;
+    background: radial-gradient(circle, rgba(79,172,254,.30) 0%, rgba(79,172,254,0) 70%) !important;
+    animation: ag-pulsa 2.4s ease-in-out infinite;
+  }
+  @keyframes ag-pulsa {
+    0%, 100% { opacity: .75; transform: scale(1); }
+    50%      { opacity: 1;   transform: scale(1.12); }
+  }
+
+  /* O conteúdo precisa terminar acima da pílula, senão o último cartão fica
+     debaixo dela — a pílula flutua 10px acima da borda, então pede mais folga
+     que a barra colada pedia.
+
+     `body .layout .main-content` (0,2,1) e não `.layout .main-content` (0,2,0)
+     por um motivo medido: o BarraInferiorMobile.css declara o mesmo seletor com
+     o mesmo !important, e ele viaja num CHUNK carregado sob demanda — que o
+     webpack injeta DEPOIS do main.css. Em empate de especificidade ganha quem
+     vem por último, e o último é sempre o chunk. Subir um degrau de
+     especificidade tira a decisão da ordem de carga. */
+  body .layout .main-content {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 92px) !important;
+  }
+
+  /* ── 4. Superfícies ─────────────────────────────────────────────────────────
+     As mesmas famílias de seletor que o mobile-app.css já normalizou. É isto que
+     faz TODO módulo receber a pele nova sem reescrever componente nenhum. */
+  .card, .modal, .modal-content, .dialog, .panel, .painel,
+  [class*='-card'], [class*='-modal'], [class*='-panel'],
+  .plm-card, .cliitem, .filters, [class*='-filtros'] {
+    background: var(--ag-vidro) !important;
+    border: 1px solid var(--ag-borda) !important;
+    border-radius: 22px !important;
+    box-shadow: var(--ag-sombra) !important;
+    color: var(--ag-texto);
+  }
+
+  /* Modais e folhas ganham o desfoque de verdade: são poucos e ficam por cima. */
+  .modal, .modal-content, .dialog,
+  .plm-folha, .propsheet__folha, [class*='-sheet'], [class*='-drawer'] {
+    background: var(--ag-vidro-forte) !important;
+    -webkit-backdrop-filter: blur(30px) saturate(180%);
+    backdrop-filter: blur(30px) saturate(180%);
+  }
+
+  /* Brilho na borda superior — o detalhe que separa "div translúcida" de
+     "vidro". Um pseudo-elemento genérico, nenhum componente tocado. */
+  .plm-card, .cliitem, .card, [class*='-card'] { position: relative; }
+  .plm-card::after, .cliitem::after, .card::after, [class*='-card']::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 12%; right: 12%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent);
+    pointer-events: none;
+  }
+
+  /* ── 5. Controles ───────────────────────────────────────────────────────────
+     O campo de busca aparecia como CAIXA BRANCA DENTRO da pílula: o
+     glass-override força `background`/`border-color` com !important num seletor
+     de quatro `:not()` — especificidade (0,4,1). Para vencer é preciso empatar o
+     !important E passar na especificidade; por isso a cadeia de `:not()` é
+     repetida aqui, chegando a (0,5,1). Não é enfeite: com seletor mais curto a
+     regra abaixo é simplesmente ignorada. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+  select,
+  textarea {
+    background: var(--ag-vidro) !important;
+    border: 1px solid var(--ag-borda) !important;
+    border-radius: 14px !important;
+    color: var(--ag-texto) !important;
+    /* 16px: abaixo disso o iOS dá zoom na página ao focar o campo. */
+    font-size: 16px !important;
+    padding: 12px 14px;
+    transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):focus,
+  select:focus,
+  textarea:focus {
+    outline: none;
+    border-color: var(--ag-blob-1) !important;
+    box-shadow: 0 0 0 4px rgba(79, 172, 254, .16) !important;
+  }
+
+  /* Campo que mora DENTRO de um contêiner já desenhado (a pílula de busca com a
+     lupa ao lado) não pode ter caixa própria — era a origem da "caixa dentro da
+     caixa" que o P.O. apontou. Mesma cadeia de :not(), mesma razão. */
+  .plm-busca input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  [class*='-busca'] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  [class*='-search'] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]) {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+  }
+
+  .plm-busca, [class*='-busca'], [class*='-search'] {
+    background: var(--ag-vidro) !important;
+    border: 1px solid var(--ag-borda) !important;
+    border-radius: 16px !important;
+    box-shadow: var(--ag-sombra) !important;
+  }
+  .plm-busca:focus-within, [class*='-busca']:focus-within, [class*='-search']:focus-within {
+    border-color: var(--ag-blob-1) !important;
+    box-shadow: 0 0 0 4px rgba(79, 172, 254, .16) !important;
+  }
+
+  /* Botão principal: gradiente da marca, com a pressão respondendo ao toque. */
+  .btn-primary, .btn-premium, .plm-nova, .plm-aplicar,
+  [class*='btn-primar'], [class*='-primario'] {
+    background: linear-gradient(135deg, var(--ag-blob-1) 0%, var(--ag-blob-2) 100%) !important;
+    border: none !important;
+    color: #fff !important;
+    box-shadow: 0 6px 18px -6px rgba(79, 172, 254, .65) !important;
+  }
+
+  .btn, [class*='btn-']:where(:not([class*='btn-icon'])),
+  button, .plm-chip, .plm-act, .bim-item {
+    transition: transform .12s cubic-bezier(.2,.8,.3,1), box-shadow .18s ease, background .18s ease;
+  }
+  .btn:active, button:active, .plm-chip:active, .plm-act:active, .bim-item:active,
+  .plm-card:active, .cliitem:active {
+    transform: scale(.965);
+  }
+
+  /* Chips e etiquetas */
+  [class*='chip'], [class*='badge'], [class*='pill'], [class*='tag'] {
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+  }
+
+  .plm-chip {
+    background: var(--ag-vidro) !important;
+    border: 1px solid var(--ag-borda) !important;
+    color: var(--ag-texto-fraco) !important;
+  }
+  .plm-chip.is-on {
+    background: linear-gradient(135deg, var(--ag-blob-1), var(--ag-blob-2)) !important;
+    border-color: transparent !important;
+    color: #fff !important;
+    box-shadow: 0 6px 16px -8px rgba(79,172,254,.8) !important;
+  }
+
+  /* A fileira de chips cortava o último item sem avisar que rolava. A máscara
+     desfaz a borda dura e o padding garante que o último respire. */
+  .plm-chips, [class*='-chips'] {
+    padding-right: 18px;
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 26px), transparent 100%);
+    mask-image: linear-gradient(90deg, #000 calc(100% - 26px), transparent 100%);
+  }
+
+  /* ── 6. Movimento ───────────────────────────────────────────────────────────
+     Entrada escalonada: os cartões sobem em sequência em vez de aparecerem todos
+     de uma vez. `backwards` mantém o estado inicial durante o atraso — sem isso
+     o item pisca visível antes de começar. */
+  @keyframes ag-sobe {
+    from { opacity: 0; transform: translate3d(0, 14px, 0); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  .main-content .plm-card,
+  .main-content .cliitem,
+  .main-content .card,
+  .main-content [class*='-card'] {
+    animation: ag-sobe .44s cubic-bezier(.22, 1, .36, 1) backwards;
+  }
+  .main-content .plm-card:nth-child(1), .main-content [class*='-card']:nth-child(1) { animation-delay: .02s; }
+  .main-content .plm-card:nth-child(2), .main-content [class*='-card']:nth-child(2) { animation-delay: .06s; }
+  .main-content .plm-card:nth-child(3), .main-content [class*='-card']:nth-child(3) { animation-delay: .10s; }
+  .main-content .plm-card:nth-child(4), .main-content [class*='-card']:nth-child(4) { animation-delay: .14s; }
+  .main-content .plm-card:nth-child(5), .main-content [class*='-card']:nth-child(5) { animation-delay: .18s; }
+  .main-content .plm-card:nth-child(6), .main-content [class*='-card']:nth-child(6) { animation-delay: .22s; }
+  .main-content .plm-card:nth-child(7), .main-content [class*='-card']:nth-child(7) { animation-delay: .26s; }
+  .main-content .plm-card:nth-child(8), .main-content [class*='-card']:nth-child(8) { animation-delay: .30s; }
+  /* Daqui em diante o atraso para de crescer: a nona linha já está fora da tela,
+     e continuar somando faria esperar por algo que ninguém está vendo. */
+  .main-content .plm-card:nth-child(n+9),
+  .main-content [class*='-card']:nth-child(n+9) { animation-delay: .32s; }
+
+  /* Folhas que sobem de baixo */
+  @keyframes ag-folha { from { transform: translate3d(0, 100%, 0); } to { transform: none; } }
+  @keyframes ag-fundo { from { opacity: 0; } to { opacity: 1; } }
+  .plm-folha, .propsheet__folha { animation: ag-folha .32s cubic-bezier(.22, 1, .36, 1); }
+  .plm-fundo, .propsheet__fundo { animation: ag-fundo .22s ease; }
+
+  /* Quem pediu menos movimento no sistema operacional recebe menos movimento.
+     Não é opcional: para parte das pessoas isto é enjoo, não enfeite. */
+  @media (prefers-reduced-motion: reduce) {
+    .agfx-blob,
+    .bim-ativo::before,
+    .main-content .plm-card,
+    .main-content .cliitem,
+    .main-content .card,
+    .main-content [class*='-card'],
+    .plm-folha, .propsheet__folha, .plm-fundo, .propsheet__fundo {
+      animation: none !important;
+    }
+    .btn:active, button:active, .plm-card:active, .cliitem:active { transform: none; }
+  }
+
+  /* ── 7. Legibilidade sobre vidro ────────────────────────────────────────────
+     O glass-override pinta texto com var(--gmp-text), calculado para fundo
+     opaco. Sobre o vidro escuro aquilo vira cinza sobre borrado. */
+  [data-theme="dark"] .card, [data-theme="dark"] [class*='-card'],
+  [data-theme="dark"] .panel, [data-theme="dark"] .painel,
+  [data-theme="dark"] .plm-card {
+    color: var(--ag-texto);
+  }
+  [data-theme="dark"] .card h1, [data-theme="dark"] .card h2,
+  [data-theme="dark"] .card h3, [data-theme="dark"] [class*='-card'] h3,
+  [data-theme="dark"] .plm-titulo, [data-theme="dark"] .plm-valor {
+    color: #fff !important;
+  }
+
+  /* Tabela virada em cartão (utils/tabelasComoCartoes) sobre vidro */
+  .tabela-cartoes td { border-color: var(--ag-borda-sutil) !important; }
+  .tabela-cartoes td::before { color: var(--ag-texto-fraco) !important; }
+
+  /* ── 8. Ver proposta ────────────────────────────────────────────────────────
+     Defeito meu: o `flex-wrap: wrap` que o mobile-app.css aplica em tudo que
+     casa com [class*='toolbar'] encontrou aqui uma barra de ALTURA FIXA (52px).
+     Os botões quebraram em três linhas dentro de uma caixa de 52px e vazaram por
+     cima do documento — é o que aparecia no print. Altura fixa e quebra de linha
+     não convivem; aqui a altura passa a seguir o conteúdo. */
+  .ppe-toolbar {
+    height: auto !important;
+    min-height: 52px;
+    flex-wrap: wrap;
+    align-items: stretch;
+    padding: 10px 12px !important;
+    gap: 8px !important;
+  }
+  .ppe-toolbar-left { width: 100%; }
+  .ppe-toolbar-actions {
+    width: 100%;
+    display: grid !important;
+    /* Grade em vez de fileira: com seis botões de largura desigual a fileira
+       quebrava em degraus. */
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px !important;
+  }
+  .ppe-btn {
+    justify-content: center;
+    min-height: 44px;
+    border-radius: 12px !important;
+    font-size: 13px !important;
+  }
+  /* Salvar e emitir revisão são as ações do fim do fluxo: ocupam a linha toda. */
+  .ppe-btn-salvar, .ppe-btn-revisao { grid-column: 1 / -1; }
+
+  .ppe-container { background: transparent !important; }
+  .ppe-preview-wrapper { background: #fff; }
+}

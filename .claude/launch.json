@@ -2,16 +2,18 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "gmp-client",
+      "name": "client",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["start"],
-      "port": 3000
+      "port": 3000,
+      "cwd": "client"
     },
     {
       "name": "gmp-build",
       "runtimeExecutable": "npx",
       "runtimeArgs": ["--yes", "serve", "-s", "build", "-l", "4173"],
-      "port": 4173
+      "port": 4173,
+      "cwd": "client"
     }
   ]
 }

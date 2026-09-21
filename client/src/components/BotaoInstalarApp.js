@@ -74,13 +74,19 @@ const BotaoInstalarApp = ({ compacto = false }) => {
 
   if (instalado || dispensado) return null;
 
-  // No iPhone o botão só aparece se o usuário não tiver dispensado nos últimos 30 dias —
-  // não há evento do sistema para saber se já instalou, então o respeito à dispensa é o
-  // que evita insistir com quem já resolveu.
-  const iosDispensadoAte = Number(localStorage.getItem(ADIADO_ATE) || 0);
-  const mostrarNoIOS = ehIOS() && Date.now() > iosDispensadoAte;
+  // Sem o evento do navegador nao ha como saber se o app ja esta instalado, entao o
+  // respeito a dispensa de 30 dias e o que evita insistir com quem ja resolveu.
+  const dispensadoAte = Number(localStorage.getItem(ADIADO_ATE) || 0);
 
-  if (!evento && !mostrarNoIOS) return null;
+  // ANTES daqui o botao exigia `ehIOS()` para aparecer sem o evento. O resultado era
+  // que em Samsung Internet, Firefox e no proprio Chrome quando os criterios de
+  // instalabilidade ainda nao tinham sido satisfeitos, NADA aparecia — e esses
+  // aparelhos sao justamente os que nao oferecem a instalacao sozinhos. Agora a
+  // ausencia do evento nao esconde o botao: ela troca o que o botao faz, de instalar
+  // para ensinar a instalar.
+  const mostrarManual = Date.now() > dispensadoAte;
+
+  if (!evento && !mostrarManual) return null;
 
   const dispensarIOS = () => {
     try {
@@ -106,26 +112,54 @@ const BotaoInstalarApp = ({ compacto = false }) => {
         <div className="bia-overlay" onClick={() => setMostrarIOS(false)}>
           <div className="bia-modal" onClick={(e) => e.stopPropagation()}>
             <div className="bia-modal-topo">
-              <h3>Instalar no iPhone</h3>
+              <h3>{ehIOS() ? 'Instalar no iPhone' : 'Instalar no aparelho'}</h3>
               <button type="button" onClick={() => setMostrarIOS(false)} aria-label="Fechar">
                 <FiX />
               </button>
             </div>
-            <p>
-              No iPhone, quem instala é o próprio Safari — o site não consegue fazer isso
-              sozinho. São três toques:
-            </p>
-            <ol>
-              <li>
-                Toque em <FiShare aria-hidden="true" /> <strong>Compartilhar</strong>, na barra
-                de baixo do Safari.
-              </li>
-              <li>Role e escolha <strong>Adicionar à Tela de Início</strong>.</li>
-              <li>Confirme em <strong>Adicionar</strong>.</li>
-            </ol>
-            <p className="bia-nota">
-              Precisa ser pelo <strong>Safari</strong>. Pelo Chrome do iPhone a opção não existe.
-            </p>
+
+            {ehIOS() ? (
+              <>
+                <p>
+                  No iPhone, quem instala é o próprio Safari — o site não consegue fazer
+                  isso sozinho. São três toques:
+                </p>
+                <ol>
+                  <li>
+                    Toque em <FiShare aria-hidden="true" /> <strong>Compartilhar</strong>, na
+                    barra de baixo do Safari.
+                  </li>
+                  <li>Role e escolha <strong>Adicionar à Tela de Início</strong>.</li>
+                  <li>Confirme em <strong>Adicionar</strong>.</li>
+                </ol>
+                <p className="bia-nota">
+                  Precisa ser pelo <strong>Safari</strong>. Pelo Chrome do iPhone a opção
+                  não existe.
+                </p>
+              </>
+            ) : (
+              <>
+                <p>
+                  Este navegador não oferece a instalação automática. Dá para instalar pelo
+                  menu dele:
+                </p>
+                <ol>
+                  <li>
+                    Abra o menu do navegador — <strong>⋮</strong> no Chrome,{' '}
+                    <strong>☰</strong> no Samsung Internet.
+                  </li>
+                  <li>
+                    Escolha <strong>Instalar aplicativo</strong> ou{' '}
+                    <strong>Adicionar à tela inicial</strong>.
+                  </li>
+                  <li>Confirme em <strong>Instalar</strong>.</li>
+                </ol>
+                <p className="bia-nota">
+                  Se a opção não aparecer, abra <strong>systemgmp.online</strong> pelo
+                  <strong> Chrome</strong> — é onde ela sempre existe.
+                </p>
+              </>
+            )}
             <div className="bia-modal-acoes">
               <button type="button" className="bia-secundario" onClick={dispensarIOS}>
                 Não mostrar de novo

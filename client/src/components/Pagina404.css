@@ -1,0 +1,170 @@
+/* Página 404 — funciona fora do Layout, então não herda nada dele: a tela
+   inteira é desenhada aqui, e precisa se virar nos dois temas. */
+
+.p404 {
+  min-height: 100vh;
+  min-height: 100dvh;      /* dvh desconta a barra do navegador no celular */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(79, 172, 254, .18), transparent 45%),
+    radial-gradient(circle at 85% 80%, rgba(124, 92, 255, .18), transparent 45%),
+    var(--gmp-bg, #fff);
+}
+
+.p404-cartao {
+  width: 100%;
+  max-width: 460px;
+  text-align: center;
+  padding: 36px 28px 30px;
+  border-radius: 24px;
+  background: var(--gmp-surface, #fff);
+  border: 1px solid var(--gmp-border, rgba(17, 24, 39, .08));
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 24px 48px -24px rgba(16, 24, 40, .3);
+}
+
+.p404-numero {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 86px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -4px;
+  background: linear-gradient(135deg, #4facfe 0%, #7c5cff 55%, #ff4d9d 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  margin-bottom: 18px;
+}
+
+/* A bússola ocupa o lugar do zero. Ela não recebe o gradiente do texto (é um
+   SVG com `stroke`), então leva a cor sólida do meio do gradiente para não
+   destoar. */
+.p404-bussola {
+  width: 66px;
+  height: 66px;
+  color: #7c5cff;
+  stroke-width: 1.6;
+  animation: p404-gira 9s linear infinite;
+}
+
+@keyframes p404-gira {
+  to { transform: rotate(360deg); }
+}
+
+.p404-cartao h1 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin: 0 0 8px;
+  color: var(--gmp-text, #14182B);
+}
+
+.p404-cartao p {
+  margin: 0 0 18px;
+  font-size: .95rem;
+  line-height: 1.55;
+  color: var(--gmp-text-light, #5B627A);
+}
+
+.p404-endereco {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--gmp-bg, #F7F8FA);
+  border: 1px solid var(--gmp-border, rgba(17, 24, 39, .08));
+}
+
+.p404-endereco span {
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--gmp-text-light, #8A90A6);
+}
+
+.p404-endereco code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .85rem;
+  color: var(--gmp-text, #14182B);
+  /* Um endereço longo não pode empurrar o cartão e criar rolagem lateral. */
+  word-break: break-all;
+}
+
+.p404-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin: 22px 0 16px;
+}
+
+.p404-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 0 20px;
+  border-radius: 14px;
+  border: 1px solid var(--gmp-border, rgba(17, 24, 39, .12));
+  background: var(--gmp-surface, #fff);
+  color: var(--gmp-text, #14182B);
+  font-size: .92rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform .12s cubic-bezier(.2, .8, .3, 1), box-shadow .18s ease;
+}
+
+.p404-btn:active { transform: scale(.965); }
+
+.p404-btn-primario {
+  background: linear-gradient(135deg, #4facfe 0%, #7c5cff 100%);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 6px 18px -6px rgba(79, 172, 254, .65);
+}
+
+.p404-nota {
+  font-size: .8rem !important;
+  margin: 0 !important;
+  color: var(--gmp-text-light, #8A90A6) !important;
+}
+
+[data-theme="dark"] .p404-cartao {
+  background: rgba(22, 20, 45, .86);
+  border-color: rgba(255, 255, 255, .11);
+}
+
+[data-theme="dark"] .p404-endereco {
+  background: rgba(255, 255, 255, .05);
+  border-color: rgba(255, 255, 255, .09);
+}
+
+[data-theme="dark"] .p404-btn {
+  background: rgba(255, 255, 255, .06);
+  border-color: rgba(255, 255, 255, .12);
+  color: #F3F4FA;
+}
+
+[data-theme="dark"] .p404-btn-primario {
+  background: linear-gradient(135deg, #4facfe 0%, #7c5cff 100%);
+  border-color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .p404-bussola { animation: none; }
+  .p404-btn:active { transform: none; }
+}
+
+@media (max-width: 480px) {
+  .p404-numero { font-size: 66px; }
+  .p404-bussola { width: 50px; height: 50px; }
+  .p404-acoes .p404-btn { flex: 1 1 100%; }
+}

@@ -9,6 +9,7 @@ import { bypassModuleRestrictions, isSystemAdmin } from '../utils/systemPermissi
 import { MODULOS_META, modulosDoUsuario, nivelAcessoUsuario } from '../constants/modulosMeta';
 import BotaoInstalarApp from './BotaoInstalarApp';
 import BarraInferiorMobile from './BarraInferiorMobile';
+import FundoAppMobile from './FundoAppMobile';
 import {
   FiHome, FiUsers, FiBriefcase, FiFileText,
   FiCalendar, FiLogOut, FiMenu, FiX, FiUserPlus, FiPackage, FiBarChart2, FiMap, FiDollarSign, FiSettings, FiShield, FiMoon, FiSun, FiGrid,
@@ -444,6 +445,9 @@ const Layout = () => {
 
   return (
     <div className="layout">
+      {/* Fundo animado do aplicativo. So existe no celular — quem decide e o CSS
+          (.agfx vive dentro do media query), nao JavaScript lendo innerWidth. */}
+      <FundoAppMobile />
       <div className="orion-version-badge" aria-hidden="true">Orion-BETA-V0</div>
       {/* Barra de topo do celular: a marca (logo GMP) sempre visivel, como num app.
           No desktop a marca ja esta na sidebar, entao o CSS esconde esta. */}

@@ -27,11 +27,71 @@ const CAMPOS_EDITAVEIS = [
   { campo: 'cliente_contato', label: 'Contato', seletor: '[data-edit="cliente_contato"]' },
 ];
 
+/* Largura a partir da qual consideramos que estamos num telefone. E o MESMO
+   ponto de corte usado pelo CSS do aplicativo (mobile-app.css, app-glass.css);
+   se um dia mudar, muda nos dois — sao a mesma decisao escrita em duas linguas. */
+const LARGURA_CELULAR = 768;
+const ID_ESTILO_ESCALA = 'ppe-escala-celular';
+
+/**
+ * Encolhe o documento da proposta para caber na largura do telefone.
+ *
+ * A proposta e uma folha A4: ~794px de largura FIXA, porque o mesmo HTML vira
+ * PDF. Num aparelho de 360px isso nao cabe, e o que o P.O. viu foi o documento
+ * cortado na direita — "MP INDUSTRIAIS" no lugar de "GMP INDUSTRIAIS", o titulo
+ * decepado no meio.
+ *
+ * Usa `zoom`, e nao `transform: scale()`, por um motivo concreto: `transform`
+ * encolhe o desenho mas NAO mexe na caixa de layout, entao o iframe continuaria
+ * com a altura do documento em tamanho natural e sobraria meia tela em branco
+ * embaixo. `zoom` refaz o layout, e a barra de rolagem passa a medir o que
+ * realmente esta na tela.
+ *
+ * A escala e MEDIDA, nao chutada: 794 e o valor de hoje do gabarito, e um
+ * gabarito novo com outra largura continuaria certo aqui.
+ */
+function ajustarEscalaCelular(doc) {
+  if (!doc || !doc.documentElement) return;
+
+  const anterior = doc.getElementById(ID_ESTILO_ESCALA);
+  // Remove antes de medir: com o zoom anterior aplicado, a medida sairia ja
+  // encolhida e a escala se aplicaria em cima dela mesma a cada repaginacao.
+  if (anterior) anterior.remove();
+
+  if (window.innerWidth > LARGURA_CELULAR) return;
+
+  const natural = Math.max(
+    doc.documentElement.scrollWidth,
+    doc.body ? doc.body.scrollWidth : 0,
+  );
+  const disponivel = doc.documentElement.clientWidth;
+  if (!natural || !disponivel || natural <= disponivel) return;
+
+  const escala = disponivel / natural;
+  const estilo = doc.createElement('style');
+  estilo.id = ID_ESTILO_ESCALA;
+  estilo.textContent = 'html{zoom:' + escala + ';}'
+    + 'body{margin-left:0!important;margin-right:0!important;}';
+  doc.head.appendChild(estilo);
+}
+
 export default function PropostaPreviewEditavel() {
   const { id } = useParams();
   const iframeRef = useRef(null);
 
   const [html, setHtml] = useState('');
+
+  // Girar o aparelho muda a largura disponivel: sem isto o documento continuaria
+  // na escala do retrato, sobrando faixa branca na direita no modo paisagem.
+  useEffect(() => {
+    const reajustar = () => ajustarEscalaCelular(iframeRef.current?.contentDocument);
+    window.addEventListener('resize', reajustar);
+    window.addEventListener('orientationchange', reajustar);
+    return () => {
+      window.removeEventListener('resize', reajustar);
+      window.removeEventListener('orientationchange', reajustar);
+    };
+  }, []);
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [mostrarHistorico, setMostrarHistorico] = useState(false);
@@ -1463,6 +1523,8 @@ export default function PropostaPreviewEditavel() {
                 injetarAtributosEdicao(doc);
                 ativarEdicaoClausulas(doc);
                 observarRepaginacoesClausulas(doc);
+                // Por ultimo: mede o documento ja com tudo dentro dele.
+                ajustarEscalaCelular(doc);
               }
               ativarEdicao();
             }}

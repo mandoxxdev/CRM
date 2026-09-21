@@ -13,6 +13,11 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
 import './styles/glass-override.css';
+/* A pele do aplicativo de celular. A ORDEM importa: o glass-override acima usa
+   !important em body, inputs e tabelas, e empate de !important se decide por
+   quem vem depois no pacote. Este import tem de continuar sendo o ultimo. */
+import './styles/app-glass.css';
+import Pagina404 from './components/Pagina404';
 import {
   Login,
   Dashboard,
@@ -555,6 +560,13 @@ function AppRoutes() {
         <Route path="requisicoes-material" element={<RequisicoesMaterialListaPage moduloKey="admin" />} />
         <Route path="requisicoes-material/nova" element={<RequisicoesMaterialNovaPage moduloKey="admin" />} />
       </Route>
+
+      {/* Coringa do NIVEL DE CIMA. Os `path="*"` que aparecem acima sao internos
+          de cada modulo (`/compras/xpto` cai na lista de compras); nenhum deles
+          cobria um endereco desconhecido na raiz. Sem esta rota, `/qualquercoisa`
+          nao casava com nada e o Router renderizava tela BRANCA, sem mensagem e
+          sem saida. Fica por ultimo porque `*` casa com tudo. */}
+      <Route path="*" element={<Pagina404 />} />
     </Routes>
   );
 }
