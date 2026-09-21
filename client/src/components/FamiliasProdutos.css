@@ -364,3 +364,57 @@
 [data-theme="dark"] .familia-card:hover .familia-card-body .familia-card-cta-label {
     color: #ffffff !important;
   }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CELULAR — mesma decisao da tela de grupos, e pelo mesmo motivo.
+
+   Os tres temas de cor eram azul, VIOLETA e ROSA, ciclando: dois de cada tres
+   cartoes destoavam da marca. Agora sao tres temperaturas de azul.
+
+   A grade `auto-fill, minmax(260px, 1fr)` caia para uma coluna no telefone por
+   acaso. Em duas colunas cabem seis familias na tela, que e o que torna a
+   escolha rapida.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .familias-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .familia-card {
+    min-height: 0;
+    border-radius: 18px;
+  }
+
+  .familia-card-header {
+    aspect-ratio: 4 / 3;
+    min-height: 0;
+    max-height: none;
+    border-radius: 18px 18px 0 0;
+  }
+
+  .familia-card-body { padding: 10px 12px 12px; }
+
+  .familia-card-nome {
+    font-size: .88rem;
+    line-height: 1.25;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .familia-card-cta-label { display: none; }
+
+  /* Hover nao existe no dedo, e em alguns Android o cartao ficava "preso"
+     levantado depois do toque. */
+  .familia-card:hover { transform: none; }
+  .familia-card:active { transform: scale(.97); }
+
+  .familias-header-actions { flex-wrap: wrap; gap: 8px; }
+}
+
+@media (max-width: 360px) {
+  .familias-grid { grid-template-columns: 1fr; }
+  .familia-card-header { aspect-ratio: 16 / 9; }
+}
