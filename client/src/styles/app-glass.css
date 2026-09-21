@@ -1121,13 +1121,19 @@
   /* Controle segmentado de largura inteira — o padrao de aplicativo para
      alternar entre duas vistas. Antes os dois botoes e o "Filtros" disputavam
      360px em `space-between`, e o Filtros caia numa terceira linha. */
+  /* TRES colunas, nao duas. Entre o seletor de vista e o botao Filtros existe
+     o sino de notificacoes — eu o havia esquecido ao desenhar isto, e com tres
+     filhos numa grade de duas colunas o Filtros caia sozinho numa segunda
+     linha, esticado a 252px com o texto encolhido no canto. Foi o que o P.O.
+     fotografou. */
   .header-actions {
     display: grid !important;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 1fr auto auto;
     align-items: center;
     gap: 8px;
     width: 100%;
   }
+  .dashboard-filtros { justify-self: end; }
   .dashboard-toggle {
     display: grid !important;
     grid-template-columns: 1fr 1fr;
@@ -1193,7 +1199,7 @@
   }
   .summary-value {
     white-space: normal !important;
-    font-size: 1.15rem !important;
+    font-size: 1.05rem !important;
     line-height: 1.15;
     overflow-wrap: break-word;
   }
@@ -1201,6 +1207,12 @@
 
   .summary-header h3 { font-size: 1.1rem !important; }
   .summary-header p { font-size: .8rem !important; }
+
+  /* O cartao que ENVOLVE os indicadores cede folga para eles.
+     Medido em 360px: com 18px de padding, sobravam 119px por indicador e
+     "R$ 17.002.782" mede 127px — quebrava em duas linhas por 8px. Com 12px
+     aqui e a fonte do valor um degrau menor, sobra folga confortavel. */
+  .summary-card.premium-summary { padding: 12px !important; }
 
   /* ── Graficos ─────────────────────────────────────────────────────────────
      Altura menor: no telefone um grafico de 300px empurra tudo para fora da

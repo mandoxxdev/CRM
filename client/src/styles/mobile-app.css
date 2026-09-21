@@ -476,11 +476,18 @@
      comiam 36px da largura util. Num cartao de 139px isso derrubava o espaco
      do nome de 113px para 77px, e "Dispersores" passava a quebrar no meio.
 
+     A condicao exige IMAGEM dentro do cabecalho, e nao so um cabecalho. A
+     primeira versao pedia `:has(> [class*='-header'])` e era larga demais: ela
+     tambem pegava o cartao de grafico, cujo `chart-header` e um cabecalho de
+     TEXTO. O titulo "Tendencias Mensais" ficava colado na borda do cartao, com
+     1px de folga — medido. Quem precisa sangrar ate a borda e a foto, nao o
+     titulo.
+
      `:has()` e suportado por todos os navegadores atuais. Se algum nao
      suportar, a regra inteira e ignorada e volta-se ao comportamento de antes
      — degrada para o estado conhecido, nao para um estado pior. */
-  [class*='-card']:not([class*='-card'] *):has(> [class*='-header']),
-  [class*='-card']:not([class*='-card'] *):has(> [class*='-cabecalho']) {
+  [class*='-card']:not([class*='-card'] *):has(> [class*='-header'] img),
+  [class*='-card']:not([class*='-card'] *):has(> [class*='-cabecalho'] img) {
     padding: 0 !important;
     overflow: hidden;
   }
