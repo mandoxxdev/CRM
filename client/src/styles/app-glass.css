@@ -793,19 +793,36 @@
 
   /* ── 11. Tabela vira cartão de aplicativo, automaticamente ──────────────────
      Estas regras desenham a hierarquia que `utils/tabelasComoCartoes.js` deduz
-     e grava em `data-papel`. Junto com ele, isto é o que faz as 52 tabelas do
-     sistema — e toda tabela que ainda vai ser escrita — terem cartão decente no
-     celular sem ninguém escrever CSS para elas.
+     e grava em `data-papel`. Junto com ele, isto é o que faz as tabelas do
+     sistema — e as que ainda vão ser escritas — terem cartão decente no celular
+     sem ninguém escrever CSS para elas.
+
+     O gancho é `.cartao-auto`, e ele é UM só de propósito. O utilitário o
+     aplica tanto nas linhas de <table> quanto nas pseudo-tabelas feitas de
+     <div> (aquelas com uma linha `head` e várias linhas em CSS grid, como
+     `.msc-row` e `.csc-row`). Se cada formato tivesse o seu bloco de CSS, o
+     dia em que um espaçamento mudasse os dois divergiriam.
 
      A reordenação é por `order`. NENHUM elemento é movido no DOM: mexer num
-     <td> que contém botão de React arriscaria evento e estado. O CSS reordena o
-     desenho; a árvore continua sendo a que o React montou. */
+     <td> que contém botão de React arriscaria evento e estado. O CSS reordena
+     o desenho; a árvore continua sendo a que o React montou. */
 
-  table.tabela-cartoes-rica tbody tr {
-    display: flex;
+  table.tabela-cartoes-rica { display: block; width: 100%; }
+  table.tabela-cartoes-rica thead { display: none; }
+  table.tabela-cartoes-rica tbody { display: block; }
+
+  /* O cabeçalho da pseudo-tabela some: os nomes das colunas já foram copiados
+     para `data-label` de cada célula. */
+  .grade-cartoes > [class*='head'],
+  .grade-cartoes > [class*='cabec'] { display: none !important; }
+
+  .cartao-auto {
+    display: flex !important;
     flex-wrap: wrap;
     align-items: center;
     gap: 0 8px;
+    /* `grid-template-columns` fica sem efeito num flex, e é justamente o que
+       se quer: era ela que pedia 710px de largura mínima. */
     padding: 14px !important;
     border-radius: 22px !important;
     border: 1px solid var(--ag-borda) !important;
@@ -814,38 +831,33 @@
     margin-bottom: 12px;
   }
 
-  table.tabela-cartoes-rica tbody td {
+  .cartao-auto > * {
     display: block;
     width: 100%;
     padding: 0;
     border: none !important;
     text-align: left;
     white-space: normal;
+    min-width: 0;
   }
 
   /* Por padrão o rótulo some; volta só nas linhas de meta, mais abaixo. */
-  table.tabela-cartoes-rica tbody td::before { display: none; }
+  .cartao-auto > *::before { display: none; }
 
   /* ── foto ── */
-  table.tabela-cartoes-rica tbody td[data-papel="foto"] {
-    order: 1;
-    width: 46px;
-    flex: 0 0 46px;
-  }
-  table.tabela-cartoes-rica tbody td[data-papel="foto"] img {
-    width: 46px;
-    height: 46px;
+  .cartao-auto > [data-papel="foto"] { order: 1; width: 46px; flex: 0 0 46px; }
+  .cartao-auto > [data-papel="foto"] img {
+    width: 46px; height: 46px;
     border-radius: 12px;
     object-fit: cover;
     display: block;
   }
 
   /* ── código ── */
-  table.tabela-cartoes-rica tbody td[data-papel="id"] {
+  .cartao-auto > [data-papel="id"] {
     order: 2;
     width: auto;
     flex: 1 1 auto;
-    min-width: 0;
     font-size: .72rem;
     font-weight: 700;
     letter-spacing: .03em;
@@ -855,18 +867,29 @@
     white-space: nowrap;
   }
 
+  /* O codigo costuma vir dentro de um chip que a tela desenhou para FUNDO
+     CLARO — `<span class="msc-pill">#4821</span>` e o caso real. Sobre o cartao
+     escuro isso mede 1,21:1 de contraste, ou seja, some. O papel `id` ja da
+     tamanho, peso e cor; o chip interno so precisa sair da frente. */
+  .cartao-auto > [data-papel="id"] * {
+    color: inherit !important;
+    background: none !important;
+    border: none !important;
+    padding: 0 !important;
+    font-size: inherit !important;
+  }
+
   /* ── situação ── */
-  table.tabela-cartoes-rica tbody td[data-papel="situacao"] {
+  .cartao-auto > [data-papel="situacao"] {
     order: 3;
     width: auto;
     flex: 0 0 auto;
-    /* empurra para o canto direito mesmo quando não há código à esquerda */
-    margin-left: auto;
+    margin-left: auto;   /* canto direito, mesmo sem código à esquerda */
     font-size: .72rem;
   }
 
   /* ── título ── */
-  table.tabela-cartoes-rica tbody td[data-papel="titulo"] {
+  .cartao-auto > [data-papel="titulo"] {
     order: 4;
     margin-top: 6px;
     font-size: .98rem;
@@ -876,7 +899,7 @@
   }
 
   /* ── valor ── */
-  table.tabela-cartoes-rica tbody td[data-papel="valor"] {
+  .cartao-auto > [data-papel="valor"] {
     order: 5;
     margin-top: 8px;
     font-size: 1.2rem;
@@ -886,7 +909,7 @@
   }
 
   /* ── meta: o resto, em voz baixa, ainda com o nome da coluna ── */
-  table.tabela-cartoes-rica tbody td[data-papel="meta"] {
+  .cartao-auto > [data-papel="meta"] {
     order: 6;
     display: flex;
     align-items: baseline;
@@ -896,7 +919,7 @@
     font-size: .78rem;
     color: var(--ag-texto-fraco);
   }
-  table.tabela-cartoes-rica tbody td[data-papel="meta"]::before {
+  .cartao-auto > [data-papel="meta"]::before {
     content: attr(data-label);
     display: block;
     flex: 0 0 auto;
@@ -908,27 +931,25 @@
     color: var(--ag-texto-fraco);
     opacity: .75;
   }
-  /* A primeira linha de meta ganha o respiro que separa do valor. */
-  table.tabela-cartoes-rica tbody td[data-papel="valor"] + td[data-papel="meta"] {
-    margin-top: 6px;
-  }
+  .cartao-auto > [data-papel="valor"] + [data-papel="meta"] { margin-top: 6px; }
+  .cartao-auto > [data-papel="meta"]:empty { display: none; }
 
   /* ── ações ── */
-  table.tabela-cartoes-rica tbody td[data-papel="acoes"] {
+  .cartao-auto > [data-papel="acoes"] {
     order: 9;
     margin-top: 10px;
     padding-top: 10px !important;
     border-top: 1px solid var(--ag-borda-sutil) !important;
   }
-  table.tabela-cartoes-rica tbody td[data-papel="acoes"] > * {
+  .cartao-auto > [data-papel="acoes"] > * {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 6px;
   }
-  /* Alvo de toque: 44px é o mínimo confortável para o dedo, e os ícones das
-     tabelas foram desenhados para o mouse, com 24px. */
-  table.tabela-cartoes-rica tbody td[data-papel="acoes"] :where(button, a) {
+  /* 44px é o mínimo confortável para o dedo; os ícones das tabelas foram
+     desenhados para o mouse, com 24px. */
+  .cartao-auto > [data-papel="acoes"] :where(button, a) {
     min-height: 44px;
     min-width: 44px;
     display: inline-flex;
@@ -937,23 +958,101 @@
     border-radius: 12px;
   }
 
-  /* Célula vazia não vira linha em branco. `:empty` não pega célula com só um
-     espaço, então o traço de "sem valor" também sai. */
-  table.tabela-cartoes-rica tbody td[data-papel="meta"]:empty { display: none; }
-
-  /* Entrada escalonada, igual à das listas feitas à mão. */
-  table.tabela-cartoes-rica tbody tr {
-    animation: ag-sobe .5s cubic-bezier(.16, 1.06, .3, 1) backwards;
-  }
-  table.tabela-cartoes-rica tbody tr:nth-child(1) { animation-delay: .02s; }
-  table.tabela-cartoes-rica tbody tr:nth-child(2) { animation-delay: .06s; }
-  table.tabela-cartoes-rica tbody tr:nth-child(3) { animation-delay: .10s; }
-  table.tabela-cartoes-rica tbody tr:nth-child(4) { animation-delay: .14s; }
-  table.tabela-cartoes-rica tbody tr:nth-child(5) { animation-delay: .18s; }
-  table.tabela-cartoes-rica tbody tr:nth-child(6) { animation-delay: .22s; }
-  table.tabela-cartoes-rica tbody tr:nth-child(n+7) { animation: none !important; }
+  /* Entrada escalonada, igual à das listas feitas à mão — e parando no sexto
+     pelo mesmo motivo: cada elemento em animação é uma camada de composição. */
+  .cartao-auto { animation: ag-sobe .5s cubic-bezier(.16, 1.06, .3, 1) backwards; }
+  .cartao-auto:nth-child(1) { animation-delay: .02s; }
+  .cartao-auto:nth-child(2) { animation-delay: .06s; }
+  .cartao-auto:nth-child(3) { animation-delay: .10s; }
+  .cartao-auto:nth-child(4) { animation-delay: .14s; }
+  .cartao-auto:nth-child(5) { animation-delay: .18s; }
+  .cartao-auto:nth-child(6) { animation-delay: .22s; }
+  .cartao-auto:nth-child(n+7) { animation: none !important; }
 
   @media (prefers-reduced-motion: reduce) {
-    table.tabela-cartoes-rica tbody tr { animation: none !important; }
+    .cartao-auto { animation: none !important; }
+  }
+
+  /* ── 12. Grades de largura fixa ─────────────────────────────────────────────
+     A varredura achou 15 grades com coluna em pixel. Elas NÃO são tabelas, então
+     a conversão automática não as alcança: são barras de filtro, layouts de duas
+     colunas e linhas de formulário. E são as piores da lista — `.msc-row` pedia
+     710px de largura mínima numa tela de 375px, o que arrasta a página inteira
+     de lado.
+
+     Não dá para resolver isso de forma genérica: o CSS não consegue casar um
+     seletor pelo VALOR de `grid-template-columns`. Então é nome por nome, aqui,
+     na camada de celular — e não no arquivo de cada componente, para que o
+     desenho do computador não seja tocado em lugar nenhum.
+
+     Quando uma tela nova aparecer com o mesmo problema, o guarda
+     (`npm run check:mobile`) avisa, e a correção é uma linha nesta lista. */
+
+  /* Layouts de duas colunas: viram uma. */
+  .csc-grid,
+  .engc-shell,
+  .engp-mat-shell,
+  .calculo-plataformas-layout,
+  .permissoes-layout {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Barras de filtro: cada filtro ocupa a linha toda, que é o que permite ler
+     o rótulo junto do campo. */
+  .csc-filters {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  /* Linhas de formulário com colunas em pixel. */
+  .proposta-form-item-panel-valores,
+  .proposta-form-acessorio-linha,
+  .eng-solm-row,
+  .engp-mat-row {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+  }
+
+  /* Grades de três colunas: duas cabem em 375px, três não. */
+  .calculo-tampo-campos-simples,
+  .custos-viagens-grid,
+  .module-loading__skeleton-grid,
+  .modal-selecao-tipo-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  /* Larguras fixas que sobraram e que não são decoração de fundo. */
+  .calculo-plataformas-table { min-width: 0 !important; }
+  .bolinhas-premium-list-panel { width: 100% !important; max-width: 100% !important; }
+
+  /* ── 13. Modais alcançáveis com o teclado aberto ────────────────────────────
+     No telefone, o teclado ocupa metade da tela. Um modal de 90vh sem rolagem
+     própria deixa o botão de salvar embaixo do teclado, inalcançável — e a
+     pessoa não tem como concluir o que começou.
+
+     `dvh` em vez de `vh` porque `vh` no celular ignora a barra do navegador e
+     mede sempre a tela cheia; `dvh` acompanha o espaço que realmente sobra. */
+  .modal, .modal-content, .dialog,
+  [class*='-modal']:not([class*='-modal-']) {
+    max-height: 88dvh !important;
+    overflow-y: auto !important;
+    /* O toque continua rolando o modal, e não a página atrás dele. */
+    overscroll-behavior: contain;
+  }
+
+  /* ── 14. Primeira tela: entrada sem desfoque em movimento ───────────────────
+     O cartao de login e o conteudo da splash tem `backdrop-filter: blur(20px)`
+     E uma animacao de entrada de 0,8s. Desfoque que se move e re-amostrado a
+     cada quadro, e estes dois sao literalmente a PRIMEIRA coisa que a pessoa ve
+     ao abrir o aplicativo — engasgar aqui define a impressao do sistema todo.
+
+     A correcao e so no celular: no computador o desfoque continua, porque la
+     sobra maquina. Fundo solido no lugar dele, sobre o gradiente da tela, fica
+     visualmente equivalente. */
+  .login-box,
+  .premium-splash-content {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background: var(--ag-solido) !important;
   }
 }

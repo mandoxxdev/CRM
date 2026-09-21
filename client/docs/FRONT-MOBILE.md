@@ -38,6 +38,31 @@ Para deixar uma tabela de fora (é raro; um calendário, por exemplo):
 <table data-sem-cartoes>
 ```
 
+### a.2) Tabela feita de `<div>` também é convertida
+
+Parte do sistema não usa `<table>`: usa um container com uma linha de cabeçalho
+e várias linhas de dados, todas em CSS grid — `.msc-row head`, `.csc-row head`,
+`.engp-mat-row head`. No celular essas são **piores** que as tabelas de verdade
+(`.msc-row` pedia 710px de largura mínima numa tela de 375px).
+
+O conversor também as trata, desde que a estrutura seja reconhecível:
+
+```jsx
+<div className="minha-tabela">
+  <div className="minha-linha head"><div>ID</div><div>Nome</div><div>Status</div></div>
+  <div className="minha-linha"><div>#1</div><div>Bomba</div><div>Ativo</div></div>
+</div>
+```
+
+Requisitos: a linha de cabeçalho precisa ter `head` (ou `cabec`) na classe, as
+linhas precisam compartilhar a mesma classe base, ter o **mesmo número** de
+filhos diretos, e existirem pelo menos **3 colunas**. Com menos que isso a
+conversão não acontece — de propósito, para não desconfigurar uma tela que
+estava certa.
+
+**Prefira `<table>` de verdade** em dados tabulares novos. A grade de div
+funciona, mas a tabela é mais fácil de acertar e é lida por leitor de tela.
+
 ### b) As convenções de nome recebem a pele do aplicativo
 
 `src/styles/app-glass.css` estiliza por **padrão de nome de classe**, não por
@@ -64,7 +89,7 @@ em filhos de grade, campos com 16px (abaixo disso o iOS dá zoom ao focar).
 
 ---
 
-## 2. As cinco regras que não dá para quebrar
+## 2. As seis regras que não dá para quebrar
 
 Cada uma nasceu de um defeito **real** deste projeto.
 
@@ -100,7 +125,17 @@ Um `min-width: 800px` cria rolagem lateral na **página inteira**, não só no s
 componente. Se precisar de espaço, use `min-width` dentro de um
 `@media (min-width: 769px)`.
 
-### 5. Componente só de celular nasce escondido
+### 5. Grade com coluna em pixel estoura a tela
+
+`grid-template-columns: 90px 220px 170px 1fr 230px` pede 710px. Numa tela de
+375px isso arrasta a **página inteira** de lado.
+
+Se a grade for uma tabela disfarçada (linha `head` + linhas de dados), não
+mexa no CSS: o conversor já resolve. Se for layout mesmo, colapse para uma
+coluna no `app-glass.css`, bloco 12 — e não no CSS do componente, para que o
+computador continue como está.
+
+### 6. Componente só de celular nasce escondido
 
 Se você criar um bloco que só existe no telefone, declare-o escondido no CSS do
 **próprio componente** e ligue-o dentro do media query:

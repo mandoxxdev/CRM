@@ -12,6 +12,17 @@
  * verificado abaixo corresponde a um defeito REAL que aconteceu neste projeto,
  * nao a uma regra de estilo inventada.
  *
+ * SOBRE OS NUMEROS DA LINHA DE BASE
+ *
+ * Este guarda le o CSS como TEXTO, e nao resolve media query aninhada. Por isso
+ * uma parte do que ele lista ja esta resolvida no app-glass.css e ele nao tem
+ * como saber — o caso conhecido sao as regras de desfoque, que a medicao no
+ * navegador mostra como `none` e ele ainda assim aponta.
+ *
+ * Isso e aceitavel porque o que importa aqui nao e o numero absoluto, e sim a
+ * VARIACAO: o guarda existe para reprovar o que PIORA. Antes de gastar tempo
+ * com um item da lista, confirme no navegador (getComputedStyle) se ele e real.
+ *
  * Ele nao reprova a divida que ja existe: compara com uma LINHA DE BASE
  * (mobile-baseline.json) e so falha quando o numero PIORA. Assim o guarda pode
  * entrar hoje, com 52 tabelas pendentes, sem travar ninguem — e ainda assim
@@ -43,6 +54,16 @@
  *
  * LARGURA_FIXA       width/min-width acima de 360px sem media query. Estoura a
  *                    tela e cria rolagem lateral na pagina inteira.
+ *
+ * GRADE_FIXA         `grid-template-columns` cujas colunas em pixel somam mais
+ *                    que 360px, sem media query. Foi o pior achado da segunda
+ *                    varredura: `.msc-row` pedia 710px numa tela de 375px e
+ *                    arrastava a pagina inteira de lado.
+ *                    Se a grade for uma TABELA disfarcada (linha `head` mais
+ *                    linhas de dados), nao corrija no CSS: o utilitario
+ *                    `tabelasComoCartoes` ja a converte em cartao sozinho.
+ *                    Se for layout mesmo, colapse para uma coluna no
+ *                    app-glass.css, bloco 12.
  *
  * (FONTE_PEQUENA saiu: o app-glass.css ja forca 16px em todo input abaixo de
  *  768px, com especificidade suficiente para ganhar. Um alerta que nunca
@@ -109,6 +130,14 @@ function keyframesQueMovem(css) {
  *  so e perigosa DENTRO delas — botao de 40px de altura e o que se quer. */
 const FAMILIAS_QUE_QUEBRAM = /header|cabecalho|toolbar|barra|actions|acoes|filters|filtros|buttons|botoes|-top\b|-topo\b/i;
 
+/**
+ * Elementos-FOLHA: botao, icone, selo, sino. Altura fixa neles e o que se quer
+ * (44px e o alvo de toque confortavel) — o defeito acontece no CONTAINER que
+ * quebra linha, nao no filho. Sem esta exclusao o guarda acusava dez casos que
+ * eram todos alvo de toque correto.
+ */
+const EH_FOLHA = /(button|btn[-\w]*|[-\w]*-icon|[-\w]*-icone|[-\w]*-badge|[-\w]*-bell|svg)\s*$/i;
+
 /** Divide um CSS em blocos { seletor, corpo }, ignorando comentarios. */
 function blocos(css) {
   const limpo = css.replace(/\/\*[\s\S]*?\*\//g, '');
@@ -121,17 +150,65 @@ function blocos(css) {
   return out;
 }
 
+/**
+ * Seletores que o app-glass.css ja colapsa para uma coluna no celular.
+ * O CSS do componente continua com a grade fixa de proposito — o computador
+ * usa. Acusar de novo aqui seria ruido.
+ */
+function gradesJaColapsadas() {
+  const glassPath = path.join(RAIZ, 'styles', 'app-glass.css');
+  const css = ler(glassPath);
+  const nomes = new Set();
+  for (const b of blocos(css)) {
+    if (!/grid-template-columns/.test(b.corpo)) continue;
+    const val = (b.corpo.match(/grid-template-columns\s*:\s*([^;]+)/) || [])[1] || '';
+    // Colapso = uma coluna, ou duas iguais.
+    if (/^\s*1fr\s*!?\s*important?\s*$/.test(val) || /repeat\(\s*2\s*,/.test(val)
+        || /^\s*1fr\s+1fr/.test(val)) {
+      b.seletor.split(',').forEach((x) => nomes.add(x.trim().replace(/^\./, '')));
+    }
+  }
+  return nomes;
+}
+
+/**
+ * Classes de linha que o conversor de pseudo-tabela ja transforma em cartao.
+ * Detectadas pelo mesmo sinal que ele usa: existe no JSX uma linha com a
+ * mesma classe base mais `head`/`cabec`.
+ */
+function gradesJaConvertidas(arquivos) {
+  const nomes = new Set();
+  for (const f of arquivos) {
+    const src = ler(f);
+    const re = /className="([\w-]+)((?:\s+[\w-]+)*)\s+(?:head|cabec\w*)"/g;
+    let m;
+    while ((m = re.exec(src)) !== null) nomes.add(m[1]);
+    const re2 = /className="([\w-]+)\s+\1--(?:head|cabec\w*)"/g;
+    while ((m = re2.exec(src)) !== null) nomes.add(m[1]);
+  }
+  return nomes;
+}
+
+const JA_COLAPSADAS = gradesJaColapsadas();
+const JA_CONVERTIDAS = gradesJaConvertidas(jsFiles);
+
 const achados = {
   TABELA_SEM_SAIDA: [],
   ALTURA_FIXA_FLEX: [],
   BLUR_EM_MOVIMENTO: [],
   LARGURA_FIXA: [],
+  GRADE_FIXA: [],
 };
 
 // ── TABELA_SEM_SAIDA ────────────────────────────────────────────────────────
 for (const f of jsFiles) {
+  // O proprio conversor fala de <table> nos comentarios. Sem isto ele se
+  // denuncia, e um guarda que acusa a si mesmo perde credibilidade.
+  if (/utils[\\/]tabelasComoCartoes/.test(f)) continue;
   const src = ler(f);
-  if (!src.includes('<table')) continue;
+  // Sem os comentarios: a palavra <table aparece em explicacao, nao so em JSX.
+  const semComentarios = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  if (!semComentarios.includes('<table')) continue;
   // Tabela com <thead> e convertida automaticamente pelo utilitario.
   const temCabecalho = /<thead/.test(src) || /<th[\s>]/.test(src);
   if (!temCabecalho) achados.TABELA_SEM_SAIDA.push(`${rel(f)} (tabela sem <thead>)`);
@@ -170,8 +247,25 @@ for (const f of cssFiles) {
     const h = b.corpo.match(/(?:^|[;\s])height\s*:\s*(\d{2,4})px/);
     if (h && /display\s*:\s*flex/.test(b.corpo)
         && !/flex-direction\s*:\s*column/.test(b.corpo)
-        && FAMILIAS_QUE_QUEBRAM.test(b.seletor)) {
+        && FAMILIAS_QUE_QUEBRAM.test(b.seletor)
+        && !b.seletor.split(',').every((x) => EH_FOLHA.test(x.trim()))) {
       achados.ALTURA_FIXA_FLEX.push(`${rel(f)} :: ${b.seletor.slice(0, 48)} (height ${h[1]}px)`);
+    }
+
+    // GRADE_FIXA
+    const g = b.corpo.match(/grid-template-columns\s*:\s*([^;]+)/);
+    if (g && !/auto-fit|auto-fill/.test(g[1]) && !temMediaCelular) {
+      const soma = (g[1].match(/(\d{2,4})px/g) || [])
+        .reduce((t, x) => t + Number(x.replace('px', '')), 0);
+      if (soma > 360) {
+        const alvos = b.seletor.split(',').map((x) => x.trim().replace(/^\./, ''));
+        const resolvida = alvos.some(
+          (a) => JA_COLAPSADAS.has(a) || JA_CONVERTIDAS.has(a),
+        );
+        if (!resolvida) {
+          achados.GRADE_FIXA.push(`${rel(f)} :: ${b.seletor.slice(0, 44)} (${soma}px minimos)`);
+        }
+      }
     }
 
     // LARGURA_FIXA

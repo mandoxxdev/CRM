@@ -193,3 +193,94 @@ describe('conversão de tabela em cartão', () => {
     expect(t.querySelector('td').getAttribute('data-papel')).toBeNull();
   });
 });
+
+describe('pseudo-tabela feita de <div>', () => {
+  // Estrutura real de MinhasSolicitacoesCompra: uma linha .head com os nomes
+  // das colunas e varias .msc-row com os dados, todas em CSS grid.
+  const GRADE = `
+    <div class="msc-table">
+      <div class="msc-row head"><div>ID</div><div>Setor</div><div>Status</div><div>Data</div></div>
+      <div class="msc-row"><div>#4821</div><div>Engenharia de processos</div>
+        <div><span class="msc-status">Aprovada</span></div><div>01/02/2026</div></div>
+      <div class="msc-row"><div>#4822</div><div>Manutencao</div>
+        <div><span class="msc-status">Pendente</span></div><div>02/02/2026</div></div>
+    </div>`;
+
+  test('converte: o cabecalho vira data-label e as linhas viram cartao', () => {
+    document.body.innerHTML = GRADE;
+    varrerTabelas();
+
+    const container = document.querySelector('.msc-table');
+    expect(container.classList.contains('grade-cartoes')).toBe(true);
+
+    const primeira = document.querySelectorAll('.msc-row')[1];
+    expect(primeira.classList.contains('cartao-auto')).toBe(true);
+    const celulas = Array.from(primeira.children);
+    expect(celulas.map((c) => c.getAttribute('data-label')))
+      .toEqual(['ID', 'Setor', 'Status', 'Data']);
+    expect(celulas[0].getAttribute('data-papel')).toBe('id');
+    expect(celulas[1].getAttribute('data-papel')).toBe('titulo');
+    expect(celulas[2].getAttribute('data-papel')).toBe('situacao');
+  });
+
+  test('NAO converte com menos de tres colunas — empilhar duas nao resolve nada', () => {
+    document.body.innerHTML = `
+      <div class="x-table">
+        <div class="x-row head"><div>A</div><div>B</div></div>
+        <div class="x-row"><div>1</div><div>2</div></div>
+        <div class="x-row"><div>3</div><div>4</div></div>
+      </div>`;
+    varrerTabelas();
+    expect(document.querySelector('.x-table').classList.contains('grade-cartoes')).toBe(false);
+  });
+
+  test('NAO converte quando o cabecalho tem numero de colunas diferente das linhas', () => {
+    document.body.innerHTML = `
+      <div class="y-table">
+        <div class="y-row head"><div>A</div><div>B</div><div>C</div></div>
+        <div class="y-row"><div>1</div><div>2</div></div>
+      </div>`;
+    varrerTabelas();
+    expect(document.querySelector('.y-table').classList.contains('grade-cartoes')).toBe(false);
+  });
+
+  test('NAO confunde um cabecalho de pagina com tabela', () => {
+    // `page-header` casa com /head/, e e o caso classico de falso positivo:
+    // converter aqui desconfiguraria uma tela que estava certa.
+    document.body.innerHTML = `
+      <div class="pagina">
+        <div class="page-header"><h1>Titulo</h1><button>Novo</button></div>
+        <p>Conteudo</p>
+      </div>`;
+    varrerTabelas();
+    expect(document.querySelector('.pagina').classList.contains('grade-cartoes')).toBe(false);
+  });
+
+  test('no computador a grade tambem fica intacta', () => {
+    fingirCelular(false);
+    document.body.innerHTML = GRADE;
+    varrerTabelas();
+    expect(document.querySelector('.msc-table').classList.contains('grade-cartoes')).toBe(false);
+  });
+
+  test('um codigo dentro de pilula continua sendo CODIGO, nao situacao', () => {
+    // Caso real: a coluna ID de Minhas Solicitacoes usa <span class="msc-pill">.
+    // A classe casa com "pill" e o numero era promovido a selo de status.
+    document.body.innerHTML = `
+      <div class="z-table">
+        <div class="z-row head"><div>ID</div><div>Setor</div><div>Status</div><div>Data</div></div>
+        <div class="z-row"><div><span class="msc-pill">#4821</span></div>
+          <div>Engenharia de processos</div>
+          <div><span class="msc-status">Aprovada</span></div><div>01/02/2026</div></div>
+        <div class="z-row"><div><span class="msc-pill">#4822</span></div>
+          <div>Manutencao</div>
+          <div><span class="msc-status">Pendente</span></div><div>02/02/2026</div></div>
+      </div>`;
+    varrerTabelas();
+    const p = [...document.querySelectorAll('.z-row')[1].children]
+      .map((c) => c.getAttribute('data-papel'));
+    expect(p[0]).toBe('id');
+    expect(p[2]).toBe('situacao');
+    expect(p.filter((x) => x === 'situacao')).toHaveLength(1);
+  });
+});

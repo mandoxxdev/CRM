@@ -53,6 +53,8 @@
 const LARGURA_CELULAR = 768;
 const CLASSE = 'tabela-cartoes';
 const CLASSE_RICA = 'tabela-cartoes-rica';
+const CLASSE_LINHA = 'cartao-auto';
+const CLASSE_GRADE = 'grade-cartoes';
 
 const ehCelular = () => window.matchMedia(`(max-width: ${LARGURA_CELULAR}px)`).matches;
 
@@ -103,10 +105,19 @@ function ehAcoes(td) {
  * pílula) ou pelo nome da coluna.
  */
 function ehSituacao(td, rotulo) {
+  const txt = limpo(td);
+
+  // Um CODIGO nunca e situacao, por mais que esteja dentro de uma pilula.
+  // Caso real: `<span class="msc-pill">#4821</span>` na coluna ID de Minhas
+  // Solicitacoes. A classe casa com "pill", e sem esta linha o numero da
+  // solicitacao era promovido a selo de status — dois selos no mesmo cartao,
+  // brigando pelo canto direito, e o codigo sumindo do lugar dele.
+  if (ehIdentificador(txt)) return false;
+
   if (td.querySelector('[class*="badge"], [class*="status"], [class*="selo"], [class*="pill"], [class*="tag"], [class*="chip"]')) {
     return true;
   }
-  return /^(status|situa|estado|ativo)/i.test(rotulo) && limpo(td).length <= 24;
+  return /^(status|situa|estado|ativo)/i.test(rotulo) && txt.length <= 24;
 }
 
 /**
@@ -141,15 +152,27 @@ function escolherTitulo(papeisPorColuna, amostras) {
  * conclusão.
  */
 function deduzirPapeis(cabecalhos, primeiraLinha) {
-  const celulas = Array.from(primeiraLinha.children).filter((c) => c.tagName === 'TD');
+  // Numa <table> so <td> conta; numa pseudo-tabela de <div>, todo filho direto
+  // e uma celula. A mesma funcao serve aos dois, e e o que garante que os dois
+  // formatos recebam EXATAMENTE a mesma hierarquia.
+  const filhos = Array.from(primeiraLinha.children);
+  const celulas = filhos.some((c) => c.tagName === 'TD')
+    ? filhos.filter((c) => c.tagName === 'TD')
+    : filhos;
   const papeis = new Array(celulas.length).fill(null);
   const amostras = celulas.map(limpo);
 
+  let jaTemSituacao = false;
   celulas.forEach((td, i) => {
     const rotulo = cabecalhos[i] || '';
     if (ehFoto(td)) papeis[i] = 'foto';
     else if (ehAcoes(td)) papeis[i] = 'acoes';
-    else if (ehSituacao(td, rotulo)) papeis[i] = 'situacao';
+    else if (!jaTemSituacao && ehSituacao(td, rotulo)) {
+      // Apenas a PRIMEIRA. Duas pilulas no canto direito se sobrepoem, e um
+      // cartao com dois "destaques" de situacao nao destaca nenhum.
+      papeis[i] = 'situacao';
+      jaTemSituacao = true;
+    }
   });
 
   // Identificador: só o PRIMEIRO que aparecer nas duas primeiras colunas de
@@ -223,6 +246,17 @@ function rotularTabela(tabela) {
   // cartão não tem âncora, e o comportamento antigo (rótulo: valor) é melhor
   // do que um monte de linhas soltas sem nada em destaque.
   tabela.classList.toggle(CLASSE_RICA, temTitulo);
+
+  // `cartao-auto` é o gancho ÚNICO do CSS, usado tanto pelas linhas de <table>
+  // quanto pelas pseudo-tabelas feitas de <div> (ver `rotularGrade`). Sem ele,
+  // o mesmo desenho precisaria de duas cópias de CSS — e duas cópias divergem.
+  if (temTitulo) {
+    linhas.forEach((linha) => {
+      if (Array.from(linha.children).filter((c) => c.tagName === 'TD').length > 1) {
+        linha.classList.add(CLASSE_LINHA);
+      }
+    });
+  }
 }
 
 /**
@@ -233,10 +267,87 @@ function rotularTabela(tabela) {
  * entrega em microtarefa, depois de o teste ja ter conferido o resultado.
  * Com isto o teste mede o que a funcao FAZ, e nao o tempo do observador.
  */
+/**
+ * PSEUDO-TABELA FEITA DE <div>.
+ *
+ * Parte deste sistema nao usa <table>: usa um container com uma linha de
+ * cabecalho e varias linhas de dados, todas em CSS grid. Exemplos reais:
+ * `.msc-row head` em Minhas Solicitacoes, `.csc-row head` em Compras,
+ * `.engp-mat-row head` no cadastro de materiais.
+ *
+ * No celular elas sao PIORES que as tabelas de verdade: a grade
+ * `90px 220px 170px 1fr 230px` pede 710px de largura minima, e numa tela de
+ * 375px isso estoura e arrasta a pagina inteira de lado. E a conversao de
+ * <table> nao as alcanca, porque nao ha <table> nenhuma.
+ *
+ * A deteccao e conservadora de proposito — um falso positivo aqui
+ * desconfiguraria uma tela que estava certa:
+ *
+ *   - tem de haver um filho com `head` ou `cabec` na classe;
+ *   - tem de haver pelo menos duas linhas irmas com a MESMA classe base;
+ *   - cabecalho e linha precisam ter o MESMO numero de filhos diretos;
+ *   - e precisa haver ao menos 3 colunas. Com duas, empilhar nao resolve nada
+ *     que o `flex-wrap` global ja nao resolva.
+ *
+ * Quando converte, o cabecalho some (os nomes passaram para `data-label`) e as
+ * linhas viram cartoes pelo mesmo CSS das tabelas — o gancho `cartao-auto` e
+ * compartilhado.
+ */
+function rotularGrade(container) {
+  if (container.hasAttribute('data-sem-cartoes')) return;
+
+  const filhos = Array.from(container.children);
+  if (filhos.length < 3) return;   // cabecalho + pelo menos duas linhas
+
+  const cabecalho = filhos.find((f) => /head|cabec/i.test(f.className || ''));
+  if (!cabecalho) return;
+
+  const colunas = Array.from(cabecalho.children);
+  if (colunas.length < 3) return;
+
+  // A classe "base" da linha: a que o cabecalho compartilha com as demais.
+  const classesCabecalho = Array.from(cabecalho.classList);
+  const base = classesCabecalho.find((c) => !/head|cabec/i.test(c));
+  if (!base) return;
+
+  const linhas = filhos.filter(
+    (f) => f !== cabecalho
+      && f.classList.contains(base)
+      && f.children.length === colunas.length,
+  );
+  if (linhas.length === 0) return;
+
+  const rotulos = colunas.map(limpo);
+  if (rotulos.every((r) => r === '')) return;
+
+  const { papeis, temTitulo } = deduzirPapeis(rotulos, linhas[0]);
+
+  linhas.forEach((linha) => {
+    Array.from(linha.children).forEach((celula, i) => {
+      if (rotulos[i] && celula.getAttribute('data-label') !== rotulos[i]) {
+        celula.setAttribute('data-label', rotulos[i]);
+      }
+      if (papeis[i] && celula.getAttribute('data-papel') !== papeis[i]) {
+        celula.setAttribute('data-papel', papeis[i]);
+      }
+    });
+    if (temTitulo) linha.classList.add(CLASSE_LINHA);
+  });
+
+  container.classList.add(CLASSE_GRADE);
+}
+
 export function varrerTabelas(raiz = document) {
   if (!ehCelular()) return;
-  const alvos = raiz.querySelectorAll ? raiz.querySelectorAll('table') : [];
-  alvos.forEach(rotularTabela);
+  if (!raiz.querySelectorAll) return;
+
+  raiz.querySelectorAll('table').forEach(rotularTabela);
+
+  // Pseudo-tabelas: o PAI de qualquer elemento marcado como cabecalho.
+  const cabecalhos = raiz.querySelectorAll('[class*="head"], [class*="cabec"]');
+  const containers = new Set();
+  cabecalhos.forEach((h) => { if (h.parentElement) containers.add(h.parentElement); });
+  containers.forEach(rotularGrade);
 }
 
 let observador = null;
