@@ -1276,7 +1276,7 @@ com o md5 original depois do último restauro.
 - Consumes (mock HTTP, contrato congelado): `GET /compras/fornecedores/:id` → linha (§5.2); `GET /compras/grupos` → `[{ id, nome }]`; `POST /compras/fornecedores` → `201 { id, … }`; `PUT /compras/fornecedores/:id` → `200 { message }`; `DELETE /compras/fornecedores/:id` → `409 { error: 'Fornecedor possui cotações — não pode ser excluído' }`.
 - Produces: rotas `fornecedores/novo` e `fornecedores/editar/:id`; `data-testid` do design §5.5.
 
-- [ ] **Step 1: o teste (vermelho: a rota cai no `*` e o `h1` é "Compras")**
+- [x] **Step 1: o teste (vermelho: a rota cai no `*` e o `h1` é "Compras")**
 
 Cabeçalho, mocks e helpers **copiados** de `PedidoCompraForm.test.js:44-112` e `:188-304` (`api` com
 `patch`; Proxy com `reais = { Compras, FornecedorForm: require('./FornecedorForm').default, Layout }`;
@@ -1394,9 +1394,9 @@ test('(h) RN-E03 "Sem grupo" viaja como grupo_id "" (o servidor limpa)', async (
 });
 ```
 
-- [ ] **Step 2: rodar** — `cd client && CI=true npx react-scripts test --watchAll=false src/components/compras/FornecedorForm.test.js`. Esperado: (a)–(h) caem (a rota não existe; `require('./FornecedorForm')` falha primeiro — crie o arquivo com `export default () => null` para ver as asserções cairem uma a uma).
+- [x] **Step 2: rodar** — `cd client && CI=true npx react-scripts test --watchAll=false src/components/compras/FornecedorForm.test.js`. Esperado: (a)–(h) caem (a rota não existe; `require('./FornecedorForm')` falha primeiro — crie o arquivo com `export default () => null` para ver as asserções cairem uma a uma).
 
-- [ ] **Step 3: a tela**
+- [x] **Step 3: a tela**
 
 ```jsx
 /**
@@ -1564,7 +1564,7 @@ antes dela (nenhuma porta escrevia `status`). Fica em **letra C/G** e no roteiro
 conserto de uma linha (`FornecedoresDoGrupo.js:154`, filtrar `status !== 'inativo'`) fica **fora**
 porque o arquivo não tem suíte — decisão reversível, registrada na letra B.
 
-- [ ] **Step 4: rotas e lazy**
+- [x] **Step 4: rotas e lazy**
 
 `lazyModules.js`, após `:61`:
 ```js
@@ -1578,9 +1578,9 @@ export const FornecedorForm = page(() => import('../components/compras/Fornecedo
             <Route path="fornecedores/editar/:id" element={<FornecedorForm />} />
 ```
 
-- [ ] **Step 5: rodar** — o arquivo (8), depois `PedidoCompraForm.test.js` (25) e `Compras.test.js` (9), depois a suíte inteira (`CI=true npx react-scripts test --watchAll=false`, esperado **50 suítes**) e `CI=true npx react-scripts build`.
+- [x] **Step 5: rodar** — o arquivo (8), depois `PedidoCompraForm.test.js` (25) e `Compras.test.js` (9), depois a suíte inteira (`CI=true npx react-scripts test --watchAll=false`, esperado **50 suítes**) e `CI=true npx react-scripts build`.
 
-- [ ] **Step 6: sabotagens**
+- [x] **Step 6: sabotagens**
 
 | # | Sabotagem | Cai |
 |---|---|---|
@@ -1590,7 +1590,67 @@ export const FornecedorForm = page(() => import('../components/compras/Fornecedo
 | 4 | `toast.error(...)` no `catch` em vez de `setErro` | **(f)** |
 | 5 | rota `fornecedores/editar/:id` removida | **(b)** segunda metade, **(e)**, **(h)** |
 
-- [ ] **Step 7: commit** — `git add client/src/components/compras/FornecedorForm.js client/src/components/compras/FornecedorForm.test.js client/src/routes/lazyModules.js client/src/App.js`. Mensagem em `msg-e40-t4.txt`.
+- [x] **Step 7: commit** — `git add client/src/components/compras/FornecedorForm.js client/src/components/compras/FornecedorForm.test.js client/src/routes/lazyModules.js client/src/App.js`. Mensagem em `msg-e40-t4.txt`.
+
+#### ✅ Task 4 FECHADA — `d6f7712` (Compras Etapa 40 T4: FornecedorForm, rotas fornecedores/novo e editar/:id e suite de 8 cenarios)
+
+> Hash medido na branch `e40-t4` (worktree `wt-e40-t4`, base `07d6893`). **Será reescrito no
+> cherry-pick para o tronco** — quem integrar (T6) atualiza este cabeçalho com o hash novo.
+
+**Números lidos (não previstos):**
+
+| Suíte | Vermelho (Step 2) | Depois |
+|---|---|---|
+| `FornecedorForm.test.js` | sem o arquivo: `Cannot find module './FornecedorForm'` (0 total); com `export default () => null`: **`7 falhou, 1 passou`** — (a) caiu em `toContain('Novo fornecedor')` com o texto da lista; (e) em `porTestId('fornecedor-razao').value` de `null` | **`8 passou`** |
+| `PedidoCompraForm.test.js` + `Compras.test.js` | — | **`34 passou`** (25 + 9) |
+| suíte inteira do client | — | **`50 suítes, 761 testes`** |
+| `CI=true npx react-scripts build` | — | **`Compiled successfully.`** (ESLint desligado no build; imports revisados à mão: todos usados) |
+
+CR = 0 nos quatro arquivos depois de cada edição e depois de cada restauro.
+
+**Sabotagens (md5 de `FornecedorForm.js` antes `36679e96…`, sabotado ≠, pós-restauro `36679e96…`
+nas quatro; `App.js` antes `9eddefd5…`, pós-restauro `9eddefd5…`; restauro por `cp` do scratchpad;
+âncora contada com `grep -cF` = 1 nas cinco):**
+
+| # | Sabotagem | Placar | QUAL asserção caiu |
+|---|---|---|---|
+| 1 | `const { endereco, ...resto } = form; const payload = { ...resto, … }` | 6/2 | **(e)** `toEqual` do `PUT`: `- Expected -1` (chave `endereco`); **(d)** também — o `POST` usa o mesmo `payload` |
+| 2 | `if (edicao) payload.status = status;` → `payload.status = status;` | 7/1 | **(d)** `toEqual` do `POST`: `+ Received +1  "status": "ativo"` |
+| 3 | `{ setErro(LITERAL_RAZAO); return; }` → `{ return; }` | 7/1 | **(c)** `alertas()`: `Expected substring: "Razão social é obrigatória" / Received string: ""` |
+| 4 | `setErro(mensagemDeErro(err, …))` → `toast.error(mensagemDeErro(err, …))` | 7/1 | **(f)** `alertas()`: `Expected substring: "Dados inválidos — grupo_id: …" / Received string: ""` (e `toast.error` chamado) |
+| 5 | `<Route path="fornecedores/editar/:id" …/>` removida | 5/3 | **(b)** segunda metade: `Expected substring: "Editar fornecedor"`, recebeu o texto da lista; **(e)** e **(h)** `porTestId(...)` de `null` |
+
+Controle positivo: os cinco cortes derrubaram o cenário previsto na tabela do Step 6 (o corte 1
+derrubou **(d) além de (e)**, ver divergência 2), e o arquivo voltou a `8 passou` com o md5 original
+depois do último restauro, antes do commit.
+
+**Divergências entre o plano e o que o código exigiu:**
+
+1. **(g) já era verde contra o código de hoje** (`7 falhou, 1 passou` com o stub nulo; o plano dizia
+   "(a)–(h) caem"). É caracterização do `handleDelete` de `Compras.js:165`, que desde a Etapa 38
+   mostra a literal do servidor — nenhuma das cinco sabotagens o derruba porque ele não mede a tela
+   nova, mede o contrato do 409 por cotação que a T2/T3 entregam. Fica na suíte como régua do
+   contrato, declarado no commit.
+2. **Sabotagem 1 derruba (d) e (e)**, não só (e): `POST` e `PUT` montam o mesmo `payload`; tirar
+   `endereco` tira dos dois.
+3. **Incidente do harness, registrado para não repetir:** um `perl -pi` para alargar o `grep` do
+   script de sabotagem quebrou a citação da linha; o `bash` abortou **antes do `cp` de restauro** e os
+   cortes 2, 3 e 4 se **empilharam** em `FornecedorForm.js` (o "md5 antes" do corte 3 era o "sabotado"
+   do 2), e `App.js` ficou sem a rota. Restauro por `sab2.bak` (form) e `sab5.bak` (App.js), md5
+   conferido igual ao limpo (`36679e96…` / `9eddefd5…`), `git diff` reconferido com só as 6 linhas
+   da task, e os cortes 2–5 rodados de novo com **guarda de md5 entre rodadas**. Lição: `bash -n` no
+   script depois de qualquer edição, e o restauro tem de ser `trap`/guardado, não a última linha.
+4. **Heredoc com acento não passa pelo Bash tool desta máquina** (`unexpected EOF while looking for
+   matching '''` num `<<'EOF'` de 266 linhas) — o arquivo de teste e a tela foram escritos com o
+   Write tool; só as edições ASCII (`lazyModules.js`, `App.js`) foram por `perl -0pi`.
+5. Linhas citadas **bateram**: `lazyModules.js:61` (export de `PedidoCompraForm`), `App.js:45`
+   (`PedidoCompraForm,` no import) e `:360-362` (a `<Route path="pedidos/editar/:id">`, fechando em
+   `:362`). Exports confirmados antes de importar: `mascararTelefoneDigitando` (`telefone.js:14`) e
+   `formatarErroPermissao` (`permissaoErro.js:135`). Depois da T4, `App.js` cresceu 4 linhas (as rotas
+   novas em `:364-366`; o que vinha depois desloca +4) e `lazyModules.js` 2 (`FornecedorForm` em `:63`).
+   **T5 reconta** os dois antes de editar.
+6. **RN-E05 (fornecedor inativado ainda aparece no "Adicionar existente" do grupo)** não foi codado,
+   como o plano manda — continua para a letra B/C e o roteiro do guia (T7).
 
 ---
 
