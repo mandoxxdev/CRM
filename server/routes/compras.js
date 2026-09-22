@@ -590,9 +590,19 @@ app.post('/api/compras/grupos/:id/foto-base64', authenticateToken, checkModulePe
 });
 
 // Fornecedores de um grupo (homologados no grupo)
+// ⚠️ ONDA DE CORRECAO DA ETAPA 40, F3 (achado I2 da revisao de UX + I4 da Fase 2): esta rota filtrava
+// `AND status = 'ativo'`. Enquanto `inativo` era inalcancavel pela tela isso era inofensivo; a T4 desta
+// etapa criou o botao que inativa, e o fornecedor inativado num grupo SUMIA da lista do grupo (sem
+// selo, sem "Remover") e nao entrava no modal "Adicionar existente" (que exclui quem ja tem o
+// grupo_id) — so voltava reativando em Compras > Fornecedores. Passa a devolver TODOS os status,
+// ativos primeiro, e a tela (`FornecedoresDoGrupo.js`, unico consumidor) pinta o selo "Inativo".
+// `status NULL` (fornecedor legado, anterior a coluna) ordena JUNTO com os ativos: e assim que a
+// tela o mostra (UX M5) e e assim que o `PUT` o grava na primeira edicao. `listarFornecedoresAux`
+// (o seletor do almoxarifado) continua so com ativos — la o inativo nao deve ser escolhido.
 app.get('/api/compras/grupos/:grupoId/fornecedores', authenticateToken, checkModulePermission('compras'), (req, res) => {
   const grupoId = req.params.grupoId;
-  db.all('SELECT * FROM fornecedores WHERE grupo_id = ? AND status = ? ORDER BY razao_social', [grupoId, 'ativo'], (err, rows) => {
+  db.all(`SELECT * FROM fornecedores WHERE grupo_id = ?
+          ORDER BY CASE WHEN status = 'inativo' THEN 1 ELSE 0 END, razao_social`, [grupoId], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows || []);
   });

@@ -202,6 +202,32 @@ const LITERAL_409_ITENS = 'Fornecedor possui itens cadastrados — não pode ser
     assert.strictEqual(await linha(id), undefined);
   });
 
+  // Onda de correcao da Etapa 40, F3-servidor (achado I2 da revisao de UX + I4 da Fase 2): a T4
+  // tornou `status = 'inativo'` alcancavel pela tela, e `GET /grupos/:grupoId/fornecedores` filtrava
+  // `AND status = 'ativo'` — o inativado SUMIA do grupo (sem selo, sem "Remover") e so voltava
+  // reativando em Compras > Fornecedores. A rota passa a devolver TODOS os status, ativos primeiro.
+  // A terceira linha e um fornecedor LEGADO com `status NULL` (UX M5: a tela o mostra como Ativo):
+  // ele tem de ordenar junto com os ativos, nao depois dos inativos.
+  await test('(13) F3: GET /grupos/:id/fornecedores lista TODOS os status, ativos (e NULL legado) primeiro, com a coluna status', async () => {
+    const g = await dbRun(db, "INSERT INTO grupos_compras (nome, numero) VALUES ('Grupo E40 F3', 41)");
+    const gid = g.lastID;
+    const ativo = await post({ razao_social: 'Zeta Ativo', grupo_id: gid });
+    const inativo = await post({ razao_social: 'Alfa Inativo', grupo_id: gid });
+    const rPut = await put(inativo.body.id, { ...SETE, razao_social: 'Alfa Inativo', grupo_id: gid, status: 'inativo' });
+    assert.strictEqual(rPut.status, 200, `fixture: ${JSON.stringify(rPut.body)}`);
+    assert.strictEqual((await linha(inativo.body.id)).status, 'inativo', 'fixture: o PUT tinha de inativar');
+    const legado = await dbRun(db, "INSERT INTO fornecedores (razao_social, grupo_id, status) VALUES ('Beta Legado', ?, NULL)", [gid]);
+    const r = await request(app).get(`/api/compras/grupos/${gid}/fornecedores`);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.strictEqual(r.body.length, 3, `esperava 3 linhas (ativo, legado NULL, inativo), veio ${r.body.length}: ${JSON.stringify(r.body.map((f) => f.razao_social))}`);
+    assert.deepStrictEqual(r.body.map((f) => f.razao_social), ['Beta Legado', 'Zeta Ativo', 'Alfa Inativo'],
+      'ativos (e NULL) primeiro em ordem alfabetica, o inativo por ultimo — mesmo sendo "Alfa"');
+    assert.deepStrictEqual(r.body.map((f) => f.status), [null, 'ativo', 'inativo'], 'a coluna status viaja na linha');
+    assert.strictEqual(r.body[1].id, ativo.body.id);
+    assert.strictEqual(r.body[2].id, inativo.body.id);
+    assert.strictEqual(r.body[0].id, legado.lastID);
+  });
+
   await close();
   console.log(`\n${passed} passou, ${failed} falhou`);
   process.exit(failed ? 1 : 0);
