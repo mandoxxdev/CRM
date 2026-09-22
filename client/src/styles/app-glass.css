@@ -1143,14 +1143,32 @@
      filhos numa grade de duas colunas o Filtros caia sozinho numa segunda
      linha, esticado a 252px com o texto encolhido no canto. Foi o que o P.O.
      fotografou. */
-  .header-actions {
+  /* ESCOPADA ao Dashboard. `.header-actions` e uma classe COMPARTILHADA — dez
+     telas a usam. Eu a transformei numa grade de tres colunas pensando so no
+     painel, e em Relatorios, que tem QUATRO botoes, eles ficaram com 44px e o
+     texto vazou para fora da pilula ("Exportar PDF" por cima do fundo azul).
+     Medido. Estilizar classe compartilhada olhando uma tela so e o erro; o
+     escopo e a correcao. */
+  .dashboard-header .header-actions {
     display: grid !important;
     grid-template-columns: 1fr auto auto;
     align-items: center;
     gap: 8px;
     width: 100%;
   }
-  .dashboard-filtros { justify-self: end; }
+  .dashboard-header .dashboard-filtros { justify-self: end; }
+
+  /* Para todas as outras telas: fileira que quebra, com os botoes cabendo no
+     proprio texto. */
+  .header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+  .header-actions > * { flex: 0 1 auto; min-width: 0; }
+  .header-actions button { white-space: nowrap; }
   .dashboard-toggle {
     display: grid !important;
     grid-template-columns: 1fr 1fr;
@@ -1276,12 +1294,160 @@
     overflow-wrap: break-word;
   }
 
-  /* Titulo com `background-clip: text` cujo gradiente termina em cor clara
-     desaparece da metade para a direita — o mesmo caso do "Dashboard
-     Executivo". No telefone eles viram texto solido. */
-  .login-header-content h1 {
+
+  /* ── 17. Caixa de busca com icone sobreposto ────────────────────────────────
+     Defeito meu, e ele valia para TODA tela com `.search-box` — 12 telas, de
+     Clientes a Financeiro.
+
+     O padrao original posiciona a lupa em ABSOLUTO sobre o campo
+     (`position: absolute; left: 15px`) e compensa com um recuo grande no
+     `padding-left` do input. A minha regra global de input escreve
+     `padding: 12px 14px` e apagou esse recuo: o texto passou a comecar embaixo
+     da lupa. Medido em Financeiro > Contas a Pagar: icone em x=32, texto
+     comecando em x=31.
+
+     Compensar o padding resolveria so metade: `.search-box` existe em duas
+     variantes, uma com a lupa absoluta e outra com ela como irma num flex, e um
+     recuo fixo quebraria a segunda.
+
+     A correcao normaliza as duas: a lupa entra no fluxo do flex. Como o
+     container ja e `display: flex` nos dois casos, ela passa a ocupar o seu
+     proprio espaco antes do campo, e nada se sobrepoe. */
+  .search-box,
+  [class*='search-box'],
+  [class*='busca-box'] {
+    display: flex !important;
+    align-items: center;
+    gap: 10px;
+  }
+  .search-box > svg,
+  [class*='search-box'] > svg,
+  [class*='busca-box'] > svg {
+    position: static !important;
+    flex: 0 0 auto;
+  }
+  .search-box > input,
+  [class*='search-box'] > input,
+  [class*='busca-box'] > input {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  /* ── 18. Filtro e tabela vazia ──────────────────────────────────────────────
+
+     FILTRO: `.filter-group` vem como bloco, com o icone e o <select> em linha.
+     Em 360px o select ficava com 162px de 320 e sobrava uma faixa morta do lado
+     direito — a caixa parecia maior que o campo. Vira flex, e o campo ocupa o
+     que sobra. */
+  .filters { display: flex; flex-direction: column; gap: 10px; }
+  .filter-group,
+  [class*='filter-group'] {
+    display: flex !important;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+  }
+  .filter-group > svg { flex: 0 0 auto; }
+  .filter-group > select,
+  .filter-group > input,
+  [class*='filter-group'] > select,
+  [class*='filter-group'] > input {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  /* TABELA VAZIA: sem nenhuma linha de dados, o utilitario nao converte (nao ha
+     de onde deduzir papel), e o cabecalho cru ficava a mostra, vazando de lado
+     — "Descricao Fornecedor Valor Vencimen...". Acima da mensagem de "nenhum
+     registro", esse cabecalho nao informa nada.
+
+     A condicao e precisa: o corpo tem UMA linha so e ela e a celula com
+     `colspan` que as telas usam para o estado vazio. Tabela com dados nao casa. */
+  table:has(> tbody > tr:only-child > td[colspan]) thead { display: none; }
+  table:has(> tbody > tr:only-child > td[colspan]) td[colspan] {
+    display: block;
+    padding: 18px 12px;
+    text-align: center;
+    color: var(--ag-texto-fraco);
+  }
+
+  /* ── 19. Dois casos achados percorrendo tela a tela ─────────────────────────
+     Estes dois nao casam com nenhuma familia de nome: os containers deles nao
+     tem classe. Por isso a correcao aponta para o FILHO, que tem.
+
+     `.almox-input`: em Almoxarifado > Auditoria e > Movimentacoes, dois campos
+     de data ficam lado a lado com 173px cada — 346px num espaco de 320. Medido.
+     O container e um flex sem quebra e sem classe. */
+  .almox-input {
+    min-width: 0;
+    max-width: 100%;
+    flex: 1 1 auto;
+  }
+  :is(div, form, section):has(> .almox-input) {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* Fileira de botoes sem classe que nao quebra linha: em Almoxarifado >
+     Configuracoes o ultimo botao saia 36px para fora. A regra global de
+     `flex-wrap` so alcanca familias de nome conhecidas; aqui o gancho e o
+     proprio conjunto de botoes irmaos. */
+  :is(div, section):has(> button + button) {
+    flex-wrap: wrap;
+  }
+
+  /* ── 20. Texto em gradiente: a familia inteira ──────────────────────────────
+     `background-clip: text` com gradiente que termina em cor clara faz o texto
+     DESAPARECER da metade para a direita sobre fundo claro. Achei o caso tres
+     vezes seguidas percorrendo telas — "Dashboard Executivo", o titulo do
+     Login, "Relatorios Executivos" — e entao contei: sao 22 seletores no
+     sistema, incluindo `.kpi-value`, que e um NUMERO de indicador.
+
+     Remendar um de cada vez seria garantir uma quarta descoberta. No celular
+     todos viram texto solido. No computador o gradiente continua: la a fonte e
+     maior, o fundo e outro, e e uma escolha de desenho que nao me cabe desfazer.
+
+     `.p404-numero` fica de fora de proposito: e meu, o gradiente vai de azul a
+     ciano (nao a branco), e sao 66px — texto grande tem exigencia de contraste
+     menor. */
+  .admin-header h1,
+  .atividades-title,
+  .custos-viagens-header h1,
+  .kpi-value,
+  .login-header-content h1,
+  .maquina-kpi-value,
+  .modal-grafico-title h2,
+  .modal-selecao-tipo-header h2,
+  .onboarding-title,
+  .premium-header h1,
+  .premium-title,
+  .relatorios-header h1,
+  .section-header h2,
+  .section-header h3,
+  .section-title,
+  .stat-content h3,
+  .vendas-header h2 {
     background: none !important;
     -webkit-text-fill-color: var(--ag-texto) !important;
     color: var(--ag-texto) !important;
+  }
+
+  /* O valor de indicador continua em azul — so num azul que se enxerga. */
+  .kpi-value, .maquina-kpi-value {
+    -webkit-text-fill-color: #1D4ED8 !important;
+    color: #1D4ED8 !important;
+  }
+  [data-theme="dark"] .kpi-value,
+  [data-theme="dark"] .maquina-kpi-value {
+    -webkit-text-fill-color: #7DC4FF !important;
+    color: #7DC4FF !important;
+  }
+
+  /* O selo de acesso na tela de escolha de modulo saia 7px para fora do cartao.
+     Pouco, mas e a primeira tela depois do login. */
+  .tipo-selecao__admin-badge {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: break-word;
   }
 }

@@ -30,6 +30,18 @@
 // runner que ignore o globalSetup; ela não é a garantia.
 process.env.TZ = 'America/Sao_Paulo';
 
+// Teto de tempo proprio, acima do padrao de 5s do Jest.
+//
+// Esta suite ficou INSTAVEL: passa 18/18 quando roda sozinha (medido: 5,9s) e
+// falha tres casos de paginacao quando roda junto com as outras 41 suites
+// (12,6s). Nao e defeito do componente — e o custo de montar a arvore com
+// `createRoot` + `act` encadeado competindo por CPU com os outros workers.
+//
+// Um teste que falha por carga da maquina, e nao pelo que afirma, ensina a
+// ignorar a suite inteira. O teto aqui e a correcao certa: nao mascara
+// lentidao do produto, porque o que demora e a montagem no ambiente de teste.
+jest.setTimeout(20000);
+
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';

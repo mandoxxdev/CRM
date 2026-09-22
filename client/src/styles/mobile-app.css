@@ -190,7 +190,24 @@
      A primeira versão desta regra forçava `grid-template-columns: 1fr` em tudo.
      Foi descartada: quebraria as grades de duas colunas que já são intencionais no
      celular, e trataria o sintoma em vez da causa. */
-  .grid > *, [class*='-grid'] > * { min-width: 0; }
+  .grid > *, [class*='-grid'] > *,
+  [class*='-layout'] > *, [class*='-shell'] > *,
+  [class*='-form'] > *, [class*='-wrap'] > *,
+  [class*='-stats'] > *, [class*='-cards'] > *, [class*='-kpis'] > *,
+  [class*='-list'] > *, [class*='-row'] > *, [class*='-group'] > *,
+  [class*='-container'] > *, [class*='-content'] > *,
+  [class*='-section'] > *, [class*='-panel'] > *, [class*='-box'] > * {
+    min-width: 0;
+  }
+
+  /* POR QUE A LISTA CRESCEU: um `repeat(auto-fill, minmax(140px, 1fr))` so e
+     seguro quando o CONTAINER esta limitado. Em Engenharia > Calculo de
+     plataformas, o formulario e filho de um grid e tinha `min-width: auto`:
+     cresceu ate o conteudo, o auto-fill enxergou largura sobrando e criou
+     CINCO colunas de 140px — 745px numa tela de 360, medido, com 478px de
+     conteudo fora da vista.
+     `min-width: 0` no filho e o que devolve a conta ao container. Vale para a
+     familia inteira de nomes, e nao so para aquela tela. */
 
   /* ── 8. o conteúdo respira a barra inferior ──────────────────────────────
      A regra específica de cada layout mora no CSS da barra; esta é a rede para
