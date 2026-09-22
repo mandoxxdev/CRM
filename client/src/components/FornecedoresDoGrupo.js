@@ -151,8 +151,11 @@ const FornecedoresDoGrupo = () => {
     }
   };
 
+  // Etapa 40 (F3): inativo nao entra em grupo enquanto inativo — antes ele era "vinculado" com
+  // sucesso e nao aparecia na lista (a rota do grupo so devolvia ativos). Quem ja esta no grupo,
+  // ativo ou nao, tambem fica de fora: o inativo do proprio grupo aparece na lista com selo.
   const fornecedoresDisponiveis = todosFornecedores.filter(
-    (f) => !f.grupo_id || String(f.grupo_id) !== String(grupoId)
+    (f) => (!f.grupo_id || String(f.grupo_id) !== String(grupoId)) && f.status !== 'inativo'
   );
 
   const handleVincular = async () => {
@@ -302,7 +305,7 @@ const FornecedoresDoGrupo = () => {
                 </select>
               </div>
               {fornecedoresDisponiveis.length === 0 && (
-                <p style={{ color: '#64748b', fontSize: 14 }}>Todos os fornecedores já estão em um grupo ou cadastre um novo.</p>
+                <p style={{ color: '#64748b', fontSize: 14 }}>Todos os fornecedores ativos já estão em um grupo (inativos não podem ser vinculados) — ou cadastre um novo.</p>
               )}
               <div className="modal-grupo-actions-right" style={{ marginTop: 16 }}>
                 <button type="button" className="btn-cancel" onClick={() => setShowModalAdd(false)}>Cancelar</button>
@@ -475,6 +478,19 @@ const FornecedoresDoGrupo = () => {
                 </div>
                 <div className="familia-card-body">
                   <div className="familia-card-nome">{f.razao_social}</div>
+                  {f.status === 'inativo' && (
+                    // Etapa 40 (F3): a rota do grupo passou a devolver inativos (antes eles sumiam
+                    // daqui). Padrao de Compras.js:323-327 (`status-badge` + cor de inativo); o
+                    // estilo base vai inline porque `.status-badge` mora em Compras.css, chunk lazy.
+                    <span
+                      className="status-badge"
+                      data-testid="fornecedor-inativo"
+                      title="Fornecedor inativo — reative em Compras › Fornecedores"
+                      style={{ display: 'inline-block', padding: '0.375rem 0.75rem', borderRadius: 12, fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', backgroundColor: '#e74c3c20', color: '#e74c3c', marginBottom: 8 }}
+                    >
+                      Inativo
+                    </span>
+                  )}
                   {f.nome_fantasia && <div style={{ fontSize: 12, color: '#64748b' }}>{f.nome_fantasia}</div>}
                   <span className="familia-card-cta-label">
                     Ver itens e preços <FiChevronRight className="familia-card-chevron" size={16} />
