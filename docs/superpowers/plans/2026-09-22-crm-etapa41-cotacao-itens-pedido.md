@@ -847,7 +847,7 @@ Cabeçalho do arquivo: substituir *"Cabecalho so (nao ha itens…)"* por *"Cabec
 - Consumes (mock): `GET /compras/cotacoes` → linhas com `pedido_id`, `pedido_numero`; `POST /compras/cotacoes/:id/gerar-pedido` → `201 { id, numero, … }`.
 - Produces: `data-testid="gerar-pedido-${id}"`, coluna Pedido, `Pedido` no export.
 
-- [ ] **Step 1: os cenários (j)(k)(l)** — fixtures em `Compras.test.js`:
+- [x] **Step 1: os cenários (j)(k)(l)** — fixtures em `Compras.test.js`:
 
 ```js
 const COTACOES_E41 = [
@@ -910,9 +910,9 @@ test('(l) RN-F14 409 do servidor -> toast.error com a literal, sem navegar; expo
 ⚠️ `celulasDaLinha(i)` existe em `Compras.test.js:177-179`; confira a assinatura de `exportToExcel` mock
 (`:230-238` usa `exportToExcel.mock.calls[0]`) para ler as linhas no índice certo.
 
-- [ ] **Step 2: rodar e ver vermelho** — (j) cai no `toEqual` dos `<th>` (7 colunas), (k) `querySelector` null, (l) idem.
+- [x] **Step 2: rodar e ver vermelho** — (j) cai no `toEqual` dos `<th>` (7 colunas), (k) `querySelector` null, (l) idem.
 
-- [ ] **Step 3: `Compras.js`** — `renderCotacoes`: `<th>Pedido</th>` antes de `<th>Ações</th>`, `colSpan="8"`, célula
+- [x] **Step 3: `Compras.js`** — `renderCotacoes`: `<th>Pedido</th>` antes de `<th>Ações</th>`, `colSpan="8"`, célula
 `<td>{cotacao.pedido_id ? <Link to={`/compras/pedidos/editar/${cotacao.pedido_id}`}>{cotacao.pedido_numero}</Link> : '-'}</td>`;
 na `action-buttons`, **antes** do lápis:
 
@@ -942,9 +942,9 @@ na `action-buttons`, **antes** do lápis:
 
 Export (`:268-278`): `'Pedido': c.pedido_numero || ''` **no fim**.
 
-- [ ] **Step 4: rodar** — `Compras.test.js` (**12**); `CotacaoForm.test.js` (8 — o (b) usa o primeiro `a[title="Editar"]`: o botão novo é `<button>`, não colide); `PedidoCompraForm.test.js` (25); suíte inteira; build.
+- [x] **Step 4: rodar** — `Compras.test.js` (**12**); `CotacaoForm.test.js` (8 — o (b) usa o primeiro `a[title="Editar"]`: o botão novo é `<button>`, não colide); `PedidoCompraForm.test.js` (25); suíte inteira; build.
 
-- [ ] **Step 5: sabotagens**
+- [x] **Step 5: sabotagens**
 
 | # | Sabotagem | Cai |
 |---|---|---|
@@ -954,7 +954,41 @@ Export (`:268-278`): `'Pedido': c.pedido_numero || ''` **no fim**.
 | 4 | `toast.error(...)` → `toast.error('Erro')` | **(l)** literal |
 | 5 | `'Pedido'` fora do fim do export | **(l)** `Object.keys` |
 
-- [ ] **Step 6: commit** — `git add client/src/components/Compras.js client/src/components/Compras.test.js`. Mensagem em `msg-e41-t4.txt`.
+- [x] **Step 6: commit** — `git add client/src/components/Compras.js client/src/components/Compras.test.js`. Mensagem em `msg-e41-t4.txt`.
+
+#### ✅ Task 4 FECHADA — `84cb19c` (na branch `e41-t4`; o hash será REESCRITO no cherry-pick para `desenvolvimento-almoxarifado`)
+
+**Números.** `Compras.test.js` 9 → **12** (RED medido antes: (j) no `toEqual` dos `<th>` com 7 colunas,
+(k) e (l) em `dispatchEvent` de `null` — o `data-testid` não existia); `CotacaoForm.test.js` 8,
+`PedidoCompraForm.test.js` 25, `FornecedorForm.test.js` 8; suíte inteira **51 suítes / 772**; build
+`CI=true` → `Compiled successfully`. Nenhum import novo: `FiShoppingCart` já estava em `:5-9`.
+
+**Sabotagens** (md5 do original `1f7d40e0…`, restauro por cópia do scratchpad, md5 pós-restauro
+idêntico nas cinco, CR=0):
+
+| # | Sabotagem | Caiu em | Asserção |
+|---|---|---|---|
+| 1 | condição do botão sem `!cotacao.pedido_id` | (j) | `gerar-pedido-771` `.toBeNull()` — recebeu o `<button>` |
+| 2 | condição sem o filtro de status | (j) | `gerar-pedido-772` `.toBeNull()` — recebeu o `<button>` |
+| 3 | linha do `navigate(...)` removida | (k) | `texto()` `.toContain('Editar pedido de compra')` — a tela continuou na aba (só a lista de cotações no `Received`) |
+| 4 | `toast.error(...)` → `toast.error('Erro')` | (l) | `toHaveBeenCalledWith` — `Expected: "Cotação COT-2026-770 já gerou o pedido PC-2026-650"`, `Received: "Erro"` |
+| 5 | `'Pedido'` movido para o INÍCIO do export | (l) | `Object.keys(linhas[0])` `.toEqual([...])` — `Pedido` na posição 0 |
+
+Dois tropeços do harness, registrados para o próximo: a sabotagem 3 com `perl -pi` e `\Q…\E`
+NÃO aplicou (o `\Q` quota o `\/`; md5 idêntico e a suíte ficou verde — foi o md5 que denunciou, não
+o placar); refeita com `perl -ni` sem `\Q`. A sabotagem 4 com `perl` e `.` sobre `Não`/`possível`
+também não aplicou (o `.` casa um byte, o acento tem dois) — refeita pelo Edit tool.
+
+**Divergências do plano (todas reversíveis):**
+- O link da coluna Pedido cai em `` `#${pedido_id}` `` quando `pedido_numero` vier vazio (mesma regra
+  de `rotuloPedido` do servidor, T2), em vez de renderizar um `<a>` sem texto. O (j) não cobre esse
+  ramo — nenhuma fixture tem `pedido_id` sem `pedido_numero`.
+- O (l) ganhou três asserções além do plano: `toast.success` não chamado, `arquivo === 'cotacoes'` e
+  `linhas.length === 3` (âncoras de que o export mediu a aba certa — precedente do (b)/(h)).
+- `toast` passou a ser importado em `Compras.test.js` (o mock de `react-toastify` já existia; o
+  plano não dizia, mas sem o import o (k)/(l) não compilam).
+- Commit assinado `Co-Authored-By: Claude Opus 5` (instrução do coordenador na retomada; as Global
+  Constraints ainda dizem `Fable 5.1`).
 
 ---
 
