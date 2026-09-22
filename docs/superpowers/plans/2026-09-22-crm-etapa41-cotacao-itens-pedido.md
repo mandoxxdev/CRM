@@ -726,7 +726,7 @@ passou a ser comportamento"*. No genérico, ao lado de `'cotacoes': 'cotacoes'` 
 - Consumes (mock HTTP): `GET /compras/materiais?search=` → `[{ id, codigo, descricao, unidade }]`; `GET /compras/cotacoes/:id` → linha + `itens[{ id, material_id, codigo, descricao, unidade, quantidade, valor_unitario }]`; `POST`/`PUT /compras/cotacoes` com `itens`.
 - Produces: `data-testid` de §5.5; payload `itens` + `valor_total` só sem itens.
 
-- [ ] **Step 1: os cenários (i)–(n) e os ajustes de mock**
+- [x] **Step 1: os cenários (i)–(n) e os ajustes de mock**
 
 Mock: `api.get` ganha `if (url === '/compras/materiais') return Promise.resolve({ data: MATERIAIS })`
 (`MATERIAIS = [{ id: 912, codigo: 'ALM-0912', descricao: 'Chapa Aço 5mm', unidade: 'KG' }]`), e a cotação
@@ -806,9 +806,9 @@ test('(n) 400 de item do servidor vai para role=alert com a literal', async () =
 });
 ```
 
-- [ ] **Step 2: rodar** — `CI=true npx react-scripts test --watchAll=false src/components/compras/CotacaoForm.test.js`: (i)–(n) caem (`porTestId('cotacao-busca-material')` é `null`), (a)–(h) seguem verdes (o (e) cai até o payload ganhar `itens: []` — é o ajuste previsto).
+- [x] **Step 2: rodar** — `CI=true npx react-scripts test --watchAll=false src/components/compras/CotacaoForm.test.js`: (i)–(n) caem (`porTestId('cotacao-busca-material')` é `null`), (a)–(h) seguem verdes (o (e) cai até o payload ganhar `itens: []` — é o ajuste previsto).
 
-- [ ] **Step 3: a tela** — em `CotacaoForm.js`, imports `useCallback, useMemo` e `FiPlus, FiSearch, FiTrash2`; cópias de `PedidoCompraForm.js`: `formatCurrency` (`:98-100`), `novaLinha` (`:124-125`); estados `itens`, `termoMaterial`, `materiais`, `buscando`; `buscarMateriais` (`:218-229`, `params: { search }`), `adicionarMaterial`, `alterarItem`, `removerItem` (`:231-245`), `total` (`:247-250`). Edição: `setItens((c.itens || []).map((it) => novaLinha({ material_id: it.material_id, codigo: it.codigo || '', descricao: it.descricao || '', unidade: it.unidade || 'UN', quantidade: String(it.quantidade ?? ''), valor_unitario: String(it.valor_unitario ?? '') })))`. Payload:
+- [x] **Step 3: a tela** — em `CotacaoForm.js`, imports `useCallback, useMemo` e `FiPlus, FiSearch, FiTrash2`; cópias de `PedidoCompraForm.js`: `formatCurrency` (`:98-100`), `novaLinha` (`:124-125`); estados `itens`, `termoMaterial`, `materiais`, `buscando`; `buscarMateriais` (`:218-229`, `params: { search }`), `adicionarMaterial`, `alterarItem`, `removerItem` (`:231-245`), `total` (`:247-250`). Edição: `setItens((c.itens || []).map((it) => novaLinha({ material_id: it.material_id, codigo: it.codigo || '', descricao: it.descricao || '', unidade: it.unidade || 'UN', quantidade: String(it.quantidade ?? ''), valor_unitario: String(it.valor_unitario ?? '') })))`. Payload:
 
 ```js
     const payload = { numero: numero.trim(), fornecedor_id: Number(fornecedorId), data_cotacao: dataCotacao, validade, status, observacoes,
@@ -822,9 +822,9 @@ bloco de itens é a cópia de `PedidoCompraForm.js:549-668` com os `data-testid`
 `min="0"`** nos inputs de linha (F4 da 40). Aviso de item sem preço (`:674-676`) e `Total` (`:678`).
 Cabeçalho do arquivo: substituir *"Cabecalho so (nao ha itens…)"* por *"Cabecalho + itens desde a 41 (D2/D3/D10)"*.
 
-- [ ] **Step 4: rodar** — o arquivo (**14**); `PedidoCompraForm.test.js` (25); `FornecedorForm.test.js` (8); `Compras.test.js` (9); suíte inteira (**51 suítes / 775**); build.
+- [x] **Step 4: rodar** — o arquivo (**14**); `PedidoCompraForm.test.js` (25); `FornecedorForm.test.js` (8); `Compras.test.js` (9); suíte inteira (**51 suítes / 775**); build.
 
-- [ ] **Step 5: sabotagens**
+- [x] **Step 5: sabotagens**
 
 | # | Sabotagem | Cai |
 |---|---|---|
@@ -834,7 +834,34 @@ Cabeçalho do arquivo: substituir *"Cabecalho so (nao ha itens…)"* por *"Cabec
 | 4 | edição sem `setItens` | **(l)** `porTestId(...)` null |
 | 5 | `Number(it.quantidade)` → `it.quantidade` | **(j)** `toEqual` (string `'3'`) |
 
-- [ ] **Step 6: commit** — `git add client/src/components/compras/CotacaoForm.js client/src/components/compras/CotacaoForm.test.js`. Mensagem em `msg-e41-t3.txt`.
+- [x] **Step 6: commit** — `git add client/src/components/compras/CotacaoForm.js client/src/components/compras/CotacaoForm.test.js`. Mensagem em `msg-e41-t3.txt`.
+
+#### ✅ Task 3 FECHADA — `a80c769` (hash da worktree `wt-e41-t3`, branch `e41-t3`; **será reescrito no cherry-pick** para `desenvolvimento-almoxarifado`)
+
+**Números (medidos, não previstos):**
+- `CotacaoForm.test.js`: **8 → 14** ((i)–(n) novos; o (e) passa a esperar `itens: []` no `PUT`, 8 chaves). Step 2 vermelho como previsto: 7 caíram ((e) + (i)–(n), `porTestId('cotacao-busca-material')` era `null`), 7 verdes.
+- `PedidoCompraForm.test.js` **25**, `FornecedorForm.test.js` **8**, `Compras.test.js` **9** (42 nas três).
+- Suíte inteira: **51 suítes / 775** — controle: com `git stash` a base dá **769**, então os +6 são desta task.
+- `CI=true npx react-scripts build`: `Compiled successfully`. `npx eslint` nos dois arquivos: limpo (o build não roda ESLint). CR=0 (perl) nos dois arquivos.
+
+**Sabotagens (base md5 `428496a6…`; restauro por cópia do scratchpad; md5 pós-restauro igual à base nas cinco; âncora `grep -cF` = 1 em todas):**
+
+| # | Sabotagem | Caiu | Asserção que caiu |
+|---|---|---|---|
+| 1 | `if (itens.length === 0) payload.valor_total` → sempre | **(j)**, **(m)** | `expect('valor_total' in corpo).toBe(false)` → `Received: true` |
+| 2 | `readOnly={itens.length > 0}` → `{false}` | **(i)**, **(l)** | `expect(...readOnly).toBe(true)` → `Received: false` |
+| 3 | `params: { search: termoMaterial }` → `{ q: … }` | **(i)** | `toEqual({ params: { search: 'chapa' } })` → `- "search"` / `+ "q"` |
+| 4 | edição sem `setItens` (`void(...)`) | **(l)**, **(m)** | `TypeError: Cannot read properties of null (reading 'value')` em `cotacao-qtd-item-912` / `'dispatchEvent'` em `cotacao-remover-item-907` |
+| 5 | `quantidade: Number(it.quantidade)` → `it.quantidade` | **(j)**, **(m)** | `toEqual` dos itens: `- "quantidade": 3` / `+ "quantidade": "3"` (e `2`/`"2"`) |
+
+Cada sabotagem derrubou **só** os cenários previstos na tabela do Step 5 e nenhum outro (12/14 ou 13/14 verdes), e a suíte voltou a 14/14 após o restauro.
+
+**Divergências em relação ao plano (todas aditivas, nenhuma muda contrato):**
+- (i) ganhou duas asserções a mais: `hasAttribute('min')` é `false` em `cotacao-qtd-item-912` e `cotacao-valor-item-912` — o plano pedia "sem `min="0"`" na tela mas nenhum cenário media; agora mede (mesmo motivo do (d) da 40).
+- (j) e (n) ganharam `toast.success` (chamado / não chamado) e (m) o `url` do `PUT`; (l) afirma também `cotacao-valor.value === '27'` — o `value` derivado, não só o `readOnly`.
+- `LITERAL_AVISO_PRECO` da cotação é própria (`'Item sem preço entra na cotação com valor unitário 0.'`), não a do pedido (que fala em custo médio no recebimento — a cotação não recebe). Sem cenário: é texto informativo, não regra.
+- `cotacao-valor` ganha `style={{ background: '#f0f0f0' }}` quando travado (o design §6 diz "fica cinza"); sem cenário.
+- Sem `soStatus`/`disabled` no bloco de itens: a cotação não tem o modo "só status" do pedido. A RN-F15 (cotação convertida não edita) é do servidor (T2, `PUT` → 409) e a literal chega ao `role="alert"` pelo caminho já testado em (f)/(h).
 
 ---
 
