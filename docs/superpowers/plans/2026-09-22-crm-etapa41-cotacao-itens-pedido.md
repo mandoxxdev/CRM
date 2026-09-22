@@ -715,7 +715,7 @@ passou a ser comportamento"*. No genérico, ao lado de `'cotacoes': 'cotacoes'` 
 
 - [x] **Step 7: commit** — `git add server/services/compras/cotacaoService.js server/services/compras/pedidoCompraService.js server/routes/compras.js server/tests/api/comprasCotacaoItens.api.test.js server/tests/api/comprasCotacaoGerarPedido.api.test.js` (+ `comprasPedidoEditarExcluir.api.test.js` se o shape da resposta exigiu ajuste). Mensagem em `msg-e41-t2.txt`.
 
-#### ✅ Task 2 FECHADA — `70d653d` (na branch `e41-t2`; o hash será reescrito no cherry-pick para `desenvolvimento-almoxarifado`)
+#### ✅ Task 2 FECHADA — `11591ca` (na branch `e41-t2`; o hash será reescrito no cherry-pick para `desenvolvimento-almoxarifado`)
 
 **Números reais:** `comprasCotacaoItens` **10/10** (vermelho antes da implementação: **1/10** — só o (9) passava,
 porque o genérico já apagava a cotação; (1)–(8) e (10) caíam como o plano previa: (1) `valor_total` 0, (4) 201,
@@ -893,7 +893,7 @@ Cabeçalho do arquivo: substituir *"Cabecalho so (nao ha itens…)"* por *"Cabec
 
 - [x] **Step 6: commit** — `git add client/src/components/compras/CotacaoForm.js client/src/components/compras/CotacaoForm.test.js`. Mensagem em `msg-e41-t3.txt`.
 
-#### ✅ Task 3 FECHADA — `a80c769` (hash da worktree `wt-e41-t3`, branch `e41-t3`; **será reescrito no cherry-pick** para `desenvolvimento-almoxarifado`)
+#### ✅ Task 3 FECHADA — `7ecf91f` (hash da worktree `wt-e41-t3`, branch `e41-t3`; **será reescrito no cherry-pick** para `desenvolvimento-almoxarifado`)
 
 **Números (medidos, não previstos):**
 - `CotacaoForm.test.js`: **8 → 14** ((i)–(n) novos; o (e) passa a esperar `itens: []` no `PUT`, 8 chaves). Step 2 vermelho como previsto: 7 caíram ((e) + (i)–(n), `porTestId('cotacao-busca-material')` era `null`), 7 verdes.
@@ -1040,7 +1040,7 @@ Export (`:268-278`): `'Pedido': c.pedido_numero || ''` **no fim**.
 
 - [x] **Step 6: commit** — `git add client/src/components/Compras.js client/src/components/Compras.test.js`. Mensagem em `msg-e41-t4.txt`.
 
-#### ✅ Task 4 FECHADA — `84cb19c` (na branch `e41-t4`; o hash será REESCRITO no cherry-pick para `desenvolvimento-almoxarifado`)
+#### ✅ Task 4 FECHADA — `bd224d2` (na branch `e41-t4`; o hash será REESCRITO no cherry-pick para `desenvolvimento-almoxarifado`)
 
 **Números.** `Compras.test.js` 9 → **12** (RED medido antes: (j) no `toEqual` dos `<th>` com 7 colunas,
 (k) e (l) em `dispatchEvent` de `null` — o `data-testid` não existia); `CotacaoForm.test.js` 8,
