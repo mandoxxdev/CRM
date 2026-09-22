@@ -424,10 +424,10 @@ const TabTiposMaterial = () => {
                 </div>
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {tipo.is_epi && <span style={{ fontSize: '0.7rem', background: 'rgba(79,172,254,0.1)', color: '#4facfe', padding: '2px 8px', borderRadius: 20, fontWeight: 600 }}>EPI</span>}
-                {tipo.is_controlado && <span style={{ fontSize: '0.7rem', background: 'rgba(239,83,80,0.1)', color: '#ef5350', padding: '2px 8px', borderRadius: 20, fontWeight: 600 }}>Controlado</span>}
-                {tipo.requer_assinatura && <span style={{ fontSize: '0.7rem', background: 'rgba(171,71,188,0.1)', color: '#ab47bc', padding: '2px 8px', borderRadius: 20, fontWeight: 600 }}>Assinatura</span>}
-                {tipo.requer_termo && <span style={{ fontSize: '0.7rem', background: 'rgba(249,168,37,0.1)', color: '#f9a825', padding: '2px 8px', borderRadius: 20, fontWeight: 600 }}>Termo</span>}
+                {tipo.is_epi && <span className="almox-selo almox-selo-epi">EPI</span>}
+                {tipo.is_controlado && <span className="almox-selo almox-selo-controlado">Controlado</span>}
+                {tipo.requer_assinatura && <span className="almox-selo almox-selo-assinatura">Assinatura</span>}
+                {tipo.requer_termo && <span className="almox-selo almox-selo-termo">Termo</span>}
               </div>
             </div>
           ))}

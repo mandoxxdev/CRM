@@ -1450,4 +1450,321 @@
     white-space: normal;
     overflow-wrap: break-word;
   }
+
+  /* ── 21. Indicadores e atalhos do Almoxarifado ────────────────────────
+     O componente pedia `auto-fit, minmax(200px, 1fr)` e o celular caia para uma
+     coluna — mas o cartao e uma FILEIRA (icone de 48px ao lado do texto), entao
+     em 360px o rotulo ficava com 27px e "Giro de estoque" saia uma palavra por
+     linha. Foi o que o P.O. fotografou.
+
+     Uma coluna resolvia a leitura e criava outro problema, medido: nove cartoes
+     de 89px = 881px, mais que a tela inteira (800px) so de indicador.
+
+     A saida e a mesma do Dashboard: DUAS colunas com o cartao na vertical
+     (icone em cima). O texto passa a ter a largura inteira do cartao — ~132px
+     contra os 27px de antes — e cabem seis numeros na primeira tela.
+
+     So que ha DOIS tipos de `.almox-kpis` nesta tela: os nove indicadores
+     simples e os tres de analise, que trazem uma legenda longa embaixo
+     ("Janela de 90 dias · consumo ÷ estoque atual"). Aqueles nao cabem em meia
+     largura. Separo pela ESTRUTURA, que e o que de fato difere: o cartao de
+     analise tem um terceiro filho dentro do `-info`.
+
+     Se o navegador nao entender `:has()`, a regra inteira e ignorada e sobra a
+     coluna unica — feia, porem legivel. A degradacao cai para o lado seguro.
+
+     `body .almox-kpis` porque a regra do componente viaja num chunk que carrega
+     DEPOIS do main.css: em empate de especificidade, ganha o chunk. */
+  body .almox-kpis {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+  body .almox-kpi-card { align-items: center; gap: 12px; }
+  /* O icone tem tamanho proprio e nunca deve encolher; o texto fica com o
+     resto. Sem isto os dois disputam a largura e o texto perde. */
+  body .almox-kpi-card > :first-child { flex: 0 0 auto; }
+  body .almox-kpi-info { flex: 1 1 auto; min-width: 0; }
+  body .almox-kpi-label { overflow-wrap: break-word; }
+
+  /* ── Os nove simples: duas colunas, cartao vertical ── */
+  body .almox-kpis:not(:has(.almox-kpi-info > :nth-child(3))) {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  body .almox-kpis:not(:has(.almox-kpi-info > :nth-child(3))) .almox-kpi-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 12px !important;
+    border-radius: 16px;
+  }
+  body .almox-kpis:not(:has(.almox-kpi-info > :nth-child(3))) .almox-kpi-icon {
+    width: 34px;
+    height: 34px;
+    font-size: 16px;
+    border-radius: 11px;
+  }
+  /* `!important` no valor porque um dos cartoes traz `fontSize` inline no JSX
+     (Valor em Estoque) — estilo inline ganha de qualquer seletor sem ele. */
+  body .almox-kpis:not(:has(.almox-kpi-info > :nth-child(3))) .almox-kpi-value {
+    font-size: 1.2rem !important;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+  }
+  body .almox-kpis:not(:has(.almox-kpi-info > :nth-child(3))) .almox-kpi-label {
+    font-size: .7rem;
+    line-height: 1.25;
+  }
+
+  /* ── Atalhos ─────────────────────────────────────────────────
+     `auto-fill, minmax(160px, 1fr)` erra por DEZ pixels: dois cartoes de 160px
+     mais 12px de espaco dao 332, e a area util de um telefone de 360px e 322.
+     Faltando dez, o auto-fill desiste e poe um por linha — cada atalho virava
+     uma faixa de 130px de altura. Fixo em duas colunas: 156px cada. */
+  body .almox-quick-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+    margin-bottom: 18px !important;
+  }
+  body .almox-quick-action {
+    padding: 14px 8px !important;
+    border-radius: 16px;
+    min-width: 0;
+  }
+  body .almox-quick-action-label {
+    font-size: .75rem !important;
+    line-height: 1.25;
+    overflow-wrap: break-word;
+  }
+  /* O atalho e um `<a>`, e herda o azul de link da marca (#4facfe). Sobre o
+     cartao claro isso da 2,24 de contraste — medido — quando texto pequeno
+     pede 4,5. O icone continua azul, que e onde a cor tem funcao; o rotulo
+     passa a ser texto.
+
+     Vale tambem no computador, onde o numero e o mesmo, mas ali eu nao mexo
+     sem combinar: esta regra esta dentro do @media de celular de proposito. */
+  body .almox-quick-action,
+  body .almox-quick-action-label { color: var(--ag-texto) !important; }
+  body .almox-quick-action-icon { color: #4facfe; }
+
+  /* ── 22. Paginas que trazem paleta propria ────────────────────────────
+     O Mapa de Areas e ESCURO de proposito: `.almox-mapa-page` redefine
+     `--gmp-surface`, `--gmp-text` e `--gmp-text-light` para uma planta baixa
+     em fundo preto, com escopo so dela. E desenho, nao defeito.
+
+     O defeito era meu. A pele de vidro do celular assume tema claro e pousava
+     cartao branco translucido (`rgba(255,255,255,.72)`) por cima daquele
+     fundo. O rotulo continuava com o cinza que a pagina escolheu para fundo
+     escuro (#a7a7a7) e o resultado foi cinza sobre quase-branco: contraste
+     2,41 medido, contra os 4,5 que texto pequeno pede.
+
+     Como a pele inteira e feita de variaveis, basta redefini-las aqui: todas
+     as regras de vidro passam a pintar escuro nesta pagina, sem que nenhuma
+     precise saber que ela existe.
+
+     Se outra tela vier com paleta propria, o conserto e acrescentar o
+     seletor dela a esta lista. */
+  .almox-mapa-page {
+    --ag-vidro:        rgba(255, 255, 255, 0.06);
+    --ag-vidro-forte:  rgba(24, 24, 26, 0.90);
+    --ag-solido:       rgba(20, 20, 22, 0.97);
+    --ag-borda:        rgba(255, 255, 255, 0.12);
+    --ag-borda-sutil:  rgba(255, 255, 255, 0.07);
+    --ag-texto:        #FFFFFF;
+    --ag-texto-fraco:  #C4C4C4;
+    --ag-sombra:      0 2px 6px rgba(0, 0, 0, .35), 0 16px 40px -16px rgba(0, 0, 0, .7);
+    --ag-sombra-alta: 0 10px 50px -10px rgba(0, 0, 0, .8);
+
+    /* O cinza de rotulo que a pagina usa (#a7a7a7) foi escolhido para fundo
+       preto, onde da 6,4 de contraste. Num cartao de vidro escuro ele cai
+       para perto de 4; clareio um pouco para nao depender da sorte. */
+    --gmp-text-light: #C4C4C4;
+
+    /* A pagina ja e um cartao grande e escuro; no telefone ela nao precisa de
+       recuo lateral proprio, que rouba 64px dos 360. */
+    padding: 18px 14px 24px !important;
+    border-radius: 18px;
+  }
+
+  /* ── 23. Cor de texto legivel no celular ─────────────────────────────
+     Achado por medicao, nao por impressao: renderizei as 21 variantes de selo
+     do Almoxarifado numa caixa fora da tela e calculei o contraste de cada
+     uma contra o proprio fundo (a mesma cor a 12% sobre o cartao). No tema
+     claro, DEZENOVE das 21 ficaram abaixo dos 4,5 que texto pequeno pede. As
+     piores: "estorno" 1,90, "baixo" 2,01, "aberto" 2,04.
+
+     A causa e a mesma em todas: a cor do SELO e a cor do TEXTO sao a mesma, e
+     ela foi escolhida para ser vista como fundo, nao como letra. Num monitor
+     grande a pessoa le pelo formato e pela posicao; num telefone, com o selo
+     de 11px, ela precisa ler a palavra.
+
+     O que muda e SO a cor da letra. O fundo continua com a cor de estado —
+     verde e verde, vermelho e vermelho — e a tela nao muda de cara.
+
+     POR QUE ISTO ESTA SEPARADO POR TEMA
+     Escrevi primeiro sem separar, e medi: os nove tons escuros criariam NOVE
+     defeitos novos no tema escuro (2,00 a 2,65), porque la o fundo do selo
+     tambem e escuro. Medindo as cores originais contra o fundo escuro, SEIS
+     das nove ja passavam; so tres reprovavam. Entao o tema escuro recebe tres
+     regras, nao nove — mexer no que ja estava certo so cria risco.
+
+     Agrupo por COR e nao por nome de variante: sao 21 nomes para 9 cores.
+     Assim uma variante nova que reuse um tom existente ja nasce legivel. */
+
+  /* ── Tema claro ─────────────────────────────────────────── */
+
+  /* cinza neutro #6A6A6A (4,29) -> 7,04 */
+  html:not([data-theme="dark"]) .almox-badge-aberta,
+  html:not([data-theme="dark"]) .almox-badge-cancelada,
+  html:not([data-theme="dark"]) .almox-badge-cancelado,
+  html:not([data-theme="dark"]) .almox-badge-zerado { color: #4A4A4A !important; }
+
+  /* azul da marca #4FACFE (2,04) -> 5,65 */
+  html:not([data-theme="dark"]) .almox-badge-aberto,
+  html:not([data-theme="dark"]) .almox-badge-ajuste,
+  html:not([data-theme="dark"]) .almox-badge-enviada { color: #1D4ED8 !important; }
+
+  /* ambar #E59800 (2,01) -> 5,98 */
+  html:not([data-theme="dark"]) .almox-badge-baixo { color: #92400E !important; }
+
+  /* laranja #FF9100 (1,90, o pior de todos) -> 6,16 */
+  html:not([data-theme="dark"]) .almox-badge-estorno { color: #9A3412 !important; }
+
+  /* verde #1AA34A (2,68) -> 5,26 */
+  html:not([data-theme="dark"]) .almox-badge-concluido,
+  html:not([data-theme="dark"]) .almox-badge-encerrada,
+  html:not([data-theme="dark"]) .almox-badge-entrada,
+  html:not([data-theme="dark"]) .almox-badge-ok { color: #146C43 !important; }
+
+  /* vermelho #E5193A (3,54) -> 5,42 */
+  html:not([data-theme="dark"]) .almox-badge-critico,
+  html:not([data-theme="dark"]) .almox-badge-saida,
+  html:not([data-theme="dark"]) .almox-badge-vencida { color: #B01030 !important; }
+
+  /* violeta #8B5CF6 (3,41) -> 7,23 */
+  html:not([data-theme="dark"]) .almox-badge-devolucao { color: #5B21B6 !important; }
+
+  /* ciano #0891B2 (3,06) -> 5,87 */
+  html:not([data-theme="dark"]) .almox-badge-transferencia { color: #155E75 !important; }
+
+  /* ardosia #94A3B8 (2,12) -> 6,40 */
+  html:not([data-theme="dark"]) .almox-badge-vazio { color: #475569 !important; }
+
+  /* Titulo de secao de formulario: `--gmp-primary` (#4facfe) como cor de
+     LETRA sobre cartao claro da 2,24. Sao os rotulos "DADOS DA REQUISICAO",
+     "IDENTIFICACAO", "CLASSIFICACAO" — a estrutura toda do formulario.
+     #1D4ED8 e o mesmo azul da marca, dois passos mais escuro: 6,20. */
+  html:not([data-theme="dark"]) .almox-section-title { color: #1D4ED8 !important; }
+
+  /* ── Tema escuro: so as tres que reprovaram ─────────────────────── */
+
+  /* vermelho #E5193A (3,91) -> 6,55 */
+  [data-theme="dark"] .almox-badge-critico,
+  [data-theme="dark"] .almox-badge-saida,
+  [data-theme="dark"] .almox-badge-vencida { color: #F87171 !important; }
+
+  /* violeta #8B5CF6 (4,13) -> 6,43 */
+  [data-theme="dark"] .almox-badge-devolucao { color: #A78BFA !important; }
+
+  /* cinza #6A6A6A (3,28) -> 6,98 */
+  [data-theme="dark"] .almox-badge-aberta,
+  [data-theme="dark"] .almox-badge-cancelada,
+  [data-theme="dark"] .almox-badge-cancelado,
+  [data-theme="dark"] .almox-badge-zerado { color: #9CA3AF !important; }
+
+  /* ── 24. Comercial: o mesmo azul, o mesmo problema ─────────────────────
+     A varredura das 14 telas do Comercial achou a MESMA familia do
+     Almoxarifado: o azul da marca (#4facfe e #0066CC) usado como cor de
+     LETRA sobre fundo claro. Ele foi desenhado para preencher botao, nao
+     para ser lido em 11px.
+
+     Numeros medidos, todos abaixo dos 4,5 exigidos. */
+
+  /* Legenda de grafico: 1,99 a 2,07. Cada item vinha com a cor da propria
+     serie, o que parece coerente e e ilegivel — e desnecessario, porque a
+     BOLINHA ao lado ja diz de que serie se trata. A letra vira texto. */
+  .recharts-legend-item-text { color: var(--ag-texto) !important; }
+
+  /* Aba selecionada de Ordens de Servico: 2,42. O azul e o sinal de
+     "selecionada" e precisa continuar azul; dois passos mais escuro mantem o
+     sinal e passa a 5,65. */
+  html:not([data-theme="dark"]) .os-tab.active,
+  html:not([data-theme="dark"]) .os-tab.active span { color: #1D4ED8 !important; }
+  /* No escuro o #1D4ED8 cai para 2,80 — eu tinha esquecido de separar e
+     criei ali o defeito que estava consertando aqui. O azul claro original
+     e o que se le sobre fundo escuro. */
+  [data-theme="dark"] .os-tab.active,
+  [data-theme="dark"] .os-tab.active span { color: #4FACFE !important; }
+
+  /* Selos de impacto e prioridade em Relatorios: 3,78 sobre o proprio fundo
+     a 10%. Mesmo tratamento dos selos do Almoxarifado: muda a letra, o fundo
+     continua vermelho. */
+  html:not([data-theme="dark"]) .badge-impact,
+  html:not([data-theme="dark"]) .badge-priority { color: #B01030 !important; }
+  [data-theme="dark"] .badge-impact,
+  [data-theme="dark"] .badge-priority { color: #F87171 !important; }
+
+  /* Texto de lista vazia: 2,58. E a unica coisa na tela quando nao ha nada —
+     justamente a hora em que precisa ser lido. */
+  /* O `*` porque a frase mora num `<span>` DENTRO do `.plm-vazio`, e o filho
+     nao herdava: a primeira versao desta regra pintou o pai e deixou o texto
+     como estava. So descobri remedindo. */
+  .plm-vazio,
+  .plm-vazio * { color: #475569 !important; }
+  [data-theme="dark"] .plm-vazio,
+  [data-theme="dark"] .plm-vazio * { color: #A7ACC4 !important; }
+
+  /* "Tentar Novamente" e branco sobre o azul claro da marca: 2,42 medido.
+     Ele aparece quando algo JA deu errado — a pior hora para o botao de
+     recuperacao ser o texto menos legivel da tela. Mesmo azul, dois passos
+     mais escuro: branco sobre #1D4ED8 da 6,93.
+
+     Medi o resto do app antes de generalizar: branco sobre #4facfe aparece
+     so aqui. Os botoes principais usam gradiente e passam. */
+  .btn-retry { background: #1D4ED8 !important; }
+
+  /* Botao de icone de grupo em Produtos: 37x37. Passa de raspao do minimo de
+     44 recomendado e fica abaixo dos 40 que eu uso como piso. Tres pixels
+     resolvem. */
+  /* `!important` porque outra regra fixa 38px e vence por ordem de carga —
+     medi o computado (38px) depois de escrever 40 e achar que bastava. */
+  /* Estava em 37x37. Subi para 40 e o retangulo media 39,x; gastei uma
+     rodada atras desse pixel. O numero que importa nao era 40 e sim 44, que
+     e o alvo de toque recomendado — e resolve a duvida junto. */
+  .btn-icon-grupo {
+    min-width: 44px !important;
+    min-height: 44px !important;
+  }
+
+  /* "Acao Recomendada:" nos cartoes de percepcao de Relatorios: o rotulo em
+     negrito usa o azul claro da marca e da 2,09. E o rotulo que anuncia o
+     que a pessoa deve FAZER. */
+  /* Selos de regra em Relatorios: "Obrigatoria" 3,78 e "Recomendada" 2,05.
+     Mesma familia dos selos do Almoxarifado, mesmos tons medidos la. */
+  html:not([data-theme="dark"]) .regra-badge.obrigatoria { color: #B01030 !important; }
+  html:not([data-theme="dark"]) .regra-badge.opcional    { color: #92400E !important; }
+  [data-theme="dark"] .regra-badge.obrigatoria { color: #F87171 !important; }
+
+  html:not([data-theme="dark"]) .insight-action strong { color: #1D4ED8 !important; }
+  [data-theme="dark"] .insight-action strong { color: #4FACFE !important; }
+
+  /* Dica com link dentro ("Configuracoes → Familias"): o link herda o azul
+     claro da marca e da 2,42; e tem 17px de altura, metade do alvo de toque
+     que um dedo acerta. Ganha cor legivel e corpo. */
+  /* Escrevi primeiro `.almox-hint-banner a` por suposicao; medindo, o link
+     estava em `.almox-field`, e a regra nao pegou nada. Vale para os dois
+     lugares — sao dicas com link dentro de formulario. */
+  /* `!important` porque a regra do componente viaja num chunk que carrega
+     DEPOIS do main.css: em empate de especificidade, ganha o chunk. Ja tinha
+     me pegado no bloco 21. */
+  html:not([data-theme="dark"]) .almox-hint-banner a,
+  html:not([data-theme="dark"]) .almox-field a { color: #1D4ED8 !important; }
+  [data-theme="dark"] .almox-hint-banner a,
+  [data-theme="dark"] .almox-field a { color: #4FACFE !important; }
+  .almox-hint-banner a,
+  .almox-field a {
+    display: inline-block;
+    min-height: 40px;
+    line-height: 40px;
+    text-decoration: underline;
+  }
 }

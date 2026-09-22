@@ -405,7 +405,7 @@ const RequisicaoForm = () => {
               )}
 
               {materiaisError && (
-                <div style={{ marginBottom: 12, padding: '10px 14px', fontSize: '0.8rem', color: 'var(--gmp-error)', background: 'rgba(229,25,58,0.08)', border: '1px solid rgba(229,25,58,0.25)', borderRadius: 8 }}>
+                <div className="almox-aviso-erro">
                   {materiaisError}
                 </div>
               )}
@@ -542,7 +542,7 @@ const RequisicaoForm = () => {
             </div>
 
             {form.urgencia === 'CRITICO' && (
-              <div style={{ background: 'rgba(229,25,58,0.08)', border: '1px solid rgba(229,25,58,0.25)', borderRadius: 10, padding: '14px 16px', fontSize: '0.8rem', color: 'var(--gmp-error)' }}>
+              <div className="almox-aviso-erro almox-aviso-erro-largo">
                 🔴 Requisição crítica. O almoxarife será notificado imediatamente.
               </div>
             )}

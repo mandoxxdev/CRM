@@ -18,6 +18,7 @@ import './styles/mobile-app.css';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 import { markChunkRecoveryReady } from './utils/chunkLoadRecovery';
+import { iniciarGradesNoCelular } from './utils/gradesNoCelular';
 import { iniciarTabelasComoCartoes } from './utils/tabelasComoCartoes';
 import { registerServiceWorker } from './utils/pushNotifications';
 
@@ -42,8 +43,12 @@ try {
 
 markChunkRecoveryReady();
 
-// Tabelas viram cartoes no celular. No desktop o utilitario nao faz nada.
+// Adaptacao automatica do front para o celular. Os dois utilitarios nao
+// fazem nada no computador, e valem para modulo que ainda nem existe:
+//   tabelas  -> viram cartoes
+//   grades com coluna fixa grande -> viram coluna unica
 iniciarTabelasComoCartoes();
+iniciarGradesNoCelular();
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(

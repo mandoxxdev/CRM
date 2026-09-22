@@ -1749,3 +1749,50 @@
   .ped-rec-grid { grid-template-columns: 1fr; }
   .ped-rec-totais { grid-template-columns: 1fr 1fr; }
 }
+
+/* ── Selos de atributo do tipo de material ──────────────────────────────
+   Eram quatro `<span>` com cor no `style` inline, sem classe. Estilo inline
+   nao tem como responder ao tema, e a cor da letra era a mesma cor do fundo
+   do selo: medido, "Termo" dava 1,71 de contraste e "EPI" 2,08, quando texto
+   pequeno pede 4,5.
+
+   Aqui cada selo tem nome, o fundo guarda a cor de significado e a LETRA
+   recebe um tom que se le. Os numeros anotados sao medidos, nao estimados. */
+.almox-selo {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+.almox-selo-epi        { background: rgba(79, 172, 254, 0.10); color: #1D4ED8; }  /* 5,75 */
+.almox-selo-controlado { background: rgba(239, 83, 80, 0.10);  color: #A81228; }  /* 6,23 */
+.almox-selo-assinatura { background: rgba(171, 71, 188, 0.10); color: #6B21A8; }  /* 7,12 */
+.almox-selo-termo      { background: rgba(249, 168, 37, 0.10); color: #92400E; }  /* 6,16 */
+
+/* No escuro o fundo do selo tambem escurece, entao a letra volta a ser
+   clara. Mesmos selos, tons invertidos, todos medidos acima de 6,4. */
+[data-theme="dark"] .almox-selo-epi        { color: #4FACFE; }  /* 7,01 */
+[data-theme="dark"] .almox-selo-controlado { color: #F87171; }  /* 6,40 */
+[data-theme="dark"] .almox-selo-assinatura { color: #D8B4FE; }  /* 10,18 */
+[data-theme="dark"] .almox-selo-termo      { color: #F9A825; }  /* 8,44 */
+
+/* ── Aviso de erro ───────────────────────────────────────────────
+   Eram dois `<div>` com o estilo escrito inline, usando `var(--gmp-error)`
+   como cor de letra sobre o mesmo vermelho a 8%: 3,79 medido, abaixo dos 4,5.
+   E texto de ERRO — a frase que a pessoa mais precisa conseguir ler.
+   #B01030 e o mesmo vermelho, dois passos mais escuro: 5,42. */
+.almox-aviso-erro {
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  font-size: 0.8rem;
+  color: #B01030;
+  background: rgba(229, 25, 58, 0.08);
+  border: 1px solid rgba(229, 25, 58, 0.25);
+  border-radius: 8px;
+}
+.almox-aviso-erro-largo { padding: 14px 16px; border-radius: 10px; }
+
+/* No escuro o fundo do aviso tambem escurece; o vermelho claro e o que se le. */
+[data-theme="dark"] .almox-aviso-erro { color: #F87171; }

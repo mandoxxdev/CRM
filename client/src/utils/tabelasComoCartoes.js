@@ -353,14 +353,40 @@ export function varrerTabelas(raiz = document) {
 let observador = null;
 let agendado = null;
 
+/**
+ * Agrupa rajadas de mutação num passe só. Sem isto, uma lista que renderiza
+ * cem linhas dispararia cem varreduras.
+ *
+ * Dois relógios, não um. `requestAnimationFrame` só dispara quando a página
+ * PINTA: aplicativo em segundo plano, tela do telefone apagada, aba
+ * ocultada. Medido nesta sessão: rAF não disparou em 1,2s com o documento
+ * se declarando `visibilityState: "visible"`.
+ *
+ * Junto com a trava `if (agendado) return`, isso não atrasa a varredura —
+ * ela MORRE. O agendamento fica pendente para sempre e toda mutação
+ * seguinte é descartada calada, ou seja, as tabelas param de virar cartão no
+ * meio do uso. O `setTimeout` corre sem pintura; quem chegar primeiro
+ * executa e cancela o outro.
+ */
 function agendarVarredura() {
   if (agendado) return;
-  // Agrupa rajadas de mutação num passe só. Sem isto, uma lista que renderiza
-  // cem linhas dispararia cem varreduras.
-  agendado = window.requestAnimationFrame(() => {
+
+  const rodar = () => {
+    if (!agendado) return;
+    agendado.cancelar();
     agendado = null;
     varrerTabelas(document);
-  });
+  };
+
+  const quadro = window.requestAnimationFrame(rodar);
+  const relogio = window.setTimeout(rodar, 250);
+
+  agendado = {
+    cancelar: () => {
+      window.cancelAnimationFrame(quadro);
+      window.clearTimeout(relogio);
+    },
+  };
 }
 
 export function iniciarTabelasComoCartoes() {
