@@ -12,6 +12,35 @@
  *   O motivo do ponto cego: eu so media ESTOURO horizontal. Texto espremido
  *   nao estoura nada. Ele cabe. So fica ilegivel.
  *
+ * ATENCAO AO MEDIR NUM PAINEL QUE NAO ESTA PINTANDO
+ *
+ * O painel do navegador embutido nem sempre repinta (o mesmo motivo que faz
+ * `requestAnimationFrame` nao disparar nele). Enquanto nao repinta, ele
+ * devolve ESTILO COMPUTADO VELHO para propriedades de pintura — cor, acima de
+ * tudo. Layout (`min-height`, retangulos) atualiza; cor, nao.
+ *
+ * Prova feita nesta sessao: escrevi `color: rgb(1,2,3) !important` no atributo
+ * `style` do elemento e `getComputedStyle` continuou devolvendo a cor antiga.
+ * Uma captura de tela depois, o mesmo `getComputedStyle` devolveu 1,2,3.
+ *
+ * Consequencia pratica: depois de QUALQUER mudanca de CSS (recarga do dev
+ * server, troca de tema, edicao em tempo real), force uma repintura antes de
+ * medir — uma captura de tela serve, mesmo minuscula. Sem isso a regua
+ * reporta defeito ja corrigido e, pior, pode dar por corrigido o que nao esta.
+ *
+ * PROTOCOLO QUE DA RESULTADO CONFIAVEL
+ *
+ *   1. `navigate` de verdade para a rota (carga completa), nao `pushState`;
+ *   2. esperar a tela montar;
+ *   3. PROVOCAR UMA PINTURA (uma captura de tela, mesmo minuscula);
+ *   4. so entao `medir()`.
+ *
+ * Medido: as duas telas de Compras acusavam selo em 1,78 e botao de 31px
+ * quando varridas por `pushState` sem pintura, e mediam LIMPO com carga
+ * completa e captura antes. O `varrer()` em lote e otimo para achar candidato
+ * — mas confirme cada achado por este caminho antes de mexer no CSS, ou vai
+ * consertar o que ja estava certo. Eu gastei varias rodadas assim.
+ *
  * Uso (colar na pagina, com a janela em 360px):
  *   reguaTela.medir()          -> defeitos da tela atual
  *   await reguaTela.varrer()   -> navega por tudo que alcanca e mede
@@ -210,9 +239,14 @@
    * entre varios registros. Barra de ferramenta do topo, com dois ou tres
    * icones conhecidos, nao entra.
    */
-  function iconeSemNome(el, txt) {
+  function iconeSemNome(el) {
     if (!el.matches('button, a[href], [role="button"]')) return null;
-    if (txt) return null;                       // ja mostra texto
+    // O texto tem de vir do PROPRIO elemento, e nao do parametro `txt`: aquele
+    // so e preenchido para folhas. Um cartao inteiro que e link tem filhos,
+    // chegava aqui com texto vazio e era acusado de "icone mudo" — foram dez
+    // cartoes de grupo em `/comercial/produtos`, todos com o nome escrito
+    // dentro.
+    if ((el.textContent || '').trim()) return null;
     if (el.getAttribute('data-rotulo')) return null;
     if (!el.closest('.cartao-auto, [class*="-card"], [class*="cartao"]')) return null;
     var irmaos = el.parentElement ? el.parentElement.querySelectorAll('button, a[href], [role="button"]').length : 1;
@@ -306,6 +340,18 @@
     var alvoL = Math.max(r.width, rotulo ? rotulo.getBoundingClientRect().width : 0);
     var alvoA = Math.max(r.height, rotulo ? rotulo.getBoundingClientRect().height : 0);
 
+    // Area de toque ampliada por pseudo-elemento conta como alvo.
+    // E o jeito de dar 44px de dedo a uma caixa de marcar nativa, que mede
+    // 18px e nao muda: o `::after` cresce sem ocupar espaco no layout. Sem
+    // ler isso, a regua acusaria justamente o conserto.
+    try {
+      var ps = getComputedStyle(el, '::after');
+      if (ps && ps.content && ps.content !== 'none' && ps.position === 'absolute') {
+        alvoL = Math.max(alvoL, parseFloat(ps.width) || 0);
+        alvoA = Math.max(alvoA, parseFloat(ps.height) || 0);
+      }
+    } catch (e) { /* navegador sem suporte: fica a medida do proprio elemento */ }
+
     // 39,5 e nao 40: o retangulo vem em subpixel e um botao com `width: 40px`
     // computado pode medir 39,4. Acusar isso e acusar arredondamento, nao
     // defeito — perdi uma rodada inteira "consertando" um botao que ja
@@ -315,7 +361,39 @@
     return 'ALVO PEQUENO: ' + Math.round(alvoL) + 'x' + Math.round(alvoA) + 'px';
   }
 
+  /* Tenta forcar recalculo de estilo e layout antes de medir.
+   *
+   * ATENCAO: isto NAO BASTA num painel que nao pinta, e a medicao feita ali
+   * NAO E CONFIAVEL. Provas desta sessao, no mesmo elemento e sem navegar:
+   *
+   *   sem pintar   -> `min-height: 0px`,  altura 31px
+   *   apos pintar  -> `min-height: 44px`, altura 44px
+   *
+   * E com a cor foi igual: escrevi `color: rgb(1,2,3) !important` no atributo
+   * `style` e `getComputedStyle` seguiu devolvendo a cor velha ate a pintura.
+   *
+   * Ou seja: o painel adia a resolucao de estilo, e tanto `getComputedStyle`
+   * quanto `getBoundingClientRect` devolvem valores de ANTES. Mexer no `body`
+   * e ler `offsetHeight` invalida a arvore, mas nao obriga a pintura — passei
+   * varias rodadas perseguindo um botao de 31px que sempre teve 44.
+   *
+   * REGRA DE USO: provoque uma pintura de verdade imediatamente antes de cada
+   * lote de medicao (no meu caso, uma captura de tela, mesmo minuscula). Sem
+   * isso a regua acusa defeito ja corrigido — e pode dar por corrigido o que
+   * nao esta.
+   */
+  function forcarRecalculo() {
+    var b = document.body;
+    if (!b) return;
+    var antes = b.style.opacity;
+    b.style.opacity = '0.999';
+    void b.offsetHeight;
+    b.style.opacity = antes;
+    void b.offsetHeight;
+  }
+
   function medir() {
+    forcarRecalculo();
     var achados = [];
     FLUTUANTES = null;          // recalcula a cada tela
     var todos = document.querySelectorAll('body *');
@@ -341,6 +419,11 @@
       // usuario vai usar — e como ela remonta a cada modulo, sujava a
       // varredura inteira do Comercial.
       if (el.closest('.splash-screen')) continue;
+      // Dica de grafico (recharts): so aparece com o ponteiro em cima, e no
+      // celular nao ha ponteiro. Ela fica montada, fora da vista, com a cor
+      // que teria sobre o fundo do grafico — medir isso e medir o que o
+      // usuario nunca ve.
+      if (el.closest('.recharts-tooltip-wrapper')) continue;
       // Decoracao pura: sem texto, posicionada fora do fluxo e desfocada.
       // Sao os halos da tela de abertura, que ficam montados por um instante
       // e "estouram" 510px de proposito — o desfoque precisa vazar. Medi o
@@ -367,7 +450,7 @@
       }
       problemas.push(estouro(el, c, r));
       problemas.push(alvoPequeno(el, r));
-      problemas.push(iconeSemNome(el, txt));
+      problemas.push(iconeSemNome(el));
       problemas.push(iconeColapsado(el, r, txt));
 
       for (var j = 0; j < problemas.length; j++) {
@@ -496,6 +579,63 @@
    * os dois e pior do que nao medir: da confianca sem base. Daqui em diante a
    * regua diz qual dos dois foi.
    */
+  /* Registro das chamadas de API, para separar TELA VAZIA de TELA QUE NAO
+   * CARREGOU.
+   *
+   * Descoberto do pior jeito: varrendo 126 rotas eu estourei o limite do
+   * servidor (500 requisicoes por 15 minutos) e passei a receber 429. As
+   * telas seguintes vinham sem dado nenhum, e a regua as classificou como
+   * "sem dados" — quando na verdade era a minha propria varredura que tinha
+   * derrubado o carregamento.
+   *
+   * Um relatorio que chama isso de "sem dados" mente duas vezes: esconde que
+   * a medicao falhou e sugere que o banco e que esta vazio.
+   */
+  var CHAMADAS = [];
+  if (!window.__reguaFetchGrampeado) {
+    var fetchOriginal = window.fetch;
+    window.fetch = function () {
+      var url = String((arguments[0] && arguments[0].url) || arguments[0] || '');
+      var p = fetchOriginal.apply(this, arguments);
+      if (url.indexOf('/api/') !== -1) {
+        p.then(function (r) { CHAMADAS.push({ t: Date.now(), status: r.status, url: url }); },
+               function () { CHAMADAS.push({ t: Date.now(), status: 0, url: url }); });
+      }
+      return p;
+    };
+    // XHR tambem, e nao so `fetch`: o app fala com a API pelo axios, que usa
+    // XMLHttpRequest. Grampeando so o `fetch` eu media 429 do servidor sem
+    // ver nenhum — a lente dizia "sem dados" numa tela que tinha falhado.
+    var abrirOriginal = XMLHttpRequest.prototype.open;
+    var enviarOriginal = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.open = function (metodo, url) {
+      this.__reguaUrl = String(url || '');
+      return abrirOriginal.apply(this, arguments);
+    };
+    XMLHttpRequest.prototype.send = function () {
+      var xhr = this;
+      if (xhr.__reguaUrl && xhr.__reguaUrl.indexOf('/api/') !== -1) {
+        xhr.addEventListener('loadend', function () {
+          CHAMADAS.push({ t: Date.now(), status: xhr.status, url: xhr.__reguaUrl });
+        });
+      }
+      return enviarOriginal.apply(this, arguments);
+    };
+
+    window.__reguaFetchGrampeado = CHAMADAS;
+  } else {
+    CHAMADAS = window.__reguaFetchGrampeado;
+  }
+
+  function falhasRecentes(desde) {
+    var ruins = [];
+    for (var i = 0; i < CHAMADAS.length; i++) {
+      var c = CHAMADAS[i];
+      if (c.t >= desde && (c.status === 0 || c.status >= 400)) ruins.push(c.status);
+    }
+    return ruins;
+  }
+
   function temConteudo() {
     // Lista com registros: e o caso claro.
     if (document.querySelector('.cartao-auto, table tbody tr td + td')) return true;
@@ -535,7 +675,13 @@
    * varredura.
    */
   function esperarQuietude(silencio, teto) {
-    silencio = silencio || 400;
+    // 700ms, e nao 400: os adaptadores de celular (tabela->cartao, grades,
+    // contraste) agendam com 250ms de atraso, e o React ainda re-renderiza
+    // quando o dado chega. Com a janela curta a varredura media o intervalo
+    // ENTRE a chegada do dado e a adaptacao, e acusava botao de 31px que,
+    // tres segundos depois, media os 44px corretos. Defeito que aparece e
+    // some sozinho e quase sempre a regua, nao a tela.
+    silencio = silencio || 700;
     teto = teto || 6000;
     return new Promise(function (resolve) {
       var ultima = Date.now();
@@ -563,6 +709,7 @@
       // Some com o que sobrou da rota anterior antes de medir a proxima.
       var sujeira = document.querySelector('.Toastify');
       if (sujeira) sujeira.innerHTML = '';
+      var marca = Date.now();
       ir(rotas[i]);
       await esperar(pausa || 400);
       // Esperar a abertura sair vale por ROTA, nao so no comeco: cada modulo
@@ -570,12 +717,41 @@
       await esperarAbertura();
       await esperarQuietude();
       if (!temConteudo()) {
-        relatorio.push({ rota: rotas[i], semDados: true, quantos: 0,
-          achados: [{ onde: '(tela)', texto: '',
-            problema: 'SEM DADOS: nada para medir — NAO vale como limpo' }] });
+        var falhou = falhasRecentes(marca);
+        relatorio.push({
+          rota: rotas[i],
+          semDados: !falhou.length,
+          falhaDeCarga: falhou.length ? falhou.slice(0, 3) : undefined,
+          quantos: 0,
+          achados: [{ onde: '(tela)', texto: '', problema: falhou.length
+            ? 'NAO CARREGOU: a API respondeu ' + falhou.slice(0, 3).join(', ') + ' — a medicao falhou, a tela nao foi vista'
+            : 'SEM DADOS: nada para medir — NAO vale como limpo' }]
+        });
         continue;
       }
       var a = medir();
+
+      /* CONFIRMACAO: defeito que some sozinho era a regua, nao a tela.
+       *
+       * Esta tela mediu botao de 31px na varredura e 44px quando eu olhei
+       * sozinho, varias vezes seguidas. A diferenca era so tempo: os
+       * adaptadores de celular agendam com atraso e o React re-renderiza
+       * quando o dado chega, entao ha uma janela em que o cartao existe mas
+       * ainda nao foi adaptado.
+       *
+       * Em vez de afinar o relogio ate o numero parecer bom — que e como se
+       * fabrica um verde falso —, a regua mede DUAS vezes e so reporta o que
+       * sobrevive as duas. O que aparece numa e some na outra nao era defeito
+       * da tela; era eu medindo no meio do caminho.
+       */
+      if (a.length) {
+        await esperar(900);
+        var b = medir();
+        var chaves = {};
+        for (var k = 0; k < b.length; k++) chaves[b[k].onde + '|' + b[k].problema] = 1;
+        a = a.filter(function (x) { return chaves[x.onde + '|' + x.problema]; });
+      }
+
       if (a.length) relatorio.push({ rota: rotas[i], quantos: a.length, achados: a.slice(0, 8) });
     }
     return relatorio;

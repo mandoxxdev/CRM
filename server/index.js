@@ -433,8 +433,13 @@ function podeInativarProposta(user, proposta) {
 
 // Rate Limiting simples (em memória)
 const rateLimitStore = new Map();
-const RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 minutos
-const RATE_LIMIT_MAX = 500; // máximo 500 requisições por IP (aumentado para evitar bloqueios)
+const RATE_LIMIT_WINDOW = parseInt(process.env.RATE_LIMIT_WINDOW_MS || String(15 * 60 * 1000), 10);
+// 500 por IP a cada 15 minutos continua sendo o padrão de produção. O valor
+// virou configurável porque uma varredura automatizada do front (126 telas,
+// nos dois temas) estoura esse teto na metade e passa a receber 429 — e uma
+// tela que não carregou é indistinguível, no pixel, de uma tela vazia. Sem
+// poder levantar o teto no ambiente local, a medição mede o rate limiter.
+const RATE_LIMIT_MAX = parseInt(process.env.RATE_LIMIT_MAX || '500', 10);
 
 function rateLimit(req, res, next) {
   const ip = req.ip || req.connection.remoteAddress || 'unknown';

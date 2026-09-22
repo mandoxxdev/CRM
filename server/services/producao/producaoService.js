@@ -144,7 +144,13 @@ async function getMaquina(db, id) {
   return dbGet(db, 'SELECT * FROM producao_maquinas WHERE id = ? AND ativo = 1', [id]);
 }
 
-async function createMaquina(db, data) {
+// A rota generica chama `createFn(db, req.user, req.body)` — tres argumentos.
+// Estas tres declaravam `(db, data)` e recebiam o USUARIO no lugar do corpo:
+// os campos vinham sempre indefinidos e a criacao respondia 400 dizendo que
+// faltava o que estava preenchido. Maquina, roteiro e motivo de parada nao
+// podiam ser criados pela API. Mesmo defeito ja corrigido em `frotasService`
+// (createMulta/createDocumento); achado ao povoar as telas para medi-las.
+async function createMaquina(db, _user, data) {
   const codigo = String(data.codigo || '').trim().toUpperCase();
   if (!codigo || !data.nome) {
     const err = new Error('Código e nome são obrigatórios');
@@ -500,7 +506,7 @@ async function getRoteiro(db, id) {
   return { ...roteiro, etapas };
 }
 
-async function createRoteiro(db, data) {
+async function createRoteiro(db, _user, data) {
   const codigo = String(data.produto_codigo || '').trim();
   if (!codigo) {
     const err = new Error('Código do produto é obrigatório');
@@ -556,7 +562,7 @@ async function listMotivosParada(db) {
   return dbAll(db, 'SELECT * FROM producao_motivos_parada WHERE ativo = 1 ORDER BY descricao');
 }
 
-async function createMotivoParada(db, data) {
+async function createMotivoParada(db, _user, data) {
   if (!data.descricao) {
     const err = new Error('Descrição é obrigatória');
     err.status = 400;

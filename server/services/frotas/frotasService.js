@@ -396,7 +396,12 @@ async function listMultas(db, { search, veiculo_id, status_pagamento } = {}) {
   return dbAll(db, sql, params);
 }
 
-async function createMulta(db, data) {
+// A rota generica chama `createFn(db, req.user, req.body)` — tres argumentos.
+// Estas duas declaravam `(db, data)` e recebiam o USUARIO no lugar do corpo:
+// `data.veiculo_id` era sempre indefinido e a criacao respondia 400 "Veiculo e
+// obrigatorio" com o veiculo preenchido. Multa e documento nao podiam ser
+// criados pela API. Descoberto ao povoar as telas de Frota para medi-las.
+async function createMulta(db, _user, data) {
   if (!data.veiculo_id) {
     const err = new Error('Veículo é obrigatório');
     err.status = 400;
@@ -458,7 +463,7 @@ async function listDocumentos(db, { search, veiculo_id, tipo, vencendo } = {}) {
   return dbAll(db, sql, params);
 }
 
-async function createDocumento(db, data) {
+async function createDocumento(db, _user, data) {
   if (!data.veiculo_id || !data.tipo) {
     const err = new Error('Veículo e tipo são obrigatórios');
     err.status = 400;

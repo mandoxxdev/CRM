@@ -980,6 +980,17 @@
     color: inherit !important;
   }
 
+  /* Link dentro do cartao: o azul de link da marca (#4facfe) da 2,24 sobre o
+     vidro claro — medido no numero da OP em `/fabrica`. Vale para qualquer
+     tabela convertida, e nao so para essa tela. Botao de acao fica de fora:
+     ele tem fundo proprio e ja foi tratado na barra de acoes. */
+  html:not([data-theme="dark"]) .cartao-auto a:not([class*="btn"]):not([data-rotulo]) {
+    color: #1D4ED8;
+  }
+  [data-theme="dark"] .cartao-auto a:not([class*="btn"]):not([data-rotulo]) {
+    color: #7DD3FC;
+  }
+
   .cartao-auto > [data-papel="valor"] + [data-papel="meta"] { margin-top: 6px; }
   .cartao-auto > [data-papel="meta"]:empty { display: none; }
   /* `:empty` so pega celula sem NENHUM no. "LOCALIZACAO —" tem um traco
@@ -1036,8 +1047,17 @@
     -webkit-overflow-scrolling: touch;
   }
   .cartao-auto > [data-papel="acoes"] > *::-webkit-scrollbar { display: none; }
-  .cartao-auto > [data-papel="acoes"] :where(button, a) {
-    min-height: 44px;
+  /* `:is` e nao `:where`: `:where()` tem especificidade ZERO, entao
+     `.cartao-auto > [data-papel="acoes"] :where(button, a)` pesava (0,2,0) —
+     o mesmo que a regra `.data-table .btn-icon` do componente, que carrega
+     depois e ganhava o empate. Resultado medido: `min-height: 0px` num botao
+     para o qual eu tinha escrito 44px, renderizado com 31px de altura.
+     `:is()` herda a especificidade do argumento e devolve o (0,2,1). */
+  .cartao-auto > [data-papel="acoes"] :is(button, a) {
+    /* `!important` porque trocar `:where` por `:is` nao bastou: a regra do
+       componente empata em (0,2,1) e carrega depois. Medido duas vezes — 31px
+       de altura num botao para o qual eu escrevi 44. */
+    min-height: 44px !important;
     min-width: 44px;
     /* `width: auto` e o que faz a legenda caber. Estes botoes foram
        desenhados quadrados, com `width: 44px` fixo e `overflow: visible`:
@@ -1047,7 +1067,12 @@
        problema era o TETO. */
     width: auto !important;
     flex: 0 0 auto;
-    display: inline-flex;
+    /* `display` com prioridade, e nao so o `min-height`: estes controles sao
+       `<a>`, que nasce INLINE, e `min-height` NAO SE APLICA a elemento
+       inline. A regra de 44px existia e era ignorada em silencio — o botao
+       ficava com a altura da linha, 31px medidos. Gritar a altura nao adianta
+       quando a caixa nao e do tipo que tem altura. */
+    display: inline-flex !important;
     flex-direction: row;
     align-items: center;
     justify-content: center;
@@ -1058,7 +1083,7 @@
     line-height: 1.1;
     white-space: nowrap;
   }
-  .cartao-auto > [data-papel="acoes"] :where(button, a) > svg { flex-shrink: 0; }
+  .cartao-auto > [data-papel="acoes"] :is(button, a) > svg { flex-shrink: 0; }
   .cartao-auto > [data-papel="acoes"] [data-rotulo]::after {
     content: attr(data-rotulo);
     font-weight: 600;
@@ -1276,6 +1301,16 @@
      De uma coluna para DUAS, e de linha horizontal (icone ao lado do texto)
      para bloco vertical (icone em cima). Dois por linha significa seis numeros
      na primeira tela, em vez de dois. */
+  /* O cartao de resumo e uma FILEIRA: cabecalho a esquerda, grade de
+     indicadores a direita. Em 360px a grade sobrava com 179px de 328, as
+     colunas caiam para 87px e "Valor total aprovado" saia em duas linhas de
+     60px de largura — medido. Empilhado, a grade recebe a largura inteira. */
+  .summary-card, .premium-summary {
+    flex-direction: column !important;
+    align-items: stretch;
+  }
+  .summary-header { width: 100%; }
+
   .summary-content.premium-summary-content,
   .summary-content {
     display: grid !important;
@@ -1960,4 +1995,354 @@
   [data-theme="dark"] .almox-mov-qtd { color: #4ADE80 !important; }
   [data-theme="dark"] .almox-mov-qtd.saida,
   [data-theme="dark"] .almox-mov-qtd[class*="saida"] { color: #F87171 !important; }
+
+  /* ── 27. Varredura do sistema inteiro ───────────────────────────────
+     126 telas de 15 modulos, medidas uma a uma em 360px. Tudo o que esta
+     aqui saiu de medicao, e cada cor nova vem anotada com o contraste que
+     entrega. Nenhuma foi escolhida a olho.
+
+     A familia que mais se repete no sistema e sempre a mesma: o azul claro
+     da marca (#4facfe) usado como LETRA sobre fundo claro, ou como FUNDO de
+     botao com letra branca. Nos dois casos ele foi desenhado para preencher,
+     nao para ser lido. */
+
+  /* ── Selos da Producao: a cor do texto e a cor do fundo ───────────────
+     Mesmo padrao dos selos do Almoxarifado, seis variantes, medidas de 1,88
+     a 2,79 no tema claro. Muda so a letra; o fundo continua com a cor de
+     estado. */
+  html:not([data-theme="dark"]) .producao-badge.primary { color: #9A3412 !important; }  /* 2,-- -> 5,84 */
+  html:not([data-theme="dark"]) .producao-badge.success { color: #146C43 !important; }  /*      -> 5,25 */
+  html:not([data-theme="dark"]) .producao-badge.warning { color: #92400E !important; }  /*      -> 6,07 */
+  html:not([data-theme="dark"]) .producao-badge.danger  { color: #B01030 !important; }  /*      -> 5,60 */
+  html:not([data-theme="dark"]) .producao-badge.info    { color: #1D4ED8 !important; }  /*      -> 5,67 */
+  html:not([data-theme="dark"]) .producao-badge.muted   { color: #475569 !important; }  /*      -> 6,16 */
+
+  [data-theme="dark"] .producao-badge.primary { color: #FB923C !important; }  /* 7,40 */
+  [data-theme="dark"] .producao-badge.success { color: #4ADE80 !important; }  /* 9,37 */
+  [data-theme="dark"] .producao-badge.warning { color: #FBBF24 !important; }  /* 9,16 */
+  [data-theme="dark"] .producao-badge.danger  { color: #F87171 !important; }  /* 6,12 */
+  [data-theme="dark"] .producao-badge.info    { color: #7DD3FC !important; }  /* 9,33 */
+  [data-theme="dark"] .producao-badge.muted   { color: #A1A1AA !important; }  /* 6,49 */
+
+  /* ── Calculadoras de Engenharia no tema escuro ────────────────────
+     Volume, tampo, motor/impelidor e selecao de agitadores escrevem em
+     cinza-escuro fixo (#475569 medido) — cor pensada para papel branco. No
+     tema escuro o fundo vira #181818 e o texto marca 2,34; num caso, 1,01.
+     Sao telas de CALCULO: quem abre esta ali para ler numero.
+
+     Em vez de caçar cada cor fixa, devolvo a heranca: o container recebe a
+     cor de texto do tema e os filhos passam a herdar dele. As cores com
+     `!important` (o `.valor`, logo acima) continuam valendo, que e o que
+     mantem o destaque do resultado. */
+  [data-theme="dark"] [class*="calculo-"],
+  [data-theme="dark"] [class*="agitador"] { color: var(--ag-texto); }
+  /* `*` e nao uma lista de tags: eu tinha listado `li, p, span...` e dois
+     casos continuaram ilegiveis porque a cor fixa estava no `<ul>`, que
+     ficou de fora — o `<li>` recebia `inherit` e herdava justamente a cor
+     errada. Listar tags e apostar em quais o autor usou.
+
+     Quem tem `!important` (o `.valor`, acima) continua vencendo, e e o que
+     preserva o destaque do resultado. */
+  [data-theme="dark"] [class*="calculo-"] *:not([class*="badge"]):not([class*="selo"]):not([class*="pill"]):not(svg):not(svg *),
+  [data-theme="dark"] [class*="agitador"] *:not([class*="badge"]):not([class*="selo"]):not([class*="pill"]):not(svg):not(svg *) {
+    color: inherit;
+  }
+
+  /* MAS herdar so vale onde o FUNDO tambem e herdado.
+
+     A caixa de observacao dessas telas traz fundo claro proprio
+     (#FFEDD5, o amarelo de aviso) e nao muda no tema escuro. Minha regra
+     acima pintou o texto dela de quase-branco: 1,04 medido — eu criei ali
+     um defeito pior do que o que estava consertando.
+
+     Caixa com fundo claro proprio mantem letra escura. E `.aviso-imp`, que
+     e texto solto sobre o fundo escuro da pagina, vai para o amarelo claro:
+     o nome parece o mesmo tipo de coisa e o fundo e o oposto, entao nao da
+     para decidir isso pelo nome da classe — so medindo. */
+  /* ── Caixas de dica e observacao no tema escuro ───────────────────
+     Espalhadas pelo sistema ha caixinhas de apoio com fundo CLARO fixo:
+     #FFEDD5 na observacao das calculadoras, #F0F7FF na dica do template de
+     proposta. Elas nao acompanham o tema, e no escuro a letra clara da
+     pagina cai em cima delas: 1,04 e 1,08 medidos — texto branco sobre
+     quase-branco.
+
+     Primeiro escrevi o contrario: forcar letra ESCURA nessas caixas. Deixa
+     legivel e deixa feio, uma mancha clara no meio de uma tela escura. E
+     obriga a acertar o nome de cada classe, o que nao funciona: `.aviso-imp`
+     tem "aviso" no nome e fundo transparente, enquanto `-obs` tem fundo
+     proprio. Pelo nome nao da para saber; so medindo.
+
+     Entao a caixa e que escurece, e a letra clara passa a fazer sentido. */
+  [data-theme="dark"] [class*="hint"],
+  [data-theme="dark"] [class*="-obs"],
+  [data-theme="dark"] [class*="callout"],
+  [data-theme="dark"] [class*="-nota"] {
+    background: rgba(255, 255, 255, 0.06) !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
+    color: var(--ag-texto) !important;
+  }
+
+  /* `.aviso-imp` e texto solto sobre o fundo escuro, nao caixa: precisa e de
+     um amarelo claro. O ambar escuro que ela usa (#B45309) da 3,54 la. */
+  [data-theme="dark"] .aviso-imp,
+  [data-theme="dark"] .aviso-imp * { color: #FBBF24 !important; }
+
+  /* ── Selos da Frota ───────────────────────────────────────
+     Quarta vez que esta familia aparece — Almoxarifado, Producao, Comercial
+     e agora Frota, sempre com a cor do texto igual a do fundo. De 2,10 a
+     3,64 medidos, e nos dois temas. Os tons sao os mesmos ja validados. */
+  html:not([data-theme="dark"]) .frotas-badge-ativo,
+  html:not([data-theme="dark"]) .frotas-badge-concluida,
+  html:not([data-theme="dark"]) .frotas-badge-pago,
+  html:not([data-theme="dark"]) .frotas-badge-aprovada { color: #146C43 !important; }
+
+  html:not([data-theme="dark"]) .frotas-badge-manutencao,
+  html:not([data-theme="dark"]) .frotas-badge-pendente,
+  html:not([data-theme="dark"]) .frotas-badge-solicitada,
+  html:not([data-theme="dark"]) .frotas-badge-em_andamento { color: #92400E !important; }
+
+  html:not([data-theme="dark"]) .frotas-badge-inativo,
+  html:not([data-theme="dark"]) .frotas-badge-cancelada,
+  html:not([data-theme="dark"]) .frotas-badge-vencido { color: #B01030 !important; }
+
+  html:not([data-theme="dark"]) .frotas-badge-preventiva,
+  html:not([data-theme="dark"]) .frotas-badge-diesel,
+  html:not([data-theme="dark"]) .frotas-badge-flex { color: #1D4ED8 !important; }
+
+  [data-theme="dark"] .frotas-badge-ativo,
+  [data-theme="dark"] .frotas-badge-concluida,
+  [data-theme="dark"] .frotas-badge-pago,
+  [data-theme="dark"] .frotas-badge-aprovada { color: #4ADE80 !important; }
+
+  [data-theme="dark"] .frotas-badge-manutencao,
+  [data-theme="dark"] .frotas-badge-pendente,
+  [data-theme="dark"] .frotas-badge-solicitada,
+  [data-theme="dark"] .frotas-badge-em_andamento { color: #FBBF24 !important; }
+
+  [data-theme="dark"] .frotas-badge-inativo,
+  [data-theme="dark"] .frotas-badge-cancelada,
+  [data-theme="dark"] .frotas-badge-vencido { color: #F87171 !important; }
+
+  [data-theme="dark"] .frotas-badge-preventiva,
+  [data-theme="dark"] .frotas-badge-diesel,
+  [data-theme="dark"] .frotas-badge-flex { color: #7DD3FC !important; }
+
+  /* O banner de erro da Fabrica usa o mesmo vermelho como letra e como
+     fundo a 10%: 3,30. E texto de ERRO, o que mais precisa ser lido. */
+  html:not([data-theme="dark"]) .producao-error-banner { color: #B01030 !important; }
+  [data-theme="dark"] .producao-error-banner { color: #F87171 !important; }
+
+  /* ── Branco sobre o azul claro ────────────────────────────────
+     Eu tinha concluido, na rodada anterior, que branco sobre #4facfe
+     aparecia so num botao. Medi de novo no sistema inteiro e estava errado:
+     e o estilo dos botoes da Fabrica. 2,42 medido. Mesmo azul, dois passos
+     mais escuro, branco por cima: 6,70. */
+  /* Primeiro escrevi `:not(.producao-btn-secondary)`, supondo que a variante
+     secundaria tivesse outro desenho. Medi: ela e branca sobre o MESMO azul
+     claro, 2,42 — eu tinha excluido justamente a quebrada. Todas levam o par
+     completo, fundo e letra, pela licao do `.btn-secondary`. */
+  .producao-btn {
+    background: #1D4ED8 !important;
+    color: #FFFFFF !important;
+  }
+
+  /* ── O resultado do calculo ──────────────────────────────────
+     Nas calculadoras de Engenharia (volume, tampo, motor/impelidor) o
+     `.valor` e o numero que a pessoa foi ali buscar, e media 2,32 — o dado
+     mais importante da tela era o menos legivel. -> 6,41. */
+  html:not([data-theme="dark"]) .valor { color: #1D4ED8 !important; }
+  [data-theme="dark"] .valor { color: #7DD3FC !important; }
+
+  /* Mesma cor, mesmo problema, no cadastro de materiais de escritorio. */
+  html:not([data-theme="dark"]) .engp-mat-toggle.on,
+  html:not([data-theme="dark"]) .engp-mat-pill { color: #1D4ED8 !important; }
+  [data-theme="dark"] .engp-mat-toggle.on,
+  [data-theme="dark"] .engp-mat-pill { color: #7DD3FC !important; }
+
+  /* ── "Cancelar" ────────────────────────────────────────────
+     Branco sobre um cinza claro (#95a5a6): 2,56 em tres formularios.
+
+     Escrevi primeiro so `background: #4B5563` e MEDI DE NOVO: em
+     `/comercial/produtos/novo` o mesmo `.btn-secondary` usa letra
+     azul-escura, e o contraste caiu para 1,45 — eu tinha piorado a tela.
+     Mexer so num lado de um par de cores e apostar que o outro lado e
+     sempre o mesmo. Aqui os dois andam juntos: 7,56 em qualquer tela. */
+  .btn-secondary {
+    background: #4B5563 !important;
+    color: #FFFFFF !important;
+  }
+
+  /* O sino de notificacoes e o terceiro caso do par "botao estreito + recuo
+     largo", e o unico onde o piso global de 16px nao pega: o dev server so
+     me deixa enxergar 456 das regras carregadas, entao nao consegui provar
+     QUAL regra zera o `min-width` dele — o `min-height` do mesmo bloco pega
+     normalmente. Fixo o tamanho aqui e sigo; se aparecer outro caso, a
+     lente ICONE COLAPSADO acusa, que foi como este apareceu. */
+  .notificacoes-bell {
+    padding: 0 !important;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+  }
+  .notificacoes-bell > svg {
+    width: 20px !important;
+    height: 20px !important;
+    min-width: 20px !important;
+  }
+
+  /* ── Total do pedido de compra ──────────────────────────────
+     Verde claro (#22c55e) em 19px negrito: 2,28, quando texto grande pede 3.
+     E o valor final do pedido. */
+  html:not([data-theme="dark"]) .pcf-total-geral strong,
+  html:not([data-theme="dark"]) .pcf-total-geral { color: #15803D !important; }
+  [data-theme="dark"] .pcf-total-geral strong,
+  [data-theme="dark"] .pcf-total-geral { color: #4ADE80 !important; }
+
+  /* ── 28. Estruturas que nao cabem em 360px ─────────────────────── */
+
+  /* Tela de escolha de perfil: o selo "ADMINISTRADOR" tem 121px e `min-width:
+     auto`, entao nao encolhe; o cabecalho e um flex sem quebra e o selo
+     terminava em 367px, fora da tela de 360. */
+  .tipo-selecao__header-top { flex-wrap: wrap; gap: 8px; }
+  .tipo-selecao__brand { min-width: 0; }
+  .tipo-selecao__admin-badge {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  /* Privilegios de superadmin: a grade pedia uma coluna FIXA de 280px dentro
+     de um container de 144px, e as opcoes terminavam em 385px. E o mesmo
+     defeito que o adaptador `gradesNoCelular` resolve — mas ali a medida
+     esta no CSS, nao no `style` inline, e por isso ele nao alcanca. */
+  .superadmin-privileges-options {
+    grid-template-columns: 1fr !important;
+    gap: 10px;
+  }
+  .superadmin-option { min-width: 0; }
+  .superadmin-option-label,
+  .superadmin-option-hint { min-width: 0; overflow-wrap: anywhere; }
+
+  /* ── Indicadores da Frota ──────────────────────────────────
+     Exatamente o defeito que o P.O. fotografou no Almoxarifado, no outro
+     modulo: duas colunas de 153px, cartao em FILEIRA com icone ao lado, e
+     sobram 49px para o rotulo — menos que a palavra "Abastecimentos". Mesmo
+     remedio: cartao na vertical, texto com a largura inteira. */
+  .frotas-kpi-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 12px !important;
+  }
+  .frotas-kpi-card > :first-child { flex: 0 0 auto; }
+  .frotas-kpi-label {
+    width: 100%;
+    font-size: .7rem;
+    line-height: 1.25;
+    overflow-wrap: break-word;
+  }
+  .frotas-kpi-value { font-size: 1.2rem !important; line-height: 1.15; }
+
+  /* ── Caixa de marcar solta ─────────────────────────────────
+     Um `<input type="checkbox">` nativo mede 18px e nao ha CSS que mude isso
+     de verdade. Quando ele esta dentro de um `<label>`, o alvo de toque e o
+     rotulo inteiro e esta tudo bem — mas em `config-template` sao 156 caixas
+     SOLTAS, sem label em volta e sem `for`: o unico alvo e o quadradinho.
+
+     A area de toque cresce por um pseudo-elemento, que nao ocupa espaco no
+     layout e portanto nao mexe em nada do desenho. O quadradinho continua
+     com 18px; o dedo passa a ter 44. */
+  input[type="checkbox"]:not(label *),
+  input[type="radio"]:not(label *) { position: relative; }
+  input[type="checkbox"]:not(label *)::after,
+  input[type="radio"]:not(label *)::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    transform: translate(-50%, -50%);
+  }
+
+  /* ── Lista de variaveis do template de proposta ─────────────────────
+     Cem itens com o mesmo defeito, e um deles passa RASPANDO: a chave em
+     #6A6A6A sobre um cinza a 6% da 4,38, contra os 4,5 exigidos. Ficar a
+     0,12 do limite nao e "quase certo" — em 12px, e a diferenca entre ler e
+     adivinhar. #4A4A4A resolve sem mudar a aparencia da lista.
+
+     E o item e uma fileira de chave + nome em 322px: sobram 73px para o
+     nome, menos que a palavra "DESCRICAO_PRODUTO". Empilhado, o nome recebe
+     a largura toda. */
+  .variaveis-proposta-item-chave { color: #4A4A4A !important; }
+  [data-theme="dark"] .variaveis-proposta-item-chave { color: #C4C4C4 !important; }
+
+  .variaveis-proposta-item {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 4px;
+  }
+  .variaveis-proposta-item > * { width: 100%; min-width: 0; }
+  .variaveis-proposta-item-nome { overflow-wrap: anywhere; }
+
+  /* ── Linha de tabela com fundo claro fixo, no tema escuro ─────────────
+     Nem toda tabela vira cartao rico: quando nenhuma coluna serve de titulo,
+     a conversao fica no modo SIMPLES e a propria `<tr>` e que vira cartao.
+     Varias telas pintam essa linha de branco fixo (`.frotas-table tbody tr`
+     e parentes), e no tema escuro o texto claro cai em cima: 1,00 medido em
+     `/frota/documentos` — branco sobre branco, literalmente invisivel.
+
+     O cartao rico ja recebe o vidro do tema no bloco 11; aqui o modo simples
+     passa a receber o mesmo. */
+  [data-theme="dark"] table.tabela-cartoes tbody tr {
+    background: var(--ag-vidro) !important;
+    border-color: var(--ag-borda) !important;
+  }
+  [data-theme="dark"] table.tabela-cartoes tbody td { background: transparent !important; }
+
+  /* ── 29. Ultimos achados da varredura completa ──────────────────────
+     Os dois que sobreviveram a medicao COM pintura forcada. */
+
+  /* Ultimas movimentacoes, no painel do Almoxarifado: a linha e um flex de
+     284px com icone, texto e quantidade, e o texto ficava com 47px — "Claude
+     (revisao mobile) · 22/09, 15:54" em cinco linhas de uma palavra. Um piso
+     de largura empurra o texto para a propria linha quando nao couber. */
+  .almox-mov-item {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 6px 10px;
+  }
+  /* `!important` porque a regra do componente viaja num chunk que carrega
+     depois: `flex-wrap` pegou e o `flex` do filho, nao — media 45px. */
+  .almox-mov-info { flex: 1 1 150px !important; min-width: 0; }
+  .almox-mov-meta { overflow-wrap: anywhere; }
+
+  /* Selo de status generico (`.status-badge.ativo` e parentes): quinta vez
+     que a familia "letra da mesma cor do fundo" aparece. 2,95 medido em
+     `/admin`. Os tons ja foram validados nos outros quatro modulos. */
+  html:not([data-theme="dark"]) .status-badge.ativo,
+  html:not([data-theme="dark"]) .status-badge.aprovado,
+  html:not([data-theme="dark"]) .status-badge.concluida,
+  html:not([data-theme="dark"]) .status-badge.concluido { color: #146C43 !important; }
+
+  html:not([data-theme="dark"]) .status-badge.pendente,
+  html:not([data-theme="dark"]) .status-badge.aguardando { color: #92400E !important; }
+
+  html:not([data-theme="dark"]) .status-badge.inativo,
+  html:not([data-theme="dark"]) .status-badge.cancelado,
+  html:not([data-theme="dark"]) .status-badge.cancelada,
+  html:not([data-theme="dark"]) .status-badge.rejeitado { color: #B01030 !important; }
+
+  [data-theme="dark"] .status-badge.ativo,
+  [data-theme="dark"] .status-badge.aprovado,
+  [data-theme="dark"] .status-badge.concluida,
+  [data-theme="dark"] .status-badge.concluido { color: #4ADE80 !important; }
+
+  [data-theme="dark"] .status-badge.pendente,
+  [data-theme="dark"] .status-badge.aguardando { color: #FBBF24 !important; }
+
+  [data-theme="dark"] .status-badge.inativo,
+  [data-theme="dark"] .status-badge.cancelado,
+  [data-theme="dark"] .status-badge.cancelada,
+  [data-theme="dark"] .status-badge.rejeitado { color: #F87171 !important; }
 }

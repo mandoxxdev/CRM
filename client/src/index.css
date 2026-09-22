@@ -553,8 +553,12 @@ a.btn-danger:hover svg {
      inclusive para o botão que ainda não foi escrito. */
   button > svg, button > img,
   a > svg, [role="button"] > svg {
-    min-width: 1em;
-    min-height: 1em;
+    /* `px` e nao `em`: o sino de notificacoes tem `font-size: 0` herdado, e
+       la `1em` resolvia para ZERO — o piso existia e nao valia nada. Medido:
+       `svg 0x20` num botao de 40px, com a regra aplicada. Unidade relativa
+       num piso de seguranca depende justamente do que pode estar quebrado. */
+    min-width: 16px;
+    min-height: 16px;
   }
 }
 

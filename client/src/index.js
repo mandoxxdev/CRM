@@ -18,6 +18,7 @@ import './styles/mobile-app.css';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 import { markChunkRecoveryReady } from './utils/chunkLoadRecovery';
+import { iniciarContrasteNoCelular } from './utils/contrasteNoCelular';
 import { iniciarGradesNoCelular } from './utils/gradesNoCelular';
 import { iniciarTabelasComoCartoes } from './utils/tabelasComoCartoes';
 import { registerServiceWorker } from './utils/pushNotifications';
@@ -47,8 +48,10 @@ markChunkRecoveryReady();
 // fazem nada no computador, e valem para modulo que ainda nem existe:
 //   tabelas  -> viram cartoes
 //   grades com coluna fixa grande -> viram coluna unica
+//   cor ilegivel escrita em JS -> escurece so a letra, mantendo o matiz
 iniciarTabelasComoCartoes();
 iniciarGradesNoCelular();
+iniciarContrasteNoCelular();
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(

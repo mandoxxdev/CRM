@@ -182,6 +182,119 @@ function ehSituacao(td, rotulo) {
   return /^(status|situa|estado|ativo)/i.test(rotulo) && txt.length <= 24;
 }
 
+/* ── Contraste do selo de situação ─────────────────────────────────────────
+ *
+ * Os selos de estado ("aprovado", "pendente", "ativo") costumam ser pintados
+ * em JAVASCRIPT, com a mesma cor servindo de letra e de fundo a ~12%:
+ *
+ *     style="background-color: rgba(46,204,113,.125); color: rgb(46,204,113)"
+ *
+ * Medido em `/compras/pedidos`: 1,87 de contraste, quando texto pequeno pede
+ * 4,5. O mesmo padrão aparece no Almoxarifado, na Produção, na Frota e no
+ * Comercial — lá dá para corrigir no CSS porque a cor está numa classe. Aqui
+ * ela está no atributo `style`, calculada em tempo de execução, e nenhum
+ * seletor alcança.
+ *
+ * Então a correção mora onde a cor pode ser LIDA. Escurece-se (ou clareia-se)
+ * a letra mantendo o matiz, até passar de 4,5. O fundo não muda: a cor de
+ * estado continua sendo a cor de estado, e a tela não muda de cara.
+ */
+const ALVO_CONTRASTE = 4.5;
+
+function canal(cor) {
+  const m = String(cor || '').match(/[\d.]+/g);
+  if (!m || m.length < 3) return null;
+  return { r: +m[0], g: +m[1], b: +m[2], a: m[3] === undefined ? 1 : +m[3] };
+}
+
+function luminancia({ r, g, b }) {
+  const f = (v) => {
+    const x = v / 255;
+    return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+}
+
+function contraste(a, b) {
+  const la = luminancia(a);
+  const lb = luminancia(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+/** Cor de fundo realmente pintada atrás do elemento, ou null se houver imagem. */
+export function fundoAtras(el) {
+  const pilha = [];
+  for (let p = el; p && p !== document.documentElement; p = p.parentElement) {
+    const c = getComputedStyle(p);
+    if (c.backgroundImage && c.backgroundImage !== 'none') return null;
+    const cor = canal(c.backgroundColor);
+    if (cor && cor.a > 0) {
+      pilha.push(cor);
+      if (cor.a >= 0.999) break;
+    }
+  }
+  if (!pilha.length) return null;
+  const base = pilha[pilha.length - 1];
+  if (base.a < 0.999) return null;
+  let out = base;
+  for (let i = pilha.length - 2; i >= 0; i -= 1) {
+    const t = pilha[i];
+    out = {
+      r: t.r * t.a + out.r * (1 - t.a),
+      g: t.g * t.a + out.g * (1 - t.a),
+      b: t.b * t.a + out.b * (1 - t.a),
+      a: 1,
+    };
+  }
+  return out;
+}
+
+/**
+ * Deixa a letra legível sobre o próprio fundo, preservando o matiz.
+ *
+ * Caminha em direção ao preto (fundo claro) ou ao branco (fundo escuro) em
+ * passos de 6%, e para no primeiro que passa. Vinte passos bastam para ir de
+ * ponta a ponta; se nem assim passar, deixa como estava — é melhor do que
+ * entregar um cinza sem significado.
+ */
+export function corLegivel(corTexto, corFundo) {
+  const t = canal(corTexto);
+  const f = canal(corFundo);
+  if (!t || !f) return null;
+  if (contraste(t, f) >= ALVO_CONTRASTE) return null;
+
+  const paraPreto = luminancia(f) > 0.4;
+  const alvo = paraPreto ? 0 : 255;
+  let atual = { ...t };
+  for (let i = 0; i < 20; i += 1) {
+    atual = {
+      r: atual.r + (alvo - atual.r) * 0.06,
+      g: atual.g + (alvo - atual.g) * 0.06,
+      b: atual.b + (alvo - atual.b) * 0.06,
+    };
+    if (contraste(atual, f) >= ALVO_CONTRASTE) {
+      return `rgb(${Math.round(atual.r)}, ${Math.round(atual.g)}, ${Math.round(atual.b)})`;
+    }
+  }
+  return null;
+}
+
+/** Aplica `corLegivel` aos selos pintados em JS dentro da célula. */
+function corrigirContrasteDoSelo(celula) {
+  const selos = celula.querySelectorAll('[style*="color"]');
+  const todos = celula.getAttribute('style') && /color/.test(celula.getAttribute('style'))
+    ? [celula, ...selos]
+    : [...selos];
+  todos.forEach((el) => {
+    const fundo = fundoAtras(el);
+    if (!fundo) return;
+    const nova = corLegivel(getComputedStyle(el).color, `rgb(${fundo.r},${fundo.g},${fundo.b})`);
+    // `setProperty` com prioridade porque a cor original também é inline: sem
+    // isso, o próximo render do React devolve a ilegível por cima.
+    if (nova) el.style.setProperty('color', nova, 'important');
+  });
+}
+
 /**
  * Marca (ou desmarca) a célula sem conteúdo, para o CSS escondê-la.
  *
@@ -333,6 +446,7 @@ function rotularTabela(tabela) {
       }
       marcarVazio(td);
       if (papel === 'acoes') rotularBotoes(td);
+      if (papel === 'situacao') corrigirContrasteDoSelo(td);
       if (rotulo) rotulou = true;
     });
   });
@@ -430,6 +544,7 @@ function rotularGrade(container) {
       }
       marcarVazio(celula);
       if (papeis[i] === 'acoes') rotularBotoes(celula);
+      if (papeis[i] === 'situacao') corrigirContrasteDoSelo(celula);
     });
     if (temTitulo) linha.classList.add(CLASSE_LINHA);
   });
