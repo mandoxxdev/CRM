@@ -60,7 +60,8 @@ apagado — a RN-F12 declara que o `pedido_id` **fica**, e o cenário afirma iss
 | RN-F09 | `rejeitado`/`cancelado` → 400 | T2-gerar (4) |
 | RN-F10 | segunda conversão → 409 sem pedido novo | T2-gerar (2), T5 |
 | RN-F11 | fornecedor inativo → 400; apagado → 400 | T2-gerar (5) |
-| RN-F12 | o pedido gerado é normal (lista, aux do recebimento, PUT, DELETE); `pedido_id` fica | T5 |
+| RN-F12 | o pedido gerado é normal (lista, aux do recebimento, PUT, DELETE); **excluir o pedido LIBERA a cotação** (`pedido_id` volta a NULL, `cotacoes_liberadas` na resposta — Fase 2 I2, o precedente da I1 da 38) | T2-gerar (10), T5 |
+| RN-F15 | cotação convertida **não pode mais ser editada**: `PUT` → 409 `Cotação ⟨numero⟩ já gerou o pedido ⟨PC⟩ — não pode mais ser editada` (Fase 2 I3) | T2-gerar (9) |
 | RN-F13 | tela: busca, linhas, total derivado, campo travado com itens, payload `itens` + `Number()` | T3 (i)–(n) |
 | RN-F14 | aba: coluna Pedido, botão condicional, POST, toast, navigate, erro no toast, export | T4 (j)(k)(l) |
 
@@ -76,7 +77,13 @@ Idênticos ao design §5. Nomes exatos que os galhos consomem:
 
 **T2 exporta** (`cotacaoService.js`): `excluirCotacao(db, id)`, `gerarPedidoDaCotacao(db, id, user)`,
 `COTACAO_SEM_ITENS`, `cotacaoStatusNaoGera(status)`, `FORNECEDOR_INATIVO_CONVERSAO`,
-`cotacaoJaGerouPedido(numero, pc)`, `cotacaoJaGerouPedidoExclusao(numero, pc)`, `COTACAO_EXCLUIDA = 'Cotação excluída com sucesso'`.
+`cotacaoJaGerouPedido(numero, pc)`, `cotacaoJaGerouPedidoExclusao(numero, pc)`,
+`cotacaoJaGerouPedidoEdicao(numero, pc)` (= `${cotacaoJaGerouPedido(numero, pc)} — não pode mais ser editada`),
+`rotuloPedido(c)` (= `c.pedido_numero || `#${c.pedido_id}``), `COTACAO_EXCLUIDA = 'Cotação excluída com sucesso'`.
+**T2 também toca `pedidoCompraService.excluirPedido`** (`:518-544`): antes de apagar o pedido,
+`UPDATE cotacoes SET pedido_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE pedido_id = ?` e a resposta
+ganha `cotacoes_liberadas: N` ao lado de `solicitacoes_liberadas` (Fase 2 I2 — é o precedente da I1 da
+Etapa 38, `liberarSolicitacoesDoPedido :213-252`).
 
 **Rotas** (T2): `POST /api/compras/cotacoes/:id/gerar-pedido` → `201` pedido (`obterPedido`: `{ id, numero, fornecedor_id, fornecedor_nome, valor_total, status, itens[…] }`); `DELETE /api/compras/cotacoes/:id` → `200 { message }`. `GET /api/compras/cotacoes` → linhas com `pedido_id`, `pedido_numero`.
 
@@ -263,8 +270,8 @@ db.run('ALTER TABLE cotacoes ADD COLUMN pedido_id INTEGER REFERENCES pedidos_com
 ### Task 2: `cotacaoService` com itens, lixeira própria e a conversão **(tronco, um executor, worktree `wt-e41-t2`)**
 
 **Files:**
-- Modify: `server/services/compras/cotacaoService.js` (reescrever), `server/routes/compras.js` (`:316-343` lista, `:345-364` bloco, `:367` genérico)
-- Test: `server/tests/api/comprasCotacaoItens.api.test.js` (novo, 10), `server/tests/api/comprasCotacaoGerarPedido.api.test.js` (novo, 8)
+- Modify: `server/services/compras/cotacaoService.js` (reescrever), `server/routes/compras.js` (`:316-343` lista, `:345-364` bloco, `:367` genérico), `server/services/compras/pedidoCompraService.js` (`excluirPedido :518-544` — liberar a cotação; Fase 2 I2)
+- Test: `server/tests/api/comprasCotacaoItens.api.test.js` (novo, 10), `server/tests/api/comprasCotacaoGerarPedido.api.test.js` (novo, **10**)
 
 **Interfaces:**
 - Consumes: T1 (`resolverItens`, `CotacaoSchema` com `itens`, coluna `pedido_id`, tabela `itens_cotacao`); `pedidoCompraService.criarPedido(db, dados, user)` (`:320`), `obterPedido(db, id)` (`:393`), `erro`, `assertFornecedor`; `dbAll`.
@@ -375,9 +382,9 @@ db.run('ALTER TABLE cotacoes ADD COLUMN pedido_id INTEGER REFERENCES pedidos_com
 })();
 ```
 
-Vermelho esperado: (1) `valor_total` 0 e `itens` undefined; (4) 201; (7) `message` do genérico e órfãos
-não medidos (vai passar `length 0`? **Não**: sem o laço de INSERT não há itens — o (7) só mede órfãos
-depois que a T2 grava itens; no vermelho ele cai na literal); (8) `Item não encontrado`; (10) 200.
+Vermelho esperado: (1) `valor_total` 0 e `itens` undefined; (4) 201; (7) cai na literal (`message` do
+genérico, *"Item excluído com sucesso"*) — a asserção de órfãos só passa a medir depois que o serviço
+grava itens; (8) `Item não encontrado`; (10) 200.
 
 - [ ] **Step 2: escrever `comprasCotacaoGerarPedido.api.test.js` e ver vermelho** (`ADMIN` id 101; fixtures: fornecedor ativo `fA`, inativo `fB`, materiais `mA`/`mB`; helper `cotar(itens, extra)`):
 
@@ -457,7 +464,34 @@ depois que a T2 grava itens; no vermelho ele cai na literal); (8) `Item não enc
     let e; try { await cotacaoService.gerarPedidoDaCotacao(db, c.id, ADMIN); } catch (x) { e = x; }
     assert.strictEqual(e && e.status, 409);
   });
+  await test('(9) RN-F15 cotacao convertida nao pode mais ser editada: PUT -> 409 literal, linha intacta', async () => {
+    const c = await cotar([{ material_id: mA, quantidade: 1, valor_unitario: 10 }]);
+    const a = await gerar(c.id); assert.strictEqual(a.status, 201);
+    const r = await request(app).put(`/api/compras/cotacoes/${c.id}`).send({ numero: c.numero, fornecedor_id: fA, status: 'rejeitado', itens: [{ material_id: mA, quantidade: 99, valor_unitario: 1 }] });
+    assert.strictEqual(r.status, 409, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, `Cotação ${c.numero} já gerou o pedido ${a.body.numero} — não pode mais ser editada`);
+    const g = await get(c.id);
+    assert.strictEqual(g.body.status, 'aprovado'); assert.strictEqual(g.body.itens[0].quantidade, 1); assert.strictEqual(g.body.valor_total, 10);
+  });
+  await test('(10) RN-F12 excluir o pedido gerado LIBERA a cotacao: pedido_id volta a NULL, resposta traz cotacoes_liberadas, e gerar de novo -> 201 com PC novo', async () => {
+    const c = await cotar([{ material_id: mA, quantidade: 1, valor_unitario: 3 }]);
+    const a = await gerar(c.id); assert.strictEqual(a.status, 201);
+    const d = await request(app).delete(`/api/compras/pedidos/${a.body.id}`);
+    assert.strictEqual(d.status, 200, JSON.stringify(d.body));
+    assert.strictEqual(d.body.cotacoes_liberadas, 1, JSON.stringify(d.body));
+    const g = await get(c.id);
+    assert.strictEqual(g.body.pedido_id, null); assert.strictEqual(g.body.pedido_numero, null);
+    const b = await gerar(c.id);
+    assert.strictEqual(b.status, 201, JSON.stringify(b.body));
+    assert.notStrictEqual(b.body.numero, a.body.numero, 'PC novo');
+    // e agora a cotacao volta a ser inexcluivel
+    assert.strictEqual((await request(app).delete(`/api/compras/cotacoes/${c.id}`)).status, 409);
+  });
 ```
+
+Acrescente ao (1): `assert.strictEqual(r.body.data_pedido, pedidoCompraService.hojeLocalISO(), 'data_pedido nasce HOJE local (Fase 2 I4) — sem isso nascia NULL')`
+(importe `hojeLocalISO` de `pedidoCompraService`). E no comentário do (5), a metade "fornecedor apagado":
+*"só alcançável no harness (FK desligada) — em produção a FK e a lixeira própria impedem o DELETE (Fase 2 M5); o cenário fica porque é o caminho do serviço"*.
 
 - [ ] **Step 3: `cotacaoService.js`** — reescrever (cabeçalho atualizado: o parágrafo *"Nao ha itens…"* vira *"Ate a Etapa 40 nao havia itens… Desde a 41…"*):
 
@@ -476,6 +510,10 @@ const numeroDuplicado = (numero) => `Já existe uma cotação com o número ${nu
 const cotacaoStatusNaoGera = (status) => `cotação ${status} não pode gerar pedido`;
 const cotacaoJaGerouPedido = (numero, pc) => `Cotação ${numero} já gerou o pedido ${pc}`;
 const cotacaoJaGerouPedidoExclusao = (numero, pc) => `${cotacaoJaGerouPedido(numero, pc)} — não pode ser excluída`;
+const cotacaoJaGerouPedidoEdicao = (numero, pc) => `${cotacaoJaGerouPedido(numero, pc)} — não pode mais ser editada`;
+// Fase 2 (I1): depois que o pedido e excluido a T2 LIBERA a cotacao (pedido_id volta a NULL), entao
+// `pedido_numero` null so acontece por SQL direto — mesmo assim a frase nao pode dizer "pedido null".
+const rotuloPedido = (c) => c.pedido_numero || `#${c.pedido_id}`;
 
 const SELECT_LINHA = `SELECT c.id, c.numero, c.fornecedor_id, f.razao_social AS fornecedor_nome, c.valor_total,
   c.data_cotacao, c.validade, c.status, c.observacoes, c.pedido_id, p.numero AS pedido_numero, c.created_at, c.updated_at
@@ -513,7 +551,10 @@ async function criarCotacao(db, dados) {
   return obterCotacao(db, r.lastID);
 }
 async function atualizarCotacao(db, id, dados) {
-  await obterCotacao(db, id);
+  const atual = await obterCotacao(db, id);
+  // RN-F15 (Fase 2, I3): convertida nao se edita — o pedido ja nasceu; mexer na cotacao depois
+  // seria rastro falso (e o status voltaria de 'aprovado' com pedido_id gravado).
+  if (atual.pedido_id != null) throw erro(cotacaoJaGerouPedidoEdicao(atual.numero, rotuloPedido(atual)), 409);
   const c = colunas(dados);
   const itens = Array.isArray(dados.itens) ? dados.itens : [];   // RN-F05: sem itens = apaga as linhas
   await assertFornecedor(db, c.fornecedor_id);
@@ -526,7 +567,7 @@ async function atualizarCotacao(db, id, dados) {
 }
 async function excluirCotacao(db, id) {
   const c = await obterCotacao(db, id);
-  if (c.pedido_id != null) throw erro(cotacaoJaGerouPedidoExclusao(c.numero, c.pedido_numero), 409);
+  if (c.pedido_id != null) throw erro(cotacaoJaGerouPedidoExclusao(c.numero, rotuloPedido(c)), 409);
   // Filhos PRIMEIRO: a FK nao dispara no harness e dispara em producao (ver o cabecalho do plano da 41).
   await dbRun(db, 'DELETE FROM itens_cotacao WHERE cotacao_id = ?', [id]);
   await dbRun(db, 'DELETE FROM cotacoes WHERE id = ?', [id]);
@@ -534,14 +575,18 @@ async function excluirCotacao(db, id) {
 }
 async function gerarPedidoDaCotacao(db, id, user) {
   const c = await obterCotacao(db, id);
-  if (c.pedido_id != null) throw erro(cotacaoJaGerouPedido(c.numero, c.pedido_numero), 409);
+  if (c.pedido_id != null) throw erro(cotacaoJaGerouPedido(c.numero, rotuloPedido(c)), 409);
   if (STATUS_QUE_NAO_GERA.includes(c.status)) throw erro(cotacaoStatusNaoGera(c.status));
   if (!c.itens.length) throw erro(COTACAO_SEM_ITENS);
-  await assertFornecedor(db, c.fornecedor_id);   // apagado -> 400 'Fornecedor não encontrado'
+  await assertFornecedor(db, c.fornecedor_id);   // apagado -> 400 'Fornecedor não encontrado' (so alcancavel no harness — M5)
   const f = await dbGet(db, 'SELECT status FROM fornecedores WHERE id = ?', [c.fornecedor_id]);
   if (f && f.status === 'inativo') throw erro(FORNECEDOR_INATIVO_CONVERSAO);   // RN-F11: a PRIMEIRA porta do Compras a olhar status
   const pedido = await pedidoCompraService.criarPedido(db, {
     fornecedor_id: c.fornecedor_id,
+    // Fase 2 (I4): `criarPedido` NAO poe default em data_pedido (`camposDoCabecalho` pula undefined,
+    // DDL sem default) — sem esta linha o pedido gerado nascia com data NULL. Mesmo precedente de
+    // `importarPedidos` (:974).
+    data_pedido: pedidoCompraService.hojeLocalISO(),
     observacoes: c.observacoes,
     itens: c.itens.map((i) => ({ material_id: i.material_id, quantidade: i.quantidade, valor_unitario: i.valor_unitario })),
   }, user);
@@ -552,8 +597,24 @@ async function gerarPedidoDaCotacao(db, id, user) {
 }
 module.exports = { criarCotacao, obterCotacao, atualizarCotacao, excluirCotacao, gerarPedidoDaCotacao,
   COTACAO_NAO_ENCONTRADA, FORNECEDOR_COM_COTACOES, COTACAO_EXCLUIDA, COTACAO_SEM_ITENS, FORNECEDOR_INATIVO_CONVERSAO,
-  numeroDuplicado, cotacaoStatusNaoGera, cotacaoJaGerouPedido, cotacaoJaGerouPedidoExclusao };
+  numeroDuplicado, cotacaoStatusNaoGera, cotacaoJaGerouPedido, cotacaoJaGerouPedidoExclusao, cotacaoJaGerouPedidoEdicao, rotuloPedido };
 ```
+
+**E em `pedidoCompraService.excluirPedido` (`:518-544`)** — Fase 2 (I2), o precedente da I1 da 38
+(`liberarSolicitacoesDoPedido`): antes do `DELETE` do cabeçalho, liberar a cotação e devolver a contagem:
+
+```js
+  // Etapa 41 (RN-F12): a cotacao que gerou este pedido volta a poder gerar outro — sem isto ela
+  // ficava num beco (nem regenera, nem se exclui), o inverso do que a Etapa 38 fez com a solicitacao.
+  const lib = await dbRun(db, 'UPDATE cotacoes SET pedido_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE pedido_id = ?', [id]);
+  // … (DELETE das linhas e do cabecalho como hoje) …
+  return { message: …, solicitacoes_liberadas: …, cotacoes_liberadas: lib.changes || 0 };
+```
+
+⚠️ **Leia `excluirPedido` inteiro antes** (`:518-544`): a resposta de hoje é `{ message, solicitacoes_liberadas }`
+(cenário (7) de `comprasPedidoEditarExcluir` afirma o shape? confira — se usar `deepStrictEqual`, a chave
+nova o derruba e o cenário precisa de ajuste declarado). O stub de `cotacoes` do harness já tem
+`pedido_id` (T1), então o `UPDATE` não morre em nenhuma suíte.
 
 ⚠️ **Ordem das guardas em `gerarPedidoDaCotacao`:** 409 (já gerou) → status → itens → fornecedor. O
 cenário (5) apaga o fornecedor **depois** de criar a cotação; `assertFornecedor` tem de vir **antes** do
@@ -590,7 +651,7 @@ até a 40; desde a 41 o `DELETE /cotacoes/:id` próprio existe e a posição des
 passou a ser comportamento"*. No genérico, ao lado de `'cotacoes': 'cotacoes'` no mapa: comentário
 *"sombreado desde a Etapa 41 pela rota própria — fica no mapa por caracterização, como `pedidos`"*.
 
-- [ ] **Step 5: rodar** — os dois arquivos (**10** e **8**); `comprasCotacaoRotas` (10 — o (8) continua 200), `comprasFornecedorCotacaoIntegracao` (3), `comprasFornecedorRotas` (13), `comprasPedidoEditarExcluir` (13), `comprasPedidoCriar` (13); `npm run test:api` (**193/193**); `npm run test:almoxarifado` (42).
+- [ ] **Step 5: rodar** — os dois arquivos (**10** e **10**); `comprasCotacaoRotas` (10 — o (8) continua 200), `comprasFornecedorCotacaoIntegracao` (3), `comprasFornecedorRotas` (13), `comprasPedidoEditarExcluir` (13 — o `excluirPedido` mudou de resposta), `comprasPedidoCriar` (13); `npm run test:api` (**193/193**); `npm run test:almoxarifado` (42).
 
 - [ ] **Step 6: sabotagens**
 
@@ -602,8 +663,11 @@ passou a ser comportamento"*. No genérico, ao lado de `'cotacoes': 'cotacoes'` 
 | 4 | `SET pedido_id = ?, status = 'aprovado'` → sem `status` | 1 | **(1)** *"gerar o pedido E aprovar"* |
 | 5 | mover o `app.delete('/api/compras/cotacoes/:id')` para **depois** do genérico | — | **(8)** `Item não encontrado`; **(10)** 200 — é a prova de que a posição é comportamento |
 | 6 | `if (resolvidos.length) c.valor_total = somaItens(resolvidos)` → sempre | 1 | **(3)** total 0 em vez de 77 |
+| 7 | `atualizarCotacao`: remover o `if (atual.pedido_id != null)` | 1 | **(9)** 200 e `status` virou `rejeitado` |
+| 8 | `excluirPedido`: remover o `UPDATE cotacoes SET pedido_id = NULL` | 1 | **(10)** `pedido_id` continua e a segunda geração dá 409 |
+| 9 | `data_pedido: pedidoCompraService.hojeLocalISO()` removido | 1 | **(1)** `data_pedido` null |
 
-- [ ] **Step 7: commit** — `git add server/services/compras/cotacaoService.js server/routes/compras.js server/tests/api/comprasCotacaoItens.api.test.js server/tests/api/comprasCotacaoGerarPedido.api.test.js`. Mensagem em `msg-e41-t2.txt`.
+- [ ] **Step 7: commit** — `git add server/services/compras/cotacaoService.js server/services/compras/pedidoCompraService.js server/routes/compras.js server/tests/api/comprasCotacaoItens.api.test.js server/tests/api/comprasCotacaoGerarPedido.api.test.js` (+ `comprasPedidoEditarExcluir.api.test.js` se o shape da resposta exigiu ajuste). Mensagem em `msg-e41-t2.txt`.
 
 ---
 
@@ -622,8 +686,8 @@ Mock: `api.get` ganha `if (url === '/compras/materiais') return Promise.resolve(
 (`MATERIAIS = [{ id: 912, codigo: 'ALM-0912', descricao: 'Chapa Aço 5mm', unidade: 'KG' }]`), e a cotação
 **770** `COTACAO_770 = { ...COTACAO_760, id: 770, numero: 'COT-2026-770', valor_total: 27, itens: [{ id: 7701, material_id: 912, codigo: 'ALM-0912', descricao: 'Chapa Aço 5mm', unidade: 'KG', quantidade: 2, valor_unitario: 10 }, { id: 7702, material_id: 907, codigo: 'ALM-0907', descricao: 'Chapa Aço 3mm', unidade: 'KG', quantidade: 1, valor_unitario: 7 }] }`
 com `if (url === '/compras/cotacoes/770') …`. `COTACAO_760` ganha `itens: []`, `pedido_id: null`,
-`pedido_numero: null`. O `toEqual` do (e) passa a esperar `itens: []` (8 chaves, sem `valor_total`? **não** —
-sem itens `valor_total` continua no payload: 9 chaves com `itens: []`).
+`pedido_numero: null`. O `toEqual` do (e) passa a esperar `itens: []` — a 760 não tem itens, então `valor_total` continua
+no payload: **8 chaves** (as 7 de hoje + `itens: []`; Fase 2 M1).
 
 ```js
 const chamadasMateriais = () => api.get.mock.calls.filter(([u]) => u === '/compras/materiais');
@@ -749,7 +813,10 @@ let cotacoesDoBanco;   // beforeEach: cotacoesDoBanco = []; e o mock `/compras/c
 ```
 
 `api.post` no `beforeEach`: `mockImplementation((url) => url.endsWith('/gerar-pedido') ? Promise.resolve({ data: { id: 650, numero: 'PC-2026-650' } }) : Promise.reject(new Error(`POST inesperado: ${url}`)))`.
-A rota `/compras/pedidos/editar/650` renderiza o **stub** `PedidoCompraForm` do Proxy (`data-stub="PedidoCompraForm"`) — é o que o (k) afirma (sem pôr a tela real em `reais`: a suíte de `Compras` não mede o form de pedido).
+A rota `/compras/pedidos/editar/650` renderiza a tela **REAL** `PedidoCompraForm` (ela já está em
+`reais` do Proxy de `Compras.test.js:41-45` — Fase 2, C1): o (k) prova a navegação pelo `h1`
+*"Editar pedido de compra"* e pelo `GET /compras/pedidos/650`, que a regex do mock (`:133`) resolve a
+partir de `pedidosDoBanco` (a fixture do 650 é posta no cenário).
 
 ```js
 test('(j) RN-F14 coluna Pedido: "-" sem pedido, link PC- com pedido; botao Gerar pedido so em 770', async () => {
@@ -766,12 +833,17 @@ test('(j) RN-F14 coluna Pedido: "-" sem pedido, link PC- com pedido; botao Gerar
 });
 test('(k) RN-F14 clicar em Gerar pedido -> POST na URL certa, toast com PC e numero, navega para a edicao do pedido', async () => {
   cotacoesDoBanco = COTACOES_E41;
+  pedidosDoBanco = [{ id: 650, numero: 'PC-2026-650', fornecedor_id: 312, fornecedor_nome: 'Aços Vale Ltda', valor_total: 27, status: 'pendente', teve_recebimento: 0, itens: [] }];
   await renderizarEm('/compras/cotacoes');
   await clicar(container.querySelector('[data-testid="gerar-pedido-770"]'));
   expect(api.post.mock.calls).toHaveLength(1);
   expect(api.post.mock.calls[0][0]).toBe('/compras/cotacoes/770/gerar-pedido');
   expect(toast.success).toHaveBeenCalledWith('Pedido PC-2026-650 gerado da cotação COT-2026-770');
-  expect(container.querySelector('[data-stub="PedidoCompraForm"]')).not.toBeNull();   // navegou
+  // ⚠️ Fase 2 (C1): `PedidoCompraForm` esta em `reais` do Proxy desta suite (`:41-45`), entao ao
+  // navegar a tela REAL monta — nao ha `data-stub`. A prova de que navegou e o h1 da edicao e o GET
+  // por id (a regex `/compras/pedidos/\d+` do mock `:133` devolve a linha de `pedidosDoBanco`).
+  expect(texto()).toContain('Editar pedido de compra');
+  expect(api.get.mock.calls.filter(([u]) => u === '/compras/pedidos/650')).toHaveLength(1);
   expect(texto()).not.toContain('Gestão de fornecedores, pedidos e cotações');
 });
 test('(l) RN-F14 409 do servidor -> toast.error com a literal, sem navegar; export tem a coluna Pedido no fim', async () => {
@@ -832,7 +904,7 @@ Export (`:268-278`): `'Pedido': c.pedido_numero || ''` **no fim**.
 |---|---|---|
 | 1 | condição do botão sem `!cotacao.pedido_id` | **(j)** `gerar-pedido-771` existe |
 | 2 | condição sem o filtro de status | **(j)** `gerar-pedido-772` |
-| 3 | `navigate(...)` removido | **(k)** stub ausente |
+| 3 | `navigate(...)` removido | **(k)** `texto()` sem *"Editar pedido de compra"* e zero `GET /compras/pedidos/650` |
 | 4 | `toast.error(...)` → `toast.error('Erro')` | **(l)** literal |
 | 5 | `'Pedido'` fora do fim do export | **(l)** `Object.keys` |
 
@@ -850,7 +922,7 @@ Export (`:268-278`): `'Pedido': c.pedido_numero || ''` **no fim**.
 - [ ] **Step 1: o teste** (`ADMIN` id 102):
 
 ```js
-  await test('(A) pela ROTA: fornecedor (tela da 40) -> cotacao com 2 itens -> gerar -> pedido na lista e no aux do recebimento com saldo cheio -> 409 na segunda -> DELETE cotacao 409 -> PUT pedido 200 -> DELETE pedido 200 -> pedido_id FICA -> DELETE cotacao AINDA 409', async () => {
+  await test('(A) pela ROTA: fornecedor (tela da 40) -> cotacao com 2 itens -> gerar -> pedido na lista e no aux do recebimento com saldo cheio -> 409 na segunda -> DELETE cotacao 409 -> PUT pedido 200 -> DELETE pedido LIBERA (cotacoes_liberadas 1) -> gera de novo 201 -> exclui tudo', async () => {
     const f = await request(app).post('/api/compras/fornecedores').send({ razao_social: 'Integração E41', nome_fantasia: '', cnpj: '', contato: '', email: '', telefone: '', endereco: '', grupo_id: '' });
     assert.strictEqual(f.status, 201);
     const c = await request(app).post('/api/compras/cotacoes').send({ numero: 'COT-E41-INT', fornecedor_id: f.body.id, data_cotacao: '2026-09-22', validade: '', status: 'em_analise', observacoes: 'frete incluso',
@@ -876,13 +948,20 @@ Export (`:268-278`): `'Pedido': c.pedido_numero || ''` **no fim**.
     // o pedido pode ser editado (troca a quantidade) e excluido
     const put = await request(app).put(`/api/compras/pedidos/${g.body.id}`).send({ fornecedor_id: f.body.id, itens: [{ material_id: mA, quantidade: 5, valor_unitario: 10 }] });
     assert.strictEqual(put.status, 200, JSON.stringify(put.body));
-    assert.strictEqual((await request(app).delete(`/api/compras/pedidos/${g.body.id}`)).status, 200);
-    // RN-F12: o vinculo FICA (rastro) — e por isso a cotacao continua nao-excluivel. Declarado (letra G);
-    // este cenario existe para ninguem "consertar" sem saber.
+    const dp = await request(app).delete(`/api/compras/pedidos/${g.body.id}`);
+    assert.strictEqual(dp.status, 200, JSON.stringify(dp.body));
+    assert.strictEqual(dp.body.cotacoes_liberadas, 1);
+    // RN-F12 (Fase 2, I2): excluir o pedido LIBERA a cotacao — pedido_id volta a NULL, ela pode gerar
+    // de novo e pode ser excluida. Sem isto ela ficava num beco que so SQL resolvia.
     const depois = await request(app).get(`/api/compras/cotacoes/${c.body.id}`);
-    assert.strictEqual(depois.body.pedido_id, g.body.id);
-    assert.strictEqual(depois.body.pedido_numero, null, 'o LEFT JOIN nao acha mais o pedido');
-    assert.strictEqual((await request(app).delete(`/api/compras/cotacoes/${c.body.id}`)).status, 409);
+    assert.strictEqual(depois.body.pedido_id, null);
+    assert.strictEqual(depois.body.pedido_numero, null);
+    assert.strictEqual(depois.body.status, 'aprovado', 'o status aprovado FICA (a aprovacao aconteceu; so o vinculo cai) — declarado');
+    const g3 = await request(app).post(`/api/compras/cotacoes/${c.body.id}/gerar-pedido`).send();
+    assert.strictEqual(g3.status, 201);
+    assert.notStrictEqual(g3.body.numero, g.body.numero);
+    assert.strictEqual((await request(app).delete(`/api/compras/pedidos/${g3.body.id}`)).status, 200);
+    assert.strictEqual((await request(app).delete(`/api/compras/cotacoes/${c.body.id}`)).status, 200, 'liberada, a cotacao se exclui com os itens');
   });
   await test('(B) pelo SERVICO: criarCotacao com itens + gerarPedidoDaCotacao, e a rota le o mesmo', async () => { /* cria por cotacaoService, gera por cotacaoService, GET /pedidos/:id e GET /cotacoes/:id batem */ });
   await test('(C) RN-F11 pela rota: inativa pelo PUT da 40 -> gerar 400 literal -> reativa -> 201', async () => { /* PUT /fornecedores/:id com status inativo (7 textos + status) -> gerar 400 -> PUT ativo -> 201 */ });
@@ -895,6 +974,11 @@ o `ADMIN` do harness passa por tudo.
 - [ ] **Step 2: rodar** — 3 verdes (integração). Controle positivo: a sabotagem 3 da T2 (sem o `if (c.pedido_id != null)`) tem de derrubar (A) em *"segunda conversao"* (409 → 201).
 
 - [ ] **Step 3: os cinco comandos** — `test:api` **194/194**; almoxarifado 42; 4/3/5; client **51 suítes / 778** (769 + 6 + 3); build.
+
+**Decisões da Fase 2 para a letra B (T6):** "Gerar pedido" **sem** `window.confirm` (a lixeira ao lado
+tem; aqui o ato é reversível — excluir o pedido libera a cotação — Fase 2 M6); `handleDelete` mostra o
+toast fixo *"Item excluído com sucesso"* e ignora a literal nova (M7, não é defeito); `criarCotacao` pelo
+serviço não passa pelo schema (`quantidade` 0 chegaria — M4, mesma classe do pedido, letra G).
 
 - [ ] **Step 4: commit** — `git add server/tests/api/comprasCotacaoPedidoIntegracao.api.test.js`. Mensagem em `msg-e41-t5.txt`.
 

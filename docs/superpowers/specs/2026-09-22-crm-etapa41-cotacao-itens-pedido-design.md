@@ -146,7 +146,8 @@ por `?cotacao=` (caminho (a)); itens de cotação sem material do catálogo; rec
 | **RN-F09** | `rejeitado`/`cancelado` → 400 `cotação ⟨status⟩ não pode gerar pedido`. | |
 | **RN-F10** | Já convertida → **409** `Cotação ⟨numero⟩ já gerou o pedido ⟨PC⟩`; nenhum pedido novo. | Segunda chamada → 409, `COUNT(pedidos_compra)` inalterado. |
 | **RN-F11** | Fornecedor `inativo` → 400 `Fornecedor inativo — reative-o em Compras → Fornecedores antes de gerar o pedido`. Fornecedor apagado → 400 `Fornecedor não encontrado` (de `assertFornecedor`). | Inativa pelo `PUT` da 40 → gerar → 400; reativa → 201. |
-| **RN-F12** | O pedido gerado é um pedido **normal**: aparece em `GET /api/compras/pedidos`, em `GET /almoxarifado/recebimentos-aux/pedidos-compra` (`?pendentes=1`) com saldo cheio, pode ser editado (`PUT`) e excluído (`DELETE /pedidos/:id`) — e excluí-lo **não** limpa `pedido_id` da cotação (rastro; declarado em G). | Integração A4. |
+| **RN-F12** | O pedido gerado é um pedido **normal**: aparece em `GET /api/compras/pedidos`, em `GET /almoxarifado/recebimentos-aux/pedidos-compra` (`?pendentes=1`) com saldo cheio, pode ser editado (`PUT`) e excluído (`DELETE /pedidos/:id`) — e excluí-lo **LIBERA a cotação** (`pedido_id` volta a NULL; a resposta traz `cotacoes_liberadas`), que pode gerar outro pedido ou ser excluída. *(corrigido na Fase 2, I2: a versão original dizia que o `pedido_id` ficava como rastro — isso deixava a cotação num beco sem saída, o inverso do precedente da I1 da Etapa 38, que libera as solicitações ao excluir o pedido.)* | T2-gerar (10), integração A4. |
+| **RN-F15** | Cotação convertida **não pode mais ser editada**: `PUT` → **409** `Cotação ⟨numero⟩ já gerou o pedido ⟨PC⟩ — não pode mais ser editada`. *(acrescentada na Fase 2, I3.)* | T2-gerar (9). |
 
 ### A2/A3 — telas
 
@@ -199,7 +200,8 @@ const CotacaoItemSchema = z.looseObject({
 Sem `min(1)` e sem `{ error }` no array (D2): `itens: 'abc'` → 400 em inglês? **Não**: dê
 `z.array(CotacaoItemSchema, { error: ITENS_COTACAO_INVALIDOS }).optional()` com
 `ITENS_COTACAO_INVALIDOS = 'itens da cotação devem ser uma lista'` — a armadilha 2 vale para o tipo do
-array. Caminho do 400: `itens.0.material_id: <literal>`.
+array. Caminho do 400: `itens.0.material_id: <literal>` (um item `{}` gera **duas** issues, `material_id`
+e `quantidade`, unidas por `; ` — Fase 2, M3).
 
 ### 5.3 `cotacaoService.js` — contrato
 
@@ -220,8 +222,10 @@ cotacaoJaGerouPedidoExclusao(numero, pc) = `Cotação ${numero} já gerou o pedi
 **+ `itens`**. `resolverItens` importada de `pedidoCompraService` (exportada na T1). A ordem em
 `criarCotacao`: `assertFornecedor` → `resolverItens` (todos os materiais **antes** de qualquer escrita)
 → `assertNumeroLivre` → INSERT cabeçalho (`valor_total` = Σ se itens, senão o do payload) → laço de
-itens → `obterCotacao`. `gerarPedidoDaCotacao`: `obterCotacao` → guardas (itens, status, `pedido_id`,
-fornecedor inativo por `SELECT status`) → `criarPedido(db, { fornecedor_id, itens, observacoes }, user)`
+itens → `obterCotacao`. `gerarPedidoDaCotacao`: `obterCotacao` → guardas **nesta ordem** (409 já gerou →
+status → itens → `assertFornecedor` → inativo por `SELECT status`; *alinhado ao plano na Fase 2, M2*) →
+`criarPedido(db, { fornecedor_id, data_pedido: hojeLocalISO(), itens, observacoes }, user)` *(o
+`data_pedido` entrou na Fase 2, I4: `criarPedido` não põe default e o pedido nascia com data NULL)*
 → `UPDATE cotacoes SET pedido_id = ?, status = 'aprovado', updated_at = …` → `obterPedido`. Se o `UPDATE`
 do vínculo falhar depois do pedido criado, o erro **sobe** (o pedido fica; a cotação sem vínculo — o
 409 não protege; declarado em G, mesma classe do vínculo não-fatal da Reposição).
@@ -331,10 +335,9 @@ Uma cotação `rejeitado` (772) sem botão.
 Pela rota **e** pelo serviço: cria fornecedor (tela da 40) → cria cotação com 2 itens → gera pedido →
 `GET /api/compras/pedidos` o lista → `GET /api/almoxarifado/recebimentos-aux/pedidos-compra` o lista
 com saldo cheio → segunda geração 409 → `DELETE /cotacoes/:id` 409 → `PUT` do pedido (troca quantidade)
-200 → `DELETE /pedidos/:id` 200 → `pedido_id` da cotação **continua** (rastro, RN-F12) → agora
-`DELETE /cotacoes/:id` … **409 ainda** (o `pedido_id` aponta para pedido apagado — decisão: a guarda olha
-`pedido_id IS NOT NULL`, não a existência do pedido; declarado em G, e o cenário afirma isso para o
-próximo não "consertar" sem saber).
+200 → `DELETE /pedidos/:id` 200 com `cotacoes_liberadas: 1` → `pedido_id` da cotação volta a **NULL**
+(RN-F12, *corrigido na Fase 2, I2*) → gerar de novo → 201 com `PC-` novo → excluir o pedido novo →
+`DELETE /cotacoes/:id` → 200 com os itens.
 
 ### 7.7 Suítes que precisam continuar verdes (números de partida, medidos)
 
@@ -357,7 +360,10 @@ próximo não "consertar" sem saber).
 - **Item de cotação sem material do catálogo** (texto livre): o pedido exige material, e a conversão
   precisa do `material_id`.
 - **Recebimento olhando a cotação**: o recebimento continua contra o pedido.
-- **Limpar `pedido_id` quando o pedido é excluído** (RN-F12 / G).
+- ~~**Limpar `pedido_id` quando o pedido é excluído** (RN-F12 / G).~~ *(Fase 2, I2: entrou na etapa —
+  `excluirPedido` libera a cotação. Deixado riscado para o próximo não reabrir a pergunta.)*
+- **Editar uma cotação já convertida** (RN-F15): recusado com 409; se algum dia for preciso, o gesto
+  é excluir o pedido (que libera a cotação) e editar depois.
 - **Extrair `TabelaItens`** compartilhada (D10).
 - **`assertFornecedor` olhando status** nas portas de pedido (D8).
 
@@ -372,9 +378,12 @@ próximo não "consertar" sem saber).
 - **B:** D1–D12 com o descartado.
 - **C:** nenhum furo novo em operação (a etapa não muda comportamento existente além da lixeira, que
   passa a **funcionar** onde daria 500).
-- **D/G:** seção 8; `pedido_id` de pedido apagado; o `UPDATE` do vínculo depois do `criarPedido` sem
-  transação; o `PUT` do pedido gerado faz `DELETE+INSERT` das linhas (herdado); os Minor da 40 que
-  seguem (`textoOpcional` coage; `observacoes: ''`).
+- **D/G:** seção 8; o `UPDATE` do vínculo depois do `criarPedido` sem transação; o `status`
+  `aprovado` fica quando o pedido é excluído (só o vínculo cai); o `PUT` do pedido gerado faz
+  `DELETE+INSERT` das linhas (herdado); `criarCotacao` pelo serviço não passa pelo schema (M4);
+  "Gerar pedido" sem `window.confirm` (M6, reversível: excluir o pedido libera); a lixeira da aba
+  mostra o toast fixo e não a literal nova (M7); os Minor da 40 que seguem (`textoOpcional` coage;
+  `observacoes: ''`).
 
 ---
 
