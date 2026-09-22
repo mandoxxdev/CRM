@@ -123,6 +123,7 @@ async function createTestApp(options = {}) {
     validade DATE,
     status TEXT DEFAULT 'em_analise',
     observacoes TEXT,
+    pedido_id INTEGER, -- Etapa 41 — vínculo com o pedido gerado; sem FK como o resto do stub
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);

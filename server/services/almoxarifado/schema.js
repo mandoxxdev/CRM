@@ -1338,6 +1338,28 @@ async function initSchema(db) {
   // de saldo do pedido (rota aux, rota de itens e o acumulador da entrada) filtra por pedido_id.
   await dbRun(db, 'CREATE INDEX IF NOT EXISTS idx_itens_pedido_compra_pedido ON itens_pedido_compra(pedido_id)');
 
+  // ── Itens de cotação (Etapa 41, Task 1) ──
+  // Espelho de `itens_pedido_compra` SEM `quantidade_recebida` (cotação não é recebida): `codigo`,
+  // `descricao` e `unidade` copiados do material por `resolverItens` (a tela de edição lê por linha,
+  // como o pedido). `valor_unitario` tem o MESMO nome da linha do pedido de propósito: a conversão
+  // copia sem renomear e o custo médio do recebimento (U1 da Etapa 37) herda o preço da cotação.
+  // Vive AQUI e não em `index.js` (onde está `cotacoes`) porque `initSchema` roda no harness
+  // (`testApp.js:32`): a tabela chega a toda suíte com a DDL de produção, sem stub — a divergência
+  // stub/produção foi a classe de defeito da F1 da Etapa 40.
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS itens_cotacao (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cotacao_id INTEGER NOT NULL,
+    material_id INTEGER,
+    codigo TEXT,
+    descricao TEXT,
+    quantidade REAL NOT NULL DEFAULT 1,
+    valor_unitario REAL DEFAULT 0,
+    unidade TEXT DEFAULT 'UN',
+    FOREIGN KEY (cotacao_id) REFERENCES cotacoes(id),
+    FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
+  )`);
+  await dbRun(db, 'CREATE INDEX IF NOT EXISTS idx_itens_cotacao_cotacao ON itens_cotacao(cotacao_id)');
+
   // ── Devoluções ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS devolucoes_material_almoxarifado (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

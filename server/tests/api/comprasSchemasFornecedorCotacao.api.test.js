@@ -138,6 +138,45 @@ const msgs = (r) => (r.success ? '' : r.error.issues.map((i) => `${i.path.join('
     assert.ok(S.CotacaoSchema.safeParse({ numero: 'C', fornecedor_id: 1, valor_total: 12.5 }).success);
   });
 
+  // ── Etapa 41, Task 1 — a cotacao ganha `itens` (OPCIONAL, D2) com literais PROPRIAS ────────
+  await test('(p) RN-F02 itens ausente -> undefined; [] passa; item minimo passa com valor_unitario undefined', () => {
+    assert.strictEqual(S.CotacaoSchema.safeParse({ numero: 'C', fornecedor_id: 1 }).data.itens, undefined);
+    const r = S.CotacaoSchema.safeParse({ numero: 'C', fornecedor_id: 1, itens: [] });
+    assert.ok(r.success, r.success ? '' : msgs(r));
+    assert.deepStrictEqual(r.data.itens, []);
+    const r2 = S.CotacaoSchema.safeParse({ numero: 'C', fornecedor_id: 1, itens: [{ material_id: 912, quantidade: 2 }] });
+    assert.ok(r2.success, r2.success ? '' : msgs(r2));
+    assert.strictEqual(r2.data.itens[0].valor_unitario, undefined);
+  });
+  await test('(q) itens "abc" -> ITENS_COTACAO_INVALIDOS (a armadilha 2 vale para o tipo do array)', () => {
+    const r = S.CotacaoSchema.safeParse({ numero: 'C', fornecedor_id: 1, itens: 'abc' });
+    assert.ok(!r.success, 'itens "abc" devia ser recusado');
+    assert.strictEqual(msgs(r), `itens: ${S.ITENS_COTACAO_INVALIDOS}`);
+    assert.strictEqual(S.ITENS_COTACAO_INVALIDOS, 'itens da cotação devem ser uma lista');
+  });
+  await test('(r) RN-F01 item: material ausente/"3"/0 -> literal; quantidade 0/"2" -> literal; valor_unitario -1 -> literal; caminho itens.0.<campo>', () => {
+    for (const v of [undefined, '3', 0]) {
+      const r = S.CotacaoSchema.safeParse({ numero: 'C', fornecedor_id: 1, itens: [{ material_id: v, quantidade: 1 }] });
+      assert.ok(!r.success, `devia recusar material_id ${JSON.stringify(v)}`);
+      assert.strictEqual(msgs(r), `itens.0.material_id: ${S.MATERIAL_ITEM_COTACAO_OBRIGATORIO}`);
+    }
+    for (const v of [0, '2']) {
+      const r = S.CotacaoSchema.safeParse({ numero: 'C', fornecedor_id: 1, itens: [{ material_id: 912, quantidade: v }] });
+      assert.strictEqual(msgs(r), `itens.0.quantidade: ${S.QTD_ITEM_COTACAO_INVALIDA}`, `quantidade ${JSON.stringify(v)} saiu como "${msgs(r)}"`);
+    }
+    const r3 = S.CotacaoSchema.safeParse({ numero: 'C', fornecedor_id: 1, itens: [{ material_id: 912, quantidade: 1, valor_unitario: -1 }] });
+    assert.strictEqual(msgs(r3), `itens.0.valor_unitario: ${S.VALOR_UNITARIO_ITEM_COTACAO_NEGATIVO}`);
+    // o segundo item errado aponta itens.1
+    const r4 = S.CotacaoSchema.safeParse({ numero: 'C', fornecedor_id: 1, itens: [{ material_id: 912, quantidade: 1 }, { material_id: 912, quantidade: 0 }] });
+    assert.strictEqual(msgs(r4), `itens.1.quantidade: ${S.QTD_ITEM_COTACAO_INVALIDA}`);
+  });
+  await test('(s) as literais do item da cotacao sao DIFERENTES das do item do pedido (um dono por frase)', () => {
+    assert.notStrictEqual(S.MATERIAL_ITEM_COTACAO_OBRIGATORIO, S.MATERIAL_ITEM_OBRIGATORIO);
+    assert.notStrictEqual(S.QTD_ITEM_COTACAO_INVALIDA, S.QTD_ITEM_PEDIDO_INVALIDA);
+    assert.notStrictEqual(S.VALOR_UNITARIO_ITEM_COTACAO_NEGATIVO, S.VALOR_UNITARIO_ITEM_NEGATIVO);
+    assert.ok(/da cotação/.test(S.QTD_ITEM_COTACAO_INVALIDA), 'a literal da quantidade tem de dizer "da cotação"');
+  });
+
   console.log(`\n${passed} passou, ${failed} falhou`);
   process.exit(failed ? 1 : 0);
 })();

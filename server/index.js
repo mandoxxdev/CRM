@@ -19254,6 +19254,12 @@ db.run(`CREATE TABLE IF NOT EXISTS cotacoes (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (fornecedor_id) REFERENCES fornecedores(id)
 )`);
+// Etapa 41: a cotação que virou pedido aponta para ele (1:1). `cotacoes` é core, então a coluna
+// entra pelo mesmo caminho das cinco de `fornecedores` abaixo (erro 'duplicate' ignorado). O stub do
+// harness (`tests/helpers/testApp.js`) ganha a coluna à mão — este arquivo não roda nos testes.
+db.run('ALTER TABLE cotacoes ADD COLUMN pedido_id INTEGER REFERENCES pedidos_compra(id)', (e) => {
+  if (e && e.message.indexOf('duplicate') === -1) console.error('Erro ao adicionar pedido_id em cotacoes:', e.message);
+});
 
 // Grupos de fornecedores homologados (ex.: Insumos, Peças, Serviços)
 db.run(`CREATE TABLE IF NOT EXISTS grupos_compras (

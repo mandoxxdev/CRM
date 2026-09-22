@@ -163,8 +163,11 @@ const PedidoStatusSchema = z.object({
  *
  * `CotacaoSchema`: `numero` e DIGITADO (contrato de `numeroDoc.js:44-64` — `cotacoes.numero` e
  * escolha humana, nunca embrulhar em `inserirComNumeroUnico`), `fornecedor_id` sem coercao (a tela
- * coage com `Number()`, como o pedido), datas por `dataIsoOpcional`, `valor_total` e campo de
- * entrada porque nao ha itens de cotacao para somar (medido: zero `cotacao_itens` no sistema).
+ * coage com `Number()`, como o pedido), datas por `dataIsoOpcional`. Sobre `valor_total`: ate a
+ * Etapa 40 era VERDADE que "e campo de entrada porque nao ha itens de cotacao para somar (medido:
+ * zero `cotacao_itens` no sistema)". Desde a 41 ha `itens_cotacao`: com itens, `valor_total` e
+ * DERIVADO no servico e o do payload e ignorado; sem itens, continua entrada (D3 da 41). O schema
+ * continua aceitando `valor_total` nas duas situacoes — quem escolhe a regra e o servico.
  */
 const STATUS_FORNECEDOR = ['ativo', 'inativo'];
 const RAZAO_SOCIAL_OBRIGATORIA = 'Razão social é obrigatória'; // a literal que a rota ja usava (:544/:564)
@@ -208,6 +211,28 @@ const VALOR_COTACAO_NEGATIVO = 'valor total da cotação não pode ser negativo'
 const DATA_COTACAO_INVALIDA = 'data da cotação inválida (use AAAA-MM-DD)';
 const VALIDADE_COTACAO_INVALIDA = 'validade da cotação inválida (use AAAA-MM-DD)';
 
+/**
+ * Etapa 41, Task 1 — o ITEM da cotacao. Mesma forma do `PedidoCompraItemSchema` (material do
+ * catalogo, sem coercao, literal no construtor E no refinamento), com literais PROPRIAS: um grep por
+ * "quantidade do item da cotacao" acha UM dono. `itens` e OPCIONAL na cotacao (D2 do design): a
+ * cotacao de cabecalho — "R$ 1.500 o lote", sem discriminar — e uso real, e os quatro cenarios da
+ * Etapa 40 que criam cotacao so com { numero, fornecedor_id } continuam valendo. Quem exige itens e
+ * a CONVERSAO em pedido (RN-F08), no servico.
+ *
+ * `ITENS_COTACAO_INVALIDOS` vai no construtor do `z.array` (armadilha 2 do cabecalho, agora para o
+ * tipo do array): sem ele, `itens: 'abc'` sairia em ingles ("Invalid input: expected array").
+ */
+const ITENS_COTACAO_INVALIDOS = 'itens da cotação devem ser uma lista';
+const MATERIAL_ITEM_COTACAO_OBRIGATORIO = 'material do item da cotação é obrigatório';
+const QTD_ITEM_COTACAO_INVALIDA = 'quantidade do item da cotação deve ser um número maior que zero';
+const VALOR_UNITARIO_ITEM_COTACAO_NEGATIVO = 'valor unitário do item da cotação não pode ser negativo';
+
+const CotacaoItemSchema = z.looseObject({
+  material_id: z.number({ error: MATERIAL_ITEM_COTACAO_OBRIGATORIO }).int(MATERIAL_ITEM_COTACAO_OBRIGATORIO).positive(MATERIAL_ITEM_COTACAO_OBRIGATORIO),
+  quantidade: z.number({ error: QTD_ITEM_COTACAO_INVALIDA }).gt(0, QTD_ITEM_COTACAO_INVALIDA),
+  valor_unitario: z.number({ error: VALOR_UNITARIO_ITEM_COTACAO_NEGATIVO }).min(0, VALOR_UNITARIO_ITEM_COTACAO_NEGATIVO).optional(),
+});
+
 const CotacaoSchema = z.looseObject({
   numero: z.string({ error: NUMERO_COTACAO_OBRIGATORIO }).trim().min(1, NUMERO_COTACAO_OBRIGATORIO),
   fornecedor_id: z.number({ error: FORNECEDOR_COTACAO_OBRIGATORIO }).int(FORNECEDOR_COTACAO_OBRIGATORIO).positive(FORNECEDOR_COTACAO_OBRIGATORIO),
@@ -216,6 +241,8 @@ const CotacaoSchema = z.looseObject({
   validade: dataIsoOpcional(VALIDADE_COTACAO_INVALIDA),
   status: z.enum(STATUS_COTACAO, { error: STATUS_COTACAO_INVALIDO }).optional(),
   observacoes: textoOpcional,
+  // Etapa 41: opcional e SEM `min(1)` (D2) — ver o comentario do `CotacaoItemSchema`.
+  itens: z.array(CotacaoItemSchema, { error: ITENS_COTACAO_INVALIDOS }).optional(),
 });
 
 module.exports = {
@@ -245,4 +272,10 @@ module.exports = {
   VALOR_COTACAO_NEGATIVO,
   DATA_COTACAO_INVALIDA,
   VALIDADE_COTACAO_INVALIDA,
+  // Etapa 41, Task 1 — o item da cotacao e as 4 literais que T2 (servico/rotas) e T3 (tela) usam.
+  CotacaoItemSchema,
+  ITENS_COTACAO_INVALIDOS,
+  MATERIAL_ITEM_COTACAO_OBRIGATORIO,
+  QTD_ITEM_COTACAO_INVALIDA,
+  VALOR_UNITARIO_ITEM_COTACAO_NEGATIVO,
 };

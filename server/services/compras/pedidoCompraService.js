@@ -1035,4 +1035,8 @@ module.exports = {
   erro,
   assertFornecedor,
   FORNECEDOR_NAO_ENCONTRADO,
+  // Etapa 41: reusada por `cotacaoService` — a frase 'Material não encontrado' tem um dono, e as
+  // linhas da cotacao ganham `codigo`/`descricao`/`unidade` copiados do material pela MESMA regra
+  // do pedido (a conversao copia sem renomear).
+  resolverItens,
 };
