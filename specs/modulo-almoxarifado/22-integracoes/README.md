@@ -8,10 +8,22 @@
 > `7ccfc85..03cd048`, 2026-09-22 — T1–T6 + onda de correção F1–F5) **entregou as telas de
 > fornecedor e de cotação** — os 4 caminhos mortos do Compras abriram, e com eles `GET
 > /fornecedores/:id`, Zod nas duas portas de fornecedor, `status`/`grupo_id: null` escritos de
-> verdade, `POST`/`GET /:id`/`PUT` de cotação e o 409 da lixeira contando as **três** FKs;
+> verdade, `POST`/`GET /:id`/`PUT` de cotação e o 409 da lixeira contando as **três** FKs, e a
+> **Etapa 41** (range `7d9e7d7..ffba9b9`, 2026-09-22 — T1–T5 + onda de correção F1–F6) **deu itens
+> à cotação e a converteu em pedido de compra** — `itens_cotacao`, `valor_total` derivado com itens,
+> `POST /cotacoes/:id/gerar-pedido` atômico por CAS, lixeira própria com cascata e 409, excluir o
+> pedido libera a cotação, e a suíte que prova a ordem UPDATE → DELETE com a FK ligada;
 > Engenharia/BOM e Produção/OP seguem **bloqueadas por dependência, com a medição escrita**
 > (ver abaixo) · **Spec original:** seções 23, 24, 25
-> **Última atualização:** 2026-09-22 — **Etapa 40 fechada**: Fornecedores e Cotações ganharam
+> **Última atualização:** 2026-09-22 — **Etapa 41 fechada**: a cotação ganhou **itens** (tabela
+> `itens_cotacao` em `schema.js`, `itens` opcional no schema, total somado e travado na tela) e o
+> botão **"Gerar pedido"** na aba Cotações cria o pedido de compra **no servidor** pelo
+> `criarPedido` da 38, grava o vínculo `cotacoes.pedido_id` e leva à edição do pedido; a mesma
+> cotação não gera dois pedidos **nem sob corrida** (6 POSTs → 1×201 + 5×409, achado da revisão
+> final); convertida não se edita nem se exclui (409); excluir o pedido **libera** a cotação;
+> a lixeira da cotação deixou de ser o genérico (com item, daria 500 em produção). Contratos no
+> item `[x]` da fatia Compras e na seção *"Contratos da fatia Compras — cotação com itens e
+> conversão (Etapa 41)"* · antes: 2026-09-22 — **Etapa 40 fechada**: Fornecedores e Cotações ganharam
 > `FornecedorForm`/`CotacaoForm`; o "Remover do grupo" que era **no-op** passou a remover; o filtro
 > *Inativo* deixou de ser inerte; fornecedor com cotação **ou com itens cadastrados** responde 409
 > em vez de 500 na lixeira; e a rota do grupo passou a mostrar inativos com selo (contratos na seção
@@ -128,6 +140,13 @@ nem tela, nem spec de Engenharia implementada) e o **MES existe sem uso real** (
   diária e na central (`ddbc18f`, `33031ac`, `8f3db94`), e `PATCH /api/compras/pedidos/:id/status`
   (`19ebf7d`) — a única porta que muda o status de um pedido que já teve recebimento. Contratos
   completos abaixo.
+- **Telas de fornecedor e cotação — ENTREGUE na Etapa 40** (`7ccfc85..03cd048`, esta feature) e
+  **cotação com itens convertida em pedido — ENTREGUE na Etapa 41** (`7d9e7d7..ffba9b9`, esta
+  feature): `itens_cotacao` (`schema.js:1349`), `POST /api/compras/cotacoes/:id/gerar-pedido`
+  criando o pedido que a Etapa 37 recebe (a integração `comprasCotacaoPedidoIntegracao` o encontra
+  em `?pendentes=1` com `saldo_pendente` cheio e o custo médio herda o `valor_unitario` da cotação),
+  lixeira própria da cotação, vínculo `cotacoes.pedido_id` liberado ao excluir o pedido. Contratos
+  nas seções 17–19.
 - Produção (MES): módulo `services/producao/` com schema próprio (`producao_ops`) — sem ponte
   com almoxarifado.
 - Relatório "consumo por OS" no dashboard: o dashboard usa `GET /relatorios/consumo-os`, que
@@ -243,9 +262,60 @@ módulo que ninguém opera criaria contrato contra comportamento não exercitado
       `01732dd` (sem `min="0"` — o servidor decide), F3 `795e47d` + `8cde2ee` (inativo visível no
       grupo com selo; a rota do grupo devolve todos os status), F1 `bdaadd8` (terceira FK), F5
       `03cd048` (`grupo_id` acima de 2^53 com a literal). Contratos na seção própria abaixo.
-      **O que a 40 deixou fora, por decisão:** itens de cotação e converter cotação em pedido (não há
-      `cotacao_itens` — inventar entidade é etapa própria, e é o **próximo alcançável**); foto na tela
+      **O que a 40 deixou fora, por decisão:** ~~itens de cotação e converter cotação em pedido (não há
+      `cotacao_itens` — inventar entidade é etapa própria, e é o **próximo alcançável**)~~ —
+      **entregues na Etapa 41** (item seguinte); foto na tela
       nova; `cidade`/`estado`/`cep`; formato de CNPJ/e-mail; `assertFornecedor` sem checar `status`.
+- [x] **Cotação com itens e conversão em pedido de compra — ENTREGUE na Etapa 41**
+      (`7d9e7d7..ffba9b9`, 2026-09-22; design `7d9e7d7`, plano `d870404`, Fase 2 `183ac38`).
+      **T1** `8d81cc5`: `itens_cotacao` em `server/services/almoxarifado/schema.js:1349` (8 colunas
+      — espelho de `itens_pedido_compra` **sem** `quantidade_recebida`, FK para `cotacoes` e
+      `materiais_almoxarifado`, índice por `cotacao_id`; em `schema.js` e não em `index.js` porque
+      `initSchema` roda no harness e a tabela chega a toda suíte com a DDL de produção, sem stub),
+      `CotacaoItemSchema` + `itens` **opcional** em `CotacaoSchema` com três literais próprias,
+      `resolverItens` exportada do serviço de pedido (um dono para `'Material não encontrado'`),
+      `cotacoes.pedido_id` por `ALTER` em `index.js` + stub do harness. **T2** `11591ca`:
+      `cotacaoService.js` grava/lê itens (`DELETE`+`INSERT` no `PUT`, como o pedido), `valor_total`
+      = Σ quando há itens (o do payload é ignorado) e o do payload sem itens; `excluirCotacao`
+      (rota própria `DELETE /api/compras/cotacoes/:id` **acima** do genérico: 409 se convertida,
+      senão filhos antes do cabeçalho); `gerarPedidoDaCotacao` → `POST
+      /api/compras/cotacoes/:id/gerar-pedido` chamando `criarPedido` com `{ fornecedor_id,
+      data_pedido: hojeLocalISO(), observacoes, itens }`, gravando `pedido_id` + `status =
+      'aprovado'`, 201 com o pedido relido; `PUT` de convertida → 409 (RN-F15); `excluirPedido`
+      **libera** a cotação (`cotacoes_liberadas`); a lista `GET /cotacoes` ganha
+      `pedido_id`/`pedido_numero`. **T3** `7ecf91f`: `CotacaoForm` com busca de material, linhas,
+      Total somado e o campo *Valor total* **travado** com ≥ 1 linha (caminho C — os 8 cenários da
+      40 seguem sem tocar fixture), payload `itens` em `Number()` e `valor_total` **só** sem itens.
+      **T4** `bd224d2`: aba Cotações com coluna **Pedido** (link para a edição), botão **"Gerar
+      pedido"** condicional (sem `pedido_id`, não `rejeitado`/`cancelado`), toast *"Pedido ⟨PC⟩
+      gerado da cotação ⟨numero⟩"* + `navigate` para `/compras/pedidos/editar/:id`, erro no toast,
+      `Pedido` no fim do Excel. **T5** `dae1cee`: integração pela rota **e** pelo serviço —
+      fornecedor (tela da 40) → cotação com 2 itens → gerar → o pedido aparece em `GET /pedidos` e
+      em `GET /almoxarifado/recebimentos-aux/pedidos-compra?pendentes=1` com `saldo_pendente` cheio
+      → 409 na segunda → `DELETE` da cotação 409 → `PUT` do pedido 200 → `DELETE` do pedido
+      libera → gera de novo com `PC-` novo → exclui tudo com 0 órfãos. **Onda F1–F6**: **F1**
+      `d6a1beb` — a conversão **não era atômica** (6 POSTs em paralelo → 6 pedidos, 5 órfãos;
+      duplo clique reproduzia com 2): o `UPDATE` do vínculo virou `… WHERE id = ? AND pedido_id IS
+      NULL` (CAS) e `changes === 0` compensa com `excluirPedido` do perdedor + 409 com o vencedor;
+      cenários (11) e (12). **F2** `83a5d71` — `comprasCotacaoFkProducao.api.test.js`: segundo banco
+      com a DDL de produção **lida** de `index.js`/`schema.js`, `foreign_keys = ON` com controle
+      positivo dentro do cenário; prova que `excluirPedido` (UPDATE antes do DELETE),
+      `excluirCotacao` (filhos antes) e a compensação do F1 passam com a FK vigiando — a suíte do
+      harness (FK OFF) era **cega** para a ordem. **F3+F3b** `ffba9b9` — o (1) afirma
+      `observacoes`, `status = 'pendente'`, `previsao_entrega = null` do pedido gerado; `somaItens`
+      arredondada a 2 casas. **F4** `a09dfe8` — botão travado em voo (`useRef`, porque a guarda por
+      estado não protegia). **F5** `abb46f4` — convertida abre travada com faixa `role="status"` +
+      link. **F6** `327d33f` — `arredondar2` no campo travado, no Total e na carga do `GET /:id`.
+      Suítes: `comprasCotacaoItens` 10, `comprasCotacaoGerarPedido` 12, `comprasCotacaoFkProducao`
+      3, `comprasCotacaoPedidoIntegracao` 3, `comprasSchemasFornecedorCotacao` 15 → 19,
+      `CotacaoForm.test.js` 8 → 16, `Compras.test.js` 9 → 13. Contratos na seção própria abaixo.
+      **O que a 41 deixou fora, por decisão:** comparar cotações de fornecedores diferentes (exige
+      "processo de cotação" com N fornecedores — entidade nova, **é o que sobra alcançável nesta
+      fatia**); preço puxado de `itens_fornecedor` (texto livre, sem `material_id`); status
+      `convertida`; pré-carga por `?cotacao=`; item sem material do catálogo; recebimento olhando a
+      cotação; `criarPedido` ainda soma cru (só `somaItens` arredonda); a lixeira da aba continua
+      visível para a convertida (409 no toast); o `ALTER … pedido_id` falha no **primeiro** boot de
+      banco **novo** (padrão herdado — letra G / consulta A18).
 
 ### Compras (spec 24) — o grosso ENTREGUE na Etapa 14
 
@@ -641,7 +711,14 @@ não é oferecido no "Vincular" (`795e47d`).
 | `POST /api/compras/cotacoes` | `CotacaoSchema`: `numero` **digitado**, obrigatório, `trim`; `fornecedor_id` inteiro > 0 **sem coerção** (`'3'` → 400; a tela manda `Number()`); `valor_total` número ≥ 0, opcional, default `0` (campo de entrada — não há itens para somar); `data_cotacao`/`validade` `''`/`null`/ausente → `NULL`, `AAAA-MM-DD` grava, outro → 400 (**regra de forma**: `2026-13-45` passa, como no pedido); `status` ∈ `STATUS_COTACAO`, default `'em_analise'`; `observacoes` texto | `201` linha com `fornecedor_nome` | `400 'Dados inválidos — numero: número da cotação é obrigatório'`; `… fornecedor_id: fornecedor da cotação é obrigatório`; `… valor_total: valor total da cotação não pode ser negativo` (também para `'10'` e `null`); `… data_cotacao: data da cotação inválida (use AAAA-MM-DD)` / `… validade: validade da cotação inválida (use AAAA-MM-DD)`; `… status: status da cotação inválido (use em_analise, aprovado, rejeitado ou cancelado)`; `400 'Fornecedor não encontrado'` (fornecedor inexistente — inativo é aceito); `409 'Já existe uma cotação com o número ⟨numero⟩'` |
 | `GET /api/compras/cotacoes/:id` | — | `200` linha | `404 'Cotação não encontrada'` |
 | `PUT /api/compras/cotacoes/:id` | o **mesmo** schema (substituição total do cabeçalho) | `200` linha | `400` (o schema roda **antes** do 404 — `PUT /999999 {}` responde 400, mesma ordem do pedido); `404`; `409` para número de **outra** cotação (o próprio id com o mesmo número → 200) |
-| `DELETE /api/compras/cotacoes/:id` (genérico) | — | `200` | `404 'Item não encontrado'` — **inalterado**, sem guarda (cotação não tem filhos) |
+| `DELETE /api/compras/cotacoes/:id` (genérico) | — | `200` | `404 'Item não encontrado'` — **inalterado**, sem guarda (cotação não tem filhos) — ⚠️ **esta linha era verdade até a 40 e ficou FALSA na 41**: desde `11591ca` a rota é **própria**, `404 'Cotação não encontrada'`, 409 se convertida, e apaga os itens antes (contrato na seção da 41 abaixo). Fica riscada à vista, não apagada |
+
+> ⚠️ **Duas frases da tabela acima ficaram FALSAS na Etapa 41 e ficam corrigidas à vista:**
+> *"`valor_total` … (campo de entrada — não há itens para somar)"* — **era verdade até a 40**; desde
+> `11591ca`, com `itens` no corpo, `valor_total` é **derivado** e o do payload é **ignorado**; sem
+> itens continua entrada (D3 da 41). E *"`PUT` … (substituição total do cabeçalho)"* — desde a 41 é
+> substituição total do **documento**: `PUT` sem `itens` **apaga** as linhas (RN-F05) e `PUT` de
+> cotação **convertida** responde 409 (RN-F15).
 
 O 409 do `numero` tem **duas guardas**: `SELECT id FROM cotacoes WHERE numero = ? AND id <> ?`
 antes do `INSERT`/`UPDATE` **e** a tradução de `SQLITE_CONSTRAINT … cotacoes.numero` no `catch`
@@ -679,6 +756,86 @@ segue sem checar status; `GET /api/compras/fornecedores` (lista) segue `SELECT *
 serviço); `FornecedoresDoGrupo.js` continua **sem suíte** (o F3-cliente foi verificado por build +
 suíte inteira, declarado no commit e na letra G).
 
+## Contratos da fatia Compras — cotação com itens e conversão (Etapa 41, `7d9e7d7..ffba9b9`)
+
+Design em `docs/superpowers/specs/2026-09-22-crm-etapa41-cotacao-itens-pedido-design.md` (D1–D12,
+RN-F01…RN-F15, §12 com o que o design previu errado); plano em
+`docs/superpowers/plans/2026-09-22-crm-etapa41-cotacao-itens-pedido.md`.
+
+### 17. O item da cotação — `CotacaoItemSchema` e `itens_cotacao` (`8d81cc5`)
+
+`itens: z.array(CotacaoItemSchema, { error: 'itens da cotação devem ser uma lista' }).optional()`
+em `CotacaoSchema`. Item: `material_id` inteiro > 0 **sem coerção** (*"material do item da cotação é
+obrigatório"*), `quantidade` > 0 (*"quantidade do item da cotação deve ser um número maior que
+zero"*), `valor_unitario` ≥ 0 opcional, default 0 (*"valor unitário do item da cotação não pode ser
+negativo"*). Caminho do 400: `Dados inválidos — itens.0.material_id: …` (um item `{}` gera **duas**
+issues, `material_id` e `quantidade`, unidas por `; `). As três literais são **diferentes** das do
+pedido — cenário (s) prova por `notStrictEqual`. Material inexistente → 400 `'Material não
+encontrado'` (de `resolverItens`) e **nada é gravado**: `resolverItens` roda **antes** do `INSERT` do
+cabeçalho. Tabela: `itens_cotacao (id, cotacao_id, material_id, codigo, descricao, quantidade,
+valor_unitario, unidade)` em `schema.js:1349`; `codigo/descricao/unidade` copiados do material.
+
+### 18. As portas de cotação depois da 41 (`11591ca`, `d6a1beb`, `ffba9b9`)
+
+`linha` = a da 40 **+ `pedido_id`, `pedido_numero`** (`LEFT JOIN pedidos_compra`) **+ `itens[{ id,
+material_id, codigo, descricao, unidade, quantidade, valor_unitario }]`** (`ORDER BY id`). A lista
+`GET /cotacoes` devolve `pedido_id`/`pedido_numero` e **não** devolve `itens`.
+
+| Rota | Corpo | Resposta | Erros |
+|---|---|---|---|
+| `POST /api/compras/cotacoes` | `CotacaoSchema` + `itens` opcional | `201` linha + itens; com itens `valor_total` = Σ(quantidade × valor_unitario) **arredondado a 2 casas** (`ffba9b9`) e o do payload **ignorado**; sem itens (ausente ou `[]`), `valor_total` do payload | os da 40; `400 'Material não encontrado'` (nada gravado); `400 'Dados inválidos — itens.N.campo: ⟨literal⟩'` |
+| `PUT /api/compras/cotacoes/:id` | idem | `200` linha + itens — **substitui** as linhas (`DELETE` + `INSERT`, ids novos); **sem `itens` apaga** as linhas e volta o total ao do payload | os da 40; **`409 'Cotação ⟨numero⟩ já gerou o pedido ⟨PC⟩ — não pode mais ser editada'`** se `pedido_id` (RN-F15, Fase 2 I3) |
+| `GET /api/compras/cotacoes/:id` | — | `200` linha + itens + `pedido_*` | `404 'Cotação não encontrada'` |
+| **`DELETE /api/compras/cotacoes/:id`** (própria, `:387`, **acima** do genérico `:393`) | — | `200 { message: 'Cotação excluída com sucesso' }` — apaga `itens_cotacao` **antes** da cotação | `404 'Cotação não encontrada'`; **`409 'Cotação ⟨numero⟩ já gerou o pedido ⟨PC⟩ — não pode ser excluída'`** |
+| **`POST /api/compras/cotacoes/:id/gerar-pedido`** (`:379`) | **sem corpo** | `201` o pedido relido por `obterPedido` (`numero` `PC-…`, `valor_total` = Σ, `data_pedido` = hoje local, `status 'pendente'`, `previsao_entrega null`, `observacoes` da cotação, `itens` com `quantidade_recebida 0`, `teve_recebimento 0`); grava `cotacoes.pedido_id` e `status = 'aprovado'` | guardas **nesta ordem**: `404`; **`409 'Cotação ⟨numero⟩ já gerou o pedido ⟨PC⟩'`**; `400 'cotação ⟨rejeitado|cancelado⟩ não pode gerar pedido'`; `400 'cotação sem itens não pode gerar pedido'`; `400 'Fornecedor não encontrado'` (apagado — só alcançável no harness); `400 'Fornecedor inativo — reative-o em Compras → Fornecedores antes de gerar o pedido'` (a **primeira** porta do Compras a olhar `fornecedores.status`) |
+
+**Atomicidade sem transação** (`d6a1beb`, F1): o `UPDATE cotacoes SET pedido_id = ?, status =
+'aprovado', updated_at = … WHERE id = ? AND pedido_id IS NULL` é a guarda; `changes === 0` →
+`excluirPedido` do pedido recém-criado (compensação — nunca apontado, passa com FK ON) → relê a
+cotação (404 se sumiu) → 409 com o vencedor. Provado por (11) (6 `POST` em `Promise.all` → 1×201 +
+5×409, `COUNT(pedidos_compra)` +1, 0 órfãos) e (12) (`DELETE /cotacoes/:id` × `gerar-pedido` → 0
+pedidos sem cotação apontando). **Entrelaçamento teórico não coberto, declarado:** `excluirCotacao`
+lê `pedido_id NULL`, o `gerar` vence o CAS, e só então o `DELETE FROM cotacoes` apaga a cotação —
+pedido vivo sem cotação; inalcançável no harness, o (12) acusa se aparecer.
+
+**`excluirPedido` libera a cotação** (`11591ca`, RN-F12 corrigida na Fase 2 I2): `UPDATE cotacoes
+SET pedido_id = NULL … WHERE pedido_id = ?` **antes** do `DELETE` do cabeçalho (ordem que a FK exige
+em produção — provada em `comprasCotacaoFkProducao` (1), `83a5d71`), resposta com
+`cotacoes_liberadas: N`. O `status = 'aprovado'` fica; regenerar cria `PC-` novo **a partir da
+cotação** (o `PUT` feito no pedido anterior se perde — letra B).
+
+### 19. As telas (`7ecf91f`, `bd224d2`, `a09dfe8`, `abb46f4`, `327d33f`)
+
+- **`CotacaoForm`**: bloco **Itens** (busca por `GET /compras/materiais?search=`, linha com
+  quantidade 1 e preço vazio, subtotal, *"Total: R$ …"*), `data-testid` prefixados `cotacao-`, sem
+  `min="0"`; o campo *Valor total* é `readOnly` e mostra a soma (arredondada) com ≥ 1 linha,
+  digitável sem linha (**o digitado volta** ao remover a última linha); payload `itens` sempre
+  (pode ser `[]`) com `Number()`, `valor_total` **só** quando `itens.length === 0`; item sem preço →
+  aviso *"Item sem preço entra na cotação com valor unitário 0."*, não recusa; 400 de item em
+  `role="alert"`. **Convertida** (`pedido_id` no `GET /:id`): faixa `role="status"`
+  `data-testid="cotacao-convertida"` *"Esta cotação já gerou o pedido ⟨PC⟩ — não pode mais ser
+  editada"* com `<Link>` para `/compras/pedidos/editar/⟨id⟩`, 13 controles `disabled`, Salvar não
+  renderizado, submit sai cedo.
+- **Aba Cotações** (`Compras.js`): coluna **Pedido** entre Status e Ações (`<Link>` com
+  `pedido_numero`, fallback `#id`, ou `-`); botão `title="Gerar pedido"`
+  (`data-testid="gerar-pedido-⟨id⟩"`) só sem `pedido_id` e status ∉ {`rejeitado`, `cancelado`},
+  `disabled` enquanto o `POST` está em voo (`gerandoRef` segura o par de cliques no mesmo tick);
+  sucesso → toast *"Pedido ⟨PC⟩ gerado da cotação ⟨numero⟩"* e `navigate` para a edição do pedido;
+  erro → `toast.error` com a literal do servidor (fallback *"Não foi possível gerar o pedido"*), sem
+  navegar. Export: `'Pedido'` no **fim**. A lixeira continua visível para a convertida: o
+  `handleDelete` leva o 409 do servidor ao `toast.error` com a literal (desde a 38) e, no sucesso,
+  mostra o toast fixo *"Item excluído com sucesso"* em vez de *"Cotação excluída com sucesso"*
+  (Fase 2 M7, não é defeito) — declarado.
+
+### O que a Etapa 41 NÃO mudou (conferido pelos revisores)
+
+`assertFornecedor` segue sem checar status (só a conversão olha); `POST /api/compras/pedidos`
+direto continua aceitando fornecedor inativo; `criarPedido` soma o total **sem** arredondar;
+`PedidoCompraCreateSchema` continua exigindo `itens.min(1)` (a cotação não); `criarCotacao` pelo
+**serviço** não passa pelo schema (`quantidade 0` chegaria — mesma classe do pedido, letra G); a
+frase morta de `comprasPedidoEditarExcluir.api.test.js:93` continua lá; o genérico mantém
+`'cotacoes'` no mapa, sombreado.
+
 ## Regras essenciais + testes de API exigidos
 
 | Regra | Teste | Estado |
@@ -712,6 +869,16 @@ suíte inteira, declarado no commit e na letra G).
 | A rota do grupo lista inativo e legado `NULL`, ativos primeiro | `comprasFornecedorRotas` (13) | ✅ `8cde2ee` |
 | A data da cotação nasce LOCAL (relógio fixo às 23:30) | `CotacaoForm.test.js` (a) — molde (q) de `PedidoCompraForm.test.js` | ✅ `55a3214` |
 | Os 4 caminhos abrem formulário e o payload é exato | `FornecedorForm.test.js` (a)–(h), `CotacaoForm.test.js` (a)–(h) | ✅ `23b86f3`/`b692413`/`01732dd` |
+| `itens` é opcional; as literais do item da cotação têm um dono cada | `comprasSchemasFornecedorCotacao` (p)–(s) | ✅ `8d81cc5` |
+| Com itens o total é derivado e o do payload é ignorado; sem itens é o do payload; material inexistente não grava nada | `comprasCotacaoItens` (1)(2)(3)(4) | ✅ `11591ca` |
+| A lixeira da cotação leva os itens (órfãos = 0) e é a rota própria, não o genérico | `comprasCotacaoItens` (7)(8)(10) — sabotagem: sem o `DELETE` dos filhos o status segue 200 e a asserção de órfãos cai | ✅ `11591ca` |
+| Gerar pedido cria um pedido NORMAL (lista, aux do recebimento com saldo cheio, `PUT`, `DELETE`) e excluí-lo libera a cotação | `comprasCotacaoGerarPedido` (1)(10); `comprasCotacaoPedidoIntegracao` (A)(B) | ✅ `11591ca`/`dae1cee` |
+| Convertida não se edita nem se exclui; rejeitada/cancelada/sem itens/fornecedor inativo não gera | `comprasCotacaoGerarPedido` (3)(4)(5)(7)(9); integração (C) | ✅ `11591ca`/`dae1cee` |
+| A mesma cotação não gera dois pedidos **sob corrida** | `comprasCotacaoGerarPedido` (11) — 6 `POST` em `Promise.all` → 1×201 + 5×409, `COUNT` +1; (12) `DELETE` × `gerar` → 0 órfãos | ✅ `d6a1beb` |
+| `excluirPedido`/`excluirCotacao` respeitam a ordem que a FK de produção exige | `comprasCotacaoFkProducao` (1)(2)(3) — DDL de produção lida de `index.js`/`schema.js`, `foreign_keys = ON` com controle positivo; a sabotagem de ordem fica verde nas outras 20 e cai aqui | ✅ `83a5d71` |
+| O cabeçalho do pedido gerado é só o contrato (`observacoes`, `status` default, `previsao` null); a soma tem 2 casas | `comprasCotacaoGerarPedido` (1); `comprasCotacaoItens` (2) 3 × 0,1 → 0,3 | ✅ `ffba9b9` |
+| Tela: campo travado com a soma, payload sem `valor_total` com itens, 400 de item no `role="alert"`, convertida travada, sem lixo de ponto flutuante | `CotacaoForm.test.js` (i)–(p) | ✅ `7ecf91f`/`abb46f4`/`327d33f` |
+| Aba: coluna Pedido, botão condicional, POST + toast + navigate real, 409 no toast sem navegar, export no fim, sem clique repetido em voo | `Compras.test.js` (j)–(m) | ✅ `bd224d2`/`a09dfe8` |
 | Revisão de BOM recalcula reservas | `nova revisao ajusta reservas dos itens alterados` | ⛔ bloqueado (BOM inexistente) |
 | Encerramento de OP bloqueia novos consumos nela | `consumo em OP encerrada falha` | ⛔ bloqueado (MES sem uso) |
 

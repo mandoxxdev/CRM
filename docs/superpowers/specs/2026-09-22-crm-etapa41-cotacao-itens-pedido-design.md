@@ -113,7 +113,7 @@ por `?cotacao=` (caminho (a)); itens de cotação sem material do catálogo; rec
 | **D2** | **`itens` é OPCIONAL na cotação** (`z.array(CotacaoItemSchema).optional()`, sem `min(1)`); cotação **sem** itens continua válida (valor fechado digitado). **A conversão exige itens** (400). | `itens.min(1)` como no pedido: quebra os 4 cenários que criam cotação de cabeçalho e proíbe um uso real — o fornecedor mandou "R$ 1.500 o lote" sem discriminar. O pedido exige itens porque o recebimento precisa de linhas; a cotação não é recebida. |
 | **D3** | **`valor_total` tem duas regras, escritas:** com itens → **derivado** (Σ quantidade × valor_unitário, o payload é ignorado como no pedido); sem itens → **entrada** (como na 40). Na tela: campo travado e somado quando há linha; digitável quando não há. | Sempre derivado (mata (d)/(e)/(h) da suíte e o uso "valor fechado"); sempre entrada (o total mentiria com itens). |
 | **D4** | **`itens_cotacao` em `schema.js` após `:1339`**, espelho de `itens_pedido_compra` **sem** `quantidade_recebida`, com `valor_unitario` (mesmo nome) e índice por `cotacao_id`; **`resolverItens` passa a ser exportada** de `pedidoCompraService` e reusada. | Criar em `index.js` junto de `cotacoes` (exige stub manual, a classe de defeito da F1 da 40); 5 colunas com `JOIN` na leitura (a tela de edição precisa de `codigo/descricao/unidade` por linha, como o pedido); copiar `resolverItens` (a frase `'Material não encontrado'` ganharia dois donos). |
-| **D5** | **Conversão NO SERVIDOR:** `POST /api/compras/cotacoes/:id/gerar-pedido`, sem corpo, chama **`pedidoCompraService.criarPedido`** com `{ fornecedor_id, itens[{material_id, quantidade, valor_unitario}], observacoes }` — herda `PC-…`, total derivado, `resolverItens`, `assertFornecedor` — grava `cotacoes.pedido_id`, e a tela navega para **`/compras/pedidos/editar/:id`** (o comprador revisa datas e previsão ali). | Caminho (a) `?cotacao=ID` com pré-carga no `PedidoCompraForm`: zero servidor, mas a cotação nunca sabe que virou pedido, o mapeamento cotação→pedido vive no client, e a segunda conversão não é barrada — reabre a pergunta na etapa seguinte. Os dois são compatíveis; (a) pode entrar depois como atalho. |
+| **D5** | **Conversão NO SERVIDOR:** `POST /api/compras/cotacoes/:id/gerar-pedido`, sem corpo, chama **`pedidoCompraService.criarPedido`** com `{ fornecedor_id, itens[{material_id, quantidade, valor_unitario}], observacoes }` — herda `PC-…`, total derivado, `resolverItens`, `assertFornecedor` — grava `cotacoes.pedido_id`, e a tela navega para **`/compras/pedidos/editar/:id`** (o comprador revisa datas e previsão ali). *(corrigido no fechamento — §12.4: o "grava `pedido_id`" era um `UPDATE` incondicional e a conversão não era atômica; hoje é compare-and-set com compensação.)* | Caminho (a) `?cotacao=ID` com pré-carga no `PedidoCompraForm`: zero servidor, mas a cotação nunca sabe que virou pedido, o mapeamento cotação→pedido vive no client, e a segunda conversão não é barrada — reabre a pergunta na etapa seguinte. Os dois são compatíveis; (a) pode entrar depois como atalho. |
 | **D6** | **Vínculo = `cotacoes.pedido_id`** (a origem aponta para o pedido, como `solicitacoes…pedido_compra_id` da Reposição), 1:1, criada por `ALTER` em `index.js` (estilo `:19269`) + coluna no stub + `SELECT_LINHA`; **segunda conversão → 409** *"Cotação ⟨numero⟩ já gerou o pedido ⟨PC⟩"*. A lista `GET /cotacoes` ganha `pedido_numero` por `LEFT JOIN pedidos_compra`. | `pedidos_compra.cotacao_id` (toca a tabela que o recebimento lê; permite N pedidos por cotação — não é o que se quer); `status = 'convertida'` (mexe em `STATUS_COTACAO` e nos dois espelhos do client, e o (g) da suíte cai). |
 | **D7** | **Conversão recusa cotação `rejeitado` ou `cancelado`** (400 *"cotação ⟨status⟩ não pode gerar pedido"*), aceita `em_analise` e `aprovado`, e **grava `status = 'aprovado'`** ao converter (gerar o pedido **é** aprovar). | Exigir `aprovado` antes: um clique a mais sem informação nova. Não mexer no status: a lista mostraria "Em Análise" com pedido gerado. |
 | **D8** | **Conversão recusa fornecedor `inativo`** (400 *"Fornecedor inativo — reative-o em Compras → Fornecedores antes de gerar o pedido"*): é a **primeira** porta do Compras a olhar `status` do fornecedor. `assertFornecedor` **continua** sem olhar (o `POST /pedidos` direto segue aceitando — D5 da 40). | Deixar passar: o pedido nasceria para um fornecedor que a tela do grupo e o recebimento escondem. Mudar `assertFornecedor`: contrato de duas portas já entregues. |
@@ -146,8 +146,8 @@ por `?cotacao=` (caminho (a)); itens de cotação sem material do catálogo; rec
 | **RN-F09** | `rejeitado`/`cancelado` → 400 `cotação ⟨status⟩ não pode gerar pedido`. | |
 | **RN-F10** | Já convertida → **409** `Cotação ⟨numero⟩ já gerou o pedido ⟨PC⟩`; nenhum pedido novo. | Segunda chamada → 409, `COUNT(pedidos_compra)` inalterado. |
 | **RN-F11** | Fornecedor `inativo` → 400 `Fornecedor inativo — reative-o em Compras → Fornecedores antes de gerar o pedido`. Fornecedor apagado → 400 `Fornecedor não encontrado` (de `assertFornecedor`). | Inativa pelo `PUT` da 40 → gerar → 400; reativa → 201. |
-| **RN-F12** | O pedido gerado é um pedido **normal**: aparece em `GET /api/compras/pedidos`, em `GET /almoxarifado/recebimentos-aux/pedidos-compra` (`?pendentes=1`) com saldo cheio, pode ser editado (`PUT`) e excluído (`DELETE /pedidos/:id`) — e excluí-lo **LIBERA a cotação** (`pedido_id` volta a NULL; a resposta traz `cotacoes_liberadas`), que pode gerar outro pedido ou ser excluída. *(corrigido na Fase 2, I2: a versão original dizia que o `pedido_id` ficava como rastro — isso deixava a cotação num beco sem saída, o inverso do precedente da I1 da Etapa 38, que libera as solicitações ao excluir o pedido.)* | T2-gerar (10), integração A4. |
-| **RN-F15** | Cotação convertida **não pode mais ser editada**: `PUT` → **409** `Cotação ⟨numero⟩ já gerou o pedido ⟨PC⟩ — não pode mais ser editada`. *(acrescentada na Fase 2, I3.)* | T2-gerar (9). |
+| **RN-F12** | O pedido gerado é um pedido **normal**: aparece em `GET /api/compras/pedidos`, em `GET /almoxarifado/recebimentos-aux/pedidos-compra` (`?pendentes=1`) com saldo cheio, pode ser editado (`PUT`) e excluído (`DELETE /pedidos/:id`) — e excluí-lo **LIBERA a cotação** (`pedido_id` volta a NULL; a resposta traz `cotacoes_liberadas`), que pode gerar outro pedido ou ser excluída. *(corrigido na Fase 2, I2: a versão original dizia que o `pedido_id` ficava como rastro — isso deixava a cotação num beco sem saída, o inverso do precedente da I1 da Etapa 38, que libera as solicitações ao excluir o pedido. Ver §12.1.)* | T2-gerar (10), integração A4. |
+| **RN-F15** | Cotação convertida **não pode mais ser editada**: `PUT` → **409** `Cotação ⟨numero⟩ já gerou o pedido ⟨PC⟩ — não pode mais ser editada`. *(acrescentada na Fase 2, I3 — ver §12.2; a metade da tela entrou só na onda final, F5 — §12.6.)* | T2-gerar (9). |
 
 ### A2/A3 — telas
 
@@ -225,10 +225,15 @@ cotacaoJaGerouPedidoExclusao(numero, pc) = `Cotação ${numero} já gerou o pedi
 itens → `obterCotacao`. `gerarPedidoDaCotacao`: `obterCotacao` → guardas **nesta ordem** (409 já gerou →
 status → itens → `assertFornecedor` → inativo por `SELECT status`; *alinhado ao plano na Fase 2, M2*) →
 `criarPedido(db, { fornecedor_id, data_pedido: hojeLocalISO(), itens, observacoes }, user)` *(o
-`data_pedido` entrou na Fase 2, I4: `criarPedido` não põe default e o pedido nascia com data NULL)*
+`data_pedido` entrou na Fase 2, I4: `criarPedido` não põe default e o pedido nascia com data NULL —
+ver §12.3)*
 → `UPDATE cotacoes SET pedido_id = ?, status = 'aprovado', updated_at = …` → `obterPedido`. Se o `UPDATE`
 do vínculo falhar depois do pedido criado, o erro **sobe** (o pedido fica; a cotação sem vínculo — o
-409 não protege; declarado em G, mesma classe do vínculo não-fatal da Reposição).
+409 não protege; declarado em G, mesma classe do vínculo não-fatal da Reposição). *(corrigido no
+fechamento — §12.4: o `UPDATE` acima era incondicional e o "409 não protege" era mais grave do que
+"declarado em G" — sob corrida ele não protegia NADA, 6 POSTs davam 6 pedidos. Hoje: `… WHERE id = ?
+AND pedido_id IS NULL`, e `changes === 0` compensa com `excluirPedido` do pedido recém-criado e
+lança o 409 com o vencedor, `d6a1beb`.)*
 
 ### 5.4 Rotas (`server/routes/compras.js`)
 
@@ -259,6 +264,12 @@ condicional; `handleGerarPedido(cotacao)`: `api.post(`/compras/cotacoes/${id}/ge
 `toast.success(`Pedido ${res.data.numero} gerado da cotação ${cotacao.numero}`)` →
 `navigate(`/compras/pedidos/editar/${res.data.id}`)`; `catch` → `toast.error(error.response?.data?.error || 'Não foi possível gerar o pedido')`.
 Exportação (`:268-278`): `'Pedido': c.pedido_numero || ''` no fim.
+
+*(corrigido no fechamento — §12.6: este §5.5 não previa (a) a tela da cotação **convertida** — o
+`GET /:id` traz `pedido_id` e o `CotacaoForm` o ignorava, abrindo em edição livre para levar o 409
+só no Salvar; (b) o arredondamento do total travado — `String(total)` mostrava
+`0.30000000000000004`; (c) o botão "Gerar pedido" sem trava em voo — duplo clique mandava dois
+`POST`. Entraram na onda: F5 `abb46f4`, F6 `327d33f`, F4 `a09dfe8`.)*
 
 ---
 
@@ -312,6 +323,12 @@ PC, `COUNT(pedidos_compra)` inalterado; (3) RN-F08 sem itens → 400; (4) RN-F09
 → `DELETE` 409 com a literal de exclusão; (8) pelo **serviço** (`gerarPedidoDaCotacao` direto) — o
 mesmo pedido, sem passar pela rota.
 
+*(corrigido no fechamento — §12.5: esta lista de cenários, mais a (9)/(10) da Fase 2, não via a
+**ordem** UPDATE → DELETE em `excluirPedido`/`excluirCotacao` sob FK ligada — o harness roda com
+`foreign_keys = 0`, então a sabotagem "UPDATE depois do DELETE" ficava verde e dava 500 em produção.
+A onda acrescentou (11)/(12) (corrida, F1) e o arquivo `comprasCotacaoFkProducao.api.test.js` (F2),
+que abre um segundo banco com a DDL de produção e a FK ligada.)*
+
 ### 7.4 `client/src/components/compras/CotacaoForm.test.js` (estender, +6 → 14) — T3
 
 (i) busca (`GET /compras/materiais` com `search`), adicionar 912, total 0 → digitar preço → Total e
@@ -326,7 +343,9 @@ ajustado (8 chaves); (n) 400 `Dados inválidos — itens.0.quantidade: …` em `
 `PC-2026-650`): coluna Pedido `-` e link `PC-2026-650` para `/compras/pedidos/editar/650`; botão
 `gerar-pedido-770` existe, `gerar-pedido-771` **não**; (k) clique → `api.post` com a URL exata → toast
 com a literal → navega (a tela de edição do pedido é stub `PedidoCompraForm` no Proxy — afirmar pela
-URL, com `PedidoCompraForm` em `reais` **ou** afirmar `mockNavigate`, à escolha do executor, declarado);
+URL, com `PedidoCompraForm` em `reais` **ou** afirmar `mockNavigate`, à escolha do executor, declarado
+— *corrigido no fechamento, §12.7: não há stub; `PedidoCompraForm` já está em `reais` de
+`Compras.test.js:41-45` e a tela REAL monta — Fase 2 C1*);
 (l) 409 do servidor → `toast.error` com a literal, sem navegar; exportação com a coluna `Pedido` no fim.
 Uma cotação `rejeitado` (772) sem botão.
 
@@ -378,7 +397,9 @@ com saldo cheio → segunda geração 409 → `DELETE /cotacoes/:id` 409 → `PU
 - **B:** D1–D12 com o descartado.
 - **C:** nenhum furo novo em operação (a etapa não muda comportamento existente além da lixeira, que
   passa a **funcionar** onde daria 500).
-- **D/G:** seção 8; o `UPDATE` do vínculo depois do `criarPedido` sem transação; o `status`
+- **D/G:** seção 8; ~~o `UPDATE` do vínculo depois do `criarPedido` sem transação~~ *(corrigido no
+  fechamento — §12.4: virou CAS + compensação, `d6a1beb`; o que fica em G é o entrelaçamento
+  teórico `excluirCotacao` × `gerar` e o `ALTER … pedido_id` no primeiro boot de banco novo)*; o `status`
   `aprovado` fica quando o pedido é excluído (só o vínculo cai); o `PUT` do pedido gerado faz
   `DELETE+INSERT` das linhas (herdado); `criarCotacao` pelo serviço não passa pelo schema (M4);
   "Gerar pedido" sem `window.confirm` (M6, reversível: excluir o pedido libera); a lixeira da aba
@@ -394,7 +415,7 @@ com saldo cheio → segunda geração 409 → `DELETE /cotacoes/:id` 409 → `PU
 | `itens` obrigatório quebra os cenários de cabeçalho | D2, 7.7 |
 | `valor_total` com duas regras diverge entre tela e servidor | RN-F03/RN-F13 espelhadas; (j)/(k) do client e (2)/(3) do servidor |
 | Lixeira passa no harness e falha em produção (FK) | rota própria com cascata (D9) e sabotagem contando órfãos (7.2 (7)) |
-| Segunda conversão cria pedido duplicado | RN-F10 com `COUNT(pedidos_compra)` |
+| Segunda conversão cria pedido duplicado | RN-F10 com `COUNT(pedidos_compra)` — *(corrigido no fechamento — §12.4: o `COUNT` do (2) media a segunda chamada **sequencial**; a **concorrente** criava N pedidos e nenhum cenário via. Hoje (11)/(12), `d6a1beb`.)* |
 | O pedido gerado não é "um pedido normal" para a Etapa 37 | integração A4 pelo aux do recebimento |
 | Fornecedor inativo vira pedido | RN-F11 |
 | Merge dos galhos | T2 é um executor só; T3/T4 tocam arquivos disjuntos (`CotacaoForm.*` vs `Compras.*`) |
@@ -415,3 +436,166 @@ com saldo cheio → segunda geração 409 → `DELETE /cotacoes/:id` 409 → `PU
    em produção no dia em que existir item — por isso a lixeira própria é **parte** da etapa, não higiene.
 6. `specs/modulo-compras/README.md:70` ("cotação não tem filhos") fica falsa — corrigir no fechamento
    dizendo que era verdade até a 40.
+
+---
+
+## 12. Como foi executado — o que este design previu errado (escrito no fechamento, 2026-09-22)
+
+> **Range da etapa:** `7d9e7d7..ffba9b9` — design `7d9e7d7`, plano `d870404`, Fase 2 `183ac38`,
+> T1 `8d81cc5`, T2 `11591ca`, T3 `7ecf91f`, T4 `bd224d2`, T5 `dae1cee`, e a onda de correção F4
+> `a09dfe8`, F5 `abb46f4`, F6 `327d33f`, F1 `d6a1beb`, F2 `83a5d71`, F3+F3b `ffba9b9`. Todos
+> conferidos com `git merge-base --is-ancestor` no fechamento.
+>
+> **Design errado é dado, não vergonha** — o que não se faz é apagar a versão errada em silêncio,
+> porque a próxima sessão confia nela de novo (regra 5 do `CLAUDE.md`). As sete correções abaixo
+> ficam **ao lado** do texto original das seções 3, 4, 5, 7, 9 e 10, que **não foi apagado**: cada
+> lugar ganhou um *(corrigido no fechamento)* apontando para cá. Fontes:
+> `.superpowers/sdd/2026-09-22-crm-etapa41-cotacao-itens-pedido/etapa41-fase2-revisao.md`,
+> `final-review-rn.md`, `final-review-ux.md`, `fix-wave-report-servidor.md`,
+> `fix-wave-report-cliente.md`.
+
+### 12.1 RN-F12 dizia que `pedido_id` ficava como RASTRO ao excluir o pedido — deixava a cotação num beco *(corrigido na Fase 2, I2)*
+
+**O design dizia** (RN-F12 e a letra G do §9, na versão `7d9e7d7`): que o pedido gerado era um
+pedido normal, editável e excluível, e que ao excluí-lo o `pedido_id` da cotação **ficava** como
+rastro — o cabeçalho do plano até afirmava *"a RN-F12 declara que o `pedido_id` fica, e o cenário
+afirma isso para ninguém 'consertar'"*.
+
+**Estava errado na consequência.** A Fase 2 traçou a cadeia até o último gesto (sonda 6): depois do
+`DELETE /pedidos/:id`, `pedido_id` ficava apontando para um id inexistente, o `LEFT JOIN` devolvia
+`pedido_numero: null`, o 409 saía como *"já gerou o pedido **null**"* (I1), e a cotação respondia
+409 em `gerar-pedido` **e** 409 em `DELETE` para sempre — só SQL resolvia (I2). É o **inverso** do
+precedente que a própria base registrou como defeito na Etapa 38 (I1, `liberarSolicitacoesDoPedido`:
+a solicitação ficava `VINCULADO` a um pedido que não existia mais).
+
+**O que vale hoje** (`11591ca`): `excluirPedido` faz `UPDATE cotacoes SET pedido_id = NULL …
+WHERE pedido_id = ?` **antes** do `DELETE` do cabeçalho (a ordem que a FK de produção exige — §12.5)
+e devolve `cotacoes_liberadas: N`; o `status = 'aprovado'` fica (a aprovação aconteceu); a cotação
+pode gerar de novo (`PC-` novo, **a partir da cotação** — o `PUT` feito no pedido anterior se perde,
+letra B) ou ser excluída. `rotuloPedido` (`pedido_numero || '#id'`) ficou como cinto para o
+intervalo sem transação. Cenário T2-gerar (10) e T5 (A). **Descartado:** manter D6/G e escrever na
+letra B que é o oposto da 38.
+
+### 12.2 Faltava a RN-F15 — o `PUT` de cotação convertida continuava aberto *(acrescentada na Fase 2, I3)*
+
+**O design dizia:** nada. As RN-F01…F14 não olhavam `pedido_id` no `PUT`: depois de gerar, o
+comprador podia trocar itens e preços (o pedido não acompanhava) ou voltar o `status` para
+`rejeitado` com `pedido_id` gravado — a lista mostraria "Rejeitado" com link `PC-…`.
+
+**O que vale hoje** (`11591ca`): `atualizarCotacao` lança **409** *"Cotação ⟨numero⟩ já gerou o
+pedido ⟨PC⟩ — não pode mais ser editada"* antes de qualquer escrita (T2-gerar (9)); se algum dia for
+preciso editar, o gesto é excluir o pedido (que libera) e editar depois (§8). **A metade da tela só
+entrou na onda** (§12.6): o servidor recusava, mas o `CotacaoForm` abria a convertida em edição
+livre. **Descartado:** congelar só os itens e deixar o cabeçalho — a tela manda tudo junto (RN-F05).
+
+### 12.3 O pedido gerado nascia com `data_pedido` NULL *(corrigido na Fase 2, I4)*
+
+**O design dizia** (§5.3, D5): `criarPedido(db, { fornecedor_id, itens, observacoes }, user)` — sem
+`data_pedido`. A Fase 0 cliente §3.4 tinha afirmado *"`data_pedido` = hoje do servidor"*.
+
+**Estava errado — a Fase 0 afirmou um default que não existe.** `camposDoCabecalho` pula
+`undefined` e a DDL de `pedidos_compra` não tem default para as datas (`index.js:19235-19236`):
+sonda 3 da Fase 2 → `data_pedido null`. Efeito: a coluna "Data Pedido" da aba e o `data_pedido` do
+aux do recebimento saíam `-`/`null` até o comprador digitar.
+
+**O que vale hoje** (`11591ca`): `data_pedido: pedidoCompraService.hojeLocalISO()` no payload —
+o mesmo fallback de `importarPedidos`; T2-gerar (1) afirma. `previsao_entrega` fica NULL de
+propósito (é o que o comprador confere na edição, §6). **Descartado:** copiar `data_cotacao` (é a
+data do documento do fornecedor).
+
+### 12.4 A conversão NÃO era atômica — D5 e §5.3 descreviam um `UPDATE` incondicional *(corrigido na onda, F1)*
+
+**O design dizia** (D5, §5.3, §9 G, §10): `obterCotacao` → guardas (409 se `pedido_id`) →
+`criarPedido` → `UPDATE cotacoes SET pedido_id = ? … WHERE id = ?` → `obterPedido`; e que se o
+`UPDATE` falhasse "o erro sobe, o 409 não protege — declarado em G". O risco do §10 ("segunda
+conversão cria pedido duplicado") apontava para RN-F10 com `COUNT(pedidos_compra)` — medido na
+**segunda chamada sequencial**.
+
+**Estava errado na gravidade: sob concorrência a guarda não protegia nada.** As duas lentes da
+revisão final chegaram ao mesmo achado por sondas diferentes (RN I1 e M3; UX C1): 6 `POST
+…/gerar-pedido` em `Promise.all` na mesma cotação → **201 × 6, seis pedidos, cinco sem cotação
+apontando**, todos visíveis no aux do recebimento com saldo cheio; duplo clique em "Gerar pedido"
+reproduzia com dois (o botão não tinha trava); `DELETE /cotacoes/:id` concorrente com `gerar` deixava
+pedido vivo com cotação apagada (o `UPDATE` afetava 0 linhas e ninguém olhava `changes`). Causa: o 409
+era lido antes de uma dezena de `await` e o `UPDATE` era incondicional, sem transação.
+
+**O que vale hoje** (`d6a1beb`, F1; `a09dfe8`, F4): o `UPDATE` **é** a guarda — `… WHERE id = ? AND
+pedido_id IS NULL` (compare-and-set); `changes === 0` → **compensação** com
+`pedidoCompraService.excluirPedido(db, pedido.id)` (o perdedor nunca foi apontado por cotação
+nenhuma, então passa com FK ON — provado em `comprasCotacaoFkProducao` (3)) → relê a cotação (404 se
+sumiu) → 409 com o vencedor. Cenários (11) (1×201 + 5×409, `COUNT` +1, 0 órfãos) e (12) (`DELETE` ×
+`gerar` → 0 órfãos; ramo observado no harness: 200 + 404). No client, `gerandoRef` + `disabled` —
+a guarda por **estado** ficava verde sob sabotagem (entre dois eventos discretos o React já
+re-renderizou; no mesmo tick o closure lê `null`), por isso `useRef`. **Descartado:** fila em
+memória por id de cotação (molde de `enqueueWrite`) — o CAS cobre as duas corridas sem estado no
+processo, e a transação real fica para o Postgres. **Fica declarado (G):** um terceiro entrelaçamento
+(`excluirCotacao` lê `pedido_id NULL` → `gerar` vence o CAS → `DELETE FROM cotacoes` apaga) é
+inalcançável no harness e não é coberto pelo CAS; o (12) acusa se aparecer.
+
+### 12.5 A suíte não via a ordem UPDATE → DELETE sob FK — o "modo de falha desta etapa" ficou sem guarda *(corrigido na onda, F2)*
+
+**O design dizia** (§7, §10, e o cabeçalho do plano): que o risco de "lixeira passa no harness e
+falha em produção" fechava com a rota própria e a sabotagem que **conta órfãos** em (7). Correto para
+`excluirCotacao` sem o `DELETE` dos filhos — mas só para essa.
+
+**Estava incompleto.** A lente RN (I2) sabotou a **ordem**: mover o `UPDATE cotacoes SET pedido_id =
+NULL` de `excluirPedido` para **depois** do `DELETE FROM pedidos_compra` deixava as 20 de cotação
+**verdes** (o harness roda `foreign_keys = 0`, `testApp.js:97`) e dava `DELETE /pedidos/:id → 500
+SQLITE_CONSTRAINT` em produção, com a cotação seguindo apontando. Nenhum `COUNT` pega ordem; só a FK
+vigiando pega.
+
+**O que vale hoje** (`83a5d71`, F2): `comprasCotacaoFkProducao.api.test.js` — **sem**
+`createTestApp` — abre um segundo `sqlite3.Database(':memory:')` com a DDL de produção **lida em
+tempo de execução** de `index.js` (`fornecedores`, `pedidos_compra`, `cotacoes`) e `schema.js`
+(`itens_pedido_compra`, `itens_cotacao`) por um extrator que falha alto se a marca sumir (cópia
+divergiria na primeira edição — a classe da F1 da 40), mais os dois `ALTER` reais, `PRAGMA
+foreign_keys = ON` afirmado, e **controle positivo dentro de cada cenário** (`UPDATE pedido_id = 999`
+e `DELETE` cru têm de falhar com `SQLITE_CONSTRAINT`). Três cenários: `excluirPedido`,
+`excluirCotacao` com itens, e a compensação do F1 sob FK. A sabotagem "FK OFF no próprio teste"
+derruba os três — o controle do controle. **Divergência do brief:** arquivo próprio (195, não 194) e
+DDL lida, não copiada.
+
+### 12.6 §5.5 não previa a tela da cotação CONVERTIDA nem o arredondamento *(corrigido na onda, F5/F6)*
+
+**O design dizia** (§5.5, §6): `cotacao-valor` com `readOnly={itens.length > 0}` e `value={String(total)}`;
+lápis → "as linhas voltam preenchidas"; a recusa da convertida era do servidor (§8, RN-F15).
+
+**Estava incompleto em dois pontos que a lente UX reproduziu.** (I1) o `GET /:id` já trazia
+`pedido_id`/`pedido_numero` (RN-F04) e a tela os ignorava: a convertida abria com **todos** os
+campos livres, nenhum sinal do `PC-…`, e o comprador preenchia tudo para levar o 409 no Salvar —
+exatamente o que o comentário da 39 no `PedidoCompraForm` (`soStatus` por `teve_recebimento`) diz
+por que não fazer. (I2) `String(total)` mostrava `0.30000000000000004` para 3 × 0,1 enquanto o
+`<p>Total: R$ 0,30</p>` ao lado estava certo; o servidor gravava o mesmo double; e ao remover a
+última linha o campo digitável herdava o lixo com `step="0.01"` — o M2 da 40 voltando por outra
+porta.
+
+**O que vale hoje:** F5 (`abb46f4`) — `convertida = c.pedido_id != null`, faixa `role="status"`
+`data-testid="cotacao-convertida"` *"Esta cotação já gerou o pedido ⟨PC⟩ — não pode mais ser
+editada"* com `<Link>` para o pedido, 13 controles `disabled`, Salvar não renderizado; cenário (o).
+F6 (`327d33f`) + F3b (`ffba9b9`) — `arredondar2` no `value`, no `<p>` e na carga do `GET /:id`
+(cotações gravadas antes do F3b continuam no banco); `somaItens` arredondada no servidor; cenário
+(p) e o (2) de Itens com 3 × 0,1 → 0,3. **Fica declarado:** `criarPedido` segue somando cru.
+
+### 12.7 T4 (k) afirmava um `data-stub` que nunca renderiza *(corrigido na Fase 2, C1)*
+
+**O design dizia** (§7.5 (k)): que a tela de edição do pedido era stub `PedidoCompraForm` no Proxy
+de `Compras.test.js`, e que o executor podia afirmar a navegação pelo `data-stub` ou por
+`mockNavigate`.
+
+**Estava errado.** `Compras.test.js:41-45` tem `reais = { Compras, PedidoCompraForm, Layout }`: ao
+navegar, o `PedidoCompraForm` **real** monta, chama `GET /compras/fornecedores` e `GET
+/compras/pedidos/650` e mostra `<h1>Editar pedido de compra</h1>`. `querySelector('[data-stub=…]')`
+seria `null` contra o código certo — e o "conserto" óbvio (tirar `PedidoCompraForm` de `reais`)
+mudaria o que a suíte mede. Único Critical da Fase 2.
+
+**O que vale hoje** (`bd224d2`): o (k) prova a navegação pelo `h1` da tela real **e** pelo `GET
+/compras/pedidos/650` (a regex do mock resolve a fixture de `pedidosDoBanco`), e afirma que a
+lista de cotações **não** está mais na tela. A sabotagem "sem `navigate`" cai no `h1`.
+
+### O que as seções 11 e 12 deixam para a Etapa 42
+
+O handoff da 40 errou em **seis** pontos que a Fase 0 desta etapa achou (seção 11); este design
+errou em **sete** que a Fase 2 e a revisão final acharam (esta seção). O padrão dos dois é o mesmo:
+**cadeia não traçada até o último gesto** (excluir o pedido, editar a convertida, clicar duas
+vezes) e **régua que só mede o caso sequencial**. A retro nº 4 deste plano fica em branco para a
+42 preencher olhando para trás; a nº 4 do plano da 40 foi preenchida no fechamento desta.

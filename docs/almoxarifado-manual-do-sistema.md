@@ -2017,7 +2017,9 @@ A tela de Recebimentos distingue, na cara, **"não existe nenhum"** de **"não c
 
 O pedido de compra é o documento do comprador: ele diz **o que** a empresa pediu, **de quem** e **por
 quanto**. É contra ele que o almoxarifado recebe (seção 14), e é ele que fecha a solicitação nascida
-da Reposição (seção 21b). A tela é **Compras → Pedidos de Compra**.
+da Reposição (seção 21b). A tela é **Compras → Pedidos de Compra**. Um pedido nasce de três
+maneiras: digitado nesta tela (14b.2), gerado de uma solicitação da Reposição (21b) ou gerado de
+uma **cotação** com um clique (14c.9) — nos três casos ele é o mesmo documento, com as mesmas regras.
 
 ### 14b.1 A lista de pedidos
 
@@ -2185,6 +2187,10 @@ estavam **vinculadas** a ele voltam para **Pendente** e soltam o vínculo; as qu
 volta a ser sugerido pela régua normal da Reposição, e a solicitação volta a oferecer **Gerar
 pedido**.
 
+**Excluir o pedido também libera a cotação que o gerou** (14c.9): a cotação volta a mostrar `-` na
+coluna *Pedido*, recupera o botão **Gerar pedido** e volta a poder ser editada ou excluída; o status
+dela continua *Aprovado*.
+
 ### 14b.4b Alterar o status de um pedido que já teve recebimento
 
 O **Status** é o único campo que continua editável depois do primeiro recebimento — e é o que tira o
@@ -2232,8 +2238,9 @@ da confirmação, recusa o fornecedor que tenha qualquer vínculo. As três veri
 | nenhum dos três | *"Item excluído com sucesso"* |
 
 Para excluí-lo mesmo assim é preciso desfazer os vínculos primeiro: apagar os pedidos dele (os que
-já tiveram recebimento **não são apagáveis**, 14b.4), apagar as cotações dele (cotação é sempre
-excluível, 14c.8) e esvaziar a lista de itens pela tela de itens e preços. As verificações são feitas
+já tiveram recebimento **não são apagáveis**, 14b.4), apagar as cotações dele (a cotação que já
+gerou pedido só é excluível depois do pedido, 14c.8) e esvaziar a lista de itens pela tela de itens
+e preços. As verificações são feitas
 **antes** de qualquer tentativa de apagar, então a mensagem é a mesma em qualquer instalação. Inativar
 o fornecedor (14c.3) é a alternativa quando o histórico precisa ficar.
 
@@ -2348,9 +2355,9 @@ Quem decide é sempre o servidor (seção 5.2): o botão escondido na tela é co
 ## 14c. Fornecedores e cotações
 
 O fornecedor é o cadastro de quem vende para a empresa; a cotação é o registro de um preço que um
-fornecedor deu. As duas telas ficam no módulo Compras: **Compras → Fornecedores** e **Compras →
-Cotações**. Os grupos de fornecedores homologados têm tela própria, **Compras → Fornecedores
-homologados** (14c.5).
+fornecedor deu — com as linhas de material cotadas — e é a origem de um pedido de compra (14c.9).
+As duas telas ficam no módulo Compras: **Compras → Fornecedores** e **Compras → Cotações**. Os
+grupos de fornecedores homologados têm tela própria, **Compras → Fornecedores homologados** (14c.5).
 
 ### 14c.1 A lista de fornecedores
 
@@ -2397,10 +2404,12 @@ Inativar um fornecedor **não o apaga** e **não bloqueia tudo**. O efeito é es
 | **Fornecedores homologados → grupo → Vincular fornecedor** | **Não é oferecido** |
 | **Pedido de compra** (14b.2), seletor de fornecedor | **Aparece**, e o pedido para ele é **aceito** |
 | **Cotação** (14c.6), seletor de fornecedor | **Aparece**, e a cotação para ele é **aceita** |
+| **Cotação → Gerar pedido** (14c.9) | **Recusado**: *"Fornecedor inativo — reative-o em Compras → Fornecedores antes de gerar o pedido"* |
 
-Ou seja: inativar impede que material **sem pedido** entre em nome dele e impede que ele seja
-**vinculado** a um grupo novo — e nada mais. Pedido e cotação continuam possíveis; a relação
-comercial não é cancelada pelo sistema. Para voltar, basta editar e escolher *Ativo*.
+Ou seja: inativar impede que material **sem pedido** entre em nome dele, impede que ele seja
+**vinculado** a um grupo novo e impede que uma **cotação dele vire pedido** — e nada mais. Pedido
+feito à mão e cotação continuam possíveis; a relação comercial não é cancelada pelo sistema. Para
+voltar, basta editar e escolher *Ativo*.
 
 Um fornecedor cadastrado sem status (o campo em branco) é mostrado como ativo na lista e na edição,
 mas **não** aparece no seletor do Recebimento até ser salvo uma vez pelo lápis — o que grava *Ativo*.
@@ -2442,35 +2451,81 @@ recusa da lixeira, 14b.5).
 ### 14c.6 A lista de cotações
 
 **Compras → Cotações** mostra, por cotação: **Número**, **Fornecedor**, **Valor Total**, **Data**,
-**Validade**, **Status** e os botões de **editar** e **excluir**. Há busca por número ou razão social
-do fornecedor e o filtro de status com **Todos os status**, **Em Análise**, **Aprovado**,
-**Rejeitado** e **Cancelado**. Sem nenhuma cotação — ou com um filtro que não deixa nenhuma —, a
-lista diz *"Nenhuma cotação encontrada"*.
+**Validade**, **Status**, **Pedido** e os botões de ação. Há busca por número ou razão social do
+fornecedor e o filtro de status com **Todos os status**, **Em Análise**, **Aprovado**, **Rejeitado**
+e **Cancelado**. Sem nenhuma cotação — ou com um filtro que não deixa nenhuma —, a lista diz
+*"Nenhuma cotação encontrada"*.
+
+A coluna **Pedido** mostra `-` enquanto a cotação não gerou pedido de compra, e o número do pedido
+(`PC-…`, clicável — abre a edição do pedido) depois que gerou (14c.9).
+
+Os botões de ação de cada linha são até três: **Gerar pedido** (ícone de carrinho — só aparece na
+cotação que ainda não tem pedido e cujo status é *Em Análise* ou *Aprovado*), **editar** (lápis) e
+**excluir** (lixeira).
+
+**Exportar Excel** nesta aba gera uma linha por cotação com **Número, Fornecedor, Valor, Status,
+Data, Validade** e, por último, **Pedido** (o número do pedido gerado, ou vazio).
 
 ### 14c.7 Criar e editar uma cotação
 
 **Compras → Cotações → Nova Cotação** abre a tela **"Nova cotação"**, com o aviso *"O número é o do
 documento do fornecedor e tem de ser único."*; o lápis abre **"Editar cotação"** com tudo
-preenchido. A cotação é **só cabeçalho** — não tem linhas de material —, com estes campos:
+preenchido, inclusive as linhas. A cotação tem um cabeçalho e, abaixo dele, o bloco **"Itens da
+cotação"**.
+
+**O cabeçalho:**
 
 | Campo | O que é |
 |---|---|
 | **Número** | **Obrigatório e digitado** — é o número do documento que o fornecedor mandou. O sistema não gera número de cotação. Tem de ser **único**; espaços nas pontas não contam |
-| **Fornecedor** | **Obrigatório.** Lista de razões sociais; o padrão é *"Selecione o fornecedor"*. Fornecedores inativos aparecem e são aceitos |
+| **Fornecedor** | **Obrigatório.** Lista de razões sociais; o padrão é *"Selecione o fornecedor"*. Fornecedores inativos aparecem e são aceitos na cotação — mas não na hora de gerar o pedido (14c.9) |
 | **Data** | Calendário, já preenchido com o dia corrente de quem está usando |
 | **Validade** | Calendário, opcional |
-| **Valor total** | Número, opcional. Em branco grava **0**. Não é somado de nada — é digitado |
+| **Valor total** | Tem **duas regras**, descritas abaixo: **somado** quando há linhas, **digitado** quando não há |
 | **Status** | *Em Análise* (o padrão), *Aprovado*, *Rejeitado* ou *Cancelado* |
-| **Observações** | Texto livre |
+| **Observações** | Texto livre. Vai para o pedido gerado (14c.9) |
 
-Salvar mostra *"Cotação salva"* e volta para a lista. A edição grava o cabeçalho inteiro de novo.
+**Os itens.** No bloco **"Itens da cotação"**, digite parte do código ou da descrição de um material
+do almoxarifado e clique em **"Buscar material"** (ou **Enter** no campo — a busca é disparada por
+você, não a cada letra). Os materiais encontrados aparecem com um botão **+** (*"Adicionar à
+cotação"*); clicar nele acrescenta uma linha à tabela com **Código, Descrição, Unidade, Quantidade,
+Valor unitário, Subtotal** e a lixeira da linha. A linha nasce com **quantidade 1** e **valor
+unitário vazio**; o mesmo material pode entrar mais de uma vez. Sem nenhuma linha, a tabela diz
+*"Nenhum item adicionado"*. Abaixo da tabela, **"Total: R$ …"** é a soma de quantidade × valor
+unitário de todas as linhas.
+
+- **Quantidade** tem de ser um número **maior que zero**.
+- **Valor unitário** pode ficar vazio: a linha entra com **0**, e a tela avisa em âmbar *"Item sem
+  preço entra na cotação com valor unitário 0."* enquanto houver alguma linha sem preço. Não pode
+  ser negativo.
+- Toda linha é um material **do catálogo** do almoxarifado; não existe linha de texto livre.
+- O código, a descrição e a unidade são **copiados do material no momento em que a cotação é
+  gravada**: renomear o material depois não muda o texto das cotações já gravadas — até que a
+  cotação seja editada e salva de novo, quando as linhas são regravadas com o texto atual.
+
+**As duas regras do Valor total.**
+
+1. **Com pelo menos uma linha**, o *Valor total* é **a soma das linhas** (quantidade × valor
+   unitário, arredondada a duas casas). O campo fica **cinza e travado** mostrando a soma, e o que
+   estiver digitado nele **é ignorado** ao gravar. Não há campo de desconto: um desconto do
+   fornecedor entra no valor unitário das linhas.
+2. **Sem nenhuma linha**, o *Valor total* é **digitado** — é a cotação "valor fechado", sem
+   discriminar itens. Em branco grava **0**.
+
+Ao remover a última linha, o campo volta a ser digitável com o valor que estava nele antes de a
+primeira linha entrar.
+
+Salvar mostra *"Cotação salva"* e volta para a lista. **A edição substitui a cotação inteira** —
+cabeçalho e linhas — pelo que está na tela: uma linha removida some, uma linha alterada é regravada,
+e o total é recalculado.
 
 **O que cada status significa.** O status é a **declaração do comprador** sobre o que fez com aquele
 preço: *Em Análise* enquanto está sendo avaliado, *Aprovado* quando foi o escolhido, *Rejeitado*
 quando não foi, *Cancelado* quando a cotação deixou de valer. O sistema **não julga a sequência** —
-qualquer um dos quatro pode ser gravado a qualquer momento — e **nenhum status dispara nada**:
-aprovar uma cotação **não cria pedido de compra** e não altera nenhum outro registro. O efeito é a
-coluna **Status** e o filtro da lista.
+qualquer um dos quatro pode ser gravado a qualquer momento — e **mudar o status, por si, não dispara
+nada**: marcar *Aprovado* à mão não cria pedido. O que cria pedido é o botão **Gerar pedido**
+(14c.9), que **grava *Aprovado* sozinho** ao gerar. *Rejeitado* e *Cancelado* tiram o botão da
+linha.
 
 ### 14c.8 O que o sistema recusa na cotação, e com que mensagem
 
@@ -2479,21 +2534,92 @@ coluna **Status** e o filtro da lista.
 | Salvar **sem número** | A tela recusa antes do servidor: *"Número da cotação é obrigatório"* |
 | Salvar **sem fornecedor** | A tela recusa antes do servidor: *"Fornecedor da cotação é obrigatório"* |
 | **Número já usado** por outra cotação (ao criar ou ao editar) | *"Já existe uma cotação com o número ⟨número⟩"* — e **nada** é gravado |
-| **Valor total negativo** | *"Dados inválidos — valor_total: valor total da cotação não pode ser negativo"*. A tela deixa digitar; é o servidor quem recusa |
+| **Valor total negativo** (cotação sem linhas) | *"Dados inválidos — valor_total: valor total da cotação não pode ser negativo"*. A tela deixa digitar; é o servidor quem recusa |
+| Linha com **quantidade vazia, zero ou negativa** | *"Dados inválidos — itens.⟨posição⟩.quantidade: quantidade do item da cotação deve ser um número maior que zero"* — a posição começa em **0** para a primeira linha |
+| Linha com **valor unitário negativo** | *"Dados inválidos — itens.⟨posição⟩.valor_unitario: valor unitário do item da cotação não pode ser negativo"* |
+| Linha cujo **material não existe mais** no catálogo | *"Material não encontrado"* — e **nada** é gravado, nem o cabeçalho |
+| Linha **sem material** (só por outro caminho que não a tela) | *"Dados inválidos — itens.⟨posição⟩.material_id: material do item da cotação é obrigatório"* |
+| Lista de itens que **não é uma lista** (só por outro caminho) | *"Dados inválidos — itens: itens da cotação devem ser uma lista"* |
 | **Data** que não seja uma data | *"Dados inválidos — data_cotacao: data da cotação inválida (use AAAA-MM-DD)"* |
 | **Validade** que não seja uma data | *"Dados inválidos — validade: validade da cotação inválida (use AAAA-MM-DD)"* |
 | **Status** fora dos quatro valores | *"Dados inválidos — status: status da cotação inválido (use em_analise, aprovado, rejeitado ou cancelado)"* |
 | Fornecedor que **não existe** | *"Fornecedor não encontrado"* — e **nada** é gravado |
 | Cotação que **não existe** (abrir ou editar) | *"Cotação não encontrada"* |
+| Editar uma cotação que **já gerou pedido** | A tela abre travada (14c.9); por outro caminho, *"Cotação ⟨número⟩ já gerou o pedido ⟨PC-…⟩ — não pode mais ser editada"* |
 
 Os erros do servidor aparecem na **faixa vermelha dentro do formulário**, com a tela aberta e o que
 você digitou preservado; só o sucesso aparece como aviso flutuante. **As duas datas** aceitam apenas
 o formato de calendário ou nada — a tela usa o seletor de data do navegador, então os formatos
 errados só chegam por outro caminho.
 
-**Excluir uma cotação** é sempre permitido: a lixeira pergunta *"Tem certeza que deseja excluir este
-item?"* e responde *"Item excluído com sucesso"*. Nada depende de uma cotação — nem o pedido, nem o
-fornecedor.
+**Excluir uma cotação.** A lixeira pergunta *"Tem certeza que deseja excluir este item?"* e, depois
+da confirmação:
+
+- cotação **sem pedido gerado** (com ou sem linhas): é apagada **com as linhas dela** — *"Item
+  excluído com sucesso"*;
+- cotação **que já gerou pedido**: recusada com *"Cotação ⟨número⟩ já gerou o pedido ⟨PC-…⟩ — não
+  pode ser excluída"*. Para excluí-la é preciso primeiro excluir o pedido (14c.9), o que libera a
+  cotação.
+
+A lixeira continua visível na cotação que já gerou pedido; a recusa aparece depois do clique. O
+fornecedor não depende da cotação para nada, mas a cotação impede excluir o fornecedor (14b.5).
+
+### 14c.9 Gerar o pedido de compra a partir da cotação
+
+O botão **Gerar pedido** (ícone de carrinho na linha da lista, 14c.6) cria um **pedido de compra**
+(14b) a partir da cotação, num clique, e abre a tela **"Editar pedido de compra"** desse pedido.
+Ele só aparece na cotação que **ainda não tem pedido** e cujo status é **Em Análise** ou
+**Aprovado**.
+
+**O que o pedido gerado recebe da cotação:** o **fornecedor**, **todas as linhas** (material,
+quantidade e valor unitário — e por isso o código, a descrição e a unidade), as **observações** e o
+**valor total** somado. O que ele **não** recebe e nasce com o padrão do pedido: **número** gerado
+pelo sistema (`PC-…`), **Data do pedido = hoje**, **Previsão de entrega vazia** e **Status
+Pendente**. A tela de edição abre justamente para você preencher a previsão e conferir o resto; o
+pedido **já está gravado** quando ela abre — fechar sem salvar não o desfaz.
+
+**O que acontece com a cotação:** ela passa a apontar para o pedido — a coluna **Pedido** mostra o
+`PC-…` —, o status vira **Aprovado** (gerar o pedido **é** aprovar a cotação) e o botão **Gerar
+pedido some** da linha. Ao gerar, aparece o aviso *"Pedido ⟨PC-…⟩ gerado da cotação ⟨número⟩"*.
+
+**O pedido gerado é um pedido como outro qualquer:** aparece em **Compras → Pedidos de Compra**,
+pode ser editado e exportado, entra no **Recebimento** (14.1c) com o saldo cheio, e o valor unitário
+de cada linha — o preço da cotação — é o que o recebimento leva para o custo médio (seção 22). O
+pedido **não guarda** de qual cotação nasceu; é a cotação que sabe qual pedido gerou.
+
+**Uma cotação gera um pedido só.** Se o botão for acionado de novo por qualquer caminho — inclusive
+dois cliques quase ao mesmo tempo, ou duas janelas abertas —, um deles cria o pedido e o outro é
+recusado com *"Cotação ⟨número⟩ já gerou o pedido ⟨PC-…⟩"*; nenhum pedido a mais sobra. Na tela, o
+botão fica desabilitado enquanto o primeiro clique está sendo processado.
+
+**A cotação que gerou pedido fica travada.** O lápis abre a tela com a faixa âmbar *"Esta cotação já
+gerou o pedido ⟨PC-…⟩ — não pode mais ser editada"* — o número é um link para a edição do pedido —,
+todos os campos e o bloco de itens desabilitados, e sem o botão de salvar. Para corrigir uma
+cotação já convertida, exclua o pedido (abaixo) e edite depois.
+
+**O que Gerar pedido recusa, e com que mensagem** (o aviso aparece em vermelho na própria lista, e
+nada é gravado):
+
+| Situação | Mensagem |
+|---|---|
+| Cotação **sem nenhuma linha** (o botão aparece mesmo assim, porque a lista não carrega as linhas) | *"cotação sem itens não pode gerar pedido"* |
+| Cotação **Rejeitado** ou **Cancelado** (o botão não aparece; só por outro caminho) | *"cotação rejeitado não pode gerar pedido"* / *"cotação cancelado não pode gerar pedido"* |
+| Fornecedor da cotação **Inativo** (14c.3) | *"Fornecedor inativo — reative-o em Compras → Fornecedores antes de gerar o pedido"* — reative o fornecedor e gere de novo |
+| Fornecedor que **não existe mais** | *"Fornecedor não encontrado"* |
+| Cotação que **já gerou pedido** | *"Cotação ⟨número⟩ já gerou o pedido ⟨PC-…⟩"* |
+| Cotação que **não existe** | *"Cotação não encontrada"* |
+| Sem resposta do servidor (rede) | *"Não foi possível gerar o pedido"* |
+
+É a única porta do módulo Compras que recusa fornecedor inativo: a cotação em si e o pedido feito à
+mão continuam aceitando (14c.3).
+
+**Excluir o pedido gerado libera a cotação.** A lixeira do pedido (14b.4 — só enquanto nenhum
+recebimento o tocou) apaga o pedido e **solta o vínculo**: na aba Cotações a coluna *Pedido* volta a
+`-`, o botão **Gerar pedido** reaparece e a cotação volta a poder ser editada ou excluída. O status
+da cotação **continua Aprovado** — o sistema não o desfaz. Gerar de novo cria um pedido com **número
+novo**, a partir das linhas **da cotação** — o que tiver sido alterado no pedido anterior (previsão,
+quantidades) **não é reaproveitado**. Um pedido gerado que **já teve recebimento** não pode ser
+excluído, e por isso a cotação dele fica presa a ele.
 
 ---
 

@@ -2315,9 +2315,64 @@ tail -1` antes de commitar.
    trabalho foi refeito. Segundo incidente da mesma classe: a re-revisão da onda tomou um 500 e foi
    retomada do mesmo jeito. **Lição:** o paralelismo em worktree é barato nesta base; o gargalo é a
    sessão, não o merge — despachar em lotes menores reduz o tamanho do corte quando ele vem.
-4. **Defeito escapado:** *(em branco de propósito — só pode ser preenchido **de fora**, por quem
+4. **Defeito escapado:** ~~*(em branco de propósito — só pode ser preenchido **de fora**, por quem
    fechar a Etapa 41 olhando para trás. É o mesmo contrato que a 39 deixou para esta, e que a T7
-   cumpriu no plano da 39.)*
+   cumpriu no plano da 39.)*~~ **Preenchida em 2026-09-22, no fechamento da Etapa 41, olhando para
+   trás.** Desta vez escapou **código**, não só handoff — e o código escapado é a classe de defeito
+   que esta etapa dizia conhecer. **(a) A cotação da 40 nasceu com `DELETE` cru pelo genérico, que
+   daria 500 no dia em que existisse filho.** `DELETE /api/compras/cotacoes/:id` ficou com o
+   `app.delete('/api/compras/:tipo/:id')` (`routes/compras.js:392` em `820860a`), e a spec desta
+   etapa escreveu, com convicção, *"⚠️ genérico, sem guarda (cotação não tem filhos)"*
+   (`specs/modulo-compras/README.md:70`) e *"`DELETE` … inalterado, sem guarda (cotação não tem
+   filhos)"* (feature 22, §15). Era verdade no dia — e era exatamente o furo que a F5 da 38 tinha
+   fechado para o pedido e que a **F1 desta etapa** (`bdaadd8`, terceira FK de `fornecedores`) tinha
+   acabado de fechar de novo pelo mesmo mecanismo: FK ligada em produção (`sqliteConcurrency.js:50`),
+   desligada no harness (`testApp.js:97`), `DELETE` cru passa verde deixando órfãos e responde 500 lá
+   fora. A Fase 0 da 41 mediu (`etapa41-fase0-servidor.md` §"Divergências", item 7) e a Fase 2 da 41
+   reproduziu por sonda (*"genérico FK ON: 500 'Erro ao excluir item' | FK OFF: 200 + 1 órfão"*);
+   a lixeira própria de cotação (`11591ca`, RN-F06/D9) virou **parte** da 41, não higiene, e a
+   revisão final da 41 ainda achou que a **ordem** dos statements sob FK também era invisível à suíte
+   (F2 da 41, `83a5d71`). A 40 não errou o código do dia; errou ao **declarar como permanente** um
+   fato que a própria "próxima tarefa detalhada" deste plano já anunciava que ia mudar ("`itens` de
+   cotação … passa a precisar de cascata ou 409"). **(b) `comprasPedidoEditarExcluir.api.test.js:93`
+   afirma *"`cotacoes` e tabela CORE que o harness nao stuba"*** — **falso desde `008a041`** (T1 desta
+   etapa promoveu `cotacoes` ao stub de `testApp.js:117`) e ninguém releu o comentário do arquivo
+   vizinho; a 41 não o tocou (declarado em G, item 9 da Fase 0).
+
+   **E o handoff — a seção "Próxima tarefa detalhada: Etapa 41" deste plano — errou em seis
+   pontos que a Fase 0 da 41 (2026-09-22, `.superpowers/sdd/etapa41-fase0-servidor.md` /
+   `-cliente.md`, contra `820860a`) achou e a seção 11 do design da 41 (`7d9e7d7`) registrou:**
+   1. *"`itens_pedido_compra` (pedido_id, material_id, quantidade, valor_unitario,
+      quantidade_recebida)"* — **5 de 9 colunas**: `codigo`, `descricao` e `unidade` são copiadas
+      do material por `resolverItens` e a tela de edição do pedido lê por linha. Espelhar as 5
+      obrigaria um `JOIN` na leitura da cotação; espelhar as 9 exigia exportar `resolverItens`, que
+      **não era exportada** (D4 da 41).
+   2. *"`GET /compras/materiais?q=`"* (no brief da Fase 0 escrito a partir deste handoff) — o
+      parâmetro é **`search`** (`PedidoCompraForm.js:222`, `routes/compras.js:309`). O handoff não
+      citou o nome; quem o seguisse escreveria o mock errado.
+   3. *"criar a tabela em `schema.js`, é o precedente"* — motivo **descritivo**, não o que decide.
+      O motivo operacional, ausente aqui: `initSchema` roda no harness (`testApp.js:32`), então
+      tabela em `schema.js` chega a toda suíte com a DDL de produção **sem stub**; tabela em
+      `index.js` exige stub manual — a classe de divergência da F1 desta etapa.
+   4. Não dito: `cotacoes.pedido_id` (ou `pedidos_compra.cotacao_id`) exige `ALTER` no core
+      (`index.js:19269` é o único estilo) **e** coluna no stub **e** no `SELECT_LINHA` — **três
+      lugares, não um**; e nenhuma das duas tabelas fora alterada alguma vez depois do `CREATE`.
+   5. *"o banco real bate exatamente"* (herdado da 37/38) — o dump de produção tem
+      `itens_pedido_compra` com **8** colunas: `quantidade_recebida` (37) **não está no dump**. Não
+      é defeito (o `safeAlter` roda no boot), mas ninguém reabriu o dump depois da 37; virou a
+      consulta **A18** da 41 (`PRAGMA table_info` **depois** do primeiro boot).
+   6. A frase morta de `comprasPedidoEditarExcluir:93` (item (b) acima) — o handoff apontava esse
+      arquivo como molde de DDL local e não viu que o comentário já mentia.
+
+   Do lado do cliente, a Fase 0 da 41 achou ainda que o handoff listava o molde de itens como
+   "linhas com `material_id`/`quantidade`/`valor_unitario`" — certo para o **payload**, mas a tela
+   carrega `codigo/descricao/unidade` por linha e a pré-carga por cotação depende de o servidor os
+   devolver, o que o handoff não listou como contrato de `GET /cotacoes/:id`; e que o cenário (g) de
+   `CotacaoForm.test.js` conta as `<option>` do filtro com `toEqual` exato — um status "convertida"
+   o derrubaria, e o handoff avisou da decisão mas não desse cenário. **O padrão, comparado com o
+   escapado da 39:** lá escapou só handoff; aqui escapou handoff **e** um `DELETE` que a etapa
+   sabia ser frágil. O que teria pego: ao escrever "cotação não tem filhos", perguntar "e no dia em
+   que tiver?" — a resposta já estava na própria próxima tarefa.
 
 ---
 
@@ -2498,4 +2553,5 @@ redigitar tudo no `PedidoCompraForm`. (2) Os outros itens abertos da fatia são 
   o contrato de `itens` no schema é tronco. **Despachar em lotes menores**: o corte de sessão da 40
   derrubou cinco agentes de uma vez.
 - **Retro nº 4 desta etapa (defeito escapado)** é preenchida pela Fase 0 da 41 olhando para trás —
-  o que a 40 deixou errado no handoff acima.
+  o que a 40 deixou errado no handoff acima. *(Feita no fechamento da 41, 2026-09-22 — ver a retro
+  acima: seis pontos do handoff e o `DELETE` cru da cotação pelo genérico.)*

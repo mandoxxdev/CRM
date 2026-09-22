@@ -536,7 +536,63 @@ sabe se alguém, em algum momento, contornou isso apagando direto no banco e dei
   fornecedor). Confirme a contagem e apague:
   `DELETE FROM itens_fornecedor WHERE fornecedor_id NOT IN (SELECT id FROM fornecedores);`
 
-### B. Decisões de negócio — B1 a B140; as em aberto esperam você, as tomadas estão escritas com o descartado
+**A18 (NOVA, da Etapa 41 — as três tabelas depois do PRIMEIRO boot com a versão nova).** Rode
+**depois** de subir o servidor uma vez, não antes: a etapa cria uma tabela e uma coluna **no boot**,
+e o que se confere é se o boot fez o que devia.
+
+```sql
+PRAGMA table_info(itens_pedido_compra);   -- esperado: 9 linhas
+PRAGMA table_info(itens_cotacao);         -- esperado: 8 linhas
+PRAGMA table_info(cotacoes);              -- esperado: 11 linhas, a última chamada pedido_id
+```
+
+O dump de produção de 03/09 tinha **8** colunas em `itens_pedido_compra` (a nona, *quantidade
+recebida*, é da Etapa 37 e entra no boot — ninguém conferiu depois), **não tinha** `itens_cotacao` e
+tinha **10** em `cotacoes`. Os três números acima são o estado certo depois de um boot bem-sucedido.
+- **9 / 8 / 11** — nada a fazer.
+- **`cotacoes` com 10 linhas** (sem `pedido_id`) — a coluna não entrou, e **todas** as telas de
+  cotação respondem erro até ela existir. Aconteceu num banco **novo** (arquivo criado nesse mesmo
+  boot): por um padrão herdado das cinco colunas de fornecedor, a instrução que adiciona a coluna
+  corre **antes** de a tabela existir no primeiro boot e só funciona no **segundo** — reinicie o
+  servidor e rode de novo (**G57**). Em produção a tabela `cotacoes` já existe, então o primeiro boot
+  basta; a consulta é a prova.
+- **`itens_cotacao` vazio (nenhuma linha)** — a tabela não foi criada: o arranque do módulo
+  almoxarifado não completou. Olhe o log do boot antes de qualquer outra coisa.
+- **`itens_pedido_compra` com 8** — o ajuste da Etapa 37 não rodou neste banco; o recebimento contra
+  pedido não funciona sem ele. Mesmo caminho: log do boot.
+
+**A19 (NOVA, da Etapa 41 — órfãos dos dois lados do vínculo).** Duas consultas; a primeira deve dar
+**zero**, a segunda é **aproximada** e serve para olhar, não para agir sozinha.
+
+```sql
+SELECT COUNT(*) FROM itens_cotacao i
+  LEFT JOIN cotacoes c ON c.id = i.cotacao_id
+ WHERE c.id IS NULL;
+```
+
+São **itens de cotação cuja cotação não existe mais**. A lixeira nova apaga os itens antes da
+cotação, e em produção a proteção do banco impede o contrário — então **zero** é o esperado, e é a
+confirmação de que ninguém apagou cotação direto no banco. Se vier maior que zero:
+`DELETE FROM itens_cotacao WHERE cotacao_id NOT IN (SELECT id FROM cotacoes);`
+
+```sql
+SELECT COUNT(*) FROM pedidos_compra p
+ WHERE NOT EXISTS (SELECT 1 FROM cotacoes WHERE pedido_id = p.id)
+   AND p.observacoes IS NOT NULL;
+```
+
+Esta procura **pedidos gerados de cotação que perderam a cotação** — o caso que a corrida do
+"Gerar pedido" criava antes da onda de correção (**B156**). É **aproximada** porque o pedido **não
+guarda** de onde nasceu (o vínculo mora na cotação, **B146**): a consulta só enumera pedidos sem
+cotação apontando e com *Observações* preenchida (o pedido gerado herda as observações da cotação;
+o pedido feito à mão grava texto **vazio**, que **também** conta como "não nulo" — acrescente
+`AND p.observacoes <> ''` para tirá-los). O que sobra pode ser pedido digitado com observação, pedido
+importado da planilha, ou pedido cuja cotação foi **excluída depois de o pedido ser excluído e
+regenerado** — nada disso é defeito. Produção tem **zero** pedidos e **zero** cotações, então o
+esperado é **0**; um número maior só pede leitura linha a linha, e o único pedido que merece atenção
+é o que tenha o **mesmo fornecedor e as mesmas linhas** de outro pedido gerado no mesmo minuto.
+
+### B. Decisões de negócio — B1 a B159; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(O título desta seção dizia "B1 a B24" — **estava defasado**: os itens já iam até B36 antes da
 Etapa 20. Corrigido em 2026-08-28 para B50, depois para B56 com as três da Etapa 24, para B57 com
@@ -2552,6 +2608,227 @@ risco assumido foi medido, não escondido.
 **O custo:** um defeito que uma revisão por frente pegaria mais cedo foi pego mais tarde (o da lista
 de itens, **B138**).
 
+**B141 (NOVA, da Etapa 41) — o escopo é "a cotação ganha linhas e vira pedido"; comparar cotações
+ficou fora.**
+
+**O que foi escolhido:** itens na cotação (material do catálogo, quantidade, preço), total somado,
+"Gerar pedido" na lista, coluna *Pedido*, lixeira própria da cotação e a integração até o
+Recebimento.
+**O que foi descartado:** comparar cotações de fornecedores diferentes para o mesmo material.
+**Por quê:** não há base para comparar — uma cotação é de **um** fornecedor com **um** número de
+documento. Comparar exige um "processo de cotação" com N fornecedores respondendo ao mesmo pedido de
+preço: é uma entidade nova, não uma coluna.
+
+**B142 (NOVA, da Etapa 41) — os itens da cotação são OPCIONAIS; o que exige itens é gerar pedido.**
+
+**O que foi escolhido:** uma cotação pode ser gravada sem nenhuma linha (só cabeçalho e valor
+digitado), como na 40. A recusa *"cotação sem itens não pode gerar pedido"* aparece só na conversão.
+**O que foi descartado:** exigir pelo menos um item, como o pedido exige.
+**Por quê:** o pedido exige linhas porque o **recebimento** precisa delas; a cotação **não é
+recebida**. E "R$ 1.500 o lote", sem discriminar, é uso real que a 40 já aceitava — exigir item
+proibiria esse uso e quebraria as cotações de cabeçalho que já podem existir.
+
+**B143 (NOVA, da Etapa 41) — o valor total tem DUAS regras: somado quando há linhas, digitado
+quando não há.**
+
+**O que foi escolhido:** com pelo menos uma linha, o total é a **soma** (quantidade × valor
+unitário) e o que foi digitado no campo é **ignorado** — na tela o campo fica cinza e travado;
+sem linha, o campo é digitável e vale o que foi digitado (regra da 40, **B130**).
+**O que foi descartado:** (a) sempre somado — mataria a cotação "valor fechado" e três cenários de
+teste da 40 que digitam o campo; (b) sempre digitado — o total mentiria assim que houvesse linha.
+**Consequência para você:** uma cotação com linhas **nunca** mostra um valor diferente da soma. Se o
+fornecedor deu desconto no total, ele tem de entrar no preço unitário das linhas — não há campo de
+desconto.
+
+**B144 (NOVA, da Etapa 41) — a linha da cotação copia código, descrição e unidade do material no
+momento em que é gravada.**
+
+**O que foi escolhido:** o item da cotação guarda, além de material, quantidade e preço, o código, a
+descrição e a unidade do material **como eram na hora**, exatamente como a linha do pedido faz.
+**O que foi descartado:** guardar só o material e ler o nome dele na hora de mostrar.
+**Por quê:** a tela de edição precisa das três colunas por linha, e a linha do pedido já resolve isso
+assim; ter as duas linhas com a mesma forma é o que permite copiar a cotação para o pedido sem
+traduzir nada. **Consequência:** renomear um material no catálogo **não** muda o texto das cotações
+antigas — é o documento como foi cotado, e é o comportamento que o pedido já tinha.
+
+**B145 (NOVA, da Etapa 41) — a conversão acontece NO SERVIDOR, e a tela abre o pedido já gravado.**
+
+**O que foi escolhido:** "Gerar pedido" pede ao servidor, que cria o pedido (número `PC-…`, linhas,
+preços, total, observações da cotação, data de hoje, status Pendente), grava o vínculo e devolve o
+pedido; a tela então abre **"Editar pedido de compra"** para o comprador conferir datas e previsão.
+**O que foi descartado:** abrir **"Novo pedido de compra"** já preenchido com as linhas da cotação,
+sem gravar nada até o comprador salvar (é como a Reposição faz, com uma linha só).
+**Por quê:** no caminho descartado a cotação **nunca fica sabendo** que virou pedido — o vínculo não
+existe, a segunda conversão não é barrada e a coluna *Pedido* não tem o que mostrar. Os dois
+caminhos são compatíveis; o descartado pode entrar depois como atalho, se fizer falta.
+**Consequência para você:** o pedido **já existe** quando a tela de edição abre. Se o comprador
+fechar a tela sem salvar, o pedido está lá do mesmo jeito (com previsão vazia). Desfazer é a lixeira
+do pedido, que libera a cotação (**B153**).
+
+**B146 (NOVA, da Etapa 41) — o vínculo é uma coluna na COTAÇÃO apontando para o pedido (um para
+um); não há status "Convertida".**
+
+**O que foi escolhido:** a cotação guarda o número do pedido que gerou; a lista mostra a coluna
+*Pedido*; a cotação convertida fica **Aprovado**.
+**O que foi descartado:** (a) o pedido apontar para a cotação — permitiria N pedidos por cotação, que
+é exatamente o que não se quer, e mexeria na tabela que o Recebimento lê; (b) um quinto status
+*Convertida* — mexeria nos quatro status em três lugares e faria "Rejeitado com pedido gerado"
+possível.
+**Consequência para você:** o pedido **não sabe** de que cotação nasceu (a **A19** explica por que a
+consulta de órfãos é aproximada). Um pedido gerado e depois excluído some sem deixar rastro no pedido
+— o rastro que fica é o status *Aprovado* da cotação (**G60**).
+
+**B147 (NOVA, da Etapa 41) — Rejeitado e Cancelado não geram; Em Análise e Aprovado geram, e gerar
+É aprovar.**
+
+**O que foi escolhido:** o botão aparece em *Em Análise* e *Aprovado*; ao gerar, a cotação vira
+**Aprovado** sozinha. *Rejeitado* e *Cancelado* não têm botão e o servidor recusa com *"cotação
+⟨status⟩ não pode gerar pedido"*.
+**O que foi descartado:** (a) exigir que o comprador aprove **antes** de poder gerar — um clique a
+mais sem informação nova; (b) não mexer no status — a lista mostraria *Em Análise* com pedido
+gerado.
+
+**B148 (NOVA, da Etapa 41) — fornecedor INATIVO é recusado na conversão, e só nela.**
+
+**O que foi escolhido:** "Gerar pedido" para cotação de fornecedor inativo responde *"Fornecedor
+inativo — reative-o em Compras → Fornecedores antes de gerar o pedido"*. É a **primeira** porta do
+Compras que olha o status do fornecedor.
+**O que foi descartado:** (a) deixar passar — o pedido nasceria para um fornecedor que o Recebimento
+e a tela do grupo escondem; (b) recusar também no *Novo Pedido* feito à mão e na cotação — muda o
+contrato de duas portas já entregues e a decisão **B127** da 40, que continua **aberta**.
+**Consequência para você:** a **B127** ganhou uma terceira opção. Hoje: cotação para inativo é
+aceita, pedido à mão para inativo é aceito, **converter** cotação de inativo é recusado. Se vocês
+decidirem que inativo bloqueia tudo, a frase acima já é a que apareceria nas outras portas.
+
+**B149 (NOVA, da Etapa 41) — a cotação ganhou lixeira própria, que apaga os itens antes e recusa a
+convertida.**
+
+**O que foi escolhido:** uma porta de exclusão só da cotação: recusa com *"Cotação ⟨número⟩ já gerou
+o pedido PC-… — não pode ser excluída"* quando há pedido; senão apaga os itens e depois a cotação. A
+lixeira genérica das outras abas deixa de alcançar cotações.
+**O que foi descartado:** (a) ensinar a lixeira genérica a apagar os filhos — não tem onde pôr a
+recusa do pedido sem inchar um bloco que serve três abas; o precedente do pedido (Etapa 38) é a porta
+própria; (b) deixar o banco apagar os filhos em cascata — a proteção do banco fica **desligada** no
+ambiente de teste, então nenhuma suíte provaria que funciona, e o mesmo caso já deu erro 500 no
+pedido.
+**Por quê importa:** sem esta porta, a lixeira da cotação daria **erro genérico em produção** no dia
+em que existisse um item — a etapa criou o item e a lixeira no mesmo passo, de propósito.
+
+**B150 (NOVA, da Etapa 41) — o bloco de itens da cotação é uma CÓPIA do bloco do pedido, não um
+componente compartilhado.**
+
+**O que foi escolhido:** copiar a busca de material, a tabela de linhas e a soma do formulário do
+pedido para o da cotação (com nomes próprios).
+**O que foi descartado:** extrair um componente de "tabela de itens" e usá-lo nos dois.
+**Por quê:** a extração mexeria nos 25 cenários de teste do pedido sem cenário próprio que a
+justifique; as Etapas 38 e 39 também não extraíram nada. Fica declarado como higiene futura. **O
+custo:** uma correção no bloco de itens tem de ser feita **duas vezes** (o arredondamento da onda
+foi feito nos dois; ver **B158**).
+
+**B151 (NOVA, da Etapa 41) — "Gerar pedido" fica na LINHA da lista, e a coluna Pedido entra entre
+Status e Ações.**
+
+**O que foi escolhido:** o ícone de carrinho na linha, condicionado (sem pedido, status permite); a
+coluna *Pedido* com o `PC-…` clicável; a exportação ganha a coluna **no fim** (as seis anteriores
+ficam idênticas para quem tem planilha montada em cima do arquivo).
+**O que foi descartado:** o botão dentro do formulário da cotação — obrigaria abrir a edição para
+converter; e a coluna nova no início do arquivo exportado — quebraria a planilha de quem já usa.
+
+**B152 (NOVA, da Etapa 41) — a etapa foi feita com o servidor num executor só e as duas telas em
+paralelo.**
+
+**O que foi escolhido:** base compartilhada (tabela, validação, coluna) primeiro; depois o servidor
+inteiro (itens, lixeira, conversão) em **uma** frente, e as duas telas (formulário da cotação e aba
+Cotações) em duas frentes paralelas contra o contrato congelado; a integração e o fechamento por
+último.
+**O que foi descartado:** dividir o servidor em duas frentes — as três coisas tocam o mesmo arquivo
+e funções vizinhas; conflito certo.
+
+**B153 (NOVA, da revisão do plano da Etapa 41) — excluir o pedido gerado LIBERA a cotação, em vez
+de deixar rastro.**
+
+**O que foi escolhido:** a lixeira do pedido limpa o vínculo da cotação: a coluna *Pedido* volta a
+`-`, o carrinho reaparece, a cotação pode gerar outro pedido (número novo) ou ser excluída. A
+resposta da lixeira informa quantas cotações foram liberadas (0 ou 1).
+**O que foi descartado:** o desenho original — o vínculo **ficava** apontando para o pedido apagado,
+"como rastro".
+**Por quê:** traçado até o fim, o rastro era um **beco**: o comprador gera, percebe o erro, exclui o
+pedido, e a cotação passa a responder "já gerou o pedido" **para sempre**, tanto ao gerar de novo
+quanto ao excluir — só SQL resolveria. É o inverso do que a Etapa 38 já tinha corrigido para as
+solicitações da Reposição (voltam para PENDENTE quando o pedido some). O rastro que sobra é o status
+*Aprovado* (**G60**).
+
+**B154 (NOVA, da revisão do plano da Etapa 41) — a cotação que virou pedido NÃO se edita.**
+
+**O que foi escolhido:** o servidor recusa qualquer edição de cotação com pedido (*"Cotação ⟨número⟩
+já gerou o pedido PC-… — não pode mais ser editada"*), e — desde a onda de correção (F5) — a tela
+abre **travada** com a faixa e o link para o pedido, sem botão Salvar.
+**O que foi descartado:** (a) deixar editar — o comprador mudaria itens e preços que o pedido **não
+acompanha**, ou voltaria o status para *Rejeitado* com pedido gerado; (b) congelar só as linhas e
+liberar o cabeçalho — a tela manda tudo junto, e o status faz parte do cabeçalho; (c) na tela, deixar
+livre e recusar no Salvar — foi o que a revisão final achou: o comprador perdia o formulário inteiro
+no 409.
+**O gesto para corrigir uma cotação convertida:** excluir o pedido (que libera, **B153**) e editar
+depois.
+
+**B155 (NOVA, da revisão do plano da Etapa 41) — "Gerar pedido" NÃO pergunta "tem certeza?".**
+
+**O que foi escolhido:** um clique gera; a lixeira ao lado continua perguntando.
+**O que foi descartado:** a confirmação.
+**Por quê:** a ação é **reversível** — excluir o pedido libera a cotação (**B153**) —, então a
+confirmação só cobraria um clique a mais de quem já escolheu o botão. Se a empresa preferir a
+pergunta, é uma linha.
+
+**B156 (NOVA, da onda de correção da Etapa 41) — sob corrida, o vínculo é a guarda, e o pedido do
+perdedor é DESFEITO; não há transação.**
+
+**O que foi escolhido:** o servidor cria o pedido, e só então tenta gravar o vínculo **"se a cotação
+ainda não tem pedido"** — uma única chamada consegue; as outras não afetam nada, e cada perdedor
+**apaga o pedido que acabou de criar** e responde *"Cotação ⟨número⟩ já gerou o pedido PC-…"* com o
+número do vencedor. Se a cotação foi excluída no meio, o pedido também é desfeito e a resposta é
+*"Cotação não encontrada"*.
+**O que foi descartado:** (a) uma transação no banco — o resto desta base não usa transação até a
+migração para o Postgres (o motor de estoque compensa do mesmo jeito); (b) uma fila em memória por
+cotação — só vale num processo só e não cobre a corrida com a lixeira.
+**Consequência para você:** por uma fração de segundo pode existir um pedido a mais, que some antes
+de a resposta chegar. Se o apagamento do perdedor **falhar** no meio (queda do servidor nessa
+fração), sobra um pedido sem cotação — é o que a segunda consulta da **A19** procura, e é a mesma
+classe de fragilidade do vínculo com a Reposição (**G59**).
+
+**B157 (NOVA, da onda de correção da Etapa 41) — na tela, a trava do duplo clique é uma
+referência, não só o botão desabilitado.**
+
+**O que foi escolhido:** o botão fica desabilitado enquanto o pedido está sendo gerado **e** o
+próprio clique repetido é ignorado por uma referência que não depende de a tela ter redesenhado.
+**O que foi descartado:** a trava só pelo estado que desabilita o botão.
+**Por quê:** medido — com a trava só no estado, tirar a trava **não derrubava nenhum teste**: entre
+dois cliques o navegador já redesenhou e nem despacha o segundo; e no mesmo instante a trava lê o
+valor antigo e não protege nada. Uma trava que nenhuma sabotagem derruba é a classe de "trava que
+não trava" que este projeto proíbe. Reverter é trocar uma linha.
+
+**B158 (NOVA, da onda de correção da Etapa 41) — o total da COTAÇÃO é arredondado a duas casas; o
+do pedido continua somado cru.**
+
+**O que foi escolhido:** a cotação grava e mostra o total com duas casas (3 × 0,1 = **0,30**, e não
+*0.30000000000000004*), tanto no servidor quanto na tela — inclusive ao abrir uma cotação gravada
+antes da correção.
+**O que foi descartado:** arredondar também a soma do pedido (Etapa 38), que a conversão usa.
+**Por quê:** fora do escopo da onda — o pedido é de outra etapa e tem 25 cenários de tela próprios.
+**Consequência para você:** um pedido gerado de uma cotação 3 × 0,1 pode nascer no banco com
+centavos de ruído (*0.30000000000000004*) enquanto a cotação mostra 0,30. A lista, o Excel e o
+Recebimento **arredondam ao exibir**, então ninguém vê a diferença na tela — mas uma consulta direta
+no banco vê. Fechar é uma linha na soma do pedido.
+
+**B159 (NOVA, da Etapa 41) — o pedido regenerado nasce da COTAÇÃO, não do pedido anterior.**
+
+**O que foi escolhido:** se o comprador gera o pedido, **edita** o pedido (troca quantidades,
+previsão), depois o exclui e gera de novo, o pedido novo vem com as linhas **da cotação** — a edição
+feita no pedido anterior **se perde**.
+**O que foi descartado:** "reaproveitar" o pedido anterior (guardar a edição em algum lugar e
+devolvê-la).
+**Por quê:** excluir é excluir; o único documento que sobrevive é a cotação, e é dela que se gera.
+Se a edição precisa sobreviver, o gesto certo é **não** excluir o pedido — editá-lo de novo.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -3247,6 +3524,13 @@ de itens, **B138**).
     caminho é esvaziar a lista pela tela de itens antes. Se alguém contornou o erro apagando direto
     no banco, a consulta **A17** encontra os itens órfãos. Ver **B138**.
 
+*A **Etapa 41 não acrescenta furo** a esta lista: ela não muda o comportamento de nada que já
+existia, exceto a lixeira da cotação — que passa a **funcionar** onde, no dia em que houvesse um item
+pendurado, daria o erro genérico em produção (a lixeira genérica apagava a cotação "crua"; agora a
+cotação tem lixeira própria que leva os itens junto, **B149**). Produção tinha zero cotações, então
+não há caso passado a conferir. O que quem opera precisa saber está nas decisões: a cotação convertida
+**não se edita** (**B154**) e excluir o pedido **libera** a cotação (**B153**).*
+
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -3605,7 +3889,8 @@ de itens, **B138**).
   fornecedor, datas, valor total (digitado), status e observações — e mais nada. Não há linhas de
   material na cotação, não há tela que compare cotações de fornecedores diferentes, e **aprovar uma
   cotação não gera pedido**. É o corte de escopo da etapa (**B123**); "converter cotação em pedido" é
-  o gesto natural seguinte e depende de existir item de cotação.
+  o gesto natural seguinte e depende de existir item de cotação. **Fechado na Etapa 41** — a cotação
+  ganhou itens e "Gerar pedido"; o que continua fora está nos itens (41) abaixo.
 
 - **(40) A tela nova de fornecedor não tem foto.** A foto continua onde estava: no modal de
   *Fornecedores homologados → grupo → lápis*. Decisão **B134**.
@@ -3624,6 +3909,38 @@ de itens, **B138**).
 
 - **(40) O módulo Compras continua sem perfis.** Quem abre o módulo cria, edita, inativa e exclui
   fornecedor e cotação — a mesma camada única da 38 (**G30**).
+
+- **(41) Não há comparação de cotações.** Cada cotação é de um fornecedor; não existe tela que ponha
+  lado a lado o preço de dois fornecedores para o mesmo material. Comparar exigiria uma entidade
+  nova ("processo de cotação"), não uma coluna — **B141**.
+
+- **(41) O preço da linha é digitado, não puxado da lista de itens do fornecedor.** A lista de
+  *Itens e preços* do fornecedor homologado é texto livre, sem ligação com o catálogo de materiais;
+  a cotação não a consulta.
+
+- **(41) Não há status "Convertida".** A cotação que virou pedido fica **Aprovado** com o `PC-…` na
+  coluna *Pedido* — **B146**. E quando o pedido é excluído, o status **continua Aprovado**; só o
+  vínculo cai (**G60**).
+
+- **(41) "Gerar pedido" sempre grava o pedido.** Não existe o caminho "abrir *Novo pedido* já
+  preenchido com a cotação, sem gravar" — **B145**. Desfazer é a lixeira do pedido.
+
+- **(41) Item de cotação sem material do catálogo não existe.** Toda linha é um material do
+  almoxarifado; texto livre não entra, porque o pedido gerado exige material.
+
+- **(41) O Recebimento continua olhando o pedido, não a cotação.** A cotação só chega ao
+  Recebimento **através** do pedido que gerou.
+
+- **(41) A cotação convertida não se edita** — nem pela tela (abre travada) nem por outro caminho
+  (recusa com frase). O gesto é excluir o pedido, que libera a cotação, e editar depois — **B154**.
+
+- **(41) O total do PEDIDO gerado não é arredondado.** Só a cotação soma com duas casas; um pedido
+  gerado de 3 × 0,1 pode nascer com ruído de centavos no banco (invisível na tela) — **B158**.
+
+- **(41) Fornecedor inativo continua aceito na cotação e no pedido feito à mão.** Só a conversão
+  cotação → pedido recusa — **B148**; a decisão **B127** segue aberta.
+
+- **(41) "Gerar pedido" não pede confirmação** — **B155**.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -4616,6 +4933,113 @@ distingue. (b) Um pedido forjado com *valor total* "nulo" recebe a frase de "neg
 voltar de qualquer formulário do Compras **perde a busca e o filtro** da aba (a aba remonta) — igual à
 38. (d) Um fornecedor com status vazio abre na edição como *Ativo* e, ao salvar, é gravado *Ativo*
 sem ninguém ter pedido — benigno, e é o que a **A16** mede.
+
+---
+
+**G57 (NOVO, da Etapa 41). Num banco NOVO, a coluna do vínculo só entra no SEGUNDO boot.**
+
+A coluna que liga a cotação ao pedido é acrescentada no arranque do servidor pelo mesmo padrão das
+cinco colunas de fornecedor da 40: a instrução corre numa fila **paralela** à que cria a tabela, e num
+arquivo de banco **criado naquele mesmo boot** ela chega **antes** de a tabela existir e falha em
+silêncio (*"no such table: cotacoes"*). Até o próximo reinício, **todas** as telas de cotação
+respondem erro. Reproduzido por sonda; **não** afeta produção (a tabela já existe lá, e o boot na
+cópia do banco de produção adicionou a coluna sem erro). É armadilha para máquina nova e ambiente de
+desenvolvimento: se as cotações derem erro logo depois de criar o banco, **reinicie** — e a **A18**
+é a prova. Fechar é mover a instrução para depois da criação da tabela.
+
+---
+
+**G58 (NOVO, da Etapa 41). Criar cotação por dentro do servidor, sem passar pela porta, não valida
+os itens.**
+
+A validação dos itens (material obrigatório, quantidade maior que zero, preço não negativo) mora na
+**porta** da cotação, como no pedido. Quem chama o serviço diretamente (código de integração, script)
+consegue gravar uma linha com quantidade 0 — e a conversão a copiaria para o pedido, que também
+aceita por esse caminho. Nenhuma tela chega lá. Mesma classe do pedido desde a 38.
+
+---
+
+**G59 (NOVO, da Etapa 41). O vínculo cotação → pedido é gravado DEPOIS de o pedido nascer, sem
+transação; a proteção é compensar, não desfazer.**
+
+Gerar pedido é dois passos: criar o pedido, depois gravar o vínculo na cotação "se ela ainda não
+tem pedido". Se o segundo passo não afetar nada (outra chamada venceu, ou a cotação foi excluída no
+meio), o servidor **apaga o pedido que acabou de criar** e responde 409/404 (**B156**). O que sobra
+descoberto: se o servidor **cair** entre criar o pedido e gravar o vínculo, ou entre perder a corrida
+e apagar o perdedor, fica um pedido sem cotação apontando — um pedido normal, com saldo cheio no
+Recebimento. É a mesma classe do vínculo não-fatal da Reposição (Etapa 38). A segunda consulta da
+**A19** procura esses pedidos; a suíte prova a compensação sob corrida (6 chamadas → 1 pedido) e sob
+a proteção do banco ligada.
+
+---
+
+**G60 (NOVO, da Etapa 41). Excluir o pedido gerado libera o vínculo, mas o status da cotação
+continua "Aprovado".**
+
+A lixeira do pedido limpa a coluna *Pedido* da cotação (**B153**) e **não** mexe no status: a
+cotação que foi aprovada ao gerar continua *Aprovado*, agora sem pedido. É deliberado (o rastro
+honesto de que um pedido chegou a existir), mas a lista não distingue "aprovada e ainda sem pedido"
+de "aprovada, gerou, e o pedido foi excluído". Se isso confundir, o comprador pode editar a cotação
+(ela está liberada) e escolher outro status.
+
+---
+
+**G61 (NOVO, da Etapa 41 — e FECHADO ainda nela). O entrelaçamento da lixeira da cotação com o
+"Gerar pedido".** *(Este item nasceu como "não está fechado"; a re-revisão da onda o reproduziu e
+ele foi corrigido. O texto original fica abaixo, com o desfecho no fim — apagá-lo faria o próximo
+leitor confiar de novo na versão errada.)*
+
+A corrida "excluir a cotação **e** gerar o pedido ao mesmo tempo" está coberta no ramo observado (a
+exclusão vence, o pedido é desfeito, 404). Existe um terceiro entrelaçamento **nunca observado**
+(nem em cinco rodadas de sonda): a lixeira lê "sem pedido", o gerar grava o vínculo e responde 201,
+e **só então** a lixeira apaga a cotação — sobraria um pedido vivo sem cotação. No ambiente de teste
+é inalcançável pela ordem das instruções; em produção a proteção do banco não o impede, porque a
+cotação apontar para o pedido não bloqueia apagar a própria cotação. Fechar exigiria a lixeira
+apagar o cabeçalho **antes** dos itens com checagem — que inverte a ordem que a proteção do banco
+impõe. Declarado; o cenário de corrida da suíte afirma "zero órfãos" e cairia se isso aparecesse.
+**FECHADO em `68d4173`** (a re-revisão da onda reproduziu o entrelaçamento com uma sonda: 28 de
+301 janelas deixavam pedido órfão). A lixeira passa a **reivindicar** a cotação — marcá-la como
+cancelada — antes de apagar, e a geração recusa cotação reivindicada: quem chega primeiro ganha, nos
+dois sentidos. O cenário de corrida varre 301 janelas e afirma zero órfãos em todas. **O que este
+item ainda declara:** a conta continua sem transação; o que protege é a ordem das reivindicações.
+
+---
+
+**G62 (NOVO, da Etapa 41). Uma janela de microssegundos em que a recusa da corrida diria "pedido
+#⟨id⟩" em vez do número.**
+
+Quando uma chamada perde a corrida, o servidor relê a cotação para responder com o número do pedido
+vencedor. Se, exatamente nesse intervalo, o vencedor for **excluído** (liberando a cotação), a
+frase sairia com o rótulo de reserva *"#⟨id⟩"* no lugar do `PC-…`. Sem cenário; anotado.
+
+---
+
+**G63 (NOVO, da Etapa 41). A lixeira da aba Cotações mostra o aviso fixo, e continua visível na
+cotação convertida.**
+
+(a) Ao excluir uma cotação a tela mostra *"Item excluído com sucesso"* — a frase própria do
+servidor (*"Cotação excluída com sucesso"*) só existe pela API; não é defeito, é o mesmo aviso das
+três abas. (b) A lixeira da cotação que **já virou pedido** continua na linha e só recusa **depois**
+do clique (*"… não pode ser excluída"*, em vermelho). O carrinho some e o lápis abre travado; a
+lixeira ficou como estava. Esconder é uma condição.
+
+---
+
+**G64 (NOVO, da Etapa 41). A tela de edição do pedido gerado não mostra o número no título.**
+
+Depois de "Gerar pedido", o aviso verde com o `PC-…` e a tela **"Editar pedido de compra"** chegam
+juntos; o título não repete o número. Se a tela do pedido falhar ao carregar (rede), o comprador
+fica sem saber qual pedido nasceu além do aviso que some — o número está na coluna *Pedido* da aba
+Cotações. Mostrar o `PC-…` no título é da tela do pedido (Etapa 38), fora desta etapa.
+
+---
+
+**G65 (NOVO, da Etapa 41). O aviso "Pedido … gerado da cotação …" colapsa um espaço duplo que
+esteja DENTRO do número da cotação.**
+
+O número da cotação é digitado e só perde os espaços das pontas; se alguém digitar *"COT  7"* (dois
+espaços no meio), o aviso verde mostra *"COT 7"*. A lista e o banco guardam o número como foi
+digitado. Cosmético.
 
 ## Etapa 0 — Fundação (2026-08-03)
 
@@ -9866,7 +10290,248 @@ sucesso"*.
 migração e banco, **51 suítes / 769 testes** no cliente (eram 49 / 753), e o empacotamento do cliente
 **limpo**.
 
+## Etapa 41 — A cotação ganha itens e vira pedido de compra (2026-09-22)
+
+**Esta etapa é do módulo CORE Compras**, a quarta seguida — e ela fecha o corte que a Etapa 40
+declarou em voz alta ("a cotação é só cabeçalho: não tem itens, não se compara e não vira pedido",
+**B123**). Até aqui a cotação do CRM dizia *"R$ 1.500,00 da Aços Vale"* e mais nada: **o que foi
+cotado ficava no PDF do fornecedor** — qual material, quanto, a que preço —, então a cotação não
+servia para conferir na entrega nem para comparar. E quando a cotação era aprovada, o comprador
+**redigitava o pedido** em *Compras → Pedidos → Novo Pedido*: fornecedor, cada material pela busca,
+quantidade e preço, tudo de novo. Havia ainda uma armadilha escondida: a lixeira da aba Cotações
+apagava a cotação "crua", e **no dia em que existisse um item pendurado nela, responderia um erro
+genérico** em produção (a proteção do banco barra o apagamento do pai com filhos) — o mesmo caso
+que a Etapa 38 fechou para o pedido. Agora a cotação tem **linhas de material** com o **total somado
+sozinho**; um clique em **"Gerar pedido"** na lista cria o pedido de compra no servidor (número
+`PC-…`, itens e preços copiados) e abre a edição dele para o comprador conferir datas; a mesma
+cotação **não gera dois pedidos** (nem com duplo clique, nem com duas abas); a cotação que virou
+pedido **abre travada** e diz qual pedido gerou; excluir uma cotação com itens **funciona** e leva
+os itens junto; e excluir uma cotação que já virou pedido é **recusado com uma frase** — o caminho
+é excluir o pedido, o que **libera** a cotação.
+
+### Antes → Agora
+
+| Onde | Antes | Agora |
+|---|---|---|
+| **Compras → Cotações → "Nova Cotação"** | Só cabeçalho: Número, Fornecedor, Data, Validade, Valor total (digitado), Status, Observações | O mesmo cabeçalho **mais o bloco "Itens da cotação"**: busca por código ou descrição, botão **"Buscar material"**, botão **+** (*"Adicionar à cotação"*) em cada material achado, e a tabela de linhas com **Código · Descrição · Unidade · Quantidade · Valor unitário · Subtotal · Ações** e **"Total: R$ …"** |
+| **Campo "Valor total"** | Sempre digitado | **Com pelo menos uma linha:** fica **cinza e travado**, mostrando a soma das linhas (quantidade × valor unitário), com **duas casas**. **Sem linha:** continua digitável, como antes — a cotação "R$ 1.500 o lote", sem discriminar, segue válida |
+| **Lápis da aba Cotações** | Abria o cabeçalho | Abre o cabeçalho **e as linhas** gravadas; trocar quantidade ou preço e salvar substitui as linhas |
+| **Coluna "Pedido" na aba Cotações** | Não existia | Entre *Status* e *Ações*: **`-`** enquanto a cotação não gerou pedido; o número **`PC-…` clicável** (abre a edição do pedido) depois |
+| **Botão "Gerar pedido"** (ícone de carrinho na linha) | Não existia — aprovar não fazia nada | Aparece **só** na cotação **sem pedido** e com status **Em Análise** ou **Aprovado**. Clique → aviso verde *"Pedido PC-… gerado da cotação ⟨número⟩"* e a tela **"Editar pedido de compra"** abre com fornecedor, linhas e preços da cotação |
+| **O pedido gerado** | — | É um pedido **normal**: nasce **Pendente**, com a *Data do pedido* de **hoje**, *Previsão de entrega* **vazia** (é o que o comprador confere na edição), as **observações da cotação**, o total somado das linhas — e aparece no Recebimento do almoxarifado como qualquer outro |
+| **Segunda tentativa de gerar** | — | O botão **some** da linha assim que a cotação tem pedido. Por outro caminho, o servidor responde *"Cotação ⟨número⟩ já gerou o pedido PC-…"* e **não cria nada** — inclusive sob duplo clique ou duas abas ao mesmo tempo |
+| **Editar uma cotação que virou pedido** | — | O lápis abre a tela **travada**: faixa âmbar *"Esta cotação já gerou o pedido PC-… — não pode mais ser editada"* (o `PC-…` é link para o pedido), todos os campos desabilitados, **sem botão Salvar** |
+| **Lixeira de cotação com itens** | Em produção daria erro genérico (*"Erro ao excluir item"*) | Apaga a cotação **e os itens** — *"Item excluído com sucesso"* |
+| **Lixeira de cotação que virou pedido** | — | Recusa: *"Cotação ⟨número⟩ já gerou o pedido PC-… — não pode ser excluída"* |
+| **Lixeira do pedido gerado** | — | Apaga o pedido (regra da 38: só se nenhum recebimento o tocou) **e libera a cotação**: a coluna *Pedido* volta a `-`, o botão "Gerar pedido" reaparece, e a cotação pode gerar outro pedido ou ser excluída |
+| **"Exportar Excel" da aba Cotações** | Número, Fornecedor, Valor, Status, Data, Validade | As mesmas seis **mais a coluna "Pedido"** no fim |
+| **Fornecedor inativo** (Etapa 40: aceito em pedido e cotação) | — | Continua aceito **na cotação**; mas **"Gerar pedido"** para ele é recusado: *"Fornecedor inativo — reative-o em Compras → Fornecedores antes de gerar o pedido"* — a primeira porta do Compras que olha o status do fornecedor |
+
+### As regras, com o cenário exato
+
+**RN-F01 — cada item tem material do catálogo, quantidade maior que zero e preço não negativo.**
+**Compras → Cotações → Nova Cotação**, no bloco **Itens da cotação**: digite parte do código ou da
+descrição de um material do almoxarifado, **Enter** ou **"Buscar material"** (a busca é ato seu, não
+da digitação), clique no **+** da linha do material → ele entra na tabela com **quantidade 1** e
+**valor unitário vazio**. Apague a quantidade (deixe vazia) e salve → faixa vermelha **"Dados
+inválidos — itens.0.quantidade: quantidade do item da cotação deve ser um número maior que zero"**
+(o `0` é a posição da linha: a segunda linha errada diria `itens.1.…`). Preço **negativo** →
+*"Dados inválidos — itens.0.valor_unitario: valor unitário do item da cotação não pode ser
+negativo"*. Preço **vazio** é aceito: a tela avisa em âmbar *"Item sem preço entra na cotação com
+valor unitário 0."* e grava **0**. Material apagado do catálogo entre a busca e o salvar → *"Material
+não encontrado"*, e **nada** é gravado (nem o cabeçalho). Por outro caminho que não a tela: item
+sem material → *"material do item da cotação é obrigatório"*; lista de itens que não é lista →
+*"itens da cotação devem ser uma lista"*.
+
+**RN-F02 — a cotação sem itens continua existindo.** Salve uma cotação só com Número e Fornecedor
+(nenhuma linha) → gravou, com o *Valor total* que você digitou (ou **0** se vazio). É uso real: o
+fornecedor mandou "R$ 1.500 o lote" sem discriminar. O que **exige** itens é gerar pedido (RN-F08).
+
+**RN-F03 — com itens, o total é somado; o que você digitou antes não vale.** Digite **999** em
+*Valor total*, adicione **duas linhas** (por exemplo 2 × R$ 10,00 e 1 × R$ 5,00) → o campo fica
+**cinza**, mostra **25** e não aceita digitação; embaixo, **"Total: R$ 25,00"**. Salve → a lista
+mostra **R$ 25,00** (o 999 foi ignorado). Remova as duas linhas → o campo volta a ser digitável
+**com o 999** que estava lá. Três linhas de 0,1 × 1 mostram **0.3**, não *0.30000000000000004*
+(fechado na onda de correção, F6/F3b).
+
+**RN-F04 / RN-F05 — o lápis traz as linhas, e salvar substitui todas.** Lápis numa cotação com
+linhas → a tabela vem preenchida sem nenhuma busca. Troque uma quantidade, remova uma linha, salve
+→ a cotação passa a ter **exatamente** o que estava na tela, com o total recalculado. Uma edição
+que mande a cotação **sem linhas** apaga as linhas que existiam (substituição total, como no pedido).
+
+**RN-F06 — a lixeira da cotação: leva os itens, recusa a convertida.** Lixeira de uma cotação
+**com itens** e sem pedido → *"Tem certeza que deseja excluir este item?"* → *"Item excluído com
+sucesso"*, e os itens vão junto (nada fica órfão — é o que a Etapa 38 fez para o pedido). Lixeira de
+uma cotação **que já gerou pedido** → aviso vermelho **"Cotação ⟨número⟩ já gerou o pedido PC-… —
+não pode ser excluída"**, e ela continua lá. Cotação apagada por outra pessoa → *"Cotação não
+encontrada"*.
+
+**RN-F07 — "Gerar pedido" cria o pedido no servidor e abre a edição dele.** Na aba Cotações, na
+linha de uma cotação **com itens** e status *Em Análise* ou *Aprovado*, clique no ícone de
+**carrinho** (*"Gerar pedido"*) → aviso verde **"Pedido PC-… gerado da cotação ⟨número⟩"** e a
+tela **"Editar pedido de compra"** abre com o fornecedor, as linhas (código, descrição, unidade,
+quantidade, valor unitário) e o total da cotação; *Data do pedido* é **hoje**, *Previsão de
+entrega* está **vazia** para você preencher, *Status* é **Pendente**, e *Observações* traz o texto da
+cotação. Salve ou volte: em **Compras → Cotações** a linha mostra o **`PC-…`** na coluna *Pedido*,
+o status virou **Aprovado** (gerar o pedido **é** aprovar) e o carrinho **sumiu**.
+
+**RN-F08 — sem itens não gera.** Gerar pedido de uma cotação de cabeçalho só → aviso vermelho
+**"cotação sem itens não pode gerar pedido"**; nada muda. (O botão aparece mesmo assim: ele não sabe
+se há itens — é a única recusa que você vê depois do clique numa cotação sem pedido.)
+
+**RN-F09 — Rejeitado e Cancelado não geram.** Numa cotação *Rejeitado* ou *Cancelado* o carrinho
+**não aparece**. Por outro caminho, o servidor responde *"cotação rejeitado não pode gerar
+pedido"* / *"cotação cancelado não pode gerar pedido"* (o status entra na frase como está gravado).
+
+**RN-F10 — a mesma cotação não gera dois pedidos, nem sob corrida.** Depois de gerar, o carrinho
+some. Se dois cliques (ou duas abas) chegarem ao servidor ao mesmo tempo, **um** ganha e os outros
+recebem **"Cotação ⟨número⟩ já gerou o pedido PC-…"** com o número do vencedor — e o pedido que o
+perdedor chegou a criar é apagado na hora, não fica órfão (onda de correção, F1/F4; ver **B156** e
+**B157**). Na tela, o botão fica **desabilitado** enquanto o primeiro clique está em voo.
+
+**RN-F11 — fornecedor inativo não vira pedido.** Inative o fornecedor da cotação (*Compras →
+Fornecedores → lápis → Inativo*), volte e clique em **Gerar pedido** → aviso vermelho **"Fornecedor
+inativo — reative-o em Compras → Fornecedores antes de gerar o pedido"**. Reative → gera. A
+cotação em si continua aceitando fornecedor inativo (decisão B127 da 40 mantida): é a **conversão**
+que recusa. Fornecedor apagado → *"Fornecedor não encontrado"* (só alcançável fora da tela — a
+lixeira de fornecedor recusa quem tem cotação).
+
+**RN-F12 — o pedido gerado é um pedido normal, e excluí-lo libera a cotação.** O `PC-…` aparece em
+*Compras → Pedidos de Compra*, pode ser editado, exportado, e aparece no **Recebimento** do
+almoxarifado (*Por Pedido de Compra*) com saldo cheio — receber contra ele alimenta o custo médio com
+o **preço da cotação**. Lixeira do pedido → *"Item excluído com sucesso"*, e em **Compras →
+Cotações** a coluna *Pedido* volta a **`-`**, o carrinho **reaparece**, o status **continua
+Aprovado** (o rastro fica) e a cotação pode **gerar outro pedido** (com número novo, a partir das
+linhas **da cotação** — não do pedido que você tinha editado; ver **B159**) ou ser excluída. Um
+pedido gerado que **já teve recebimento** não pode ser excluído (regra da 38), então a cotação fica
+presa a ele — é o desejado.
+
+**RN-F15 — a cotação convertida não se edita.** Lápis numa cotação com pedido → a tela abre com a
+faixa âmbar **"Esta cotação já gerou o pedido PC-… — não pode mais ser editada"** (o `PC-…` é
+link para a edição do pedido), com **todos** os campos e o bloco de itens desabilitados e **sem** o
+botão *Salvar cotação*. Por outro caminho, o servidor responde *"Cotação ⟨número⟩ já gerou o
+pedido PC-… — não pode mais ser editada"* e nada muda. Para corrigir uma cotação convertida, o
+gesto é excluir o pedido (que libera a cotação) e editar depois.
+
+**RN-F13 / RN-F14 — a tela recusa pouco; o servidor decide.** A tela só barra número vazio e
+fornecedor não escolhido (como na 40). Quantidade, preço, material, itens, status, fornecedor
+inativo e "já gerou" são frases **do servidor**: no formulário elas chegam à **faixa vermelha**;
+na linha da lista ("Gerar pedido" e lixeira) chegam ao **aviso flutuante vermelho**, e a tela
+**não navega**. Se o servidor não responder nada (rede), o aviso é *"Não foi possível gerar o
+pedido"*.
+
+### Como testar ao vivo
+
+O roteiro completo, clique a clique, está no guia (`docs/almoxarifado-guia-etapas-e-testes.md`,
+seção da Etapa 41). Em cinco minutos: **Nova Cotação** → digite 999 no valor → busque um material →
+**+** → quantidade 2, preço 10 → segundo material, 1 × 5 → o campo *Valor total* fica **cinza com
+25** → **Salvar cotação** → na lista, coluna *Pedido* = `-` → **carrinho** → *"Pedido PC-… gerado da
+cotação …"* e a edição do pedido abre com as duas linhas → voltar em **Cotações** → o `PC-…` está
+na coluna, o carrinho **sumiu**, o status é **Aprovado** → **lápis** → faixa âmbar, tudo travado →
+**lixeira** da cotação → *"Cotação … já gerou o pedido PC-… — não pode ser excluída"* → **Pedidos
+de Compra → lixeira** do `PC-…` → volte em Cotações → `-` e carrinho de volta → **lixeira** da
+cotação → *"Item excluído com sucesso"*, e os itens foram junto.
+
+### O que esta etapa NÃO cobre
+
+- **Comparar cotações** de fornecedores diferentes para o mesmo material. Não há base: uma cotação
+  é de **um** fornecedor; comparar exigiria um "processo de cotação" com N fornecedores — entidade
+  nova. **B141.**
+- **Puxar o preço da lista de itens do fornecedor** (*Fornecedores homologados → grupo → fornecedor
+  → Itens e preços*): aquela lista é texto livre, sem ligação com o catálogo de materiais.
+- **Status "Convertida"**: a cotação que virou pedido fica **Aprovado** com o `PC-…` na coluna
+  *Pedido*. O vínculo é a coluna, não um quinto status. **B146.**
+- **Abrir "Novo pedido" já preenchido a partir da cotação** (sem gravar nada): a conversão é sempre
+  no servidor, com o pedido já gravado. **B145.**
+- **Item de cotação sem material do catálogo** (texto livre): o pedido exige material, e a conversão
+  precisa dele.
+- **Recebimento olhando a cotação**: o recebimento continua contra o **pedido**.
+- **O pedido gerado sendo somado com duas casas.** A **cotação** grava o total arredondado; o pedido
+  que nasce dela soma cru, então um pedido de 3 × 0,1 pode nascer com centavos de ruído no banco
+  enquanto a cotação mostra 0,30 (a lista e o Excel arredondam ao exibir). **B158.**
+- **A lista de itens da cotação e do pedido virarem um componente só** (hoje são duas cópias).
+- **Fornecedor inativo recusado no pedido direto** (*Novo Pedido*): só a **conversão** recusa; o
+  pedido feito à mão para inativo continua aceito (B127 da 40). **B148.**
+- **Uma confirmação ("tem certeza?") no "Gerar pedido"**: não há, de propósito — a ação é
+  reversível (excluir o pedido libera a cotação). **B155.**
+- **A lixeira da cotação convertida continuar visível** (e recusar depois do clique): não foi
+  escondida. **G63.**
+- **Nove miudezas declaradas pela revisão** e não tocadas: **G57 a G65**.
+
+### O que a revisão encontrou
+
+- **Revisão do plano antes de codar (Fase 2):** **1 crítico, 4 importantes e 8 menores**, todos
+  aplicados ao plano e ao design antes da primeira linha de código. O crítico era um cenário de
+  teste que afirmava uma tela falsa que nunca renderiza; os importantes mudaram regra: **excluir o
+  pedido passou a liberar a cotação** (a versão original deixava a cotação num beco — nem gerar de
+  novo, nem excluir; **B153**), **cotação convertida não se edita** (**B154**), a frase do 409
+  nunca diz "pedido null", e o pedido gerado nasce com a **data de hoje** (nascia sem data).
+- **Revisão final, duas lentes (regras/servidor e tela/UX):** **1 crítico e 4 importantes reais**,
+  **7 menores**, **zero alarme falso** — o crítico e um dos importantes são o **mesmo defeito**
+  visto pelas duas lentes. Os quatro: (1) **duplo clique ou duas chamadas ao mesmo tempo em "Gerar
+  pedido" criavam N pedidos** para a mesma cotação (medido: 6 chamadas → 6 pedidos, 5 órfãos,
+  todos visíveis no Recebimento); (2) **a suíte era cega à ordem "liberar a cotação, depois apagar
+  o pedido"** — inverter a ordem passava verde no ambiente de teste (proteção do banco desligada) e
+  daria erro 500 em produção; (3) **a cotação convertida abria em edição livre** e só recusava no
+  Salvar, com o formulário inteiro perdido; (4) **ponto flutuante no total travado**
+  (*0.30000000000000004* ao lado de *R$ 0,30*).
+- **Onda de correção, seis commits** (`a09dfe8..ffba9b9`): F4 (o botão não aceita clique repetido
+  em voo), F5 (a cotação convertida abre travada, com faixa e link), F6 (o campo travado mostra duas
+  casas), F1 (o servidor não cria N pedidos sob corrida — o vínculo é a guarda, e o perdedor é
+  desfeito), F2 (suíte que prova a ordem com a proteção do banco **ligada**, sobre a DDL de
+  produção), F3 (afirma o cabeçalho do pedido gerado e arredonda a soma da cotação).
+- **Re-revisão da onda** (uma lente fresca, 2026-09-22): **zero crítico, 1 importante, 4 menores.**
+  Os seis consertos foram reproduzidos com as sondas originais e estão fechados. O importante era
+  uma sétima corrida, mais fina que a que a onda fechou: **apagar a cotação enquanto o pedido está
+  sendo gerado** — não no mesmo instante, mas alguns milissegundos depois — deixava o pedido vivo
+  sem cotação nenhuma (aconteceu em 28 de 301 janelas medidas). **Fechado em `68d4173` (F7):** a
+  lixeira passa a **reivindicar** a cotação antes de apagá-la, e a geração recusa cotação
+  reivindicada — quem chega primeiro ganha, nos dois sentidos. O cenário novo varre 301 janelas e
+  afirma **zero pedidos órfãos** em todas.
+
+**Números lidos** (`820860a..68d4173`): **195 de 195 arquivos** da suíte de API (eram 191), **42 de
+42** no serviço do almoxarifado, **4/4 · 3/3 · 5/5** nas suítes de validação, migração e banco,
+**51 suítes / 781 testes** no cliente (eram 769), e o empacotamento do cliente **limpo**.
+
 ## Onde estamos e o que vem a seguir
+
+- **Etapa 41 entregue (2026-09-22):** **a cotação ganha itens e vira pedido de compra**
+  (`8d81cc5..ffba9b9`, onda de correção da revisão final `a09dfe8..ffba9b9`, seis commits). Quarta
+  etapa seguida no módulo **Compras**, e a que fecha o corte que a 40 declarou (**B123**). **O
+  problema era que a cotação não dizia o que foi cotado** — o material, a quantidade e o preço
+  ficavam no PDF do fornecedor —, e aprovada a cotação o comprador **redigitava o pedido** inteiro;
+  e a lixeira da cotação daria erro genérico em produção no dia em que existisse um item. Agora a
+  cotação tem **linhas de material** com o **total somado** (campo cinza e travado; sem linha,
+  continua digitável); a lista tem a coluna **Pedido** e o botão **"Gerar pedido"**, que cria o
+  pedido no servidor (*"Pedido PC-… gerado da cotação ⟨número⟩"*) e abre **"Editar pedido de
+  compra"** com fornecedor, linhas e preços; a mesma cotação **não gera dois pedidos** — nem sob
+  duplo clique; a cotação convertida **abre travada** com a faixa *"Esta cotação já gerou o pedido
+  PC-… — não pode mais ser editada"*; fornecedor inativo é recusado **na conversão** (*"Fornecedor
+  inativo — reative-o em Compras → Fornecedores antes de gerar o pedido"*); excluir cotação com
+  itens **funciona** e excluir cotação convertida é recusado (*"… — não pode ser excluída"*); e
+  **excluir o pedido libera a cotação**.
+  **O que é seu:** as consultas **A18** (as três tabelas depois do **primeiro boot** — 9/8/11
+  colunas; num banco novo a coluna do vínculo só entra no segundo boot) e **A19** (itens de cotação
+  órfãos, e a busca aproximada por pedidos que perderam a cotação); as decisões **B141 a B159**,
+  todas tomadas por mim com o descartado escrito — as que **esperam você** são a **B148** (inativo
+  é recusado só na **conversão**; a **B127** da 40 ganhou uma terceira opção) e a **B158** (o
+  pedido gerado soma cru; só a cotação arredonda); **nenhum furo novo** em C; as limitações **(41)**
+  em D; e as fragilidades **G57 a G65** — as que valem ler são a **G57** (banco novo: reinicie) e a
+  **G59** (o vínculo é compensado, não transacionado).
+  **A revisão do plano (Fase 2) achou 1 crítico, 4 importantes e 8 menores** antes da primeira
+  linha de código — dois importantes mudaram regra: excluir o pedido **libera** a cotação
+  (**B153**) e a cotação convertida **não se edita** (**B154**). **A revisão final (duas lentes)
+  achou 1 crítico e 4 importantes reais, 7 menores, zero alarme falso**, corrigidos em seis commits
+  — o crítico: **duplo clique em "Gerar pedido" criava dois pedidos** (6 chamadas ao mesmo tempo
+  criavam 6), e a suíte era cega à ordem que a proteção do banco exige em produção. **A re-revisão da
+  onda achou mais uma corrida** — apagar a cotação com o pedido em vôo deixava pedido órfão — e ela
+  foi fechada em `68d4173`; fora isso, nada novo.
+  Números **lidos** no fechamento: **195/195 arquivos** da suíte de API, **42/42** no almoxarifado,
+  **4/4 · 3/3 · 5/5**, **51 suítes / 781 testes** no cliente, empacotamento limpo.
+  **A Etapa 42 já está escolhida:** *o recebimento fecha o pedido* — quando tudo o que o pedido
+  pediu chega, o status vira **Recebido** sozinho, e o selo de atraso some sem ninguém clicar no
+  lápis. É o último elo aberto da cadeia que as quatro etapas de Compras abriram (cotação → pedido →
+  recebimento), e está detalhado no fim do plano da 41.
 
 - **Etapa 40 entregue (2026-09-21; documentação fechada em 2026-09-22):** **Fornecedores e
   Cotações ganham tela** (`90597c7..03cd048`, onda de correção da revisão final `55a3214..03cd048`,

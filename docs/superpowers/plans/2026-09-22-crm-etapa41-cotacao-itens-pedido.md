@@ -21,7 +21,7 @@
 - **`DELETE /api/compras/cotacoes/:id` registrado ANTES do genérico** (`app.delete('/api/compras/:tipo/:id')`, `:367`) — posição é comportamento.
 - **Gate:** `authenticateToken, checkModulePermission('compras')` em toda rota nova. Nenhum `requirePermission`.
 - **Client:** `data-testid` prefixados `cotacao-`; ids de fixture **770/771/772** (cotações), **7701/7702** (itens), **912** (material), **650** (pedido gerado) — fora do conjunto ocupado; erro de form em `role="alert"`, erro de ação de linha em `toast` (mesmo canal da lixeira); as duas telas novas já estão em `reais` dos Proxies das suas suítes.
-- **Commits:** português, corpo sem acento, um por task, `git add` explícito, mensagem em `…\scratchpad\msg-e41-t<N>.txt`, `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`. Nada de push pelos executores.
+- **Commits:** português, corpo sem acento, um por task, `git add` explícito, mensagem em `…\scratchpad\msg-e41-t<N>.txt`, `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>` *(na retomada após o corte de sessão o coordenador trocou para `Claude Opus 5` — T2–T5 e a onda estão assinados assim; a T1 com Fable 5.1)*. Nada de push pelos executores.
 - **Sabotagem:** `md5sum` antes/depois/pós-restauro, âncora `grep -cF` = 1, restauro por cópia do scratchpad, nunca `git checkout --`; `python3` não executa; **heredoc com acento quebra no Bash desta máquina — usar o Write tool**; LF (CR=0 por `perl -ne '$c++ if /\r/'`).
 - **Teste verde de primeira é suspeito:** controle positivo nomeado em cada task.
 
@@ -35,7 +35,14 @@ que **não** apague os filhos antes **passa no harness** (deixa órfãos) e **fa
 Nenhuma asserção de status pega isso. Por isso o cenário da lixeira **conta `itens_cotacao` órfãos**, e a
 sabotagem obrigatória é remover o `DELETE` dos filhos e ver esse `COUNT` cair. Mesma lógica para o
 vínculo: `cotacoes.pedido_id REFERENCES pedidos_compra(id)` não dispara no harness quando o pedido é
-apagado — a RN-F12 declara que o `pedido_id` **fica**, e o cenário afirma isso para ninguém "consertar".
+apagado — ~~a RN-F12 declara que o `pedido_id` **fica**, e o cenário afirma isso para ninguém "consertar"~~
+*(corrigido no fechamento: a Fase 2 (I2) **inverteu** a RN-F12 — `excluirPedido` libera a cotação com
+`UPDATE … SET pedido_id = NULL` **antes** do `DELETE`; e é justamente essa ordem que o harness não vê
+e a onda teve de provar com a FK ligada — F2, `83a5d71`. Ver §12.1 e §12.5 do design.)*
+**O que o fechamento acrescenta a este aviso:** o harness com FK desligada também é cego para a
+**ordem** dos statements (não só para a ausência do `DELETE` dos filhos), e nenhum `COUNT` pega
+ordem. A régua para isso é um segundo banco com a DDL de produção e `foreign_keys = ON`
+(`comprasCotacaoFkProducao.api.test.js`), com controle positivo dentro do cenário.
 
 ### Três regras herdadas
 
@@ -1199,6 +1206,41 @@ filhos") era verdade até a 40; (iii) o guia de usuário pode usar o roteiro do 
 
 Os 7 artefatos + planos: novidades (seção da 41; letras **A18** (PRAGMAs pós-boot) e **A19** (órfãos), **B141–B152** (D1–D12), **C** nenhum novo, **D/G** (seção 8 do design + `pedido_id` de pedido apagado + `UPDATE` do vínculo sem transação + `comprasPedidoEditarExcluir:93` frase morta), item em "Onde estamos"); guia (roteiro: criar cotação com 2 itens → gerar pedido → conferir a edição do pedido → voltar e ver a coluna Pedido → tentar de novo pela API → excluir); manual (seção de cotação: itens, total, "Gerar pedido", o que Inativo/rejeitado fazem); `specs/modulo-compras/README.md:70` ("cotação não tem filhos" — **era verdade até a 40**), `22-integracoes` (o "falta para 🟢" desta fatia: o que sobra), mapa; design com "Como foi executado"; este plano com retro e a próxima tarefa (pela ordem do CLAUDE.md — medir); retro nº 4 do plano da 40 (defeito escapado — preencher com o que a Fase 0 da 41 achou de errado no handoff da 40: as 6 correções da seção 11 do design da 41).
 
+#### ✅ Task 6 FECHADA — fechamento (2026-09-22, sobre o tronco `ffba9b9`)
+
+Executada em **três frentes paralelas** depois da onda de correção, cada uma com arquivos disjuntos:
+
+- [x] **Escritor de desenvolvedor (esta frente):** `specs/modulo-compras/README.md` (cabeçalho com a
+  41, 36 rotas medidas por `grep`, serviços/telas/tabelas com o que mudou, a linha da aba Cotações
+  reescrita com hashes, a frase *"⚠️ genérico, sem guarda (cotação não tem filhos)"* riscada com
+  "era verdade até a 40; desde a 41 …", seção *"O que a Etapa 41 mudou na aba Cotações"* com os
+  fatos novos — `itens_cotacao` em `schema.js`, `cotacoes.pedido_id` em três lugares, a corrida
+  achada e fechada, a suíte de FK com DDL de produção); `specs/modulo-almoxarifado/22-integracoes/README.md`
+  (status e "Última atualização" com a 41; item `[x]` *"Cotação com itens e conversão em pedido de
+  compra"* com os 11 hashes; as duas frases da tabela da §15 que ficaram falsas, riscadas à vista;
+  seções 17–19 de contratos; 11 linhas novas na tabela de regras/testes; o "falta para 🟢" da fatia
+  reduzido a comparar cotações); `specs/modulo-almoxarifado/README.md` (parágrafo "Última
+  atualização" da 41 no formato dos anteriores, a 40 empurrada para "Antes:", a linha da feature 22
+  com o trecho da 41 e o "falta para 🟢" atualizado); o design da 41 (§12 com sete correções, cada
+  lugar original marcado *(corrigido no fechamento)* sem apagar); este plano (esta Task 6, a onda,
+  a retro e a Etapa 42); e a retro nº 4 do plano da 40.
+- [x] **Escritor de usuário (frente paralela):** `docs/almoxarifado-novidades-por-etapa.md` (seção da
+  41 com Antes→Agora e cenários com literal; letras **A18/A19**, **B141+**, C, D, G),
+  `docs/almoxarifado-guia-etapas-e-testes.md` (roteiro clicável: criar cotação com 2 itens → gerar
+  pedido → conferir a edição → coluna Pedido → tentar de novo pela API → excluir) e
+  `docs/almoxarifado-manual-do-sistema.md` (seção de cotação: itens, total, "Gerar pedido", o que
+  inativo/rejeitado fazem — sem número de etapa, sem hash).
+- [ ] **Integrador:** os cinco comandos no tronco `ffba9b9` com os números **lidos**, `git status`
+  limpo, re-revisão da onda (uma lente fresca sobre `3032f5a..ffba9b9`) e o commit do fechamento.
+  **Pendente no momento em que esta frente escreveu** — os números desta etapa estão em "ver o
+  commit do fechamento" no mapa e abaixo, de propósito: esta frente **não rodou suíte nenhuma** e
+  não vai inventar placar.
+
+**O que a T5 deixou para cá e onde ficou:** (i) o pedido regenerado nasce da **cotação** (o `PUT`
+do pedido anterior se perde) — letra B, e escrito no item da feature 22 e no §12.1 do design;
+(ii) `specs/modulo-compras/README.md:70` — riscada com "era verdade até a 40"; (iii) o roteiro do
+(A) como roteiro manual — no guia (frente do usuário).
+
 ---
 
 ## Self-review
@@ -1213,9 +1255,291 @@ Os 7 artefatos + planos: novidades (seção da 41; letras **A18** (PRAGMAs pós-
 
 ---
 
-## Retro de 4 números (preencher na T6)
+## Retro de 4 números (preenchida na T6)
 
-1. **Rodadas de correção até verde:** …
-2. **Achados da revisão (Fase 2 + Fase 5):** …
-3. **Paralelismo:** T2/T3/T4 em três worktrees — conflitos? A interrupção por limite de sessão da 40 repetiu?
-4. **Defeito escapado:** *(em branco — a Etapa 42 preenche olhando para trás.)*
+*(Preenchida em 2026-09-22, lendo `.superpowers/sdd/2026-09-22-crm-etapa41-cotacao-itens-pedido/progress.md`,
+`etapa41-fase2-revisao.md`, `final-review-rn.md`, `final-review-ux.md`, `fix-wave-brief.md`,
+`fix-wave-report-servidor.md` e `fix-wave-report-cliente.md` — não de memória.)*
+
+1. **Rodadas de correção até verde:** **T1–T5: zero rodadas de correção** — cada task fechou verde no
+   próprio commit, com as sabotagens derrubando o cenário previsto (e, em seis casos, um a mais: T1
+   sab. 4 derrubou (r) além de (q); T2 sab. 4 derrubou (9) além de (1) e sab. 5 derrubou Itens (7) e
+   Gerar (7)/(10) além de Itens (8)/(10); T3 sab. 4 derrubou (m) além de (l)). **Reviews por task:
+   nenhuma** — como na 40, as duas lentes da Fase 5 cobriram `183ac38..e2996ff` (RN) e `3032f5a` (UX)
+   de uma vez. **Fase 5: UMA onda de correção, 6 itens, 6 commits** (`a09dfe8 abb46f4 327d33f
+   d6a1beb 83a5d71 ffba9b9` — o F3 e o F3b no mesmo commit; o F2 em arquivo próprio). Duas sabotagens
+   da onda **não derrubaram nada e viraram achado**: a guarda por `useState` do F4 (trocada por
+   `useRef`) e o `formatCurrency` no `<p>` do F6 (já arredondava — mantido por coerência, declarado).
+   **Re-revisão da onda (2026-09-22): 0 Critical, 1 Important, 4 Minor.** O Important era uma
+   SÉTIMA corrida, mais fina que a da onda: `DELETE /cotacoes/:id` chegando algumas voltas do event
+   loop DEPOIS do `gerar` (não no mesmo tick, que era o único que o (12) exercitava) deixava pedido
+   vivo órfão em 28 de 301 janelas — o comentário do F1 afirmava cobrir essa corrida e não cobria.
+   **Fechado como F7 (`68d4173`)**: `excluirCotacao` reivindica por CAS (`status = cancelado WHERE
+   pedido_id IS NULL`) antes de apagar, e o CAS do `gerar` recusa cancelada; cenário (13) varre
+   d = 0..300 e afirma zero órfãos, caía em d=34 antes. Os 4 Minor ficaram declarados (letra G).
+   Total: **2 rodadas** para a etapa (a onda de seis + o F7) — a 39 e a 40 tiveram 1.
+2. **Achados da revisão (Fase 2 + Fase 5):** **Fase 2 (revisão fresca do plano, antes de codar):
+   1 Critical + 4 Important + 8 Minor, os 13 aplicados ao plano e ao design em `183ac38`** — o
+   Critical (T4 (k) afirmava um `data-stub` que a tela real nunca renderiza) virou prova pelo `h1`
+   e pelo `GET` por id; o I2 (beco da cotação depois de excluir o pedido) **inverteu a RN-F12**; o I3
+   criou a RN-F15; o I4 achou o `data_pedido` NULL que a Fase 0 cliente afirmava preenchido; o I1
+   (`"pedido null"` na literal) virou `rotuloPedido`. **Fase 5 (duas lentes independentes): 1
+   Critical + 4 Important + 7 Minor, todos reais, os Important reproduzidos por sonda; ruído: 0** (UX
+   1C/2I/4M sobre `3032f5a`; RN 0C/2I/3M sobre `183ac38..e2996ff`). **As lentes convergiram no achado
+   mais caro** — a corrida do `gerar-pedido` (UX C1 = RN I1 = RN M3): 6 POSTs → 6 pedidos, medido por
+   sonda nos dois relatórios. Contando por raiz: **6 achados distintos viraram onda** (F1–F6). Dos 7
+   Minor, **cinco seguem abertos e declarados** (letra G): `ALTER … pedido_id` no primeiro boot de
+   banco novo (RN M1); `.replace('  ', ' ')` no toast (UX M1); sem cenário para o aviso de item sem
+   preço e para o fallback `#id` (UX M2); lixeira visível para a convertida (UX M3); h1 da edição do
+   pedido sem o `PC-` (UX M4). Dois viraram onda (RN M2 = F3; RN M3 fechado pelo F1).
+3. **Paralelismo: TRÊS galhos em worktrees (T2 `wt-e41-t2`, T3 `wt-e41-t3`, T4 `wt-e41-t4`, junction
+   de `node_modules`) a partir de `0dad68b`, e mais dois na onda (`e41-fs`, `e41-fc`) a partir de
+   `3032f5a` — ZERO conflitos de merge** nos nove cherry-picks (T4 `84cb19c` → `bd224d2`, T3 `a80c769`
+   → `7ecf91f`, T2 `70d653d` → `11591ca`; onda `05d5740`/`ed01c91`/`385d527` → `a09dfe8`/`abb46f4`/
+   `327d33f`, `42c534f`/`1b8e102`/`b572fc3` → `d6a1beb`/`83a5d71`/`ffba9b9`), suíte inteira rodada
+   depois de cada um. A previsão do plano (conflito só por adjacência nos blocos FECHADA) foi
+   conservadora: nenhum. **O que custou, de novo, foi a sessão:** T2, T3 e T4 foram **cortadas pelo
+   limite de sessão da API logo no início** (worktrees limpas), retomadas via `SendMessage` com
+   contexto preservado — **a segunda vez seguida** (a 40 perdeu cinco agentes de uma vez pelo mesmo
+   motivo; a lição "despachar em lotes menores" escrita no handoff da 40 **não foi aplicada** — os
+   três galhos saíram juntos). O paralelismo em worktree continua barato nesta base; o gargalo
+   segue sendo a sessão.
+4. **Defeito escapado:** *(em branco de propósito — só pode ser preenchido **de fora**, por quem
+   fechar a Etapa 42 olhando para trás, com o que a Fase 0 dela achar de errado no handoff abaixo e
+   no código desta etapa. É o mesmo contrato que a 40 deixou para esta, cumprido na retro nº 4 do
+   plano da 40 neste fechamento.)*
+
+---
+
+## Onda de correção final (BASE `3032f5a`)
+
+Executada em 2026-09-22 a partir de
+`.superpowers/sdd/2026-09-22-crm-etapa41-cotacao-itens-pedido/fix-wave-brief.md`, que consolida
+`final-review-rn.md` (I1, I2, M2, M3) e `final-review-ux.md` (C1, I1, I2). **Dois executores em
+paralelo**, em worktrees (`e41-fs` servidor: F1, F2, F3+F3b; `e41-fc` cliente: F4, F5, F6), um commit
+por item, cherry-pick para o tronco (cliente primeiro, depois servidor — a ordem final no `git log`
+é `a09dfe8 abb46f4 327d33f d6a1beb 83a5d71 ffba9b9`). Relatórios completos em
+`fix-wave-report-servidor.md` e `fix-wave-report-cliente.md`.
+
+- [x] **F1 (RN I1 = UX C1 = RN M3) — a conversão não era atômica: N chamadas concorrentes criavam N
+  pedidos** — `d6a1beb` (wt `42c534f`). `gerarPedidoDaCotacao`: o `UPDATE` do vínculo ganhou `AND
+  pedido_id IS NULL` e virou a guarda (CAS); `changes === 0` → `pedidoCompraService.excluirPedido(db,
+  pedido.id)` (compensação — o perdedor nunca foi apontado, passa com FK ON) → `obterCotacao` relê (404
+  se a cotação sumiu) → 409 com o vencedor. A checagem rápida de `pedido_id != null` continua.
+  Cenários **(11)** (6 `gerar` em `Promise.all` → exatamente 1×201 + 5×409 com o `PC-` do vencedor,
+  `COUNT(pedidos_compra)` +1, `pedido_id` apontando para o único pedido, linhas = itens da cotação, 0
+  órfãos) e **(12)** (`DELETE /cotacoes/:id` × `gerar` → 0 pedidos sem cotação apontando; ramo
+  observado no harness: **200 + 404**, 5 rodadas). **Vermelho antes:** (11) `status:
+  201,201,201,201,201,201`; (12) `200 + 201` com pedido órfão. **Sabotagens:** sem o `AND pedido_id IS
+  NULL` → **(11)** cai no `deepStrictEqual` dos 6 códigos (`201 × 6`) e (12) herda os órfãos; sem a
+  compensação → **(11)** cai em *"os perdedores tem de ser COMPENSADOS (excluirPedido) — sem isso ficam
+  6 pedidos"* (`COUNT +6`) e (12) em *"cotacao apagada: nenhum pedido pode sobrar"*. **Descartado:**
+  fila em memória por id de cotação. **Declarado:** o terceiro entrelaçamento (`excluirCotacao` lê
+  NULL → `gerar` vence → `DELETE` apaga) fica fora do CAS; o (12) acusa se aparecer. Janela entre o CAS
+  perder e o `obterCotacao` reler em que o vencedor poderia ser excluído (409 sairia com `#null`) —
+  sem cenário, anotado.
+- [x] **F2 (RN I2) — a suíte não via a ordem UPDATE → DELETE em `excluirPedido`** — `83a5d71` (wt
+  `1b8e102`). Arquivo próprio **`comprasCotacaoFkProducao.api.test.js`** (3 cenários, **sem**
+  `createTestApp`): segundo `sqlite3.Database(':memory:')` com a DDL de produção **lida em tempo de
+  execução** de `index.js` (`fornecedores`, `pedidos_compra`, `cotacoes`) e `schema.js`
+  (`itens_pedido_compra`, `itens_cotacao`) por um extrator `ddlDe(arquivo, tabela)` que falha alto se a
+  marca sumir; + os dois `ALTER` reais (`pedido_id` com `REFERENCES`, `quantidade_recebida`);
+  `materiais_almoxarifado` mínima; `PRAGMA foreign_keys = ON` afirmado por `PRAGMA foreign_keys` = 1 e
+  `foreign_key_list(cotacoes)`. **Controle positivo dentro de cada cenário:** `UPDATE pedido_id = 999`
+  e `DELETE` cru têm de falhar com `SQLITE_CONSTRAINT`. (1) `excluirPedido` → `cotacoes_liberadas 1`,
+  `pedido_id` NULL, `foreign_key_check` vazio, regenerar dá PC novo; (2) `excluirCotacao` com 2 itens →
+  0 `itens_cotacao`, fk_check vazio; (3) o F1 sob FK ON — 2 `gerar` em `Promise.allSettled` → 1
+  fulfilled + 1 rejected 409, `COUNT +1`. **Sabotagens:** `UPDATE cotacoes SET pedido_id = NULL` movido
+  para **depois** do `DELETE FROM pedidos_compra` → **(1)** cai com `SQLITE_CONSTRAINT: FOREIGN KEY
+  constraint failed` **enquanto `comprasCotacaoGerarPedido` continua 12/12** (o furo I2, reproduzido);
+  sem o `DELETE FROM itens_cotacao` → **(2)** cai com `SQLITE_CONSTRAINT`; `PRAGMA foreign_keys = OFF`
+  no próprio teste → **(1)(2)(3)** caem (*"controle+ … a FK NAO vigiou (passou) — o banco deste teste
+  nao prova nada"*) — o controle do controle. **Divergências do brief:** arquivo próprio (195, não
+  194); DDL lida, não copiada; nenhuma tabela extra além do `ALTER … quantidade_recebida`; o (3) não
+  estava no brief (prova a premissa "passa com FK ON").
+- [x] **F3 (RN M2) — o cabeçalho do pedido gerado não era afirmado** + **F3b (UX I2, metade servidor)
+  — `somaItens` gravava o double cru** — `ffba9b9` (wt `b572fc3`). (1) de `comprasCotacaoGerarPedido`:
+  fixture com `observacoes: 'frete incluso E41'`, afirma `observacoes` igual, `status === 'pendente'` (o
+  DEFAULT do DDL — nada além do contrato viaja para `criarPedido`), `previsao_entrega === null`.
+  `somaItens = Math.round(reduce(...) * 100) / 100`; (2) de `comprasCotacaoItens`: POST 3 × 0,1 → `0.3`;
+  PUT 3 × 0,2 → `0.6` (era `0.6000000000000001` — sem o PUT a sabotagem "round só no criar"
+  passaria). **Vermelho antes:** *"ponto flutuante cru: 0.30000000000000004"*. **Sabotagens:**
+  `status: 'cancelado', previsao_entrega: '2020-01-01'` no payload → **(1)** cai em *"status e o DEFAULT
+  do DDL"*; sem `observacoes` → **(1)** cai em *"observacoes da cotacao vai para o pedido (RN-F07)"*; sem
+  o `Math.round` → **Itens (2)** cai em *"ponto flutuante cru"*. **Declarado:** `criarPedido` (Etapa 38)
+  continua somando cru — pedido gerado de 3 × 0,1 nasce com `pedidos_compra.valor_total` sem
+  arredondar. Letra B.
+- [x] **F4 (UX C1, metade cliente) — o botão "Gerar pedido" aceitava clique repetido em voo** —
+  `a09dfe8` (wt `05d5740`). `Compras.js`: estado `gerandoId` alimenta `disabled={gerandoId ===
+  cotacao.id}`; a guarda de saída cedo é um **`useRef`** (`gerandoRef`), `finally` volta os dois a
+  `null`. Cenário **(m)** em `Compras.test.js`: `api.post` devolve promise pendente; par de cliques no
+  mesmo `act` + terceiro clique após o re-render → `api.post` **1×**, botão `disabled`, ainda na aba;
+  resolve → toast 1× e navega (h1 + `GET /compras/pedidos/650`). **Vermelho antes:** `api.post` length 2.
+  **Sabotagens:** sem `disabled` **e** sem a guarda do ref → **(m)** `api.post` 1 → **2**; só sem
+  `disabled` → **(m)** `botao().disabled` true → **false**; só sem a guarda do ref → **(m)** 1 → **2** (par
+  no mesmo tick). **Divergência do brief, que pedia guarda por estado:** com `if (gerandoId === …)` de
+  `useState`, tirar o `if` ficava **13/13 verde** — entre dois eventos discretos o React já
+  re-renderizou e o botão está `disabled` (o jsdom nem despacha o click), e no mesmo tick o closure lê
+  `null`; um `if` que nenhuma sabotagem derruba é a classe de "trava que não trava" que o projeto
+  proíbe. Reverter = trocar `gerandoRef.current` por `gerandoId` e apagar o par de cliques do (m).
+- [x] **F5 (UX I1) — cotação convertida abria em edição livre e perdia o trabalho no Salvar** —
+  `abb46f4` (wt `ed01c91`). `CotacaoForm.js`: `convertida = c.pedido_id != null` e `pedidoGerado {id,
+  numero}` do `GET /:id`; faixa **`role="status"`** `data-testid="cotacao-convertida"` (âmbar, paleta do
+  `aviso-so-status` do pedido — não a caixa vermelha do erro) com *"Esta cotação já gerou o pedido ⟨PC⟩
+  — não pode mais ser editada"* e `<Link to="/compras/pedidos/editar/⟨id⟩">` (fallback `#id`);
+  `disabled={convertida}` em **13** controles; Salvar **não renderizado**; `handleSubmit` sai cedo.
+  Cenário **(o)** com fixture **771** (`pedido_id: 650`, `pedido_numero: 'PC-2026-650'`, 1 item): faixa +
+  `role` + literal + `href`, `alertas()` vazio, 10 controles `disabled` nomeados **e** varredura de todo
+  `[data-testid^="cotacao-"]` sem nenhum livre (controle `>= 10`), `button[type=submit]` ausente,
+  `submeter()` → `api.put`/`api.post` não chamados. **Vermelho antes:** `porTestId('cotacao-convertida')`
+  null. **Sabotagens:** sem `disabled` no `cotacao-numero` → **(o)** true → **false**; sem `if
+  (convertida) return` → **(o)** `api.put` 0 → **1**; `role="status"` → `"alert"` → **(o)** cai no `role`
+  (a primeira tentativa por `perl` acertou o **comentário** e ficou verde — refeita com âncora de
+  linha inteira); sem os `disabled` das linhas (8 ocorrências) → **(o)** `cotacao-qtd-item-912.disabled`
+  true → **false**. **Não entrou (declarado):** esconder a lixeira da convertida na aba (UX M3); o lápis
+  continua e agora abre a tela travada — o "ver" proposto no I1.
+- [x] **F6 (UX I2, metade cliente) — ponto flutuante no total travado** — `327d33f` (wt `385d527`).
+  `arredondar2 = Math.round((Number(v)||0)*100)/100`; `totalArredondado` no `value` do input travado e
+  no `<p>Total</p>`; **e** no `setValorTotal` da carga do `GET /:id` (cotações gravadas **antes** do F3b
+  continuam no banco com o ruído — sem o round na carga, remover a última linha devolvia o campo
+  digitável com `0.30000000000000004` e `step="0.01"` bloquearia o submit no navegador). Cenário
+  **(p)**: 912 × 3 × 0,1 → controle positivo `String(3*0.1) === '0.30000000000000004'`, `cotacao-valor.value
+  === '0.3'`, `Total: R$ 0,30`, texto sem o ruído; remover → `readOnly` false e `'7'` (o digitado volta);
+  fixture **773** (`valor_total: 0.30000000000000004`, 1 item) → travado `'0.3'`, removido → digitável
+  `'0.3'`. **Vermelho antes:** `'0.30000000000000004'`. **Sabotagens:** `String(total)` no `value` → **(p)**
+  `'0.3'` → `'0.30000000000000004'`; carga do GET sem `arredondar2` → **(p)** edição da 773 cai;
+  `arredondar2` vira identidade → **(p)** cai; `formatCurrency(total)` no `<p>` → **16/16 verde** —
+  `formatCurrency` já arredonda; a troca no `<p>` é coerência, declarada na mensagem do commit.
+
+**Verificação da onda** (executores nas worktrees): servidor `test:api` **195/195** (194 +
+`comprasCotacaoFkProducao`), almoxarifado **42/0**, `comprasCotacaoGerarPedido` 10 → **12**,
+suítes vizinhas 3/10/3/19/13 verdes; cliente `Compras.test.js` **13/13**, `CotacaoForm.test.js`
+**16/16**, suíte inteira **51 suítes / 781** (778 + 3), build **Compiled successfully**; CR = 0 em
+todos os arquivos tocados. **No tronco, medidos pelo integrador em `68d4173`** (esta frente não rodou os cinco comandos e não
+copia os números das worktrees como se fossem do tronco): `test:api` **195/195 arquivos**;
+almoxarifado **42/0**; validation **4/0**; safealter **3/0**; sqlite **5/0**; client **51 suítes /
+781 testes**; build **Compiled successfully**.
+
+**Re-revisão da onda (2026-09-22): 0C · 1I · 4M — o Important virou o F7 `68d4173` (CAS na
+exclusão, cenário (13) varrendo 301 janelas); relatório em `fix-wave-rereview.md`.** (Uma lente
+fresca sobre `3032f5a..ffba9b9`,
+com as sondas originais — `sonda3_corrida.js`, `sonda1b_fk_prod.js`, `sonda-e41-duplo-clique.js`,
+`sonda-e41-ux.test.js` P1/P2/P4 — rodadas contra o código novo, e efeito colateral do conserto
+procurado: a compensação do F1 chamando `excluirPedido` com `solicitacoes_liberadas`/`cotacoes_liberadas`
+0; o `useRef` do F4 não resetando em erro; o `arredondar2` na carga do F6 alterando o `PUT` sem itens
+de uma cotação com 3 casas gravadas).
+
+**Para as letras B e G (o escritor de usuário recebeu o texto):** B — CAS + compensação em vez de
+fila (F1); `criarPedido` segue somando cru (F3b); `useRef` em vez de estado na guarda (F4); faixa
+`role="status"` âmbar em vez da caixa de erro (F5); round também na carga do `GET /:id` (F6); o
+pedido regenerado nasce da cotação (T5); "Gerar pedido" sem `window.confirm` (Fase 2 M6). G — o
+entrelaçamento `excluirCotacao` × `gerar` fora do CAS; o `ALTER … pedido_id` no primeiro boot de banco
+novo (RN M1); `.replace('  ', ' ')` no toast (UX M1); lixeira visível para a convertida (UX M3); h1 da
+edição do pedido sem o `PC-` (UX M4); `criarCotacao` pelo serviço sem schema (Fase 2 M4); a frase
+morta de `comprasPedidoEditarExcluir:93`.
+
+---
+
+## Próxima tarefa detalhada — Etapa 42: o recebimento passa a FECHAR o pedido (status automático + alerta de pedido parcial) — medir antes
+
+**Por que esta, e não outra** (pela ordem do `CLAUDE.md`, sem consultar ninguém):
+
+1. **O "falta para 🟢" da feature 22 nomeado neste fechamento é *comparar cotações*** — e ele exige
+   um "processo de cotação" com N fornecedores por material, entidade que **não existe** e que o
+   design da 41 (D1) descartou explicitamente. Não é alcançável numa etapa sem inventar modelo de
+   dados sem demanda; **descartado** como Etapa 42 (fica declarado no mapa).
+2. **As três fatias do Compras nomeadas na 38/39/40 foram entregues** (pedido, prazo, telas,
+   cotação→pedido). Pelo mapa `specs/modulo-almoxarifado/README.md`, as candidatas 🟡 medidas nos
+   fechamentos anteriores: **05** separação/picking (3 de 13 — lista de separação como entidade, rota
+   de picking, tela de fila: escopo grande, entidade nova), **06** aprovações (o motor configurável
+   está adiado "para demanda real" por decisão do usuário — só sobram dois defeitos pequenos:
+   `limite_aprovacao_auto` morto e o lembrete que não alcança `AGUARDANDO_APROVACAO_VALOR`), **08**
+   recebimento, **21** relatórios (previsto × realizado depende da 22 — bloqueado), **23**
+   perfis/auditoria (exportação XLSX e retenção do log — valor baixo).
+3. **Escolha: feature 08, o item (5) do seu "falta para 🟢", nomeado com dono pela Etapa 39:** *o
+   `processar` da 37 gravar `status = 'recebido'` no pedido quando a situação derivada vira
+   `RECEBIDO`* — e, na mesma etapa, o **follow-up da feature 20** que depende do mesmo dado:
+   exportar `derivarRecebimentoDoPedido` (ou uma fonte sem `LIMIT`) para o alerta **pedido-parcial**
+   existir. **Por quê é a de maior valor alcançável:** as quatro etapas seguidas no Compras
+   construíram a cadeia cotação → pedido → recebimento → custo médio (a sonda e2e da lente RN desta
+   etapa a percorreu inteira: `custo_medio 12.5`, aux `PARCIAL, saldo 4`), e a cadeia termina num
+   pedido que **continua "Atrasado" para sempre** na aba Compras depois de fisicamente recebido, até
+   o comprador lembrar de usar o `PATCH` da 39 à mão — o defeito que a 39 provou por teste e resolveu
+   com uma porta manual, deixando o automático nomeado. É pequeno (uma escrita não-fatal ao lado do
+   acumulador da 37, uma exportação, uma entrada no registro de alertas), tem dado real (o pedido
+   gerado da cotação da 41 é recebível por clique) e fecha o último elo aberto da cadeia que as
+   quatro etapas de Compras abriram. **Descartado:** divergência formal numerada (item (3) da 08 —
+   tabela e fluxo próprios, escopo de etapa inteira sem esse elo fechado); conferência física
+   estruturada (item (2)).
+
+**Contrato que a 42 consome (medido em `ffba9b9` neste fechamento — a Fase 0 tem de reconta linhas):**
+
+- **O acumulador da 37** — `receiptService.js:1260-1270` (`darEntradaEstoque`, dentro do claim
+  `entrada_estoque_em IS NULL`, depois de `entrouFisicamente = true`, **não-fatal** com `warn`):
+  `UPDATE itens_pedido_compra SET quantidade_recebida = COALESCE(quantidade_recebida, 0) + ? WHERE id
+  = ?` por `item.pedido_item_id`. Roda nos **dois** caminhos de entrada física (`processarNota` e
+  `aprovarRecebimento`). É **ali**, e só ali, que o saldo do pedido muda — o gancho do status entra ao
+  lado, com a mesma não-fatalidade e o mesmo motivo (um `throw` travaria a nota com o estoque já
+  creditado).
+- **A régua de situação** — `derivarRecebimentoDoPedido(quantidadePedida, quantidadeRecebida)`,
+  `receiptService.js:1463`, **não exportada** (`module.exports :1640`), usada em `:1530` (aux, por
+  pedido com `SUM`) e `:1579` (itens do pedido). Devolve `situacao_recebimento`
+  (`ABERTO`/`PARCIAL`/`RECEBIDO`) e `saldo_pendente` clampado. A 42 **exporta** e reusa — não copia
+  (mesma regra do `resolverItens` da 41: um dono por régua).
+- **O enum e a régua de atraso do core** — `STATUS_PEDIDO_COMPRA = ['pendente', 'aprovado',
+  'rejeitado', 'em_analise', 'enviado', 'recebido', 'cancelado']` (`schemas.js:60`);
+  `STATUS_PEDIDO_FORA_DO_ATRASO = ['recebido', 'cancelado', 'rejeitado']` e `derivarAtraso`
+  (`pedidoCompraService.js:748-761`) — gravar `'recebido'` **é** o que tira o pedido do atraso na
+  aba e do alerta `PEDIDO_COMPRA_ATRASADO` (`alertRegistry.js:462`, que importa a régua por require
+  lazy). Nenhuma máquina de estados: o `PATCH …/status` da 39 aceita qualquer dos 7, e o gancho
+  automático **não** pode inventar uma.
+- **A porta manual que já existe** — `PATCH /api/compras/pedidos/:id/status` (`19ebf7d`) e a guarda
+  de duas pernas do `PUT`/`DELETE` (`6c21e89`): o automático escreve **só** `status` (como o
+  `PATCH`), nunca passa pelo `PUT` (que faz `DELETE`+`INSERT` das linhas e zeraria
+  `quantidade_recebida`).
+- **O registro de alertas** — `alertRegistry.js` (18 entradas; a de `PEDIDO_COMPRA_ATRASADO` é o
+  molde: colunas **projetadas**, nunca `p.*`; dedupe com o dado que muda; prefixo `[Compras]`;
+  require lazy do módulo core porque o ciclo está a um require de fechar). A fonte de hoje para
+  "parcial" (`listarPedidosCompraAux`) tem `LIMIT 50` e não devolve `previsao_entrega` — a spec 20
+  registra isso como o bloqueio real.
+- **A integração que já existe e a 42 estende** — `recebimentoContraPedidoIntegracao.api.test.js`
+  (`97726c3`) e `comprasCotacaoPedidoIntegracao.api.test.js` (`dae1cee`): a 42 pode partir de um
+  pedido **gerado da cotação** e receber até `RECEBIDO`, afirmando `status = 'recebido'` na lista de
+  Compras e `atrasado = 0` com `previsao_entrega` no passado.
+
+**Pontos de atenção (medir na Fase 0 antes de prometer):**
+
+- **Onde está a fronteira de "recebido":** `RECEBIDO` derivado é `soma_recebida >= total_pedido` por
+  pedido — mas o acumulador soma **por linha** e o `processar` percorre item a item. O gancho tem de
+  decidir **depois** do laço (uma leitura do `SUM` ao fim de `darEntradaEstoque`), não por item, senão
+  um pedido de 2 linhas vira `recebido` na primeira. E o `aprovarRecebimento` (segundo caminho)
+  precisa do mesmo gancho — a 37 já pagou por esquecer esse caminho uma vez.
+- **Reversibilidade:** o pedido que ficou `recebido` e depois tem um recebimento **estornado**/
+  reprocessado — o acumulador não desfaz (é `+ ?` idempotente por claim). Decidir se o gancho só
+  **sobe** para `recebido` (nunca desce) e escrever na letra B; o `PATCH` manual continua sendo a
+  saída para o resto.
+- **Não sobrescrever `cancelado`/`rejeitado`:** se o comprador cancelou o pedido e a nota chega
+  mesmo assim (o aux `?pendentes=1` **não filtra `status`** — G da 38), o gancho não pode ressuscitar
+  o pedido para `recebido` sem decisão. Caminho reversível: só grava quando o status atual ∉
+  {`cancelado`, `rejeitado`}, e registra em B.
+- **Auditoria:** a mudança automática de status é escrita em tabela **core** por um ato do
+  almoxarifado — o `PATCH` da 39 audita? (medir `comprasPedidoStatus.api.test.js`). Se audita, o
+  gancho tem de deixar o mesmo rastro com autor = quem processou a nota.
+- **O alerta pedido-parcial precisa de uma data para o dedupe** (a lição do `PEDIDO_COMPRA_ATRASADO`:
+  só com o id o pedido era calado para sempre). Candidata: `pedido-parcial-<id>-<saldo_pendente>` ou
+  a data do último recebimento — medir o que a régua devolve.
+- **Contrato de não-toque a preservar:** `receiptService.js` é do almoxarifado e as três etapas de
+  Compras (38, 39, 40) o proibiram por contrato; a 42 **toca** (é a feature 08), mas com o mesmo
+  molde do acumulador: dentro do claim, depois da entrada física, não-fatal, com a tabela de compras
+  podendo não existir (`sqlite_master` guard, como `gerarContaPagar`).
+- **Suítes que têm de continuar verdes (números de partida, a confirmar na Fase 0 com o commit do
+  fechamento):** `recebimentoContraPedidoIntegracao`, `comprasPedidoAtraso` (11),
+  `comprasPedidoAtrasoIntegracao` (blocos D / 9a / 9c — **afirmam que receber não muda o atraso
+  sozinho**: a 42 inverte isso de propósito e tem de reescrever esses cenários **dizendo que estavam
+  certos até a 41**), `comprasPedidoStatus` (7), `alertaPedidoAtrasado` (10),
+  `comprasCotacaoPedidoIntegracao` (3), `comprasCotacaoFkProducao` (3).
+- **Despachar em lotes menores:** duas etapas seguidas perderam agentes pelo limite de sessão ao
+  despachar três ou mais de uma vez. Servidor (gancho + exportação + alerta) e cliente (badge
+  "Recebido" e o alerta na central, se houver) são disjuntos — dois galhos, não mais.
+- **Retro nº 4 desta etapa (defeito escapado)** é preenchida pela Fase 0 da 42 olhando para trás —
+  o que a 41 deixou errado no handoff acima e no código.

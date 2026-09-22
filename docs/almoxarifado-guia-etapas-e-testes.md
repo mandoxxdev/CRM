@@ -2,14 +2,58 @@
 
 > Atualizado em 2026-09-22 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 40) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38, 39 e 40 também não são do módulo** — as três são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), e a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 41) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome.
 
-> ## Onde o desenvolvimento está — 2026-09-22 (Etapa 40 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-09-22 (Etapa 41 ENTREGUE · modo contínuo pelo mapa)
 >
-> **Etapas 1 a 20 e 22 a 40 completas; a Etapa 21 foi entregue no NÚCLEO do CRM e as 38, 39 e 40 no
-> módulo COMPRAS.** A **Etapa 40 (Fornecedores e Cotações ganham tela)** fechou em 2026-09-21, com
-> uma onda de correção da revisão final; a documentação do fechamento foi completada em 2026-09-22.
-> **Próxima etapa: Etapa 41 — a cotação ganha itens e vira pedido de compra** (módulo Compras; o "falta para 🟢" alcançável da feature 22). O desenho inicial está no fim do plano da 40 (`docs/superpowers/plans/2026-09-21-crm-etapa40-fornecedores-cotacoes.md`, seção "Próxima tarefa detalhada — Etapa 41").
+> **Etapas 1 a 20 e 22 a 41 completas; a Etapa 21 foi entregue no NÚCLEO do CRM e as 38 a 41 no
+> módulo COMPRAS.** A **Etapa 41 (a cotação ganha itens e vira pedido de compra)** fechou em
+> 2026-09-22, com uma onda de correção da revisão final (seis commits).
+> **Próxima etapa: Etapa 42 — o recebimento fecha o pedido** (quando tudo o que o pedido pediu
+> chega, o status vira **Recebido** sozinho e o selo de atraso some sem ninguém clicar no lápis). É
+> o último elo aberto da cadeia cotação → pedido → recebimento; o desenho inicial está no fim do
+> plano da 41 (`docs/superpowers/plans/2026-09-22-crm-etapa41-cotacao-itens-pedido.md`, seção
+> "Próxima tarefa detalhada — Etapa 42").
+>
+> **O problema era que a cotação não dizia o que foi cotado, e aprovar não fazia nada.** A cotação
+> da Etapa 40 era só cabeçalho: *"R$ 1.500,00 da Aços Vale"* — qual material, quanto e a que preço
+> ficavam no PDF do fornecedor. Aprovada, o comprador **redigitava o pedido** inteiro em *Novo
+> Pedido*. E a lixeira da cotação apagava o registro "cru": no dia em que existisse um item
+> pendurado nela, daria erro genérico em produção.
+>
+> **O que a 41 mudou:**
+> - **Compras → Cotações → Nova Cotação** ganhou o bloco **"Itens da cotação"**: busca de material
+>   (*"Buscar material"*), botão **+** por material, tabela com **Quantidade**, **Valor unitário** e
+>   **Subtotal**, e **"Total: R$ …"** somado. Com pelo menos uma linha, o campo **Valor total** fica
+>   **cinza e travado** com a soma; sem linha, continua digitável como na 40.
+> - **A aba Cotações ganhou a coluna "Pedido"** (`-` ou o `PC-…` clicável) e o botão **"Gerar
+>   pedido"** (ícone de carrinho), só na cotação sem pedido com status *Em Análise* ou *Aprovado*.
+>   Clique → *"Pedido PC-… gerado da cotação ⟨número⟩"* e a tela **"Editar pedido de compra"**
+>   abre com fornecedor, linhas e preços; a cotação vira **Aprovado** e o carrinho **some**.
+> - **A mesma cotação não gera dois pedidos** — nem com duplo clique nem com duas abas: um vence, os
+>   outros recebem *"Cotação ⟨número⟩ já gerou o pedido PC-…"* e nada sobra.
+> - **A cotação convertida abre travada**: faixa âmbar *"Esta cotação já gerou o pedido PC-… — não
+>   pode mais ser editada"* (o `PC-…` é link), campos desabilitados, sem Salvar.
+> - **Fornecedor inativo não vira pedido**: *"Fornecedor inativo — reative-o em Compras →
+>   Fornecedores antes de gerar o pedido"*. Cotação sem itens: *"cotação sem itens não pode gerar
+>   pedido"*.
+> - **Lixeira da cotação**: com itens, apaga tudo junto (*"Item excluído com sucesso"*); convertida,
+>   recusa (*"Cotação ⟨número⟩ já gerou o pedido PC-… — não pode ser excluída"*). **Lixeira do
+>   pedido gerado libera a cotação** — o `-` e o carrinho voltam.
+> - **"Exportar Excel"** da aba Cotações ganhou a coluna **Pedido** no fim.
+>
+> **⚠️ Três coisas antes de apresentar a 41:**
+> 1. **Rode a consulta A18 do documento de novidades DEPOIS do primeiro boot** — ela confere as três
+>    tabelas (9 / 8 / 11 colunas). Num banco **novo**, a coluna do vínculo só entra no **segundo**
+>    boot (**G57**): se as cotações derem erro logo depois de criar o banco, reinicie o servidor.
+> 2. **Excluir o pedido gerado LIBERA a cotação** (**B153**) — a coluna *Pedido* volta a `-` e o
+>    carrinho reaparece; o status continua *Aprovado* (**G60**). Gerar de novo cria um `PC-…` **novo**
+>    a partir das linhas **da cotação** — o que foi editado no pedido anterior se perde (**B159**).
+> 3. **Inativo é recusado só na conversão.** Cotação e pedido feito à mão para fornecedor inativo
+>    continuam aceitos (**B127** da 40, ainda aberta); "Gerar pedido" recusa (**B148**).
+>
+> **Antes disto: a Etapa 40 (Fornecedores e Cotações ganham tela)** fechou em 2026-09-21, com uma
+> onda de correção da revisão final; a documentação do fechamento foi completada em 2026-09-22.
 >
 > **O problema era que quatro botões do Compras não faziam nada.** A tela de Compras tem três abas
 > — Fornecedores, Pedidos de Compra e Cotações. Desde a 38 a aba Pedidos tem formulário; nas outras
@@ -4747,6 +4791,152 @@ que ele não tinha como repetir com sucesso garantido.
 - **Número de série de material** — continua sendo **digitado pelo operador** e de propósito não
   passa por este gerador. Retentar com outro número gravaria algo que ninguém digitou.
 - **Números de outros módulos do CRM** — a varredura foi do almoxarifado.
+
+---
+
+## Etapa 41 — A cotação ganha itens e vira pedido de compra (ENTREGUE — 2026-09-22)
+
+**O que mudou, em uma frase:** a cotação de compra passou a ter **linhas de material** (material do
+catálogo, quantidade, preço) com o **total somado sozinho**, e a aba Cotações ganhou o botão
+**"Gerar pedido"**, que cria o pedido de compra no servidor a partir da cotação e abre a edição
+dele — a mesma cotação não gera dois pedidos, a cotação convertida abre travada, e excluir o
+pedido libera a cotação.
+
+**Esta etapa é do módulo Compras**, como a 38, a 39 e a 40. **Todas as telas deste roteiro são do
+módulo Compras** (menu *Compras*), com uma única ida ao Almoxarifado, opcional, para ver o pedido
+gerado no Recebimento.
+
+O problema era que a cotação da Etapa 40 era só cabeçalho: *"R$ 1.500,00 da Aços Vale"* — o que foi
+cotado (material, quantidade, preço) ficava no PDF do fornecedor, e a cotação do CRM não servia para
+conferir na entrega nem para comparar. Aprovada a cotação, o comprador **redigitava o pedido** em
+*Novo Pedido*: fornecedor, cada material pela busca, quantidade e preço. E havia uma armadilha
+escondida: a lixeira da cotação apagava o registro "cru", e **no dia em que existisse um item
+pendurado**, responderia erro genérico em produção — o mesmo caso que a 38 fechou para o pedido.
+
+### Onde se percebe cada mudança
+
+| Tela | Antes | Agora |
+|---|---|---|
+| **Compras → Cotações → "Nova Cotação"** | Só cabeçalho | Cabeçalho **+ "Itens da cotação"**: busca (*"Buscar material"*), **+** por material (*"Adicionar à cotação"*), tabela **Código · Descrição · Unidade · Quantidade · Valor unitário · Subtotal · Ações**, **"Total: R$ …"** |
+| **Campo "Valor total"** | Sempre digitado | Com linha: **cinza, travado, com a soma** (duas casas). Sem linha: digitável, como antes |
+| **Lápis da aba Cotações** | Abria o cabeçalho | Abre cabeçalho **e linhas**; salvar substitui as linhas pelo que está na tela |
+| **Coluna "Pedido"** (entre Status e Ações) | Não existia | `-` sem pedido; **`PC-…` clicável** depois de gerar |
+| **Botão "Gerar pedido"** (carrinho na linha) | Não existia | Só na cotação **sem pedido** com status *Em Análise* ou *Aprovado*. Clique → *"Pedido PC-… gerado da cotação ⟨número⟩"* → **"Editar pedido de compra"** com fornecedor, linhas e preços; a cotação vira **Aprovado** e o carrinho **some** |
+| **Segundo "Gerar pedido"** | — | Recusado: *"Cotação ⟨número⟩ já gerou o pedido PC-…"* — inclusive sob duplo clique (o botão fica desabilitado enquanto o primeiro está em voo) |
+| **Lápis de cotação convertida** | — | Tela **travada**: faixa âmbar *"Esta cotação já gerou o pedido PC-… — não pode mais ser editada"* (o `PC-…` é link), sem botão Salvar |
+| **"Gerar pedido" sem itens / fornecedor inativo** | — | *"cotação sem itens não pode gerar pedido"* / *"Fornecedor inativo — reative-o em Compras → Fornecedores antes de gerar o pedido"* (aviso vermelho, sem sair da lista) |
+| **Lixeira de cotação com itens** | Erro genérico em produção | *"Item excluído com sucesso"* — os itens vão junto |
+| **Lixeira de cotação convertida** | — | *"Cotação ⟨número⟩ já gerou o pedido PC-… — não pode ser excluída"* |
+| **Lixeira do pedido gerado** | — | Apaga o pedido **e libera a cotação**: `-` e carrinho de volta |
+| **"Exportar Excel" da aba Cotações** | 6 colunas | As mesmas 6 **+ "Pedido"** no fim |
+
+### Roteiro de teste manual
+
+**Nada aqui usa SQL.** Você precisa de um usuário com acesso ao **módulo Compras**; para o passo 12,
+também ao **Almoxarifado**. Precisa existir pelo menos **um fornecedor ativo** (crie pela Etapa 40
+se não houver) e **dois materiais** no cadastro do almoxarifado.
+
+**A cotação com itens**
+
+1. Entre em **Compras → Cotações** → **"Nova Cotação"**. Preencha *Número* = **COT-TESTE-41**,
+   escolha o fornecedor, e digite **999** em *Valor total* (é para provar que ele será ignorado).
+2. Desça até **"Itens da cotação"**. Digite parte do código ou da descrição de um material e clique
+   em **"Buscar material"** (ou **Enter** no campo — a busca é ato seu, não da digitação) → a lista de
+   materiais aparece com um **+** por linha. Clique no **+** → a linha entra na tabela com
+   **quantidade 1** e **valor unitário vazio**, e aparece o aviso âmbar *"Item sem preço entra na
+   cotação com valor unitário 0."*.
+3. Troque a quantidade para **2** e o valor unitário para **10** → o aviso some, *Subtotal* mostra
+   **R$ 20,00**, **"Total: R$ 20,00"**, e o campo *Valor total* lá em cima ficou **cinza, travado, com
+   20** — o 999 sumiu. Busque um segundo material, **+**, quantidade **1**, valor **5** → Total
+   **R$ 25,00** e o campo mostra **25**.
+4. **A recusa do servidor chega à faixa.** Apague a quantidade da segunda linha (deixe vazia) e clique
+   em **Salvar cotação** → faixa vermelha **"Dados inválidos — itens.1.quantidade: quantidade do item
+   da cotação deve ser um número maior que zero"** (o `1` é a posição da linha: a primeira seria
+   `itens.0`). Volte a quantidade para **1**.
+5. **Salvar cotação** → *"Cotação salva"*. Na lista: **R$ 25,00**, status *em_analise*, coluna
+   **Pedido** = `-`, e na linha o ícone de **carrinho** (*"Gerar pedido"*) ao lado do lápis e da
+   lixeira.
+6. **O lápis traz as linhas.** Lápis da COT-TESTE-41 → as duas linhas estão lá, sem nenhuma busca;
+   *Valor total* travado com 25. Remova a segunda linha (lixeira da linha) → Total **R$ 20,00**.
+   Remova a primeira também → o campo *Valor total* volta a ser **digitável, com o 999** que você
+   tinha digitado no passo 1 (o digitado não se perde enquanto há linhas — ele só não vale). Clique
+   em **"Voltar para cotações"** sem salvar.
+
+**Gerar o pedido**
+
+7. Na linha da COT-TESTE-41, clique no **carrinho** → aviso verde **"Pedido PC-… gerado da cotação
+   COT-TESTE-41"** e a tela **"Editar pedido de compra"** abre: fornecedor da cotação, as **duas
+   linhas** com código, descrição, unidade, quantidade e valor unitário, **Total: R$ 25,00**, *Data do
+   pedido* = **hoje**, *Previsão de entrega* **vazia**, *Status* **Pendente**. Anote o número `PC-…`.
+   Preencha uma previsão e **Salvar** (ou só volte — o pedido já existe de qualquer jeito).
+8. **Compras → Cotações** → a linha da COT-TESTE-41 mostra o **`PC-…`** na coluna *Pedido*
+   (clicável: abre a mesma edição do pedido), o status virou **aprovado**, e o **carrinho sumiu** —
+   só lápis e lixeira.
+9. **A cotação convertida abre travada.** Lápis → a faixa âmbar **"Esta cotação já gerou o pedido
+   PC-… — não pode mais ser editada"** com o `PC-…` em link; todos os campos e o bloco de itens
+   desabilitados; **não há** botão *Salvar cotação*. Clique no link → abre o pedido. Volte.
+10. **Excluir a convertida é recusado.** Lixeira da COT-TESTE-41 → *"Tem certeza que deseja excluir
+    este item?"* → OK → aviso vermelho **"Cotação COT-TESTE-41 já gerou o pedido PC-… — não pode ser
+    excluída"**, e a linha continua lá.
+11. **As duas recusas do "Gerar pedido".** **"Nova Cotação"** → *Número* **COT-TESTE-41-B**, mesmo
+    fornecedor, **sem nenhuma linha**, *Valor total* **50** → salvar. Na lista o carrinho **aparece**
+    (a lista não sabe que não há itens); clique → aviso vermelho **"cotação sem itens não pode gerar
+    pedido"**, nada muda. Agora **Compras → Fornecedores → lápis** desse fornecedor → *Status*
+    **Inativo** → salvar. Volte em **Cotações**, carrinho da COT-TESTE-41-B → **"Fornecedor inativo —
+    reative-o em Compras → Fornecedores antes de gerar o pedido"**. Reative o fornecedor.
+12. *(Opcional, Almoxarifado.)* **Almoxarifado → Recebimentos → Novo Recebimento → "Por Pedido de
+    Compra"** → o `PC-…` do passo 7 está na lista, com as duas linhas e **"Saldo pendente"** cheio
+    (2 e 1). É o pedido normal da Etapa 37 — receber contra ele leva o **preço da cotação** para o
+    custo médio. Não precisa concluir o recebimento (se concluir, o pedido deixa de ser excluível e o
+    passo 13 não funciona — é a regra da 38).
+
+**Excluir o pedido libera a cotação**
+
+13. **Compras → Pedidos de Compra** → lixeira do `PC-…` → OK → *"Item excluído com sucesso"*.
+14. **Compras → Cotações** → a COT-TESTE-41 voltou a `-` na coluna *Pedido*, o **carrinho
+    reapareceu**, e o status **continua aprovado** (o rastro fica — é decisão, **G60**). Lápis → a
+    tela abre **livre** de novo, com as duas linhas.
+15. *(Opcional.)* Carrinho de novo → um **`PC-…` diferente** nasce, com as linhas **da cotação** (não
+    com a previsão que você tinha preenchido no pedido anterior — **B159**). Exclua esse pedido também
+    pela aba Pedidos.
+16. **A lixeira leva os itens.** Lixeira da COT-TESTE-41 (agora sem pedido) → *"Item excluído com
+    sucesso"*, a linha some — e os dois itens foram junto (não há como vê-los pela tela: a prova é que
+    nada dá erro, onde antes daria). Apague a COT-TESTE-41-B também.
+17. *(Opcional.)* **"Exportar Excel"** na aba Cotações antes de apagar → a planilha tem, no fim, a
+    coluna **Pedido** com o `PC-…` das cotações convertidas e vazio nas outras.
+
+### O que esperar no dia a dia
+
+- **Com linhas, o total é sempre a soma.** Não há campo de desconto: um desconto do fornecedor entra
+  no preço unitário das linhas. Sem linha nenhuma, o campo é digitado (o "R$ 1.500 o lote").
+- **"Gerar pedido" grava o pedido na hora.** Fechar a tela de edição sem salvar não desfaz nada — o
+  pedido existe, com previsão vazia. Desfazer é a lixeira do pedido.
+- **Gerar é aprovar.** A cotação vira *Aprovado* sozinha ao gerar; *Rejeitado* e *Cancelado* não
+  têm carrinho.
+- **A cotação convertida não se edita.** Para corrigir, exclua o pedido (libera) e edite.
+- **Excluir o pedido libera a cotação, e o status continua Aprovado.** Gerar de novo cria um número
+  novo a partir das linhas da cotação.
+- **Inativo bloqueia só a conversão.** Cotação e pedido feito à mão para fornecedor inativo
+  continuam aceitos (decisão **B127** da 40, aberta).
+- **Duplo clique não cria dois pedidos** — nem em duas abas. Se acontecer de dois cliques chegarem
+  juntos, o segundo mostra *"Cotação … já gerou o pedido PC-…"* e nada sobra.
+- **A lixeira da cotação convertida continua visível** e só recusa depois do clique (**G63**).
+- **Num banco recém-criado**, a coluna do vínculo só entra no segundo boot (**G57**): se as
+  cotações derem erro logo após criar o banco, reinicie. Em produção não se aplica; a consulta
+  **A18** prova.
+
+### O que a Etapa 41 NÃO cobre
+
+- **Comparar cotações** de fornecedores diferentes para o mesmo material (**B141**).
+- **Preço puxado da lista de itens do fornecedor homologado** — aquela lista é texto livre.
+- **Status "Convertida"** — o vínculo é a coluna *Pedido*; a cotação fica *Aprovado* (**B146**).
+- **"Novo pedido" pré-preenchido pela cotação sem gravar** (**B145**).
+- **Item de cotação sem material do catálogo.**
+- **Recebimento olhando a cotação** — continua contra o pedido.
+- **O total do pedido gerado com duas casas** — só a cotação arredonda; o pedido soma cru, invisível
+  na tela (**B158**).
+- **Confirmação no "Gerar pedido"** (**B155**) e **esconder a lixeira da convertida** (**G63**).
+- **Perfis no módulo Compras**: quem abre o módulo faz tudo dentro dele.
 
 ---
 
