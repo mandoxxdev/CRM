@@ -137,7 +137,7 @@ nenhum de código; o **plano** (blocos FECHADA) pode conflitar por adjacência �
 - Consumes: `dataIsoOpcional`, `textoOpcional`, `CotacaoSchema` existentes; `resolverItens` (`pedidoCompraService.js:290-309`).
 - Produces: os exports listados em "Contratos"; a tabela `itens_cotacao` em todo `createTestApp()`; a coluna `pedido_id` no stub e em produção.
 
-- [ ] **Step 1: escrever (p)–(s) e ver vermelho** — em `comprasSchemasFornecedorCotacao.api.test.js`, após o (o):
+- [x] **Step 1: escrever (p)–(s) e ver vermelho** — em `comprasSchemasFornecedorCotacao.api.test.js`, após o (o):
 
 ```js
   await test('(p) RN-F02 itens ausente -> undefined; [] passa; item minimo passa com valor_unitario undefined', () => {
@@ -181,7 +181,7 @@ nenhum de código; o **plano** (blocos FECHADA) pode conflitar por adjacência �
 
 Rodar: `cd server && node tests/api/comprasSchemasFornecedorCotacao.api.test.js` → (p) cai em `itens` (hoje `looseObject` deixa passar `'abc'`: (q) cai com `success`), (r)(s) caem com `undefined`.
 
-- [ ] **Step 2: `schemas.js`** — antes de `CotacaoSchema` (`:211`):
+- [x] **Step 2: `schemas.js`** — antes de `CotacaoSchema` (`:211`):
 
 ```js
 /**
@@ -210,9 +210,9 @@ para somar (medido: zero cotacao_itens no sistema)"*) → *"Era verdade ate a Et
 `itens_cotacao`: com itens, `valor_total` e DERIVADO no servico e o do payload e ignorado; sem itens,
 continua entrada (D3 da 41)."* Exportar os 5 nomes.
 
-- [ ] **Step 3: `pedidoCompraService.js`** — acrescentar `resolverItens` ao `module.exports` (com comentário: *"Etapa 41: reusada por `cotacaoService` — a frase 'Material não encontrado' tem um dono"*).
+- [x] **Step 3: `pedidoCompraService.js`** — acrescentar `resolverItens` ao `module.exports` (com comentário: *"Etapa 41: reusada por `cotacaoService` — a frase 'Material não encontrado' tem um dono"*).
 
-- [ ] **Step 4: DDL** — `schema.js`, após o `CREATE INDEX` de `:1339`:
+- [x] **Step 4: DDL** — `schema.js`, após o `CREATE INDEX` de `:1339`:
 
 ```js
   // ── Itens de cotação (Etapa 41, Task 1) ──
@@ -251,9 +251,9 @@ db.run('ALTER TABLE cotacoes ADD COLUMN pedido_id INTEGER REFERENCES pedidos_com
 
 `testApp.js:117-127`: acrescentar `pedido_id INTEGER,` antes de `created_at` (comentário: *"Etapa 41 — vínculo com o pedido gerado; sem FK como o resto do stub"*).
 
-- [ ] **Step 5: rodar** — o arquivo (**19 passou**); `comprasCotacaoRotas` (10); `comprasFornecedorCotacaoIntegracao` (3); `comprasPedidoCriar` (13); um `node -e` que abre `createTestApp()` e faz `PRAGMA table_info(itens_cotacao)` (8 colunas) e `PRAGMA table_info(cotacoes)` (11); `npm run test:api` (**191/191**).
+- [x] **Step 5: rodar** — o arquivo (**19 passou**); `comprasCotacaoRotas` (10); `comprasFornecedorCotacaoIntegracao` (3); `comprasPedidoCriar` (13); um `node -e` que abre `createTestApp()` e faz `PRAGMA table_info(itens_cotacao)` (8 colunas) e `PRAGMA table_info(cotacoes)` (11); `npm run test:api` (**191/191**).
 
-- [ ] **Step 6: sabotagens**
+- [x] **Step 6: sabotagens**
 
 | # | Sabotagem | Âncora | Cai |
 |---|---|---|---|
@@ -263,7 +263,53 @@ db.run('ALTER TABLE cotacoes ADD COLUMN pedido_id INTEGER REFERENCES pedidos_com
 | 4 | remover `itens:` de `CotacaoSchema` | 1 | **(p)** `[]` vira… passa (looseObject) — **(q)** cai: `'abc'` passa |
 | 5 | `CREATE TABLE IF NOT EXISTS itens_cotacao` sem `cotacao_id` | 1 | o `PRAGMA` do Step 5 (7 colunas) — declare que a suíte de schemas não vê a DDL; a T2 (1) é quem a exercita |
 
-- [ ] **Step 7: commit** — `git add server/services/almoxarifado/schema.js server/index.js server/tests/helpers/testApp.js server/services/compras/schemas.js server/services/compras/pedidoCompraService.js server/tests/api/comprasSchemasFornecedorCotacao.api.test.js`. Mensagem em `msg-e41-t1.txt`: por que `itens` é opcional, por que a tabela vive em `schema.js`, por que `pedido_id` toca três lugares, e o descartado (`min(1)`, `index.js`, `cotacao_id` no pedido).
+- [x] **Step 7: commit** — `git add server/services/almoxarifado/schema.js server/index.js server/tests/helpers/testApp.js server/services/compras/schemas.js server/services/compras/pedidoCompraService.js server/tests/api/comprasSchemasFornecedorCotacao.api.test.js`. Mensagem em `msg-e41-t1.txt`: por que `itens` é opcional, por que a tabela vive em `schema.js`, por que `pedido_id` toca três lugares, e o descartado (`min(1)`, `index.js`, `cotacao_id` no pedido).
+
+#### ✅ Task 1 FECHADA — `8d81cc5`
+
+**Números reais:** `comprasSchemasFornecedorCotacao` **19/19** (+4: (p)–(s); vermelho antes da implementação:
+16/19 — (q), (r), (s) caíam); `comprasCotacaoRotas` **10/10**; `comprasFornecedorCotacaoIntegracao` **3/3**;
+`comprasPedidoCriar` **13/13**; sonda `PRAGMA` via `createTestApp()`: `itens_cotacao` **8** colunas
+(`id,cotacao_id,material_id,codigo,descricao,quantidade,valor_unitario,unidade`), `cotacoes` **11** (com
+`pedido_id` entre `observacoes` e `created_at` no stub), índice `idx_itens_cotacao_cotacao` presente;
+`npm run test:api` **191/191**. CR=0 nos seis arquivos.
+
+**Sabotagens** (md5 antes = md5 pós-restauro nas cinco; âncora `grep -cF` = 1 em todas; restauro por cópia do
+scratchpad):
+
+| # | Sabotagem | Qual asserção caiu |
+|---|---|---|
+| 1 | `z.array(CotacaoItemSchema)` sem `{ error }` | **(q)** `strictEqual(msgs(r), 'itens: …')` — saiu em inglês; 18/19 |
+| 2 | `.gt(0, …)` → `.gte(0, …)` | **(r)** `quantidade 0 saiu como ""` (passou sem erro); 18/19 |
+| 3 | `QTD_ITEM_COTACAO_INVALIDA = QTD_ITEM_PEDIDO_INVALIDA` | **(s)** `notStrictEqual` da quantidade; 18/19 |
+| 4 | linha `itens:` removida de `CotacaoSchema` | **(q)** `'abc'` passou **e (r)** `material_id undefined` passou; (p) segue verde (looseObject deixa `[]` atravessar), como previsto; 17/19 |
+| 5 | DDL sem `cotacao_id` | a sonda **não chega a contar 7 colunas**: `initSchema` morre em `SQLITE_ERROR: unknown column "cotacao_id" in foreign key definition` (a FK referencia a coluna removida) — mais alto que o previsto no plano. A suíte de schemas segue **19/19**: ela não vê a DDL; a T2 (1) é quem a exercita |
+
+**Divergências plano ↔ código (o código mandou):**
+- O plano previa "(p) cai em `itens`" no vermelho. **(p) já passava antes da implementação**: `looseObject`
+  deixa `itens` atravessar intacto, e `[]`/`[{material_id, quantidade}]`/`valor_unitario undefined` são o que
+  entrou. O vermelho real da T1 foi (q), (r), (s). (s) caiu na asserção do regex `/da cotação/` (as três
+  `notStrictEqual(undefined, literal)` passam com o export ausente), não "com `undefined`".
+- Sabotagem 5: a previsão "7 colunas" pressupunha a DDL criar; com `FOREIGN KEY (cotacao_id)` intacto o
+  SQLite recusa a `CREATE TABLE` inteira. A sonda é sensível de qualquer jeito.
+- Sabotagem 4 derruba (r) além de (q) (o plano só listava (q)).
+- No stub do harness `pedido_id` entrou **antes** de `created_at` (como o plano pedia); em produção o `ALTER`
+  a põe **no fim**. Contagem igual (11); ordem posicional difere — nada no módulo lê por índice.
+- O comentário `:164-167` de `schemas.js` foi reescrito mantendo a frase antiga entre aspas e datando-a
+  ("era verdade até a Etapa 40"), em vez de trocá-la em silêncio (regra 5 do CLAUDE.md).
+
+**Posições novas de linha (para a T2 recontar antes de editar):**
+- `schemas.js`: `ITENS_COTACAO_INVALIDOS :225`, `CotacaoItemSchema :230`, `CotacaoSchema :236`, `itens: :245`,
+  `module.exports :248-281` (os 5 nomes novos ficam em `:276-280`).
+- `pedidoCompraService.js`: `resolverItens :290` (inalterada), `module.exports :1013-1042`, `resolverItens, :1041`.
+- `schema.js`: `CREATE TABLE itens_cotacao :1349-1360`, índice `:1361`; `Devoluções` desceu para `:1363`.
+- `index.js`: `CREATE TABLE cotacoes :19244`, `ALTER … pedido_id :19260-19262`; os `ALTER` de `fornecedores`
+  desceram 6 linhas (`:19275` em diante).
+- `testApp.js`: stub `cotacoes :117-129`, `pedido_id :126`; tudo abaixo desceu 1 linha.
+- `routes/compras.js` **não foi tocado**: lista `:316-343`, bloco `:345-364`, genérico `:367` seguem válidos.
+
+Scratchpad: `msg-e41-t1.txt`, `sonda-e41-t1.js` (a sonda `PRAGMA`, reutilizável pela T2), `sab-e41-t1.sh`,
+`schemas.js.e41t1.bak`, `schema.js.e41t1.bak`.
 
 ---
 
