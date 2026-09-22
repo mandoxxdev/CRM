@@ -1083,7 +1083,7 @@ também não aplicou (o `.` casa um byte, o acento tem dois) — refeita pelo Ed
 
 **Interfaces:** consome T1–T2, `POST /api/compras/fornecedores` (payload da tela da 40), `GET /api/almoxarifado/recebimentos-aux/pedidos-compra?pendentes=1` (`extended.js:1116`), `PUT`/`DELETE /api/compras/pedidos/:id`.
 
-- [ ] **Step 1: o teste** (`ADMIN` id 102):
+- [x] **Step 1: o teste** (`ADMIN` id 102):
 
 ```js
   await test('(A) pela ROTA: fornecedor (tela da 40) -> cotacao com 2 itens -> gerar -> pedido na lista e no aux do recebimento com saldo cheio -> 409 na segunda -> DELETE cotacao 409 -> PUT pedido 200 -> DELETE pedido LIBERA (cotacoes_liberadas 1) -> gera de novo 201 -> exclui tudo', async () => {
@@ -1135,16 +1135,63 @@ também não aplicou (o `.` casa um byte, o acento tem dois) — refeita pelo Ed
 exato do campo de saldo (`saldo_pendente`, design da 37) e se a rota aux exige perfil (gate `auth` só) —
 o `ADMIN` do harness passa por tudo.
 
-- [ ] **Step 2: rodar** — 3 verdes (integração). Controle positivo: a sabotagem 3 da T2 (sem o `if (c.pedido_id != null)`) tem de derrubar (A) em *"segunda conversao"* (409 → 201).
+- [x] **Step 2: rodar** — 3 verdes (integração). Controle positivo: a sabotagem 3 da T2 (sem o `if (c.pedido_id != null)`) tem de derrubar (A) em *"segunda conversao"* (409 → 201).
 
-- [ ] **Step 3: os cinco comandos** — `test:api` **194/194**; almoxarifado 42; 4/3/5; client **51 suítes / 778** (769 + 6 + 3); build.
+- [x] **Step 3: os cinco comandos** — `test:api` **194/194**; almoxarifado 42; 4/3/5; client **51 suítes / 778** (769 + 6 + 3); build.
 
 **Decisões da Fase 2 para a letra B (T6):** "Gerar pedido" **sem** `window.confirm` (a lixeira ao lado
 tem; aqui o ato é reversível — excluir o pedido libera a cotação — Fase 2 M6); `handleDelete` mostra o
 toast fixo *"Item excluído com sucesso"* e ignora a literal nova (M7, não é defeito); `criarCotacao` pelo
 serviço não passa pelo schema (`quantidade` 0 chegaria — M4, mesma classe do pedido, letra G).
 
-- [ ] **Step 4: commit** — `git add server/tests/api/comprasCotacaoPedidoIntegracao.api.test.js`. Mensagem em `msg-e41-t5.txt`.
+- [x] **Step 4: commit** — `git add server/tests/api/comprasCotacaoPedidoIntegracao.api.test.js`. Mensagem em `msg-e41-t5.txt`.
+
+#### ✅ Task 5 FECHADA — `dae1cee` (no tronco `desenvolvimento-almoxarifado`, sobre T1–T4 integradas)
+
+**Números reais:** `comprasCotacaoPedidoIntegracao` **3/3** (verde de primeira, como o plano previa — daí os dois
+controles abaixo); `npm run test:api` **194/194** (193 + este); `npm run test:almoxarifado` **42 passou, 0 falhou**;
+`test:validation` **4 passed**; `test:safealter` **3 passed**; `test:sqlite` **5 passed**; client
+**51 suítes / 778 testes**; `CI=true react-scripts build` **Compiled successfully**. CR=0 no arquivo novo.
+`git status` só com os 3 untracked pré-existentes (`docs/bkp_bancoprod.md`, `server/data/database.sqlite.bak`,
+`server/nodemon.json`), não adicionados.
+
+**Controles positivos** (md5 antes = md5 pós-restauro nos dois arquivos; âncora `grep -cF` = 1; restauro por cópia
+de `cotacaoService.js.e41t5.bak` / `pedidoCompraService.js.e41t5.bak` do scratchpad, nunca `git checkout --`):
+
+| # | Sabotagem | Qual asserção caiu |
+|---|---|---|
+| 1 | `gerarPedidoDaCotacao` sem `if (c.pedido_id != null)` (= sabotagem 3 da T2) | **(A)** `'segunda conversao: {…}'` — `strictEqual(g2.status, 409)` veio **201** com pedido `PC-` novo; **e (B)** `'segunda conversao pelo servico'` (`e.status` 409 → não lançou); 1/3 |
+| 2a | `excluirPedido`: `UPDATE cotacoes SET pedido_id = NULL` trocado por `cotacoesLiberadas = 0` | **(A)** `'cotacoes_liberadas: {"message":…,"solicitacoes_liberadas":0,"cotacoes_liberadas":0}'` (0 vs 1); 2/3 |
+| 2b | idem, trocado por `cotacoesLiberadas = 1` (isola o vínculo da contagem, como a sabotagem 8 da T2) | **(A)** `'pedido_id null depois de excluir o pedido'` — continuou apontando para o pedido apagado (a FK não dispara no harness, é a asserção que a RN-F12 protege); 2/3 |
+
+**Divergências plano ↔ código (nenhuma no código; só no teste, todas a mais):**
+- O (A) do plano foi escrito **verbatim** e ganhou asserções extras que o plano não listava: `itens.length === 2` na
+  criação, `fornecedor_id` e `/^PC-/` no pedido gerado, `quantidade_recebida === 0` no aux, a **literal** do 409 da
+  segunda conversão, `valor_total === 50` depois do `PUT` do pedido, `itens.length === 2` na cotação **depois** da
+  liberação (a exclusão do pedido não toca `itens_cotacao`), `valor_total === 25` no pedido regenerado (**nasce da
+  cotação, não do pedido editado** — é o que distingue "liberar" de "reaproveitar"), `COUNT(itens_cotacao) = 0` e
+  `GET 404` depois da exclusão final (a régua de órfãos do cabeçalho do plano).
+- O (B) do plano estava em prosa; o código faz `deepStrictEqual(rp.body, JSON.parse(JSON.stringify(p)))` — o
+  `JSON.parse(JSON.stringify())` é necessário porque `obterPedido` devolve o objeto do driver e a rota o serializa;
+  sem isso `undefined` vs chave ausente derrubaria por forma, não por conteúdo. Também afirma a lista de cotações
+  (`pedido_numero`, RN-F04) e o 409 pelo serviço.
+- O (C) afirma, além do plano, que `status = 'inativo'` **gravou** (régua do PUT, regra 1 herdada: medir a ausência
+  contra um caso que existe) e que `pedido_id` continua `null` na recusa.
+- `saldo_pendente` e o gate só-`auth` da rota aux: **confirmados** em `extended.js:1116` e
+  `receiptService.js:1463-1472` (`derivarRecebimentoDoPedido`) — o nome do plano estava certo.
+- O `POST /fornecedores` da tela da 40 manda `grupo_id: ''` → o preprocess devolve `null` e o 201 sai; o payload do
+  plano funcionou sem ajuste.
+
+**Fixtures próprias:** `ADMIN` id 102, `COT-E41-INT-001…`, `MAT-E41-INT-A/B`, razões sociais `Integração E41`,
+`Servico E41 INT`, `Inativavel E41 INT` — nenhuma colide com a T2 (`COT-E41-G-*`, `MAT-E41-A/B`, id 101).
+
+Scratchpad: `msg-e41-t5.txt`, `cotacaoService.js.e41t5.bak`, `pedidoCompraService.js.e41t5.bak`.
+
+**Próxima tarefa detalhada:** Task 6 — fechamento pela skill `fechar-etapa`, com a lista de artefatos já escrita no
+bloco da Task 6 abaixo. Pontos de atenção que a T5 deixa para ela: (i) a letra B precisa registrar que o pedido
+regenerado nasce da **cotação** (o `PUT` que o comprador fez no pedido anterior se perde — é o comportamento
+escolhido, reversível se um dia se quiser "reaproveitar"); (ii) `specs/modulo-compras/README.md:70` ("cotação não tem
+filhos") era verdade até a 40; (iii) o guia de usuário pode usar o roteiro do (A) como roteiro manual clicável.
 
 ---
 
