@@ -845,7 +845,7 @@ coluna no `POST`, e está no cenário (1)? **Não**: o (1) não manda `endereco`
 
 - [x] **Step 7: commit** — `git add server/routes/compras.js server/tests/api/comprasFornecedorRotas.api.test.js`. Mensagem em `msg-e40-t2.txt`: o defeito do botão (com a linha `:563` e a sonda), o retrofit sem recusar o modal (cenários (1)(2) como prova), a projeção sem `planilha_*`, o 409 por cotação e o comentário que era verdade até a 39; descartado: `PATCH /status` próprio, traduzir a FK no `catch`.
 
-#### ✅ Task 2 FECHADA — `dabb671` (Compras Etapa 40 T2: GET /fornecedores/:id, Zod nas duas portas, status e grupo_id null limpa, 409 por cotacao)
+#### ✅ Task 2 FECHADA — `6795b39` (Compras Etapa 40 T2: GET /fornecedores/:id, Zod nas duas portas, status e grupo_id null limpa, 409 por cotacao)
 
 > Hash medido na worktree `wt-e40-t2` (branch `e40-t2`, base `07d6893`). **Será reescrito no
 > cherry-pick para o tronco** — a T6 deve citar o hash novo.
@@ -1202,7 +1202,7 @@ os outros; o bloco acima o mostra junto só para leitura. `respondeErro` fica on
 
 - [x] **Step 7: commit** — `git add server/services/compras/cotacaoService.js server/routes/compras.js server/tests/api/comprasCotacaoRotas.api.test.js`. Mensagem em `msg-e40-t3.txt`.
 
-#### ✅ Task 3 FECHADA — `57c1922` (Compras Etapa 40 T3: cotacaoService e as portas POST, GET /:id e PUT de cotacao)
+#### ✅ Task 3 FECHADA — `29dd6a8` (Compras Etapa 40 T3: cotacaoService e as portas POST, GET /:id e PUT de cotacao)
 
 > Hash medido na branch `e40-t3` (worktree `wt-e40-t3`, base `07d6893`). **Será reescrito no
 > cherry-pick para o tronco** — quem integrar atualiza este cabeçalho com o hash novo.
@@ -1592,7 +1592,7 @@ export const FornecedorForm = page(() => import('../components/compras/Fornecedo
 
 - [x] **Step 7: commit** — `git add client/src/components/compras/FornecedorForm.js client/src/components/compras/FornecedorForm.test.js client/src/routes/lazyModules.js client/src/App.js`. Mensagem em `msg-e40-t4.txt`.
 
-#### ✅ Task 4 FECHADA — `d6f7712` (Compras Etapa 40 T4: FornecedorForm, rotas fornecedores/novo e editar/:id e suite de 8 cenarios)
+#### ✅ Task 4 FECHADA — `23b86f3` (Compras Etapa 40 T4: FornecedorForm, rotas fornecedores/novo e editar/:id e suite de 8 cenarios)
 
 > Hash medido na branch `e40-t4` (worktree `wt-e40-t4`, base `07d6893`). **Será reescrito no
 > cherry-pick para o tronco** — quem integrar (T6) atualiza este cabeçalho com o hash novo.
@@ -1986,7 +1986,7 @@ dependendo de `filterStatus`, sem requisição dupla.
 
 - [x] **Step 7: commit** — `git add client/src/components/compras/CotacaoForm.js client/src/components/compras/CotacaoForm.test.js client/src/routes/lazyModules.js client/src/App.js client/src/components/Compras.js`. Mensagem em `msg-e40-t5.txt`.
 
-#### ✅ Task 5 FECHADA — `f7bbb5f` (Compras Etapa 40 T5: CotacaoForm, rotas cotacoes/nova e editar/:id, rotulo Nova Cotacao e status por aba)
+#### ✅ Task 5 FECHADA — `b692413` (Compras Etapa 40 T5: CotacaoForm, rotas cotacoes/nova e editar/:id, rotulo Nova Cotacao e status por aba)
 
 > Hash medido na branch `e40-t5` (worktree `CRM-wt-e40-t5`, base `07d6893`). **Será reescrito no
 > cherry-pick para o tronco** — quem integrar troca o hash aqui e no mapa da T6.
