@@ -204,6 +204,43 @@ const ADMIN = { id: 101, nome: 'Admin E41 T2 Gerar', role: 'admin', is_superadmi
     assert.strictEqual(await contaOrfaos(), 0, `pedido vivo sem cotacao apontando (${par})`);
   });
 
+  // ── (13) O ENTRELACAMENTO QUE O (12) NAO VE (re-revisao da onda, I1) ────────────────────────
+  // O (12) dispara os dois no MESMO tick e observa sempre `200 + 404`. Com o DELETE chegando algumas
+  // voltas do event loop DEPOIS do gerar, `excluirCotacao` le `pedido_id NULL`, o CAS do gerar vence,
+  // e o `DELETE FROM cotacoes` cru apaga a cotacao por baixo do pedido: pedido vivo, orfao, no aux do
+  // recebimento (28 de 301 janelas na sonda do revisor). O conserto e simetrico ao F1: a exclusao
+  // tambem REIVINDICA a cotacao por CAS (`status = 'cancelado' WHERE pedido_id IS NULL`) antes de
+  // apagar, e o CAS do gerar recusa cotacao cancelada. Este cenario varre d = 0..300 voltas (a sonda achou os orfaos entre ~40 e ~300).
+  await test('(13) DELETE chegando d voltas do event loop DEPOIS do gerar: em NENHUMA janela sobra pedido orfao', async () => {
+    const dormir = async (n) => { for (let i = 0; i < n; i += 1) await new Promise((r) => setImmediate(r)); };
+    const pares = {};
+    for (let d = 0; d <= 300; d += 1) {
+      const c = await cotar([{ material_id: mA, quantidade: 2, valor_unitario: 10 }]);
+      const antes = await contaPedidos();
+      const pg = gerar(c.id).then((r) => r);            // supertest e lazy: o .then dispara agora
+      await dormir(d);
+      const pd = request(app).delete(`/api/compras/cotacoes/${c.id}`).then((r) => r);
+      const [g, dl] = await Promise.all([pg, pd]);
+      const par = `gerar ${g.status} + delete ${dl.status}`;
+      pares[par] = (pares[par] || 0) + 1;
+      const cot = await dbGet(db, 'SELECT id, pedido_id, status FROM cotacoes WHERE id = ?', [c.id]);
+      assert.strictEqual(await contaOrfaos(), 0, `d=${d}: pedido vivo sem cotacao apontando (${par}; cotacao ${cot ? JSON.stringify(cot) : 'APAGADA'})`);
+      // e as duas saidas legitimas sao as unicas: ou o gerar venceu (201 + 409, cotacao viva apontando)
+      // ou a exclusao venceu (404/409 + 200, cotacao apagada, nenhum pedido nasceu)
+      if (g.status === 201) {
+        assert.strictEqual(dl.status, 409, `d=${d}: ${par}`);
+        assert.ok(cot && cot.pedido_id === g.body.id, `d=${d}: a cotacao tem de apontar para o pedido`);
+        assert.strictEqual(await contaPedidos(), antes + 1);
+      } else {
+        assert.strictEqual(dl.status, 200, `d=${d}: ${par}`);
+        assert.ok([400, 404, 409].includes(g.status), `d=${d}: ${par}`); // 400 = perdeu para a exclusao (frase de status), 404 = ja apagada
+        assert.strictEqual(cot, undefined, `d=${d}: a cotacao tinha de ter sido apagada`);
+        assert.strictEqual(await contaPedidos(), antes, `d=${d}: nenhum pedido pode ter sobrado`);
+      }
+    }
+    console.log(`      pares observados: ${JSON.stringify(pares)}`);
+  });
+
   await close();
   console.log(`\n${passed} passou, ${failed} falhou`);
   process.exit(failed ? 1 : 0);

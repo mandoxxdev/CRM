@@ -146,6 +146,22 @@ async function atualizarCotacao(db, id, dados) {
 async function excluirCotacao(db, id) {
   const c = await obterCotacao(db, id);
   if (c.pedido_id != null) throw erro(cotacaoJaGerouPedidoExclusao(c.numero, rotuloPedido(c)), 409);
+  // ⚠️ REIVINDICAR ANTES DE APAGAR (re-revisao da onda da 41, I1). O 409 acima le `pedido_id NULL`,
+  // mas um `gerar-pedido` em voo pode vencer o CAS dele entre esta leitura e o `DELETE` — o (12) da
+  // suite, que dispara os dois no mesmo tick, nunca via; com o DELETE chegando algumas voltas do
+  // event loop depois (28 de 301 janelas na sonda), a cotacao era apagada por baixo do pedido recem
+  // criado: pedido vivo, orfao, no aux do recebimento. Este UPDATE e o CAS simetrico ao do gerar:
+  // marca `cancelado` SO se ninguem vinculou pedido; 0 linhas = o gerar venceu -> 409 com o vencedor.
+  // E o CAS do gerar, por sua vez, recusa `cancelado` — quem marcou primeiro ganha, nos dois sentidos.
+  // Descartado: apagar a cotacao com `DELETE ... WHERE pedido_id IS NULL` direto — a FK de
+  // `itens_cotacao` exige os filhos apagados ANTES, e apagar filhos de uma cotacao que outro esta
+  // convertendo e o mesmo furo por outra porta.
+  const claim = await dbRun(db,
+    "UPDATE cotacoes SET status = 'cancelado', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND pedido_id IS NULL", [id]);
+  if (!claim.changes) {
+    const atual = await obterCotacao(db, id); // 404 se sumiu no meio
+    throw erro(cotacaoJaGerouPedidoExclusao(atual.numero, rotuloPedido(atual)), 409);
+  }
   // Filhos PRIMEIRO: a FK nao dispara no harness e dispara em producao (ver o cabecalho do plano da 41).
   await dbRun(db, 'DELETE FROM itens_cotacao WHERE cotacao_id = ?', [id]);
   await dbRun(db, 'DELETE FROM cotacoes WHERE id = ?', [id]);
@@ -186,8 +202,11 @@ async function gerarPedidoDaCotacao(db, id, user) {
   // faz do UPDATE um compare-and-set: uma unica chamada afeta 1 linha, as outras afetam 0. Tambem
   // cobre a corrida com `DELETE /cotacoes/:id` (a cotacao sumiu -> 0 linhas -> o pedido nao pode ficar).
   // D7: gerar o pedido E aprovar — sem isto a lista mostraria "Em Análise" com pedido gerado.
+  // `AND status NOT IN ('rejeitado', 'cancelado')` (re-revisao, I1): `excluirCotacao` reivindica a
+  // cotacao marcando `cancelado` antes de apagar; sem esta clausula o gerar venceria o CAS sobre uma
+  // cotacao ja reivindicada e o DELETE a apagaria por baixo do pedido.
   const vinculo = await dbRun(db,
-    "UPDATE cotacoes SET pedido_id = ?, status = 'aprovado', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND pedido_id IS NULL",
+    "UPDATE cotacoes SET pedido_id = ?, status = 'aprovado', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND pedido_id IS NULL AND status NOT IN ('rejeitado', 'cancelado')",
     [pedido.id, id]);
   if (!vinculo.changes) {
     // Perdeu a corrida (ou a cotacao foi apagada no meio): COMPENSAR — o pedido que acabou de nascer
@@ -198,6 +217,9 @@ async function gerarPedidoDaCotacao(db, id, user) {
     // corridas sem estado no processo.
     await pedidoCompraService.excluirPedido(db, pedido.id);
     const atual = await obterCotacao(db, id);
+    // Perdeu para a EXCLUSAO (re-revisao I1): a cotacao ainda existe por um instante, marcada
+    // `cancelado` e sem pedido — a frase certa e a de status, nao "ja gerou o pedido #null".
+    if (atual.pedido_id == null) throw erro(cotacaoStatusNaoGera(atual.status));
     throw erro(cotacaoJaGerouPedido(atual.numero, rotuloPedido(atual)), 409);
   }
   return pedidoCompraService.obterPedido(db, pedido.id);
