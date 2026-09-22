@@ -211,13 +211,16 @@ const ADMIN = { id: 64, nome: 'Admin Compras E38', role: 'admin' };
     assert.strictEqual(semNome.status, 400);
     assert.strictEqual(semNome.body.error, 'Nome do grupo é obrigatório');
 
-    // Itens do fornecedor: `itens_fornecedor` e tabela core que o harness nao stuba. Criada aqui
-    // pelo mesmo motivo de `grupos_compras`, e so com as colunas que as rotas movidas tocam.
+    // Itens do fornecedor: `itens_fornecedor` e tabela core. Ate a onda de correcao da Etapa 40 o
+    // harness nao a stubava e esta DDL local (criada pelo mesmo motivo de `grupos_compras`) era a
+    // unica forma; desde a F1 (I1 da revisao de RN) `testApp.js` a cria ANTES deste arquivo rodar,
+    // entao este CREATE e no-op. Fica aqui alinhado a forma do harness (`fornecedor_id` e
+    // `descricao` NOT NULL, como em producao) para que, se o stub sumir, a forma medida seja a mesma.
     await dbRun(db, `CREATE TABLE IF NOT EXISTS itens_fornecedor (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      fornecedor_id INTEGER,
+      fornecedor_id INTEGER NOT NULL,
       codigo TEXT,
-      descricao TEXT,
+      descricao TEXT NOT NULL,
       unidade TEXT DEFAULT 'UN',
       preco REAL DEFAULT 0,
       observacoes TEXT,

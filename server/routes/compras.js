@@ -433,6 +433,23 @@ app.delete('/api/compras/:tipo/:id', authenticateToken, checkModulePermission('c
    * em producao. Pedido e checado PRIMEIRO — com os dois vinculos, a literal e a de pedido.
    * A literal de cotacao NAO mora aqui: e `cotacaoService.FORNECEDOR_COM_COTACOES` (a T2 a escreveu
    * inline porque a T3 rodava em paralelo; a T6 trocou pela constante e afirma a identidade).
+   *
+   * ⚠️ ONDA DE CORRECAO DA ETAPA 40, F1 (achado I1 da revisao de RN) — `fornecedores` tem TRES FKs
+   * apontando para ela, nao duas, e as duas correcoes acima enumeravam so as de documento:
+   *   1. `pedidos_compra.fornecedor_id`  (`index.js:19241`)  — contagem 1, literal inline abaixo;
+   *   2. `cotacoes.fornecedor_id`        (`index.js:19244`)  — contagem 2, `FORNECEDOR_COM_COTACOES`;
+   *   3. `itens_fornecedor.fornecedor_id` (`index.js:19296`) — a lista de precos do fornecedor
+   *      (`POST /:id/itens` e `/itens/importar`, mais abaixo neste arquivo), que ficou FORA da
+   *      enumeracao, do design (D10) e do harness ate esta onda. Fornecedor com lista de precos e
+   *      sem documento passava pelas duas contagens, o `DELETE` cru caia na FK em producao e a
+   *      lixeira respondia 500 'Erro ao excluir item' — exatamente o defeito que a F5 da 39 e a D10
+   *      desta etapa diziam ter fechado (sonda A do revisor, DDL de producao + `foreign_keys = 1`).
+   * A terceira contagem entra DEPOIS das duas (precedencia pedido -> cotacao -> itens): documento
+   * pesa mais que item de lista, e a literal de itens mora aqui, inline como a de pedido (ha duas
+   * literais inline neste bloco e uma no servico; registrado na letra B do fechamento). O caminho
+   * alternativo — cascatear `DELETE FROM itens_fornecedor WHERE fornecedor_id = ?` antes de apagar —
+   * foi descartado nesta onda: e irreversivel e apagaria dado que o comprador importou por planilha
+   * sem avisar; o 409 obriga a esvaziar a lista pela tela de itens primeiro.
    */
   if (tipo === 'fornecedores') {
     return db.get('SELECT COUNT(*) AS n FROM pedidos_compra WHERE fornecedor_id = ?', [idNum], (err, row) => {
@@ -451,7 +468,16 @@ app.delete('/api/compras/:tipo/:id', authenticateToken, checkModulePermission('c
         if ((row2 && row2.n) > 0) {
           return res.status(409).json({ error: cotacaoService.FORNECEDOR_COM_COTACOES });
         }
-        return apagar();
+        return db.get('SELECT COUNT(*) AS n FROM itens_fornecedor WHERE fornecedor_id = ?', [idNum], (err3, row3) => {
+          if (err3) {
+            console.error('Erro ao checar itens do fornecedor:', err3);
+            return res.status(500).json({ error: 'Erro ao excluir item' });
+          }
+          if ((row3 && row3.n) > 0) {
+            return res.status(409).json({ error: 'Fornecedor possui itens cadastrados — não pode ser excluído' });
+          }
+          return apagar();
+        });
       });
     });
   }

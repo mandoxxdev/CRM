@@ -21,6 +21,7 @@ function test(name, fn) {
 const ADMIN = { id: 97, nome: 'Admin E40 T2', role: 'admin', is_superadmin: 1, email: 'admin@test.com' };
 const LITERAL_409_PEDIDO = 'Fornecedor possui pedidos de compra — não pode ser excluído';
 const LITERAL_409_COTACAO = 'Fornecedor possui cotações — não pode ser excluído';
+const LITERAL_409_ITENS = 'Fornecedor possui itens cadastrados — não pode ser excluído';
 
 (async () => {
   const { app, db, close } = await createTestApp({ user: ADMIN });
@@ -170,6 +171,35 @@ const LITERAL_409_COTACAO = 'Fornecedor possui cotações — não pode ser excl
     assert.strictEqual(r.status, 400);
     assert.ok(r.body.error.startsWith('Dados inválidos — '), r.body.error);
     assert.deepStrictEqual(Object.keys(r.body), ['error']);
+  });
+
+  // Onda de correcao da Etapa 40, F1 (achado I1 da revisao de RN): `itens_fornecedor` e a TERCEIRA
+  // FK para `fornecedores` e o generico so contava pedido e cotacao — fornecedor com lista de precos
+  // e sem documento dava 500 em producao (FK ligada). Aqui o harness roda com `foreign_keys = 0`,
+  // entao sem a terceira contagem o DELETE responderia 200 e apagaria: e isso que a primeira
+  // assercao mede.
+  await test('(12) F1: fornecedor com itens_fornecedor -> 409 literal de ITENS; com pedido vale a de pedido; com cotacao (sem pedido) a de cotacao; apaga o item -> 200', async () => {
+    const r0 = await post({ razao_social: 'Com lista de precos' });
+    const id = r0.body.id;
+    await dbRun(db, "INSERT INTO itens_fornecedor (fornecedor_id, descricao) VALUES (?, 'Parafuso M8')", [id]);
+    const r = await request(app).delete(`/api/compras/fornecedores/${id}`);
+    assert.strictEqual(r.status, 409, `so com itens: esperava 409, veio ${r.status} ${JSON.stringify(r.body)}`);
+    assert.strictEqual(r.body.error, LITERAL_409_ITENS);
+    assert.ok(await linha(id), 'o 409 nao pode ter apagado a linha');
+    await dbRun(db, "INSERT INTO pedidos_compra (numero, fornecedor_id) VALUES ('PC-E40-F1', ?)", [id]);
+    const r2 = await request(app).delete(`/api/compras/fornecedores/${id}`);
+    assert.strictEqual(r2.status, 409);
+    assert.strictEqual(r2.body.error, LITERAL_409_PEDIDO, 'itens + pedido: a literal de pedido tem precedencia');
+    await dbRun(db, 'DELETE FROM pedidos_compra WHERE fornecedor_id = ?', [id]);
+    await dbRun(db, "INSERT INTO cotacoes (numero, fornecedor_id) VALUES ('COT-E40-F1', ?)", [id]);
+    const r3 = await request(app).delete(`/api/compras/fornecedores/${id}`);
+    assert.strictEqual(r3.status, 409);
+    assert.strictEqual(r3.body.error, LITERAL_409_COTACAO, 'itens + cotacao (sem pedido): a literal de cotacao vem antes da de itens');
+    await dbRun(db, 'DELETE FROM cotacoes WHERE fornecedor_id = ?', [id]);
+    await dbRun(db, 'DELETE FROM itens_fornecedor WHERE fornecedor_id = ?', [id]);
+    const r4 = await request(app).delete(`/api/compras/fornecedores/${id}`);
+    assert.strictEqual(r4.status, 200, JSON.stringify(r4.body));
+    assert.strictEqual(await linha(id), undefined);
   });
 
   await close();

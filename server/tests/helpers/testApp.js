@@ -127,6 +127,27 @@ async function createTestApp(options = {}) {
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
+  // `itens_fornecedor` é tabela CORE (`server/index.js:19285`) — a lista de preços de um fornecedor,
+  // e a TERCEIRA FK para `fornecedores` (as outras duas são `pedidos_compra` e `cotacoes`, acima).
+  // Entra no harness na onda de correção da Etapa 40 (F1, achado I1 da revisão de RN): o genérico
+  // `DELETE /api/compras/fornecedores/:id` passou a contar esta tabela antes de apagar, e sem o stub
+  // a contagem morreria aqui com "no such table" — um erro que NÃO existe em produção — enquanto em
+  // produção a FK derrubava o DELETE com 500. Até aqui só `comprasPedidosRotas.api.test.js` a
+  // declarava, com DDL local (que vira no-op). Espelha a DDL de produção SEM a FK, pelo mesmo motivo
+  // dos dois stubs acima; `NOT NULL` de `fornecedor_id` e `descricao` ficam como em produção — as
+  // duas rotas que inserem (`POST /:id/itens` e `/itens/importar`) sempre mandam os dois.
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS itens_fornecedor (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fornecedor_id INTEGER NOT NULL,
+    codigo TEXT,
+    descricao TEXT NOT NULL,
+    unidade TEXT DEFAULT 'UN',
+    preco REAL DEFAULT 0,
+    observacoes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
   // Diretório temporário para uploads (multer do módulo exige um PERSISTENT_DATA_DIR)
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'almox-test-'));
 
