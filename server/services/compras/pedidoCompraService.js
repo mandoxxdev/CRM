@@ -552,7 +552,9 @@ async function excluirPedido(db, pedidoId) {
   // inverso do que a Etapa 38 fez com a solicitacao. E ANTES do cabecalho pelo mesmo motivo das
   // solicitacoes: em producao `cotacoes.pedido_id` e FK e a linha nao pode apontar para pedido
   // apagado nem por um instante. `cotacoes` e do core (nasce em `index.js`), entao nao precisa da
-  // guarda de tabela ausente que `liberarSolicitacoesDoPedido` tem.
+  // guarda de tabela ausente que `liberarSolicitacoesDoPedido` tem. A ordem UPDATE -> DELETE e afirmada com a
+  // FK LIGADA em `comprasCotacaoFkProducao.api.test.js` (onda de correcao da 41, F2): no harness
+  // (`foreign_keys = 0`) inverte-la nao derruba nada — foi medido.
   const cotacoesLiberadas = (await dbRun(db,
     'UPDATE cotacoes SET pedido_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE pedido_id = ?', [pedido.id])).changes || 0;
   await dbRun(db, 'DELETE FROM pedidos_compra WHERE id = ?', [pedido.id]);

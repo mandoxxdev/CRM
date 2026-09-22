@@ -23,7 +23,9 @@
  * ⚠️ O MODO DE FALHA DESTA ETAPA (cabecalho do plano da 41): a FK `itens_cotacao.cotacao_id` NAO
  * dispara no harness (`foreign_keys = 0`) e dispara em producao. Um `DELETE FROM cotacoes` que nao
  * apague os filhos antes passa aqui deixando orfaos e da 500 la. `excluirCotacao` apaga os filhos
- * PRIMEIRO, e o cenario (7) de `comprasCotacaoItens` conta orfaos em vez de olhar o status.
+ * PRIMEIRO, e o cenario (7) de `comprasCotacaoItens` conta orfaos em vez de olhar o status. Desde a onda de
+ * correcao da 41 (F2), `comprasCotacaoFkProducao.api.test.js` prova a ORDEM com a FK LIGADA (segundo
+ * banco com a DDL de producao): sabotagem de ordem passa no harness e cai la.
  */
 const { dbRun, dbGet, dbAll } = require('../almoxarifado/db');
 const pedidoCompraService = require('./pedidoCompraService');
