@@ -399,8 +399,16 @@ app.delete('/api/compras/:tipo/:id', authenticateToken, checkModulePermission('c
    * o pedido apontando para o vazio) e em producao (onde a FK dispara). Um `catch` traduzido diria
    * a frase certa so no ambiente que tem a FK, e o teste nao poderia prova-la.
    *
-   * Nenhum outro ramo do generico muda: `cotacoes` tem a MESMA FK e continua com `COUNT = 0` (sem
-   * porta de criacao, sem risco), e `pedidos` aqui esta sombreado pela rota propria da Task 3.
+   * Nenhum outro ramo do generico muda: `pedidos` aqui esta sombreado pela rota propria da Task 3.
+   *
+   * ⚠️ CORRECAO DA ETAPA 40 — este paragrafo dizia "`cotacoes` tem a MESMA FK e continua com
+   * `COUNT = 0` (sem porta de criacao, sem risco)". Era VERDADE ate a Etapa 39 e DEIXOU DE SER: a
+   * Etapa 40 criou `POST /api/compras/cotacoes`, entao uma cotacao apontando para o fornecedor volta
+   * a fazer o `DELETE` cru cair na FK em producao (500 'Erro ao excluir item'). A segunda contagem
+   * abaixo (RN-E12) fecha isso do mesmo jeito da F5: 409 ANTES do DELETE, mesma frase no harness e
+   * em producao. Pedido e checado PRIMEIRO — com os dois vinculos, a literal e a de pedido.
+   * A literal de cotacao esta inline aqui porque a T3 (dona de `cotacaoService.FORNECEDOR_COM_COTACOES`)
+   * roda em paralelo; a T6 afirma a igualdade das duas frases.
    */
   if (tipo === 'fornecedores') {
     return db.get('SELECT COUNT(*) AS n FROM pedidos_compra WHERE fornecedor_id = ?', [idNum], (err, row) => {
@@ -411,7 +419,16 @@ app.delete('/api/compras/:tipo/:id', authenticateToken, checkModulePermission('c
       if ((row && row.n) > 0) {
         return res.status(409).json({ error: 'Fornecedor possui pedidos de compra — não pode ser excluído' });
       }
-      return apagar();
+      return db.get('SELECT COUNT(*) AS n FROM cotacoes WHERE fornecedor_id = ?', [idNum], (err2, row2) => {
+        if (err2) {
+          console.error('Erro ao checar cotacoes do fornecedor:', err2);
+          return res.status(500).json({ error: 'Erro ao excluir item' });
+        }
+        if ((row2 && row2.n) > 0) {
+          return res.status(409).json({ error: 'Fornecedor possui cotações — não pode ser excluído' });
+        }
+        return apagar();
+      });
     });
   }
 
@@ -531,47 +548,58 @@ app.get('/api/compras/grupos/:grupoId/fornecedores', authenticateToken, checkMod
   });
 });
 
-// Criar fornecedor (opcional: grupo_id para já homologar no grupo)
-app.post('/api/compras/fornecedores', authenticateToken, checkModulePermission('compras'), (req, res) => {
-  const body = req.body || {};
-  const razao_social = (body.razao_social || '').trim();
-  const nome_fantasia = (body.nome_fantasia || '').trim();
-  const cnpj = (body.cnpj || '').trim();
-  const contato = body.contato != null ? String(body.contato).trim() : null;
-  const email = body.email != null ? String(body.email).trim() : null;
-  const telefone = body.telefone != null ? String(body.telefone).trim() : null;
-  const grupo_id = body.grupo_id != null ? (parseInt(body.grupo_id, 10) || null) : null;
-  if (!razao_social) return res.status(400).json({ error: 'Razão social é obrigatória' });
-  db.run('INSERT INTO fornecedores (razao_social, nome_fantasia, cnpj, contato, email, telefone, grupo_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    [razao_social, nome_fantasia, cnpj, contato, email, telefone, grupo_id, 'ativo'], function(err) {
+// Etapa 40, Task 2 (RN-E06): a linha de UM fornecedor, para o formulario de edicao. Projecao NOMEADA
+// e nao `SELECT *`: `planilha_dados` e o JSON inteiro da planilha do fornecedor (`index.js:19272`), e
+// a licao da F3 da Etapa 39 vale aqui — a coluna que ninguem le nao viaja. `cidade`/`estado`/`cep`
+// viajam porque existem na DDL, mesmo sem consumidor (a tela nao os mostra, declarado).
+app.get('/api/compras/fornecedores/:id', authenticateToken, checkModulePermission('compras'), (req, res) => {
+  db.get(`SELECT id, razao_social, nome_fantasia, cnpj, contato, email, telefone, endereco, cidade, estado, cep,
+                 status, grupo_id, foto, created_at, updated_at
+          FROM fornecedores WHERE id = ?`, [req.params.id], (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
-    res.status(201).json({ id: this.lastID, razao_social, nome_fantasia, grupo_id });
+    if (!row) return res.status(404).json({ error: pedidoCompraService.FORNECEDOR_NAO_ENCONTRADO });
+    res.json(row);
   });
 });
 
-// Atualizar fornecedor (ex.: grupo_id para homologar no grupo)
-app.put('/api/compras/fornecedores/:id', authenticateToken, checkModulePermission('compras'), (req, res) => {
+// Criar fornecedor (opcional: grupo_id para já homologar no grupo).
+// Etapa 40, Task 2: `validate(FornecedorSchema)` na frente — RN-E01 pelo schema (mesma literal de
+// antes, agora com o prefixo da casa), textos trimados, `grupo_id` ja resolvido para numero|null.
+// `status` e IGNORADO aqui de proposito (RN-E04): fornecedor nasce 'ativo'.
+app.post('/api/compras/fornecedores', authenticateToken, checkModulePermission('compras'),
+  validate(FornecedorSchema), (req, res) => {
+  const body = req.body;
+  const nome_fantasia = body.nome_fantasia || '';
+  const cnpj = body.cnpj || '';
+  const contato = body.contato || null;
+  const email = body.email || null;
+  const telefone = body.telefone || null;
+  const endereco = body.endereco || null;
+  const grupo_id = body.grupo_id == null ? null : body.grupo_id;
+  db.run('INSERT INTO fornecedores (razao_social, nome_fantasia, cnpj, contato, email, telefone, endereco, grupo_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [body.razao_social, nome_fantasia, cnpj, contato, email, telefone, endereco, grupo_id, 'ativo'], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.status(201).json({ id: this.lastID, razao_social: body.razao_social, nome_fantasia, grupo_id });
+  });
+});
+
+// Atualizar fornecedor. SUBSTITUICAO TOTAL dos sete textos (RN-E02, caracterizado — a tela de
+// edicao reenvia todos). `grupo_id` e `status` so entram no UPDATE quando vieram no corpo
+// (`!== undefined`): ausente = nao mexe. E `grupo_id: null` LIMPA (RN-E03) — ate a Etapa 40 o
+// `!= null` daqui tratava null como ausente, e o botao "Remover do grupo" de
+// `FornecedoresDoGrupo.js:188-200` respondia sucesso sem remover nada (sonda da Fase 0).
+app.put('/api/compras/fornecedores/:id', authenticateToken, checkModulePermission('compras'),
+  validate(FornecedorSchema), (req, res) => {
   const id = req.params.id;
-  const body = req.body || {};
-  const razao_social = (body.razao_social || '').trim();
-  const nome_fantasia = (body.nome_fantasia || '').trim();
-  const cnpj = (body.cnpj || '').trim();
-  const contato = body.contato != null ? String(body.contato).trim() : null;
-  const email = body.email != null ? String(body.email).trim() : null;
-  const telefone = body.telefone != null ? String(body.telefone).trim() : null;
-  const endereco = body.endereco != null ? String(body.endereco).trim() : null;
-  const grupo_id = body.grupo_id != null ? (parseInt(body.grupo_id, 10) || null) : undefined;
-  if (!razao_social) return res.status(400).json({ error: 'Razão social é obrigatória' });
+  const body = req.body;
   const updates = ['razao_social = ?', 'nome_fantasia = ?', 'cnpj = ?', 'contato = ?', 'email = ?', 'telefone = ?', 'endereco = ?', 'updated_at = CURRENT_TIMESTAMP'];
-  const params = [razao_social, nome_fantasia, cnpj, contato, email, telefone, endereco];
-  if (grupo_id !== undefined) {
-    updates.push('grupo_id = ?');
-    params.push(grupo_id);
-  }
+  const params = [body.razao_social, body.nome_fantasia || '', body.cnpj || '', body.contato || null, body.email || null, body.telefone || null, body.endereco || null];
+  if (body.grupo_id !== undefined) { updates.push('grupo_id = ?'); params.push(body.grupo_id); }
+  if (body.status !== undefined) { updates.push('status = ?'); params.push(body.status); }
   params.push(id);
   db.run('UPDATE fornecedores SET ' + updates.join(', ') + ' WHERE id = ?', params, function(err) {
     if (err) return res.status(500).json({ error: err.message });
-    if (this.changes === 0) return res.status(404).json({ error: 'Fornecedor não encontrado' });
+    if (this.changes === 0) return res.status(404).json({ error: pedidoCompraService.FORNECEDOR_NAO_ENCONTRADO });
     res.json({ message: 'Fornecedor atualizado' });
   });
 });
