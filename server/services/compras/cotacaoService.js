@@ -86,8 +86,11 @@ const traduzUnique = (e, numero) => (
   /SQLITE_CONSTRAINT.*cotacoes\.numero/.test(e && e.message) ? erro(numeroDuplicado(numero), 409) : e
 );
 
-// RN-F03: a MESMA conta do pedido (`criarPedido`), sobre as linhas ja resolvidas.
-const somaItens = (itens) => itens.reduce((s, i) => s + Number(i.quantidade) * Number(i.valor_unitario || 0), 0);
+// RN-F03: a MESMA conta do pedido (`criarPedido`), sobre as linhas ja resolvidas — ARREDONDADA a 2 casas
+// (onda de correcao da 41, F3b = UX I2): 3 x 0.1 em double e 0.30000000000000004, e esse lixo ia para o
+// banco e para o campo travado da tela. Descartado: arredondar so no cliente — o `valor_total` gravado e
+// o que a lista le. (O `criarPedido` continua somando cru: fora do escopo desta onda, registrado.)
+const somaItens = (itens) => Math.round(itens.reduce((s, i) => s + Number(i.quantidade) * Number(i.valor_unitario || 0), 0) * 100) / 100;
 
 /** RN-F05: substituicao total — `DELETE` + `INSERT`, como o `PUT` do pedido. */
 async function gravarItens(db, cotacaoId, resolvidos) {

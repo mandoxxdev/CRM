@@ -48,10 +48,18 @@ const ADMIN = { id: 100, nome: 'Admin E41 T2 Itens', role: 'admin', is_superadmi
     assert.strictEqual(r.body.pedido_id, null);
     assert.strictEqual(r.body.pedido_numero, null);
   });
-  await test('(2) RN-F03 valor_total do payload e IGNORADO quando ha itens', async () => {
+  await test('(2) RN-F03 valor_total do payload e IGNORADO quando ha itens; a soma e ARREDONDADA a 2 casas (3 x 0.1 = 0.3, nao 0.30000000000000004)', async () => {
     const r = await post({ numero: num(), fornecedor_id: forn, valor_total: 999, itens: [{ material_id: mA, quantidade: 3, valor_unitario: 1.5 }] });
     assert.strictEqual(r.status, 201);
     assert.strictEqual(r.body.valor_total, 4.5, 'devia ignorar 999');
+    // Onda de correcao da 41 (F3b = UX I2, metade servidor): sem `Math.round(s * 100) / 100` o double
+    // cru ia para o banco e para a tela (`cotacao-valor` mostrava 0.30000000000000004).
+    const f = await post({ numero: num(), fornecedor_id: forn, itens: [{ material_id: mA, quantidade: 3, valor_unitario: 0.1 }] });
+    assert.strictEqual(f.status, 201);
+    assert.strictEqual(f.body.valor_total, 0.3, `ponto flutuante cru: ${f.body.valor_total}`);
+    const u = await put(f.body.id, { numero: f.body.numero, fornecedor_id: forn, itens: [{ material_id: mA, quantidade: 3, valor_unitario: 0.2 }] });
+    assert.strictEqual(u.status, 200, JSON.stringify(u.body));
+    assert.strictEqual(u.body.valor_total, 0.6, `ponto flutuante cru no PUT: ${u.body.valor_total}`);
   });
   await test('(3) RN-F02 sem itens (ausente e []) -> valor_total do payload; itens = []', async () => {
     const a = await post({ numero: num(), fornecedor_id: forn, valor_total: 77 });

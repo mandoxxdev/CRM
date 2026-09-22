@@ -51,8 +51,8 @@ const ADMIN = { id: 101, nome: 'Admin E41 T2 Gerar', role: 'admin', is_superadmi
   const contaOrfaos = async () => (await dbGet(db,
     'SELECT COUNT(*) AS n FROM pedidos_compra WHERE id NOT IN (SELECT pedido_id FROM cotacoes WHERE pedido_id IS NOT NULL)')).n;
 
-  await test('(1) RN-F07 gerar -> 201 pedido PC-, total = soma, 2 linhas com codigo/descricao/unidade e recebida 0; cotacao ganha pedido_id e status aprovado', async () => {
-    const c = await cotar([{ material_id: mA, quantidade: 2, valor_unitario: 10 }, { material_id: mB, quantidade: 1, valor_unitario: 5 }], { status: 'em_analise' });
+  await test('(1) RN-F07 gerar -> 201 pedido PC-, total = soma, 2 linhas com codigo/descricao/unidade e recebida 0; cotacao ganha pedido_id e status aprovado; cabecalho: observacoes da cotacao, status pendente, previsao_entrega null', async () => {
+    const c = await cotar([{ material_id: mA, quantidade: 2, valor_unitario: 10 }, { material_id: mB, quantidade: 1, valor_unitario: 5 }], { status: 'em_analise', observacoes: 'frete incluso E41' });
     const r = await gerar(c.id);
     assert.strictEqual(r.status, 201, JSON.stringify(r.body));
     assert.ok(/^PC-/.test(r.body.numero), r.body.numero);
@@ -61,6 +61,13 @@ const ADMIN = { id: 101, nome: 'Admin E41 T2 Gerar', role: 'admin', is_superadmi
     assert.deepStrictEqual(r.body.itens.map((i) => [i.material_id, i.quantidade, i.valor_unitario, i.codigo, i.quantidade_recebida]),
       [[mA, 2, 10, 'MAT-E41-A', 0], [mB, 1, 5, 'MAT-E41-B', 0]]);
     assert.strictEqual(r.body.data_pedido, pedidoCompraService.hojeLocalISO(), 'data_pedido nasce HOJE local (Fase 2 I4) — sem isso nascia NULL');
+    // Onda de correcao da 41 (F3 = RN M2): o CABECALHO do pedido gerado. RN-F07 diz que so
+    // `fornecedor_id, data_pedido, observacoes, itens` viajam para `criarPedido` — afirmado pelo
+    // resultado: `observacoes` e a da cotacao, `status` e o DEFAULT do DDL e `previsao_entrega` nasce
+    // NULL. Antes, injetar `status: 'cancelado'` + `previsao_entrega` ou tirar `observacoes` passava 20/20.
+    assert.strictEqual(r.body.observacoes, 'frete incluso E41', 'observacoes da cotacao vai para o pedido (RN-F07)');
+    assert.strictEqual(r.body.status, 'pendente', 'status e o DEFAULT do DDL — nada alem do contrato viaja para criarPedido');
+    assert.strictEqual(r.body.previsao_entrega, null, 'previsao_entrega nasce NULL');
     const g = await get(c.id);
     assert.strictEqual(g.body.pedido_id, r.body.id);
     assert.strictEqual(g.body.pedido_numero, r.body.numero);
