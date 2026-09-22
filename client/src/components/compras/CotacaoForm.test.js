@@ -164,17 +164,41 @@ const alertas = () => [...container.querySelectorAll('[role="alert"]')]
 const linkPorTexto = (t) => [...container.querySelectorAll('a')]
   .find((a) => a.textContent.trim().includes(t));
 
+// ── (a) RN-D03 a cotacao nasce com a data LOCAL, nao com a de amanha ─────────────────────────
+//
+// Onda de correcao da Etapa 40 (F2, achado I1 da revisao de UX). A versao anterior deste cenario
+// era TAUTOLOGICA: calculava o "esperado" com `new Date()` + getters locais — o MESMO calculo do
+// componente — e so divergia da implementacao errada (`toISOString().slice(0,10)`, UTC) entre 21h
+// e meia-noite no fuso do Brasil. Das 00:00 as 20:59 ela passava com o `hojeISO` quebrado.
+//
+// Molde: o (q) de `PedidoCompraForm.test.js`. O relogio e fixado em 2026-09-17T02:30:00Z, que e
+// 23:30 de 16/09 em America/Sao_Paulo (o globalSetup fixa o TZ): UTC e local discordam de dia, e
+// a implementacao UTC devolveria 2026-09-17. `global.Date` vira uma subclasse fixa (e nao
+// `jest.useFakeTimers`, que no Jest 27 fakeia o `setTimeout` de `esperarEfeitos()`); o construtor
+// sem argumentos continua sendo LOCAL, como a RN-D03 exige. Restaurado no `finally`.
 test('(a) /compras/cotacoes/nova renderiza "Nova cotação" e o form, com a data de hoje LOCAL', async () => {
-  // controle de fuso, como Compras.test.js:197-202: o globalSetup fixa America/Sao_Paulo
-  expect(new Date().getTimezoneOffset()).toBe(180);
-  await renderizarEm('/compras/cotacoes/nova');
-  expect(texto()).toContain('Nova cotação');
-  expect(porTestId('cotacao-form')).not.toBeNull();
-  expect(texto()).not.toContain('Gestão de fornecedores, pedidos e cotações');
-  const hoje = new Date();
-  const esperado = [hoje.getFullYear(), String(hoje.getMonth() + 1).padStart(2, '0'), String(hoje.getDate()).padStart(2, '0')].join('-');
-  expect(porTestId('cotacao-data').value).toBe(esperado);
-  expect(porTestId('cotacao-status').value).toBe('em_analise');
+  const DateReal = global.Date;
+  const INSTANTE = new DateReal('2026-09-17T02:30:00Z');
+  class DataFixa extends DateReal {
+    constructor(...args) { super(...(args.length ? args : [INSTANTE.getTime()])); }
+    static now() { return INSTANTE.getTime(); }
+  }
+  global.Date = DataFixa;
+  try {
+    // CONTROLE POSITIVO, dentro do cenario: o relogio fixo esta instalado E na janela em que UTC e
+    // local divergem — a implementacao antiga (UTC) responderia 17, a certa (local) responde 16.
+    expect(new Date().getTimezoneOffset()).toBe(180);
+    expect(new Date().toISOString().slice(0, 10)).toBe('2026-09-17');
+    expect(new Date().getDate()).toBe(16);
+    await renderizarEm('/compras/cotacoes/nova');
+    expect(texto()).toContain('Nova cotação');
+    expect(porTestId('cotacao-form')).not.toBeNull();
+    expect(texto()).not.toContain('Gestão de fornecedores, pedidos e cotações');
+    expect(porTestId('cotacao-data').value).toBe('2026-09-16');
+    expect(porTestId('cotacao-status').value).toBe('em_analise');
+  } finally {
+    global.Date = DateReal;
+  }
 });
 
 test('(b) RN-E16 o botao da aba diz "Nova Cotação" e chega ao form; o lapis tambem', async () => {
