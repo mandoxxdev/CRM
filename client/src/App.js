@@ -43,6 +43,7 @@ import {
   Compras,
   ComprasSolicitacoesCompra,
   PedidoCompraForm,
+  FornecedorForm,
   GruposFornecedores,
   FornecedoresDoGrupo,
   ItensFornecedor,
@@ -360,6 +361,9 @@ export function AppRoutes() {
         <Route path="pedidos/editar/:id" element={
           <PedidoCompraForm />
         } />
+        {/* Etapa 40, Task 4: os dois caminhos da aba Fornecedores que caiam no `*` */}
+        <Route path="fornecedores/novo" element={<FornecedorForm />} />
+        <Route path="fornecedores/editar/:id" element={<FornecedorForm />} />
         <Route path="cotacoes" element={
           <Compras />
         } />
