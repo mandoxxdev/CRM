@@ -45,6 +45,11 @@ const ADMIN = { id: 101, nome: 'Admin E41 T2 Gerar', role: 'admin', is_superadmi
   }
   const gerar = (id) => request(app).post(`/api/compras/cotacoes/${id}/gerar-pedido`).send();
   const contaPedidos = async () => (await dbGet(db, 'SELECT COUNT(*) AS n FROM pedidos_compra')).n;
+  const contaLinhas = async () => (await dbGet(db, 'SELECT COUNT(*) AS n FROM itens_pedido_compra')).n;
+  // Pedido VIVO que nenhuma cotacao aponta. Neste arquivo TODO pedido nasce de `gerar-pedido`, entao
+  // o numero certo e sempre 0 — um orfao aqui e um pedido que a RN-F10 prometeu nao criar.
+  const contaOrfaos = async () => (await dbGet(db,
+    'SELECT COUNT(*) AS n FROM pedidos_compra WHERE id NOT IN (SELECT pedido_id FROM cotacoes WHERE pedido_id IS NOT NULL)')).n;
 
   await test('(1) RN-F07 gerar -> 201 pedido PC-, total = soma, 2 linhas com codigo/descricao/unidade e recebida 0; cotacao ganha pedido_id e status aprovado', async () => {
     const c = await cotar([{ material_id: mA, quantidade: 2, valor_unitario: 10 }, { material_id: mB, quantidade: 1, valor_unitario: 5 }], { status: 'em_analise' });
@@ -144,6 +149,52 @@ const ADMIN = { id: 101, nome: 'Admin E41 T2 Gerar', role: 'admin', is_superadmi
     assert.notStrictEqual(b.body.numero, a.body.numero, 'PC novo');
     // e agora a cotacao volta a ser inexcluivel
     assert.strictEqual((await request(app).delete(`/api/compras/cotacoes/${c.id}`)).status, 409);
+  });
+  // Onda de correcao da 41 (F1 = RN I1 = UX C1): a conversao NAO era atomica. O 409 era lido em
+  // `obterCotacao` antes de varios `await` e o `UPDATE` do vinculo era incondicional — 6 POSTs em
+  // paralelo davam 6 x 201, seis pedidos, cinco sem cotacao apontando (todos visiveis no aux do
+  // recebimento). Duplo clique na tela reproduz com dois. O conserto e o `UPDATE … WHERE id = ? AND
+  // pedido_id IS NULL` como guarda + compensacao (`excluirPedido` do perdedor) + 409 com o vencedor.
+  await test('(11) RN-F10 CORRIDA: 6 gerar-pedido em paralelo na MESMA cotacao -> exatamente 1 x 201 e 5 x 409 com o PC do vencedor; COUNT(pedidos) +1; pedido_id aponta para o unico pedido; linhas = itens da cotacao; 0 orfaos', async () => {
+    const c = await cotar([{ material_id: mA, quantidade: 2, valor_unitario: 10 }, { material_id: mB, quantidade: 1, valor_unitario: 5 }]);
+    const pedidosAntes = await contaPedidos();
+    const linhasAntes = await contaLinhas();
+    const rs = await Promise.all(Array.from({ length: 6 }, () => gerar(c.id)));
+    const codigos = rs.map((r) => r.status);
+    assert.deepStrictEqual([...codigos].sort(), [201, 409, 409, 409, 409, 409], `status: ${codigos.join(',')}`);
+    const vencedor = rs.find((r) => r.status === 201).body;
+    assert.ok(/^PC-/.test(vencedor.numero), vencedor.numero);
+    for (const r of rs.filter((x) => x.status === 409)) {
+      assert.strictEqual(r.body.error, `Cotação ${c.numero} já gerou o pedido ${vencedor.numero}`, JSON.stringify(r.body));
+    }
+    assert.strictEqual(await contaPedidos(), pedidosAntes + 1, 'os perdedores tem de ser COMPENSADOS (excluirPedido) — sem isso ficam 6 pedidos');
+    const g = await get(c.id);
+    assert.strictEqual(g.body.pedido_id, vencedor.id, 'pedido_id aponta para o unico pedido que existe');
+    assert.strictEqual(g.body.pedido_numero, vencedor.numero);
+    assert.strictEqual(g.body.status, 'aprovado');
+    assert.strictEqual(await contaLinhas(), linhasAntes + 2, 'itens_pedido_compra: so as 2 linhas do vencedor, nenhuma orfa');
+    assert.strictEqual(await contaOrfaos(), 0, 'pedido vivo sem cotacao apontando');
+  });
+  // F1, segunda metade (RN M3): `DELETE /cotacoes/:id` concorrente com `gerar-pedido`. Antes, o
+  // `UPDATE` afetava 0 linhas sem ninguem olhar `changes` e sobrava um pedido vivo com a cotacao
+  // apagada. Os dois resultados legitimos: a exclusao venceu (200 + 404/409, nenhum pedido sobra)
+  // ou a conversao venceu (409 + 201, a cotacao aponta para o pedido). O invariante e um so: 0 orfaos.
+  await test('(12) CORRIDA DELETE /cotacoes/:id x gerar-pedido -> (200 + 404/409) ou (409 + 201); nunca pedido vivo com cotacao apagada', async () => {
+    const c = await cotar([{ material_id: mA, quantidade: 1, valor_unitario: 7 }]);
+    const pedidosAntes = await contaPedidos();
+    const [d, g] = await Promise.all([request(app).delete(`/api/compras/cotacoes/${c.id}`), gerar(c.id)]);
+    const par = `delete ${d.status} + gerar ${g.status}: ${JSON.stringify(d.body)} / ${JSON.stringify(g.body)}`;
+    if (d.status === 200) {
+      assert.ok([404, 409].includes(g.status), par);
+      assert.strictEqual(await contaPedidos(), pedidosAntes, `cotacao apagada: nenhum pedido pode sobrar (${par})`);
+      assert.strictEqual((await get(c.id)).status, 404);
+    } else {
+      assert.strictEqual(d.status, 409, par);
+      assert.strictEqual(g.status, 201, par);
+      assert.strictEqual(await contaPedidos(), pedidosAntes + 1, par);
+      assert.strictEqual((await get(c.id)).body.pedido_id, g.body.id);
+    }
+    assert.strictEqual(await contaOrfaos(), 0, `pedido vivo sem cotacao apontando (${par})`);
   });
 
   await close();

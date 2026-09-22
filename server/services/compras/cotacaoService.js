@@ -173,10 +173,28 @@ async function gerarPedidoDaCotacao(db, id, user) {
     observacoes: c.observacoes,
     itens: c.itens.map((i) => ({ material_id: i.material_id, quantidade: i.quantidade, valor_unitario: i.valor_unitario })),
   }, user);
-  // Sem transacao (como o resto ate o Postgres): se este UPDATE falhar, o pedido FICA e a cotacao
-  // fica sem vinculo — declarado na letra G do fechamento. O erro sobe.
+  // ⚠️ O UPDATE E A GUARDA (onda de correcao da 41, F1 = RN I1/M3 = UX C1). O 409 la em cima e o
+  // caminho RAPIDO, nao a protecao: entre ele e este ponto ha uma dezena de `await`, e sem transacao
+  // (como o resto ate o Postgres) N chamadas concorrentes leem `pedido_id NULL` e criam N pedidos —
+  // medido por sonda: 6 POSTs em paralelo -> 6 x 201, cinco pedidos sem cotacao apontando, todos
+  // visiveis no aux do recebimento; duplo clique na tela reproduz com dois. O `AND pedido_id IS NULL`
+  // faz do UPDATE um compare-and-set: uma unica chamada afeta 1 linha, as outras afetam 0. Tambem
+  // cobre a corrida com `DELETE /cotacoes/:id` (a cotacao sumiu -> 0 linhas -> o pedido nao pode ficar).
   // D7: gerar o pedido E aprovar — sem isto a lista mostraria "Em Análise" com pedido gerado.
-  await dbRun(db, "UPDATE cotacoes SET pedido_id = ?, status = 'aprovado', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [pedido.id, id]);
+  const vinculo = await dbRun(db,
+    "UPDATE cotacoes SET pedido_id = ?, status = 'aprovado', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND pedido_id IS NULL",
+    [pedido.id, id]);
+  if (!vinculo.changes) {
+    // Perdeu a corrida (ou a cotacao foi apagada no meio): COMPENSAR — o pedido que acabou de nascer
+    // nao e apontado por cotacao nenhuma, entao `excluirPedido` passa com FK ON (libera 0 cotacoes,
+    // 0 solicitacoes, apaga linhas e cabecalho). Depois, o mesmo 409 da checagem rapida, com o
+    // vencedor relido; se a cotacao nao existe mais, `obterCotacao` lanca o 404.
+    // Descartado: fila em memoria por id de cotacao (molde de `enqueueWrite`) — o CAS cobre as duas
+    // corridas sem estado no processo.
+    await pedidoCompraService.excluirPedido(db, pedido.id);
+    const atual = await obterCotacao(db, id);
+    throw erro(cotacaoJaGerouPedido(atual.numero, rotuloPedido(atual)), 409);
+  }
   return pedidoCompraService.obterPedido(db, pedido.id);
 }
 
