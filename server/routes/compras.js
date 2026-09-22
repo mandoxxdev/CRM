@@ -437,8 +437,8 @@ app.delete('/api/compras/:tipo/:id', authenticateToken, checkModulePermission('c
    * ⚠️ ONDA DE CORRECAO DA ETAPA 40, F1 (achado I1 da revisao de RN) — `fornecedores` tem TRES FKs
    * apontando para ela, nao duas, e as duas correcoes acima enumeravam so as de documento:
    *   1. `pedidos_compra.fornecedor_id`  (`index.js:19241`)  — contagem 1, literal inline abaixo;
-   *   2. `cotacoes.fornecedor_id`        (`index.js:19244`)  — contagem 2, `FORNECEDOR_COM_COTACOES`;
-   *   3. `itens_fornecedor.fornecedor_id` (`index.js:19296`) — a lista de precos do fornecedor
+   *   2. `cotacoes.fornecedor_id`        (`index.js:19255`)  — contagem 2, `FORNECEDOR_COM_COTACOES`;
+   *   3. `itens_fornecedor.fornecedor_id` (`index.js:19295`) — a lista de precos do fornecedor
    *      (`POST /:id/itens` e `/itens/importar`, mais abaixo neste arquivo), que ficou FORA da
    *      enumeracao, do design (D10) e do harness ate esta onda. Fornecedor com lista de precos e
    *      sem documento passava pelas duas contagens, o `DELETE` cru caia na FK em producao e a
