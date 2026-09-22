@@ -130,6 +130,96 @@
     return null;
   }
 
+  /* COBERTO ────────────────────────────────────────────────────────────────
+   * Um elemento `fixed` pousado em cima de texto do conteudo. O botao de
+   * ajuda do app cobria o valor de "CATEGORIA" no cartao de Materiais — some
+   * a informacao, e nenhuma outra regua ve: o texto cabe, contrasta e nao
+   * estoura. Ele so nao esta la para quem olha.
+   *
+   * A barra inferior e a de cima sao `fixed` de proposito e ficam FORA: o
+   * conteudo rola por baixo delas, e e assim que tem de ser.
+   */
+  function flutuantes() {
+    var fora = [];
+    var todos = document.querySelectorAll('body *');
+    for (var i = 0; i < todos.length; i++) {
+      var e = todos[i];
+      if (getComputedStyle(e).position !== 'fixed') continue;
+      if (e.closest('.bim, [class*="topbar"], [class*="bottom-nav"], .Toastify, .splash-screen')) continue;
+      if (e.parentElement && getComputedStyle(e.parentElement).position === 'fixed') continue;
+      var r = e.getBoundingClientRect();
+      if (r.width > 3 && r.height > 3 && r.width < LARGURA * 0.9) fora.push(r);
+    }
+    return fora;
+  }
+  var FLUTUANTES = null;
+
+  function coberto(el, r, txt) {
+    if (!txt || txt.length < 2) return null;
+    if (el.closest('[class*="topbar"], .bim, .Toastify, .splash-screen')) return null;
+    if (FLUTUANTES === null) FLUTUANTES = flutuantes();
+    for (var i = 0; i < FLUTUANTES.length; i++) {
+      var f = FLUTUANTES[i];
+      var cruza = !(f.right < r.left || f.left > r.right || f.bottom < r.top || f.top > r.bottom);
+      if (!cruza) continue;
+      // Quanto do texto some por baixo.
+      var larg = Math.min(f.right, r.right) - Math.max(f.left, r.left);
+      var alt = Math.min(f.bottom, r.bottom) - Math.max(f.top, r.top);
+      var parte = (larg * alt) / (r.width * r.height);
+      if (parte > 0.12) {
+        return 'COBERTO: ' + Math.round(parte * 100) + '% escondido por elemento flutuante';
+      }
+    }
+    return null;
+  }
+
+  /* ICONE COLAPSADO ───────────────────────────────────────────────────────
+   * Botao que existe, ocupa lugar e nao mostra nada: o desenho dentro dele
+   * foi espremido ate sumir.
+   *
+   * Sempre a mesma causa nesta base — `box-sizing: border-box` com recuo
+   * lateral grande num botao estreito. 40px de largura menos 20+20 de recuo
+   * da caixa de conteudo ZERO, e o `<svg>`, que e flexivel, encolhe para
+   * nada. Ja derrubou todos os botoes de icone do app uma vez, e o botao de
+   * ajuda uma segunda vez, agora por minha mao.
+   *
+   * A regua nao via porque `visivel()` descarta o que mede menos de 3px —
+   * ou seja, descartava exatamente a vitima. Por isso a pergunta e feita do
+   * lado do BOTAO, que continua grande.
+   */
+  function iconeColapsado(el, r, txt) {
+    if (!el.matches('button, a[href], [role="button"]')) return null;
+    if (txt) return null;
+    if (r.width < 20 || r.height < 20) return null;
+    var desenhos = el.querySelectorAll('svg, img');
+    if (!desenhos.length) return null;
+    for (var i = 0; i < desenhos.length; i++) {
+      var d = desenhos[i].getBoundingClientRect();
+      if (d.width >= 4 && d.height >= 4) return null;   // ao menos um aparece
+    }
+    return 'ICONE COLAPSADO: botao de ' + Math.round(r.width) + 'px com desenho de 0px';
+  }
+
+  /* ICONE SEM NOME ─────────────────────────────────────────────────────────
+   * Botao que mostra so um desenho. O `title` resolve para leitor de tela e
+   * nao resolve nada para quem OLHA: o cartao de Materiais tinha OITO
+   * quadrados iguais, e "Entrada rapida" e "Saida rapida" so se distinguiam
+   * pela direcao de uma seta de 16px. O P.O. viu e disse que estava um lixo.
+   *
+   * Vale dentro de LISTA (cartao convertido), onde o usuario esta decidindo
+   * entre varios registros. Barra de ferramenta do topo, com dois ou tres
+   * icones conhecidos, nao entra.
+   */
+  function iconeSemNome(el, txt) {
+    if (!el.matches('button, a[href], [role="button"]')) return null;
+    if (txt) return null;                       // ja mostra texto
+    if (el.getAttribute('data-rotulo')) return null;
+    if (!el.closest('.cartao-auto, [class*="-card"], [class*="cartao"]')) return null;
+    var irmaos = el.parentElement ? el.parentElement.querySelectorAll('button, a[href], [role="button"]').length : 1;
+    if (irmaos < 4) return null;                // duas ou tres, ainda da para deduzir
+    return 'ICONE SEM NOME: ' + irmaos + ' botoes iguais sem legenda';
+  }
+
   /* CONTRASTE BAIXO ────────────────────────────────────────────────────────
    * O dado mais importante da tela sendo o menos legivel ja aconteceu duas
    * vezes aqui: o numero principal do Dashboard media 2,30, e os rotulos do
@@ -227,6 +317,7 @@
 
   function medir() {
     var achados = [];
+    FLUTUANTES = null;          // recalcula a cada tela
     var todos = document.querySelectorAll('body *');
     for (var i = 0; i < todos.length; i++) {
       var el = todos[i];
@@ -272,9 +363,12 @@
         problemas.push(espremido(el, c, r, txt));
         problemas.push(cortado(el, c, txt));
         problemas.push(contrasteBaixo(el, c, txt));
+        problemas.push(coberto(el, r, txt));
       }
       problemas.push(estouro(el, c, r));
       problemas.push(alvoPequeno(el, r));
+      problemas.push(iconeSemNome(el, txt));
+      problemas.push(iconeColapsado(el, r, txt));
 
       for (var j = 0; j < problemas.length; j++) {
         if (!problemas[j]) continue;
@@ -307,6 +401,14 @@
       '<div class="cp-espremido" style="width:27px;font:600 12px system-ui">Giro de estoque</div>' +
       '<div class="cp-cortado" style="width:40px;overflow:hidden;white-space:nowrap;font:12px system-ui">texto bem maior que a caixa</div>' +
       '<button class="cp-alvo" style="width:20px;height:20px;padding:0;min-height:0">x</button>' +
+      // O `min-width: 0` aqui e proposital e importante: o app agora tem uma
+      // regra global que da piso de 1em a icone dentro de botao, e ela
+      // protege ate a vitima plantada. Sem furar essa protecao, o controle
+      // positivo para de reproduzir o defeito e deixa de testar o detector —
+      // passaria a dizer "a regua enxerga" quando ela pode estar cega.
+      '<button class="cp-colapsado" style="width:40px;height:40px;padding:12px 20px;box-sizing:border-box;display:inline-flex">' +
+        '<svg viewBox="0 0 24 24" style="min-width:0;width:100%"></svg></button>' +
+      '<button class="cn-icone-ok" style="width:40px;height:40px;padding:0;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center"><svg width="20" height="20" viewBox="0 0 24 24"></svg></button>' +
       // NAO podem ser acusados
       '<button class="cn-botao-ok" style="width:145px;min-height:44px;padding:12px 20px;white-space:nowrap;font:12px system-ui">Materiais sem endereço</button>' +
       '<div class="cn-texto-ok" style="width:280px;font:12px system-ui">Uma frase inteira que cabe sem aperto nenhum</div>' +
@@ -316,17 +418,33 @@
       '<select class="cn-lista" style="width:198px;height:44px"><option class="cn-opcao">Corredor A</option></select>' +
       '<div style="background:#ffffff"><span class="cp-contraste" style="color:#a7a7a7;font:12px system-ui">rotulo cinza claro</span></div>' +
       '<div style="background:#ffffff"><span class="cn-contraste-ok" style="color:#14182B;font:12px system-ui">texto escuro legivel</span></div>' +
-      '<div style="background-image:linear-gradient(#fff,#000)"><span class="cn-sobre-gradiente" style="color:#888;font:12px system-ui">nao da para saber a cor do fundo</span></div>';
+      '<div style="background-image:linear-gradient(#fff,#000)"><span class="cn-sobre-gradiente" style="color:#888;font:12px system-ui">nao da para saber a cor do fundo</span></div>' +
+      // ICONE SEM NOME: cinco botoes mudos dentro de um cartao.
+      '<div class="cartao-auto"><div class="cp-barra">' +
+        '<button class="cp-mudo" title="Extrato"><svg width="16" height="16"></svg></button>' +
+        '<button title="Requisitar"><svg width="16" height="16"></svg></button>' +
+        '<button title="Imprimir"><svg width="16" height="16"></svg></button>' +
+        '<button title="Entrada"><svg width="16" height="16"></svg></button>' +
+        '<button title="Saida"><svg width="16" height="16"></svg></button>' +
+      '</div>' +
+      // NEGATIVO: os mesmos cinco, agora com legenda — nao podem ser acusados.
+      '<div class="cn-barra">' +
+        '<button class="cn-comrotulo" data-rotulo="Extrato"><svg width="16" height="16"></svg></button>' +
+        '<button data-rotulo="Requisitar"><svg width="16" height="16"></svg></button>' +
+        '<button data-rotulo="Imprimir"><svg width="16" height="16"></svg></button>' +
+        '<button data-rotulo="Entrada"><svg width="16" height="16"></svg></button>' +
+        '<button data-rotulo="Saida"><svg width="16" height="16"></svg></button>' +
+      '</div></div>';
     document.body.appendChild(caixa);
     var vistos = medir().map(function (a) { return a.onde; });
     caixa.remove();
 
-    var cega = ['cp-espremido', 'cp-cortado', 'cp-alvo', 'cp-contraste'].filter(function (k) {
+    var cega = ['cp-espremido', 'cp-cortado', 'cp-alvo', 'cp-contraste', 'cp-mudo', 'cp-colapsado'].filter(function (k) {
       return vistos.indexOf(k) === -1;
     });
     if (cega.length) throw new Error('CONTROLE POSITIVO FALHOU, regua cega para: ' + cega.join(', '));
 
-    var ruidosa = ['cn-botao-ok', 'cn-texto-ok', 'cn-reticencias', 'cn-trilho', 'cn-caixa', 'cn-opcao', 'cn-contraste-ok', 'cn-sobre-gradiente'].filter(function (k) {
+    var ruidosa = ['cn-botao-ok', 'cn-texto-ok', 'cn-reticencias', 'cn-trilho', 'cn-caixa', 'cn-opcao', 'cn-contraste-ok', 'cn-sobre-gradiente', 'cn-comrotulo', 'cn-icone-ok'].filter(function (k) {
       return vistos.indexOf(k) !== -1;
     });
     if (ruidosa.length) throw new Error('CONTROLE NEGATIVO FALHOU, regua acusa o que esta certo: ' + ruidosa.join(', '));
@@ -363,6 +481,79 @@
     return false;   // desisti de esperar; a medicao segue, marcada abaixo
   }
 
+  /* A tela tem CONTEUDO para ser medido?
+   *
+   * Esta e a correcao mais importante que esta regua recebeu, e nao e sobre
+   * pixel nenhum.
+   *
+   * Eu varri as 24 telas do Almoxarifado, dei todas como limpas e subi. O
+   * P.O. abriu Materiais e mandou a foto: cartao de 472px, foto esmagada,
+   * oito icones mudos. A varredura nao tinha errado a conta — o banco local
+   * tinha ZERO materiais. Tela vazia nao tem cartao, e cartao que nao existe
+   * nao tem defeito.
+   *
+   * "Limpo" e "nao havia o que medir" sao resultados diferentes, e confundir
+   * os dois e pior do que nao medir: da confianca sem base. Daqui em diante a
+   * regua diz qual dos dois foi.
+   */
+  function temConteudo() {
+    // Lista com registros: e o caso claro.
+    if (document.querySelector('.cartao-auto, table tbody tr td + td')) return true;
+
+    // A frase de vazio NAO basta sozinha, e a primeira versao desta funcao
+    // errou por confiar nela. O painel do Almoxarifado tem 62 blocos de
+    // indicador e diz, numa secao interna, "Nenhuma requisicao pendente de
+    // atendimento"; o formulario de material tem 45 campos e a palavra
+    // "nenhuma" numa dica. Os dois foram marcados como sem dados, e os dois
+    // tinham muito o que medir.
+    //
+    // Entao pergunto o que a tela TEM, e nao so o que ela diz:
+    if (document.querySelectorAll('input, select, textarea').length >= 3) return true;
+    if (document.querySelectorAll('[class*="kpi"], [class*="summary"], [class*="stat"]').length >= 2) return true;
+
+    var vazio = /nenhum|nao ha|não há|sem registro|sem resultado/i;
+    if (vazio.test(document.body.innerText || '')) return false;
+
+    // Nem lista, nem formulario, nem painel, nem aviso de vazio: nao tenho
+    // sinal de ausencia, entao nao acuso.
+    return true;
+  }
+
+  /* Espera a tela SOSSEGAR, em vez de contar um tempo fixo.
+   *
+   * Pausa fixa e um chute sobre a rede. Com 800ms eu medi Materiais no meio
+   * do carregamento e a regua acusou 27 defeitos: a tabela ja estava na tela
+   * e ainda nao tinha virado cartao. Nenhum era real — 900ms depois a mesma
+   * tela media zero.
+   *
+   * Isso corta dos dois lados, e o lado silencioso e pior: medir cedo demais
+   * tambem devolve tela VAZIA como limpa, que foi exatamente o erro que fez
+   * o Almoxarifado passar.
+   *
+   * Aqui eu observo as mutacoes e so meco depois de um intervalo sem
+   * nenhuma. Com teto, para uma tela que anima sem parar nao travar a
+   * varredura.
+   */
+  function esperarQuietude(silencio, teto) {
+    silencio = silencio || 400;
+    teto = teto || 6000;
+    return new Promise(function (resolve) {
+      var ultima = Date.now();
+      var obs = new MutationObserver(function () { ultima = Date.now(); });
+      obs.observe(document.body, { childList: true, subtree: true, attributes: true, characterData: true });
+      var inicio = Date.now();
+      var timer = setInterval(function () {
+        var quieto = Date.now() - ultima >= silencio;
+        var estourou = Date.now() - inicio >= teto;
+        if (quieto || estourou) {
+          clearInterval(timer);
+          obs.disconnect();
+          resolve(quieto ? 'quieta' : 'teto');
+        }
+      }, 80);
+    });
+  }
+
   async function varrer(rotas, pausa) {
     autoTeste();
     await esperarAbertura();
@@ -373,10 +564,17 @@
       var sujeira = document.querySelector('.Toastify');
       if (sujeira) sujeira.innerHTML = '';
       ir(rotas[i]);
-      await esperar(pausa || 900);
+      await esperar(pausa || 400);
       // Esperar a abertura sair vale por ROTA, nao so no comeco: cada modulo
       // remonta a sua. Sem isto eu media o app por baixo de uma cortina.
       await esperarAbertura();
+      await esperarQuietude();
+      if (!temConteudo()) {
+        relatorio.push({ rota: rotas[i], semDados: true, quantos: 0,
+          achados: [{ onde: '(tela)', texto: '',
+            problema: 'SEM DADOS: nada para medir — NAO vale como limpo' }] });
+        continue;
+      }
       var a = medir();
       if (a.length) relatorio.push({ rota: rotas[i], quantos: a.length, achados: a.slice(0, 8) });
     }

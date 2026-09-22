@@ -859,6 +859,10 @@
 
   /* ── foto ── */
   .cartao-auto > [data-papel="foto"] { order: 1; width: 46px; flex: 0 0 46px; }
+  /* Sem imagem nao ha miniatura: o que sobra e a caixa cinza do placeholder,
+     e ela nao informa nada. Medido em Materiais: 72px de cartao gastos para
+     mostrar que o material nao tem foto. */
+  .cartao-auto > [data-papel="foto"]:not(:has(img)) { display: none; }
   .cartao-auto > [data-papel="foto"] img {
     width: 46px; height: 46px;
     border-radius: 12px;
@@ -961,8 +965,27 @@
     color: var(--ag-texto-fraco);
     opacity: .75;
   }
+  /* O valor da linha de meta usa a cor do CARTAO, nao a que a tabela de
+     computador escolheu para ele.
+
+     Caso medido: a familia do material vem com `color: #4facfe` no `style`
+     inline — bonito numa tabela de monitor, 2,37 de contraste sobre o cartao
+     de vidro claro. E o terceiro lugar onde o azul da marca aparece como cor
+     de letra pequena; resolver aqui cobre todas as tabelas convertidas, as de
+     hoje e as de amanha, em vez de um seletor por tela.
+
+     Selo, pilula e barra de estoque ficam de fora: neles a cor E a
+     informacao, e achatar apagaria o sinal. */
+  .cartao-auto > [data-papel="meta"] *:not([class*="badge"]):not([class*="status"]):not([class*="selo"]):not([class*="pill"]):not([class*="tag"]):not([class*="chip"]):not([class*="bar"]):not([class*="fill"]):not(svg):not(svg *) {
+    color: inherit !important;
+  }
+
   .cartao-auto > [data-papel="valor"] + [data-papel="meta"] { margin-top: 6px; }
   .cartao-auto > [data-papel="meta"]:empty { display: none; }
+  /* `:empty` so pega celula sem NENHUM no. "LOCALIZACAO —" tem um traco
+     dentro, entao passava e ocupava uma linha para comunicar ausencia. Quem
+     precisa saber que falta endereco abre o material. */
+  .cartao-auto > [data-vazio="1"] { display: none !important; }
 
   /* ── ações ── */
   .cartao-auto > [data-papel="acoes"] {
@@ -977,15 +1000,70 @@
     align-items: center;
     gap: 6px;
   }
-  /* 44px é o mínimo confortável para o dedo; os ícones das tabelas foram
-     desenhados para o mouse, com 24px. */
+  /* ── A barra de acoes, com NOME ────────────────────────────────────
+     O cartao de Materiais tem OITO botoes, e todos eram quadrados iguais de
+     44px. O P.O. viu a tela e disse que estava um lixo; estava mesmo — oito
+     icones sem legenda nao sao oito acoes, sao um enigma. "Entrada rapida de
+     estoque" e "Saida rapida de estoque" so se distinguem pela direcao de uma
+     setinha de 16px.
+
+     Todos ja traziam `title`, entao o leitor de tela sempre soube o que eram.
+     Quem OLHAVA e que nao. O utilitario copia esse `title` encurtado para
+     `data-rotulo` e aqui ele vira legenda.
+
+     Quatro por linha: em 290px de cartao da 68px por botao, que comporta
+     "Requisitar" em duas linhas de 10px. A altura sai igual a de antes — os
+     mesmos oito botoes ja ocupavam duas fileiras —, so que agora dizem o que
+     fazem. */
+  /* Fileira que se arrasta, e nao grade de dois andares.
+
+     Com os oito botoes em grade de 4 colunas, a barra media 135px — um
+     TERCO de um cartao de 384px so de botao, numa lista cuja funcao e
+     deixar a pessoa percorrer materiais. Em fileira unica a barra cai para
+     perto de 50px e os mesmos oito continuam todos ali, arrastando de lado.
+
+     O icone e o rotulo ficam LADO A LADO, nao um sobre o outro: sem altura
+     extra, e a legenda e o que torna oito quadrados iguais em oito acoes. */
+  .cartao-auto > [data-papel="acoes"] > * {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+    overflow-x: auto;
+    /* Sem isto o arrasto para seco no fim do conteudo, e com o cartao
+       arredondado o ultimo botao parece cortado. */
+    padding-right: 2px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .cartao-auto > [data-papel="acoes"] > *::-webkit-scrollbar { display: none; }
   .cartao-auto > [data-papel="acoes"] :where(button, a) {
     min-height: 44px;
     min-width: 44px;
+    /* `width: auto` e o que faz a legenda caber. Estes botoes foram
+       desenhados quadrados, com `width: 44px` fixo e `overflow: visible`:
+       com o rotulo ao lado, o texto vazava para fora da caixa e pisava no
+       botao seguinte — medido, "Extrato" ocupava 50px numa caixa de 44 e
+       invadia "Requisitar". Um `min-width` nao resolve: ele e piso, e o
+       problema era o TETO. */
+    width: auto !important;
+    flex: 0 0 auto;
     display: inline-flex;
+    flex-direction: row;
     align-items: center;
     justify-content: center;
-    border-radius: 12px;
+    gap: 6px;
+    padding: 0 12px !important;
+    border-radius: 14px;
+    font-size: .72rem;
+    line-height: 1.1;
+    white-space: nowrap;
+  }
+  .cartao-auto > [data-papel="acoes"] :where(button, a) > svg { flex-shrink: 0; }
+  .cartao-auto > [data-papel="acoes"] [data-rotulo]::after {
+    content: attr(data-rotulo);
+    font-weight: 600;
+    letter-spacing: -.01em;
+    white-space: nowrap;
   }
 
   /* Entrada escalonada, igual à das listas feitas à mão — e parando no sexto
@@ -1767,4 +1845,119 @@
     line-height: 40px;
     text-decoration: underline;
   }
+
+  /* ── 25. Busca e filtros do Almoxarifado ───────────────────────────
+     Dois defeitos que aparecem mesmo com a lista VAZIA, e que eu deixei
+     passar porque nenhuma das minhas reguas olha para sobreposicao nem para
+     alinhamento.
+
+     1. A lupa fica em `position: absolute` dentro do campo, e o campo estava
+        com `padding-left: 0` — medido. A lupa ocupa de 50px a 66px e o texto
+        comeca em 38px, ou seja, a lupa fica EM CIMA da primeira letra: o
+        usuario le "B(lupa)car por nome". Foi uma regra global minha de
+        `padding` em input que apagou o recuo que abria espaco para ela.
+
+     2. Os tres filtros sao `<select>` num flex, e select encolhe conforme o
+        texto da opcao: 275px, 243px e 150px. Empilhados, o resultado e uma
+        escada. Todos ocupam a linha inteira. */
+  /* A lupa deixa de flutuar por cima e passa a OCUPAR LUGAR.
+
+     O remendo obvio seria devolver `padding-left` ao input. Nao resolve o
+     problema, so o esconde num numero: o recuo teria de casar com o `left`
+     que cada componente deu a sua lupa, e no dia em que um deles mudasse o
+     icone voltaria a pisar no texto. Enquanto houver um elemento solto por
+     cima do campo, a sobreposicao continua possivel.
+
+     Aqui a pilula vira uma FILEIRA: lupa, depois campo. Lado a lado nao ha
+     como um cobrir o outro, em nenhuma largura.
+
+     `:has(> svg)` so entra onde existe icone de verdade; sem suporte, a
+     regra e ignorada inteira e volta o desenho anterior. */
+  [class*='-busca']:has(> svg),
+  [class*='-search']:has(> svg) {
+    display: flex !important;
+    align-items: center;
+    gap: 10px;
+    padding: 0 14px !important;
+  }
+  [class*='-busca']:has(> svg) > svg,
+  [class*='-search']:has(> svg) > svg {
+    position: static !important;
+    transform: none !important;
+    flex: 0 0 auto;
+    opacity: .55;
+  }
+  [class*='-busca']:has(> svg) > input,
+  [class*='-search']:has(> svg) > input {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 12px 0 !important;
+  }
+
+  .almox-filters {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+  .almox-filters > * { width: 100% !important; min-width: 0; }
+
+  /* ── 26. O botao de ajuda sai de cima do conteudo ────────────────────
+     Medido: o botao flutuante de 56px escondia 21% do valor da familia em
+     Materiais e 26% da quantidade em Movimentacoes. Aparece na foto que o
+     P.O. mandou, tapando "CONSUM…".
+
+     Encolher ou afastar nao resolve, so diminui o estrago: enquanto ele
+     flutuar sobre uma lista que usa a largura inteira, vai cobrir alguma
+     coisa. E os valores sao alinhados a direita justamente onde ele fica.
+
+     A barra de cima esta VAZIA fora o logo. Levando o botao para la ele
+     continua sempre a um toque, no canto que o polegar alcanca com o
+     aparelho na mao, e nao ha conteudo nenhum embaixo dele.
+
+     No computador nada muda: esta regra so existe dentro do @media. */
+  .help-guide-button,
+  [class*="help-guide"],
+  [class*="ajuda-flutuante"] {
+    position: fixed !important;
+    top: 12px !important;
+    right: 12px !important;
+    bottom: auto !important;
+    left: auto !important;
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+    min-height: 40px !important;
+    /* Acima da barra de cima, que tem z-index proprio. */
+    z-index: 1200 !important;
+    box-shadow: 0 2px 10px rgba(16, 24, 40, .18) !important;
+
+    /* O recuo TEM de ir junto com a largura.
+
+       Fixei 40px e deixei o `padding: 12px 20px` da regra global de botao:
+       com `box-sizing: border-box` isso da caixa de conteudo com ZERO de
+       largura, e o icone, que e flexivel, encolheu para nada. O botao virou
+       um circulo azul liso — medido, `svg 0x20`.
+
+       E a segunda vez nesta base que este par derruba um icone. Largura
+       pequena e recuo grande nao convivem. */
+    padding: 0 !important;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+  }
+  .help-guide-button > svg,
+  [class*="help-guide"] > svg { flex: 0 0 auto; }
+  .help-guide-button svg,
+  [class*="help-guide"] svg { width: 20px; height: 20px; }
+
+  /* Quantidade movimentada no painel: verde #1AA34A sobre o cartao claro da
+     ultima movimentacao — 3,04 medido, e e um NUMERO, o tipo de conteudo
+     que nao se adivinha pelo contexto. Mesmos tons ja medidos nos selos:
+     #146C43 no claro, #4ADE80 no escuro (o fundo la e escuro). */
+  html:not([data-theme="dark"]) .almox-mov-qtd { color: #146C43 !important; }
+  html:not([data-theme="dark"]) .almox-mov-qtd.saida,
+  html:not([data-theme="dark"]) .almox-mov-qtd[class*="saida"] { color: #B01030 !important; }
+  [data-theme="dark"] .almox-mov-qtd { color: #4ADE80 !important; }
+  [data-theme="dark"] .almox-mov-qtd.saida,
+  [data-theme="dark"] .almox-mov-qtd[class*="saida"] { color: #F87171 !important; }
 }

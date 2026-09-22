@@ -537,6 +537,25 @@ a.btn-danger:hover svg {
 
   /* Um SVG dentro de botão nunca deve encolher: ele É o conteúdo. */
   button > svg { flex-shrink: 0; }
+
+  /* E `flex-shrink: 0` NÃO basta — descobri medindo.
+     O `.botao-preferencias` mede 44px e carrega o `padding: 12px 20px` desta
+     folha. Com `box-sizing: border-box` sobram 4px de caixa de conteúdo, e o
+     desenho, que pede 1em, foi renderizado com 2px: o botão existia, ocupava
+     lugar e não mostrava nada. Medido: `svg 2x18` num botão de 44x44.
+
+     `flex-shrink` protege contra o encolhimento do FLEX; aqui quem esmaga é a
+     caixa de conteúdo, por outro caminho. `min-width` é o que resiste aos
+     dois, e vence `max-width: 100%` quando os dois brigam.
+
+     É a terceira vez que este par (botão estreito + recuo largo) apaga um
+     ícone nesta base. Um piso geral custa duas linhas e encerra a família,
+     inclusive para o botão que ainda não foi escrito. */
+  button > svg, button > img,
+  a > svg, [role="button"] > svg {
+    min-width: 1em;
+    min-height: 1em;
+  }
 }
 
 @media (max-width: 480px) {

@@ -83,10 +83,72 @@ const ehIdentificador = (txt) => (
   txt.length > 0 && txt.length <= 28 && !/\s/.test(txt) && /\d/.test(txt)
 );
 
-/** A célula é só uma imagem? (miniatura de produto, avatar de cliente) */
-function ehFoto(td) {
-  if (!td.querySelector('img')) return false;
-  return limpo(td).length <= 2;   // "—" de placeholder conta como vazio
+const ROTULO_FOTO = /^(foto|imagem|img|logo|avatar|miniatura)\b/i;
+
+/**
+ * A célula é só uma imagem? (miniatura de produto, avatar de cliente)
+ *
+ * O nome da coluna conta, e não só a presença de `<img>`. Quando o material
+ * ainda não tem foto, a tela desenha um PLACEHOLDER — uma caixa com ícone,
+ * sem `<img>` nenhum. A versão anterior exigia a tag, então essa célula caía
+ * no papel `meta` e virava uma faixa inteira escrita "FOTO" com um quadrado
+ * cinza dentro: 72px de cartão medidos, para não dizer nada.
+ */
+function ehFoto(td, rotulo) {
+  if (limpo(td).length > 2) return false;      // tem texto: não é miniatura
+  if (td.querySelector('img')) return true;
+  return ROTULO_FOTO.test((rotulo || '').trim());
+}
+
+/**
+ * O conteúdo desta célula é "nada"?
+ *
+ * Um traço não é informação. Na lista de materiais, "LOCALIZAÇÃO —" ocupava
+ * uma linha do cartão para comunicar ausência, e o cartão do celular não tem
+ * espaço para isso: quem precisa saber que falta endereço abre o material.
+ *
+ * Controles e imagens nunca contam como vazio — um `<td>` com só um botão é
+ * ação, não buraco.
+ */
+const SEM_CONTEUDO = /^(—|–|-|n\/a|na|null|undefined|não informado|nao informado)$/i;
+
+function pareceVazio(td) {
+  if (td.querySelector('img, input, select, textarea, button, a[href], [role="button"]')) {
+    return false;
+  }
+  const txt = limpo(td);
+  return txt === '' || SEM_CONTEUDO.test(txt);
+}
+
+/**
+ * Um rótulo curto para um botão que só tem ícone.
+ *
+ * Os oito botões do cartão de materiais trazem `title`, então o leitor de
+ * tela os anuncia — mas quem OLHA a tela vê oito quadrados iguais. Era a
+ * queixa do P.O.: o cartão não diz o que faz.
+ *
+ * O `title` costuma ser uma frase ("Entrada rápida de estoque neste
+ * material"). Aqui ela vira etiqueta: junto palavras enquanto couber em 14
+ * caracteres e descarto preposição solta no fim, que ficaria pendurada
+ * ("Plano de" → "Plano").
+ */
+const PALAVRA_SOLTA = /^(de|do|da|dos|das|o|a|os|as|no|na|em|para|com|este|esta|deste|desta|neste|nesta)$/i;
+
+export function rotuloCurto(titulo, limite = 14) {
+  const palavras = String(titulo || '').trim().split(/\s+/).filter(Boolean);
+  if (!palavras.length) return '';
+  const escolhidas = [];
+  let tamanho = 0;
+  for (const p of palavras) {
+    const custo = escolhidas.length ? p.length + 1 : p.length;
+    if (tamanho + custo > limite && escolhidas.length) break;
+    escolhidas.push(p);
+    tamanho += custo;
+  }
+  while (escolhidas.length > 1 && PALAVRA_SOLTA.test(escolhidas[escolhidas.length - 1])) {
+    escolhidas.pop();
+  }
+  return escolhidas.join(' ');
 }
 
 /**
@@ -118,6 +180,40 @@ function ehSituacao(td, rotulo) {
     return true;
   }
   return /^(status|situa|estado|ativo)/i.test(rotulo) && txt.length <= 24;
+}
+
+/**
+ * Marca (ou desmarca) a célula sem conteúdo, para o CSS escondê-la.
+ *
+ * É por CÉLULA e não por coluna: um material tem endereço, o outro não, e a
+ * decisão muda a cada linha. Desmarcar importa tanto quanto marcar — a lista
+ * recarrega com dados novos e a célula que estava vazia pode deixar de estar.
+ */
+function marcarVazio(td) {
+  const vazio = pareceVazio(td);
+  if (vazio && td.getAttribute('data-vazio') !== '1') {
+    td.setAttribute('data-vazio', '1');
+  } else if (!vazio && td.hasAttribute('data-vazio')) {
+    td.removeAttribute('data-vazio');
+  }
+}
+
+/**
+ * Dá nome visível aos botões que só têm ícone, copiando do `title`.
+ *
+ * O CSS desenha `attr(data-rotulo)` embaixo do ícone. Não mexo no conteúdo
+ * do botão: ele é de React, e inserir um nó lá dentro seria desfeito no
+ * próximo render — e pior, poderia atrapalhar o clique.
+ */
+function rotularBotoes(celula) {
+  const botoes = celula.querySelectorAll('button[title], a[href][title], [role="button"][title]');
+  botoes.forEach((b) => {
+    if (limpo(b)) return;                       // já mostra texto próprio
+    const curto = rotuloCurto(b.getAttribute('title'));
+    if (curto && b.getAttribute('data-rotulo') !== curto) {
+      b.setAttribute('data-rotulo', curto);
+    }
+  });
 }
 
 /**
@@ -165,7 +261,7 @@ function deduzirPapeis(cabecalhos, primeiraLinha) {
   let jaTemSituacao = false;
   celulas.forEach((td, i) => {
     const rotulo = cabecalhos[i] || '';
-    if (ehFoto(td)) papeis[i] = 'foto';
+    if (ehFoto(td, rotulo)) papeis[i] = 'foto';
     else if (ehAcoes(td)) papeis[i] = 'acoes';
     else if (!jaTemSituacao && ehSituacao(td, rotulo)) {
       // Apenas a PRIMEIRA. Duas pilulas no canto direito se sobrepoem, e um
@@ -235,6 +331,8 @@ function rotularTabela(tabela) {
       if (papel && td.getAttribute('data-papel') !== papel) {
         td.setAttribute('data-papel', papel);
       }
+      marcarVazio(td);
+      if (papel === 'acoes') rotularBotoes(td);
       if (rotulo) rotulou = true;
     });
   });
@@ -330,6 +428,8 @@ function rotularGrade(container) {
       if (papeis[i] && celula.getAttribute('data-papel') !== papeis[i]) {
         celula.setAttribute('data-papel', papeis[i]);
       }
+      marcarVazio(celula);
+      if (papeis[i] === 'acoes') rotularBotoes(celula);
     });
     if (temTitulo) linha.classList.add(CLASSE_LINHA);
   });

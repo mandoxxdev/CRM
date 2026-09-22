@@ -9,7 +9,7 @@
  * Cada caso abaixo é uma tabela real do sistema, reduzida ao essencial.
  */
 
-import { varrerTabelas } from './tabelasComoCartoes';
+import {varrerTabelas, rotuloCurto } from './tabelasComoCartoes';
 
 /** Finge um telefone: é a largura que liga a conversão. */
 function fingirCelular(ehCelular = true) {
@@ -282,5 +282,127 @@ describe('pseudo-tabela feita de <div>', () => {
     expect(p[0]).toBe('id');
     expect(p[2]).toBe('situacao');
     expect(p.filter((x) => x === 'situacao')).toHaveLength(1);
+  });
+});
+
+describe('o cartao de materiais que o P.O. fotografou', () => {
+  test('a coluna Foto SEM imagem e reconhecida como foto, e nao como dado', () => {
+    // O material sem foto traz um PLACEHOLDER: caixa com icone, sem <img>.
+    // A versao anterior exigia a tag, entao a celula caia em `meta` e virava
+    // uma faixa escrita "FOTO" com um quadrado cinza — 72px medidos, para
+    // nao dizer nada.
+    document.body.innerHTML = `
+      <table>
+        <thead><tr><th>Foto</th><th>Código</th><th>Material</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><div class="placeholder"><svg></svg></div></td>
+            <td>CH-0450-316L</td>
+            <td>Chapa inox 316L 4,50mm</td>
+            <td><span class="badge">OK</span></td>
+          </tr>
+        </tbody>
+      </table>`;
+    varrerTabelas(document);
+    const primeira = document.querySelector('tbody td');
+    expect(primeira.getAttribute('data-papel')).toBe('foto');
+  });
+
+  test('celula cujo valor e um traco e marcada como vazia', () => {
+    document.body.innerHTML = `
+      <table>
+        <thead><tr><th>Código</th><th>Material</th><th>Localização</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>ESC-001</td>
+            <td>Folha A4 para impressora</td>
+            <td>—</td>
+            <td><span class="badge">OK</span></td>
+          </tr>
+        </tbody>
+      </table>`;
+    varrerTabelas(document);
+    const tds = document.querySelectorAll('tbody td');
+    expect(tds[2].getAttribute('data-vazio')).toBe('1');
+    expect(tds[0].getAttribute('data-vazio')).toBeNull();
+  });
+
+  test('celula com botao NUNCA conta como vazia, mesmo sem texto', () => {
+    document.body.innerHTML = `
+      <table>
+        <thead><tr><th>Código</th><th>Material</th><th>Ações</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>ESC-001</td>
+            <td>Folha A4 para impressora</td>
+            <td><button title="Extrato"><svg></svg></button></td>
+          </tr>
+        </tbody>
+      </table>`;
+    varrerTabelas(document);
+    const acoes = document.querySelectorAll('tbody td')[2];
+    expect(acoes.getAttribute('data-vazio')).toBeNull();
+  });
+
+  test('botao so com icone ganha legenda vinda do title', () => {
+    document.body.innerHTML = `
+      <table>
+        <thead><tr><th>Código</th><th>Material</th><th>Ações</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>ESC-001</td>
+            <td>Folha A4 para impressora</td>
+            <td>
+              <button title="Entrada rápida de estoque neste material"><svg></svg></button>
+              <button title="Extrato"><svg></svg></button>
+            </td>
+          </tr>
+        </tbody>
+      </table>`;
+    varrerTabelas(document);
+    const bts = document.querySelectorAll('tbody td button');
+    expect(bts[0].getAttribute('data-rotulo')).toBe('Entrada rápida');
+    expect(bts[1].getAttribute('data-rotulo')).toBe('Extrato');
+  });
+
+  test('botao que JA mostra texto nao recebe legenda repetida', () => {
+    document.body.innerHTML = `
+      <table>
+        <thead><tr><th>Código</th><th>Material</th><th>Ações</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>ESC-001</td>
+            <td>Folha A4 para impressora</td>
+            <td><button title="Abrir o extrato">Extrato</button></td>
+          </tr>
+        </tbody>
+      </table>`;
+    varrerTabelas(document);
+    expect(document.querySelector('tbody td button').getAttribute('data-rotulo')).toBeNull();
+  });
+});
+
+describe('rotuloCurto', () => {
+  test('corta a frase do title numa etiqueta que cabe no botao', () => {
+    expect(rotuloCurto('Extrato')).toBe('Extrato');
+    expect(rotuloCurto('Entrada rápida de estoque neste material')).toBe('Entrada rápida');
+    expect(rotuloCurto('Imprimir etiqueta do material')).toBe('Imprimir');
+  });
+
+  test('nao deixa preposicao pendurada no fim', () => {
+    // "Plano de" cabe em 14 caracteres, mas termina no ar.
+    expect(rotuloCurto('Plano de inspeção')).toBe('Plano');
+    expect(rotuloCurto('Edita o cadastro deste material')).toBe('Edita');
+  });
+
+  test('aguenta title vazio ou ausente sem quebrar', () => {
+    expect(rotuloCurto('')).toBe('');
+    expect(rotuloCurto(null)).toBe('');
+    expect(rotuloCurto(undefined)).toBe('');
+  });
+
+  test('uma palavra sozinha e longa demais ainda volta inteira', () => {
+    // Melhor uma etiqueta grande do que um botao sem nome.
+    expect(rotuloCurto('Reclassificar')).toBe('Reclassificar');
   });
 });
