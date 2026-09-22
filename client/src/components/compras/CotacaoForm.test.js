@@ -16,6 +16,8 @@
  * - ids das fixtures fora do conjunto ocupado pelas outras suites ({312, 355, 418-421, 640, 901,
  *   907}): a cotacao e 760, o POST devolve 761. O fornecedor escolhido e o 312 — nao e o primeiro
  *   da lista, de proposito.
+ * - Etapa 41, Task 3 (cenarios (i)–(n)): a cotacao ganha ITENS (D2/D3/D10). Fixtures novas: a
+ *   cotacao 770 com dois itens (7701/7702) e o material 912; o (e) passa a esperar `itens: []`.
  *
  * Executar:
  *   cd client && CI=true npx react-scripts test --watchAll=false \
@@ -94,6 +96,18 @@ const COTACAO_760 = {
   id: 760, numero: 'COT-2026-760', fornecedor_id: 312, fornecedor_nome: 'Aços Vale Ltda', valor_total: 1500.5,
   data_cotacao: '2026-09-10', validade: '2026-10-10', status: 'em_analise', observacoes: 'frete incluso',
   created_at: '2026-09-10 09:00:00', updated_at: '2026-09-10 09:00:00',
+  // Etapa 41 (RN-F04): o GET /:id devolve `itens[]` e a lista devolve `pedido_id`/`pedido_numero`.
+  itens: [], pedido_id: null, pedido_numero: null,
+};
+// Etapa 41 (D10, RN-F13): a busca de material e a cotacao COM itens. Ids fora do conjunto ocupado:
+// 770 (cotacao), 7701/7702 (itens), 912 (material novo); o 907 ja existe no molde do pedido.
+const MATERIAIS = [{ id: 912, codigo: 'ALM-0912', descricao: 'Chapa Aço 5mm', unidade: 'KG' }];
+const COTACAO_770 = {
+  ...COTACAO_760, id: 770, numero: 'COT-2026-770', valor_total: 27,
+  itens: [
+    { id: 7701, material_id: 912, codigo: 'ALM-0912', descricao: 'Chapa Aço 5mm', unidade: 'KG', quantidade: 2, valor_unitario: 10 },
+    { id: 7702, material_id: 907, codigo: 'ALM-0907', descricao: 'Chapa Aço 3mm', unidade: 'KG', quantidade: 1, valor_unitario: 7 },
+  ],
 };
 const LISTA = [{ ...COTACAO_760 }];
 
@@ -108,6 +122,8 @@ beforeEach(() => {
     if (url === '/compras/fornecedores') return Promise.resolve({ data: FORNECEDORES });
     if (url === '/compras/cotacoes') return Promise.resolve({ data: LISTA });
     if (url === '/compras/cotacoes/760') return Promise.resolve({ data: COTACAO_760 });
+    if (url === '/compras/cotacoes/770') return Promise.resolve({ data: COTACAO_770 });
+    if (url === '/compras/materiais') return Promise.resolve({ data: MATERIAIS });
     if (url === '/compras/pedidos') return Promise.resolve({ data: [] });
     return Promise.reject(new Error(`URL inesperada no teste: ${url}`));
   });
@@ -257,8 +273,11 @@ test('(e) RN-E13 edicao: GET /:id preenche e o PUT manda o cabecalho inteiro', a
   await selecionar(porTestId('cotacao-status'), 'aprovado');
   await submeter();
   expect(api.put.mock.calls).toHaveLength(1);
+  // Etapa 41 (D3, Fase 2 M1): a 760 nao tem itens, entao `valor_total` continua no payload e
+  // `itens: []` viaja junto — 8 chaves. Com itens, o (j)/(m) provam que `valor_total` NAO vai.
   expect(api.put.mock.calls[0]).toEqual(['/compras/cotacoes/760', {
     numero: 'COT-2026-760', fornecedor_id: 312, valor_total: 1500.5, data_cotacao: '2026-09-10', validade: '2026-10-10', status: 'aprovado', observacoes: 'frete incluso',
+    itens: [],
   }]);
   expect(toast.success).toHaveBeenCalledWith('Cotação salva');
 });
@@ -312,6 +331,97 @@ test('(h) F4 valor_total -1 viaja no POST e o 400 do servidor aparece em role=al
   expect(api.post.mock.calls).toHaveLength(1);
   expect(api.post.mock.calls[0][1].valor_total).toBe(-1);
   expect(alertas()).toContain(LITERAL_400);
+  expect(toast.error).not.toHaveBeenCalled();
+  expect(toast.success).not.toHaveBeenCalled();
+  expect(texto()).toContain('Nova cotação'); // ficou no form
+});
+
+// ── Etapa 41, Task 3 (RN-F13, RN-F05) — a cotacao ganha itens ────────────────────────────────
+//
+// D3 (duas regras para `valor_total`): com linha, o campo `cotacao-valor` fica `readOnly` e mostra a
+// soma, e o payload NAO leva `valor_total` (o servidor deriva); sem linha, e digitavel e viaja
+// (cenarios (d)/(e)/(h) seguem iguais). D10: o bloco de itens e copia do `PedidoCompraForm`, com os
+// `data-testid` prefixados `cotacao-` e SEM `min="0"` nas linhas (F4 da 40).
+const chamadasMateriais = () => api.get.mock.calls.filter(([u]) => u === '/compras/materiais');
+async function adicionar912() {
+  digitar(porTestId('cotacao-busca-material'), 'chapa');
+  await clicar(porTestId('cotacao-botao-buscar-material'));
+  await clicar(porTestId('cotacao-adicionar-material-912'));
+}
+
+test('(i) RN-F13 busca com search, adiciona 912, total soma e o campo Valor total trava com a soma', async () => {
+  await renderizarEm('/compras/cotacoes/nova');
+  digitar(porTestId('cotacao-valor'), '55');           // digitavel enquanto nao ha linha
+  await adicionar912();
+  expect(chamadasMateriais()[0][1]).toEqual({ params: { search: 'chapa' } });
+  expect(porTestId('cotacao-qtd-item-912').value).toBe('1');
+  // F4 da 40, estendido as linhas: sem `min` — o servidor decide e a literal chega ao alert ((n)).
+  expect(porTestId('cotacao-qtd-item-912').hasAttribute('min')).toBe(false);
+  expect(porTestId('cotacao-valor-item-912').hasAttribute('min')).toBe(false);
+  digitar(porTestId('cotacao-valor-item-912'), '12.5');
+  expect(texto()).toContain('Total: R$ 12,50');
+  expect(porTestId('cotacao-valor').readOnly).toBe(true);
+  expect(porTestId('cotacao-valor').value).toBe('12.5');
+  await clicar(porTestId('cotacao-remover-item-912'));
+  expect(porTestId('cotacao-valor').readOnly).toBe(false);
+  expect(porTestId('cotacao-valor').value).toBe('55');   // volta o digitado
+});
+
+test('(j) RN-F13 POST com itens em Number() e SEM valor_total', async () => {
+  await renderizarEm('/compras/cotacoes/nova');
+  digitar(porTestId('cotacao-numero'), 'COT-9');
+  await selecionar(porTestId('cotacao-fornecedor'), '312');
+  await adicionar912();
+  digitar(porTestId('cotacao-qtd-item-912'), '3');
+  digitar(porTestId('cotacao-valor-item-912'), '2.5');
+  await submeter();
+  expect(api.post.mock.calls).toHaveLength(1);
+  const corpo = api.post.mock.calls[0][1];
+  expect(corpo.itens).toEqual([{ material_id: 912, quantidade: 3, valor_unitario: 2.5 }]);
+  expect('valor_total' in corpo).toBe(false);
+  expect(toast.success).toHaveBeenCalledWith('Cotação salva');
+});
+
+test('(k) RN-F13 sem item -> POST com valor_total digitado e itens []', async () => {
+  await renderizarEm('/compras/cotacoes/nova');
+  digitar(porTestId('cotacao-numero'), 'COT-9');
+  await selecionar(porTestId('cotacao-fornecedor'), '312');
+  digitar(porTestId('cotacao-valor'), '99.9');
+  await submeter();
+  const corpo = api.post.mock.calls[0][1];
+  expect(corpo.valor_total).toBe(99.9);
+  expect(corpo.itens).toEqual([]);
+});
+
+test('(l) RN-F13 edicao da 770 pre-carrega 2 linhas sem buscar material; campo travado com 27', async () => {
+  await renderizarEm('/compras/cotacoes/editar/770');
+  expect(porTestId('cotacao-qtd-item-912').value).toBe('2');
+  expect(porTestId('cotacao-valor-item-907').value).toBe('7');
+  expect(chamadasMateriais()).toHaveLength(0);
+  expect(porTestId('cotacao-valor').readOnly).toBe(true);
+  expect(porTestId('cotacao-valor').value).toBe('27');
+  expect(texto()).toContain('Total: R$ 27,00');
+});
+
+test('(m) RN-F05 remover uma linha e salvar -> PUT com 1 item', async () => {
+  await renderizarEm('/compras/cotacoes/editar/770');
+  await clicar(porTestId('cotacao-remover-item-907'));
+  await submeter();
+  expect(api.put.mock.calls).toHaveLength(1);
+  expect(api.put.mock.calls[0][0]).toBe('/compras/cotacoes/770');
+  const corpo = api.put.mock.calls[0][1];
+  expect(corpo.itens).toEqual([{ material_id: 912, quantidade: 2, valor_unitario: 10 }]);
+  expect('valor_total' in corpo).toBe(false);
+});
+
+test('(n) 400 de item do servidor vai para role=alert com a literal', async () => {
+  api.post.mockImplementation(() => Promise.reject({ response: { status: 400, data: { error: 'Dados inválidos — itens.0.quantidade: quantidade do item da cotação deve ser um número maior que zero' } } }));
+  await renderizarEm('/compras/cotacoes/nova');
+  digitar(porTestId('cotacao-numero'), 'COT-9');
+  await selecionar(porTestId('cotacao-fornecedor'), '312');
+  await adicionar912();
+  await submeter();
+  expect(alertas()).toContain('itens.0.quantidade: quantidade do item da cotação');
   expect(toast.error).not.toHaveBeenCalled();
   expect(toast.success).not.toHaveBeenCalled();
   expect(texto()).toContain('Nova cotação'); // ficou no form
