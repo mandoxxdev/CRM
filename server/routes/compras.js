@@ -59,6 +59,8 @@ const fs = require('fs');
 const { validate } = require('../services/almoxarifado/validation');
 const { PedidoCompraCreateSchema, PedidoStatusSchema, FornecedorSchema, CotacaoSchema } = require('../services/compras/schemas');
 const pedidoCompraService = require('../services/compras/pedidoCompraService');
+// Etapa 40, Task 3: a cotacao ganha servico proprio (D9 do design), no molde do pedido.
+const cotacaoService = require('../services/compras/cotacaoService');
 // Etapa 38, Task 4: os 5 leitores de planilha sairam do escopo deste registrador para
 // `services/compras/planilhaCompras.js` (movidos VERBATIM, md5 conferido) porque a importacao de
 // PEDIDOS tambem os usa e aqui dentro eles eram inalcancaveis por `require`. A rota de itens do
@@ -338,6 +340,28 @@ app.get('/api/compras/cotacoes', authenticateToken, checkModulePermission('compr
     res.json(rows);
   });
 });
+
+// ── Cotacao de compra — criacao, leitura por id e edicao (Etapa 40, Task 3) ──────────────────────
+// Mesmo molde das portas de pedido (:169-230): `validate(CotacaoSchema)` na frente, a rota nao faz
+// SQL e traduz `e.status` do servico (400 fornecedor/schema, 404 nao existe, 409 numero repetido).
+// Nenhuma e DELETE, entao a posicao em relacao ao generico `/:tipo/:id` e convencao, nao
+// comportamento (Fase 0 servidor §1.1); ficam aqui por ser o bloco do recurso.
+const respondeErro = (res, e) => res.status(e.status || 500).json({ error: e.message });
+
+app.post('/api/compras/cotacoes', authenticateToken, checkModulePermission('compras'),
+  validate(CotacaoSchema), async (req, res) => {
+    try { res.status(201).json(await cotacaoService.criarCotacao(db, req.body)); }
+    catch (e) { respondeErro(res, e); }
+  });
+app.get('/api/compras/cotacoes/:id', authenticateToken, checkModulePermission('compras'), async (req, res) => {
+  try { res.json(await cotacaoService.obterCotacao(db, req.params.id)); }
+  catch (e) { respondeErro(res, e); }
+});
+app.put('/api/compras/cotacoes/:id', authenticateToken, checkModulePermission('compras'),
+  validate(CotacaoSchema), async (req, res) => {
+    try { res.json(await cotacaoService.atualizarCotacao(db, req.params.id, req.body)); }
+    catch (e) { respondeErro(res, e); }
+  });
 
 // Delete genérico
 app.delete('/api/compras/:tipo/:id', authenticateToken, checkModulePermission('compras'), (req, res) => {
