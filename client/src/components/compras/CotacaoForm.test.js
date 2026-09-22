@@ -109,6 +109,16 @@ const COTACAO_770 = {
     { id: 7702, material_id: 907, codigo: 'ALM-0907', descricao: 'Chapa Aço 3mm', unidade: 'KG', quantidade: 1, valor_unitario: 7 },
   ],
 };
+// Onda de correcao da 41 (F5, UX I1): a cotacao JA CONVERTIDA — `pedido_id`/`pedido_numero`
+// preenchidos pelo GET /:id (RN-F04). Ids fora do conjunto ocupado: 771 (a mesma da suite da aba,
+// `Compras.test.js`) e o pedido 650.
+const COTACAO_771_CONVERTIDA = {
+  ...COTACAO_760, id: 771, numero: 'COT-2026-771', status: 'aprovado', valor_total: 20,
+  pedido_id: 650, pedido_numero: 'PC-2026-650',
+  itens: [
+    { id: 7711, material_id: 912, codigo: 'ALM-0912', descricao: 'Chapa Aço 5mm', unidade: 'KG', quantidade: 2, valor_unitario: 10 },
+  ],
+};
 const LISTA = [{ ...COTACAO_760 }];
 
 let container;
@@ -123,6 +133,7 @@ beforeEach(() => {
     if (url === '/compras/cotacoes') return Promise.resolve({ data: LISTA });
     if (url === '/compras/cotacoes/760') return Promise.resolve({ data: COTACAO_760 });
     if (url === '/compras/cotacoes/770') return Promise.resolve({ data: COTACAO_770 });
+    if (url === '/compras/cotacoes/771') return Promise.resolve({ data: COTACAO_771_CONVERTIDA });
     if (url === '/compras/materiais') return Promise.resolve({ data: MATERIAIS });
     if (url === '/compras/pedidos') return Promise.resolve({ data: [] });
     return Promise.reject(new Error(`URL inesperada no teste: ${url}`));
@@ -425,4 +436,49 @@ test('(n) 400 de item do servidor vai para role=alert com a literal', async () =
   expect(toast.error).not.toHaveBeenCalled();
   expect(toast.success).not.toHaveBeenCalled();
   expect(texto()).toContain('Nova cotação'); // ficou no form
+});
+
+// ── (o) F5 da onda de correcao da 41 (UX I1): cotacao convertida abre TRAVADA ─────────────────
+//
+// Antes: a edicao da 771 abria com todos os campos livres e nenhum sinal do pedido; o comprador
+// editava dez linhas, clicava em Salvar e so entao levava o 409 do servidor, com o trabalho
+// perdido. Agora o `GET /:id` (que ja traz `pedido_id`/`pedido_numero`, RN-F04) liga `convertida`:
+// faixa `role="status"` (NAO `role="alert"`, para nao colidir com `alertas()` das suites) com o
+// link para o pedido, campos e bloco de itens `disabled`, Salvar nao renderizado — e o submit por
+// evento (Enter num campo, `submeter()` aqui) tambem nao chama o PUT. Molde: `soStatus` do
+// `PedidoCompraForm`.
+const porTestIdCotacao = () => [...container.querySelectorAll('[data-testid^="cotacao-"]')]
+  .filter((el) => ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'].includes(el.tagName));
+test('(o) F5 edicao da 771 convertida: faixa com link para o pedido, tudo disabled, Salvar ausente, PUT nao chamado', async () => {
+  await renderizarEm('/compras/cotacoes/editar/771');
+  const faixa = porTestId('cotacao-convertida');
+  expect(faixa).not.toBeNull();
+  expect(faixa.getAttribute('role')).toBe('status');
+  expect(faixa.textContent.replace(/ /g, ' '))
+    .toContain('Esta cotação já gerou o pedido PC-2026-650 — não pode mais ser editada');
+  expect(faixa.querySelector('a').getAttribute('href')).toBe('/compras/pedidos/editar/650');
+  expect(alertas()).toBe(''); // informativa, nao erro
+  // O que veio do GET continua visivel (e para LER, nao para editar).
+  expect(porTestId('cotacao-numero').value).toBe('COT-2026-771');
+  expect(porTestId('cotacao-qtd-item-912').value).toBe('2');
+  // TODOS os controles com testid `cotacao-` travados: cabecalho, busca, linhas e remover.
+  expect(porTestId('cotacao-numero').disabled).toBe(true);
+  expect(porTestId('cotacao-fornecedor').disabled).toBe(true);
+  expect(porTestId('cotacao-status').disabled).toBe(true);
+  expect(porTestId('cotacao-valor').disabled).toBe(true);
+  expect(porTestId('cotacao-observacoes').disabled).toBe(true);
+  expect(porTestId('cotacao-busca-material').disabled).toBe(true);
+  expect(porTestId('cotacao-botao-buscar-material').disabled).toBe(true);
+  expect(porTestId('cotacao-qtd-item-912').disabled).toBe(true);
+  expect(porTestId('cotacao-valor-item-912').disabled).toBe(true);
+  expect(porTestId('cotacao-remover-item-912').disabled).toBe(true);
+  const livres = porTestIdCotacao().filter((el) => !el.disabled).map((el) => el.dataset.testid);
+  expect(livres).toEqual([]);
+  expect(porTestIdCotacao().length).toBeGreaterThanOrEqual(10); // controle: a varredura viu os campos
+  // Salvar nao existe; o submit por evento tambem nao grava.
+  expect(container.querySelector('form[data-testid="cotacao-form"] button[type="submit"]')).toBeNull();
+  await submeter();
+  expect(api.put).not.toHaveBeenCalled();
+  expect(api.post).not.toHaveBeenCalled();
+  expect(texto()).toContain('Editar cotação'); // ficou no form
 });

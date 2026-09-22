@@ -69,6 +69,11 @@ const CotacaoForm = () => {
   const [termoMaterial, setTermoMaterial] = useState('');
   const [materiais, setMateriais] = useState([]);
   const [buscando, setBuscando] = useState(false);
+  // Onda de correcao da 41 (F5, UX I1): a cotacao que JA virou pedido abre travada. O GET /:id ja
+  // traz `pedido_id`/`pedido_numero` (RN-F04); antes a tela os ignorava e o comprador so descobria
+  // no 409 do Salvar, com o formulario inteiro editado e perdido. Molde: `soStatus` do pedido.
+  const [convertida, setConvertida] = useState(false);
+  const [pedidoGerado, setPedidoGerado] = useState({ id: null, numero: '' });
 
   useEffect(() => {
     let vivo = true;
@@ -92,6 +97,9 @@ const CotacaoForm = () => {
         setValorTotal(c.valor_total == null ? '' : String(c.valor_total));
         setStatus(c.status || 'em_analise');
         setObservacoes(c.observacoes || '');
+        // F5: `pedido_id` preenchido = ja virou pedido (RN-F10); a tela trava e aponta para ele.
+        setConvertida(c.pedido_id != null);
+        setPedidoGerado({ id: c.pedido_id ?? null, numero: c.pedido_numero || '' });
         // RN-F13: a edicao pre-carrega as linhas do GET /:id (codigo/descricao/unidade vem do JOIN
         // do servidor, RN-F04) — nenhuma busca de material e disparada.
         setItens((c.itens || []).map((it) => novaLinha({
@@ -144,6 +152,8 @@ const CotacaoForm = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    // F5: sem botao Salvar a tela nao submete, mas Enter num campo ainda dispara o evento.
+    if (convertida) return;
     setErro('');
     if (!numero.trim()) { setErro('Número da cotação é obrigatório'); return; }
     if (!fornecedorId) { setErro('Fornecedor da cotação é obrigatório'); return; }
@@ -196,16 +206,30 @@ const CotacaoForm = () => {
       )}
       {carregando ? <div className="loading">Carregando...</div> : (
         <form data-testid="cotacao-form" onSubmit={handleSubmit}>
+          {/* F5 (UX I1): `role="status"`, nao `role="alert"` — e informativa, nao erro, e as suites
+              medem erro por `[role="alert"]`. A literal e a mesma ideia do 409 do servidor
+              (`cotacaoJaGerouPedido`), com o link para o pedido no lugar do numero da cotacao. */}
+          {convertida && (
+            <div
+              role="status"
+              data-testid="cotacao-convertida"
+              style={{ background: 'rgba(185, 119, 14, 0.12)', color: '#b9770e', border: '1px solid #b9770e', borderRadius: 8, padding: '10px 14px', marginBottom: 16 }}
+            >
+              Esta cotação já gerou o pedido{' '}
+              <Link to={`/compras/pedidos/editar/${pedidoGerado.id}`}>{pedidoGerado.numero || `#${pedidoGerado.id}`}</Link>
+              {' '}— não pode mais ser editada
+            </div>
+          )}
           <div className="filters" style={{ flexWrap: 'wrap', gap: 12 }}>
-            <label style={coluna}>Número *<input data-testid="cotacao-numero" type="text" value={numero} onChange={(ev) => setNumero(ev.target.value)} /></label>
+            <label style={coluna}>Número *<input data-testid="cotacao-numero" type="text" value={numero} onChange={(ev) => setNumero(ev.target.value)} disabled={convertida} /></label>
             <label style={coluna}>Fornecedor *
-              <select data-testid="cotacao-fornecedor" value={fornecedorId} onChange={(ev) => setFornecedorId(ev.target.value)} className="filter-select">
+              <select data-testid="cotacao-fornecedor" value={fornecedorId} onChange={(ev) => setFornecedorId(ev.target.value)} disabled={convertida} className="filter-select">
                 <option value="">Selecione o fornecedor</option>
                 {fornecedores.map((f) => <option key={f.id} value={f.id}>{f.razao_social}</option>)}
               </select>
             </label>
-            <label style={coluna}>Data<input data-testid="cotacao-data" type="date" value={dataCotacao} onChange={(ev) => setDataCotacao(ev.target.value)} /></label>
-            <label style={coluna}>Validade<input data-testid="cotacao-validade" type="date" value={validade} onChange={(ev) => setValidade(ev.target.value)} /></label>
+            <label style={coluna}>Data<input data-testid="cotacao-data" type="date" value={dataCotacao} onChange={(ev) => setDataCotacao(ev.target.value)} disabled={convertida} /></label>
+            <label style={coluna}>Validade<input data-testid="cotacao-validade" type="date" value={validade} onChange={(ev) => setValidade(ev.target.value)} disabled={convertida} /></label>
             {/* Sem `min`: o servidor decide (D3/D11) e a literal do 400 chega ao role="alert";
                 com `min="0"` o navegador barrava o submit com tooltip nativa (UX M2).
                 Etapa 41 (D3): com linhas o campo trava e mostra a soma; o `onChange` segue setando
@@ -216,19 +240,20 @@ const CotacaoForm = () => {
                 type="number"
                 step="0.01"
                 readOnly={itens.length > 0}
+                disabled={convertida}
                 value={itens.length > 0 ? String(total) : valorTotal}
                 onChange={(ev) => setValorTotal(ev.target.value)}
                 style={itens.length > 0 ? { background: '#f0f0f0' } : undefined}
               />
             </label>
             <label style={coluna}>Status
-              <select data-testid="cotacao-status" value={status} onChange={(ev) => setStatus(ev.target.value)} className="filter-select">
+              <select data-testid="cotacao-status" value={status} onChange={(ev) => setStatus(ev.target.value)} disabled={convertida} className="filter-select">
                 {STATUS_COTACAO.map((s) => <option key={s.valor} value={s.valor}>{s.label}</option>)}
               </select>
             </label>
           </div>
           <label style={{ display: 'block', margin: '12px 0' }}>Observações
-            <textarea data-testid="cotacao-observacoes" value={observacoes} onChange={(ev) => setObservacoes(ev.target.value)} rows={2} style={{ width: '100%' }} />
+            <textarea data-testid="cotacao-observacoes" value={observacoes} onChange={(ev) => setObservacoes(ev.target.value)} disabled={convertida} rows={2} style={{ width: '100%' }} />
           </label>
 
           {/* Etapa 41 (D10): bloco de itens copiado de `PedidoCompraForm.js`, testids `cotacao-`. */}
@@ -242,6 +267,7 @@ const CotacaoForm = () => {
                 placeholder="Buscar material por código ou descrição..."
                 value={termoMaterial}
                 onChange={(ev) => setTermoMaterial(ev.target.value)}
+                disabled={convertida}
                 onKeyDown={(ev) => {
                   // Enter no campo busca, e NÃO submete a cotação: um `type="submit"` implícito
                   // aqui gravaria a cotação no primeiro Enter da busca de material.
@@ -256,7 +282,7 @@ const CotacaoForm = () => {
               type="button"
               className="btn-secondary"
               onClick={buscarMateriais}
-              disabled={buscando}
+              disabled={buscando || convertida}
             >
               <FiSearch /> {buscando ? 'Buscando...' : 'Buscar material'}
             </button>
@@ -281,6 +307,7 @@ const CotacaoForm = () => {
                           className="btn-icon"
                           title="Adicionar à cotação"
                           onClick={() => adicionarMaterial(m)}
+                          disabled={convertida}
                         >
                           <FiPlus />
                         </button>
@@ -317,6 +344,7 @@ const CotacaoForm = () => {
                         step="any"
                         value={it.quantidade}
                         onChange={(ev) => alterarItem(it.chave, 'quantidade', ev.target.value)}
+                        disabled={convertida}
                         style={{ width: 90 }}
                       />
                     </td>
@@ -327,6 +355,7 @@ const CotacaoForm = () => {
                         step="any"
                         value={it.valor_unitario}
                         onChange={(ev) => alterarItem(it.chave, 'valor_unitario', ev.target.value)}
+                        disabled={convertida}
                         style={{ width: 110 }}
                       />
                     </td>
@@ -338,6 +367,7 @@ const CotacaoForm = () => {
                         className="btn-icon btn-danger"
                         title="Remover item"
                         onClick={() => removerItem(it.chave)}
+                        disabled={convertida}
                       >
                         <FiTrash2 />
                       </button>
@@ -354,9 +384,13 @@ const CotacaoForm = () => {
 
           <p><strong>Total: {formatCurrency(total)}</strong></p>
 
-          <div className="header-actions">
-            <button type="submit" className="btn-premium" disabled={salvando}><FiSave /> {salvando ? 'Salvando...' : 'Salvar cotação'}</button>
-          </div>
+          {/* F5: convertida nao tem Salvar (nem travado) — nao ha o que salvar; o `handleSubmit`
+              ainda sai cedo para o Enter num campo. */}
+          {!convertida && (
+            <div className="header-actions">
+              <button type="submit" className="btn-premium" disabled={salvando}><FiSave /> {salvando ? 'Salvando...' : 'Salvar cotação'}</button>
+            </div>
+          )}
         </form>
       )}
     </div>
