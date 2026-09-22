@@ -546,7 +546,7 @@ o arquivo voltou a `15 passou` com o md5 original depois do último restauro.
 - Consumes: `FornecedorSchema`, `RAZAO_SOCIAL_OBRIGATORIA`, `GRUPO_FORNECEDOR_INVALIDO`, `STATUS_FORNECEDOR_INVALIDO` (T1); `validate` (`:59`); `FORNECEDOR_COM_COTACOES` — **como a T3 roda em paralelo, a T2 escreve a literal inline** `'Fornecedor possui cotações — não pode ser excluído'` no genérico, e a T6 afirma que `cotacaoService.FORNECEDOR_COM_COTACOES` é igual (a igualdade é o contrato; duplicar a string é o custo do paralelismo, declarado).
 - Produces: `GET /api/compras/fornecedores/:id` (projeção nomeada), `POST`/`PUT` validados, 409 por cotação. **T4 e T6 consomem.**
 
-- [ ] **Step 1: escrever a CARACTERIZAÇÃO primeiro** — cenários (1) e (2) contra o código de hoje, verdes **antes** de qualquer edição:
+- [x] **Step 1: escrever a CARACTERIZAÇÃO primeiro** — cenários (1) e (2) contra o código de hoje, verdes **antes** de qualquer edição:
 
 ```js
 /**
@@ -613,9 +613,9 @@ const LITERAL_409_COTACAO = 'Fornecedor possui cotações — não pode ser excl
   });
 ```
 
-- [ ] **Step 2: rodar (1)(2) — VERDES contra o código de hoje.** Se algum cair, o payload copiado está errado: corrija o **teste**, não o código.
+- [x] **Step 2: rodar (1)(2) — VERDES contra o código de hoje.** Se algum cair, o payload copiado está errado: corrija o **teste**, não o código.
 
-- [ ] **Step 3: acrescentar os cenários (3)–(11), rodar e ver vermelho** (o (4) é o que mais importa — é o defeito do botão):
+- [x] **Step 3: acrescentar os cenários (3)–(11), rodar e ver vermelho** (o (4) é o que mais importa — é o defeito do botão):
 
 ```js
   await test('(3) RN-E01 razao_social so espacos -> 400 "Dados inválidos — razao_social: …" nas DUAS portas', async () => {
@@ -736,7 +736,7 @@ Esperado no vermelho: (3) cai (a literal antiga é `'Razão social é obrigatór
 harness (FK desligada) — **leia qual asserção**; (10) 201 já hoje (verde — é caracterização, e o
 (h) da T1 é quem guarda o `looseObject`); (11) cai pelo prefixo.
 
-- [ ] **Step 4: implementar** — em `routes/compras.js`:
+- [x] **Step 4: implementar** — em `routes/compras.js`:
 
 (a) `:60` **já traz `FornecedorSchema`** desde a T1 (Fase 2, I3) — **não edite essa linha**. E use
 `pedidoCompraService.FORNECEDOR_NAO_ENCONTRADO` (já `require` em `:61`) nos dois 404 abaixo, em vez da
@@ -831,9 +831,9 @@ coluna no `POST`, e está no cenário (1)? **Não**: o (1) não manda `endereco`
   }
 ```
 
-- [ ] **Step 5: rodar** — o arquivo (**11 passou**); `comprasPedidoEditarExcluir.api.test.js` (**13** — o cenário (12) é a F5 e tem de seguir verde); `comprasPedidosRotas` (5); depois `npm run test:api`.
+- [x] **Step 5: rodar** — o arquivo (**11 passou**); `comprasPedidoEditarExcluir.api.test.js` (**13** — o cenário (12) é a F5 e tem de seguir verde); `comprasPedidosRotas` (5); depois `npm run test:api`.
 
-- [ ] **Step 6: sabotagens**
+- [x] **Step 6: sabotagens**
 
 | # | Sabotagem | Âncora (`grep -cF` = 1) | Cai |
 |---|---|---|---|
@@ -843,7 +843,52 @@ coluna no `POST`, e está no cenário (1)? **Não**: o (1) não manda `endereco`
 | 4 | inverter a ordem: checar `cotacoes` antes de `pedidos_compra` | as duas linhas `SELECT COUNT(*) AS n FROM` | **(9)** *"a literal de pedido tem precedencia"* |
 | 5 | `if (body.status !== undefined)` → remover a linha | 1 | **(6)** `inativo` não grava |
 
-- [ ] **Step 7: commit** — `git add server/routes/compras.js server/tests/api/comprasFornecedorRotas.api.test.js`. Mensagem em `msg-e40-t2.txt`: o defeito do botão (com a linha `:563` e a sonda), o retrofit sem recusar o modal (cenários (1)(2) como prova), a projeção sem `planilha_*`, o 409 por cotação e o comentário que era verdade até a 39; descartado: `PATCH /status` próprio, traduzir a FK no `catch`.
+- [x] **Step 7: commit** — `git add server/routes/compras.js server/tests/api/comprasFornecedorRotas.api.test.js`. Mensagem em `msg-e40-t2.txt`: o defeito do botão (com a linha `:563` e a sonda), o retrofit sem recusar o modal (cenários (1)(2) como prova), a projeção sem `planilha_*`, o 409 por cotação e o comentário que era verdade até a 39; descartado: `PATCH /status` próprio, traduzir a FK no `catch`.
+
+#### ✅ Task 2 FECHADA — `dabb671` (Compras Etapa 40 T2: GET /fornecedores/:id, Zod nas duas portas, status e grupo_id null limpa, 409 por cotacao)
+
+> Hash medido na worktree `wt-e40-t2` (branch `e40-t2`, base `07d6893`). **Será reescrito no
+> cherry-pick para o tronco** — a T6 deve citar o hash novo.
+
+**Números lidos (não previstos):**
+
+| Suíte | Step 2 (caracterização, código antigo) | Step 3 (vermelho) | Step 5 (verde) |
+|---|---|---|---|
+| `comprasFornecedorRotas.api.test.js` | **`2 passou, 0 falhou`** — (1) e (2) verdes contra `07d6893`, sem edição na rota | `3 passou, 8 falhou` — verdes (1), (2), (7) | **`11 passou, 0 falhou`** |
+| `comprasPedidoEditarExcluir.api.test.js` | — | — | **13 passou** (o (12) da F5 seguiu verde) |
+| `comprasPedidosRotas.api.test.js` | — | — | **5 passou** |
+| `npm run test:api` | — | — | **189/189 arquivos de teste OK** (188 da T1 + este arquivo) |
+
+CR = 0 em `routes/compras.js`, no teste e no plano depois de cada edição (`git ls-files --eol`: `i/lf w/lf` nos dois arquivos commitados).
+
+**Qual asserção caiu no vermelho do Step 3** (o plano previa; lido):
+(3) `+ 'Razão social é obrigatória' / - 'Dados inválidos — razao_social: …'`; (4) *"grupo_id null tinha de LIMPAR"* `1 !== null`;
+(5) `200 !== 400` no `'abc'`; (6) `'ativo' !== 'inativo'`; (8) `404 !== 200` com `r.body = {}`; (9) `200 !== 409` com
+`{"message":"Item excluído com sucesso"}` (FK desligada no harness, como previsto); (10) `null !== 'Rua 3'` — *"o POST tinha de gravar endereco"*
+(a régua do `endereco` que o Step 4 manda acrescentar); (11) `Razão social é obrigatória` sem o prefixo.
+
+**Sabotagens** (md5 de `routes/compras.js` antes `11ab9ac5…`; sabotado ≠ nas cinco — `42593b21`, `e93131da`, `557abdba`, `a608755f`, `d78f3fde`;
+pós-restauro `11ab9ac5…` nas cinco; restauro por `cp` do scratchpad; âncora contada = 1 nas cinco):
+
+| # | Sabotagem | Placar | QUAL asserção caiu |
+|---|---|---|---|
+| 1 | `if (body.grupo_id !== undefined)` → `!= null` | 10/1 | **(4)** *"grupo_id null tinha de LIMPAR — antes era no-op (routes/compras.js:563)"* — o controle positivo do defeito do botão |
+| 2 | tirar `validate(FornecedorSchema),` do `PUT` (âncora multilinha `…(req, res) => {\n  const id`, contada com perl = 1; a de uma linha dá 2 por causa do `POST`) | 7/4 | **(3)** segunda metade `200 !== 400`; **(5)** `'abc'` `200 !== 400`; **(6)** `'x'` `200 !== 400`; **e (4)** `'' !== null` — sem o preprocess, `grupo_id: ''` grava a string vazia em vez de limpar (o plano não previa esta quarta queda) |
+| 3 | projeção do `GET /:id` → `SELECT *` | 10/1 | **(8)** *"a projecao tinha de excluir planilha_*"* — as chaves listadas incluíram `planilha_dados, planilha_nome, planilha_atualizado_em` |
+| 4 | trocar `pedidos_compra` ↔ `cotacoes` nas duas linhas `SELECT COUNT(*)` (as literais ficaram no lugar) | 10/1 | **(9)** — mas na **primeira** asserção da literal (`+ '…pedidos de compra…' / - '…cotações…'`), não na de precedência: com só a cotação vinculada, a primeira contagem já responde com a frase de pedido. A ordem das frases é o que o teste guarda |
+| 5 | remover a linha `if (body.status !== undefined) …` | 10/1 | **(6)** `'ativo' !== 'inativo'` — `inativo` não gravou |
+
+Controle positivo: cada corte derrubou o cenário previsto (e, no 2, um a mais); `11 passou` com md5 `11ab9ac5…` depois do último restauro.
+
+**Divergências entre o plano e o que o código exigiu:**
+
+1. **Sabotagem 2 derruba QUATRO cenários, não três**: sem o `validate()` no `PUT`, `grupo_id: ''` (segunda metade do (4)) chega cru e o `!== undefined` grava `''` na coluna — `'' !== null`. Não é defeito: é a prova de que o `''`→`null` mora no preprocess do schema, não na rota.
+2. **Sabotagem 4 cai na primeira asserção do (9), não na de precedência.** O plano dizia *"a literal de pedido tem precedencia"*; trocar só as tabelas do `SELECT COUNT(*)` deixa a frase de pedido na primeira contagem, então já o cenário "só cotação" recebe a frase errada. Trocar os blocos inteiros (frase junto) seria o corte que derruba só a precedência; o de tabelas derruba antes. Ambos derrubam (9).
+3. **Âncora da sabotagem 2 é multilinha por necessidade**: `validate(FornecedorSchema), (req, res) => {` sozinho dá `grep -cF` = 2 (POST e PUT); com `\n  const id` = 1 (perl `-0`).
+4. **(10) fica vermelho no Step 3**, não verde como o plano dizia — por causa do acréscimo de `endereco` que o próprio Step 4 manda pôr no (10). Sem o acréscimo, seria verde (caracterização).
+5. **Comentário do 409** ganhou uma frase além do texto do plano: *"A literal de cotacao esta inline aqui porque a T3 … roda em paralelo; a T6 afirma a igualdade"* — para quem ler a rota sem o plano saber por que a string não vem do serviço.
+6. Linhas citadas (`:60`, `:402-403`, `:405-416`, `:534-577`, `:553`, `:563`) **bateram** todas em `07d6893`. Depois da T2, `routes/compras.js` cresceu **28** linhas (753 → 781): o bloco do genérico `:402-433`, o `GET /:id` em `:551-563`, `POST` em `:565-584`, `PUT` em `:586-605`. **T3 reconte** antes de inserir as portas de cotação (o cherry-pick deslocará o que vier depois de `:402`).
+7. Nada foi descartado além do que o plano já descartava (`PATCH /status`, FK no `catch`). `cidade`/`estado`/`cep` viajam no `GET /:id` como o design §5.2 manda, sem consumidor.
 
 ---
 
