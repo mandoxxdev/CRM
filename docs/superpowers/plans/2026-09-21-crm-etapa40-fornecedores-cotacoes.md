@@ -2064,7 +2064,7 @@ dois arquivos voltaram ao md5 original e a suíte a `7 passed` depois do último
 
 **Interfaces:** consome tudo de T1–T3 e a rota aux do almoxarifado `GET /api/almoxarifado/recebimentos-aux/fornecedores` (`routes/almoxarifado/extended.js:1147`, gate só `auth`; devolve `[{ id, razao_social, nome_fantasia, cnpj }]` com `WHERE status='ativo'`, `LIMIT 50`).
 
-- [ ] **Step 1: o teste**
+- [x] **Step 1: o teste**
 
 ```js
 /**
@@ -2169,11 +2169,65 @@ const ADMIN = { id: 99, nome: 'Admin E40 T6', role: 'admin', is_superadmin: 1, e
 })();
 ```
 
-- [ ] **Step 2: rodar** — (A)(B)(C) verdes de primeira é **esperado** (é integração de código já testado). Controles positivos rodados **aqui**: (i) a sabotagem 4 da T2 (ordem das contagens) tem de derrubar (A) em *"vale a de pedido"*; (ii) trocar `'ativo'` por `'inativo'` no `WHERE` de `listarFornecedoresAux` (`receiptService.js:1613-1614`) tem de derrubar (A) no **controle positivo** (`aux0`), não na negativa — se cair na negativa, o `aux0` não está antes do `PUT`.
+- [x] **Step 2: rodar** — (A)(B)(C) verdes de primeira é **esperado** (é integração de código já testado). Controles positivos rodados **aqui**: (i) a sabotagem 4 da T2 (ordem das contagens) tem de derrubar (A) em *"vale a de pedido"*; (ii) trocar `'ativo'` por `'inativo'` no `WHERE` de `listarFornecedoresAux` (`receiptService.js:1613-1614`) tem de derrubar (A) no **controle positivo** (`aux0`), não na negativa — se cair na negativa, o `aux0` não está antes do `PUT`.
 
-- [ ] **Step 3: os cinco comandos** (`test:api` esperado **191/191**: 187 + 4 arquivos novos — T1, T2, T3, T6; client **51 suítes**), `git status` limpo.
+- [x] **Step 3: os cinco comandos** (`test:api` esperado **191/191**: 187 + 4 arquivos novos — T1, T2, T3, T6; client **51 suítes**), `git status` limpo.
 
-- [ ] **Step 4: commit** — `git add server/tests/api/comprasFornecedorCotacaoIntegracao.api.test.js server/routes/compras.js`. Mensagem em `msg-e40-t6.txt`.
+- [x] **Step 4: commit** — `git add server/tests/api/comprasFornecedorCotacaoIntegracao.api.test.js server/routes/compras.js`. Mensagem em `msg-e40-t6.txt`.
+
+#### ✅ Task 6 FECHADA — `d64ede0` (Compras Etapa 40 T6: integracao fornecedor x cotacao pela rota e pelo servico, 409 do generico usa a constante)
+
+> Feita no **tronco** (`desenvolvimento-almoxarifado`), sobre `fb2da89`, com T1–T5 já integradas
+> (T2 `6795b39`, T3 `29dd6a8`, T4 `23b86f3`, T5 `b692413`). Hash definitivo, sem cherry-pick.
+
+**Números lidos (não previstos):**
+
+| Suíte | Resultado |
+|---|---|
+| `comprasFornecedorCotacaoIntegracao.api.test.js` | **`3 passou, 0 falhou`** de primeira — esperado (integração de código já testado); por isso os dois controles positivos abaixo |
+| `npm run test:api` | **`191/191 arquivos de teste OK`** (190 + este arquivo; bateu com o previsto) |
+| `npm run test:almoxarifado` | **42 passou, 0 falhou** |
+| `test:validation` / `test:safealter` / `test:sqlite` | **4 / 3 / 5** passed, 0 failed |
+| client `react-scripts test` | **51 suítes, 768 testes**, 0 falhas |
+| client `CI=true build` | `Compiled successfully.` |
+
+CR = 0 em `routes/compras.js`, no teste e no plano depois de cada edição (`git ls-files --eol`: `i/lf w/lf`
+nos dois arquivos commitados). `git status` só com os 3 untracked pré-existentes (`docs/bkp_bancoprod.md`,
+`server/data/database.sqlite.bak`, `server/nodemon.json`), não adicionados.
+
+Posições recontadas antes de editar `routes/compras.js`: `require` de `cotacaoService` já em `:63` (topo,
+logo após o de `pedidoCompraService` em `:61`); `respondeErro` em `:349`; rotas de cotação em `:351-364`;
+o bloco do 409 do genérico em `:437-457`, com a literal inline de cotação em `:452` (agora
+`cotacaoService.FORNECEDOR_COM_COTACOES`). Nenhum `require` precisou ser movido.
+
+**Controles positivos** (md5 antes/sabotado/pós-restauro; restauro por `cp` do scratchpad; âncoras contadas
+com `grep -cF` = 1 cada; roteiro num único comando Bash com `perl -pi -e`):
+
+| # | Sabotagem | md5 antes → sabotado → pós-restauro | Placar | QUAL asserção caiu |
+|---|---|---|---|---|
+| (i) | inverter a ordem dos **dois blocos inteiros** de contagem no genérico (tabela **e** literal juntas: cotação checada primeiro, pedido depois) | `af11e802` → `e3d42cc5` → `af11e802` | 2/1 | **(A)** *"com pedido E cotacao, vale a de pedido"* — o `d1` (só cotação) continuou certo; a queda foi exatamente na precedência |
+| (ii) | `const params = ['ativo'];` → `['inativo']` em `listarFornecedoresAux` (`receiptService.js:1614`, posição bateu) | `e54df637` → `59dabbe0` → `e54df637` | 2/1 | **(A)** *"controle positivo: ATIVO tem de aparecer no aux antes de inativar"* — o `aux0`, **não** a negativa; prova que o controle positivo está antes do `PUT` |
+
+(B) e (C) seguiram verdes nas duas sabotagens, como devem (nenhuma toca o serviço nem o `grupo_id`).
+Depois do último restauro, `3 passou` com os md5 originais.
+
+**Divergências entre o plano e o que o código exigiu:**
+
+1. **A sabotagem (i) não é literalmente "a sabotagem 4 da T2".** A T2 trocou só as **tabelas** dos dois
+   `SELECT COUNT(*)` e, como a própria T2 registrou, isso derruba a **primeira** literal (só cotação
+   vinculada já recebe a frase de pedido) — aqui cairia no `d1` (*"a rota usa a CONSTANTE do servico"*),
+   não em *"vale a de pedido"*. Para derrubar a precedência, como o Step 2 pede, a sabotagem tem de
+   inverter os **blocos inteiros** (tabela + literal). Foi o que se fez; a asserção prevista caiu.
+2. **O `require` de `cotacaoService` já estava no topo** (`:63`, posto pela T3) — o passo condicional
+   "se estiver abaixo do genérico, mova" não se aplicou.
+3. **O comentário do 409** deixou de dizer que a literal "está inline porque a T3 roda em paralelo" e
+   passou a dizer onde a constante mora e por que um dia foi inline (histórico útil para quem ler o
+   `git blame`).
+4. **A frase de pedido continua literal na rota** (`'Fornecedor possui pedidos de compra — não pode ser
+   excluído'`, `:444`) — o plano só manda trocar a de cotação; `pedidoCompraService` não exporta essa
+   constante e o teste (A)/(5) e a T2 (9) a guardam por texto. Fica como está; candidata a **letra B**
+   no fechamento se se quiser simetria.
+5. Nada foi descartado. Nenhuma spec estava errada no trecho que a T6 tocou.
 
 ---
 
