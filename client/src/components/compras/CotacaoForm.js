@@ -42,6 +42,9 @@ function mensagemDeErro(erro, fallback) {
 const formatCurrency = (valor) => new Intl.NumberFormat('pt-BR', {
   style: 'currency', currency: 'BRL',
 }).format(Number(valor) || 0);
+// Duas casas decimais em numero (nao string): e o que o `<input type="number" step="0.01">` aceita
+// e o que `somaItens` do servidor grava desde a onda de correcao da 41 (F3b).
+const arredondar2 = (valor) => Math.round((Number(valor) || 0) * 100) / 100;
 
 // Copia de `PedidoCompraForm.js`: a chave da linha e local (o mesmo material pode aparecer duas
 // vezes; o servidor decide). Preco vazio e aceito — o aviso abaixo diz o que deixa de acontecer.
@@ -94,7 +97,9 @@ const CotacaoForm = () => {
         setFornecedorId(c.fornecedor_id == null ? '' : String(c.fornecedor_id));
         setDataCotacao((c.data_cotacao || '').slice(0, 10));
         setValidade((c.validade || '').slice(0, 10));
-        setValorTotal(c.valor_total == null ? '' : String(c.valor_total));
+        // F6: cotacao gravada antes do arredondamento do servidor traz o ruido; sem isto, remover
+        // a ultima linha devolvia um campo digitavel com `step="0.01"` que o navegador recusa.
+        setValorTotal(c.valor_total == null ? '' : String(arredondar2(c.valor_total)));
         setStatus(c.status || 'em_analise');
         setObservacoes(c.observacoes || '');
         // F5: `pedido_id` preenchido = ja virou pedido (RN-F10); a tela trava e aponta para ele.
@@ -148,6 +153,9 @@ const CotacaoForm = () => {
     () => itens.reduce((soma, it) => soma + (Number(it.quantidade) || 0) * (Number(it.valor_unitario) || 0), 0),
     [itens],
   );
+  // F6 (UX I2): 3 x 0.1 em double e 0.30000000000000004 — o `<input>` travado mostrava isso cru
+  // ao lado de um `<p>` com R$ 0,30. Duas casas, como `step="0.01"` e como o servidor grava.
+  const totalArredondado = arredondar2(total);
   const temItemSemPreco = itens.some((it) => !(Number(it.valor_unitario) > 0));
 
   const handleSubmit = async (e) => {
@@ -241,7 +249,7 @@ const CotacaoForm = () => {
                 step="0.01"
                 readOnly={itens.length > 0}
                 disabled={convertida}
-                value={itens.length > 0 ? String(total) : valorTotal}
+                value={itens.length > 0 ? String(totalArredondado) : valorTotal}
                 onChange={(ev) => setValorTotal(ev.target.value)}
                 style={itens.length > 0 ? { background: '#f0f0f0' } : undefined}
               />
@@ -382,7 +390,7 @@ const CotacaoForm = () => {
             <p style={{ color: '#b9770e' }}>{LITERAL_AVISO_PRECO}</p>
           )}
 
-          <p><strong>Total: {formatCurrency(total)}</strong></p>
+          <p><strong>Total: {formatCurrency(totalArredondado)}</strong></p>
 
           {/* F5: convertida nao tem Salvar (nem travado) — nao ha o que salvar; o `handleSubmit`
               ainda sai cedo para o Enter num campo. */}

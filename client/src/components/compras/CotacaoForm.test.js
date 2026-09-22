@@ -119,6 +119,14 @@ const COTACAO_771_CONVERTIDA = {
     { id: 7711, material_id: 912, codigo: 'ALM-0912', descricao: 'Chapa Aço 5mm', unidade: 'KG', quantidade: 2, valor_unitario: 10 },
   ],
 };
+// Onda de correcao da 41 (F6, UX I2): cotacao gravada ANTES do arredondamento do servidor, com o
+// ruido de ponto flutuante persistido (3 x 0.1). Id 773, fora do conjunto ocupado.
+const COTACAO_773_RUIDO = {
+  ...COTACAO_760, id: 773, numero: 'COT-2026-773', valor_total: 0.30000000000000004,
+  itens: [
+    { id: 7731, material_id: 912, codigo: 'ALM-0912', descricao: 'Chapa Aço 5mm', unidade: 'KG', quantidade: 3, valor_unitario: 0.1 },
+  ],
+};
 const LISTA = [{ ...COTACAO_760 }];
 
 let container;
@@ -134,6 +142,7 @@ beforeEach(() => {
     if (url === '/compras/cotacoes/760') return Promise.resolve({ data: COTACAO_760 });
     if (url === '/compras/cotacoes/770') return Promise.resolve({ data: COTACAO_770 });
     if (url === '/compras/cotacoes/771') return Promise.resolve({ data: COTACAO_771_CONVERTIDA });
+    if (url === '/compras/cotacoes/773') return Promise.resolve({ data: COTACAO_773_RUIDO });
     if (url === '/compras/materiais') return Promise.resolve({ data: MATERIAIS });
     if (url === '/compras/pedidos') return Promise.resolve({ data: [] });
     return Promise.reject(new Error(`URL inesperada no teste: ${url}`));
@@ -481,4 +490,40 @@ test('(o) F5 edicao da 771 convertida: faixa com link para o pedido, tudo disabl
   expect(api.put).not.toHaveBeenCalled();
   expect(api.post).not.toHaveBeenCalled();
   expect(texto()).toContain('Editar cotação'); // ficou no form
+});
+
+// ── (p) F6 da onda de correcao da 41 (UX I2): o campo travado nao mostra lixo de ponto flutuante ─
+//
+// 3 x 0.1 em double e 0.30000000000000004; o `<p>Total</p>` passa por `formatCurrency` e mostra
+// R$ 0,30, mas o `<input>` travado mostrava `String(total)` cru — dois numeros discordando na
+// mesma tela. Pior na edicao: o `valorTotal` nascia do `valor_total` gravado com o ruido e, ao
+// remover a ultima linha, o campo voltava digitavel com `step="0.01"` e o navegador BLOQUEAVA o
+// submit (stepMismatch; nao reproduzivel em jsdom, por isso o que se mede aqui e o `value`).
+// Conserto: `Math.round(total * 100) / 100` no `value` e no `<p>`, e o mesmo arredondamento ao
+// carregar `valor_total` do GET. Ao remover a ultima linha o campo volta ao DIGITADO (nao ao
+// total) — e o (i), reafirmado aqui com um digitado diferente do total.
+test('(p) F6 3 x 0.1 -> cotacao-valor "0.3" e Total R$ 0,30; remover volta ao digitado; edicao com ruido gravado carrega "0.3"', async () => {
+  await renderizarEm('/compras/cotacoes/nova');
+  digitar(porTestId('cotacao-valor'), '7');
+  await adicionar912();
+  digitar(porTestId('cotacao-qtd-item-912'), '3');
+  digitar(porTestId('cotacao-valor-item-912'), '0.1');
+  // Controle positivo: a conta crua tem o ruido — e o que o conserto tem de esconder.
+  expect(String(3 * 0.1)).toBe('0.30000000000000004');
+  expect(porTestId('cotacao-valor').value).toBe('0.3');
+  expect(texto()).toContain('Total: R$ 0,30');
+  expect(texto()).not.toContain('0.30000000000000004');
+  await clicar(porTestId('cotacao-remover-item-912'));
+  expect(porTestId('cotacao-valor').readOnly).toBe(false);
+  expect(porTestId('cotacao-valor').value).toBe('7'); // o digitado, nao o total
+
+  // Edicao de cotacao gravada com o ruido: o campo travado e o digitavel (apos remover) vem limpos.
+  await act(async () => { root.unmount(); }); container.remove();
+  container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container);
+  await renderizarEm('/compras/cotacoes/editar/773');
+  expect(porTestId('cotacao-valor').readOnly).toBe(true);
+  expect(porTestId('cotacao-valor').value).toBe('0.3');
+  await clicar(porTestId('cotacao-remover-item-912'));
+  expect(porTestId('cotacao-valor').readOnly).toBe(false);
+  expect(porTestId('cotacao-valor').value).toBe('0.3');
 });
