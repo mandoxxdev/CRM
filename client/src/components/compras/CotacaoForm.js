@@ -132,7 +132,9 @@ const CotacaoForm = () => {
             </label>
             <label style={coluna}>Data<input data-testid="cotacao-data" type="date" value={dataCotacao} onChange={(ev) => setDataCotacao(ev.target.value)} /></label>
             <label style={coluna}>Validade<input data-testid="cotacao-validade" type="date" value={validade} onChange={(ev) => setValidade(ev.target.value)} /></label>
-            <label style={coluna}>Valor total<input data-testid="cotacao-valor" type="number" step="0.01" min="0" value={valorTotal} onChange={(ev) => setValorTotal(ev.target.value)} /></label>
+            {/* Sem `min`: o servidor decide (D3/D11) e a literal do 400 chega ao role="alert";
+                com `min="0"` o navegador barrava o submit com tooltip nativa (UX M2). */}
+            <label style={coluna}>Valor total<input data-testid="cotacao-valor" type="number" step="0.01" value={valorTotal} onChange={(ev) => setValorTotal(ev.target.value)} /></label>
             <label style={coluna}>Status
               <select data-testid="cotacao-status" value={status} onChange={(ev) => setStatus(ev.target.value)} className="filter-select">
                 {STATUS_COTACAO.map((s) => <option key={s.valor} value={s.valor}>{s.label}</option>)}

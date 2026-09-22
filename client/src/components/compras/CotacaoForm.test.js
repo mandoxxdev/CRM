@@ -228,6 +228,10 @@ test('(c) RN-E15 sem numero -> alerta; com numero e sem fornecedor -> alerta; PO
 
 test('(d) RN-E14 POST com Number() nos numericos e navega com toast', async () => {
   await renderizarEm('/compras/cotacoes/nova');
+  // F4 (UX M2): sem `min` no valor — o servidor decide (D3/D11) e a literal do 400 chega ao
+  // `role="alert"` (cenario (h)); com `min="0"` o navegador barrava o submit com tooltip nativa.
+  expect(porTestId('cotacao-valor').hasAttribute('min')).toBe(false);
+  expect(porTestId('cotacao-valor').getAttribute('step')).toBe('0.01');
   digitar(porTestId('cotacao-numero'), 'COT-1');
   await selecionar(porTestId('cotacao-fornecedor'), '312');
   digitar(porTestId('cotacao-valor'), '99.9');
@@ -286,4 +290,29 @@ test('(g) RN-E16 o select de status mostra so as opcoes da aba, e trocar de aba 
   expect(opcoes()).toEqual(['', 'em_analise', 'aprovado', 'rejeitado', 'cancelado']);
   expect(select().value).toBe('');
   expect(chamadas('/compras/cotacoes').at(-1)[1].params.status).toBe('');
+});
+
+// ── (h) F4 (UX M2) valor negativo VIAJA e o 400 do servidor chega ao role="alert" ─────────────
+//
+// Politica da etapa (D3/D11): a tela nao valida o que o servidor ja valida; a literal do Zod
+// (`VALOR_COTACAO_NEGATIVO`, `schemas.js`) e o que o comprador le. Este cenario mede a composicao
+// client<->servidor: `-1` sai da tela como numero, o `validate()` responde
+// `{ error: 'Dados inválidos — valor_total: ...' }` (`validation.js`) e a faixa mostra isso.
+// O `min="0"` em si e medido no (d): em jsdom o submit por evento nao roda a validacao nativa,
+// entao este cenario passaria mesmo com o atributo — e o (d) que cai na sabotagem.
+test('(h) F4 valor_total -1 viaja no POST e o 400 do servidor aparece em role=alert', async () => {
+  const LITERAL_400 = 'Dados inválidos — valor_total: valor total da cotação não pode ser negativo';
+  api.post.mockImplementation(() => Promise.reject({ response: { status: 400, data: { error: LITERAL_400 } } }));
+  await renderizarEm('/compras/cotacoes/nova');
+  digitar(porTestId('cotacao-numero'), 'COT-NEG');
+  await selecionar(porTestId('cotacao-fornecedor'), '312');
+  digitar(porTestId('cotacao-valor'), '-1');
+  expect(porTestId('cotacao-valor').value).toBe('-1');
+  await submeter();
+  expect(api.post.mock.calls).toHaveLength(1);
+  expect(api.post.mock.calls[0][1].valor_total).toBe(-1);
+  expect(alertas()).toContain(LITERAL_400);
+  expect(toast.error).not.toHaveBeenCalled();
+  expect(toast.success).not.toHaveBeenCalled();
+  expect(texto()).toContain('Nova cotação'); // ficou no form
 });
