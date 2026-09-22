@@ -1665,7 +1665,7 @@ depois do último restauro, antes do commit.
 - Consumes (mock HTTP): `GET /compras/fornecedores` → lista (`razao_social`); `GET /compras/cotacoes/:id` → linha (§5.4); `POST /compras/cotacoes` → `201` linha; `PUT` → `200` linha; `409 { error: 'Já existe uma cotação com o número X' }`.
 - Produces: rotas `cotacoes/nova` e `cotacoes/editar/:id`; rótulo `Nova Cotação`; `<select>` de status por aba.
 
-- [ ] **Step 1: o teste** — mesmo cabeçalho da T4 (com `CotacaoForm` em `reais`). Fixtures:
+- [x] **Step 1: o teste** — mesmo cabeçalho da T4 (com `CotacaoForm` em `reais`). Fixtures:
 
 ```js
 const FORNECEDORES = [{ id: 355, razao_social: 'Parafusos Sul', status: 'ativo' }, { id: 312, razao_social: 'Aços Vale Ltda', status: 'ativo' }];
@@ -1777,9 +1777,9 @@ Para o (g): o stub do `Layout` no Proxy deste arquivo ganha dois links —
 (`:513`) ganha `data-testid="filtro-status"`. Confira antes que `loadData` manda `params: { search, status }`
 (`:62-64`, `:79-81`) — o `[1].params.status` da asserção depende dessa forma.
 
-- [ ] **Step 2: rodar e ver vermelho** (arquivo vazio exportando `() => null` para chegar às asserções).
+- [x] **Step 2: rodar e ver vermelho** (arquivo vazio exportando `() => null` para chegar às asserções).
 
-- [ ] **Step 3: a tela**
+- [x] **Step 3: a tela**
 
 ```jsx
 /**
@@ -1936,7 +1936,7 @@ const CotacaoForm = () => {
 export default CotacaoForm;
 ```
 
-- [ ] **Step 4: rotas, lazy, rótulo e opções por aba**
+- [x] **Step 4: rotas, lazy, rótulo e opções por aba**
 
 `lazyModules.js`, após `:63`: `export const CotacaoForm = page(() => import('../components/compras/CotacaoForm'));`
 `App.js:43-45`: acrescentar `CotacaoForm` ao import. Após `:374`:
@@ -1971,9 +1971,9 @@ e use `statusValido` **nos dois lugares**: no `value` do `<select>` (`:515`) **e
 `params.status` de `loadData` (`:63`, `:73-74`, `:80`) — o `useEffect` de `loadData` continua
 dependendo de `filterStatus`, sem requisição dupla.
 
-- [ ] **Step 5: rodar** — o arquivo (7); `PedidoCompraForm.test.js` (25 — o (i) usa `'Novo Pedido'`, que continua); `Compras.test.js` (9); suíte inteira; build.
+- [x] **Step 5: rodar** — o arquivo (7); `PedidoCompraForm.test.js` (25 — o (i) usa `'Novo Pedido'`, que continua); `Compras.test.js` (9); suíte inteira; build.
 
-- [ ] **Step 6: sabotagens**
+- [x] **Step 6: sabotagens**
 
 | # | Sabotagem | Cai |
 |---|---|---|
@@ -1984,7 +1984,75 @@ dependendo de `filterStatus`, sem requisição dupla.
 | 5 | `if (!fornecedorId)` removido | **(c)** segunda metade |
 | 6 | `statusValido` → `filterStatus` nos `params` de `loadData` (deixando o `value` do select) | **(g)** *"params.status … toBe('')"* recebe `'inativo'` — é o controle positivo do I1 da Fase 2 |
 
-- [ ] **Step 7: commit** — `git add client/src/components/compras/CotacaoForm.js client/src/components/compras/CotacaoForm.test.js client/src/routes/lazyModules.js client/src/App.js client/src/components/Compras.js`. Mensagem em `msg-e40-t5.txt`.
+- [x] **Step 7: commit** — `git add client/src/components/compras/CotacaoForm.js client/src/components/compras/CotacaoForm.test.js client/src/routes/lazyModules.js client/src/App.js client/src/components/Compras.js`. Mensagem em `msg-e40-t5.txt`.
+
+#### ✅ Task 5 FECHADA — `f7bbb5f` (Compras Etapa 40 T5: CotacaoForm, rotas cotacoes/nova e editar/:id, rotulo Nova Cotacao e status por aba)
+
+> Hash medido na branch `e40-t5` (worktree `CRM-wt-e40-t5`, base `07d6893`). **Será reescrito no
+> cherry-pick para o tronco** — quem integrar troca o hash aqui e no mapa da T6.
+
+**Números lidos (não previstos):**
+
+| Suíte | Antes (Step 2, `CotacaoForm = () => null`) | Depois |
+|---|---|---|
+| `CotacaoForm.test.js` | `7 failed, 7 total` (os 7 cenários; a rota caía no `*` e o `h1` era "Compras") | **`7 passed`** |
+| `PedidoCompraForm.test.js` | — | **`25 passed`** (o (i) com `'Novo Pedido'` continua verde: o rótulo agora é a string inteira por aba) |
+| `Compras.test.js` | — | **`9 passed`** |
+| Suíte inteira do client | — | **`50 passed` suítes / `760 passed` testes** |
+| `CI=true npx react-scripts build` | — | **`Compiled successfully.`** |
+
+CR = 0 nos cinco arquivos tocados depois de cada edição (medido com `perl -ne '$c++ if /\r/'`).
+Controle de fuso do (a): `getTimezoneOffset() === 180` passou (o `globalSetup` fixa America/Sao_Paulo).
+ESLint (`npx eslint` nos cinco arquivos — o build **não** o roda): 0 erros, 9 warnings, **todos
+pré-existentes** em linhas não tocadas (`FiDollarSign`/`FiCalendar`/`FiTrendingUp`/`FiTrendingDown`
+e `tabs` nunca usados, `default-case` ×2, `exhaustive-deps` ×2 em `Compras.js:71` e `App.js:166`).
+Nenhum import novo sem uso.
+
+**Sabotagens (md5 de `CotacaoForm.js` antes `2d8c7fc9…`, `Compras.js` antes `457590d0…`; sabotado ≠
+nas seis; pós-restauro igual ao original nas seis; restauro por `cp` do scratchpad; âncora contada
+com `grep -cF` = 1 nas cinco primeiras e **4** na sexta, ver divergência 2). Rodadas às **21:18 local**:**
+
+| # | Sabotagem | Placar | QUAL asserção caiu |
+|---|---|---|---|
+| 1 | `fornecedor_id: Number(fornecedorId)` → `fornecedor_id: fornecedorId` | 5/2 | **(d)** `expect(corpo.fornecedor_id).toBe(312)` — `Expected: 312 / Received: "312"`; **(e)** `toEqual` do `PUT` (`- Expected 1 / + Received 1`, o `fornecedor_id` como string) |
+| 2 | `hojeISO` → `new Date().toISOString().slice(0, 10)` | 6/1 | **(a)** `expect(porTestId('cotacao-data').value).toBe(esperado)` — `Expected: "2026-09-21" / Received: "2026-09-22"`. **Rodou DENTRO da janela 21h–0h** (21:18 local, UTC já era dia 22), então caiu de verdade; fora da janela passaria e a proteção seria só a RN-D03 e o comentário |
+| 3 | `'Nova Cotação'` → `'Novo Cotação'` em `Compras.js` | 6/1 | **(b)** `expect(linkPorTexto('Novo Cotação')).toBeUndefined()` — recebeu o `<a class="btn-premium" href="/compras/cotacoes/nova">…Novo Cotação…</a>` |
+| 4 | `OPCOES_STATUS.cotacoes` com `['pendente', 'Pendente']` na frente | 6/1 | **(g)** `expect(opcoes()).toEqual(['', 'em_analise', 'aprovado', 'rejeitado', 'cancelado'])` — `+ Received + 1` (`'pendente'`) |
+| 5 | linha `if (!fornecedorId) { setErro(…); return; }` removida | 6/1 | **(c)** `expect(alertas()).toContain('Fornecedor da cotação é obrigatório')` — `Received string: ""` (o form seguiu para o `POST`) |
+| 6 | `status: statusValido` → `status: filterStatus` nos 4 `params` (o `value` do select ficou em `statusValido`) | 6/1 | **(g)** `expect(chamadas('/compras/cotacoes').at(-1)[1].params.status).toBe('')` — `Expected: "" / Received: "inativo"`. É o controle positivo do I1 da Fase 2: o select mostrava "Todos" e a requisição ia com `inativo` |
+
+Controle positivo: os seis cortes cortaram **exatamente** o cenário que a tabela do Step 6 previa; os
+dois arquivos voltaram ao md5 original e a suíte a `7 passed` depois do último restauro.
+
+**Divergências entre o plano e o que o código exigiu:**
+
+1. **Linhas citadas bateram todas** em `07d6893`: `Compras.js:496` (rótulo), `:513-525` (select),
+   `:63`/`:73-74`/`:80` (`params.status`), `lazyModules.js:63` (`FornecedoresDoGrupo`),
+   `App.js:43-46` (import) e `:374` (`ItensFornecedor`). Depois da T5: `Compras.js` cresceu **+24**
+   linhas (`OPCOES_STATUS` em `:15-23` com o comentário, `statusValido` em `:49-54`, o `<select>`
+   agora abre em `:530` com o `data-testid` em `:531`), `App.js` **+4** (as duas rotas em
+   `:376-378`), `lazyModules.js` **+2** (`CotacaoForm` em `:65`) — medido depois do commit.
+   **T6 reconta** antes de citar qualquer linha desses três.
+2. **Âncora da sabotagem 6 conta 4, não 1**: são os quatro `params.status` de `loadData`
+   (fornecedores, pedidos ×2 com/sem `atrasados`, cotações) — o plano diz "três" em `:63`, `:73-74`,
+   `:80`, mas `:73-74` são **duas** linhas com `status:`. A sabotagem trocou os 4 (`/g`) de
+   propósito: é a forma que o I1 da Fase 2 descreve.
+3. **A sabotagem 2 caiu porque rodou às 21:18 local** — dentro da janela que o plano avisava. Fora
+   dela o placar seria 7/0 e a linha da tabela teria de dizer "não cai".
+4. **Asserções acrescentadas aos cenários do plano** (nenhuma removida): (a) `cotacao-form` presente
+   e o subtítulo da lista ausente; (b) `GET /compras/cotacoes/760` chamado exatamente 1 vez;
+   (c) o primeiro alerta é **substituído** (não acumulado) pelo segundo; (d) `api.post` chamado
+   1 vez; (e) `toast.success('Cotação salva')`; (f) `toast.success` **não** chamado e o `h1`
+   continua "Nova cotação" (ficou no form). O código de `CotacaoForm.js` é o do Step 3 verbatim,
+   mais um comentário em `hojeISO` dizendo por que não é `toISOString`.
+5. **`Compras.js` ganhou comentários** onde o plano só trazia código: em `OPCOES_STATUS` (por que
+   por aba) e em `statusValido` (por que derivado e usado nos dois lugares). `FiFilter` continua
+   usado (o ícone ao lado do select não mudou).
+6. **Ferramenta:** o heredoc do Bash quebrou ao gravar o teste com acentos (`unexpected EOF while
+   looking for matching ''`) e a sessão da API resetou no meio; a task foi retomada do Step 1 com a
+   worktree limpa e os arquivos gravados pelo Write tool (LF confirmado). Sem efeito no resultado.
+7. **Fronteira HTTP 100% mockada**, como o plano manda: nada aqui prova o servidor da T3 —
+   `POST`/`PUT`/`GET /:id` de cotação são do contrato §5.4 e a T6 é quem cruza.
 
 ---
 
