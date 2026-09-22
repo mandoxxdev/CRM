@@ -12,6 +12,16 @@ import { SkeletonTable } from './SkeletonLoader';
 import './Compras.css';
 import './Loading.css';
 
+// Etapa 40 (RN-E16): as opcoes do filtro de status sao POR ABA. Antes o select trazia uma mistura
+// (ativo/inativo/pendente/...) e a aba Cotacoes oferecia `pendente`, que nunca casa com uma
+// cotacao. Fornecedores: `ativo`/`inativo`; Pedidos: `STATUS_PEDIDO_COMPRA` (as 7); Cotacoes:
+// `STATUS_COTACAO` do servidor, na mesma ordem.
+const OPCOES_STATUS = {
+  fornecedores: [['ativo', 'Ativo'], ['inativo', 'Inativo']],
+  pedidos: [['pendente', 'Pendente'], ['aprovado', 'Aprovado'], ['rejeitado', 'Rejeitado'], ['em_analise', 'Em Análise'], ['enviado', 'Enviado'], ['recebido', 'Recebido'], ['cancelado', 'Cancelado']],
+  cotacoes: [['em_analise', 'Em Análise'], ['aprovado', 'Aprovado'], ['rejeitado', 'Rejeitado'], ['cancelado', 'Cancelado']],
+};
+
 const Compras = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -36,6 +46,12 @@ const Compras = () => {
   // re-dispara por `search` e `status` — um `param` a mais e uma dependencia a mais, zero
   // refatoracao (`loadData` ja passa params no mesmo `api.get`).
   const [soAtrasados, setSoAtrasados] = useState(false);
+  // Etapa 40 (RN-E16): ao trocar de aba, `<Compras/>` NAO remonta (as tres rotas renderizam o
+  // mesmo elemento e o React Router v6 preserva o state). Um `filterStatus='inativo'` vindo da aba
+  // Fornecedores iria em `GET /compras/cotacoes?status=inativo` (lista vazia) enquanto o select,
+  // sem essa opcao, exibiria "Todos os status". Derivado no render — sem efeito, sem setState —
+  // e usado NOS DOIS lugares: no `value` do select e nos `params.status` de `loadData`.
+  const statusValido = (OPCOES_STATUS[activeSection] || []).some(([v]) => v === filterStatus) ? filterStatus : '';
 
   const tabs = [
     { id: 'fornecedores', label: 'Fornecedores', icon: FiShoppingCart },
@@ -60,7 +76,7 @@ const Compras = () => {
       switch (activeSection) {
         case 'fornecedores':
           const fornecedoresRes = await api.get('/compras/fornecedores', {
-            params: { search, status: filterStatus }
+            params: { search, status: statusValido }
           });
           setFornecedores(fornecedoresRes.data || []);
           break;
@@ -70,14 +86,14 @@ const Compras = () => {
           // o filtro com a string '1', entao seria ruido de contrato que nao faz nada.
           const pedidosRes = await api.get('/compras/pedidos', {
             params: soAtrasados
-              ? { search, status: filterStatus, atrasados: 1 }
-              : { search, status: filterStatus }
+              ? { search, status: statusValido, atrasados: 1 }
+              : { search, status: statusValido }
           });
           setPedidos(pedidosRes.data || []);
           break;
         case 'cotacoes':
           const cotacoesRes = await api.get('/compras/cotacoes', {
-            params: { search, status: filterStatus }
+            params: { search, status: statusValido }
           });
           setCotacoes(cotacoesRes.data || []);
           break;
@@ -493,7 +509,7 @@ const Compras = () => {
             <div className="btn-premium-icon">
               <FiPlus size={20} />
             </div>
-            <span className="btn-premium-text">Novo {activeSection === 'fornecedores' ? 'Fornecedor' : activeSection === 'pedidos' ? 'Pedido' : 'Cotação'}</span>
+            <span className="btn-premium-text">{activeSection === 'fornecedores' ? 'Novo Fornecedor' : activeSection === 'pedidos' ? 'Novo Pedido' : 'Nova Cotação'}</span>
             <div className="btn-premium-shine"></div>
           </Link>
         </div>
@@ -512,17 +528,13 @@ const Compras = () => {
         <div className="filter-group">
           <FiFilter />
           <select
-            value={filterStatus}
+            data-testid="filtro-status"
+            value={statusValido}
             onChange={(e) => setFilterStatus(e.target.value)}
             className="filter-select"
           >
             <option value="">Todos os status</option>
-            <option value="ativo">Ativo</option>
-            <option value="inativo">Inativo</option>
-            <option value="pendente">Pendente</option>
-            <option value="aprovado">Aprovado</option>
-            <option value="rejeitado">Rejeitado</option>
-            <option value="em_analise">Em Análise</option>
+            {(OPCOES_STATUS[activeSection] || []).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
         </div>
         {/* Etapa 39 (RN-D07): CONDICIONAL a aba Pedidos. O bloco `.filters` e renderizado FORA do

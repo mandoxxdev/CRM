@@ -46,6 +46,7 @@ import {
   FornecedorForm,
   GruposFornecedores,
   FornecedoresDoGrupo,
+  CotacaoForm,
   ItensFornecedor,
   Financeiro,
   Fabrica,
@@ -376,6 +377,9 @@ export function AppRoutes() {
         <Route path="fornecedores-homologados/fornecedor/:fornecedorId" element={
           <ItensFornecedor />
         } />
+        {/* Etapa 40, Task 5: os dois caminhos da aba Cotações que caiam no `*` */}
+        <Route path="cotacoes/nova" element={<CotacaoForm />} />
+        <Route path="cotacoes/editar/:id" element={<CotacaoForm />} />
         <Route path="requisicoes-material" element={<RequisicoesMaterialListaPage moduloKey="compras" />} />
         <Route path="requisicoes-material/nova" element={<RequisicoesMaterialNovaPage moduloKey="compras" />} />
       </Route>

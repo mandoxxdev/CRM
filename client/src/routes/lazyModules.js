@@ -63,6 +63,8 @@ export const PedidoCompraForm = page(() => import('../components/compras/PedidoC
 export const FornecedorForm = page(() => import('../components/compras/FornecedorForm'));
 export const GruposFornecedores = page(() => import('../components/GruposFornecedores'));
 export const FornecedoresDoGrupo = page(() => import('../components/FornecedoresDoGrupo'));
+// Etapa 40, Task 5: a tela de criacao/edicao de cotacao, pelo mesmo code-splitting das outras.
+export const CotacaoForm = page(() => import('../components/compras/CotacaoForm'));
 export const ItensFornecedor = page(() => import('../components/ItensFornecedor'));
 export const Financeiro = page(() => import('../components/Financeiro'));
 export const Fabrica = shell(() => import('../components/Fabrica'), 'operacional');
