@@ -1,27 +1,60 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-09-17 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-09-22 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 39) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 e 39 também não são do módulo** — as duas são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, e a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado).
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 40) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38, 39 e 40 também não são do módulo** — as três são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), e a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua.
 
-> ## Onde o desenvolvimento está — 2026-09-21 (Etapa 39 FECHADA · Etapa 40 começando)
+> ## Onde o desenvolvimento está — 2026-09-22 (Etapa 40 ENTREGUE · modo contínuo pelo mapa)
 >
-> **Etapas 1 a 20 e 22 a 39 completas; a Etapa 21 foi entregue no NÚCLEO do CRM e as 38 e 39 no
-> módulo COMPRAS.** A **Etapa 39 (o pedido de compra passa a ser acompanhado)** fechou em
-> 2026-09-17, com uma onda de correção da revisão final; a documentação do fechamento foi
-> completada em 2026-09-21. **Próxima etapa: Etapa 40 — Fornecedores e Cotações ganham tela**
-> (módulo Compras): hoje os botões **"Novo Fornecedor"** e **"Nova Cotação"** e os dois lápis de
-> editar dessas abas **voltam para a lista** sem fazer nada — é o mesmo corte que a 38 e a 39
-> declararam, e a última coisa em Compras que se clica e não acontece. O desenho está no fim do
-> plano da 39 (`docs/superpowers/plans/2026-09-16-crm-etapa39-pedido-acompanhado.md`, seção
-> "Próxima etapa: Etapa 40").
+> **Etapas 1 a 20 e 22 a 40 completas; a Etapa 21 foi entregue no NÚCLEO do CRM e as 38, 39 e 40 no
+> módulo COMPRAS.** A **Etapa 40 (Fornecedores e Cotações ganham tela)** fechou em 2026-09-21, com
+> uma onda de correção da revisão final; a documentação do fechamento foi completada em 2026-09-22.
+> **Próxima etapa: Etapa 41 — a cotação ganha itens e vira pedido de compra** (módulo Compras; o "falta para 🟢" alcançável da feature 22). O desenho inicial está no fim do plano da 40 (`docs/superpowers/plans/2026-09-21-crm-etapa40-fornecedores-cotacoes.md`, seção "Próxima tarefa detalhada — Etapa 41").
+>
+> **O problema era que quatro botões do Compras não faziam nada.** A tela de Compras tem três abas
+> — Fornecedores, Pedidos de Compra e Cotações. Desde a 38 a aba Pedidos tem formulário; nas outras
+> duas, **"Novo Fornecedor"**, **"Nova Cotação"** e os dois **lápis** apontavam para um endereço sem
+> tela e **voltavam para a lista**. Cotação não podia ser criada por caminho nenhum; fornecedor, só
+> pelo modal escondido em *Fornecedores homologados → grupo*. E dois defeitos nunca reportados
+> estavam no caminho: **"Remover do grupo" dizia sucesso e não removia**, e o status **Inativo** do
+> filtro da aba **não podia ser gravado por tela nenhuma**.
+>
+> **O que a 40 mudou:**
+> - **Compras → Fornecedores → "Novo Fornecedor"** abre **"Novo fornecedor"** (razão social, nome
+>   fantasia, CNPJ, contato, e-mail, telefone, endereço e **Grupo**); o lápis abre **"Editar
+>   fornecedor"** com o campo **Status** (*Ativo/Inativo*). Salvar mostra *"Fornecedor salvo"*.
+> - **Inativar um fornecedor** o tira do **seletor do Recebimento** e do **"Vincular"** dos grupos;
+>   ele **continua** na lista de Compras (selo *inativo*), na tela do grupo (selo **"Inativo"**) e
+>   **continua aceito** em pedido e em cotação — decisão declarada, **B127**.
+> - **Compras → Cotações → "Nova Cotação"** (o botão dizia *"Novo Cotação"*) abre **"Nova cotação"**:
+>   número **digitado e único** (*"Já existe uma cotação com o número ⟨X⟩"*), fornecedor, data,
+>   validade, valor total, status (*Em Análise, Aprovado, Rejeitado, Cancelado*) e observações.
+> - **O filtro de status mostra só as opções de cada aba** — a aba Cotações oferecia *Pendente*, que
+>   nunca casava com nada.
+> - **"Remover do grupo" remove.** E a lixeira de fornecedor ganhou duas frases novas, além da de
+>   pedido: *"Fornecedor possui cotações — não pode ser excluído"* e *"Fornecedor possui itens
+>   cadastrados — não pode ser excluído"* — a segunda dava erro genérico em produção.
+>
+> **⚠️ Três coisas antes de apresentar a 40:**
+> 1. **Quem acreditava ter tirado um fornecedor de um grupo precisa conferir** — o botão não
+>    removia (**C54**). Em produção todos os fornecedores estão em grupo; não há como saber se algum
+>    deveria ter saído.
+> 2. **Rode as consultas A16 e A17 do documento de novidades antes do deploy.** Fornecedor com
+>    status vazio aparece como ativo na lista, mas **não aparece no seletor do Recebimento**; e
+>    itens de preço órfãos de fornecedor podem existir se alguém contornou o erro antigo da lixeira.
+> 3. **Inativo NÃO bloqueia pedido nem cotação.** Se a empresa esperar que bloqueie, é a decisão
+>    **B127** que precisa de resposta — hoje é aceito, de propósito.
+>
+> **Antes disto: a Etapa 39 (o pedido de compra passa a ser acompanhado)** fechou em 2026-09-17,
+> com uma onda de correção da revisão final; a documentação do fechamento foi completada em
+> 2026-09-21.
 >
 > **O problema era que ninguém olhava o prazo do pedido.** A Etapa 38 passou a gravar uma **Previsão
 > de entrega** em cada pedido — e nada no sistema comparava essa promessa com o calendário. Um pedido
 > prometido para a semana passada tinha exatamente a mesma cara de um prometido para o mês que vem, e
 > descobrir o atraso dependia de alguém ler a lista data a data.
 >
-> **O que mudou:**
+> **O que a 39 mudou:**
 > - **A coluna *Previsão Entrega* ganhou o selo vermelho "Atrasado há N dias"** (com o singular
 >   certo: *"Atrasado há 1 dia"*), e a aba ganhou a caixa **"Só atrasados"**, que compõe com a busca
 >   e com o filtro de status.
@@ -4714,6 +4747,152 @@ que ele não tinha como repetir com sucesso garantido.
 - **Número de série de material** — continua sendo **digitado pelo operador** e de propósito não
   passa por este gerador. Retentar com outro número gravaria algo que ninguém digitou.
 - **Números de outros módulos do CRM** — a varredura foi do almoxarifado.
+
+---
+
+## Etapa 40 — Fornecedores e Cotações ganham tela (ENTREGUE — 2026-09-21)
+
+**O que mudou, em uma frase:** as abas **Fornecedores** e **Cotações** do módulo Compras ganharam
+formulário de criar e editar — os quatro botões que voltavam para a lista passaram a abrir uma tela
+que grava —, o fornecedor pode ser **inativado**, o botão **"Remover do grupo"** passou a remover, e
+a lixeira de fornecedor passou a dizer **por que** recusa.
+
+**Esta etapa é do módulo Compras**, como a 38 e a 39. **Todas as telas deste roteiro são do módulo
+Compras** (menu *Compras*), com uma única ida ao Almoxarifado para conferir o seletor do Recebimento.
+
+O problema era simples: a tela de Compras tem três abas, e só a de Pedidos tinha formulário. Nas
+outras duas, **"Novo Fornecedor"**, **"Nova Cotação"** e os dois **lápis** apontavam para um endereço
+sem tela do outro lado — o comprador clicava e **voltava para a lista**. Cotação não tinha como ser
+criada; fornecedor, só por um modal escondido em *Fornecedores homologados → grupo*. No caminho,
+duas coisas que ninguém tinha reportado: **"Remover do grupo" dizia sucesso e não removia**, e o
+status **Inativo**, que o filtro da aba oferecia, **não podia ser gravado por nenhuma tela**.
+
+### Onde se percebe cada mudança
+
+| Tela | Antes | Agora |
+|---|---|---|
+| **Compras → Fornecedores → "Novo Fornecedor"** | Voltava para a lista | Abre **"Novo fornecedor"**: Razão social*, Nome fantasia, CNPJ, Contato, E-mail, Telefone, Endereço, **Grupo** (*Sem grupo* ou um grupo homologado). **Salvar fornecedor** → *"Fornecedor salvo"* |
+| **Lápis da aba Fornecedores** | Voltava para a lista | Abre **"Editar fornecedor"** preenchido, com o campo **Status** (*Ativo* / *Inativo*) |
+| **Inativar** | Não havia como | *Inativo* → selo na lista, some do **seletor do Recebimento** e do **"Vincular"** dos grupos; continua aceito em pedido e cotação |
+| **Compras → Cotações → "Nova Cotação"** | Botão *"Novo Cotação"*, voltava para a lista | Botão **"Nova Cotação"** → **"Nova cotação"**: Número*, Fornecedor*, Data, Validade, Valor total, Status, Observações. **Salvar cotação** → *"Cotação salva"* |
+| **Lápis da aba Cotações** | Voltava para a lista | **"Editar cotação"** preenchida |
+| **Número da cotação repetido** | — | *"Já existe uma cotação com o número ⟨X⟩"* na faixa vermelha |
+| **Filtro de status** | Uma lista só para as três abas | Só as opções da aba: Fornecedores *Ativo/Inativo*; Cotações *Em Análise, Aprovado, Rejeitado, Cancelado* |
+| **Fornecedores homologados → grupo → "Remover do grupo"** | *"Fornecedor removido do grupo"* e nada mudava | Remove de verdade |
+| **Fornecedores homologados → grupo**, fornecedor inativo | Sumia | Aparece depois dos ativos com o selo **"Inativo"**; o "Vincular" não o oferece |
+| **Lixeira de fornecedor com cotação / com itens de preço** | Erro genérico *"Erro ao excluir item"* | *"Fornecedor possui cotações — não pode ser excluído"* / *"Fornecedor possui itens cadastrados — não pode ser excluído"* |
+
+### Roteiro de teste manual
+
+**Nada aqui usa SQL.** Você precisa de um usuário com acesso ao **módulo Compras**; para o passo 6,
+também ao **Almoxarifado**. Todas as telas são do menu **Compras**, salvo o passo 6.
+
+**Fornecedor: criar, recusar, editar, inativar**
+
+1. Entre em **Compras → Fornecedores** e clique em **"Novo Fornecedor"** → abre a tela **"Novo
+   fornecedor"** (é o primeiro sinal da etapa: antes, você continuava na lista).
+2. **A recusa local.** Deixe *Razão social* em branco, preencha só *Nome fantasia* e clique em
+   **Salvar fornecedor** → a faixa vermelha diz **"Razão social é obrigatória"** e nada é enviado.
+3. Preencha *Razão social* = **Fornecedor Teste 40**, um telefone (ele ganha máscara enquanto você
+   digita), escolha um **Grupo** (se houver algum grupo homologado cadastrado) e salve → aviso verde
+   **"Fornecedor salvo"**, a tela volta para a lista e a linha nova está lá com o selo *ativo*.
+4. Clique no **lápis** dessa linha → **"Editar fornecedor"** com tudo preenchido e, no fim, o campo
+   **Status** (que **não** existia na tela de criação). Troque para **Inativo** e salve → na lista o
+   selo virou *inativo*. No filtro de status, escolha **"Inativo"** → só ele aparece; **"Ativo"** → ele
+   some. *(Antes da etapa, o filtro "Inativo" nunca encontrava ninguém.)*
+5. **Onde o inativo aparece e onde some — a parte para demonstrar com cuidado:**
+   - **Compras → Fornecedores homologados → o grupo** que você escolheu no passo 3 → o cartão dele
+     está lá, **depois dos ativos**, com o selo **"Inativo"** (passe o mouse: *"Fornecedor inativo —
+     reative em Compras › Fornecedores"*). Clique em **"Vincular fornecedor"** → ele **não** está na
+     lista do modal (e, se não houver mais ninguém disponível, a frase é *"Todos os fornecedores
+     ativos já estão em um grupo (inativos não podem ser vinculados) — ou cadastre um novo."*).
+   - **Compras → Pedidos de Compra → Novo Pedido** → no seletor de fornecedor ele **aparece**, e um
+     pedido para ele é **aceito**. *É decisão declarada, não defeito: inativar não bloqueia pedido.*
+6. **Almoxarifado → Recebimentos → Novo Recebimento** (*Somente pela Nota Fiscal*) → no seletor de
+   fornecedor ele **não aparece**. Volte em **Compras → Fornecedores**, lápis, **Ativo**, salve →
+   reapareceu no Recebimento.
+
+**Remover do grupo (o defeito que ninguém tinha visto)**
+
+7. **Compras → Fornecedores homologados → o grupo** → no cartão do fornecedor de teste, clique em
+   **"Remover do grupo"** → confirmação *"Remover "Fornecedor Teste 40" deste grupo? O fornecedor
+   continua cadastrado."* → **OK** → aviso *"Fornecedor removido do grupo"* e o cartão **some**. Antes
+   da etapa o aviso era o mesmo **e o cartão ficava**. Confira em **Compras → Fornecedores → lápis**:
+   *Grupo* está em **"Sem grupo"**. *(O caminho inverso também vale: escolher "Sem grupo" no lápis
+   tira o fornecedor do grupo.)*
+
+**Cotação: criar, repetir o número, valor negativo**
+
+8. **Compras → Cotações** → o botão diz **"Nova Cotação"** (dizia *"Novo Cotação"*) → abre **"Nova
+   cotação"**, com o subtítulo *"O número é o do documento do fornecedor e tem de ser único."* e a
+   **Data** já preenchida com hoje.
+9. **Recusas locais:** salve sem nada → **"Número da cotação é obrigatório"**; digite o número
+   **COT-TESTE-40** e salve sem fornecedor → **"Fornecedor da cotação é obrigatório"**. Nenhuma das
+   duas chama o servidor.
+10. Escolha o **Fornecedor Teste 40**, *Valor total* **1500**, deixe *Status* em **Em Análise** e
+    salve → **"Cotação salva"**, e a lista mostra Número, Fornecedor, **R$ 1.500,00**, Data, Validade
+    e o selo *em_analise*.
+11. **O número único.** **"Nova Cotação"** de novo, mesmo número **COT-TESTE-40**, qualquer
+    fornecedor, salvar → faixa vermelha **"Já existe uma cotação com o número COT-TESTE-40"**, e a tela
+    fica aberta com o que você digitou. Troque o número para **COT-TESTE-41** e salve → gravou.
+12. **O valor negativo é o servidor quem recusa.** Lápis da COT-TESTE-41, *Valor total* **-1**,
+    salvar → faixa **"Dados inválidos — valor_total: valor total da cotação não pode ser negativo"**.
+    *(O navegador não barra antes — de propósito, para a frase do servidor chegar à tela.)* Corrija
+    para **0** e salve.
+13. **O filtro por aba.** Na aba Cotações, o filtro de status oferece **Todos os status, Em Análise,
+    Aprovado, Rejeitado, Cancelado** — e mais nada. Na aba Fornecedores, **Todos, Ativo, Inativo**.
+
+**A lixeira do fornecedor: três recusas, uma ordem**
+
+14. **Compras → Fornecedores** → lixeira do **Fornecedor Teste 40** → *"Tem certeza que deseja
+    excluir este item?"* → OK → aviso vermelho **"Fornecedor possui cotações — não pode ser
+    excluído"** (ele tem as duas cotações dos passos 10 e 11).
+15. Se você criou o pedido do passo 5 para ele, a frase que aparece é a de **pedido** —
+    *"Fornecedor possui pedidos de compra — não pode ser excluído"* —, porque pedido é checado
+    **antes** de cotação. Apague esse pedido pela lixeira da aba Pedidos e tente de novo: agora é a
+    frase de **cotação**.
+16. *(Opcional, para ver a terceira frase.)* **Fornecedores homologados → grupo → clique no cartão do
+    fornecedor** → tela **"Itens e preços – …"** → **Novo item** com uma descrição qualquer. Apague as
+    duas cotações pela lixeira da aba Cotações (cotação é sempre excluível) e tente excluir o
+    fornecedor → **"Fornecedor possui itens cadastrados — não pode ser excluído"**. Apague o item.
+17. **A verificação final:** sem pedido, sem cotação e sem item, a lixeira do fornecedor responde
+    **"Item excluído com sucesso"** e a linha some.
+
+### O que esperar no dia a dia
+
+- **Inativar não é apagar, e não bloqueia tudo.** Um fornecedor inativo some do seletor do
+  Recebimento (sem pedido) e do "Vincular" dos grupos, e **só**. Ele continua na lista, continua no
+  grupo em que estava (com selo) e continua aceito em pedido de compra e em cotação. Se a empresa
+  quiser que inativo bloqueie pedido e cotação, é a decisão **B127** que precisa de resposta.
+- **Para tirar um fornecedor de um grupo há dois caminhos**, e os dois funcionam: o botão "Remover do
+  grupo" na tela do grupo, ou *Grupo = Sem grupo* no lápis de Compras → Fornecedores.
+- **Quem acreditava ter removido um fornecedor de um grupo antes desta etapa precisa conferir**: o
+  botão dizia sucesso e não removia (**C54**).
+- **O número da cotação é o do documento do fornecedor**, digitado. O sistema não gera número de
+  cotação (o pedido, sim). Espaços nas pontas não contam.
+- **O status da cotação é declaração do comprador.** Aprovar uma cotação **não gera pedido**; não há
+  fluxo. O efeito é a coluna e o filtro.
+- **A cotação é só cabeçalho**: sem itens, sem comparação entre fornecedores. O *Valor total* é
+  digitado.
+- **Fornecedor com status vazio** (cadastrado antes de existir a coluna) aparece como ativo na lista,
+  mas **não aparece no seletor do Recebimento**. Abrir e salvar pelo lápis normaliza; a consulta
+  **A16** do documento de novidades encontra todos de uma vez.
+- **Salvar ou voltar de qualquer formulário perde a busca e o filtro da aba** — igual ao pedido.
+- **CNPJ e e-mail aceitam qualquer texto**, e dois fornecedores podem ter o mesmo CNPJ (**B125**).
+
+### O que a Etapa 40 NÃO cobre
+
+- **Itens de cotação, comparação de cotações e "converter cotação em pedido".** A cotação é
+  cabeçalho só; aprovar não gera nada. É o corte de escopo declarado (**B123**).
+- **Foto do fornecedor** na tela nova: continua no modal de *Fornecedores homologados → grupo →
+  lápis*.
+- **Cidade, estado e CEP**: existem no cadastro, nenhuma tela os mostra.
+- **Validação de CNPJ e e-mail, e CNPJ único.**
+- **Bloquear pedido e cotação para fornecedor inativo** (decisão **B127**, aberta).
+- **Perfis no módulo Compras**: quem abre o módulo faz tudo dentro dele.
+- **Testes automatizados da tela do grupo** (*Fornecedores homologados*): o selo "Inativo", o
+  "Vincular" e o "Remover do grupo" foram verificados pelo servidor e pela compilação, não por uma
+  suíte que abra a tela (**G55**) — por isso o roteiro acima passa por ela.
 
 ---
 

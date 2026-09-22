@@ -55,9 +55,9 @@
 | 22 | A trilha de auditoria ganha uma tela | 2026-08-28 | Três etapas anotaram quem mexeu em quê e **nada disso tinha leitor**; agora há a tela **Auditoria**, com filtro de tipo, ação, pessoa e período, o de/para campo a campo ao expandir a linha, e os três índices que a tabela nunca teve |
 | 23 | O histórico para de mentir por omissão e por excesso | 2026-08-28 | **Sem tela nova:** o que muda é a confiança no que a tela da 22 mostra. Salvar configurações virou tudo-ou-nada (falha no meio deixava parte gravada **sem nenhuma linha de histórico**), excluir o que já está inativo parou de virar uma segunda linha de "Exclusão" indistinguível da real, e o mecanismo de "tenta de novo" parou de responder erro e gravar assim mesmo |
 
-*(A tabela acima para na **Etapa 23**: as etapas 24 a 38 têm seção própria mais abaixo e não foram
-acrescentadas ao resumo. **Atualizado em 2026-09-16 — a última etapa entregue é a 38, "Pedido de
-compra".**)*
+*(A tabela acima para na **Etapa 23**: as etapas 24 a 40 têm seção própria mais abaixo e não foram
+acrescentadas ao resumo. **Atualizado em 2026-09-22 — a última etapa entregue é a 40, "Fornecedores
+e Cotações ganham tela".**)*
 
 Com a 6c, a feature 10 (lotes, séries e etiquetas) ficou **completa por inteiro**; com a 7, as
 features 11 (transferências) e 12 (devoluções) também; com a 8, a feature 13 (materiais de
@@ -490,7 +490,53 @@ etapa; se por algum motivo isso não pegar, o dia de referência volta a ser o u
 vence **hoje** passa a acusar atraso a partir das **21h**. O jeito de conferir sem SQL é olhar a
 aba Pedidos depois das 21h: nenhum pedido com previsão de **hoje** pode estar com o selo vermelho.
 
-### B. Decisões de negócio — B1 a B122; as em aberto esperam você, as tomadas estão escritas com o descartado
+**A16 (NOVA, da Etapa 40 — que status os fornecedores têm no banco).** A Etapa 40 é a primeira em
+que uma tela **grava** o status do fornecedor, e a tela só conhece dois valores: *ativo* e *inativo*.
+Um fornecedor com status **vazio** (anterior à coluna) ou com um texto **fora desses dois** não quebra
+nada, mas se comporta de um jeito que parece defeito: a lista o mostra como *ativo*, o filtro *Ativo*
+**não o encontra**, o filtro *Inativo* também não, e ele **não aparece** no seletor de fornecedor do
+Recebimento (que lista só quem está literalmente *ativo*).
+
+```sql
+SELECT COUNT(*) FROM fornecedores WHERE status IS NULL OR status NOT IN ('ativo','inativo');
+```
+
+- **`0`** — nada a fazer (é o esperado: os dez fornecedores de produção estavam todos *ativo* na
+  medição desta etapa).
+- **maior que zero** — veja quais são com
+  `SELECT id, razao_social, status FROM fornecedores WHERE status IS NULL OR status NOT IN ('ativo','inativo');`
+  e decida um a um. **Abrir o fornecedor no lápis e salvar** já normaliza (o formulário mostra
+  *Ativo* selecionado e grava *ativo*). Para acertar todos de uma vez, depois de confirmar que são
+  mesmo ativos: `UPDATE fornecedores SET status = 'ativo' WHERE status IS NULL;` — os que tiverem
+  outro texto qualquer, corrija pelo lápis, para ninguém ser marcado como ativo sem querer.
+
+**A17 (NOVA, da Etapa 40 — cotações e itens de fornecedor).** Duas consultas, as duas devem dar
+**zero**.
+
+```sql
+SELECT numero, COUNT(*) FROM cotacoes GROUP BY numero HAVING COUNT(*) > 1;
+```
+
+O número da cotação já era único no banco; a consulta é confirmação, porque a partir desta etapa a
+tela recusa o repetido com *"Já existe uma cotação com o número ⟨X⟩"* e, se o banco tivesse dois
+iguais, um deles seria ineditável pelo número. **Zero linhas** é o esperado (produção tinha zero
+cotações). Se vier alguma, renumere uma das duas pelo lápis antes de mais nada.
+
+```sql
+SELECT COUNT(*) FROM itens_fornecedor i
+  LEFT JOIN fornecedores f ON f.id = i.fornecedor_id
+ WHERE f.id IS NULL;
+```
+
+São **itens de lista de preços cujo fornecedor não existe mais**. Até esta etapa, excluir um
+fornecedor que tinha lista de itens respondia o erro genérico *"Erro ao excluir item"* — e ninguém
+sabe se alguém, em algum momento, contornou isso apagando direto no banco e deixou a lista para trás.
+- **`0`** — nada a fazer.
+- **maior que zero** — são linhas inalcançáveis por qualquer tela (a tela de itens abre a partir do
+  fornecedor). Confirme a contagem e apague:
+  `DELETE FROM itens_fornecedor WHERE fornecedor_id NOT IN (SELECT id FROM fornecedores);`
+
+### B. Decisões de negócio — B1 a B140; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(O título desta seção dizia "B1 a B24" — **estava defasado**: os itens já iam até B36 antes da
 Etapa 20. Corrigido em 2026-08-28 para B50, depois para B56 com as três da Etapa 24, para B57 com
@@ -2325,6 +2371,187 @@ publicada para a varredura usar.
 pediu, é criar uma segunda régua de saldo de pedido — o erro que a Etapa 37 evitou de propósito.
 **O custo:** o alerta continua não existindo; a diferença é que agora está escrito **por quê**.
 
+**B123 (NOVA, da Etapa 40) — o escopo é "os quatro caminhos mortos e o que eles exigem do servidor";
+cotação é só cabeçalho.**
+
+**O que foi escolhido:** entregar as telas de criar/editar fornecedor e de criar/editar cotação, com o
+servidor que elas precisam (validação, leitura por id, gravação de status, "Remover do grupo" que
+remove, recusa da lixeira por cotação).
+**O que foi descartado:** itens de cotação, comparação de cotações entre fornecedores e "converter
+cotação em pedido".
+**Por quê:** não existe tabela de itens de cotação no sistema — inventar a entidade é etapa própria,
+e as outras duas ideias dependem dela.
+**O custo:** a cotação registra número, fornecedor, datas, valor e status, e mais nada; a coluna
+*Valor Total* da lista é digitada, não somada.
+
+**B124 (NOVA, da Etapa 40) — o formulário de edição abre o fornecedor por uma leitura própria, sem
+carregar a planilha de preços.**
+
+**O que foi escolhido:** uma leitura "me dê este fornecedor" que devolve os campos do cadastro e
+**não** devolve a planilha de preços que o fornecedor pode ter anexada.
+**O que foi descartado:** o contorno que uma tela antiga usa — pedir a lista inteira de fornecedores
+e procurar o certo nela.
+**Por quê:** a lista inteira vem **com a planilha de cada fornecedor** dentro, e um formulário que
+abre por um clique não pode pagar isso (ver **G52**).
+
+**B125 (NOVA, da Etapa 40) — a validação nova de fornecedor NÃO recusa nada que o modal do grupo já
+mandava; e não valida CNPJ nem e-mail.**
+
+**O que foi escolhido:** o servidor passou a validar o fornecedor no mesmo formato das outras portas do
+Compras, aceitando **tudo o que o modal de *Fornecedores homologados* já mandava** (campos vazios,
+grupo como texto, "sem grupo"). CNPJ e e-mail aceitam qualquer texto.
+**O que foi descartado:** exigir formato de e-mail, formato de CNPJ e CNPJ único.
+**Por quê:** o modal do grupo manda o e-mail vazio nas suas três gravações e quebraria; e produção tem
+dez fornecedores com CNPJ livre — validar formato é regra nova sobre acervo, e o banco não exige CNPJ
+único. **Se vocês quiserem essa regra, é uma decisão de vocês** (letra D).
+
+**B126 (NOVA, da Etapa 40) — "Sem grupo" e "Remover do grupo" passam a LIMPAR o grupo do fornecedor.**
+
+**O que foi escolhido:** mandar "sem grupo" (pela tela nova ou pelo botão do grupo) **limpa** o grupo.
+**O que foi descartado:** preservar o comportamento antigo, em que o botão "Remover do grupo" dizia
+sucesso e não fazia nada.
+**Por quê:** era defeito, não contrato — nenhuma tela dependia de "remover" não remover. Reversível
+em uma linha. Ver **C54**.
+
+**B127 (NOVA, da Etapa 40) — Inativar é um campo da edição do fornecedor, e o inativo continua
+aceito em pedido e em cotação.**
+
+**O que foi escolhido:** o campo **Status** entra no formulário de **edição** (não no de criação:
+fornecedor nasce *Ativo*). Um inativo **some** do seletor do Recebimento e do "Vincular" dos grupos,
+**aparece** na lista de fornecedores e na tela do grupo (com selo), e **continua aceito** como
+fornecedor de um pedido de compra e de uma cotação.
+**O que foi descartado:** (a) uma porta separada só para trocar status, como a que o pedido ganhou na
+39 — aqui o formulário já reenvia tudo, uma porta a mais é cerimônia; (b) recusar pedido/cotação
+para fornecedor inativo.
+**Por quê (b):** nenhuma tela antes desta conseguia inativar alguém, então ninguém nunca decidiu o
+que "inativo" significa para um pedido. Recusar seria inventar a regra; aceitar é reversível.
+**O que é seu:** dizer se inativo deve **bloquear pedido e cotação**. Enquanto não disser, aceita.
+Ver **G51**.
+
+**B128 (NOVA, da Etapa 40) — o número da cotação é DIGITADO, não gerado.**
+
+**O que foi escolhido:** o comprador digita o número, que é o **do documento do fornecedor**; o
+sistema só exige que não se repita (*"Já existe uma cotação com o número ⟨X⟩"*).
+**O que foi descartado:** gerar *COT-2026-0001* como o pedido faz.
+**Por quê:** a cotação é um documento **de fora** — o número que importa é o que o fornecedor
+imprimiu, e é ele que o comprador precisa citar ao ligar de volta.
+
+**B129 (NOVA, da Etapa 40) — os quatro status da cotação são Em Análise, Aprovado, Rejeitado e
+Cancelado, no masculino.**
+
+**O que foi escolhido:** esses quatro, com *Em Análise* como padrão.
+**O que foi descartado:** *Pendente* e *Enviado* (são estados de **pedido**), e a grafia no feminino
+(*aprovada*).
+**Por quê:** a lista e o filtro já pintavam e filtravam essas quatro palavras no masculino; uma
+segunda grafia daria um filtro que nunca acha nada.
+
+**B130 (NOVA, da Etapa 40) — o valor total da cotação é DIGITADO.**
+
+**O que foi escolhido:** um campo *Valor total*, opcional, que vale **0** quando vazio.
+**O que foi descartado:** derivar de itens (não há itens) ou deixar sempre zero (a coluna da lista
+ficaria decorativa).
+
+**B131 (NOVA, da Etapa 40) — a cotação ganhou um serviço próprio; o fornecedor continua como estava.**
+
+**O que foi escolhido:** a lógica de cotação nasceu separada da rota, no mesmo molde do pedido; a de
+fornecedor ficou onde estava, só com a validação na frente.
+**O que foi descartado:** reorganizar também o fornecedor.
+**Por quê:** as duas portas de fornecedor tinham **zero** cenário de teste — mexer na estrutura sem
+régua é reforma sem prova. Fica para quando houver motivo.
+
+**B132 (NOVA, da Etapa 40) — a lixeira recusa fornecedor com cotação ANTES de tentar apagar.**
+
+**O que foi escolhido:** contar as cotações do fornecedor e recusar com *"Fornecedor possui cotações
+— não pode ser excluído"*, do mesmo jeito que a 39 fez para pedido.
+**O que foi descartado:** deixar o banco recusar e traduzir o erro.
+**Por quê:** a tradução só falaria a frase certa no ambiente em que a proteção do banco está ligada; o
+teste não conseguiria prová-la. Ver **B138** para a terceira recusa (itens), que este desenho não
+enumerava.
+
+**B133 (NOVA, da Etapa 40) — erro do servidor aparece numa faixa dentro do formulário; só o sucesso
+é aviso flutuante.**
+
+**O que foi escolhido:** o mesmo molde do formulário de pedido.
+**O que foi descartado:** aviso flutuante para erro.
+**Por quê:** dois canais de erro na mesma tela confundem quem copia o molde, e o aviso flutuante some
+antes de ser lido.
+
+**B134 (NOVA, da Etapa 40) — a tela de fornecedor tem Grupo e Status; não tem foto.**
+
+**O que foi escolhido:** *Grupo* (opcional, com "Sem grupo") e *Status* (só na edição).
+**O que foi descartado:** a foto do fornecedor.
+**Por quê:** a foto já é resolvida pelo modal de *Fornecedores homologados → grupo → lápis*, e
+trazê-la dobraria a tela por um campo que outra tela já cobre.
+
+**B135 (NOVA, da Etapa 40) — a tabela de cotações entrou no ambiente de teste compartilhado.**
+
+Decisão de engenharia, registrada porque tem consequência: **toda** suíte nova que toque cotação usa
+a mesma forma de tabela, em vez de cada uma declarar a sua. Foi o que a Etapa 37 fechou para o pedido
+depois de sete versões divergentes.
+
+**B136 (NOVA, da Etapa 40) — a etapa foi feita em quatro frentes em paralelo.**
+
+Servidor de fornecedor, servidor de cotação, tela de fornecedor e tela de cotação foram desenvolvidos
+ao mesmo tempo, em cópias isoladas do projeto, e integrados sem conflito. Registrado porque a Etapa
+39 mediu o custo de fazer em fila.
+
+**B137 (NOVA, da onda de correção da Etapa 40) — fornecedor inativo dentro de um grupo APARECE no
+grupo, com selo, e fica FORA do "Vincular".**
+
+**O problema:** a etapa criou o botão que inativa, e um fornecedor inativado enquanto estava num
+grupo **sumia** da tela do grupo — sem selo, sem "Remover do grupo", sem caminho de volta a não ser
+reativar em *Compras → Fornecedores*. E um inativo de fora podia ser "vinculado" com sucesso e não
+aparecer.
+**O que foi escolhido:** a tela do grupo mostra **todos** os fornecedores do grupo, ativos primeiro,
+e pinta o selo **"Inativo"** (com a dica *"Fornecedor inativo — reative em Compras › Fornecedores"*);
+o modal "Vincular fornecedor" **não oferece** inativos, e a lista vazia diz *"Todos os fornecedores
+ativos já estão em um grupo (inativos não podem ser vinculados) — ou cadastre um novo."*. Fornecedor
+com status **vazio** (anterior à coluna) fica junto dos ativos na ordenação, que é como a tela o
+trata (**A16**).
+**O que foi descartado:** (a) esconder o inativo do grupo e oferecê-lo no "Vincular" para dar um
+caminho de volta — "vincular" quem já está vinculado é gravar sem efeito; (b) continuar escondendo.
+**O custo:** o seletor do **Recebimento** continua mostrando **só ativos**, de propósito — lá o
+inativo não deve ser escolhido (**G54**).
+
+**B138 (NOVA, da onda de correção da Etapa 40) — fornecedor com lista de itens/preços é RECUSADO na
+lixeira, em vez de a lista ser apagada junto.**
+
+**O problema:** a lixeira só checava pedido e cotação. Fornecedor com **itens de preço** cadastrados
+(e sem pedido nem cotação) passava pelas duas checagens e, em produção, o banco barrava a exclusão
+com o erro genérico *"Erro ao excluir item"* — o mesmo defeito que a 39 e este desenho diziam ter
+fechado. Ver **C55**.
+**O que foi escolhido:** uma terceira recusa, *"Fornecedor possui itens cadastrados — não pode ser
+excluído"*, checada **depois** de pedido e de cotação (documento pesa mais que item de lista). Para
+excluir o fornecedor, esvazie a lista pela tela de itens primeiro.
+**O que foi descartado:** apagar os itens em cascata e depois o fornecedor.
+**Por quê:** é irreversível e apagaria, sem avisar, uma lista que o comprador importou por planilha.
+**Registro menor:** as frases de pedido e de itens moram na própria lixeira; a de cotação mora no
+serviço de cotação. São três textos em dois lugares; a simetria fica para quando houver motivo.
+
+**B139 (NOVA, da onda de correção da Etapa 40) — a tela da cotação NÃO barra valor negativo; o
+servidor decide e a frase chega à faixa.**
+
+**O problema:** o campo *Valor total* tinha uma trava do navegador que bloqueava o salvar com uma
+dica nativa, e a frase do servidor (*"valor total da cotação não pode ser negativo"*) nunca chegava
+à tela — contra a política da própria etapa.
+**O que foi escolhido:** tirar a trava; digitar **-1** e salvar mostra *"Dados inválidos —
+valor_total: valor total da cotação não pode ser negativo"* na faixa.
+**O que foi descartado:** uma mensagem própria da tela para negativo.
+**Por quê:** seria uma terceira fonte da mesma regra, e o teste deixaria de provar que tela e servidor
+conversam.
+
+**B140 (NOVA, da Etapa 40) — as revisões individuais das quatro frentes foram PULADAS; a revisão
+final, com duas lentes, cobriu as quatro de uma vez.**
+
+**O que foi escolhido:** revisar a base compartilhada (Task 1) isoladamente e as quatro frentes só
+na revisão final.
+**O que foi descartado:** uma revisão por frente, como manda o processo.
+**Por quê:** as quatro frentes foram interrompidas por limite de sessão e retomadas; revisar cada uma
+custaria mais uma rodada em cada. A revisão final achou **3 importantes reais**, todos corrigidos — o
+risco assumido foi medido, não escondido.
+**O custo:** um defeito que uma revisão por frente pegaria mais cedo foi pego mais tarde (o da lista
+de itens, **B138**).
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -3002,6 +3229,24 @@ pediu, é criar uma segunda régua de saldo de pedido — o erro que a Etapa 37 
     (b) para forçar a varredura numa demonstração, **reinicie o servidor e espere 30 segundos**.
     Ver **G41**.
 
+54. **NOVO, da Etapa 40 — o botão "Remover do grupo" NÃO removia; a partir de agora remove.** Em
+    **Compras → Fornecedores homologados → grupo**, o botão de remover o fornecedor do grupo
+    respondia *"Fornecedor removido do grupo"* e **não mudava nada**: o cartão continuava lá depois
+    de recarregar. Quem operou essa tela e acredita ter tirado um fornecedor de um grupo **precisa
+    conferir**, porque o fornecedor ainda está lá. (Em produção, na medição desta etapa, os dez
+    fornecedores estavam todos em grupo — não há como saber se algum deveria ter saído.) A partir
+    desta etapa o botão remove de verdade, com a confirmação *"Remover "⟨razão social⟩" deste
+    grupo? O fornecedor continua cadastrado."*. Ver **B126**.
+
+55. **NOVO, da Etapa 40 — excluir um fornecedor com lista de itens/preços respondia "Erro ao
+    excluir item" e não dizia por quê; agora diz.** A lixeira da aba Fornecedores checava só pedido
+    e cotação. Um fornecedor com itens cadastrados em *Fornecedores homologados → grupo →
+    fornecedor → Itens e preços* — e sem pedido nem cotação — dava, em produção, o erro genérico
+    *"Erro ao excluir item"*, e quem clicava tentava de novo sem saber que havia uma lista
+    pendurada. Agora responde *"Fornecedor possui itens cadastrados — não pode ser excluído"*, e o
+    caminho é esvaziar a lista pela tela de itens antes. Se alguém contornou o erro apagando direto
+    no banco, a consulta **A17** encontra os itens órfãos. Ver **B138**.
+
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -3345,7 +3590,7 @@ pediu, é criar uma segunda régua de saldo de pedido — o erro que a Etapa 37 
 
 - **(39) As abas Fornecedores e Cotações continuam sem tela de criação.** Mesmo corte da Etapa 38,
   renovado por decisão (**B118**): a etapa foi gasta no prazo do pedido. É o próximo candidato
-  declarado.
+  declarado. **Fechado na Etapa 40** — as duas abas ganharam tela; ver os itens (40) abaixo.
 
 - **(39) A aba Pedidos mostra PRAZO, não QUANTIDADE.** O que já chegou de cada linha (saldo pendente,
   **ABERTO / PARCIAL / RECEBIDO**) continua aparecendo só no formulário de recebimento — a limitação
@@ -3355,6 +3600,30 @@ pediu, é criar uma segunda régua de saldo de pedido — o erro que a Etapa 37 
   muda **apenas** o status; fornecedor, datas, observações e itens continuam recusados depois do
   primeiro recebimento — e é essa recusa que impede a quantidade já recebida de ser zerada. Corrigir
   a previsão de entrega de um pedido já recebido continua sem caminho de tela.
+
+- **(40) A cotação é só cabeçalho: não tem itens, não se compara e não vira pedido.** Número,
+  fornecedor, datas, valor total (digitado), status e observações — e mais nada. Não há linhas de
+  material na cotação, não há tela que compare cotações de fornecedores diferentes, e **aprovar uma
+  cotação não gera pedido**. É o corte de escopo da etapa (**B123**); "converter cotação em pedido" é
+  o gesto natural seguinte e depende de existir item de cotação.
+
+- **(40) A tela nova de fornecedor não tem foto.** A foto continua onde estava: no modal de
+  *Fornecedores homologados → grupo → lápis*. Decisão **B134**.
+
+- **(40) Cidade, estado e CEP não aparecem em tela nenhuma.** Os campos existem no cadastro, mas
+  nenhuma tela os mostra ou grava — a tela nova também não. Endereço é um campo de texto livre só.
+
+- **(40) CNPJ e e-mail aceitam qualquer texto, e o CNPJ não é único.** Não há validação de formato
+  em nenhum dos dois, e dois fornecedores podem ter o mesmo CNPJ. É regra nova sobre acervo (o modal
+  do grupo manda esses campos vazios, e produção tem CNPJ livre) — **B125**. Se vocês quiserem a
+  regra, ela é de vocês.
+
+- **(40) Fornecedor inativo continua podendo ser escolhido em pedido e em cotação.** Inativar tira o
+  fornecedor do seletor do Recebimento e do "Vincular" dos grupos, e só. É decisão declarada
+  (**B127**) até vocês dizerem se inativo deve bloquear pedido e cotação.
+
+- **(40) O módulo Compras continua sem perfis.** Quem abre o módulo cria, edita, inativa e exclui
+  fornecedor e cotação — a mesma camada única da 38 (**G30**).
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -4223,6 +4492,130 @@ Marcar **"Só atrasados"** numa base sem nenhum pedido atrasado deixa a tabela c
 uma lista vazia: *"Nenhum pedido encontrado"*. Quem chegar na tela com o filtro já marcado — ele
 continua marcado enquanto você fica na aba — pode concluir que **não há pedido nenhum** cadastrado. A
 caixa fica visível logo acima, então o sinal existe; o texto é que não ajuda.
+
+
+---
+
+**G44 (NOVO, da Etapa 40). Um grupo que não existe passa pela validação e, em produção, dá erro cru.**
+
+A tela de fornecedor só oferece grupos que existem, então pelo caminho normal isto não acontece. Mas
+um pedido forjado com um número de grupo inexistente **passa** pela validação (ela confere só a forma
+do número) e, em produção — onde o banco checa a referência —, responde um erro 500 com a mensagem
+crua do banco na faixa da tela. No ambiente de teste a mesma requisição grava e responde sucesso,
+porque lá a referência não é checada. Grupos não são apagados (são desativados), então o número
+"pendurado" também não surge sozinho.
+
+---
+
+**G45 (NOVO, da Etapa 40). Textos do fornecedor e da cotação aceitam qualquer tipo e viram texto.**
+
+Um valor que não seja texto num campo de texto (por exemplo, um objeto num pedido forjado) é
+convertido para texto e gravado como *"[object Object]"*. Nenhuma tela manda isso; é lixo-entra,
+lixo-fica, e não quebra contrato.
+
+---
+
+**G46 (NOVO, da Etapa 40). Editar uma cotação que não existe responde a validação do corpo antes de
+dizer "não encontrada".**
+
+Um pedido de edição para uma cotação inexistente **com corpo inválido** recebe a recusa de validação,
+não *"Cotação não encontrada"*. É a mesma ordem do pedido de compra; a tela sempre manda corpo válido,
+então na prática a frase que aparece é a certa.
+
+---
+
+**G47 (NOVO, da Etapa 40). O filtro de status "viaja" da aba Cotações para a aba Pedidos.**
+
+Escolha *Aprovado* na aba Cotações e mude para Pedidos: o filtro chega como *Aprovado* também —
+porque os quatro status de cotação **são** também status de pedido, e as três abas compartilham a
+caixa de filtro. Passe por Fornecedores (onde *Aprovado* não existe e o filtro mostra "Todos") e volte
+para Cotações: o *Aprovado* reaparece sozinho. Coerente (o que a caixa mostra é o que a lista
+filtra), mas é estado fantasma.
+
+---
+
+**G48 (NOVO, da Etapa 40). O seletor de fornecedor da cotação lista inativos e carrega a planilha de
+cada fornecedor.**
+
+O seletor de *Nova cotação* mostra **todos** os fornecedores, inativos inclusive (igual ao do pedido —
+e é a decisão **B127**). E a lista que ele carrega vem com a **planilha de preços inteira** de cada
+fornecedor dentro, mesmo que a tela só use o nome — o custo que o formulário de edição evitou (B124)
+continua aqui e no pedido.
+
+---
+
+**G49 (NOVO, da Etapa 40). As datas da cotação (e do pedido) conferem a forma, não o calendário.**
+
+*"2026-13-45"* passa: a régua é "quatro dígitos, traço, dois, traço, dois". A tela usa o calendário
+do navegador, que não deixa digitar isso; só chega por outro caminho. Vale igual para *Data do pedido*
+e *Previsão de entrega* desde a 39.
+
+---
+
+**G50 (NOVO, da Etapa 40). A frase que a tela mostra e a que o servidor responde diferem na letra
+inicial.**
+
+A tela recusa localmente com *"Número da cotação é obrigatório"* / *"Fornecedor da cotação é
+obrigatório"* (maiúscula); o servidor, com *"Dados inválidos — numero: número da cotação é
+obrigatório"* (minúscula, com o prefixo da casa). Não são a mesma string porque a tela não lê o texto
+do servidor; quem procurar a frase num log encontra as duas grafias.
+
+---
+
+**G51 (NOVO, da Etapa 40). Pedido de compra e cotação aceitam fornecedor inativo.**
+
+A checagem "o fornecedor existe?" que pedido e cotação fazem **não olha o status**. Um comprador
+pode inativar um fornecedor e, no mesmo dia, abrir um pedido para ele — o pedido é aceito (medido
+por teste). O que acontece ao **receber** contra esse pedido não foi medido nesta etapa. Decisão
+**B127**; vira regra quando vocês disserem.
+
+---
+
+**G52 (NOVO, da Etapa 40). A lista de fornecedores vem inteira, sem página, e com a planilha de cada
+um dentro.**
+
+A aba Fornecedores, o seletor do pedido e o seletor da cotação pedem a lista completa, e cada linha
+traz a planilha de preços que o fornecedor tiver anexado. Com dez fornecedores é invisível; com
+centenas e planilhas grandes, a aba vai demorar. O formulário de edição já não paga isso (B124); os
+outros três ainda pagam.
+
+---
+
+**G53 (NOVO, da Etapa 40). A segunda proteção do número único da cotação só é exercida por
+concorrência, e nenhum teste a prova.**
+
+O número repetido é recusado **antes** de gravar (é o que todo teste prova) **e** também se dois
+compradores gravarem o mesmo número no mesmo instante (o banco recusa e o sistema traduz para a mesma
+frase). Essa segunda proteção foi verificada por sonda (seis gravações simultâneas → uma gravou,
+cinco recusadas), mas removê-la **não derruba nenhum teste** — é declarado, não escondido.
+
+---
+
+**G54 (NOVO, da Etapa 40). O seletor de fornecedor do Recebimento mostra só quem está literalmente
+"ativo".**
+
+É de propósito — no recebimento sem pedido o inativo não deve ser escolhido. A consequência que
+importa: um fornecedor com status **vazio** (anterior à coluna de status) também **não aparece** ali,
+embora a lista de Compras o mostre como ativo. A consulta **A16** encontra esses; abrir e salvar pelo
+lápis normaliza.
+
+---
+
+**G55 (NOVO, da Etapa 40). A tela do grupo de fornecedores homologados não tem suíte de teste.**
+
+O selo "Inativo", o "Vincular" que não oferece inativos e o "Remover do grupo" que agora remove
+foram verificados **pelo servidor** (as portas que a tela chama têm cenários) e pela compilação —
+não há teste automatizado que abra essa tela. Uma regressão só nela seria pega na mão.
+
+---
+
+**G56 (NOVO, da Etapa 40). Quatro miudezas declaradas pela revisão e não tocadas.**
+
+(a) *Observações* vazia na edição da cotação grava texto vazio, não "sem valor" — nenhuma tela
+distingue. (b) Um pedido forjado com *valor total* "nulo" recebe a frase de "negativo". (c) Salvar ou
+voltar de qualquer formulário do Compras **perde a busca e o filtro** da aba (a aba remonta) — igual à
+38. (d) Um fornecedor com status vazio abre na edição como *Ativo* e, ao salvar, é gravado *Ativo*
+sem ninguém ter pedido — benigno, e é o que a **A16** mede.
 
 ## Etapa 0 — Fundação (2026-08-03)
 
@@ -9284,7 +9677,228 @@ sai do filtro e o cartão esvazia. O roteiro clicável está no guia
 **3/3** e **5/5** nas suítes de validação, migração e banco, **49 suítes / 753 testes** no cliente
 (eram 48 / 739), e o empacotamento do cliente **limpo**.
 
+## Etapa 40 — Fornecedores e Cotações ganham tela (2026-09-21)
+
+**Esta etapa é do módulo CORE Compras**, a terceira seguida — e ela fecha o corte que a 38 e a 39
+declararam duas vezes. A tela de Compras tem três abas: **Fornecedores**, **Pedidos de Compra** e
+**Cotações**. Desde a 38 a aba Pedidos tem formulário; as outras duas **não tinham**: o botão
+**"Novo Fornecedor"**, o botão **"Nova Cotação"** e os dois **lápis** dessas abas apontavam para um
+endereço sem tela do outro lado e **voltavam para a lista** — o comprador clicava e nada acontecia.
+Cadastrar fornecedor só era possível por um modal escondido em *Fornecedores homologados → grupo*;
+cadastrar cotação **não era possível de jeito nenhum** (zero cotações em produção, e nenhuma porta
+que criasse uma). No caminho apareceram dois defeitos que ninguém tinha reportado: o botão
+**"Remover do grupo"** da tela do grupo respondia *"Fornecedor removido do grupo"* **sem remover
+nada** (em produção os dez fornecedores nasceram todos pelo modal do grupo e ninguém tentou tirar
+um), e o status **Inativo** existia no filtro da aba mas **nenhuma tela conseguia gravá-lo** — o
+filtro era decorativo. Agora os quatro caminhos abrem um formulário, o formulário grava, "Remover do
+grupo" remove, um fornecedor pode ser inativado (e a etapa diz exatamente onde um inativo some e onde
+continua aparecendo), e excluir um fornecedor com cotação ou com lista de itens é recusado com uma
+frase, em vez de um erro genérico.
+
+### Antes → Agora
+
+| Onde | Antes | Agora |
+|---|---|---|
+| **Compras → Fornecedores → "Novo Fornecedor"** | Voltava para a lista | Abre **"Novo fornecedor"**: Razão social*, Nome fantasia, CNPJ, Contato, E-mail, Telefone, Endereço e **Grupo** (*Sem grupo* ou um dos grupos homologados). **Salvar fornecedor** → *"Fornecedor salvo"* e a linha nova na lista |
+| **Lápis da aba Fornecedores** | Voltava para a lista | Abre **"Editar fornecedor"** com os campos preenchidos e mais o campo **Status** (*Ativo* / *Inativo*) — que só existe na edição |
+| **Inativar um fornecedor** | Impossível pela tela: o filtro *"Inativo"* da aba nunca achava ninguém | Status *Inativo* → a linha ganha o selo *inativo*, o filtro **"Inativo"** o encontra, e ele **some do seletor de fornecedor do Recebimento** e do **"Vincular"** dos grupos. Continua aceito em pedido e em cotação (declarado) |
+| **Compras → Cotações → "Nova Cotação"** | Botão escrito **"Novo Cotação"**, e voltava para a lista | Botão **"Nova Cotação"**, que abre **"Nova cotação"**: Número*, Fornecedor*, Data, Validade, Valor total, Status e Observações. **Salvar cotação** → *"Cotação salva"* |
+| **Lápis da aba Cotações** | Voltava para a lista | Abre **"Editar cotação"** com tudo preenchido |
+| **Número da cotação** | Não existia cotação | É **digitado** (é o número do documento do fornecedor) e **único**: repetir responde *"Já existe uma cotação com o número ⟨X⟩"* |
+| **Filtro de status das abas** | Uma lista só, misturada, para as três abas — a aba Cotações oferecia *Pendente*, que nunca casa com cotação nenhuma | Cada aba mostra **só os seus**: Fornecedores *Ativo/Inativo*; Pedidos os sete de pedido; Cotações *Em Análise, Aprovado, Rejeitado, Cancelado* |
+| **Fornecedores homologados → grupo → "Remover do grupo"** | Dizia *"Fornecedor removido do grupo"* e **não removia** | Remove. O fornecedor sai do grupo e continua cadastrado |
+| **Fornecedores homologados → grupo**, fornecedor inativo | Sumia da tela do grupo (sem selo, sem "Remover") | Aparece no grupo com o selo **"Inativo"**, depois dos ativos, e com os botões de editar e remover |
+| **Fornecedores homologados → grupo → "Vincular fornecedor"** | Oferecia inativos, que eram "vinculados" com sucesso e não apareciam | **Não oferece inativos**; a lista vazia diz *"Todos os fornecedores ativos já estão em um grupo (inativos não podem ser vinculados) — ou cadastre um novo."* |
+| **Lixeira de fornecedor com cotação** | Em produção, erro genérico *"Erro ao excluir item"* | *"Fornecedor possui cotações — não pode ser excluído"* |
+| **Lixeira de fornecedor com lista de itens/preços** | Em produção, erro genérico *"Erro ao excluir item"* — o defeito que a 39 acreditava ter fechado | *"Fornecedor possui itens cadastrados — não pode ser excluído"* |
+| **Validação das portas de fornecedor** | Só *"Razão social é obrigatória"*, feita à mão | O mesmo formato de recusa das outras portas do Compras (*"Dados inválidos — ⟨campo⟩: ⟨frase⟩"*), **sem recusar nada que o modal do grupo já mandava** |
+
+### As regras, com o cenário exato
+
+**RN-E01 — razão social é obrigatória, e a tela recusa antes de chamar o servidor.**
+**Compras → Fornecedores → Novo Fornecedor**, deixe *Razão social* vazia (ou só com espaços) e
+clique em **Salvar fornecedor** → a faixa vermelha diz **"Razão social é obrigatória"** e **nenhuma
+requisição** é feita. A mesma regra vale no servidor, para quem chegar por outro caminho: a resposta
+é *"Dados inválidos — razao_social: Razão social é obrigatória"*.
+
+**RN-E02 — editar fornecedor reenvia todos os campos.** A tela de edição carrega os sete textos e
+grava os sete de volta. Isto é uma **caracterização** do que o servidor já fazia (substituição total),
+não uma regra nova — está escrito porque quem mandar só um campo por outro caminho zera os demais.
+
+**RN-E03 — "Sem grupo" limpa o grupo, e é isso que conserta o "Remover do grupo".**
+Edite um fornecedor que está num grupo, troque **Grupo** para **"Sem grupo"** e salve → em
+**Fornecedores homologados → grupo** ele não está mais lá. E o botão **"Remover do grupo"** da tela do
+grupo faz exatamente isso: confirmação *"Remover "⟨razão social⟩" deste grupo? O fornecedor
+continua cadastrado."*, aviso *"Fornecedor removido do grupo"*, e o cartão **some** — antes o aviso
+era o mesmo e o cartão ficava. Ver **C54**.
+
+**RN-E04 — Status só na edição; fornecedor nasce Ativo.**
+O formulário de **novo** fornecedor não tem o campo Status: todo fornecedor nasce **Ativo**. Na
+**edição**, o campo aparece com *Ativo* e *Inativo*. Na lista, o selo da coluna Status mostra o valor
+gravado (*ativo* / *inativo*), e o filtro **"Inativo"** passa a encontrar alguém.
+
+**RN-E05 — onde o Inativo some e onde ele continua. (Este é o cenário para demonstrar com cuidado,
+porque a resposta não é "some de tudo".)**
+
+| Tela | Fornecedor inativo |
+|---|---|
+| **Compras → Fornecedores** (lista) | **Aparece**, com o selo *inativo*; o filtro *Ativo* o esconde e o filtro *Inativo* o isola |
+| **Almoxarifado → Recebimentos → Novo Recebimento**, seletor de fornecedor | **Some** |
+| **Compras → Fornecedores homologados → grupo** (lista do grupo) | **Aparece**, depois dos ativos, com o selo **"Inativo"** — e o selo explica, ao passar o mouse: *"Fornecedor inativo — reative em Compras › Fornecedores"* |
+| **Fornecedores homologados → grupo → "Vincular fornecedor"** | **Não é oferecido** |
+| **Compras → Pedidos de Compra → Novo Pedido**, seletor de fornecedor | **Aparece**, e o pedido é **aceito** |
+| **Compras → Cotações → Nova Cotação**, seletor de fornecedor | **Aparece**, e a cotação é **aceita** |
+
+As duas últimas linhas são **decisão declarada** (B127, G51), não esquecimento: inativar um
+fornecedor não cancela a relação comercial com ele — cancela a chegada de material sem documento.
+
+**RN-E06 — abrir um fornecedor que não existe.** Lápis num fornecedor apagado por outra pessoa →
+a tela de edição abre com a faixa *"Fornecedor não encontrado"*.
+
+**RN-E07 — o número da cotação é digitado e único.**
+**Compras → Cotações → Nova Cotação**: o subtítulo da tela avisa *"O número é o do documento do
+fornecedor e tem de ser único."*. Grave a cotação **COT-77** para um fornecedor; abra **Nova Cotação**
+de novo e grave outra **COT-77** → faixa vermelha **"Já existe uma cotação com o número COT-77"**, e
+a segunda não é gravada. Espaços nas pontas não contam (*" COT-77 "* é o mesmo número). Editar uma
+cotação e trocar o número pelo de **outra** cotação responde a mesma frase; salvar a própria cotação
+com o próprio número é aceito.
+
+**RN-E08 — fornecedor da cotação é obrigatório.** Deixe *Fornecedor* em *"Selecione o fornecedor"* e
+salve → faixa **"Fornecedor da cotação é obrigatório"**, sem chamar o servidor. Número vazio →
+**"Número da cotação é obrigatório"**. Fornecedor apagado no meio do caminho → *"Fornecedor não
+encontrado"*, e **nada** é gravado.
+
+**RN-E09 — as duas datas só aceitam calendário ou vazio.** *Data* nasce preenchida com **hoje** (o
+dia de quem está clicando, não o do servidor — a mesma regra da Etapa 39). *Validade* é opcional;
+vazia fica vazia de verdade. Uma data fora do formato só chega por outro caminho que não a tela, e
+responde *"Dados inválidos — data_cotacao: data da cotação inválida (use AAAA-MM-DD)"* ou *"Dados
+inválidos — validade: validade da cotação inválida (use AAAA-MM-DD)"*.
+
+**RN-E10 — o status da cotação é um de quatro.** *Em Análise* (o padrão), *Aprovado*, *Rejeitado*,
+*Cancelado*. O sistema **não julga a sequência** — não há fluxo de aprovação de cotação, e nada
+acontece ao aprovar (não vira pedido; ver "NÃO cobre"). Fora da lista, por outro caminho: *"Dados
+inválidos — status: status da cotação inválido (use em_analise, aprovado, rejeitado ou cancelado)"*.
+
+**RN-E11 — valor total negativo é o servidor quem recusa, e a frase chega à faixa.**
+Digite **-1** em *Valor total* e salve → faixa **"Dados inválidos — valor_total: valor total da
+cotação não pode ser negativo"**. A tela **não** barra o valor antes (foi tirado na onda de correção,
+**B139**): a regra mora num lugar só. Valor vazio grava **0**.
+
+**RN-E12 — excluir fornecedor: três recusas, nesta ordem.**
+A lixeira da aba Fornecedores pergunta *"Tem certeza que deseja excluir este item?"* e depois:
+
+| O fornecedor tem… | Resposta |
+|---|---|
+| pelo menos um **pedido de compra** | *"Fornecedor possui pedidos de compra — não pode ser excluído"* |
+| nenhum pedido, mas pelo menos uma **cotação** | *"Fornecedor possui cotações — não pode ser excluído"* |
+| nem pedido nem cotação, mas **itens na lista de preços** (*Fornecedores homologados → grupo → fornecedor → Itens e preços*) | *"Fornecedor possui itens cadastrados — não pode ser excluído"* |
+| nada disso | *"Item excluído com sucesso"* |
+
+Com mais de um vínculo vale a frase do **primeiro da lista** (pedido pesa mais que cotação, que pesa
+mais que item). A verificação é feita **antes** de tentar apagar, então a frase é a mesma em qualquer
+instalação. A terceira linha foi acrescentada pela onda de correção — ver **C55** e **B138**. Cotação
+é sempre excluível (não tem nada pendurado nela).
+
+**RN-E13 — editar cotação.** O lápis abre **"Editar cotação"** com tudo preenchido; salvar grava
+o cabeçalho inteiro. Cotação apagada por outra pessoa → *"Cotação não encontrada"*.
+
+**RN-E14 — os quatro caminhos.** *Novo Fornecedor* → **"Novo fornecedor"**; lápis → **"Editar
+fornecedor"**; *Nova Cotação* → **"Nova cotação"**; lápis → **"Editar cotação"**. Cada tela tem o
+link **"Voltar para fornecedores"** / **"Voltar para cotações"**. Salvar com sucesso mostra o aviso
+verde e **volta para a aba**; erro do servidor aparece **na faixa vermelha da própria tela**, nunca em
+aviso flutuante — a tela fica aberta com o que você digitou.
+
+**RN-E15 — o que a tela recusa sem chamar o servidor** são só três coisas: razão social vazia,
+número da cotação vazio e fornecedor da cotação não escolhido. Todo o resto é o servidor quem decide.
+
+**RN-E16 — o rótulo e o filtro.** O botão da aba Cotações diz **"Nova Cotação"** (dizia *"Novo
+Cotação"*). O filtro de status mostra **"Todos os status"** e só as opções da aba: na aba
+Fornecedores são **3** opções ao todo; na Cotações, **5**; na Pedidos, **8**.
+
+### Como testar ao vivo
+
+O roteiro completo, clique a clique, está no guia (`docs/almoxarifado-guia-etapas-e-testes.md`,
+seção da Etapa 40). Em cinco minutos: **Novo Fornecedor** vazio → *"Razão social é obrigatória"* →
+preencha e salve → lápis → *Inativo* → confira que ele sumiu do seletor do **Recebimento** e
+apareceu com selo no **grupo** → **"Remover do grupo"** → o cartão some → **Nova Cotação** duas vezes
+com o mesmo número → *"Já existe uma cotação com o número …"* → lixeira do fornecedor → *"Fornecedor
+possui cotações — não pode ser excluído"* → apague a cotação → lixeira de novo → *"Item excluído com
+sucesso"*.
+
+### O que esta etapa NÃO cobre
+
+- **Itens de cotação.** A cotação é só cabeçalho (número, fornecedor, datas, valor, status,
+  observações). Não há linhas de material, não há comparação de cotações entre fornecedores e não há
+  **"converter cotação em pedido"** — é o gesto natural seguinte e depende de existir item. **B123.**
+- **Foto do fornecedor** na tela nova: continua no modal de *Fornecedores homologados → grupo →
+  lápis*. **B134.**
+- **Cidade, estado e CEP**: existem no banco, nenhuma tela os mostra ou grava. A tela nova também não.
+- **Validação de formato de CNPJ e de e-mail, e CNPJ único.** Qualquer texto é aceito nos dois — é
+  regra nova sobre um acervo que já tem CNPJ livre, e o modal do grupo manda esses campos vazios.
+  **B125.**
+- **Perfis no módulo Compras**: continua uma camada só — quem abre o módulo faz tudo (G30).
+- **Fornecedor inativo em pedido e em cotação**: aceito, de propósito (RN-E05, **B127**, **G51**).
+- **Paginação da lista de fornecedores** e o peso da planilha que ela carrega (**G52**).
+- **Lixeira própria** de fornecedor e de cotação: a genérica serve.
+
+### O que a revisão encontrou
+
+- **Revisão do plano antes de codar (Fase 2):** 0 críticos, 4 importantes e 9 menores, todos
+  aplicados ao plano e ao design antes da primeira linha de código.
+- **Revisão da Task 1 (os schemas):** aprovada, 4 menores — um deles (número de grupo absurdo
+  respondendo em inglês) virou o item F5 da onda.
+- **Revisão final, duas lentes (regras/servidor e tela/UX):** 0 críticos, **3 importantes reais** e
+  10 menores, **zero alarme falso**. Os três: (1) fornecedor com **lista de itens/preços** e sem
+  pedido nem cotação dava **erro 500** na lixeira em produção — a terceira relação que a 39 e o
+  desenho desta etapa não enumeraram; (2) o teste da **data local** da cotação era tautológico
+  (passava com a implementação errada das 0h às 20h59); (3) fornecedor **inativado dentro de um
+  grupo ficava invisível** na tela do grupo — sem selo, sem "Remover", sem caminho de volta a não
+  ser reativar.
+- **Onda de correção, seis commits** (`55a3214..03cd048`): F1 (a terceira recusa da lixeira), F2 (o
+  teste da data com relógio fixo), F3 (inativo visível no grupo com selo, e fora do "Vincular"), F4
+  (a tela deixa o servidor decidir o valor negativo), F5 (grupo absurdo responde em português).
+- **Re-revisão da onda** (uma lente fresca sobre `448db90..03cd048`, 2026-09-22): **0 Critical, 0 Important, 1 Minor** — os três Important originais foram reproduzidos com as sondas originais contra o código novo e estão fechados; o Minor era duas referências de linha erradas no comentário do bloco de exclusão, corrigido em `db05e84`. Nenhum efeito colateral do conserto foi encontrado.
+- **Revisões por task de T2 a T5 foram puladas por decisão** (as duas lentes finais cobriram os
+  quatro galhos de uma vez) — **B140**.
+
+**Números lidos ao fim da onda** (`90597c7..03cd048`): **191/191 arquivos** da suíte de API (eram
+187), **42 de 42** no serviço do almoxarifado, **4/4**, **3/3** e **5/5** nas suítes de validação,
+migração e banco, **51 suítes / 769 testes** no cliente (eram 49 / 753), e o empacotamento do cliente
+**limpo**.
+
 ## Onde estamos e o que vem a seguir
+
+- **Etapa 40 entregue (2026-09-21; documentação fechada em 2026-09-22):** **Fornecedores e
+  Cotações ganham tela** (`90597c7..03cd048`, onda de correção da revisão final `55a3214..03cd048`,
+  seis commits). Terceira etapa seguida no módulo **Compras**, e a que fecha o corte que a 38 e a
+  39 declararam duas vezes. **O problema era que quatro botões não faziam nada:** "Novo
+  Fornecedor", "Nova Cotação" e os dois lápis dessas abas apontavam para um endereço sem tela e
+  **voltavam para a lista**; cotação não podia ser criada por caminho nenhum, e fornecedor só pelo
+  modal escondido de *Fornecedores homologados*. Agora os quatro abrem um formulário que grava;
+  o fornecedor ganhou **Grupo** e **Status** (*Ativo/Inativo* — o filtro "Inativo" da aba deixou de
+  ser decorativo); a cotação nasce com **número digitado e único** (*"Já existe uma cotação com o
+  número ⟨X⟩"*), fornecedor, datas, valor e um de quatro status; o filtro de status mostra **só
+  as opções de cada aba**; e dois defeitos que ninguém tinha reportado foram fechados no caminho:
+  **"Remover do grupo" não removia** (dizia sucesso e não mudava nada) e **excluir fornecedor com
+  cotação ou com lista de itens** dava erro genérico em produção — agora são duas frases, além da de
+  pedido, checadas nessa ordem.
+  **O que é seu:** as consultas **A16** (fornecedor com status vazio ou desconhecido — a lista o
+  mostra como ativo, mas o seletor do Recebimento não o lista) e **A17** (cotação com número
+  repetido e itens de preço órfãos de fornecedor); as decisões **B123 a B140**, todas tomadas por
+  mim com o descartado escrito — as duas que **esperam você** são a **B127** (fornecedor inativo
+  **continua aceito** em pedido e em cotação; inativar só o tira do Recebimento e do "Vincular"
+  dos grupos) e a **B125** (CNPJ e e-mail sem validação de formato, CNPJ não único); os furos
+  **C54** (quem acreditava ter removido um fornecedor de um grupo precisa conferir — ele ainda está
+  lá) e **C55**; e as fragilidades **G44 a G56** — a que vale ler é a **G51**, que é a outra face da
+  B127.
+  **A revisão adversarial (duas lentes) achou 0 críticos, 3 importantes reais e 10 menores, zero
+  alarme falso**, corrigidos em seis commits — o importante que mais importa: fornecedor com
+  **lista de itens/preços** dava erro 500 na lixeira em produção, a terceira relação que a 39 e o
+  desenho desta etapa não enumeraram. A re-revisão da onda não achou nada além de um comentário com linhas erradas (`db05e84`).
+  Números **lidos** no fechamento: **191/191 arquivos** da suíte de API, **42 de 42** no serviço do
+  almoxarifado, **4/4 · 3/3 · 5/5** nas suítes de validação, migração e banco, **51 suítes / 769
+  testes** no cliente, empacotamento **limpo**.
+  **A Etapa 41 já está escolhida:** *a cotação ganha itens e vira pedido* — é o "falta para 🟢" alcançável da feature 22 (itens de cotação não existem em lugar nenhum; converter cotação em pedido é o gesto natural depois da 40), com a próxima tarefa detalhada no fim do plano da 40.
 
 - **Etapa 39 entregue (2026-09-17; documentação fechada em 2026-09-21):** **o pedido de compra
   passa a ser acompanhado** (`39ea9d2..19ebf7d`, onda de correção da revisão final

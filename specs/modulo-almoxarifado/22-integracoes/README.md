@@ -4,10 +4,19 @@
 > (range `b276dca..2de7944`, 2026-08-25), a **fatia Compras / criação do pedido de compra foi
 > entregue na Etapa 38** (range `be71754..0a7e5c6`, 2026-09-16 — T1–T7 + onda de correção F1–F8) e o
 > **acompanhamento de prazo com alerta de atraso foi entregue na Etapa 39** (range
-> `39ea9d2..19ebf7d`, 2026-09-17 — T1–T5 + onda de correção F1–F4);
+> `39ea9d2..19ebf7d`, 2026-09-17 — T1–T5 + onda de correção F1–F4), e a **Etapa 40** (range
+> `7ccfc85..03cd048`, 2026-09-22 — T1–T6 + onda de correção F1–F5) **entregou as telas de
+> fornecedor e de cotação** — os 4 caminhos mortos do Compras abriram, e com eles `GET
+> /fornecedores/:id`, Zod nas duas portas de fornecedor, `status`/`grupo_id: null` escritos de
+> verdade, `POST`/`GET /:id`/`PUT` de cotação e o 409 da lixeira contando as **três** FKs;
 > Engenharia/BOM e Produção/OP seguem **bloqueadas por dependência, com a medição escrita**
 > (ver abaixo) · **Spec original:** seções 23, 24, 25
-> **Última atualização:** 2026-09-17 — **Etapa 39 fechada**: `GET /api/compras/pedidos` passou a
+> **Última atualização:** 2026-09-22 — **Etapa 40 fechada**: Fornecedores e Cotações ganharam
+> `FornecedorForm`/`CotacaoForm`; o "Remover do grupo" que era **no-op** passou a remover; o filtro
+> *Inativo* deixou de ser inerte; fornecedor com cotação **ou com itens cadastrados** responde 409
+> em vez de 500 na lixeira; e a rota do grupo passou a mostrar inativos com selo (contratos na seção
+> *"Contratos da fatia Compras — fornecedores e cotações"*) · antes: 2026-09-17 — **Etapa 39
+> fechada**: `GET /api/compras/pedidos` passou a
 > devolver `atrasado`/`dias_atraso` derivados na leitura, a aba Pedidos ganhou badge, filtro
 > `Só atrasados` e duas colunas no Excel, o alerta `PEDIDO_COMPRA_ATRASADO` entrou no registro, e o
 > `PATCH /api/compras/pedidos/:id/status` abriu a **única** saída do "atrasado para sempre" do pedido
@@ -61,8 +70,10 @@
 > A ressalva de escopo, decidida pelo caminho reversível e mantida: a tela é do módulo **core
 > Compras**, mas a spec dela vive **aqui**, nesta feature 22, como "fatia Compras" (decisão B105) —
 > e `itens_pedido_compra`, ao contrário do que o design da 37 dizia, **não é tabela do core**: o
-> `CREATE TABLE` está em `server/services/almoxarifado/schema.js:1311`. Cotações e fornecedores
-> **continuam sem tela de criação** — a 38 consertou **uma** das três abas.
+> `CREATE TABLE` está em `server/services/almoxarifado/schema.js:1311`. ~~Cotações e fornecedores
+> **continuam sem tela de criação** — a 38 consertou **uma** das três abas.~~ **Era verdade até a
+> 39: a Etapa 40 (`7ccfc85..03cd048`, 2026-09-22) entregou as duas telas** — ver o item `[x]` da
+> lista abaixo e a seção de contratos da 40.
 
 As integrações dependem de dados que hoje **não existem em produção**: `projetos` (0 registros),
 `pedidos_compra` (0), `producao_ops` (0), `ordens_servico` (1). O almoxarifado já tem as colunas
@@ -195,6 +206,15 @@ módulo que ninguém opera criaria contrato contra comportamento não exercitado
 - [x] **`DELETE /api/compras/fornecedores/:id` → 409 em vez de 500** (`59abaea`): `Fornecedor
       possui pedidos de compra — não pode ser excluído`. **Era inalcançável antes da 38** (não havia
       pedido); virou alcançável na mesma etapa que criou o dado.
+      ⚠️ **Este item dizia que a lixeira "deixou de dar 500", e isso ESTAVA INCOMPLETO** — medido
+      na revisão final da Etapa 40 (lente RN, I1, sonda com a DDL de produção e `foreign_keys = 1`):
+      `fornecedores` tem **três** tabelas com FK para ela, não uma — `pedidos_compra`, `cotacoes` e
+      **`itens_fornecedor`** (a lista de preços, `index.js:19285-19296`). Fornecedor com itens e sem
+      pedido continuava respondendo **500** em produção; nenhum teste via porque `itens_fornecedor`
+      não estava no harness. Fechado na 40: 409 por cotação (`6795b39`, RN-E12) e 409 por itens
+      (`bdaadd8`, F1 — literal `Fornecedor possui itens cadastrados — não pode ser excluído`, stub no
+      harness, cenários (9) e (12) de `comprasFornecedorRotas.api.test.js`). Precedência: pedido →
+      cotação → itens. Descartado: cascatear `DELETE FROM itens_fornecedor` (irreversível).
 - [ ] **Segunda camada de autorização no core Compras** — **fora por decisão declarada** (B101 /
       decisão 8 do design): `/api/compras/*` continua com `authenticateToken` +
       `checkModulePermission('compras')` e **nenhum `requirePermission`**, inclusive nas portas de
@@ -208,9 +228,24 @@ módulo que ninguém opera criaria contrato contra comportamento não exercitado
       **duplica** os pedidos. A Fase 0 propunha idempotência por `numero`, que é **incompatível**
       com o `numero` gerado pelo servidor (B100); os cenários da suíte afirmam a duplicação em vez
       de fingir que ela não existe.
-- [ ] **Tela de criação de cotações e fornecedores** — **fora do escopo, declarado**:
-      `/compras/fornecedores/novo` e `/compras/cotacoes/nova` seguem caindo no `path="*"`. A 38
-      consertou **uma** das três abas.
+- [x] **Tela de criação de cotações e fornecedores — ENTREGUE na Etapa 40** (`7ccfc85..03cd048`,
+      2026-09-22). ~~**Fora do escopo, declarado**: `/compras/fornecedores/novo` e
+      `/compras/cotacoes/nova` seguem caindo no `path="*"`. A 38 consertou **uma** das três abas.~~
+      Os quatro caminhos (`fornecedores/novo`, `fornecedores/editar/:id`, `cotacoes/nova`,
+      `cotacoes/editar/:id`) abrem formulário e gravam: `FornecedorForm` (`23b86f3`) e `CotacaoForm`
+      (`b692413`) em `client/src/components/compras/`, com rotas em `App.js` e exports lazy. No
+      servidor: `FornecedorSchema` + `CotacaoSchema` + `cotacoes` no harness (`008a041`); `GET
+      /fornecedores/:id`, Zod nas duas portas de fornecedor **sem recusar os quatro payloads do modal
+      do grupo**, `status` no `PUT`, `grupo_id: null` limpando (consertou o "Remover do grupo" que era
+      no-op) e 409 por cotação (`6795b39`); `cotacaoService.js` + `POST`/`GET /:id`/`PUT
+      /api/compras/cotacoes` (`29dd6a8`); integração pela rota e pelo serviço (`d64ede0`). Onda de
+      correção: F2 `55a3214` (cenário (a) de `CotacaoForm.test.js` deixou de ser tautológico), F4
+      `01732dd` (sem `min="0"` — o servidor decide), F3 `795e47d` + `8cde2ee` (inativo visível no
+      grupo com selo; a rota do grupo devolve todos os status), F1 `bdaadd8` (terceira FK), F5
+      `03cd048` (`grupo_id` acima de 2^53 com a literal). Contratos na seção própria abaixo.
+      **O que a 40 deixou fora, por decisão:** itens de cotação e converter cotação em pedido (não há
+      `cotacao_itens` — inventar entidade é etapa própria, e é o **próximo alcançável**); foto na tela
+      nova; `cidade`/`estado`/`cep`; formato de CNPJ/e-mail; `assertFornecedor` sem checar `status`.
 
 ### Compras (spec 24) — o grosso ENTREGUE na Etapa 14
 
@@ -564,6 +599,86 @@ reimportar o próprio Excel do CRM **movia as duas datas um dia para trás** a c
 com a data de **amanhã**). Régua geral da casa, escrita aqui porque custou uma etapa: **data não
 passa por `new Date(str)`** — nem no client, nem no servidor, nem em fixture de teste.
 
+## Contratos da fatia Compras — fornecedores e cotações (Etapa 40, `7ccfc85..03cd048`)
+
+Mesmo gate de sempre: `authenticateToken` + `checkModulePermission('compras')` e **nada mais** (a
+revisão final sondou as quatro rotas novas com `setUser(null)` → 401). Design em
+`docs/superpowers/specs/2026-09-21-crm-etapa40-fornecedores-cotacoes-design.md` (D1–D14,
+RN-E01…E16, e a seção 12 com o que o design previu errado); plano em
+`docs/superpowers/plans/2026-09-21-crm-etapa40-fornecedores-cotacoes.md`.
+
+### 14. Fornecedor — `FornecedorSchema` e as portas (`008a041`, `6795b39`)
+
+| Rota | Corpo | Resposta | Erros |
+|---|---|---|---|
+| `GET /api/compras/fornecedores/:id` (**nova**) | — | `200 { id, razao_social, nome_fantasia, cnpj, contato, email, telefone, endereco, cidade, estado, cep, status, grupo_id, foto, created_at, updated_at }` — **sem** `planilha_dados`/`planilha_nome`/`planilha_atualizado_em` | `404 { error: 'Fornecedor não encontrado' }` (id inexistente ou não numérico) |
+| `POST /api/compras/fornecedores` | `FornecedorSchema` (`looseObject`) | `201 { id, razao_social, nome_fantasia, grupo_id }` — **mantido** da 38; grava `status = 'ativo'` **sempre** e **ignora** `status` no corpo; passou a gravar `endereco` (era ignorado) | `400 'Dados inválidos — razao_social: Razão social é obrigatória'` (vazia ou só espaços); `400 'Dados inválidos — grupo_id: grupo do fornecedor inválido'` |
+| `PUT /api/compras/fornecedores/:id` | `FornecedorSchema` | `200 { message: 'Fornecedor atualizado' }` — **mantido**. **Substituição total** dos 7 textos (`razao_social, nome_fantasia, cnpj, contato, email, telefone, endereco`): ausente ou `''` grava `''`/`null` (caracterizado, não mudado — a tela reenvia todos). `grupo_id` e `status` só entram no `UPDATE` quando vieram (`!== undefined`) | `400` idem; `400 'Dados inválidos — status: status do fornecedor inválido (use ativo ou inativo)'`; `404 'Fornecedor não encontrado'` |
+| `DELETE /api/compras/fornecedores/:id` (genérico) | — | `200 { message: 'Item excluído com sucesso' }` | `409` `Fornecedor possui pedidos de compra — não pode ser excluído` → `Fornecedor possui cotações — não pode ser excluído` → `Fornecedor possui itens cadastrados — não pode ser excluído` (nessa precedência, **antes** do `DELETE`, mesma frase no harness e em produção); `404 'Item não encontrado'` |
+| `GET /api/compras/grupos/:grupoId/fornecedores` | — | desde `8cde2ee` devolve **todos os status** do grupo, `ORDER BY CASE WHEN status = 'inativo' THEN 1 ELSE 0 END, razao_social` (ativos e `NULL` legado primeiro), com a coluna `status` na linha | — |
+
+**`grupo_id` (RN-E03):** número, string numérica (`'3'` → 3, vem de `useParams` no modal), `null`,
+`''`, `0` e ausente são válidos. `null`/`''`/`0`/`NaN`/negativo → `null` (no `PUT`, **limpa** a
+coluna — o botão "Remover do grupo" passou a remover); ausente → `undefined` (o `PUT` **não mexe**);
+`'abc'`, `3.5`, `{}` e qualquer número acima de 2^53 → 400 com a literal (`03cd048`).
+**Textos:** `trim`, `''` aceito, `null` aceito, **sem** validação de formato de e-mail/CNPJ (D3 —
+o modal do grupo manda `''` e produção tem CNPJ livre). `looseObject`: chave desconhecida (`cidade`)
+sobrevive ao parse e a rota a ignora.
+**`status` (RN-E04/E05):** `'ativo' | 'inativo'` só no `PUT`. Inativo **some** do seletor do
+recebimento (`GET /api/almoxarifado/recebimentos-aux/fornecedores`, `WHERE status = 'ativo'`,
+de propósito) e **continua aceito** por `POST /api/compras/pedidos` e por cotação
+(`assertFornecedor` não checa status — declarado). Na tela do grupo aparece com selo *Inativo* e
+não é oferecido no "Vincular" (`795e47d`).
+
+### 15. Cotação — `CotacaoSchema`, `cotacaoService.js` e as três portas (`008a041`, `29dd6a8`)
+
+`STATUS_COTACAO = ['em_analise', 'aprovado', 'rejeitado', 'cancelado']` (masculino, porque
+`getStatusColor` e o filtro da aba já pintam essas formas). `linha` =
+`{ id, numero, fornecedor_id, fornecedor_nome, valor_total, data_cotacao, validade, status, observacoes, created_at, updated_at }`.
+
+| Rota | Corpo | Resposta | Erros |
+|---|---|---|---|
+| `POST /api/compras/cotacoes` | `CotacaoSchema`: `numero` **digitado**, obrigatório, `trim`; `fornecedor_id` inteiro > 0 **sem coerção** (`'3'` → 400; a tela manda `Number()`); `valor_total` número ≥ 0, opcional, default `0` (campo de entrada — não há itens para somar); `data_cotacao`/`validade` `''`/`null`/ausente → `NULL`, `AAAA-MM-DD` grava, outro → 400 (**regra de forma**: `2026-13-45` passa, como no pedido); `status` ∈ `STATUS_COTACAO`, default `'em_analise'`; `observacoes` texto | `201` linha com `fornecedor_nome` | `400 'Dados inválidos — numero: número da cotação é obrigatório'`; `… fornecedor_id: fornecedor da cotação é obrigatório`; `… valor_total: valor total da cotação não pode ser negativo` (também para `'10'` e `null`); `… data_cotacao: data da cotação inválida (use AAAA-MM-DD)` / `… validade: validade da cotação inválida (use AAAA-MM-DD)`; `… status: status da cotação inválido (use em_analise, aprovado, rejeitado ou cancelado)`; `400 'Fornecedor não encontrado'` (fornecedor inexistente — inativo é aceito); `409 'Já existe uma cotação com o número ⟨numero⟩'` |
+| `GET /api/compras/cotacoes/:id` | — | `200` linha | `404 'Cotação não encontrada'` |
+| `PUT /api/compras/cotacoes/:id` | o **mesmo** schema (substituição total do cabeçalho) | `200` linha | `400` (o schema roda **antes** do 404 — `PUT /999999 {}` responde 400, mesma ordem do pedido); `404`; `409` para número de **outra** cotação (o próprio id com o mesmo número → 200) |
+| `DELETE /api/compras/cotacoes/:id` (genérico) | — | `200` | `404 'Item não encontrado'` — **inalterado**, sem guarda (cotação não tem filhos) |
+
+O 409 do `numero` tem **duas guardas**: `SELECT id FROM cotacoes WHERE numero = ? AND id <> ?`
+antes do `INSERT`/`UPDATE` **e** a tradução de `SQLITE_CONSTRAINT … cotacoes.numero` no `catch`
+(sonda da revisão final: 6 `POST` concorrentes → 1×201 + 5×409, 1 linha). A suíte só exercita a
+primeira — a segunda é declarada (letra G). `numero` é digitado por contrato de `numeroDoc.js:64`
+(é o número do documento do **fornecedor**); `UNIQUE` do SQLite é sensível a caixa (`cot-77` e
+`COT-77` coexistem — anotado, não é RN).
+
+### 16. As telas (`23b86f3`, `b692413`, `01732dd`)
+
+- **`FornecedorForm`** (`/compras/fornecedores/novo`, `/editar/:id`): `h1` *"Novo fornecedor"* /
+  *"Editar fornecedor"*; 7 textos (todos `type="text"`, inclusive e-mail — o navegador não valida o
+  que o servidor não valida), Grupo (`GET /compras/grupos`, opção *"Sem grupo"* = `''` → o servidor
+  limpa) e **Status só na edição**. Recusa local: *"Razão social é obrigatória"* em `role="alert"`
+  sem chamar a API. `PUT` manda os 7 textos + `grupo_id` + `status`; `POST` os 7 + `grupo_id`.
+  Toast *"Fornecedor salvo"* e volta à aba; erro do servidor na faixa `role="alert"` com a literal.
+- **`CotacaoForm`** (`/compras/cotacoes/nova`, `/editar/:id`): `h1` *"Nova cotação"* / *"Editar
+  cotação"*; Número*, Fornecedor* (`GET /compras/fornecedores`, lista **inclusive inativos** — como o
+  pedido, declarado), Data (nasce hoje **local**, `hojeISO` por getters, nunca `toISOString`),
+  Validade, Valor total (**sem** `min="0"` — `01732dd`: `-1` viaja e o 400 do servidor chega à
+  faixa), Status, Observações. Recusa local: *"Número da cotação é obrigatório"* / *"Fornecedor da
+  cotação é obrigatório"* (inicial maiúscula; as do servidor são minúsculas — o client não importa o
+  servidor, declarado). Payload com `Number()` nos numéricos. Toast *"Cotação salva"*.
+- **Aba Compras** (`Compras.js`): botão *"Nova Cotação"* (era *"Novo Cotação"*); `<select>` de status
+  por aba (Fornecedores `ativo/inativo`; Pedidos os 7; Cotações os 4) com `statusValido` derivado —
+  o `<Compras/>` **não remonta** entre abas e um filtro inválido na aba nova cai em `''` tanto no
+  `value` quanto na requisição. Filtro **válido** nas duas abas (ex.: `aprovado` de Cotações → Pedidos)
+  viaja — coerente, declarado (letra G).
+
+### O que a Etapa 40 NÃO mudou (conferido pelos revisores)
+
+`listarFornecedoresAux` (`receiptService.js`) segue `WHERE status = 'ativo'`; `assertFornecedor`
+segue sem checar status; `GET /api/compras/fornecedores` (lista) segue `SELECT *` sem `LIMIT`, com
+`planilha_dados` inteiro; a literal de pedido do 409 segue inline na rota (a de cotação vem do
+serviço); `FornecedoresDoGrupo.js` continua **sem suíte** (o F3-cliente foi verificado por build +
+suíte inteira, declarado no commit e na letra G).
+
 ## Regras essenciais + testes de API exigidos
 
 | Regra | Teste | Estado |
@@ -586,6 +701,17 @@ passa por `new Date(str)`** — nem no client, nem no servidor, nem em fixture d
 | A central de alertas não carrega valor nem observação do pedido | `alertaPedidoAtrasado.api.test.js` (10) | ✅ `8f3db94` |
 | Pedido já recebido pode ter o status mudado, e só ele | `comprasPedidoStatus.api.test.js` (7 cenários; o (5) prova que a guarda do `PUT` **não** foi afrouxada) | ✅ `19ebf7d` |
 | Receber pelas portas da Etapa 37 não muda o atraso sozinho | `comprasPedidoAtrasoIntegracao.api.test.js` blocos D / 9a / 9c | ✅ `fc84e09`/`19ebf7d` |
+| O retrofit de Zod não recusa nada que o modal do grupo já manda (4 payloads reais) | `comprasSchemasFornecedorCotacao.api.test.js` (a)–(d) + `comprasFornecedorRotas.api.test.js` (1)(2), escritos **antes** do retrofit | ✅ `008a041`/`6795b39` |
+| `grupo_id: null` no `PUT` LIMPA a coluna ("Remover do grupo" remove) | `comprasFornecedorRotas` (4) — lê a coluna; integração (C) ponta a ponta | ✅ `6795b39`/`d64ede0` |
+| `status` só é escrito pelo `PUT`; `POST` grava `ativo` e ignora a chave | `comprasFornecedorRotas` (6) | ✅ `6795b39` |
+| Inativo some do seletor do recebimento, com controle positivo antes | `comprasFornecedorCotacaoIntegracao` (A) — `aux0` prova que o ativo aparecia | ✅ `d64ede0` |
+| `GET /fornecedores/:id` não carrega `planilha_*` | `comprasFornecedorRotas` (8) | ✅ `6795b39` |
+| Lixeira do fornecedor: 409 por cotação e por itens, precedência pedido → cotação → itens | `comprasFornecedorRotas` (9)(12); integração (A) | ✅ `6795b39`/`bdaadd8`/`d64ede0` |
+| Número de cotação repetido → 409 com o número; o próprio id → 200 | `comprasCotacaoRotas` (2)(9) | ✅ `29dd6a8` |
+| Cotação com fornecedor inexistente → 400 e a linha não muda | `comprasCotacaoRotas` (3)(7)(10) | ✅ `29dd6a8` |
+| A rota do grupo lista inativo e legado `NULL`, ativos primeiro | `comprasFornecedorRotas` (13) | ✅ `8cde2ee` |
+| A data da cotação nasce LOCAL (relógio fixo às 23:30) | `CotacaoForm.test.js` (a) — molde (q) de `PedidoCompraForm.test.js` | ✅ `55a3214` |
+| Os 4 caminhos abrem formulário e o payload é exato | `FornecedorForm.test.js` (a)–(h), `CotacaoForm.test.js` (a)–(h) | ✅ `23b86f3`/`b692413`/`01732dd` |
 | Revisão de BOM recalcula reservas | `nova revisao ajusta reservas dos itens alterados` | ⛔ bloqueado (BOM inexistente) |
 | Encerramento de OP bloqueia novos consumos nela | `consumo em OP encerrada falha` | ⛔ bloqueado (MES sem uso) |
 

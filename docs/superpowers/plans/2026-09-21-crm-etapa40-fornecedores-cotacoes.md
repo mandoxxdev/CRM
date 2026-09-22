@@ -2242,14 +2242,22 @@ plano, o design (seção "O que foi executado", com o que este design previu err
 do plano da 39** (defeito escapado — preencher com o que a Fase 0 desta etapa achou de ERRADO no
 handoff da 39: as quatro correções da seção 11 do design).
 
-- [ ] **Step 1: medir as letras** (`grep -o "\*\*A[0-9]\+" …` para A, B, C, F, G) — a 39 fechou em A15 · B122 · C53 · F13 · G43.
-- [ ] **Step 2: novidades** — seção da Etapa 40 antes de `## Onde estamos`, com Antes → Agora, os cenários com literal (design §6), "NÃO cobre" (design §8); letras: **A** (as duas consultas do design §9 — a A(i) com `WHERE status IS NULL OR status NOT IN ('ativo','inativo')`, Fase 2 M6), **B123–B137** (D1–D14 **mais** a decisão de deixar o "Adicionar existente" com inativo fora, I4), **C54** ("Remover do grupo" não removia — e a partir de agora remove) e **C55** (inativo pode ser "adicionado" a um grupo e não aparece — I4), **G44+** (lista `SELECT *`; `assertFornecedor` sem status; tradução do `UNIQUE` só por corrida; `dataIsoOpcional` aceita `2026-13-45` — regra de forma, não de calendário, vale para pedido e cotação, M8; as frases de recusa local da tela de cotação e as do servidor diferem na inicial porque o client não importa o servidor, M4). E o item da 40 em "Onde estamos".
-- [ ] **Step 3: specs** — `modulo-compras/README.md` linhas das abas; `22-integracoes/README.md:211`; mapa.
-- [ ] **Step 4: guia** — seção da Etapa 40 com roteiro clicável (criar fornecedor → editar → inativar → ver sumir do recebimento; criar cotação → repetir número → 409; lixeira com cotação; e o aviso *"inativo some do grupo e da lista de disponíveis do recebimento; para tirá-lo de um grupo use a tela de edição, Sem grupo"*) e o cabeçalho "Onde o desenvolvimento está".
-- [ ] **Step 5: manual** — enxertar em "Compras": como cadastrar/editar fornecedor, o que Inativo faz, cotação (número único, o que cada status significa), a frase literal de cada recusa.
-- [ ] **Step 6: este plano** — tasks com hash (**os hashes pós-cherry-pick**, conferidos com `git merge-base --is-ancestor`), divergências, retro de 4 números, **próxima tarefa detalhada** (pela ordem do `CLAUDE.md`: o que este fechamento nomear como "falta para 🟢"; senão o mapa — medir antes).
-- [ ] **Step 7: verificação medida** (os cinco comandos, números reais) e **commit** (`msg-e40-t7.txt`).
-- [ ] **Step 8: emendar na próxima etapa** no mesmo turno (Passo 8 da `fechar-etapa`).
+- [x] **Step 1: medir as letras** (`grep -o "\*\*A[0-9]\+" …` para A, B, C, F, G) — a 39 fechou em A15 · B122 · C53 · F13 · G43. **Medido em 2026-09-22: A15 · B122 · C53 · F13 · G43** — a 40 entra em **A16**, **B123**, **C54**, **G44**.
+- [x] **Step 2: novidades** — **feito pelo escritor de usuário, 2026-09-22** (`docs/almoxarifado-novidades-por-etapa.md`: seção da Etapa 40, letras A16/A17, B123–B140, C54/C55, G44+ e o item em "Onde estamos"). ~~seção da Etapa 40 antes de `## Onde estamos`, com Antes → Agora, os cenários com literal (design §6), "NÃO cobre" (design §8); letras: **A** (as duas consultas do design §9 — a A(i) com `WHERE status IS NULL OR status NOT IN ('ativo','inativo')`, Fase 2 M6), **B123–B137** (D1–D14 **mais** a decisão de deixar o "Adicionar existente" com inativo fora, I4), **C54** ("Remover do grupo" não removia — e a partir de agora remove) e **C55** (inativo pode ser "adicionado" a um grupo e não aparece — I4), **G44+** (lista `SELECT *`; `assertFornecedor` sem status; tradução do `UNIQUE` só por corrida; `dataIsoOpcional` aceita `2026-13-45` — regra de forma, não de calendário, vale para pedido e cotação, M8; as frases de recusa local da tela de cotação e as do servidor diferem na inicial porque o client não importa o servidor, M4). E o item da 40 em "Onde estamos".~~ **Divergência do plano:** as letras B foram até **B140** (não B137; o escritor de usuário somou F4 e a decisão de pular as revisões por task como B139 e B140): D1–D14 mais as três da onda (409 de itens em vez de cascata; `NULL` ordena com ativos; inativo fora do "Vincular") e a I4. E o C55 mudou de sentido depois da F3: o inativo **não pode mais** ser "adicionado" a um grupo (o "Vincular" o exclui) — o que ficou em C é o legado: quem *acreditava* ter removido um fornecedor de um grupo antes da 40 não removeu.
+- [x] **Step 3: specs** — **feito pelo escritor de desenvolvedor, 2026-09-22**: `specs/modulo-compras/README.md` (status, 34 rotas, as duas linhas ❌ → ✅ com hash, o parágrafo dos "4 caminhos mortos" riscado como histórico, seção nova *"O que a Etapa 40 mudou"* com o que a spec não dizia); `specs/modulo-almoxarifado/22-integracoes/README.md` (status, o item `:211` → `[x]` com os 12 hashes, a correção do item do `59abaea` — enumerava UMA FK e são três —, seções 14–16 de contratos, 12 linhas na tabela de regras); `specs/modulo-almoxarifado/README.md` (cabeçalho "Última atualização" com a 40 e a 39 empurrada para "Antes:", linha da feature 22 com o que falta para 🟢).
+- [x] **Step 4: guia** — **feito pelo escritor de usuário, 2026-09-22** (`docs/almoxarifado-guia-etapas-e-testes.md`: seção da Etapa 40 com o roteiro clicável e o cabeçalho "Onde o desenvolvimento está"). ⚠️ O aviso previsto aqui (*"inativo some do grupo … use a tela de edição, Sem grupo"*) **ficou obsoleto pela F3**: o inativo agora aparece no grupo com selo e tem "Remover do grupo"; o roteiro do guia tem de dizer isso, não o texto acima.
+- [x] **Step 5: manual** — **feito pelo escritor de usuário, 2026-09-22** (`docs/almoxarifado-manual-do-sistema.md`, seção Compras: fornecedor, Inativo, cotação, as literais de recusa).
+- [x] **Step 6: este plano** — **feito pelo escritor de desenvolvedor, 2026-09-22**: os seis hashes de T1–T6 são os do tronco (reescritos em `fb2da89`) e os seis da onda foram conferidos um a um com `git merge-base --is-ancestor <hash> 03cd048` (todos OK); retro de 4 números abaixo; seção "Onda de correção final"; **próxima tarefa detalhada (Etapa 41)** no fim do arquivo.
+- [x] **Step 7: verificação medida pelo integrador** (tronco `03cd048`, 2026-09-22): `test:api` **191/191 arquivos**; `test:almoxarifado` **42/0**; `test:validation` **4/0**; `test:safealter` **3/0**; `test:sqlite` **5/0**; client **51 suítes / 769 testes** (o brief da onda previa 770 — a base `448db90` tinha 768, não 769; +1 do cenário (h) de `CotacaoForm.test.js`); `CI=true npx react-scripts build` **Compiled successfully**. **Commit do fechamento:** o integrador commita depois dos dois escritores — hash no `git log` (não estava disponível no momento desta escrita).
+- [x] **Step 8: emendar na próxima etapa** no mesmo turno — **próxima etapa: ver a seção *"Próxima tarefa detalhada — Etapa 41"* no fim deste arquivo.** A Fase 0 dela começa pelo integrador depois do commit do fechamento.
+
+#### ✅ Task 7 FECHADA — documentação escrita em 2026-09-22 (commit do fechamento: ver `git log` após `03cd048`)
+
+**Divergências do Step 2/4 registradas acima** (B até 138; C55 mudou de sentido; o aviso do guia
+ficou obsoleto pela F3). **Não verificado por este escritor:** os números das letras A16/A17 e
+B123–B140 foram informados pelo integrador e escritos em paralelo pelo escritor de usuário — quem
+integrar confere com `grep -o "\*\*B[0-9]\+" docs/almoxarifado-novidades-por-etapa.md | sort -u |
+tail -1` antes de commitar.
 
 ---
 
@@ -2265,9 +2273,229 @@ handoff da 39: as quatro correções da seção 11 do design).
 
 ---
 
-## Retro de 4 números (preencher na T7)
+## Retro de 4 números (preenchida na T7)
 
-1. **Rodadas de correção até verde:** …
-2. **Achados da revisão (Fase 2 + Fase 5):** reais … / ruído …
-3. **Paralelismo:** quatro galhos em worktrees com junction — funcionou? Custo de integração (conflitos em `App.js`/`lazyModules.js`)?
-4. **Defeito escapado:** *(em branco — quem fechar a Etapa 41 preenche olhando para trás.)*
+*(Preenchida em 2026-09-22, lendo `.superpowers/sdd/2026-09-21-crm-etapa40-fornecedores-cotacoes/progress.md`,
+`task-1-review.md`, `final-review-rn.md`, `final-review-ux.md`, `fix-wave-report-servidor.md` e
+`fix-wave-report-cliente.md` — não de memória.)*
+
+1. **Rodadas de correção até verde:** **T1–T6: zero rodadas de correção** — cada task fechou verde
+   no próprio commit, com as sabotagens derrubando o cenário previsto (e, em cinco casos, um a
+   mais). **Reviews por task: só a T1 teve** (Approved, 0 Critical / 0 Important / 4 Minor); **T2–T5
+   ficaram SEM review individual por decisão** (`progress.md` linha 9): as duas lentes da Fase 5
+   cobriram `07d6893..b692413` de uma vez. **Fase 5: UMA onda de correção** (F1–F5, **6 commits**
+   porque o F3 tem metade servidor e metade cliente: `55a3214 01732dd 795e47d bdaadd8 8cde2ee
+   03cd048`). A re-revisão da onda (2026-09-22): **0C/0I/1M**, o Minor (linhas erradas no comentário do
+   409) corrigido em `db05e84`; nenhum efeito colateral. Total: **1 rodada** para a etapa (igual à 39; a 38 precisou de 8
+   commits de onda).
+2. **Achados da revisão (Fase 2 + Fase 5):** **Fase 2 (revisão fresca do plano, antes de codar):
+   0 Critical + 4 Important + 9 Minor, os 13 aplicados ao plano e ao design em `84ace0b`** — o mais
+   caro, o I1 (`<Compras/>` não remonta entre abas e o filtro *Inativo* viajaria para Cotações
+   mostrando "Todos"), virou `statusValido` derivado e o cenário (g) sem remontar a raiz; o I2 pôs o
+   controle positivo `aux0` antes da negativa da RN-E05; o I3 moveu o `require` dos schemas para a
+   T1 e evitou o conflito T2×T3. **Review da T1: 0/0/4** (todos inalcançáveis pelo client de hoje;
+   o Minor 2 virou F5). **Fase 5 (duas lentes independentes sobre `07d6893..b692413`): 0 Critical +
+   3 Important + 10 Minor** (RN 0/1/4, UX 0/2/6), **todos reais, os Important reproduzidos por
+   sonda; ruído: 0.** As lentes **convergiram** no inativo dentro do grupo (UX I2 = Fase 2 I4). Dos
+   10 Minor, **oito seguem abertos e declarados** (letra G): `grupo_id` inexistente → 500 cru com FK
+   ligada; `textoOpcional` coage objeto; `PUT /cotacoes` valida antes do 404; `valor_total: null` com
+   a frase de "negativo"; filtro válido viaja entre abas; seletor de fornecedor da cotação lista
+   inativos e carrega `planilha_dados`; `observacoes: ''` grava `''`; salvar/voltar perde busca e
+   filtro. Dois viraram onda (UX M2 = F4; T1 Minor 2 = F5).
+3. **Paralelismo: QUATRO galhos em worktrees com junction de `node_modules` (`mklink /J`) — funcionou,
+   e custou ZERO conflitos de merge.** A sonda da junção (suítes de servidor e client verdes na
+   worktree) foi feita antes de despachar. T2 (`dabb671` → `6795b39`), T3 (`57c1922` → `29dd6a8`),
+   T4 (→ `23b86f3`) e T5 (→ `b692413`) entraram por cherry-pick **limpo**, um a um, com a suíte
+   inteira rodada depois de cada um — **a T5 previu conflito no `import` de `App.js:43-46` (I3 da Fase
+   2) e não houve**: a previsão era conservadora, o cherry-pick aplicou sozinho. A onda repetiu a
+   forma (duas worktrees, `e40-fs` e `e40-fc`, seis cherry-picks limpos). **O que custou foi outra
+   coisa:** o **limite de sessão da API** (429, reset 21:10) cortou os **cinco** agentes (T2–T5 + review
+   da T1) de uma vez, com T2 verde sem commit, T3 pela metade, T4 só com teste e T5 zerada; os cinco
+   foram **retomados pelo mesmo agente** via `SendMessage`, com contexto preservado, e nenhum
+   trabalho foi refeito. Segundo incidente da mesma classe: a re-revisão da onda tomou um 500 e foi
+   retomada do mesmo jeito. **Lição:** o paralelismo em worktree é barato nesta base; o gargalo é a
+   sessão, não o merge — despachar em lotes menores reduz o tamanho do corte quando ele vem.
+4. **Defeito escapado:** *(em branco de propósito — só pode ser preenchido **de fora**, por quem
+   fechar a Etapa 41 olhando para trás. É o mesmo contrato que a 39 deixou para esta, e que a T7
+   cumpriu no plano da 39.)*
+
+---
+
+## Onda de correção final (BASE `448db90`)
+
+Executada em 2026-09-22 a partir de
+`.superpowers/sdd/2026-09-21-crm-etapa40-fornecedores-cotacoes/fix-wave-brief.md`, que consolida
+`final-review-rn.md` (I1), `final-review-ux.md` (I1, I2, M2), `task-1-review.md` (Minor 2) e a I4 da
+Fase 2. **Dois executores em paralelo**, em worktrees (`e40-fs` servidor: F1, F3-servidor, F5;
+`e40-fc` cliente: F2, F4, F3-cliente), um commit por item, cherry-pick para o tronco (cliente
+primeiro, depois servidor — a ordem final no `git log` é `55a3214 01732dd 795e47d bdaadd8 8cde2ee
+03cd048`). Relatórios completos em `fix-wave-report-servidor.md` e `fix-wave-report-cliente.md`.
+
+- [x] **F1 (RN I1) — a terceira FK: `itens_fornecedor` fora do bloco 409 do genérico** — `bdaadd8`
+  (wt `506c312`). Terceira contagem depois de pedido e cotação, literal `Fornecedor possui itens
+  cadastrados — não pode ser excluído` inline na rota, comentário do bloco enumerando as **três** FKs;
+  stub de `itens_fornecedor` no harness espelhando `index.js:19285-19296` **sem** FK e **com** os
+  `NOT NULL` (a DDL local de `comprasPedidosRotas` era nulável — alinhada ao stub); cenário **(12)** em
+  `comprasFornecedorRotas.api.test.js` (só itens → 409 de itens; + pedido → de pedido; + cotação →
+  de cotação; apagados → 200). **Vermelho antes:** `so com itens: esperava 409, veio 200`.
+  **Sabotagem:** terceira contagem removida → **(12)** cai na primeira asserção (`esperava 409, veio
+  200 {"message":"Item excluído com sucesso"}`), md5 `7c6b0ba3…` → `53fe65d2…` → `7c6b0ba3…`.
+  **Descartado:** cascatear `DELETE FROM itens_fornecedor` (irreversível) — letra B.
+- [x] **F2 (UX I1) — cenário (a) de `CotacaoForm.test.js` era tautológico** — `55a3214` (wt
+  `5b0fe2b`). Reescrito no molde do (q) de `PedidoCompraForm.test.js`: `global.Date` → subclasse fixa
+  em `2026-09-17T02:30:00Z` (23:30 de 16/09 local), afirma `'2026-09-16'`, controle positivo
+  **dentro** do cenário (`toISOString()` = `'2026-09-17'`, `getDate()` = 16), `Date` restaurado no
+  `finally`; sem `jest.useFakeTimers` (Jest 27 fakeia o `setTimeout` de `esperarEfeitos()`).
+  Componente **sem alteração**. **Sabotagem:** `hojeISO` → `toISOString().slice(0,10)` → **(a)** cai
+  com `Expected "2026-09-16" / Received "2026-09-17"` em qualquer hora do dia, md5 `2d8c7fc9…` →
+  `347860b2…` → `2d8c7fc9…`.
+- [x] **F3 (UX I2 + Fase 2 I4) — fornecedor inativo dentro de um grupo ficava invisível** — duas
+  metades. **F3-servidor** `8cde2ee` (wt `b69c64d`): `GET /api/compras/grupos/:grupoId/fornecedores`
+  devolve **todos os status**, `ORDER BY CASE WHEN status = 'inativo' THEN 1 ELSE 0 END, razao_social`;
+  cenário **(13)** com **três** linhas (ativo, legado `NULL` por SQL, inativado pelo `PUT`), ordem
+  `[legado, ativo, inativo]`. **Divergência do brief:** o `ORDER BY status = 'ativo' DESC` proposto
+  mandaria o `NULL` legado para **depois** dos inativos (em SQLite `NULL = 'ativo'` é `NULL`, e `DESC`
+  o põe por último) enquanto a tela o mostra como Ativo — o `CASE` trata `NULL` como ativo. **Vermelho
+  antes:** `esperava 3 linhas (ativo, legado NULL, inativo), veio 1: ["Zeta Ativo"]`. **Sabotagem:**
+  reposto `AND status = ?` `'ativo'` → **(13)** cai na mesma mensagem, md5 `79256e86…` → `e6713a2d…` →
+  `79256e86…`. **F3-cliente** `795e47d` (wt `370acad`): `FornecedoresDoGrupo.js` — selo *Inativo*
+  abaixo do nome (`data-testid="fornecedor-inativo"`, estilo base inline porque o arquivo não importa
+  `Compras.css` e a aba é chunk lazy; classe `status-badge` mantida), `fornecedoresDisponiveis` exclui
+  `status === 'inativo'`, texto de lista vazia diz que inativo não pode ser vinculado. **SEM SUÍTE
+  (declarado):** nenhuma suíte cobre o arquivo; verificado por build + suíte inteira + ESLint (1
+  warning pré-existente, `exhaustive-deps` em `:91`, não tocado). **Descartado:** incluir os inativos
+  do próprio grupo no "Vincular" (PUT sem efeito, e continuaria sem selo).
+- [x] **F4 (UX M2) — `min="0"` no valor da cotação barrava o submit com tooltip nativa** — `01732dd`
+  (wt `d5c3bc9`). Removido o `min` (mantido `step="0.01"`); **(d)** afirma `hasAttribute('min') ===
+  false` e `step === '0.01'`; cenário **(h)** novo: `-1` digitado viaja como `valor_total: -1`, o 400
+  mockado no formato exato do `validate()` aparece em `role="alert"`, sem toast, form fica na tela.
+  **TDD:** (d)+(h) antes do conserto → (d) vermelho no `hasAttribute`. **Sabotagem:** `min="0"`
+  reposto → **(d)** cai (`Expected false / Received true`); **(h) continua verde sob a sabotagem** —
+  o jsdom não roda validação nativa no submit por evento, e isso está escrito no comentário do (h):
+  quem mede o atributo é o (d). md5 `4b67aefd…` → `ac1f956c…` → `4b67aefd…`. **Descartado:** validar
+  negativo na tela com mensagem própria (terceira fonte da mesma regra).
+- [x] **F5 (review da T1, Minor 2) — `grupo_id` acima de 2^53 respondia em inglês** — `03cd048` (wt
+  `02d2dc8`). `z.number().int()` → `z.number().int(GRUPO_FORNECEDOR_INVALIDO)` dentro do union;
+  cenário **(f)** de `comprasSchemasFornecedorCotacao.api.test.js` ganha `1e21` e
+  `'99999999999999999999'` (a string vira `1e20` no `parseInt` do preprocess — cai no mesmo `.int()`).
+  **Vermelho antes:** `grupo_id 1e+21 saiu como "grupo_id: Too big: expected int to be
+  <=9007199254740991"`. **Sabotagem:** literal do `.int()` retirada → **(f)** cai com a mensagem em
+  inglês, md5 `e062dc43…` → `1ab7e4f8…` → `e062dc43…`.
+
+**Verificação da onda** (executores nas worktrees, depois o integrador no tronco `03cd048`):
+`test:api` **191/191** (nenhum arquivo novo — (12), (13) e (f) entraram em arquivos existentes);
+almoxarifado **42/0**; validation **4/0**; safealter **3/0**; sqlite **5/0**; client **51 suítes /
+769 testes** (o brief previa 770 — a base tinha 768, não 769; divergência registrada pelo executor
+cliente); build **Compiled successfully**. CR = 0 nos 9 arquivos tocados. `git status` só com os 3
+untracked pré-existentes.
+
+**Re-revisão da onda (uma lente fresca sobre `448db90..03cd048`, 2026-09-22): 0 Critical · 0 Important · 1 Minor.** Os três Important originais (FK de `itens_fornecedor`, teste tautológico da data, inativo invisível no grupo) foram reproduzidos com as sondas originais contra o código novo — fechados, inclusive com `PRAGMA foreign_keys=ON` e a sabotagem do `toISOString` rodada às 02:12 locais. Efeito colateral do conserto: procurado, não achado (stub `NOT NULL`, `.int(MSG)` em 25 valores, `ORDER BY` com `NULL`). O Minor: o comentário novo do bloco 409 citava `index.js:19244` e `:19296` para as FKs de cotação e itens; as reais são `:19255` e `:19295` — corrigido em **`db05e84`**. Relatório: `.superpowers/sdd/2026-09-21-crm-etapa40-fornecedores-cotacoes/fix-wave-rereview.md`.
+
+**Para as letras B e G (o escritor de usuário recebeu o texto):** B — 409 de itens em vez de cascata
+(F1); `NULL` ordena com os ativos na rota do grupo (F3); inativo do próprio grupo fora do "Vincular"
+(F3-cliente); badge com estilo inline em vez de importar `Compras.css` (F3-cliente); F4 sem
+validação local de negativo; a literal de pedido do 409 segue inline na rota (T6 divergência 4).
+G — `listarFornecedoresAux` continua só com ativos de propósito; `FornecedoresDoGrupo.js` sem suíte;
+os oito Minor declarados na retro nº 2.
+
+---
+
+## Próxima tarefa detalhada — Etapa 41: itens de cotação e converter cotação em pedido (medir antes)
+
+**Por que esta e não outra.** Pela ordem do `CLAUDE.md`: (1) este fechamento **nomeia** o "falta para
+🟢" alcançável da feature 22: a linha do mapa e a seção 8 do design da 40 dizem que os bloqueios
+restantes são **entidades inexistentes** (BOM/Engenharia, OP/Produção, fase de projeto/centro de
+custo — nenhuma existe em lugar nenhum do sistema, e nenhuma etapa do almoxarifado as cria), e que
+**dentro da fatia Compras** o próximo alcançável é **itens de cotação + converter cotação em pedido**
+— o design da 40 o chamou de *"o gesto natural seguinte; depende de itens"* (§8) e o descartou em D1
+por ser entidade nova. Depois da 40, a cotação existe mas é um **cabeçalho com um valor digitado**:
+o comprador não consegue dizer *o que* foi cotado nem transformar a cotação aprovada em pedido sem
+redigitar tudo no `PedidoCompraForm`. (2) Os outros itens abertos da fatia são cortes **por decisão**
+(B101 autorização, idempotência da importação, aprovação/workflow, status automático no recebimento
+— este é fatia da feature 08). Escolha reversível, a registrar na letra B da 41.
+
+**Fase 0 obrigatória antes de prometer** (`desenvolver-etapa-almoxarifado`), medindo pelo nome do
+**contrato**:
+
+| Medir | O que se sabe hoje (2026-09-22, contra `03cd048`) | O que a Fase 0 confirma |
+|---|---|---|
+| `cotacao_itens` / `itens_cotacao` em qualquer grafia | **zero** como tabela, coluna ou rota (medido na Fase 0 da 40, §1). Conferido em 2026-09-22 com `grep -rln --exclude-dir=node_modules`: as **únicas** ocorrências em `server/` são **dois comentários** da própria 40 (`cotacaoService.js` e `schemas.js`) dizendo que a entidade não existe; `client/` zero | continua sem tabela; a entidade nasce na 41 — e os dois comentários têm de ser reescritos quando ela nascer |
+| `cotacoes` | cabeçalho chapado, `index.js:19244-19256`: `numero UNIQUE`, `fornecedor_id NOT NULL` + FK, `valor_total`, `data_cotacao`, `validade`, `status DEFAULT 'em_analise'`, `observacoes`; no harness desde `008a041` (`testApp.js`, sem FK, `fornecedor_id` nulável) | onde criar a tabela nova: **`server/services/almoxarifado/schema.js`**, ao lado de `itens_pedido_compra` (`:1311`) — é o precedente: `itens_pedido_compra` **não é do core** apesar de `pedidos_compra` ser (spec da 22, correção da 38). Reconte a linha |
+| `itens_pedido_compra` | `schema.js:1311`: `pedido_id`, `material_id`, `quantidade`, `valor_unitario`, `quantidade_recebida` (+ `safeAlter` de colunas, `:1329-1339`) | a forma a espelhar para `cotacao_itens` (**sem** `quantidade_recebida`) |
+| `PedidoCompraCreateSchema` | `schemas.js:127`: `itens: z.array(PedidoCompraItemSchema, { error: ITENS_PEDIDO_VAZIO }).min(1, ITENS_PEDIDO_VAZIO)` — o pedido **exige** itens; `numero` gerado `PC-…`; `valor_total` **derivado** dos itens | "converter" = `POST /api/compras/pedidos` com os itens da cotação; o pedido **não** aceita `numero` nem `valor_total` do payload |
+| `criarPedido` (`pedidoCompraService.js`) | resolve materiais **antes** de escrever, `assertFornecedor` em `:327`, vínculo opcional com `solicitacao_id` (gate condicional `gerenciar_reposicao`) | a conversão chama o serviço, não duplica SQL; decidir se a cotação guarda `pedido_id` (coluna nova via `safeAlter`) ou só muda `status` |
+| `STATUS_COTACAO` | `schemas.js:203`: `['em_analise', 'aprovado', 'rejeitado', 'cancelado']`; espelhado em `CotacaoForm.js:17` (com rótulos) e em `OPCOES_STATUS.cotacoes` de `Compras.js` | não há estado "convertida"; decidir (letra B) se converter exige `aprovado`, se muda o status, e se a segunda conversão é 409 |
+| `GET /api/compras/cotacoes` (lista, `routes/compras.js:316`) | `LEFT JOIN` com `fornecedor_nome`, `?search=` por `numero`/`razao_social`, `?status=` | se ganhar `qtd_itens`, é `LEFT JOIN` + `COUNT` — sem N+1 |
+| Produção | **0** cotações, **0** pedidos, 10 fornecedores (dump sem escrita desde 04/set) | nada a migrar; a coluna `valor_total` digitada da 40 vira **derivada** quando houver itens? — decisão da 41 (D8 da 40 é reversível e diz isso) |
+
+**Contrato que a 41 consome (congelado pela 40, não reabrir):**
+
+- **Rotas de cotação** (`routes/compras.js:351-364`, gate `authenticateToken +
+  checkModulePermission('compras')`): `POST /api/compras/cotacoes` → `201` linha; `GET
+  /api/compras/cotacoes/:id` → `200` linha / `404 { error: 'Cotação não encontrada' }`; `PUT
+  /api/compras/cotacoes/:id` → `200` linha (mesmo schema, substituição total do cabeçalho; **valida
+  antes do 404**). `linha = { id, numero, fornecedor_id, fornecedor_nome, valor_total, data_cotacao,
+  validade, status, observacoes, created_at, updated_at }`. 400 de schema com prefixo `Dados
+  inválidos — <campo>: <literal>`; `400 'Fornecedor não encontrado'`; `409 'Já existe uma cotação com
+  o número ⟨numero⟩'`. `DELETE` pelo genérico, sem guarda — **a 41 tem de pôr guarda ou cascata para
+  os itens** (é a mesma classe da terceira FK da 40: sem stub no harness, o teste não vê).
+- **`cotacaoService.js`** (`server/services/compras/`): `criarCotacao(db, dados)`,
+  `obterCotacao(db, id)`, `atualizarCotacao(db, id, dados)`, `COTACAO_NAO_ENCONTRADA`,
+  `FORNECEDOR_COM_COTACOES`, `numeroDuplicado(numero)`; `SELECT_LINHA` interno; `erro` e
+  `assertFornecedor` importados de `pedidoCompraService` (que também exporta
+  `FORNECEDOR_NAO_ENCONTRADO`). 409 do número em **duas guardas** (`assertNumeroLivre` +
+  `traduzUnique`).
+- **`CotacaoSchema`** (`schemas.js:212-219`, `looseObject`): `numero` string `trim().min(1)`;
+  `fornecedor_id` `number().int().positive()` **sem coerção**; `valor_total` `number().min(0)` opcional;
+  `data_cotacao`/`validade` `dataIsoOpcional`; `status` enum; `observacoes` `textoOpcional`. As 6
+  literais exportadas: `NUMERO_COTACAO_OBRIGATORIO`, `FORNECEDOR_COTACAO_OBRIGATORIO`,
+  `STATUS_COTACAO_INVALIDO`, `VALOR_COTACAO_NEGATIVO`, `DATA_COTACAO_INVALIDA`,
+  `VALIDADE_COTACAO_INVALIDA`. **Acrescentar `itens` é `z.array(...).min(1, MSG)` com literal nos
+  dois lugares** (armadilha 2 do cabeçalho de `schemas.js`) — e decidir se `itens` é obrigatório
+  (quebra o `POST` mínimo da 40, cenário (1) de `comprasCotacaoRotas`) ou opcional.
+- **`CotacaoForm.js`** (`client/src/components/compras/`): `data-testid` `cotacao-numero`,
+  `cotacao-fornecedor` (select de `GET /compras/fornecedores`, **sem** filtro de status),
+  `cotacao-data` (nasce `hojeISO()` local), `cotacao-validade`, `cotacao-valor` (`type="number"`,
+  `step="0.01"`, **sem** `min`), `cotacao-status`, `cotacao-observacoes`; form `cotacao-form`; `h1`
+  *"Nova cotação"* / *"Editar cotação"*; recusa local *"Número da cotação é obrigatório"* /
+  *"Fornecedor da cotação é obrigatório"*; payload com `Number()`; toast *"Cotação salva"*;
+  `navigate('/compras/cotacoes')`; erro em `role="alert"` por `mensagemDeErro`. Exporta
+  `STATUS_COTACAO` (com `label`). A suíte `CotacaoForm.test.js` tem **8** cenários (a)–(h), com o (a)
+  em relógio fixo (`DataFixa`) — **copiar esse molde**, não o de `Compras.test.js`. O molde de itens
+  na tela é o `PedidoCompraForm.js` (busca de material por `GET /compras/materiais`, linhas com
+  `material_id`/`quantidade`/`valor_unitario`).
+- **Testes que têm de continuar verdes** (números de partida): `comprasCotacaoRotas` **10**,
+  `comprasFornecedorRotas` **13**, `comprasSchemasFornecedorCotacao` **15**,
+  `comprasFornecedorCotacaoIntegracao` **3**, `comprasPedidoEditarExcluir` **13**, `comprasPedidoCriar`
+  **13**; client `CotacaoForm.test.js` **8**, `FornecedorForm.test.js` **8**, `PedidoCompraForm.test.js`
+  **25**, `Compras.test.js` **9**. API **191/191** arquivos; client **51 suítes / 769 testes**.
+
+**Pontos de atenção herdados (e os Minor da 40 que uma etapa de cotação pode fechar):**
+
+- **`numero` da cotação é DIGITADO** (contrato de `numeroDoc.js:64`, D6): ao converter, o pedido
+  ganha `PC-…` **gerado** e a cotação mantém o número do fornecedor — são dois números, não um. Não
+  embrulhar `cotacoes.numero` em `inserirComNumeroUnico`.
+- **`assertFornecedor` não checa `status`** (D5, declarado em duas etapas): uma cotação de fornecedor
+  **inativo** converte em pedido com fornecedor inativo. A 41 decide se a conversão recusa (letra B)
+  — e se recusar, é a primeira porta a olhar `status`, então precisa de literal própria e cenário.
+- **`FornecedoresDoGrupo.js` não tem suíte** (F3-cliente foi verificado só por build). Se a 41 tocar
+  o arquivo, o primeiro passo é um cenário com ele em `reais`.
+- **Minor declarados na letra G da 40 que a 41 pode fechar sem abrir escopo:** (i) `PUT /cotacoes/:id`
+  valida o corpo **antes** do 404 (RN M3) — ao reescrever o `PUT` com itens, checar o id primeiro custa
+  uma linha; (ii) `valor_total: null` sai com a frase de "negativo" (RN M4) — some se `valor_total`
+  virar derivado; (iii) `observacoes: ''` grava `''` em vez de `null` (UX M4) — `colunas()` do serviço;
+  (iv) o seletor de fornecedor da cotação lista inativos e carrega `planilha_dados` inteiro (UX M3) —
+  `GET /compras/fornecedores?status=ativo` já existe e o filtro deixou de ser inerte na 40; (v) a
+  tradução do `UNIQUE` do número só é exercida por corrida (T3 sabotagem 5) — segue declarada, não
+  é da 41; (vi) `dataIsoOpcional` aceita `2026-13-45` (M8) — regra de forma herdada do pedido, mudar
+  é decisão que atinge `previsao_entrega` também.
+- **A lixeira da cotação hoje é o genérico sem guarda.** Com `cotacao_itens` referenciando
+  `cotacoes`, apagar uma cotação com itens cai na FK em produção e passa no harness — **o stub de
+  `cotacao_itens` no harness é tronco (T1)**, e o cenário (8) de `comprasCotacaoRotas` (DELETE → 200)
+  passa a precisar de cascata ou 409. Decidir e provar com sabotagem (lição da F1).
+- **Paralelismo:** servidor (schema + tabela + serviço + rotas) e cliente (itens no `CotacaoForm` +
+  botão "Converter em pedido") são disjuntos — dois galhos em worktrees com junction, como na 40;
+  o contrato de `itens` no schema é tronco. **Despachar em lotes menores**: o corte de sessão da 40
+  derrubou cinco agentes de uma vez.
+- **Retro nº 4 desta etapa (defeito escapado)** é preenchida pela Fase 0 da 41 olhando para trás —
+  o que a 40 deixou errado no handoff acima.

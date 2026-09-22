@@ -2184,9 +2184,46 @@ e os `task-N-report.md` — não de memória.)*
    fechamento com **2 escritores** (usuário / desenvolvedor). **Lição:** quando duas tasks tocam o
    mesmo arquivo em faixas disjuntas, o custo do worktree é menor que o da fila — na Etapa 40, os
    dois pares (fornecedor / cotação) são disjuntos por natureza e **devem** ir em paralelo.
-4. **Defeito escapado:** *(em branco de propósito — só pode ser preenchido **de fora**, por quem
+4. **Defeito escapado:** ~~*(em branco de propósito — só pode ser preenchido **de fora**, por quem
    fechar a Etapa 40 olhando para trás. É o mesmo contrato que a 38 deixou para esta, e que a T6
-   Step 8(b) cumpriu.)*
+   Step 8(b) cumpriu.)*~~ **Preenchida em 2026-09-22, no fechamento da Etapa 40, olhando para
+   trás.** No **código** que a 39 entregou, a 40 não achou defeito nenhum: as suítes da 39
+   (`comprasPedidoAtraso` 11, `comprasPedidoStatus` 7, `PedidoCompraForm.test.js` 25,
+   `Compras.test.js` 9) seguiram verdes por toda a 40, e o molde (q) da 39 foi o que **consertou** a
+   40 (F2). **O que escapou foi o HANDOFF** — a seção "Próxima etapa: Etapa 40" deste plano, escrita
+   sobre a Fase 0 de 16/09 (`etapa39-fase0-acompanhamento.md` §6), e a Fase 0 da 40 (2026-09-21,
+   `.superpowers/sdd/etapa40-fase0-servidor.md`/`-cliente.md`, contra `90597c7`) achou **quatro
+   afirmações erradas e dois fatos que nenhuma medição tinha**, registrados na seção 11 do design da
+   40 (`7ccfc85`):
+   1. *"as rotas novas têm de ficar **acima** do genérico `DELETE /:tipo/:id` em `routes/compras.js`
+      (sombreamento medido)"* — **falso**: o Express casa **método + caminho**; o sombreamento que a 38
+      mediu é de `DELETE /grupos/:id` por `DELETE /:tipo/:id`, e só um `DELETE` novo precisaria ficar
+      acima. A Fase 0 da 40 provou com o `PUT :553`, registrado **abaixo** do genérico, respondendo 200.
+      Nenhuma rota da 40 é `DELETE`; a regra escrita aqui teria feito a T2/T3 mover código sem motivo.
+   2. *"`GET /fornecedores/:id` — criar, o formulário de edição **precisa** dela"* — **forte demais**:
+      `ItensFornecedor.js:78-84` edita sem ela (lista + `find`). Criar foi **decisão** (D2 da 40, pela
+      projeção sem `planilha_dados`), não requisito — e a diferença importa porque "precisa" fecha a
+      letra B antes de ela existir.
+   3. *"copiar a forma do `PedidoCompraForm.js`: … **toast com a literal do servidor**"* — **molde
+      errado**: no `PedidoCompraForm.js:405-415` o erro do servidor vai para `role="alert"`; toast é só
+      de sucesso e da lixeira. A suíte da 38 mede erro por `alertas()`; um form copiado deste handoff
+      teria dois canais de erro (é exatamente o que a D11 da 40 proíbe).
+   4. *"`cotacoes` não está no harness: a suíte de API sobe a DDL local, padrão de `testApp.js:93-97`"*
+      — **arquivo errado**: o padrão de DDL local está em `comprasPedidoEditarExcluir.api.test.js:93-108`;
+      `testApp.js:93-97` é o stub de `pedidos_compra`. Irrelevante no fim porque a 40 promoveu
+      `cotacoes` ao harness (D13), mas quem seguisse a linha abriria o arquivo errado.
+
+   **E os dois fatos que a medição de 16/09 (e todas as anteriores) não tinha**, os dois em portas
+   que a 39 tocou de lado e não mediu: **(a) "Remover do grupo" era no-op** — `FornecedoresDoGrupo.js`
+   mandava `grupo_id: null` e `routes/compras.js:563` fazia `body.grupo_id != null ? … : undefined`,
+   então a coluna não entrava no `UPDATE` e o botão respondia sucesso sem mudar nada (defeito latente,
+   nunca reportado, porque os 10 fornecedores de produção nasceram todos pelo modal e ninguém tentou
+   tirar um); **(b) nenhuma porta escrevia `fornecedores.status`** — o filtro *Inativo* da aba, o
+   `?status=` da lista e três `WHERE status = 'ativo'` (grupo, seletor do recebimento) eram **inertes**.
+   Os dois viraram RN (E03, E04) na 40 em vez de letra G, e o (b) puxou a onda F3 quando `inativo`
+   ficou alcançável. **Lição para o handoff da 40 → 41** (escrita lá): afirmações de arquitetura no
+   handoff ("tem de ficar acima", "precisa", "padrão de X:linha") valem só com a **sonda** que as
+   prova; sem sonda, escrever como hipótese a medir.
 
 ---
 

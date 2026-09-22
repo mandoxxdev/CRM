@@ -109,14 +109,14 @@ planilha do fornecedor, perfis no core Compras, `DELETE` próprio, paginação d
 |---|---|---|
 | **D1** | **Escopo = A0 → A1 → A2 → A3**, os quatro caminhos mortos e o que eles exigem no servidor. | Itens de cotação (`cotacao_itens` não existe; inventar entidade é etapa própria); comparar cotações; converter cotação em pedido. |
 | **D2** | **`GET /api/compras/fornecedores/:id` é criada**, com **projeção nomeada** (sem `planilha_dados`/`planilha_nome`/`planilha_atualizado_em`). | O contorno de `ItensFornecedor.js:78-84` (lista + `find`): a lista é `SELECT *` sem `LIMIT` (`:87-100`) e carrega a planilha JSON inteira de cada fornecedor; um form que abre por id não pode depender disso. |
-| **D3** | **Retrofit de Zod nas duas portas de fornecedor SEM mudar o contrato:** `looseObject`; `razao_social` `trim().min(1)` com a literal de hoje (`'Razão social é obrigatória'`, `:544`/`:564`, e a tela já tem toast com a mesma frase, `FornecedoresDoGrupo.js:126`); textos `z.string().optional().nullable()` aceitando `''`; `grupo_id` por `z.preprocess` (RN-E03). **Sem validação de formato de e-mail ou CNPJ.** | `z.string().email()` / regex de CNPJ: `FornecedoresDoGrupo` manda `email: ''` nos três `PUT` e a 400 quebraria o modal existente; CNPJ não tem `UNIQUE` na DDL e produção tem 10 linhas com CNPJ livre. Validar formato é regra nova sobre acervo — fica na letra D. |
+| **D3** | **Retrofit de Zod nas duas portas de fornecedor SEM mudar o contrato:** `looseObject`; `razao_social` `trim().min(1)` com a literal de hoje (`'Razão social é obrigatória'`, `:544`/`:564`, e a tela já tem toast com a mesma frase, `FornecedoresDoGrupo.js:126`); textos `z.string().optional().nullable()` aceitando `''`; `grupo_id` por `z.preprocess` (RN-E03). **Sem validação de formato de e-mail ou CNPJ.** *(corrigido no fechamento, §12.5: a decisão vale também para a validação NATIVA do navegador — `type="email"` e `min="0"` a contradiziam)* | `z.string().email()` / regex de CNPJ: `FornecedoresDoGrupo` manda `email: ''` nos três `PUT` e a 400 quebraria o modal existente; CNPJ não tem `UNIQUE` na DDL e produção tem 10 linhas com CNPJ livre. Validar formato é regra nova sobre acervo — fica na letra D. |
 | **D4** | **`grupo_id: null` no `PUT` passa a LIMPAR a coluna** — conserta "Remover do grupo". `''`, `0` e `NaN` também limpam (é o que `parseInt … \|\| null` já fazia). Ausente → não mexe. | Preservar o no-op: era defeito, não contrato; nenhum consumidor depende de `null` não limpar (os outros dois `PUT` mandam string). Reversível em uma linha. |
 | **D5** | **`status` entra no `PUT` de fornecedor** como `z.enum(['ativo','inativo'])` opcional; ausente → não mexe. O `POST` continua `'ativo'` fixo. | `PATCH /:id/status` próprio (o molde da 39): o `PUT` já é substituição total e a tela de edição reenvia tudo — uma porta a mais para um campo que viaja no mesmo form é cerimônia. `assertFornecedor` (`pedidoCompraService.js:255`) **continua não checando status** — um pedido pode citar fornecedor inativo; declarado na letra G, não decidido aqui. |
 | **D6** | **`cotacoes.numero` é DIGITADO e obrigatório** (`trim().min(1)`), `UNIQUE` traduzido em **409** *"Já existe uma cotação com o número ⟨numero⟩"*. | Gerar `COT-…` por `inserirComNumeroUnico`: o contrato de `numeroDoc.js:44-64` só o permite se a porta **não aceitar** `numero` — e o número da cotação é o do documento do **fornecedor**, que o comprador precisa citar. |
 | **D7** | **Vocabulário de `cotacoes.status`:** `STATUS_COTACAO = ['em_analise','aprovado','rejeitado','cancelado']`, default `'em_analise'` (é o `DEFAULT` da DDL e o fallback da tela, `Compras.js:442`). | `pendente`/`enviado` (são estados de **pedido**); vocabulário próprio em feminino (`aprovada`): `getStatusColor` (`Compras.js:135-148`) e o `<select>` já pintam/filtram as formas masculinas — uma segunda grafia daria filtro inerte. |
 | **D8** | **`valor_total` é campo de entrada** (`z.number().min(0)`, opcional, default `0`). | Derivar de itens: não há itens. Deixar sempre `0`: a lista mostra a coluna (`:434`) e ela seria decorativa. |
 | **D9** | **Cotação ganha `cotacaoService.js`** (`criarCotacao`, `obterCotacao`, `atualizarCotacao`, com `erro()` e `assertFornecedor` **importados** de `pedidoCompraService`); **fornecedor fica SQL na rota + `validate()`**, como hoje. | `fornecedorService.js`: as duas portas têm 15 linhas de SQL cada e zero cenário; extrair sem régua é refactor sem prova. Duplicar `assertFornecedor`: duas frases *"Fornecedor não encontrado"* divergiriam. |
-| **D10** | **409 na exclusão de fornecedor por cotação:** *"Fornecedor possui cotações — não pode ser excluído"*, no mesmo bloco da F5 (`:405-416`), **antes** do `DELETE`; o comentário `:402-403` é **reescrito** dizendo que era verdade até a 40. `DELETE /cotacoes/:id` segue pelo genérico, sem guarda (cotação não tem filhos). | Traduzir a constraint no `catch`: só falaria a frase no ambiente com FK ligada (o harness roda `foreign_keys = 0`), e o teste não a provaria — mesma razão da F5. |
+| **D10** | **409 na exclusão de fornecedor por cotação:** *"Fornecedor possui cotações — não pode ser excluído"*, no mesmo bloco da F5 (`:405-416`), **antes** do `DELETE`; o comentário `:402-403` é **reescrito** dizendo que era verdade até a 40. `DELETE /cotacoes/:id` segue pelo genérico, sem guarda (cotação não tem filhos). *(corrigido no fechamento, §12.1: esta decisão enumerava DUAS FKs e `fornecedores` tem TRÊS — `itens_fornecedor` ficou fora e foi a F1 da onda)* | Traduzir a constraint no `catch`: só falaria a frase no ambiente com FK ligada (o harness roda `foreign_keys = 0`), e o teste não a provaria — mesma razão da F5. |
 | **D11** | **Erro do servidor em `role="alert"`, sucesso em toast**, como `PedidoCompraForm.js:405-415` — e não toast de erro. Depois de salvar, `navigate` para a aba. | Toast de erro: a suíte da 38 mede erro por `alertas()`, e um form com dois canais de erro confunde quem copia. |
 | **D12** | **A tela de fornecedor tem `grupo` (select de `GET /compras/grupos`, opcional) e `status` (só na edição).** Sem foto. | Foto: é multipart com fallback base64 (`FornecedoresDoGrupo.js:18-40`) e continua no modal do grupo; trazê-la dobra a tela por um campo que o modal já resolve. |
 | **D13** | **`cotacoes` promovida ao harness** `testApp.js`, ao lado de `fornecedores :64` e `pedidos_compra :100`, **sem FK e com `fornecedor_id` nulável** (a mesma forma da DDL local de `comprasPedidoEditarExcluir:97-108`, que vira no-op). | DDL local em cada suíte nova: é o caminho que a Etapa 37 fechou para `pedidos_compra` depois de sete DDLs divergentes. |
@@ -134,11 +134,11 @@ Cada RN aparece no nome do teste que a prova e na frase do manual que a descreve
 |---|---|---|
 | **RN-E01** | `razao_social` é obrigatória nas duas portas; vazia ou só espaços → **400** `Dados inválidos — razao_social: Razão social é obrigatória`. | `POST { razao_social: '  ' }` → 400 com a literal; `PUT` idem. |
 | **RN-E02** | O `PUT` é **substituição total** dos sete textos (`razao_social, nome_fantasia, cnpj, contato, email, telefone, endereco`): campo ausente ou `''` grava `''`/`null` como hoje. A tela de edição **reenvia todos**. | `PUT { razao_social: 'X' }` sozinho zera `email`. Caracterizado, não mudado. |
-| **RN-E03** | `grupo_id` aceita **número, string numérica, `null`, `''` e ausente**. `'3'` → 3. No `POST`: `null`/`''`/`0`/ausente → `NULL`. No `PUT`: `null`/`''`/`0` → **limpa**; ausente → **não mexe**. Qualquer outra string → 400 `grupo_id: grupo do fornecedor inválido`. | Linha com `grupo_id=7`; `PUT { …, grupo_id: null }` → `grupo_id IS NULL` (o botão "Remover do grupo" passa a remover). `PUT { … }` sem a chave → continua 7. |
+| **RN-E03** | `grupo_id` aceita **número, string numérica, `null`, `''` e ausente**. `'3'` → 3. No `POST`: `null`/`''`/`0`/ausente → `NULL`. No `PUT`: `null`/`''`/`0` → **limpa**; ausente → **não mexe**. Qualquer outra string → 400 `grupo_id: grupo do fornecedor inválido`. *(corrigido no fechamento, §12.2 e §12.6: "qualquer outra string" estava errado — string numérica NEGATIVA (`'-2'`) limpa, como o `parseInt … \|\| null` de antes; `NaN` limpa; número acima de 2^53 → 400 com a literal)* | Linha com `grupo_id=7`; `PUT { …, grupo_id: null }` → `grupo_id IS NULL` (o botão "Remover do grupo" passa a remover). `PUT { … }` sem a chave → continua 7. |
 | **RN-E04** | `status` no `PUT`: `'ativo'` ou `'inativo'`; outro valor → 400 `status: status do fornecedor inválido (use ativo ou inativo)`; ausente → não mexe. O `POST` grava sempre `'ativo'`, ignorando `status` no corpo. | `PUT { …, status: 'inativo' }` → `GET /:id` devolve `inativo`; `POST { …, status: 'inativo' }` → 201 e `ativo`. |
-| **RN-E05** | Fornecedor `inativo` **some** dos seletores do almoxarifado (`GET /almoxarifado/recebimentos-aux/fornecedores`, `WHERE status='ativo'`) e de `GET /grupos/:id/fornecedores`; **continua aceito** por `POST /api/compras/pedidos` (`assertFornecedor` não checa status — declarado). | Inativar → aux não lista; pedido com ele → 201. |
+| **RN-E05** | Fornecedor `inativo` **some** dos seletores do almoxarifado (`GET /almoxarifado/recebimentos-aux/fornecedores`, `WHERE status='ativo'`) e ~~de `GET /grupos/:id/fornecedores`~~; **continua aceito** por `POST /api/compras/pedidos` (`assertFornecedor` não checa status — declarado). *(corrigido no fechamento, §12.3: "some do grupo" era curto e virou defeito — desde a F3 o inativo APARECE na tela do grupo, com selo, e só não é oferecido no "Vincular")* | Inativar → aux não lista; pedido com ele → 201. |
 | **RN-E06** | `GET /api/compras/fornecedores/:id` devolve a linha com **projeção nomeada** (sem as três colunas `planilha_*`); id inexistente → **404** `Fornecedor não encontrado`; id não numérico → 404 idem. | `GET /:id` de linha com `planilha_dados` preenchido → corpo **sem** a chave. |
-| **RN-E12** | Fornecedor com **cotação** não pode ser excluído: **409** `Fornecedor possui cotações — não pode ser excluído`. Com pedido, a literal da F5 continua (`… pedidos de compra …`); com os dois, vale a de **pedido** (checada primeiro). Cotação é sempre excluível. | Fornecedor + cotação → `DELETE /fornecedores/:id` 409; apaga a cotação → 200. |
+| **RN-E12** | Fornecedor com **cotação** não pode ser excluído: **409** `Fornecedor possui cotações — não pode ser excluído`. Com pedido, a literal da F5 continua (`… pedidos de compra …`); com os dois, vale a de **pedido** (checada primeiro). Cotação é sempre excluível. *(corrigido no fechamento, §12.1: faltava a terceira contagem — com **itens cadastrados** e sem pedido/cotação, 409 `Fornecedor possui itens cadastrados — não pode ser excluído`; precedência pedido → cotação → itens)* | Fornecedor + cotação → `DELETE /fornecedores/:id` 409; apaga a cotação → 200. |
 
 ### A1 — cotação (servidor)
 
@@ -164,6 +164,10 @@ Cada RN aparece no nome do teste que a prova e na frase do manual que a descreve
 ## 5. Contratos congelados
 
 ### 5.1 `FornecedorSchema` (`server/services/compras/schemas.js`, exportado com as literais)
+
+*(corrigido no fechamento, §12.2 e §12.6: o `grupoIdOpcional` abaixo NÃO é o que foi entregue — o
+regex `/^\d+$/` recusava `'-2'`, `NaN` saía como `'INVALIDO'` → 400, e o `.int()` do union não tinha
+literal. O código real está em `schemas.js` a partir de `008a041` + `03cd048`.)*
 
 ```js
 const RAZAO_SOCIAL_OBRIGATORIA = 'Razão social é obrigatória';            // a literal de hoje, :544/:564
@@ -338,7 +342,9 @@ cotação mostra a literal (molde (h2) `:490-525`); (h) grupo `''` viaja como `'
 
 (a) `/compras/cotacoes/nova`; (b) `linkPorTexto('Nova Cotação')` (RN-E16 — e prova que o rótulo
 mudou); (c) recusa local de número e fornecedor; (d) `POST` com `Number()` e `hojeISO` local (com o
-controle de fuso de `Compras.test.js:197-202`); (e) edição `GET`+`PUT`; (f) 409 do número em
+controle de fuso de `Compras.test.js:197-202`) *(corrigido no fechamento, §12.4: esse "controle de
+fuso" era o molde ERRADO — é sobre `formatDate`, e o cenário que saiu dele era tautológico; o molde
+certo é o (q) de `PedidoCompraForm.test.js`, com `DataFixa` às 23:30 — F2)*; (e) edição `GET`+`PUT`; (f) 409 do número em
 `role="alert"`; (g) o `<select>` de status da aba Cotações tem as 4 opções + Todos, e o da aba
 Fornecedores tem 2 + Todos (RN-E16).
 
@@ -423,3 +429,150 @@ API **187/187**, client **49 / 753**.
 
 E dois fatos que **nenhuma** medição anterior tinha: o no-op do `grupo_id: null` e a inércia de
 `fornecedores.status` — os dois viram RN (E03, E04) em vez de ficarem em letra G.
+
+---
+
+## 12. Como foi executado — o que este design previu errado (escrito no fechamento, 2026-09-22)
+
+> **Range da etapa:** `7ccfc85..03cd048` — design `7ccfc85`, plano `43b24c1`, Fase 2 `84ace0b`,
+> T1 `008a041`, T2 `6795b39`, T3 `29dd6a8`, T4 `23b86f3`, T5 `b692413`, T6 `d64ede0`, e a onda de
+> correção F2 `55a3214`, F4 `01732dd`, F3-cliente `795e47d`, F1 `bdaadd8`, F3-servidor `8cde2ee`,
+> F5 `03cd048`. Todos conferidos com `git merge-base --is-ancestor` no fechamento.
+>
+> **Design errado é dado, não vergonha** — o que não se faz é apagar a versão errada em silêncio,
+> porque a próxima sessão confia nela de novo (regra 5 do `CLAUDE.md`). As seis correções abaixo
+> ficam **ao lado** do texto original das seções 3, 4, 5 e 7, que **não foi apagado**: cada lugar
+> ganhou um *(corrigido no fechamento)* apontando para cá.
+
+### 12.1 D10 e RN-E12 enumeravam DUAS FKs — `fornecedores` tem TRÊS *(corrigido no fechamento)*
+
+**O design dizia** (D10, RN-E12, §5.2): que a lixeira do fornecedor precisava de **uma** contagem a
+mais — `cotacoes` —, ao lado da de `pedidos_compra` que a F5 da Etapa 38 (`59abaea`) tinha posto; e
+que o comentário do genérico seria reescrito dizendo "era verdade até a 40". RN-E12 fechava com
+*"sem nada → 200"*.
+
+**Estava incompleto, e a incompletude era o mesmo defeito que a F5 dizia ter fechado.** A revisão
+final (lente RN, I1) leu a DDL de produção: `itens_fornecedor.fornecedor_id REFERENCES
+fornecedores(id)` (`index.js:19285-19296`) é a **terceira** FK — a lista de preços que
+`ItensFornecedor.js` e a importação de planilha criam. Fornecedor com itens e sem pedido/cotação
+passava pelas duas contagens, o `DELETE` cru caía na FK em produção (`foreign_keys = ON`) e a
+lixeira respondia **500 `'Erro ao excluir item'`**. Reproduzido por sonda (`sondaA_fk_prod.js`);
+nenhum teste via porque `itens_fornecedor` **não estava no harness** — uma terceira contagem sem o
+stub morreria com "no such table" na suíte e passaria em produção, a inversão exata que a lição da
+Etapa 8 manda evitar. A Fase 0 desta etapa mediu `cotacoes` linha a linha e **não** procurou as
+outras FKs de `fornecedores`; a spec da 38 (feature 22, item do `59abaea`) também não as enumerava.
+
+**O que vale hoje** (`bdaadd8`, F1): terceira contagem no mesmo bloco, precedência **pedido →
+cotação → itens**, literal `Fornecedor possui itens cadastrados — não pode ser excluído` inline na
+rota (como a de pedido; a de cotação vem do serviço), stub de `itens_fornecedor` no harness
+espelhando produção **sem** a FK e **com** os `NOT NULL` (as duas rotas que inserem sempre mandam os
+dois campos), a DDL local de `comprasPedidosRotas` alinhada ao stub, e o cenário **(12)** de
+`comprasFornecedorRotas.api.test.js`. **Descartado:** cascatear `DELETE FROM itens_fornecedor`
+antes de apagar — irreversível, apagaria lista importada sem avisar; o 409 obriga a esvaziar a lista
+pela tela de itens primeiro (letra B). **O `RN-E12` correto:** *fornecedor com pedido, cotação OU
+itens não pode ser excluído; sem os três → 200.*
+
+### 12.2 RN-E03 dizia que `'-2'` (string) → 400; plano e código LIMPAM *(corrigido no fechamento)*
+
+**O design dizia** (RN-E03 e o `grupoIdOpcional` do §5.1): *"qualquer outra string → 400"*, com o
+regex `/^\d+$/` — que só aceita dígitos; `'-2'` cairia no `'INVALIDO'` e sairia 400.
+
+**Estava errado em relação ao que a etapa decidiu preservar.** O contrato de D4 é *"`''`, `0` e
+`NaN` também limpam (é o que `parseInt … || null` já fazia)"* — e `parseInt('-2', 10) || null` dá
+`null`, ou seja, **a rota de antes limpava** com string negativa. O plano (T1 Step 4) escreveu
+`/^\s*-?\d+\s*$/` com `n > 0 ? n : null`, o código seguiu o plano, e o review da T1 (Minor 4)
+registrou a divergência design↔código. O design era o lado errado: recusar `'-2'` seria **mudar o
+contrato** que a D3 manda não mudar.
+
+**O que vale hoje** (`008a041`): string numérica com sinal e espaços em volta é aceita; `≤ 0` →
+`null` (limpa); só string **não numérica**, número não inteiro, objeto e (desde `03cd048`) número
+acima de 2^53 respondem 400 com `grupo do fornecedor inválido`. **A RN-E03 correta:** *`grupo_id`
+aceita número, string numérica (com ou sem sinal), `null`, `''` e ausente; `≤ 0`, `null`, `''` e
+`NaN` → limpa; ausente → não mexe; string não numérica, decimal ou fora do inteiro seguro → 400.*
+
+### 12.3 RN-E05 "inativo some do grupo" era curto — e virou defeito quando `inativo` ficou alcançável *(corrigido no fechamento)*
+
+**O design dizia** (RN-E05 e §6): que o fornecedor inativo **some** de `GET /grupos/:id/fornecedores`
+e dos seletores do almoxarifado, e só; e a seção 8 declarou (I4 da Fase 2) que um inativo podia ser
+"vinculado" a um grupo com sucesso e não aparecer.
+
+**Estava curto no lugar que importa.** A revisão final (lente UX, I2) compôs a RN com a tela do
+grupo: inativar um fornecedor que **já está** num grupo faz ele sumir da lista do grupo (a rota
+filtra `ativo`) **e** do modal "Vincular" (que exclui quem já tem o `grupo_id`) — sem selo, sem
+"Remover do grupo", sem nada na tela dizendo onde ele foi; só volta reativando em Compras →
+Fornecedores. Antes da 40 isso era inalcançável (nenhuma porta escrevia `status`); a T4 abriu o
+caminho, e "some" deixou de ser regra para ser sucesso silencioso da mesma classe do "Remover do
+grupo" que esta etapa consertou.
+
+**O que vale hoje** (`8cde2ee` + `795e47d`, F3): a rota do grupo devolve **todos os status**,
+`ORDER BY CASE WHEN status = 'inativo' THEN 1 ELSE 0 END, razao_social` — ativos e **`NULL`
+legado** primeiro (o brief propunha `ORDER BY status = 'ativo' DESC`, que mandaria o legado para
+depois dos inativos enquanto a tela o mostra como Ativo — divergência do executor, registrada);
+`FornecedoresDoGrupo.js` pinta o selo *Inativo* (estilo base inline, porque o arquivo não importa
+`Compras.css` e a aba é chunk lazy) e **exclui inativos** do "Vincular". `listarFornecedoresAux`
+(seletor do recebimento) continua só com ativos, de propósito. **A RN-E05 correta:** *inativo some
+do seletor do recebimento e não é oferecido no "Vincular"; na tela do grupo APARECE com selo e pode
+ser removido; continua aceito por pedido e cotação.* **Declarado:** `FornecedoresDoGrupo.js` não
+tem suíte — o F3-cliente foi verificado por build e suíte inteira (letra G).
+
+### 12.4 §7.4 (a) era tautológico, e o "controle de fuso" apontava para o molde errado *(corrigido no fechamento)*
+
+**O design dizia** (§7.4 (a)/(d)): afirmar a data local *"com o controle de fuso de
+`Compras.test.js:197-202`"*.
+
+**Estava errado no molde.** Aquele trecho é sobre `formatDate` (outra função), e o cenário que a T5
+escreveu a partir dele calculava o "esperado" com `new Date()` + getters locais — o **mesmo** cálculo
+do componente. A revisão final (lente UX, I1) provou com relógio fixo que, com a implementação
+errada (`toISOString().slice(0,10)`, a que a Etapa 39 corrigiu no pedido), o cenário **passava das
+00:00 às 20:59** e só caía entre 21h e meia-noite; a sabotagem 2 da T5 "caiu" porque rodou às
+21:18 — dentro da janela, por sorte de horário, e a própria T5 declarou isso. O molde certo já
+existia: o **(q)** de `PedidoCompraForm.test.js:869-883` (`DataFixa` por subclasse de `Date` às
+23:30 local, controle positivo `toISOString() === dia seguinte`), escrito pela 39 na §12.2 do design
+dela.
+
+**O que vale hoje** (`55a3214`, F2): o (a) fixa `global.Date` em `2026-09-17T02:30:00Z`, afirma a
+literal `'2026-09-16'`, e o controle positivo fica **dentro** do cenário (`toISOString()` tem de dar
+`'2026-09-17'` e `getDate()` 16); `Date` é restaurado no `finally`; `jest.useFakeTimers` não é usado
+(Jest 27 fakearia o `setTimeout` de `esperarEfeitos()`). A sabotagem cai em qualquer hora do dia.
+
+### 12.5 `<input type="email">` e `min="0"` contradiziam a D3 — a validação NATIVA também é validação *(corrigido no fechamento)*
+
+**O design dizia** (D3, D11): o servidor **não** valida formato de e-mail/CNPJ e a tela mostra a
+literal do servidor em `role="alert"` — mas o §5.5 não dizia nada sobre os `type`/`min` dos inputs,
+e o plano trouxe `type="email"` (T4) e `min="0"` (T5).
+
+**Estava incompleto, e o buraco apareceu duas vezes.** No jsdom nada muda; no navegador real,
+`type="email"` barra `email: 'abc'` com tooltip nativa antes do `handleSubmit` (o modal do grupo, na
+mesma porta, aceita), e `min="0"` barra o valor negativo antes de o servidor dizer `valor total da
+cotação não pode ser negativo` — dois canais de erro no mesmo form, o que a D11 proíbe. O primeiro
+foi pego pela Fase 2 (M9) e corrigido **antes** de codar (T4 usa `type="text"` com comentário); o
+segundo passou pela Fase 2 e foi pego pela revisão final (lente UX, M2).
+
+**O que vale hoje** (`23b86f3` para o e-mail; `01732dd`, F4, para o valor): nenhum input das duas
+telas usa validação nativa que o servidor não tenha; `-1` viaja no `POST` e o 400 chega à faixa —
+cenário (h) de `CotacaoForm.test.js`, com (d) afirmando `hasAttribute('min') === false`.
+**Descartado:** validar negativo na tela com mensagem própria (terceira fonte da mesma regra).
+**A D3 correta acrescenta:** *sem validação de formato no servidor E sem validação nativa no
+navegador — a tela só recusa localmente o que é obrigatório (RN-E15).*
+
+### 12.6 O preprocess do `grupo_id`: o ⚠️ do plano induzia um no-op, e o design dizia `NaN` limpa quando o código respondia 400 *(corrigido no fechamento)*
+
+**O design dizia** (§5.1): um `grupoIdOpcional` que devolve `'INVALIDO'` para `NaN` (→ 400), com
+D4/RN-E03 afirmando que **`NaN` limpa**; e o plano (T1 Step 4, versão `43b24c1`) trazia um ⚠️
+mandando trocar `.optional()` por `z.optional(z.preprocess(...))` "se o preprocess não rodar com
+`undefined`".
+
+**As duas coisas estavam erradas, de jeitos diferentes.** (i) A Fase 2 sondou o `zod@4.4.3` (M1): o
+preprocess **roda** com `undefined`, mas `.optional()` devolve `undefined` e a chave não entra em
+`parsed.data` — o cenário (d) passa como está, e `z.optional(...)` dá o **mesmo** resultado; seguir o
+⚠️ faria o worker trocar por um equivalente e registrar uma "divergência" inexistente. (ii) `typeof
+NaN === 'number'` → `Number.isInteger(NaN)` falso → `String(NaN)` → union → **400**, contra a RN
+(M5). Inalcançável por JSON, mas design e código têm de dizer a mesma coisa.
+
+**O que vale hoje** (`84ace0b` no plano; `008a041` no código): o ⚠️ foi substituído por *"Medido:
+nada a trocar"*; o preprocess ganhou `if (typeof v === 'number' && Number.isNaN(v)) return null;`
+**antes** do `typeof v === 'number'`, e `NaN` limpa como a RN dizia. **Declarado (review da T1,
+Minor 1):** essa linha **não tem teste** — o cenário (f) usa a string `'NaN'`, que é outro caminho
+(union → 400); clone do schema sem a linha passa `15/15`. Fica como lacuna nomeada, não como
+proteção fingida. O `'INVALIDO'` do §5.1 nunca existiu no código: o valor não numérico é devolvido
+cru e o union o recusa com a literal.

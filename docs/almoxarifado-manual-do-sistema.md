@@ -26,6 +26,7 @@ explicada logo abaixo dela.
 13. [Inventário e conferência de estoque](#13-inventário-e-conferência-de-estoque)
 14. [Recebimento de material](#14-recebimento-de-material)
 14b. [Pedido de compra](#14b-pedido-de-compra)
+14c. [Fornecedores e cotações](#14c-fornecedores-e-cotações)
 15. [Inspeção e qualidade](#15-inspeção-e-qualidade)
 16. [Materiais de clientes](#16-materiais-de-clientes)
 17. [Material enviado a terceiros](#17-material-enviado-a-terceiros)
@@ -2217,16 +2218,24 @@ a aparecer aberto, com o saldo inteiro, e o mesmo material poderia ser recebido 
 > sequência obrigatória de status no módulo Compras (14b.8) — a escolha é do comprador, e o efeito
 > visível é a coluna **Status**, o selo de atraso e os filtros.
 
-### 14b.5 Fornecedor com pedido não pode ser excluído
+### 14b.5 Fornecedor com pedido, cotação ou itens de preço não pode ser excluído
 
-Na aba **Fornecedores**, a lixeira de um fornecedor que tenha **qualquer** pedido de compra é
-recusada:
+Na aba **Fornecedores**, a lixeira pergunta *"Tem certeza que deseja excluir este item?"* e, depois
+da confirmação, recusa o fornecedor que tenha qualquer vínculo. As três verificações são feitas
+**nesta ordem**, e a mensagem é a da primeira que encontrar algo:
 
-> *"Fornecedor possui pedidos de compra — não pode ser excluído"*
+| O fornecedor tem… | Mensagem |
+|---|---|
+| pelo menos um **pedido de compra** | *"Fornecedor possui pedidos de compra — não pode ser excluído"* |
+| nenhum pedido, mas pelo menos uma **cotação** | *"Fornecedor possui cotações — não pode ser excluído"* |
+| nem pedido nem cotação, mas **itens na lista de preços** (14c.5) | *"Fornecedor possui itens cadastrados — não pode ser excluído"* |
+| nenhum dos três | *"Item excluído com sucesso"* |
 
-Para excluí-lo mesmo assim é preciso apagar os pedidos dele primeiro — e os que já tiveram
-recebimento **não são apagáveis** (14b.4). A verificação é feita **antes** de qualquer tentativa de
-apagar, então a mensagem é a mesma em qualquer instalação.
+Para excluí-lo mesmo assim é preciso desfazer os vínculos primeiro: apagar os pedidos dele (os que
+já tiveram recebimento **não são apagáveis**, 14b.4), apagar as cotações dele (cotação é sempre
+excluível, 14c.8) e esvaziar a lista de itens pela tela de itens e preços. As verificações são feitas
+**antes** de qualquer tentativa de apagar, então a mensagem é a mesma em qualquer instalação. Inativar
+o fornecedor (14c.3) é a alternativa quando o histórico precisa ficar.
 
 ### 14b.6 Importar uma planilha de pedidos
 
@@ -2335,6 +2344,156 @@ recusa é:
 > um administrador."*
 
 Quem decide é sempre o servidor (seção 5.2): o botão escondido na tela é conveniência, não barreira.
+
+## 14c. Fornecedores e cotações
+
+O fornecedor é o cadastro de quem vende para a empresa; a cotação é o registro de um preço que um
+fornecedor deu. As duas telas ficam no módulo Compras: **Compras → Fornecedores** e **Compras →
+Cotações**. Os grupos de fornecedores homologados têm tela própria, **Compras → Fornecedores
+homologados** (14c.5).
+
+### 14c.1 A lista de fornecedores
+
+A aba mostra, por fornecedor: **Razão Social** (com o nome fantasia embaixo), **CNPJ**, **Contato**,
+**Email**, **Telefone**, **Status** (o selo *ativo* ou *inativo*) e os botões de **editar** e
+**excluir**. Há busca por razão social, nome fantasia ou CNPJ, e o filtro de status com as opções
+**Todos os status**, **Ativo** e **Inativo**. A lista traz **todos** os fornecedores, inativos
+inclusive — o filtro é que separa.
+
+### 14c.2 Cadastrar e editar um fornecedor
+
+**Compras → Fornecedores → Novo Fornecedor** abre a tela **"Novo fornecedor"**; o lápis de uma linha
+abre **"Editar fornecedor"** com tudo preenchido. Os campos:
+
+| Campo | O que é |
+|---|---|
+| **Razão social** | **Obrigatória.** É o único campo que a tela exige |
+| **Nome fantasia**, **CNPJ**, **Contato**, **E-mail**, **Endereço** | Texto livre, opcionais. Não há validação de formato de CNPJ nem de e-mail, e dois fornecedores podem ter o mesmo CNPJ |
+| **Telefone** | Opcional; ganha máscara enquanto se digita |
+| **Grupo** | Opcional. *"Sem grupo"* ou um dos grupos de fornecedores homologados. Escolher *"Sem grupo"* na edição **tira** o fornecedor do grupo em que estava |
+| **Status** | **Só na edição.** *Ativo* ou *Inativo*. Todo fornecedor **nasce ativo** — a tela de criação não tem o campo |
+
+Salvar mostra *"Fornecedor salvo"* e volta para a lista. Salvar **sem razão social** (ou só com
+espaços) é recusado pela própria tela, antes de chamar o servidor, com a faixa vermelha
+**"Razão social é obrigatória"**. A edição **reenvia todos os campos**: o que estiver em branco na
+tela fica em branco no cadastro.
+
+Se o fornecedor tiver sido apagado por outra pessoa enquanto a tela estava aberta, a edição abre com a
+faixa *"Fornecedor não encontrado"*.
+
+**Os outros caminhos que também cadastram e editam fornecedor** são os modais da tela do grupo
+homologado (14c.5). Todos gravam no mesmo cadastro; a diferença é que só a tela de edição de
+**Compras → Fornecedores** tem o campo **Status**, e só o modal do grupo tem a **foto**.
+
+### 14c.3 O que "Inativo" faz — e o que não faz
+
+Inativar um fornecedor **não o apaga** e **não bloqueia tudo**. O efeito é este, tela por tela:
+
+| Tela | Fornecedor inativo |
+|---|---|
+| **Compras → Fornecedores** (lista) | **Aparece**, com o selo *inativo*. O filtro *Ativo* o esconde; o filtro *Inativo* o isola |
+| **Recebimento** (seção 14), seletor de fornecedor | **Não aparece.** O seletor lista só fornecedores ativos |
+| **Fornecedores homologados → grupo** (14c.5) | **Aparece** no grupo em que estava, depois dos ativos, com o selo **"Inativo"** |
+| **Fornecedores homologados → grupo → Vincular fornecedor** | **Não é oferecido** |
+| **Pedido de compra** (14b.2), seletor de fornecedor | **Aparece**, e o pedido para ele é **aceito** |
+| **Cotação** (14c.6), seletor de fornecedor | **Aparece**, e a cotação para ele é **aceita** |
+
+Ou seja: inativar impede que material **sem pedido** entre em nome dele e impede que ele seja
+**vinculado** a um grupo novo — e nada mais. Pedido e cotação continuam possíveis; a relação
+comercial não é cancelada pelo sistema. Para voltar, basta editar e escolher *Ativo*.
+
+Um fornecedor cadastrado sem status (o campo em branco) é mostrado como ativo na lista e na edição,
+mas **não** aparece no seletor do Recebimento até ser salvo uma vez pelo lápis — o que grava *Ativo*.
+
+### 14c.4 O que o sistema recusa no fornecedor, e com que mensagem
+
+| Situação | O que acontece |
+|---|---|
+| Razão social vazia | A tela recusa antes do servidor: *"Razão social é obrigatória"*. Pelo servidor, a mesma regra responde *"Dados inválidos — razao_social: Razão social é obrigatória"* |
+| Grupo que não seja um número de grupo | *"Dados inválidos — grupo_id: grupo do fornecedor inválido"* (a tela só oferece grupos existentes; isto só ocorre por outro caminho) |
+| Status fora de *ativo* / *inativo* | *"Dados inválidos — status: status do fornecedor inválido (use ativo ou inativo)"* (idem) |
+| Fornecedor que não existe (abrir ou editar) | *"Fornecedor não encontrado"* |
+| Excluir fornecedor com pedido, cotação ou itens | As três frases de 14b.5, nessa ordem |
+
+### 14c.5 Grupos de fornecedores homologados
+
+**Compras → Fornecedores homologados** lista os grupos; abrir um grupo mostra um cartão por
+fornecedor, **ativos primeiro**, cada um com o nome, o nome fantasia, a foto (quando houver), o
+selo **"Inativo"** quando for o caso (passar o mouse sobre o selo mostra *"Fornecedor inativo —
+reative em Compras › Fornecedores"*), e dois botões: **Editar fornecedor** (abre o modal com todos os
+campos e a foto) e **Remover do grupo**. Clicar no cartão abre a tela **"Itens e preços – ⟨razão
+social⟩"**, que é a lista de preços do fornecedor (é ela que conta como "itens cadastrados" na
+recusa da lixeira, 14b.5).
+
+- **Vincular fornecedor** abre o modal *"Vincular fornecedor ao grupo"*, que oferece os fornecedores
+  **ativos** que ainda não estão neste grupo. Sem ninguém disponível, a frase é *"Todos os
+  fornecedores ativos já estão em um grupo (inativos não podem ser vinculados) — ou cadastre um
+  novo."*. Confirmar mostra *"Fornecedor adicionado ao grupo"*.
+- **Novo fornecedor** (o outro botão da tela do grupo) abre o modal *"Novo fornecedor"*, que pede
+  razão social (obrigatória: *"Razão social é obrigatória"*), nome fantasia e CNPJ, e mostra
+  *"Fornecedor cadastrado e vinculado ao grupo"* — o fornecedor nasce ativo e já dentro do grupo.
+- **Remover do grupo** pergunta *"Remover "⟨razão social⟩" deste grupo? O fornecedor continua
+  cadastrado."* e, confirmado, mostra *"Fornecedor removido do grupo"* — o cartão sai do grupo e o
+  fornecedor continua existindo em **Compras → Fornecedores**, sem grupo. O mesmo efeito se obtém
+  escolhendo *"Sem grupo"* no lápis de Compras → Fornecedores.
+- **Editar fornecedor** no modal grava e mostra *"Fornecedor atualizado"*. O modal **não** tem o
+  campo Status — para inativar, use o lápis de Compras → Fornecedores.
+
+### 14c.6 A lista de cotações
+
+**Compras → Cotações** mostra, por cotação: **Número**, **Fornecedor**, **Valor Total**, **Data**,
+**Validade**, **Status** e os botões de **editar** e **excluir**. Há busca por número ou razão social
+do fornecedor e o filtro de status com **Todos os status**, **Em Análise**, **Aprovado**,
+**Rejeitado** e **Cancelado**. Sem nenhuma cotação — ou com um filtro que não deixa nenhuma —, a
+lista diz *"Nenhuma cotação encontrada"*.
+
+### 14c.7 Criar e editar uma cotação
+
+**Compras → Cotações → Nova Cotação** abre a tela **"Nova cotação"**, com o aviso *"O número é o do
+documento do fornecedor e tem de ser único."*; o lápis abre **"Editar cotação"** com tudo
+preenchido. A cotação é **só cabeçalho** — não tem linhas de material —, com estes campos:
+
+| Campo | O que é |
+|---|---|
+| **Número** | **Obrigatório e digitado** — é o número do documento que o fornecedor mandou. O sistema não gera número de cotação. Tem de ser **único**; espaços nas pontas não contam |
+| **Fornecedor** | **Obrigatório.** Lista de razões sociais; o padrão é *"Selecione o fornecedor"*. Fornecedores inativos aparecem e são aceitos |
+| **Data** | Calendário, já preenchido com o dia corrente de quem está usando |
+| **Validade** | Calendário, opcional |
+| **Valor total** | Número, opcional. Em branco grava **0**. Não é somado de nada — é digitado |
+| **Status** | *Em Análise* (o padrão), *Aprovado*, *Rejeitado* ou *Cancelado* |
+| **Observações** | Texto livre |
+
+Salvar mostra *"Cotação salva"* e volta para a lista. A edição grava o cabeçalho inteiro de novo.
+
+**O que cada status significa.** O status é a **declaração do comprador** sobre o que fez com aquele
+preço: *Em Análise* enquanto está sendo avaliado, *Aprovado* quando foi o escolhido, *Rejeitado*
+quando não foi, *Cancelado* quando a cotação deixou de valer. O sistema **não julga a sequência** —
+qualquer um dos quatro pode ser gravado a qualquer momento — e **nenhum status dispara nada**:
+aprovar uma cotação **não cria pedido de compra** e não altera nenhum outro registro. O efeito é a
+coluna **Status** e o filtro da lista.
+
+### 14c.8 O que o sistema recusa na cotação, e com que mensagem
+
+| Situação | O que acontece |
+|---|---|
+| Salvar **sem número** | A tela recusa antes do servidor: *"Número da cotação é obrigatório"* |
+| Salvar **sem fornecedor** | A tela recusa antes do servidor: *"Fornecedor da cotação é obrigatório"* |
+| **Número já usado** por outra cotação (ao criar ou ao editar) | *"Já existe uma cotação com o número ⟨número⟩"* — e **nada** é gravado |
+| **Valor total negativo** | *"Dados inválidos — valor_total: valor total da cotação não pode ser negativo"*. A tela deixa digitar; é o servidor quem recusa |
+| **Data** que não seja uma data | *"Dados inválidos — data_cotacao: data da cotação inválida (use AAAA-MM-DD)"* |
+| **Validade** que não seja uma data | *"Dados inválidos — validade: validade da cotação inválida (use AAAA-MM-DD)"* |
+| **Status** fora dos quatro valores | *"Dados inválidos — status: status da cotação inválido (use em_analise, aprovado, rejeitado ou cancelado)"* |
+| Fornecedor que **não existe** | *"Fornecedor não encontrado"* — e **nada** é gravado |
+| Cotação que **não existe** (abrir ou editar) | *"Cotação não encontrada"* |
+
+Os erros do servidor aparecem na **faixa vermelha dentro do formulário**, com a tela aberta e o que
+você digitou preservado; só o sucesso aparece como aviso flutuante. **As duas datas** aceitam apenas
+o formato de calendário ou nada — a tela usa o seletor de data do navegador, então os formatos
+errados só chegam por outro caminho.
+
+**Excluir uma cotação** é sempre permitido: a lixeira pergunta *"Tem certeza que deseja excluir este
+item?"* e responde *"Item excluído com sucesso"*. Nada depende de uma cotação — nem o pedido, nem o
+fornecedor.
 
 ---
 
