@@ -431,8 +431,8 @@ app.delete('/api/compras/:tipo/:id', authenticateToken, checkModulePermission('c
    * a fazer o `DELETE` cru cair na FK em producao (500 'Erro ao excluir item'). A segunda contagem
    * abaixo (RN-E12) fecha isso do mesmo jeito da F5: 409 ANTES do DELETE, mesma frase no harness e
    * em producao. Pedido e checado PRIMEIRO — com os dois vinculos, a literal e a de pedido.
-   * A literal de cotacao esta inline aqui porque a T3 (dona de `cotacaoService.FORNECEDOR_COM_COTACOES`)
-   * roda em paralelo; a T6 afirma a igualdade das duas frases.
+   * A literal de cotacao NAO mora aqui: e `cotacaoService.FORNECEDOR_COM_COTACOES` (a T2 a escreveu
+   * inline porque a T3 rodava em paralelo; a T6 trocou pela constante e afirma a identidade).
    */
   if (tipo === 'fornecedores') {
     return db.get('SELECT COUNT(*) AS n FROM pedidos_compra WHERE fornecedor_id = ?', [idNum], (err, row) => {
@@ -449,7 +449,7 @@ app.delete('/api/compras/:tipo/:id', authenticateToken, checkModulePermission('c
           return res.status(500).json({ error: 'Erro ao excluir item' });
         }
         if ((row2 && row2.n) > 0) {
-          return res.status(409).json({ error: 'Fornecedor possui cotações — não pode ser excluído' });
+          return res.status(409).json({ error: cotacaoService.FORNECEDOR_COM_COTACOES });
         }
         return apagar();
       });
