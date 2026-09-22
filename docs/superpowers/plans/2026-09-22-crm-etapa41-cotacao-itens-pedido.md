@@ -323,7 +323,7 @@ Scratchpad: `msg-e41-t1.txt`, `sonda-e41-t1.js` (a sonda `PRAGMA`, reutilizável
 - Consumes: T1 (`resolverItens`, `CotacaoSchema` com `itens`, coluna `pedido_id`, tabela `itens_cotacao`); `pedidoCompraService.criarPedido(db, dados, user)` (`:320`), `obterPedido(db, id)` (`:393`), `erro`, `assertFornecedor`; `dbAll`.
 - Produces: contrato §5.3/§5.4 do design. **T4 e T5 consomem.**
 
-- [ ] **Step 1: escrever `comprasCotacaoItens.api.test.js` e ver vermelho** (cabeçalho no molde de `comprasCotacaoRotas.api.test.js`; `ADMIN` id 100):
+- [x] **Step 1: escrever `comprasCotacaoItens.api.test.js` e ver vermelho** (cabeçalho no molde de `comprasCotacaoRotas.api.test.js`; `ADMIN` id 100):
 
 ```js
 (async () => {
@@ -432,7 +432,7 @@ Vermelho esperado: (1) `valor_total` 0 e `itens` undefined; (4) 201; (7) cai na 
 genérico, *"Item excluído com sucesso"*) — a asserção de órfãos só passa a medir depois que o serviço
 grava itens; (8) `Item não encontrado`; (10) 200.
 
-- [ ] **Step 2: escrever `comprasCotacaoGerarPedido.api.test.js` e ver vermelho** (`ADMIN` id 101; fixtures: fornecedor ativo `fA`, inativo `fB`, materiais `mA`/`mB`; helper `cotar(itens, extra)`):
+- [x] **Step 2: escrever `comprasCotacaoGerarPedido.api.test.js` e ver vermelho** (`ADMIN` id 101; fixtures: fornecedor ativo `fA`, inativo `fB`, materiais `mA`/`mB`; helper `cotar(itens, extra)`):
 
 ```js
   const gerar = (id) => request(app).post(`/api/compras/cotacoes/${id}/gerar-pedido`).send();
@@ -539,7 +539,7 @@ Acrescente ao (1): `assert.strictEqual(r.body.data_pedido, pedidoCompraService.h
 (importe `hojeLocalISO` de `pedidoCompraService`). E no comentário do (5), a metade "fornecedor apagado":
 *"só alcançável no harness (FK desligada) — em produção a FK e a lixeira própria impedem o DELETE (Fase 2 M5); o cenário fica porque é o caminho do serviço"*.
 
-- [ ] **Step 3: `cotacaoService.js`** — reescrever (cabeçalho atualizado: o parágrafo *"Nao ha itens…"* vira *"Ate a Etapa 40 nao havia itens… Desde a 41…"*):
+- [x] **Step 3: `cotacaoService.js`** — reescrever (cabeçalho atualizado: o parágrafo *"Nao ha itens…"* vira *"Ate a Etapa 40 nao havia itens… Desde a 41…"*):
 
 ```js
 const { dbRun, dbGet, dbAll } = require('../almoxarifado/db');
@@ -668,7 +668,7 @@ cenário (5) apaga o fornecedor **depois** de criar a cotação; `assertForneced
 (`:320-380`) — se devolver `{ id, numero, … }` sem `itens`, `obterPedido` é quem relê. E o `user`: a rota
 passa `req.user` (o gate condicional de `solicitacao_id` não dispara porque não mandamos `solicitacao_id`).
 
-- [ ] **Step 4: as rotas** — em `routes/compras.js`:
+- [x] **Step 4: as rotas** — em `routes/compras.js`:
 
 (a) lista `:316-343`: `SELECT c.*, f.razao_social as fornecedor_nome, p.numero AS pedido_numero FROM cotacoes c LEFT JOIN fornecedores f ON c.fornecedor_id = f.id LEFT JOIN pedidos_compra p ON p.id = c.pedido_id WHERE 1=1` (o `c.*` já traz `pedido_id`).
 
@@ -697,9 +697,9 @@ até a 40; desde a 41 o `DELETE /cotacoes/:id` próprio existe e a posição des
 passou a ser comportamento"*. No genérico, ao lado de `'cotacoes': 'cotacoes'` no mapa: comentário
 *"sombreado desde a Etapa 41 pela rota própria — fica no mapa por caracterização, como `pedidos`"*.
 
-- [ ] **Step 5: rodar** — os dois arquivos (**10** e **10**); `comprasCotacaoRotas` (10 — o (8) continua 200), `comprasFornecedorCotacaoIntegracao` (3), `comprasFornecedorRotas` (13), `comprasPedidoEditarExcluir` (13 — o `excluirPedido` mudou de resposta), `comprasPedidoCriar` (13); `npm run test:api` (**193/193**); `npm run test:almoxarifado` (42).
+- [x] **Step 5: rodar** — os dois arquivos (**10** e **10**); `comprasCotacaoRotas` (10 — o (8) continua 200), `comprasFornecedorCotacaoIntegracao` (3), `comprasFornecedorRotas` (13), `comprasPedidoEditarExcluir` (13 — o `excluirPedido` mudou de resposta), `comprasPedidoCriar` (13); `npm run test:api` (**193/193**); `npm run test:almoxarifado` (42).
 
-- [ ] **Step 6: sabotagens**
+- [x] **Step 6: sabotagens**
 
 | # | Sabotagem | Âncora | Cai |
 |---|---|---|---|
@@ -713,7 +713,64 @@ passou a ser comportamento"*. No genérico, ao lado de `'cotacoes': 'cotacoes'` 
 | 8 | `excluirPedido`: remover o `UPDATE cotacoes SET pedido_id = NULL` | 1 | **(10)** `pedido_id` continua e a segunda geração dá 409 |
 | 9 | `data_pedido: pedidoCompraService.hojeLocalISO()` removido | 1 | **(1)** `data_pedido` null |
 
-- [ ] **Step 7: commit** — `git add server/services/compras/cotacaoService.js server/services/compras/pedidoCompraService.js server/routes/compras.js server/tests/api/comprasCotacaoItens.api.test.js server/tests/api/comprasCotacaoGerarPedido.api.test.js` (+ `comprasPedidoEditarExcluir.api.test.js` se o shape da resposta exigiu ajuste). Mensagem em `msg-e41-t2.txt`.
+- [x] **Step 7: commit** — `git add server/services/compras/cotacaoService.js server/services/compras/pedidoCompraService.js server/routes/compras.js server/tests/api/comprasCotacaoItens.api.test.js server/tests/api/comprasCotacaoGerarPedido.api.test.js` (+ `comprasPedidoEditarExcluir.api.test.js` se o shape da resposta exigiu ajuste). Mensagem em `msg-e41-t2.txt`.
+
+#### ✅ Task 2 FECHADA — `70d653d` (na branch `e41-t2`; o hash será reescrito no cherry-pick para `desenvolvimento-almoxarifado`)
+
+**Números reais:** `comprasCotacaoItens` **10/10** (vermelho antes da implementação: **1/10** — só o (9) passava,
+porque o genérico já apagava a cotação; (1)–(8) e (10) caíam como o plano previa: (1) `valor_total` 0, (4) 201,
+(7) literal do genérico, (8) `Item não encontrado`, (10) 200); `comprasCotacaoGerarPedido` **10/10** (vermelho:
+**0/10**); `comprasCotacaoRotas` **10/10**; `comprasFornecedorCotacaoIntegracao` **3/3**; `comprasFornecedorRotas`
+**13/13**; `comprasPedidoEditarExcluir` **13/13** (12/13 antes do ajuste declarado abaixo); `comprasPedidoCriar`
+**13/13**; `npm run test:api` **193/193**; `npm run test:almoxarifado` **42**. CR=0 nos sete arquivos.
+
+**Sabotagens** (md5 antes = md5 pós-restauro nas nove; âncora `grep -cF` = 1 em todas; restauro por cópia do
+scratchpad; script `sab-e41-t2.sh`):
+
+| # | Sabotagem | Qual asserção caiu |
+|---|---|---|
+| 1 | `excluirCotacao` sem `DELETE FROM itens_cotacao` | **Itens (7)** `'itens_cotacao orfaos — o DELETE dos filhos nao rodou'` — o status seguiu 200, como o cabeçalho do plano avisa; 9/10 |
+| 2 | `criarCotacao`: `resolverItens` movido para DEPOIS do INSERT (com `UPDATE valor_total` para manter (1)(2) verdes) | **Itens (4)** `'o cabecalho nao pode ter sido gravado (resolverItens antes do INSERT)'`; 9/10 |
+| 3 | `gerarPedidoDaCotacao` sem `if (c.pedido_id != null)` | **Gerar (2)** `strictEqual(r.status, 409)` — veio 201 com pedido novo; **(8)** `e.status` 409 (não lançou); 8/10 |
+| 4 | `SET pedido_id = ?, status = 'aprovado'` → sem `status` | **Gerar (1)** `'gerar o pedido E aprovar (D7)'` **e (9)** `g.body.status === 'aprovado'` (o plano só listava (1)); 8/10 |
+| 5 | `app.delete('/api/compras/cotacoes/:id')` movido para DEPOIS do genérico (para o fim do arquivo, antes do `};`) | **Itens (8)** `Item não encontrado`, **(10)** 200 `Item excluído com sucesso`, **e (7)** literal do genérico; **Gerar (7)** e **(10)** (o `DELETE` da cotação convertida deu 200 em vez de 409); 7/10 + 8/10 — a posição é comportamento |
+| 6 | `if (resolvidos.length) c.valor_total = …` → sempre | **Itens (3)** `valor_total` 0 em vez de 77; 9/10 |
+| 7 | `atualizarCotacao` sem `if (atual.pedido_id != null)` | **Gerar (9)** `strictEqual(r.status, 409)` — veio 200 com `status: 'rejeitado'` e `quantidade: 99` gravados; 9/10 |
+| 8 | `excluirPedido`: `UPDATE cotacoes SET pedido_id = NULL` trocado por `cotacoesLiberadas = 1` (para isolar o vínculo da contagem) | **Gerar (10)** `g.body.pedido_id === null` — continuou apontando para o pedido apagado (e a segunda geração daria 409); 9/10 |
+| 9 | `data_pedido: pedidoCompraService.hojeLocalISO()` removido | **Gerar (1)** `'data_pedido nasce HOJE local (Fase 2 I4) — sem isso nascia NULL'`; 9/10 |
+
+**Divergências plano ↔ código (o código mandou):**
+- **`comprasPedidoEditarExcluir` (8) caiu**, e não pelo shape de `excluirPedido` (nenhum cenário faz
+  `deepStrictEqual` da resposta — `cotacoes_liberadas` entrou sem derrubar nada): o (8) usava `cotacoes` como
+  "metade positiva" do genérico e afirmava `'Item excluído com sucesso'`. Desde a 41 o genérico não alcança mais
+  `cotacoes`. Ajuste declarado no próprio cenário: a metade positiva passou a usar `fornecedores` (que o
+  genérico ainda serve) e a cotação continua lá afirmando a literal PRÓPRIA (`'Cotação excluída com sucesso'`)
+  — se o genérico voltar a responder por ela, é essa asserção que acusa.
+- `comprasCotacaoRotas` (cabeçalho e nome do (8)) dizia *"O DELETE continua pelo generico"* — datado como
+  "era verdade até a 40" em vez de apagado (regra 5 do CLAUDE.md). Arquivo adicionado ao commit (não estava
+  no `git add` do Step 7).
+- Sabotagem 4 derruba (9) além de (1); sabotagem 5 derruba Itens (7) e Gerar (7)/(10) além de Itens (8)/(10).
+- Sabotagem 8: o plano dizia "remover o `UPDATE`"; removê-lo inteiro derrubaria (10) já em
+  `cotacoes_liberadas` (1 vs undefined). Troquei por constante `1` para que a asserção que caia seja a do
+  vínculo (`pedido_id === null`), que é a que a RN-F12 protege.
+- `criarPedido` devolve o pedido relido (`relerPedido`) com `itens`; `obterPedido` relê de novo e acrescenta
+  `teve_recebimento` — é o que a rota devolve (contrato §5.4: "pedido (`obterPedido`)"). Sem mudança.
+- Comentário-doc de `excluirPedido` ganhou a frase da liberação da cotação (não estava no plano; sem isso o
+  docblock afirmaria só as solicitações).
+
+**Posições novas de linha (para T4/T5 recontarem antes de editar):**
+- `routes/compras.js`: lista `GET /cotacoes :318` (`LEFT JOIN pedidos_compra` em `:325`), bloco da cotação
+  `:347-391` (`respondeErro :359`, `POST :361`, `GET /:id :366`, `PUT :370`, **`POST …/gerar-pedido :379`**,
+  **`DELETE /cotacoes/:id :387`**), genérico `:393` (`'cotacoes': 'cotacoes'` em `:400`). Tudo abaixo desceu
+  26 linhas em relação a `820860a`.
+- `cotacaoService.js`: literais `:33-46` (`cotacaoJaGerouPedido :40`, `rotuloPedido :46`), `SELECT_LINHA :48`,
+  `lerItens :53`, `obterCotacao :58`, `colunas :66`, `somaItens :88`, `gravarItens :91`, `criarCotacao :99`,
+  `atualizarCotacao :117`, `excluirCotacao :141`, `gerarPedidoDaCotacao :159`, `module.exports :183-187`.
+- `pedidoCompraService.js`: `excluirPedido :537`, `cotacoesLiberadas :556-557`, `cotacoes_liberadas :565`;
+  `module.exports :1024-1053`, `resolverItens, :1052` (desceu 11 linhas).
+
+Scratchpad: `msg-e41-t2.txt`, `sab-e41-t2.sh`, `cotacaoService.js.e41t2.bak`, `pedidoCompraService.js.e41t2.bak`,
+`compras.routes.js.e41t2.bak`.
 
 ---
 
