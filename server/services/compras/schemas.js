@@ -182,7 +182,11 @@ const grupoIdOpcional = z.preprocess((v) => {
   if (typeof v === 'number') return Number.isInteger(v) ? (v > 0 ? v : null) : String(v);
   if (typeof v === 'string' && /^\s*-?\d+\s*$/.test(v)) { const n = parseInt(v, 10); return n > 0 ? n : null; }
   return v; // string nao numerica, objeto etc.: cai no union e sai com a literal
-}, z.union([z.null(), z.number().int()], { error: GRUPO_FORNECEDOR_INVALIDO })).optional();
+  // Onda de correcao da Etapa 40, F5 (review da T1, Minor 2): a literal vai TAMBEM no `.int()` —
+  // armadilha 2 do cabecalho. `1e21` (ou a string '99999999999999999999', que o parseInt acima
+  // devolve como 1e20) passa no TIPO number e falha no refinamento de inteiro seguro (> 2^53), e
+  // sem a literal ali a resposta saia em ingles: "Too big: expected int to be <=9007199254740991".
+}, z.union([z.null(), z.number().int(GRUPO_FORNECEDOR_INVALIDO)], { error: GRUPO_FORNECEDOR_INVALIDO })).optional();
 
 const FornecedorSchema = z.looseObject({
   razao_social: z.string({ error: RAZAO_SOCIAL_OBRIGATORIA }).trim().min(1, RAZAO_SOCIAL_OBRIGATORIA),

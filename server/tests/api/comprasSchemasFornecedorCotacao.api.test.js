@@ -57,17 +57,21 @@ const msgs = (r) => (r.success ? '' : r.error.issues.map((i) => `${i.path.join('
     }
     assert.strictEqual(S.RAZAO_SOCIAL_OBRIGATORIA, 'Razão social é obrigatória');
   });
-  await test('(f) RN-E03 grupo_id "", 0, -2 -> null (limpa); "abc", 3.5 -> 400 com a literal', () => {
+  await test('(f) RN-E03 grupo_id "", 0, -2 -> null (limpa); "abc", 3.5, 1e21, "99999999999999999999" -> 400 com a literal', () => {
     for (const v of ['', 0, -2, 'NaN']) {
       const r = S.FornecedorSchema.safeParse({ razao_social: 'A', grupo_id: v });
       if (v === 'NaN') { assert.ok(!r.success); continue; }
       assert.ok(r.success, `${JSON.stringify(v)}: ${r.success ? '' : msgs(r)}`);
       assert.strictEqual(r.data.grupo_id, null, `grupo_id ${JSON.stringify(v)} devia virar null`);
     }
-    for (const v of ['abc', 3.5, {}]) {
+    // Onda de correcao da Etapa 40, F5 (review da T1, Minor 2): 1e21 e a string de 20 digitos
+    // passam pelo preprocess como NUMERO inteiro maior que 2^53 e caem no `.int()` do union — que,
+    // sem literal propria, respondia em ingles ("Too big: expected int to be <=9007199254740991").
+    // E a armadilha 2 do cabecalho de schemas.js: a literal tem de estar TAMBEM no refinamento.
+    for (const v of ['abc', 3.5, {}, 1e21, '99999999999999999999']) {
       const r = S.FornecedorSchema.safeParse({ razao_social: 'A', grupo_id: v });
       assert.ok(!r.success, `devia recusar grupo_id ${JSON.stringify(v)}`);
-      assert.strictEqual(msgs(r), `grupo_id: ${S.GRUPO_FORNECEDOR_INVALIDO}`);
+      assert.strictEqual(msgs(r), `grupo_id: ${S.GRUPO_FORNECEDOR_INVALIDO}`, `grupo_id ${JSON.stringify(v)} saiu como "${msgs(r)}"`);
     }
   });
   await test('(g) RN-E04 status ativo/inativo passam; "x" -> literal com a lista; ausente -> undefined', () => {
