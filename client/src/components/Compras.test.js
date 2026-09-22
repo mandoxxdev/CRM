@@ -462,3 +462,45 @@ test('(l) RN-F14 409 do servidor -> toast.error com a literal, sem navegar; expo
   expect(linhas[1].Pedido).toBe('PC-2026-650');
   expect(linhas[0].Pedido).toBe(''); // sem pedido: '' e nao null/'-' (mesma razao do (i))
 }, 10000);
+
+// ── (m) F4 da onda de correcao da 41 (UX C1): "Gerar pedido" NAO aceita duplo clique ──────────
+//
+// O POST fica PENDENTE (resolvido a mao) para que os cliques seguintes cheguem enquanto o primeiro
+// ainda esta em voo — e o gesto que criava DOIS pedidos (sonda P4 da revisao de UX: `api.post` 2x,
+// botao nunca `disabled`). Duas travas, medidas SEPARADAMENTE:
+//   1. o PAR de cliques no MESMO `act` chega antes do re-render — o botao ainda nao esta
+//      `disabled` e so a guarda do `gerandoRef` no handler segura o segundo POST (com o estado no
+//      lugar do ref, o closure ainda le `null` e o segundo POST sai; medido na sabotagem S3);
+//   2. o TERCEIRO clique, depois do re-render, encontra o botao `disabled` — e o jsdom (como o
+//      navegador) nem despacha o click.
+// So depois de resolver e que a tela navega.
+test('(m) F4 cliques repetidos em Gerar pedido com o POST em voo -> 1 POST, botao disabled; resolve -> navega', async () => {
+  cotacoesDoBanco = COTACOES_E41;
+  pedidosDoBanco = [{ id: 650, numero: 'PC-2026-650', fornecedor_id: 312, fornecedor_nome: 'Aços Vale Ltda', valor_total: 27, status: 'pendente', teve_recebimento: 0, itens: [] }];
+  let resolverPost;
+  api.post.mockImplementation(() => new Promise((resolve) => { resolverPost = resolve; }));
+
+  await renderizarEm('/compras/cotacoes');
+  const botao = () => container.querySelector('[data-testid="gerar-pedido-770"]');
+  const click = () => new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
+  expect(botao().disabled).toBe(false);
+  // Trava 1: dois cliques no mesmo tick (antes do re-render).
+  await act(async () => { botao().dispatchEvent(click()); botao().dispatchEvent(click()); });
+  await esperarEfeitos();
+  expect(api.post.mock.calls).toHaveLength(1);
+  expect(botao().disabled).toBe(true);
+  // Trava 2: terceiro clique com o botao ja travado.
+  await clicar(botao());
+
+  expect(api.post.mock.calls).toHaveLength(1);
+  expect(api.post.mock.calls[0][0]).toBe('/compras/cotacoes/770/gerar-pedido');
+  expect(botao().disabled).toBe(true);
+  expect(texto()).toContain('Gestão de fornecedores, pedidos e cotações'); // ainda na aba
+
+  await act(async () => { resolverPost({ data: { id: 650, numero: 'PC-2026-650' } }); });
+  await esperarEfeitos();
+
+  expect(toast.success).toHaveBeenCalledTimes(1);
+  expect(texto()).toContain('Editar pedido de compra');
+  expect(api.get.mock.calls.filter(([u]) => u === '/compras/pedidos/650')).toHaveLength(1);
+}, 10000);

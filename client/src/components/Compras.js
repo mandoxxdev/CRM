@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { toast } from 'react-toastify';
@@ -46,6 +46,11 @@ const Compras = () => {
   // re-dispara por `search` e `status` — um `param` a mais e uma dependencia a mais, zero
   // refatoracao (`loadData` ja passa params no mesmo `api.get`).
   const [soAtrasados, setSoAtrasados] = useState(false);
+  // Onda de correcao da 41 (F4): id da cotacao cujo "Gerar pedido" esta em voo. O ESTADO trava o
+  // botao (`disabled`); o REF e a guarda do handler — dois cliques no mesmo tick chegam antes do
+  // re-render e o closure do estado ainda le `null`, so o ref ve o primeiro.
+  const [gerandoId, setGerandoId] = useState(null);
+  const gerandoRef = useRef(null);
   // Etapa 40 (RN-E16): ao trocar de aba, `<Compras/>` NAO remonta (as tres rotas renderizam o
   // mesmo elemento e o React Router v6 preserva o state). Um `filterStatus='inativo'` vindo da aba
   // Fornecedores iria em `GET /compras/cotacoes?status=inativo` (lista vazia) enquanto o select,
@@ -189,13 +194,24 @@ const Compras = () => {
   // itens / fornecedor inativo); o fallback fica para o erro sem corpo (rede, 500 sem JSON).
   // Sem `window.confirm` (Fase 2, M6): a acao e reversivel — excluir o pedido LIBERA a cotacao
   // (RN-F12), entao um confirm aqui so cobraria um clique a mais de quem ja escolheu o botao.
+  //
+  // Onda de correcao da 41 (F4, UX C1): `gerandoId` trava o botao enquanto o POST esta em voo. Sem
+  // isso, um duplo clique (ou rede lenta) disparava DOIS POSTs e o servidor, sem transacao, criava
+  // dois pedidos para a mesma cotacao — um deles orfao. O `disabled` fecha o gesto na tela; o
+  // `return` cedo pelo ref e a segunda trava, para o clique que chegar antes do re-render.
   const handleGerarPedido = async (cotacao) => {
+    if (gerandoRef.current === cotacao.id) return;
+    gerandoRef.current = cotacao.id;
+    setGerandoId(cotacao.id);
     try {
       const res = await api.post(`/compras/cotacoes/${cotacao.id}/gerar-pedido`);
       toast.success(`Pedido ${res.data?.numero || ''} gerado da cotação ${cotacao.numero}`.replace('  ', ' '));
       navigate(`/compras/pedidos/editar/${res.data.id}`);
     } catch (error) {
       toast.error(error.response?.data?.error || 'Não foi possível gerar o pedido');
+    } finally {
+      gerandoRef.current = null;
+      setGerandoId(null);
     }
   };
 
@@ -494,6 +510,7 @@ const Compras = () => {
                         <button
                           type="button"
                           onClick={() => handleGerarPedido(cotacao)}
+                          disabled={gerandoId === cotacao.id}
                           className="btn-icon"
                           title="Gerar pedido"
                           data-testid={`gerar-pedido-${cotacao.id}`}
