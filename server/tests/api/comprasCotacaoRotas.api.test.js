@@ -1,7 +1,10 @@
 /**
  * Etapa 40, Task 3 — `POST`/`GET /:id`/`PUT` de cotacao. RN-E07…RN-E11, RN-E13.
- * O DELETE continua pelo generico e o cenario (8) prova que a promocao de `cotacoes` ao harness
- * (T1) nao mudou a forma que o cenario (8) de comprasPedidoEditarExcluir ja media.
+ * O cabecalho dizia "O DELETE continua pelo generico e o cenario (8) prova que a promocao de
+ * `cotacoes` ao harness (T1) nao mudou a forma que o cenario (8) de comprasPedidoEditarExcluir ja
+ * media". Era verdade ate a Etapa 40: desde a 41 o DELETE de cotacao e a rota PROPRIA
+ * (`comprasCotacaoItens.api.test.js`, RN-F06) e o (8) daqui so afirma que o status e o sumico
+ * continuam iguais.
  *
  * Executar: cd server && node tests/api/comprasCotacaoRotas.api.test.js
  */
@@ -124,7 +127,7 @@ const ADMIN = { id: 98, nome: 'Admin E40 T3', role: 'admin', is_superadmin: 1, e
     assert.strictEqual((await get(a.body.id)).body.fornecedor_id, fB);
   });
 
-  await test('(8) DELETE pelo generico continua 200 e a linha some', async () => {
+  await test('(8) DELETE continua 200 e a linha some (pelo generico ate a 40; pela rota propria desde a 41)', async () => {
     const a = await post({ numero: num(), fornecedor_id: fA });
     const r = await request(app).delete(`/api/compras/cotacoes/${a.body.id}`);
     assert.strictEqual(r.status, 200);

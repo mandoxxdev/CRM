@@ -313,11 +313,14 @@ app.get('/api/compras/materiais', authenticateToken, checkModulePermission('comp
 });
 
 // Cotações
+// Etapa 41 (RN-F04): a lista ganha `pedido_numero` por `LEFT JOIN pedidos_compra` (o `c.*` ja traz
+// `pedido_id`). A lista NAO carrega itens — quem precisa deles le `GET /cotacoes/:id`.
 app.get('/api/compras/cotacoes', authenticateToken, checkModulePermission('compras'), (req, res) => {
   const { search, status } = req.query;
-  let query = `SELECT c.*, f.razao_social as fornecedor_nome 
-               FROM cotacoes c 
-               LEFT JOIN fornecedores f ON c.fornecedor_id = f.id 
+  let query = `SELECT c.*, f.razao_social as fornecedor_nome, p.numero AS pedido_numero
+               FROM cotacoes c
+               LEFT JOIN fornecedores f ON c.fornecedor_id = f.id
+               LEFT JOIN pedidos_compra p ON p.id = c.pedido_id
                WHERE 1=1`;
   const params = [];
 
@@ -341,11 +344,18 @@ app.get('/api/compras/cotacoes', authenticateToken, checkModulePermission('compr
   });
 });
 
-// ── Cotacao de compra — criacao, leitura por id e edicao (Etapa 40, Task 3) ──────────────────────
+// ── Cotacao de compra — criacao, leitura por id, edicao (Etapa 40, Task 3), conversao em pedido e
+// lixeira propria (Etapa 41, Task 2) ─────────────────────────────────────────────────────────────
 // Mesmo molde das portas de pedido (:169-230): `validate(CotacaoSchema)` na frente, a rota nao faz
-// SQL e traduz `e.status` do servico (400 fornecedor/schema, 404 nao existe, 409 numero repetido).
-// Nenhuma e DELETE, entao a posicao em relacao ao generico `/:tipo/:id` e convencao, nao
-// comportamento (Fase 0 servidor §1.1); ficam aqui por ser o bloco do recurso.
+// SQL e traduz `e.status` do servico (400 fornecedor/schema/material, 404 nao existe, 409 numero
+// repetido ou cotacao ja convertida).
+//
+// ⚠️ Este comentario dizia "Nenhuma e DELETE, entao a posicao em relacao ao generico `/:tipo/:id` e
+// convencao, nao comportamento". Era verdade ate a Etapa 40. Desde a 41 o `DELETE /cotacoes/:id`
+// PROPRIO existe (abaixo) e a posicao deste bloco — ACIMA do generico — passou a ser COMPORTAMENTO,
+// pelo mesmo motivo do bloco de pedidos (:189-199): `/api/compras/cotacoes/7` casa `/:tipo/:id`, e
+// registrada depois a rota propria nunca seria alcancada. A sabotagem 5 da T2 da 41 move a rota
+// para baixo e os cenarios (8) e (10) de `comprasCotacaoItens` caem.
 const respondeErro = (res, e) => res.status(e.status || 500).json({ error: e.message });
 
 app.post('/api/compras/cotacoes', authenticateToken, checkModulePermission('compras'),
@@ -362,6 +372,22 @@ app.put('/api/compras/cotacoes/:id', authenticateToken, checkModulePermission('c
     try { res.json(await cotacaoService.atualizarCotacao(db, req.params.id, req.body)); }
     catch (e) { respondeErro(res, e); }
   });
+// Etapa 41 (RN-F07…F11): a conversao. Sem corpo — tudo vem da cotacao; o servico chama
+// `pedidoCompraService.criarPedido` (numero PC- gerado, total derivado, resolverItens), grava o vinculo
+// e devolve o pedido relido. 201 como o POST de pedido. `req.user` vai para `criarPedido` (o gate de
+// `gerenciar_reposicao` nao dispara: a conversao nao manda `solicitacao_id`).
+app.post('/api/compras/cotacoes/:id/gerar-pedido', authenticateToken, checkModulePermission('compras'), async (req, res) => {
+  try { res.status(201).json(await cotacaoService.gerarPedidoDaCotacao(db, req.params.id, req.user)); }
+  catch (e) { respondeErro(res, e); }
+});
+// Etapa 41 (RN-F06): a lixeira PROPRIA da cotacao, e ela tem de ficar ACIMA do generico
+// `DELETE /api/compras/:tipo/:id` (posicao e comportamento — o mesmo motivo do bloco de pedidos,
+// :189-199). Ate a Etapa 40 o generico apagava `cotacoes` cru; com `itens_cotacao` (FK) isso da 500 em
+// producao e passa no harness deixando orfaos. Aqui: 409 se ja gerou pedido, senao filhos primeiro.
+app.delete('/api/compras/cotacoes/:id', authenticateToken, checkModulePermission('compras'), async (req, res) => {
+  try { res.json(await cotacaoService.excluirCotacao(db, req.params.id)); }
+  catch (e) { respondeErro(res, e); }
+});
 
 // Delete genérico
 app.delete('/api/compras/:tipo/:id', authenticateToken, checkModulePermission('compras'), (req, res) => {
@@ -369,6 +395,8 @@ app.delete('/api/compras/:tipo/:id', authenticateToken, checkModulePermission('c
   const tables = {
     'fornecedores': 'fornecedores',
     'pedidos': 'pedidos_compra',
+    // sombreado desde a Etapa 41 pela rota propria `DELETE /api/compras/cotacoes/:id` — fica no mapa
+    // por caracterizacao, como `pedidos` (sombreado desde a 38).
     'cotacoes': 'cotacoes'
   };
 

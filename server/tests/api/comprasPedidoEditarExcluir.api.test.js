@@ -441,12 +441,23 @@ const ERRO_STATUS = 'Dados inválidos — status: status do pedido inválido (us
   // (8) ------------------------------------------------------------------------------------
   await test('(8) o generico continua respondendo pelas outras abas — e continua sombreando grupos', async () => {
     // METADE POSITIVA DA ORDEM DE REGISTRO: registrar `DELETE /api/compras/pedidos/:id` ANTES do
-    // generico nao pode ter tirado o generico do ar para `cotacoes`/`fornecedores`.
+    // generico nao pode ter tirado o generico do ar para as abas que ele AINDA serve.
+    //
+    // ⚠️ CORRECAO DA ETAPA 41 (T2): ate a 40 esta metade media `cotacoes` pelo generico e afirmava a
+    // literal `'Item excluído com sucesso'`. Desde a 41 `cotacoes` TAMBEM tem rota propria
+    // (`DELETE /api/compras/cotacoes/:id`, registrada acima do generico — RN-F06, D9), entao o
+    // generico so alcanca `fornecedores`. A metade positiva passa a usar um fornecedor sem vinculo;
+    // a cotacao continua aqui, agora afirmando a literal PROPRIA — se um dia o generico voltar a
+    // responder por ela, e esta assercao que acusa.
+    const fornSolto = await dbRun(db, "INSERT INTO fornecedores (razao_social) VALUES ('Forn solto T3-8')");
+    const rf = await request(app).delete(`/api/compras/fornecedores/${fornSolto.lastID}`);
+    assert.strictEqual(rf.status, 200, `DELETE de fornecedor pelo generico: ${rf.status} ${JSON.stringify(rf.body)}`);
+    assert.strictEqual(rf.body.message, 'Item excluído com sucesso', 'a literal do generico mudou de dono');
     const cot = await dbRun(db,
       "INSERT INTO cotacoes (numero, fornecedor_id, status) VALUES ('COT-T3-1', ?, 'em_analise')", [fornecedorId]);
     const r = await request(app).delete(`/api/compras/cotacoes/${cot.lastID}`);
-    assert.strictEqual(r.status, 200, `DELETE de cotacao pelo generico: ${r.status} ${JSON.stringify(r.body)}`);
-    assert.strictEqual(r.body.message, 'Item excluído com sucesso', 'a literal do generico mudou de dono');
+    assert.strictEqual(r.status, 200, `DELETE de cotacao pela rota propria: ${r.status} ${JSON.stringify(r.body)}`);
+    assert.strictEqual(r.body.message, 'Cotação excluída com sucesso', 'desde a Etapa 41 a cotacao sai pela rota propria, nao pelo generico');
     assert.strictEqual(await dbGet(db, 'SELECT id FROM cotacoes WHERE id = ?', [cot.lastID]), undefined,
       'a cotacao tinha de ter sumido');
 

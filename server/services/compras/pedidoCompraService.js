@@ -518,7 +518,8 @@ async function atualizarPedido(db, pedidoId, dados) {
  * RN-C08 — exclui o pedido, se e somente se o recebimento permitir, e leva as LINHAS junto — e
  * LIBERA a solicitacao da reposicao (`liberarSolicitacoesDoPedido`, achado I1 da revisao final:
  * antes disso a solicitacao ficava `VINCULADO` apontando para o pedido apagado e nunca mais virava
- * pedido nenhum).
+ * pedido nenhum) — e, desde a Etapa 41 (RN-F12), LIBERA a cotacao que o gerou (`cotacoes.pedido_id`
+ * volta a NULL; `cotacoes_liberadas` na resposta).
  *
  * ⚠️ OS FILHOS PRIMEIRO, e por dois motivos, nao um: no harness (`foreign_keys = 0`) apagar so a
  * cabeca deixa **linha orfa** — medido por sonda contra o codigo de hoje: o `DELETE` generico
@@ -546,12 +547,22 @@ async function excluirPedido(db, pedidoId) {
   // esta ON e a sequencia itens -> solicitacoes -> cabecalho e a unica que nao deixa nada
   // apontando para um pedido que ja nao existe no meio do caminho.
   const solicitacoesLiberadas = await liberarSolicitacoesDoPedido(db, pedido.id);
+  // Etapa 41 (RN-F12): a cotacao que gerou este pedido volta a poder gerar outro — sem isto ela
+  // ficava num beco (nem regenera, nem se exclui: `cotacoes.pedido_id` e guarda das duas portas), o
+  // inverso do que a Etapa 38 fez com a solicitacao. E ANTES do cabecalho pelo mesmo motivo das
+  // solicitacoes: em producao `cotacoes.pedido_id` e FK e a linha nao pode apontar para pedido
+  // apagado nem por um instante. `cotacoes` e do core (nasce em `index.js`), entao nao precisa da
+  // guarda de tabela ausente que `liberarSolicitacoesDoPedido` tem.
+  const cotacoesLiberadas = (await dbRun(db,
+    'UPDATE cotacoes SET pedido_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE pedido_id = ?', [pedido.id])).changes || 0;
   await dbRun(db, 'DELETE FROM pedidos_compra WHERE id = ?', [pedido.id]);
   return {
     message: 'Pedido de compra excluído com sucesso',
     // A contagem sai na resposta porque apagar um pedido MUDA o estado de outro modulo: quem clicou
     // na lixeira precisa saber que a solicitacao da reposicao voltou para a fila.
     solicitacoes_liberadas: solicitacoesLiberadas,
+    // Etapa 41: idem para a cotacao de origem (0 ou 1 — o vinculo e 1:1).
+    cotacoes_liberadas: cotacoesLiberadas,
   };
 }
 
