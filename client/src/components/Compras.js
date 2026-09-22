@@ -183,6 +183,22 @@ const Compras = () => {
     }
   };
 
+  // Etapa 41 (RN-F14): a conversao e do SERVIDOR (D5) — a tela so pede e vai para a edicao do pedido
+  // gerado, onde o comprador confere datas e previsao. Erro no toast: e o mesmo canal da lixeira,
+  // e pela mesma razao — a literal e a do servidor (409 `Cotação X já gerou o pedido Y`, 400 sem
+  // itens / fornecedor inativo); o fallback fica para o erro sem corpo (rede, 500 sem JSON).
+  // Sem `window.confirm` (Fase 2, M6): a acao e reversivel — excluir o pedido LIBERA a cotacao
+  // (RN-F12), entao um confirm aqui so cobraria um clique a mais de quem ja escolheu o botao.
+  const handleGerarPedido = async (cotacao) => {
+    try {
+      const res = await api.post(`/compras/cotacoes/${cotacao.id}/gerar-pedido`);
+      toast.success(`Pedido ${res.data?.numero || ''} gerado da cotação ${cotacao.numero}`.replace('  ', ' '));
+      navigate(`/compras/pedidos/editar/${res.data.id}`);
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Não foi possível gerar o pedido');
+    }
+  };
+
   /**
    * A linha do Excel da aba Pedidos — UMA POR ITEM, e as colunas são as que a importação LÊ.
    *
@@ -272,7 +288,10 @@ const Compras = () => {
             'Valor': formatCurrency(c.valor_total),
             'Status': c.status || '',
             'Data': formatDate(c.data_cotacao),
-            'Validade': formatDate(c.validade)
+            'Validade': formatDate(c.validade),
+            // Etapa 41 (RN-F14): o numero do pedido gerado, NO FIM — as 6 colunas acima ficam
+            // identicas para quem ja tem planilha montada em cima do export.
+            'Pedido': c.pedido_numero || ''
           }));
           nomeArquivo = 'cotacoes';
           break;
@@ -434,13 +453,14 @@ const Compras = () => {
               <th>Data</th>
               <th>Validade</th>
               <th>Status</th>
+              <th>Pedido</th>
               <th>Ações</th>
             </tr>
           </thead>
           <tbody>
             {cotacoes.length === 0 ? (
               <tr>
-                <td colSpan="7" className="no-data">Nenhuma cotação encontrada</td>
+                <td colSpan="8" className="no-data">Nenhuma cotação encontrada</td>
               </tr>
             ) : (
               cotacoes.map(cotacao => (
@@ -458,8 +478,29 @@ const Compras = () => {
                       {cotacao.status || 'em_analise'}
                     </span>
                   </td>
+                  {/* Etapa 41 (RN-F14): o pedido gerado desta cotacao (`pedido_id`/`pedido_numero`
+                      vem do LEFT JOIN da lista, T2). Link para a edicao do pedido; '-' sem pedido. */}
+                  <td>
+                    {cotacao.pedido_id
+                      ? <Link to={`/compras/pedidos/editar/${cotacao.pedido_id}`}>{cotacao.pedido_numero || `#${cotacao.pedido_id}`}</Link>
+                      : '-'}
+                  </td>
                   <td>
                     <div className="action-buttons">
+                      {/* Etapa 41 (RN-F14): "Gerar pedido" so quando AINDA NAO gerou (RN-F10) e o
+                          status permite (RN-F09) — o servidor recusa os dois casos com 409/400; a
+                          tela so nao oferece um botao que vai falhar. */}
+                      {!cotacao.pedido_id && !['rejeitado', 'cancelado'].includes(cotacao.status) && (
+                        <button
+                          type="button"
+                          onClick={() => handleGerarPedido(cotacao)}
+                          className="btn-icon"
+                          title="Gerar pedido"
+                          data-testid={`gerar-pedido-${cotacao.id}`}
+                        >
+                          <FiShoppingCart />
+                        </button>
+                      )}
                       <Link to={`/compras/cotacoes/editar/${cotacao.id}`} className="btn-icon" title="Editar">
                         <FiEdit />
                       </Link>

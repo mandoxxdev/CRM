@@ -20,6 +20,7 @@ import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { AppRoutes } from '../App';
 import api from '../services/api';
+import { toast } from 'react-toastify';
 import { exportToExcel } from '../utils/exportExcel';
 
 jest.mock('../services/api', () => ({
@@ -109,13 +110,32 @@ const ITENS_420 = [{
   unidade: 'KG', quantidade: 3, valor_unitario: 30, quantidade_recebida: 0,
 }];
 
-let container; let root; let pedidosDoBanco; let fornecedoresDoBanco; let itensDoBanco;
+// Etapa 41 (RN-F14) — cotacoes como `GET /compras/cotacoes` passou a devolve-las na T2: a lista
+// traz `pedido_id`/`pedido_numero` (LEFT JOIN em `pedidos_compra`), nunca os itens. Ids 770/771/772
+// (cotacoes) e 650 (pedido gerado) — fora do conjunto ocupado pelas outras suites.
+//   770: aprovada, sem pedido  → e a UNICA que ganha o botao "Gerar pedido"
+//   771: aprovada, JA convertida (pedido 650) → link para a edicao do pedido, sem botao
+//   772: rejeitada, sem pedido → sem botao (RN-F09 na tela: `rejeitado`/`cancelado` nao geram)
+const COTACOES_E41 = [
+  { id: 770, numero: 'COT-2026-770', fornecedor_nome: 'Aços Vale Ltda', valor_total: 27, data_cotacao: '2026-09-20', validade: '2026-10-20', status: 'aprovado', pedido_id: null, pedido_numero: null },
+  { id: 771, numero: 'COT-2026-771', fornecedor_nome: 'Parafusos Sul', valor_total: 90, data_cotacao: '2026-09-18', validade: null, status: 'aprovado', pedido_id: 650, pedido_numero: 'PC-2026-650' },
+  { id: 772, numero: 'COT-2026-772', fornecedor_nome: 'Parafusos Sul', valor_total: 1, data_cotacao: '2026-09-18', validade: null, status: 'rejeitado', pedido_id: null, pedido_numero: null },
+];
+
+let container; let root; let pedidosDoBanco; let fornecedoresDoBanco; let itensDoBanco; let cotacoesDoBanco;
 
 beforeEach(() => {
   global.IS_REACT_ACT_ENVIRONMENT = true;
   pedidosDoBanco = [];
   fornecedoresDoBanco = FORNECEDORES_E39;
   itensDoBanco = {};
+  cotacoesDoBanco = [];
+  // Etapa 41: o unico POST que esta aba faz e a conversao (`…/gerar-pedido`, T2). Resolve com o
+  // pedido gerado (`obterPedido` devolve `{ id, numero, … }`); qualquer outra URL REJEITA, pela
+  // mesma razao do fallback do `api.get` abaixo.
+  api.post.mockImplementation((url) => (url.endsWith('/gerar-pedido')
+    ? Promise.resolve({ data: { id: 650, numero: 'PC-2026-650' } })
+    : Promise.reject(new Error(`POST inesperado: ${url}`))));
   // Implementação aqui e não na fábrica do `jest.mock`: o `resetMocks` do react-scripts apaga
   // implementações entre cenários.
   //
@@ -125,7 +145,7 @@ beforeEach(() => {
   api.get.mockImplementation((url) => {
     if (url === '/compras/fornecedores') return Promise.resolve({ data: fornecedoresDoBanco });
     if (url === '/compras/pedidos') return Promise.resolve({ data: pedidosDoBanco });
-    if (url === '/compras/cotacoes') return Promise.resolve({ data: [] });
+    if (url === '/compras/cotacoes') return Promise.resolve({ data: cotacoesDoBanco });
     // Igualdade ANTES da regex (molde de `compras/PedidoCompraForm.test.js:177-182`):
     // `/compras/pedidos` e PREFIXO de `/compras/pedidos/:id`. A exportacao faz 1 GET por pedido
     // desde o F6 da 38 (`ba6278e`) — sem este ramo o fallback REJEITA e os cenarios de export
@@ -365,4 +385,80 @@ test('(i) pedido no prazo exporta "Nao" e a coluna de dias vazia (nunca 0, nunca
   // mente ("zero dias de atraso" e diferente de "nao esta atrasado") e `'-'` quebraria a coluna
   // como numerica para quem filtrar a planilha.
   expect(linhas[0]['Dias de atraso']).toBe('');
+}, 10000);
+
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+// Etapa 41, Task 4 — a aba Cotacoes ganha a coluna Pedido e o botao "Gerar pedido" (RN-F14).
+//
+// A conversao e do SERVIDOR (design D5): a tela so faz o POST e vai para a edicao do pedido
+// gerado, onde o comprador confere datas e previsao. O botao e CONDICIONAL — some quando a
+// cotacao ja tem `pedido_id` (RN-F10 na tela) e quando o status e `rejeitado`/`cancelado`
+// (RN-F09) — e nao tem `window.confirm` (decisao M6 da Fase 2: a acao e reversivel pela lixeira
+// do pedido, que LIBERA a cotacao — RN-F12).
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+
+// ── (j) RN-F14 coluna Pedido e botao condicional ──────────────────────────────────────────────
+//
+// RED medido contra o codigo velho: o `toEqual` dos `<th>` cai com 7 colunas (sem `Pedido`).
+test('(j) RN-F14 coluna Pedido: "-" sem pedido, link PC- com pedido; botao Gerar pedido so em 770', async () => {
+  cotacoesDoBanco = COTACOES_E41;
+
+  await renderizarEm('/compras/cotacoes');
+
+  expect([...container.querySelectorAll('thead th')].map((th) => th.textContent))
+    .toEqual(['Número', 'Fornecedor', 'Valor Total', 'Data', 'Validade', 'Status', 'Pedido', 'Ações']);
+  expect(celulasDaLinha(0)[6].textContent).toBe('-');
+  const link = celulasDaLinha(1)[6].querySelector('a');
+  expect(link.textContent).toBe('PC-2026-650');
+  expect(link.getAttribute('href')).toBe('/compras/pedidos/editar/650');
+  expect(container.querySelector('[data-testid="gerar-pedido-770"]')).not.toBeNull();
+  expect(container.querySelector('[data-testid="gerar-pedido-771"]')).toBeNull(); // ja tem pedido
+  expect(container.querySelector('[data-testid="gerar-pedido-772"]')).toBeNull(); // rejeitado
+}, 10000);
+
+// ── (k) RN-F14 clicar em Gerar pedido: POST, toast e navegacao para a edicao do pedido ────────
+test('(k) RN-F14 clicar em Gerar pedido -> POST na URL certa, toast com PC e numero, navega para a edicao do pedido', async () => {
+  cotacoesDoBanco = COTACOES_E41;
+  pedidosDoBanco = [{ id: 650, numero: 'PC-2026-650', fornecedor_id: 312, fornecedor_nome: 'Aços Vale Ltda', valor_total: 27, status: 'pendente', teve_recebimento: 0, itens: [] }];
+
+  await renderizarEm('/compras/cotacoes');
+  await clicar(container.querySelector('[data-testid="gerar-pedido-770"]'));
+
+  expect(api.post.mock.calls).toHaveLength(1);
+  expect(api.post.mock.calls[0][0]).toBe('/compras/cotacoes/770/gerar-pedido');
+  expect(toast.success).toHaveBeenCalledWith('Pedido PC-2026-650 gerado da cotação COT-2026-770');
+  // ⚠️ Fase 2 (C1): `PedidoCompraForm` esta em `reais` do Proxy desta suite (`:41-45`), entao ao
+  // navegar a tela REAL monta — nao ha `data-stub`. A prova de que navegou e o h1 da edicao e o GET
+  // por id (a regex `/compras/pedidos/\d+` do mock devolve a linha de `pedidosDoBanco`).
+  expect(texto()).toContain('Editar pedido de compra');
+  expect(api.get.mock.calls.filter(([u]) => u === '/compras/pedidos/650')).toHaveLength(1);
+  expect(texto()).not.toContain('Gestão de fornecedores, pedidos e cotações');
+}, 10000);
+
+// ── (l) RN-F14 erro do servidor no toast, sem navegar; export com a coluna Pedido NO FIM ──────
+//
+// A literal e a DO SERVIDOR (`cotacaoJaGerouPedido`, T2) — mesmo canal e mesma razao da lixeira
+// (`handleDelete`): um 409 trocado por texto generico fica indistinguivel de um 500 para quem
+// clica, e o comprador tentaria de novo sem saber que o pedido ja existe.
+test('(l) RN-F14 409 do servidor -> toast.error com a literal, sem navegar; export tem a coluna Pedido no fim', async () => {
+  cotacoesDoBanco = COTACOES_E41;
+  api.post.mockImplementation(() => Promise.reject({ response: { status: 409, data: { error: 'Cotação COT-2026-770 já gerou o pedido PC-2026-650' } } }));
+
+  await renderizarEm('/compras/cotacoes');
+  await clicar(container.querySelector('[data-testid="gerar-pedido-770"]'));
+
+  expect(toast.error).toHaveBeenCalledWith('Cotação COT-2026-770 já gerou o pedido PC-2026-650');
+  expect(toast.success).not.toHaveBeenCalled();
+  expect(texto()).toContain('Gestão de fornecedores, pedidos e cotações'); // continua na aba
+
+  await clicar(botaoPorTexto('Exportar Excel'));
+
+  expect(exportToExcel).toHaveBeenCalledTimes(1);
+  const [linhas, arquivo] = exportToExcel.mock.calls[0];
+  expect(arquivo).toBe('cotacoes');
+  expect(linhas).toHaveLength(3);
+  // ORDEM congelada: as 6 colunas da aba continuam identicas e `Pedido` entra NO FIM.
+  expect(Object.keys(linhas[0])).toEqual(['Número', 'Fornecedor', 'Valor', 'Status', 'Data', 'Validade', 'Pedido']);
+  expect(linhas[1].Pedido).toBe('PC-2026-650');
+  expect(linhas[0].Pedido).toBe(''); // sem pedido: '' e nao null/'-' (mesma razao do (i))
 }, 10000);
