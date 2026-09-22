@@ -903,7 +903,7 @@ Controle positivo: cada corte derrubou o cenário previsto (e, no 2, um a mais);
 - Consumes: `CotacaoSchema`, `STATUS_COTACAO` e as 6 literais (T1); `erro`, `assertFornecedor`, `FORNECEDOR_NAO_ENCONTRADO` de `pedidoCompraService` (T1); `dbRun`, `dbGet` de `services/almoxarifado/db`.
 - Produces: contrato 3 (`criarCotacao`, `obterCotacao`, `atualizarCotacao`, `COTACAO_NAO_ENCONTRADA`, `FORNECEDOR_COM_COTACOES`, `numeroDuplicado`) e as rotas do design §5.4. **T5 e T6 consomem.**
 
-- [ ] **Step 1: escrever o teste (vermelho: 404 sem JSON nas três portas)**
+- [x] **Step 1: escrever o teste (vermelho: 404 sem JSON nas três portas)**
 
 ```js
 /**
@@ -1063,9 +1063,9 @@ const ADMIN = { id: 98, nome: 'Admin E40 T3', role: 'admin', is_superadmin: 1, e
 })();
 ```
 
-- [ ] **Step 2: rodar e ver vermelho** — `Cannot find module '../../services/compras/cotacaoService'`. Crie o arquivo vazio exportando `{}` e rode de novo: (1)–(9) caem com `404` sem JSON (`r.body = {}`), (10) com `criarCotacao is not a function`.
+- [x] **Step 2: rodar e ver vermelho** — `Cannot find module '../../services/compras/cotacaoService'`. Crie o arquivo vazio exportando `{}` e rode de novo: (1)–(9) caem com `404` sem JSON (`r.body = {}`), (10) com `criarCotacao is not a function`.
 
-- [ ] **Step 3: `cotacaoService.js`**
+- [x] **Step 3: `cotacaoService.js`**
 
 ```js
 /**
@@ -1157,7 +1157,7 @@ module.exports = {
 ⚠️ Confirme que `dbRun` de `services/almoxarifado/db.js` resolve com `{ lastID, changes }` (é o que
 `pedidoCompraService` usa — leia `criarPedido`). Se resolver com o `this` do sqlite, o nome é o mesmo.
 
-- [ ] **Step 4: as rotas**, em `routes/compras.js` após o `GET /api/compras/cotacoes` (`:340`) e **antes** do genérico:
+- [x] **Step 4: as rotas**, em `routes/compras.js` após o `GET /api/compras/cotacoes` (`:340`) e **antes** do genérico:
 
 ```js
 // ── Cotacao de compra — criacao, leitura por id e edicao (Etapa 40, Task 3) ──────────────────────
@@ -1188,9 +1188,9 @@ app.put('/api/compras/cotacoes/:id', authenticateToken, checkModulePermission('c
 `cotacaoService` vai numa **linha nova após `:61`** (o `require` de `pedidoCompraService`), no topo com
 os outros; o bloco acima o mostra junto só para leitura. `respondeErro` fica onde o bloco mostra.
 
-- [ ] **Step 5: rodar** — o arquivo (**10 passou**); `comprasPedidoEditarExcluir` (**13**); `npm run test:api`.
+- [x] **Step 5: rodar** — o arquivo (**10 passou**); `comprasPedidoEditarExcluir` (**13**); `npm run test:api`.
 
-- [ ] **Step 6: sabotagens**
+- [x] **Step 6: sabotagens**
 
 | # | Sabotagem | Âncora | Cai |
 |---|---|---|---|
@@ -1200,7 +1200,68 @@ os outros; o bloco acima o mostra junto só para leitura. `respondeErro` fica on
 | 4 | `obterCotacao`: `erro(COTACAO_NAO_ENCONTRADA, 404)` → `400` | 1 | **(7)** os dois 404 |
 | 5 | `traduzUnique` + `assertNumeroLivre` — só a segunda guarda removida | — | **nada cai, e é previsto**: a primeira guarda cobre o caso sem corrida. Declare (letra G): a tradução do `UNIQUE` só é exercida por corrida. |
 
-- [ ] **Step 7: commit** — `git add server/services/compras/cotacaoService.js server/routes/compras.js server/tests/api/comprasCotacaoRotas.api.test.js`. Mensagem em `msg-e40-t3.txt`.
+- [x] **Step 7: commit** — `git add server/services/compras/cotacaoService.js server/routes/compras.js server/tests/api/comprasCotacaoRotas.api.test.js`. Mensagem em `msg-e40-t3.txt`.
+
+#### ✅ Task 3 FECHADA — `57c1922` (Compras Etapa 40 T3: cotacaoService e as portas POST, GET /:id e PUT de cotacao)
+
+> Hash medido na branch `e40-t3` (worktree `wt-e40-t3`, base `07d6893`). **Será reescrito no
+> cherry-pick para o tronco** — quem integrar atualiza este cabeçalho com o hash novo.
+
+**Números lidos (não previstos):**
+
+| Suíte | Step 2a (sem módulo) | Step 2b (`module.exports = {}`) | Só serviço, sem rotas | Depois (Step 5) |
+|---|---|---|---|---|
+| `comprasCotacaoRotas.api.test.js` | `Cannot find module '../../services/compras/cotacaoService'` | **`0 passou, 10 falhou`** | `1 passou, 9 falhou` (só a (10), pelo serviço) | **`10 passou, 0 falhou`** |
+| `comprasPedidoEditarExcluir.api.test.js` | — | — | — | **`13 passou, 0 falhou`** |
+| `npm run test:api` | — | — | — | **`189/189 arquivos de teste OK`** (188 + este) |
+
+`dbRun` de `services/almoxarifado/db.js:5-12` resolve `{ lastID, changes }` — conferido por
+leitura antes de usar `r.lastID`. CR = 0 nos três arquivos depois de cada edição; `git ls-files
+--eol` mostra `i/lf w/lf` nos três. Posições recontadas antes de editar `routes/compras.js`: o
+`require` novo ficou em `:63` (linha nova após o de `pedidoCompraService`, `:61`, com um comentário
+em `:62`; a `:60` não foi tocada); `respondeErro` em `:349`, as três rotas em `:351-364`, o genérico
+`DELETE /:tipo/:id` desceu para `:367`.
+
+**Sabotagens** (md5 de `cotacaoService.js` antes `49a6cedf`, sabotado ≠ nas cinco, pós-restauro
+`49a6cedf` nas cinco; restauro por `cp` do scratchpad; âncora contada = 1 nas cinco; roteiro em
+`scratchpad/sab-e40-t3.sh`):
+
+| # | Sabotagem | Placar | QUAL asserção caiu |
+|---|---|---|---|
+| 1 | `assertNumeroLivre`: `WHERE numero = ? AND id <> ?` → `WHERE numero = ?` | 8/2 | **(2)** `o proprio id com o mesmo numero nao e duplicata` (o `PUT` do próprio id veio 409); **(7)** também — o `PUT` que troca o fornecedor mantém o `numero` e caiu com `{"error":"Já existe uma cotação com o número COT-E40-017"}` (o plano previa só a (2)) |
+| 2 | `colunas`: `status: dados.status \|\| 'em_analise'` → `dados.status` | 9/1 | **(1)** `status` veio `null` (o `INSERT` manda `NULL` explícito, então o `DEFAULT` da DDL não socorre) |
+| 3 | `criarCotacao`: `await assertFornecedor(...)` removido (âncora = as duas linhas de guarda, para não pegar o do `atualizarCotacao`) | 8/2 | **(3)** `fornecedor_id: 999999` veio 201 em vez de 400; **(10)** `devia lancar` |
+| 4 | `obterCotacao`: `erro(COTACAO_NAO_ENCONTRADA, 404)` → `400` | 8/2 | **(7)** `r404.status` 400 ≠ 404; **(8)** também — o `GET` depois do `DELETE` veio 400 (o plano previa só a (7)) |
+| 5 | `traduzUnique`: o `.test(...)` do `SQLITE_CONSTRAINT … cotacoes.numero` → `false` (segunda guarda nunca traduz) | 10/0 | **nada caiu, e é PREVISTO**: a primeira guarda (`assertNumeroLivre`) cobre todo caso sem corrida; a tradução do `UNIQUE` só é exercida por corrida entre o `SELECT` e o `INSERT`. Declarado no cabeçalho do serviço; vai para a **letra G** do fechamento. |
+
+Controle positivo: as sabotagens 1–4 cortaram **exatamente** o cenário que a tabela do Step 6
+previa (duas delas cortaram um cenário a mais, listado acima), e o arquivo voltou a `10 passou`
+com o md5 original depois do último restauro.
+
+**Divergências entre o plano e o que o código exigiu:**
+
+1. **Vermelho do Step 2b para a (10):** o plano previa `criarCotacao is not a function`; saiu
+   `Expected values to be strictly equal` — o cenário tem `try { … } catch (x) { e = x; }` em volta
+   da chamada, então o `TypeError` é capturado e quem cai é `assert.strictEqual(e.status, 400)`
+   (`undefined ≠ 400`). O teste está certo; a previsão do plano é que ignorava o `catch`.
+2. **Sabotagem 1 corta dois cenários, não um:** a (7) faz `PUT` mantendo o próprio `numero`
+   (troca só o fornecedor), então sem o `AND id <> ?` ela também vira 409. Sinal positivo: o
+   cenário (7) é uma segunda régua da mesma regra.
+3. **Sabotagem 4 corta dois cenários, não um:** a (8) mede `404` no `GET` depois do `DELETE` e
+   também caiu. Mesma leitura.
+4. **Âncora da sabotagem 3:** `await assertFornecedor(db, c.fornecedor_id);` sozinho tem **2**
+   ocorrências (criar e atualizar); a âncora usada foi o par de linhas
+   `assertFornecedor` + `assertNumeroLivre(db, c.numero, null)` (1 ocorrência, o `null` só existe
+   no `criarCotacao`).
+5. **Âncora da sabotagem 1:** `WHERE numero = ? AND id <> ?` tem **2** ocorrências (a segunda no
+   cabeçalho de comentário do serviço); a âncora usada foi a linha inteira com `[numero, idAtual || 0]`
+   (1 ocorrência).
+6. **Heredoc do Bash quebrou** ao escrever o teste (`unexpected EOF while looking for matching`)
+   — o arquivo foi escrito com o Write tool; conteúdo idêntico ao bloco do Step 1.
+7. O bloco do Step 4 mostra o `require` de `cotacaoService` dentro do bloco das rotas "só para
+   leitura"; ficou no topo, em `:63`, como o plano manda. `comprasPedidosRotas` e
+   `comprasPedidoCriar` não foram rodados isolados (o plano não os pede para a T3); os dois estão
+   dentro do `189/189`.
 
 ---
 
