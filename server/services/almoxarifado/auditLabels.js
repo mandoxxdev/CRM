@@ -67,6 +67,12 @@ const ROTULOS_ENTIDADE = Object.freeze({
   material_cliente: 'Material de cliente',
   movimentacao: 'Movimentação',
   notificacao: 'Notificação',
+  // Etapa 42 (RN-E07): o recebimento que completa o pedido grava `pedidos_compra.status` sozinho, e
+  // essa e a UNICA escrita do almoxarifado numa tabela do CORE Compras que deixa trilha propria — o
+  // `PATCH ./status` manual da Etapa 39 nao audita (assimetria declarada: ali o autor e o proprio
+  // ato humano na porta; aqui o pedido do comprador muda sozinho). Sem esta linha o teste de
+  // cobertura de entidades fica vermelho de proposito e `pedido_compra` apareceria cru no filtro.
+  pedido_compra: 'Pedido de compra',
   perfil_almoxarifado_usuario: 'Perfil de usuário',
   // Etapa 27: o plano de inspeção do material (característica, nominal e os dois desvios) nasce
   // auditado — quem muda a tolerância muda, por número, qual peça reprova (RN-03). Mesma regra da
@@ -148,6 +154,14 @@ const GRUPOS_ACAO = congelarGrupos([
   { rotulo: 'Início do faturamento', verbos: ['INICIAR_FATURAMENTO'] },
   { rotulo: 'Processamento da nota', verbos: ['PROCESSAR_NOTA'] },
   { rotulo: 'Recebida', verbos: ['RECEBIDA'] },
+  // Etapa 42 (RN-E07): a entrada fisica que completa o pedido de compra grava
+  // `pedidos_compra.status = 'recebido'` sozinha. Rotulo PROPRIO, e NAO agrupado com
+  // 'Mudança de status': aquele grupo e de `lote`/`serie` (lotService:105,143, seriesService:316) e
+  // agrupar juntaria, num filtro so, dois atos que nem entidade compartilham — a regra de agrupar
+  // vale para SINONIMOS do mesmo ato (RN-06), nao para atos diferentes com nome parecido. O rotulo
+  // diz "automático" de proposito: e o que permite ao comprador distinguir, na trilha, o fechamento
+  // que o almoxarifado fez do que ele mesmo fez pelo `PATCH .../status`.
+  { rotulo: 'Fechamento automático do pedido', verbos: ['STATUS_AUTOMATICO_RECEBIDO'] },
   // Etapa 36 (RN-18): quem autorizou receber ACIMA do pedido, e em que item. Sem esta linha o
   // cenario "TODO verbo gravavel tem rotulo" de `auditLabels.api.test.js` fica vermelho — a
   // varredura le o literal `acao: 'EXCEDENTE_AUTORIZADO'` do receiptService. E o mesmo buraco de

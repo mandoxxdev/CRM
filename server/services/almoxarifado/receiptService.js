@@ -1091,6 +1091,9 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id 
   }
 
   // ── 2. Entrada item a item, cada um reclamado antes de mover ──
+  // (Etapa 42, RN-E01/RN-E02) As linhas de pedido que ESTA execucao somou. Vive FORA do laco porque
+  // a decisao de fechar o pedido e AGREGADA: ver o comentario de `fecharPedidosCompletos`.
+  const entraramNoPedido = [];
   for (const item of itens) {
     // Etapa 5: a inspecao deixou de ser PRE-REQUISITO da entrada e passou a ser passo posterior.
     // O material esta fisicamente no galpao desde o descarregamento — barrar a entrada fazia o
@@ -1259,6 +1262,11 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id 
         // documento travado e o pedido sem contar. Perder a contagem de um pedido com um `warn` e
         // reparavel por SQL; travar a nota nao e.
         if (item.pedido_item_id) {
+          // (Etapa 42, RN-E01) O registro do que ESTA execucao somou — a lista que
+          // `fecharPedidosCompletos` recebe DEPOIS do laco. Anotar aqui, e nao percorrer os itens de
+          // novo no fim, e o que garante que so entra o que casou o claim: reprocessar a mesma nota
+          // nao pode re-auditar um fechamento que ja aconteceu.
+          entraramNoPedido.push({ id: item.id, pedido_item_id: item.pedido_item_id });
           try {
             await dbRun(db, `UPDATE itens_pedido_compra
                 SET quantidade_recebida = COALESCE(quantidade_recebida, 0) + ?
@@ -1299,6 +1307,18 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id 
         throw e;
       }
     }
+  }
+
+  // ── 3. (Etapa 42, RN-E01..RN-E07) O PEDIDO FECHA ──
+  // AQUI, depois do laco inteiro, e NAO-FATAL: os dois motivos estao escritos no cabecalho de
+  // `fecharPedidosCompletos`. O `catch` e do CHAMADOR (e nao de dentro da funcao) para que uma
+  // excecao inesperada em QUALQUER passo dela — a leitura da soma, o UPDATE, a auditoria — caia no
+  // mesmo lugar com a mesma literal, em vez de cada passo inventar o seu.
+  try {
+    await fecharPedidosCompletos(db, user, recebimentoId, entraramNoPedido);
+  } catch (eStatus) {
+    console.warn('[recebimento] status automatico do pedido de compra falhou '
+      + `(recebimento ${recebimentoId}): ${eStatus.message}`);
   }
 }
 
@@ -1540,6 +1560,119 @@ async function listarPedidosCompraAux(db, { search, pendentes } = {}) {
     fornecedor_cnpj: linha.fornecedor_cnpj,
     ...derivarRecebimentoDoPedido(linha.total_pedido, linha.soma_recebida),
   }));
+}
+
+/**
+ * RN-E01..RN-E07 (Etapa 42, T2) — O RECEBIMENTO FECHA O PEDIDO DE COMPRA.
+ *
+ * ⚠️ ESTA FUNCAO REVOGA A RN-24 DA ETAPA 37, e a revogacao e declarada, nao silenciosa: aquela RN
+ * dizia "a situacao do pedido e DERIVADA na leitura, NUNCA gravada" e "nada e escrito em
+ * `pedidos_compra`" (`specs/modulo-almoxarifado/08-recebimento/README.md:107` e `:329`), e o design
+ * da Etapa 39 usou exatamente essa frase para descartar o gancho automatico. A RN-24 estava CERTA
+ * ate a Etapa 41: sem gesto automatico, gravar o status seria inventar uma maquina de estados. O que
+ * mudou e que as Etapas 38-41 fecharam a cadeia cotacao -> pedido -> recebimento, e o ultimo elo
+ * aberto era um pedido que continuava "Atrasado" PARA SEMPRE depois de fisicamente recebido, ate o
+ * comprador lembrar de usar o `PATCH .../status` a mao (o beco que a Etapa 39 mediu, provou por teste
+ * e resolveu com uma porta MANUAL, deixando o automatico nomeado).
+ *
+ * ── AS SEIS DECISOES QUE ESTAO NESTE CORPO ────────────────────────────────────────────────────
+ *
+ * 1. **DEPOIS do laco de itens, nunca dentro dele** (e por isso a funcao recebe a lista pronta).
+ *    `RECEBIDO` e AGREGADO POR PEDIDO (`soma_recebida >= total_pedido`), e o laco da entrada anda
+ *    item a item: um gancho por item fecharia um pedido de 2 linhas na PRIMEIRA linha.
+ *
+ * 2. **Dentro de `darEntradaEstoque`, que os DOIS caminhos de entrada fisica chamam** — o mesmo
+ *    motivo, escrito no acumulador da Etapa 37 logo acima: `processarNota` E `aprovarRecebimento`
+ *    (ramo APROVADO) creditam estoque, e a Etapa 37 ja pagou uma vez por esquecer o segundo.
+ *
+ * 3. **O pedido sai do DADO, nao do cabecalho**: a lista de linhas tocadas vira pedido por
+ *    `SELECT DISTINCT pedido_id`. `rec.pedido_compra_id` daria o mesmo resultado hoje (medido:
+ *    `pedido_item_id` so e gravado a partir das linhas do pedido resolvido, `resolverLinhaDoPedido`),
+ *    mas seria confiar num invariante em vez de no dado — e o dado e o que o acumulador somou.
+ *
+ * 4. **So SOBE (RN-E03).** Nao existe estorno de `quantidade_recebida` neste modulo (o acumulador e
+ *    `+ qtd` idempotente por claim), entao um gancho que descesse precisaria de uma regua de estorno
+ *    que nao existe. ⚠️ O gesto de estorno EXISTE em outro lugar e vale saber:
+ *    `POST /movimentacoes/:id/cancelar` reverte o SALDO e nao toca em nada disto — o pedido fica
+ *    `recebido` com estoque 0, e a recuperacao e o `PATCH` manual. Limitacao NOVA desta etapa,
+ *    declarada na letra B e no guia do usuario.
+ *
+ * 5. **Nao sobrescreve o que o COMPRADOR decidiu (RN-E04).** `cancelado`/`rejeitado` ficam como
+ *    estao — o aux `?pendentes=1` nao filtra status, entao a nota PODE chegar num pedido cancelado, e
+ *    ressuscita-lo para `recebido` seria decidir pelo comprador. A guarda mora no `WHERE` do UPDATE
+ *    (e nao num `if` antes dele) para ser ATOMICA: dois `processar` simultaneos de notas diferentes do
+ *    mesmo pedido nao podem os dois achar que ganharam. `r.changes` e o que decide se audita — e por
+ *    isso `recebido` tambem entra na lista: idempotencia, sem UPDATE e sem segunda linha de trilha.
+ *
+ * 6. **NAO-FATAL, com guarda de tabela ausente**, como o acumulador e o `gerarContaPagar`. Um
+ *    `throw` aqui faria `processarNota` falhar DEPOIS de o estoque ter entrado: o recebimento ficaria
+ *    fora de PROCESSADO e o reprocessamento PULARIA os itens pelo claim — material no galpao,
+ *    documento travado e o pedido sem fechar. Perder o fechamento de um pedido com um `warn` e
+ *    reparavel por `PATCH`; travar a nota nao e.
+ *
+ * O `warn` do status terminal sai SO para `cancelado`/`rejeitado`: `recebido` e o caminho ESPERADO
+ * (segundo recebimento, excedente autorizado) e avisar nele treinaria o operador a ignorar o log.
+ */
+async function fecharPedidosCompletos(db, user, recebimentoId, itensQueEntraram) {
+  const linhasTocadas = (itensQueEntraram || [])
+    .map((i) => i.pedido_item_id).filter((id) => id != null);
+  if (!linhasTocadas.length) return [];
+
+  const tableExists = await dbGet(db,
+    "SELECT name FROM sqlite_master WHERE type='table' AND name='pedidos_compra'");
+  if (!tableExists) return [];
+
+  const marcas = linhasTocadas.map(() => '?').join(',');
+  const pedidos = await dbAll(db,
+    `SELECT DISTINCT pedido_id FROM itens_pedido_compra WHERE id IN (${marcas}) AND pedido_id IS NOT NULL`,
+    linhasTocadas);
+
+  const fechados = [];
+  for (const { pedido_id: pedidoId } of pedidos) {
+    const pedido = await dbGet(db, 'SELECT id, numero, status FROM pedidos_compra WHERE id = ?', [pedidoId]);
+    if (!pedido) continue;
+
+    // A MESMA agregacao das duas rotas de leitura (`SOMA_POR_PEDIDO_SQL`), recortada a este pedido:
+    // uma segunda soma escrita aqui divergiria da tela na primeira edicao, e "completo" passaria a
+    // significar coisas diferentes no e-mail, na aba e neste UPDATE.
+    const soma = await dbGet(db,
+      `SELECT total_pedido, soma_recebida FROM (${SOMA_POR_PEDIDO_SQL}) WHERE pedido_id = ?`, [pedidoId]);
+    const { situacao_recebimento: situacao } = derivarRecebimentoDoPedido(
+      soma?.total_pedido, soma?.soma_recebida);
+    if (situacao !== 'RECEBIDO') continue;
+
+    const r = await dbRun(db, `UPDATE pedidos_compra
+        SET status = 'recebido', updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND LOWER(COALESCE(status, '')) NOT IN ('recebido', 'cancelado', 'rejeitado')`,
+    [pedidoId]);
+
+    if (!r.changes) {
+      const atual = String(pedido.status || '').toLowerCase();
+      if (atual === 'cancelado' || atual === 'rejeitado') {
+        console.warn(`[recebimento] pedido ${pedido.numero || `#${pedidoId}`} completo, mas status `
+          + `${pedido.status} nao e sobrescrito automaticamente`);
+      }
+      continue;
+    }
+
+    // RN-E07 — a trilha. `alterarStatusPedido` (a porta MANUAL da Etapa 39) nao audita, e a
+    // assimetria e deliberada: ali o autor e o proprio ato humano naquela porta, aqui o pedido do
+    // comprador muda SOZINHO, por um ato de outro modulo. Sem esta linha ninguem responde "quem
+    // mudou meu pedido". Dentro do mesmo `try` nao-fatal do chamador, de proposito: a trilha nao
+    // vale travar a nota.
+    await registrarAuditoria(db, {
+      entidade: 'pedido_compra',
+      entidade_id: pedidoId,
+      acao: 'STATUS_AUTOMATICO_RECEBIDO',
+      usuario_id: user?.id,
+      usuario_nome: user?.nome || user?.email,
+      dados_anteriores: { status: pedido.status },
+      dados_novos: { status: 'recebido' },
+      justificativa: `Recebimento ${recebimentoId} completou o pedido`,
+    });
+    fechados.push(pedidoId);
+  }
+  return fechados;
 }
 
 /**

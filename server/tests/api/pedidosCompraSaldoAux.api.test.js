@@ -8,11 +8,18 @@
  * passa a dizer `quantidade_pedida`, `quantidade_recebida`, `saldo_pendente` e
  * `situacao_recebimento`, e nasce a rota de ITENS do pedido que a tela (T5) consome.
  *
- * ⚠️ NADA AQUI ESCREVE EM `pedidos_compra`. Ela e tabela CORE (`server/index.js:19230`), com
- * vocabulario de status MINUSCULO e badge por mapa de cores em `client/src/components/Compras.js`:
- * gravar `'RECEBIDO'` ali pintaria a tela de Compras de cinza com a palavra crua e nao casaria com
- * nenhum `?status=`. A situacao e derivada de SOMAS a cada leitura — e o cenario (5) e a regua
- * disso, com a sabotagem 3 provando que ele sabe falhar.
+ * ⚠️ ESTA FRASE MUDOU NA ETAPA 42, e a versao antiga fica registrada porque ela estava CERTA ate a
+ * Etapa 41. Ela dizia: *"NADA AQUI ESCREVE EM `pedidos_compra`. … A situacao e derivada de SOMAS a
+ * cada leitura"*. Continua verdade para as ROTAS DE LEITURA deste arquivo — nenhuma delas escreve —,
+ * mas deixou de ser verdade para o CAMINHO que o cenario (5) percorre: desde a Etapa 42 (RN-E01) a
+ * entrada fisica que COMPLETA o pedido grava `pedidos_compra.status = 'recebido'`, no fim de
+ * `darEntradaEstoque`. O medo daquela frase (badge cinza com palavra crua, `?status=` que nao casa)
+ * segue endereçado, agora por MEDIDA e nao por abstinencia: `'recebido'` pertence a
+ * `STATUS_PEDIDO_COMPRA`, tem cor propria no badge e e opcao do filtro — e o cenario (5) afirma isso
+ * por lista importada do schema, nao por constante copiada.
+ *
+ * `situacao_recebimento` continua sendo campo NOVO AO LADO do status, nunca no lugar dele: essa
+ * metade da RN-24 nao caiu, e e o que os cenarios (1)-(4), (6)-(8) medem.
  *
  * ⚠️ MODO DE FALHA 3 DESTA ETAPA — `COUNT` de 0 contra 0 passa. Todo cenario daqui INSERE a linha
  * do pedido, le o id que o `INSERT` devolveu e afirma o VALOR (10/6/4/'PARCIAL'), nunca "nao deu
@@ -31,6 +38,9 @@ const assert = require('assert');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbGet } = require('../../services/almoxarifado/db');
+// Etapa 42: o cenario (5) afirma que a palavra gravada pertence ao vocabulario da tela — a lista vem
+// do schema, nunca copiada aqui (uma segunda lista de 7 status divergiria na primeira edicao).
+const { STATUS_PEDIDO_COMPRA } = require('../../services/compras/schemas');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -260,30 +270,52 @@ const COMPRAS = { id: 66, nome: 'Compras E37', role: 'usuario', perfil_almoxarif
   });
 
   // ── (5) O CONTRATO CORE: nada desta etapa escreve em `pedidos_compra` ───────────────────────
-  await test('(5) recebimento inteiro processado: pedidos_compra.status continua EXATAMENTE o inserido', async () => {
+  /**
+   * ⚠️ ESTE CENARIO FOI REESCRITO NA ETAPA 42, e a assercao anterior ESTAVA CERTA ate a Etapa 41.
+   *
+   * Ele afirmava `core.status === 'aprovado'` — *"a situacao do pedido e DERIVADA na leitura;
+   * escrever na tabela core pintaria a tela de Compras de cinza com a palavra crua e nao casaria com
+   * nenhum `?status=`"*. Era a RN-24 da Etapa 37, e ela se sustentava enquanto NAO havia gesto
+   * automatico: gravar o status sem regra seria inventar uma maquina de estados.
+   *
+   * A Etapa 42 (RN-E01) grava `status = 'recebido'`, e o medo daquela frase nao se realiza — por
+   * medida, nao por sorte: `'recebido'` PERTENCE ao vocabulario minusculo de `STATUS_PEDIDO_COMPRA`
+   * (`services/compras/schemas.js:60`), tem cor propria no badge (`Compras.js:165`) e e opcao do
+   * filtro (`:21`). O que o cenario mede agora e exatamente isso: a palavra gravada e a do
+   * vocabulario, e `situacao_recebimento` continua sendo um campo AO LADO do status, nunca no lugar
+   * dele (essa metade nao mudou).
+   *
+   * O motivo de a RN-24 ter caido esta no cabecalho de `fecharPedidosCompletos`: as Etapas 38-41
+   * fecharam a cadeia cotacao -> pedido -> recebimento, e o ultimo elo aberto era um pedido que
+   * ficava "Atrasado" para sempre depois de fisicamente recebido.
+   */
+  await test('(5) RN-E01 recebimento inteiro processado: o status do CORE vira `recebido` (minusculo, do vocabulario da tela)', async () => {
     const mat = await novoMaterial();
-    // `aprovado` e palavra do vocabulario MINUSCULO da tela de Compras. Se alguem gravar
-    // `'RECEBIDO'` aqui, o badge de `Compras.js` cai no default cinza com a palavra crua.
     const pedido = await novoPedido([{ material_id: mat.id, quantidade: 10 }],
       { tag: 'C5', status: 'aprovado' });
 
     await receberEAprovar(pedido.id,
       [{ material_id: mat.id, quantidade: 10, quantidade_recebida: 10 }]);
 
-    // Metade POSITIVA: a entrada fisica ACONTECEU (senao "o status nao mudou" seria verdade por
-    // vacuidade — nada teria rodado).
+    // Metade POSITIVA, e ela continua valendo: a entrada fisica ACONTECEU (senao a assercao de
+    // status seria verdade por vacuidade — nada teria rodado).
     const linha = await linhaDoPedido(pedido.linhas[0]);
     assert.strictEqual(linha.quantidade_recebida, 10,
-      'o acumulador da T3 tem de ter somado: sem isso este cenario nao mede nada');
+      'o acumulador da E37 tem de ter somado: sem isso este cenario nao mede nada');
 
     const core = await statusCore(pedido.id);
-    assert.strictEqual(core.status, 'aprovado',
-      'a situacao do pedido e DERIVADA na leitura; escrever na tabela core pintaria a tela de '
-      + 'Compras de cinza com a palavra crua e nao casaria com nenhum ?status=');
+    assert.strictEqual(core.status, 'recebido',
+      'o pedido recebido por inteiro tinha de ter fechado (RN-E01) — se isto voltou a ser `aprovado`, '
+      + 'o gancho da Etapa 42 foi removido e o beco da RN-D12 reabriu');
+    // ⚠️ A palavra, e nao so o fato: `'RECEBIDO'` em maiuscula cairia no default CINZA do badge de
+    // `Compras.js` e nao casaria com nenhum `?status=` — o medo que a assercao antiga protegia, e que
+    // continua protegido aqui.
+    assert.ok(STATUS_PEDIDO_COMPRA.includes(core.status),
+      `o status gravado (${core.status}) esta fora do vocabulario da tela: ${STATUS_PEDIDO_COMPRA.join(', ')}`);
 
     const res = await listar('?search=E37T4-C5');
     const doPedido = res.body.find((p) => p.id === pedido.id);
-    assert.strictEqual(doPedido.status, 'aprovado', 'a rota ecoa o status CORE, sem reescreve-lo');
+    assert.strictEqual(doPedido.status, 'recebido', 'a rota ecoa o status CORE, sem reescreve-lo');
     assert.strictEqual(doPedido.situacao_recebimento, 'RECEBIDO',
       'a situacao do RECEBIMENTO e um campo NOVO, ao lado do status core — nao no lugar dele');
   });

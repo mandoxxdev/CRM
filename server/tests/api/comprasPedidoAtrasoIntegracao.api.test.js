@@ -8,7 +8,7 @@
  * `criarPedido` escreve. Cada peça tem arquivo de unidade próprio (T1
  * `comprasPedidoAtraso.api.test.js`, T4 `alertaPedidoAtrasado.api.test.js`) e NENHUM deles percorre
  * a vida inteira de um pedido atrasado — nascer, ser listado, ser avisado, ser RECEBIDO pelas
- * portas da Etapa 37 e continuar atrasado, e então esbarrar na régua da Etapa 38.
+ * portas da Etapa 37, SAIR do atraso por isso (Etapa 42), e esbarrar na régua da Etapa 38.
  *
  * ⚠️ O ATALHO QUE ESTE ARQUIVO SE PROÍBE: `INSERT INTO pedidos_compra` a mão. Os arquivos de
  * unidade inserem direto de propósito (fixture barato), mas aqui o pedido nasce por
@@ -34,19 +34,32 @@
  * - **9c** repete a saída pelo SERVIÇO (`alterarStatusPedido`), sem HTTP: a Reposição e a
  *   importação chamam o serviço direto e a porta nova tem de ser alcançável do mesmo jeito.
  *
- * ⚠️ **ESTA PROSA MUDOU NA ONDA DE CORREÇÃO, e o que ela dizia estava certo para o código de
- * então:** até `fc84e09` o 9a afirmava que o pedido recebido com atraso ficava atrasado **para
+ * ⚠️ **ESTA PROSA MUDOU DUAS VEZES, e as duas versões anteriores estavam certas para o código de
+ * então. Nenhuma foi apagada, porque é a trilha de como a limitação morreu.**
+ *
+ * *(1) Até `fc84e09`* o 9a afirmava que o pedido recebido com atraso ficava atrasado **para
  * sempre**, porque não havia gesto de tela nenhum que escrevesse `status` num pedido com
  * recebimento. O achado I1 da revisão final julgou que isso não é canto raro — é o caminho normal
- * de TODO pedido que o almoxarifado recebe depois da data prometida —, e a F4 abriu a porta. Agora
- * é **"atrasado até o PATCH"**: o passo 8 continua mostrando que RECEBER não muda o atraso (a
- * limitação D6 segue de pé, e é fatia da feature 08 fazer o `processar` gravar `status`), e o 9a
- * mostra que o usuário **agora consegue** mudá-lo à mão. Se um dia a 08 fizer o `processar` gravar
- * `status`, é o **passo 8** que cai — e o aviso é de que a limitação acabou, não de que quebrou.
+ * de TODO pedido que o almoxarifado recebe depois da data prometida —, e a F4 abriu o
+ * `PATCH …/status`. Virou **"atrasado até o PATCH"**.
  *
- * ⚠️ O 9a e o 9c DEVOLVEM o pedido do BLOCO D para `pendente` no fim, e isso é medição, não
- * higiene: o BLOCO F conta `duplicadas: 1` justamente porque aquele pedido continua na régua. O
- * ida-e-volta ainda prova, de graça, que a porta escreve nos DOIS sentidos.
+ * *(2) Até a Etapa 41* esta prosa dizia: *"o passo 8 continua mostrando que RECEBER não muda o
+ * atraso (a limitação D6 segue de pé, e é fatia da feature 08 fazer o `processar` gravar `status`).
+ * Se um dia a 08 fizer o `processar` gravar `status`, é o **passo 8** que cai — e o aviso é de que a
+ * limitação acabou, não de que quebrou."*
+ *
+ * **Esse dia é a Etapa 42.** O passo 8 caiu exatamente como previsto, e foi reescrito, não
+ * remendado: agora ele afirma que receber por inteiro **tira** o pedido do atraso (RN-E01 grava
+ * `status = 'recebido'` no fim de `darEntradaEstoque`; RN-E10 é a consequência pela régua única
+ * `derivarAtraso`, que **não mudou**). A limitação D6 acabou; o `PATCH` continua existindo e continua
+ * sendo a saída para o que o gancho automático NÃO cobre — ele só sobe (RN-E03) e não sobrescreve
+ * `cancelado`/`rejeitado` (RN-E04).
+ *
+ * ⚠️ O BLOCO D (desde a Etapa 42), o 9a e o 9c DEVOLVEM o pedido para `pendente` no fim, e isso é
+ * medição, não higiene: o BLOCO F conta `duplicadas: 1` justamente porque aquele pedido continua na
+ * régua, e os blocos E precisam de um pedido COM recebimento e AINDA atrasado — estado que, depois da
+ * Etapa 42, só existe se alguém reabrir o pedido à mão. O ida-e-volta ainda prova, de graça, que a
+ * porta escreve nos DOIS sentidos.
  *
  * ⚠️ O TERCEIRO PEDIDO DO BLOCO E (previsão = HOJE) não é enfeite: sem ele, trocar `<` por `<=` em
  * `derivarAtraso` não derruba NENHUM passo desta integração (ontem continua sendo ontem) e a
@@ -240,9 +253,9 @@ function diasDeHoje(n) {
   });
 
   // ─────────────────────────────────────────────────────────────────────────────────────────────
-  // BLOCO D — RN-D12: receber pelas portas REAIS da Etapa 37 NAO muda o atraso
+  // BLOCO D — RN-E01/RN-E10 (era RN-D12): receber pelas portas REAIS da Etapa 37 TIRA o pedido do atraso
   // ─────────────────────────────────────────────────────────────────────────────────────────────
-  await test('(D) RN-D12: o pedido e RECEBIDO pelas portas da Etapa 37 e CONTINUA atrasado na aba Compras', async () => {
+  await test('(D) RN-E01/RN-E10 (era RN-D12): o pedido e RECEBIDO pelas portas da Etapa 37 e SAI do atraso na aba Compras', async () => {
     const linhaPedido = HIST.itens[0].id;
     const criado = await criarRecebimento({
       tipo_recebimento: 'PEDIDO_COMPRA', pedido_compra_id: HIST.id,
@@ -278,16 +291,42 @@ function diasDeHoje(n) {
     assert.strictEqual(aux[0].situacao_recebimento, 'RECEBIDO',
       `o almoxarifado tinha de ver RECEBIDO: ${JSON.stringify(aux[0])}`);
 
-    // ⚠️ PASSO 8 — O QUE TRANSFORMA A LIMITACAO D6 EM REGUA. O `status` do CORE continua
-    // `pendente` (o `processar` da 37 NAO o escreve), entao a regua de atraso continua valendo.
-    assert.strictEqual(await statusCoreDoPedido(HIST.id), 'pendente',
-      'o `processar` da Etapa 37 passou a gravar `status` no pedido CORE — a limitacao D6 acabou, '
-      + 'e a RN-D12 precisa ser reescrita (nao e este teste que esta errado)');
+    // ⚠️ PASSO 8 — REESCRITO NA ETAPA 42, E A ASSERCAO ANTERIOR ESTAVA CERTA ATE A ETAPA 41.
+    //
+    // Este passo afirmava `status === 'pendente'` e `atrasado === 1`, com a mensagem *"o `processar`
+    // da Etapa 37 passou a gravar `status` no pedido CORE — a limitacao D6 acabou, e a RN-D12
+    // precisa ser reescrita (nao e este teste que esta errado)"*. O teste pediu para ser reescrito
+    // quando esse dia chegasse; chegou. A Etapa 42 (RN-E01/RN-E10) grava, de proposito, e o beco que
+    // a RN-D12 descrevia — pedido "Atrasado" PARA SEMPRE depois de fisicamente recebido, ate o
+    // comprador lembrar do `PATCH` — deixou de existir.
+    //
+    // A regua de atraso NAO mudou: continua sendo `derivarAtraso` com
+    // `STATUS_PEDIDO_FORA_DO_ATRASO = ['recebido','cancelado','rejeitado']`. O que mudou e quem
+    // escreve `'recebido'`. Por isso o passo 8 nao virou "atrasado = 0" apenas: ele afirma os TRES
+    // elos da corrente (status gravado -> regua -> filtro), que e o que prova a RN-E10 de ponta a
+    // ponta pela ROTA.
+    assert.strictEqual(await statusCoreDoPedido(HIST.id), 'recebido',
+      'o recebimento INTEIRO nao fechou o pedido — o gancho da Etapa 42 (RN-E01) nao rodou no '
+      + 'caminho do `processar`, e o beco da RN-D12 reabriu');
     const linha = await naLista('', HIST.id);
-    assert.strictEqual(linha.atrasado, 1,
-      'receber o pedido INTEIRO pelo almoxarifado apagou o atraso na aba Compras — se isso foi '
-      + 'intencional (feature 08), a RN-D12 mudou');
-    assert.strictEqual(linha.dias_atraso, 1, `esperava dias_atraso 1, veio ${JSON.stringify(linha.dias_atraso)}`);
+    assert.strictEqual(linha.atrasado, 0,
+      `o pedido recebido e fechado continua acusando atraso na aba Compras: ${JSON.stringify(linha)}`);
+    assert.strictEqual(linha.dias_atraso, null,
+      `sem atraso o campo e null, nunca 0 — "0 dias de atraso" renderizaria badge: ${JSON.stringify(linha.dias_atraso)}`);
+    assert.ok(!(await listar('?atrasados=1')).body.some((p) => p.id === HIST.id),
+      '?atrasados=1 continua trazendo o pedido que o almoxarifado ja fechou');
+
+    // ⚠️ E AQUI O PEDIDO VOLTA A `pendente` — de proposito, e nao para "consertar" o cenario.
+    // Os blocos (E.9a) e (E.9c) medem a porta MANUAL da Etapa 39, que continua existindo e continua
+    // sendo a saida para o que o gancho automatico NAO cobre (RN-E03: ele so sobe; RN-E04: ele nao
+    // sobrescreve `cancelado`/`rejeitado`). Eles precisam de um pedido COM recebimento e AINDA
+    // atrasado — estado que, depois da Etapa 42, so existe se alguem reabrir o pedido a mao. Este
+    // `PATCH` e esse gesto, e ele prova de graca que a saida de emergencia da RN-E03 funciona nos
+    // dois sentidos.
+    const reabre = await request(app).patch(`/api/compras/pedidos/${HIST.id}/status`).send({ status: 'pendente' });
+    assert.strictEqual(reabre.status, 200, `o PATCH de reabertura falhou: ${JSON.stringify(reabre.body)}`);
+    assert.strictEqual((await naLista('', HIST.id)).atrasado, 1,
+      'reabrir o pedido a mao tinha de devolve-lo ao atraso — sem isto os blocos E medem outro estado');
   });
 
   // ─────────────────────────────────────────────────────────────────────────────────────────────

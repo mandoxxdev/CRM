@@ -371,8 +371,14 @@ const semPermissao = (perfil) => 'Autorizar recebimento acima do pedido exige a 
     assert.deepStrictEqual(vazio.body, [],
       'a linha excedida nao tem o que receber; com o saldo em -1 ela voltaria a ser oferecida');
 
-    assert.strictEqual(await statusCoreDoPedido(PEDIDO.id), 'aprovado',
-      'nem o excedente autorizado escreve em `pedidos_compra`');
+    // ⚠️ REESCRITO NA ETAPA 42 (RN-E01), e a assercao anterior ESTAVA CERTA ate a Etapa 41: ela
+    // afirmava `'aprovado'`, com o comentario *"nem o excedente autorizado escreve em
+    // `pedidos_compra`"* — a RN-24 da Etapa 37. A Etapa 42 grava, e o excedente e justamente um dos
+    // casos que FECHAM: a regua clampa o saldo em 0, entao `recebida > pedida` tambem e `RECEBIDO`.
+    // Comparar por igualdade (`recebida === pedida`) deixaria o pedido excedido aberto para sempre.
+    assert.strictEqual(await statusCoreDoPedido(PEDIDO.id), 'recebido',
+      'o excedente autorizado completou o pedido e ele nao fechou — o gancho da Etapa 42 esta '
+      + 'comparando por igualdade em vez de usar a regua com clamp');
   });
 
   // ───────────────────────────────────────────────────────────────────────────────────────────────
