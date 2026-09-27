@@ -509,6 +509,41 @@ item 4 de "Erros DESTE plano"):**
   `test:api` **199/199 arquivos**, almoxarifado **42/0**, validation **4/0**, safealter **3/0**,
   sqlite **5/0**, cliente **51 suítes / 786 testes**, build `Compiled successfully`.
 
+**Fase 0 da 43 JÁ COMEÇOU — o que foi medido no fechamento da 42 (e economiza a metade da medição):**
+
+- **A divergência de quantidade JÁ é derivada, e com régua float-safe.**
+  `services/almoxarifado/divergencia.js` existe desde a Etapa 10b e é a **fonte única** de *"isto é
+  divergência de verdade"*: `EPSILON_DIVERGENCIA = 1e-9` + `divergenciaRealSql(coluna)`. O motivo
+  medido está escrito no topo do arquivo: `quantidade_sistema` nasce de subtração `REAL`, e contar
+  `0.2` contra `0.1999999999999993` gerava divergência `7e-16` — cada consumidor com `!= 0` cru
+  tratava **o operador que acertou** como divergente. **A 43 NÃO cria régua nova: ela consome esta.**
+- **A consulta da divergência de recebimento também já existe:**
+  `alertRegistry.listarDivergenciasRecebimento(db, { dias, recebimentoId })` (`:139-155`) devolve
+  `item_id, recebimento_id, material_codigo, material_nome, quantidade_esperada, quantidade_recebida,
+  divergencia, recebimento_numero, nota_fiscal`, filtrando por `divergenciaRealSql`. Ela tem **modo
+  por id** (`recebimentoId`) além do modo janela — o modo por id é o que um documento de divergência
+  consumiria. **Já é chamada por gancho no ato**, nos dois escritores (a nota em `:44-58` explica).
+- **Portanto o que falta na 43 é EXATAMENTE o que a spec 08 nomeia — o *registro formal (tipo,
+  quantidade, ação)* —, e não a detecção.** O fato está derivado; o que não existe é o **documento**
+  com número, tipo de divergência, e **a decisão** (aceitar, devolver, aceitar sob desvio, sucatear)
+  com autor e trilha. Isso muda o desenho: a 43 é uma tabela nova + portas de decisão + tela, **não**
+  um serviço de detecção. É menor do que parecia.
+- **O gerador de número:** a função é `gerarNumeroDocumento(prefixo)` (**não** `gerarNumero`), em
+  `services/almoxarifado/numeroDoc.js:100` — devolve `<PREFIXO>-<Date.now() em base36 maiúsculo><8
+  aleatórios>`, e `ehColisaoDeNumero(err)` é o par dela para o retry. Um `ND-` sai dela em uma linha.
+- **Os dois perfis que a decisão de autorização tem de conciliar (medido):**
+  `receber_material: [ADMINISTRADOR, ALMOXARIFE, COMPRAS]` (`permissions.js:86`) e
+  `inspecionar: [ADMINISTRADOR, ALMOXARIFE, QUALIDADE]` (`:102`). **A interseção é
+  ADMINISTRADOR+ALMOXARIFE**; o que divide é **COMPRAS** (recebe, não inspeciona) e **QUALIDADE**
+  (inspeciona, não recebe). Isso torna a pergunta concreta: *abrir* uma divergência é ato de quem
+  **conferiu** (então inclui COMPRAS?) e *decidir* o destino é ato de quem responde pela qualidade
+  (então QUALIDADE, e não COMPRAS). O caminho reversível já proposto continua valendo, agora com os
+  nomes certos: abrir em `[ADMINISTRADOR, ALMOXARIFE, QUALIDADE, COMPRAS]`, decidir em
+  `[ADMINISTRADOR, QUALIDADE]` — e registrar na letra B, porque tirar COMPRAS da decisão é escolha.
+- **O que ainda NÃO foi medido** (fica para a Fase 0 da 43): o lado da **inspeção**
+  (`inspectionService`) — como a não conformidade se relacionaria com a decisão de inspeção que já
+  existe, e se `listarReprovados` (que alimenta o alerta `MATERIAL_REPROVADO`) já é o embrião disso.
+
 **Pontos de atenção (medir na Fase 0 antes de prometer):**
 
 - **Um documento ou dois?** A decisão de desenho mais cara da 43. *"Divergência de recebimento"* e
