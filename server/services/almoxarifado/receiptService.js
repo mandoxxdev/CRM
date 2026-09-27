@@ -1471,28 +1471,39 @@ function derivarRecebimentoDoPedido(quantidadePedida, quantidadeRecebida) {
   };
 }
 
+/**
+ * A AGREGACAO DO SALDO DO PEDIDO, num lugar so (Etapa 42, T1).
+ *
+ * Duas consultas leem esta soma — `listarPedidosCompraAux` (a aba de recebimento, com `LIMIT 50`) e
+ * `situacaoDosPedidosCompra` (a fonte do alerta, sem `LIMIT`). Duplicar a subquery faria a segunda
+ * divergir da primeira na primeira edicao, que e exatamente o motivo pelo qual
+ * `derivarRecebimentoDoPedido` tambem e UMA funcao: a regua e a agregacao precisam ter o MESMO dono,
+ * senao "PARCIAL" passa a significar coisas diferentes na tela e no e-mail.
+ *
+ * `material_id IS NOT NULL` e o MESMO recorte de `carregarItensPedidoCompra`: sem material nao ha o
+ * que dar entrada no estoque, e e o recorte que a regua de saldo do `POST` usa. Contar linhas de
+ * texto livre (frete, servico) faria a rota dizer "PARCIAL" num pedido que ja chegou inteiro.
+ */
+const SOMA_POR_PEDIDO_SQL = `SELECT pedido_id,
+    SUM(COALESCE(quantidade, 0)) as total_pedido,
+    SUM(COALESCE(quantidade_recebida, 0)) as soma_recebida
+  FROM itens_pedido_compra WHERE material_id IS NOT NULL GROUP BY pedido_id`;
+
 async function listarPedidosCompraAux(db, { search, pendentes } = {}) {
   const tableExists = await dbGet(db,
     "SELECT name FROM sqlite_master WHERE type='table' AND name='pedidos_compra'");
   if (!tableExists) return [];
 
-  // A soma por pedido vem de uma SUBQUERY AGRUPADA, e nao de um `.filter()`/`reduce` em JS depois
-  // da consulta, porque o filtro de `?pendentes=1` tem de rodar ANTES do `LIMIT 50` (ver abaixo)
-  // — e para isso a soma precisa existir dentro do SQL.
-  //
-  // `material_id IS NOT NULL` e o MESMO recorte de `carregarItensPedidoCompra`: sem material nao
-  // ha o que dar entrada no estoque, e e o recorte que a regua de saldo do `POST` usa. Contar
-  // linhas de texto livre aqui faria a rota dizer "PARCIAL" num pedido que ja chegou inteiro.
+  // A soma por pedido vem de uma SUBQUERY AGRUPADA (`SOMA_POR_PEDIDO_SQL`), e nao de um
+  // `.filter()`/`reduce` em JS depois da consulta, porque o filtro de `?pendentes=1` tem de rodar
+  // ANTES do `LIMIT 50` (ver abaixo) — e para isso a soma precisa existir dentro do SQL.
   let sql = `SELECT p.id, p.numero, p.valor_total, p.status, p.data_pedido,
     f.razao_social as fornecedor_nome, f.cnpj as fornecedor_cnpj,
     COALESCE(i.total_pedido, 0) as total_pedido,
     COALESCE(i.soma_recebida, 0) as soma_recebida
     FROM pedidos_compra p
     LEFT JOIN fornecedores f ON p.fornecedor_id = f.id
-    LEFT JOIN (SELECT pedido_id,
-        SUM(COALESCE(quantidade, 0)) as total_pedido,
-        SUM(COALESCE(quantidade_recebida, 0)) as soma_recebida
-      FROM itens_pedido_compra WHERE material_id IS NOT NULL GROUP BY pedido_id) i
+    LEFT JOIN (${SOMA_POR_PEDIDO_SQL}) i
       ON i.pedido_id = p.id
     WHERE 1=1`;
   const params = [];
@@ -1529,6 +1540,65 @@ async function listarPedidosCompraAux(db, { search, pendentes } = {}) {
     fornecedor_cnpj: linha.fornecedor_cnpj,
     ...derivarRecebimentoDoPedido(linha.total_pedido, linha.soma_recebida),
   }));
+}
+
+/**
+ * RN-E08 (Etapa 42, T1) — a SITUACAO DE TODOS OS PEDIDOS, sem `LIMIT`, para quem NAO e a tela.
+ *
+ * ⚠️ POR QUE NAO REUSAR `listarPedidosCompraAux` (a pergunta que a spec 20 deixou registrada):
+ * o aux termina em `ORDER BY p.created_at DESC LIMIT 50` porque a ABA DE RECEBIMENTO lista os 50
+ * pedidos mais novos — contrato de tela, com o `?pendentes=1` dependendo da POSICAO do filtro. Um
+ * alerta por e-mail construido sobre ele ignoraria o 51o pedido parcial EM SILENCIO, e e um silencio
+ * pior que a ausencia do alerta: o comprador passa a confiar numa varredura incompleta. Pendurar um
+ * `semLimite` no aux mexeria na porta da TELA por causa do e-mail; daqui sai uma segunda CONSULTA,
+ * nunca uma segunda REGUA — a situacao e o saldo continuam vindo de `derivarRecebimentoDoPedido` e a
+ * agregacao de `SOMA_POR_PEDIDO_SQL`.
+ *
+ * `previsao_entrega` e `status` VEM (o aux nao os traz): sao o que o alerta precisa para escrever a
+ * linha "Previsão de entrega" e para descartar pedido `cancelado`/`rejeitado`/`recebido`.
+ *
+ * ⚠️ COLUNAS PROJETADAS, nunca `p.*` — a MESMA regra (e o mesmo motivo) do F3 da Etapa 39: a linha
+ * crua desta fonte viaja para `GET /almoxarifado/alertas/central`, cujo gate e
+ * `requirePermission('ver_alertas')` e NAO inclui `checkModulePermission('compras')`. Com `p.*`, um
+ * almoxarife que toma 403 em `GET /api/compras/pedidos` receberia `valor_total` e `observacoes` de
+ * pedidos CORE na aba Network. E qualquer coluna acrescentada amanha a `pedidos_compra` viajaria sem
+ * revisao nenhuma.
+ *
+ * `LEFT JOIN`, nao `JOIN`: pedido orfao de fornecedor tambem tem saldo pendente (R9 da Etapa 39).
+ *
+ * O filtro `situacao` roda em JS, DEPOIS da regua — de proposito. Escrever
+ * `AND i.soma_recebida > 0 AND i.soma_recebida < i.total_pedido` aqui seria a SEGUNDA definicao de
+ * "PARCIAL", e ela divergiria da primeira no unico caso que importa (excedente autorizado, que o
+ * clamp da regua resolve). Sem `LIMIT`, filtrar depois nao esconde nada — era o `LIMIT` que fazia a
+ * posicao do filtro ser contrato no aux.
+ *
+ * Tabela ausente -> `[]`, o mesmo contrato do aux e de `gerarContaPagar`: este modulo ASSUME que as
+ * tabelas de compras podem nao existir, e a central de alertas roda no mesmo handle.
+ */
+async function situacaoDosPedidosCompra(db, { situacao } = {}) {
+  const tableExists = await dbGet(db,
+    "SELECT name FROM sqlite_master WHERE type='table' AND name='pedidos_compra'");
+  if (!tableExists) return [];
+
+  const linhas = await dbAll(db, `SELECT p.id, p.numero, p.status, p.previsao_entrega,
+      f.razao_social as fornecedor_nome,
+      COALESCE(i.total_pedido, 0) as total_pedido,
+      COALESCE(i.soma_recebida, 0) as soma_recebida
+    FROM pedidos_compra p
+    LEFT JOIN fornecedores f ON p.fornecedor_id = f.id
+    LEFT JOIN (${SOMA_POR_PEDIDO_SQL}) i ON i.pedido_id = p.id
+    ORDER BY p.id ASC`);
+
+  return linhas
+    .map((linha) => ({
+      id: linha.id,
+      numero: linha.numero,
+      status: linha.status,
+      previsao_entrega: linha.previsao_entrega,
+      fornecedor_nome: linha.fornecedor_nome,
+      ...derivarRecebimentoDoPedido(linha.total_pedido, linha.soma_recebida),
+    }))
+    .filter((linha) => !situacao || linha.situacao_recebimento === situacao);
 }
 
 /**
@@ -1652,6 +1722,12 @@ module.exports = {
   processarNota,
   listarRecebimentos,
   listarPedidosCompraAux,
+  // Etapa 42, T1 (RN-E08): a regua de situacao/saldo do pedido passa a ter UM dono EXPORTADO, e a
+  // fonte sem `LIMIT` nasce ao lado dela. Antes desta linha o `alertRegistry` nao tinha como
+  // perguntar "este pedido esta parcial?" sem COPIAR a regua — e a spec 20 registrou isso, por
+  // escrito, como o bloqueio real do alerta de pedido parcial (nao era falta de dado).
+  derivarRecebimentoDoPedido,
+  situacaoDosPedidosCompra,
   listarItensPedidoCompraAux,
   listarFornecedoresAux,
   getRecebimento,
