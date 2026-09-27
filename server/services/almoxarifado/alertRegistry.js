@@ -178,6 +178,38 @@ async function listarDivergenciaConferencia(db, { dias, conferenciaId } = {}) {
 }
 
 /**
+ * Etapa 42, T3 — os status de `pedidos_compra` em que o PARCIAL deixa de ser pendencia (RN-E09).
+ *
+ * `cancelado`/`rejeitado`: o pedido foi abandonado no meio e o saldo que falta nao e pendencia de
+ * ninguem. `recebido`: o comprador JA declarou o pedido encerrado a mao — a saida manual que o
+ * `PATCH /api/compras/pedidos/:id/status` da Etapa 39 abriu — e insistir por e-mail seria discutir
+ * com a decisao humana. Sem este filtro, cada um dos tres viraria e-mail ate o fim dos tempos
+ * (a varredura e diaria e nao ha expurgo da fila).
+ *
+ * ⚠️ MESMO CONTEUDO de `STATUS_PEDIDO_FORA_DO_ATRASO` (`services/compras/pedidoCompraService.js`),
+ * e a duplicacao e DELIBERADA: la a lista responde "nao ha mais prazo a furar", aqui responde
+ * "nao ha mais saldo a cobrar". Importar aquela constante amarraria os dois alertas, e um status
+ * acrescentado la (digamos `em_analise`, que atrasa mas TEM saldo a cobrar) calaria este alerta em
+ * silencio. Minusculo porque e o vocabulario da coluna (`services/compras/schemas.js:60`); o
+ * `toLowerCase` no filtro e o que aceita acervo importado com caixa diferente.
+ */
+const STATUS_PEDIDO_PARCIAL_DECIDIDO = ['cancelado', 'rejeitado', 'recebido'];
+
+/**
+ * Etapa 42, T3 — a linha "Previsão de entrega" do e-mail do parcial.
+ *
+ * `''` e `null` sao o MESMO caso: a base tem a string VAZIA gravada na coluna `DATE` porque ate a
+ * onda F3 da Etapa 38 o formulario mandava `''` sempre (cabecalho de `pedidoCompraService.js`,
+ * `:744-746`). Ao contrario do alerta de ATRASO, que filtra a previsao pela regex
+ * `/^\d{4}-\d{2}-\d{2}$/` e por isso nunca ve um vazio, a populacao do PARCIAL NAO filtra previsao
+ * nenhuma — de proposito: o pedido importado sem previsao com saldo pendente e exatamente o que
+ * ninguem esta acompanhando. Sem esta funcao o comprador receberia `Previsão de entrega: null`.
+ */
+function previsaoOuNaoInformada(valor) {
+  return String(valor ?? '').trim() || 'não informada';
+}
+
+/**
  * C2/C3 — as 7 entradas da Etapa 16 + as 4 da Etapa 17 (as tres de evento no fim tem tambem
  * gancho no ato — `dispararAlertaRegistrado` — com o MESMO dedupe, RN-01).
  * `listar(db, { dias })` devolve as linhas cruas da condicao;
@@ -548,6 +580,81 @@ const ALERT_REGISTRY = Object.freeze([
       `Fornecedor: ${linha.fornecedor_nome || '-'}`,
       `Previsão de entrega: ${linha.previsao_entrega}`,
       `Atraso: ${linha.dias_atraso} dia(s)`,
+      `Status: ${linha.status}`,
+    ].join('\n'),
+  },
+  {
+    chave: 'PEDIDO_COMPRA_PARCIAL',
+    titulo: 'Pedido de compra recebido parcialmente',
+    descricao: 'Pedidos de compra com entrega parcial e saldo ainda pendente.',
+    configDias: null,
+    // Etapa 42, T3 (RN-E09) — a 13a entrada do registro.
+    //
+    // ── O BLOQUEIO QUE ELA DESFAZ ─────────────────────────────────────────────────────────────
+    // A `specs/modulo-almoxarifado/20-alertas/README.md` manteve este alerta como `[ ]` por
+    // DECISAO: a regua de situacao/saldo da Etapa 37 (`derivarRecebimentoDoPedido`) nao era
+    // exportada, e a unica fonte exportada era `listarPedidosCompraAux`, com `LIMIT 50` (contrato
+    // de TELA: a aba lista os 50 pedidos mais novos) e sem `previsao_entrega`. Construir o alerta
+    // sobre o aux ignoraria o 51o pedido parcial EM SILENCIO — pior que a ausencia do alerta,
+    // porque o comprador passaria a confiar numa varredura incompleta. A T1 desta etapa criou
+    // `situacaoDosPedidosCompra` (SEM `LIMIT`, com `previsao_entrega`/`status`, colunas PROJETADAS
+    // e guarda `sqlite_master`), e esta entrada apenas a CONSOME: nenhum SQL novo mora aqui, e a
+    // regua continua tendo um dono so.
+    //
+    // ⚠️ REQUIRE **LAZY**, e aqui NAO e so convencao — e o ciclo FECHANDO. `receiptService.js:31`
+    // requer ESTE arquivo no TOPO; um require de topo de `receiptService` aqui completaria
+    // alertRegistry -> receiptService -> alertRegistry, e um dos lados capturaria `{}` mid-load.
+    // `{}` nao lanca: `situacaoDosPedidosCompra` viria `undefined`, o `listar` lancaria
+    // "is not a function" e `montarCentral` traduziria isso em `erro: true` — o cartao aparece
+    // vazio, a varredura nao manda e-mail, e a SUITE FICA VERDE. Falha silenciosa; o lazy custa
+    // nada. `alertaPedidoParcial.api.test.js (10)` afirma `cartao.erro === undefined` e carrega o
+    // registro num processo FRIO, que e o unico jeito de pegar o `{}` mid-load.
+    //
+    // ⚠️ COLUNAS PROJETADAS: a projecao vive na fonte (T1), com o mesmo motivo do F3 da Etapa 39 —
+    // `montarCentral` devolve as linhas CRUAS em `GET /almoxarifado/alertas/central`, cujo gate
+    // (`requirePermission('ver_alertas')`) NAO inclui `checkModulePermission('compras')`.
+    //
+    // O filtro de status roda AQUI e nao na fonte: a fonte responde "qual e a situacao de cada
+    // pedido", e "qual pedido merece e-mail" e politica DESTE alerta (a tela de recebimento, que le
+    // a mesma fonte pelo aux, mostra o cancelado de proposito).
+    listar: async (db) => {
+      const { situacaoDosPedidosCompra } = require('./receiptService');
+      const parciais = await situacaoDosPedidosCompra(db, { situacao: 'PARCIAL' });
+      return parciais.filter((l) => !STATUS_PEDIDO_PARCIAL_DECIDIDO
+        .includes(String(l.status || '').toLowerCase()));
+    },
+    // RN-E09: UM aviso por SALDO PENDENTE — e o saldo e o dado que MUDA a cada chegada parcial
+    // nova, que e justamente o evento que o comprador precisa acompanhar. A chave so com o id
+    // calaria o pedido para sempre (o defeito que a Etapa 39 pagou em `33031ac` no
+    // `pedido-atrasado-<id>`): o hash do primeiro aviso fica num indice UNIQUE, o `INSERT OR
+    // IGNORE` do `enfileirar` devolve DUPLICADA e nao ha expurgo da fila — silencio permanente.
+    //
+    // ⚠️ O `Math.round(saldo * 1000)` NAO e cosmetico. `saldo_pendente` e
+    // `Math.max(0, pedida - recebida)` sobre `SUM(REAL)`, sem arredondamento: MEDIDO no cenario (6)
+    // do teste, o mesmo estado fisico (10 pedidos, 3,3 recebidos) da `6.7` numa linha so e
+    // `6.699999999999999` em duas linhas — a chave crua mandaria DOIS e-mails pelo mesmo saldo, e o
+    // segundo chegaria sem nada ter acontecido no pedido. 3 casas decimais e a precisao que as
+    // unidades do modulo usam (`quantidade` REAL de PC/KG/M), e o teste afirma que 0,001 de
+    // diferenca REAL ainda muda a chave.
+    //
+    // DESCARTADO: dedupe por mes (perderia a chegada nova); dedupe so pelo id (silencio
+    // permanente); expurgo da fila quando o pedido fecha — e contrato da feature 19 e a chave
+    // carrega o saldo DO MOMENTO do enfileiramento, que o gancho de fechamento nao conhece (D10).
+    dedupeChave: (linha) => `pedido-parcial-${linha.id}-${Math.round(linha.saldo_pendente * 1000)}`,
+    payload: (linha) => ({ pedido_compra_id: linha.id, saldo_pendente: linha.saldo_pendente }),
+    // Prefixo `[Compras]`, NAO `[Almoxarifado]`: o documento e de Compras e a lista de
+    // destinatarios e compartilhada — o prefixo e o que permite ao leitor filtrar (mesma decisao
+    // da entrada irma, Etapa 39).
+    assunto: (linha) => `[Compras] Pedido de compra recebido parcialmente — ${linha.numero}`,
+    // As 7 linhas sao CONTRATO CONGELADO (secao 2.4 do plano da Etapa 42), e o cartao da central
+    // tem rotulos PROPRIOS, curtos, que nao sao estas strings.
+    corpo: (linha) => [
+      `Pedido: ${linha.numero}`,
+      `Fornecedor: ${linha.fornecedor_nome || '-'}`,
+      `Quantidade pedida: ${linha.quantidade_pedida}`,
+      `Quantidade recebida: ${linha.quantidade_recebida}`,
+      `Saldo pendente: ${linha.saldo_pendente}`,
+      `Previsão de entrega: ${previsaoOuNaoInformada(linha.previsao_entrega)}`,
       `Status: ${linha.status}`,
     ].join('\n'),
   },
