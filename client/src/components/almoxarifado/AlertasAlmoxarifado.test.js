@@ -198,7 +198,11 @@ const CENTRAL_FIXTURE = {
     {
       chave: 'PEDIDO_COMPRA_PARCIAL', titulo: 'Pedido de compra recebido parcialmente',
       descricao: 'Pedidos de compra com entrega parcial e saldo ainda pendente.',
-      dias: null, total: 2,
+      // ⚠️ `total: 9` com 2 linhas, e a diferenca e MEDICAO, nao enfeite: se o total fosse 2 (igual a
+      // `linhas.length`), o cenario do badge passaria tambem num componente que renderizasse
+      // `linhas.length` em vez do `total` do servidor — o defeito real que o C1 corta em 50 linhas
+      // existe para evitar. Achado de revisao adversarial: a assercao era tautologica nesta fixture.
+      dias: null, total: 9,
       linhas: [
         {
           id: 91, numero: 'PC-2026-071', status: 'pendente', previsao_entrega: '2026-10-02',
@@ -468,9 +472,15 @@ test('PEDIDO_COMPRA_PARCIAL: cartao existe com o titulo do servidor e o badge do
   expect(c).not.toBeNull();
   expect(c.textContent).toContain('Pedido de compra recebido parcialmente');
   expect(c.textContent).toContain('Pedidos de compra com entrega parcial e saldo ainda pendente.');
-  expect(badgeTotal('PEDIDO_COMPRA_PARCIAL').textContent).toContain('2');
-  // configDias: null no registro — o cartao nao inventa janela.
-  expect(c.textContent).not.toMatch(/\d+ dias/);
+  // O badge mostra o `total` do SERVIDOR (9), nao `linhas.length` (2) — ver a nota na fixture.
+  expect(badgeTotal('PEDIDO_COMPRA_PARCIAL').textContent).toContain('9');
+  // configDias: null no registro — o cartao nao inventa janela de dias.
+  //
+  // ⚠️ A assercao ANTERIOR era `not.toMatch(/\d+ dias/)` sobre o texto do cartao, e ela acertava por
+  // ADJACENCIA do badge de total, nao por medir a ausencia da janela (achado de revisao adversarial).
+  // Agora mede o ELEMENTO: a janela renderiza com a classe `almox-badge-baixo` (`:335`), e nao ha
+  // nenhum neste cartao.
+  expect(c.querySelectorAll('.almox-badge-baixo')).toHaveLength(0);
 });
 
 test('PEDIDO_COMPRA_PARCIAL: os 6 cabecalhos do contrato 2.6, na ordem', async () => {

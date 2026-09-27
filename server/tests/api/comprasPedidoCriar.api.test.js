@@ -317,7 +317,16 @@ const contarPedidos = async (db) => (await dbGet(db, 'SELECT COUNT(*) as n FROM 
     assert.strictEqual(itens.status, 200, `itens aux esperava 200, veio ${itens.status}`);
     assert.strictEqual(itens.body.length, 1, `esperava 1 linha com saldo, vieram ${itens.body.length}`);
     assert.strictEqual(itens.body[0].saldo_pendente, 10, 'saldo da linha errado');
-    assert.strictEqual(itens.body[0].valor_unitario, 4, 'o preco da linha (U1 da E37) nao chegou ao recebimento');
+    // ⚠️ REESCRITA na onda de correcao da Etapa 42: a assercao era `valor_unitario === 4`, usando o
+    // JSON desta rota como PROXY de "o preco chegou ao recebimento". O campo saiu do contrato porque a
+    // rota tem `auth` e NENHUM `requirePermission`, entao o preco negociado vazava para qualquer
+    // usuario autenticado (medido por sonda, inclusive para quem nao tem perfil e para CONSULTA).
+    // A GARANTIA de verdade nunca dependeu deste JSON: o preco viaja pelo SERVIDOR (`resolverItens`
+    // le `linhaResolvida.valor_unitario` do banco; o client explicitamente NAO manda o campo), e quem
+    // prova isso e `pedidoSaldoRecebido.api.test.js`, no cenario que afirma o `custo_medio` do
+    // material depois da entrada fisica. O proxy foi trocado pela negativa que prende a exposicao.
+    assert.ok(!('valor_unitario' in itens.body[0]),
+      `a rota de itens do pedido nao pode devolver preco: ${JSON.stringify(itens.body[0])}`);
   });
 
   // (11) e (12) -----------------------------------------------------------------------------

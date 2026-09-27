@@ -11,8 +11,25 @@ vai achar que a suíte mudou de tamanho sozinha
 
 ## 1. Regras de negócio numeradas
 
-Cada `RN-Exx` aparece (a) aqui, (b) no nome do teste que a prova, (c) na frase do
-`docs/almoxarifado-manual-do-sistema.md`. `grep RN-E01` acha os três.
+Cada `RN-Exx` aparece (a) aqui e (b) no nome do teste que a prova — `grep RN-E01` acha os dois.
+
+⚠️ **ESTA FRASE PROMETIA TRÊS LUGARES E ESTAVA ERRADA EM DOIS PONTOS; a revisão adversarial mediu, e
+a correção fica à vista porque a segunda parte é permanente.**
+
+1. **O terceiro lugar era o manual do sistema, e ele NÃO leva IDs de RN — de propósito.** O manual
+   descreve o sistema para quem nunca ouviu falar de etapa; `RN-E01` ali é jargão de
+   desenvolvimento, da mesma família que a skill `fechar-etapa` proíbe naquele arquivo (número de
+   etapa, hash, nome de função). O rastro de negócio → documento existe, mas por **frase**, não por
+   ID: a régua de "completo" está escrita por extenso na seção 14b.1b, e as decisões estão nas letras
+   B/D das novidades, que **são** o documento de rastro.
+2. **O espaço de nomes `RN-E0x` JÁ ESTAVA OCUPADO, e isso não tem conserto barato.**
+   `docs/almoxarifado-novidades-por-etapa.md:10327-10386` usa `RN-E01..RN-E10` para a etapa de
+   **fornecedor/cotação**. Um `grep RN-E01` traz os dois assuntos, e vai continuar trazendo: renomear
+   agora mexeria em nomes de teste e comentários de código já commitados, por um ganho de higiene, e
+   o risco de um rename mecânico num arquivo de 199 suítes é maior que o incômodo.
+   **Regra para a próxima etapa, que resolve de vez:** o prefixo passa a carregar o número da etapa —
+   `RN-43-01`, `RN-44-01`. O espaço de uma letra por etapa está esgotado desde a 41, e foi por isso
+   que duas etapas colidiram sem ninguém notar.
 
 | ID | Enunciado | Cenário que a prova |
 |---|---|---|
@@ -141,9 +158,17 @@ quebrar a suíte**. Por isso T3 afirma `cartao.erro === undefined` (molde de
 ### 2.5 Log não-fatal (literais congeladas)
 
 ```
-[recebimento] status automatico do pedido de compra falhou (recebimento <id>, pedido <id>): <msg>
+[recebimento] status automatico do pedido de compra falhou (recebimento <id>): <msg>
 [recebimento] pedido <numero|#id> completo, mas status <status> nao e sobrescrito automaticamente
 ```
+
+⚠️ **A primeira literal foi corrigida AQUI depois da revisão adversarial: o plano congelava
+`(recebimento <id>, pedido <id>)` e o código escreve só `(recebimento <id>)`** — e não poderia
+escrever outra coisa, porque o `catch` é do **chamador**, fora do laço de pedidos, e nesse ponto não
+existe "o pedido" (podem ser vários, ou nenhum). O documento de novidades já trazia a literal certa;
+era o plano que mentia. Contrato congelado que o código não pode cumprir é pior que contrato
+ausente — o próximo executor tenta cumpri-lo e move o `catch` para dentro do laço, perdendo a
+garantia de que **qualquer** passo da função cai no mesmo lugar com a mesma frase.
 
 **O segundo `warn` sai SÓ quando `LOWER(status) ∈ {cancelado, rejeitado}` (F11).** O status
 `'recebido'` está na lista de respeitados por **idempotência**, e ele é o **caminho esperado**: o
@@ -388,13 +413,59 @@ que afirma que a guarda sai **calada**. Com o cenário consertado, a mesma sabot
 que o código trata por *guarda* não mede não-fatalidade nenhuma — a falha tem de acontecer **depois** da
 guarda.
 
+## 5a. Fase 5 — revisão adversarial: duas lentes frescas em paralelo, com sonda executada
+
+Duas lentes disjuntas, em paralelo, instruídas a **refutar**: (A) correção das RN + composição entre
+T1/T2/T3/T4; (B) autorização/exposição de dado + *"este teste passaria com a feature quebrada?"*.
+As duas rodaram **sondas executáveis** pelas portas reais — 18 sondas ao todo — em vez de ler código.
+
+**Placar: 10 achados — 2 Critical, 2 Important, 6 Minor. Zero ruído** (nenhum achado descartado por
+não reprodução; toda hipótese que caiu foi relatada como caída, com a evidência).
+
+| # | Lente | Achado | Estado |
+|---|---|---|---|
+| **F1** | RN | **Critical** — pedido fisicamente completo **não fechava** por ponto flutuante (`20,1` recebido em `2,2 + 17,9`); e-mail com `Saldo pendente: 3.55e-15` contra cartão com `0` | ✅ `275340d` |
+| **F2** | RN | **Important** — excedente autorizado de um material **pagava o saldo** de outro (agregação por pedido vs. régua da escrita por material) | ✅ `275340d` |
+| **F3** | RN | **Critical** — laço que lança no meio deixava estado **irrecuperável e mudo** (nota processada, saldo 0, pedido `pendente`+`RECEBIDO`, sem log) | ✅ `275340d` |
+| F4 | RN | Minor — o pedido é gravado `recebido` **antes** de a nota virar PROCESSADA | ✅ declarado (`G68`) |
+| F5 | RN | Minor — literal "congelada" no plano que o código não produz | ✅ §2.5 corrigida |
+| F6 | RN | Minor — `grep RN-E01` não acha os três lugares; e o ID **colide** com outra etapa | ✅ §1 corrigida |
+| F7 | Aut | **Important** — as duas rotas aux de pedido têm **só `auth`**: valor, CNPJ e **preço** vazavam para quem não tem perfil e para Consulta; e a Etapa 42 escreveu duas justificativas com **premissa falsa** sobre um 403 que não existe | ✅ preço removido + frases corrigidas + gate na letra B (`B166`) |
+| F8 | Aut | Important — cenário (5) com as asserções atrás de `if (status === 201)`: desapareciam **em silêncio** com o defeito vivo | ✅ virou `assert` |
+| F9 | Aut | Minor — as **três** guardas de normalização de caixa podiam ser removidas **as três** com os 199 arquivos verdes | ✅ cenário (5b) |
+| F10 | Aut | Minor × 2 no cliente — badge tautológico na fixture; `not.toMatch(/\d+ dias/)` acertando por adjacência | ✅ `total: 9` + asserção por elemento |
+
+**Vereditos de autorização (medidos, não deduzidos):** fechar o pedido **não é escalada de
+privilégio** — quem não tem perfil toma 403 na porta, o único valor gravável é a constante `recebido`,
+e a guarda atômica impede sobrescrever o que o comprador decidiu (`B166` declara a fronteira). O
+alerta novo **não vaza** nada monetário, nem no cartão nem no e-mail (medido campo a campo, contra o
+irmão). A trilha é legível **só pelo Administrador** — o comprador toma 403, o que deixa a promessa da
+`B163` incompleta para o dono do pedido (`B167`). O `PATCH .../status` está **intacto**, com controle
+positivo provando que o 403 medido era o gate e não a rota quebrada.
+
+**Hipóteses que caíram, e valem tanto quanto os achados:** dois recebimentos concorrentes contra o
+mesmo pedido (sequencial **e** `Promise.all`) fecham uma vez, com uma linha de trilha — o `r.changes`
+resolve a corrida; duas linhas do mesmo material somam certo; pedido sem linhas e linha de texto livre
+não quebram; `SOMA_POR_PEDIDO_SQL` **não** diverge entre os três leitores (testado até com
+`quantidade_recebida` negativa); o gancho **não** pode ser removido sem a suíte notar (13 cenários em
+5 arquivos caem); e no cliente as asserções **não** casam com o fallback genérico. A limitação
+declarada do estorno foi **confirmada verdadeira** por sonda — o texto da letra B descreve o
+comportamento real.
+
+**A 5ª e a 6ª ocorrência de "teste que não sabe falhar" desta base** saíram daqui (F8 e F9), e nenhuma
+era teste vazio no sentido clássico: uma era asserção **armada atrás de um interruptor sem alarme**, a
+outra eram **guardas sem cobertura**. Vale registrar a diferença, porque o padrão que a
+`fechar-etapa` cataloga ("cenário que afirma ausência passa com a tela vazia") não pegaria nenhuma das
+duas.
+
 ## 5b. Retro de 4 números — Etapa 42
 
-**1. Rodadas de correção até verde:** **0** no sentido clássico (nenhum fix-round de código depois da
-integração — ver a Fase 5 abaixo quando fechar). O que houve foi **1 conserto de TESTE durante a
-task**, achado pelo controle positivo: o cenário de não-fatalidade de T2 não sabia falhar e foi
-reescrito antes de o commit sair. Contar isso como "rodada de correção" seria contabilidade
-generosa; contar como zero seria desonesto — fica registrado como o que é.
+**1. Rodadas de correção até verde: UMA** (`275340d` + os consertos de teste e de documento que vieram
+com ela). Uma rodada, não mais: os 10 achados da Fase 5 foram endereçados de uma vez, na ordem que o
+revisor sugeriu (F3 → F1 → F2, depois os Minor), e nenhum teste falhou em 3 rodadas seguidas — o
+detector de esteira não disparou. Antes dela houve **1 conserto de TESTE durante a task**, achado pelo
+controle positivo (o cenário de não-fatalidade de T2 não sabia falhar e foi reescrito antes de o commit
+sair); contar isso como rodada seria generoso, ignorá-lo seria desonesto.
 
 **2. Achados da revisão: reais vs. ruído.**
 - **Fase 2 (revisão do plano): 17 achados — 17 reais, 0 ruído.** Os três Critical foram confirmados
@@ -407,7 +478,12 @@ generosa; contar como zero seria desonesto — fica registrado como o que é.
   medição minha errada. **Nenhum achado foi descartado por não reprodução.** A Fase 2 desta etapa é a
   de melhor rendimento até aqui: 3 Critical num plano que já tinha passado pela minha própria
   medição.
-- **Fase 5 (revisão do código): duas lentes em paralelo** — resultado abaixo, na seção da Fase 5.
+- **Fase 5 (revisão do código): 10 achados — 2 Critical, 2 Important, 6 Minor, ZERO ruído** (seção 5a).
+  **O número que importa:** os dois Critical estavam **atrás de uma suíte de 199 arquivos verde**, e os
+  dois só apareceram por **sonda executada pelas portas reais** — leitura de código e suíte verde não
+  os acharam. É a terceira etapa seguida em que isso acontece, e agora com o caso mais eloquente da
+  série: o F1 fazia a etapa **não cumprir a própria feature-título** (pedido completo que não fecha) em
+  qualquer pedido com uma casa decimal, num módulo cujas unidades são KG e M.
 
 **3. Paralelismo: 2 galhos, rodaram em paralelo de fato, 0 retrabalho.** T3 em worktree isolada
 (`../CRM-wt-e42-alerta`, junction de `node_modules`, sem `npm install`) e T4 na árvore principal, só
@@ -420,9 +496,16 @@ dos dois. Foi congelado **antes** de despachar.
 necessidade (os dois tocam o mesmo arquivo). A janela de paralelismo real desta etapa era pequena
 por desenho — o valor estava no tronco.
 
-**4. Defeito que escapou:** a preencher na Fase 0 da Etapa 43, olhando para trás. Os candidatos
-conhecidos (declarados, não escapados) estão nas letras B161 (movimentação ESTORNADA depois do
-fechamento) e D10/B165 (e-mail de parcial que chega depois de o pedido fechar).
+**4. Defeito que escapou:** a preencher na Fase 0 da Etapa 43, olhando para trás. **Mas dois já são
+conhecidos agora — e não escaparam: foram pegos na Fase 5, dentro da etapa.** O **F1** (float) e o
+**F3** (laço que lança) estavam atrás de uma suíte verde de 199 arquivos, e se a Fase 5 tivesse sido
+uma revisão por **leitura** os dois teriam ido para produção — o F1 fazendo a etapa **não cumprir a
+própria feature-título** em qualquer pedido com uma casa decimal. O que de fato sobra para a 43 medir é
+se o conserto da régua (epsilon + déficit por material) produziu efeito em algum consumidor que
+ninguém listou. Os limites **declarados** (decisão, não defeito) estão em **B161** (movimentação
+estornada depois do fechamento), **B165**/D10 (e-mail que chega depois do fechamento), **B166** (o gate
+aberto das duas rotas aux — pendência **sua**), **B167** (a trilha que o comprador não lê) e **G68** (o
+pedido gravado antes de a nota fechar).
 
 **Bônus — o que este plano errou, e é a métrica que mais importa para a próxima:** quatro erros, os
 quatro achados pela **execução** e não por releitura (seção 5, "Erros DESTE plano"). O mais instrutivo

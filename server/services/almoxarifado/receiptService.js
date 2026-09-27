@@ -1579,7 +1579,7 @@ async function listarPedidosCompraAux(db, { search, pendentes } = {}) {
   // A soma por pedido vem de uma SUBQUERY AGRUPADA (`SOMA_POR_PEDIDO_SQL`), e nao de um
   // `.filter()`/`reduce` em JS depois da consulta, porque o filtro de `?pendentes=1` tem de rodar
   // ANTES do `LIMIT 50` (ver abaixo) — e para isso a soma precisa existir dentro do SQL.
-  let sql = `SELECT p.id, p.numero, p.valor_total, p.status, p.data_pedido,
+  let sql = `SELECT p.id, p.numero, p.status, p.data_pedido,
     f.razao_social as fornecedor_nome, f.cnpj as fornecedor_cnpj,
     COALESCE(i.total_pedido, 0) as total_pedido,
     COALESCE(i.soma_recebida, 0) as soma_recebida,
@@ -1616,7 +1616,6 @@ async function listarPedidosCompraAux(db, { search, pendentes } = {}) {
   return linhas.map((linha) => ({
     id: linha.id,
     numero: linha.numero,
-    valor_total: linha.valor_total,
     status: linha.status,
     data_pedido: linha.data_pedido,
     fornecedor_nome: linha.fornecedor_nome,
@@ -1775,10 +1774,21 @@ async function fecharPedidosCompletos(db, user, recebimentoId) {
  *
  * ⚠️ COLUNAS PROJETADAS, nunca `p.*` — a MESMA regra (e o mesmo motivo) do F3 da Etapa 39: a linha
  * crua desta fonte viaja para `GET /almoxarifado/alertas/central`, cujo gate e
- * `requirePermission('ver_alertas')` e NAO inclui `checkModulePermission('compras')`. Com `p.*`, um
- * almoxarife que toma 403 em `GET /api/compras/pedidos` receberia `valor_total` e `observacoes` de
- * pedidos CORE na aba Network. E qualquer coluna acrescentada amanha a `pedidos_compra` viajaria sem
- * revisao nenhuma.
+ * `requirePermission('ver_alertas')`, uma lista que **nao** inclui PRODUCAO/CONSULTA e **nao** exige
+ * o modulo Compras. Com `p.*`, `valor_total` e `observacoes` de pedidos CORE viajariam para quem tem
+ * `ver_alertas` sem ter Compras — e, pior, qualquer coluna acrescentada amanha a `pedidos_compra`
+ * viajaria junto, sem revisao nenhuma. A projecao e o que impede isso.
+ *
+ * ⚠️ **A JUSTIFICATIVA ANTERIOR DESTE PARAGRAFO ESTAVA ERRADA, e a correcao fica a vista.** Ela dizia
+ * *"um almoxarife que toma 403 em `GET /api/compras/pedidos` receberia `valor_total` e `observacoes`
+ * na aba Network"* — e o almoxarife **nao** tomava 403 para aquele dado: ele **ja recebia**
+ * `valor_total` e `fornecedor_cnpj` pela porta do PROPRIO almoxarifado
+ * (`GET /recebimentos-aux/pedidos-compra`, que tem `auth` e nenhum `requirePermission`), medido por
+ * sonda na revisao adversarial — e recebia tambem quem nao tem perfil nenhum (fallback `PRODUCAO`) e
+ * quem e `CONSULTA`, que **tomam** 403 na central. A projecao continua certa por higiene; o argumento
+ * que a sustentava e que era falso, e frase assim faz o proximo confiar num 403 que nao existe.
+ * O `valor_total` saiu daquela porta nesta onda de correcao; o GATE dela continua aberto, e essa
+ * decisao esta na letra B para o Andre arbitrar.
  *
  * `LEFT JOIN`, nao `JOIN`: pedido orfao de fornecedor tambem tem saldo pendente (R9 da Etapa 39).
  *
@@ -1886,7 +1896,22 @@ async function listarItensPedidoCompraAux(db, pedidoId) {
         // payload por material e mede a recebida TOTAL). `saldo_pendente` segue sendo exibido como
         // informacao do que falta naquela linha.
         saldo_pendente_material: Math.max(0, saldoPorMaterial.get(String(linha.material_id))),
-        valor_unitario: linha.valor_unitario,
+        // ⚠️ `valor_unitario` SAIU daqui na onda de correcao da Etapa 42, e a remocao e a correcao de
+        // uma EXPOSICAO medida, nao limpeza de campo sobrando. Esta rota tem `auth` e NENHUM
+        // `requirePermission` (`routes/almoxarifado/extended.js:1137`), entao qualquer usuario
+        // autenticado do sistema — inclusive quem nao tem perfil nenhum, que cai no fallback
+        // `PRODUCAO`, e quem tem `CONSULTA` — recebia o PRECO NEGOCIADO de cada linha do pedido de
+        // compra. Medido por sonda na revisao adversarial, com `valor_unitario: 98765.432` chegando em
+        // 200 para os tres perfis.
+        //
+        // Medido tambem que o client NAO consome este campo: `RecebimentosAlmoxarifado.js:566-578`
+        // mapeia id/material/unidade/saldos e nada mais (o `valor_unitario` que aquela tela manda no
+        // `PUT /fiscal` vem de `detalhe.itens`, do proprio recebimento, nao daqui).
+        //
+        // O gate da rota continua aberto e isso esta na letra B, para o Andre arbitrar: apertar
+        // `requirePermission('receber_material')` aqui e uma linha, mas tira a tela de recebimento de
+        // quem hoje so olha (CONSULTA/PRODUCAO), e essa e decisao dele, nao minha. Tirar o preco e
+        // reversivel e nao muda gesto nenhum.
       };
     })
     .filter((item) => item.saldo_pendente > 0);

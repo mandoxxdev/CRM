@@ -628,7 +628,7 @@ escrever status em massa numa tabela do núcleo, sem ninguém olhando, é exatam
 correção retroativa que este projeto evita — e o `HAVING` acima pode incluir pedido que você
 cancelou informalmente ou que teve excedente lançado por engano.
 
-### B. Decisões de negócio — B1 a B165; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B167; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(O título desta seção dizia "B1 a B24" — **estava defasado**: os itens já iam até B36 antes da
 Etapa 20. Corrigido em 2026-08-28 para B50, depois para B56 com as três da Etapa 24, para B57 com
@@ -2937,6 +2937,45 @@ ele foi escrito**, que o fechamento não conhece — apagar exigiria varrer a fi
 casamento frágil. E o e-mail não fica falso: o pedido **estava** parcial quando o aviso nasceu, e a
 fila é também o histórico. O estado de agora está sempre na aba Compras.
 
+**B166 (NOVA, da Etapa 42 — e é a que mais merece a sua leitura desta lista) — quem tem permissão de RECEBER passa a poder fechar um pedido de compra, e a porta do Recebimento continua aberta demais.**
+
+**O que foi escolhido:** o fechamento automático dispara de dentro do recebimento, então quem o
+dispara é quem tem permissão de **receber material** — hoje **Administrador, Almoxarife e Compras**.
+Isso significa que um **Almoxarife escreve no pedido do módulo Compras sendo barrado no módulo
+Compras**. Medido, e é o que sustenta a escolha: (i) quem **não tem perfil** cai em *Produção* e
+**não alcança** a porta (toma 403), então "usuário sem perfil" não fecha pedido nenhum; (ii) o único
+valor que o automático grava é a palavra **Recebido** — ele não escolhe status, e **não** sobrescreve
+Cancelado/Rejeitado, então o Almoxarife não ganha por aí o poder que o lápis dá ao comprador;
+(iii) ele só age quando a conta física fecha.
+**O que foi descartado:** exigir o módulo Compras para processar a nota. Descartado porque tiraria do
+Almoxarife o recebimento inteiro, não só o fechamento — o gate é o mesmo.
+**Se você preferir restringir**, o ponto a apertar é a permissão de **receber material**, e vale saber
+que apertá-la custa o recebimento todo.
+
+⚠️ **E aqui vai um achado de revisão que NÃO é desta etapa, mas que ela encontrou e você precisa
+decidir:** as duas consultas que a tela de Recebimento usa para listar pedidos de compra e suas linhas
+(as que existem desde a etapa do recebimento contra pedido) **só exigem estar logado** — nenhuma
+permissão de perfil. Medido por sonda: um usuário **sem perfil nenhum** e um usuário de **Consulta**
+recebiam, em resposta 200, o **valor total do pedido**, o **CNPJ do fornecedor** e o **preço unitário
+negociado de cada linha**. Nesta onda de correção **tirei os dois campos de preço** das respostas
+(medido que nenhuma tela os usa; o preço continua chegando ao custo médio por dentro do servidor, que
+é por onde ele sempre andou) e **mantive o CNPJ**, porque a tela de recebimento o usa para preencher o
+formulário. **O gate em si não mexi, e é decisão sua:** exigir *receber material* nessas duas
+consultas é uma linha, mas faz a tela de Recebimento parar de abrir a lista de pedidos para quem hoje
+só olha (Consulta/Produção). Fica registrado em vez de decidido no seu lugar porque muda quem
+consegue usar uma tela.
+
+**B167 (da Etapa 42) — a trilha do fechamento automático só o Administrador do almoxarifado lê.**
+
+**O que foi escolhido:** manter o gate da tela de Auditoria como está (**só Administrador**).
+**O que foi descartado:** abrir a Auditoria para o perfil de Compras.
+**Por quê, e qual é o custo:** a razão de existir da trilha (**B163**) é responder *"quem mudou meu
+pedido?"* — e **o comprador, que é o dono do pedido, não alcança a resposta**: ele toma 403 na tela de
+Auditoria (medido). Abrir aquela tela para Compras daria a ele a trilha **inteira** do almoxarifado, e
+não só a linha do pedido dele; por isso não foi feito por conta própria. É uma linha de código quando
+você decidir, e as opções são: abrir a Auditoria para Compras (simples, dá tudo), ou mostrar as
+mudanças automáticas na própria tela do pedido (mais trabalho, dá só o que interessa).
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -5206,6 +5245,16 @@ espaços no meio), o aviso verde mostra *"COT 7"*. A lista e o banco guardam o n
 digitado. Cosmético.
 
 ---
+
+**G68 (NOVO, da Etapa 42). O pedido é marcado *Recebido* ANTES de a nota ser marcada como
+processada.** A ordem interna é: entra no estoque → fecha o pedido → gera a conta a pagar → marca a
+nota como *Processada*. Se algo falhar **entre** o fechamento e a marcação (medido com a geração da
+conta a pagar recusada pelo banco), o pedido do Compras fica **Recebido** por uma nota que **não**
+chegou a *Processada*, e a tela de recebimento mostra a nota ainda no faturamento. É **aceitável pelo
+mesmo raciocínio já escrito no código** — o material está no galpão, e travar a nota é o dano maior —
+e o estado **converge** quando a causa da falha é corrigida e a nota reprocessada. Fica declarado
+porque ninguém adivinha a ordem: quem vê um pedido *Recebido* com a nota em aberto precisa saber que
+isso é conhecido, não corrupção.
 
 **G66 (NOVO, da Etapa 42). O alerta de pedido ATRASADO não tem guarda de tabela ausente — o de
 parcial tem.** As duas entradas leem `pedidos_compra`, que é tabela do **núcleo**. A entrada nova

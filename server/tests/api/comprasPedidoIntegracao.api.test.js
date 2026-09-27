@@ -248,8 +248,14 @@ const semPermissao = (perfil) => 'Autorizar recebimento acima do pedido exige a 
     assert.strictEqual(linhas.body[0].saldo_pendente, 10, 'saldo da linha errado');
     assert.strictEqual(linhas.body[0].saldo_pendente_material, 10,
       'e o TETO que a porta do recebimento aceita — a tela limita o input por ele');
-    assert.strictEqual(linhas.body[0].valor_unitario, 7,
-      'o preco da linha (U1 da Etapa 37, base do custo medio) nao chegou ao recebimento');
+    // ⚠️ REESCRITA na onda de correcao da Etapa 42, pelo mesmo motivo da irma em
+    // `comprasPedidoCriar`: o `valor_unitario` saiu do contrato desta rota porque ela tem `auth` e
+    // NENHUM `requirePermission` — o preco negociado vazava para qualquer usuario autenticado, medido
+    // por sonda. A garantia do custo medio nunca passou por este JSON (o preco viaja pelo servidor,
+    // de `linhaResolvida`), e quem a prova e o cenario de `custo_medio` de
+    // `pedidoSaldoRecebido.api.test.js`. Aqui fica a negativa, que prende a exposicao no lugar.
+    assert.ok(!('valor_unitario' in linhas.body[0]),
+      `a rota de itens do pedido nao pode devolver preco: ${JSON.stringify(linhas.body[0])}`);
   });
 
   // ═══════════════════════════════════════════════════════════════════════════════════════════════

@@ -524,9 +524,17 @@ const ALERT_REGISTRY = Object.freeze([
       // ⚠️ COLUNAS NOMEADAS, nunca `SELECT p.*` — e a onda de correcao (F3) trocou justamente
       // isso. `montarCentral` devolve as linhas CRUAS (ate 50) na resposta de
       // `GET /api/almoxarifado/alertas/central`, cujo gate e `requirePermission('ver_alertas')` —
-      // que NAO inclui `checkModulePermission('compras')`. Com `p.*`, um ALMOXARIFE (que recebe
-      // 403 em `GET /api/compras/pedidos`) recebia `valor_total`, `observacoes` e `fornecedor_id`
-      // de pedidos CORE na aba Network, ainda que a tela desenhe so 4 colunas.
+      // que NAO inclui `checkModulePermission('compras')`. Com `p.*`, quem tem `ver_alertas` sem ter
+      // o modulo Compras recebia `valor_total`, `observacoes` e `fornecedor_id` de pedidos CORE na
+      // aba Network, ainda que a tela desenhe so 4 colunas.
+      //
+      // ⚠️ **A FRASE ENTRE PARENTESES AQUI ESTAVA ERRADA e fica corrigida a vista** (revisao
+      // adversarial da Etapa 42): ela dizia *"um ALMOXARIFE (que recebe 403 em
+      // `GET /api/compras/pedidos`)"*. O almoxarife **nao** ficava sem aquele dado — ele o obtinha
+      // pela porta do proprio almoxarifado (`GET /recebimentos-aux/pedidos-compra`, com `auth` e
+      // NENHUM `requirePermission`), medido por sonda; e quem **de fato** toma 403 na central
+      // (PRODUCAO, CONSULTA) tambem obtinha por lá. A projecao de colunas continua certa — o que
+      // estava errado era o exemplo, e exemplo errado ensina a confiar num 403 inexistente.
       //
       // O time JA decidiu este trade-off por escrito no arquivo ao lado (`permissions.js:92-95`):
       // PRODUCAO/ENGENHARIA/CONSULTA saíram de `ver_alertas` na Etapa 16 porque

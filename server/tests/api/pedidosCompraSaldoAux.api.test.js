@@ -251,7 +251,14 @@ const COMPRAS = { id: 66, nome: 'Compras E37', role: 'usuario', perfil_almoxarif
     assert.strictEqual(item.saldo_pendente, 4);
     assert.strictEqual(item.codigo, 'LINHA-A');
     assert.strictEqual(item.unidade, 'PC');
-    assert.strictEqual(item.valor_unitario, 25);
+    // ⚠️ `valor_unitario` SAIU do contrato desta rota na onda de correcao da Etapa 42, e a assercao
+    // virou a NEGATIVA. Motivo medido por sonda na revisao adversarial: a rota tem `auth` e NENHUM
+    // `requirePermission`, entao qualquer usuario autenticado — inclusive quem nao tem perfil (cai no
+    // fallback PRODUCAO) e quem e CONSULTA — recebia o PRECO NEGOCIADO de cada linha do pedido de
+    // compra. Medido tambem que o client nao consome o campo. A assercao antiga (`=== 25`) prendia a
+    // exposicao no lugar, e e por isso que ela e substituida em vez de apagada.
+    assert.ok(!('valor_unitario' in item),
+      `a rota de itens do pedido nao pode devolver preco (gate e so \`auth\`): ${JSON.stringify(item)}`);
     assert.strictEqual(item.material_codigo, mat.codigo, 'a tela mostra o codigo do MATERIAL');
     assert.ok(item.material_nome, 'a tela mostra o nome do material');
 
