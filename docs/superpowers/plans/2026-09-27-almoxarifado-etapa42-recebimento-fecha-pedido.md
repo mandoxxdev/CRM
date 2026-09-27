@@ -631,13 +631,25 @@ item 4 de "Erros DESTE plano"):**
   **ação** que a spec 08 pede (*"tipo, quantidade, ação"*) **já tem vocabulário** do lado da
   qualidade — a 43 não precisa inventá-lo, precisa decidir se o reusa ou o estende
   (falta `ACEITAR_SOB_DESVIO`, que é o item (2) do "falta para 🟢" da feature 09, e `SUCATEAR`).
-  ⚠️ **A investigar na Fase 0 da 43, com sonda:** `divergencia_dimensional` é **derivada** das medidas
-  (`:224`, e a Etapa 29 tornou o campo somente-leitura na tela quando há medidas), mas
-  `divergencia_quantidade` é gravada **do payload** (`:275` — `data.divergencia_quantidade ? 1 : 0`),
-  isto é, é um **booleano que o usuário marca**, enquanto a divergência real de quantidade é
-  **calculável** pela régua float-safe de `divergencia.js`. Se for isso, é a mesma classe de defeito
-  da feature 07 (`reserva_id` que era só uma coluna) e da própria Etapa 37 — **e é achado, não
-  tarefa**: medir antes de afirmar, porque pode ser decisão declarada em algum lugar que eu não li.
+  ⚠️ **ACHADO, agora MEDIDO (era suspeita quando esta linha foi escrita, e a medição a confirmou):**
+  na tabela de inspeção, `conforme` é **derivado** (`reprovada === 0 ? 1 : 0`, `:274`) e
+  `divergencia_dimensional` é **derivada** das medidas (`:224`; a Etapa 29 tornou o campo
+  somente-leitura na tela quando há medidas) — mas **`divergencia_quantidade` é gravada do PAYLOAD**
+  (`:275`, `data.divergencia_quantidade ? 1 : 0`), junto com `certificado_ausente`, `dano_fisico` e
+  `material_incorreto`. É um **booleano que o usuário marca**, enquanto a divergência real de
+  quantidade é **calculável** e já tem régua float-safe pronta (`divergenciaRealSql` sobre
+  `quantidade_recebida - quantidade_esperada`, que é exatamente o que
+  `alertRegistry.listarDivergenciasRecebimento` faz).
+  **Procurei decisão declarada e não existe:** `specs/.../09-inspecao-qualidade/README.md:61` só
+  **lista** a coluna ("conforme, divergência de quantidade/dimensional, certificado ausente…"), sem
+  dizer que é auto-declarada nem por quê; nada nas novidades trata do assunto.
+  **Por que isso importa para a 43, e muda a ordem das tasks:** é a mesma classe de defeito da feature
+  07 (`reserva_id` que era só uma coluna com a spec afirmando que havia baixa) e da própria 37 (o
+  pedido que não sabia o que tinha chegado). O documento de divergência **não pode nascer lendo esse
+  booleano** — nasceria herdando a mentira. A 43 tem de decidir: derivar (e tornar o campo
+  somente-leitura, como a 29 fez com o dimensional) ou declarar por escrito que é uma **afirmação do
+  inspetor**, distinta do fato calculado. `certificado_ausente`/`dano_fisico`/`material_incorreto`
+  são legitimamente auto-declarados (ninguém os calcula) — só o de **quantidade** tem o fato ao lado.
 - **`listarReprovados`** (que alimenta o alerta `MATERIAL_REPROVADO`) é o embrião do documento visto
   pela qualidade — vale ler antes de desenhar a tabela nova.
 
