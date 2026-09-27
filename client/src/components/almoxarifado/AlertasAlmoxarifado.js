@@ -175,15 +175,50 @@ const COLUNAS_POR_CHAVE = {
         .join('; ') || '—',
     },
   ],
-  // Etapa 39 (RN-D09): a linha crua vem de `pedidos_compra` (SELECT p.*), então o fallback
-  // genérico mostraria `id`, `fornecedor_id` e `valor_total` crus — e nenhum deles é a história
-  // do alerta. Espelha as cinco linhas do corpo do e-mail, menos o `Status` (que o cartão já
-  // qualifica: o alerta só existe para pedido ainda não recebido).
+  // Etapa 39 (RN-D09): a linha crua vem de `pedidos_compra`, então o fallback genérico mostraria
+  // `id` e `status` crus — e nenhum deles é a história do alerta. Espelha as cinco linhas do corpo
+  // do e-mail, menos o `Status` (que o cartão já qualifica: o alerta só existe para pedido ainda
+  // não recebido).
+  //
+  // ⚠️ CORREÇÃO (Etapa 42, T4): este comentário dizia que a linha vem de `pedidos_compra`
+  // **`SELECT p.*`**, e citava `fornecedor_id`/`valor_total` como o que o fallback mostraria.
+  // Isso é FALSO desde a onda F3 da Etapa 39, que trocou o `p.*` por colunas nomeadas
+  // (`alertRegistry.js`, entrada `PEDIDO_COMPRA_ATRASADO`: `p.id, p.numero, p.status,
+  // p.previsao_entrega, f.razao_social AS fornecedor_nome`) exatamente para valor de pedido e
+  // observação de negociação pararem de viajar para a central, cujo gate (`ver_alertas`) não
+  // inclui `checkModulePermission('compras')`. A frase fica corrigida À VISTA, com a data, em vez
+  // de apagada em silêncio — regra 5 do CLAUDE.md, e esta base já foi enganada duas vezes por
+  // afirmação removida sem rastro.
   PEDIDO_COMPRA_ATRASADO: [
     { titulo: 'Pedido', render: (l) => l.numero || `#${l.id}` },
     { titulo: 'Fornecedor', render: (l) => l.fornecedor_nome || '—' },
     { titulo: 'Previsão', render: (l) => (l.previsao_entrega ? formatData(l.previsao_entrega) : '—') },
     { titulo: 'Dias de atraso', render: (l) => (l.dias_atraso ?? '—') },
+  ],
+  // Etapa 42 (RN-E09), a 13a chave. A linha vem de `situacaoDosPedidosCompra` (receiptService,
+  // T1): { id, numero, status, previsao_entrega, fornecedor_nome, quantidade_pedida,
+  // quantidade_recebida, saldo_pendente, situacao_recebimento }. Sem esta entrada o fallback
+  // genérico desenharia os 6 primeiros campos NA ORDEM DO OBJETO — `id` e `status` crus incluídos
+  // — e a história do alerta (quanto foi pedido, quanto chegou, quanto falta) sumiria.
+  //
+  // Contrato congelado 2.6 do plano da etapa: 6 colunas, nesta ordem, e NENHUMA coluna crua.
+  // `situacao_recebimento` fica fora de propósito: o cartão só existe para pedido PARCIAL, então
+  // uma coluna repetindo "PARCIAL" em toda linha é ruído; e `status` fica fora pelo mesmo motivo
+  // do cartão irmão (o `status` do core não é a régua do alerta — quem decide é a situação).
+  //
+  // ⚠️ Os rótulos são CURTOS e de propósito DIFERENTES das frases do corpo do e-mail (o e-mail
+  // diz "Quantidade pedida:", aqui é "Pedida"). É o mesmo precedente do `PEDIDO_COMPRA_ATRASADO`
+  // (`Previsão`/`Dias de atraso` no cartão, frases inteiras no e-mail) — a tabela precisa de
+  // cabeçalho que caiba na coluna. Não unificar com as literais do `alertRegistry`.
+  PEDIDO_COMPRA_PARCIAL: [
+    { titulo: 'Pedido', render: (l) => l.numero || `#${l.id}` },
+    { titulo: 'Fornecedor', render: (l) => l.fornecedor_nome || '—' },
+    { titulo: 'Pedida', render: (l) => formatNum(l.quantidade_pedida) },
+    { titulo: 'Recebida', render: (l) => formatNum(l.quantidade_recebida) },
+    { titulo: 'Saldo pendente', render: (l) => formatNum(l.saldo_pendente) },
+    // A população do parcial NÃO filtra previsão (a do atrasado filtra), então a linha chega com
+    // `previsao_entrega` null — o guarda evita "Invalid Date" na célula.
+    { titulo: 'Previsão', render: (l) => (l.previsao_entrega ? formatData(l.previsao_entrega) : '—') },
   ],
 };
 

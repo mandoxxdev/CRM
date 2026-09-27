@@ -156,9 +156,19 @@ const CENTRAL_FIXTURE = {
       ],
     },
     // Etapa 39: a 12a entrada do registro, e a PRIMEIRA que lê tabela CORE (`pedidos_compra`).
-    // A linha é `SELECT p.*` + `fornecedor_nome`, então o fallback genérico mostraria `id`,
-    // `fornecedor_id` e `valor_total` crus. `fornecedor_nome` null de propósito na 2a linha:
-    // pedido órfão de fornecedor TAMBÉM atrasa (LEFT JOIN, R9) e não pode virar "null" na tela.
+    //
+    // ⚠️ CORREÇÃO DE COMENTÁRIO (Etapa 42, T4): este comentário dizia "a linha é `SELECT p.*` +
+    // `fornecedor_nome`". Era VERDADE só até a onda F3 da Etapa 39, que trocou o `p.*` por
+    // colunas nomeadas exatamente para o `valor_total`/`observacoes`/`fornecedor_id` de pedido
+    // CORE pararem de viajar para a central (`alertRegistry.js`, o SELECT da entrada
+    // `PEDIDO_COMPRA_ATRASADO`: `p.id, p.numero, p.status, p.previsao_entrega,
+    // f.razao_social AS fornecedor_nome`). A afirmação fica À VISTA em vez de apagada em
+    // silêncio (regra 5 do CLAUDE.md). A fixture abaixo MANTÉM os campos extras de propósito:
+    // ela prova que, se um dia voltarem, a tela não os desenha.
+    //
+    // Sem entrada em COLUNAS_POR_CHAVE o fallback genérico mostraria `id`, `fornecedor_id` e
+    // `valor_total` crus. `fornecedor_nome` null de propósito na 2a linha: pedido órfão de
+    // fornecedor TAMBÉM atrasa (LEFT JOIN, R9) e não pode virar "null" na tela.
     {
       chave: 'PEDIDO_COMPRA_ATRASADO', titulo: 'Pedido de compra atrasado',
       descricao: 'Pedidos de compra com previsão de entrega vencida e ainda não recebidos.',
@@ -173,6 +183,32 @@ const CENTRAL_FIXTURE = {
           id: 32, numero: 'PC-2026-032', fornecedor_id: null, fornecedor_nome: null,
           valor_total: 800, data_pedido: '2026-09-02', previsao_entrega: '2026-09-20',
           status: 'aprovado', atrasado: 1, dias_atraso: 8,
+        },
+      ],
+    },
+    // Etapa 42 (T4): a 13a entrada, NO FIM da fixture porque é a posição em que o servidor a
+    // devolve (a ordem do ALERT_REGISTRY, depois de PEDIDO_COMPRA_ATRASADO). A linha é a que
+    // `situacaoDosPedidosCompra` projeta (T1): { id, numero, status, previsao_entrega,
+    // fornecedor_nome, quantidade_pedida, quantidade_recebida, saldo_pendente,
+    // situacao_recebimento }.
+    //
+    // A 2a linha é o pedido SEM fornecedor (LEFT JOIN, F6 — órfão TEM de vir) e SEM previsão
+    // (a população do parcial não filtra previsão, ao contrário da do atrasado): as duas
+    // células têm de sair `—`, nunca "null" nem "Invalid Date".
+    {
+      chave: 'PEDIDO_COMPRA_PARCIAL', titulo: 'Pedido de compra recebido parcialmente',
+      descricao: 'Pedidos de compra com entrega parcial e saldo ainda pendente.',
+      dias: null, total: 2,
+      linhas: [
+        {
+          id: 91, numero: 'PC-2026-071', status: 'pendente', previsao_entrega: '2026-10-02',
+          fornecedor_nome: 'Aços Vale', quantidade_pedida: 120, quantidade_recebida: 45,
+          saldo_pendente: 75, situacao_recebimento: 'PARCIAL',
+        },
+        {
+          id: 92, numero: 'PC-2026-072', status: 'aprovado', previsao_entrega: null,
+          fornecedor_nome: null, quantidade_pedida: 7.5, quantidade_recebida: 2.5,
+          saldo_pendente: 5, situacao_recebimento: 'PARCIAL',
         },
       ],
     },
@@ -222,6 +258,11 @@ test('um cartao por alerta, na ordem do array do C1 (a tela nao reordena)', asyn
     'alerta-card-DIVERGENCIA_INVENTARIO',
     'alerta-card-LOTE_SEM_CERTIFICADO',
     'alerta-card-PEDIDO_COMPRA_ATRASADO',
+    // Etapa 42: a 13a entrada entra AQUI, no fim — é a posição do ALERT_REGISTRY no servidor.
+    // Esta lista é intencionalmente a lista INTEIRA (não um `toContain`): ela é a única prova de
+    // que a tela não reordena, e por isso a chave nova compartilha a CENTRAL_FIXTURE em vez de
+    // ganhar fixture própria (F9 — fixture separada perderia exatamente esta medição).
+    'alerta-card-PEDIDO_COMPRA_PARCIAL',
   ]);
   expect(texto()).toContain('Calibração vencendo');
   expect(texto()).toContain('Requisição atrasada');
@@ -401,6 +442,89 @@ test('PEDIDO_COMPRA_ATRASADO: pedido, fornecedor, previsao e dias de atraso — 
   // O fallback genérico mostraria as chaves cruas do SELECT p.* nos primeiros 6 campos.
   expect(t).not.toMatch(/fornecedor id/i);
   expect(t).not.toMatch(/valor total/i);
+});
+
+/**
+ * Etapa 42, T4 — cartão da 13a chave, `PEDIDO_COMPRA_PARCIAL`, contra o contrato congelado 2.6 do
+ * plano (docs/superpowers/plans/2026-09-27-almoxarifado-etapa42-recebimento-fecha-pedido.md):
+ * `Pedido` · `Fornecedor` · `Pedida` · `Recebida` · `Saldo pendente` · `Previsão`, nesta ordem.
+ *
+ * Os rótulos do cartão são CURTOS e DIFERENTES das frases do corpo do e-mail (o e-mail diz
+ * "Quantidade pedida:", o cartão diz "Pedida") — intencional, mesmo padrão do cartão irmão
+ * (`Previsão`/`Dias de atraso` no cartão, frases inteiras no e-mail). Não unificar: a seção 2.4 do
+ * plano apagou a frase "o e-mail e o cartão citam as mesmas" justamente porque era o contrato
+ * ambíguo que T3 e T4 dividiriam (F5).
+ *
+ * Sem entrada em COLUNAS_POR_CHAVE o cartão NÃO some (o fallback genérico existe de propósito),
+ * mas mostra `id`, `status` e a ordem do SELECT — e o cartão só existe para pedido PARCIAL, então
+ * repetir a situação na tabela seria ruído.
+ */
+const celulasTodas = (chave) => [...card(chave).querySelectorAll('tbody td')].map((td) => td.textContent);
+
+test('PEDIDO_COMPRA_PARCIAL: cartao existe com o titulo do servidor e o badge do total', async () => {
+  await renderizar();
+
+  const c = card('PEDIDO_COMPRA_PARCIAL');
+  expect(c).not.toBeNull();
+  expect(c.textContent).toContain('Pedido de compra recebido parcialmente');
+  expect(c.textContent).toContain('Pedidos de compra com entrega parcial e saldo ainda pendente.');
+  expect(badgeTotal('PEDIDO_COMPRA_PARCIAL').textContent).toContain('2');
+  // configDias: null no registro — o cartao nao inventa janela.
+  expect(c.textContent).not.toMatch(/\d+ dias/);
+});
+
+test('PEDIDO_COMPRA_PARCIAL: os 6 cabecalhos do contrato 2.6, na ordem', async () => {
+  await renderizar();
+  await expandir('PEDIDO_COMPRA_PARCIAL');
+
+  expect(cabecalhos('PEDIDO_COMPRA_PARCIAL')).toEqual([
+    'Pedido', 'Fornecedor', 'Pedida', 'Recebida', 'Saldo pendente', 'Previsão',
+  ]);
+});
+
+test('PEDIDO_COMPRA_PARCIAL: numero, fornecedor, as tres quantidades e a previsao formatada', async () => {
+  await renderizar();
+  await expandir('PEDIDO_COMPRA_PARCIAL');
+
+  // Celula a celula, na ordem de 2.6 — `toContain` no texto do cartao inteiro deixaria a coluna
+  // trocada passar (Pedida/Recebida sao o par mais facil de inverter).
+  expect(celulasTodas('PEDIDO_COMPRA_PARCIAL').slice(0, 6)).toEqual([
+    'PC-2026-071', 'Aços Vale', '120', '45', '75', '02/10/26',
+  ]);
+});
+
+test('PEDIDO_COMPRA_PARCIAL: sem fornecedor e sem previsao viram travessao, e o cartao nao quebra', async () => {
+  await renderizar();
+  await expandir('PEDIDO_COMPRA_PARCIAL');
+
+  // 2a linha: fornecedor_nome null (LEFT JOIN, F6) e previsao_entrega null (a populacao do
+  // parcial nao filtra previsao). formatNum/`—` sao os mesmos helpers das entradas vizinhas.
+  expect(celulasTodas('PEDIDO_COMPRA_PARCIAL').slice(6, 12)).toEqual([
+    'PC-2026-072', '—', '7,5', '2,5', '5', '—',
+  ]);
+  expect(card('PEDIDO_COMPRA_PARCIAL').textContent).not.toMatch(/null|undefined|Invalid Date|NaN/);
+});
+
+test('PEDIDO_COMPRA_PARCIAL: nenhum campo cru no cartao (id, status, situacao_recebimento)', async () => {
+  await renderizar();
+  await expandir('PEDIDO_COMPRA_PARCIAL');
+
+  const cabecalhosMinusculos = cabecalhos('PEDIDO_COMPRA_PARCIAL').map((h) => h.toLowerCase());
+  expect(cabecalhosMinusculos).not.toContain('id');
+  expect(cabecalhosMinusculos).not.toContain('status');
+  expect(cabecalhosMinusculos).not.toContain('situacao recebimento');
+
+  // O fallback generico desenharia os 6 primeiros campos do objeto: id, numero, status,
+  // previsao_entrega, fornecedor_nome, quantidade_pedida — o `id` e o `status` crus entrariam
+  // como CELULA. (`not.toContain('pendente')` no texto do cartao seria um teste vazio: a palavra
+  // ja esta na descricao e no cabecalho "Saldo pendente".)
+  const cels = celulasTodas('PEDIDO_COMPRA_PARCIAL');
+  expect(cels).not.toContain('91');
+  expect(cels).not.toContain('92');
+  expect(cels).not.toContain('pendente');
+  expect(cels).not.toContain('aprovado');
+  // O cartao SO existe para pedido parcial — repetir a situacao seria ruido.
+  expect(card('PEDIDO_COMPRA_PARCIAL').textContent).not.toContain('PARCIAL');
 });
 
 test('gate visual: sem ver_alertas o painel de sem-permissao aparece sem nem chamar o GET', async () => {
