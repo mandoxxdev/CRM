@@ -14,7 +14,7 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 > inteiro passa a **Recebido** sozinho, sai da lista de atrasados, deixa trilha de auditoria, e o
 > pedido que chegou pela metade ganhou **alerta próprio** dizendo quanto falta. Duas limitações que
 > estavam na letra **D** das novidades desde a Etapa 39 deixaram de existir; uma limitação **nova**
-> nasceu no lugar e está declarada (**B161**: movimentação cancelada depois do fechamento não deixa
+> nasceu no lugar e está declarada (**B161**: movimentação ESTORNADA depois do fechamento não deixa
 > sinal de que falta material).
 >
 > **Próxima etapa: escolhida pelo mapa** `specs/modulo-almoxarifado/README.md` — a feature 🔴/🟡 de
@@ -4877,9 +4877,10 @@ depois. E do outro lado havia silêncio: um pedido de 10 que recebeu 4 e parou n
 
 **As três recusas do automático — o que ele NÃO faz**
 
-11. **Ele não reabre.** No pedido do passo 8 (Recebido), vá em **Estoque → Movimentações**, ache a
-    entrada do último recebimento e **cancele** a movimentação. O saldo do material volta — e o
-    pedido **continua Recebido**. ⚠️ **Isto é limitação declarada, não bug** (letra **B161** das
+11. **Ele não reabre.** No pedido do passo 8 (Recebido), vá em **Almoxarifado → Movimentações**, ache
+    a entrada do último recebimento e clique em **Estornar Movimentação** (o modal exige *Motivo do
+    estorno*; confirme com **Confirmar Estorno**). O saldo do material volta — e o pedido **continua
+    Recebido**. ⚠️ **Isto é limitação declarada, não bug** (letra **B161** das
     novidades): nesse estado **não sobra sinal nenhum** de que falta material, e a correção é sua,
     pelo lápis → *Status* → **Pendente**.
 12. **Ele não mexe em Cancelado.** Crie um segundo pedido de **4** do mesmo material. Registre e

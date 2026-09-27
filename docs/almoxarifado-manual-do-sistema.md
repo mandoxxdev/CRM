@@ -2214,7 +2214,7 @@ O **Status** é o único campo que continua editável depois do primeiro recebim
 
 Este caminho **não** é o normal para o pedido que chegou inteiro — esse fecha sozinho (14b.1b). Ele
 existe para os três casos em que a decisão é sua: **reabrir** um pedido fechado (o material voltou por
-devolução ou por movimentação cancelada), **fechar** um pedido que chegou por fora do sistema, e mexer
+devolução ou por estorno de movimentação), **fechar** um pedido que chegou por fora do sistema, e mexer
 no status de um pedido **Cancelado** ou **Rejeitado**, que o automático nunca toca.
 
 Clique no **lápis** do pedido na aba Pedidos de Compra. Se ele já teve recebimento, o formulário abre

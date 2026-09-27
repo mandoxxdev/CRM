@@ -421,7 +421,7 @@ necessidade (os dois tocam o mesmo arquivo). A janela de paralelismo real desta 
 por desenho — o valor estava no tronco.
 
 **4. Defeito que escapou:** a preencher na Fase 0 da Etapa 43, olhando para trás. Os candidatos
-conhecidos (declarados, não escapados) estão nas letras B161 (movimentação cancelada depois do
+conhecidos (declarados, não escapados) estão nas letras B161 (movimentação ESTORNADA depois do
 fechamento) e D10/B165 (e-mail de parcial que chega depois de o pedido fechar).
 
 **Bônus — o que este plano errou, e é a métrica que mais importa para a próxima:** quatro erros, os
@@ -540,9 +540,23 @@ item 4 de "Erros DESTE plano"):**
   (então QUALIDADE, e não COMPRAS). O caminho reversível já proposto continua valendo, agora com os
   nomes certos: abrir em `[ADMINISTRADOR, ALMOXARIFE, QUALIDADE, COMPRAS]`, decidir em
   `[ADMINISTRADOR, QUALIDADE]` — e registrar na letra B, porque tirar COMPRAS da decisão é escolha.
-- **O que ainda NÃO foi medido** (fica para a Fase 0 da 43): o lado da **inspeção**
-  (`inspectionService`) — como a não conformidade se relacionaria com a decisão de inspeção que já
-  existe, e se `listarReprovados` (que alimenta o alerta `MATERIAL_REPROVADO`) já é o embrião disso.
+- **O lado da INSPEÇÃO já tem metade do documento — e tem um cheiro de defeito para investigar.**
+  Medido em `inspecoes_recebimento_almoxarifado` (`schema.js:1128`) + `decidirInspecao`
+  (`inspectionService.js:172`): a tabela já guarda `conforme`, `divergencia_quantidade`,
+  `divergencia_dimensional`, `quantidade_aprovada`, `quantidade_reprovada` e `encaminhamento`, com o
+  enum **`ENCAMINHAMENTOS = ['DEVOLVER', 'ANALISE_ENGENHARIA', 'SUBSTITUICAO']`** (`:33`). Ou seja: a
+  **ação** que a spec 08 pede (*"tipo, quantidade, ação"*) **já tem vocabulário** do lado da
+  qualidade — a 43 não precisa inventá-lo, precisa decidir se o reusa ou o estende
+  (falta `ACEITAR_SOB_DESVIO`, que é o item (2) do "falta para 🟢" da feature 09, e `SUCATEAR`).
+  ⚠️ **A investigar na Fase 0 da 43, com sonda:** `divergencia_dimensional` é **derivada** das medidas
+  (`:224`, e a Etapa 29 tornou o campo somente-leitura na tela quando há medidas), mas
+  `divergencia_quantidade` é gravada **do payload** (`:275` — `data.divergencia_quantidade ? 1 : 0`),
+  isto é, é um **booleano que o usuário marca**, enquanto a divergência real de quantidade é
+  **calculável** pela régua float-safe de `divergencia.js`. Se for isso, é a mesma classe de defeito
+  da feature 07 (`reserva_id` que era só uma coluna) e da própria Etapa 37 — **e é achado, não
+  tarefa**: medir antes de afirmar, porque pode ser decisão declarada em algum lugar que eu não li.
+- **`listarReprovados`** (que alimenta o alerta `MATERIAL_REPROVADO`) é o embrião do documento visto
+  pela qualidade — vale ler antes de desenhar a tabela nova.
 
 **Pontos de atenção (medir na Fase 0 antes de prometer):**
 

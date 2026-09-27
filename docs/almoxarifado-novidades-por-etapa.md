@@ -2890,7 +2890,7 @@ lápis → Status.
 Um gancho que descesse precisaria de uma régua de estorno de pedido que ninguém pediu, e ela é etapa
 inteira, não linha.
 ⚠️ **Limitação NOVA que esta etapa cria, e é o item de maior atenção desta lista:** se você
-**cancelar uma movimentação** de entrada (Estoque → movimentação → cancelar) de um pedido que já
+**ESTORNAR uma movimentação** de entrada (Almoxarifado → Movimentações → **Estornar Movimentação**, que exige motivo escrito) de um pedido que já
 fechou, o saldo volta a zero **e o pedido continua *Recebido***. Ele fica fora da lista de atrasados,
 fora do alerta de parcial e fora da lista de pedidos pendentes do Recebimento — ou seja, **não sobra
 sinal nenhum** de que falta material. Antes desta etapa o selo de atrasado era o sinal que sobrava.
@@ -3668,7 +3668,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
     **O que continua valendo para quem opera:** o automático **só fecha** — ele nunca reabre um
     pedido (**B161**), não mexe em pedido *Cancelado* ou *Rejeitado* (**B162**), e o recebimento
     **parcial** não muda status nenhum. E há uma limitação **nova** no lugar da antiga, que vale ler:
-    cancelar uma movimentação de entrada depois de o pedido ter fechado **não deixa sinal nenhum** de
+    estornar uma movimentação de entrada depois de o pedido ter fechado **não deixa sinal nenhum** de
     que falta material (**B161**).
 
 ### D. Limitações declaradas — são decisão, não esquecimento
@@ -10584,7 +10584,7 @@ alerta de atrasado, porque o *Status* virou **Recebido**.
 
 - **Não existe status *"parcial"*** no pedido: enquanto faltar material ele segue *Pendente*/
   *Aprovado*, e quem conta a história é o alerta novo e o *"Saldo pendente"* da tela de recebimento.
-- **O automático não reabre pedido** — e o caso que mais importa é este: **cancelar uma movimentação
+- **O automático não reabre pedido** — e o caso que mais importa é este: **estornar uma movimentação
   de entrada** de um pedido já fechado devolve o saldo e **deixa o pedido Recebido**, sem sinal nenhum
   de que falta material (letra **B161**). A correção é o lápis → *Status*.
 - **A mudança manual de status continua sem trilha** — só a automática audita (**B163**).
