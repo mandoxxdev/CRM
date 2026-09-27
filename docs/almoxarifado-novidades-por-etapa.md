@@ -1,7 +1,7 @@
 # Almoxarifado — O que há de novo, etapa por etapa
 
 > **Documento de melhorias do módulo almoxarifado** — consolida tudo que foi entregue da
-> Etapa 0 até a **Etapa 21** (02/08/2026 a 28/08/2026), na branch `desenvolvimento-almoxarifado`.
+> Etapa 0 até a **Etapa 42** (02/08/2026 a 27/09/2026), na branch `desenvolvimento-almoxarifado`.
 > Cada seção diz o que o usuário vê de novo, o que melhorou por baixo do capô e o
 > "antes → agora" da etapa.
 >
@@ -13,7 +13,16 @@
 >
 > Fontes: `docs/almoxarifado-guia-etapas-e-testes.md` (roteiros de teste manual de cada
 > etapa), `specs/modulo-almoxarifado/README.md` (status por feature) e os planos em
-> `docs/superpowers/plans/`. Atualizado em **2026-08-28 (Etapa 21)**.
+> `docs/superpowers/plans/`. Atualizado em **2026-09-27 (Etapa 42)**.
+>
+> *(⚠️ **Este cabeçalho ficou defasado por 18 etapas e a correção fica dita, não silenciosa.** Ele
+> afirmava "consolida tudo que foi entregue da Etapa 0 até a **Etapa 21**" e "Atualizado em
+> 2026-08-28 (Etapa 21)" — e as Etapas 22 a 42 foram entregues depois, **cada uma com seção própria
+> mais abaixo**, inclusive cinco do módulo **Compras** (38 a 42). É o mesmo defeito que este mesmo
+> cabeçalho já corrigiu uma vez, quando dizia "até a Etapa 14": quem lê só o topo conclui que metade
+> do que existe no sistema não existe. **A tabela "Visão geral" abaixo também para na 23** e não foi
+> estendida — as etapas 24 a 42 estão nas seções, não na tabela; deixar a tabela incompleta é
+> preferível a reescrevê-la de memória, mas quem procurar ali não vai achar.)*
 >
 > *(Este cabeçalho e a tabela abaixo diziam "até a Etapa 14" e "desenvolvimento pausado aqui" —
 > **estava desatualizado**: a pausa foi levantada em 28/08 e as Etapas 15 a 20 foram entregues,
@@ -592,7 +601,34 @@ regenerado** — nada disso é defeito. Produção tem **zero** pedidos e **zero
 esperado é **0**; um número maior só pede leitura linha a linha, e o único pedido que merece atenção
 é o que tenha o **mesmo fornecedor e as mesmas linhas** de outro pedido gerado no mesmo minuto.
 
-### B. Decisões de negócio — B1 a B159; as em aberto esperam você, as tomadas estão escritas com o descartado
+**A20 (NOVA, da Etapa 42 — o pedido que JÁ chegou inteiro antes de o automático existir).** O
+fechamento automático roda **na entrada física**, então ele só alcança recebimentos processados **de
+agora em diante**. Pedido que já recebeu tudo **antes** do deploy continua com o status antigo — e,
+se a previsão venceu, continua na lista de atrasados. Esta consulta lista exatamente esses, para
+você fechá-los à mão pelo lápis (ou decidir deixar como estão):
+
+```sql
+SELECT p.id, p.numero, p.status, p.previsao_entrega,
+       SUM(COALESCE(i.quantidade, 0))            AS pedido,
+       SUM(COALESCE(i.quantidade_recebida, 0))   AS recebido
+  FROM pedidos_compra p
+  JOIN itens_pedido_compra i ON i.pedido_id = p.id AND i.material_id IS NOT NULL
+ WHERE LOWER(COALESCE(p.status, '')) NOT IN ('recebido', 'cancelado', 'rejeitado')
+ GROUP BY p.id
+HAVING SUM(COALESCE(i.quantidade, 0)) > 0
+   AND SUM(COALESCE(i.quantidade_recebida, 0)) >= SUM(COALESCE(i.quantidade, 0));
+```
+
+**No banco de desenvolvimento a checagem já foi feita: `pedidos_compra` = 0 e
+`itens_pedido_compra` = 0**, então lá o resultado é vazio por construção. Se em produção vier
+**0**, só anotar e fechar. Se vier **mais que 0**, cada linha é um pedido que **está completo e o
+sistema ainda não sabe**: abra pelo lápis e mude o *Status* para **Recebido** (o gesto não toca as
+quantidades recebidas — há teste que garante isso). **Não há migração automática de propósito:**
+escrever status em massa numa tabela do núcleo, sem ninguém olhando, é exatamente o tipo de
+correção retroativa que este projeto evita — e o `HAVING` acima pode incluir pedido que você
+cancelou informalmente ou que teve excedente lançado por engano.
+
+### B. Decisões de negócio — B1 a B165; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(O título desta seção dizia "B1 a B24" — **estava defasado**: os itens já iam até B36 antes da
 Etapa 20. Corrigido em 2026-08-28 para B50, depois para B56 com as três da Etapa 24, para B57 com
@@ -2829,6 +2865,78 @@ devolvê-la).
 **Por quê:** excluir é excluir; o único documento que sobrevive é a cotação, e é dela que se gera.
 Se a edição precisa sobreviver, o gesto certo é **não** excluir o pedido — editá-lo de novo.
 
+**B160 (NOVA, da Etapa 42) — o pedido recebido por inteiro FECHA SOZINHO, e isso revoga uma decisão escrita da Etapa 37.**
+
+**O que foi escolhido:** quando o processamento da nota faz a quantidade recebida alcançar a pedida,
+o sistema grava **Status: Recebido** no pedido de compra automaticamente — e o selo de atraso cai por
+consequência, porque a régua de atraso já excluía *Recebido*.
+**O que foi descartado:** manter só a porta manual (o lápis → Status), que a Etapa 39 abriu.
+**Por quê:** a decisão 4 / RN-24 da Etapa 37 dizia, por escrito, *"a situação do pedido é derivada na
+leitura, nunca gravada"*, e o design da Etapa 39 usou essa frase para descartar o automático. **Ela
+estava certa até a Etapa 41** — sem gesto automático nenhum, gravar o status seria inventar uma
+máquina de estados. O que mudou é que as Etapas 38 a 41 fecharam a cadeia cotação → pedido →
+recebimento, e o último elo aberto era um pedido que ficava *"Atrasado"* **para sempre** depois de
+fisicamente recebido, até o comprador lembrar de usar a porta manual. A régua de atraso **não** mudou:
+só mudou quem escreve a palavra. **Se você preferir o controle manual**, é reversível: basta remover o
+gancho — nada mais na etapa depende dele.
+
+**B161 (NOVA, da Etapa 42) — o automático só SOBE: ele nunca reabre um pedido.**
+
+**O que foi escolhido:** um pedido que fechou fica *Recebido*, mesmo que depois o material volte
+(devolução, estorno de movimentação) e a conta física deixe de fechar. Quem reabre é o comprador, pelo
+lápis → Status.
+**O que foi descartado:** reverter o status para *Pendente* quando a conta volta a não fechar.
+**Por quê:** não existe estorno da quantidade recebida do pedido neste módulo — o acumulador só soma.
+Um gancho que descesse precisaria de uma régua de estorno de pedido que ninguém pediu, e ela é etapa
+inteira, não linha.
+⚠️ **Limitação NOVA que esta etapa cria, e é o item de maior atenção desta lista:** se você
+**cancelar uma movimentação** de entrada (Estoque → movimentação → cancelar) de um pedido que já
+fechou, o saldo volta a zero **e o pedido continua *Recebido***. Ele fica fora da lista de atrasados,
+fora do alerta de parcial e fora da lista de pedidos pendentes do Recebimento — ou seja, **não sobra
+sinal nenhum** de que falta material. Antes desta etapa o selo de atrasado era o sinal que sobrava.
+Recuperação: lápis → Status de volta para *Pendente* (e, se o número do recebido estiver errado, ele
+se corrige por consulta). Está na letra **D** também, como limitação declarada.
+
+**B162 (NOVA, da Etapa 42) — o automático não mexe em pedido Cancelado nem Rejeitado.**
+
+**O que foi escolhido:** se a nota chega num pedido que você cancelou (ou rejeitou), o material
+**entra no estoque** — ele está fisicamente no galpão — mas o status fica como você deixou, e o
+sistema registra no log do servidor que o pedido estava completo e não foi sobrescrito.
+**O que foi descartado:** gravar *Recebido* sempre que a conta fechar.
+**Por quê:** a lista de pedidos pendentes que o Recebimento oferece **não filtra por status** (é a
+letra G da Etapa 38), então a nota pode ser lançada contra um pedido cancelado por engano.
+Ressuscitar o pedido nesse caso seria decidir no seu lugar.
+
+**B163 (NOVA, da Etapa 42) — a mudança automática DEIXA RASTRO, embora a manual não deixe.**
+
+**O que foi escolhido:** o fechamento automático grava uma linha na trilha de auditoria —
+*"Fechamento automático do pedido"*, com o nome de quem processou a nota.
+**O que foi descartado:** não auditar, por simetria com o `Status` manual, que **não** audita.
+**Por quê:** na porta manual o autor é o próprio ato humano registrado ali; aqui o pedido do comprador
+muda **sozinho**, por um ato de outro módulo. Sem a trilha, ninguém responde *"quem mudou meu
+pedido?"*. **A assimetria fica declarada:** se você quiser a trilha também na mudança manual, é uma
+linha — e vale dizer que hoje ela não existe.
+
+**B164 (NOVA, da Etapa 42) — o alerta de pedido parcial avisa por SALDO, não por dia nem por mês.**
+
+**O que foi escolhido:** enquanto faltar a **mesma** quantidade, o alerta não repete; chegou mais
+material e ainda sobrou saldo, ele avisa outra vez com o número novo.
+**O que foi descartado:** um aviso por mês (perderia a chegada nova), um aviso só por pedido (calaria
+aquele pedido **para sempre** — o defeito que a Etapa 39 já pagou no alerta de atrasado), e um aviso
+agregado numa linha só (você age **por pedido**, não pelo total).
+**Por quê:** o saldo é o dado que muda quando algo acontece de verdade; é ele que merece um aviso.
+
+**B165 (da Etapa 42) — o e-mail de "recebido parcialmente" pode chegar depois de o pedido fechar.**
+
+**O que foi escolhido:** aceitar essa janela. A varredura monta o aviso uma vez por dia e o envio sai
+alguns minutos depois; se o pedido for completado nesse intervalo, o e-mail **sai de todo jeito**.
+**O que foi descartado:** cancelar o aviso pendente quando o pedido fecha.
+**Por quê:** existe precedente para cancelar (o estorno de movimentação faz isso), mas ali o gatilho
+sabe exatamente qual aviso apagar; aqui a identificação do aviso carrega o **saldo do momento em que
+ele foi escrito**, que o fechamento não conhece — apagar exigiria varrer a fila por texto, um
+casamento frágil. E o e-mail não fica falso: o pedido **estava** parcial quando o aviso nasceu, e a
+fila é também o histórico. O estado de agora está sempre na aba Compras.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -3531,6 +3639,38 @@ cotação tem lixeira própria que leva os itens junto, **B149**). Produção ti
 não há caso passado a conferir. O que quem opera precisa saber está nas decisões: a cotação convertida
 **não se edita** (**B154**) e excluir o pedido **libera** a cotação (**B153**).*
 
+52. **✅ RESOLVIDO NA ETAPA 42 — o pedido recebido por inteiro ficava "Atrasado" para sempre, e nada
+    avisava quando ele chegava pela metade.**
+
+    ⚠️ **Este item estava FALTANDO, e a falta tem nome:** a decisão **B121** (Etapa 39) escreveu
+    *"ver **C52**"* e o item **C52 nunca foi escrito** — referência pendurada, do tipo que faz o
+    leitor procurar e não achar. Fica registrado aqui em vez de a referência ser apagada, porque a
+    referência estava **certa**: o furo existia, era exatamente o que a B121 descrevia, e só não
+    tinha entrada própria.
+
+    **O furo, em uma frase:** o **Status** do pedido de compra era a única coisa que tirava o pedido
+    da lista de atrasados, e **nenhum recebimento o escrevia**. Então todo pedido que o almoxarifado
+    recebia **depois** da data prometida — o caminho **normal**, não o canto raro — ficava com o selo
+    *Atrasado* crescendo sem teto, morando dentro do filtro *"Atrasados"*, até alguém abrir o pedido
+    no lápis e trocar o status à mão. A Etapa 39 mediu isso, provou por teste e abriu a porta
+    manual; o automático ficou nomeado para a etapa seguinte.
+
+    **E do outro lado, o silêncio:** um pedido de 10 que recebeu 4 e parou não avisava ninguém. A
+    especificação de alertas previa o aviso *"Pedido recebido parcialmente"* desde o começo; ele
+    ficou fora por dois motivos diferentes, e o primeiro era **errado** (*"falta o dado"* — o dado
+    existia desde a Etapa 37, ver **B122**).
+
+    **A Etapa 42 fechou os dois lados.** A última remessa que completa o pedido grava
+    *Recebido* sozinho (o selo de atraso cai por consequência, pela mesma régua de sempre), com
+    trilha de auditoria nomeando quem processou a nota; e o alerta de parcial passou a existir na
+    central e no e-mail diário, dizendo **quanto falta** e avisando de novo quando esse número muda.
+
+    **O que continua valendo para quem opera:** o automático **só fecha** — ele nunca reabre um
+    pedido (**B161**), não mexe em pedido *Cancelado* ou *Rejeitado* (**B162**), e o recebimento
+    **parcial** não muda status nenhum. E há uma limitação **nova** no lugar da antiga, que vale ler:
+    cancelar uma movimentação de entrada depois de o pedido ter fechado **não deixa sinal nenhum** de
+    que falta material (**B161**).
+
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -3856,16 +3996,23 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   tem 51 do mesmo tipo. A Etapa 38 mexeu nesse arquivo (**moveu 23 rotas do Compras para fora dele**,
   byte a byte), mas **não** tocou nos 51. Ver **B94**.
 
-- **(39) Receber o material não fecha o pedido — o status continua sendo escolhido à mão.** Não há
-  status automático no recebimento, nem status "parcial": um pedido totalmente recebido continua
-  *Pendente* até o comprador mudá-lo. É decisão (**B121**), e a consequência operacional está na
-  letra **C52**: pedido recebido com atraso continua aparecendo como atrasado até alguém trocar o
-  status pelo lápis.
+- ~~**(39) Receber o material não fecha o pedido — o status continua sendo escolhido à mão.**~~
+  **RESOLVIDO NA ETAPA 42 (B160).** A limitação existiu de verdade da Etapa 37 até a 41, e o texto
+  dela fica aqui riscado em vez de apagado, porque era decisão registrada (**B121**) e quem lesse só a
+  lista nova não entenderia por que havia uma porta manual. Hoje o pedido **totalmente recebido** vira
+  *Recebido* sozinho e sai da lista de atrasados junto (a consequência que a letra **C52** descrevia
+  como incômodo permanente). **O que sobra de limitação, e é pouco:** continua não existindo status
+  *"parcial"* no pedido — enquanto faltar material o pedido segue *Pendente*/*Aprovado*, e é o **alerta
+  de parcial** (abaixo, também novo) que avisa. E o automático **não reabre** pedido nenhum: ver
+  **B161**, que descreve a limitação NOVA que esta etapa cria no lugar da antiga (movimentação
+  cancelada depois do fechamento não deixa sinal).
 
-- **(39) Não existe alerta de "pedido recebido parcialmente".** A especificação de alertas o previa e
-  dizia que faltava dado — **estava desatualizada** (o dado existe desde a Etapa 37). Ele segue fora
-  pelo motivo verdadeiro: a conta de quanto falta é feita dentro do formulário de recebimento e não é
-  publicada para a varredura. Ver **B122**.
+- ~~**(39) Não existe alerta de "pedido recebido parcialmente".**~~ **RESOLVIDO NA ETAPA 42 (B164).**
+  O texto antigo fica porque ele **já era uma correção** de outro texto errado, e a sequência é a
+  lição: a spec de alertas dizia *"falta o dado"* (errado desde a Etapa 37 — o dado existia); a Etapa
+  39 corrigiu para *"falta publicar a conta para a varredura"* (certo); e a Etapa 42 publicou — a conta
+  de quanto falta passou a ter uma fonte própria, sem o limite de 50 pedidos que a tela usa. O alerta
+  existe, diz quanto falta, e avisa de novo quando o saldo muda.
 
 - **(39) A hora da varredura diária não é escolhível.** Ela roda 30 segundos depois de o servidor
   subir e a cada 24 horas — então o horário do e-mail é o horário do último reinício, e um prazo que
@@ -4177,6 +4324,23 @@ se um PDF abre legível ou se um modal coube na largura. Ficaram, portanto, **se
 
 *Por que isto está escrito aqui em vez de "está tudo certo": esta mesma lacuna já mordeu a Etapa 7 —
 uma classe de estilo inventada sai sem cor nenhuma e nenhum teste de comportamento percebe.*
+
+**(42) Nenhum clique foi dado nesta etapa — o fechamento automático foi provado por teste, não por
+navegador.** Fica declarado em vez de subentendido, porque **esta etapa muda o que a aba Compras
+mostra** e ninguém viu a tela. O que os testes provam (e é bastante): a gravação do status, a régua,
+o filtro `?atrasados=1`, a trilha de auditoria, a população do alerta, as sete linhas do e-mail e as
+seis colunas do cartão — inclusive que o cartão **não** desenha campos crus. O que **só o navegador**
+prova, e vale os 5 minutos do roteiro da etapa no guia:
+
+1. **O badge do pedido fechado fica verde?** `'recebido'` tem cor própria no mapa de cores da aba
+   Pedidos de Compra, mas o badge escreve a **palavra crua em minúscula** (`recebido`, não
+   *"Recebido"*) — confirmar que fica legível ao lado dos outros, e que não caiu no cinza do padrão.
+2. **O cartão novo de Alertas cabe na largura?** São **seis** colunas; os cartões vizinhos têm
+   quatro. Abrir **Almoxarifado → Alertas**, expandir o cartão *"Pedido de compra recebido
+   parcialmente"* e conferir que a tabela não estoura nem corta a coluna *Previsão*.
+3. **A trilha mostra o rótulo, não o verbo cru?** **Almoxarifado → Auditoria**, filtro de entidade
+   **"Pedido de compra"**: a linha tem de dizer *"Fechamento automático do pedido"*. Há teste de
+   cobertura que garante que o rótulo **existe**, mas não que a tela o **usa** naquele filtro.
 
 ### G. Fragilidades estruturais que continuam de pé
 
@@ -5040,6 +5204,27 @@ esteja DENTRO do número da cotação.**
 O número da cotação é digitado e só perde os espaços das pontas; se alguém digitar *"COT  7"* (dois
 espaços no meio), o aviso verde mostra *"COT 7"*. A lista e o banco guardam o número como foi
 digitado. Cosmético.
+
+---
+
+**G66 (NOVO, da Etapa 42). O alerta de pedido ATRASADO não tem guarda de tabela ausente — o de
+parcial tem.** As duas entradas leem `pedidos_compra`, que é tabela do **núcleo**. A entrada nova
+(parcial) checa se a tabela existe antes de consultar e devolve lista vazia se não existir; a entrada
+de **atrasado**, da etapa anterior, consulta direto. Num ambiente sem o módulo Compras instalado, o
+cartão de atrasado aparece na central com **marca de erro** enquanto os outros doze respondem — a
+central não cai (ela isola erro por cartão), mas um cartão vermelho permanente ensina o operador a
+ignorar erro de cartão. **Não foi consertado nesta etapa de propósito:** a etapa é da feature de
+recebimento, e mexer na entrada da etapa anterior sem necessidade abriria escopo. Em produção a
+tabela **existe**, então hoje não há sintoma. É uma linha de código quando alguém quiser.
+
+---
+
+**G67 (NOVO, da Etapa 42). O pedido só fecha na ENTRADA FÍSICA — nada mais no sistema reconta.** Se
+alguém corrigir a quantidade recebida de uma linha de pedido por fora (SQL, importação futura,
+migração), o pedido **não** fecha sozinho: não existe varredura que reavalie pedidos completos. A
+letra **A20** dá a consulta que encontra esses casos, e a correção é pelo lápis. **É consequência do
+desenho, não descuido:** o gancho vive dentro do fluxo da entrada porque é lá que existe o ato a
+auditar (quem processou a nota); uma varredura periódica fecharia pedido sem autor.
 
 ## Etapa 0 — Fundação (2026-08-03)
 
@@ -10289,6 +10474,130 @@ sucesso"*.
 187), **42 de 42** no serviço do almoxarifado, **4/4**, **3/3** e **5/5** nas suítes de validação,
 migração e banco, **51 suítes / 769 testes** no cliente (eram 49 / 753), e o empacotamento do cliente
 **limpo**.
+
+## Etapa 42 — O recebimento fecha o pedido (2026-09-27)
+
+**Esta etapa é a única das cinco que fica nos DOIS lados** — o gancho roda dentro do processamento da
+nota, no **Almoxarifado**, e o efeito aparece no **Compras** —, e ela **encerra a cadeia** que as
+Etapas 38 a 41 abriram: cotação → pedido → recebimento → pedido fechado.
+
+**O problema era o último elo, e ele doía todo dia.** O **Status** do pedido de compra era a única
+coisa que o tirava da lista de atrasados, e **nenhum recebimento o escrevia**. Então todo pedido que o
+almoxarifado recebia **depois** da data prometida — que é o caminho **normal**, não o canto raro —
+ficava com o selo *Atrasado* crescendo sem teto e morando dentro do filtro *"Atrasados"*, até alguém
+abrir o pedido no lápis e trocar o status à mão. A Etapa 39 mediu isso, provou por teste, e resolveu
+com uma **porta manual**, deixando o automático nomeado para depois. E do outro lado havia silêncio:
+um pedido de 10 que recebeu 4 e parou **não avisava ninguém** — a especificação de alertas previa o
+aviso *"pedido recebido parcialmente"* desde o começo, e ele ficou fora por dois motivos diferentes, o
+primeiro dos quais estava **errado**.
+
+**Agora:** quando a última remessa chega e o processamento da nota faz a quantidade recebida alcançar
+a pedida, o sistema grava **Status: Recebido** no pedido **sozinho**; o selo de atraso cai por
+consequência (a régua de atraso não mudou — mudou **quem escreve a palavra**); a mudança fica na
+trilha de auditoria como *"Fechamento automático do pedido"*, com o nome de quem processou a nota; e
+enquanto o pedido está pela metade, o **13º alerta** do sistema diz **quanto falta**, avisando de novo
+quando esse número muda.
+
+### Antes → Agora
+
+| | Antes | Agora |
+|---|---|---|
+| Pedido recebido por inteiro | *Pendente*, com selo **Atrasado** para sempre | **Recebido** sozinho, sem selo |
+| Tirar o pedido do atraso | Só pelo lápis → Status, um pedido por vez | Automático; o lápis fica para os casos que o automático não cobre |
+| Pedido pela metade | Ninguém avisava | Alerta **"Pedido de compra recebido parcialmente"** na central e no e-mail diário, com **quanto falta** |
+| Repetição do aviso | — | **Um por saldo**: mesmo saldo não repete; chegou mais e ainda falta, avisa de novo |
+| Quem mudou o status | Sempre uma pessoa | A trilha distingue **"Fechamento automático do pedido"** da mudança manual |
+| Pedido *Cancelado* que recebe nota | — | Material entra no estoque; o status **fica como o comprador deixou** |
+| Cartão da central | 12 cartões | **13**, com colunas próprias (Pedido · Fornecedor · Pedida · Recebida · Saldo pendente · Previsão) — sem `id` cru |
+
+**Uma decisão escrita foi revogada, e está dito em voz alta (B160).** A Etapa 37 registrou *"a
+situação do pedido é derivada na leitura, **nunca gravada**"*, e o desenho da Etapa 39 usou essa frase
+para descartar o automático. **Ela estava certa até a Etapa 41:** sem gesto automático nenhum, gravar
+o status seria inventar uma máquina de estados. O que mudou é que a cadeia fechou e este era o único
+elo que faltava. **Três suítes de teste que afirmavam o comportamento antigo foram reescritas dizendo
+que estavam certas** — uma delas trazia, por escrito, o pedido da própria reescrita para o dia em que
+isso acontecesse. Duas limitações que estavam na letra **D** desde a Etapa 39 deixaram de existir, e
+o furo **C52** — uma referência que a Etapa 39 criou e **nunca escreveu** — finalmente tem texto.
+
+**A limitação NOVA que esta etapa cria, e é o que merece sua atenção (B161):** o automático **só
+fecha, nunca reabre**. Se você cancelar uma **movimentação de entrada** de um pedido já fechado, o
+saldo volta e o pedido **continua Recebido** — fora da lista de atrasados, fora do alerta de parcial e
+fora dos pendentes do Recebimento. **Não sobra sinal nenhum** de que falta material; antes desta
+etapa, o selo de atrasado era o sinal que sobrava. A correção é pelo lápis → Status.
+
+### As regras, com o cenário exato (para demonstrar ao vivo)
+
+Todos os cenários abaixo são **clicáveis**, sem SQL. Você precisa de um usuário com acesso a
+**Compras** e **Almoxarifado**, um fornecedor ativo e um material no cadastro. As frases entre aspas
+são as que **aparecem de fato** na tela — foram lidas do código, não aproximadas.
+
+**R1 — O pedido inteiro fecha sozinho.** Crie um pedido de **10** de um material com *Previsão de
+entrega* **de ontem** → na aba Pedidos de Compra ele aparece *Pendente* com o selo **Atrasado**, e o
+filtro **"Atrasados"** o traz. Receba os 10 pelo Almoxarifado (Novo Recebimento → *Por Pedido de
+Compra* → o `PC-…` → Conferir → Encaminhar para compras → Finalizar compras → Iniciar faturamento →
+dados da nota → **Processar nota**). Volte a Compras: *Status* é **Recebido**, o selo sumiu, e o
+filtro "Atrasados" **não** traz mais o pedido. **Ninguém clicou no lápis.**
+
+**R2 — A conta é do PEDIDO, não da linha.** Pedido com **duas** linhas de materiais diferentes
+(10 + 10). Receba só a primeira → o pedido **continua Pendente** (chegou metade). Receba a segunda →
+**Recebido**. *É a regra que impede um pedido de dois itens de fechar quando chega o primeiro.*
+
+**R3 — Chegar MAIS também fecha.** Pedido de **10**, recebimento de **12** com a autorização de
+excedente (*"Autorizar excedente"*, que já existia) → o pedido fecha. A conta é *"chegou pelo menos
+tudo"*, não *"chegou exatamente"*.
+
+**R4 — O automático nunca reabre.** Pedido de **20** marcado **Recebido** à mão pelo lápis, e depois
+um recebimento de **5** → o pedido **continua Recebido**. O sistema só fecha; reabrir é decisão sua.
+
+**R5 — Pedido Cancelado não ressuscita.** Pedido de **4**; registre o recebimento, **cancele o
+pedido** pelo lápis (*Status* → **Cancelado**), e só então **Processe a nota** → o material **entra no
+estoque** (ele está fisicamente no galpão) e o *Status* **continua Cancelado**. No log do servidor
+fica a linha `[recebimento] pedido PC-… completo, mas status cancelado nao e sobrescrito
+automaticamente`. *O mesmo vale para Rejeitado.*
+
+**R6 — A nota nunca trava por causa do pedido.** Se a gravação do status falhar por qualquer motivo, o
+recebimento **termina normalmente**, o estoque entra, e o servidor registra
+`[recebimento] status automatico do pedido de compra falhou (recebimento N): <motivo>`. *Foi decisão:
+travar a nota depois de o material já ter entrado deixaria material no galpão com documento preso.*
+
+**R7 — A trilha diz quem fechou.** Almoxarifado → **Auditoria**, filtro de entidade **"Pedido de
+compra"** → uma linha **"Fechamento automático do pedido"** por pedido fechado, com o nome de **quem
+processou a nota** e a hora. Processar de novo **não** cria uma segunda linha.
+
+**R8 — O alerta de parcial, e o que ele escreve.** Pedido de **10** com **4** recebidos → Almoxarifado
+→ **Alertas** → cartão **"Pedido de compra recebido parcialmente"**, colunas **Pedido · Fornecedor ·
+Pedida · Recebida · Saldo pendente · Previsão**. O e-mail diário sai com o assunto
+`[Compras] Pedido de compra recebido parcialmente — PC-…` e o corpo em sete linhas:
+`Pedido:`, `Fornecedor:`, `Quantidade pedida:`, `Quantidade recebida:`, `Saldo pendente:`,
+`Previsão de entrega:` e `Status:`. Pedido **sem previsão** cadastrada sai como
+`Previsão de entrega: não informada`, e sem fornecedor sai `Fornecedor: -`.
+
+**R9 — O aviso não vira spam nem cala.** Enquanto faltar **o mesmo** saldo, a varredura do dia
+seguinte **não** manda e-mail novo. Receba mais **2** (saldo 6 → 4) e a varredura seguinte manda **um
+novo** aviso, com o número novo. *A escolha é deliberada: um aviso por id calaria o pedido para
+sempre, e um por dia viraria ruído.*
+
+**R10 — Quem fecha sai dos dois alertas.** Receba o resto → o pedido sai do alerta de parcial **e** do
+alerta de atrasado, porque o *Status* virou **Recebido**.
+
+### O que esta etapa NÃO cobre
+
+- **Não existe status *"parcial"*** no pedido: enquanto faltar material ele segue *Pendente*/
+  *Aprovado*, e quem conta a história é o alerta novo e o *"Saldo pendente"* da tela de recebimento.
+- **O automático não reabre pedido** — e o caso que mais importa é este: **cancelar uma movimentação
+  de entrada** de um pedido já fechado devolve o saldo e **deixa o pedido Recebido**, sem sinal nenhum
+  de que falta material (letra **B161**). A correção é o lápis → *Status*.
+- **A mudança manual de status continua sem trilha** — só a automática audita (**B163**).
+- **O e-mail de parcial pode chegar depois de o pedido fechar** (janela de minutos entre montar e
+  enviar) — **B165**.
+- **Nada de divergência formal numerada** nem de **conferência física estruturada** (contagem,
+  pesagem, checklist por tipo de material): são as fatias que ainda faltam no recebimento.
+- **Nada de comparação de cotações** entre fornecedores.
+
+**Números lidos no fechamento:** **199/199 arquivos** da suíte de API (eram 195 — quatro arquivos
+novos: a fonte do saldo, o gancho, o alerta e a integração da cadeia), **42 de 42** no serviço do
+almoxarifado, **4/4**, **3/3** e **5/5** nas suítes de validação, migração e banco, **51 suítes /
+786 testes** no cliente (eram 781), e o empacotamento do cliente **limpo**.
 
 ## Etapa 41 — A cotação ganha itens e vira pedido de compra (2026-09-22)
 

@@ -1,7 +1,7 @@
 # 20 — Alertas Operacionais
 
-> **Status:** 🟢 no que é viável hoje — **18 de 21 alertas** do checklist (Etapa 16 somou 7 pela varredura, Etapa 17 somou 4 no ato/vigília, **Etapa 39 somou 1 — o primeiro que lê tabela CORE**; 2 itens SAÍRAM do checklist dizendo por quê — ver abaixo), **central no front entregue** e o motor único em duas parcelas (`alertRegistry` + modo evento com `dispararAlertaRegistrado`). **Restam só os 3 com lacuna nas features donas** — nenhum deles é bloqueio deste arquivo. · **Spec original:** seção 26
-> **Última atualização:** 2026-09-17 (Etapa 39: a entrada **`PEDIDO_COMPRA_ATRASADO`** — `ddbc18f`, `33031ac`, `8f3db94`, dentro do range `39ea9d2..19ebf7d`; design `docs/superpowers/specs/2026-09-16-crm-etapa39-pedido-acompanhado-design.md`, plano `docs/superpowers/plans/2026-09-16-crm-etapa39-pedido-acompanhado.md`. Antes — Etapa 17: modo evento + 4 alertas — `d65d81b..e51ca79`; design `docs/superpowers/specs/2026-08-28-almoxarifado-etapa17-alertas-evento-design.md`, plano `docs/superpowers/plans/2026-08-28-almoxarifado-etapa17-alertas-evento.md`. Antes — Etapa 16: registro + varredura + central — `6bed5e2..ed5f032`; design `docs/superpowers/specs/2026-08-28-almoxarifado-etapa16-alertas-design.md`, plano `docs/superpowers/plans/2026-08-28-almoxarifado-etapa16-alertas.md`)
+> **Status:** 🟢 no que é viável hoje — **19 de 21 alertas** do checklist (Etapa 16 somou 7 pela varredura, Etapa 17 somou 4 no ato/vigília, **Etapa 39 somou 1 — o primeiro que lê tabela CORE** e a **Etapa 42 somou o 19o**, `PEDIDO_COMPRA_PARCIAL`, que fechou a lacuna mais antiga desta lista; 2 itens SAÍRAM do checklist dizendo por quê — ver abaixo), **central no front entregue** e o motor único em duas parcelas (`alertRegistry` + modo evento com `dispararAlertaRegistrado`). **Restam só os 3 com lacuna nas features donas** — nenhum deles é bloqueio deste arquivo. · **Spec original:** seção 26
+> **Última atualização:** 2026-09-27 (Etapa 42: a entrada **`PEDIDO_COMPRA_PARCIAL`** — a fonte `dcda360`, a entrada e o cartao no range da etapa; design `docs/superpowers/specs/2026-09-27-almoxarifado-etapa42-recebimento-fecha-pedido-design.md`, plano `docs/superpowers/plans/2026-09-27-almoxarifado-etapa42-recebimento-fecha-pedido.md`. Antes — Etapa 39: a entrada **`PEDIDO_COMPRA_ATRASADO`** — `ddbc18f`, `33031ac`, `8f3db94`, dentro do range `39ea9d2..19ebf7d`; design `docs/superpowers/specs/2026-09-16-crm-etapa39-pedido-acompanhado-design.md`, plano `docs/superpowers/plans/2026-09-16-crm-etapa39-pedido-acompanhado.md`. Antes — Etapa 17: modo evento + 4 alertas — `d65d81b..e51ca79`; design `docs/superpowers/specs/2026-08-28-almoxarifado-etapa17-alertas-evento-design.md`, plano `docs/superpowers/plans/2026-08-28-almoxarifado-etapa17-alertas-evento.md`. Antes — Etapa 16: registro + varredura + central — `6bed5e2..ed5f032`; design `docs/superpowers/specs/2026-08-28-almoxarifado-etapa16-alertas-design.md`, plano `docs/superpowers/plans/2026-08-28-almoxarifado-etapa16-alertas.md`)
 
 ## Objetivo
 
@@ -24,20 +24,41 @@ Todos os alertas preventivos da spec, com motor único (verificação periódica
 - [x] Requisição atrasada — Etapa 16, `6bed5e2` (status derivado da máquina de estados — a primeira versão do plano hardcodava literais inexistentes como `APROVADA` e **estava errada**; só alerta quem preencheu `data_necessidade`; dedupe 1× por requisição). **Pendência nomeada:** `data_necessidade` aceita texto livre por API e data ilegível nunca alerta, em silêncio (letra C19 das novidades) — falta `z.regex` no schema
 - [ ] Material separado aguardando retirada há N dias
 - [x] Material reservado há muitos dias — Etapa 16, `6bed5e2` (reserva ATIVA além de `alerta_reserva_parada_dias` OU `expira_em` vencida; dedupe 1× por reserva)
-- [ ] Pedido recebido parcialmente — ⚠️ **o motivo que estava escrito aqui (e em Infra, `:48`)
-  ESTAVA DESATUALIZADO, e fica corrigido à vista em vez de apagado:** dizia *"falta noção de saldo
-  do pedido"*, isto é, **bloqueado por falta de dado** — e o dado chegou. A **Etapa 37**
-  (`ea0aa4f..13ad237`) entregou `itens_pedido_compra.quantidade_recebida`, o elo `pedido_item_id` e a
-  **situação derivada** `ABERTO`/`PARCIAL`/`RECEBIDO`; a **Etapa 38** (`2fb9f68`) entregou
-  `previsao_entrega` **validada**. **O que falta agora é outra coisa, e é a porta:** a derivação da
-  Etapa 37 (`derivarRecebimentoDoPedido`) **não é exportada** e vive em `receiptService.js`, que é
-  contrato de **não-toque**; a única fonte exportada é `listarPedidosCompraAux`, que tem **`LIMIT
-  50`** (`receiptService.js:1518`) e **não devolve `previsao_entrega`** (`:1486-1488`). Consumi-la
-  daria um alerta que ignora o 51º pedido em silêncio; recalcular a situação aqui criaria a
-  **segunda fórmula de saldo** — exatamente o que a régua única de atraso (abaixo) existe para
-  evitar. **Follow-up nomeado:** exportar `derivarRecebimentoDoPedido` (ou uma fonte sem `LIMIT` com
-  `previsao_entrega`) é **fatia da feature [08](../08-recebimento/README.md)**; até lá este item fica
-  `[ ]` por decisão, não por esquecimento.
+- [x] **Pedido recebido parcialmente** — **Etapa 42, 2026-09-27.** A 13ª entrada do registro
+  (`PEDIDO_COMPRA_PARCIAL`), com o follow-up que este item nomeava **entregue na mesma etapa**:
+  `derivarRecebimentoDoPedido` passou a ser **exportada** e nasceu `situacaoDosPedidosCompra`, sem
+  `LIMIT` e com `previsao_entrega`/`status` (`dcda360`, fatia da feature 08, como estava previsto
+  aqui). Contrato da entrada, que é o que outra sessão precisa para não reinventá-la:
+  - população: `situacao_recebimento === 'PARCIAL'` **e** `status` ∉ `{cancelado, rejeitado,
+    recebido}` — nos três a decisão já é do comprador;
+  - `dedupeChave` `pedido-parcial-${id}-${Math.round(saldo_pendente * 1000)}` — **um aviso por
+    saldo**: mesmo saldo não repete, saldo novo avisa de novo. O **arredondamento é parte do
+    contrato**: `saldo_pendente` é `REAL` e duas `SUM(REAL)` sobre o mesmo estado físico podem
+    produzir `6.699999999999999` e `6.7`, o que mandaria dois e-mails para o mesmo estado;
+  - prefixo `[Compras]` no assunto (o documento é de Compras, a lista de destinatários é
+    compartilhada — mesma razão do alerta de atrasado);
+  - corpo com **sete** linhas: `Pedido:` · `Fornecedor:` (`-` sem fornecedor) · `Quantidade pedida:`
+    · `Quantidade recebida:` · `Saldo pendente:` · `Previsão de entrega:` (**`não informada`** quando
+    vazia — e isto é contrato, porque, ao contrário do alerta de atrasado, esta população **não
+    filtra** por previsão, então o pedido importado sem prazo entra) · `Status:`;
+  - colunas **projetadas** na fonte, `LEFT JOIN fornecedores`, e **require lazy** de
+    `receiptService` dentro do `listar` — as três pelo mesmo motivo da entrada irmã (vazamento para
+    quem tem `ver_alertas` sem o módulo Compras; pedido órfão de fornecedor que desapareceria; e o
+    ciclo de require, que agora **fecha de fato** e cuja falha é silenciosa);
+  - cartão da central com 6 colunas próprias — `Pedido · Fornecedor · Pedida · Recebida · Saldo
+    pendente · Previsão` (`6df2169`), porque o fallback genérico mostraria `id` cru.
+
+  > ⚠️ **O texto que estava aqui era a SEGUNDA versão do motivo, e as duas ficam registradas, porque
+  > a sequência é a lição.** A primeira dizia *"falta noção de saldo do pedido"* — **bloqueado por
+  > falta de dado**, e estava **desatualizada** desde a Etapa 37. A segunda (escrita na Etapa 39)
+  > corrigiu para o motivo verdadeiro: *"a derivação não é exportada … a única fonte exportada tem
+  > `LIMIT 50` e não devolve `previsao_entrega`; consumi-la daria um alerta que ignora o 51º pedido
+  > em silêncio, e recalcular a situação aqui criaria a segunda fórmula de saldo"*. **Essa segunda
+  > versão estava certa, e foi ela que desenhou a solução** — a Etapa 42 não contornou o bloqueio,
+  > removeu-o: exportou a régua e criou a fonte sem `LIMIT`, mantendo **um dono** para a régua e
+  > **um dono** para a agregação (`SOMA_POR_PEDIDO_SQL`, compartilhada com a rota da tela, que
+  > **continua** com o `LIMIT 50` porque ali ele é contrato de tela). Há teste pareado que afirma a
+  > diferença: com 51 pedidos parciais, a fonte nova devolve **51** e o aux da tela devolve **50**.
 - [x] **Pedido de compra atrasado** — Etapa 39, `ddbc18f` (+ `33031ac`, `8f3db94`). **A primeira
   entrada do registro que lê tabelas CORE** (`pedidos_compra`, `fornecedores`) — as 11 anteriores só
   leem `*_almoxarifado`; mesmo handle, mesmo arquivo SQLite, decisão de arquitetura declarada. O
@@ -110,7 +131,7 @@ Todos os alertas preventivos da spec, com motor único (verificação periódica
 - [x] **Primeira parcela do motor único** — Etapa 16, `6bed5e2`: o `alertRegistry` é o registro de regras (condição, dedupe, janela em config, textos), consumido pela varredura E pela central. **O que NÃO entrou, declarado:** canal/destinatário POR alerta (todos usam a lista única `alertas_estoque_emails` e o toggle mestre — corte da Etapa 12 que continua, B15) e a unificação da máquina do mínimo/zerado no registro (funciona e é testada; reescrever seria risco sem valor novo — decisão do design da 16)
 - [x] Central de alertas no front — Etapa 16, `3eb2c42`/`ed5f032` (tela própria com item de menu; SEM segundo sino no header, decisão da Etapa 12 mantida)
 - [x] **Segunda parcela do motor único — modo EVENTO** (Etapa 17, `c1cd0a1`): `dispararAlertaRegistrado(db, chave, linha)` enfileira no ato reusando dedupe/assunto/corpo/payload da MESMA entrada do registro, e os `listar` dos alertas de evento são **dual-mode** (janela para central/varredura, id do fato para o gancho) — uma régua só para os dois caminhos, com o `INSERT OR IGNORE` da fila garantindo que o duplo disparo vire DUPLICADA e que evento perdido seja pego pela varredura
-- [ ] Cada alerta novo entra quando a feature correspondente ganhar o dado — **incluir o alerta no checklist da feature dona**. Lacunas nomeadas (medição 2026-08-28), as ÚNICAS que restam: separado-aguardando-retirada (falta a data da transição p/ PRONTA_PARA_RETIRADA), ~~pedido-parcial (falta noção de saldo do pedido)~~ — **esta metade estava DESATUALIZADA desde as Etapas 37/38: o dado existe; o que falta é a FONTE EXPORTADA** (ver o item do checklist acima) —, consumo-acima-do-previsto (projeto sem orçamento)
+- [ ] Cada alerta novo entra quando a feature correspondente ganhar o dado — **incluir o alerta no checklist da feature dona**. Lacunas nomeadas (medição 2026-08-28), as ÚNICAS que restam **e agora são DUAS**: separado-aguardando-retirada (falta a data da transição p/ PRONTA_PARA_RETIRADA) e consumo-acima-do-previsto (projeto sem orçamento). ~~pedido-parcial (falta noção de saldo do pedido)~~ — **ENTREGUE na Etapa 42** (`dcda360` + a entrada do registro), e o texto riscado registra as duas correções que essa linha já sofreu: o motivo original (*"falta o dado"*) estava desatualizado desde a Etapa 37, o segundo (*"falta a fonte exportada"*) estava certo, e a Etapa 42 removeu o bloqueio em vez de contorná-lo — ver o item do checklist acima
 - [x] **Uma entrada do registro pode ler tabela de OUTRO módulo** — Etapa 39, `ddbc18f`: `PEDIDO_COMPRA_ATRASADO` consulta `pedidos_compra`/`fornecedores` (CORE) pelo mesmo handle e importa a régua do módulo Compras por **require lazy**. Precedente aberto de propósito e declarado: o registro deixou de ser exclusivamente do almoxarifado. **O que isso exige de quem escrever a próxima entrada cross-módulo:** projetar as colunas (a central não tem o gate do módulo de origem) e manter o require lazy (o ciclo está a um require de distância)
 
 ## Regras essenciais + testes de API exigidos

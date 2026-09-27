@@ -1,6 +1,8 @@
 # 08 — Entrada e Recebimento de Materiais
 
-> **Status:** 🟡 — workflow fiscal NF maduro, quarentena na entrada fechada (Etapa 5), **lote nasce aqui desde a Etapa 6**, entrada da nota **atômica e idempotente** desde o review final do branch (2026-08-10), desde a **Etapa 36** as duas portas de escrita têm enum, guarda de NF duplicada e barreira de excedente, mais o campo de quantidade conferida na tela, e desde a **Etapa 37** (`ea0aa4f..13ad237`) o **recebimento parcial contra o PEDIDO DE COMPRA existe de ponta a ponta** — o pedido tem saldo, a tela carrega os itens com o que falta chegar, e a porta recusa acima do saldo. **O que falta para 🟢:** (1) **criação de pedido de compra no módulo Compras** — medido na Fase 0 da Etapa 38: **nenhum código da aplicação insere `pedidos_compra`/`itens_pedido_compra`** (o core Compras não tem uma tela de criação em nenhuma das três abas; acervo 0/0), então em produção a forma "Pedido de compra" abre um `<select>` **vazio** e **tudo o que a Etapa 37 entregou fica inerte** até isso existir. É a **Etapa 38**, já decidida e desenhada; (2) **conferência física estruturada** (contagem, pesagem, medição, checklist por tipo de material); (3) **divergência formal numerada** — que só agora tem os **dois** insumos (o campo de conferência da 36 e o `pedido_item_id` da 37); (4) definição de localização na entrada (feature 02) e e-mail automático (feature 19). **A frase anterior deste status dizia que faltava "etiqueta" — ESTAVA ERRADA:** a etiqueta foi entregue na **Etapa 6c** (`4ebd1ce`), ver a correção no item de checklist "Ao aprovar" · **Spec original:** seção 8
+> **Status:** 🟡 — workflow fiscal NF maduro, quarentena na entrada fechada (Etapa 5), **lote nasce aqui desde a Etapa 6**, entrada da nota **atômica e idempotente** desde o review final do branch (2026-08-10), desde a **Etapa 36** as duas portas de escrita têm enum, guarda de NF duplicada e barreira de excedente, mais o campo de quantidade conferida na tela, e desde a **Etapa 37** (`ea0aa4f..13ad237`) o **recebimento parcial contra o PEDIDO DE COMPRA existe de ponta a ponta** — o pedido tem saldo, a tela carrega os itens com o que falta chegar, e a porta recusa acima do saldo. E desde a **Etapa 42** (2026-09-27) o recebimento **FECHA o pedido**: a entrada física que completa o pedido grava `pedidos_compra.status = 'recebido'`, com trilha de auditoria, e o pedido parcial ganhou alerta próprio. **O que falta para 🟢:** (1) **conferência física estruturada** (contagem, pesagem, medição, checklist por tipo de material); (2) **divergência formal numerada** — tem os **dois** insumos desde a 37 (o campo de conferência da 36 e o `pedido_item_id`), e é a fatia de maior valor que resta aqui; (3) definição de localização na entrada (feature 02) e e-mail automático na entrada confirmada (feature 19); (4) **o pedido que reabre** — a limitação NOVA da Etapa 42: cancelar a movimentação de entrada de um pedido já fechado não reverte `quantidade_recebida` nem o status, e o estado não deixa sinal (`B161` das novidades).
+
+> ⚠️ **ESTA LISTA TINHA UM ITEM (1) FALSO, e ele enganou três etapas.** Até a Etapa 42 o primeiro item era *"criação de pedido de compra no módulo Compras — … tudo o que a Etapa 37 entregou fica inerte até isso existir. É a **Etapa 38**, já decidida e desenhada"*. **A Etapa 38 ENTREGOU** (2026-09-16), e a 41 ainda acrescentou o caminho cotação → "Gerar pedido" — mas a frase continuou aqui dizendo que a feature era inerte em produção. Quem lesse esta spec entre 2026-09-16 e 2026-09-27 seria ativamente enganado sobre o estado do módulo. Corrigido ao medir, na Fase 0 da Etapa 42, e dito em vez de apagado. **O handoff da Etapa 41 repetiu o erro por outro lado**, falando de um *"item (5)"* desta lista — que nunca teve cinco itens. **A frase anterior deste status dizia que faltava "etiqueta" — ESTAVA ERRADA:** a etiqueta foi entregue na **Etapa 6c** (`4ebd1ce`), ver a correção no item de checklist "Ao aprovar" · **Spec original:** seção 8
 > **Etapa 31 (2026-08-31, `1e6c9a9..67b6758`) — o NÚMERO deste documento mudou de forma, e só ele.** O `REC-` era montado com os **últimos dígitos** do milissegundo mais um sorteio de 0 a 99, e por isso o carimbo **repetia** a cada **27,78 horas**. Agora vem do gerador único `services/almoxarifado/numeroDoc.js` (relógio inteiro em base36 + 8 aleatórios), com retry na colisão. **Nada mais desta feature mudou** — nem status, nem checklist, nem comportamento: o número passa de 12–14 caracteres só com dígitos para 20 com letras, os antigos **não** foram migrados e continuam legíveis (RN-05, testada). Furo **C41** das novidades.
 > **Etapa 34 (2026-09-16, `746a106..054f727`) — o painel do recebimento ganhou ANEXOS, e a tela
 > ganhou a PRIMEIRA suíte de teste que já teve.** Bloco "Anexos" no fim do painel de detalhe
@@ -104,7 +106,13 @@
 > **dentro do claim** e depois de `entrouFisicamente = true`, nos **dois** caminhos (`processarNota`
 > e `aprovarRecebimento` direto). É **idempotente** pelo claim e **não-fatal** de propósito: falha do
 > `UPDATE` vira `console.warn` e a nota processa — perder a contagem é reversível por SQL, travar a
-> nota com o estoque já creditado não é. Nada é escrito em `pedidos_compra`.
+> nota com o estoque já creditado não é. ~~Nada é escrito em `pedidos_compra`.~~ **Deixou de ser
+> verdade na Etapa 42** (`371b838`): ao lado deste acumulador, e **depois do laço de itens** (porque
+> "completo" é agregado por pedido, não por linha), passou a rodar o gancho que grava
+> `pedidos_compra.status = 'recebido'` — com o **mesmo** molde deste parágrafo: dentro do fluxo da
+> entrada física, **não-fatal**, com guarda de tabela ausente, e pelo mesmo motivo (travar a nota com
+> o estoque creditado é o dano maior). A frase riscada fica porque ela é o que explica por que o
+> gancho tem essa forma.
 > **(4) `402070c` + `eb10d9c` — a situação do pedido é DERIVADA na leitura.** A lista
 > `-aux/pedidos-compra` ganhou `quantidade_pedida`, `quantidade_recebida`, `saldo_pendente` (com
 > `Math.max(0, …)`) e `situacao_recebimento` (`ABERTO`/`PARCIAL`/`RECEBIDO`) **ao lado** do `status`
@@ -326,10 +334,21 @@ Todos os tipos de entrada da spec, conferência documental e física estruturada
     dentro do claim, nos dois caminhos (`processarNota` e `aprovarRecebimento` direto). É
     idempotente pelo claim e **não-fatal**. **Consequência inerente, não bug:** dois documentos
     abertos contra o mesmo pedido passam os dois — é o mesmo mecanismo que faz a regra valer.
-  - **RN-24 — a situação do pedido é DERIVADA na leitura, nunca gravada.** `ABERTO`/`PARCIAL`/
-    `RECEBIDO` e `saldo_pendente` (com `Math.max(0, …)`) saem ao lado do `status` do core, que
-    **não é tocado**. `?pendentes=1` filtra no `WHERE`, antes do `LIMIT`, e **pedido sem linhas
-    conta como pendente** — é o Compras que ainda não lançou os itens, não um pedido quitado.
+  - **RN-24 — a situação do pedido é DERIVADA na leitura.** `ABERTO`/`PARCIAL`/`RECEBIDO` e
+    `saldo_pendente` (com `Math.max(0, …)`) saem **ao lado** do `status` do core. `?pendentes=1`
+    filtra no `WHERE`, antes do `LIMIT`, e **pedido sem linhas conta como pendente** — é o Compras
+    que ainda não lançou os itens, não um pedido quitado.
+    > ⚠️ **METADE DESTA RN FOI REVOGADA NA ETAPA 42, e a metade revogada era o título.** Até a Etapa
+    > 41 ela dizia *"**nunca gravada**"* e *"o `status` do core … **não é tocado**"*, e estava
+    > **certa**: não havia gesto automático nenhum, e gravar sem régua seria inventar uma máquina de
+    > estados. A Etapa 42 (`371b838`, RN-E01) **grava** `status = 'recebido'` quando a entrada física
+    > completa o pedido. **O que continua valendo, e é a parte que importa:** a situação derivada
+    > (`situacao_recebimento`, `saldo_pendente`) continua sendo campo **ao lado** do status, nunca no
+    > lugar dele — as rotas de leitura desta feature seguem sem escrever nada —, e o `?pendentes=1`
+    > continua sendo saldo, não status. O medo que a frase antiga protegia (badge cinza com palavra
+    > crua, `?status=` que não casa) segue endereçado por **medida**: `'recebido'` pertence a
+    > `STATUS_PEDIDO_COMPRA`, tem cor no badge e é opção do filtro — e há teste que afirma isso com a
+    > lista **importada do schema**, não copiada.
   - **RN-25 — as duas recusas próprias do pedido, e por que são DUAS.** *"Pedido de compra
     <numero> não tem itens lançados no módulo Compras"* e *"Pedido de compra <numero> já foi
     recebido por completo"*: colapsar as duas foi o defeito que a decisão 14 do design tirou do
@@ -435,6 +454,31 @@ Todos os tipos de entrada da spec, conferência documental e física estruturada
   > e apagá-lo esconderia o motivo de o enum existir.
   > **Medido no banco de desenvolvimento: zero recebimentos gravados** — não há acervo a migrar,
   > e um enum aplicado agora não invalida dado nenhum.
+- [x] **O recebimento FECHA o pedido: status automático + trilha (Etapa 42, 2026-09-27)** —
+      **`dcda360`** (T1: a régua `derivarRecebimentoDoPedido` passa a ser **exportada** e nasce
+      `situacaoDosPedidosCompra`, sem `LIMIT` e com `previsao_entrega`; a subquery da soma virou a
+      constante compartilhada `SOMA_POR_PEDIDO_SQL`, para a agregação também ter um dono) e
+      **`371b838`** (T2: `fecharPedidosCompletos` no **fim** de `darEntradaEstoque`, mais o rótulo de
+      auditoria e a reescrita das três suítes que afirmavam o comportamento antigo).
+      **RN-E01..RN-E07.** Testes: `comprasPedidoSituacaoFonte.api.test.js` (8 cenários),
+      `comprasPedidoStatusAutomatico.api.test.js` (10) e
+      `recebimentoFechaPedidoIntegracao.api.test.js` (a cadeia cotação → pedido → recebimento
+      parcial → fechamento, pela rota).
+      > ⚠️ **Esta entrega REVOGA a RN-24 desta própria spec** (e o item `:107`, *"nada é escrito em
+      > `pedidos_compra`"*). A RN-24 estava **correta até a Etapa 41**: sem gesto automático nenhum,
+      > gravar o status seria inventar uma máquina de estados, e o design da Etapa 39 usou
+      > exatamente essa frase para descartar o gancho. O que mudou é que as Etapas 38–41 fecharam a
+      > cadeia e o último elo aberto era um pedido que ficava *"Atrasado"* **para sempre** depois de
+      > fisicamente recebido. A régua de atraso **não** mudou (`derivarAtraso`, que já excluía
+      > `'recebido'`): mudou **quem escreve a palavra**. Ver a RN-24 mais abaixo, onde a revogação
+      > está anotada no lugar dela.
+      >
+      > **Os limites, que são decisão e não falta:** o gancho **só sobe** (nunca reabre pedido — e
+      > cancelar a movimentação de entrada depois do fechamento **não deixa sinal**, limitação nova
+      > `B161`); não sobrescreve `cancelado`/`rejeitado`; é **não-fatal** com guarda de tabela
+      > ausente (um `throw` travaria a nota com o estoque já creditado, e o claim impediria o
+      > reprocessamento); e **audita**, embora o `PATCH .../status` manual não audite — ali o autor é
+      > o próprio ato humano na porta, aqui o pedido muda sozinho por ato de outro módulo.
 - [x] Recebimento parcial de pedido (validar suporte real + saldo pendente do pedido) —
       **`ea0aa4f`** (as duas colunas + índice + stub do harness), **`57ace18`** (a régua do saldo no
       `POST`), **`d062889`** (o acumulador na entrada física), **`402070c`** + **`eb10d9c`** (a
@@ -483,8 +527,17 @@ Todos os tipos de entrada da spec, conferência documental e física estruturada
       > (i) **janela do primeiro boot** depois do deploy: a rota consulta `quantidade_recebida` antes
       > de o `safeAlter` rodar e o `catch` é silencioso → `<select>` vazio sem mensagem, ao lado do
       > `initSchema` não-awaited.
-- [ ] **Criação de pedido de compra no módulo Compras — sem isso esta feature fica INERTE em
-      produção.** Desmarcado, e não por esquecimento: medido na Fase 0 da Etapa 38
+- [x] **Criação de pedido de compra no módulo Compras — ENTREGUE na Etapa 38** (`2fb9f68` e
+      seguintes; a tela, o `POST`/`PUT` com itens, a importação de planilha e o "Gerar pedido" da
+      Reposição). ⚠️ **Este item ficou `[ ]` por DESATUALIZAÇÃO, não por decisão, desde 2026-09-16**
+      — e a linha de status no topo desta spec repetiu o erro até a **Etapa 42** (2026-09-27), que o
+      corrigiu ao medir. Quem leu a spec entre uma data e a outra concluiu que a feature continuava
+      **inerte em produção**, quando ela já era alcançável por clique desde a 38, e a Etapa 41 ainda
+      acrescentou o caminho **cotação → "Gerar pedido"**. O texto medido na Fase 0 da 38 fica abaixo,
+      porque ele explica **por que** a feature ficou inerte por três etapas — e é a única fonte que
+      registra o acervo `0/0` daquele momento:
+      </br>
+      *(texto original, verdadeiro em 2026-09-16 e falso desde a Etapa 38)* — medido na Fase 0 da Etapa 38
       (`.superpowers/sdd/etapa38-fase0-pedido-de-compra.md`, 2026-09-16) — **nenhum código da
       aplicação insere `pedidos_compra` nem `itens_pedido_compra`**. A rota core
       `server/index.js:20002` é **GET-only**, não existe `POST` em lugar nenhum, e o botão "Novo

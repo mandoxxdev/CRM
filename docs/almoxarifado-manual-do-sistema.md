@@ -2084,10 +2084,27 @@ ela não aparece.
 **E o sistema avisa por e-mail.** O pedido atrasado gera um aviso na varredura diária de alertas,
 descrito na seção 21c-bis.
 
-> **Receber o material não tira o pedido da lista de atrasados.** Quem passa a saber que o material
-> chegou é o recebimento (14.1c); o **Status** do pedido continua sendo a declaração do comprador, e
-> nenhum recebimento o altera. Um pedido entregue com atraso continua com o selo até alguém mudar o
-> status — o que se faz pelo caminho da seção 14b.4b.
+> **Receber o material POR INTEIRO tira o pedido da lista de atrasados, automaticamente.** Quando a
+> última remessa chega e o processamento da nota faz a quantidade recebida alcançar a quantidade
+> pedida, o sistema grava **Status: Recebido** no pedido sozinho, e o selo de atraso cai junto —
+> ninguém precisa lembrar de mudar o status à mão.
+>
+> A régua é exatamente esta: soma de **tudo o que entrou fisicamente no estoque** por aquele pedido
+> **≥** soma de **tudo o que o pedido pediu**, contando só as linhas que têm material do cadastro
+> (linha de frete ou serviço, sem material, não entra na conta). Chegar **mais** do que o pedido
+> pediu também fecha.
+>
+> **O que o automático NÃO faz** (e por isso o caminho manual da seção 14b.4b continua existindo):
+> - **recebimento parcial não fecha nada** — enquanto faltar material, o pedido segue em aberto e
+>   atrasado, e é isso que o alerta *"Pedido de compra recebido parcialmente"* (21c-bis) avisa;
+> - **ele nunca reabre um pedido**: se depois de fechado o material voltar (devolução, estorno de
+>   movimentação), o status **continua** *Recebido* — quem corrige é o comprador, por 14b.4b;
+> - **ele não mexe em pedido Cancelado nem Rejeitado**: se a nota chegar num pedido que você cancelou,
+>   o material entra no estoque (ele está fisicamente no galpão) mas o status fica como você deixou.
+>
+> Toda mudança automática fica registrada na **trilha de auditoria** como *"Fechamento automático do
+> pedido"*, com o nome de quem processou a nota — é onde você descobre por que um pedido seu mudou de
+> status sem você ter tocado nele.
 
 ### 14b.2 Criar um pedido
 
@@ -2193,8 +2210,12 @@ dela continua *Aprovado*.
 
 ### 14b.4b Alterar o status de um pedido que já teve recebimento
 
-O **Status** é o único campo que continua editável depois do primeiro recebimento — e é o que tira o
-pedido entregue da lista de atrasados (14b.1b).
+O **Status** é o único campo que continua editável depois do primeiro recebimento.
+
+Este caminho **não** é o normal para o pedido que chegou inteiro — esse fecha sozinho (14b.1b). Ele
+existe para os três casos em que a decisão é sua: **reabrir** um pedido fechado (o material voltou por
+devolução ou por movimentação cancelada), **fechar** um pedido que chegou por fora do sistema, e mexer
+no status de um pedido **Cancelado** ou **Rejeitado**, que o automático nunca toca.
 
 Clique no **lápis** do pedido na aba Pedidos de Compra. Se ele já teve recebimento, o formulário abre
 com uma faixa de aviso no topo:
@@ -3739,6 +3760,18 @@ falha do servidor de e-mail nunca trava uma movimentação, uma devolução ou u
 - **Pedido de compra atrasado** — varredura diária dos pedidos de compra com previsão de entrega
   vencida e status que ainda cobra entrega (14b.1b). Um aviso por **prazo prometido**: enquanto a
   previsão for a mesma, não repete; renegociado o prazo e vencido de novo, avisa outra vez.
+- **Pedido de compra recebido parcialmente** — varredura diária dos pedidos que
+  receberam **parte** do material e ainda têm saldo pendente. O aviso diz o pedido, o fornecedor,
+  quanto foi pedido, quanto chegou, **quanto falta** e a previsão de entrega (ou *"não informada"*,
+  quando o pedido não tem prazo cadastrado). Um aviso por **saldo**: enquanto faltar a mesma
+  quantidade, não repete; chegou mais material e ainda sobrou saldo, avisa outra vez com o número
+  novo. Pedido **Cancelado**, **Rejeitado** ou já marcado **Recebido** não entra — nos três casos a
+  decisão já é do comprador. Quando a última remessa fecha o pedido, ele sai deste alerta **e** sai
+  do alerta de atrasado, porque o status passa a *Recebido* sozinho (14b.1b).
+  > Um detalhe de tempo, para não assustar: o aviso é montado pela varredura e enviado alguns minutos
+  > depois. Se o pedido for completado nesse intervalo, o e-mail já estava na fila e **sai de todo
+  > jeito** — ele era verdade quando foi escrito. Basta conferir o pedido na aba Compras: lá o estado
+  > é sempre o de agora.
 
 O que **não** gera aviso de movimentação, de propósito: reservas e liberações, envio e retorno
 de remessa a terceiro (a remessa tem o aviso próprio de vencida) e os ajustes aplicados pela
