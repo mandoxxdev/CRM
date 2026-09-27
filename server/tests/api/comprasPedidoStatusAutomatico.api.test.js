@@ -232,28 +232,160 @@ function capturarWarn(fn) {
       autorizar_excedente: true,
       itens: [itemDaTela(matJ, ja.linhas[0].id, 2)],
     });
-    if (extra.status === 201) {
-      const linhasLog = await capturarWarn(async () => {
-        const conf = await request(app).put(`/api/almoxarifado/recebimentos/${extra.body.id}/conferir`)
-          .send({ itens: [itemDaTela(matJ, ja.linhas[0].id, 2)] });
-        assert.strictEqual(conf.status, 200, JSON.stringify(conf.body));
-        for (const acao of ['encaminhar_compras', 'finalizar_compras', 'iniciar_faturamento']) {
-          await request(app).post(`/api/almoxarifado/recebimentos/${extra.body.id}/workflow`).send({ acao });
-        }
-        await request(app).put(`/api/almoxarifado/recebimentos/${extra.body.id}/fiscal`).send({
-          nota_fiscal: `NF-E42T2-X${extra.body.id}`, fornecedor_id: forn.lastID,
-          fornecedor_nome: 'Fornecedor E42 T2', data_emissao_nf: '2026-09-01',
-          data_entrada_nf: '2026-09-02', valor_total_nota: 2,
-          itens: [itemDaTela(matJ, ja.linhas[0].id, 2)],
-        });
-        assert.strictEqual((await processar(extra.body.id)).status, 200);
+    // ⚠️ ESTE `assert` SUBSTITUI UM `if (extra.status === 201) { … }` — e a troca e o achado de uma
+    // revisao adversarial, reproduzido. Dentro daquele `if` moravam as DUAS unicas assercoes da base
+    // que medem (a) que o excedente contra pedido JA fechado nao duplica a trilha e (b) que o caminho
+    // FELIZ nao escreve `warn` (a "metade silenciosa" da decisao F11). Com um `if`, o dia em que o
+    // `POST` deixar de responder 201 as duas somem EM SILENCIO e o cenario continua reportando ✓.
+    //
+    // O revisor provou que isso nao e hipotetico: com o `warn` tornado incondicional (o defeito que
+    // (b) existe para pegar) MAIS uma guarda plausivel de "pedido encerrado nao aceita recebimento",
+    // o cenario passava VERDE com o defeito vivo. E a guarda plausivel e tentadora justamente por
+    // causa desta etapa — agora que o pedido fecha sozinho, "nao aceitar recebimento em pedido
+    // fechado" parece regra obvia. Com o `assert`, aquele dia da vermelho aqui, nomeando o motivo.
+    assert.strictEqual(extra.status, 201,
+      'o excedente autorizado da Etapa 36 tinha de passar — se uma regra nova passou a recusar '
+      + 'recebimento contra pedido ja fechado, as duas assercoes abaixo (trilha nao duplicada e '
+      + `log sem ruido no caminho feliz) precisam de outro caminho: ${JSON.stringify(extra.body)}`);
+    const linhasLog = await capturarWarn(async () => {
+      const conf = await request(app).put(`/api/almoxarifado/recebimentos/${extra.body.id}/conferir`)
+        .send({ itens: [itemDaTela(matJ, ja.linhas[0].id, 2)] });
+      assert.strictEqual(conf.status, 200, JSON.stringify(conf.body));
+      for (const acao of ['encaminhar_compras', 'finalizar_compras', 'iniciar_faturamento']) {
+        await request(app).post(`/api/almoxarifado/recebimentos/${extra.body.id}/workflow`).send({ acao });
+      }
+      await request(app).put(`/api/almoxarifado/recebimentos/${extra.body.id}/fiscal`).send({
+        nota_fiscal: `NF-E42T2-X${extra.body.id}`, fornecedor_id: forn.lastID,
+        fornecedor_nome: 'Fornecedor E42 T2', data_emissao_nf: '2026-09-01',
+        data_entrada_nf: '2026-09-02', valor_total_nota: 2,
+        itens: [itemDaTela(matJ, ja.linhas[0].id, 2)],
       });
-      assert.strictEqual((await auditoriasDoPedido(ja.pedido.id)).length, 1,
-        'o excedente contra pedido JA recebido duplicou a trilha');
-      const ruido = linhasLog.filter((l) => /nao e sobrescrito automaticamente/.test(l));
-      assert.deepStrictEqual(ruido, [],
-        `o caminho FELIZ (pedido ja recebido) escreveu aviso no log: ${JSON.stringify(ruido)}`);
-    }
+      assert.strictEqual((await processar(extra.body.id)).status, 200);
+    });
+    assert.strictEqual((await auditoriasDoPedido(ja.pedido.id)).length, 1,
+      'o excedente contra pedido JA recebido duplicou a trilha');
+    const ruido = linhasLog.filter((l) => /nao e sobrescrito automaticamente/.test(l));
+    assert.deepStrictEqual(ruido, [],
+      `o caminho FELIZ (pedido ja recebido) escreveu aviso no log: ${JSON.stringify(ruido)}`);
+  });
+
+  // ── (5b) A GUARDA DE CAIXA: acervo com status em MAIUSCULA ───────────────────────────────────
+  //
+  // Achado de revisao adversarial, MEDIDO: as TRES guardas de normalizacao de caixa desta etapa
+  // (`LOWER()` no `WHERE` do UPDATE, `toLowerCase()` no `if` do warn e `toLowerCase()` no filtro do
+  // alerta) podiam ser removidas as TRES DE UMA VEZ e a suite inteira — 199 arquivos — continuava
+  // VERDE. Guarda sem cobertura e guarda que o proximo refactor apaga "porque nada cai".
+  //
+  // Por que ela existe, e por que o dano seria permanente: nenhuma porta de escrita do app produz
+  // caixa alta (as tres validam por `z.enum(STATUS_PEDIDO_COMPRA)`, tudo minusculo, e a importacao
+  // de planilha nao le coluna de status), entao `'CANCELADO'` so chega por SQL ou migracao legada —
+  // exatamente o acervo que existe em cliente antigo. Sem a guarda, aquele pedido volta a ser
+  // RESSUSCITADO para `recebido` pelo gancho, e passa a gerar e-mail de parcial todo dia, para
+  // sempre, porque nao ha expurgo da fila de notificacoes.
+  await test('(5b) RN-E04 pedido com status CANCELADO em MAIUSCULA (acervo legado) tambem nao e sobrescrito', async () => {
+    const materialId = await novoMaterial();
+    const { pedido, linhas } = await novoPedido({ itens: [{ material_id: materialId, quantidade: 3, valor_unitario: 1 }] });
+    const recId = await receberPeloFluxo(pedido, [itemDaTela(materialId, linhas[0].id, 3)]);
+    // A caixa alta NAO passa por nenhuma porta do app (o enum e minusculo) — por isso o UPDATE cru,
+    // que e o unico jeito de reproduzir o acervo legado. Declarado, nao atalho.
+    await dbRun(db, "UPDATE pedidos_compra SET status = 'CANCELADO' WHERE id = ?", [pedido.id]);
+
+    const linhasLog = await capturarWarn(async () => {
+      assert.strictEqual((await processar(recId)).status, 200, 'a nota tinha de processar mesmo assim');
+    });
+
+    assert.strictEqual(await statusDoPedido(pedido.id), 'CANCELADO',
+      'o gancho ressuscitou um pedido CANCELADO gravado em maiuscula — a guarda de caixa do `WHERE` caiu');
+    assert.strictEqual((await auditoriasDoPedido(pedido.id)).length, 0,
+      'auditou uma mudanca que nao aconteceu');
+    assert.strictEqual(await saldoDoMaterial(materialId), 3, 'o estoque devia ter entrado');
+    // E o aviso tem de sair, com a palavra como esta no banco: sem a normalizacao no `if`, o codigo
+    // nao reconhece o status terminal e o operador nao descobre o pedido que ficou de fora.
+    const avisou = linhasLog.some((l) => /nao e sobrescrito automaticamente/.test(l) && l.includes('CANCELADO'));
+    assert.ok(avisou,
+      `o log nao registrou o pedido CANCELADO em maiuscula: ${JSON.stringify(linhasLog)}`);
+  });
+
+  // ── (5c) O LACO QUE LANCA NO MEIO — o estado irrecuperavel ──────────────────────────────────
+  //
+  // Achado CRITICAL de revisao adversarial, reproduzido por sonda com uma falha REAL (nao injetada
+  // no codigo): item 2 do recebimento e material com controle de serie cujo numero JA esta em
+  // estoque, e o motor recusa. O item 1 (a linha do pedido) ja tinha somado quando isso acontece,
+  // entao o `throw` sobe e o gancho NAO roda.
+  //
+  // ⚠️ O QUE TORNAVA O ESTADO IRRECUPERAVEL, e e a parte que importa: a lista de linhas tocadas era
+  // montada SO com os itens que casaram o claim NESTA execucao. Na segunda passada (serie
+  // consertada), o claim do item 1 ja estava tomado, a lista saia VAZIA, e o gancho voltava `[]` na
+  // primeira linha. Resultado medido pela sonda: nota PROCESSADA, estoque creditado, saldo do pedido
+  // ZERO, e o pedido `pendente` com situacao derivada `RECEBIDO` — fora de `?atrasados=1`? NAO, ele
+  // FICA la ("Atrasado" para sempre), fora do alerta de parcial (a situacao e RECEBIDO), fora do
+  // `?pendentes=1` (saldo 0) e **sem uma linha de log**. Nenhum sinal, nenhuma recuperacao a nao ser
+  // SQL — e ninguem sabe que precisa.
+  //
+  // O conserto foi tirar o claim da equacao: a lista sai de TODOS os itens do recebimento que tem
+  // `pedido_item_id`. A idempotencia nao dependia do claim — ela vem do `r.changes` do `UPDATE` com
+  // a guarda de status no `WHERE`, e o cenario (3) deste arquivo e quem prova isso.
+  await test('(5c) RN-E01 recebimento cujo laco LANCA no item 2: depois de consertar e reprocessar, o pedido FECHA', async () => {
+    const matA = await novoMaterial();
+    const matSerie = await novoMaterial();
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET controle_serie = 1 WHERE id = ?', [matSerie]);
+
+    // Passo 1 — a serie SN-DUP entra em estoque por um recebimento ANTERIOR, sem pedido nenhum.
+    setUser(ADMIN);
+    const antes = await request(app).post('/api/almoxarifado/recebimentos').send({
+      tipo_recebimento: 'NOTA_FISCAL', nota_fiscal: 'NF-SERIE-BASE',
+      itens: [{ material_id: matSerie, quantidade: 1, quantidade_recebida: 1, series: 'SN-DUP' }],
+    });
+    assert.strictEqual(antes.status, 201, `fixture: ${JSON.stringify(antes.body)}`);
+    assert.strictEqual((await request(app).post(`/api/almoxarifado/recebimentos/${antes.body.id}/aprovar`)
+      .send({})).status, 200, 'fixture: a serie SN-DUP tinha de entrar em estoque');
+
+    // Passo 2 — o pedido tem UMA linha (material A). O item da serie entra no MESMO recebimento
+    // **fora** do pedido, que e caso legitimo e declarado da Etapa 37 (decisao 9: material que nao
+    // esta no pedido entra com `pedido_item_id` nulo e sem regua de saldo).
+    //
+    // ⚠️ A FORMA DO CENARIO E O ACHADO. Uma primeira versao deste teste punha as DUAS linhas no
+    // pedido e passava VERDE mesmo com o defeito: na segunda passada, o item da serie — que tambem
+    // tinha `pedido_item_id` — entrava na lista, o gancho resolvia o pedido por ele e lia a soma
+    // completa. O defeito so aparece quando TODOS os itens com linha de pedido foram reclamados na
+    // passada que falhou, e quem sobra para a segunda nao aponta para pedido nenhum. Foi assim que a
+    // sonda da revisao o encontrou, e e por isso que a metade positiva do passo 3 e obrigatoria.
+    const { pedido, linhas } = await novoPedido({
+      itens: [{ material_id: matA, quantidade: 5, valor_unitario: 1 }],
+    });
+    const recId = await receberPeloFluxo(pedido, [
+      itemDaTela(matA, linhas[0].id, 5),
+      { material_id: matSerie, quantidade: 1, quantidade_recebida: 1, series: 'SN-DUP' },
+    ]);
+
+    // Passo 3 — a falha REAL: o motor recusa a serie que ja esta em estoque.
+    const falhou = await processar(recId);
+    assert.strictEqual(falhou.status, 400,
+      `o motor tinha de recusar a serie duplicada (e a falha e o ponto do cenario): ${JSON.stringify(falhou.body)}`);
+    // Metade POSITIVA, sem a qual o resto passaria por vacuidade: o item 1 JA somou no pedido.
+    const somaParcial = await dbGet(db,
+      'SELECT quantidade_recebida FROM itens_pedido_compra WHERE id = ?', [linhas[0].id]);
+    assert.strictEqual(somaParcial.quantidade_recebida, 5,
+      `o item 1 tinha de ter somado antes do throw: ${JSON.stringify(somaParcial)}`);
+    assert.strictEqual(await statusDoPedido(pedido.id), 'pendente',
+      'nada podia ter fechado ainda — falta a linha da serie');
+
+    // Passo 4 — o operador conserta a serie (o gesto real) e reprocessa.
+    await dbRun(db, `UPDATE recebimentos_material_itens_almoxarifado SET series = 'SN-NOVA'
+      WHERE recebimento_id = ? AND material_id = ?`, [recId, matSerie]);
+    const ok = await processar(recId);
+    assert.strictEqual(ok.status, 200, `reprocessar apos consertar a serie: ${JSON.stringify(ok.body)}`);
+
+    // Passo 5 — O ACHADO. Com a lista montada pelo claim, aqui o pedido ficava `pendente` com
+    // situacao `RECEBIDO`: completo, invisivel e atrasado para sempre.
+    assert.strictEqual(await statusDoPedido(pedido.id), 'recebido',
+      'o pedido ficou fisicamente completo e o status nao acompanhou — a lista do gancho voltou a '
+      + 'depender do claim desta execucao, e o item que somou na passada ANTERIOR sumiu dela');
+    assert.strictEqual((await auditoriasDoPedido(pedido.id)).length, 1,
+      'o fechamento tinha de deixar UMA linha de trilha');
+    const situacao = (await receiptService.situacaoDosPedidosCompra(db)).find((l) => l.id === pedido.id);
+    assert.strictEqual(situacao.situacao_recebimento, 'RECEBIDO', JSON.stringify(situacao));
+    assert.strictEqual(situacao.saldo_pendente, 0, JSON.stringify(situacao));
   });
 
   // ── (6) RN-E06: O SEGUNDO CAMINHO DE ENTRADA FISICA ─────────────────────────────────────────

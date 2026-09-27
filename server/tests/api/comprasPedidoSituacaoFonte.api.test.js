@@ -106,6 +106,88 @@ function diasDeHoje(n) {
       { quantidade_pedida: 10, quantidade_recebida: 0, saldo_pendente: 10, situacao_recebimento: 'ABERTO' });
   });
 
+  // ── (1b) O FLOAT: pedido FISICAMENTE completo tem de FECHAR ────────────────────────────────
+  //
+  // Achado CRITICAL de revisao adversarial, reproduzido por sonda pelas portas reais: `recebida >=
+  // pedida` sobre `SUM(REAL)` sem epsilon NAO fecha um pedido que chegou inteiro. Uma casa decimal em
+  // KG basta — 20,1 recebido em 2,2 + 17,9 da 20.099999999999998 —, e o modulo tem KG/M por
+  // construcao. O efeito medido era exatamente o beco que a Etapa 42 existe para fechar: pedido
+  // fisicamente completo, `pendente`, dentro de `?atrasados=1` PARA SEMPRE. E pior, o e-mail do
+  // alerta saia com `Saldo pendente: 3.552713678800501e-15` enquanto o cartao, que formata com 4
+  // casas, mostrava `Saldo pendente 0` — duas partes lendo o MESMO numero de modos diferentes.
+  //
+  // O conserto reusa o epsilon que a base JA tem (`divergencia.js`, `EPSILON_DIVERGENCIA = 1e-9`),
+  // que existe desde a Etapa 10b pela MESMA razao (subtracao REAL gerando divergencia de 7e-16 e
+  // cada consumidor com `!= 0` cru tratando o operador que ACERTOU como divergente). Um dono para o
+  // epsilon, como ja ha um dono para a regua e um para a agregacao.
+  await test('(1b) RN-E08 float: 2,2 + 17,9 contra 20,1 e RECEBIDO com saldo 0 — nao PARCIAL com saldo 3,5e-15', async () => {
+    const { derivarRecebimentoDoPedido } = receiptService;
+    const somaReal = 2.2 + 17.9;
+    // Guarda que prende o proprio cenario: se um dia o JS somar isso exato, o teste deixa de medir o
+    // que pretende e tem de dizer isso em voz alta, em vez de passar por sorte.
+    assert.notStrictEqual(somaReal, 20.1,
+      `este cenario depende de 2.2 + 17.9 !== 20.1 neste runtime; deu ${somaReal}`);
+
+    const r = derivarRecebimentoDoPedido(20.1, somaReal);
+    assert.strictEqual(r.situacao_recebimento, 'RECEBIDO',
+      `pedido fisicamente completo ficou ${r.situacao_recebimento} por ruido de float: ${JSON.stringify(r)}`);
+    assert.strictEqual(r.saldo_pendente, 0,
+      `o saldo tinha de ser ZERO, nao residuo: ${JSON.stringify(r.saldo_pendente)}`);
+    // O residuo tambem nao pode vazar para o campo de exibicao: o e-mail escreve este numero cru.
+    assert.strictEqual(r.quantidade_recebida, 20.1,
+      `a recebida tinha de vir limpa para o corpo do e-mail: ${JSON.stringify(r.quantidade_recebida)}`);
+
+    // E o PARCIAL de verdade continua parcial, com saldo legivel (a metade positiva: sem ela, um
+    // epsilon grande demais faria tudo virar RECEBIDO e o cenario passaria).
+    const parcial = derivarRecebimentoDoPedido(20.1, 2.2);
+    assert.strictEqual(parcial.situacao_recebimento, 'PARCIAL', JSON.stringify(parcial));
+    assert.strictEqual(parcial.saldo_pendente, 17.9,
+      `saldo de parcial fracionario tinha de vir limpo: ${JSON.stringify(parcial.saldo_pendente)}`);
+  });
+
+  // ── (1c) O EXCEDENTE CRUZADO: excesso de A nao paga o saldo de B ───────────────────────────
+  //
+  // Achado IMPORTANT da mesma revisao, reproduzido por sonda: a agregacao do "completo" era por
+  // PEDIDO, mas a regua da ESCRITA (`assertSaldoDoPedidoPermitido`) e por MATERIAL. Com excedente
+  // autorizado, uma nota de 25 de A num pedido A(10)+B(10) fechava o pedido com B em ZERO — o pedido
+  // saia de `?atrasados=1`, saia de `?pendentes=1` e nao entrava no alerta de parcial, enquanto a
+  // rota de itens continuava oferecendo 10 de B. A MESMA base afirmando "completo" e "faltam 10".
+  //
+  // O "completo" passou a ser medido na unidade que a escrita ja usa: soma dos deficits POR MATERIAL,
+  // cada um clampado em zero antes de somar. Excesso de um material nao compensa falta de outro.
+  await test('(1c) RN-E08 excedente de um material NAO paga o saldo de outro (deficit por material)', async () => {
+    const matA = await novoMaterial();
+    const matB = await novoMaterial();
+    const r = await request(app).post('/api/compras/pedidos').send({
+      fornecedor_id: forn.lastID,
+      itens: [
+        { material_id: matA, quantidade: 10, valor_unitario: 1 },
+        { material_id: matB, quantidade: 10, valor_unitario: 1 },
+      ],
+    });
+    assert.strictEqual(r.status, 201, `fixture: ${JSON.stringify(r.body)}`);
+    const linhas = await dbAll(db,
+      'SELECT id, material_id FROM itens_pedido_compra WHERE pedido_id = ? ORDER BY id', [r.body.id]);
+    // 25 de A (excedente) e 0 de B. A soma por PEDIDO da 25 >= 20 e diria "completo".
+    await dbRun(db, 'UPDATE itens_pedido_compra SET quantidade_recebida = 25 WHERE id = ?', [linhas[0].id]);
+
+    const linha = (await receiptService.situacaoDosPedidosCompra(db)).find((l) => l.id === r.body.id);
+    assert.strictEqual(linha.situacao_recebimento, 'PARCIAL',
+      `o material B nunca chegou e o pedido foi dado por completo: ${JSON.stringify(linha)}`);
+    assert.strictEqual(linha.saldo_pendente, 10,
+      `o saldo tinha de ser os 10 de B que faltam, nao o agregado do pedido: ${JSON.stringify(linha)}`);
+    // A metade que prende a exibicao: pedida e recebida continuam sendo os totais CRUS do pedido —
+    // o que mudou e so a regua do "completo" e do saldo.
+    assert.strictEqual(linha.quantidade_pedida, 20, JSON.stringify(linha));
+    assert.strictEqual(linha.quantidade_recebida, 25, JSON.stringify(linha));
+
+    // E a metade POSITIVA: chegando os 10 de B, agora fecha.
+    await dbRun(db, 'UPDATE itens_pedido_compra SET quantidade_recebida = 10 WHERE id = ?', [linhas[1].id]);
+    const fechado = (await receiptService.situacaoDosPedidosCompra(db)).find((l) => l.id === r.body.id);
+    assert.strictEqual(fechado.situacao_recebimento, 'RECEBIDO', JSON.stringify(fechado));
+    assert.strictEqual(fechado.saldo_pendente, 0, JSON.stringify(fechado));
+  });
+
   // ── (2) O CORACAO: 51 PARCIAIS, AS DUAS FONTES NO MESMO BANCO ───────────────────────────────
   await test('(2) RN-E08 com 51 pedidos parciais a fonte NOVA devolve 51 e o aux da TELA devolve 50 (o LIMIT dele e intencional)', async () => {
     const idsCriados = [];

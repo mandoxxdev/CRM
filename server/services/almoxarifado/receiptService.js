@@ -14,6 +14,10 @@ const { dbRun, dbGet, dbAll } = require('./db');
 const { TIPOS_RECEBIMENTO } = require('./schema');
 const [TIPO_NOTA_FISCAL, TIPO_PEDIDO_COMPRA] = TIPOS_RECEBIMENTO;
 const { registrarAuditoria } = require('./audit');
+// (Etapa 42, onda de correcao) O epsilon vem de `divergencia.js`, que existe desde a Etapa 10b como
+// dono unico de "isto e zero para efeito pratico" — reescrever o literal aqui seria a segunda
+// definicao, e a divergencia entre as duas apareceria na primeira edicao de uma delas.
+const { EPSILON_DIVERGENCIA } = require('./divergencia');
 const { inserirComNumeroUnico } = require('./numeroDoc');
 const {
   registrarMovimentacao, resolveLocalizacaoEntrada, validarLocalizacaoParaMovimento,
@@ -1091,9 +1095,6 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id 
   }
 
   // ── 2. Entrada item a item, cada um reclamado antes de mover ──
-  // (Etapa 42, RN-E01/RN-E02) As linhas de pedido que ESTA execucao somou. Vive FORA do laco porque
-  // a decisao de fechar o pedido e AGREGADA: ver o comentario de `fecharPedidosCompletos`.
-  const entraramNoPedido = [];
   for (const item of itens) {
     // Etapa 5: a inspecao deixou de ser PRE-REQUISITO da entrada e passou a ser passo posterior.
     // O material esta fisicamente no galpao desde o descarregamento — barrar a entrada fazia o
@@ -1262,11 +1263,6 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id 
         // documento travado e o pedido sem contar. Perder a contagem de um pedido com um `warn` e
         // reparavel por SQL; travar a nota nao e.
         if (item.pedido_item_id) {
-          // (Etapa 42, RN-E01) O registro do que ESTA execucao somou — a lista que
-          // `fecharPedidosCompletos` recebe DEPOIS do laco. Anotar aqui, e nao percorrer os itens de
-          // novo no fim, e o que garante que so entra o que casou o claim: reprocessar a mesma nota
-          // nao pode re-auditar um fechamento que ja aconteceu.
-          entraramNoPedido.push({ id: item.id, pedido_item_id: item.pedido_item_id });
           try {
             await dbRun(db, `UPDATE itens_pedido_compra
                 SET quantidade_recebida = COALESCE(quantidade_recebida, 0) + ?
@@ -1315,7 +1311,7 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id 
   // excecao inesperada em QUALQUER passo dela — a leitura da soma, o UPDATE, a auditoria — caia no
   // mesmo lugar com a mesma literal, em vez de cada passo inventar o seu.
   try {
-    await fecharPedidosCompletos(db, user, recebimentoId, entraramNoPedido);
+    await fecharPedidosCompletos(db, user, recebimentoId);
   } catch (eStatus) {
     console.warn('[recebimento] status automatico do pedido de compra falhou '
       + `(recebimento ${recebimentoId}): ${eStatus.message}`);
@@ -1461,12 +1457,41 @@ function quantidadeFinita(valor) {
  * UMA funcao, consumida pelas DUAS rotas de leitura (lista e itens): duas copias divergiriam na
  * primeira edicao, e e a classe de bug que `divergencia.js` existe para matar neste modulo.
  */
-function situacaoRecebimentoPedido(quantidadePedida, quantidadeRecebida) {
+function situacaoRecebimentoPedido(quantidadePedida, quantidadeRecebida, saldoPendente) {
   const pedida = quantidadeFinita(quantidadePedida);
   const recebida = quantidadeFinita(quantidadeRecebida);
-  if (pedida > 0 && recebida >= pedida) return 'RECEBIDO';
-  if (recebida <= 0) return 'ABERTO';
+  // ⚠️ QUEM DECIDE "completo" e o SALDO, nao a comparacao `recebida >= pedida` — e a troca e a
+  // correcao de DOIS achados da revisao adversarial de uma vez (float e excedente cruzado), porque os
+  // dois eram o mesmo erro: comparar dois agregados do pedido em vez de olhar o que FALTA.
+  if (pedida > 0 && quantidadeFinita(saldoPendente) <= 0) return 'RECEBIDO';
+  if (recebida <= EPSILON_DIVERGENCIA) return 'ABERTO';
   return 'PARCIAL';
+}
+
+/**
+ * O saldo LIMPO, e as duas limpezas sao correcao de achado, nao cosmetica.
+ *
+ * (a) **Residuo de float vira ZERO** (`<= EPSILON_DIVERGENCIA`). Medido por sonda pelas portas reais:
+ *     pedido de 20,1 KG recebido em 2,2 + 17,9 soma `20.099999999999998`, e `recebida >= pedida` dava
+ *     **false** — o pedido fisicamente completo ficava `pendente` e dentro de `?atrasados=1` PARA
+ *     SEMPRE, que e exatamente o beco que esta etapa existe para fechar. Uma casa decimal em KG basta,
+ *     e este modulo tem KG/M por construcao.
+ *
+ * (b) **O numero exibido tambem e arredondado** (6 casas). Sem isso o corpo do e-mail do alerta saia
+ *     com `Saldo pendente: 3.552713678800501e-15` enquanto o cartao da central, que formata com 4
+ *     casas, escrevia `Saldo pendente 0` — o mesmo numero contando duas historias, e a do e-mail em
+ *     notacao cientifica. 6 casas e folga sobre as 3 que o dedupe do alerta usa e sobre as 4 do
+ *     cartao.
+ *
+ * O epsilon e o de `divergencia.js`, que existe desde a Etapa 10b pelo MESMO motivo (subtracao REAL
+ * gerando divergencia de 7e-16, com cada consumidor de comparacao exata tratando o operador que
+ * ACERTOU como divergente). Um dono para o epsilon, como ja ha um dono para a regua e um para a
+ * agregacao — reescrever `1e-9` aqui seria a segunda definicao de "zero para efeito pratico".
+ */
+function saldoLimpo(valor) {
+  const bruto = Math.max(0, quantidadeFinita(valor));
+  if (bruto <= EPSILON_DIVERGENCIA) return 0;
+  return Math.round(bruto * 1e6) / 1e6;
 }
 
 /**
@@ -1480,14 +1505,33 @@ function situacaoRecebimentoPedido(quantidadePedida, quantidadeRecebida) {
  * ao operador (o filtro da rota de itens e `saldo_pendente > 0`) e a assercao da RN-24
  * ("saldo 0 no pedido completado") ficaria falsa exatamente no caso que esta etapa CRIA.
  */
-function derivarRecebimentoDoPedido(quantidadePedida, quantidadeRecebida) {
+function derivarRecebimentoDoPedido(quantidadePedida, quantidadeRecebida, saldoPorMaterial) {
   const pedida = quantidadeFinita(quantidadePedida);
   const recebida = quantidadeFinita(quantidadeRecebida);
+  // ⚠️ O TERCEIRO PARAMETRO E A CORRECAO DO ACHADO DO EXCEDENTE CRUZADO, e ele e OPCIONAL de
+  // proposito. Quando o chamador conhece o deficit POR MATERIAL (as duas rotas de PEDIDO, via
+  // `SOMA_POR_PEDIDO_SQL`), ele manda — e ai o excesso de um material NAO paga a falta de outro.
+  // Quando o chamador olha UMA linha (a rota de itens do pedido, `:1794`), nao existe "por material"
+  // a considerar e o saldo e a subtracao mesmo.
+  //
+  // Medido por sonda: pedido A(10)+B(10) com uma nota de 25 de A (excedente autorizado) e 0 de B
+  // fechava como `RECEBIDO` com saldo 0 — o pedido saia de `?atrasados=1`, saia de `?pendentes=1` e
+  // ficava fora do alerta de parcial, enquanto `listarItensPedidoCompraAux` continuava oferecendo 10
+  // de B com teto 10. A MESMA base afirmando "completo" e "faltam 10" ao mesmo tempo. A causa: o
+  // "completo" agregava por PEDIDO enquanto a regua da ESCRITA (`assertSaldoDoPedidoPermitido`)
+  // agrega por MATERIAL — duas unidades de medida para a mesma pergunta.
+  //
+  // `quantidade_pedida` e `quantidade_recebida` continuam sendo os totais CRUS do pedido (so limpos
+  // do ruido de float): elas sao o que a tela e o e-mail EXIBEM, e mostrar 20 pedidos quando o
+  // pedido pediu 20 e o certo, mesmo que o saldo venha de outra conta.
+  const saldo = saldoPorMaterial == null
+    ? saldoLimpo(pedida - recebida)
+    : saldoLimpo(saldoPorMaterial);
   return {
-    quantidade_pedida: pedida,
-    quantidade_recebida: recebida,
-    saldo_pendente: Math.max(0, pedida - recebida),
-    situacao_recebimento: situacaoRecebimentoPedido(pedida, recebida),
+    quantidade_pedida: saldoLimpo(pedida),
+    quantidade_recebida: saldoLimpo(recebida),
+    saldo_pendente: saldo,
+    situacao_recebimento: situacaoRecebimentoPedido(pedida, recebida, saldo),
   };
 }
 
@@ -1503,11 +1547,29 @@ function derivarRecebimentoDoPedido(quantidadePedida, quantidadeRecebida) {
  * `material_id IS NOT NULL` e o MESMO recorte de `carregarItensPedidoCompra`: sem material nao ha o
  * que dar entrada no estoque, e e o recorte que a regua de saldo do `POST` usa. Contar linhas de
  * texto livre (frete, servico) faria a rota dizer "PARCIAL" num pedido que ja chegou inteiro.
+ *
+ * ⚠️ A SUBQUERY DE DOIS NIVEIS (agrupa por material, depois por pedido) E CORRECAO DE ACHADO, nao
+ * estilo. A coluna `saldo_por_material` soma o deficit de CADA material com o clamp em zero ANTES da
+ * soma, e e por isso que o excesso de um material nao paga a falta de outro. A causa do defeito: a
+ * regua da ESCRITA (`assertSaldoDoPedidoPermitido`) sempre agregou por MATERIAL, e o "completo"
+ * agregava por PEDIDO — duas unidades de medida para a mesma pergunta. Medido por sonda: uma nota de
+ * 25 de A num pedido A(10)+B(10), com excedente autorizado, fechava o pedido com B em ZERO, e a rota
+ * de itens continuava oferecendo 10 de B com teto 10 — a mesma base afirmando "completo" e "faltam
+ * 10". O cenario (1c) de `comprasPedidoSituacaoFonte` prende isto.
+ *
+ * `MAX(a, b)` de DOIS argumentos e a funcao ESCALAR do SQLite (a agregada e a de um argumento so) — e
+ * o que permite clampar linha a linha dentro da propria soma.
  */
 const SOMA_POR_PEDIDO_SQL = `SELECT pedido_id,
-    SUM(COALESCE(quantidade, 0)) as total_pedido,
-    SUM(COALESCE(quantidade_recebida, 0)) as soma_recebida
-  FROM itens_pedido_compra WHERE material_id IS NOT NULL GROUP BY pedido_id`;
+    SUM(total_material) as total_pedido,
+    SUM(recebida_material) as soma_recebida,
+    SUM(MAX(0, total_material - recebida_material)) as saldo_por_material
+  FROM (SELECT pedido_id, material_id,
+      SUM(COALESCE(quantidade, 0)) as total_material,
+      SUM(COALESCE(quantidade_recebida, 0)) as recebida_material
+    FROM itens_pedido_compra WHERE material_id IS NOT NULL
+    GROUP BY pedido_id, material_id)
+  GROUP BY pedido_id`;
 
 async function listarPedidosCompraAux(db, { search, pendentes } = {}) {
   const tableExists = await dbGet(db,
@@ -1520,7 +1582,8 @@ async function listarPedidosCompraAux(db, { search, pendentes } = {}) {
   let sql = `SELECT p.id, p.numero, p.valor_total, p.status, p.data_pedido,
     f.razao_social as fornecedor_nome, f.cnpj as fornecedor_cnpj,
     COALESCE(i.total_pedido, 0) as total_pedido,
-    COALESCE(i.soma_recebida, 0) as soma_recebida
+    COALESCE(i.soma_recebida, 0) as soma_recebida,
+    COALESCE(i.saldo_por_material, 0) as saldo_por_material
     FROM pedidos_compra p
     LEFT JOIN fornecedores f ON p.fornecedor_id = f.id
     LEFT JOIN (${SOMA_POR_PEDIDO_SQL}) i
@@ -1558,7 +1621,7 @@ async function listarPedidosCompraAux(db, { search, pendentes } = {}) {
     data_pedido: linha.data_pedido,
     fornecedor_nome: linha.fornecedor_nome,
     fornecedor_cnpj: linha.fornecedor_cnpj,
-    ...derivarRecebimentoDoPedido(linha.total_pedido, linha.soma_recebida),
+    ...derivarRecebimentoDoPedido(linha.total_pedido, linha.soma_recebida, linha.saldo_por_material),
   }));
 }
 
@@ -1577,18 +1640,36 @@ async function listarPedidosCompraAux(db, { search, pendentes } = {}) {
  *
  * ── AS SEIS DECISOES QUE ESTAO NESTE CORPO ────────────────────────────────────────────────────
  *
- * 1. **DEPOIS do laco de itens, nunca dentro dele** (e por isso a funcao recebe a lista pronta).
- *    `RECEBIDO` e AGREGADO POR PEDIDO (`soma_recebida >= total_pedido`), e o laco da entrada anda
- *    item a item: um gancho por item fecharia um pedido de 2 linhas na PRIMEIRA linha.
+ * 1. **DEPOIS do laco de itens, nunca dentro dele.** `RECEBIDO` e AGREGADO POR PEDIDO, e o laco da
+ *    entrada anda item a item: um gancho por item fecharia um pedido de 2 linhas na PRIMEIRA linha.
  *
  * 2. **Dentro de `darEntradaEstoque`, que os DOIS caminhos de entrada fisica chamam** — o mesmo
  *    motivo, escrito no acumulador da Etapa 37 logo acima: `processarNota` E `aprovarRecebimento`
  *    (ramo APROVADO) creditam estoque, e a Etapa 37 ja pagou uma vez por esquecer o segundo.
  *
- * 3. **O pedido sai do DADO, nao do cabecalho**: a lista de linhas tocadas vira pedido por
- *    `SELECT DISTINCT pedido_id`. `rec.pedido_compra_id` daria o mesmo resultado hoje (medido:
- *    `pedido_item_id` so e gravado a partir das linhas do pedido resolvido, `resolverLinhaDoPedido`),
- *    mas seria confiar num invariante em vez de no dado — e o dado e o que o acumulador somou.
+ * 3. **A lista de linhas sai de TODOS os itens DO RECEBIMENTO, nunca dos que casaram o claim nesta
+ *    execucao — e esta frase e a correcao de um CRITICAL achado por sonda na revisao adversarial.**
+ *
+ *    A primeira versao recebia a lista pronta, montada dentro do laco com os itens que reclamaram o
+ *    `entrada_estoque_em IS NULL`, e justificava isso com "reprobar nao pode re-auditar um fechamento
+ *    que ja aconteceu". **A justificativa era desnecessaria** (a idempotencia vem do `r.changes` do
+ *    UPDATE, decisao 5) **e o preco era um estado irrecuperavel e MUDO**, reproduzido assim: item 1 do
+ *    recebimento e a linha do pedido e soma; item 2 e material com controle de serie cujo numero ja
+ *    esta em estoque, o motor recusa e o `throw` sobe — o gancho nunca roda (correto ate aqui). O
+ *    operador conserta a serie e reprocessa: o claim do item 1 JA esta tomado, a lista sai VAZIA, e o
+ *    gancho volta `[]` na primeira linha. Medido: nota PROCESSADA, estoque creditado, saldo do pedido
+ *    ZERO, pedido `pendente` com situacao derivada `RECEBIDO` — dentro de `?atrasados=1` para sempre,
+ *    FORA do alerta de parcial (a situacao e RECEBIDO), FORA do `?pendentes=1` (saldo 0) e **sem uma
+ *    linha de log**. Nenhum sinal e nenhuma recuperacao a nao ser SQL, sem ninguem saber que precisa.
+ *
+ *    Ler todos os itens do recebimento e seguro exatamente porque a decisao de gravar NAO depende de
+ *    quem entrou agora: ela depende da SOMA do pedido, que e lida do banco. O cenario (5c) de
+ *    `comprasPedidoStatusAutomatico` prende isto, e o (3) prende a idempotencia.
+ *
+ * 3b. **O pedido sai do DADO, nao do cabecalho**: as linhas viram pedido por `SELECT DISTINCT
+ *    pedido_id`. `rec.pedido_compra_id` daria o mesmo resultado hoje (medido: `pedido_item_id` so e
+ *    gravado a partir das linhas do pedido resolvido, `resolverLinhaDoPedido`), mas seria confiar num
+ *    invariante em vez de no dado.
  *
  * 4. **So SOBE (RN-E03).** Nao existe estorno de `quantidade_recebida` neste modulo (o acumulador e
  *    `+ qtd` idempotente por claim), entao um gancho que descesse precisaria de uma regua de estorno
@@ -1613,19 +1694,21 @@ async function listarPedidosCompraAux(db, { search, pendentes } = {}) {
  * O `warn` do status terminal sai SO para `cancelado`/`rejeitado`: `recebido` e o caminho ESPERADO
  * (segundo recebimento, excedente autorizado) e avisar nele treinaria o operador a ignorar o log.
  */
-async function fecharPedidosCompletos(db, user, recebimentoId, itensQueEntraram) {
-  const linhasTocadas = (itensQueEntraram || [])
-    .map((i) => i.pedido_item_id).filter((id) => id != null);
-  if (!linhasTocadas.length) return [];
-
+async function fecharPedidosCompletos(db, user, recebimentoId) {
   const tableExists = await dbGet(db,
     "SELECT name FROM sqlite_master WHERE type='table' AND name='pedidos_compra'");
   if (!tableExists) return [];
 
-  const marcas = linhasTocadas.map(() => '?').join(',');
-  const pedidos = await dbAll(db,
-    `SELECT DISTINCT pedido_id FROM itens_pedido_compra WHERE id IN (${marcas}) AND pedido_id IS NOT NULL`,
-    linhasTocadas);
+  // TODOS os itens deste recebimento que apontam para linha de pedido — nao so os desta execucao
+  // (decisao 3). Um `JOIN` em vez de dois passos porque a linha pode ter sido apagada pelo Compras
+  // entre a nota e o reprocessamento: `pedido_id IS NOT NULL` ja cobre isso, e sem o `JOIN` teriamos
+  // um `IN (...)` com ids que nao existem mais.
+  const pedidos = await dbAll(db, `SELECT DISTINCT ip.pedido_id
+    FROM recebimentos_material_itens_almoxarifado ri
+    JOIN itens_pedido_compra ip ON ip.id = ri.pedido_item_id
+    WHERE ri.recebimento_id = ? AND ri.pedido_item_id IS NOT NULL AND ip.pedido_id IS NOT NULL`,
+  [recebimentoId]);
+  if (!pedidos.length) return [];
 
   const fechados = [];
   for (const { pedido_id: pedidoId } of pedidos) {
@@ -1716,7 +1799,8 @@ async function situacaoDosPedidosCompra(db, { situacao } = {}) {
   const linhas = await dbAll(db, `SELECT p.id, p.numero, p.status, p.previsao_entrega,
       f.razao_social as fornecedor_nome,
       COALESCE(i.total_pedido, 0) as total_pedido,
-      COALESCE(i.soma_recebida, 0) as soma_recebida
+      COALESCE(i.soma_recebida, 0) as soma_recebida,
+    COALESCE(i.saldo_por_material, 0) as saldo_por_material
     FROM pedidos_compra p
     LEFT JOIN fornecedores f ON p.fornecedor_id = f.id
     LEFT JOIN (${SOMA_POR_PEDIDO_SQL}) i ON i.pedido_id = p.id
@@ -1729,7 +1813,7 @@ async function situacaoDosPedidosCompra(db, { situacao } = {}) {
       status: linha.status,
       previsao_entrega: linha.previsao_entrega,
       fornecedor_nome: linha.fornecedor_nome,
-      ...derivarRecebimentoDoPedido(linha.total_pedido, linha.soma_recebida),
+      ...derivarRecebimentoDoPedido(linha.total_pedido, linha.soma_recebida, linha.saldo_por_material),
     }))
     .filter((linha) => !situacao || linha.situacao_recebimento === situacao);
 }

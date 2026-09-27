@@ -288,13 +288,28 @@ function resultadoDe(resultados, chave) {
   });
 
   // ── (6) SALDO FRACIONARIO: A CHAVE ARREDONDA ────────────────────────────────────────────────
-  await test('(6) F14 dois estados fisicos IGUAIS com saldo REAL diferente geram a MESMA chave (arredondada)', async () => {
-    // ── O DEFEITO QUE ESTE CENARIO EXISTE PARA PEGAR ───────────────────────────────────────────
-    // `saldo_pendente` e `Math.max(0, pedida - recebida)` sobre `SUM(REAL)`, SEM arredondamento.
-    // Dois pedidos com o MESMO estado fisico (10 pedidos, 3,3 recebidos) dao saldos diferentes em
-    // ponto flutuante conforme o numero de LINHAS que a soma percorre — MEDIDO abaixo, nao
-    // teorizado. Uma chave crua (`${saldo}`) mandaria dois e-mails para o mesmo estado, e o pior:
-    // o segundo e-mail chegaria sem nada ter acontecido no pedido.
+  await test('(6) F14 dois estados fisicos IGUAIS geram a MESMA chave — a REGUA limpa, e o arredondamento da chave e a segunda linha de defesa', async () => {
+    // ── ⚠️ ESTE CENARIO FOI REESCRITO NA ONDA DE CORRECAO, E O MOTIVO E A LICAO ────────────────
+    //
+    // Ele nasceu medindo o arredondamento DA CHAVE contra a poeira de ponto flutuante que a fonte
+    // entregava: dois pedidos com o MESMO estado fisico (10 pedidos, 3,3 recebidos) davam saldos
+    // diferentes em `double` conforme o numero de LINHAS que a soma percorria, e a assercao central
+    // era `notStrictEqual(a.saldo_pendente, b.saldo_pendente)` — a "poeira" era a FIXTURE.
+    //
+    // A revisao adversarial mostrou que aquela poeira era sintoma de um CRITICAL mais fundo: a
+    // mesma falta de epsilon fazia um pedido FISICAMENTE COMPLETO nao fechar (20,1 recebido em
+    // 2,2 + 17,9 dava `recebida >= pedida` false), e o e-mail saia com
+    // `Saldo pendente: 3.552713678800501e-15` enquanto o cartao mostrava `0`. O conserto foi na
+    // REGUA (`saldoLimpo`, com o epsilon de `divergencia.js`): a fonte passou a entregar saldo
+    // arredondado a 6 casas.
+    //
+    // Com isso, a assercao original ficou VERMELHA pela razao certa — ela dizia, em voz alta,
+    // *"fixture perdeu a poeira de ponto flutuante — sem ela este cenario nao mede nada"*. Em vez de
+    // afrouxar a mensagem, o cenario passou a medir o que agora e verdade: **a regua limpa na
+    // origem** e os dois estados chegam IDENTICOS ao alerta. O arredondamento da chave continua no
+    // codigo como SEGUNDA linha de defesa (quem escrever um terceiro consumidor da regua, ou quem
+    // mexer no epsilon, nao reintroduz dois e-mails pelo mesmo saldo), e a parte do cenario que o
+    // mede diretamente — `0,001 ainda muda a chave` — continua abaixo.
     const umaLinha = await novoPedido({ previsao: diasDeHoje(-1), quantidades: [10] });
     await receber(umaLinha.id, [3.3]);
     const duasLinhas = await novoPedido({ previsao: diasDeHoje(-1), quantidades: [4, 6] });
@@ -308,10 +323,15 @@ function resultadoDe(resultados, chave) {
     assert.strictEqual(Math.round(a.quantidade_recebida * 1000), 3300, JSON.stringify(a));
     assert.strictEqual(Math.round(b.quantidade_recebida * 1000), 3300, JSON.stringify(b));
     assert.strictEqual(a.quantidade_pedida, b.quantidade_pedida, 'fixture: as pedidas tinham de bater');
-    // A MEDIDA que justifica o arredondamento: os dois saldos NAO sao o mesmo double.
-    assert.notStrictEqual(a.saldo_pendente, b.saldo_pendente,
-      `fixture perdeu a poeira de ponto flutuante (${a.saldo_pendente} vs ${b.saldo_pendente}) — `
-      + 'sem ela este cenario nao mede nada');
+
+    // ⚠️ A ASSERCAO NOVA, e ela e o conserto do CRITICAL: a regua entrega o MESMO double para o
+    // mesmo estado fisico, por caminhos de soma diferentes. Se isto cair, `saldoLimpo` perdeu o
+    // arredondamento e o e-mail volta a escrever notacao cientifica.
+    assert.strictEqual(a.saldo_pendente, b.saldo_pendente,
+      `a regua entregou saldos diferentes (${a.saldo_pendente} vs ${b.saldo_pendente}) para o mesmo `
+      + 'estado fisico — `saldoLimpo` nao esta limpando na origem');
+    assert.strictEqual(a.saldo_pendente, 6.7,
+      `o saldo tinha de chegar legivel ao e-mail: ${JSON.stringify(a.saldo_pendente)}`);
 
     const entrada = entradaDoParcial();
     assert.strictEqual(
@@ -319,9 +339,13 @@ function resultadoDe(resultados, chave) {
       entrada.dedupeChave({ id: 99, saldo_pendente: b.saldo_pendente }),
       'o mesmo estado fisico gerou duas chaves de dedupe — dois e-mails pelo mesmo saldo',
     );
-    // E a metade negativa: a chave CRUA teria divergido (o dano e real, nao hipotetico).
-    assert.notStrictEqual(`pedido-parcial-99-${a.saldo_pendente}`, `pedido-parcial-99-${b.saldo_pendente}`,
-      'a fixture nao reproduz a divergencia que o arredondamento existe para absorver');
+    // A SEGUNDA LINHA DE DEFESA, medida direto na chave com a poeira INJETADA a mao (nao mais vinda
+    // da fonte, que agora limpa): se um dia a regua parar de arredondar, a chave ainda absorve.
+    assert.strictEqual(
+      entrada.dedupeChave({ id: 99, saldo_pendente: 6.7 }),
+      entrada.dedupeChave({ id: 99, saldo_pendente: 6.699999999999999 }),
+      'a chave deixou de absorver poeira de float — a segunda linha de defesa caiu',
+    );
     // E o arredondamento NAO pode calar uma chegada de verdade: 0,001 ainda muda a chave.
     assert.notStrictEqual(entrada.dedupeChave({ id: 99, saldo_pendente: 6.7 }),
       entrada.dedupeChave({ id: 99, saldo_pendente: 6.699 }),
