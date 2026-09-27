@@ -35,6 +35,15 @@ server/database.sqlite*
 # prontos para entrar num `git add -A` por acidente (megabytes de binário por commit).
 server/data/backups/*-shm
 server/data/backups/*-wal
+# E a copia MANUAL do banco (`cp database.sqlite database.sqlite.bak`) tambem escapava: `*.sqlite`
+# NAO casa com `database.sqlite.bak`, porque o padrao exige que o nome TERMINE em `.sqlite`.
+# Medido em 2026-09-27: havia um `server/data/database.sqlite.bak` de 31 MB untracked-mas-nao-
+# ignorado, com os `-shm`/`-wal` dele ao lado, a um `git add -A` de entrar no historico para
+# sempre (e o CLAUDE.md proibe `git add -A` na raiz exatamente por isto — mas a proibicao e uma
+# regra que se lembra, e o .gitignore e uma que se cumpre).
+*.sqlite.bak
+*.sqlite.bak-shm
+*.sqlite.bak-wal
 
 # A rotina de backup grava "database-2026-08-06T14-36-25-wal", SEM o .sqlite no
 # nome — os padroes acima nao pegavam, e 211 arquivos com dado de cliente
