@@ -676,9 +676,23 @@ SELECT m.codigo AS material, m.nome, m.quantidade_bloqueada,
   JOIN inspecoes_recebimento_almoxarifado i        ON i.recebimento_item_id = ri.id
  WHERE COALESCE(m.quantidade_bloqueada, 0) > 0
    AND COALESCE(i.quantidade_reprovada, 0) > 0
+   -- Só as ANTIGAS: a marcação da atualização é o que as distingue das novas, que têm caminho
+   -- automático. Sem esta linha a consulta lista o estoque bloqueado inteiro e nunca vem 0.
+   AND i.liberacao_nc_em IS NOT NULL
+   -- E fora as que a aceitação de um documento JÁ liberou — elas também ficam marcadas.
+   AND NOT EXISTS (SELECT 1 FROM nao_conformidades_almoxarifado nc
+                    WHERE nc.referencia_tipo = 'INSPECAO' AND nc.referencia_id = i.id
+                      AND nc.status = 'DECIDIDA'
+                      AND nc.decisao IN ('ACEITAR','ACEITAR_SOB_DESVIO'))
  GROUP BY m.id
  ORDER BY m.quantidade_bloqueada DESC;
 ```
+
+> ⚠️ **As duas últimas condições foram acrescentadas depois** — a primeira versão desta consulta
+> não olhava a marcação nem os documentos, e por isso contava também as inspeções **novas** (que
+> têm caminho automático) e as **já liberadas**. Ela rodava, mas o número não era "quanto ficou de
+> fora", e a instrução *"se vier 0, nada a fazer"* nunca se cumpriria. Achado da revisão, medido
+> executando a consulta contra um banco com uma inspeção já liberada — ela aparecia no resultado.
 
 Se vier **0**, nada a fazer. Se vier **mais que 0**, cada linha é material bloqueado por reprovação
 antiga. **O caminho continua sendo o de sempre, e não mudou:** um Administrador ou Gestor
@@ -3904,7 +3918,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 
 57. **✅ RESOLVIDO NA ETAPA 44 — a Qualidade decide e a decisão EXECUTA.** Aceitar (ou aceitar sob
     desvio) uma não conformidade de inspeção agora **libera sozinha** o material que a reprovação
-    havia bloqueado, e a tela diz quanto saiu: *"Não conformidade NC-0007 decidida! 3 liberado(s)
+    havia bloqueado, e a tela diz quanto saiu: *"Não conformidade NC-… decidida! 3 liberado(s)
     do bloqueio"*. Ninguém precisa mais pedir a um Administrador que desbloqueie à mão.
 
     **E o conserto NÃO foi o que este item prescrevia.** O parágrafo final abaixo dizia que o
@@ -4017,17 +4031,26 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
     ninguém "consertar" como se fosse defeito. O que falta é o aviso na tela, e isso é etapa
     própria.
 
-63. **NOVO, da Etapa 44 — duas não conformidades da MESMA inspeção: a primeira aceitação libera
-    tudo.** É raro, mas possível: a mesma inspeção pode ter mais de um documento (tipos
-    diferentes). Se um deles for decidido *Devolver* e o outro *Aceitar*, **a aceitação libera a
-    quantidade reprovada inteira daquela inspeção** — inclusive a parte que o outro documento
-    mandava devolver. A segunda decisão de aceitação, essa sim, não libera nada e diz *"O material
-    desta inspeção já havia sido liberado"*.
+63. **NOTA DE ARQUITETURA, da Etapa 44 — duas não conformidades da mesma inspeção.** ⚠️ **Este
+    item nasceu descrevendo um risco de operação e isso estava ERRADO — a revisão mediu que ele
+    não é alcançável hoje.** Fica corrigido, e não apagado, porque a proteção existe no código e
+    quem a encontrar sem esta explicação vai achar que ela é gratuita.
 
-    **Por que não foi barrado:** recusar a liberação enquanto existisse outro documento aberto da
-    mesma inspeção criaria um documento que **nunca fecha** — o beco que a regra do material
-    inativo existe justamente para evitar. Escolhido o caminho que não trava ninguém, com o risco
-    declarado aqui. Ver **B175**.
+    **O que eu escrevi e não se sustenta:** *"a mesma inspeção pode ter mais de um documento
+    (tipos diferentes)"*, como se fosse coisa que acontece. **Não acontece.** A reprovação abre
+    **um único** documento por inspeção — o sistema escolhe um tipo por prioridade e registra os
+    outros problemas na descrição. E a única outra porta, abrir um documento à mão apontando para
+    a mesma inspeção, **já não libera nada** por outra regra (ver o passo 5 do roteiro).
+
+    **O que a proteção faz, então:** ela garante que a liberação aconteça **uma vez por inspeção**,
+    e não uma vez por documento — defesa em profundidade, para o dia em que algum caminho novo
+    consiga abrir um segundo documento automático. Se isso um dia acontecer, a primeira aceitação
+    libera a quantidade reprovada **inteira**, e a segunda responde *"O material desta inspeção já
+    havia sido liberado"* sem mexer no saldo.
+
+    **Por que não se barra a liberação enquanto houver outro documento aberto da mesma inspeção:**
+    criaria um documento que **nunca fecha** — o beco que a regra do material inativo existe para
+    evitar. Ver **B175**.
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -4447,11 +4470,16 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 
 - **(41) "Gerar pedido" não pede confirmação** — **B155**.
 
-- **(43) A decisão da não conformidade NÃO mexe no estoque.** Decidir *Devolver ao fornecedor* não
-  cria a devolução; decidir *Sucatear* não baixa saldo; *Aceitar sob desvio* não desbloqueia
-  (**C57**). O documento registra **o que se decidiu**; executar continua sendo gesto próprio, nas
-  telas de sempre. Ligar a decisão ao motor de estoque é etapa própria — e fazê-lo errado (inventar
-  como uma falta "devolve" material que nunca entrou) seria pior que não fazer.
+- **(43→44) Só QUATRO das seis decisões não mexem no estoque.** ⚠️ **Esta linha dizia *"A decisão
+  da não conformidade NÃO mexe no estoque"* e ficou ERRADA pela metade na Etapa 44** — está
+  corrigida aqui em vez de apagada, porque é justamente nesta letra que se procura "o que o sistema
+  não faz", e quem a lesse sairia convencido do contrário do que foi entregue.
+  **O que continua valendo:** decidir *Devolver ao fornecedor* não cria a devolução; *Sucatear* não
+  baixa saldo; *Substituição* e *Análise da Engenharia* também não mexem em nada. O documento
+  registra **o que se decidiu**, e executar essas quatro continua sendo gesto próprio.
+  **O que deixou de valer:** *Aceitar* e *Aceitar sob desvio* **liberam** o material que a inspeção
+  havia bloqueado, desde a Etapa 44. O furo **C57** está **resolvido**. ~~Ligar a decisão ao motor
+  de estoque é etapa própria~~ — foi a Etapa 44, e ela ligou.
 
 - **(43) A divergência de INVENTÁRIO continua sem documento numerado.** A conferência de inventário
   tem fluxo próprio (conferir → ajustar) e ficou fora desta etapa de propósito.
@@ -11359,7 +11387,7 @@ decisão que acabara de ser tomada. **O documento dizia uma coisa e o saldo dizi
 
 Agora aceitar **executa**. Quem decide *Aceitar* ou *Aceitar sob desvio* numa não conformidade de
 inspeção vê, no mesmo clique, o material voltar ao disponível — e a tela diz quanto: *"Não
-conformidade NC-0007 decidida! 3 liberado(s) do bloqueio"*. Ninguém pede nada a ninguém.
+conformidade NC-… decidida! 3 liberado(s) do bloqueio"*. Ninguém pede nada a ninguém.
 
 ### Antes → Agora
 
@@ -11378,32 +11406,37 @@ Receba um material crítico (10 kg), deixe-o cair na fila de Inspeções, reprov
 com **3 bloqueados e 7 disponíveis**, e nasce sozinho o documento `NC-…`. Vá em **Não
 Conformidades**, clique no ícone de decidir da linha aberta, escolha **Aceitar sob desvio**,
 escreva a justificativa e confirme.
-→ *"Não conformidade NC-0007 decidida! 3 liberado(s) do bloqueio"*, e o material passa a ter
+→ *"Não conformidade NC-… decidida! 3 liberado(s) do bloqueio"*, e o material passa a ter
 **10 disponíveis e 0 bloqueados**. O físico não muda — liberar não cria material, só tira a
 retenção.
 
 **2. As outras quatro decisões não mexem no saldo — e a tela diz isso.**
 No mesmo lugar, escolha **Devolver ao fornecedor** (ou *Substituição*, *Análise da Engenharia*,
 *Sucatear*).
-→ *"Não conformidade NC-0008 decidida! Esta decisão não altera o saldo"*. O documento fecha com
+→ *"Não conformidade NC-… decidida! Esta decisão não altera o saldo"*. O documento fecha com
 autor e justificativa, e os quilos **continuam bloqueados** — corretamente, porque o material
 ainda não voltou a lugar nenhum.
 
 **3. Falta de quantidade no recebimento não tem o que liberar.**
 Abra um documento de **origem Recebimento** (aquele que nasce quando chega menos do que o pedido) e
 decida **Aceitar**.
-→ *"Não conformidade NC-0009 decidida! Esta não conformidade não tem material bloqueado para
+→ *"Não conformidade NC-… decidida! Esta não conformidade não tem material bloqueado para
 liberar"*. Faltar material não bloqueia nada — não há o que soltar.
 
-**4. Liberar duas vezes o mesmo material é impossível.**
-Se a mesma inspeção tiver **dois** documentos (acontece quando há tipos diferentes de problema) e
-os dois forem aceitos, o segundo responde:
-→ *"Não conformidade NC-0010 decidida! O material desta inspeção já havia sido liberado"*, e o
-saldo **não se move de novo**. A decisão fica registrada; o efeito, não se repete.
+**4. Liberar duas vezes o mesmo material é impossível.** *(proteção de bastidor — **não tente
+demonstrar ao vivo**)*
+A liberação acontece **uma vez por inspeção**, não uma por documento. Se algum dia existirem dois
+documentos da mesma inspeção e os dois forem aceitos, o segundo responde *"O material desta
+inspeção já havia sido liberado"* sem mexer no saldo.
+⚠️ **Este passo estava no roteiro clicável e foi tirado de lá** — a revisão mediu que ele **não é
+reproduzível**: a reprovação abre **um único** documento por inspeção, e a outra porta (abrir à
+mão) já não libera pelo passo 5. Fica descrito porque a proteção existe no código; quem a
+encontrar sem esta nota vai achá-la gratuita.
 
-**5. Documento aberto à mão não libera saldo.**
+**5. Documento aberto à mão não libera saldo.** *(proteção de bastidor — hoje **não há botão** de
+abrir documento à mão em tela nenhuma; só por integração)*
 Um documento criado manualmente apontando para uma inspeção, decidido como aceitação, responde:
-→ *"Não conformidade NC-0011 decidida! Não conformidade aberta manualmente não libera saldo"*.
+→ *"Não conformidade NC-… decidida! Não conformidade aberta manualmente não libera saldo"*.
 **Isto é proteção, não limitação:** se o documento manual liberasse, bastaria apontá-lo para
 qualquer inspeção antiga para soltar material bloqueado por qualquer outro motivo — e sem passar
 pela permissão de ajuste de estoque. Quem precisa soltar material fora deste fluxo continua usando
@@ -11411,22 +11444,38 @@ a tela de Movimentações.
 
 **6. Material desativado não prende o documento.**
 Se o material foi desativado no cadastro depois da reprovação, aceitar responde:
-→ *"Não conformidade NC-0012 decidida! Material inativo — a decisão foi registrada sem liberar
+→ *"Não conformidade NC-… decidida! Material inativo — a decisão foi registrada sem liberar
 saldo"*. **A decisão é gravada.** O contrário — recusar a decisão — deixaria o documento aberto
 para sempre, cobrando todo dia no alerta de não conformidade parada.
 
-**7. Se alguém já tiver desbloqueado à mão, a decisão é recusada inteira.**
+**7. Se alguém já tiver desbloqueado à mão, o documento fecha mesmo assim — e diz por quê.**
 Cenário: a inspeção reprovou 3, mas um Gestor já desbloqueou o material antes pela tela de
-Movimentações, e o bloqueio agora é 1.
-→ **A decisão não é gravada** e a tela mostra *"Quantidade bloqueada insuficiente: 1"*. O documento
-**continua Aberto**, para ser decidido depois de acertar o saldo.
-**Por que recusar tudo em vez de liberar o que dá:** liberar pela metade deixaria o documento
-dizendo "aceito" com material ainda preso, em silêncio — que é exatamente o problema que esta
-etapa veio consertar. Melhor a decisão não passar e a pessoa ver por quê.
+Movimentações, e o bloqueio agora é 1. Decida **Aceitar**.
+→ *"Não conformidade NC-… decidida! O material já havia sido desbloqueado fora do documento — a
+decisão foi registrada sem liberar saldo"*. **A decisão é gravada**, o saldo não muda.
+
+⚠️ **Este comportamento MUDOU no fix-round da etapa, e o motivo é importante.** Na primeira
+versão a decisão era **recusada** com *"Quantidade bloqueada insuficiente: 1"*, e o documento
+continuava Aberto. Parecia o rigor certo — e criava um beco sem saída: desbloquear à mão **era o
+procedimento normal antes desta etapa**, então quem o tivesse feito ficava com um documento que
+**nunca mais fechava**, cobrando todo dia no alerta, e a única saída era registrar uma decisão
+falsa (*Devolver*) só para calá-lo. É o mesmo beco que a regra do material desativado existe para
+evitar. A recusa continua valendo para falha **inesperada** do sistema; para este estado, que é
+conhecido e frequente, o documento fecha dizendo a verdade.
 
 **8. Quem não pode decidir continua não podendo — e o saldo nem é tocado.**
-Um perfil sem permissão de decidir (Almoxarife, Compras) recebe **"sem permissão"** antes de
-qualquer efeito.
+Entre com um perfil **Almoxarife** (ou Compras) e tente decidir. A recusa vem **antes** de
+qualquer efeito no saldo:
+→ *"Sem permissão para decidir não conformidade — seu perfil é Almoxarife. Solicite acesso a um
+administrador."*
+
+**9. Estornar a liberação pelo livro é recusado.**
+Vá em **Movimentações**, ache o *Desbloqueio* que a decisão gerou e tente estorná-lo.
+→ *"Liberação por não conformidade não pode ser estornada pelo livro — o documento continuaria
+dizendo 'aceito' com o material bloqueado"*.
+**Por quê:** o estorno devolveria o material ao bloqueio e deixaria o documento dizendo "aceito" —
+o furo C57 de volta, e **sem saída**, porque o documento não pode ser decidido de novo. Um
+*Desbloqueio* **avulso**, que não veio de documento nenhum, continua estornável normalmente.
 
 ### O que esta etapa NÃO cobre
 

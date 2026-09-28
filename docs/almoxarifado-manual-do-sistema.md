@@ -3008,6 +3008,8 @@ não ausência dela. O aviso de sucesso traz uma destas cinco frases:
 | *"Esta não conformidade não tem material bloqueado para liberar"* | o documento veio de **recebimento** (faltar material não bloqueia nada), ou a inspeção não reprovou quantidade nenhuma |
 | *"O material desta inspeção já havia sido liberado"* | outro documento da mesma inspeção já liberou |
 | *"Não conformidade aberta manualmente não libera saldo"* | o documento foi criado à mão, e não pelo registro automático da reprovação |
+| *"Material inativo — a decisão foi registrada sem liberar saldo"* | o material foi desativado no cadastro depois da reprovação |
+| *"O material já havia sido desbloqueado fora do documento — a decisão foi registrada sem liberar saldo"* | o bloqueio do material é **menor** que a quantidade reprovada: alguém já o desbloqueou pela tela de Movimentações |
 
 **A liberação acontece uma vez por inspeção, não por documento.** Se a mesma inspeção tiver mais de
 um documento e os dois forem aceitos, só o primeiro libera; o segundo grava a decisão e avisa que o
@@ -3015,15 +3017,23 @@ material já havia sido liberado. ⚠️ **E a quantidade liberada é a reprovad
 inspeção** — se um documento da mesma inspeção tiver sido decidido *Devolver*, a aceitação do outro
 solta também a parte que se pretendia devolver.
 
-**Se o material não estiver mais bloqueado o suficiente, a decisão é recusada por inteiro** com
-*"Quantidade bloqueada insuficiente: N"*, e o documento **continua Aberto**. Acontece quando alguém
-já desbloqueou aquele material à mão. É deliberado: liberar pela metade deixaria o documento
-dizendo "aceito" com material ainda preso, sem ninguém saber.
+**Dois estados conhecidos não travam o documento: ele fecha e a tela diz por quê.**
 
-**Material inativo não trava o documento.** Se o material foi desativado no cadastro depois da
-reprovação, a decisão **é gravada** e o saldo não muda, com o aviso *"Material inativo — a decisão
-foi registrada sem liberar saldo"*. Recusar a decisão deixaria o documento aberto para sempre,
-cobrando todo dia no cartão de alerta.
+- **O material já foi desbloqueado à mão.** Se o bloqueio do material for menor que a quantidade
+  reprovada — porque alguém desbloqueou pela tela de Movimentações —, a decisão **é gravada** e o
+  saldo não muda.
+- **O material foi desativado** no cadastro depois da reprovação: idem.
+
+Em ambos, recusar a decisão deixaria o documento **aberto para sempre**, cobrando todo dia no
+cartão de alerta, e a única saída seria registrar uma decisão falsa só para fechá-lo. **A recusa
+continua valendo para falha inesperada do sistema:** aí a decisão **não** é gravada, e o documento
+permanece Aberto para ser decidido de novo.
+
+**A liberação não pode ser desfeita pelo livro.** A movimentação de *Desbloqueio* que a decisão
+gera **recusa o estorno**, com *"Liberação por não conformidade não pode ser estornada pelo livro —
+o documento continuaria dizendo 'aceito' com o material bloqueado"*. Estorná-la devolveria o
+material ao bloqueio deixando o documento afirmando que ele foi aceito — e sem saída, porque um
+documento decidido não se decide de novo. Um *Desbloqueio* **avulso** (15.3) continua estornável.
 
 ⚠️ **Dois portões: o bloqueio é do material, o status é do lote.** Em material com **controle por
 lote**, liberar o documento **não reabilita o lote**. Se o lote estiver **Reprovado** (4), o saldo

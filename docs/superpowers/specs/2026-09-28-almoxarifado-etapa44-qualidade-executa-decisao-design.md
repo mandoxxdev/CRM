@@ -142,6 +142,8 @@ tem de ser **recusa explícita com mensagem**, nunca silêncio que parece sucess
 | **RN-07** | O efeito da decisão **volta na resposta** e a tela **diz o que aconteceu com o saldo**. Decidir e não ver diferença foi exatamente o que criou o furo C57. |
 | **RN-08** | Nenhuma ação de perfil nova. Quem pode `decidir_nao_conformidade` executa o efeito da própria decisão; quem não pode continua tomando 403 na porta, antes de qualquer efeito. |
 | **RN-09** | **Só NC aberta AUTOMATICAMENTE libera** (`aberto_automaticamente = 1`). NC aberta à mão sobre uma inspeção grava a decisão e devolve `SEM_BLOQUEIO` com mensagem própria. **É esta regra que torna verdadeiro o "efeito limitado pelo documento"** — sem ela, quem decide escolhe qual documento decidir, e portanto quanto desbloquear, entre todas as inspeções da história (achado CRITICAL da Fase 2). |
+| **RN-11** | **O pool drenado por fora não trava o documento.** Se `quantidade_bloqueada < quantidade_reprovada` — porque alguém desbloqueou à mão, que era **o procedimento normal antes desta etapa** —, a decisão é gravada e o saldo não muda, com mensagem própria. **Acrescentada no fix-round**, e ela inverte o que o design dizia: a recusa com *"Quantidade bloqueada insuficiente"* criava o beco "documento que nunca fecha", porque a NC não podia ser decidida e ficava cobrando no alerta para sempre, com a única saída sendo registrar uma decisão **falsa**. A fatalidade da RN-02 continua valendo para falha **inesperada** do motor; este estado é conhecido e medido **antes** de escrever qualquer coisa. |
+| **RN-12** | **A liberação não é estornável pelo livro.** `cancelarMovimentacao` recusa um `DESBLOQUEIO` cujo motivo é o da liberação. Sem isso, estorná-la devolvia a quantidade ao bloqueio e deixava o documento `DECIDIDA` dizendo "aceito" com o material preso — o C57 ressuscitado e **sem saída** (a NC não se redecide, e `liberacao_nc_em` já está carimbado) — e, pelo ramo `BLOQUEIO` sem guarda, podia produzir **disponível negativo**. |
 | **RN-10** | **Material inativo não trava o documento.** Se o material foi desativado, o motor recusaria com *"Material inativo não pode ser movimentado"* e, pela RN-02, a NC **nunca fecharia** — ficando presa para sempre no alerta de NC parada. Então material inativo é `SEM_BLOQUEIO` com mensagem própria: a decisão é gravada, o saldo não muda, e a tela diz por quê. |
 
 **Ordem de precedência do efeito** (a primeira que casar vence — a Fase 2 mediu que sem isto
@@ -152,8 +154,9 @@ tem de ser **recusa explícita com mensagem**, nunca silêncio que parece sucess
 3. `aberto_automaticamente <> 1` → **`SEM_BLOQUEIO`** (RN-09)
 4. inspeção inexistente, `quantidade_reprovada <= 0`, ou `material_id` nulo → **`SEM_BLOQUEIO`** (RN-06)
 5. material inativo → **`SEM_BLOQUEIO`** (RN-10)
-6. claim de `liberacao_nc_em` não casou → **`JA_LIBERADA`** (RN-03)
-7. caso contrário → `DESBLOQUEIO` → **`LIBERADA`** (RN-01)
+6. `quantidade_bloqueada < quantidade_reprovada` → **`SEM_BLOQUEIO`** (RN-11)
+7. claim de `liberacao_nc_em` não casou → **`JA_LIBERADA`** (RN-03)
+8. caso contrário → `DESBLOQUEIO` → **`LIBERADA`** (RN-01)
 
 ## 4. A ordem das operações — reescrita pela Fase 2
 
@@ -266,6 +269,40 @@ Nenhum campo novo no formulário. Nenhuma permissão nova a esconder.
   evitar. Registrar na **letra B**.
 - **Não retroage**: inspeções anteriores ao deploy nascem com `liberacao_nc_em` preenchido pelo
   backfill (RN-03) e portanto **nunca liberam**. Consulta de produção para a **letra A**.
+
+## 7-bis. O que a Fase 5 mudou — e o CRITICAL que era do MOTOR, não desta etapa
+
+Duas lentes adversariais, **19 achados, 2 CRITICAL, zero ruído**. Três mudaram o código de
+produção, e o primeiro é o mais importante da etapa inteira:
+
+1. **CRITICAL — o rollback supunha que o motor é atômico, e ele não é.** Os seis ramos de retenção
+   de `registrarMovimentacao` escrevem em `quantidade_bloqueada` / `quantidade_em_inspecao`
+   **antes** do `try` do próprio motor. Qualquer falha posterior — o `INSERT` do ledger, um
+   trigger, a auditoria interna — saía da função com **o pool já mexido e nenhuma linha no livro**.
+   E `executarLiberacao`, vendo o `throw`, desfazia os dois claims e concluía que nada tinha
+   acontecido. Resultado **reproduzido**: NC volta a `ABERTA`, é decidida de novo, e uma reprovação
+   de 3 kg solta **6**, com uma única linha no livro.
+   **O defeito é do motor, não desta etapa** — afeta `BLOQUEIO`, `QUARENTENA` e os de inspeção pela
+   mesma razão. Consertado onde mora: o catch amplo passou a reverter o delta de retenção, como já
+   fazia para série, linha de saldo, crédito de entrada e físico de saída.
+   ⚠️ **O cenário 8 do teste não pegava isto, e vale saber por quê:** ele provocava a recusa de
+   **teto** do motor, que falha *antes* de qualquer efeito — provava "o rollback funciona quando o
+   motor não fez nada", a metade fácil. O cenário **8b** existe para a outra metade, e força a
+   falha no ponto exato com um trigger no `INSERT` do ledger.
+2. **IMPORTANT — `cancelarMovimentacao` ressuscitava o C57, de forma irrecuperável.** Virou a
+   **RN-12**.
+3. **IMPORTANT — a fatalidade criava o beco que a RN-10 existe para evitar.** Virou a **RN-11**.
+4. **MINOR, mas do mesmo tipo:** o backfill tinha o ledger como **única** barreira (perdido ele, o
+   próximo boot carimbava inspeções recentes); a trilha era **fatal** depois de a operação já ter
+   valido, fazendo o usuário ver 500 e depois 409 sobre algo que deu certo; e o texto do **modal**
+   ainda exibia o enunciado literal do C57 — a etapa corrigiu o comentário do arquivo e deixou a
+   frase visível intacta. **Comentário de código corrigido não corrige a tela.**
+
+E seis buracos de teste, cada um provado por sabotagem que **não derrubava nada**: a fiação do
+backfill (a migração existia e ninguém provava que era chamada), a precedência RN-04 × RN-05, o
+`recebimento_id` da movimentação, o `efeito_saldo` da trilha, a forma congelada medida em 1 dos 4
+efeitos, e três cenários de client com numeração duplicada e uma referência cruzada apontando para
+o teste errado.
 
 ## 8. O que a Fase 2 mudou neste design
 

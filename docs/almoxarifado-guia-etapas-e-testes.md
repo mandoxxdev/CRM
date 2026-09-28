@@ -12,7 +12,7 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 >
 > A **Etapa 44 (a Qualidade executa a própria decisão)** fechou em 2026-09-28 e **fecha o furo que
 > a 43 abriu**: aceitar uma não conformidade de inspeção agora **libera sozinha** o material que a
-> reprovação havia bloqueado, e a tela diz quanto saiu — *"Não conformidade NC-0007 decidida! 3
+> reprovação havia bloqueado, e a tela diz quanto saiu — *"Não conformidade NC-… decidida! 3
 > liberado(s) do bloqueio"*. Ninguém precisa mais pedir a um Administrador que desbloqueie à mão, e
 > o livro de movimentações passou a apontar **qual documento** soltou aquele bloqueio.
 > **Sem permissão nova:** quem já podia decidir o documento executa o efeito dele. Os botões
@@ -4884,14 +4884,24 @@ a configuração **"Inspeção de material crítico"** ligada em *Almoxarifado �
     **Devolver ao fornecedor**.
     → *"Não conformidade NC-… decidida! Esta decisão não altera o saldo"*, e o material continua
     com **3 bloqueados**. Está certo: o material ainda não voltou a lugar nenhum.
-11. **A recusa que você deve ver.** Repita até o passo 6 com um terceiro material. Antes de
-    decidir, vá em **Movimentações** e faça um **Desbloqueio** manual de 2 (deixando 1 bloqueado).
-    Volte a Não Conformidades e decida **Aceitar**.
-    → **A decisão NÃO é gravada**, e a tela mostra *"Quantidade bloqueada insuficiente: 1"*. O
-    documento continua **Aberto**. É de propósito: liberar pela metade deixaria o documento
-    dizendo "aceito" com material ainda preso, em silêncio.
-12. **Sem permissão.** Entre com um usuário de perfil **Almoxarife** e tente decidir qualquer não
-    conformidade. → Recusa por permissão, **antes** de qualquer efeito no saldo.
+11. **Quando alguém já desbloqueou à mão.** Repita até o passo 6 com um terceiro material. Antes
+    de decidir, vá em **Movimentações** e faça um **Desbloqueio** manual de 2 (deixando 1
+    bloqueado). Volte a Não Conformidades e decida **Aceitar**.
+    → *"Não conformidade NC-… decidida! O material já havia sido desbloqueado fora do documento —
+    a decisão foi registrada sem liberar saldo"*. **O documento FECHA**, e o saldo não muda.
+    **Por que o documento fecha em vez de recusar:** desbloquear à mão era o procedimento normal
+    antes desta etapa. Se a decisão fosse recusada, quem o tivesse feito ficaria com um documento
+    que **nunca mais fecha**, cobrando todo dia no alerta — e a única saída seria registrar uma
+    decisão falsa só para calá-lo.
+12. **Estornar a liberação é recusado.** Em **Movimentações**, ache o *Desbloqueio* que a decisão
+    do passo 7 gerou e tente estorná-lo.
+    → *"Liberação por não conformidade não pode ser estornada pelo livro — o documento continuaria
+    dizendo 'aceito' com o material bloqueado"*. Um *Desbloqueio* **avulso** continua estornável
+    normalmente.
+13. **Sem permissão.** Entre com um usuário de perfil **Almoxarife** e tente decidir qualquer não
+    conformidade.
+    → *"Sem permissão para decidir não conformidade — seu perfil é Almoxarife. Solicite acesso a
+    um administrador."*, **antes** de qualquer efeito no saldo.
 
 ### ⚠️ Um passo a mais quando o material tem controle por lote
 
@@ -4915,7 +4925,8 @@ propósito — lote reprovado tem de continuar barrado até alguém decidir o co
   tela de Movimentações. É proteção deliberada: se liberassem, bastaria apontar um documento novo
   para uma inspeção antiga qualquer para soltar material bloqueado por outro motivo.
 - **Documento aberto à mão sobre uma inspeção não libera saldo** — mesma proteção, e a tela diz
-  *"Não conformidade aberta manualmente não libera saldo"*.
+  *"Não conformidade aberta manualmente não libera saldo"*. (Hoje **não há botão** de abrir
+  documento à mão em tela nenhuma; a proteção existe para a integração e para o futuro.)
 - **A tela não mostra, na linha, quanto aquele documento liberou.** O aviso aparece no momento da
   decisão; depois, o vínculo está no livro de movimentações, pelo número da NC.
 
