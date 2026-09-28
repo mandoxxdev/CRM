@@ -12,7 +12,7 @@ import {
   FiCalendar, FiLogOut, FiMenu, FiX, FiUserPlus, FiPackage, FiBarChart2, FiMap, FiDollarSign, FiSettings, FiShield, FiMoon, FiSun, FiGrid,
   FiShoppingCart, FiTrendingDown, FiTrendingUp, FiCreditCard, FiTruck, FiFileText as FiFileText2, FiTool, FiCheckCircle,   FiSliders, FiCircle, FiDroplet, FiZap, FiLayers, FiClipboard,
   FiArchive, FiActivity, FiList, FiMessageCircle, FiAlertTriangle, FiCheckSquare, FiLock, FiCornerUpLeft,
-  FiScissors, FiBell, FiMail, FiCamera
+  FiScissors, FiBell, FiMail, FiCamera, FiAlertOctagon
 } from 'react-icons/fi';
 import Notificacoes from './Notificacoes';
 import BuscaGlobal from './BuscaGlobal';
@@ -335,6 +335,15 @@ const Layout = () => {
     { path: '/almoxarifado/requisicoes-material', icon: FiList, label: 'Minhas Requisições' },
     { path: '/almoxarifado/recebimentos', icon: FiPackage, label: 'Recebimentos' },
     { path: '/almoxarifado/inspecoes', icon: FiCheckSquare, label: 'Inspeções' },
+    // Etapa 43: o documento NUMERADO (NC-...) que nasce da divergencia de recebimento e da
+    // reprovacao de inspecao. Vizinho de "Inspeções" de proposito — e a continuacao daquele
+    // fluxo (reprovou -> abre NC -> a Qualidade decide), nao um assunto novo. Sem adminOnly,
+    // mesmo criterio de alertas/notificacoes: a listagem e leitura (so `auth`) e quem barra a
+    // decisao e o backend; o chao de fabrica tem o que ver aqui dentro.
+    // FiAlertOctagon, nao FiAlertTriangle — o triangulo ja e "Alertas" (condicao a vigiar) e o
+    // octogono e a placa de PARE: documento aberto que espera decisao, nao aviso que se resolve
+    // sozinho quando a condicao passa.
+    { path: '/almoxarifado/nao-conformidades', icon: FiAlertOctagon, label: 'Não Conformidades' },
     { path: '/almoxarifado/movimentacoes', icon: FiActivity, label: 'Movimentações' },
     { path: '/almoxarifado/lotes', icon: FiLayers, label: 'Lotes e Séries' },
     { path: '/almoxarifado/devolucoes', icon: FiCornerUpLeft, label: 'Devoluções' },

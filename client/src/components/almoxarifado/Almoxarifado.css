@@ -286,6 +286,17 @@
 .almox-badge-vencida         { background: rgba(229,25,58,0.12);   color: var(--gmp-error);
                                border: 1px solid rgba(229,25,58,0.35); }
 
+/* Etapa 43 — status da NAO CONFORMIDADE numerada. As tres classes PRECISAM existir pelo mesmo
+   motivo escrito no bloco acima: o componente monta `almox-badge-nc-${status.toLowerCase()}` e
+   classe inexistente sai sem fundo nem cor, sem nenhum teste de comportamento pegar.
+   PREFIXO PROPRIO (`-nc-`) em vez de reusar `almox-badge-aberta`/`-cancelada` da remessa a
+   terceiros: as palavras coincidem por acaso (substantivo feminino), mas as escalas nao — na
+   remessa ABERTA e o estado normal e neutro, aqui ABERTA e um problema esperando decisao e tem
+   de puxar o olho. Reusar amarraria as duas telas: mudar a cor da remessa repintaria a NC. */
+.almox-badge-nc-aberta       { background: rgba(229,25,58,0.12);   color: var(--gmp-error); }
+.almox-badge-nc-decidida     { background: rgba(26,163,74,0.12);   color: var(--gmp-success); }
+.almox-badge-nc-cancelada    { background: rgba(107,107,107,0.12); color: var(--gmp-text-light); }
+
 /* ── Nome como link (abre extrato/detalhe sem sair da tela) ── */
 .almox-link-btn {
   background: none;
