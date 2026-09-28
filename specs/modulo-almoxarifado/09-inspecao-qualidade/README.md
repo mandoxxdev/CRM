@@ -303,8 +303,24 @@ isso já produziu "o que falta para 🟢" errado quatro vezes seguidas na featur
    pago **na aba Histórico**, não no formulário de decisão — porque a linha de inspeção só passa a
    existir **depois** da decisão (`inspectionService.js:268`), e antes dela não há a que prender o
    anexo.
-4. **Encaminhamento com status** (saber se a devolução/análise/substituição foi executada) — a
-   execução em si é a feature 12.
+4. **Encaminhamento com status** (saber se a devolução/análise/substituição foi executada) — ~~a
+   execução em si é a feature 12~~.
+   > ⚠️ **CORREÇÃO (Fase 0 da Etapa 45, medida em 2026-09-28): esta linha, e todas as outras desta
+   > spec que dizem que "a feature 12 ainda não existe", ESTÃO ERRADAS desde 2026-08-12.** A
+   > feature 12 (Devoluções) está **🟢 no mapa** e foi entregue pela Etapa 7
+   > (`29524fc..0722bfd`): devolução ao estoque com vínculo à saída original, lote, série e tela
+   > própria. É a **quarta vez** nesta base que uma spec afirma a ausência de algo que existe.
+   >
+   > **Mas o erro não é só de data, e a parte interessante é esta:** o que ESTE item precisa
+   > continua não existindo, e está **desmarcado dentro da própria feature 12** —
+   > `12-devolucoes/README.md:176`: *"[ ] Devolução ao fornecedor: fluxo próprio com documento e
+   > e-mail — fora do escopo da Etapa 7, declarado"*. Ou seja: **a feature 12 está 🟢 com um item
+   > de checklist aberto do qual esta feature depende.** A cor diz "pronto" e a coisa que a 09
+   > espera não está lá. Nenhuma das duas specs via isso sozinha, porque o erro atravessa as duas.
+   >
+   > **Fica à vista, e não apagado**, porque quem lesse "a feature 12 não existe" iria construí-la
+   > do zero, e quem lesse o 🟢 dela concluiria que este item já podia ser feito. Os dois se
+   > enganariam em direções opostas.
 
 ~~**E um item NOVO, criado pela Etapa 29:** 5. **Cadastro do plano de inspeção PELA TELA.**~~
 **PAGO na Etapa 30** (`af7adea..7982f18`) — ver o item marcado no checklist de frontend. Riscado

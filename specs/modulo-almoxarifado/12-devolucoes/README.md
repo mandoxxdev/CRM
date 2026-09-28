@@ -1,5 +1,16 @@
 # 12 — Devoluções
 
+> **⚠️ RESSALVA DO 🟢, acrescentada em 2026-09-28 (Fase 0 da Etapa 45) — leia antes de confiar na
+> cor.** O verde vale para a **devolução AO ESTOQUE** (produção, projeto, ferramenta, cliente). A
+> **devolução AO FORNECEDOR continua desmarcada** no checklist abaixo (`:176`), e **outra feature
+> depende dela**: o item *"encaminhamento com status"* da **09 (Inspeção e qualidade)** — saber se
+> a devolução ao fornecedor que a inspeção pediu foi executada — está esperando este fluxo.
+> Enquanto isso, a spec 09 dizia que *"a feature 12 ainda não existe"*, o que **também estava
+> errado** e está corrigido lá. As duas afirmações se cancelavam: uma dizia que nada existe, a
+> outra que está tudo pronto, e a verdade é que falta **uma parte nomeada**. Nenhuma das duas specs
+> enxergava isso sozinha, porque o erro atravessa as duas. **Não mude a cor sem entregar a
+> devolução ao fornecedor** — e, quando entregar, tire esta ressalva.
+>
 > **Status:** 🟢 — **Etapa 7 entregue (2026-08-12, `29524fc..0722bfd` + `eabd848`/`7fc1b7f`)**: a
 > devolução cita a saída original (com validação de quantidade), herda o lote, reativa a série,
 > tem tela dedicada em `/almoxarifado/devolucoes` — e o **bug de saldo do destino SUCATA foi
