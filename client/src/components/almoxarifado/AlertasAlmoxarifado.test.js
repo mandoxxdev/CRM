@@ -216,6 +216,37 @@ const CENTRAL_FIXTURE = {
         },
       ],
     },
+    // Etapa 43 (T4, D6): a 14a entrada, no FIM pela mesma razão da 13a. A linha é a que
+    // `listarNaoConformidadesParadas` projeta (alertRegistry): { id, numero, origem, tipo,
+    // status, created_at, material_id, material_codigo, material_nome, material_unidade,
+    // recebimento_id, recebimento_numero, nota_fiscal, quantidade_esperada, quantidade_recebida,
+    // divergencia, dias_parada }.
+    //
+    // A 2a linha é a NC SEM recebimento e SEM material (a NC aberta à mão pode não ter nenhum dos
+    // dois): as duas células têm de sair `—`, nunca "null" nem "null (NF null)".
+    {
+      chave: 'NAO_CONFORMIDADE_ABERTA', titulo: 'Não conformidade aberta',
+      descricao: 'Não conformidades ainda sem decisão há mais dias que o configurado.',
+      // `total: 5` com 2 linhas pelo mesmo motivo medido da entrada irmã: um badge que
+      // renderizasse `linhas.length` passaria numa fixture em que os dois números coincidem.
+      dias: 7, total: 5,
+      linhas: [
+        {
+          id: 41, numero: 'NC-2026-0041', origem: 'RECEBIMENTO', tipo: 'QUANTIDADE',
+          status: 'ABERTA', created_at: '2026-09-15 08:30:00', material_id: 7,
+          material_codigo: 'CH-1020', material_nome: 'Chapa 1020', material_unidade: 'KG',
+          recebimento_id: 3, recebimento_numero: 'REC-2026-003', nota_fiscal: '9912',
+          quantidade_esperada: 100, quantidade_recebida: 94, divergencia: -6, dias_parada: 13,
+        },
+        {
+          id: 42, numero: 'NC-2026-0042', origem: 'INSPECAO', tipo: 'DANO_FISICO',
+          status: 'ABERTA', created_at: '2026-09-19 11:00:00', material_id: null,
+          material_codigo: null, material_nome: null, material_unidade: null,
+          recebimento_id: null, recebimento_numero: null, nota_fiscal: null,
+          quantidade_esperada: null, quantidade_recebida: null, divergencia: null, dias_parada: 9,
+        },
+      ],
+    },
   ],
 };
 
@@ -267,6 +298,8 @@ test('um cartao por alerta, na ordem do array do C1 (a tela nao reordena)', asyn
     // que a tela não reordena, e por isso a chave nova compartilha a CENTRAL_FIXTURE em vez de
     // ganhar fixture própria (F9 — fixture separada perderia exatamente esta medição).
     'alerta-card-PEDIDO_COMPRA_PARCIAL',
+    // Etapa 43 (T4): a 14a, pelo mesmo motivo e na mesma posição — o fim do ALERT_REGISTRY.
+    'alerta-card-NAO_CONFORMIDADE_ABERTA',
   ]);
   expect(texto()).toContain('Calibração vencendo');
   expect(texto()).toContain('Requisição atrasada');
@@ -535,6 +568,86 @@ test('PEDIDO_COMPRA_PARCIAL: nenhum campo cru no cartao (id, status, situacao_re
   expect(cels).not.toContain('aprovado');
   // O cartao SO existe para pedido parcial — repetir a situacao seria ruido.
   expect(card('PEDIDO_COMPRA_PARCIAL').textContent).not.toContain('PARCIAL');
+});
+
+/**
+ * Etapa 43, T4 (D6) — cartão da 14a chave, `NAO_CONFORMIDADE_ABERTA`: `NC` · `Material` · `Tipo` ·
+ * `Origem` · `Dias parada` · `Recebimento`, nesta ordem.
+ *
+ * O cartão cobra a DECISÃO de um documento que a T3 faz nascer sozinho. Sem entrada em
+ * COLUNAS_POR_CHAVE o cartão não some (o fallback genérico existe de propósito), mas desenharia
+ * `id`, `origem`, `tipo`, `status`, `created_at` e `material_id` — e a pergunta do alerta ("qual
+ * documento está parado e há quanto tempo") sumiria junto com a coluna `dias_parada`, que é a
+ * única razão de a linha estar ali.
+ *
+ * `status` fica de fora porque a população é só `ABERTA` (mesmo motivo do cartão irmão) — uma
+ * coluna repetindo "ABERTA" em toda linha é ruído.
+ */
+test('NAO_CONFORMIDADE_ABERTA: cartao existe com o titulo do servidor, a janela e o badge do total', async () => {
+  await renderizar();
+
+  const c = card('NAO_CONFORMIDADE_ABERTA');
+  expect(c).not.toBeNull();
+  expect(c.textContent).toContain('Não conformidade aberta');
+  expect(c.textContent).toContain('Não conformidades ainda sem decisão há mais dias que o configurado.');
+  // O badge mostra o `total` do SERVIDOR (5), nao `linhas.length` (2).
+  expect(badgeTotal('NAO_CONFORMIDADE_ABERTA').textContent).toContain('5');
+  // `dias: 7` no registro (configDias `alerta_nc_parada_dias`) — ao contrario das duas entradas de
+  // Compras, esta TEM janela, e a tela tem de mostra-la (o elemento, nao o texto por adjacencia).
+  expect(c.querySelectorAll('.almox-badge-baixo')).toHaveLength(1);
+  expect(c.querySelector('.almox-badge-baixo').textContent).toContain('7');
+});
+
+test('NAO_CONFORMIDADE_ABERTA: os 6 cabecalhos, na ordem', async () => {
+  await renderizar();
+  await expandir('NAO_CONFORMIDADE_ABERTA');
+
+  expect(cabecalhos('NAO_CONFORMIDADE_ABERTA')).toEqual([
+    'NC', 'Material', 'Tipo', 'Origem', 'Dias parada', 'Recebimento',
+  ]);
+});
+
+test('NAO_CONFORMIDADE_ABERTA: numero, material, tipo, origem, dias e o recebimento com NF', async () => {
+  await renderizar();
+  await expandir('NAO_CONFORMIDADE_ABERTA');
+
+  // Celula a celula — `toContain` no texto do cartao inteiro deixaria Tipo/Origem trocados passar,
+  // e esse e o par mais facil de inverter (os dois sao enum em CAIXA ALTA).
+  expect(celulasTodas('NAO_CONFORMIDADE_ABERTA').slice(0, 6)).toEqual([
+    'NC-2026-0041', 'CH-1020 — Chapa 1020', 'QUANTIDADE', 'RECEBIMENTO', '13', 'REC-2026-003 (NF 9912)',
+  ]);
+});
+
+test('NAO_CONFORMIDADE_ABERTA: NC sem material e sem recebimento vira travessao, e o cartao nao quebra', async () => {
+  await renderizar();
+  await expandir('NAO_CONFORMIDADE_ABERTA');
+
+  // 2a linha: material_codigo null (a NC de inspecao/manual pode nao ter material congelado) e
+  // recebimento_numero + nota_fiscal null. Sem os guardas a celula sairia "null (NF null)".
+  expect(celulasTodas('NAO_CONFORMIDADE_ABERTA').slice(6, 12)).toEqual([
+    'NC-2026-0042', '—', 'DANO_FISICO', 'INSPECAO', '9', '—',
+  ]);
+  expect(card('NAO_CONFORMIDADE_ABERTA').textContent).not.toMatch(/null|undefined|Invalid Date|NaN/);
+});
+
+test('NAO_CONFORMIDADE_ABERTA: nenhum campo cru no cartao (id, status, created_at, material_id)', async () => {
+  await renderizar();
+  await expandir('NAO_CONFORMIDADE_ABERTA');
+
+  const cabecalhosMinusculos = cabecalhos('NAO_CONFORMIDADE_ABERTA').map((h) => h.toLowerCase());
+  expect(cabecalhosMinusculos).not.toContain('id');
+  expect(cabecalhosMinusculos).not.toContain('status');
+  expect(cabecalhosMinusculos).not.toContain('created at');
+  expect(cabecalhosMinusculos).not.toContain('material id');
+
+  // O fallback generico desenharia id, numero, origem, tipo, status, created_at — o `id` e o
+  // `created_at` crus entrariam como CELULA. (`not.toContain('ABERTA')` no texto do cartao seria
+  // teste vazio: a palavra ja esta no titulo do proprio cartao.)
+  const cels = celulasTodas('NAO_CONFORMIDADE_ABERTA');
+  expect(cels).not.toContain('41');
+  expect(cels).not.toContain('42');
+  expect(cels).not.toContain('ABERTA');
+  expect(cels).not.toContain('2026-09-15 08:30:00');
 });
 
 test('gate visual: sem ver_alertas o painel de sem-permissao aparece sem nem chamar o GET', async () => {

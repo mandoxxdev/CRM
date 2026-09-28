@@ -34,6 +34,11 @@ const ENTIDADES_ANEXO = {
   inspecao: 'inspecoes_recebimento_almoxarifado',
   devolucao: 'devolucoes_material_almoxarifado',
   item_remessa: 'itens_remessa_terceiro_almoxarifado',
+  // Etapa 43 (T4): a SETIMA entidade. O "acrescentar depois e UMA LINHA" do paragrafo acima
+  // sendo cobrado — a NC e um documento que nasce de uma divergencia FISICA, e a foto da chapa
+  // amassada, o laudo e o e-mail do fornecedor sao a prova de que a decisao (aceitar sob desvio,
+  // devolver, sucatear) se apoiou em alguma coisa. Sem anexo, a justificativa e so texto.
+  nao_conformidade: 'nao_conformidades_almoxarifado',
 };
 
 // `arquivo_path` NAO entra: o nome do arquivo no disco nao sai para o client, que so precisa do

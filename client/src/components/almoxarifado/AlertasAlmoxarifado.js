@@ -220,6 +220,27 @@ const COLUNAS_POR_CHAVE = {
     // `previsao_entrega` null — o guarda evita "Invalid Date" na célula.
     { titulo: 'Previsão', render: (l) => (l.previsao_entrega ? formatData(l.previsao_entrega) : '—') },
   ],
+  // Etapa 43 (T4, D6), a 14a chave. A linha vem de `listarNaoConformidadesParadas`
+  // (alertRegistry): { id, numero, origem, tipo, status, created_at, material_id,
+  // material_codigo, material_nome, material_unidade, recebimento_id, recebimento_numero,
+  // nota_fiscal, quantidade_esperada, quantidade_recebida, divergencia, dias_parada }. Sem esta
+  // entrada o fallback genérico desenharia os 6 primeiros campos NA ORDEM DO OBJETO — `id`,
+  // `status` e `material_id` crus incluídos — e a pergunta do cartão ("que documento está parado,
+  // há quanto tempo, de qual material") sumiria.
+  //
+  // `status` fica de fora de propósito, como nos dois cartões irmãos: a população deste alerta é
+  // só `ABERTA`, então uma coluna repetindo "ABERTA" em toda linha é ruído. `dias_parada` é
+  // INTEIRO derivado no servidor (CAST do julianday) — a tela não recalcula idade (lição G6).
+  NAO_CONFORMIDADE_ABERTA: [
+    { titulo: 'NC', render: (l) => l.numero || `#${l.id}` },
+    { titulo: 'Material', render: (l) => (l.material_codigo ? `${l.material_codigo} — ${l.material_nome}` : '—') },
+    { titulo: 'Tipo', render: (l) => l.tipo || '—' },
+    { titulo: 'Origem', render: (l) => l.origem || '—' },
+    { titulo: 'Dias parada', render: (l) => (l.dias_parada ?? '—') },
+    // A NC aberta à mão pode não ter recebimento (o SQL da T1 congela `recebimento_id` quando há
+    // um, e deixa nulo quando não há) — o guarda evita a célula "null (NF null)".
+    { titulo: 'Recebimento', render: (l) => `${l.recebimento_numero || '—'}${l.nota_fiscal ? ` (NF ${l.nota_fiscal})` : ''}` },
+  ],
 };
 
 // Alerta que o registro do servidor ganhar amanhã e esta tabela ainda não conhecer não pode

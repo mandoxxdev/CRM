@@ -170,11 +170,13 @@ function resultadoDe(resultados, chave) {
     // ⚠️ 12 -> 13 na Etapa 42, T3 (o mesmo gesto que a Etapa 39 fez ao virar 11 -> 12): a entrada
     // `PEDIDO_COMPRA_PARCIAL` e a 13a do registro. O numero LITERAL fica de proposito — trocado por
     // `ALERT_REGISTRY.length` esta linha viraria uma tautologia e pararia de medir "nenhuma anterior
-    // caiu", que e a unica coisa que ela existe para dizer. Quem acrescentar a 14a atualiza aqui.
+    // caiu", que e a unica coisa que ela existe para dizer. Quem acrescentar a 15a atualiza aqui.
+    // 13 -> 14 na Etapa 43, T4: a entrada `NAO_CONFORMIDADE_ABERTA` — e ela foi acrescentada aqui
+    // exatamente pelo caminho que este comentario manda.
     // (O molde do numero DINAMICO, para quem quer o outro contrato, e
     // `alertaRegistro.api.test.js:260`, que compara a varredura com `ALERT_REGISTRY.length` porque
     // ali o que se mede e "uma entrada de resultado por entrada do registro", nao o total.)
-    assert.strictEqual(alertas.length, 13, `a central tem ${alertas.length} cartoes`);
+    assert.strictEqual(alertas.length, 14, `a central tem ${alertas.length} cartoes`);
   });
 
   // ── (5) RN-D11: os ids do alerta sao os MESMOS ids de atrasado=1 na rota ────────────────────
@@ -238,8 +240,8 @@ function resultadoDe(resultados, chave) {
     // tambem requer `receiptService` de forma LAZY. O total literal continua aqui pelo mesmo motivo
     // da linha :169 — na carga a FRIO o que se mede e que o require lazy segurou o ciclo INTEIRO
     // (`receiptService.js:31` requer este registro no topo), e um `ALERT_REGISTRY.length` no lugar
-    // do numero compararia o processo frio consigo mesmo.
-    assert.deepStrictEqual(medido, { total: 13, tem: true, listar: 'function' },
+    // do numero compararia o processo frio consigo mesmo. 13 -> 14 na Etapa 43, T4.
+    assert.deepStrictEqual(medido, { total: 14, tem: true, listar: 'function' },
       `carga a frio devolveu ${saida.trim()}`);
   });
 
