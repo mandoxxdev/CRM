@@ -70,6 +70,16 @@ async function itemRetido(db, { qtd = 10, mat } = {}) {
   return { mat: materialId, itemId: it.id, qtd, recebimentoId: rec.id };
 }
 
+/**
+ * Etapa 43 (RN-07): `divergencia_quantidade` passou a ser DERIVADA do item e o payload e ignorado.
+ * O fixture nasce com `quantidade_recebida = quantidade_esperada` (`receiptService.js:425`), entao
+ * a flag so pode valer 1 se a divergencia for FABRICADA — e sem ela o padrao `1/0/0` do cenario de
+ * cruzamento de coluna abaixo deixaria de existir, que e o custo que a Fase 2 mandou NAO pagar.
+ */
+const fabricarDivergencia = (db, itemId, recebida) => dbRun(db,
+  'UPDATE recebimentos_material_itens_almoxarifado SET quantidade_recebida = ? WHERE id = ?',
+  [recebida, itemId]);
+
 async function novoPlano(db, materialId, campos = {}) {
   seq += 1;
   const r = await dbRun(db, `INSERT INTO planos_inspecao_almoxarifado
@@ -249,6 +259,9 @@ async function decidir(app, itemId, payload) {
 
     // 3 medidas, so a ultima fora: total 3 != nao_conformes 1 != conformes 2. Qualquer troca de
     // operador no subselect muda um dos dois numeros.
+    // Etapa 43 (RN-07): a flag `divergencia_quantidade: 1` do payload abaixo nao grava mais nada
+    // sozinha — o fato tem de existir no item.
+    await fabricarDivergencia(db, itemId, qtd - 2);
     const dec = await decidir(app, itemId, {
       quantidade_aprovada: qtd, quantidade_reprovada: 0,
       divergencia_quantidade: 1, dano_fisico: 0, material_incorreto: 0, certificado_ausente: 0,
@@ -268,6 +281,14 @@ async function decidir(app, itemId, payload) {
     // As tres flags, uma ligada por vez, para pegar qualquer cruzamento de coluna no SELECT.
     // Com as tres a 1 na mesma linha, trocar `i.dano_fisico` por `i.material_incorreto` seria
     // invisivel; com o padrao 1/0/0, 0/1/0, 0/0/1 nenhuma troca sobrevive.
+    //
+    // ⚠️ Etapa 43 (RN-07) — A ALAVANCA MUDOU DE LUGAR, E ELA NAO PODE SUMIR. `divergencia_quantidade`
+    // deixou de sair do payload: mandar `1` no corpo agora grava 0. Se este laco continuasse so
+    // mandando a flag, os tres padroes virariam 0/0/0, 0/1/0, 0/0/1 — e o padrao 1/0/0, que e a
+    // UNICA coisa que distingue `divergencia_quantidade` das outras duas colunas, sumiria: trocar
+    // essa coluna por outra no SELECT voltaria a passar verde e esta medicao morreria em silencio.
+    // Por isso o `1` dela agora e FABRICADO NO ITEM (recebida != esperada), que e o que a derivada
+    // le. O padrao continua identico do ponto de vista da assercao.
     const padroes = [
       { divergencia_quantidade: 1, dano_fisico: 0, material_incorreto: 0 },
       { divergencia_quantidade: 0, dano_fisico: 1, material_incorreto: 0 },
@@ -276,6 +297,8 @@ async function decidir(app, itemId, payload) {
     const mat2 = await novoMaterial(db);
     for (const flags of padroes) {
       const it = await itemRetido(db, { mat: mat2 });
+      // O `1` de `divergencia_quantidade` vem do FATO (RN-07); o das outras duas, do payload.
+      if (flags.divergencia_quantidade === 1) await fabricarDivergencia(db, it.itemId, it.qtd - 3);
       const d = await decidir(app, it.itemId, {
         quantidade_aprovada: it.qtd, quantidade_reprovada: 0,
         certificado_ausente: 0, ...flags,
