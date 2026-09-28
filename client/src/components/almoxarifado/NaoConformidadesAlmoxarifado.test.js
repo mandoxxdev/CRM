@@ -414,7 +414,10 @@ describe('NaoConformidadesAlmoxarifado — falha de carga', () => {
   // (`routes/almoxarifado.js:282-285` → `index.js:2933`), cujo corpo é
   // `{ error: 'Acesso negado ao módulo', modulo: 'almoxarifado' }` — sem `acao` e sem `perfil`.
   // A tradução de 403 de PERFIL continua testada, no lugar onde ela de fato acontece: o POST de
-  // decidir, cenário (15).
+  // decidir, cenário (16). ⚠️ Esta referência dizia "cenário (15)" e ficou ERRADA quando a Etapa
+  // 44 acrescentou três cenários reusando os números (15)-(17); apontava para dois testes, e
+  // nenhum deles era o do 403. Os novos foram renumerados para (18)-(20) e esta linha, corrigida.
+
   test('(13) 403 de MÓDULO na carga vira o painel de erro, não "nenhuma não conformidade"', async () => {
     falharCarga = {
       response: { status: 403, data: { error: 'Acesso negado ao módulo', modulo: 'almoxarifado' } },
@@ -473,12 +476,12 @@ describe('NaoConformidadesAlmoxarifado — o efeito da decisão no saldo', () =>
     await clicarBotaoModal('Registrar decisão');
   }
 
-  test('(15) LIBERADA: o toast diz quanto saiu do bloqueio, com a literal do servidor', async () => {
+  test('(18) LIBERADA: o toast diz quanto saiu do bloqueio, com a literal do servidor', async () => {
     await decidirCom({ efeito: 'LIBERADA', quantidade: 3, material_id: 12, mensagem: '3 liberado(s) do bloqueio' });
     expect(toast.success).toHaveBeenCalledWith('Não conformidade NC-2026-0007 decidida! 3 liberado(s) do bloqueio');
   });
 
-  test('(16) os outros três efeitos também aparecem — NENHUMA não pode virar silêncio', async () => {
+  test('(19) os outros três efeitos também aparecem — NENHUMA não pode virar silêncio', async () => {
     // O ponto do cenário: `NENHUMA` é uma INFORMAÇÃO ("esta decisão não altera o saldo"), não a
     // ausência de informação. Se a tela só falasse no caso que libera, o usuário voltaria a não
     // distinguir "não mexeu" de "não avisou" — que é o C57 renascendo pela metade.
@@ -494,12 +497,43 @@ describe('NaoConformidadesAlmoxarifado — o efeito da decisão no saldo', () =>
     }
   });
 
-  test('(17) resposta SEM o campo `liberacao` não mostra `undefined` — e o toast continua saindo', async () => {
+  test('(20) resposta SEM o campo `liberacao` não mostra `undefined` — e o toast continua saindo', async () => {
     // Servidor anterior a esta versão, ou resposta truncada: concatenar `undefined` mostraria
     // "decidida! undefined" no lugar do aviso, que é pior que não avisar nada.
     await decidirCom(null);
     expect(toast.success).toHaveBeenCalledWith('Não conformidade NC-2026-0007 decidida!');
     const dito = toast.success.mock.calls.map(([m]) => m).join(' | ');
     expect(dito).not.toContain('undefined');
+  });
+});
+
+/**
+ * Etapa 44, fix-round — O TEXTO DO MODAL, que a revisão adversarial pegou.
+ *
+ * Achado CRITICAL, e o modo de falha vale escrever: a Etapa 44 corrigiu o comentário de cabeçalho
+ * do componente (que afirmava "não move estoque") e **deixou intacto o parágrafo visível dentro do
+ * modal**, que dizia *"O material reprovado continua bloqueado até alguém com ajustar_estoque
+ * desbloqueá-lo"* — o enunciado literal do furo que a etapa fechou, exibido na tela no passo do
+ * roteiro em que o apresentador afirma que ele foi resolvido.
+ *
+ * Comentário de código corrigido não corrige a tela. Este cenário prende a frase.
+ */
+describe('NaoConformidadesAlmoxarifado — o aviso do modal acompanha a regra', () => {
+  test('(21) o modal diz que aceitar libera, e NÃO afirma mais que o material continua bloqueado', async () => {
+    await renderizar();
+    await clicar(botaoDecidir(linhas()[0]));
+    const modal = container.querySelector('.almox-modal');
+    expect(modal).not.toBeNull();
+    const texto = modal.textContent;
+
+    // A metade POSITIVA: o modal explica o efeito das duas decisões de aceitação.
+    expect(texto).toContain('Aceitar sob desvio');
+    expect(texto).toContain('liberam o material');
+    expect(texto).toContain('não mexem no saldo');
+
+    // E a negativa, que é o achado: a frase antiga não pode voltar, em nenhuma das formas em que
+    // ela já apareceu.
+    expect(texto).not.toContain('continua bloqueado');
+    expect(texto).not.toContain('ajustar_estoque');
   });
 });

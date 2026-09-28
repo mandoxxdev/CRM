@@ -491,10 +491,26 @@ const NaoConformidadesAlmoxarifado = () => {
                   </>
                 )}
               </p>
+              {/*
+                ⚠️ ESTE PARÁGRAFO É LIDO PELO USUÁRIO NO INSTANTE EM QUE ELE DECIDE — é o único
+                lugar da tela que explica o que a decisão faz com o saldo, e por isso ele TEM de
+                acompanhar a regra.
+
+                Até a Etapa 44 ele dizia "A decisão fecha o DOCUMENTO, não o estoque … o material
+                reprovado continua bloqueado até alguém com ajustar_estoque desbloqueá-lo" — o
+                enunciado literal do furo C57. A Etapa 44 fechou o furo e, na primeira passada,
+                corrigiu só o comentário de cabeçalho deste arquivo: o texto VISÍVEL ficou
+                afirmando o contrário do que o sistema passou a fazer, e o roteiro de apresentação
+                mandava abrir justamente este modal. A revisão adversarial pegou.
+
+                Lição que fica escrita aqui: comentário de código corrigido não corrige a tela.
+                O cenário `(21)` de `NaoConformidadesAlmoxarifado.test.js` prende esta frase.
+              */}
               <p style={{ fontSize: '0.78rem', color: 'var(--gmp-text-light)', marginTop: 0 }}>
-                A decisão fecha o DOCUMENTO, não o estoque: devolver não cria a devolução e
-                sucatear não baixa saldo (D7). O material reprovado continua bloqueado até alguém
-                com <em>ajustar_estoque</em> desbloqueá-lo.
+                <strong>Aceitar</strong> e <strong>Aceitar sob desvio</strong> liberam o material
+                que esta inspeção deixou bloqueado. As outras quatro decisões registram a intenção
+                e <strong>não mexem no saldo</strong> — devolver não cria a devolução e sucatear
+                não baixa estoque. O aviso ao confirmar diz o que aconteceu.
               </p>
               <div className="almox-field">
                 <label className="almox-label">Decisão<span className="required">*</span></label>

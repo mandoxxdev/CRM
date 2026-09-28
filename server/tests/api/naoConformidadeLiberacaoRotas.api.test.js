@@ -72,6 +72,23 @@ const uniq = (p) => `${p}-${Date.now() % 1000000}-${++seq}`;
   const decidirHttp = (id, decisao) => request(app).post(`${BASE}/${id}/decidir`)
     .send({ decisao, justificativa: 'laudo da engenharia anexo' });
 
+  /**
+   * A FORMA congelada de um efeito que NAO libera, aplicada a TODOS eles.
+   *
+   * ⚠️ Achado da revisao adversarial: antes, so `NENHUMA` era medido assim. Trocar o retorno de
+   * `JA_LIBERADA` para devolver quantidade e material passava verde em quatro suites — e a tela,
+   * que le `liberacao.mensagem` e pode um dia ler os outros campos, receberia numeros de uma
+   * liberacao que NAO aconteceu.
+   */
+  function formaDeQuemNaoLibera(liberacao, rotulo) {
+    assert.ok('quantidade' in liberacao, `${rotulo}: o campo \`quantidade\` sumiu do JSON`);
+    assert.ok('material_id' in liberacao, `${rotulo}: o campo \`material_id\` sumiu do JSON`);
+    assert.strictEqual(liberacao.quantidade, null,
+      `${rotulo}: quantidade veio ${JSON.stringify(liberacao.quantidade)} — tem de ser null, nunca 0 nem ausente`);
+    assert.strictEqual(liberacao.material_id, null,
+      `${rotulo}: material_id veio ${JSON.stringify(liberacao.material_id)}`);
+  }
+
   // ── (1) LIBERADA — o efeito chega inteiro, com a forma congelada ──────────────────────────
   await test('(1) LIBERADA chega pelo HTTP com efeito, quantidade, material_id e a literal', async () => {
     const f = await novaInspecaoReprovada({ reprovada: 3, bloqueioDeOutraOrigem: 10 });
@@ -103,10 +120,7 @@ const uniq = (p) => `${p}-${Date.now() % 1000000}-${++seq}`;
     assert.strictEqual(r.body.liberacao.efeito, 'NENHUMA', `efeito ${r.body.liberacao.efeito}`);
     assert.strictEqual(r.body.liberacao.mensagem, 'Esta decisão não altera o saldo', `mensagem: ${r.body.liberacao.mensagem}`);
     // `null`, nunca `0` nem ausente: com `0` a tela mostraria "0 liberado(s)"; ausente, `undefined`.
-    assert.ok('quantidade' in r.body.liberacao, 'o campo `quantidade` sumiu do JSON');
-    assert.ok('material_id' in r.body.liberacao, 'o campo `material_id` sumiu do JSON');
-    assert.strictEqual(r.body.liberacao.quantidade, null, `quantidade veio ${JSON.stringify(r.body.liberacao.quantidade)}`);
-    assert.strictEqual(r.body.liberacao.material_id, null, `material_id veio ${JSON.stringify(r.body.liberacao.material_id)}`);
+    formaDeQuemNaoLibera(r.body.liberacao, 'NENHUMA');
   });
 
   // ── (3) SEM_BLOQUEIO e JA_LIBERADA pelo HTTP ──────────────────────────────────────────────
@@ -124,6 +138,7 @@ const uniq = (p) => `${p}-${Date.now() % 1000000}-${++seq}`;
     assert.strictEqual(rManual.body.liberacao.efeito, 'SEM_BLOQUEIO', `efeito ${rManual.body.liberacao.efeito}`);
     assert.strictEqual(rManual.body.liberacao.mensagem, 'Não conformidade aberta manualmente não libera saldo',
       `mensagem: ${rManual.body.liberacao.mensagem}`);
+    formaDeQuemNaoLibera(rManual.body.liberacao, 'SEM_BLOQUEIO');
     assert.strictEqual(await bloqueadaDe(f.materialId), 13, 'a NC manual mexeu no saldo pela porta HTTP');
 
     // JA_LIBERADA: a automatica libera primeiro, e uma segunda automatica da MESMA inspecao nao.
@@ -137,22 +152,54 @@ const uniq = (p) => `${p}-${Date.now() % 1000000}-${++seq}`;
     assert.strictEqual(rSegunda.body.liberacao.efeito, 'JA_LIBERADA', `efeito ${rSegunda.body.liberacao.efeito}`);
     assert.strictEqual(rSegunda.body.liberacao.mensagem, 'O material desta inspeção já havia sido liberado',
       `mensagem: ${rSegunda.body.liberacao.mensagem}`);
+    formaDeQuemNaoLibera(rSegunda.body.liberacao, 'JA_LIBERADA');
     assert.strictEqual(await bloqueadaDe(f.materialId), 10, 'a segunda liberou de novo pela porta HTTP');
   });
 
   // ── (4) o 400 do motor sobe com a literal, e a decisao nao fica gravada ───────────────────
   await test('(4) o 400 do motor sobe com a literal e a NC volta a ABERTA', async () => {
-    const f = await novaInspecaoReprovada({ reprovada: 3 });
-    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = 1 WHERE id = ?', [f.materialId]);
+    // ⚠️ O GATILHO DESTE CENARIO MUDOU NO FIX-ROUND. Ele drenava o pool (bloqueada 1 < reprovada
+    // 3) para provocar o 400 do teto — e esse caminho deixou de ser recusa: virou a RN-11, que
+    // GRAVA a decisao e devolve SEM_BLOQUEIO. Se o cenario tivesse ficado, mediria a regra errada.
+    // Agora injeta uma falha REAL do motor, que e o unico caso em que a rota ainda devolve 400.
+    const f = await novaInspecaoReprovada({ reprovada: 3, bloqueioDeOutraOrigem: 10 });
+    const stock = require('../../services/almoxarifado/stockService');
+    const original = stock.registrarMovimentacao;
+    stock.registrarMovimentacao = async () => {
+      throw Object.assign(new Error('Quantidade bloqueada insuficiente: 1'), { status: 400 });
+    };
     setUser({ ...QUALIDADE });
 
     const r = await decidirHttp(f.nc.id, 'ACEITAR');
+    stock.registrarMovimentacao = original;
 
     assert.strictEqual(r.status, 400, `status ${r.status}: ${JSON.stringify(r.body)}`);
     assert.strictEqual(r.body.error, 'Quantidade bloqueada insuficiente: 1', `mensagem: ${r.body.error}`);
     const depois = await dbGet(db, 'SELECT status, decisao FROM nao_conformidades_almoxarifado WHERE id = ?', [f.nc.id]);
     assert.strictEqual(depois.status, 'ABERTA', `a NC ficou ${depois.status} depois do 400`);
     assert.strictEqual(depois.decisao, null, `a decisao ${depois.decisao} ficou gravada`);
+    assert.strictEqual(await bloqueadaDe(f.materialId), 13, 'o 400 mexeu no saldo');
+  });
+
+  // ── (4b) — RN-11 pela porta: o pool drenado por fora NAO devolve erro ─────────────────────
+  await test('(4b) RN-11 pelo HTTP: pool drenado por fora responde 200 com SEM_BLOQUEIO', async () => {
+    // O contraponto do (4), no mesmo arquivo: o que ANTES era 400 e hoje e 200 com efeito
+    // explicito. Sem este cenario, alguem "restaurando" a recusa reabriria o beco do documento
+    // que nunca fecha sem nenhum teste avisar.
+    const f = await novaInspecaoReprovada({ reprovada: 3 });
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = 1 WHERE id = ?', [f.materialId]);
+    setUser({ ...QUALIDADE });
+
+    const r = await decidirHttp(f.nc.id, 'ACEITAR');
+
+    assert.strictEqual(r.status, 200, `status ${r.status}: ${JSON.stringify(r.body)}`);
+    assert.strictEqual(r.body.liberacao.efeito, 'SEM_BLOQUEIO', `efeito ${r.body.liberacao.efeito}`);
+    assert.strictEqual(r.body.liberacao.mensagem,
+      'O material já havia sido desbloqueado fora do documento — a decisão foi registrada sem liberar saldo',
+      `mensagem: ${r.body.liberacao.mensagem}`);
+    formaDeQuemNaoLibera(r.body.liberacao, 'SEM_BLOQUEIO_DRENADO');
+    assert.strictEqual(r.body.status, 'DECIDIDA', 'o documento nao fechou — o beco voltou');
+    assert.strictEqual(await bloqueadaDe(f.materialId), 1, 'o saldo mudou');
   });
 
   // ── (5) o 403 acontece ANTES de qualquer efeito de saldo ──────────────────────────────────

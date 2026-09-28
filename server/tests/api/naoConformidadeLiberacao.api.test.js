@@ -93,13 +93,27 @@ async function erroDe(fn) {
     nc.decidirNaoConformidade(db, user, id, { decisao, justificativa: 'analise da engenharia anexa' });
 
   const movimentacoesDe = (materialId) => dbAll(db,
-    `SELECT tipo, quantidade, motivo, documento_vinculado FROM movimentacoes_almoxarifado
+    `SELECT tipo, quantidade, motivo, documento_vinculado, recebimento_id FROM movimentacoes_almoxarifado
      WHERE material_id = ? ORDER BY id`, [materialId]);
 
   const liberacaoDaInspecao = async (inspecaoId) => {
     const i = await dbGet(db, 'SELECT liberacao_nc_em FROM inspecoes_recebimento_almoxarifado WHERE id = ?', [inspecaoId]);
     return i.liberacao_nc_em;
   };
+
+  // ── (0) — a FIACAO do backfill, antes de qualquer cenario mexer no ledger ─────────────────
+  await test('(0) o backfill esta ligado em initSchema — nao so implementado', async () => {
+    // ⚠️ ACHADO DA REVISAO ADVERSARIAL: o cenario (12) chama a migracao A MAO, entao ele prova o
+    // CORPO dela e nao a FIACAO. Apagar a chamada de dentro de `initSchema` deixava as tres
+    // suites desta etapa verdes — e num deploy onde essa linha se perdesse (refatoracao, merge),
+    // TODAS as inspecoes antigas nasceriam liberaveis, que e o vale-desbloqueio que a Fase 2
+    // classificou como CRITICAL, com a suite afirmando que "esta etapa nao retroage".
+    //
+    // Este cenario roda PRIMEIRO de proposito: o (12) e o (17) mexem no ledger.
+    const led = await dbGet(db, 'SELECT 1 as ok FROM schema_migrations_almoxarifado WHERE id = ?',
+      ['backfill_liberacao_nc_inspecoes_antigas']);
+    assert.ok(led, 'initSchema nao chamou o backfill — a migracao existe e ninguem a executa');
+  });
 
   // ── (1) e (2) — as duas decisoes que liberam ───────────────────────────────────────────────
   for (const decisao of ['ACEITAR', 'ACEITAR_SOB_DESVIO']) {
@@ -207,15 +221,24 @@ async function erroDe(fn) {
     assert.strictEqual(await bloqueadaDe(f.materialId), 10, 'a segunda NC liberou de novo — a trava por inspecao falhou');
   });
 
-  // ── (8) — a liberacao e FATAL ──────────────────────────────────────────────────────────────
-  await test('(8) RN-02 a liberacao falhou: a decisao NAO fica gravada e os dois claims voltam', async () => {
-    // Bloqueado MENOR que a reprovada: o motor recusa com a literal da Etapa 5. E o caminho real
-    // (alguem desbloqueou na mao antes), nao um mock.
-    const f = await novaInspecaoReprovada({ reprovada: 3 });
-    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = 1 WHERE id = ?', [f.materialId]);
+  // ── (8) — a liberacao e FATAL quando o motor falha DE VERDADE ─────────────────────────────
+  await test('(8) RN-02 o motor falhou: a decisao NAO fica gravada e os dois claims voltam', async () => {
+    // ⚠️ ESTE CENARIO MUDOU DE GATILHO NO FIX-ROUND, e a razao e um achado.
+    // Antes ele drenava o pool (bloqueada 1 < reprovada 3) e media o 400 do TETO do motor. Isso
+    // provava so a metade facil — a recusa de teto acontece ANTES de qualquer efeito, entao o
+    // rollback nao tinha nada a desfazer. E, pior, aquele caminho deixou de ser recusa: virou a
+    // RN-11 (cenario 14). Agora o gatilho e uma falha REAL do motor, injetada trocando
+    // `registrarMovimentacao` — e o unico jeito de exercitar o caminho em que o rollback importa.
+    const f = await novaInspecaoReprovada({ reprovada: 3, bloqueioDeOutraOrigem: 10 });
     const doc = await ncAutomatica(f.inspecaoId);
+    const stock = require('../../services/almoxarifado/stockService');
+    const original = stock.registrarMovimentacao;
+    stock.registrarMovimentacao = async () => {
+      throw Object.assign(new Error('Quantidade bloqueada insuficiente: 1'), { status: 400 });
+    };
 
     const e = await erroDe(() => decidir(doc.id, 'ACEITAR'));
+    stock.registrarMovimentacao = original;
 
     assert.ok(e, 'a decisao passou em vez de recusar');
     assert.strictEqual(e.message, 'Quantidade bloqueada insuficiente: 1', `mensagem: ${e.message}`);
@@ -229,9 +252,50 @@ async function erroDe(fn) {
     assert.strictEqual(depois.decisao, null, `a decisao ${depois.decisao} ficou gravada`);
     assert.strictEqual(depois.decidido_em, null, 'decidido_em ficou preenchido');
     assert.strictEqual(await liberacaoDaInspecao(f.inspecaoId), null, 'a inspecao ficou travada para sempre');
-    assert.strictEqual(await bloqueadaDe(f.materialId), 1, 'o bloqueado mudou');
+    assert.strictEqual(await bloqueadaDe(f.materialId), 13, 'o bloqueado mudou');
     const movs = await movimentacoesDe(f.materialId);
     assert.strictEqual(movs.length, 0, `nasceu movimentacao numa liberacao que falhou: ${JSON.stringify(movs)}`);
+
+    // E a PROVA de que o rollback restaura de verdade: decidir de novo agora funciona.
+    const r2 = await decidir(doc.id, 'ACEITAR');
+    assert.strictEqual(r2.liberacao.efeito, 'LIBERADA', `a segunda tentativa deu ${r2.liberacao.efeito}`);
+    assert.strictEqual(await bloqueadaDe(f.materialId), 10, 'a segunda tentativa nao liberou certo');
+  });
+
+  // ── (8b) — ⚠️ O ACHADO CRITICAL: o motor falhando DEPOIS de mexer no pool ──────────────────
+  await test('(8b) o motor falha DEPOIS de decrementar o pool: o pool volta, e nao ha liberacao em dobro', async () => {
+    // ⚠️ O CENARIO (8) NAO PEGAVA ISTO, e a diferenca e a razao de este existir.
+    // La o motor recusa ANTES de tocar em saldo, entao "o pool nao mudou" passa trivialmente.
+    // Aqui o motor vai ate o fim: decrementa `quantidade_bloqueada` (stockService, ramo
+    // DESBLOQUEIO) e SO ENTAO estoura, no `INSERT` do ledger. O decremento acontece FORA do `try`
+    // do motor, entao o catch amplo dele nunca o desfazia — e `executarLiberacao`, vendo o
+    // `throw`, desfazia os dois claims e concluia que nada tinha acontecido.
+    //
+    // Resultado medido pela revisao adversarial antes do conserto: NC volta a ABERTA, e a proxima
+    // decisao libera OUTRA VEZ. Uma reprovacao de 3 kg soltava 6, com UMA linha no livro.
+    const f = await novaInspecaoReprovada({ reprovada: 3, bloqueioDeOutraOrigem: 10 });
+    const doc = await ncAutomatica(f.inspecaoId);
+    // O gatilho aborta o INSERT do ledger — o ponto exato, depois do pool e antes do livro.
+    await dbRun(db, `CREATE TRIGGER trg_e44_falha_ledger BEFORE INSERT ON movimentacoes_almoxarifado
+      WHEN NEW.tipo = 'DESBLOQUEIO' AND NEW.material_id = ${f.materialId}
+      BEGIN SELECT RAISE(ABORT, 'disco cheio'); END`);
+
+    const e = await erroDe(() => decidir(doc.id, 'ACEITAR'));
+    await dbRun(db, 'DROP TRIGGER trg_e44_falha_ledger');
+
+    assert.ok(e, 'a decisao passou com o ledger abortando');
+    // A ASSERCAO DISCRIMINANTE: o pool voltou. Sem a compensacao no motor daria 10.
+    assert.strictEqual(await bloqueadaDe(f.materialId), 13,
+      'o motor estourou com o pool JA decrementado e nao o devolveu — e o caminho da liberacao em dobro');
+    const depois = await dbGet(db, 'SELECT status FROM nao_conformidades_almoxarifado WHERE id = ?', [doc.id]);
+    assert.strictEqual(depois.status, 'ABERTA', `a NC ficou ${depois.status}`);
+    assert.strictEqual(await liberacaoDaInspecao(f.inspecaoId), null, 'a inspecao ficou travada');
+
+    // E a metade que prova o dobro: decidir de novo solta 3, nao mais 3.
+    const r2 = await decidir(doc.id, 'ACEITAR');
+    assert.strictEqual(r2.liberacao.efeito, 'LIBERADA', `segunda decisao: ${r2.liberacao.efeito}`);
+    assert.strictEqual(await bloqueadaDe(f.materialId), 10,
+      'a reprovacao de 3 soltou mais de 3 no total — liberacao em dobro');
   });
 
   // ── (9) — o rastro no livro ────────────────────────────────────────────────────────────────
@@ -249,6 +313,48 @@ async function erroDe(fn) {
     // Distinto de "Desbloqueio avulso" de proposito: e o que torna a liberacao legivel no livro
     // sem cruzar tabela nenhuma.
     assert.strictEqual(movs[0].motivo, 'Liberação por não conformidade', `motivo ${movs[0].motivo}`);
+    // O vinculo com o recebimento tambem viaja. Sem esta assercao, trocar por `null` passa verde —
+    // medido pela revisao adversarial.
+    assert.strictEqual(movs[0].recebimento_id, f.recebimentoId,
+      `recebimento_id ${movs[0].recebimento_id} vs ${f.recebimentoId}`);
+  });
+
+  // ── (9b) — a liberacao NAO pode ser estornada pelo livro ──────────────────────────────────
+  await test('(9b) estornar a liberacao pelo livro e RECUSADO — senao o C57 ressuscita sem saida', async () => {
+    // Achado IMPORTANT da revisao: `DESBLOQUEIO` **e** estornavel pelo livro, entao a liberacao
+    // escapava das guardas de retencao ao lado. Estorna-la devolvia a quantidade ao bloqueado e
+    // deixava o documento DECIDIDA dizendo "aceito" com o material preso — o C57 de volta, e desta
+    // vez SEM SAIDA: a NC nao pode ser redecidida (409) e uma NC nova da mesma inspecao devolve
+    // JA_LIBERADA, porque `liberacao_nc_em` continua carimbado.
+    const stock = require('../../services/almoxarifado/stockService');
+    const f = await novaInspecaoReprovada({ reprovada: 3, bloqueioDeOutraOrigem: 10 });
+    const doc = await ncAutomatica(f.inspecaoId);
+    await decidir(doc.id, 'ACEITAR');
+    const mov = await dbGet(db, `SELECT id FROM movimentacoes_almoxarifado
+      WHERE material_id = ? AND tipo = 'DESBLOQUEIO' ORDER BY id DESC LIMIT 1`, [f.materialId]);
+    assert.ok(mov, 'a liberacao nao deixou linha no livro — o fixture perdeu o sentido');
+
+    const e = await erroDe(() => stock.cancelarMovimentacao(db, ADMIN, mov.id, 'engano'));
+
+    assert.ok(e, 'o estorno da liberacao passou');
+    assert.strictEqual(e.message,
+      'Liberação por não conformidade não pode ser estornada pelo livro — o documento continuaria dizendo "aceito" com o material bloqueado',
+      `mensagem: ${e.message}`);
+    assert.strictEqual(e.status, 400, `status ${e.status}`);
+    assert.strictEqual(await bloqueadaDe(f.materialId), 10, 'o estorno recusado mexeu no saldo');
+
+    // A metade POSITIVA: um `DESBLOQUEIO` avulso, que NAO e liberacao, continua estornavel. Sem
+    // ela, a recusa passaria identica se alguem barrasse `DESBLOQUEIO` inteiro por engano.
+    await stock.registrarMovimentacao(db, ADMIN, {
+      material_id: f.materialId, tipo: 'DESBLOQUEIO', quantidade: 2,
+      justificativa: 'liberacao avulsa de inventario', motivo: 'Desbloqueio avulso',
+    });
+    assert.strictEqual(await bloqueadaDe(f.materialId), 8, 'o desbloqueio avulso nao aplicou');
+    const avulso = await dbGet(db, `SELECT id FROM movimentacoes_almoxarifado
+      WHERE material_id = ? AND tipo = 'DESBLOQUEIO' ORDER BY id DESC LIMIT 1`, [f.materialId]);
+    const semErro = await erroDe(() => stock.cancelarMovimentacao(db, ADMIN, avulso.id, 'engano'));
+    assert.strictEqual(semErro, null, `o desbloqueio AVULSO deixou de ser estornavel: ${JSON.stringify(semErro)}`);
+    assert.strictEqual(await bloqueadaDe(f.materialId), 10, 'o estorno do avulso nao devolveu ao bloqueado');
   });
 
   // ── (10) — regressao da Etapa 43 ───────────────────────────────────────────────────────────
@@ -328,6 +434,108 @@ async function erroDe(fn) {
       `mensagem: ${res.liberacao.mensagem}`);
     assert.strictEqual(res.status, 'DECIDIDA', `a NC ficou ${res.status} — o documento ficou preso`);
     assert.strictEqual(await bloqueadaDe(f.materialId), 3, 'o bloqueado mudou num material inativo');
+  });
+
+  // ── (14) — RN-11: o pool drenado por fora ──────────────────────────────────────────────────
+  await test('(14) RN-11 alguem desbloqueou a mao antes: a decisao e GRAVADA e diz por que nao liberou', async () => {
+    // ⚠️ Este cenario existe por um achado, e ele inverte o que a etapa fazia.
+    // O workaround que existia ANTES desta etapa era exatamente este: a gestao desbloqueava na mao
+    // pela tela de Movimentacoes. Depois dela, esse gesto INUTILIZAVA o documento — o motor
+    // recusava com "Quantidade bloqueada insuficiente", a liberacao e fatal, e a NC ficava ABERTA
+    // PARA SEMPRE cobrando no alerta. A unica saida era gravar uma decisao FALSA (DEVOLVER) so
+    // para o documento fechar. Mesmo beco que a RN-10 existe para evitar.
+    const f = await novaInspecaoReprovada({ reprovada: 3 });
+    const doc = await ncAutomatica(f.inspecaoId);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = 1 WHERE id = ?', [f.materialId]);
+
+    const res = await decidir(doc.id, 'ACEITAR');
+
+    assert.strictEqual(res.liberacao.efeito, 'SEM_BLOQUEIO', `efeito ${res.liberacao.efeito}`);
+    assert.strictEqual(res.liberacao.mensagem,
+      'O material já havia sido desbloqueado fora do documento — a decisão foi registrada sem liberar saldo',
+      `mensagem: ${res.liberacao.mensagem}`);
+    // A ASSERCAO QUE O CENARIO EXISTE PARA FAZER: o documento FECHA.
+    assert.strictEqual(res.status, 'DECIDIDA', `a NC ficou ${res.status} — o documento ficou preso de novo`);
+    assert.strictEqual(res.decisao, 'ACEITAR', `decisao gravada: ${res.decisao}`);
+    assert.strictEqual(await bloqueadaDe(f.materialId), 1, 'o saldo mudou');
+    assert.strictEqual(await liberacaoDaInspecao(f.inspecaoId), null, 'a inspecao foi carimbada sem liberar');
+  });
+
+  // ── (15) — precedencia RN-04 x RN-05 ───────────────────────────────────────────────────────
+  await test('(15) a precedencia: NC de RECEBIMENTO decidida DEVOLVER e NENHUMA, nao SEM_BLOQUEIO', async () => {
+    // O unico caso que DISCRIMINA a ordem dos dois primeiros niveis de `efeitoPrevisto`. Sem ele,
+    // inverter os blocos (1) e (2) passa em quatro suites — medido pela revisao adversarial — e o
+    // usuario veria "nao tem material bloqueado para liberar" onde o contrato manda "esta decisao
+    // nao altera o saldo".
+    const f = await novaInspecaoReprovada({ reprovada: 3 });
+    await dbRun(db, 'UPDATE recebimentos_material_itens_almoxarifado SET quantidade_recebida = 7 WHERE id = ?', [f.itemId]);
+    const doc = await nc.abrirNaoConformidade(db, ADMIN, {
+      origem: 'RECEBIMENTO', referencia_tipo: 'RECEBIMENTO_ITEM', referencia_id: f.itemId,
+      tipo: 'QUANTIDADE', aberto_automaticamente: 1, descricao: 'faltaram 3',
+    });
+
+    const res = await decidir(doc.id, 'DEVOLVER');
+
+    assert.strictEqual(res.liberacao.efeito, 'NENHUMA', `efeito ${res.liberacao.efeito}`);
+    assert.strictEqual(res.liberacao.mensagem, 'Esta decisão não altera o saldo', `mensagem: ${res.liberacao.mensagem}`);
+  });
+
+  // ── (16) — a copia do motivo no motor nao pode derivar ─────────────────────────────────────
+  await test('(16) o motivo literal copiado em stockService continua igual ao daqui', async () => {
+    // `stockService` guarda uma COPIA de `MOTIVO_LIBERACAO` (require reciproco fecharia ciclo) e a
+    // usa para RECUSAR o estorno da liberacao. Se as duas derivarem, a recusa vira comparacao com
+    // literal morta e o estorno volta a ser aceito — em silencio.
+    const fonte = require('fs').readFileSync(
+      require('path').join(__dirname, '../../services/almoxarifado/stockService.js'), 'utf8');
+    const m = fonte.match(/const MOTIVO_LIBERACAO_NC = '([^']*)'/);
+    assert.ok(m, 'MOTIVO_LIBERACAO_NC sumiu de stockService.js — a recusa de estorno perdeu a regua');
+    assert.strictEqual(m[1], nc.MOTIVO_LIBERACAO,
+      `as duas copias do motivo derivaram: "${m[1]}" vs "${nc.MOTIVO_LIBERACAO}"`);
+  });
+
+  // ── (17) — a barreira estrutural do backfill ───────────────────────────────────────────────
+  await test('(17) o backfill NAO carimba quando a coluna ja existia (ledger perdido nao reabre)', async () => {
+    // Achado da revisao: o ledger era a UNICA barreira. Perdida a linha (restauracao de backup,
+    // limpeza, DELETE distraido), o boot seguinte carimbava as inspecoes RECENTES — e decidir
+    // passava a devolver 200 dizendo "ja havia sido liberado" com o material PRESO. Agora a
+    // barreira e estrutural: `jaExistia = true` significa "esta instalacao ja passou por aqui".
+    const { migrateBackfillLiberacaoNcInspecoesAntigas } = require('../../services/almoxarifado/schema');
+    const f = await novaInspecaoReprovada({ reprovada: 3, bloqueioDeOutraOrigem: 10 });
+    await dbRun(db, 'DELETE FROM schema_migrations_almoxarifado WHERE id = ?',
+      ['backfill_liberacao_nc_inspecoes_antigas']);
+
+    await migrateBackfillLiberacaoNcInspecoesAntigas(db, true);
+
+    assert.strictEqual(await liberacaoDaInspecao(f.inspecaoId), null,
+      'o backfill carimbou uma inspecao NOVA — a barreira estrutural nao existe');
+    // A metade positiva, no mesmo cenario: a inspecao continua liberavel de verdade.
+    const doc = await ncAutomatica(f.inspecaoId);
+    const res = await decidir(doc.id, 'ACEITAR');
+    assert.strictEqual(res.liberacao.efeito, 'LIBERADA', `efeito ${res.liberacao.efeito}`);
+    assert.strictEqual(await bloqueadaDe(f.materialId), 10, 'nao liberou');
+    // E o ledger foi reposto, para a proxima rodada nao reabrir a janela.
+    const led = await dbGet(db, 'SELECT 1 as ok FROM schema_migrations_almoxarifado WHERE id = ?',
+      ['backfill_liberacao_nc_inspecoes_antigas']);
+    assert.ok(led, 'a migracao saiu sem repor a linha do ledger');
+  });
+
+  // ── (18) — a trilha e NAO FATAL ────────────────────────────────────────────────────────────
+  await test('(18) a trilha falhou DEPOIS de tudo: a decisao vale e o chamador nao recebe erro', async () => {
+    // Inversao deliberada: aqui ja aconteceu tudo. Subir o erro faria a QUALIDADE ver um 500
+    // depois de uma operacao que VALEU, tentar de novo e levar 409 — acreditando que nao valeu.
+    const f = await novaInspecaoReprovada({ reprovada: 3, bloqueioDeOutraOrigem: 10 });
+    const doc = await ncAutomatica(f.inspecaoId);
+    await dbRun(db, `CREATE TRIGGER trg_e44_falha_trilha BEFORE INSERT ON auditoria_log_almoxarifado
+      WHEN NEW.acao = 'NC_DECIDIDA'
+      BEGIN SELECT RAISE(ABORT, 'trilha indisponivel'); END`);
+
+    const e = await erroDe(() => decidir(doc.id, 'ACEITAR'));
+    await dbRun(db, 'DROP TRIGGER trg_e44_falha_trilha');
+
+    assert.strictEqual(e, null, `a trilha derrubou a decisao: ${JSON.stringify(e)}`);
+    assert.strictEqual(await bloqueadaDe(f.materialId), 10, 'nao liberou');
+    const depois = await dbGet(db, 'SELECT status FROM nao_conformidades_almoxarifado WHERE id = ?', [doc.id]);
+    assert.strictEqual(depois.status, 'DECIDIDA', `a NC ficou ${depois.status}`);
   });
 
   await close();
