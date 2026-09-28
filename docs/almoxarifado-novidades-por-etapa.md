@@ -1321,6 +1321,13 @@ certificado e a **fila de itens aguardando inspeção** — seguem invisíveis p
 tarefa que destrava isso é dar régua por perfil à central**; é etapa própria, e é a que eu
 recomendo se vocês quiserem a Qualidade recebendo alerta.
 
+> **Atualização da Etapa 43 — agora são CINCO, e o custo mudou de natureza.** Entrou o cartão
+> *"Não conformidade aberta"*, e ele é o primeiro em que a **ação** pertence a quem **não vê** o
+> aviso: quem decide a não conformidade é Administrador e **Qualidade**, e o cartão é visto por
+> Administrador, Almoxarife, Gestor e **Compras** — justamente o perfil tirado da decisão (**B169**).
+> Até aqui a exclusão custava visibilidade; agora custa **cobrança**. O detalhe completo, com os
+> três caminhos possíveis, está no furo **C59**.
+
 **B56 (NOVO, da Etapa 24) — bloquear e desbloquear material avulso ficaram FORA do perfil
 Qualidade, e o item da spec fica pago pela metade de propósito.** A especificação pedia o perfil
 Qualidade com "inspecionar, aprovar/reprovar, **bloquear/liberar sob desvio**". As duas primeiras
@@ -3046,6 +3053,18 @@ o item continua lá. **Consequência a saber:** com a feature ligada, o cartão 
 recebimento"* tende a ficar **vazio** no dia a dia; ver item ali passa a significar *"o automático
 falhou"*, e não *"chegou diferente"*.
 
+**A régua exata, e a exceção que ela cria — acrescentado depois da revisão adversarial, porque não
+estava escrito aqui nem no manual (15b.7).** A exclusão não é *"o item tem não conformidade"*, é
+**`status <> 'CANCELADA'`**: só sai do cartão o item cuja NC está **Aberta** ou **Decidida**. Um
+item cuja única NC foi **cancelada** — o operador corrigiu a quantidade (RN-05), e depois ela
+divergiu de novo — **VOLTA a aparecer** no cartão antigo. **O desvio é deliberado e está justificado
+no código:** a NC cancelada é a divergência que alguém corrigiu e **quebrou de novo**, e tratar o
+documento morto como *"já documentado"* esconderia justamente o **erro novo** — que é o cenário que
+a Etapa 17 pagou para existir. **O que quem apresenta precisa dizer:** item no cartão *"Divergência
+de recebimento"* significa **uma de duas coisas** — *o automático não conseguiu abrir o documento*
+**ou** *a divergência voltou depois de uma correção*. Sem essa segunda leitura, quem vir o item ali
+vai ler como falha do sistema.
+
 **B171 (NOVA, da Etapa 43) — não existe botão "abrir não conformidade" em tela nenhuma.**
 
 **O que foi escolhido:** o documento nasce **só** pelos caminhos automáticos (conferência, dados
@@ -3862,6 +3881,25 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
     teste**, com o porquê ao lado: no dia em que a central passar a filtrar por perfil, o arquivo
     fica vermelho com a explicação junto, em vez de a mudança passar despercebida.
 
+60. **NOVO, da Etapa 43 — corrigir a quantidade e errar DE NOVO no mesmo número abre um documento
+    NOVO, com número novo.** Isso é de propósito, e quem opera precisa saber para não achar que o
+    sistema duplicou: um documento **cancelado** é uma divergência que alguém corrigiu; se ela
+    volta, é erro **novo** e merece registro próprio. O documento antigo continua lá, cancelado,
+    contando o que aconteceu daquela vez.
+
+    **Como a revisão achou isto, vale registrar:** antes do conserto, o sistema fazia o contrário —
+    não abria nada, achando que era "o mesmo fato" —, e ao mesmo tempo **escondia** o item do
+    cartão de divergência porque ele já tinha documento. A falta ficava viva, sem documento e sem
+    aviso. Era o pior estado possível desta feature, e foi encontrado por sonda executada, não por
+    leitura.
+
+61. **NOVO, da Etapa 43 — depois que a nota entra no estoque, reconferir NÃO apaga mais o
+    documento, nem quando o recebimento foi aprovado sem nota fiscal.** Havia dois caminhos que
+    creditam estoque, e a proteção só conhecia um: pelo outro, corrigir a quantidade **apagava** o
+    documento de uma falta que já tinha virado estoque, conta a pagar e pedido fechado — com o
+    motivo automático afirmando uma correção que nunca houve. Agora a proteção olha o carimbo de
+    entrada do **próprio item**, que os dois caminhos escrevem.
+
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -4286,9 +4324,22 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   telas de sempre. Ligar a decisão ao motor de estoque é etapa própria — e fazê-lo errado (inventar
   como uma falta "devolve" material que nunca entrou) seria pior que não fazer.
 
-- **(43) A divergência de INVENTÁRIO continua sem documento numerado.** O campo de origem do
-  documento já a aceita; a conferência de inventário tem fluxo próprio (conferir → ajustar) e ficou
-  fora de propósito. Acrescentá-la depois não exige mudar nada do que já existe.
+- **(43) A divergência de INVENTÁRIO continua sem documento numerado.** A conferência de inventário
+  tem fluxo próprio (conferir → ajustar) e ficou fora desta etapa de propósito.
+
+  ⚠️ **Correção — isto dizia outra coisa, e estava errado.** A frase aqui era *"o campo de origem do
+  documento já a aceita; acrescentá-la depois não exige mudar nada do que já existe"*. **Não é
+  verdade.** A origem é um enum fechado de **dois** valores —
+  `NC_ORIGENS = ['RECEBIMENTO', 'INSPECAO']` — e a tentativa de gravar `INVENTARIO` é recusada com
+  **400 "Origem inválida"**, com teste de API congelando a recusa. Acrescentar o inventário exige,
+  no mínimo: **(1)** pôr `INVENTARIO` no enum do serviço; **(2)** aceitar um `referencia_tipo` novo
+  (hoje só `RECEBIMENTO_ITEM` e `INSPECAO`) apontando para o item da conferência, **e** o par
+  origem → referência correspondente, que é validado junto porque o índice único do banco é sobre os
+  dois; **(3)** escrever o
+  gancho que abre o documento na conclusão da conferência, com a régua de divergência dela; **(4)**
+  acrescentar o rótulo da origem nova à tela de Não Conformidades (e ao filtro de origem); e **(5)**
+  reescrever o teste que hoje **afirma** a recusa, dizendo que ele estava certo até aqui. É trabalho
+  de etapa própria — não é uma linha de configuração.
 
 - **(43) A tela de Recebimento não mostra o número da NC do item.** O vínculo aparece só na tela de
   Não Conformidades, pelo número do recebimento e da nota fiscal. Era promessa do desenho inicial e
@@ -11060,14 +11111,24 @@ módulo passa o tempo todo desfazendo.
 ### As regras, com o cenário exato
 
 **(1) Chegou menos do que a nota diz → o documento nasce sozinho.**
-Recebimento com item de **10 UN**; na conferência (ou no modal de dados fiscais, que é o caminho que
-a tela usa de verdade) registre **8**. Salve. Abra **Almoxarifado → Não Conformidades**: existe uma
+Recebimento com item de **10 UN**; no painel de conferência, no campo **"Qtd. conferida"**, registre
+**8** e clique em **"Salvar Conferência"**. Abra **Almoxarifado → Não Conformidades**: existe uma
 linha nova, estado **Aberta**, origem **Recebimento**, tipo **Quantidade**, com *Esperada 10*,
 *Recebida 8*, *Divergência −2* e o número **NC-…**.
 
-> **Vale para as duas portas, e isso não é detalhe:** tanto a tela de conferência quanto o modal
-> fiscal escrevem quantidade recebida. Se o documento nascesse só numa delas, ele nunca nasceria na
-> prática — porque a tela real passa pela outra.
+> **Vale para as duas portas, e isso não é detalhe:** tanto a conferência quanto o salvamento dos
+> dados fiscais escrevem quantidade recebida no banco, e o documento nasce nas duas. Se ele nascesse
+> só numa delas, metade dos caminhos reais ficaria sem documento.
+>
+> ⚠️ **Correção — este parágrafo dizia outra coisa, e estava errado.** Ele dizia *"no modal de dados
+> fiscais, que é o caminho que a tela usa de verdade"*, repetindo uma premissa que ficou no código
+> desde a Etapa 17. **O modal de dados fiscais não tem campo de quantidade nenhum** — ele pede o
+> cabeçalho da nota e os totais, e **reenvia** a quantidade que já estava gravada. Quem **digita** a
+> quantidade é o campo *"Qtd. conferida"* do painel de conferência, que existe desde a **Etapa 36** e
+> chama `PUT /conferir`. O campo só aparece nos estados *Recebido — Almoxarifado* e *Em Conferência*:
+> quem seguir o roteiro antigo — avançar até o faturamento e depois procurar a quantidade — **não
+> acha o campo**, porque ele já sumiu. A conclusão de enganchar nas duas portas continua certa; o
+> motivo é que as duas são alcançáveis por tela, não que só uma seja.
 
 **(2) Chegou a mais também é divergência.** Registre **12** de 10 (com a autorização de excedente
 que a Etapa 36 criou): o documento nasce igual, com *Divergência +2*.
@@ -11151,8 +11212,11 @@ exatamente isso: a rede de segurança de quando o documento não nasceu.
 4. **Não há botão "abrir não conformidade" nas telas de recebimento e inspeção.** O documento nasce
    **sozinho** pelos dois caminhos automáticos; a abertura manual existe na API, mas sem tela — ver
    a letra **B**.
-5. **A divergência de INVENTÁRIO continua sem documento.** O campo de origem já a aceita; a
-   conferência de inventário tem fluxo próprio e ficou fora de propósito.
+5. **A divergência de INVENTÁRIO continua sem documento.** A conferência de inventário tem fluxo
+   próprio e ficou fora desta etapa de propósito. ⚠️ **Esta linha dizia *"o campo de origem já a
+   aceita"* e estava errada:** a origem é um enum de **dois** valores (`RECEBIMENTO`, `INSPECAO`) e
+   `INVENTARIO` é **recusado com 400 "Origem inválida"**, com teste de API congelando a recusa.
+   O que seria preciso mudar está escrito na letra **D**.
 6. **A tela de Recebimento não mostra o número da NC.** O vínculo aparece na tela de Não
    Conformidades, pelo número do recebimento e da nota.
 
@@ -11176,6 +11240,15 @@ exatamente isso: a rede de segurança de quando o documento não nasceu.
   usa**; derivar a divergência da inspeção **apagaria** uma medição que pega cruzamento de coluna; e
   esconder o item do alerta antigo, do jeito que estava desenhado, **silenciaria** o aviso de *"errou
   de novo, pior"* que a Etapa 17 pagou para existir.
+  **E a revisão final (duas lentes) achou mais 26, 5 críticos, zero alarme falso** — todos
+  corrigidos. Os dois que mais importam: (a) **o silêncio completo** — uma falta decidida, depois
+  corrigida, depois repetida no mesmo número ficava **sem documento e fora de todos os cartões**,
+  porque a guarda de reabertura e o alerta se cancelavam, cada um supondo que o outro cobria; e (b)
+  **o "fato congelado" era forjável pela porta de programação** — dava para gravar o documento
+  apontando para outro material, e mandar um fato pronto **desligava** a validação que devolveria
+  "não encontrado". **Um número vale a leitura:** os seis consertos do coração da feature **não
+  derrubaram nenhum teste** — nenhum daqueles defeitos tinha cobertura, e é por isso que esta base
+  revisa executando sonda, e não só lendo código.
 
 - **Etapa 41 entregue (2026-09-22):** **a cotação ganha itens e vira pedido de compra**
   (`8d81cc5..ffba9b9`, onda de correção da revisão final `a09dfe8..ffba9b9`, seis commits). Quarta

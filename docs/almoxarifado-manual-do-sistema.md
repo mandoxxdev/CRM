@@ -673,7 +673,7 @@ As leituras que essa tabela permite fazer, e que vale explicar a quem pergunta:
 - **Reservar para outra OS** é separado de **Reservar**. Qualquer requisitante reserva material para a própria ordem; transferir uma reserva de uma OS para outra é decisão de priorização, e fica com o Administrador e o Gestor.
 - **Inspecionar** é o que autoriza aprovar, reprovar e liberar material da quarentena, e também mudar a situação de um lote ou de uma série, e liberar vencimento. Pertence ao Administrador, ao Almoxarife e ao **Qualidade**.
 - **Gerenciar plano de inspeção** é o que autoriza cadastrar, editar e desativar as características a medir de um material, com o valor nominal e a tolerância (15.2.1). Pertence ao Administrador, ao **Qualidade** e à **Engenharia** — quem especifica tolerância. **Ler** o plano é liberado a qualquer usuário do módulo, porque quem inspeciona precisa saber o que medir. É permissão **separada de Configurar** de propósito: *Configurar* é só do Administrador, e prendê-la ali deixaria a qualidade sem cadastrar o que ela mesma mede.
-- **O perfil Qualidade decide inspeção e define o plano de inspeção — e nada além disso.** Ele existe justamente para que a área de qualidade não precise pedir ao almoxarifado que decida por ela, nem receber um perfil largo. Além de *Inspecionar*, ele tem **Gerenciar plano de inspeção** (15.2.1), que é o cadastro das características a medir e das tolerâncias — não faria sentido a qualidade não poder cadastrar o que ela mesma vai medir. Consequência que quem for usá-lo precisa saber: **os botões "Bloquear Material" e "Desbloquear Material" da tela de Inspeções não são dele** — eles mexem em saldo e pertencem a **Ajustar estoque** (Administrador e Gestor). Clicando neles, o Qualidade recebe:
+- **O perfil Qualidade tem quatro ações, e todas são da mesma família: decidir qualidade.** Ele existe justamente para que a área de qualidade não precise pedir ao almoxarifado que decida por ela, nem receber um perfil largo. São elas: **Inspecionar** (aprovar, reprovar, liberar da quarentena, mudar situação de lote e de série, liberar vencimento); **Gerenciar plano de inspeção** (15.2.1), o cadastro das características a medir e das tolerâncias — não faria sentido a qualidade não poder cadastrar o que ela mesma vai medir; e as duas da não conformidade, **Registrar não conformidade** e **Decidir não conformidade** (15b), sendo que **decidir** é dele e do Administrador, e de mais ninguém. Fora dessas quatro, ele é leitura. Consequência que quem for usá-lo precisa saber: **os botões "Bloquear Material" e "Desbloquear Material" da tela de Inspeções não são dele** — eles mexem em saldo e pertencem a **Ajustar estoque** (Administrador e Gestor). Clicando neles, o Qualidade recebe:
   > *Sem permissão para ajustar saldo de estoque — seu perfil é Qualidade. Solicite acesso a um administrador.*
 
   Bloquear material por decisão de qualidade continua acontecendo **dentro da inspeção** (reprovar o item recebido), que é o que ele pode.
@@ -681,7 +681,7 @@ As leituras que essa tabela permite fazer, e que vale explicar a quem pergunta:
 - **Conferir separação é separado de Separar / emitir**, mesmo com os mesmos dois perfis hoje: a conferência é a segunda pessoa olhando a caixa (10.3), e a permissão existe à parte para poder ser restringida sem mexer na separação. Ter a permissão não basta: **quem separou não confere**, e isso vale para o Administrador também — a barreira é por pessoa, não por perfil.
 - **As duas aprovações de sucateamento são de balcões diferentes de propósito.** A perna do almoxarifado (Administrador, Almoxarife) e a perna da gestão (Administrador, Gestor) precisam **das duas assinaturas, de pessoas diferentes**, para uma baixa de sucata sair do estoque — e, embora o Administrador tenha as duas permissões, **a mesma pessoa nunca assina as duas pernas** (seção 20).
 
-E duas que a tabela **não** mostra: **Inspecionar** cobre as decisões de qualidade, mas anexar o certificado do fornecedor a um lote pertence a **Receber material** — é o pessoal que recebe a carga que tem o documento em mãos. E **a central de alertas não é filtrada por perfil**: quem tem *Ver a central de alertas* vê o registro inteiro, inclusive os alertas de estoque parado e de estoque excessivo, que trazem o **valor em dinheiro** parado. É por isso que o perfil **Qualidade** não a recebe — os quatro alertas que interessariam a ele (material reprovado, divergência de recebimento, lote sem certificado e fila de itens aguardando inspeção) só ficam acessíveis quando a central souber filtrar por perfil.
+E duas que a tabela **não** mostra: **Inspecionar** cobre as decisões de qualidade, mas anexar o certificado do fornecedor a um lote pertence a **Receber material** — é o pessoal que recebe a carga que tem o documento em mãos. E **a central de alertas não é filtrada por perfil**: quem tem *Ver a central de alertas* vê o registro inteiro, inclusive os alertas de estoque parado e de estoque excessivo, que trazem o **valor em dinheiro** parado. É por isso que o perfil **Qualidade** não a recebe — os **cinco** alertas que interessariam a ele (material reprovado, divergência de recebimento, lote sem certificado, fila de itens aguardando inspeção e **não conformidade aberta**) só ficam acessíveis quando a central souber filtrar por perfil. O quinto entrou na Etapa 43 e muda o tamanho do problema: até ele, a exclusão custava à Qualidade apenas **visibilidade**; agora **a ação pertence justamente a quem não vê o cartão que a cobra** — o cartão *"Não conformidade aberta"* é visto por Administrador, Almoxarife, Gestor e Compras, e quem **decide** é Administrador e Qualidade. Na prática, a Qualidade acompanha as pendências pela tela **Não Conformidades** (15b), que é aberta a qualquer usuário do módulo e tem filtro por estado; o que ela não recebe é o cartão e o e-mail. É o furo **C59** das novidades, onde estão os três caminhos possíveis e o que cada um custa.
 
 ### 5.6 Como se atribui um perfil
 
@@ -2910,8 +2910,8 @@ Ele nasce **sozinho**, em três momentos:
 
 | Momento | O que dispara | Origem e tipo |
 |---|---|---|
-| Conferência de recebimento | quantidade recebida diferente da esperada | Recebimento · Quantidade |
-| Preenchimento dos dados fiscais | o mesmo (é o caminho que a tela usa na prática) | Recebimento · Quantidade |
+| Conferência de recebimento | o campo **"Qtd. conferida"** salvo com quantidade diferente da esperada — é aqui que alguém **digita** o número (14.2b) | Recebimento · Quantidade |
+| Preenchimento dos dados fiscais | o mesmo fato, pela segunda porta: o modal da NF **não tem campo de quantidade**, mas **reenvia** ao servidor a quantidade já gravada | Recebimento · Quantidade |
 | Decisão de inspeção | quantidade reprovada maior que zero | Inspeção · o tipo mais específico |
 
 **"Diferente" tem régua**, e é a mesma do resto do módulo: a diferença precisa ser maior que
@@ -2951,7 +2951,7 @@ virou estoque e dinheiro, não.
 ### 15b.4 Decidir
 
 A decisão é o que dá sentido ao documento. Na linha **Aberta**, o botão de decidir abre um
-formulário com duas escolhas:
+formulário com **seis** escolhas — e a **justificativa**:
 
 | Decisão | Significa |
 |---|---|
@@ -2964,7 +2964,13 @@ formulário com duas escolhas:
 
 **A justificativa é obrigatória.** Sem ela o sistema recusa com *"Justificativa é obrigatória para
 decidir a não conformidade"* — é o único registro de **por quê**, que é a razão de o documento
-existir. Decidir grava também **quem** decidiu e **quando**.
+existir. Decidir grava também **quem** decidiu e **quando**. A **decisão** é conferida **antes** da
+justificativa: confirmar o formulário em branco mostra primeiro *"Escolha a decisão"*.
+
+Depois de gravada a decisão, a tela **larga o filtro de status** e volta a mostrar *Todos os
+status*, para que a linha recém-decidida **continue à vista** com a decisão e o nome de quem
+decidiu — com o filtro preso em *Abertas* ela sumiria no mesmo instante em que fosse decidida. O
+filtro de **origem**, se estiver escolhido, permanece.
 
 Um documento só é decidido **uma vez**. Se alguém decidiu no intervalo, a segunda tentativa recebe
 *"Esta não conformidade já foi encerrada"*.
@@ -3011,6 +3017,16 @@ Com isso, o cartão *"Divergência de recebimento"* passou a significar outra co
 diferente e o documento não foi aberto"**. Ele é a rede de segurança para o caso raro de a abertura
 automática falhar — e é por isso que a falha da abertura **não derruba** a conferência nem a decisão
 de inspeção: o material entra, e o item continua visível no cartão antigo até alguém cuidar dele.
+
+**Há uma segunda leitura, e ela é deliberada.** A régua não é *"o item tem documento"*, é *"o item
+tem documento que **não** está cancelado"*. Então o item cuja única não conformidade foi
+**cancelada** — porque alguém corrigiu a quantidade (15b.3) e depois ela divergiu de novo —
+**volta a aparecer** no cartão antigo. É o que se quer: o documento cancelado registra um problema
+que **deixou de existir**, e tratá-lo como "já documentado" esconderia o problema **novo**.
+
+Resumindo o que quem olha o cartão precisa saber: **item em *"Divergência de recebimento"* significa
+ou que o documento não pôde ser aberto, ou que a divergência voltou depois de uma correção.** Nos
+dois casos a tela para conferir é **Não Conformidades**, filtrando por *Todos os status*.
 
 ### 15b.8 Anexos
 

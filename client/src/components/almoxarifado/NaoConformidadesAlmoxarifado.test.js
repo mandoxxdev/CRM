@@ -115,6 +115,8 @@ const chamadasLista = () => api.get.mock.calls.filter(([u]) => u === '/almoxarif
 
 const filtroStatus = () => container.querySelector('select[aria-label="Filtrar por status"]');
 
+const filtroOrigem = () => container.querySelector('select[aria-label="Filtrar por origem"]');
+
 const botaoDecidir = (linha) => [...linha.querySelectorAll('.almox-btn-icon')]
   .find((b) => b.getAttribute('title')?.includes('Decidir'));
 
@@ -199,6 +201,29 @@ describe('NaoConformidadesAlmoxarifado — lista e filtro', () => {
     await renderizar();
     expect(container.querySelector('.almox-empty')).not.toBeNull();
     expect(container.querySelector('[data-testid="nc-erro-carga"]')).toBeNull();
+  });
+
+  // Achado 12 da revisão adversarial: o serviço sempre aceitou `origem` e a tela NUNCA a enviava
+  // — o roteiro de teste manual mandava "filtre por origem Inspeção" e não havia onde clicar. O
+  // filtro existe agora, e este cenário é o que impede que ele vire decoração: o que importa não
+  // é o `<select>` estar na tela, é o parâmetro SAIR na query.
+  test('(15) o filtro de origem manda `origem` na query, e "Todas" volta a não mandar nada', async () => {
+    await renderizar();
+    // Positiva: o filtro existe e oferece as duas origens do enum do servidor.
+    expect([...filtroOrigem().querySelectorAll('option')].map((o) => o.value))
+      .toEqual(['', 'RECEBIMENTO', 'INSPECAO']);
+    expect(chamadasLista()).toHaveLength(1);
+
+    preencher(filtroOrigem(), 'INSPECAO');
+    await act(async () => {});
+    expect(chamadasLista()).toHaveLength(2);
+    // O status escolhido continua junto: os dois filtros somam, não se substituem.
+    expect(chamadasLista()[1][1].params).toEqual({ limite: 200, status: 'ABERTA', origem: 'INSPECAO' });
+
+    preencher(filtroOrigem(), '');
+    await act(async () => {});
+    expect(chamadasLista()).toHaveLength(3);
+    expect(chamadasLista()[2][1].params).toEqual({ limite: 200, status: 'ABERTA' });
   });
 });
 
@@ -290,6 +315,73 @@ describe('NaoConformidadesAlmoxarifado — modal de decisão', () => {
     expect(toast.error).toHaveBeenCalledWith('Esta não conformidade já foi encerrada');
     expect(container.querySelector('.almox-modal')).not.toBeNull();
   });
+
+  // A tradução de 403 de PERFIL mora AQUI, e não na carga da lista: o `requirePermission(
+  // 'decidir_nao_conformidade')` está só no POST (`extended.js:1097`), e é dele que sai o corpo
+  // com `acao` e `perfil` (`permissions.js:229`). É o 403 que ALMOXARIFE e COMPRAS recebem — os
+  // dois abrem a tela e o documento, e não decidem (D8).
+  test('(16) 403 de perfil no POST vira a frase traduzida, com a ação e o perfil por extenso', async () => {
+    await abrirModalDaAberta();
+    api.post.mockRejectedValueOnce({
+      response: {
+        status: 403,
+        data: { error: 'Sem permissão para esta operação', acao: 'decidir_nao_conformidade', perfil: 'COMPRAS' },
+      },
+    });
+    preencher(campoPorLabel('Decisão'), 'DEVOLVER');
+    preencher(campoPorLabel('Justificativa'), 'material fora de especificacao');
+    await clicarBotaoModal('Registrar decisão');
+    expect(toast.error).toHaveBeenCalledWith(
+      'Sem permissão para decidir não conformidade — seu perfil é Compras. Solicite acesso a um administrador.',
+    );
+    // O modal fica aberto: a recusa é de perfil, não do que foi digitado.
+    expect(container.querySelector('.almox-modal')).not.toBeNull();
+  });
+
+  // Achado 11 da revisão adversarial: com o filtro em "Abertas" (o padrão), a NC recém decidida
+  // deixava de casar o filtro e a linha SUMIA junto com o toast — a pessoa decidia e a tabela
+  // ficava vazia. Num documento cujo valor é justamente FICAR, isso é o pior desfecho possível.
+  test('(17) decidir com o filtro em "Abertas" NÃO esconde a linha — a recarga larga o status', async () => {
+    // O mock passa a respeitar o filtro, como o serviço faz. Sem isto o cenário provaria NADA:
+    // a lista voltaria igual com ou sem `status` na query, e a sabotagem ficaria verde.
+    api.get.mockImplementation((url, config) => {
+      if (url === '/almoxarifado/nao-conformidades') {
+        const status = config?.params?.status;
+        const itens = status ? ncDoBanco.filter((nc) => nc.status === status) : ncDoBanco;
+        return Promise.resolve({ data: { itens } });
+      }
+      if (url === '/almoxarifado/anexos') return Promise.resolve({ data: [] });
+      return Promise.resolve({ data: [] });
+    });
+    await renderizar();
+    // Ponto de partida: o filtro padrão é "Abertas" e só a NC 7 casa.
+    expect(chamadasLista()[0][1].params).toEqual({ limite: 200, status: 'ABERTA' });
+    expect(linhas()).toHaveLength(1);
+    expect(linhas()[0].textContent).toContain('NC-2026-0007');
+
+    await clicar(botaoDecidir(linhas()[0]));
+    preencher(campoPorLabel('Decisão'), 'ACEITAR');
+    preencher(campoPorLabel('Justificativa'), 'falta de 8 pecas aceita');
+    // O servidor gravou: a NC 7 não é mais ABERTA.
+    ncDoBanco = ncDoBanco.map((nc) => (nc.id === 7 ? {
+      ...nc, status: 'DECIDIDA', decisao: 'ACEITAR',
+      justificativa: 'falta de 8 pecas aceita',
+      decidido_por_nome: 'Ana Souza', decidido_em: '2026-09-28 09:00:00',
+    } : nc));
+    await clicarBotaoModal('Registrar decisão');
+    await act(async () => {});
+
+    expect(api.post).toHaveBeenCalled();
+    // A metade positiva, e é ela que carrega o cenário: a recarga saiu SEM `status`.
+    const ultima = chamadasLista()[chamadasLista().length - 1][1].params;
+    expect(ultima).toEqual({ limite: 200 });
+    expect(filtroStatus().value).toBe('');
+    // E o desfecho que o usuário vê: a linha decidida continua na tela, com a decisão gravada.
+    expect(linhas().length).toBeGreaterThanOrEqual(1);
+    expect(container.textContent).toContain('NC-2026-0007');
+    expect(container.textContent).toContain('Aceitar');
+    expect(container.querySelector('.almox-empty')).toBeNull();
+  });
 });
 
 describe('NaoConformidadesAlmoxarifado — falha de carga', () => {
@@ -315,19 +407,28 @@ describe('NaoConformidadesAlmoxarifado — falha de carga', () => {
     expect(container.textContent).toContain('Banco indisponivel');
   });
 
-  test('(13) 403 de perfil vira a frase traduzida, não "nenhuma não conformidade"', async () => {
+  // ⚠️ Este cenário media um 403 que NÃO EXISTE nesta rota (achado 5 da revisão adversarial):
+  // injetava `{ acao, perfil }` na carga da LISTA. Mas `GET /api/almoxarifado/nao-conformidades`
+  // (`routes/almoxarifado/extended.js:1073`) é só `auth` — não tem `requirePermission`. O único
+  // 403 alcançável ali é o de MÓDULO, do `app.use('/api/almoxarifado', ...)`
+  // (`routes/almoxarifado.js:282-285` → `index.js:2933`), cujo corpo é
+  // `{ error: 'Acesso negado ao módulo', modulo: 'almoxarifado' }` — sem `acao` e sem `perfil`.
+  // A tradução de 403 de PERFIL continua testada, no lugar onde ela de fato acontece: o POST de
+  // decidir, cenário (15).
+  test('(13) 403 de MÓDULO na carga vira o painel de erro, não "nenhuma não conformidade"', async () => {
     falharCarga = {
-      response: {
-        status: 403,
-        data: { error: 'Sem permissão para esta operação', acao: 'decidir_nao_conformidade', perfil: 'PRODUCAO' },
-      },
+      response: { status: 403, data: { error: 'Acesso negado ao módulo', modulo: 'almoxarifado' } },
     };
     await renderizar();
     const painel = container.querySelector('[data-testid="nc-erro-carga"]');
     expect(painel).not.toBeNull();
-    expect(painel.textContent).toContain('decidir não conformidade');
-    expect(painel.textContent).toContain('Produção');
+    // `formatarErroPermissao` devolve null sem `acao`/`perfil`, então o que aparece é o `error`
+    // literal do servidor — e NÃO a frase de perfil, que aqui seria invenção da tela.
+    expect(painel.textContent).toContain('Acesso negado ao módulo');
+    expect(painel.textContent).not.toContain('seu perfil é');
+    // E a negativa que é a razão do cenário: nada de "não há não conformidade".
     expect(container.querySelector('.almox-empty')).toBeNull();
+    expect(linhas()).toHaveLength(0);
   });
 });
 

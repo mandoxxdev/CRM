@@ -4848,43 +4848,80 @@ recebeu quando passou a sair da medição.
 | "Divergência de quantidade" era caixa marcada à mão | Caixa **travada**, preenchida pela conta do sistema |
 | Nada cobrava decisão | Alerta **"Não conformidade aberta"** para documento parado mais de 7 dias |
 | Corrigir digitação deixava o aviso velho de pé | Documento **cancelado sozinho**, com o motivo escrito |
-| — | Menu **Almoxarifado → Não Conformidades**, com filtro, decisão e anexos |
+| **Almoxarifado → Alertas**: 13 cartões | **14**: o novo é **"Não conformidade aberta"**, com as colunas **NC · Material · Tipo · Origem · Dias parada · Recebimento** |
+| — | Menu **Almoxarifado → Não Conformidades**, com filtro de **status**, filtro de **origem**, decisão e anexos |
 
 ### Roteiro de teste manual (do login à verificação)
 
 > Entre como **Administrador** para os passos 1 a 10; os passos 11 e 12 pedem outros perfis.
 
 1. **Login** e vá em **Almoxarifado → Recebimentos**.
-2. Crie um recebimento novo com um material e **quantidade esperada 10**. Siga o fluxo até o ponto
-   em que os **dados fiscais** podem ser preenchidos.
-3. No modal de dados fiscais, registre **quantidade recebida 7** no item. **Salve.**
-4. Vá em **Almoxarifado → Não Conformidades** (item novo no menu). **Deve haver uma linha nova**:
-   número `NC-…`, estado **Aberta**, origem **Recebimento**, tipo **Quantidade**, *Esperada 10*,
-   *Recebida 7*, *Divergência −3*.
-5. Volte ao recebimento e mude a quantidade recebida para **6**. Salve. Volte à tela de Não
+2. Clique em **"Novo Recebimento"**, escolha um material e ponha **quantidade esperada 10**. Salve.
+   O painel de detalhe **abre sozinho** e o recebimento fica em **"Recebido — Almoxarifado"**.
+   ⚠️ **Não avance o fluxo aqui** — é neste estado que existe o campo de quantidade.
+3. No painel de detalhe, embaixo do nome do material, há o campo **"Qtd. conferida"**. Digite **7** e
+   clique em **"Salvar Conferência"** (o botão de cima da coluna de ações): aparece
+   **"Conferência salva"**.
+
+   > **Onde esse campo vive, e por que só ali.** Ele aparece **nos dois estados em que o material
+   > ainda está com o almoxarifado** — *"Recebido — Almoxarifado"* e *"Em Conferência"* — e **some**
+   > assim que o recebimento passa para *"Conferido — Almoxarifado"*: dali em diante a quantidade já
+   > virou base de custo médio e de conta a pagar, e corrigi-la pela tela seria mexer no passado sem
+   > trilha. **O modal "Preencher Dados da NF (Faturamento)" NÃO tem campo de quantidade** — ele só
+   > pede o cabeçalho da nota (número, série, datas, CFOP, chave, CNPJ, pedido) e os totais fiscais.
+   > Ele **reenvia** ao servidor a quantidade que já estava gravada, e por isso também abre/atualiza
+   > a não conformidade; mas quem **digita** o número é o painel de conferência, aqui.
+
+4. Vá em **Almoxarifado → Não Conformidades** (item novo no menu). O filtro nasce em **"Abertas"**, e
+   **deve haver uma linha nova**: número `NC-…`, estado **Aberta**, origem **Recebimento**, tipo
+   **Quantidade**, *Esperada 10*, *Recebida 7*, *Divergência −3*.
+5. Volte a **Recebimentos**, clique na linha do recebimento para reabrir o painel, mude a
+   **"Qtd. conferida"** para **6** e clique de novo em **"Salvar Conferência"**. Volte à tela de Não
    Conformidades: **continua UMA linha**, agora com *Recebida 6* e *Divergência −4*. (Conferir de
    novo **não** cria documento repetido.)
-6. Mude a quantidade de volta para **10** e salve. Na tela de Não Conformidades, troque o filtro para
-   **Canceladas**: a linha está lá, e em *Motivo do cancelamento* aparece
-   **"Divergência corrigida na reconferência: recebida 10 de 10 esperada"**.
-7. Repita o passo 3 (registre **7** de novo) para ter uma NC **Aberta** para decidir.
-8. Na linha *Aberta*, clique no botão de **decidir**. **Deixe a justificativa vazia** e confirme:
-   aparece **"Justificativa é obrigatória para decidir a não conformidade"** e nada é salvo.
-9. Escolha **Aceitar sob desvio**, escreva a justificativa e confirme: aparece **"Não conformidade
-   NC-… decidida!"**, a linha vira **Decidida** e mostra seu nome e a data.
-10. Clique no botão de **detalhes** da linha decidida: aparecem a justificativa e o bloco de
-    **anexos** — anexe um PDF qualquer (o laudo, na vida real) e confira que ele baixa.
-11. **Troque para um usuário de perfil Compras.** Abra Não Conformidades e tente decidir: o sistema
-    recusa com **"Sem permissão para decidir não conformidade — seu perfil é Compras. Solicite
-    acesso a um administrador."**
-12. **Troque para um usuário de perfil Qualidade** e decida: **funciona**. (Abrir pode Administrador,
-    Almoxarife, Qualidade e Compras; **decidir**, só Administrador e Qualidade.)
+6. Mude a quantidade de volta para **10** e salve. Na tela de Não Conformidades, troque o filtro de
+   status para **Canceladas**: a linha está lá e a coluna *Decisão* mostra **"Cancelada em ⟨data⟩"**.
+   **O motivo NÃO fica na linha** — clique no **chevron** da linha (botão *"Detalhes e anexos"*) e,
+   no painel que se abre, aparece **"Motivo do cancelamento: Divergência corrigida na reconferência:
+   recebida 10 de 10 esperada"**.
+7. Volte ao recebimento e registre **7** de novo (mesmo gesto do passo 3). Em Não Conformidades,
+   ponha o filtro de status de volta em **Abertas**: há uma NC aberta com número **novo**. O
+   documento cancelado **não reabre** — depois de uma correção, errar de novo é problema **novo**.
+8. Na linha *Aberta*, clique no botão de **decidir** (o ícone de check). **Confirme com tudo em
+   branco**: aparece **"Escolha a decisão"** — a decisão é conferida **antes** da justificativa.
+   Agora escolha **Aceitar sob desvio**, **deixe a justificativa vazia** e confirme de novo: aparece
+   **"Justificativa é obrigatória para decidir a não conformidade"**. Nas duas tentativas **nada é
+   salvo** e o formulário continua aberto para corrigir.
+9. Escreva a justificativa e confirme: aparece **"Não conformidade NC-… decidida!"**, a linha vira
+   **Decidida** e mostra seu nome e a data.
+
+   > **Repare no filtro de status:** ele volta sozinho para **"Todos os status"**, e a linha que você
+   > acabou de decidir **continua na tela**. É de propósito: com o filtro preso em *Abertas*, a NC
+   > recém-decidida deixaria de casar o filtro e **sumiria junto com o toast** — quem decide quer ver
+   > a decisão gravada, com o próprio nome. O filtro de **origem**, se você tiver escolhido um,
+   > **continua onde estava** (ele não esconde o que você acabou de fazer).
+
+10. Clique no **chevron** (*"Detalhes e anexos"*) da linha decidida: aparecem a **justificativa da
+    decisão** e o bloco de **anexos** — anexe um PDF qualquer (o laudo, na vida real) e confira que
+    ele baixa.
+11. **Troque para um usuário de perfil Compras.** Abra Não Conformidades — **a tela abre e a lista
+    aparece** — e tente decidir: o sistema recusa com **"Sem permissão para decidir não conformidade
+    — seu perfil é Compras. Solicite acesso a um administrador."**
+12. **Troque para um usuário de perfil Qualidade** e decida: **funciona**.
+
+    > **Quem pode o quê, sem ambiguidade:** **ver** a tela e os documentos é de **qualquer usuário
+    > com acesso ao módulo** — inclusive **Produção** e **Consulta**, porque as duas rotas de leitura
+    > exigem só login e acesso ao módulo, sem perfil. **Abrir** um documento (hoje só pela API, sem
+    > botão) é de Administrador, Almoxarife, Qualidade e Compras. **Decidir** é só de Administrador e
+    > Qualidade.
 13. **O lado da inspeção.** Volte como Administrador, vá em **Almoxarifado → Inspeções**, escolha um
     item retido e abra a decisão. Repare que a caixa **"Divergência de quantidade"** está
     **travada** — marcada ou não conforme a conta, e não conforme a sua vontade.
 14. Reprove parte do item, marcando **Dano físico** e **Certificado ausente**. Salve.
-15. Em **Não Conformidades**, filtre por origem **Inspeção**: há **uma** linha nova, tipo **Dano
-    físico** (a causa mais específica vence; as duas marcações ficam descritas no documento).
+15. Em **Não Conformidades**, use o **segundo filtro** da barra — o que começa em *"Todas as
+    origens"* — e escolha **Inspeção**: há **uma** linha nova, tipo **Dano físico** (a causa mais
+    específica vence; as duas marcações ficam descritas no documento). Os dois filtros **somam**:
+    com *Abertas* + *Inspeção*, a lista mostra só o que a qualidade abriu e ainda não decidiu.
 16. **O alerta — e por que ele não aparece no mesmo dia.** Um documento aberto só começa a cobrar
     depois de **7 dias parados**. O número é editável em **Almoxarifado → Configurações →
     "Alerta de Não Conformidade Parada (dias)"**, mas o menor valor aceito é **1** (pôr 0 é recusado
@@ -4896,7 +4933,12 @@ recebeu quando passou a sair da medição.
 17. **A rede de segurança.** Ainda na tela de Alertas, repare que o item que virou documento **não**
     aparece mais no cartão *"Divergência de recebimento"*. Isso é de propósito: o mesmo problema em
     dois cartões ensina qualquer um a ignorar os dois. O cartão antigo passou a significar *"o
-    automático não conseguiu abrir o documento"*.
+    automático não conseguiu abrir o documento"* — **com uma exceção, e ela é deliberada**: a régua
+    da exclusão é *"tem não conformidade que **não** está cancelada"*. Um item cuja única NC foi
+    **cancelada** (o caso do passo 6: alguém corrigiu, e depois errou de novo) **volta a aparecer**
+    no cartão antigo. É o que se quer — tratar o documento morto como *"já documentado"* esconderia
+    justamente o **erro novo**. Ver item ali significa, então, uma de duas coisas: *o automático
+    falhou* **ou** *a divergência voltou depois de uma correção*.
 
 ### O que esta etapa NÃO cobre
 
@@ -4908,7 +4950,11 @@ recebeu quando passou a sair da medição.
   só pelos caminhos automáticos. Registrar um certificado ausente **sem** reprovar na inspeção não
   tem caminho de tela hoje (**B171**).
 - **Não conformidade aberta não trava o processamento da nota** (**B172**).
-- **A divergência de inventário continua sem documento numerado.**
+- **A divergência de inventário continua sem documento numerado** — e **não** é só um campo a
+  preencher: a origem do documento é um enum de **dois** valores (*Recebimento* e *Inspeção*), e
+  `INVENTARIO` é recusado com **"Origem inválida"**. O que seria preciso mudar está escrito na letra
+  **D** das novidades — que até a revisão desta etapa afirmava o contrário ("o campo de origem já a
+  aceita"), e foi corrigida.
 - **A tela de Recebimento não mostra o número da NC do item.**
 - **Divergências antigas, anteriores a esta etapa, não ganham documento sozinhas** — a consulta
   **A21** das novidades lista quais são e o que fazer com elas.

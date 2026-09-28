@@ -475,6 +475,75 @@ frase para o plano da 43 eu a li como se um gancho na conferência bastasse, e o
 **a UI nunca chama `/conferir`**. A lição não é sobre a 42: é que "já existe gancho nos dois
 escritores" é uma frase sobre o alerta, não uma licença para enganchar num lugar só.
 
+## Fase 5 — a revisão adversarial, e a rodada de correção que ela produziu
+
+**Duas lentes frescas, em paralelo: 26 achados reais, 5 CRITICAL, ZERO ruído.** Todos com
+arquivo:linha e **reproduzidos por sonda executada** antes de virarem correção.
+
+### Os seis do núcleo (lente "correção da RN e composição")
+
+1. **CRITICAL — o silêncio completo.** Confere 8 de 10 → NC abre → QUALIDADE decide → operador
+   corrige para 10 → volta a faltar 2. **Nenhuma NC nova nascia** (a RN-10 comparava com o
+   documento encerrado e via "mesmo fato"), o item **saía** do cartão `DIVERGENCIA_RECEBIMENTO`
+   (o D6 exclui quem tem NC não cancelada) e o e-mail era engolido pelo dedupe. Falta real, viva,
+   **sem documento e sem cartão nenhum** — o D6 e a RN-10 se cancelando, cada um supondo que o
+   outro cobria o caso. **Conserto:** `getUltimaEncerrada` deixa de considerar `CANCELADA` (a
+   divergência corrigida que volta é fato NOVO — e o comentário do D6 em `alertRegistry.js:149-151`
+   já dizia isso por escrito, enquanto esta função fazia o contrário), e nasce a coluna
+   `fato_superado_em`, carimbada quando o item passa por um estado sem divergência depois de o
+   documento encerrar.
+2. **CRITICAL — a RN-11 guardava o status errado.** `aprovarRecebimento` (ramo sem nota fiscal)
+   **credita estoque e fecha o pedido** deixando o documento em `APROVADO`, não `PROCESSADO`. Por
+   ele, a NC de uma falta que já virou estoque e dinheiro era **cancelada**, com o motivo
+   automático afirmando uma correção que nunca houve. **Conserto:** a guarda passa a olhar
+   `item.entrada_estoque_em`, o carimbo do **claim** que os dois caminhos escrevem — por item, não
+   por documento; o status fica como cinto de segurança.
+3. **IMPORTANT — a RN-10 tratava `CANCELADA` como "mesmo fato"** (a outra metade do achado 1).
+4. **IMPORTANT — `origem` e `referencia_tipo` validados separadamente**: o par cruzado passava por
+   baixo do índice único e abria uma **segunda** NC ABERTA do mesmo item+tipo; e como `getAbertaDe`
+   não filtra por origem, o gancho só achava a primeira e a outra ficava **ABERTA para sempre**,
+   alimentando o alerta novo todo dia. **Conserto:** `REFERENCIA_DA_ORIGEM`.
+5. **IMPORTANT — o gancho não herdava o escopo do `UPDATE`.** Conferir o recebimento A citando o
+   id de um item de B **abria** documento para B (com autor e ato errados) e, se B não estivesse
+   divergente, **CANCELAVA** a NC de B — destruindo documento por um gesto que o próprio `UPDATE`,
+   protegido por `WHERE id = ? AND recebimento_id = ?`, já tinha ignorado.
+6. **IMPORTANT — o gancho apagava documento humano.** A RN-05 foi desenhada para matar NC
+   automática fantasma; ela cancelava também a NC aberta **à mão**, com um motivo automático
+   afirmando uma correção que nunca houve. **Conserto:** só cancela o que `aberto_automaticamente`.
+
+### O da outra lente que pesa igual
+
+7. **O "fato congelado" era FORJÁVEL pela porta HTTP.** A rota entregava `req.body` cru e o serviço
+   honrava `dados.fato` e `dados.aberto_automaticamente`: um ALMOXARIFE gravava documento apontando
+   para **outro material**, com números que contradiziam o item; e mandar `fato` junto de um
+   `referencia_id` inexistente devolvia **201 no lugar do 404**, porque o fato pronto **desliga** a
+   única validação de existência. Era a feature ao contrário — o documento existe para ser
+   confiável. **Conserto:** `abrirNaoConformidadeManual`, lista branca de quatro campos.
+
+### O que a segunda lente achou fora do código
+
+- **Cinco buracos de teste**, cada um provado por sabotagem que **não derrubava nada**: `nota_fiscal`
+  fora da projeção; NC **CANCELADA** voltando a cobrar no alerta (o caminho **mais comum**, o da
+  RN-05); a ordenação da listagem; `referencia_tipo` fora da chave de `getAbertaDe`; e um cenário
+  de client que media um **403 que aquela rota não consegue emitir**.
+- **Treze achados de documentação**, três deles CRITICAL — e os três no **roteiro de teste manual**,
+  que é o artefato com que o André apresenta ao vivo: o passo 3 mandava digitar a quantidade num
+  modal **que não tem o campo**; os passos 9-10 pediam para clicar numa linha que **sumia da tela**
+  ao ser decidida; e o passo 15 mandava usar um filtro de origem **que não existia**.
+- **Dois consertos de TELA** saíram daí, e são melhoria de verdade: o filtro de origem passou a
+  existir (o serviço sempre o aceitou) e decidir deixou de esconder a linha recém-decidida.
+- **Uma premissa falsa propagada em três arquivos** — *"a UI de produção nunca chama `/conferir`"*.
+  Quem digita a quantidade é o painel de conferência, desde a Etapa 36; o modal fiscal **não tem
+  campo de quantidade** e só reenvia. A conclusão (enganchar nos dois escritores) continua certa,
+  pelo motivo certo. Corrigida à vista nos três.
+
+### A parte que mais importa desta fase
+
+**Os seis consertos do núcleo não derrubaram um único teste** — a suíte seguiu em 204/204 depois
+deles. Nenhum dos seis defeitos tinha cobertura, o que é a medida exata do valor da revisão por
+execução: a suíte verde não era evidência de nada ali. A rodada de regressão fechou os dez buracos,
+cada um com **controle positivo que nomeia a asserção derrubada**.
+
 ## Retro de 4 números — Etapa 43
 
 1. **Rodadas de correção até verde:** **zero** no sentido clássico — nenhuma task precisou de uma
@@ -483,9 +552,14 @@ escritores" é uma frase sobre o alerta, não uma licença para enganchar num lu
    de código. Dois deles (o gancho na porta errada e a exclusão na função compartilhada) teriam
    virado, no mínimo, uma rodada de correção cada — e o terceiro (a medição apagada do padrão
    `1/0/0`) não viraria rodada nenhuma, porque **ninguém teria notado**.
-2. **Achados da revisão: 20 reais, 0 ruído.** Todos com arquivo:linha e cenário. A taxa de zero
+2. **Achados das revisões: 46 reais, 0 ruído** — **20** na Fase 2 (plano, antes de codar) e **26**
+   na Fase 5 (duas lentes, código pronto), com **9 bloqueantes/CRITICAL** somados. A taxa de zero
    ruído se repete pela terceira etapa seguida, e o que a explica é a instrução de exigir cenário
-   concreto de falha em vez de opinião.
+   concreto de falha **reproduzido** em vez de opinião.
+   **O número que ensina mais, porém, é outro: os seis consertos do núcleo NÃO derrubaram um único
+   teste** — a suíte seguiu 204/204 depois deles. Nenhum dos seis defeitos tinha cobertura. É a
+   medida exata de por que a revisão por execução existe nesta base: ali, a suíte verde não era
+   evidência de nada.
 3. **Paralelismo:** 4 galhos em worktrees isoladas, em **dois** lotes de dois (T3+T5, depois T4
    sozinho com T6 na sequência). **Nenhum retrabalho por conflito**, e nenhum agente perdido. O
    que evitou o retrabalho foi congelar **por escrito** os dois aditivos de contrato que a T5

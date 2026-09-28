@@ -68,6 +68,12 @@ const STATUS_FILTROS = [
   { valor: 'CANCELADA', rotulo: 'Canceladas' },
 ];
 
+const ORIGEM_FILTROS = [
+  { valor: '', rotulo: 'Todas as origens' },
+  { valor: 'RECEBIMENTO', rotulo: 'Recebimento' },
+  { valor: 'INSPECAO', rotulo: 'Inspeção' },
+];
+
 // Os seis do enum `NC_DECISOES` (nonConformityService.js:45). Os três do meio são os
 // `ENCAMINHAMENTOS` que a inspeção já usa — reusados, não reinventados.
 const DECISOES = [
@@ -154,6 +160,7 @@ const NaoConformidadesAlmoxarifado = () => {
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState(null);
   const [statusFiltro, setStatusFiltro] = useState('ABERTA');
+  const [origemFiltro, setOrigemFiltro] = useState('');
   const [recarga, setRecarga] = useState(0);
   const [expandida, setExpandida] = useState(null);
 
@@ -168,6 +175,7 @@ const NaoConformidadesAlmoxarifado = () => {
       // Regra 1: `limite`, nunca `limit`.
       const params = { limite: LIMITE_LISTA };
       if (statusFiltro) params.status = statusFiltro;
+      if (origemFiltro) params.origem = origemFiltro;
       const res = await api.get(ROTA, { params });
       setItens(res.data?.itens || []);
     } catch (err) {
@@ -185,7 +193,7 @@ const NaoConformidadesAlmoxarifado = () => {
     } finally {
       setLoading(false);
     }
-  }, [statusFiltro]);
+  }, [statusFiltro, origemFiltro]);
 
   useEffect(() => { carregar(); }, [carregar, recarga]);
 
@@ -215,6 +223,13 @@ const NaoConformidadesAlmoxarifado = () => {
       });
       toast.success(`Não conformidade ${decisaoTarget.numero} decidida!`);
       setDecisaoTarget(null);
+      // ⚠️ Achado 11 da revisão adversarial: com o filtro em "Abertas" (o padrão), a NC recém
+      // decidida deixa de casar o filtro e a linha SOME junto com o toast — a pessoa decide e a
+      // tabela fica vazia, sem nada dizendo que deu certo. Pior num documento cujo valor é
+      // justamente ficar: quem acabou de decidir quer VER a decisão gravada, com o próprio nome.
+      // Então a tela larga o filtro de status e mostra tudo; o de origem continua onde estava,
+      // porque ele não esconde o que você acabou de fazer.
+      if (statusFiltro === 'ABERTA') setStatusFiltro('');
       setRecarga((n) => n + 1);
     } catch (err) {
       toast.error(
@@ -255,6 +270,20 @@ const NaoConformidadesAlmoxarifado = () => {
           onChange={(e) => { setExpandida(null); setStatusFiltro(e.target.value); }}
         >
           {STATUS_FILTROS.map((s) => <option key={s.valor || 'todos'} value={s.valor}>{s.rotulo}</option>)}
+        </select>
+        {/*
+          O filtro de ORIGEM existe porque o serviço sempre aceitou `origem` e a tela nunca o
+          enviava — achado 12 da revisão adversarial: o roteiro de teste manual mandava "filtre
+          por origem Inspeção" e não havia onde. Separar o que veio do recebimento do que veio da
+          qualidade é a primeira coisa que quem opera pergunta.
+        */}
+        <select
+          className="almox-select"
+          aria-label="Filtrar por origem"
+          value={origemFiltro}
+          onChange={(e) => { setExpandida(null); setOrigemFiltro(e.target.value); }}
+        >
+          {ORIGEM_FILTROS.map((o) => <option key={o.valor || 'todas'} value={o.valor}>{o.rotulo}</option>)}
         </select>
         {!loading && !erro && (
           <span style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>
