@@ -49,8 +49,19 @@ const nonConformityService = require('./nonConformityService');
 
 /**
  * Etapa 17 (RN-04, gancho C4.2) — aviso pos-escrita da quantidade recebida, nos DOIS escritores
- * reais (`conferirRecebimento` e `salvarDadosFiscal`; a UI de producao passa pelo fiscal, entao
- * um gancho so na conferencia nunca dispararia de verdade — achado Critico da revisao do plano).
+ * reais (`conferirRecebimento` e `salvarDadosFiscal`).
+ *
+ * ⚠️ CORRECAO (revisao adversarial da Etapa 43): este cabecalho dizia *"a UI de producao passa
+ * pelo fiscal, entao um gancho so na conferencia nunca dispararia de verdade"*. Estava certo em
+ * 2026-08-28 e FICOU DESATUALIZADO na Etapa 36: `PUT /conferir` ganhou chamador de tela naquela
+ * etapa — o botao "Salvar Conferencia" do painel de detalhe
+ * (`client/src/components/almoxarifado/RecebimentosAlmoxarifado.js:415-419`, que registra a
+ * decisao de usar `/conferir` e NAO `/fiscal`). Hoje a UI escreve quantidade pelos DOIS caminhos:
+ * o campo "Qtd. conferida" do painel (status RECEBIDO/EM_CONFERENCIA) chama `/conferir`, e o
+ * `salvarFiscal` REENVIA a quantidade ja em estado ao salvar os dados fiscais (o modal de NF nao
+ * tem campo de quantidade — ver `:964`). A conclusao do achado Critico da Etapa 17 continua
+ * valendo, e por outro motivo: o gancho tem de estar nos dois escritores porque os dois sao
+ * alcancaveis por tela. Nada muda de comportamento aqui.
  *
  * A regua e a query compartilhada do registro (`listarDivergenciasRecebimento({ recebimentoId })`,
  * float-safe por `divergenciaRealSql`): refazer a comparacao em JS aqui seria a segunda definicao
@@ -79,11 +90,17 @@ async function avisarDivergenciasDoRecebimento(db, recebimentoId) {
  *
  * ── TRES DECISOES QUE ESTAO NESTE CORPO ──────────────────────────────────────────────────────
  *
- * 1. **Nos DOIS escritores, nao so no `conferir`.** A UI de producao NUNCA chama `/conferir` —
- *    ela escreve quantidade pelo modal de NF (`salvarDadosFiscal`). Esta frase esta no cabecalho
- *    deste arquivo (`:43-45`) como achado Critico da Etapa 17 e ha teste congelando-a
- *    (`alertaEventoGanchos.api.test.js:160`). Com o gancho so na conferencia, a feature nasceria
- *    com a suite verde e INVISIVEL no unico caminho que o cliente usa.
+ * 1. **Nos DOIS escritores, nao so no `conferir`.** ⚠️ CORRECAO (revisao adversarial da Etapa
+ *    43): esta decisao estava escrita aqui como *"a UI de producao NUNCA chama `/conferir` — ela
+ *    escreve quantidade pelo modal de NF"*, repetindo o cabecalho do arquivo. **Estava errado
+ *    desde a Etapa 36**, que deu chamador de tela ao `/conferir` (botao "Salvar Conferencia",
+ *    `RecebimentosAlmoxarifado.js:415-419`) — e o campo de quantidade por item vive justamente
+ *    no painel de conferencia, sob a guarda de status RECEBIDO/EM_CONFERENCIA, porque o modal de
+ *    NF nao tem campo de quantidade nenhum (`:964`). **O que continua verdade e a conclusao**: o
+ *    gancho tem de estar nos DOIS escritores, agora porque os dois tem gesto de tela — o painel
+ *    escreve pelo `/conferir` e o `salvarFiscal` reenvia a quantidade ao salvar a NF. Com o
+ *    gancho so em um deles, metade dos caminhos reais ficaria sem documento, com a suite verde.
+ *    Ha teste congelando os dois disparos (`alertaEventoGanchos.api.test.js:160`).
  *
  * 2. **DEPOIS de `avisarDivergenciasDoRecebimento`**, posicao congelada no D4: uma falha do
  *    gancho novo nao pode afetar o aviso que ja existia.
@@ -95,11 +112,19 @@ async function avisarDivergenciasDoRecebimento(db, recebimentoId) {
  *    documento com um `warn` e reparavel pela porta manual e pelo alerta de divergencia, que
  *    continua sendo a rede de seguranca (D6); travar a conferencia nao e.
  */
-async function abrirNaoConformidadesDeQuantidade(db, user, itens) {
+// ⚠️ `recebimentoId` NAO e opcional na pratica, e a razao foi medida: o `UPDATE` do item, nas duas
+// portas, e protegido por `WHERE id = ? AND recebimento_id = ?`, mas este gancho recebia a lista
+// crua e o servico buscava o item SO por id. Achado 5 da revisao adversarial, reproduzido:
+// conferir o recebimento A citando o id de um item do recebimento B ABRIA documento para o item de
+// B (com autor, hora e ato errados) e, quando o item de B nao estava divergente, CANCELAVA a NC de
+// B — destruindo documento por um gesto que o proprio `UPDATE` ja tinha ignorado. O gancho passa a
+// herdar o mesmo escopo do `UPDATE`.
+async function abrirNaoConformidadesDeQuantidade(db, user, itens, recebimentoId) {
   if (!itens?.length) return;
   for (const item of itens) {
     try {
-      await nonConformityService.sincronizarNaoConformidadeQuantidade(db, user, item?.id);
+      await nonConformityService.sincronizarNaoConformidadeQuantidade(db, user, item?.id,
+        { recebimentoId });
     } catch (e) {
       console.warn('[recebimento] nao conformidade de quantidade falhou '
         + `(item ${item?.id}): ${e.message}`);
@@ -842,7 +867,7 @@ async function conferirRecebimento(db, user, recebimentoId, data) {
 
   await avisarDivergenciasDoRecebimento(db, recebimentoId);
   // Etapa 43 (T3): DEPOIS do aviso, posicao congelada no D4. Ver `abrirNaoConformidadesDeQuantidade`.
-  await abrirNaoConformidadesDeQuantidade(db, user, itens);
+  await abrirNaoConformidadesDeQuantidade(db, user, itens, recebimentoId);
 
   return { success: true };
 }
@@ -928,9 +953,13 @@ async function salvarDadosFiscal(db, user, recebimentoId, data) {
     fornecedor_nome: pedido?.fornecedor_nome ?? fornecedor_nome ?? rec.fornecedor_nome,
   }, recebimentoId);
 
-  // RN-18 (Etapa 36): a SEGUNDA porta, e a que a UI de producao realmente usa para escrever
-  // quantidade (o mesmo motivo que colocou o gancho de divergencia nos dois escritores na Etapa
-  // 17). ANTES do UPDATE do cabecalho: recusar depois gravaria os dados fiscais e devolveria 400.
+  // RN-18 (Etapa 36): a SEGUNDA porta pela qual a quantidade chega ao banco — nao a que o
+  // operador DIGITA (⚠️ isto tambem dizia "a que a UI de producao realmente usa para escrever
+  // quantidade", e a revisao adversarial da Etapa 43 mediu que esta errado: quem digita e o campo
+  // "Qtd. conferida" do painel de conferencia, que chama `/conferir`; aqui a quantidade chega
+  // REENVIADA pelo `salvarFiscal`, do estado da tela). E o mesmo motivo que colocou o gancho de
+  // divergencia nos dois escritores na Etapa 17.
+  // ANTES do UPDATE do cabecalho: recusar depois gravaria os dados fiscais e devolveria 400.
   // A regra de AUMENTO (F1 + R2) mora dentro de `assertExcedentePermitido` e vale nas duas portas:
   // o modal de NF nao tem campo de quantidade nem caixa de autorizacao, e reenvia a quantidade de
   // TODOS os itens.
@@ -1012,7 +1041,7 @@ async function salvarDadosFiscal(db, user, recebimentoId, data) {
   await avisarDivergenciasDoRecebimento(db, recebimentoId);
   // Etapa 43 (T3): o gancho da porta que a UI REALMENTE usa — sem esta linha a feature nasceria
   // invisivel em producao com a suite verde (ver `abrirNaoConformidadesDeQuantidade`, decisao 1).
-  await abrirNaoConformidadesDeQuantidade(db, user, itens);
+  await abrirNaoConformidadesDeQuantidade(db, user, itens, recebimentoId);
 
   return { success: true };
 }

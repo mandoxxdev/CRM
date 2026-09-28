@@ -1050,7 +1050,15 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
 
   app.post('/api/almoxarifado/nao-conformidades', auth, requirePermission('registrar_nao_conformidade'), async (req, res) => {
     try {
-      const nc = await nonConformityService.abrirNaoConformidade(db, req.user, req.body || {});
+      // A rota chama `abrirNaoConformidadeManual`, que e uma LISTA BRANCA de quatro campos, em vez
+      // de entregar `req.body` cru a `abrirNaoConformidade`: achado 6 da revisao adversarial,
+      // reproduzido. Com o corpo cru, um `fato` forjado no payload gravava o documento apontando
+      // para o material ERRADO, com numeros que contradiziam o item; e `fato` junto de um
+      // `referencia_id` inexistente devolvia 201 no lugar do 404, porque o fato pronto DESLIGA a
+      // unica validacao de existencia que havia. `aberto_automaticamente` tambem vinha do corpo,
+      // entao um documento humano podia se declarar automatico na listagem e na trilha.
+      // O "fato congelado" existe para ser confiavel; forjavel pela porta HTTP ele nao serve.
+      const nc = await nonConformityService.abrirNaoConformidadeManual(db, req.user, req.body || {});
       // `null` NAO e erro do servico: e a idempotencia da RN-08 dizendo que ja existe uma NC
       // ABERTA identica (indice parcial composto). Os ganchos automaticos da T3 ignoram esse
       // `null`; a porta MANUAL o traduz em 409, porque aqui houve uma pessoa pedindo um documento

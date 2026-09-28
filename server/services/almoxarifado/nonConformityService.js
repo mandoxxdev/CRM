@@ -36,6 +36,12 @@ const { registrarAuditoria } = require('./audit');
 
 const NC_ORIGENS = ['RECEBIMENTO', 'INSPECAO'];
 const NC_REFERENCIA_TIPOS = ['RECEBIMENTO_ITEM', 'INSPECAO'];
+/**
+ * O par valido origem -> referencia_tipo. Existe porque validar os dois SEPARADAMENTE deixava
+ * passar a combinacao cruzada, e o indice unico parcial da RN-08 e sobre os dois juntos: trocar
+ * so a `origem` abria uma SEGUNDA NC ABERTA do mesmo item e tipo (achado 4 da revisao).
+ */
+const REFERENCIA_DA_ORIGEM = { RECEBIMENTO: 'RECEBIMENTO_ITEM', INSPECAO: 'INSPECAO' };
 const NC_TIPOS = ['QUANTIDADE', 'DIMENSIONAL', 'CERTIFICADO_AUSENTE', 'DANO_FISICO', 'MATERIAL_INCORRETO', 'OUTRO'];
 /**
  * Os tres do meio sao os `ENCAMINHAMENTOS` que `inspectionService.js:33` ja usa — REUSADOS, nao
@@ -113,12 +119,23 @@ const FROM_LISTA = `FROM nao_conformidades_almoxarifado nc
   LEFT JOIN recebimentos_material_almoxarifado r ON r.id = nc.recebimento_id`;
 
 /** Le o item de recebimento com o que a NC precisa congelar. */
-function getItemRecebimento(db, itemId) {
+/**
+ * O item, opcionalmente PRESO A UM RECEBIMENTO.
+ *
+ * ⚠️ O escopo nao e enfeite — achado 5 da revisao adversarial (lente 1), reproduzido: o `UPDATE`
+ * de `conferirRecebimento` e protegido por `WHERE id = ? AND recebimento_id = ?`, mas o gancho
+ * recebia a lista crua e buscava so por `id`. Entao conferir o recebimento A citando o item do
+ * recebimento B **abria** documento para o item de B (com autor, hora e ato errados) e, quando o
+ * item de B nao estava divergente, **CANCELAVA** a NC de B — documento destruido por um gesto que
+ * o proprio serviço ja tinha decidido ignorar. O gancho passa a herdar o mesmo escopo do `UPDATE`.
+ */
+function getItemRecebimento(db, itemId, recebimentoId = null) {
   return dbGet(db, `SELECT ri.id, ri.recebimento_id, ri.material_id, ri.quantidade_esperada,
-      ri.quantidade_recebida, r.status AS recebimento_status
+      ri.quantidade_recebida, ri.entrada_estoque_em, r.status AS recebimento_status
     FROM recebimentos_material_itens_almoxarifado ri
     LEFT JOIN recebimentos_material_almoxarifado r ON r.id = ri.recebimento_id
-    WHERE ri.id = ?`, [itemId]);
+    WHERE ri.id = ? AND (? IS NULL OR ri.recebimento_id = ?)`,
+  [itemId, recebimentoId, recebimentoId]);
 }
 
 function getInspecao(db, inspecaoId) {
@@ -167,6 +184,15 @@ async function resolverFato(db, referenciaTipo, referenciaId) {
  *
  * `dados.fato` permite ao chamador passar o fato JA lido (os ganchos acabaram de le-lo); sem ele,
  * a funcao resolve pela referencia e e ela quem devolve o 404 da referencia inexistente.
+ *
+ * ⚠️ `fato` e `aberto_automaticamente` sao de USO INTERNO e NUNCA podem vir de payload HTTP —
+ * achado 6 da revisao adversarial (lente 2), reproduzido: a rota repassava `req.body` inteiro,
+ * entao um ALMOXARIFE mandava `fato: { material_id: <outro>, divergencia: 0 }` e gravava um
+ * documento apontando para o material errado, com numeros que contradiziam o item; e mandar
+ * `fato` junto com um `referencia_id` inexistente devolvia 201 em vez do 404, porque o `fato`
+ * pronto DESLIGA a unica validacao de existencia que havia. Era a feature inteira ao contrario:
+ * o "fato congelado" existe para ser confiavel. Quem chama de fora passa por
+ * `abrirNaoConformidadeManual`, que nao le esses dois campos.
  */
 async function abrirNaoConformidade(db, user, dados = {}) {
   const origem = dados.origem;
@@ -176,6 +202,15 @@ async function abrirNaoConformidade(db, user, dados = {}) {
   if (!NC_ORIGENS.includes(origem)) throw erro('Origem inválida', 400);
   if (!NC_REFERENCIA_TIPOS.includes(referenciaTipo)) throw erro('Tipo de referência inválido', 400);
   if (!NC_TIPOS.includes(tipo)) throw erro('Tipo de não conformidade inválido', 400);
+  // Achado 4 da lente 1: `origem` e `referencia_tipo` eram validados SEPARADAMENTE, e o indice
+  // unico parcial e sobre os dois — entao `origem: 'INSPECAO'` com `referencia_tipo:
+  // 'RECEBIMENTO_ITEM'` passava por baixo da RN-08 e abria uma SEGUNDA NC do mesmo item+tipo.
+  // Pior: `getAbertaDe` nao filtra por origem, entao o gancho so achava a primeira e a outra
+  // ficava ABERTA para sempre, alimentando o alerta todo dia — o beco "Atrasado para sempre"
+  // que a RN-05 existe para evitar, reintroduzido pela porta manual.
+  if (REFERENCIA_DA_ORIGEM[origem] !== referenciaTipo) {
+    throw erro('Tipo de referência inválido', 400);
+  }
   const referenciaId = idInteiro(dados.referencia_id);
   if (!referenciaId) throw erro('Referência inválida', 400);
 
@@ -220,6 +255,22 @@ async function abrirNaoConformidade(db, user, dados = {}) {
   return obterNaoConformidade(db, id);
 }
 
+/**
+ * A PORTA MANUAL. E o unico caminho que codigo de rota deve chamar: ela monta o payload com uma
+ * LISTA BRANCA de quatro campos, entao `fato` e `aberto_automaticamente` — que sao de uso interno
+ * dos ganchos — nao atravessam a fronteira HTTP nem que o cliente os mande. Ver o aviso no
+ * docblock de `abrirNaoConformidade`.
+ */
+function abrirNaoConformidadeManual(db, user, corpo = {}) {
+  return abrirNaoConformidade(db, user, {
+    origem: corpo.origem,
+    referencia_tipo: corpo.referencia_tipo,
+    referencia_id: corpo.referencia_id,
+    tipo: corpo.tipo,
+    descricao: corpo.descricao,
+  });
+}
+
 /** A NC ABERTA de um par referencia+tipo, se houver. */
 function getAbertaDe(db, referenciaTipo, referenciaId, tipo) {
   return dbGet(db, `SELECT * FROM nao_conformidades_almoxarifado
@@ -228,21 +279,41 @@ function getAbertaDe(db, referenciaTipo, referenciaId, tipo) {
 }
 
 /**
- * A ULTIMA NC ENCERRADA do mesmo par referencia+tipo — insumo da RN-10.
+ * A ULTIMA NC ENCERRADA do mesmo par referencia+tipo que ainda vale como "ja documentado" —
+ * insumo da RN-10.
  * `referencia_tipo` entra na chave porque `referencia_id` sozinho nao distingue item de inspecao:
  * o item 5 e a inspecao 5 sao dois registros diferentes e nao podem compartilhar historia.
+ *
+ * ⚠️ DUAS EXCLUSOES, as duas vindas da revisao adversarial (lente 1, achados 1 e 3):
+ *
+ * 1. `CANCELADA` NAO entra. Documento cancelado e a divergencia que o operador CORRIGIU; se ela
+ *    voltar, e erro NOVO e precisa de documento novo. Tratar o documento morto como "ja
+ *    documentado" esconderia exatamente o que a feature existe para mostrar — e o comentario da
+ *    exclusao do D6 em `alertRegistry.js:149-151` ja dizia isso por escrito, enquanto esta funcao
+ *    fazia o contrario. As duas metades da etapa aplicavam reguas OPOSTAS ao mesmo estado.
+ * 2. Documento com `fato_superado_em` NAO entra: o item passou por um estado sem divergencia
+ *    depois de o documento encerrar, entao o numero pode coincidir e o fato e outro.
  */
 function getUltimaEncerrada(db, referenciaTipo, referenciaId, tipo) {
   return dbGet(db, `SELECT * FROM nao_conformidades_almoxarifado
     WHERE referencia_tipo = ? AND referencia_id = ? AND tipo = ?
-      AND status IN ('DECIDIDA','CANCELADA')
+      AND status = 'DECIDIDA' AND fato_superado_em IS NULL
     ORDER BY id DESC LIMIT 1`, [referenciaTipo, referenciaId, tipo]);
 }
 
 /**
  * O gancho de QUANTIDADE, chamado pelos DOIS escritores de `quantidade_recebida`
- * (`conferirRecebimento` e `salvarDadosFiscal`) — a UI de producao passa pelo fiscal, entao
- * enganchar so na conferencia faria a feature nascer invisivel.
+ * (`conferirRecebimento` e `salvarDadosFiscal`).
+ *
+ * ⚠️ A FRASE QUE ESTAVA AQUI — "a UI de producao passa pelo fiscal, entao enganchar so na
+ * conferencia faria a feature nascer invisivel" — ESTAVA ERRADA, e ficou dita em vez de apagada
+ * porque ela vinha de um comentario do `receiptService` que a revisao adversarial mediu e
+ * derrubou. Quem DIGITA a quantidade e o painel de conferencia, pelo campo "Qtd. conferida", que
+ * chama `/conferir` desde a Etapa 36 (a decisao esta escrita em
+ * `client/.../RecebimentosAlmoxarifado.js:407-419`); o modal de NF **nao tem campo de
+ * quantidade** e so REENVIA o que ja estava gravado.
+ * **A conclusao continua a mesma, com o motivo certo:** os dois sao escritores de
+ * `quantidade_recebida`, os dois podem mudar o fato, entao os dois engancham.
  *
  * Idempotente por construcao. Devolve `{ efeito, nc }`, com `efeito` em:
  *   `ABERTA` · `ATUALIZADA` · `CANCELADA` · `BLOQUEADA_PROCESSADO` · `NENHUMA`
@@ -256,10 +327,10 @@ function getUltimaEncerrada(db, referenciaTipo, referenciaId, tipo) {
  * campo `acao` com literal maiusculo para outra coisa que nao seja verbo de trilha — nem em
  * COMENTARIO, porque a varredura e `grep` e nao le sintaxe (esta frase ja custou uma rodada).
  */
-async function sincronizarNaoConformidadeQuantidade(db, user, itemId) {
+async function sincronizarNaoConformidadeQuantidade(db, user, itemId, opcoes = {}) {
   const id = idInteiro(itemId);
   if (!id) return { efeito: 'NENHUMA', nc: null };
-  const item = await getItemRecebimento(db, id);
+  const item = await getItemRecebimento(db, id, opcoes.recebimentoId ?? null);
   if (!item) return { efeito: 'NENHUMA', nc: null };
 
   // RN-03: item sem quantidade conferida nao abre NC — ninguem conferiu ainda, e "nao conferido"
@@ -268,7 +339,18 @@ async function sincronizarNaoConformidadeQuantidade(db, user, itemId) {
 
   const divergencia = Number(item.quantidade_recebida) - Number(item.quantidade_esperada);
   const divergente = temDivergenciaReal(divergencia);
-  const processado = item.recebimento_status === STATUS_RECEBIMENTO_PROCESSADO;
+  // RN-11 — "ja entrou no estoque?", nao "o status e PROCESSADO?".
+  //
+  // ⚠️ CORRIGIDO pela revisao adversarial (lente 1, achado 2, reproduzido): a guarda olhava SO o
+  // status `PROCESSADO`, e ha um SEGUNDO caminho que credita estoque — `aprovarRecebimento`, o
+  // ramo sem nota fiscal — que deixa o documento em `APROVADO`. Por ele, a NC de uma falta que JA
+  // virou estoque e JA fechou o pedido de compra era CANCELADA, com o motivo automatico afirmando
+  // uma correcao que nunca houve. O marcador certo e o do proprio ITEM: `entrada_estoque_em` e
+  // escrito pelo claim de `darEntradaEstoque` nos DOIS caminhos, e e por item, nao por documento.
+  // O status continua na conta como cinto de seguranca (documento processado cujo item, por
+  // qualquer razao, nao tenha o carimbo).
+  const processado = item.entrada_estoque_em != null
+    || item.recebimento_status === STATUS_RECEBIMENTO_PROCESSADO;
   const aberta = await getAbertaDe(db, 'RECEBIMENTO_ITEM', id, 'QUANTIDADE');
 
   if (aberta) {
@@ -286,6 +368,14 @@ async function sincronizarNaoConformidadeQuantidade(db, user, itemId) {
         [item.quantidade_esperada, item.quantidade_recebida, divergencia, aberta.id]);
       return { efeito: 'ATUALIZADA', nc: await obterNaoConformidade(db, aberta.id) };
     }
+
+    // ⚠️ RN-05 so vale para documento que o GANCHO abriu — achado 6 da revisao (lente 1),
+    // reproduzido: um ALMOXARIFE abre a NC a mao ("o peso na balanca nao fecha com a NF, em
+    // apuracao") num item cuja quantidade conferida bate, e a primeira conferencia de rotina
+    // APAGAVA o documento humano, com um motivo automatico afirmando uma correcao que nunca
+    // houve. O gancho nao pode destruir o que nao foi ele que escreveu; o documento manual e
+    // encerrado por uma PESSOA, decidindo.
+    if (!aberta.aberto_automaticamente) return { efeito: 'NENHUMA', nc: aberta };
 
     // RN-05 — a divergencia sumiu (o operador corrigiu o proprio erro de digitacao). Sem este
     // cancelamento a NC fantasma ficaria aberta para sempre, que e o beco "Atrasado para sempre"
@@ -309,7 +399,24 @@ async function sincronizarNaoConformidadeQuantidade(db, user, itemId) {
     return { efeito: 'CANCELADA', nc: await obterNaoConformidade(db, aberta.id) };
   }
 
-  if (!divergente) return { efeito: 'NENHUMA', nc: null };
+  if (!divergente) {
+    // ⚠️ A METADE QUE FALTAVA DA RN-10, e ela fecha um CRITICAL (achado 1 da lente 1,
+    // reproduzido). Sem esta linha, o item voltava ao normal SEM QUE NADA REGISTRASSE ISSO — e
+    // quando ele quebrava de novo no MESMO valor, a guarda abaixo comparava com o documento
+    // encerrado, achava "mesmo fato" e NAO abria nada. Resultado medido: falta real e viva, zero
+    // NC ABERTA no modulo inteiro, item fora do cartao `DIVERGENCIA_RECEBIMENTO` (o D6 exclui
+    // quem tem NC nao-cancelada) e e-mail engolido pelo dedupe. Silencio completo, que e o pior
+    // modo de falha possivel desta etapa: o D6 e a RN-10 se cancelando, cada um supondo que o
+    // outro cobria o caso.
+    //
+    // O carimbo diz "o fato deste documento foi SUPERADO": o item passou por um estado sem
+    // divergencia depois que o documento encerrou, entao um problema futuro e problema NOVO,
+    // ainda que o numero coincida.
+    await dbRun(db, `UPDATE nao_conformidades_almoxarifado SET fato_superado_em = CURRENT_TIMESTAMP
+      WHERE referencia_tipo = 'RECEBIMENTO_ITEM' AND referencia_id = ? AND tipo = 'QUANTIDADE'
+        AND status = 'DECIDIDA' AND fato_superado_em IS NULL`, [id]);
+    return { efeito: 'NENHUMA', nc: null };
+  }
 
   // RN-10 — nao reabrir sem MUDANCA DE FATO. O modal de NF reenvia a quantidade de TODOS os itens
   // (receiptService.js:889-890), entao salvar de novo sem mexer em nada reabriria documento para
@@ -457,7 +564,15 @@ async function listarNaoConformidades(db, filtros = {}) {
     sql += ' AND nc.material_id = ?';
     params.push(materialId);
   }
-  // ABERTAS primeiro (e o que a tela e o alerta precisam ver), mais velhas no topo dentro delas.
+  // ABERTAS primeiro — e o que a tela precisa mostrar —, e dentro delas as MAIS NOVAS no topo.
+  //
+  // ⚠️ Este comentario dizia "mais velhas no topo", o que CONTRADIZIA o proprio `ORDER BY` logo
+  // abaixo (`created_at DESC`). Achado da rodada de regressao; parece copia do comentario da irma
+  // `alertRegistry.listarNaoConformidadesParadas`, que de fato usa `ASC`. A diferenca entre as
+  // duas e intencional e vale escrever: a TELA e uma lista de documentos, e lista de documento
+  // abre no mais recente; o ALERTA cobra decisao, e cobrar comeca pelo que esta parado ha mais
+  // tempo. Ordem errada aqui nao quebra nada visivel, e e exatamente por isso que o cenario
+  // (11b) de `naoConformidadeServico.api.test.js` existe: ele prende os DOIS criterios.
   sql += ` ORDER BY CASE WHEN nc.status = 'ABERTA' THEN 0 ELSE 1 END, nc.created_at DESC, nc.id DESC LIMIT ?`;
   params.push(limiteLista(filtros.limite));
   return dbAll(db, sql, params);
@@ -473,6 +588,7 @@ async function obterNaoConformidade(db, ncId) {
 
 module.exports = {
   abrirNaoConformidade,
+  abrirNaoConformidadeManual,
   sincronizarNaoConformidadeQuantidade,
   abrirNaoConformidadeDeInspecao,
   decidirNaoConformidade,

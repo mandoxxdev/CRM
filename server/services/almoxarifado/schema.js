@@ -1280,6 +1280,12 @@ async function initSchema(db) {
     decidido_em DATETIME,
     motivo_cancelamento TEXT,
     cancelado_em DATETIME,
+    -- Carimbo da RN-10: "o fato deste documento foi SUPERADO". Escrito quando o item volta a NAO
+    -- ter divergencia DEPOIS de o documento ter sido decidido. Existe porque sem ele o modulo
+    -- ficava MUDO no cenario medido pela revisao adversarial: decidir, corrigir, quebrar de novo
+    -- no mesmo numero — a guarda de reabertura via "mesmo fato" e nao abria nada, e o cartao
+    -- antigo ja tinha excluido o item por ele ter documento. Ver getUltimaEncerrada.
+    fato_superado_em DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
