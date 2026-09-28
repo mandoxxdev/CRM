@@ -562,11 +562,21 @@ const MIGRATION_BACKFILL_LIBERACAO_NC = 'backfill_liberacao_nc_inspecoes_antigas
  * proposito: a RN-09 depende de raciocinio sobre quantas NCs automaticas podem existir por
  * inspecao, e este carimbo nao depende de raciocinio nenhum.
  *
- * Idempotente pelo ledger. O proprio UPDATE tambem e seguro de reexecutar (`WHERE ... IS NULL`),
- * mas o ledger e o que impede o carimbo de alcancar inspecoes criadas DEPOIS da migracao — que e
- * exatamente o que nao pode acontecer.
+ * ── A BARREIRA SAO DUAS, E A SEGUNDA É A QUE IMPORTA ────────────────────────────────────────
+ * O ledger impede a re-execucao no caso normal. **Mas ele era a UNICA barreira, e isso era um
+ * furo** (achado da revisao adversarial): perdida a linha do ledger — restauracao de backup,
+ * limpeza de tabela, um `DELETE` distraido —, o proximo boot rodava `initSchema` de novo e
+ * carimbava as inspecoes RECENTES, que ainda nao tinham sido decididas. O efeito e o pior
+ * residual que o design desta etapa nomeia: decidir devolve 200 dizendo *"ja havia sido
+ * liberado"* com o material **preso**, em silencio e sem caminho de volta.
+ *
+ * Por isso a barreira real e ESTRUTURAL: `jaExistia` diz se a coluna existia ANTES do `safeAlter`
+ * desta rodada. Se existia, esta instalacao ja passou pela migracao — e o backfill **nunca mais
+ * roda**, tenha o ledger a linha ou nao. So carimba na rodada em que a coluna NASCE, que e a
+ * unica em que "todas as inspecoes da tabela sao antigas" e verdade por construcao. Em banco novo
+ * a coluna tambem nasce, e a tabela esta vazia: carimba zero linhas.
  */
-async function migrateBackfillLiberacaoNcInspecoesAntigas(db) {
+async function migrateBackfillLiberacaoNcInspecoesAntigas(db, jaExistia = false) {
   await dbRun(db, `CREATE TABLE IF NOT EXISTS schema_migrations_almoxarifado (
     id TEXT PRIMARY KEY,
     applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -576,6 +586,15 @@ async function migrateBackfillLiberacaoNcInspecoesAntigas(db) {
     'SELECT 1 as ok FROM schema_migrations_almoxarifado WHERE id = ?',
     [MIGRATION_BACKFILL_LIBERACAO_NC]);
   if (applied) return;
+
+  // A barreira estrutural (ver o cabeçalho): a coluna já existia antes desta rodada, logo esta
+  // instalação já passou pela migração. Registra no ledger e sai SEM carimbar — se chegou aqui
+  // com o ledger vazio, ele foi perdido, e carimbar agora atingiria inspeções recentes.
+  if (jaExistia) {
+    await dbRun(db, 'INSERT OR IGNORE INTO schema_migrations_almoxarifado (id) VALUES (?)',
+      [MIGRATION_BACKFILL_LIBERACAO_NC]);
+    return;
+  }
 
   const colInfo = await dbGet(db,
     `SELECT name FROM pragma_table_info('inspecoes_recebimento_almoxarifado') WHERE name = 'liberacao_nc_em'`);
@@ -1217,8 +1236,11 @@ async function initSchema(db) {
   // a MESMA NC duas vezes, que ja estava protegido, e nao contra o buraco real. O motor tambem
   // nao salva: ele so recusa quando o pool do material esta insuficiente, e o pool e AGREGADO —
   // com um bloqueio de outra origem na mesma peca, a segunda liberacao passa em silencio.
+  // A ordem destas três linhas É a barreira do backfill — ver o comentário da migração.
+  const liberacaoNcJaExistia = !!(await dbGet(db,
+    `SELECT name FROM pragma_table_info('inspecoes_recebimento_almoxarifado') WHERE name = 'liberacao_nc_em'`));
   await safeAlter(db, 'ALTER TABLE inspecoes_recebimento_almoxarifado ADD COLUMN liberacao_nc_em DATETIME');
-  await migrateBackfillLiberacaoNcInspecoesAntigas(db);
+  await migrateBackfillLiberacaoNcInspecoesAntigas(db, liberacaoNcJaExistia);
 
   // ── Plano de inspeção e medidas (Etapa 27, contrato C2) ──────────────────────────────────────
   //

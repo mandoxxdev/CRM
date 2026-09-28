@@ -76,6 +76,7 @@ const EFEITO_MSG = {
   SEM_BLOQUEIO: 'Esta não conformidade não tem material bloqueado para liberar',
   SEM_BLOQUEIO_MANUAL: 'Não conformidade aberta manualmente não libera saldo',
   SEM_BLOQUEIO_INATIVO: 'Material inativo — a decisão foi registrada sem liberar saldo',
+  SEM_BLOQUEIO_DRENADO: 'O material já havia sido desbloqueado fora do documento — a decisão foi registrada sem liberar saldo',
   NENHUMA: 'Esta decisão não altera o saldo',
 };
 
@@ -581,6 +582,24 @@ function efeitoPrevisto(nc, insp, material, decisao) {
   // diz por que. Descartado: recusar a decisao.
   if (material && !material.ativo) return nada('SEM_BLOQUEIO', EFEITO_MSG.SEM_BLOQUEIO_INATIVO);
 
+  // (6) RN-11 — O POOL JÁ FOI DRENADO POR FORA. Achado da revisão adversarial, e é o caso mais
+  // provável de todos: o workaround que existia ANTES desta etapa era justamente alguém da gestão
+  // desbloquear na mão pela tela de Movimentações. Depois dela, esse mesmo gesto INUTILIZAVA o
+  // documento — o motor recusava com "Quantidade bloqueada insuficiente: N", e como a liberação é
+  // fatal (RN-02) a decisão nunca era gravada. A NC ficava ABERTA **para sempre**, cobrando todo
+  // dia no cartao de NC parada, e a única saída era registrar uma decisão FALSA (`DEVOLVER`) só
+  // para o documento fechar.
+  //
+  // É o mesmo beco que a RN-10 existe para evitar, e o raciocínio dela se aplica palavra por
+  // palavra. Então: a decisão é gravada, o saldo não muda, e a tela diz **por quê** — o material
+  // já não estava mais lá para ser liberado.
+  //
+  // ⚠️ Isto NÃO enfraquece a RN-02, e a diferença importa: a fatalidade continua valendo para
+  // falha INESPERADA do motor (aí a decisão é desfeita). Aqui não há falha nenhuma — há um estado
+  // conhecido, medido antes de escrever qualquer coisa, e dito em voz alta.
+  const bloqueadaAtual = Number(material?.quantidade_bloqueada) || 0;
+  if (bloqueadaAtual < reprovada) return nada('SEM_BLOQUEIO', EFEITO_MSG.SEM_BLOQUEIO_DRENADO);
+
   return { efeito: 'LIBERAVEL', quantidade: reprovada, material_id: materialId, mensagem: null };
 }
 
@@ -640,7 +659,7 @@ async function decidirNaoConformidade(db, user, ncId, dados = {}) {
       && atual.aberto_automaticamente) {
     insp = await getInspecao(db, atual.referencia_id);
     if (insp?.material_id) {
-      material = await dbGet(db, 'SELECT id, ativo FROM materiais_almoxarifado WHERE id = ?',
+      material = await dbGet(db, 'SELECT id, ativo, quantidade_bloqueada FROM materiais_almoxarifado WHERE id = ?',
         [insp.material_id]);
     }
   }
@@ -661,16 +680,28 @@ async function decidirNaoConformidade(db, user, ncId, dados = {}) {
     liberacao = await executarLiberacao(db, user, atual, insp, previsto, justificativa, id);
   }
 
-  await registrarAuditoria(db, {
-    entidade: ENTIDADE_AUDITORIA,
-    entidade_id: id,
-    acao: ACAO_DECIDIDA,
-    usuario_id: user?.id,
-    usuario_nome: user?.nome || user?.email,
-    dados_anteriores: { status: 'ABERTA' },
-    dados_novos: { status: 'DECIDIDA', decisao: dados.decisao, efeito_saldo: liberacao.efeito },
-    justificativa,
-  });
+  // ⚠️ NAO FATAL, e a inversao em relacao ao resto desta funcao e deliberada (achado da revisao
+  // adversarial). Aqui ja aconteceu TUDO: a decisao esta gravada e o material esta liberado. Se a
+  // trilha falhar e o erro subir, o chamador ve um 500 depois de uma operacao que VALEU, tenta de
+  // novo e leva 409 "ja foi encerrada" — ou seja, acredita que nao valeu, quando valeu. Perder a
+  // linha de trilha e ruim; fazer a QUALIDADE acreditar que o material continua bloqueado quando
+  // ele nao esta e pior, porque ela age sobre essa crenca.
+  // O rastro do SALDO nao se perde de qualquer forma: a linha do livro carrega
+  // `documento_vinculado = NC-…`. Mesmo desenho dos ganchos da Etapa 43 e do e-mail da inspecao.
+  try {
+    await registrarAuditoria(db, {
+      entidade: ENTIDADE_AUDITORIA,
+      entidade_id: id,
+      acao: ACAO_DECIDIDA,
+      usuario_id: user?.id,
+      usuario_nome: user?.nome || user?.email,
+      dados_anteriores: { status: 'ABERTA' },
+      dados_novos: { status: 'DECIDIDA', decisao: dados.decisao, efeito_saldo: liberacao.efeito },
+      justificativa,
+    });
+  } catch (e) {
+    console.warn(`[NC] decisão ${id} gravada, mas a trilha falhou: ${e.message}`);
+  }
 
   const nc = await obterNaoConformidade(db, id);
   return { ...nc, liberacao };
