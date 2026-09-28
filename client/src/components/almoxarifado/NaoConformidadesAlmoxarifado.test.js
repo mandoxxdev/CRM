@@ -451,3 +451,55 @@ describe('NaoConformidadesAlmoxarifado — anexos do documento', () => {
       .toContain('Faltaram 8 pecas na conferencia');
   });
 });
+
+/**
+ * Etapa 44, T3 — A TELA DIZ O QUE ACONTECEU COM O SALDO.
+ *
+ * Por que estes cenários existem: até a Etapa 44, decidir "aceito sob desvio" e decidir "devolver"
+ * produziam o MESMO feedback na tela — a linha virava DECIDIDA e pronto. Uma das duas liberava
+ * material bloqueado e a outra não, e quem clicava não tinha como saber. Foi esse silêncio que
+ * virou o furo C57.
+ *
+ * A mensagem vem PRONTA do servidor (contrato congelado na seção 5 do design da etapa). Estes
+ * cenários provam que a tela a RETRANSMITE — e que ela não inventa nada quando o campo não vem.
+ */
+describe('NaoConformidadesAlmoxarifado — o efeito da decisão no saldo', () => {
+  async function decidirCom(liberacao) {
+    api.post.mockResolvedValueOnce({ data: { id: 7, status: 'DECIDIDA', ...(liberacao ? { liberacao } : {}) } });
+    await renderizar();
+    await clicar(botaoDecidir(linhas()[0]));
+    preencher(campoPorLabel('Decisão'), 'ACEITAR_SOB_DESVIO');
+    preencher(campoPorLabel('Justificativa'), 'laudo da engenharia anexo');
+    await clicarBotaoModal('Registrar decisão');
+  }
+
+  test('(15) LIBERADA: o toast diz quanto saiu do bloqueio, com a literal do servidor', async () => {
+    await decidirCom({ efeito: 'LIBERADA', quantidade: 3, material_id: 12, mensagem: '3 liberado(s) do bloqueio' });
+    expect(toast.success).toHaveBeenCalledWith('Não conformidade NC-2026-0007 decidida! 3 liberado(s) do bloqueio');
+  });
+
+  test('(16) os outros três efeitos também aparecem — NENHUMA não pode virar silêncio', async () => {
+    // O ponto do cenário: `NENHUMA` é uma INFORMAÇÃO ("esta decisão não altera o saldo"), não a
+    // ausência de informação. Se a tela só falasse no caso que libera, o usuário voltaria a não
+    // distinguir "não mexeu" de "não avisou" — que é o C57 renascendo pela metade.
+    const casos = [
+      ['NENHUMA', 'Esta decisão não altera o saldo'],
+      ['JA_LIBERADA', 'O material desta inspeção já havia sido liberado'],
+      ['SEM_BLOQUEIO', 'Não conformidade aberta manualmente não libera saldo'],
+    ];
+    for (const [efeito, mensagem] of casos) {
+      jest.clearAllMocks();
+      await decidirCom({ efeito, quantidade: null, material_id: null, mensagem });
+      expect(toast.success).toHaveBeenCalledWith(`Não conformidade NC-2026-0007 decidida! ${mensagem}`);
+    }
+  });
+
+  test('(17) resposta SEM o campo `liberacao` não mostra `undefined` — e o toast continua saindo', async () => {
+    // Servidor anterior a esta versão, ou resposta truncada: concatenar `undefined` mostraria
+    // "decidida! undefined" no lugar do aviso, que é pior que não avisar nada.
+    await decidirCom(null);
+    expect(toast.success).toHaveBeenCalledWith('Não conformidade NC-2026-0007 decidida!');
+    const dito = toast.success.mock.calls.map(([m]) => m).join(' | ');
+    expect(dito).not.toContain('undefined');
+  });
+});

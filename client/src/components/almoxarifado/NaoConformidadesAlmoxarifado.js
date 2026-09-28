@@ -51,8 +51,14 @@ import './Almoxarifado.css';
  *   `Number.isInteger` do serviço existe para evitar. O caminho reversível é este: a NC nasce
  *   pelos três ganchos (D4), e a abertura manual ganha porta no dia em que a tela de recebimento
  *   tiver um botão "abrir NC deste item" — uma linha, com o id em mãos.
- * - **Não move estoque** (D7): decidir `DEVOLVER` não cria devolução, `SUCATEAR` não baixa saldo.
- *   O documento registra o que se decidiu, com autor e justificativa.
+ * - ~~**Não move estoque** (D7): decidir `DEVOLVER` não cria devolução, `SUCATEAR` não baixa
+ *   saldo. O documento registra o que se decidiu, com autor e justificativa.~~
+ *   **ISTO DEIXOU DE VALER PELA METADE, e fica corrigido à vista em vez de apagado.** Desde a
+ *   Etapa 44, decidir **Aceitar** ou **Aceitar sob desvio** numa NC de inspeção **libera** o
+ *   material que a reprovação havia bloqueado — e o toast de sucesso passa a dizer quanto saiu do
+ *   bloqueio. `DEVOLVER`, `SUBSTITUICAO`, `ANALISE_ENGENHARIA` e `SUCATEAR` continuam só marcando
+ *   intenção, e o toast diz isso também (*"Esta decisão não altera o saldo"*), porque um silêncio
+ *   ali faria as duas coisas parecerem iguais — que foi o furo C57.
  */
 
 const ROTA = '/almoxarifado/nao-conformidades';
@@ -217,11 +223,25 @@ const NaoConformidadesAlmoxarifado = () => {
     }
     setSalvando(true);
     try {
-      await api.post(`${ROTA}/${decisaoTarget.id}/decidir`, {
+      const resp = await api.post(`${ROTA}/${decisaoTarget.id}/decidir`, {
         decisao: decisaoForm.decisao,
         justificativa: decisaoForm.justificativa.trim(),
       });
-      toast.success(`Não conformidade ${decisaoTarget.numero} decidida!`);
+      // O QUE ACONTECEU COM O SALDO, dito na tela. Sem isto, decidir "aceito sob desvio" e ver a
+      // linha virar DECIDIDA parece idêntico a decidir "devolver" — e foi exatamente esse silêncio
+      // que criou o furo C57: a decisão que libera material e a que só marca intenção eram
+      // indistinguíveis para quem clica.
+      //
+      // A mensagem vem PRONTA do servidor, nunca montada aqui. Montá-la no client exigiria uma
+      // segunda cópia das regras de qual decisão libera, em qual origem, com qual quantidade — e
+      // no dia em que as duas divergissem a tela mentiria sobre o saldo, que é o defeito que este
+      // aviso existe para evitar. Mesmo critério, já escrito, da pré-visualização de tolerância
+      // que a B60 vetou.
+      //
+      // O `?.` não é decoração: um servidor anterior a esta versão não manda o campo, e
+      // concatenar `undefined` mostraria "decidida! undefined" no lugar do aviso.
+      const mensagemSaldo = resp?.data?.liberacao?.mensagem;
+      toast.success(`Não conformidade ${decisaoTarget.numero} decidida!${mensagemSaldo ? ` ${mensagemSaldo}` : ''}`);
       setDecisaoTarget(null);
       // ⚠️ Achado 11 da revisão adversarial: com o filtro em "Abertas" (o padrão), a NC recém
       // decidida deixa de casar o filtro e a linha SOME junto com o toast — a pessoa decide e a
