@@ -540,6 +540,62 @@ async function migrateBackfillItemQuantidadeEmInspecao(db) {
   }
 }
 
+const MIGRATION_BACKFILL_LIBERACAO_NC = 'backfill_liberacao_nc_inspecoes_antigas';
+
+/**
+ * Backfill da Etapa 44 (RN-03): marca TODAS as inspecoes que ja existiam como "ja liberadas".
+ *
+ * ⚠️ UM UPDATE QUE CARIMBA TUDO PARECE ERRADO — e nao e. Sem ele, a Etapa 44 sai com uma porta
+ * lateral CRITICAL, achada pela Fase 2: `abrirNaoConformidadeManual` (Etapa 43) deixa um perfil
+ * QUALIDADE abrir, a mao, uma NC apontando para QUALQUER inspecao da historia — `resolverFato` so
+ * exige que a inspecao exista, nao checa reprovada, nem data, nem autoria. Com a coluna nascendo
+ * NULL em todas elas, cada reprovacao ja arquivada viraria um VALE-DESBLOQUEIO no valor da
+ * propria reprovada, cobravel contra o pool bloqueado do material — que pode estar bloqueado por
+ * outra coisa inteiramente (um bloqueio avulso de inventario, por exemplo). Ou seja: um caminho
+ * para mexer em saldo sem `ajustar_estoque` e sem passar por `POST /materiais/:id/desbloquear`.
+ *
+ * Carimbar tudo e o que torna verdadeira a frase "esta etapa nao retroage": a liberacao so vale
+ * para inspecao decidida DEPOIS do deploy, que e a unica cujo bloqueio nasceu sob esta regra.
+ * Nao ha perda: nenhuma NC anterior a esta etapa jamais liberou nada — a liberacao nao existia.
+ *
+ * A defesa em profundidade e a RN-09 (so NC aberta AUTOMATICAMENTE libera). As duas ficam de
+ * proposito: a RN-09 depende de raciocinio sobre quantas NCs automaticas podem existir por
+ * inspecao, e este carimbo nao depende de raciocinio nenhum.
+ *
+ * Idempotente pelo ledger. O proprio UPDATE tambem e seguro de reexecutar (`WHERE ... IS NULL`),
+ * mas o ledger e o que impede o carimbo de alcancar inspecoes criadas DEPOIS da migracao — que e
+ * exatamente o que nao pode acontecer.
+ */
+async function migrateBackfillLiberacaoNcInspecoesAntigas(db) {
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS schema_migrations_almoxarifado (
+    id TEXT PRIMARY KEY,
+    applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  const applied = await dbGet(db,
+    'SELECT 1 as ok FROM schema_migrations_almoxarifado WHERE id = ?',
+    [MIGRATION_BACKFILL_LIBERACAO_NC]);
+  if (applied) return;
+
+  const colInfo = await dbGet(db,
+    `SELECT name FROM pragma_table_info('inspecoes_recebimento_almoxarifado') WHERE name = 'liberacao_nc_em'`);
+  if (!colInfo) {
+    await dbRun(db, 'INSERT OR IGNORE INTO schema_migrations_almoxarifado (id) VALUES (?)',
+      [MIGRATION_BACKFILL_LIBERACAO_NC]);
+    return;
+  }
+
+  const result = await dbRun(db, `UPDATE inspecoes_recebimento_almoxarifado
+    SET liberacao_nc_em = CURRENT_TIMESTAMP
+    WHERE liberacao_nc_em IS NULL`);
+
+  await dbRun(db, 'INSERT OR IGNORE INTO schema_migrations_almoxarifado (id) VALUES (?)',
+    [MIGRATION_BACKFILL_LIBERACAO_NC]);
+  if (result.changes > 0) {
+    console.log(`✅ Migração backfill_liberacao_nc_inspecoes_antigas aplicada (${result.changes} inspeção(ões) anterior(es) marcada(s) como não liberáveis)`);
+  }
+}
+
 const MIGRATION_HISTORICO_NULLABLE = 'alertas_historico_nullable_material';
 
 async function migrateHistoricoNullableMaterial(db) {
@@ -1149,6 +1205,20 @@ async function initSchema(db) {
   await safeAlter(db, 'ALTER TABLE inspecoes_recebimento_almoxarifado ADD COLUMN quantidade_aprovada REAL');
   await safeAlter(db, 'ALTER TABLE inspecoes_recebimento_almoxarifado ADD COLUMN quantidade_reprovada REAL');
   await safeAlter(db, 'ALTER TABLE inspecoes_recebimento_almoxarifado ADD COLUMN encaminhamento TEXT');
+
+  // Etapa 44 (RN-03) — o carimbo de "o material reprovado por ESTA inspecao ja foi liberado por
+  // uma nao conformidade". E o claim que torna a liberacao IDEMPOTENTE.
+  //
+  // ⚠️ POR QUE A TRAVA MORA NA INSPECAO E NAO NA NC, que e o lugar obvio: o indice unico da NC e
+  // PARCIAL E POR TIPO (`idx_nc_almox_aberta`), entao a MESMA inspecao pode carregar mais de uma
+  // NC aberta — basta o `tipo` ser outro —, e `abrirNaoConformidadeManual` deixa abrir uma a mao
+  // apontando para ela. Duas NCs da mesma inspecao decididas como aceitacao liberariam a
+  // quantidade reprovada DUAS VEZES. Travar na NC (`status = 'DECIDIDA'`) protege contra decidir
+  // a MESMA NC duas vezes, que ja estava protegido, e nao contra o buraco real. O motor tambem
+  // nao salva: ele so recusa quando o pool do material esta insuficiente, e o pool e AGREGADO —
+  // com um bloqueio de outra origem na mesma peca, a segunda liberacao passa em silencio.
+  await safeAlter(db, 'ALTER TABLE inspecoes_recebimento_almoxarifado ADD COLUMN liberacao_nc_em DATETIME');
+  await migrateBackfillLiberacaoNcInspecoesAntigas(db);
 
   // ── Plano de inspeção e medidas (Etapa 27, contrato C2) ──────────────────────────────────────
   //
@@ -2233,6 +2303,9 @@ async function initSchema(db) {
 module.exports = {
   initSchema,
   safeAlter,
+  // Exportada para o cenario (12) da Etapa 44 poder rodar a migracao DEPOIS de criar a inspecao,
+  // que e o unico jeito de simular "a inspecao ja existia no dia do deploy" num banco de teste.
+  migrateBackfillLiberacaoNcInspecoesAntigas,
   CATEGORIAS_SEED,
   FAMILIAS_SEED,
   SETORES_ALMOX_SEED,
