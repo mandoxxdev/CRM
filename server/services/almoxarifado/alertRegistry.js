@@ -135,11 +135,29 @@ async function listarReprovados(db, { dias, inspecaoId } = {}) {
  * fora da central E da rede de seguranca; o item nao tem timestamp proprio — limitacao
  * declarada: qualquer toque posterior no recebimento renova a presenca na central; o dedupe
  * por item segura o e-mail).
+ *
+ * ── Etapa 43 (T4, D6): `excluirComNC` e OPT-IN, e isso NAO e estilo ──────────────────────────
+ * Esta funcao e o DETECTOR do modulo, nao a populacao de um cartao: os dois modos que ja
+ * existiam sao consumidos por `avisarDivergenciasDoRecebimento` (receiptService `:843` e
+ * `:1012`), que dispara o aviso NO ATO nos dois escritores de `quantidade_recebida`. Excluir
+ * "item que ja tem NC" por DENTRO dela — que foi o que a primeira versao do design mandava —
+ * cala o gancho do ato a partir da segunda escrita e MATA o cenario A1 de
+ * `alertaEventoGanchos.api.test.js:289-318` ("errar de novo, PIOR, avisa de novo"), que e o bug
+ * que a Etapa 17 pagou. MEDIDO, nao suposto: a T4 rodou a forma errada e contou os arquivos que
+ * caem. Por isso o terceiro modo e opt-in e QUEM O LIGA e so o `listar` da entrada do alerta.
+ *
+ * A regua da exclusao e `status <> 'CANCELADA'`, e a escolha e do mesmo tamanho: a NC CANCELADA
+ * e a divergencia que o operador CORRIGIU e depois quebrou de novo (RN-05 + RN-10) — tratar o
+ * documento morto como "ja documentado" esconderia justamente o erro NOVO.
  */
-async function listarDivergenciasRecebimento(db, { dias, recebimentoId } = {}) {
+async function listarDivergenciasRecebimento(db, { dias, recebimentoId, excluirComNC } = {}) {
   const filtro = recebimentoId
     ? 'AND ri.recebimento_id = ?'
     : `AND COALESCE(r.updated_at, r.created_at) >= datetime('now', '-' || ? || ' days')`;
+  const semNc = excluirComNC ? `AND NOT EXISTS (
+      SELECT 1 FROM nao_conformidades_almoxarifado nc
+      WHERE nc.referencia_tipo = 'RECEBIMENTO_ITEM' AND nc.referencia_id = ri.id
+        AND nc.tipo = 'QUANTIDADE' AND nc.status <> 'CANCELADA')` : '';
   return dbAll(db, `
     SELECT ri.id AS item_id, ri.recebimento_id, m.codigo AS material_codigo,
       m.nome AS material_nome, ri.quantidade_esperada, ri.quantidade_recebida,
@@ -151,7 +169,46 @@ async function listarDivergenciasRecebimento(db, { dias, recebimentoId } = {}) {
     WHERE ri.quantidade_recebida IS NOT NULL
       AND ${divergenciaRealSql('ri.quantidade_recebida - ri.quantidade_esperada')}
       ${filtro}
+      ${semNc}
     ORDER BY ri.id ASC`, [recebimentoId ?? dias]);
+}
+
+/**
+ * NAO_CONFORMIDADE_ABERTA (Etapa 43, T4, D6): NCs ainda sem decisao ha mais dias que o
+ * configurado. Ate aqui o modulo abria o documento sozinho (T3) e ninguem cobrava a decisao —
+ * NC ABERTA ficava ABERTA para sempre, em silencio, que e o beco "Atrasado para sempre" da
+ * Etapa 42 em outra roupa.
+ *
+ * ⚠️ SQL PROPRIO em vez de `nonConformityService.listarNaoConformidades`, e e medicao, nao gosto:
+ * aquela funcao clampa em `LIMITE_PADRAO = 100` e nao filtra por idade. Construir a varredura
+ * DIARIA sobre ela ignoraria a 101a NC parada EM SILENCIO — exatamente o bloqueio que a Etapa 42
+ * descreveu para o `LIMIT 50` do aux de pedidos, e pior que a ausencia do alerta, porque o
+ * usuario passaria a confiar numa varredura incompleta. A regua de "parada" e de e-mail, nao de
+ * tela, e mora aqui.
+ *
+ * ⚠️ COLUNAS NOMEADAS, nunca `nc.*` (licao F3 da Etapa 39): `montarCentral` devolve as linhas
+ * CRUAS em `GET /almoxarifado/alertas/central`, e toda coluna acrescentada a tabela amanha
+ * viajaria para a central sem revisao. A lista abaixo e exatamente o que o corpo do e-mail, o
+ * dedupe, o payload e o cartao leem — `descricao`, `justificativa` e os `*_por_nome` ficam de
+ * fora de proposito (texto livre em caixa de entrada, mesma classe de decisao do B30).
+ *
+ * `julianday` (e nao `datetime('now','-N days')`) porque a janela desta entrada e fracionaria no
+ * teste e porque e o molde da irma mais proxima, `RESERVA_PARADA`. O `CAST ... AS INTEGER`
+ * trunca: `dias_parada` e o numero de dias JA COMPLETOS.
+ */
+async function listarNaoConformidadesParadas(db, { dias }) {
+  return dbAll(db, `
+    SELECT nc.id, nc.numero, nc.origem, nc.tipo, nc.status, nc.created_at,
+      nc.material_id, m.codigo AS material_codigo, m.nome AS material_nome,
+      m.unidade AS material_unidade, nc.recebimento_id, r.numero AS recebimento_numero,
+      r.nota_fiscal, nc.quantidade_esperada, nc.quantidade_recebida, nc.divergencia,
+      CAST(julianday('now') - julianday(nc.created_at) AS INTEGER) AS dias_parada
+    FROM nao_conformidades_almoxarifado nc
+    LEFT JOIN materiais_almoxarifado m ON m.id = nc.material_id
+    LEFT JOIN recebimentos_material_almoxarifado r ON r.id = nc.recebimento_id
+    WHERE nc.status = 'ABERTA'
+      AND julianday('now') - julianday(nc.created_at) > ?
+    ORDER BY nc.created_at ASC, nc.id ASC`, [dias]);
 }
 
 /**
@@ -409,7 +466,16 @@ const ALERT_REGISTRY = Object.freeze([
     descricao: 'Itens recebidos com quantidade diferente da esperada na janela configurada.',
     evento: true,
     configDias: { chave: 'alerta_eventos_janela_dias', default: 7 },
-    listar: (db, { dias }) => listarDivergenciasRecebimento(db, { dias }),
+    // Etapa 43 (T4, D6): `excluirComNC` LIGADO — e so aqui. A partir do momento em que a
+    // divergencia vira `NC-…`, quem cobra e o cartao `NAO_CONFORMIDADE_ABERTA`; o mesmo item nos
+    // dois avisos ensina o usuario a ignorar os dois. O papel que sobra para este cartao e
+    // DECLARADO e e a rede de seguranca do gancho nao fatal da T3: enquanto a NC NAO existir
+    // (porque o gancho explodiu e virou `console.warn`), o item continua aqui, na central e na
+    // varredura diaria.
+    //
+    // ⚠️ A exclusao mora NESTA LINHA e nao dentro de `listarDivergenciasRecebimento` — o motivo
+    // medido esta no cabecalho daquela funcao (o cenario A1 da Etapa 17 morre).
+    listar: (db, { dias }) => listarDivergenciasRecebimento(db, { dias, excluirComNC: true }),
     // 1x por item; correcao posterior da quantidade nao re-alerta (declarado no design).
     // A quantidade ENTRA no dedupe (achado A1 da revisao adversarial, reproduzido): com
     // `receb-diverg-<item_id>` puro, salvar 8 de 10, corrigir para 10 e depois errar 2 de 10
@@ -666,6 +732,51 @@ const ALERT_REGISTRY = Object.freeze([
       `Status: ${linha.status}`,
     ].join('\n'),
   },
+  {
+    chave: 'NAO_CONFORMIDADE_ABERTA',
+    titulo: 'Não conformidade aberta',
+    descricao: 'Não conformidades ainda sem decisão há mais dias que o configurado.',
+    configDias: { chave: 'alerta_nc_parada_dias', default: 7 },
+    // Etapa 43, T4 (D6) — a 14a entrada do registro.
+    //
+    // ── O QUE ELA COBRA ───────────────────────────────────────────────────────────────────────
+    // A T3 fez a NC NASCER sozinha nas duas portas do recebimento e na inspecao. Nascer sozinha
+    // sem ninguem cobrar a decisao seria trocar um silencio por outro: o documento existe, fica
+    // `ABERTA` para sempre e ninguem responde "o que se decidiu fazer com a falta de 4 kg", que e
+    // metade da razao de a feature existir. Este alerta cobra a DECISAO — NC decidida ou cancelada
+    // sai da condicao sozinha, sem gancho nenhum.
+    //
+    // ⚠️ Prefixo `[Almoxarifado]` (e nao `[Compras]`, como as duas entradas irmas acima): o
+    // documento e do almoxarifado e quem decide e QUALIDADE (D8). O prefixo e o que permite ao
+    // leitor filtrar a caixa compartilhada.
+    //
+    // ⚠️ SEM require de servico: o SQL mora no arquivo (ver `listarNaoConformidadesParadas`), entao
+    // nao ha ciclo a evitar aqui — `nonConformityService` nem e importado.
+    listar: (db, { dias }) => listarNaoConformidadesParadas(db, { dias }),
+    // RN do D6: UM aviso por NC, para sempre — o molde e `quarentena-<item_id>` e
+    // `req-atrasada-<id>`, as duas irmas que tambem cobram um ato humano pendente. Nem mes nem
+    // semana na chave DE PROPOSITO: re-lembrar mensalmente de uma NC parada geraria e-mail para
+    // sempre (nao ha expurgo da fila) sem nenhum fato novo, e o dado que o destinatario precisa —
+    // "esta NC esta parada" — nao muda enquanto ninguem decide. A NC decidida sai da condicao;
+    // a que voltar a ser aberta e outro documento, com outro id.
+    //
+    // DESCARTADO: por a `dias_parada` na chave (como a `previsao_entrega` do pedido atrasado) —
+    // ali a data PROMETIDA so muda quando ha renegociacao, aqui `dias_parada` muda TODO DIA, e a
+    // chave viraria um e-mail diario pela mesma NC.
+    dedupeChave: (linha) => `nc-${linha.id}`,
+    payload: (linha) => ({ nao_conformidade_id: linha.id, material_id: linha.material_id }),
+    assunto: (linha) => `[Almoxarifado] Não conformidade aberta — ${linha.numero}`,
+    corpo: (linha) => [
+      `Não conformidade: ${linha.numero}`,
+      `Material: ${linha.material_codigo ? `${linha.material_codigo} — ${linha.material_nome}` : '-'}`,
+      `Tipo: ${linha.tipo}`,
+      `Origem: ${linha.origem}`,
+      `Aberta há: ${linha.dias_parada} dia(s)`,
+      // A NC de origem INSPECAO tambem congela o `recebimento_id` (o SQL da listagem nao e
+      // polimorfico, T1), mas a NC aberta a mao pode nao ter nenhum — dai o travessao.
+      `Recebimento: ${linha.recebimento_numero || '-'}${linha.nota_fiscal ? ` (NF ${linha.nota_fiscal})` : ''}`,
+    ].join('\n'),
+  },
 ]);
 
 /** Corte de linhas por alerta na central (C1) — o `total` continua sendo o numero cheio. */
@@ -717,4 +828,7 @@ module.exports = {
   listarReprovados,
   listarDivergenciasRecebimento,
   listarDivergenciaConferencia,
+  // Etapa 43 (T4): exportada para o teste da 14a entrada medir a regua de "parada" sem passar
+  // pela central inteira.
+  listarNaoConformidadesParadas,
 };

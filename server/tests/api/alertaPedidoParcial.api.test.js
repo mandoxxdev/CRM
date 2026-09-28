@@ -453,12 +453,14 @@ function resultadoDe(resultados, chave) {
 
   // ── (10) O REGISTRO TEM 13 ENTRADAS, INCLUSIVE NUM PROCESSO FRIO ────────────────────────────
   await test('(10) F17 a 13a entrada carrega num processo FRIO com listar function (require lazy)', async () => {
-    assert.strictEqual(alertRegistry.ALERT_REGISTRY.length, 13,
-      `o registro tinha de ter 13 entradas, tem ${alertRegistry.ALERT_REGISTRY.length}`);
+    // Etapa 43 (T4): 13 -> 14 (a entrada NAO_CONFORMIDADE_ABERTA). O numero cheio continua sendo
+    // a assercao certa: ele e o que pega a entrada que some por um merge ruim.
+    assert.strictEqual(alertRegistry.ALERT_REGISTRY.length, 14,
+      `o registro tinha de ter 14 entradas, tem ${alertRegistry.ALERT_REGISTRY.length}`);
     const { cartao, alertas } = await cartaoDaCentral();
-    assert.strictEqual(alertas.length, 13, `a central tem ${alertas.length} cartoes`);
+    assert.strictEqual(alertas.length, 14, `a central tem ${alertas.length} cartoes`);
     assert.strictEqual(cartao.erro, undefined, `listar lancou: ${cartao.erro_mensagem}`);
-    // Nenhuma das 12 anteriores caiu por causa da nova.
+    // Nenhuma das outras 13 caiu por causa da nova.
     const comErro = alertas.filter((a) => a.erro).map((a) => a.chave);
     assert.deepStrictEqual(comErro, [], `entradas com erro na central: ${JSON.stringify(comErro)}`);
 
@@ -474,7 +476,7 @@ function resultadoDe(resultados, chave) {
       console.log(JSON.stringify({ total: r.ALERT_REGISTRY.length, tem: !!e, listar: typeof (e && e.listar) }));
     `], { cwd: require('path').join(__dirname, '..', '..'), encoding: 'utf8' });
     const medido = JSON.parse(saida.trim().split('\n').pop());
-    assert.deepStrictEqual(medido, { total: 13, tem: true, listar: 'function' },
+    assert.deepStrictEqual(medido, { total: 14, tem: true, listar: 'function' },
       `carga a frio devolveu ${saida.trim()}`);
   });
 
@@ -518,7 +520,7 @@ function resultadoDe(resultados, chave) {
     await dbRun(db, 'ALTER TABLE pedidos_compra RENAME TO pedidos_compra_fora_e42t3');
     try {
       const { alertas, cartao } = await cartaoDaCentral();
-      assert.strictEqual(alertas.length, 13, 'a central perdeu cartoes com a tabela ausente');
+      assert.strictEqual(alertas.length, 14, 'a central perdeu cartoes com a tabela ausente');
       assert.ok(cartao, 'o cartao do parcial desapareceu');
       // A guarda `sqlite_master` e da fonte (T1): sem a tabela, ela devolve `[]` e o cartao vem
       // VAZIO, nao com erro.
@@ -528,7 +530,9 @@ function resultadoDe(resultados, chave) {
 
       // As 11 entradas que so leem tabelas `*_almoxarifado` continuam respondendo.
       const semCompras = alertas.filter((a) => !a.chave.startsWith('PEDIDO_COMPRA_'));
-      assert.strictEqual(semCompras.length, 11, JSON.stringify(semCompras.map((a) => a.chave)));
+      // Etapa 43 (T4): 11 -> 12 com a entrada NAO_CONFORMIDADE_ABERTA, que tambem so le tabela
+      // `*_almoxarifado` e por isso entra nesta conta.
+      assert.strictEqual(semCompras.length, 12, JSON.stringify(semCompras.map((a) => a.chave)));
       const quebradas = semCompras.filter((a) => a.erro).map((a) => a.chave);
       assert.deepStrictEqual(quebradas, [],
         `entradas de almoxarifado quebraram por falta de tabela de compras: ${JSON.stringify(quebradas)}`);

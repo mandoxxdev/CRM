@@ -109,17 +109,20 @@ test('remover ja removido: 404, nao 200', async () => {
   } finally { await ctx.close(); }
 });
 
-// As seis entidades do mapa apontam para tabela que EXISTE — a regua que pega nome imaginado.
-// A assercao de DISTINCAO (`new Set(...).size === 6`) e o que impede o teste de passar com um
-// mapa que aponte as seis chaves para `materiais_almoxarifado`: so "a tabela existe" seria
+// As entidades do mapa apontam para tabela que EXISTE — a regua que pega nome imaginado.
+// A assercao de DISTINCAO (`new Set(...).size`) e o que impede o teste de passar com um
+// mapa que aponte todas as chaves para `materiais_almoxarifado`: so "a tabela existe" seria
 // satisfeito por esse mapa errado, e anexar em `inspecao` validaria contra material.
-test('as seis entidades do mapa apontam para tabelas distintas que existem no schema', async () => {
+//
+// ⚠️ 6 -> 7 na Etapa 43, T4: `nao_conformidade` entrou porque a NC e um documento que nasce de uma
+// divergencia FISICA — a foto da chapa amassada e o laudo sao a prova em que a decisao se apoia.
+test('as entidades do mapa apontam para tabelas distintas que existem no schema', async () => {
   const ctx = await createTestApp();
   try {
     const M = anexoService.ENTIDADES_ANEXO;
     const chaves = Object.keys(M);
-    assert.strictEqual(chaves.length, 6, 'o mapa tem seis entidades — uma por pendencia de spec');
-    assert.strictEqual(new Set(Object.values(M)).size, 6, 'duas entidades apontam para a MESMA tabela');
+    assert.strictEqual(chaves.length, 7, 'o mapa tem sete entidades — uma por pendencia de spec');
+    assert.strictEqual(new Set(Object.values(M)).size, 7, 'duas entidades apontam para a MESMA tabela');
     // O mapa e CONTRATO: mudar chave ou tabela tem de passar por aqui, conscientemente.
     assert.deepStrictEqual(M, {
       material: 'materiais_almoxarifado',
@@ -128,6 +131,7 @@ test('as seis entidades do mapa apontam para tabelas distintas que existem no sc
       inspecao: 'inspecoes_recebimento_almoxarifado',
       devolucao: 'devolucoes_material_almoxarifado',
       item_remessa: 'itens_remessa_terceiro_almoxarifado',
+      nao_conformidade: 'nao_conformidades_almoxarifado',
     });
     // E o laco em sqlite_master e a guarda contra erro de digitacao no proprio literal acima.
     for (const chave of chaves) {

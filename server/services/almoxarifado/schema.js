@@ -2162,6 +2162,11 @@ async function initSchema(db) {
     // central mostra e o que a varredura diaria re-verifica como rede de seguranca. Mesmo
     // prefixo 'alerta_' ja validado nos dois lados na Etapa 16.
     ['alerta_eventos_janela_dias', '7', 'Janela em dias que os alertas de evento (reprovado, divergencias) mostram na central'],
+    // Etapa 43 (T4, D6): janela do alerta NAO_CONFORMIDADE_ABERTA — dias com a NC ainda sem
+    // decisao. SEMEADA porque chave nao semeada e ineditavel pelo PUT /configuracoes (a licao da
+    // Etapa 10 registrada acima): o administrador salvaria 200 "Configuracoes salvas!" e o motor
+    // continuaria usando o default. Mesmo prefixo 'alerta_' ja validado nos dois lados.
+    ['alerta_nc_parada_dias', '7', 'Dias com a nao conformidade ABERTA (sem decisao) para alertar documento parado'],
   ];
   for (const [chave, valor, desc] of configs) {
     await dbRun(db, 'INSERT OR IGNORE INTO configuracoes_almoxarifado (chave, valor, descricao) VALUES (?,?,?)', [chave, valor, desc]);
