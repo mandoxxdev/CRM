@@ -1232,6 +1232,81 @@ async function initSchema(db) {
   await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_medidas_inspecao_almox_inspecao
     ON medidas_inspecao_almoxarifado(inspecao_id)`);
 
+  // ── Não conformidade NUMERADA (Etapa 43, features 08 + 09) ──────────────────────────────────
+  //
+  // POR QUE UMA TABELA SÓ, com `origem` (D1). A spec 08 pede "divergência formal numerada" e a 09
+  // pede "não conformidade formal numerada" — é o MESMO documento visto de dois lados. Duas
+  // tabelas divergiriam na primeira edição e dariam DOIS números para o mesmo fato físico, que é
+  // a classe de bug que este módulo mais combate. O precedente a favor é
+  // `anexos_documento_almoxarifado`: tabela única com `entidade` + `entidade_id`, que serviu seis
+  // consumidores sem virar duas. `origem` aceita `INVENTARIO` no dia em que for pedido, sem
+  // migração — ele fica FORA agora porque a divergência de inventário tem fluxo próprio.
+  //
+  // POR QUE `material_id` E `recebimento_id` MORAM AQUI, e não saem de JOIN pela origem: são
+  // CONGELADOS no ato da abertura, qualquer que seja a origem. É isso que torna a listagem
+  // NÃO-POLIMÓRFICA — um `LEFT JOIN materiais` + `LEFT JOIN recebimentos` e pronto, em vez de dois
+  // caminhos de JOIN com metade das colunas vindo nula para metade das linhas.
+  //
+  // POR QUE o fato (`quantidade_*`, `divergencia`) é copiado e não lido do item: mesmo precedente
+  // das medidas de inspeção logo acima (RN-05 da Etapa 27) — o documento conta o que se observou
+  // NAQUELE instante, e reconferir o item depois de DECIDIDA não pode reescrever a história.
+  // Enquanto a NC está ABERTA o fato ainda está sendo apurado e é atualizado (RN-04); depois, não.
+  //
+  // Os nomes de coluna seguem o que o schema JÁ usa: `motivo_cancelamento`, `cancelado_em` e o
+  // padrão `<particípio masculino>_por_id/_nome` (`criado_por_nome`, `conferido_por_nome`,
+  // `recebido_por_nome`… — 19 colunas). `aberta_por_nome`/`decidida_em` seria flexão que não
+  // existe em nenhuma delas, e DDL fica para sempre.
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS nao_conformidades_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    numero TEXT UNIQUE NOT NULL,
+    origem TEXT NOT NULL,
+    referencia_tipo TEXT NOT NULL,
+    referencia_id INTEGER NOT NULL,
+    tipo TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'ABERTA',
+    material_id INTEGER,
+    recebimento_id INTEGER,
+    quantidade_esperada REAL,
+    quantidade_recebida REAL,
+    divergencia REAL,
+    descricao TEXT,
+    decisao TEXT,
+    justificativa TEXT,
+    aberto_por_id INTEGER,
+    aberto_por_nome TEXT,
+    aberto_automaticamente INTEGER DEFAULT 0,
+    decidido_por_id INTEGER,
+    decidido_por_nome TEXT,
+    decidido_em DATETIME,
+    motivo_cancelamento TEXT,
+    cancelado_em DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
+  )`);
+
+  // O índice é ÚNICO e PARCIAL, e as duas coisas importam (D5):
+  //
+  //   - ÚNICO sobre `(origem, referencia_tipo, referencia_id, tipo)`: reconferir dez vezes o mesmo
+  //     item não pode abrir dez documentos. A colisão é detectada PELO BANCO, nunca por um
+  //     SELECT-antes-do-INSERT, que tem janela de corrida (mesma razão escrita em extended.js:200).
+  //   - PARCIAL `WHERE status = 'ABERTA'`: sem isso, decidir uma NC trancaria o par item+tipo para
+  //     sempre — chegou a menos e aceitou-se; reconferiu e faltou MAIS ainda: isso é fato novo e
+  //     merece documento novo. Duas NCs ENCERRADAS do mesmo item são consequência DESEJADA. A
+  //     guarda contra reabrir sem fato novo é a RN-10, em código (nonConformityService), porque é
+  //     comparação por epsilon e índice não sabe fazer isso.
+  //
+  // Sem try/catch, como `idx_planos_inspecao_almox_mat_carac` e pela mesma razão medida: a tabela
+  // NASCE com o índice, não existe base legada com NC duplicada porque não existe base legada com
+  // NC. O try/catch da Etapa 26 foi para um índice acrescentado a tabela que JÁ tinha dados.
+  await dbRun(db, `CREATE UNIQUE INDEX IF NOT EXISTS idx_nc_almox_aberta
+    ON nao_conformidades_almoxarifado(origem, referencia_tipo, referencia_id, tipo)
+    WHERE status = 'ABERTA'`);
+
+  // A consulta da tela e a do alerta são as duas "abertas, mais velhas primeiro".
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_nc_almox_status
+    ON nao_conformidades_almoxarifado(status, created_at)`);
+
   const recebCols = [
     "tipo_recebimento TEXT DEFAULT 'NOTA_FISCAL'",
     'fornecedor_cnpj TEXT',

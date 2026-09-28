@@ -183,6 +183,18 @@ CREATE INDEX IF NOT EXISTS idx_nc_almox_status
   está no lugar errado.
 
 ### T2 — tronco — permissões + rotas + rótulos
+
+> **O que a T1 já entregou, e que a T2 consome (medido, não prometido):**
+> `services/almoxarifado/nonConformityService.js` exporta `abrirNaoConformidade(db, user, dados)`
+> (→ documento, ou **`null`** quando já há ABERTA idêntica → a rota traduz em **409**),
+> `sincronizarNaoConformidadeQuantidade`, `abrirNaoConformidadeDeInspecao`,
+> `decidirNaoConformidade(db, user, id, { decisao, justificativa })`,
+> `listarNaoConformidades(db, filtros)` → **array** (a rota embrulha em `{ itens }`),
+> `obterNaoConformidade(db, id)` → linha ou **`null`** (a rota traduz em 404), os cinco enums e
+> `LIMITE_PADRAO`/`LIMITE_TETO`. Todos os erros já saem com `.status` (400/404/409) e com a
+> mensagem literal da tabela de contratos acima — o `handleError` de `extended.js:77` só
+> repassa. **A rota não deve revalidar enum nem id**: duplicar a régua é como a mensagem literal
+> se parte em duas.
 - `permissions.js`: as duas ações (D8), com o comentário explicando a exclusão de COMPRAS da
   decisão.
 - **`client/src/utils/permissaoErro.js` NO MESMO COMMIT** (achado 5 — é a **5ª** vez que este
@@ -252,7 +264,18 @@ Lotes de no máximo **dois** galhos.
 
 ## Tasks feitas
 
-- [ ] T1
+- [x] T1 — tabela + `nonConformityService.js` + `naoConformidadeServico.api.test.js` (13 cenários).
+      Suíte: **200/200 arquivos** em `test:api` (baseline era 199/199).
+      **Três pontos em que a T1 divergiu do plano, todos registráveis na letra B:**
+      1. `sincronizarNaoConformidadeQuantidade` devolve `{ efeito, nc }`, e o campo **NÃO** pode
+         chamar-se `acao`: `auditLabels.api.test.js:61` varre `services/` com
+         `grep -rhoP "acao: '[A-Z_]+"` e trata todo casamento como verbo de auditoria sem rótulo.
+         Medido — com `acao` o teste cai. Vale inclusive dentro de comentário.
+      2. **RN-10 vale só no gancho**, não na porta manual `abrirNaoConformidade`. Uma pessoa que
+         abre documento à mão está afirmando que reobservou o fato; a guarda existe contra o
+         reenvio automático do modal de NF, não contra a pessoa.
+      3. `listarNaoConformidades` devolve **array** (molde de `listarHistorico`/`listarAnexos`);
+         quem embrulha em `{ itens }` é a rota da T2.
 - [ ] T2
 - [ ] T3
 - [ ] T4
