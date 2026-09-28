@@ -11491,6 +11491,23 @@ o furo C57 de volta, e **sem saída**, porque o documento não pode ser decidido
 
 ## Onde estamos e o que vem a seguir
 
+- **Etapa 44 entregue (2026-09-28):** **a Qualidade executa a própria decisão**. Aceitar uma não
+  conformidade de inspeção **libera sozinha** o material que a reprovação havia bloqueado, e a tela
+  diz quanto saiu. Ninguém precisa mais pedir a um Administrador que desbloqueie à mão, e o livro
+  de movimentações passou a apontar **qual documento** soltou aquele bloqueio. **Sem permissão
+  nova** — quem já podia decidir o documento executa o efeito dele.
+  **O que é seu:** a consulta **A22** (quanto material antigo continua sem caminho automático de
+  liberação); as decisões **B173 a B175** — a que mais pede sua leitura é a **B173**, porque ela
+  **abandona** uma promessa que a documentação repetia desde a Etapa 24; e os furos **C62** (liberar
+  a NC **não** reabilita o lote — são dois portões e este abre um) e **C63**.
+  **O furo C57 está RESOLVIDO**, e o conserto **não** foi o que ele mesmo prescrevia.
+  **As revisões acharam 34 itens, 4 CRITICAL, zero ruído** — 15 no plano, antes de codar, e 19 no
+  código pronto. O mais grave era do **motor de estoque**, não desta etapa: quando ele falhava
+  *depois* de mexer no bloqueio e *antes* de escrever no livro, devolvia erro com o saldo já
+  alterado — e a etapa, confiando no erro, refazia a operação. Uma reprovação de 3 kg soltava 6.
+  Corrigido onde mora. **E um achado de apresentação:** o aviso dentro do modal de decisão ainda
+  exibia a frase do furo antigo, no passo exato em que você diria que ele foi resolvido.
+
 - **Etapa 43 entregue (2026-09-28):** **a divergência vira documento numerado**. O sistema já
   detectava que chegou material a menos e que a inspeção reprovou; o que não existia era o
   **documento** com a **decisão**. Agora a divergência de recebimento e a não conformidade de
@@ -11502,7 +11519,7 @@ o furo C57 de volta, e **sem saída**, porque o documento não pode ser decidido
   sozinhas, com três caminhos e a recomendação de não criar em massa); as decisões **B168 a B172** —
   as que mais pedem sua leitura são a **B169** (tirar Compras da decisão) e a **B171** (não existe
   botão de abrir à mão); os furos **C57** (a Qualidade decide *aceitar sob desvio* e **não
-  consegue executar** a própria decisão — é o próximo passo natural) e **C58**; e as três limitações
+  consegue executar** a própria decisão — ✅ RESOLVIDO na Etapa 44) e **C58**; e as três limitações
   **(43)** em D.
   **A revisão do plano (Fase 2) achou 20 itens, 4 bloqueantes, antes da primeira linha de código** —
   e três deles eram invisíveis por leitura: o documento ia nascer **só na porta que a tela real não
