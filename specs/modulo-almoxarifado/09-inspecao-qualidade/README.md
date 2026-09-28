@@ -37,9 +37,21 @@
 > é ignorado, o valor derivado volta na resposta e a caixa da tela ficou somente leitura — como
 > a Etapa 29 fez com a dimensional. **Isto fica dito, e não apagado**, porque quem leu esta spec
 > antes de 2026-09-28 pode ter escrito código confiando naquele booleano.
-> **Faltam para 🟢: agora DOIS** (eram três) — **liberação sob desvio autorizado**, que mudou de
+> **Etapa 44 (2026-09-28, `ff02188..db94225`) — A QUALIDADE EXECUTA A PRÓPRIA DECISÃO.** Decidir
+> `ACEITAR` ou `ACEITAR_SOB_DESVIO` numa NC de inspeção **libera** a quantidade reprovada, por
+> `DESBLOQUEIO` no motor, com o número da NC no livro. **Sem ação de perfil nova** — e isso
+> **contraria o que este cabeçalho prescrevia**: a frase *"o caminho limpo é uma ação própria
+> `bloquear_qualidade`"* continua valendo para os **botões avulsos** (**B56**), e **deixou de
+> valer** como conserto do furo C57; ver a correção no item do checklist e em **B173**.
+> Duas guardas que a revisão do plano exigiu: só NC **automática** libera (**RN-09**) e a migração
+> faz **backfill** de `liberacao_nc_em` nas inspeções existentes (**RN-03**) — sem as duas,
+> `abrirNaoConformidadeManual` viraria um desbloqueio sem `ajustar_estoque` contra qualquer
+> inspeção da história.
+> **Faltam para 🟢: agora UM** (eram dois) — **encaminhamento com status**.
+> ~~**Faltam para 🟢: agora DOIS** (eram três) — **liberação sob desvio autorizado**, que mudou de
 > natureza (a decisão existe e é imutável; o que falta é a QUALIDADE **conseguir executá-la**,
-> ver o item 2 abaixo) e **encaminhamento com status**. As duas pendências antigas desta spec
+> ver o item 2 abaixo) e **encaminhamento com status**.~~ *(valeu por um dia; a 44 pagou o
+> primeiro.)* As duas pendências antigas desta spec
 > (reprovar por lote, e material reprovado sem vínculo ao recebimento de origem) continuam fora
 > da conta, como sempre estiveram: são pendências, não checklist. *Este cabeçalho listava também
 > "cadastro do plano pela tela" (pago na Etapa 30) e "anexos" (pago na 32) — os dois saíram.* ·
@@ -137,7 +149,37 @@ Inspeção de recebimento com plano, quarentena e bloqueio efetivos no saldo, n�
 - [x] Quarentena como estado real: entrada inspecionável nasce `em_inspecao`, aprovação move para disponível via movimentação — **Etapa 5**: motor (`c37b67e`) + entrada retida em vez de barrada (`4db5e11`) + decisão via `DECISAO_INSPECAO` (`91184ca`). **A spec estava descrevendo um objetivo que a implementação anterior não cumpria** — verificado em 2026-08-07 (design da etapa) que `darEntradaEstoque` na verdade **recusava** aprovar recebimento de item crítico sem inspeção prévia (o material nunca chegava a existir no sistema, mesmo já estando fisicamente no galpão); não era "quarentena que não funciona", era ausência total de quarentena na entrada. Está corrigido: item que exige inspeção agora entra sempre, retido.
 - [x] Bloqueio de material fora de recebimento (achado em estoque) com motivo — **Etapa 5**: `inspectionService.bloquearMaterial`/`desbloquearMaterial` (`dc841f2`), rotas `POST /materiais/:id/bloquear|desbloquear` (`bbf7ed7`), botões na tela (`dcee909`). Motivo é `justificativa` obrigatória desde `c6a76a4`.
 - [ ] Não conformidade formal (número, descrição, ação, responsável) vinculada à inspeção — **fora do escopo da Etapa 5** (decisão do design). O que existe é o **encaminhamento** (linha abaixo) registrado junto da reprovação — não é uma NC numerada com fluxo próprio.
-- [ ] Liberação sob desvio autorizado (quem autorizou, justificativa, histórico imutável) — **fora do escopo da Etapa 5** (decisão do design).
+- [x] Liberação sob desvio autorizado (quem autorizou, justificativa, histórico imutável) —
+      ~~fora do escopo da Etapa 5 (decisão do design)~~ **PAGO EM DUAS ETAPAS**: a **43**
+      (`4e11793..`) entregou a **decisão** imutável com autor e justificativa, e a **44**
+      (`ff02188`, `db94225`) entregou a **liberação** — decidir `ACEITAR` ou `ACEITAR_SOB_DESVIO`
+      numa NC de inspeção devolve ao disponível a quantidade que aquela inspeção reprovou, por
+      `DESBLOQUEIO` no motor, com `documento_vinculado` = o número da NC e o motivo
+      *"Liberação por não conformidade"*.
+      > **⚠️ O CONSERTO NÃO FOI O QUE ESTA SPEC PRESCREVIA, e a prescrição fica corrigida à vista.**
+      > Esta spec dizia, desde a Etapa 24 e em dois lugares (o cabeçalho e o item do perfil
+      > QUALIDADE), que *"o caminho limpo é uma ação PRÓPRIA (`bloquear_qualidade`)"*. **A Etapa 44
+      > abandonou essa prescrição de propósito**, e o motivo é uma distinção que a frase original
+      > não fazia: `bloquear_qualidade` resolve o problema dos **botões avulsos** de
+      > bloquear/desbloquear (**B56**), que é OUTRO. Para *este* item — "quem decide não consegue
+      > executar" — ela é **larga demais**: daria à QUALIDADE o poder de desbloquear qualquer
+      > quantidade de qualquer material, a qualquer hora, sem documento. O caminho escolhido é o
+      > mais estreito que resolve: **nenhuma ação de perfil nova**, e o efeito preso ao documento.
+      > Segue o precedente já escrito em `permissions.js:192-193` para os ganchos da Etapa 43 —
+      > *"efeito do ato já autorizado"*. **B173** das novidades.
+      > **Duas guardas que a revisão do plano exigiu, e sem as quais a etapa teria aberto uma porta
+      > lateral:** (1) só NC com `aberto_automaticamente = 1` libera — senão
+      > `abrirNaoConformidadeManual` deixaria apontar para **qualquer inspeção da história** e
+      > liberar contra o pool bloqueado do material, sem `ajustar_estoque`; (2) a migração faz
+      > **backfill** de `inspecoes_recebimento_almoxarifado.liberacao_nc_em` em todas as inspeções
+      > existentes, pela mesma razão. A trava de idempotência mora na **inspeção**, não na NC,
+      > porque o índice único da NC é parcial **e por tipo** — a mesma inspeção pode carregar mais
+      > de um documento.
+      > **O que NÃO entrou, e é corte declarado:** as outras quatro decisões (`DEVOLVER`,
+      > `SUBSTITUICAO`, `ANALISE_ENGENHARIA`, `SUCATEAR`) continuam marcando intenção sem tocar no
+      > saldo (**B174**); e a liberação **não** reabilita o lote — em material com `controle_lote`,
+      > lote `REPROVADO` continua barrando a saída (furo **C62**, fixado por teste em
+      > `naoConformidadeLiberacaoIntegracao.api.test.js`).
 - [x] Solicitar análise da Engenharia / devolução ao fornecedor / substituição (registrar o encaminhamento pretendido) — **Etapa 5** (`dc841f2`): o campo `encaminhamento` (`DEVOLVER` | `ANALISE_ENGENHARIA` | `SUBSTITUICAO`) é validado e gravado em `inspecoes_recebimento_almoxarifado` na reprovação.
 - [ ] Encaminhamentos **com status** (acompanhar se a devolução/análise/substituição já foi executada) — **não implementado**. O `encaminhamento` de hoje é só a intenção registrada no momento da reprovação; não há campo de status nem nada que marque quando ela é cumprida. É **a pendência que esta etapa cria**, ver seção própria abaixo — a execução em si é a feature 12 (Devoluções), que ainda não existe.
 - [x] Anexos: certificado, relatório dimensional, fotos (`anexos_documento_almoxarifado`) — **PAGO na Etapa 32** (`0bb9ab4` serviço e schema · `8a496e9` as quatro rotas · `59902a9` componente · `8847c7e` plug na aba Histórico · `dad6a84` integração · `2bad01b` e `fd71958` fix-rounds da revisão adversarial).
@@ -184,6 +226,14 @@ Inspeção de recebimento com plano, quarentena e bloqueio efetivos no saldo, n�
       o caminho limpo é uma ação PRÓPRIA** (`bloquear_qualidade`), não abrir `ajustar_estoque` —
       mesmo critério que o módulo já usou em `remessar_terceiro`, `ajustar_material_cliente` e
       `gerenciar_ferramentas`.
+      > **⚠️ ESTA PRESCRIÇÃO FOI PARCIALMENTE ABANDONADA NA ETAPA 44, e isto fica dito.** Ela
+      > continua correta **para o que esta linha trata** (dar à QUALIDADE os botões avulsos de
+      > bloquear/desbloquear — **B56**, ainda aberta). **Mas ela vinha sendo citada também como o
+      > conserto do furo C57** ("a QUALIDADE decide e não executa"), e **para aquilo estava
+      > errada**: o problema não era falta do botão avulso, era a decisão não produzir efeito, e a
+      > ação nova seria larga demais para resolvê-lo — daria o poder de soltar qualquer quantidade
+      > de qualquer material, sem documento. A Etapa 44 resolveu o C57 **sem ação de perfil nova**,
+      > pelo documento. Quem ler esta linha procurando "o conserto do C57" vai à etapa errada.
 
 ### Frontend
 - [x] Fila de inspeções pendentes — **Etapa 5** (`dcee909`, `InspecoesAlmoxarifado.js`): lista o que está retido, de qual recebimento, há quantos dias.
@@ -210,10 +260,17 @@ checklist de backend e a Etapa 29 pagou os **dois de frontend** — o item 5 da 
 TELA de medidas e a tela de leitura"*) **saiu**. Dos cinco, sobram **quatro**, e três deles são
 fluxo inteiro.
 
-> **ATUALIZADO EM 2026-09-28 (Etapa 43):** dos quatro, o item 1 (**não conformidade formal
-> numerada**) está **pago** e o item 2 (**liberação sob desvio**) está **pago pela metade** — a
-> decisão existe, a execução não alcança quem decide. **Sobram DOIS**, e o que impede o 🟢 hoje
-> não é falta de documento: é a **permissão** que separa quem decide de quem executa. Sem esta lista escrita, a próxima leitura teria de refazer a conta — e nesta base
+> **ATUALIZADO EM 2026-09-28 (Etapa 44):** dos quatro, os itens 1 (**não conformidade formal
+> numerada**) e 2 (**liberação sob desvio**) estão **pagos**, e o 3 (**anexos**) desde a 32.
+> **Sobra UM: encaminhamento com status**, e ele depende da feature 12 (Devoluções), que ainda não
+> existe. Ou seja: **a feature 09 não fecha sozinha** — o que falta tem dono em outra spec.
+> ~~**ATUALIZADO EM 2026-09-28 (Etapa 43):** … o item 2 (**liberação sob desvio**) está **pago pela
+> metade** … **Sobram DOIS**, e o que impede o 🟢 hoje não é falta de documento: é a **permissão**
+> que separa quem decide de quem executa.~~ *(valeu por um dia. E a última frase estava **errada
+> como diagnóstico**: o que impedia não era a permissão — a Etapa 44 resolveu **sem mexer em
+> permissão nenhuma**, ligando a decisão ao motor. Fica dito, porque essa frase induziria a próxima
+> sessão a abrir `ajustar_estoque` para a QUALIDADE, que é a saída larga.)*
+> Sem esta lista escrita, a próxima leitura teria de refazer a conta — e nesta base
 isso já produziu "o que falta para 🟢" errado quatro vezes seguidas na feature 23.
 
 1. ~~**Não conformidade formal** (número, descrição, ação, responsável) vinculada à inspeção — é uma
@@ -225,16 +282,17 @@ isso já produziu "o que falta para 🟢" errado quatro vezes seguidas na featur
    justificativa, trilha (`NC_ABERTA`/`NC_DECIDIDA`/`NC_CANCELADA`), anexos e tela própria. A
    reprovação da inspeção **abre o documento sozinha**, com o `tipo` pela prioridade
    `MATERIAL_INCORRETO → DANO_FISICO → DIMENSIONAL → CERTIFICADO_AUSENTE → QUANTIDADE`.
-2. **Liberação sob desvio autorizado** (quem autorizou, justificativa, histórico imutável) —
-   **PAGO PELA METADE na Etapa 43, e a metade que falta está medida.** A decisão
-   `ACEITAR_SOB_DESVIO` existe no documento, com autor, justificativa e histórico imutável — mas
-   **ela não libera o material**. A quantidade reprovada continua em `quantidade_bloqueada`
-   (`inspectionService.js:250-251`), e quem desbloqueia é `POST /materiais/:id/desbloquear`,
-   gateado por `ajustar_estoque`, que **não inclui QUALIDADE** (`permissions.js:99-101`, exclusão
-   deliberada da Etapa 24). **Resultado medido: a QUALIDADE decide e não consegue executar a
-   própria decisão.** O item **continua contando** para a cor. O conserto limpo é o que esta spec
-   já nomeia desde a Etapa 24: uma ação própria (`bloquear_qualidade`), separada do ajuste de
-   estoque geral. Furo **C57** das novidades.
+2. ~~**Liberação sob desvio autorizado** (quem autorizou, justificativa, histórico imutável) —
+   **PAGO PELA METADE na Etapa 43**. A decisão `ACEITAR_SOB_DESVIO` existe no documento, com autor,
+   justificativa e histórico imutável — mas **ela não libera o material**. (…) O conserto limpo é o
+   que esta spec já nomeia desde a Etapa 24: uma ação própria (`bloquear_qualidade`), separada do
+   ajuste de estoque geral. Furo **C57** das novidades.~~
+   **PAGO POR INTEIRO NA ETAPA 44** (2026-09-28, `ff02188` T1 · `db94225` T2/T3/T4). Riscado em vez
+   de apagado. A decisão de aceitação **executa**: devolve ao disponível a quantidade reprovada
+   daquela inspeção, uma vez só, com o número da NC no livro. **A prescrição de
+   `bloquear_qualidade` foi ABANDONADA** — ver a correção no item do checklist acima e **B173**:
+   ela resolvia o problema dos botões avulsos (**B56**, que continua aberta), e para este item era
+   mais larga que o necessário. O furo **C57** está **resolvido**.
 3. ~~**Anexos** (certificado, relatório dimensional, fotos) — depende de
    `anexos_documento_almoxarifado`, que é item próprio de outra spec.~~ **PAGO na Etapa 32**
    (`e708125..fd71958`). Riscado em vez de apagado, para quem tiver lido a lista anterior

@@ -1,14 +1,29 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-09-28 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-09-28 (Etapa 44) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 43) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 44) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-09-28 (Etapa 43 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-09-28 (Etapa 44 ENTREGUE · modo contínuo pelo mapa)
 >
-> **Etapas 1 a 20 e 22 a 43 completas; a Etapa 21 foi entregue no NÚCLEO do CRM e as 38 a 42 no
+> **Etapas 1 a 20 e 22 a 44 completas; a Etapa 21 foi entregue no NÚCLEO do CRM e as 38 a 42 no
 > módulo COMPRAS** (a 42 nos dois: o gancho roda no Almoxarifado, o efeito aparece no Compras).
-> A **43 volta para dentro do almoxarifado**, nas features 08 (Recebimento) e 09 (Inspeção).
+> A **43 e a 44 estão dentro do almoxarifado**, nas features 08 (Recebimento) e 09 (Inspeção).
+>
+> A **Etapa 44 (a Qualidade executa a própria decisão)** fechou em 2026-09-28 e **fecha o furo que
+> a 43 abriu**: aceitar uma não conformidade de inspeção agora **libera sozinha** o material que a
+> reprovação havia bloqueado, e a tela diz quanto saiu — *"Não conformidade NC-0007 decidida! 3
+> liberado(s) do bloqueio"*. Ninguém precisa mais pedir a um Administrador que desbloqueie à mão, e
+> o livro de movimentações passou a apontar **qual documento** soltou aquele bloqueio.
+> **Sem permissão nova:** quem já podia decidir o documento executa o efeito dele. Os botões
+> avulsos de bloquear/desbloquear continuam fora do perfil Qualidade, de propósito.
+> **O que ela NÃO faz e você precisa saber:** só as duas decisões de **aceitação** mexem no saldo
+> (*Devolver*, *Substituição*, *Análise da Engenharia* e *Sucatear* só registram a intenção, e a
+> tela diz isso); liberar a NC **não reabilita o lote** em material com controle por lote — a saída
+> continua recusando até alguém voltar o lote para *Ativo* (furo **C62**); e reprovações
+> **anteriores** a esta atualização continuam só no caminho manual (consulta **A22**).
+>
+> **Próxima etapa: escolhida pelo mapa** `specs/modulo-almoxarifado/README.md`.
 >
 > A **Etapa 43 (a divergência vira documento numerado)** fechou em 2026-09-28. O que o sistema já
 > **detectava** — chegou menos material do que a nota diz, a inspeção reprovou um lote — passou a
@@ -18,11 +33,13 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 > decisão, e o alerta antigo de divergência virou a **rede de segurança** de quando o documento não
 > nasce. E a caixa *"divergência de quantidade"* da inspeção, que era **marcada à mão**, passou a
 > ser **calculada** e somente leitura — o mesmo que aconteceu com a dimensional na Etapa 27.
-> **O que ela NÃO faz e você precisa saber:** a decisão **não mexe no estoque** — *aceitar sob
+> ~~**O que ela NÃO faz e você precisa saber:** a decisão **não mexe no estoque** — *aceitar sob
 > desvio* fecha o documento e **não desbloqueia** o material, e o perfil Qualidade não tem permissão
-> de ajuste de estoque (furo **C57** das novidades, e é o próximo passo natural).
->
-> **Próxima etapa: escolhida pelo mapa** `specs/modulo-almoxarifado/README.md`.
+> de ajuste de estoque (furo **C57** das novidades, e é o próximo passo natural).~~
+> **ISTO DEIXOU DE VALER NA ETAPA 44** — ficou certo por um dia e está corrigido aqui em vez de
+> apagado. As duas decisões de **aceitação** passaram a desbloquear o material; as outras quatro
+> continuam só registrando a intenção. O furo **C57** está **resolvido**, e o conserto **não** foi
+> a permissão nova que este parágrafo previa — ver a seção da Etapa 44, acima.
 >
 > A **Etapa 42 (o recebimento fecha o pedido)** fechou em 2026-09-27 e **encerrou a cadeia** que as
 > Etapas 38 a 41 abriram: cotação → pedido → recebimento → pedido fechado. O pedido recebido por
@@ -4813,6 +4830,94 @@ que ele não tinha como repetir com sucesso garantido.
 - **Número de série de material** — continua sendo **digitado pelo operador** e de propósito não
   passa por este gerador. Retentar com outro número gravaria algo que ninguém digitou.
 - **Números de outros módulos do CRM** — a varredura foi do almoxarifado.
+
+---
+
+## Etapa 44 — A Qualidade executa a própria decisão (ENTREGUE — 2026-09-28)
+
+**O que mudou, em uma frase:** aceitar uma não conformidade de inspeção **libera sozinha** o
+material que a reprovação havia bloqueado — antes, o documento fechava e os quilos continuavam
+presos até alguém da gestão desbloquear à mão, noutra tela.
+
+**O problema que ela resolve.** A Qualidade analisava o lote reprovado, concluía *"está fora da
+especificação, mas nesta aplicação serve"*, assinava com justificativa — e nada acontecia com o
+saldo. Quem podia desbloquear era o Administrador ou o Gestor, pela tela de Movimentações, sem
+nenhum vínculo com a decisão recém-tomada. **O documento dizia uma coisa e o saldo dizia outra**, e
+esse era o furo **C57**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| *Aceitar sob desvio* fechava o documento e **o material continuava bloqueado** | A decisão libera a quantidade que aquela inspeção reprovou, no mesmo clique |
+| Era preciso **pedir a outra pessoa** que desbloqueasse pela tela de Movimentações | Quem decide o documento executa o efeito dele — sem permissão nova |
+| O livro registrava *"Desbloqueio avulso"*, sem dizer por ordem de quê | A movimentação carrega o **número da NC** e o motivo *"Liberação por não conformidade"* |
+| Decidir *Aceitar sob desvio* e decidir *Devolver* davam o mesmo retorno na tela | A tela diz o que aconteceu com o saldo — **inclusive quando nada muda** |
+
+### Roteiro de teste manual
+
+**O que você precisa antes de começar:** um usuário com perfil **Qualidade** (ou Administrador) e
+a configuração **"Inspeção de material crítico"** ligada em *Almoxarifado → Configurações*.
+
+1. **Entre** no sistema e vá em **Almoxarifado → Materiais**. Crie um material novo (ou edite um
+   existente) e marque **Material crítico**. Anote o código.
+2. **Almoxarifado → Recebimentos → Novo recebimento.** Escolha o fornecedor, preencha a nota
+   fiscal e adicione **10** unidades do material do passo 1. Salve.
+3. Na lista de recebimentos, abra o que você criou e **processe/aprove** a entrada.
+   → Vá em **Materiais** e confira: o material tem **10 em inspeção** e **0 disponível**. É a
+   quarentena — material crítico entra retido.
+4. **Almoxarifado → Inspeções.** O item aparece na fila de pendentes. Clique em **Decidir**.
+5. No modal, preencha **Quantidade aprovada: 7** e **Quantidade reprovada: 3**, marque **Dano
+   físico**, escolha o encaminhamento **Análise da Engenharia** e escreva uma observação. Confirme.
+   → Volte a **Materiais**: o material agora tem **7 disponíveis e 3 bloqueados**.
+6. **Almoxarifado → Não Conformidades.** O documento `NC-…` já está lá, com status **Aberta** —
+   ninguém o criou, ele nasceu da reprovação. Anote o número.
+7. Clique no ícone de **decidir** da linha. Escolha **Aceitar sob desvio**, escreva a justificativa
+   (*"desvio autorizado pela engenharia, laudo em anexo"*) e confirme.
+   → **O aviso que prova a etapa:** *"Não conformidade NC-… decidida! 3 liberado(s) do bloqueio"*.
+8. **Volte a Materiais.** O material agora tem **10 disponíveis e 0 bloqueados**. A quantidade
+   total **não mudou** — liberar não cria material, só tira a retenção.
+9. **Almoxarifado → Movimentações.** A última linha é um **Desbloqueio** de 3, com o motivo
+   *"Liberação por não conformidade"* e o **número da NC** no documento vinculado. Antes desta
+   etapa, ali só se lia "Desbloqueio avulso".
+10. **Agora o outro lado.** Repita os passos 1 a 6 com outro material, e desta vez decida
+    **Devolver ao fornecedor**.
+    → *"Não conformidade NC-… decidida! Esta decisão não altera o saldo"*, e o material continua
+    com **3 bloqueados**. Está certo: o material ainda não voltou a lugar nenhum.
+11. **A recusa que você deve ver.** Repita até o passo 6 com um terceiro material. Antes de
+    decidir, vá em **Movimentações** e faça um **Desbloqueio** manual de 2 (deixando 1 bloqueado).
+    Volte a Não Conformidades e decida **Aceitar**.
+    → **A decisão NÃO é gravada**, e a tela mostra *"Quantidade bloqueada insuficiente: 1"*. O
+    documento continua **Aberto**. É de propósito: liberar pela metade deixaria o documento
+    dizendo "aceito" com material ainda preso, em silêncio.
+12. **Sem permissão.** Entre com um usuário de perfil **Almoxarife** e tente decidir qualquer não
+    conformidade. → Recusa por permissão, **antes** de qualquer efeito no saldo.
+
+### ⚠️ Um passo a mais quando o material tem controle por lote
+
+Se o material tiver **controle por lote** e alguém tiver posto o lote em **Reprovado** (tela de
+Lotes), liberar a não conformidade **não reabilita o lote**. A tela dirá *"3 liberado(s) do
+bloqueio"*, o saldo disponível subirá — **e a saída continuará sendo recusada**, com *"Lote LOTE-123
+esta reprovado e nao pode ser utilizado"*.
+
+São **dois portões**, e esta etapa abre um. Para o material sair, é preciso um segundo gesto:
+voltar o lote para **Ativo** na tela de Lotes, com justificativa. Isso está fixado por teste de
+propósito — lote reprovado tem de continuar barrado até alguém decidir o contrário.
+
+### O que esta etapa NÃO cobre
+
+- **Os botões avulsos de Bloquear/Desbloquear material continuam fora do perfil Qualidade.** Eles
+  exigem permissão de ajuste de estoque (Administrador e Gestor). Foi decisão declarada, não
+  esquecimento — o que a etapa deu à Qualidade foi executar **o documento que ela assinou**, não
+  mexer em saldo livremente.
+- **Devolver, Substituição e Sucatear não executam nada** — só registram a intenção.
+- **Reprovações anteriores a esta atualização não liberam.** Elas continuam no caminho manual, pela
+  tela de Movimentações. É proteção deliberada: se liberassem, bastaria apontar um documento novo
+  para uma inspeção antiga qualquer para soltar material bloqueado por outro motivo.
+- **Documento aberto à mão sobre uma inspeção não libera saldo** — mesma proteção, e a tela diz
+  *"Não conformidade aberta manualmente não libera saldo"*.
+- **A tela não mostra, na linha, quanto aquele documento liberou.** O aviso aparece no momento da
+  decisão; depois, o vínculo está no livro de movimentações, pelo número da NC.
 
 ---
 

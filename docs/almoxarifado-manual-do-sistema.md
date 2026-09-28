@@ -2868,6 +2868,14 @@ O desbloqueio **nunca satura em silêncio**: pedir para desbloquear 50 quando h�
 
 Perfil exigido para bloquear e desbloquear: **ajustar estoque** (Administrador e Gestor). Ele é **diferente** do de decidir inspeção — quem decide inspeção não necessariamente pode bloquear material avulso.
 
+**Há um segundo caminho para tirar material do bloqueio, e ele não passa por estes botões:** aceitar
+a **não conformidade** que a reprovação gerou libera sozinha a quantidade reprovada, e quem faz isso
+é quem pode **decidir não conformidade** (Administrador e Qualidade) — ver **15b.4-bis**. Os dois
+caminhos existem de propósito e não se substituem: estes botões soltam **qualquer quantidade de
+qualquer material**, a qualquer momento, e por isso continuam restritos ao ajuste de estoque; a
+liberação pelo documento solta **só o que aquela inspeção reprovou**, uma vez, com o número do
+documento gravado no livro.
+
 ### 15.4 O que material bloqueado deixa de poder fazer
 
 Bloqueado é um **estado administrativo**, não uma ausência física. O material continua no galpão, continua valendo dinheiro e continua sendo contado no inventário.
@@ -2975,15 +2983,60 @@ filtro de **origem**, se estiver escolhido, permanece.
 Um documento só é decidido **uma vez**. Se alguém decidiu no intervalo, a segunda tentativa recebe
 *"Esta não conformidade já foi encerrada"*.
 
-**A decisão não mexe no estoque.** Decidir *Devolver ao fornecedor* não cria a devolução; decidir
-*Sucatear* não baixa saldo; *Aceitar sob desvio* **não desbloqueia** o material. O documento registra
-o que se decidiu — executar continua sendo gesto próprio, nas telas de sempre (12, 6 e 15.3).
+### 15b.4-bis O que a decisão faz com o saldo
 
-⚠️ **Consequência prática de quem decide não poder executar:** a quantidade reprovada na inspeção
-fica **bloqueada** (15.3), e quem tira material do bloqueio precisa da permissão **ajustar_estoque**,
-que o perfil **Qualidade não tem** (5). Na prática: a Qualidade decide *Aceitar sob desvio* e precisa
-pedir a um Administrador ou Gestor que desbloqueie o material pela tela de Movimentações, com
-justificativa.
+**As duas decisões de aceitação liberam o material; as outras quatro não tocam no estoque.**
+
+Quando o documento veio de uma **inspeção** e é a aceitação de uma reprovação, decidir **Aceitar**
+ou **Aceitar sob desvio** faz o sistema devolver ao disponível, sozinho, a quantidade que aquela
+inspeção reprovou — a mesma que estava em **bloqueado** (15.3). A movimentação nasce como um
+**Desbloqueio** no livro, com o motivo *"Liberação por não conformidade"* e o **número do
+documento** no campo de documento vinculado, e leva a justificativa da decisão.
+
+**Decidir *Devolver ao fornecedor*, *Substituição*, *Análise da Engenharia* ou *Sucatear* não muda
+saldo nenhum.** *Sucatear* não baixa estoque (isso passa pelo fluxo de sucateamento, com as duas
+aprovações — seção 20) e *Devolver* não cria a devolução. O documento registra o que se **decidiu**;
+executar essas quatro continua sendo gesto próprio, nas telas de sempre (12, 6 e 20).
+
+**A tela diz, em todos os casos, o que aconteceu com o saldo** — porque "não mexeu" é informação, e
+não ausência dela. O aviso de sucesso traz uma destas cinco frases:
+
+| O que a tela diz | Quando |
+|---|---|
+| *"N liberado(s) do bloqueio"* | a aceitação liberou N unidades |
+| *"Esta decisão não altera o saldo"* | a decisão é uma das quatro que só registram intenção |
+| *"Esta não conformidade não tem material bloqueado para liberar"* | o documento veio de **recebimento** (faltar material não bloqueia nada), ou a inspeção não reprovou quantidade nenhuma |
+| *"O material desta inspeção já havia sido liberado"* | outro documento da mesma inspeção já liberou |
+| *"Não conformidade aberta manualmente não libera saldo"* | o documento foi criado à mão, e não pelo registro automático da reprovação |
+
+**A liberação acontece uma vez por inspeção, não por documento.** Se a mesma inspeção tiver mais de
+um documento e os dois forem aceitos, só o primeiro libera; o segundo grava a decisão e avisa que o
+material já havia sido liberado. ⚠️ **E a quantidade liberada é a reprovada INTEIRA daquela
+inspeção** — se um documento da mesma inspeção tiver sido decidido *Devolver*, a aceitação do outro
+solta também a parte que se pretendia devolver.
+
+**Se o material não estiver mais bloqueado o suficiente, a decisão é recusada por inteiro** com
+*"Quantidade bloqueada insuficiente: N"*, e o documento **continua Aberto**. Acontece quando alguém
+já desbloqueou aquele material à mão. É deliberado: liberar pela metade deixaria o documento
+dizendo "aceito" com material ainda preso, sem ninguém saber.
+
+**Material inativo não trava o documento.** Se o material foi desativado no cadastro depois da
+reprovação, a decisão **é gravada** e o saldo não muda, com o aviso *"Material inativo — a decisão
+foi registrada sem liberar saldo"*. Recusar a decisão deixaria o documento aberto para sempre,
+cobrando todo dia no cartão de alerta.
+
+⚠️ **Dois portões: o bloqueio é do material, o status é do lote.** Em material com **controle por
+lote**, liberar o documento **não reabilita o lote**. Se o lote estiver **Reprovado** (4), o saldo
+disponível sobe e a saída continua sendo recusada com *"Lote ⟨código⟩ esta reprovado e nao pode ser
+utilizado"*. Para o material sair, é preciso um segundo gesto: voltar o lote para **Ativo** na tela
+de Lotes, com justificativa.
+
+**A liberação vale só para inspeções decididas a partir da versão que a introduziu.** Reprovações
+anteriores continuam saindo do bloqueio pelo caminho manual, na tela de Movimentações, com a
+permissão **ajustar_estoque**. Não é limitação por descuido: se documentos pudessem liberar
+reprovações antigas, bastaria criar um apontando para qualquer inspeção do passado para soltar
+material bloqueado por outro motivo — sem passar pela permissão de ajuste de estoque. Pela mesma
+razão, documento **aberto à mão** não libera.
 
 ### 15b.5 Quem pode o quê
 
