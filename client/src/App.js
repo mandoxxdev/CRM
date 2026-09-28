@@ -108,6 +108,7 @@ import {
   ScannerAlmoxarifado,
   ReservasAlmoxarifado,
   InspecoesAlmoxarifado,
+  NaoConformidadesAlmoxarifado,
   LotesAlmoxarifado,
   DevolucoesAlmoxarifado,
   MateriaisClienteAlmoxarifado,
@@ -524,6 +525,10 @@ export function AppRoutes() {
         <Route path="recebimentos" element={<RecebimentosAlmoxarifado />} />
         <Route path="reservas" element={<ReservasAlmoxarifado />} />
         <Route path="inspecoes" element={<InspecoesAlmoxarifado />} />
+        {/* Etapa 43: a divergencia/reprovacao virou documento numerado. Sem adminOnly e sem
+            rota protegida — o GET da listagem e so `auth` (leitura), e quem barra a DECISAO e o
+            requirePermission('decidir_nao_conformidade') do servidor. */}
+        <Route path="nao-conformidades" element={<NaoConformidadesAlmoxarifado />} />
         <Route path="lotes" element={<LotesAlmoxarifado />} />
         <Route path="devolucoes" element={<DevolucoesAlmoxarifado />} />
         <Route path="materiais-cliente" element={<MateriaisClienteAlmoxarifado />} />

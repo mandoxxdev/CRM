@@ -157,6 +157,7 @@ export const RecebimentosAlmoxarifado = page(() => import('../components/almoxar
 export const ScannerAlmoxarifado = page(() => import('../components/almoxarifado/ScannerAlmoxarifado'));
 export const ReservasAlmoxarifado = page(() => import('../components/almoxarifado/ReservasAlmoxarifado'));
 export const InspecoesAlmoxarifado = page(() => import('../components/almoxarifado/InspecoesAlmoxarifado'));
+export const NaoConformidadesAlmoxarifado = page(() => import('../components/almoxarifado/NaoConformidadesAlmoxarifado'));
 export const LotesAlmoxarifado = page(() => import('../components/almoxarifado/LotesAlmoxarifado'));
 export const DevolucoesAlmoxarifado = page(() => import('../components/almoxarifado/DevolucoesAlmoxarifado'));
 export const MateriaisClienteAlmoxarifado = page(() => import('../components/almoxarifado/MateriaisClienteAlmoxarifado'));
