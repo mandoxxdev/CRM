@@ -338,14 +338,35 @@ dizendo que o 🟢 é só da devolução ao estoque).
   **Medir**: uma devolução ao fornecedor pode nascer das **duas** origens (material reprovado *e*
   material que chegou errado), ao contrário da liberação, que só faz sentido na inspeção.
 - **`inspecoes_recebimento_almoxarifado.encaminhamento`** (`DEVOLVER` | `ANALISE_ENGENHARIA` |
-  `SUBSTITUICAO`) está gravado desde a Etapa 5 e **continua sem leitor** — é a fila que a spec 09
-  descreve desde então. É o padrão *"calculado, gravado e sem quem leia"* que esta base já pagou
-  três vezes.
+  `SUBSTITUICAO`) está gravado desde a Etapa 5.
+  > ⚠️ **ESTA LINHA DIZIA "continua sem leitor" E EU A ESCREVI ERRADA** (achado da própria Fase 0
+  > da 45, medindo o que eu tinha acabado de afirmar). Ele **tem três leitores**: a consulta do
+  > cartão de alerta (`alertRegistry.js:119`), o corpo do e-mail (`:457`) e a coluna
+  > *Encaminhamento* da tela de Alertas (`AlertasAlmoxarifado.js:141`) — mais a descrição da NC
+  > (`nonConformityService.js:511`). **O que ele não tem é STATUS**: os leitores mostram a
+  > *intenção*, e ninguém sabe se ela foi cumprida. É uma frase muito diferente de "sem leitor", e
+  > a diferença muda o desenho: a Etapa 45 **não** precisa criar a fila — precisa dar **estado** à
+  > que já aparece na tela.
+  > Fica à vista porque é o terceiro handoff seguido desta base em que uma frase minha sobre
+  > "ninguém lê isto" não sobreviveu à medição.
 - **`quantidade_bloqueada`** é de onde o material sai: devolver ao fornecedor **tira do bloqueado
   e tira do físico**, ao contrário da liberação, que só tira do bloqueado. **Medir se existe tipo
   de movimento para isso** — `SUCATA` e `PERDA` fazem algo parecido, e a Etapa 5 declarou que o
   bloqueado sai por `DESBLOQUEIO` seguido de saída separada, *"e os dois passos não estão amarrados
   um ao outro"* (pendência aberta da spec 09).
+
+- ⚠️ **MEDIDO — a devolução que existe é uma ENTRADA, e por isso o fluxo novo não é "mais um
+  destino".** `devolucoes_material_almoxarifado` (`schema.js:1537`) e `returnService.js` tratam do
+  material **voltando para o galpão**: `DESTINOS = ['ESTOQUE','QUARENTENA','SUCATA','RETRABALHO']`
+  (`:12`), e o serviço grava `ENTRADA_DEVOLUCAO` em todos eles. Devolver ao **fornecedor** é o
+  oposto: o material **sai do site**. Acrescentar `FORNECEDOR` àquela lista faria o serviço dar
+  **entrada** de algo que está indo embora.
+  **A spec 12 já dizia isso** — *"Não é 'a mesma devolução com outro destino': tem documento fiscal
+  e contraparte externa"* (`:176`) — e a medição **confirma a spec**, o que é raro o bastante para
+  ficar escrito: aqui não há correção a fazer, há uma afirmação a reusar.
+  **Consequência de desenho:** o fluxo novo se parece mais com a **remessa a terceiros** (feature
+  14, que já tem retenção própria e documento) do que com a devolução ao estoque. Medir `REMESSA_TERCEIRO`
+  como molde antes de inventar um tipo de movimento.
 
 ### Pontos de atenção (medir na Fase 0 antes de prometer)
 
