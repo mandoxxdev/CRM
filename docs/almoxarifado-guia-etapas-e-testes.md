@@ -1,13 +1,28 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-09-27 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-09-28 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 42) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 43) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-09-27 (Etapa 42 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-09-28 (Etapa 43 ENTREGUE · modo contínuo pelo mapa)
 >
-> **Etapas 1 a 20 e 22 a 42 completas; a Etapa 21 foi entregue no NÚCLEO do CRM e as 38 a 42 no
+> **Etapas 1 a 20 e 22 a 43 completas; a Etapa 21 foi entregue no NÚCLEO do CRM e as 38 a 42 no
 > módulo COMPRAS** (a 42 nos dois: o gancho roda no Almoxarifado, o efeito aparece no Compras).
+> A **43 volta para dentro do almoxarifado**, nas features 08 (Recebimento) e 09 (Inspeção).
+>
+> A **Etapa 43 (a divergência vira documento numerado)** fechou em 2026-09-28. O que o sistema já
+> **detectava** — chegou menos material do que a nota diz, a inspeção reprovou um lote — passou a
+> virar **documento numerado** (`NC-…`), que nasce sozinho em três portas (conferência, dados
+> fiscais e inspeção), congela o fato, guarda **a decisão** com autor e justificativa, aceita anexo
+> e tem **tela própria no menu**: *Não Conformidades*. Um alerta novo cobra documento parado sem
+> decisão, e o alerta antigo de divergência virou a **rede de segurança** de quando o documento não
+> nasce. E a caixa *"divergência de quantidade"* da inspeção, que era **marcada à mão**, passou a
+> ser **calculada** e somente leitura — o mesmo que aconteceu com a dimensional na Etapa 27.
+> **O que ela NÃO faz e você precisa saber:** a decisão **não mexe no estoque** — *aceitar sob
+> desvio* fecha o documento e **não desbloqueia** o material, e o perfil Qualidade não tem permissão
+> de ajuste de estoque (furo **C57** das novidades, e é o próximo passo natural).
+>
+> **Próxima etapa: escolhida pelo mapa** `specs/modulo-almoxarifado/README.md`.
 >
 > A **Etapa 42 (o recebimento fecha o pedido)** fechou em 2026-09-27 e **encerrou a cadeia** que as
 > Etapas 38 a 41 abriram: cotação → pedido → recebimento → pedido fechado. O pedido recebido por
@@ -4800,6 +4815,103 @@ que ele não tinha como repetir com sucesso garantido.
 - **Números de outros módulos do CRM** — a varredura foi do almoxarifado.
 
 ---
+
+## Etapa 43 — A divergência vira documento numerado (ENTREGUE — 2026-09-28)
+
+**O que mudou, em uma frase:** quando chega material a menos (ou a mais) do que a nota diz, e quando
+a inspeção reprova um lote, o sistema **abre sozinho um documento numerado** — `NC-…` — que guarda o
+fato do jeito que foi observado e, depois, **a decisão**: aceitar, aceitar sob desvio, devolver ao
+fornecedor, mandar para a Engenharia, substituir ou sucatear — com quem decidiu, quando e por quê.
+
+**Por que faltava.** O sistema já **detectava** a divergência e a reprovação: mostrava na central de
+alertas e mandava e-mail. Mas o aviso **envelhece e sai da janela de dias**, e a decisão não ficava
+escrita em lugar nenhum. Três meses depois ninguém conseguia responder *"quem decidiu aceitar aquela
+falta de 3 kg, e por quê?"*.
+
+**Um documento só para os dois lados.** A divergência que o almoxarifado vê na conferência e a não
+conformidade que a qualidade vê na inspeção são o mesmo fato visto de ângulos diferentes — então são
+o mesmo documento, com um campo dizendo a **origem** (*Recebimento* ou *Inspeção*). Dois documentos
+dariam dois números para o mesmo problema.
+
+**E uma caixa parou de aceitar opinião.** No formulário de inspeção, *"Divergência de quantidade"*
+era uma caixa que o inspetor marcava — enquanto o sistema tinha os números para calcular. Agora ela é
+**somente leitura**, preenchida pela conta. É o mesmo tratamento que a divergência **dimensional**
+recebeu quando passou a sair da medição.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Divergência aparecia no alerta e sumia com o tempo | Vira **documento numerado** que fica, com estado *Aberta* / *Decidida* / *Cancelada* |
+| A decisão não era gravada em lugar nenhum | **Decisão, autor, data e justificativa** no documento, com trilha |
+| Reprovar na inspeção só bloqueava o material | A reprovação **abre o documento sozinha**, com o tipo da causa |
+| "Divergência de quantidade" era caixa marcada à mão | Caixa **travada**, preenchida pela conta do sistema |
+| Nada cobrava decisão | Alerta **"Não conformidade aberta"** para documento parado mais de 7 dias |
+| Corrigir digitação deixava o aviso velho de pé | Documento **cancelado sozinho**, com o motivo escrito |
+| — | Menu **Almoxarifado → Não Conformidades**, com filtro, decisão e anexos |
+
+### Roteiro de teste manual (do login à verificação)
+
+> Entre como **Administrador** para os passos 1 a 10; os passos 11 e 12 pedem outros perfis.
+
+1. **Login** e vá em **Almoxarifado → Recebimentos**.
+2. Crie um recebimento novo com um material e **quantidade esperada 10**. Siga o fluxo até o ponto
+   em que os **dados fiscais** podem ser preenchidos.
+3. No modal de dados fiscais, registre **quantidade recebida 7** no item. **Salve.**
+4. Vá em **Almoxarifado → Não Conformidades** (item novo no menu). **Deve haver uma linha nova**:
+   número `NC-…`, estado **Aberta**, origem **Recebimento**, tipo **Quantidade**, *Esperada 10*,
+   *Recebida 7*, *Divergência −3*.
+5. Volte ao recebimento e mude a quantidade recebida para **6**. Salve. Volte à tela de Não
+   Conformidades: **continua UMA linha**, agora com *Recebida 6* e *Divergência −4*. (Conferir de
+   novo **não** cria documento repetido.)
+6. Mude a quantidade de volta para **10** e salve. Na tela de Não Conformidades, troque o filtro para
+   **Canceladas**: a linha está lá, e em *Motivo do cancelamento* aparece
+   **"Divergência corrigida na reconferência: recebida 10 de 10 esperada"**.
+7. Repita o passo 3 (registre **7** de novo) para ter uma NC **Aberta** para decidir.
+8. Na linha *Aberta*, clique no botão de **decidir**. **Deixe a justificativa vazia** e confirme:
+   aparece **"Justificativa é obrigatória para decidir a não conformidade"** e nada é salvo.
+9. Escolha **Aceitar sob desvio**, escreva a justificativa e confirme: aparece **"Não conformidade
+   NC-… decidida!"**, a linha vira **Decidida** e mostra seu nome e a data.
+10. Clique no botão de **detalhes** da linha decidida: aparecem a justificativa e o bloco de
+    **anexos** — anexe um PDF qualquer (o laudo, na vida real) e confira que ele baixa.
+11. **Troque para um usuário de perfil Compras.** Abra Não Conformidades e tente decidir: o sistema
+    recusa com **"Sem permissão para decidir não conformidade — seu perfil é Compras. Solicite
+    acesso a um administrador."**
+12. **Troque para um usuário de perfil Qualidade** e decida: **funciona**. (Abrir pode Administrador,
+    Almoxarife, Qualidade e Compras; **decidir**, só Administrador e Qualidade.)
+13. **O lado da inspeção.** Volte como Administrador, vá em **Almoxarifado → Inspeções**, escolha um
+    item retido e abra a decisão. Repare que a caixa **"Divergência de quantidade"** está
+    **travada** — marcada ou não conforme a conta, e não conforme a sua vontade.
+14. Reprove parte do item, marcando **Dano físico** e **Certificado ausente**. Salve.
+15. Em **Não Conformidades**, filtre por origem **Inspeção**: há **uma** linha nova, tipo **Dano
+    físico** (a causa mais específica vence; as duas marcações ficam descritas no documento).
+16. **O alerta — e por que ele não aparece no mesmo dia.** Um documento aberto só começa a cobrar
+    depois de **7 dias parados**. O número é editável em **Almoxarifado → Configurações →
+    "Alerta de Não Conformidade Parada (dias)"**, mas o menor valor aceito é **1** (pôr 0 é recusado
+    com *"Configuração "alerta_nc_parada_dias" deve ser um número de dias maior que zero"*). Ou
+    seja: **este cartão não é verificável no mesmo minuto em que você cria o documento** — deixe uma
+    NC aberta e confira no dia seguinte com o valor em 1. O cartão chama-se **"Não conformidade
+    aberta"** e traz NC, material, tipo, origem, dias parada e recebimento; o e-mail sai com assunto
+    **"[Almoxarifado] Não conformidade aberta — NC-…"**, uma vez por documento.
+17. **A rede de segurança.** Ainda na tela de Alertas, repare que o item que virou documento **não**
+    aparece mais no cartão *"Divergência de recebimento"*. Isso é de propósito: o mesmo problema em
+    dois cartões ensina qualquer um a ignorar os dois. O cartão antigo passou a significar *"o
+    automático não conseguiu abrir o documento"*.
+
+### O que esta etapa NÃO cobre
+
+- **A decisão não mexe no estoque.** *Devolver ao fornecedor* não cria a devolução; *Sucatear* não
+  baixa saldo; *Aceitar sob desvio* **não desbloqueia** o material — e o perfil **Qualidade não tem**
+  permissão de ajuste de estoque, então ele precisa pedir o desbloqueio a um Administrador ou Gestor.
+  É o furo **C57** das novidades, e o próximo passo natural desta feature.
+- **Não há botão "abrir não conformidade" nas telas de Recebimento e Inspeções.** O documento nasce
+  só pelos caminhos automáticos. Registrar um certificado ausente **sem** reprovar na inspeção não
+  tem caminho de tela hoje (**B171**).
+- **Não conformidade aberta não trava o processamento da nota** (**B172**).
+- **A divergência de inventário continua sem documento numerado.**
+- **A tela de Recebimento não mostra o número da NC do item.**
+- **Divergências antigas, anteriores a esta etapa, não ganham documento sozinhas** — a consulta
+  **A21** das novidades lista quais são e o que fazer com elas.
 
 ## Etapa 42 — O recebimento fecha o pedido (ENTREGUE — 2026-09-27)
 

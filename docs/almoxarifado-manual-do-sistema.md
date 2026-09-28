@@ -28,6 +28,7 @@ explicada logo abaixo dela.
 14b. [Pedido de compra](#14b-pedido-de-compra)
 14c. [Fornecedores e cotações](#14c-fornecedores-e-cotações)
 15. [Inspeção e qualidade](#15-inspeção-e-qualidade)
+15b. [Não conformidades](#15b-não-conformidades)
 16. [Materiais de clientes](#16-materiais-de-clientes)
 17. [Material enviado a terceiros](#17-material-enviado-a-terceiros)
 18. [Transformação no terceiro](#18-transformação-no-terceiro)
@@ -626,7 +627,7 @@ Corolário que vale conhecer: o perfil **Consulta** nunca acontece por omissão 
 | **Compras** | Consulta e recebe material |
 | **Engenharia** | Cadastra e edita material, requisita, reserva e **define o plano de inspeção** (as tolerâncias que ela mesma especifica) |
 | **Produção** | Consulta, requisita e reserva material (é o padrão de quem não tem perfil definido) |
-| **Qualidade** | Consulta, decide inspeção (aprova/reprova item recebido, libera vencimento de lote, muda situação de lote e de série) e **define o plano de inspeção** — as características a medir e suas tolerâncias. Não movimenta estoque, não ajusta saldo nem cadastra material |
+| **Qualidade** | Consulta, decide inspeção (aprova/reprova item recebido, libera vencimento de lote, muda situação de lote e de série), **define o plano de inspeção** — as características a medir e suas tolerâncias — e é quem **decide as não conformidades** (15b). Não movimenta estoque, não ajusta saldo nem cadastra material — e é por isso que ela decide *aceitar sob desvio* e precisa de um Administrador ou Gestor para desbloquear o material (15b.4) |
 | **Consulta** | Somente leitura |
 
 A separação entre **Almoxarife** e **Gestor** é intencional e é o desenho de controle interno do módulo: quem **movimenta** o estoque não é quem **corrige** o saldo. O almoxarife lança entradas e saídas; o ajuste de inventário — o lançamento que faz o número bater sem que nada tenha entrado ou saído — pertence ao gestor.
@@ -653,6 +654,8 @@ A separação entre **Almoxarife** e **Gestor** é intencional e é o desenho de
 | Autorizar recebimento acima do pedido | ● | – | ● | – | – | – | – | – |
 | Inspecionar | ● | ● | – | – | – | – | ● | – |
 | Gerenciar plano de inspeção (características a medir e tolerâncias) | ● | – | – | – | ● | – | ● | – |
+| Registrar não conformidade | ● | ● | ● | – | – | – | ● | – |
+| Decidir não conformidade (aceitar, devolver, sucatear…) | ● | – | – | – | – | – | ● | – |
 | Reservar | ● | ● | – | ● | ● | – | – | – |
 | Reservar para outra OS | ● | – | – | – | – | ● | – | – |
 | Inventariar | ● | ● | – | – | – | ● | – | – |
@@ -1876,7 +1879,9 @@ O botão **Salvar Conferência**, no fim do painel, grava as contagens digitadas
 
 Ela mostra a diferença e a quantidade esperada entre parênteses, e diz *a menos* ou *a mais*. Diferença muito pequena também aparece com precisão — `200,001` contra `200` mostra *"Divergência: 0.001 a mais que o esperado (200)"* — porque o sistema compara os números crus, não o número arredondado que a tela mostraria.
 
-Registrar quantidade diferente da esperada também **dispara o aviso de divergência de recebimento** (21c), no mesmo instante.
+Registrar quantidade diferente da esperada também **dispara o aviso de divergência de recebimento** (21c) e **abre uma não conformidade** (15b), no mesmo instante — vale tanto ao salvar a conferência quanto ao salvar os dados fiscais. É um documento numerado por item divergente, e conferir o mesmo item de novo **atualiza** esse documento em vez de criar outro.
+
+Se a abertura do documento falhar por qualquer motivo, **a conferência é salva do mesmo jeito**: o material chegou, e travar o registro por causa do documento deixaria saldo real fora do sistema. O item continua aparecendo no cartão *"Divergência de recebimento"* da central de alertas, que é exatamente a rede de segurança para esse caso (15b.7).
 
 **Campo vazio não é zero.** Deixar "Qtd. conferida" em branco significa *"não contei este item"*: o sistema preserva a quantidade que já estava gravada e **não** desmarca a conferência que outra pessoa já tenha feito naquele item. Isso importa quando se salva a contagem de um item e os outros ficam em branco — os outros não são zerados nem desmarcados.
 
@@ -2664,7 +2669,19 @@ Campos:
 | Quantidade reprovada | sim | pode ser 0 |
 | Encaminhamento | aparece quando há reprovado | Devolver ao fornecedor · Análise da Engenharia · Substituição |
 | Observações | **sim quando há reprovado** | é o único registro do motivo da reprovação |
-| Problemas identificados | não | Divergência de quantidade · Divergência dimensional · Certificado ausente · Dano físico · Material incorreto |
+| Problemas identificados | não | Divergência de quantidade · Divergência dimensional · Certificado ausente · Dano físico · Material incorreto — **as duas primeiras são calculadas pelo sistema e aparecem travadas** |
+
+**Duas das cinco caixas de "Problemas identificados" não aceitam opinião.**
+
+- **Divergência de quantidade** é calculada comparando o que se esperava receber com o que foi
+  registrado na conferência do item. A caixa aparece **travada**, marcada ou desmarcada conforme a
+  conta. Marcá-la por fora não tem efeito: o registro grava o resultado do cálculo.
+- **Divergência dimensional** é calculada a partir das medidas, quando há plano de inspeção
+  (15.2.1). Sem medidas, ela continua sendo declaração do inspetor.
+
+As outras três — **certificado ausente**, **dano físico** e **material incorreto** — continuam sendo
+marcação do inspetor, porque nada no sistema as calcula: é um papel que faltou no envelope, uma
+amassadura na chapa, uma peça trocada.
 
 **A regra central: aprovado + reprovado tem de fechar exatamente com o retido.** Não fechar deixaria uma sobra presa em quarentena para sempre, sem fila que a mostrasse. Se não fechar, o sistema recusa com *"Aprovado + reprovado (85) tem de fechar com o retido (100)"* — nomeando os dois números.
 
@@ -2868,6 +2885,138 @@ Bloqueado é um **estado administrativo**, não uma ausência física. O materia
 | Entrar no valor total do estoque | **Sim** |
 
 A razão de tudo isso é uma só: material bloqueado sai do **saldo disponível** (6.1), e é o saldo disponível que autoriza qualquer saída. A tentativa de usar material bloqueado é recusada com *"Material bloqueado não pode ser utilizado"*.
+
+---
+
+## 15b. Não conformidades
+
+### 15b.1 O que é
+
+Uma **não conformidade** é o documento que registra um problema com material que entrou — e, mais
+importante, **o que se decidiu fazer a respeito**. Ela tem número próprio (`NC-` seguido de 16
+caracteres), fica guardada para sempre e vive na tela **Almoxarifado → Não Conformidades**.
+
+O documento serve a dois públicos que enxergam o mesmo fato de ângulos diferentes:
+
+- o **almoxarifado**, que na conferência vê que chegou quantidade diferente da esperada;
+- a **qualidade**, que na inspeção reprova parte do material.
+
+São **um documento só**, com um campo dizendo a **origem** (*Recebimento* ou *Inspeção*). Dois
+documentos separados dariam dois números para o mesmo problema.
+
+### 15b.2 Como o documento nasce
+
+Ele nasce **sozinho**, em três momentos:
+
+| Momento | O que dispara | Origem e tipo |
+|---|---|---|
+| Conferência de recebimento | quantidade recebida diferente da esperada | Recebimento · Quantidade |
+| Preenchimento dos dados fiscais | o mesmo (é o caminho que a tela usa na prática) | Recebimento · Quantidade |
+| Decisão de inspeção | quantidade reprovada maior que zero | Inspeção · o tipo mais específico |
+
+**"Diferente" tem régua**, e é a mesma do resto do módulo: a diferença precisa ser maior que
+0,000000001. Sem essa margem, uma conta com casas decimais — receber 20,1 kg em duas pesagens de 2,2
+e 17,9 — produziria diferenças fantasmas da ordem de 0,000000000000003 e abriria documento contra
+quem acertou.
+
+**Quando a origem é a inspeção e há mais de um problema marcado** (por exemplo, dano físico **e**
+certificado ausente), nasce **um** documento, com o tipo da causa mais específica, nesta ordem:
+material incorreto → dano físico → dimensional → certificado ausente → quantidade. As outras
+marcações ficam descritas no documento; o tipo serve para agrupar e filtrar, não para contar a
+história inteira.
+
+**Não existe botão de abrir um documento à mão.** A abertura manual existe no sistema, mas não tem
+tela: registrar formalmente um certificado ausente **sem** reprovar na inspeção não tem caminho de
+clique hoje.
+
+### 15b.3 O fato é congelado; a decisão é gravada
+
+No momento em que nasce, o documento **copia** o que se esperava, o que foi recebido e a diferença.
+Esses números não são recalculados depois: o documento conta o que foi observado.
+
+Enquanto o documento está **Aberto**, ele ainda acompanha o fato:
+
+| O que você faz | O que acontece com o documento |
+|---|---|
+| Confere de novo com outra quantidade ainda divergente | **Os números são atualizados** — continua sendo **um** documento |
+| Confere de novo e a diferença **desaparece** | O documento é **cancelado sozinho**, com o motivo: *"Divergência corrigida na reconferência: recebida ⟨X⟩ de ⟨Y⟩ esperada"* |
+| Salva a conferência **sem mudar nada** depois de o documento ter sido decidido | **Nada acontece** — documento encerrado não reabre, e não nasce outro |
+| Confere de novo um recebimento **já processado** | **Nada é cancelado nem reescrito**; pode nascer documento novo, se aparecer diferença que não existia |
+
+A última linha é a que mais importa, e a regra é assimétrica de propósito: depois que a nota foi
+processada — material no estoque, conta a pagar gerada —, o documento **não pode ser apagado** por
+uma correção posterior de tela. Criar documento é reversível; apagar o registro de uma falta que já
+virou estoque e dinheiro, não.
+
+### 15b.4 Decidir
+
+A decisão é o que dá sentido ao documento. Na linha **Aberta**, o botão de decidir abre um
+formulário com duas escolhas:
+
+| Decisão | Significa |
+|---|---|
+| **Aceitar** | o material serve como está |
+| **Aceitar sob desvio** | está fora do especificado, mas serve nesta aplicação |
+| **Devolver ao fornecedor** | volta para quem mandou |
+| **Substituição** | o fornecedor manda outro no lugar |
+| **Análise da Engenharia** | a Engenharia decide o destino |
+| **Sucatear** | vira sucata |
+
+**A justificativa é obrigatória.** Sem ela o sistema recusa com *"Justificativa é obrigatória para
+decidir a não conformidade"* — é o único registro de **por quê**, que é a razão de o documento
+existir. Decidir grava também **quem** decidiu e **quando**.
+
+Um documento só é decidido **uma vez**. Se alguém decidiu no intervalo, a segunda tentativa recebe
+*"Esta não conformidade já foi encerrada"*.
+
+**A decisão não mexe no estoque.** Decidir *Devolver ao fornecedor* não cria a devolução; decidir
+*Sucatear* não baixa saldo; *Aceitar sob desvio* **não desbloqueia** o material. O documento registra
+o que se decidiu — executar continua sendo gesto próprio, nas telas de sempre (12, 6 e 15.3).
+
+⚠️ **Consequência prática de quem decide não poder executar:** a quantidade reprovada na inspeção
+fica **bloqueada** (15.3), e quem tira material do bloqueio precisa da permissão **ajustar_estoque**,
+que o perfil **Qualidade não tem** (5). Na prática: a Qualidade decide *Aceitar sob desvio* e precisa
+pedir a um Administrador ou Gestor que desbloqueie o material pela tela de Movimentações, com
+justificativa.
+
+### 15b.5 Quem pode o quê
+
+| Ato | Perfis |
+|---|---|
+| **Ver** a lista e os documentos | qualquer usuário com acesso ao módulo |
+| **Abrir** um documento | Administrador · Almoxarife · Qualidade · Compras |
+| **Decidir** | **Administrador · Qualidade** |
+
+Compras fica **fora da decisão** de propósito: ele recebe material e é quem trata com o fornecedor,
+então decidir sobre a entrega do fornecedor que ele mesmo escolheu seria decidir em causa própria. A
+tentativa é recusada com *"Sem permissão para decidir não conformidade — seu perfil é ⟨perfil⟩.
+Solicite acesso a um administrador."*
+
+### 15b.6 O documento que ninguém decide
+
+Um documento que fica **Aberto** mais dias que o configurado (padrão **7**; o campo é *Alerta de Não
+Conformidade Parada (dias)*, em Configurações) aparece no cartão **"Não conformidade aberta"** da
+central de alertas, com número, material, tipo, origem, dias parado e recebimento — e gera e-mail
+com o assunto *"[Almoxarifado] Não conformidade aberta — NC-…"*.
+
+**O aviso sai uma vez por documento.** Relembrar todo mês uma pendência parada geraria e-mail
+eterno sem nenhum fato novo. Decidir ou cancelar tira o documento do cartão, sem nenhum gesto extra.
+
+### 15b.7 O cartão antigo de divergência mudou de significado
+
+O item que virou documento **sai** do cartão *"Divergência de recebimento"* da central de alertas —
+o mesmo problema em dois avisos ensina qualquer um a ignorar os dois.
+
+Com isso, o cartão *"Divergência de recebimento"* passou a significar outra coisa: **"chegou
+diferente e o documento não foi aberto"**. Ele é a rede de segurança para o caso raro de a abertura
+automática falhar — e é por isso que a falha da abertura **não derruba** a conferência nem a decisão
+de inspeção: o material entra, e o item continua visível no cartão antigo até alguém cuidar dele.
+
+### 15b.8 Anexos
+
+Cada documento aceita anexos, pelo mesmo mecanismo das outras telas (15.2.4): o laudo do
+fornecedor, a foto da peça amassada, o e-mail que autorizou a devolução. Eles ficam presos ao
+documento e o download é autenticado.
 
 ---
 
@@ -3760,6 +3909,13 @@ falha do servidor de e-mail nunca trava uma movimentação, uma devolução ou u
 - **Pedido de compra atrasado** — varredura diária dos pedidos de compra com previsão de entrega
   vencida e status que ainda cobra entrega (14b.1b). Um aviso por **prazo prometido**: enquanto a
   previsão for a mesma, não repete; renegociado o prazo e vencido de novo, avisa outra vez.
+- **Não conformidade aberta** — varredura diária dos documentos de não conformidade (15b) que
+  continuam **sem decisão** há mais dias que o configurado (7 de fábrica). O aviso diz o número
+  da NC, o material, o tipo, a origem, há quantos dias está parado e o recebimento de origem.
+  **Um aviso por documento, para sempre:** relembrar periodicamente uma pendência parada geraria
+  e-mail eterno sem nenhum fato novo, e o dado que o destinatário precisa — *"esta NC está
+  parada"* — não muda enquanto ninguém decide. Decidir ou cancelar tira o documento da condição,
+  sem nenhum gesto extra.
 - **Pedido de compra recebido parcialmente** — varredura diária dos pedidos que
   receberam **parte** do material e ainda têm saldo pendente. O aviso diz o pedido, o fornecedor,
   quanto foi pedido, quanto chegou, **quanto falta** e a previsão de entrega (ou *"não informada"*,
@@ -3876,7 +4032,8 @@ A tela **Almoxarifado → Alertas** reúne, num lugar só, as condições que o 
 | Requisição atrasada | requisição ativa, em qualquer status em que ainda possa ser atendida, com a data de necessidade no passado — só entra quem **preencheu** a data de necessidade |
 | Reserva parada | reserva ativa criada há mais dias que a janela configurada, ou com a data de expiração vencida |
 | Material reprovado | inspeção de recebimento com quantidade reprovada, dentro da janela de eventos |
-| Divergência de recebimento | item cuja quantidade recebida difere da esperada, dentro da janela de eventos. **Quem produz esse número é o campo "Qtd. conferida"** do painel do recebimento (14.2b) — digitar uma quantidade diferente da esperada e salvar a conferência é o gesto que cria a divergência; a entrada fiscal, quando altera a quantidade, também |
+| Divergência de recebimento | item cuja quantidade recebida difere da esperada, dentro da janela de eventos, **e que ainda não virou não conformidade** (15b.7). **Quem produz esse número é o campo "Qtd. conferida"** do painel do recebimento (14.2b) — digitar uma quantidade diferente da esperada e salvar a conferência é o gesto que cria a divergência; a entrada fiscal, quando altera a quantidade, também. Como a não conformidade nasce no mesmo instante, este cartão tende a ficar **vazio** na operação normal: ver item aqui significa que o documento **não foi aberto** |
+| Não conformidade aberta | documento de não conformidade (15b) ainda **sem decisão** há mais dias que o configurado (padrão 7) — uma linha por documento, com número, material, tipo, origem, dias parado e recebimento. Decidir ou cancelar tira a linha, sem nenhum gesto extra |
 | Divergência de inventário | conferência concluída com pelo menos um item divergente, dentro da janela de eventos — **uma linha por conferência**, com a contagem de itens (nunca o valor em reais) |
 | Lotes sem certificado | resumo dos lotes com saldo cujo material exige certificado do fornecedor e que estão sem o arquivo — inclui lote bloqueado (o caso mais comum, porque o lote que exige certificado nasce travado) e material de cliente |
 

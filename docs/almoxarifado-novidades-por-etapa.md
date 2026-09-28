@@ -1,7 +1,7 @@
 # Almoxarifado — O que há de novo, etapa por etapa
 
 > **Documento de melhorias do módulo almoxarifado** — consolida tudo que foi entregue da
-> Etapa 0 até a **Etapa 42** (02/08/2026 a 27/09/2026), na branch `desenvolvimento-almoxarifado`.
+> Etapa 0 até a **Etapa 43** (02/08/2026 a 28/09/2026), na branch `desenvolvimento-almoxarifado`.
 > Cada seção diz o que o usuário vê de novo, o que melhorou por baixo do capô e o
 > "antes → agora" da etapa.
 >
@@ -13,15 +13,15 @@
 >
 > Fontes: `docs/almoxarifado-guia-etapas-e-testes.md` (roteiros de teste manual de cada
 > etapa), `specs/modulo-almoxarifado/README.md` (status por feature) e os planos em
-> `docs/superpowers/plans/`. Atualizado em **2026-09-27 (Etapa 42)**.
+> `docs/superpowers/plans/`. Atualizado em **2026-09-28 (Etapa 43)**.
 >
 > *(⚠️ **Este cabeçalho ficou defasado por 18 etapas e a correção fica dita, não silenciosa.** Ele
 > afirmava "consolida tudo que foi entregue da Etapa 0 até a **Etapa 21**" e "Atualizado em
-> 2026-08-28 (Etapa 21)" — e as Etapas 22 a 42 foram entregues depois, **cada uma com seção própria
+> 2026-08-28 (Etapa 21)" — e as Etapas 22 a 43 foram entregues depois, **cada uma com seção própria
 > mais abaixo**, inclusive cinco do módulo **Compras** (38 a 42). É o mesmo defeito que este mesmo
 > cabeçalho já corrigiu uma vez, quando dizia "até a Etapa 14": quem lê só o topo conclui que metade
 > do que existe no sistema não existe. **A tabela "Visão geral" abaixo também para na 23** e não foi
-> estendida — as etapas 24 a 42 estão nas seções, não na tabela; deixar a tabela incompleta é
+> estendida — as etapas 24 a 43 estão nas seções, não na tabela; deixar a tabela incompleta é
 > preferível a reescrevê-la de memória, mas quem procurar ali não vai achar.)*
 >
 > *(Este cabeçalho e a tabela abaixo diziam "até a Etapa 14" e "desenvolvimento pausado aqui" —
@@ -628,7 +628,39 @@ escrever status em massa numa tabela do núcleo, sem ninguém olhando, é exatam
 correção retroativa que este projeto evita — e o `HAVING` acima pode incluir pedido que você
 cancelou informalmente ou que teve excedente lançado por engano.
 
-### B. Decisões de negócio — B1 a B167; as em aberto esperam você, as tomadas estão escritas com o descartado
+**A21 (NOVA, da Etapa 43 — as divergências que JÁ EXISTEM e nunca vão virar documento sozinhas).**
+O documento de não conformidade nasce **no ato** da conferência, dos dados fiscais ou da inspeção.
+Item que já foi conferido com divergência **antes** do deploy **não** ganha documento — ninguém vai
+tocar naquele recebimento de novo. Esta consulta lista exatamente esses, para você decidir o que
+fazer com cada um:
+
+```sql
+SELECT ri.id AS item_id, r.numero AS recebimento, r.nota_fiscal, r.status,
+       m.codigo AS material, ri.quantidade_esperada, ri.quantidade_recebida,
+       (ri.quantidade_recebida - ri.quantidade_esperada) AS divergencia,
+       r.data_recebimento
+  FROM recebimentos_material_itens_almoxarifado ri
+  JOIN recebimentos_material_almoxarifado r ON r.id = ri.recebimento_id
+  JOIN materiais_almoxarifado m            ON m.id = ri.material_id
+ WHERE ri.quantidade_recebida IS NOT NULL
+   AND ABS(ri.quantidade_recebida - ri.quantidade_esperada) > 1e-9
+   AND NOT EXISTS (SELECT 1 FROM nao_conformidades_almoxarifado nc
+                    WHERE nc.referencia_tipo = 'RECEBIMENTO_ITEM' AND nc.referencia_id = ri.id)
+ ORDER BY r.data_recebimento DESC;
+```
+
+Se vier **0**, só anotar e fechar. Se vier **mais que 0**, cada linha é uma divergência real sem
+documento. **Três caminhos, e a escolha é sua:** (a) **deixar como está** — são fatos antigos, já
+resolvidos na prática, e o histórico não precisa de documento; (b) **reconferir o recebimento pela
+tela**, o que faz o documento nascer com os números de hoje (⚠️ só faça isso com recebimento ainda
+**não processado** — ver **C58**); (c) pedir a criação em massa, que **não** foi feita de propósito:
+abrir centenas de documentos "Abertos" de uma vez encheria o alerta de pendências que ninguém vai
+decidir, e o alerta perderia a força logo na estreia.
+
+**No banco de desenvolvimento a consulta ainda não foi rodada contra dados reais** — a tabela nasce
+vazia nesta etapa, então lá o resultado é vazio por construção.
+
+### B. Decisões de negócio — B1 a B172; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(O título desta seção dizia "B1 a B24" — **estava defasado**: os itens já iam até B36 antes da
 Etapa 20. Corrigido em 2026-08-28 para B50, depois para B56 com as três da Etapa 24, para B57 com
@@ -2976,6 +3008,67 @@ não só a linha do pedido dele; por isso não foi feito por conta própria. É 
 você decidir, e as opções são: abrir a Auditoria para Compras (simples, dá tudo), ou mostrar as
 mudanças automáticas na própria tela do pedido (mais trabalho, dá só o que interessa).
 
+**B168 (NOVA, da Etapa 43) — UM documento para os dois lados, e ele se chama "não conformidade".**
+
+**O que foi escolhido:** uma tabela só, com um campo de **origem** (*Recebimento* ou *Inspeção*),
+e o nome **não conformidade** (prefixo `NC-`) para o documento.
+**O que foi descartado:** dois documentos separados — um de "divergência de recebimento", outro de
+"não conformidade de qualidade".
+**Por quê:** é o **mesmo fato visto de dois ângulos**. Dois documentos dariam **dois números para o
+mesmo problema** e divergiriam na primeira vez que alguém mudasse um dos dois. **O custo da
+escolha, e é real:** a palavra muda de tela para tela — a conferência de recebimento continua
+falando em *"divergência"*, e a tela nova fala em *"não conformidade"*. Padronizar a palavra nas
+duas telas é decisão sua; a alternativa (renomear o documento para "divergência") deixaria o nome
+errado do lado da qualidade, onde dano físico e certificado ausente **não são** divergência de
+quantidade.
+
+**B169 (NOVA, da Etapa 43) — quem RECEBE pode abrir; só a QUALIDADE decide. E tirar Compras da
+decisão foi escolha.**
+
+**O que foi escolhido:** abrir uma não conformidade pode **Administrador, Almoxarife, Qualidade e
+Compras**; **decidir** só **Administrador e Qualidade**.
+**O que foi descartado:** deixar Compras decidir também (ele recebe material e é quem fala com o
+fornecedor).
+**Por quê:** Compras é **parte interessada no fornecedor sobre o qual estaria decidindo** — aceitar
+sob desvio uma entrega do próprio fornecedor que ele escolheu é o conflito que a separação de
+papéis existe para evitar. **É uma linha de código para reverter**, se na sua operação o comprador
+for justamente quem deve decidir.
+
+**B170 (NOVA, da Etapa 43) — o alerta antigo de divergência passou a esconder o que já virou
+documento.**
+
+**O que foi escolhido:** item que já tem não conformidade **sai** do cartão *"Divergência de
+recebimento"*; quem cobra a decisão é o cartão novo.
+**O que foi descartado:** deixar o item nos dois cartões.
+**Por quê:** o mesmo problema em dois avisos ensina o leitor a ignorar os dois. E o papel que sobra
+para o cartão antigo é o que faltava: **rede de segurança** — se o documento não puder ser aberto,
+o item continua lá. **Consequência a saber:** com a feature ligada, o cartão *"Divergência de
+recebimento"* tende a ficar **vazio** no dia a dia; ver item ali passa a significar *"o automático
+falhou"*, e não *"chegou diferente"*.
+
+**B171 (NOVA, da Etapa 43) — não existe botão "abrir não conformidade" em tela nenhuma.**
+
+**O que foi escolhido:** o documento nasce **só** pelos caminhos automáticos (conferência, dados
+fiscais e inspeção). A abertura manual existe na API, sem tela.
+**O que foi descartado:** um botão de abrir à mão na tela de Não Conformidades.
+**Por quê:** abrir à mão exige dizer **a qual item de recebimento ou a qual inspeção** o documento
+se refere, e nenhuma tela do módulo mostra esses números internos — um campo numérico cru
+convidaria a pendurar o documento no registro errado. **O lugar certo é um botão "abrir NC deste
+item" dentro da tela de Recebimento**, que é trabalho de uma etapa própria. **Consequência:** hoje
+não há como registrar formalmente um certificado ausente ou um dano físico **sem reprovar na
+inspeção**.
+
+**B172 (NOVA, da Etapa 43) — não conformidade aberta NÃO trava o recebimento.**
+
+**O que foi escolhido:** o material entra no estoque e a conta a pagar é gerada normalmente com o
+documento em aberto.
+**O que foi descartado:** bloquear o processamento da nota enquanto houver não conformidade sem
+decisão.
+**Por quê:** a não conformidade é **documento paralelo** — o material fisicamente chegou, e travar
+a entrada deixaria saldo real fora do sistema, que é pior que a pendência documental. Se a sua
+operação exigir o contrário (nada entra com pendência aberta), é uma guarda a acrescentar — mas
+ela muda a rotina do galpão, e por isso não foi tomada por conta própria.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -3718,6 +3811,57 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
     estornar uma movimentação de entrada depois de o pedido ter fechado **não deixa sinal nenhum** de
     que falta material (**B161**).
 
+57. **NOVO, da Etapa 43 — a Qualidade decide "aceitar sob desvio" e NÃO consegue executar a própria
+    decisão.** O documento de não conformidade oferece a decisão **Aceitar sob desvio**, que é o
+    gesto clássico de *"está fora da especificação, mas nesta aplicação serve"*. **O documento
+    fecha; o material continua bloqueado.** Quem tira material do bloqueio é a tela de
+    **Movimentações**, com a permissão de **ajuste de estoque** — e o perfil **Qualidade não a
+    tem**, por exclusão deliberada registrada desde a Etapa 24 (*"mexer em saldo não é ofício de
+    qualidade"*).
+
+    **Na prática, hoje:** a Qualidade decide *Aceitar sob desvio*, e precisa **pedir a um
+    Administrador ou Gestor** que desbloqueie o material pela tela de Movimentações, com
+    justificativa. Sem isso, o lote fica aceito no papel e preso no saldo.
+
+    **O conserto limpo já está nomeado** desde a Etapa 24 e continua valendo: uma permissão própria
+    de bloqueio/desbloqueio **de qualidade**, separada do ajuste de estoque geral. É etapa própria,
+    e é o passo natural depois desta.
+
+58. **NOVO, da Etapa 43 — corrigir a quantidade de um recebimento JÁ PROCESSADO não apaga o
+    documento, e isso é de propósito.** Se a nota já foi processada — material no estoque, conta a
+    pagar gerada, pedido de compra fechado — e alguém volta à conferência e corrige a quantidade
+    para o valor cheio, a não conformidade existente **não é cancelada**. Ela continua contando o
+    que foi observado quando o material entrou.
+
+    **Por que assim:** cancelar ali apagaria o único registro de uma falta que **já virou estoque e
+    dinheiro**, com um motivo automático dizendo "divergência corrigida". Criar documento é
+    reversível; apagar não. **O que quem opera precisa saber:** depois de processada a nota, a
+    correção da quantidade é assunto de **estorno de movimentação**, não de reconferência — e o
+    documento antigo fica para explicar o que aconteceu.
+
+59. **NOVO, da Etapa 43 — quem DECIDE a não conformidade é justamente quem NÃO VÊ o alerta que
+    cobra a decisão.** Achado pelo teste de integração, medido pela rota: o perfil **Qualidade**
+    é o único não-administrador que pode decidir uma não conformidade — e **não tem acesso à
+    central de Alertas** (recebe recusa ao abri-la). Quem **vê** o cartão *"Não conformidade
+    aberta"* é Administrador, Almoxarife, Gestor e **Compras** — e Compras é exatamente o perfil
+    que foi excluído da decisão de propósito (**B169**).
+
+    **Por que a central é fechada para a Qualidade:** ela mostra **custo de estoque parado e
+    valor em reais** nos cartões de estoque sem consumo e estoque excessivo, e a exclusão está
+    escrita desde a Etapa 24. Até aqui a consequência era só de **visibilidade**; esta é a
+    primeira vez que a **ação** pertence a quem não vê o cartão.
+
+    **Na prática, hoje, e funciona:** a Qualidade acompanha as pendências pela tela
+    **Não Conformidades**, que é aberta a qualquer usuário do módulo e tem filtro por estado —
+    é lá que ela vê o que está parado. O que ela não recebe é o **e-mail** e o cartão.
+
+    **Três caminhos, e a escolha é sua:** (a) **incluir Qualidade na central** — simples, mas
+    abre junto os cartões de custo, que foi o motivo original da exclusão; (b) **dar à central um
+    filtro por perfil**, que é o conserto limpo e é etapa própria; (c) **deixar como está**, com a
+    tela de Não Conformidades como porta da Qualidade. A asserção da recusa ficou **congelada no
+    teste**, com o porquê ao lado: no dia em que a central passar a filtrar por perfil, o arquivo
+    fica vermelho com a explicação junto, em vez de a mudança passar despercebida.
+
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -4135,6 +4279,21 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   cotação → pedido recusa — **B148**; a decisão **B127** segue aberta.
 
 - **(41) "Gerar pedido" não pede confirmação** — **B155**.
+
+- **(43) A decisão da não conformidade NÃO mexe no estoque.** Decidir *Devolver ao fornecedor* não
+  cria a devolução; decidir *Sucatear* não baixa saldo; *Aceitar sob desvio* não desbloqueia
+  (**C57**). O documento registra **o que se decidiu**; executar continua sendo gesto próprio, nas
+  telas de sempre. Ligar a decisão ao motor de estoque é etapa própria — e fazê-lo errado (inventar
+  como uma falta "devolve" material que nunca entrou) seria pior que não fazer.
+
+- **(43) A divergência de INVENTÁRIO continua sem documento numerado.** O campo de origem do
+  documento já a aceita; a conferência de inventário tem fluxo próprio (conferir → ajustar) e ficou
+  fora de propósito. Acrescentá-la depois não exige mudar nada do que já existe.
+
+- **(43) A tela de Recebimento não mostra o número da NC do item.** O vínculo aparece só na tela de
+  Não Conformidades, pelo número do recebimento e da nota fiscal. Era promessa do desenho inicial e
+  **saiu na revisão do plano**, porque nenhuma tarefa tocava aquela tela — preferiu-se retirar a
+  promessa a deixá-la escrita e não cumprida.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -10859,7 +11018,164 @@ cotação → *"Item excluído com sucesso"*, e os itens foram junto.
 42** no serviço do almoxarifado, **4/4 · 3/3 · 5/5** nas suítes de validação, migração e banco,
 **51 suítes / 781 testes** no cliente (eram 769), e o empacotamento do cliente **limpo**.
 
+## Etapa 43 — A divergência vira documento numerado (2026-09-28)
+
+**O sistema já sabia que alguma coisa tinha dado errado. Ele só não guardava o que foi feito a
+respeito.**
+
+Quando chega menos material do que a nota diz, ou quando a inspeção reprova um lote, o sistema
+detecta na hora, mostra na central de alertas e manda e-mail. Só que o aviso **envelhece e some** da
+janela de dias, e a **decisão** — aceitar assim mesmo, devolver ao fornecedor, mandar para a
+Engenharia, sucatear — não ficava escrita em lugar nenhum. Morava no e-mail de alguém, ou na memória
+do almoxarife.
+
+Três perguntas que, até esta etapa, o sistema **não conseguia responder**:
+
+- *"Quem decidiu aceitar aquela falta de 3 kg do fornecedor X, e quando?"*
+- *"Aquele lote reprovado foi devolvido, sucateado, ou aceito sob desvio?"*
+- *"Quantas pendências de qualidade estão abertas sem decisão há mais de uma semana?"*
+
+Agora existe o documento: **NC-XXXXXXXXXXXXXXXX**, com número único, o fato congelado do jeito que
+foi observado, a decisão, quem decidiu, a justificativa, a trilha de auditoria e os anexos (laudo,
+foto, e-mail do fornecedor). E uma **tela própria**, no menu do almoxarifado: **Não Conformidades**.
+
+**Um documento só, para os dois lados.** A divergência que o almoxarifado vê na conferência e a não
+conformidade que a qualidade vê na inspeção são **o mesmo fato visto de ângulos diferentes** — e por
+isso são o **mesmo documento**, com um campo dizendo de onde veio (*Recebimento* ou *Inspeção*).
+Fazer dois documentos daria dois números para o mesmo problema, que é exatamente a confusão que este
+módulo passa o tempo todo desfazendo.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A divergência aparecia na central de alertas e sumia quando saía da janela de dias | Vira **documento numerado** que fica, com estado *Aberta* / *Decidida* / *Cancelada* |
+| A decisão sobre a divergência não era gravada em lugar nenhum | **Decisão, autor, data e justificativa** ficam no documento, com trilha de auditoria |
+| Reprovar na inspeção deixava o material bloqueado e mais nada | A reprovação **abre o documento sozinha**, com o tipo da causa (dano físico, certificado ausente, dimensional…) |
+| Na inspeção, "divergência de quantidade" era uma **caixa que o inspetor marcava** | A caixa é **somente leitura**: o sistema calcula a divergência e o inspetor não pode contradizê-la |
+| Nada avisava que uma divergência estava parada sem decisão | Alerta próprio: **não conformidade aberta** há mais de 7 dias |
+| Corrigir um erro de digitação na conferência deixava o aviso antigo de pé | O documento é **cancelado sozinho**, dizendo no motivo o que passou a valer |
+| — | Menu **Almoxarifado → Não Conformidades**, com filtro por estado e anexos por documento |
+
+### As regras, com o cenário exato
+
+**(1) Chegou menos do que a nota diz → o documento nasce sozinho.**
+Recebimento com item de **10 UN**; na conferência (ou no modal de dados fiscais, que é o caminho que
+a tela usa de verdade) registre **8**. Salve. Abra **Almoxarifado → Não Conformidades**: existe uma
+linha nova, estado **Aberta**, origem **Recebimento**, tipo **Quantidade**, com *Esperada 10*,
+*Recebida 8*, *Divergência −2* e o número **NC-…**.
+
+> **Vale para as duas portas, e isso não é detalhe:** tanto a tela de conferência quanto o modal
+> fiscal escrevem quantidade recebida. Se o documento nascesse só numa delas, ele nunca nasceria na
+> prática — porque a tela real passa pela outra.
+
+**(2) Chegou a mais também é divergência.** Registre **12** de 10 (com a autorização de excedente
+que a Etapa 36 criou): o documento nasce igual, com *Divergência +2*.
+
+**(3) Conferir de novo não cria documento repetido.** Salve a conferência outra vez, mudando de 8
+para 7: **continua uma** não conformidade, com os números atualizados para *Recebida 7*,
+*Divergência −3*. O documento acompanha o fato enquanto ele está sendo apurado.
+
+**(4) Corrigiu o erro de digitação? O documento se cancela e DIZ por quê.** Volte a quantidade para
+**10**. A linha passa a **Cancelada**, e em *Motivo do cancelamento* aparece, literalmente:
+**"Divergência corrigida na reconferência: recebida 10 de 10 esperada"**. Sem isso, um erro de
+digitação corrigido deixaria um documento fantasma aberto para sempre.
+
+**(5) Salvar sem mudar nada NÃO reabre documento fechado.** Depois de decidir uma não conformidade,
+abra a conferência e salve de novo **sem alterar nada** (o formulário reenvia todos os itens, então
+isso acontece o tempo todo). **Nada é reaberto.** Só nasce documento novo se a quantidade **mudar**
+em relação ao que o documento anterior registrou.
+
+**(6) Recebimento já processado não perde documento.** Se a nota já foi processada — material no
+estoque, conta a pagar gerada, pedido de compra fechado — reconferir **não cancela** e **não
+reescreve** a não conformidade existente. Pode **abrir** uma nova, se aparecer divergência que não
+existia. A regra é assimétrica de propósito: criar documento é reversível, apagar não.
+
+**(7) Reprovar na inspeção abre o documento pelo motivo mais grave.** Na tela **Inspeções**, reprove
+parte de um item marcando *Dano físico* e *Certificado ausente*. Nasce **uma** não conformidade, de
+origem **Inspeção**, com tipo **Dano físico** — a causa mais específica vence — e as duas marcações
+descritas no documento. Nada se perde: o tipo serve para agrupar, não para contar a história.
+
+**(8) A caixa "Divergência de quantidade" da inspeção parou de aceitar opinião.** No formulário de
+decisão, essa caixa agora aparece **travada**, marcada ou desmarcada conforme a conta do sistema
+(recebida × esperada). Marcá-la à mão não tem mais efeito: se o item não tem divergência, o registro
+fica **sem** divergência, mesmo que a caixa seja enviada marcada. É o mesmo tratamento que a
+divergência **dimensional** recebeu quando passou a sair da medição.
+
+**(9) Decidir exige dizer por quê.** Na tela **Não Conformidades**, clique em decidir numa linha
+*Aberta*. Escolha entre **Aceitar**, **Aceitar sob desvio**, **Devolver ao fornecedor**,
+**Substituição**, **Análise da Engenharia** e **Sucatear**. Deixe a justificativa vazia e confirme:
+a tela recusa com **"Justificativa é obrigatória para decidir a não conformidade"**. Preencha e
+confirme: aparece **"Não conformidade NC-… decidida!"** e a linha vira **Decidida**, com seu nome e
+a data.
+
+**(10) Decidir duas vezes não acontece.** Se outra pessoa decidiu no intervalo, a segunda tentativa
+recebe **"Esta não conformidade já foi encerrada"**.
+
+**(11) Quem decide não é quem recebe.** Abrir uma não conformidade pode: **Administrador,
+Almoxarife, Qualidade e Compras**. **Decidir** só **Administrador e Qualidade**. Entre com um
+usuário de perfil *Compras* e tente decidir: o sistema recusa com **"Sem permissão para decidir não
+conformidade — seu perfil é Compras. Solicite acesso a um administrador."** O motivo está na letra
+**B** — Compras é parte interessada no fornecedor sobre o qual estaria decidindo.
+
+**(12) Documento parado sem decisão começa a cobrar.** Uma não conformidade que fica **Aberta** por
+mais de **7 dias** (número configurável, chave *alerta_nc_parada_dias*) passa a aparecer no cartão
+**"Não conformidade aberta"** da central de alertas — com NC, material, tipo, origem, **dias parada**
+e recebimento — e a gerar e-mail com assunto **"[Almoxarifado] Não conformidade aberta — NC-…"**.
+Decidir ou cancelar tira o documento do cartão sozinho. **O aviso sai uma vez por documento**, de
+propósito: relembrar todo mês uma NC parada geraria e-mail eterno sem nenhum fato novo.
+
+**(13) O alerta antigo de divergência mudou de papel — e isso é intencional.** Um item que já virou
+não conformidade **sai** do cartão *"Divergência de recebimento"*, para o mesmo problema não aparecer
+em dois avisos (o jeito mais rápido de ensinar alguém a ignorar os dois). O que sobra para o cartão
+antigo é o papel de **rede de segurança**: se o documento não puder ser aberto, o item continua lá, na
+central e na varredura diária.
+
+**(14) A falha do automático não derruba o recebimento.** Se por qualquer motivo o documento não
+puder ser aberto, a conferência e a inspeção **terminam normalmente** e o problema fica registrado no
+log do servidor. O item continua aparecendo no alerta antigo de divergência — que passou a ser
+exatamente isso: a rede de segurança de quando o documento não nasceu.
+
+### O que esta etapa NÃO cobre
+
+1. **A decisão não mexe no estoque.** Decidir *Devolver ao fornecedor* **não** cria a devolução;
+   decidir *Sucatear* **não** baixa saldo. O documento registra o que se decidiu; executar continua
+   sendo gesto próprio, nas telas de sempre.
+2. **Não conformidade aberta NÃO trava o recebimento.** O material entra no estoque e a conta a
+   pagar é gerada com o documento em aberto. É coerente com o item 1, e fica dito porque quem lê "não
+   conformidade" costuma supor o contrário.
+3. **Aceitar sob desvio fecha o DOCUMENTO, não a LIBERAÇÃO.** O material reprovado continua
+   bloqueado; quem o desbloqueia é a tela de Movimentações, com permissão de ajuste de estoque — que
+   o perfil **Qualidade não tem**. Ou seja: a Qualidade decide e **não consegue executar a própria
+   decisão**. Está na letra **C**, e é o próximo passo natural desta feature.
+4. **Não há botão "abrir não conformidade" nas telas de recebimento e inspeção.** O documento nasce
+   **sozinho** pelos dois caminhos automáticos; a abertura manual existe na API, mas sem tela — ver
+   a letra **B**.
+5. **A divergência de INVENTÁRIO continua sem documento.** O campo de origem já a aceita; a
+   conferência de inventário tem fluxo próprio e ficou fora de propósito.
+6. **A tela de Recebimento não mostra o número da NC.** O vínculo aparece na tela de Não
+   Conformidades, pelo número do recebimento e da nota.
+
 ## Onde estamos e o que vem a seguir
+
+- **Etapa 43 entregue (2026-09-28):** **a divergência vira documento numerado**. O sistema já
+  detectava que chegou material a menos e que a inspeção reprovou; o que não existia era o
+  **documento** com a **decisão**. Agora a divergência de recebimento e a não conformidade de
+  qualidade são **um documento só** (`NC-…`), que **nasce sozinho** em três portas (conferência,
+  dados fiscais e inspeção), congela o fato, guarda a decisão com autor e justificativa, aceita
+  anexo e tem **tela própria** no menu — *Não Conformidades*. E a caixa *"divergência de
+  quantidade"* da inspeção, que era **marcada à mão**, passou a ser **calculada** e somente leitura.
+  **O que é seu:** a consulta **A21** (as divergências antigas que nunca vão virar documento
+  sozinhas, com três caminhos e a recomendação de não criar em massa); as decisões **B168 a B172** —
+  as que mais pedem sua leitura são a **B169** (tirar Compras da decisão) e a **B171** (não existe
+  botão de abrir à mão); os furos **C57** (a Qualidade decide *aceitar sob desvio* e **não
+  consegue executar** a própria decisão — é o próximo passo natural) e **C58**; e as três limitações
+  **(43)** em D.
+  **A revisão do plano (Fase 2) achou 20 itens, 4 bloqueantes, antes da primeira linha de código** —
+  e três deles eram invisíveis por leitura: o documento ia nascer **só na porta que a tela real não
+  usa**; derivar a divergência da inspeção **apagaria** uma medição que pega cruzamento de coluna; e
+  esconder o item do alerta antigo, do jeito que estava desenhado, **silenciaria** o aviso de *"errou
+  de novo, pior"* que a Etapa 17 pagou para existir.
 
 - **Etapa 41 entregue (2026-09-22):** **a cotação ganha itens e vira pedido de compra**
   (`8d81cc5..ffba9b9`, onda de correção da revisão final `a09dfe8..ffba9b9`, seis commits). Quarta

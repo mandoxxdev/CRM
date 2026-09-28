@@ -83,6 +83,11 @@ const RESPOSTA_DO_SERVIDOR = {
   // recebimento, divergencia de inventario). Mesma obrigacao das anteriores — sem fixture
   // valida, o guard client-side veria undefined como NaN e derrubaria os testes de Salvar.
   alerta_eventos_janela_dias: { valor: '7', descricao: 'Janela dos alertas de evento (dias)', id: 19 },
+  // Etapa 43: a janela do alerta de NAO CONFORMIDADE parada. Mesma obrigacao das anteriores —
+  // sem fixture valida aqui, o guard client-side veria undefined como NaN e derrubaria SEIS
+  // testes de Salvar que nem tocam nesta chave (medido: foi exatamente o que aconteceu ao
+  // acrescentar o campo em CAMPOS).
+  alerta_nc_parada_dias: { valor: '7', descricao: 'Alerta de nao conformidade parada (dias)', id: 20 },
 };
 
 let container;
@@ -469,4 +474,43 @@ test('a chave de janela dos alertas de evento (Etapa 17) aparece, recusa 0 e ent
   await act(async () => { botao.click(); });
   expect(api.put).toHaveBeenCalledTimes(1);
   expect(api.put.mock.calls[0][1].alerta_eventos_janela_dias).toBe('15');
+});
+
+/**
+ * Etapa 43 — `alerta_nc_parada_dias`: os dias que uma NAO CONFORMIDADE pode ficar ABERTA (sem
+ * decisao) antes de o cartao cobrar. A chave foi semeada em schema.js pela task do servidor e
+ * tem leitor real (`alertRegistry.resolverDias`), mas a tela renderiza a LISTA FIXA `CAMPOS` —
+ * fora dela a chave existe no banco e e INEDITAVEL pela UI. E o mesmo defeito que originou este
+ * arquivo na Etapa 16 e reapareceu na 17; entrou no fechamento da 43 justamente por isso.
+ *
+ * ⚠️ O cenario tambem fixa o limite que o roteiro manual do guia cita: o menor valor aceito e 1.
+ * Nao da para "ver o cartao agora" pondo 0 — o guard recusa antes do submit.
+ */
+test('a chave de dias da nao conformidade parada (Etapa 43) aparece, recusa 0 e entra no payload', async () => {
+  await renderAbaGeral();
+
+  expect(container.textContent).toContain('Alerta de Não Conformidade Parada (dias)');
+  const inputNC = inputDoCampo('Alerta de Não Conformidade Parada (dias)');
+  expect(inputNC).not.toBeNull();
+  // A fixture do servidor manda '7' — a tela mostra o valor gravado, nao um default local.
+  expect(inputNC.value).toBe('7');
+
+  const preencher = (el, valor) => {
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(el, valor);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  const botao = [...container.querySelectorAll('button')]
+    .find(b => /Salvar Configurações/.test(b.textContent));
+
+  await act(async () => { preencher(inputNC, '0'); });
+  await act(async () => { botao.click(); });
+  expect(api.put).not.toHaveBeenCalled();
+  expect(toast.error).toHaveBeenCalledWith(
+    'Configuração "alerta_nc_parada_dias" deve ser um número de dias maior que zero'
+  );
+
+  await act(async () => { preencher(inputNC, '1'); });
+  await act(async () => { botao.click(); });
+  expect(api.put).toHaveBeenCalledTimes(1);
+  expect(api.put.mock.calls[0][1].alerta_nc_parada_dias).toBe('1');
 });

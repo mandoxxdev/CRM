@@ -24,8 +24,24 @@
 > `656467c`/`054f727`). O corte da Etapa 32 — **"só a inspeção tem botão"** — **deixou de valer**:
 > estava certo quando escrito, e está corrigido aqui em vez de apagado em silêncio. Nada do
 > comportamento desta feature mudou na 34 (zero linhas de servidor, zero na tela de inspeção).
-> **Faltam para 🟢 (agora TRÊS, todos fluxo de negócio):** não conformidade formal numerada,
-> liberação sob desvio autorizado e encaminhamento com status. *Este cabeçalho listava também
+> **Etapa 43 (2026-09-28, `4e11793..`) — a NÃO CONFORMIDADE FORMAL NUMERADA existe**, e com ela
+> duas correções desta feature. (a) O item 1 de "O que falta para 🟢" está **pago**: a reprovação
+> da inspeção abre sozinha um documento `NC-…` na tabela `nao_conformidades_almoxarifado`, única
+> para recebimento e inspeção, com decisão, autor, justificativa, trilha, anexos, alerta de
+> documento parado e tela própria. (b) **`divergencia_quantidade` DEIXOU DE SER UM CHECKBOX.**
+> Esta spec listava a coluna em "O que já existe" sem dizer que ela era **auto-declarada** — e
+> ela era: `decidirInspecao` gravava `data.divergencia_quantidade ? 1 : 0` do payload, enquanto
+> `conforme` e `divergencia_dimensional` ao lado eram **derivados**. Era a mesma classe de
+> defeito do `reserva_id` da feature 07 (coluna que a spec descreve como fato e é só uma
+> marcação). **A partir da 43 ela é DERIVADA** do item pela régua de `divergencia.js`, o payload
+> é ignorado, o valor derivado volta na resposta e a caixa da tela ficou somente leitura — como
+> a Etapa 29 fez com a dimensional. **Isto fica dito, e não apagado**, porque quem leu esta spec
+> antes de 2026-09-28 pode ter escrito código confiando naquele booleano.
+> **Faltam para 🟢: agora DOIS** (eram três) — **liberação sob desvio autorizado**, que mudou de
+> natureza (a decisão existe e é imutável; o que falta é a QUALIDADE **conseguir executá-la**,
+> ver o item 2 abaixo) e **encaminhamento com status**. As duas pendências antigas desta spec
+> (reprovar por lote, e material reprovado sem vínculo ao recebimento de origem) continuam fora
+> da conta, como sempre estiveram: são pendências, não checklist. *Este cabeçalho listava também
 > "cadastro do plano pela tela" (pago na Etapa 30) e "anexos" (pago na 32) — os dois saíram.* ·
 > **Spec original:** seção 9
 > **Última atualização:** 2026-09-02 (**Etapa 32 — anexos**; antes: 2026-08-31 (**Etapa 30, `af7adea..7982f18`: o cadastro do plano ganha
@@ -59,6 +75,13 @@ Inspeção de recebimento com plano, quarentena e bloqueio efetivos no saldo, n�
 ## O que já existe
 
 - `inspecoes_recebimento_almoxarifado` (`schema.js`): conforme, divergência de quantidade/dimensional, certificado ausente, dano físico, material incorreto, ação, responsável — e, desde a Etapa 5, `quantidade_aprovada`, `quantidade_reprovada` e `encaminhamento` (`DEVOLVER` | `ANALISE_ENGENHARIA` | `SUBSTITUICAO` | null).
+  > ⚠️ **QUAIS DESSAS COLUNAS SÃO FATO E QUAIS SÃO OPINIÃO — esta linha nunca dizia, e a omissão
+  > enganava.** Hoje (2026-09-28): `conforme` é **derivada** (`reprovada === 0`),
+  > `divergencia_dimensional` é **derivada** das medidas desde a Etapa 27, e
+  > `divergencia_quantidade` passou a ser **derivada** do item na Etapa 43 — antes dela, era
+  > gravada **do payload**, um checkbox que o inspetor marcava enquanto o sistema tinha os
+  > números para calcular. `certificado_ausente`, `dano_fisico` e `material_incorreto`
+  > **continuam auto-declarados**, e isso é legítimo: nada no sistema os calcula.
 - `recebimentos_material_itens_almoxarifado.quantidade_em_inspecao` (coluna nova, Etapa 5): quanto **este item específico** está retido — é a fonte de verdade que a fila e a decisão usam, não mais o pool compartilhado do material. Nasceu com `DEFAULT 0` e ganhou backfill para bancos onde já havia retenção antes da coluna existir (ver limitação registrada abaixo).
 - `inspectionService.js` (**novo**, `server/services/almoxarifado/inspectionService.js`): `decidirInspecao`, `bloquearMaterial`, `desbloquearMaterial`, `listarInspecoesPendentes`. Substitui por inteiro `receiptService.inspecionarItem`, que foi **removida** — fazia `UPDATE` SQL direto somando a mesma quantidade em `quantidade_bloqueada` **e** `quantidade_em_inspecao` ao mesmo tempo (bloquear 10 tirava 20 do disponível), sem passar pelo motor e sem deixar rastro no livro.
 - Motor (`stockService.js`) ganhou quatro tipos de movimento novos em `TIPOS_MOVIMENTO`: `QUARENTENA` (`em_inspecao += q`, entrada retida), `LIBERACAO_INSPECAO` (`em_inspecao −= q`) e `REPROVACAO_INSPECAO` (`em_inspecao −= q`, `bloqueada += q`) como blocos simétricos a `BLOQUEIO`/`DESBLOQUEIO`; e `DECISAO_INSPECAO`, que é o que `decidirInspecao` **realmente** usa — um único `UPDATE` condicional que baixa o retido inteiro de `em_inspecao` e soma só a parte reprovada em `bloqueada`, para não abrir uma janela entre "libera" e "reprova" onde uma decisão concorrente poderia consumir o mesmo retido pela metade. Todos os quatro têm guarda atômica no próprio `WHERE` (nunca saturam em silêncio) e nenhum toca `quantidade_atual`.
@@ -185,12 +208,33 @@ Inspeção de recebimento com plano, quarentena e bloqueio efetivos no saldo, n�
 **A feature NÃO muda de cor.** Ela continua **🟡**. A Etapa 27 pagou os dois primeiros itens do
 checklist de backend e a Etapa 29 pagou os **dois de frontend** — o item 5 da lista anterior (*"a
 TELA de medidas e a tela de leitura"*) **saiu**. Dos cinco, sobram **quatro**, e três deles são
-fluxo inteiro. Sem esta lista escrita, a próxima leitura teria de refazer a conta — e nesta base
+fluxo inteiro.
+
+> **ATUALIZADO EM 2026-09-28 (Etapa 43):** dos quatro, o item 1 (**não conformidade formal
+> numerada**) está **pago** e o item 2 (**liberação sob desvio**) está **pago pela metade** — a
+> decisão existe, a execução não alcança quem decide. **Sobram DOIS**, e o que impede o 🟢 hoje
+> não é falta de documento: é a **permissão** que separa quem decide de quem executa. Sem esta lista escrita, a próxima leitura teria de refazer a conta — e nesta base
 isso já produziu "o que falta para 🟢" errado quatro vezes seguidas na feature 23.
 
-1. **Não conformidade formal** (número, descrição, ação, responsável) vinculada à inspeção — é uma
-   máquina de estados própria; o que existe hoje é o `encaminhamento` registrado na reprovação.
-2. **Liberação sob desvio autorizado** (quem autorizou, justificativa, histórico imutável) — idem.
+1. ~~**Não conformidade formal** (número, descrição, ação, responsável) vinculada à inspeção — é uma
+   máquina de estados própria; o que existe hoje é o `encaminhamento` registrado na reprovação.~~
+   **PAGO na Etapa 43** (2026-09-28, `4e11793..` — T1 `4e11793`, T2 `6a4c984`, T3 `21ef822`, T4
+   `9b6f205`, T5 `1bab308`+`9e4fb3d`). Riscado em vez de apagado. A tabela é
+   `nao_conformidades_almoxarifado`, **única para os dois lados** (`origem` = `RECEBIMENTO` |
+   `INSPECAO`), com número `NC-` do gerador único, fato congelado, decisão com autor e
+   justificativa, trilha (`NC_ABERTA`/`NC_DECIDIDA`/`NC_CANCELADA`), anexos e tela própria. A
+   reprovação da inspeção **abre o documento sozinha**, com o `tipo` pela prioridade
+   `MATERIAL_INCORRETO → DANO_FISICO → DIMENSIONAL → CERTIFICADO_AUSENTE → QUANTIDADE`.
+2. **Liberação sob desvio autorizado** (quem autorizou, justificativa, histórico imutável) —
+   **PAGO PELA METADE na Etapa 43, e a metade que falta está medida.** A decisão
+   `ACEITAR_SOB_DESVIO` existe no documento, com autor, justificativa e histórico imutável — mas
+   **ela não libera o material**. A quantidade reprovada continua em `quantidade_bloqueada`
+   (`inspectionService.js:250-251`), e quem desbloqueia é `POST /materiais/:id/desbloquear`,
+   gateado por `ajustar_estoque`, que **não inclui QUALIDADE** (`permissions.js:99-101`, exclusão
+   deliberada da Etapa 24). **Resultado medido: a QUALIDADE decide e não consegue executar a
+   própria decisão.** O item **continua contando** para a cor. O conserto limpo é o que esta spec
+   já nomeia desde a Etapa 24: uma ação própria (`bloquear_qualidade`), separada do ajuste de
+   estoque geral. Furo **C57** das novidades.
 3. ~~**Anexos** (certificado, relatório dimensional, fotos) — depende de
    `anexos_documento_almoxarifado`, que é item próprio de outra spec.~~ **PAGO na Etapa 32**
    (`e708125..fd71958`). Riscado em vez de apagado, para quem tiver lido a lista anterior

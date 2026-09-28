@@ -312,10 +312,153 @@ Lotes de no máximo **dois** galhos.
          com o código e o cenário seria tautologia. Custo declarado: mudar D8 exige mudar o teste.
       3. O clamp de 500 é medido **na rota** envelopando `db.all` durante três requisições
          (`?limite=9999` → 500, `?limite=7` → 7, ausente → 100), em vez de criar 501 documentos.
-- [ ] T3
-- [ ] T4
-- [ ] T5
-- [ ] T6
+- [x] T3 — os **três** ganchos (`conferirRecebimento`, `salvarDadosFiscal`, `decidirInspecao`),
+      a derivação da RN-07 e o aditivo da fila de pendentes (`21ef822`, worktree `CRM-e43-t3`,
+      integrada em `929dd5e`). Suíte **201/201** na base da worktree.
+      **Sonda de ciclo de `require`, rodada em quatro cargas frias** (`receipt→inspection→nc`,
+      `nc→inspection→receipt`, e cada serviço sozinho): **não há ciclo** — `nonConformityService`
+      só requer `db`/`divergencia`/`numeroDoc`/`audit`. Por isso o `require` é de **topo**, e não
+      preguiçoso: copiar o preguiçoso do `alertRegistry` sem o ciclo que o justifica seria cargo
+      cult. As chamadas vão pelo **objeto do módulo** (não desestruturadas) porque o teste de
+      não-fatalidade monkeypatcha.
+      **Controles positivos, os três com a asserção certa:** (a) gancho removido do `/fiscal` →
+      caiu *"registrar 7 de 10 PELA ROTA FISCAL tinha de abrir a NC … abriu 0"*; (b)
+      `divergencia_quantidade` voltando ao payload → caiu *"o payload mandou `true` num item sem
+      divergencia: a resposta tinha de trazer o DERIVADO 0"*; (c) `console.warn` → `throw` →
+      caiu `conf.resultado.status === 200` (veio 500), e a variante só da inspeção caiu em
+      `insp.resultado.status === 201`. A falha injetada substitui a função **inteira**, então
+      acontece depois de qualquer guarda — a armadilha do teste vazio da Etapa 42 não se repetiu.
+      **Divergência do plano:** `try/catch` **por item**, não um em volta do laço, para que um
+      item que explode não faça os outros do mesmo documento perderem a NC.
+- [x] T4 — 14ª entrada `NAO_CONFORMIDADE_ABERTA`, a exclusão do D6 **na entrada do alerta**, a 7ª
+      entidade de anexo e o cartão no client (`9b6f205`, worktree `CRM-e43-t4`, integrada em
+      `c4234c3`). Suíte **203/203**; client **51 suítes / 791 testes** na base da worktree.
+      **A sabotagem do D6 nos dois jeitos é o resultado mais valioso desta task, e ela corrige em
+      parte a previsão da Fase 2:** na *forma errada* (exclusão dentro de
+      `listarDivergenciasRecebimento`) caem **três** arquivos — `recebimentoExcedente (4)`,
+      `recebimentoPortasIntegracao (B)` e o cenário próprio —, mas `alertaEventoGanchos` fica
+      **VERDE**, inclusive o A1. Motivo medido: o gancho de NC roda **depois** do aviso de
+      divergência, então no ato a NC ainda não existe; e no A1 a NC está `CANCELADA` quando o
+      operador erra de novo. **O A1 só cai quando a exclusão também ignora o status** — ou seja, a
+      cláusula `status <> 'CANCELADA'` é parte do desenho, e isso agora está provado por execução,
+      não por dedução.
+      **SQL próprio** (`listarNaoConformidadesParadas`) em vez de reusar `listarNaoConformidades`:
+      aquela clampa em 100 e a varredura **diária** ignoraria a 101ª NC parada em silêncio.
+      **Quatro contadores que o plano não listava** foram encontrados e corrigidos
+      (`alertaPedidoParcial` tinha uma **terceira** conta, `alertaPedidoAtrasado` tinha **duas**, e
+      `anexoService.api.test.js` afirma o mapa inteiro); e `alertaEventoGanchos (7)` foi
+      **adaptado, não corrigido mecanicamente** — ele apagava a linha da fila e pedia à varredura
+      que a regenerasse, o que com o D6 corretamente não acontece se o item já tem NC; o cenário
+      passou a apagar **também a NC**, que é o estado em que a varredura é rede de segurança.
+- [x] T5 — a tela `NaoConformidadesAlmoxarifado.js` + rota + menu + a caixa somente leitura da
+      inspeção (`1bab308` e `9e4fb3d`, worktree `CRM-e43-t5`, integrada em `67d7715`).
+      Client **52 suítes / 804 testes**, build `Compiled successfully`.
+      **Achado da sabotagem, escrito no código:** `setItens(null)` no `catch` **sozinho não
+      derruba teste nenhum** — quem carrega a garantia de "não mostra lista velha" é a precedência
+      do estado de erro no render. A linha ficou como segunda trava **com a nota dizendo isso**,
+      para o próximo não confundir redundância com garantia.
+      **Três estados, não dois**, para a flag da inspeção (1 / 0 / **ausente**): enquanto a fila do
+      servidor não trouxer o campo, a caixa fica travada e **diz** *"Ainda não informada pelo
+      servidor nesta fila"* — desmarcada e calada seria o BLOQUEANTE 4 da Fase 2 entrando pela
+      porta do tempo.
+      **Divergência do plano:** a tela **não abre NC à mão**. O payload exige `referencia_tipo` +
+      `referencia_id` e nenhuma tela do módulo mostra esses ids; um campo numérico cru convidaria a
+      pendurar o documento no registro errado — que é o que a guarda `Number.isInteger` existe para
+      evitar. **Consequência declarada:** `registrar_nao_conformidade` fica sem call site de UI
+      (letra **B171**).
+- [x] T6 — `naoConformidadeIntegracao.api.test.js` (`1725779`), 6 cenários, **tudo por HTTP**.
+      Suíte **204/204 arquivos**.
+      **As duas sabotagens acertaram o alvo:** (a) `excluirComNC: false` derrubou o cenário (2)
+      em *"o item 2 virou NC-… e NAO podia continuar no cartao DIVERGENCIA_RECEBIMENTO"* e o
+      irmão no (3); (b) prioridade do D9 invertida derrubou **só** o (5), nomeando o tipo errado.
+      **O cenário (2) vale mais que o da T4 e é por isso que a task existe:** o teste da T4 chama
+      `montarCentral` direto; este entra **pela rota**, com gate, e mede os **dois cartões na
+      mesma resposta** — é a única prova de que a exclusão do D6 chega ao usuário.
+      **DEFEITO DE COMPOSIÇÃO ENCONTRADO — e é o achado da etapa** (ver a letra **C59**):
+      `decidir_nao_conformidade` é `[ADMINISTRADOR, QUALIDADE]`, mas `ver_alertas` é
+      `[ADMINISTRADOR, ALMOXARIFE, GESTOR, COMPRAS]` (`permissions.js:149`). Medido pela rota:
+      QUALIDADE + `GET /alertas/central` → **403**. O único perfil não-admin que pode **agir**
+      sobre a NC é o único que **não vê** o cartão que a cobra; e quem vê (COMPRAS) é quem foi
+      excluído da decisão de propósito. A exclusão de QUALIDADE de `ver_alertas` já estava
+      declarada desde a Etapa 24, mas ali a consequência era só de **visibilidade** — esta é a
+      primeira entrada cuja **ação** pertence a quem não vê o cartão. O 403 ficou **congelado no
+      teste**, com o porquê no cabeçalho: no dia em que a central filtrar por perfil, o arquivo
+      fica vermelho com a explicação ao lado.
+
+### Fechamento (fora das seis tasks, feito na integração)
+
+- **O campo do alerta novo era INEDITÁVEL pela tela.** A T4 semeou `alerta_nc_parada_dias` em
+  `schema.js`, mas `ConfiguracoesAlmoxarifado.js` renderiza uma **lista fixa** (`CAMPOS`) — chave
+  fora dela existe no banco e não tem onde ser editada. É o **mesmo buraco** que as Etapas 16 e 17
+  pagaram, e o cabeçalho de `ConfiguracoesGerais.test.js` já o registrava. Corrigido no
+  fechamento, com cenário próprio e **controle positivo**: removendo a linha de `CAMPOS`, o teste
+  cai em `expect(container.textContent).toContain('Alerta de Não Conformidade Parada (dias)')` —
+  a asserção certa. Restaurado por cópia com `md5sum -c` OK.
+  Efeito colateral medido: sem a chave na **fixture** do teste, o guard client-side vê `undefined`
+  como `NaN` e derruba **seis** testes de Salvar que nem tocam nela — exatamente o que o
+  comentário da Etapa 16 previa.
+
+## Próxima tarefa detalhada — Etapa 44: a QUALIDADE executa a própria decisão (feature 09) — medir antes
+
+**Por que esta, e não outra** (pela ordem do `CLAUDE.md`, sem consultar ninguém):
+
+1. **É o que o fechamento desta etapa nomeou como "falta para 🟢"** da feature que acabei de
+   tocar: a 09 saiu de três itens para **dois**, e um deles — *liberação sob desvio autorizado* —
+   está **pago pela metade**. O documento existe, a decisão é imutável, e **quem decide não
+   consegue executar**.
+2. **O furo é concreto, medido e pequeno**, o que é raro: `ACEITAR_SOB_DESVIO` fecha o documento e
+   o material continua em `quantidade_bloqueada`. Quem desbloqueia é
+   `POST /api/almoxarifado/materiais/:id/desbloquear` (`extended.js:1103`), gateado por
+   **`ajustar_estoque`** — `[ADMINISTRADOR, GESTOR]`, sem QUALIDADE (`permissions.js:99-101`), e a
+   exclusão é **deliberada e escrita** desde a Etapa 24 (*"mexer em saldo não é ofício de
+   qualidade"*). Na prática a Qualidade decide e **pede a outra pessoa** que execute.
+3. **A saída já está nomeada por escrito desde a Etapa 24**, na própria spec 09: *"o caminho limpo
+   é uma ação PRÓPRIA (`bloquear_qualidade`)"*. Não é desenho novo — é cobrar uma promessa.
+4. **Descartado como Etapa 44, com o motivo:** (a) **conferência física estruturada** (item (1) da
+   08) — cadastro de checklist por tipo de material, escopo de etapa inteira, e ela **consome** a
+   NC; (b) **encaminhamento com status** (o outro item da 09) — depende de a devolução ao
+   fornecedor existir como fluxo (feature 12), maior e com dono em outra spec; (c) **botão "abrir
+   NC deste item"** na tela de Recebimento (**B171**) — é meia-task, cabe como galho de outra
+   etapa, não como etapa.
+
+**Contrato que a 44 consome (medido em 2026-09-28; a Fase 0 tem de RECONTAR e cruzar com a spec
+09 ANTES de medir do zero):**
+
+- **`inspectionService.bloquearMaterial` / `desbloquearMaterial`** (`:401` e `:414`) — as duas
+  são finas: validam `quantidade > 0` e `justificativa` não vazia e chamam `registrarMovimentacao`
+  com os tipos `BLOQUEIO` / `DESBLOQUEIO` e o motivo literal *"Bloqueio avulso"* / *"Desbloqueio
+  avulso"*. **Não têm vínculo com documento nenhum** — é exatamente o que a 44 acrescenta.
+- **`DESBLOQUEIO` recusa com 400 quando a quantidade pedida é maior que a bloqueada** (Etapa 5, já
+  escrito na spec 09) — a 44 **não** precisa inventar essa guarda.
+- **`nonConformityService.decidirNaoConformidade`** — hoje só grava. O gancho de execução entra
+  **depois** da gravação, e a pergunta de desenho é se ele é **fatal** (a decisão falha se o
+  desbloqueio falhar) ou **não fatal** como os três ganchos da 43. **Recomendação medida:** aqui
+  deve ser **FATAL**, ao contrário da 43 — decidir "aceito" e o material continuar bloqueado em
+  silêncio é pior que a decisão não ter sido gravada, porque o documento diria uma coisa e o saldo
+  outra. É a inversão do critério da 43, e por isso precisa estar escrita.
+- **A NC de origem `INSPECAO` guarda `referencia_id` = id da inspeção**, e a inspeção guarda
+  `quantidade_reprovada` e `recebimento_item_id` — então o material e a quantidade a desbloquear
+  são alcançáveis sem coluna nova. **Medir**: a NC de origem `RECEBIMENTO` **não** tem material
+  bloqueado (falta de quantidade não bloqueia nada), então a execução só faz sentido na origem
+  `INSPECAO` — e isso tem de ser **recusa explícita**, não silêncio.
+
+**Pontos de atenção (medir na Fase 0 antes de prometer):**
+
+- **A ação nova é `bloquear_qualidade` ou duas?** A spec 09 nomeia uma. Mas bloquear e desbloquear
+  têm **riscos diferentes** (desbloquear devolve material ao disponível). O precedente desta base
+  é ação própria quando **a natureza do risco muda** — medir se o cliente quer separar.
+- **O que fazer com `SUCATEAR` e `DEVOLVER`.** Se a 44 executa `ACEITAR`/`ACEITAR_SOB_DESVIO`,
+  fica estranho não executar os outros dois — mas sucatear passa pelas **duas pernas de
+  aprovação** (`aprovar_sucateamento` + `aprovar_sucateamento_gestao`) e devolver é a feature 12.
+  **Caminho reversível:** executar só as duas decisões de aceitação, e declarar as outras duas
+  como "marcam intenção" — registrando na letra B, porque é corte de escopo visível na tela.
+- **A tela.** O botão de decidir já existe; o que muda é o **efeito**. A tela precisa dizer o que
+  aconteceu com o saldo (*"material liberado"*), senão o usuário decide e não vê diferença — foi
+  o que aconteceu na Etapa 43 com o `ACEITAR_SOB_DESVIO` e virou o furo **C57**.
+- **Não repetir o erro da 43 nos testes de permissão:** asserção negativa de permissão não fica
+  vermelha na rodada TDD; o controle positivo **concedendo** a ação proibida é a única prova.
+- **Despachar em lotes de no máximo dois galhos** — regra que continua valendo (nenhum agente foi
+  perdido nesta etapa com esse limite).
 
 ## Retro nº 4 da Etapa 42 — o defeito que escapou (preenchido por esta Fase 0)
 
@@ -331,3 +474,34 @@ recebimento já tinha gancho "nos dois escritores" — e tinha, para o **alerta*
 frase para o plano da 43 eu a li como se um gancho na conferência bastasse, e o revisor mediu que
 **a UI nunca chama `/conferir`**. A lição não é sobre a 42: é que "já existe gancho nos dois
 escritores" é uma frase sobre o alerta, não uma licença para enganchar num lugar só.
+
+## Retro de 4 números — Etapa 43
+
+1. **Rodadas de correção até verde:** **zero** no sentido clássico — nenhuma task precisou de uma
+   segunda rodada depois de integrada, e a suíte nunca ficou vermelha na branch principal. O que
+   substituiu as rodadas foi a **Fase 2**: 20 achados, 4 bloqueantes, **antes** da primeira linha
+   de código. Dois deles (o gancho na porta errada e a exclusão na função compartilhada) teriam
+   virado, no mínimo, uma rodada de correção cada — e o terceiro (a medição apagada do padrão
+   `1/0/0`) não viraria rodada nenhuma, porque **ninguém teria notado**.
+2. **Achados da revisão: 20 reais, 0 ruído.** Todos com arquivo:linha e cenário. A taxa de zero
+   ruído se repete pela terceira etapa seguida, e o que a explica é a instrução de exigir cenário
+   concreto de falha em vez de opinião.
+3. **Paralelismo:** 4 galhos em worktrees isoladas, em **dois** lotes de dois (T3+T5, depois T4
+   sozinho com T6 na sequência). **Nenhum retrabalho por conflito**, e nenhum agente perdido. O
+   que evitou o retrabalho foi congelar **por escrito** os dois aditivos de contrato que a T5
+   consumia da T3 — sem isso os dois estavam no mesmo lote e acoplados, como a Fase 2 mediu.
+4. **Defeito que escapou:** a preencher pela Fase 0 da Etapa 44. **Dois candidatos já conhecidos
+   e declarados**, que valem verificação lá: (a) `registrar_nao_conformidade` ficou **sem call
+   site de UI** (B171) — ação que existe e ninguém alcança pela tela é o padrão que esta base já
+   pagou três vezes; (b) a abertura automática **não alcança** divergência anterior ao deploy
+   (A21), e ninguém vai reconferir recebimento antigo só para gerar documento.
+
+### O que esta etapa aprendeu sobre o próprio fluxo
+
+**A Fase 2 achou um erro que a Fase 0 tinha acabado de cometer**, e vale nomear o mecanismo: o
+handoff da Etapa 42 dizia que a divergência de recebimento *"já é chamada por gancho no ato, nos
+dois escritores"*. Aquilo era uma frase sobre **o alerta**. Ao transportá-la para o plano da 43,
+eu a li como licença para enganchar a NC **num lugar só** — e o revisor mediu que a UI nunca chama
+`/conferir`. **A lição não é "leia melhor":** é que uma frase de handoff sobre um mecanismo (o
+alerta) não autoriza conclusão sobre outro (o documento), mesmo quando os dois moram na mesma
+função. Medir de novo custa minutos; a feature teria nascido invisível em produção.

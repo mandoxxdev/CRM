@@ -2944,6 +2944,12 @@ const TabConfiguracoes = () => {
     // recebimento, divergencia de inventario) — semeada no schema.js e lida pela mesma
     // alertRegistry.resolverDias. O prefixo `alerta_` ja cai no guard do handleSalvar.
     { chave: 'alerta_eventos_janela_dias', label: 'Alerta de Eventos (dias)', tipo: 'number', descricao: 'Janela em dias que os alertas de evento (reprovado, divergências) mostram na central' },
+    // Etapa 43 (T4): a janela do 14o alerta (nao conformidade ABERTA sem decisao). A chave foi
+    // semeada no schema.js pela task do servidor, mas a tela renderiza a LISTA FIXA `CAMPOS` —
+    // chave fora dela existe no banco e e INEDITAVEL pela UI. E o mesmo buraco que a Etapa 16
+    // pagou com as tres janelas acima, e que o cabecalho de ConfiguracoesGerais.test.js registra;
+    // por isso a linha entra aqui no fechamento da etapa, e nao "quando alguem pedir".
+    { chave: 'alerta_nc_parada_dias', label: 'Alerta de Não Conformidade Parada (dias)', tipo: 'number', descricao: 'Dias com a não conformidade ABERTA (sem decisão) para alertar documento parado' },
     { chave: 'notificacoes_dest_entradas', label: 'Destinatários — Entradas', tipo: 'text', descricao: 'E-mails (lista) para notificação de entrada de material; vazio usa o e-mail de alertas' },
     { chave: 'notificacoes_dest_saidas', label: 'Destinatários — Saídas', tipo: 'text', descricao: 'E-mails (lista) para notificação de saída de material; vazio usa o e-mail de alertas' },
     { chave: 'notificacoes_dest_ajustes', label: 'Destinatários — Ajustes', tipo: 'text', descricao: 'E-mails (lista) para notificação de ajuste de estoque; vazio usa o e-mail de alertas' },
