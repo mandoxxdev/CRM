@@ -3627,7 +3627,8 @@ mudanças automáticas na própria tela do pedido (mais trabalho, dá só o que 
     confirmar que ele fechou e com o quê.
 
 
-52. **NOVO, da Etapa 39 — o pedido que o almoxarifado recebeu continua marcado como "Atrasado" até
+52. **✅ RESOLVIDO NA ETAPA 42 (leia junto com o item 56, que descreve o automático que fechou
+    este furo) — o pedido que o almoxarifado recebeu continua marcado como "Atrasado" até
     alguém mudar o status pelo lápis.** Receber o material e processar a nota **não** mexe no status
     do pedido de compra: quem passa a saber que o material chegou é o **recebimento**, e o status do
     pedido continua sendo a declaração do **comprador** (decisão **B121**). Na prática, um pedido
@@ -3678,14 +3679,21 @@ cotação tem lixeira própria que leva os itens junto, **B149**). Produção ti
 não há caso passado a conferir. O que quem opera precisa saber está nas decisões: a cotação convertida
 **não se edita** (**B154**) e excluir o pedido **libera** a cotação (**B153**).*
 
-52. **✅ RESOLVIDO NA ETAPA 42 — o pedido recebido por inteiro ficava "Atrasado" para sempre, e nada
-    avisava quando ele chegava pela metade.**
+56. **✅ RESOLVIDO NA ETAPA 42 — o pedido recebido por inteiro ficava "Atrasado" para sempre, e nada
+    avisava quando ele chegava pela metade.** *(É o fechamento do item **52** acima — leia os dois
+    juntos: o 52 descreve o furo e o gesto manual que existia; este descreve o automático que o
+    substituiu.)*
 
-    ⚠️ **Este item estava FALTANDO, e a falta tem nome:** a decisão **B121** (Etapa 39) escreveu
-    *"ver **C52**"* e o item **C52 nunca foi escrito** — referência pendurada, do tipo que faz o
-    leitor procurar e não achar. Fica registrado aqui em vez de a referência ser apagada, porque a
-    referência estava **certa**: o furo existia, era exatamente o que a B121 descrevia, e só não
-    tinha entrada própria.
+    ⚠️ **ESTE ITEM NASCEU COM DOIS ERROS, E OS DOIS FICAM DITOS EM VEZ DE APAGADOS** (achados na
+    Fase 0 da Etapa 43, medindo este documento). Ele foi escrito no fechamento da Etapa 42
+    **numerado como "52"**, afirmando que *"o item **C52** nunca foi escrito"*. **As duas coisas
+    estavam erradas:** (1) o item 52 **existe desde a Etapa 39**, está logo acima, e descreve
+    exatamente o furo que a B121 apontava — a referência *"ver C52"* nunca esteve pendurada; (2)
+    como esta é a **56ª** entrada da lista, chamá-la de 52 criava **duas** entradas com o mesmo
+    número, e a lista numerada renumera sozinha ao exibir — ou seja, o texto dizia "52" e a tela
+    mostrava "56". Quem procurasse C52 acharia o item certo (o de cima) e leria, logo abaixo, que
+    ele não existia. **Corrigido aqui, à vista:** o número virou 56 e a afirmação falsa foi
+    substituída por esta nota.
 
     **O furo, em uma frase:** o **Status** do pedido de compra era a única coisa que tirava o pedido
     da lista de atrasados, e **nenhum recebimento o escrevia**. Então todo pedido que o almoxarifado
