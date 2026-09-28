@@ -172,9 +172,46 @@ nem mostra `undefined`.
 
 ## Estado
 
-- [ ] T1 — tronco (schema + backfill + serviço, 13 cenários)
-- [ ] T2 — galho (rota)
-- [ ] T3 — galho (tela)
-- [ ] T4 — integração (2 fluxos)
-- [ ] Fase 5 — revisão adversarial
-- [ ] Fase 6 — `fechar-etapa` (incluindo a correção dos dois textos da spec 09)
+- [x] **T1 — tronco** (`ff02188`): coluna `liberacao_nc_em` + backfill com ledger próprio +
+      `efeitoPrevisto` (função pura, 7 níveis de precedência) + `decidirNaoConformidade`
+      reordenada + `executarLiberacao`. **13 cenários**, todos verdes.
+- [x] **T2 — galho** (`db94225`): a rota **não precisou mudar uma linha** — ela já devolve o que o
+      serviço monta. **5 cenários** de contrato: o campo sobrevivendo à serialização, a forma
+      congelada (`null`, nunca `0`), o 400 do motor com a literal e o 403 antes de qualquer efeito.
+- [x] **T3 — galho** (`db94225`): o toast concatena `resp.data?.liberacao?.mensagem`. **3 cenários**
+      (os quatro efeitos + resposta sem o campo). O cabeçalho do componente, que afirmava "não move
+      estoque (D7)", ficou corrigido à vista.
+- [x] **T4 — integração** (`db94225`): **2 fluxos** — o ciclo do C57 ponta a ponta com usuário
+      QUALIDADE real, e o segundo portão do lote.
+- [x] **Documentação** (`a3f3373`, `195a06d`): os 7 artefatos da skill `fechar-etapa`.
+- [ ] Fase 5 — revisão adversarial (duas lentes, em curso)
+- [ ] Retro de 4 números
+
+---
+
+## Onde a execução divergiu do plano
+
+**1. O plano previa mudança na rota (T2) e ela não foi necessária.** `extended.js:1102` já faz
+`res.json(await nonConformityService.decidirNaoConformidade(...))` — o campo aditivo flui sozinho.
+A task virou **só cenários**, e isso não a torna dispensável: o que ela mede é a **forma** do
+contrato (`quantidade`/`material_id` em `null`, nunca `0` nem ausentes), contra a qual a T3 foi
+escrita em paralelo. Sem o cenário, servidor e tela poderiam divergir com as duas suítes verdes.
+
+**2. Dois controles positivos do plano caíram pela asserção ERRADA, e precisaram de um segundo
+disparo cada.** É a armadilha que a `fechar-etapa` nomeia — *"leia QUAL asserção caiu"* — e ela
+apareceu duas vezes nesta task:
+
+| Sabotagem prevista | O que caiu | O que faltava provar | O segundo disparo |
+|---|---|---|---|
+| trocar o claim da inspeção por um claim na NC | cenário 7, pela asserção do **`efeito`** (`LIBERADA` em vez de `JA_LIBERADA`) | a asserção do **saldo** (`bloqueada` = 10, não 7) nunca rodou | rodar o motor **mesmo com o claim falhando** e ainda reportar `JA_LIBERADA` — derruba o saldo nos cenários **7 e 12** |
+| remover o rollback do passo 4 | cenário 8, pela asserção do **`status`** | a de **`liberacao_nc_em`** nunca rodou | remover **só** o rollback da inspeção — derruba a asserção que faltava |
+
+**A lição, que vale além desta etapa:** quando duas asserções do mesmo cenário são produzidas pelo
+**mesmo ramo** do código, uma sabotagem qualquer derruba sempre a primeira, e a segunda fica sem
+prova nenhuma — com o placar vermelho dando a impressão contrária. O que separa as duas é uma
+sabotagem que faça o código **mentir sobre o que fez**, e não uma que o faça fazer menos.
+
+**3. O cenário do lote (T4) precisou de dois ajustes de fixture que são medição, não acidente:**
+material com `controle_lote` **exige o campo Lote na entrada** (o lote nasce do recebimento, não de
+um `INSERT`), e `SAIDA_PRODUCAO` **exige vínculo com OS ou projeto** — a saída do cenário teve de
+ser `emergencial` com justificativa. As duas guardas são anteriores a esta etapa e continuam de pé.
