@@ -38,6 +38,14 @@ const alertRegistry = require('./alertRegistry');
 // `ownerRules.assertAjustePermitido`. Sem ciclo: `permissions.js` nao requer nada no topo (o
 // `../systemPermissions` dele e requerido DENTRO de `getPerfilFromUser`, de proposito).
 const { can, getPerfilFromUser } = require('./permissions');
+// Etapa 43 (T3, D4): o DOCUMENTO da divergencia de quantidade. Require de TOPO, e nao preguicoso,
+// porque foi MEDIDO que nao ha ciclo: `nonConformityService` so requer db/divergencia/numeroDoc/
+// audit, e nenhum deles chega de volta aqui (sonda de carga fria nas duas ordens de import, T3).
+// Pelo OBJETO do modulo, NAO desestruturado — mesmo motivo de `purchaseService` e
+// `notificationQueueService` acima: o teste de nao-fatalidade monkeypatcha
+// `sincronizarNaoConformidadeQuantidade` em tempo de execucao para provar que o gancho que explode
+// nao derruba a conferencia, e uma desestruturacao capturaria a funcao original antes do patch.
+const nonConformityService = require('./nonConformityService');
 
 /**
  * Etapa 17 (RN-04, gancho C4.2) — aviso pos-escrita da quantidade recebida, nos DOIS escritores
@@ -60,6 +68,42 @@ async function avisarDivergenciasDoRecebimento(db, recebimentoId) {
     }
   } catch (e) {
     console.warn('[almoxarifado-alertas] Falha ao avisar divergencia de recebimento:', e.message);
+  }
+}
+
+/**
+ * Etapa 43 (T3, D4) — o DOCUMENTO da divergencia, nos MESMOS dois escritores de
+ * `quantidade_recebida` em que o aviso da Etapa 17 ja mora. Ate aqui a falta de 3 kg virava
+ * e-mail e alerta, e sumia quando caia fora da janela de dias: nao havia como responder "quem
+ * decidiu aceitar, e quando". Agora vira `NC-…`.
+ *
+ * ── TRES DECISOES QUE ESTAO NESTE CORPO ──────────────────────────────────────────────────────
+ *
+ * 1. **Nos DOIS escritores, nao so no `conferir`.** A UI de producao NUNCA chama `/conferir` —
+ *    ela escreve quantidade pelo modal de NF (`salvarDadosFiscal`). Esta frase esta no cabecalho
+ *    deste arquivo (`:43-45`) como achado Critico da Etapa 17 e ha teste congelando-a
+ *    (`alertaEventoGanchos.api.test.js:160`). Com o gancho so na conferencia, a feature nasceria
+ *    com a suite verde e INVISIVEL no unico caminho que o cliente usa.
+ *
+ * 2. **DEPOIS de `avisarDivergenciasDoRecebimento`**, posicao congelada no D4: uma falha do
+ *    gancho novo nao pode afetar o aviso que ja existia.
+ *
+ * 3. **Por item, e o `try/catch` por item tambem** (molde do gancho de status da Etapa 42, em
+ *    `darEntradaEstoque`): um item que explode nao pode fazer os outros do mesmo documento
+ *    perderem a NC. NAO-FATAL sempre — um `throw` aqui devolveria 400/500 para uma conferencia
+ *    que JA gravou a quantidade, e o operador reenviaria achando que nao salvou. Perder o
+ *    documento com um `warn` e reparavel pela porta manual e pelo alerta de divergencia, que
+ *    continua sendo a rede de seguranca (D6); travar a conferencia nao e.
+ */
+async function abrirNaoConformidadesDeQuantidade(db, user, itens) {
+  if (!itens?.length) return;
+  for (const item of itens) {
+    try {
+      await nonConformityService.sincronizarNaoConformidadeQuantidade(db, user, item?.id);
+    } catch (e) {
+      console.warn('[recebimento] nao conformidade de quantidade falhou '
+        + `(item ${item?.id}): ${e.message}`);
+    }
   }
 }
 
@@ -797,6 +841,8 @@ async function conferirRecebimento(db, user, recebimentoId, data) {
   }
 
   await avisarDivergenciasDoRecebimento(db, recebimentoId);
+  // Etapa 43 (T3): DEPOIS do aviso, posicao congelada no D4. Ver `abrirNaoConformidadesDeQuantidade`.
+  await abrirNaoConformidadesDeQuantidade(db, user, itens);
 
   return { success: true };
 }
@@ -964,6 +1010,9 @@ async function salvarDadosFiscal(db, user, recebimentoId, data) {
   }
 
   await avisarDivergenciasDoRecebimento(db, recebimentoId);
+  // Etapa 43 (T3): o gancho da porta que a UI REALMENTE usa — sem esta linha a feature nasceria
+  // invisivel em producao com a suite verde (ver `abrirNaoConformidadesDeQuantidade`, decisao 1).
+  await abrirNaoConformidadesDeQuantidade(db, user, itens);
 
   return { success: true };
 }

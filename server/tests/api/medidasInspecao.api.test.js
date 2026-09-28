@@ -73,6 +73,18 @@ async function itemRetido(db, qtd = 10) {
   return { mat, itemId: it.id, qtd };
 }
 
+/**
+ * Etapa 43 (RN-07): `divergencia_quantidade` deixou de sair do payload e passou a ser DERIVADA do
+ * item. O fixture nasce com `quantidade_recebida = quantidade_esperada`
+ * (`receiptService.js:425`), entao a derivada da 0 e mandar a flag no corpo nao muda mais nada.
+ * Para o cenario (18) continuar afirmando `divergencia_quantidade === 1` ele tem de fabricar a
+ * divergencia DE VERDADE — afrouxar a assercao para `=== 0` guardaria o comportamento novo e
+ * perderia a unica assercao positiva que essa coluna tem neste arquivo.
+ */
+const fabricarDivergencia = (db, itemId, recebida) => dbRun(db,
+  'UPDATE recebimentos_material_itens_almoxarifado SET quantidade_recebida = ? WHERE id = ?',
+  [recebida, itemId]);
+
 async function novoPlano(db, materialId, campos = {}) {
   seq += 1;
   const r = await dbRun(db, `INSERT INTO planos_inspecao_almoxarifado
@@ -445,13 +457,18 @@ async function recusa(fn) {
 
   await test('(18) Regressao: inspecao SEM medidas segue manual e move saldo como hoje', async () => {
     const { mat, itemId } = await itemRetido(db, 10);
+    // Etapa 43 (RN-07): recebeu 8 de 10 esperadas — divergencia REAL, que e o que a derivada le.
+    // O payload abaixo ainda manda a flag DE PROPOSITO: aqui ela coincide com o fato. Quem prova
+    // que o fato vence o payload quando os dois discordam e `naoConformidadeGanchos.api.test.js`.
+    await fabricarDivergencia(db, itemId, 8);
     await inspectionService.decidirInspecao(db, ADMIN, itemId, {
       quantidade_aprovada: 7, quantidade_reprovada: 3,
       divergencia_dimensional: 1, divergencia_quantidade: 1,
     });
     const [insp] = await inspecoesDoItem(db, itemId);
     assert.strictEqual(insp.divergencia_dimensional, 1, 'sem medidas a flag continua sendo a do payload');
-    assert.strictEqual(insp.divergencia_quantidade, 1);
+    assert.strictEqual(insp.divergencia_quantidade, 1,
+      'com recebida 8 de 10 a derivada da RN-07 tinha de gravar 1');
     assert.strictEqual(insp.quantidade_aprovada, 7);
     assert.strictEqual(insp.quantidade_reprovada, 3);
     const m = await material(db, mat);
