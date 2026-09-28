@@ -48,6 +48,16 @@ const ACOES = {
   // desta acao e o que a caixa "Autorizo o recebimento acima do pedido" produz quando o perfil
   // nao pode: sem rotulo, o toast mostraria "autorizar excedente" cru.
   autorizar_excedente: 'autorizar recebimento acima do pedido',
+  // Etapa 43, T2: as DUAS acoes da nao conformidade numerada entram no mapa NO MESMO commit que
+  // as cria em ACAO_PERFIS — e a SEXTA vez que este buraco aparece nesta base (achado 7 da Etapa
+  // 11, Etapa 12 Task 4, Etapa 16 Task 3, fix-round da Etapa 30, Etapa 32). Sem estas duas linhas,
+  // `permissaoErro.test.js:44` ("toda acao de ACAO_PERFIS tem rotulo proprio") fica vermelho na
+  // suite do CLIENT por causa de uma task de SERVIDOR, parecendo regressao de outra frente.
+  // O 403 de `decidir_nao_conformidade` e o que o modal de decisao produz para ALMOXARIFE e
+  // COMPRAS (que abrem, mas nao decidem — D8): sem rotulo, o toast mostraria "decidir nao
+  // conformidade" cru, sem acento, e o usuario nao saberia que ABRIR ele ainda pode.
+  registrar_nao_conformidade: 'registrar não conformidade',
+  decidir_nao_conformidade: 'decidir não conformidade',
 
   // Etapa 30, fix-round da revisao adversarial: QUATRO acoes de ACAO_PERFIS nao tinham rotulo, e
   // tres delas ja tinham call site de UI — o toast mostrava a chave crua ("gerenciar plano

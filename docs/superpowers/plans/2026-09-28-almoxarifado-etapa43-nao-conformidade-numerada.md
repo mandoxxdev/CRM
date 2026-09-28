@@ -210,6 +210,21 @@ CREATE INDEX IF NOT EXISTS idx_nc_almox_status
   TDD, então o controle positivo é a única prova dela).
 
 ### T3 — galho — os TRÊS ganchos + a derivação da inspeção (RN-07)
+
+> **O que a T2 já entregou, e que a T3/T5 consomem (medido, não prometido):**
+> as quatro rotas existem em `extended.js`, logo depois de `GET /inspecoes/:id/medidas`:
+> `POST /api/almoxarifado/nao-conformidades` (gate `registrar_nao_conformidade`, 201, e **409**
+> com a mensagem literal quando o serviço devolve `null`), `GET /nao-conformidades` (só `auth`,
+> resposta **`{ itens: [...] }`**, query passada inteira ao serviço — `status`, `origem`, `tipo`,
+> `material_id`, `limite`), `GET /nao-conformidades/:id` (só `auth`, 404 também para id não
+> numérico) e `POST /nao-conformidades/:id/decidir` (gate `decidir_nao_conformidade`, 200).
+> `ACAO_PERFIS` tem as duas ações novas e `GET /almoxarifado/minhas-permissoes` já as publica —
+> a T5 lê a flag de lá para esconder o botão de decidir, e ela **falha aberta** de propósito.
+> `auditLabels.js` tem a entidade `nao_conformidade` e os três verbos: **nenhuma task nova precisa
+> reabrir esse arquivo por causa da NC**.
+> ⚠️ **A T3 não pode escrever `acao: 'ALGO_MAIUSCULO'` em `services/almoxarifado/` para nada que
+> não seja verbo de trilha — nem dentro de comentário** (`auditLabels.api.test.js:61` é `grep`).
+
 - `receiptService.conferirRecebimento` **e** `receiptService.salvarDadosFiscal`: ao fim, por item
   tocado, `sincronizarNaoConformidadeQuantidade`, em `try/catch` com `console.warn` (molde do
   gancho de status da Etapa 42), **depois** de `avisarDivergenciasDoRecebimento` (`:799` e `:966`).
@@ -276,7 +291,27 @@ Lotes de no máximo **dois** galhos.
          reenvio automático do modal de NF, não contra a pessoa.
       3. `listarNaoConformidades` devolve **array** (molde de `listarHistorico`/`listarAnexos`);
          quem embrulha em `{ itens }` é a rota da T2.
-- [ ] T2
+- [x] T2 — permissões (D8) + `permissaoErro.js` no mesmo commit + rótulos de auditoria (RN-09) +
+      as quatro rotas + `naoConformidadeRotas.api.test.js` (8 cenários).
+      Suíte: **201/201 arquivos** em `test:api` (baseline era 200/200); client
+      `permissaoErro.test.js` **9/9**.
+      **Controle positivo, rodado:** com `decidir_nao_conformidade: [ADMINISTRADOR, QUALIDADE,
+      COMPRAS]` em `permissions.js`, o cenário (7) caiu com *"perfil COMPRAS PASSOU indevidamente
+      em decidir_nao_conformidade (status 200)"* — a asserção certa, nomeando ação e perfil, e
+      nenhuma outra. Restaurado por `perl` inverso com `md5sum` conferido (`a6a20f5f…`).
+      **Segundo controle (client):** removendo os dois rótulos de `permissaoErro.js`,
+      `permissaoErro.test.js:44` fica vermelho listando as duas ações — a guarda da Etapa 30
+      está viva, e esta seria a 6ª ocorrência do buraco se o commit fosse só de servidor.
+      **Onde a T2 divergiu do plano (letra B):**
+      1. A entidade `nao_conformidade` entrou com **três rótulos de ação** (`Não conformidade
+         aberta` / `decidida` / `cancelada`), como a RN-09 mandava — e a nota no arquivo explica
+         que agrupar impediria a pergunta "o que foi DECIDIDO neste mês", que é a razão de o
+         documento existir.
+      2. As listas de perfil do teste da matriz são **literais**, e não derivadas de
+         `ACAO_PERFIS`: derivadas, a sabotagem do controle positivo mudaria a expectativa junto
+         com o código e o cenário seria tautologia. Custo declarado: mudar D8 exige mudar o teste.
+      3. O clamp de 500 é medido **na rota** envelopando `db.all` durante três requisições
+         (`?limite=9999` → 500, `?limite=7` → 7, ausente → 100), em vez de criar 501 documentos.
 - [ ] T3
 - [ ] T4
 - [ ] T5

@@ -176,6 +176,35 @@ const ACAO_PERFIS = {
   // requirePermission na rota"). Entra de graca em GET /almoxarifado/minhas-permissoes — a rota
   // itera Object.keys(ACAO_PERFIS).
   autorizar_excedente: [PERFIS.ADMINISTRADOR, PERFIS.COMPRAS],
+  // Etapa 43 (D8): a nao conformidade numerada tem DUAS acoes proprias, e a assimetria entre elas
+  // E a feature — abrir e largo, decidir e estreito.
+  //
+  // Por que acoes proprias, e nao carona em `inspecionar`/`receber_material` (o criterio ja escrito
+  // acima para ajustar_material_cliente, remessar_terceiro, conferir_separacao e
+  // autorizar_excedente): a NC e DOCUMENTO com autor, decisao e justificativa, e o risco e de
+  // natureza diferente do ato que a origina. Com carona em `inspecionar`, quem decide a inspecao
+  // decidiria tambem o documento que julga o proprio recebimento; com carona em
+  // `receber_material`, o COMPRAS — que abre — decidiria junto, que e exatamente o que o paragrafo
+  // seguinte recusa. E restringir uma coisa passaria a restringir a outra.
+  //
+  // `registrar_nao_conformidade` e larga porque quem VE o problema abre: quem confere (ALMOXARIFE,
+  // COMPRAS) e quem inspeciona (QUALIDADE). Nao ha risco em abrir documento a mais — ha risco em
+  // nao abrir. Os ganchos automaticos da T3 rodam SEM requirePermission: sao efeito do ato ja
+  // autorizado (conferir, inspecionar), mesmo desenho do gancho de status da Etapa 42.
+  //
+  // COMPRAS fica FORA de `decidir_nao_conformidade` DE PROPOSITO, e essa e a exclusao que precisa
+  // de justificativa porque ele e o candidato obvio (tem `receber_material` e `autorizar_excedente`):
+  // COMPRAS e PARTE INTERESSADA no fornecedor sobre o qual decidiria — aceitar sob desvio a falta
+  // de um fornecedor que ele mesmo negociou e o conflito que a separacao de papeis existe para
+  // evitar. Mesmo raciocinio, escrito, de gerenciar_plano_inspecao (Etapa 27) e autorizar_excedente
+  // (Etapa 36). Aceitar sob desvio e ato de quem responde pela qualidade do que entra.
+  // ALMOXARIFE tambem fica fora: quem RECEBE nao julga o proprio recebimento.
+  // Reversivel numa linha se o cliente pedir; registrado na letra B do doc de novidades.
+  //
+  // As duas entram de graca em GET /almoxarifado/minhas-permissoes — a rota itera
+  // Object.keys(ACAO_PERFIS) — e e o que permite a tela da T5 esconder o botao de decidir.
+  registrar_nao_conformidade: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE, PERFIS.QUALIDADE, PERFIS.COMPRAS],
+  decidir_nao_conformidade: [PERFIS.ADMINISTRADOR, PERFIS.QUALIDADE],
 };
 
 function getPerfilFromUser(user) {

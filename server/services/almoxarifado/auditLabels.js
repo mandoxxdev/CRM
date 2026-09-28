@@ -66,6 +66,11 @@ const ROTULOS_ENTIDADE = Object.freeze({
   material: 'Material',
   material_cliente: 'Material de cliente',
   movimentacao: 'Movimentação',
+  // Etapa 43: a divergência deixa de ser só alerta e vira DOCUMENTO numerado (`NC-…`), com autor,
+  // decisão e justificativa. Mesma regra da `categoria` e do `plano_inspecao` acima: sem esta linha
+  // o teste de cobertura de entidades fica vermelho de propósito e `nao_conformidade` apareceria
+  // crua no filtro da tela de auditoria.
+  nao_conformidade: 'Não conformidade',
   notificacao: 'Notificação',
   // Etapa 42 (RN-E07): o recebimento que completa o pedido grava `pedidos_compra.status` sozinho, e
   // essa e a UNICA escrita do almoxarifado numa tabela do CORE Compras que deixa trilha propria — o
@@ -167,6 +172,19 @@ const GRUPOS_ACAO = congelarGrupos([
   // varredura le o literal `acao: 'EXCEDENTE_AUTORIZADO'` do receiptService. E o mesmo buraco de
   // fiacao que a Etapa 30 pagou num fix-round por nao existir regua na epoca.
   { rotulo: 'Excedente autorizado', verbos: ['EXCEDENTE_AUTORIZADO'] },
+
+  // Nao conformidade numerada (Etapa 43, RN-09) — TRES rotulos distintos, e NAO um grupo so.
+  // Agrupar os tres num 'Nao conformidade' unico foi considerado e DESCARTADO pela mesma regra
+  // escrita acima na nota do 'Fechamento automatico do pedido': agrupar vale para SINONIMOS do
+  // mesmo ato (RN-06), nao para atos DIFERENTES de nome parecido. Aqui os tres sao atos distintos
+  // com autores distintos — abrir pode ser do gancho automatico ou de quem viu o problema, decidir
+  // e de quem responde pela qualidade (gate `decidir_nao_conformidade`) e cancelar so o sistema faz
+  // (RN-05, quando a divergencia sumiu na reconferencia). Num grupo so, o filtro "Nao conformidade"
+  // traria as tres coisas juntas e ninguem conseguiria listar "o que foi DECIDIDO neste mes", que
+  // e a pergunta para a qual o documento existe.
+  { rotulo: 'Não conformidade aberta', verbos: ['NC_ABERTA'] },
+  { rotulo: 'Não conformidade decidida', verbos: ['NC_DECIDIDA'] },
+  { rotulo: 'Não conformidade cancelada', verbos: ['NC_CANCELADA'] },
 
   // Conferência de inventário (routes/almoxarifado.js, ternário — invisível para a varredura)
   { rotulo: 'Contagem', verbos: ['CONTAGEM'] },

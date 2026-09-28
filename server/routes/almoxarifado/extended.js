@@ -51,6 +51,10 @@ const seriesService = require('../../services/almoxarifado/seriesService');
 const reservationService = require('../../services/almoxarifado/reservationService');
 const receiptService = require('../../services/almoxarifado/receiptService');
 const inspectionService = require('../../services/almoxarifado/inspectionService');
+// Etapa 43: a nao conformidade numerada. O servico ja valida enum, id e estado, e lanca com
+// `.status` + a mensagem literal do contrato — as rotas abaixo NAO revalidam nada (duplicar a
+// regua e como a mensagem literal se parte em duas).
+const nonConformityService = require('../../services/almoxarifado/nonConformityService');
 const returnService = require('../../services/almoxarifado/returnService');
 const scrapService = require('../../services/almoxarifado/scrapService');
 const scrapDisposalService = require('../../services/almoxarifado/scrapDisposalService');
@@ -1029,6 +1033,65 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
         : await inspectionService.listarMedidasDaInspecao(db, inspecaoId);
       if (medidas === null) return res.status(404).json({ error: 'Inspeção não encontrada' });
       res.json(medidas);
+    } catch (e) { handleError(res, e); }
+  });
+
+  // ── Não conformidade numerada (Etapa 43, features 08 + 09) ──
+  //
+  // As quatro portas do documento `NC-…`. A regra que vale para todas: quem valida enum, id,
+  // referência e estado é `nonConformityService`, que lança erro com `.status` (400/404/409) e a
+  // mensagem literal do contrato; o `handleError` de :77 só repassa. Revalidar aqui criaria uma
+  // SEGUNDA cópia da régua e a mensagem literal passaria a existir em dois lugares — que é
+  // exatamente como as duas se separam na primeira mudança.
+  //
+  // Autorização em DUAS larguras de propósito (D8): abrir é largo (quem vê o problema abre),
+  // decidir é estreito (quem responde pela qualidade). Ler é só `auth`, molde de
+  // `/inspecoes/pendentes` acima — quem abre a tela do módulo lê o documento.
+
+  app.post('/api/almoxarifado/nao-conformidades', auth, requirePermission('registrar_nao_conformidade'), async (req, res) => {
+    try {
+      const nc = await nonConformityService.abrirNaoConformidade(db, req.user, req.body || {});
+      // `null` NAO e erro do servico: e a idempotencia da RN-08 dizendo que ja existe uma NC
+      // ABERTA identica (indice parcial composto). Os ganchos automaticos da T3 ignoram esse
+      // `null`; a porta MANUAL o traduz em 409, porque aqui houve uma pessoa pedindo um documento
+      // novo e devolver 201 com o documento antigo faria parecer que o pedido dela criou algo.
+      if (!nc) {
+        return res.status(409).json({ error: 'Já existe uma não conformidade aberta para este item e tipo' });
+      }
+      res.status(201).json(nc);
+    } catch (e) { handleError(res, e); }
+  });
+
+  app.get('/api/almoxarifado/nao-conformidades', auth, async (req, res) => {
+    try {
+      // `listarNaoConformidades` devolve ARRAY (molde de `listarHistorico`/`listarAnexos`); quem
+      // embrulha em `{ itens }` e esta rota, porque o contrato da tela da T5 pede um objeto — e
+      // objeto e o que permite acrescentar `total` depois sem quebrar quem ja consome.
+      // `req.query` passa inteiro: `limite` e clampado no servico SEM erro (teto 500) e filtro
+      // fora do enum nao e 400, e filtro que nao casa nada — mesma regua de `/inspecoes/pendentes`.
+      const itens = await nonConformityService.listarNaoConformidades(db, req.query);
+      res.json({ itens });
+    } catch (e) { handleError(res, e); }
+  });
+
+  app.get('/api/almoxarifado/nao-conformidades/:id', auth, async (req, res) => {
+    try {
+      // Id nao numerico e 404, e nao 400: `obterNaoConformidade` devolve `null` tanto para 'abc'
+      // quanto para um id que nao existe, porque para quem chama nao ha diferenca entre as duas
+      // coisas. Sem isso o SQLite coagiria o texto em silencio (mesmo motivo de
+      // `/inspecoes/:id/medidas` acima).
+      const nc = await nonConformityService.obterNaoConformidade(db, req.params.id);
+      if (!nc) return res.status(404).json({ error: 'Não conformidade não encontrada' });
+      res.json(nc);
+    } catch (e) { handleError(res, e); }
+  });
+
+  app.post('/api/almoxarifado/nao-conformidades/:id/decidir', auth, requirePermission('decidir_nao_conformidade'), async (req, res) => {
+    try {
+      // `requirePermission` ANTES de qualquer leitura do corpo: 403 antes de 400, como nas rotas
+      // de `configurar` (:478) e de `POST /recebimentos` (:973). Invertido, um perfil sem
+      // permissao descobriria a forma do payload e a existencia da NC pelo codigo de erro.
+      res.json(await nonConformityService.decidirNaoConformidade(db, req.user, req.params.id, req.body || {}));
     } catch (e) { handleError(res, e); }
   });
 
