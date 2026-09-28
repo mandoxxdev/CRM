@@ -442,6 +442,31 @@ Lotes de no máximo **dois** galhos.
   bloqueado (falta de quantidade não bloqueia nada), então a execução só faz sentido na origem
   `INSPECAO` — e isso tem de ser **recusa explícita**, não silêncio.
 
+**FASE 0 DA 44 JÁ COMEÇOU — o que foi medido no fechamento da 43:**
+
+- **`ajustar_estoque: [ADMINISTRADOR, GESTOR]`** (`permissions.js:26`) — confirmado. **QUALIDADE
+  não está lá, e ALMOXARIFE também não.** As duas rotas de bloqueio/desbloqueio avulso
+  (`extended.js:1098` e `:1103`) usam essa ação.
+- **⚠️ `quantidade_bloqueada` é um POOL DO MATERIAL, não do item nem da inspeção**
+  (`schema.js:787`, coluna de `materiais_almoxarifado`). **Isto muda o desenho da 44 e precisa
+  estar no design, não descoberto no meio:** não existe vínculo entre "os 3 kg que esta inspeção
+  reprovou" e "os 3 kg bloqueados" — o bloqueio é um número agregado por código de material. Logo,
+  *liberar o que esta NC aceitou* é **decrementar o pool pela quantidade reprovada daquela
+  inspeção**, e a exatidão é por convenção, não por rastro. É a mesma natureza do saldo global que
+  o `CLAUDE.md` declara intencional (almoxarifado é área física, não filial) — **não é para
+  "consertar"**, é para declarar.
+- **O motor já tem a guarda certa, e ela é o teto da 44:** o ramo `DESBLOQUEIO`
+  (`stockService.js:816-827`) decrementa com `WHERE ... COALESCE(quantidade_bloqueada,0) >= ?` e
+  **recusa com 400** *"Quantidade bloqueada insuficiente: N"* em vez de saturar em silêncio. A 44
+  **não precisa inventar** proteção contra liberar mais do que existe — precisa **não contorná-la**
+  (nada de `UPDATE` direto; a liberação passa por `registrarMovimentacao`, como tudo neste módulo).
+- **O que a NC de origem `INSPECAO` alcança sem coluna nova:** `referencia_id` é o id da inspeção,
+  e a inspeção guarda `quantidade_reprovada` e `recebimento_item_id` → material e quantidade estão
+  a um JOIN de distância. **A NC de origem `RECEBIMENTO` não tem nada bloqueado** (falta de
+  quantidade não bloqueia material), então a execução só faz sentido na origem `INSPECAO` — e
+  pedir execução numa NC de recebimento tem de ser **recusa explícita com mensagem**, nunca
+  silêncio que parece sucesso.
+
 **Pontos de atenção (medir na Fase 0 antes de prometer):**
 
 - **A ação nova é `bloquear_qualidade` ou duas?** A spec 09 nomeia uma. Mas bloquear e desbloquear
