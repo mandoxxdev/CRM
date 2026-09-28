@@ -73,6 +73,27 @@ const formatDataHora = (d) => (d ? new Date(d).toLocaleDateString('pt-BR') : '�
 const faixaDoPlano = (p) => formatarFaixa(p.valor_nominal, p.desvio_inferior, p.desvio_superior);
 
 const TEXTO_DIVERGENCIA_DERIVADA = 'Derivada das medidas ao salvar — fora da tolerância liga sozinha';
+
+/*
+ * Etapa 43 (RN-07) — a caixa "Divergência de quantidade" vira SOMENTE LEITURA.
+ *
+ * Era o último checkbox desta tela que mandava no banco: `inspectionService.js` gravava
+ * `data.divergencia_quantidade ? 1 : 0`, ou seja, o PAYLOAD decidia um fato que o servidor já
+ * tinha ao lado (`quantidade_esperada` e `quantidade_recebida` do item). Mesma classe de defeito
+ * do `reserva_id` da feature 07: coluna que a spec descrevia como fato e que era só um checkbox.
+ * Agora o servidor deriva pela régua de `divergencia.js` e ignora o payload — então a caixa passa
+ * a MOSTRAR o fato, como a dimensional faz desde a Etapa 29.
+ *
+ * ⚠️ A tela NÃO recalcula a divergência, mesmo tendo as duas quantidades à mão. Está vetado por
+ * decisão escrita desta feature (nota da B60: "pré-visualizar na tela exigiria uma segunda cópia
+ * da régua") — o epsilon de 1e-9 mora num lugar só. A flag `divergencia_quantidade` (0/1) vem
+ * DERIVADA na própria linha de `GET /inspecoes/pendentes` (aditivo congelado da T3).
+ */
+const TEXTO_DIVERGENCIA_QUANTIDADE = 'Do que a conferência registrou — o servidor compara esperada × recebida';
+// Enquanto a fila não devolver a flag (ambiente antigo, cache de API), a caixa fica desmarcada e
+// desabilitada com este aviso em vez de fingir que sabe. Desmarcada e SEM aviso era exatamente a
+// tela que mente quando há divergência — o achado BLOQUEANTE 4 da Fase 2.
+const TEXTO_DIVERGENCIA_INDISPONIVEL = 'Ainda não informada pelo servidor nesta fila';
 // O caso do meio — característica QUE ESTÁ no plano e que o inspetor NÃO mediu — é o que a
 // revisão adversarial da Etapa 29 achou: bastava uma medida conforme para a caixa travar e a
 // marcação manual sumir, mesmo com a divergência tendo sido vista noutra característica. O
@@ -200,6 +221,14 @@ const InspecoesAlmoxarifado = () => {
 
   const reprovadaNum = parseFloat(decisaoForm.quantidade_reprovada) || 0;
 
+  // Etapa 43/RN-07: `true` | `false` | `null`. `null` é "a fila não informou" — e é um estado
+  // DIFERENTE de "não há divergência", que a caixa mostra com outro texto. Sem essa distinção,
+  // um servidor antigo (ou a T3 ainda não mesclada) faria a caixa desmarcada afirmar um fato que
+  // ninguém apurou. `Number(...)` porque o SQLite devolve 0/1, não booleano.
+  const divergenciaQuantidade = (decisaoTarget == null || decisaoTarget.divergencia_quantidade == null)
+    ? null
+    : Number(decisaoTarget.divergencia_quantidade) === 1;
+
   const submitDecisao = async () => {
     const retido = Number(decisaoTarget.quantidade_retida);
     const aprovada = parseFloat(decisaoForm.quantidade_aprovada) || 0;
@@ -225,6 +254,10 @@ const InspecoesAlmoxarifado = () => {
         // Com medidas, a flag manual de divergência dimensional NÃO vai: o servidor deriva das
         // medidas, e mandar `true` junto ligaria a divergência mesmo com tudo dentro da faixa.
         if (linhasMedidas.length > 0 && key === 'divergencia_dimensional') return;
+        // Etapa 43/RN-07: a de QUANTIDADE nunca vai. O servidor a deriva do item e IGNORA o
+        // payload — mandá-la seria deixar no ar a ideia de que a tela ainda manda nesse fato, e
+        // o próximo a ler este código reabriria a caixa para edição achando que tem efeito.
+        if (key === 'divergencia_quantidade') return;
         if (decisaoForm[key]) payload[key] = true;
       });
       // A chave só entra se houver linha (achado 12): `medidas: []` é outra coisa para o servidor.
@@ -402,6 +435,12 @@ const InspecoesAlmoxarifado = () => {
                 <span style={{ fontSize: '0.82rem', color: 'var(--gmp-text-light)' }}>
                   Recebimento {decisaoTarget.recebimento_numero || `#${decisaoTarget.recebimento_id}`}
                   {decisaoTarget.nota_fiscal ? ` · NF ${decisaoTarget.nota_fiscal}` : ''}
+                  {/* Etapa 43: as duas quantidades vêm da fila (aditivo da T3) só para o
+                      inspetor VER o fato que liga a caixa de divergência de quantidade. A tela
+                      não as compara — a régua é do servidor. */}
+                  {decisaoTarget.quantidade_esperada != null && decisaoTarget.quantidade_recebida != null && (
+                    <> · esperada {decisaoTarget.quantidade_esperada} · recebida {decisaoTarget.quantidade_recebida}</>
+                  )}
                 </span>
               </p>
               <div className="almox-form-grid">
@@ -441,15 +480,25 @@ const InspecoesAlmoxarifado = () => {
                     {FLAGS_INSPECAO.map(({ key, label }) => {
                       // RN-02: `checked={false}` de propósito, não o estado — o estado fica
                       // guardado para a caixa voltar como estava se o inspetor limpar as medidas.
-                      const derivada = key === 'divergencia_dimensional' && temMedidas;
+                      const derivadaPorMedida = key === 'divergencia_dimensional' && temMedidas;
+                      // Etapa 43/RN-07: a de QUANTIDADE é derivada SEMPRE, não só às vezes — o
+                      // servidor a calcula com ou sem medidas, e ignora o payload.
+                      const derivadaPelaFila = key === 'divergencia_quantidade';
+                      const derivada = derivadaPorMedida || derivadaPelaFila;
+                      const marcada = derivadaPelaFila
+                        ? divergenciaQuantidade === true
+                        : (derivadaPorMedida ? false : decisaoForm[key]);
+                      const nota = derivadaPelaFila
+                        ? (divergenciaQuantidade === null ? TEXTO_DIVERGENCIA_INDISPONIVEL : TEXTO_DIVERGENCIA_QUANTIDADE)
+                        : TEXTO_DIVERGENCIA_DERIVADA;
                       return (
                         <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 400, fontSize: '0.85rem' }}>
-                          <input type="checkbox" checked={derivada ? false : decisaoForm[key]} disabled={derivada}
+                          <input type="checkbox" checked={marcada} disabled={derivada}
                             onChange={(e) => setDecisaoForm((f) => ({ ...f, [key]: e.target.checked }))} />
                           {label}
                           {derivada && (
                             <span style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>
-                              — {TEXTO_DIVERGENCIA_DERIVADA}
+                              — {nota}
                             </span>
                           )}
                         </label>

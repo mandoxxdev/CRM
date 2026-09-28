@@ -651,3 +651,88 @@ describe('InspecoesAlmoxarifado — abas Pendentes / Histórico (Etapa 29)', () 
     expect(campoPorLabel('Quantidade aprovada').value).toBe('100');
   });
 });
+
+/**
+ * Etapa 43 (RN-07) — a caixa "Divergência de quantidade" é SOMENTE LEITURA.
+ *
+ * Era o último checkbox desta tela que mandava no banco: o servidor gravava
+ * `data.divergencia_quantidade ? 1 : 0`, com as duas quantidades do item ao lado, sem olhar para
+ * elas. Agora ele deriva pela régua de `divergencia.js` e IGNORA o payload — então a caixa passa
+ * a MOSTRAR o fato, e a tela não o recalcula (a B60 vetou a segunda cópia da régua no client).
+ *
+ * ⚠️ A flag `divergencia_quantidade` na linha da fila é ADITIVO DA T3, que roda em paralelo:
+ * nesta base `GET /inspecoes/pendentes` ainda não a devolve. Os cenários abaixo MOCAM a resposta
+ * contra o contrato congelado do plano — a integração real só fecha depois do merge da T3. O
+ * cenário (4) é justamente o que acontece enquanto ela não sobe.
+ */
+describe('InspecoesAlmoxarifado — divergência de quantidade somente leitura (Etapa 43)', () => {
+  const checkboxFlag = (rotulo) => [...container.querySelectorAll('.almox-modal input[type="checkbox"]')]
+    .find((c) => c.closest('label')?.textContent.includes(rotulo));
+  const labelFlag = (rotulo) => [...container.querySelectorAll('.almox-modal label')]
+    .find((l) => l.textContent.includes(rotulo));
+
+  test('(1) com a fila dizendo que HÁ divergência, a caixa vem marcada e travada', async () => {
+    pendentesDoBanco = [{
+      ...PENDENTE, quantidade_esperada: 100, quantidade_recebida: 92, divergencia_quantidade: 1,
+    }];
+    await renderizar();
+    await abrirDecisao(0);
+    const caixa = checkboxFlag('Divergência de quantidade');
+    expect(caixa.checked).toBe(true);
+    expect(caixa.disabled).toBe(true);
+    expect(labelFlag('Divergência de quantidade').textContent).toContain('esperada × recebida');
+    // A metade POSITIVA, no mesmo teste: as outras caixas continuam EDITÁVEIS. Sem ela, um modal
+    // que não renderizasse mais nenhum checkbox — ou um `disabled` global — passaria batido.
+    expect(checkboxFlag('Certificado ausente').disabled).toBe(false);
+    expect(checkboxFlag('Certificado ausente').checked).toBe(false);
+    // E as quantidades que produziram o fato ficam à vista no cabeçalho do modal.
+    expect(container.querySelector('.almox-modal').textContent).toContain('esperada 100');
+    expect(container.querySelector('.almox-modal').textContent).toContain('recebida 92');
+  });
+
+  test('(2) com a fila dizendo que NÃO há divergência, a caixa vem desmarcada e igualmente travada', async () => {
+    pendentesDoBanco = [{
+      ...PENDENTE, quantidade_esperada: 100, quantidade_recebida: 100, divergencia_quantidade: 0,
+    }];
+    await renderizar();
+    await abrirDecisao(0);
+    const caixa = checkboxFlag('Divergência de quantidade');
+    expect(caixa.checked).toBe(false);
+    expect(caixa.disabled).toBe(true);
+    // Desmarcada com o texto do servidor é AFIRMAÇÃO ("não há"); desmarcada sem texto seria a
+    // tela fingindo que sabe. O cenário (4) cobre o outro caso.
+    expect(labelFlag('Divergência de quantidade').textContent).toContain('esperada × recebida');
+    expect(checkboxFlag('Material incorreto').disabled).toBe(false);
+  });
+
+  test('(3) o payload NÃO leva `divergencia_quantidade` — o servidor deriva e ignoraria', async () => {
+    pendentesDoBanco = [{
+      ...PENDENTE, quantidade_esperada: 100, quantidade_recebida: 92, divergencia_quantidade: 1,
+    }];
+    await renderizar();
+    await abrirDecisao(0);
+    // Metade POSITIVA: outra flag manual, marcada, TEM de chegar ao payload — prova que o laço
+    // que monta as flags continua vivo e que a ausência abaixo é da chave, não do laço inteiro.
+    await act(async () => {
+      checkboxFlag('Dano físico').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    preencher(campoPorLabel('Quantidade aprovada'), '100');
+    preencher(campoPorLabel('Quantidade reprovada'), '0');
+    await clicarBotaoModal('Salvar');
+    const payload = api.post.mock.calls[0][1];
+    expect(payload.dano_fisico).toBe(true);
+    expect(payload).not.toHaveProperty('divergencia_quantidade');
+  });
+
+  test('(4) fila que ainda não devolve a flag (T3 não mesclada): travada, desmarcada e DIZENDO que não sabe', async () => {
+    // O PENDENTE padrão é a fila de hoje — sem `divergencia_quantidade`. Desmarcada e calada
+    // seria a tela mentindo quando há divergência (achado BLOQUEANTE 4 da Fase 2).
+    await renderizar();
+    await abrirDecisao(0);
+    const caixa = checkboxFlag('Divergência de quantidade');
+    expect(caixa.checked).toBe(false);
+    expect(caixa.disabled).toBe(true);
+    expect(labelFlag('Divergência de quantidade').textContent).toContain('Ainda não informada pelo servidor');
+    expect(checkboxFlag('Certificado ausente').disabled).toBe(false);
+  });
+});
