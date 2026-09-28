@@ -8,6 +8,15 @@ const { avaliarRegrasVinculo } = require('./movementRules');
 const ownerRules = require('./ownerRules');
 const { TIPOS_MOVIMENTO, TIPOS_RETENCAO } = require('./schema');
 const { disponivelSql, COLUNAS_RETENCAO } = require('./availabilitySql');
+/**
+ * Espelha `nonConformityService.MOTIVO_LIBERACAO` SEM importá-lo — o mesmo desenho, e pelo mesmo
+ * motivo, da cópia de `STATUS_RECEBIMENTO_PROCESSADO` que mora lá: `nonConformityService` faz
+ * `require('./stockService')` (preguiçoso) para chamar o motor, e um require recíproco no topo
+ * daqui devolveria um objeto pela metade dependendo da ordem de carga.
+ * Há cenário em `naoConformidadeLiberacao.api.test.js` comparando as duas strings — uma cópia sem
+ * guarda deriva em silêncio, e a recusa de estorno viraria comparação com literal morta.
+ */
+const MOTIVO_LIBERACAO_NC = 'Liberação por não conformidade';
 const { custoUnitarioSql, valorEstoqueSql } = require('./custoSql');
 const movementTypes = require('./movementTypes');
 // seriesService nao importa stockService de volta — sem ciclo.
@@ -713,6 +722,26 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     await validarLocalizacaoParaMovimento(db, localizacao_destino_id, material, 'destino');
   }
 
+  // ⚠️ O QUE ESTE MOVIMENTO APLICOU NAS COLUNAS DE RETENÇÃO, para o catch amplo poder reverter.
+  //
+  // Achado CRITICAL da revisão adversarial da Etapa 44, e ele é do MOTOR, não daquela etapa: os
+  // seis ramos de retenção abaixo (`BLOQUEIO`, `DESBLOQUEIO`, `QUARENTENA`, `LIBERACAO_INSPECAO`,
+  // `REPROVACAO_INSPECAO`, `DECISAO_INSPECAO`) escrevem em `quantidade_bloqueada` /
+  // `quantidade_em_inspecao` **antes do `try`** que começa mais abaixo — então qualquer falha
+  // posterior (o `INSERT` do ledger, a auditoria interna, um trigger, o disco) saía da função com
+  // o pool **já alterado e sem linha nenhuma no livro**. O catch compensava série, linha de saldo,
+  // crédito de entrada e físico de saída; a retenção era a única coisa aplicada aqui que ele não
+  // conhecia.
+  //
+  // Por que isso é grave e não teórico: quem chama confia no `throw` para concluir "nada
+  // aconteceu" e desfazer o próprio estado. Na Etapa 44 o efeito medido foi **liberação em
+  // dobro** — a NC voltava a ABERTA, era decidida de novo, e o pool caía duas vezes para uma
+  // única reprovação de 3 kg, com **uma** linha no livro.
+  //
+  // Guardamos o DELTA aplicado (com sinal), e não o valor anterior, porque o pool é agregado por
+  // material: restaurar o valor lido no topo apagaria o que outra operação fez no intervalo.
+  let retencaoAplicada = null;
+
   if (tiposEntrada.includes(tipo)) {
     saldoPosterior = saldoAnterior + parseFloat(quantidade);
   } else if (tiposSaida.includes(tipo)) {
@@ -812,6 +841,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
   } else if (tipo === 'BLOQUEIO') {
     await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = COALESCE(quantidade_bloqueada,0) + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
       [quantidade, material_id]);
+    retencaoAplicada = { bloqueada: quantidade, emInspecao: 0 };
     saldoPosterior = saldoAnterior;
   } else if (tipo === 'DESBLOQUEIO') {
     // Guarda no WHERE em vez de MAX(0,...): saturar em silencio devolve ao disponivel menos do
@@ -825,11 +855,13 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
         new Error(`Quantidade bloqueada insuficiente: ${material.quantidade_bloqueada || 0}`),
         { status: 400 });
     }
+    retencaoAplicada = { bloqueada: -quantidade, emInspecao: 0 };
     saldoPosterior = saldoAnterior;
   } else if (tipo === 'QUARENTENA') {
     await dbRun(db, `UPDATE materiais_almoxarifado
       SET quantidade_em_inspecao = COALESCE(quantidade_em_inspecao,0) + ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?`, [quantidade, material_id]);
+    retencaoAplicada = { bloqueada: 0, emInspecao: quantidade };
     saldoPosterior = saldoAnterior;
   } else if (tipo === 'LIBERACAO_INSPECAO' || tipo === 'REPROVACAO_INSPECAO') {
     // Guarda no proprio WHERE, como o resto do motor: liberar/reprovar mais do que esta retido
@@ -848,6 +880,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
         new Error(`Quantidade em inspeção insuficiente: ${material.quantidade_em_inspecao || 0}`),
         { status: 400 });
     }
+    retencaoAplicada = { bloqueada: bloqueiaTambem, emInspecao: -quantidade };
     saldoPosterior = saldoAnterior;
   } else if (tipo === 'DECISAO_INSPECAO') {
     // Correcao de review (Etapa 5): uma decisao de inspecao pode aprovar parte e reprovar parte
@@ -875,6 +908,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
         new Error(`Quantidade em inspeção insuficiente: ${material.quantidade_em_inspecao || 0}`),
         { status: 400 });
     }
+    retencaoAplicada = { bloqueada: reprovadaQtd, emInspecao: -quantidade };
     saldoPosterior = saldoAnterior;
   } else if (tipo === 'REMESSA_TERCEIRO') {
     // Guarda no proprio WHERE, como o resto do motor: mandar para fora mais do que esta disponivel
@@ -1308,6 +1342,25 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     // abaixo viram no-op nesse caminho, evitando compensar em dobro. `seriesClaim` só fica
     // populado quando o claim teve SUCESSO (se falhou, a atribuição nunca completou), então não há
     // ambiguidade equivalente para ele.
+    // RETENÇÃO — desfaz o delta que os ramos de `BLOQUEIO`/`DESBLOQUEIO`/`QUARENTENA`/
+    // `LIBERACAO_INSPECAO`/`REPROVACAO_INSPECAO`/`DECISAO_INSPECAO` aplicaram lá em cima, FORA
+    // deste `try`. Ver o comentário de `retencaoAplicada` na declaração: sem isto, uma falha no
+    // `INSERT` do ledger (ou em qualquer coisa entre o pool e ele) devolvia erro ao chamador com
+    // o pool **já mexido e sem linha no livro** — e quem chama confia no `throw` para concluir que
+    // nada aconteceu. Foi medido produzindo liberação em dobro na Etapa 44.
+    //
+    // Soma o INVERSO do delta em vez de restaurar o valor lido no topo: o pool é agregado por
+    // material, e restaurar o valor absoluto apagaria o que outra operação tiver feito no meio.
+    // Sem guarda no `WHERE` de propósito — isto é a reversão de algo que JÁ aconteceu, e uma
+    // guarda que recusasse deixaria o estado pior que o inconsistente: deixaria o inconsistente
+    // **e** em silêncio.
+    if (retencaoAplicada) {
+      await dbRun(db, `UPDATE materiais_almoxarifado
+        SET quantidade_bloqueada   = COALESCE(quantidade_bloqueada,0) - ?,
+            quantidade_em_inspecao = COALESCE(quantidade_em_inspecao,0) - ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?`, [retencaoAplicada.bloqueada, retencaoAplicada.emInspecao, material_id]);
+    }
     if (seriesClaim.length > 0) {
       await seriesService.desfazerSaida(db, seriesClaim);
     }
@@ -1440,6 +1493,25 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
   if (['QUARENTENA', 'LIBERACAO_INSPECAO', 'REPROVACAO_INSPECAO', 'DECISAO_INSPECAO'].includes(mov.tipo)) {
     throw Object.assign(
       new Error('Movimento de inspeção não pode ser estornado pelo livro — use a tela de Inspeções para rever a decisão'),
+      { status: 400 });
+  }
+  // Etapa 44 (achado IMPORTANT da revisão adversarial): a LIBERAÇÃO por não conformidade é um
+  // `DESBLOQUEIO` — tipo que **é** estornável pelo livro, e por isso escapava das duas guardas ao
+  // lado. Estorná-la devolvia a quantidade a `quantidade_bloqueada` e deixava o documento
+  // `DECIDIDA` dizendo "aceito" com o material preso: o furo C57 ressuscitado, e desta vez **sem
+  // saída** — a NC não pode ser redecidida (409) e uma NC nova da mesma inspeção devolve
+  // `JA_LIBERADA`, porque `liberacao_nc_em` continua carimbado.
+  //
+  // Pior: o ramo `BLOQUEIO` do estorno **não tem guarda** contra `quantidade_atual`, então
+  // liberar → consumir → estornar deixa `bloqueada > atual`, ou seja, **disponível negativo** —
+  // exatamente a "retenção sem lastro físico" que o desenho da etapa evitou no caminho normal e
+  // que voltaria por aqui, a dois cliques na tela do livro.
+  //
+  // A recusa casa pelo MOTIVO, e não por `documento_vinculado LIKE 'NC-%'`: o número é dado de
+  // usuário em outros tipos de movimento, e o motivo é escrito por um único ponto do código.
+  if (mov.tipo === 'DESBLOQUEIO' && mov.motivo === MOTIVO_LIBERACAO_NC) {
+    throw Object.assign(
+      new Error('Liberação por não conformidade não pode ser estornada pelo livro — o documento continuaria dizendo "aceito" com o material bloqueado'),
       { status: 400 });
   }
   // Etapa 8b (achado da Task 4, que o plano não previa): mesma recusa, mesmo motivo. O par de
