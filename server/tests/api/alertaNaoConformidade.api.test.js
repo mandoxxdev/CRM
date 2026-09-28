@@ -237,6 +237,53 @@ function resultadoDe(resultados, chave) {
       `a NC ${PARADA.nc.numero} foi decidida e NAO podia continuar cobrando decisao`);
   });
 
+  // ── (4b) CANCELAR TAMBEM TIRA A NC DO ALERTA — E E O CAMINHO MAIS COMUM ──────────────────────
+  //
+  // O cenario (4) acima so media o estado `DECIDIDA`, e com isso o filtro `nc.status = 'ABERTA'`
+  // de `listarNaoConformidadesParadas` ficava meio medido: trocado por
+  // `nc.status IN ('ABERTA','CANCELADA')` a suite INTEIRA continuava verde. E `CANCELADA` nao e o
+  // caso raro — e o desfecho da RN-05, o operador corrigindo o proprio erro de digitacao, que
+  // acontece muito mais que uma decisao formal de qualidade. Cobrar decisao de um documento que ja
+  // morreu e o "Atrasado para sempre" da Etapa 42 de volta: ninguem consegue tirar do cartao uma
+  // NC que nao da mais para decidir (`decidir` recusa NC nao-ABERTA com 409).
+  await test('(4b) NC CANCELADA pela correcao da quantidade (RN-05) tambem sai do alerta', async () => {
+    const alvo = await itemComNc(80, 71);
+    await envelhecerNc(alvo.nc.id, 15);
+
+    const antes = (await cartao(EVENTO)).cartao;
+    assert.ok(linhaDaNc(antes, alvo.nc.numero),
+      `setup: a NC ${alvo.nc.numero}, parada ha 15 dias, tinha de estar no cartao antes da correcao`);
+
+    // O caminho REAL da RN-05: reconferir com a quantidade certa. Nada de UPDATE de status na mao —
+    // o que o cartao tem de deixar de mostrar e o documento que o GANCHO cancelou.
+    const res = await request(app).put(`/api/almoxarifado/recebimentos/${alvo.recId}/conferir`)
+      .send({ itens: [{ id: alvo.itemId, quantidade_recebida: 80 }] });
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    const gravada = await dbGet(db,
+      'SELECT status FROM nao_conformidades_almoxarifado WHERE id = ?', [alvo.nc.id]);
+    assert.strictEqual(gravada.status, 'CANCELADA',
+      `setup: a correcao tinha de cancelar a NC (RN-05), ela ficou ${gravada.status}`);
+
+    const depois = (await cartao(EVENTO)).cartao;
+    assert.ok(!linhaDaNc(depois, alvo.nc.numero),
+      `a NC ${alvo.nc.numero} foi CANCELADA e continua cobrando decisao — e um documento que `
+      + 'ninguem consegue mais decidir, entao ele cobraria para sempre');
+
+    // E a varredura diaria conta a mesma historia: documento morto nao vira e-mail.
+    const hash = hashDedupe(EVENTO, chaveEsperada(alvo.nc.id));
+    await queueService.varrerAlertasRegistrados(db);
+    assert.strictEqual((await filaPorHash(db, hash)).length, 0,
+      `a NC CANCELADA ${alvo.nc.numero} virou e-mail de cobranca`);
+
+    // GUARDA ANTI-TESTE-VAZIO: uma NC parada NAO cancelada, no mesmo cenario, continua no cartao —
+    // sem ela as tres assercoes de ausencia acima passariam com o cartao inteiro vazio.
+    const viva = await itemComNc(90, 79);
+    await envelhecerNc(viva.nc.id, 15);
+    const comViva = (await cartao(EVENTO)).cartao;
+    assert.ok(linhaDaNc(comViva, viva.nc.numero),
+      `o cartao deixou de mostrar NC parada nenhuma: ${JSON.stringify(comViva.linhas.map((l) => l.numero))}`);
+  });
+
   // ── (5) DEDUPE `nc-<id>`: UM E-MAIL POR NC ───────────────────────────────────────────────────
   await test('(5) a varredura enfileira UMA vez por NC parada; a segunda passada e DUPLICADA', async () => {
     const alvo = await itemComNc(30, 25);

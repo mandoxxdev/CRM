@@ -68,12 +68,16 @@ const uniq = (p) => `${p}-${Date.now() % 1000000}-${++seq}`;
   async function novoItem({ esperada = 10, recebida = 7 } = {}) {
     const mat = await dbRun(db, 'INSERT INTO materiais_almoxarifado (codigo, nome, unidade) VALUES (?,?,?)',
       [uniq('MAT-T2'), 'Material da T2', 'KG']);
+    // A NF sai do fixture como DADO, e nao como `uniq('NF')` anonimo dentro do INSERT: e ela que a
+    // linha da listagem tem de devolver, e sem o valor esperado em maos a assercao viraria um
+    // `assert.ok(linha.nota_fiscal)` — que passa com qualquer coisa nao vazia.
+    const notaFiscal = uniq('NF');
     const rec = await dbRun(db, `INSERT INTO recebimentos_material_almoxarifado
-      (numero, status, nota_fiscal) VALUES (?,?,?)`, [uniq('REC-T2'), 'RECEBIDO', uniq('NF')]);
+      (numero, status, nota_fiscal) VALUES (?,?,?)`, [uniq('REC-T2'), 'RECEBIDO', notaFiscal]);
     const item = await dbRun(db, `INSERT INTO recebimentos_material_itens_almoxarifado
       (recebimento_id, material_id, quantidade_esperada, quantidade_recebida) VALUES (?,?,?,?)`,
       [rec.lastID, mat.lastID, esperada, recebida]);
-    return { materialId: mat.lastID, recebimentoId: rec.lastID, itemId: item.lastID };
+    return { materialId: mat.lastID, recebimentoId: rec.lastID, itemId: item.lastID, notaFiscal };
   }
 
   const corpoDe = (itemId, extra = {}) => ({
@@ -86,11 +90,11 @@ const uniq = (p) => `${p}-${Date.now() % 1000000}-${++seq}`;
 
   /** Abre uma NC pela porta HTTP, como ADMIN, e devolve o documento. */
   async function abrirPorHttp(extra = {}) {
-    const { itemId, materialId } = await novoItem();
+    const { itemId, materialId, notaFiscal } = await novoItem();
     setUser({ ...ADMIN });
     const r = await request(app).post(BASE).send(corpoDe(itemId, extra));
     assert.strictEqual(r.status, 201, `abertura de fixture falhou: ${r.status} ${JSON.stringify(r.body)}`);
-    return { nc: r.body, itemId, materialId };
+    return { nc: r.body, itemId, materialId, notaFiscal };
   }
 
   // ── (1) POST: as quatro recusas de forma, com a MENSAGEM LITERAL ──────────────────────────
@@ -199,6 +203,13 @@ const uniq = (p) => `${p}-${Date.now() % 1000000}-${++seq}`;
     const linha = abertas.body.itens.find((i) => i.id === a.nc.id);
     assert.ok(linha.material_codigo, `material_codigo veio ${JSON.stringify(linha.material_codigo)} pela rota`);
     assert.ok(linha.recebimento_numero, `recebimento_numero veio ${JSON.stringify(linha.recebimento_numero)} pela rota`);
+    // `nota_fiscal` estava no SELECT de `CAMPOS_LISTA` e NINGUEM a media: trocar `r.nota_fiscal`
+    // por `NULL` no servico nao derrubava nenhum arquivo da suite. E ela e o numero pelo qual o
+    // almoxarife acha o papel no arquivo fisico — a coluna que liga o documento ao mundo real.
+    // Conferida pelo VALOR do fixture, nao por `assert.ok`: a NF de OUTRO recebimento tambem seria
+    // "nao vazia" e passaria por um JOIN errado.
+    assert.strictEqual(linha.nota_fiscal, a.notaFiscal,
+      `nota_fiscal veio ${JSON.stringify(linha.nota_fiscal)} e o recebimento da NC tem ${JSON.stringify(a.notaFiscal)}`);
 
     // `limite` CHEGA ao SQL pela rota — provado pelo efeito, com a lista maior que o limite.
     assert.ok(todas.body.itens.length > 2, `so ha ${todas.body.itens.length} NCs: o teste de \`limite\` seria vazio`);

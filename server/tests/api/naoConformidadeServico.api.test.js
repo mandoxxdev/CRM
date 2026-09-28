@@ -443,6 +443,128 @@ async function erroDe(fn) {
     assert.strictEqual(await nc.obterNaoConformidade(db, 'abc'), null, 'obter de id nao numerico nao devolveu null');
   });
 
+  // ── (11b) A ORDEM DA LISTAGEM ──────────────────────────────────────────────────────────────
+  //
+  // `ORDER BY CASE WHEN status = 'ABERTA' THEN 0 ELSE 1 END, created_at DESC, id DESC` NAO era
+  // medido por ninguem: apagar o `CASE` inteiro, ou trocar `DESC` por `ASC`, deixava a suite
+  // verde. E a ordem e contrato de TELA — e ela que poe o que ainda precisa de decisao acima do
+  // que ja foi encerrado. Sem assercao, a primeira reescrita do SQL a perde em silencio.
+  //
+  // O `created_at` e CARIMBADO A MAO com datas distintas de proposito: o do SQLite tem resolucao
+  // de 1 SEGUNDO, entao quatro NCs criadas na mesma rodada nascem EMPATADAS e o criterio de
+  // desempate (`id DESC`) responderia pelo teste inteiro — mediria a insercao, nao a ordenacao.
+  await test('(11b) listagem ordena ABERTAS primeiro e, dentro de cada grupo, `created_at DESC`', async () => {
+    const carimbar = (id, data) => dbRun(db,
+      'UPDATE nao_conformidades_almoxarifado SET created_at = ? WHERE id = ?', [data, id]);
+
+    // Quatro documentos em tres estados. As datas estao EMBARALHADAS em relacao ao status: com
+    // datas alinhadas ao status, `created_at DESC` sozinho produziria a mesma ordem e o `CASE`
+    // ficaria sem medicao.
+    const a = await novoItem({ esperada: 10, recebida: 7 });
+    const ncAberta1 = (await nc.sincronizarNaoConformidadeQuantidade(db, ADMIN, a.itemId)).nc;
+    const b = await novoItem({ esperada: 10, recebida: 3 });
+    const ncAberta2 = (await nc.sincronizarNaoConformidadeQuantidade(db, ADMIN, b.itemId)).nc;
+    const c = await novoItem({ esperada: 10, recebida: 5 });
+    const ncDecidida = (await nc.sincronizarNaoConformidadeQuantidade(db, ADMIN, c.itemId)).nc;
+    await nc.decidirNaoConformidade(db, QUALIDADE, ncDecidida.id, { decisao: 'ACEITAR', justificativa: 'aceito' });
+    const d = await novoItem({ esperada: 10, recebida: 2 });
+    const ncCancelada = (await nc.sincronizarNaoConformidadeQuantidade(db, ADMIN, d.itemId)).nc;
+    await setQtd(d.itemId, 10);
+    assert.strictEqual((await nc.sincronizarNaoConformidadeQuantidade(db, ADMIN, d.itemId)).efeito, 'CANCELADA',
+      'setup: a quarta NC tinha de ser CANCELADA pela correcao (RN-05)');
+
+    await carimbar(ncAberta1.id, '2020-01-01 10:00:00'); // ABERTA, a mais VELHA das abertas
+    await carimbar(ncAberta2.id, '2020-06-01 10:00:00'); // ABERTA, a mais NOVA das abertas
+    await carimbar(ncDecidida.id, '2021-01-01 10:00:00'); // encerrada, a mais NOVA de todas
+    await carimbar(ncCancelada.id, '2019-01-01 10:00:00'); // encerrada, a mais VELHA de todas
+
+    // `limite: 500` (o teto) porque este arquivo ja criou dezenas de NCs: com o padrao de 100 as
+    // quatro poderiam cair fora da pagina e a assercao mediria a paginacao, nao a ordem.
+    const todas = await nc.listarNaoConformidades(db, { limite: 500 });
+    const alvos = [ncAberta1.id, ncAberta2.id, ncDecidida.id, ncCancelada.id];
+    const ordem = todas.map((l) => l.id).filter((id) => alvos.includes(id));
+    assert.strictEqual(ordem.length, 4,
+      `a listagem trouxe ${ordem.length} das 4 NCs do cenario — o resto da assercao nao mediria a ordem`);
+    assert.deepStrictEqual(ordem, [ncAberta2.id, ncAberta1.id, ncDecidida.id, ncCancelada.id],
+      'a ordem tinha de ser: as duas ABERTAS primeiro (a de 2020-06 antes da de 2020-01, `created_at '
+      + 'DESC`), e so depois as encerradas (2021-01 antes de 2019-01); veio '
+      + JSON.stringify(ordem.map((id) => todas.find((l) => l.id === id))
+        .map((l) => `${l.status}@${l.created_at}`)));
+
+    // A ordem sobrevive ao FILTRO: dentro de `status=ABERTA` o criterio que sobra e a data, e ele
+    // tem de continuar `DESC`. Sem esta metade, apagar so o `created_at DESC` passaria despercebido
+    // caso o `CASE` sozinho ja explicasse a sequencia acima.
+    const abertas = await nc.listarNaoConformidades(db, { status: 'ABERTA', limite: 500 });
+    const ordemAbertas = abertas.map((l) => l.id).filter((id) => alvos.includes(id));
+    assert.deepStrictEqual(ordemAbertas, [ncAberta2.id, ncAberta1.id],
+      `dentro de ?status=ABERTA a mais NOVA vem primeiro (\`created_at DESC\`); veio ${JSON.stringify(ordemAbertas)}`);
+  });
+
+  // ── (11c) `referencia_tipo` na chave de `getAbertaDe` ──────────────────────────────────────
+  //
+  // `referencia_id` SOZINHO nao identifica nada: o item 5 e a inspecao 5 sao dois registros
+  // diferentes e convivem no mesmo banco desde sempre. `getAbertaDe` sem `referencia_tipo` no
+  // `WHERE` nao derrubava nenhum arquivo da suite — os fixtures dos outros cenarios nunca puseram
+  // um item e uma inspecao com o MESMO id ao mesmo tempo, que e justamente o que este cenario
+  // fabrica (id explicito no INSERT da inspecao).
+  //
+  // A consequencia da ausencia e do tamanho do achado 1: o gancho de QUANTIDADE do RECEBIMENTO
+  // acharia a NC da INSPECAO e, no item sem divergencia, a CANCELARIA — reprovacao de qualidade
+  // apagada por uma conferencia de quantidade de outro registro.
+  await test('(11c) o gancho de quantidade do item N nao toca a NC da inspecao de id N', async () => {
+    // O item do cenario: conferido e SEM divergencia (10 de 10). Precisa ter `quantidade_recebida`
+    // gravada, senao a RN-03 devolve NENHUMA antes de `getAbertaDe` e nada seria medido.
+    const item = await novoItem({ esperada: 10, recebida: 10 });
+
+    // A inspecao mora em OUTRO item, com numeros bem diferentes — assim, se o gancho errado
+    // escrever nela, os numeros denunciam. O `id` vai EXPLICITO para casar com o id do item acima.
+    const doInspetor = await novoItem({ esperada: 20, recebida: 20 });
+    const jaExiste = await dbGet(db,
+      'SELECT id FROM inspecoes_recebimento_almoxarifado WHERE id = ?', [item.itemId]);
+    assert.ok(!jaExiste, `o id ${item.itemId} ja esta ocupado na tabela de inspecoes — o cenario nao colide nada`);
+    await dbRun(db, `INSERT INTO inspecoes_recebimento_almoxarifado
+      (id, recebimento_item_id, conforme, quantidade_aprovada, quantidade_reprovada, responsavel_nome)
+      VALUES (?,?,0,16,4,?)`, [item.itemId, doInspetor.itemId, 'Inspetor da colisao']);
+
+    const ncInspecao = await nc.abrirNaoConformidadeDeInspecao(db, ADMIN, item.itemId);
+    assert.ok(ncInspecao, 'setup: a inspecao reprovada tinha de abrir NC');
+    assert.strictEqual(ncInspecao.referencia_tipo, 'INSPECAO');
+    assert.strictEqual(ncInspecao.referencia_id, item.itemId,
+      'setup: a inspecao TEM de ter o mesmo id do item — e a colisao inteira do cenario');
+    assert.strictEqual(ncInspecao.tipo, 'QUANTIDADE',
+      'setup: o tipo tem de ser QUANTIDADE, que e o que o gancho de quantidade procura');
+    assert.strictEqual(ncInspecao.status, 'ABERTA');
+
+    // (a) O item N nao esta divergente. Sem `referencia_tipo` na chave, o gancho acha a NC da
+    // INSPECAO, ve que ela e automatica e a CANCELA pela RN-05.
+    const semDiv = await nc.sincronizarNaoConformidadeQuantidade(db, ADMIN, item.itemId);
+    assert.strictEqual(semDiv.efeito, 'NENHUMA',
+      `o gancho do item devolveu ${JSON.stringify(semDiv.efeito)} — ele agarrou a NC da inspecao de mesmo id`);
+    let daInspecao = await dbGet(db, 'SELECT * FROM nao_conformidades_almoxarifado WHERE id = ?', [ncInspecao.id]);
+    assert.strictEqual(daInspecao.status, 'ABERTA',
+      `a NC ${ncInspecao.numero}, de uma REPROVACAO de inspecao, ficou ${daInspecao.status} por causa de `
+      + 'uma conferencia de quantidade do item de mesmo id');
+    assert.strictEqual(daInspecao.motivo_cancelamento, null,
+      `a NC da inspecao ganhou motivo automatico: ${JSON.stringify(daInspecao.motivo_cancelamento)}`);
+
+    // (b) A METADE POSITIVA: agora o item N fica divergente. Tem de nascer documento PROPRIO, do
+    // tipo `RECEBIMENTO_ITEM`, sem encostar no fato congelado da inspecao.
+    await setQtd(item.itemId, 6);
+    const comDiv = await nc.sincronizarNaoConformidadeQuantidade(db, ADMIN, item.itemId);
+    assert.strictEqual(comDiv.efeito, 'ABERTA',
+      `o item divergente devolveu ${JSON.stringify(comDiv.efeito)} — sem a chave completa o gancho ATUALIZA `
+      + 'a NC da inspecao em vez de abrir a do item');
+    assert.strictEqual(comDiv.nc.referencia_tipo, 'RECEBIMENTO_ITEM', JSON.stringify(comDiv.nc));
+    assert.notStrictEqual(comDiv.nc.id, ncInspecao.id, 'o gancho reaproveitou o documento da inspecao');
+
+    daInspecao = await dbGet(db, 'SELECT * FROM nao_conformidades_almoxarifado WHERE id = ?', [ncInspecao.id]);
+    assert.strictEqual(daInspecao.quantidade_esperada, 20,
+      `o fato da NC da inspecao foi reescrito pelo gancho do item: esperada ${daInspecao.quantidade_esperada}`);
+    assert.strictEqual(daInspecao.quantidade_recebida, 20,
+      `o fato da NC da inspecao foi reescrito: recebida ${daInspecao.quantidade_recebida}`);
+    assert.strictEqual(daInspecao.status, 'ABERTA', `a NC da inspecao ficou ${daInspecao.status}`);
+  });
+
   // ── (12) D9: a NC da inspecao ──────────────────────────────────────────────────────────────
   await test('(12) [D9] NC de inspecao: UMA por inspecao, tipo por prioridade, flags na descricao', async () => {
     const { itemId, materialId, recebimentoId } = await novoItem({ esperada: 10, recebida: 10 });
