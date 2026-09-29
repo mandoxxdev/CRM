@@ -1103,6 +1103,25 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     } catch (e) { handleError(res, e); }
   });
 
+  // Etapa 45 (RN-02) — REGISTRAR QUE O ENCAMINHAMENTO FOI EXECUTADO. Rota separada de `/decidir`
+  // porque sao dois gestos: decidir `DEVOLVER` e intencao, e o material so sai do predio quando
+  // alguem embala e chama a transportadora. Ver o cabecalho de `registrarExecucao`.
+  //
+  // `executar_encaminhamento` inclui COMPRAS, que NAO esta em `decidir_nao_conformidade` — e e a
+  // diferenca que da razao a esta rota existir. O que impede a soma das duas acoes de COMPRAS
+  // (`registrar_nao_conformidade` + esta) de virar porta para apagar estoque e a RN-06, dentro do
+  // servico, e NAO o gate: ver o comentario da acao em permissions.js.
+  //
+  // O corpo tem UM campo (`observacoes`), e o servico o le por nome — nada de `req.body` cru,
+  // pelo mesmo achado 6 que fez a abertura manual passar por lista branca.
+  app.post('/api/almoxarifado/nao-conformidades/:id/executar', auth, requirePermission('executar_encaminhamento'), async (req, res) => {
+    try {
+      res.json(await nonConformityService.registrarExecucao(db, req.user, req.params.id, {
+        observacoes: (req.body || {}).observacoes,
+      }));
+    } catch (e) { handleError(res, e); }
+  });
+
   app.post('/api/almoxarifado/materiais/:id/bloquear', auth, requirePermission('ajustar_estoque'), async (req, res) => {
     try { res.json(await inspectionService.bloquearMaterial(db, req.user, req.params.id, req.body)); }
     catch (e) { handleError(res, e); }

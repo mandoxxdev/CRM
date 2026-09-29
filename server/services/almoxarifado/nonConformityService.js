@@ -1132,6 +1132,20 @@ async function listarNaoConformidades(db, filtros = {}) {
   for (const [campo, coluna] of [['status', 'nc.status'], ['origem', 'nc.origem'], ['tipo', 'nc.tipo']]) {
     if (filtros[campo]) { sql += ` AND ${coluna} = ?`; params.push(filtros[campo]); }
   }
+  // Etapa 45 (RN-08) — A FILA DO QUE FALTA EXECUTAR. `?execucao=PENDENTE` e a resposta real ao
+  // requisito "acompanhar se ja foi executada": o cartao de reprovados tem janela de 7 dias e e
+  // AVISO DE EVENTO, nao fila de pendencia — passada a janela a inspecao sai sozinha, executada ou
+  // nao (F0-4, que corrigiu uma medicao minha que estava falsa).
+  //
+  // ⚠️ `AND nc.status = 'DECIDIDA'` entra JUNTO, e nao e redundancia. `execucao_estado` fica NULL
+  // em NC ABERTA e em NC CANCELADA, entao o `=` sozinho ja as excluiria HOJE — mas "hoje" e o
+  // acidente de o backfill so ter carimbado as decididas. Uma NC cancelada DEPOIS de decidida
+  // conserva o `PENDENTE` que a decisao gravou (cancelar nao limpa a coluna), e apareceria na
+  // fila cobrando execucao de um documento morto. A clausula e a regra; o NULL e a coincidencia.
+  if (filtros.execucao) {
+    sql += ' AND nc.execucao_estado = ? AND nc.status = \'DECIDIDA\'';
+    params.push(filtros.execucao);
+  }
   const materialId = Number(filtros.material_id);
   if (filtros.material_id !== undefined && filtros.material_id !== '' && Number.isFinite(materialId)) {
     sql += ' AND nc.material_id = ?';
