@@ -145,6 +145,46 @@ pendurada na outra · **COMPRAS executando NC manual recebe 200 com `NENHUMA` e 
 move** (é a linha que prova que a B169 continua valendo) · 403 não move saldo · o filtro traz o
 pendente **e não traz** o executado, **nem NC `ABERTA`, nem `CANCELADA`**.
 
+### ✅ T3 — feita (`dc629e1`)
+
+`encaminhamentoRotas.api.test.js`, **8 cenários, 8/8**. `test:api` **211/211 arquivos**.
+
+**Divergência:** o filtro ganhou `AND nc.status = 'DECIDIDA'` junto, que o plano não pedia.
+`execucao_estado` fica `NULL` em NC `ABERTA` e `CANCELADA`, então a igualdade sozinha já as
+excluiria **hoje** — mas "hoje" é o acidente de o backfill só ter carimbado as decididas. Uma NC
+cancelada **depois** de decidida conserva o `PENDENTE` que a decisão gravou (cancelar não limpa a
+coluna) e voltaria à fila cobrando execução de documento morto. O cenário (7) **confere** que ela
+conserva o `PENDENTE` antes de afirmar que a fila a exclui — sem essa conferência ele mediria
+outra coisa e passaria verde à toa.
+
+**Controles positivos:** conceder `executar_encaminhamento` ao ALMOXARIFE derruba (1b) e (2)
+nomeando o perfil (é a **única** prova da lista negativa — `can()` devolve `false` para o que não
+conhece, então ela passa verde até com a ação inexistente); pendurar a rota em
+`decidir_nao_conformidade` derruba (1) e (3) com COMPRAS levando 403; tirar a cláusula de status
+derruba (7) em *"NC CANCELADA depois de decidida entrou na fila"*.
+
+⚠️ **E uma sabotagem NÃO SABOTOU na primeira tentativa:** o padrão `perl` não casava as aspas
+escapadas do SQL dentro da string JS, e a suíte seguiu verde. Lida sem conferência, a conclusão
+seria *"a cláusula está protegida"* — **falsa**. Foi pega por conferir o arquivo depois de
+aplicar, que é exatamente a razão de a regra do `md5`/`grep -c` existir.
+
+### ⚠️ O QUE A T3 E A T2 DEIXARAM QUEBRADO, E SÓ A T4 MEDIU
+
+**O commit da T2 (`f8ab433`) deixou a suíte do client VERMELHA, e eu reportei a T2 e a T3 como
+fechadas citando só os números do servidor.** `permissaoErro.test.js:52` varre `ACAO_PERFIS` e
+exige rótulo em `client/src/utils/permissaoErro.js` para toda ação; `executar_encaminhamento`
+nasceu sem o dele e a guarda acusou `semRotulo = ["executar_encaminhamento"]` — **sétima
+ocorrência** desse buraco nesta base.
+
+A guarda existe desde a Etapa 30 e **funcionou**. Quem falhou foi a medição: a `fechar-etapa`
+lista **cinco** comandos, e eu rodei os três de servidor depois da T2 e da T3. Dizer "210/210" e
+"211/211" não era mentira, mas era **resposta a uma pergunta menor que a que eu tinha dito estar
+respondendo**. Consertado dentro da T4 (`0305acc`); registrado aqui porque suíte vermelha entre
+dois commits é o tipo de coisa que some do histórico se ninguém escrever.
+
+**Regra que fica:** ação nova em `ACAO_PERFIS` é mudança de **duas pontas**, e o commit que cria
+a ação tem de rodar a suíte do client.
+
 ## T4 — galho: a tela
 
 Coluna **Execução**, filtro *Pendentes de execução*, botão **Registrar execução**.
@@ -237,6 +277,33 @@ escrita, erro **medido** na Etapa 43, `alertRegistry.js:415-425`).
 **Cenários:** o devolvido sai **e o pendente continua** · **o gancho do ato continua avisando no
 modo `{inspecaoId}`** · **execução de `SUBSTITUICAO` NÃO silencia o cartão** (ela não devolve nada).
 
+### ✅ T5 — feita (`7c9bd1f`)
+
+`alertaReprovadoExecutado.api.test.js`, **7 cenários**. `test:api` **213/213** · almoxarifado
+**42/0**. Seis controles positivos, cada um na asserção que guarda o achado — e **uma sabotagem
+que não aplicou** (regex `perl` falhou, suíte verde), tratada como **controle inválido, não como
+prova**, e refeita por `sed`. É a segunda ocorrência do mesmo padrão nesta etapa.
+
+**Duas divergências do que o briefing dizia:**
+
+| # | Briefing | Medido |
+|---|---|---|
+| 1 | o comentário-molde de `excluirComNC` está em `:415-425` | está em **`:139-152`**; `:415-425` é a entrada do registro, não a função |
+| 2 | (nada sobre `status`) | **`status` ficou FORA da régua**, decisão do executor, com a razão escrita: hoje o único escritor de `CANCELADA` cancela NC `ABERTA`, e se um dia cancelar uma executada, o material **saiu do galpão do mesmo jeito** |
+
+⚠️ **A divergência 2 é uma assimetria deliberada com a T3, e as duas precisam ser lidas juntas.**
+A T3 pôs `AND status = 'DECIDIDA'` na fila `?execucao=PENDENTE`; a T5 **não** pôs a condição
+equivalente no cartão. Não é incoerência: a fila **cobra ação futura**, e cobrar de documento
+morto é ruído que treina o operador a ignorar a fila; o cartão **relata um fato consumado**, e o
+material devolvido não volta a existir porque alguém cancelou o papel. Se um dia `CANCELADA`
+passar a alcançar NC executada, é a **fila** que continua certa e o **cartão** que precisa ser
+reavaliado — não o contrário.
+
+**Consequência declarada pelo executor:** o `listar` é um só para a central e para a varredura
+diária (RN-01), então a rede de segurança da varredura também para de enfileirar a devolvida.
+Caso perdido estreito (exigiria o gancho ter virado `console.warn` **e** a execução cair dentro
+dos mesmos 7 dias). Descartado: dois `listar` separados.
+
 ## T6 — tronco: integração
 
 Receber crítico → reprovar com `DEVOLVER` → a NC nasce → decidir → **conferir que o material NÃO
@@ -244,6 +311,33 @@ saiu** (é a RN-02, e é o que distingue esta etapa da 44) → registrar execuç
 → o material sai do físico **e** do bloqueado, a linha do **lote** é debitada e a de lote `NULL`
 não fica negativa → o cartão para de cobrar → o pedido de compra **continua Recebido** (corte
 declarado, fixado por teste).
+
+### ✅ T6 — feita (`a5b800c`)
+
+`devolucaoFornecedorIntegracao.api.test.js`, **3 cenários, 3/3**. `test:api` **213/213** ·
+almoxarifado **42/0** · client **52 suítes / 829 testes** · build compilado sem warning.
+
+**Divergência:** *"o cartão para de cobrar"* **não** entrou neste arquivo. A T5 já o prova ponta a
+ponta, pela entrada do registro **e** por `montarCentral` (cenário 7 dela), e repetir aqui seria
+uma segunda cópia da mesma medição — que é como as listas replicadas deste módulo começaram.
+
+**Controles positivos — e os DOIS primeiros caíram na asserção errada.** A asserção que guarda a
+RN-02 (*"a DECISÃO baixou o físico"*) está **atrás de duas outras**: qualquer sabotagem que mova o
+material na decisão muda junto `liberacao.efeito` e `execucao_estado`, então o cenário caía por
+elas e a de saldo **nunca rodava**.
+
+| Sabotagem | Cai | Asserção |
+|---|---|---|
+| `DEVOLVER` dentro de `DECISOES_QUE_LIBERAM` | (1) | ⚠️ `efeito === 'NENHUMA'` — a de saldo não roda |
+| decisão chamando `registrarExecucao` em silêncio | (1) | ⚠️ `execucao_estado === 'PENDENTE'` — idem |
+| **motor chamado PELA LATERAL na decisão**, sem tocar em `efeito` nem em `execucao_estado` | (1) | ✅ *"a DECISAO baixou o fisico — o sistema afirmaria uma remessa que nao aconteceu"*, `7 !== 10` |
+| sem `lote_id` **e** sem `exigeLote` | (1) | *"a linha do lote nao caiu de 10 para 7"* — com `lote_id` sozinho o motor ainda recusa, o que **mede** que a segunda tranca da RN-12 é real |
+| tipo fora de `TIPOS_DEDICADOS` | (3) | *"a rota generica aceitou o tipo"*, 201 com o saldo movido |
+| `UPDATE` artificial baixando `quantidade_recebida` | (2) | *"a devolucao baixou `quantidade_recebida` do pedido"* — a fixação do corte está viva, não é comentário |
+
+**A lição, pela terceira vez nesta etapa:** placar vermelho não é prova. A asserção decisiva
+precisa ser alcançável por **alguma** sabotagem — e quando ela está atrás de outras, a sabotagem
+tem de ser a que faz o código **mentir sobre o que fez**.
 
 ---
 
@@ -275,7 +369,7 @@ declarado, fixado por teste).
 
 - [x] T1 — tronco (motor) — `a425559`
 - [x] T2 — tronco (estado de execução) — `f8ab433`
-- [ ] T3 / T4 / T5 — galhos
-- [ ] T6 — integração
+- [x] T3 — rota e fila — `dc629e1` · [x] T4 — tela — `0305acc` · [x] T5 — cartão — `7c9bd1f`
+- [x] T6 — integração — `a5b800c`
 - [ ] Fase 5 — revisão adversarial
 - [ ] Fase 6 — `fechar-etapa`
