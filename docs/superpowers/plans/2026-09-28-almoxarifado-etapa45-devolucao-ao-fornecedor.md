@@ -155,6 +155,74 @@ texto novo (*"o material continua bloqueado até a execução"*) **derruba** a a
 duas negativas e escreva sem essas palavras** (*"segue retido até a execução ser registrada"*).
 Apagar a negativa para o teste passar desfaz a proteção da etapa anterior.
 
+### ✅ T4 — feita (`0305acc`)
+
+`NaoConformidadesAlmoxarifado.test.js`, **12 cenários novos (22)-(33)**, arquivo em **33/33**.
+Suíte do client inteira **829/829 em 52 arquivos**; `CI=true npx react-scripts build` →
+*Compiled successfully*, sem warning.
+
+**Divergências e medições da execução:**
+
+| # | O que o plano/briefing dizia | O que a execução mediu |
+|---|---|---|
+| 1 | o teste fica em `__tests__/NaoConformidadesAlmoxarifado.test.js` | **não existe `__tests__/` neste módulo**: o arquivo é irmão do componente, em `client/src/components/almoxarifado/`. As linhas 536-537 da armadilha estavam certas |
+| 2 | (nada) | **a suíte do CLIENT já estava VERMELHA quando a T4 começou**, por causa do commit de SERVIDOR da T2: `executar_encaminhamento` entrou em `ACAO_PERFIS` e não tinha rótulo em `client/src/utils/permissaoErro.js`, então `permissaoErro.test.js:52` acusava `semRotulo = ["executar_encaminhamento"]`. Medido **antes** de qualquer edição. É a **sétima** ocorrência deste buraco; a guarda da Etapa 30 funcionou — quem atrasou foi o rótulo. Corrigido no mesmo commit, e o cenário (30) prova que ele **chega à tela**, não só ao mapa |
+| 3 | a armadilha era o parágrafo do modal | **era, e pelo mesmo motivo de novo**: ele afirmava *"devolver não cria a devolução"* — verdade até a T3 e mentira depois dela. Corrigido com *"segue retido"*; as duas negativas do (21) ficaram intactas e **repetidas** no (32), junto com uma terceira (`not.toContain('não cria a devolução')`) |
+| 4 | (nada) | **`?execucao` não é filtro independente**: o serviço soma `AND status = 'DECIDIDA'` (`nonConformityService.js:1146`). Com o status padrão da tela ("Abertas") a fila devolveria lista vazia **sempre**, e a tela afirmaria "não há nada pendente" sem ter medido nada. Os dois selects passaram a se sincronizar (letra B abaixo) |
+
+**Decisões reversíveis (letra B), com o que foi descartado:**
+
+1. **Os dois filtros se sincronizam** — escolher um estado de execução põe o status em "Decididas";
+   escolher outro status larga a fila. *Descartado:* deixar os selects independentes e explicar a
+   lista vazia com um aviso — seria a regra 2 do cabeçalho do componente (a tela afirmando ausência
+   que não mediu) entrando pela porta do filtro.
+2. **Este botão some por PERFIL**, ao contrário do de decidir — e continua falhando **aberto**
+   (`pode()` devolve `true` enquanto `minhas-permissoes` não voltou). Razão: `executar_encaminhamento`
+   é a única ação desta tela cuja plateia (COMPRAS) **não** é a de quem decide (QUALIDADE).
+   *Descartado:* mostrar sempre e deixar o 403 falar, como faz o botão de decidir.
+3. **Observações opcionais**, ao contrário da justificativa da decisão: aqui se declara um FATO
+   físico. *Descartado:* exigir texto — produziria "ok" digitado.
+
+**Controles positivos — 18 sabotagens, todas vermelhas na asserção que guarda o achado:**
+
+| Sabotagem | Cai | Asserção |
+|---|---|---|
+| vazio (NC não decidida) renderiza "Pendente" | (22) | `toBe('—')` — recebeu `"Pendente"` |
+| `NAO_SE_APLICA` vira traço | (22) | `toContain('Não se aplica')` |
+| executada sem autor nem data | (22), (31) | `toContain('Marina Prado')` — recebeu `"Executada—"` |
+| `execucao` fora da query | (23) | `params` sem o campo |
+| a fila não acerta o status | (23), (31) | `status: 'ABERTA'` no lugar de `'DECIDIDA'`; e (31) ficou com **0 linhas** |
+| o status não larga a fila | (23) | `execucao` sobrevivendo em `{ limite, status: 'ABERTA' }` |
+| o botão ignora o perfil | (24) | `botaoExecutar(...)` **definido** com `mockPodeExecutar = false` |
+| o botão ignora o estado de execução | (24) | o botão apareceu na linha `NAO_SE_APLICA` |
+| POST em `/decidir` | (25), (26) | a URL da chamada |
+| corpo sempre com `observacoes` | (26) | `toHaveBeenCalledWith(url, {})` |
+| o toast cala `execucao.mensagem` | (27) | recebeu `"…registrada!"` sem a literal |
+| concatenação sem o `?.` | (28) | recebeu `"…registrada! undefined"` |
+| erro genérico no lugar da literal | (29), (30) | recebeu `"Erro ao registrar a execução"` |
+| a ação sem rótulo em `permissaoErro.js` | **(30) e `permissaoErro.test.js`** | *"Sem permissão para **executar encaminhamento**"* (o fallback) |
+| a fila não é largada depois de executar | (31) | `execucao` ainda na query da recarga |
+| o modal de execução com texto igual para toda decisão | (33) | `toContain('não movimenta estoque')` num `SUCATEAR` |
+| parágrafo velho inteiro de volta | (32) | ⚠️ **caiu na asserção ERRADA** — `toContain('execução')`, **antes** da negativa. O controle não valia |
+| ↳ o texto NOVO carregando a afirmação velha junto | (32) | `not.toContain('não cria a devolução')` — **esta** é a que guarda o achado |
+
+**Cenários:** os quatro estados da coluna · o filtro manda `execucao` e leva o status junto (e a
+volta) · o botão só em DECIDIDA+PENDENTE e some sem a ação · o POST com observações aparadas · o
+corpo vazio quando não há observação · os **cinco** efeitos do servidor no toast, inclusive os que
+**não** movem saldo · resposta sem `execucao` não mostra `undefined` · 409 literal · 403 traduzido
+com o rótulo novo · executar com a fila ligada **não** esconde a linha · o parágrafo do modal de
+decisão fala do segundo gesto **sem** ressuscitar o C57 · o modal de execução muda de texto conforme
+a decisão.
+
+### Próxima tarefa detalhada: T5 — o cartão de reprovados
+
+Fica **inteira em `server/`** (`alertRegistry.js` / `listarReprovados`), e o contrato que ela
+consome é o desta T4 apenas de leitura: `execucao_estado = 'EXECUTADA'` **e** `decisao = 'DEVOLVER'`
+é a régua, e nada mais. Pontos de atenção já escritos acima, na descrição da T5: a flag
+`excluirComExecucao` é **opt-in** e liga **só** no `listar` da entrada do cartão — **nunca** no modo
+`{ inspecaoId }`, que é o gancho do ato (excluir por dentro calaria o gancho a partir da segunda
+escrita, erro **medido** na Etapa 43, `alertRegistry.js:415-425`).
+
 ## T5 — galho: o cartão de reprovados
 
 ⚠️ **Esta task foi REESCRITA — a premissa dela era falsa.** O cartão **não** cobra para sempre
