@@ -507,6 +507,154 @@ async function erroDe(fn) {
     assert.ok(dados.movimentacao_id, 'a trilha nao aponta a linha do livro');
   });
 
+  // ── (17) a (20) — O FIX-ROUND DA FASE 5 ────────────────────────────────────────────────────
+
+  await test('(17) CRITICAL do epsilon: duas reprovacoes fracionarias, e a SEGUNDA devolucao acontece', async () => {
+    // ⚠️ O CENARIO QUE A ETAPA INTEIRA NAO TINHA. Os arquivos desta etapa nasceram com ZERO
+    // literais fracionarios de quantidade, num modulo cuja unidade e KG — entao `3` e `10`
+    // escondiam a classe de defeito que o proprio modulo tem dono unico para tratar
+    // (`divergencia.js`). Reproduzido pela revisao adversarial com operacao normal.
+    //
+    // 2.3 + 3.4 = 5.699999999999999 em IEEE-754. Depois de devolver 2.3 sobram
+    // 3.3999999999999995, e `3.3999999999999995 < 3.4` e VERDADE: a segunda devolucao respondia
+    // 200 com "o material ja havia saido do bloqueio" tendo o COMPRAS acabado de despachar.
+    const mat = await dbRun(db, `INSERT INTO materiais_almoxarifado
+      (codigo, nome, unidade, quantidade_atual, quantidade_bloqueada, ativo) VALUES (?,?,'KG',20,0,1)`,
+      [uniq('MAT-E45EPS'), 'Chapa fracionada']);
+    const materialId = mat.lastID;
+
+    const ncsFracionarias = [];
+    for (const reprovada of [2.3, 3.4]) {
+      const rec = await dbRun(db, `INSERT INTO recebimentos_material_almoxarifado
+        (numero, status, nota_fiscal) VALUES (?,'RECEBIDO',?)`, [uniq('REC-EPS'), uniq('NF')]);
+      const item = await dbRun(db, `INSERT INTO recebimentos_material_itens_almoxarifado
+        (recebimento_id, material_id, quantidade_esperada, quantidade_recebida) VALUES (?,?,10,10)`,
+        [rec.lastID, materialId]);
+      const insp = await dbRun(db, `INSERT INTO inspecoes_recebimento_almoxarifado
+        (recebimento_item_id, conforme, quantidade_aprovada, quantidade_reprovada) VALUES (?,0,?,?)`,
+        [item.lastID, 10 - reprovada, reprovada]);
+      // O bloqueio somado do jeito que o motor soma — e o que produz o residuo.
+      await dbRun(db, `UPDATE materiais_almoxarifado
+        SET quantidade_bloqueada = COALESCE(quantidade_bloqueada,0) + ? WHERE id = ?`,
+        [reprovada, materialId]);
+      const doc = await ncAutomatica(insp.lastID);
+      await decidir(doc.id, 'DEVOLVER');
+      ncsFracionarias.push({ ncId: doc.id, reprovada });
+    }
+
+    // A guarda que prova que o cenario esta medindo o que diz: sem o residuo, ele passaria com
+    // `<` cru e nao provaria nada.
+    const antes = await saldos(materialId);
+    assert.notStrictEqual(Number(antes.quantidade_bloqueada), 5.7,
+      `o fixture nao produziu residuo de ponto flutuante (veio ${antes.quantidade_bloqueada}) — `
+      + 'sem residuo este cenario passa com `<` cru e nao mede nada');
+
+    const r1 = await executar(ncsFracionarias[0].ncId);
+    assert.strictEqual(r1.execucao.efeito, 'BAIXADA', JSON.stringify(r1.execucao));
+
+    const r2 = await executar(ncsFracionarias[1].ncId);
+    assert.strictEqual(r2.execucao.efeito, 'BAIXADA',
+      `a segunda devolucao virou ${r2.execucao.efeito}: ${r2.execucao.mensagem}`);
+
+    const depois = await saldos(materialId);
+    assert.ok(Math.abs(Number(depois.quantidade_atual) - 14.3) < 1e-9,
+      `o fisico deveria ser 14.3, veio ${depois.quantidade_atual}`);
+    assert.ok(Math.abs(Number(depois.quantidade_bloqueada)) < 1e-9,
+      `o bloqueado deveria zerar, veio ${depois.quantidade_bloqueada}`);
+  });
+
+  await test('(18) a POSICAO do teto fisico: recebi 3, reprovei 3, devolvo os 3', async () => {
+    // Achado de revisao: nenhum fixture devolvia o fisico INTEIRO, entao trocar `quantidade_atual
+    // >= ?` por `> ?` no claim do motor deixava as 45 assercoes da etapa verdes — e o caso
+    // natural "chegou 3, reprovei os 3" passava a ser recusado, com o documento travando em
+    // PENDENTE. E a licao da Etapa 27: o que o teste ancora e ONDE a regua esta, nao o sinal.
+    const ctx = await ncDecidida('DEVOLVER', { reprovada: 3, esperada: 3, atual: 3 });
+    const res = await executar(ctx.ncId);
+    assert.strictEqual(res.execucao.efeito, 'BAIXADA', JSON.stringify(res.execucao));
+    const depois = await saldos(ctx.materialId);
+    assert.strictEqual(Number(depois.quantidade_atual), 0, 'o fisico nao zerou');
+    assert.strictEqual(Number(depois.quantidade_bloqueada), 0, 'o bloqueado nao zerou');
+  });
+
+  await test('(19) o pool AGREGADO: a inspecao ja liberada nao baixa contra a retencao alheia', async () => {
+    // ⚠️ O caso B175/C63 da Etapa 44: duas NCs da MESMA inspecao com decisoes OPOSTAS. A de
+    // aceitacao solta os 3 kg; a de devolucao, executada depois, encontrava o pool com 5 kg de
+    // OUTRA inspecao e baixava 3 contra eles — material que ninguem devolveu sumindo do fisico,
+    // com mensagem de sucesso.
+    const ctx = await novaInspecaoReprovada({ reprovada: 3, esperada: 20, bloqueioDeOutraOrigem: 5 });
+    const aceita = await ncAutomatica(ctx.inspecaoId);
+    const devolve = await nc.abrirNaoConformidade(db, QUALIDADE, {
+      origem: 'INSPECAO', referencia_tipo: 'INSPECAO', referencia_id: ctx.inspecaoId,
+      tipo: 'DANO_FISICO', aberto_automaticamente: 1, descricao: 'segunda causa',
+    });
+    await decidir(aceita.id, 'ACEITAR');
+    await decidir(devolve.id, 'DEVOLVER');
+
+    const antes = await saldos(ctx.materialId);
+    // A metade positiva: a aceitacao REALMENTE soltou os 3 — sem isto o cenario passaria com a
+    // liberacao quebrada, medindo o nada.
+    assert.strictEqual(Number(antes.quantidade_bloqueada), 5,
+      'a aceitacao nao liberou os 3 — o cenario nao chegou ao estado que quer medir');
+
+    const res = await executar(devolve.id);
+
+    // ⚠️ AS ASSERCOES DE SALDO VEM PRIMEIRO, E A ORDEM E DELIBERADA. Com o `efeito` na frente, a
+    // sabotagem que desliga a guarda derrubava o cenario por ele e as de saldo NUNCA rodavam —
+    // o mesmo tropeco que esta etapa ja cometeu tres vezes. Aqui o DANO e o saldo: material que
+    // ninguem devolveu sumindo do fisico e retencao alheia sendo comida.
+    const depois = await saldos(ctx.materialId);
+    assert.strictEqual(Number(depois.quantidade_atual), Number(antes.quantidade_atual),
+      'baixou o fisico contra a retencao de OUTRA inspecao — material que ninguem devolveu sumiu');
+    assert.strictEqual(Number(depois.quantidade_bloqueada), 5,
+      'comeu a retencao da outra inspecao');
+
+    assert.strictEqual(res.execucao.efeito, 'SEM_SALDO', JSON.stringify(res.execucao));
+    assert.strictEqual(res.execucao.mensagem,
+      'O material desta inspeção já havia sido liberado por outra não conformidade — a execução foi registrada sem mover saldo');
+  });
+
+  await test('(19b) o chamador passa AS DUAS trancas ao motor (exigeLote E exigeSerie)', async () => {
+    // ⚠️ O cenario (9) de `devolucaoFornecedorMotor` prova que o MOTOR honra `exigeSerie`. Ele
+    // NAO prova que este chamador a passa — e era exatamente essa a falta que a revisao achou:
+    // `exigeLote` estava la e `exigeSerie` nao, apesar de o comentario ao lado declarar o
+    // principio para as duas.
+    //
+    // A tranca e defesa em profundidade: o nivel 6 da precedencia recusa ANTES, entao nenhum
+    // caminho normal a alcanca e nenhuma sabotagem no codigo de producao a derruba. E o caso
+    // "defeito inalcancavel" da skill: em vez de remover a protecao porque nada cai, mede-se o
+    // que ela E — o argumento que sai daqui — em vez do que ela impede.
+    let opcoesVistas = null;
+    const original = stockService.registrarMovimentacao;
+    stockService.registrarMovimentacao = async (...args) => {
+      opcoesVistas = args[3];
+      return original.apply(null, args);
+    };
+    try {
+      const ctx = await ncDecidida('DEVOLVER', { reprovada: 3, esperada: 10 });
+      const res = await executar(ctx.ncId);
+      assert.strictEqual(res.execucao.efeito, 'BAIXADA', JSON.stringify(res.execucao));
+    } finally {
+      stockService.registrarMovimentacao = original;
+    }
+    assert.ok(opcoesVistas, 'o motor nao chegou a ser chamado — o cenario nao mediu nada');
+    assert.strictEqual(opcoesVistas.exigeLote, true, 'a tranca do lote (RN-12) nao chega ao motor');
+    assert.strictEqual(opcoesVistas.exigeSerie, true, 'a tranca da serie (RN-13) nao chega ao motor');
+  });
+
+  await test('(20) a literal de "sem reprovada" tem cenario — era a unica das 14 sem nenhum', async () => {
+    // Achado MENOR da revisao: esta literal nasceu no fix da T2 porque a tabela congelada do
+    // design estava incompleta, e ficou sendo a unica sem teste. A decisao da inspecao e
+    // REESCRIVEL, entao a reprovada pode virar zero depois de o documento existir.
+    const ctx = await ncDecidida('DEVOLVER', { reprovada: 3, esperada: 10 });
+    await dbRun(db, `UPDATE inspecoes_recebimento_almoxarifado
+      SET quantidade_reprovada = 0, quantidade_aprovada = 10 WHERE id = ?`, [ctx.inspecaoId]);
+    const res = await executar(ctx.ncId);
+    assert.strictEqual(res.execucao.efeito, 'SEM_SALDO', JSON.stringify(res.execucao));
+    assert.strictEqual(res.execucao.mensagem,
+      'Esta não conformidade não tem material reprovado para devolver');
+    assert.strictEqual(Number((await saldos(ctx.materialId)).quantidade_bloqueada), 3);
+  });
+
   // ── (16) o backfill — POR ULTIMO, porque mexe no ledger ────────────────────────────────────
   await test('(16) o backfill da estado a NC ja decidida, e NAO rebaixa uma EXECUTADA', async () => {
     const pendente = await ncDecidida('DEVOLVER', { reprovada: 3, esperada: 10 });

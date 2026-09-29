@@ -8,6 +8,10 @@ const { avaliarRegrasVinculo } = require('./movementRules');
 const ownerRules = require('./ownerRules');
 const { TIPOS_MOVIMENTO, TIPOS_RETENCAO } = require('./schema');
 const { disponivelSql, COLUNAS_RETENCAO } = require('./availabilitySql');
+// Etapa 45 (fix-round): a regua de "isto e diferenca de verdade", dona unica desde a Etapa 10b.
+// Usada SO no claim de `DEVOLUCAO_FORNECEDOR`, e o raio pequeno e deliberado — ver o comentario
+// la. Afrouxar por epsilon TODO claim de saida e mudanca de motor, nao de etapa.
+const { EPSILON_DIVERGENCIA } = require('./divergencia');
 /**
  * Espelha `nonConformityService.MOTIVO_LIBERACAO` SEM importá-lo — o mesmo desenho, e pelo mesmo
  * motivo, da cópia de `STATUS_RECEBIMENTO_PROCESSADO` que mora lá: `nonConformityService` faz
@@ -1149,11 +1153,22 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
         //
         // ⚠️ E a mensagem diz os DOIS numeros. Com so um deles, o operador nao sabe qual das duas
         // condicoes falhou — e `bloqueada > atual` e estado alcancavel neste modulo.
+        // ⚠️ O claim tolera EPSILON, e a tolerancia e PAR com a da precedencia em
+        // `nonConformityService.efeitoExecucaoPrevisto` — as duas tem de concordar, ou o conserto
+        // do CRITICAL so muda o sintoma de lugar. Com a precedencia tolerante e o claim cru,
+        // devolver 3.4 de um pool que a aritmetica deixou em 3.3999999999999995 deixaria de
+        // responder "ja havia saido do bloqueio" (200 mentindo) e passaria a estourar no motor,
+        // derrubando a execucao e trancando o documento em PENDENTE. Trocar um defeito silencioso
+        // por um beco nao e conserto.
+        //
+        // O raio e SO este ramo: `baixandoBloqueado` vale para um unico tipo. Afrouxar por
+        // epsilon todo claim de saida do motor e decisao de outro tamanho, e nao desta etapa.
         const rowB = await dbGet(db, `UPDATE materiais_almoxarifado
           SET quantidade_atual = quantidade_atual - ?,
               quantidade_bloqueada = COALESCE(quantidade_bloqueada,0) - ?,
               updated_at = CURRENT_TIMESTAMP
-          WHERE id = ? AND COALESCE(quantidade_bloqueada,0) >= ? AND quantidade_atual >= ?
+          WHERE id = ? AND COALESCE(quantidade_bloqueada,0) >= ? - ${EPSILON_DIVERGENCIA}
+            AND quantidade_atual >= ? - ${EPSILON_DIVERGENCIA}
           RETURNING quantidade_atual`,
           [quantidade, quantidade, material_id, quantidade, quantidade]);
         if (!rowB) {

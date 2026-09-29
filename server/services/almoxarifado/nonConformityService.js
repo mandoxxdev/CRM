@@ -113,6 +113,10 @@ const EFEITO_EXEC_MSG = {
   // propria isso cairia no `NENHUMA` generico — "esta execucao nao altera o saldo" — que e
   // verdade e nao diz NADA sobre o porque, no unico caso em que o usuario esperava a baixa.
   SEM_SALDO_SEM_REPROVADA: 'Esta não conformidade não tem material reprovado para devolver',
+  // Fix-round da Fase 5: a retenção desta inspeção já foi solta por uma decisão de ACEITAÇÃO em
+  // outra NC da mesma inspeção (B175/C63 da Etapa 44). Sem esta literal, o pool AGREGADO deixava
+  // a devolução baixar 3 kg contra a retenção de outra inspeção, com mensagem de sucesso.
+  SEM_SALDO_JA_LIBERADA: 'O material desta inspeção já havia sido liberado por outra não conformidade — a execução foi registrada sem mover saldo',
   NENHUMA: 'Esta execução não altera o saldo',
   NENHUMA_MANUAL: 'Só a não conformidade aberta pela reprovação da inspeção devolve material',
 };
@@ -182,6 +186,21 @@ const temDivergenciaReal = (valor) => Math.abs(valor) > EPSILON_DIVERGENCIA;
 
 /** "E o mesmo fato?" da RN-10, pela MESMA regua. */
 const mesmoFato = (a, b) => Math.abs(Number(a) - Number(b)) <= EPSILON_DIVERGENCIA;
+
+/**
+ * "`a` e MENOR que `b` de verdade?" — a mesma regua de `divergencia.js`, aplicada as comparacoes
+ * de SALDO das Etapas 44 e 45.
+ *
+ * Existe por um CRITICAL reproduzido na revisao da Etapa 45: `quantidade_bloqueada` e REAL e
+ * nasce de somas sucessivas, entao duas reprovacoes de 2.3 e 3.4 deixam 5.699999999999999 no
+ * pool. Depois de devolver 2.3 sobram 3.3999999999999995, e `3.3999999999999995 < 3.4` e
+ * VERDADE — a devolucao legitima da segunda vira "o material ja havia saido do bloqueio". Ver o
+ * comentario longo em `efeitoExecucaoPrevisto`, que conta o estado absorvente que isso produz.
+ *
+ * Mesma classe do `!= 0` que `divergencia.js` existe para proibir, e mesma regua: ruido de
+ * IEEE-754 abaixo do epsilon NAO e diferenca.
+ */
+const menosQue = (a, b) => (Number(a) || 0) < Number(b) - EPSILON_DIVERGENCIA;
 
 const CAMPOS_LISTA = `nc.id, nc.numero, nc.origem, nc.referencia_tipo, nc.referencia_id, nc.tipo,
   nc.status, nc.material_id, m.codigo AS material_codigo, m.nome AS material_nome,
@@ -654,8 +673,15 @@ function efeitoPrevisto(nc, insp, material, decisao) {
   // ⚠️ Isto NÃO enfraquece a RN-02, e a diferença importa: a fatalidade continua valendo para
   // falha INESPERADA do motor (aí a decisão é desfeita). Aqui não há falha nenhuma — há um estado
   // conhecido, medido antes de escrever qualquer coisa, e dito em voz alta.
-  const bloqueadaAtual = Number(material?.quantidade_bloqueada) || 0;
-  if (bloqueadaAtual < reprovada) return nada('SEM_BLOQUEIO', EFEITO_MSG.SEM_BLOQUEIO_DRENADO);
+  // ⚠️ `menosQue`, e nao `<` cru — MESMA correcao do CRITICAL da Etapa 45, e este e o ponto de
+  // ORIGEM da forma: a 45 copiou daqui. Com `<` cru, liberar 3.4 de um pool que a aritmetica de
+  // ponto flutuante deixou em 3.3999999999999995 responde "o material ja havia sido desbloqueado
+  // fora do documento" e FECHA a NC sem liberar nada — a QUALIDADE aceita sob desvio, o
+  // documento diz aceito, e o material segue preso. E exatamente o furo C57 renascendo por
+  // arredondamento, na etapa escrita para fecha-lo.
+  if (menosQue(material?.quantidade_bloqueada, reprovada)) {
+    return nada('SEM_BLOQUEIO', EFEITO_MSG.SEM_BLOQUEIO_DRENADO);
+  }
 
   return { efeito: 'LIBERAVEL', quantidade: reprovada, material_id: materialId, mensagem: null };
 }
@@ -926,13 +952,56 @@ function efeitoExecucaoPrevisto(nc, insp, material, lote) {
     return nada('SEM_SALDO', EFEITO_EXEC_MSG.SEM_SALDO_SEM_REPROVADA);
   }
   if (!material.ativo) return nada('SEM_SALDO', EFEITO_EXEC_MSG.SEM_SALDO_INATIVO);
-  if ((Number(material.quantidade_bloqueada) || 0) < reprovada) {
+
+  // ⚠️ A RETENCAO DESTA INSPECAO JA FOI SOLTA POR OUTRA NC — e o teste abaixo NAO sabe disso.
+  //
+  // Achado de DOIS revisores independentes, e vale ler junto com o que `schema.js` ja escrevia
+  // para justificar onde a trava mora: *"o pool e AGREGADO — com bloqueio de outra origem na
+  // mesma peca, a segunda baixa passa em silencio e apaga material que ninguem devolveu"*. O
+  // nivel seguinte compara `quantidade_bloqueada` do POOL com a reprovada, e o pool nao sabe de
+  // quem e cada quilo. Se os 3 kg desta inspecao ja sairam do bloqueio e ha 5 kg retidos de
+  // OUTRA inspecao, o nivel seguinte passa e a devolucao baixa 3 kg contra a retencao alheia,
+  // com mensagem de sucesso.
+  //
+  // O caso ALCANCAVEL e nomeado — e o B175/C63 da Etapa 44: duas NCs da MESMA inspecao com
+  // decisoes opostas, a de aceitacao solta tudo. `liberacao_nc_em` e a prova documental de que
+  // isso aconteceu, e e barata: ja esta na linha que `getInspecao` le.
+  //
+  // ⚠️ ISTO NAO FECHA O CASO GERAL, e a diferenca importa: quem drenou o bloqueio PELA MAO
+  // (`POST /materiais/:id/desbloquear`, o workaround anterior a estas duas etapas) nao deixa
+  // marca nenhuma na inspecao, e esse caminho continua aberto. Fechar de verdade exige
+  // contabilizar retencao POR ORIGEM, que e tabela nova e etapa propria. Declarado nas letras
+  // A (consulta pre-deploy) e C do documento de novidades.
+  if (insp.liberacao_nc_em) {
+    return nada('SEM_SALDO', EFEITO_EXEC_MSG.SEM_SALDO_JA_LIBERADA);
+  }
+
+  // ⚠️ AS DUAS COMPARACOES ABAIXO USAM `menosQue`, E NAO `<` CRU. CRITICAL achado na revisao
+  // adversarial, REPRODUZIDO pelas rotas reais com operacao inteiramente normal:
+  //
+  //   dois recebimentos de 10 kg do mesmo material critico, inspecoes reprovando 2.3 e 3.4.
+  //   `quantidade_bloqueada` vira 5.699999999999999 (IEEE-754, nao erro de ninguem).
+  //   Devolver a primeira (2.3) deixa 3.3999999999999995. Devolver a segunda (3.4) cai aqui,
+  //   porque `3.3999999999999995 < 3.4` e VERDADE — e responde 200 com
+  //   "O material já havia saído do bloqueio", tendo o COMPRAS acabado de embalar e despachar.
+  //
+  // O estado resultante e ABSORVENTE, e e o que torna isto CRITICAL e nao cosmetico: a NC fica
+  // `EXECUTADA` (some da fila `?execucao=PENDENTE`), o cartao de reprovados cala junto, a
+  // re-execucao e 409, e ate o desbloqueio manual recusa ("Quantidade bloqueada insuficiente:
+  // 3.3999999999999995"). O material sai do galpao e continua contado no fisico e no bloqueado,
+  // sem nenhuma superficie cobrando.
+  //
+  // ESTE ARQUIVO JA SABIA DISSO. Ele importa `EPSILON_DIVERGENCIA` desde a Etapa 43 (`:43`), usa
+  // em `temDivergenciaReal`/`mesmoFato`, e o docblock do topo avisa que um `!== 0` cru ali
+  // "transformaria 7e-16 em documento numerado contra quem contou CERTO". Eu escrevi duas
+  // comparacoes novas de REAL sem aplicar a regua que o proprio arquivo declara ter dono unico.
+  if (menosQue(material.quantidade_bloqueada, reprovada)) {
     return nada('SEM_SALDO', EFEITO_EXEC_MSG.SEM_SALDO_BLOQUEIO);
   }
   // ⚠️ `bloqueada > atual` E ALCANCAVEL — `stockService.js` documenta o estado. Sem este teste a
   // baixa iria ao motor e tomaria recusa fatal, trancando o documento pelo caminho que os dois
   // testes acima existem para evitar.
-  if ((Number(material.quantidade_atual) || 0) < reprovada) {
+  if (menosQue(material.quantidade_atual, reprovada)) {
     return nada('SEM_SALDO', EFEITO_EXEC_MSG.SEM_SALDO_FISICO);
   }
 
@@ -1085,7 +1154,15 @@ async function executarDevolucao(db, user, nc, insp, previsto, observacoes, id) 
       // `exigeLote` e a SEGUNDA tranca da RN-12; a primeira e o nivel 7 da precedencia, que ja
       // recusou com literal propria. Redundante de proposito: o dia em que alguem chamar esta
       // funcao por um caminho que pule a precedencia, o motor ainda recusa.
-    }, { exigeLote: true });
+      //
+      // ⚠️ `exigeSerie` FALTAVA, e o achado e da revisao adversarial — eu escrevi o principio no
+      // paragrafo acima e o apliquei a UMA das duas regras. A RN-13 e a mais grave das duas: sem
+      // ela o motor baixa `quantidade_atual` sem tocar em `series_almoxarifado` (MEDIDO: 10 -> 7
+      // no fisico, 3 -> 0 no bloqueado, zero linhas de serie alteradas), quebrando o invariante
+      // `COUNT(serie presente) == quantidade_atual` da Etapa 6b — e a peca devolvida ao
+      // fornecedor continua ENTREGAVEL pela tela de Movimentacoes, porque a serie segue presente.
+      // Aditivo: o nivel 6 da precedencia recusa antes, e com mensagem melhor.
+    }, { exigeLote: true, exigeSerie: true });
   } catch (e) {
     await dbRun(db, `UPDATE inspecoes_recebimento_almoxarifado SET devolucao_fornecedor_em = NULL
       WHERE id = ? AND devolucao_fornecedor_em IS NOT NULL`, [insp.id]);

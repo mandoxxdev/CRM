@@ -216,6 +216,43 @@ async function erroDe(fn) {
       'DEVOLUCAO_CLIENTE entrou no consumo — as duas devolucoes sao coisas diferentes');
   });
 
+  // ── (9) FIX-ROUND DA FASE 5 — a SEGUNDA tranca da serie ────────────────────────────────────
+  await test('(9) `exigeSerie` recusa no motor: sem ela a peca devolvida continuaria ENTREGAVEL', async () => {
+    // ⚠️ ACHADO DA REVISAO ADVERSARIAL, medido por sonda: `registrarExecucao` passava
+    // `exigeLote: true` e NAO `exigeSerie: true`, apesar de o comentario ao lado declarar o
+    // principio ("o dia em que alguem chamar esta funcao por um caminho que pule a precedencia,
+    // o motor ainda recusa"). Aplicado a UMA das duas regras.
+    //
+    // Sem a tranca, o motor baixa `quantidade_atual` sem tocar em `series_almoxarifado`: o
+    // invariante `COUNT(serie presente) == quantidade_atual` da Etapa 6b quebra, e a peca
+    // devolvida ao fornecedor segue `EM_ESTOQUE` — ou seja, ENTREGAVEL pela tela de
+    // Movimentacoes. Material que ja saiu do predio podendo ser entregue a producao.
+    const mat = await dbRun(db, `INSERT INTO materiais_almoxarifado
+      (codigo, nome, unidade, quantidade_atual, quantidade_bloqueada, ativo, controle_serie)
+      VALUES (?,?,'UN',10,3,1,1)`, [uniq('MAT-E45SER'), 'Peca serializada']);
+
+    const e = await erroDe(() => stock.registrarMovimentacao(db, ADMIN, {
+      material_id: mat.lastID, tipo: 'DEVOLUCAO_FORNECEDOR', quantidade: 3,
+      justificativa: 'devolucao ao fornecedor', motivo: 'Devolução ao fornecedor',
+    }, { exigeSerie: true }));
+    assert.ok(e, 'o motor baixou material serializado sem exigir as series');
+
+    const depois = await saldos(mat.lastID);
+    assert.strictEqual(Number(depois.quantidade_atual), 10, 'o fisico foi mexido apesar da recusa');
+    assert.strictEqual(Number(depois.quantidade_bloqueada), 3, 'o bloqueado foi mexido');
+
+    // A metade positiva — e ela existe porque a recusa sozinha passaria com o motor quebrado
+    // para TODO tipo: material SEM controle de serie continua devolvendo normalmente.
+    const semSerie = await novoMaterial({ atual: 10, bloqueada: 3 });
+    await stock.registrarMovimentacao(db, ADMIN, {
+      material_id: semSerie, tipo: 'DEVOLUCAO_FORNECEDOR', quantidade: 3,
+      justificativa: 'devolucao ao fornecedor', motivo: 'Devolução ao fornecedor',
+    }, { exigeSerie: true });
+    const ok = await saldos(semSerie);
+    assert.strictEqual(Number(ok.quantidade_atual), 7, 'a tranca barrou quem nao tem serie');
+    assert.strictEqual(Number(ok.quantidade_bloqueada), 0);
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);

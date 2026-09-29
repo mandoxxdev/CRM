@@ -99,17 +99,26 @@ const uniq = (p) => `${p}-${Date.now() % 1000000}-${++seq}`;
   const temInspecao = (linhas, id) => linhas.some((l) => l.inspecao_id === id);
 
   // ── (1) a copia dos literais, antes de tudo ────────────────────────────────────────────────
-  await test('(1) o SQL da flag usa os MESMOS literais de DECISAO_QUE_DEVOLVE/EXECUCAO_EXECUTADA', async () => {
-    // O SQL desta regua nao importa `nonConformityService` (nenhum require de servico mora nesse
-    // trecho, como em `listarNaoConformidadesParadas`), entao os dois literais sao COPIA. Copia
-    // sem guarda deriva: renomear a decisao ou o estado no servico deixaria a flag casando um
-    // valor que nao existe mais — e o cartao voltaria a cobrar TUDO em silencio, verde na suite.
+  await test('(1) a regua cala pelo MOVIMENTO (devolucao_fornecedor_em), nao pelo documento', async () => {
+    // ⚠️ ESTE CENARIO FOI REESCRITO NO FIX-ROUND DA FASE 5, e a versao anterior fica descrita
+    // porque ela media a coisa errada com toda a aparencia de rigor.
+    //
+    // Ele guardava os literais `nc.decisao = 'DEVOLVER'` e `nc.execucao_estado = 'EXECUTADA'`
+    // contra deriva — guarda legitima, e a regua inteira estava errada por baixo dela: as duas
+    // condicoes medem INTENCAO REGISTRADA, e o cartao cobra MATERIAL QUE AINDA ESTA NO GALPAO.
+    // Execucao com efeito `NENHUMA` ou `SEM_SALDO` vira `EXECUTADA` sem mover nada, e o cartao
+    // calava com o material inteiro retido (reproduzido por DOIS revisores).
+    //
+    // A regua agora e `i.devolucao_fornecedor_em IS NULL`, que e mais forte: a coluna so e
+    // carimbada dentro de `executarDevolucao`, e o rollback a apaga se o motor falhar. Quem
+    // guarda a deriva agora e o cenario (8), que prova que ela NAO e escrita em nenhum outro
+    // caminho — que e a propriedade de que esta regua depende.
     const fonte = fs.readFileSync(
       path.join(__dirname, '../../services/almoxarifado/alertRegistry.js'), 'utf8');
-    assert.ok(fonte.includes(`nc.decisao = '${nc.DECISAO_QUE_DEVOLVE}'`),
-      `a regua nao casa DECISAO_QUE_DEVOLVE ('${nc.DECISAO_QUE_DEVOLVE}')`);
-    assert.ok(fonte.includes(`nc.execucao_estado = '${nc.EXECUCAO_EXECUTADA}'`),
-      `a regua nao casa EXECUCAO_EXECUTADA ('${nc.EXECUCAO_EXECUTADA}')`);
+    assert.ok(fonte.includes('i.devolucao_fornecedor_em IS NULL'),
+      'a regua do cartao nao usa o carimbo do movimento');
+    assert.ok(!/nc\.execucao_estado\s*=/.test(fonte),
+      'a regua voltou a medir o ESTADO do documento em vez do movimento');
   });
 
   // ── (2) OPT-IN ─────────────────────────────────────────────────────────────────────────────
@@ -199,6 +208,80 @@ const uniq = (p) => `${p}-${Date.now() % 1000000}-${++seq}`;
     assert.ok(temInspecao(card.linhas, pendente.inspecaoId), 'a central perdeu a inspecao pendente');
     assert.ok(!temInspecao(card.linhas, devolvida.inspecaoId),
       'a central ainda cobra a devolucao ja executada');
+  });
+
+  // ── (8) a (10) — O FIX-ROUND DA FASE 5 ─────────────────────────────────────────────────────
+
+  await test('(8) execucao com efeito NENHUMA (RN-06) NAO cala o cartao — o material continua aqui', async () => {
+    // ⚠️ REPRODUZIDO POR EXECUCAO NA REVISAO, e e o furo que a regua antiga tinha: a NC
+    // AUTOMATICA decidida DEVOLVER segue pendente, alguem abre uma NC MANUAL sobre a mesma
+    // inspecao (COMPRAS tem `registrar_nao_conformidade`), a QUALIDADE decide DEVOLVER nela e o
+    // COMPRAS a executa. A resposta e 200 com `NENHUMA` e a literal da RN-06 — NADA SAI —, mas
+    // `execucao_estado` daquela NC manual virava EXECUTADA e o cartao calava com o material
+    // inteiro ainda bloqueado no galpao.
+    const ctx = await novaInspecaoReprovada({ reprovada: 3, esperada: 10 });
+    const automatica = await nc.abrirNaoConformidadeDeInspecao(db, QUALIDADE, ctx.inspecaoId);
+    await decidir(automatica.id, 'DEVOLVER');
+
+    const manual = await nc.abrirNaoConformidadeManual(db, COMPRAS, {
+      origem: 'INSPECAO', referencia_tipo: 'INSPECAO', referencia_id: ctx.inspecaoId,
+      tipo: 'OUTRO', descricao: 'aberta a mao',
+    });
+    await decidir(manual.id, 'DEVOLVER');
+    const res = await executar(manual.id);
+
+    // A metade positiva: o cenario so mede o que diz se a execucao de fato NAO moveu nada.
+    assert.strictEqual(res.execucao.efeito, 'NENHUMA', JSON.stringify(res.execucao));
+    const m = await dbGet(db, 'SELECT quantidade_bloqueada FROM materiais_almoxarifado WHERE id = ?',
+      [ctx.materialId]);
+    assert.strictEqual(Number(m.quantidade_bloqueada), 3, 'o fixture deixou de medir o que queria');
+
+    assert.ok(temInspecao(await cartao(), ctx.inspecaoId),
+      'o cartao calou por uma execucao que o proprio sistema diz nao ter devolvido nada');
+  });
+
+  await test('(9) execucao com efeito SEM_SALDO NAO cala o cartao', async () => {
+    // Mesma familia do (8), e era a metade que fechava o CRITICAL do epsilon: quando a devolucao
+    // legitima virava `SEM_SALDO` por ruido de ponto flutuante, o cartao — ULTIMA superficie que
+    // ainda cobraria aquele material — calava junto, e nao sobrava nada apontando o esquecimento.
+    const ctx = await novaInspecaoReprovada({ reprovada: 3, esperada: 10 });
+    const doc = await nc.abrirNaoConformidadeDeInspecao(db, QUALIDADE, ctx.inspecaoId);
+    await decidir(doc.id, 'DEVOLVER');
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET ativo = 0 WHERE id = ?', [ctx.materialId]);
+    const res = await executar(doc.id);
+    assert.strictEqual(res.execucao.efeito, 'SEM_SALDO', JSON.stringify(res.execucao));
+    assert.ok(temInspecao(await cartao(), ctx.inspecaoId),
+      'o cartao calou por uma execucao que nao moveu saldo nenhum');
+  });
+
+  await test('(10) `devolucao_fornecedor_em` so e escrita pela execucao que MOVEU — a regua depende disso', async () => {
+    // A regua nova confia numa propriedade do resto do modulo: a coluna e carimbada em UM lugar
+    // so, e apagada de volta se o motor falhar. Se um dia alguem a escrever noutro caminho, a
+    // regua passa a calar por intencao de novo — sem nada cair. Esta e a guarda de deriva que
+    // substitui a antiga (ver o cenario (1)).
+    const fonte = fs.readFileSync(
+      path.join(__dirname, '../../services/almoxarifado/nonConformityService.js'), 'utf8');
+    const escritas = (fonte.match(/SET devolucao_fornecedor_em = CURRENT_TIMESTAMP/g) || []).length;
+    assert.strictEqual(escritas, 1,
+      `esperava 1 escritor de devolucao_fornecedor_em, achei ${escritas} — a regua do cartao depende de haver so um`);
+    assert.ok(/SET devolucao_fornecedor_em = NULL/.test(fonte),
+      'o rollback do carimbo sumiu — uma execucao que falhou calaria o cartao para sempre');
+
+    // E a metade medida, nao lida: a execucao que falha no motor NAO cala o cartao.
+    const ctx = await novaInspecaoReprovada({ reprovada: 3, esperada: 10 });
+    const doc = await nc.abrirNaoConformidadeDeInspecao(db, QUALIDADE, ctx.inspecaoId);
+    await decidir(doc.id, 'DEVOLVER');
+    const stockService = require('../../services/almoxarifado/stockService');
+    const original = stockService.registrarMovimentacao;
+    stockService.registrarMovimentacao = async () => { throw new Error('motor caiu'); };
+    try {
+      await executar(doc.id).then(() => { throw new Error('a falha do motor nao subiu'); },
+        (e) => assert.strictEqual(e.message, 'motor caiu'));
+    } finally {
+      stockService.registrarMovimentacao = original;
+    }
+    assert.ok(temInspecao(await cartao(), ctx.inspecaoId),
+      'o motor falhou, nada saiu, e o cartao parou de cobrar');
   });
 
   await close();

@@ -118,7 +118,13 @@ function maisVelhoQueDias(dataStr, dias) {
  * `listarDivergenciasRecebimento` (o cabecalho dela conta o cenario A1 que morre). Por isso o
  * terceiro modo e opt-in e QUEM O LIGA e so o `listar` da entrada do alerta.
  *
- * A REGUA EXIGE AS DUAS CONDICOES, e nenhuma das duas sobra:
+ * ⚠️ A REGUA ABAIXO E A DA PRIMEIRA VERSAO, E FOI SUBSTITUIDA NO FIX-ROUND DA FASE 5. Fica
+ * escrita porque o raciocinio dela esta certo e ainda ensina POR QUE nenhuma das duas condicoes
+ * sozinha servia — o que ele nao viu e que as duas juntas continuam medindo INTENCAO REGISTRADA,
+ * e nao MATERIAL MOVIDO. A regua atual e `i.devolucao_fornecedor_em IS NULL`; ver o comentario
+ * dentro da funcao.
+ *
+ * A regua antiga exigia as duas condicoes, e nenhuma das duas sobrava:
  *   · `decisao = 'DEVOLVER'` — executar uma `SUBSTITUICAO`, um `SUCATEAR` ou uma
  *     `ANALISE_ENGENHARIA` e registrar um ato que NAO devolveu nada ao fornecedor. So
  *     `execucao_estado` na regua faria qualquer execucao calar o aviso do material reprovado.
@@ -144,10 +150,23 @@ async function listarReprovados(db, { dias, inspecaoId, excluirComExecucao } = {
   const filtro = inspecaoId
     ? 'AND i.id = ?'
     : `AND i.data_inspecao >= datetime('now', '-' || ? || ' days')`;
-  const semExecucao = excluirComExecucao ? `AND NOT EXISTS (
-      SELECT 1 FROM nao_conformidades_almoxarifado nc
-      WHERE nc.referencia_tipo = 'INSPECAO' AND nc.referencia_id = i.id
-        AND nc.decisao = 'DEVOLVER' AND nc.execucao_estado = 'EXECUTADA')` : '';
+  // ⚠️ A REGUA MUDOU NO FIX-ROUND DA FASE 5, E A VERSAO ANTERIOR FICA DESCRITA PORQUE ELA
+  // PARECIA CERTA — o docblock acima defende, com razao, que `decisao` e `execucao_estado`
+  // JUNTAS bastam. DOIS revisores independentes mostraram, por execucao, que nao bastam: as duas
+  // medem INTENCAO REGISTRADA, e o cartao cobra MATERIAL QUE AINDA ESTA NO GALPAO.
+  //
+  //   · execucao com efeito `NENHUMA` (NC aberta a mao sobre a mesma inspecao — RN-06): 200,
+  //     nada sai, `execucao_estado` vira EXECUTADA, e o cartao calava com `bloqueada = 3`;
+  //   · execucao com efeito `SEM_SALDO` (bloqueio drenado, fisico insuficiente, inativo): idem;
+  //   · e o CRITICAL do epsilon: a devolucao legitima que virava `SEM_SALDO` calava o cartao,
+  //     que era a ULTIMA superficie que ainda cobraria o material esquecido.
+  //
+  // `i.devolucao_fornecedor_em` resolve os tres de uma vez, e e mais forte que as duas condicoes
+  // que substitui: ela so e carimbada dentro de `executarDevolucao`, DEPOIS do claim e so quando
+  // o motor de fato baixou (o rollback a apaga se o motor falhar) — e esse caminho ja exige
+  // `decisao = 'DEVOLVER'` e a RN-06 inteira. Ou seja: a coluna ja E a conjuncao, medida no
+  // resultado em vez de declarada na intencao. Deixa de ser preciso ler a NC.
+  const semExecucao = excluirComExecucao ? 'AND i.devolucao_fornecedor_em IS NULL' : '';
   return dbAll(db, `
     SELECT i.id AS inspecao_id, m.codigo AS material_codigo, m.nome AS material_nome,
       i.quantidade_reprovada, i.encaminhamento, r.numero AS recebimento_numero, r.nota_fiscal,
