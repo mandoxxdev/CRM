@@ -38,9 +38,17 @@ jest.mock('react-toastify', () => ({
 
 // Permissões liberadas: o alvo aqui é o comportamento da tela, e o gate real é do servidor (o
 // hook falha ABERTO de propósito). O que esconde o botão de decidir nesta tela é o STATUS.
+//
+// ⚠️ Etapa 45: `executar_encaminhamento` é a ÚNICA ação desta tela que esconde botão por perfil
+// (a plateia dela é COMPRAS, e não quem decide), então ela precisa ser controlável por cenário.
+// O prefixo `mock` no nome não é estilo: é o que o jest permite referenciar dentro da fábrica.
+let mockPodeExecutar = true;
 jest.mock('../../hooks/useAlmoxPermissoes', () => ({
   useAlmoxPermissoes: () => ({
-    perfil: 'QUALIDADE', pode: () => true, bloquearSeNaoPode: () => true, loading: false,
+    perfil: 'QUALIDADE',
+    pode: (acao) => (acao === 'executar_encaminhamento' ? mockPodeExecutar : true),
+    bloquearSeNaoPode: () => true,
+    loading: false,
   }),
 }));
 
@@ -54,6 +62,10 @@ const NC_ABERTA = {
   aberto_por_nome: null, aberto_automaticamente: 1,
   decidido_por_nome: null, decidido_em: null, motivo_cancelamento: null, cancelado_em: null,
   created_at: '2026-09-27 11:00:00', updated_at: '2026-09-27 11:00:00',
+  // Etapa 45: NC ainda não decidida não tem estado de execução — e `null` aqui NÃO é o mesmo que
+  // "pendente". Ver o cenário (22).
+  execucao_estado: null, execucao_em: null, execucao_por_nome: null,
+  execucao_observacoes: null, execucao_movimentacao_id: null,
 };
 
 const NC_DECIDIDA = {
@@ -68,6 +80,32 @@ const NC_DECIDIDA = {
   decidido_por_nome: 'Ana Souza', decidido_em: '2026-09-27 15:30:00',
   motivo_cancelamento: null, cancelado_em: null,
   created_at: '2026-09-27 12:00:00', updated_at: '2026-09-27 15:30:00',
+  // As duas decisões de ACEITAÇÃO já se executaram no clique da decisão (Etapa 44) — nasceram
+  // `NAO_SE_APLICA` (`nonConformityService.js:732`). Não há ato externo a confirmar.
+  execucao_estado: 'NAO_SE_APLICA', execucao_em: null, execucao_por_nome: null,
+  execucao_observacoes: null, execucao_movimentacao_id: null,
+};
+
+/**
+ * Etapa 45 — as duas linhas que a etapa inteira existe para distinguir: a mesma decisão
+ * (`DEVOLVER`), uma esperando alguém embalar e outra já embarcada.
+ */
+const NC_A_EXECUTAR = {
+  ...NC_DECIDIDA,
+  id: 21, numero: 'NC-2026-0021', decisao: 'DEVOLVER',
+  material_id: 12, material_codigo: 'ALM-0012', material_nome: 'Parafuso M8',
+  justificativa: 'Fora de especificacao, volta ao fornecedor',
+  execucao_estado: 'PENDENTE', execucao_em: null, execucao_por_nome: null,
+};
+
+const NC_EXECUTADA = {
+  ...NC_DECIDIDA,
+  id: 22, numero: 'NC-2026-0022', decisao: 'DEVOLVER',
+  material_id: 13, material_codigo: 'ALM-0013', material_nome: 'Bucha Bronze',
+  justificativa: 'Fora de especificacao, volta ao fornecedor',
+  execucao_estado: 'EXECUTADA', execucao_em: '2026-09-29 08:15:00',
+  execucao_por_nome: 'Marina Prado', execucao_observacoes: 'NF de devolucao 9012',
+  execucao_movimentacao_id: 777,
 };
 
 let container;
@@ -79,6 +117,7 @@ beforeEach(() => {
   global.IS_REACT_ACT_ENVIRONMENT = true;
   ncDoBanco = [NC_ABERTA, NC_DECIDIDA];
   falharCarga = null;
+  mockPodeExecutar = true;
   // Implementações aqui, não na fábrica do jest.mock: clearAllMocks apaga implementações e só o
   // primeiro teste teria dados.
   api.get.mockImplementation((url) => {
@@ -119,6 +158,14 @@ const filtroOrigem = () => container.querySelector('select[aria-label="Filtrar p
 
 const botaoDecidir = (linha) => [...linha.querySelectorAll('.almox-btn-icon')]
   .find((b) => b.getAttribute('title')?.includes('Decidir'));
+
+const filtroExecucao = () => container.querySelector('select[aria-label="Filtrar por execução"]');
+
+const botaoExecutar = (linha) => [...linha.querySelectorAll('.almox-btn-icon')]
+  .find((b) => b.getAttribute('title')?.includes('Registrar execução'));
+
+/** A célula da coluna Execução — 8ª das nove (Número…Decisão, Execução, Ações). */
+const celulaExecucao = (linha) => linha.querySelectorAll('td')[7];
 
 function preencher(elemento, valor) {
   const proto = elemento.tagName === 'SELECT' ? window.HTMLSelectElement.prototype
@@ -535,5 +582,306 @@ describe('NaoConformidadesAlmoxarifado — o aviso do modal acompanha a regra', 
     // ela já apareceu.
     expect(texto).not.toContain('continua bloqueado');
     expect(texto).not.toContain('ajustar_estoque');
+  });
+});
+
+/**
+ * Etapa 45, T4 — INTENÇÃO E FATO SÃO DUAS COISAS, E A TELA TEM DE MOSTRAR AS DUAS.
+ *
+ * Até aqui, uma NC decidida `DEVOLVER` há três semanas e uma decidida há cinco minutos eram a
+ * MESMA linha na tabela: "Decidida · Devolver ao fornecedor". A pergunta que o módulo existe para
+ * responder — *o material já voltou ao fornecedor?* — não tinha resposta na tela, e quem quisesse
+ * saber teria de perguntar a Compras por e-mail.
+ *
+ * O que estes cenários protegem:
+ *
+ * - a coluna **Execução** distingue os QUATRO casos, e o quarto é o vazio: NC ainda não decidida
+ *   não tem execução pendente. Igualar vazio a "pendente" inflaria a fila de Compras com
+ *   documento que ninguém decidiu;
+ * - o filtro **Pendentes de execução** manda `?execucao=PENDENTE` **e** acerta o status junto —
+ *   o servidor soma `AND status = 'DECIDIDA'` a esse filtro, então a combinação com o padrão
+ *   "Abertas" devolveria lista vazia SEMPRE, e a tela afirmaria "não há nada pendente" sem ter
+ *   medido nada (é a regra 2 do cabeçalho entrando pela porta do filtro);
+ * - o botão só aparece onde a rota pode dizer sim, e some para quem não tem a ação — este é o
+ *   único botão desta tela que some por PERFIL, porque a plateia dele (COMPRAS) não é a de quem
+ *   decide (QUALIDADE);
+ * - o toast repete a literal de `execucao.mensagem` do servidor. Ela carrega os desfechos que NÃO
+ *   movem saldo e mesmo assim registram execução ("O material já havia saído do bloqueio…"), que
+ *   é a informação que ninguém consegue deduzir da tela.
+ */
+describe('NaoConformidadesAlmoxarifado — o estado de execução do encaminhamento', () => {
+  test('(22) a coluna Execução distingue pendente, executada (com autor e data) e não se aplica — e o vazio da NC não decidida', async () => {
+    ncDoBanco = [NC_ABERTA, NC_DECIDIDA, NC_A_EXECUTAR, NC_EXECUTADA];
+    await renderizar();
+    // A metade positiva que carrega o cenário: a coluna existe no cabeçalho e as quatro linhas
+    // vieram. Sem isto, "a célula não diz Pendente" passaria com a tabela vazia.
+    expect([...container.querySelectorAll('.almox-table thead th')].map((t) => t.textContent))
+      .toEqual(['Número', 'Material', 'Origem', 'Tipo', 'O fato', 'Status', 'Decisão', 'Execução', 'Ações']);
+    expect(linhas()).toHaveLength(4);
+
+    // ABERTA: não foi decidida, então não há execução — e "—" NÃO é "pendente".
+    expect(linhas()[0].textContent).toContain('NC-2026-0007');
+    expect(celulaExecucao(linhas()[0]).textContent).toBe('—');
+
+    // ACEITAR_SOB_DESVIO: já se executou no clique da decisão (Etapa 44).
+    expect(linhas()[1].textContent).toContain('NC-2026-0008');
+    expect(celulaExecucao(linhas()[1]).textContent).toContain('Não se aplica');
+
+    // DEVOLVER esperando alguém embalar: é a fila de Compras.
+    expect(linhas()[2].textContent).toContain('NC-2026-0021');
+    expect(celulaExecucao(linhas()[2]).textContent).toContain('Pendente');
+
+    // DEVOLVER já embarcada: quem registrou e quando, que é o que o auditor pergunta.
+    expect(linhas()[3].textContent).toContain('NC-2026-0022');
+    const executada = celulaExecucao(linhas()[3]).textContent;
+    expect(executada).toContain('Executada');
+    expect(executada).toContain('Marina Prado');
+    expect(executada).toContain('29/09/26');   // 08:15 UTC continua dia 29 em pt-BR (UTC-3)
+    // E a negativa que é o ponto da etapa: a linha executada não diz "Pendente".
+    expect(executada).not.toContain('Pendente');
+  });
+
+  test('(23) o filtro "Pendentes de execução" manda `execucao` e leva o status junto — e trocar o status larga a fila', async () => {
+    await renderizar();
+    // Positiva: o filtro existe e oferece os estados do servidor.
+    expect([...filtroExecucao().querySelectorAll('option')].map((o) => o.value))
+      .toEqual(['', 'PENDENTE', 'EXECUTADA', 'NAO_SE_APLICA']);
+    expect(chamadasLista()[0][1].params).toEqual({ limite: 200, status: 'ABERTA' });
+
+    preencher(filtroExecucao(), 'PENDENTE');
+    await act(async () => {});
+    // A query sai com os dois, e o status VISÍVEL acompanha. Sem esta sincronia o servidor
+    // aplicaria `status='ABERTA' AND status='DECIDIDA'` e a fila de Compras seria vazia sempre.
+    expect(chamadasLista()).toHaveLength(2);
+    expect(chamadasLista()[1][1].params).toEqual({ limite: 200, status: 'DECIDIDA', execucao: 'PENDENTE' });
+    expect(filtroStatus().value).toBe('DECIDIDA');
+
+    // E o caminho de volta: pedir "Abertas" desfaz a fila em vez de deixar a combinação impossível.
+    preencher(filtroStatus(), 'ABERTA');
+    await act(async () => {});
+    expect(chamadasLista()).toHaveLength(3);
+    expect(chamadasLista()[2][1].params).toEqual({ limite: 200, status: 'ABERTA' });
+    expect(filtroExecucao().value).toBe('');
+  });
+
+  test('(24) o botão "Registrar execução" só aparece em DECIDIDA+PENDENTE — e some sem `executar_encaminhamento`', async () => {
+    ncDoBanco = [NC_ABERTA, NC_DECIDIDA, NC_A_EXECUTAR, NC_EXECUTADA];
+    await renderizar();
+    expect(linhas()).toHaveLength(4);
+    // A positiva: a pendente tem o botão.
+    expect(linhas()[2].textContent).toContain('NC-2026-0021');
+    expect(botaoExecutar(linhas()[2])).toBeDefined();
+    // As três negativas, cada uma por uma razão diferente na rota:
+    //   aberta -> 400 "só é possível registrar a execução de uma não conformidade decidida"
+    //   aceitação -> 400 "esta decisão não tem execução a registrar"
+    //   já executada -> 409 "a execução desta não conformidade já foi registrada"
+    // Botão com erro garantido é armadilha, não gate.
+    expect(botaoExecutar(linhas()[0])).toBeUndefined();
+    expect(botaoExecutar(linhas()[1])).toBeUndefined();
+    expect(botaoExecutar(linhas()[3])).toBeUndefined();
+
+    // Agora sem a ação. Este é o único botão desta tela que some por PERFIL — e continua falhando
+    // ABERTO, porque `pode()` devolve true enquanto as permissões não voltaram (ver o hook).
+    mockPodeExecutar = false;
+    await act(async () => { root.render(<MemoryRouter><NaoConformidadesAlmoxarifado /></MemoryRouter>); });
+    expect(linhas()).toHaveLength(4);
+    expect(botaoExecutar(linhas()[2])).toBeUndefined();
+    // A metade positiva do "some": a MESMA linha continua ali, e o botão de detalhes também —
+    // sem isto, o cenário passaria com a tabela sumida.
+    expect(linhas()[2].textContent).toContain('NC-2026-0021');
+    expect(celulaExecucao(linhas()[2]).textContent).toContain('Pendente');
+    expect([...linhas()[2].querySelectorAll('.almox-btn-icon')]
+      .find((b) => b.getAttribute('title')?.includes('Detalhes'))).toBeDefined();
+  });
+});
+
+describe('NaoConformidadesAlmoxarifado — registrar a execução', () => {
+  async function abrirExecucao() {
+    ncDoBanco = [NC_A_EXECUTAR];
+    await renderizar();
+    await clicar(botaoExecutar(linhas()[0]));
+  }
+
+  test('(25) o POST vai para `/executar` do id certo, com as observações aparadas', async () => {
+    await abrirExecucao();
+    expect(container.querySelector('.almox-modal')).not.toBeNull();
+    preencher(campoPorLabel('Observações'), '  NF de devolucao 9012, transportadora Rapido  ');
+    await clicarBotaoModal('Registrar execução');
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/nao-conformidades/21/executar', {
+      observacoes: 'NF de devolucao 9012, transportadora Rapido',
+    });
+    // A lista recarrega: sem isso a linha continuaria "Pendente" na tela até um F5.
+    expect(chamadasLista().length).toBeGreaterThanOrEqual(2);
+  });
+
+  test('(26) observação é OPCIONAL: sem texto o POST sai com corpo vazio, e sai', async () => {
+    // O contrário do modal de decisão, e de propósito: aqui se declara um FATO do mundo físico
+    // ("mandei de volta"). Exigir justificativa para registrar um fato só produziria "ok".
+    await abrirExecucao();
+    preencher(campoPorLabel('Observações'), '   ');
+    await clicarBotaoModal('Registrar execução');
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/nao-conformidades/21/executar', {});
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  test('(27) o toast repete a literal de `execucao.mensagem` — os cinco efeitos, inclusive os que NÃO movem saldo', async () => {
+    // O ponto: `SEM_SALDO` e `NENHUMA` NÃO são erro — a execução fica registrada, e a mensagem é
+    // o único lugar que diz por que o saldo não mudou. Calar neles faria "devolvi e o estoque não
+    // baixou" parecer bug silencioso, que é o furo C57 um andar acima.
+    const casos = [
+      ['BAIXADA', '8 devolvido(s) ao fornecedor'],
+      ['JA_DEVOLVIDA', 'O material desta inspeção já havia sido devolvido'],
+      ['SEM_SALDO', 'O material já havia saído do bloqueio — a execução foi registrada sem mover saldo'],
+      ['NENHUMA', 'Esta execução não altera o saldo'],
+      ['NENHUMA', 'Só a não conformidade aberta pela reprovação da inspeção devolve material'],
+    ];
+    for (const [efeito, mensagem] of casos) {
+      jest.clearAllMocks();
+      api.post.mockResolvedValueOnce({
+        data: { id: 21, execucao: { efeito, quantidade: null, material_id: null, mensagem } },
+      });
+      await abrirExecucao();
+      await clicarBotaoModal('Registrar execução');
+      expect(toast.success).toHaveBeenCalledWith(`Execução de NC-2026-0021 registrada! ${mensagem}`);
+      await act(async () => { root.unmount(); });
+      container.remove();
+      container = document.createElement('div');
+      document.body.appendChild(container);
+      root = createRoot(container);
+    }
+  });
+
+  test('(28) resposta sem o campo `execucao` não mostra `undefined` — e o toast continua saindo', async () => {
+    // Servidor anterior a esta versão, ou resposta truncada. Mesma lição do cenário (20).
+    api.post.mockResolvedValueOnce({ data: { id: 21, status: 'DECIDIDA' } });
+    await abrirExecucao();
+    await clicarBotaoModal('Registrar execução');
+    expect(toast.success).toHaveBeenCalledWith('Execução de NC-2026-0021 registrada!');
+    expect(toast.success.mock.calls.map(([m]) => m).join(' | ')).not.toContain('undefined');
+  });
+
+  test('(29) 409 do servidor vai LITERAL ao toast, e o modal continua aberto', async () => {
+    await abrirExecucao();
+    api.post.mockRejectedValueOnce({
+      response: { status: 409, data: { error: 'A execução desta não conformidade já foi registrada' } },
+    });
+    await clicarBotaoModal('Registrar execução');
+    expect(toast.error).toHaveBeenCalledWith('A execução desta não conformidade já foi registrada');
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(container.querySelector('.almox-modal')).not.toBeNull();
+  });
+
+  test('(30) 403 de perfil vira a frase traduzida — a ação nova TEM rótulo próprio', async () => {
+    // `executar_encaminhamento` entrou em ACAO_PERFIS na T2 (servidor) e deixou
+    // `permissaoErro.test.js` vermelho na suíte do CLIENT — medido no início da T4. O rótulo foi
+    // acrescentado no mesmo commit desta tela; este cenário é o que prova que ele CHEGA à tela, e
+    // não só ao mapa.
+    await abrirExecucao();
+    api.post.mockRejectedValueOnce({
+      response: {
+        status: 403,
+        data: { error: 'Sem permissão para esta operação', acao: 'executar_encaminhamento', perfil: 'ALMOXARIFE' },
+      },
+    });
+    await clicarBotaoModal('Registrar execução');
+    expect(toast.error).toHaveBeenCalledWith(
+      'Sem permissão para registrar a execução do encaminhamento — seu perfil é Almoxarife. Solicite acesso a um administrador.',
+    );
+  });
+
+  // Irmão do achado 11 da Etapa 43, no filtro novo: com a fila "Pendentes de execução" ligada, a
+  // NC recém executada deixa de casar o filtro e a linha SOME junto com o toast. Quem acabou de
+  // registrar quer VER o registro com o próprio nome — é a razão de o documento existir.
+  test('(31) executar com a fila ligada NÃO esconde a linha — a recarga larga o `execucao=PENDENTE`', async () => {
+    // O mock respeita os filtros, como o serviço faz. Sem isto o cenário provaria NADA: a lista
+    // voltaria igual com ou sem `execucao` na query, e a sabotagem ficaria verde.
+    ncDoBanco = [NC_A_EXECUTAR];
+    api.get.mockImplementation((url, config) => {
+      if (url === '/almoxarifado/nao-conformidades') {
+        const { status, execucao } = config?.params || {};
+        const itens = ncDoBanco.filter((nc) => (!status || nc.status === status)
+          && (!execucao || (nc.execucao_estado === execucao && nc.status === 'DECIDIDA')));
+        return Promise.resolve({ data: { itens } });
+      }
+      if (url === '/almoxarifado/anexos') return Promise.resolve({ data: [] });
+      return Promise.resolve({ data: [] });
+    });
+    await renderizar();
+    preencher(filtroExecucao(), 'PENDENTE');
+    await act(async () => {});
+    expect(linhas()).toHaveLength(1);
+    expect(linhas()[0].textContent).toContain('NC-2026-0021');
+
+    await clicar(botaoExecutar(linhas()[0]));
+    // O servidor gravou: a NC 21 não está mais pendente de execução.
+    ncDoBanco = ncDoBanco.map((nc) => (nc.id === 21 ? {
+      ...nc, execucao_estado: 'EXECUTADA', execucao_em: '2026-09-29 10:00:00',
+      execucao_por_nome: 'Marina Prado',
+    } : nc));
+    await clicarBotaoModal('Registrar execução');
+    await act(async () => {});
+
+    expect(api.post).toHaveBeenCalled();
+    // A metade positiva, e é ela que carrega o cenário: a recarga saiu SEM `execucao`.
+    expect(chamadasLista()[chamadasLista().length - 1][1].params)
+      .toEqual({ limite: 200, status: 'DECIDIDA' });
+    expect(filtroExecucao().value).toBe('');
+    // E o desfecho que o usuário vê: a linha continua na tela, agora executada.
+    expect(container.textContent).toContain('NC-2026-0021');
+    expect(celulaExecucao(linhas()[0]).textContent).toContain('Marina Prado');
+    expect(container.querySelector('.almox-empty')).toBeNull();
+  });
+});
+
+/**
+ * Etapa 45 — O PARÁGRAFO DO MODAL DE DECISÃO, PELA SEGUNDA VEZ ATRÁS DA REGRA.
+ *
+ * O cenário (21) existe porque a Etapa 44 corrigiu o comentário de código e deixou o texto da tela
+ * afirmando o contrário do que o sistema fazia. A Etapa 45 cria exatamente a mesma armadilha um
+ * degrau adiante: o parágrafo dizia *"devolver não cria a devolução"*, verdade até a T3 e mentira
+ * depois dela.
+ *
+ * ⚠️ E a redação NATURAL da correção — *"o material continua bloqueado até a execução"* — derruba
+ * as duas negativas do (21), que são a proteção contra o C57 voltar. Elas continuam de pé aqui, de
+ * propósito e repetidas: o texto novo tem de dizer a mesma coisa SEM essas palavras.
+ */
+describe('NaoConformidadesAlmoxarifado — o modal de decisão fala do segundo gesto', () => {
+  test('(32) o modal diz que Devolver espera o registro da execução — sem ressuscitar a frase do C57', async () => {
+    await renderizar();
+    await clicar(botaoDecidir(linhas()[0]));
+    const texto = container.querySelector('.almox-modal').textContent;
+
+    // A positiva nova: a decisão que hoje TEM segundo gesto é nomeada, e o gesto também.
+    expect(texto).toContain('Devolver ao fornecedor');
+    expect(texto).toContain('execução');
+    expect(texto).toContain('segue retido');
+
+    // O que o (21) já guardava, repetido aqui porque é a frase que este texto quase reintroduziu.
+    expect(texto).toContain('liberam o material');
+    expect(texto).toContain('não mexem no saldo');
+    expect(texto).not.toContain('continua bloqueado');
+    expect(texto).not.toContain('ajustar_estoque');
+    // E a afirmação que virou mentira na T3 não pode sobreviver em lugar nenhum da tela.
+    expect(texto).not.toContain('não cria a devolução');
+  });
+
+  test('(33) o modal de execução muda o texto conforme a decisão — só DEVOLVER move saldo', async () => {
+    ncDoBanco = [NC_A_EXECUTAR, { ...NC_A_EXECUTAR, id: 23, numero: 'NC-2026-0023', decisao: 'SUCATEAR' }];
+    await renderizar();
+
+    await clicar(botaoExecutar(linhas()[0]));
+    const devolver = container.querySelector('.almox-modal').textContent;
+    expect(devolver).toContain('Registrar execução de NC-2026-0021');
+    expect(devolver).toContain('Devolver ao fornecedor');
+    expect(devolver).toContain('dá a baixa no estoque');
+    await clicarBotaoModal('Cancelar');
+
+    // E o sucateamento: mesmo botão, texto OPOSTO. Dizer a mesma frase nos dois faria "registrei a
+    // execução do sucateamento" parecer que o estoque baixou.
+    await clicar(botaoExecutar(linhas()[1]));
+    const sucatear = container.querySelector('.almox-modal').textContent;
+    expect(sucatear).toContain('Registrar execução de NC-2026-0023');
+    expect(sucatear).toContain('não movimenta estoque');
+    expect(sucatear).not.toContain('dá a baixa no estoque');
   });
 });

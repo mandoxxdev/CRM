@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  FiAlertOctagon, FiAlertTriangle, FiCheckSquare, FiChevronDown, FiChevronUp, FiRefreshCw,
+  FiAlertOctagon, FiAlertTriangle, FiCheckSquare, FiChevronDown, FiChevronUp, FiRefreshCw, FiTruck,
 } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import api from '../../services/api';
@@ -56,9 +56,28 @@ import './Almoxarifado.css';
  *   **ISTO DEIXOU DE VALER PELA METADE, e fica corrigido à vista em vez de apagado.** Desde a
  *   Etapa 44, decidir **Aceitar** ou **Aceitar sob desvio** numa NC de inspeção **libera** o
  *   material que a reprovação havia bloqueado — e o toast de sucesso passa a dizer quanto saiu do
- *   bloqueio. `DEVOLVER`, `SUBSTITUICAO`, `ANALISE_ENGENHARIA` e `SUCATEAR` continuam só marcando
- *   intenção, e o toast diz isso também (*"Esta decisão não altera o saldo"*), porque um silêncio
- *   ali faria as duas coisas parecerem iguais — que foi o furo C57.
+ *   bloqueio. ~~`DEVOLVER`, `SUBSTITUICAO`, `ANALISE_ENGENHARIA` e `SUCATEAR` continuam só
+ *   marcando intenção~~ — **e desde a Etapa 45 `DEVOLVER` também deixou de ser só intenção,
+ *   por um SEGUNDO gesto.**
+ *
+ * ── Etapa 45, T4 — O ESTADO DE EXECUÇÃO NA TELA ─────────────────────────────────────────────
+ *
+ * Decidir `DEVOLVER` é dizer o que se vai fazer; o material só sai do prédio quando alguém de
+ * Compras embala e chama a transportadora — outro dia, outra pessoa, outro gate
+ * (`executar_encaminhamento`, que inclui COMPRAS e NÃO inclui quem decide). Por isso a tela ganha
+ * TRÊS coisas, e nenhuma delas é enfeite:
+ *
+ * 1. **Coluna Execução.** Sem ela, uma NC decidida `DEVOLVER` há três semanas e uma decidida hoje
+ *    são a mesma linha — e a pergunta que o módulo existe para responder ("o material já voltou
+ *    ao fornecedor?") não tem resposta na tela.
+ * 2. **Filtro "Pendentes de execução"** (`?execucao=PENDENTE`), que é a FILA de Compras. O
+ *    servidor soma `AND status = 'DECIDIDA'` a este filtro, então escolher a fila também põe o
+ *    status em "Decididas" — ver `trocarExecucao` abaixo, e a razão medida ali.
+ * 3. **Botão "Registrar execução"**, só onde ele pode dar certo (DECIDIDA + PENDENTE), e o toast
+ *    repete a literal que o servidor manda em `execucao.mensagem` — mesmo padrão de `liberacao`
+ *    da Etapa 44, e pela mesma razão: a régua de quando a baixa acontece (RN-06, série, lote,
+ *    saldo) mora no servidor, e uma segunda cópia dela aqui mentiria sobre o saldo no dia em que
+ *    as duas divergissem.
  */
 
 const ROTA = '/almoxarifado/nao-conformidades';
@@ -78,6 +97,16 @@ const ORIGEM_FILTROS = [
   { valor: '', rotulo: 'Todas as origens' },
   { valor: 'RECEBIMENTO', rotulo: 'Recebimento' },
   { valor: 'INSPECAO', rotulo: 'Inspeção' },
+];
+
+// Etapa 45 — a fila do que falta executar. Os três valores são os de `execucao_estado`
+// (`nonConformityService.js:100-102`); o servidor filtra por igualdade e soma `AND status =
+// 'DECIDIDA'` sozinho, então qualquer um deles só faz sentido sobre NC decidida.
+const EXECUCAO_FILTROS = [
+  { valor: '', rotulo: 'Qualquer execução' },
+  { valor: 'PENDENTE', rotulo: 'Pendentes de execução' },
+  { valor: 'EXECUTADA', rotulo: 'Já executadas' },
+  { valor: 'NAO_SE_APLICA', rotulo: 'Sem execução a registrar' },
 ];
 
 // Os seis do enum `NC_DECISOES` (nonConformityService.js:45). Os três do meio são os
@@ -105,6 +134,16 @@ const ROTULO_TIPO = {
 };
 
 const ROTULO_STATUS = { ABERTA: 'Aberta', DECIDIDA: 'Decidida', CANCELADA: 'Cancelada' };
+
+// `NAO_SE_APLICA` é o estado das duas decisões de ACEITAÇÃO: elas já se executaram no mesmo
+// clique da decisão (Etapa 44), então não há ato externo a confirmar. Dizer "Não se aplica" é
+// diferente de deixar a célula vazia — vazio é a NC que ainda não foi decidida, e confundir as
+// duas faria a fila de Compras parecer maior do que é.
+const ROTULO_EXECUCAO = {
+  PENDENTE: 'Pendente',
+  EXECUTADA: 'Executada',
+  NAO_SE_APLICA: 'Não se aplica',
+};
 
 // Timestamps do SQLite chegam em UTC sem sufixo ("YYYY-MM-DD HH:MM:SS") — sem o 'Z' o V8 leria
 // como hora local e a NC decidida às 22h apareceria no dia seguinte. Mesmo ajuste de
@@ -167,12 +206,16 @@ const NaoConformidadesAlmoxarifado = () => {
   const [erro, setErro] = useState(null);
   const [statusFiltro, setStatusFiltro] = useState('ABERTA');
   const [origemFiltro, setOrigemFiltro] = useState('');
+  const [execucaoFiltro, setExecucaoFiltro] = useState('');
   const [recarga, setRecarga] = useState(0);
   const [expandida, setExpandida] = useState(null);
 
   const [decisaoTarget, setDecisaoTarget] = useState(null);
   const [decisaoForm, setDecisaoForm] = useState(FORM_DECISAO_VAZIO);
   const [salvando, setSalvando] = useState(false);
+
+  const [execucaoTarget, setExecucaoTarget] = useState(null);
+  const [execucaoObs, setExecucaoObs] = useState('');
 
   const carregar = useCallback(async () => {
     setLoading(true);
@@ -182,6 +225,7 @@ const NaoConformidadesAlmoxarifado = () => {
       const params = { limite: LIMITE_LISTA };
       if (statusFiltro) params.status = statusFiltro;
       if (origemFiltro) params.origem = origemFiltro;
+      if (execucaoFiltro) params.execucao = execucaoFiltro;
       const res = await api.get(ROTA, { params });
       setItens(res.data?.itens || []);
     } catch (err) {
@@ -199,7 +243,7 @@ const NaoConformidadesAlmoxarifado = () => {
     } finally {
       setLoading(false);
     }
-  }, [statusFiltro, origemFiltro]);
+  }, [statusFiltro, origemFiltro, execucaoFiltro]);
 
   useEffect(() => { carregar(); }, [carregar, recarga]);
 
@@ -262,6 +306,77 @@ const NaoConformidadesAlmoxarifado = () => {
     }
   };
 
+  /**
+   * Etapa 45 — POR QUE OS DOIS FILTROS SE SINCRONIZAM, e por que isso não é esperteza de UI.
+   *
+   * `?execucao=<estado>` NÃO é um filtro independente no servidor: ele vem com
+   * `AND nc.status = 'DECIDIDA'` grudado (`nonConformityService.js:1146`), porque execução de
+   * documento ABERTO ou CANCELADO não existe. Com o status padrão da tela ("Abertas"), pedir a
+   * fila de execução produziria `status='ABERTA' AND status='DECIDIDA'` — **lista vazia sempre**,
+   * e o usuário leria "não há nada pendente de execução" quando a verdade é que a pergunta era
+   * impossível. É o mesmo modo de falha da regra 2 do cabeçalho (a tela AFIRMANDO ausência que
+   * ela não mediu), entrando pela porta do filtro.
+   *
+   * Então: escolher um estado de execução põe o status em "Decididas" (que é o recorte real que
+   * o servidor vai aplicar de qualquer forma — a tela só passa a DIZER isso), e escolher um
+   * status que não seja "Decididas" larga o filtro de execução, em vez de deixar a combinação
+   * impossível de pé. Decisão reversível e registrada na letra B: o descartado era deixar os dois
+   * selects independentes e explicar a lista vazia com um aviso.
+   */
+  const trocarStatus = (valor) => {
+    setExpandida(null);
+    setStatusFiltro(valor);
+    if (valor !== 'DECIDIDA' && execucaoFiltro) setExecucaoFiltro('');
+  };
+
+  const trocarExecucao = (valor) => {
+    setExpandida(null);
+    setExecucaoFiltro(valor);
+    if (valor && statusFiltro !== 'DECIDIDA') setStatusFiltro('DECIDIDA');
+  };
+
+  const abrirExecucao = (nc) => {
+    setExecucaoTarget(nc);
+    setExecucaoObs('');
+  };
+
+  /**
+   * O SEGUNDO GESTO. Não há campo obrigatório aqui de propósito: quem clica está declarando um
+   * FATO do mundo físico ("mandei de volta"), e exigir justificativa para registrar um fato
+   * empurraria a pessoa a digitar "ok" — o oposto do que a justificativa da DECISÃO serve.
+   * `observacoes` vai só quando tem conteúdo; o servidor usa o próprio texto como justificativa
+   * da movimentação quando ele existe, e monta uma frase com o número da NC quando não existe.
+   */
+  const submeterExecucao = async () => {
+    setSalvando(true);
+    try {
+      const obs = execucaoObs.trim();
+      const resp = await api.post(`${ROTA}/${execucaoTarget.id}/executar`, obs ? { observacoes: obs } : {});
+      // Mesma regra da decisão (Etapa 44): a literal do que aconteceu com o saldo vem PRONTA do
+      // servidor. Aqui ela pesa mais ainda, porque os desfechos sem baixa não são erro — a
+      // execução FICA registrada e a mensagem é o único lugar que diz por que o saldo não mudou
+      // ("O material já havia saído do bloqueio…", "Material inativo…"). O `?.` protege resposta
+      // de servidor anterior a esta versão: concatenar `undefined` seria pior que não avisar.
+      const mensagemSaldo = resp?.data?.execucao?.mensagem;
+      toast.success(`Execução de ${execucaoTarget.numero} registrada!${mensagemSaldo ? ` ${mensagemSaldo}` : ''}`);
+      setExecucaoTarget(null);
+      // Irmão do achado 11 da Etapa 43: com a fila "Pendentes de execução" ligada, a NC que
+      // acabou de ser executada deixa de casar o filtro e a linha SOME junto com o toast — quem
+      // acabou de registrar quer VER o registro com o próprio nome. A tela larga a fila e mostra
+      // as decididas; o filtro de origem fica onde estava, porque ele não esconde o que se fez.
+      if (execucaoFiltro === 'PENDENTE') setExecucaoFiltro('');
+      setRecarga((n) => n + 1);
+    } catch (err) {
+      toast.error(
+        formatarErroPermissao(err.response?.data)
+        || err.response?.data?.error
+        || 'Erro ao registrar a execução',
+      );
+    } finally {
+      setSalvando(false);
+    }
+  };
+
   const lista = itens || [];
   const abertas = lista.filter((nc) => nc.status === 'ABERTA').length;
 
@@ -287,7 +402,7 @@ const NaoConformidadesAlmoxarifado = () => {
           className="almox-select"
           aria-label="Filtrar por status"
           value={statusFiltro}
-          onChange={(e) => { setExpandida(null); setStatusFiltro(e.target.value); }}
+          onChange={(e) => trocarStatus(e.target.value)}
         >
           {STATUS_FILTROS.map((s) => <option key={s.valor || 'todos'} value={s.valor}>{s.rotulo}</option>)}
         </select>
@@ -305,6 +420,16 @@ const NaoConformidadesAlmoxarifado = () => {
         >
           {ORIGEM_FILTROS.map((o) => <option key={o.valor || 'todas'} value={o.valor}>{o.rotulo}</option>)}
         </select>
+        {/* Etapa 45: a FILA de Compras. Ver `trocarExecucao` para o porquê de ele mexer no
+            status — sem essa sincronia o combo padrão devolveria lista vazia sempre. */}
+        <select
+          className="almox-select"
+          aria-label="Filtrar por execução"
+          value={execucaoFiltro}
+          onChange={(e) => trocarExecucao(e.target.value)}
+        >
+          {EXECUCAO_FILTROS.map((x) => <option key={x.valor || 'qualquer'} value={x.valor}>{x.rotulo}</option>)}
+        </select>
         {!loading && !erro && (
           <span style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>
             {lista.length} documento{lista.length !== 1 ? 's' : ''}
@@ -316,7 +441,7 @@ const NaoConformidadesAlmoxarifado = () => {
       {erro ? (
         <PainelErroCarga mensagem={erro} onTentarNovamente={() => setRecarga((n) => n + 1)} />
       ) : loading || itens === null ? (
-        <div className="almox-table-container"><SkeletonTable rows={6} columns={7} /></div>
+        <div className="almox-table-container"><SkeletonTable rows={6} columns={9} /></div>
       ) : lista.length === 0 ? (
         <div className="almox-table-container">
           <div className="almox-empty">
@@ -339,6 +464,7 @@ const NaoConformidadesAlmoxarifado = () => {
                 <th>O fato</th>
                 <th>Status</th>
                 <th>Decisão</th>
+                <th>Execução</th>
                 <th>Ações</th>
               </tr>
             </thead>
@@ -391,6 +517,24 @@ const NaoConformidadesAlmoxarifado = () => {
                           </div>
                         ) : '—'}
                       </td>
+                      {/* Etapa 45 — a coluna que responde "o material já voltou ao fornecedor?".
+                          Os três estados são distintos NA TELA, e o vazio é um quarto: NC ainda
+                          não decidida não tem execução a mostrar, e igualar vazio a "pendente"
+                          inflaria a fila de Compras com documento que ninguém decidiu ainda. */}
+                      <td style={{ fontSize: '0.8rem' }}>
+                        {nc.execucao_estado === 'EXECUTADA' ? (
+                          <>
+                            <div style={{ fontWeight: 700 }}>{ROTULO_EXECUCAO.EXECUTADA}</div>
+                            <div style={{ color: 'var(--gmp-text-light)' }}>
+                              {nc.execucao_por_nome || '—'} · {formatDataHora(nc.execucao_em)}
+                            </div>
+                          </>
+                        ) : nc.execucao_estado === 'PENDENTE' ? (
+                          <span className="almox-badge almox-badge-nc-aberta">{ROTULO_EXECUCAO.PENDENTE}</span>
+                        ) : nc.execucao_estado === 'NAO_SE_APLICA' ? (
+                          <span style={{ color: 'var(--gmp-text-light)' }}>{ROTULO_EXECUCAO.NAO_SE_APLICA}</span>
+                        ) : '—'}
+                      </td>
                       <td>
                         <div className="almox-actions">
                           {/* Só para NC ABERTA: decidir de novo é 409 (RN-06), e botão que
@@ -409,6 +553,29 @@ const NaoConformidadesAlmoxarifado = () => {
                               <FiCheckSquare />
                             </button>
                           )}
+                          {/* Etapa 45 — o SEGUNDO gesto, e ele aparece onde pode dar certo: a
+                              rota recusa (400/409) execução de NC não decidida, de decisão de
+                              aceitação e de execução já registrada, e botão com erro garantido é
+                              armadilha (mesmo critério do botão de decidir acima).
+
+                              ⚠️ Aqui o gate de PERFIL ESCONDE, ao contrário do botão de decidir —
+                              e continua falhando ABERTO, porque `pode()` devolve `true` quando a
+                              carga de `minhas-permissoes` falhou ou ainda não voltou (ver o hook).
+                              A razão de esconder: `executar_encaminhamento` é a única ação desta
+                              tela cuja plateia (COMPRAS) é DIFERENTE de quem decide (QUALIDADE),
+                              então o botão visível para a Qualidade seria um convite permanente a
+                              um 403 que não é engano dela. Quem manda continua sendo o backend. */}
+                          {nc.status === 'DECIDIDA' && nc.execucao_estado === 'PENDENTE'
+                            && pode('executar_encaminhamento') && (
+                            <button
+                              type="button"
+                              className="almox-btn-icon"
+                              title="Registrar execução do encaminhamento"
+                              onClick={() => abrirExecucao(nc)}
+                            >
+                              <FiTruck />
+                            </button>
+                          )}
                           <button
                             type="button"
                             className="almox-btn-icon"
@@ -423,7 +590,7 @@ const NaoConformidadesAlmoxarifado = () => {
                     </tr>
                     {aberto && (
                       <tr data-testid={`nc-detalhe-${nc.id}`}>
-                        <td colSpan={8}>
+                        <td colSpan={9}>
                           <div style={{ padding: '4px 2px 10px' }}>
                             <p style={{ margin: '0 0 8px', fontSize: '0.85rem' }}>
                               <strong>Descrição:</strong> {nc.descricao || '—'}
@@ -505,12 +672,21 @@ const NaoConformidadesAlmoxarifado = () => {
 
                 Lição que fica escrita aqui: comentário de código corrigido não corrige a tela.
                 O cenário `(21)` de `NaoConformidadesAlmoxarifado.test.js` prende esta frase.
+
+                ⚠️ ETAPA 45, E É A SEGUNDA VEZ QUE ESTE PARÁGRAFO FICA PARA TRÁS DA REGRA. Ele
+                dizia "devolver não cria a devolução" — verdade até a T3 desta etapa, e mentira
+                depois dela: `Devolver ao fornecedor` agora baixa o material, no gesto seguinte,
+                por quem tem `executar_encaminhamento`. Corrigido aqui, no mesmo commit da tela,
+                e o cenário (26) prende a frase nova sem largar as duas negativas do (21).
               */}
               <p style={{ fontSize: '0.78rem', color: 'var(--gmp-text-light)', marginTop: 0 }}>
                 <strong>Aceitar</strong> e <strong>Aceitar sob desvio</strong> liberam o material
-                que esta inspeção deixou bloqueado. As outras quatro decisões registram a intenção
-                e <strong>não mexem no saldo</strong> — devolver não cria a devolução e sucatear
-                não baixa estoque. O aviso ao confirmar diz o que aconteceu.
+                que esta inspeção deixou bloqueado, agora. As outras quatro decisões
+                <strong> não mexem no saldo</strong> neste clique: <strong>Devolver ao
+                fornecedor</strong> passa a esperar o registro da execução (coluna
+                <em> Execução</em>), e é ele que baixa o material — até lá ele segue retido.
+                Substituição, Análise da Engenharia e Sucatear registram só a intenção. O aviso ao
+                confirmar diz o que aconteceu.
               </p>
               <div className="almox-field">
                 <label className="almox-label">Decisão<span className="required">*</span></label>
@@ -544,6 +720,73 @@ const NaoConformidadesAlmoxarifado = () => {
               <button className="btn-almox-secondary" onClick={() => setDecisaoTarget(null)}>Cancelar</button>
               <button className="btn-almox-primary" disabled={salvando} onClick={submeterDecisao}>
                 {salvando ? 'Salvando...' : 'Registrar decisão'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/*
+        Etapa 45 — o modal do SEGUNDO gesto. Separado do de decisão de propósito, e não uma aba
+        dele: são dois atos, de duas pessoas, em dois dias, com dois gates. Juntá-los num
+        formulário só convidaria a "decidir e marcar como executado" no mesmo clique — que é
+        exatamente a confusão entre intenção e fato que a etapa existe para desfazer.
+      */}
+      {execucaoTarget && (
+        <div className="almox-modal-overlay" onClick={() => { if (!salvando) setExecucaoTarget(null); }}>
+          <div className="almox-modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
+            <div className="almox-modal-header">
+              <h2>Registrar execução de {execucaoTarget.numero}</h2>
+              <button className="almox-modal-close" onClick={() => setExecucaoTarget(null)}>✕</button>
+            </div>
+            <div className="almox-modal-body">
+              <p style={{ marginTop: 0 }}>
+                <strong>{execucaoTarget.material_nome || 'Material não identificado'}</strong>
+                {execucaoTarget.material_codigo ? ` (${execucaoTarget.material_codigo})` : ''}
+                {' — decisão: '}
+                {ROTULO_DECISAO[execucaoTarget.decisao] || execucaoTarget.decisao}
+              </p>
+              {/*
+                O texto muda com a DECISÃO porque o efeito muda: só `DEVOLVER` move saldo (RN-03).
+                Dizer a mesma frase nos dois casos faria "registrei a execução do sucateamento"
+                parecer que o estoque baixou — o mesmo silêncio do furo C57, um andar acima.
+                Quanto/se o saldo se move, quem diz é o servidor, no toast.
+              */}
+              <p style={{ fontSize: '0.78rem', color: 'var(--gmp-text-light)', marginTop: 0 }}>
+                {execucaoTarget.decisao === 'DEVOLVER' ? (
+                  <>
+                    Confirme que o material <strong>saiu de fato</strong> para o fornecedor. É este
+                    registro que dá a baixa no estoque — antes dele o material segue retido. O
+                    aviso ao confirmar diz quanto saiu, ou por que não saiu.
+                  </>
+                ) : (
+                  <>
+                    Esta decisão <strong>não movimenta estoque</strong>: o registro guarda a data,
+                    o autor e a observação de que o encaminhamento foi cumprido.
+                  </>
+                )}
+              </p>
+              <div className="almox-field">
+                <label className="almox-label">Observações</label>
+                <textarea
+                  className="almox-input"
+                  rows={3}
+                  value={execucaoObs}
+                  placeholder="Opcional — nº da nota de devolução, transportadora, quem recebeu do outro lado."
+                  onChange={(e) => setExecucaoObs(e.target.value)}
+                />
+              </div>
+              {!pode('executar_encaminhamento') && (
+                <p style={{ fontSize: '0.78rem', color: 'var(--gmp-warning)', margin: 0 }}>
+                  {formatarErroPermissao({ acao: 'executar_encaminhamento', perfil })
+                    || 'Seu perfil provavelmente não pode registrar a execução.'}
+                </p>
+              )}
+            </div>
+            <div className="almox-modal-footer">
+              <button className="btn-almox-secondary" onClick={() => setExecucaoTarget(null)}>Cancelar</button>
+              <button className="btn-almox-primary" disabled={salvando} onClick={submeterExecucao}>
+                {salvando ? 'Salvando...' : 'Registrar execução'}
               </button>
             </div>
           </div>

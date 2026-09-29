@@ -58,6 +58,14 @@ const ACOES = {
   // conformidade" cru, sem acento, e o usuario nao saberia que ABRIR ele ainda pode.
   registrar_nao_conformidade: 'registrar não conformidade',
   decidir_nao_conformidade: 'decidir não conformidade',
+  // Etapa 45, T4: a SÉTIMA vez que este buraco aparece. `executar_encaminhamento` entrou em
+  // ACAO_PERFIS na T2 (commit de SERVIDOR) e deixou `permissaoErro.test.js:52` VERMELHO na suíte
+  // do CLIENT — medido no início desta task, antes de qualquer edição: `semRotulo` veio
+  // `["executar_encaminhamento"]`. A guarda da Etapa 30 fez o serviço dela; quem atrasou foi o
+  // rótulo. O 403 desta ação é o que QUALIDADE e ALMOXARIFE veem ao tentar registrar a execução
+  // de uma devolução — ela é de COMPRAS (e de ADMINISTRADOR), e é justamente a plateia diferente
+  // de `decidir_nao_conformidade` que faz esta ação existir.
+  executar_encaminhamento: 'registrar a execução do encaminhamento',
 
   // Etapa 30, fix-round da revisao adversarial: QUATRO acoes de ACAO_PERFIS nao tinham rotulo, e
   // tres delas ja tinham call site de UI — o toast mostrava a chave crua ("gerenciar plano
