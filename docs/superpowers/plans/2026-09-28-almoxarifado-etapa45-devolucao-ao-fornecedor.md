@@ -103,7 +103,7 @@ senão a compensação dupla passa verde) · material de cliente não vira "cons
    resolver e calcular → claim da inspeção → motor → rollback do claim se o motor falhar.
 6. Rótulo `NC_EXECUTADA` em `auditLabels.js` — sem ele `auditLabels.api.test.js` **derruba a suíte**.
 
-### ✅ T2 — feita (`__T2_HASH__`)
+### ✅ T2 — feita (`f8ab433`)
 
 `encaminhamentoExecucao.api.test.js`, **19 cenários, 19/19**. Suítes: `test:api` **210/210
 arquivos** · almoxarifado **42/0** · validation **4/0** · safealter **3/0** · sqlite **5/0**.
@@ -206,7 +206,7 @@ declarado, fixado por teste).
 ## Estado
 
 - [x] T1 — tronco (motor) — `a425559`
-- [x] T2 — tronco (estado de execução) — `__T2_HASH__`
+- [x] T2 — tronco (estado de execução) — `f8ab433`
 - [ ] T3 / T4 / T5 — galhos
 - [ ] T6 — integração
 - [ ] Fase 5 — revisão adversarial
