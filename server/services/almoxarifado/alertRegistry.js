@@ -109,11 +109,45 @@ function maisVelhoQueDias(dataStr, dias) {
  * MATERIAL_REPROVADO (RN-03): inspecoes com `quantidade_reprovada > 0`. Janela por
  * `data_inspecao` (DATETIME UTC do SQLite — comparacao de string com datetime('now') e
  * consistente).
+ *
+ * ── Etapa 45 (T5): `excluirComExecucao` e OPT-IN, pelo MESMO motivo medido da irma abaixo ────
+ * Esta funcao e DUAL-MODE, e o modo `{ inspecaoId }` NAO e a populacao do cartao: e o GANCHO DO
+ * ATO — `inspectionService.js:341` o chama logo depois de gravar a decisao da inspecao para
+ * montar a linha do e-mail que sai na hora. Excluir "inspecao ja devolvida" por DENTRO desta
+ * funcao calaria aquele gancho, e essa forma errada ja foi MEDIDA na Etapa 43 em
+ * `listarDivergenciasRecebimento` (o cabecalho dela conta o cenario A1 que morre). Por isso o
+ * terceiro modo e opt-in e QUEM O LIGA e so o `listar` da entrada do alerta.
+ *
+ * A REGUA EXIGE AS DUAS CONDICOES, e nenhuma das duas sobra:
+ *   · `decisao = 'DEVOLVER'` — executar uma `SUBSTITUICAO`, um `SUCATEAR` ou uma
+ *     `ANALISE_ENGENHARIA` e registrar um ato que NAO devolveu nada ao fornecedor. So
+ *     `execucao_estado` na regua faria qualquer execucao calar o aviso do material reprovado.
+ *   · `execucao_estado = 'EXECUTADA'` — decidir DEVOLVER e INTENCAO (a NC nasce `PENDENTE`, T2).
+ *     So a `decisao` na regua esconderia a caixa que AINDA ESTA no galpao, que e exatamente o
+ *     que o cartao existe para mostrar.
+ *
+ * ⚠️ O que esta flag NAO e: ela nao e "tirar da fila de pendencia". O cartao tem janela de 7 dias
+ * (`alerta_eventos_janela_dias`) e a inspecao sai dele sozinha passados os 7 dias, executada ou
+ * nao — a fila do que falta executar e `GET /nao-conformidades?execucao=PENDENTE` (T3). O e-mail
+ * tambem nao esta em jogo: `dedupeChave: reprovado-<inspecao_id>` ja saiu no instante da
+ * reprovacao, 1x para sempre. O que a flag faz e so nao cobrar na central o que ja foi feito.
+ *
+ * Literais em vez de `nonConformityService.DECISAO_QUE_DEVOLVE`/`EXECUCAO_EXECUTADA`: mesma
+ * escolha (e mesmo motivo — nenhum require de servico neste SQL) de
+ * `listarNaoConformidadesParadas` com o seu `'ABERTA'`. A copia e guardada contra deriva pelo
+ * cenario (1) de `alertaReprovadoExecutado.api.test.js`, que le as duas constantes do servico.
+ * `status` fica FORA da regua: hoje o unico escritor de `CANCELADA` cancela NC `ABERTA`
+ * (`nonConformityService.js:477`), entao uma NC EXECUTADA nunca e cancelada — e se um dia for,
+ * o material ja saiu do galpao do mesmo jeito.
  */
-async function listarReprovados(db, { dias, inspecaoId } = {}) {
+async function listarReprovados(db, { dias, inspecaoId, excluirComExecucao } = {}) {
   const filtro = inspecaoId
     ? 'AND i.id = ?'
     : `AND i.data_inspecao >= datetime('now', '-' || ? || ' days')`;
+  const semExecucao = excluirComExecucao ? `AND NOT EXISTS (
+      SELECT 1 FROM nao_conformidades_almoxarifado nc
+      WHERE nc.referencia_tipo = 'INSPECAO' AND nc.referencia_id = i.id
+        AND nc.decisao = 'DEVOLVER' AND nc.execucao_estado = 'EXECUTADA')` : '';
   return dbAll(db, `
     SELECT i.id AS inspecao_id, m.codigo AS material_codigo, m.nome AS material_nome,
       i.quantidade_reprovada, i.encaminhamento, r.numero AS recebimento_numero, r.nota_fiscal,
@@ -124,6 +158,7 @@ async function listarReprovados(db, { dias, inspecaoId } = {}) {
     JOIN materiais_almoxarifado m ON m.id = ri.material_id
     WHERE i.quantidade_reprovada > 0
       ${filtro}
+      ${semExecucao}
     ORDER BY i.data_inspecao DESC, i.id DESC`, [inspecaoId ?? dias]);
 }
 
@@ -446,7 +481,22 @@ const ALERT_REGISTRY = Object.freeze([
     descricao: 'Inspeções de recebimento com quantidade reprovada na janela configurada.',
     evento: true,
     configDias: { chave: 'alerta_eventos_janela_dias', default: 7 },
-    listar: (db, { dias }) => listarReprovados(db, { dias }),
+    // Etapa 45 (T5): `excluirComExecucao` LIGADO — e so aqui. O cartao mostra "material reprovado
+    // nos ultimos 7 dias"; a inspecao cuja devolucao JA FOI EXECUTADA (NC decidida `DEVOLVER` e
+    // com `execucao_estado = 'EXECUTADA'`, T2) nao tem mais nada a cobrar de ninguem, e continuar
+    // listando o que ja foi feito e o jeito mais rapido de ensinar o usuario a ignorar o cartao.
+    //
+    // ⚠️ A exclusao mora NESTA LINHA e nao dentro de `listarReprovados` — o motivo medido (o
+    // gancho do ato da inspecao) esta no cabecalho daquela funcao, junto com a razao de a regua
+    // exigir as DUAS condicoes.
+    //
+    // CONSEQUENCIA DECLARADA (RN-01: o `listar` e UM so para a central e para a varredura
+    // diaria): a rede de seguranca da varredura tambem deixa de enfileirar a inspecao devolvida.
+    // O caso perdido e estreito e conhecido — o gancho do ato explodiu e virou `console.warn`, E
+    // a devolucao foi executada dentro dos mesmos 7 dias. DESCARTADO: dois `listar` (um para a
+    // central, outro para a varredura) — seriam duas definicoes da mesma condicao, a classe de
+    // bug que este arquivo inteiro existe para nao ter.
+    listar: (db, { dias }) => listarReprovados(db, { dias, excluirComExecucao: true }),
     // Decisao de inspecao e imutavel — 1 aviso por inspecao, para sempre.
     dedupeChave: (linha) => `reprovado-${linha.inspecao_id}`,
     payload: (linha) => ({ inspecao_id: linha.inspecao_id }),
