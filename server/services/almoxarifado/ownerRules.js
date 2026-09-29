@@ -65,9 +65,19 @@ const { registrarAuditoria } = require('./audit');
  *    ausencia ser LIDA, nao presumida. A guarda de verdade para material de cliente e a outra,
  *    TIPOS_AJUSTE_DONO abaixo — AJUSTE_INVENTARIO esta la tambem.
  */
+/*
+ *  - DEVOLUCAO_FORNECEDOR (Etapa 45): ISENTO, e a decisao e DELIBERADA, nao omissao — o aviso em
+ *    maiusculas logo abaixo existe justamente para ninguem cair fora desta lista por acidente.
+ *    A guarda de dono existe para impedir que material de um cliente seja APLICADO no trabalho de
+ *    outro (ou da GMP). Devolver ao fornecedor nao aplica material em trabalho nenhum: manda de
+ *    volta, para quem entregou, o que a inspecao reprovou. E o mesmo raciocinio de
+ *    DEVOLUCAO_CLIENTE, que abre esta lista — as duas mandam o material de volta para a origem
+ *    dele. Exigir OS/projeto aqui travaria a devolucao de uma chapa de cliente que chegou errada,
+ *    que e exatamente o caso em que devolver e mais urgente.
+ */
 const TIPOS_ISENTOS_DONO = ['DEVOLUCAO_CLIENTE', 'TRANSFERENCIA', 'AJUSTE', 'AJUSTE_POSITIVO',
   'AJUSTE_NEGATIVO', 'REMESSA_TERCEIRO', 'RETORNO_TERCEIRO', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO',
-  'RETORNO_TRANSFORMACAO', 'ENTRADA_RETALHO', 'AJUSTE_INVENTARIO'];
+  'RETORNO_TRANSFORMACAO', 'ENTRADA_RETALHO', 'AJUSTE_INVENTARIO', 'DEVOLUCAO_FORNECEDOR'];
 
 /**
  * Tipos de saida que a guarda cobre. Espelha o `tiposSaida` do stockService menos os isentos.

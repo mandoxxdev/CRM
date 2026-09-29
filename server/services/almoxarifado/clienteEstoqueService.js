@@ -40,6 +40,27 @@ const movementTypes = require('./movementTypes');
  * galvanizador e material que o cliente nao recebe de volta: ele tem de ver isso.
  */
 const TIPOS_ENTRADA = movementTypes.TIPOS_ENTRADA;
+/*
+ * Etapa 45: `DEVOLUCAO_FORNECEDOR` FICA nesta conta — e eu tinha decidido o contrario, com a
+ * decisao escrita no plano da etapa. Dois testes desta base a derrubaram, e eles estavam certos.
+ *
+ * O raciocinio que eu tinha: devolver ao fornecedor nao e consumo, e rotula-lo como consumo diz ao
+ * cliente que a GMP consumiu a chapa dele — leitura ruim numa tela cuja unica funcao e prestar
+ * contas de material de terceiro. Continua verdade, e mesmo assim a conclusao estava errada.
+ *
+ * Por que: o comentario logo acima ja tinha resolvido este caso para PERDA_TERCEIRO/CONSUMO_TERCEIRO
+ * — "eles nao tem coluna propria, entao deixa-los de fora nao os separa: os torna INVISIVEIS, com o
+ * saldo caindo sem contrapartida em lugar nenhum da tela". Perda no galvanizador tambem nao e
+ * consumo da GMP, e esta aqui pela mesma razao. Tirar `DEVOLUCAO_FORNECEDOR` quebrava a equacao
+ * `recebido - consumido - devolvido = saldo` (teste [EQUACAO]) e sumia com o material da tela.
+ *
+ * E a coluna `devolvido` NAO serve: ela e a devolucao AO DONO, e o cliente RECEBE o material de
+ * volta. Devolver ao fornecedor e material que o cliente NAO recebe de volta — do ponto de vista
+ * da prestacao de contas, o mesmo grupo de perda no terceiro.
+ *
+ * Rotulo impreciso e visivel vale mais que rotulo exato e invisivel. O conserto limpo e uma coluna
+ * PROPRIA na tela de posicao por cliente, que e escopo de outra etapa — registrado na letra B.
+ */
 const TIPOS_CONSUMO = movementTypes.TIPOS_SAIDA.filter((t) => t !== 'DEVOLUCAO_CLIENTE');
 
 const listaSql = (arr) => arr.map(() => '?').join(',');

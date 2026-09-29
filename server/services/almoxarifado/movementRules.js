@@ -27,6 +27,10 @@ const REGRAS_VINCULO = {
   // bloqueio avulso, o desbloqueio e a reprovacao de inspecao.
   BLOQUEIO: { vinculo: 'nenhum', justificativa: true },
   DESBLOQUEIO: { vinculo: 'nenhum', justificativa: true },
+  // Etapa 45: exige justificativa como todo movimento que tira material do galpao sem ser consumo
+  // — o "por que" e o unico registro de qual defeito mandou a peca de volta. `vinculo: 'nenhum'`
+  // porque o vinculo dela e o DOCUMENTO (a NC, em `documento_vinculado`), nao OS nem projeto.
+  DEVOLUCAO_FORNECEDOR: { vinculo: 'nenhum', justificativa: true },
   REPROVACAO_INSPECAO: { vinculo: 'nenhum', justificativa: true },
   DECISAO_INSPECAO: { vinculo: 'nenhum', justificativa: true },
 

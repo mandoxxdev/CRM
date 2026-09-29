@@ -247,6 +247,7 @@ const GRUPOS_ACAO = congelarGrupos([
   { rotulo: 'Sucata', verbos: ['SUCATA'] },
   { rotulo: 'Perda', verbos: ['PERDA'] },
   { rotulo: 'Devolução ao cliente', verbos: ['DEVOLUCAO_CLIENTE'] },
+  { rotulo: 'Devolução ao fornecedor', verbos: ['DEVOLUCAO_FORNECEDOR'] },
   { rotulo: 'Perda em terceiro', verbos: ['PERDA_TERCEIRO'] },
   { rotulo: 'Consumo em terceiro', verbos: ['CONSUMO_TERCEIRO'] },
 ]);

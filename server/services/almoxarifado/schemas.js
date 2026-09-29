@@ -76,6 +76,7 @@ const CAMINHO_TIPO_DEDICADO = {
   CONSUMO_TERCEIRO: 'consumo em poder de terceiro é registrado na transformação ou no encerramento da remessa, em Remessas a Terceiros',
   RETORNO_TRANSFORMACAO: 'o retorno transformado é registrado pela transformação da remessa, em Remessas a Terceiros',
   AJUSTE_INVENTARIO: 'a tela de Inventário (conclua uma conferência com ajustes aplicados)',
+  DEVOLUCAO_FORNECEDOR: 'a devolução ao fornecedor é registrada no documento que a decidiu — use Almoxarifado → Não Conformidades e registre a execução',
 };
 
 const MSG_TIPO_NAO_PERMITIDO_GENERICA = 'tipo de movimentação não permitido nesta rota '

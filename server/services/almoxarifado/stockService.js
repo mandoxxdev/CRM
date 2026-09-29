@@ -597,6 +597,17 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
   // coluna de retencao, atomicamente, no claim mais abaixo.
   const baixandoTerceiro = ['PERDA_TERCEIRO', 'CONSUMO_TERCEIRO'].includes(tipo);
 
+  // Etapa 45 — MESMO papel de `baixandoTerceiro`, com a outra coluna de retencao. A quantidade que
+  // `DEVOLUCAO_FORNECEDOR` baixa esta em `quantidade_bloqueada` (a inspecao reprovou e reteve), e
+  // o disponivel a subtrai — sem esta flag, devolver material 100% bloqueado seria impossivel
+  // (disponivel = 0), e a guarda explicita de material bloqueado o recusaria de qualquer forma.
+  // A validacao real acontece contra a propria coluna, atomicamente, no claim mais abaixo.
+  //
+  // ⚠️ A flag desliga DUAS guardas, e por isso o tipo TEM de ser DEDICADO (`TIPOS_DEDICADOS`, em
+  // schema.js): sem aquilo, a rota generica `/movimentacoes/v2` aceitaria o tipo e qualquer um com
+  // o gate `movimentar` apagaria material bloqueado sem documento nenhum.
+  const baixandoBloqueado = tipo === 'DEVOLUCAO_FORNECEDOR';
+
   // ── Lote (Etapa 6) ──────────────────────────────────────────────────────────
   // Aceita `lote_id` (numero) ou `lote` (codigo). O ledger guarda os DOIS: `lote_id` para juntar
   // e `lote` com o codigo congelado, porque movimentacao e imutavel e precisa continuar legivel
@@ -769,7 +780,13 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
       // Etapa 8b: PERDA_TERCEIRO/CONSUMO_TERCEIRO tambem sao descarte — lote vencido perdido no
       // galvanizador tem de poder ser baixado, pelo mesmo motivo do resto da lista (senao o lote
       // fica PRESO: nao pode sair como consumo, e tambem nao pode ser encerrado).
-      const tiposDescarte = ['SUCATA', 'PERDA', 'AJUSTE_NEGATIVO', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO'];
+      // Etapa 45: DEVOLUCAO_FORNECEDOR entra pelo MESMO motivo, e o caso e mais comum que os
+      // outros — lote vencido e uma das razoes tipicas de devolver ao fornecedor. Sem ele o lote
+      // ficaria PRESO: nao sai para consumo por estar vencido, e nao pode voltar para quem o
+      // entregou. ⚠️ A guarda de STATUS do lote continua valendo (ela roda antes desta): lote
+      // REPROVADO nao sai nem por aqui, e isso e deliberado — reabilitar o lote e outro gesto.
+      const tiposDescarte = ['SUCATA', 'PERDA', 'AJUSTE_NEGATIVO', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO',
+        'DEVOLUCAO_FORNECEDOR'];
       if (!tiposDescarte.includes(tipo) && lotService.isVencido(loteResolvido) && !lotService.vencimentoLiberado(loteResolvido)) {
         throw Object.assign(
           new Error(`Lote ${loteResolvido.codigo} vencido em ${loteResolvido.data_validade} nao pode sair para consumo. `
@@ -787,13 +804,16 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     // quantidade_em_terceiros, que o disponivel subtrai. Sem esta excecao, encerrar uma remessa
     // que levou TODO o saldo do material seria impossivel (disponivel = 0). A validacao real
     // acontece contra a propria coluna, atomicamente, no claim mais abaixo.
-    if (!consumindoReserva && !baixandoTerceiro) {
+    if (!consumindoReserva && !baixandoTerceiro && !baixandoBloqueado) {
       const disponivel = await getSaldoDisponivel(material);
       if (disponivel < quantidade && !permiteNegativo) {
         throw Object.assign(new Error(`Saldo insuficiente. Disponível: ${disponivel} ${material.unidade}`), { status: 400 });
       }
     }
-    if ((material.quantidade_bloqueada || 0) > 0 && tiposSaida.includes(tipo)) {
+    // Etapa 45: `baixandoBloqueado` sai daqui pela razao OPOSTA a de todos os outros tipos — ele
+    // existe para tirar do bloqueado, e esta guarda existe para impedir que o bloqueado seja usado.
+    // Aplicada a ele, ela proibiria exatamente a operacao que ele e.
+    if (!baixandoBloqueado && (material.quantidade_bloqueada || 0) > 0 && tiposSaida.includes(tipo)) {
       const dispSemBloqueio = material.quantidade_atual - (material.quantidade_bloqueada || 0);
       if (quantidade > dispSemBloqueio && !permiteNegativo) {
         throw Object.assign(new Error('Material bloqueado não pode ser utilizado'), { status: 400 });
@@ -1006,6 +1026,21 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
             quantidade_em_terceiros = COALESCE(quantidade_em_terceiros,0) + ?,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ?`, [quantidade, quantidade, material_id]);
+    } else if (baixandoBloqueado) {
+      // Etapa 45 — espelho do bloco acima. Devolve os DOIS efeitos do claim: compensar so o fisico
+      // deixaria o material de volta no galpao e FORA do bloqueio, ou seja, disponivel para sair —
+      // material reprovado virando utilizavel por causa de uma falha no ledger.
+      //
+      // ⚠️ E POR ISSO `retencaoAplicada` NAO E USADO NESTE TIPO, embora ele mexa em coluna de
+      // retencao: aquele mecanismo serve aos ramos que aplicam a retencao FORA do `try` (BLOQUEIO,
+      // QUARENTENA e os de inspecao). Aqui a retencao e baixada DENTRO do claim, junto do fisico,
+      // e quem a devolve e este ramo. Usar os dois compensaria EM DOBRO — a revisao do plano da 45
+      // pegou isso antes de virar codigo: `bloqueada` voltaria a 6 para uma reprovacao de 3.
+      await dbRun(db, `UPDATE materiais_almoxarifado
+        SET quantidade_atual = quantidade_atual + ?,
+            quantidade_bloqueada = COALESCE(quantidade_bloqueada,0) + ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?`, [quantidade, quantidade, material_id]);
     } else {
       await dbRun(db, `UPDATE materiais_almoxarifado
         SET quantidade_atual = quantidade_atual + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
@@ -1104,6 +1139,30 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
             { status: 400 });
         }
         saldoPosterior = rowT.quantidade_atual;
+        saidaFisicoAplicado = true;
+      } else if (baixandoBloqueado) {
+        // Etapa 45 — molde EXATO do bloco acima, com `quantidade_bloqueada` no lugar. As duas
+        // guardas no proprio WHERE, e pelas mesmas duas razoes: nao devolver mais do que a
+        // inspecao reteve, e nao negativar o fisico. `permiteNegativo` NAO se aplica aqui de
+        // proposito — o que esta bloqueado e quantidade conhecida e finita, e "devolvi 40 de uma
+        // reprovacao de 3" e erro de digitacao, nao operacao com saldo negativo.
+        //
+        // ⚠️ E a mensagem diz os DOIS numeros. Com so um deles, o operador nao sabe qual das duas
+        // condicoes falhou — e `bloqueada > atual` e estado alcancavel neste modulo.
+        const rowB = await dbGet(db, `UPDATE materiais_almoxarifado
+          SET quantidade_atual = quantidade_atual - ?,
+              quantidade_bloqueada = COALESCE(quantidade_bloqueada,0) - ?,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = ? AND COALESCE(quantidade_bloqueada,0) >= ? AND quantidade_atual >= ?
+          RETURNING quantidade_atual`,
+          [quantidade, quantidade, material_id, quantidade, quantidade]);
+        if (!rowB) {
+          throw Object.assign(
+            new Error(`Devolução acima do que está bloqueado: há ${material.quantidade_bloqueada || 0} `
+              + `${material.unidade} bloqueado(s) (físico: ${material.quantidade_atual})`),
+            { status: 400 });
+        }
+        saldoPosterior = rowB.quantidade_atual;
         saidaFisicoAplicado = true;
       } else {
       const row = await dbGet(db, `UPDATE materiais_almoxarifado
@@ -1509,6 +1568,19 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
   //
   // A recusa casa pelo MOTIVO, e não por `documento_vinculado LIKE 'NC-%'`: o número é dado de
   // usuário em outros tipos de movimento, e o motivo é escrito por um único ponto do código.
+  // Etapa 45: a devolução ao fornecedor herda a razão da recusa acima, e a herda mais forte.
+  // Estorná-la traria o material de volta ao galpão com o documento dizendo "devolvido" — e **sem
+  // saída**, porque a execução não se registra duas vezes (claim em `execucao_em` e no carimbo da
+  // inspeção). O material voltaria bloqueado, sem ninguém para decidir de novo o que fazer com ele.
+  //
+  // Casa por **tipo**, e não por motivo como a recusa acima: `DEVOLUCAO_FORNECEDOR` é DEDICADO —
+  // só nasce do documento —, então o tipo já é a régua exata. A recusa da liberação teve de casar
+  // por motivo justamente porque `DESBLOQUEIO` é público e nasce também do bloqueio avulso.
+  if (mov.tipo === 'DEVOLUCAO_FORNECEDOR') {
+    throw Object.assign(
+      new Error('Devolução ao fornecedor não pode ser estornada pelo livro — o material voltaria bloqueado com o documento dizendo que foi devolvido'),
+      { status: 400 });
+  }
   if (mov.tipo === 'DESBLOQUEIO' && mov.motivo === MOTIVO_LIBERACAO_NC) {
     throw Object.assign(
       new Error('Liberação por não conformidade não pode ser estornada pelo livro — o documento continuaria dizendo "aceito" com o material bloqueado'),

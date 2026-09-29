@@ -61,6 +61,17 @@ const TIPOS_MOVIMENTO = [
   // Passa pelo motor de proposito: assim lote, serie e endereco funcionam, que e justamente o
   // que a ilha de materiais de cliente nao dava.
   'DEVOLUCAO_CLIENTE',
+  // Etapa 45: a IRMA de DEVOLUCAO_CLIENTE, e vale ler as duas juntas. Devolver ao FORNECEDOR
+  // tambem e SAIDA — o material reprovado sai do predio de volta para quem o entregou. A
+  // diferenca entre as duas e de onde o material sai:
+  //   - DEVOLUCAO_CLIENTE tira do DISPONIVEL (o material do cliente estava utilizavel);
+  //   - DEVOLUCAO_FORNECEDOR tira do BLOQUEADO (a inspecao o reprovou e ele esta retido), e por
+  //     isso baixa `quantidade_atual` E `quantidade_bloqueada` no MESMO UPDATE — molde de
+  //     PERDA_TERCEIRO, pela mesma razao.
+  // E as DUAS sao direcao OPOSTA a devolucao da Etapa 7 (tela /almoxarifado/devolucoes, tipo
+  // ENTRADA_DEVOLUCAO), onde o material VOLTA para o estoque. Agora sao TRES nomes parecidos com
+  // duas direcoes; o aviso que ja estava aqui vale em dobro.
+  'DEVOLUCAO_FORNECEDOR',
   // Etapa 5 — quarentena. Simetria de BLOQUEIO/DESBLOQUEIO: mexem em coluna de retencao
   // sem tocar o fisico, porque o material esta no galpao o tempo todo.
   'QUARENTENA', 'LIBERACAO_INSPECAO', 'REPROVACAO_INSPECAO',
@@ -206,8 +217,25 @@ const TIPOS_RETENCAO = [
 //     bastaria mandar {tipo:'AJUSTE_INVENTARIO'} para gravar um ajuste "homologado por
 //     conferencia" sem conferencia nenhuma por tras — a exigencia de que o valor venha de uma
 //     contagem revisada ficaria decorativa.
+/*
+ * Etapa 45 — `DEVOLUCAO_FORNECEDOR`. ⚠️ ESTA ENTRADA E A GUARDA INTEIRA, e isso nao e obvio:
+ * `TIPOS_MOVIMENTO_ROTA` (schemas.js:58) e DERIVADA por filter — TIPOS_MOVIMENTO menos ESTORNO,
+ * menos TIPOS_RETENCAO, menos ESTA lista. Nao existe lista de permitidos a editar: o default e
+ * ABERTO, e esquecer de entrar aqui entrega o tipo na rota generica.
+ *
+ * O que estaria aberto sem ela: `DEVOLUCAO_FORNECEDOR` desliga as DUAS guardas de saida (a do
+ * disponivel e a de "material bloqueado nao pode ser utilizado"), porque o que ele baixa esta
+ * justamente no bloqueado. Um ALMOXARIFE — gate `movimentar`, o mais amplo do modulo — mandaria
+ * `{tipo:'DEVOLUCAO_FORNECEDOR'}` na v2 e apagaria material bloqueado sem documento nenhum.
+ *
+ * A revisao do plano previu exatamente este erro ("o modo de falhar e esquecer de optar por
+ * fora"), e ele aconteceu mesmo assim na primeira escrita — o tipo foi parar duas vezes em
+ * TIPOS_MOVIMENTO e nenhuma aqui. Quem pegou foi o cenario (5) de
+ * `devolucaoFornecedorMotor.api.test.js`, que manda o tipo pela v2 e exige a recusa.
+ */
 const TIPOS_DEDICADOS = ['DEVOLUCAO_CLIENTE', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO',
-  'RETORNO_TRANSFORMACAO', 'ENTRADA_RETALHO', 'SUCATA', 'AJUSTE_INVENTARIO'];
+  'RETORNO_TRANSFORMACAO', 'ENTRADA_RETALHO', 'SUCATA', 'AJUSTE_INVENTARIO',
+  'DEVOLUCAO_FORNECEDOR'];
 
 /**
  * Classificacao da linha de resultado de uma TRANSFORMACAO (Etapa 8c, decisao 8 do design).
