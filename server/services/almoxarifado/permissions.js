@@ -205,6 +205,28 @@ const ACAO_PERFIS = {
   // Object.keys(ACAO_PERFIS) — e e o que permite a tela da T5 esconder o botao de decidir.
   registrar_nao_conformidade: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE, PERFIS.QUALIDADE, PERFIS.COMPRAS],
   decidir_nao_conformidade: [PERFIS.ADMINISTRADOR, PERFIS.QUALIDADE],
+  // Etapa 45 — REGISTRAR QUE O ENCAMINHAMENTO FOI EXECUTADO. Acao PROPRIA, e ao contrario da
+  // Etapa 44 (onde liberar era efeito do ato ja autorizado, no mesmo gesto e no mesmo instante),
+  // aqui e OUTRO ato, outro dia, OUTRA PESSOA: quem trata com o fornecedor e o COMPRAS.
+  //
+  // ⚠️ A CONCESSAO A COMPRAS E CONDICIONADA A RN-06, E ESTA E A LINHA QUE PRECISA SER LIDA ANTES
+  // DE QUALQUER AFROUXAMENTO. COMPRAS tem `registrar_nao_conformidade` (larga de proposito: quem
+  // VE o problema abre) e fica FORA de `decidir_nao_conformidade` por conflito de interesse com o
+  // fornecedor (parágrafo acima, B169). Sem a RN-06 — "so a NC ABERTA AUTOMATICAMENTE pela
+  // reprovacao da inspecao, de origem INSPECAO, baixa saldo" —, a soma das duas acoes daria a
+  // Compras meia porta para APAGAR ESTOQUE: abrir uma NC a mao apontando para qualquer inspecao
+  // da historia (`resolverFato` so exige que ela exista) e executa-la baixaria material bloqueado
+  // por outro fato inteiramente, sem `ajustar_estoque` e sem `movimentar`. E a irma da RN-09 da
+  // Etapa 44, e AQUI ELA PESA MAIS: la a porta lateral liberava retencao; aqui apaga patrimonio.
+  //
+  // Com a RN-06 valendo, o alcance desta acao para o COMPRAS cai para exatamente o que a etapa
+  // promete: "confirmar que a devolucao que a QUALIDADE ja decidiu de fato saiu". Quem afrouxar a
+  // RN-06 esta mexendo na RAZAO desta concessao, nao so numa guarda de servico.
+  //
+  // ALMOXARIFE fica de fora: quem opera o estoque nao confirma sozinho a saida do material que a
+  // qualidade reprovou — seria o mesmo conflito de "quem recebe nao julga o proprio recebimento",
+  // do lado da baixa. Reversivel numa linha; registrado na letra B.
+  executar_encaminhamento: [PERFIS.ADMINISTRADOR, PERFIS.QUALIDADE, PERFIS.COMPRAS],
 };
 
 function getPerfilFromUser(user) {

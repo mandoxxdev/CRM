@@ -643,6 +643,63 @@ async function migrateBackfillLiberacaoNcInspecoesAntigas(db, jaExistia = false)
   }
 }
 
+const MIGRATION_BACKFILL_EXECUCAO_NC = 'backfill_execucao_estado_nc';
+
+/**
+ * Etapa 45 (RN-01) — dá `execucao_estado` às NCs que JÁ estavam decididas quando a coluna nasceu.
+ *
+ * Sem ela, toda NC decidida antes do deploy fica com `execucao_estado` NULL: some do filtro
+ * `?execucao=PENDENTE` (a fila do que falta executar) e o botão da tela não aparece — ou seja, a
+ * feature nasceria cega justamente para o acúmulo que ela existe para resolver. As decisões de
+ * aceitação viram `NAO_SE_APLICA`, porque a Etapa 44 já as executou no mesmo clique.
+ *
+ * ── ⚠️ ESTE BACKFILL É O OPOSTO DO DA ETAPA 44, E A ASSIMETRIA É DELIBERADA ──────────────────
+ * `migrateBackfillLiberacaoNcInspecoesAntigas` (acima) carimba o passado para IMPEDIR uma ação
+ * retroativa, e por isso precisou de uma barreira ESTRUTURAL além do ledger: re-executá-lo depois
+ * de uma restauração de backup atingiria inspeções RECENTES e as trancaria em silêncio, sem
+ * caminho de volta. Aqui a direção é a inversa — o backfill HABILITA um gesto, e um gesto que
+ * **ninguém executa sozinho**: alguém precisa clicar em "registrar execução", com perfil
+ * `executar_encaminhamento`, e a RN-06 ainda decide se aquilo move saldo.
+ *
+ * Por isso aqui basta o ledger, e a re-execução é inofensiva por construção: o `WHERE` exige
+ * `execucao_estado IS NULL`, então ela **nunca** toca uma NC já executada nem rebaixa um
+ * `EXECUTADA` para `PENDENTE`. Quem ler as duas migrações lado a lado e achar que uma delas está
+ * errada está lendo o efeito de cada carimbo — trancar vs. destrancar —, e são opostos mesmo.
+ */
+async function migrateBackfillExecucaoEstadoNc(db) {
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS schema_migrations_almoxarifado (
+    id TEXT PRIMARY KEY,
+    applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  const applied = await dbGet(db,
+    'SELECT 1 as ok FROM schema_migrations_almoxarifado WHERE id = ?',
+    [MIGRATION_BACKFILL_EXECUCAO_NC]);
+  if (applied) return;
+
+  const colInfo = await dbGet(db,
+    `SELECT name FROM pragma_table_info('nao_conformidades_almoxarifado') WHERE name = 'execucao_estado'`);
+  if (!colInfo) {
+    await dbRun(db, 'INSERT OR IGNORE INTO schema_migrations_almoxarifado (id) VALUES (?)',
+      [MIGRATION_BACKFILL_EXECUCAO_NC]);
+    return;
+  }
+
+  // A lista literal espelha `DECISOES_QUE_LIBERAM` de `nonConformityService.js`. Copiá-la aqui é
+  // deliberado (schema.js não importa serviço, e o ciclo seria certo); o cenário (0) de
+  // `encaminhamentoExecucao.api.test.js` compara as duas para a cópia não derivar em silêncio.
+  const result = await dbRun(db, `UPDATE nao_conformidades_almoxarifado
+    SET execucao_estado = CASE WHEN decisao IN ('ACEITAR','ACEITAR_SOB_DESVIO')
+                               THEN 'NAO_SE_APLICA' ELSE 'PENDENTE' END
+    WHERE status = 'DECIDIDA' AND decisao IS NOT NULL AND execucao_estado IS NULL`);
+
+  await dbRun(db, 'INSERT OR IGNORE INTO schema_migrations_almoxarifado (id) VALUES (?)',
+    [MIGRATION_BACKFILL_EXECUCAO_NC]);
+  if (result.changes > 0) {
+    console.log(`✅ Migração backfill_execucao_estado_nc aplicada (${result.changes} não conformidade(s) decidida(s) com estado de execução)`);
+  }
+}
+
 const MIGRATION_HISTORICO_NULLABLE = 'alertas_historico_nullable_material';
 
 async function migrateHistoricoNullableMaterial(db) {
@@ -1270,6 +1327,25 @@ async function initSchema(db) {
   await safeAlter(db, 'ALTER TABLE inspecoes_recebimento_almoxarifado ADD COLUMN liberacao_nc_em DATETIME');
   await migrateBackfillLiberacaoNcInspecoesAntigas(db, liberacaoNcJaExistia);
 
+  // Etapa 45 (RN-05) — o irmao do carimbo acima, para o outro lado da decisao: "o material
+  // reprovado por ESTA inspecao ja foi DEVOLVIDO AO FORNECEDOR". E o claim que torna a execucao
+  // idempotente NO NIVEL QUE IMPORTA.
+  //
+  // ⚠️ A trava mora na INSPECAO pela MESMA razao escrita tres paragrafos acima, e vale repetir
+  // porque a primeira versao do plano desta etapa a pos na NC e teria passado: `idx_nc_almox_aberta`
+  // e parcial E POR TIPO, entao a mesma inspecao carrega mais de uma NC. `execucao_em` na NC
+  // protege contra executar a MESMA NC duas vezes — que e protecao de documento, nao de saldo.
+  // Duas NCs da mesma inspecao (tipos diferentes) executadas como `DEVOLVER` baixariam a
+  // quantidade reprovada DUAS VEZES, e o motor nao salva: ele so recusa quando o pool esta
+  // insuficiente, e o pool e AGREGADO — com bloqueio de outra origem na mesma peca, a segunda
+  // baixa passa em silencio e apaga material que ninguem devolveu.
+  //
+  // SEM BACKFILL, e a assimetria com `liberacao_nc_em` e deliberada: la o carimbo retroativo
+  // FECHAVA uma porta de abuso (inspecao antiga virando vale-desbloqueio); aqui carimbar o
+  // passado TRANCARIA a devolucao legitima de material que ainda esta bloqueado no galpao hoje —
+  // e nada acontece sozinho, porque alguem precisa clicar em "registrar execucao".
+  await safeAlter(db, 'ALTER TABLE inspecoes_recebimento_almoxarifado ADD COLUMN devolucao_fornecedor_em DATETIME');
+
   // ── Plano de inspeção e medidas (Etapa 27, contrato C2) ──────────────────────────────────────
   //
   // Até aqui `divergencia_dimensional` (acima) era uma CAIXA QUE O INSPETOR MARCAVA. Com plano e
@@ -1432,6 +1508,32 @@ async function initSchema(db) {
   // A consulta da tela e a do alerta são as duas "abertas, mais velhas primeiro".
   await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_nc_almox_status
     ON nao_conformidades_almoxarifado(status, created_at)`);
+
+  // ── Etapa 45 (RN-01) — O ESTADO DE EXECUÇÃO DA DECISÃO ───────────────────────────────────────
+  //
+  // O requisito da feature 09 é *"acompanhar se a devolução/análise/substituição já foi
+  // executada"*, e até aqui a NC respondia só "o que se decidiu". Decidir `DEVOLVER` é intenção;
+  // a caixa continua no galpão até alguém embalar, emitir documento e chamar a transportadora.
+  //
+  // ⚠️ POR QUE SÃO DOIS GESTOS, e não um só como na Etapa 44: lá a decisão de ACEITAR executava
+  // no mesmo clique e estava certo, porque liberar é ato ADMINISTRATIVO — o material está no
+  // galpão antes e depois, só deixa de estar retido. Devolver não é: o material SAI. Baixar o
+  // estoque no instante da decisão faria o sistema afirmar uma remessa que ainda não aconteceu, e
+  // o galpão teria material que o sistema diz não existir.
+  //
+  // `execucao_estado`: `PENDENTE` (a decisão exige ato externo), `EXECUTADA`, ou `NAO_SE_APLICA`
+  // (as duas decisões de aceitação, que já se executaram na 44). NULL = NC ainda não decidida.
+  // `execucao_movimentacao_id` é o elo com o livro — INTEGER solto, no padrão do módulo.
+  const ncCols = [
+    "execucao_estado TEXT",
+    'execucao_em DATETIME',
+    'execucao_por_id INTEGER',
+    'execucao_por_nome TEXT',
+    'execucao_observacoes TEXT',
+    'execucao_movimentacao_id INTEGER',
+  ];
+  for (const col of ncCols) await safeAlter(db, `ALTER TABLE nao_conformidades_almoxarifado ADD COLUMN ${col}`);
+  await migrateBackfillExecucaoEstadoNc(db);
 
   const recebCols = [
     "tipo_recebimento TEXT DEFAULT 'NOTA_FISCAL'",
@@ -2356,6 +2458,9 @@ module.exports = {
   // Exportada para o cenario (12) da Etapa 44 poder rodar a migracao DEPOIS de criar a inspecao,
   // que e o unico jeito de simular "a inspecao ja existia no dia do deploy" num banco de teste.
   migrateBackfillLiberacaoNcInspecoesAntigas,
+  // Etapa 45: mesmo motivo — o cenario do backfill precisa roda-la DEPOIS de criar a NC decidida,
+  // que e o unico jeito de simular "a NC ja estava decidida no dia do deploy" num banco de teste.
+  migrateBackfillExecucaoEstadoNc,
   CATEGORIAS_SEED,
   FAMILIAS_SEED,
   SETORES_ALMOX_SEED,

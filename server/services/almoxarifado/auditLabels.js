@@ -185,6 +185,11 @@ const GRUPOS_ACAO = congelarGrupos([
   { rotulo: 'Não conformidade aberta', verbos: ['NC_ABERTA'] },
   { rotulo: 'Não conformidade decidida', verbos: ['NC_DECIDIDA'] },
   { rotulo: 'Não conformidade cancelada', verbos: ['NC_CANCELADA'] },
+  // Etapa 45: QUARTO grupo, e pelo mesmo critério dos três acima — é ato distinto, com autor
+  // distinto e gate próprio (`executar_encaminhamento`, que inclui COMPRAS, fora de
+  // `decidir_nao_conformidade`). Juntá-lo a "decidida" apagaria a pergunta que esta etapa existe
+  // para responder: "o que já foi de fato EXECUTADO", que é diferente de "o que foi decidido".
+  { rotulo: 'Não conformidade executada', verbos: ['NC_EXECUTADA'] },
 
   // Conferência de inventário (routes/almoxarifado.js, ternário — invisível para a varredura)
   { rotulo: 'Contagem', verbos: ['CONTAGEM'] },

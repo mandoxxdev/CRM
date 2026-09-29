@@ -84,11 +84,60 @@ const EFEITO_MSG = {
  * torna a liberacao legivel no livro sem cruzar tabela nenhuma. */
 const MOTIVO_LIBERACAO = 'Liberação por não conformidade';
 
+/**
+ * ── Etapa 45 (RN-01) — O ESTADO DE EXECUCAO DA DECISAO ──────────────────────────────────────
+ *
+ * As QUATRO decisoes que exigem ato externo. Derivada por complemento de `DECISOES_QUE_LIBERAM`,
+ * e nao escrita a mao, porque uma decisao nova em `NC_DECISOES` tem de cair num dos dois lados
+ * OBRIGATORIAMENTE — uma lista literal aqui a deixaria fora dos dois em silencio, e ela nasceria
+ * sem estado de execucao nenhum (invisivel na fila, sem botao na tela).
+ */
+const DECISOES_COM_EXECUCAO = NC_DECISOES.filter((d) => !DECISOES_QUE_LIBERAM.includes(d));
+
+/** A UNICA decisao cuja execucao move saldo (RN-03). As outras tres marcam data e autor (RN-04). */
+const DECISAO_QUE_DEVOLVE = 'DEVOLVER';
+
+const EXECUCAO_PENDENTE = 'PENDENTE';
+const EXECUCAO_EXECUTADA = 'EXECUTADA';
+const EXECUCAO_NAO_SE_APLICA = 'NAO_SE_APLICA';
+
+/** Mensagens LITERAIS de cada efeito da execucao (secao 5 do design). Congeladas: o manual as cita. */
+const EFEITO_EXEC_MSG = {
+  JA_DEVOLVIDA: 'O material desta inspeção já havia sido devolvido',
+  SEM_SALDO_BLOQUEIO: 'O material já havia saído do bloqueio — a execução foi registrada sem mover saldo',
+  SEM_SALDO_FISICO: 'Não há saldo físico deste material — a execução foi registrada sem mover saldo',
+  SEM_SALDO_INATIVO: 'Material inativo — a execução foi registrada sem mover saldo',
+  // ⚠️ ACRESCENTADA NA T2, e nao estava na tabela do design. O estado existe: a NC automatica
+  // nasce so com reprovada > 0, mas a INSPECAO pode ter sido corrigida depois (a decisao da
+  // inspecao e reescrevivel), e `getInspecao` pode nao achar nada se a linha sumir. Sem literal
+  // propria isso cairia no `NENHUMA` generico — "esta execucao nao altera o saldo" — que e
+  // verdade e nao diz NADA sobre o porque, no unico caso em que o usuario esperava a baixa.
+  SEM_SALDO_SEM_REPROVADA: 'Esta não conformidade não tem material reprovado para devolver',
+  NENHUMA: 'Esta execução não altera o saldo',
+  NENHUMA_MANUAL: 'Só a não conformidade aberta pela reprovação da inspeção devolve material',
+};
+
+/** As recusas da execucao, com o codigo HTTP de cada uma (secao 5 do design). */
+const EXEC_RECUSA = {
+  SEM_EXECUCAO: { status: 400, mensagem: 'Esta decisão não tem execução a registrar' },
+  NAO_DECIDIDA: { status: 400, mensagem: 'Só é possível registrar a execução de uma não conformidade decidida' },
+  JA_REGISTRADA: { status: 409, mensagem: 'A execução desta não conformidade já foi registrada' },
+  SERIE: { status: 400, mensagem: 'Material com controle de série não pode ser devolvido por aqui — dê baixa pela tela de Movimentações' },
+  SEM_LOTE: { status: 400, mensagem: 'Não foi possível identificar o lote do material devolvido' },
+};
+
+/** O motivo da movimentacao da devolucao — o que a torna legivel no livro sem cruzar tabela. */
+const MOTIVO_DEVOLUCAO_FORNECEDOR = 'Devolução ao fornecedor';
+
 /** Entidade da trilha, e os TRES verbos distintos da RN-09 (rotulos sao da T2). */
 const ENTIDADE_AUDITORIA = 'nao_conformidade';
 const ACAO_ABERTA = 'NC_ABERTA';
 const ACAO_DECIDIDA = 'NC_DECIDIDA';
 const ACAO_CANCELADA = 'NC_CANCELADA';
+/** Etapa 45 — verbo PROPRIO, e nao um `NC_DECIDIDA` com dados diferentes: a execucao tem outro
+ * autor, outro dia e outro gate (`executar_encaminhamento`). Sem rotulo em `auditLabels.js` a
+ * suite inteira cai, de proposito — ver o cabecalho de `auditLabels.api.test.js`. */
+const ACAO_EXECUTADA = 'NC_EXECUTADA';
 
 /**
  * Espelha `receiptService.STATUS.PROCESSADO` SEM importa-lo (ver cabecalho: ciclo).
@@ -140,7 +189,9 @@ const CAMPOS_LISTA = `nc.id, nc.numero, nc.origem, nc.referencia_tipo, nc.refere
   nc.quantidade_esperada, nc.quantidade_recebida, nc.divergencia, nc.descricao, nc.decisao,
   nc.justificativa, nc.aberto_por_id, nc.aberto_por_nome, nc.aberto_automaticamente,
   nc.decidido_por_id, nc.decidido_por_nome, nc.decidido_em, nc.motivo_cancelamento,
-  nc.cancelado_em, nc.created_at, nc.updated_at`;
+  nc.cancelado_em, nc.created_at, nc.updated_at,
+  nc.execucao_estado, nc.execucao_em, nc.execucao_por_id, nc.execucao_por_nome,
+  nc.execucao_observacoes, nc.execucao_movimentacao_id`;
 
 /**
  * O SQL NAO e polimorfico: `material_id` e `recebimento_id` foram CONGELADOS na propria NC no ato
@@ -171,9 +222,15 @@ function getItemRecebimento(db, itemId, recebimentoId = null) {
   [itemId, recebimentoId, recebimentoId]);
 }
 
+/**
+ * ⚠️ `ri.lote_id` e `ri.lote` entraram na Etapa 45 (RN-12) e NAO sao enfeite: a execucao da
+ * devolucao precisa dizer ao motor DE QUAL LOTE o material saiu. Sem eles o debito cai na linha
+ * de saldo de lote `NULL` — que fica NEGATIVA — enquanto a linha do lote devolvido continua
+ * mostrando saldo, e as duas pontas passam a discordar em silencio.
+ */
 function getInspecao(db, inspecaoId) {
   return dbGet(db, `SELECT i.*, ri.recebimento_id, ri.material_id, ri.quantidade_esperada,
-      ri.quantidade_recebida
+      ri.quantidade_recebida, ri.lote_id, ri.lote
     FROM inspecoes_recebimento_almoxarifado i
     LEFT JOIN recebimentos_material_itens_almoxarifado ri ON ri.id = i.recebimento_item_id
     WHERE i.id = ?`, [inspecaoId]);
@@ -668,11 +725,18 @@ async function decidirNaoConformidade(db, user, ncId, dados = {}) {
   // ── Passo 2: o claim da DECISAO. E o serializador, e vem ANTES de qualquer efeito de saldo ──
   // `AND status = 'ABERTA'` no UPDATE, e nao so no SELECT acima: e o claim que faz duas decisoes
   // simultaneas nao se sobrescreverem (mesmo molde do claim de `decidirInspecao`).
+  // Etapa 45 (RN-01): o estado de execucao nasce JUNTO com a decisao, no MESMO claim. Fazer disso
+  // um `UPDATE` separado abriria uma janela em que a NC esta DECIDIDA e `execucao_estado` e NULL —
+  // e NULL some do filtro `?execucao=PENDENTE`, que e a fila do que falta executar. Documento
+  // decidido invisivel na fila e exatamente o que esta etapa veio consertar.
+  const execucaoEstado = DECISOES_QUE_LIBERAM.includes(dados.decisao)
+    ? EXECUCAO_NAO_SE_APLICA : EXECUCAO_PENDENTE;
   const upd = await dbRun(db, `UPDATE nao_conformidades_almoxarifado SET
     status = 'DECIDIDA', decisao = ?, justificativa = ?, decidido_por_id = ?, decidido_por_nome = ?,
-    decidido_em = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+    decidido_em = CURRENT_TIMESTAMP, execucao_estado = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ? AND status = 'ABERTA'`,
-    [dados.decisao, justificativa, user?.id || null, user?.nome || user?.email || null, id]);
+    [dados.decisao, justificativa, user?.id || null, user?.nome || user?.email || null,
+      execucaoEstado, id]);
   if (!upd.changes) throw erro('Esta não conformidade já foi encerrada', 409);
 
   let liberacao = previsto;
@@ -743,9 +807,12 @@ async function executarLiberacao(db, user, nc, insp, previsto, justificativa, id
     // afirmando "aceito" com o material preso e pior que decisao nao registrada, porque e mudo.
     await dbRun(db, `UPDATE inspecoes_recebimento_almoxarifado SET liberacao_nc_em = NULL
       WHERE id = ? AND liberacao_nc_em IS NOT NULL`, [insp.id]);
+    // `execucao_estado = NULL` entra no rollback da Etapa 45: a NC volta a ABERTA e um estado de
+    // execucao sobrevivente a deixaria na fila de "pendente de execucao" sem decisao nenhuma.
     await dbRun(db, `UPDATE nao_conformidades_almoxarifado SET
       status = 'ABERTA', decisao = NULL, justificativa = NULL, decidido_por_id = NULL,
-      decidido_por_nome = NULL, decidido_em = NULL, updated_at = CURRENT_TIMESTAMP
+      decidido_por_nome = NULL, decidido_em = NULL, execucao_estado = NULL,
+      updated_at = CURRENT_TIMESTAMP
       WHERE id = ? AND status = 'DECIDIDA'`, [id]);
     throw e;
   }
@@ -755,6 +822,292 @@ async function executarLiberacao(db, user, nc, insp, previsto, justificativa, id
     quantidade: previsto.quantidade,
     material_id: previsto.material_id,
     mensagem: `${previsto.quantidade} liberado(s) do bloqueio`,
+  };
+}
+
+/**
+ * Etapa 45 (RN-12) — DE QUAL LOTE o material devolvido sai.
+ *
+ * O lote vive no ITEM DO RECEBIMENTO (`lote_id` numerico desde a Etapa 6; `lote` e o codigo
+ * digitado na conferencia, que pode existir sem o id em recebimento antigo). Resolver aqui, e nao
+ * deixar o motor adivinhar, e o que impede o debito de cair na linha de saldo de lote `NULL` —
+ * ver o comentario de `getInspecao`.
+ *
+ * `null` quando nao ha lote resolvivel; quem decide se isso e recusa ou seguir em frente e a
+ * precedencia (nivel 7), porque material SEM `controle_lote` devolve normalmente sem lote nenhum.
+ */
+async function resolverLoteDaInspecao(db, insp, materialId) {
+  if (!insp || !materialId) return null;
+  const lotService = require('./lotService');
+  if (insp.lote_id) {
+    const porId = await lotService.getLote(db, insp.lote_id);
+    // O `material_id` e conferido de proposito: o item aponta para um lote, e lote de OUTRO
+    // material aqui seria dado sujo que o motor recusaria la na frente com mensagem de motor.
+    if (porId && Number(porId.material_id) === Number(materialId)) return porId;
+  }
+  if (insp.lote && String(insp.lote).trim()) {
+    const porCodigo = await lotService.getLotePorCodigo(db, materialId, String(insp.lote).trim());
+    if (porCodigo) return porCodigo;
+  }
+  return null;
+}
+
+/**
+ * Etapa 45, RN-01..RN-13 — decide, SEM ESCREVER, qual sera o efeito desta execucao no saldo.
+ *
+ * Irma de `efeitoPrevisto` (Etapa 44) e pura pela mesma razao: e a parte que da para provar sem
+ * banco. **A ORDEM DOS TESTES E O CONTRATO** — a precedencia de 10 niveis esta congelada na
+ * secao 3 do design, e sem ela mais de um caso casa duas regras com mensagens diferentes (uma NC
+ * manual decidida `SUBSTITUICAO` casa a RN-04 e a RN-06 ao mesmo tempo).
+ *
+ * Devolve `{ efeito, quantidade, material_id, lote_id, mensagem }`. Dois efeitos sao INTERNOS:
+ *   - `RECUSA` carrega `{ status, mensagem }` e quem o traduz em `throw` e o chamador — assim a
+ *     precedencia inteira, inclusive as recusas, e testavel sem subir banco nem rota;
+ *   - `DEVOLVIVEL` significa "nada impede, tente o claim"; quem o traduz em `BAIXADA` ou
+ *     `JA_DEVOLVIDA` e o claim da INSPECAO, que e o unico que sabe a resposta.
+ */
+function efeitoExecucaoPrevisto(nc, insp, material, lote) {
+  const nada = (efeito, mensagem) => ({
+    efeito, quantidade: null, material_id: null, lote_id: null, mensagem,
+  });
+  const recusa = (r) => ({ efeito: 'RECUSA', recusa: r, mensagem: r.mensagem });
+
+  // (1) RN-01 — as duas decisoes de ACEITACAO ja se executaram na Etapa 44, no mesmo clique da
+  // decisao. Nao ha ato externo a confirmar, e oferecer um botao de "registrar execucao" nelas
+  // conviteria a registrar uma execucao que nao existe.
+  if (DECISOES_QUE_LIBERAM.includes(nc.decisao)) return recusa(EXEC_RECUSA.SEM_EXECUCAO);
+
+  // (2) RN-07 — so NC DECIDIDA tem execucao. `ABERTA` (ninguem decidiu o que fazer) e `CANCELADA`
+  // (a divergencia sumiu na reconferencia) recusam.
+  if (nc.status !== 'DECIDIDA') return recusa(EXEC_RECUSA.NAO_DECIDIDA);
+
+  // (3) RN-05, nivel DOCUMENTO — 409. E a protecao do documento; a do SALDO e o claim da inspecao,
+  // la embaixo, e as duas sao necessarias por razoes diferentes (ver schema.js).
+  if (nc.execucao_em) return recusa(EXEC_RECUSA.JA_REGISTRADA);
+
+  // (4) RN-04 — `SUBSTITUICAO`, `ANALISE_ENGENHARIA` e `SUCATEAR` registram data, autor e
+  // observacao, e NAO movem estoque. Corte declarado: criar a reposicao da substituicao e baixar
+  // o sucateamento tem cada um o proprio fluxo de aprovacao.
+  if (nc.decisao !== DECISAO_QUE_DEVOLVE) return nada('NENHUMA', EFEITO_EXEC_MSG.NENHUMA);
+
+  // (5) RN-06 — ⚠️ A LINHA QUE SUSTENTA A CONCESSAO A COMPRAS. Irma da RN-09 da Etapa 44, e aqui
+  // ela pesa mais: la a porta lateral LIBERAVA retencao; aqui APAGA PATRIMONIO.
+  // `abrirNaoConformidadeManual` deixa qualquer um com `registrar_nao_conformidade` — o que inclui
+  // COMPRAS e ALMOXARIFE — abrir uma NC apontando para QUALQUER inspecao da historia
+  // (`resolverFato` so exige que ela exista). Sem esta guarda, decidir `DEVOLVER` nessa NC e
+  // executa-la baixaria material contra o pool, que e AGREGADO, sem `ajustar_estoque` e sem
+  // `movimentar` — um caminho para apagar estoque por fora do motor. Ver o comentario de
+  // `executar_encaminhamento` em permissions.js: afrouxar isto muda a razao daquela concessao.
+  if (!nc.aberto_automaticamente || nc.origem !== 'INSPECAO' || nc.referencia_tipo !== 'INSPECAO') {
+    return nada('NENHUMA', EFEITO_EXEC_MSG.NENHUMA_MANUAL);
+  }
+
+  // (6) RN-13 — material com controle de SERIE recusa, e isso e corte declarado, nao esquecimento.
+  // Baixar `quantidade_atual` sem baixar as linhas de `series_almoxarifado` quebra o invariante
+  // `COUNT(serie presente) == quantidade_atual` da Etapa 6b — e a peca devolvida ao fornecedor
+  // continuaria ENTREGAVEL pela tela de Movimentacoes, porque a serie segue "presente". Escolher
+  // QUAIS series voltam e gesto de tela, e e etapa propria.
+  if (material && material.controle_serie) return recusa(EXEC_RECUSA.SERIE);
+
+  // (7) RN-12 — `controle_lote` ligado e nenhum lote resolvivel: RECUSA, em vez de deixar o motor
+  // debitar a linha de lote `NULL`. Essa linha ficaria NEGATIVA enquanto a do lote devolvido
+  // continuaria mostrando saldo — as duas pontas discordando em silencio, que e o defeito que a
+  // Etapa 9 ja pagou uma vez.
+  if (material && material.controle_lote && !lote) return recusa(EXEC_RECUSA.SEM_LOTE);
+
+  // (8) RN-11 — OS TRES ESTADOS CONHECIDOS QUE REGISTRAM SEM MOVER. E a licao literal da RN-11 da
+  // Etapa 44, e a razao e a mesma: recusa FATAL cria documento que nunca fecha. Se o material ja
+  // saiu do bloqueio por fora (o workaround que existia antes destas duas etapas), ou o fisico nao
+  // cobre, ou o material foi inativado, a execucao fica REGISTRADA — alguem de fato embalou e
+  // mandou embora — e a tela diz POR QUE o saldo nao mudou.
+  const reprovada = Number(insp?.quantidade_reprovada) || 0;
+  const materialId = insp?.material_id || null;
+  if (!insp || !(reprovada > 0) || !materialId || !material) {
+    return nada('SEM_SALDO', EFEITO_EXEC_MSG.SEM_SALDO_SEM_REPROVADA);
+  }
+  if (!material.ativo) return nada('SEM_SALDO', EFEITO_EXEC_MSG.SEM_SALDO_INATIVO);
+  if ((Number(material.quantidade_bloqueada) || 0) < reprovada) {
+    return nada('SEM_SALDO', EFEITO_EXEC_MSG.SEM_SALDO_BLOQUEIO);
+  }
+  // ⚠️ `bloqueada > atual` E ALCANCAVEL — `stockService.js` documenta o estado. Sem este teste a
+  // baixa iria ao motor e tomaria recusa fatal, trancando o documento pelo caminho que os dois
+  // testes acima existem para evitar.
+  if ((Number(material.quantidade_atual) || 0) < reprovada) {
+    return nada('SEM_SALDO', EFEITO_EXEC_MSG.SEM_SALDO_FISICO);
+  }
+
+  // (9) e (10) sao do claim: DEVOLVIVEL so diz "nada impede".
+  return {
+    efeito: 'DEVOLVIVEL',
+    quantidade: reprovada,
+    material_id: materialId,
+    lote_id: lote ? lote.id : null,
+    mensagem: null,
+  };
+}
+
+/**
+ * RN-01..RN-13 — REGISTRAR QUE O ENCAMINHAMENTO FOI EXECUTADO.
+ *
+ * ── A ORDEM DAS OPERACOES E A MESMA DA ETAPA 44, E PELA MESMA RAZAO MEDIDA ───────────────────
+ *   1. resolver e CALCULAR o efeito, sem escrever nada
+ *   2. claim da EXECUCAO na NC  (WHERE status='DECIDIDA' AND execucao_em IS NULL) -> 409
+ *   3. claim da INSPECAO        (WHERE devolucao_fornecedor_em IS NULL) -> JA_DEVOLVIDA
+ *   4. `DEVOLUCAO_FORNECEDOR` pelo motor -> falhou = desfaz os DOIS claims e propaga
+ *   5. trilha (NAO fatal)
+ *
+ * O claim do DOCUMENTO vem antes de qualquer efeito de saldo porque e ele que serializa: a
+ * perdedora de uma corrida morre ANTES de tocar em estoque, e nenhuma compensacao precisa passar
+ * pelo motor. A Etapa 44 comecou com a ordem inversa e a Fase 2 mediu que ela produzia os dois
+ * estados que a regra existe para proibir — o raciocinio inteiro esta em `decidirNaoConformidade`
+ * e vale palavra por palavra aqui.
+ *
+ * ⚠️ E AQUI HA UMA DIFERENCA REAL EM RELACAO A 44, que e o que esta etapa existe para dizer: a
+ * baixa NAO e fatal para a DECISAO, e sim para a EXECUCAO. Se o motor falhar, a NC volta a
+ * `PENDENTE` de execucao — decidida, documentada, esperando alguem tentar de novo. Desfazer a
+ * decisao aqui seria errado: ela foi tomada outro dia, por outra pessoa, e continua valendo.
+ */
+async function registrarExecucao(db, user, ncId, dados = {}) {
+  const id = idInteiro(ncId);
+  if (!id) throw erro('Não conformidade não encontrada', 404);
+  const atual = await dbGet(db, 'SELECT * FROM nao_conformidades_almoxarifado WHERE id = ?', [id]);
+  if (!atual) throw erro('Não conformidade não encontrada', 404);
+
+  const observacoes = String(dados.observacoes ?? '').trim() || null;
+
+  // ── Passo 1: resolver e calcular, SEM ESCREVER ─────────────────────────────────────────────
+  // As leituras so acontecem no caminho que pode mover saldo; nos outros a precedencia decide
+  // sozinha, com `insp`/`material`/`lote` nulos, e e de proposito: uma NC manual NAO deve nem
+  // chegar a ler a inspecao alheia para a qual aponta.
+  let insp = null;
+  let material = null;
+  let lote = null;
+  if (atual.decisao === DECISAO_QUE_DEVOLVE && atual.status === 'DECIDIDA' && !atual.execucao_em
+      && atual.aberto_automaticamente
+      && atual.origem === 'INSPECAO' && atual.referencia_tipo === 'INSPECAO') {
+    insp = await getInspecao(db, atual.referencia_id);
+    if (insp?.material_id) {
+      material = await dbGet(db, `SELECT id, codigo, unidade, ativo, quantidade_atual,
+        quantidade_bloqueada, controle_lote, controle_serie
+        FROM materiais_almoxarifado WHERE id = ?`, [insp.material_id]);
+      lote = await resolverLoteDaInspecao(db, insp, insp.material_id);
+    }
+  }
+  const previsto = efeitoExecucaoPrevisto(atual, insp, material, lote);
+  if (previsto.efeito === 'RECUSA') throw erro(previsto.recusa.mensagem, previsto.recusa.status);
+
+  // ── Passo 2: o claim da EXECUCAO. E o serializador, e vem ANTES de qualquer efeito de saldo ──
+  // `AND execucao_em IS NULL` no proprio UPDATE, e nao so no SELECT: e o que faz duas execucoes
+  // simultaneas nao se sobrescreverem. `status = 'DECIDIDA'` entra junto porque um cancelamento
+  // concorrente entre o SELECT e este UPDATE deixaria execucao registrada em documento morto.
+  const upd = await dbRun(db, `UPDATE nao_conformidades_almoxarifado SET
+    execucao_estado = ?, execucao_em = CURRENT_TIMESTAMP, execucao_por_id = ?,
+    execucao_por_nome = ?, execucao_observacoes = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND status = 'DECIDIDA' AND execucao_em IS NULL`,
+    [EXECUCAO_EXECUTADA, user?.id || null, user?.nome || user?.email || null, observacoes, id]);
+  if (!upd.changes) throw erro(EXEC_RECUSA.JA_REGISTRADA.mensagem, EXEC_RECUSA.JA_REGISTRADA.status);
+
+  let execucao = {
+    efeito: previsto.efeito, quantidade: null, material_id: null, lote_id: null,
+    movimentacao_id: null, mensagem: previsto.mensagem,
+  };
+  if (previsto.efeito === 'DEVOLVIVEL') {
+    execucao = await executarDevolucao(db, user, atual, insp, previsto, observacoes, id);
+  }
+
+  // NAO FATAL, pela mesma inversao deliberada de `decidirNaoConformidade`: aqui ja aconteceu tudo,
+  // e um 500 depois de uma operacao que VALEU faria o usuario tentar de novo e levar 409 — ou
+  // seja, acreditar que nao valeu. O rastro do saldo nao se perde: a linha do livro carrega
+  // `documento_vinculado = NC-…`.
+  try {
+    await registrarAuditoria(db, {
+      entidade: ENTIDADE_AUDITORIA,
+      entidade_id: id,
+      acao: ACAO_EXECUTADA,
+      usuario_id: user?.id,
+      usuario_nome: user?.nome || user?.email,
+      dados_anteriores: { execucao_estado: EXECUCAO_PENDENTE },
+      dados_novos: {
+        execucao_estado: EXECUCAO_EXECUTADA,
+        decisao: atual.decisao,
+        efeito_saldo: execucao.efeito,
+        quantidade: execucao.quantidade,
+        movimentacao_id: execucao.movimentacao_id || null,
+      },
+      justificativa: observacoes,
+    });
+  } catch (e) {
+    console.warn(`[NC] execução ${id} gravada, mas a trilha falhou: ${e.message}`);
+  }
+
+  const nc = await obterNaoConformidade(db, id);
+  return { ...nc, execucao };
+}
+
+/**
+ * Passos 3 e 4 da ordem acima. NAO e ponto de entrada e nao valida nada: quem chega aqui ja passou
+ * pelo `efeitoExecucaoPrevisto` e pelo claim da NC.
+ *
+ * O rollback desfaz os DOIS claims, e nessa ordem: primeiro o da inspecao (senao uma execucao
+ * concorrente veria a NC reaberta com a inspecao ainda travada) e depois o da NC.
+ */
+async function executarDevolucao(db, user, nc, insp, previsto, observacoes, id) {
+  // Passo 3 — o claim da INSPECAO (RN-05). E por INSPECAO e nao por NC de proposito: duas NCs de
+  // TIPOS diferentes da mesma inspecao baixariam a reprovada duas vezes, e o motor nao salva
+  // porque o pool e agregado. Ver o comentario da coluna em schema.js.
+  const claim = await dbRun(db, `UPDATE inspecoes_recebimento_almoxarifado
+    SET devolucao_fornecedor_em = CURRENT_TIMESTAMP
+    WHERE id = ? AND devolucao_fornecedor_em IS NULL`, [insp.id]);
+  if (!claim.changes) {
+    return {
+      efeito: 'JA_DEVOLVIDA', quantidade: null, material_id: null, lote_id: null,
+      movimentacao_id: null, mensagem: EFEITO_EXEC_MSG.JA_DEVOLVIDA,
+    };
+  }
+
+  // Passo 4 — o motor. `require` preguicoso e chamada POR PROPRIEDADE, pelas duas razoes escritas
+  // em `executarLiberacao`: a primeira evita ciclo futuro, a segunda e o unico jeito de o teste do
+  // rollback trocar a funcao por uma que estoura.
+  const justificativa = observacoes
+    || `Execução da devolução ao fornecedor decidida na não conformidade ${nc.numero}`;
+  const stockService = require('./stockService');
+  let mov;
+  try {
+    mov = await stockService.registrarMovimentacao(db, user, {
+      material_id: previsto.material_id,
+      tipo: 'DEVOLUCAO_FORNECEDOR',
+      quantidade: previsto.quantidade,
+      lote_id: previsto.lote_id || null,
+      justificativa,
+      motivo: MOTIVO_DEVOLUCAO_FORNECEDOR,
+      documento_vinculado: nc.numero,
+      recebimento_id: nc.recebimento_id || null,
+      // `exigeLote` e a SEGUNDA tranca da RN-12; a primeira e o nivel 7 da precedencia, que ja
+      // recusou com literal propria. Redundante de proposito: o dia em que alguem chamar esta
+      // funcao por um caminho que pule a precedencia, o motor ainda recusa.
+    }, { exigeLote: true });
+  } catch (e) {
+    await dbRun(db, `UPDATE inspecoes_recebimento_almoxarifado SET devolucao_fornecedor_em = NULL
+      WHERE id = ? AND devolucao_fornecedor_em IS NOT NULL`, [insp.id]);
+    // A NC volta a PENDENTE, NAO a decisao a ABERTA — ver o aviso no docblock de
+    // `registrarExecucao`: a decisao foi de outra pessoa, outro dia, e continua valendo.
+    await dbRun(db, `UPDATE nao_conformidades_almoxarifado SET
+      execucao_estado = ?, execucao_em = NULL, execucao_por_id = NULL, execucao_por_nome = NULL,
+      execucao_observacoes = NULL, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND execucao_em IS NOT NULL`, [EXECUCAO_PENDENTE, id]);
+    throw e;
+  }
+
+  await dbRun(db, `UPDATE nao_conformidades_almoxarifado
+    SET execucao_movimentacao_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [mov.id, id]);
+
+  return {
+    efeito: 'BAIXADA',
+    quantidade: previsto.quantidade,
+    material_id: previsto.material_id,
+    lote_id: previsto.lote_id || null,
+    movimentacao_id: mov.id,
+    mensagem: `${previsto.quantidade} devolvido(s) ao fornecedor`,
   };
 }
 
@@ -813,6 +1166,8 @@ module.exports = {
   abrirNaoConformidadeDeInspecao,
   decidirNaoConformidade,
   efeitoPrevisto,
+  registrarExecucao,
+  efeitoExecucaoPrevisto,
   listarNaoConformidades,
   obterNaoConformidade,
   NC_ORIGENS,
@@ -821,8 +1176,16 @@ module.exports = {
   NC_DECISOES,
   NC_STATUS,
   DECISOES_QUE_LIBERAM,
+  DECISOES_COM_EXECUCAO,
+  DECISAO_QUE_DEVOLVE,
+  EXECUCAO_PENDENTE,
+  EXECUCAO_EXECUTADA,
+  EXECUCAO_NAO_SE_APLICA,
   EFEITO_MSG,
+  EFEITO_EXEC_MSG,
+  EXEC_RECUSA,
   MOTIVO_LIBERACAO,
+  MOTIVO_DEVOLUCAO_FORNECEDOR,
   LIMITE_PADRAO,
   LIMITE_TETO,
   STATUS_RECEBIMENTO_PROCESSADO,

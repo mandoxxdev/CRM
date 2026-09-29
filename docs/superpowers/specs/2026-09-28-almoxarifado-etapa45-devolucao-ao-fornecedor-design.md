@@ -163,6 +163,14 @@ quando não baixa — molde da Etapa 44, cujo achado 14 foi exatamente este):
 | `SEM_SALDO` | RN-11, material inativo | `"Material inativo — a execução foi registrada sem mover saldo"` |
 | `NENHUMA` | RN-04 | `"Esta execução não altera o saldo"` |
 | `NENHUMA` | RN-06 | `"Só a não conformidade aberta pela reprovação da inspeção devolve material"` |
+| `SEM_SALDO` | RN-11, **sem reprovada** | `"Esta não conformidade não tem material reprovado para devolver"` |
+
+> ⚠️ **A última linha foi ACRESCENTADA na T2, e esta tabela tinha seis.** Eu escrevi "a tabela
+> está congelada" e ela estava **incompleta**: a NC automática nasce só com `reprovada > 0`, mas a
+> **decisão da inspeção é reescrevível**, então a reprovada pode virar zero depois de o documento
+> existir. Sem literal própria esse caso caía no `NENHUMA` genérico — *"esta execução não altera o
+> saldo"* —, que é verdade e **não diz nada** justamente no único caso em que o operador esperava
+> ver a baixa acontecer. Fica à vista em vez de emendada em silêncio.
 
 Erros:
 

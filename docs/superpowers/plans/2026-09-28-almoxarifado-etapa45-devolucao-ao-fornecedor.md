@@ -103,6 +103,32 @@ senão a compensação dupla passa verde) · material de cliente não vira "cons
    resolver e calcular → claim da inspeção → motor → rollback do claim se o motor falhar.
 6. Rótulo `NC_EXECUTADA` em `auditLabels.js` — sem ele `auditLabels.api.test.js` **derruba a suíte**.
 
+### ✅ T2 — feita (`__T2_HASH__`)
+
+`encaminhamentoExecucao.api.test.js`, **19 cenários, 19/19**. Suítes: `test:api` **210/210
+arquivos** · almoxarifado **42/0** · validation **4/0** · safealter **3/0** · sqlite **5/0**.
+
+**Divergências e medições da execução:**
+
+| # | O que o plano dizia | O que a execução mediu |
+|---|---|---|
+| 1 | 7 literais na tabela de efeitos | faltava **uma**: NC automática de inspeção cuja inspeção deixou de ter reprovada (a decisão da inspeção é reescrevível). Sem literal própria isso caía no `NENHUMA` genérico — *"esta execução não altera o saldo"*, verdade que **não diz nada** no único caso em que o usuário esperava a baixa. Acrescentada como `SEM_SALDO_SEM_REPROVADA`, com a razão no código e na seção 5 do design |
+| 2 | backfill precisa de barreira como o da 44 | **não precisa, e o motivo é a direção**: o da 44 carimba para **trancar** (re-executá-lo tranca inspeção recente, em silêncio, sem volta); este carimba para **destrancar**, e o `WHERE execucao_estado IS NULL` o torna inofensivo por construção. Cenário (16) prende os dois lados — inclusive que ele **não rebaixa** uma `EXECUTADA` |
+| 3 | (nada) | o rollback do motor devolve a NC a **`PENDENTE`**, e **não** desfaz a decisão — ao contrário da 44, onde a liberação é fatal para a decisão. Aqui a decisão foi de outra pessoa, outro dia, e continua valendo. Cenário (14) prende, e prova que o estado volta **usável** (executar de novo funciona) |
+
+**Controles positivos — 8 sabotagens, e as duas primeiras caíram na asserção ERRADA:**
+
+| Sabotagem | Cai | Asserção |
+|---|---|---|
+| desligar a RN-06 (as **duas** camadas) | (6), (7) | ⚠️ primeiro caiu em `efeito === 'NENHUMA'` — a asserção de saldo **nunca rodava**. Só com a segunda sabotagem, que faz o código **mentir** (relata `NENHUMA` e roda o motor), o teste caiu em *"a NC manual mexeu no fisico"* e `7 !== 10` |
+| claim da inspeção sem `IS NULL` | (8) | ⚠️ idem — caiu em `efeito`. A versão que mente (roda o motor e relata `JA_DEVOLVIDA`) derruba em *"a segunda NC baixou o fisico de novo"*, `14 !== 17` |
+| rollback **só** do claim da inspeção | (14) | *"o claim da inspecao ficou orfao"* |
+| rollback da NC deixando `EXECUTADA` | (14) | *"a NC nao voltou para a fila"* |
+| nível 7 (lote) desligado | (12) | a mensagem vira a do motor (*"exige lote nesta movimentacao"*) — **medição**: a segunda tranca (`exigeLote`) é real, o furo é de **mensagem**, não de saldo |
+| nível 6 (série) desligado | (13) | *"devolveu material com controle de serie"* — nenhum erro é levantado |
+| backfill sem `execucao_estado IS NULL` | (16) | *"o backfill rebaixou uma execucao ja registrada"* |
+| `decidir` sempre `PENDENTE` | (1) | *"ACEITAR deveria nascer NAO_SE_APLICA"* |
+
 **Cenários:** os sete efeitos da tabela · 409 na segunda execução · 400 em NC aberta e cancelada ·
 400 na decisão de aceitação · **RN-06: NC manual e NC de origem RECEBIMENTO não baixam saldo** ·
 **RN-05: duas NCs de tipos diferentes da MESMA inspeção — a segunda não move saldo** · os três
@@ -179,8 +205,8 @@ declarado, fixado por teste).
 
 ## Estado
 
-- [ ] T1 — tronco (motor)
-- [ ] T2 — tronco (estado de execução)
+- [x] T1 — tronco (motor) — `a425559`
+- [x] T2 — tronco (estado de execução) — `__T2_HASH__`
 - [ ] T3 / T4 / T5 — galhos
 - [ ] T6 — integração
 - [ ] Fase 5 — revisão adversarial
