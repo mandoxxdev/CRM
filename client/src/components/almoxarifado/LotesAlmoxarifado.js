@@ -156,6 +156,21 @@ const LotesAlmoxarifado = () => {
     return () => { cancelado = true; };
   }, [materialId, reloadToken]);
 
+  // Etapa 50 (C71): o resumo físico × atribuído, com a MESMA guarda `cancelado` e o mesmo
+  // `reloadToken`. Falha aqui não derruba a tabela nem dispara o toast dos lotes — o bloco só some.
+  const [resumoLotes, setResumoLotes] = useState(null);
+  useEffect(() => {
+    if (!materialId) { setResumoLotes(null); return undefined; }
+    let cancelado = false;
+    // Fase 5 (M3): zera antes do GET - senao, na troca de material, o bloco mostra o valor do
+    // material ANTERIOR com a unidade do novo enquanto a resposta nao chega.
+    setResumoLotes(null);
+    api.get(`/almoxarifado/materiais/${materialId}/lotes/resumo`)
+      .then((res) => { if (!cancelado) setResumoLotes(res.data || null); })
+      .catch(() => { if (!cancelado) setResumoLotes(null); });
+    return () => { cancelado = true; };
+  }, [materialId, reloadToken]);
+
   // Mesmo molde do efeito de lotes acima, mas só dispara com a aba Séries selecionada — trocar
   // de aba (ou de material) antes da resposta chegar tem de descartá-la pela mesma guarda
   // `cancelado`, senão a resposta atrasada de uma visita anterior pinta a aba/material atual.
@@ -448,6 +463,25 @@ const LotesAlmoxarifado = () => {
           </table>
         )}
       </div>
+      )}
+
+      {/* Etapa 50 (C71): o físico e o "sem lote atribuído". FORA do ternário da tabela — o
+          material legado com controle de lote e sem lote nenhum cai em "Nenhum lote cadastrado",
+          e é justamente o que mais precisa deste bloco (Fase 2 da etapa). */}
+      {aba === 'LOTES' && materialId && resumoLotes && resumoLotes.sem_lote_atribuido !== 0 && (
+        <div data-testid="resumo-sem-lote" className="almox-hint-banner" style={{ marginTop: 12, fontSize: '0.85rem' }}>
+          <div>
+            <strong>Sem lote atribuído:</strong> {resumoLotes.sem_lote_atribuido} {materialSelecionado?.unidade || ''}
+            {' · '}
+            <strong>Físico total do material:</strong> {resumoLotes.fisico} {materialSelecionado?.unidade || ''}
+          </div>
+          <div style={{ marginTop: 4, color: 'var(--gmp-text-light)' }}>
+            O saldo de cada lote é o atribuído a ele. Saídas que não informam lote (como a entrega de
+            requisição) e o ajuste de saldo total não baixam de lote nenhum; entradas sem lote (por
+            exemplo, antes de ligar o controle de lote) também ficam fora dos lotes. Lotes + sem lote
+            atribuído = físico total.
+          </div>
+        </div>
       )}
 
       {/* Tabela — Séries (Task 10) */}

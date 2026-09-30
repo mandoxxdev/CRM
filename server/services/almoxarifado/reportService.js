@@ -4,6 +4,7 @@ const { valorEstoqueSql, custoUnitarioSql } = require('./custoSql');
 const { divergenciaRealSql } = require('./divergencia');
 const { consumoJanelaSql, consumoJanelaParams } = require('./consumoSql');
 const { TIPOS_SAIDA, TIPOS_DEVOLUCAO } = require('./movementTypes');
+const { residualSemLote } = require('./lotService');
 
 async function relatorioEstoqueAtual(db) {
   // Etapa 8, Task 1 (classe A): relatorio de posicao do estoque PROPRIO. valor_total somando
@@ -41,7 +42,7 @@ async function relatorioSaldoPorLote(db) {
     JOIN materiais_almoxarifado m ON m.id = s.material_id
     LEFT JOIN clientes cl ON cl.id = m.proprietario_cliente_id
     WHERE m.ativo = 1
-    GROUP BY l.id
+    GROUP BY s.material_id, l.id
     ORDER BY m.nome, l.codigo`);
 
   const porMaterial = new Map();
@@ -63,7 +64,8 @@ async function relatorioSaldoPorLote(db) {
     FROM materiais_almoxarifado m
     LEFT JOIN clientes cl ON cl.id = m.proprietario_cliente_id
     WHERE m.ativo = 1 AND m.controle_lote = 1 AND ABS(COALESCE(m.quantidade_atual, 0)) > ${EPS_SALDO}
-      AND NOT EXISTS (SELECT 1 FROM estoque_saldo_almoxarifado s WHERE s.material_id = m.id AND s.lote_id IS NOT NULL)
+      AND NOT EXISTS (SELECT 1 FROM estoque_saldo_almoxarifado s JOIN lotes_almoxarifado l ON l.id = s.lote_id
+                      WHERE s.material_id = m.id)
     ORDER BY m.nome`);
   for (const m of semLoteNenhum) {
     porMaterial.set(m.material_id, { base: m, soma: 0, linhas: [] });
@@ -71,7 +73,8 @@ async function relatorioSaldoPorLote(db) {
 
   const saida = [];
   for (const { base, soma, linhas } of porMaterial.values()) {
-    const semLote = (Number(base.fisico_material) || 0) - soma;
+    // Etapa 50: a conta do residuo e a da tela de Lotes (lotService.residualSemLote) - fonte unica.
+    const semLote = residualSemLote(base.fisico_material, soma);
     for (const l of linhas) {
       saida.push({
         material_codigo: l.material_codigo, material_nome: l.material_nome, cliente: l.cliente,
@@ -79,11 +82,11 @@ async function relatorioSaldoPorLote(db) {
         quantidade: l.quantidade, fisico_material: l.fisico_material,
       });
     }
-    if (Math.abs(semLote) > EPS_SALDO) {
+    if (semLote !== 0) {
       saida.push({
         material_codigo: base.material_codigo, material_nome: base.material_nome, cliente: base.cliente,
         lote: 'Sem lote atribuído', validade: null, status_lote: null,
-        quantidade: Math.round(semLote * 1e6) / 1e6, fisico_material: base.fisico_material,
+        quantidade: semLote, fisico_material: base.fisico_material,
       });
     }
   }

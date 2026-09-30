@@ -239,7 +239,48 @@ async function listarLotesDoMaterial(db, materialId, { apenasComSaldo = false } 
   return comFlags;
 }
 
+// ── Etapa 50 (C71): o físico e o "sem lote atribuído" ────────────────────────────────────────
+// O saldo de um lote é o ATRIBUÍDO a ele: os fluxos isentos de lote (entrega de requisição, ajuste
+// absoluto, internos) gravam na linha `lote_id NULL`, e o lote pode mostrar 100 com o material em 70.
+// Esta é a FONTE ÚNICA da conta do resíduo — o relatório "Saldo por lote" (Etapa 49) e a tela de
+// Lotes usam as duas funções abaixo, e por isso não podem divergir.
+const EPS_SALDO = 1e-9;
+
+/** Arredonda a 6 casas ANTES de comparar — um resíduo de 1e-8 não vira linha "0". */
+function residualSemLote(fisico, somaLotes) {
+  const r = Math.round(((Number(fisico) || 0) - (Number(somaLotes) || 0)) * 1e6) / 1e6;
+  return Math.abs(r) > EPS_SALDO ? r : 0;
+}
+
+/**
+ * Resumo de um material para a tela de Lotes: `{ fisico, soma_lotes, sem_lote_atribuido }`.
+ * O resíduo só é informado nos MESMOS materiais que o relatório mostra (Fase 2 da Etapa 50):
+ * ativo E (tem saldo em algum lote OU tem controle de lote com físico ≠ 0). Fora disso, 0 — senão
+ * material sem controle e sem lote mostraria o físico inteiro como "sem lote", e o relatório não.
+ * A soma é a do relatório: saldo com lote que EXISTE (JOIN lotes), pelo material do saldo.
+ */
+async function resumoLotesDoMaterial(db, materialId) {
+  const m = await dbGet(db, 'SELECT id, ativo, controle_lote, quantidade_atual FROM materiais_almoxarifado WHERE id = ?',
+    [materialId]);
+  if (!m) throw Object.assign(new Error('Material não encontrado'), { status: 404 });
+  const s = await dbGet(db, `SELECT COUNT(*) as n, COALESCE(SUM(s.quantidade), 0) as soma
+    FROM estoque_saldo_almoxarifado s
+    JOIN lotes_almoxarifado l ON l.id = s.lote_id
+    WHERE s.material_id = ?`, [materialId]);
+  const fisico = Number(m.quantidade_atual) || 0;
+  // Fase 5 (M2): a soma CRUA vai para o residuo, como no relatorio - arredondar antes divergia na 7a casa.
+  const somaLotes = Number(s.soma) || 0;
+  const exibe = Number(m.ativo) === 1
+    && (Number(s.n) > 0 || (Number(m.controle_lote) === 1 && Math.abs(fisico) > EPS_SALDO));
+  return {
+    fisico,
+    soma_lotes: Math.round(somaLotes * 1e6) / 1e6,
+    sem_lote_atribuido: exibe ? residualSemLote(fisico, somaLotes) : 0,
+  };
+}
+
 module.exports = {
   STATUS_LOTE, isVencido, getLote, getLotePorCodigo, criarOuObterLote, mudarStatusLote,
   vencimentoLiberado, liberarVencimento, liberarBloqueioPorCertificado, listarLotesDoMaterial,
+  EPS_SALDO, residualSemLote, resumoLotesDoMaterial,
 };

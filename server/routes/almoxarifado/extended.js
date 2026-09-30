@@ -1163,6 +1163,14 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     } catch (e) { handleError(res, e); }
   });
 
+  // Etapa 50 (C71): o fisico e o 'sem lote atribuido' do material. Rota NOVA: a /lotes continua array,
+  // porque quatro seletores de lote a consomem com com_saldo=1.
+  app.get('/api/almoxarifado/materiais/:id/lotes/resumo', auth, requirePermission('visualizar'), async (req, res) => {
+    try {
+      res.json(await lotService.resumoLotesDoMaterial(db, Number(req.params.id)));
+    } catch (e) { handleError(res, e); }
+  });
+
   app.put('/api/almoxarifado/lotes/:id/status', auth, requirePermission('inspecionar'), async (req, res) => {
     try {
       const { status, justificativa } = req.body || {};
