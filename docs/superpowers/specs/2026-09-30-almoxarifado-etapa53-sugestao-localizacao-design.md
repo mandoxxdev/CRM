@@ -46,3 +46,39 @@ surpreenderia quem já sabe o endereço (letra B).
 |---|---|---|
 | **T1** | predicado extraído + serviço + rota | **tronco** |
 | **T2** | a tela | galho contra o contrato da RN-02 (em série) |
+
+## 5. O que a Fase 2 mudou: 4 IMPORTANT, 3 MINOR (sonda `rev53-sonda.js`, pelo motor real)
+
+**A RN-04 estava ERRADA.** Ela dizia que *"a entrada sem destino continua indo para a padrão, como hoje"*. O motor
+valida o destino **resolvido**: se a padrão está **bloqueada** ou **não aceita o tipo** do material, a entrada sem
+destino é **recusada**. A sugestão omitiria a padrão em silêncio, e o operador, com o destino em "—", tomaria 400.
+**Corrigido:**
+- a resposta passa a ser `{ padrao: { localizacao_id, codigo, recusa }, sugestoes: [...] }`;
+- a tela avisa: *"A localização padrão <código> não recebe este material (<motivo>) — escolha um destino."*
+
+**A regra de endereço vale para os DOIS papéis.** Um predicado só de destino deixaria no motor uma segunda cópia do
+teste de bloqueio para a origem. A extração vira `motivoRecusaEndereco(loc, material, papel)`, e o motor a chama nos dois papéis,
+**com as mesmas literais**.
+
+**Contêiner não é "vaga".** `listarLocalizacoesVazias` inclui o pai sem saldo direto. Um pai com os filhos **vazios** seria
+proposto como prateleira livre. Em `VAZIA_COMPATIVEL` fica excluído quem tem filho **ativo**.
+
+**A invariante "toda sugestão é aceita pelo motor" é FRACA sozinha.** O motor aceita localização inativa, inexistente e pai,
+então o teste passaria com qualquer uma delas, e também com a lista vazia. **Corrigido no plano:** o teste afirma
+que a lista **não está vazia**, e há cenários negativos explícitos (inativa, pai, almoxarifado inativo), com controle
+positivo que estraga o filtro.
+
+**Declarados:**
+- **Almoxarifado inativo:** fica fora da sugestão.
+- **Material inativo:** 400 `Material inativo não recebe entrada`, porque o motor recusa entrada dele. Medir a literal real antes de escrever.
+- **Tela:**
+  - as sugestões são zeradas quando o material muda;
+  - o destino preenchido **por sugestão** é limpo quando o material muda; o destino escolhido à mão, não;
+  - os GETs usam a guarda `cancelado`.
+
+**🔴 Defeito do MOTOR achado pela sonda, fora desta etapa — letra C, e é a próxima etapa.**
+- Entrada em localização **inativa** é aceita, e grava saldo que o mapa não mostra, porque o mapa filtra `ativo = 1`. Isso fura a regra da 52: ela barra desativar uma localização ocupada, mas o motor ocupa uma que já está inativa.
+- Entrada em destino **inexistente** (id 999999) é aceita e grava saldo órfão.
+
+Pôr `ativo` no predicado extraído mudaria o comportamento do motor, e esta etapa promete "mesmas literais". A recusa
+no motor fica para uma etapa própria.
