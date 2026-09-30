@@ -89,6 +89,10 @@ const lerValorOrigem = (valor) => {
   return { localizacao_origem_id, lote_id: lote ? Number(lote) : null };
 };
 
+// Etapa 59: a origem planejada na separação só vale enquanto há separado ainda não entregue.
+const temPlanejada = (item) => !!item.origem_separacao_id && getSeparado(item) > getEntregue(item);
+const valorPlanejada = (item) => `${item.origem_separacao_id}:${item.lote_separacao_id ?? ''}`;
+
 const formatMoeda = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 const RequisicoesList = () => {
@@ -153,6 +157,9 @@ const RequisicoesList = () => {
   const [origensEntrega, setOrigensEntrega] = useState({});
   const [saldosEntrega, setSaldosEntrega] = useState({});
   const saldosEntregaSeqRef = useRef(0);
+  const [saldosEntregaFalhos, setSaldosEntregaFalhos] = useState({});
+  // Etapa 59 (RN-05): de onde o item sai na separação ({ [itemId]: valor "loc:lote" }).
+  const [origensSeparacao, setOrigensSeparacao] = useState({});
   const [quantidadesSeparacao, setQuantidadesSeparacao] = useState({});
   const [entregaAposSeparar, setEntregaAposSeparar] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -235,29 +242,59 @@ const RequisicoesList = () => {
   // Etapa 58 (RN-05): ao abrir o modal de entrega, busca onde cada material está. A chave é a lista
   // de materiais entregáveis — fechar o modal zera a chave, então reabrir busca de novo e a sequência
   // descarta a resposta atrasada da abertura anterior. Falha da busca = só "Qualquer endereço".
-  const materiaisEntregaKey = showEntregar && detalhe
-    ? [...new Set((detalhe.itens || [])
-      .filter((i) => maxQtdEntrega(i) > 0)
-      .map((i) => i.material_id)
-      .filter(Boolean))].join(',')
-    : '';
+  // Etapa 59 (RN-05): o modal de separação usa a mesma busca e as mesmas opções. A chave leva o
+  // modal ("E:"/"S:") para que passar da separação para a entrega busque de novo e zere as escolhas.
+  const materiaisDoModal = (filtro) => [...new Set((detalhe?.itens || [])
+    .filter(filtro)
+    .map((i) => i.material_id)
+    .filter(Boolean))].join(',');
+  let materiaisEntregaKey = '';
+  if (showEntregar && detalhe) materiaisEntregaKey = `E:${materiaisDoModal((i) => maxQtdEntrega(i) > 0)}`;
+  else if (showSeparar && detalhe) materiaisEntregaKey = `S:${materiaisDoModal((i) => maxQtdSeparacao(i) > 0)}`;
   useEffect(() => {
     const seq = ++saldosEntregaSeqRef.current;
     setSaldosEntrega({});
+    setSaldosEntregaFalhos({});
     setOrigensEntrega({});
-    if (!materiaisEntregaKey) return;
-    materiaisEntregaKey.split(',').forEach(async (materialId) => {
+    setOrigensSeparacao({});
+    const materiais = materiaisEntregaKey.slice(2);
+    if (!materiais) return;
+    materiais.split(',').forEach(async (materialId) => {
       let rows = [];
+      let falhou = false;
       try {
         const res = await api.get(`/almoxarifado/estoque/${materialId}/saldos`);
         rows = opcoesOrigem(res?.data);
       } catch (err) {
         rows = [];
+        falhou = true;
       }
       if (saldosEntregaSeqRef.current !== seq) return;
+      if (falhou) setSaldosEntregaFalhos((prev) => ({ ...prev, [materialId]: true }));
       setSaldosEntrega((prev) => ({ ...prev, [materialId]: rows }));
     });
   }, [materiaisEntregaKey]);
+
+  // Etapa 59 (RN-05): na entrega, o "Sai de" de um item com origem planejada na separação vem
+  // pré-selecionado com ela, assim que as opções do material chegam. Se a planejada não está entre
+  // as opções (sem saldo ali), fica "automático" e marcado `automatico` — a entrega então manda
+  // `origem_automatica: true`, senão o servidor aplicaria a planejada e recusaria. Busca que falhou
+  // não decide nada: sem chave, o servidor aplica a planejada (estrita) como na entrega de um clique.
+  useEffect(() => {
+    if (!showEntregar || !detalhe) return;
+    const novas = {};
+    (detalhe.itens || []).forEach((item) => {
+      if (maxQtdEntrega(item) <= 0 || !temPlanejada(item)) return;
+      if (origensEntrega[item.id]) return;
+      const rows = saldosEntrega[item.material_id];
+      if (!rows || saldosEntregaFalhos[item.material_id]) return;
+      const valor = valorPlanejada(item);
+      novas[item.id] = rows.some((s) => valorOrigem(s) === valor)
+        ? { valor, codigo: '', automatico: false }
+        : { valor: '', codigo: '', automatico: true };
+    });
+    if (Object.keys(novas).length) setOrigensEntrega((prev) => ({ ...novas, ...prev }));
+  }, [showEntregar, detalhe, saldosEntrega, saldosEntregaFalhos, origensEntrega]);
 
   const aplicarDetalhe = useCallback((data, id) => {
     setDetalhe(data);
@@ -470,6 +507,14 @@ const RequisicoesList = () => {
         .map((i) => ({
           item_id: i.id,
           quantidade_separada: parseFloat(quantidadesSeparacao[i.id] || 0),
+          // Etapa 59 (RN-01): origem/lote só quando escolhidos; lote só se a linha tem lote.
+          ...(() => {
+            const origem = lerValorOrigem(origensSeparacao[i.id]);
+            if (!origem) return {};
+            return origem.lote_id
+              ? { localizacao_origem_id: origem.localizacao_origem_id, lote_id: origem.lote_id }
+              : { localizacao_origem_id: origem.localizacao_origem_id };
+          })(),
         }))
         .filter((i) => i.quantidade_separada > 0);
 
@@ -507,6 +552,10 @@ const RequisicoesList = () => {
           if (origem.lote_id) item.lote_id = origem.lote_id;
           const codigo = extrairCodigoLido(escolha.codigo);
           if (codigo) item.codigo_lido_origem = codigo;
+        } else if (escolha?.automatico && temPlanejada(i)) {
+          // Etapa 59 (RN-05): "automático" num item com origem planejada tem de ser dito ao servidor,
+          // senão ele aplica a planejada. Item sem planejada segue sem chave nenhuma (Etapa 58).
+          item.origem_automatica = true;
         }
         return item;
       })
@@ -1098,6 +1147,13 @@ const RequisicoesList = () => {
                       <div style={{ fontSize: '0.72rem', color: 'var(--gmp-text-light)', lineHeight: 1.5 }}>
                         <div>Solicitado: <strong>{item.quantidade_solicitada}</strong></div>
                         <div>Separado: <strong>{getSeparado(item)}</strong></div>
+                        {/* Etapa 59 (RN-05): de onde foi separado — só enquanto há separado a entregar. */}
+                        {item.origem_separacao_codigo && getSeparado(item) > getEntregue(item) && (
+                          <div data-testid={`separado-de-${item.id}`}>
+                            separado de <strong>{item.origem_separacao_codigo}</strong>
+                            {item.lote_separacao_codigo ? ` — lote ${item.lote_separacao_codigo}` : ''}
+                          </div>
+                        )}
                         <div>Entregue: <strong style={{ color: getEntregue(item) > 0 ? 'var(--gmp-success)' : 'inherit' }}>{getEntregue(item)}</strong></div>
                         {getPendente(item) > 0 && (
                           <div style={{ color: 'var(--gmp-warning)' }}>Pendente: <strong>{getPendente(item)}</strong></div>
@@ -1603,6 +1659,22 @@ const RequisicoesList = () => {
                     <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>
                       Solicitado: {item.quantidade_solicitada} · Já separado: {getSeparado(item)} · Saldo: {item.saldo_atual}
                     </div>
+                    {/* Etapa 59 (RN-05): de onde o separador tirou — opcional. Com origem escolhida, a
+                        entrega sem escolha sai dela (a origem planejada). */}
+                    <div style={{ marginTop: 8 }}>
+                      <label className="almox-label" htmlFor={`separacao-origem-${item.id}`} style={{ fontSize: '0.8rem' }}>Sai de</label>
+                      <select id={`separacao-origem-${item.id}`} className="almox-form-select"
+                        value={origensSeparacao[item.id] || ''}
+                        onChange={e => {
+                          const valor = e.target.value;
+                          setOrigensSeparacao(o => ({ ...o, [item.id]: valor }));
+                        }}>
+                        <option value="">Qualquer endereço (automático)</option>
+                        {(saldosEntrega[item.material_id] || []).map(s => (
+                          <option key={valorOrigem(s)} value={valorOrigem(s)}>{rotuloOrigem(s)}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                   <div>
                     <input className="almox-count-input" type="number" min="0" step="1"
@@ -1670,7 +1742,7 @@ const RequisicoesList = () => {
                           const valor = e.target.value;
                           setOrigensEntrega(o => ({
                             ...o,
-                            [item.id]: { valor, codigo: valor ? (o[item.id]?.codigo || '') : '' },
+                            [item.id]: { valor, codigo: valor ? (o[item.id]?.codigo || '') : '', automatico: !valor },
                           }));
                         }}>
                         <option value="">Qualquer endereço (automático)</option>
