@@ -1,5 +1,5 @@
 const { dbAll, dbGet } = require('./db');
-const { disponivelSql } = require('./availabilitySql');
+const { disponivelSql, COLUNAS_RETENCAO } = require('./availabilitySql');
 const { valorEstoqueSql, custoUnitarioSql } = require('./custoSql');
 const { divergenciaRealSql } = require('./divergencia');
 const { consumoJanelaSql, consumoJanelaParams } = require('./consumoSql');
@@ -15,6 +15,91 @@ async function relatorioEstoqueAtual(db) {
     FROM materiais_almoxarifado m
     WHERE m.ativo = 1 AND m.proprietario_cliente_id IS NULL
     ORDER BY m.categoria, m.nome`);
+}
+
+// ── Etapa 49 — relatórios de saldo ─────────────────────────────────────────────────────────
+// As três chaves INCLUEM material de cliente (coluna Cliente): lote, série e retenção de material
+// de cliente são justamente o que o almoxarife precisa ver. O que `relatorioEstoqueAtual` exclui é
+// a VALORIZAÇÃO, e nenhuma destas valoriza (desenho da etapa, seção 6).
+const CLIENTE_SQL = 'COALESCE(cl.nome_fantasia, cl.razao_social)';
+const EPS_SALDO = 1e-9;
+
+/**
+ * RN-01 (corrigida na Fase 2): saldo ATRIBUÍDO por lote, mais a linha "Sem lote atribuído".
+ * Os fluxos isentos de lote (entrega de requisição, AJUSTE absoluto, internos) gravam na linha
+ * `lote_id NULL` de estoque_saldo — o saldo de um lote NÃO é o que está na prateleira. A invariante
+ * que vale é a do material inteiro: Σ linhas = quantidade_atual. Por isso a linha residual
+ * (`quantidade_atual − Σ lotes`, PODE ser negativa) e a coluna do físico total.
+ */
+async function relatorioSaldoPorLote(db) {
+  const lotes = await dbAll(db, `SELECT m.id as material_id, m.codigo as material_codigo, m.nome as material_nome,
+      ${CLIENTE_SQL} as cliente, m.quantidade_atual as fisico_material,
+      l.id as lote_id, l.codigo as lote, l.data_validade as validade, l.status as status_lote,
+      SUM(s.quantidade) as quantidade
+    FROM estoque_saldo_almoxarifado s
+    JOIN lotes_almoxarifado l ON l.id = s.lote_id
+    JOIN materiais_almoxarifado m ON m.id = s.material_id
+    LEFT JOIN clientes cl ON cl.id = m.proprietario_cliente_id
+    WHERE m.ativo = 1
+    GROUP BY l.id
+    ORDER BY m.nome, l.codigo`);
+
+  const porMaterial = new Map();
+  for (const l of lotes) {
+    if (!porMaterial.has(l.material_id)) porMaterial.set(l.material_id, { base: l, soma: 0, linhas: [] });
+    const g = porMaterial.get(l.material_id);
+    g.soma += Number(l.quantidade) || 0;
+    if ((Number(l.quantidade) || 0) > EPS_SALDO) g.linhas.push(l);
+  }
+
+  const saida = [];
+  for (const { base, soma, linhas } of porMaterial.values()) {
+    const semLote = (Number(base.fisico_material) || 0) - soma;
+    for (const l of linhas) {
+      saida.push({
+        material_codigo: l.material_codigo, material_nome: l.material_nome, cliente: l.cliente,
+        lote: l.lote, validade: l.validade, status_lote: l.status_lote,
+        quantidade: l.quantidade, fisico_material: l.fisico_material,
+      });
+    }
+    if (Math.abs(semLote) > EPS_SALDO) {
+      saida.push({
+        material_codigo: base.material_codigo, material_nome: base.material_nome, cliente: base.cliente,
+        lote: 'Sem lote atribuído', validade: null, status_lote: null,
+        quantidade: Math.round(semLote * 1e6) / 1e6, fisico_material: base.fisico_material,
+      });
+    }
+  }
+  return saida;
+}
+
+/** RN-02: uma linha por série PRESENTE — a lista de presentes é a do serviço de séries. */
+async function relatorioSeriesEmEstoque(db) {
+  const { STATUS_PRESENTES } = require('./seriesService');
+  return dbAll(db, `SELECT m.codigo as material_codigo, m.nome as material_nome, ${CLIENTE_SQL} as cliente,
+      s.numero, s.status, l.codigo as lote
+    FROM series_almoxarifado s
+    JOIN materiais_almoxarifado m ON m.id = s.material_id
+    LEFT JOIN lotes_almoxarifado l ON l.id = s.lote_id
+    LEFT JOIN clientes cl ON cl.id = m.proprietario_cliente_id
+    WHERE s.status IN (${STATUS_PRESENTES.map(() => '?').join(',')})
+    ORDER BY m.nome, s.numero`, STATUS_PRESENTES);
+}
+
+/**
+ * RN-03: saldos comprometidos. Colunas e filtro montados de COLUNAS_RETENCAO (a mesma lista que
+ * define o disponível) — e o registro tem um teste que exige `colunas ⊇ COLUNAS_RETENCAO`, porque
+ * as colunas dele são estáticas (desenho, seção 6).
+ */
+async function relatorioSaldosComprometidos(db) {
+  const retidas = COLUNAS_RETENCAO.map((c) => `COALESCE(m.${c},0) as ${c}`).join(', ');
+  const algumaRetida = COLUNAS_RETENCAO.map((c) => `COALESCE(m.${c},0) > 0`).join(' OR ');
+  return dbAll(db, `SELECT m.codigo as material_codigo, m.nome as material_nome, ${CLIENTE_SQL} as cliente,
+      m.quantidade_atual as fisico, ${retidas}, ${disponivelSql('m')} as disponivel
+    FROM materiais_almoxarifado m
+    LEFT JOIN clientes cl ON cl.id = m.proprietario_cliente_id
+    WHERE m.ativo = 1 AND (${algumaRetida})
+    ORDER BY m.nome`);
 }
 
 async function relatorioAbaixoMinimo(db) {
@@ -64,13 +149,51 @@ async function relatorioMateriaisBloqueados(db) {
     WHERE ativo = 1 AND COALESCE(quantidade_bloqueada,0) > 0 ORDER BY nome`);
 }
 
+/**
+ * Etapa 49 (RN-05): grupos de movimento para o filtro do histórico. O filtro `tipo` é EXATO sobre
+ * texto livre — "entradas" são 8 tipos, e quem digitasse ENTRADA via só um deles. As listas vêm de
+ * movementTypes (fonte única do motor); AJUSTE e TRANSFERENCIA não têm lista lá e são por nome.
+ */
+const GRUPOS_MOVIMENTO = {
+  ENTRADA: { tipos: () => require('./movementTypes').TIPOS_ENTRADA },
+  SAIDA: { tipos: () => TIPOS_SAIDA },
+  DEVOLUCAO: { tipos: () => TIPOS_DEVOLUCAO },
+  AJUSTE: { like: 'AJUSTE%' },
+  TRANSFERENCIA: { tipos: () => ['TRANSFERENCIA'] },
+};
+
 async function relatorioHistoricoMovimentacoes(db, filters = {}) {
-  let sql = `SELECT m.*, ma.nome as material_nome, ma.codigo as material_codigo
+  // Etapa 49 (RN-04): usuário e centro de custo — o mesmo JOIN da rota /movimentacoes, para a
+  // coluna mostrar código e nome, e não o id.
+  let sql = `SELECT m.*, ma.nome as material_nome, ma.codigo as material_codigo,
+      CASE WHEN cc.id IS NULL THEN NULL ELSE cc.codigo || ' — ' || cc.nome END as centro_custo
     FROM movimentacoes_almoxarifado m
-    JOIN materiais_almoxarifado ma ON m.material_id = ma.id WHERE m.cancelado = 0`;
+    JOIN materiais_almoxarifado ma ON m.material_id = ma.id
+    LEFT JOIN centros_custo_almoxarifado cc ON m.centro_custo_id = cc.id
+    WHERE m.cancelado = 0`;
   const params = [];
   if (filters.material_id) { sql += ' AND m.material_id = ?'; params.push(filters.material_id); }
   if (filters.tipo) { sql += ' AND m.tipo = ?'; params.push(filters.tipo); }
+  if (filters.grupo) {
+    const g = GRUPOS_MOVIMENTO[String(filters.grupo).toUpperCase()];
+    if (!g) {
+      throw Object.assign(new Error(
+        `Grupo de movimento inválido: ${filters.grupo} (use ENTRADA, SAIDA, AJUSTE, DEVOLUCAO ou TRANSFERENCIA)`,
+      ), { status: 400 });
+    }
+    if (g.like) { sql += ' AND m.tipo LIKE ?'; params.push(g.like); } else {
+      const tipos = g.tipos();
+      sql += ` AND m.tipo IN (${tipos.map(() => '?').join(',')})`;
+      params.push(...tipos);
+    }
+  }
+  if (filters.usuario) {
+    // ESCAPE: % e _ digitados valem como texto, não como curinga.
+    const termo = String(filters.usuario).replace(/[\\%_]/g, (c) => `\\${c}`);
+    sql += " AND m.usuario_nome LIKE ? ESCAPE '\\'";
+    params.push(`%${termo}%`);
+  }
+  if (filters.centro_custo_id) { sql += ' AND m.centro_custo_id = ?'; params.push(filters.centro_custo_id); }
   if (filters.data_inicio) { sql += ' AND DATE(m.created_at) >= ?'; params.push(filters.data_inicio); }
   if (filters.data_fim) { sql += ' AND DATE(m.created_at) <= ?'; params.push(filters.data_fim); }
   sql += ' ORDER BY m.created_at DESC LIMIT 500';
@@ -469,4 +592,6 @@ module.exports = {
   relatorioConsumoPeriodo, relatorioFerramentasEmprestadas, relatorioEPIPorColaborador,
   relatorioSolicitacoesCompraPendentes, relatorioSucataFinanceiro, relatorioIndicadores,
   relatorioCustoProjeto,
+  // Etapa 49
+  relatorioSaldoPorLote, relatorioSeriesEmEstoque, relatorioSaldosComprometidos,
 };

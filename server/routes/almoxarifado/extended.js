@@ -2176,6 +2176,10 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     // o alerta MATERIAL_SEM_ENDERECO, senao relatorio e alerta de mesmo nome divergiriam
     // (achado Critico 2 da revisao do plano da etapa). Comportamento identico ao anterior.
     'materiais-sem-endereco': (db) => alertRegistry.listarMateriaisSemEndereco(db),
+    // Etapa 49: saldo por lote (atribuido + 'Sem lote atribuido'), series presentes, saldos comprometidos.
+    'saldo-por-lote': reportService.relatorioSaldoPorLote,
+    'series-em-estoque': reportService.relatorioSeriesEmEstoque,
+    'saldos-comprometidos': reportService.relatorioSaldosComprometidos,
   };
 
   // Exposto SO para o teste de paridade (relatoriosRegistro.api.test.js) inspecionar o PAR
