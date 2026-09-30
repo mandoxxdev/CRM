@@ -98,6 +98,13 @@ const pendenteSeparado = (item) => Math.max(0, getSeparado(item) - getEntregue(i
 // chave (o servidor aplica a planejada) — e faz "Qualquer endereço" virar uma troca de verdade.
 const VALOR_PLANEJADA_SEM_SALDOS = '__planejada__';
 
+// Etapa 61 (RN-04): material com controle de série sai dizendo QUAIS séries saem. As séries vêm de
+// GET /materiais/:id/series?status=EM_ESTOQUE; com um lote escolhido no "Sai de", só as desse lote
+// (o servidor recusa séries de lotes diferentes). O endereço da série é só dica: a transferência
+// não move a série, então ele não filtra.
+const seriesDoLote = (info, loteId) => (info?.series || [])
+  .filter((s) => !loteId || Number(s.lote_id) === Number(loteId));
+
 // Etapa 60 (RN-01/04): o máximo separável que a tela conhece, na mesma régua do servidor:
 // base = min(pendente de separação, saldo − o que OUTROS itens do mesmo material separam nesta
 // rodada); com um "Sai de" escolhido, também a quantidade da opção menos o separado pendente de quem
@@ -191,6 +198,12 @@ const RequisicoesList = () => {
   const [saldosEntrega, setSaldosEntrega] = useState({});
   const saldosEntregaSeqRef = useRef(0);
   const [saldosEntregaFalhos, setSaldosEntregaFalhos] = useState({});
+  // Etapa 61 (RN-04): por material, se exige série e quais estão em estoque
+  // ({ [materialId]: { serializado, series, falhou } } — ausente = ainda carregando) e, por item,
+  // os ids escolhidos. `seriesEntregaSeqRef` descarta a resposta de uma abertura anterior do modal.
+  const [seriesEntrega, setSeriesEntrega] = useState({});
+  const [seriesEscolhidas, setSeriesEscolhidas] = useState({});
+  const seriesEntregaSeqRef = useRef(0);
   // Etapa 59 (RN-05): de onde o item sai na separação ({ [itemId]: valor "loc:lote" }).
   const [origensSeparacao, setOrigensSeparacao] = useState({});
   const [quantidadesSeparacao, setQuantidadesSeparacao] = useState({});
@@ -306,6 +319,41 @@ const RequisicoesList = () => {
       if (saldosEntregaSeqRef.current !== seq) return;
       if (falhou) setSaldosEntregaFalhos((prev) => ({ ...prev, [materialId]: true }));
       setSaldosEntrega((prev) => ({ ...prev, [materialId]: rows }));
+    });
+  }, [materiaisEntregaKey]);
+
+  // Etapa 61 (RN-04): só no modal de entrega. O detalhe da requisição não traz `controle_serie`,
+  // então pergunta ao material (GET /materiais/:id). Falha nessa busca = trata como sem série (não
+  // trava a entrega; se o material exigir, o servidor recusa com a literal que manda escolher).
+  // Falha na busca das séries de um material serializado = nenhuma série para escolher (o
+  // confirmar fica desabilitado e o modal diz por quê).
+  useEffect(() => {
+    const seq = ++seriesEntregaSeqRef.current;
+    setSeriesEntrega({});
+    setSeriesEscolhidas({});
+    if (!materiaisEntregaKey.startsWith('E:')) return;
+    const materiais = materiaisEntregaKey.slice(2);
+    if (!materiais) return;
+    materiais.split(',').forEach(async (materialId) => {
+      let info;
+      try {
+        const res = await api.get(`/almoxarifado/materiais/${materialId}`);
+        if (!Number(res?.data?.controle_serie)) {
+          info = { serializado: false, series: [], falhou: false };
+        } else {
+          try {
+            const r2 = await api.get(`/almoxarifado/materiais/${materialId}/series?status=EM_ESTOQUE`);
+            const rows = Array.isArray(r2?.data) ? r2.data : [];
+            info = { serializado: true, series: rows, falhou: false };
+          } catch (err) {
+            info = { serializado: true, series: [], falhou: true };
+          }
+        }
+      } catch (err) {
+        info = { serializado: false, series: [], falhou: false };
+      }
+      if (seriesEntregaSeqRef.current !== seq) return;
+      setSeriesEntrega((prev) => ({ ...prev, [materialId]: info }));
     });
   }, [materiaisEntregaKey]);
 
@@ -594,7 +642,7 @@ const RequisicoesList = () => {
 
   // `origens` só vem do modal (handleEntregar). A entrega direta (`direto: true`) não escolhe
   // origem e segue mandando só item + quantidade, como antes da Etapa 58.
-  const montarItensEntrega = (fonte, qtdMap = quantidadesEntrega, origens = null) => {
+  const montarItensEntrega = (fonte, qtdMap = quantidadesEntrega, origens = null, seriesMap = null) => {
     if (!fonte?.itens) return [];
     return fonte.itens
       .map((i) => {
@@ -616,6 +664,9 @@ const RequisicoesList = () => {
           // senão ele aplica a planejada. Item sem planejada segue sem chave nenhuma (Etapa 58).
           item.origem_automatica = true;
         }
+        // Etapa 61 (RN-04): só item de material serializado leva `serie_ids` (ids numéricos).
+        const ids = seriesMap?.[i.id];
+        if (ids?.length) item.serie_ids = ids.map(Number);
         return item;
       })
       .filter((i) => i.item_id && i.quantidade_atendida > 0);
@@ -760,8 +811,46 @@ const RequisicoesList = () => {
     }
   };
 
+  // Etapa 61 (RN-04): as séries que valem para o item — só as do lote escolhido no "Sai de" (trocar
+  // o lote não apaga a escolha, mas as de outro lote deixam de contar e de ir no PUT).
+  // null = material sem controle de série; `carregando` = ainda não se sabe.
+  const seriesDoItem = (item) => {
+    const info = seriesEntrega[item.material_id];
+    if (!info) return { carregando: true };
+    if (!info.serializado) return null;
+    const loteId = lerValorOrigem(origensEntrega[item.id]?.valor)?.lote_id || null;
+    const visiveis = seriesDoLote(info, loteId);
+    const idsVisiveis = new Set(visiveis.map((s) => Number(s.id)));
+    const escolhidas = (seriesEscolhidas[item.id] || []).filter((id) => idsVisiveis.has(id));
+    return { visiveis, escolhidas, falhou: info.falhou };
+  };
+
+  // Confirmar só com cada item serializado (com quantidade > 0) tendo EXATAMENTE a quantidade.
+  const entregaSeriesPendente = () => (detalhe?.itens || []).some((i) => {
+    if (maxQtdEntrega(i) <= 0) return false;
+    const qtd = parseFloat(quantidadesEntrega[i.id]) || 0;
+    if (qtd <= 0) return false;
+    const s = seriesDoItem(i);
+    if (!s) return false;
+    if (s.carregando) return true;
+    return s.escolhidas.length !== qtd;
+  });
+
+  const alternarSerie = (itemId, serieId) => {
+    setSeriesEscolhidas((prev) => {
+      const atual = prev[itemId] || [];
+      const id = Number(serieId);
+      return { ...prev, [itemId]: atual.includes(id) ? atual.filter((x) => x !== id) : [...atual, id] };
+    });
+  };
+
   const handleEntregar = async () => {
-    const itens_atendidos = montarItensEntrega(detalhe, quantidadesEntrega, origensEntrega);
+    const seriesMap = {};
+    (detalhe?.itens || []).forEach((i) => {
+      const s = seriesDoItem(i);
+      if (s && !s.carregando && s.escolhidas.length) seriesMap[i.id] = s.escolhidas;
+    });
+    const itens_atendidos = montarItensEntrega(detalhe, quantidadesEntrega, origensEntrega, seriesMap);
     await entregarItens(itens_atendidos);
   };
 
@@ -1875,6 +1964,62 @@ const RequisicoesList = () => {
                         dica={lerValorOrigem(origensEntrega[item.id]?.valor) ? null :'Para confirmar a leitura, escolha antes de onde o item sai.'}
                       />
                     </div>
+                    {/* Etapa 61 (RN-04): material com controle de série — quais séries saem. */}
+                    {(() => {
+                      const s = seriesDoItem(item);
+                      if (!s) return null;
+                      if (s.carregando) {
+                        return <div style={{ marginTop: 8, fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>Verificando séries do material...</div>;
+                      }
+                      const escolhidasOutros = new Set(detalhe.itens
+                        .filter((o) => o.id !== item.id && Number(o.material_id) === Number(item.material_id))
+                        .flatMap((o) => seriesDoItem(o)?.escolhidas || []));
+                      const bate = s.escolhidas.length === qtdEntregar;
+                      return (
+                        <div id={`entrega-series-${item.id}`} style={{ marginTop: 8 }}>
+                          <div className="almox-label" style={{ fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between' }}>
+                            <span>Séries que saem</span>
+                            <span id={`entrega-series-contador-${item.id}`}
+                              style={{ color: bate ? 'var(--gmp-success)' : 'var(--gmp-warning)', fontWeight: 600 }}>
+                              {s.escolhidas.length} de {qtdEntregar}
+                            </span>
+                          </div>
+                          {s.falhou ? (
+                            <div style={{ fontSize: '0.75rem', color: 'var(--gmp-error)' }}>
+                              Não foi possível carregar as séries deste material. Feche e abra a entrega de novo.
+                            </div>
+                          ) : s.visiveis.length === 0 ? (
+                            <div style={{ fontSize: '0.75rem', color: 'var(--gmp-warning)' }}>
+                              Nenhuma série em estoque{lerValorOrigem(origensEntrega[item.id]?.valor)?.lote_id ? ' neste lote' : ''}. Regularize as séries do material em Lotes e Séries.
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px' }}>
+                              {s.visiveis.map((serie) => {
+                                const id = Number(serie.id);
+                                const marcada = s.escolhidas.includes(id);
+                                const bloqueada = !marcada && (escolhidasOutros.has(id) || s.escolhidas.length >= qtdEntregar);
+                                return (
+                                  <label key={serie.id} style={{ fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                    title={escolhidasOutros.has(id) ? 'Já escolhida em outro item' : undefined}>
+                                    <input type="checkbox" data-serie-id={id} checked={marcada} disabled={bloqueada}
+                                      onChange={() => alternarSerie(item.id, id)} />
+                                    <span>{serie.numero}</span>
+                                    {serie.localizacao_descricao && (
+                                      <span style={{ color: 'var(--gmp-text-light)', fontSize: '0.7rem' }}> · {serie.localizacao_descricao}</span>
+                                    )}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          )}
+                          {!bate && qtdEntregar > 0 && (
+                            <div style={{ fontSize: '0.7rem', color: 'var(--gmp-warning)', marginTop: 4 }}>
+                              Escolha exatamente {qtdEntregar} série(s) para entregar {qtdEntregar} {item.unidade}.
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                   <div>
                     <input className="almox-count-input" type="number" min="0" step="1"
@@ -1891,7 +2036,7 @@ const RequisicoesList = () => {
             </div>
             <div className="almox-modal-footer">
               <button className="btn-almox-secondary" onClick={() => setShowEntregar(false)}>Cancelar</button>
-              <button className="btn-almox-primary" onClick={handleEntregar} disabled={saving || detalhe.itens.every(i => maxQtdEntrega(i) <= 0)}>
+              <button className="btn-almox-primary" onClick={handleEntregar} disabled={saving || detalhe.itens.every(i => maxQtdEntrega(i) <= 0) || entregaSeriesPendente()}>
                 {saving ? 'Confirmando...' : '✅ Confirmar Entrega'}
               </button>
             </div>

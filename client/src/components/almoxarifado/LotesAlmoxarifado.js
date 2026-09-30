@@ -85,12 +85,21 @@ const STATUS_SERIE_INFO = {
   ENTREGUE: { label: 'Entregue', cls: 'concluido' },
   SUCATEADA: { label: 'Sucateada', cls: 'cancelado' },
   ESTORNADA: { label: 'Estornada', cls: 'cancelado' },
+  // Etapa 61 (RN-06): série dada como ausente na regularização — não é presente.
+  BAIXADA: { label: 'Baixada', cls: 'cancelado' },
 };
+
+// Etapa 61 (RN-06): presentes = EM_ESTOQUE + BLOQUEADA (a mesma régua de `contarPresentes` no
+// servidor). Os limites espelham `regularizarSeries`: cadastrar até floor(físico − presentes),
+// baixar até ceil(presentes − físico). O servidor recalcula e é quem decide.
+const STATUS_PRESENTES = ['EM_ESTOQUE', 'BLOQUEADA'];
+const JUSTIFICATIVA_REGULARIZAR_MIN = 5;
+const numerosDigitados = (texto) => [...new Set(String(texto || '').split('\n').map((l) => l.trim()).filter(Boolean))];
 
 const serieStatusInfo = (s) => STATUS_SERIE_INFO[s] || { label: s || '—', cls: 'vazio' };
 
 const LotesAlmoxarifado = () => {
-  const { bloquearSeNaoPode } = useAlmoxPermissoes();
+  const { bloquearSeNaoPode, pode } = useAlmoxPermissoes();
   const [searchParams] = useSearchParams();
 
   const [materiais, setMateriais] = useState([]);
@@ -184,6 +193,62 @@ const LotesAlmoxarifado = () => {
       .finally(() => { if (!cancelado) setLoadingSeries(false); });
     return () => { cancelado = true; };
   }, [materialId, aba, reloadToken]);
+
+  // Etapa 61 (RN-06): o material vem do GET por id (a lista do select é carregada uma vez só e
+  // envelhece; aqui o físico e `controle_serie` são relidos a cada Atualizar/ação). Mesma guarda
+  // `cancelado`. Falha = sem aviso (não inventa divergência).
+  const [materialSerie, setMaterialSerie] = useState(null);
+  const [regCadastrar, setRegCadastrar] = useState('');
+  const [regBaixar, setRegBaixar] = useState([]);
+  const [regJustificativa, setRegJustificativa] = useState('');
+  const [regSaving, setRegSaving] = useState(false);
+  const [regErro, setRegErro] = useState('');
+  useEffect(() => {
+    setMaterialSerie(null);
+    setRegCadastrar('');
+    setRegBaixar([]);
+    setRegJustificativa('');
+    setRegErro('');
+    if (!materialId || aba !== 'SERIES') return undefined;
+    let cancelado = false;
+    api.get(`/almoxarifado/materiais/${materialId}`)
+      .then((res) => { if (!cancelado) setMaterialSerie(res.data && !Array.isArray(res.data) ? res.data : null); })
+      .catch(() => { if (!cancelado) setMaterialSerie(null); });
+    return () => { cancelado = true; };
+  }, [materialId, aba, reloadToken]);
+
+  const seriesPresentes = series.filter((s) => STATUS_PRESENTES.includes(s.status));
+  const fisicoSerie = Number(materialSerie?.quantidade_atual) || 0;
+  const divergenciaSerie = !!materialSerie && Number(materialSerie.controle_serie) === 1
+    && String(materialSerie.id) === String(materialId) && !loadingSeries
+    && Math.abs(seriesPresentes.length - fisicoSerie) > 1e-9;
+  const maxCadastrar = Math.max(0, Math.floor(fisicoSerie - seriesPresentes.length + 1e-9));
+  const maxBaixar = Math.max(0, Math.ceil(seriesPresentes.length - fisicoSerie - 1e-9));
+  const numerosACadastrar = numerosDigitados(regCadastrar);
+  const regQtd = maxCadastrar > 0 ? numerosACadastrar.length : regBaixar.length;
+  const regMax = maxCadastrar > 0 ? maxCadastrar : maxBaixar;
+  const regJustificativaOk = regJustificativa.trim().length >= JUSTIFICATIVA_REGULARIZAR_MIN;
+  const podeRegularizar = regQtd > 0 && regQtd <= regMax && regJustificativaOk && !regSaving;
+
+  const alternarBaixa = (id) => setRegBaixar((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const regularizarSeries = async () => {
+    if (!podeRegularizar) return;
+    setRegSaving(true);
+    setRegErro('');
+    try {
+      const body = { justificativa: regJustificativa.trim() };
+      if (maxCadastrar > 0) body.cadastrar = numerosACadastrar;
+      else body.baixar = regBaixar.map(Number);
+      await api.post(`/almoxarifado/materiais/${materialId}/series/regularizar`, body);
+      toast.success('Séries regularizadas!');
+      loadLotes();
+    } catch (err) {
+      setRegErro(err.response?.data?.error || 'Erro ao regularizar as séries');
+    } finally {
+      setRegSaving(false);
+    }
+  };
 
   const materialSelecionado = materiais.find((m) => m.id === parseInt(materialId, 10));
 
@@ -481,6 +546,83 @@ const LotesAlmoxarifado = () => {
             exemplo, antes de ligar o controle de lote) também ficam fora dos lotes. Lotes + sem lote
             atribuído = físico total.
           </div>
+        </div>
+      )}
+
+      {/* Etapa 61 (RN-06): séries presentes ≠ físico — o aviso e, para quem pode ajustar estoque, o
+          gesto de regularização. Fica fora da tabela: o caso "físico sem nenhuma série" é justamente
+          o de lista vazia. */}
+      {aba === 'SERIES' && divergenciaSerie && (
+        <div id="series-divergencia" style={{ margin: '0 0 12px', padding: 12, borderRadius: 8, background: 'var(--gmp-surface)', border: '1px solid var(--gmp-warning)' }}>
+          <div style={{ fontWeight: 600, color: 'var(--gmp-warning)' }}>
+            Séries presentes: {seriesPresentes.length} · Físico: {fisicoSerie}
+          </div>
+          <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', marginTop: 4 }}>
+            O número de séries em estoque (em estoque + bloqueadas) não bate com o saldo físico do material.
+            {maxCadastrar > 0 && ' Há unidades sem série: a entrega delas fica travada até cadastrar as séries.'}
+            {maxBaixar > 0 && ' Há séries que não estão mais no estoque: a entrega poderia oferecê-las.'}
+          </div>
+          {pode('ajustar_estoque') && regMax > 0 && (
+            <div id="series-regularizar" style={{ marginTop: 12 }}>
+              <div style={{ fontWeight: 600, marginBottom: 8 }}>Regularizar séries</div>
+              {maxCadastrar > 0 ? (
+                <div className="almox-field">
+                  <label className="almox-label" htmlFor="regularizar-cadastrar">
+                    Números de série a cadastrar (um por linha, até {maxCadastrar})
+                  </label>
+                  <textarea id="regularizar-cadastrar" className="almox-textarea" rows={4}
+                    value={regCadastrar} onChange={(e) => setRegCadastrar(e.target.value)} />
+                  <div style={{ fontSize: '0.75rem', color: numerosACadastrar.length > maxCadastrar ? 'var(--gmp-error)' : 'var(--gmp-text-light)' }}>
+                    {numerosACadastrar.length} de até {maxCadastrar}
+                  </div>
+                </div>
+              ) : (
+                <div className="almox-field">
+                  <div className="almox-label">Séries a baixar como ausentes (até {maxBaixar})</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px' }}>
+                    {seriesPresentes.map((s) => {
+                      const id = Number(s.id);
+                      const marcada = regBaixar.includes(id);
+                      return (
+                        <label key={s.id} style={{ fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <input type="checkbox" data-serie-id={id} checked={marcada}
+                            disabled={!marcada && regBaixar.length >= maxBaixar}
+                            onChange={() => alternarBaixa(id)} />
+                          {s.numero}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>{regBaixar.length} de até {maxBaixar}</div>
+                </div>
+              )}
+              <div className="almox-field">
+                <label className="almox-label" htmlFor="regularizar-justificativa">
+                  Justificativa<span className="required">*</span>
+                </label>
+                <textarea id="regularizar-justificativa" className="almox-textarea" rows={2}
+                  value={regJustificativa} onChange={(e) => setRegJustificativa(e.target.value)}
+                  placeholder="Por que as séries estão sendo regularizadas..." />
+                {regJustificativa.length > 0 && !regJustificativaOk && (
+                  <div style={{ fontSize: '0.75rem', color: 'var(--gmp-error)' }}>
+                    A justificativa precisa de pelo menos {JUSTIFICATIVA_REGULARIZAR_MIN} caracteres.
+                  </div>
+                )}
+              </div>
+              {regErro && (
+                <div id="regularizar-erro" role="alert" style={{ fontSize: '0.8rem', color: 'var(--gmp-error)', marginBottom: 8 }}>{regErro}</div>
+              )}
+              <button type="button" id="regularizar-confirmar" className="btn-almox-primary"
+                disabled={!podeRegularizar} onClick={regularizarSeries}>
+                {regSaving ? 'Regularizando...' : 'Regularizar séries'}
+              </button>
+            </div>
+          )}
+          {pode('ajustar_estoque') && regMax === 0 && (
+            <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', marginTop: 8 }}>
+              A diferença é menor que uma unidade — acerte o físico pelo ajuste de estoque.
+            </div>
+          )}
         </div>
       )}
 
