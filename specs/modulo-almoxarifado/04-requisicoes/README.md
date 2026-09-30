@@ -22,7 +22,16 @@
 > linhas de servidor no range (medido: `git diff --stat` do range restrito a `server/` vem vazio).
 > Detalhe do conserto, das asserções que o travam e do que ficou de fora: no item de checklist de
 > anexos, mais abaixo.
-> **Última atualização:** 2026-09-16 (Etapa 35 — uma carga do detalhe por gesto e ✕ que descarta a
+> **Etapa 47 (2026-09-30, `4f53292` em diante) — a requisição passou a poder exigir N aprovações de
+> regra, e a travada por valor passou a ser cobrada.** O ciclo de status **não mudou**: a pendência
+> de regra é tabela filha, e o status continua `PENDENTE` ou `AGUARDANDO_APROVACAO_VALOR` até o
+> `/aprovar` ou o `/aprovar-valor` — que passam a ser **barrados** enquanto houver pendência aberta.
+> As frases abaixo de que "a tabela configurável fica para demanda real" (em "O que já existe",
+> "Dependências" e "Não entregue") **estavam certas quando escritas e ficaram erradas agora** — ver a
+> feature 06. E o lembrete de hora em hora, que alcançava só `PENDENTE`, passou a alcançar
+> `AGUARDANDO_APROVACAO_VALOR` (dos aprovadores de valor) e ganhou uma segunda fila, por pendência de
+> regra; com pendência aberta, a fila por status não cobra.
+> **Última atualização:** 2026-09-30 (Etapa 47); antes: 2026-09-16 (Etapa 35 — uma carga do detalhe por gesto e ✕ que descarta a
 > resposta em voo; antes: 2026-09-16, Etapa 34 — anexos no painel; antes: 2026-08-11, auditoria
 > spec×código)
 
@@ -36,14 +45,14 @@ Fluxo completo: rascunho → aprovação → disponibilidade → reserva → sep
 - Duas APIs: `/api/almoxarifado/requisicoes` (`routes/almoxarifado.js` — `GET`/`POST /requisicoes`, `GET /:id`, e as ações `/enviar`, `/aprovar`, `/rejeitar`, `/aprovar-valor`, `/rejeitar-valor`, `/separacao` (+alias `/separar`), `/liberar-retirada`, `/entregar`, `/confirmar-recebimento`, `/encerrar`, `/copiar`, `/cancelar`, `DELETE` administrativa) e `/api/requisicoes-material` (`routes/requisicoesMaterial.js`, cross-módulo com whitelist por setor e sanitização de campos).
 - Fluxo implementado: criar → aprovar/rejeitar → separação → entregar (parcial ok) → cancelar; delete admin com estorno de estoque.
 - Aprovação por valor (`requisitionValueApprovalService.js`, limite configurável, aprovar-valor/rejeitar-valor).
-- Notificações: e-mail ao almoxarifado na criação, e-mail a Compras para itens sem estoque, lembretes a cada 1 h (`requisitionReminderService.js`, log em `requisicao_lembretes_log`).
+- Notificações: e-mail ao almoxarifado na criação, e-mail a Compras para itens sem estoque, lembretes a cada 1 h (`requisitionReminderService.js`, log em `requisicao_lembretes_log`). **Etapa 47:** alcança também a travada por valor e cada pendência de regra — ver o cabeçalho.
 - Disponibilidade em lote: `POST /requisicoes-material/disponibilidade` + badge no front.
 - Front: `RequisicoesList.js` (1.080 L, ações completas), `RequisicaoForm.js` (industrial), `RequisicaoMaterialCesta.js` (administrativa), configurado para 10 módulos-origem (`requisicoesMaterialConfig.js`).
 - Campos existentes: solicitante, departamento, setor, os_referencia (texto), urgencia, prioridade, data_necessidade, justificativa, projeto_id, cliente_id, equipamento, valor_total; + Etapa 3: `tipo_requisicao`, `centro_custo_id`, `local_entrega`, `recebimento_confirmado_por/em`, `encerrado_por/em`.
 - Testes de serviço: separação/entrega parcial em múltiplas rodadas, exclusão com estorno, lembretes, liberação por valor, filtro por setor.
 - **Etapa 3 (2026-08-05) — item mais importante: entrega e estorno passaram a baixar/estornar estoque pelo motor (`stockService.registrarMovimentacao`)**, fechando o bypass de SQL cru anotado desde a Etapa 1 (`requisitionService.entregarRequisicao/excluirRequisicao`). Ganho: atomicidade (sem race condition entre entregas concorrentes do mesmo material), auditoria (toda baixa/estorno grava linha em `auditoria_log_almoxarifado`), saldo por localização (padrão do material, com bloqueio de localização respeitado) e vínculos estruturados na movimentação (`requisicao_id`, `projeto_id`, `centro_custo_id`; OS continua só como referência em texto — a requisição não tem `os_id`, só `os_referencia`). `maxEntregar` e o GET de detalhe passaram a calcular pelo **disponível** (físico − reservado/bloqueado/inspeção), não mais pelo físico — semântica nova de `saldo_atual` no front.
 - **Etapa 4 (2026-08-06) — mudança que esta spec não contava (registrada na auditoria de 2026-08-11):** a entrega passou a **consumir a reserva da própria requisição**, dividindo a saída entre reserva e excedente sem reserva (`requisitionService.entregarRequisicao`); e separar/entregar somam o hold da própria requisição ao disponível — a própria reserva não barra mais a separação/entrega da requisição dona. Detalhes, decisões e testes na feature 07.
-- Decisões de escopo confirmadas (ver `docs/superpowers/specs/2026-08-05-almoxarifado-etapa3-requisicoes-design.md`): aprovações ficam com regras fixas declarativas em código (tabela configurável fica para demanda real — ver feature 06); tipo de requisição é campo único de fluxo operacional único (fluxos específicos de EPI/ferramenta vêm com as features donas); confirmação de recebimento não é status novo, são campos (`recebimento_confirmado_por/em`) setáveis pelo solicitante em ENTREGUE/PARCIALMENTE_ATENDIDA/ENCERRADA.
+- Decisões de escopo confirmadas (ver `docs/superpowers/specs/2026-08-05-almoxarifado-etapa3-requisicoes-design.md`): aprovações ficam com regras fixas declarativas em código (tabela configurável fica para demanda real — ver feature 06 — **superado pela Etapa 47: a tabela existe**); tipo de requisição é campo único de fluxo operacional único (fluxos específicos de EPI/ferramenta vêm com as features donas); confirmação de recebimento não é status novo, são campos (`recebimento_confirmado_por/em`) setáveis pelo solicitante em ENTREGUE/PARCIALMENTE_ATENDIDA/ENCERRADA.
 
 ## Checklist
 

@@ -1076,7 +1076,7 @@ Os status e as passagens permitidas entre eles são fixos; qualquer tentativa fo
 - **Tipo da requisição** — 14 opções: Consumo, Ordem de Produção, Ordem de Serviço, Projeto, Montagem, Instalação Externa, Assistência Técnica, Manutenção, Desenvolvimento, Administrativo, Emergencial, Ferramenta, EPI e Material do Cliente. Sem escolha, assume **Consumo**.
 - **Rascunho é do dono.** Só o solicitante envia o próprio rascunho: *"Apenas o solicitante pode enviar o rascunho"*; e só rascunho pode ser enviado: *"Apenas rascunhos podem ser enviados"*.
 
-**Enviar é o gatilho de tudo.** Enquanto está em Rascunho, a requisição não dispara e-mail, não é avaliada pela alçada de valor e não é vista pelo almoxarifado. É o envio que a coloca em circulação.
+**Enviar é o gatilho de tudo.** Enquanto está em Rascunho, a requisição não dispara e-mail, não é avaliada pelas regras de aprovação nem pela alçada de valor, e não é vista pelo almoxarifado. É o envio que a coloca em circulação — e é **no envio** que o sistema decide quais regras de aprovação ela precisa cumprir (8.4).
 
 Existe ainda **"Copiar como Novo Rascunho"**, que gera um rascunho novo com os mesmos itens, tipo e vínculos, sem as quantidades já entregues. A justificativa só é copiada quando o tipo é Emergencial.
 
@@ -1195,7 +1195,7 @@ Repare que o teste é **"maior que zero"**, não "preenchido". Materiais que nun
 
 **O que acontece:**
 
-1. Ao enviar, a requisição vai para **Aguard. Aprov. Valor** em vez de Pendente, e os aprovadores configurados recebem e-mail.
+1. Ao enviar, a requisição vai para **Aguard. Aprov. Valor** em vez de Pendente, e os aprovadores configurados recebem e-mail. Enquanto ela continuar parada, o e-mail **se repete** no intervalo do lembrete (8.6).
 2. Separação e entrega ficam bloqueadas enquanto isso: *"Requisição aguardando aprovação de valor (R$ 12.400,00). Um aprovador autorizado deve liberar antes da separação ou entrega."*
 3. Se o valor da requisição **subir** depois (itens alterados) e ultrapassar o limite sem ter sido liberada antes, ela volta a travar na tentativa de separar/entregar: *"Valor total (R$ 12.400,00) excede o limite de liberação automática (R$ 10.000,00). Aprovação de alto valor necessária."*
 4. **Quem pode liberar:** os usuários da lista configurada, mais o administrador do sistema. Fora disso: *"Sem permissão para aprovar liberação por valor"*. A segregação continua valendo — o solicitante não libera a própria, ainda que esteja na lista.
@@ -1206,16 +1206,88 @@ Reprovar por valor rejeita a requisição. Aqui **não há segregação**: o sol
 
 > Note que a lista de aprovadores de valor é **nominal** (usuários escolhidos um a um na configuração), e não um perfil. Ela não se confunde com a permissão "aprovar requisição", que é por perfil. O administrador do sistema sempre pode liberar por valor.
 
-### 8.4 Aprovação automática
+### 8.4 Regras de aprovação — o aval extra configurável
+
+Além da aprovação comum e da alçada por valor, o administrador do módulo cadastra **regras de aprovação** em **Almoxarifado → Configurações → Regras de Aprovação**. Uma regra diz **quando** a requisição precisa de um aval extra e **quem** pode dá-lo.
+
+**Os critérios de uma regra:**
+
+| Critério | A regra se encaixa quando… |
+|---|---|
+| **Tipo de requisição** | o tipo da requisição é o escolhido |
+| **Algum item é material crítico** | pelo menos um item é de material marcado como crítico |
+| **Valor total a partir de (R$)** | `valor_total ≥ valor informado` — o mesmo cálculo de valor da alçada (8.3), mas com **"maior ou igual"** |
+| **Algum item com quantidade a partir de** | pelo menos um **material** da requisição tem quantidade **maior ou igual** à informada — somando todas as linhas desse mesmo material (duas linhas de 30 do mesmo parafuso contam como 60) |
+| **Centro de custo** | o centro de custo da requisição é o escolhido |
+
+**A regra vale quando TODOS os critérios preenchidos batem** — critérios somam restrição ("E"), não alternativa ("OU"). Critério em branco não filtra. A regra também pode filtrar por **projeto**, mas só por integração: a tela de requisição não grava projeto.
+
+**Quem assina** é uma **lista de pessoas**, escolhidas uma a uma — não um perfil. É isso que permite ao sistema garantir que duas regras sejam assinadas por duas pessoas diferentes.
+
+**O que o cadastro recusa, com a frase exata:**
+
+- sem nome: *"Regra precisa de um nome"*;
+- sem nenhum critério: *"Regra precisa de pelo menos um critério"*. Deixar *material crítico* desmarcado não conta como critério;
+- sem ninguém em *Quem pode assinar*: *"Regra precisa de pelo menos um aprovador"*;
+- valor ou quantidade zero ou negativos: *"valor_minimo deve ser um número maior que zero"* / *"quantidade_minima deve ser um número maior que zero"*. A frase sai com o nome técnico do campo;
+- por integração, usuário inexistente ou desativado na lista: *"Aprovador inexistente ou inativo: ⟨ids⟩"*;
+- por integração, tipo desconhecido: *"Tipo de requisição inválido: ⟨valor⟩"*;
+- só quem administra o módulo cadastra regra. Os demais recebem *"Acesso restrito — administrador do Almoxarifado ou Super Administrador"*.
+
+**Como uma regra atua na requisição:**
+
+1. **No envio**, o sistema confere as regras **ativas**. Cada regra que se encaixa gera uma **assinatura pendente**, que guarda o nome da regra e a lista de quem pode assinar **naquele momento**. Mudar a lista da regra depois não altera a requisição que já entrou. Regra criada, editada ou reativada também **não** alcança requisição já enviada.
+2. **Enquanto houver assinatura pendente, nenhuma aprovação passa**: nem a comum, nem a liberação por valor, nem a aprovação automática. Na tela, **Aprovar e Separar**, **Só Aprovar** e **Aprovar Liberação** ficam desabilitados, com o aviso *"Aguardando N aprovação(ões) de regra antes da aprovação"*. Por integração, a recusa é *"Requisição tem aprovação de regra pendente: ⟨nomes das regras⟩"*. A recusa acontece **antes** de qualquer reserva, então nenhum saldo fica preso por uma aprovação recusada.
+3. **Assinar** é feito no bloco **Aprovações de regra** do detalhe da requisição, pelo botão **Assinar**, que só aparece para quem pode assinar. No topo da tela de Requisições, o painel **"Aprovações de regra aguardando você (N)"** lista o que o usuário pode assinar agora — e só isso: a pendência que ele não pode assinar não chega até ele. Ao assinar, o sistema confirma *"Aprovação da regra "⟨regra⟩" assinada. Ainda falta(m) N."* ou, na última, *"… A requisição já pode ser aprovada."*.
+4. **Assinar não aprova a requisição.** Depois da última assinatura, a aprovação comum (ou a liberação por valor) continua necessária, e é ela que reserva o material (9.3). Uma requisição que se encaixa em duas regras passa por três pessoas: as duas assinaturas e a aprovação.
+
+**Quem pode assinar, e as recusas:**
+
+- quem está na lista da regra, ou quem administra o módulo (administrador do Almoxarifado ou Super Administrador) — que pode assinar qualquer regra;
+- **nunca o solicitante**: *"Solicitante não pode aprovar a própria requisição"*;
+- quem não está na lista: *"Você não está entre os aprovadores desta regra"*;
+- **a mesma pessoa não assina duas regras da mesma requisição**, administrador inclusive: *"Você já assinou outra aprovação de regra desta requisição"*. Essa garantia vale mesmo com os dois cliques no mesmo instante. A aprovação comum **não** conta como assinatura de regra, então quem assinou uma regra pode aprovar a requisição depois;
+- assinatura já dada, ou de regra desativada: *"Esta aprovação de regra não está mais aberta"*;
+- requisição que não está mais aguardando (rejeitada, cancelada, aprovada): *"Requisição não está aguardando aprovação"*.
+- usuário **desativado** no cadastro, mesmo que ainda esteja na lista: *"Usuário inativo não pode assinar aprovação de regra"*.
+
+> **Cuidado ao configurar:** duas regras cujo **único** aprovador é a mesma pessoa travam a requisição que se encaixa nas duas, porque essa pessoa assina uma e é recusada na outra. A saída é um administrador assinar a segunda, ou desativar uma das regras. Dê a cada regra pelo menos duas pessoas, ou evite regras que se sobreponham.
+
+**Desativar uma regra** que está segurando requisições **libera** essas requisições. A tela avisa antes: *"Desativar esta regra libera N requisição(ões) que aguardam a assinatura dela — a pendência fica registrada como obsoleta e deixa de bloquear a aprovação."*. Depois confirma *"N aprovação(ões) pendente(s) desta regra deixaram de bloquear requisições"*. Na requisição, a assinatura passa a aparecer como *"Obsoleta (regra desativada)"*. Isso vale só para requisição que ainda aguarda aprovação; a de requisição já rejeitada ou cancelada fica como estava. **Reativar a regra não reabre** a assinatura obsoleta. Desativar funciona mesmo que alguém da lista tenha sido desativado no cadastro — é justamente a saída quando o único aprovador sai da empresa; já **acrescentar** à lista alguém desativado continua recusado com *"Aprovador inexistente ou inativo: ⟨ids⟩"*.
+
+Cada assinatura fica na auditoria da requisição como **Aprovação de regra**, e cada criação ou edição de regra na entidade **Regra de aprovação**.
+
+### 8.5 Aprovação automática
 
 Existe ainda uma configuração de **aprovação automática**. Com ela ligada, a requisição enviada é aprovada na hora, com o aprovador registrado como **"Sistema (automático)"**.
 
-Duas ressalvas:
+Três ressalvas:
 
 - **Urgência "Crítico" nunca é auto-aprovada** — justamente a que mais chama atenção precisa de olho humano.
 - A aprovação automática **só corre depois** da alçada por valor. Requisição que caiu em *Aguard. Aprov. Valor* não é auto-aprovada.
+- **Requisição com assinatura de regra pendente não é auto-aprovada** (8.4) — ela fica **Pendente**.
 
-> As regras de aprovação em vigor são estas — **segregação**, **limite por valor** e **aprovação automática**. Não existe hoje configuração de regras por tipo de material, quantidade ou projeto.
+> As regras de aprovação em vigor são estas: **segregação**, **limite por valor**, **regras de aprovação configuráveis** e **aprovação automática**. Urgência e material de cliente não são critério de regra.
+
+### 8.6 A cobrança por e-mail — o lembrete de requisição parada
+
+Requisição parada esperando uma decisão recebe um **lembrete por e-mail**, repetido a cada intervalo, enquanto continuar parada. Ele é configurado em **Almoxarifado → Configurações → Alertas de Estoque → Lembretes de requisições pendentes**: liga/desliga e **Intervalo entre lembretes (horas)**, com padrão de 24 h. O sistema confere de hora em hora.
+
+**A regra de quando sai:** a requisição (ou a assinatura pendente) precisa estar parada há **mais que o intervalo**, e o último lembrete dela precisa ter saído há **mais que o intervalo**. O número de dias do e-mail conta desde a última mudança da requisição (ou desde a criação da assinatura pendente), arredondado para cima, com mínimo de 1.
+
+**Há três lembretes, e cada um vai para quem pode fazer o gesto que falta:**
+
+| A requisição está… | O e-mail diz | Vai para |
+|---|---|---|
+| **Pendente**, sem assinatura de regra pendente | *"Lembrete: Requisição ⟨número⟩ aguardando aprovação há N dias"* | a lista de e-mails de notificação de requisições |
+| **Aguard. Aprov. Valor**, sem assinatura de regra pendente | *"Lembrete: Requisição ⟨número⟩ aguardando liberação por valor há N dias"*, com a linha *"Valor total: R$ … (limite de liberação automática: R$ …)"* | os **aprovadores de valor**; sem nenhum configurado, a lista de notificação de requisições |
+| com **assinatura de regra pendente** | um e-mail **por assinatura**: *"Lembrete: Requisição ⟨número⟩ aguardando aprovação da regra "⟨regra⟩" há N dias"*, com a linha *"Regra: ⟨regra⟩"* | quem está na lista **daquela** regra e está ativo no cadastro, **menos** o solicitante e quem já assinou outra regra da mesma requisição. Se não sobrar ninguém, vai para a lista de notificação de requisições |
+
+**Enquanto houver assinatura de regra pendente, os dois primeiros lembretes não saem.** Eles cobrariam uma aprovação que o sistema está recusando. Assinada a última regra, a cobrança volta à aprovação comum (ou à liberação por valor).
+
+**Uma exceção:** a requisição que **já tinha sido aprovada** e caiu em *Aguard. Aprov. Valor* depois não recebe o lembrete de valor. Isso acontece quando a alçada é ligada depois da aprovação e alguém tenta separar ou entregar. Essa requisição aparece no filtro de aprovações de valor da tela de Requisições.
+
+Cada envio fica registrado no histórico de lembretes, por destinatário e com o número de dias. O registro do lembrete de regra diz também qual assinatura foi cobrada.
 
 ---
 

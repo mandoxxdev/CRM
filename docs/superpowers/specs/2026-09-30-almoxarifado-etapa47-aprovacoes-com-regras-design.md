@@ -585,3 +585,17 @@ o histórico de requisição rejeitada ou cancelada.
 rodadas concorrentes, e o controle sem ele deu `changes=2`. Nenhum outro caminho leva a requisição de
 `PENDENTE` a aprovado. Itens não são editáveis depois do envio. `/copiar` cria rascunho. A rota de
 `requisicoesMaterial.js` passa pelo avaliador.
+
+### 9.8 O que a Fase 5 (revisão do código) mudou no contrato
+
+Três revisores frescos em paralelo, cada um com uma lente: regras de negócio, autorização e força dos testes. Todos os achados reais foram reproduzidos por sonda antes da correção. O que muda **neste desenho**:
+
+- **A 9.3 estava ERRADA sobre quantidade.** Ela dizia *"`quantidade_minima` — casa se ALGUM item tem `quantidade_solicitada` ≥"*, e o código fazia exatamente isso, **linha a linha**. Só que a criação grava linhas repetidas do mesmo material. Duas linhas de 6 escapavam da regra "≥ 10" que uma linha de 12 dispararia, e o próprio solicitante contornava a regra. **O certo é:** "item" é o **material**, e a quantidade é **somada por material** (`GROUP BY material_id`). O `material_critico` segue a mesma leitura.
+- **A 9.4 (RN-07b) mudou quem assina "como admin".** A regra copiava o `role === 'admin'` da liberação por valor. Com isso, o superadmin que **cria** a regra levava 403 ao tentar destravar a pendência dela, e a saída "um admin assina", da 9.7/M2, não incluía quem administra o módulo. **Agora:** `role === 'admin'` **ou** `canConfigureAlmox` (superadmin, admin do módulo, perfil ADMINISTRADOR), no servidor e na tela.
+- **A 9.5 ganhou uma recusa nova:** 403 — `Usuário inativo não pode assinar aprovação de regra`. O JWT sobrevive 24 h à desativação e o snapshot da pendência mantém o usuário na lista. A recusa só vale quando a linha do usuário **existe** e está inativa.
+- **A fila (`GET /aprovacoes-regra/pendentes`) é filtrada no servidor.** Ela devolve só o que o usuário pode assinar, e tudo para quem configura o módulo. Antes, a fila inteira (nomes de regra, ids de aprovadores) ia para qualquer usuário do módulo, e só a tela filtrava.
+- **O `PUT` da regra não revalida quem já está na lista.** Desativar uma regra cujo aprovador saiu da empresa dava 400, e desativar é justamente a saída para esse caso. Acrescentar alguém inativo continua recusado.
+- **A 9.7/C2 tinha um furo nos rascunhos.** A migração carimbava também `RASCUNHO`, e o envio de um desses com o avaliador falhando passava pelo gate vazio. Agora são duas barreiras: a migração não carimba rascunho, e o `/enviar` zera `regras_avaliadas_em` no mesmo `UPDATE` que o torna `PENDENTE`. A segunda também fecha a janela entre o envio e o fim do avaliador.
+- **`pendencias_regra_abertas` nos GETs** passou a contar só a requisição que ainda aguarda (o I2 da 9.7 tinha filtrado a tela de regras e a fila, mas não esta).
+- **O nome da regra sai escapado na manchete do e-mail HTML.** Antes só a linha `Regra:` era escapada.
+- **A tela preserva `projeto_id` e `ordem` ao editar.** O `PUT` substitui a regra inteira, e a tela não tem campo para esses dois; sem repassá-los, editar pela tela apagava o projeto e zerava a ordem.

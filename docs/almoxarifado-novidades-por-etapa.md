@@ -107,7 +107,10 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Vinte e quatro itens para rodar em produção ANTES do deploy — vinte e um são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Vinte e seis itens para rodar em produção ANTES do deploy — vinte e três são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-09-30 (Etapa 47) de vinte e quatro para vinte e seis**, com a **A25** e a
+**A26**. A Etapa 46 não acrescentou nenhuma.)*
 
 *(Este título dizia "Duas consultas" — **passou a três com a A4, da Etapa 24**, ganhou a
 **limpeza de disco A5 na Etapa 25** e **passou a cinco com a A6 e a A7, da Etapa 26**. Corrigido
@@ -798,7 +801,41 @@ SELECT nc.numero, nc.decisao, nc.decidido_em, nc.decidido_por_nome,
   é o furo **C64**, e não há como tirá-los de lá hoje. Se esta consulta trouxer muitos deles, vale
   esperar a próxima etapa antes de entregar a fila ao Compras.
 
-### B. Decisões de negócio — B1 a B185; as em aberto esperam você, as tomadas estão escritas com o descartado
+**A25 (NOVA, da Etapa 47 — requisições já aprovadas que caíram em liberação por valor: elas ficam
+fora do lembrete novo).** O lembrete agora cobra a requisição parada em *Aguard. Aprov. Valor* — mas
+**só a que nasceu travada**. Existe um segundo caminho para esse status: uma requisição **já
+aprovada** (com reserva viva) é jogada nele quando alguém liga a liberação por valor **depois** e
+tenta separar ou entregar. Nessa, a frase *"aguardando liberação por valor há N dias"* mentiria, e
+ela fica fora. Saiba quantas existem hoje:
+
+```sql
+SELECT id, numero, solicitante_nome, valor_total, data_aprovacao, aprovador_nome, updated_at
+  FROM requisicoes_almoxarifado
+ WHERE status = 'AGUARDANDO_APROVACAO_VALOR'
+   AND data_aprovacao IS NOT NULL
+   AND COALESCE(ativo, 1) = 1
+ ORDER BY updated_at;
+```
+
+**Como ler o resultado:** **0 linhas** — nada a fazer. **Cada linha** é uma requisição que ninguém vai
+cobrar por e-mail: ela continua aparecendo no filtro *Aprovações de valor* da tela de Requisições,
+e é por ali que o aprovador de valor precisa ser avisado. O caminho que a produz é o furo **C68**.
+
+**A26 (NOVA, da Etapa 47 — a configuração aposentada: só conferir, não apagar).** A chave
+`limite_aprovacao_auto` saiu da instalação nova e da listagem, mas **a linha já gravada no seu banco
+fica** — de propósito (letra **B186**).
+
+```sql
+SELECT chave, valor, descricao FROM configuracoes_almoxarifado WHERE chave = 'limite_aprovacao_auto';
+```
+
+**Como ler o resultado:** **1 linha** é o esperado e **não pede ação** — nada no sistema a lê. **0
+linhas** também está certo (banco criado depois). **Não rode `DELETE`**: se um dia a regra de
+aprovação automática por quantidade for pedida, a linha é o ponto de partida.
+
+### B. Decisões de negócio — B1 a B196; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+*(**Atualizado em 2026-09-30 de B185 para B196**, com as onze da Etapa 47 — a B196 veio da revisão do código.)*
 
 *(O título desta seção dizia "B1 a B24" — **estava defasado**: os itens já iam até B36 antes da
 Etapa 20. Corrigido em 2026-08-28 para B50, depois para B56 com as três da Etapa 24, para B57 com
@@ -3439,6 +3476,91 @@ de ler.
 **E o travessão ficou onde ele é correto:** no documento cancelado que **nunca foi decidido** (o
 cancelamento automático da reconferência), onde não havia cobrança alguma para deixar de existir.
 
+**B186 (NOVA, da Etapa 47) — `limite_aprovacao_auto` foi APOSENTADA, sem apagar a linha.**
+**O que foi escolhido:** sai da instalação nova, some da listagem de configurações, e o servidor a
+trata como desconhecida se alguém tentar gravá-la (*"Configuração desconhecida:
+limite_aprovacao_auto"*). A linha que já existe no seu banco **fica**.
+**O que foi descartado:** (a) **apagar** a linha na atualização — irreversível, e dado que ninguém lê
+não faz mal parado; (b) **implementar** a aprovação automática por quantidade que ela prometia — regra
+de negócio que ninguém pediu, criada só para justificar uma linha de configuração.
+**Como desfazer:** voltar a chave para a instalação e tirá-la da lista de aposentadas. Consulta
+**A26**.
+
+**B187 (NOVA, da Etapa 47) — assinar uma regra NÃO aprova a requisição; as regras SOMAM à aprovação
+normal.** **Escolhido:** a requisição continua *Pendente* (ou *Aguard. Aprov. Valor*) enquanto as
+assinaturas de regra vão chegando; depois da última, alguém ainda dá o **Só Aprovar** (ou a
+liberação por valor), como antes.
+**Descartado:** a última assinatura de regra aprovar a requisição sozinha.
+**Por quê:** (1) a aprovação normal é quem **reserva o material** — sem ela, a requisição assinada
+pelas regras sairia aprovada sem saldo garantido; (2) o sistema não tem transação, e "assinar" e
+"aprovar" no mesmo gesto seriam duas gravações em lugares diferentes, com uma janela em que uma
+existe e a outra não. Do jeito escolhido, a garantia é **uma gravação só**.
+**A consequência que é sua:** uma requisição com duas regras passa por **três** pessoas (duas
+assinaturas + a aprovação). Se a regra deveria **substituir** a aprovação normal, isso é mudança de
+desenho, e reversível.
+
+**B188 (NOVA, da Etapa 47) — desativar uma regra com assinatura pendente torna a pendência
+OBSOLETA.** **Escolhido:** a pendência deixa de bloquear, **continua no histórico** marcada *"Obsoleta
+(regra desativada)"*, e a tela avisa antes e depois quantas requisições foram liberadas. Só as de
+requisição **ainda aguardando** — a de requisição rejeitada ou cancelada fica como estava.
+**Descartado:** (a) **manter** a pendência — a requisição ficaria travada por uma regra que o
+administrador acabou de desligar, sem saída na tela; (b) **apagar** — perderia o registro de que a
+regra valia quando a requisição entrou. **Reativar não reabre** a pendência: a requisição pode ter sido
+aprovada no intervalo.
+
+**B189 (NOVA, da Etapa 47) — a aprovação normal NÃO conta como assinatura de regra.** Quem assinou a
+regra *"Valor alto"* **pode** dar o *Só Aprovar* depois. A regra "a mesma pessoa não satisfaz duas
+regras" vale **entre regras**. **Descartado:** proibir também o aprovador normal de ter assinado uma
+regra — travaria equipes pequenas, onde o gestor que assina a regra é o mesmo que aprova. Se a
+política da empresa for "quem assinou não aprova", é uma linha.
+
+**B190 (NOVA, da Etapa 47) — o Administrador assina qualquer regra.** Mesmo critério da liberação por
+valor, que já aceitava administrador sem estar na lista. Ele continua sob as duas barreiras: não
+assina requisição **própria** e não assina **duas** regras da mesma requisição. **Descartado:** só a
+lista — deixaria requisição travada sem saída quando todos da lista estão fora (ver **C70**).
+
+**B191 (NOVA, da Etapa 47) — com assinatura de regra pendente, o lembrete "aguardando aprovação" da
+requisição CALA.** **Escolhido:** a requisição sai do lembrete comum (e do lembrete de liberação por
+valor) enquanto houver assinatura de regra pendente, e volta quando a última é dada.
+**Descartado:** os dois lembretes ao mesmo tempo — o comum cobraria a lista geral (ou o aprovador de
+valor) por um gesto que o sistema **está recusando**, e a frase "aguardando aprovação" mentiria sobre
+qual gesto falta.
+
+**B192 (NOVA, da Etapa 47) — sem ninguém na lista que possa assinar, o lembrete da regra vai para a
+lista geral.** Acontece quando os únicos aprovadores da regra são o próprio solicitante ou quem já
+assinou outra regra da mesma requisição. **Escolhido:** cobrar a lista geral de notificação de
+requisições, que alcança quem pode resolver (um administrador, ou desativar a regra).
+**Descartado:** não mandar e-mail nenhum — o silêncio é o defeito que esta linhagem de etapas veio
+fechar.
+
+**B193 (NOVA, da Etapa 47) — "projeto" é critério de regra, mas não aparece na tela.** A tela de
+requisição **não grava projeto**, então uma regra por projeto nunca casaria com requisição criada pela
+tela. Ficou disponível pela porta de programação (para requisições que chegam de outros módulos com
+projeto), e fora da aba. **Descartado:** mostrar o campo — seria oferecer uma regra que, na prática,
+não dispara.
+
+**B194 (NOVA, da Etapa 47, técnica) — o plano mandava carregar o serviço de liberação por valor
+"dentro da função", por medo de dependência circular; carreguei normalmente.** Medi: o ciclo que o
+plano citava é entre **outros** dois serviços; este não participa dele. Fica registrado porque é
+divergência do plano, não porque muda comportamento.
+
+**B195 (NOVA, da Etapa 47) — quem assina uma regra é uma LISTA DE PESSOAS, não um perfil — e por isso
+nenhuma permissão nova foi criada.** **Escolhido:** cada regra nomeia usuários, como a liberação por
+valor já faz. **Descartado:** "a regra exige perfil Gestor" — perfil não diz **quem**, e a regra "a
+mesma pessoa não assina duas regras" só existe se o sistema souber quem é quem; e uma permissão nova
+**por regra** criada na tela é impossível. **Consequência:** trocar a pessoa que assina é editar a
+regra — mas a requisição que **já entrou** continua com a lista **do momento em que entrou**.
+
+**B196 (NOVA, da Etapa 47, revisão do código) — quem administra o módulo assina QUALQUER regra.**
+**Escolhido:** além de quem está na lista, pode assinar quem configura o Almoxarifado (administrador do
+módulo ou Super Administrador). **Por quê:** a primeira versão copiou da liberação por valor o
+critério "papel admin do sistema", e o Super Administrador que **cria** a regra não conseguia
+destravar a assinatura dela quando o único aprovador saía de férias — a saída "um administrador
+assina" que o próprio manual promete não existia para ele. **Descartado:** manter o critério da
+liberação por valor por simetria (a liberação por valor **continua** com o critério antigo — se
+quiser alinhar as duas, é uma decisão sua). **E a mesma pessoa continua não podendo assinar duas
+regras da mesma requisição**, administrador inclusive.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -4385,6 +4507,32 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
     (o caso normal), o bloqueado já saiu junto. Se ninguém deu baixa nenhuma, o material continua
     retido e sem documento cobrando — este é o único estado que a etapa cria e não cobra.
 
+68. **NOVO, da Etapa 47 (anterior a ela, achado pela revisão do plano) — uma requisição JÁ APROVADA
+    pode cair em "Aguard. Aprov. Valor" por um atalho que a máquina de estados não conhece.** Quando a
+    liberação por valor é ligada **depois** de uma requisição ter sido aprovada, e alguém tenta
+    **separar** ou **entregar** essa requisição, o sistema recalcula o valor, vê que passou do limite e
+    **muda o status para *Aguard. Aprov. Valor* por gravação direta** — um caminho que a lista oficial
+    de mudanças de status proíbe a partir de *Aprovada*, *Reservada* e os demais. A requisição fica
+    com reserva viva e aprovação registrada, esperando liberação.
+    **O que isso significa para quem opera:** ela **não** recebe o lembrete novo de valor (a frase
+    mentiria — ela não está "aguardando há N dias" desde o pedido), e o aprovador de valor só a vê pelo
+    filtro *Aprovações de valor*. **Consulta A25** mede quantas existem. **Não foi consertado nesta
+    etapa** porque é mudança de máquina de estados, anterior a ela.
+
+69. **NOVO, da Etapa 47 — o lembrete de requisição contou a espera 3 horas A MENOS desde que
+    existe.** A hora gravada pelo banco é universal; o lembrete a lia como hora do servidor (UTC-3).
+    Efeito: *"há 2 dias"* com 50 horas de espera, e o **registro de lembretes** gravou o mesmo número
+    a menos. **Corrigido** — mas o histórico de lembretes já enviado continua com o número antigo:
+    quem comparar o registro de antes e de depois da atualização vai ver o salto.
+
+70. **NOVO, da Etapa 47 — duas regras com o MESMO aprovador único travam a requisição que se encaixa
+    nas duas.** Se *"Valor alto"* e *"Material crítico"* têm só a **Ana** em *Quem pode assinar*, a Ana
+    assina uma e é recusada na outra (*"Você já assinou outra aprovação de regra desta requisição"*).
+    **As saídas:** um **Administrador** assina a segunda (ver **B190**), ou desativa-se uma das regras.
+    O cadastro **não** recusa a configuração, porque ela só trava quando uma requisição casa as duas.
+    **Recomendação para quem configura:** toda regra com pelo menos duas pessoas, ou regras que não se
+    sobreponham.
+
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -4871,6 +5019,28 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   tem seletor de série. Mesma limitação, e pelo mesmo motivo, do descarte de devolução da Etapa 7.
   promessa a deixá-la escrita e não cumprida.
 
+- **(47) Urgência e material de cliente não são critério de regra de aprovação.** A spec da feature
+  os lista junto com tipo, valor, quantidade, projeto e centro de custo; ficaram de fora do desenho.
+  Acrescentá-los é uma coluna nova cada, sem nada irreversível no caminho.
+
+- **(47) Regra vale no ENVIO da requisição.** Criar, editar ou reativar uma regra **não** reavalia as
+  requisições que já estão na fila. E as requisições que já existiam no dia da atualização foram
+  marcadas como "regras já avaliadas" — **nenhuma regra nova as alcança**; elas seguem a aprovação de
+  antes. **Por quê:** uma regra que aparece do nada numa requisição de semanas atrás, travando o botão
+  de aprovar, é pior que a regra valer do próximo envio em diante.
+
+- **(47) A requisição já aprovada que caiu em liberação por valor não é cobrada por e-mail.** É o furo
+  **C68**, e a consulta **A25** mede quantas há. Cobrá-la exigiria outra frase ("voltou a aguardar
+  liberação") e resolver o atalho da máquina de estados antes — etapa própria.
+
+- **(47) Não há fila "minhas aprovações" da aprovação normal.** O painel novo mostra só as
+  **assinaturas de regra** que o usuário pode dar; a liberação por valor já tinha o filtro dela. A
+  aprovação normal é por perfil, e perfil não diz **quem** — a fila dela é outra decisão.
+
+- **(47) Editar a lista de quem assina não alcança requisição que já entrou.** A requisição guarda a
+  lista **do momento do envio**. Trocar o gestor responsável depois não passa a pendência para ele — a
+  saída é o Administrador assinar, ou desativar a regra (que torna a pendência obsoleta).
+
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
 **"Uma remessa não pode misturar materiais de donos diferentes."** O sistema hoje **recusa** montar
@@ -5174,6 +5344,29 @@ prova, e vale os 5 minutos do roteiro do guia:
 6. **A linha não some junto com o aviso de sucesso?** Com o filtro *Pendentes de execução* ligado,
    cancelar tem de **largar os dois filtros** e manter a linha visível. É a terceira aparição desse
    modo de falha nesta base, e é o único item desta lista que já deu errado duas vezes antes.
+
+**(47) Nenhum clique foi dado nesta etapa.** Os testes provam as recusas com a frase exata, o botão
+de aprovar desabilitado com o motivo, o *Assinar* aparecendo só para quem pode, o painel da fila
+filtrado, a confirmação antes de desativar regra com pendência, e — pelo caminho real do job — quem
+recebe cada e-mail. O que **só o navegador** prova:
+
+1. **A aba nova cabe na barra de Configurações?** A barra passou a ter **doze** abas (a nova fica logo
+   depois de *Liberação por Valor*). Conferir em tela de notebook que *Regras de Aprovação* aparece e
+   que a barra não estoura a largura.
+2. **O motivo do botão cinza aparece?** O texto *"Aguardando N aprovação(ões) de regra antes da
+   aprovação"* está no **título** do botão (aparece ao parar o mouse) e no aviso abaixo do bloco.
+   Conferir que o aviso aparece — o título não aparece em celular.
+3. **O e-mail HTML mostra o valor e o limite?** Os testes leem o texto do e-mail; o HTML ganhou as
+   linhas *Valor total* e *Regra* no bloco de dados. Conferir num cliente de e-mail real que elas
+   aparecem e não quebram a tabela.
+4. **O painel "Aprovações de regra aguardando você" some quando não há nada?** Entrar com um usuário
+   que não está em nenhuma regra: o painel **não** pode aparecer vazio.
+5. **O texto de ajuda do lembrete ficou desatualizado — conferir e decidir.** Em **Configurações →
+   Alertas de Estoque → Lembretes de requisições pendentes**, a tela diz *"Envia e-mail diário quando
+   uma requisição permanece com status PENDENTE… Usa os mesmos destinatários configurados acima"*.
+   Depois desta etapa isso é **meia verdade**: a requisição travada por valor e cada assinatura de
+   regra também são cobradas, e **não** pelos destinatários de cima. *(Registrado no fechamento; se
+   ainda estiver assim quando você ler, é o próximo ajuste de texto.)*
 
 ### G. Fragilidades estruturais que continuam de pé
 
@@ -6176,6 +6369,27 @@ próprio, com os prefixos de tabela, porque ela mora em outro arquivo e nenhuma 
 condição. **A cópia é guardada por teste**, mas é cópia. **É uma linha de código quando alguém
 quiser** publicar a condição num único lugar — e vale, porque este é o terceiro fechamento seguido
 em que uma revisão acha meia-régua neste mesmo ponto.
+
+---
+
+**G76 (NOVO, da Etapa 47). O teste que prova a contagem certa de dias do lembrete só funciona numa
+máquina FORA do horário universal.** O defeito corrigido (**C69**) era ler a hora do banco como hora
+local. Numa máquina em UTC-3 — a de desenvolvimento — as duas leituras diferem em 3 horas e o teste
+pega o erro (a sabotagem ficou vermelha aqui). **Num servidor configurado em UTC as duas leituras
+coincidem**, o teste passa verde com o defeito de volta, e ninguém percebe. **Fica declarado:** a
+proteção é real nesta máquina e vazia em UTC. Fechar isso é fixar o fuso no começo do teste e
+derrubá-lo se o ambiente não tiver o fuso esperado.
+
+---
+
+**G77 (NOVO, da Etapa 47). A marcação das requisições antigas na atualização não tem teste.** Na
+primeira vez que o sistema sobe depois da atualização, todas as requisições que já existem recebem a
+marca "regras já avaliadas" — sem ela, **nenhuma** delas poderia ser aprovada (a aprovação passa a
+exigir a marca). O ambiente de teste nasce com banco **vazio**, então a marcação roda sobre zero
+linhas e nada prova que ela acontece. **O risco, se ela falhar:** as requisições pendentes do dia da
+atualização seriam reavaliadas no primeiro *Só Aprovar* — com as regras que existirem naquele
+momento —, e não travariam para sempre (a aprovação reavalia quando falta a marca). **O pior caso é
+uma regra aplicada retroativamente, não uma requisição morta.**
 
 aparece na hora, para quem está editando.
 ## Etapa 0 — Fundação (2026-08-03)
@@ -12314,7 +12528,169 @@ havia cobrança nenhuma para deixar de existir.
    alertas, e a Qualidade não tem — por isso o corpo do aviso **nomeia** a saída em vez de depender
    de quem o lê. Ver a letra **B**.
 
+## Etapa 47 — O motor de aprovações ganha regras, e a requisição de alto valor passa a ser cobrada (2026-09-30)
+
+Até aqui, a aprovação de requisição tinha duas portas fixas: a **aprovação normal** e a **liberação
+por valor**. Não havia como dizer *"toda requisição com material crítico precisa do aval da
+Manutenção"* ou *"acima de R$ 5.000 a Diretoria assina"*. E havia um buraco na cobrança: a requisição
+travada por valor avisava os aprovadores **uma vez**, no instante em que travava, e **nunca mais** —
+o lembrete diário só olhava as pendentes comuns. A requisição mais cara era a que podia ficar
+esquecida.
+
+Agora o administrador do módulo cadastra **regras de aprovação**. Cada regra diz **quando vale**
+(tipo de requisição, material crítico, valor a partir de, quantidade a partir de, centro de custo) e
+**quem pode assinar**. Uma requisição que se encaixa em duas regras precisa de **duas assinaturas, de
+duas pessoas diferentes**, e só depois disso a aprovação normal (ou a liberação por valor) é aceita.
+Cada assinatura pendente é **cobrada por e-mail de quem pode dá-la**, e a requisição travada por
+valor passou a ser cobrada todo dia, de quem libera por valor.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Só duas portas fixas de aprovação (normal e por valor) | Aba **Regras de Aprovação** em Configurações: regras com critérios e lista de quem assina |
+| — | Requisição que se encaixa em N regras exige **N assinaturas, de N pessoas diferentes**, antes da aprovação |
+| "Só Aprovar" e "Aprovar e Separar" sempre clicáveis em requisição pendente | Desabilitados, com o motivo, enquanto faltar assinatura de regra |
+| A requisição travada por valor recebia **um** e-mail, no instante em que travava | Cobrada todo dia pelo lembrete, **dos aprovadores de valor**, com o valor e o limite no corpo |
+| — | Cada assinatura pendente tem lembrete próprio, **de quem pode assinar aquela regra** |
+| Aprovação automática aprovava qualquer requisição normal não crítica | Não aprova requisição que tem assinatura de regra pendente — ela fica **Pendente** |
+| Configuração `limite_aprovacao_auto` listada pela API, prometendo aprovação automática por quantidade que não existe | Some da listagem e não é mais gravável; a linha de bancos antigos **não** é apagada |
+| E-mail de lembrete dizia "há 2 dias" com 50 horas de espera (contava 3h a menos no servidor em UTC-3) | Conta a espera certa |
+
+### As regras, com o cenário exato
+
+**Preparação para a apresentação:** três usuários além do solicitante — **Ana** e **Bia** (perfil
+Gestor) e um **Administrador** do módulo. Um material com custo de R$ 600 e outro marcado como
+**material crítico**.
+
+**1. Cadastrar a regra.** **Almoxarifado → Configurações → Regras de Aprovação → Nova regra.**
+Nome *"Valor alto"*, **Valor total a partir de (R$)** = 1000, marque a **Ana** em *Quem pode
+assinar*, **Salvar regra** → *"Regra criada"*. Crie a segunda: *"Material crítico"*, marque **Algum
+item é material crítico**, marque a **Bia**.
+A regra vale quando **todos** os critérios preenchidos batem — a tela diz isso abaixo do formulário.
+
+**2. As recusas do cadastro, com a frase de cada uma.**
+- sem nome → *"Regra precisa de um nome"*;
+- sem nenhum critério → *"Regra precisa de pelo menos um critério"* (marcar só *material crítico
+  = não* também não conta);
+- sem ninguém em *Quem pode assinar* → *"Regra precisa de pelo menos um aprovador"*;
+- valor zero ou negativo → *"valor_minimo deve ser um número maior que zero"* (a frase sai com o nome
+  técnico do campo — é assim que o servidor escreve);
+- quantidade zero → *"quantidade_minima deve ser um número maior que zero"*.
+- Pela porta de programação, com usuário inexistente ou desativado → *"Aprovador inexistente ou
+  inativo: 99"*, e tipo inválido → *"Tipo de requisição inválido: BANANA"*.
+- Quem não administra o módulo → *"Acesso restrito — administrador do Almoxarifado ou Super
+  Administrador"*.
+
+**3. A requisição que se encaixa nas duas.** Entre como solicitante e crie uma requisição com **2**
+unidades do material de R$ 600 (R$ 1.200) e **1** do crítico. Entre como Administrador e abra a
+requisição em **Requisições**: aparece o bloco **Aprovações de regra**, com *"Valor alto · Aguardando
+assinatura"* e *"Material crítico · Aguardando assinatura"*, e o aviso *"Aguardando 2 aprovação(ões)
+de regra antes da aprovação. Quem assina cada regra está no bloco acima."*. Os botões **Aprovar e
+Separar** e **Só Aprovar** estão **cinza**; parando o mouse sobre eles, *"Aguardando 2
+aprovação(ões) de regra antes da aprovação"*.
+Pela porta de programação, o `/aprovar` recusa com *"Requisição tem aprovação de regra pendente:
+Valor alto, Material crítico"* — e **não reserva nada** (esse detalhe tem teste próprio, porque a
+primeira versão do desenho deixaria reserva órfã).
+
+**4. Assinar.** Entre como **Ana**. No topo de **Requisições** aparece *"Aprovações de regra
+aguardando você (1)"*; clique na linha, e no detalhe clique **Assinar** →
+*"Aprovação da regra "Valor alto" assinada. Ainda falta(m) 1."*. Entre como **Bia** e assine a
+outra → *"Aprovação da regra "Material crítico" assinada. A requisição já pode ser aprovada."*. Os
+botões de aprovar voltam a ficar ativos.
+
+**5. A segregação vale em cada assinatura.** Pela porta de programação (a tela nem mostra o botão a
+quem não pode):
+- o próprio solicitante → *"Solicitante não pode aprovar a própria requisição"*;
+- quem não está na lista da regra → *"Você não está entre os aprovadores desta regra"*;
+- o Administrador do módulo (que pode assinar qualquer regra — ver **B196**) assina uma e tenta a outra → *"Você já assinou
+  outra aprovação de regra desta requisição"*;
+- assinar de novo a que já foi assinada → *"Esta aprovação de regra não está mais aberta"*.
+- usuário **desativado** no cadastro, mesmo estando na lista → *"Usuário inativo não pode assinar
+  aprovação de regra"* (o acesso dele sobrevive até 24 h à desativação; a assinatura não).
+**A aprovação normal não conta como assinatura de regra:** quem assinou uma regra pode dar o
+*Só Aprovar* depois. Ver a letra **B**.
+
+**6. A liberação por valor também espera.** Com a **Liberação por Valor** ligada e limite R$ 500, a
+mesma requisição nasce *Aguard. Aprov. Valor*. O botão **Aprovar Liberação** fica cinza enquanto
+faltar assinatura de regra, e pela porta de programação a recusa é a mesma frase da regra 3. Depois
+das duas assinaturas, a liberação passa e reserva o material.
+
+**7. A aprovação automática respeita as regras.** Em **Configurações Gerais**, ligue **Aprovação
+Automática**. Requisição que se encaixa numa regra nasce **Pendente** (não Aprovada); requisição que
+não se encaixa em nenhuma continua sendo aprovada sozinha.
+
+**8. Desativar uma regra com assinatura pendente.** Em **Regras de Aprovação**, clique **Desativar**
+numa regra que está segurando requisição: a tela pergunta antes — *"Desativar esta regra libera N
+requisição(ões) que aguardam a assinatura dela — a pendência fica registrada como obsoleta e deixa de
+bloquear a aprovação."* — com **Desativar mesmo assim** e **Manter ativa**. Confirmando:
+*"N aprovação(ões) pendente(s) desta regra deixaram de bloquear requisições"* e *"Regra desativada"*.
+Na requisição, a linha passa a dizer *"Obsoleta (regra desativada)"*. Reativar a regra **não**
+reabre a pendência. Regra **sem** pendência desativa direto, sem pergunta.
+
+**9. O lembrete da requisição travada por valor.** Com o lembrete ligado (**Configurações → Alertas
+de Estoque → Lembretes de requisições pendentes**), a requisição parada em *Aguard. Aprov. Valor*
+passa a receber, a cada intervalo, o e-mail *"Lembrete: Requisição REQ-… aguardando liberação por
+valor há 2 dias"*, com a linha *"Valor total: R$ 1.200,00 (limite de liberação automática: R$
+500,00)"* e a chamada *"Acesse o sistema para aprovar ou reprovar a liberação:"*. Ele vai para os
+**aprovadores de valor** — sem nenhum configurado, para a lista geral de notificação de requisições.
+
+**10. O lembrete de cada assinatura de regra.** Cada assinatura pendente há mais que o intervalo
+recebe *"Lembrete: Requisição REQ-… aguardando aprovação da regra "Valor alto" há 2 dias"*, com a
+linha *"Regra: Valor alto"* e a chamada *"Acesse o sistema para assinar a aprovação da regra:"*. Vai
+para **quem está na lista da regra**, tirando o solicitante e quem já assinou outra regra da mesma
+requisição (nenhum dos dois pode assinar esta). Se não sobrar ninguém, vai para a lista geral — cobrar
+alguém que resolva é melhor que não cobrar ninguém.
+**E enquanto houver assinatura de regra pendente, o lembrete "aguardando aprovação" da requisição
+não sai:** ele cobraria quem não pode aprovar ainda. Assinada a última, ele volta.
+
+**11. A quantidade conta por MATERIAL, não por linha.** Crie a regra *"Quantidade grande"* com
+**Algum item com quantidade a partir de** = 50. Uma requisição com **duas linhas de 30** do mesmo
+parafuso se encaixa (conta 60); uma com 30 de um parafuso e 30 de uma porca, **não**. Sem isso, o
+solicitante contornava a regra dividindo o pedido em linhas.
+
+### O que esta etapa NÃO cobre
+
+1. **Urgência e material de cliente não são critério de regra.** A spec os lista; ficaram fora.
+2. **Projeto é critério só pela porta de programação.** A tela de requisição não grava projeto,
+   então uma regra por projeto nunca casaria com requisição criada pela tela.
+3. **Regra nova ou editada não vale para requisição já enviada.** A regra é avaliada no **envio**.
+4. **A requisição já aprovada que caiu em *Aguard. Aprov. Valor* depois não recebe o lembrete de
+   valor.** Ver a letra **C**.
+5. **Não há fila "minhas aprovações" da aprovação normal** — só das assinaturas de regra (e da
+   liberação por valor, que já existia).
+6. **Material fora da lista técnica e dupla aprovação de ajuste** continuam fora — dependem de
+   outras features.
+
 ## Onde estamos e o que vem a seguir
+
+- **Etapa 47 entregue (2026-09-30):** **o motor de aprovações ganha regras, e a requisição de alto
+  valor passa a ser cobrada.** O administrador cadastra regras (tipo, material crítico, valor,
+  quantidade, centro de custo) com a lista de quem assina; a requisição que se encaixa em N regras
+  precisa de **N assinaturas de N pessoas** antes de a aprovação normal ou a liberação por valor
+  serem aceitas — e a aprovação automática passou a respeitar isso. Cada assinatura pendente é
+  cobrada de quem pode dá-la, e a requisição travada por valor, que avisava uma vez e nunca mais,
+  passou a ser cobrada todo dia.
+  **O que é seu:** as consultas **A25** (requisições já aprovadas que caíram em liberação por valor —
+  ficam fora do lembrete) e **A26** (a linha órfã da configuração aposentada); as decisões **B186 a
+  B196** — a que mais pede sua leitura é a **B187** (assinar **não** muda o status da requisição, e
+  as regras **somam** à aprovação normal em vez de substituí-la) e a **B191** (com assinatura de regra
+  pendente, o lembrete comum **cala**); os furos **C68 a C70**; as limitações **(47)** em D; as
+  verificações **(47)** em F; e as fragilidades **G76** e **G77**.
+  **Um defeito antigo saiu de graça:** o lembrete contava a espera 3 horas a menos (lia a hora do
+  banco como se fosse local), e dizia *"há 2 dias"* com 50 horas de espera — desde que o lembrete
+  existe. **E um segundo:** dois *Só Aprovar* ao mesmo tempo na mesma requisição respondiam sucesso os
+  dois e reservavam o material duas vezes; agora o segundo é recusado.
+  **As revisões do plano acharam 22 itens, 6 CRITICAL** — 11 no plano original e 11 no contrato das
+  regras, antes de codar. **O que mais ensina:** a primeira versão do desenho barrava a aprovação só
+  no último passo, depois de reservar — a reaprovação reservaria **o dobro** (medido pela revisão, com
+  duas reservas de 10 para um item de 10).
+  **A revisão do código pronto achou 12 itens reais, nenhum CRITICAL** — os que mais importam: o
+  próprio solicitante **contornava a regra de quantidade** dividindo o pedido em linhas do mesmo
+  material (agora soma por material; o desenho estava errado), e o **Super Administrador que cria a
+  regra não conseguia destravá-la** (agora quem administra o módulo assina qualquer regra — **B196**).
+  Mais 21 pontos que os testes não cobriam, dois deles escondendo defeito: editar uma regra pela tela
+  apagava o projeto dela, e o nome da regra saía sem proteção no e-mail. Todos corrigidos e com teste.
 
 - **Etapa 46 entregue (2026-09-30):** **o documento decidido deixa de ser um beco, e passa a
   cobrar**. A etapa passada criou uma situação sem saída: material com **número de série** decidido

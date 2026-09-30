@@ -1,12 +1,28 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-09-30 (Etapa 46) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-09-30 (Etapa 47) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 46) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 47) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-09-30 (Etapa 46 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-09-30 (Etapa 47 ENTREGUE · modo contínuo pelo mapa)
 >
-> **Etapas 1 a 20 e 22 a 46 completas; a Etapa 21 foi entregue no NÚCLEO do CRM e as 38 a 42 no
+> **O desenvolvimento parou aqui: Etapa 47, 2026-09-30.** A **Etapa 47 (o motor de aprovações ganha
+> regras, e a requisição de alto valor passa a ser cobrada)** fecha dois achados antigos da feature
+> **06 (Aprovações)** e paga o item que ela adiava desde a Etapa 3. O administrador cadastra **regras
+> de aprovação** em *Configurações → Regras de Aprovação* (tipo de requisição, material crítico, valor
+> a partir de, quantidade a partir de, centro de custo, e **quem pode assinar**). A requisição que se
+> encaixa em N regras precisa de **N assinaturas de N pessoas diferentes** antes de o *Só Aprovar*, o
+> *Aprovar e Separar*, o *Aprovar Liberação* ou a **Aprovação Automática** passarem — os botões ficam
+> **cinza com o motivo** (*"Aguardando N aprovação(ões) de regra antes da aprovação"*). Cada
+> assinatura pendente é **cobrada por e-mail de quem pode dá-la**, e a requisição travada por valor —
+> que avisava uma vez e nunca mais — passou a ser **cobrada todo dia**, dos aprovadores de valor.
+> **O que ela NÃO faz e você precisa saber:** assinar **não aprova** a requisição (as regras **somam**
+> à aprovação normal); regra nova **não** alcança requisição já enviada; urgência e material de
+> cliente **não** são critério; e a requisição **já aprovada** que caiu em liberação por valor depois
+> **não** recebe o lembrete (furo C68). A feature 06 **continua 🟡**.
+> **Próxima etapa:** ver *"Próxima tarefa detalhada"* no plano da Etapa 47.
+>
+> **Etapas 1 a 20 e 22 a 47 completas; a Etapa 21 foi entregue no NÚCLEO do CRM e as 38 a 42 no
 > módulo COMPRAS** (a 42 nos dois: o gancho roda no Almoxarifado, o efeito aparece no Compras).
 > A **43, a 44, a 45 e a 46 estão dentro do almoxarifado**, nas features 08 (Recebimento) e 09
 > (Inspeção) — a 46 com efeito também em 20 (Alertas) e 23 (Perfis).
@@ -4885,6 +4901,98 @@ que ele não tinha como repetir com sucesso garantido.
 - **Números de outros módulos do CRM** — a varredura foi do almoxarifado.
 
 ---
+
+## Etapa 47 — O motor de aprovações ganha regras, e a requisição de alto valor passa a ser cobrada (ENTREGUE — 2026-09-30)
+
+**O que mudou, em uma frase:** o administrador passa a cadastrar **regras de aprovação** — *quando*
+a requisição precisa de um aval extra e *quem* pode dá-lo —, cada aval pendente é **cobrado por
+e-mail** de quem pode dá-lo, e a requisição travada por valor passou a ser cobrada **todo dia**.
+
+**O problema que ela resolve.** A aprovação tinha duas portas fixas: a aprovação normal (por perfil) e
+a liberação por valor (acima de um limite em R$). Não dava para dizer *"material crítico precisa do
+aval da Manutenção"*. E a requisição travada por valor avisava os aprovadores **uma vez**, na hora em
+que travava, e nunca mais — o lembrete diário só olhava requisição *Pendente*.
+
+**Como funciona.** Cada regra tem critérios — **tipo de requisição**, **algum item é material
+crítico**, **valor total a partir de**, **algum item com quantidade a partir de**, **centro de
+custo** — e vale quando **todos** os preenchidos batem. Quando a requisição é **enviada**, cada regra
+que se encaixa gera uma **assinatura pendente**. Enquanto houver assinatura pendente, **nenhuma**
+aprovação passa: nem *Só Aprovar*, nem *Aprovar e Separar*, nem *Aprovar Liberação*, nem a
+*Aprovação Automática*. Cada assinatura tem de ser de uma **pessoa diferente**, e o solicitante nunca
+assina. **Assinar não aprova:** depois da última assinatura, a aprovação normal continua sendo
+necessária — é ela que reserva o material.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Duas portas fixas de aprovação | Aba **Regras de Aprovação** em Configurações |
+| Botões de aprovar sempre clicáveis em requisição pendente | Cinza com o motivo enquanto faltar assinatura de regra |
+| — | Bloco **Aprovações de regra** no detalhe, com **Assinar** para quem pode |
+| — | Painel **"Aprovações de regra aguardando você (N)"** no topo de Requisições |
+| Requisição travada por valor recebia um e-mail só | Lembrete diário para os **aprovadores de valor**, com o valor e o limite |
+| — | Lembrete diário de cada assinatura pendente, para **quem pode assinar** |
+| Aprovação Automática aprovava toda requisição normal não crítica | Não aprova a que tem assinatura de regra pendente |
+
+### Roteiro de teste manual (≈15 min)
+
+**Preparação.** Quatro usuários: **Solicitante** (qualquer perfil que requisita), **Ana** e **Bia**
+(perfil *Gestor*) e você como **Administrador** do módulo. Dois materiais: um com custo unitário de
+**R$ 600** e outro marcado como **material crítico** (no cadastro do material). Para ver os e-mails,
+o SMTP em *Configurações → Alertas de Estoque* precisa estar configurado.
+
+1. **Cadastrar as regras.** Como Administrador: **Almoxarifado → Configurações → Regras de
+   Aprovação → Nova regra**. Nome **Valor alto**, *Valor total a partir de (R$)* = **1000**, marque a
+   **Ana**, **Salvar regra** → *"Regra criada"*. Repita: **Material crítico**, marque *Algum item é
+   material crítico*, marque a **Bia**.
+   ✅ As duas aparecem na lista, com *"Valor ≥ R$ 1.000,00"* e *"Algum item é material crítico"*, e
+   *"Assinam: Ana"* / *"Assinam: Bia"*.
+2. **As recusas.** *Nova regra*, só o nome, **Salvar regra** → *"Regra precisa de pelo menos um
+   critério"*. Preencha um valor e desmarque todos → *"Regra precisa de pelo menos um aprovador"*.
+   Apague o nome → *"Regra precisa de um nome"*. **Cancelar**.
+3. **Criar a requisição.** Como **Solicitante**: nova requisição com **2** do material de R$ 600 e
+   **1** do crítico, **enviar**.
+4. **Ver o bloqueio.** Como **Administrador**, abra a requisição em **Requisições**.
+   ✅ Bloco **Aprovações de regra** com *Valor alto · Aguardando assinatura* e *Material crítico ·
+   Aguardando assinatura*.
+   ✅ Aviso *"Aguardando 2 aprovação(ões) de regra antes da aprovação. Quem assina cada regra está no
+   bloco acima."*.
+   ✅ **Aprovar e Separar** e **Só Aprovar** cinza.
+5. **Assinar a primeira.** Como **Ana**: em **Requisições**, o painel *"Aprovações de regra
+   aguardando você (1)"* mostra a requisição. Clique nela, e no detalhe clique **Assinar** →
+   *"Aprovação da regra "Valor alto" assinada. Ainda falta(m) 1."*. O botão *Assinar* da outra regra
+   **não** aparece para ela.
+6. **Assinar a segunda.** Como **Bia**, mesma coisa na *Material crítico* → *"Aprovação da regra
+   "Material crítico" assinada. A requisição já pode ser aprovada."*.
+7. **Aprovar.** Como **Administrador**, os botões voltaram a ficar ativos: **Só Aprovar** → aprovada.
+8. **Desativar com pendência.** Crie outra requisição igual à do passo 3. Em **Regras de Aprovação**,
+   clique **Desativar** na *Valor alto*.
+   ✅ Aparece *"Desativar esta regra libera 1 requisição(ões) que aguardam a assinatura dela — a
+   pendência fica registrada como obsoleta e deixa de bloquear a aprovação."*.
+   **Desativar mesmo assim** → *"1 aprovação(ões) pendente(s) desta regra deixaram de bloquear
+   requisições"*. Na requisição, a linha *Valor alto* diz *"Obsoleta (regra desativada)"*.
+9. **Aprovação Automática.** Em *Configurações Gerais*, ligue **Aprovação Automática**. Uma requisição
+   só com o material crítico nasce **Pendente** (a regra *Material crítico* segura); uma só com o
+   material de R$ 600 × 1 (sem regra ativa que case) nasce **Aprovada**. Desligue ao terminar.
+10. **Liberação por valor.** Em *Configurações → Liberação por Valor*, ligue com limite **500** e
+    marque um aprovador. Reative a *Valor alto*. Uma requisição de R$ 1.200 nasce *Aguard. Aprov.
+    Valor*, e **Aprovar Liberação** fica cinza até a Ana assinar.
+11. **Os e-mails (só com SMTP).** Com o lembrete ligado em *Configurações → Alertas de Estoque*, a
+    requisição parada em *Aguard. Aprov. Valor* recebe *"Lembrete: Requisição REQ-… aguardando
+    liberação por valor há N dias"*, com *"Valor total: R$ … (limite de liberação automática: R$ …)"*,
+    e cada assinatura pendente recebe *"Lembrete: Requisição REQ-… aguardando aprovação da regra
+    "Valor alto" há N dias"*. O lembrete só sai depois do intervalo configurado (padrão 24 h) — para
+    demonstrar, use um intervalo de 1 h e uma requisição antiga.
+
+### O que esta etapa NÃO cobre
+
+- **Urgência** e **material de cliente** não são critério de regra.
+- **Projeto** é critério só pela porta de programação — a tela de requisição não grava projeto.
+- Regra criada, editada ou reativada **não** alcança requisição **já enviada**.
+- A requisição **já aprovada** que caiu em liberação por valor depois **não** recebe o lembrete (C68).
+- Não há fila "minhas aprovações" da aprovação **normal** — só das assinaturas de regra.
+- ⚠️ O texto de ajuda do bloco *Lembretes de requisições pendentes* (em *Alertas de Estoque*) ainda
+  fala só de *PENDENTE* e dos destinatários de cima — ver a letra F (47) das novidades.
 
 ## Etapa 46 — A não conformidade decidida deixa de ser um beco (ENTREGUE — 2026-09-30)
 

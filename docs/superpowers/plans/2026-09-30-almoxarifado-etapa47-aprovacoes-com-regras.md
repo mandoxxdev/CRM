@@ -384,6 +384,113 @@ status → (1)–(4)(6)(7); log sem pendência → (5); lane de status cobrando 
 
 ---
 
+## ✅ T6 + T7 — as telas (2026-09-30, `2b1d0f6`)
+
+Rodaram **em série**, como a Fase 2 mandou (7.8): as duas compartilham a decisão sobre pendência
+obsoleta, e ela ficou numa tela só — a T6 pergunta e avisa, a T7 mostra `Obsoleta (regra desativada)`.
+
+**T6 — `TabRegrasAprovacao.js`** (arquivo próprio, plugado em `ConfiguracoesAlmoxarifado.js` como a
+aba `regras-aprovacao`): lista com critérios em linguagem de usuário e quem assina; criar/editar com
+o payload do contrato; recusa do backend com a literal dele; **desativar com pendência pede
+confirmação e avisa quantas deixaram de bloquear**, desativar sem pendência não pergunta.
+`projeto_id` **fora da tela** (e dentro da API): o formulário de requisição não grava projeto, então
+a regra por projeto nunca casaria com requisição criada pela tela — **letra B**.
+
+**T7 — `AprovacoesRegra.js`** (dois componentes) na `RequisicoesList`: o painel *"Aprovações de regra
+aguardando você"* (só `pode_assinar`); o bloco das pendências no detalhe com o *Assinar* (espelho da
+RN-07); e os três botões de aprovar **desabilitados com o motivo** enquanto houver pendência. Tudo
+**só no modo almoxarifado** (o F1 da Etapa 34).
+
+**Nenhuma ação nova em `ACAO_PERFIS`** — o lado do aprovador é por identidade (8.4) —, então o buraco
+do rótulo em `permissaoErro.js` que o plano temia **não se abriu**.
+
+**Cenários e sabotagens:** `TabRegrasAprovacao.test.js` 5/5, 5 sabotagens vermelhas (payload como
+string, erro genérico, sem confirmação, confirmação sempre, sem aviso de obsoletas).
+`RequisicoesList.test.js` ganhou 7 (42/42), 7 sabotagens vermelhas (botão sem gate, solicitante
+assinando, duas pernas, fila sem filtro, fila fora do almoxarifado, lane de valor sem gate, URL errada).
+**Client 859/859; build com `CI=true` limpo.**
+
+## ✅ T8 — integração cruzando tudo (2026-09-30, `7fe7d6b`)
+
+`integracaoAprovacoesRegra.api.test.js`, 7/7, num fluxo só: entra pela **segunda rota de criação**
+(`/api/requisicoes-material`, que nenhuma task cobria) com uma requisição que casa **duas regras e
+passa do limite de valor** → a liberação é barrada pelas regras → o job cobra **cada pendência da
+sua plateia** e **cala** a lane de valor → o admin assina uma perna e é recusado na outra, a Bia
+assina a segunda → o job volta a cobrar a liberação **da plateia dela** (só o Caio) → a liberação
+passa, reserva, e a auditoria tem as duas `APROVACAO_REGRA` + a `APROVACAO_VALOR`. E entra também
+**pelo serviço** (`createRequisicao` direto) — as duas portas que a skill manda exercitar.
+
+**Sabotagens de fiação:** avaliador desfiado do envio → (1)(4)(5)(6)(7); lane de regra desfiada do
+job → (3); lane de status sem calar → (3); `aprovarValor` **só** sem a pré-checagem → **verde, e é
+certo**: a guarda no `WHERE` ainda recusa com a mesma literal (a defesa em profundidade da 9.7/C1).
+
+⚠️ **Teste vazio meu, pego antes de valer:** a primeira rodada destas sabotagens deu **quatro NO-OP**.
+O harness tinha uma função `restore` com `for f in …` que **sobrescrevia a variável `f` global** de
+`sab` — a sabotagem ia para o arquivo errado e o `cmp` comparava o arquivo errado. Sexto caso desta
+forma na base; corrigido com `local`, e a rodada que vale é a de cima.
+
+---
+
+## Fase 5 — revisão adversarial: 3 lentes, 1 fix-round, tudo reproduzido antes de corrigir
+
+Três revisores frescos em paralelo (regras de negócio, autorização, força dos testes), instruídos a
+**refutar**. O que mudou no contrato está na **9.8 do desenho**; aqui fica o placar e o que cada
+achado custou.
+
+| Lente | Achados reais | O que era |
+|---|---|---|
+| Regras de negócio | **2 IMPORTANT, 2 MINOR** (todos por sonda) | a regra de quantidade era contornável pelo **próprio solicitante** com linhas repetidas — **o desenho (9.3) estava errado**; a migração carimbava **rascunho**, e o envio dele com o avaliador falhando passava pelo gate vazio; não dava para desativar regra de aprovador inativo; a contagem dos GETs contava requisição morta |
+| Autorização | **1 IMPORTANT, 3 MINOR** (sonda) | o superadmin que cria a regra não conseguia destravá-la (`role === 'admin'` herdado da liberação por valor); usuário desativado assinava; "Assinar" em requisição rejeitada; a fila inteira ia a qualquer usuário do módulo |
+| Força dos testes | **27 sabotagens, 21 verdes** — **2 defeitos reais** + lacunas | editar pela tela **apagava `projeto_id` e zerava `ordem`**; o nome da regra saía **cru** na manchete do HTML; e o rollback de `/aprovar` na corrida, os critérios de tipo/CC, a fronteira `>=`, a migração, o `obsoleta_por_nome`, o `valor_total` da fila e quatro gestos do client **nunca eram exercitados** |
+
+**Ruído: 1.** O revisor de autorização viu o `>=` de quantidade virar `>` em disco — era sabotagem
+**temporária** do revisor de testes, rodando ao mesmo tempo na mesma árvore. Conferido: `git diff
+-- server client` vazio quando os três terminaram. **Lição:** revisor que sabota e revisor que lê
+na mesma árvore se enxergam; da próxima vez, o que sabota vai para worktree.
+
+**As correções:** soma por material no avaliador; `/enviar` zera `regras_avaliadas_em` e a migração
+não carimba rascunho; `idsJaNaRegra` no `PUT`; contagem dos GETs filtrada; `isAdmin` = `role admin`
+**ou** `canConfigureAlmox` (servidor e tela); recusa de usuário inativo (literal nova); fila filtrada
+no servidor; `podeAssinar` olha o status da requisição; escape na manchete; a tela preserva
+`projeto_id`/`ordem`. E o texto de ajuda do lembrete na aba de Alertas, que o fork da documentação
+achou dizendo "só PENDENTE", foi reescrito.
+
+**Os cenários que fecham os achados:** `regrasAprovacao` 14 → **24** (quantidade por material,
+fronteira, tipo/CC, superadmin, fila filtrada, inativo + desativar, contagem, **a corrida de dois
+`/aprovar`** — que é a única prova do rollback —, `/enviar` zerando o carimbo, e **a migração
+reexecutada com `DROP COLUMN`**, que prova o carimbo no nascimento, o rascunho de fora e o boot
+seguinte sem carimbar nada); `lembreteRegra` 7 → **9** (escape nas três ocorrências, aprovador
+inativo); `TabRegrasAprovacao` 5 → **7**; `RequisicoesList` +4.
+
+**Controle positivo do fix-round:** servidor **17 sabotagens, 17 vermelhas** (X1–X17, cada uma no
+cenário certo); client **6, 6 vermelhas** (C1–C6). Nenhuma NO-OP.
+
+**Detector de esteira:** nenhum teste falhou em duas rodadas seguidas. Uma rodada de correção.
+
+**Verificação final (medida, depois do fix-round):** `test:api` **221/221** · `test:almoxarifado` **42/42** ·
+`test:validation` 4/4 · `test:safealter` 3/3 · `test:sqlite` 5/5 · client **865/865** (53 suítes) · build com
+`CI=true` **Compiled successfully**. Fix-round `e4ee27c`.
+
+## Retro de 4 números — Etapa 47
+
+1. **Rodadas de correção até verde: 1** na Fase 5. Mas o número honesto inclui as duas revisões de
+   **contrato** antes do código (Fase 2 do plano: 11 achados, 3 CRITICAL; Fase 1-c: 11 achados, 3
+   CRITICAL). Os três CRITICAL da 1-c — reserva em dobro, porta aberta com o avaliador falhando,
+   `valor_minimo` que nunca casaria — **teriam sido código** se a 1-c não existisse.
+2. **Achados da revisão do código: 12 reais, 1 ruído** (o `>=` visto no meio de uma sabotagem
+   alheia). Mais **21 lacunas de teste** provadas por sabotagem, das quais **2 escondiam defeito
+   real**.
+3. **Paralelismo: 0 galhos de implementação em paralelo** — a Fase 2 tirou T5/T6 de galho (a decisão
+   sobre pendência obsoleta tem UI nos dois lados) e todas as oito tasks rodaram em série. **Sem
+   retrabalho por isso.** O paralelismo desta etapa foi de **revisão** (3 lentes) e de
+   **documentação** (um fork escrevendo os artefatos enquanto a Fase 5 rodava) — e o segundo pegou
+   um texto de ajuda desatualizado que o código não tinha visto.
+4. **Defeito que escapou:** *preencher na Etapa 48.* Da Etapa 46 para cá: nenhum defeito da 46 foi
+   achado nesta etapa. **Da própria 47, antes de fechar:** o harness de sabotagem da T8 deu quatro
+   NO-OP (variável global sobrescrita) — pego antes de valer, registrado na T8.
+
+---
+
 ## Fase 2 — o que o revisor do plano tem de atacar
 
 1. Os contratos cobrem os casos de erro e as **mensagens literais**? (o desenho ainda **não**
@@ -407,6 +514,52 @@ status → (1)–(4)(6)(7); log sem pendência → (5); lane de status cobrando 
 - [x] Fase 1-b — a resposta da 7.9 está na **seção 8 do desenho**: a pendência é a verdade, o `status` é cache re-derivável, e quem cobra NUNCA lê o `status`. As literais de T3/T4/T5 continuam fora, agora com a razão certa: dependem da escolha da T3 sobre regra desativada
 - [x] Fase 2 — revisão do plano: **11 achados, 3 CRITICAL, 6 refutados** — o plano NAO estava executavel; desenho e plano corrigidos
 - [x] Fase 1-c — seção 9 do desenho: a assinatura de regra NÃO vira o status (o gate fica no `WHERE` de `/aprovar` e `/aprovar-valor`), 8.5 resolvida como `OBSOLETA`, contratos e literais de T3/T4 congelados. Revisada: 9.7 (`7957c3f`).
-- [x] T1 (`4f53292`) · [x] T2 (`dc1c3f8`) · [x] T3 + T4 (`d212fb7`) · [x] T5 (`dbde640`) · [ ] T6 · [ ] T7 · [ ] T8 *(oito, e todas tronco — ver a Fase 2)*
-- [ ] Fase 5 — revisão adversarial
-- [ ] Fase 6 — `fechar-etapa`
+- [x] T1 (`4f53292`) · [x] T2 (`dc1c3f8`) · [x] T3 + T4 (`d212fb7`) · [x] T5 (`dbde640`) · [x] T6 + T7 (`2b1d0f6`) · [x] T8 (`7fe7d6b`) *(oito, e todas tronco — ver a Fase 2)*
+- [x] Fase 5 — revisão adversarial: 12 achados reais, 1 ruído, fix-round `e4ee27c`
+- [x] Fase 6 — `fechar-etapa`: novidades, specs 04/06 e mapa, guia, manual e esta retro; verificação final medida (221/221, 865/865, build limpo)
+
+---
+
+## Próxima tarefa detalhada — Etapa 48: a feature 06 fecha o que não depende de ninguém
+
+**Escolha, pela ordem do CLAUDE.md.** A 06 continua 🟡 com quatro pendências. **Duas não são
+executáveis agora**, e foram medidas antes de dizer isso:
+- a **dupla aprovação de ajuste** aguarda a decisão **B11**, que continua em aberto na letra B. A spec
+  17 está 🟢 e diz, na `:168`, que o fluxo formal *"aguarda a decisão"*;
+- a **lista técnica → Engenharia** depende da feature 22, e a spec 22 (`:98` e `:162`) mede que
+  *"BOM não existe em lugar nenhum do sistema"*.
+
+**As outras duas, mais uma costura de texto que a Etapa 47 deixou, cabem numa etapa e não dependem
+de decisão:**
+
+1. **Urgência e material de cliente como critério de regra.** Pontos de atenção:
+   - a urgência é **texto livre** no servidor (`schemas.js:325`, `urgencia: z.string().nullable()`);
+   - os valores que a tela usa são `NORMAL`, `URGENTE` e `CRITICO` (`RequisicoesList.js:69-72`, `URGENCIA_INFO`);
+   - **nada de critério sobre enum aberto:** fechar a lista é parte da task, no molde de `TIPOS_REQUISICAO`/`NC_ORIGENS` (`schema.js:40`), e a decisão sobre requisição antiga com valor fora da lista vai para a letra B;
+   - "material de cliente" = algum item com `materiais_almoxarifado.proprietario_cliente_id IS NOT NULL` (`schema.js:994`; a feature 13 está 🟢 e define `NULL` = nosso);
+   - consome: `regras_aprovacao` (novas colunas por `safeAlter`), `approvalRulesService.validarRegra`/`regraCasa`/`avaliarRequisicao`, e a query de itens do avaliador, que precisa trazer `m.proprietario_cliente_id`;
+   - literal nova a congelar: a recusa de urgência fora da lista, no formato de `Tipo de requisição inválido: <valor>`.
+2. **A fila da aprovação SIMPLES** — o item `[~]` do Frontend da spec 06, *"falta a equivalente para a lane SIMPLES"*. **Não precisa de rota nova**, e isto foi medido: `GET /almoxarifado/requisicoes` já devolve `status`, `solicitante_id` e, desde a Etapa 47, `pendencias_regra_abertas`. A fila é o recorte:
+   - `status = 'PENDENTE'`;
+   - `solicitante_id ≠ eu`;
+   - `pendencias_regra_abertas = 0`;
+   - e o usuário tem `pode('aprovar_requisicao')`, que vem de `GET /almoxarifado/minhas-permissoes` (`extended.js:527`) e falha **aberto** de propósito.
+
+   Pontos de atenção:
+   - o painel da Etapa 47 (`FilaAprovacoesRegra`, em `AprovacoesRegra.js`) é o molde;
+   - **só no modo almoxarifado** (F1 da Etapa 34);
+   - decidir se a lista mora num painel ou num botão de filtro, como o de *Aprovações de valor* em `RequisicoesList.js`.
+3. **O texto de ajuda do lembrete, que a Etapa 47 tornou meia-verdade.** Fica em
+   `ConfiguracoesAlmoxarifado.js`, `TabAlertasEstoque`, no bloco *"Lembretes de requisições
+   pendentes"*, e diz *"Envia e-mail diário quando uma requisição permanece com status PENDENTE… Usa
+   os mesmos destinatários configurados acima"*. Depois da T1 e da T5, a travada por valor e cada
+   assinatura de regra também são cobradas, e **não** por esses destinatários. É a F(47) item 5 das
+   novidades. Uma linha de texto, e ela entra com cenário que afirma a frase.
+
+**O que NÃO reabrir:** o gate (9.1/9.7), a segregação por perna, os dois lembretes e as telas da
+Etapa 47 estão fechados e com sabotagem. O furo **C68** (o `UPDATE` cru de `verificarBloqueioLiberacao`
+fora da máquina de estados) **não entra nesta etapa**: é mudança de máquina de estados com efeito em
+separar e entregar, e merece Fase 0 própria.
+
+**Depois da 48, a 06 só vira 🟢 com a B11 respondida e a feature 22 existindo.** Se a 48 fechar, a
+escolha seguinte volta ao mapa (🔴/🟡 de maior valor, medida antes de prometer).
