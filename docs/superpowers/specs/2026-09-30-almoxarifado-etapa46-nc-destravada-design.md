@@ -56,6 +56,11 @@ preservada** no documento. Quem precisar de outro encaminhamento abre documento 
 
 ## 3. A colisão semântica do `CANCELADA`, e o discriminador
 
+> 🔴 **A SEÇÃO 9 SUBSTITUI O DISCRIMINADOR DESTA SEÇÃO.** `decidido_em` é exclusivo (medido) mas
+> **não é suficiente**: ele não distingue o cancelamento humano de uma NC `ABERTA`. Leia a 9 antes
+> de implementar. O texto abaixo fica porque o raciocínio da colisão está certo, e é ele que
+> sustenta a seção 9.
+
 **Achada na Fase 1, e ela muda o desenho.** Hoje `CANCELADA` tem **um** significado só, e há código
 que depende disso:
 
@@ -89,6 +94,9 @@ estados" — custo alto para informação que duas colunas existentes já carreg
 ---
 
 ## 4. Regras de negócio
+
+> 🔴 **RN-01, RN-02, RN-03 e RN-05 foram CORRIGIDAS na seção 9** (revisão da Fase 2: 12 achados, 3
+> CRITICAL). As versões abaixo ficam à vista. RN-04, RN-06, RN-07, RN-08 e RN-09 valem como estão.
 
 **RN-01 — Cancelar NC `ABERTA` por pessoa.** Com motivo obrigatório. Libera o índice parcial
 `idx_nc_almox_aberta(origem, referencia_tipo, referencia_id, tipo) WHERE status = 'ABERTA'`
@@ -142,6 +150,9 @@ documento decidido e não executado continua só num filtro que alguém precisa 
 ---
 
 ## 5. Contratos congelados
+
+> 🔴 **A seção 9 acrescenta a SEXTA e a SÉTIMA recusa e aperta a régua do motivo.** A tabela abaixo
+> está incompleta.
 
 ### `POST /api/almoxarifado/nao-conformidades/:id/cancelar`
 
@@ -227,3 +238,148 @@ mandaria a execução mexer num filtro que está certo.
 4. **Não fecha o caso geral do pool agregado** (**C65**): contabilidade de retenção por origem é
    tronco de motor, com migração, e continua sendo etapa própria.
 5. **Não cria botão de abrir NC à mão.** Continua sem tela (B171 da Etapa 43).
+
+---
+
+## 9. O que a Fase 2 mudou — 12 achados, 3 CRITICAL, 8 hipóteses refutadas
+
+Revisor fresco, 2026-09-30, com o plano + o desenho + os oito arquivos que eles tocam. **Os três
+CRITICAL mudam o desenho, não a execução**, e os três foram reproduzidos por leitura das linhas
+citadas antes de entrar aqui.
+
+### 9.1 🔴 O discriminador `decidido_em` é exclusivo, e NÃO é suficiente
+
+**A seção 3 está certa no diagnóstico e errada na solução.** `decidido_em` é exclusivo — varredura
+confirmou: escrito só em `:762`, limpo só em `:840`, e o backfill da Etapa 45 (`schema.js:681-694`)
+toca **apenas** `execucao_estado`. **Mas ele não cobre a RN-01:** uma NC `ABERTA` cancelada por
+pessoa tem `decidido_em IS NULL`, que é exatamente a assinatura que a tabela da seção 3 atribui a
+*"a divergência desapareceu; o sistema anulou sozinho"*. **O cancelamento humano produz as DUAS
+linhas daquela tabela.**
+
+*Cenário:* a QUALIDADE cancela a NC `ABERTA` de quantidade (*"balança descalibrada, divergência
+improcedente"*). O índice parcial libera o slot. Alguém **reenvia os dados fiscais** —
+`salvarDadosFiscal` reenvia a quantidade de **todos** os itens e é um dos dois escritores
+enganchados. O gancho: `getAbertaDe` não acha nada → ainda divergente → `getUltimaEncerrada` **não**
+casa → nasce **NC nova, automática, numerada**, sobre o mesmo fato, sem mudança de fato nenhuma.
+**E repete a cada salvamento de NF.** A RN-10 não segura, porque a régua dela é o resultado de
+`getUltimaEncerrada`.
+
+**O discriminador passa a ser `cancelado_por_id IS NOT NULL`**, com duas colunas novas por
+`safeAlter`: `cancelado_por_id INTEGER` e `cancelado_por_nome TEXT`. **O precedente é literal no
+próprio schema:** `conferencias_almoxarifado` tem o quarteto
+`cancelado_por_id` / `cancelado_por_nome` / `cancelado_em` / `motivo_cancelamento`
+(`schema.js:2311-2314`); a tabela de NC tem só os **dois últimos**. Esta etapa completa o quarteto.
+
+**E isso paga o achado 6 de graça:** a seção 2 prometia *"motivo obrigatório, autor e data"*, e
+**não havia coluna de autor**. Sem ela, um cancelamento cuja trilha falhasse (o `try/catch` com
+`console.warn`) ficaria **sem autor em lugar nenhum**, e a tela nunca poderia mostrar quem cancelou
+— ao contrário do que ela já faz para conferência.
+
+### 9.2 🔴 A RN-05 reintroduzia o "silêncio completo" que `fato_superado_em` existe para matar
+
+O carimbo de fato superado é escrito por um `UPDATE` com **`AND status = 'DECIDIDA'`**
+(`nonConformityService.js:524-526`). Uma NC cancelada por pessoa **nunca** recebe o carimbo.
+
+*Cenário:* item de 10, conferido 8 → NC automática nasce → decidida → pessoa cancela → operador
+**corrige para 10** (o `UPDATE` de `:524` não toca a linha, porque ela é `CANCELADA`) → a falta
+volta **igualzinha**, 8 de 10 → `getUltimaEncerrada` (com a RN-05) devolve a NC cancelada,
+`mesmoFato(-2, -2)` é verdadeiro, e o serviço retorna `NENHUMA`. **Falta real e viva, zero NC no
+módulo.** É o CRITICAL que o comentário de `:512-527` narra, em terceira roupa.
+
+**O guarda que existe não pega:** `naoConformidadeRegressao.api.test.js:124-160` usa uma NC
+**DECIDIDA** — ele continua verde com o furo aberto.
+
+**Correção:** o `UPDATE` de `:524-526` recebe a **mesma** condição da RN-05, e o cenário-controle
+*"cancelada por pessoa → corrige → quebra de novo → nasce documento NOVO"* entra em
+`ncCancelamento.api.test.js`.
+
+### 9.3 🔴 O claim deixava cancelar uma NC de ACEITAÇÃO já liberada
+
+Uma NC decidida `ACEITAR`/`ACEITAR_SOB_DESVIO` fica `DECIDIDA` com
+`execucao_estado = 'NAO_SE_APLICA'` e **`execucao_em NULL`** (o claim da decisão, `:758-765`, nunca
+escreve `execucao_em`) — **e o saldo já se moveu**: houve `DESBLOQUEIO` no motor com
+`documento_vinculado = NC-…` e `liberacao_nc_em` carimbado na inspeção. O claim proposto
+(`status IN ('ABERTA','DECIDIDA') AND execucao_em IS NULL`) **aceita**, e a resposta imprime
+*"a decisão fica registrada, e a execução deixa de ser cobrada"* — execução que nunca foi cobrada,
+sobre um documento cuja linha de livro passa a apontar para documento morto. **É palavra por palavra
+o que a RN-03 proíbe.**
+
+**Correção:** o ramo `DECIDIDA` do claim exige `execucao_estado = 'PENDENTE'`, e o contrato ganha a
+**sexta recusa**, com literal própria — a da RN-03 fala de *"execução já registrada"*, que é **falsa**
+aqui. Sem literal nova o caso cai no 409 da RN-04 (*"já está cancelada"*), que **mente**.
+
+### 9.4 As RN corrigidas
+
+**RN-01 (corrigida) — Cancelar NC `ABERTA` por pessoa.** Motivo com **pelo menos 5 caracteres**
+(régua do módulo: `PUT /conferencias/:id/cancelar`, `routes/almoxarifado.js:1680-1683`, justificada
+com *"cancelar um inventário é tão destrutivo quanto aplicar o ajuste dele"*). Grava
+`cancelado_por_id`/`_nome`. O índice parcial é liberado, **mas o gancho automático NÃO reabre** —
+ver RN-05.
+
+**RN-02 (corrigida) — Cancelar NC `DECIDIDA` com `execucao_estado = 'PENDENTE'`.** Só esse estado. A
+decisão é preservada; `execucao_estado` é preservado (RN-06).
+
+**RN-03 (corrigida) — Encaminhamento que JÁ produziu efeito não cancela.** Duas portas, **duas
+literais**, porque as causas são diferentes: `execucao_em IS NOT NULL` (a execução foi registrada) e
+`execucao_estado = 'NAO_SE_APLICA'` (a decisão de aceitação **liberou material no próprio clique**).
+
+**RN-05 (corrigida) — "Cancelado por pessoa" é um ENCERRAMENTO, como decidir.** Os dois consumidores
+do estado passam a tratá-lo assim, e é isso que torna a régua coerente em vez de meia:
+
+| Consumidor | Hoje | Depois |
+|---|---|---|
+| `getUltimaEncerrada` (`:406`) | `status = 'DECIDIDA' AND fato_superado_em IS NULL` | `+ OR (cancelado_por_id IS NOT NULL)` — não reabre sozinho sobre fato que uma pessoa encerrou |
+| o `UPDATE` de `fato_superado_em` (`:524-526`) | `AND status = 'DECIDIDA'` | a mesma condição — **fato que muda ainda gera documento novo** |
+| `listarDivergenciasRecebimento`, exclusão do D6 (`alertRegistry.js:211-213`) | `AND nc.status <> 'CANCELADA'` | `AND (nc.status <> 'CANCELADA' OR nc.cancelado_por_id IS NOT NULL)` |
+
+⚠️ **A terceira linha é o achado 7 da revisão, e sem ela a etapa nasce incoerente.** Hoje o D6
+exclui do cartão o item que tem NC **não cancelada**, com o comentário dizendo que NC cancelada é *"a
+divergência que o operador CORRIGIU"*. Depois da RN-05, a NC cancelada-por-pessoa significa o
+**oposto**: o fato continua de pé, e **nenhum documento novo pode nascer sobre ele**. Sem ajustar o
+D6, o item volta ao cartão como divergência **não documentada** e não existe porta para documentá-la
+(a abertura manual não tem tela). Seria exatamente a simetria que o docblock de `getUltimaEncerrada`
+foi escrito para não repetir: *"as duas metades da etapa aplicavam réguas OPOSTAS ao mesmo estado"*.
+
+**O que isso significa em uma frase:** `CANCELADA + cancelado_por_id` passa a se comportar como
+`DECIDIDA` para os dois consumidores. A única diferença é que não há decisão a executar. **E o cancelamento AUTOMÁTICO continua NÃO sendo encerramento**:
+`CANCELADA + cancelado_por_id IS NULL`
+segue fora dos três, como os comentários atuais mandam.
+
+### 9.5 O contrato congelado, completo (substitui a tabela da seção 5)
+
+| Código | Mensagem literal | Quando |
+|---|---|---|
+| 400 | `O motivo do cancelamento deve ter pelo menos 5 caracteres` | RN-01/RN-02 |
+| 404 | `Não conformidade não encontrada` | id inexistente |
+| 409 | `A execução desta não conformidade já foi registrada — o documento não pode ser cancelado` | `execucao_em IS NOT NULL` |
+| 409 | `A decisão desta não conformidade já liberou o material — o documento não pode ser cancelado` | **NOVA** — `execucao_estado = 'NAO_SE_APLICA'` (9.3) |
+| 409 | `Esta não conformidade já está cancelada` | RN-04 |
+| 403 | *(corpo padrão de `requirePermission`)* | RN-07 |
+
+**No `changes === 0` do claim (achado 9):** **reler a linha** e escolher a literal, em vez de recair
+sempre na da RN-04. Uma corrida com `POST /executar` grava `execucao_em` entre a leitura e o claim, e
+aí a resposta certa é a primeira, não *"já está cancelada"*.
+
+### 9.6 Os achados que mudam TASK, não desenho
+
+| # | Achado | Task |
+|---|---|---|
+| 4 | a entrada nova de alerta derruba **sete** asserções de contagem (`ALERT_REGISTRY.length === 14` e `alertas.length === 14`) em `alertaNaoConformidade.api.test.js:156,169`, `alertaPedidoAtrasado.api.test.js:179,244`, `alertaPedidoParcial.api.test.js:458,461,523`, `naoConformidadeIntegracao.api.test.js:232`, **mais** `semCompras.length === 12` em `alertaPedidoParcial.api.test.js:535` (a entrada nova só lê tabelas `*_almoxarifado`, então entra nessa conta) | **T3**, com gate `npm run test:api` inteiro |
+| 5 | a tela mostraria badge de status **Cancelada** ao lado de execução **Pendente** (`NaoConformidadesAlmoxarifado.js:532-533` não olha `status`), contradizendo o toast | **T4** |
+| 8 | largar só o filtro de execução não devolve a linha: `trocarExecucao` **força** `statusFiltro = 'DECIDIDA'` (`:335`), e o padrão é `'ABERTA'` (`:207`) — a T4 larga **os dois** | **T4** |
+| 11 | dois comentários passam a mentir: `alertRegistry.js:145-148` (*"o único escritor de `CANCELADA` cancela NC `ABERTA`"*, e o `:477` que ele cita já está deslocado — o `UPDATE` está em `:495-497`) e `alertRegistry.js:820-821` (*"NC decidida ou cancelada sai da condição sozinha"*) | **T2** e **T3** |
+| 12 | `COLUNAS_POR_CHAVE` (`AlertasAlmoxarifado.js:88`) é a **terceira ponta** da config/entrada nova; sem entrada, o cartão cai em `colunasGenericas` e mostra campos crus | **T3** |
+
+### 9.7 As oito hipóteses que o revisor levantou e refutou
+
+Valem registro porque cada uma custaria trabalho se tivesse sido aceita sem medir:
+terceiro escritor de `decidido_em` (**não existe**); colisão da literal 409 com a da execução (os
+três consumidores comparam por igualdade exata); a config nova derrubando `CHAVES_TELA.length === 18`
+(aquelas listas são escritas à mão e **já estão defasadas**; a varredura real é
+`configuracoesGerais.api.test.js:40-52`, e as duas pontas bastam); a ação nova derrubando a contagem
+de `permissaoErro.test.js` (o guarda é `toBeGreaterThanOrEqual(24)` — o que derruba é só a ausência
+do rótulo); cancelar e depois executar (recusado por **dois** trancos); cancelar NC de inspeção e
+redecidir a inspeção (comportamento pré-existente, não regressão); o alerta diário continuar
+cobrando (os dois filtros e os dois dedupes não colidem); e *"não há filtro de Canceladas na tela"*
+(**há** — `STATUS_FILTROS` tem `{ valor: 'CANCELADA', rotulo: 'Canceladas' }`, e o motivo já é
+renderizado na linha expandida).
