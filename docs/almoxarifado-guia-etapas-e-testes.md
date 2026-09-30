@@ -1,17 +1,40 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-09-29 (Etapa 45) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-09-30 (Etapa 46) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 45) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 46) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-09-29 (Etapa 45 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-09-30 (Etapa 46 ENTREGUE · modo contínuo pelo mapa)
 >
-> **Etapas 1 a 20 e 22 a 45 completas; a Etapa 21 foi entregue no NÚCLEO do CRM e as 38 a 42 no
+> **Etapas 1 a 20 e 22 a 46 completas; a Etapa 21 foi entregue no NÚCLEO do CRM e as 38 a 42 no
 > módulo COMPRAS** (a 42 nos dois: o gancho roda no Almoxarifado, o efeito aparece no Compras).
-> A **43, a 44 e a 45 estão dentro do almoxarifado**, nas features 08 (Recebimento) e 09 (Inspeção).
+> A **43, a 44, a 45 e a 46 estão dentro do almoxarifado**, nas features 08 (Recebimento) e 09
+> (Inspeção) — a 46 com efeito também em 20 (Alertas) e 23 (Perfis).
 >
-> **O desenvolvimento parou aqui: Etapa 45, 2026-09-29.** E com ela a **feature 09 (Inspeção e
-> qualidade) fechou em 🟢** — era o último item da lista dela.
+> **O desenvolvimento parou aqui: Etapa 46, 2026-09-30.** A **feature 09 (Inspeção e qualidade)**
+> fechou em 🟢 na Etapa 45; a **46 nasceu de um furo declarado no fechamento dela** (o **C64**) e
+> paga esse furo — não é item novo da lista da feature.
+>
+> A **Etapa 46 (a não conformidade decidida deixa de ser um beco)** fechou em 2026-09-30 e **paga o
+> furo C64 que a 45 declarou**: o documento decidido *Devolver ao fornecedor* de material com
+> **número de série** (ou lote não identificável) era recusado pela execução com erro **fatal** e
+> ficava **Decidido / execução Pendente para sempre**, cobrando um gesto que ninguém conseguia
+> registrar. Agora há **saída** e há **cobrança**. A saída é o botão **✕ "Cancelar a não
+> conformidade"**, com **motivo obrigatório** de 5 caracteres, que fecha o documento
+> **preservando a decisão** (*"Documento cancelado — a decisão fica registrada, e a execução deixa
+> de ser cobrada"*); a coluna **Execução** passa a dizer **"Deixou de ser cobrada"** e a linha sai da
+> fila *"Pendentes de execução"*. A cobrança é o **15º alerta** da central — o cartão **"Execução
+> pendente"**, com janela própria em *Configurações* (**"Alerta de Execução Pendente da NC (dias)"**,
+> semeada em 7) —, porque o documento preso **também não cobrava ninguém**. **Quem cancela é
+> Administrador e Qualidade; o Compras NÃO** — ele executa e é cobrado pela fila, então não deve
+> poder limpá-la. **Só cancela documento DECIDIDO com execução PENDENTE:** *Aberto* recusa ensinando
+> o caminho (*"decida o documento, ou corrija a quantidade conferida"*), decisão de aceitação já
+> liberada recusa, e execução já registrada recusa.
+> **O que ela NÃO faz e você precisa saber:** cancelar **não desbloqueia** o material (os quilos
+> reprovados continuam bloqueados — soltá-los é *Desbloquear Material*, de Administrador/Gestor, ou
+> a baixa por Movimentações), **não redecide** o documento, **não** devolve peça serializada por
+> esta tela, e **não cancela documento Aberto** — este último foi **corte de escopo da revisão
+> final**, porque cancelar documento sem decisão silenciaria divergência **viva**.
 >
 > A **Etapa 45 (a devolução ao fornecedor deixa de ser um combinado verbal)** fechou em 2026-09-29 e
 > **fecha o último buraco que a 44 deixou aberto**: decidir *Devolver ao fornecedor* virou só a
@@ -29,6 +52,11 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 > identificável, é **recusado** na execução — e o documento fica **preso** na fila *Pendentes de
 > execução*, sem gesto de tela que o destrave. Use material sem série e sem lote na apresentação; o
 > destravamento é a próxima etapa.
+> **ISTO FOI PAGO NA ETAPA 46** — fica corrigido aqui em vez de apagado. A recusa da execução é a
+> mesma, mas o documento **não fica mais preso**: a Qualidade (ou um Administrador) **cancela** com
+> motivo, e a decisão continua registrada. **Já é seguro demonstrar série ao vivo** — o roteiro está
+> na seção da Etapa 46. Duas ressalvas que o cancelamento **não** cobre: o material reprovado
+> **continua bloqueado**, e devolução de peça serializada continua sem tela.
 >
 > **Próxima etapa: escolhida pelo mapa** `specs/modulo-almoxarifado/README.md` — com a feature 09
 > em 🟢, a escolha sai da 🔴/🟡 de maior valor, medida antes de prometer.
@@ -4858,6 +4886,261 @@ que ele não tinha como repetir com sucesso garantido.
 
 ---
 
+## Etapa 46 — A não conformidade decidida deixa de ser um beco (ENTREGUE — 2026-09-30)
+
+**O que mudou, em uma frase:** o documento decidido que **ninguém consegue executar** ganhou uma
+porta de saída — **Cancelar**, com motivo, preservando a decisão — e, enquanto espera, passou a
+**cobrar** num cartão próprio da central de Alertas.
+
+**O problema que ela resolve.** A Etapa 45 separou *decidir* de *executar*, e criou um beco no
+mesmo movimento: material com **número de série** (ou com lote não identificável) decidido
+*Devolver ao fornecedor* é **recusado** na execução com um erro **fatal**, que se repete para
+sempre. O documento ficava **Decidido / execução Pendente** eternamente, cobrando do Compras um
+gesto que ninguém conseguia registrar — e cobrando **só dentro de um filtro de tela** que alguém
+precisava escolher, porque o cartão de *"Não conformidade aberta"* mede documento `ABERTA` e o
+documento decidido sai dele sem entrar em nenhum outro. Era o furo **C64**. Agora há **saída** (a
+Qualidade cancela, com motivo, e a decisão continua legível) e há **cobrança** (o cartão *"Execução
+pendente"*, com janela configurável).
+
+**Quem pode cancelar: Administrador e Qualidade.** O **Compras não pode**, de propósito: é ele quem
+executa e quem é cobrado pela fila — dar-lhe o cancelar seria dar-lhe o botão de **limpar a própria
+cobrança**.
+
+**Só cancela documento DECIDIDO cuja execução está PENDENTE.** Documento **Aberto** não cancela (o
+gesto certo é **decidir**, ou corrigir a quantidade conferida); documento cuja **decisão de
+aceitação** já se executou não cancela (não há pendência a encerrar); documento **já executado** não
+cancela.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| NC decidida *Devolver* de material com série ficava **Decidida / Pendente para sempre** — a execução recusava, o documento não se decidia de novo e **nenhum gesto de tela** o destravava | Botão **Cancelar** na linha (ícone ✕), só para **Administrador e Qualidade**, com **motivo obrigatório**: o documento fecha e a decisão **fica registrada** |
+| O documento parado **não cobrava ninguém** — morava só no filtro *"Pendentes de execução"*, que alguém precisava escolher | Cartão **"Execução pendente"** na central de **Alertas**, com janela própria em *Configurações* (**"Alerta de Execução Pendente da NC (dias)"**, semeada em **7**) |
+| A coluna **Execução** mostrava o selo **Pendente** na linha **cancelada** — contradizendo, na mesma tela, o aviso que acabara de dizer que a cobrança terminou | A coluna diz **"Deixou de ser cobrada"** — e **`—`** quando o documento cancelado **nunca foi decidido** (o cancelamento automático da reconferência) |
+| Tentar executar um documento cancelado respondia *"a execução desta não conformidade já foi registrada"*, o que era **falso** (nada havia sido registrado) | Responde *"Esta não conformidade foi cancelada — não há execução a registrar"* |
+| `CANCELADA` só nascia do **gancho automático** da reconferência, e a trilha creditava o ato a quem apenas **reconferiu a quantidade** — inclusive ao Compras, que toma 403 no cancelar | Os **dois** atos gravam autor e a marca de automático em *Auditoria → **"Não conformidade cancelada"***, e o cancelamento humano registra **quem** cancelou e o **motivo** |
+
+### Roteiro de teste manual
+
+**O que você precisa antes de começar** — este roteiro usa **dois perfis de trabalho** e um
+administrador para duas telas:
+
+- **quem decide e cancela**: usuário com perfil **Qualidade** (o **Administrador** também cancela);
+- **quem executa e toma o 403**: usuário com perfil **Compras**;
+- **um Administrador**, para dois passos que a Qualidade não alcança: mudar a janela em
+  *Configurações* e **abrir a central de Alertas** — a Qualidade está **fora** de `ver_alertas` de
+  propósito (a central carrega o valor em dinheiro do estoque parado). Quem vê o cartão é
+  **Administrador, Almoxarife, Gestor ou Compras**.
+
+O material tem de estar marcado como **Material crítico** (é isso que faz a entrada cair na fila de
+inspeção) **e com Controle por número de série** — e aqui a série é o **ponto**, não um detalhe: é
+ela que cria o beco que esta etapa paga. Se a entrada não cair em inspeção, a chave
+`inspecao_material_critico` foi desligada no banco (ela nasce ligada e **não tem tela**).
+
+⚠️ **Este roteiro tem uma espera de um dia**, e não há como encurtá-la: a janela do cartão novo
+conta dias **desde a decisão** e o menor valor aceito é **1** (pôr 0 é recusado com *"Configuração
+"alerta_nc_execucao_pendente_dias" deve ser um número de dias maior que zero"*). Faça os Trechos A
+e B num dia e os Trechos C e D no dia seguinte. A **fila** (*Pendentes de execução*) é imediata; o
+**cartão** não.
+
+#### Trecho A — armar o beco (entre como **Administrador**, depois como **Qualidade**)
+
+1. **Almoxarifado → Configurações → Configurações Gerais.** Ponha **1** no campo **"Alerta de
+   Execução Pendente da NC (dias)"** e salve → *"Configurações salvas!"*. É o campo novo da etapa;
+   se ele não estiver na lista, você está numa versão anterior a 2026-09-30.
+2. **Almoxarifado → Materiais.** Crie um material novo, marque **Material crítico** e marque
+   **"Controle por número de série"**. Anote o código.
+3. **Almoxarifado → Recebimentos → Novo recebimento.** Escolha o fornecedor, preencha a nota fiscal
+   e lance **10** unidades do material do passo 2. No item, na caixa **"Séries (uma por linha)"**,
+   digite **10** números de série (o contador ao lado tem de fechar com a quantidade recebida — sem
+   isso o processamento recusa a nota inteira). **Salve antes de processar.**
+4. Na lista de recebimentos, abra o que você criou e **processe/aprove** a entrada.
+5. **A verificação de saldo "antes". Almoxarifado → Materiais:** **10 no físico**, **0
+   disponível**, **10 em inspeção**. É a quarentena — material crítico entra retido.
+6. **Almoxarifado → Inspeções**, aba **Pendentes**. Na linha do material, clique em **"Decidir
+   inspeção (aprovar/reprovar)"**. No modal **"Decidir Inspeção"**: **Quantidade aprovada: 7**,
+   **Quantidade reprovada: 3**, **Encaminhamento: Devolver ao fornecedor**, marque **Dano físico**
+   e escreva a observação (obrigatória quando há quantidade reprovada). Confirme.
+   → Em **Materiais**: **10 no físico**, **7 disponíveis**, **3 bloqueados**.
+7. **Almoxarifado → Não Conformidades.** O documento `NC-…` já está lá, **Aberta**, origem
+   **Inspeção**, coluna **Execução** em **—**. Anote o número.
+8. **Ainda com o documento Aberto, olhe a coluna de ações: não há botão de cancelar.** É regra, não
+   esquecimento — documento sem decisão não se cancela, e a recusa do servidor **ensina o caminho**:
+   *"Só é possível cancelar uma não conformidade já decidida — decida o documento, ou corrija a
+   quantidade conferida"* (409). Cancelar um documento aberto mataria a divergência **viva**: o item
+   sairia do cartão *"Divergência de recebimento"*, o gancho não reabriria nada e **não existe tela
+   de abertura manual de não conformidade** para recomeçar.
+9. Entre como **Qualidade** (se já não estiver) e clique em **"Decidir a não conformidade"**. No
+   modal **"Decidir NC-…"** escolha **Decisão: Devolver ao fornecedor**, escreva a **Justificativa**
+   e clique em **Registrar decisão**.
+   → *"Não conformidade NC-… decidida! Esta decisão não altera o saldo"*.
+   → A coluna **Execução** passa a **Pendente**, e o botão **✕ ("Cancelar a não conformidade")**
+   **aparece** — as duas condições de visibilidade dele são exatamente as duas em que o servidor
+   diz sim.
+10. **Confira que nada se moveu. Materiais:** ainda **10 no físico** e **3 bloqueados**.
+
+#### Trecho B — o beco, visto por quem é cobrado (saia e entre como **Compras**)
+
+11. **Almoxarifado → Não Conformidades.** No **terceiro filtro** (o de execução), troque *"Qualquer
+    execução"* por **"Pendentes de execução"** — o filtro de status salta sozinho para
+    **"Decididas"**, como na Etapa 45. O `NC-…` do passo 7 está na fila.
+12. Na linha dele, clique no botão de **caminhão** (*"Registrar execução do encaminhamento"*) e
+    confirme em **Registrar execução**.
+    → **A recusa fatal, e é o beco:** *"Material com controle de série não pode ser devolvido por
+    aqui — dê baixa pela tela de Movimentações"* (400). Clique de novo: **a mesma recusa, sempre**.
+    Devolver peça serializada é escolher **quais peças** voltam, e essa escolha não existe nesta
+    tela.
+13. **E o Compras não tem porta de saída: o botão ✕ não aparece nas linhas dele.** O gate de perfil
+    **esconde** o cancelar de quem não pode usá-lo, como já faz com o caminhão para o Almoxarife —
+    botão com 403 garantido é armadilha, não gate. **Se você quiser ver o 403 com os próprios
+    olhos**, force a falha da leitura de permissões (ela falha **aberta** de propósito): F12 →
+    **Network** → localize a chamada **`minhas-permissoes`** → *Block request URL* → recarregue a
+    tela. O ✕ aparece por precaução, o modal traz o aviso âmbar e o clique volta do servidor com
+    *"Sem permissão para cancelar não conformidade — seu perfil é Compras. Solicite acesso a um
+    administrador."* — **antes** de qualquer efeito.
+14. **Materiais, de novo:** **10 no físico**, **3 bloqueados**. Nenhuma das tentativas moveu nada.
+
+#### Trecho C — no dia seguinte: o documento passa a cobrar (**Administrador** ou **Compras**)
+
+15. **Almoxarifado → Alertas.** O cartão **"Execução pendente"** traz o `NC-…`, com as colunas
+    **NC**, **Material**, **Decisão**, **Decidida em**, **Decidida há** e **Recebimento**. A coluna
+    *Decisão* mostra o código da decisão (`DEVOLVER`). **Este é o segundo entregável da etapa:**
+    antes, o documento preso não aparecia em cartão nenhum.
+16. Repare que o cartão **nomeia a saída** na descrição — *"Se a execução for impossível (material
+    com número de série, lote não identificável), a Qualidade pode cancelar o documento."* — e o
+    e-mail (assunto **"[Almoxarifado] Execução pendente — NC-…"**) repete a frase no fim do corpo.
+    É deliberado: quem recebe o aviso é o Compras, que **não** tem o botão; sem essa linha o cartão
+    ficaria aceso para sempre para quem só pode tomar 400.
+17. **A fila continua lá também.** Em **Não Conformidades**, com **"Pendentes de execução"**, o
+    documento está nos **dois** lugares. Guarde isso: é o que o Trecho D vai apagar.
+
+#### Trecho D — a saída (saia e entre como **Qualidade**)
+
+18. **Almoxarifado → Não Conformidades**, filtro de status em **"Decididas"**. Na linha do `NC-…`,
+    clique no botão **✕ ("Cancelar a não conformidade")**. Abre o modal **"Cancelar NC-…"**, com o
+    material, a decisão tomada e o parágrafo cinza que é **a única explicação que o usuário
+    recebe**: cancelar **não apaga a decisão**, o que termina é a **cobrança da execução**.
+19. **Motivo curto não passa.** Digite **`nao`** (3 caracteres) no campo **Motivo** (placeholder
+    *"Por que este documento não se cumpre? Mínimo de 5 caracteres — é o que fica para quem auditar
+    depois."*).
+    → O botão **"Cancelar documento"** fica **desabilitado**, e abaixo do campo aparece *"O motivo
+    precisa de pelo menos 5 caracteres."* A mesma régua existe no servidor, que recusaria com *"O
+    motivo do cancelamento deve ter pelo menos 5 caracteres"* (400) — a tela só evita a viagem.
+20. Apague e escreva um motivo de verdade: *"Peça serializada — baixa pela tela de Movimentações"*.
+    Clique em **"Cancelar documento"** (o botão secundário chama-se **Voltar**, e não *Cancelar*,
+    para não haver dois "Cancelar" no mesmo rodapé).
+    → **O aviso que prova a etapa:** *"Não conformidade NC-… cancelada! Documento cancelado — a
+    decisão fica registrada, e a execução deixa de ser cobrada"*.
+    → E **a linha não desaparece**: a tela **larga os dois filtros** (status volta a *"Todos os
+    status"*, execução a *"Qualquer execução"*), porque quem acabou de cancelar quer **ver** o
+    documento com o motivo que digitou.
+21. **Leia a linha cancelada, coluna por coluna** — é aqui que se confere que a etapa não apagou
+    evidência:
+    - **Status**: selo **Cancelada**;
+    - **Decisão**: continua **"Devolver ao fornecedor"**, com **quem decidiu e quando** — a decisão
+      ficou **legível**;
+    - **Execução**: **"Deixou de ser cobrada"** (e **não** o selo *Pendente*, que é o que a coluna
+      mostrava antes do conserto);
+    - clique no **chevron** da linha (*"Detalhes e anexos"*): aparece **"Motivo do cancelamento:"**
+      com o texto do passo 20, ao lado da **"Justificativa da decisão:"**.
+22. **Conferir que saiu dos DOIS lugares:**
+    - **a fila** — ponha o filtro de execução em **"Pendentes de execução"**: o `NC-…` **não está
+      mais lá** (o que exclui a linha é o **status**, não o estado de execução, que continua
+      gravado como *Pendente* de propósito);
+    - **o cartão** — entre como **Administrador** (ou **Compras**), vá em **Almoxarifado →
+      Alertas**: o cartão **"Execução pendente"** **já não traz** o documento. Cancelar **calou a
+      cobrança**, e essa é a composição que nenhuma das duas metades prova sozinha.
+23. **A trilha. Almoxarifado → Auditoria.** No filtro de ações escolha **"Não conformidade
+    cancelada"** → a linha do passo 20, com o autor e, na coluna de justificativa, **o motivo** que
+    você digitou. Troque para **"Não conformidade decidida"** → a linha do passo 9. Dois atos, dois
+    registros — e, nos detalhes da linha do cancelamento, os campos **`cancelado_por_id`** e
+    **`automatico`** (aqui em **`false`**) dizem **qual dos dois cancelamentos** foi: o humano ou o
+    gancho automático da reconferência, que usa o mesmo verbo.
+24. **O saldo, pela última vez. Almoxarifado → Materiais:** **10 no físico**, **7 disponíveis**,
+    **3 bloqueados** — exatamente o que estava no passo 6. **Nenhum passo desta etapa moveu
+    estoque**, e é o comportamento desejado: cancelar encerra a **cobrança**, não o problema
+    físico. Os 3 continuam bloqueados, e soltá-los é outro gesto, de outro perfil (ver *"O que esta
+    etapa não cobre"*).
+25. **Os outros dois desfechos que não cancelam, vistos pela ausência do botão.** Repita 2 a 9 com
+    outro material (pode ser sem série) e decida **Aceitar sob desvio** → a coluna **Execução**
+    nasce em **"Não se aplica"** e **não há ✕**: a decisão já se executou no mesmo clique, não há
+    pendência a encerrar (pela porta de programação: *"Esta decisão não deixou execução pendente —
+    não há o que encerrar"*, 409). Depois faça um material **sem série**, decida **Devolver ao
+    fornecedor** e **registre a execução** (Trecho B da Etapa 45) → **Execução: Executada** e o ✕
+    **desaparece**; o servidor recusaria com *"A execução desta não conformidade já foi registrada
+    — o documento não pode ser cancelado"* (409).
+
+### Passos que NÃO são reproduzíveis por tela
+
+Estas proteções existem no código, têm teste e **não se demonstram ao vivo** — não porque falhem,
+mas porque hoje não há botão que chegue até elas:
+
+- **A corrida de dois cancelamentos.** Dois cancelamentos **simultâneos** do mesmo documento
+  (medidos com duas chamadas em paralelo) dão **um sucesso e uma recusa**, e **uma** linha de
+  trilha. O que se consegue ver pela tela é a versão lenta: com a fila aberta em **duas abas**,
+  cancele na primeira e depois na segunda (que ainda mostra o ✕) → a segunda volta com *"Esta não
+  conformidade já está cancelada"* (409). A versão **realmente simultânea** tem uma terceira
+  resposta, quando a linha muda **duas** vezes no meio do caminho (por exemplo: a execução gravou o
+  carimbo e o rollback dela o limpou) — *"O documento mudou de estado durante o cancelamento —
+  tente de novo"* (409) —, e chegar a esse estado por cliques não é possível.
+- **Executar um documento já cancelado.** Depois do cancelamento o botão de caminhão **não existe
+  mais** na linha, então a recusa só se alcança por fora: *"Esta não conformidade foi cancelada —
+  não há execução a registrar"* (400). Ela é **nova nesta etapa** — é o estado que a etapa criou —
+  e substituiu uma resposta que **mentia**, dizendo que a execução já havia sido registrada quando
+  nada havia sido registrado.
+- **A régua do documento cancelado em relação à divergência que ele fechava.** Cancelar **por
+  pessoa** é um **encerramento** (como decidir): o item **não** volta ao cartão *"Divergência de
+  recebimento"* e o reenvio da mesma nota **não** abre documento novo — mas, se o operador corrigir
+  a quantidade e ela **quebrar de novo no mesmo valor**, um documento **novo** nasce. O
+  cancelamento **automático** da reconferência continua significando *"a divergência sumiu"* e
+  segue a régua antiga. São quatro estados que exigem armar a base pela integração; a diferença
+  entre os dois cancelamentos mora numa coluna, não num botão.
+
+### O que esta etapa não cobre
+
+- **Cancelar não desbloqueia o material.** Os 3 do roteiro continuam **bloqueados** depois do
+  cancelamento, de propósito: o documento morreu, o material não se moveu. Soltá-los é outro gesto
+  e de outro perfil — **"Desbloquear Material"** em *Inspeções* (Administrador ou Gestor, exige
+  permissão de ajuste de estoque) — ou a baixa pela tela de **Movimentações**, que é o que a recusa
+  da execução manda fazer.
+- **Não devolve material com número de série.** A etapa deu a **saída** do beco, não a devolução
+  serializada: escolher **quais peças** voltam continua sem tela, e o caminho segue sendo
+  Movimentações.
+- **Não redecide o documento.** Cancelar não reabre a decisão. O modal diz *"cancele este documento
+  e abra outro"* — e vale saber que **abrir não conformidade à mão não tem botão em tela nenhuma**
+  (herança da Etapa 43): o documento novo nasce pelas portas automáticas (conferência, dados
+  fiscais, inspeção).
+- **Não cancela documento Aberto.** Foi **corte de escopo da revisão final**, não esquecimento:
+  cancelar um documento sem decisão silenciaria uma divergência **viva** — o item sairia do cartão
+  antigo, o gancho não reabriria e não haveria como recomeçar. A recusa indica os dois gestos
+  certos (decidir, ou corrigir a quantidade conferida).
+- ~~**A linha não diz quem cancelou, no documento que foi decidido.** A coluna *Decisão* continua
+  mostrando **quem decidiu**; o autor do cancelamento aparece na linha **só** quando o documento
+  nunca foi decidido.~~
+  ⚠️ **CORRIGIDO no fechamento da etapa, e vale contar por que estava assim.** O nome de quem
+  cancelou **aparece sim**, embaixo do badge **Cancelada**, na coluna de **Situação** — junto com a
+  data. A coluna *Decisão* continua mostrando **quem decidiu**, que é o certo: são dois atos, com
+  dois autores.
+  **O que havia acontecido:** o campo existia no servidor e o código da tela o desenhava… no ramo
+  errado — um ramo que só é alcançado quando o documento **nunca foi decidido**. E como cancelar
+  **exige** documento decidido, aquele desenho nunca era executado. Foi escrevendo **este roteiro**
+  que o problema apareceu: quem foi conferir na tela, para escrever o passo, não achou o nome.
+  Vale como lição de método: **escrever o roteiro de teste manual é uma forma de medir a tela** —
+  ela achou um defeito que 44 cenários automatizados não acharam.
+- **O cartão novo não é verificável no mesmo minuto.** A janela mínima é **1 dia** e conta desde a
+  **decisão** (não desde a abertura do documento) — um documento aberto há 60 dias e decidido hoje
+  **não** está atrasado na execução.
+- **A Qualidade não recebe o aviso.** Quem cancela é Administrador e Qualidade, e a **Qualidade
+  está fora** de `ver_alertas` — o cartão e o e-mail chegam a Administrador, Almoxarife, Gestor e
+  Compras. O conserto escolhido foi **escrever a saída** na descrição e no corpo do e-mail, em vez
+  de alargar a permissão (decisão registrada na letra **B** do documento de novidades).
+- **Não retroage e não mexe em mais nada.** Nenhum pedido de compra é reaberto, nenhuma nota fiscal
+  é emitida, nenhum e-mail sai para o fornecedor e nenhum valor é estornado — tudo o que a Etapa 45
+  já declarava continua valendo.
+
+---
+
 ## Etapa 45 — A devolução ao fornecedor deixa de ser um combinado verbal (ENTREGUE — 2026-09-29)
 
 **O que mudou, em uma frase:** decidir *Devolver ao fornecedor* passou a ser só a **intenção** — a
@@ -5034,6 +5317,20 @@ etapa.
 **Na prática:** escolha um material **sem** controle de série e **sem** controle de lote para a
 demonstração (passo 1 do roteiro). Se alguém perguntar sobre série, responda pela mensagem — ela é
 correta e é a decisão certa —, mas **não clique**.
+
+> ⚠️ **O C64 FOI PAGO NA ETAPA 46 (2026-09-30)** — o texto acima fica **como está** porque descreve
+> corretamente o que a Etapa 45 entregou; o que mudou é que **o beco já tem saída**. A recusa da
+> execução continua a mesma (*"Material com controle de série não pode ser devolvido por aqui — dê
+> baixa pela tela de Movimentações"*), mas o documento **não fica mais preso**: a **Qualidade** (ou
+> um **Administrador**) usa o botão **✕ "Cancelar a não conformidade"**, informa um **motivo de no
+> mínimo 5 caracteres** e o documento fecha **preservando a decisão** — *"Documento cancelado — a
+> decisão fica registrada, e a execução deixa de ser cobrada"*. A linha passa a mostrar **"Deixou de
+> ser cobrada"** na coluna Execução e sai da fila *"Pendentes de execução"*. E, enquanto ninguém
+> resolve, o documento **cobra**: nasceu o cartão **"Execução pendente"** na central de Alertas. O
+> **Compras continua sem** o cancelar, de propósito. **Já é seguro demonstrar série ao vivo** — o
+> roteiro completo está na seção da **Etapa 46**, acima. Duas ressalvas: cancelar **não desbloqueia**
+> o material (os quilos reprovados continuam bloqueados) e **não existe** devolução de peça
+> serializada por esta tela.
 
 ### Passos que NÃO são reproduzíveis por tela
 
@@ -5314,6 +5611,13 @@ recebeu quando passou a sair da medição.
     no cartão antigo. É o que se quer — tratar o documento morto como *"já documentado"* esconderia
     justamente o **erro novo**. Ver item ali significa, então, uma de duas coisas: *o automático
     falhou* **ou** *a divergência voltou depois de uma correção*.
+    > ⚠️ **METADE DESTE PARÁGRAFO DEIXOU DE VALER NA ETAPA 46** — corrigido aqui em vez de apagado.
+    > Desde 2026-09-30 há **dois** tipos de documento cancelado, e a régua passou a distingui-los:
+    > o cancelamento **automático** da reconferência (a divergência sumiu) continua devolvendo o
+    > item ao cartão antigo, exatamente como descrito acima; o cancelamento feito **por uma pessoa**
+    > passou a valer como **encerramento**, igual a decidir, e o item **não** volta ao cartão. Sem
+    > isso, o cartão cobraria uma divergência que ninguém pode documentar — não há tela de abertura
+    > manual de não conformidade.
 
 ### O que esta etapa NÃO cobre
 

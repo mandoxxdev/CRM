@@ -596,6 +596,23 @@ const NaoConformidadesAlmoxarifado = () => {
                         <span className={`almox-badge almox-badge-nc-${String(nc.status || '').toLowerCase()}`}>
                           {ROTULO_STATUS[nc.status] || nc.status}
                         </span>
+                        {/* ⚠️ O AUTOR DO CANCELAMENTO MORA AQUI, e não na coluna Decisão — achado do
+                            fechamento da Etapa 46. Ele esteve na coluna Decisão por algumas horas e
+                            era INERTE: aquele ramo só é alcançado quando `nc.decisao` é nulo, e depois
+                            do corte de escopo do fix-round **só documento DECIDIDO cancela**. Ou seja:
+                            o campo entrou na projeção, a tela "mostrava" o autor, e o caminho que
+                            produz um documento cancelado nunca passava por ali. Foi o executor do guia
+                            de usuário que mediu isso, tentando escrever o passo do roteiro.
+
+                            Aqui é o lugar certo por significado: o STATUS é "Cancelada", e quem/quando
+                            é a qualificação dele — o mesmo padrão da coluna Decisão, que mostra a
+                            decisão e abaixo quem decidiu e quando. */}
+                        {nc.status === 'CANCELADA' && (
+                          <div style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem', marginTop: 2 }}>
+                            {formatDataHora(nc.cancelado_em)}
+                            {nc.cancelado_por_nome ? ` · ${nc.cancelado_por_nome}` : ''}
+                          </div>
+                        )}
                       </td>
                       <td style={{ fontSize: '0.8rem' }}>
                         {nc.decisao ? (
@@ -607,14 +624,13 @@ const NaoConformidadesAlmoxarifado = () => {
                           </>
                         ) : nc.status === 'CANCELADA' ? (
                           <div style={{ color: 'var(--gmp-text-light)' }}>
-                            {/* ⚠️ O AUTOR entrou no fix-round da Fase 5: a coluna `cancelado_por_nome` viajava
-                                na projeção desde a T2 e a tela não a mostrava em lugar nenhum — o desenho
-                                justificou a coluna dizendo que "a tela nunca poderia mostrar quem cancelou",
-                                a coluna entrou e a tela continuou sem mostrar. Quando o nome falta (linha
-                                antiga, ou cancelamento automático da reconferência) a frase fica só com a
-                                data, que é o que ela dizia antes. */}
+                            {/* Este ramo só é alcançado pelo cancelamento AUTOMÁTICO da reconferência
+                                — o único que produz documento cancelado SEM decisão. O cancelamento
+                                humano exige documento decidido, então ele cai no ramo de cima e o
+                                quem/quando dele mora na coluna de STATUS (ver o comentário lá).
+                                Sem autor aqui de propósito: o automático não tem autor, e é isso que
+                                o distingue. */}
                             Cancelada em {formatDataHora(nc.cancelado_em)}
-                            {nc.cancelado_por_nome ? ` por ${nc.cancelado_por_nome}` : ''}
                           </div>
                         ) : '—'}
                       </td>

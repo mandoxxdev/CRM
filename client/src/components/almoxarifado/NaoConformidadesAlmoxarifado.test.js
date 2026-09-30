@@ -127,7 +127,7 @@ const NC_CANCELADA_APOS_DECISAO = {
   ...NC_A_EXECUTAR,
   id: 24, numero: 'NC-2026-0024', status: 'CANCELADA',
   motivo_cancelamento: 'Fornecedor assumiu a troca em campo, devolucao cancelada',
-  cancelado_em: '2026-09-29 17:00:00',
+  cancelado_em: '2026-09-29 17:00:00', cancelado_por_id: 91, cancelado_por_nome: 'Ana Souza',
   execucao_estado: 'PENDENTE', execucao_em: null, execucao_por_nome: null,
 };
 
@@ -196,6 +196,11 @@ const botaoDetalhes = (linha) => [...linha.querySelectorAll('.almox-btn-icon')]
 
 /** A célula da coluna Execução — 8ª das nove (Número…Decisão, Execução, Ações). */
 const celulaExecucao = (linha) => linha.querySelectorAll('td')[7];
+// Etapa 46, fechamento: as duas colunas vizinhas, por indice como a de execucao. O `td[5]` e o
+// STATUS (onde o autor do cancelamento mora) e o `td[6]` e a DECISAO — a confusao entre as duas
+// foi o achado que criou o cenario (44).
+const celulaStatus = (linha) => linha.querySelectorAll('td')[5];
+const celulaDecisao = (linha) => linha.querySelectorAll('td')[6];
 
 function preencher(elemento, valor) {
   const proto = elemento.tagName === 'SELECT' ? window.HTMLSelectElement.prototype
@@ -1247,6 +1252,30 @@ describe('NaoConformidadesAlmoxarifado — cancelar o documento', () => {
     expect(texto).not.toContain('decidir de novo');
   });
 
+
+  test('(44) a linha cancelada diz QUEM cancelou — na coluna de STATUS, não na de Decisão', async () => {
+    // ⚠️ ACHADO DO FECHAMENTO, e ele é do tipo mais traiçoeiro: o autor do cancelamento esteve na
+    // coluna **Decisão** por algumas horas e era **INERTE**. Aquele ramo só é alcançado quando
+    // `nc.decisao` é nulo, e depois do corte de escopo **só documento DECIDIDO cancela** — ou seja,
+    // o campo entrou na projeção, o componente "mostrava" o autor, e o caminho que produz um
+    // documento cancelado nunca passava por ali. Quem mediu foi o executor do guia de usuário,
+    // tentando escrever o passo do roteiro: ele foi ver na tela e não achou.
+    ncDoBanco = [NC_A_EXECUTAR, NC_CANCELADA_APOS_DECISAO];
+    await renderizar();
+    expect(linhas()).toHaveLength(2);
+
+    const cancelada = linhas()[1];
+    expect(cancelada.textContent).toContain('NC-2026-0024');
+    // O badge de status continua, e o quem/quando entra ABAIXO dele.
+    expect(celulaStatus(cancelada).textContent).toContain('Cancelada');
+    expect(celulaStatus(cancelada).textContent).toContain('Ana Souza');
+    // E a coluna Decisão continua sendo da DECISÃO — quem decidiu, não quem cancelou.
+    expect(celulaDecisao(cancelada).textContent).toContain('Devolver ao fornecedor');
+
+    // Metade POSITIVA: a linha NÃO cancelada não ganha nada na coluna de status além do badge.
+    expect(celulaStatus(linhas()[0]).textContent).toContain('Decidida');
+    expect(celulaStatus(linhas()[0]).textContent).not.toContain('Ana Souza');
+  });
   test('(43) recusa do servidor vai LITERAL ao toast e o modal continua aberto', async () => {
     ncDoBanco = [NC_A_EXECUTAR];
     await renderizar();
