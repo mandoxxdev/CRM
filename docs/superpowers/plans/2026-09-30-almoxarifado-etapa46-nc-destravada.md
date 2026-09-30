@@ -525,4 +525,88 @@ Exclusividade não é suficiência, e essa é a linha a acrescentar no próximo 
 - [x] Fase 2 — revisão do plano por agente fresco: **12 achados, 3 CRITICAL, 8 refutados** — desenho e plano corrigidos antes da primeira linha de código
 - [x] T1 — gate + rotulo, as duas pontas no mesmo commit — `a625fb7` · [x] T2 — colunas, servico, rota e RN-05 nos tres consumidores — `2afb944` · [x] T3 — 15ª entrada, config de **quatro** pontas e **nove** contagens (executada sem commit; hash a preencher na integração) · [ ] T4 · [x] T5 — integracao cruzando os galhos — `7812823`
 - [x] Fase 5 — revisão adversarial: 3 lentes, 23 achados, 1 CRITICAL, 29 refutados + fix-round
-- [ ] Fase 6 — `fechar-etapa`
+- [x] Fase 6 — `fechar-etapa`: os 7 artefatos + a retro acima
+
+---
+
+## Retro de 4 números — Etapa 46
+
+**1. Rodadas de correção até verde: uma** (o fix-round da Fase 5), e nenhuma task precisou de segunda
+rodada depois de integrada. **Mas o número honesto é outro:** a Fase 2 mudou o desenho **antes** da
+primeira linha de código (3 CRITICAL), e a Fase 5 mudou o **escopo** depois de tudo entregue. Ou
+seja: **duas reescritas de desenho, zero retrabalho de integração.** O sort topológico segurou — o
+tronco congelou o contrato e os dois galhos rodaram em paralelo sem se tocar.
+
+**2. Achados: 35 reais, 4 CRITICAL, zero ruído.** 12 na Fase 2 (plano, antes de codar — 3 CRITICAL)
+e 23 na Fase 5 (três lentes — 1 CRITICAL), mais **29 hipóteses** que os revisores levantaram e
+**refutaram sozinhos** antes de reportar.
+
+**Três números que ensinam mais que o total:**
+
+- **Duas das três lentes chegaram sozinhas ao MESMO corte de escopo**, por caminhos diferentes — e o
+  que elas cortaram (a RN-01) era coisa que **eu** havia acrescentado ao desenho. Convergência
+  independente é o sinal mais forte que este fluxo produz; quando duas lentes cegas apontam o mesmo
+  lugar, não é questão de gosto.
+- **O CRITICAL não era desta etapa.** O "silêncio completo" que a Etapa 43 fechou continuava aberto
+  por um ramo que a suíte não cobria — reproduzido **sem cancelamento nenhum**, com a NC encerrada
+  por decisão. **Terceira vez** nesta linhagem que uma etapa descobre que a anterior fechou pela
+  metade (a 45 achou o épsilon da 44; a 44 achou a atomicidade do motor; a 46 acha o carimbo da 43).
+  O padrão não é descuido de uma etapa: é que **o fechamento declara** classes inteiras como
+  resolvidas a partir do caminho que ele testou.
+- **Um terço dos achados da Fase 5 foi sobre a própria suíte**, que estava verde: o claim inteiro do
+  cancelamento era apagável com 39 cenários passando, o e-mail saía com `undefined` com 7 cenários
+  passando, e o motivo vazava entre modais com 43 cenários passando. A lente que mediu isso construiu
+  um harness de sabotagem **em memória** que **aborta se a substituição não acontecer** — que é a
+  resposta direta a uma lição da T3 desta etapa, aplicada no mesmo dia.
+
+**3. Paralelismo: 2 galhos em paralelo (T3 e T4) + 3 lentes em paralelo + 2 agentes de documentação.**
+Nenhum retrabalho por conflito — os arquivos eram disjuntos e o tronco estava congelado. **E o
+paralelismo ACHOU coisa que serial não acharia:** a T4, rodando o gate do client, topou com **sete
+falhas** causadas pela config nova da T3 e **fez certo em não tocar** arquivo do outro executor —
+foi assim que a "quarta ponta" da configuração apareceu, que o plano não previa.
+
+⚠️ **O risco de processo das Etapas 44/45 NÃO se repetiu:** as três lentes receberam, por escrito, a
+instrução de trabalhar em **cópia**, e nenhuma tocou a árvore. `git status` limpo ao fim das três.
+
+**4. Defeito que escapou:** a preencher pela Fase 0 da etapa seguinte. **Quatro candidatos
+declarados**, todos com o cenário já escrito:
+
+- **(a)** a corrida `cancelar × executar` não tem teste (**G74**) — e a lição é que a declaração
+  anterior de "não é reproduzível" estava **frouxa**: a irmã `cancelar × cancelar` era reproduzível
+  em 6 linhas, e sem ela a reserva inteira era apagável;
+- **(b)** a condição de "encerrou o fato" é **copiada à mão** no cartão D6 (**G75**), guardada por
+  teste mas ainda cópia — e este é o **terceiro** fechamento seguido em que uma revisão acha
+  meia-régua nesse mesmo ponto;
+- **(c)** o estado do **C67**: documento cancelado sem ninguém ter dado baixa deixa material retido
+  **sem nenhuma superfície cobrando** — é o único estado novo que a etapa cria e não cobra;
+- **(d)** o bloco de aviso de permissão **dentro** do modal de cancelar é inalcançável (o botão que
+  abre o modal já esconde por perfil). Inerte hoje, e é o padrão *"superfície que promete o que não
+  existe"* que esta base já pagou três vezes — declarado para ninguém escrever teste para ele.
+
+---
+
+## Próxima tarefa detalhada — escolha e medição de abertura
+
+**A cadeia recebimento → inspeção → não conformidade → devolução → destravamento está FECHADA.** A
+feature 09 está 🟢, a 12 perdeu a ressalva, a 20 ganhou a 15ª entrada, e o furo C64 — o único que
+esta cadeia deixou como beco — está pago. **Não há "próximo item" pendente dentro dela**; o que
+sobra são os furos declarados (C65, C67) e as fragilidades (G74, G75), nenhum deles bloqueando
+operação.
+
+**Logo a escolha volta ao mapa** (`specs/modulo-almoxarifado/README.md`), pela regra 3 do CLAUDE.md:
+a feature 🔴/🟡 de maior valor, **medindo antes de prometer**. As 🟡 no mapa hoje: **00** (fundação),
+**01** (cadastros), **02** (localizações), **05** (separação e picking), **06** (motor de
+aprovações), **08** (recebimento), **21** (relatórios) e **22** (integrações).
+
+**⚠️ A Fase 0 da próxima etapa TEM de começar medindo, e esta base tem três cicatrizes disso:** na
+Etapa 24 eu afirmei que uma tela não existia — existia, estava no menu e no manual; na 26 contei "3
+arquivos" e nomeei dois, enquanto a spec já nomeava os três corretamente; e na 45 eu afirmei que um
+cartão "cobra para sempre", quando ele tem janela de 7 dias. **A regra que saiu dessas três:** ler o
+que a spec já mediu **antes** de medir, e quando os dois discordarem, tratar isso como **achado** em
+vez de escolher a própria medição.
+
+**E o candidato mais provável, sem prometer nada antes de medir:** a **05 (separação e picking)** é
+a 🟡 mais antiga da lista que não recebeu etapa nenhuma desde a 28, e o fluxo dela é vizinho direto
+do que acabou de ser construído (requisição → separação → entrega). A **08 (recebimento)** foi
+tocada pelas Etapas 42/43 e o "falta para 🟢" dela precisa ser **relido**, não assumido. **A decisão
+sai da Fase 0 da próxima etapa, com a spec na mão.**
