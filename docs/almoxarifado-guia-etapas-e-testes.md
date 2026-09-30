@@ -1,14 +1,37 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-09-28 (Etapa 44) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-09-29 (Etapa 45) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 44) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 45) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-09-28 (Etapa 44 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-09-29 (Etapa 45 ENTREGUE · modo contínuo pelo mapa)
 >
-> **Etapas 1 a 20 e 22 a 44 completas; a Etapa 21 foi entregue no NÚCLEO do CRM e as 38 a 42 no
+> **Etapas 1 a 20 e 22 a 45 completas; a Etapa 21 foi entregue no NÚCLEO do CRM e as 38 a 42 no
 > módulo COMPRAS** (a 42 nos dois: o gancho roda no Almoxarifado, o efeito aparece no Compras).
-> A **43 e a 44 estão dentro do almoxarifado**, nas features 08 (Recebimento) e 09 (Inspeção).
+> A **43, a 44 e a 45 estão dentro do almoxarifado**, nas features 08 (Recebimento) e 09 (Inspeção).
+>
+> **O desenvolvimento parou aqui: Etapa 45, 2026-09-29.** E com ela a **feature 09 (Inspeção e
+> qualidade) fechou em 🟢** — era o último item da lista dela.
+>
+> A **Etapa 45 (a devolução ao fornecedor deixa de ser um combinado verbal)** fechou em 2026-09-29 e
+> **fecha o último buraco que a 44 deixou aberto**: decidir *Devolver ao fornecedor* virou só a
+> **intenção**, e a baixa do estoque passou a acontecer num **segundo clique** — o **Registrar
+> execução** —, dado por quem despachou a caixa de verdade. Quem decide continua sendo a Qualidade;
+> quem registra a saída pode ser **Compras, Qualidade ou Administrador** (o **Almoxarife não**, de
+> propósito). A tela de *Não Conformidades* ganhou a coluna **Execução** (*Pendente*, *Executada*,
+> *Não se aplica*) e a fila **"Pendentes de execução"** — o que falta despachar —, o livro de
+> movimentações passou a registrar a saída com o motivo *"Devolução ao fornecedor"* e o número da NC,
+> e o cartão de *Material reprovado* passou a medir **material que saiu**, não intenção registrada.
+> **O que ela NÃO faz e você precisa saber:** não emite nota fiscal de devolução, não avisa o
+> fornecedor, não pede reposição, não reabre o pedido de compra (ele continua *Recebido*) e **não
+> desfaz** — execução registrada não tem estorno, nem pelo livro.
+> **⚠️ Um furo para não demonstrar ao vivo (C64):** material com **número de série**, ou com lote não
+> identificável, é **recusado** na execução — e o documento fica **preso** na fila *Pendentes de
+> execução*, sem gesto de tela que o destrave. Use material sem série e sem lote na apresentação; o
+> destravamento é a próxima etapa.
+>
+> **Próxima etapa: escolhida pelo mapa** `specs/modulo-almoxarifado/README.md` — com a feature 09
+> em 🟢, a escolha sai da 🔴/🟡 de maior valor, medida antes de prometer.
 >
 > A **Etapa 44 (a Qualidade executa a própria decisão)** fechou em 2026-09-28 e **fecha o furo que
 > a 43 abriu**: aceitar uma não conformidade de inspeção agora **libera sozinha** o material que a
@@ -22,8 +45,10 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 > tela diz isso); liberar a NC **não reabilita o lote** em material com controle por lote — a saída
 > continua recusando até alguém voltar o lote para *Ativo* (furo **C62**); e reprovações
 > **anteriores** a esta atualização continuam só no caminho manual (consulta **A22**).
->
-> **Próxima etapa: escolhida pelo mapa** `specs/modulo-almoxarifado/README.md`.
+> **UM PEDAÇO DISTO DEIXOU DE VALER NA ETAPA 45** — corrigido aqui em vez de apagado: *Devolver ao
+> fornecedor* **passou a mexer no saldo**, só não no clique da decisão: quem move é o **Registrar
+> execução**, no gesto seguinte. *Substituição*, *Análise da Engenharia* e *Sucatear* continuam
+> registrando apenas a intenção, agora com data e autor da execução.
 >
 > A **Etapa 43 (a divergência vira documento numerado)** fechou em 2026-09-28. O que o sistema já
 > **detectava** — chegou menos material do que a nota diz, a inspeção reprovou um lote — passou a
@@ -4479,8 +4504,8 @@ requisição. Nos comandos abaixo ele é `$TOKEN`.
    ```
    Sem o `material_id`, recusa com *"Material é obrigatório"*.
 5. **Deixe um item retido para inspecionar:** Almoxarifado → Recebimentos → novo recebimento do
-   **mesmo material** (ele precisa estar marcado como **crítico** e a retenção de material crítico
-   precisa estar ligada em Configurações) → aprovar. Ele aparece em **Inspeções → Pendentes**.
+   **mesmo material** (basta ele estar marcado como **crítico**; a retenção nasce ativa e não tem
+   interruptor em tela — ver a correção no roteiro da Etapa 44) → aprovar. Ele aparece em **Inspeções → Pendentes**.
    Anote o **id do item** (ele vem na fila; ou use `GET /api/almoxarifado/inspecoes/pendentes`).
 6. **Decida a inspeção mandando a medida, e NENHUMA caixa marcada.** Com o plano `+0,005/+0,021`
    sobre nominal 25, a faixa é `[25,005 ; 25,021]` — mande `24.998`, que está fora:
@@ -4587,9 +4612,9 @@ qualquer requisição do sistema logado; abaixo ele é `$TOKEN`.
      -d '{"material_id": 1, "caracteristica": "Furo", "unidade": "mm",
           "valor_nominal": 10, "desvio_inferior": 0.005, "desvio_superior": 0.021}'
    ```
-2. **Deixe um item retido:** Almoxarifado → Recebimentos → novo recebimento **desse material** (ele
-   precisa estar marcado como **crítico**, e a retenção de material crítico ligada em
-   Configurações) → aprovar. Ele aparece em **Inspeções → Pendentes**.
+2. **Deixe um item retido:** Almoxarifado → Recebimentos → novo recebimento **desse material** (basta ele
+   estar marcado como **crítico**; a retenção nasce ativa e não tem interruptor em tela — ver a
+   correção no roteiro da Etapa 44) → aprovar. Ele aparece em **Inspeções → Pendentes**.
 3. **Abra Decidir Inspeção.** Agora existe o bloco **Medidas do plano**, com duas linhas:
    - *Diâmetro (mm) — nominal 12.3 · faixa **[12.2 ; 12.4]***
    - *Furo (mm) — nominal 10 · faixa **[10.005 ; 10.021]***
@@ -4833,6 +4858,232 @@ que ele não tinha como repetir com sucesso garantido.
 
 ---
 
+## Etapa 45 — A devolução ao fornecedor deixa de ser um combinado verbal (ENTREGUE — 2026-09-29)
+
+**O que mudou, em uma frase:** decidir *Devolver ao fornecedor* passou a ser só a **intenção** — a
+baixa no estoque acontece num **segundo clique**, o **Registrar execução**, dado por quem despachou
+a caixa de verdade.
+
+**O problema que ela resolve.** Quem manda o material de volta é o **Compras**, dias depois, por
+telefone e transportadora. Até aqui o sistema não tinha onde registrar isso: a Qualidade decidia
+*Devolver ao fornecedor*, o documento fechava e os quilos reprovados **ficavam bloqueados para
+sempre**, porque nada perguntava se a caixa tinha ido embora. O estoque contava material que já não
+estava no galpão, o cartão de *Material reprovado* cobrava uma providência que talvez já tivesse
+sido tomada, e ninguém conseguia responder *"essa devolução já foi feita?"*. Agora são **dois
+gestos, com dois donos e duas datas**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Decidir *Devolver ao fornecedor* fechava o documento e **o material continuava bloqueado**, sem prazo e sem cobrança | O documento fica **Pendente de execução** até alguém registrar que o material saiu |
+| Não havia onde dizer que a devolução foi feita | Botão **Registrar execução** na linha do documento, com data, autor e observações (nº da nota, transportadora, quem recebeu) |
+| A baixa teria de ser feita à mão, sem vínculo com o documento | A baixa é **automática no registro da execução**, com o número da NC no livro e o motivo *"Devolução ao fornecedor"* |
+| A tela não respondia *"o material já voltou ao fornecedor?"* | Coluna **Execução**: vazio (não decidido), **Pendente**, **Executada** (com quem e quando) e **Não se aplica** |
+| Não havia fila de trabalho para o Compras | Filtro **"Pendentes de execução"** — a fila do que falta despachar |
+| Quem decide era quem (não) executava | Ação própria: **Administrador, Qualidade e Compras** registram execução; o **Almoxarife não** |
+
+### Roteiro de teste manual
+
+**O que você precisa antes de começar** — este roteiro usa **dois logins** (e mais dois só para
+passos específicos):
+
+- **quem decide**: usuário com perfil **Qualidade** (ou **Administrador**);
+- **quem registra a execução**: usuário com perfil **Compras** (Qualidade e Administrador também
+  podem);
+- **quem tenta e não consegue**: usuário com perfil **Almoxarife** (passo 22);
+- um **Administrador** no passo 20 — é ele que desbloqueia material à mão.
+
+O material tem de estar marcado como **Material crítico** no cadastro: é isso que faz a entrada cair
+na fila de inspeção. Se não cair, a chave `inspecao_material_critico` foi desligada no banco (ela
+nasce ligada e **não tem tela**).
+
+#### Trecho A — a Qualidade decide, e nada se move (entre como **Qualidade** ou **Administrador**)
+
+1. **Almoxarifado → Materiais.** Crie um material novo (ou edite um existente), marque **Material
+   crítico** e deixe-o **sem** controle de série e **sem** controle de lote — o caminho principal é
+   este; série e lote estão no aviso do fim desta seção. Anote o código.
+2. **Almoxarifado → Recebimentos → Novo recebimento.** Escolha o fornecedor, preencha a nota fiscal
+   e lance **10** unidades do material do passo 1. Salve.
+3. Na lista de recebimentos, abra o que você criou e **processe/aprove** a entrada.
+4. **A verificação de saldo "antes".** Volte a **Materiais** e anote o que está lá: **10 no físico**,
+   **0 disponível**, **10 em inspeção**. É a quarentena — material crítico entra retido.
+5. **Almoxarifado → Inspeções**, aba **Pendentes**. Na linha do material, clique no botão
+   **"Decidir inspeção (aprovar/reprovar)"**. No modal **"Decidir Inspeção"** preencha
+   **Quantidade aprovada: 7**, **Quantidade reprovada: 3**, **Encaminhamento: Devolver ao
+   fornecedor**, marque **Dano físico** em *Problemas identificados* e escreva a observação (ela é
+   obrigatória quando há quantidade reprovada). Confirme.
+   → Em **Materiais**: **10 no físico**, **7 disponíveis**, **3 bloqueados**.
+6. **Almoxarifado → Não Conformidades.** O documento `NC-…` já está na lista, com status **Aberta** e
+   origem **Inspeção** — ninguém o criou, ele nasceu da reprovação. A coluna **Execução** mostra
+   **—**: documento não decidido não tem execução a mostrar. Anote o número.
+7. Clique no botão **"Decidir a não conformidade"**. No modal **"Decidir NC-…"**, **leia o parágrafo
+   cinza antes de escolher** — é ele que diz o que cada decisão faz com o saldo. Escolha a
+   **Decisão: Devolver ao fornecedor**, escreva a **Justificativa** e clique em **Registrar
+   decisão**.
+   → **O aviso:** *"Não conformidade NC-… decidida! Esta decisão não altera o saldo"*.
+   → A coluna **Execução** da linha passa a **Pendente**.
+8. **Volte a Materiais e confira que NADA mudou:** ainda **10 no físico** e **3 bloqueados**. **Este
+   é o ponto da etapa** — a decisão registrou a intenção, e o material continua no galpão.
+
+#### Trecho B — o Compras executa, e é aí que o saldo desce (saia e entre como **Compras**)
+
+9. **Almoxarifado → Não Conformidades.** No **terceiro filtro** (o de execução), troque *"Qualquer
+   execução"* por **"Pendentes de execução"**.
+   → A lista traz só o que espera despacho — e repare que o **filtro de status saltou sozinho para
+   "Decididas"**. É de propósito: execução só existe em documento decidido. Para ver o avesso,
+   escolha **"Abertas"** no filtro de status e o filtro de execução volta a **"Qualquer execução"**.
+   Deixe a fila em **"Pendentes de execução"** para o passo seguinte.
+10. Na linha do `NC-…`, clique no botão de **caminhão** — **"Registrar execução do encaminhamento"**.
+    No modal **"Registrar execução de NC-…"** o texto cinza diz que é **este** registro que dá a
+    baixa. No campo **Observações** (placeholder *"Opcional — nº da nota de devolução,
+    transportadora, quem recebeu do outro lado."*) escreva *"NF de devolução 123, transportadora
+    X"*. Clique em **Registrar execução**.
+    → **O aviso que prova a etapa:** *"Execução de NC-… registrada!"* — **sem** frase de efeito
+    depois dela, porque o saldo se moveu de verdade.
+    → A coluna **Execução** passa a **Executada**, com **o seu nome e a hora**. E a tela **larga a
+    fila sozinha** (volta a *"Qualquer execução"*), para você ver o registro que acabou de fazer —
+    com o filtro *Pendentes* ligado, a linha teria sumido junto com o aviso.
+11. **A verificação de saldo "depois". Almoxarifado → Materiais:** **7 no físico**, **7
+    disponíveis**, **0 bloqueado**. Os 3 saíram do galpão e saíram da conta.
+12. **O livro. Almoxarifado → Movimentações.** A linha nova é a da devolução: a coluna **Motivo /
+    Referência** traz *"Devolução ao fornecedor"* e a coluna **Vínculo** traz o **número da NC**.
+    Na coluna **Tipo** ela aparece como **Devolução ao fornecedor**, com a cor de saída (vermelho), e
+    o filtro *"Todos os tipos"* **oferece** essa opção — use-a para achar todas as devoluções do mês.
+    ⚠️ **Isto foi consertado no fechamento da etapa, e vale saber:** o tipo nasceu **fora** da lista
+    de rótulos do livro, então até o conserto a coluna Tipo mostrava o código cru
+    `DEVOLUCAO_FORNECEDOR` e o filtro não tinha a opção — a devolução era **não-localizável** no
+    livro. Se você estiver numa versão anterior a 2026-09-29, é isso que vai ver, e o jeito de achar
+    a linha é filtrar por data.
+13. **A devolução não tem botão de estornar — e isso é a proteção.** Na linha da devolução, a coluna
+    de ações **não oferece** o estorno (compare com a linha de uma **Saída** comum, que oferece).
+    **Por quê:** o estorno devolveria o material ao bloqueio e deixaria o documento dizendo
+    "executada", com o material fisicamente no fornecedor — e **sem saída**, porque o documento não
+    pode ser decidido de novo. O servidor recusa de todo jeito, com
+    *"Devolução ao fornecedor não pode ser estornada pelo livro — o material voltaria bloqueado com o
+    documento dizendo que foi devolvido"*; a tela apenas não oferece o clique que erra sempre.
+    ⚠️ **Também consertado no fechamento da etapa:** até 2026-09-29 o botão **aparecia** e entregava
+    essa recusa. Se você estiver numa versão anterior, é isso que vai ver — e a recusa é a mesma.
+14. **A trilha. Almoxarifado → Auditoria.** No filtro de ações (*"Todas as ações"*), escolha
+    **"Não conformidade executada"** → a linha do passo 10, com **quem** e **quando**. Troque para
+    **"Não conformidade decidida"** → a linha do passo 7, com **outro autor e outra data**. São
+    **dois atos, dois donos, duas datas** — era exatamente o que não existia antes.
+15. **O cartão para de cobrar. Almoxarifado → Alertas**, cartão **"Material reprovado"**: a inspeção
+    do passo 5 **desapareceu** dele. Enquanto a execução não é registrada, ela continua listada.
+
+#### Trecho C — os desfechos que não movem saldo (e continuam sendo registrados)
+
+16. **Documento não decidido não tem botão.** Repita os passos 1 a 6 com outro material e **não
+    decida**. A linha fica com **Execução —** e **sem** o botão de caminhão: a tela só o mostra onde
+    ele pode dar certo. A recusa existe no servidor, para quem tentar por fora:
+    *"Só é possível registrar a execução de uma não conformidade decidida"* (400).
+17. **Aceitação não tem execução — ela já se executou.** Repita 1 a 7 com outro material, decidindo
+    **Aceitar sob desvio**.
+    → A coluna **Execução** nasce em **"Não se aplica"**, e **não há botão**. Aceitar libera o
+    material no mesmo clique (é a Etapa 44); não há um segundo gesto esperando no mundo físico. Pela
+    porta de programação a resposta é *"Esta decisão não tem execução a registrar"* (400).
+18. **As outras três decisões registram o ato e não mexem no saldo.** Repita 1 a 7 com outro
+    material, decidindo **Sucatear** (vale igual para **Substituição** e **Análise da Engenharia**).
+    → **Execução: Pendente**, com botão. Abra o modal e **repare que o texto cinza mudou**: *"Esta
+    decisão não movimenta estoque: o registro guarda a data, o autor e a observação de que o
+    encaminhamento foi cumprido."* Confirme.
+    → *"Execução de NC-… registrada! Esta execução não altera o saldo"*, e os **3 continuam
+    bloqueados**. Está certo: alguém precisava poder dizer *"cumprido, nesta data"*.
+19. **Falta de quantidade no recebimento não devolve nada** — e este é o caso **mais comum**. Em
+    **Não Conformidades**, ponha o filtro de origem em **Recebimento**, pegue um documento que
+    nasceu de conferência (chegou menos do que a nota dizia), decida **Devolver ao fornecedor** e
+    registre a execução.
+    → *"Execução de NC-… registrada! Só a não conformidade aberta pela reprovação da inspeção
+    devolve material"*. Não chegou: não há o que mandar de volta.
+20. **Quando alguém já soltou o material à mão.** Repita 1 a 7 com outro material, decidindo
+    **Devolver ao fornecedor**. Antes de executar, entre como **Administrador**, vá em
+    **Almoxarifado → Inspeções** e use o botão **"Desbloquear Material"** para soltar os 3 (ele
+    exige permissão de ajuste de estoque — Administrador ou Gestor). Volte como **Compras** e
+    registre a execução.
+    → *"Execução de NC-… registrada! O material já havia saído do bloqueio — a execução foi
+    registrada sem mover saldo"*. **O registro FICA gravado**, e é deliberado: recusar deixaria o
+    documento cobrando na fila para sempre, e a única saída seria mentir em outra decisão — o mesmo
+    beco que a Etapa 44 fechou.
+21. **Registrar duas vezes é recusado.** Com a fila **"Pendentes de execução"** aberta em **duas
+    abas** do navegador, registre a execução do mesmo documento nas duas (ou dê **dois cliques
+    rápidos** no botão do modal).
+    → A segunda responde *"A execução desta não conformidade já foi registrada"* (409), e o saldo
+    **não se move de novo**.
+22. **Sem permissão.** Entre com um usuário de perfil **Almoxarife** e abra **Não Conformidades**.
+    → O botão de **caminhão nem aparece** nas linhas pendentes — é a única ação desta tela cuja
+    plateia (Compras) é diferente de quem decide, e mostrá-lo seria convite permanente a um 403. Se
+    a leitura de permissões da tela falhar, o botão **aparece por precaução** (ela falha aberta de
+    propósito) — e aí o modal traz o aviso âmbar e o clique volta do servidor com: *"Sem permissão
+    para registrar a execução do encaminhamento — seu perfil é Almoxarife. Solicite acesso a um
+    administrador."* — **antes** de qualquer efeito no saldo.
+
+### ⚠️ Antes de apresentar: o furo C64 — NÃO demonstre série nem lote ao vivo
+
+Material com **número de série** é recusado na execução, de propósito: *"Material com controle de
+série não pode ser devolvido por aqui — dê baixa pela tela de Movimentações"*. Devolver material
+serializado é escolher **quais peças** voltam, e essa escolha não existe nesta tela. O mesmo vale
+quando o lote do material devolvido não pode ser identificado: *"Não foi possível identificar o lote
+do material devolvido"*.
+
+**O problema é o que sobra depois da recusa.** O documento **continua preso na fila *"Pendentes de
+execução"*** e **não há gesto de tela que o destrave**: a execução não se registra (a recusa volta
+sempre), o documento não se decide de novo, e a fila do Compras fica com um item que ninguém
+consegue baixar. É o furo **C64**, declarado no documento de novidades, e é o assunto da próxima
+etapa.
+
+**Na prática:** escolha um material **sem** controle de série e **sem** controle de lote para a
+demonstração (passo 1 do roteiro). Se alguém perguntar sobre série, responda pela mensagem — ela é
+correta e é a decisão certa —, mas **não clique**.
+
+### Passos que NÃO são reproduzíveis por tela
+
+Estas proteções existem no código, têm teste e **não se demonstram ao vivo** — não porque falhem,
+mas porque hoje **não há botão** que chegue até elas:
+
+- **Documento aberto à mão sobre uma inspeção não devolve material.** A resposta é *"Execução de
+  NC-… registrada! Só a não conformidade aberta pela reprovação da inspeção devolve material"* — a
+  mesma do passo 19. Só que abrir documento à mão **não tem botão em tela nenhuma** (é herança da
+  Etapa 43): existe apenas pela integração. **É esta linha que sustenta a permissão do Compras** —
+  ele *pode* abrir documento e *não pode* decidir; se documento manual devolvesse material, abrir +
+  executar somaria uma porta para apagar estoque sem passar por ajuste de estoque nem pela
+  Qualidade.
+- **Duas devoluções da mesma inspeção: a segunda não baixa de novo** — *"O material desta inspeção
+  já havia sido devolvido"*. A trava mora na **inspeção**, não no documento, porque a mesma inspeção
+  pode em teoria carregar mais de um documento. Para vê-la pela tela seriam necessários **dois
+  documentos** sobre a mesma inspeção — e o segundo só nasce à mão, que é o item de cima.
+- **As demais mensagens da família "registrada sem mover saldo"** — *"Não há saldo físico deste
+  material — a execução foi registrada sem mover saldo"*, *"Material inativo — a execução foi
+  registrada sem mover saldo"*, *"O material desta inspeção já havia sido liberado por outra não
+  conformidade — a execução foi registrada sem mover saldo"* e *"Esta não conformidade não tem
+  material reprovado para devolver"*. Todas **gravam** o registro; chegar a cada uma exige armar um
+  estado que a operação normal não produz.
+
+E uma quarta, esta por desenho: **a devolução ao fornecedor não entra pelo formulário genérico de
+Movimentações** — o tipo é **dedicado** a este fluxo, como já são a devolução ao cliente e o retorno
+de transformação. O formulário de *Nova Movimentação* **nem oferece** a opção; o caminho é o
+documento.
+
+### O que esta etapa não cobre
+
+- **Não emite documento fiscal de devolução.** Nota, CFOP e impostos ficam fora — o registro é de
+  **estoque e rastreabilidade**. O número da nota cabe no campo de observações da execução.
+- **Não manda e-mail ao fornecedor.** Nenhum aviso externo sai do sistema.
+- **Não pede material de reposição.** Devolver não abre solicitação de compra, e *Substituição*
+  continua sendo uma **decisão** que alguém cumpre fora do sistema.
+- **Não reabre o pedido de compra.** O pedido fechado pelo recebimento **continua Recebido** depois
+  da devolução; a quantidade recebida não é reduzida. Corte declarado e fixado por teste.
+- **Não desfaz.** Registrada, a execução não tem botão de estorno (passo 13), e o documento não pode
+  ser decidido de novo.
+- **Não mexe em contas a pagar.** Nenhum valor é estornado.
+- **Não devolve material com número de série** — ver o aviso do **C64**, acima.
+- **Não retroage.** Documentos decididos *Devolver* **antes** desta atualização aparecem na fila
+  **"Pendentes de execução"** — que é o comportamento desejado —, mas nada devolve material
+  automaticamente por eles.
+- **A coluna Execução não diz quanto saiu.** O número aparece no aviso do momento; depois, o vínculo
+  está no livro de movimentações, pelo número da NC.
+
+---
+
 ## Etapa 44 — A Qualidade executa a própria decisão (ENTREGUE — 2026-09-28)
 
 **O que mudou, em uma frase:** aceitar uma não conformidade de inspeção **libera sozinha** o
@@ -4857,7 +5108,15 @@ esse era o furo **C57**.
 ### Roteiro de teste manual
 
 **O que você precisa antes de começar:** um usuário com perfil **Qualidade** (ou Administrador) e
-a configuração **"Inspeção de material crítico"** ligada em *Almoxarifado → Configurações*.
+a retenção de material crítico ativa — e ela **nasce ativa**, não há nada para ligar.
+
+> ⚠️ **CORREÇÃO (fechamento da Etapa 45, 2026-09-29).** Este pré-requisito dizia *"a configuração
+> 'Inspeção de material crítico' ligada em Almoxarifado → Configurações"*. **Não existe esse
+> controle em tela nenhuma.** A chave existe no banco, nasce com o valor **ligado** e só é lida pelo
+> servidor no processamento do recebimento — nenhuma tela a exibe ou edita. Quem seguisse a
+> instrução procuraria um interruptor que não existe e concluiria que o roteiro está errado. **O que
+> você precisa de verdade é só marcar o material como crítico** no cadastro. A mesma frase aparecia
+> em outros dois roteiros deste guia e foi corrigida nos três.
 
 1. **Entre** no sistema e vá em **Almoxarifado → Materiais**. Crie um material novo (ou edite um
    existente) e marque **Material crítico**. Anote o código.

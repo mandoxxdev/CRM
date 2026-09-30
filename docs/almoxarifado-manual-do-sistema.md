@@ -624,10 +624,10 @@ Corolário que vale conhecer: o perfil **Consulta** nunca acontece por omissão 
 | **Administrador** | Acesso total, incluindo configurações do módulo |
 | **Almoxarife** | Movimenta estoque, cadastra material, separa, entrega, aprova e inventaria — não ajusta saldo nem configura |
 | **Gestor** | Ajusta saldo, aprova requisição e inventaria — não movimenta nem cadastra material |
-| **Compras** | Consulta e recebe material |
+| **Compras** | Consulta, recebe material e **registra a execução do encaminhamento** de uma não conformidade — inclusive a devolução ao fornecedor, que é a baixa do material (15b.4-ter) |
 | **Engenharia** | Cadastra e edita material, requisita, reserva e **define o plano de inspeção** (as tolerâncias que ela mesma especifica) |
 | **Produção** | Consulta, requisita e reserva material (é o padrão de quem não tem perfil definido) |
-| **Qualidade** | Consulta, decide inspeção (aprova/reprova item recebido, libera vencimento de lote, muda situação de lote e de série), **define o plano de inspeção** — as características a medir e suas tolerâncias — e é quem **decide as não conformidades** (15b). Não movimenta estoque, não ajusta saldo nem cadastra material — e é por isso que ela decide *aceitar sob desvio* e precisa de um Administrador ou Gestor para desbloquear o material (15b.4) |
+| **Qualidade** | Consulta, decide inspeção (aprova/reprova item recebido, libera vencimento de lote, muda situação de lote e de série), **define o plano de inspeção** — as características a medir e suas tolerâncias — e é quem **decide as não conformidades** (15b) e pode **registrar a execução do encaminhamento** delas (15b.4-ter). Não movimenta estoque, não ajusta saldo nem cadastra material — mas as duas decisões de aceitação de uma não conformidade **liberam o material bloqueado sozinhas**, no clique da decisão, sem depender de ninguém com ajuste de estoque (15b.4-bis) |
 | **Consulta** | Somente leitura |
 
 A separação entre **Almoxarife** e **Gestor** é intencional e é o desenho de controle interno do módulo: quem **movimenta** o estoque não é quem **corrige** o saldo. O almoxarife lança entradas e saídas; o ajuste de inventário — o lançamento que faz o número bater sem que nada tenha entrado ou saído — pertence ao gestor.
@@ -656,6 +656,7 @@ A separação entre **Almoxarife** e **Gestor** é intencional e é o desenho de
 | Gerenciar plano de inspeção (características a medir e tolerâncias) | ● | – | – | – | ● | – | ● | – |
 | Registrar não conformidade | ● | ● | ● | – | – | – | ● | – |
 | Decidir não conformidade (aceitar, devolver, sucatear…) | ● | – | – | – | – | – | ● | – |
+| Registrar a execução do encaminhamento (confirmar que a devolução, a substituição, a análise ou o sucateamento foi cumprido) | ● | – | ● | – | – | – | ● | – |
 | Reservar | ● | ● | – | ● | ● | – | – | – |
 | Reservar para outra OS | ● | – | – | – | – | ● | – | – |
 | Inventariar | ● | ● | – | – | – | ● | – | – |
@@ -673,15 +674,16 @@ As leituras que essa tabela permite fazer, e que vale explicar a quem pergunta:
 - **Reservar para outra OS** é separado de **Reservar**. Qualquer requisitante reserva material para a própria ordem; transferir uma reserva de uma OS para outra é decisão de priorização, e fica com o Administrador e o Gestor.
 - **Inspecionar** é o que autoriza aprovar, reprovar e liberar material da quarentena, e também mudar a situação de um lote ou de uma série, e liberar vencimento. Pertence ao Administrador, ao Almoxarife e ao **Qualidade**.
 - **Gerenciar plano de inspeção** é o que autoriza cadastrar, editar e desativar as características a medir de um material, com o valor nominal e a tolerância (15.2.1). Pertence ao Administrador, ao **Qualidade** e à **Engenharia** — quem especifica tolerância. **Ler** o plano é liberado a qualquer usuário do módulo, porque quem inspeciona precisa saber o que medir. É permissão **separada de Configurar** de propósito: *Configurar* é só do Administrador, e prendê-la ali deixaria a qualidade sem cadastrar o que ela mesma mede.
-- **O perfil Qualidade tem quatro ações, e todas são da mesma família: decidir qualidade.** Ele existe justamente para que a área de qualidade não precise pedir ao almoxarifado que decida por ela, nem receber um perfil largo. São elas: **Inspecionar** (aprovar, reprovar, liberar da quarentena, mudar situação de lote e de série, liberar vencimento); **Gerenciar plano de inspeção** (15.2.1), o cadastro das características a medir e das tolerâncias — não faria sentido a qualidade não poder cadastrar o que ela mesma vai medir; e as duas da não conformidade, **Registrar não conformidade** e **Decidir não conformidade** (15b), sendo que **decidir** é dele e do Administrador, e de mais ninguém. Fora dessas quatro, ele é leitura. Consequência que quem for usá-lo precisa saber: **os botões "Bloquear Material" e "Desbloquear Material" da tela de Inspeções não são dele** — eles mexem em saldo e pertencem a **Ajustar estoque** (Administrador e Gestor). Clicando neles, o Qualidade recebe:
+- **O perfil Qualidade tem cinco ações, e todas são da mesma família: decidir qualidade.** Ele existe justamente para que a área de qualidade não precise pedir ao almoxarifado que decida por ela, nem receber um perfil largo. São elas: **Inspecionar** (aprovar, reprovar, liberar da quarentena, mudar situação de lote e de série, liberar vencimento); **Gerenciar plano de inspeção** (15.2.1), o cadastro das características a medir e das tolerâncias — não faria sentido a qualidade não poder cadastrar o que ela mesma vai medir; e as três da não conformidade, **Registrar não conformidade**, **Decidir não conformidade** e **Registrar a execução do encaminhamento** (15b), sendo que **decidir** é dele e do Administrador, e de mais ninguém. Fora dessas cinco, ele é leitura. Consequência que quem for usá-lo precisa saber: **os botões "Bloquear Material" e "Desbloquear Material" da tela de Inspeções não são dele** — eles mexem em saldo e pertencem a **Ajustar estoque** (Administrador e Gestor). Clicando neles, o Qualidade recebe:
   > *Sem permissão para ajustar saldo de estoque — seu perfil é Qualidade. Solicite acesso a um administrador.*
 
   Bloquear material por decisão de qualidade continua acontecendo **dentro da inspeção** (reprovar o item recebido), que é o que ele pode.
 - **Autorizar recebimento acima do pedido é separado de Receber material, e o Almoxarife não a tem.** Quem recebe a carga registra quanto chegou; autorizar que **entre mais do que o esperado — ou mais do que o saldo do pedido de compra** — é decisão de **Compras** ou do **Administrador** (14.1c e 14.2b). É o mesmo critério das duas assinaturas de sucateamento: quem executa não aprova a própria exceção. Consequência prática para quem usa: a caixa *"Autorizo o recebimento acima do pedido"* **não aparece** na tela do Almoxarife, e por isso a recusa que ele recebe nomeia quem resolve em vez de mandá-lo marcar algo. O **Gestor** não tem esta ação — e não teria como usá-la, porque ele não tem *Receber material* e não abre o recebimento.
+- **Registrar a execução do encaminhamento é a única ação do módulo que Compras tem e o Almoxarife não.** Ela confirma que o que a não conformidade decidiu foi cumprido — e, no caso de *Devolver ao fornecedor*, é ela que **baixa o material** (15b.4-ter). **Compras está dentro** porque é quem fala com o fornecedor, agenda a coleta e emite os documentos comerciais: é quem sabe que o material saiu. **O Almoxarife está fora** porque quem opera o estoque não confirma sozinho a saída do material que a qualidade reprovou — é o mesmo critério de "quem recebe não julga o próprio recebimento", aplicado do lado da baixa. A **Qualidade** também pode registrar a execução, e isso não é contradição: ela decide e, quando é ela mesma que cuida do envio, confirma — o que a permissão separada garante é que **Compras consiga executar sem poder decidir**, e que o **Almoxarife não consiga nenhuma das duas coisas**.
 - **Conferir separação é separado de Separar / emitir**, mesmo com os mesmos dois perfis hoje: a conferência é a segunda pessoa olhando a caixa (10.3), e a permissão existe à parte para poder ser restringida sem mexer na separação. Ter a permissão não basta: **quem separou não confere**, e isso vale para o Administrador também — a barreira é por pessoa, não por perfil.
 - **As duas aprovações de sucateamento são de balcões diferentes de propósito.** A perna do almoxarifado (Administrador, Almoxarife) e a perna da gestão (Administrador, Gestor) precisam **das duas assinaturas, de pessoas diferentes**, para uma baixa de sucata sair do estoque — e, embora o Administrador tenha as duas permissões, **a mesma pessoa nunca assina as duas pernas** (seção 20).
 
-E duas que a tabela **não** mostra: **Inspecionar** cobre as decisões de qualidade, mas anexar o certificado do fornecedor a um lote pertence a **Receber material** — é o pessoal que recebe a carga que tem o documento em mãos. E **a central de alertas não é filtrada por perfil**: quem tem *Ver a central de alertas* vê o registro inteiro, inclusive os alertas de estoque parado e de estoque excessivo, que trazem o **valor em dinheiro** parado. É por isso que o perfil **Qualidade** não a recebe — os **cinco** alertas que interessariam a ele (material reprovado, divergência de recebimento, lote sem certificado, fila de itens aguardando inspeção e **não conformidade aberta**) só ficam acessíveis quando a central souber filtrar por perfil. O quinto entrou na Etapa 43 e muda o tamanho do problema: até ele, a exclusão custava à Qualidade apenas **visibilidade**; agora **a ação pertence justamente a quem não vê o cartão que a cobra** — o cartão *"Não conformidade aberta"* é visto por Administrador, Almoxarife, Gestor e Compras, e quem **decide** é Administrador e Qualidade. Na prática, a Qualidade acompanha as pendências pela tela **Não Conformidades** (15b), que é aberta a qualquer usuário do módulo e tem filtro por estado; o que ela não recebe é o cartão e o e-mail. É o furo **C59** das novidades, onde estão os três caminhos possíveis e o que cada um custa.
+E duas que a tabela **não** mostra: **Inspecionar** cobre as decisões de qualidade, mas anexar o certificado do fornecedor a um lote pertence a **Receber material** — é o pessoal que recebe a carga que tem o documento em mãos. E **a central de alertas não é filtrada por perfil**: quem tem *Ver a central de alertas* vê o registro inteiro, inclusive os alertas de estoque parado e de estoque excessivo, que trazem o **valor em dinheiro** parado. É por isso que o perfil **Qualidade** não a recebe — os **cinco** alertas que interessariam a ele (material reprovado, divergência de recebimento, lote sem certificado, fila de itens aguardando inspeção e **não conformidade aberta**) só ficam acessíveis quando a central souber filtrar por perfil. O quinto deles é o mais recente e muda o tamanho do problema: até ele, a exclusão custava à Qualidade apenas **visibilidade**; agora **a ação pertence justamente a quem não vê o cartão que a cobra** — o cartão *"Não conformidade aberta"* é visto por Administrador, Almoxarife, Gestor e Compras, e quem **decide** é Administrador e Qualidade. Na prática, a Qualidade acompanha as pendências pela tela **Não Conformidades** (15b), que é aberta a qualquer usuário do módulo e tem filtro por estado; o que ela não recebe é o cartão e o e-mail. Esta é uma limitação conhecida e registrada, e a correção passa por a central saber filtrar por perfil — enquanto ela não souber, dar o cartão à Qualidade significaria dar também o valor em dinheiro do estoque parado.
 
 ### 5.6 Como se atribui um perfil
 
@@ -876,6 +878,12 @@ de pessoas diferentes**, e por isso tem processo próprio, na tela **Sobras e Re
 seção 20 descreve o caminho completo. O livro de Movimentações continua **exibindo** os
 lançamentos de sucata; só o formulário não os cria.
 
+**Devolução ao fornecedor também não está na lista, pela mesma razão.** Ela nasce só de dentro do
+documento de não conformidade que decidiu devolver, no botão **Registrar execução** (15b.4-ter),
+porque é a única baixa do módulo que consome material **bloqueado** — aceitá-la aqui deixaria
+qualquer pessoa com permissão de movimentar apagar material retido pela qualidade, sem documento
+nenhum por trás. O livro também a **exibe**; o formulário não a cria.
+
 Pontos técnicos importantes:
 
 - **Ajuste é absoluto, não incremental.** Digitar 40 num material que tem 100 leva o saldo a 40. Por isso o rótulo do campo muda para "Novo Saldo" quando o tipo é Ajuste.
@@ -884,7 +892,7 @@ Pontos técnicos importantes:
 
 ### 6.3 Outros movimentos que o sistema gera sozinho
 
-Além dos cinco do formulário, o livro registra movimentos criados pelas telas especializadas. Eles **não podem** ser lançados pelo formulário genérico — a tela de Movimentações recusa, e a mensagem depende do tipo. Para os tipos de retenção, a recusa é *"tipo de movimentação não permitido nesta rota (tipos de reserva, bloqueio e inspeção só podem ser criados pelas telas de Reservas e Inspeções)"*. Para os tipos que têm processo próprio, a recusa **ensina o caminho certo** — para Sucata: *"tipo de movimentação não permitido nesta rota — sucatear é um processo com dupla aprovação — use Almoxarifado → Sobras e Retalhos → aba Sucateamentos"*; para Entrada (retalho): *"tipo de movimentação não permitido nesta rota — retalho nasce pelo botão Gerar retalho, em Almoxarifado → Sobras e Retalhos"* (devolução ao cliente, perda/consumo no terceiro e retorno de transformação têm recusas equivalentes apontando para Materiais de Clientes e Remessas a Terceiros).
+Além dos cinco do formulário, o livro registra movimentos criados pelas telas especializadas. Eles **não podem** ser lançados pelo formulário genérico — a tela de Movimentações recusa, e a mensagem depende do tipo. Para os tipos de retenção, a recusa é *"tipo de movimentação não permitido nesta rota (tipos de reserva, bloqueio e inspeção só podem ser criados pelas telas de Reservas e Inspeções)"*. Para os tipos que têm processo próprio, a recusa **ensina o caminho certo** — para Sucata: *"tipo de movimentação não permitido nesta rota — sucatear é um processo com dupla aprovação — use Almoxarifado → Sobras e Retalhos → aba Sucateamentos"*; para Entrada (retalho): *"tipo de movimentação não permitido nesta rota — retalho nasce pelo botão Gerar retalho, em Almoxarifado → Sobras e Retalhos"*; para Devolução ao fornecedor: *"tipo de movimentação não permitido nesta rota — a devolução ao fornecedor é registrada no documento que a decidiu — use Almoxarifado → Não Conformidades e registre a execução"* (devolução ao cliente, perda/consumo no terceiro e retorno de transformação têm recusas equivalentes apontando para Materiais de Clientes e Remessas a Terceiros).
 
 | Movimento | Nasce em | Efeito |
 |---|---|---|
@@ -895,6 +903,7 @@ Além dos cinco do formulário, o livro registra movimentos criados pelas telas 
 | Remessa / Retorno de terceiro | Remessas a Terceiros | Mexe só no **Em poder de terceiros** |
 | Entrada (retalho) | Sobras e Retalhos → Gerar retalho | Soma ao físico do material-retalho, **sempre sem custo** (seção 19) |
 | Sucata | Segunda aprovação de um sucateamento (seção 20) e devolução com destino Sucata (12.6) | Subtrai do físico |
+| Devolução ao fornecedor | Não Conformidades → **Registrar execução** de um documento decidido *Devolver ao fornecedor* (15b.4-ter) | Subtrai do físico **e do Bloqueado, juntos** |
 | Estorno | Botão "Estornar" do livro | Lançamento reverso |
 
 Essa separação é deliberada: cada um desses movimentos tem uma tela dona, com a permissão certa e um registro paralelo (a reserva, o item do recebimento, a inspeção, a remessa) que dá lastro ao número. Se a tela genérica os aceitasse, o número da coluna existiria sem nada por trás.
@@ -915,6 +924,7 @@ São dois campos com papéis diferentes.
 | Bloqueio / Desbloqueio | **Sim** |
 | Reprovação / Decisão de inspeção | **Sim** |
 | Remessa, Retorno, Perda e Consumo no terceiro | **Sim** |
+| Devolução ao fornecedor | **Sim** — e ela nunca falta na prática: é a **observação** que você escreve ao registrar a execução da não conformidade, ou, se você deixar o campo em branco, um texto que o sistema grava citando o documento que decidiu devolver (15b.4-ter) |
 | Entrada, Saída, Transferência | Não |
 
 O raciocínio é uniforme: **todo movimento que muda a resposta à pergunta "onde está esse material?" ou "por que ele sumiu?" precisa da resposta escrita**. Tirar material do disponível sem dizer por que é baixa sem motivo.
@@ -930,7 +940,7 @@ A regra é por tipo de movimento:
 | Saída para produção, Saída para montagem, Saída para assistência | **OS ou Projeto** — obrigatoriamente um dos dois | *"SAIDA_PRODUCAO exige vínculo com OS ou projeto (ou use emergencial com justificativa)"* |
 | Saída (genérica) | **Qualquer um**: OS, Projeto, Centro de Custo, justificativa ou referência | *"Saída exige OS, projeto, centro de custo ou justificativa"* |
 | Transferência, Devolução ao cliente | Nenhum | — |
-| Ajuste, Sucata, Perda, Bloqueio, Inspeção, Terceiros | Nenhum, mas **justificativa é obrigatória** (6.4) | — |
+| Ajuste, Sucata, Perda, Bloqueio, Inspeção, Terceiros, Devolução ao fornecedor | Nenhum, mas **justificativa é obrigatória** (6.4) | — |
 
 Por que a saída para produção é mais exigente: ela é a saída que vira **custo de alguém**. Sem OS ou projeto, o material sai do estoque e não entra em lugar nenhum — o custo desaparece.
 
@@ -964,6 +974,23 @@ O motor testa nesta ordem, e **nada de saldo é tocado até todas passarem**:
 8. **Vencimento do lote** — lote vencido **não sai para consumo**, mas **sai** pelas baixas de descarte: Perda ou Ajuste na tela de Movimentações, e a baixa de sucata pelo processo de sucateamento (seção 20) — senão ficaria preso para sempre. A recusa ensina as saídas possíveis: *"Lote L-001 vencido em 2026-01-31 nao pode sair para consumo. Libere o vencimento do lote (PUT /api/almoxarifado/lotes/:id/liberar-vencimento) com justificativa, ou baixe por SUCATA/PERDA ou corrija por AJUSTE."*
 9. **Saldo disponível** → *"Saldo insuficiente. Disponível: 12 UN"*. O número na mensagem é o disponível real, não o físico.
 10. **Bloqueio de qualidade** — se há quantidade bloqueada e a saída invadiria essa parte: *"Material bloqueado não pode ser utilizado"*.
+
+**Quatro dessas travas não valem para a devolução ao fornecedor** (15b.4-ter), e cada dispensa tem
+um motivo:
+
+- **saldo disponível (9)** e **bloqueio de qualidade (10)**: a quantidade que ela baixa é exatamente
+  a que está **bloqueada**, e o disponível a exclui — com essas duas valendo, devolver material
+  inteiramente reprovado seria impossível. A validação, ali, acontece contra a própria parcela
+  bloqueada;
+- **vencimento do lote (8)**: lote vencido é uma das razões mais comuns de devolver ao fornecedor, e
+  barrá-lo o deixaria preso no estoque para sempre;
+- **propriedade (5)**: devolver não aplica material no trabalho de ninguém — manda de volta para
+  quem entregou o que a inspeção reprovou. Exigir OS ou projeto travaria justamente a devolução de
+  uma chapa de cliente que chegou errada.
+
+**As outras continuam valendo, e a mais importante é a situação do lote (7):** lote Bloqueado ou
+Reprovado não sai nem por esse caminho. E, como essa baixa só nasce de dentro do documento de não
+conformidade, ninguém a alcança pelo formulário de Movimentações (6.2, 6.3).
 
 A validação final de saldo acontece **no próprio comando que desconta**, e não numa leitura anterior: duas saídas simultâneas do mesmo material não conseguem consumir o mesmo saldo.
 
@@ -1004,6 +1031,7 @@ Há linhas que o livro **não estorna de propósito**, cada uma com a porta cert
 | Reserva / Liberação de reserva | *"Use a liberação de reserva para desfazer reservas"* |
 | Quarentena e decisões de inspeção | *"Movimento de inspeção não pode ser estornado pelo livro — use a tela de Inspeções para rever a decisão"* |
 | Remessa / Retorno de terceiro | *"Movimento de remessa a terceiro não pode ser estornado pelo livro — use a tela de Remessas para cancelar ou encerrar a remessa"* |
+| Devolução ao fornecedor | *"Devolução ao fornecedor não pode ser estornada pelo livro — o material voltaria bloqueado com o documento dizendo que foi devolvido"* — e não há outra porta: a execução não se registra duas vezes e o documento decidido não se decide de novo (15b.4-ter) |
 | Qualquer movimentação gerada por uma requisição | *"Movimentação vinculada a requisição — use os fluxos da requisição (exclusão/encerramento)"* |
 
 Em material com número de série há duas guardas a mais, ambas verificadas **antes** de qualquer alteração: não se estorna uma entrada cujas séries já saíram (*"estorno de entrada recusado: ha series desta entrada ja movimentadas — estorne as saidas primeiro"*), nem uma saída cujas séries já voltaram por outro caminho (*"estorno de saida recusado: series desta saida ja reentraram no estoque — a devolucao ja repos o material"*).
@@ -1408,7 +1436,12 @@ O contraste é fácil de demonstrar: no mesmo material, mudando o tipo de **Tran
 
 Material entregue que volta ao almoxarifado é registrado em **Almoxarifado → Devoluções** — não pelo formulário de Movimentações. A diferença é o que a tela de Devoluções guarda e o formulário genérico não guardaria: **de qual entrega** o material está voltando, em **que condição**, com **que destino** e de **qual lote**.
 
-> **Não confundir** com a devolução **ao cliente** (16.7), que é o caminho oposto: lá o material sai do prédio de volta para o dono. Aqui ele volta para o estoque depois de ter sido entregue.
+> **Não confundir** com as outras duas devoluções do módulo, que são o caminho oposto — nas duas o material **sai** do prédio, de volta para quem é dele ou para quem o entregou:
+>
+> - a devolução **ao cliente** (16.7), pela tela Materiais de Clientes;
+> - a devolução **ao fornecedor** (15b.4-ter), registrada dentro do documento de não conformidade que a decidiu, e que baixa o material reprovado.
+>
+> Aqui, na seção 12, o material **volta para o estoque** depois de ter sido entregue.
 
 ### 12.1 O formulário começa pelo material
 
@@ -2704,6 +2737,12 @@ Os três resultados possíveis:
 
 A quantidade física do material **não muda** em nenhum dos três casos — o material continua na prateleira; o que muda é o que se pode fazer com ele. E decidir é uma operação única: aprovar e reprovar acontecem juntos, nunca em dois passos que poderiam ficar pela metade.
 
+**O campo Encaminhamento é a intenção da qualidade, não o ato.** Ele fica no registro da inspeção e
+não move material nenhum. O que decide e o que executa o destino da parte reprovada é o documento de
+**não conformidade** que a reprovação abre sozinha (15b): é lá que se escolhe entre aceitar, devolver,
+substituir, mandar à Engenharia ou sucatear, e é lá que se registra que a devolução ao fornecedor
+**aconteceu** — o gesto que de fato tira o material do prédio (15b.4-ter).
+
 A tela de Inspeções tem duas abas: **Pendentes**, com a fila do que ainda não foi decidido, e **Histórico**, com o que já foi (15.2.3). O filtro de material do topo vale para as duas.
 
 Uma decisão de inspeção **não pode ser estornada pelo livro de movimentações** — ela é o registro de um julgamento, não um lançamento de saldo a acertar. **Uma decisão já tomada pode ser LIDA, na aba Histórico, mas não pode ser desfeita nem corrigida:** não há como reabrir uma inspeção, mudar uma medida ou apagar uma decisão. O que continua recuperável é o **saldo**, por Bloquear/Desbloquear Material (15.3) — o **registro** da inspeção é imutável.
@@ -2868,12 +2907,19 @@ O desbloqueio **nunca satura em silêncio**: pedir para desbloquear 50 quando h�
 
 Perfil exigido para bloquear e desbloquear: **ajustar estoque** (Administrador e Gestor). Ele é **diferente** do de decidir inspeção — quem decide inspeção não necessariamente pode bloquear material avulso.
 
-**Há um segundo caminho para tirar material do bloqueio, e ele não passa por estes botões:** aceitar
-a **não conformidade** que a reprovação gerou libera sozinha a quantidade reprovada, e quem faz isso
-é quem pode **decidir não conformidade** (Administrador e Qualidade) — ver **15b.4-bis**. Os dois
-caminhos existem de propósito e não se substituem: estes botões soltam **qualquer quantidade de
-qualquer material**, a qualquer momento, e por isso continuam restritos ao ajuste de estoque; a
-liberação pelo documento solta **só o que aquela inspeção reprovou**, uma vez, com o número do
+**Há outros dois caminhos para tirar material do bloqueio, e nenhum deles passa por estes botões** —
+os dois vivem no documento de **não conformidade** que a reprovação gerou:
+
+- **aceitar** o documento (*Aceitar* ou *Aceitar sob desvio*) devolve ao disponível a quantidade que
+  aquela inspeção reprovou, e quem faz isso é quem pode **decidir não conformidade** (Administrador e
+  Qualidade) — ver **15b.4-bis**;
+- **registrar a execução** de um documento decidido *Devolver ao fornecedor* **tira o material do
+  prédio**: baixa o físico e o bloqueado juntos, e quem faz isso é quem pode registrar a execução do
+  encaminhamento (Administrador, Qualidade e Compras) — ver **15b.4-ter**.
+
+Os três caminhos existem de propósito e não se substituem: estes botões soltam **qualquer quantidade
+de qualquer material**, a qualquer momento, e por isso continuam restritos ao ajuste de estoque; os
+dois do documento agem **só sobre o que aquela inspeção reprovou**, uma vez, com o número do
 documento gravado no livro.
 
 ### 15.4 O que material bloqueado deixa de poder fazer
@@ -2888,11 +2934,16 @@ Bloqueado é um **estado administrativo**, não uma ausência física. O materia
 | Atender requisição | **Não** |
 | Ser enviado a um terceiro | **Não** |
 | Ser devolvido ao cliente dono | **Não** |
+| Ser devolvido ao **fornecedor**, pelo registro da execução da não conformidade (15b.4-ter) | **Sim** — é a única saída que consome justamente a parcela bloqueada |
 | Ser transferido de prateleira | Sim |
 | Ser contado no inventário | **Sim** |
 | Entrar no valor total do estoque | **Sim** |
 
 A razão de tudo isso é uma só: material bloqueado sai do **saldo disponível** (6.1), e é o saldo disponível que autoriza qualquer saída. A tentativa de usar material bloqueado é recusada com *"Material bloqueado não pode ser utilizado"*.
+
+A exceção da devolução ao fornecedor não é uma brecha nessa regra, é o outro lado dela: aquela baixa
+existe **para** desfazer a retenção, baixa físico e bloqueado ao mesmo tempo e só nasce de dentro do
+documento que decidiu devolver — o formulário de Movimentações não a oferece (6.3).
 
 ---
 
@@ -2983,6 +3034,11 @@ filtro de **origem**, se estiver escolhido, permanece.
 Um documento só é decidido **uma vez**. Se alguém decidiu no intervalo, a segunda tentativa recebe
 *"Esta não conformidade já foi encerrada"*.
 
+**A decisão já nasce dizendo se ainda falta alguém executá-la.** No mesmo instante em que é gravada,
+o documento recebe um **estado de execução**: as duas decisões de aceitação nascem como *Não se
+aplica* (elas se executam ali mesmo), e as outras quatro nascem **Pendente**, esperando o segundo
+gesto descrito em 15b.4-ter.
+
 ### 15b.4-bis O que a decisão faz com o saldo
 
 **As duas decisões de aceitação liberam o material; as outras quatro não tocam no estoque.**
@@ -2994,17 +3050,23 @@ inspeção reprovou — a mesma que estava em **bloqueado** (15.3). A movimenta�
 documento** no campo de documento vinculado, e leva a justificativa da decisão.
 
 **Decidir *Devolver ao fornecedor*, *Substituição*, *Análise da Engenharia* ou *Sucatear* não muda
-saldo nenhum.** *Sucatear* não baixa estoque (isso passa pelo fluxo de sucateamento, com as duas
-aprovações — seção 20) e *Devolver* não cria a devolução. O documento registra o que se **decidiu**;
-executar essas quatro continua sendo gesto próprio, nas telas de sempre (12, 6 e 20).
+saldo nenhum neste clique.** Essas quatro registram o que se **decidiu** e deixam o documento
+**Pendente de execução**: falta alguém confirmar que o encaminhamento foi cumprido (15b.4-ter). Até
+esse registro, o material reprovado continua **bloqueado** na prateleira.
+
+Das quatro, **só a execução de *Devolver ao fornecedor* baixa estoque** — e quem baixa é o registro
+da execução, nunca a decisão. *Substituição*, *Análise da Engenharia* e *Sucatear* não mexem em
+saldo nem quando executadas: pedir a reposição ao fornecedor, cumprir o destino que a Engenharia
+definiu e baixar a sucata (que passa pelo fluxo de sucateamento, com as duas aprovações — seção 20)
+continuam sendo gestos próprios, nas telas de sempre.
 
 **A tela diz, em todos os casos, o que aconteceu com o saldo** — porque "não mexeu" é informação, e
-não ausência dela. O aviso de sucesso traz uma destas cinco frases:
+não ausência dela. O aviso de sucesso da **decisão** traz uma destas frases:
 
 | O que a tela diz | Quando |
 |---|---|
 | *"N liberado(s) do bloqueio"* | a aceitação liberou N unidades |
-| *"Esta decisão não altera o saldo"* | a decisão é uma das quatro que só registram intenção |
+| *"Esta decisão não altera o saldo"* | a decisão é uma das quatro que deixam o documento pendente de execução |
 | *"Esta não conformidade não tem material bloqueado para liberar"* | o documento veio de **recebimento** (faltar material não bloqueia nada), ou a inspeção não reprovou quantidade nenhuma |
 | *"O material desta inspeção já havia sido liberado"* | outro documento da mesma inspeção já liberou |
 | *"Não conformidade aberta manualmente não libera saldo"* | o documento foi criado à mão, e não pelo registro automático da reprovação |
@@ -3048,6 +3110,179 @@ reprovações antigas, bastaria criar um apontando para qualquer inspeção do p
 material bloqueado por outro motivo — sem passar pela permissão de ajuste de estoque. Pela mesma
 razão, documento **aberto à mão** não libera.
 
+### 15b.4-ter Registrar a execução — o segundo gesto
+
+Decidir e executar são **dois atos separados, com donos e datas diferentes**. Quem decide diz o que
+fazer com o material; quem registra a execução confirma que **foi feito**. O documento guarda os
+dois, cada um com o seu autor e a sua data — e é isso que permite responder à pergunta que a
+decisão sozinha não responde: *o material já saiu?*
+
+- **Aceitar** e **Aceitar sob desvio** se executam no mesmo ato da decisão, porque é ali que elas
+  liberam o material (15b.4-bis). Esses documentos nascem com execução **"Não se aplica"** e **não
+  têm botão de execução**.
+- **Devolver ao fornecedor**, **Substituição**, **Análise da Engenharia** e **Sucatear** deixam o
+  documento com execução **"Pendente"**.
+
+#### A coluna Execução
+
+| O que aparece | Significa |
+|---|---|
+| *(vazio)* | o documento **ainda não foi decidido** — não há execução a mostrar |
+| **Pendente** | decidido, esperando alguém confirmar que o encaminhamento foi cumprido |
+| **Executada** | cumprido — com o **nome de quem registrou** e a data e hora |
+| **Não se aplica** | a decisão foi uma das duas de aceitação, que já se executou no clique da decisão |
+
+Vazio e *Pendente* são propositalmente diferentes: tratar documento não decidido como pendente de
+execução faria a fila parecer maior do que é, com trabalho que ninguém decidiu ainda.
+
+#### O botão e o modal
+
+O botão **Registrar execução** aparece **só** na linha de documento **Decidido** com execução
+**Pendente** — nas outras a operação seria recusada, e botão que erra sempre é armadilha, não
+controle. Ele também **só aparece para quem tem a permissão**: é o único botão desta tela que a
+falta de perfil **esconde** em vez de recusar no clique, porque quem registra a execução (Compras)
+não é quem decide (Qualidade), e deixá-lo visível para a qualidade seria um convite permanente a
+uma recusa que não é engano dela. Quem autoriza continua sendo o servidor.
+
+O botão abre o modal **"Registrar execução de ⟨número do documento⟩"**, que mostra o **material**, a
+**decisão** gravada e um campo **Observações** — **opcional**, e é o lugar do número da nota de
+devolução, da transportadora, de quem recebeu do outro lado.
+
+O texto do modal muda com a decisão, porque o efeito muda:
+
+- em **Devolver ao fornecedor**, ele pede que se confirme que o material **saiu de fato** para o
+  fornecedor, e avisa que **é este registro que dá a baixa no estoque — antes dele o material segue
+  retido**;
+- nas outras três, ele diz que a decisão **não movimenta estoque**: o registro guarda a data, o
+  autor e a observação de que o encaminhamento foi cumprido.
+
+#### O que a execução de *Devolver ao fornecedor* faz com o saldo
+
+**É ela que dá a baixa.** Sai a quantidade que aquela inspeção **reprovou**, baixando ao mesmo
+tempo o **saldo físico** e o **saldo bloqueado** — é a única saída do módulo que consome justamente
+a parcela bloqueada, que todas as outras são recusadas por tocar (15.4).
+
+Em material com **controle por lote**, a baixa sai da **linha do lote que entrou naquele
+recebimento**: o lote do item inspecionado, não uma escolha de tela.
+
+A movimentação aparece no **livro de movimentações** (6) com o motivo **"Devolução ao fornecedor"** e
+com o **número do documento de não conformidade** no campo de documento vinculado. A observação que
+você escreveu vai como justificativa do movimento; se você não escrever nada, o sistema grava uma
+dizendo que aquilo é a execução da devolução decidida naquele documento.
+
+**A trilha guarda a execução como um ato próprio**, e não como uma segunda versão da decisão: na
+tela de Auditoria (5.8) ela aparece como *Não conformidade executada*, com quem registrou, quando, a
+decisão que estava valendo e a observação como justificativa. São dois atos, com dois autores e duas
+datas, e a trilha os separa.
+
+⚠️ **A situação do lote continua valendo, e ela é verificada antes.** Lote **vencido** sai por aqui —
+devolver ao fornecedor é uma das razões mais comuns de um lote vencido deixar o estoque, e barrá-lo
+o deixaria preso para sempre. Mas lote **Bloqueado** ou **Reprovado** não sai nem por aqui: a
+recusa é a mesma de qualquer saída (*"Lote ⟨código⟩ esta reprovado e nao pode ser utilizado"*), e
+reabilitar o lote é um segundo gesto, na tela de Lotes, com justificativa.
+
+#### O aviso de sucesso
+
+O aviso traz sempre *"Execução de ⟨número do documento⟩ registrada!"* e, quando há o que dizer sobre
+o saldo, a frase que explica o que aconteceu com ele:
+
+| O que a tela diz | Quando |
+|---|---|
+| *"⟨N⟩ devolvido(s) ao fornecedor"* | a devolução baixou N unidades — o caso normal |
+| *"Esta execução não altera o saldo"* | a decisão é *Substituição*, *Análise da Engenharia* ou *Sucatear* |
+| *"Só a não conformidade aberta pela reprovação da inspeção devolve material"* | o documento foi aberto à mão, e não pelo registro automático da reprovação |
+| *"O material desta inspeção já havia sido devolvido"* | o material daquela inspeção já tinha saído |
+| *"O material já havia saído do bloqueio — a execução foi registrada sem mover saldo"* | o bloqueio do material é **menor** que a quantidade reprovada: alguém já o soltou pela tela de Movimentações |
+| *"Não há saldo físico deste material — a execução foi registrada sem mover saldo"* | o saldo físico não cobre a quantidade reprovada |
+| *"Material inativo — a execução foi registrada sem mover saldo"* | o material foi desativado no cadastro depois da reprovação |
+| *"Esta não conformidade não tem material reprovado para devolver"* | a inspeção do documento não tem quantidade reprovada |
+| *"O material desta inspeção já havia sido liberado por outra não conformidade — a execução foi registrada sem mover saldo"* | outro documento da mesma inspeção foi **aceito** e já soltou a retenção daquela inspeção |
+
+#### As quatro regras que quem executa precisa conhecer
+
+**1. Só o documento que nasceu da reprovação de uma inspeção devolve material.** Documento aberto à
+mão registra a execução e **não move saldo** — e a frase do aviso diz isso. A razão é a mesma da
+liberação (15b.4-bis): abrir documento é permissão larga, e sem essa trava bastaria apontar um
+documento para qualquer inspeção do passado para apagar material bloqueado sem passar nem pela
+permissão de movimentar estoque nem pela de ajustar saldo.
+
+**2. A devolução acontece uma vez por inspeção, não por documento.** Se o material daquela inspeção
+já saiu, uma segunda tentativa **registra a execução e não baixa de novo** — e avisa que já havia
+sido devolvido.
+
+**3. A execução é registrada mesmo quando não há saldo a mover, e a mensagem diz o motivo.** Alguém
+de fato embalou e despachou; o registro vale, e o que a tela explica é **por que o saldo não mudou**.
+Recusar deixaria o documento cobrando execução para sempre na fila, e a única saída seria registrar
+algo falso só para tirá-lo de lá. **A recusa continua valendo para falha inesperada do sistema:** aí
+o documento **volta a Pendente** de execução — decidido, documentado, esperando nova tentativa. A
+decisão **não** é desfeita, porque foi tomada em outro dia, por outra pessoa, e continua valendo.
+
+**4. Material com número de série não é devolvido por esta tela.** A tentativa é recusada com
+*"Material com controle de série não pode ser devolvido por aqui — dê baixa pela tela de
+Movimentações"*. Escolher **quais** peças voltam é gesto de tela, e baixar a quantidade sem baixar as
+séries deixaria a peça já devolvida ainda entregável pelo sistema.
+
+#### As recusas
+
+| Situação | Mensagem |
+|---|---|
+| A decisão é *Aceitar* ou *Aceitar sob desvio* | *"Esta decisão não tem execução a registrar"* |
+| O documento está **Aberto** ou **Cancelado** | *"Só é possível registrar a execução de uma não conformidade decidida"* |
+| A execução já foi registrada | *"A execução desta não conformidade já foi registrada"* |
+| Material com controle de número de série | *"Material com controle de série não pode ser devolvido por aqui — dê baixa pela tela de Movimentações"* |
+| Material com controle por lote, e nenhum lote identificável no item recebido | *"Não foi possível identificar o lote do material devolvido"* |
+| Perfil sem a permissão | *"Sem permissão para registrar a execução do encaminhamento — seu perfil é Almoxarife. Solicite acesso a um administrador."* |
+
+#### Não há como desfazer
+
+A execução **não se registra duas vezes**, e a movimentação de devolução **recusa o estorno** pelo
+livro, com *"Devolução ao fornecedor não pode ser estornada pelo livro — o material voltaria
+bloqueado com o documento dizendo que foi devolvido"* (6.10). O documento decidido também **não pode
+ser decidido de novo**. Confirme com o material já embalado, não antes.
+
+#### A fila do que falta executar
+
+A tela tem um **filtro de execução**, com quatro opções: *Qualquer execução*, *Pendentes de
+execução*, *Já executadas* e *Sem execução a registrar*. **Pendentes de execução** é a fila de quem
+executa.
+
+Os dois filtros são **amarrados de propósito**, porque execução só existe em documento decidido:
+
+- **escolher um estado de execução muda o filtro de status para *Decididas***;
+- **escolher um status diferente de *Decididas* limpa o filtro de execução.**
+
+Sem essa amarração, um estado de execução somado ao status padrão (*Abertas*) devolveria **lista
+vazia sempre** — e quem olhasse leria "não há nada pendente de execução" quando a verdade é que a
+pergunta nunca pôde ser respondida.
+
+Depois de uma execução registrada com a fila *Pendentes de execução* ligada, a tela **larga o filtro
+de execução** e volta a *Qualquer execução*, para que a linha recém-executada continue à vista com o
+nome de quem registrou — presa na fila, ela sumiria no mesmo instante em que fosse executada. O
+filtro de origem, se estiver escolhido, permanece.
+
+#### O painel de Alertas para de cobrar o que saiu
+
+O cartão **Material reprovado** da central de alertas (21c-bis) deixa de listar a inspeção **cujo
+material saiu de fato** para o fornecedor. Se a execução foi registrada **sem mover saldo** — qualquer
+uma das frases acima que termina em "sem mover saldo" —, o aviso **continua** listando, porque o
+material continua no galpão. O cartão mede **material movido**, não intenção registrada.
+
+#### O que a devolução NÃO faz
+
+Registrar a execução é um lançamento de **estoque** e de **documento**, e nada além disso. Ela:
+
+- **não** emite nota fiscal de devolução;
+- **não** manda e-mail ao fornecedor — a única notificação possível é o aviso **interno** de
+  movimentação, que sai para a lista de e-mails da empresa e só quando a chave *"Notificar
+  movimentações por e-mail"* estiver ligada (21c.1);
+- **não** pede material de reposição;
+- **não** reabre o pedido de compra — a quantidade recebida do pedido **não** é reduzida, e o pedido
+  continua registrando que aquela quantidade chegou;
+- **não** mexe em contas a pagar.
+
+O que ela faz é gravar quem executou e quando, baixar o material do estoque e deixar a linha no
+livro. O acerto comercial com o fornecedor é combinado fora do sistema.
+
 ### 15b.5 Quem pode o quê
 
 | Ato | Perfis |
@@ -3055,10 +3290,20 @@ razão, documento **aberto à mão** não libera.
 | **Ver** a lista e os documentos | qualquer usuário com acesso ao módulo |
 | **Abrir** um documento | Administrador · Almoxarife · Qualidade · Compras |
 | **Decidir** | **Administrador · Qualidade** |
+| **Registrar a execução** do encaminhamento | **Administrador · Qualidade · Compras** |
 
 Compras fica **fora da decisão** de propósito: ele recebe material e é quem trata com o fornecedor,
 então decidir sobre a entrega do fornecedor que ele mesmo escolheu seria decidir em causa própria. A
 tentativa é recusada com *"Sem permissão para decidir não conformidade — seu perfil é ⟨perfil⟩.
+Solicite acesso a um administrador."*
+
+**E Compras fica dentro da execução pela mesma lógica invertida:** quem fala com o fornecedor,
+agenda a coleta e emite os documentos comerciais é quem sabe que o material saiu — negar-lhe o
+registro obrigaria a pedir a outra área que confirmasse um fato que ela não viu. O **Almoxarife**
+é o único perfil que **não** pode registrar a execução, mesmo movimentando estoque no dia a dia:
+quem opera o estoque não confirma sozinho a saída do material que a qualidade reprovou, pelo mesmo
+critério de "quem recebe não julga o próprio recebimento", do lado da baixa. A tentativa dele é
+recusada com *"Sem permissão para registrar a execução do encaminhamento — seu perfil é Almoxarife.
 Solicite acesso a um administrador."*
 
 ### 15b.6 O documento que ninguém decide
@@ -3070,6 +3315,10 @@ com o assunto *"[Almoxarifado] Não conformidade aberta — NC-…"*.
 
 **O aviso sai uma vez por documento.** Relembrar todo mês uma pendência parada geraria e-mail
 eterno sem nenhum fato novo. Decidir ou cancelar tira o documento do cartão, sem nenhum gesto extra.
+
+**Esse cartão cobra a decisão, não a execução.** Um documento decidido que ninguém executou **não**
+entra nele e **não** gera e-mail — quem o cobra é o filtro *Pendentes de execução* da própria tela
+de Não Conformidades (15b.4-ter), que é a fila de quem executa e não tem prazo para esvaziar.
 
 ### 15b.7 O cartão antigo de divergência mudou de significado
 
@@ -3139,6 +3388,13 @@ Quando os dois lados existem, o **projeto** tem precedência sobre a OS na hora 
 
 O erro que essa regra impede é o mais caro da operação, e ele **não é erro de estoque**: o número fecha perfeitamente. É erro contratual — o cliente cobra onde a chapa dele foi aplicada, e a chapa foi para o equipamento de outro.
 
+**Há uma saída que a garantia não cobre, e ela é da mesma família da devolução ao dono:** a
+**devolução ao fornecedor**, registrada na execução de uma não conformidade (15b.4-ter), **não exige
+OS nem projeto**. A regra existe para impedir que material de um cliente seja **aplicado** no
+trabalho de outro; devolver ao fornecedor não aplica material em trabalho nenhum — manda de volta,
+para quem entregou, o que a inspeção reprovou. Exigir vínculo ali travaria exatamente o caso em que
+devolver é mais urgente: a chapa do cliente que chegou errada.
+
 ### 16.5 A movimentação emergencial NÃO fura essa garantia
 
 No restante do módulo, uma movimentação marcada como **emergencial** com justificativa dispensa o vínculo obrigatório a OS/projeto, e a pendência de regularização fica registrada para depois (6.6).
@@ -3198,14 +3454,14 @@ Em **Almoxarifado → Materiais de Clientes**, escolhe-se o cliente e o sistema 
 |---|---|
 | Código / Material / Un. | identificação do item |
 | **Recebido** | tudo que entrou daquele material, somado do livro |
-| **Consumido** | tudo que saiu por aplicação, perda, sucata, consumo em terceiro |
+| **Consumido** | tudo que saiu por aplicação, perda, sucata, consumo em terceiro e devolução ao fornecedor |
 | **Devolvido** | o que voltou para o cliente (coluna separada, de propósito) |
 | **Saldo** | o que está no galpão agora |
 | **Aplicado em** | a lista de OS e projetos onde aquele material foi usado, com a quantidade de cada |
 
 Os números **saem do livro de movimentações**, não de contadores paralelos: a conta que o cliente faz de cabeça — **recebido − consumido − devolvido = saldo** — fecha. Movimentações estornadas não contam (o estorno é visível no livro, mas não pesa na posição).
 
-"Devolvido" é coluna separada porque o cliente precisa distinguir **o que virou peça** de **o que voltou para ele**. Perda no terceiro e consumo no processo entram em "Consumido", e não somem da tela: material que o cliente não vai receber de volta tem de aparecer em algum lugar.
+"Devolvido" é coluna separada porque o cliente precisa distinguir **o que virou peça** de **o que voltou para ele**. Perda no terceiro e consumo no processo entram em "Consumido", e não somem da tela: material que o cliente não vai receber de volta tem de aparecer em algum lugar. **Material do cliente devolvido ao fornecedor entra em "Consumido"** pela mesma razão — ele saiu do galpão e não vai voltar para o cliente, e deixá-lo fora tornaria a saída invisível e a conta da tela não fecharia.
 
 O botão **PDF da posição** gera, no próprio navegador, um documento com:
 
@@ -3965,8 +4221,8 @@ falha do servidor de e-mail nunca trava uma movimentação, uma devolução ou u
 
 ### 21c.1 O que gera aviso
 
-- **Movimentações de estoque** (entrada, saída, ajuste manual e movimentos de terceiros que
-  baixam saldo) — **somente se a chave "Notificar movimentações por e-mail" estiver ligada**
+- **Movimentações de estoque** (entrada, saída, ajuste manual, movimentos de terceiros que
+  baixam saldo e a devolução ao fornecedor) — **somente se a chave "Notificar movimentações por e-mail" estiver ligada**
   em Configurações; ela vem desligada de fábrica. O e-mail traz tipo, número, data/hora,
   usuário, material, quantidade, **saldo anterior e posterior**, lote e séries quando houver,
   projeto/OS/cliente, motivo, justificativa e um link direto para o livro de movimentações.
@@ -4110,7 +4366,7 @@ A tela **Almoxarifado → Alertas** reúne, num lugar só, as condições que o 
 | Materiais sem endereço | material ativo sem localização padrão e sem nenhum saldo endereçado — **material de cliente conta**, porque endereçá-lo é trabalho do almoxarife (mesma régua do relatório de mesmo nome) |
 | Requisição atrasada | requisição ativa, em qualquer status em que ainda possa ser atendida, com a data de necessidade no passado — só entra quem **preencheu** a data de necessidade |
 | Reserva parada | reserva ativa criada há mais dias que a janela configurada, ou com a data de expiração vencida |
-| Material reprovado | inspeção de recebimento com quantidade reprovada, dentro da janela de eventos |
+| Material reprovado | inspeção de recebimento com quantidade reprovada, dentro da janela de eventos, **e cujo material ainda não saiu de fato para o fornecedor**. A inspeção some do cartão quando alguém registra a execução de uma não conformidade decidida *Devolver ao fornecedor* **e a baixa acontece** (15b.4-ter) — o cartão mede material movido, não intenção registrada. Se a execução foi registrada **sem mover saldo** (qualquer uma das frases que terminam em "sem mover saldo"), a linha **continua** aqui, porque o material continua no galpão |
 | Divergência de recebimento | item cuja quantidade recebida difere da esperada, dentro da janela de eventos, **e que ainda não virou não conformidade** (15b.7). **Quem produz esse número é o campo "Qtd. conferida"** do painel do recebimento (14.2b) — digitar uma quantidade diferente da esperada e salvar a conferência é o gesto que cria a divergência; a entrada fiscal, quando altera a quantidade, também. Como a não conformidade nasce no mesmo instante, este cartão tende a ficar **vazio** na operação normal: ver item aqui significa que o documento **não foi aberto** |
 | Não conformidade aberta | documento de não conformidade (15b) ainda **sem decisão** há mais dias que o configurado (padrão 7) — uma linha por documento, com número, material, tipo, origem, dias parado e recebimento. Decidir ou cancelar tira a linha, sem nenhum gesto extra |
 | Divergência de inventário | conferência concluída com pelo menos um item divergente, dentro da janela de eventos — **uma linha por conferência**, com a contagem de itens (nunca o valor em reais) |
@@ -4119,6 +4375,8 @@ A tela **Almoxarifado → Alertas** reúne, num lugar só, as condições que o 
 **Quatro desses avisos nascem no ATO, não na varredura.** Reprovar material numa inspeção, registrar quantidade diferente da esperada — no campo **"Qtd. conferida"** ao salvar a conferência, ou na entrada fiscal — e concluir uma conferência com divergência disparam o e-mail no mesmo instante do fato; a varredura diária continua olhando a janela de eventos como rede de segurança, e o mesmo fato **não** é avisado duas vezes. Se o envio falhar, o ato acontece do mesmo jeito — a inspeção é gravada, o estoque se move, a conferência conclui: o aviso nunca segura a operação.
 
 Um detalhe que o operador precisa entender: a janela de eventos olha a **última atualização** do documento. Mexer num recebimento antigo que tem divergência nunca comunicada faz o aviso nascer ali — é a rede de segurança, não repetição.
+
+**E um aviso de evento não é uma fila de pendência.** A janela do cartão *Material reprovado* é configurável (padrão **7** dias) e a inspeção **sai dele sozinha** passado o prazo, devolvida ou não — o cartão diz "isto aconteceu nos últimos dias", não "isto ainda falta fazer". Para acompanhar o que falta executar existe o filtro **Pendentes de execução** da tela de Não Conformidades (15b.4-ter), que não tem prazo e não esvazia com o tempo. Pelo mesmo motivo, registrar a devolução **não** cancela o e-mail de material reprovado: ele saiu uma única vez, no instante da reprovação.
 
 **E-mail: um aviso por situação, não um por dia.** A varredura roda diariamente, mas cada situação gera um único e-mail: calibração avisa uma vez por validade; requisição atrasada e reserva parada, uma vez cada; sem consumo e excessivo re-lembram no máximo uma vez por mês enquanto persistirem; materiais sem endereço é um resumo semanal com a contagem, e lotes sem certificado um resumo mensal. Nos avisos de ato, cada fato avisa uma vez: uma inspeção reprovada, uma conferência concluída, e — no caso da quantidade recebida — cada valor divergente diferente. Corrigir a quantidade e errar de novo com outro número é fato novo e avisa outra vez; salvar o mesmo número duas vezes, não. Os avisos saem para a mesma lista de e-mails dos alertas de estoque, e o interruptor geral de e-mail dos alertas desliga todos — a central, por ser leitura ao vivo, continua funcionando mesmo com o e-mail desligado.
 
