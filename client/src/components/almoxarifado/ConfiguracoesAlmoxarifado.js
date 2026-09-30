@@ -10,8 +10,9 @@ import {
   FiPackage, FiSliders, FiMapPin, FiSettings,
   FiShield, FiRefreshCw, FiArrowLeft, FiArrowRight, FiMove,
   FiLayers, FiChevronDown, FiChevronRight, FiGrid, FiBell, FiSend, FiMail, FiMessageCircle, FiUsers, FiClipboard, FiShoppingCart, FiDollarSign,
-  FiTag, FiAlertTriangle, FiRotateCcw
+  FiTag, FiAlertTriangle, FiRotateCcw, FiCheckSquare
 } from 'react-icons/fi';
+import TabRegrasAprovacao from './TabRegrasAprovacao';
 import { useSearchParams } from 'react-router-dom';
 import { prefixarAlmoxarifado, buildLocalizacaoPath } from '../../utils/localizacaoLabel';
 import { invalidarAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
@@ -190,6 +191,7 @@ const TABS = [
   { id: 'localizacoes', label: 'Localizações', icon: FiMapPin },
   { id: 'alertas', label: 'Alertas de Estoque', icon: FiBell },
   { id: 'liberacao-valor', label: 'Liberação por Valor', icon: FiDollarSign },
+  { id: 'regras-aprovacao', label: 'Regras de Aprovação', icon: FiCheckSquare }, // Etapa 47 (T6)
   { id: 'perfis', label: 'Perfis de Acesso', icon: FiShield },
   { id: 'geral', label: 'Configurações Gerais', icon: FiSettings },
 ];
@@ -265,6 +267,7 @@ const ConfiguracoesAlmoxarifado = () => {
       {tab === 'localizacoes' && <TabLocalizacoes />}
       {tab === 'alertas' && <TabAlertasEstoque />}
       {tab === 'liberacao-valor' && <TabLiberacaoValor />}
+      {tab === 'regras-aprovacao' && <TabRegrasAprovacao />}
       {tab === 'perfis' && <TabPerfisAcesso />}
       {tab === 'geral' && <TabConfiguracoes />}
     </div>

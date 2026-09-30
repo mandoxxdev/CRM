@@ -13,6 +13,7 @@ import { TIPO_REQUISICAO_LABELS } from './requisicaoLabels';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import AssinaturaCanvas from './AssinaturaCanvas';
 import AnexosDocumento from './AnexosDocumento';
+import { AprovacoesRegraRequisicao, FilaAprovacoesRegra } from './AprovacoesRegra';
 import {
   FiPlus, FiRefreshCw, FiEye, FiCheck, FiX, FiPackage,
   FiAlertTriangle, FiClock, FiTruck, FiCheckCircle, FiFilter, FiMap, FiTrash2, FiDollarSign,
@@ -779,6 +780,13 @@ const RequisicoesList = () => {
     ? requisicoes.filter((r) => r.tipo_requisicao === filtroTipo)
     : requisicoes;
 
+  // Etapa 47 (T7): enquanto houver pendência de regra aberta, o servidor recusa /aprovar e
+  // /aprovar-valor (gate). A tela desabilita os botões e diz POR QUÊ, em vez de deixar o clique
+  // cair num 400.
+  const pendenciasRegraAbertas = Number(detalhe?.pendencias_regra_abertas) || 0;
+  const temPendenciaRegra = pendenciasRegraAbertas > 0;
+  const motivoPendenciaRegra = `Aguardando ${pendenciasRegraAbertas} aprovação(ões) de regra antes da aprovação`;
+
   return (
     <div className="almox-page">
       <AlmoxPageHeader
@@ -800,6 +808,11 @@ const RequisicoesList = () => {
           </>
         }
       />
+
+      {/* Etapa 47 (T7): o que este usuario pode assinar agora. So no modo almoxarifado. */}
+      {warehouseMode && (
+        <FilaAprovacoesRegra recarregarEm={requisicoes} onAbrir={(id) => abrirDetalhe(id)} />
+      )}
 
       {/* Filtros */}
       <div className="almox-filters">
@@ -969,6 +982,19 @@ const RequisicoesList = () => {
                     Aguardando aprovação de alto valor.
                   </div>
                 )}
+                {/* Etapa 47 (T7): as pendências de regra, com o "Assinar" de quem pode. */}
+                {warehouseMode && (
+                  <AprovacoesRegraRequisicao
+                    requisicao={detalhe}
+                    user={user}
+                    onAssinado={async () => { await abrirDetalhe(detalhe.id, { force: true }); await loadRequisicoes(); }}
+                  />
+                )}
+                {warehouseMode && temPendenciaRegra && ['PENDENTE', 'AGUARDANDO_APROVACAO_VALOR'].includes(detalhe.status) && (
+                  <div className="almox-hint-banner" data-testid="aviso-pendencia-regra" style={{ marginBottom: 16, fontSize: '0.8rem' }}>
+                    {motivoPendenciaRegra}. Quem assina cada regra está no bloco acima.
+                  </div>
+                )}
 
                 {/* Itens */}
                 <div style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--gmp-text)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
@@ -1085,7 +1111,8 @@ const RequisicoesList = () => {
                 {warehouseMode && detalhe.status === 'AGUARDANDO_APROVACAO_VALOR' && (souAprovadorValor || isAdmin) && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 20, flexWrap: 'wrap' }}>
                     <button className="btn-almox-primary" style={{ flex: 1, justifyContent: 'center', minWidth: 140 }}
-                      onClick={handleAprovarValor} disabled={saving}>
+                      onClick={handleAprovarValor} disabled={saving || temPendenciaRegra}
+                      title={temPendenciaRegra ? motivoPendenciaRegra : undefined}>
                       <FiCheck size={14} /> Aprovar Liberação
                     </button>
                     <button className="btn-almox-danger" style={{ flex: 1, justifyContent: 'center', minWidth: 100 }}
@@ -1125,13 +1152,13 @@ const RequisicoesList = () => {
                 {warehouseMode && detalhe.status === 'PENDENTE' && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 20, flexWrap: 'wrap' }}>
                     <button className="btn-almox-primary" style={{ flex: 1, justifyContent: 'center', minWidth: 140 }}
-                      onClick={(e) => { if (!bloquearSeNaoPode('aprovar_requisicao', e)) return; handleAprovar(detalhe.id, true); }} disabled={saving}
-                      title="Aprova a requisição e já abre a separação dos materiais">
+                      onClick={(e) => { if (!bloquearSeNaoPode('aprovar_requisicao', e)) return; handleAprovar(detalhe.id, true); }} disabled={saving || temPendenciaRegra}
+                      title={temPendenciaRegra ? motivoPendenciaRegra : 'Aprova a requisição e já abre a separação dos materiais'}>
                       <FiCheck size={14} /> Aprovar e Separar
                     </button>
                     <button className="btn-almox-secondary" style={{ flex: 1, justifyContent: 'center', minWidth: 120 }}
-                      onClick={(e) => { if (!bloquearSeNaoPode('aprovar_requisicao', e)) return; handleAprovar(detalhe.id, false); }} disabled={saving}
-                      title="Aprova a requisição sem iniciar a separação agora">
+                      onClick={(e) => { if (!bloquearSeNaoPode('aprovar_requisicao', e)) return; handleAprovar(detalhe.id, false); }} disabled={saving || temPendenciaRegra}
+                      title={temPendenciaRegra ? motivoPendenciaRegra : 'Aprova a requisição sem iniciar a separação agora'}>
                       <FiCheck size={14} /> Só Aprovar
                     </button>
                     <button className="btn-almox-danger" style={{ flex: 1, justifyContent: 'center', minWidth: 100 }}

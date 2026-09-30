@@ -755,3 +755,108 @@ describe('Etapa 34: anexos da requisição no painel de detalhe', () => {
   });
   });
 });
+
+// ─── Etapa 47 (T7): pendências de regra de aprovação ───────────────────────────────────────
+//
+// Contrato congelado no desenho da etapa (9.5/9.7). O servidor barra /aprovar e /aprovar-valor
+// enquanto houver pendência ABERTA; o que só a tela prova é que ela NÃO oferece o gesto que vai
+// ser recusado, diz POR QUÊ, oferece o "Assinar" a quem pode — e que nada disso dispara GET do
+// almoxarifado fora do modo almoxarifado (o F1 da Etapa 34).
+describe('Etapa 47: pendências de regra na tela de requisições', () => {
+  const PEND = (over = {}) => ({
+    id: 7, requisicao_id: 55, regra_id: 3, regra_nome: 'Valor alto', aprovadores: [99],
+    status: 'ABERTA', aprovador_id: null, aprovador_nome: null, ...over,
+  });
+  let pendenciasDoBanco;
+  let filaDoBanco;
+
+  beforeEach(() => {
+    pendenciasDoBanco = [PEND()];
+    filaDoBanco = [];
+    const base = api.get.getMockImplementation();
+    api.get.mockImplementation((url, cfg) => {
+      if (url === '/almoxarifado/requisicoes/55/aprovacoes-regra') return Promise.resolve({ data: pendenciasDoBanco });
+      if (url === '/almoxarifado/aprovacoes-regra/pendentes') return Promise.resolve({ data: filaDoBanco });
+      return base(url, cfg);
+    });
+  });
+
+  const urlsGet = () => api.get.mock.calls.map(([u]) => u);
+
+  test('com pendencia aberta: Aprovar desabilitado com o motivo, e o aviso na tela', async () => {
+    detalheDoBanco = { ...baseRequisicao('PENDENTE'), solicitante_id: 1, pendencias_regra_abertas: 2 };
+    await renderizar();
+    const aprovar = botaoPorTexto('Só Aprovar');
+    expect(aprovar.disabled).toBe(true);
+    expect(aprovar.title).toBe('Aguardando 2 aprovação(ões) de regra antes da aprovação');
+    expect(botaoPorTexto('Aprovar e Separar').disabled).toBe(true);
+    expect(container.querySelector('[data-testid="aviso-pendencia-regra"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="aprovacoes-regra"]').textContent).toContain('Valor alto');
+  });
+
+  test('sem pendencia aberta: Aprovar habilitado e sem aviso (metade positiva)', async () => {
+    pendenciasDoBanco = [];
+    detalheDoBanco = { ...baseRequisicao('PENDENTE'), solicitante_id: 1, pendencias_regra_abertas: 0 };
+    await renderizar();
+    expect(botaoPorTexto('Só Aprovar').disabled).toBe(false);
+    expect(container.querySelector('[data-testid="aviso-pendencia-regra"]')).toBeNull();
+    expect(container.querySelector('[data-testid="aprovacoes-regra"]')).toBeNull();
+  });
+
+  test('Assinar: aparece para quem esta na lista, chama a rota certa, e some para o solicitante', async () => {
+    api.put.mockResolvedValue({ data: { success: true, pendencias_abertas: 0 } });
+    detalheDoBanco = { ...baseRequisicao('PENDENTE'), solicitante_id: 1, pendencias_regra_abertas: 1 };
+    await renderizar();
+    const assinar = botaoPorTexto('Assinar');
+    expect(assinar).toBeTruthy();
+    await act(async () => { assinar.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    expect(api.put).toHaveBeenCalledWith('/almoxarifado/requisicoes/55/aprovacoes-regra/7/aprovar');
+  });
+
+  test('o solicitante NAO ve o Assinar, e quem ja assinou outra perna tambem nao', async () => {
+    // O usuário do harness é o 99 — aqui ele é o solicitante.
+    detalheDoBanco = { ...baseRequisicao('PENDENTE'), solicitante_id: 99, pendencias_regra_abertas: 1 };
+    await renderizar();
+    expect(botaoPorTexto('Assinar')).toBeFalsy();
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    pendenciasDoBanco = [PEND(), PEND({ id: 8, regra_nome: 'Crítico', status: 'APROVADA', aprovador_id: 99, aprovador_nome: 'Eu' })];
+    detalheDoBanco = { ...baseRequisicao('PENDENTE'), solicitante_id: 1, pendencias_regra_abertas: 1 };
+    await renderizar();
+    expect(container.querySelector('[data-testid="aprovacoes-regra"]').textContent).toContain('Assinada por Eu');
+    expect(botaoPorTexto('Assinar')).toBeFalsy();
+  });
+
+  test('a lane de valor tambem fica desabilitada com pendencia aberta', async () => {
+    detalheDoBanco = {
+      ...baseRequisicao('AGUARDANDO_APROVACAO_VALOR'), solicitante_id: 1, valor_total: 900, pendencias_regra_abertas: 1,
+    };
+    await renderizar();
+    const liberar = botaoPorTexto('Aprovar Liberação');
+    expect(liberar).toBeTruthy();
+    expect(liberar.disabled).toBe(true);
+  });
+
+  test('a fila mostra so o que o usuario pode assinar, e abre a requisicao', async () => {
+    filaDoBanco = [
+      { id: 7, requisicao_id: 55, numero: 'REQ-055', regra_nome: 'Valor alto', solicitante_nome: 'Joao', valor_total: 1200, pode_assinar: true },
+      { id: 9, requisicao_id: 56, numero: 'REQ-056', regra_nome: 'Crítico', solicitante_nome: 'Maria', valor_total: 10, pode_assinar: false },
+    ];
+    detalheDoBanco = { ...baseRequisicao('PENDENTE'), solicitante_id: 1, pendencias_regra_abertas: 1 };
+    await renderizarSemDetalhe();
+    const fila = container.querySelector('[data-testid="fila-aprovacoes-regra"]');
+    expect(fila.textContent).toContain('Aprovações de regra aguardando você (1)');
+    expect(fila.textContent).toContain('REQ-055');
+    expect(fila.textContent).not.toContain('REQ-056');
+  });
+
+  test('fora do modo almoxarifado: nenhuma consulta de pendencia de regra (F1 da Etapa 34)', async () => {
+    mockWarehouseMode = false;
+    filaDoBanco = [{ id: 7, requisicao_id: 55, numero: 'REQ-055', regra_nome: 'x', pode_assinar: true }];
+    detalheDoBanco = { ...baseRequisicao('PENDENTE'), solicitante_id: 1, pendencias_regra_abertas: 1 };
+    await renderizar();
+    expect(urlsGet().filter((u) => String(u).includes('aprovacoes-regra'))).toEqual([]);
+    expect(container.querySelector('[data-testid="fila-aprovacoes-regra"]')).toBeNull();
+  });
+});
