@@ -269,6 +269,78 @@ filtro → (3).
 
 ---
 
+## Fase 1-c — o contrato de T3/T4, e a revisão dele (2026-09-30)
+
+A 8.5 deixou para a T3 a decisão sobre regra desativada e as literais. Escrevi a **seção 9 do
+desenho** (`f14f38b`) antes de abrir a T3, e um revisor fresco com sonda a atacou: **3 CRITICAL, 4
+IMPORTANT, 4 MINOR, 6 refutadas** — a **9.7** (`7957c3f`). O que mais importa para quem retoma:
+
+- **assinar pendência de regra NÃO muda o status da requisição.** O gate fica no `WHERE` de
+  `/aprovar`, `/aprovar-valor` e das auto-aprovações — um `UPDATE` numa linha só, a propriedade que
+  o molde de duas pernas tinha e N pendências perderiam;
+- **C1:** o gate só no `WHERE` deixava reserva órfã (`/aprovar` reserva ANTES) e a reaprovação
+  reservava em dobro — medido. Pré-checagem antes de reservar + rollback **só das reservas desta
+  chamada**;
+- **C2:** o avaliador falhando deixava zero pendências e o gate passava por vazio. Coluna
+  `regras_avaliadas_em`, gravada por último; sem ela o gate fecha;
+- **C3:** `valor_minimo` nunca casaria — `valor_total` ainda é 0 no ponto do avaliador.
+
+## ✅ T3 + T4 — feitas juntas (2026-09-30, `d212fb7`)
+
+O plano mandava que fossem um par ("a T3 não fecha sozinha"), e fecharam no mesmo commit.
+
+**O que mudou:**
+- `schema.js`: `regras_aprovacao`, `requisicao_aprovacoes_regra` (UNIQUE requisição+regra),
+  `regras_avaliadas_em` com carimbo nas requisições que existem quando a coluna **nasce**
+  (`PRAGMA` antes, porque `safeAlter` não diz se criou);
+- `approvalRulesService.js` (novo): validação com as literais da 9.5, CRUD, avaliador, gate
+  (`GATE_SQL` + `exigirSemPendenciaAberta`), fila, contagem, e o claim da assinatura;
+- `requisitionCreateService.dispararNotificacoesCriacao`: o avaliador, antes do valor, com falha
+  logada e **porta fechada**;
+- `/aprovar`: pré-checagem, guarda no `WHERE` (com `status='PENDENTE'`, que fecha também o achado
+  anterior de dois `/aprovar` simultâneos), rollback das próprias reservas e 400;
+- `aprovarValor`: pré-checagem e guarda, e `changes` conferido — antes o `UPDATE` devolvia sucesso
+  sem mudar nada;
+- as duas auto-aprovações viraram `tentarAprovacaoAutomatica`, com `dbRun`, gate e `changes`: a
+  resposta não afirma mais `APROVADO` sem conferir;
+- rotas novas da 9.5 e `pendencias_regra_abertas` em `GET /requisicoes` e `/:id`.
+
+**Cenários (`regrasAprovacao.api.test.js`, 14/14),** todos pela rota: as dez literais do POST; o
+avaliador casando duas regras e nenhuma; o `/aprovar` barrado **sem reserva**; a tela com a
+contagem; a segregação em cada perna com a metade positiva; o avaliador falhando **fechando** a
+porta; a auto-aprovação dos dois lados; a lane de valor barrada e depois liberada; a desativação
+obsoletando só a pendência viva; a fila com `pode_assinar`; e **(14) a corrida** — o mesmo admin
+assinando as duas pendências ao mesmo tempo, que é a única prova da guarda no `WHERE` (em sequência
+a pré-checagem já dá a mensagem).
+
+**Controle positivo — 11 sabotagens, 11 vermelhas, nenhuma NO-OP:**
+
+| Sabotagem | Ficou vermelho | Leitura |
+|---|---|---|
+| S1 só sem a pré-checagem do `/aprovar` | (9) | ⚠️ **o (5) fica verde, e é CERTO**: a guarda no `WHERE` + o rollback ainda impedem a reserva órfã. O (9) cai porque a reavaliação mora na pré-checagem |
+| S2 sem pré-checagem **e** sem rollback | (5) (9) | prova que o rollback é o que segura a S1 |
+| S3 sem pré-checagem **e** sem gate no `WHERE` | (5) (7) (8) (9) | |
+| S4 `aprovarValor` sem gate | (11) | |
+| S5 auto-aprovação sem gate | (9) (10) (12) (13) (14) | |
+| S6 claim sem `NOT EXISTS` | (14) | **só a corrida pega** — em sequência a pré-checagem cobre |
+| S7 avaliador lendo `valor_total` da coluna | (3) (5) (6) (7) (11) (13) (14) | o C3 |
+| S8 gate sem exigir o carimbo | (9) | o C2 |
+| S9 obsolescência sem filtrar requisição viva | (12) | o I2 |
+| S10 desativar não obsoleta | (12) | |
+| S11 solicitante assina | (7) (8) | |
+
+**Divergência que a suíte pegou:** `auditLabels.api.test.js` ficou vermelho — `regra_aprovacao` e
+`APROVACAO_REGRA` nasceram sem rótulo, e a tela de auditoria mostraria o nome cru. Rótulos
+acrescentados no mesmo commit; a suíte fecha 219/219.
+
+**Limites declarados:**
+- o carimbo da migração (requisições antigas) **não tem cenário**: o harness nasce com banco vazio,
+  então a coluna nasce sobre zero linhas. A lógica é três linhas ao lado de um comentário;
+- `/api/requisicoes-material` passa pelo avaliador por construção (chama `createRequisicao`), mas
+  nenhum cenário entra por ela — vai para a T8 (integração).
+
+---
+
 ## Fase 2 — o que o revisor do plano tem de atacar
 
 1. Os contratos cobrem os casos de erro e as **mensagens literais**? (o desenho ainda **não**
@@ -291,7 +363,7 @@ filtro → (3).
 - [x] Fase 1 — desenho e plano (`637d9fa`), **corrigidos pela Fase 2**: ver a seção 7 do desenho
 - [x] Fase 1-b — a resposta da 7.9 está na **seção 8 do desenho**: a pendência é a verdade, o `status` é cache re-derivável, e quem cobra NUNCA lê o `status`. As literais de T3/T4/T5 continuam fora, agora com a razão certa: dependem da escolha da T3 sobre regra desativada
 - [x] Fase 2 — revisão do plano: **11 achados, 3 CRITICAL, 6 refutados** — o plano NAO estava executavel; desenho e plano corrigidos
-- [x] Fase 1-c — seção 9 do desenho: a assinatura de regra NÃO vira o status (o gate fica no `WHERE` de `/aprovar` e `/aprovar-valor`), 8.5 resolvida como `OBSOLETA`, contratos e literais de T3/T4 congelados. **Em revisão por agente fresco.**
-- [x] T1 (`4f53292`) · [x] T2 (`dc1c3f8`) · [ ] T3 · [ ] T4 · [ ] T5 · [ ] T6 · [ ] T7 · [ ] T8 *(oito, e todas tronco — ver a Fase 2)*
+- [x] Fase 1-c — seção 9 do desenho: a assinatura de regra NÃO vira o status (o gate fica no `WHERE` de `/aprovar` e `/aprovar-valor`), 8.5 resolvida como `OBSOLETA`, contratos e literais de T3/T4 congelados. Revisada: 9.7 (`7957c3f`).
+- [x] T1 (`4f53292`) · [x] T2 (`dc1c3f8`) · [x] T3 + T4 (`d212fb7`) · [ ] T5 · [ ] T6 · [ ] T7 · [ ] T8 *(oito, e todas tronco — ver a Fase 2)*
 - [ ] Fase 5 — revisão adversarial
 - [ ] Fase 6 — `fechar-etapa`
