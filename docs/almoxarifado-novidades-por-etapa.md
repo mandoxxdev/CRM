@@ -896,9 +896,9 @@ SELECT m.codigo, m.nome, l.codigo AS endereco, s.quantidade
 - ⚠️ **Material COM lote** tem o mesmo sintoma e **não** foi corrigido (letra **C**, item 72) — a consulta acima
   filtra `lote_id IS NULL` de propósito.
 
-### B. Decisões de negócio — B1 a B209; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B212; as em aberto esperam você, as tomadas estão escritas com o descartado
 
-*(**Atualizado em 2026-09-30 de B205 para B209**, com as quatro da Etapa 51.)*
+*(**Atualizado em 2026-09-30 de B205 para B212**, com as quatro da Etapa 51 e as três da Etapa 52.)*
 
 *(**Atualizado em 2026-09-30 de B204 para B205**, com a da Etapa 50.)*
 
@@ -3715,6 +3715,25 @@ por **contagem** no endereço — que agora absorve a linha "sem localização a
 uma migração que redistribuísse as linhas (irreversível, e a base de 3/set tinha **zero** movimentos com
 endereço — o passado é quase vazio).
 
+**B210 (NOVA, da Etapa 52) — a lista de localizações vazias fica aberta a quem acessa o módulo, como o Mapa.**
+**Escolhido:** a rota da lista continua exigindo só login (e o relatório fica sem restrição por perfil),
+exatamente como o **Mapa de Áreas**, que mostra o mesmo dado. **Descartado:** restringir por perfil — o desenho da
+etapa chegou a justificar isso como "a régua das outras leituras do módulo", e **a justificativa estava
+errada**: o Mapa e dezenas de outras leituras são só login, e a permissão que se usaria inclui todos os perfis
+(não barraria ninguém).
+
+**B211 (NOVA, da Etapa 52) — o endereço "pai" FICA na lista de vazias, com a coluna Filhas ocupadas.** O Mapa é
+plano: um pai sem saldo próprio aparece vazio mesmo com as filhas ocupadas. **Escolhido:** o pai aparece, e a
+coluna diz quantas filhas ativas estão ocupadas — assim a lista continua concordando com o Mapa. **Descartado:**
+excluir o pai da lista (quebraria a concordância com o Mapa, e o usuário deixaria de ver o pai).
+
+**B212 (NOVA, da Etapa 52) — apagar ou desativar endereço OCUPADO é recusado, pela regra do Mapa.** A recusa
+antiga só olhava linha de saldo diferente de zero; o endereço ocupado **só pelo material antigo** (sem saldo por
+endereço) era apagado, e o material **sumia de todas as telas**. **Escolhido:** recusar com *"Localização
+ocupada: há material nela (N item(ns)). Transfira o saldo antes de apagar ou desativar."* (a recusa antiga
+continua valendo antes dela). **Descartado:** deixar como estava (a lista de vazias vira convite para "limpar"
+endereços) e bloquear também o endereço **pai** com filhas ocupadas (fica declarado em **D (52)**).
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -4707,6 +4726,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
     aparece **ocupado** no **Mapa**. **Até a correção:** para material com lote, confira o endereço pela
     **contagem** (a contagem "L2 em A = 0" agora é aceita e zera a conta — **B207**); e a tela de **localizações
     vazias** (Etapa 52) **tem de declarar** que, para material com lote, vazio pode aparecer ocupado.
+    **Etapa 52:** a lista de localizações vazias **declara** isso na nota do relatório — o endereço de material
+    com lote pode aparecer **ocupado** (fora da lista) depois de a entrega tirar o material.
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -5263,6 +5284,15 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   positiva. É teórico — **não reproduzido** (a revisão mediu 2000 endereços em 220 ms, sem divergência).
 - **(51) A tela de Movimentações não oferece endereço no AJUSTE.** A contagem por endereço (que absorve o
   "sem localização atribuída", **B207**) existe no sistema mas não tem campo na tela — é pela integração.
+- **(52) Endereço "pai" pode ser apagado com filhas ocupadas.** A recusa de apagar olha o endereço, não a
+  árvore; o Mapa e a lista são planos. As filhas continuam no Mapa e o material não some.
+- **(52) Material INATIVO ocupa pelo saldo por endereço, mas não pelo endereço padrão.** Material inativado com
+  saldo num endereço continua ocupando; o material antigo inativado (sem saldo por endereço) deixa de ocupar o
+  padrão. É a regra que o Mapa já tinha.
+- **(52) Saldo parte num endereço e parte "sem endereço", sem endereço padrão, fica fora do Mapa.** Um material
+  com **10** num endereço e **30** "sem localização atribuída", sem padrão, mostra só os 10 no Mapa — os 30 não
+  aparecem nem no Mapa nem em *"Materiais sem endereço"*. É anterior à etapa.
+- **(52) A lista não filtra** por almoxarifado ou setor na tela; filtrar é na planilha.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -5628,6 +5658,15 @@ navegador** prova:
    **vazio**. Antes desta etapa, aparecia ocupado.
 2. **A transferência de um endereço já esvaziado é recusada** em **Movimentações → Transferência**, com a mensagem
    *"Saldo insuficiente na localização de origem"*.
+
+**(52) Nenhum clique foi dado nesta etapa.** Os testes provam a lista, a concordância com o Mapa e as recusas
+pela rota (17 cenários). O que **só o navegador** prova:
+
+1. **A lista aparece em Relatórios → Estoque** como *"Localizações vazias"*, com a nota inteira legível e o
+   botão **Exportar XLSX** depois de **Consultar**.
+2. **A recusa de apagar aparece no aviso da tela.** Em **Configurações → Localizações**, remover um endereço com
+   material mostra *"Localização ocupada: há material nela (…)"* (ou *"Não é possível remover: localização possui
+   saldo"*) no aviso vermelho, e o endereço continua na lista.
 
 ### G. Fragilidades estruturais que continuam de pé
 
@@ -13299,7 +13338,91 @@ estorno da contagem registrando quantidade que não se moveu (corrigido: recusa)
 o código de 13 jeitos e **11 passavam** — ganharam cenário, e cada um foi confirmado quebrando o código de
 novo (12 de 12 ficaram vermelhos; um precisou de um cenário extra para ficar).
 
+## Etapa 52 — A lista de localizações vazias, e o endereço ocupado que não pode mais ser apagado (2026-09-30)
+
+Com a Etapa 51, o sistema passou a saber de verdade o que está em cada endereço (para material sem lote).
+Esta etapa dá **tela** a isso: uma lista de **onde há espaço livre** no almoxarifado, em **Relatórios →
+Estoque → Localizações vazias**, exportável em planilha. E a lista segue **a mesma regra do Mapa**: antes, o
+servidor tinha uma lista de vazias escondida (sem tela) que discordava do Mapa — um material antigo, sem
+saldo por endereço, aparecia **com 40** no Mapa e o mesmo endereço aparecia **vazio** na lista.
+
+A revisão achou um problema mais sério no caminho: **apagar** um endereço ocupado só por um desses materiais
+antigos era aceito — e as **40 unidades sumiam de todas as telas**. Como a lista de vazias vira o convite
+natural para "limpar" endereços, apagar ou desativar endereço ocupado passou a ser **recusado** pela mesma
+regra.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Não havia tela para "onde tem espaço livre" | **Relatórios → Estoque → Localizações vazias**, com código, endereço, almoxarifado, tipo, bloqueada e **filhas ocupadas**, exportável em XLSX |
+| A lista de vazias do servidor (sem tela) dava como **vazio** o endereço padrão de um material antigo que o **Mapa** mostrava **com 40** | Lista e Mapa usam **a mesma regra**: um endereço está na lista **se e somente se** o Mapa o mostra sem material |
+| **Apagar** um endereço ocupado só por material antigo (sem saldo por endereço) era **aceito** — e o material **sumia de todas as telas** | **Recusado**: *"Localização ocupada: há material nela (N item(ns)). Transfira o saldo antes de apagar ou desativar."* |
+| Desativar um endereço **ocupado** pela integração (`ativo: 0`) era aceito sem conferir nada; e `ativo: 2` gravava **2**, e o endereço sumia do Mapa com o material dentro | Desativar endereço ocupado é **recusado** com a mesma mensagem; o valor gravado é sempre 0 ou 1 |
+
+### As regras, com o cenário exato
+
+**1. A lista.** Em **Almoxarifado → Relatórios**, categoria **Estoque**, escolha **Localizações vazias** e
+**Consultar**. Aparecem as localizações **ativas** sem material. A nota do relatório diz, literalmente:
+*"Localizações ativas sem material, pela mesma regra do Mapa de localizações. Endereço bloqueado vazio aparece
+(coluna Bloqueada). Uma localização "pai" sem saldo próprio aparece mesmo com filhas ocupadas — a coluna
+Filhas ocupadas diz quantas. Em material com LOTE, um endereço pode continuar aparecendo ocupado depois de a
+entrega de requisição retirar o material, porque a entrega não escolhe lote."* Depois de **Consultar**, o
+botão **Exportar XLSX** gera a planilha.
+
+**2. Lista e Mapa concordam.** Abra o **Mapa de Áreas** ao lado: todo endereço que o Mapa mostra **vazio** está
+na lista, e nenhum que o Mapa mostra com material está.
+
+**3. O material antigo conta.** Um material com **endereço padrão** e saldo, mas que nunca teve saldo por
+endereço (cadastrado antes do controle por endereço), **ocupa** o endereço padrão — ele aparece no Mapa e
+**não** aparece na lista. Antes, aparecia nos dois.
+
+**4. A entrega esvazia, e o endereço entra na lista.** Dê entrada de um material **sem lote** num endereço,
+entregue uma requisição dele inteira (Etapa 51) e consulte a lista: o endereço aparece **vazio**.
+
+**5. Endereço bloqueado vazio aparece**, com **Bloqueada = 1**. Endereço **inativo** não aparece.
+
+**6. Apagar endereço ocupado é recusado.** Em **Configurações → Localizações**, clique para remover um endereço
+que tem material (inclusive o endereço padrão de um material antigo): depois do *"Remover localização?"*,
+aparece *"Localização ocupada: há material nela (1 item(ns)). Transfira o saldo antes de apagar ou
+desativar."*. A contagem é de **materiais**, não de lotes — um material em dois lotes conta 1. Se o endereço
+tem uma linha de saldo diferente de zero (inclusive negativa), a recusa que já existia continua valendo:
+*"Não é possível remover: localização possui saldo"*. Endereço vazio continua sendo removido normalmente.
+
+**7. Apagar de novo um endereço já apagado** responde que ele **já estava inativo** — não *"ocupada"*, mesmo que
+ainda seja o endereço padrão de algum material.
+
+### O que esta etapa NÃO cobre
+
+1. **Material COM lote** — um endereço pode continuar aparecendo **ocupado** depois de a entrega tirar o
+   material (**C72**, está na nota do relatório).
+2. **Hierarquia de endereços.** O Mapa e a lista são **planos**: um "pai" (rua, setor) sem saldo próprio aparece
+   como vazio mesmo com as filhas ocupadas — a coluna **Filhas ocupadas** diz quantas. E o pai pode ser **apagado**
+   com filhas ocupadas — ver **D (52)**.
+3. **Desativar pela tela** — a tela de localizações não tem esse botão; a guarda vale para a integração.
+4. **Filtro de busca na lista** (por almoxarifado, por setor): a tela de relatórios mostra a lista inteira; filtrar
+   é na planilha.
+
+### O que a revisão encontrou
+
+Duas revisões. A do plano achou que **apagar** um endereço ocupado só por material antigo sumia com o material de
+todas as telas (entrou na etapa: a recusa), que a verificação automática do registro de relatórios reprovaria a
+chave nova (o endereço passou a ser montado na consulta), e que a justificativa escrita para restringir a lista
+por perfil **estava errada** (a lista ficou aberta como o Mapa, **B210**). A do código achou que a recusa
+**antiga** de apagar (saldo diferente de zero) **nunca tinha tido teste** — quebrá-la passava na suíte inteira —,
+que `ativo: 2` pela integração sumia com o endereço do Mapa, e que apagar de novo um endereço já apagado respondia
+"ocupada". Todas corrigidas e com teste. **E um teste vazio meu:** o cenário do "setor em branco" passava com o
+defeito, porque o próprio teste gravava o setor em branco como "sem setor" — nunca testava o caso. Corrigido, e a
+verificação endurecida.
+
 ## Onde estamos e o que vem a seguir
+
+- **Etapa 52 entregue (2026-09-30):** **a lista de localizações vazias, e o endereço ocupado que não pode mais
+  ser apagado.** Em **Relatórios → Estoque → Localizações vazias**, pela **mesma regra do Mapa** (o que um mostra
+  vazio, o outro também). Apagar ou desativar endereço **ocupado** passou a ser recusado — inclusive o endereço
+  padrão de material antigo, que antes era apagado e sumia com o material de todas as telas. **O que é seu:** as
+  decisões **B210 a B212**; o **C72** vale nesta tela (nota do relatório); as limitações **(52)** em D e as
+  verificações **(52)** em F.
 
 - **Etapa 51 entregue (2026-09-30):** **a saída passa a baixar o endereço de onde o material sai.** A entrega
   de requisição, que não diz de onde sai, agora tira dos endereços que **têm** o material (o padrão primeiro),

@@ -2,7 +2,7 @@
 
 > **Status:** 🟡 — Etapa 2 entregue (2026-08-04): multi-almoxarifado (entidade `almoxarifados` como raiz + migração ledger), restrições de endereço (bloqueio + tipos de material permitidos) aplicadas no motor, exclusão de localização com saldo bloqueada, `endereco_completo` + consultas de vazias/sem-endereço, gestão de almoxarifados e restrições no front. Falta: código de endereço padrão gerado, capacidade/peso/dimensões como enforcement, sugestão de localização na entrada, confirmação por leitura.
 > **Spec original:** seções 3, 11
-> **Última atualização:**  2026-09-30 (**Etapa 51** — a saída passa a baixar o endereço de onde o material sai; três afirmações desta spec corrigidas à vista em "O que já existe"). Anterior: 2026-08-11 (auditoria spec×código: corrigido o alcance real da validação de tipo permitido e da preservação de campos no PUT; áreas especiais reclassificadas como parcial)
+> **Última atualização:**  2026-09-30 (**Etapa 52** — a tela de localizações vazias pela regra do mapa, e a recusa de apagar/desativar endereço ocupado; antes: **Etapa 51** — a saída passa a baixar o endereço de onde o material sai; três afirmações desta spec corrigidas à vista em "O que já existe"). Anterior: 2026-08-11 (auditoria spec×código: corrigido o alcance real da validação de tipo permitido e da preservação de campos no PUT; áreas especiais reclassificadas como parcial)
 > **📋 Plano de implementação:** [docs/superpowers/plans/2026-08-04-almoxarifado-etapa2-cadastros.md](../../../docs/superpowers/plans/2026-08-04-almoxarifado-etapa2-cadastros.md) — Tasks 1, 2, 5, 7 · Design: [docs/superpowers/specs/2026-08-04-almoxarifado-etapa2-cadastros-design.md](../../../docs/superpowers/specs/2026-08-04-almoxarifado-etapa2-cadastros-design.md)
 
 ## Objetivo
@@ -42,7 +42,7 @@ Múltiplos almoxarifados, endereçamento padrão (ALM-CORREDOR-ESTRUTURA-NÍVEL-
 
 ### Frontend
 - [x] Cadastro/gestão de almoxarifados — aba "Setores e Áreas" em `ConfiguracoesAlmoxarifado.js` (`AlmoxarifadosSection`)
-- [ ] Tela de consulta de ocupação/vazias/sem endereço (pode ser aba do mapa) — rotas de backend prontas (`/localizacoes/vazias`, `/relatorios/materiais-sem-endereco`), **sem consumidor no front** ainda
+- [x] Tela de consulta de ocupação/vazias/sem endereço — **Etapa 52** (`8e1d46d`): **vazias** em Relatórios → Estoque → *Localizações vazias* (chave `localizacoes-vazias`), pela regra do mapa; **sem endereço** já tinha tela (Relatórios → Estoque → *Materiais sem endereço*); **ocupação** é o Mapa de Áreas. ⚠️ Esta linha dizia "sem consumidor no front" também para *sem endereço* — já tinha (chave do registro de relatórios, tela dirigida pela lista do servidor).
 - [x] Bloqueio de endereço no mapa — badge 🔒 em `MapaLocalizacoesAlmoxarifado.js`; filtro por almoxarifado também adicionado
 - [x] Campos de restrição (`bloqueada`, `tipos_material_permitidos`) na edição de localização em `ConfiguracoesAlmoxarifado.js`
 
@@ -92,9 +92,36 @@ continuava com o saldo antigo — "ocupado" no mapa com o físico zerado. A tela
   saldo já foi consumido (o estorno deixaria o material negativo)"* (Fase 5) — (Fase 5 `5fdc68a`)
 - [ ] **Material COM lote** — **não consertado**: a entrega não escolhe lote (B204), e a saída sem lote não toca linha
   de lote. Declarado nas novidades (letra C).
-- [ ] **Tela de vazias** — Etapa 52.
+- [x] **Tela de vazias** — **Etapa 52** (`8e1d46d`), ver a seção abaixo.
 
 Testes: `saidaPorLocalizacao.api.test.js` **24/24** (os 8 cenários da sonda da Fase 0, os da Fase 2 e os 11 da
 Fase 5, incluindo a corrida de duas saídas e o ledger falhando). Controle positivo: 5 sabotagens no motor + 12 no
 fix-round, todas vermelhas (a do filtro de lote da absorção ficou verde na primeira versão do teste e exigiu o
 cenário 19b).
+
+## Entregue na Etapa 52 (2026-09-30) — a lista de localizações vazias, e o endereço ocupado que não pode ser apagado
+
+**Por que:** a rota `GET /localizacoes/vazias` existia sem consumidor e decidia "vazia" com uma régua **mais pobre**
+que a do mapa (sem o fallback do legado): o S8 da Fase 0 da Etapa 51 mediu o mapa com `LEG = 40` e a lista dando
+LEG como vazia. A Fase 2 achou uma **terceira** régua: o `DELETE` de localização olhava só `quantidade != 0` e
+apagava localização ocupada **só pelo legado** — o material sumia de todas as telas.
+
+- [x] **Regra única de ocupação** — `stockService.OCUPACAO_SQL`, extraída literalmente do `MAPA_LOCALIZACOES_SQL`
+  (o mapa não mudou: texto e resultado idênticos, medidos com 21, 508 e 3008 localizações) — `8e1d46d`
+- [x] **`listarLocalizacoesVazias`** — ativas fora de `OCUPACAO_SQL`, com `endereco_completo` montado no SQL e
+  `sub_ocupadas` (filhas ativas ocupadas); a rota `/localizacoes/vazias` usa o helper (continua só `auth`, como o
+  mapa — **B210**) — `8e1d46d`
+- [x] **Chave `localizacoes-vazias`** no registro de relatórios (Estoque, `acao: null`, exportável, nota com o C72) —
+  `8e1d46d`
+- [x] **DELETE e PUT-que-desativa** recusam localização **ocupada** pela mesma régua: *"Localização ocupada: há
+  material nela (N item(ns)). Transfira o saldo antes de apagar ou desativar."* (a recusa antiga *"Não é possível
+  remover: localização possui saldo"* continua antes dela) — `8e1d46d`; a guarda só vale para localização **ativa**
+  (a já apagada responde `ja_inativo`) e o PUT grava `ativo` como 0/1 (`ativo: 2` gravava 2 e sumia com a
+  localização do mapa) — (Fase 5 `44138a0`)
+- [ ] **Hierarquia** — o pai sem saldo próprio aparece vazio (a coluna diz as filhas ocupadas) e pode ser apagado
+  com filhas ocupadas. Declarado (**B211**, **D (52)**).
+- [ ] **Material com lote** — continua podendo aparecer ocupado depois da entrega (**C72**, na nota do relatório).
+
+Testes: `localizacoesVazias.api.test.js` **17/17** — em cada cenário, "na lista ⇔ `qtd_itens == 0` no mapa" para
+todas as localizações ativas. Controle positivo: 6 sabotagens no código + 8 no fix-round, todas vermelhas (a do
+"setor em branco" ficou verde enquanto o próprio teste gravava o setor em branco como NULL — teste vazio, corrigido).

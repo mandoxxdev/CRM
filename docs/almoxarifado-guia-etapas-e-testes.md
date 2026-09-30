@@ -1,19 +1,25 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-09-30 (Etapa 51) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-09-30 (Etapa 52) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 51) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 52) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-09-30 (Etapa 51 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-09-30 (Etapa 52 ENTREGUE · modo contínuo pelo mapa)
 >
-> **O desenvolvimento parou aqui: Etapa 51, 2026-09-30.** A **Etapa 51 (a saída baixa o endereço de onde o
+> **O desenvolvimento parou aqui: Etapa 52, 2026-09-30.** A **Etapa 52 (a lista de localizações vazias)** dá
+> tela ao espaço livre: **Relatórios → Estoque → Localizações vazias**, pela **mesma regra do Mapa**, exportável
+> em planilha. E apagar ou desativar endereço **ocupado** passou a ser recusado — inclusive o endereço padrão de
+> material antigo, que antes era apagado e sumia com o material. **Próxima etapa:** ver *"Próxima tarefa
+> detalhada"* no plano da Etapa 52.
+>
+> **Etapas 1 a 20 e 22 a 52 completas.**
+>
+> **Etapa 51, 2026-09-30.** A **Etapa 51 (a saída baixa o endereço de onde o
 > material sai)** conserta o motor de estoque: a entrega de requisição, que não diz de onde sai, passa a tirar
 > dos endereços que **têm** o material, e o endereço esvaziado aparece **vazio** no Mapa. A etapa nasceu de
 > uma **medição**: a tela de localizações vazias, que era o plano, mentiria sobre prateleiras vazias. **Material
 > com lote** continua com o problema (novidades, C72). **Próxima etapa: 52 — a tela de localizações vazias**
 > (ver *"Próxima tarefa detalhada"* no plano da Etapa 51).
->
-> **Etapas 1 a 20 e 22 a 51 completas.**
 >
 > **Etapa 50, 2026-09-30.** A **Etapa 50 (a tela de Lotes para de mostrar
 > o saldo do lote como se fosse o físico)** fecha o furo **C71**: em *Lotes e Séries*, abaixo da tabela,
@@ -4933,6 +4939,56 @@ que ele não tinha como repetir com sucesso garantido.
 - **Número de série de material** — continua sendo **digitado pelo operador** e de propósito não
   passa por este gerador. Retentar com outro número gravaria algo que ninguém digitou.
 - **Números de outros módulos do CRM** — a varredura foi do almoxarifado.
+
+---
+
+## Etapa 52 — A lista de localizações vazias (ENTREGUE — 2026-09-30)
+
+**O que mudou, em uma frase:** há uma lista de **onde tem espaço livre** — **Relatórios → Estoque →
+Localizações vazias** —, que concorda com o Mapa; e apagar um endereço **ocupado** passou a ser recusado.
+
+**O problema que ela resolve.** O servidor já tinha uma lista de vazias, sem tela, que **discordava do Mapa**:
+um material antigo (sem saldo por endereço) aparecia **com 40** no Mapa e o mesmo endereço aparecia **vazio** na
+lista. E apagar esse endereço era aceito — o material **sumia de todas as telas**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Sem tela de espaço livre | **Relatórios → Estoque → Localizações vazias**, exportável em XLSX |
+| Lista (sem tela) e Mapa discordavam no material antigo | Mesma regra: vazio na lista ⇔ vazio no Mapa |
+| Apagar endereço ocupado só por material antigo era aceito — o material sumia | Recusado: *"Localização ocupada: há material nela (N item(ns)). Transfira o saldo antes de apagar ou desativar."* |
+
+### Roteiro de teste manual (≈8 min)
+
+**Preparação.** Dois endereços (**A** e **B**) e um material **sem** controle por lote.
+
+1. **A lista.** **Almoxarifado → Relatórios**, categoria **Estoque**, **Localizações vazias** → **Consultar**. A e B
+   aparecem (estão vazios). Leia a nota: ela explica a regra, o endereço bloqueado, as filhas ocupadas e o caso
+   do material com lote.
+2. **Exportar.** Clique **Exportar XLSX**: a planilha tem Código, Endereço, Almoxarifado, Tipo, Bloqueada e
+   Filhas ocupadas.
+3. **Ocupar um endereço.** Em **Movimentações → Entrada**, dê entrada de **10** do material em **A**. Consulte de
+   novo: **A saiu** da lista; B continua.
+4. **Conferir com o Mapa.** **Almoxarifado → Mapa**: A aparece ocupado, B vazio — a mesma coisa que a lista.
+5. **Apagar o endereço ocupado.** **Configurações → Localizações**, remova **A**: depois do *"Remover
+   localização?"*, aparece *"Não é possível remover: localização possui saldo"* (A tem saldo no endereço). O
+   endereço continua lá.
+6. **Esvaziar e apagar.** Entregue uma requisição dos 10 (Etapa 51 — o endereço esvazia). Consulte a lista: A
+   **voltou**. Agora remova A: removido.
+7. **Endereço padrão de material antigo.** (Se houver material antigo com endereço padrão e saldo, sem saldo por
+   endereço.) O endereço padrão dele **não** aparece na lista, e removê-lo é recusado com *"Localização ocupada:
+   há material nela (1 item(ns))…"*. Antes, era removido e o material sumia.
+8. **Endereço bloqueado vazio** aparece na lista com **Bloqueada = 1**.
+
+### O que esta etapa NÃO cobre
+
+- **Material COM lote** — um endereço pode continuar aparecendo ocupado depois da entrega (novidades, **C72**; está na
+  nota do relatório).
+- **Hierarquia** — o "pai" (rua, setor) sem saldo próprio aparece vazio, com a coluna **Filhas ocupadas**; e pode ser
+  apagado com filhas ocupadas.
+- **Filtro na tela** (almoxarifado, setor) — filtrar é na planilha.
+- **Desativar pela tela** — a tela não tem esse botão; a recusa vale para a integração.
 
 ---
 

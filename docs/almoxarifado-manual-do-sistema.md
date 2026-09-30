@@ -342,11 +342,21 @@ Recusa:
 
 Deixar a lista vazia significa **sem restrição** (não "nenhum tipo permitido").
 
-### 3.5 Excluir uma localização que tem saldo
+### 3.5 Excluir ou desativar uma localização ocupada
 
-Excluir é permitido apenas quando a posição está vazia. A verificação é feita por **existência de linha de saldo diferente de zero**, e não pela soma — um endereço com +10 de um material e −10 de outro **não** conta como vazio.
+Excluir é permitido apenas quando a posição está vazia, e são duas verificações, nesta ordem:
 
-> *"Não é possível remover: localização possui saldo"*
+1. **Existe alguma linha de saldo diferente de zero** na posição (positiva ou negativa)? A verificação é por linha, não pela soma — um endereço com +10 de um material e −10 de outro **não** conta como vazio:
+
+   > *"Não é possível remover: localização possui saldo"*
+
+2. **A posição está ocupada pela regra do Mapa?** Conta também o material que tem esta posição como **padrão**, tem saldo e **nenhum** saldo endereçado — o material cadastrado antes do controle por posição, que o Mapa mostra aqui mesmo sem linha de saldo:
+
+   > *"Localização ocupada: há material nela (1 item(ns)). Transfira o saldo antes de apagar ou desativar."*
+
+   O número é de **materiais** distintos — um material em dois lotes conta 1.
+
+A mesma segunda recusa vale para **desativar** a posição pela integração (a tela de localizações não tem esse botão). Uma posição que **já** está inativa responde que já estava inativa, sem recusar.
 
 A exclusão bem-sucedida é uma **inativação**: a posição sai das listas, mas o código continua reservado. Recriar depois o mesmo código reaproveita e reativa aquele endereço.
 
@@ -376,11 +386,19 @@ Há duas coisas diferentes, e confundi-las causa dúvida:
 - **O ajuste com localização** — a **contagem daquela prateleira** — **define** (não soma) o que existe ali e recalcula o total do material pela soma de todas as posições. Se a contagem deixaria o material com saldo **negativo** (num material que não permite), o sistema primeiro zera a conta "sem localização atribuída" negativa; só recusa se nem isso bastar: *"Ajuste deixaria o saldo do material negativo (-50). O material não permite saldo negativo."* A tela de Movimentações não oferece posição no ajuste; a contagem por posição é feita pela integração.
 - **Material com lote.** O lote tem posição própria. A saída **sem** lote (como a entrega de requisição, que não escolhe lote) **não** tira de posição de lote. Nesse material, uma posição pode continuar mostrando o lote depois que ele saiu pela entrega, e a contagem daquela posição ("este lote, aqui, tem 0") põe a conta em dia.
 
-Duas consultas de apoio para quem está organizando o galpão: **materiais sem endereço**, em **Relatórios → Estoque → Materiais sem endereço**; e **posições vazias**, que existe como consulta de sistema, ainda sem tela própria.
+Duas consultas de apoio para quem está organizando o galpão, as duas em **Relatórios → Estoque**: **Materiais sem endereço** e **Localizações vazias** (ver 3.7).
 
 ### 3.7 O Mapa de Áreas
 
 **Almoxarifado → Mapa de Áreas** desenha o galpão em duas dimensões, com uma caixa por posição, arrastável para representar o layout real. Cada caixa mostra a ocupação: quantos materiais distintos estão ali, a quantidade total, quantos itens estão abaixo do mínimo e quantos estão críticos. Há filtro por almoxarifado no topo, e a posição bloqueada aparece com contorno tracejado e o cadeado 🔒.
+
+**A regra de "ocupada".** Uma posição está ocupada quando tem saldo endereçado maior que zero de algum material, **ou** quando é a posição **padrão** de um material ativo com saldo que não tem saldo endereçado nenhum (o material cadastrado antes do controle por posição). O material de cliente ocupa como qualquer outro — a chapa do cliente ocupa a prateleira de verdade. Material **inativado** ocupa pelo saldo endereçado, mas não pela posição padrão.
+
+**Localizações vazias** — em **Relatórios → Estoque → Localizações vazias** — é a lista das posições **ativas** que **não** estão ocupadas pela **mesma regra**: o que o Mapa mostra vazio está na lista, e nada que o Mapa mostra ocupado está. A lista traz código, endereço (almoxarifado / setor / posição pai / código), almoxarifado, tipo, **Bloqueada** e **Filhas ocupadas**, e exporta em planilha. Três leituras que a nota do relatório já explica:
+
+- a posição **bloqueada** vazia aparece (coluna Bloqueada = 1); a posição **inativa** não;
+- uma posição **"pai"** (rua, setor) sem saldo próprio aparece mesmo com as filhas ocupadas — a coluna **Filhas ocupadas** diz quantas filhas ativas estão ocupadas; o Mapa e a lista são planos;
+- em material **com lote**, uma posição pode continuar aparecendo **ocupada** depois de a entrega de requisição retirar o material, porque a entrega não escolhe lote (ver 3.6).
 
 ---
 
@@ -4717,6 +4735,8 @@ permissão de um relatório simplesmente não o vê no menu; forçar o endereço
 
 No grupo **Estoque**, visíveis para todo perfil com acesso ao módulo:
 
+- **Localizações vazias** — as posições ativas sem material, pela mesma regra do Mapa de Áreas, com endereço,
+  almoxarifado, tipo, **Bloqueada** e **Filhas ocupadas**. A regra e as três leituras da nota estão em 3.7.
 - **Saldo por lote** — uma linha por lote com saldo, com **Validade**, **Status do lote**, **Saldo
   atribuído** e **Físico total do material**. O saldo de um lote é o **atribuído** a ele: as saídas
   que não informam lote (a entrega de requisição, por exemplo) e o ajuste de saldo total não baixam de

@@ -4,7 +4,7 @@
 >
 > **CORREÇÃO DE FATO (regra 5), Etapa 49:** o item do Levantamento dizia "**são 18**" chaves no
 > registro — **estava errado**: eram **19** (a `custo-por-projeto`, `reportRegistry.js:416`, entrou na
-> Etapa 14 e esta spec não foi reaberta). Com a Etapa 49 são **22**.
+> Etapa 14 e esta spec não foi reaberta). Com a Etapa 49 são **22**. Com a **Etapa 52** são **23** (`localizacoes-vazias`, Relatórios → Estoque — a lista de localizações vazias pela regra do mapa; ver spec 02).
 >
 > **CORREÇÕES DE FATO (regra 5 — o texto abaixo afirmava e ESTAVA ERRADO):** este arquivo
 > dizia "**15** tipos no mapa" e "eram 16" — no início da Etapa 13 eram **17** (medido), e com
@@ -56,7 +56,7 @@ replicar, com controle positivo do próprio padrão de busca.
 ## Checklist
 
 ### Levantamento (fazer primeiro)
-- [x] Listar os tipos do mapa `reports` e casar com a spec 27 — `781c784` (**são 18** — *dizia 18; **estava errado**: eram **19** desde a Etapa 14; **agora 22**, Etapa 49* —, todos no
+- [x] Listar os tipos do mapa `reports` e casar com a spec 27 — `781c784` (**são 18** — *dizia 18; **estava errado**: eram **19** desde a Etapa 14; **22** na Etapa 49; **agora 23**, Etapa 52 (`localizacoes-vazias`)* —, todos no
   `reportRegistry.js` com titulo/categoria/gate/params/colunas/limite/nota declarados por
   chave; a validação de subida derruba o processo se dispatcher e registro divergirem)
 
