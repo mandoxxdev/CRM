@@ -47,4 +47,13 @@
 ## Estado
 
 - [x] Fase 0 (desenho, seção 1) · [x] Fase 1
-- [x] Fase 2 (1 CRITICAL, 4 IMPORTANT — seção 6 do desenho) · [ ] T1 · [ ] T2 · [ ] T3 · [ ] T4 · [ ] Fase 5 · [ ] Fase 6
+- [x] Fase 2 (1 CRITICAL, 4 IMPORTANT — seção 6 do desenho) · [x] T1–T3 (`c71cb87`) · [x] T4 (`d77df40`) · [ ] Fase 5 · [ ] Fase 6
+
+## Execução (2026-09-30)
+
+- **T1–T3 (`c71cb87`):** as três chaves novas, o histórico estendido e o registro de 19 para 22 chaves.
+  - `relatoriosSaldos` 8/8, incluindo o cenário da sonda do lote e o `%` como texto.
+  - 9 sabotagens vermelhas. A K7, do escape, deu NO-OP na primeira rodada por escape de shell e foi refeita com um script perl em arquivo.
+  - **Divergências:** os testes vieram **depois** do código, e as sabotagens são a prova. A varredura existente do registro chamava todo parâmetro de texto com `'x'`, e o `grupo` tem lista fechada; ganhou um `exemplo` opcional no parâmetro.
+- **T4 (`d77df40`):** `integracaoRelatoriosSaldos` 6/6, com 2 sabotagens vermelhas.
+- **Suítes:** `test:api` **226/226**, `test:almoxarifado` 42/42.
