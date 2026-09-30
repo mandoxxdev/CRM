@@ -627,6 +627,28 @@ filtro passa a excluir `CANCELADA` explicitamente. **O caminho reversível é o 
 coluna apaga a informação de que havia execução pendente quando se cancelou, que é justamente o que
 o motivo do cancelamento vai explicar.
 
+> ### ⚠️ ESTE ITEM 5 ESTÁ ERRADO — corrigido em 2026-09-30, na Fase 1 da Etapa 46
+>
+> **A armadilha não existe.** O filtro já tem `AND nc.status = 'DECIDIDA'` colado
+> (`nonConformityService.js:1217-1219`), então a NC cancelada **nunca** casa `?execucao=PENDENTE`,
+> por mais que conserve o `PENDENTE` na coluna. E o comentário que eu **citei** neste próprio item
+> descreve **este cenário exato** como a razão de a cláusula existir: *"Uma NC cancelada DEPOIS de
+> decidida conserva o `PENDENTE` que a decisão gravou (cancelar não limpa a coluna), e apareceria
+> na fila cobrando execução de um documento morto. A cláusula é a regra; o NULL é a coincidência."*
+>
+> **Eu li o comentário, transcrevi um pedaço dele e concluí o oposto do que ele diz.** A frase
+> *"então o `=` sozinho já as excluiria HOJE"*, que eu usei como prova de que a proteção era
+> acidental, é justamente o trecho em que o autor **descarta** a coincidência e afirma a cláusula.
+>
+> **O que muda no escopo da Etapa 46:** a decisão que apresentei como reversível — *"o filtro passa
+> a excluir `CANCELADA` explicitamente"* — **já está tomada no código desde a Etapa 45**. O que
+> sobra não é uma mudança, é uma **proibição**: o cancelamento **não deve zerar** `execucao_estado`.
+> Virou a **RN-06** do desenho da 46.
+>
+> **Fica à vista** porque o item errado foi **commitado e empurrado** (`4143318`), e porque na forma
+> em que estava ele mandaria a execução mexer num filtro que está certo — o tipo de "conserto" que
+> quebra o que funcionava.
+
 **Conclusão da Fase 0:** o esboço de três itens acima vira **quatro**, e a ordem muda. Tronco:
 (1) ação `cancelar_nao_conformidade` + rótulo em `permissaoErro.js` **no mesmo commit** (sétima vez);
 (2) `cancelarNaoConformidade` no serviço, cobrindo `ABERTA` e `DECIDIDA`-com-`PENDENTE`, com motivo
