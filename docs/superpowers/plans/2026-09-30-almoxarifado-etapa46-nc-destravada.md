@@ -250,6 +250,6 @@ Exclusividade não é suficiência, e essa é a linha a acrescentar no próximo 
 - [x] Fase 0 — medida (no plano da Etapa 45, com **uma correção**: seção 7 do desenho)
 - [x] Fase 1 — desenho e plano
 - [x] Fase 2 — revisão do plano por agente fresco: **12 achados, 3 CRITICAL, 8 refutados** — desenho e plano corrigidos antes da primeira linha de código
-- [ ] T1 · [ ] T2 · [ ] T3 · [ ] T4 · [ ] T5
+- [x] T1 — gate + rotulo, as duas pontas no mesmo commit — `a625fb7` · [ ] T2 · [ ] T3 · [ ] T4 · [ ] T5
 - [ ] Fase 5 — revisão adversarial
 - [ ] Fase 6 — `fechar-etapa`
