@@ -3124,12 +3124,16 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
                      ma.foto, ma.material_critico,
                      ma.localizacao, ma.localizacao_padrao_id,
                      a.codigo as almoxarifado_codigo, a.nome as almoxarifado_nome,
-                     tm.nome as tipo_nome, tm.icone as tipo_icone, tm.is_epi, tm.requer_assinatura
+                     tm.nome as tipo_nome, tm.icone as tipo_icone, tm.is_epi, tm.requer_assinatura,
+                     -- Etapa 59: a origem planejada na separação, para a tela mostrar "separado de X".
+                     lsep.codigo as origem_separacao_codigo, ltsep.codigo as lote_separacao_codigo
               FROM itens_requisicao_almoxarifado ir
               JOIN materiais_almoxarifado ma ON ir.material_id = ma.id
               LEFT JOIN tipos_material_almoxarifado tm ON ma.tipo_material_id = tm.id
               LEFT JOIN localizacoes_almoxarifado l ON ma.localizacao_padrao_id = l.id
               LEFT JOIN almoxarifados a ON l.almoxarifado_id = a.id
+              LEFT JOIN localizacoes_almoxarifado lsep ON lsep.id = ir.origem_separacao_id
+              LEFT JOIN lotes_almoxarifado ltsep ON ltsep.id = ir.lote_separacao_id
               WHERE ir.requisicao_id = ?`,
         [req.params.id], async (err2, itens) => {
           if (err2) return res.status(500).json({ error: err2.message });

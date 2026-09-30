@@ -364,6 +364,56 @@ async function listarSeparacoes(db, requisicaoId) {
  * laço antigo gravava item a item e lançava 400 no meio, deixando `quantidade_separada` alterada
  * sem rodada — sem dono, sem trilha, e sem limpar a conferência de uma caixa que mudou.
  */
+/**
+ * Etapa 58/59 — a regra ÚNICA de "este item pode sair desta origem/lote nesta quantidade", usada
+ * pela entrega e pela separação. Lança com a mensagem SEM o prefixo do material (quem chama prefixa).
+ * `pedidoPorOrigem` acumula o que a mesma chamada já pediu do mesmo material/origem/lote.
+ */
+async function checarOrigemItem(db, item, { origemId, loteId, lidoNorm }, qty, pedidoPorOrigem) {
+  if (lidoNorm && !origemId) {
+    throw Object.assign(new Error('Para confirmar a origem pela leitura, informe a localização de origem'), { status: 400 });
+  }
+  let codigoOrigem = null;
+  if (origemId) {
+    const loc = await stockService.validarEnderecoExplicito(db, origemId, 'origem');
+    await stockService.validarLocalizacaoParaMovimento(db, origemId, { tipo_material: item.tipo_material }, 'origem');
+    codigoOrigem = loc.codigo;
+    if (lidoNorm) await stockService.conferirLeitura(db, lidoNorm, origemId, 'origem');
+  }
+  let loteCodigo = null;
+  if (loteId) {
+    const lote = await dbGet(db, 'SELECT * FROM lotes_almoxarifado WHERE id = ?', [loteId]);
+    if (!lote || Number(lote.material_id) !== Number(item.material_id)) {
+      throw Object.assign(new Error('Lote não pertence a este material'), { status: 400 });
+    }
+    // Etapa 58 (Fase 5): status e vencimento com as literais do motor.
+    if (lote.status !== 'ATIVO') {
+      throw Object.assign(new Error(`Lote ${lote.codigo} esta ${String(lote.status).toLowerCase()} e nao pode ser utilizado`), { status: 400 });
+    }
+    if (lotService.isVencido(lote) && !lotService.vencimentoLiberado(lote)) {
+      throw Object.assign(new Error(`Lote ${lote.codigo} vencido em ${lote.data_validade} nao pode sair para consumo. `
+        + 'Libere o vencimento do lote (PUT /api/almoxarifado/lotes/:id/liberar-vencimento) com justificativa, '
+        + 'ou baixe por SUCATA/PERDA ou corrija por AJUSTE.'), { status: 400 });
+    }
+    loteCodigo = lote.codigo;
+  }
+  const onde = origemId ? 'AND localizacao_id = ?' : '';
+  const s = await dbGet(db, `SELECT COALESCE(SUM(quantidade), 0) as q FROM estoque_saldo_almoxarifado
+    WHERE material_id = ? AND lote_id IS ? ${onde}`, [item.material_id, loteId, ...(origemId ? [origemId] : [])]);
+  // Dois itens do MESMO material saindo do mesmo endereço/lote somam (Etapa 58, Fase 5).
+  const chave = `${item.material_id}|${origemId}|${loteId}`;
+  const jaPedido = pedidoPorOrigem.get(chave) || 0;
+  pedidoPorOrigem.set(chave, jaPedido + qty);
+  const saldo = (Number(s.q) || 0) - jaPedido;
+  if (saldo + 1e-9 < qty) {
+    throw Object.assign(new Error(origemId
+      ? `O saldo em ${codigoOrigem} (${Math.round(saldo * 1e6) / 1e6}) não cobre a quantidade (${qty}) — a saída tiraria de outros endereços`
+      : `Saldo insuficiente no lote ${loteCodigo}. Disponível: ${Math.round(saldo * 1e6) / 1e6} ${item.unidade || ''}`.trim()),
+    { status: 400 });
+  }
+  return codigoOrigem;
+}
+
 async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
   if (!user?.id) {
     const err = new Error('Separação exige usuário identificado');
@@ -395,6 +445,7 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
   // "quem separou não confere" (RN-03) ficava apoiada numa rodada que nunca foi gravada. A
   // separação é tudo ou nada: ou todas as entradas cabem, ou nenhuma é gravada.
   const validados = []; // [{ item, qty, novaSeparada }] — só item existente com qty > 0
+  const pedidoSeparacao = new Map();
   for (const entrada of itensSeparados) {
     const item = itens.find((i) => Number(i.id) === Number(entrada.item_id));
     if (!item) continue;
@@ -419,18 +470,44 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
     }
 
     // Só em memória: o mesmo item duas vezes no payload é validado contra o acumulado, como antes.
+    // Etapa 59 (RN-01/02): a origem de onde o separador tirou. O saldo nela tem de cobrir esta rodada
+    // e, se a origem planejada ja era ESTE par (endereco, lote), tambem o separado ainda nao entregue.
+    const origemId = entrada.localizacao_origem_id ? Number(entrada.localizacao_origem_id) : null;
+    const loteId = entrada.lote_id ? Number(entrada.lote_id) : null;
+    const pendenteAntes = Math.max(0, getSeparado(item) - getEntregue(item));
+    const mesmoPar = Number(item.origem_separacao_id || 0) === Number(origemId || 0)
+      && Number(item.lote_separacao_id || 0) === Number(loteId || 0);
+    if (origemId || loteId) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        await checarOrigemItem(db, item, { origemId, loteId, lidoNorm: null },
+          qty + (mesmoPar ? pendenteAntes : 0), pedidoSeparacao);
+      } catch (e) {
+        const err = new Error(`${item.material_nome}: ${e.message}`);
+        err.status = e.status || 400;
+        throw err;
+      }
+    }
+    // Rodada com origem diferente (ou sem origem) sobre separado pendente de outra: mista -> nula.
+    const planejada = pendenteAntes > 1e-9 && !mesmoPar ? { origemId: null, loteId: null }
+      : { origemId: origemId || null, loteId: origemId || loteId ? loteId : null };
+    item.origem_separacao_id = planejada.origemId;
+    item.lote_separacao_id = planejada.loteId;
     const novaSeparada = getSeparado(item) + qty;
     item.quantidade_separada = novaSeparada;
-    validados.push({ item, qty, novaSeparada });
+    validados.push({ item, qty, novaSeparada, origemId, loteId, planejada });
   }
 
   // PASSADA 2 — gravar. Daqui em diante nenhuma entrada pode falhar por regra de negócio.
   const tocados = []; // [{ item_id, material_id, quantidade }]
-  for (const { item, qty, novaSeparada } of validados) {
-    // eslint-disable-next-line no-await-in-loop
-    await dbRun(db, 'UPDATE itens_requisicao_almoxarifado SET quantidade_separada = ? WHERE id = ?',
-      [novaSeparada, item.id]);
-    tocados.push({ item_id: item.id, material_id: item.material_id, quantidade: qty });
+  for (const { item, qty, novaSeparada, origemId, loteId, planejada } of validados) {
+    await dbRun(db, `UPDATE itens_requisicao_almoxarifado SET quantidade_separada = ?,
+        origem_separacao_id = ?, lote_separacao_id = ? WHERE id = ?`,
+    [novaSeparada, planejada.origemId, planejada.loteId, item.id]);
+    tocados.push({
+      item_id: item.id, material_id: item.material_id, quantidade: qty,
+      ...(origemId ? { localizacao_origem_id: origemId } : {}), ...(loteId ? { lote_id: loteId } : {}),
+    });
   }
 
   let rodadaId = null;
@@ -563,68 +640,40 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
     }
   }
 
-  // Etapa 58 (RN-01/02): origem, lote e leitura POR ITEM. Tudo validado ANTES de qualquer baixa
-  // (Fase 2, crítico 2): cada item vira até duas baixas (excedente + reservada), e uma recusa na
-  // segunda deixava a primeira feita. O motor continua sendo a guarda contra concorrência.
+  // Etapa 58 (RN-01/02) + 59 (RN-03): origem, lote e leitura POR ITEM, validados ANTES de qualquer
+  // baixa. Item sem origem no payload usa a origem PLANEJADA na separação — só até o separado ainda
+  // não entregue (acima disso, o que sai nunca foi separado dali: automático) e nunca quando a tela
+  // pede automático explicitamente (`origem_automatica: true` — a saída quando a planejada não serve
+  // mais; Fase 2, crítico 1). Qualquer falha da PLANEJADA diz o que fazer.
   const origemPorItem = new Map();
   const pedidoPorOrigem = new Map();
   for (const item of itens) {
     const entrada = itensAtendidos?.find((ia) => Number(ia.item_id) === Number(item.id));
     const qty = entrada ? num(entrada.quantidade_atendida) : 0;
     if (qty <= 0) continue;
-    const origemId = entrada.localizacao_origem_id ? Number(entrada.localizacao_origem_id) : null;
-    const loteId = entrada.lote_id ? Number(entrada.lote_id) : null;
+    let origemId = entrada.localizacao_origem_id ? Number(entrada.localizacao_origem_id) : null;
+    let loteId = entrada.lote_id ? Number(entrada.lote_id) : null;
     const lido = entrada.codigo_lido_origem;
-    if (!origemId && !loteId && (lido === undefined || lido === null || lido === '')) continue;
+    const semEscolha = !origemId && !loteId && (lido === undefined || lido === null || lido === '');
+    let planejada = false;
+    if (semEscolha && entrada.origem_automatica !== true && item.origem_separacao_id
+        && qty <= Math.max(0, getSeparado(item) - getEntregue(item)) + 1e-9) {
+      origemId = Number(item.origem_separacao_id);
+      loteId = item.lote_separacao_id ? Number(item.lote_separacao_id) : null;
+      planejada = true;
+    }
+    if (!origemId && !loteId && semEscolha) continue;
     try {
       const lidoNorm = stockService.normalizarCodigoLido(lido);
-      if (lidoNorm && !origemId) {
-        throw Object.assign(new Error('Para confirmar a origem pela leitura, informe a localização de origem'), { status: 400 });
-      }
-      let codigoOrigem = null;
-      if (origemId) {
-        const loc = await stockService.validarEnderecoExplicito(db, origemId, 'origem');
-        await stockService.validarLocalizacaoParaMovimento(db, origemId, { tipo_material: item.tipo_material }, 'origem');
-        codigoOrigem = loc.codigo;
-        if (lidoNorm) await stockService.conferirLeitura(db, lidoNorm, origemId, 'origem');
-      }
-      let loteCodigo = null;
-      if (loteId) {
-        const lote = await dbGet(db, 'SELECT * FROM lotes_almoxarifado WHERE id = ?', [loteId]);
-        if (!lote || Number(lote.material_id) !== Number(item.material_id)) {
-          throw Object.assign(new Error('Lote não pertence a este material'), { status: 400 });
-        }
-        // Fase 5: o status e o vencimento do lote tambem aqui, com as literais do motor — senao a
-        // recusa saia na hora da baixa do item, com os anteriores ja entregues.
-        if (lote.status !== 'ATIVO') {
-          throw Object.assign(new Error(`Lote ${lote.codigo} esta ${String(lote.status).toLowerCase()} e nao pode ser utilizado`), { status: 400 });
-        }
-        if (lotService.isVencido(lote) && !lotService.vencimentoLiberado(lote)) {
-          throw Object.assign(new Error(`Lote ${lote.codigo} vencido em ${lote.data_validade} nao pode sair para consumo. `
-            + 'Libere o vencimento do lote (PUT /api/almoxarifado/lotes/:id/liberar-vencimento) com justificativa, '
-            + 'ou baixe por SUCATA/PERDA ou corrija por AJUSTE.'), { status: 400 });
-        }
-        loteCodigo = lote.codigo;
-      }
-      // O item INTEIRO (todas as baixas) cabe no que foi escolhido.
-      const onde = origemId ? 'AND localizacao_id = ?' : '';
-      const s = await dbGet(db, `SELECT COALESCE(SUM(quantidade), 0) as q FROM estoque_saldo_almoxarifado
-        WHERE material_id = ? AND lote_id IS ? ${onde}`, [item.material_id, loteId, ...(origemId ? [origemId] : [])]);
-      // Fase 5: dois itens do MESMO material saindo do mesmo endereço/lote somam — cada um cabia
-      // sozinho e o segundo era recusado pelo motor depois de o primeiro sair.
-      const chave = `${item.material_id}|${origemId}|${loteId}`;
-      const jaPedido = pedidoPorOrigem.get(chave) || 0;
-      pedidoPorOrigem.set(chave, jaPedido + qty);
-      const saldo = (Number(s.q) || 0) - jaPedido;
-      if (saldo + 1e-9 < qty) {
-        throw Object.assign(new Error(origemId
-          ? `O saldo em ${codigoOrigem} (${Math.round(saldo * 1e6) / 1e6}) não cobre a quantidade (${qty}) — a saída tiraria de outros endereços`
-          : `Saldo insuficiente no lote ${loteCodigo}. Disponível: ${Math.round(saldo * 1e6) / 1e6} ${item.unidade || ''}`.trim()),
-        { status: 400 });
-      }
+      await checarOrigemItem(db, item, { origemId, loteId, lidoNorm }, qty, pedidoPorOrigem);
       origemPorItem.set(item.id, { origemId, loteId, lido: lidoNorm });
     } catch (e) {
-      const err = new Error(`${item.material_nome}: ${e.message}`);
+      let msg = `${item.material_nome}: ${e.message}`;
+      if (planejada) {
+        const loc = await dbGet(db, 'SELECT codigo FROM localizacoes_almoxarifado WHERE id = ?', [origemId]);
+        msg = `${item.material_nome}: a origem da separação (${loc ? loc.codigo : origemId}) não serve mais (${e.message}) — entregue escolhendo de onde sai`;
+      }
+      const err = new Error(msg);
       err.status = e.status || 400;
       throw err;
     }
@@ -729,6 +778,11 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
         [entregueAcumulado, entregueAcumulado, Math.max(getSeparado(item), entregueAcumulado), item.id]);
     }
 
+    // Etapa 59 (RN-04): entregue todo o separado, a origem planejada nao vale mais.
+    if (item.origem_separacao_id && Math.max(getSeparado(item), entregueAcumulado) - entregueAcumulado <= 1e-9) {
+      // eslint-disable-next-line no-await-in-loop
+      await dbRun(db, 'UPDATE itens_requisicao_almoxarifado SET origem_separacao_id = NULL, lote_separacao_id = NULL WHERE id = ?', [item.id]);
+    }
     entregas.push({ item_id: item.id, quantidade: qtyEntregar });
   }
 
