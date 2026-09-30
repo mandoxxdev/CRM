@@ -2015,7 +2015,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         if (!current) return res.status(404).json({ error: 'Localização não encontrada' });
 
         // Etapa 52 (RN-04): desativar pelo PUT é apagar por outro caminho — a mesma guarda do DELETE.
-        const desativando = ativo !== undefined && !Number(ativo) && Number(current.ativo) === 1;
+        // Fase 5: `Number(ativo) !== 1` e nao `!Number(ativo)` - `ativo: 2` gravava 2 e a localizacao
+        // sumia do mapa (que filtra ativo = 1) com o material dentro.
+        const desativando = ativo !== undefined && Number(ativo) !== 1 && Number(current.ativo) === 1;
         if (desativando) {
           stockService.contarOcupacaoLocalizacao(db, Number(req.params.id)).then((ocupantes) => {
             if (ocupantes > 0) {
@@ -2041,7 +2043,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
             [codigo, descricao || null, setor || null, subgrupoVal, tipo || 'Almoxarifado', parentVal,
              pos_x ?? null, pos_y ?? null, largura ?? 120, altura ?? 80, almoxarifadoIdParam,
              bloqueadaFinal, tiposFinal,
-             ativo !== undefined ? ativo : 1, req.params.id],
+             ativo !== undefined ? (Number(ativo) === 1 ? 1 : 0) : 1, req.params.id],
             function (err) {
               if (err) return res.status(500).json({ error: err.message });
               db.get(`SELECT * FROM localizacoes_almoxarifado WHERE id = ?`, [req.params.id], (e, r) => {
@@ -2070,7 +2072,13 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         // Etapa 52 (RN-04): a régua de "ocupada" é a do mapa (`OCUPACAO_SQL`). Sem isto, uma
         // localização ocupada SÓ pelo legado (material com padrão aqui e sem linha endereçada) era
         // apagada, e o material sumia de todas as telas.
-        stockService.contarOcupacaoLocalizacao(db, Number(req.params.id)).then((ocupantes) => {
+        // Fase 5 (MINOR 4): só para localização ATIVA — a já apagada respondia "ocupada… transfira o
+        // saldo antes de apagar", o que engana (ela já está apagada; o 200 `ja_inativo` é o certo).
+        Promise.all([
+          stockService.contarOcupacaoLocalizacao(db, Number(req.params.id)),
+          dbGet(db, 'SELECT ativo FROM localizacoes_almoxarifado WHERE id = ?', [req.params.id]),
+        ]).then(([ocupantesBrutos, linhaLoc]) => {
+        const ocupantes = linhaLoc && Number(linhaLoc.ativo) === 1 ? ocupantesBrutos : 0;
         if (ocupantes > 0) {
           return res.status(400).json({
             error: `Localização ocupada: há material nela (${ocupantes} item(ns)). Transfira o saldo antes de apagar ou desativar.`,

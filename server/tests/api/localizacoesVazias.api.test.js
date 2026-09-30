@@ -32,7 +32,7 @@ let seq = 0;
   setUser(ADMIN);
   const loc = async (codigo, extra = {}) => (await dbRun(db,
     'INSERT INTO localizacoes_almoxarifado (codigo, descricao, setor, ativo, bloqueada, parent_id) VALUES (?,?,?,?,?,?)',
-    [`E52-${codigo}-${++seq}`, codigo, extra.setor || null, extra.ativo ?? 1, extra.bloqueada || 0, extra.parent || null])).lastID;
+    [`E52-${codigo}-${++seq}`, codigo, extra.setor !== undefined ? extra.setor : null, extra.ativo ?? 1, extra.bloqueada || 0, extra.parent || null])).lastID;
   const material = async (extra = {}) => (await dbRun(db, `INSERT INTO materiais_almoxarifado
       (codigo, nome, unidade, quantidade_atual, ativo, controle_lote, localizacao_padrao_id)
       VALUES (?, 'Mat E52', 'UN', ?, 1, ?, ?)`,
@@ -155,6 +155,68 @@ let seq = 0;
     const V = await loc('DELVAZ');
     const r = await request(app).delete(`/api/almoxarifado/localizacoes/${V}`);
     assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+  });
+
+  // ═══ Fase 5: as lacunas que o revisor mostrou (sabotagens verdes) ═══
+  await test('(12) linha de saldo NEGATIVA: a recusa antiga do DELETE continua valendo', async () => {
+    // Única guarda da rota sem teste — a régua nova (OCUPACAO_SQL, só quantidade > 0) não pega a
+    // negativa, e trocar a antiga por 0 passava a suíte inteira verde.
+    const N = await loc('NEG'); const m = await material();
+    await dbRun(db, 'INSERT INTO estoque_saldo_almoxarifado (material_id, localizacao_id, quantidade) VALUES (?,?,-3)', [m, N]);
+    const r = await request(app).delete(`/api/almoxarifado/localizacoes/${N}`);
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, 'Não é possível remover: localização possui saldo');
+  });
+
+  await test('(13) PUT: ativo "0", false e 2 numa ocupada sao recusados; 2 numa vazia grava 0, nunca 2', async () => {
+    const A = await loc('PUTSTR'); await entrada(await material(), A, 4);
+    const cur = await dbGet(db, 'SELECT * FROM localizacoes_almoxarifado WHERE id = ?', [A]);
+    for (const ativo of ['0', false, 2, '2']) {
+      const r = await request(app).put(`/api/almoxarifado/localizacoes/${A}`).send({ ...cur, ativo });
+      assert.strictEqual(r.status, 400, `ativo=${JSON.stringify(ativo)} passou: ${JSON.stringify(r.body)}`);
+    }
+    assert.strictEqual((await dbGet(db, 'SELECT ativo FROM localizacoes_almoxarifado WHERE id = ?', [A])).ativo, 1);
+    const V = await loc('PUT2');
+    const cur2 = await dbGet(db, 'SELECT * FROM localizacoes_almoxarifado WHERE id = ?', [V]);
+    const ok = await request(app).put(`/api/almoxarifado/localizacoes/${V}`).send({ ...cur2, ativo: 2 });
+    assert.strictEqual(ok.status, 200);
+    assert.strictEqual((await dbGet(db, 'SELECT ativo FROM localizacoes_almoxarifado WHERE id = ?', [V])).ativo, 0);
+  });
+
+  await test('(14) PUT numa localizacao JA inativa passa (a guarda e so para quem esta desativando)', async () => {
+    const I = await loc('JAINA', { ativo: 0 }); await material({ padrao: I, fisico: 10 });
+    const cur = await dbGet(db, 'SELECT * FROM localizacoes_almoxarifado WHERE id = ?', [I]);
+    const r = await request(app).put(`/api/almoxarifado/localizacoes/${I}`).send({ ...cur, descricao: 'x', ativo: 0 });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+  });
+
+  await test('(15) DELETE de localizacao ja inativa que ainda e padrao do legado responde ja_inativo, nao "ocupada"', async () => {
+    const I = await loc('DELINA', { ativo: 0 }); await material({ padrao: I, fisico: 10 });
+    const r = await request(app).delete(`/api/almoxarifado/localizacoes/${I}`);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.strictEqual(r.body.ja_inativo, true);
+  });
+
+  await test('(16) sub_ocupadas nao conta filha INATIVA; a mensagem conta MATERIAIS (dois lotes = 1 item)', async () => {
+    const PAI = await loc('PAI2'); const FI = await loc('FINA', { parent: PAI, ativo: 0 });
+    await dbRun(db, 'INSERT INTO estoque_saldo_almoxarifado (material_id, localizacao_id, quantidade) VALUES (?,?,5)', [await material(), FI]);
+    assert.strictEqual((await vazias()).find((l) => l.id === PAI).sub_ocupadas, 0);
+    const D = await loc('DOISLOTES'); const m = await material({ lote: 1 });
+    const L1 = await lotService.criarOuObterLote(db, ADMIN, { material_id: m, codigo: 'L1' });
+    const L2 = await lotService.criarOuObterLote(db, ADMIN, { material_id: m, codigo: 'L2' });
+    await entrada(m, D, 3, L1.id); await entrada(m, D, 4, L2.id);
+    // Pelo PUT de desativar: o DELETE bateria antes na recusa antiga (linha != 0).
+    const curD = await dbGet(db, 'SELECT * FROM localizacoes_almoxarifado WHERE id = ?', [D]);
+    const r = await request(app).put(`/api/almoxarifado/localizacoes/${D}`).send({ ...curD, ativo: 0 });
+    assert.strictEqual(r.body.error, MSG_OCUPADA(1), JSON.stringify(r.body));
+  });
+
+  await test('(17) setor vazio nao duplica a barra no endereco', async () => {
+    const S = await loc('SEMSETOR', { setor: '' });
+    const linha = (await vazias()).find((l) => l.id === S);
+    // Sem almoxarifado e sem pai, a barra sobrando apareceria no COMEÇO (" / E52-..."), não entre
+    // duas — a primeira versão desta asserção só procurava "/ /" e passava com o defeito.
+    assert.strictEqual(linha.endereco_completo, linha.codigo, `endereco com barra sobrando: "${linha.endereco_completo}"`);
   });
 
   await close();
