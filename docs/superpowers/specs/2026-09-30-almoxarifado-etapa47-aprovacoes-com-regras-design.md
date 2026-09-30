@@ -132,12 +132,22 @@ O lembrete de hoje (medido em `requisitionReminderService.js:79` e `:106`) escre
 
 **A variante do status novo espelha a forma e troca o gesto**, porque é o gesto que muda de dono:
 
-| Onde | Literal congelada |
+> ⚠️ **A tabela abaixo foi SUBSTITUÍDA na execução da T1** — a versão original tinha três defeitos
+> que a Fase 2 mediu (seção 7.6): o `R$` dobrado, a manchete HTML que não correspondia a string
+> nenhuma, e o plural mal descrito. A tabela original está no histórico (`637d9fa`). Estas são as
+> literais **que o código escreve**, lidas do arquivo depois da T1:
+
+| Onde | Literal congelada (T1, lida do código) |
 |---|---|
-| assunto | `Lembrete: Requisição <NUMERO> aguardando liberação por valor há <N> dia(s)` |
+| assunto (e `<title>` do HTML) | `Lembrete: Requisição <NUMERO> aguardando liberação por valor há <N> dia`/`dias` — **flexionado**, como o assunto de hoje |
 | título (texto) | `LEMBRETE — REQUISIÇÃO AGUARDANDO LIBERAÇÃO POR VALOR` |
-| linha nova no corpo | `Valor total: R$ <VALOR> (limite de liberação automática: R$ <LIMITE>)` |
-| título (HTML) | `Aguardando liberação por valor` |
+| linha nova no corpo texto, logo após `Aguardando há: <N> dia(s)` (**cru**, como já era) | `Valor total: <VALOR> (limite de liberação automática: <LIMITE>)` — `<VALOR>` e `<LIMITE>` saem de `formatMoeda`, que **já emite** `R$ 900,00` |
+| linha nova no bloco de dados do HTML, após OS/Referência | `<strong>Valor total:</strong> <VALOR> (limite de liberação automática: <LIMITE>)` |
+| manchete HTML (a faixa azul) | `📋 Requisição aguardando liberação por valor há <N> dia`/`dias` |
+| chamada no texto | `Acesse o sistema para aprovar ou reprovar a liberação:` — o verbo do e-mail irmão (`notificarAprovadoresValor`: *"aprovar ou reprovar a liberação"*), e não o `aprovar ou rejeitar` da lane normal |
+
+O botão do HTML (`Ver requisições pendentes`) **não muda**: a requisição travada por valor aparece
+na mesma tela, e trocar o rótulo seria literal nova sem razão.
 
 **Por que a linha do valor é obrigatória e não enfeite:** ela é **o número que explica por que a
 requisição parou**. Sem ela o aprovador de valor recebe um lembrete idêntico ao da lane normal e não
@@ -411,3 +421,109 @@ trava requisição —, mas a decisão é da T3 porque ela depende do formato fi
 dependem desta escolha e do formato dos critérios. **A Fase 1-b fecha a pergunta estrutural, não o
 contrato de mensagem** — e o plano já registra que congelar antes do formato existir foi como a
 Etapa 45 terminou com duas mensagens fora da tabela.
+
+---
+
+## 9. Fase 1-c — a escolha da 8.5, e os contratos congelados de T3/T4 (2026-09-30)
+
+Escrita **depois** de T1 e T2 fecharem, e antes de a T3 abrir — que é o momento que a 8.5 marcou.
+Medido de novo antes de escrever: `material_critico` existe em `materiais_almoxarifado`;
+`TIPOS_REQUISICAO` é lista fechada em `schema.js:40`; `projeto_id` e `centro_custo_id` são colunas da
+requisição; `isAprovadorValor` aceita `role = 'admin'` **ou** id na lista de config.
+
+### 9.1 A decisão estrutural que simplifica a 8.1: a assinatura de regra NÃO vira o status
+
+A 8.1 mostrou que "assinar a pendência" e "virar o status" viram **dois `UPDATE`** sem transação. A
+saída é **não ligar os dois**: assinar uma pendência de regra **não muda o status** da requisição.
+Ela continua `PENDENTE` (ou `AGUARDANDO_APROVACAO_VALOR`) até o gesto que já existe — `/aprovar` ou
+`/aprovar-valor` — e **esse gesto passa a ser barrado enquanto houver pendência de regra aberta**,
+com a condição **no `WHERE` do `UPDATE` que aprova** (`AND NOT EXISTS (… status = 'ABERTA')`).
+
+**Por que isso é melhor que o `CASE` do molde:** a garantia volta a ser **um `UPDATE` só, numa linha
+só** — a propriedade que a 8.1 disse que se perdia. As regras **somam** aprovações à aprovação normal
+(a 5.3 já dizia "as regras novas somam, não substituem"); não substituem a aprovação normal.
+**Descartado:** a última assinatura de regra aprovar a requisição sozinha — exigiria os dois `UPDATE`
+da 8.1 **e** tiraria da aprovação normal a reserva de saldo (`reservarItensAprovacao`), que só a rota
+`/aprovar` faz.
+
+**RN-08 revisada:** quem cobra e quem conta o que falta lê a **tabela filha**. O `status` da
+requisição é lido **só** para excluir requisição já decidida (rejeitada/cancelada) da cobrança — e o
+caso perigoso (status "aprovado" com pendência aberta) fica **impossível** pelo `WHERE` do gate, não
+por disciplina de quem lê.
+
+### 9.2 A escolha da 8.5 — regra desativada com pendência aberta
+
+**Escolhido: a pendência vira `OBSOLETA`** no mesmo gesto que desativa a regra — deixa de bloquear,
+não some do histórico, e a resposta do `PUT` devolve quantas foram obsoletadas. **Descartados:**
+"fica" (requisição travada por regra que o administrador acabou de desligar, sem saída na tela) e
+"some" (apaga o registro de que a regra valia quando a requisição entrou). Reativar a regra **não**
+reabre as obsoletas — a requisição já pode ter sido aprovada no intervalo.
+
+### 9.3 Tabelas
+
+```
+regras_aprovacao
+  id, nome TEXT NOT NULL, ativo INTEGER DEFAULT 1, ordem INTEGER DEFAULT 0,
+  -- critérios: NULL = não filtra; a regra casa quando TODOS os não-NULL casam (E, não OU)
+  tipo_requisicao TEXT,          -- um de TIPOS_REQUISICAO
+  material_critico INTEGER,      -- 1 = casa se ALGUM item é material_critico
+  valor_minimo REAL,             -- casa se valor_total >= valor_minimo
+  quantidade_minima REAL,        -- casa se ALGUM item tem quantidade_solicitada >= quantidade_minima
+  centro_custo_id INTEGER, projeto_id INTEGER,   -- igualdade
+  aprovadores TEXT NOT NULL,     -- JSON de ids de usuarios (8.4)
+  criado_por_id, criado_por_nome, created_at, updated_at
+
+requisicao_aprovacoes_regra
+  id, requisicao_id, regra_id,
+  regra_nome TEXT, aprovadores TEXT,        -- SNAPSHOT no envio: editar a regra depois não
+                                            -- muda quem pode assinar a requisição que já entrou
+  status TEXT NOT NULL DEFAULT 'ABERTA',    -- ABERTA | APROVADA | OBSOLETA
+  aprovador_id, aprovador_nome, aprovado_em,
+  obsoleta_em, obsoleta_por_nome,
+  created_at,
+  UNIQUE (requisicao_id, regra_id)
+```
+
+### 9.4 RN novas desta fase
+
+- **RN-09 — o avaliador roda em `dispararNotificacoesCriacao`**, que é o ponto por onde passam os
+  **dois** caminhos de envio (criação direta e `/enviar` de rascunho) e as **duas** rotas de criação
+  (`/api/almoxarifado/requisicoes` e `/api/requisicoes-material`). Roda **antes** da avaliação de
+  valor. Rascunho não passa por ali, e é certo: rascunho não foi enviado.
+- **RN-10 — auto-aprovação não se aplica com pendência de regra aberta** (7.5). As duas rotas que
+  fazem o `UPDATE … 'Sistema (automático)'` ganham o mesmo `NOT EXISTS` no `WHERE`; a requisição
+  fica `PENDENTE`, e a resposta diz `status: 'PENDENTE'` — não mente `APROVADO`.
+- **RN-11 — o gate vale nas duas lanes:** `/aprovar` e `/aprovar-valor` recusam enquanto houver
+  pendência `ABERTA`. Sem a segunda, a liberação por valor (que leva direto a `APROVADO`) contornaria
+  todas as regras.
+- **RN-07, concretizada:** quem assina uma pendência tem de (a) não ser o solicitante; (b) estar no
+  snapshot `aprovadores` da pendência **ou** ser `role = 'admin'` (mesmo critério da liberação por
+  valor); (c) **não ter assinado outra pendência da mesma requisição** — no `WHERE` do claim
+  (`NOT EXISTS`), por ser TOCTOU (8.3). A aprovação normal **não** conta como pendência: quem assina
+  uma regra pode dar o `/aprovar` depois. *(Escolha reversível; ver letra B.)*
+
+### 9.5 Contratos congelados — rotas e literais
+
+Nenhuma ação nova em `ACAO_PERFIS`: o lado do aprovador é por identidade (8.4). A configuração das
+regras usa o gate de configuração do módulo (`denyUnlessAlmoxAdmin`), como `/configuracoes`.
+
+| Rota | Sucesso | Recusas (código — literal) |
+|---|---|---|
+| `GET /api/almoxarifado/regras-aprovacao` | 200 `[regra]` com `aprovadores` como array de ids e `pendencias_abertas` (contagem) | 403 — `Acesso restrito — administrador do Almoxarifado ou Super Administrador` |
+| `POST /api/almoxarifado/regras-aprovacao` | 201 `regra` | 400 — `Regra precisa de um nome` · 400 — `Regra precisa de pelo menos um critério` · 400 — `Regra precisa de pelo menos um aprovador` · 400 — `Aprovador inexistente ou inativo: <ids>` · 400 — `Tipo de requisição inválido: <valor>` · 400 — `<campo> deve ser um número maior que zero` (valor_minimo, quantidade_minima) · 403 — a do gate |
+| `PUT /api/almoxarifado/regras-aprovacao/:id` | 200 `{ regra, pendencias_obsoletadas }` | as mesmas do POST · 404 — `Regra não encontrada` |
+| `GET /api/almoxarifado/requisicoes/:id/aprovacoes-regra` | 200 `[pendencia]` | 404 — `Requisição não encontrada` |
+| `GET /api/almoxarifado/aprovacoes-regra/pendentes` | 200 `[pendencia + numero, solicitante_nome, valor_total, pode_assinar]` — só `ABERTA` de requisição em `PENDENTE`/`AGUARDANDO_APROVACAO_VALOR` | — |
+| `PUT /api/almoxarifado/requisicoes/:id/aprovacoes-regra/:pid/aprovar` | 200 `{ success: true, pendencias_abertas }` | 404 — `Aprovação de regra não encontrada` · 403 — `Solicitante não pode aprovar a própria requisição` · 403 — `Você não está entre os aprovadores desta regra` · 403 — `Você já assinou outra aprovação de regra desta requisição` · 400 — `Esta aprovação de regra não está mais aberta` · 400 — `Requisição não está aguardando aprovação` |
+| `PUT …/aprovar` e `PUT …/aprovar-valor` (existentes) | inalterado | **nova:** 400 — `Requisição tem aprovação de regra pendente: <nomes separados por vírgula>` |
+
+**Ordem das checagens do claim** (a mensagem certa para o caso certo): 404 → requisição não
+aguardando → pendência não aberta → solicitante → fora da lista → já assinou outra. A pré-checagem
+dá a mensagem; o `WHERE` do `UPDATE` dá a garantia, e se ele pegar `changes = 0` a rota relê e
+devolve a mensagem da condição que falhou.
+
+### 9.6 O que continua fora
+
+O lembrete **por pendência** (T5) e as telas (T6/T7) consomem estes contratos e não os mudam. Se uma
+delas precisar de campo novo, é contrato novo, registrado no plano — não edição silenciosa desta
+tabela.

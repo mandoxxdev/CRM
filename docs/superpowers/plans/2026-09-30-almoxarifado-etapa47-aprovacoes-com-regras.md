@@ -181,6 +181,94 @@ O **bypass da máquina de estados** em `verificarBloqueioLiberacao`: ele grava
 É **anterior** a esta etapa, não é o que ela veio resolver, e consertá-lo aqui abriria escopo de
 máquina de estados. **Vai para a letra C** com o cenário medido.
 
+## ✅ T1 — feita (2026-09-30, `4f53292`)
+
+**O que mudou** (`requisitionReminderService.js` + uma linha de export em
+`requisitionValueApprovalService.js`):
+
+1. `buscarRequisicoesElegiveis` cobre `PENDENTE` **ou** `AGUARDANDO_APROVACAO_VALOR` **com
+   `data_aprovacao IS NULL`** (só a procedência de nascimento — 7.3). Maturação e reincidência
+   intocadas.
+2. `resolverDestinatarios` escolhe por status: no status de valor devolve **só**
+   `getEmailsAprovadores` (que agora está **exportada**), sem somar a lista geral. Exportada também
+   `resolverDestinatarios`, que o teste mede por endereço.
+3. `getReminderSettings` carrega `limiteValor`; `buildMensagemLembrete` ganhou um 5º parâmetro
+   **opcional** `settings` — os chamadores de quatro argumentos continuam valendo
+   (`tests/almoxarifado.test.js:589` é um deles, e a suíte dele segue 42/42).
+4. `processarLembretesPendentes` ganhou `try/catch` por requisição: a que lança aparece no
+   resultado com `enviado: false` e `erros`, e o lote segue.
+5. As literais estão na **seção 6 do desenho, reescrita** com o que o código escreve.
+
+**Divergências do previsto:**
+
+- **O `require` foi no topo, não dentro da função**, ao contrário do que o plano mandava. Medido: o
+  ciclo que o plano citava é entre o serviço de **valor** e o de **notificação**; o de valor
+  **não** importa o de lembrete, então não há ciclo aqui. A chamada é pela propriedade do módulo,
+  o que é o que deixa o cenário (8) patchear.
+- **🔴 Defeito ANTERIOR achado pelo cenário (9), e corrigido:** `diasAguardando` fazia
+  `new Date(updated_at)` com a string do SQLite (`YYYY-MM-DD HH:MM:SS`, UTC, **sem `Z`**), que o
+  Node lê como hora **local**. No servidor em UTC-3 o lembrete contava 3h a menos — 50h de espera
+  saíam como *"há 2 dias"*. Valia para a lane `PENDENTE` também, desde que o lembrete existe.
+  Correção com o mesmo padrão de `alertRegistry.maisVelhoQueDias` e `purchaseService`
+  (acrescenta `Z` só quando não há `T`). ⚠️ **O cenário (9) só distingue em máquina fora de UTC** —
+  num servidor em UTC as duas leituras coincidem e ele passaria com o defeito. Esta máquina é
+  UTC-3, e a S7 abaixo ficou vermelha aqui.
+- **Cenário (9) novo**, que o plano pedia e o teste não tinha: o log grava a tentativa com o
+  destinatário certo e `dias_aguardando` contado da criação.
+
+**Controle positivo — 8 sabotagens, 8 vermelhas, nenhuma NO-OP** (conferido com `cmp` antes de
+cada rodada):
+
+| Sabotagem | Ficou vermelho |
+|---|---|
+| S1 elegibilidade só `PENDENTE` | (1) (2) (8) |
+| S2 sem `data_aprovacao IS NULL` | (2) |
+| S3 plateia do status novo = lista geral | (4) (9) |
+| S4 plateia = geral **somada** à de valor | (4) (9) |
+| S5 mensagem sempre da lane normal | (6) |
+| S6 sem `try/catch` por requisição | (8) |
+| S7 `diasAguardando` volta a ler hora local | (9) |
+| S8 `R$` dobrado na linha do valor | (6) |
+
+**Suítes:** `requisicaoLembreteValor` 9/9 · `test:almoxarifado` 42/42 · `test:validation` 4/4 ·
+`test:safealter` 3/3 · `test:sqlite` 5/5 · `test:api` **218/218** (rodada limpa, depois das sabotagens).
+
+**Para a letra C do fechamento:** o bypass da máquina de estados em `verificarBloqueioLiberacao`
+(7.3) e o defeito de fuso de `diasAguardando` (corrigido aqui, mas existiu em produção).
+
+---
+
+## ✅ T2 — feita (2026-09-30, `dc1c3f8`)
+
+**Medido no momento da task** (o ⚠️ do plano): `git grep limite_aprovacao_auto` fora de `docs/` e
+`specs/` devolve **uma** linha — o seed (`schema.js:2348`). Nenhum leitor; a task não mudou de
+natureza.
+
+**O que mudou — três camadas, porque uma só entregava zero:**
+
+1. o seed para de criar a chave (instalação nova não a tem);
+2. `configDiff.CHAVES_APOSENTADAS = ['limite_aprovacao_auto']` — o `GET /configuracoes` pula a
+   linha órfã dos bancos antigos;
+3. o `PUT /configuracoes` a trata como **desconhecida**: `400` com a literal que a rota já tinha,
+   `Configuração desconhecida: limite_aprovacao_auto`. **Divergência do plano:** o plano só falava
+   da listagem. Sem esta camada a chave sumia da listagem e continuava **gravável com 200** — a
+   mesma classe de defeito que a própria rota documenta (chave que se grava e ninguém lê).
+
+**Sem `DELETE`** — a linha de produção fica intacta, e o cenário (3) prova isso **pelo caminho do
+PUT**. ⚠️ **Limite declarado:** um `DELETE` posto no `schema.js` rodaria na inicialização, **antes**
+de o teste inserir a linha de produção, e passaria despercebido. Proteger isso exigiria reinicializar
+o schema sobre um banco já povoado dentro do teste; não fiz, porque a regra está no comentário do seed
+e na constante, e a sabotagem seria alguém escrever um `DELETE` contra o texto que está ao lado dele.
+
+**Letra B do fechamento:** escolhido aposentar (reversível: tirar da constante e voltar a semear);
+descartados o `DELETE` (irreversível) e implementar aprovação automática por quantidade (regra que
+ninguém pediu).
+
+**Controle positivo — 3 sabotagens, 3 vermelhas:** seed volta → (1); GET sem filtro → (2); PUT sem
+filtro → (3).
+
+---
+
 ## Fase 2 — o que o revisor do plano tem de atacar
 
 1. Os contratos cobrem os casos de erro e as **mensagens literais**? (o desenho ainda **não**
@@ -203,6 +291,7 @@ máquina de estados. **Vai para a letra C** com o cenário medido.
 - [x] Fase 1 — desenho e plano (`637d9fa`), **corrigidos pela Fase 2**: ver a seção 7 do desenho
 - [x] Fase 1-b — a resposta da 7.9 está na **seção 8 do desenho**: a pendência é a verdade, o `status` é cache re-derivável, e quem cobra NUNCA lê o `status`. As literais de T3/T4/T5 continuam fora, agora com a razão certa: dependem da escolha da T3 sobre regra desativada
 - [x] Fase 2 — revisão do plano: **11 achados, 3 CRITICAL, 6 refutados** — o plano NAO estava executavel; desenho e plano corrigidos
-- [ ] T1 · [ ] T2 · [ ] T3 · [ ] T4 · [ ] T5 · [ ] T6 · [ ] T7 · [ ] T8 *(oito, e todas tronco — ver a Fase 2)*
+- [x] Fase 1-c — seção 9 do desenho: a assinatura de regra NÃO vira o status (o gate fica no `WHERE` de `/aprovar` e `/aprovar-valor`), 8.5 resolvida como `OBSOLETA`, contratos e literais de T3/T4 congelados. **Em revisão por agente fresco.**
+- [x] T1 (`4f53292`) · [x] T2 (`dc1c3f8`) · [ ] T3 · [ ] T4 · [ ] T5 · [ ] T6 · [ ] T7 · [ ] T8 *(oito, e todas tronco — ver a Fase 2)*
 - [ ] Fase 5 — revisão adversarial
 - [ ] Fase 6 — `fechar-etapa`
