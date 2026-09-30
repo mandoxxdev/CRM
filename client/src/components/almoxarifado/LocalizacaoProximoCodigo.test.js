@@ -159,6 +159,17 @@ test('(d) rota falhando: a tela cai no gerador local e não fica sem proposta', 
   expect(api.post.mock.calls[0][1].somente_novo).toBe(true);
 });
 
+test('(d2) rota caída + 409: o fallback NÃO repropõe o código recusado (sem laço)', async () => {
+  proximoImpl = () => Promise.reject(new Error('Network Error'));
+  await assistenteAteConfirmacao();
+  api.post.mockRejectedValueOnce({ response: { status: 409, data: { error: 'O código SND-02 pertence a uma localização desativada — gere outro código' } } });
+  await clicar(botao(/Confirmar cadastro/));
+  expect(api.post.mock.calls[0][1].codigo).toBe('SND-02');
+  // Fase 5: sem a lista de recusados, o gerador local (que não vê inativas) propunha SND-02 de novo.
+  await clicar(botao(/Confirmar cadastro/));
+  expect(api.post.mock.calls[1][1].codigo).toBe('SND-03');
+});
+
 test('enquanto o código carrega, confirmar fica desabilitado', async () => {
   let resolver;
   await assistenteAteConfirmacao();

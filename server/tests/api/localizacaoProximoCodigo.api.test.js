@@ -96,6 +96,19 @@ const ADMIN = { id: 1, nome: 'Admin', role: 'admin', is_superadmin: 1, email: 'a
     assert.strictEqual(await cod({ setor: 'Mx' }), 'MX-02');
   });
 
+  await test('RN-01 excluir_id na FILHA: mover a P-05 para o mesmo pai propoe P-03, nao P-06', async () => {
+    const P = await loc('EXF-01', { setor: 'Exf' });
+    await loc('EXF-02', { parent: P, setor: 'Exf' }); const F5 = await loc('EXF-05', { parent: P, setor: 'Exf' });
+    assert.strictEqual(await cod({ parent_id: P, excluir_id: F5 }), 'EXF-03');
+    assert.strictEqual(await cod({ parent_id: P }), 'EXF-06');
+  });
+
+  await test('parametro repetido (?setor=a&setor=b) nao vira 500: vale o primeiro', async () => {
+    const r = await request(app).get('/api/almoxarifado/localizacoes/proximo-codigo?setor=Q&setor=Zeta');
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body)); // 'Q' e nao 'QZE' (String do array juntaria os dois).
+    assert.strictEqual(r.body.codigo, 'Q-01');
+  });
+
   await test('RN-05 POST somente_novo com codigo de INATIVA: 409 e nada reativado; sem o campo, reativa (Etapa 19)', async () => {
     const I = await loc('RN5-01', { setor: 'R5', ativo: 0 });
     const r = await request(app).post('/api/almoxarifado/localizacoes').send({ codigo: 'RN5-01', setor: 'R5', somente_novo: true });

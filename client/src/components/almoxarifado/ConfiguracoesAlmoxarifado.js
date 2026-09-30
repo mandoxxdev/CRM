@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
@@ -112,6 +112,13 @@ const generateNextCodigo = (localizacoes, { setor, parent_id, tipo }, setoresCon
   const maxNum = nums.length ? Math.max(...nums) : 0;
   return `${prefix}-${String(maxNum + 1).padStart(2, '0')}`;
 };
+
+// Etapa 55 (Fase 5): os códigos recusados entram no fallback como irmãs fictícias — o gerador local
+// passa a propor o seguinte a eles.
+const comRecusados = (lista, recusados, setor, parentId) => [
+  ...lista,
+  ...[...recusados].map((codigo, i) => ({ id: -1 - i, codigo, setor, parent_id: parentId })),
+];
 
 const parseSubgrupo = (subgrupo) => {
   const m = String(subgrupo || '').match(/^([A-Za-z]+)(\d+)$/);
@@ -1419,6 +1426,9 @@ const TabLocalizacoes = () => {
   const [moverCodigo, setMoverCodigo] = useState('');
   const [moverCodigoLoading, setMoverCodigoLoading] = useState(false);
   const [moverCodigoTentativa, setMoverCodigoTentativa] = useState(0);
+  // Fase 5: códigos que o servidor RECUSOU nesta sessão. Só o fallback local precisa disto — ele não
+  // vê as inativas, e sem a lista propunha de novo o mesmo código recusado (409 em laço, sem saída).
+  const codigosRecusados = useRef(new Set());
 
   useEffect(() => { loadLocs(); loadTipos(); loadSetores(); loadAlmoxarifados(); }, []);
 
@@ -1438,12 +1448,12 @@ const TabLocalizacoes = () => {
       .then(r => {
         if (cancelado) return;
         const codigo = r?.data?.codigo;
-        setWizardCodigo(codigo || generateNextCodigo(localizacoes, { setor: wizard.setor, parent_id: wizardParentParam }, setoresConfig));
+        setWizardCodigo(codigo || generateNextCodigo(comRecusados(localizacoes, codigosRecusados.current, wizard.setor, wizardParentParam), { setor: wizard.setor, parent_id: wizardParentParam }, setoresConfig));
       })
       .catch(() => {
         if (cancelado) return;
         // RN-04: a tela nunca fica sem proposta — cai no gerador local (o de antes da Etapa 55).
-        setWizardCodigo(generateNextCodigo(localizacoes, { setor: wizard.setor, parent_id: wizardParentParam }, setoresConfig));
+        setWizardCodigo(generateNextCodigo(comRecusados(localizacoes, codigosRecusados.current, wizard.setor, wizardParentParam), { setor: wizard.setor, parent_id: wizardParentParam }, setoresConfig));
       })
       .finally(() => { if (!cancelado) setWizardCodigoLoading(false); });
     return () => { cancelado = true; };
@@ -1461,7 +1471,7 @@ const TabLocalizacoes = () => {
     const params = { setor: moverData.setor, excluir_id: moverLoc.id };
     if (moverParentParam) params.parent_id = moverParentParam;
     const fallback = () => generateNextCodigo(
-      localizacoes.filter(l => l.id !== moverLoc.id),
+      comRecusados(localizacoes.filter(l => l.id !== moverLoc.id), codigosRecusados.current, moverData.setor, moverParentParam),
       { setor: moverData.setor, parent_id: moverParentParam, tipo: moverLoc.tipo },
       setoresConfig,
     );
@@ -1664,7 +1674,10 @@ const TabLocalizacoes = () => {
       setWizardError(err.response?.data?.error || 'Erro ao cadastrar localização');
       const status = err.response?.status;
       // Código recusado (409 inativa / 400 já existe): busca outro — a prévia atualiza.
-      if (status === 409 || status === 400) setWizardCodigoTentativa(n => n + 1);
+      if (status === 409 || status === 400) {
+        if (status === 409 || /já existe/i.test(err.response?.data?.error || '')) codigosRecusados.current.add(wizardCodigo);
+        setWizardCodigoTentativa(n => n + 1);
+      }
     } finally { setSaving(false); }
   };
 
@@ -1770,7 +1783,10 @@ const TabLocalizacoes = () => {
       setMoverError(err.response?.data?.error || 'Erro ao mover');
       const status = err.response?.status;
       // Código recusado pelo servidor (ex.: "Código já existe"): busca outro — a prévia atualiza.
-      if (status === 409 || status === 400) setMoverCodigoTentativa(n => n + 1);
+      if (status === 409 || status === 400) {
+        if (/já existe/i.test(err.response?.data?.error || '')) codigosRecusados.current.add(moverCodigo);
+        setMoverCodigoTentativa(n => n + 1);
+      }
     }
     finally { setSaving(false); }
   };

@@ -37,7 +37,9 @@ async function prefixoDoSetor(db, setor) {
   return (limpo.slice(0, 3) || 'LOC').toUpperCase();
 }
 
-async function proximoCodigoLocalizacao(db, { setor, parent_id: parentId, excluir_id: excluirId } = {}) {
+async function proximoCodigoLocalizacao(db, { setor: setorBruto, parent_id: parentId, excluir_id: excluirId } = {}) {
+  // Fase 5: `?setor=a&setor=b` chega como ARRAY e virava bind invalido (500). Vale o primeiro.
+  const setor = Array.isArray(setorBruto) ? setorBruto[0] : setorBruto;
   const excluir = excluirId ? parseInt(excluirId, 10) : null;
   const pai = parentId ? parseInt(parentId, 10) : null;
   let prefixo; let base;
