@@ -322,13 +322,16 @@ const MapaLocalizacoesAlmoxarifado = () => {
     const locId = searchParams.get('loc');
     if (!locId || !carregou) return null;
     const loc = localizacoes.find(l => String(l.id) === locId);
-    if (!loc) return { tipo: 'nao-encontrada', texto: 'Localização não encontrada ou inativa' };
+    // Fase 5: o aviso é da localização DA ETIQUETA — clicar noutra célula (ou fechar a seleção) não
+    // mexe na URL, e o aviso ficava ao lado de outra localização aberta.
+    if (!loc) return selecionada ? null : { tipo: 'nao-encontrada', texto: 'Localização não encontrada ou inativa' };
+    if (selecionada?.id !== loc.id) return null;
     const codigoEtiqueta = searchParams.get('codigo');
     if (codigoEtiqueta && codigoEtiqueta !== loc.codigo) {
       return { tipo: 'desatualizada', texto: `Etiqueta desatualizada: ${codigoEtiqueta} → ${loc.codigo}. Reimprima.` };
     }
     return null;
-  }, [localizacoes, searchParams, carregou]);
+  }, [localizacoes, searchParams, carregou, selecionada]);
 
   const setores = useMemo(() => {
     const s = new Set(localizacoes.map(l => l.setor).filter(Boolean));

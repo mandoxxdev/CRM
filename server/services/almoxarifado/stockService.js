@@ -1082,7 +1082,9 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     const aqui = await dbGet(db, `SELECT COALESCE(SUM(quantidade), 0) as q FROM estoque_saldo_almoxarifado
       WHERE material_id = ? AND localizacao_id = ? AND lote_id IS ?`, [material_id, localizacao_origem_id, loteIdFinal || null]);
     const saldoAqui = Number(aqui.q) || 0;
-    if (saldoAqui + EPS < parseFloat(quantidade)) {
+    // A TRANSFERENCIA nao drena outros enderecos: a guarda dela ("Saldo insuficiente na localizacao
+    // de origem") ja diz a coisa certa — esta mensagem ali enganaria (Fase 5).
+    if (tipo !== 'TRANSFERENCIA' && saldoAqui + EPS < parseFloat(quantidade)) {
       throw Object.assign(new Error(
         `O saldo em ${confirmadoOrigem} (${Math.round(saldoAqui * 1e6) / 1e6}) não cobre a quantidade (${parseFloat(quantidade)}) — a saída tiraria de outros endereços`,
       ), { status: 400 });
@@ -1726,6 +1728,21 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
         await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
           [quantidade, saldo.id]);
         saldoLinhasSaidaParaReverter = [{ id: saldo.id, quantidade }];
+      }
+      // Etapa 56 (Fase 5, reproduzido por sonda): a checagem de saldo da origem CONFIRMADA roda antes
+      // do claim, com varios await no meio — duas saidas de 10 confirmadas em A (A:10, B:50) passavam
+      // as duas, e a segunda drenava B gravando codigo_lido_origem = A. Confere DEPOIS do claim que
+      // tudo saiu da origem; se nao, o catch amplo abaixo compensa as linhas e o fisico.
+      if (confirmadoOrigem && saldoLinhasSaidaParaReverter.length) {
+        const ids = saldoLinhasSaidaParaReverter.map((l) => l.id);
+        const fora = await dbGet(db, `SELECT COUNT(*) as n FROM estoque_saldo_almoxarifado
+          WHERE id IN (${ids.map(() => '?').join(',')}) AND (localizacao_id IS NULL OR localizacao_id <> ?)`,
+        [...ids, localizacao_origem_id]);
+        if (Number(fora.n) > 0) {
+          throw Object.assign(new Error(
+            `O saldo em ${confirmadoOrigem} mudou durante a saída e não cobre mais a quantidade — confira e tente de novo`,
+          ), { status: 400 });
+        }
       }
 
       // Serie (Etapa 6b, Task 4): reivindica as series ESPECIFICAS depois que o debito fisico ja

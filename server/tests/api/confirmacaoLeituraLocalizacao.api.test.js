@@ -119,6 +119,41 @@ let seq = 0;
     assert.strictEqual(l.codigo_lido_destino, null);
   });
 
+  await test('Fase 5: duas saidas CONCORRENTES confirmadas em A (A:10, B:50) — uma e recusada e B fica intacto', async () => {
+    const A = await loc('RA'); const B = await loc('RB'); const m = await material();
+    ok(await mov({ material_id: m, tipo: 'ENTRADA', quantidade: 10, localizacao_destino_id: A.id }));
+    ok(await mov({ material_id: m, tipo: 'ENTRADA', quantidade: 50, localizacao_destino_id: B.id }));
+    const s = { material_id: m, tipo: 'SAIDA', quantidade: 10, localizacao_origem_id: A.id, codigo_lido_origem: A.codigo };
+    const rs = await Promise.all([mov(s), mov(s)]);
+    const st = rs.map((r) => r.status).sort();
+    assert.deepStrictEqual(st, [201, 400], JSON.stringify(rs.map((r) => r.body)));
+    const recusada = rs.find((r) => r.status === 400);
+    assert.strictEqual(recusada.body.error, `O saldo em ${A.codigo} mudou durante a saída e não cobre mais a quantidade — confira e tente de novo`);
+    const emB = await dbGet(db, 'SELECT COALESCE(SUM(quantidade),0) q FROM estoque_saldo_almoxarifado WHERE material_id = ? AND localizacao_id = ?', [m, B.id]);
+    assert.strictEqual(Number(emB.q), 50);
+    assert.strictEqual((await dbGet(db, 'SELECT quantidade_atual q FROM materiais_almoxarifado WHERE id = ?', [m])).q, 50);
+  });
+
+  await test('Fase 5: saida COM lote confirmada — conta so o saldo DAQUELE lote no endereco', async () => {
+    const A = await loc('LA'); const m = await material();
+    ok(await mov({ material_id: m, tipo: 'ENTRADA', quantidade: 2, localizacao_destino_id: A.id, lote: `L-${seq}` }));
+    ok(await mov({ material_id: m, tipo: 'ENTRADA', quantidade: 50, localizacao_destino_id: A.id }));
+    const lote = `L-${seq}`;
+    recusa(await mov({ material_id: m, tipo: 'SAIDA', quantidade: 10, localizacao_origem_id: A.id, lote, codigo_lido_origem: A.codigo }),
+      `O saldo em ${A.codigo} (2) não cobre a quantidade (10) — a saída tiraria de outros endereços`);
+    ok(await mov({ material_id: m, tipo: 'SAIDA', quantidade: 2, localizacao_origem_id: A.id, lote, codigo_lido_origem: A.codigo }));
+  });
+
+  await test('Fase 5: TRANSFERENCIA com origem lida e saldo curto — a mensagem e a da transferencia, nao "outros enderecos"', async () => {
+    const A = await loc('XA'); const B = await loc('XB'); const m = await material();
+    ok(await mov({ material_id: m, tipo: 'ENTRADA', quantidade: 3, localizacao_destino_id: A.id }));
+    const r = await request(app).post('/api/almoxarifado/transferencias').send({
+      material_id: m, quantidade: 5, localizacao_origem_id: A.id, localizacao_destino_id: B.id, motivo: 'e56', codigo_lido_origem: A.codigo,
+    });
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.ok(!/outros endereços/.test(r.body.error), r.body.error);
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed\n`);
   process.exit(failed > 0 ? 1 : 0);

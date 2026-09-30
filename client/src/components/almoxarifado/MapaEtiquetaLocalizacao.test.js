@@ -113,3 +113,13 @@ test('carga do mapa falhou: não afirma "não encontrada" (o erro vai no toast)'
   await renderMapa('?loc=7&codigo=COR-A-03');
   expect(aviso('aviso-loc-nao-encontrada')).toBeNull();
 });
+
+test('Fase 5: fechar a seleção tira o aviso da etiqueta (ele é da localização DA etiqueta, não da URL)', async () => {
+  await renderMapa('?loc=7&codigo=COR-A-01');
+  expect(aviso('aviso-etiqueta-desatualizada')).toBeTruthy();
+  const fechar = [...container.querySelectorAll('button')].find(b => b.textContent.trim() === 'Fechar');
+  expect(fechar).toBeTruthy();
+  await act(async () => { fechar.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+  expect(aviso('aviso-etiqueta-desatualizada')).toBeNull();
+  expect(aviso('aviso-loc-nao-encontrada')).toBeNull();
+});
