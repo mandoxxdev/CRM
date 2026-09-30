@@ -21,6 +21,7 @@ const requisitionCreateService = require('../services/almoxarifado/requisitionCr
 const requisitionStateMachine = require('../services/almoxarifado/requisitionStateMachine');
 const valueApprovalService = require('../services/almoxarifado/requisitionValueApprovalService');
 const approvalRulesService = require('../services/almoxarifado/approvalRulesService');
+const { TIPOS_URGENCIA } = require('../services/almoxarifado/schema');
 const stockService = require('../services/almoxarifado/stockService');
 const materialService = require('../services/almoxarifado/materialService');
 const {
@@ -2979,7 +2980,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     if (urgencia) { sql += ` AND r.urgencia = ?`; params.push(urgencia); }
     if (departamento) { sql += ` AND r.departamento LIKE ?`; params.push(`%${departamento}%`); }
 
-    sql += ` ORDER BY CASE r.urgencia WHEN 'CRITICO' THEN 1 WHEN 'URGENTE' THEN 2 ELSE 3 END, r.created_at DESC`;
+    sql += ` ORDER BY CASE UPPER(r.urgencia) WHEN 'CRITICO' THEN 1 WHEN 'URGENTE' THEN 2 ELSE 3 END, r.created_at DESC`;
 
     db.all(sql, params, (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
@@ -3149,13 +3150,21 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         return res.status(400).json({ error: 'Apenas rascunhos podem ser enviados' });
       }
 
+      // Etapa 48 (Fase 5, IMPORTANT-1): o envio é quando a urgência passa a valer (regras,
+      // auto-aprovação), e o rascunho pode ter sido gravado antes da lista fechar. Normaliza a caixa
+      // e recusa o que continuar fora da lista, com a mesma literal da criação.
+      const urgenciaEnvio = String(reqRow.urgencia || 'NORMAL').toUpperCase();
+      if (!TIPOS_URGENCIA.includes(urgenciaEnvio)) {
+        return res.status(400).json({ error: `Urgência inválida: ${reqRow.urgencia}` });
+      }
+
       await dbRun(db,
         // Etapa 47 (Fase 5, regras, I2): `regras_avaliadas_em = NULL` no mesmo UPDATE - o gate fica
         // FECHADO desde o instante em que a requisicao vira PENDENTE ate o avaliador gravar o carimbo.
         // Sem isto, um rascunho que ja tivesse carimbo (os da migracao) enviado com o avaliador falhando
         // deixava o /aprovar passar por vazio.
-        `UPDATE requisicoes_almoxarifado SET status='PENDENTE', regras_avaliadas_em=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-        [req.params.id]);
+        `UPDATE requisicoes_almoxarifado SET status='PENDENTE', urgencia=?, regras_avaliadas_em=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+        [urgenciaEnvio, req.params.id]);
 
       const avaliacaoValor = await requisitionCreateService.dispararNotificacoesCriacao(
         db, req.params.id, req.user.email,
@@ -3808,7 +3817,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   app.get('/api/almoxarifado/dashboard/requisicoes',(req, res) => {
     db.get(`SELECT COUNT(*) as total FROM requisicoes_almoxarifado WHERE status = 'PENDENTE'`, [], (err, pendente) => {
       if (err) return res.status(500).json({ error: err.message });
-      db.get(`SELECT COUNT(*) as total FROM requisicoes_almoxarifado WHERE status = 'URGENTE' OR urgencia IN ('URGENTE','CRITICO') AND status NOT IN ('ENTREGUE','CANCELADO','REJEITADO')`, [], (err2, urgentes) => {
+      db.get(`SELECT COUNT(*) as total FROM requisicoes_almoxarifado WHERE status = 'URGENTE' OR UPPER(urgencia) IN ('URGENTE','CRITICO') AND status NOT IN ('ENTREGUE','CANCELADO','REJEITADO')`, [], (err2, urgentes) => {
         if (err2) return res.status(500).json({ error: err2.message });
         db.get(`SELECT COUNT(*) as total FROM requisicoes_almoxarifado`, [], (err3, emitidas) => {
           if (err3) return res.status(500).json({ error: err3.message });
@@ -3818,7 +3827,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
                     FROM requisicoes_almoxarifado r
                     WHERE r.status IN ('PENDENTE','APROVADO','EM_SEPARACAO','PARCIALMENTE_ATENDIDA',
                                         'AGUARDANDO_ESTOQUE','AGUARDANDO_COMPRA','PRONTA_PARA_RETIRADA','AGUARDANDO_APROVACAO_VALOR')
-                    ORDER BY CASE r.urgencia WHEN 'CRITICO' THEN 1 WHEN 'URGENTE' THEN 2 ELSE 3 END, r.created_at ASC
+                    ORDER BY CASE UPPER(r.urgencia) WHEN 'CRITICO' THEN 1 WHEN 'URGENTE' THEN 2 ELSE 3 END, r.created_at ASC
                     LIMIT 5`, [], (err5, abertas) => {
               if (err5) return res.status(500).json({ error: err5.message });
               res.json({

@@ -210,3 +210,22 @@ test('Etapa 48: urgencia e material de cliente — no payload, e descritos na li
   expect(body.urgencia).toBe('CRITICO');
   expect(body.material_cliente).toBe(true);
 });
+
+test('Etapa 48 (Fase 5, E/F): desativar e editar PRESERVAM urgencia e material de cliente', async () => {
+  // `paraPayload` manda `urgencia: null` quando o form não a tem — e null explícito APAGA o critério
+  // no servidor. É o defeito da Etapa 47 com projeto_id, nos dois gestos que remontam o payload.
+  const regra = { ...REGRA_SEM_PENDENCIA, id: 9, nome: 'Urgente de cliente', material_critico: null,
+    centro_custo_id: null, urgencia: 'URGENTE', material_cliente: 1 };
+  mockGets([regra]);
+  api.put.mockResolvedValue({ data: { regra: {}, pendencias_obsoletadas: 0 } });
+  await renderizar();
+  await clicar(botao('Desativar'));
+  expect(api.put.mock.calls[0][1].urgencia).toBe('URGENTE');
+  expect(api.put.mock.calls[0][1].material_cliente).toBe(true);
+
+  await clicar(botao('Editar'));
+  await clicar(botao('Salvar regra'));
+  const corpoEdicao = api.put.mock.calls[api.put.mock.calls.length - 1][1];
+  expect(corpoEdicao.urgencia).toBe('URGENTE');
+  expect(corpoEdicao.material_cliente).toBe(true);
+});

@@ -978,6 +978,23 @@ describe('Etapa 48: fila da aprovação simples', () => {
     expect(painel()).toBeNull();
   });
 
+  test('a fila RECARREGA quando a lista recarrega: a requisicao aprovada sai do painel (Fase 5, MINOR-H)', async () => {
+    linhasPendentes = [LINHA({ id: 70, numero: 'REQ-070' })];
+    detalheDoBanco = { ...baseRequisicao('PENDENTE'), solicitante_id: 1 };
+    await renderizarSemDetalhe();
+    expect(painel()).not.toBeNull();
+    linhasPendentes = [];
+    // Qualquer gesto que recarrega a lista (aqui o filtro de status) tem de recarregar a fila junto.
+    const sel = [...container.querySelectorAll('select')].find((s) => [...s.options].some((o) => o.value === 'PENDENTE'));
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+      setter.call(sel, 'PENDENTE');
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    expect(painel()).toBeNull();
+  });
+
   test('clicar abre a requisicao certa', async () => {
     linhasPendentes = [LINHA({ id: 55, numero: 'REQ-055' })];
     detalheDoBanco = { ...baseRequisicao('PENDENTE'), solicitante_id: 1 };

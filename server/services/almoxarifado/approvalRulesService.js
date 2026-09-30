@@ -191,7 +191,13 @@ async function criarRegra(db, payload, user) {
 async function atualizarRegra(db, id, payload, user) {
   const atual = await dbGet(db, 'SELECT * FROM regras_aprovacao WHERE id = ?', [id]);
   if (!atual) throw erro(404, 'Regra não encontrada');
-  const r = await validarRegra(db, payload, { idsJaNaRegra: parseIds(atual.aprovadores) });
+  // Fase 5 (E48, MINOR-1): campo AUSENTE mantém o valor atual. O PUT substitui a regra inteira, e um
+  // cliente que não conhece um critério (bundle antigo em cache no deploy, script) o apagava em
+  // silêncio — a regra "URGENTE e valor ≥ 5" virava "valor ≥ 5". `null`/'' explícitos continuam
+  // limpando o critério.
+  const atualFormatada = formatarRegra(atual);
+  const mesclado = { ...atualFormatada, ...Object.fromEntries(Object.entries(payload || {}).filter(([, v]) => v !== undefined)) };
+  const r = await validarRegra(db, mesclado, { idsJaNaRegra: parseIds(atual.aprovadores) });
   await dbRun(db, `UPDATE regras_aprovacao SET nome=?, ativo=?, ordem=?, tipo_requisicao=?,
       material_critico=?, material_cliente=?, urgencia=?, valor_minimo=?, quantidade_minima=?,
       centro_custo_id=?, projeto_id=?, aprovadores=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
@@ -218,7 +224,9 @@ function regraCasa(regra, req, itens, valorTotal) {
   if (regra.tipo_requisicao && regra.tipo_requisicao !== (req.tipo_requisicao || 'CONSUMO')) return false;
   if (regra.material_critico && !itens.some((i) => Number(i.material_critico) === 1)) return false;
   if (regra.material_cliente && !itens.some((i) => Number(i.material_cliente) === 1)) return false;
-  if (regra.urgencia && regra.urgencia !== (req.urgencia || 'NORMAL')) return false;
+  // Fase 5 (E48, IMPORTANT-1): sem caixa - um rascunho legado com 'critico' minusculo escapava da regra
+  // "Critico" (a mesma causa que a Fase 2 corrigiu so na auto-aprovacao).
+  if (regra.urgencia && regra.urgencia !== String(req.urgencia || 'NORMAL').toUpperCase()) return false;
   // `>=` — régua própria das regras; a liberação por valor usa `>` (9.7/M3).
   if (regra.valor_minimo != null && !(valorTotal >= Number(regra.valor_minimo))) return false;
   if (regra.quantidade_minima != null

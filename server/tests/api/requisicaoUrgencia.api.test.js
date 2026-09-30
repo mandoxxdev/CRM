@@ -98,6 +98,59 @@ const SOLIC = { id: 10, nome: 'Solicitante', email: 'solic@test.com' };
     }
   });
 
+  await test('(3b) CRIACAO DIRETA com CRITICO e auto-aprovacao ligada fica PENDENTE; NORMAL aprova (Fase 5, MINOR-D)', async () => {
+    await dbRun(db, `INSERT INTO configuracoes_almoxarifado (chave, valor) VALUES ('aprovacao_automatica','1')
+      ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor`);
+    try {
+      const crit = await como(SOLIC).post('/api/almoxarifado/requisicoes')
+        .send({ itens: ITENS, urgencia: 'CRITICO', justificativa_urgencia: 'risco' });
+      assert.strictEqual(crit.body.status, 'PENDENTE', `CRITICO foi auto-aprovada na criacao: ${JSON.stringify(crit.body)}`);
+      const normal = await como(SOLIC).post('/api/almoxarifado/requisicoes').send({ itens: ITENS, urgencia: 'NORMAL' });
+      assert.strictEqual(normal.body.status, 'APROVADO', JSON.stringify(normal.body));
+    } finally {
+      await dbRun(db, "UPDATE configuracoes_almoxarifado SET valor = '0' WHERE chave = 'aprovacao_automatica'");
+    }
+  });
+
+  // ── Fase 5 (IMPORTANT-1): o ENVIO do rascunho legado também passa pela lista ──────────────
+  const rascunhoLegado = async (urg) => {
+    const r = await dbRun(db, `INSERT INTO requisicoes_almoxarifado (numero, solicitante_id, solicitante_nome, status, urgencia)
+      VALUES (?, ?, 'Solic', 'RASCUNHO', ?)`, [`REQ-E48L-${urg}-${Date.now()}`, SOLIC.id, urg]);
+    await dbRun(db, 'INSERT INTO itens_requisicao_almoxarifado (requisicao_id, material_id, quantidade_solicitada) VALUES (?,?,1)',
+      [r.lastID, mat.body.id]);
+    return r.lastID;
+  };
+
+  await test('(4) rascunho legado FORA da lista: o /enviar recusa com a literal e o rascunho fica rascunho', async () => {
+    const id = await rascunhoLegado('ALTA');
+    const env = await como(SOLIC).post(`/api/almoxarifado/requisicoes/${id}/enviar`);
+    assert.strictEqual(env.status, 400, JSON.stringify(env.body));
+    assert.strictEqual(env.body.error, 'Urgência inválida: ALTA');
+    assert.strictEqual((await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [id])).status, 'RASCUNHO');
+  });
+
+  await test('(5) rascunho legado "critico" minusculo: o envio NORMALIZA e a regra "Critico" o pega', async () => {
+    await dbRun(db, 'CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY, nome TEXT, email TEXT, ativo INTEGER DEFAULT 1)');
+    await dbRun(db, "INSERT OR REPLACE INTO usuarios (id, nome, email, ativo) VALUES (11, 'Ana', 'ana@test.com', 1)");
+    const regra = await como(ADMIN).post('/api/almoxarifado/regras-aprovacao')
+      .send({ nome: 'Critico', urgencia: 'CRITICO', aprovadores: [11] });
+    assert.strictEqual(regra.status, 201, JSON.stringify(regra.body));
+    try {
+      const id = await rascunhoLegado('critico');
+      const env = await como(SOLIC).post(`/api/almoxarifado/requisicoes/${id}/enviar`);
+      assert.strictEqual(env.status, 200, JSON.stringify(env.body));
+      const row = await dbGet(db, 'SELECT urgencia FROM requisicoes_almoxarifado WHERE id = ?', [id]);
+      assert.strictEqual(row.urgencia, 'CRITICO', 'o envio nao normalizou a urgencia legada');
+      const pend = await dbGet(db, 'SELECT regra_nome FROM requisicao_aprovacoes_regra WHERE requisicao_id = ?', [id]);
+      assert.ok(pend, 'a urgencia legada escapou da regra "Critico"');
+      setUser({ id: 13, nome: 'Caio', perfil_almoxarifado: 'GESTOR' });
+      const ap = await request(app).put(`/api/almoxarifado/requisicoes/${id}/aprovar`);
+      assert.strictEqual(ap.status, 400, `aprovada por fora da regra: ${JSON.stringify(ap.body)}`);
+    } finally {
+      await como(ADMIN).put(`/api/almoxarifado/regras-aprovacao/${regra.body.id}`).send({ ativo: false });
+    }
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed\n`);
   process.exit(failed > 0 ? 1 : 0);

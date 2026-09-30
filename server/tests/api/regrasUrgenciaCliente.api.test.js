@@ -62,6 +62,10 @@ const ANA = { id: 11, nome: 'Ana', email: 'ana@test.com', perfil_almoxarifado: '
     const r1 = await criar({ nome: 'x', urgencia: 'ALTA' });
     assert.strictEqual(r1.status, 400);
     assert.strictEqual(r1.body.error, 'Urgência inválida: ALTA');
+    // Fase 5 (MINOR-C): a lista e EXATA tambem no cadastro - 'urgente' minusculo criaria regra morta.
+    const rMin = await criar({ nome: 'x', urgencia: 'urgente' });
+    assert.strictEqual(rMin.status, 400);
+    assert.strictEqual(rMin.body.error, 'Urgência inválida: urgente');
     const r2 = await criar({ nome: 'x', material_cliente: 0 });
     assert.strictEqual(r2.status, 400);
     assert.strictEqual(r2.body.error, 'Regra precisa de pelo menos um critério');
@@ -95,6 +99,47 @@ const ANA = { id: 11, nome: 'Ana', email: 'ana@test.com', perfil_almoxarifado: '
     assert.ok(!soCliente.includes('Urgente de cliente'), 'casou sem a urgencia');
     const soUrgente = await enviar([{ material_id: matNosso, quantidade: 1 }], { urgencia: 'URGENTE' });
     assert.ok(!soUrgente.includes('Urgente de cliente'), 'casou sem material de cliente');
+  });
+
+  await test('(5) PUT sem um campo PRESERVA o criterio; null explicito limpa (Fase 5, MINOR-1)', async () => {
+    const r = await criar({ nome: 'Urgente e caro', urgencia: 'URGENTE', valor_minimo: 5 });
+    assert.strictEqual(r.status, 201);
+    // Cliente que não conhece `urgencia` (bundle antigo, script): só manda o valor.
+    const put = await como(ADMIN).put(`/api/almoxarifado/regras-aprovacao/${r.body.id}`)
+      .send({ nome: 'Urgente e caro', valor_minimo: 7, aprovadores: [ANA.id] });
+    assert.strictEqual(put.status, 200, JSON.stringify(put.body));
+    assert.strictEqual(put.body.regra.urgencia, 'URGENTE', 'o PUT sem o campo apagou o criterio de urgencia');
+    assert.strictEqual(put.body.regra.valor_minimo, 7);
+    const limpa = await como(ADMIN).put(`/api/almoxarifado/regras-aprovacao/${r.body.id}`).send({ urgencia: null });
+    assert.strictEqual(limpa.status, 200, JSON.stringify(limpa.body));
+    assert.strictEqual(limpa.body.regra.urgencia, null, 'null explicito nao limpou');
+    assert.strictEqual(limpa.body.regra.valor_minimo, 7);
+  });
+
+  await test('(6) PUT so com o NOME: os dois criterios novos continuam gravados — relidos do banco (Fase 5, IMPORTANT-A)', async () => {
+    const r = await criar({ nome: 'So urgente de cliente', urgencia: 'URGENTE', material_cliente: true });
+    assert.strictEqual(r.status, 201);
+    const put = await como(ADMIN).put(`/api/almoxarifado/regras-aprovacao/${r.body.id}`).send({ nome: 'Renomeada' });
+    assert.strictEqual(put.status, 200, JSON.stringify(put.body));
+    const { dbGet } = require('../../services/almoxarifado/db');
+    const linha = await dbGet(db, 'SELECT nome, urgencia, material_cliente, ativo FROM regras_aprovacao WHERE id = ?', [r.body.id]);
+    assert.deepStrictEqual({ ...linha }, { nome: 'Renomeada', urgencia: 'URGENTE', material_cliente: 1, ativo: 1 },
+      'editar o nome apagou criterio — a regra passaria a valer para toda requisicao');
+    await como(ADMIN).put(`/api/almoxarifado/regras-aprovacao/${r.body.id}`).send({ ativo: false });
+  });
+
+  await test('(7) urgencia NULA de requisicao legada casa a regra "Normal" (o padrao NORMAL, Fase 5 MINOR-B)', async () => {
+    const r = await criar({ nome: 'N', urgencia: 'NORMAL' });
+    assert.strictEqual(r.status, 201);
+    const ins = await dbRun(db, `INSERT INTO requisicoes_almoxarifado (numero, solicitante_id, solicitante_nome, status, urgencia)
+      VALUES (?, ?, 'Solic', 'RASCUNHO', NULL)`, [`REQ-E48N-${Date.now()}`, SOLIC.id]);
+    await dbRun(db, 'INSERT INTO itens_requisicao_almoxarifado (requisicao_id, material_id, quantidade_solicitada) VALUES (?,?,1)',
+      [ins.lastID, matNosso]);
+    const env = await como(SOLIC).post(`/api/almoxarifado/requisicoes/${ins.lastID}/enviar`);
+    assert.strictEqual(env.status, 200, JSON.stringify(env.body));
+    const nomes = (await dbAll(db, 'SELECT regra_nome FROM requisicao_aprovacoes_regra WHERE requisicao_id = ?', [ins.lastID]))
+      .map((p) => p.regra_nome);
+    assert.ok(nomes.includes('N'), `a urgencia nula nao casou a regra Normal: ${JSON.stringify(nomes)}`);
   });
 
   await close();
