@@ -341,6 +341,49 @@ acrescentados no mesmo commit; a suíte fecha 219/219.
 
 ---
 
+## ✅ T5 — o lembrete por pendência de regra (2026-09-30, `dbde640`)
+
+**O que mudou** (`requisitionReminderService.js` + duas colunas por `safeAlter`):
+
+- **lane nova, dirigida por PENDÊNCIA** (7.2): `buscarPendenciasRegraElegiveis` (pendência `ABERTA`,
+  requisição ainda aguardando, maturação por `created_at` **da pendência** e reincidência pela coluna
+  nova `requisicao_aprovacoes_regra.ultimo_lembrete_enviado`);
+- **plateia:** o snapshot de aprovadores **menos** o solicitante e quem já assinou outra perna — os
+  dois não podem assinar esta, cobrar deles é ruído. Sem ninguém que possa, **cai na lista geral**
+  (alguém que resolva: um admin, ou desativar a regra);
+- **mensagem:** `buildMensagemLembrete` ganhou um 6º parâmetro opcional `pendencia`. Literais:
+  assunto `Lembrete: Requisição <N> aguardando aprovação da regra "<regra>" há <N> dia`/`dias`;
+  título `LEMBRETE — REQUISIÇÃO AGUARDANDO APROVAÇÃO DE REGRA`; linha `Regra: <nome>`; chamada
+  `Acesse o sistema para assinar a aprovação da regra:`; e a linha `Regra:` no HTML;
+- **log:** `requisicao_lembretes_log.pendencia_regra_id` (NULL = lane de status);
+- **fiação num ponto só:** `processarLembretesPendentes` chama a lane de regra e devolve
+  `lembretes_regra` — o job horário e a rota manual já chamam essa função, então **não há segunda
+  fiação para esquecer** (a lição da Etapa 25). Uma falha da lane de regra não apaga o resultado da
+  de status.
+
+**🔶 Decisão que o plano não previa — letra B:** enquanto há pendência de regra `ABERTA`, a
+requisição **sai da lane de status**. `/aprovar` e `/aprovar-valor` estão barrados pelo gate; a
+lane de status cobraria a lista geral (ou os aprovadores de valor) por um gesto que eles **não podem
+fazer**. Quando a última pendência é assinada, a lane de status volta. **Descartado:** manter as duas
+lanes cobrando ao mesmo tempo (mensagem de "aguardando aprovação" que mente sobre qual gesto falta —
+exatamente o que a RN-03 proíbe).
+
+**Cenários (`lembreteRegra.api.test.js`, 7/7)** pelo caminho real do job, com `alertService.enviarEmail`
+substituído por um coletor: elegibilidade (madura sim; nova, já lembrada, de requisição rejeitada e
+obsoleta não) + reincidência marcada; plateia por endereço exato; fallback para a lista geral; as
+literais; o log com a pendência; a lane de status calada com pendência aberta **e de volta sem ela**
+(metade positiva); e um erro numa pendência não abortando o lote.
+
+**Controle positivo — 9 sabotagens, 9 vermelhas, nenhuma NO-OP:** sem reincidência → (1); sem filtro
+de requisição viva → (1); plateia = snapshot cru → (2)(3); sem fallback → (3); mensagem da lane de
+status → (1)–(4)(6)(7); log sem pendência → (5); lane de status cobrando requisição bloqueada →
+(5)(6); sem `try/catch` → (7); lane não fiada no job → (1)–(5)(7).
+
+**Suítes:** `lembreteRegra` 7/7 · `requisicaoLembreteValor` 9/9 (a T1 continua) · `test:api` **220/220** ·
+`test:almoxarifado` 42/42 · validation/safealter verdes.
+
+---
+
 ## Fase 2 — o que o revisor do plano tem de atacar
 
 1. Os contratos cobrem os casos de erro e as **mensagens literais**? (o desenho ainda **não**
@@ -364,6 +407,6 @@ acrescentados no mesmo commit; a suíte fecha 219/219.
 - [x] Fase 1-b — a resposta da 7.9 está na **seção 8 do desenho**: a pendência é a verdade, o `status` é cache re-derivável, e quem cobra NUNCA lê o `status`. As literais de T3/T4/T5 continuam fora, agora com a razão certa: dependem da escolha da T3 sobre regra desativada
 - [x] Fase 2 — revisão do plano: **11 achados, 3 CRITICAL, 6 refutados** — o plano NAO estava executavel; desenho e plano corrigidos
 - [x] Fase 1-c — seção 9 do desenho: a assinatura de regra NÃO vira o status (o gate fica no `WHERE` de `/aprovar` e `/aprovar-valor`), 8.5 resolvida como `OBSOLETA`, contratos e literais de T3/T4 congelados. Revisada: 9.7 (`7957c3f`).
-- [x] T1 (`4f53292`) · [x] T2 (`dc1c3f8`) · [x] T3 + T4 (`d212fb7`) · [ ] T5 · [ ] T6 · [ ] T7 · [ ] T8 *(oito, e todas tronco — ver a Fase 2)*
+- [x] T1 (`4f53292`) · [x] T2 (`dc1c3f8`) · [x] T3 + T4 (`d212fb7`) · [x] T5 (`dbde640`) · [ ] T6 · [ ] T7 · [ ] T8 *(oito, e todas tronco — ver a Fase 2)*
 - [ ] Fase 5 — revisão adversarial
 - [ ] Fase 6 — `fechar-etapa`
