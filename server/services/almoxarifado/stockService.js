@@ -996,8 +996,9 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
   // Mesmo alcance e mesma decisao de desenho do exigeLote acima: exigeSerie so e
   // declarado pelo CHAMADOR, nunca deduzido pelo motor. A movimentacao manual (v1/v2) e o
   // recebimento (Task 6) declaram — os dois caminhos onde o operador tem como informar
-  // series na tela; entrega/exclusao de requisicao e devolucao/sucata de devolucao continuam
-  // isentas ate as telas deles terem campo de serie (pendencia declarada nas specs 04/12).
+  // series na tela. ~~entrega/exclusao de requisicao ... continuam isentas~~ — ESTAVA ERRADO desde
+  // a Etapa 61: a isencao da entrega era o defeito (o fisico baixava e a serie ficava EM_ESTOQUE).
+  // A entrega e a exclusao de requisicao declaram exigeSerie desde entao (requisitionService).
   const seriesEntrada = Array.isArray(params.series)
     ? params.series.map((s) => String(s).trim()).filter(Boolean) : [];
   const serieIdsSaida = Array.isArray(params.serie_ids)

@@ -7,7 +7,8 @@
 const { dbGet, dbAll, dbRun } = require('./db');
 const { registrarAuditoria } = require('./audit');
 
-const STATUS_SERIE = ['EM_ESTOQUE', 'BLOQUEADA', 'ENTREGUE', 'SUCATEADA', 'ESTORNADA'];
+// Etapa 61: BAIXADA = serie dada como ausente na regularizacao (nao presente; ver regularizarSeries).
+const STATUS_SERIE = ['EM_ESTOQUE', 'BLOQUEADA', 'ENTREGUE', 'SUCATEADA', 'ESTORNADA', 'BAIXADA'];
 const STATUS_PRESENTES = ['EM_ESTOQUE', 'BLOQUEADA'];
 
 function erro(msg, status = 400) {
@@ -322,6 +323,71 @@ async function mudarStatusSerie(db, user, serieId, novoStatus, justificativa) {
   return linha;
 }
 
+/**
+ * Etapa 61 (RN-06) — regulariza o invariante `COUNT(serie presente) == quantidade_atual` que as
+ * entregas anteriores a esta etapa quebraram (o fisico baixava e a serie ficava EM_ESTOQUE) e o
+ * estoque legado criado sem linhas de serie. Dois sentidos, e NUNCA cria divergencia nova:
+ *  - `cadastrar` numeros de serie para fisico que nao tem serie — no maximo `fisico − presentes`;
+ *  - `baixar` series "fantasma" (presentes mas ausentes) — no maximo `presentes − fisico`, status BAIXADA.
+ * Sem movimentacao de estoque (o fisico ja esta certo); justificativa obrigatoria; auditado por serie.
+ */
+async function regularizarSeries(db, user, materialId, { cadastrar = [], baixar = [], justificativa } = {}) {
+  const just = String(justificativa || '').trim();
+  if (just.length < 5) throw erro('justificativa obrigatoria (minimo 5 caracteres)');
+  const material = await dbGet(db, 'SELECT id, codigo, quantidade_atual, controle_serie FROM materiais_almoxarifado WHERE id = ?', [materialId]);
+  if (!material) throw erro('material nao encontrado', 404);
+  if (!Number(material.controle_serie)) throw erro('material sem controle de serie');
+  const numeros = Array.isArray(cadastrar) ? [...new Set(cadastrar.map((s) => String(s).trim()).filter(Boolean))] : [];
+  const ids = Array.isArray(baixar) ? [...new Set(baixar.map(Number).filter((x) => Number.isInteger(x) && x > 0))] : [];
+  if (!numeros.length && !ids.length) throw erro('informe series para cadastrar ou para baixar');
+  const fisico = Number(material.quantidade_atual) || 0;
+  const presentes = await contarPresentes(db, materialId);
+  if (numeros.length) {
+    const max = Math.max(0, Math.floor(fisico - presentes + 1e-9));
+    if (numeros.length > max) {
+      throw erro(`cadastrar ${numeros.length} serie(s) passaria o fisico (${fisico}) — presentes ${presentes}, cadastre no maximo ${max}`);
+    }
+    for (const numero of numeros) {
+      if (await getSeriePorNumero(db, materialId, numero)) throw erro(`serie ${numero} ja existe neste material`);
+    }
+  }
+  if (ids.length) {
+    const max = Math.max(0, Math.ceil(presentes - fisico - 1e-9));
+    if (ids.length > max) {
+      throw erro(`baixar ${ids.length} serie(s) deixaria menos series que o fisico (${fisico}) — presentes ${presentes}, baixe no maximo ${max}`);
+    }
+    const rows = await dbAll(db, `SELECT id, numero, material_id, status FROM series_almoxarifado WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
+    for (const x of ids) {
+      const s = rows.find((r) => r.id === x);
+      if (!s || Number(s.material_id) !== Number(materialId) || !STATUS_PRESENTES.includes(s.status)) {
+        throw erro(`serie ${s ? s.numero : x} nao esta presente neste material`);
+      }
+    }
+  }
+  const afetadas = [];
+  for (const numero of numeros) {
+    const r = await dbRun(db, `INSERT INTO series_almoxarifado (material_id, numero, status, status_motivo, created_por)
+      VALUES (?, ?, 'EM_ESTOQUE', ?, ?)`, [materialId, numero, just, user?.id || null]);
+    afetadas.push({ id: r.lastID, numero, de: null, para: 'EM_ESTOQUE' });
+  }
+  for (const x of ids) {
+    const linha = await dbGet(db, `UPDATE series_almoxarifado SET status = 'BAIXADA', status_motivo = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND status IN ('EM_ESTOQUE','BLOQUEADA') RETURNING id, numero`, [just, x]);
+    if (!linha) throw erro('status da serie mudou durante a operacao — recarregue', 409);
+    afetadas.push({ id: linha.id, numero: linha.numero, de: 'presente', para: 'BAIXADA' });
+  }
+  for (const a of afetadas) {
+    await registrarAuditoria(db, {
+      entidade: 'serie', entidade_id: a.id, acao: 'REGULARIZACAO_SERIES',
+      usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
+      dados_anteriores: a.de ? { status: a.de } : null,
+      dados_novos: { numero: a.numero, status: a.para, material_id: Number(materialId) },
+      justificativa: just,
+    });
+  }
+  return { cadastradas: numeros.length, baixadas: ids.length, presentes: await contarPresentes(db, materialId), fisico };
+}
+
 async function contarPresentes(db, materialId) {
   const r = await dbGet(db, `
     SELECT COUNT(*) AS n FROM series_almoxarifado
@@ -331,6 +397,7 @@ async function contarPresentes(db, materialId) {
 
 module.exports = {
   STATUS_SERIE,
+  regularizarSeries,
   STATUS_PRESENTES,
   getSerie,
   getSeriePorNumero,

@@ -715,6 +715,44 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
   // não entregue (acima disso, o que sai nunca foi separado dali: automático) e nunca quando a tela
   // pede automático explicitamente (`origem_automatica: true` — a saída quando a planejada não serve
   // mais; Fase 2, crítico 1). Qualquer falha da PLANEJADA diz o que fazer.
+  // Etapa 61 (RN-01): material com SERIE diz QUAIS series saem — antes de qualquer baixa. Sem isto a
+  // entrega baixava o fisico e deixava as series EM_ESTOQUE (sonda: fisico 1, series presentes 3), e
+  // a serie entregue podia sair de novo. A de um clique (sem series) cai aqui, com a saida na literal.
+  const seriesPorItem = new Map(); // item.id -> { ids, loteSeries }
+  const seriesUsadas = new Set();
+  for (const item of itens) {
+    const entrada = itensAtendidos?.find((ia) => Number(ia.item_id) === Number(item.id));
+    const qty = entrada ? num(entrada.quantidade_atendida) : 0;
+    if (qty <= 0) continue;
+    const mat = await dbGet(db, 'SELECT controle_serie FROM materiais_almoxarifado WHERE id = ?', [item.material_id]);
+    if (!mat || !Number(mat.controle_serie)) continue;
+    const falha = (msg) => Object.assign(new Error(`${item.material_nome}: ${msg}`), { status: 400 });
+    if (!Number.isInteger(qty)) throw falha('material com controle de serie exige quantidade inteira');
+    const ids = Array.isArray(entrada.serie_ids)
+      ? entrada.serie_ids.map(Number).filter((x) => Number.isInteger(x) && x > 0) : [];
+    if (ids.length !== qty) {
+      throw falha(`material com controle de serie: informe ${qty} serie(s) para ${qty} unidade(s) — recebidas ${ids.length}`
+        + (ids.length === 0 ? ' — entregue escolhendo as series' : ''));
+    }
+    if (new Set(ids).size !== ids.length || ids.some((x) => seriesUsadas.has(x))) {
+      throw falha('serie repetida na entrega');
+    }
+    const rows = await dbAll(db, `SELECT id, numero, material_id, status, lote_id FROM series_almoxarifado
+      WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
+    for (const x of ids) {
+      const s = rows.find((r) => r.id === x);
+      if (!s || Number(s.material_id) !== Number(item.material_id) || s.status !== 'EM_ESTOQUE') {
+        throw falha(`serie ${s ? s.numero : x} nao esta em estoque deste material`);
+      }
+    }
+    // Fase 2: o lote vem das series (sem lote explicito, o claim aceitava series de qualquer lote e o
+    // fisico drenava pelo ramo sem lote — o saldo por lote e o lote das series se separavam).
+    const lotes = new Set(rows.map((r) => (r.lote_id ? Number(r.lote_id) : null)));
+    if (lotes.size > 1) throw falha('escolha series de um lote so');
+    ids.forEach((x) => seriesUsadas.add(x));
+    seriesPorItem.set(item.id, { ids, loteSeries: [...lotes][0] || null });
+  }
+
   const origemPorItem = new Map();
   const pedidoPorOrigem = new Map();
   for (const item of itens) {
@@ -732,7 +770,17 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
       loteId = item.lote_separacao_id ? Number(item.lote_separacao_id) : null;
       planejada = true;
     }
-    if (!origemId && !loteId && semEscolha) continue;
+    // Etapa 61: o lote das series escolhidas vale como lote da saida (e tem de bater com o escolhido).
+    const loteSeries = seriesPorItem.get(item.id)?.loteSeries || null;
+    if (loteSeries) {
+      if (loteId && loteId !== loteSeries) {
+        const err = new Error(`${item.material_nome}: as series escolhidas nao sao do lote escolhido`);
+        err.status = 400;
+        throw err;
+      }
+      loteId = loteSeries;
+    }
+    if (!origemId && !loteId && semEscolha && !loteSeries) continue;
     try {
       const lidoNorm = stockService.normalizarCodigoLido(lido);
       await checarOrigemItem(db, item, { origemId, loteId, lidoNorm }, qty, pedidoPorOrigem);
@@ -814,6 +862,8 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
       : baixasReserva;
 
     let entregueAcumulado = getEntregue(item);
+    // Etapa 61 (RN-02): as series se dividem entre as baixas, em ordem (a 1a baixa leva as primeiras).
+    const seriesRestantes = [...(seriesPorItem.get(item.id)?.ids || [])];
     for (const baixa of baixas) {
       try {
         // eslint-disable-next-line no-await-in-loop
@@ -822,6 +872,7 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
           tipo: 'SAIDA',
           quantidade: baixa.quantidade,
           reserva_id: baixa.reserva_id,
+          ...(seriesPorItem.has(item.id) ? { serie_ids: seriesRestantes.splice(0, baixa.quantidade) } : {}),
           ...(origemPorItem.has(item.id) ? {
             localizacao_origem_id: origemPorItem.get(item.id).origemId || undefined,
             lote_id: origemPorItem.get(item.id).loteId || undefined,
@@ -834,7 +885,7 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
           projeto_id: reqRow.projeto_id || undefined,
           cliente_id: reqRow.cliente_id || undefined,
           centro_custo_id: reqRow.centro_custo_id || undefined,
-        }, { origemEstrita: !!origemPorItem.get(item.id)?.origemId });
+        }, { origemEstrita: !!origemPorItem.get(item.id)?.origemId, exigeSerie: true });
       } catch (e) {
         const err = new Error(`${item.material_nome}: ${e.message}`);
         err.status = e.status;
@@ -913,7 +964,7 @@ async function excluirRequisicao(db, requisicaoId, user, justificativa, alertSer
     const doMaterial = itens.filter((i) => i.material_id === materialId && getEntregue(i) > 0);
     const totalEntregue = doMaterial.reduce((s, i) => s + getEntregue(i), 0);
     // eslint-disable-next-line no-await-in-loop
-    const material = await dbGet(db, 'SELECT id, localizacao_padrao_id, tipo_material FROM materiais_almoxarifado WHERE id = ?', [materialId]);
+    const material = await dbGet(db, 'SELECT id, localizacao_padrao_id, tipo_material, controle_serie FROM materiais_almoxarifado WHERE id = ?', [materialId]);
     // eslint-disable-next-line no-await-in-loop
     const grupos = await dbAll(db, `SELECT m.localizacao_origem_id as origem, m.lote_id, SUM(m.quantidade) as q
       FROM movimentacoes_almoxarifado m
@@ -929,7 +980,25 @@ async function excluirRequisicao(db, requisicaoId, user, justificativa, alertSer
           const loc = await dbGet(db, 'SELECT * FROM localizacoes_almoxarifado WHERE id = ?', [destino]);
           if (!loc || Number(loc.ativo) !== 1 || stockService.motivoRecusaEndereco(loc, material, 'destino')) destino = undefined;
         }
-        partes.push({ material, nome, quantidade: Number(g.q), destino, lote_id: g.lote_id || undefined });
+        // Etapa 61 (RN-05): material com serie volta COM as series que sairam nesta parte (as ENTREGUE
+        // das saidas deste grupo) — senao o fisico voltava e as series ficavam ENTREGUE. Saida legada
+        // sem series (anterior a esta etapa): o de antes. Parte ja devolvida: recusa antes de tudo.
+        let series;
+        if (Number(material.controle_serie)) {
+          // eslint-disable-next-line no-await-in-loop
+          const sr = await dbAll(db, `SELECT s.numero FROM series_almoxarifado s
+            WHERE s.status = 'ENTREGUE' AND s.movimentacao_saida_id IN (
+              SELECT m.id FROM movimentacoes_almoxarifado m
+              WHERE m.requisicao_id = ? AND m.material_id = ? AND m.tipo = 'SAIDA' AND COALESCE(m.cancelado, 0) = 0
+                AND m.localizacao_origem_id IS ? AND m.lote_id IS ?)`, [requisicaoId, materialId, g.origem, g.lote_id]);
+          if (sr.length && Math.abs(sr.length - Number(g.q)) > 1e-9) {
+            const err = new Error(`${nome}: parte das series desta entrega ja voltou ao estoque — devolva o restante pela devolucao`);
+            err.status = 400;
+            throw err;
+          }
+          if (sr.length) series = sr.map((s) => s.numero);
+        }
+        partes.push({ material, nome, quantidade: Number(g.q), destino, lote_id: g.lote_id || undefined, series });
       }
     } else {
       for (const i of doMaterial) partes.push({ material, nome, quantidade: getEntregue(i), destino: undefined, lote_id: undefined });
@@ -955,6 +1024,7 @@ async function excluirRequisicao(db, requisicaoId, user, justificativa, alertSer
         quantidade: parte.quantidade,
         localizacao_destino_id: parte.destino,
         lote_id: parte.lote_id,
+        ...(parte.series ? { series: parte.series } : {}),
         motivo: `Estorno exclusão requisição ${reqRow.numero}`,
         referencia: reqRow.os_referencia || reqRow.numero,
         justificativa: justificativa || motivo,
@@ -962,7 +1032,7 @@ async function excluirRequisicao(db, requisicaoId, user, justificativa, alertSer
         projeto_id: reqRow.projeto_id || undefined,
         cliente_id: reqRow.cliente_id || undefined,
         centro_custo_id: reqRow.centro_custo_id || undefined,
-      });
+      }, parte.series ? { exigeSerie: true } : {});
     } catch (e) {
       const err = new Error(`${parte.nome}: ${e.message}`);
       err.status = e.status;

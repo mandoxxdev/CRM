@@ -142,6 +142,7 @@ const GRUPOS_ACAO = congelarGrupos([
   { rotulo: 'Conclusão', verbos: ['CONCLUSAO'] },
   { rotulo: 'Encerramento', verbos: ['ENCERRAMENTO'] },
   { rotulo: 'Mudança de status', verbos: ['MUDANCA_STATUS'] },
+  { rotulo: 'Regularização de séries', verbos: ['REGULARIZACAO_SERIES'] }, // Etapa 61
   { rotulo: 'Assinatura de entrega', verbos: ['ASSINATURA_ENTREGA'] },
   { rotulo: 'Confirmação de recebimento', verbos: ['CONFIRMACAO_RECEBIMENTO'] },
   // Etapa 28: a separação passa a ter dono e a auditar (SEPARACAO, Task 1); a segunda

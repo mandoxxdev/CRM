@@ -108,23 +108,33 @@ async function criarRequisicao(db, materialId, quantidade, { status = 'APROVADO'
     assert.strictEqual(res.status, 201, 'material sem controle_serie nao pode ser travado pelo body');
   });
 
-  await test('[fluxos internos] entrega de requisicao continua isenta de serie', async () => {
-    // material controle_serie=1 com qtd 5 via INSERT direto — estoque legado, sem nenhuma linha
-    // em series_almoxarifado (nao passou pela entradaSeries). A entrega nao pode travar nisso:
-    // requisitionService chama registrarMovimentacao SEM opcoes.exigeSerie (default {}), entao a
-    // guarda nem avalia controle_serie — a isencao e do CHAMADOR, igual ao lote.
-    const mat = await novoMaterial(db, { controle_serie: 1, qtd: 5 });
+  // ⚠️ Etapa 61: este cenario dizia "entrega de requisicao continua isenta de serie" — e a isencao
+  // ERA O DEFEITO (sonda: a entrega baixava o fisico e deixava as series EM_ESTOQUE; fisico 1, series
+  // presentes 3). Reescrito DE PROPOSITO: a entrega de material com serie exige as series, e o
+  // estoque legado sem linha de serie tem saida pela regularizacao (cadastrar as series do fisico).
+  await test('[Etapa 61] entrega de requisicao EXIGE as series; o legado sem serie sai pela regularizacao', async () => {
+    const mat = await novoMaterial(db, { controle_serie: 1, qtd: 5 }); // legado: 5 no fisico, 0 series
     const { id: reqId, itemId } = await criarRequisicao(db, mat, 5, { status: 'APROVADO' });
 
     await requisitionService.separarRequisicao(db, reqId, [{ item_id: itemId, quantidade_separada: 5 }], ADMIN);
     const separada = await dbGet(db, 'SELECT quantidade_separada FROM itens_requisicao_almoxarifado WHERE id = ?', [itemId]);
     assert.strictEqual(separada.quantidade_separada, 5);
 
-    const entrega = await requisitionService.entregarRequisicao(
+    await assert.rejects(() => requisitionService.entregarRequisicao(
       db, reqId, [{ item_id: itemId, quantidade_atendida: 5 }], ADMIN, null,
+    ), (e) => e.status === 400 && /informe 5 serie\(s\) para 5 unidade\(s\) — recebidas 0/.test(e.message));
+    assert.strictEqual(await totalDoMaterial(db, mat), 5, 'a entrega recusada nao pode baixar o fisico');
+
+    const seriesService = require('../../services/almoxarifado/seriesService');
+    await seriesService.regularizarSeries(db, ADMIN, mat, { cadastrar: ['L1', 'L2', 'L3', 'L4', 'L5'], justificativa: 'cadastro do legado' });
+    const ids = (await dbAll(db, 'SELECT id FROM series_almoxarifado WHERE material_id = ? ORDER BY id', [mat])).map((s) => s.id);
+    const entrega = await requisitionService.entregarRequisicao(
+      db, reqId, [{ item_id: itemId, quantidade_atendida: 5, serie_ids: ids }], ADMIN, null,
     );
     assert.strictEqual(entrega.status, 'ENTREGUE', JSON.stringify(entrega));
-    assert.strictEqual(await totalDoMaterial(db, mat), 0, 'a entrega deveria ter baixado o fisico sem exigir serie');
+    assert.strictEqual(await totalDoMaterial(db, mat), 0);
+    const presentes = await dbGet(db, "SELECT COUNT(*) n FROM series_almoxarifado WHERE material_id = ? AND status IN ('EM_ESTOQUE','BLOQUEADA')", [mat]);
+    assert.strictEqual(presentes.n, 0, 'fisico e series presentes tem de bater');
   });
 
   await close();

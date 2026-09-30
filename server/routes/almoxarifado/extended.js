@@ -1194,6 +1194,15 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     } catch (e) { handleError(res, e); }
   });
 
+  // Etapa 61 (RN-06): regularizar as series de um material (cadastrar para fisico sem serie; baixar
+  // series "fantasma"). Mesmo gate do ajuste de estoque — e um acerto de inventario das series.
+  app.post('/api/almoxarifado/materiais/:id/series/regularizar', auth, requirePermission('ajustar_estoque'), async (req, res) => {
+    try {
+      const { cadastrar, baixar, justificativa } = req.body || {};
+      res.json(await seriesService.regularizarSeries(db, req.user, req.params.id, { cadastrar, baixar, justificativa }));
+    } catch (e) { handleError(res, e); }
+  });
+
   app.put('/api/almoxarifado/series/:id/status', auth, requirePermission('inspecionar'), async (req, res) => {
     try {
       const { status, justificativa } = req.body || {};
