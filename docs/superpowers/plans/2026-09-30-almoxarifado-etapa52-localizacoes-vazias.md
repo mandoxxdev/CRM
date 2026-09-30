@@ -32,4 +32,4 @@ Para **cada** cenário, conferir que a lista de vazias bate com o mapa, isto é,
 ## Estado
 
 - [x] Fase 0 · [x] Fase 1
-- [ ] Fase 2 · [ ] T1 · [ ] T2 · [ ] Fase 5 · [ ] Fase 6
+- [x] Fase 2 (2 IMPORTANT, 2 MINOR — seção 5 do desenho) · [ ] T1 · [ ] T2 · [ ] Fase 5 · [ ] Fase 6

@@ -44,3 +44,30 @@ estar "ocupada" no mapa e "vazia" na lista, nem o contrário.
 |---|---|---|
 | **T1** | `OCUPACAO_SQL` + helper + rota + chave | **tronco** |
 | **T2** | integração: mapa × lista em todos os casos (legado, drenado, bloqueado, inativo, lote) | **tronco** |
+
+## 5. O que a Fase 2 mudou: 2 IMPORTANT, 2 MINOR (sondas `rev52-sonda*.js`)
+
+**A varredura do registro reprovaria a chave.** Ela procura cada coluna declarada no SQL real, e o
+`endereco_completo` era montado em JS. **Correção:** o endereço é montado no **próprio SELECT**, e as colunas
+declaradas usam os nomes do SQL (`almoxarifado_codigo`, `tipo`, `bloqueada`).
+
+**🔶 Apagar ou inativar localização usava uma TERCEIRA régua, e isso entra nesta etapa.**
+- O `DELETE /localizacoes/:id` só olha as linhas com `quantidade != 0`.
+- Uma localização ocupada **só pelo legado** (o mapa mostrando 40) era apagada com 200, e aí as **40 unidades ficavam invisíveis em todas as telas**: o fallback some junto com a localização, e o material não entra em "sem endereço" porque a padrão dele não é nula.
+- O `PUT` com `ativo = 0` não checava nada.
+
+A lista de vazias vira o **convite** natural para apagar. **RN-04 nova:** o DELETE e o PUT que desativa passam
+a recusar a localização ocupada pela **mesma** `OCUPACAO_SQL` (e continuam recusando a linha diferente de zero, que pega a negativa):
+`400 — Localização ocupada: há material nela (N item(ns)). Transfira o saldo antes de apagar ou desativar.`
+
+**A letra B da RN-02 estava errada.** `requirePermission('visualizar')` **não** é "a régua das outras leituras":
+o `/mapa/localizacoes` e 46 GETs são só `auth`, e `visualizar` inclui todos os perfis. **Escolha:** a rota
+de vazias **continua só `auth`**, como o mapa, que mostra o mesmo dado. A RN-02 perde esse item.
+
+**Hierarquia:** o mapa ignora `parent_id`. O pai é um cartão solto, "Vazio", enquanto o filho está ocupado. **Escolha
+(reversível):** o pai **fica** na lista, com a coluna **`sub_ocupadas`** (filhos ativos ocupados), e não é excluído.
+Excluí-lo quebraria o invariante "`qtd_itens == 0` se e somente se está na lista", e o usuário vê que é um contêiner.
+
+**Declarados:**
+- **material inativo:** ocupa pela linha endereçada, mas não pelo fallback (a extração literal herda isso);
+- a combinação `A:10` positiva mais `NULL:30` sem padrão deixa os 30 fora do mapa e de "sem endereço". É anterior à etapa e vai para a letra D.
