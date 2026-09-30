@@ -798,7 +798,7 @@ SELECT nc.numero, nc.decisao, nc.decidido_em, nc.decidido_por_nome,
   é o furo **C64**, e não há como tirá-los de lá hoje. Se esta consulta trouxer muitos deles, vale
   esperar a próxima etapa antes de entregar a fila ao Compras.
 
-### B. Decisões de negócio — B1 a B180; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B185; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(O título desta seção dizia "B1 a B24" — **estava defasado**: os itens já iam até B36 antes da
 Etapa 20. Corrigido em 2026-08-28 para B50, depois para B56 com as três da Etapa 24, para B57 com
@@ -3365,6 +3365,80 @@ alguém foi ler o código da janela. É a quinta vez nesta base que uma mediçã
 existe" estava errada, e as cinco tinham a mesma forma: eu descrevi o que **imaginei** que o código
 fazia, em vez de ler.
 
+**B181 (NOVA, da Etapa 46) — tirei do escopo a capacidade de cancelar documento AINDA NÃO
+DECIDIDO, e essa é a decisão que mais mudou a etapa.**
+
+**O que foi escolhido:** só documento **decidido**, com execução **pendente**, pode ser cancelado.
+**O que foi descartado:** cancelar também documento **aberto** — que era como eu havia desenhado e
+**entregue**.
+**Por quê:** duas revisões independentes mediram, por execução, que isso **silenciava um problema
+vivo**. Cancelando um documento aberto de divergência de quantidade — com um motivo qualquer, tipo
+*"não quero ver isso na lista"* —, a falta continuava no galpão, o item **saía** do cartão de
+divergências, o sistema **parava** de reabrir o documento, e **não existe tela** para abrir um à
+mão. Resultado: quatro quilos faltando de verdade, zero documento, zero cartão, zero cobrança.
+**O que sobra no lugar:** para documento aberto o gesto certo é **decidir** (aceitar a falta,
+devolver, sucatear) ou **corrigir a quantidade conferida** — e aí o sistema cancela sozinho. A
+recusa diz isso com todas as letras.
+**Se você quiser a capacidade de volta**, ela é uma linha — mas então o cartão de divergências
+precisa de um terceiro estado ("documentada e anulada") em vez de simplesmente excluir o item, senão
+o silêncio volta.
+
+**B182 (NOVA, da Etapa 46) — o COMPRAS não cancela, e a exclusão é sobre incentivo, não sobre
+confiança.**
+
+**O que foi escolhido:** cancelar é de **Administrador** e **Qualidade**.
+**O que foi descartado:** dar ao Compras, que é quem tem a ação de **executar**.
+**Por quê:** o Compras é quem a fila **cobra**. Dar-lhe o cancelamento seria dar-lhe **limpar a
+própria pendência**, e é o incentivo exatamente invertido — quem é cobrado não deve poder apagar a
+cobrança sem passar por quem respondeu pelo material. E não é `decidir_nao_conformidade` tampouco:
+anular não é decidir, e quem decidiu não deve poder apagar o próprio rastro por baixo de uma ação
+que se chama "decidir".
+**A consequência que isso cria, e que também é decisão:** o Compras recebe o aviso e **não** tem
+saída própria — ele depende da Qualidade. Ver **B183**.
+
+**B183 (NOVA, da Etapa 46) — o aviso novo NOMEIA a saída em vez de eu alargar quem vê a central.**
+
+**O problema medido:** quem recebe o aviso *Execução pendente* é quem tem acesso à central de
+alertas, e o **Compras** está lá. A **Qualidade**, único perfil não-administrador que **pode
+cancelar**, **não** tem acesso à central. Ou seja: o cartão ficava aceso indefinidamente para quem
+só podia tomar erro — o beco reencenado uma camada acima.
+**O que foi escolhido:** a descrição do cartão e o corpo do e-mail **dizem o caminho**: *"Execução
+impossível (número de série, lote não identificável)? A Qualidade pode cancelar o documento em
+Almoxarifado → Não Conformidades."*
+**O que foi descartado:** pôr a Qualidade em quem-vê-alertas. Alargar permissão é **menos
+reversível** que escrever uma frase, e a central carrega o **valor em dinheiro** do estoque parado —
+que é a razão registrada de a Qualidade estar fora dela desde o começo.
+**Se você preferir o contrário**, é uma linha, e aí a Qualidade passa a ver também os cartões de
+estoque parado e excessivo, com o valor.
+
+**B184 (NOVA, da Etapa 46) — três mensagens do sistema afirmavam fato que não havia acontecido, e
+as três foram trocadas.**
+
+Não é decisão de negócio no sentido usual, e está aqui porque **muda o que o operador lê na tela** e
+porque a classe de defeito é a mais caro desta base: **mensagem que afirma efeito que não houve.**
+
+| Dizia | Por que era falso | Diz agora |
+|---|---|---|
+| *"A decisão desta não conformidade já liberou o material"*, ao recusar o cancelamento de um documento aceito | **medido:** em documento de **falta de quantidade** aceito, e em documento aberto à mão, **nada** é liberado — não há retenção a soltar. A régua olhava a **classe** da decisão, não o efeito | *"Esta decisão não deixou execução pendente — não há o que encerrar"* |
+| *"A execução desta não conformidade já foi registrada"*, ao tentar executar um documento **cancelado** | não havia execução nenhuma registrada. Era a **mesma** falha que já havia sido corrigida do lado do cancelamento e ficou intacta deste lado | *"Esta não conformidade foi cancelada — não há execução a registrar"* |
+| *"Só é possível registrar a execução de uma não conformidade decidida"*, num documento cancelado | o documento **foi** decidido, e a decisão está gravada e legível — a frase mandava decidir o que já estava decidido | idem, a mesma de cima |
+
+**A que mais importa é a primeira**, porque ela deixava um documento **incancelável com uma
+mentira**: o operador lia que o sistema mexeu em saldo que nunca mexeu, e não tinha como encerrar o
+documento.
+
+**B185 (NOVA, da Etapa 46) — a linha cancelada mostra "Deixou de ser cobrada", e não um travessão.**
+
+**O que foi escolhido:** na coluna **Execução**, o documento cancelado que tinha execução pendente
+mostra *"Deixou de ser cobrada"*.
+**O que foi descartado:** um travessão.
+**Por quê:** o travessão não mentiria, mas **igualaria** a linha cancelada à do documento que nunca
+foi decidido — e são estados diferentes: neste havia execução pendente e **alguém a encerrou, com
+motivo**. O texto ecoa a literal do aviso de sucesso, então a tela confirma o que o usuário acabou
+de ler.
+**E o travessão ficou onde ele é correto:** no documento cancelado que **nunca foi decidido** (o
+cancelamento automático da reconferência), onde não havia cobrança alguma para deixar de existir.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -4282,6 +4356,35 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
     caminhos que escrevem naquelas colunas. É etapa própria, com migração. **A consulta A23 mede a
     exposição real da sua base antes do deploy**, e ela é a que mais pede atenção nesta etapa.
 
+66. **✅ O FURO 64 ESTÁ RESOLVIDO na Etapa 46 — e o item fica, riscado, porque ele descreve o
+    problema.** O documento recusado por série ou por lote não identificável **tem saída**: a
+    Qualidade (ou o Administrador) cancela, com motivo, e o documento sai da fila **e** do aviso,
+    com a decisão preservada. E o documento pendente passou a **cobrar** por conta própria, pelo
+    aviso *Execução pendente* — o que o 64 descrevia como "não é destravável **e** não cobra
+    ninguém" deixou de valer nas duas metades.
+
+    ⚠️ **O que continua verdade do 64, e importa:** a recusa de série **não foi afrouxada**.
+    Devolver peça serializada continua fora da tela de Não Conformidades — o caminho é
+    **Movimentações**, que tem seletor de série. O que mudou é que agora dá para **dizer ao sistema**
+    que a baixa foi feita por fora.
+
+67. **NOVO, da Etapa 46 — cancelar um documento decidido NÃO devolve o material ao estado anterior,
+    e ninguém deve esperar que devolva.** Cancelar encerra a **cobrança** da execução; ele não
+    desbloqueia material, não estorna movimentação e não reabre pedido. Num documento decidido
+    *Devolver* cujo material **continua retido** (porque a execução nunca aconteceu), o cancelamento
+    deixa o material **ainda retido** — e é isso que se quer, porque a retenção foi criada pela
+    reprovação da inspeção, não pelo documento.
+
+    **Como se solta esse material, então:** pela tela de **Movimentações**, com desbloqueio e
+    justificativa (Administrador ou Gestor), como se fazia antes desta linhagem de etapas toda. **O
+    que o cancelamento faz é parar de pedir um gesto impossível** — não substituir o gesto que ainda
+    falta.
+
+    ⚠️ **Consequência prática para quem opera:** depois de cancelar um documento de devolução que
+    nunca foi executada, **confira o bloqueado do material**. Se a baixa foi dada em Movimentações
+    (o caso normal), o bloqueado já saiu junto. Se ninguém deu baixa nenhuma, o material continua
+    retido e sem documento cobrando — este é o único estado que a etapa cria e não cobra.
+
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -5044,6 +5147,33 @@ navegador** prova, e vale os 5 minutos do roteiro do guia:
    rótulo **existe**, não que a tela o **usa** naquele filtro.
 5. **O texto do modal muda com a decisão?** Em *Devolver* ele diz que é este registro que dá a baixa;
    nas outras três decisões, que **não movimenta estoque**. São duas frases diferentes no mesmo modal.
+
+**(46) Nenhum clique foi dado nesta etapa.** O que os testes provam (e é bastante): as seis recusas
+com a frase exata de cada uma, a decisão sobrevivendo campo a campo ao cancelamento, a fila e o
+aviso novo deixando de cobrar o documento cancelado, o aviso **contando desde a decisão** (não desde
+a abertura), a matriz de perfis com o 403 do Compras pela rota real, a trilha distinguindo o
+cancelamento de pessoa do automático, e a corrida de dois cancelamentos. O que **só o navegador**
+prova, e vale os 5 minutos do roteiro do guia:
+
+1. **O cartão novo cabe na central?** É o **décimo quinto**, e as colunas dele (documento, material,
+   decisão, dias pendente) foram escritas à mão no mapa de colunas da tela. Abrir **Almoxarifado →
+   Alertas**, expandir *Execução pendente* e conferir que a tabela não estoura e que **nenhuma
+   coluna aparece com nome cru** — se a entrada do mapa tivesse ficado de fora, o cartão cairia num
+   modo genérico que imprime os campos crus, e **nada** ficaria vermelho.
+2. **A frase que nomeia a saída aparece?** O corpo do aviso diz *"Execução impossível (número de
+   série, lote não identificável)? A Qualidade pode cancelar o documento…"*. Conferir que ela chega
+   ao cartão **e** ao e-mail — ela existe justamente porque quem recebe o aviso não é quem cancela.
+3. **A configuração nova aparece e salva?** **Almoxarifado → Configurações**, campo *Alerta de
+   Execução Pendente da NC (dias)*. Trocar para 30, salvar, e conferir que persiste. Zero e texto
+   são recusados pelo servidor (isso tem teste); o que o navegador prova é que o campo **existe** na
+   tela e chega no payload.
+4. **O motivo obrigatório desabilita o botão de verdade?** Abrir o modal, digitar 4 caracteres e
+   conferir que **Cancelar documento** fica cinza, com o aviso de 5 caracteres abaixo do campo.
+5. **A linha cancelada mostra quem cancelou?** A coluna de status passa a dizer *"Cancelada em
+   ⟨data⟩ por ⟨nome⟩"*. O nome é novo nesta etapa — antes só havia a data.
+6. **A linha não some junto com o aviso de sucesso?** Com o filtro *Pendentes de execução* ligado,
+   cancelar tem de **largar os dois filtros** e manter a linha visível. É a terceira aparição desse
+   modo de falha nesta base, e é o único item desta lista que já deu errado duas vezes antes.
 
 ### G. Fragilidades estruturais que continuam de pé
 
@@ -6013,6 +6143,39 @@ recusa dela casa por tipo, então couberam as duas na mesma régua); a do desblo
 a tela passar a olhar o motivo, o que é mudança de régua e não de lista. Fica declarado: a tela desta
 base tem princípio escrito desde a Etapa 5 — *"com o servidor recusando, o botão só entregaria um
 400; a tela não pode oferecê-lo"* — e este é o caso que ainda o viola.
+
+---
+
+**G74 (NOVO, da Etapa 46). Dois cancelamentos ao mesmo tempo no mesmo documento: um vence, e agora
+isso tem teste — mas a corrida com a EXECUÇÃO continua sem.** O cancelamento "reserva" o documento
+antes de gravar, então dois cliques simultâneos não passam os dois: um vence e o outro recebe erro,
+e a trilha fica com **uma** linha. **Isso está medido.**
+
+O que **não** está medido é a corrida entre **cancelar** e **registrar execução** — o caso em que as
+duas coisas acontecem no mesmo instante, por duas pessoas. A proteção existe no código (as duas
+"reservas" se excluem, e cada uma devolve a frase certa quando perde), e o ambiente de teste não
+consegue forçar as duas a se cruzarem. **Fica declarado:** a proteção está lá, a suíte não a prova.
+
+⚠️ **E uma lição de método vale registro aqui, porque ela nasceu de um erro meu nesta etapa.** O
+fechamento da etapa anterior declarou que *"a corrida não é reproduzível no harness"*, em geral.
+**Era frouxo:** a corrida `cancelar × cancelar` **é** reproduzível, custou seis linhas de teste, e
+sem ela a "reserva" **inteira** podia ser apagada com 39 cenários passando. Declarar um caso como
+impossível de testar é barato e perigoso — foi uma revisão que mediu o contrário.
+
+---
+
+**G75 (NOVO, da Etapa 46). A condição de "este documento encerrou o fato" mora em UM lugar no
+servidor e é COPIADA à mão no cartão de divergências.** Ela decide três coisas ao mesmo tempo: se o
+sistema pode abrir um documento novo para o mesmo problema, se o carimbo de "fato superado" alcança
+o documento antigo, e se o item sai do cartão. **Se as três pontas discordarem, volta o pior modo de
+falha desta feature:** um documento tido por encerrado que nunca recebe o carimbo, e que por isso
+bloqueia a abertura do documento novo **para sempre** — problema vivo, zero documento, zero cartão.
+
+Duas das três pontas agora leem a **mesma constante**; a terceira (o cartão) repete a regra em SQL
+próprio, com os prefixos de tabela, porque ela mora em outro arquivo e nenhuma rota publica a
+condição. **A cópia é guardada por teste**, mas é cópia. **É uma linha de código quando alguém
+quiser** publicar a condição num único lugar — e vale, porque este é o terceiro fechamento seguido
+em que uma revisão acha meia-régua neste mesmo ponto.
 
 aparece na hora, para quem está editando.
 ## Etapa 0 — Fundação (2026-08-03)
@@ -12025,7 +12188,157 @@ filtro não tinha a opção — a devolução era **não-localizável** no livro
    **Pendentes de execução** — que é o comportamento desejado —, mas nada devolve material
    automaticamente por eles. Ver a consulta **A24**.
 
+## Etapa 46 — O documento decidido deixa de ser um beco, e passa a cobrar (2026-09-30)
+
+A etapa passada separou dois gestos: a Qualidade decide *"devolver ao fornecedor"*, e o Compras
+registra, dias depois, que o material saiu de fato. Ficou faltando o que fazer quando o segundo
+gesto é **impossível**. Peça com número de série não é devolvida por aquela tela — a baixa de peça
+serializada é escolha de **quais** peças, e isso se faz em Movimentações. O sistema recusava, com
+razão, e aí o documento ficava **decidido, esperando uma execução que ninguém conseguia registrar,
+para sempre**. Quem fez a baixa por fora não tinha como dizer isso ao sistema, e a fila do Compras
+ia enchendo de documento que ele não podia resolver.
+
+Agora existe a saída: **cancelar o documento**, com motivo obrigatório, **sem apagar a decisão**. E
+o documento que espera execução passou a **cobrar**: nasceu o aviso *Execução pendente* na central
+de Alertas, com prazo próprio.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Documento decidido *Devolver* de material com **número de série** era recusado pela execução e **ficava na fila para sempre** | Botão **Cancelar** na linha, com motivo — o documento sai da fila e o motivo fica no histórico |
+| A única saída era registrar uma decisão falsa, ou conviver com a fila suja | A decisão **continua registrada e legível**; o que termina é a cobrança da execução |
+| Não havia como saber **quem** tirou o documento da fila | A linha mostra *"Cancelada em ⟨data⟩ por ⟨nome⟩"*, e a trilha distingue o cancelamento **de pessoa** do automático |
+| Documento decidido e não executado só aparecia para quem **escolhesse** o filtro da fila | Aviso **Execução pendente** na central de Alertas, com prazo configurável contado **desde a decisão** |
+| — | O aviso **nomeia a saída**: se a execução for impossível, ele diz que a Qualidade pode cancelar |
+
+### As regras, com o cenário exato
+
+**1. O caminho completo, que é o cenário que a etapa existe para resolver.**
+Cadastre um material com **Controle de série**, receba 10, deixe cair em **Inspeções**, reprove 3.
+Em **Não Conformidades**, decida **Devolver ao fornecedor**. A coluna **Execução** mostra
+**Pendente**. Entre como **Compras** e clique em **Registrar execução**:
+→ *"Material com controle de série não pode ser devolvido por aqui — dê baixa pela tela de
+Movimentações"*. E é isso para sempre: tentar de novo dá a mesma coisa.
+Agora entre como **Qualidade**, clique em **Cancelar**, escreva o motivo — *"baixa das 3 peças dada
+em Movimentações, séries 4471 a 4473"* — e confirme.
+→ *"Não conformidade NC-… cancelada! Documento cancelado — a decisão fica registrada, e a execução
+deixa de ser cobrada"*. O documento sai da fila **e** do aviso, e a linha passa a mostrar
+*"Cancelada em …"* com o seu nome.
+
+**2. A decisão NÃO é apagada — e isso é o ponto.**
+Abra os detalhes do documento cancelado: a decisão (*Devolver ao fornecedor*), quem decidiu, quando,
+a justificativa e o motivo do cancelamento estão todos lá. **Cancelar não é "desfazer a decisão"**:
+é encerrar a **cobrança**. Quem precisar de outro encaminhamento cancela e abre outro documento;
+este fica no histórico dizendo o que se decidiu e por que morreu.
+
+**3. Documento ainda não decidido NÃO cancela — e a recusa diz o caminho.**
+Numa não conformidade **Aberta** o botão não aparece. Pela porta de programação:
+→ *"Só é possível cancelar uma não conformidade já decidida — decida o documento, ou corrija a
+quantidade conferida"*.
+**Por quê, e vale ler:** cancelar um documento aberto **esconderia um problema que ninguém
+resolveu**. A divergência continuaria de pé, o item sairia do cartão de divergências, o sistema
+pararia de reabrir o documento — e não existe tela para abrir um à mão. Ou seja: o problema
+continuaria no galpão e **nenhuma superfície o cobraria**. O gesto certo para um documento aberto é
+**decidi-lo** (aceitar a falta, devolver, sucatear…) ou **corrigir a quantidade conferida**, e nesse
+caso o sistema cancela o documento sozinho.
+⚠️ **Isto mudou durante a etapa:** a primeira versão deixava cancelar documento aberto, e a revisão
+mediu esse exato silêncio. Ver a letra **B**.
+
+**4. Decisão de aceitação não cancela — ela já se executou.**
+Um documento decidido **Aceitar** ou **Aceitar sob desvio** não tem execução pendente (a liberação
+acontece no mesmo clique da decisão). Pela porta de programação:
+→ *"Esta decisão não deixou execução pendente — não há o que encerrar"*.
+
+**5. Execução já registrada não cancela.**
+→ *"A execução desta não conformidade já foi registrada — o documento não pode ser cancelado"*. O
+ato aconteceu e está no livro de movimentações; anular o documento depois dele deixaria a linha do
+livro apontando para um documento morto.
+
+**6. Cancelar duas vezes não passa.**
+→ *"Esta não conformidade já está cancelada"*, e o motivo do **primeiro** cancelamento é o que fica.
+
+**7. O motivo é obrigatório, com pelo menos 5 caracteres.**
+O botão de confirmar fica **desabilitado** enquanto o campo não tem 5 caracteres, e a tela avisa
+*"O motivo precisa de pelo menos 5 caracteres."*. Pela porta de programação:
+→ *"O motivo do cancelamento deve ter pelo menos 5 caracteres"*.
+**A régua é a mesma do cancelamento de inventário**, e pela mesma razão: encerrar um documento de
+qualidade à mão é tão consequente quanto o ato que ele encerra.
+
+**8. O Compras não cancela — e essa exclusão é deliberada.**
+Entre como **Compras** e tente:
+→ *"Sem permissão para cancelar não conformidade — seu perfil é Compras. Solicite acesso a um
+administrador."* O botão nem aparece para ele.
+**Por quê:** o Compras é quem **executa** e é quem a fila **cobra**. Dar-lhe o cancelamento seria
+dar-lhe limpar a própria pendência — o incentivo invertido. Quem anula é quem responde pelo
+material: Qualidade (ou Administrador). Ver a letra **B**.
+
+**9. Executar um documento cancelado é recusado, e a frase diz a verdade.**
+→ *"Esta não conformidade foi cancelada — não há execução a registrar"*.
+⚠️ **Esta frase nasceu na revisão:** antes, a resposta era *"a execução desta não conformidade já
+foi registrada"* — sobre um documento em que **nada** havia sido registrado. Ver a letra **B**.
+
+**10. O aviso novo: Execução pendente.**
+**Almoxarifado → Alertas**. O cartão **Execução pendente** lista os documentos decididos cuja
+execução segue pendente há mais dias que o configurado, contados **desde a decisão** (não desde a
+abertura: um documento aberto há 60 dias e decidido ontem **não** está atrasado). O prazo se regula
+em **Almoxarifado → Configurações**, padrão **7 dias**.
+O corpo do aviso **nomeia a saída**: *"Execução impossível (número de série, lote não
+identificável)? A Qualidade pode cancelar o documento em Almoxarifado → Não Conformidades."*
+⚠️ **Essa frase também nasceu na revisão**, e o motivo está na letra **B**: quem recebe o aviso é o
+Compras, e ele **não pode** cancelar.
+
+**11. O documento cancelado sai do aviso, e o executado também.**
+No mesmo cartão: documento **executado** não aparece (o ato foi feito), documento **cancelado** não
+aparece (a cobrança foi encerrada), e documento **decidido dentro do prazo** ainda não aparece.
+Quem quiser a lista completa sem prazo usa o filtro **Pendentes de execução** na tela de Não
+Conformidades.
+
+**12. A coluna Execução não mente na linha cancelada.**
+Na linha cancelada a coluna **Execução** mostra **"Deixou de ser cobrada"** — o mesmo que o aviso de
+sucesso acabou de dizer. E quando o documento cancelado **nunca foi decidido** (o cancelamento
+automático, que acontece quando o operador corrige a quantidade), a coluna mostra **`—`**: ali não
+havia cobrança nenhuma para deixar de existir.
+
+### O que esta etapa NÃO cobre
+
+1. **Não redecide.** Documento decidido não muda de decisão. Cancela-se e abre-se outro — o
+   histórico fica com os dois, e é essa a escolha: a decisão é imutável desde que passou a existir.
+2. **Não afrouxa a recusa de série.** Devolver peça serializada continua fora da tela de Não
+   Conformidades; o caminho é **Movimentações**.
+3. **Não cria botão de abrir documento à mão.** Continua não existindo — e é por isso que a regra 3
+   recusa cancelar documento aberto.
+4. **Não desfaz a execução.** Documento já executado não cancela (regra 5). Um erro de registro se
+   conserta em **Movimentações**, com ajuste e justificativa.
+5. **Não avisa a Qualidade pela central.** O aviso novo vai para quem tem acesso à central de
+   alertas, e a Qualidade não tem — por isso o corpo do aviso **nomeia** a saída em vez de depender
+   de quem o lê. Ver a letra **B**.
+
 ## Onde estamos e o que vem a seguir
+
+- **Etapa 46 entregue (2026-09-30):** **o documento decidido deixa de ser um beco, e passa a
+  cobrar**. A etapa passada criou uma situação sem saída: material com **número de série** decidido
+  *Devolver ao fornecedor* é recusado pela execução — corretamente, porque baixa de peça serializada
+  se faz em Movimentações — e o documento ficava **decidido, esperando para sempre** uma execução que
+  ninguém conseguia registrar. Agora a Qualidade **cancela** o documento, com motivo, **sem apagar a
+  decisão**: o que termina é a cobrança. E o documento pendente passou a cobrar sozinho, pelo aviso
+  novo **Execução pendente**, com prazo contado **desde a decisão**.
+  **O que é seu:** as decisões **B181 a B185**. As duas que mais pedem sua leitura são a **B181**
+  (eu **tirei do escopo** a capacidade de cancelar documento ainda não decidido, porque ela
+  silenciava problema vivo — e ela estava entregue) e a **B183** (o aviso **nomeia a saída** em vez
+  de eu alargar quem vê a central, porque quem recebe o aviso não é quem pode cancelar). A **B184**
+  vale ler pelo tipo de defeito: **três mensagens afirmavam efeito de estoque que não havia
+  acontecido**. O furo **C64** da etapa passada está **resolvido**; sobra o **C67** — cancelar não
+  solta material, e há um estado (documento cancelado sem ninguém ter dado baixa) que fica sem
+  cobrança. As verificações **(46)** em F, e as fragilidades **G74** e **G75**.
+  **Nenhuma consulta nova em A:** esta etapa não precisa de nada rodado antes do deploy. A migração
+  acrescenta duas colunas vazias, e vazio é exatamente o que descreve o que já existe.
+  **As revisões acharam 35 itens, 4 CRITICAL, zero ruído** — 12 no plano, antes de codar, e 23 no
+  código pronto, por três lentes independentes. **O número que ensina:** das três lentes, **duas
+  chegaram sozinhas ao mesmo corte de escopo**, por caminhos diferentes, e o que elas cortaram era
+  coisa que **eu** tinha acrescentado ao desenho. E o CRITICAL não era desta etapa: o "silêncio
+  completo" que a etapa 43 fechou continuava aberto por um ramo que a suíte não cobria, e o cenário
+  que supostamente o provava passava verde porque usava um documento só.
 
 - **Etapa 45 entregue (2026-09-29):** **a devolução ao fornecedor deixa de ser um combinado verbal**.
   Decidir *Devolver* virou **intenção registrada**; quem despacha o material — o **Compras** — clica

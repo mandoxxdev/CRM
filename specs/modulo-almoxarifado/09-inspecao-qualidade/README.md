@@ -66,6 +66,40 @@
 > **irmã da Etapa 44** fazia a aceitação fechar o documento **sem liberar nada** (o C57 renascendo
 > por arredondamento dentro da etapa escrita para fechá-lo). Corrigidas as duas em `7f72e39`, mais a
 > tolerância pareada no claim do motor.
+> **Etapa 46 (2026-09-30, `a625fb7..5a975a0`) — O DOCUMENTO DECIDIDO DEIXA DE SER UM BECO.** A 45
+> criou uma situação sem saída, e ela foi achada por **dois revisores independentes** na Fase 5
+> dela (furo **C64**): a execução recusa `controle_serie` e lote não identificável com **400 fatal**
+> — corretamente —, e o documento ficava `DECIDIDA` + `execucao_estado = 'PENDENTE'` para sempre,
+> porque `decidir` dá 409 em NC decidida e o único cancelamento que existia era automático, só para
+> NC de quantidade `aberto_automaticamente`, com `WHERE status = 'ABERTA'`.
+> **Entregue:** ação nova `cancelar_nao_conformidade` (ADMINISTRADOR + QUALIDADE; **COMPRAS fora**,
+> porque ele executa e é quem a fila cobra — B182), rota
+> `POST /nao-conformidades/:id/cancelar` com motivo de **no mínimo 5 caracteres** (régua de
+> `PUT /conferencias/:id/cancelar`), duas colunas por `safeAlter` (`cancelado_por_id`,
+> `cancelado_por_nome`, completando o quarteto que `conferencias_almoxarifado` já tinha), botão e
+> modal na tela, e a **15ª entrada** do registro de alertas
+> (`NAO_CONFORMIDADE_EXECUCAO_PENDENTE`, janela por `decidido_em`).
+> **A DECISÃO É PRESERVADA** — `decisao`, `justificativa`, `decidido_por_*`, `decidido_em` e até
+> `execucao_estado` ficam intactos. O que o cancelamento encerra é a **cobrança**; quem exclui a
+> cancelada da fila é o `status`.
+> **`cancelado_por_id` é ESTRUTURAL, não adorno de auditoria:** ele discrimina os dois significados
+> de `CANCELADA` (o automático, em que o fato sumiu, e o humano, em que o fato continua de pé), e
+> **três** consumidores dependem dele — `getUltimaEncerrada`, o carimbo de `fato_superado_em` e a
+> exclusão do cartão D6. A condição virou **uma constante** (`SQL_ENCERRADA`) porque as pontas têm
+> de andar juntas.
+> **⚠️ A RN-01 do desenho — cancelar NC `ABERTA` — FOI CORTADA no fix-round**, e a correção fica à
+> vista: ela silenciava divergência **VIVA** (documento morto sem decisão, item fora do cartão D6,
+> gancho não reabrindo, e **não existe tela de abertura manual**). Duas lentes mediram isso por
+> sonda, independentemente. Hoje cancelar exige `DECIDIDA` + `PENDENTE`, e `ABERTA` recusa com a
+> literal que **ensina** o caminho. **B181.**
+> **E o CRITICAL da Fase 5 não era desta etapa:** o carimbo de `fato_superado_em` vivia num ramo só
+> alcançável quando **não** havia NC `ABERTA`, então o "silêncio completo" que a Etapa 43 fechou
+> continuava aberto — reproduzido também **sem** cancelamento nenhum, com a NC encerrada por
+> decisão. Corrigido aqui, com o cenário que o cobre; o que existia passava verde porque usava um
+> documento só.
+> **A feature continua 🟢** — esta etapa não paga item de checklist, ela **fecha um beco** que a
+> anterior criou. O que sobra declarado: cancelar **não solta material** (furo **C67**), e a corrida
+> `cancelar × executar` não tem teste (**G74**).
 > **Faltam para 🟢: ZERO.** Os quatro itens da lista morreram — 1 e 2 na 43/44, 3 na 32, **4 nesta
 > etapa**.
 > **O que NÃO fecha com o 🟢, e não é checklist:** as duas pendências antigas (reprovar por lote;
@@ -81,7 +115,7 @@
 > da conta, como sempre estiveram: são pendências, não checklist. *Este cabeçalho listava também
 > "cadastro do plano pela tela" (pago na Etapa 30) e "anexos" (pago na 32) — os dois saíram.* ·
 > **Spec original:** seção 9
-> **Última atualização:** 2026-09-29 (**Etapa 45 — o encaminhamento ganha status; a feature vira 🟢**. Antes: 2026-09-28 (Etapas 43 e 44 — a NC numerada e a liberação pela decisão; as duas escreveram no cabeçalho e na seção "O que falta para 🟢" e a **43 esqueceu de marcar o checklist**, corrigido aqui). Antes: 2026-09-02 (**Etapa 32 — anexos**; antes: 2026-08-31 (**Etapa 30, `af7adea..7982f18`: o cadastro do plano ganha
+> **Última atualização:** 2026-09-30 (**Etapa 46 — o documento decidido deixa de ser um beco; a feature CONTINUA 🟢, e a etapa não paga item de checklist: ela fecha o furo C64 que a 45 criou**. Antes: 2026-09-29 (**Etapa 45 — o encaminhamento ganha status; a feature vira 🟢**). Antes: 2026-09-28 (Etapas 43 e 44 — a NC numerada e a liberação pela decisão; as duas escreveram no cabeçalho e na seção "O que falta para 🟢" e a **43 esqueceu de marcar o checklist**, corrigido aqui). Antes: 2026-09-02 (**Etapa 32 — anexos**; antes: 2026-08-31 (**Etapa 30, `af7adea..7982f18`: o cadastro do plano ganha
 > tela** — o item 5 de "O que falta para 🟢", criado no fechamento da 29, está **pago**. Com ele
 > **não falta mais tela nenhuma** no ciclo dimensional: cadastrar plano, medir na inspeção e reler
 > as medidas são todos cliques. A feature **continua 🟡**, e os quatro itens restantes são **fluxo

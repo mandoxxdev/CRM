@@ -624,10 +624,10 @@ Corolário que vale conhecer: o perfil **Consulta** nunca acontece por omissão 
 | **Administrador** | Acesso total, incluindo configurações do módulo |
 | **Almoxarife** | Movimenta estoque, cadastra material, separa, entrega, aprova e inventaria — não ajusta saldo nem configura |
 | **Gestor** | Ajusta saldo, aprova requisição e inventaria — não movimenta nem cadastra material |
-| **Compras** | Consulta, recebe material e **registra a execução do encaminhamento** de uma não conformidade — inclusive a devolução ao fornecedor, que é a baixa do material (15b.4-ter) |
+| **Compras** | Consulta, recebe material e **registra a execução do encaminhamento** de uma não conformidade — inclusive a devolução ao fornecedor, que é a baixa do material (15b.4-ter). **Não cancela** o documento: quem é cobrado pela fila não a limpa (15b.4-quater) |
 | **Engenharia** | Cadastra e edita material, requisita, reserva e **define o plano de inspeção** (as tolerâncias que ela mesma especifica) |
 | **Produção** | Consulta, requisita e reserva material (é o padrão de quem não tem perfil definido) |
-| **Qualidade** | Consulta, decide inspeção (aprova/reprova item recebido, libera vencimento de lote, muda situação de lote e de série), **define o plano de inspeção** — as características a medir e suas tolerâncias — e é quem **decide as não conformidades** (15b) e pode **registrar a execução do encaminhamento** delas (15b.4-ter). Não movimenta estoque, não ajusta saldo nem cadastra material — mas as duas decisões de aceitação de uma não conformidade **liberam o material bloqueado sozinhas**, no clique da decisão, sem depender de ninguém com ajuste de estoque (15b.4-bis) |
+| **Qualidade** | Consulta, decide inspeção (aprova/reprova item recebido, libera vencimento de lote, muda situação de lote e de série), **define o plano de inspeção** — as características a medir e suas tolerâncias — e é quem **decide as não conformidades** (15b), pode **registrar a execução do encaminhamento** delas (15b.4-ter) e é quem **cancela** o documento cuja execução não se cumpre (15b.4-quater). Não movimenta estoque, não ajusta saldo nem cadastra material — mas as duas decisões de aceitação de uma não conformidade **liberam o material bloqueado sozinhas**, no clique da decisão, sem depender de ninguém com ajuste de estoque (15b.4-bis) |
 | **Consulta** | Somente leitura |
 
 A separação entre **Almoxarife** e **Gestor** é intencional e é o desenho de controle interno do módulo: quem **movimenta** o estoque não é quem **corrige** o saldo. O almoxarife lança entradas e saídas; o ajuste de inventário — o lançamento que faz o número bater sem que nada tenha entrado ou saído — pertence ao gestor.
@@ -657,6 +657,7 @@ A separação entre **Almoxarife** e **Gestor** é intencional e é o desenho de
 | Registrar não conformidade | ● | ● | ● | – | – | – | ● | – |
 | Decidir não conformidade (aceitar, devolver, sucatear…) | ● | – | – | – | – | – | ● | – |
 | Registrar a execução do encaminhamento (confirmar que a devolução, a substituição, a análise ou o sucateamento foi cumprido) | ● | – | ● | – | – | – | ● | – |
+| Cancelar não conformidade (encerrar a cobrança da execução de um documento decidido) | ● | – | – | – | – | – | ● | – |
 | Reservar | ● | ● | – | ● | ● | – | – | – |
 | Reservar para outra OS | ● | – | – | – | – | ● | – | – |
 | Inventariar | ● | ● | – | – | – | ● | – | – |
@@ -674,16 +675,17 @@ As leituras que essa tabela permite fazer, e que vale explicar a quem pergunta:
 - **Reservar para outra OS** é separado de **Reservar**. Qualquer requisitante reserva material para a própria ordem; transferir uma reserva de uma OS para outra é decisão de priorização, e fica com o Administrador e o Gestor.
 - **Inspecionar** é o que autoriza aprovar, reprovar e liberar material da quarentena, e também mudar a situação de um lote ou de uma série, e liberar vencimento. Pertence ao Administrador, ao Almoxarife e ao **Qualidade**.
 - **Gerenciar plano de inspeção** é o que autoriza cadastrar, editar e desativar as características a medir de um material, com o valor nominal e a tolerância (15.2.1). Pertence ao Administrador, ao **Qualidade** e à **Engenharia** — quem especifica tolerância. **Ler** o plano é liberado a qualquer usuário do módulo, porque quem inspeciona precisa saber o que medir. É permissão **separada de Configurar** de propósito: *Configurar* é só do Administrador, e prendê-la ali deixaria a qualidade sem cadastrar o que ela mesma mede.
-- **O perfil Qualidade tem cinco ações, e todas são da mesma família: decidir qualidade.** Ele existe justamente para que a área de qualidade não precise pedir ao almoxarifado que decida por ela, nem receber um perfil largo. São elas: **Inspecionar** (aprovar, reprovar, liberar da quarentena, mudar situação de lote e de série, liberar vencimento); **Gerenciar plano de inspeção** (15.2.1), o cadastro das características a medir e das tolerâncias — não faria sentido a qualidade não poder cadastrar o que ela mesma vai medir; e as três da não conformidade, **Registrar não conformidade**, **Decidir não conformidade** e **Registrar a execução do encaminhamento** (15b), sendo que **decidir** é dele e do Administrador, e de mais ninguém. Fora dessas cinco, ele é leitura. Consequência que quem for usá-lo precisa saber: **os botões "Bloquear Material" e "Desbloquear Material" da tela de Inspeções não são dele** — eles mexem em saldo e pertencem a **Ajustar estoque** (Administrador e Gestor). Clicando neles, o Qualidade recebe:
+- **O perfil Qualidade tem seis ações, e todas são da mesma família: decidir qualidade.** Ele existe justamente para que a área de qualidade não precise pedir ao almoxarifado que decida por ela, nem receber um perfil largo. São elas: **Inspecionar** (aprovar, reprovar, liberar da quarentena, mudar situação de lote e de série, liberar vencimento); **Gerenciar plano de inspeção** (15.2.1), o cadastro das características a medir e das tolerâncias — não faria sentido a qualidade não poder cadastrar o que ela mesma vai medir; e as quatro da não conformidade, **Registrar não conformidade**, **Decidir não conformidade**, **Registrar a execução do encaminhamento** e **Cancelar não conformidade** (15b), sendo que **decidir** e **cancelar** são dele e do Administrador, e de mais ninguém. Fora dessas seis, ele é leitura. Consequência que quem for usá-lo precisa saber: **os botões "Bloquear Material" e "Desbloquear Material" da tela de Inspeções não são dele** — eles mexem em saldo e pertencem a **Ajustar estoque** (Administrador e Gestor). Clicando neles, o Qualidade recebe:
   > *Sem permissão para ajustar saldo de estoque — seu perfil é Qualidade. Solicite acesso a um administrador.*
 
   Bloquear material por decisão de qualidade continua acontecendo **dentro da inspeção** (reprovar o item recebido), que é o que ele pode.
 - **Autorizar recebimento acima do pedido é separado de Receber material, e o Almoxarife não a tem.** Quem recebe a carga registra quanto chegou; autorizar que **entre mais do que o esperado — ou mais do que o saldo do pedido de compra** — é decisão de **Compras** ou do **Administrador** (14.1c e 14.2b). É o mesmo critério das duas assinaturas de sucateamento: quem executa não aprova a própria exceção. Consequência prática para quem usa: a caixa *"Autorizo o recebimento acima do pedido"* **não aparece** na tela do Almoxarife, e por isso a recusa que ele recebe nomeia quem resolve em vez de mandá-lo marcar algo. O **Gestor** não tem esta ação — e não teria como usá-la, porque ele não tem *Receber material* e não abre o recebimento.
 - **Registrar a execução do encaminhamento é a única ação do módulo que Compras tem e o Almoxarife não.** Ela confirma que o que a não conformidade decidiu foi cumprido — e, no caso de *Devolver ao fornecedor*, é ela que **baixa o material** (15b.4-ter). **Compras está dentro** porque é quem fala com o fornecedor, agenda a coleta e emite os documentos comerciais: é quem sabe que o material saiu. **O Almoxarife está fora** porque quem opera o estoque não confirma sozinho a saída do material que a qualidade reprovou — é o mesmo critério de "quem recebe não julga o próprio recebimento", aplicado do lado da baixa. A **Qualidade** também pode registrar a execução, e isso não é contradição: ela decide e, quando é ela mesma que cuida do envio, confirma — o que a permissão separada garante é que **Compras consiga executar sem poder decidir**, e que o **Almoxarife não consiga nenhuma das duas coisas**.
+- **Cancelar não conformidade é a terceira permissão dessa família, e ela é o espelho da de execução.** Encerrar a cobrança da execução de um documento decidido (15b.4-quater) pertence ao **Administrador** e à **Qualidade** — e **Compras está fora de propósito**, porque é ele quem a fila cobra, e quem é cobrado por uma pendência não deve poder apagá-la sem passar por quem respondeu pelo material. **Compras executa; não anula.** O **Almoxarife** continua fora das três. Cancelar também **não** é decidir: a decisão fica preservada, e é justamente por isso que as duas permissões são separadas — anular a cobrança e julgar o material são atos diferentes.
 - **Conferir separação é separado de Separar / emitir**, mesmo com os mesmos dois perfis hoje: a conferência é a segunda pessoa olhando a caixa (10.3), e a permissão existe à parte para poder ser restringida sem mexer na separação. Ter a permissão não basta: **quem separou não confere**, e isso vale para o Administrador também — a barreira é por pessoa, não por perfil.
 - **As duas aprovações de sucateamento são de balcões diferentes de propósito.** A perna do almoxarifado (Administrador, Almoxarife) e a perna da gestão (Administrador, Gestor) precisam **das duas assinaturas, de pessoas diferentes**, para uma baixa de sucata sair do estoque — e, embora o Administrador tenha as duas permissões, **a mesma pessoa nunca assina as duas pernas** (seção 20).
 
-E duas que a tabela **não** mostra: **Inspecionar** cobre as decisões de qualidade, mas anexar o certificado do fornecedor a um lote pertence a **Receber material** — é o pessoal que recebe a carga que tem o documento em mãos. E **a central de alertas não é filtrada por perfil**: quem tem *Ver a central de alertas* vê o registro inteiro, inclusive os alertas de estoque parado e de estoque excessivo, que trazem o **valor em dinheiro** parado. É por isso que o perfil **Qualidade** não a recebe — os **cinco** alertas que interessariam a ele (material reprovado, divergência de recebimento, lote sem certificado, fila de itens aguardando inspeção e **não conformidade aberta**) só ficam acessíveis quando a central souber filtrar por perfil. O quinto deles é o mais recente e muda o tamanho do problema: até ele, a exclusão custava à Qualidade apenas **visibilidade**; agora **a ação pertence justamente a quem não vê o cartão que a cobra** — o cartão *"Não conformidade aberta"* é visto por Administrador, Almoxarife, Gestor e Compras, e quem **decide** é Administrador e Qualidade. Na prática, a Qualidade acompanha as pendências pela tela **Não Conformidades** (15b), que é aberta a qualquer usuário do módulo e tem filtro por estado; o que ela não recebe é o cartão e o e-mail. Esta é uma limitação conhecida e registrada, e a correção passa por a central saber filtrar por perfil — enquanto ela não souber, dar o cartão à Qualidade significaria dar também o valor em dinheiro do estoque parado.
+E duas que a tabela **não** mostra: **Inspecionar** cobre as decisões de qualidade, mas anexar o certificado do fornecedor a um lote pertence a **Receber material** — é o pessoal que recebe a carga que tem o documento em mãos. E **a central de alertas não é filtrada por perfil**: quem tem *Ver a central de alertas* vê o registro inteiro, inclusive os alertas de estoque parado e de estoque excessivo, que trazem o **valor em dinheiro** parado. É por isso que o perfil **Qualidade** não a recebe — os **seis** alertas que interessariam a ele (material reprovado, divergência de recebimento, lote sem certificado, fila de itens aguardando inspeção, **não conformidade aberta** e **execução pendente**) só ficam acessíveis quando a central souber filtrar por perfil. Os dois últimos são os que mudam o tamanho do problema: até eles, a exclusão custava à Qualidade apenas **visibilidade**; com eles, **a ação pertence justamente a quem não vê o cartão que a cobra**. O cartão *"Não conformidade aberta"* é visto por Administrador, Almoxarife, Gestor e Compras, e quem **decide** é Administrador e Qualidade. No cartão *"Execução pendente"* a torção é dupla e vale explicar: quem o vê é quem **executa** (Compras), e a única saída para o documento que **não pode** ser executado é **cancelá-lo**, o que é da Qualidade — que não vê o cartão. É por isso que o texto daquele aviso **nomeia a saída e diz de quem ela é** (15b.6-bis), em vez de só cobrar: sem essa linha, o destinatário ficaria com um cartão aceso e nenhuma porta. Na prática, a Qualidade acompanha as pendências pela tela **Não Conformidades** (15b), que é aberta a qualquer usuário do módulo e tem filtro por estado e por estado de execução; o que ela não recebe é o cartão e o e-mail. Esta é uma limitação conhecida e registrada, e a correção passa por a central saber filtrar por perfil — enquanto ela não souber, dar o cartão à Qualidade significaria dar também o valor em dinheiro do estoque parado.
 
 ### 5.6 Como se atribui um perfil
 
@@ -3127,22 +3129,27 @@ decisão sozinha não responde: *o material já saiu?*
 
 | O que aparece | Significa |
 |---|---|
-| *(vazio)* | o documento **ainda não foi decidido** — não há execução a mostrar |
+| *(um travessão)* | o documento **ainda não foi decidido** — não há execução a mostrar. É também o que aparece no documento **cancelado que nunca chegou a ser decidido**, porque ali também não havia cobrança nenhuma |
 | **Pendente** | decidido, esperando alguém confirmar que o encaminhamento foi cumprido |
 | **Executada** | cumprido — com o **nome de quem registrou** e a data e hora |
 | **Não se aplica** | a decisão foi uma das duas de aceitação, que já se executou no clique da decisão |
+| **Deixou de ser cobrada** | o documento foi **cancelado** enquanto a execução ainda estava Pendente — a decisão continua gravada, e a cobrança terminou (15b.4-quater) |
 
-Vazio e *Pendente* são propositalmente diferentes: tratar documento não decidido como pendente de
-execução faria a fila parecer maior do que é, com trabalho que ninguém decidiu ainda.
+Travessão e *Pendente* são propositalmente diferentes: tratar documento não decidido como pendente
+de execução faria a fila parecer maior do que é, com trabalho que ninguém decidiu ainda. E
+*"Deixou de ser cobrada"* é propositalmente diferente do travessão: nesta linha **havia** uma
+execução pendente e alguém a encerrou, com motivo — o travessão diria que nunca houve cobrança.
 
 #### O botão e o modal
 
 O botão **Registrar execução** aparece **só** na linha de documento **Decidido** com execução
 **Pendente** — nas outras a operação seria recusada, e botão que erra sempre é armadilha, não
-controle. Ele também **só aparece para quem tem a permissão**: é o único botão desta tela que a
-falta de perfil **esconde** em vez de recusar no clique, porque quem registra a execução (Compras)
-não é quem decide (Qualidade), e deixá-lo visível para a qualidade seria um convite permanente a
-uma recusa que não é engano dela. Quem autoriza continua sendo o servidor.
+controle. Ele também **só aparece para quem tem a permissão**: é um dos dois botões desta tela que a
+falta de perfil **esconde** em vez de recusar no clique (o outro é o de cancelar, 15b.4-quater), e
+pela mesma razão nos dois — quem registra a execução (Compras) não é quem decide nem quem cancela
+(Qualidade), e deixar o botão visível para a plateia errada seria um convite permanente a uma recusa
+que não é engano dela. O botão de **decidir**, cuja plateia é a mesma de quem olha a lista, continua
+recusando no clique. Quem autoriza continua sendo o servidor.
 
 O botão abre o modal **"Registrar execução de ⟨número do documento⟩"**, que mostra o **material**, a
 **decisão** gravada e um campo **Observações** — **opcional**, e é o lugar do número da nota de
@@ -3212,33 +3219,43 @@ sido devolvido.
 
 **3. A execução é registrada mesmo quando não há saldo a mover, e a mensagem diz o motivo.** Alguém
 de fato embalou e despachou; o registro vale, e o que a tela explica é **por que o saldo não mudou**.
-Recusar deixaria o documento cobrando execução para sempre na fila, e a única saída seria registrar
-algo falso só para tirá-lo de lá. **A recusa continua valendo para falha inesperada do sistema:** aí
+Recusar deixaria o documento cobrando execução na fila sem que ninguém pudesse dar por cumprido o
+que já tinha sido cumprido. **A recusa continua valendo para falha inesperada do sistema:** aí
 o documento **volta a Pendente** de execução — decidido, documentado, esperando nova tentativa. A
 decisão **não** é desfeita, porque foi tomada em outro dia, por outra pessoa, e continua valendo.
 
 **4. Material com número de série não é devolvido por esta tela.** A tentativa é recusada com
 *"Material com controle de série não pode ser devolvido por aqui — dê baixa pela tela de
 Movimentações"*. Escolher **quais** peças voltam é gesto de tela, e baixar a quantidade sem baixar as
-séries deixaria a peça já devolvida ainda entregável pelo sistema.
+séries deixaria a peça já devolvida ainda entregável pelo sistema. **Este documento não fica preso
+por causa disso:** depois de dar a baixa das séries em Movimentações, a Qualidade **cancela** o
+documento dizendo isso no motivo (15b.4-quater). O mesmo vale para o caso em que o sistema não
+consegue identificar o lote do material devolvido.
 
 #### As recusas
 
 | Situação | Mensagem |
 |---|---|
 | A decisão é *Aceitar* ou *Aceitar sob desvio* | *"Esta decisão não tem execução a registrar"* |
-| O documento está **Aberto** ou **Cancelado** | *"Só é possível registrar a execução de uma não conformidade decidida"* |
+| O documento ainda está **Aberto** | *"Só é possível registrar a execução de uma não conformidade decidida"* |
+| O documento foi **cancelado** | *"Esta não conformidade foi cancelada — não há execução a registrar"* |
 | A execução já foi registrada | *"A execução desta não conformidade já foi registrada"* |
 | Material com controle de número de série | *"Material com controle de série não pode ser devolvido por aqui — dê baixa pela tela de Movimentações"* |
 | Material com controle por lote, e nenhum lote identificável no item recebido | *"Não foi possível identificar o lote do material devolvido"* |
 | Perfil sem a permissão | *"Sem permissão para registrar a execução do encaminhamento — seu perfil é Almoxarife. Solicite acesso a um administrador."* |
 
-#### Não há como desfazer
+#### A execução registrada não se desfaz
 
 A execução **não se registra duas vezes**, e a movimentação de devolução **recusa o estorno** pelo
 livro, com *"Devolução ao fornecedor não pode ser estornada pelo livro — o material voltaria
 bloqueado com o documento dizendo que foi devolvido"* (6.10). O documento decidido também **não pode
 ser decidido de novo**. Confirme com o material já embalado, não antes.
+
+**O que tem saída é o contrário disso: o documento que ainda *não* foi executado.** Enquanto a
+execução está Pendente, o documento pode ser **cancelado** por Administrador ou Qualidade
+(15b.4-quater) — é o caminho para o encaminhamento que não se cumpre. Depois de registrada a
+execução, não: aí a única resposta é *"A execução desta não conformidade já foi registrada — o
+documento não pode ser cancelado"*.
 
 #### A fila do que falta executar
 
@@ -3260,12 +3277,23 @@ de execução** e volta a *Qualquer execução*, para que a linha recém-executa
 nome de quem registrou — presa na fila, ela sumiria no mesmo instante em que fosse executada. O
 filtro de origem, se estiver escolhido, permanece.
 
+**A fila sai por dois caminhos, e os dois são deliberados:** a **execução registrada** e o
+**cancelamento do documento** (15b.4-quater). Não há um terceiro — a fila não esvazia com o tempo,
+porque não tem prazo. Depois de um cancelamento a tela larga **os dois** filtros: o de execução
+volta a *Qualquer execução* e o de status volta a *Todos os status*, porque o documento cancelado
+não casa nem *Abertas* nem *Decididas* e, presos, os dois filtros esconderiam a linha que a pessoa
+acabou de cancelar — justamente a que ela quer ver, com o motivo que digitou. O filtro de origem
+permanece.
+
 #### O painel de Alertas para de cobrar o que saiu
 
 O cartão **Material reprovado** da central de alertas (21c-bis) deixa de listar a inspeção **cujo
 material saiu de fato** para o fornecedor. Se a execução foi registrada **sem mover saldo** — qualquer
 uma das frases acima que termina em "sem mover saldo" —, o aviso **continua** listando, porque o
-material continua no galpão. O cartão mede **material movido**, não intenção registrada.
+material continua no galpão. O cartão mede **material movido**, não intenção registrada. Pela mesma
+régua, **cancelar o documento não tira a inspeção deste cartão** (15b.4-quater): o cancelamento
+encerra a cobrança da execução, e não move material. O que tira essa inspeção do cartão é o material
+sair — ou a janela de dias do próprio cartão vencer, porque ele é aviso de evento e não fila.
 
 #### O que a devolução NÃO faz
 
@@ -3283,6 +3311,110 @@ Registrar a execução é um lançamento de **estoque** e de **documento**, e na
 O que ela faz é gravar quem executou e quando, baixar o material do estoque e deixar a linha no
 livro. O acerto comercial com o fornecedor é combinado fora do sistema.
 
+### 15b.4-quater Cancelar o documento — a saída quando o encaminhamento não se cumpre
+
+Nem todo encaminhamento decidido pode ser executado pelo sistema. O caso mais comum é o material
+com **número de série** decidido *Devolver ao fornecedor*: a execução recusa a baixa (a regra 4 de
+15b.4-ter), a baixa das séries é feita na tela de **Movimentações**, e o documento continuaria
+cobrando um gesto que ninguém consegue fazer por ali. **Cancelar o documento é a saída para isso** —
+o registro do encerramento de uma cobrança que não tem como ser atendida.
+
+A ordem prática nesse caso é esta: **primeiro** dá-se a baixa das peças em **Movimentações**,
+escolhendo quais séries saem; **depois** a Qualidade cancela o documento, dizendo no motivo que a
+baixa foi feita por lá. O documento fica no histórico com a decisão, com o motivo e com o nome de
+quem o encerrou — e para de aparecer nas duas cobranças da execução.
+
+**Quem pode: Administrador e Qualidade.** O **Compras não pode**, e a razão é de incentivo, não de
+confiança: é ele quem registra a execução e é ele quem a fila cobra, então deixá-lo encerrar o
+próprio documento seria deixá-lo limpar a própria fila sem passar por quem respondeu pelo material.
+**Compras executa; não anula.** O **Almoxarife** também está fora, pelo mesmo critério das outras
+ações desta família: quem opera o estoque não encerra o documento que julga o que ele recebeu. A
+tentativa é recusada com *"Sem permissão para cancelar não conformidade — seu perfil é ⟨perfil⟩.
+Solicite acesso a um administrador."*
+
+Como no botão de execução, o botão **some** para quem não tem a permissão, em vez de recusar no
+clique — a plateia dele é outra (Qualidade), e deixá-lo visível para quem opera a fila seria um
+convite permanente a uma recusa que não é engano dessa pessoa. Quem decide continua sendo o
+servidor.
+
+#### Só documento decidido com execução pendente
+
+O botão **Cancelar a não conformidade** aparece **só** na linha **Decidida** com execução
+**Pendente**. Em qualquer outra situação a operação é recusada, e cada recusa tem a sua razão
+própria:
+
+| Situação | Mensagem |
+|---|---|
+| O documento **ainda não foi decidido** | *"Só é possível cancelar uma não conformidade já decidida — decida o documento, ou corrija a quantidade conferida"* |
+| A decisão foi de **aceitação** (*Aceitar* ou *Aceitar sob desvio*), que já se executou no próprio clique | *"Esta decisão não deixou execução pendente — não há o que encerrar"* |
+| A **execução já foi registrada** | *"A execução desta não conformidade já foi registrada — o documento não pode ser cancelado"* |
+| O documento **já está cancelado** | *"Esta não conformidade já está cancelada"* |
+| Outra pessoa mexeu no documento no mesmo instante | *"O documento mudou de estado durante o cancelamento — tente de novo"* |
+
+A primeira recusa **nomeia as duas saídas certas** de propósito: um documento aberto ou se **decide**
+(e aí, se for o caso, se cancela) ou se resolve **corrigindo a quantidade conferida** no recebimento,
+que é o que o cancela sozinho (15b.3). Cancelar documento aberto à mão silenciaria uma divergência
+que continua de pé, sem ninguém ter decidido nada sobre ela.
+
+#### O motivo é obrigatório
+
+O botão abre o modal **"Cancelar ⟨número do documento⟩"**, que mostra o material e a decisão gravada,
+explica o que o cancelamento faz e pede o **Motivo**, com o lembrete *"Por que este documento não se
+cumpre? Mínimo de 5 caracteres — é o que fica para quem auditar depois."*
+
+**O motivo precisa de pelo menos 5 caracteres.** Abaixo disso o botão de confirmar fica
+**desabilitado**, com o aviso *"O motivo precisa de pelo menos 5 caracteres."*; forçado, o sistema
+recusa com *"O motivo do cancelamento deve ter pelo menos 5 caracteres"*. É o único registro de **por
+que** a cobrança terminou.
+
+Os dois botões do rodapé são **"Voltar"** e **"Cancelar documento"** — o secundário não se chama
+"Cancelar", como nos outros modais desta tela, porque num modal cujo botão principal é *Cancelar
+documento* duas palavras iguais seriam convite ao clique errado.
+
+#### Cancelar NÃO apaga a decisão
+
+Esta é a regra central, e o modal a diz com as mesmas palavras: **cancelar não apaga a decisão.** O
+documento continua guardando **o que foi decidido, quem decidiu e quando**, com a justificativa da
+decisão. O que termina é a **cobrança da execução**: o documento sai da fila *Pendentes de execução*
+e do aviso de execução pendente (21c-bis).
+
+O aviso de sucesso diz exatamente isso: *"Não conformidade ⟨número⟩ cancelada! Documento cancelado —
+a decisão fica registrada, e a execução deixa de ser cobrada"*.
+
+**Para mudar o rumo do material, não se reedita este documento:** cancela-se este, com o motivo, e
+abre-se outro. Este fica no histórico.
+
+#### O que o documento cancelado passa a mostrar
+
+- o **status** vira **Cancelada**, e a coluna de decisão continua mostrando a decisão e quem decidiu;
+- a coluna de **Execução** passa a dizer **"Deixou de ser cobrada"** — e um travessão, quando o
+  documento cancelado nunca havia sido decidido;
+- no painel de detalhes da linha aparece **"Motivo do cancelamento:"** com o texto que foi digitado;
+- a linha registra **quem cancelou e quando** (*"Cancelada em ⟨data e hora⟩ por ⟨nome⟩"*), e é esse
+  autor que distingue o cancelamento **feito por uma pessoa** do cancelamento **automático** da
+  reconferência (15b.3), que não tem autor;
+- na tela de **Auditoria** (5.8) o ato aparece como *Não conformidade cancelada*, com quem cancelou,
+  o motivo como justificativa e o registro de que havia execução **Pendente** no instante do
+  cancelamento — que é a informação que o motivo explica.
+
+Para achar o documento depois, o filtro de status tem a opção **Canceladas** (e *Todos os status*).
+
+#### Depois de cancelado, não há execução a registrar
+
+Tentar registrar a execução de um documento cancelado é recusado com *"Esta não conformidade foi
+cancelada — não há execução a registrar"*. E o documento cancelado **não volta**: decidi-lo de novo
+é recusado com *"Esta não conformidade já foi encerrada"*.
+
+#### O que o cancelamento humano NÃO reabre
+
+O item **não volta** ao cartão *"Divergência de recebimento"* da central de alertas quando o
+documento foi **decidido e depois cancelado por uma pessoa**. Isso é deliberado, e a régua é dupla:
+o item só reaparece no cartão antigo se o documento cancelado **não tinha decisão** — que é o caso
+do cancelamento automático da reconferência (15b.7). Cancelamento por pessoa sobre documento
+decidido é um **encerramento**, como decidir: alguém olhou o problema, decidiu e registrou por que a
+execução não se cumpre. Devolvê-lo ao cartão como "divergência não documentada" cobraria o que
+ninguém pode atender — não existe tela para abrir um documento à mão (15b.2).
+
 ### 15b.5 Quem pode o quê
 
 | Ato | Perfis |
@@ -3291,6 +3423,7 @@ livro. O acerto comercial com o fornecedor é combinado fora do sistema.
 | **Abrir** um documento | Administrador · Almoxarife · Qualidade · Compras |
 | **Decidir** | **Administrador · Qualidade** |
 | **Registrar a execução** do encaminhamento | **Administrador · Qualidade · Compras** |
+| **Cancelar** o documento decidido com execução pendente | **Administrador · Qualidade** |
 
 Compras fica **fora da decisão** de propósito: ele recebe material e é quem trata com o fornecedor,
 então decidir sobre a entrega do fornecedor que ele mesmo escolheu seria decidir em causa própria. A
@@ -3306,6 +3439,12 @@ critério de "quem recebe não julga o próprio recebimento", do lado da baixa. 
 recusada com *"Sem permissão para registrar a execução do encaminhamento — seu perfil é Almoxarife.
 Solicite acesso a um administrador."*
 
+**E Compras fica fora do cancelamento, que é a terceira permissão desta família.** Cancelar não é
+decidir (a decisão fica preservada) e não é executar, então é permissão à parte — e ela é de
+**Administrador e Qualidade**. Dar o cancelamento a Compras seria dar a quem a fila cobra o poder de
+limpar a própria fila; o Almoxarife fica fora pela mesma razão das outras duas. Resumindo a família
+inteira: **a Qualidade decide e encerra; Compras executa; o Almoxarife não faz nenhuma das três.**
+
 ### 15b.6 O documento que ninguém decide
 
 Um documento que fica **Aberto** mais dias que o configurado (padrão **7**; o campo é *Alerta de Não
@@ -3314,11 +3453,43 @@ central de alertas, com número, material, tipo, origem, dias parado e recebimen
 com o assunto *"[Almoxarifado] Não conformidade aberta — NC-…"*.
 
 **O aviso sai uma vez por documento.** Relembrar todo mês uma pendência parada geraria e-mail
-eterno sem nenhum fato novo. Decidir ou cancelar tira o documento do cartão, sem nenhum gesto extra.
+eterno sem nenhum fato novo. **Decidir** tira o documento do cartão, sem nenhum gesto extra — e
+também sai dele o documento que a reconferência cancelou sozinha, porque a divergência deixou de
+existir (15b.3).
 
-**Esse cartão cobra a decisão, não a execução.** Um documento decidido que ninguém executou **não**
-entra nele e **não** gera e-mail — quem o cobra é o filtro *Pendentes de execução* da própria tela
-de Não Conformidades (15b.4-ter), que é a fila de quem executa e não tem prazo para esvaziar.
+**Esse cartão cobra a decisão; quem cobra a execução é outro.** Um documento decidido que ninguém
+executou **não** entra neste cartão e **não** gera este e-mail: ele é cobrado pelo cartão
+**"Execução pendente"** (21c-bis) e pelo filtro *Pendentes de execução* da própria tela de Não
+Conformidades (15b.4-ter).
+
+**São dois avisos separados de propósito, e a separação é de destinatário e de prazo.** Este cobra a
+**decisão**, e quem decide é a **Qualidade**; o outro cobra a **execução**, e quem executa é
+**Compras**. Um cartão só somaria as duas cobranças no mesmo lugar e no mesmo e-mail — a Qualidade
+recebendo cobrança de devolução que não é dela, Compras recebendo cobrança de decisão que não é
+dele — e obrigaria os dois prazos a ser um só, quando na prática decidir leva dias e uma devolução
+que depende do fornecedor leva semanas. Cada um tem a sua janela em Configurações.
+
+### 15b.6-bis O documento decidido que ninguém executa
+
+Um documento **decidido** cuja execução continua **Pendente** mais dias que o configurado (padrão
+**7**; o campo é *Alerta de Execução Pendente da NC (dias)*, em **Almoxarifado → Configurações**)
+aparece no cartão **"Execução pendente"** da central de alertas, com número, material, tipo,
+origem, **a decisão** e há quantos dias foi decidida — e gera e-mail com o assunto
+*"[Almoxarifado] Execução pendente — NC-…"*.
+
+**O relógio conta desde a decisão**, não desde a abertura do documento: o que este aviso cobra é o
+segundo gesto, e o prazo dele começa quando ficou combinado o que fazer.
+
+**O aviso sai uma vez por documento**, como o de cima e pela mesma razão. Sai da condição de duas
+maneiras: **registrando a execução** ou **cancelando o documento** (15b.4-quater).
+
+**E o aviso nomeia a segunda saída, de propósito:** *"Execução impossível (número de série, lote não
+identificável)? A Qualidade pode cancelar o documento em Almoxarifado → Não Conformidades."* O
+motivo é de perfil, e vale entender: **quem recebe este aviso é quem executa** (a central é de
+Administrador, Almoxarife, Gestor e Compras), e **quem cancela é a Qualidade**, que não vê a central.
+Sem essa linha, o destinatário do aviso seria justamente alguém sem porta de saída — a execução
+recusada pela regra da série, e o cancelamento fora do seu perfil. O aviso diz o caminho em vez de
+deixar quem o recebe sem resposta.
 
 ### 15b.7 O cartão antigo de divergência mudou de significado
 
@@ -3330,11 +3501,14 @@ diferente e o documento não foi aberto"**. Ele é a rede de segurança para o c
 automática falhar — e é por isso que a falha da abertura **não derruba** a conferência nem a decisão
 de inspeção: o material entra, e o item continua visível no cartão antigo até alguém cuidar dele.
 
-**Há uma segunda leitura, e ela é deliberada.** A régua não é *"o item tem documento"*, é *"o item
-tem documento que **não** está cancelado"*. Então o item cuja única não conformidade foi
-**cancelada** — porque alguém corrigiu a quantidade (15b.3) e depois ela divergiu de novo —
-**volta a aparecer** no cartão antigo. É o que se quer: o documento cancelado registra um problema
-que **deixou de existir**, e tratá-lo como "já documentado" esconderia o problema **novo**.
+**Há uma segunda leitura, e ela é deliberada.** A régua não é *"o item tem documento"*: é *"o item
+tem documento que ainda vale"* — e um documento cancelado **pode ou não** valer, dependendo de como
+foi cancelado. Os dois casos são diferentes e o sistema os separa:
+
+| Como o documento foi cancelado | O item volta ao cartão antigo? |
+|---|---|
+| **Sozinho, pela reconferência** — alguém corrigiu a quantidade e a divergência desapareceu (15b.3), e depois ela divergiu de novo. O documento morreu **sem decisão** e sem autor | **Sim.** Aquele documento registra um problema que **deixou de existir**; tratá-lo como "já documentado" esconderia o problema **novo** |
+| **Por uma pessoa**, sobre documento **decidido**, com a execução pendente (15b.4-quater) | **Não.** Alguém olhou, decidiu e registrou por que a execução não se cumpre — é um encerramento, como decidir. Devolvê-lo ao cartão cobraria um documento novo que não existe caminho para abrir (15b.2) |
 
 Resumindo o que quem olha o cartão precisa saber: **item em *"Divergência de recebimento"* significa
 ou que o documento não pôde ser aberto, ou que a divergência voltou depois de uma correção.** Nos
@@ -4249,8 +4423,20 @@ falha do servidor de e-mail nunca trava uma movimentação, uma devolução ou u
   da NC, o material, o tipo, a origem, há quantos dias está parado e o recebimento de origem.
   **Um aviso por documento, para sempre:** relembrar periodicamente uma pendência parada geraria
   e-mail eterno sem nenhum fato novo, e o dado que o destinatário precisa — *"esta NC está
-  parada"* — não muda enquanto ninguém decide. Decidir ou cancelar tira o documento da condição,
-  sem nenhum gesto extra.
+  parada"* — não muda enquanto ninguém decide. Decidir tira o documento da condição, sem nenhum
+  gesto extra, e o mesmo vale para o documento que a reconferência cancela sozinha.
+- **Execução pendente** — varredura diária dos documentos de não conformidade **já decididos** cuja
+  execução do encaminhamento (15b.4-ter) segue **pendente** há mais dias que o configurado (7 de
+  fábrica), contados **desde a decisão**. O aviso diz o número, o material, o tipo, a origem, **a
+  decisão** — que é o que quem lê precisa saber para saber o que executar —, há quantos dias foi
+  decidida e o recebimento de origem; o assunto é *"[Almoxarifado] Execução pendente — NC-…"*. E ele
+  **nomeia a saída**: *"Execução impossível (número de série, lote não identificável)? A Qualidade
+  pode cancelar o documento em Almoxarifado → Não Conformidades."* **Um aviso por documento, para
+  sempre**, pela mesma razão do de cima. Registrar a execução ou cancelar o documento tira a linha
+  da condição. É alerta **separado** do *"Não conformidade aberta"*, e não uma versão mais larga
+  dele: aquele cobra a **decisão** (dona: a Qualidade), este cobra a **execução** (dono: Compras),
+  e as duas janelas são reguláveis à parte porque decidir leva dias e uma devolução que depende do
+  fornecedor leva semanas.
 - **Pedido de compra recebido parcialmente** — varredura diária dos pedidos que
   receberam **parte** do material e ainda têm saldo pendente. O aviso diz o pedido, o fornecedor,
   quanto foi pedido, quanto chegou, **quanto falta** e a previsão de entrega (ou *"não informada"*,
@@ -4368,7 +4554,8 @@ A tela **Almoxarifado → Alertas** reúne, num lugar só, as condições que o 
 | Reserva parada | reserva ativa criada há mais dias que a janela configurada, ou com a data de expiração vencida |
 | Material reprovado | inspeção de recebimento com quantidade reprovada, dentro da janela de eventos, **e cujo material ainda não saiu de fato para o fornecedor**. A inspeção some do cartão quando alguém registra a execução de uma não conformidade decidida *Devolver ao fornecedor* **e a baixa acontece** (15b.4-ter) — o cartão mede material movido, não intenção registrada. Se a execução foi registrada **sem mover saldo** (qualquer uma das frases que terminam em "sem mover saldo"), a linha **continua** aqui, porque o material continua no galpão |
 | Divergência de recebimento | item cuja quantidade recebida difere da esperada, dentro da janela de eventos, **e que ainda não virou não conformidade** (15b.7). **Quem produz esse número é o campo "Qtd. conferida"** do painel do recebimento (14.2b) — digitar uma quantidade diferente da esperada e salvar a conferência é o gesto que cria a divergência; a entrada fiscal, quando altera a quantidade, também. Como a não conformidade nasce no mesmo instante, este cartão tende a ficar **vazio** na operação normal: ver item aqui significa que o documento **não foi aberto** |
-| Não conformidade aberta | documento de não conformidade (15b) ainda **sem decisão** há mais dias que o configurado (padrão 7) — uma linha por documento, com número, material, tipo, origem, dias parado e recebimento. Decidir ou cancelar tira a linha, sem nenhum gesto extra |
+| Não conformidade aberta | documento de não conformidade (15b) ainda **sem decisão** há mais dias que o configurado (padrão 7) — uma linha por documento, com número, material, tipo, origem, dias parado e recebimento. Decidir tira a linha, sem nenhum gesto extra, e o mesmo vale para o documento que a reconferência cancela sozinha |
+| Execução pendente | documento de não conformidade **já decidido** cuja **execução** do encaminhamento (15b.4-ter) segue pendente há mais dias que o configurado (padrão 7). **O relógio conta desde a decisão**, não desde a abertura do documento — uma linha por documento, com número, material, tipo, origem, **a decisão** e há quantos dias foi decidida. Sai da lista quando a execução é registrada **ou** quando o documento é cancelado (15b.4-quater). O aviso **nomeia essa saída** no próprio texto: *"Execução impossível (número de série, lote não identificável)? A Qualidade pode cancelar o documento em Almoxarifado → Não Conformidades."* |
 | Divergência de inventário | conferência concluída com pelo menos um item divergente, dentro da janela de eventos — **uma linha por conferência**, com a contagem de itens (nunca o valor em reais) |
 | Lotes sem certificado | resumo dos lotes com saldo cujo material exige certificado do fornecedor e que estão sem o arquivo — inclui lote bloqueado (o caso mais comum, porque o lote que exige certificado nasce travado) e material de cliente |
 
@@ -4376,7 +4563,9 @@ A tela **Almoxarifado → Alertas** reúne, num lugar só, as condições que o 
 
 Um detalhe que o operador precisa entender: a janela de eventos olha a **última atualização** do documento. Mexer num recebimento antigo que tem divergência nunca comunicada faz o aviso nascer ali — é a rede de segurança, não repetição.
 
-**E um aviso de evento não é uma fila de pendência.** A janela do cartão *Material reprovado* é configurável (padrão **7** dias) e a inspeção **sai dele sozinha** passado o prazo, devolvida ou não — o cartão diz "isto aconteceu nos últimos dias", não "isto ainda falta fazer". Para acompanhar o que falta executar existe o filtro **Pendentes de execução** da tela de Não Conformidades (15b.4-ter), que não tem prazo e não esvazia com o tempo. Pelo mesmo motivo, registrar a devolução **não** cancela o e-mail de material reprovado: ele saiu uma única vez, no instante da reprovação.
+**E um aviso de evento não é uma fila de pendência.** A janela do cartão *Material reprovado* é configurável (padrão **7** dias) e a inspeção **sai dele sozinha** passado o prazo, devolvida ou não — o cartão diz "isto aconteceu nos últimos dias", não "isto ainda falta fazer". Quem cobra o que falta executar são dois outros lugares, e nenhum dos dois esvazia com o tempo: o cartão **Execução pendente**, que só sai por execução registrada ou por cancelamento do documento, e o filtro **Pendentes de execução** da tela de Não Conformidades (15b.4-ter), que não tem prazo nenhum. Pelo mesmo motivo, registrar a devolução **não** cancela o e-mail de material reprovado: ele saiu uma única vez, no instante da reprovação.
+
+**Uma nota de operação que vale saber antes de receber o aviso.** Quem vê a central — e recebe o e-mail de *Execução pendente* — é quem **executa** (Administrador, Almoxarife, Gestor e Compras); quem **cancela** o documento é a **Qualidade**, que não vê a central. É exatamente por isso que o texto do aviso **diz o caminho** em vez de só cobrar: sem essa linha, o único destinatário do aviso seria alguém sem nenhuma porta de saída para o documento — a execução recusada e o cancelamento fora do seu perfil. Na prática: Compras recebe o aviso, vê que a execução é impossível e pede à Qualidade que cancele o documento com o motivo.
 
 **E-mail: um aviso por situação, não um por dia.** A varredura roda diariamente, mas cada situação gera um único e-mail: calibração avisa uma vez por validade; requisição atrasada e reserva parada, uma vez cada; sem consumo e excessivo re-lembram no máximo uma vez por mês enquanto persistirem; materiais sem endereço é um resumo semanal com a contagem, e lotes sem certificado um resumo mensal. Nos avisos de ato, cada fato avisa uma vez: uma inspeção reprovada, uma conferência concluída, e — no caso da quantidade recebida — cada valor divergente diferente. Corrigir a quantidade e errar de novo com outro número é fato novo e avisa outra vez; salvar o mesmo número duas vezes, não. Os avisos saem para a mesma lista de e-mails dos alertas de estoque, e o interruptor geral de e-mail dos alertas desliga todos — a central, por ser leitura ao vivo, continua funcionando mesmo com o e-mail desligado.
 
