@@ -14,6 +14,8 @@ const requisitionNotificationService = require('./requisitionNotificationService
 // Sem ciclo: o serviço de valor não importa este módulo. A chamada é sempre pela propriedade do
 // módulo (`requisitionValueApprovalService.getEmailsAprovadores`), não por desestruturação.
 const requisitionValueApprovalService = require('./requisitionValueApprovalService');
+// Sem ciclo: o serviço de regras não importa este módulo.
+const approvalRulesService = require('./approvalRulesService');
 
 const STATUS_AGUARDANDO_VALOR = requisitionValueApprovalService.STATUS_AGUARDANDO;
 
@@ -99,11 +101,25 @@ function getRequisicoesUrl(appBaseUrl) {
 /**
  * `settings` é opcional para não quebrar quem já chama com quatro argumentos; só a variante de
  * liberação por valor o usa (para o limite).
+ * `pendencia` (Etapa 47, T5) escolhe a terceira variante: a cobrança de UMA pendência de regra,
+ * que nomeia a regra. Ela ganha de `porValor`: quando há pendência, é ela o gesto que falta.
  */
-function buildMensagemLembrete(requisicao, itens, dias, appBaseUrl, settings = {}) {
+function buildMensagemLembrete(requisicao, itens, dias, appBaseUrl, settings = {}, pendencia = null) {
   const numero = requisicao.numero || `REQ-${requisicao.id}`;
-  const porValor = requisicao.status === STATUS_AGUARDANDO_VALOR;
-  const gesto = porValor ? 'liberação por valor' : 'aprovação';
+  const porRegra = !!pendencia;
+  const porValor = !porRegra && requisicao.status === STATUS_AGUARDANDO_VALOR;
+  let gesto = 'aprovação';
+  let tituloGesto = 'APROVAÇÃO';
+  let chamada = 'aprovar ou rejeitar';
+  if (porRegra) {
+    gesto = `aprovação da regra "${pendencia.regra_nome}"`;
+    tituloGesto = 'APROVAÇÃO DE REGRA';
+    chamada = 'assinar a aprovação da regra';
+  } else if (porValor) {
+    gesto = 'liberação por valor';
+    tituloGesto = 'LIBERAÇÃO POR VALOR';
+    chamada = 'aprovar ou reprovar a liberação';
+  }
   const diasFlex = `${dias} dia${dias === 1 ? '' : 's'}`;
   const assunto = `Lembrete: Requisição ${numero} aguardando ${gesto} há ${diasFlex}`;
   // `formatMoeda` já emite o "R$" — a literal não o repete.
@@ -137,11 +153,11 @@ function buildMensagemLembrete(requisicao, itens, dias, appBaseUrl, settings = {
     </tr>`;
   }).join('');
 
-  const text = `LEMBRETE — REQUISIÇÃO AGUARDANDO ${gesto.toUpperCase()}
+  const text = `LEMBRETE — REQUISIÇÃO AGUARDANDO ${tituloGesto}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Requisição: ${numero}
-Aguardando há: ${dias} dia(s)${valorComLimite ? `\nValor total: ${valorComLimite}` : ''}
+Aguardando há: ${dias} dia(s)${porRegra ? `\nRegra: ${pendencia.regra_nome}` : ''}${valorComLimite ? `\nValor total: ${valorComLimite}` : ''}
 Solicitante: ${requisicao.solicitante_nome}
 Setor: ${setor}
 Urgência: ${urgencia}
@@ -150,7 +166,7 @@ OS/Referência: ${osRef}
 Itens:
 ${itensTexto || '—'}
 
-Acesse o sistema para ${porValor ? 'aprovar ou reprovar a liberação' : 'aprovar ou rejeitar'}:
+Acesse o sistema para ${chamada}:
 ${appUrl}
 
 Gerado em ${geradoEm}
@@ -194,7 +210,8 @@ GMP Industriais — Orion`;
                     <strong>Setor:</strong> ${alertService.escapeHtml(setor)}<br>
                     <strong>Urgência:</strong> ${alertService.escapeHtml(urgencia)}<br>
                     <strong>OS/Referência:</strong> ${alertService.escapeHtml(osRef)}${valorComLimite ? `<br>
-                    <strong>Valor total:</strong> ${alertService.escapeHtml(valorComLimite)}` : ''}
+                    <strong>Valor total:</strong> ${alertService.escapeHtml(valorComLimite)}` : ''}${porRegra ? `<br>
+                    <strong>Regra:</strong> ${alertService.escapeHtml(pendencia.regra_nome)}` : ''}
                   </td>
                 </tr>
               </table>
@@ -264,12 +281,12 @@ async function resolverDestinatarios(db, requisicao, settings) {
   return [...destinatarios].filter(Boolean);
 }
 
-async function registrarLog(db, requisicaoId, destinatario, status, erro, dias) {
+async function registrarLog(db, requisicaoId, destinatario, status, erro, dias, pendenciaId = null) {
   try {
     await dbRun(db, `INSERT INTO requisicao_lembretes_log
-      (requisicao_id, destinatario, status, erro, dias_aguardando)
-      VALUES (?, ?, ?, ?, ?)`,
-    [requisicaoId, destinatario, status, erro || null, dias]);
+      (requisicao_id, destinatario, status, erro, dias_aguardando, pendencia_regra_id)
+      VALUES (?, ?, ?, ?, ?, ?)`,
+    [requisicaoId, destinatario, status, erro || null, dias, pendenciaId]);
   } catch (err) {
     console.warn('[almoxarifado-lembretes] Falha ao registrar log:', err.message);
   }
@@ -298,6 +315,10 @@ async function buscarRequisicoesElegiveis(db, intervaloHoras) {
     WHERE (status = 'PENDENTE'
            OR (status = ? AND data_aprovacao IS NULL))
       AND COALESCE(ativo, 1) = 1
+      -- Etapa 47 (T5): com pendencia de regra ABERTA o /aprovar e o /aprovar-valor estao barrados;
+      -- cobrar por status seria cobrar de quem nao pode agir. A lane de pendencia cobra.
+      AND NOT EXISTS (SELECT 1 FROM requisicao_aprovacoes_regra p
+                      WHERE p.requisicao_id = requisicoes_almoxarifado.id AND p.status = 'ABERTA')
       AND datetime(updated_at) <= datetime('now', ?)
       AND (
         ultimo_lembrete_enviado IS NULL
@@ -345,10 +366,108 @@ async function processarLembreteRequisicao(db, requisicao, settings) {
   };
 }
 
+// ── Etapa 47, T5 — o lembrete POR PENDÊNCIA de regra ────────────────────────────────────────
+// Outro lembrete, e não uma variante do de status (desenho 7.2): a chave é a PENDÊNCIA, com
+// maturação e reincidência próprias. O status da requisição entra só para excluir a já decidida.
+
+async function buscarPendenciasRegraElegiveis(db, intervaloHoras) {
+  const horas = Math.max(1, Number(intervaloHoras) || DEFAULT_INTERVAL_HOURS);
+  const cutoff = `-${horas} hours`;
+  const aguardando = approvalRulesService.STATUS_REQUISICAO_AGUARDANDO;
+  return dbAll(db, `SELECT p.*, q.numero, q.solicitante_id, q.solicitante_nome, q.setor, q.departamento,
+      q.urgencia, q.os_referencia, q.status AS requisicao_status
+    FROM requisicao_aprovacoes_regra p
+    JOIN requisicoes_almoxarifado q ON q.id = p.requisicao_id
+    WHERE p.status = 'ABERTA'
+      AND q.status IN (${aguardando.map(() => '?').join(',')})
+      AND COALESCE(q.ativo, 1) = 1
+      AND datetime(p.created_at) <= datetime('now', ?)
+      AND (p.ultimo_lembrete_enviado IS NULL OR datetime(p.ultimo_lembrete_enviado) <= datetime('now', ?))
+    ORDER BY p.created_at ASC, p.id ASC`, [...aguardando, cutoff, cutoff]);
+}
+
+/**
+ * Plateia de UMA pendência: o snapshot de aprovadores dela, MENOS quem não pode assinar — o
+ * solicitante e quem já assinou outra perna da mesma requisição (RN-07). Sem ninguém que possa,
+ * cai na lista geral: melhor cobrar alguém que resolva (um admin, desativar a regra) do que
+ * ninguém — o silêncio é o defeito que esta linhagem de etapas veio fechar.
+ */
+async function resolverDestinatariosPendencia(db, pendencia, settings) {
+  let ids = [];
+  try { ids = JSON.parse(pendencia.aprovadores || '[]').map(Number); } catch (_) { ids = []; }
+  const jaAssinaram = new Set((await dbAll(db, `SELECT aprovador_id FROM requisicao_aprovacoes_regra
+    WHERE requisicao_id = ? AND status = 'APROVADA' AND aprovador_id IS NOT NULL`,
+  [pendencia.requisicao_id])).map((r) => Number(r.aprovador_id)));
+  const podem = ids.filter((id) => id !== Number(pendencia.solicitante_id) && !jaAssinaram.has(id));
+
+  let emails = [];
+  if (podem.length) {
+    const rows = await dbAll(db, `SELECT email FROM usuarios
+      WHERE id IN (${podem.map(() => '?').join(',')}) AND COALESCE(ativo, 1) = 1 AND email IS NOT NULL`, podem);
+    emails = rows.map((r) => r.email);
+  }
+  if (!emails.length) emails = settings.emails;
+  return [...new Set(emails.map((e) => String(e).trim().toLowerCase()))].filter(Boolean);
+}
+
+async function processarLembretePendencia(db, pendencia, settings) {
+  const dias = diasAguardando(pendencia.created_at);
+  const requisicao = {
+    id: pendencia.requisicao_id, numero: pendencia.numero, status: pendencia.requisicao_status,
+    solicitante_nome: pendencia.solicitante_nome, setor: pendencia.setor,
+    departamento: pendencia.departamento, urgencia: pendencia.urgencia, os_referencia: pendencia.os_referencia,
+  };
+  const base = {
+    pendencia_id: pendencia.id, requisicao_id: pendencia.requisicao_id,
+    numero: pendencia.numero, regra_nome: pendencia.regra_nome,
+  };
+  const itens = await carregarItens(db, pendencia.requisicao_id);
+  const destinatarios = await resolverDestinatariosPendencia(db, pendencia, settings);
+  if (!destinatarios.length) return { ...base, enviado: false, motivo: 'nenhum destinatário configurado' };
+
+  const msg = buildMensagemLembrete(requisicao, itens, dias, settings.appUrl, settings, pendencia);
+  const resultado = await alertService.enviarEmail(db, destinatarios, msg.assunto, msg.html, msg.text);
+  const hasError = resultado.erros.length > 0 && resultado.enviados === 0;
+  for (const destinatario of destinatarios) {
+    await registrarLog(db, pendencia.requisicao_id, destinatario,
+      hasError ? 'ERRO' : 'ENVIADO', hasError ? resultado.erros.join('; ') : null, dias, pendencia.id);
+  }
+  if (!hasError && resultado.enviados > 0) {
+    await dbRun(db, 'UPDATE requisicao_aprovacoes_regra SET ultimo_lembrete_enviado = CURRENT_TIMESTAMP WHERE id = ?',
+      [pendencia.id]);
+  }
+  return { ...base, enviado: resultado.enviados > 0, destinatarios, erros: resultado.erros, dias_aguardando: dias };
+}
+
+async function processarLembretesRegra(db, settings) {
+  const elegiveis = await buscarPendenciasRegraElegiveis(db, settings.intervaloHoras);
+  const resultados = [];
+  // Mesmo motivo do try/catch da lane de status: uma pendência ruim não mata as outras.
+  for (const pendencia of elegiveis) {
+    try {
+      resultados.push(await processarLembretePendencia(db, pendencia, settings));
+    } catch (err) {
+      console.warn(`[almoxarifado-lembretes] Falha na pendência ${pendencia.id} (${pendencia.regra_nome}):`, err.message);
+      resultados.push({
+        pendencia_id: pendencia.id, requisicao_id: pendencia.requisicao_id, numero: pendencia.numero,
+        regra_nome: pendencia.regra_nome, enviado: false, erros: [err.message],
+      });
+    }
+  }
+  return {
+    processados: resultados.length,
+    enviados: resultados.filter((r) => r.enviado).length,
+    resultados,
+  };
+}
+
 async function processarLembretesPendentes(db) {
   const settings = await getReminderSettings(db);
   if (!settings.ativo) {
-    return { ativo: false, processados: 0, enviados: 0, resultados: [] };
+    return {
+      ativo: false, processados: 0, enviados: 0, resultados: [],
+      lembretes_regra: { processados: 0, enviados: 0, resultados: [] },
+    };
   }
 
   const elegiveis = await buscarRequisicoesElegiveis(db, settings.intervaloHoras);
@@ -371,11 +490,23 @@ async function processarLembretesPendentes(db) {
     }
   }
 
+  // A lane de pendência roda no MESMO gesto: o job horário e a rota manual chamam só esta
+  // função, então não há segunda fiação para esquecer. Uma falha dela não apaga o resultado
+  // da lane de status.
+  let lembretesRegra;
+  try {
+    lembretesRegra = await processarLembretesRegra(db, settings);
+  } catch (err) {
+    console.warn('[almoxarifado-lembretes] Falha na lane de pendências de regra:', err.message);
+    lembretesRegra = { processados: 0, enviados: 0, resultados: [], erro: err.message };
+  }
+
   return {
     ativo: true,
     processados: resultados.length,
     enviados: resultados.filter((r) => r.enviado).length,
     resultados,
+    lembretes_regra: lembretesRegra,
   };
 }
 
@@ -388,6 +519,9 @@ module.exports = {
   processarLembretesPendentes,
   processarLembreteRequisicao,
   resolverDestinatarios,
+  resolverDestinatariosPendencia,
+  buscarPendenciasRegraElegiveis,
+  processarLembretesRegra,
   resetLembreteRequisicao,
   buildMensagemLembrete,
   diasAguardando,

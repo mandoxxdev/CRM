@@ -2378,6 +2378,10 @@ async function initSchema(db) {
   )`);
   await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_req_aprov_regra_status
     ON requisicao_aprovacoes_regra (status, requisicao_id)`);
+  // T5: o lembrete de regra é POR PENDÊNCIA — a reincidência é dela, não da requisição, e o log
+  // diz qual pendência foi cobrada (NULL = lembrete da lane de status).
+  await safeAlter(db, 'ALTER TABLE requisicao_aprovacoes_regra ADD COLUMN ultimo_lembrete_enviado DATETIME');
+  await safeAlter(db, 'ALTER TABLE requisicao_lembretes_log ADD COLUMN pendencia_regra_id INTEGER');
   // 9.7/C2: `regras_avaliadas_em` só é gravada DEPOIS de todas as pendências inseridas; sem ela o
   // gate de aprovação fecha. As requisições que já existem quando a coluna NASCE foram enviadas
   // antes de existir regra — recebem o carimbo, senão nenhuma delas poderia ser aprovada.
