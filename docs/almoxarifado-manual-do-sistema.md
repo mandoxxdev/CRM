@@ -462,8 +462,31 @@ Ou seja: um material com 102 unidades no total, sendo 100 no lote `L-001` e 2 no
 saldo daquele lote. As que **não informam** — a entrega de requisição, as saídas internas e o ajuste de
 saldo total — movem o saldo do material numa linha sem lote. Assim, a soma dos lotes pode ser maior ou
 menor que o físico do material; a diferença é o saldo **sem lote atribuído**. O relatório **Saldo por
-lote** (21d) mostra os dois e fecha a conta com o físico. A tela **Lotes e Séries** mostra o saldo
-atribuído de cada lote — para saber quanto do material não está em lote nenhum, use o relatório.
+lote** (21d) mostra os dois e fecha a conta com o físico.
+
+A tela **Lotes e Séries** mostra, em cada lote, o saldo **atribuído** — é o número contra o qual a saída
+por lote é conferida, e o mesmo que os seletores de lote de Movimentações, Devoluções e Sobras mostram.
+**Abaixo da tabela**, quando o material tem saldo fora dos lotes, aparece o bloco:
+
+> **Sem lote atribuído:** ⟨valor⟩ · **Físico total do material:** ⟨valor⟩
+> *"O saldo de cada lote é o atribuído a ele. Saídas que não informam lote (como a entrega de
+> requisição) e o ajuste de saldo total não baixam de lote nenhum; entradas sem lote (por exemplo, antes
+> de ligar o controle de lote) também ficam fora dos lotes. Lotes + sem lote atribuído = físico total."*
+
+A conta é: **sem lote atribuído = físico do material − soma do saldo de todos os lotes existentes do
+material**, arredondada a seis casas. Ela **pode ser negativa** (saíram 30 sem lote de um material cujo
+lote tinha 100: o lote segue com 100 e o sem lote fica −30) ou **positiva** (entrou material sem lote,
+por exemplo antes de ligar o controle). É **a mesma conta** do relatório *Saldo por lote*, e as duas
+mostram o mesmo número.
+
+**Quando o bloco aparece.** Só quando o resultado é diferente de zero **e** o material:
+- está **ativo**; e
+- tem saldo em algum lote, **ou** tem **Controle por lote** ligado com físico diferente de zero.
+
+Por isso um material **sem** controle de lote e **sem** lote nenhum não mostra o bloco (não há o que
+conferir); um material antigo que ganhou **Controle por lote** depois de já ter estoque, e nunca teve
+lote, mostra *"Nenhum lote cadastrado para este material"* **e** o bloco com o físico inteiro em *"Sem
+lote atribuído"*. O bloco não aparece na aba **Séries**.
 
 ### 4.6 Certificado do fornecedor
 

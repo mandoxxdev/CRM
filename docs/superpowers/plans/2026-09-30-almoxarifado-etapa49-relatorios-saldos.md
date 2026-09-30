@@ -89,7 +89,7 @@ que fica: **âncora de sabotagem sem barra invertida sempre que possível**.
    — a Fase 0 mediu pelo nome do contrato, mas não **executou** o filtro que dizia cobrir.
 3. **Paralelismo: 0 galhos** — as quatro tasks escrevem o mesmo registro, cuja validação é global; declarado no
    desenho. Paralelismo de revisão (2 lentes) e de documentação (fork).
-4. **Defeito que escapou:** *preencher na Etapa 50.* Da 48 para cá: nenhum defeito da 48 foi achado nesta etapa.
+4. **Defeito que escapou: 1, achado na Fase 5 da Etapa 50.** O `relatorioSaldoPorLote` agrupava por `l.id`: uma linha de saldo de **outro** material apontando para um lote somava no lote errado (X mostrava o lote LX com 17 e "Sem lote atribuído" −7; Y sumia). Corrigido para `GROUP BY s.material_id, l.id` na Etapa 50 (`1f335b4`), com cenário. Nenhum dos 16 cenários desta etapa usava dado inconsistente entre material e lote. Da 48 para cá: nenhum defeito da 48 foi achado nesta etapa.
 
 ## Próxima tarefa detalhada — Etapa 50: a tela de Lotes para de mostrar o saldo atribuído como físico (fecha o C71)
 

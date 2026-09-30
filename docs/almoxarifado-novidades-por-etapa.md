@@ -857,7 +857,9 @@ SELECT status, urgencia, COUNT(*) AS qtd
   encaixa em regra de urgência. A trava que impede aprovar Crítico automaticamente e a ordem da lista
   já tratam `critico` minúsculo como Crítico.
 
-### B. Decisões de negócio — B1 a B204; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B205; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+*(**Atualizado em 2026-09-30 de B204 para B205**, com a da Etapa 50.)*
 
 *(**Atualizado em 2026-09-30 de B200 para B204**, com as quatro da Etapa 49 — a B202 veio da revisão do código.)*
 
@@ -3634,6 +3636,16 @@ estoque.** O saldo de lote é o **atribuído**; as saídas sem lote ficam numa l
 **Descartado:** fazer a entrega de requisição e o ajuste baixarem de um lote (qual? o mais antigo?) —
 é mudança de regra do estoque, com efeito em tudo que usa lote, e merece etapa própria (ver **C71**).
 
+**B205 (NOVA, da Etapa 50) — a tela de Lotes ganhou um pedido NOVO ao servidor, em vez de mudar o que
+já existia.** A lista de lotes de um material alimenta, além da tela de Lotes, os **quatro seletores de
+lote** (Movimentações, Devoluções e dois em Sobras), e para eles o saldo **atribuído** é o número certo —
+a saída por lote é conferida contra ele. **Escolhido:** um pedido novo e separado que devolve só o
+**físico**, a **soma dos lotes** e o **sem lote atribuído**, com a **mesma conta** do relatório *Saldo por
+lote* (uma fonte só). **Descartado:** mudar o formato da lista de lotes (quebraria os quatro seletores) e
+fazer a tela calcular sozinha (seria uma segunda conta, que já provou divergir na revisão). **Mantida a
+B204:** a entrega de requisição continua **não** baixando de lote — a tela agora mostra o efeito disso,
+não o muda.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -4606,8 +4618,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
     **Recomendação para quem configura:** toda regra com pelo menos duas pessoas, ou regras que não se
     sobreponham.
 
-71. **NOVO, achado na Etapa 49 (anterior a ela) — a tela de LOTES mostra o saldo ATRIBUÍDO ao lote como
-    se fosse o que está na prateleira.** Cenário: entrada de **100** no lote A; uma requisição de **30**
+71. **✅ RESOLVIDO NA ETAPA 50 (`1f335b4`) — a tela de LOTES mostrava o saldo
+    ATRIBUÍDO ao lote como se fosse o que está na prateleira.** Agora a tela mostra, abaixo da tabela, o
+    bloco **"Sem lote atribuído"** e **"Físico total do material"**, com a mesma conta do relatório
+    *Saldo por lote* — as duas não podem divergir. O número de cada lote **não** mudou (é o certo para
+    escolher lote na saída). Deixado aqui, riscado, em vez de apagado, para quem lembrar do furo
+    confirmar que fechou. O texto original era: Cenário: entrada de **100** no lote A; uma requisição de **30**
     é **entregue** (a entrega não pergunta lote). O material fica com **70** — mas em **Lotes e Séries**
     o lote A continua mostrando **100**. O mesmo vale para o **ajuste de saldo total** e para as saídas
     que não informam lote. **Até a correção:** confira lote pelo relatório **Saldo por lote**, que mostra
@@ -5149,6 +5165,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(49) O histórico do relatório corta nas 500 mais recentes e esconde os cancelados.** O histórico
   completo é a tela **Movimentações** filtrada pelo material.
 
+- **(50) A entrega de requisição continua NÃO baixando de lote.** A tela de Lotes agora **mostra** a
+  diferença entre os lotes e o físico (*"Sem lote atribuído"*), mas não a elimina: fazer a entrega e o
+  ajuste de saldo total baixarem de um lote é mudança de regra do estoque (qual lote? o mais antigo?),
+  descartada na **B204** e mantida na **B205**.
+
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
 **"Uma remessa não pode misturar materiais de donos diferentes."** O sistema hoje **recusa** montar
@@ -5495,6 +5516,14 @@ que **só o navegador** prova:
    atribuído"*. Conferir que aparece inteira no rodapé do relatório.
 2. **O campo "Grupo (ENTRADA, SAIDA, AJUSTE, DEVOLUCAO ou TRANSFERENCIA)" cabe no formulário do
    histórico?** O rótulo é longo.
+
+**(50) Nenhum clique foi dado nesta etapa.** Os testes provam a conta (comparando a tela com o
+relatório em onze cenários), a rota e o bloco da tela. O que **só o navegador** prova:
+
+1. **O bloco "Sem lote atribuído" é lido?** Ele aparece abaixo da tabela de lotes, com um texto de
+   quatro linhas. Conferir que não some visualmente embaixo de uma tabela longa.
+2. **No material antigo sem lote nenhum**, a tela mostra *"Nenhum lote cadastrado para este material"*
+   **e** o bloco logo abaixo — conferir que as duas mensagens juntas não confundem.
 
 ### G. Fragilidades estruturais que continuam de pé
 
@@ -12995,7 +13024,7 @@ filtro de grupo vale também na exportação.
    endereço confiável, e isso não foi medido. Letra **D**.
 2. **A tela de Lotes continua mostrando o saldo atribuído como se fosse o físico** — é um defeito
    anterior a esta etapa, na letra **C** (**C71**). Até corrigir, a conferência de lote é pelo
-   relatório *Saldo por lote*.
+   relatório *Saldo por lote*. **Resolvido na Etapa 50.**
 3. **PDF** continua fora (impressão do navegador).
 4. **Previsto × realizado** depende da feature de ordem de produção/lista técnica, que não existe.
 5. **O histórico completo** (sem teto e com os cancelados) continua sendo a tela **Movimentações**
@@ -13018,7 +13047,87 @@ segundo revisor mostrou **10 lugares** em que o código estava certo mas nenhum 
 dois endereços, cada grupo, validade do lote, retenção isolada…) — todos ganharam teste, e cada teste
 novo foi confirmado quebrando o código de propósito.
 
+## Etapa 50 — A tela de Lotes para de mostrar o saldo do lote como se fosse o que está na prateleira (2026-09-30)
+
+A tela **Lotes e Séries** mostrava, em cada lote, o saldo **atribuído** a ele — e lia-se como se fosse
+o que está fisicamente no almoxarifado. Não é: a **entrega de requisição** não pergunta lote, e o
+**ajuste de saldo total** também não; as duas mexem no material sem mexer em lote nenhum. Resultado:
+entrada de 100 no lote A, entrega de 30 — o material fica com **70**, e a tela de Lotes continuava
+dizendo **100** no lote A. Quem conferia a prateleira pela tela contava 30 peças a mais.
+
+Agora a tela mostra, abaixo da tabela, **quanto do material não está em lote nenhum** e **o físico
+total**, com a mesma conta do relatório *Saldo por lote* — e as duas não podem mais divergir.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A tela de Lotes mostrava o lote A com 100 e nada mais — com o material em 70 | O lote A continua com 100, e abaixo aparece **"Sem lote atribuído: -30"** e **"Físico total do material: 70"** |
+| Material antigo com controle de lote e sem lote nenhum mostrava só *"Nenhum lote cadastrado"* | Mostra *"Nenhum lote cadastrado"* **e** o bloco com o físico inteiro sem lote |
+| Para saber quanto não estava em lote nenhum, só pelo relatório | A própria tela mostra, com o mesmo número do relatório |
+
+### As regras, com o cenário exato
+
+**Preparação:** um material com **Controle por lote**, um usuário que faça a requisição e **outro** que
+a aprove (quem pede não aprova a própria requisição).
+
+**1. A diferença aparece na tela de Lotes.** Dê entrada de **100** no lote A. Faça uma requisição de **30**,
+aprove com o outro usuário, separe e entregue. Abra **Almoxarifado → Lotes e Séries** e escolha o material.
+A tabela mostra o lote **A** com **100** (é o saldo atribuído a ele — o certo para escolher lote na
+saída). **Abaixo da tabela** aparece:
+→ **Sem lote atribuído:** -30 · **Físico total do material:** 70
+→ *"O saldo de cada lote é o atribuído a ele. Saídas que não informam lote (como a entrega de
+requisição) e o ajuste de saldo total não baixam de lote nenhum; entradas sem lote (por exemplo, antes
+de ligar o controle de lote) também ficam fora dos lotes. Lotes + sem lote atribuído = físico total."*
+
+**2. Quando está tudo em lote, nada muda.** Num material em que todo o saldo está em lotes, o bloco
+**não aparece** — a tela fica igual à de antes.
+
+**3. Material antigo sem lote nenhum.** Um material que ganhou *Controle por lote* depois de já ter
+estoque mostra *"Nenhum lote cadastrado para este material"* **e**, abaixo, o bloco com o físico inteiro
+em *"Sem lote atribuído"*.
+
+**4. A tela e o relatório dizem o mesmo número.** Compare o bloco com **Relatórios → Estoque → Saldo por
+lote**: a linha *"Sem lote atribuído"* do material tem o **mesmo** valor.
+
+**5. Quando o bloco NÃO aparece:** na aba **Séries**; em material **inativo**; em material **sem**
+controle de lote e **sem** lote nenhum (nesse caso não há o que conferir). Um material **sem** controle de
+lote mas com lotes antigos **mostra** o bloco, como o relatório.
+
+### O que esta etapa NÃO cobre
+
+1. **A entrega de requisição continua sem baixar de lote** — a tela mostra o efeito, não o muda (letra
+   **D**, **B204**/**B205**).
+2. **Os seletores de lote** (Movimentações, Devoluções, Sobras) continuam mostrando o saldo atribuído —
+   é o número certo para eles.
+
+### O que a revisão encontrou
+
+**Plano:** a revisão mostrou que, do jeito que o plano estava escrito, **a tela e o relatório
+divergiriam**: um material sem controle e sem lote apareceria com o físico inteiro "sem lote" na tela e
+em nada no relatório, e o material antigo sem lote nenhum ficaria sem o bloco (a tela cai em *"Nenhum
+lote cadastrado"* antes da tabela). Corrigido antes do código: o mesmo critério nas duas.
+
+**Código pronto:** um revisor (numa cópia separada) achou **três casos em que tela e relatório ainda
+divergiam**, todos reproduzidos: uma linha de saldo de **outro** material apontando para um lote fazia o
+**relatório** somar no lote errado (**defeito que escapou da Etapa 49** — a tela estava certa); um lote
+apagado era tratado diferente nas duas; e um arredondamento feito duas vezes divergia na sétima casa. E
+um de tela: ao trocar de material, o bloco do material anterior ficava à mostra enquanto o novo
+carregava. Todos corrigidos, e os comportamentos da tela que não tinham teste (aba Séries, resposta
+atrasada, *Atualizar*) ganharam teste — cada um confirmado quebrando o código de propósito.
+
 ## Onde estamos e o que vem a seguir
+
+- **Etapa 50 entregue (2026-09-30):** **a tela de Lotes para de mostrar o saldo do lote como se fosse o
+  que está na prateleira.** Abaixo da tabela de lotes aparecem **"Sem lote atribuído"** e **"Físico total
+  do material"**, com a mesma conta do relatório *Saldo por lote*. O furo **C71** está **resolvido**.
+  **O que é seu:** a decisão **B205** (um pedido novo ao servidor em vez de mudar a lista de lotes, que
+  alimenta quatro seletores); a limitação **(50)** em D (a entrega continua sem baixar de lote); e as
+  verificações **(50)** em F.
+  **O que a revisão achou:** no plano, tela e relatório divergiriam em dois casos (corrigido antes do
+  código); no código, **três divergências reais** — uma delas um defeito que **escapou da Etapa 49** no
+  próprio relatório — e o bloco do material anterior à mostra na troca de material. Todas corrigidas e
+  com teste.
 
 - **Etapa 49 entregue (2026-09-30):** **os relatórios de saldo que faltavam.** Em **Relatórios →
   Estoque**: **Saldo por lote** (com a linha *"Sem lote atribuído"* que fecha a conta com o físico),
@@ -13029,7 +13138,7 @@ novo foi confirmado quebrando o código de propósito.
   verde, os dois presos a outras features (previsto × realizado; indicadores restantes).
   **O que é seu:** as decisões **B201 a B204** — a que mais pede leitura é a **B204** (o relatório mostra
   o saldo de lote como ele é, em vez de mudar a regra do estoque); o furo **C71** (a tela de Lotes mostra
-  o saldo atribuído como físico — anterior a esta etapa); as limitações **(49)** em D; e as
+  o saldo atribuído como físico — anterior a esta etapa; **resolvido na Etapa 50**); as limitações **(49)** em D; e as
   verificações **(49)** em F.
   **O que a revisão achou:** no plano, **1 CRITICAL** — o saldo de lote **não é** o físico (provado
   movimentando de verdade: lote *"com 100"*, material com 70), e três itens que eu dei por cobertos não

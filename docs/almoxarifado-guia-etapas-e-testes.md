@@ -1,22 +1,28 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-09-30 (Etapa 49) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-09-30 (Etapa 50) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 49) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 50) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-09-30 (Etapa 49 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-09-30 (Etapa 50 ENTREGUE · modo contínuo pelo mapa)
 >
-> **O desenvolvimento parou aqui: Etapa 49, 2026-09-30.** A **Etapa 49 (os relatórios de saldo que
+> **O desenvolvimento parou aqui: Etapa 50, 2026-09-30.** A **Etapa 50 (a tela de Lotes para de mostrar
+> o saldo do lote como se fosse o físico)** fecha o furo **C71**: em *Lotes e Séries*, abaixo da tabela,
+> aparecem **"Sem lote atribuído"** e **"Físico total do material"**, com a mesma conta do relatório *Saldo
+> por lote*. O saldo de cada lote continua o **atribuído** (é o certo para escolher lote na saída). A
+> revisão achou e corrigiu um defeito que tinha escapado da Etapa 49 no próprio relatório.
+> **Próxima etapa:** ver *"Próxima tarefa detalhada"* no plano da Etapa 50.
+>
+> **Etapas 1 a 20 e 22 a 50 completas.**
+>
+> **Etapa 49, 2026-09-30.** A **Etapa 49 (os relatórios de saldo que
 > faltavam)** fecha os relatórios de estoque e de movimentação da feature **21 (Relatórios)**: em
 > *Relatórios → Estoque* entram **Saldo por lote** (com a linha *"Sem lote atribuído"*, que fecha a conta
 > com o físico — o saldo de lote é o **atribuído**, não o da prateleira), **Séries em estoque** e
 > **Saldos comprometidos**; e o **Histórico de movimentações** filtra por **grupo**, **usuário** e
 > **centro de custo**. A feature 21 **continua 🟡**, presa a outras features (previsto × realizado;
-> indicadores restantes). **Atenção:** a tela de *Lotes e Séries* ainda mostra o saldo atribuído como
-> físico (furo C71, anterior).
-> **Próxima etapa:** ver *"Próxima tarefa detalhada"* no plano da Etapa 49.
->
-> **Etapas 1 a 20 e 22 a 49 completas.**
+> indicadores restantes). A tela de *Lotes e Séries* mostrava o saldo atribuído como físico (furo C71) —
+> **resolvido na Etapa 50**.
 >
 > **Etapa 48, 2026-09-30.** A **Etapa 48 (regras por urgência e por
 > material de cliente, e a fila da aprovação simples)** completa o que a 47 deixou na feature **06
@@ -4924,6 +4930,57 @@ que ele não tinha como repetir com sucesso garantido.
 
 ---
 
+## Etapa 50 — A tela de Lotes mostra o físico e o "sem lote atribuído" (ENTREGUE — 2026-09-30)
+
+**O que mudou, em uma frase:** a tela **Lotes e Séries** passa a mostrar, abaixo da tabela de lotes,
+**quanto do material não está em lote nenhum** e **o físico total** — e para de deixar o saldo do lote
+passar por saldo da prateleira.
+
+**O problema que ela resolve.** O saldo de cada lote é o **atribuído** a ele. A **entrega de
+requisição** não pergunta lote, e o **ajuste de saldo total** também não — os dois mudam o material sem
+mudar lote nenhum. Entrada de 100 no lote A, entrega de 30: o material ficava com 70 e a tela seguia
+dizendo **100** no lote A.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Lote A com 100, e nada mais, com o material em 70 | Lote A com 100 **e**, abaixo, **"Sem lote atribuído: -30"** · **"Físico total do material: 70"** |
+| Material antigo sem lote nenhum: só *"Nenhum lote cadastrado"* | *"Nenhum lote cadastrado"* **e** o bloco com o físico inteiro sem lote |
+| Para saber o que estava fora dos lotes, só pelo relatório | A própria tela mostra, com o mesmo número do relatório |
+
+### Roteiro de teste manual (≈8 min)
+
+**Preparação.** Um material com **Controle por lote**, um lote **A** cadastrado, e **dois usuários** — um
+que pede a requisição e outro que aprova (quem pede não aprova a própria).
+
+1. **Entrada no lote.** Em **Movimentações**, dê **Entrada** de **100** no lote A.
+2. **Sem diferença, sem bloco.** **Almoxarifado → Lotes e Séries**, escolha o material: o lote A com
+   **100**, e **nada** abaixo da tabela (tudo está em lote).
+3. **Uma saída sem lote.** Com o primeiro usuário, faça uma requisição de **30**; com o segundo, aprove;
+   depois separe e **entregue**.
+4. **O bloco aparece.** Volte a **Lotes e Séries** e clique **Atualizar**: o lote A **continua com 100**,
+   e abaixo da tabela aparece **"Sem lote atribuído: -30 UN · Físico total do material: 70 UN"**, com o
+   texto: *"O saldo de cada lote é o atribuído a ele. Saídas que não informam lote (como a entrega de
+   requisição) e o ajuste de saldo total não baixam de lote nenhum; entradas sem lote (por exemplo, antes
+   de ligar o controle de lote) também ficam fora dos lotes. Lotes + sem lote atribuído = físico total."*
+5. **O mesmo número no relatório.** **Relatórios → Estoque → Saldo por lote → Consultar**: a linha *"Sem
+   lote atribuído"* do material mostra **−30**, igual à tela.
+6. **Aba Séries.** Na mesma tela, troque para a aba **Séries**: o bloco **não** aparece ali.
+7. **Troca de material.** Escolha outro material cujo saldo esteja todo em lote: o bloco some (não fica o
+   do material anterior).
+8. **Material antigo sem lote.** (Se houver um material que ganhou *Controle por lote* com estoque e nunca
+   teve lote.) A tela mostra *"Nenhum lote cadastrado para este material"* e, abaixo, o bloco com o
+   físico inteiro em *"Sem lote atribuído"*.
+
+### O que esta etapa NÃO cobre
+
+- **A entrega de requisição continua sem baixar de lote** — a tela mostra a diferença, não a elimina.
+- **Os seletores de lote** (Movimentações, Devoluções, Sobras) continuam mostrando o saldo **atribuído**
+  do lote — é o certo para eles, porque a saída por lote é conferida contra ele.
+
+---
+
 ## Etapa 49 — Os relatórios de saldo que faltavam (ENTREGUE — 2026-09-30)
 
 **O que mudou, em uma frase:** a tela de **Relatórios** ganha, na categoria **Estoque**, o **Saldo por
@@ -4976,7 +5033,7 @@ qualquer com uma **reserva** (aprove uma requisição dele com saldo).
 
 - **A tela de Lotes (Lotes e Séries) ainda mostra o saldo atribuído como físico** — no passo 3, ela
   continuaria mostrando o lote A com 100. É anterior a esta etapa (furo **C71** das novidades); confira
-  lote pelo relatório.
+  lote pelo relatório. **Resolvido na Etapa 50** (a tela ganhou o bloco "Sem lote atribuído").
 - **Saldo por endereço / por almoxarifado** fica fora (almoxarifado é área física, não filial).
 - **O filtro de centro de custo pede o número (id)** do centro de custo — não há lista de escolha.
 - **A busca por usuário** ignora maiúsculas só em letras sem acento.

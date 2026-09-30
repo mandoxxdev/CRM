@@ -4,7 +4,21 @@
 > (Etapa 6b, 2026-08-11) e etiquetas com QR (Etapa 6c, 2026-08-11). A feature 10 fica completa
 > **exceto pelas pendências declaradas** nas três etapas (ver as seções de pendências, mais abaixo
 > — nenhuma bloqueia o critério de aceite do módulo) · **Spec original:** seção 10
-> **Última atualização:** 2026-08-12 (**Etapa 7 — a devolução SAIU da lista de fluxos internos
+> **Última atualização:** 2026-09-30 (**Etapa 50 — a tela de Lotes para de mostrar o saldo ATRIBUÍDO
+> como se fosse o físico (fecha o C71 das novidades).** O saldo de um lote é o atribuído a ele: os
+> fluxos isentos de `exigeLote` (a entrega de requisição, o ajuste de saldo total) gravam na linha
+> `lote_id NULL` de `estoque_saldo_almoxarifado`, e o lote podia mostrar 100 com o material em 70.
+> **O número do lote NÃO mudou** — `GET /materiais/:id/lotes` continua devolvendo array e é o que os
+> quatro seletores de lote usam com `com_saldo=1`. Entrou uma rota NOVA, `GET /materiais/:id/lotes/resumo`
+> (gate `visualizar`; 404 *"Material não encontrado"*) → `{ fisico, soma_lotes, sem_lote_atribuido }`,
+> servida por `lotService.resumoLotesDoMaterial`, e a conta do resíduo (`residualSemLote`) é a MESMA
+> que o relatório *Saldo por lote* (feature 21, Etapa 49) passou a usar — tela e relatório não podem
+> divergir. O resíduo só é informado nos materiais que o relatório mostra: ativo **e** (saldo em lote
+> existente **ou** controle de lote com físico ≠ 0). A tela mostra o bloco *"Sem lote atribuído"* e
+> *"Físico total do material"* **fora** do ternário da tabela (o legado sem lote nenhum cai em *"Nenhum
+> lote cadastrado"*). A entrega continua **sem** baixar de lote (B204/B205). Hash no commit de
+> fechamento.)
+> Antes: 2026-08-12 (**Etapa 7 — a devolução SAIU da lista de fluxos internos
 > isentos de `exigeLote`.** Eram quatro; agora são **dois** (entrega e exclusão administrativa de
 > requisição). `returnService.registrarDevolucao` declara `{ exigeLote: true }` e herda o lote da
 > saída original (`38d2391`); a transferência também passou a exigir lote (`5a1e188`), o que obrigou
