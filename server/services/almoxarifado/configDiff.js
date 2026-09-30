@@ -91,4 +91,10 @@ function calcularDiff(anteriores, novos) {
   return { anteriores: diffAnteriores, novos: diffNovos };
 }
 
-module.exports = { calcularDiff, CHAVES_SECRETAS, CHAVES_URL_COM_CREDENCIAL, MASCARA, MASCARA_QUERY, mascararUrl };
+// Etapa 47 (T2, RN-04): chaves que saíram do seed por prometerem o que não existe, mas cuja linha
+// continua gravada nos bancos antigos. O `GET /configuracoes` não as lista e o `PUT` as trata como
+// desconhecidas. Sem `DELETE` de propósito: apagar é irreversível, e dado sem leitor não faz mal.
+// Para desaposentar: tirar daqui e voltar a semear.
+const CHAVES_APOSENTADAS = ['limite_aprovacao_auto'];
+
+module.exports = { calcularDiff, CHAVES_SECRETAS, CHAVES_APOSENTADAS, CHAVES_URL_COM_CREDENCIAL, MASCARA, MASCARA_QUERY, mascararUrl };

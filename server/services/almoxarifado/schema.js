@@ -2345,7 +2345,9 @@ async function initSchema(db) {
     // Migrado de routes/almoxarifado.js (diff de segurança — Task 3): chaves base que só
     // existiam no callback do CREATE TABLE da rota.
     ['aprovacao_automatica', '0', 'Aprovar requisições automaticamente sem revisão'],
-    ['limite_aprovacao_auto', '5', 'Quantidade máxima para aprovação automática por item'],
+    // Etapa 47 (T2, RN-04): `limite_aprovacao_auto` SAIU daqui — prometia "quantidade máxima para
+    // aprovação automática por item", e isso nunca existiu (nenhum leitor no repositório). A linha
+    // já gravada em produção NÃO é apagada; ela é escondida por `configDiff.CHAVES_APOSENTADAS`.
     ['notificar_estoque_critico', '1', 'Enviar alerta quando estoque atingir mínimo'],
     ['prazo_atendimento_horas', '24', 'Prazo padrão para atendimento de requisições (horas)'],
     ['prefixo_requisicao', 'REQ', 'Prefixo do número de requisição'],

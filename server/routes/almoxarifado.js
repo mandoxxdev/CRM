@@ -2514,6 +2514,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       if (err) return res.status(500).json({ error: err.message });
       const obj = {};
       rows.forEach(r => {
+        if (configDiff.CHAVES_APOSENTADAS.includes(r.chave)) return;
         const valor = configDiff.CHAVES_SECRETAS.includes(r.chave)
           ? (r.valor ? alertService.PASSWORD_MASK : '')
           : r.valor;
@@ -2549,7 +2550,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // alimenta o Set de chaves conhecidas, entao a coluna a mais nao muda nada nela, e e ela
       // que da o `dados_anteriores` do diff sem um segundo SELECT.
       const existentes = await dbAll(db, `SELECT chave, valor FROM configuracoes_almoxarifado`);
-      const conhecidas = new Set(existentes.map(r => r.chave));
+      // Etapa 47 (T2): a chave aposentada tem linha em banco antigo, mas não é "conhecida" — senão
+      // ela sumiria da listagem e continuaria gravável com 200.
+      const conhecidas = new Set(existentes.map(r => r.chave)
+        .filter(c => !configDiff.CHAVES_APOSENTADAS.includes(c)));
       const desconhecidas = entradas.map(([chave]) => chave).filter(c => !conhecidas.has(c));
       if (desconhecidas.length) {
         return res.status(400).json({ error: `Configuração desconhecida: ${desconhecidas.join(', ')}` });
