@@ -527,3 +527,61 @@ devolve a mensagem da condição que falhou.
 O lembrete **por pendência** (T5) e as telas (T6/T7) consomem estes contratos e não os mudam. Se uma
 delas precisar de campo novo, é contrato novo, registrado no plano — não edição silenciosa desta
 tabela.
+
+### 9.7 O que a revisão da Fase 1-c mudou — 3 CRITICAL, 4 IMPORTANT, 4 MINOR, 6 hipóteses refutadas
+
+Revisor fresco com duas sondas executadas (`rev1c-probe.js`, `rev1c-claim.js`, no scratchpad).
+Conferi no código os pontos em que a correção depende de detalhe antes de aceitar.
+
+**🔴 C1 — o gate só no `WHERE` deixava reserva órfã, e a reaprovação reservava em dobro (medido:
+item de 10, duas reservas de 10).** `/aprovar` reserva **antes** do `UPDATE`, e `saldoDisponivelParaItem`
+devolve a reserva da própria requisição ao disponível. E em `/aprovar-valor` a rota grava o status
+de reserva num segundo `UPDATE` **sem guarda** — o gate seria contornado sempre que houvesse saldo.
+**Correção, nas duas rotas:** (1) **pré-checagem** das pendências **antes** de reservar — é ela que dá
+a literal; (2) o `UPDATE` que aprova ganha a guarda no `WHERE` e `changes === 0` vira 400;
+(3) nesse ramo, **libera só as reservas que ESTA chamada criou** (os `reserva_id` que
+`reservarItensAprovacao` devolve), via `stockService.liberarReserva`. ⚠️ **Não**
+`liberarReservasDaRequisicao`, que o revisor sugeriu: ela solta **todas** as reservas da requisição,
+inclusive as de um `/aprovar` concorrente que venceu.
+E o `/aprovar` ganha `AND status = 'PENDENTE'` no `WHERE` — o achado anterior à etapa que o revisor
+mediu (dois `/aprovar` simultâneos respondem 200 os dois e o segundo reserva de novo) sai de graça com
+a mesma guarda.
+
+**🔴 C2 — o avaliador falhando deixava a requisição SEM pendência, e o gate passava por vazio.**
+**Correção: coluna `regras_avaliadas_em`**, gravada **só depois** de todas as pendências inseridas.
+- falha no avaliador: é logada, a coluna fica `NULL` e **a requisição fecha, não abre**;
+- o gate de `/aprovar`, de `/aprovar-valor` e das duas auto-aprovações exige `regras_avaliadas_em IS NOT NULL`;
+- `/aprovar` e `/aprovar-valor` com a coluna `NULL` **reavaliam na pré-checagem**. O avaliador é idempotente por `UNIQUE (requisicao_id, regra_id)`. Se a reavaliação falhar de novo, a resposta é 500 com a mensagem do erro, e nada é aprovado;
+- **migração:** as requisições que já existem quando a coluna **nasce** recebem `CURRENT_TIMESTAMP`, porque foram enviadas antes de existir regra. `safeAlter` não diz se criou a coluna, então a migração checa `PRAGMA table_info` antes.
+
+**🔴 C3 — `valor_minimo` nunca casaria:** na ordem da RN-09, `valor_total` ainda é 0 (só
+`atualizarValorRequisicao` o grava). **Correção:** o avaliador calcula com `calcularValorTotal`.
+
+**I1 — a frase absoluta da 9.1 era falsa** (janela entre o envio e a gravação das pendências). A
+coluna do C2 fecha a janela: sem ela preenchida o gate recusa. A frase fica: *impossível enquanto o
+gate exigir as duas condições*.
+
+**I2 — pendência de requisição morta.** Contagem (`pendencias_abertas`), fila e obsolescência passam a
+filtrar pela requisição em `PENDENTE`/`AGUARDANDO_APROVACAO_VALOR`: desativar a regra **não reescreve**
+o histórico de requisição rejeitada ou cancelada.
+
+**I3 — o contrato do POST/PUT, fechado:**
+- `material_critico` só filtra quando é `1`/`true`. `0`, `false` e `null` significam "não filtra" e **não contam** como critério;
+- `aprovadores` que não seja array não vazio de inteiros recebe a mesma literal de *pelo menos um aprovador*;
+- `centro_custo_id`/`projeto_id` precisam ser inteiros > 0: `<campo> deve ser um número maior que zero`. **Não** há checagem de existência, porque as tabelas são do núcleo e o harness não as tem (declarado);
+- `ativo` é coagido a `0`/`1`;
+- a validação é escrita no serviço, **não** no Zod, e as literais saem **sem** o prefixo `Dados inválidos —`.
+
+**I4 — a tela de requisições precisa saber.** `GET /requisicoes` e `GET /requisicoes/:id` ganham
+`pendencias_regra_abertas` (inteiro). Contrato congelado agora, não na T6.
+
+**Os MINOR, declarados:**
+- **M1:** as auto-aprovações passam a `dbRun` com checagem de `changes`, porque o callback arrow não alcança `this.changes`;
+- **M2:** duas regras com o mesmo único aprovador exigem uma segunda pessoa, e a saída é um admin ou desativar uma das regras. O avaliador não recusa, e o manual avisa;
+- **M3:** `valor_minimo` é `>=`, enquanto a liberação por valor é `>`. São réguas de mecanismos diferentes;
+- **M4:** urgência e material de cliente, listados na spec 06, **ficam fora** desta etapa. Coluna nova depois, e não há decisão irreversível nisso.
+
+**As refutações que valem registro:** o claim com `NOT EXISTS` correlacionado deu **0** duplas em 200
+rodadas concorrentes, e o controle sem ele deu `changes=2`. Nenhum outro caminho leva a requisição de
+`PENDENTE` a aprovado. Itens não são editáveis depois do envio. `/copiar` cria rascunho. A rota de
+`requisicoesMaterial.js` passa pelo avaliador.
