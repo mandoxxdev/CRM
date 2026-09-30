@@ -18,7 +18,7 @@
  *    sozinha é TOCTOU (8.3) — a pré-checagem existe pela MENSAGEM, o WHERE pela GARANTIA.
  */
 const { dbRun, dbGet, dbAll } = require('./db');
-const { TIPOS_REQUISICAO } = require('./schema');
+const { TIPOS_REQUISICAO, TIPOS_URGENCIA } = require('./schema');
 const valueApprovalService = require('./requisitionValueApprovalService');
 
 /** Status da requisição em que uma pendência ainda cobra, conta e pode ser assinada (9.7/I2). */
@@ -68,6 +68,7 @@ function formatarRegra(row) {
     ...row,
     ativo: row.ativo ? 1 : 0,
     material_critico: row.material_critico ? 1 : null,
+    material_cliente: row.material_cliente ? 1 : null,
     aprovadores: parseIds(row.aprovadores),
   };
 }
@@ -102,12 +103,20 @@ async function validarRegra(db, payload, { idsJaNaRegra = [] } = {}) {
   }
   // Só `1`/`true` filtra; 0/false/null significam "não filtra" e NÃO contam como critério (I3).
   const materialCritico = (p.material_critico === true || p.material_critico === 1 || p.material_critico === '1') ? 1 : null;
+  // Etapa 48 (RN-03): mesma leitura - so 1/true filtra.
+  const materialCliente = (p.material_cliente === true || p.material_cliente === 1 || p.material_cliente === '1') ? 1 : null;
+  // Etapa 48 (RN-02): um de TIPOS_URGENCIA, com a MESMA literal da criacao da requisicao.
+  let urgencia = null;
+  if (p.urgencia !== undefined && p.urgencia !== null && p.urgencia !== '') {
+    if (!TIPOS_URGENCIA.includes(p.urgencia)) throw erro(400, `Urgência inválida: ${p.urgencia}`);
+    urgencia = p.urgencia;
+  }
   const valorMinimo = numeroPositivoOuNulo(p, 'valor_minimo');
   const quantidadeMinima = numeroPositivoOuNulo(p, 'quantidade_minima');
   const centroCustoId = inteiroPositivoOuNulo(p, 'centro_custo_id');
   const projetoId = inteiroPositivoOuNulo(p, 'projeto_id');
 
-  const algumCriterio = [tipoRequisicao, materialCritico, valorMinimo, quantidadeMinima, centroCustoId, projetoId]
+  const algumCriterio = [tipoRequisicao, materialCritico, materialCliente, urgencia, valorMinimo, quantidadeMinima, centroCustoId, projetoId]
     .some((v) => v !== null);
   if (!algumCriterio) throw erro(400, 'Regra precisa de pelo menos um critério');
 
@@ -135,6 +144,8 @@ async function validarRegra(db, payload, { idsJaNaRegra = [] } = {}) {
     nome, ativo, ordem,
     tipo_requisicao: tipoRequisicao,
     material_critico: materialCritico,
+    material_cliente: materialCliente,
+    urgencia,
     valor_minimo: valorMinimo,
     quantidade_minima: quantidadeMinima,
     centro_custo_id: centroCustoId,
@@ -162,11 +173,11 @@ async function obterRegra(db, id) {
 async function criarRegra(db, payload, user) {
   const r = await validarRegra(db, payload);
   const ins = await dbRun(db, `INSERT INTO regras_aprovacao
-    (nome, ativo, ordem, tipo_requisicao, material_critico, valor_minimo, quantidade_minima,
-     centro_custo_id, projeto_id, aprovadores, criado_por_id, criado_por_nome)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-  [r.nome, r.ativo, r.ordem, r.tipo_requisicao, r.material_critico, r.valor_minimo, r.quantidade_minima,
-    r.centro_custo_id, r.projeto_id, JSON.stringify(r.aprovadores), user?.id || null, nomeDoUsuario(user)]);
+    (nome, ativo, ordem, tipo_requisicao, material_critico, material_cliente, urgencia, valor_minimo,
+     quantidade_minima, centro_custo_id, projeto_id, aprovadores, criado_por_id, criado_por_nome)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+  [r.nome, r.ativo, r.ordem, r.tipo_requisicao, r.material_critico, r.material_cliente, r.urgencia, r.valor_minimo,
+    r.quantidade_minima, r.centro_custo_id, r.projeto_id, JSON.stringify(r.aprovadores), user?.id || null, nomeDoUsuario(user)]);
   return obterRegra(db, ins.lastID);
 }
 
@@ -182,10 +193,10 @@ async function atualizarRegra(db, id, payload, user) {
   if (!atual) throw erro(404, 'Regra não encontrada');
   const r = await validarRegra(db, payload, { idsJaNaRegra: parseIds(atual.aprovadores) });
   await dbRun(db, `UPDATE regras_aprovacao SET nome=?, ativo=?, ordem=?, tipo_requisicao=?,
-      material_critico=?, valor_minimo=?, quantidade_minima=?, centro_custo_id=?, projeto_id=?,
-      aprovadores=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-  [r.nome, r.ativo, r.ordem, r.tipo_requisicao, r.material_critico, r.valor_minimo, r.quantidade_minima,
-    r.centro_custo_id, r.projeto_id, JSON.stringify(r.aprovadores), id]);
+      material_critico=?, material_cliente=?, urgencia=?, valor_minimo=?, quantidade_minima=?,
+      centro_custo_id=?, projeto_id=?, aprovadores=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+  [r.nome, r.ativo, r.ordem, r.tipo_requisicao, r.material_critico, r.material_cliente, r.urgencia, r.valor_minimo,
+    r.quantidade_minima, r.centro_custo_id, r.projeto_id, JSON.stringify(r.aprovadores), id]);
 
   let pendenciasObsoletadas = 0;
   if (!r.ativo) {
@@ -206,6 +217,8 @@ async function atualizarRegra(db, id, payload, user) {
 function regraCasa(regra, req, itens, valorTotal) {
   if (regra.tipo_requisicao && regra.tipo_requisicao !== (req.tipo_requisicao || 'CONSUMO')) return false;
   if (regra.material_critico && !itens.some((i) => Number(i.material_critico) === 1)) return false;
+  if (regra.material_cliente && !itens.some((i) => Number(i.material_cliente) === 1)) return false;
+  if (regra.urgencia && regra.urgencia !== (req.urgencia || 'NORMAL')) return false;
   // `>=` — régua própria das regras; a liberação por valor usa `>` (9.7/M3).
   if (regra.valor_minimo != null && !(valorTotal >= Number(regra.valor_minimo))) return false;
   if (regra.quantidade_minima != null
@@ -233,7 +246,8 @@ async function avaliarRequisicao(db, requisicaoId) {
     // uma linha de 12 dispararia. O próprio solicitante contornava a regra. A 9.3 dizia "ALGUM
     // item tem quantidade ≥"; estava errada: "item" é o material, não a linha.
     const itens = await dbAll(db, `SELECT ir.material_id, SUM(ir.quantidade_solicitada) AS quantidade_solicitada,
-        MAX(COALESCE(m.material_critico, 0)) AS material_critico
+        MAX(COALESCE(m.material_critico, 0)) AS material_critico,
+        MAX(CASE WHEN m.proprietario_cliente_id IS NOT NULL THEN 1 ELSE 0 END) AS material_cliente
       FROM itens_requisicao_almoxarifado ir
       JOIN materiais_almoxarifado m ON m.id = ir.material_id
       WHERE ir.requisicao_id = ?
