@@ -92,7 +92,7 @@ produção vai para a **letra A**.
 
 - [x] Fase 0: medida (seção 1 do desenho)
 - [x] Fase 1: desenho e plano
-- [x] Fase 2 (0 CRITICAL, 2 IMPORTANT, 5 MINOR) · [x] T1 (`d8631bd`) · [x] T2 (`68563a5`) · [x] T3 + T4 (`29809af`) · [x] T5 (`410fece`) · [ ] Fase 5 · [ ] Fase 6
+- [x] Fase 2 (0 CRITICAL, 2 IMPORTANT, 5 MINOR) · [x] T1 (`d8631bd`) · [x] T2 (`68563a5`) · [x] T3 + T4 (`29809af`) · [x] T5 (`410fece`) · [x] Fase 5 (fix-round `731a13a`) · [x] Fase 6 (verificação final medida: `test:api` 224/224 · `test:almoxarifado` 42/42 · validation 4/4 · safealter 3/3 · sqlite 5/5 · client 872/872 em 53 suítes · build `CI=true` limpo)
 
 ## Execução — T1 a T5 (2026-09-30)
 
@@ -109,3 +109,91 @@ produção vai para a **letra A**.
 - **A marca da requisição não avaliada (IMPORTANT-1 da Fase 2)** entrou na T4, com cenário, e a costura servidor-tela dela está no (4) da T5.
 
 `test:api` **223/223** depois de T1 e T2; `test:almoxarifado` 42/42.
+
+## Fase 5 — revisão adversarial: 2 lentes, 1 fix-round, nenhum ruído
+
+Dois revisores frescos: **regras + autorização** na árvore principal, e **força dos testes** numa
+**worktree isolada**. Essa foi a lição da Etapa 47, onde um revisor viu a sabotagem temporária do
+outro; aqui o placar de ruído foi **zero**.
+
+| Lente | Achados | O que era |
+|---|---|---|
+| Regras + autorização | **0 CRITICAL, 1 IMPORTANT, 3 MINOR** (sonda `f548rn-probe.js`) | **IMPORTANT-1:** a mesma causa do IMPORTANT-2 da Fase 2 voltou por outro caminho. A trava da auto-aprovação tinha sido corrigida, mas `regraCasa` comparava a urgência exata e o `/enviar` não validava. Um rascunho legado com `critico` minúsculo escapava da regra "Crítico" e era aprovado por quem não é aprovador dela (reproduzido: `/aprovar` 200 TOTALMENTE_RESERVADA). **MINOR-1:** um PUT sem um campo apagava o critério. **MINOR-2:** ordenação e contador compararam o valor exato. **MINOR-3:** a fila expõe o mesmo que o `GET /requisicoes` já expunha, aceito sem mudança |
+| Força dos testes | **2 IMPORTANT, 4 MINOR** (lacunas provadas por sabotagem que deixava tudo verde) | **A:** editar o nome apagava os critérios novos **no servidor**. **E/F:** a tela descartava os critérios novos ao desativar e ao editar; o código estava certo e nenhum teste o protegia. **D:** a trava do Crítico na **criação direta** não tinha teste. **B:** o padrão NORMAL do avaliador. **C:** `'urgente'` no cadastro. **H:** a recarga da fila |
+
+**As correções (fix-round `731a13a`):**
+- `/enviar` normaliza a caixa da urgência do rascunho, recusa o que continuar fora da lista com `Urgência inválida: <valor>` e grava o valor normalizado;
+- `regraCasa` compara sem caixa;
+- o PUT da regra mescla: campo **ausente** mantém, `null` explícito limpa;
+- a ordenação e o contador do dashboard usam `UPPER`.
+
+**Cenários novos:**
+- `requisicaoUrgencia` 5 → **8**: (3b) a criação direta com CRITICO; (4) rascunho legado fora da lista; (5) rascunho legado `critico` sendo pego pela regra;
+- `regrasUrgenciaCliente` 4 → **7**: (5) PUT parcial, (6) PUT só com o nome **relido do banco**, (7) urgência nula;
+- `TabRegrasAprovacao` 8 → **9** (E/F);
+- `RequisicoesList` 50 → **51** (H).
+
+**Controle positivo do fix-round:** 4 + 5 sabotagens.
+- **Y1** (`regraCasa` com a caixa exata) ficou **VERDE**, e está certo: o `/enviar` agora normaliza antes de avaliar, então o defeito ficou **inalcançável** pelas rotas de hoje. A forma segura fica, e **está declarado que a suíte não a protege** (G78 nas novidades). O mesmo vale para o MINOR-B: o envio já grava NORMAL.
+- **Y2** (envio sem validar) → (4); **Y3** (envio sem normalizar) → (5); **Y4** (PUT sem mescla) → (5);
+- **E**, **F**, **H**, **A** e **D** vermelhos, cada um no cenário que o fecha.
+
+## Retro de 4 números — Etapa 48
+
+1. **Rodadas de correção até verde: 1**, com uma revisão de plano antes (0 CRITICAL, 2 IMPORTANT). Os
+   dois IMPORTANT do plano entraram na execução. Um deles — urgência comparada como palavra exata —
+   **foi corrigido pela metade**: só na auto-aprovação. A Fase 5 o achou de novo na regra e no envio.
+   **Lição:** quando a Fase 2 nomeia uma **causa** ("comparação exata de um enum que não é
+   fechado no passado"), o conserto tem de varrer **todos os leitores** dela, não o sintoma que o
+   revisor reproduziu.
+2. **Achados da revisão do código: 3 IMPORTANT reais e 7 MINOR, nenhum ruído.** Das lacunas de
+   teste, **nenhuma escondia defeito** (as de edição na tela e no servidor tinham o código certo).
+3. **Paralelismo: 0 galhos em paralelo.** T3 e T4 eram independentes pela regra, mas rodaram em série
+   por custo, como o desenho escolheu (B200). Sem retrabalho. O paralelismo foi de **revisão** (2
+   lentes, uma em worktree) e de **documentação** (fork).
+4. **Defeito que escapou:** *preencher na Etapa 49.* Da 47 para a 48 escaparam **dois textos**, não
+   código. A **G77** das novidades dizia que a marcação da migração "não tem teste" e que marcava
+   "todas as requisições", e as duas coisas tinham deixado de ser verdade no fix-round da própria 47.
+   A spec 06 dizia `role = 'admin'` e "quantidade em algum item". Os três foram corrigidos à vista
+   neste fechamento. **O fork de documentação da 47 escreveu antes do fix-round, e o pai reconciliou
+   só parte do que mudou.**
+
+## Próxima tarefa detalhada — Etapa 49: a feature 21 (Relatórios) fecha o que não depende da 22
+
+**Escolha, pela ordem do CLAUDE.md:**
+- **A 06 não pode ir a 🟢 agora.** Os dois itens restantes dependem da decisão **B11** (dupla aprovação de ajuste) e da feature **22** (BOM, que "não existe em lugar nenhum do sistema", spec 22).
+- **No mapa, a 21 é a 🟡 mais perto do verde** ("🟡→quase-🟢" no status dela), e fechá-la não depende de ninguém, a não ser no item previsto × realizado.
+- As outras 🟡 têm falta maior e mais cara:
+  - **02:** código de endereço, enforcement de capacidade, sugestão de localização, confirmação por leitura;
+  - **05:** lista de separação como entidade e rota de picking;
+  - **08:** valores e validação do campo fiscal;
+  - **23:** perna de auditoria.
+
+**O que já medi hoje, e que a Fase 0 da 49 tem de CRUZAR antes de desenhar:**
+- `reportRegistry.js` tem **19** chaves, e a spec 21 diz "são 18". A `custo-por-projeto` (linha 416 do registro) entrou depois, e a spec não foi reaberta. **Achado de spec.**
+- O checklist "Relatórios de estoque" e "Relatórios de movimentação" tem **oito `[ ]`**, vários com "verificar cobertura atual", e o registro **já tem** chaves que parecem cobrir parte deles:
+  - `estoque-atual` tem as colunas `disponivel` e `valor_total` → "Estoque disponível";
+  - `materiais-bloqueados` → parte de "reservado/bloqueado";
+  - `materiais-cliente` (título "Posição por cliente") → "Saldo por cliente";
+  - `historico-movimentacoes` → "Histórico completo do item";
+  - `consumo-periodo` e `consumo-os` → parte de "por período" e "por projeto".
+
+  **A Fase 0 marca `[x]` o que estiver coberto, com a chave e o hash**, e só o que sobrar vira escopo. É a mesma armadilha da Etapa 24: medir pelo nome do **contrato** (a chave do registro), não pelo nome que se imagina.
+- **Candidatos a escopo, se a medição confirmar que faltam:**
+  - saldo por **lote/série**: as tabelas de lote e série existem desde a Etapa 6/6b;
+  - saldo **em quarentena / em terceiros**: `quantidade_em_inspecao` e as remessas da feature 14;
+  - saldo por **localização/almoxarifado**: saldo global por material é **intencional** (o CLAUDE.md diz que almoxarifado é área física, não filial). O relatório seria de **onde está fisicamente** (o endereço), **nunca** de saldo segregado por almoxarifado. Não propor segregação;
+  - movimentação por **usuário** e por **centro de custo**.
+
+**Contrato que ela consome:**
+- `reportRegistry` (cada chave com `titulo`, `categoria`, `gate`, `params`, `colunas`, `limite` e `nota`, e a validação de subida que derruba o processo se dispatcher e registro divergirem);
+- a tela `/almoxarifado/relatorios`, dirigida pela lista do servidor;
+- a exportação XLSX genérica.
+
+**Relatório novo = chave nova no registro**, sem tela nova.
+
+**Pontos de atenção:**
+- o **gate por chave**: relatório de saldo de cliente segue a régua de `materiais-cliente`;
+- a **valorização por cliente** continua fora (letra B);
+- o **PDF** foi cortado de propósito na Etapa 13 (letra D) e não reabre sem decisão;
+- previsto × realizado depende da 22 e fica fora.

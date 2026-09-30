@@ -1074,11 +1074,12 @@ Os status e as passagens permitidas entre eles são fixos; qualquer tentativa fo
 - **Quantidade maior que zero** em cada item → *"Dados inválidos — itens.0.quantidade: quantidade deve ser maior que zero"* (o número é a posição do item na lista). Vale igual para "Salvar Rascunho" e para "Enviar".
 - **Material existente e ativo** → *"Material(is) inexistente(s) ou inativo(s): MAT-001, MAT-007"*.
 - **Tipo da requisição** — 14 opções: Consumo, Ordem de Produção, Ordem de Serviço, Projeto, Montagem, Instalação Externa, Assistência Técnica, Manutenção, Desenvolvimento, Administrativo, Emergencial, Ferramenta, EPI e Material do Cliente. Sem escolha, assume **Consumo**.
+- **Urgência** — três opções, e só elas: **Normal** (*"Normal — atendimento padrão"*), **Urgente** (*"⚠️ Urgente — linha parada"*) e **Crítico** (*"🔴 Crítico — risco de segurança"*). Sem escolha, assume **Normal**. Urgente e Crítico pedem justificativa na tela (*"Justifique a urgência para requisições urgentes/críticas"*). Qualquer outro valor — inclusive a mesma palavra escrita de outro jeito, como *"urgente"* — é recusado, sem gravar nada: *"Urgência inválida: urgente"*. Um rascunho salvo com a urgência escrita de outro jeito tem a forma corrigida quando é **enviado** (*"critico"* vira Crítico); se for outra palavra, o envio é recusado com a mesma frase e ele continua rascunho.
 - **Rascunho é do dono.** Só o solicitante envia o próprio rascunho: *"Apenas o solicitante pode enviar o rascunho"*; e só rascunho pode ser enviado: *"Apenas rascunhos podem ser enviados"*.
 
 **Enviar é o gatilho de tudo.** Enquanto está em Rascunho, a requisição não dispara e-mail, não é avaliada pelas regras de aprovação nem pela alçada de valor, e não é vista pelo almoxarifado. É o envio que a coloca em circulação — e é **no envio** que o sistema decide quais regras de aprovação ela precisa cumprir (8.4).
 
-Existe ainda **"Copiar como Novo Rascunho"**, que gera um rascunho novo com os mesmos itens, tipo e vínculos, sem as quantidades já entregues. A justificativa só é copiada quando o tipo é Emergencial.
+Existe ainda **"Copiar como Novo Rascunho"**, que gera um rascunho novo com os mesmos itens, tipo e vínculos, sem as quantidades já entregues. A justificativa só é copiada quando o tipo é Emergencial. A urgência **não** é copiada: a cópia nasce **Normal**.
 
 ### 7.3 Requisição emergencial — o que fura e o que não fura
 
@@ -1162,6 +1163,8 @@ São **duas checagens independentes e cumulativas**:
 
 **A rejeição é o oposto e isso é deliberado:** rejeitar a **própria** requisição é **desistência**, decisão legítima de quem pediu — qualquer perfil pode. Rejeitar a requisição de **outra pessoa** é decisão de aprovação e exige o perfil: *"Sem permissão para rejeitar requisição de outro solicitante"*.
 
+**Onde o aprovador vê o que espera por ele.** Quem tem o perfil de aprovar vê, no topo da tela de Requisições, o painel **"Requisições aguardando sua aprovação (N)"**, com número, solicitante e valor de cada uma. Entram as requisições **Pendentes** de **outras pessoas** que **não** esperam assinatura de regra (8.4). Ficam de fora a própria (que ele não pode aprovar), a que ainda espera assinatura de regra (essa aparece no painel das regras), e a que aguarda a aprovação por valor. Clicar numa linha abre a requisição; depois de aprovada, ela sai do painel. Quem não pode aprovar não vê o painel. Uma requisição cujas regras o sistema ainda não conseguiu conferir aparece marcada com *"· regras ainda não avaliadas — a aprovação vai conferir"*: ao aprovar, a conferência é feita na hora e, se ela se encaixa numa regra, a aprovação é recusada com *"Requisição tem aprovação de regra pendente: ⟨nome da regra⟩"*, sem reservar nada.
+
 ### 8.2 Rejeição justificada
 
 O **motivo é obrigatório**: *"Dados inválidos — motivo: Motivo da rejeição é obrigatório"* — e o botão de confirmar no modal fica desabilitado até o campo ser preenchido. Só requisição **Pendente** pode ser rejeitada: *"Apenas requisições pendentes podem ser rejeitadas"*. O motivo fica gravado na requisição e na auditoria, com autor e data.
@@ -1215,7 +1218,9 @@ Além da aprovação comum e da alçada por valor, o administrador do módulo ca
 | Critério | A regra se encaixa quando… |
 |---|---|
 | **Tipo de requisição** | o tipo da requisição é o escolhido |
+| **Urgência** | a urgência da requisição é a escolhida (Normal, Urgente ou Crítico) |
 | **Algum item é material crítico** | pelo menos um item é de material marcado como crítico |
+| **Algum item é material de cliente** | pelo menos um item é de material que pertence a um cliente (cadastrado com dono em Materiais de Clientes), mesmo misturado com material próprio |
 | **Valor total a partir de (R$)** | `valor_total ≥ valor informado` — o mesmo cálculo de valor da alçada (8.3), mas com **"maior ou igual"** |
 | **Algum item com quantidade a partir de** | pelo menos um **material** da requisição tem quantidade **maior ou igual** à informada — somando todas as linhas desse mesmo material (duas linhas de 30 do mesmo parafuso contam como 60) |
 | **Centro de custo** | o centro de custo da requisição é o escolhido |
@@ -1227,11 +1232,12 @@ Além da aprovação comum e da alçada por valor, o administrador do módulo ca
 **O que o cadastro recusa, com a frase exata:**
 
 - sem nome: *"Regra precisa de um nome"*;
-- sem nenhum critério: *"Regra precisa de pelo menos um critério"*. Deixar *material crítico* desmarcado não conta como critério;
+- sem nenhum critério: *"Regra precisa de pelo menos um critério"*. Deixar *material crítico* ou *material de cliente* desmarcado não conta como critério;
 - sem ninguém em *Quem pode assinar*: *"Regra precisa de pelo menos um aprovador"*;
 - valor ou quantidade zero ou negativos: *"valor_minimo deve ser um número maior que zero"* / *"quantidade_minima deve ser um número maior que zero"*. A frase sai com o nome técnico do campo;
 - por integração, usuário inexistente ou desativado na lista: *"Aprovador inexistente ou inativo: ⟨ids⟩"*;
 - por integração, tipo desconhecido: *"Tipo de requisição inválido: ⟨valor⟩"*;
+- por integração, urgência fora das três: *"Urgência inválida: ⟨valor⟩"* — a mesma frase da requisição;
 - só quem administra o módulo cadastra regra. Os demais recebem *"Acesso restrito — administrador do Almoxarifado ou Super Administrador"*.
 
 **Como uma regra atua na requisição:**
@@ -1253,7 +1259,7 @@ Além da aprovação comum e da alçada por valor, o administrador do módulo ca
 
 > **Cuidado ao configurar:** duas regras cujo **único** aprovador é a mesma pessoa travam a requisição que se encaixa nas duas, porque essa pessoa assina uma e é recusada na outra. A saída é um administrador assinar a segunda, ou desativar uma das regras. Dê a cada regra pelo menos duas pessoas, ou evite regras que se sobreponham.
 
-**Desativar uma regra** que está segurando requisições **libera** essas requisições. A tela avisa antes: *"Desativar esta regra libera N requisição(ões) que aguardam a assinatura dela — a pendência fica registrada como obsoleta e deixa de bloquear a aprovação."*. Depois confirma *"N aprovação(ões) pendente(s) desta regra deixaram de bloquear requisições"*. Na requisição, a assinatura passa a aparecer como *"Obsoleta (regra desativada)"*. Isso vale só para requisição que ainda aguarda aprovação; a de requisição já rejeitada ou cancelada fica como estava. **Reativar a regra não reabre** a assinatura obsoleta. Desativar funciona mesmo que alguém da lista tenha sido desativado no cadastro — é justamente a saída quando o único aprovador sai da empresa; já **acrescentar** à lista alguém desativado continua recusado com *"Aprovador inexistente ou inativo: ⟨ids⟩"*.
+**Desativar uma regra** que está segurando requisições **libera** essas requisições. A tela avisa antes: *"Desativar esta regra libera N requisição(ões) que aguardam a assinatura dela — a pendência fica registrada como obsoleta e deixa de bloquear a aprovação."*. Depois confirma *"N aprovação(ões) pendente(s) desta regra deixaram de bloquear requisições"*. Na requisição, a assinatura passa a aparecer como *"Obsoleta (regra desativada)"*. Isso vale só para requisição que ainda aguarda aprovação; a de requisição já rejeitada ou cancelada fica como estava. Editar uma regra pela tela preserva todos os critérios dela; por integração, um critério que não é mandado na edição **fica como estava** — só o critério mandado vazio é limpo. **Reativar a regra não reabre** a assinatura obsoleta. Desativar funciona mesmo que alguém da lista tenha sido desativado no cadastro — é justamente a saída quando o único aprovador sai da empresa; já **acrescentar** à lista alguém desativado continua recusado com *"Aprovador inexistente ou inativo: ⟨ids⟩"*.
 
 Cada assinatura fica na auditoria da requisição como **Aprovação de regra**, e cada criação ou edição de regra na entidade **Regra de aprovação**.
 
@@ -1263,11 +1269,11 @@ Existe ainda uma configuração de **aprovação automática**. Com ela ligada, 
 
 Três ressalvas:
 
-- **Urgência "Crítico" nunca é auto-aprovada** — justamente a que mais chama atenção precisa de olho humano.
+- **Urgência "Crítico" nunca é auto-aprovada** — justamente a que mais chama atenção precisa de olho humano. Vale também para um rascunho antigo em que a urgência esteja escrita de outro jeito (*"critico"*).
 - A aprovação automática **só corre depois** da alçada por valor. Requisição que caiu em *Aguard. Aprov. Valor* não é auto-aprovada.
 - **Requisição com assinatura de regra pendente não é auto-aprovada** (8.4) — ela fica **Pendente**.
 
-> As regras de aprovação em vigor são estas: **segregação**, **limite por valor**, **regras de aprovação configuráveis** e **aprovação automática**. Urgência e material de cliente não são critério de regra.
+> As regras de aprovação em vigor são estas: **segregação**, **limite por valor**, **regras de aprovação configuráveis** (inclusive por urgência e por material de cliente) e **aprovação automática**.
 
 ### 8.6 A cobrança por e-mail — o lembrete de requisição parada
 

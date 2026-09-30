@@ -31,7 +31,12 @@
 > feature 06. E o lembrete de hora em hora, que alcançava só `PENDENTE`, passou a alcançar
 > `AGUARDANDO_APROVACAO_VALOR` (dos aprovadores de valor) e ganhou uma segunda fila, por pendência de
 > regra; com pendência aberta, a fila por status não cobra.
-> **Última atualização:** 2026-09-30 (Etapa 47); antes: 2026-09-16 (Etapa 35 — uma carga do detalhe por gesto e ✕ que descarta a
+> **Etapa 48 (2026-09-30, `d8631bd` em diante) — a urgência virou lista fechada.** O campo `urgencia`,
+> que era texto livre no servidor, só aceita `NORMAL`, `URGENTE` e `CRITICO`: a criação (as duas rotas)
+> recusa o resto com *"Urgência inválida: <valor>"*, e o `/enviar` do rascunho normaliza a caixa e recusa o
+> que continuar fora. O passado não é reescrito. E a lista ganhou o painel *"Requisições aguardando sua
+> aprovação"* (feature 06).
+> **Última atualização:** 2026-09-30 (Etapa 48); antes: 2026-09-30 (Etapa 47); antes: 2026-09-16 (Etapa 35 — uma carga do detalhe por gesto e ✕ que descarta a
 > resposta em voo; antes: 2026-09-16, Etapa 34 — anexos no painel; antes: 2026-08-11, auditoria
 > spec×código)
 
@@ -48,7 +53,7 @@ Fluxo completo: rascunho → aprovação → disponibilidade → reserva → sep
 - Notificações: e-mail ao almoxarifado na criação, e-mail a Compras para itens sem estoque, lembretes a cada 1 h (`requisitionReminderService.js`, log em `requisicao_lembretes_log`). **Etapa 47:** alcança também a travada por valor e cada pendência de regra — ver o cabeçalho.
 - Disponibilidade em lote: `POST /requisicoes-material/disponibilidade` + badge no front.
 - Front: `RequisicoesList.js` (1.080 L, ações completas), `RequisicaoForm.js` (industrial), `RequisicaoMaterialCesta.js` (administrativa), configurado para 10 módulos-origem (`requisicoesMaterialConfig.js`).
-- Campos existentes: solicitante, departamento, setor, os_referencia (texto), urgencia, prioridade, data_necessidade, justificativa, projeto_id, cliente_id, equipamento, valor_total; + Etapa 3: `tipo_requisicao`, `centro_custo_id`, `local_entrega`, `recebimento_confirmado_por/em`, `encerrado_por/em`.
+- Campos existentes: solicitante, departamento, setor, os_referencia (texto), urgencia (**lista fechada desde a Etapa 48**: NORMAL/URGENTE/CRITICO), prioridade, data_necessidade, justificativa, projeto_id, cliente_id, equipamento, valor_total; + Etapa 3: `tipo_requisicao`, `centro_custo_id`, `local_entrega`, `recebimento_confirmado_por/em`, `encerrado_por/em`.
 - Testes de serviço: separação/entrega parcial em múltiplas rodadas, exclusão com estorno, lembretes, liberação por valor, filtro por setor.
 - **Etapa 3 (2026-08-05) — item mais importante: entrega e estorno passaram a baixar/estornar estoque pelo motor (`stockService.registrarMovimentacao`)**, fechando o bypass de SQL cru anotado desde a Etapa 1 (`requisitionService.entregarRequisicao/excluirRequisicao`). Ganho: atomicidade (sem race condition entre entregas concorrentes do mesmo material), auditoria (toda baixa/estorno grava linha em `auditoria_log_almoxarifado`), saldo por localização (padrão do material, com bloqueio de localização respeitado) e vínculos estruturados na movimentação (`requisicao_id`, `projeto_id`, `centro_custo_id`; OS continua só como referência em texto — a requisição não tem `os_id`, só `os_referencia`). `maxEntregar` e o GET de detalhe passaram a calcular pelo **disponível** (físico − reservado/bloqueado/inspeção), não mais pelo físico — semântica nova de `saldo_atual` no front.
 - **Etapa 4 (2026-08-06) — mudança que esta spec não contava (registrada na auditoria de 2026-08-11):** a entrega passou a **consumir a reserva da própria requisição**, dividindo a saída entre reserva e excedente sem reserva (`requisitionService.entregarRequisicao`); e separar/entregar somam o hold da própria requisição ao disponível — a própria reserva não barra mais a separação/entrega da requisição dona. Detalhes, decisões e testes na feature 07.

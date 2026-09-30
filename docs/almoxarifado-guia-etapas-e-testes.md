@@ -1,12 +1,24 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-09-30 (Etapa 47) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-09-30 (Etapa 48) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 47) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 48) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-09-30 (Etapa 47 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-09-30 (Etapa 48 ENTREGUE · modo contínuo pelo mapa)
 >
-> **O desenvolvimento parou aqui: Etapa 47, 2026-09-30.** A **Etapa 47 (o motor de aprovações ganha
+> **O desenvolvimento parou aqui: Etapa 48, 2026-09-30.** A **Etapa 48 (regras por urgência e por
+> material de cliente, e a fila da aprovação simples)** completa o que a 47 deixou na feature **06
+> (Aprovações)**: as regras ganham os critérios **urgência** e **material de cliente**; a urgência vira
+> **lista fechada** (Normal, Urgente, Crítico — o resto é recusado com *"Urgência inválida: ⟨valor⟩"*,
+> e o rascunho antigo tem a caixa corrigida no envio); e quem pode aprovar ganha o painel
+> **"Requisições aguardando sua aprovação"**. A feature 06 **continua 🟡**, a **dois** itens, os dois
+> presos a dependência: a dupla aprovação de ajuste (decisão **B11**) e a regra da lista técnica
+> (feature 22).
+> **Próxima etapa:** ver *"Próxima tarefa detalhada"* no plano da Etapa 48.
+>
+> **Etapas 1 a 20 e 22 a 48 completas.**
+>
+> **Etapa 47, 2026-09-30.** A **Etapa 47 (o motor de aprovações ganha
 > regras, e a requisição de alto valor passa a ser cobrada)** fecha dois achados antigos da feature
 > **06 (Aprovações)** e paga o item que ela adiava desde a Etapa 3. O administrador cadastra **regras
 > de aprovação** em *Configurações → Regras de Aprovação* (tipo de requisição, material crítico, valor
@@ -4899,6 +4911,66 @@ que ele não tinha como repetir com sucesso garantido.
 - **Número de série de material** — continua sendo **digitado pelo operador** e de propósito não
   passa por este gerador. Retentar com outro número gravaria algo que ninguém digitou.
 - **Números de outros módulos do CRM** — a varredura foi do almoxarifado.
+
+---
+
+## Etapa 48 — Regras por urgência e por material de cliente, e a fila da aprovação simples (ENTREGUE — 2026-09-30)
+
+**O que mudou, em uma frase:** as regras de aprovação passam a poder exigir aval pela **urgência** da
+requisição e por ela levar **material de cliente**; a urgência vira uma lista fechada; e quem pode
+aprovar ganha, no topo de Requisições, a lista do que espera a aprovação dele.
+
+**O problema que ela resolve.** A etapa passada criou as regras, mas sem os dois critérios que a
+especificação pedia e que mais aparecem no galpão. E a urgência era, por trás da tela, texto livre:
+uma regra "Urgente" nunca casaria com um *"urgente"* gravado por outro caminho — e um rascunho antigo
+com *"critico"* em minúsculo escapava da trava que impede aprovar Crítico automaticamente. Por fim, o
+aprovador comum não tinha onde ver *"estas esperam você"*.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Urgência aceitava qualquer texto pela porta de programação | Só **Normal / Urgente / Crítico**; o resto → *"Urgência inválida: ⟨valor⟩"* |
+| Rascunho antigo com urgência em minúsculo escapava da trava do Crítico | O **envio** grava a forma certa; outra palavra é recusada |
+| Regras sem urgência nem material de cliente | Campo **Urgência** e caixa **Algum item é material de cliente** na aba Regras de Aprovação |
+| Aprovador comum procurava na lista | Painel **"Requisições aguardando sua aprovação (N)"** |
+
+### Roteiro de teste manual (≈10 min)
+
+**Preparação.** Os usuários da Etapa 47 (Solicitante; **Ana** e **Bia**, perfil Gestor; um
+**Administrador** do módulo), um material **nosso** e um **material de cliente** (cadastrado com dono
+em *Materiais de Clientes*).
+
+1. **A urgência no formulário.** Como Solicitante, abra *Nova requisição*: o campo **Urgência** tem
+   *"Normal — atendimento padrão"*, *"⚠️ Urgente — linha parada"* e *"🔴 Crítico — risco de
+   segurança"*. Nada muda para quem usa a tela.
+2. **Regra por urgência.** Como Administrador: **Configurações → Regras de Aprovação → Nova regra**,
+   nome *"Urgente"*, **Urgência** = *Urgente*, marque a **Ana**, **Salvar regra** → *"Regra criada"*.
+   A lista mostra *"Urgência: Urgente"*.
+3. **Regra por material de cliente.** Nova regra *"De cliente"*, marque **Algum item é material de
+   cliente** e a **Bia**. A lista mostra *"Algum item é material de cliente"*.
+4. **A requisição que se encaixa nas duas.** Como Solicitante: requisição **Urgente** (justifique a
+   urgência) com **1** do material de cliente. Como Administrador, abra-a: o bloco *Aprovações de
+   regra* mostra *"Urgente · Aguardando assinatura"* e *"De cliente · Aguardando assinatura"*.
+5. **As metades que NÃO casam.** Uma requisição **Normal** só com material nosso: **nenhuma**
+   assinatura. Uma **Normal** com material de cliente: só *"De cliente"*.
+6. **A fila simples.** Crie, como Solicitante, uma requisição **Normal** só com material nosso. Entre
+   como **Bia** (Gestor, pode aprovar): no topo de **Requisições**, o painel **"Requisições aguardando
+   sua aprovação"** lista essa requisição (número, solicitante, valor). A do passo 4 **não** aparece
+   ali (espera assinatura de regra — está no painel das regras). Clique na linha → abre a requisição;
+   **Só Aprovar** → ela **sai** do painel.
+7. **Quem não pode aprovar não vê.** Entre como um usuário de perfil **Produção**: o painel **não**
+   aparece.
+8. **A recusa da urgência (pela porta de programação, opcional).** Um `POST` de requisição com
+   `"urgencia": "ALTA"` → *"Urgência inválida: ALTA"*; nada é gravado.
+
+### O que esta etapa NÃO cobre
+
+- **A urgência antiga fora da lista não é corrigida no banco** — só no envio do rascunho. A consulta
+  **A27** das novidades mostra se você tem alguma.
+- **A feature 06 continua 🟡**: faltam a **dupla aprovação de ajuste** (espera a decisão **B11**) e a
+  **regra da lista técnica** (depende da feature 22).
+- **O painel da fila simples é um recorte fixo**, sem filtro próprio.
 
 ---
 

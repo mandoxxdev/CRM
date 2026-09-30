@@ -84,3 +84,20 @@ A recusa "Regra precisa de pelo menos um critério" passa a contar os dois crit�
 
 T3 e T4 são independentes de regra (critério da skill): nenhuma interpretação de uma exige retrabalho
 na outra. Mas são **pequenas**, e rodar em worktree custa mais que rodá-las em série. **Escolha:** série.
+
+## 6. O que as revisões mudaram neste desenho
+
+- **A seção 1 estava IMPRECISA sobre quem escreve urgência.** Ela dizia "um lugar só, o `<select>` de
+  `RequisicaoForm.js`". **O certo:** o `/copiar` também escreve, e grava `NORMAL` porque não copia a
+  urgência (Fase 2, MINOR 5). Com isso **não** há um terceiro escritor: o `/enviar` não escreve, só
+  lê, e é justamente isso que abriu o IMPORTANT-1 da Fase 5.
+- **A RN-01 dizia que a recusa mora em `createRequisicao`, "a porta das duas rotas de criação". Isso
+  estava certo e era INSUFICIENTE.** A urgência passa a valer no **envio** do rascunho (regras,
+  auto-aprovação), e o `/enviar` não passa por `createRequisicao`. **O certo:** a lista vale nas
+  **duas** portas. A criação recusa; o **envio** normaliza a caixa, recusa o que continuar fora com
+  a mesma literal e grava o valor normalizado (Fase 5, IMPORTANT-1).
+- **A RN-04 prometia "não oferecer gesto que o servidor recusa".** **O certo:** isso vale só com
+  `regras_avaliadas_em` preenchido. A requisição não avaliada **fica** na fila, marcada (Fase 2,
+  IMPORTANT-1).
+- **A seção 3 ganhou uma regra de edição:** no `PUT /regras-aprovacao/:id`, campo **ausente** mantém
+  o valor e `null` explícito limpa (Fase 5, MINOR-1).

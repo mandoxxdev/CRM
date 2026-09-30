@@ -107,7 +107,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Vinte e seis itens para rodar em produção ANTES do deploy — vinte e três são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Vinte e sete itens para rodar em produção ANTES do deploy — vinte e quatro são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-09-30 (Etapa 48) de vinte e seis para vinte e sete**, com a **A27**.)*
 
 *(**Atualizado em 2026-09-30 (Etapa 47) de vinte e quatro para vinte e seis**, com a **A25** e a
 **A26**. A Etapa 46 não acrescentou nenhuma.)*
@@ -833,7 +835,31 @@ SELECT chave, valor, descricao FROM configuracoes_almoxarifado WHERE chave = 'li
 linhas** também está certo (banco criado depois). **Não rode `DELETE`**: se um dia a regra de
 aprovação automática por quantidade for pedida, a linha é o ponto de partida.
 
-### B. Decisões de negócio — B1 a B196; as em aberto esperam você, as tomadas estão escritas com o descartado
+**A27 (NOVA, da Etapa 48 — urgências fora da lista no seu banco: medir antes, nada a apagar).** A
+urgência virou lista fechada (**Normal**, **Urgente**, **Crítico**, gravadas como `NORMAL`, `URGENTE`,
+`CRITICO`). O que já está gravado **não foi reescrito** (letra **B197**).
+
+```sql
+SELECT status, urgencia, COUNT(*) AS qtd
+  FROM requisicoes_almoxarifado
+ GROUP BY status, urgencia
+ ORDER BY status, urgencia;
+```
+
+**Como ler o resultado:**
+- **Só `NORMAL`, `URGENTE`, `CRITICO`** (e eventualmente vazio) — nada a fazer.
+- **`RASCUNHO` com a mesma palavra em outra caixa** (`critico`, `Urgente`) — nada a fazer: o **envio**
+  grava a forma certa e segue.
+- **`RASCUNHO` com outra palavra** (`ALTA`, `media`…) — o envio desse rascunho vai ser **recusado** com
+  *"Urgência inválida: ALTA"*. Avise o solicitante para refazer o pedido pela tela (ou copiar o
+  rascunho — a cópia nasce **Normal**).
+- **Qualquer outro status com valor fora da lista** — a requisição **fica como está**: ela só não se
+  encaixa em regra de urgência. A trava que impede aprovar Crítico automaticamente e a ordem da lista
+  já tratam `critico` minúsculo como Crítico.
+
+### B. Decisões de negócio — B1 a B200; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+*(**Atualizado em 2026-09-30 de B196 para B200**, com as quatro da Etapa 48 — a B199 veio da revisão do código.)*
 
 *(**Atualizado em 2026-09-30 de B185 para B196**, com as onze da Etapa 47 — a B196 veio da revisão do código.)*
 
@@ -3561,6 +3587,28 @@ liberação por valor por simetria (a liberação por valor **continua** com o c
 quiser alinhar as duas, é uma decisão sua). **E a mesma pessoa continua não podendo assinar duas
 regras da mesma requisição**, administrador inclusive.
 
+**B197 (NOVA, da Etapa 48) — a urgência é lista fechada daqui para frente; o passado não é
+reescrito.** **Escolhido:** criação e envio só aceitam **Normal/Urgente/Crítico**; o envio de rascunho
+antigo **normaliza a caixa** (`critico` → `CRITICO`) e **recusa** palavra fora da lista.
+**Descartado:** (a) um `UPDATE` na atualização que "consertasse" tudo — irreversível, e para `ALTA`
+não há resposta certa (é Urgente? Crítico?); (b) aceitar variações de caixa na criação — reabriria a
+lista por outro caminho. Consulta **A27**.
+
+**B198 (NOVA, da Etapa 48) — a fila da aprovação simples mostra a requisição cujas regras ainda não
+foram conferidas, marcada.** **Escolhido:** ela aparece com *"regras ainda não avaliadas — a aprovação
+vai conferir"*, e a aprovação confere na hora. **Descartado:** escondê-la — ela também não está no
+painel das regras (nenhuma assinatura foi criada), e sumiria das duas telas.
+
+**B199 (NOVA, da Etapa 48, revisão do código) — editar uma regra sem mandar um campo MANTÉM o valor;
+só mandar o campo vazio o limpa.** **Escolhido:** assim um programa ou uma tela antiga (em cache logo
+depois de uma atualização) que não conhece um critério não o apaga em silêncio — a regra *"Urgente e
+valor ≥ 5"* viraria *"valor ≥ 5"* e passaria a valer para toda requisição. **Descartado:** a edição
+substituindo a regra inteira (o comportamento anterior).
+
+**B200 (NOVA, da Etapa 48) — as duas telas da etapa rodaram em série, não em paralelo.** Eram
+independentes pela regra desta base, mas pequenas: separá-las em cópias paralelas custava mais do
+que ganhava. Decisão de processo, registrada porque a base mede o paralelismo em toda etapa.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -5019,27 +5067,40 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   tem seletor de série. Mesma limitação, e pelo mesmo motivo, do descarte de devolução da Etapa 7.
   promessa a deixá-la escrita e não cumprida.
 
-- **(47) Urgência e material de cliente não são critério de regra de aprovação.** A spec da feature
+- **✅ PAGO NA ETAPA 48 — (47) Urgência e material de cliente não são critério de regra de aprovação.** Os
+  dois viraram critério na Etapa 48 (cenários 3 a 5 dela). O texto original fica abaixo. A spec da feature
   os lista junto com tipo, valor, quantidade, projeto e centro de custo; ficaram de fora do desenho.
   Acrescentá-los é uma coluna nova cada, sem nada irreversível no caminho.
 
 - **(47) Regra vale no ENVIO da requisição.** Criar, editar ou reativar uma regra **não** reavalia as
   requisições que já estão na fila. E as requisições que já existiam no dia da atualização foram
   marcadas como "regras já avaliadas" — **nenhuma regra nova as alcança**; elas seguem a aprovação de
-  antes. **Por quê:** uma regra que aparece do nada numa requisição de semanas atrás, travando o botão
+  antes. **Exceção: os rascunhos** — esses são conferidos quando forem enviados. **Por quê:** uma regra que aparece do nada numa requisição de semanas atrás, travando o botão
   de aprovar, é pior que a regra valer do próximo envio em diante.
 
 - **(47) A requisição já aprovada que caiu em liberação por valor não é cobrada por e-mail.** É o furo
   **C68**, e a consulta **A25** mede quantas há. Cobrá-la exigiria outra frase ("voltou a aguardar
   liberação") e resolver o atalho da máquina de estados antes — etapa própria.
 
-- **(47) Não há fila "minhas aprovações" da aprovação normal.** O painel novo mostra só as
+- **✅ PAGO NA ETAPA 48 — (47) Não há fila "minhas aprovações" da aprovação normal.** A Etapa 48 criou o
+  painel *"Requisições aguardando sua aprovação"* (cenário 7 dela). O texto original: o painel novo mostra só as
   **assinaturas de regra** que o usuário pode dar; a liberação por valor já tinha o filtro dela. A
   aprovação normal é por perfil, e perfil não diz **quem** — a fila dela é outra decisão.
 
 - **(47) Editar a lista de quem assina não alcança requisição que já entrou.** A requisição guarda a
   lista **do momento do envio**. Trocar o gestor responsável depois não passa a pendência para ele — a
   saída é o Administrador assinar, ou desativar a regra (que torna a pendência obsoleta).
+
+- **(48) A urgência antiga fora da lista não é reescrita.** O rascunho é corrigido (ou recusado) no
+  envio; a requisição já enviada fica como está e só não se encaixa em regra de urgência. Consulta
+  **A27**, decisão **B197**.
+
+- **(48) O painel da fila simples é um recorte fixo.** Pendentes de outras pessoas, sem assinatura de
+  regra faltando. Não tem filtro próprio nem ordenação própria — segue a ordem da lista (urgência,
+  depois data).
+
+- **(48) A feature de aprovações não fica verde nesta etapa.** Faltam a **dupla aprovação de ajuste**
+  (espera a decisão **B11**) e a **regra da lista técnica** (depende da feature 22, que não existe).
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -5361,12 +5422,24 @@ recebe cada e-mail. O que **só o navegador** prova:
    aparecem e não quebram a tabela.
 4. **O painel "Aprovações de regra aguardando você" some quando não há nada?** Entrar com um usuário
    que não está em nenhuma regra: o painel **não** pode aparecer vazio.
-5. **O texto de ajuda do lembrete ficou desatualizado — conferir e decidir.** Em **Configurações →
+5. **✅ CORRIGIDO no fix-round da própria Etapa 47 (`e4ee27c`) —** o texto passou a dizer quem recebe em cada
+   caso. Fica para conferir no navegador que ele cabe no bloco. O registro original:
+   5. **O texto de ajuda do lembrete ficou desatualizado — conferir e decidir.** Em **Configurações →
    Alertas de Estoque → Lembretes de requisições pendentes**, a tela diz *"Envia e-mail diário quando
    uma requisição permanece com status PENDENTE… Usa os mesmos destinatários configurados acima"*.
    Depois desta etapa isso é **meia verdade**: a requisição travada por valor e cada assinatura de
    regra também são cobradas, e **não** pelos destinatários de cima. *(Registrado no fechamento; se
    ainda estiver assim quando você ler, é o próximo ajuste de texto.)*
+
+**(48) Nenhum clique foi dado nesta etapa.** Os testes provam a recusa da urgência pelas duas portas e
+no envio, os dois critérios novos com as duas metades, o painel com o recorte, a marca, a permissão e
+a recarga. O que **só o navegador** prova:
+
+1. **O painel "Requisições aguardando sua aprovação" e o de regras cabem juntos no topo?** Um
+   aprovador que também assina regra vê os dois. Conferir em notebook que a lista ainda aparece sem
+   rolar demais.
+2. **O campo Urgência e a caixa "material de cliente" cabem no formulário da regra?** O formulário
+   ganhou um campo e uma caixa.
 
 ### G. Fragilidades estruturais que continuam de pé
 
@@ -6382,6 +6455,14 @@ derrubá-lo se o ambiente não tiver o fuso esperado.
 
 ---
 
+**⚠️ G77 — CORRIGIDO NO PRÓPRIO FECHAMENTO DA 47, e o texto abaixo ESTAVA ERRADO em dois pontos.** Ele
+foi escrito antes da revisão do código e dizia (1) que a marcação "não tem teste" e (2) que "todas as
+requisições que já existem" recebem a marca. **O certo:** (1) a revisão acrescentou um teste que apaga
+a coluna e sobe o sistema de novo sobre um banco já povoado — ele prova a marcação no nascimento da
+coluna **e** que o boot seguinte não marca nada; (2) **rascunhos ficam de fora** da marcação, porque
+ainda não foram enviados — e o envio zera a marca. Mantido abaixo, riscado por esta nota, em vez de
+apagado.
+
 **G77 (NOVO, da Etapa 47). A marcação das requisições antigas na atualização não tem teste.** Na
 primeira vez que o sistema sobe depois da atualização, todas as requisições que já existem recebem a
 marca "regras já avaliadas" — sem ela, **nenhuma** delas poderia ser aprovada (a aprovação passa a
@@ -6390,6 +6471,17 @@ linhas e nada prova que ela acontece. **O risco, se ela falhar:** as requisiçõ
 atualização seriam reavaliadas no primeiro *Só Aprovar* — com as regras que existirem naquele
 momento —, e não travariam para sempre (a aprovação reavalia quando falta a marca). **O pior caso é
 uma regra aplicada retroativamente, não uma requisição morta.**
+
+---
+
+**G78 (NOVO, da Etapa 48). A comparação sem caixa na regra de urgência não tem teste que a proteja — e
+isso é certo.** A regra "Crítico" compara a urgência da requisição sem distinguir maiúscula de
+minúscula. Mas nenhuma requisição chega à conferência com a caixa errada: a criação só aceita a
+forma certa, e o **envio** do rascunho grava a forma certa antes de conferir. A revisão trocou essa
+comparação pela exata e **todos os testes ficaram verdes** — o defeito ficou **inalcançável** pelas
+telas e rotas de hoje. **Mantida** como defesa (custa nada, e protege a próxima porta que gravar
+urgência sem passar pelo envio); **declarado** que a suíte não a protege. O mesmo vale para o padrão
+"urgência vazia = Normal" da regra: o envio já grava Normal.
 
 aparece na hora, para quem está editando.
 ## Etapa 0 — Fundação (2026-08-03)
@@ -12662,7 +12754,123 @@ solicitante contornava a regra dividindo o pedido em linhas.
 6. **Material fora da lista técnica e dupla aprovação de ajuste** continuam fora — dependem de
    outras features.
 
+## Etapa 48 — Regras por urgência e por material de cliente, e a fila da aprovação simples (2026-09-30)
+
+A etapa passada deixou as regras de aprovação decidirem por tipo, valor, quantidade, material crítico
+e centro de custo — mas não pela **urgência** da requisição nem por ela levar **material de cliente**,
+os dois critérios que a especificação pedia e que mais aparecem no galpão (*"requisição urgente
+precisa do aval do supervisor"*, *"mexer em material do cliente precisa do aval do comercial"*). E o
+aprovador comum continuava sem um lugar que dissesse *"estas são as requisições esperando você"* — a
+etapa passada deu essa fila só a quem assina regra.
+
+Agora a urgência é uma **lista fechada** — Normal, Urgente, Crítico —, as regras podem exigir aval
+por urgência e por material de cliente, e quem pode aprovar vê, no topo da tela de Requisições, as
+requisições de outras pessoas que só esperam a aprovação dele.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A urgência era texto livre por trás da tela: qualquer valor entrava pela porta de programação | Só **Normal**, **Urgente** ou **Crítico**; o resto é recusado com *"Urgência inválida: ⟨valor⟩"* |
+| Rascunho gravado com a urgência em minúsculo (*"critico"*) escapava da trava que impede aprovar Crítico automaticamente | A trava não distingue maiúscula de minúscula, e o **envio** do rascunho grava a urgência na forma certa |
+| — | Regra de aprovação por **urgência** (campo *Urgência* na aba Regras de Aprovação) |
+| — | Regra de aprovação por **material de cliente** (*Algum item é material de cliente*) |
+| O aprovador comum procurava na lista, requisição por requisição | Painel **"Requisições aguardando sua aprovação (N)"** no topo de Requisições |
+| Editar uma regra por um programa que não conhecesse um critério o apagava em silêncio | Campo ausente na edição **mantém** o valor; só limpa quem manda o campo vazio |
+| A ordem da lista e o contador de urgentes do painel tratavam *"critico"* minúsculo como normal | Contam como Crítico |
+
+### As regras, com o cenário exato
+
+**Preparação:** os usuários da Etapa 47 (Ana e Bia, perfil Gestor; um Administrador do módulo), um
+material **nosso** e um **material de cliente** (cadastrado com dono em Materiais de Clientes).
+
+**1. A urgência só aceita os três valores.** No formulário de requisição o campo **Urgência** tem
+*"Normal — atendimento padrão"*, *"⚠️ Urgente — linha parada"* e *"🔴 Crítico — risco de
+segurança"* — nada muda para quem usa a tela. Pela porta de programação, qualquer outro valor —
+inclusive *"urgente"* em minúsculo — é recusado, **sem gravar nada**:
+→ *"Urgência inválida: ALTA"*. Vazio continua virando **Normal**.
+
+**2. Rascunho antigo.** Um rascunho salvo **antes** desta etapa pode ter urgência fora da lista. Ao
+**Enviar** esse rascunho:
+- se for a mesma palavra em outra caixa (*"critico"*), o sistema grava *"CRITICO"* e segue;
+- se for outra palavra (*"ALTA"*), o envio é recusado com *"Urgência inválida: ALTA"* e o rascunho
+  continua rascunho.
+A consulta **A27** mostra se o seu banco tem algum.
+
+**3. Regra por urgência.** **Configurações → Regras de Aprovação → Nova regra**: nome *"Urgente"*,
+**Urgência** = *Urgente*, marque a **Ana**. A lista mostra *"Urgência: Urgente"*. Crie uma requisição
+**Urgente**: nasce com a assinatura *"Urgente · Aguardando assinatura"*; uma **Normal** ou **Crítica**,
+não. Cadastrar a regra com urgência fora da lista (pela porta de programação) →
+*"Urgência inválida: urgente"*.
+
+**4. Regra por material de cliente.** Nova regra *"De cliente"*, marque **Algum item é material de
+cliente**, marque a **Bia**. A lista mostra *"Algum item é material de cliente"*. Uma requisição com
+**um** item de material de cliente (mesmo misturado com material nosso) nasce com a assinatura; uma
+só com material nosso, não. Deixar a caixa desmarcada **não conta** como critério:
+→ *"Regra precisa de pelo menos um critério"*.
+
+**5. Os dois juntos são "E".** Uma regra com *Urgente* **e** *material de cliente* só vale para a
+requisição que tem **as duas coisas**.
+
+**6. A aprovação automática continua respeitando.** Com **Aprovação Automática** ligada, a
+requisição **Urgente** que se encaixa na regra nasce **Pendente**; a **Normal** sem regra continua
+sendo aprovada sozinha; a **Crítica** nunca é aprovada sozinha.
+
+**7. A fila da aprovação simples.** Entre como alguém que pode aprovar (Gestor, Almoxarife ou
+Administrador). No topo de **Requisições** aparece **"Requisições aguardando sua aprovação (N)"**,
+com número, solicitante e valor de cada uma. Entram as **Pendentes de outras pessoas sem assinatura de
+regra faltando**. **Não entram:** a sua própria (você não pode aprová-la), a que ainda espera
+assinatura de regra (essa está no painel das regras, da etapa passada), e a travada por valor.
+Clique na linha → abre a requisição. Quem não pode aprovar **não vê** o painel. Depois de aprovar, a
+requisição **sai** do painel.
+
+**8. A marca "regras ainda não avaliadas".** Se o sistema não conseguiu conferir as regras no envio
+de uma requisição, ela aparece na fila com *"· regras ainda não avaliadas — a aprovação vai
+conferir"*. Clicar em aprovar faz a conferência nessa hora — e, se ela se encaixa numa regra, a
+recusa é *"Requisição tem aprovação de regra pendente: ⟨nome da regra⟩"*, sem reservar nada. Ela
+fica na fila, e não escondida, porque escondida não apareceria em painel nenhum.
+
+### O que esta etapa NÃO cobre
+
+1. **A urgência antiga fora da lista não é corrigida no banco.** Continua lá até o rascunho ser
+   enviado (ver cenário 2); requisição **já enviada** com urgência estranha fica como está — ela só
+   não se encaixa em regra de urgência. Consulta **A27**.
+2. **Dupla aprovação de ajuste de estoque** (aguarda a decisão **B11**) e **material fora da lista
+   técnica → Engenharia** (depende da feature 22). São o que falta para a feature de aprovações
+   ficar completa.
+3. **O painel da fila simples não tem filtro próprio** — é um recorte fixo; para outros recortes,
+   continuam os filtros da lista.
+
+### O que a revisão encontrou
+
+**Plano:** 0 CRITICAL, 2 IMPORTANT, 5 MINOR. Os dois IMPORTANT viraram parte da etapa: a fila mostraria
+uma requisição que a aprovação recusa (virou a marca do cenário 8), e a trava do Crítico comparava a
+palavra exata (virou a comparação sem caixa).
+
+**Código pronto:** dois revisores, **0 CRITICAL, 3 IMPORTANT e 7 MINOR**, **nenhum ruído** (o revisor
+que sabota trabalhou numa cópia separada — a lição da etapa passada). O que mais ensina: **a mesma
+causa voltou por outro caminho.** A trava da aprovação automática foi corrigida na primeira revisão,
+mas o **envio** do rascunho não passava pela lista e a regra "Crítico" comparava a palavra exata —
+um rascunho antigo com *"critico"* escapava da regra e podia ser aprovado por quem não é aprovador
+dela. Corrigido no envio (cenário 2). E dois pontos em que **editar uma regra apagava os critérios
+novos** — um no servidor, um na tela — ganharam teste; o código da tela estava certo e nenhum teste o
+protegia.
+
 ## Onde estamos e o que vem a seguir
+
+- **Etapa 48 entregue (2026-09-30):** **regras por urgência e por material de cliente, e a fila da
+  aprovação simples.** A urgência virou lista fechada (Normal, Urgente, Crítico) — o que entra fora
+  dela é recusado com *"Urgência inválida: ⟨valor⟩"*, e o rascunho antigo tem a caixa corrigida no
+  envio; as regras de aprovação ganharam os critérios **urgência** e **material de cliente**; e quem
+  pode aprovar ganhou o painel **"Requisições aguardando sua aprovação"**. **A feature de aprovações
+  fica a dois itens do verde, e os dois dependem de você ou de outra feature:** a dupla aprovação de
+  ajuste (decisão **B11**) e a regra da lista técnica (feature 22).
+  **O que é seu:** a consulta **A27** (urgências fora da lista no seu banco — e o que acontece com cada
+  uma); as decisões **B197 a B200**; e a limitação **(48)** em D.
+  **O que a revisão achou:** a mesma causa corrigida na primeira revisão — a urgência comparada como
+  palavra exata — voltou pelo **envio do rascunho** e pela regra "Crítico": um rascunho antigo com
+  *"critico"* minúsculo escapava da regra. Fechado no envio. Revisões: plano **0 CRITICAL / 2
+  IMPORTANT**, código **0 CRITICAL / 3 IMPORTANT / 7 MINOR**, **nenhum ruído**.
 
 - **Etapa 47 entregue (2026-09-30):** **o motor de aprovações ganha regras, e a requisição de alto
   valor passa a ser cobrada.** O administrador cadastra regras (tipo, material crítico, valor,
