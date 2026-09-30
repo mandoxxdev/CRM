@@ -1122,6 +1122,17 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     } catch (e) { handleError(res, e); }
   });
 
+  // Etapa 46 — a SAIDA do documento preso. Gate PROPRIO: nao e `decidir_nao_conformidade` (anular
+  // nao e decidir, e a decisao fica preservada) nem `executar_encaminhamento` (senao o COMPRAS
+  // limparia a propria fila). Ver o comentario de `cancelar_nao_conformidade` em permissions.js.
+  app.post('/api/almoxarifado/nao-conformidades/:id/cancelar', auth, requirePermission('cancelar_nao_conformidade'), async (req, res) => {
+    try {
+      res.json(await nonConformityService.cancelarNaoConformidade(db, req.user, req.params.id, {
+        motivo: (req.body || {}).motivo,
+      }));
+    } catch (e) { handleError(res, e); }
+  });
+
   app.post('/api/almoxarifado/materiais/:id/bloquear', auth, requirePermission('ajustar_estoque'), async (req, res) => {
     try { res.json(await inspectionService.bloquearMaterial(db, req.user, req.params.id, req.body)); }
     catch (e) { handleError(res, e); }

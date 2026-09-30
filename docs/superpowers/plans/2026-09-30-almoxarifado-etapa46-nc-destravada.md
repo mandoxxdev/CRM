@@ -125,6 +125,41 @@ sucesso; a fila `?execucao=PENDENTE` **não** traz a cancelada; a trilha.
 
 ---
 
+### ✅ T2 — feita
+
+`ncCancelamento.api.test.js`, **15 cenários, 15/15**. `test:api` **214/214 arquivos** (eram 213 —
+o arquivo novo) · almoxarifado **42/0** · validation **4/0** · safealter **3/0** · sqlite **5/0**.
+
+**Divergência do plano, e ela é a que mais importa:** o plano dizia que a suíte de cancelamento
+**não** protegeria `cancelado_por_id` — *"quem limpar a coluna num refactor quebra a RN-05 sem
+nenhum cenário deste arquivo ficar vermelho"*. **Falso**, e foi a **própria sabotagem** que
+derrubou a frase: trocar a escrita da coluna por `NULL` derruba **quatro** cenários. Escrevi isso
+no código como aviso, e o aviso estava errado — corrigido à vista no docblock de
+`cancelarNaoConformidade`.
+
+#### As sete sabotagens — e a primeira NÃO SABOTOU
+
+| # | Sabotagem | Cai | Asserção |
+|---|---|---|---|
+| 1 | `getUltimaEncerrada` volta a só `DECIDIDA` (1ª tentativa, **linha 409**) | **nada** | ⚠️ **no-op**: as linhas deslocaram quando eu inseri o docblock, e a 409 virou linha de comentário. `md5sum` igual ao backup denunciou. Refeita contando a âncora (`grep -n`), linha **433** |
+| 1b | idem, na linha certa | (12) | *"o gancho devolveu ABERTA — reabriu o que uma pessoa anulou"* |
+| 2 | o carimbo `fato_superado_em` volta a só `DECIDIDA` | (14) | *"o carimbo de fato superado NAO alcancou a linha cancelada por pessoa — e o 'silencio completo' do passo seguinte"* |
+| 3 | o `semNc` do D6 volta à régua antiga | (15) | *"o item voltou ao cartao como divergencia NAO DOCUMENTADA — e nao existe porta para documenta-la"* |
+| 4 | o cancelamento **zera** `execucao_estado` (contra a RN-06) | (5) e (10) | *"o cancelamento ZEROU execucao_estado — a RN-06 proibe: quem exclui da fila e o status"* |
+| 5 | tira a recusa `JA_LIBEROU` | (7) | *"ACEITAR caiu na literal errada — e a errada MENTE sobre a causa"* — prova a **literal**, não só a recusa: o claim ainda barra, mas a mensagem passa a mentir |
+| 6 | **`OR` largo**: casa qualquer `CANCELADA` em vez de `cancelado_por_id` | (13) | *"a cancelada AUTOMATICA passou a valer como encerramento, e o erro novo ficou sem documento"* — **é o controle que a Fase 2 exigiu**, e ele prova que o teste ancora o DISCRIMINADOR, não um `OR` qualquer |
+| 7 | não grava `cancelado_por_id` | (3), (12), (14), (15) | quatro asserções, uma por consumidor — **e é esta que refuta o comentário do plano** |
+
+**A lição da sabotagem 1** é a mesma que a `fechar-etapa` já traz escrita, e eu a repeti de novo:
+**contar a âncora antes de aplicar `sed` por número de linha.** Eu tinha inserido um docblock de 23
+linhas no mesmo arquivo minutos antes, e usei o número de linha medido **antes** dele. O `md5sum`
+pegou — foi para isso que a regra existe.
+
+**O que NÃO tem teste, e fica declarado:** a corrida entre `/cancelar` e `/executar`. O
+`changes === 0` relê a linha para escolher a literal certa (achado 9 da Fase 2), mas a corrida não é
+reproduzível no harness — o claim fica, e a suíte não o protege. Mesma situação do claim
+serializador da Etapa 45, que virou a letra **E+**.
+
 ## T3 — galho: o alerta que cobra, a config de TRÊS pontas, e sete contagens
 
 > **Reescrita depois da Fase 2.**

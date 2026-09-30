@@ -1533,6 +1533,33 @@ async function initSchema(db) {
     'execucao_movimentacao_id INTEGER',
   ];
   for (const col of ncCols) await safeAlter(db, `ALTER TABLE nao_conformidades_almoxarifado ADD COLUMN ${col}`);
+
+  // ── Etapa 46 — QUEM cancelou, e por que estas DUAS colunas sao o discriminador da etapa ─────
+  //
+  // A tabela ja tinha `motivo_cancelamento` e `cancelado_em` desde a Etapa 43, e ficou PELA
+  // METADE: `conferencias_almoxarifado` tem o QUARTETO completo desde a Etapa 17
+  // (cancelado_por_id / cancelado_por_nome / cancelado_em / motivo_cancelamento, mais abaixo neste
+  // arquivo). Esta etapa completa o da NC, e nao e so simetria:
+  //
+  // ⚠️ `cancelado_por_id IS NOT NULL` E O DISCRIMINADOR ENTRE OS DOIS SIGNIFICADOS DE `CANCELADA`.
+  // Ate a Etapa 45, cancelar era UM ato so — automatico, dentro de
+  // `sincronizarNaoConformidadeQuantidade`, quando a divergencia DESAPARECE. A Etapa 46 acrescenta
+  // o cancelamento HUMANO, e nele o problema NAO desapareceu: ele continua de pe, e uma pessoa
+  // decidiu encerrar o documento. Os dois consumidores do estado precisam distinguir:
+  //
+  //   · `CANCELADA` + `cancelado_por_id IS NULL`  -> o fato sumiu; NAO e encerramento
+  //   · `CANCELADA` + `cancelado_por_id NOT NULL` -> encerrado por PESSOA; E encerramento
+  //
+  // O desenho da 46 tentou primeiro `decidido_em` como discriminador, e a revisao da Fase 2
+  // mostrou por execucao que ele e EXCLUSIVO mas NAO SUFICIENTE: uma NC ABERTA cancelada por
+  // pessoa tem `decidido_em IS NULL`, a MESMA assinatura do cancelamento automatico — e o gancho
+  // de quantidade reabriria, a cada salvamento de NF, o documento que a pessoa acabou de anular.
+  //
+  // NULL nas linhas antigas e exatamente o certo: toda NC cancelada antes desta etapa e
+  // automatica, por construcao (o unico escritor de `CANCELADA` tinha `WHERE status = 'ABERTA'` e
+  // exigia `aberto_automaticamente`). Sem backfill, de proposito.
+  await safeAlter(db, 'ALTER TABLE nao_conformidades_almoxarifado ADD COLUMN cancelado_por_id INTEGER');
+  await safeAlter(db, 'ALTER TABLE nao_conformidades_almoxarifado ADD COLUMN cancelado_por_nome TEXT');
   await migrateBackfillExecucaoEstadoNc(db);
 
   const recebCols = [

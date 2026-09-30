@@ -142,9 +142,16 @@ function maisVelhoQueDias(dataStr, dias) {
  * escolha (e mesmo motivo — nenhum require de servico neste SQL) de
  * `listarNaoConformidadesParadas` com o seu `'ABERTA'`. A copia e guardada contra deriva pelo
  * cenario (1) de `alertaReprovadoExecutado.api.test.js`, que le as duas constantes do servico.
- * `status` fica FORA da regua: hoje o unico escritor de `CANCELADA` cancela NC `ABERTA`
- * (`nonConformityService.js:477`), entao uma NC EXECUTADA nunca e cancelada — e se um dia for,
- * o material ja saiu do galpao do mesmo jeito.
+ * `status` fica FORA da regua, e a razao MUDOU na Etapa 46 — a conclusao continua a mesma.
+ * ~~hoje o unico escritor de `CANCELADA` cancela NC `ABERTA` (`nonConformityService.js:477`),
+ * entao uma NC EXECUTADA nunca e cancelada~~ — isso valeu ate a Etapa 45 e **deixou de valer**:
+ * a Etapa 46 criou `cancelarNaoConformidade`, que cancela NC `ABERTA` **e** `DECIDIDA`. (E o
+ * `:477` daquela frase ja estava deslocado: o `UPDATE` do cancelamento automatico mora no corpo de
+ * `sincronizarNaoConformidadeQuantidade`.)
+ * **O que continua verdade, e e o que sustenta a regua:** NC com execucao REGISTRADA nao e
+ * cancelavel — `cancelarNaoConformidade` recusa com `execucao_em IS NOT NULL` —, e se um dia for,
+ * o material ja saiu do galpao do mesmo jeito. A regua aqui e `devolucao_fornecedor_em`, que mede
+ * MATERIAL MOVIDO, e nenhum cancelamento a apaga.
  */
 async function listarReprovados(db, { dias, inspecaoId, excluirComExecucao } = {}) {
   const filtro = inspecaoId
@@ -203,6 +210,22 @@ async function listarReprovados(db, { dias, inspecaoId, excluirComExecucao } = {
  * A regua da exclusao e `status <> 'CANCELADA'`, e a escolha e do mesmo tamanho: a NC CANCELADA
  * e a divergencia que o operador CORRIGIU e depois quebrou de novo (RN-05 + RN-10) — tratar o
  * documento morto como "ja documentado" esconderia justamente o erro NOVO.
+ *
+ * ⚠️ ETAPA 46 — A REGUA GANHOU UMA SEGUNDA METADE, e o paragrafo acima ficou VERDADEIRO SO PARA
+ * O CANCELAMENTO AUTOMATICO. A regua atual e
+ * `status <> 'CANCELADA' OR cancelado_por_id IS NOT NULL`.
+ *
+ * O porque: a Etapa 46 criou o cancelamento HUMANO (`cancelarNaoConformidade`), em que a
+ * divergencia NAO foi corrigida — ela continua de pe, e uma pessoa encerrou o documento. Com a
+ * regua antiga o item voltaria ao cartao como divergencia NAO DOCUMENTADA, e nao existe porta para
+ * documenta-la: nao ha tela de abertura manual de NC, e o gancho automatico tambem para de reabrir
+ * (`getUltimaEncerrada` passou a tratar a cancelada-por-pessoa como encerramento). Seria o cartao
+ * cobrando o que ninguem pode atender.
+ *
+ * "Cancelado por PESSOA" e um ENCERRAMENTO, como decidir — e os TRES consumidores do estado
+ * passam a trata-lo assim. Os outros dois estao em `nonConformityService.js`
+ * (`getUltimaEncerrada` e o carimbo de `fato_superado_em`), e o docblock de la conta a historia
+ * inteira com o cenario de cada furo que aparece se um deles ficar de fora.
  */
 async function listarDivergenciasRecebimento(db, { dias, recebimentoId, excluirComNC } = {}) {
   const filtro = recebimentoId
@@ -211,7 +234,8 @@ async function listarDivergenciasRecebimento(db, { dias, recebimentoId, excluirC
   const semNc = excluirComNC ? `AND NOT EXISTS (
       SELECT 1 FROM nao_conformidades_almoxarifado nc
       WHERE nc.referencia_tipo = 'RECEBIMENTO_ITEM' AND nc.referencia_id = ri.id
-        AND nc.tipo = 'QUANTIDADE' AND nc.status <> 'CANCELADA')` : '';
+        AND nc.tipo = 'QUANTIDADE'
+        AND (nc.status <> 'CANCELADA' OR nc.cancelado_por_id IS NOT NULL))` : '';
   return dbAll(db, `
     SELECT ri.id AS item_id, ri.recebimento_id, m.codigo AS material_codigo,
       m.nome AS material_nome, ri.quantidade_esperada, ri.quantidade_recebida,
