@@ -20,6 +20,7 @@ const { valorEstoqueSql, custoUnitarioSql } = require('../services/almoxarifado/
 const requisitionCreateService = require('../services/almoxarifado/requisitionCreateService');
 const requisitionStateMachine = require('../services/almoxarifado/requisitionStateMachine');
 const valueApprovalService = require('../services/almoxarifado/requisitionValueApprovalService');
+const approvalRulesService = require('../services/almoxarifado/approvalRulesService');
 const stockService = require('../services/almoxarifado/stockService');
 const materialService = require('../services/almoxarifado/materialService');
 const {
@@ -2964,7 +2965,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   app.get('/api/almoxarifado/requisicoes',(req, res) => {
     const { status, urgencia, minha, departamento } = req.query;
     let sql = `SELECT r.*,
-                 (SELECT COUNT(*) FROM itens_requisicao_almoxarifado WHERE requisicao_id = r.id) as total_itens
+                 (SELECT COUNT(*) FROM itens_requisicao_almoxarifado WHERE requisicao_id = r.id) as total_itens,
+                 -- Etapa 47 (9.7/I4): a tela sabe que o "Aprovar" vai ser barrado pelas regras.
+                 (SELECT COUNT(*) FROM requisicao_aprovacoes_regra p
+                   WHERE p.requisicao_id = r.id AND p.status = 'ABERTA') as pendencias_regra_abertas
                FROM requisicoes_almoxarifado r WHERE COALESCE(r.ativo, 1) = 1`;
     const params = [];
 
@@ -2996,7 +3000,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
   // GET /api/almoxarifado/requisicoes/:id — detalhe com itens
   app.get('/api/almoxarifado/requisicoes/:id',(req, res) => {
-    db.get(`SELECT * FROM requisicoes_almoxarifado WHERE id = ? AND COALESCE(ativo, 1) = 1`, [req.params.id], (err, req_row) => {
+    db.get(`SELECT *,
+              (SELECT COUNT(*) FROM requisicao_aprovacoes_regra p
+                WHERE p.requisicao_id = requisicoes_almoxarifado.id AND p.status = 'ABERTA') as pendencias_regra_abertas
+            FROM requisicoes_almoxarifado WHERE id = ? AND COALESCE(ativo, 1) = 1`, [req.params.id], (err, req_row) => {
       if (err) return res.status(500).json({ error: err.message });
       if (!req_row) return res.status(404).json({ error: 'Requisição não encontrada' });
 
@@ -3059,6 +3066,23 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     });
   });
 
+  /**
+   * Aprovação automática (config `aprovacao_automatica`), comum às duas portas de envio.
+   * Etapa 47 (RN-10, 9.7/M1): não se aplica com pendência de regra aberta nem com regras ainda
+   * não avaliadas — a guarda está no WHERE, e `changes` diz a verdade. Antes eram dois `db.run`
+   * com callback arrow (sem `this.changes`) e a resposta afirmava APROVADO sem conferir.
+   * @returns {Promise<boolean>} true se a requisição foi aprovada automaticamente.
+   */
+  async function tentarAprovacaoAutomatica(requisicaoId, urgencia) {
+    const cfg = await dbGet(db, `SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'aprovacao_automatica'`);
+    if (!cfg || cfg.valor !== '1' || urgencia === 'CRITICO') return false;
+    const upd = await dbRun(db,
+      `UPDATE requisicoes_almoxarifado SET status='APROVADO', aprovador_nome='Sistema (automático)', data_aprovacao=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
+       WHERE id=? AND status='PENDENTE' AND ${approvalRulesService.GATE_SQL}`,
+      [requisicaoId]);
+    return upd.changes > 0;
+  }
+
   // POST /api/almoxarifado/requisicoes — criar requisição
   // requirePermission('requisitar'): [ADMINISTRADOR, PRODUCAO, ENGENHARIA, ALMOXARIFE] —
   // inclui PRODUCAO por design (quem pede material é o chão de fábrica), então o fallback
@@ -3084,22 +3108,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         });
       }
 
-      // Verificar aprovação automática
-      db.get(`SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'aprovacao_automatica'`, [], (e, cfg) => {
-        if (!e && cfg && cfg.valor === '1' && req.body.urgencia !== 'CRITICO') {
-          db.run(`UPDATE requisicoes_almoxarifado SET status='APROVADO', aprovador_nome='Sistema (automático)', data_aprovacao=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL WHERE id=?`,
-            [result.id], () => {
-              res.status(201).json({
-                id: result.id, numero: result.numero, status: 'APROVADO', aprovacao: 'automatica',
-                valor_total: result.valor_total,
-              });
-            });
-        } else {
-          res.status(201).json({
-            id: result.id, numero: result.numero, status: 'PENDENTE',
-            valor_total: result.valor_total,
-          });
-        }
+      const auto = await tentarAprovacaoAutomatica(result.id, req.body.urgencia);
+      res.status(201).json({
+        id: result.id, numero: result.numero,
+        status: auto ? 'APROVADO' : 'PENDENTE',
+        ...(auto ? { aprovacao: 'automatica' } : {}),
+        valor_total: result.valor_total,
       });
     } catch (e) {
       res.status(e.status || 500).json({ error: e.message });
@@ -3150,21 +3164,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       }
 
       // Mesma checagem de aprovação automática que o POST /requisicoes aplica na criação direta.
-      db.get(`SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'aprovacao_automatica'`, [], (e, cfg) => {
-        if (!e && cfg && cfg.valor === '1' && reqRow.urgencia !== 'CRITICO') {
-          db.run(`UPDATE requisicoes_almoxarifado SET status='APROVADO', aprovador_nome='Sistema (automático)', data_aprovacao=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL WHERE id=?`,
-            [req.params.id], () => {
-              res.json({
-                id: Number(req.params.id), numero: reqRow.numero, status: 'APROVADO', aprovacao: 'automatica',
-                valor_total: avaliacaoValor.valor_total,
-              });
-            });
-        } else {
-          res.json({
-            id: Number(req.params.id), numero: reqRow.numero, status: 'PENDENTE',
-            valor_total: avaliacaoValor.valor_total,
-          });
-        }
+      const auto = await tentarAprovacaoAutomatica(req.params.id, reqRow.urgencia);
+      res.json({
+        id: Number(req.params.id), numero: reqRow.numero,
+        status: auto ? 'APROVADO' : 'PENDENTE',
+        ...(auto ? { aprovacao: 'automatica' } : {}),
+        valor_total: avaliacaoValor.valor_total,
       });
     } catch (e) {
       res.status(e.status || 500).json({ error: e.message });
@@ -3209,6 +3214,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // dos itens/materiais, não do status da requisição) para gravar tudo num único
       // UPDATE — evita uma janela transitória com status=APROVADO visível a leitores
       // concorrentes entre dois writes.
+      // Etapa 47 (RN-11, 9.7/C1): a pré-checagem das regras vem ANTES de reservar. Recusar só no
+      // WHERE do UPDATE deixaria a reserva criada com a requisição PENDENTE, e a reaprovação
+      // reservaria em dobro (medido pela revisão: duas reservas de 10 para um item de 10).
+      await approvalRulesService.exigirSemPendenciaAberta(db, reqRow);
+
       const statusPosAprovacao = await requisitionStateMachine.calcularStatusPosAprovacao(db, req.params.id);
 
       // Etapa 4 (design, decisão 2 — ligação 04→07): a aprovação RESERVA o saldo de cada item,
@@ -3228,10 +3238,33 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       const reserva = await requisitionService.reservarItensAprovacao(db, req.params.id, req.user, reqRow);
       const statusFinal = reserva.status || statusPosAprovacao;
 
-      await dbRun(db,
+      // A GARANTIA: status ainda PENDENTE e o gate das regras, no mesmo UPDATE. `status='PENDENTE'`
+      // fecha também o achado anterior à etapa — dois /aprovar simultâneos respondiam 200 os dois
+      // e o segundo reservava de novo.
+      const upd = await dbRun(db,
         `UPDATE requisicoes_almoxarifado SET status=?, aprovador_id=?, aprovador_nome=?, data_aprovacao=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
-         WHERE id=?`,
+         WHERE id=? AND status='PENDENTE' AND ${approvalRulesService.GATE_SQL}`,
         [statusFinal, req.user.id, req.user.nome || req.user.email, req.params.id]);
+      if (!upd.changes) {
+        // Perdeu: devolve SÓ as reservas que ESTA chamada criou. Não `liberarReservasDaRequisicao`
+        // — ela soltaria também as de um /aprovar concorrente que venceu (9.7/C1).
+        for (const r of reserva.reservas) {
+          try {
+            await stockService.liberarReserva(db, req.user, r.reserva_id, null, {
+              statusFinal: 'LIBERADA',
+              motivo: 'Aprovação recusada — reserva desfeita',
+              motivoMovimentacao: 'Liberação por aprovação recusada',
+            });
+          } catch (relErr) {
+            console.warn('[almoxarifado-aprovar] Falha ao desfazer reserva', r.reserva_id, '—', relErr.message);
+          }
+        }
+        const atual = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
+        const msgGate = await approvalRulesService.mensagemGateAtual(db, req.params.id);
+        return res.status(400).json({
+          error: msgGate || `Transição inválida: ${atual?.status} → APROVADO`,
+        });
+      }
 
       await registrarAuditoria(db, {
         entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'APROVACAO',
@@ -3328,6 +3361,78 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         dados_novos: { status: result.status, reservas: reserva.reservas },
       });
 
+      res.json(result);
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
+
+  // ── Etapa 47 (T3/T4): regras de aprovação e as pendências que elas geram ──
+  // Contratos congelados: desenho da etapa, seções 9.5 e 9.7. Configurar regra usa o gate de
+  // configuração do módulo; assinar é por IDENTIDADE (a regra nomeia quem assina — 8.4), por isso
+  // nenhuma ação nova em ACAO_PERFIS.
+  app.get('/api/almoxarifado/regras-aprovacao', async (req, res) => {
+    if (denyUnlessAlmoxAdmin(req, res)) return;
+    try {
+      res.json(await approvalRulesService.listarRegras(db));
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/almoxarifado/regras-aprovacao', async (req, res) => {
+    if (denyUnlessAlmoxAdmin(req, res)) return;
+    try {
+      const regra = await approvalRulesService.criarRegra(db, req.body, req.user);
+      await registrarAuditoria(db, {
+        entidade: 'regra_aprovacao', entidade_id: regra.id, acao: 'CRIACAO',
+        usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email, dados_novos: regra,
+      });
+      res.status(201).json(regra);
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
+
+  app.put('/api/almoxarifado/regras-aprovacao/:id', async (req, res) => {
+    if (denyUnlessAlmoxAdmin(req, res)) return;
+    try {
+      const result = await approvalRulesService.atualizarRegra(db, req.params.id, req.body, req.user);
+      await registrarAuditoria(db, {
+        entidade: 'regra_aprovacao', entidade_id: Number(req.params.id), acao: 'EDICAO',
+        usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
+        dados_novos: { ...result.regra, pendencias_obsoletadas: result.pendencias_obsoletadas },
+      });
+      res.json(result);
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
+
+  app.get('/api/almoxarifado/aprovacoes-regra/pendentes', async (req, res) => {
+    try {
+      res.json(await approvalRulesService.listarFilaPendentes(db, req.user));
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
+
+  app.get('/api/almoxarifado/requisicoes/:id/aprovacoes-regra', async (req, res) => {
+    try {
+      res.json(await approvalRulesService.listarPendenciasDaRequisicao(db, req.params.id));
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
+
+  app.put('/api/almoxarifado/requisicoes/:id/aprovacoes-regra/:pid/aprovar', async (req, res) => {
+    try {
+      const result = await approvalRulesService.assinarPendencia(db, req.params.id, req.params.pid, req.user);
+      await registrarAuditoria(db, {
+        entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'APROVACAO_REGRA',
+        usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
+        dados_novos: { pendencia_id: Number(req.params.pid), pendencias_abertas: result.pendencias_abertas },
+      });
       res.json(result);
     } catch (e) {
       res.status(e.status || 500).json({ error: e.message });

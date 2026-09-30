@@ -2340,6 +2340,55 @@ async function initSchema(db) {
   await safeAlter(db, 'ALTER TABLE conferencias_almoxarifado ADD COLUMN cancelado_em DATETIME');
   await safeAlter(db, 'ALTER TABLE conferencias_almoxarifado ADD COLUMN motivo_cancelamento TEXT');
 
+  // ── Etapa 47 (T3): regras de aprovação configuráveis e as pendências que elas geram ──
+  // Desenho: docs/superpowers/specs/2026-09-30-almoxarifado-etapa47-aprovacoes-com-regras-design.md
+  // seções 8 e 9. A pendência é a VERDADE; assinar uma NÃO muda o status da requisição — o gate
+  // mora no WHERE do UPDATE de /aprovar e /aprovar-valor (9.1).
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS regras_aprovacao (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL,
+    ativo INTEGER NOT NULL DEFAULT 1,
+    ordem INTEGER NOT NULL DEFAULT 0,
+    tipo_requisicao TEXT,
+    material_critico INTEGER,
+    valor_minimo REAL,
+    quantidade_minima REAL,
+    centro_custo_id INTEGER,
+    projeto_id INTEGER,
+    aprovadores TEXT NOT NULL DEFAULT '[]',
+    criado_por_id INTEGER,
+    criado_por_nome TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS requisicao_aprovacoes_regra (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    requisicao_id INTEGER NOT NULL,
+    regra_id INTEGER NOT NULL,
+    regra_nome TEXT,
+    aprovadores TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'ABERTA',
+    aprovador_id INTEGER,
+    aprovador_nome TEXT,
+    aprovado_em DATETIME,
+    obsoleta_em DATETIME,
+    obsoleta_por_nome TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (requisicao_id, regra_id)
+  )`);
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_req_aprov_regra_status
+    ON requisicao_aprovacoes_regra (status, requisicao_id)`);
+  // 9.7/C2: `regras_avaliadas_em` só é gravada DEPOIS de todas as pendências inseridas; sem ela o
+  // gate de aprovação fecha. As requisições que já existem quando a coluna NASCE foram enviadas
+  // antes de existir regra — recebem o carimbo, senão nenhuma delas poderia ser aprovada.
+  // `safeAlter` não diz se criou a coluna, por isso o PRAGMA antes.
+  const colsReqE47 = await dbAll(db, 'PRAGMA table_info(requisicoes_almoxarifado)');
+  const colunaAvaliadaNasce = !colsReqE47.some((c) => c.name === 'regras_avaliadas_em');
+  await safeAlter(db, 'ALTER TABLE requisicoes_almoxarifado ADD COLUMN regras_avaliadas_em DATETIME');
+  if (colunaAvaliadaNasce) {
+    await dbRun(db, 'UPDATE requisicoes_almoxarifado SET regras_avaliadas_em = CURRENT_TIMESTAMP WHERE regras_avaliadas_em IS NULL');
+  }
+
   // ── Config defaults ──
   const configs = [
     // Migrado de routes/almoxarifado.js (diff de segurança — Task 3): chaves base que só

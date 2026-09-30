@@ -14,6 +14,7 @@ const sectorMaterialService = require('./sectorMaterialService');
 const requisitionNotificationService = require('./requisitionNotificationService');
 const purchaseNotifyService = require('./requisitionPurchaseNotifyService');
 const valueApprovalService = require('./requisitionValueApprovalService');
+const approvalRulesService = require('./approvalRulesService');
 // Etapa 31: `gerarNumeroReq` SUMIU daqui. Ela era o milissegundo fatiado em DECIMAL (os seis
 // ultimos digitos) mais 2 digitos aleatorios — esse carimbo repetia a cada 16,7 MINUTOS (o pior
 // dos quatro), e duas requisicoes criadas nesse intervalo, no mesmo offset de ms, disputavam 100
@@ -62,6 +63,14 @@ async function dispararNotificacoesCriacao(db, requisicaoId, solicitanteEmail = 
   ).catch((err) => {
     console.warn('[requisitionCreateService] Falha ao notificar Compras:', err.message);
   });
+
+  // Etapa 47 (RN-09): as regras de aprovação, ANTES do valor. Falha é logada e NÃO abre a porta:
+  // sem `regras_avaliadas_em` o gate de aprovação fica fechado e `/aprovar` reavalia (9.7/C2).
+  try {
+    await approvalRulesService.avaliarRequisicao(db, requisicaoId);
+  } catch (regraErr) {
+    console.warn('[requisitionCreateService] Falha ao avaliar regras de aprovação:', regraErr.message);
+  }
 
   let avaliacaoValor;
   try {

@@ -90,6 +90,7 @@ const ROTULOS_ENTIDADE = Object.freeze({
   // rotulo. Sem esta linha, `auditLabels.api.test.js` ("os 26 literais tem rotulo") fica vermelho
   // de proposito e a entidade nova apareceria crua no filtro da tela.
   recebimento_item: 'Item do recebimento',
+  regra_aprovacao: 'Regra de aprovação', // Etapa 47 (T3)
   remessa_terceiro: 'Remessa a terceiro',
   requisicao: 'Requisição',
   reserva: 'Reserva',
@@ -134,6 +135,7 @@ const GRUPOS_ACAO = congelarGrupos([
   // Requisição / aprovação
   { rotulo: 'Aprovação', verbos: ['APROVACAO'] },
   { rotulo: 'Aprovação por valor', verbos: ['APROVACAO_VALOR'] },
+  { rotulo: 'Aprovação de regra', verbos: ['APROVACAO_REGRA'] }, // Etapa 47 (T4)
   { rotulo: 'Rejeição', verbos: ['REJEICAO'] },
   { rotulo: 'Rejeição por valor', verbos: ['REJEICAO_VALOR'] },
   { rotulo: 'Cancelamento', verbos: ['CANCELAMENTO'] },
