@@ -2516,6 +2516,9 @@ async function initSchema(db) {
   await safeAlter(db, 'ALTER TABLE movimentacoes_almoxarifado ADD COLUMN centro_custo_id INTEGER');
   await safeAlter(db, 'ALTER TABLE movimentacoes_almoxarifado ADD COLUMN emergencial INTEGER DEFAULT 0');
   await safeAlter(db, 'ALTER TABLE movimentacoes_almoxarifado ADD COLUMN regularizacao_pendente INTEGER DEFAULT 0');
+  // Etapa 56: o rastro da confirmação por leitura — o código da localização conferida em cada papel.
+  await safeAlter(db, 'ALTER TABLE movimentacoes_almoxarifado ADD COLUMN codigo_lido_origem TEXT');
+  await safeAlter(db, 'ALTER TABLE movimentacoes_almoxarifado ADD COLUMN codigo_lido_destino TEXT');
 
   // Etapa 11: primeiro shape de consulta do modulo com subselect correlacionado por material
   // sobre o livro inteiro (consumo medio, ultima entrada/saida) — sem indice e N x full scan.

@@ -120,6 +120,10 @@ const MovimentacaoSchema = z.object({
   // precisam estar aqui para chegarem ao motor.
   series: z.array(z.string().trim().min(1)).max(1000).optional(),
   serie_ids: z.array(z.coerce.number().int().positive()).max(1000).optional(),
+  // Etapa 56: declarados (senao o z.object descarta) mas SEM tipo aqui — quem valida e o motor, que
+  // tambem recebe o body cru de /transferencias; assim as duas rotas dao a MESMA mensagem.
+  codigo_lido_origem: z.unknown().optional(),
+  codigo_lido_destino: z.unknown().optional(),
 }).superRefine((d, ctx) => {
   // quantidade 0 só é aceita para AJUSTE com localização (zera aquela localização
   // e propaga o total do material — ver stockService.registrarMovimentacao). Para

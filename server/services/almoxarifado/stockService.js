@@ -577,6 +577,35 @@ async function materiaisComPadrao(db, localizacaoId) {
     ORDER BY codigo`, [localizacaoId]);
 }
 
+/**
+ * Etapa 56 (RN-02) — confirmação do endereço por leitura da etiqueta. Opcional: ausente, nada muda.
+ * O texto lido é validado AQUI (e não só no Zod) porque `/transferencias` repassa o body cru.
+ */
+function normalizarCodigoLido(valor) {
+  if (valor === undefined || valor === null) return null;
+  if (typeof valor !== 'string') throw Object.assign(new Error('Endereço lido inválido'), { status: 400 });
+  const s = valor.trim();
+  if (!s) return null;
+  if (s.length > 100) throw Object.assign(new Error('Endereço lido inválido'), { status: 400 });
+  return s;
+}
+
+/** Compara o lido com o código da localização efetiva do papel; devolve o código DA LOCALIZAÇÃO. */
+async function conferirLeitura(db, lido, localizacaoId, papel) {
+  const loc = localizacaoId
+    ? await dbGet(db, 'SELECT codigo FROM localizacoes_almoxarifado WHERE id = ?', [localizacaoId])
+    : null;
+  if (!loc) {
+    throw Object.assign(new Error(`Endereço lido (${lido}), mas o movimento não tem localização de ${papel}`), { status: 400 });
+  }
+  if (String(loc.codigo).toLowerCase() !== lido.toLowerCase()) {
+    throw Object.assign(new Error(
+      `Endereço lido (${lido}) não confere com a localização de ${papel} (${loc.codigo}) — se a etiqueta é antiga, reimprima`,
+    ), { status: 400 });
+  }
+  return loc.codigo;
+}
+
 async function validarLocalizacaoParaMovimento(db, localizacaoId, material, papel) {
   if (!localizacaoId) return;
   const loc = await dbGet(db, 'SELECT * FROM localizacoes_almoxarifado WHERE id = ?', [localizacaoId]);
@@ -1025,6 +1054,39 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
   } else if (tiposAjuste.includes(tipo) && localizacao_destino_id) {
     await validarEnderecoExplicito(db, localizacao_destino_id, 'destino', { aceitaInativa: true });
     await validarLocalizacaoParaMovimento(db, localizacao_destino_id, material, 'destino');
+  }
+
+  // Etapa 56 (RN-02): confirmação por leitura, DEPOIS das checagens de endereço (a inexistente
+  // mantém a própria mensagem) e antes de qualquer efeito — inclusive as UPDATEs da TRANSFERENCIA.
+  const lidoOrigem = normalizarCodigoLido(params.codigo_lido_origem);
+  const lidoDestino = normalizarCodigoLido(params.codigo_lido_destino);
+  let confirmadoOrigem = null;
+  let confirmadoDestino = null;
+  if (lidoDestino) {
+    // Entrada: a informada ou a padrão (tudo vai para UM endereço). Transferência e ajuste: só a
+    // informada — nenhum dos dois cai na padrão.
+    let locDestino = null;
+    if (tiposEntrada.includes(tipo)) locDestino = resolveLocalizacaoEntrada(material, localizacao_destino_id);
+    else if (tipo === 'TRANSFERENCIA' || tiposAjuste.includes(tipo)) locDestino = localizacao_destino_id || null;
+    confirmadoDestino = await conferirLeitura(db, lidoDestino, locDestino, 'destino');
+  }
+  if (lidoOrigem) {
+    if (!tiposSaida.includes(tipo) && tipo !== 'TRANSFERENCIA') await conferirLeitura(db, lidoOrigem, null, 'origem');
+    // Fase 2 (CRÍTICO): a saída DRENA vários endereços (claimSaldoSemLote/claimSaldoDoLote) — sem
+    // origem informada, ou sem saldo nela que cubra, "confirmar a origem" certificaria um endereço de
+    // onde o material não saiu (A:10, saída de 40 "confirmada" em A tirava 30 de B).
+    if (!localizacao_origem_id) {
+      throw Object.assign(new Error('Para confirmar a origem pela leitura, informe a localização de origem'), { status: 400 });
+    }
+    confirmadoOrigem = await conferirLeitura(db, lidoOrigem, localizacao_origem_id, 'origem');
+    const aqui = await dbGet(db, `SELECT COALESCE(SUM(quantidade), 0) as q FROM estoque_saldo_almoxarifado
+      WHERE material_id = ? AND localizacao_id = ? AND lote_id IS ?`, [material_id, localizacao_origem_id, loteIdFinal || null]);
+    const saldoAqui = Number(aqui.q) || 0;
+    if (saldoAqui + EPS < parseFloat(quantidade)) {
+      throw Object.assign(new Error(
+        `O saldo em ${confirmadoOrigem} (${Math.round(saldoAqui * 1e6) / 1e6}) não cobre a quantidade (${parseFloat(quantidade)}) — a saída tiraria de outros endereços`,
+      ), { status: 400 });
+    }
   }
 
   // ⚠️ O QUE ESTE MOVIMENTO APLICOU NAS COLUNAS DE RETENÇÃO, para o catch amplo poder reverter.
@@ -1715,8 +1777,8 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, referencia, observacoes,
      usuario_id, usuario_nome, localizacao_origem_id, localizacao_destino_id, lote, lote_id, unidade,
      projeto_id, os_id, cliente_id, documento_vinculado, justificativa, reserva_id, recebimento_id, requisicao_id,
-     centro_custo_id, emergencial, regularizacao_pendente)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+     centro_custo_id, emergencial, regularizacao_pendente, codigo_lido_origem, codigo_lido_destino)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
     material_id, tipo, quantidade, saldoAnteriorReal, saldoPosterior,
     motivo || null, referencia || null, observacoes || null,
     user.id, user.nome || user.email,
@@ -1724,7 +1786,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     projeto_id || null, os_id || null, cliente_id || null,
     documento_vinculado || null, justificativa || null,
     reserva_id || null, recebimento_id || null, requisicao_id || null,
-    centro_custo_id || null, emergencial ? 1 : 0, regularizacaoPendente,
+    centro_custo_id || null, emergencial ? 1 : 0, regularizacaoPendente, confirmadoOrigem, confirmadoDestino,
   ]);
   } catch (e) {
     // Compensa ANTES de relançar — o caminho de entrada/saída com série termina aqui dentro
