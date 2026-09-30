@@ -4,7 +4,10 @@
 > (Etapa 6b, 2026-08-11) e etiquetas com QR (Etapa 6c, 2026-08-11). A feature 10 fica completa
 > **exceto pelas pendências declaradas** nas três etapas (ver as seções de pendências, mais abaixo
 > — nenhuma bloqueia o critério de aceite do módulo) · **Spec original:** seção 10
-> **Última atualização:** 2026-09-30 (**Etapa 50 — a tela de Lotes para de mostrar o saldo ATRIBUÍDO
+> **Última atualização:** 2026-09-30 (**Etapa 61 — a entrega de material com série exige as séries, a
+> exclusão de requisição as devolve, e a regularização acerta o legado** (`6ba7429`, `d74e5a8` + fix-round `77d084c`).
+> A pendência (a) de série **estava errada** — a isenção da entrega era o defeito que quebrava o invariante;
+> corrigida à vista abaixo.) Antes: 2026-09-30 (**Etapa 50 — a tela de Lotes para de mostrar o saldo ATRIBUÍDO
 > como se fosse o físico (fecha o C71 das novidades).** O saldo de um lote é o atribuído a ele: os
 > fluxos isentos de `exigeLote` (a entrega de requisição, o ajuste de saldo total) gravam na linha
 > `lote_id NULL` de `estoque_saldo_almoxarifado`, e o lote podia mostrar 100 com o material em 70.
@@ -565,7 +568,8 @@ rota fazia isso. Era uma parede com placa de porta.
   e oferece mudar status, liberar vencimento (só para lote vencido) e anexar certificado (libera
   sozinho o lote que estava bloqueado por falta dele). Ver pendência (a), abaixo, para o que ainda
   falta (extrato agregado do lote)
-- [x] Seleção de série na movimentação — **Etapa 6b, Task 8 (`4836d24`+fix `576fd61`)**. Separação e entrega da requisição continuam sem campo de série — é um dos 4 fluxos internos isentos, pendência (a) da lista abaixo, mesmo padrão já declarado para lote
+- [x] Seleção de série na movimentação — **Etapa 6b, Task 8 (`4836d24`+fix `576fd61`)**. ~~Separação e entrega da requisição continuam sem campo de série — é um dos 4 fluxos internos isentos, pendência (a) da lista abaixo, mesmo padrão já declarado para lote~~ — **a entrega tem campo de série desde a Etapa 61** (`d74e5a8`, fix-round `77d084c`): a janela de entrega lista as séries em estoque do item e exige exatamente a quantidade; a isenção era defeito (ver a correção na pendência (a)). A **separação** continua sem série (ela não mexe em estoque).
+- [x] **Regularização de séries** (Etapa 61, `6ba7429` + fix-round `77d084c`) — `POST /materiais/:id/series/regularizar` cadastra números para físico sem série (até físico − presentes) ou baixa séries "fantasma" (status novo `BAIXADA`, até presentes − físico); justificativa ≥ 5, gate `ajustar_estoque`, limite no próprio `WHERE` (corrida não passa), compensação se falhar no meio, auditoria `REGULARIZACAO_SERIES` por série; lote opcional para o que se cadastra; cadastrar o número de uma `BAIXADA` a reativa. Tela: aviso *"Séries presentes: p · Físico: f"* e o formulário na aba Séries de Lotes e Séries.
 - [x] **Botão imprimir etiqueta em Materiais e Recebimento** — **Etapa 6c**: Materiais (Task 5,
   `8b842ea`+fix `0785119`) — ícone por linha; material com `controle_lote`/`controle_serie` navega
   para "Lotes e Séries" filtrado em vez de abrir o modal (a etiqueta certa mora lá, etiqueta de
@@ -729,9 +733,20 @@ Letradas independentemente das pendências de lote acima ((a)-(g)), para não co
 Nenhuma é lacuna esquecida — são decisões de escopo tomadas no design da 6b ou débitos técnicos
 conhecidos, registrados de propósito em vez de ficarem implícitos.
 
-- **(a) Dois fluxos internos + transferência continuam isentos de série** (entrega de requisição e
+- ~~**(a) Dois fluxos internos + transferência continuam isentos de série** (entrega de requisição e
   exclusão administrativa de requisição; e transferência) — espelho exato do padrão já declarado
-  para `controle_lote` (ver pendência (g) do lote, acima).
+  para `controle_lote` (ver pendência (g) do lote, acima).~~
+  > **CORREÇÃO (2026-09-30, Etapa 61) — isto dizia que a isenção da entrega e da exclusão de requisição
+  > era uma decisão de escopo "espelho do lote"; ESTAVA ERRADO: a isenção ERA UM DEFEITO.** Diferente do
+  > lote (que sem ele só deixa o saldo "sem lote atribuído"), a série é a própria unidade física: a entrega
+  > baixava o físico e deixava a série `EM_ESTOQUE` — sonda da Etapa 61: entrada de 3 séries, entrega de 2 →
+  > físico **1**, séries presentes **3**. O invariante `COUNT(séries presentes) == quantidade_atual` quebrava a
+  > cada entrega de material serializado, e a série entregue podia sair de novo. **O certo, desde a Etapa 61
+  > (`6ba7429`, `d74e5a8` + fix-round `77d084c`):** a entrega **exige** as séries (N == quantidade, de um lote só,
+  > em estoque, sem repetição — tudo antes de qualquer baixa) e declara `exigeSerie`; a exclusão de requisição
+  > devolve **as mesmas séries** por saída, líquido das devoluções; e há um gesto de **regularização** para o
+  > legado (`POST /materiais/:id/series/regularizar`). **Continua isenta:** a transferência (a série não muda de
+  > endereço — decisão 9 da 6b, **C76**) e o `AJUSTE`/inventário (mudam o físico sem tocar em série — **C82**).
   > **CORREÇÃO (2026-08-12, Etapa 7): esta pendência dizia que a devolução era isenta de série e
   > que "a reentrada de uma devolução com série se faz hoje por ENTRADA manual na tela de
   > Movimentações, não por um campo de série na tela de Devolução, que não existe". As duas
@@ -891,7 +906,7 @@ de teste, registrados de propósito.
 ## Dependências
 
 - 03 (motor de estoque) — as validações entram no `stockService`. **Entregues na Etapa 6, Task 3.**
-- Consome: 04/05 (entrega — registrar lote/série entregue por item ainda não existe), 07 (reserva
+- Consome: 04/05 (entrega — ~~registrar lote/série entregue por item ainda não existe~~ — **estava desatualizado**: o lote/endereço por item existe na entrega desde a Etapa 58 e a série desde a Etapa 61), 07 (reserva
   por lote — **continua aberta**: a reserva é do material, não do lote), 08 (entrada — **ligada na
   Task 5**, o lote nasce no recebimento), 09 (reprovação — **ligação pendente**, ver pendência (e)),
   15 (retalhos).

@@ -1,19 +1,25 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-09-30 (Etapa 60) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-09-30 (Etapa 61) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 60) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 61) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-09-30 (Etapa 60 ENTREGUE · Etapa 61 começando)
+> ## Onde o desenvolvimento está — 2026-09-30 (Etapa 61 ENTREGUE · Etapa 62 começando)
 >
-> **O desenvolvimento parou aqui: Etapa 60 fechada, Etapa 61 começando — 2026-09-30.** A **Etapa 60 (separar menos do
+> **O desenvolvimento parou aqui: Etapa 61 fechada, Etapa 62 começando — 2026-09-30.** A **Etapa 61 (a entrega de
+> material com série diz quais peças saem)**: a janela de entrega pede **as séries** de cada item com série (contador e
+> quantidade exata); a entrega de um clique de material com série é recusada; excluir a requisição devolve as mesmas
+> peças, só o que falta devolver; e **Lotes e Séries → Séries** ganhou **Regularizar séries** para acertar o que as
+> entregas antigas deixaram errado. **Antes do deploy, rode a consulta A30** das novidades. **Próxima etapa, já
+> começando: 62 — o ajuste e o inventário de material com série** (ver *"Próxima tarefa detalhada"* no plano da Etapa 61).
+>
+> **Etapas 1 a 20 e 22 a 61 completas.**
+>
+> **Etapa 60, 2026-09-30.** A **Etapa 60 (separar menos do
 > que dava passa a deixar registro, com o porquê)**: cada rodada de separação grava, por item, quanto dava para
 > separar, se ficou abaixo e o motivo; a janela de separação pede **"Motivo da divergência (opcional)"** quando a
 > quantidade fica abaixo do possível — **sem obrigar** —, e o conferente lê a divergência no bloco **Separação** do
-> detalhe. **Próxima etapa, já começando: 61 — a série por item na entrega** (feature 05; ver *"Próxima tarefa
-> detalhada"* no plano da Etapa 60).
->
-> **Etapas 1 a 20 e 22 a 60 completas.**
+> detalhe.
 >
 > **Etapa 59, 2026-09-30.** A **Etapa 59 (a separação diz
 > de onde cada item sai, e a entrega de um clique usa)**: a janela de separação tem **"Sai de"** por item (endereço e
@@ -4982,6 +4988,53 @@ que ele não tinha como repetir com sucesso garantido.
 - **Número de série de material** — continua sendo **digitado pelo operador** e de propósito não
   passa por este gerador. Retentar com outro número gravaria algo que ninguém digitou.
 - **Números de outros módulos do CRM** — a varredura foi do almoxarifado.
+
+---
+
+## Etapa 61 — A entrega de material com série diz quais peças saem (ENTREGUE — 2026-09-30)
+
+**O que mudou, em uma frase:** ao entregar material com número de série, o sistema pergunta **quais** peças saem — e
+só elas saem do estoque.
+
+**O problema que ela resolve.** A entrega de requisição baixava o número mas deixava a peça entregue marcada "em
+estoque"; a próxima entrega podia escolher uma peça que já não estava lá. Agora a entrega pede as séries, a exclusão
+da requisição devolve as mesmas peças, e dá para acertar as séries que ficaram erradas.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A entrega baixava o número e a peça continuava "em estoque" | A entrega pede **quais séries** saem e dá baixa nelas |
+| A entrega de um clique entregava material com série | É recusada — escolha as séries em **"Entregar escolhendo de onde sai…"** |
+| Excluir a requisição devolvia o número sem as peças (e creditava de novo o que já tinha sido devolvido) | Devolve as **mesmas** peças, só o que falta devolver |
+| Séries erradas não tinham conserto na tela | **Lotes e Séries → Séries**: aviso e **Regularizar séries** |
+
+### Roteiro de teste manual (≈6 min)
+
+**Preparação.** Um material com **controle de série** (Materiais → editar → Controle de série) e uma **Entrada** de 3
+unidades com as séries **S1**, **S2**, **S3**. Uma requisição dele com **2**, aprovada e separada.
+
+1. **A de um clique recusa.** No detalhe da requisição, clique **"Confirmar Entrega e Baixar Estoque"**: a mensagem
+   termina em *"— recebidas 0 — entregue escolhendo as series"*. Nada sai.
+2. **Escolher as séries.** Clique **"Entregar escolhendo de onde sai…"**: o item mostra **"Séries que saem"** e *"0 de
+   2"*; o **Confirmar** está travado. Marque **S1** e **S3**: *"2 de 2"*, e o **Confirmar** libera. Confirme.
+3. **Conferir o estoque.** Em **Lotes e Séries → Séries** do material: só **S2** está em estoque; S1 e S3 aparecem como
+   entregues; o físico é **1**.
+4. **Excluir devolve as peças.** Exclua a requisição (como administrador): o físico volta a **3**, e S1 e S3 voltam para
+   em estoque.
+5. **Regularizar.** Crie uma divergência de propósito: faça um **Ajuste** do material para **2** (o ajuste não mexe em
+   série — **C82**). Em **Lotes e Séries → Séries** aparece *"Séries presentes: 3 · Físico: 2"* e **Regularizar
+   séries**; marque uma série que "não está" na prateleira, escreva a justificativa (mínimo 5 letras) e regularize: o
+   aviso some, e a série aparece como **Baixada**. Para trazê-la de volta, faça o ajuste para 3 e **cadastre** o mesmo
+   número no formulário.
+6. **Sem perfil.** Com um usuário que não ajusta estoque, a mesma tela mostra o aviso, mas **não** o formulário.
+
+### O que esta etapa NÃO cobre
+
+- O **ajuste** e o **inventário** de material com série não mexem nas séries (**C82**) — acerte pela regularização.
+- A entrega de um clique de material com série é **recusada** (**D (61)**).
+- A **separação** não registra série — só a entrega.
+- A transferência não muda o endereço da série (**C76**).
 
 ---
 

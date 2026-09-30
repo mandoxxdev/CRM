@@ -107,7 +107,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Vinte e nove itens para rodar em produção ANTES do deploy — vinte e seis são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Trinta itens para rodar em produção ANTES do deploy — vinte e sete são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-09-30 (Etapa 61) de vinte e nove para trinta**, com a **A30** — as séries que já não batem com o físico. As Etapas 58, 59 e 60 não acrescentaram nenhuma.)*
 
 *(**Atualizado em 2026-09-30 (Etapa 54) de vinte e oito para vinte e nove**, com a **A29**. As Etapas 52 e 53 não acrescentaram nenhuma. **As Etapas 55, 56 e 57 também não** — a 57 cria uma coluna nova no item do recebimento (o endereço onde ele entrou) que nasce **vazia** para o que já foi recebido, e o sistema trata o vazio buscando pelo histórico, como antes; não há o que medir nem limpar.)*
 
@@ -931,9 +933,43 @@ SELECT s.material_id, s.localizacao_id, s.quantidade, l.ativo
   (`ativo` vazio na consulta): só por contagem/ajuste pela integração — o endereço não aparece na lista da tela.
   **Não apague linha por SQL** — a soma das linhas é o físico do material.
 
-### B. Decisões de negócio — B1 a B239; as em aberto esperam você, as tomadas estão escritas com o descartado
+**A30 (NOVA, da Etapa 61 — materiais com série cuja contagem de séries NÃO bate com o físico: o estrago que as
+entregas antigas deixaram).** Até esta etapa, entregar uma requisição de material com série **baixava o físico e deixava
+a série "em estoque"** (sonda: entrada de 3 séries, entrega de 2 → físico **1**, séries em estoque **3**). A partir
+dela a entrega exige as séries e dá baixa nelas — mas **o passado fica**. E o estoque antigo lançado sem série tem o
+problema inverso: físico sem nenhuma série cadastrada, e a entrega dele passa a ser **recusada** até alguém cadastrar
+as séries. Uma consulta, com os dois sinais:
 
-*(**Atualizado em 2026-09-30 de B237 para B239**, com as duas da Etapa 60; antes, de B233 para B237, com as quatro da Etapa 59; antes, de B228 para B233, com as cinco da Etapa 58; antes, de B225 para B228, com as três da Etapa 57; antes, de B222 para B225, com as três da Etapa 56; antes, de B219 para B222, com as da Etapa 55.)*
+```sql
+-- materiais com série cujas séries presentes (em estoque + bloqueadas) diferem do físico
+SELECT m.id, m.codigo, m.nome, m.quantidade_atual AS fisico,
+       (SELECT COUNT(*) FROM series_almoxarifado s
+         WHERE s.material_id = m.id AND s.status IN ('EM_ESTOQUE','BLOQUEADA')) AS presentes
+  FROM materiais_almoxarifado m
+ WHERE m.controle_serie = 1 AND m.ativo = 1
+   AND (SELECT COUNT(*) FROM series_almoxarifado s
+         WHERE s.material_id = m.id AND s.status IN ('EM_ESTOQUE','BLOQUEADA')) <> m.quantidade_atual;
+```
+
+**Como ler o resultado:**
+- **Vazia** — nada a fazer.
+- **`presentes` MAIOR que `fisico`** — são séries "fantasma": saíram numa entrega antiga e continuam aparecendo em
+  estoque. **A janela de entrega as oferece** — o operador pode escolher uma peça que não está lá. Corrija em **Lotes e
+  Séries → aba Séries**, escolhendo o material: aparece *"Séries presentes: p · Físico: f"* e o formulário **Regularizar
+  séries**; marque as séries que **já não estão** no estoque (confira na prateleira) e dê a baixa com justificativa. A
+  série vai para **Baixada** (não conta mais como presente). Dá para baixar no máximo a diferença.
+- **`presentes` MENOR que `fisico`** — há unidades sem série cadastrada (estoque antigo). **A entrega delas fica
+  recusada** até cadastrar: no mesmo formulário, informe os números (um por linha) que estão nas peças, com o lote se
+  o material tem lote. Dá para cadastrar no máximo a diferença.
+- Quem pode regularizar: o perfil que pode **ajustar estoque**. **Não altere série por SQL** — a regularização audita
+  cada série e confere o limite.
+- **Atenção:** o **ajuste de estoque** e o **inventário** de material com série continuam mudando o físico **sem tocar
+  nas séries** (**C82**) — esta consulta pode voltar a acusar diferença depois de um ajuste. Rode de novo depois de
+  inventários.
+
+### B. Decisões de negócio — B1 a B243; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+*(**Atualizado em 2026-09-30 de B239 para B243**, com as quatro da Etapa 61; antes, de B237 para B239, com as duas da Etapa 60; antes, de B233 para B237, com as quatro da Etapa 59; antes, de B228 para B233, com as cinco da Etapa 58; antes, de B225 para B228, com as três da Etapa 57; antes, de B222 para B225, com as três da Etapa 56; antes, de B219 para B222, com as da Etapa 55.)*
 
 *(**Atualizado em 2026-09-30 de B205 para B219**, com as quatro da Etapa 51, as três da Etapa 52, as quatro da Etapa 53 e as três da Etapa 54.)*
 
@@ -3947,6 +3983,39 @@ pedir o motivo, mas não conhece as outras requisições; por isso o motivo digi
 servidor conclui que não houve divergência. **Descartado:** gravar o motivo só quando o servidor vê divergência (o
 texto do separador sumia sem aviso sempre que as duas contas discordavam).
 
+**B240 (NOVA, da Etapa 61) — a entrega de material com série EXIGE as séries; a de um clique é recusada.**
+**Escolhido:** para material com controle de série, a entrega diz **quais** séries saem (exatamente a quantidade, em
+estoque, de um lote só), e o sistema dá baixa nelas. A entrega de um clique não tem onde escolher — é recusada com a
+frase que manda escolher na janela. **Descartado:** o sistema escolher as séries sozinho na entrega de um clique — o
+estoque ficaria certo em número, mas o registro **mentiria** sobre **quais** peças saíram (o princípio da série desde
+a Etapa 6b). **E corrige uma decisão antiga, à vista:** a Etapa 6b deixou a entrega "isenta de série até a tela ter
+campo", como se fosse igual ao lote; **estava errado** — sem lote o saldo só fica "sem lote atribuído", mas sem série a
+peça entregue continuava "em estoque" e podia sair de novo.
+
+**B241 (NOVA, da Etapa 61) — excluir a requisição devolve POR SAÍDA, o que falta devolver, com as séries.**
+**Escolhido:** a exclusão devolve cada saída pelo que **ainda não foi devolvido** (desconta as devoluções que citam a
+saída), com as séries que saíram nela; saída antiga, sem série, volta como antes; se as séries da saída não batem com
+o que falta devolver, a exclusão é recusada e manda usar a devolução. **Descartado:** devolver por endereço/lote somando
+as saídas (a versão da Etapa 58) — sem descontar as devoluções, **excluir depois de devolver creditava o físico de novo**
+(defeito antigo, valia também para material sem série), e uma saída antiga misturada com uma nova travava a exclusão.
+
+**B242 (NOVA, da Etapa 61) — a REGULARIZAÇÃO das séries, com limite e com volta.**
+**Escolhido:** em Lotes e Séries, quem pode ajustar estoque cadastra séries para físico sem série (até a diferença) ou
+dá baixa em séries que já não estão lá (até a diferença, status **Baixada**, que não conta como presente), sempre com
+justificativa (mínimo 5 caracteres) e auditoria por série; o que se cadastra pode ir com **lote**; cadastrar o número
+de uma série **baixada por engano** a traz de volta. O limite é conferido na própria gravação — duas pessoas ao mesmo
+tempo não passam juntas da diferença. **Descartado:** baixar/cadastrar livre (criaria divergência nova); série sem volta
+depois de baixada (a única saída seria uma entrada de estoque, que soma físico).
+
+**B243 (NOVA, da Etapa 61) — o que a janela de entrega faz quando algo falha.**
+**Escolhido:** se a tela não consegue saber se o material tem série, trata como sem série (o servidor recusa se
+precisar); se não consegue carregar as séries de um material com série, o **Confirmar** fica travado; séries de lotes
+diferentes marcadas no mesmo item travam o Confirmar (*"Escolha séries de um lote só."*); depois de uma recusa do
+servidor (outra entrega levou a série), a lista de séries é recarregada. O endereço da série aparece só como **dica**
+(a transferência não move a série — **C76**). Diferença fracionária entre físico e séries: a tela manda acertar o
+físico pelo ajuste de estoque. **Descartado:** travar a entrega de todo material quando a consulta de série falha (um
+erro de rede bloquearia material sem série).
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -5031,6 +5100,23 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
     **sem** escolha, a entrega é item a item como sempre: se o segundo falhar (saldo que alguém tirou no meio), o
     primeiro já saiu — e fica contado como entregue, então nada se perde.
 
+82. **NOVO, da Etapa 61 — o AJUSTE de estoque e o INVENTÁRIO de material com série mudam o físico SEM tocar nas
+    séries.** A entrega agora dá baixa na série (**B240**), mas o ajuste (inclusive o de endereço) e a conferência de
+    inventário continuam mudando só o número. Cenário: material com 5 séries e físico 5; um ajuste para 3 deixa físico
+    **3** e séries presentes **5** — as duas "a mais" continuam aparecendo na janela de entrega. **Até a correção:**
+    depois de ajuste ou inventário de material com série, rode a consulta da **A30** e acerte pela **regularização**
+    (**B242**). A regularização vira remédio permanente enquanto este furo existir — é a candidata da próxima etapa.
+
+83. **✅ RESOLVIDO NA ETAPA 61 (`77d084c`) — DEFEITO ANTIGO achado pela revisão: excluir a requisição depois de
+    DEVOLVER o material creditava o físico de novo.** A exclusão devolvia tudo o que a requisição entregou, sem
+    descontar o que já tinha voltado pela **devolução**. Cenário: entregue 2, devolvidas as 2, excluída a requisição →
+    o físico subia mais 2 (valia também para material **sem** série). Desde a Etapa 61 a exclusão devolve só o que
+    **falta devolver** de cada saída (**B241**). **Para medir se já aconteceu:** requisições **excluídas** com devolução
+    citando as suas saídas — `SELECT r.numero, d.material_id, d.quantidade FROM devolucoes_material_almoxarifado d JOIN
+    movimentacoes_almoxarifado m ON m.id = d.movimentacao_saida_id JOIN requisicoes_almoxarifado r ON r.id =
+    m.requisicao_id WHERE r.ativo = 0 AND r.status = 'CANCELADO';` — cada linha é um crédito em dobro possível; confira
+    o físico do material pela contagem.
+
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -5668,6 +5754,16 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   como divergente (ou pedir numa que ele não grava). O que vale é o que o servidor grava (**B239**).
 - **(60) Não separar nada de um item não fica registrado** — o item com quantidade 0 nem entra na rodada, então não há
   onde levar o motivo.
+- **(61) A entrega de um clique de material com série é recusada** (**B240**) — o operador usa **"Entregar escolhendo
+  de onde sai…"** e marca as séries. Requisição com item com série e item comum: a de um clique recusa a entrega inteira.
+- **(61) A separação não registra série** — só a entrega (é ela que baixa a peça).
+- **(61) O ajuste e o inventário de material com série não tocam nas séries** — ver **C82**.
+- **(61) A regularização desfaz o que gravou se falhar no meio** — mas esse caminho só acontece em corrida (duas pessoas
+  ao mesmo tempo); o teste automático prova a corrida, não a falha no meio de uma lista.
+- **(61) Cancelar uma saída ANTIGA de requisição** (anterior a esta etapa, sem série) pela tela de Movimentações já era
+  recusado com uma mensagem enganosa sobre séries — pré-existente, não mexido.
+- **(61) A devolução não baixa o "entregue" do item da requisição** — a exclusão agora desconta as devoluções por conta
+  própria (**B241**), mas outros números que leem o "entregue" continuam somando o que voltou.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -6121,6 +6217,17 @@ servidor simulado (12 cenários). O que **só o navegador** prova:
 2. **Confirma sem motivo.** Separe menos e confirme **sem** escrever nada: a rodada é aceita.
 3. **O conferente vê.** No detalhe, no bloco **Separação**, a rodada mostra *"⟨material⟩: separou ⟨q⟩ de ⟨máximo⟩ —
    ⟨motivo⟩"* (ou *"— sem motivo informado"*).
+**(61) Nenhum clique foi dado nesta etapa.** Os testes provam a regra pelo servidor (15 cenários) e as telas com o
+servidor simulado. O que **só o navegador** prova:
+
+1. **As séries na entrega.** Numa requisição de material com série, clique **"Entregar escolhendo de onde sai…"**: o
+   item mostra **"Séries que saem"** com o contador *"0 de ⟨q⟩"*; o **Confirmar** só libera com exatamente a
+   quantidade marcada. Marque séries de dois lotes: aparece *"Escolha séries de um lote só."*.
+2. **A de um clique recusa.** Em **"Confirmar Entrega e Baixar Estoque"**, a mensagem termina em *"— entregue
+   escolhendo as series"*.
+3. **A regularização.** Em **Lotes e Séries → Séries**, num material cujo físico não bate: aparecem *"Séries presentes:
+   p · Físico: f"* e **Regularizar séries**; com o perfil de ajuste, o formulário; sem ele, só o aviso.
+
 
 ### G. Fragilidades estruturais que continuam de pé
 
@@ -7401,9 +7508,12 @@ com telas para digitar, gerar, selecionar, bloquear e visualizar essas séries.
 - Antes: não havia onde bloquear uma unidade específica → Agora: aba Séries, com a saída recusando série bloqueada.
 - Antes: a suíte passava verde sem testar série nenhuma → Agora: cobre entrada, saída, estorno, bloqueio e o invariante.
 
-**Limites declarados:** série não é exigida nos fluxos internos (entrega/exclusão de
+**Limites declarados:** ~~série não é exigida nos fluxos internos (entrega/exclusão de
 requisição, devolução, sucata de devolução) nem em transferência — mesma lacuna já
-existente para lote; inspeções reprovam por quantidade, não por série individual; não
+existente para lote~~ — **isto estava errado quanto à entrega e à exclusão de requisição (corrigido na Etapa 61):**
+a "lacuna" não era igual à do lote — sem série exigida, a entrega baixava o físico e deixava a peça "em estoque",
+quebrando o invariante desta própria etapa. Desde a Etapa 61 a entrega exige as séries e a exclusão as devolve
+(**B240**, **B241**); a devolução já exigia desde a Etapa 7; a transferência continua sem série (**C76**); inspeções reprovam por quantidade, não por série individual; não
 existe reserva por série.
 
 ---
@@ -14442,15 +14552,90 @@ contrário. Tudo corrigido e com teste: as contas agora descontam os outros iten
 **sempre** gravado (**B239**).
 
 
+## Etapa 61 — A entrega de material com série diz quais peças saem (2026-09-30)
+
+Material com número de série é rastreado peça por peça — mas a entrega de requisição, a saída mais comum do galpão,
+**não perguntava qual peça saiu**: baixava o número e deixava a peça entregue marcada **"em estoque"**. A próxima entrega
+podia escolher uma peça que já não estava lá, e a lista de séries deixava de bater com o estoque. Agora a entrega pede
+**quais séries** saem, excluir a requisição devolve **as mesmas** peças, e há um jeito de **acertar** as séries que as
+entregas antigas deixaram erradas.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Entregar material com série baixava o número e a peça continuava "em estoque" | A entrega exige **quais séries** saem e dá baixa nelas (**B240**) |
+| A janela de entrega não tinha onde escolher série | Item com série mostra **"Séries que saem"** com o contador *"n de q"*; o **Confirmar** só libera com a quantidade exata |
+| A entrega de um clique entregava material com série | É recusada, com a frase que manda escolher as séries na janela |
+| Excluir a requisição devolvia o número sem as peças — e, se já tinha havido devolução, **creditava de novo** | Devolve por saída, **só o que falta devolver**, com as mesmas séries (**B241**) |
+| Séries que não batiam com o estoque não tinham conserto na tela | **Lotes e Séries → Séries** avisa *"Séries presentes: p · Físico: f"* e oferece **Regularizar séries** (**B242**) |
+
+### As regras, com o cenário exato
+
+**1. A entrega pede as séries.** Com um material com série (entrada de 3 peças S1, S2, S3), uma requisição de 2
+separada: clique **"Entregar escolhendo de onde sai…"**. O item mostra **"Séries que saem"** e *"0 de 2"*; marque S1
+e S3 — o contador fica em *"2 de 2"* e o **Confirmar** libera. Depois da entrega, o estoque do material é 1 e só S2
+aparece em estoque.
+
+**2. A de um clique é recusada.** Na mesma situação, clique **"Confirmar Entrega e Baixar Estoque"**: aparece
+*"⟨material⟩: material com controle de serie: informe 2 serie(s) para 2 unidade(s) — recebidas 0 — entregue escolhendo
+as series"*. Nada sai.
+
+**3. Série que não está em estoque, repetida ou de lote misturado.** A janela já barra lotes misturados (*"Escolha
+séries de um lote só."*). Pelo servidor, as recusas são: *"⟨material⟩: serie ⟨número⟩ nao esta em estoque deste
+material"*, *"⟨material⟩: serie repetida na entrega"*, *"⟨material⟩: escolha series de um lote so"* e, com um lote
+escolhido no "Sai de" e séries de outro, *"⟨material⟩: as series escolhidas nao sao do lote escolhido"*. Em todas,
+nada sai.
+
+**4. Excluir devolve as mesmas peças — e só o que falta.** Entregue S1 e S2 e exclua a requisição: o estoque volta a 3
+e S1 e S2 voltam para "em estoque". Se S1 já tinha voltado pela **Devolução**, a exclusão devolve só S2 — o estoque
+não sobe duas vezes.
+
+**5. Regularizar as séries.** Em **Lotes e Séries → Séries**, escolha um material cujo físico não bate com as séries:
+aparece *"Séries presentes: p · Físico: f"*. Com o perfil que ajusta estoque, **Regularizar séries**:
+- séries **a mais** (peças que já saíram): marque-as e dê baixa com justificativa — elas vão para **Baixada**;
+- séries **a menos** (estoque antigo sem série): digite os números, um por linha (e o lote, se houver); *"Para reativar
+  uma série baixada por engano, informe o número dela."*
+Passar da diferença é recusado: *"baixar ⟨n⟩ serie(s) deixaria menos series que o fisico (⟨f⟩) — presentes ⟨p⟩, baixe
+no maximo ⟨m⟩"* / *"cadastrar ⟨n⟩ serie(s) passaria o fisico (⟨f⟩) — presentes ⟨p⟩, cadastre no maximo ⟨m⟩"*;
+justificativa curta: *"justificativa obrigatoria (minimo 5 caracteres)"*.
+
+### O que esta etapa NÃO cobre
+
+1. O **ajuste** e o **inventário** de material com série mudam o número sem tocar nas séries — **C82** (acerte pela
+   regularização).
+2. A entrega de um clique de material com série é recusada — **D (61)**.
+3. A separação não registra série — só a entrega.
+4. A transferência não muda o endereço da série — **C76**.
+
+### O que a revisão encontrou
+
+A revisão do **plano** achou que corrigir só a entrega quebraria o outro lado: **excluir** a requisição devolveria o
+número sem as peças; e que o **legado** travaria nos dois sentidos (peças "fantasma" oferecidas na janela; estoque sem
+série que nunca mais sairia) — daí a regularização. A revisão do **código** achou um **defeito antigo**: excluir a
+requisição **depois de devolver** creditava o estoque de novo (valia também para material sem série — **C83**); além
+disso, uma saída antiga misturada com uma nova travava a exclusão, a regularização podia passar do limite com duas
+pessoas ao mesmo tempo, e a série cadastrada sem lote nunca aparecia na entrega de material com lote. Tudo corrigido e
+com teste. E uma decisão antiga estava **errada**: a Etapa 6b deixou a entrega "isenta de série" como se fosse igual ao
+lote — está corrigida à vista na seção dela e na **B240**.
+
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 61 entregue (2026-09-30):** **a entrega de material com série diz quais peças saem.** A janela de entrega
+  pede as séries (contador e quantidade exata); a de um clique de material com série é recusada; excluir a requisição
+  devolve as mesmas peças, só o que falta devolver; e **Lotes e Séries** ganhou **Regularizar séries**. **O que é seu:**
+  a consulta **A30** (rodar em produção — as entregas antigas deixaram séries erradas); as decisões **B240 a B243**
+  (a **B240** corrige uma decisão da Etapa 6b); os furos **C82** e **C83**; as limitações **(61)** em D e as verificações
+  **(61)** em F. **Próxima: Etapa 62 — o ajuste e o inventário de material com série; ver o plano da Etapa 61.**
 
 - **Etapa 60 entregue (2026-09-30):** **separar menos do que dava passa a deixar registro, com o porquê.** Cada rodada
   de separação grava, por item, quanto dava para separar, se ficou abaixo e o motivo (opcional); a janela pede o
   motivo abaixo do possível, e o conferente lê a divergência no bloco **Separação**. **O que é seu:** as decisões
   **B238** (só registro — se quiserem o motivo obrigatório, é de vocês) e **B239**; as limitações **(60)** em D e as
-  verificações **(60)** em F. **Próxima: Etapa 61 — ver o plano da Etapa 60.**
+  verificações **(60)** em F. **Próxima: Etapa 61 — ver o plano da Etapa 60.** *(Feita — Etapa 61.)*
 
 - **Etapa 59 entregue (2026-09-30):** **a separação diz de onde cada item sai, e a entrega de um clique usa.** A
   janela de separação tem **"Sai de"** por item; o item mostra *"separado de ⟨endereço⟩"*; a entrega — inclusive o botão

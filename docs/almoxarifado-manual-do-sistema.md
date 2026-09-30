@@ -615,7 +615,7 @@ Com **Controle por número de série** ligado, cada unidade tem identidade próp
 
 **No Recebimento**, cada item tem a caixa **"Séries (uma por linha)"** ao lado dos campos de lote, com contador contra a quantidade recebida.
 
-**Ciclo de vida da série.** Os estados possíveis são cinco:
+**Ciclo de vida da série.** Os estados possíveis são seis:
 
 | Estado | Significado |
 |---|---|
@@ -624,6 +624,7 @@ Com **Controle por número de série** ligado, cada unidade tem identidade próp
 | **Entregue** | saiu do estoque numa saída |
 | **Sucateada** | saiu por sucata ou perda |
 | **Estornada** | a entrada que a criou foi cancelada — a série não volta a ficar disponível, porque aquela entrada nunca deveria ter acontecido |
+| **Baixada** | dada como ausente numa **regularização** (a peça não está no estoque, mas a série constava como presente) — não conta como presente |
 
 O ciclo normal é **Em estoque → Entregue → (devolução) → Em estoque**: devolver uma unidade reativa a série, que volta a ficar disponível. Bloquear e desbloquear é a única transição manual, e vai e volta entre Em estoque e Bloqueada.
 
@@ -640,7 +641,25 @@ Recusas mais comuns, na letra:
 
 **Bloquear e desbloquear** se faz em **Almoxarifado → Lotes e Séries → aba "Séries"**, que lista Número, Status, Lote, Localização e as ações. A **justificativa é obrigatória** e fica registrada junto com a série. Só as séries Em estoque e Bloqueadas têm ação — os estados finais não voltam por essa via.
 
-Uma unidade de controle importante: o sistema mantém a igualdade entre **quantidade de séries presentes** e **saldo do material**. É isso que impede um material serializado ter 10 no saldo e 8 séries cadastradas.
+Uma unidade de controle importante: o sistema mantém a igualdade entre **quantidade de séries presentes** (em estoque + bloqueadas) e **saldo do material**. A entrada, a saída, a **entrega de requisição** (7.5), a **exclusão de requisição** (7.6) e a devolução mexem nas séries junto com o saldo. **O ajuste de estoque e o inventário não mexem**: eles mudam só o número — depois deles, confira as séries e, se não baterem, regularize (abaixo).
+
+**Regularizar séries.** Em **Lotes e Séries → aba "Séries"**, escolhido um material com série cujas séries presentes não batem com o saldo, aparece o aviso *"Séries presentes: 3 · Físico: 2"*. Para quem tem o perfil que **ajusta estoque** (Administrador ou Gestor), aparece também o formulário **Regularizar séries**, que acerta nos dois sentidos — sem movimentar estoque, porque o saldo já está certo:
+
+- **Séries a mais** (a peça já saiu, mas a série consta como presente): marque as séries que não estão na prateleira; elas passam a **Baixada**. Dá para baixar **no máximo a diferença** entre presentes e saldo.
+- **Séries a menos** (unidades sem série cadastrada): digite os números, **um por linha**, e o **lote** delas se o material tiver lote. Dá para cadastrar **no máximo a diferença** entre saldo e presentes. Cadastrar o número de uma série **Baixada** a traz de volta para Em estoque — é o caminho para desfazer uma baixa feita por engano: *"Para reativar uma série baixada por engano, informe o número dela."*
+
+A **justificativa é obrigatória** (mínimo 5 caracteres) e fica registrada em cada série regularizada. O limite é conferido no momento da gravação: se duas pessoas regularizarem ao mesmo tempo, a segunda recebe o aviso para recarregar. Recusas, na letra:
+
+| Situação | Mensagem |
+|---|---|
+| Justificativa curta | *"justificativa obrigatoria (minimo 5 caracteres)"* |
+| Baixar mais do que a diferença | *"baixar 3 serie(s) deixaria menos series que o fisico (1) — presentes 3, baixe no maximo 2"* |
+| Cadastrar mais do que a diferença | *"cadastrar 6 serie(s) passaria o fisico (5) — presentes 0, cadastre no maximo 5"* |
+| Número que já existe (e não está Baixada) | *"serie SN-001 ja existe neste material"* |
+| Série que não está presente | *"serie SN-001 nao esta presente neste material"* |
+| Lote de outro material | *"lote nao pertence a este material"* |
+| Outra pessoa regularizou antes | *"o limite de series mudou durante a regularizacao — recarregue"* |
+| Material sem controle de série | *"material sem controle de serie"* |
 
 ### 4.8 Etiquetas com QR Code
 
@@ -1316,6 +1335,7 @@ Regras:
 - **Confirmar endereço lido.** Com uma origem escolhida, o campo **"Confirmar endereço lido"** aceita a leitura da etiqueta do endereço (ou o código digitado) e confere com a origem escolhida — a mesma regra da movimentação (6.2b): *"Chapa 3mm: Endereço lido (B-02) não confere com a localização de origem (A-01) — se a etiqueta é antiga, reimprima"*. Sem origem escolhida o campo fica desabilitado, com a dica *"Para confirmar a leitura, escolha antes de onde o item sai."*
 - **A origem da separação.** Quando o item foi separado dizendo de onde (10.2), a entrega sai **dali** sem que ninguém precise escolher de novo — inclusive pelo botão **"Confirmar Entrega e Baixar Estoque"**, que entrega tudo o que foi separado em um clique. Na janela de entrega, o **Sai de** desse item já vem com a origem da separação escolhida. A origem da separação vale **só até o que foi separado e ainda não foi entregue**: acima disso (depois de uma entrega parcial o teto de material comum sobe), o que sai nunca foi separado dali, e a entrega é automática. Item separado **sem** origem sai pela regra automática.
 - **Quando a origem da separação não serve mais** — o endereço perdeu saldo para outra saída, foi bloqueado, ou o lote foi bloqueado ou venceu —, a entrega é recusada **antes de qualquer baixa**, com o motivo e o caminho: *"Chapa 3mm: a origem da separação (A-01) não serve mais (O saldo em A-01 (1) não cobre a quantidade (5) — a saída tiraria de outros endereços) — entregue escolhendo de onde sai"*. Pelo botão **Entregar escolhendo de onde sai…**, escolha outro endereço ou **"Qualquer endereço (automático)"** — neste item, "automático" quer dizer **ignorar** a origem da separação. O sistema **não** troca de endereço sozinho: o histórico diria que saiu de onde não saiu. Se a lista de endereços não carregar, o **Sai de** mostra **"Planejada da separação (A-01)"** (a entrega usa a origem da separação) e "automático" continua disponível.
+- **Material com número de série: a entrega diz QUAIS séries saem.** Na janela de entrega, o item com série mostra **"Séries que saem"** — as séries em estoque do material (só as do lote escolhido no **Sai de**, se houver lote), com o endereço como dica — e o contador *"0 de 2"*. O **Confirmar** só libera quando cada item com série tem **exatamente** a quantidade marcada; séries de lotes diferentes no mesmo item travam com *"Escolha séries de um lote só."*. As séries marcadas saem do estoque (passam a **Entregue**) junto com o saldo; o lote da saída é o lote delas. O botão de um clique **não** tem onde escolher série: para material com série ele é recusado com *"Chapa 3mm: material com controle de serie: informe 2 serie(s) para 2 unidade(s) — recebidas 0 — entregue escolhendo as series"*. Outras recusas, todas antes de qualquer baixa: *"Chapa 3mm: serie SN-004 nao esta em estoque deste material"*, *"Chapa 3mm: serie repetida na entrega"* (inclusive a mesma série em dois itens), *"Chapa 3mm: escolha series de um lote so"*, *"Chapa 3mm: as series escolhidas nao sao do lote escolhido"* e *"Chapa 3mm: material com controle de serie exige quantidade inteira"*. Se outra entrega levou uma das séries enquanto a janela estava aberta, a recusa do servidor aparece e a lista de séries é recarregada.
 - Itens **sem** escolha continuam sendo entregues um a um: se um deles for recusado no meio, os anteriores já saíram e ficam contados como entregues.
 
 **O disponível usado aqui soma de volta a reserva da própria requisição** — o que a aprovação reservou é daquela requisição e não pode barrá-la (9.4).
@@ -1333,7 +1353,7 @@ Regras:
 - **Confirmar recebimento** é o testemunho do **próprio solicitante** de que o material chegou às mãos dele. **Não há atalho de administrador**: *"Apenas o solicitante pode confirmar o recebimento"*. Só vale nos status Entregue, Parcialmente Atendida e Encerrada (*"Confirmação de recebimento não permitida no status EM_SEPARACAO"*), e só uma vez (*"Recebimento já confirmado"*).
 - **Encerrar** fecha a requisição de vez: cancela o saldo pendente e nenhuma entrega futura é aceita. Parte de Entregue ou Parcialmente Atendida, e exige o perfil de aprovação — *"Sem permissão para encerrar requisições"*. O motivo é opcional — contraste deliberado com a rejeição, onde ele é obrigatório.
 - **Cancelar** é do solicitante (ou de administrador do sistema): sem permissão, *"Sem permissão"*; em status que não aceita, *"Não é possível cancelar neste status"*. Cancelar **libera as reservas** daquela requisição.
-- **Excluir** uma requisição **estorna as entregas já feitas** (devolve ao estoque, com linha no livro) e **libera as reservas** que ela ainda segurava. A devolução é **por saída**: cada quantidade volta ao **lote** de onde saiu e ao **endereço** de onde saiu, se esse endereço ainda pode receber o material (ativo, não bloqueado, com o tipo do material permitido); senão, vai para o endereço padrão. Tudo é conferido antes da primeira devolução — se o padrão também não puder receber, a exclusão é recusada com a mensagem do endereço, e nada volta. Numa requisição antiga cujo histórico de saídas não fecha com o total entregue, o estorno é feito numa entrada só, no endereço padrão e sem lote. É restrito a administradores do almoxarifado ou super administrador: *"Apenas administradores do Almoxarifado ou Super Administrador podem excluir requisições"*.
+- **Excluir** uma requisição **estorna as entregas já feitas** (devolve ao estoque, com linha no livro) e **libera as reservas** que ela ainda segurava. A devolução é **por saída**, e só do que **ainda não voltou**: o que já foi devolvido pela Devolução citando aquela saída é descontado, então excluir depois de devolver não credita o estoque duas vezes. Cada quantidade volta ao **lote** de onde saiu e ao **endereço** de onde saiu, se esse endereço ainda pode receber o material (ativo, não bloqueado, com o tipo do material permitido); senão, vai para o endereço padrão. Material com número de série volta **com as mesmas séries** que saíram (voltam a Em estoque); se as séries daquela saída não batem com o que falta devolver, a exclusão é recusada com *"Chapa 3mm: as series desta entrega nao batem com o que falta devolver — use a devolucao"*. Tudo é conferido antes da primeira devolução — se o padrão também não puder receber, a exclusão é recusada com a mensagem do endereço, e nada volta. Numa requisição antiga cujo histórico de saídas não fecha com o total entregue, o estorno é feito numa entrada só, no endereço padrão e sem lote, descontado o que já foi devolvido. É restrito a administradores do almoxarifado ou super administrador: *"Apenas administradores do Almoxarifado ou Super Administrador podem excluir requisições"*.
 
 ### 7.7 Anexos da requisição
 
