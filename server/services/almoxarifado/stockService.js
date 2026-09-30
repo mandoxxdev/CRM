@@ -556,7 +556,9 @@ function motivoRecusaEndereco(loc, material, papel) {
  * `aceitaInativa`: o AJUSTE precisa conseguir zerar um endereço desativado (RN-03, checado no ramo).
  */
 async function validarEnderecoExplicito(db, localizacaoId, papel, { aceitaInativa = false } = {}) {
-  if (localizacaoId === undefined || localizacaoId === null || localizacaoId === '') return null;
+  // Fase 5: 0 tambem e "nao informado" — o resto do motor (e o retalho, `localizacaoId || undefined`)
+  // ja tratava 0 como ausente; so aqui ele virava "nao encontrada".
+  if (localizacaoId === undefined || localizacaoId === null || localizacaoId === '' || Number(localizacaoId) === 0) return null;
   const loc = await dbGet(db, 'SELECT * FROM localizacoes_almoxarifado WHERE id = ?', [localizacaoId]);
   if (!loc) throw Object.assign(new Error(`Localização de ${papel} não encontrada`), { status: 400 });
   if (papel === 'destino' && !aceitaInativa && Number(loc.ativo) !== 1) {
@@ -1543,7 +1545,9 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
       if (locAjuste && Number(locAjuste.ativo) !== 1) {
         const atualAqui = await dbGet(db, `SELECT COALESCE(SUM(quantidade), 0) as q FROM estoque_saldo_almoxarifado
           WHERE material_id = ? AND localizacao_id = ? AND lote_id IS ?`, [material_id, localizacao_destino_id, loteIdFinal || null]);
-        if (parseFloat(quantidade) > (Number(atualAqui.q) || 0) + EPS) {
+        // Fase 5: o teto e max(atual, 0) — numa linha NEGATIVA (saida de origem inativa com saldo
+        // negativo permitido), zerar e subir em relacao a ela, e ficaria preso para sempre.
+        if (parseFloat(quantidade) > Math.max(Number(atualAqui.q) || 0, 0) + EPS) {
           throw Object.assign(new Error(
             `Localização ${locAjuste.codigo} está inativa — o ajuste só pode reduzir ou zerar o saldo dela`,
           ), { status: 400 });

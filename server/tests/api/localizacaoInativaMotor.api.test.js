@@ -98,6 +98,24 @@ let seq = 0;
     assert.strictEqual(await saldoEm(m.id, L.id), 0);
   });
 
+  await test('RN-03 linha NEGATIVA numa inativa: zerar passa (o teto e max(atual, 0)); subir acima de 0 nao', async () => {
+    const L = await loc('NG'); const m = await material();
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET permite_saldo_negativo = 1 WHERE id = ?', [m.id]);
+    ok(await mov({ material_id: m.id, tipo: 'ENTRADA', quantidade: 3, localizacao_destino_id: L.id }));
+    await desativar(L.id);
+    ok(await mov({ material_id: m.id, tipo: 'SAIDA', quantidade: 5, localizacao_origem_id: L.id }));
+    assert.strictEqual(await saldoEm(m.id, L.id), -2);
+    recusa(await mov({ material_id: m.id, tipo: 'AJUSTE', quantidade: 1, localizacao_destino_id: L.id }),
+      `Localização ${L.codigo} está inativa — o ajuste só pode reduzir ou zerar o saldo dela`);
+    ok(await mov({ material_id: m.id, tipo: 'AJUSTE', quantidade: 0, localizacao_destino_id: L.id }));
+    assert.strictEqual(await saldoEm(m.id, L.id), 0);
+  });
+
+  await test('id 0 e "nao informado" (como no resto do motor), nao "nao encontrada"', async () => {
+    const m = await material();
+    ok(await mov({ material_id: m.id, tipo: 'ENTRADA', quantidade: 1, localizacao_destino_id: 0 }));
+  });
+
   await test('RN-04 ORIGEM inativa e aceita: SAIDA e TRANSFERENCIA esvaziam o endereco desativado', async () => {
     const L = await loc('OR'); const B = await loc('ORB'); const m = await material();
     ok(await mov({ material_id: m.id, tipo: 'ENTRADA', quantidade: 10, localizacao_destino_id: L.id }));
@@ -145,9 +163,15 @@ let seq = 0;
     const P = await loc('D6'); const ms = [];
     for (let i = 0; i < 6; i++) ms.push(await material({ padrao: P.id }));
     const put = await request(app).put(`/api/almoxarifado/localizacoes/${P.id}`).send({ codigo: P.codigo, ativo: 0 });
-    assert.strictEqual(put.body.error, MSG_PADRAO(6, `${ms.slice(0, 5).map((x) => x.codigo).sort().join(', ')}, …`));
+    // A ordem e a do servidor (texto): ordena os 6 e pega 5 — nao a ordem de criacao (Fase 5).
+    assert.strictEqual(put.body.error, MSG_PADRAO(6, `${ms.map((x) => x.codigo).sort().slice(0, 5).join(', ')}, …`));
     const edita = await request(app).put(`/api/almoxarifado/localizacoes/${P.id}`).send({ codigo: P.codigo, descricao: 'nova', ativo: 1 });
     assert.strictEqual(edita.status, 200, JSON.stringify(edita.body));
+    // Metade positiva do PUT (Fase 5): sem padrao em uso, desativar pelo PUT passa.
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET localizacao_padrao_id = NULL WHERE localizacao_padrao_id = ?', [P.id]);
+    const des = await request(app).put(`/api/almoxarifado/localizacoes/${P.id}`).send({ codigo: P.codigo, ativo: 0 });
+    assert.strictEqual(des.status, 200, JSON.stringify(des.body));
+    assert.strictEqual((await dbGet(db, 'SELECT ativo FROM localizacoes_almoxarifado WHERE id = ?', [P.id])).ativo, 0);
   });
 
   await test('RN-05 cadastro: POST e PUT recusam padrao inativa ou inexistente; editar outro campo de legado passa', async () => {
@@ -168,6 +192,10 @@ let seq = 0;
     await desativar(A.id);
     const n = await request(app).put(`/api/almoxarifado/materiais/${id}`).send({ nome: 'Renomeado', localizacao_padrao_id: A.id });
     assert.strictEqual(n.status, 200, JSON.stringify(n.body));
+    // Tirar a padrao (null) nao valida nada e passa.
+    const semPadrao = await request(app).put(`/api/almoxarifado/materiais/${id}`).send({ localizacao_padrao_id: null });
+    assert.strictEqual(semPadrao.status, 200, JSON.stringify(semPadrao.body));
+    assert.strictEqual((await dbGet(db, 'SELECT localizacao_padrao_id p FROM materiais_almoxarifado WHERE id = ?', [id])).p, null);
   });
 
   await test('Recebimento: nota com destino INATIVO e recusada inteira, antes de qualquer item entrar', async () => {
@@ -181,7 +209,9 @@ let seq = 0;
     }
     const recRow = await dbGet(db, 'SELECT * FROM recebimentos_material_almoxarifado WHERE id = ?', [rec]);
     await assert.rejects(() => receiptService.darEntradaEstoque(db, ADMIN, recRow, rec, { localizacao_id: I.id }),
-      (e) => e.status === 400 && e.message.includes(`Localização ${I.codigo} está inativa`) && e.message.includes(m1.codigo));
+      // Literal EXATA: sem a pre-checagem, o item 1 cairia no motor com outra mensagem — o `movs === 0`
+      // sozinho nao distinguia os dois caminhos (Fase 5).
+      (e) => { assert.strictEqual(e.message, `Nao foi possivel dar entrada no estoque: Localização ${I.codigo} está inativa`); return e.status === 400; });
     const movs = await dbAll(db, 'SELECT id FROM movimentacoes_almoxarifado WHERE material_id IN (?,?)', [m1.id, m2.id]);
     assert.strictEqual(movs.length, 0);
     // Metade positiva: com destino ativo, os dois entram.
