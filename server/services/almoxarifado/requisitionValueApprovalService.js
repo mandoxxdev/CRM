@@ -410,5 +410,6 @@ module.exports = {
   listarAguardandoAprovacao,
   notificarAprovadoresValor,
   notificarSolicitanteValor,
+  getEmailsAprovadores,
   formatMoeda,
 };

@@ -1,9 +1,21 @@
 /**
- * Lembretes diários por e-mail para requisições PENDENTE sem resposta do aprovador.
+ * Lembretes diários por e-mail para requisições paradas esperando um gesto de aprovação:
+ *  - PENDENTE → a aprovação normal; plateia = lista geral de notificação;
+ *  - AGUARDANDO_APROVACAO_VALOR (Etapa 47, T1) → a LIBERAÇÃO POR VALOR; plateia = os aprovadores
+ *    de valor configurados (`getEmailsAprovadores`, que cai na lista geral se não houver nenhum).
+ *
+ * A liberação por valor NÃO é regra de aprovação: é mecanismo próprio, com colunas e plateia
+ * próprias, e para ele o `status` é chave legítima. As pendências de regra (T4 em diante) são
+ * cobradas por OUTRO lembrete, dirigido por pendência — nunca por `status`.
  */
 const { dbGet, dbAll, dbRun } = require('./db');
 const alertService = require('./alertService');
 const requisitionNotificationService = require('./requisitionNotificationService');
+// Sem ciclo: o serviço de valor não importa este módulo. A chamada é sempre pela propriedade do
+// módulo (`requisitionValueApprovalService.getEmailsAprovadores`), não por desestruturação.
+const requisitionValueApprovalService = require('./requisitionValueApprovalService');
+
+const STATUS_AGUARDANDO_VALOR = requisitionValueApprovalService.STATUS_AGUARDANDO;
 
 const DEFAULT_INTERVAL_HOURS = 24;
 
@@ -42,11 +54,14 @@ async function getReminderSettings(db) {
   ]);
 
   const emails = await requisitionNotificationService.getRequisicaoNotificationEmails(db);
+  // O limite mora aqui, e não dentro de `buildMensagemLembrete`: ela é síncrona e exportada.
+  const { limite: limiteValor } = await requisitionValueApprovalService.getConfig(db);
 
   return {
     ativo: parseBool(ativo, true),
     intervaloHoras: Number(intervaloHoras) > 0 ? Number(intervaloHoras) : DEFAULT_INTERVAL_HOURS,
     emails,
+    limiteValor,
     appUrl: alertService.resolveAppBaseUrl(appUrlDb),
   };
 }
@@ -62,8 +77,15 @@ async function getReminderSettingsForApi(db) {
   };
 }
 
+/**
+ * `updated_at` do SQLite vem "YYYY-MM-DD HH:MM:SS" em UTC e sem "Z": o `new Date` lia como hora
+ * LOCAL (UTC-3 no servidor) e o lembrete dizia "há 2 dias" com 50h de espera. Mesma solução de
+ * `alertRegistry.maisVelhoQueDias`: só acrescenta "Z" quando não há "T", senão um ISO já válido
+ * viraria "...ZZ".
+ */
 function diasAguardando(updatedAt) {
-  const ts = new Date(updatedAt).getTime();
+  const s = String(updatedAt ?? '');
+  const ts = new Date(s.includes('T') ? s : `${s.replace(' ', 'T')}Z`).getTime();
   if (Number.isNaN(ts)) return 1;
   const diffMs = Date.now() - ts;
   return Math.max(1, Math.ceil(diffMs / (24 * 60 * 60 * 1000)));
@@ -74,9 +96,21 @@ function getRequisicoesUrl(appBaseUrl) {
   return `${base}/almoxarifado/requisicoes`;
 }
 
-function buildMensagemLembrete(requisicao, itens, dias, appBaseUrl) {
+/**
+ * `settings` é opcional para não quebrar quem já chama com quatro argumentos; só a variante de
+ * liberação por valor o usa (para o limite).
+ */
+function buildMensagemLembrete(requisicao, itens, dias, appBaseUrl, settings = {}) {
   const numero = requisicao.numero || `REQ-${requisicao.id}`;
-  const assunto = `Lembrete: Requisição ${numero} aguardando aprovação há ${dias} dia${dias === 1 ? '' : 's'}`;
+  const porValor = requisicao.status === STATUS_AGUARDANDO_VALOR;
+  const gesto = porValor ? 'liberação por valor' : 'aprovação';
+  const diasFlex = `${dias} dia${dias === 1 ? '' : 's'}`;
+  const assunto = `Lembrete: Requisição ${numero} aguardando ${gesto} há ${diasFlex}`;
+  // `formatMoeda` já emite o "R$" — a literal não o repete.
+  const valorComLimite = porValor
+    ? `${requisitionValueApprovalService.formatMoeda(requisicao.valor_total)}`
+      + ` (limite de liberação automática: ${requisitionValueApprovalService.formatMoeda(settings.limiteValor)})`
+    : null;
   const geradoEm = alertService.formatDateTimePtBr();
   const appUrl = getRequisicoesUrl(appBaseUrl);
   const setor = requisicao.setor || requisicao.departamento || 'Não informado';
@@ -103,11 +137,11 @@ function buildMensagemLembrete(requisicao, itens, dias, appBaseUrl) {
     </tr>`;
   }).join('');
 
-  const text = `LEMBRETE — REQUISIÇÃO AGUARDANDO APROVAÇÃO
+  const text = `LEMBRETE — REQUISIÇÃO AGUARDANDO ${gesto.toUpperCase()}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Requisição: ${numero}
-Aguardando há: ${dias} dia(s)
+Aguardando há: ${dias} dia(s)${valorComLimite ? `\nValor total: ${valorComLimite}` : ''}
 Solicitante: ${requisicao.solicitante_nome}
 Setor: ${setor}
 Urgência: ${urgencia}
@@ -116,7 +150,7 @@ OS/Referência: ${osRef}
 Itens:
 ${itensTexto || '—'}
 
-Acesse o sistema para aprovar ou rejeitar:
+Acesse o sistema para ${porValor ? 'aprovar ou reprovar a liberação' : 'aprovar ou rejeitar'}:
 ${appUrl}
 
 Gerado em ${geradoEm}
@@ -142,7 +176,7 @@ GMP Industriais — Orion`;
           </tr>
           <tr>
             <td style="padding:14px 24px;background-color:#eff6ff;border-bottom:3px solid #2563eb;font-family:Arial,Helvetica,sans-serif;">
-              <div style="font-size:15px;font-weight:bold;color:#1d4ed8;">📋 Requisição aguardando aprovação há ${dias} dia${dias === 1 ? '' : 's'}</div>
+              <div style="font-size:15px;font-weight:bold;color:#1d4ed8;">📋 Requisição aguardando ${gesto} há ${diasFlex}</div>
             </td>
           </tr>
           <tr>
@@ -159,7 +193,8 @@ GMP Industriais — Orion`;
                     <strong>Solicitante:</strong> ${alertService.escapeHtml(requisicao.solicitante_nome)}<br>
                     <strong>Setor:</strong> ${alertService.escapeHtml(setor)}<br>
                     <strong>Urgência:</strong> ${alertService.escapeHtml(urgencia)}<br>
-                    <strong>OS/Referência:</strong> ${alertService.escapeHtml(osRef)}
+                    <strong>OS/Referência:</strong> ${alertService.escapeHtml(osRef)}${valorComLimite ? `<br>
+                    <strong>Valor total:</strong> ${alertService.escapeHtml(valorComLimite)}` : ''}
                   </td>
                 </tr>
               </table>
@@ -210,6 +245,13 @@ async function carregarItens(db, requisicaoId) {
 }
 
 async function resolverDestinatarios(db, requisicao, settings) {
+  // A plateia é por status: quem LIBERA POR VALOR é lista própria de configuração, e não a
+  // lista geral. Somar as duas seria cobrar de quem não pode fazer o gesto pendente.
+  if (requisicao.status === STATUS_AGUARDANDO_VALOR) {
+    const emails = await requisitionValueApprovalService.getEmailsAprovadores(db);
+    return [...new Set(emails.map((e) => String(e).trim().toLowerCase()))].filter(Boolean);
+  }
+
   const destinatarios = new Set(settings.emails.map((e) => e.toLowerCase()));
 
   if (requisicao.aprovador_id) {
@@ -248,15 +290,20 @@ async function resetLembreteRequisicao(db, requisicaoId) {
 async function buscarRequisicoesElegiveis(db, intervaloHoras) {
   const horas = Math.max(1, Number(intervaloHoras) || DEFAULT_INTERVAL_HOURS);
   const cutoff = `-${horas} hours`;
+  // `data_aprovacao IS NULL` restringe o status de valor à procedência de NASCIMENTO. A de
+  // descarrilamento (requisição já aprovada que caiu no status quando a liberação foi ligada
+  // depois, por UPDATE fora da máquina de estados) fica de fora: nela "aguardando há N dias"
+  // mentiria. O bypass em si é achado próprio (letra C da Etapa 47).
   return dbAll(db, `SELECT * FROM requisicoes_almoxarifado
-    WHERE status = 'PENDENTE'
+    WHERE (status = 'PENDENTE'
+           OR (status = ? AND data_aprovacao IS NULL))
       AND COALESCE(ativo, 1) = 1
       AND datetime(updated_at) <= datetime('now', ?)
       AND (
         ultimo_lembrete_enviado IS NULL
         OR datetime(ultimo_lembrete_enviado) <= datetime('now', ?)
       )
-    ORDER BY updated_at ASC`, [cutoff, cutoff]);
+    ORDER BY updated_at ASC`, [STATUS_AGUARDANDO_VALOR, cutoff, cutoff]);
 }
 
 async function processarLembreteRequisicao(db, requisicao, settings) {
@@ -273,7 +320,7 @@ async function processarLembreteRequisicao(db, requisicao, settings) {
     };
   }
 
-  const msg = buildMensagemLembrete(requisicao, itens, dias, settings.appUrl);
+  const msg = buildMensagemLembrete(requisicao, itens, dias, settings.appUrl, settings);
   const resultado = await alertService.enviarEmail(db, destinatarios, msg.assunto, msg.html, msg.text);
   const hasError = resultado.erros.length > 0 && resultado.enviados === 0;
 
@@ -307,8 +354,21 @@ async function processarLembretesPendentes(db) {
   const elegiveis = await buscarRequisicoesElegiveis(db, settings.intervaloHoras);
   const resultados = [];
 
+  // Uma requisição que lança NÃO pode abortar o lote: a busca ordena `updated_at ASC`, então a
+  // mais antiga vem primeiro, e sem este try/catch ela mataria o lembrete de todas as posteriores
+  // — de hora em hora, em silêncio, porque o job engole o erro no console.warn.
   for (const requisicao of elegiveis) {
-    resultados.push(await processarLembreteRequisicao(db, requisicao, settings));
+    try {
+      resultados.push(await processarLembreteRequisicao(db, requisicao, settings));
+    } catch (err) {
+      console.warn(`[almoxarifado-lembretes] Falha na requisição ${requisicao.numero || requisicao.id}:`, err.message);
+      resultados.push({
+        requisicao_id: requisicao.id,
+        numero: requisicao.numero,
+        enviado: false,
+        erros: [err.message],
+      });
+    }
   }
 
   return {
@@ -327,6 +387,7 @@ module.exports = {
   buscarRequisicoesElegiveis,
   processarLembretesPendentes,
   processarLembreteRequisicao,
+  resolverDestinatarios,
   resetLembreteRequisicao,
   buildMensagemLembrete,
   diasAguardando,
