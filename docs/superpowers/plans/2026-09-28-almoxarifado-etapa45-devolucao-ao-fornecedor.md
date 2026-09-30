@@ -574,3 +574,146 @@ origem** no motor, que é o que fecha o caso **geral** do pool agregado (letras 
 `quantidade_bloqueada`/`quantidade_em_inspecao` — colunas agregadas por material, lidas por
 `availabilitySql.js` e por seis ramos de `registrarMovimentacao` —, então é **tronco de motor** e
 etapa própria, com migração e backfill. O beco da NC é **reversível e estreito**; este não.
+
+---
+
+## Fase 0 da Etapa 46 — medida em 2026-09-29, ANTES de prometer
+
+Cinco medições no código, cada uma com o lugar exato. **Duas delas mudam o escopo** do esboço acima.
+
+**1. A transição `DECIDIDA → ABERTA` JÁ EXISTE no código, e funciona.** Não é preciso inventá-la:
+`nonConformityService.js:838-842` faz exatamente isso no rollback de `executarLiberacao` — `status =
+'ABERTA'`, decisão, justificativa, autor e `decidido_em` a `NULL`, mais `execucao_estado = NULL`
+(entrou na Etapa 45, com o motivo escrito: estado de execução sobrevivente deixaria a NC na fila
+**sem decisão nenhuma**). O `WHERE id = ? AND status = 'DECIDIDA'` está lá. **O que falta é a porta,
+não o mecanismo** — e o mecanismo já foi exercitado por teste, no cenário de rollback da 44.
+⚠️ **Mas ele desfaz a decisão, e isto NÃO é o que a Etapa 46 quer.** A Etapa 43 estabeleceu que a
+decisão é **imutável e auditada**; apagar autor e justificativa de uma decisão que **aconteceu** é
+apagar evidência. O rollback pode fazer isso porque ali a decisão **falhou inteira** (nada foi
+gravado no livro). Para a Etapa 46 o caminho é **cancelar** (status novo, motivo, autor, data,
+decisão **preservada**), não reverter.
+
+**2. Não existe ação de perfil de cancelamento.** `ACAO_PERFIS` tem `registrar_nao_conformidade`
+(ADMINISTRADOR, ALMOXARIFE, QUALIDADE, COMPRAS), `decidir_nao_conformidade` (ADMINISTRADOR,
+QUALIDADE) e `executar_encaminhamento` (ADMINISTRADOR, QUALIDADE, COMPRAS). **Nada mais.** A ação
+nova é a quarta da família.
+
+**3. Só existem CINCO rotas de NC** (`extended.js:1051, 1073, 1085, 1097, 1117`): criar, listar,
+obter, decidir, executar. **Nenhuma cancela.** O único cancelamento do módulo vive dentro de
+`sincronizarNaoConformidadeQuantidade` (`nonConformityService.js:496`), é automático, dispara só
+quando a divergência de quantidade **desaparece** na reconferência, exige
+`aberto_automaticamente` e tem `WHERE id = ? AND status = 'ABERTA'`.
+
+**4. 🔴 ACHADO NOVO, e ele aumenta o escopo: a NC presa em `PENDENTE` não tem ALERTA NENHUM.** A
+entrada `NAO_CONFORMIDADE_ABERTA` (`alertRegistry.js:810`) cobra a **decisão**, e o
+`listarNaoConformidadesParadas` (`:253-265`) filtra `WHERE nc.status = 'ABERTA'`. O próprio
+comentário dela diz que *"NC decidida ou cancelada sai da condição sozinha, sem gancho nenhum"* —
+o que estava **certo** quando foi escrito, porque decidir era o último gesto. **Depois da Etapa 45
+não é mais:** a NC decidida com execução `PENDENTE` **sai do alerta** e só aparece para quem
+escolher o filtro `?execucao=PENDENTE` na tela. Ou seja, o furo **C64** é pior do que a letra C
+descreve — o documento preso não é apenas destravável por ninguém, **ele também não cobra
+ninguém**. A Etapa 46 tem de entregar a 15ª entrada do registro de alertas: *"execução pendente há
+mais de N dias"*, com `configDias` própria, no mesmo padrão.
+
+**5. A fila `?execucao=PENDENTE` não exclui `CANCELADA` hoje — e isso é uma armadilha plantada.**
+`listarNaoConformidadesParadas` não entra nisso, mas `listarNaoConformidades`
+(`nonConformityService.js:1217-1220`) já traz o comentário: `execucao_estado` fica `NULL` em NC
+`ABERTA` e em NC `CANCELADA`, *"então o `=` sozinho já as excluiria HOJE"* — **porque hoje só se
+cancela NC `ABERTA`, que nunca teve estado de execução.** No instante em que a Etapa 46 permitir
+cancelar uma NC **decidida**, essa NC carrega `execucao_estado = 'PENDENTE'` e **passa a casar o
+filtro**, reaparecendo na fila do Compras como coisa a fazer. **Este é o ponto exato em que a
+Etapa 46 quebra se ninguém ler o comentário**: ou o cancelamento zera `execucao_estado`, ou o
+filtro passa a excluir `CANCELADA` explicitamente. **O caminho reversível é o segundo** — zerar a
+coluna apaga a informação de que havia execução pendente quando se cancelou, que é justamente o que
+o motivo do cancelamento vai explicar.
+
+**Conclusão da Fase 0:** o esboço de três itens acima vira **quatro**, e a ordem muda. Tronco:
+(1) ação `cancelar_nao_conformidade` + rótulo em `permissaoErro.js` **no mesmo commit** (sétima vez);
+(2) `cancelarNaoConformidade` no serviço, cobrindo `ABERTA` e `DECIDIDA`-com-`PENDENTE`, com motivo
+obrigatório, decisão **preservada** e a régua do filtro decidida como acima. Galhos: (3) a 15ª
+entrada do alerta; (4) o botão na tela. **Nenhuma migração** — `motivo_cancelamento` e
+`cancelado_em` já existem em `nao_conformidades_almoxarifado` (`schema.js:1477-1478`), e o verbo
+`NC_CANCELADA` já tem rótulo em `auditLabels.js`.
+
+---
+
+## Fase 6 — o que o próprio fechamento achou (e um deles é código)
+
+**A Fase 6 não era para achar defeito, e achou três.** Vale registrar porque diz algo sobre o
+processo: os três saíram de **escrever a documentação de usuário**, que obriga a percorrer a tela
+clicando, e nenhum saiu de ler código — que é o que as Fases 2 e 5 fizeram.
+
+**1. 🔴 DEFEITO DE CÓDIGO, corrigido aqui: `DEVOLUCAO_FORNECEDOR` nasceu FORA da lista de rótulos do
+livro.** `MovimentacoesAlmoxarifado.js:50` (`TIPOS`) é o que o livro usa para o rótulo (`tipoInfo`,
+`:441`) e para o dropdown de filtro. Tipo ausente cai em `{ label: tipo }` — a coluna *Tipo* mostrava
+**`DEVOLUCAO_FORNECEDOR`** cru, e o filtro não tinha a opção, então a devolução ao fornecedor era
+**não-localizável** no livro. Escapou de três revisores e das 18 sabotagens da T4.
+
+**O arquivo já avisava, a duas linhas de onde o tipo devia ter entrado:** o comentário de
+`AJUSTE_INVENTARIO` (`:55-58`), escrito na Etapa 10 pela mesma falha, diz que sem o rótulo o tipo
+*"cai no fallback genérico (rótulo cru 'AJUSTE_INVENTARIO', sem opção no dropdown de filtro)"*. **É a
+mesma forma do CRITICAL do épsilon**: o aviso estava escrito no arquivo e eu passei por cima. Duas
+vezes na mesma etapa.
+
+Consertado com TDD: quatro cenários novos em `MovimentacoesAlmoxarifado.test.js` (rótulo na linha
+com a metade positiva; a **cor** — `almox-badge-saida`, vermelho, e não o violeta de `DEVOLUCAO`,
+porque esta TIRA material do galpão; a opção no filtro; e o formulário **continuando** a não
+oferecer o tipo). **3 de 4 vermelhos antes do conserto**; o quarto é asserção negativa e passava
+verde de graça, então levou **controle positivo**: expor o tipo em `TIPOS_FORM` derrubou-o **nomeando
+o tipo** (`Expected value: not "DEVOLUCAO_FORNECEDOR"`), além de derrubar o cenário do rótulo com
+`["Saída", "SABOTAGEM"]`. md5 restaurado por `sed` inverso e conferido contra a cópia pós-conserto.
+
+**E o buraco maior ficou declarado, não consertado:** medido em 2026-09-29, `TIPOS` cobre **10**
+tipos e o serviço grava **pelo menos 24** — quatorze mostram código cru e não têm filtro (bloqueio,
+desbloqueio, quarentena, reserva, liberação de reserva, remessa/retorno/consumo/perda em terceiro,
+retorno de transformação, devolução de cliente, entrada por compra, entrada por devolução, e os de
+inspeção). Letra **G73**. Esta etapa paga **só o tipo que ela criou**.
+
+**2. A literal do caminho felizardo estava INCOMPLETA no meu próprio texto.** Eu escrevi o cenário 1
+das novidades como *"Execução de NC-… registrada!"* — mas o serviço devolve
+`mensagem: '<N> devolvido(s) ao fornecedor'` (`nonConformityService.js:1187`), e o toast concatena.
+A frase que o usuário mais vai ver ao vivo é **"Execução de NC-… registrada! 3 devolvido(s) ao
+fornecedor"**. Corrigido. **Escrever documentação com literal aproximada é o que a skill proíbe**, e
+eu errei justamente no caminho principal, por tê-lo escrito de memória em vez de ler.
+
+**3. O guia mandava ligar uma configuração que não tem tela — e mandava isso em TRÊS roteiros.**
+O pré-requisito *"a configuração 'Inspeção de material crítico' ligada em Almoxarifado →
+Configurações"* (roteiros das Etapas 27, 29 e 44) é falso: a chave `inspecao_material_critico` existe
+em `schema.js:2327`, **nasce com o valor `'1'`**, é lida só por `receiptService.js:1181` e **nenhuma
+tela a exibe ou edita**. Quem seguisse a instrução procuraria um interruptor inexistente e concluiria
+que o roteiro está errado. Corrigido nos três, com a correção **à vista** em vez de reescrita em
+silêncio. **Defeito anterior a esta etapa**, achado por ter percorrido o roteiro vizinho.
+
+**A conclusão de processo:** as Fases 2 e 5 leem código e acham defeito de regra; a Fase 6 escreve
+para o usuário e acha defeito de **superfície** — rótulo cru, literal aproximada, instrução
+impossível. São populações diferentes de defeito, e nenhuma das duas encontra a da outra. Isso é
+argumento para a Fase 6 **não** ser tratada como burocracia de fim de etapa.
+
+**4. 🔴 SEGUNDO DEFEITO DE CÓDIGO, corrigido aqui: o botão de estornar aparecia na linha da
+devolução.** `podeEstornar` (`MovimentacoesAlmoxarifado.js:132`) esconde por `TIPOS_SEM_ESTORNO`, e
+`DEVOLUCAO_FORNECEDOR` não estava lá — mas `stockService.js:1594` recusa o estorno desse tipo
+**sempre**, casando por tipo. O botão entregava um 400 garantido.
+
+**O princípio já estava escrito no cabeçalho do arquivo de teste desta tela, desde a Etapa 5:**
+*"Com o servidor recusando, o botão só entregaria um 400. Nos dois casos a tela não pode
+oferecê-lo."* Terceira vez na etapa que o aviso estava no arquivo. Corrigido com um cenário que tem a
+metade positiva obrigatória (a linha de `SAIDA` ao lado **continua** oferecendo estorno — sem ela o
+teste passaria com um `podeEstornar` que devolvesse `false` para tudo). **1 vermelho antes, 33/33
+depois.**
+
+⚠️ **O irmão da Etapa 44 NÃO foi corrigido, e a razão é estrutural:** a recusa do desbloqueio por não
+conformidade casa por **motivo** (`mov.motivo === MOTIVO_LIBERACAO_NC`), porque o desbloqueio
+**avulso** é o mesmo tipo e continua estornável. `TIPOS_SEM_ESTORNO` é por tipo, então aquele caso
+exige a tela passar a olhar o motivo — mudança de régua, não de lista. Declarado em **G73**.
+
+**Guia e novidades foram reescritos nos dois pontos**, porque os dois documentos descreviam o
+comportamento **anterior** (o guia mandava clicar em estornar para ver a recusa; as novidades diziam
+que o botão aparece). Cada correção ficou com a nota *"consertado no fechamento da etapa"* e o que se
+vê numa versão anterior a 2026-09-29 — quem estiver apresentando de uma build antiga precisa saber.
+
+### Números finais da Fase 6 (medidos em 2026-09-29, depois de todo o conserto)
+
+`test:api` **213/213 arquivos** (15 passed / 0 failed no arquivo de contagem) · almoxarifado
+**42 passou / 0 falhou** · validation **4/0** · safealter **3/0** · sqlite **5/0** · client
+**52 suítes / 834 testes** (eram 829 — os **5** cenários novos de `MovimentacoesAlmoxarifado.test.js`)
+· build **Compiled successfully** com `CI=true`.

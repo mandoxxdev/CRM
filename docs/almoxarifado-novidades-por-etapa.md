@@ -5978,6 +5978,42 @@ palavra, a lista de mensagens de recusa escrita em dois lugares do código. Ela 
 verdade — foi para isso que nasceu —, mas compara **o texto cru**: trocar a indentação ou quebrar
 uma linha faz a guarda acusar mudança onde não houve. **Mantido de propósito:** a alternativa
 (interpretar o código em vez de comparar o texto) é mais frágil que o alarme falso, e o alarme falso
+---
+
+**G73 (NOVO, achado no FECHAMENTO da Etapa 45). O livro de Movimentações mostra o CÓDIGO CRU de
+quatorze tipos de movimento, e não tem opção de filtro para nenhum deles.** A tela tem uma lista de
+rótulos com **dez** tipos; o sistema grava **pelo menos vinte e quatro**. Tipo que não está na
+lista cai num atalho que imprime o próprio código na coluna *Tipo* — e, pior, **não aparece no
+dropdown de filtro**, o que o torna **não-localizável** no livro.
+
+**Medido em 2026-09-29.** Mostram código cru hoje: bloqueio, desbloqueio, quarentena, reserva,
+liberação de reserva, remessa a terceiro, retorno de terceiro, consumo em terceiro, perda no
+terceiro, retorno de transformação, devolução de cliente, entrada por compra, entrada por devolução,
+e os movimentos de inspeção. **Quem procurar no livro "todos os desbloqueios do mês" não consegue.**
+
+**A devolução ao fornecedor entrou nessa lista e SAIU dela no fechamento desta etapa** — a Etapa 45
+criou o tipo e não o pôs nos rótulos, o que foi corrigido com quatro cenários de teste (ver o passo
+17 do roteiro da Etapa 45). **Os outros quatorze ficam declarados e não consertados**, por dois
+motivos: cada um precisa de rótulo, opção de filtro e **cor** coerente com o que ele faz no saldo, e
+alguns são movimentos internos que talvez não devam aparecer no filtro do operador — decidir isso
+caso a caso é etapa própria, não linha de fechamento.
+
+⚠️ **E este defeito tem histórico:** o comentário que hoje explica o rótulo de *Ajuste (inventário)*
+foi escrito por causa da mesma falha, e diz textualmente que sem o rótulo o tipo *"cai no fallback
+genérico (rótulo cru, sem opção no dropdown de filtro)"*. O aviso estava no arquivo, a duas linhas
+de onde o tipo novo deveria ter entrado. **É a mesma forma do defeito mais grave desta etapa** (o
+épsilon): o arquivo já sabia, e quem escreveu passou por cima.
+
+**E um segundo item, da mesma tela e do mesmo fechamento: o botão de estornar aparece em linhas que
+o servidor recusa SEMPRE.** A tela esconde o estorno por **tipo** de movimento; a recusa do
+**desbloqueio por não conformidade** (Etapa 44) casa por **motivo**, porque o desbloqueio **avulso**
+continua estornável e é o mesmo tipo. Resultado: na linha da liberação por não conformidade o botão
+aparece e entrega um erro. **A devolução ao fornecedor tinha o mesmo problema e foi corrigida** (a
+recusa dela casa por tipo, então couberam as duas na mesma régua); a do desbloqueio **não cabe** sem
+a tela passar a olhar o motivo, o que é mudança de régua e não de lista. Fica declarado: a tela desta
+base tem princípio escrito desde a Etapa 5 — *"com o servidor recusando, o botão só entregaria um
+400; a tela não pode oferecê-lo"* — e este é o caso que ainda o viola.
+
 aparece na hora, para quem está editando.
 ## Etapa 0 — Fundação (2026-08-03)
 
@@ -11853,7 +11889,8 @@ decida **Devolver ao fornecedor** com justificativa.
 **10 no físico**, 3 bloqueados. A coluna **Execução** da linha passa a mostrar **Pendente**.
 Agora clique em **Registrar execução**, escreva *"NF de devolução 123, transportadora X"* e
 confirme.
-→ *"Execução de NC-… registrada!"* — e o material passa a ter **7 no físico e 0 bloqueados**. Em
+→ *"Execução de NC-… registrada! 3 devolvido(s) ao fornecedor"* — e o material passa a ter **7 no
+físico e 0 bloqueados**. Em
 **Movimentações** há uma saída de **Devolução ao fornecedor** de 3, com o número da NC no campo de
 documento e o motivo *"Devolução ao fornecedor"*.
 
@@ -11948,6 +11985,28 @@ antes de qualquer efeito no saldo.
 O tipo é **dedicado** a este fluxo, como já são a devolução ao cliente e o retorno de transformação.
 Registrá-lo pelo formulário genérico é recusado; o caminho é o documento.
 
+**16. A devolução não tem botão de estornar — e isso é a proteção.**
+Vá em **Movimentações** e ache a saída de **Devolução ao fornecedor**: a coluna de ações **não
+oferece** o estorno (a linha de uma **Saída** comum, ao lado, oferece). Pela porta de programação a
+recusa é explícita:
+→ *"Devolução ao fornecedor não pode ser estornada pelo livro — o material voltaria bloqueado com o
+documento dizendo que foi devolvido"*.
+**Por quê:** o estorno devolveria o material ao bloqueio e deixaria o documento dizendo "executada",
+com o material fisicamente no fornecedor — e **sem saída**, porque o documento não pode ser decidido
+de novo. Mesma proteção que a Etapa 44 pôs na liberação.
+⚠️ **O botão APARECIA até o fechamento da etapa**, e entregava essa recusa no clique. Foi escondido
+no fechamento, porque esta tela tem princípio próprio desde a Etapa 5: *botão que erra sempre é
+armadilha, não controle*. **O desbloqueio por não conformidade da Etapa 44 continua com o botão
+visível**, e não é inconsistência: lá a recusa depende do MOTIVO (o desbloqueio avulso continua
+estornável), e a tela esconde por TIPO. Fica declarado em **G73**.
+
+**17. A devolução aparece no livro com nome, e é filtrável.**
+Em **Movimentações**, o filtro de tipo passa a ter a opção **Devolução ao fornecedor**, e a linha
+mostra esse rótulo em vermelho (cor de saída — o material sai do galpão).
+⚠️ **Isto foi consertado no fechamento da etapa, não durante ela:** o tipo novo nasceu **fora** da
+lista de rótulos do livro, então a coluna Tipo mostrava o código cru `DEVOLUCAO_FORNECEDOR` e o
+filtro não tinha a opção — a devolução era **não-localizável** no livro. Ver **G73**.
+
 ### O que esta etapa NÃO cobre
 
 1. **Não emite documento fiscal de devolução.** Nota, CFOP e impostos ficam fora — o registro é de
@@ -11981,7 +12040,9 @@ Registrá-lo pelo formulário genérico é recusado; o caminho é o documento.
   de registrar execução, e ela só é segura por causa de **uma** regra) e a **B180**, onde registro que
   uma premissa que escrevi sobre o cartão **era falsa**; os furos **C64** (o documento recusado por
   série ou lote **tranca na fila** e nada o destrava — é a próxima etapa) e **C65**; as limitações
-  **(45)** em D; as verificações **(45)** em F; e as fragilidades **G69 a G72**.
+  **(45)** em D; as verificações **(45)** em F; e as fragilidades **G69 a G73** — a **G73** foi achada no próprio fechamento e é a que aparece na
+  tela: o livro de Movimentações mostra o código cru de quatorze tipos de movimento e não os oferece
+  no filtro. A devolução ao fornecedor era o décimo quinto, e foi consertada aqui.
   **As revisões acharam 33 itens, 6 CRITICAL, zero ruído** — 13 no plano, antes de codar, e 20 no
   código pronto, por três lentes independentes. **O CRITICAL do código era meu**, e é o que mais
   ensina: duas comparações de número quebrado sem a régua de tolerância que o próprio arquivo declara

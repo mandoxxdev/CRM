@@ -18,7 +18,7 @@
 > B180** (a B176 é a concessão ao COMPRAS e por que ela só é segura por causa da RN-06; a **B180**
 > registra que uma premissa minha sobre o cartão **era falsa**); os furos **C64** (documento preso na
 > fila por série/lote — dois revisores, e é a próxima etapa) e **C65**; as limitações **(45)** em D;
-> as verificações **(45)** em F; e as fragilidades **G69 a G72**.
+> as verificações **(45)** em F; e as fragilidades **G69 a G73**.
 > **O número que ensina:** 33 achados reais, zero ruído, e o único CRITICAL do código era **meu** —
 > duas comparações de `REAL` sem `EPSILON_DIVERGENCIA` num arquivo que **importa** o épsilon e cujo
 > docblock avisa contra exatamente isso. A mesma falha existia na **Etapa 44**, onde fazia a aceitação
