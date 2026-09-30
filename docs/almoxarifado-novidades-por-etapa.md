@@ -931,9 +931,9 @@ SELECT s.material_id, s.localizacao_id, s.quantidade, l.ativo
   (`ativo` vazio na consulta): só por contagem/ajuste pela integração — o endereço não aparece na lista da tela.
   **Não apague linha por SQL** — a soma das linhas é o físico do material.
 
-### B. Decisões de negócio — B1 a B228; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B233; as em aberto esperam você, as tomadas estão escritas com o descartado
 
-*(**Atualizado em 2026-09-30 de B225 para B228**, com as três da Etapa 57; antes, de B222 para B225, com as três da Etapa 56; antes, de B219 para B222, com as da Etapa 55.)*
+*(**Atualizado em 2026-09-30 de B228 para B233**, com as cinco da Etapa 58; antes, de B225 para B228, com as três da Etapa 57; antes, de B222 para B225, com as três da Etapa 56; antes, de B219 para B222, com as da Etapa 55.)*
 
 *(**Atualizado em 2026-09-30 de B205 para B219**, com as quatro da Etapa 51, as três da Etapa 52, as quatro da Etapa 53 e as três da Etapa 54.)*
 
@@ -3713,6 +3713,8 @@ estoque.** O saldo de lote é o **atribuído**; as saídas sem lote ficam numa l
 **Escolhido:** o relatório mostra a linha *"Sem lote atribuído"* e o físico, e diz isso na nota.
 **Descartado:** fazer a entrega de requisição e o ajuste baixarem de um lote (qual? o mais antigo?) —
 é mudança de regra do estoque, com efeito em tudo que usa lote, e merece etapa própria (ver **C71**).
+*(**Etapa 58 — como ficou:** a entrega de requisição **passou a poder** escolher o lote, junto com o endereço — ver **B231**.
+Sem escolha, continua não baixando de lote.)*
 
 **B205 (NOVA, da Etapa 50) — a tela de Lotes ganhou um pedido NOVO ao servidor, em vez de mudar o que
 já existia.** A lista de lotes de um material alimenta, além da tela de Lotes, os **quatro seletores de
@@ -3732,6 +3734,8 @@ mesma regra que já valia para o lote desde a Etapa 6 ("almoxarifado é área f�
 teste e já estava escrita. **Descartado:** exigir endereço em toda saída (a entrega de requisição não tem
 esse campo, e travaria o fluxo principal) e escolher o endereço de **menor** saldo (fragmentaria o
 endereçamento sem ganho). **Consequência a saber:** o endereço padrão esvazia primeiro.
+*(**Etapa 58 — como ficou:** "a entrega de requisição nunca diz" **deixou de ser verdade** — a entrega pode escolher de
+onde sai (**B229**, **B231**). A regra desta decisão continua valendo para a entrega que não escolhe.)*
 
 **B207 (NOVA, da Etapa 51) — a contagem por endereço ABSORVE o "sem localização atribuída" negativo, em
 vez de ser recusada.** Uma contagem por endereço que deixaria o material com saldo negativo (num material
@@ -3865,6 +3869,37 @@ como estava — com destino por item, a peça reprovada ficaria em X e a devolu�
 recusa do servidor aparece dentro da janela de processamento e as escolhas de destino ficam; a pessoa corrige e confirma
 de novo. **Descartado:** o aviso que some sozinho (o de antes) — com a lista de itens recusados, sumir antes de ler faz
 perder a informação.
+
+**B229 (NOVA, da Etapa 58) — a origem escolhida na entrega de requisição é ESTRITA.** Quem escolhe "Sai de A" na
+entrega recebe exatamente isso: se A não tem a quantidade (no lote escolhido, quando houver), a entrega é recusada
+com *"⟨material⟩: O saldo em ⟨A⟩ (⟨saldo⟩) não cobre a quantidade (⟨q⟩) — a saída tiraria de outros endereços"*.
+**Escolhido:** estrita, com a mesma conferência da origem lida na etiqueta (**B224**) — inclusive depois da baixa, contra
+duas entregas simultâneas. **Descartado:** tratar a escolha como **preferência** (tirar de A e completar com B): o
+histórico diria "saiu de A" para o que saiu de B, e o estorno devolveria a A o que nunca esteve lá.
+
+**B230 (NOVA, da Etapa 58) — o botão principal da entrega continua sendo de UM clique; escolher a origem é um botão
+ao lado.** **"Confirmar Entrega e Baixar Estoque"** entrega tudo o que foi separado, sem janela, como sempre.
+**Escolhido:** um botão novo, **"Entregar escolhendo de onde sai…"**, que abre a janela de entrega com **"Sai de"** por
+item. **Descartado:** fazer o botão principal abrir a janela sempre — um clique a mais para todo mundo, todo dia. **A
+consequência** é o **C80**: a entrega de um clique continua sem origem.
+
+**B231 (NOVA, da Etapa 58) — a entrega de requisição PODE escolher o lote.** **Muda a B204 e a B206**, que diziam
+"a entrega não escolhe lote" e "a entrega de requisição nunca diz de onde sai". **Escolhido:** o lote vem junto com o
+endereço escolhido em "Sai de" (cada opção é um endereço **e** um lote); sem escolha, a entrega faz o que sempre fez.
+O **C72** (endereço de material com lote que continua "ocupado") **só se resolve quando alguém escolhe** a origem com o
+lote. **Descartado:** escolher o lote sozinho (o mais antigo, o que vence primeiro) — é regra de estoque, não de tela.
+
+**B232 (NOVA, da Etapa 58) — excluir a requisição devolve cada saída ao lote e ao endereço de onde ela saiu.** Antes a
+exclusão devolvia tudo numa entrada só, sem lote e sem endereço — o que era simétrico enquanto a entrega também não
+escolhia nada. **Escolhido:** devolver **por saída**: mesmo lote, e para o endereço de origem se ele ainda aceita
+receber o material (ativo, não bloqueado, tipo permitido); senão, para o padrão. Tudo é conferido **antes** da
+primeira devolução — ou volta tudo, ou nada volta. Se o histórico não fecha com o entregue (requisição antiga), a
+exclusão faz o de antes. **Descartado:** devolver ao padrão sem lote (o lote perderia para sempre o que saiu).
+
+**B233 (NOVA, da Etapa 58) — a devolução citando uma entrega herda o lote dela.** **Escolhido:** a devolução
+(**Devoluções**, citando a saída) herda o lote da saída sempre que a saída tem lote — antes, só em material com
+controle de lote —, nos destinos **Estoque** e **Quarentena**. **Descartado:** herdar também no **Retrabalho**, que é
+uma saída: herdar um lote vencido ou com pouco saldo recusaria uma devolução que antes passava.
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -4860,6 +4895,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
     vazias** (Etapa 52) **tem de declarar** que, para material com lote, vazio pode aparecer ocupado.
     **Etapa 52:** a lista de localizações vazias **declara** isso na nota do relatório — o endereço de material
     com lote pode aparecer **ocupado** (fora da lista) depois de a entrega tirar o material.
+    **Etapa 58:** a entrega **pode** agora escolher de onde sai **com o lote** (**B231**) — escolhendo, o endereço
+    esvazia de verdade. A entrega de um clique (**C80**) continua sem escolher, e o furo continua para ela.
 
 73. **✅ RESOLVIDO NA ETAPA 54 (c757276 e 30707de) — NOVO, da Etapa 53 — o sistema ACEITA entrada em endereço INATIVO e em endereço que NÃO EXISTE.** Achado pela
     revisão do plano da Etapa 53, pelo sistema real. Cenário 1: remova um endereço vazio em Configurações →
@@ -4931,6 +4968,16 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
     outro.** Se o endereço onde a peça entrou já não tem a quantidade inteira (alguém tirou de lá antes), o sistema
     completa com outros endereços, mas o histórico registra só o de entrada como origem. E, em material que permite
     saldo negativo, a falta fica negativa **no endereço de entrada** (antes, no padrão ou em "sem endereço").
+
+80. **NOVO, da Etapa 58 — a entrega de UM clique continua sem origem.** O botão **"Confirmar Entrega e Baixar Estoque"**
+    — o jeito mais comum de entregar — não pergunta de onde sai: tira primeiro do endereço padrão, depois dos outros
+    (**B206**), e material com lote continua não baixando de lote (**C72**). Para escolher, use **"Entregar escolhendo
+    de onde sai…"** (**B230**). A próxima etapa quer que a **separação** registre a origem e a entrega de um clique a use.
+
+81. **NOVO, da Etapa 58 — a entrega continua podendo sair pela metade entre itens SEM origem.** Tudo o que foi
+    **escolhido** (endereço, lote, leitura) é conferido para todos os itens antes de qualquer baixa. Mas, entre itens
+    **sem** escolha, a entrega é item a item como sempre: se o segundo falhar (saldo que alguém tirou no meio), o
+    primeiro já saiu — e fica contado como entregue, então nada se perde.
 
 
 ### D. Limitações declaradas — são decisão, não esquecimento
@@ -5543,6 +5590,14 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   transfira à mão.
 - **(57) A aprovação de recebimento fora do fluxo de nota fiscal** aceita destino por item pela integração, mas a tela
   não tem janela para ela.
+- **(58) A janela de entrega não marca lote bloqueado, lote vencido nem endereço bloqueado** nas opções de "Sai de" —
+  escolher um deles é recusado pelo servidor, com a mensagem dele.
+- **(58) Série e divergência por item** (a spec da separação pede "localização lida, lote/série, quantidade,
+  divergência") ficam fora: a entrega registra endereço, lote e leitura.
+- **(58) A devolução para Retrabalho não herda o lote da entrega** (**B233**) — e essa escolha **não tem teste**: a
+  regra está no código, mas nenhum cenário automático quebra se ela mudar.
+- **(58) A separação não registra de onde vai sair** — a origem é escolhida na **entrega**. Registrar na separação é
+  a próxima etapa.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -5966,6 +6021,16 @@ navegador** prova:
 3. **A recusa fica na janela.** Escolha para um item um endereço que não aceita o tipo do material: a janela mostra
    *"Nao foi possivel dar entrada no estoque: ⟨MAT⟩: Localização ⟨X⟩ não aceita o tipo de material '⟨tipo⟩'"* e
    continua aberta com as escolhas.
+
+**(58) Nenhum clique foi dado nesta etapa.** Os testes provam a regra pelo servidor (14 cenários, inclusive duas
+entregas simultâneas do mesmo endereço e a exclusão com duas partes) e a janela com o servidor simulado (10 cenários).
+O que **só o navegador** prova:
+
+1. **"Sai de" mostra onde o material está.** Numa requisição em separação, clique **"Entregar escolhendo de onde
+   sai…"**: cada item tem **Sai de** com **"Qualquer endereço (automático)"** e os endereços com saldo, no formato
+   *"⟨endereço⟩ — lote ⟨lote⟩ (⟨quantidade⟩)"*.
+2. **A escolha vale.** Escolha um endereço, confirme a entrega e abra o **Mapa**: o saldo saiu daquele endereço.
+3. **O botão principal continua de um clique.** **"Confirmar Entrega e Baixar Estoque"** entrega sem abrir janela.
 
 ### G. Fragilidades estruturais que continuam de pé
 
@@ -14093,17 +14158,97 @@ o endereço do outro item — agora o endereço de entrada fica gravado no próp
 bloqueado depois, e validações frouxas no pedido. Tudo corrigido e com teste.
 
 
+## Etapa 58 — A entrega de requisição diz de onde cada item sai (2026-09-30)
+
+A entrega de requisição é a saída mais frequente do galpão — e até aqui ela **não dizia de onde saía**: o sistema
+tirava primeiro do endereço padrão, depois dos outros, e material com lote não baixava de lote nenhum. Quem vai à
+prateleira sabe de onde tirou. Agora, na janela de entrega, cada item tem **"Sai de"**: escolha o endereço (e o lote)
+de onde o material saiu, e, se quiser, leia a etiqueta do endereço para confirmar. A escolha é **exata**: se ali não
+há o bastante, a entrega é recusada em vez de completar com outro endereço. E excluir uma requisição entregue devolve
+cada peça ao lote e ao endereço de onde ela saiu.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A entrega não dizia de onde saía (padrão primeiro, depois os outros) | **"Sai de"** por item, com endereço e lote; **"Qualquer endereço (automático)"** é o de antes |
+| Material com lote não baixava de lote nenhum na entrega | A entrega **pode** escolher o lote (**B231**) |
+| — | A origem escolhida é **exata**: não completa com outro endereço (**B229**) |
+| — | **"Confirmar endereço lido"** na entrega, como na tela de Movimentações |
+| Só havia o botão de um clique | Ao lado dele, **"Entregar escolhendo de onde sai…"** (**B230**); o de um clique continua igual |
+| Excluir a requisição devolvia tudo ao padrão, sem lote | Devolve cada saída ao **lote** e ao **endereço** de onde saiu (**B232**) |
+| A devolução citando a entrega herdava o lote só de material com controle de lote | Herda sempre que a entrega tinha lote, para Estoque e Quarentena (**B233**) |
+
+### As regras, com o cenário exato
+
+**1. Escolher de onde sai.** Abra uma requisição em separação (ou parcialmente atendida) e clique **"Entregar
+escolhendo de onde sai…"** (ou **Completar Entrega**). A janela **Confirmar Entrega** mostra, por item, **Sai de** com
+**"Qualquer endereço (automático)"** e os endereços onde o material está, como *"A-01 (10)"* ou *"B-02 — lote L-7 (4)"*.
+Escolha um e confirme em **✅ Confirmar Entrega**: o saldo sai daquele endereço (e daquele lote).
+
+**2. A escolha é exata.** Com o material em **A** (3) e **B** (50), entregue 5 escolhendo **A**: a entrega é recusada
+com *"⟨material⟩: O saldo em ⟨A⟩ (3) não cobre a quantidade (5) — a saída tiraria de outros endereços"*, e **nada** sai.
+Entregue 3 de A, ou escolha outro endereço.
+
+**3. Nada sai pela metade quando há escolha.** Se um item tem escolha inválida (endereço bloqueado, lote bloqueado, lote
+de outro material, leitura que não confere), a entrega **inteira** é recusada antes de qualquer baixa. Mensagens,
+sempre com o nome do material na frente:
+*"⟨material⟩: Localização ⟨X⟩ está bloqueada"*,
+*"⟨material⟩: Lote ⟨L⟩ esta bloqueado e nao pode ser utilizado"*,
+*"⟨material⟩: Lote não pertence a este material"*,
+*"⟨material⟩: Endereço lido (⟨lido⟩) não confere com a localização de origem (⟨A⟩) — se a etiqueta é antiga, reimprima"*.
+
+**4. Confirmar lendo a etiqueta.** Com a origem escolhida, o campo **"Confirmar endereço lido"** aceita a leitura da
+etiqueta do endereço (ou o código digitado). Sem origem, o campo fica desabilitado: *"Para confirmar a leitura, escolha
+antes de onde o item sai."*
+
+**5. Dois itens do mesmo material.** Dois itens de 6 do mesmo material saindo do mesmo endereço, que tem 10: a entrega
+é recusada — o endereço precisa cobrir a **soma**.
+
+**6. Excluir a requisição devolve para onde saiu.** Entregue 4 do lote **L** saindo de **A** e exclua a requisição: os
+4 voltam para **A**, no lote **L**. Se **A** não aceita mais o material (desativado, bloqueado ou com o tipo
+restrito), voltam para o padrão. Se o padrão também não pode receber, a exclusão é recusada **antes** de devolver
+qualquer coisa.
+
+**7. O botão de um clique continua igual.** **"Confirmar Entrega e Baixar Estoque"** entrega tudo o que foi separado,
+sem janela e sem escolher origem (**C80**).
+
+### O que esta etapa NÃO cobre
+
+1. A **entrega de um clique** continua sem origem — **C80**.
+2. A **separação** não registra de onde vai sair — **D (58)**; é a próxima etapa.
+3. A janela não marca lote bloqueado/vencido nem endereço bloqueado nas opções — **D (58)**.
+4. Série e divergência por item ficam fora — **D (58)**.
+5. Entre itens **sem** escolha, a entrega ainda pode sair pela metade — **C81**.
+
+### O que a revisão encontrou
+
+A revisão do **plano** achou três problemas graves antes do código: a escolha seria só uma **preferência** (o sistema
+completaria com outro endereço e o histórico diria o endereço escolhido); cada item vira até duas baixas e uma recusa
+na segunda deixaria a primeira feita; e **excluir a requisição** devolveria ao padrão sem lote, fazendo o lote perder o
+que saiu. Achou também que a busca "onde o material está" **já existia** — a etapa usou a que havia. A revisão do
+**código** achou a exclusão podendo **travar** (a origem já não aceitava o material) e **devolver em dobro** numa nova
+tentativa, o status do lote fora da checagem prévia, e dois itens do mesmo material somando errado. Tudo corrigido e
+com teste — menos a herança de lote no Retrabalho, declarada sem teste.
+
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 58 entregue (2026-09-30):** **a entrega de requisição diz de onde cada item sai.** Na janela de entrega, cada
+  item tem **"Sai de"** (endereço e lote) e **"Confirmar endereço lido"**; a escolha é exata; nada sai pela metade quando
+  há escolha; excluir a requisição devolve ao lote e ao endereço de onde saiu. O botão de um clique continua igual, e
+  ao lado dele há **"Entregar escolhendo de onde sai…"**. **O que é seu:** as decisões **B229 a B233** (a **B231** muda
+  a **B204**); os furos **C80** e **C81**; as limitações **(58)** em D e as verificações **(58)** em F. **Próxima: Etapa
+  59 — a separação escolhe de onde sai, e a entrega de um clique usa; ver o plano da Etapa 58.**
 
 - **Etapa 57 entregue (2026-09-30):** **o recebimento deixa escolher o endereço de cada item.** **Processar Nota** abre
   uma janela com os itens que vão entrar e um destino por item (**"Padrão do material"** continua sendo o padrão); um
   endereço que não pode receber recusa a nota inteira com a lista; e a devolução ao fornecedor sai do endereço onde a
   peça reprovada entrou. Fecha o **D (53)** *"a tela de recebimento não tem campo de endereço"*. **O que é seu:** as
   decisões **B226 a B228**; os furos **C78** e **C79**; as limitações **(57)** em D e as verificações **(57)** em F.
-  **Próxima: Etapa 58 — a separação registra de onde cada item sai (endereço e lote) — feature 05; ver o plano da
-  Etapa 57.**
+  **Próxima (feita): Etapa 58** — a origem foi paga **na entrega**, não na separação (ver acima).
 
 - **Etapa 56 entregue (2026-09-30):** **o endereço ganha etiqueta, e a movimentação pode conferir a etiqueta lida.**
   Etiqueta com QR para endereço (Configurações → Localizações); ler abre o endereço no Mapa, que avisa quando a etiqueta

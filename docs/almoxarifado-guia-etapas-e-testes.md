@@ -1,18 +1,25 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-09-30 (Etapa 57) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-09-30 (Etapa 58) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 57) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 58) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-09-30 (Etapa 57 ENTREGUE · Etapa 58 começando)
+> ## Onde o desenvolvimento está — 2026-09-30 (Etapa 58 ENTREGUE · Etapa 59 começando)
 >
-> **O desenvolvimento parou aqui: Etapa 57 fechada, Etapa 58 começando — 2026-09-30.** A **Etapa 57 (o recebimento
+> **O desenvolvimento parou aqui: Etapa 58 fechada, Etapa 59 começando — 2026-09-30.** A **Etapa 58 (a entrega de
+> requisição diz de onde cada item sai)**: na janela de entrega, cada item tem **"Sai de"** (endereço e lote) e
+> **"Confirmar endereço lido"**; a escolha é exata (recusa em vez de completar com outro endereço); nada sai pela metade
+> quando há escolha; excluir a requisição devolve ao lote e ao endereço de onde saiu. O botão de um clique continua
+> igual, e ao lado dele há **"Entregar escolhendo de onde sai…"**. **Próxima etapa, já começando: 59 — a separação
+> escolhe de onde sai, e a entrega de um clique usa** (feature 05; ver *"Próxima tarefa detalhada"* no plano da Etapa 58).
+>
+> **Etapas 1 a 20 e 22 a 58 completas.**
+>
+> **Etapa 57, 2026-09-30.** A **Etapa 57 (o recebimento
 > deixa escolher o endereço de cada item)**: **Processar Nota** abre uma janela com um destino por item ("Padrão do
 > material" continua o padrão); um endereço que não pode receber recusa a nota inteira com a lista; e a devolução ao
-> fornecedor sai do endereço onde a peça reprovada entrou. **Próxima etapa, já começando: 58 — a separação registra de
-> onde cada item sai (endereço e lote)** (feature 05; ver *"Próxima tarefa detalhada"* no plano da Etapa 57).
->
-> **Etapas 1 a 20 e 22 a 57 completas.**
+> fornecedor sai do endereço onde a peça reprovada entrou. **Próxima etapa: 58** (feita — acima; a origem foi paga na
+> entrega, não na separação).
 >
 > **Etapa 56, 2026-09-30.** A **Etapa 56 (o endereço ganha
 > etiqueta, e a movimentação pode conferir a etiqueta lida)**: etiqueta com QR para endereço, que o Scanner abre no
@@ -4965,6 +4972,53 @@ que ele não tinha como repetir com sucesso garantido.
 - **Número de série de material** — continua sendo **digitado pelo operador** e de propósito não
   passa por este gerador. Retentar com outro número gravaria algo que ninguém digitou.
 - **Números de outros módulos do CRM** — a varredura foi do almoxarifado.
+
+---
+
+## Etapa 58 — A entrega de requisição diz de onde cada item sai (ENTREGUE — 2026-09-30)
+
+**O que mudou, em uma frase:** na janela de entrega de requisição, cada item pode dizer **de onde sai** (endereço e
+lote) e, se quiser, confirmar lendo a etiqueta do endereço — e a escolha é exata.
+
+**O problema que ela resolve.** A entrega de requisição, a saída mais comum do galpão, não dizia de onde saía: o
+sistema tirava do endereço padrão primeiro e, em material com lote, não baixava de lote nenhum. Quem vai à prateleira
+sabe de onde tirou; agora o sistema também sabe.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Entrega sem origem (padrão primeiro) | **"Sai de"** por item; **"Qualquer endereço (automático)"** é o de antes |
+| Material com lote não baixava de lote | Escolher a origem escolhe também o lote |
+| — | Origem exata: se não cobre, a entrega é recusada, nada sai |
+| — | **"Confirmar endereço lido"** por item |
+| Só o botão de um clique | Ao lado, **"Entregar escolhendo de onde sai…"**; o de um clique continua igual |
+| Excluir a requisição devolvia ao padrão, sem lote | Devolve ao lote e ao endereço de cada saída |
+
+### Roteiro de teste manual (≈6 min)
+
+**Preparação.** Dois endereços ativos, **A** e **B**. Um material com **3** em **A** e **50** em **B** (Movimentações →
+Entrada). Uma requisição desse material, com **5** separados (Requisições → separar).
+
+1. **As opções.** Abra a requisição e clique **"Entregar escolhendo de onde sai…"**. A janela **Confirmar Entrega**
+   mostra, no item, **Sai de** com **"Qualquer endereço (automático)"**, *"⟨A⟩ (3)"* e *"⟨B⟩ (50)"*.
+2. **A escolha é exata.** Escolha **A**, deixe a quantidade em 5 e clique **✅ Confirmar Entrega**: aparece
+   *"⟨material⟩: O saldo em ⟨A⟩ (3) não cobre a quantidade (5) — a saída tiraria de outros endereços"*. Nada saiu.
+3. **Entregar de B.** Troque para **B** e confirme: no **Mapa**, **B** ficou com 45 e **A** continua com 3.
+4. **Leitura.** Numa nova entrega, com **A** escolhido, leia a etiqueta de **B** em **Confirmar endereço lido**:
+   *"⟨material⟩: Endereço lido (⟨B⟩) não confere com a localização de origem (⟨A⟩) — se a etiqueta é antiga,
+   reimprima"*. Sem origem escolhida, o campo fica desabilitado.
+5. **Excluir devolve para onde saiu.** Exclua a requisição (administrador): os 5 voltam para **B**.
+6. **O botão de um clique.** Em outra requisição separada, **"Confirmar Entrega e Baixar Estoque"** entrega sem abrir
+   janela — como sempre.
+
+### O que esta etapa NÃO cobre
+
+- A entrega de **um clique** continua sem origem (**C80**).
+- A **separação** não registra de onde vai sair — é a próxima etapa (**D (58)**).
+- A janela não marca lote bloqueado/vencido nem endereço bloqueado; escolher um deles é recusado pelo servidor
+  (**D (58)**).
+- Série e divergência por item (**D (58)**); entre itens **sem** escolha, a entrega ainda pode sair pela metade (**C81**).
 
 ---
 

@@ -1,7 +1,7 @@
 # Etapa 58 — a entrega de requisição diz de onde cada item sai (endereço, lote, leitura)
 
-> Status: **Fase 0-1** (design + plano). Feature 05 (Separação e picking), item "registro por item
-> (localização/lote)".
+> Status: **FECHADA (2026-09-30)** — `cec2b56` (T1), `d18019f` (T2), fix-round e9bca72.
+> Feature 05 (Separação e picking), item "registro por item (localização/lote)" — pago **na entrega**, não na separação.
 
 ## Fase 0 — medido (2026-09-30)
 
@@ -38,13 +38,20 @@
 
 ## Tasks
 
-- **T1 (tronco)** — serviço + rota RN-04. Testes `server/tests/api/entregaOrigemPorItem.api.test.js`:
+- [x] **T1 (tronco)** — `cec2b56`. **Divergência:** a RN-04 (rota nova) **caiu** na Fase 2 — `GET /estoque/:id/saldos`
+  já existia; e a T1 ganhou os três críticos da Fase 2 (origem estrita, validação de todos os itens antes da 1ª baixa,
+  estorno da exclusão por saída) e a herança de lote na devolução. Plano original da T1: Testes `server/tests/api/entregaOrigemPorItem.api.test.js`:
   sai do endereço informado (A:10, B:50, entrega 5 de A → A 5, B 50); com lote (baixa do lote); com
   reserva (as duas baixas usam a mesma origem); endereço bloqueado/inexistente recusado com prefixo;
   leitura confere/não confere; origem que não cobre com leitura → recusa B224; ausente = hoje;
   RN-04 com e sem lote. Integração: aprovar → separar → entregar → saldo por endereço.
-- **T2 (galho, tela)** — RN-05 com testes.
-- **T3** — verificação, Fase 5, fechamento.
+- [x] **T2 (galho, tela)** — `d18019f`. **Divergências:** (1) o botão principal **"Confirmar Entrega e Baixar Estoque"**
+  é o caminho DIRETO (um clique, sem modal) e continua sem origem — ao lado dele entrou **"Entregar escolhendo de onde
+  sai…"**, que abre o modal com "Sai de" (B230; descartado: o principal abrir o modal sempre, um clique a mais para
+  todo mundo). (2) O campo "Confirmar endereço lido" saiu de `MovimentacoesAlmoxarifado.js` para
+  `CampoCodigoLido.js` — as duas telas usam o mesmo. (3) `lote_id` não é enviado quando a linha não tem lote (em vez
+  de `null`). Testes: 10 cenários, 11 sabotagens + 1 (o botão secundário) vermelhas.
+- [x] **T3** — Fase 5 + fix-round e9bca72 + fechamento.
 
 ## Fase 2 — revisão do plano: 3 críticos, 4 importantes, 3 menores → o que mudou
 
@@ -79,3 +86,49 @@
   `localizacao_origem_id` e `lote_id` (nulo quando a linha não tem lote). "Confirmar endereço lido"
   opcional (extração `extrairCodigoLido` da Etapa 56), só com origem escolhida. Manda os campos só
   quando escolhidos. Erro do servidor como hoje.
+
+## Fase 5 — revisão adversarial do código (um revisor): 0 CRITICAL, 2 IMPORTANT, 3 MINOR corrigidos; 4 declarados
+
+| # | Achado | Cenário | Correção |
+|---|---|---|---|
+| I-1 | A exclusão podia **travar** e **creditar em dobro** | Saída de um endereço que hoje não aceita o tipo do material como destino (saldo antigo ali): a ENTRADA de estorno voltava para lá e o motor recusava; com duas partes (origem, lote), a 1ª já tinha sido creditada quando a 2ª falhava — requisição ativa, e a nova tentativa creditava a 1ª de novo | A origem só vale como destino do estorno se ainda aceita o material (ativa, não bloqueada, tipo permitido); senão a padrão. **Todas** as partes são validadas antes da 1ª ENTRADA. Agrupado por **material** |
+| I-2 | O status do lote não estava na pré-checagem | Item 1 sem origem, item 2 com lote BLOQUEADO: o item 1 era baixado e o 2 recusado na baixa | Status e vencimento do lote na pré-checagem, com as literais do motor |
+| M-1 | Dois itens do mesmo material | A:10, dois itens de 6 saindo de A: cada um cabia sozinho, o 2º era recusado depois de o 1º sair; e a exclusão caía sempre no estorno antigo (as saídas somavam os dois itens) | A pré-checagem soma por material/origem/lote; a exclusão agrupa por material |
+| M-2 | Devolução para RETRABALHO herdando lote | RETRABALHO é uma saída: herdar um lote vencido ou curto recusaria o que antes passava | Herda o lote da saída só para ESTOQUE/QUARENTENA (ou material com `controle_lote`). **Sem teste** — ver D (58) |
+| M-3 | Formatação `formatMoeda =(v)` | — | sem efeito; não mexido |
+
+Declarados, não corrigidos: a tela não marca lote bloqueado/vencido nem endereço bloqueado nas opções (a recusa vem do
+servidor, com a literal); a fixture da tela não tem dois lotes no mesmo endereço; o teste "Ausente" é de regressão (não
+prova a feature); a herança de lote no RETRABALHO não tem teste.
+
+Testes finais: `server/tests/api/entregaOrigemPorItem.api.test.js` **14/14** (7 sabotagens da T1 + 5 do fix-round, todas
+vermelhas no cenário certo); `client/.../RequisicoesEntregaOrigem.test.js` **10/10**.
+
+## Retro — os 4 números
+
+1. **Rodadas de correção até verde:** 1 fix-round.
+2. **Achados:** Fase 2 — 10 (3 CRITICAL) + a Fase 0 **errada** (a rota "onde o material está" já existia); Fase 5 —
+   2 IMPORTANT + 3 MINOR reais, 4 declarados, **0 ruído**.
+3. **Paralelismo:** 1 galho (a tela) depois do tronco commitado, sem retrabalho. A divergência do botão principal veio
+   do executor da tela (ele notou que o modal não abria no caminho mais comum) — virou um botão secundário.
+4. **Defeito que escapou da Etapa 57:** nenhum conhecido.
+
+## Próxima tarefa detalhada — Etapa 59: a separação escolhe de onde sai, e a entrega direta usa (feature 05)
+
+**Por que esta.** A 58 pagou o "registro por item (localização/lote)" **na entrega** — mas só no modal. A entrega mais
+comum é o botão **"Confirmar Entrega e Baixar Estoque"**, de um clique, que **continua sem origem** (drena a padrão
+primeiro — **C80**). Quem vai à prateleira é quem **separa**: é ali que "tirei de A, lote L" é conhecido. Se a
+separação registrar a origem planejada por item, a entrega direta pode usá-la sem mudar o gesto de ninguém.
+
+**Fase 0 da 59 — medir antes de prometer:**
+1. A rodada de separação (`separacoes_requisicao_almoxarifado`, `itens_json`, Etapa 28): o formato do JSON, quem lê
+   (`listarSeparacoes`, a tela da 2ª conferência), e se cabe `{ localizacao_origem_id, lote_id }` por item sem quebrar
+   leitor nenhum.
+2. **Várias rodadas** para o mesmo item (separou 3 de A, depois 2 de B): a entrega direta tem de sair em **duas
+   baixas** com origens diferentes — a entrega hoje monta **uma** entrada por item (`itens_atendidos`). Medir se o
+   serviço aceita o mesmo `item_id` duas vezes (hoje: `find` pega só a primeira).
+3. A **2ª conferência** (quem separou não confere): a origem planejada entra no que o conferente vê?
+4. O que acontece se o saldo da origem planejada **mudou** entre separar e entregar — a origem é estrita (recusa).
+   Decidir (letra B): a entrega direta recusa, ou cai no automático com aviso.
+5. Contratos que **não** se reabrem: a origem estrita da 58 (`origemEstrita`), a pré-checagem de todos os itens, a
+   confirmação por leitura, o estorno da exclusão por saída.

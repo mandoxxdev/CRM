@@ -261,7 +261,7 @@ O bloco **Controles** tem sete opções. Ligar uma delas muda o comportamento do
 
 Há ainda uma marcação fora deste bloco que tem efeito operacional: **Material crítico**, no bloco Classificação. É ela — e não a opção "Requer inspeção" — que faz a quantidade recebida entrar **retida em inspeção** no recebimento, em vez de entrar direto como disponível (ver 14.6). O material fica fisicamente no galpão, contado no saldo total, mas fora do disponível até que a inspeção decida.
 
-Onde a exigência de lote e de série **não** se aplica, e isso é deliberado: entrega de requisição, estorno de requisição excluída, inspeção, ajuste puro de inventário e as movimentações de remessa a terceiros. Essas telas não têm campo de lote nem de série, e exigi-los ali tornaria o material impossível de entregar. O ajuste é isento por um motivo próprio: é por ele que se regulariza estoque antigo, que não tem lote nenhum. O preço é que a quantidade movimentada por esses caminhos fica na linha "sem lote" — o saldo total do material continua correto.
+Onde a exigência de lote e de série **não** se aplica, e isso é deliberado: entrega de requisição, estorno de requisição excluída, inspeção, ajuste puro de inventário e as movimentações de remessa a terceiros. Exigi-los ali tornaria o material impossível de entregar. Na entrega de requisição o lote é **opcional**: escolhendo em **"Sai de"** (7.5) o endereço e o lote de onde o item sai, a baixa é daquele lote; sem escolher, fica na linha "sem lote". O ajuste é isento por um motivo próprio: é por ele que se regulariza estoque antigo, que não tem lote nenhum. O preço é que a quantidade movimentada por esses caminhos fica na linha "sem lote" — o saldo total do material continua correto.
 
 ### 2.8 Proprietário — material que é do cliente
 
@@ -1308,6 +1308,15 @@ Regras:
 - Se nada foi informado → *"Informe ao menos uma quantidade maior que zero para entregar"*.
 - Se todos os itens foram atendidos por completo, o status vira **Entregue**; senão, **Parcialmente Atendida**.
 
+**De onde sai — "Sai de".** A janela de entrega (aberta por **Entregar escolhendo de onde sai…** ou por **Completar Entrega**) mostra, em cada item, o campo **Sai de**. A primeira opção, **"Qualquer endereço (automático)"**, é a regra geral da saída: o sistema tira primeiro do endereço padrão do material e depois dos endereços com mais saldo. As outras opções são os endereços onde o material está, com o lote quando houver, no formato *"A-01 (10)"* ou *"B-02 — lote L-7 (4)"* — só endereços com saldo positivo aparecem. Escolher uma opção diz ao sistema exatamente de qual endereço, e de qual lote, o item sai. Regras:
+
+- **A escolha é exata.** O endereço escolhido (no lote escolhido) tem de cobrir a quantidade inteira do item; o sistema **não completa** com outro endereço. Senão: *"Chapa 3mm: O saldo em A-01 (3) não cobre a quantidade (5) — a saída tiraria de outros endereços"*. A mesma conferência é refeita depois da baixa: se outra entrega levou o saldo daquele endereço ao mesmo tempo, a segunda é recusada com *"Chapa 3mm: O saldo em A-01 mudou durante a saída e não cobre mais a quantidade — confira e tente de novo"*, e nada dela fica gravado.
+- **Tudo o que foi escolhido é conferido antes de qualquer baixa**, em todos os itens: se um item tem escolha inválida, **nenhum** item é entregue. Recusas, sempre com o nome do material na frente: *"Chapa 3mm: Localização A-01 está bloqueada"*, *"Chapa 3mm: Localização de origem não encontrada"*, *"Chapa 3mm: Lote não pertence a este material"*, *"Chapa 3mm: Lote L-7 esta bloqueado e nao pode ser utilizado"* (e a de lote vencido sem liberação, a mesma da movimentação — 4.3).
+- **Dois itens do mesmo material** saindo do mesmo endereço e lote somam: o endereço precisa cobrir a soma.
+- **Confirmar endereço lido.** Com uma origem escolhida, o campo **"Confirmar endereço lido"** aceita a leitura da etiqueta do endereço (ou o código digitado) e confere com a origem escolhida — a mesma regra da movimentação (6.2b): *"Chapa 3mm: Endereço lido (B-02) não confere com a localização de origem (A-01) — se a etiqueta é antiga, reimprima"*. Sem origem escolhida o campo fica desabilitado, com a dica *"Para confirmar a leitura, escolha antes de onde o item sai."*
+- **O botão "Confirmar Entrega e Baixar Estoque"** entrega tudo o que foi separado em um clique, **sem** escolher origem — vale a regra automática.
+- Itens **sem** escolha continuam sendo entregues um a um: se um deles for recusado no meio, os anteriores já saíram e ficam contados como entregues.
+
 **O disponível usado aqui soma de volta a reserva da própria requisição** — o que a aprovação reservou é daquela requisição e não pode barrá-la (9.4).
 
 **Assinatura do recebedor.** Logo depois de uma entrega bem-sucedida, o sistema abre **✍ Colher assinatura do recebedor**: o nome de quem retirou o material e um quadro para assinar na tela (funciona com o dedo e com o mouse; **Confirmar assinatura** só habilita depois de existir traço, e **Limpar** recomeça). As regras:
@@ -1323,7 +1332,7 @@ Regras:
 - **Confirmar recebimento** é o testemunho do **próprio solicitante** de que o material chegou às mãos dele. **Não há atalho de administrador**: *"Apenas o solicitante pode confirmar o recebimento"*. Só vale nos status Entregue, Parcialmente Atendida e Encerrada (*"Confirmação de recebimento não permitida no status EM_SEPARACAO"*), e só uma vez (*"Recebimento já confirmado"*).
 - **Encerrar** fecha a requisição de vez: cancela o saldo pendente e nenhuma entrega futura é aceita. Parte de Entregue ou Parcialmente Atendida, e exige o perfil de aprovação — *"Sem permissão para encerrar requisições"*. O motivo é opcional — contraste deliberado com a rejeição, onde ele é obrigatório.
 - **Cancelar** é do solicitante (ou de administrador do sistema): sem permissão, *"Sem permissão"*; em status que não aceita, *"Não é possível cancelar neste status"*. Cancelar **libera as reservas** daquela requisição.
-- **Excluir** uma requisição **estorna as entregas já feitas** (devolve ao estoque, com linha no livro) e **libera as reservas** que ela ainda segurava. É restrito a administradores do almoxarifado ou super administrador: *"Apenas administradores do Almoxarifado ou Super Administrador podem excluir requisições"*.
+- **Excluir** uma requisição **estorna as entregas já feitas** (devolve ao estoque, com linha no livro) e **libera as reservas** que ela ainda segurava. A devolução é **por saída**: cada quantidade volta ao **lote** de onde saiu e ao **endereço** de onde saiu, se esse endereço ainda pode receber o material (ativo, não bloqueado, com o tipo do material permitido); senão, vai para o endereço padrão. Tudo é conferido antes da primeira devolução — se o padrão também não puder receber, a exclusão é recusada com a mensagem do endereço, e nada volta. Numa requisição antiga cujo histórico de saídas não fecha com o total entregue, o estorno é feito numa entrada só, no endereço padrão e sem lote. É restrito a administradores do almoxarifado ou super administrador: *"Apenas administradores do Almoxarifado ou Super Administrador podem excluir requisições"*.
 
 ### 7.7 Anexos da requisição
 
@@ -1604,7 +1613,7 @@ Os avisos por situação são estes:
 | Aguard. Estoque | *"Sem saldo disponível no momento — inicie a separação assim que o estoque for reposto."* |
 | Aguard. Compra | *"Sem saldo disponível — há uma solicitação de compra em andamento para os materiais desta requisição."* |
 
-Os botões, na ordem do fluxo: **Iniciar Separação** (que vira **Ajustar Separação** quando a separação já começou), **Conferir separação**, **Liberar para Retirada** — que só aparece se algum item tem quantidade separada — e **Confirmar Entrega e Baixar Estoque**. Sem nada separado, no lugar do botão de entrega a tela informa: *"Nenhuma quantidade separada disponível para entrega no momento."*
+Os botões, na ordem do fluxo: **Iniciar Separação** (que vira **Ajustar Separação** quando a separação já começou), **Conferir separação**, **Liberar para Retirada** — que só aparece se algum item tem quantidade separada — e **Confirmar Entrega e Baixar Estoque**, que entrega em um clique; ao lado dele, **Entregar escolhendo de onde sai…** abre a janela de entrega com o campo **Sai de** por item (7.5). Sem nada separado, no lugar do botão de entrega a tela informa: *"Nenhuma quantidade separada disponível para entrega no momento."*
 
 Abaixo dos itens, o bloco **Separação (N)** lista cada rodada de separação com **quem separou, quando e quantos itens tocou**; e, quando a caixa já foi conferida, a linha **Conferida por … em …**.
 
@@ -1762,7 +1771,7 @@ Em material com "Controle por lote":
 - **Com entrega citada**, o lote é **herdado da entrega** — o campo aparece em modo leitura, com o rótulo "Lote (herdado da entrega)", sem seletor. Não há o que escolher: o material voltou do lote de onde saiu.
 - **Sem entrega citada** (avulsa), o lote é escolhido no seletor. Sem escolher, a tela barra: *"Material com controle por lote: informe de qual lote é a devolução"*.
 - Um lote informado à mão **ganha** do herdado.
-- Em material **sem** controle de lote, nada é herdado — herdar criaria linhas de saldo quebradas por lote que ninguém pediu.
+- Em material **sem** controle de lote, o lote é herdado **só** quando a entrega citada saiu de um lote (escolhido em **"Sai de"**, 7.5) e a devolução vai para **Estoque** ou **Quarentena** — o material volta ao lote de onde saiu. Na devolução para **Retrabalho**, que é uma saída, nada é herdado. Entrega sem lote não tem o que herdar.
 
 O **projeto e a OS** seguem a mesma lógica: com entrega citada, a devolução **herda o projeto
 e a OS da saída original** — é o que faz o relatório de custo por projeto (seção 21d) abater a

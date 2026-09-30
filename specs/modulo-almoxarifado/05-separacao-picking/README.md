@@ -1,7 +1,7 @@
 # 05 — Separação e Picking
 
-> **Status:** 🟡 **com dono e segunda conferência** — **Etapa 28 (2026-08-29, `9cef003..62cb2b1`)**: cada rodada de separação é registrada com autor (`separacoes_requisicao_almoxarifado`, append-only), a separação e a liberação auditam, e a **segunda conferência (conferente ≠ separador, em QUALQUER rodada)** existe com a barreira repetida no `WHERE` do claim; com material crítico ainda na caixa ela é **obrigatória** para liberar e para entregar. **O que falta para 🟢:** lista de separação como entidade, agrupamento/rota de picking, registro por item com localização lida e lote retirado, substituição de lote, divergência com motivo, transferência para localização de kit (exige estender `TIPOS_LOCALIZACAO`), kits, e a tela de fila. Antes: 🟡 básico — a separação simples por item existe e foi endurecida pelas Etapas 3/4/6 (permissão `separar_emitir`, liberação para retirada, parcialidade acumulada); lista de separação como entidade, conferência dupla, rota de picking e kits continuam não existindo · **Spec original:** seção 12
-> **Última atualização:** 2026-08-29 (**Etapa 28 fechada, `9cef003..62cb2b1`** — ver o bloco "Etapa 28" no fim: o "responsável pela separação" e a "segunda conferência" estão pagos; a **régua de obrigatoriedade** é decisão minha (letra **B62**), e a revisão adversarial achou que a **escrita parcial** do laço de separação — anterior à etapa — deixava item gravado sem rodada, furando a barreira; virou tudo-ou-nada em `5a3d593`). Antes: 2026-08-29 (**Fase 0 da Etapa 28, medida no código**: esta spec afirmava
+> **Status:** 🟡 **com dono, segunda conferência e origem por item na ENTREGA** — **Etapa 58 (2026-09-30, `cec2b56`, `d18019f` + fix-round e9bca72)**: a entrega de requisição escolhe, por item, o endereço e o lote de onde sai ("Sai de"), com confirmação por leitura opcional; a origem escolhida é estrita; a exclusão da requisição devolve ao lote e ao endereço de cada saída. Antes: **Etapa 28 (2026-08-29, `9cef003..62cb2b1`)**: cada rodada de separação é registrada com autor (`separacoes_requisicao_almoxarifado`, append-only), a separação e a liberação auditam, e a **segunda conferência (conferente ≠ separador, em QUALQUER rodada)** existe com a barreira repetida no `WHERE` do claim; com material crítico ainda na caixa ela é **obrigatória** para liberar e para entregar. **O que falta para 🟢:** lista de separação como entidade, agrupamento/rota de picking, registro por item com localização lida e lote retirado **na SEPARAÇÃO** (na entrega está pago — Etapa 58; a entrega de um clique ainda não usa, **C80**), série e divergência por item, substituição de lote, divergência com motivo, transferência para localização de kit (exige estender `TIPOS_LOCALIZACAO`), kits, e a tela de fila. Antes: 🟡 básico — a separação simples por item existe e foi endurecida pelas Etapas 3/4/6 (permissão `separar_emitir`, liberação para retirada, parcialidade acumulada); lista de separação como entidade, conferência dupla, rota de picking e kits continuam não existindo · **Spec original:** seção 12
+> **Última atualização:** 2026-09-30 (**Etapa 58 fechada** — a entrega de requisição diz de onde cada item sai; ver o bloco "Etapa 58" no fim). Antes: 2026-08-29 (**Etapa 28 fechada, `9cef003..62cb2b1`** — ver o bloco "Etapa 28" no fim: o "responsável pela separação" e a "segunda conferência" estão pagos; a **régua de obrigatoriedade** é decisão minha (letra **B62**), e a revisão adversarial achou que a **escrita parcial** do laço de separação — anterior à etapa — deixava item gravado sem rodada, furando a barreira; virou tudo-ou-nada em `5a3d593`). Antes: 2026-08-29 (**Fase 0 da Etapa 28, medida no código**: esta spec afirmava
 > que `TIPOS_LOCALIZACAO` já contemplava "Reservado"/"Kit"/"Aguardando retirada" — **ESTAVA
 > ERRADO**, ver a correção abaixo; e a medição achou o **bloqueio real** de três itens do
 > checklist, que a spec não nomeava: **a separação não tem autor e não deixa rastro**. Nenhum item
@@ -57,7 +57,7 @@ Listas de separação agrupadas, rota de picking, conferência dupla, montagem e
   "Segunda conferência (conferente ≠ separador)" e a regra "conferência pelo mesmo usuário da
   separação falha" **não têm como existir**
 - [ ] Sugestão de rota (ordenar itens pela hierarquia de localizações)
-- [ ] Registro por item: localização lida, lote/série retirado, quantidade, divergência
+- [ ] Registro por item: localização lida, lote/série retirado, quantidade, divergência — **PARCIAL, pago NA ENTREGA na Etapa 58** (`cec2b56` serviço, `d18019f` tela, fix-round e9bca72): cada item da entrega aceita `localizacao_origem_id`, `lote_id` e `codigo_lido_origem` (a "localização lida" é a confirmação por leitura da Etapa 56), a origem escolhida é **estrita** (recusa se não cobre) e tudo é validado antes da primeira baixa. **Continua `[ ]` por três motivos:** (1) o registro é na **entrega**, não na **separação** — a rodada de separação não guarda endereço nem lote (próxima etapa); (2) a entrega de **um clique** ("Confirmar Entrega e Baixar Estoque") não escolhe origem (**C80**); (3) **série** e **divergência** por item ficam fora (**D (58)**).
 - [ ] Substituição de lote com registro
 - [ ] Separação parcial com saldo pendente — nota (auditoria 2026-08-11): a **parcialidade em si já funciona** (acúmulo de `quantidade_separada` em múltiplas rodadas + teto `maxSeparar`, entregue nas Etapas 3/4); o que falta deste item é a entidade lista-de-separação e o registro de divergência
 - [ ] Transferir material separado para localização "Aguardando retirada"/"Kit" (movimentação v2 de transferência) — **exige estender `TIPOS_LOCALIZACAO` primeiro** (ver a correção em "O que já existe"): os três tipos que este item pressupõe **não existem** no enum
@@ -80,6 +80,8 @@ Listas de separação agrupadas, rota de picking, conferência dupla, montagem e
 | ~~Material separado sai do disponível (vai para localização reservada)~~ **Superada — esta regra estava errada como mecanismo (corrigido 2026-08-11):** desde a Etapa 4 o material sai do disponível **na aprovação**, via reserva (`requisitionService.reservarItensAprovacao`); a separação não move saldo nenhum | coberto pelos testes de reserva da feature 07 (`requisicaoReservaAutomatica.api.test.js`); mover fisicamente para localização de kit fica com a lista de separação, se vier |
 | Segunda conferência exige usuário diferente | **`segundaConferencia.api.test.js` `[RN-03] PESO: separador da PRIMEIRA rodada tenta conferir -> 403`** e `[RN-03] o claim sozinho segura` (Etapa 28) |
 | Divergência na separação exige registro | `separacao com quantidade menor exige motivo` |
+| Entrega com origem escolhida é estrita (recusa se o endereço/lote não cobre; nada sai pela metade quando há escolha) | `entregaOrigemPorItem.api.test.js` — `Fase 2 critico 1`, `Fase 2 critico 2`, `Tudo antes`, `Concorrencia` (Etapa 58) |
+| Excluir a requisição devolve ao lote e ao endereço de cada saída | `entregaOrigemPorItem.api.test.js` — `Fase 2 critico 3`, `Fase 5: excluir com DUAS partes…` (Etapa 58) |
 
 ## Dependências
 
@@ -111,3 +113,36 @@ que a rodada de B a registrasse.
 
 **Não virou código, declarado:** requisição separada antes da etapa não tem rodada (**C37**);
 `dbGet` com `UPDATE ... RETURNING` roda fora da `writeChain` (**G9**, pré-existente em todo claim).
+
+
+## Etapa 58 — a entrega de requisição diz de onde cada item sai (2026-09-30)
+
+Plano: `docs/superpowers/plans/2026-09-30-almoxarifado-etapa58-origem-na-entrega.md`.
+
+**Por que na ENTREGA e não na separação:** a separação é **lógica** — grava quantidade separada e a rodada, **não
+move estoque**. O gesto que baixa o saldo, e portanto o que pode dizer "tirei de A", é a entrega. Registrar a origem
+**planejada** na separação é a próxima etapa.
+
+**Entregue:**
+- [x] Origem por item na entrega (`localizacao_origem_id`, `lote_id`, `codigo_lido_origem` em `itens_atendidos`),
+  repassada a todas as baixas do item (excedente e reservada) — `cec2b56`.
+- [x] Origem **estrita**: o serviço recusa se o endereço (no lote) não cobre, e o motor ganha `origemEstrita` (4º
+  argumento, nunca o body) com a checagem antes e depois da baixa, contra entregas simultâneas — `cec2b56`.
+- [x] Validação de **todos** os itens com escolha antes da primeira baixa (endereço, lote do material, status e
+  vencimento do lote, leitura, saldo somado por material/endereço/lote) — `cec2b56` + fix-round e9bca72.
+- [x] Exclusão da requisição devolve **por saída** (mesmo lote; origem se ainda aceita o material, senão a padrão),
+  agrupando por material, com todas as partes validadas antes da primeira devolução — `cec2b56` + fix-round e9bca72.
+  **Toca a feature 04 (requisições).**
+- [x] Devolução citando a saída herda o lote dela (Estoque/Quarentena) — `cec2b56` + fix-round e9bca72.
+  **Toca a feature 12 (devoluções).**
+- [x] Tela: "Sai de" e "Confirmar endereço lido" por item na janela de entrega; botão **"Entregar escolhendo de onde
+  sai…"** ao lado do de um clique — `d18019f`.
+
+**Fica de fora, declarado:** a entrega de um clique sem origem (**C80**); item sem escolha continua item a item
+(**C81**); a janela não marca lote bloqueado/vencido nem endereço bloqueado (**D (58)**); série e divergência por item
+(**D (58)**); a herança de lote no Retrabalho não tem teste (**D (58)**).
+
+**A Fase 0 do plano estava errada** num ponto: dizia que não havia rota "onde este material está" — **havia**
+(`GET /estoque/:materialId/saldos`); a rota nova planejada caiu.
+
+**Testes:** `server/tests/api/entregaOrigemPorItem.api.test.js` 14/14; `client/.../RequisicoesEntregaOrigem.test.js` 10/10.
