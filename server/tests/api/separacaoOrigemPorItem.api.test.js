@@ -96,7 +96,8 @@ let seq = 0;
     const { id, ids } = await req([[m.id, 10]]);
     await separar(id, [{ item_id: ids[0], quantidade_separada: 5, localizacao_origem_id: A.id }]);
     const e = await separarErro(id, [{ item_id: ids[0], quantidade_separada: 5, localizacao_origem_id: A.id }]);
-    assert.ok(/não cobre a quantidade \(10\)/.test(e.message), e.message);
+    // O saldo mostrado ja desconta o separado pendente (8 - 5 = 3).
+    assert.strictEqual(e.message, `${m.nome}: O saldo em ${A.codigo} (3) não cobre a quantidade (5) — a saída tiraria de outros endereços`);
     await separar(id, [{ item_id: ids[0], quantidade_separada: 3, localizacao_origem_id: A.id }]);
     assert.strictEqual((await itemRow(ids[0])).origem_separacao_id, A.id);
   });
@@ -163,6 +164,44 @@ let seq = 0;
     const { id, ids } = await req([[m.id, 2]]);
     const e = await separarErro(id, [{ item_id: ids[0], quantidade_separada: 2, localizacao_origem_id: A.id, lote_id: lb }]);
     assert.strictEqual(e.message, `${m.nome}: Lote ${cod} esta bloqueado e nao pode ser utilizado`);
+  });
+
+  await test('Fase 5: DOIS itens do mesmo material no mesmo par — o pendente do outro conta (L:7, 5 + 5 recusado)', async () => {
+    const A = await loc('TA'); const m = await material();
+    await entrar(m.id, A.id, 7);
+    const { id, ids } = await req([[m.id, 5], [m.id, 5]]);
+    await separar(id, [{ item_id: ids[0], quantidade_separada: 5, localizacao_origem_id: A.id }]);
+    const e = await separarErro(id, [{ item_id: ids[1], quantidade_separada: 5, localizacao_origem_id: A.id }]);
+    assert.strictEqual(e.message, `${m.nome}: O saldo em ${A.codigo} (2) não cobre a quantidade (5) — a saída tiraria de outros endereços`);
+    await separar(id, [{ item_id: ids[1], quantidade_separada: 2, localizacao_origem_id: A.id }]);
+    // E a entrega de um clique dos dois passa (5 + 2 de A).
+    const r = await entregar(id, [{ item_id: ids[0], quantidade_atendida: 5 }, { item_id: ids[1], quantidade_atendida: 2 }]);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.strictEqual(await saldoEm(m.id, A.id), 0);
+  });
+
+  await test('Fase 5: a mesma entrada duas vezes no payload nao conta o pendente em dobro (L:10, 4 + 4)', async () => {
+    const A = await loc('PA'); const m = await material();
+    await entrar(m.id, A.id, 10);
+    const { id, ids } = await req([[m.id, 10]]);
+    await separar(id, [{ item_id: ids[0], quantidade_separada: 4, localizacao_origem_id: A.id },
+      { item_id: ids[0], quantidade_separada: 4, localizacao_origem_id: A.id }]);
+    assert.strictEqual((await itemRow(ids[0])).quantidade_separada, 8);
+  });
+
+  await test('Fase 5: RN-04 MANTEM a planejada depois de entrega parcial; lote sem endereco nao vira planejada', async () => {
+    const A = await loc('KA'); const m = await material(); const cod = `LK-${seq}`;
+    await entrar(m.id, A.id, 10, cod);
+    const lk = (await dbGet(db, 'SELECT id FROM lotes_almoxarifado WHERE material_id = ?', [m.id])).id;
+    const { id, ids } = await req([[m.id, 6]]);
+    await separar(id, [{ item_id: ids[0], quantidade_separada: 6, localizacao_origem_id: A.id, lote_id: lk }]);
+    assert.strictEqual((await entregar(id, [{ item_id: ids[0], quantidade_atendida: 2 }])).status, 200);
+    const it = await itemRow(ids[0]);
+    assert.strictEqual(it.origem_separacao_id, A.id); assert.strictEqual(it.lote_separacao_id, lk);
+    const r2 = await req([[m.id, 1]]);
+    await separar(r2.id, [{ item_id: r2.ids[0], quantidade_separada: 1, lote_id: lk }]);
+    const it2 = await itemRow(r2.ids[0]);
+    assert.strictEqual(it2.origem_separacao_id, null); assert.strictEqual(it2.lote_separacao_id, null);
   });
 
   await close();

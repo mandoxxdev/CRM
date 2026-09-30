@@ -7,6 +7,8 @@
  * - Modal de entrega: item com origem planejada (origem_separacao_id + lote_separacao_id, com
  *   separado > entregue) vem pré-selecionado com ela. "Qualquer endereço (automático)" num item com
  *   planejada manda `origem_automatica: true`; planejada fora das opções → automático + a mesma chave.
+ *   Quantidade a entregar acima de separado - entregue → automático sem chave (o servidor aplica a
+ *   planejada até o pendente). Busca de saldos falhando → opção "Planejada da separação" selecionada.
  * - Detalhe: "separado de {codigo}[ — lote {lote}]" só enquanto separado > entregue.
  *
  * Executar: cd client && CI=true npx react-scripts test src/components/almoxarifado/RequisicoesSeparacaoOrigem --watchAll=false
@@ -217,14 +219,61 @@ describe('Etapa 59: a entrega parte da origem planejada na separação', () => {
       .toEqual({ item_id: 1, quantidade_atendida: 3, origem_automatica: true });
   });
 
-  test('busca de saldos falhando: não decide nada — nenhuma chave, o servidor aplica a planejada', async () => {
+  test('busca de saldos falhando: "Planejada da separação" selecionada, confirmar não manda chave', async () => {
     saldosImpl = () => Promise.reject(new Error('rede'));
     requisicao = parcial(PLANEJADA);
     await renderizar();
     await clicar('Completar Entrega');
-    expect(selectEntrega().value).toBe('');
+    const sel = selectEntrega();
+    expect(sel.value).toBe('__planejada__');
+    expect(sel.options[sel.selectedIndex].textContent).toBe('Planejada da separação (B-02)');
     await clicar('✅ Confirmar Entrega');
     expect(enviadoEm('entregar', 'itens_atendidos')).toEqual({ item_id: 1, quantidade_atendida: 3 });
+  });
+
+  test('busca de saldos falhando: escolher "automático" é troca real e manda origem_automatica: true', async () => {
+    saldosImpl = () => Promise.reject(new Error('rede'));
+    requisicao = parcial(PLANEJADA);
+    await renderizar();
+    await clicar('Completar Entrega');
+    // O beco sem saída era o select já estar em "" — no navegador, escolher a mesma opção não
+    // dispara change (o jsdom dispara, então a precondição abaixo é que prova a troca real).
+    expect(selectEntrega().value).toBe('__planejada__');
+    escolher(selectEntrega(), '');
+    expect(selectEntrega().value).toBe('');
+    await clicar('✅ Confirmar Entrega');
+    expect(enviadoEm('entregar', 'itens_atendidos'))
+      .toEqual({ item_id: 1, quantidade_atendida: 3, origem_automatica: true });
+  });
+});
+
+// Revisão da Etapa 59: o servidor só aplica a planejada até `separado - entregue`. Aqui 7 separados,
+// 2 entregues → pendente separado 5; a entregável vem do servidor (6 passa do pendente, 5 não).
+describe('Etapa 59 (revisão): a pré-seleção da planejada respeita o pendente separado', () => {
+  const acimaDoPendente = (entregavel) => parcial({
+    ...PLANEJADA, quantidade_solicitada: 10, quantidade_separada: 7, quantidade_entregavel: entregavel,
+  });
+
+  test('entregável 6 > pendente 5: automático e nenhuma chave de origem', async () => {
+    requisicao = acimaDoPendente(6);
+    await renderizar();
+    await clicar('Completar Entrega');
+    expect(selectEntrega().value).toBe('');
+    await clicar('✅ Confirmar Entrega');
+    const item = enviadoEm('entregar', 'itens_atendidos');
+    expect(item).toEqual({ item_id: 1, quantidade_atendida: 6 });
+    expect(item).not.toHaveProperty('origem_automatica');
+    expect(item).not.toHaveProperty('localizacao_origem_id');
+  });
+
+  test('entregável 5 = pendente 5: a planejada vem pré-selecionada', async () => {
+    requisicao = acimaDoPendente(5);
+    await renderizar();
+    await clicar('Completar Entrega');
+    expect(selectEntrega().value).toBe('2:7');
+    await clicar('✅ Confirmar Entrega');
+    expect(enviadoEm('entregar', 'itens_atendidos'))
+      .toEqual({ item_id: 1, quantidade_atendida: 5, localizacao_origem_id: 2, lote_id: 7 });
   });
 });
 

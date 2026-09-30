@@ -446,6 +446,17 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
   // separação é tudo ou nada: ou todas as entradas cabem, ou nenhuma é gravada.
   const validados = []; // [{ item, qty, novaSeparada }] — só item existente com qty > 0
   const pedidoSeparacao = new Map();
+  // Etapa 59 (Fase 5): o separado ainda nao entregue de TODOS os itens com origem planejada continua
+  // fisicamente la — entra no acumulado desde o inicio. Antes so o do proprio item contava (mesmoPar):
+  // dois itens do mesmo material no mesmo par passavam a separacao e a entrega de um clique recusava
+  // um deles; e a mesma entrada duas vezes no payload contava o pendente em dobro.
+  for (const it of itens) {
+    const pend = Math.max(0, getSeparado(it) - getEntregue(it));
+    if (it.origem_separacao_id && pend > 1e-9) {
+      const k = `${it.material_id}|${Number(it.origem_separacao_id)}|${it.lote_separacao_id ? Number(it.lote_separacao_id) : null}`;
+      pedidoSeparacao.set(k, (pedidoSeparacao.get(k) || 0) + pend);
+    }
+  }
   for (const entrada of itensSeparados) {
     const item = itens.find((i) => Number(i.id) === Number(entrada.item_id));
     if (!item) continue;
@@ -471,7 +482,7 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
 
     // Só em memória: o mesmo item duas vezes no payload é validado contra o acumulado, como antes.
     // Etapa 59 (RN-01/02): a origem de onde o separador tirou. O saldo nela tem de cobrir esta rodada
-    // e, se a origem planejada ja era ESTE par (endereco, lote), tambem o separado ainda nao entregue.
+    // somada ao separado pendente de quem ja planejou o mesmo par (semeado no acumulado acima).
     const origemId = entrada.localizacao_origem_id ? Number(entrada.localizacao_origem_id) : null;
     const loteId = entrada.lote_id ? Number(entrada.lote_id) : null;
     const pendenteAntes = Math.max(0, getSeparado(item) - getEntregue(item));
@@ -480,8 +491,7 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
     if (origemId || loteId) {
       try {
         // eslint-disable-next-line no-await-in-loop
-        await checarOrigemItem(db, item, { origemId, loteId, lidoNorm: null },
-          qty + (mesmoPar ? pendenteAntes : 0), pedidoSeparacao);
+        await checarOrigemItem(db, item, { origemId, loteId, lidoNorm: null }, qty, pedidoSeparacao);
       } catch (e) {
         const err = new Error(`${item.material_nome}: ${e.message}`);
         err.status = e.status || 400;
@@ -490,7 +500,8 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
     }
     // Rodada com origem diferente (ou sem origem) sobre separado pendente de outra: mista -> nula.
     const planejada = pendenteAntes > 1e-9 && !mesmoPar ? { origemId: null, loteId: null }
-      : { origemId: origemId || null, loteId: origemId || loteId ? loteId : null };
+      // Fase 5: lote sem endereco nao vira planejada (a entrega exige o endereco, e ficaria preso).
+      : { origemId: origemId || null, loteId: origemId ? loteId : null };
     item.origem_separacao_id = planejada.origemId;
     item.lote_separacao_id = planejada.loteId;
     const novaSeparada = getSeparado(item) + qty;

@@ -92,6 +92,11 @@ const lerValorOrigem = (valor) => {
 // Etapa 59: a origem planejada na separação só vale enquanto há separado ainda não entregue.
 const temPlanejada = (item) => !!item.origem_separacao_id && getSeparado(item) > getEntregue(item);
 const valorPlanejada = (item) => `${item.origem_separacao_id}:${item.lote_separacao_id ?? ''}`;
+// O servidor só aplica a planejada até o separado ainda não entregue; acima disso é automático.
+const pendenteSeparado = (item) => Math.max(0, getSeparado(item) - getEntregue(item));
+// Opção do "Sai de" quando a busca de saldos falhou num item com planejada: selecionada, não manda
+// chave (o servidor aplica a planejada) — e faz "Qualquer endereço" virar uma troca de verdade.
+const VALOR_PLANEJADA_SEM_SALDOS = '__planejada__';
 
 const formatMoeda = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -278,8 +283,15 @@ const RequisicoesList = () => {
   // Etapa 59 (RN-05): na entrega, o "Sai de" de um item com origem planejada na separação vem
   // pré-selecionado com ela, assim que as opções do material chegam. Se a planejada não está entre
   // as opções (sem saldo ali), fica "automático" e marcado `automatico` — a entrega então manda
-  // `origem_automatica: true`, senão o servidor aplicaria a planejada e recusaria. Busca que falhou
-  // não decide nada: sem chave, o servidor aplica a planejada (estrita) como na entrega de um clique.
+  // `origem_automatica: true`, senão o servidor aplicaria a planejada e recusaria.
+  // Revisão da Etapa 59: a planejada é estrita e o servidor só a aplica até `separado - entregue`.
+  // Depois de entrega parcial a quantidade entregável pode passar disso; pré-selecionar a planejada
+  // aí mandaria origem estrita para a quantidade inteira e o servidor recusaria. Então, quando a
+  // quantidade passa do pendente separado, fica "automático" SEM `origem_automatica` (o servidor
+  // aplica a planejada até o pendente e completa automático acima). Só a pré-seleção inicial segue
+  // essa regra: mudar a quantidade depois não mexe na escolha já feita.
+  // Busca que falhou: opção "Planejada da separação" selecionada, sem chave (o servidor aplica a
+  // planejada, como na entrega de um clique) — e "Qualquer endereço" continua sendo uma troca real.
   useEffect(() => {
     if (!showEntregar || !detalhe) return;
     const novas = {};
@@ -287,14 +299,23 @@ const RequisicoesList = () => {
       if (maxQtdEntrega(item) <= 0 || !temPlanejada(item)) return;
       if (origensEntrega[item.id]) return;
       const rows = saldosEntrega[item.material_id];
-      if (!rows || saldosEntregaFalhos[item.material_id]) return;
+      if (!rows) return;
+      const qtd = parseFloat(quantidadesEntrega[item.id] ?? maxQtdEntrega(item)) || 0;
+      if (qtd > pendenteSeparado(item)) {
+        novas[item.id] = { valor: '', codigo: '', automatico: false };
+        return;
+      }
+      if (saldosEntregaFalhos[item.material_id]) {
+        novas[item.id] = { valor: VALOR_PLANEJADA_SEM_SALDOS, codigo: '', automatico: false };
+        return;
+      }
       const valor = valorPlanejada(item);
       novas[item.id] = rows.some((s) => valorOrigem(s) === valor)
         ? { valor, codigo: '', automatico: false }
         : { valor: '', codigo: '', automatico: true };
     });
     if (Object.keys(novas).length) setOrigensEntrega((prev) => ({ ...novas, ...prev }));
-  }, [showEntregar, detalhe, saldosEntrega, saldosEntregaFalhos, origensEntrega]);
+  }, [showEntregar, detalhe, saldosEntrega, saldosEntregaFalhos, origensEntrega, quantidadesEntrega]);
 
   const aplicarDetalhe = useCallback((data, id) => {
     setDetalhe(data);
@@ -1745,6 +1766,9 @@ const RequisicoesList = () => {
                             [item.id]: { valor, codigo: valor ? (o[item.id]?.codigo || '') : '', automatico: !valor },
                           }));
                         }}>
+                        {saldosEntregaFalhos[item.material_id] && temPlanejada(item) && (
+                          <option value={VALOR_PLANEJADA_SEM_SALDOS}>Planejada da separação ({item.origem_separacao_codigo})</option>
+                        )}
                         <option value="">Qualquer endereço (automático)</option>
                         {(saldosEntrega[item.material_id] || []).map(s => (
                           <option key={valorOrigem(s)} value={valorOrigem(s)}>{rotuloOrigem(s)}</option>
@@ -1753,9 +1777,9 @@ const RequisicoesList = () => {
                       <CampoCodigoLido
                         id={`entrega-codigo-lido-${item.id}`}
                         value={origensEntrega[item.id]?.codigo || ''}
-                        disabled={!origensEntrega[item.id]?.valor}
+                        disabled={!lerValorOrigem(origensEntrega[item.id]?.valor)}
                         onChange={v => setOrigensEntrega(o => ({ ...o, [item.id]: { ...o[item.id], codigo: v } }))}
-                        dica={origensEntrega[item.id]?.valor ? null : 'Para confirmar a leitura, escolha antes de onde o item sai.'}
+                        dica={lerValorOrigem(origensEntrega[item.id]?.valor) ? null :'Para confirmar a leitura, escolha antes de onde o item sai.'}
                       />
                     </div>
                   </div>
