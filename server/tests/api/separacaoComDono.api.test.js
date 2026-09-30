@@ -198,6 +198,8 @@ const auditoriaSeparacao = (db, reqId) => dbAll(db,
     const base = (its) => its.map(({ item_id, material_id, quantidade }) => ({ item_id, material_id, quantidade }));
     assert.deepStrictEqual(base(rodadas[0].itens), [{ item_id: itemIds[0], material_id: matId, quantidade: 1 }]);
     assert.ok('divergente' in rodadas[0].itens[0] && 'maximo' in rodadas[0].itens[0]);
+    // O deepStrictEqual de antes provava também que rodada SEM origem não carrega origem/lote (Fase 5).
+    assert.ok(rodadas.every((r) => r.itens.every((i) => !('localizacao_origem_id' in i) && !('lote_id' in i))));
     assert.deepStrictEqual(base(rodadas[1].itens), [{ item_id: itemIds[0], material_id: matId, quantidade: 1 }]);
     assert.ok(rodadas[0].created_at, 'created_at preenchido');
 

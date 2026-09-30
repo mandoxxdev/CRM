@@ -98,16 +98,28 @@ const pendenteSeparado = (item) => Math.max(0, getSeparado(item) - getEntregue(i
 // chave (o servidor aplica a planejada) — e faz "Qualquer endereço" virar uma troca de verdade.
 const VALOR_PLANEJADA_SEM_SALDOS = '__planejada__';
 
-// Etapa 60 (RN-01/04): o máximo separável que a tela conhece — o do item e, com um "Sai de"
-// escolhido, também a quantidade daquela opção. O servidor recalcula na hora (é ele quem grava
-// `maximo`/`divergente`); aqui só decide quando pedir o motivo, que é opcional.
+// Etapa 60 (RN-01/04): o máximo separável que a tela conhece, na mesma régua do servidor:
+// base = min(pendente de separação, saldo − o que OUTROS itens do mesmo material separam nesta
+// rodada); com um "Sai de" escolhido, também a quantidade da opção menos o separado pendente de quem
+// já planejou o mesmo par — aqui só o do próprio item (outras requisições a tela não conhece).
+// O servidor recalcula na hora (é ele quem grava `maximo`/`divergente`); aqui só decide quando
+// pedir o motivo, que é opcional.
 const MOTIVO_DIVERGENCIA_MAX = 500;
-const maxSeparavelNaTela = (item, valorOrigemEscolhida, saldos) => {
-  const maxItem = maxQtdSeparacao(item);
-  if (!valorOrigemEscolhida) return maxItem;
+const maxSeparavelNaTela = (item, valorOrigemEscolhida, saldos, outrosMesmoMaterial = 0) => {
+  const pendenteSeparacao = Math.max(0, Number(item.quantidade_solicitada) - getSeparado(item));
+  const livre = Math.max(0, (Number(item.saldo_atual) || 0) - (Number(outrosMesmoMaterial) || 0));
+  const base = Math.min(pendenteSeparacao, livre);
+  if (!valorOrigemEscolhida) return base;
   const opcao = (saldos || []).find((s) => valorOrigem(s) === valorOrigemEscolhida);
-  return opcao ? Math.min(maxItem, Number(opcao.quantidade) || 0) : maxItem;
+  if (!opcao) return base;
+  const jaPlanejadoNoPar = temPlanejada(item) && valorPlanejada(item) === valorOrigemEscolhida
+    ? pendenteSeparado(item) : 0;
+  return Math.min(base, Math.max(0, (Number(opcao.quantidade) || 0) - jaPlanejadoNoPar));
 };
+// O que os OUTROS itens do mesmo material estão separando no modal agora (dividem o saldo).
+const separandoOutrosDoMaterial = (itens, item, quantidades) => (itens || [])
+  .filter((i) => i.id !== item.id && Number(i.material_id) === Number(item.material_id))
+  .reduce((s, i) => s + Math.max(0, parseFloat((quantidades || {})[i.id]) || 0), 0);
 // Só abaixo do máximo e acima de zero: quantidade 0 não vai no payload, então não há onde levar o motivo.
 const separacaoDivergente = (qtdDigitada, maximo) => {
   const q = parseFloat(qtdDigitada) || 0;
@@ -556,7 +568,8 @@ const RequisicoesList = () => {
           })(),
           // Etapa 60 (RN-01): motivo só quando preenchido e só para item abaixo do máximo separável.
           ...(() => {
-            const maximo = maxSeparavelNaTela(i, origensSeparacao[i.id], saldosEntrega[i.material_id]);
+            const maximo = maxSeparavelNaTela(i, origensSeparacao[i.id], saldosEntrega[i.material_id],
+              separandoOutrosDoMaterial(detalhe.itens, i, quantidadesSeparacao));
             if (!separacaoDivergente(quantidadesSeparacao[i.id], maximo)) return {};
             const motivo = String(motivosSeparacao[i.id] || '').trim().slice(0, MOTIVO_DIVERGENCIA_MAX);
             return motivo ? { motivo_divergencia: motivo } : {};
@@ -1225,8 +1238,24 @@ const RequisicoesList = () => {
                       Separação{separacoes.length > 0 ? ` (${separacoes.length})` : ''}
                     </div>
                     {separacoes.map((s) => {
-                      // Etapa 60 (RN-03): as entradas divergentes da rodada, para quem confere.
-                      const divergentes = (Array.isArray(s.itens) ? s.itens : []).filter((e) => e && e.divergente);
+                      // Etapa 60 (RN-03): os itens divergentes da rodada, para quem confere. O mesmo item
+                      // pode vir em mais de uma entrada (só pela API); o servidor grava a régua do item
+                      // agregado em cada uma — então uma linha por item, com a soma das quantidades.
+                      const porItem = new Map();
+                      (Array.isArray(s.itens) ? s.itens : []).forEach((e) => {
+                        if (!e) return;
+                        const chave = Number(e.item_id);
+                        const acc = porItem.get(chave);
+                        if (!acc) {
+                          porItem.set(chave, { ...e, quantidade: Number(e.quantidade) || 0 });
+                          return;
+                        }
+                        acc.quantidade += Number(e.quantidade) || 0;
+                        acc.divergente = acc.divergente || e.divergente;
+                        if (acc.maximo == null && e.maximo != null) acc.maximo = e.maximo;
+                        if (!acc.motivo_divergencia && e.motivo_divergencia) acc.motivo_divergencia = e.motivo_divergencia;
+                      });
+                      const divergentes = [...porItem.values()].filter((e) => e.divergente);
                       return (
                         <div key={s.id} style={{ padding: '6px 0', borderBottom: '1px solid var(--gmp-border)', fontSize: '0.82rem' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1236,12 +1265,12 @@ const RequisicoesList = () => {
                               · {formatDate(s.created_at)} · {Number(s.itens_tocados) || 0} {Number(s.itens_tocados) === 1 ? 'item' : 'itens'}
                             </span>
                           </div>
-                          {divergentes.map((e, idx) => {
+                          {divergentes.map((e) => {
                             const itemDet = (detalhe.itens || []).find((i) => Number(i.id) === Number(e.item_id));
                             const nome = itemDet?.material_nome || `Item #${e.item_id}`;
                             const motivo = typeof e.motivo_divergencia === 'string' ? e.motivo_divergencia.trim() : '';
                             return (
-                              <div key={`${s.id}-${e.item_id}-${idx}`} data-testid={`divergencia-${s.id}-${e.item_id}`}
+                              <div key={`${s.id}-${e.item_id}`} data-testid={`divergencia-${s.id}-${e.item_id}`}
                                 style={{ marginLeft: 20, marginTop: 4, fontSize: '0.78rem', color: 'var(--gmp-warning)' }}>
                                 {`${nome}: separou ${e.quantidade} de ${e.maximo}${motivo ? ` — ${motivo}` : ' — sem motivo informado'}`}
                               </div>
@@ -1741,7 +1770,8 @@ const RequisicoesList = () => {
                     {/* Etapa 60 (RN-04): abaixo do máximo separável, pede o porquê — sem obrigar. */}
                     {separacaoDivergente(
                       quantidadesSeparacao[item.id],
-                      maxSeparavelNaTela(item, origensSeparacao[item.id], saldosEntrega[item.material_id])
+                      maxSeparavelNaTela(item, origensSeparacao[item.id], saldosEntrega[item.material_id],
+                        separandoOutrosDoMaterial(detalhe.itens, item, quantidadesSeparacao))
                     ) && (
                       <div style={{ marginTop: 8 }}>
                         <label className="almox-label" htmlFor={`separacao-motivo-${item.id}`} style={{ fontSize: '0.8rem' }}>

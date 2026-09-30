@@ -2,7 +2,8 @@
  * Etapa 60 (RN-03/RN-04) — a divergência na separação, com motivo (opcional).
  *
  * - Modal de separação: quando a quantidade de um item fica abaixo do máximo separável que a tela
- *   conhece (maxQtdSeparacao; com "Sai de" escolhido, o mínimo entre isso e a quantidade da opção),
+ *   conhece (pendente de separação e saldo menos o que outros itens do mesmo material separam agora;
+ *   com "Sai de" escolhido, também a quantidade da opção menos o pendente planejado no mesmo par),
  *   aparece "Motivo da divergência (opcional)". Não obriga. O PUT /separacao leva
  *   `motivo_divergencia` (trim) só quando preenchido e só para item abaixo do máximo.
  * - Detalhe: o bloco "Separação (N)" lista, por rodada, as entradas divergentes:
@@ -68,9 +69,11 @@ const SALDOS = [
 let container;
 let root;
 let requisicao;
+let saldos;
 
 beforeEach(() => {
   global.IS_REACT_ACT_ENVIRONMENT = true;
+  saldos = SALDOS;
   api.get.mockImplementation((url) => {
     if (url === '/almoxarifado/requisicoes') {
       const { itens, separacoes, ...linha } = requisicao;
@@ -78,7 +81,7 @@ beforeEach(() => {
     }
     if (url === '/almoxarifado/requisicoes/55') return Promise.resolve({ data: requisicao });
     if (url === '/almoxarifado/configuracoes/liberacao-valor') return Promise.resolve({ data: { souAprovador: false } });
-    if (url === '/almoxarifado/estoque/10/saldos') return Promise.resolve({ data: SALDOS });
+    if (url === '/almoxarifado/estoque/10/saldos') return Promise.resolve({ data: saldos });
     return Promise.resolve({ data: [] });
   });
   api.put.mockResolvedValue({ data: { parcial: true } });
@@ -215,6 +218,50 @@ describe('Etapa 60: motivo da divergência no modal de separação', () => {
   });
 });
 
+describe('Etapa 60: a régua da tela segue a do servidor', () => {
+  // Dois itens do MESMO material, 10 disponíveis: o que um separa sai do separável do outro.
+  const DOIS_DO_MESMO = {
+    ...REQ_BASE, status: 'APROVADO',
+    itens: [
+      { ...ITEM_BASE, quantidade_solicitada: 6, saldo_atual: 10, quantidade_separada: 0, quantidade_entregue: 0, quantidade_atendida: 0 },
+      { ...ITEM_BASE, id: 2, quantidade_solicitada: 10, saldo_atual: 10, quantidade_separada: 0, quantidade_entregue: 0, quantidade_atendida: 0 },
+    ],
+  };
+  const inputDoItem = (n) => container.querySelectorAll('.almox-modal input.almox-count-input')[n];
+
+  test('dois itens do mesmo material: 6 + 4 de 10 não pede motivo; 6 + 3 pede no segundo', async () => {
+    requisicao = DOIS_DO_MESMO;
+    await renderizar();
+    await clicar('Iniciar Separação');
+    digitar(inputDoItem(0), '6');
+    digitar(inputDoItem(1), '4');
+    expect(container.querySelector('#separacao-motivo-1')).toBeNull();
+    expect(container.querySelector('#separacao-motivo-2')).toBeNull();
+
+    digitar(inputDoItem(1), '3');
+    expect(container.querySelector('#separacao-motivo-2')).toBeTruthy();
+    expect(container.querySelector('#separacao-motivo-1')).toBeNull();
+  });
+
+  test('planejada no mesmo par com pendente: opção A com 8, 4 já separados nela — separar 4 não é divergência', async () => {
+    saldos = [{ ...SALDOS[0], quantidade: 8 }, SALDOS[1]];
+    requisicao = {
+      ...REQ_BASE, status: 'APROVADO',
+      itens: [{
+        ...ITEM_BASE, quantidade_solicitada: 10, quantidade_separada: 4, quantidade_entregue: 0, quantidade_atendida: 0,
+        origem_separacao_id: 1, lote_separacao_id: null, origem_separacao_codigo: 'A-01',
+      }],
+    };
+    await renderizar();
+    await clicar('Iniciar Separação');
+    escolher(selectSeparacao(), '1:');
+    digitar(inputQtd(), '4');
+    expect(campoMotivo()).toBeNull();
+    digitar(inputQtd(), '3');
+    expect(campoMotivo()).toBeTruthy();
+  });
+});
+
 describe('Etapa 60: divergências no bloco "Separação (N)" do detalhe', () => {
   const comRodadas = (itensRodada) => ({
     ...REQ_BASE, status: 'SEPARADO',
@@ -249,6 +296,17 @@ describe('Etapa 60: divergências no bloco "Separação (N)" do detalhe', () => 
       .toBe('Chapa 3mm: separou 3 de 5 — sem motivo informado');
     expect(container.querySelector('[data-testid="divergencia-7-2"]')).toBeNull();
     expect(container.textContent).not.toContain('Parafuso M8: separou');
+  });
+
+  test('o mesmo item em duas entradas da rodada: uma linha só, com a soma', async () => {
+    requisicao = comRodadas([
+      { item_id: 1, material_id: 10, quantidade: 1, maximo: 5, divergente: true, motivo_divergencia: 'caixa avariada' },
+      { item_id: 1, material_id: 10, quantidade: 2, maximo: 5, divergente: true, motivo_divergencia: 'caixa avariada' },
+    ]);
+    await renderizar();
+    const linhas = container.querySelectorAll('[data-testid="divergencia-7-1"]');
+    expect(linhas).toHaveLength(1);
+    expect(linhas[0].textContent).toBe('Chapa 3mm: separou 3 de 5 — caixa avariada');
   });
 
   test('rodada antiga (sem os campos da Etapa 60) não mostra divergência', async () => {

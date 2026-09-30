@@ -474,7 +474,10 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
     // Etapa 60 (RN-01): a regua da divergencia e o maximo separavel NA HORA, do item AGREGADO (o mesmo
     // item duas vezes no payload nao vira duas reguas) — guardado no 1o encontro, antes da mutacao.
     if (!reguaDivergencia.has(item.id)) {
-      reguaDivergencia.set(item.id, { maxInicial: max, origens: new Set(), saldoOrigem: null, total: 0, motivo: null });
+      reguaDivergencia.set(item.id, {
+        maxInicial: max, pend: pendenteSeparacao(item), estoque: num(estoque), material_id: item.material_id,
+        origens: new Set(), saldoOrigem: null, total: 0, motivo: null,
+      });
     }
 
     if (qty > max) {
@@ -503,11 +506,20 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
     if (!regua.motivo && typeof entrada.motivo_divergencia === 'string' && entrada.motivo_divergencia.trim()) {
       regua.motivo = entrada.motivo_divergencia.trim().slice(0, 500);
     }
-    if (origemId && regua.saldoOrigem === null) {
+    if ((origemId || loteId) && regua.saldoOrigem === null) {
+      // Fase 5: tambem lote sem endereco (o saldo do lote limita), e o separado ainda nao entregue de
+      // OUTRAS requisicoes no mesmo par — senao quem separa tudo o que esta livre sai "divergente".
+      const onde = origemId ? 'AND localizacao_id = ?' : '';
       // eslint-disable-next-line no-await-in-loop
       const so = await dbGet(db, `SELECT COALESCE(SUM(quantidade), 0) as q FROM estoque_saldo_almoxarifado
-        WHERE material_id = ? AND localizacao_id = ? AND lote_id IS ?`, [item.material_id, origemId, loteId]);
-      regua.saldoOrigem = (Number(so.q) || 0) - (pedidoSeparacao.get(`${item.material_id}|${origemId}|${loteId}`) || 0);
+        WHERE material_id = ? AND lote_id IS ? ${onde}`, [item.material_id, loteId, ...(origemId ? [origemId] : [])]);
+      // eslint-disable-next-line no-await-in-loop
+      const outras = origemId ? await dbGet(db, `SELECT COALESCE(SUM(MAX(COALESCE(ir.quantidade_separada,0) - COALESCE(ir.quantidade_entregue,0), 0)), 0) as q
+        FROM itens_requisicao_almoxarifado ir JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id
+        WHERE ir.material_id = ? AND ir.origem_separacao_id = ? AND ir.lote_separacao_id IS ?
+          AND ir.requisicao_id <> ? AND COALESCE(r.ativo, 1) = 1`, [item.material_id, origemId, loteId, requisicaoId]) : { q: 0 };
+      regua.saldoOrigem = (Number(so.q) || 0) - (Number(outras.q) || 0)
+        - (pedidoSeparacao.get(`${item.material_id}|${origemId}|${loteId}`) || 0);
     }
     if (origemId || loteId) {
       try {
@@ -534,12 +546,22 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
   // Etapa 60 (RN-01/02): so REGISTRO — a divergencia nao recusa (Fase 2: o parcial legitimo, em varias
   // viagens ou por origem, e da spec 05). O motivo e opcional; a tela pede quando fica abaixo.
   const divergenciaPorItem = new Map();
+  // Fase 5: dois itens do MESMO material dividem o disponivel na rodada — o que um separa sai do
+  // separavel do outro (10 livres, 6 + 4: nenhum dos dois e divergente).
+  const totalPorMaterial = new Map();
+  for (const r of reguaDivergencia.values()) {
+    totalPorMaterial.set(r.material_id, (totalPorMaterial.get(r.material_id) || 0) + r.total);
+  }
   for (const [itemId, r] of reguaDivergencia) {
-    const umaOrigem = r.origens.size === 1 && ![...r.origens][0].startsWith('null|');
-    const maximo = umaOrigem && r.saldoOrigem !== null ? Math.min(r.maxInicial, Math.max(0, r.saldoOrigem)) : r.maxInicial;
+    const outros = totalPorMaterial.get(r.material_id) - r.total;
+    const base = Math.min(r.pend, Math.max(0, r.estoque - outros));
+    const umaChave = r.origens.size === 1 && r.saldoOrigem !== null;
+    const maximo = umaChave ? Math.min(base, Math.max(0, r.saldoOrigem)) : base;
     const divergente = r.total < maximo - 1e-9;
     divergenciaPorItem.set(itemId, {
-      maximo: Math.round(maximo * 1e6) / 1e6, divergente, motivo_divergencia: divergente ? r.motivo : null,
+      // Fase 5: o motivo nunca e descartado — a regua da tela pode diferir da do servidor, e o texto
+      // de quem separou vale mesmo quando o servidor nao ve divergencia.
+      maximo: Math.round(maximo * 1e6) / 1e6, divergente, motivo_divergencia: r.motivo,
     });
   }
 

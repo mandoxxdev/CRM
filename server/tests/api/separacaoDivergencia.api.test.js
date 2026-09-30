@@ -88,7 +88,45 @@ let seq = 0;
     const { id, ids } = await req([[m, 10]]);
     await separar(id, [{ item_id: ids[0], quantidade_separada: 3, motivo_divergencia: 'nao era divergencia' }]);
     const it = itensDa((await rodadas(id))[0])[0];
-    assert.strictEqual(it.maximo, 3); assert.strictEqual(it.divergente, false); assert.strictEqual(it.motivo_divergencia, null);
+    // Fase 5: o motivo nunca e descartado (a regua da tela pode diferir da do servidor).
+    assert.strictEqual(it.maximo, 3); assert.strictEqual(it.divergente, false); assert.strictEqual(it.motivo_divergencia, 'nao era divergencia');
+  });
+
+  await test('Fase 5: DOIS itens do mesmo material dividem o disponivel (10 livres, 6 + 4): nenhum divergente', async () => {
+    const m = await material(); const A = await loc('DM'); await entrar(m, A.id, 10);
+    const { id, ids } = await req([[m, 10], [m, 10]]);
+    await separar(id, [{ item_id: ids[0], quantidade_separada: 6 }, { item_id: ids[1], quantidade_separada: 4 }]);
+    const its = itensDa((await rodadas(id))[0]);
+    assert.deepStrictEqual(its.map((x) => [x.maximo, x.divergente]), [[6, false], [4, false]]);
+    // Metade positiva (material novo, 10 livres): 6 + 3 deixa 1 — os dois ficam abaixo do separável.
+    // (Separado sem origem de OUTRA requisição não sai do disponível — a separação não reserva; D (60).)
+    const m2 = await material(); await entrar(m2, A.id, 10);
+    const r2 = await req([[m2, 10], [m2, 10]]);
+    await separar(r2.id, [{ item_id: r2.ids[0], quantidade_separada: 6 }, { item_id: r2.ids[1], quantidade_separada: 3 }]);
+    const its2 = itensDa((await rodadas(r2.id))[0]);
+    assert.deepStrictEqual(its2.map((x) => [x.maximo, x.divergente]), [[7, true], [4, true]]);
+  });
+
+  await test('Fase 5: o separado pendente no MESMO par (outra rodada, outra requisicao) nao conta como separavel', async () => {
+    const m = await material(); const A = await loc('PA'); const B = await loc('PB');
+    await entrar(m, A.id, 8); await entrar(m, B.id, 10);
+    // Outra requisição separou 5 de A e não entregou.
+    const outra = await req([[m, 5]]);
+    await separar(outra.id, [{ item_id: outra.ids[0], quantidade_separada: 5, localizacao_origem_id: A.id }]);
+    const { id, ids } = await req([[m, 8]]);
+    await separar(id, [{ item_id: ids[0], quantidade_separada: 3, localizacao_origem_id: A.id }]);
+    const it = itensDa((await rodadas(id))[0])[0];
+    assert.strictEqual(it.maximo, 3); assert.strictEqual(it.divergente, false);
+    // A própria requisição, 2a rodada no mesmo par (C:8, pede 10; 4 na 1a, 4 na 2a): o pendente dela
+    // (4) já saiu do separável em C — 4 de 4, não divergente. Sem descontar, seria "4 de 6" (a
+    // sabotagem desta linha ficava verde com um cenário em que o pedido do item limitava antes).
+    const C = await loc('PC'); await entrar(m, C.id, 8);
+    const r3 = await req([[m, 10]]);
+    await separar(r3.id, [{ item_id: r3.ids[0], quantidade_separada: 4, localizacao_origem_id: C.id }]);
+    await separar(r3.id, [{ item_id: r3.ids[0], quantidade_separada: 4, localizacao_origem_id: C.id }]);
+    const lista = await rodadas(r3.id);
+    const segunda = itensDa(lista[lista.length - 1])[0];
+    assert.strictEqual(segunda.maximo, 4); assert.strictEqual(segunda.divergente, false);
   });
 
   await test('Fase 2: UMA origem na rodada limita o maximo ao saldo nela (4 em A, 6 em B: separar 4 de A nao e divergencia)', async () => {
