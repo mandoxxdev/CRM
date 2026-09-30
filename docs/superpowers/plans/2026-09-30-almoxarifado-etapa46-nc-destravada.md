@@ -415,6 +415,6 @@ Exclusividade não é suficiência, e essa é a linha a acrescentar no próximo 
 - [x] Fase 0 — medida (no plano da Etapa 45, com **uma correção**: seção 7 do desenho)
 - [x] Fase 1 — desenho e plano
 - [x] Fase 2 — revisão do plano por agente fresco: **12 achados, 3 CRITICAL, 8 refutados** — desenho e plano corrigidos antes da primeira linha de código
-- [x] T1 — gate + rotulo, as duas pontas no mesmo commit — `a625fb7` · [x] T2 — colunas, servico, rota e RN-05 nos tres consumidores — `2afb944` · [x] T3 — 15ª entrada, config de **quatro** pontas e **nove** contagens (executada sem commit; hash a preencher na integração) · [ ] T4 · [ ] T5
+- [x] T1 — gate + rotulo, as duas pontas no mesmo commit — `a625fb7` · [x] T2 — colunas, servico, rota e RN-05 nos tres consumidores — `2afb944` · [x] T3 — 15ª entrada, config de **quatro** pontas e **nove** contagens (executada sem commit; hash a preencher na integração) · [ ] T4 · [x] T5 — integracao cruzando os galhos — `7812823`
 - [ ] Fase 5 — revisão adversarial
 - [ ] Fase 6 — `fechar-etapa`
