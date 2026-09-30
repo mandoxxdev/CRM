@@ -57,6 +57,15 @@ const TIPOS = [
   // aparecer no livro com rótulo e opção de filtro, senão cai no fallback genérico (rótulo cru
   // "AJUSTE_INVENTARIO", sem opção no dropdown de filtro).
   { value: 'AJUSTE_INVENTARIO', label: 'Ajuste (inventário)', cls: 'ajuste' },
+  // Etapa 45 (achado da Fase 6, e o comentário de AJUSTE_INVENTARIO acima já avisava): o tipo
+  // nasce SÓ do registro da execução de uma não conformidade decidida `DEVOLVER` — nunca deste
+  // formulário, que é por isso que ele está em `TIPOS_DEDICADOS` no servidor. Mas o LIVRO precisa
+  // do rótulo e da opção de filtro, senão a coluna Tipo mostra `DEVOLUCAO_FORNECEDOR` cru e a
+  // devolução ao fornecedor fica não-localizável no filtro.
+  //
+  // `cls: 'saida'` e não `'devolucao'`: DEVOLUCAO é a devolução AO estoque (material volta);
+  // esta TIRA material do galpão. A cor precisa dizer isso.
+  { value: 'DEVOLUCAO_FORNECEDOR', label: 'Devolução ao fornecedor', cls: 'saida' },
   { value: 'ESTORNO', label: 'Estorno', cls: 'estorno' },
 ];
 
@@ -119,6 +128,12 @@ const TIPOS_SEM_ESTORNO = [
   'RESERVA', 'LIBERACAO_RESERVA',
   'QUARENTENA', 'LIBERACAO_INSPECAO', 'REPROVACAO_INSPECAO', 'DECISAO_INSPECAO',
   'AJUSTE_INVENTARIO',
+  // Etapa 45: o servidor recusa o estorno deste tipo SEMPRE, casando por tipo — o material
+  // voltaria bloqueado com o documento da não conformidade dizendo que foi devolvido. Botão que
+  // erra sempre é armadilha, não gate: mesmo princípio do cabeçalho deste arquivo, da Etapa 5.
+  // (O DESBLOQUEIO por não conformidade da Etapa 44 NÃO cabe aqui: lá a recusa casa por MOTIVO, e
+  // o desbloqueio avulso continua estornável. Fica declarado em G73.)
+  'DEVOLUCAO_FORNECEDOR',
 ];
 const podeEstornar = (m) => !m.cancelado && m.tipo !== 'ESTORNO' && !TIPOS_SEM_ESTORNO.includes(m.tipo);
 

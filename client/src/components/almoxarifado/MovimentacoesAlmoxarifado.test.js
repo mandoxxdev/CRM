@@ -532,3 +532,114 @@ describe('MovimentacoesAlmoxarifado — hint de retalho disponível na SAÍDA (E
     }));
   });
 });
+
+/**
+ * Etapa 45, fechamento — DEVOLUCAO_FORNECEDOR no livro.
+ *
+ * ACHADO DA FASE 6, e ele escapou de três revisores: a etapa criou o tipo de movimento novo e
+ * NÃO o pôs em `TIPOS`, que é a lista que o livro usa para rótulo (`tipoInfo`) e para o dropdown
+ * de filtro. O efeito é o fallback `{ label: tipo }` — a coluna Tipo mostra o código cru
+ * `DEVOLUCAO_FORNECEDOR` e o filtro não tem a opção, então a devolução ao fornecedor não é
+ * localizável no livro.
+ *
+ * O ARQUIVO JÁ AVISAVA: o comentário de `AJUSTE_INVENTARIO` (linha ~55) foi escrito na Etapa 10
+ * por este mesmo motivo, com a frase "senão cai no fallback genérico (rótulo cru
+ * 'AJUSTE_INVENTARIO', sem opção no dropdown de filtro)". Mesma classe do épsilon do fix-round:
+ * o aviso estava escrito no arquivo e eu passei por cima.
+ *
+ * `cls: 'saida'` (vermelho) e não `'devolucao'` (violeta): DEVOLUCAO é a devolução AO estoque, que
+ * devolve material; esta TIRA material do galpão. A cor tem de dizer isso.
+ *
+ * ⚠️ O BURACO MAIOR FICA DECLARADO, não consertado aqui (letra G das novidades): medido em
+ * 2026-09-29, `TIPOS` cobre 10 tipos e o serviço grava pelo menos 14 outros que caem no rótulo
+ * cru — BLOQUEIO, DESBLOQUEIO, QUARENTENA, RESERVA, LIBERACAO_RESERVA, REMESSA_TERCEIRO,
+ * RETORNO_TERCEIRO, CONSUMO_TERCEIRO, PERDA_TERCEIRO, RETORNO_TRANSFORMACAO, DEVOLUCAO_CLIENTE,
+ * ENTRADA_COMPRA, ENTRADA_DEVOLUCAO e os de inspeção. Consertar todos é etapa própria (rótulo +
+ * opção de filtro + cor por tipo); esta etapa paga só o tipo que ela mesma criou.
+ */
+const MOV_DEVOLUCAO_FORNECEDOR = [
+  movimento(1, 'SAIDA'),
+  { ...movimento(20, 'DEVOLUCAO_FORNECEDOR'), motivo: 'Devolução ao fornecedor', documento_vinculado: 'NC-2026-0007' },
+];
+
+describe('MovimentacoesAlmoxarifado — DEVOLUCAO_FORNECEDOR no livro (Etapa 45)', () => {
+  beforeEach(() => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/movimentacoes') return Promise.resolve({ data: MOV_DEVOLUCAO_FORNECEDOR });
+      if (url === '/almoxarifado/materiais') {
+        return Promise.resolve({ data: [{ id: 10, codigo: 'MAT-1', nome: 'Chapa 3mm', unidade: 'PC' }] });
+      }
+      return Promise.resolve({ data: [] });
+    });
+  });
+
+  test('a linha mostra o rótulo "Devolução ao fornecedor", e NÃO o código cru', async () => {
+    await renderizar();
+    const badges = linhas().map((tr) => tr.querySelector('.almox-badge')?.textContent);
+    // A metade positiva: a linha de controle tem o rótulo dela, senão este teste passaria com uma
+    // tela que não desenha badge nenhuma.
+    expect(badges).toContain('Saída');
+    expect(badges).toContain('Devolução ao fornecedor');
+    expect(badges).not.toContain('DEVOLUCAO_FORNECEDOR');
+  });
+
+  test('a badge da devolução ao fornecedor usa a cor de SAÍDA (o material sai do galpão)', async () => {
+    await renderizar();
+    const badge = linhas()
+      .map((tr) => tr.querySelector('.almox-badge'))
+      .find((b) => b?.textContent === 'Devolução ao fornecedor');
+    expect(badge.className).toContain('almox-badge-saida');
+  });
+
+  test('o filtro do livro oferece a opção (senão a devolução não é localizável)', async () => {
+    await renderizar();
+    const filtro = container.querySelector('.almox-filters select.almox-select');
+    const valores = [...filtro.querySelectorAll('option')].map((o) => o.value);
+    expect(valores).toContain('DEVOLUCAO_FORNECEDOR');
+    // Metade positiva de novo: a lista de filtro existe e tem os tipos vizinhos.
+    expect(valores).toContain('SAIDA');
+  });
+
+  test('o FORMULÁRIO continua sem oferecer o tipo — ele é dedicado à execução da não conformidade', async () => {
+    await abrirModalNovaMovimentacao();
+    const valores = [...seletorTipo().querySelectorAll('option')].map((o) => o.value);
+    expect(valores).not.toContain('DEVOLUCAO_FORNECEDOR');
+    // Metade positiva: o seletor do formulário está de pé e oferece o que deve.
+    expect(valores).toContain('SAIDA');
+    expect(valores).toContain('TRANSFERENCIA');
+  });
+});
+
+/**
+ * Etapa 45, fechamento (segundo achado da Fase 6): o botão de estorno aparecia na linha da
+ * devolução ao fornecedor, e o servidor recusa SEMPRE
+ * (`stockService.js:1594`, casando por TIPO: *"Devolução ao fornecedor não pode ser estornada pelo
+ * livro — o material voltaria bloqueado com o documento dizendo que foi devolvido"*).
+ *
+ * O cabeçalho DESTE arquivo já fixou o princípio, na Etapa 5: *"Com o servidor recusando, o botão
+ * só entregaria um 400. Nos dois casos a tela não pode oferecê-lo."* A recusa aqui é por tipo e
+ * incondicional, então `TIPOS_SEM_ESTORNO` é exatamente o lugar dela.
+ *
+ * ⚠️ NÃO vale para o `DESBLOQUEIO` da Etapa 44: lá a recusa casa por MOTIVO (o desbloqueio avulso
+ * continua estornável), e `TIPOS_SEM_ESTORNO` é por tipo. Aquele caso continua recusado pelo
+ * servidor com o botão visível, e fica declarado em G73.
+ */
+describe('MovimentacoesAlmoxarifado — estorno da devolução ao fornecedor (Etapa 45)', () => {
+  beforeEach(() => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/movimentacoes') return Promise.resolve({ data: MOV_DEVOLUCAO_FORNECEDOR });
+      if (url === '/almoxarifado/materiais') {
+        return Promise.resolve({ data: [{ id: 10, codigo: 'MAT-1', nome: 'Chapa 3mm', unidade: 'PC' }] });
+      }
+      return Promise.resolve({ data: [] });
+    });
+  });
+
+  test('não oferece estorno na devolução ao fornecedor, e CONTINUA oferecendo na saída comum', async () => {
+    await renderizar();
+    // MOV_DEVOLUCAO_FORNECEDOR = [SAIDA, DEVOLUCAO_FORNECEDOR]. A linha de controle é obrigatória:
+    // sem ela o teste passaria com um `podeEstornar` que devolvesse false para tudo.
+    expect(temBotaoEstorno(0)).toBe(true);
+    expect(temBotaoEstorno(1)).toBe(false);
+  });
+});
