@@ -21,6 +21,7 @@ const approvalRulesService = require('./approvalRulesService');
 // sufixos. Era exportada mas nao importada em lugar nenhum, entao remove-la nao mexe em contrato
 // de ninguem.
 const { inserirComNumeroUnico } = require('./numeroDoc');
+const { TIPOS_URGENCIA } = require('./schema');
 
 /**
  * Dispara as notificações pós-criação (e-mail solicitantes/almoxarifado + alerta de
@@ -104,6 +105,16 @@ async function createRequisicao(db, user, payload, { modulo, skipNotificacoes = 
 
   const setorFinal = departamento || setor || null;
 
+  // Etapa 48 (RN-01): lista fechada, ANTES de qualquer escrita (o `ensureSetoresRequisicao` abaixo
+  // já escreve). Vazio/ausente continuam sendo NORMAL. Comparação EXATA: 'urgente' é recusado —
+  // aceitar variações seria reabrir a lista por outro caminho.
+  const urgenciaFinal = (urgencia === undefined || urgencia === null || urgencia === '') ? 'NORMAL' : urgencia;
+  if (!TIPOS_URGENCIA.includes(urgenciaFinal)) {
+    const err = new Error(`Urgência inválida: ${urgencia}`);
+    err.status = 400;
+    throw err;
+  }
+
   if (setorFinal) {
     await sectorMaterialService.ensureSetoresRequisicao(db);
   }
@@ -142,7 +153,7 @@ async function createRequisicao(db, user, payload, { modulo, skipNotificacoes = 
     [
       num, user.id, user.nome || user.email,
       setorFinal, setorFinal, os_referencia || null,
-      urgencia || 'NORMAL', observacoes || null, justificativa_urgencia || null,
+      urgenciaFinal, observacoes || null, justificativa_urgencia || null,
       modulo_origem || null, statusInicial,
       tipo_requisicao || 'CONSUMO', centro_custo_id || null, local_entrega || null,
       projeto_id || null, cliente_id || null, equipamento || null,

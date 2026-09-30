@@ -43,6 +43,11 @@ const TIPOS_REQUISICAO = [
   'ADMINISTRATIVO', 'EMERGENCIAL', 'FERRAMENTA', 'EPI', 'MATERIAL_CLIENTE',
 ];
 
+// Etapa 48 (RN-01): urgencia da requisicao, LISTA FECHADA. Era texto livre no servidor, e so o select do
+// formulario a escrevia (com estes tres). Critério de regra sobre enum aberto nunca casaria com o que
+// entrasse por fora. Quem valida: requisitionCreateService.createRequisicao e o cadastro de regras.
+const TIPOS_URGENCIA = ['NORMAL', 'URGENTE', 'CRITICO'];
+
 // Etapa 36 (RN-11): fonte UNICA dos valores de `tipo_recebimento`. A coluna existe desde sempre
 // (`recebCols`, "tipo_recebimento TEXT DEFAULT 'NOTA_FISCAL'") e aceitava QUALQUER string — medido
 // por sonda na Fase 0: 'BANANA<script>' entrava com 201. Mora aqui, e nao em schemas.js, pelo mesmo
@@ -2382,6 +2387,9 @@ async function initSchema(db) {
   // diz qual pendência foi cobrada (NULL = lembrete da lane de status).
   await safeAlter(db, 'ALTER TABLE requisicao_aprovacoes_regra ADD COLUMN ultimo_lembrete_enviado DATETIME');
   await safeAlter(db, 'ALTER TABLE requisicao_lembretes_log ADD COLUMN pendencia_regra_id INTEGER');
+  // Etapa 48 (RN-02/03): dois criterios novos. NULL = nao filtra, como os demais.
+  await safeAlter(db, 'ALTER TABLE regras_aprovacao ADD COLUMN urgencia TEXT');
+  await safeAlter(db, 'ALTER TABLE regras_aprovacao ADD COLUMN material_cliente INTEGER');
   // 9.7/C2: `regras_avaliadas_em` só é gravada DEPOIS de todas as pendências inseridas; sem ela o
   // gate de aprovação fecha. As requisições que já existem quando a coluna NASCE foram enviadas
   // antes de existir regra — recebem o carimbo, senão nenhuma delas poderia ser aprovada.
@@ -2566,6 +2574,7 @@ module.exports = {
   TIPOS_DEDICADOS,
   TIPOS_RESULTADO,
   TIPOS_REQUISICAO,
+  TIPOS_URGENCIA,
   TIPOS_RECEBIMENTO,
   STATUS_SOBRA,
 };

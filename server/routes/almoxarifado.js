@@ -3077,7 +3077,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
    */
   async function tentarAprovacaoAutomatica(requisicaoId, urgencia) {
     const cfg = await dbGet(db, `SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'aprovacao_automatica'`);
-    if (!cfg || cfg.valor !== '1' || urgencia === 'CRITICO') return false;
+    // Etapa 48 (Fase 2, IMPORTANT-2): sem distinguir maiuscula - um rascunho gravado antes da lista
+    // fechar com 'critico' minusculo escapava da trava e era auto-aprovado.
+    if (!cfg || cfg.valor !== '1' || String(urgencia || '').toUpperCase() === 'CRITICO') return false;
     const upd = await dbRun(db,
       `UPDATE requisicoes_almoxarifado SET status='APROVADO', aprovador_nome='Sistema (automático)', data_aprovacao=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
        WHERE id=? AND status='PENDENTE' AND ${approvalRulesService.GATE_SQL}`,
