@@ -81,6 +81,69 @@ const ADMIN = { id: 1, nome: 'Admin Teste', role: 'admin' };
     assert.deepStrictEqual(linhas.map((l) => [l.lote, l.quantidade]), [['X', 5]]);
   });
 
+  await test('(2b) lote NEGATIVO (material permite saldo negativo) aparece — e a conta fecha (Fase 5, I1)', async () => {
+    const m = await material('E49-NEG', 'permite_saldo_negativo=1');
+    const a = await lotService.criarOuObterLote(db, ADMIN, { material_id: m, codigo: 'A' });
+    const b = await lotService.criarOuObterLote(db, ADMIN, { material_id: m, codigo: 'B' });
+    for (const [lote, tipo, q] of [[a.id, 'ENTRADA', 10], [b.id, 'ENTRADA', 10], [a.id, 'SAIDA', 15]]) {
+      const res = await request(app).post('/api/almoxarifado/movimentacoes/v2')
+        .send({ material_id: m, tipo, quantidade: q, lote_id: lote, motivo: 'e49', justificativa: 'e49' });
+      assert.strictEqual(res.status, 201, JSON.stringify(res.body));
+    }
+    const linhas = (await rel('saldo-por-lote')).filter((l) => l.material_codigo === 'E49-NEG');
+    assert.deepStrictEqual(Object.fromEntries(linhas.map((l) => [l.lote, l.quantidade])), { A: -5, B: 10 },
+      `o lote negativo sumiu: ${JSON.stringify(linhas)}`);
+    assert.strictEqual(linhas.reduce((s, l) => s + l.quantidade, 0), 5, 'a tela nao fecha com o fisico');
+  });
+
+  await test('(2c) material com controle de lote que NUNCA teve lote aparece com o fisico sem lote (Fase 5, I2)', async () => {
+    await dbRun(db, `INSERT INTO materiais_almoxarifado (codigo, nome, unidade, quantidade_atual, ativo, controle_lote)
+      VALUES ('E49-LEGADO', 'Legado', 'UN', 40, 1, 1)`);
+    const linhas = (await rel('saldo-por-lote')).filter((l) => l.material_codigo === 'E49-LEGADO');
+    assert.deepStrictEqual(linhas.map((l) => [l.lote, l.quantidade, l.fisico_material]), [['Sem lote atribuído', 40, 40]]);
+    // Metade positiva: sem controle de lote não entra.
+    await dbRun(db, `INSERT INTO materiais_almoxarifado (codigo, nome, unidade, quantidade_atual, ativo, controle_lote)
+      VALUES ('E49-SEMCTRL', 'Sem controle', 'UN', 40, 1, 0)`);
+    assert.ok(!(await rel('saldo-por-lote')).some((l) => l.material_codigo === 'E49-SEMCTRL'));
+  });
+
+  // ── Fase 5 (força dos testes): os cenários que dez sabotagens verdes mostraram faltar ───────
+  await test('(2d) lote em DOIS enderecos soma as duas linhas; validade e status do lote vem na linha', async () => {
+    const m = await material('E49-2END');
+    const lote = await lotService.criarOuObterLote(db, ADMIN, { material_id: m, codigo: 'A', data_validade: '2027-03-31' });
+    const l1 = (await dbRun(db, "INSERT INTO localizacoes_almoxarifado (codigo, descricao) VALUES ('E49-L1','L1')")).lastID;
+    const l2 = (await dbRun(db, "INSERT INTO localizacoes_almoxarifado (codigo, descricao) VALUES ('E49-L2','L2')")).lastID;
+    for (const [loc, q] of [[l1, 60], [l2, 40]]) {
+      const res = await request(app).post('/api/almoxarifado/movimentacoes/v2')
+        .send({ material_id: m, tipo: 'ENTRADA', quantidade: q, lote_id: lote.id, localizacao_destino_id: loc, motivo: 'e49' });
+      assert.strictEqual(res.status, 201, JSON.stringify(res.body));
+    }
+    const linhas = (await rel('saldo-por-lote')).filter((l) => l.material_codigo === 'E49-2END');
+    assert.deepStrictEqual(linhas.map((l) => [l.lote, l.quantidade]), [['A', 100]], JSON.stringify(linhas));
+    assert.strictEqual(linhas[0].validade, '2027-03-31', 'a validade do lote nao veio');
+    assert.ok(linhas[0].status_lote, 'o status do lote nao veio');
+  });
+
+  await test('(2e) residual POSITIVO: ajuste de saldo total sem lote aparece como "Sem lote atribuido"', async () => {
+    const m = await material('E49-RESPOS');
+    const lote = await lotService.criarOuObterLote(db, ADMIN, { material_id: m, codigo: 'A' });
+    const e = await request(app).post('/api/almoxarifado/movimentacoes/v2')
+      .send({ material_id: m, tipo: 'ENTRADA', quantidade: 10, lote_id: lote.id, motivo: 'e49' });
+    assert.strictEqual(e.status, 201);
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: m, tipo: 'AJUSTE', quantidade: 15, motivo: 'inventario', justificativa: 'inventario',
+    });
+    const linhas = (await rel('saldo-por-lote')).filter((l) => l.material_codigo === 'E49-RESPOS');
+    assert.deepStrictEqual(linhas.map((l) => [l.lote, l.quantidade]), [['A', 10], ['Sem lote atribuído', 5]]);
+  });
+
+  await test('(2f) material INATIVO fica fora do saldo por lote e dos comprometidos (declarado na nota)', async () => {
+    await dbRun(db, `INSERT INTO materiais_almoxarifado (codigo, nome, unidade, quantidade_atual, ativo, controle_lote, quantidade_reservada)
+      VALUES ('E49-INATIVO', 'Inativo', 'UN', 40, 0, 1, 3)`);
+    assert.ok(!(await rel('saldo-por-lote')).some((l) => l.material_codigo === 'E49-INATIVO'));
+    assert.ok(!(await rel('saldos-comprometidos')).some((l) => l.material_codigo === 'E49-INATIVO'));
+  });
+
   await test('(3) series em estoque: presentes (EM_ESTOQUE, BLOQUEADA) aparecem; ENTREGUE nao', async () => {
     const m = await material('E49-SERIE');
     for (const [numero, status] of [['S1', 'EM_ESTOQUE'], ['S2', 'BLOQUEADA'], ['S3', 'ENTREGUE']]) {
@@ -108,6 +171,16 @@ const ADMIN = { id: 1, nome: 'Admin Teste', role: 'admin' };
     assert.strictEqual(atual.disponivel, ret.disponivel, 'disponivel divergente do estoque-atual');
   });
 
+  await test('(4b) retencao ISOLADA: so em inspecao, ou so em terceiros, tambem aparece', async () => {
+    await dbRun(db, `INSERT INTO materiais_almoxarifado (codigo, nome, unidade, quantidade_atual, ativo, quantidade_em_inspecao)
+      VALUES ('E49-INSP', 'So inspecao', 'UN', 5, 1, 1)`);
+    await dbRun(db, `INSERT INTO materiais_almoxarifado (codigo, nome, unidade, quantidade_atual, ativo, quantidade_em_terceiros)
+      VALUES ('E49-TERC', 'So terceiros', 'UN', 5, 1, 1)`);
+    const cods = (await rel('saldos-comprometidos')).map((l) => l.material_codigo);
+    assert.ok(cods.includes('E49-INSP'), 'material so em inspecao sumiu');
+    assert.ok(cods.includes('E49-TERC'), 'material so em terceiros sumiu');
+  });
+
   await test('(5) o registro declara TODA coluna de COLUNAS_RETENCAO (as colunas dele sao estaticas)', async () => {
     const chaves = RELATORIOS['saldos-comprometidos'].colunas.map((c) => c.chave);
     for (const c of [...COLUNAS_RETENCAO, 'disponivel']) {
@@ -133,6 +206,29 @@ const ADMIN = { id: 1, nome: 'Admin Teste', role: 'admin' };
     const bad = await request(app).get('/api/almoxarifado/relatorios/historico-movimentacoes').query({ grupo: 'COMPRAS' });
     assert.strictEqual(bad.status, 400);
     assert.strictEqual(bad.body.error, 'Grupo de movimento inválido: COMPRAS (use ENTRADA, SAIDA, AJUSTE, DEVOLUCAO ou TRANSFERENCIA)');
+  });
+
+  await test('(6b) CADA grupo pega a lista inteira dele (SAIDA, DEVOLUCAO, TRANSFERENCIA) e o grupo aceita minuscula', async () => {
+    const mG = (await dbRun(db, "INSERT INTO materiais_almoxarifado (codigo, nome, unidade, quantidade_atual, ativo) VALUES ('E49-GRP','Grp','UN',0,1)")).lastID;
+    for (const tipo of ['SAIDA', 'SAIDA_PRODUCAO', 'ENTRADA_DEVOLUCAO', 'DEVOLUCAO', 'TRANSFERENCIA', 'ENTRADA']) {
+      await dbRun(db, `INSERT INTO movimentacoes_almoxarifado (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, usuario_nome, cancelado)
+        VALUES (?,?,1,0,0,'x',0)`, [mG, tipo]);
+    }
+    const g = async (grupo) => (await rel('historico-movimentacoes', { material_id: mG, grupo })).map((l) => l.tipo).sort();
+    assert.deepStrictEqual(await g('SAIDA'), ['SAIDA', 'SAIDA_PRODUCAO']);
+    assert.deepStrictEqual(await g('DEVOLUCAO'), ['DEVOLUCAO', 'ENTRADA_DEVOLUCAO']);
+    assert.deepStrictEqual(await g('TRANSFERENCIA'), ['TRANSFERENCIA']);
+    assert.deepStrictEqual(await g('saida'), ['SAIDA', 'SAIDA_PRODUCAO'], 'grupo em minuscula foi recusado');
+  });
+
+  await test('(7b) o _ digitado no usuario tambem vale como texto (ESCAPE)', async () => {
+    const mU = (await dbRun(db, "INSERT INTO materiais_almoxarifado (codigo, nome, unidade, quantidade_atual, ativo) VALUES ('E49-USR','Usr','UN',0,1)")).lastID;
+    for (const nome of ['Joao_Silva', 'JoaoXSilva']) {
+      await dbRun(db, `INSERT INTO movimentacoes_almoxarifado (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, usuario_nome, cancelado)
+        VALUES (?, 'ENTRADA', 1, 0, 0, ?, 0)`, [mU, nome]);
+    }
+    const r = await rel('historico-movimentacoes', { material_id: mU, usuario: 'Joao_Silva' });
+    assert.deepStrictEqual(r.map((l) => l.usuario_nome), ['Joao_Silva'], 'o _ virou curinga');
   });
 
   await test('(7) usuario por parte do nome, e o % digitado vale como texto (ESCAPE)', async () => {

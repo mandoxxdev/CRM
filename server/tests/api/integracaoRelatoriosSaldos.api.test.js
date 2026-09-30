@@ -39,6 +39,14 @@ const NOVAS = ['saldo-por-lote', 'series-em-estoque', 'saldos-comprometidos'];
     VALUES ('E49-CLI', 'Material de cliente', 'UN', 10, 1, 4, ?)`, [cliente]);
   await dbRun(db, `INSERT INTO materiais_almoxarifado (codigo, nome, unidade, quantidade_atual, ativo, quantidade_bloqueada)
     VALUES ('E49-NOSSO', 'Nosso', 'UN', 10, 1, 2)`);
+  // Fase 5 (testes): sem lote nem serie na semente, a comparacao XLSX x JSON era 0 = 0 para duas chaves.
+  const matLote = (await dbRun(db, "INSERT INTO materiais_almoxarifado (codigo, nome, unidade, quantidade_atual, ativo, controle_lote) VALUES ('E49-ILOTE','Lote int','UN',0,1,1)")).lastID;
+  const loteInt = await require('../../services/almoxarifado/lotService').criarOuObterLote(db, ADMIN, { material_id: matLote, codigo: 'L-INT' });
+  setUser(ADMIN);
+  const ent = await request(app).post('/api/almoxarifado/movimentacoes/v2')
+    .send({ material_id: matLote, tipo: 'ENTRADA', quantidade: 7, lote_id: loteInt.id, motivo: 'e49' });
+  assert.strictEqual(ent.status, 201, JSON.stringify(ent.body));
+  await dbRun(db, "INSERT INTO series_almoxarifado (material_id, numero, status) VALUES (?, 'S-INT', 'EM_ESTOQUE')", [matLote]);
   const mat = (await dbRun(db, "INSERT INTO materiais_almoxarifado (codigo, nome, unidade, quantidade_atual, ativo) VALUES ('E49-MOV','Mov','UN',0,1)")).lastID;
   for (const tipo of ['ENTRADA_COMPRA', 'SAIDA', 'ENTRADA_MANUAL']) {
     await dbRun(db, `INSERT INTO movimentacoes_almoxarifado (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, usuario_nome, cancelado)
@@ -67,6 +75,7 @@ const NOVAS = ['saldo-por-lote', 'series-em-estoque', 'saldos-comprometidos'];
         || XLSX.read(xls.body, { type: 'buffer' }).Sheets[XLSX.read(xls.body, { type: 'buffer' }).SheetNames[0]], { header: 1 });
       assert.deepStrictEqual(linhas[0], RELATORIOS[tipo].colunas.map((c) => c.rotulo));
       assert.strictEqual(linhas.length - 1, json.body.length);
+      assert.ok(json.body.length > 0, `: comparacao vazia (0 = 0) nao prova nada`);
     });
   }
 

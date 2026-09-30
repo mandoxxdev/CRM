@@ -142,7 +142,9 @@ const RELATORIOS = {
     categoria: 'Movimentações',
     acao: null,
     exportavel: true,
-    nota: "Mostra as 500 movimentações mais recentes do filtro.",
+    nota: 'Mostra as 500 movimentações mais recentes do filtro. Os grupos se sobrepõem: AJUSTE_POSITIVO '
+      + 'está em ENTRADA e em AJUSTE, e AJUSTE_NEGATIVO em SAIDA e em AJUSTE — não some grupos. A busca '
+      + 'por usuário ignora maiúsculas só em letras sem acento.',
     // Fase 2, I5: a query do proprio relatorio ja tem LIMIT 500 (reportService.js) — o export
     // herda esse teto, nunca refaz a query sem limite.
     limite: 500,
@@ -459,7 +461,9 @@ const RELATORIOS = {
     exportavel: true,
     nota: 'O saldo de cada lote é o ATRIBUÍDO a ele. Saídas que não informam lote (a entrega de '
       + 'requisição, por exemplo) e o ajuste de saldo total não baixam de lote nenhum — elas aparecem '
-      + 'na linha "Sem lote atribuído", que pode ser negativa. Lote + Sem lote atribuído = físico total.',
+      + 'na linha "Sem lote atribuído", que pode ser negativa. Lote + Sem lote atribuído = físico total. '
+      + 'Lote negativo aparece (material que permite saldo negativo). Material com controle de lote que '
+      + 'nunca teve lote aparece só com a linha "Sem lote atribuído". Materiais inativos ficam fora.',
     limite: null,
     params: [],
     colunas: [
@@ -497,8 +501,9 @@ const RELATORIOS = {
     categoria: 'Estoque',
     acao: null,
     exportavel: true,
-    nota: 'Materiais com saldo reservado, bloqueado, em inspeção ou em terceiros. Disponível = físico '
-      + 'menos essas quatro retenções.',
+    nota: 'Materiais ativos com saldo reservado, bloqueado, em inspeção ou em terceiros. Disponível = físico '
+      + 'menos essas quatro retenções. Material inativado com retenção não aparece aqui (mesma régua de '
+      + '"Materiais bloqueados").',
     limite: null,
     params: [],
     // As quatro colunas de retenção TEM de ser as de availabilitySql.COLUNAS_RETENCAO — o teste do

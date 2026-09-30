@@ -49,7 +49,24 @@ async function relatorioSaldoPorLote(db) {
     if (!porMaterial.has(l.material_id)) porMaterial.set(l.material_id, { base: l, soma: 0, linhas: [] });
     const g = porMaterial.get(l.material_id);
     g.soma += Number(l.quantidade) || 0;
-    if ((Number(l.quantidade) || 0) > EPS_SALDO) g.linhas.push(l);
+    // Fase 5 (I1): |saldo| e não saldo > 0 — com `permite_saldo_negativo` o motor deixa um lote
+    // negativar de propósito, e escondê-lo enquanto ele entra na conta fazia a tela somar 10 com o
+    // físico em 5. Só o lote EXATAMENTE zerado some.
+    if (Math.abs(Number(l.quantidade) || 0) > EPS_SALDO) g.linhas.push(l);
+  }
+
+  // Fase 5 (I2): material com controle de lote que NUNCA teve lote (o legado que ganhou o controle
+  // depois de já ter estoque) não tinha linha nenhuma — enquanto o de lote zerado aparecia com o
+  // residual. Os dois estão no mesmo estado; entram os dois, com o físico inteiro sem lote.
+  const semLoteNenhum = await dbAll(db, `SELECT m.id as material_id, m.codigo as material_codigo,
+      m.nome as material_nome, ${CLIENTE_SQL} as cliente, m.quantidade_atual as fisico_material
+    FROM materiais_almoxarifado m
+    LEFT JOIN clientes cl ON cl.id = m.proprietario_cliente_id
+    WHERE m.ativo = 1 AND m.controle_lote = 1 AND ABS(COALESCE(m.quantidade_atual, 0)) > ${EPS_SALDO}
+      AND NOT EXISTS (SELECT 1 FROM estoque_saldo_almoxarifado s WHERE s.material_id = m.id AND s.lote_id IS NOT NULL)
+    ORDER BY m.nome`);
+  for (const m of semLoteNenhum) {
+    porMaterial.set(m.material_id, { base: m, soma: 0, linhas: [] });
   }
 
   const saida = [];
