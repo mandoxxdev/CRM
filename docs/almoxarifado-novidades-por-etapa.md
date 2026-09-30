@@ -857,7 +857,9 @@ SELECT status, urgencia, COUNT(*) AS qtd
   encaixa em regra de urgência. A trava que impede aprovar Crítico automaticamente e a ordem da lista
   já tratam `critico` minúsculo como Crítico.
 
-### B. Decisões de negócio — B1 a B200; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B204; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+*(**Atualizado em 2026-09-30 de B200 para B204**, com as quatro da Etapa 49 — a B202 veio da revisão do código.)*
 
 *(**Atualizado em 2026-09-30 de B196 para B200**, com as quatro da Etapa 48 — a B199 veio da revisão do código.)*
 
@@ -3609,6 +3611,29 @@ substituindo a regra inteira (o comportamento anterior).
 independentes pela regra desta base, mas pequenas: separá-las em cópias paralelas custava mais do
 que ganhava. Decisão de processo, registrada porque a base mede o paralelismo em toda etapa.
 
+**B201 (NOVA, da Etapa 49) — os três relatórios de saldo INCLUEM material de cliente, com a coluna
+Cliente.** **Escolhido:** lote, série e reserva de material de cliente são justamente o que o
+almoxarife precisa ver (o material está no galpão). **Descartado:** repetir o corte do *Estoque atual*,
+que exclui material de cliente — lá o corte existe por causa da **valorização** (somar patrimônio
+alheio ao nosso), e nenhum dos três relatórios novos valoriza. Mesma régua que *Materiais bloqueados*
+já usava.
+
+**B202 (NOVA, da Etapa 49, revisão do código) — o lote NEGATIVO aparece no Saldo por lote.** Num
+material que permite saldo negativo, o sistema deixa um lote negativar de propósito. **Escolhido:**
+mostrar, porque ele entra na conta — escondê-lo fazia a tela somar 10 com o físico em 5. **Descartado:**
+esconder "o que não faz sentido": o número some e a conta deixa de fechar.
+
+**B203 (NOVA, da Etapa 49) — os grupos do histórico SE SOBREPÕEM.** *ENTRADA* e *SAIDA* seguem as listas
+que o próprio estoque usa, e o ajuste positivo/negativo está nelas **e** em *AJUSTE*. **Escolhido:**
+grupo = "pertence a", declarado na nota (*"não some grupos"*). **Descartado:** grupos exclusivos — o
+ajuste negativo **é** saída para o estoque, e tirá-lo de SAIDA faria o relatório contradizer o saldo.
+
+**B204 (NOVA, da Etapa 49) — o Saldo por lote mostra a verdade que existe hoje, em vez de corrigir o
+estoque.** O saldo de lote é o **atribuído**; as saídas sem lote ficam numa linha sem lote.
+**Escolhido:** o relatório mostra a linha *"Sem lote atribuído"* e o físico, e diz isso na nota.
+**Descartado:** fazer a entrega de requisição e o ajuste baixarem de um lote (qual? o mais antigo?) —
+é mudança de regra do estoque, com efeito em tudo que usa lote, e merece etapa própria (ver **C71**).
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -4581,6 +4606,14 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
     **Recomendação para quem configura:** toda regra com pelo menos duas pessoas, ou regras que não se
     sobreponham.
 
+71. **NOVO, achado na Etapa 49 (anterior a ela) — a tela de LOTES mostra o saldo ATRIBUÍDO ao lote como
+    se fosse o que está na prateleira.** Cenário: entrada de **100** no lote A; uma requisição de **30**
+    é **entregue** (a entrega não pergunta lote). O material fica com **70** — mas em **Lotes e Séries**
+    o lote A continua mostrando **100**. O mesmo vale para o **ajuste de saldo total** e para as saídas
+    que não informam lote. **Até a correção:** confira lote pelo relatório **Saldo por lote**, que mostra
+    a linha *"Sem lote atribuído"* e o físico total. Corrigir a tela (ou fazer essas saídas baixarem de
+    lote) é etapa própria — ver **B204**.
+
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -5102,6 +5135,20 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(48) A feature de aprovações não fica verde nesta etapa.** Faltam a **dupla aprovação de ajuste**
   (espera a decisão **B11**) e a **regra da lista técnica** (depende da feature 22, que não existe).
 
+- **(49) Saldo por endereço / por almoxarifado fica fora.** Saldo segregado por almoxarifado não se
+  propõe (área física, não filial). Um relatório de **onde está fisicamente** precisaria de saldo por
+  endereço confiável, e essa confiabilidade não foi medida.
+
+- **(49) O filtro de centro de custo pede o NÚMERO (id) do centro de custo.** A tela de relatórios só
+  sabe desenhar texto, número e data; não há lista de escolha. A coluna do resultado mostra código e
+  nome.
+
+- **(49) A busca por usuário ignora maiúsculas só em letras sem acento.** *"ana"* acha *"Ana"*, mas
+  *"josé"* não acha *"JOSÉ"*. Está na nota do relatório.
+
+- **(49) O histórico do relatório corta nas 500 mais recentes e esconde os cancelados.** O histórico
+  completo é a tela **Movimentações** filtrada pelo material.
+
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
 **"Uma remessa não pode misturar materiais de donos diferentes."** O sistema hoje **recusa** montar
@@ -5440,6 +5487,14 @@ a recarga. O que **só o navegador** prova:
    rolar demais.
 2. **O campo Urgência e a caixa "material de cliente" cabem no formulário da regra?** O formulário
    ganhou um campo e uma caixa.
+
+**(49) Nenhum clique foi dado nesta etapa.** Os testes provam as contas, os filtros e a exportação. O
+que **só o navegador** prova:
+
+1. **A nota do *Saldo por lote* cabe e é lida?** Ela é longa, e é ela que explica a linha *"Sem lote
+   atribuído"*. Conferir que aparece inteira no rodapé do relatório.
+2. **O campo "Grupo (ENTRADA, SAIDA, AJUSTE, DEVOLUCAO ou TRANSFERENCIA)" cabe no formulário do
+   histórico?** O rótulo é longo.
 
 ### G. Fragilidades estruturais que continuam de pé
 
@@ -12856,7 +12911,131 @@ dela. Corrigido no envio (cenário 2). E dois pontos em que **editar uma regra a
 novos** — um no servidor, um na tela — ganharam teste; o código da tela estava certo e nenhum teste o
 protegia.
 
+## Etapa 49 — Os relatórios de saldo que faltavam (2026-09-30)
+
+Na tela de Relatórios dava para ver o estoque, os bloqueados e o histórico de movimentações — mas não
+dava para responder perguntas que o almoxarife faz todo dia: *"quanto sobrou do lote tal?"*, *"que
+números de série estão aqui dentro?"*, *"quanto deste material está preso em reserva, inspeção ou com
+terceiro?"*, *"o que o fulano movimentou?"*, *"quanto foi para o centro de custo tal?"*. E o filtro
+de tipo do histórico pedia o nome **exato** do movimento — quem digitava *ENTRADA* via só um dos oito
+tipos de entrada.
+
+Agora, em **Almoxarifado → Relatórios**, a categoria **Estoque** tem três relatórios novos, e o
+**Histórico de movimentações** filtra por grupo, por usuário e por centro de custo — tudo na mesma
+tela e com a mesma exportação para Excel.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| — | Relatório **Saldo por lote**, com a linha **"Sem lote atribuído"** que fecha a conta com o físico |
+| — | Relatório **Séries em estoque** (em estoque e bloqueadas) |
+| Só havia *Materiais bloqueados* | Relatório **Saldos comprometidos**: físico, reservado, bloqueado, em inspeção, em terceiros e disponível |
+| Filtro *Tipo de movimento* só pelo nome exato (*ENTRADA* trazia 1 de 8 tipos de entrada) | Filtro **Grupo**: ENTRADA, SAIDA, AJUSTE, DEVOLUCAO ou TRANSFERENCIA |
+| O histórico não dizia quem movimentou nem para qual centro de custo | Colunas **Usuário** e **Centro de custo**, e filtros por eles |
+
+### As regras, com o cenário exato
+
+**Preparação:** um material com **Controle por lote**, dois lotes (A e B), e um usuário que faça
+entregas de requisição.
+
+**1. Saldo por lote — o saldo do lote é o ATRIBUÍDO a ele.** Dê entrada de **100** no lote A. Faça uma
+requisição de **30** desse material e **entregue** (a entrega não pergunta lote). Abra **Relatórios →
+Estoque → Saldo por lote**: o lote **A** aparece com **100**, e logo abaixo a linha **"Sem lote
+atribuído"** com **−30**; a coluna **Físico total do material** mostra **70** nas duas linhas. **Lote +
+Sem lote atribuído = físico.** A tela explica isso na nota do relatório:
+→ *"O saldo de cada lote é o ATRIBUÍDO a ele. Saídas que não informam lote (a entrega de requisição,
+por exemplo) e o ajuste de saldo total não baixam de lote nenhum — elas aparecem na linha "Sem lote
+atribuído", que pode ser negativa. Lote + Sem lote atribuído = físico total. Lote negativo aparece
+(material que permite saldo negativo). Material com controle de lote que nunca teve lote aparece só
+com a linha "Sem lote atribuído". Materiais inativos ficam fora."*
+
+**2. O lote zerado some; o negativo aparece.** Dê saída de todo o lote B **informando o lote**: ele
+não aparece mais. Num material que **permite saldo negativo**, uma saída maior que o lote deixa o
+lote **negativo** — e ele **aparece**, para a conta fechar (ver **B202**).
+
+**3. Material com controle de lote que nunca teve lote.** Um material antigo que ganhou *Controle por
+lote* depois de já ter estoque aparece **só** com a linha *"Sem lote atribuído"*, com o físico inteiro.
+
+**4. Séries em estoque.** **Relatórios → Estoque → Séries em estoque**: uma linha por número de série
+**em estoque** ou **bloqueado**, com material, número, status e lote. Série entregue, sucateada ou
+estornada não aparece. Nota: *"Séries presentes no almoxarifado: em estoque e bloqueadas."*
+
+**5. Saldos comprometidos.** **Relatórios → Estoque → Saldos comprometidos**: só os materiais com
+**alguma** retenção. Colunas **Físico, Reservado, Bloqueado, Em inspeção, Em terceiros, Disponível** —
+e o *Disponível* é o mesmo número do relatório *Estoque atual*. Material só em inspeção, ou só com
+terceiro, também aparece. Nota: *"Materiais ativos com saldo reservado, bloqueado, em inspeção ou em
+terceiros. Disponível = físico menos essas quatro retenções. Material inativado com retenção não
+aparece aqui (mesma régua de "Materiais bloqueados")."*
+
+**6. Material de cliente aparece nos três, com o nome do cliente** na coluna **Cliente** (ver **B201**).
+
+**7. Histórico por grupo.** **Relatórios → Movimentações → Histórico de movimentações**, campo **Grupo
+(ENTRADA, SAIDA, AJUSTE, DEVOLUCAO ou TRANSFERENCIA)**: *ENTRADA* traz **todos** os tipos de entrada;
+*AJUSTE* traz todos os ajustes; aceita minúsculas. Qualquer outra palavra:
+→ *"Grupo de movimento inválido: COMPRAS (use ENTRADA, SAIDA, AJUSTE, DEVOLUCAO ou TRANSFERENCIA)"*
+(aparece no painel do relatório e num aviso). **Os grupos se sobrepõem** — o ajuste positivo está em
+ENTRADA e em AJUSTE; o negativo, em SAIDA e em AJUSTE. **Não some os grupos** (ver **B203**). A nota diz:
+*"Mostra as 500 movimentações mais recentes do filtro. Os grupos se sobrepõem: AJUSTE_POSITIVO está em
+ENTRADA e em AJUSTE, e AJUSTE_NEGATIVO em SAIDA e em AJUSTE — não some grupos. A busca por usuário
+ignora maiúsculas só em letras sem acento."*
+
+**8. Histórico por usuário e por centro de custo.** Campo **Usuário (parte do nome)**: *"ana"* traz as
+movimentações da Ana. Um **%** ou **_** digitado vale como letra, não como curinga. Campo **Centro de
+custo (id)**: o **número** do centro de custo (ver a limitação **(49)** em D). As colunas novas
+**Usuário** e **Centro de custo** (código e nome) saem na tabela e no Excel.
+
+**9. Exportar.** Depois de **Consultar**, cada relatório novo mostra **Exportar XLSX**, com o cabeçalho igual às colunas da tela; o
+filtro de grupo vale também na exportação.
+
+### O que esta etapa NÃO cobre
+
+1. **Saldo por endereço / por almoxarifado.** Saldo separado por almoxarifado não se propõe (almoxarifado
+   é área física, não filial). Um relatório de **onde está fisicamente** precisaria de saldo por
+   endereço confiável, e isso não foi medido. Letra **D**.
+2. **A tela de Lotes continua mostrando o saldo atribuído como se fosse o físico** — é um defeito
+   anterior a esta etapa, na letra **C** (**C71**). Até corrigir, a conferência de lote é pelo
+   relatório *Saldo por lote*.
+3. **PDF** continua fora (impressão do navegador).
+4. **Previsto × realizado** depende da feature de ordem de produção/lista técnica, que não existe.
+5. **O histórico completo** (sem teto e com os cancelados) continua sendo a tela **Movimentações**
+   filtrada por material; o relatório corta nas 500 mais recentes.
+
+### O que a revisão encontrou
+
+**Plano:** **1 CRITICAL** — a primeira versão do *Saldo por lote* somava só os lotes, e a revisão
+provou, fazendo as movimentações de verdade, que **o saldo de lote não é o físico**: a entrega de
+requisição não informa lote, e o lote continuava *"com 100"* com o material em 70. O desenho estava
+errado; virou a linha *"Sem lote atribuído"*. A mesma revisão mostrou que três itens que a minha
+medição deu por *"cobertos"* não estavam — o filtro de tipo era exato (virou o **Grupo**) e o
+usuário/centro de custo existiam só na tela Movimentações, não no relatório.
+
+**Código pronto:** dois revisores (o que sabota numa cópia separada), **0 CRITICAL, 2 IMPORTANT, 3
+MINOR, nenhum ruído**. Os dois IMPORTANT eram o mesmo relatório escondendo coisa: o **lote negativo**
+sumia da tela mas continuava na conta, e o **material de controle por lote que nunca teve lote** não
+aparecia. Os três MINOR viraram texto nas notas (inativo, grupos sobrepostos, acento na busca). O
+segundo revisor mostrou **10 lugares** em que o código estava certo mas nenhum teste o protegia (lote em
+dois endereços, cada grupo, validade do lote, retenção isolada…) — todos ganharam teste, e cada teste
+novo foi confirmado quebrando o código de propósito.
+
 ## Onde estamos e o que vem a seguir
+
+- **Etapa 49 entregue (2026-09-30):** **os relatórios de saldo que faltavam.** Em **Relatórios →
+  Estoque**: **Saldo por lote** (com a linha *"Sem lote atribuído"* que fecha a conta com o físico),
+  **Séries em estoque** e **Saldos comprometidos** (reservado, bloqueado, em inspeção, em terceiros,
+  disponível); e o **Histórico de movimentações** filtra por **grupo**, **usuário** e **centro de
+  custo**. **Todos os itens de relatório de estoque e de movimentação da especificação estão pagos** —
+  cinco já estavam cobertos por relatórios que existiam. A feature de relatórios fica a dois itens do
+  verde, os dois presos a outras features (previsto × realizado; indicadores restantes).
+  **O que é seu:** as decisões **B201 a B204** — a que mais pede leitura é a **B204** (o relatório mostra
+  o saldo de lote como ele é, em vez de mudar a regra do estoque); o furo **C71** (a tela de Lotes mostra
+  o saldo atribuído como físico — anterior a esta etapa); as limitações **(49)** em D; e as
+  verificações **(49)** em F.
+  **O que a revisão achou:** no plano, **1 CRITICAL** — o saldo de lote **não é** o físico (provado
+  movimentando de verdade: lote *"com 100"*, material com 70), e três itens que eu dei por cobertos não
+  estavam. No código, **0 CRITICAL / 2 IMPORTANT / 3 MINOR, nenhum ruído**: o lote negativo e o material
+  sem lote nenhum sumiam da tela. E **10 lugares** certos no código mas sem teste que os protegesse —
+  todos ganharam teste.
 
 - **Etapa 48 entregue (2026-09-30):** **regras por urgência e por material de cliente, e a fila da
   aprovação simples.** A urgência virou lista fechada (Normal, Urgente, Crítico) — o que entra fora

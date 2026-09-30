@@ -1,6 +1,10 @@
 # 21 — Relatórios, Dashboards e Indicadores
 
-> **Status:** 🟡→quase-🟢 — **Etapa 13 entregue (2026-08-24, `4fdda54..8bb5e52`)**: tela de relatórios dirigida por registro único com gate declarado por chave, exportação XLSX, indicadores gerenciais e cartões no dashboard. Falta da spec 27: PDF, indicadores dependentes de outras features (previsto×realizado precisa da 22), quebras por lote/série/cliente valoradas · **Spec original:** seção 27
+> **Status:** 🟡→quase-🟢 — **Etapa 49 (2026-09-30, `492b14f..` fechamento): os relatórios de SALDO que faltavam** — saldo por lote (atribuído + "Sem lote atribuído", que fecha com o físico), séries em estoque, saldos comprometidos, e o histórico de movimentações por grupo, usuário e centro de custo. Com isso **todos os itens de "Relatórios de estoque" e "Relatórios de movimentação" estão pagos** (cinco deles já estavam cobertos por chaves existentes — ver o checklist). **Falta para 🟢:** previsto × realizado (depende da 22) e os indicadores restantes da spec 27 (cada um com a feature dona); o **saldo por endereço** ficou fora de propósito (ver o item). · **Etapa 13 entregue (2026-08-24, `4fdda54..8bb5e52`)**: tela de relatórios dirigida por registro único com gate declarado por chave, exportação XLSX, indicadores gerenciais e cartões no dashboard. · **Spec original:** seção 27
+>
+> **CORREÇÃO DE FATO (regra 5), Etapa 49:** o item do Levantamento dizia "**são 18**" chaves no
+> registro — **estava errado**: eram **19** (a `custo-por-projeto`, `reportRegistry.js:416`, entrou na
+> Etapa 14 e esta spec não foi reaberta). Com a Etapa 49 são **22**.
 >
 > **CORREÇÕES DE FATO (regra 5 — o texto abaixo afirmava e ESTAVA ERRADO):** este arquivo
 > dizia "**15** tipos no mapa" e "eram 16" — no início da Etapa 13 eram **17** (medido), e com
@@ -52,21 +56,21 @@ replicar, com controle positivo do próprio padrão de busca.
 ## Checklist
 
 ### Levantamento (fazer primeiro)
-- [x] Listar os tipos do mapa `reports` e casar com a spec 27 — `781c784` (**são 18**, todos no
+- [x] Listar os tipos do mapa `reports` e casar com a spec 27 — `781c784` (**são 18** — *dizia 18; **estava errado**: eram **19** desde a Etapa 14; **agora 22**, Etapa 49* —, todos no
   `reportRegistry.js` com titulo/categoria/gate/params/colunas/limite/nota declarados por
   chave; a validação de subida derruba o processo se dispatcher e registro divergirem)
 
 ### Relatórios de estoque (spec 27)
-- [ ] Saldo por item / localização / almoxarifado — verificar cobertura atual
-- [ ] Saldo por lote / número de série (depende da feature 10)
-- [ ] Saldo por cliente (feature 13) / por projeto
-- [ ] Saldo reservado / bloqueado / em quarentena / em terceiros (features 07/09/14)
-- [ ] Estoque disponível (fórmula da feature 03)
+- [x] Saldo por item — coberto pela chave **`estoque-atual`** (existente, `781c784`). **Por localização / almoxarifado: FORA, de propósito.** Saldo segregado por almoxarifado não se propõe (almoxarifado é área física, não filial — CLAUDE.md); um relatório de **onde está fisicamente** precisaria de saldo por endereço confiável, e a Fase 0 da Etapa 49 não mediu se `estoque_saldo_almoxarifado.localizacao_id` é mantido em toda movimentação (letra D da 49). O endereço **padrão** do material já sai em `materiais-sem-endereco` (o inverso).
+- [x] Saldo por lote / número de série — chaves **`saldo-por-lote`** e **`series-em-estoque`** (Etapa 49, `c71cb87`; Fase 5 `5eeed45`). ⚠️ **O saldo de lote é o ATRIBUÍDO, não o físico:** as saídas sem lote (entrega de requisição) e o ajuste de saldo total gravam na linha sem lote; o relatório mostra a linha **"Sem lote atribuído"** (pode ser negativa) para a conta fechar com o físico. A Fase 2 da 49 **derrubou a primeira versão desta RN por sonda** (entrada de 100 no lote A, entrega de 30 sem lote → lote "com 100", material com 70).
+- [x] Saldo por cliente — coberto pela chave **`materiais-cliente`** ("Posição por cliente", existente, `6e97715`). **Por projeto:** coberto em parte — custo e reserva por projeto/OS (`custo-por-projeto`, `reservado-os`); saldo **físico** por projeto não existe porque o saldo é por material, não por projeto.
+- [x] Saldo reservado / bloqueado / em quarentena / em terceiros — chave **`saldos-comprometidos`** (Etapa 49, `c71cb87`), montada de `COLUNAS_RETENCAO` + `disponivelSql`; o teste do registro exige `colunas ⊇ COLUNAS_RETENCAO` (uma retenção nova sem coluna toma vermelho). `materiais-bloqueados` continua existindo.
+- [x] Estoque disponível — coberto pela chave **`estoque-atual`**, coluna `disponivel` (existente, `0a01124`, fórmula única `disponivelSql`).
 
 ### Relatórios de movimentação
-- [ ] Entradas/saídas por período · transferências · devoluções · ajustes — parcial
-- [ ] Por usuário / por projeto / por centro de custo
-- [ ] Histórico completo do item (feature 03)
+- [x] Entradas/saídas por período · transferências · devoluções · ajustes — **`historico-movimentacoes`** com o parâmetro novo **`grupo`** (Etapa 49, `c71cb87`). *Antes desta etapa o item estava "parcial" e a Fase 0 o marcou "coberto" — **errado**: o filtro `tipo` é exato sobre texto livre (entradas são 8 tipos); a Fase 2 derrubou.* Os grupos se sobrepõem (AJUSTE_POSITIVO em ENTRADA e AJUSTE) — declarado na nota.
+- [x] Por usuário / por centro de custo — parâmetros **`usuario`** e **`centro_custo_id`** + colunas no **`historico-movimentacoes`** (Etapa 49, `c71cb87`). A rota `GET /movimentacoes` já filtrava os dois; faltava no relatório (tela/XLSX). **Por projeto:** `consumo-periodo` (param `projeto_id`) e `custo-por-projeto`.
+- [x] Histórico completo do item — a cobertura **completa** é **`GET /api/almoxarifado/movimentacoes?material_id=`** (`routes/almoxarifado.js:920`, sem teto e com os cancelados, tela Movimentações). O relatório `historico-movimentacoes` filtrado por material corta em 500 e esconde cancelados — é o recorte exportável, não o histórico completo.
 
 ### Gestão e indicadores — ver a seção "entregue na Etapa 13" abaixo para o estado atual
 - [x] Acuracidade — já era da 10b (rota própria, gate `inventario`) · giro/cobertura/rupturas — Etapa 13, ver abaixo

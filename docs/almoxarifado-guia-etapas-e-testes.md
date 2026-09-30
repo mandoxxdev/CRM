@@ -1,12 +1,24 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-09-30 (Etapa 48) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-09-30 (Etapa 49) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 48) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 49) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-09-30 (Etapa 48 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-09-30 (Etapa 49 ENTREGUE · modo contínuo pelo mapa)
 >
-> **O desenvolvimento parou aqui: Etapa 48, 2026-09-30.** A **Etapa 48 (regras por urgência e por
+> **O desenvolvimento parou aqui: Etapa 49, 2026-09-30.** A **Etapa 49 (os relatórios de saldo que
+> faltavam)** fecha os relatórios de estoque e de movimentação da feature **21 (Relatórios)**: em
+> *Relatórios → Estoque* entram **Saldo por lote** (com a linha *"Sem lote atribuído"*, que fecha a conta
+> com o físico — o saldo de lote é o **atribuído**, não o da prateleira), **Séries em estoque** e
+> **Saldos comprometidos**; e o **Histórico de movimentações** filtra por **grupo**, **usuário** e
+> **centro de custo**. A feature 21 **continua 🟡**, presa a outras features (previsto × realizado;
+> indicadores restantes). **Atenção:** a tela de *Lotes e Séries* ainda mostra o saldo atribuído como
+> físico (furo C71, anterior).
+> **Próxima etapa:** ver *"Próxima tarefa detalhada"* no plano da Etapa 49.
+>
+> **Etapas 1 a 20 e 22 a 49 completas.**
+>
+> **Etapa 48, 2026-09-30.** A **Etapa 48 (regras por urgência e por
 > material de cliente, e a fila da aprovação simples)** completa o que a 47 deixou na feature **06
 > (Aprovações)**: as regras ganham os critérios **urgência** e **material de cliente**; a urgência vira
 > **lista fechada** (Normal, Urgente, Crítico — o resto é recusado com *"Urgência inválida: ⟨valor⟩"*,
@@ -15,8 +27,6 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 > presos a dependência: a dupla aprovação de ajuste (decisão **B11**) e a regra da lista técnica
 > (feature 22).
 > **Próxima etapa:** ver *"Próxima tarefa detalhada"* no plano da Etapa 48.
->
-> **Etapas 1 a 20 e 22 a 48 completas.**
 >
 > **Etapa 47, 2026-09-30.** A **Etapa 47 (o motor de aprovações ganha
 > regras, e a requisição de alto valor passa a ser cobrada)** fecha dois achados antigos da feature
@@ -4911,6 +4921,66 @@ que ele não tinha como repetir com sucesso garantido.
 - **Número de série de material** — continua sendo **digitado pelo operador** e de propósito não
   passa por este gerador. Retentar com outro número gravaria algo que ninguém digitou.
 - **Números de outros módulos do CRM** — a varredura foi do almoxarifado.
+
+---
+
+## Etapa 49 — Os relatórios de saldo que faltavam (ENTREGUE — 2026-09-30)
+
+**O que mudou, em uma frase:** a tela de **Relatórios** ganha, na categoria **Estoque**, o **Saldo por
+lote**, as **Séries em estoque** e os **Saldos comprometidos**; e o **Histórico de movimentações** passa
+a filtrar por **grupo**, **usuário** e **centro de custo**.
+
+**O problema que ela resolve.** Perguntas de todo dia — *quanto sobrou do lote?*, *que séries estão aqui?*,
+*quanto está preso em reserva, inspeção ou com terceiro?*, *o que fulano movimentou?* — não tinham
+relatório. E o filtro de tipo do histórico pedia o nome exato: *ENTRADA* trazia um dos oito tipos de
+entrada.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Sem relatório de lote | **Saldo por lote**, com a linha **"Sem lote atribuído"** que fecha com o físico |
+| Sem relatório de séries | **Séries em estoque** (em estoque e bloqueadas) |
+| Só *Materiais bloqueados* | **Saldos comprometidos**: físico, reservado, bloqueado, em inspeção, em terceiros, disponível |
+| Filtro *Tipo de movimento* pelo nome exato | Filtro **Grupo** (ENTRADA, SAIDA, AJUSTE, DEVOLUCAO, TRANSFERENCIA) |
+| Histórico sem usuário nem centro de custo | Colunas e filtros **Usuário** e **Centro de custo** |
+
+### Roteiro de teste manual (≈10 min)
+
+**Preparação.** Um material com **Controle por lote** e dois lotes cadastrados (A e B); um material
+qualquer com uma **reserva** (aprove uma requisição dele com saldo).
+
+1. **Entrada por lote.** Em **Movimentações**, dê **Entrada** de **100** no lote A e de **20** no lote B.
+2. **Uma saída sem lote.** Faça uma requisição de **30** desse material, aprove, separe e **entregue**
+   (a entrega não pergunta lote).
+3. **Saldo por lote.** **Almoxarifado → Relatórios → Estoque → Saldo por lote → Consultar**: o lote **A**
+   com **100**, o **B** com **20**, e a linha **"Sem lote atribuído"** com **−30**; a coluna **Físico
+   total do material** mostra **90**. **100 + 20 − 30 = 90.** Leia a nota no rodapé — ela explica isso.
+4. **O lote zerado some.** Em **Movimentações**, dê **Saída** de **20** informando o **lote B**. Consulte
+   de novo: o lote B **não** aparece mais.
+5. **Séries em estoque.** Num material com **Controle por número de série**, dê entrada de 2 séries.
+   **Relatórios → Estoque → Séries em estoque → Consultar**: as duas aparecem, com status *EM_ESTOQUE*.
+6. **Saldos comprometidos.** **Relatórios → Estoque → Saldos comprometidos → Consultar**: o material da
+   reserva aparece com a coluna **Reservado** preenchida e o **Disponível** = físico menos as retenções.
+   Um material sem nenhuma retenção **não** aparece.
+7. **Histórico por grupo.** **Relatórios → Movimentações → Histórico de movimentações**, campo **Grupo**
+   = *entrada* → **Consultar**: aparecem as entradas do passo 1 (todas, qualquer que seja o tipo exato).
+   Troque para *COMPRAS* → a tela mostra *"Grupo de movimento inválido: COMPRAS (use ENTRADA, SAIDA,
+   AJUSTE, DEVOLUCAO ou TRANSFERENCIA)"*.
+8. **Histórico por usuário.** Limpe o grupo e digite parte do **seu** nome em **Usuário (parte do
+   nome)** → só as suas movimentações; a coluna **Usuário** mostra o nome.
+9. **Exportar.** Em cada relatório novo, depois de **Consultar**, clique **Exportar XLSX**: a planilha tem
+   as mesmas colunas da tela.
+
+### O que esta etapa NÃO cobre
+
+- **A tela de Lotes (Lotes e Séries) ainda mostra o saldo atribuído como físico** — no passo 3, ela
+  continuaria mostrando o lote A com 100. É anterior a esta etapa (furo **C71** das novidades); confira
+  lote pelo relatório.
+- **Saldo por endereço / por almoxarifado** fica fora (almoxarifado é área física, não filial).
+- **O filtro de centro de custo pede o número (id)** do centro de custo — não há lista de escolha.
+- **A busca por usuário** ignora maiúsculas só em letras sem acento.
+- **PDF** continua fora.
 
 ---
 

@@ -458,6 +458,13 @@ Quando o lote é informado, a saída é validada **contra o saldo daquele lote**
 
 Ou seja: um material com 102 unidades no total, sendo 100 no lote `L-001` e 2 no `L-002`, recusa um pedido de 10 unidades do `L-002` — e a mensagem diz o saldo real daquele lote.
 
+**O saldo de um lote é o que foi atribuído a ele.** Entrada e saída que **informam** o lote movem o
+saldo daquele lote. As que **não informam** — a entrega de requisição, as saídas internas e o ajuste de
+saldo total — movem o saldo do material numa linha sem lote. Assim, a soma dos lotes pode ser maior ou
+menor que o físico do material; a diferença é o saldo **sem lote atribuído**. O relatório **Saldo por
+lote** (21d) mostra os dois e fecha a conta com o físico. A tela **Lotes e Séries** mostra o saldo
+atribuído de cada lote — para saber quanto do material não está em lote nenhum, use o relatório.
+
 ### 4.6 Certificado do fornecedor
 
 Com **Requer certificado** ligado no material, o lote nasce **Bloqueado** no recebimento, com o motivo *"Certificado do fornecedor nao anexado"*. O material entra fisicamente no estoque; a saída é que fica travada. A trava mora no lote — se o item for recebido sem lote informado, não há o que bloquear; por isso esta opção anda junto com **Controle por lote**.
@@ -4672,6 +4679,49 @@ permissão de um relatório simplesmente não o vê no menu; forçar o endereço
   de consumo (por OS, por período, mais consumidos) contam apenas as saídas diretas de
   produção; o indicador de giro conta tudo que debita o patrimônio (incluindo sucata e
   perda). Cada rodapé diz qual régua usa.
+
+### Saldo por lote, séries e saldos comprometidos
+
+No grupo **Estoque**, visíveis para todo perfil com acesso ao módulo:
+
+- **Saldo por lote** — uma linha por lote com saldo, com **Validade**, **Status do lote**, **Saldo
+  atribuído** e **Físico total do material**. O saldo de um lote é o **atribuído** a ele: as saídas
+  que não informam lote (a entrega de requisição, por exemplo) e o ajuste de saldo total não baixam de
+  lote nenhum. Por isso o relatório acrescenta, por material, a linha **"Sem lote atribuído"** =
+  físico − soma dos lotes, que **pode ser negativa**. A conta sempre fecha:
+  **soma dos lotes + Sem lote atribuído = físico total**. Exemplo: entrada de 100 no lote A, entrega
+  de 30 sem lote → lote A **100**, Sem lote atribuído **−30**, físico **70**.
+  Regras de quem aparece: lote com saldo **zero** não aparece; lote **negativo** aparece (material
+  que permite saldo negativo); material com controle de lote que **nunca teve lote** aparece só com a
+  linha "Sem lote atribuído"; material **inativo** fica fora.
+- **Séries em estoque** — uma linha por número de série **em estoque** ou **bloqueado** (os presentes
+  no almoxarifado), com material, número, status e lote. Séries entregues, sucateadas ou estornadas
+  não aparecem.
+- **Saldos comprometidos** — os materiais **ativos** com **alguma** retenção, com **Físico, Reservado,
+  Bloqueado, Em inspeção, Em terceiros** e **Disponível** (físico menos as quatro retenções — o mesmo
+  número do relatório Estoque atual). Material sem retenção não aparece; material inativado com
+  retenção também não (mesma régua de Materiais bloqueados).
+
+Os três incluem **material de cliente**, com o nome do dono na coluna **Cliente** — ao contrário do
+Estoque atual, que só lista o estoque próprio porque soma valor.
+
+### Histórico de movimentações — filtros por grupo, usuário e centro de custo
+
+Além de material, tipo exato e período, o **Histórico de movimentações** (grupo Movimentações) filtra
+por:
+
+- **Grupo (ENTRADA, SAIDA, AJUSTE, DEVOLUCAO ou TRANSFERENCIA)** — traz todos os tipos daquele grupo
+  (ENTRADA pega entrada de compra, manual, por devolução, retalho etc.; aceita minúsculas). Os grupos
+  **se sobrepõem**: o ajuste positivo está em ENTRADA e em AJUSTE, e o negativo em SAIDA e em AJUSTE —
+  não some grupos. Outra palavra é recusada:
+  *"Grupo de movimento inválido: COMPRAS (use ENTRADA, SAIDA, AJUSTE, DEVOLUCAO ou TRANSFERENCIA)"*.
+- **Usuário (parte do nome)** — um `%` ou `_` digitado vale como letra. Maiúsculas e minúsculas são
+  equivalentes só em letras sem acento.
+- **Centro de custo (id)** — o número do centro de custo.
+
+As colunas **Usuário** e **Centro de custo** (código e nome) saem na tela e no Excel. O relatório
+mostra as 500 movimentações mais recentes do filtro e não inclui as canceladas; o histórico completo
+de um material, sem teto e com as canceladas, é a tela **Movimentações** filtrada por ele.
 
 ### Custo por projeto
 

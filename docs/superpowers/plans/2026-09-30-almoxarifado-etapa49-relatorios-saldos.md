@@ -47,7 +47,7 @@
 ## Estado
 
 - [x] Fase 0 (desenho, seção 1) · [x] Fase 1
-- [x] Fase 2 (1 CRITICAL, 4 IMPORTANT — seção 6 do desenho) · [x] T1–T3 (`c71cb87`) · [x] T4 (`d77df40`) · [ ] Fase 5 · [ ] Fase 6
+- [x] Fase 2 (1 CRITICAL, 4 IMPORTANT — seção 6 do desenho) · [x] T1–T3 (`c71cb87`) · [x] T4 (`d77df40`) · [x] Fase 5 (fix-round `5eeed45`) · [x] Fase 6 (verificação final medida: `test:api` 226/226 · `test:almoxarifado` 42/42 · validation 4/4 · safealter 3/3 · sqlite 5/5 · client 872/872 em 53 suítes · build `CI=true` limpo)
 
 ## Execução (2026-09-30)
 
@@ -57,3 +57,72 @@
   - **Divergências:** os testes vieram **depois** do código, e as sabotagens são a prova. A varredura existente do registro chamava todo parâmetro de texto com `'x'`, e o `grupo` tem lista fechada; ganhou um `exemplo` opcional no parâmetro.
 - **T4 (`d77df40`):** `integracaoRelatoriosSaldos` 6/6, com 2 sabotagens vermelhas.
 - **Suítes:** `test:api` **226/226**, `test:almoxarifado` 42/42.
+
+## Fase 5 — revisão adversarial: 2 lentes, 1 fix-round (Fase 5 `5eeed45`)
+
+| Lente | Placar | O que era |
+|---|---|---|
+| Correção e exposição (sonda `f549rn-sonda.js`) | **0 CRITICAL, 2 IMPORTANT, 3 MINOR**; exposição **refutada** | **I1:** lote **negativo** (material que permite saldo negativo) sumia da tela mas entrava na conta — a tela somava 10 com o físico em 5. Agora `|saldo| > ε`. **I2:** material com controle de lote que **nunca teve lote** não aparecia, enquanto o de lote zerado aparecia com o residual — o legado sumia. Agora entra com o físico inteiro em "Sem lote atribuído". **M1** inativo (séries inclui, os outros excluem), **M2** grupos sobrepostos, **M3** acento no `LIKE` — os três viraram texto nas notas do registro |
+| Força dos testes (worktree isolada) | **10 sabotagens novas, 10 verdes** — o código estava certo, faltava cenário | lote em dois endereços (`SUM`→`MAX` passava), residual positivo, retenção isolada (só inspeção, só terceiros), grupos SAIDA/DEVOLUCAO/TRANSFERENCIA, validade/status do lote, material inativo, `_` no `LIKE`, grupo em minúscula, e a integração comparando **0 = 0** para lote e série (semente sem lote nem série) |
+
+**Ruído: 0** — a lição da Etapa 47 (revisor que sabota na mesma árvore) segue valendo: o de testes
+trabalhou em worktree, e viu as correções do I1/I2 na árvore principal sem confundi-las com as dele.
+
+**Os cenários que fecham:** `relatoriosSaldos` **8 → 16** — (2b) lote negativo, (2c) nunca teve lote,
+(2d) dois endereços + validade/status, (2e) residual positivo, (2f) inativo, (4b) retenção isolada,
+(6b) cada grupo + minúscula, (7b) `_`; `integracaoRelatoriosSaldos` ganhou lote e série na semente e
+a asserção `json.body.length > 0` (a comparação vazia não prova nada).
+
+**Controle positivo:** as duas correções (I1, I2) — 2/2 vermelhas; as dez lacunas reproduzidas contra
+os testes novos — **10/10 vermelhas**. ⚠️ **A S5 (`_` no escape) deu NO-OP DUAS VEZES** — uma por
+escape de shell, outra porque `\Q…\E` do perl consome uma barra antes de citar; refeita com uma
+âncora **sem barra** (`%_]`, contada: 1 ocorrência). É o sétimo NO-OP de harness desta base; a regra
+que fica: **âncora de sabotagem sem barra invertida sempre que possível**.
+
+## Retro de 4 números — Etapa 49
+
+1. **Rodadas de correção até verde: 1** (Fase 5). Mas o número que ensina é o da **Fase 2: 1 CRITICAL** —
+   a RN-01 (soma por lote) estava **errada**, e a sonda que a derrubou movimentou estoque de verdade. Sem a
+   Fase 2, o relatório de lote nasceria mentindo no fluxo principal de consumo.
+2. **Achados reais: 7** (1 CRITICAL + 4 IMPORTANT na Fase 2; 2 IMPORTANT na Fase 5) + 3 MINOR + **10 lacunas de
+   teste**. **Ruído: 0.** **E três afirmações da MINHA Fase 0 eram falsas** (dei por "coberto" o que não estava)
+   — a Fase 0 mediu pelo nome do contrato, mas não **executou** o filtro que dizia cobrir.
+3. **Paralelismo: 0 galhos** — as quatro tasks escrevem o mesmo registro, cuja validação é global; declarado no
+   desenho. Paralelismo de revisão (2 lentes) e de documentação (fork).
+4. **Defeito que escapou:** *preencher na Etapa 50.* Da 48 para cá: nenhum defeito da 48 foi achado nesta etapa.
+
+## Próxima tarefa detalhada — Etapa 50: a tela de Lotes para de mostrar o saldo atribuído como físico (fecha o C71)
+
+**Escolha, pela ordem do CLAUDE.md** (a "próxima tarefa" desta etapa → o que ficou para 🟢 → o mapa):
+- a **21** não vai a 🟢 sem a feature 22 (previsto × realizado) e as features donas dos indicadores restantes;
+- **medido no mapa** (`specs/modulo-almoxarifado/README.md`), as 🟡 restantes têm falta cara ou presa a decisão:
+  **02** (capacidade/peso, sugestão de localização, leitura por confirmação), **05** (lista de separação como
+  entidade, rota de picking), **08** (valores e validação fiscal), **23** (*"falta o cliente dizer quais
+  operações a exigem"* — decisão dele);
+- o **C71** é a única **mentira operacional em tela** conhecida, é pequeno, não depende de ninguém, e a
+  Etapa 49 já tem a régua que o resolve.
+
+**O que já está medido (Fase 0 parcial, feita neste fechamento):**
+- a tela é `client/src/components/almoxarifado/LotesAlmoxarifado.js`, que exibe `l.saldo` (`:417`) de
+  `GET /api/almoxarifado/materiais/:id/lotes` (`routes/almoxarifado/extended.js:1158`), servido por
+  `lotService.listarLotesDoMaterial` (`:206`) — `SUM(estoque_saldo.quantidade) WHERE lote_id = l.id`, o
+  **atribuído**;
+- a **mesma** rota é consumida com `com_saldo=1` pelos seletores de lote de **Movimentações**
+  (`MovimentacoesAlmoxarifado.js:241`), **Devoluções** (`DevolucoesAlmoxarifado.js:114`) e **Sobras**
+  (`SobrasAlmoxarifado.js:224`, `:251`), onde o atribuído é o **certo** (a saída por lote valida contra o saldo do lote — manual 4.5). **Não mudar o número
+  do lote**: o que falta é mostrar a **diferença** e o **físico**;
+- a régua já existe em `reportService.relatorioSaldoPorLote` (Etapa 49): residual = `quantidade_atual − Σ lotes`,
+  com `|x| > ε`, lote negativo exibido.
+
+**Contrato proposto (a Fase 1 da 50 congela):** a rota devolve um **array** — mudar para objeto quebraria esses quatro
+consumidores. Duas saídas, escolher na Fase 1: (a) rota nova `GET /materiais/:id/lotes/resumo` →
+`{ fisico, soma_lotes, sem_lote_atribuido }`, reaproveitando a régua do relatório (extraída para um helper
+único — **não** copiar a conta); (b) a tela calcula com o `quantidade_atual` do material que ela já tem e a
+soma de **todos** os lotes (sem `com_saldo`). **Preferir (a)**: fonte única, e o teste da régua já existe.
+**Na tela:** abaixo da tabela de lotes, a linha *"Sem lote atribuído"* e o *"Físico total"*, com um texto curto
+explicando — o mesmo da nota do relatório.
+
+**Pontos de atenção:** os seletores de lote (quatro consumidores de `com_saldo=1`) **não** mudam; material sem controle de lote não mostra a linha;
+a correção **não** faz a entrega de requisição baixar de lote (isso é mudança de regra do estoque — **B204**
+descartou); o C71 vira ✅ nas novidades com o hash, e o manual 4.5 perde a frase *"para saber quanto do
+material não está em lote nenhum, use o relatório"*.
