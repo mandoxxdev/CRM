@@ -204,6 +204,78 @@ Etapa 45 (achado 11).
 **executada** não aparece; NC **cancelada** com `PENDENTE` conservado não aparece (a amarração com a
 T2, e a razão de a régua exigir `status = 'DECIDIDA'` em vez de só `execucao_estado`).
 
+### ✅ T3 — feita (sem commit; integração pelo tronco)
+
+`alertaExecucaoPendente.api.test.js`, **7 cenários, 7/7**. `test:api` **215/215 arquivos** (eram
+214 — o arquivo novo) · almoxarifado **42/0** · validation **4/0** · safealter **3/0** · sqlite
+**5/0** · client **52 suítes / 845 testes, 0 falhas** · `CI=true react-scripts build` OK.
+
+**Arquivos tocados:** `server/services/almoxarifado/alertRegistry.js` (função nova, 15ª entrada,
+export, e o comentário mentiroso corrigido à vista), `server/services/almoxarifado/schema.js`
+(seed), `client/src/components/almoxarifado/ConfiguracoesAlmoxarifado.js` (`CAMPOS`),
+`client/src/components/almoxarifado/AlertasAlmoxarifado.js` (`COLUNAS_POR_CHAVE`),
+`server/tests/api/alertaExecucaoPendente.api.test.js` (novo) e as contagens em
+`alertaNaoConformidade`, `alertaPedidoAtrasado`, `alertaPedidoParcial`,
+`naoConformidadeIntegracao`, `alertaReprovadoExecutado` (servidor) +
+`client/.../ConfiguracoesGerais.test.js`.
+
+#### 🔴 Três divergências do plano, e duas custaram suíte vermelha
+
+1. **As asserções de contagem eram NOVE, não sete.** As duas que faltavam na lista:
+   · `alertaPedidoParcial.api.test.js:480` — `deepStrictEqual(medido, { total: 14, ... })` na
+     **carga a FRIO** (`execFileSync`). O plano contou três neste arquivo (`:458`, `:461`, `:523`)
+     e são **quatro**;
+   · `alertaReprovadoExecutado.api.test.js:120` — `assert.ok(!/nc\.execucao_estado\s*=/.test(fonte))`,
+     um guarda de **TEXTO-FONTE** que varria o `alertRegistry.js` **inteiro**. A régua da entrada
+     nova tem `nc.execucao_estado = 'PENDENTE'` no próprio SQL, por contrato, então o guarda ficou
+     vermelho acusando uma regressão que não existe. **Corrigido à vista e narrado no arquivo:** a
+     janela passou a ser o **corpo de `listarReprovados`** — que é o que as duas asserções sempre
+     quiseram dizer —, com uma terceira asserção contra vacuidade do corte (se o `slice` viesse
+     vazio, a negativa passaria de graça). Falso positivo em guarda de texto é pior que guarda
+     ausente: ele treina o próximo a "consertar" o código certo ou a apagar o guarda.
+
+2. **A config tem QUATRO pontas, não três.** A quarta é a **fixture
+   `RESPOSTA_DO_SERVIDOR`** de `client/.../ConfiguracoesGerais.test.js`: sem a chave nova ali, o
+   guard client-side de `handleSalvar` lê `configs[chave]` undefined, `Number` vira `NaN` e
+   **SETE testes de Salvar que nada têm a ver com a chave caem**. A nota da Etapa 43 nessa mesma
+   fixture **previa** isso por escrito ("medido: foi exatamente o que aconteceu"); esta task pagou
+   de novo. Cenário próprio acrescentado, no molde do da Etapa 43.
+
+3. **O comentário que eu escrevi sobre o dedupe estava errado, e a medição o derrubou.** Eu escrevi
+   que o prefixo `nc-exec-` evitava colisão com o `nc-<id>` da irmã. **Falso:** o `hash_dedupe` é
+   `sha256(EVENTO|chave)` (`notificationQueueService.js:42`) e os dois eventos são distintos —
+   `nc-<id>` cru nos dois **não** bateria no UNIQUE. Corrigido à vista no código, e o cenário (6)
+   agora **exige as duas linhas na fila** para a mesma NC. O prefixo fica por legibilidade da
+   chave na fila e no log, o que é um motivo menor e está dito como tal.
+
+#### As nove sabotagens — e duas foram NO-OP na primeira tentativa
+
+| # | Sabotagem | Cai | Asserção |
+|---|---|---|---|
+| 1 | janela por `created_at` em vez de `decidido_em` (1ª tentativa) | (2),(3),(4),(5),(7) | ⚠️ derrubou a **metade positiva** de (2) e a asserção-guarda nunca era alcançada. **O teste foi endurecido**: a positiva passou a ter a ABERTURA envelhecida também, então ela passa nas DUAS réguas |
+| 1b | idem, com o teste endurecido | (2) | *"a NC … foi ABERTA ha 60 dias mas decidida AGORA — a janela e por `decidido_em`"* |
+| 2 | tira `nc.status = 'DECIDIDA'` da régua | (4) e (7) | *"a NC … foi CANCELADA e continua cobrando execucao"* — **é a amarração com a T2**, e prova que `execucao_estado` sozinho não serve porque a RN-06 conserva a coluna |
+| 3 | tira `nc.execucao_estado = 'PENDENTE'` | (3) e (7) | *"a NC … foi EXECUTADA e nao podia continuar cobrando execucao"* |
+| 4 | `dedupeChave` sem o prefixo (1ª tentativa) | **nada** | ⚠️ **no-op**: `${linha.id}` dentro de `\Q…\E` foi **interpolado pelo perl** (`\Q` não impede interpolação de variável) e `subs=0` denunciou. Refeita com `\$\Q{…}\E` |
+| 4b | idem, na forma certa | (6) | *"esperava 1 linha na fila para NC-…, veio 0"* — guarda a **fórmula** da chave |
+| 5 | não semeia `alerta_nc_execucao_pendente_dias` em `schema.js` | (1) | *"alerta_nc_execucao_pendente_dias tinha de estar SEMEADA no schema"* |
+| 6 | tira `nc.decisao` do SELECT | (2) e (6) | (2) na linha do cartão e (6) em *"o corpo tem de dizer O QUE ficou combinado"* |
+| 7 | registro **sem a 15ª entrada** (`.slice(0, 14)`) | os **4** arquivos de contagem + o novo | `ALERT_REGISTRY.length === 15`, `alertas.length === 15`, `total: 15` na carga a frio, e `res.body.alertas.length === 15`. A `semCompras.length === 13` exigiu **sonda própria** (o cenário cai antes numa asserção anterior) — provada com cópia descartável do arquivo |
+| 8 | régua de `listarReprovados` volta a ler `nc.execucao_estado` **mantendo** o carimbo | (1) de `alertaReprovadoExecutado` | *"a regua voltou a medir o ESTADO do documento em vez do movimento"* — prova que o guarda **estreitado** continua guardando o que dizia guardar |
+| 9 | tira a linha de `CAMPOS` em `ConfiguracoesAlmoxarifado.js` | 1 de `ConfiguracoesGerais` | o cenário novo da Etapa 46 (a chave existe no banco e fica **ineditável** pela UI) |
+
+**A lição da sabotagem 4** é nova e vale escrita: **`\Q…\E` do perl NÃO impede interpolação de
+variável.** Um padrão com `${...}` dentro de `\Q` casa zero e o `-i` grava o arquivo intacto —
+sabotagem no-op com aparência de sabotagem. O detector aqui **não** foi o `md5sum` (o arquivo não
+mudou, então o hash bate com o backup e parece "restaurado"), foi o **contador de substituições**
+`warn "subs=$n"`. Contar substituições é mais forte que comparar hash: ele distingue "não mudou
+porque restaurei" de "não mudou porque não achei".
+
+**O que NÃO tem teste, e fica declarado:** o cartão da tela (`COLUNAS_POR_CHAVE`) não tem cenário
+de render próprio — `AlertasAlmoxarifado` não tem suíte de componente, e o fallback
+`colunasGenericas` faz a ausência da entrada **não quebrar nada**. A entrada foi posta agora
+justamente porque o defeito seria invisível; quem a apagar num refactor não fica vermelho.
+
 ---
 
 ## T4 — galho: a tela
@@ -237,6 +309,26 @@ legível e que o saldo **não** se moveu em nenhum dos passos.
 
 **É a única prova de que as partes compõem:** T2 prova o cancelamento, T3 prova o cartão, e nenhuma
 das duas prova que cancelar **cala** o cartão.
+
+**Contrato que a T3 entregou, e que a T5 consome** (congelado — a T5 não deve redescobrir por
+leitura de código):
+
+- `GET /api/almoxarifado/alertas/central` → `alertas[14]`, `chave:
+  'NAO_CONFORMIDADE_EXECUCAO_PENDENTE'`, `titulo: 'Execução pendente'`, `dias` vindo de
+  `alerta_nc_execucao_pendente_dias` (semeada em `7`).
+- Cada linha traz `id, numero, origem, tipo, status, decisao, decidido_em, execucao_estado,
+  material_id, material_codigo, material_nome, material_unidade, recebimento_id,
+  recebimento_numero, nota_fiscal, quantidade_esperada, quantidade_recebida, divergencia,
+  dias_pendente`. **Sem** `justificativa` e **sem** `*_por_nome` (B30).
+- Régua: `status = 'DECIDIDA' AND execucao_estado = 'PENDENTE' AND julianday('now') -
+  julianday(decidido_em) > dias`. Ordem `decidido_em ASC, id ASC`. Dedupe `nc-exec-<id>`.
+- **Ponto de atenção para a T5:** o fluxo ponta a ponta precisa **envelhecer `decidido_em`** (a
+  janela é por decisão, não por abertura) para a NC entrar no cartão antes do cancelamento —
+  envelhecer `created_at` **não** a coloca lá. Depois de cancelar, ela sai do cartão porque a
+  régua exige `status = 'DECIDIDA'`, e **não** porque `execucao_estado` mudou: a RN-06 conserva a
+  coluna em `PENDENTE`.
+- Helpers prontos para copiar: `itemComNc`, `decidirComExecucaoPendente`, `envelhecerDecisao` e
+  `envelhecerAbertura` em `server/tests/api/alertaExecucaoPendente.api.test.js`.
 
 ---
 
@@ -285,6 +377,6 @@ Exclusividade não é suficiência, e essa é a linha a acrescentar no próximo 
 - [x] Fase 0 — medida (no plano da Etapa 45, com **uma correção**: seção 7 do desenho)
 - [x] Fase 1 — desenho e plano
 - [x] Fase 2 — revisão do plano por agente fresco: **12 achados, 3 CRITICAL, 8 refutados** — desenho e plano corrigidos antes da primeira linha de código
-- [x] T1 — gate + rotulo, as duas pontas no mesmo commit — `a625fb7` · [x] T2 — colunas, servico, rota e RN-05 nos tres consumidores — `2afb944` · [ ] T3 · [ ] T4 · [ ] T5
+- [x] T1 — gate + rotulo, as duas pontas no mesmo commit — `a625fb7` · [x] T2 — colunas, servico, rota e RN-05 nos tres consumidores — `2afb944` · [x] T3 — 15ª entrada, config de **quatro** pontas e **nove** contagens (executada sem commit; hash a preencher na integração) · [ ] T4 · [ ] T5
 - [ ] Fase 5 — revisão adversarial
 - [ ] Fase 6 — `fechar-etapa`

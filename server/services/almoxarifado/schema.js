@@ -2422,6 +2422,13 @@ async function initSchema(db) {
     // Etapa 10 registrada acima): o administrador salvaria 200 "Configuracoes salvas!" e o motor
     // continuaria usando o default. Mesmo prefixo 'alerta_' ja validado nos dois lados.
     ['alerta_nc_parada_dias', '7', 'Dias com a nao conformidade ABERTA (sem decisao) para alertar documento parado'],
+    // Etapa 46 (T3, RN-08): janela do alerta NAO_CONFORMIDADE_EXECUCAO_PENDENTE — dias desde a
+    // DECISAO com a execucao ainda pendente. Chave PROPRIA, e nao a reutilizacao de
+    // `alerta_nc_parada_dias`: sao dois prazos com dois donos (decidir e da Qualidade, executar e
+    // de Compras e pode depender do fornecedor), e o motivo inteiro esta no comentario da entrada
+    // em alertRegistry.js. SEMEADA pelo mesmo motivo da irma acima — chave nao semeada e
+    // ineditavel pelo PUT /configuracoes (a licao da Etapa 10).
+    ['alerta_nc_execucao_pendente_dias', '7', 'Dias desde a decisao com a execucao da nao conformidade ainda PENDENTE para alertar'],
   ];
   for (const [chave, valor, desc] of configs) {
     await dbRun(db, 'INSERT OR IGNORE INTO configuracoes_almoxarifado (chave, valor, descricao) VALUES (?,?,?)', [chave, valor, desc]);

@@ -146,15 +146,18 @@ function resultadoDe(resultados, chave) {
   const linhaDaNc = (c, numero) => c.linhas.find((l) => l.numero === numero);
   const linhaDoItem = (c, itemId) => c.linhas.find((l) => l.item_id === itemId);
 
-  // ── (1) A ENTRADA EXISTE, E O REGISTRO TEM 14 ────────────────────────────────────────────────
+  // ── (1) A ENTRADA EXISTE, E O REGISTRO TEM 15 ────────────────────────────────────────────────
   await test('(1) a 14a entrada esta no registro, com titulo, janela configuravel e listar function', async () => {
     const e = entradaDaNc();
     assert.strictEqual(e.titulo, 'Não conformidade aberta', e.titulo);
     assert.deepStrictEqual(e.configDias, { chave: 'alerta_nc_parada_dias', default: 7 },
       `a janela tinha de sair da config: ${JSON.stringify(e.configDias)}`);
     assert.strictEqual(typeof e.listar, 'function');
-    assert.strictEqual(alertRegistry.ALERT_REGISTRY.length, 14,
-      `o registro tinha de ter 14 entradas, tem ${alertRegistry.ALERT_REGISTRY.length}`);
+    // 14 -> 15 na Etapa 46, T3: a entrada `NAO_CONFORMIDADE_EXECUCAO_PENDENTE`, que cobra a
+    // EXECUCAO da decisao (dono: Compras) e e IRMA desta aqui, que cobra a DECISAO (dono:
+    // Qualidade). O indice `[13]` abaixo continua certo: a nova entra NO FIM, no indice 14.
+    assert.strictEqual(alertRegistry.ALERT_REGISTRY.length, 15,
+      `o registro tinha de ter 15 entradas, tem ${alertRegistry.ALERT_REGISTRY.length}`);
     assert.strictEqual(alertRegistry.ALERT_REGISTRY[13].chave, EVENTO,
       'a entrada nova entra NO FIM — a ordem do registro e a ordem dos cartoes da tela');
 
@@ -166,7 +169,7 @@ function resultadoDe(resultados, chave) {
     assert.strictEqual(semeada.valor, '7', semeada.valor);
 
     const { alertas, cartao: c } = await cartao(EVENTO);
-    assert.strictEqual(alertas.length, 14, `a central tem ${alertas.length} cartoes`);
+    assert.strictEqual(alertas.length, 15, `a central tem ${alertas.length} cartoes`);
     assert.strictEqual(c.erro, undefined, `o listar da entrada nova lancou: ${JSON.stringify(c)}`);
     assert.strictEqual(c.dias, 7, `a janela do cartao tinha de ser 7, veio ${c.dias}`);
     const comErro = alertas.filter((a) => a.erro).map((a) => a.chave);

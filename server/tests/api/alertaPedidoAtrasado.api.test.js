@@ -173,10 +173,11 @@ function resultadoDe(resultados, chave) {
     // caiu", que e a unica coisa que ela existe para dizer. Quem acrescentar a 15a atualiza aqui.
     // 13 -> 14 na Etapa 43, T4: a entrada `NAO_CONFORMIDADE_ABERTA` — e ela foi acrescentada aqui
     // exatamente pelo caminho que este comentario manda.
+    // 14 -> 15 na Etapa 46, T3: `NAO_CONFORMIDADE_EXECUCAO_PENDENTE`, pelo mesmo caminho.
     // (O molde do numero DINAMICO, para quem quer o outro contrato, e
     // `alertaRegistro.api.test.js:260`, que compara a varredura com `ALERT_REGISTRY.length` porque
     // ali o que se mede e "uma entrada de resultado por entrada do registro", nao o total.)
-    assert.strictEqual(alertas.length, 14, `a central tem ${alertas.length} cartoes`);
+    assert.strictEqual(alertas.length, 15, `a central tem ${alertas.length} cartoes`);
   });
 
   // ── (5) RN-D11: os ids do alerta sao os MESMOS ids de atrasado=1 na rota ────────────────────
@@ -240,8 +241,9 @@ function resultadoDe(resultados, chave) {
     // tambem requer `receiptService` de forma LAZY. O total literal continua aqui pelo mesmo motivo
     // da linha :169 — na carga a FRIO o que se mede e que o require lazy segurou o ciclo INTEIRO
     // (`receiptService.js:31` requer este registro no topo), e um `ALERT_REGISTRY.length` no lugar
-    // do numero compararia o processo frio consigo mesmo. 13 -> 14 na Etapa 43, T4.
-    assert.deepStrictEqual(medido, { total: 14, tem: true, listar: 'function' },
+    // do numero compararia o processo frio consigo mesmo. 13 -> 14 na Etapa 43, T4; 14 -> 15 na
+    // Etapa 46, T3 (`NAO_CONFORMIDADE_EXECUCAO_PENDENTE`, SQL proprio e nenhum require novo).
+    assert.deepStrictEqual(medido, { total: 15, tem: true, listar: 'function' },
       `carga a frio devolveu ${saida.trim()}`);
   });
 

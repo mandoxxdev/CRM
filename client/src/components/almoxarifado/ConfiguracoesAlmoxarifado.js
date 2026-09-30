@@ -2950,6 +2950,12 @@ const TabConfiguracoes = () => {
     // pagou com as tres janelas acima, e que o cabecalho de ConfiguracoesGerais.test.js registra;
     // por isso a linha entra aqui no fechamento da etapa, e nao "quando alguem pedir".
     { chave: 'alerta_nc_parada_dias', label: 'Alerta de Não Conformidade Parada (dias)', tipo: 'number', descricao: 'Dias com a não conformidade ABERTA (sem decisão) para alertar documento parado' },
+    // Etapa 46 (T3): a janela do 15o alerta (NC DECIDIDA com execução ainda PENDENTE). Entra aqui
+    // no MESMO passo da semeadura, e não "quando alguém pedir": esta lista `CAMPOS` é fixa, e
+    // chave semeada fora dela existe no banco e é INEDITÁVEL pela UI — o administrador salvaria
+    // 200 "Configurações salvas!" e o motor continuaria no default. É o buraco que a Etapa 16
+    // pagou com três janelas e a Etapa 43 com esta linha acima.
+    { chave: 'alerta_nc_execucao_pendente_dias', label: 'Alerta de Execução Pendente da NC (dias)', tipo: 'number', descricao: 'Dias desde a decisão com a execução da não conformidade ainda pendente para alertar' },
     { chave: 'notificacoes_dest_entradas', label: 'Destinatários — Entradas', tipo: 'text', descricao: 'E-mails (lista) para notificação de entrada de material; vazio usa o e-mail de alertas' },
     { chave: 'notificacoes_dest_saidas', label: 'Destinatários — Saídas', tipo: 'text', descricao: 'E-mails (lista) para notificação de saída de material; vazio usa o e-mail de alertas' },
     { chave: 'notificacoes_dest_ajustes', label: 'Destinatários — Ajustes', tipo: 'text', descricao: 'E-mails (lista) para notificação de ajuste de estoque; vazio usa o e-mail de alertas' },

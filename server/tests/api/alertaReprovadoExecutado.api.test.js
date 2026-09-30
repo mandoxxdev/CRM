@@ -115,10 +115,34 @@ const uniq = (p) => `${p}-${Date.now() % 1000000}-${++seq}`;
     // caminho — que e a propriedade de que esta regua depende.
     const fonte = fs.readFileSync(
       path.join(__dirname, '../../services/almoxarifado/alertRegistry.js'), 'utf8');
-    assert.ok(fonte.includes('i.devolucao_fornecedor_em IS NULL'),
+
+    // ⚠️ A VARREDURA ERA NO ARQUIVO INTEIRO, E ISSO ESTAVA ERRADO — corrigido A VISTA na Etapa 46,
+    // T3, porque o defeito so apareceu quando custou. A assercao negativa abaixo diz "a regua
+    // voltou a medir o ESTADO do documento", mas `fonte` e o registro COMPLETO, com 15 entradas: a
+    // 15a (`NAO_CONFORMIDADE_EXECUCAO_PENDENTE`) tem `nc.execucao_estado = 'PENDENTE'` no proprio
+    // SQL, DE PROPOSITO e como contrato dela, e o guarda ficou vermelho acusando uma regressao que
+    // nao existe. Falso positivo em guarda de texto e pior que guarda ausente: ele treina o
+    // proximo a "consertar" o codigo certo, ou a apagar o guarda.
+    //
+    // A janela agora e o CORPO de `listarReprovados` — que e o que as duas assercoes sempre
+    // quiseram dizer. O docblock fica DE FORA de proposito (ele narra a regua ANTIGA, com
+    // `execucao_estado = 'EXECUTADA'` escrito por extenso, justamente para ensinar por que ela nao
+    // bastava), e por isso o corte comeca na assinatura da funcao.
+    const inicio = fonte.indexOf('async function listarReprovados(');
+    assert.ok(inicio >= 0, '`listarReprovados` nao existe mais em alertRegistry.js');
+    const fim = fonte.indexOf('\n}\n', inicio);
+    assert.ok(fim > inicio, 'nao foi possivel delimitar o corpo de `listarReprovados`');
+    const regua = fonte.slice(inicio, fim);
+
+    assert.ok(regua.includes('i.devolucao_fornecedor_em IS NULL'),
       'a regua do cartao nao usa o carimbo do movimento');
-    assert.ok(!/nc\.execucao_estado\s*=/.test(fonte),
+    assert.ok(!/nc\.execucao_estado\s*=/.test(regua),
       'a regua voltou a medir o ESTADO do documento em vez do movimento');
+    // GUARDA DO PROPRIO CORTE (senao um `slice` que devolvesse string vazia faria a assercao
+    // negativa passar por vacuidade — o falso-verde que este arquivo existe para nao ter):
+    // o corte tem de conter o SQL da funcao.
+    assert.ok(regua.includes('FROM inspecoes_recebimento_almoxarifado i'),
+      `o corte nao pegou o SQL de listarReprovados (${regua.length} chars)`);
   });
 
   // ── (2) OPT-IN ─────────────────────────────────────────────────────────────────────────────

@@ -88,6 +88,13 @@ const RESPOSTA_DO_SERVIDOR = {
   // testes de Salvar que nem tocam nesta chave (medido: foi exatamente o que aconteceu ao
   // acrescentar o campo em CAMPOS).
   alerta_nc_parada_dias: { valor: '7', descricao: 'Alerta de nao conformidade parada (dias)', id: 20 },
+  // Etapa 46 (T3): a janela do alerta de EXECUCAO PENDENTE da NC. Mesma obrigacao das
+  // anteriores, e ela COBROU de novo: acrescentar a chave em `CAMPOS` sem esta linha derrubou
+  // SETE testes de Salvar que nem tocam nela (o guard client-side le `configs[chave]`
+  // undefined, o `Number('')` vira NaN e o submit e barrado). MEDIDO nesta task — a nota da
+  // Etapa 43 acima previa exatamente isso, e a fixture continua sendo a quarta ponta da config
+  // que nenhum plano listou.
+  alerta_nc_execucao_pendente_dias: { valor: '7', descricao: 'Alerta de execucao pendente da NC (dias)', id: 21 },
 };
 
 let container;
@@ -513,4 +520,51 @@ test('a chave de dias da nao conformidade parada (Etapa 43) aparece, recusa 0 e 
   await act(async () => { botao.click(); });
   expect(api.put).toHaveBeenCalledTimes(1);
   expect(api.put.mock.calls[0][1].alerta_nc_parada_dias).toBe('1');
+});
+
+/**
+ * Etapa 46 (T3) — `alerta_nc_execucao_pendente_dias`: os dias que uma NC DECIDIDA pode ficar com
+ * a execucao PENDENTE antes de o cartao novo cobrar. Chave PROPRIA, e nao a reutilizacao da
+ * `alerta_nc_parada_dias` do teste acima: sao dois prazos com dois donos (decidir e da Qualidade,
+ * executar e de Compras e pode depender do fornecedor).
+ *
+ * ⚠️ ESTE CENARIO E A QUARTA PONTA DA CONFIG, e o plano da etapa listou tres (schema, `CAMPOS`,
+ * `COLUNAS_POR_CHAVE`). A quarta e a FIXTURE de `RESPOSTA_DO_SERVIDOR` deste arquivo: sem ela, o
+ * guard client-side de `handleSalvar` le `configs['alerta_nc_execucao_pendente_dias']` undefined,
+ * `Number(undefined)` vira NaN e SETE testes de Salvar que nada tem a ver com esta chave caem.
+ * A nota da Etapa 43 (na fixture, acima) previu; esta task pagou.
+ */
+test('a chave de dias da execucao pendente da NC (Etapa 46) aparece, recusa 0 e entra no payload', async () => {
+  await renderAbaGeral();
+
+  expect(container.textContent).toContain('Alerta de Execução Pendente da NC (dias)');
+  const inputExec = inputDoCampo('Alerta de Execução Pendente da NC (dias)');
+  expect(inputExec).not.toBeNull();
+  // A fixture do servidor manda '7' — a tela mostra o valor gravado, nao um default local.
+  expect(inputExec.value).toBe('7');
+
+  // E o campo da IRMA continua la, com o proprio valor: uma tela que trocasse um rotulo pelo
+  // outro passaria nas assercoes acima e deixaria uma das duas janelas ineditavel.
+  expect(inputDoCampo('Alerta de Não Conformidade Parada (dias)')).not.toBeNull();
+
+  const preencher = (el, valor) => {
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(el, valor);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  const botao = [...container.querySelectorAll('button')]
+    .find(b => /Salvar Configurações/.test(b.textContent));
+
+  await act(async () => { preencher(inputExec, '0'); });
+  await act(async () => { botao.click(); });
+  expect(api.put).not.toHaveBeenCalled();
+  expect(toast.error).toHaveBeenCalledWith(
+    'Configuração "alerta_nc_execucao_pendente_dias" deve ser um número de dias maior que zero'
+  );
+
+  await act(async () => { preencher(inputExec, '30'); });
+  await act(async () => { botao.click(); });
+  expect(api.put).toHaveBeenCalledTimes(1);
+  expect(api.put.mock.calls[0][1].alerta_nc_execucao_pendente_dias).toBe('30');
+  // A irma segue no MESMO payload, com o valor da fixture — o salvar manda o mapa inteiro.
+  expect(api.put.mock.calls[0][1].alerta_nc_parada_dias).toBe('7');
 });

@@ -290,6 +290,56 @@ async function listarNaoConformidadesParadas(db, { dias }) {
 }
 
 /**
+ * NAO_CONFORMIDADE_EXECUCAO_PENDENTE (Etapa 46, T3 — RN-08): NCs DECIDIDAS cuja execucao ainda
+ * esta `PENDENTE` ha mais dias que o configurado.
+ *
+ * ── O BECO QUE ELA FECHA ──────────────────────────────────────────────────────────────────────
+ * A Etapa 45 separou DECIDIR de EXECUTAR: a NC nasce `DECIDIDA` + `execucao_estado = 'PENDENTE'` e
+ * espera um ato externo (devolver ao fornecedor, substituir, sucatear, mandar para engenharia).
+ * Quando aquele ato e impossivel — material com controle de serie, lote nao identificavel —, a
+ * recusa da execucao e fatal e se repete para sempre, e o documento fica parado sem NINGUEM ser
+ * cobrado: `listarNaoConformidadesParadas` filtra `status = 'ABERTA'`, entao a NC decidida sai
+ * daquele cartao e nao entra em nenhum outro. Mora so num filtro de tela que alguem precisa
+ * escolher. E o beco "atrasado para sempre" da Etapa 42 em terceira roupa.
+ *
+ * ⚠️ A JANELA E POR `decidido_em`, **NAO** POR `created_at`, e a diferenca nao e cosmetica: o que
+ * se cobra aqui e o tempo decorrido desde a DECISAO, nao a idade do documento. Um documento aberto
+ * ha 60 dias e decidido ONTEM nao esta atrasado na execucao — com `created_at` ele apareceria no
+ * cartao no dia seguinte a decisao, cobrando de Compras um prazo que ainda nem comecou a correr, e
+ * o cartao viraria ruido no primeiro mes. (A irma `NAO_CONFORMIDADE_ABERTA` mede por `created_at`
+ * porque **ali** o relogio comeca a andar quando o documento nasce.)
+ *
+ * ⚠️ `status = 'DECIDIDA'` ENTRA NA REGUA, e nao e redundancia com `execucao_estado = 'PENDENTE'`
+ * (mesma decisao, e pelo mesmo motivo, do filtro `?execucao=PENDENTE` de
+ * `nonConformityService.listarNaoConformidades`): a RN-06 da Etapa 46 **conserva**
+ * `execucao_estado` no cancelamento — cancelar NAO zera a coluna, de proposito, para a decisao
+ * continuar legivel no documento morto. So `execucao_estado = 'PENDENTE'` na regua faria a NC
+ * CANCELADA continuar cobrando execucao de um documento que ninguem pode mais executar.
+ *
+ * ⚠️ COLUNAS NOMEADAS, nunca `nc.*` (licao F3 da Etapa 39, mesma da funcao acima): `montarCentral`
+ * devolve as linhas CRUAS em `GET /almoxarifado/alertas/central`. `justificativa` e os `*_por_nome`
+ * ficam de fora de proposito (texto livre em caixa de entrada, classe de decisao do B30).
+ *
+ * `julianday` com `CAST ... AS INTEGER` (e nao `datetime('now','-N days')`) e o molde da irma
+ * acima: janela fracionaria no teste e `dias_pendente` como numero de dias JA COMPLETOS.
+ */
+async function listarNaoConformidadesExecucaoPendente(db, { dias }) {
+  return dbAll(db, `
+    SELECT nc.id, nc.numero, nc.origem, nc.tipo, nc.status, nc.decisao, nc.decidido_em,
+      nc.execucao_estado, nc.material_id, m.codigo AS material_codigo, m.nome AS material_nome,
+      m.unidade AS material_unidade, nc.recebimento_id, r.numero AS recebimento_numero,
+      r.nota_fiscal, nc.quantidade_esperada, nc.quantidade_recebida, nc.divergencia,
+      CAST(julianday('now') - julianday(nc.decidido_em) AS INTEGER) AS dias_pendente
+    FROM nao_conformidades_almoxarifado nc
+    LEFT JOIN materiais_almoxarifado m ON m.id = nc.material_id
+    LEFT JOIN recebimentos_material_almoxarifado r ON r.id = nc.recebimento_id
+    WHERE nc.status = 'DECIDIDA'
+      AND nc.execucao_estado = 'PENDENTE'
+      AND julianday('now') - julianday(nc.decidido_em) > ?
+    ORDER BY nc.decidido_em ASC, nc.id ASC`, [dias]);
+}
+
+/**
  * DIVERGENCIA_INVENTARIO (RN-05): conferencias CONCLUIDO com item divergente pela MESMA regua
  * do inventario (`divergenciaRealSql('ic.divergencia')` — ABS(NULL) e NULL, entao item nao
  * contado nao conta), AGREGADO por conferencia (1 aviso, nunca por item — a exclusao de
@@ -841,8 +891,21 @@ const ALERT_REGISTRY = Object.freeze([
     // A T3 fez a NC NASCER sozinha nas duas portas do recebimento e na inspecao. Nascer sozinha
     // sem ninguem cobrar a decisao seria trocar um silencio por outro: o documento existe, fica
     // `ABERTA` para sempre e ninguem responde "o que se decidiu fazer com a falta de 4 kg", que e
-    // metade da razao de a feature existir. Este alerta cobra a DECISAO — NC decidida ou cancelada
-    // sai da condicao sozinha, sem gancho nenhum.
+    // metade da razao de a feature existir. Este alerta cobra a DECISAO.
+    //
+    // ⚠️ A FRASE QUE ESTAVA AQUI VALIA E DEIXOU DE VALER, e fica corrigida A VISTA em vez de
+    // apagada em silencio (Etapa 46, T3 — achado 11 da Fase 2). Ela dizia:
+    // ~~"NC decidida ou cancelada sai da condicao sozinha, SEM GANCHO NENHUM"~~. Era VERDADE
+    // quando foi escrita, na Etapa 43: decidir era o ULTIMO gesto, e sair deste cartao era sair do
+    // assunto. A Etapa 45 separou DECIDIR de EXECUTAR e a frase virou meia verdade perigosa — a NC
+    // decidida sai daqui de fato, mas pode ficar `execucao_estado = 'PENDENTE'` para sempre
+    // (execucao recusada por controle de serie / lote nao identificavel), e "sair da condicao"
+    // passou a significar "sair de TODA cobranca".
+    //
+    // O que continua verdade, e e o que sustenta o filtro `status = 'ABERTA'`: quem sai DESTE
+    // cartao sai porque a decisao ACONTECEU (ou porque o documento morreu), e isso e exatamente o
+    // que este cartao cobra. Quem cobra o que vem DEPOIS e a 15a entrada,
+    // `NAO_CONFORMIDADE_EXECUCAO_PENDENTE`, logo abaixo.
     //
     // ⚠️ Prefixo `[Almoxarifado]` (e nao `[Compras]`, como as duas entradas irmas acima): o
     // documento e do almoxarifado e quem decide e QUALIDADE (D8). O prefixo e o que permite ao
@@ -872,6 +935,66 @@ const ALERT_REGISTRY = Object.freeze([
       `Aberta há: ${linha.dias_parada} dia(s)`,
       // A NC de origem INSPECAO tambem congela o `recebimento_id` (o SQL da listagem nao e
       // polimorfico, T1), mas a NC aberta a mao pode nao ter nenhum — dai o travessao.
+      `Recebimento: ${linha.recebimento_numero || '-'}${linha.nota_fiscal ? ` (NF ${linha.nota_fiscal})` : ''}`,
+    ].join('\n'),
+  },
+  {
+    chave: 'NAO_CONFORMIDADE_EXECUCAO_PENDENTE',
+    titulo: 'Execução pendente',
+    descricao: 'Não conformidades decididas cuja execução segue pendente há mais dias que o configurado.',
+    configDias: { chave: 'alerta_nc_execucao_pendente_dias', default: 7 },
+    // Etapa 46, T3 (RN-08) — a 15a entrada do registro.
+    //
+    // ── POR QUE ELA E SEPARADA DA `NAO_CONFORMIDADE_ABERTA`, E NAO UM AFROUXAMENTO DAQUELA ────
+    // A alternativa obvia era largar a regua da irma acima de `status = 'ABERTA'` para
+    // `status IN ('ABERTA','DECIDIDA')` e ganhar os dois casos num cartao so. FOI DESCARTADO, e o
+    // motivo e de DESTINATARIO e de PRAZO, nao de estilo:
+    //
+    //   · a irma cobra a **DECISAO**, e o dono dela e a **QUALIDADE** (D8 da Etapa 43 — e por isso
+    //     o prefixo `[Almoxarifado]` e nao `[Compras]`);
+    //   · esta cobra a **EXECUCAO**, e o dono dela e **COMPRAS** (B176 da Etapa 45 deu a COMPRAS o
+    //     `executar_encaminhamento`; a Etapa 46 deliberadamente NAO lhe deu o cancelar).
+    //
+    // Uma entrada so misturaria dois destinatarios e dois prazos no MESMO cartao e no MESMO
+    // e-mail: Qualidade receberia cobranca de devolucao que nao e dela, Compras receberia cobranca
+    // de decisao que nao e dele, e a janela — que hoje pode ser 7 dias para decidir e 30 para
+    // executar uma devolucao que depende do fornecedor — teria de ser uma unica. A regra de ouro
+    // deste modulo e a que os cartoes `MATERIAL_REPROVADO`/`DIVERGENCIA_RECEBIMENTO` ja pagaram:
+    // o mesmo fato em dois avisos (ou dois fatos no mesmo aviso) ensina o usuario a ignorar o
+    // aviso. Duas entradas, dois textos, duas janelas, dois dedupes.
+    //
+    // ⚠️ SEM require de servico: o SQL mora no arquivo (`listarNaoConformidadesExecucaoPendente`),
+    // entao nao ha ciclo a evitar — `nonConformityService` nem e importado. Os literais
+    // `'DECIDIDA'`/`'PENDENTE'` do SQL sao a mesma copia deliberada da irma acima com o seu
+    // `'ABERTA'` (nenhum require de servico neste SQL), e o cenario (1) do teste le as constantes
+    // do servico para guardar contra deriva.
+    listar: (db, { dias }) => listarNaoConformidadesExecucaoPendente(db, { dias }),
+    // UM aviso por NC, para sempre — o molde e o `nc-<id>` da irma.
+    //
+    // ⚠️ O prefixo `nc-exec-` NAO e o que evita colisao com a irma, e vale dizer porque e a
+    // conclusao errada mais facil de tirar aqui: a MESMA NC passa pelos dois cartoes (parada 9
+    // dias -> decidida -> pendente de execucao), mas o `hash_dedupe` e
+    // `sha256(EVENTO|chave)` (`notificationQueueService.js:42`), e os dois EVENTOS sao
+    // diferentes — `nc-<id>` cru nos dois nao bateria no indice UNIQUE. MEDIDO no cenario (6) do
+    // teste, que exige as DUAS linhas na fila para a mesma NC. O prefixo existe para a chave ser
+    // LEGIVEL na fila e no log (`nc-exec-` diz qual cobranca e sem cruzar a coluna `evento`).
+    //
+    // DESCARTADO: por `dias_pendente` na chave — muda TODO DIA e viraria e-mail diario pela mesma
+    // NC (a mesma razao que a irma registra para nao usar `dias_parada`). E tambem por a `decisao`
+    // na chave: ela e IMUTAVEL depois do claim de `decidir` (Etapa 43), entao nao acrescentaria
+    // nada.
+    dedupeChave: (linha) => `nc-exec-${linha.id}`,
+    payload: (linha) => ({ nao_conformidade_id: linha.id, material_id: linha.material_id }),
+    assunto: (linha) => `[Almoxarifado] Execução pendente — ${linha.numero}`,
+    corpo: (linha) => [
+      `Não conformidade: ${linha.numero}`,
+      `Material: ${linha.material_codigo ? `${linha.material_codigo} — ${linha.material_nome}` : '-'}`,
+      `Tipo: ${linha.tipo}`,
+      `Origem: ${linha.origem}`,
+      // A DECISAO e o dado que distingue este e-mail do da irma: quem le precisa saber O QUE
+      // ficou combinado (devolver? substituir? sucatear?) para saber o que executar.
+      `Decisão: ${linha.decisao || '-'}`,
+      `Decidida há: ${linha.dias_pendente} dia(s)`,
       `Recebimento: ${linha.recebimento_numero || '-'}${linha.nota_fiscal ? ` (NF ${linha.nota_fiscal})` : ''}`,
     ].join('\n'),
   },
@@ -929,4 +1052,6 @@ module.exports = {
   // Etapa 43 (T4): exportada para o teste da 14a entrada medir a regua de "parada" sem passar
   // pela central inteira.
   listarNaoConformidadesParadas,
+  // Etapa 46 (T3): idem, para a 15a entrada — a regua de "execucao pendente" medida direto.
+  listarNaoConformidadesExecucaoPendente,
 };

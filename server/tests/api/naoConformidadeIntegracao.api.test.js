@@ -229,8 +229,9 @@ const EVENTO_DIV = 'DIVERGENCIA_RECEBIMENTO';
     const res = await central();
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
     // Metade positiva #1: a central inteira respondeu. Sem isto, tudo abaixo passaria com `[]`.
-    assert.strictEqual(res.body.alertas.length, 14,
-      `a central tinha de trazer 14 cartoes, trouxe ${res.body.alertas.length}`);
+    // 14 -> 15 na Etapa 46, T3 (a entrada `NAO_CONFORMIDADE_EXECUCAO_PENDENTE`).
+    assert.strictEqual(res.body.alertas.length, 15,
+      `a central tinha de trazer 15 cartoes, trouxe ${res.body.alertas.length}`);
     const comErro = res.body.alertas.filter((a) => a.erro).map((a) => a.chave);
     assert.deepStrictEqual(comErro, [], `cartoes com erro na central: ${JSON.stringify(comErro)}`);
 

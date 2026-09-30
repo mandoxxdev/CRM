@@ -241,6 +241,23 @@ const COLUNAS_POR_CHAVE = {
     // um, e deixa nulo quando não há) — o guarda evita a célula "null (NF null)".
     { titulo: 'Recebimento', render: (l) => `${l.recebimento_numero || '—'}${l.nota_fiscal ? ` (NF ${l.nota_fiscal})` : ''}` },
   ],
+  // ── Etapa 46 (T3): a 15ª chave. Ela entra AQUI e não no fechamento da etapa porque o fallback
+  // `colunasGenericas` é declarado de propósito — nada quebra sem esta entrada, o cartão apenas
+  // aparece com os nomes CRUS das 6 primeiras colunas da primeira linha (`id`, `numero`, `origem`,
+  // `tipo`, `status`, `decisao`), sem material e sem o "decidida há". Ou seja: é decisão a tomar
+  // agora, não defeito a descobrir na revisão adversarial.
+  //
+  // As colunas espelham a ordem do corpo do e-mail do MESMO alerta, e a diferença em relação à
+  // irmã `NAO_CONFORMIDADE_ABERTA` é justamente o que este cartão cobra: a DECISÃO tomada e o
+  // tempo desde ela — não a idade do documento.
+  NAO_CONFORMIDADE_EXECUCAO_PENDENTE: [
+    { titulo: 'NC', render: (l) => l.numero || `#${l.id}` },
+    { titulo: 'Material', render: (l) => (l.material_codigo ? `${l.material_codigo} — ${l.material_nome}` : '—') },
+    { titulo: 'Decisão', render: (l) => l.decisao || '—' },
+    { titulo: 'Decidida em', render: (l) => formatData(l.decidido_em) },
+    { titulo: 'Decidida há', render: (l) => (l.dias_pendente ?? '—') },
+    { titulo: 'Recebimento', render: (l) => `${l.recebimento_numero || '—'}${l.nota_fiscal ? ` (NF ${l.nota_fiscal})` : ''}` },
+  ],
 };
 
 // Alerta que o registro do servidor ganhar amanhã e esta tabela ainda não conhecer não pode
