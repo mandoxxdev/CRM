@@ -702,6 +702,9 @@ const RequisicoesList = () => {
     } catch (err) {
       console.error('[RequisicoesList] Erro ao entregar requisição', err?.response?.data || err);
       toast.error(err.response?.data?.error || 'Erro ao entregar');
+      // Fase 5 (review da Etapa 61): o erro pode ser outra entrega ter levado a série (400/409) —
+      // relê as séries do modal para a lista não oferecer de novo a que já saiu.
+      recarregarSeriesEntrega();
     } finally {
       setSaving(false);
     }
@@ -822,7 +825,11 @@ const RequisicoesList = () => {
     const visiveis = seriesDoLote(info, loteId);
     const idsVisiveis = new Set(visiveis.map((s) => Number(s.id)));
     const escolhidas = (seriesEscolhidas[item.id] || []).filter((id) => idsVisiveis.has(id));
-    return { visiveis, escolhidas, falhou: info.falhou };
+    // Fase 5 (review da Etapa 61): com "Sai de" automático a lista mistura lotes, e o servidor recusa
+    // séries de lotes diferentes (sem lote conta como um lote à parte, como lá).
+    const lotesEscolhidos = new Set(visiveis.filter((s) => escolhidas.includes(Number(s.id)))
+      .map((s) => (s.lote_id ? Number(s.lote_id) : null)));
+    return { visiveis, escolhidas, falhou: info.falhou, lotesMisturados: lotesEscolhidos.size > 1 };
   };
 
   // Confirmar só com cada item serializado (com quantidade > 0) tendo EXATAMENTE a quantidade.
@@ -833,6 +840,7 @@ const RequisicoesList = () => {
     const s = seriesDoItem(i);
     if (!s) return false;
     if (s.carregando) return true;
+    if (s.lotesMisturados) return true;
     return s.escolhidas.length !== qtd;
   });
 
@@ -841,6 +849,35 @@ const RequisicoesList = () => {
       const atual = prev[itemId] || [];
       const id = Number(serieId);
       return { ...prev, [itemId]: atual.includes(id) ? atual.filter((x) => x !== id) : [...atual, id] };
+    });
+  };
+
+  // Fase 5 (review da Etapa 61): relê as séries EM_ESTOQUE dos materiais serializados do modal e
+  // mantém só as marcações que continuam em estoque. Mesma guarda de sequência do efeito de carga
+  // (fechar/reabrir o modal no meio descarta a resposta). Falha = lista vazia com o aviso de falha.
+  const recarregarSeriesEntrega = () => {
+    const seq = seriesEntregaSeqRef.current;
+    Object.entries(seriesEntrega).forEach(async ([materialId, info]) => {
+      if (!info?.serializado) return;
+      let novo;
+      try {
+        const r = await api.get(`/almoxarifado/materiais/${materialId}/series?status=EM_ESTOQUE`);
+        novo = { serializado: true, series: Array.isArray(r?.data) ? r.data : [], falhou: false };
+      } catch (err) {
+        novo = { serializado: true, series: [], falhou: true };
+      }
+      if (seriesEntregaSeqRef.current !== seq) return;
+      const ids = new Set(novo.series.map((s) => Number(s.id)));
+      const itensDoMaterial = new Set((detalhe?.itens || [])
+        .filter((i) => String(i.material_id) === String(materialId)).map((i) => String(i.id)));
+      setSeriesEntrega((prev) => ({ ...prev, [materialId]: novo }));
+      setSeriesEscolhidas((prev) => {
+        const prox = { ...prev };
+        Object.keys(prox).forEach((itemId) => {
+          if (itensDoMaterial.has(String(itemId))) prox[itemId] = prox[itemId].filter((id) => ids.has(Number(id)));
+        });
+        return prox;
+      });
     });
   };
 
@@ -2010,6 +2047,11 @@ const RequisicoesList = () => {
                                   </label>
                                 );
                               })}
+                            </div>
+                          )}
+                          {s.lotesMisturados && (
+                            <div id={`entrega-series-lotes-${item.id}`} role="alert" style={{ fontSize: '0.7rem', color: 'var(--gmp-error)', marginTop: 4 }}>
+                              Escolha séries de um lote só.
                             </div>
                           )}
                           {!bate && qtdEntregar > 0 && (

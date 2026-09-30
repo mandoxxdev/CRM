@@ -197,6 +197,92 @@ let seq = 0;
     assert.strictEqual((await estado(m.id)).presentes, 0);
   });
 
+  // ── Fase 5 ────────────────────────────────────────────────────────────────────────────────
+  const stockService = require('../../services/almoxarifado/stockService');
+  const saidaDe = async (m) => (await dbGet(db, "SELECT id FROM movimentacoes_almoxarifado WHERE material_id = ? AND tipo = 'SAIDA' ORDER BY id DESC", [m])).id;
+  const devolver = (m, saidaId, numeros) => request(app).post('/api/almoxarifado/devolucoes').send({
+    material_id: m, quantidade: numeros.length, motivo: 'sobra', destino: 'ESTOQUE', movimentacao_saida_id: saidaId, series: numeros,
+  });
+
+  await test('Fase 5 (critico): devolver TUDO e depois excluir a requisicao NAO credita de novo', async () => {
+    const m = await material(); await entrar(m.id, ['K1', 'K2', 'K3']);
+    const { id, ids } = await req([[m.id, 2]]);
+    await separar(id, [{ item_id: ids[0], quantidade_separada: 2 }]);
+    assert.strictEqual((await entregar(id, [{ item_id: ids[0], quantidade_atendida: 2, serie_ids: [await serieId(m.id, 'K1'), await serieId(m.id, 'K2')] }])).status, 200);
+    const d = await devolver(m.id, await saidaDe(m.id), ['K1', 'K2']);
+    assert.strictEqual(d.status, 201, JSON.stringify(d.body));
+    assert.deepStrictEqual(await estado(m.id), { fisico: 3, presentes: 3 });
+    const del = await request(app).delete(`/api/almoxarifado/requisicoes/${id}`).send({ justificativa: 'e61 teste' });
+    assert.strictEqual(del.status, 200, JSON.stringify(del.body));
+    assert.deepStrictEqual(await estado(m.id), { fisico: 3, presentes: 3 }, 'a exclusao creditou o fisico de novo');
+  });
+
+  await test('Fase 5: devolucao PARCIAL e exclusao — volta so o que falta, com a serie dele', async () => {
+    const m = await material(); await entrar(m.id, ['N1', 'N2', 'N3']);
+    const { id, ids } = await req([[m.id, 2]]);
+    await separar(id, [{ item_id: ids[0], quantidade_separada: 2 }]);
+    assert.strictEqual((await entregar(id, [{ item_id: ids[0], quantidade_atendida: 2, serie_ids: [await serieId(m.id, 'N1'), await serieId(m.id, 'N2')] }])).status, 200);
+    assert.strictEqual((await devolver(m.id, await saidaDe(m.id), ['N1'])).status, 201);
+    const del = await request(app).delete(`/api/almoxarifado/requisicoes/${id}`).send({ justificativa: 'e61 teste' });
+    assert.strictEqual(del.status, 200, JSON.stringify(del.body));
+    assert.deepStrictEqual(await estado(m.id), { fisico: 3, presentes: 3 });
+    assert.strictEqual((await dbGet(db, "SELECT status FROM series_almoxarifado WHERE material_id = ? AND numero = 'N2'", [m.id])).status, 'EM_ESTOQUE');
+  });
+
+  await test('Fase 5: saida LEGADA (sem serie) e saida nova no mesmo par — a exclusao trata cada uma', async () => {
+    const m = await material(); await entrar(m.id, ['Q1', 'Q2', 'Q3']);
+    const { id, ids } = await req([[m.id, 2]]);
+    await separar(id, [{ item_id: ids[0], quantidade_separada: 2 }]);
+    // A saída legada: como a entrega fazia antes desta etapa (sem série), com o item contado.
+    await stockService.registrarMovimentacao(db, ADMIN, { material_id: m.id, tipo: 'SAIDA', quantidade: 1, motivo: 'legado', justificativa: 'legado', requisicao_id: id });
+    await dbRun(db, 'UPDATE itens_requisicao_almoxarifado SET quantidade_entregue = 1, quantidade_atendida = 1 WHERE id = ?', [ids[0]]);
+    await dbRun(db, "UPDATE requisicoes_almoxarifado SET status = 'PARCIALMENTE_ATENDIDA' WHERE id = ?", [id]);
+    assert.strictEqual((await entregar(id, [{ item_id: ids[0], quantidade_atendida: 1, serie_ids: [await serieId(m.id, 'Q1')] }])).status, 200);
+    const del = await request(app).delete(`/api/almoxarifado/requisicoes/${id}`).send({ justificativa: 'e61 teste' });
+    assert.strictEqual(del.status, 200, JSON.stringify(del.body));
+    assert.strictEqual((await estado(m.id)).fisico, 3);
+    assert.strictEqual((await dbGet(db, "SELECT status FROM series_almoxarifado WHERE material_id = ? AND numero = 'Q1'", [m.id])).status, 'EM_ESTOQUE');
+  });
+
+  await test('Fase 5: series SEM lote com lote escolhido — recusa com a literal (antes vinha do motor, generica)', async () => {
+    const m = await material(); await entrar(m.id, ['R1']); const cod = `LR-${seq}`; await entrar(m.id, ['R2'], cod);
+    const lr = (await dbGet(db, 'SELECT id FROM lotes_almoxarifado WHERE material_id = ? AND codigo = ?', [m.id, cod])).id;
+    const { id, ids } = await req([[m.id, 1]]);
+    await separar(id, [{ item_id: ids[0], quantidade_separada: 1 }]);
+    const r = await entregar(id, [{ item_id: ids[0], quantidade_atendida: 1, lote_id: lr, serie_ids: [await serieId(m.id, 'R1')] }]);
+    assert.strictEqual(r.status, 400); assert.strictEqual(r.body.error, `${m.nome}: as series escolhidas nao sao do lote escolhido`);
+    assert.deepStrictEqual(await estado(m.id), { fisico: 2, presentes: 2 });
+  });
+
+  await test('Fase 5: regularizacao — corrida nao passa do limite; BAIXADA reativa; lote vai junto; recusa nao grava', async () => {
+    const m = await material(); const cod = `LZ-${seq}`; await entrar(m.id, ['Z0'], cod);
+    const lz = (await dbGet(db, 'SELECT id FROM lotes_almoxarifado WHERE material_id = ? AND codigo = ?', [m.id, cod])).id;
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 2 WHERE id = ?', [m.id]); // falta 1 serie
+    const rs = await Promise.all([
+      regularizar(m.id, { cadastrar: ['Z1'], justificativa: 'aba um do legado' }),
+      regularizar(m.id, { cadastrar: ['Z2'], justificativa: 'aba dois do legado' }),
+    ]);
+    assert.deepStrictEqual(rs.map((r) => r.status).sort(), [200, 409], JSON.stringify(rs.map((r) => r.body)));
+    assert.deepStrictEqual(await estado(m.id), { fisico: 2, presentes: 2 });
+    // Baixa uma por engano, depois reativa pelo mesmo gesto (cadastrar o número).
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 1 WHERE id = ?', [m.id]);
+    const z0 = await serieId(m.id, 'Z0');
+    assert.strictEqual((await regularizar(m.id, { baixar: [z0], justificativa: 'baixa por engano' })).status, 200);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 2 WHERE id = ?', [m.id]);
+    const re = await regularizar(m.id, { cadastrar: ['Z0'], justificativa: 'reativar a baixada', lote_id: lz });
+    assert.strictEqual(re.status, 200, JSON.stringify(re.body));
+    assert.strictEqual((await dbGet(db, 'SELECT status FROM series_almoxarifado WHERE id = ?', [z0])).status, 'EM_ESTOQUE');
+    // Cadastrar com lote grava o lote; recusa (lote de outro material) nao grava nada.
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 3 WHERE id = ?', [m.id]);
+    const outro = await material(); const codO = `LO-${seq}`; await entrar(outro.id, ['O1'], codO);
+    const lo = (await dbGet(db, 'SELECT id FROM lotes_almoxarifado WHERE material_id = ?', [outro.id])).id;
+    const bad = await regularizar(m.id, { cadastrar: ['Z8'], justificativa: 'lote errado', lote_id: lo });
+    assert.strictEqual(bad.status, 400); assert.strictEqual(bad.body.error, 'lote nao pertence a este material');
+    assert.strictEqual((await dbGet(db, "SELECT COUNT(*) n FROM series_almoxarifado WHERE material_id = ? AND numero = 'Z8'", [m.id])).n, 0);
+    assert.strictEqual((await regularizar(m.id, { cadastrar: ['Z9'], justificativa: 'com o lote', lote_id: lz })).status, 200);
+    assert.strictEqual((await dbGet(db, "SELECT lote_id FROM series_almoxarifado WHERE material_id = ? AND numero = 'Z9'", [m.id])).lote_id, lz);
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed\n`);
   process.exit(failed > 0 ? 1 : 0);

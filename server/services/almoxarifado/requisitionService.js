@@ -771,15 +771,18 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
       planejada = true;
     }
     // Etapa 61: o lote das series escolhidas vale como lote da saida (e tem de bater com o escolhido).
-    const loteSeries = seriesPorItem.get(item.id)?.loteSeries || null;
-    if (loteSeries) {
-      if (loteId && loteId !== loteSeries) {
-        const err = new Error(`${item.material_nome}: as series escolhidas nao sao do lote escolhido`);
-        err.status = 400;
-        throw err;
-      }
-      loteId = loteSeries;
+    const infoSeries = seriesPorItem.get(item.id);
+    const loteSeries = infoSeries?.loteSeries || null;
+    // Fase 5: tambem series SEM lote com lote escolhido (antes a checagem nem rodava e a recusa vinha
+    // do claim do motor, generica); e, quando o lote e o da origem PLANEJADA, a mensagem diz isso.
+    if (infoSeries && loteId && loteSeries !== loteId) {
+      const err = new Error(planejada
+        ? `${item.material_nome}: a origem da separação não serve mais (as series escolhidas nao sao do lote dela) — entregue escolhendo de onde sai`
+        : `${item.material_nome}: as series escolhidas nao sao do lote escolhido`);
+      err.status = 400;
+      throw err;
     }
+    if (loteSeries) loteId = loteSeries;
     if (!origemId && !loteId && semEscolha && !loteSeries) continue;
     try {
       const lidoNorm = stockService.normalizarCodigoLido(lido);
@@ -965,43 +968,53 @@ async function excluirRequisicao(db, requisicaoId, user, justificativa, alertSer
     const totalEntregue = doMaterial.reduce((s, i) => s + getEntregue(i), 0);
     // eslint-disable-next-line no-await-in-loop
     const material = await dbGet(db, 'SELECT id, localizacao_padrao_id, tipo_material, controle_serie FROM materiais_almoxarifado WHERE id = ?', [materialId]);
+    // Etapa 61 (Fase 5): POR SAÍDA e LÍQUIDO das devoluções. Por grupo (origem, lote) e sem descontar
+    // as devoluções, excluir depois de devolver tudo creditava o físico DE NOVO (a devolução já
+    // tinha devolvido; e as séries reativadas perdem o vínculo com a saída, então o caso caía no
+    // ramo "legado" e entrava sem série); e uma saída legada misturada com uma nova no mesmo grupo
+    // travava a exclusão para sempre. Cada saída: o que falta devolver dela; material com série,
+    // as séries dela ainda ENTREGUE (legada: nenhuma — o de antes; número diferente: recusa).
     // eslint-disable-next-line no-await-in-loop
-    const grupos = await dbAll(db, `SELECT m.localizacao_origem_id as origem, m.lote_id, SUM(m.quantidade) as q
+    const saidas = await dbAll(db, `SELECT m.id, m.localizacao_origem_id as origem, m.lote_id, m.quantidade as q,
+        COALESCE((SELECT SUM(d.quantidade) FROM devolucoes_material_almoxarifado d WHERE d.movimentacao_saida_id = m.id), 0) as devolvida
       FROM movimentacoes_almoxarifado m
       WHERE m.requisicao_id = ? AND m.material_id = ? AND m.tipo = 'SAIDA' AND COALESCE(m.cancelado, 0) = 0
-      GROUP BY m.localizacao_origem_id, m.lote_id`, [requisicaoId, materialId]);
-    const somaLivro = grupos.reduce((s, g) => s + (Number(g.q) || 0), 0);
+      ORDER BY m.id`, [requisicaoId, materialId]);
+    const somaLivro = saidas.reduce((s, g) => s + (Number(g.q) || 0), 0);
     const nome = doMaterial[0].material_nome;
-    if (grupos.length && Math.abs(somaLivro - totalEntregue) < 1e-9) {
-      for (const g of grupos) {
+    if (saidas.length && Math.abs(somaLivro - totalEntregue) < 1e-9) {
+      for (const g of saidas) {
+        const liquido = (Number(g.q) || 0) - (Number(g.devolvida) || 0);
+        if (liquido <= 1e-9) continue;
         let destino = g.origem || undefined;
         if (destino) {
           // eslint-disable-next-line no-await-in-loop
           const loc = await dbGet(db, 'SELECT * FROM localizacoes_almoxarifado WHERE id = ?', [destino]);
           if (!loc || Number(loc.ativo) !== 1 || stockService.motivoRecusaEndereco(loc, material, 'destino')) destino = undefined;
         }
-        // Etapa 61 (RN-05): material com serie volta COM as series que sairam nesta parte (as ENTREGUE
-        // das saidas deste grupo) — senao o fisico voltava e as series ficavam ENTREGUE. Saida legada
-        // sem series (anterior a esta etapa): o de antes. Parte ja devolvida: recusa antes de tudo.
         let series;
         if (Number(material.controle_serie)) {
           // eslint-disable-next-line no-await-in-loop
-          const sr = await dbAll(db, `SELECT s.numero FROM series_almoxarifado s
-            WHERE s.status = 'ENTREGUE' AND s.movimentacao_saida_id IN (
-              SELECT m.id FROM movimentacoes_almoxarifado m
-              WHERE m.requisicao_id = ? AND m.material_id = ? AND m.tipo = 'SAIDA' AND COALESCE(m.cancelado, 0) = 0
-                AND m.localizacao_origem_id IS ? AND m.lote_id IS ?)`, [requisicaoId, materialId, g.origem, g.lote_id]);
-          if (sr.length && Math.abs(sr.length - Number(g.q)) > 1e-9) {
-            const err = new Error(`${nome}: parte das series desta entrega ja voltou ao estoque — devolva o restante pela devolucao`);
+          const sr = await dbAll(db, `SELECT numero FROM series_almoxarifado
+            WHERE status = 'ENTREGUE' AND movimentacao_saida_id = ?`, [g.id]);
+          if (sr.length && Math.abs(sr.length - liquido) > 1e-9) {
+            const err = new Error(`${nome}: as series desta entrega nao batem com o que falta devolver — use a devolucao`);
             err.status = 400;
             throw err;
           }
           if (sr.length) series = sr.map((s) => s.numero);
         }
-        partes.push({ material, nome, quantidade: Number(g.q), destino, lote_id: g.lote_id || undefined, series });
+        partes.push({ material, nome, quantidade: liquido, destino, lote_id: g.lote_id || undefined, series });
       }
     } else {
-      for (const i of doMaterial) partes.push({ material, nome, quantidade: getEntregue(i), destino: undefined, lote_id: undefined });
+      // Livro que não soma o entregue (dado antigo): o estorno de antes — líquido do que já foi
+      // devolvido citando as saídas desta requisição.
+      // eslint-disable-next-line no-await-in-loop
+      const dev = await dbGet(db, `SELECT COALESCE(SUM(d.quantidade), 0) as q FROM devolucoes_material_almoxarifado d
+        JOIN movimentacoes_almoxarifado m ON m.id = d.movimentacao_saida_id
+        WHERE m.requisicao_id = ? AND m.material_id = ?`, [requisicaoId, materialId]);
+      const liquido = totalEntregue - (Number(dev.q) || 0);
+      if (liquido > 1e-9) partes.push({ material, nome, quantidade: liquido, destino: undefined, lote_id: undefined });
     }
   }
   for (const parte of partes) {

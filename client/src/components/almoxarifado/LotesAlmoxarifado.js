@@ -203,9 +203,13 @@ const LotesAlmoxarifado = () => {
   const [regJustificativa, setRegJustificativa] = useState('');
   const [regSaving, setRegSaving] = useState(false);
   const [regErro, setRegErro] = useState('');
+  // Fase 5 (review da Etapa 61): lote opcional das series cadastradas — material com lote e serie
+  // ficava num beco (a entrega filtra pelo lote e a serie sem lote nunca aparecia). Vazio = sem lote.
+  const [regLoteId, setRegLoteId] = useState('');
   useEffect(() => {
     setMaterialSerie(null);
     setRegCadastrar('');
+    setRegLoteId('');
     setRegBaixar([]);
     setRegJustificativa('');
     setRegErro('');
@@ -223,7 +227,9 @@ const LotesAlmoxarifado = () => {
     && String(materialSerie.id) === String(materialId) && !loadingSeries
     && Math.abs(seriesPresentes.length - fisicoSerie) > 1e-9;
   const maxCadastrar = Math.max(0, Math.floor(fisicoSerie - seriesPresentes.length + 1e-9));
-  const maxBaixar = Math.max(0, Math.ceil(seriesPresentes.length - fisicoSerie - 1e-9));
+  // Fase 5: floor nos dois sentidos, como o servidor (ceil deixava baixar 1 com fisico 2,5 e 3
+  // presentes e criava a divergencia inversa).
+  const maxBaixar = Math.max(0, Math.floor(seriesPresentes.length - fisicoSerie + 1e-9));
   const numerosACadastrar = numerosDigitados(regCadastrar);
   const regQtd = maxCadastrar > 0 ? numerosACadastrar.length : regBaixar.length;
   const regMax = maxCadastrar > 0 ? maxCadastrar : maxBaixar;
@@ -238,7 +244,10 @@ const LotesAlmoxarifado = () => {
     setRegErro('');
     try {
       const body = { justificativa: regJustificativa.trim() };
-      if (maxCadastrar > 0) body.cadastrar = numerosACadastrar;
+      if (maxCadastrar > 0) {
+        body.cadastrar = numerosACadastrar;
+        if (regLoteId) body.lote_id = Number(regLoteId);
+      }
       else body.baixar = regBaixar.map(Number);
       await api.post(`/almoxarifado/materiais/${materialId}/series/regularizar`, body);
       toast.success('Séries regularizadas!');
@@ -575,6 +584,19 @@ const LotesAlmoxarifado = () => {
                   <div style={{ fontSize: '0.75rem', color: numerosACadastrar.length > maxCadastrar ? 'var(--gmp-error)' : 'var(--gmp-text-light)' }}>
                     {numerosACadastrar.length} de até {maxCadastrar}
                   </div>
+                  <div id="regularizar-cadastrar-dica" style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>
+                    Para reativar uma série baixada por engano, informe o número dela.
+                  </div>
+                  {lotes.length > 0 && (
+                    <div style={{ marginTop: 8 }}>
+                      <label className="almox-label" htmlFor="regularizar-lote">Lote das séries cadastradas</label>
+                      <select id="regularizar-lote" className="almox-select" value={regLoteId}
+                        onChange={(e) => setRegLoteId(e.target.value)}>
+                        <option value="">Sem lote</option>
+                        {lotes.map((l) => <option key={l.id} value={l.id}>{l.codigo}</option>)}
+                      </select>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="almox-field">

@@ -1198,8 +1198,8 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
   // series "fantasma"). Mesmo gate do ajuste de estoque — e um acerto de inventario das series.
   app.post('/api/almoxarifado/materiais/:id/series/regularizar', auth, requirePermission('ajustar_estoque'), async (req, res) => {
     try {
-      const { cadastrar, baixar, justificativa } = req.body || {};
-      res.json(await seriesService.regularizarSeries(db, req.user, req.params.id, { cadastrar, baixar, justificativa }));
+      const { cadastrar, baixar, justificativa, lote_id } = req.body || {};
+      res.json(await seriesService.regularizarSeries(db, req.user, req.params.id, { cadastrar, baixar, justificativa, lote_id }));
     } catch (e) { handleError(res, e); }
   });
 

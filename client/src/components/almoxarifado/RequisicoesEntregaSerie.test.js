@@ -65,6 +65,8 @@ const SERIES = [
   { id: '12', numero: 'SN-002', status: 'EM_ESTOQUE', lote_id: 7, localizacao_descricao: null },
   { id: '13', numero: 'SN-003', status: 'EM_ESTOQUE', lote_id: 8, localizacao_descricao: null },
   { id: '14', numero: 'SN-004', status: 'EM_ESTOQUE', lote_id: 8, localizacao_descricao: null },
+  // Fase 5: terceira do lote 7 — o servidor recusa series de lotes diferentes, entao os 3 de 3 saem do mesmo lote.
+  { id: '15', numero: 'SN-005', status: 'EM_ESTOQUE', lote_id: 7, localizacao_descricao: null },
 ];
 
 let container;
@@ -147,7 +149,7 @@ describe('Etapa 61: séries no modal de entrega', () => {
     await abrirModal();
     expect(api.get).toHaveBeenCalledWith('/almoxarifado/materiais/10');
     expect(api.get).toHaveBeenCalledWith('/almoxarifado/materiais/10/series?status=EM_ESTOQUE');
-    expect(numerosVisiveis()).toEqual(['SN-001 · Prateleira A', 'SN-002', 'SN-003', 'SN-004']);
+    expect(numerosVisiveis()).toEqual(['SN-001 · Prateleira A', 'SN-002', 'SN-003', 'SN-004', 'SN-005']);
     expect(contador()).toBe('0 de 3');
     expect(botaoConfirmar().disabled).toBe(true);
   });
@@ -159,7 +161,7 @@ describe('Etapa 61: séries no modal de entrega', () => {
     await marcar(12);
     expect(contador()).toBe('2 de 3');
     expect(botaoConfirmar().disabled).toBe(true);
-    await marcar(13);
+    await marcar(15);
     expect(contador()).toBe('3 de 3');
     expect(botaoConfirmar().disabled).toBe(false);
     expect(caixa(14).disabled).toBe(true);
@@ -173,12 +175,12 @@ describe('Etapa 61: séries no modal de entrega', () => {
     await renderizar();
     await abrirModal();
     await marcar(11);
-    await marcar(13);
-    await marcar(14);
+    await marcar(12);
+    await marcar(15);
     await act(async () => { botaoConfirmar().click(); });
     expect(api.put).toHaveBeenCalledWith('/almoxarifado/requisicoes/55/entregar', expect.any(Object));
     expect(api.put.mock.calls[0][1].itens_atendidos[0]).toEqual({
-      item_id: 1, quantidade_atendida: 3, serie_ids: [11, 13, 14],
+      item_id: 1, quantidade_atendida: 3, serie_ids: [11, 12, 15],
     });
   });
 
@@ -188,7 +190,7 @@ describe('Etapa 61: séries no modal de entrega', () => {
     await marcar(13);
     expect(contador()).toBe('1 de 3');
     escolherOrigem('2:7');
-    expect(numerosVisiveis()).toEqual(['SN-001 · Prateleira A', 'SN-002']);
+    expect(numerosVisiveis()).toEqual(['SN-001 · Prateleira A', 'SN-002', 'SN-005']);
     expect(contador()).toBe('0 de 3');
     digitarQuantidade('2');
     await marcar(11);
@@ -233,5 +235,45 @@ describe('Etapa 61: séries no modal de entrega', () => {
     await act(async () => { resolverPrimeira({ data: SERIES }); });
     expect(numerosVisiveis()).toEqual(['SN-004']);
     expect(caixas()).toHaveLength(1);
+  });
+
+  test('Fase 5: "Sai de" automático com séries de lotes diferentes — confirmar trava e avisa', async () => {
+    await renderizar();
+    await abrirModal();
+    await marcar(11);
+    await marcar(12);
+    await marcar(13);
+    expect(contador()).toBe('3 de 3');
+    expect(container.querySelector('#entrega-series-lotes-1').textContent).toBe('Escolha séries de um lote só.');
+    expect(botaoConfirmar().disabled).toBe(true);
+    // Trocar a do lote 8 por uma do lote 7 libera.
+    await marcar(13);
+    await marcar(15);
+    expect(container.querySelector('#entrega-series-lotes-1')).toBeNull();
+    expect(botaoConfirmar().disabled).toBe(false);
+  });
+
+  test('Fase 5: erro do servidor na entrega recarrega as séries e mantém as marcações ainda em estoque', async () => {
+    const chamadas = [
+      () => Promise.resolve({ data: SERIES }),
+      // Outra entrega levou a SN-002 no meio.
+      () => Promise.resolve({ data: SERIES.filter((s) => s.id !== '12') }),
+    ];
+    seriesImpl = () => chamadas.shift()();
+    api.put.mockRejectedValue({ response: { status: 409, data: { error: 'serie SN-002 nao esta em estoque' } } });
+    await renderizar();
+    await abrirModal();
+    await marcar(11);
+    await marcar(12);
+    await marcar(15);
+    await act(async () => { botaoConfirmar().click(); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    const getsSeries = api.get.mock.calls.filter(([u]) => u === '/almoxarifado/materiais/10/series?status=EM_ESTOQUE');
+    expect(getsSeries).toHaveLength(2);
+    expect(numerosVisiveis()).toEqual(['SN-001 · Prateleira A', 'SN-003', 'SN-004', 'SN-005']);
+    expect(contador()).toBe('2 de 3');
+    expect(caixa(11).checked).toBe(true);
+    expect(caixa(15).checked).toBe(true);
+    expect(botaoConfirmar().disabled).toBe(true);
   });
 });

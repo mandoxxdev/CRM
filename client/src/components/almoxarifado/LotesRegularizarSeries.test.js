@@ -125,6 +125,38 @@ describe('Etapa 61: regularização das séries', () => {
     expect(getsDepois).toBeGreaterThan(getsAntes);
   });
 
+  test('Fase 5: lote das séries cadastradas vai como lote_id só quando escolhido; dica de reativar', async () => {
+    const getBase = api.get.getMockImplementation();
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/materiais/10/lotes') return Promise.resolve({ data: [{ id: 77, codigo: 'L-77', status: 'LIBERADO' }] });
+      return getBase(url);
+    });
+    await renderizar();
+    expect(formulario().textContent).toContain('Para reativar uma série baixada por engano, informe o número dela.');
+    const select = container.querySelector('#regularizar-lote');
+    expect([...select.options].map((o) => o.textContent)).toEqual(['Sem lote', 'L-77']);
+    // Sem escolher: o corpo não leva lote_id.
+    cadastrar('SN-9');
+    justificar('Inventario de setembro');
+    await clicarRegularizar();
+    expect(api.post).toHaveBeenLastCalledWith('/almoxarifado/materiais/10/series/regularizar', {
+      cadastrar: ['SN-9'], justificativa: 'Inventario de setembro',
+    });
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    // Escolhido: lote_id numérico.
+    cadastrar('SN-10');
+    justificar('Inventario de setembro');
+    act(() => {
+      const s = container.querySelector('#regularizar-lote');
+      s.value = '77';
+      s.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await clicarRegularizar();
+    expect(api.post).toHaveBeenLastCalledWith('/almoxarifado/materiais/10/series/regularizar', {
+      cadastrar: ['SN-10'], justificativa: 'Inventario de setembro', lote_id: 77,
+    });
+  });
+
   test('cadastrar acima da diferença bloqueia', async () => {
     await renderizar();
     cadastrar('A\nB\nC');
