@@ -114,6 +114,73 @@ liberação por valor, o lembrete de cada plateia, e a segregação valendo em c
 
 ---
 
+---
+
+## Fase 2 — 11 achados, 3 CRITICAL, 6 refutados: o plano NÃO estava executável
+
+Revisor fresco com sonda executada. **Os detalhes e as correções estão na seção 7 do desenho**; aqui
+fica o que muda **neste plano**, e por que a ordem das tasks tinha de mudar.
+
+### O sort topológico estava errado, e o erro era estrutural
+
+A T1 era tronco e vinha **primeiro**. Mas ela dirige a plateia do lembrete **por `status`**, e a
+T4 precisa dirigir **por pendência** — então a T1, como escrita, **cimentaria a régua que a T4 teria
+de desmontar**. Isso é exatamente o retrabalho que o sort topológico existe para evitar, e eu o
+plantei na primeira task.
+
+**A saída não foi reordenar: foi SEPARAR dois mecanismos que eu havia misturado.** A liberação por
+valor **não é uma regra** — é mecanismo anterior, com colunas próprias e plateia própria. Para ela o
+`status` é chave legítima. As N aprovações de regra são **linhas de tabela filha**, e o lembrete
+delas é **outro lembrete**, dirigido por pendência. Com isso a T1 volta a poder vir primeiro, **sem
+cimentar nada** — mas só porque o desenho agora diz isso por escrito.
+
+### O sort topológico revisado
+
+| Task | O que é | Classificação | O que mudou |
+|---|---|---|---|
+| **T1** | o lembrete da **liberação por valor** alcança o status, só na procedência de **nascimento** | **tronco** | ganhou o **export** que faltava, o `try/catch` por requisição, o `AND data_aprovacao IS NULL` e o limite em `getReminderSettings` |
+| **T2** | `limite_aprovacao_auto` sai da **listagem da API** | **tronco** | mudou de natureza: **não havia tela** de onde tirá-la, e sem isso a task entregava **zero** |
+| **T3** | `regras_aprovacao` **+ a tabela filha das pendências** | **tronco** | ganhou a tabela filha, que é a resposta à pergunta 7.9 |
+| **T4** | o avaliador, o `CASE` do claim único, a segregação por perna, **e o gate da auto-aprovação** | **tronco** | ganhou a interação com `aprovacao_automatica`, que contorna a segregação inteira |
+| **T5** | o lembrete **por pendência** de regra | **tronco** | **task nova** — era o que a RN-02 misturava com a T1 |
+| **T6** | aba de configuração das regras | **tronco** *(era galho)* | deixou de ser galho: a costura "regra desativada com pendência aberta" tem UI nos dois lados |
+| **T7** | tela da fila de pendências | **tronco** *(era galho)* | idem, mais a questão perfil→pessoa |
+| **T8** | integração cruzando tudo | **tronco** | — |
+
+⚠️ **Esta etapa perdeu o paralelismo, e isso é resultado da medição, não pessimismo.** O critério
+desta base é *"se um erro de interpretação num agente exigiria retrabalho no outro, não é
+independente"* — e as duas telas compartilham **duas** decisões (o que fazer com pendência órfã, e
+como a regra nomeia quem assina). Fingir independência aqui custaria mais que rodar serial.
+
+### As cinco correções da T1, que era a task "pequena"
+
+1. **`getEmailsAprovadores` não está exportado** — passo explícito, e o cenário
+   *"um erro numa requisição não aborta o lote"* entra na lista, com o `try/catch` por requisição
+   que **hoje não existe**. Sem isso, uma requisição ruim mataria o lembrete de **todas** as
+   `PENDENTE` posteriores, de hora em hora, em silêncio.
+2. **`AND data_aprovacao IS NULL`** na elegibilidade — o status tem **duas** procedências, e na
+   segunda a literal mente.
+3. **O limite vai para `getReminderSettings`** — `buildMensagemLembrete` é síncrona **e exportada**,
+   então o limite não é alcançável de dentro dela.
+4. **A literal perde o `R$` explícito** — `formatMoeda` já o emite, e a minha versão sairia
+   *"Valor total: R$ R$ 900,00"*.
+5. **O cenário tem de LIGAR a configuração.** Na configuração de fábrica a RN-02 é **no-op**: sem
+   aprovador de valor cadastrado, a plateia cai na lista geral, que é a **mesma** de `PENDENTE`.
+
+### E a metade positiva que eu escrevi não provava nada
+
+Eu havia escrito *"requisição em `PENDENTE` continua entrando — a metade que prova que não quebrei a
+lane boa"*. O revisor mediu: **`PENDENTE` nunca tem `aprovador_id`**, então o ramo que eu dizia estar
+preservando é **inalcançável hoje**. A metade positiva tem de ser outra: **os endereços exatos** da
+lane `PENDENTE` antes e depois, com um aprovador de valor cujo e-mail **não** esteja na lista geral.
+
+### O que sai desta etapa e vira achado próprio
+
+O **bypass da máquina de estados** em `verificarBloqueioLiberacao`: ele grava
+`AGUARDANDO_APROVACAO_VALOR` por `UPDATE` cru, a partir de seis status que `TRANSICOES` **proíbe**.
+É **anterior** a esta etapa, não é o que ela veio resolver, e consertá-lo aqui abriria escopo de
+máquina de estados. **Vai para a letra C** com o cenário medido.
+
 ## Fase 2 — o que o revisor do plano tem de atacar
 
 1. Os contratos cobrem os casos de erro e as **mensagens literais**? (o desenho ainda **não**
@@ -133,8 +200,9 @@ liberação por valor, o lembrete de cada plateia, e a segregação valendo em c
 ## Estado
 
 - [x] Fase 0 — medida, **com correção da própria medição** (`06e3b00` + `d716c47`)
-- [ ] Fase 1 — desenho e plano *(o desenho existe; falta congelar as LITERAIS de recusa)*
-- [ ] Fase 2 — revisão do plano por agente fresco
-- [ ] T1 · [ ] T2 · [ ] T3 · [ ] T4 · [ ] T5 · [ ] T6 · [ ] T7
+- [x] Fase 1 — desenho e plano (`637d9fa`), **corrigidos pela Fase 2**: ver a seção 7 do desenho
+- [ ] Fase 1-b — as literais de T3/T4/T5 e a resposta da 7.9 (o registro da pendência), ANTES de despachar qualquer task
+- [x] Fase 2 — revisão do plano: **11 achados, 3 CRITICAL, 6 refutados** — o plano NAO estava executavel; desenho e plano corrigidos
+- [ ] T1 · [ ] T2 · [ ] T3 · [ ] T4 · [ ] T5 · [ ] T6 · [ ] T7 · [ ] T8 *(oito, e todas tronco — ver a Fase 2)*
 - [ ] Fase 5 — revisão adversarial
 - [ ] Fase 6 — `fechar-etapa`

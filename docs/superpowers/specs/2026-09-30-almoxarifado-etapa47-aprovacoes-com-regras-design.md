@@ -164,3 +164,157 @@ mensagens e terminou com oito** — duas nasceram na execução, e a tabela do d
 o fechamento.
 
 **A Fase 2 tem de cobrar essa tabela**, e o plano já manda o revisor exigi-la.
+
+---
+
+## 7. O que a Fase 2 mudou — 11 achados, 3 CRITICAL, 6 hipóteses refutadas
+
+Revisor fresco, 2026-09-30, com **sonda executada** (script em scratchpad, nenhum arquivo do projeto
+tocado). Verifiquei os onze antes de aceitar. **Três derrubam afirmações minhas que este desenho
+apresentava como medidas**, e uma delas é uma troca de configuração.
+
+### 7.1 🔴 `getEmailsAprovadores` NÃO está exportado — e a T1, como escrita, derruba a lane que funciona
+
+A seção 5 diz que a função *"já existe"*. Existe como função
+(`requisitionValueApprovalService.js:313`) e **não está em `module.exports`** — verificado: o objeto
+exportado tem 17 nomes e ela não é um deles.
+
+**E o modo de falha é muito pior que um `TypeError`:** `processarLembretesPendentes`
+(`requisitionReminderService.js:301-320`) **não tem `try/catch` por requisição**. Um erro numa
+requisição **aborta o lote**, e como `buscarRequisicoesElegiveis` ordena `updated_at ASC`, **uma**
+requisição de alto valor antiga mataria o lembrete de **todas** as `PENDENTE` posteriores — de hora
+em hora, em silêncio, porque o job engole no `console.warn`.
+
+**Correção:** exportar a função é **passo explícito** da T1, e o cenário *"um erro numa requisição
+não aborta o lote"* entra na lista — com o `try/catch` por requisição, que hoje não existe.
+
+### 7.2 🔴 A RN-02 usa `status` como chave da plateia, e esta base tem um arquivo que existe para tornar isso impossível de esquecer
+
+`scrapDisposalStateMachine.js:10-24`, textualmente: *"AS DUAS PERNAS DE APROVAÇÃO NÃO SÃO ESTADOS…
+status é um campo só e as pernas são duas assinaturas com nome, id e hora… As pernas são COLUNAS. O
+status só vira APROVADO quando a SEGUNDA assinatura chega, e quem decide isso é o `CASE` do claim num
+UPDATE único guardado no WHERE."*
+
+E a spec 06 (`:35`) **manda partir dali**: *"Quem for construir o motor de regras desta feature 06
+deve PARTIR DAQUI, não do zero."* **Este desenho não citou esse precedente uma única vez**, e a
+RN-02 faz exatamente o que aquele arquivo existe para impedir.
+
+**A consequência medida:** requisição que passa do limite **e** casa duas regras tem `status` = um
+gesto e pendências abertas = três. Sob a RN-02 o lembrete sai **só** para os aprovadores de valor, e
+os dois aprovadores de regra **nunca** são cobrados — a forma do **C64** que este desenho afirma
+estar fechando. E como a T1 é tronco e vem primeiro, ela **cimentaria** a régua que a T4 teria de
+desmontar: o retrabalho que o sort topológico existe para evitar.
+
+**Correção, e ela separa duas coisas que eu havia misturado:**
+
+- **A liberação por valor NÃO é uma regra.** É mecanismo próprio, anterior, com colunas próprias
+  (`aprovador_valor_id`, `data_aprovacao_valor`) e plateia própria por configuração. Para **ela**, o
+  `status` é chave legítima — é o mecanismo que o define.
+- **As N aprovações de regra são outra coisa**, e o `status` **nunca** é a chave delas. Elas são
+  **linhas de uma tabela filha**, com assinatura (id, nome, hora) por perna, e o `status` da
+  requisição só muda na **última** — pelo `CASE` num claim único, como o molde manda.
+- **O lembrete de pendência de regra é, portanto, OUTRO lembrete**, dirigido **por pendência** e não
+  por status. A T1 cobre o da liberação por valor; o de regra nasce com a T4. **Escrito aqui para a
+  T1 não cimentar nada.**
+
+### 7.3 🔴 `AGUARDANDO_APROVACAO_VALOR` tem DUAS procedências, e a literal congelada mente numa delas
+
+`verificarBloqueioLiberacao` é chamada de `requisitionService.js:387` (**separar**) e `:533`
+(**entregar**) — verificado. Ou seja: uma requisição **já aprovada**, com `aprovador_id` preenchido,
+`data_aprovacao` preenchida e **reserva viva**, pode cair em `AGUARDANDO_APROVACAO_VALOR` quando
+alguém liga a liberação por valor depois. O `UPDATE` é cru e **não passa** por `validarTransicao` —
+e a máquina de estados **proíbe** todas essas transições.
+
+Nesse caminho, o lembrete novo cobraria requisição já aprovada e possivelmente **parcialmente
+entregue**; `diasAguardando` contaria do **descarrilamento**, não do pedido; e a literal
+*"aguardando liberação por valor há N dias"* **mente**.
+
+**Correção:** a elegibilidade do status novo ganha **`AND data_aprovacao IS NULL`** — a T1 cobre a
+procedência de **nascimento**. A procedência de **descarrilamento** fica **fora de escopo,
+declarada**, e o bypass da máquina de estados vai para a letra **C** como achado próprio: ele é
+anterior a esta etapa.
+
+### 7.4 🔴 A RN-04 tinha a premissa FALSA, e eu troquei as duas configurações
+
+A seção 3 afirmava que `limite_aprovacao_auto` *"aparece na tela prometendo 'Quantidade máxima para
+aprovação automática por item'"*. **Verificado: ela tem ZERO ocorrências na tela de configurações.**
+A lista `CAMPOS` é fixa e a chave não está nela; ela só aparece na **listagem da API**
+(`GET /configuracoes`, que é `SELECT *`).
+
+**E a troca é o que mais ensina:** quem **aparece na tela** é `aprovacao_automatica`
+(`ConfiguracoesAlmoxarifado.js:2921`) — a config que fica **uma linha acima** no mesmo bloco de seed
+(`schema.js:2347`) e que, ao contrário da outra, **tem leitores reais** (`routes:3084` e `:3149`).
+Eu olhei o bloco do seed, vi duas chaves vizinhas de aprovação, e atribuí à morta a superfície da
+viva.
+
+**Correções:**
+- a RN-04 para de alegar promessa em tela;
+- a T2 **entregava zero mudança mensurável** como estava (sem `DELETE`, a API continua devolvendo a
+  chave, e não havia tela de onde tirá-la). **Escolhido:** lista de exclusão no
+  `GET /configuracoes`, que é reversível e mensurável. **Descartado:** o `DELETE` (irreversível) e o
+  "não fazer nada" (que era o efeito real do plano anterior);
+- **e a spec 06 estava CERTA** onde eu escalei: ela diz *"aparece na listagem de configurações do
+  módulo"* — que é a API. Foi o desenho que virou "tela".
+
+### 7.5 🔴 A RN-06/07 não foi traçada até `aprovacao_automatica` — e ela contorna a segregação inteira
+
+`routes:3083-3090` (criar) e `:3148-3155` (enviar rascunho) fazem
+`UPDATE … status='APROVADO', aprovador_nome='Sistema (automático)'` — **sem `aprovador_id`, sem
+`validarTransicao`, sem segregação**. Com a chave ligada e urgência ≠ CRÍTICO, a requisição à qual a
+T4 acabou de criar duas pendências é posta em `APROVADO` **na mesma requisição HTTP**, deixando as
+pendências **órfãs e abertas** — e é a requisição **do próprio solicitante**, aprovada por um
+`UPDATE` que não tem usuário.
+
+**Correção:** a RN-06 declara a interação — **auto-aprovação não se aplica quando há pendência de
+regra aberta** —, e o plano diz **onde** o avaliador roda: a auto-aprovação está na **rota**, depois
+do serviço, então gancho só no `requisitionCreateService` é **sobrescrito**.
+
+### 7.6 As três correções do contrato congelado da seção 6
+
+| Defeito medido | Correção |
+|---|---|
+| `Valor total: R$ <VALOR>` com `formatMoeda`, que **já emite** `"R$ 900,00"` → sairia **"R$ R$ 900,00"**. O e-mail irmão escreve `Valor total: ${valorFmt}`, sem "R$" extra | a literal perde o `R$` explícito |
+| `<LIMITE>` é **inalcançável**: `buildMensagemLembrete` é **síncrona** e exportada, e o limite só existe no `getConfig` (async) | **escolhido:** `getReminderSettings` passa a carregar o limite, porque ela já é o lugar das configurações do lembrete e assim nenhuma assinatura exportada muda |
+| minha nota sobre o plural estava **meio errada** (o corpo texto escreve `dia(s)` **cru**), e a tabela **não congelou** a única manchete HTML visível — a linha "título (HTML)" do meu contrato **não correspondia a string nenhuma do arquivo** | as duas corrigidas na Fase 1-b, lendo as cinco strings que mudam |
+
+**O modo de falha da Etapa 45 — congelar seis literais e terminar com oito — já havia começado
+dentro da minha própria tabela congelada.**
+
+### 7.7 A refutação que vale mais que os achados
+
+O revisor tentou derrubar *"a RN-02 quebra a plateia de hoje da lane `PENDENTE`"* e **achou coisa
+melhor**: uma requisição `PENDENTE` **nunca tem `aprovador_id`** — ele só é escrito por rotas que
+tiram o status de `PENDENTE` (sonda: `COUNT(*) WHERE status='PENDENTE' AND aprovador_id IS NOT NULL`
+= **0**). Logo o ramo `if (requisicao.aprovador_id)` de `resolverDestinatarios` é **inalcançável
+hoje**, e a seção 5 deste desenho descreve *"hoje soma a lista ao e-mail do `aprovador_id`"* —
+**código que nunca roda**.
+
+**Dois corolários:**
+1. o cenário que eu escrevi como metade positiva (*"a plateia de `PENDENTE` continua sendo a de
+   antes"*) **não prova nada**;
+2. **na configuração de fábrica a RN-02 é um NO-OP**: com `liberacao_valor_ativo='0'` e
+   `liberacao_valor_aprovadores='[]'`, `getEmailsAprovadores` cai em
+   `getRequisicaoNotificationEmails` — **exatamente a plateia de `PENDENTE`**. O cenário tem de
+   **ligar** a config, e o desenho tem de parar de justificar a RN-02 com *"listas diferentes por
+   configuração"* como se fosse fato medido: são diferentes **quando configuradas**.
+
+### 7.8 E os galhos NÃO são independentes
+
+*"Regra desativada com pendência em aberto"* é costura compartilhada: a desativação acontece na tela
+da **T5**, a pendência órfã se exibe na tela da **T6**, e "bloqueia / cascateia / fica obsoleta" é
+**uma** decisão com UI nos dois lados. O mesmo vale para perfil→pessoa. Pelo critério desta base —
+*se um erro de interpretação num agente exigiria retrabalho no outro, não é independente* — **T5 e
+T6 deixam de ser galhos** e viram tronco depois da T4.
+
+### 7.9 A pergunta que a Fase 1 deixou sem resposta, e que a Fase 1-b tem de responder
+
+**"Qual é o registro de uma aprovação pendente, e o que `status` guarda enquanto k de N assinaram?"**
+
+Hoje o estado de aprovação é `status` + duas colunas **singulares**, e `TRANSICOES` não tem estado de
+aprovação parcial. Sem resposta, quebram quatro coisas: a plateia do lembrete, qual dos N aprovadores
+vai em `aprovador_id`, a fila da T6 (que não sabe o que falta) e a auditoria (uma linha por lane
+hoje, N sem discriminador de regra depois).
+
+**O precedente existe e a spec manda usá-lo:** pernas são **linhas**, não estados; o `status` muda só
+na última assinatura, por `CASE` num claim único. Para **N configurável** isso vira **tabela filha +
+contagem de faltantes no `CASE`** — e o desenho anterior não dizia uma palavra sobre isso.
