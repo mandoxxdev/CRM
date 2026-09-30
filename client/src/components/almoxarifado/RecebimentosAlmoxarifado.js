@@ -125,6 +125,46 @@ const mensagemPedidoSemSaldo = (linhas, pedido, pedidoId) => {
   return 'Este pedido já foi recebido por completo.';
 };
 
+/*
+ * Etapa 57 (RN-05) — o modal de "Processar nota" escolhe o destino POR ITEM.
+ *
+ * `itensQueVaoEntrar` usa a MESMA regra do servidor (`receiptService.processarNota`,
+ * `quantidadeDoItem` + `entrada_estoque_em`): quantidade = recebida || esperada, e só entra o que
+ * tem quantidade > 0 e ainda não entrou. Uma regra diferente aqui ofereceria destino para um item
+ * que o servidor ignora (o destino dele é ignorado sem validar — Fase 2, IMPORTANTE) ou esconderia
+ * um item que vai entrar (recebida 0 com esperada > 0 entra pela esperada).
+ */
+const quantidadeQueEntra = (item) => Number(item.quantidade_recebida) || Number(item.quantidade_esperada) || 0;
+const itensQueVaoEntrar = (itens) => (itens || [])
+  .filter((it) => quantidadeQueEntra(it) > 0 && !it.entrada_estoque_em);
+
+/*
+ * As localizações oferecidas como destino: sem as bloqueadas (o motor recusa) e sem os "pais" de
+ * alguma localização ativa (o motor aceita, mas o Mapa esconde o saldo que cai no pai — ver a
+ * Fase 2 do plano). Inativa também sai: o servidor recusaria a nota inteira.
+ */
+const destinosOferecidos = (localizacoes) => {
+  const ativas = (localizacoes || []).filter((l) => l.ativo !== 0 && l.ativo !== false);
+  const pais = new Set(ativas.filter((l) => l.parent_id != null).map((l) => Number(l.parent_id)));
+  return ativas.filter((l) => !Number(l.bloqueada) && !pais.has(Number(l.id)));
+};
+
+/*
+ * O aviso do item enquanto o seletor está em "Padrão do material", lido de
+ * `GET /materiais/:id/sugestao-localizacao` (Etapa 53). `undefined` = a sugestão não carregou
+ * (ou falhou, ex.: material inativo → 400): sem aviso — o servidor recusa com a literal dele.
+ */
+const avisoPadraoDoItem = (sugestao) => {
+  if (sugestao === undefined) return null;
+  const padrao = sugestao?.padrao ?? null;
+  if (!padrao) return 'Sem localização padrão — o saldo entra sem endereço.';
+  if (padrao.recusa) {
+    return `A localização padrão ${padrao.codigo} não recebe este material (${padrao.recusa}) — escolha um destino.`;
+  }
+  if (padrao.inativa) return `A localização padrão ${padrao.codigo} está inativa — escolha um destino.`;
+  return null;
+};
+
 const RecebimentosAlmoxarifado = () => {
   const { pode } = useAlmoxPermissoes();
   const [recebimentos, setRecebimentos] = useState([]);
@@ -198,6 +238,16 @@ const RecebimentosAlmoxarifado = () => {
   const [erroCriacao, setErroCriacao] = useState(null);
   const [showNovo, setShowNovo] = useState(false);
   const [showFiscal, setShowFiscal] = useState(false);
+  // Etapa 57 (RN-05): o modal de "Processar nota". `destinosProc` é { [item_id]: '' | id da
+  // localização } ('' = "Padrão do material"); `sugestoesProc` é { [material_id]: resposta da
+  // sugestão }, e material ausente do mapa = sugestão não carregou/falhou (sem aviso).
+  const [showProcessar, setShowProcessar] = useState(false);
+  const [localizacoesProc, setLocalizacoesProc] = useState([]);
+  const [erroLocalizacoesProc, setErroLocalizacoesProc] = useState(null);
+  const [destinosProc, setDestinosProc] = useState({});
+  const [sugestoesProc, setSugestoesProc] = useState({});
+  const [erroProcessar, setErroProcessar] = useState(null);
+  const processarSeqRef = useRef(0);
   const [buscaMat, setBuscaMat] = useState('');
   const [etiquetas, setEtiquetas] = useState(null);
   const [fiscalForm, setFiscalForm] = useState(EMPTY_FISCAL);
@@ -474,18 +524,58 @@ const RecebimentosAlmoxarifado = () => {
     }
   };
 
+  // Etapa 57 (RN-05): "Processar nota" abre o modal em vez do `window.confirm`. As consultas
+  // (localizações e uma sugestão por material) são de melhor esforço: falha não bloqueia o
+  // processamento — o item fica em "Padrão do material", que é o comportamento de antes.
+  const abrirProcessar = () => {
+    const seq = ++processarSeqRef.current;
+    setDestinosProc({});
+    setSugestoesProc({});
+    setErroProcessar(null);
+    setErroLocalizacoesProc(null);
+    setLocalizacoesProc([]);
+    setShowProcessar(true);
+    api.get('/almoxarifado/localizacoes')
+      .then((r) => { if (seq === processarSeqRef.current) setLocalizacoesProc(Array.isArray(r.data) ? r.data : []); })
+      .catch(() => {
+        if (seq === processarSeqRef.current) {
+          setErroLocalizacoesProc('Não foi possível carregar as localizações — os itens entram na padrão do material.');
+        }
+      });
+    const materiaisIds = [...new Set(itensQueVaoEntrar(detalhe?.itens).map((it) => it.material_id))];
+    materiaisIds.forEach((mid) => {
+      api.get(`/almoxarifado/materiais/${mid}/sugestao-localizacao`)
+        .then((r) => {
+          if (seq === processarSeqRef.current) setSugestoesProc((s) => ({ ...s, [mid]: r.data || null }));
+        })
+        .catch(() => { /* sem aviso: o servidor recusa com a literal dele (ex.: material inativo) */ });
+    });
+  };
+
+  const fecharProcessar = () => {
+    processarSeqRef.current += 1;
+    setShowProcessar(false);
+    setErroProcessar(null);
+  };
+
   const processarNota = async () => {
-    if (!window.confirm('Processar nota fiscal? Isso dará entrada no estoque e gerará contas a pagar.')) return;
+    const destinos = itensQueVaoEntrar(detalhe?.itens)
+      .filter((it) => destinosProc[it.id])
+      .map((it) => ({ item_id: it.id, localizacao_id: Number(destinosProc[it.id]) }));
     setSaving(true);
+    setErroProcessar(null);
     try {
-      const res = await api.post(`/almoxarifado/recebimentos/${detalhe.id}/processar`, {});
+      const res = await api.post(`/almoxarifado/recebimentos/${detalhe.id}/processar`, { destinos });
       toast.success(res.data.contas_pagar_id
         ? 'Nota processada — estoque atualizado e conta a pagar gerada!'
         : 'Nota processada — estoque atualizado!');
+      fecharProcessar();
       abrirDetalhe(detalhe.id);
       loadRecebimentos();
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Erro ao processar nota');
+      // A recusa fica NO MODAL (RN-05): a lista "{MAT}: motivo" do servidor diz qual item trocar,
+      // e um toast que some em segundos deixaria o operador sem saber qual.
+      setErroProcessar(err.response?.data?.error || 'Erro ao processar nota');
     } finally {
       setSaving(false);
     }
@@ -870,7 +960,7 @@ const RecebimentosAlmoxarifado = () => {
               <FiFileText size={14} /> Preencher Dados da NF (Faturamento)
             </button>
             <button type="button" className="btn-almox-primary" style={{ width: '100%', justifyContent: 'center' }}
-              onClick={processarNota} disabled={saving}>
+              onClick={abrirProcessar} disabled={saving}>
               <FiDollarSign size={14} /> Processar Nota — Estoque + Contas a Pagar
             </button>
           </>
@@ -1469,6 +1559,83 @@ const RecebimentosAlmoxarifado = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Etapa 57 (RN-05): processar a nota escolhendo o destino de cada item */}
+      {showProcessar && detalhe && (
+        <div className="almox-modal-overlay" onClick={() => { if (!saving) fecharProcessar(); }}>
+          <div className="almox-modal" data-testid="modal-processar" onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 760 }}>
+            <div className="almox-modal-header">
+              <h2>Processar nota fiscal</h2>
+              <button type="button" className="almox-modal-close" onClick={fecharProcessar} disabled={saving}>✕</button>
+            </div>
+            <div className="almox-modal-body">
+              <p style={{ marginTop: 0 }}>
+                Processar nota fiscal? Isso dará entrada no estoque e gerará contas a pagar.
+              </p>
+              {erroLocalizacoesProc && (
+                <div className="almox-hint-banner" style={{ marginBottom: 10, fontSize: '0.8rem' }}>{erroLocalizacoesProc}</div>
+              )}
+              {itensQueVaoEntrar(detalhe.itens).length === 0 ? (
+                <p style={{ color: 'var(--text-muted, #666)' }}>Nenhum item com quantidade a dar entrada.</p>
+              ) : (
+                <table className="almox-table">
+                  <thead>
+                    <tr><th>Material</th><th>Quantidade</th><th>Destino</th></tr>
+                  </thead>
+                  <tbody>
+                    {itensQueVaoEntrar(detalhe.itens).map((it) => {
+                      const escolhido = destinosProc[it.id] || '';
+                      const aviso = escolhido ? null
+                        : avisoPadraoDoItem(Object.prototype.hasOwnProperty.call(sugestoesProc, it.material_id)
+                          ? sugestoesProc[it.material_id] : undefined);
+                      return (
+                        <tr key={it.id} data-testid={`processar-item-${it.id}`}>
+                          <td>
+                            <strong>{it.material_codigo}</strong> — {it.material_nome}
+                          </td>
+                          <td>{quantidadeQueEntra(it)} {it.unidade || ''}</td>
+                          <td>
+                            <select className="almox-select" aria-label={`Destino de ${it.material_codigo}`}
+                              data-testid={`destino-item-${it.id}`} value={escolhido} disabled={saving}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setDestinosProc((d) => ({ ...d, [it.id]: v }));
+                              }}>
+                              <option value="">Padrão do material</option>
+                              {destinosOferecidos(localizacoesProc).map((l) => (
+                                <option key={l.id} value={l.id}>{l.endereco_completo || l.codigo}</option>
+                              ))}
+                            </select>
+                            {aviso && (
+                              <div className="almox-hint" data-testid={`aviso-padrao-${it.id}`}
+                                style={{ fontSize: '0.75rem', color: '#b45309', marginTop: 4 }}>
+                                {aviso}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+              {erroProcessar && (
+                <div className="almox-hint-banner" role="alert" style={{ marginTop: 12, fontSize: '0.8rem', color: 'var(--gmp-error)' }}>
+                  {erroProcessar}
+                </div>
+              )}
+            </div>
+            <div className="almox-modal-footer">
+              <button type="button" className="btn-almox-secondary" onClick={fecharProcessar} disabled={saving}>Cancelar</button>
+              <button type="button" className="btn-almox-primary" data-testid="confirmar-processar"
+                onClick={processarNota} disabled={saving}>
+                {saving ? 'Processando...' : 'Confirmar'}
+              </button>
+            </div>
           </div>
         </div>
       )}
