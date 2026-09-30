@@ -315,6 +315,96 @@ async function claimSaldoDoLote(db, materialId, loteId, locPreferida, quantidade
 }
 
 /**
+ * Etapa 51 (RN-01/02) — a saída SEM LOTE baixa os endereços que têm saldo.
+ *
+ * Antes, a saída sem lote debitava UMA linha — a da origem declarada, a da localização padrão ou a
+ * `NULL` — sem guarda. A entrega de requisição (o fluxo principal) não manda origem: entrada de 100
+ * em A e entrega de 100 deixavam **A:100 e NULL:−100** com o físico em 0. O endereço vazio aparecia
+ * OCUPADO no mapa, e uma tela de "localizações vazias" o esconderia (sonda da Fase 0).
+ *
+ * Mesma regra que o motor já usa para lote (`claimSaldoDoLote`, "área física não é filial"): drena
+ * as linhas SEM LOTE com saldo, a localização resolvida primeiro (a origem declarada ou a padrão),
+ * depois as maiores. Só o que SOBRAR vai para a linha da localização resolvida (ou `NULL`), que
+ * pode ficar negativa — é o "sem localização atribuída", no molde do "sem lote atribuído" das
+ * Etapas 49/50. Linha de LOTE nunca é tocada aqui (B204: a entrega não escolhe lote).
+ *
+ * **Diferença deliberada do claim de lote — relê em vez de pular** (Fase 2 da etapa, sonda de
+ * concorrência): no lote, um débito condicional que não casa vira RECUSA; aqui o resto seria
+ * negativado em silêncio. Duas saídas simultâneas de 60 com A:100 davam A:40 e NULL:−60 — o
+ * perdedor leu 100, falhou o débito e pulou a linha que ainda tinha 40. Agora, se o débito não
+ * casar, relê a linha e tira o que houver nela.
+ *
+ * Devolve TODAS as linhas debitadas (inclusive a do resto), para as compensações da saída
+ * (série recusada, INSERT do ledger falhando) devolverem exatamente o que foi tirado.
+ */
+async function claimSaldoSemLote(db, materialId, locPreferida, quantidade) {
+  const linhas = await dbAll(db, `
+    SELECT id FROM estoque_saldo_almoxarifado
+    WHERE material_id = ? AND lote_id IS NULL AND quantidade > 0
+    ORDER BY (localizacao_id IS ?) DESC, quantidade DESC, id`,
+  [materialId, locPreferida || null]);
+
+  const aplicados = [];
+  let restante = quantidade;
+  for (const linha of linhas) {
+    if (restante <= EPS) break;
+    for (let tentativa = 0; tentativa < 3; tentativa++) {
+      const atual = await dbGet(db, 'SELECT quantidade FROM estoque_saldo_almoxarifado WHERE id = ?', [linha.id]);
+      const disponivel = Number(atual?.quantidade) || 0;
+      if (disponivel <= EPS) break;
+      const take = Math.min(restante, disponivel);
+      const claim = await dbGet(db, `UPDATE estoque_saldo_almoxarifado
+        SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND quantidade >= ?
+        RETURNING id`, [take, linha.id, take]);
+      if (claim) {
+        aplicados.push({ id: linha.id, quantidade: take });
+        restante -= take;
+        break;
+      }
+    }
+  }
+
+  if (restante > EPS) {
+    const saldo = await getOrCreateSaldo(db, materialId, locPreferida, null);
+    await dbRun(db, `UPDATE estoque_saldo_almoxarifado
+      SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [restante, saldo.id]);
+    aplicados.push({ id: saldo.id, quantidade: restante });
+  }
+  return aplicados;
+}
+
+/**
+ * Etapa 51 (RN-04) — nenhum AJUSTE com localização deixa o físico negativo em material que não o
+ * permite. O AJUSTE com localização grava o valor absoluto na linha e recalcula `quantidade_atual`
+ * pela SOMA das linhas — e uma linha negativa "sem localização atribuída" (herança da saída antiga)
+ * entrava nessa soma: A:0, B:20, NULL:−45 dava físico −25 num material sem negativo.
+ *
+ * **Absorve em vez de recusar** (Fase 2, CRITICAL): recusar travaria para sempre o material com
+ * lote — entrada de 100 no lote L2 em A e entrega sem lote deixam A/L2:100 e NULL:−100, e a contagem
+ * verdadeira "L2 em A = 0" seria barrada, sem outro caminho para zerar linha de lote. Então as
+ * linhas SEM LOTE NEGATIVAS (a `NULL/NULL` primeiro, depois as mais negativas) sobem até o total dar
+ * 0. Devolve o déficit que sobrar (> 0 = nem absorvendo tudo o total chega a 0 → o chamador recusa).
+ */
+async function absorverNegativosSemLote(db, materialId, { excluirId = null } = {}) {
+  const tot = await dbGet(db, 'SELECT COALESCE(SUM(quantidade),0) as total FROM estoque_saldo_almoxarifado WHERE material_id = ?',
+    [materialId]);
+  let deficit = -(Number(tot.total) || 0);
+  if (deficit <= EPS) return 0;
+  const negativas = await dbAll(db, `SELECT id, quantidade FROM estoque_saldo_almoxarifado
+    WHERE material_id = ? AND lote_id IS NULL AND quantidade < 0 AND id IS NOT ?
+    ORDER BY (localizacao_id IS NULL) DESC, quantidade ASC, id`, [materialId, excluirId]);
+  for (const n of negativas) {
+    if (deficit <= EPS) break;
+    const sobe = Math.min(deficit, -Number(n.quantidade));
+    await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [sobe, n.id]);
+    deficit -= sobe;
+  }
+  return deficit > EPS ? deficit : 0;
+}
+
+/**
  * Mantém a linha de saldo "sem localização explícita" (ou a da localização padrão do material,
  * se houver) coerente com `quantidade_atual` depois de um AJUSTE sem localização — que define o
  * total do material por um valor absoluto, sem dizer onde ele está.
@@ -332,7 +422,7 @@ async function claimSaldoDoLote(db, materialId, loteId, locPreferida, quantidade
  * outras linhas conhecidas. Isso preserva quantidade já distribuída em localizações/lotes reais,
  * em vez de sobrescrever cegamente com o total inteiro.
  */
-async function syncSaldoLocalizacaoPadrao(db, materialId, loteId = null) {
+async function syncSaldoLocalizacaoPadrao(db, materialId, loteId = null, { drenar = false } = {}) {
   const material = await getMaterial(db, materialId);
   const locKey = material.localizacao_padrao_id || null;
   const materialQty = material.quantidade_atual || 0;
@@ -341,7 +431,24 @@ async function syncSaldoLocalizacaoPadrao(db, materialId, loteId = null) {
   const outras = await dbGet(db,
     'SELECT COALESCE(SUM(quantidade),0) as total FROM estoque_saldo_almoxarifado WHERE material_id = ? AND id != ?',
     [materialId, saldo.id]);
-  const novaLinha = materialQty - (outras.total || 0);
+  let novaLinha = materialQty - (outras.total || 0);
+  // Etapa 51 (RN-03): AJUSTE absoluto sem localização PARA BAIXO drena os endereços sem lote com
+  // saldo antes de negativar a linha padrão/NULL — senão A30 e B20 ajustados para 5 davam A:30,
+  // B:20, NULL:−45, e os dois endereços pareciam ocupados com o material quase zerado.
+  // `drenar` só vem ligado do AJUSTE de ida: esta função também serve à reconciliação de estorno e
+  // às compensações, e drenar ali mudaria caminhos que ninguém pediu (Fase 2, MINOR 5).
+  if (drenar && !loteId && novaLinha < -EPS) {
+    const positivas = await dbAll(db, `SELECT id, quantidade FROM estoque_saldo_almoxarifado
+      WHERE material_id = ? AND lote_id IS NULL AND quantidade > 0 AND id != ?
+      ORDER BY quantidade DESC, id`, [materialId, saldo.id]);
+    for (const p of positivas) {
+      if (novaLinha >= -EPS) break;
+      const tira = Math.min(-novaLinha, Number(p.quantidade));
+      await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [tira, p.id]);
+      novaLinha += tira;
+    }
+  }
   await dbRun(db,
     'UPDATE estoque_saldo_almoxarifado SET quantidade = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
     [novaLinha, saldo.id]);
@@ -1246,9 +1353,28 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
       // "soma das linhas é a verdade" que `syncMaterialTotals` implementa. Restaurada.
       // loteIdFinal (Etapa 6, Task 3): AJUSTE citando lote define o saldo daquela linha de lote
       // específica; sem lote, loteIdFinal é null e o comportamento é o de sempre.
+      // Etapa 51 (RN-04): checa ANTES de escrever se o total projetado ficaria negativo num material
+      // que não permite — e se as linhas sem lote negativas ("sem localização atribuída") cobrem a
+      // diferença. Só recusa se nem absorvendo o total chega a 0; senão absorve depois do SET.
+      if (!permiteNegativo) {
+        const chave = [material_id, localizacao_destino_id, loteIdFinal || null];
+        const proj = await dbGet(db, `SELECT
+            COALESCE(SUM(CASE WHEN localizacao_id IS ? AND lote_id IS ? THEN 0 ELSE quantidade END), 0) as outras,
+            COALESCE(SUM(CASE WHEN lote_id IS NULL AND quantidade < 0 AND NOT (localizacao_id IS ? AND lote_id IS ?)
+                              THEN -quantidade ELSE 0 END), 0) as absorvivel
+          FROM estoque_saldo_almoxarifado WHERE material_id = ?`,
+        [chave[1], chave[2], chave[1], chave[2], material_id]);
+        const totalProjetado = (Number(proj.outras) || 0) + parseFloat(quantidade);
+        if (totalProjetado < -EPS && totalProjetado + (Number(proj.absorvivel) || 0) < -EPS) {
+          throw Object.assign(new Error(
+            `Ajuste deixaria o saldo do material negativo (${Math.round(totalProjetado * 1e6) / 1e6}). O material não permite saldo negativo.`,
+          ), { status: 400 });
+        }
+      }
       const saldo = await getOrCreateSaldo(db, material_id, localizacao_destino_id, loteIdFinal);
       await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [parseFloat(quantidade), saldo.id]);
+      if (!permiteNegativo) await absorverNegativosSemLote(db, material_id, { excluirId: saldo.id });
       await syncMaterialTotals(db, material_id);
       const atual = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [material_id]);
       saldoPosterior = atual.quantidade_atual;
@@ -1328,8 +1454,14 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
             { status: 400 });
         }
         saldoLinhasSaidaParaReverter = claim.linhas;
+      } else if (!loteIdFinal) {
+        // Etapa 51 (RN-01/02): sem lote, a saída drena os ENDEREÇOS com saldo (a origem declarada
+        // ou a padrão primeiro) e só o resto vai para a linha "sem localização atribuída". A
+        // condição é `!loteIdFinal`, e não o `else` inteiro: este ramo também atendia saída COM
+        // lote de material que permite negativo, que segue no ramo de baixo (Fase 2, IMPORTANT 3).
+        saldoLinhasSaidaParaReverter = await claimSaldoSemLote(db, material_id, locSaida, quantidade);
       } else {
-        // Sem lote (ou material que permite saldo negativo): a linha continua sendo criada, porque
+        // Com lote em material que permite saldo negativo: a linha continua sendo criada, porque
         // aqui ela PODE ficar negativa e precisa existir para `syncMaterialTotals` somar.
         const saldo = await getOrCreateSaldo(db, material_id, locSaida, loteIdFinal);
         await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
@@ -1378,7 +1510,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
       // físico (achado do review round 3 — ver docstring de `syncSaldoLocalizacaoPadrao`).
       // AJUSTE COM localização já escreveu na localização certa acima — chamar isto aqui
       // reescreveria a localização padrão por engano.
-      await syncSaldoLocalizacaoPadrao(db, material_id, loteIdFinal);
+      await syncSaldoLocalizacaoPadrao(db, material_id, loteIdFinal, { drenar: true });
     }
   }
 
@@ -1869,6 +2001,12 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
         }
         await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
           [delta, saldoLoc.id]);
+        // Etapa 51 (RN-04, Fase 2): o estorno do AJUSTE com localização também recalcula o total
+        // pela soma — a mesma absorção das linhas sem lote negativas vale aqui.
+        const matEstorno = await getMaterial(db, mov.material_id);
+        const permiteNegEstorno = matEstorno.permite_saldo_negativo
+          || (await getConfig(db, 'permite_saldo_negativo_global')) === '1';
+        if (!permiteNegEstorno) await absorverNegativosSemLote(db, mov.material_id, { excluirId: saldoLoc.id });
         await syncMaterialTotals(db, mov.material_id);
         const atual = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mov.material_id]);
         saldoDepois = atual.quantidade_atual;
