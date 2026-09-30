@@ -643,3 +643,105 @@ describe('MovimentacoesAlmoxarifado — estorno da devolução ao fornecedor (Et
     expect(temBotaoEstorno(1)).toBe(false);
   });
 });
+
+// ─── Etapa 53: sugestão de localização na ENTRADA ──────────────────────────────────────────
+describe('Etapa 53: sugestao de localizacao na entrada', () => {
+  let sugestaoDoBanco;
+  beforeEach(() => {
+    sugestaoDoBanco = {
+      padrao: { localizacao_id: 1, codigo: 'A-01', recusa: null },
+      sugestoes: [
+        { localizacao_id: 1, codigo: 'A-01', endereco_completo: 'A-01', motivo: 'PADRAO', quantidade_no_endereco: 3 },
+        { localizacao_id: 2, codigo: 'B-01', endereco_completo: 'B-01', motivo: 'JA_TEM_O_MATERIAL', quantidade_no_endereco: 20 },
+        { localizacao_id: 3, codigo: 'C-01', endereco_completo: 'C-01', motivo: 'VAZIA_COMPATIVEL', quantidade_no_endereco: 0 },
+        { localizacao_id: 4, codigo: 'D-01', endereco_completo: 'D-01', motivo: 'VAZIA_COMPATIVEL', quantidade_no_endereco: 0 },
+      ],
+    };
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/movimentacoes') return Promise.resolve({ data: MOVIMENTOS });
+      if (url === '/almoxarifado/materiais') {
+        return Promise.resolve({ data: [
+          { id: 10, codigo: 'MAT-1', nome: 'Chapa 3mm', unidade: 'PC' },
+          { id: 11, codigo: 'MAT-2', nome: 'Perfil', unidade: 'PC' },
+        ] });
+      }
+      if (url.endsWith('/sugestao-localizacao')) return Promise.resolve({ data: sugestaoDoBanco });
+      if (url === '/almoxarifado/localizacoes') {
+        return Promise.resolve({ data: [1, 2, 3, 4].map((id) => ({ id, codigo: `${'ABCD'[id - 1]}-01` })) });
+      }
+      return Promise.resolve({ data: [] });
+    });
+  });
+  const blocoSugestoes = () => container.querySelector('[data-testid="sugestoes-localizacao"]');
+  const selectDestino = () => [...container.querySelectorAll('.almox-modal .almox-field')]
+    .find((f) => f.textContent.includes('Localização de destino')).querySelector('select');
+  const urlsSugestao = () => api.get.mock.calls.filter(([u]) => String(u).endsWith('/sugestao-localizacao'));
+  async function entradaCom(materialId) {
+    await abrirModalNovaMovimentacao();
+    preencher(container.querySelector('.almox-modal select.almox-form-select'), String(materialId));
+    preencher(seletorTipo(), 'ENTRADA');
+    await esperarEfeitos();
+  }
+
+  test('ate 3 sugestoes com o motivo, e o clique preenche o destino (nada preenche sozinho)', async () => {
+    await entradaCom(10);
+    const botoes = [...blocoSugestoes().querySelectorAll('button')];
+    expect(botoes.map((b) => b.textContent)).toEqual([
+      'A-01 · padrão do material', 'B-01 · já tem este material (20)', 'C-01 · vazia',
+    ]);
+    expect(selectDestino().value).toBe('');
+    await act(async () => { botoes[1].dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    expect(selectDestino().value).toBe('2');
+  });
+
+  test('padrao RECUSADA: aviso com o motivo enquanto o destino esta vazio', async () => {
+    sugestaoDoBanco = { padrao: { localizacao_id: 1, codigo: 'A-01', recusa: 'Localização A-01 está bloqueada' }, sugestoes: [] };
+    await entradaCom(10);
+    const aviso = container.querySelector('[data-testid="aviso-padrao-recusada"]');
+    expect(aviso.textContent).toBe('A localização padrão A-01 não recebe este material (Localização A-01 está bloqueada) — escolha um destino.');
+  });
+
+  test('trocar de material LIMPA o destino que veio de sugestao; o escolhido a mao fica', async () => {
+    await entradaCom(10);
+    await act(async () => { blocoSugestoes().querySelector('button').dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    expect(selectDestino().value).toBe('1');
+    preencher(container.querySelector('.almox-modal select.almox-form-select'), '11');
+    await esperarEfeitos();
+    expect(selectDestino().value).toBe('');
+    // à mão
+    preencher(selectDestino(), '4');
+    preencher(container.querySelector('.almox-modal select.almox-form-select'), '10');
+    await esperarEfeitos();
+    expect(selectDestino().value).toBe('4');
+    // Clicou uma sugestão e DEPOIS trocou à mão: a troca manual vence — o destino fica.
+    await act(async () => { blocoSugestoes().querySelector('button').dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    preencher(selectDestino(), '3');
+    preencher(container.querySelector('.almox-modal select.almox-form-select'), '11');
+    await esperarEfeitos();
+    expect(selectDestino().value).toBe('3');
+  });
+
+  test('numa SAIDA nao ha GET de sugestao; sem material tambem nao', async () => {
+    await abrirModalNovaMovimentacao();
+    preencher(seletorTipo(), 'ENTRADA');
+    await esperarEfeitos();
+    expect(urlsSugestao()).toEqual([]);
+    // SAIDA primeiro, material depois: escolher o material com ENTRADA dispararia um GET legítimo.
+    preencher(seletorTipo(), 'SAIDA');
+    preencher(container.querySelector('.almox-modal select.almox-form-select'), '10');
+    await esperarEfeitos();
+    expect(urlsSugestao()).toEqual([]);
+    expect(blocoSugestoes()).toBeNull();
+  });
+
+  test('falha da sugestao nao quebra o formulario', async () => {
+    api.get.mockImplementation((url) => {
+      if (url.endsWith('/sugestao-localizacao')) return Promise.reject(new Error('x'));
+      if (url === '/almoxarifado/materiais') return Promise.resolve({ data: [{ id: 10, codigo: 'MAT-1', nome: 'Chapa', unidade: 'PC' }] });
+      return Promise.resolve({ data: [] });
+    });
+    await entradaCom(10);
+    expect(blocoSugestoes()).toBeNull();
+    expect(container.querySelector('.almox-modal')).not.toBeNull();
+  });
+});

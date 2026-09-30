@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
@@ -251,6 +251,27 @@ const MovimentacoesAlmoxarifado = () => {
         setForm((f) => ({ ...f, lote_id: sugerido ? String(sugerido.id) : '' }));
       })
       .catch(() => { if (!cancelado) setLotes([]); });
+    return () => { cancelado = true; };
+  }, [form.material_id, form.tipo]);
+
+  // Etapa 53: sugestão de localização numa ENTRADA. Só oferece — nada é preenchido sozinho, e o
+  // motor decide. Mesmo molde do efeito de lotes (guarda `cancelado`). Na troca de material as
+  // sugestões são zeradas NA HORA (sem isso, os botões do material anterior ficavam clicáveis
+  // durante o carregamento), e o destino é limpo SÓ se veio de uma sugestão — o escolhido à mão
+  // continua (Fase 2 da etapa).
+  const [sugestaoLoc, setSugestaoLoc] = useState(null);
+  const destinoDeSugestao = useRef(false);
+  useEffect(() => {
+    setSugestaoLoc(null);
+    if (destinoDeSugestao.current) {
+      destinoDeSugestao.current = false;
+      setForm((f) => ({ ...f, localizacao_destino_id: '' }));
+    }
+    if (!form.material_id || form.tipo !== 'ENTRADA') return undefined;
+    let cancelado = false;
+    api.get(`/almoxarifado/materiais/${form.material_id}/sugestao-localizacao`)
+      .then((res) => { if (!cancelado) setSugestaoLoc(res.data || null); })
+      .catch(() => { if (!cancelado) setSugestaoLoc(null); });
     return () => { cancelado = true; };
   }, [form.material_id, form.tipo]);
 
@@ -762,7 +783,7 @@ const MovimentacoesAlmoxarifado = () => {
                     <div className="almox-field">
                       <label className="almox-label">Localização de destino</label>
                       <select className="almox-form-select" value={form.localizacao_destino_id}
-                        onChange={e => setForm(f => ({ ...f, localizacao_destino_id: e.target.value }))}>
+                        onChange={e => { destinoDeSugestao.current = false; setForm(f => ({ ...f, localizacao_destino_id: e.target.value })); }}>
                         <option value="">—</option>
                         {localizacoes.map(l => (
                           <option key={l.id} value={l.id}>
@@ -771,6 +792,26 @@ const MovimentacoesAlmoxarifado = () => {
                           </option>
                         ))}
                       </select>
+                      {/* Etapa 53: a padrão que o motor recusaria — sem destino, a entrada toma 400. */}
+                      {form.tipo === 'ENTRADA' && sugestaoLoc?.padrao?.recusa && !form.localizacao_destino_id && (
+                        <div data-testid="aviso-padrao-recusada" className="almox-hint-banner" style={{ marginTop: 6, fontSize: '0.8rem' }}>
+                          A localização padrão {sugestaoLoc.padrao.codigo} não recebe este material ({sugestaoLoc.padrao.recusa}) — escolha um destino.
+                        </div>
+                      )}
+                      {form.tipo === 'ENTRADA' && sugestaoLoc?.sugestoes?.length > 0 && (
+                        <div data-testid="sugestoes-localizacao" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)', alignSelf: 'center' }}>Sugestões:</span>
+                          {sugestaoLoc.sugestoes.slice(0, 3).map((s) => (
+                            <button key={s.localizacao_id} type="button" className="btn-almox-secondary"
+                              style={{ fontSize: '0.75rem', padding: '3px 8px' }}
+                              onClick={() => { destinoDeSugestao.current = true; setForm((f) => ({ ...f, localizacao_destino_id: String(s.localizacao_id) })); }}
+                              title={s.endereco_completo}>
+                              {s.codigo} · {s.motivo === 'PADRAO' ? 'padrão do material'
+                                : s.motivo === 'JA_TEM_O_MATERIAL' ? `já tem este material (${s.quantidade_no_endereco})` : 'vazia'}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                   {form.tipo === 'ENTRADA' && (

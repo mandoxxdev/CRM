@@ -520,15 +520,16 @@ function resolveLocalizacaoSaida(material, origemId) {
  * NÃO é chamado por cancelarMovimentacao (estorno): reverter precisa sempre ser possível, mesmo
  * numa localização bloqueada depois do movimento original — ver comentário em cancelarMovimentacao.
  */
-async function validarLocalizacaoParaMovimento(db, localizacaoId, material, papel) {
-  if (!localizacaoId) return;
-  const loc = await dbGet(db, 'SELECT * FROM localizacoes_almoxarifado WHERE id = ?', [localizacaoId]);
-  if (!loc) return; // localização inexistente: não é responsabilidade deste helper (FK/lookup trata em outro lugar)
-
-  if (loc.bloqueada) {
-    throw Object.assign(new Error(`Localização ${loc.codigo} está bloqueada`), { status: 400 });
-  }
-
+/**
+ * Etapa 53 (RN-01) — a regra de "este endereço aceita este material neste papel", PURA e ÚNICA.
+ * Devolve a mensagem de recusa (a MESMA literal que o motor sempre lançou) ou `null`. O motor
+ * (`validarLocalizacaoParaMovimento`) e a sugestão de localização usam esta função, e por isso a
+ * sugestão nunca propõe um endereço que o motor recusaria. Vale para os DOIS papéis: o bloqueio
+ * recusa na origem também (Fase 2 da etapa — um predicado só de destino deixaria uma 2ª cópia).
+ */
+function motivoRecusaEndereco(loc, material, papel) {
+  if (!loc) return null;
+  if (loc.bloqueada) return `Localização ${loc.codigo} está bloqueada`;
   if (papel === 'destino' && loc.tipos_material_permitidos) {
     let permitidos;
     try {
@@ -540,10 +541,98 @@ async function validarLocalizacaoParaMovimento(db, localizacaoId, material, pape
     // permitido". A rota já normaliza [] para NULL na gravação, mas o helper trata o caso aqui
     // também (defesa em profundidade: dado escrito por outro caminho, ex. SQL direto/migração).
     if (Array.isArray(permitidos) && permitidos.length > 0 && !permitidos.includes(material.tipo_material)) {
-      throw Object.assign(new Error(
-        `Localização ${loc.codigo} não aceita o tipo de material '${material.tipo_material || ''}'`), { status: 400 });
+      return `Localização ${loc.codigo} não aceita o tipo de material '${material.tipo_material || ''}'`;
     }
   }
+  return null;
+}
+
+async function validarLocalizacaoParaMovimento(db, localizacaoId, material, papel) {
+  if (!localizacaoId) return;
+  const loc = await dbGet(db, 'SELECT * FROM localizacoes_almoxarifado WHERE id = ?', [localizacaoId]);
+  if (!loc) return; // localização inexistente: não é responsabilidade deste helper (FK/lookup trata em outro lugar)
+  const recusa = motivoRecusaEndereco(loc, material, papel);
+  if (recusa) throw Object.assign(new Error(recusa), { status: 400 });
+}
+
+/**
+ * Etapa 53 (RN-02) — sugestão de localização para uma ENTRADA. Só oferece: quem decide é o motor.
+ * `padrao` diz se a localização padrão recebe o material — se não recebe, a entrada SEM destino é
+ * recusada pelo motor, e a tela precisa avisar (Fase 2: a RN-04 do desenho dizia o contrário).
+ * `sugestoes`, sem repetição e só endereços ATIVOS, de almoxarifado ativo, que a regra aceita:
+ *   1. PADRAO — a padrão;
+ *   2. JA_TEM_O_MATERIAL — onde o material já tem saldo, maiores primeiro (consolidar);
+ *   3. VAZIA_COMPATIVEL — vazias pela régua da Etapa 52, SEM filho ativo (contêiner não é vaga),
+ *      no máximo 5, as do almoxarifado da padrão primeiro.
+ */
+async function sugerirLocalizacaoEntrada(db, materialId) {
+  const material = await getMaterial(db, materialId);
+  if (!material) throw Object.assign(new Error('Material não encontrado'), { status: 404 });
+  if (!material.ativo) throw Object.assign(new Error('Material inativo não pode ser movimentado'), { status: 400 });
+
+  const ativa = (loc) => loc && Number(loc.ativo) === 1 && !(loc.almoxarifado_ativo === 0);
+  const LOC_SQL = `SELECT l.*, a.ativo as almoxarifado_ativo, a.codigo as almoxarifado_codigo, p.codigo as parent_codigo,
+      COALESCE(a.codigo || ' / ', '') || COALESCE(NULLIF(l.setor, '') || ' / ', '')
+        || COALESCE(p.codigo || ' / ', '') || l.codigo as endereco_completo
+    FROM localizacoes_almoxarifado l
+    LEFT JOIN almoxarifados a ON l.almoxarifado_id = a.id
+    LEFT JOIN localizacoes_almoxarifado p ON l.parent_id = p.id`;
+
+  let padrao = null;
+  const sugestoes = [];
+  const vistos = new Set();
+  const incluir = (loc, motivo, quantidade = 0) => {
+    if (vistos.has(loc.id)) return;
+    vistos.add(loc.id);
+    sugestoes.push({
+      localizacao_id: loc.id, codigo: loc.codigo, endereco_completo: loc.endereco_completo,
+      motivo, quantidade_no_endereco: quantidade,
+    });
+  };
+
+  if (material.localizacao_padrao_id) {
+    const loc = await dbGet(db, `${LOC_SQL} WHERE l.id = ?`, [material.localizacao_padrao_id]);
+    if (loc) {
+      const recusa = motivoRecusaEndereco(loc, material, 'destino');
+      padrao = { localizacao_id: loc.id, codigo: loc.codigo, recusa };
+      if (!recusa && ativa(loc)) {
+        const q = await dbGet(db, `SELECT COALESCE(SUM(quantidade),0) q FROM estoque_saldo_almoxarifado
+          WHERE material_id = ? AND localizacao_id = ?`, [materialId, loc.id]);
+        incluir(loc, 'PADRAO', Number(q.q) || 0);
+      }
+    }
+  }
+
+  const comSaldo = await dbAll(db, `${LOC_SQL}
+    JOIN (SELECT localizacao_id, SUM(quantidade) q FROM estoque_saldo_almoxarifado
+          WHERE material_id = ? AND localizacao_id IS NOT NULL GROUP BY localizacao_id HAVING SUM(quantidade) > 0) sd
+      ON sd.localizacao_id = l.id
+    ORDER BY sd.q DESC, l.id`, [materialId]);
+  for (const loc of comSaldo) {
+    if (ativa(loc) && !motivoRecusaEndereco(loc, material, 'destino')) {
+      const q = await dbGet(db, `SELECT COALESCE(SUM(quantidade),0) q FROM estoque_saldo_almoxarifado
+        WHERE material_id = ? AND localizacao_id = ?`, [materialId, loc.id]);
+      incluir(loc, 'JA_TEM_O_MATERIAL', Number(q.q) || 0);
+    }
+  }
+
+  const almoxPadrao = padrao
+    ? (await dbGet(db, 'SELECT almoxarifado_id FROM localizacoes_almoxarifado WHERE id = ?', [padrao.localizacao_id]))?.almoxarifado_id
+    : null;
+  const vazias = (await listarLocalizacoesVazias(db))
+    .filter((l) => !vistos.has(l.id));
+  const semFilho = await dbAll(db, `SELECT l.id FROM localizacoes_almoxarifado l
+    WHERE NOT EXISTS (SELECT 1 FROM localizacoes_almoxarifado f WHERE f.parent_id = l.id AND f.ativo = 1)`);
+  const idsSemFilho = new Set(semFilho.map((r) => r.id));
+  const almoxAtivos = new Set((await dbAll(db, 'SELECT id FROM almoxarifados WHERE COALESCE(ativo,1) = 1')).map((r) => r.id));
+  const candidatas = vazias
+    .filter((l) => idsSemFilho.has(l.id))
+    .filter((l) => l.almoxarifado_id == null || almoxAtivos.has(l.almoxarifado_id))
+    .filter((l) => !motivoRecusaEndereco(l, material, 'destino'))
+    .sort((a, b) => (Number(b.almoxarifado_id === almoxPadrao) - Number(a.almoxarifado_id === almoxPadrao)));
+  for (const loc of candidatas.slice(0, 5)) incluir(loc, 'VAZIA_COMPATIVEL', 0);
+
+  return { padrao, sugestoes };
 }
 
 // `quantidade_reservada` SAIU deste mapa no review final da Etapa 6. A Task 2 removeu a coluna de
@@ -2428,6 +2517,8 @@ async function consultarSaldosPorLocalizacao(db, materialId) {
 }
 
 module.exports = {
+  motivoRecusaEndereco,
+  sugerirLocalizacaoEntrada,
   listarLocalizacoesVazias,
   contarOcupacaoLocalizacao,
   getConfig,

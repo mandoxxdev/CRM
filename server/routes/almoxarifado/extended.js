@@ -1163,6 +1163,13 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     } catch (e) { handleError(res, e); }
   });
 
+  // Etapa 53: sugestao de localizacao para ENTRADA - so oferece, o motor decide. Gate `auth`, como o mapa.
+  app.get('/api/almoxarifado/materiais/:id/sugestao-localizacao', auth, async (req, res) => {
+    try {
+      res.json(await stockService.sugerirLocalizacaoEntrada(db, Number(req.params.id)));
+    } catch (e) { handleError(res, e); }
+  });
+
   // Etapa 50 (C71): o fisico e o 'sem lote atribuido' do material. Rota NOVA: a /lotes continua array,
   // porque quatro seletores de lote a consomem com com_saldo=1.
   app.get('/api/almoxarifado/materiais/:id/lotes/resumo', auth, requirePermission('visualizar'), async (req, res) => {
