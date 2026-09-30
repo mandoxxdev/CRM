@@ -1,18 +1,23 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-09-30 (Etapa 56) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-09-30 (Etapa 57) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 56) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 57) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-09-30 (Etapa 56 ENTREGUE · Etapa 57 começando)
+> ## Onde o desenvolvimento está — 2026-09-30 (Etapa 57 ENTREGUE · Etapa 58 começando)
 >
-> **O desenvolvimento parou aqui: Etapa 56 fechada, Etapa 57 começando — 2026-09-30.** A **Etapa 56 (o endereço ganha
+> **O desenvolvimento parou aqui: Etapa 57 fechada, Etapa 58 começando — 2026-09-30.** A **Etapa 57 (o recebimento
+> deixa escolher o endereço de cada item)**: **Processar Nota** abre uma janela com um destino por item ("Padrão do
+> material" continua o padrão); um endereço que não pode receber recusa a nota inteira com a lista; e a devolução ao
+> fornecedor sai do endereço onde a peça reprovada entrou. **Próxima etapa, já começando: 58 — a separação registra de
+> onde cada item sai (endereço e lote)** (feature 05; ver *"Próxima tarefa detalhada"* no plano da Etapa 57).
+>
+> **Etapas 1 a 20 e 22 a 57 completas.**
+>
+> **Etapa 56, 2026-09-30.** A **Etapa 56 (o endereço ganha
 > etiqueta, e a movimentação pode conferir a etiqueta lida)**: etiqueta com QR para endereço, que o Scanner abre no
 > Mapa (com aviso de etiqueta desatualizada depois de um **Mover**); na movimentação, o campo opcional **Confirmar
-> endereço lido** recusa o endereço errado antes de mexer no saldo. **Próxima etapa, já começando: 57 — o destino do
-> material no processamento do recebimento** (feature 08; ver *"Próxima tarefa detalhada"* no plano da Etapa 56).
->
-> **Etapas 1 a 20 e 22 a 56 completas.**
+> endereço lido** recusa o endereço errado antes de mexer no saldo.
 >
 > **Etapa 55, 2026-09-30.** A **Etapa 55 (o código proposto para um endereço novo para de ressuscitar endereço
 > removido)**: o próximo código de endereço é calculado pelo servidor, conta os endereços removidos e nunca repete um
@@ -4960,6 +4965,55 @@ que ele não tinha como repetir com sucesso garantido.
 - **Número de série de material** — continua sendo **digitado pelo operador** e de propósito não
   passa por este gerador. Retentar com outro número gravaria algo que ninguém digitou.
 - **Números de outros módulos do CRM** — a varredura foi do almoxarifado.
+
+---
+
+## Etapa 57 — O recebimento deixa escolher o endereço de cada item (ENTREGUE — 2026-09-30)
+
+**O que mudou, em uma frase:** **Processar Nota** abre uma janela com os itens que vão entrar, e cada item pode ir para
+um endereço diferente — deixar em **"Padrão do material"** é o comportamento de antes.
+
+**O problema que ela resolve.** Processar a nota mandava todo item para o endereço padrão do material (ou "sem
+endereço"), e a tela nem perguntava. Quem descarrega sabe em que prateleira cada material vai. E, com o material entrando
+em endereços diferentes, a devolução ao fornecedor de uma peça reprovada passou a sair **de onde ela entrou**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| "Processar Nota" pedia só uma confirmação | Janela **Processar nota fiscal** com os itens e um destino por item |
+| Todo item no endereço padrão | Destino por item; **"Padrão do material"** continua o padrão |
+| Nada avisava que o padrão não recebe o material | Aviso por item (padrão que recusa, inativo, ou sem padrão) |
+| Erro ao processar num aviso que some | Erro **na janela**, com as escolhas mantidas |
+| Devolução ao fornecedor sairia do padrão | Sai do endereço onde o item reprovado entrou |
+
+### Roteiro de teste manual (≈6 min)
+
+**Preparação.** Dois endereços ativos, **A** e **B**, e um endereço **C** que só aceita o tipo **EPI** (Configurações →
+Localizações). Uma nota com dois materiais (não EPI), pronta para processar (dados fiscais preenchidos e encaminhada ao
+faturamento).
+
+1. **Abrir a janela.** Abra a nota em **Recebimentos** e clique **Processar Nota — Estoque + Contas a Pagar**: aparece
+   *"Processar nota fiscal? Isso dará entrada no estoque e gerará contas a pagar."* e a tabela
+   **Material / Quantidade / Destino**, com os dois itens em **"Padrão do material"**. Se um material não tem padrão, o
+   item mostra *"Sem localização padrão — o saldo entra sem endereço."*
+2. **Recusa com a lista.** Escolha **C** para o primeiro item e **Confirmar**: a janela mostra
+   *"Nao foi possivel dar entrada no estoque: ⟨MAT⟩: Localização ⟨C⟩ não aceita o tipo de material '⟨tipo⟩'"*, continua
+   aberta, e nada entrou.
+3. **Cada item no seu lugar.** Troque o primeiro para **A**, escolha **B** para o segundo e **Confirmar**: *"Nota
+   processada — …"*. No **Mapa**, o primeiro material está em **A** e o segundo em **B**.
+4. **(Opcional, com material crítico e inspeção ligada)** Receba 10 de um material crítico no endereço **A**, com 20
+   peças boas no padrão dele; reprove 3 na inspeção com **Devolver ao fornecedor**, decida e execute a devolução em
+   **Não Conformidades**: **A** fica com 7 e o padrão continua com 20.
+
+### O que esta etapa NÃO cobre
+
+- A janela **não mostra os botões de sugestão** de Movimentações — só o aviso sobre o padrão (**D (57)**).
+- Endereço de **almoxarifado inativo** aparece na lista (**D (57)**).
+- **Quarentena não tem endereço**: escolher uma área "Quarentena" põe o material lá, e depois de liberado ele não se
+  move sozinho — transfira à mão (**D (57)**).
+- Os furos **C78** (a devolução pode tirar de um padrão bloqueado) e **C79** (o histórico da devolução registra só o
+  endereço de entrada).
 
 ---
 

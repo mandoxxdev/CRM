@@ -2161,6 +2161,8 @@ Tentar pular etapa é recusado com a mensagem nomeando a situação atual — po
 
 **A entrada no estoque acontece em um único momento: no botão "Processar Nota".** Antes dele, o recebimento existe como documento, mas o saldo do material ainda não mudou.
 
+O botão abre a janela **Processar nota fiscal**, com a pergunta *"Processar nota fiscal? Isso dará entrada no estoque e gerará contas a pagar."* e a lista dos itens que vão entrar, cada um com o **endereço de destino** — a regra completa está em 14.3b. **Confirmar** dá a entrada; **Cancelar** fecha sem mexer em nada.
+
 ### 14.2b Conferir a quantidade que chegou
 
 Enquanto o recebimento está com o almoxarifado — situações **RECEBIDO** e **EM_CONFERENCIA** —, cada item do painel de detalhe mostra **duas** quantidades e tem um campo para registrar a contagem física:
@@ -2238,11 +2240,67 @@ Além disso, antes de mover qualquer saldo, o sistema verifica **item por item**
 | Material com controle de série não aceita quantidade quebrada | *"…: quantidade fracionaria com controle de serie"* |
 | Localização de destino tem de aceitar aquele material | a razão específica da localização (3.4) |
 
-Quando uma localização de destino é informada para a nota inteira (pela integração), ela é conferida **uma vez**, antes dos itens: tem de existir e estar ativa — *"Nao foi possivel dar entrada no estoque: Localização A-01 está inativa"*.
+Quando uma localização de destino é informada para a nota inteira (pela integração), ela é conferida **uma vez**, antes dos itens: tem de existir e estar ativa — *"Nao foi possivel dar entrada no estoque: Localização A-01 está inativa"*. O destino escolhido **para um item** (14.3b) é conferido junto com os outros problemas daquele item — existir, estar ativo e aceitar o material — e entra na mesma lista: *"Nao foi possivel dar entrada no estoque: ⟨MAT-1⟩: Localização ⟨X⟩ está inativa; ⟨MAT-2⟩: Localização ⟨Y⟩ está bloqueada"*.
 
  **Nenhum item entra enquanto houver um item com problema** — a nota é recusada inteira, você acerta e reprocessa. Isso evita o pior cenário do galpão: metade da nota no estoque e ninguém sabendo qual metade.
 
 > **Atenção operacional:** lote e séries são lidos **do que está salvo**, não do que está digitado na tela. Preencha lote/séries e clique em **Salvar Dados Fiscais** antes de **Processar Nota**.
+
+### 14.3b Onde cada item entra — o destino por item
+
+Na janela **Processar nota fiscal**, cada item tem um seletor de **Destino**. A primeira opção é **"Padrão do
+material"**, e é com ela que a janela abre: quem não mexer em nada processa a nota mandando cada item para o endereço
+padrão do seu material — ou para "sem endereço", se o material não tiver padrão.
+
+**Quais itens aparecem.** Só os que **vão entrar agora**: quantidade maior que zero — a **recebida**, ou a
+**esperada** quando a recebida está em zero — e que ainda não entraram numa tentativa anterior (14.4). Se não sobrar
+nenhum, a janela diz *"Nenhum item com quantidade a dar entrada."*
+
+**Quais endereços são oferecidos.** Os **ativos**, menos os **bloqueados** e menos os que têm **sub-endereços** (um
+endereço "pai" não aparece no Mapa como ocupado, então o que fosse guardado nele ficaria invisível). A lista não
+distingue endereços de um almoxarifado desativado.
+
+**Como o sistema decide o endereço de cada item**, nesta ordem:
+
+1. o destino escolhido **para aquele item**;
+2. senão, o destino informado **para a nota inteira** (só pela integração);
+3. senão, o **endereço padrão** do material;
+4. senão, "sem endereço".
+
+**O aviso sobre o padrão.** Enquanto um item está em "Padrão do material", a janela avisa quando o padrão não serve:
+
+| O que a janela diz | Quando |
+|---|---|
+| *"A localização padrão ⟨código⟩ não recebe este material (⟨motivo⟩) — escolha um destino."* | o padrão está bloqueado ou não aceita o tipo do material — a nota seria recusada |
+| *"A localização padrão ⟨código⟩ está inativa — escolha um destino."* | o padrão está desativado — o material entraria num endereço que o Mapa não mostra |
+| *"Sem localização padrão — o saldo entra sem endereço."* | o material não tem padrão |
+
+Escolher um endereço para o item tira o aviso.
+
+**Quando algo é recusado, a nota inteira é recusada** (14.3), a mensagem aparece **dentro da janela** e as escolhas
+ficam como estavam: corrija o destino que a mensagem aponta e clique **Confirmar** de novo. Se a lista de endereços não
+puder ser carregada, a janela avisa *"Não foi possível carregar as localizações — os itens entram na padrão do
+material."* e processa assim mesmo.
+
+**O endereço de entrada fica registrado no item.** É ele que a devolução ao fornecedor usa para saber de onde tirar a
+peça reprovada (15b.4-ter).
+
+**Quarentena não é um endereço.** O material retido para inspeção (14.6) é uma quantidade do material, não de um
+endereço. Escolher como destino uma área chamada "Quarentena" guarda o material lá; depois da liberação ele **não se
+move sozinho** — leve-o ao endereço definitivo por **Transferência** (11).
+
+**Pela integração**, o destino por item vai em `destinos` — uma lista de pares item/endereço — no processamento, no
+avanço de etapa para processar e na aprovação direta. Recusas, antes de qualquer item entrar:
+
+| Mensagem | Quando |
+|---|---|
+| *"Destinos inválidos"* | não é uma lista, ou uma posição dela não é um par item/endereço |
+| *"Item ⟨id⟩ não pertence a este recebimento"* | o item não é desta nota (inclusive um identificador que não é número) |
+| *"Destino inválido para o item ⟨id⟩"* | o endereço não é um número inteiro positivo |
+| *"Item ⟨id⟩ repetido nos destinos"* | o mesmo item aparece duas vezes |
+
+O destino de um item que não vai entrar (quantidade zero ou já entrado) é **ignorado**, sem ser conferido: o item fica
+onde entrou.
 
 ### 14.4 A mesma nota não duplica estoque — nem no mesmo documento, nem entre documentos
 
@@ -3436,6 +3494,12 @@ a parcela bloqueada, que todas as outras são recusadas por tocar (15.4).
 
 Em material com **controle por lote**, a baixa sai da **linha do lote que entrou naquele
 recebimento**: o lote do item inspecionado, não uma escolha de tela.
+
+**De qual endereço sai.** A baixa sai primeiro do **endereço onde aquele item do recebimento entrou** (14.3b) — mesmo
+que o material tenha entrado em endereços diferentes na mesma nota, ou que o padrão tenha outras peças, boas. Se esse
+endereço não tiver a quantidade inteira, o sistema completa com os outros endereços que têm o material, e o livro
+registra o endereço de entrada como origem. Se o endereço de entrada tiver sido **desativado ou bloqueado** depois, a
+execução não é recusada: a baixa sai como qualquer saída sem endereço declarado, começando pelo endereço padrão.
 
 A movimentação aparece no **livro de movimentações** (6) com o motivo **"Devolução ao fornecedor"** e
 com o **número do documento de não conformidade** no campo de documento vinculado. A observação que

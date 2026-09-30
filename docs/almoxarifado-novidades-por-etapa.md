@@ -109,7 +109,7 @@ está detalhado na seção da etapa correspondente e no
 
 ### A. Vinte e nove itens para rodar em produção ANTES do deploy — vinte e seis são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
 
-*(**Atualizado em 2026-09-30 (Etapa 54) de vinte e oito para vinte e nove**, com a **A29**. As Etapas 52 e 53 não acrescentaram nenhuma.)*
+*(**Atualizado em 2026-09-30 (Etapa 54) de vinte e oito para vinte e nove**, com a **A29**. As Etapas 52 e 53 não acrescentaram nenhuma. **As Etapas 55, 56 e 57 também não** — a 57 cria uma coluna nova no item do recebimento (o endereço onde ele entrou) que nasce **vazia** para o que já foi recebido, e o sistema trata o vazio buscando pelo histórico, como antes; não há o que medir nem limpar.)*
 
 
 *(**Atualizado em 2026-09-30 (Etapa 48) de vinte e seis para vinte e sete**, com a **A27**.)*
@@ -931,9 +931,9 @@ SELECT s.material_id, s.localizacao_id, s.quantidade, l.ativo
   (`ativo` vazio na consulta): só por contagem/ajuste pela integração — o endereço não aparece na lista da tela.
   **Não apague linha por SQL** — a soma das linhas é o físico do material.
 
-### B. Decisões de negócio — B1 a B225; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B228; as em aberto esperam você, as tomadas estão escritas com o descartado
 
-*(**Atualizado em 2026-09-30 de B222 para B225**, com as três da Etapa 56; antes, de B219 para B222, com as da Etapa 55.)*
+*(**Atualizado em 2026-09-30 de B225 para B228**, com as três da Etapa 57; antes, de B222 para B225, com as três da Etapa 56; antes, de B219 para B222, com as da Etapa 55.)*
 
 *(**Atualizado em 2026-09-30 de B205 para B219**, com as quatro da Etapa 51, as três da Etapa 52, as quatro da Etapa 53 e as três da Etapa 54.)*
 
@@ -3849,6 +3849,23 @@ completar de outros endereços — o histórico diria que tudo saiu do endereço
 etiqueta ao estornar; o histórico do estorno fica sem o código conferido. **Descartado:** copiar o do movimento
 original — afirmaria uma conferência que não aconteceu.
 
+**B226 (NOVA, da Etapa 57) — o destino por item no recebimento é OPCIONAL; o padrão do material continua sendo o
+padrão.** **Escolhido:** a janela de processamento abre com todo item em **"Padrão do material"**; só muda de endereço o
+item em que alguém escolheu. Quem não mexer processa exatamente como antes. **Descartado:** obrigar a escolher o destino
+de cada item (travaria o recebimento de quem não usa endereçamento) e pré-preencher com a primeira sugestão (o sistema
+decidiria sozinho onde o material está — mesma razão da **B213**).
+
+**B227 (NOVA, da Etapa 57) — a devolução ao fornecedor sai do endereço onde o item reprovado ENTROU.** **Escolhido:** o
+endereço de entrada fica gravado no próprio item do recebimento, e a devolução o usa como origem preferida; se ele foi
+desativado ou bloqueado depois, a devolução sai como antes (do padrão primeiro) em vez de ser recusada. Recebimento
+anterior a esta etapa (sem o endereço gravado) usa o endereço registrado na entrada da nota. **Descartado:** deixar
+como estava — com destino por item, a peça reprovada ficaria em X e a devolução tiraria peça **boa** do padrão.
+
+**B228 (NOVA, da Etapa 57) — o erro ao processar a nota fica NA JANELA, não num aviso passageiro.** **Escolhido:** a
+recusa do servidor aparece dentro da janela de processamento e as escolhas de destino ficam; a pessoa corrige e confirma
+de novo. **Descartado:** o aviso que some sozinho (o de antes) — com a lista de itens recusados, sumir antes de ler faz
+perder a informação.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -4905,6 +4922,16 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
     passa a "conferir" o segundo na movimentação. O Mapa pega esse caso (ele abre pela identidade e avisa que a etiqueta
     está desatualizada); a movimentação não. Saída: reimprimir a etiqueta depois de todo **Mover**.
 
+78. **NOVO, da Etapa 57 — a devolução ao fornecedor pode tirar peça de um endereço padrão BLOQUEADO.** Antes, quando o
+    padrão do material estava bloqueado, a devolução ao fornecedor era recusada. Agora, se o item entrou em outro
+    endereço, a devolução sai de lá — e, se lá não houver o bastante, o sistema completa com os outros endereços que
+    têm o material, **inclusive o padrão bloqueado** (a baixa por endereço não olha o bloqueio). Material sem lote.
+
+79. **NOVO, da Etapa 57 — o histórico da devolução diz que saiu do endereço de entrada mesmo quando parte saiu de
+    outro.** Se o endereço onde a peça entrou já não tem a quantidade inteira (alguém tirou de lá antes), o sistema
+    completa com outros endereços, mas o histórico registra só o de entrada como origem. E, em material que permite
+    saldo negativo, a falta fica negativa **no endereço de entrada** (antes, no padrão ou em "sem endereço").
+
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -5472,6 +5499,9 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(52) A lista não filtra** por almoxarifado ou setor na tela; filtrar é na planilha.
 - **(53) A sugestão existe só em Movimentações.** A tela de **Recebimentos** não tem campo de endereço, e a
   sugestão não aparece lá.
+  **Etapa 57 (como ficou):** a tela de Recebimentos **passou a ter** o destino por item, na janela de processamento
+  (`aaf09cb`, `86ee1c1`) — e mostra o **aviso** sobre o padrão tirado da sugestão; os **botões** de sugestão continuam
+  só em Movimentações (**D (57)**).
 - **(53) Endereço padrão que é "pai"** (tem sub-endereço ativo) é **omitido** das sugestões **sem aviso** — o sistema
   aceita entrada nele, e a tela não diz por que ele não aparece.
 - **(53) "Vazia" não é "tem espaço".** Capacidade e peso não entram na conta (decisão do desenho da feature 02).
@@ -5504,6 +5534,15 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   código de endereço) dá *"Endereço lido inválido"* quando passa de 100 caracteres, em vez de *"não confere"*.
 - **(56) Leitor configurado com o teclado errado** estraga a URL do QR (`:` e `/` trocados); o campo manda o texto cru e
   o servidor recusa com *"não confere"* — reconfigure o leitor.
+- **(57) A janela de processamento não mostra os botões de sugestão** da tela de Movimentações ("já tem este
+  material", "vazia") — só o aviso sobre o padrão.
+- **(57) Endereço de almoxarifado inativo aparece na lista de destinos** — a lista de endereços não traz essa
+  informação, e o sistema aceita a entrada lá.
+- **(57) Quarentena não tem endereço.** O material retido para inspeção é um número do material, não de um endereço:
+  escolher uma área "Quarentena" como destino põe o material lá, e depois de liberado ele **não se move sozinho** —
+  transfira à mão.
+- **(57) A aprovação de recebimento fora do fluxo de nota fiscal** aceita destino por item pela integração, mas a tela
+  não tem janela para ela.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -5915,6 +5954,18 @@ saídas simultâneas) e as telas com o servidor simulado. O que **só o navegado
 2. **O leitor de código "digita" no campo.** Com um leitor USB/Bluetooth configurado como teclado, leia a etiqueta no
    campo **Confirmar endereço lido**: o campo recebe o conteúdo e o Enter do leitor **não** envia o formulário.
 3. **Etiqueta velha.** Depois de um **Mover**, leia a etiqueta antiga: aparece *"Etiqueta desatualizada: … Reimprima."*
+
+**(57) Nenhum clique foi dado nesta etapa.** Os testes provam a regra pelo servidor (11 cenários, inclusive o ciclo
+inteiro de reprovação e devolução ao fornecedor) e a janela com o servidor simulado (9 cenários). O que **só o
+navegador** prova:
+
+1. **A janela abre com os itens certos.** Numa nota pronta para processar, clique **Processar Nota — Estoque + Contas a
+   Pagar**: aparecem só os itens que ainda vão entrar, cada um com **"Padrão do material"** selecionado.
+2. **O destino escolhido vale.** Escolha um endereço para um item, confirme, e abra o **Mapa**: o item está lá; o que
+   ficou no padrão está no padrão.
+3. **A recusa fica na janela.** Escolha para um item um endereço que não aceita o tipo do material: a janela mostra
+   *"Nao foi possivel dar entrada no estoque: ⟨MAT⟩: Localização ⟨X⟩ não aceita o tipo de material '⟨tipo⟩'"* e
+   continua aberta com as escolhas.
 
 ### G. Fragilidades estruturais que continuam de pé
 
@@ -13968,16 +14019,98 @@ não tinha teste; a transferência recebia a mensagem errada; e o aviso do Mapa 
 seleção. Tudo corrigido e com teste.
 
 
+## Etapa 57 — O recebimento deixa escolher o endereço de cada item (2026-09-30)
+
+Até aqui, processar a nota fiscal dava entrada de **todos** os itens no **endereço padrão** de cada material — ou
+"sem endereço", quando o material não tinha padrão. A tela nem perguntava: era uma confirmação e pronto. Uma nota traz
+vários materiais, e quem descarrega sabe em que prateleira cada um vai. Agora **Processar Nota** abre uma janela com os
+itens que vão entrar e, para cada um, um seletor de destino. Deixar em **"Padrão do material"** é o comportamento de
+sempre; escolher um endereço manda o item para lá. Um endereço que não pode receber recusa a nota **inteira** antes de
+qualquer item entrar, com a lista do que está errado. E a devolução ao fornecedor de uma peça reprovada passa a sair
+**do endereço onde aquela peça entrou**, e não do padrão.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| "Processar Nota" pedia só uma confirmação | Abre a janela **Processar nota fiscal** com os itens que vão entrar, cada um com seu destino |
+| Todo item entrava no endereço padrão (ou sem endereço) | Destino **por item**; **"Padrão do material"** continua sendo o padrão (**B226**) |
+| Nada avisava que o padrão não recebe o material | Aviso por item: padrão que recusa o material, padrão inativo, ou material sem padrão |
+| Erro ao processar aparecia num aviso que sumia | O erro fica **na janela**, com as escolhas mantidas (**B228**) |
+| Com material entrando em endereços diferentes, a devolução ao fornecedor sairia do padrão | Sai do endereço **onde o item reprovado entrou** (**B227**) |
+
+### As regras, com o cenário exato
+
+**1. Escolher o destino de cada item.** Abra uma nota em **Recebimentos** no ponto de processar e clique **Processar
+Nota — Estoque + Contas a Pagar**. A janela **Processar nota fiscal** mostra *"Processar nota fiscal? Isso dará entrada
+no estoque e gerará contas a pagar."* e a tabela **Material / Quantidade / Destino**. Escolha um endereço para um item,
+deixe outro em **"Padrão do material"** e clique **Confirmar**: cada item entra onde foi dito, e o que ficou no padrão
+entra no padrão.
+
+**2. Quais itens aparecem.** Só os que **ainda vão entrar**: quantidade recebida maior que zero — ou, se a recebida
+estiver em zero, a esperada — e que ainda não entraram numa tentativa anterior. Sem nenhum: *"Nenhum item com
+quantidade a dar entrada."*
+
+**3. Quais endereços são oferecidos.** Os ativos, **sem** os bloqueados e **sem** os que têm sub-endereços (o Mapa não
+mostra saldo guardado num "pai").
+
+**4. O aviso do padrão.** Com o item em "Padrão do material", aparece, conforme o caso:
+*"A localização padrão ⟨código⟩ não recebe este material (⟨motivo⟩) — escolha um destino."*,
+*"A localização padrão ⟨código⟩ está inativa — escolha um destino."* ou
+*"Sem localização padrão — o saldo entra sem endereço."* Escolher um endereço tira o aviso.
+
+**5. Endereço que não pode receber: a nota inteira é recusada.** Se um item for para um endereço desativado e outro
+para um bloqueado, **nada entra**, e a janela mostra, por exemplo:
+*"Nao foi possivel dar entrada no estoque: ⟨MAT-1⟩: Localização ⟨X⟩ está inativa; ⟨MAT-2⟩: Localização ⟨Y⟩ está
+bloqueada"*. Corrija os destinos e confirme de novo — a janela continua aberta com as escolhas.
+
+**6. Localizações que não carregaram.** Se a lista de endereços falhar, a janela avisa *"Não foi possível carregar as
+localizações — os itens entram na padrão do material."* e processa assim mesmo.
+
+**7. A devolução ao fornecedor sai de onde a peça entrou.** Receba 10 de um material crítico no endereço **X** (com o
+padrão **P** tendo outras 20 peças boas), reprove 3 na inspeção com **Devolver ao fornecedor**, decida e execute a
+devolução: **X** fica com 7 e **P** continua com 20. Vale também quando o **mesmo material aparece duas vezes** na nota
+em endereços diferentes: sai do endereço **do item** reprovado. Se aquele endereço foi desativado ou bloqueado depois,
+a devolução não é recusada — sai como antes (do padrão primeiro).
+
+### O que esta etapa NÃO cobre
+
+1. A janela **não mostra os botões de sugestão** da tela de Movimentações ("já tem este material", "vazia") — só o
+   aviso do padrão. **D (57)**.
+2. **Endereço de almoxarifado inativo** aparece na lista (a lista de endereços não traz essa informação). **D (57)**.
+3. **Quarentena não tem endereço** — escolher uma área "Quarentena" como destino exige transferir o material à mão
+   depois de liberado. **D (57)**.
+4. Os furos **C78** e **C79**.
+
+### O que a revisão encontrou
+
+A revisão do **plano** achou três problemas graves antes de qualquer código: a checagem aprovaria o destino do item
+e a gravação usaria o da nota; o destino da nota voltaria a repetir a mensagem por item (a Etapa 54 tinha consertado
+isso); e o caminho de **aprovação** do recebimento também dá entrada e escaparia da validação. Achou ainda que esta
+etapa **criaria** um defeito na devolução ao fornecedor (sairia do padrão, com a peça reprovada em outro endereço) —
+corrigido junto. A revisão do **código** achou o caso do **mesmo material duas vezes na nota** (a devolução escolhia
+o endereço do outro item — agora o endereço de entrada fica gravado no próprio item), a falta de teste para o endereço
+bloqueado depois, e validações frouxas no pedido. Tudo corrigido e com teste.
+
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 57 entregue (2026-09-30):** **o recebimento deixa escolher o endereço de cada item.** **Processar Nota** abre
+  uma janela com os itens que vão entrar e um destino por item (**"Padrão do material"** continua sendo o padrão); um
+  endereço que não pode receber recusa a nota inteira com a lista; e a devolução ao fornecedor sai do endereço onde a
+  peça reprovada entrou. Fecha o **D (53)** *"a tela de recebimento não tem campo de endereço"*. **O que é seu:** as
+  decisões **B226 a B228**; os furos **C78** e **C79**; as limitações **(57)** em D e as verificações **(57)** em F.
+  **Próxima: Etapa 58 — a separação registra de onde cada item sai (endereço e lote) — feature 05; ver o plano da
+  Etapa 57.**
 
 - **Etapa 56 entregue (2026-09-30):** **o endereço ganha etiqueta, e a movimentação pode conferir a etiqueta lida.**
   Etiqueta com QR para endereço (Configurações → Localizações); ler abre o endereço no Mapa, que avisa quando a etiqueta
   está desatualizada; na movimentação, o campo opcional **Confirmar endereço lido** recusa o endereço errado antes de
   mexer no saldo, e o histórico guarda o endereço conferido. **O que é seu:** as decisões **B223 a B225**; os furos
   **C76** (série) e **C77** (etiqueta confere pelo código); as limitações **(56)** em D e as verificações **(56)** em F.
-  **Próxima: Etapa 57 — o destino do material no processamento do recebimento (feature 08; ver o plano da Etapa 56).**
+  **Próxima: Etapa 57 — o destino do material no processamento do recebimento (feature 08; ver o plano da Etapa 56).** *(Feita — ver acima.)*
 
 - **Etapa 55 entregue (2026-09-30):** **o código proposto para um endereço novo para de ressuscitar endereço
   removido.** O próximo código de endereço é calculado pelo servidor, conta os removidos e nunca repete um código

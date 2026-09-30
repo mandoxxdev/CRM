@@ -1,6 +1,6 @@
 # 08 — Entrada e Recebimento de Materiais
 
-> **Status:** 🟡 — workflow fiscal NF maduro, quarentena na entrada fechada (Etapa 5), **lote nasce aqui desde a Etapa 6**, entrada da nota **atômica e idempotente** desde o review final do branch (2026-08-10), desde a **Etapa 36** as duas portas de escrita têm enum, guarda de NF duplicada e barreira de excedente, mais o campo de quantidade conferida na tela, e desde a **Etapa 37** (`ea0aa4f..13ad237`) o **recebimento parcial contra o PEDIDO DE COMPRA existe de ponta a ponta** — o pedido tem saldo, a tela carrega os itens com o que falta chegar, e a porta recusa acima do saldo. E desde a **Etapa 42** (2026-09-27) o recebimento **FECHA o pedido**: a entrada física que completa o pedido grava `pedidos_compra.status = 'recebido'`, com trilha de auditoria, e o pedido parcial ganhou alerta próprio. **E desde a Etapa 43** (2026-09-28, `4e11793..`) a **divergência tem DOCUMENTO NUMERADO**: registrar quantidade diferente da esperada — na conferência **e** nos dados fiscais, que é o caminho que a tela usa — abre sozinha uma não conformidade `NC-…` (`nao_conformidades_almoxarifado`, tabela única compartilhada com a feature 09), que congela o fato, guarda a decisão com autor e justificativa, tem trilha, anexos, alerta de documento parado e tela própria; reconferir atualiza o mesmo documento e corrigir a divergência o cancela. **O que falta para 🟢:** (1) **conferência física estruturada** (contagem, pesagem, medição, checklist por tipo de material); ~~(2) **divergência formal numerada**~~ — **PAGO na Etapa 43**, riscado em vez de apagado; (3) definição de localização na entrada (feature 02) e e-mail automático na entrada confirmada (feature 19); (4) **o pedido que reabre** — a limitação NOVA da Etapa 42: estornar a movimentação de entrada de um pedido já fechado não reverte `quantidade_recebida` nem o status, e o estado não deixa sinal (`B161` das novidades).
+> **Status:** 🟡 — workflow fiscal NF maduro, quarentena na entrada fechada (Etapa 5), **lote nasce aqui desde a Etapa 6**, entrada da nota **atômica e idempotente** desde o review final do branch (2026-08-10), desde a **Etapa 36** as duas portas de escrita têm enum, guarda de NF duplicada e barreira de excedente, mais o campo de quantidade conferida na tela, e desde a **Etapa 37** (`ea0aa4f..13ad237`) o **recebimento parcial contra o PEDIDO DE COMPRA existe de ponta a ponta** — o pedido tem saldo, a tela carrega os itens com o que falta chegar, e a porta recusa acima do saldo. E desde a **Etapa 42** (2026-09-27) o recebimento **FECHA o pedido**: a entrada física que completa o pedido grava `pedidos_compra.status = 'recebido'`, com trilha de auditoria, e o pedido parcial ganhou alerta próprio. **E desde a Etapa 43** (2026-09-28, `4e11793..`) a **divergência tem DOCUMENTO NUMERADO**: registrar quantidade diferente da esperada — na conferência **e** nos dados fiscais, que é o caminho que a tela usa — abre sozinha uma não conformidade `NC-…` (`nao_conformidades_almoxarifado`, tabela única compartilhada com a feature 09), que congela o fato, guarda a decisão com autor e justificativa, tem trilha, anexos, alerta de documento parado e tela própria; reconferir atualiza o mesmo documento e corrigir a divergência o cancela. **O que falta para 🟢:** (1) **conferência física estruturada** (contagem, pesagem, medição, checklist por tipo de material); ~~(2) **divergência formal numerada**~~ — **PAGO na Etapa 43**, riscado em vez de apagado; (3) ~~definição de localização na entrada (feature 02)~~ — **PAGO na Etapa 57** (`aaf09cb`, `86ee1c1`, fix-round `18c67a8`): destino **por item** ao processar a nota, riscado em vez de apagado; sobra o e-mail automático na entrada confirmada (feature 19); (4) **o pedido que reabre** — a limitação NOVA da Etapa 42: estornar a movimentação de entrada de um pedido já fechado não reverte `quantidade_recebida` nem o status, e o estado não deixa sinal (`B161` das novidades). **E desde a Etapa 57** (2026-09-30) o processamento da nota abre uma janela com um **destino por item** ("Padrão do material" continua o padrão, B226), a pré-checagem da nota inteira lista "MAT: motivo" do destino de cada item, `/processar`, `/workflow` e `/aprovar` aceitam `destinos`, o item grava `localizacao_entrada_id`, e a devolução ao fornecedor sai do endereço onde o item reprovado entrou (B227).
 
 > ⚠️ **ESTA LISTA TINHA UM ITEM (1) FALSO, e ele enganou três etapas.** Até a Etapa 42 o primeiro item era *"criação de pedido de compra no módulo Compras — … tudo o que a Etapa 37 entregou fica inerte até isso existir. É a **Etapa 38**, já decidida e desenhada"*. **A Etapa 38 ENTREGOU** (2026-09-16), e a 41 ainda acrescentou o caminho cotação → "Gerar pedido" — mas a frase continuou aqui dizendo que a feature era inerte em produção. Quem lesse esta spec entre 2026-09-16 e 2026-09-27 seria ativamente enganado sobre o estado do módulo. Corrigido ao medir, na Fase 0 da Etapa 42, e dito em vez de apagado. **O handoff da Etapa 41 repetiu o erro por outro lado**, falando de um *"item (5)"* desta lista — que nunca teve cinco itens. **A frase anterior deste status dizia que faltava "etiqueta" — ESTAVA ERRADA:** a etiqueta foi entregue na **Etapa 6c** (`4ebd1ce`), ver a correção no item de checklist "Ao aprovar" · **Spec original:** seção 8
 > **Etapa 31 (2026-08-31, `1e6c9a9..67b6758`) — o NÚMERO deste documento mudou de forma, e só ele.** O `REC-` era montado com os **últimos dígitos** do milissegundo mais um sorteio de 0 a 99, e por isso o carimbo **repetia** a cada **27,78 horas**. Agora vem do gerador único `services/almoxarifado/numeroDoc.js` (relógio inteiro em base36 + 8 aleatórios), com retry na colisão. **Nada mais desta feature mudou** — nem status, nem checklist, nem comportamento: o número passa de 12–14 caracteres só com dígitos para 20 com letras, os antigos **não** foram migrados e continuam legíveis (RN-05, testada). Furo **C41** das novidades.
@@ -153,7 +153,7 @@
 > linha do pedido. Mais **6 Minor** (`e253ad2` corrida do `<select>`; `93cce5e` os dois contratos que
 > a suíte exercitava sem afirmar; `e0f8b18` o hash da T6; `13ad237` `var(--gmp-danger)`, que **nunca
 > existiu** — só `--gmp-error` —, e por isso os avisos saíam na cor herdada).
-> **Última atualização:** 2026-09-16 (Etapa 37 — saldo do pedido, recebimento parcial pela tela,
+> **Última atualização:** 2026-09-30 (**Etapa 57** — o destino por item no processamento da nota, e a devolução ao fornecedor saindo do endereço de entrada; antes: 2026-09-16, Etapa 37 — saldo do pedido, recebimento parcial pela tela,
 > acumulador na entrada física e a situação derivada; antes: 2026-09-16, Etapa 36 — enum, NF duplicada, barreira de excedente,
 > quantidade conferida na tela e a régua do workflow; antes: 2026-09-16, Etapa 35 — erro de carga visível, painel que não mente e
 > barra de etapas neutra; antes: 2026-09-16, Etapa 34 — anexos no painel + primeira suíte da tela;
@@ -771,6 +771,11 @@ Todos os tipos de entrada da spec, conferência documental e física estruturada
   > localização** na entrada (feature 02, não construída); (b) a etiqueta **automática ao aprovar**
   > — hoje é impressão sob demanda por clique, e disparar automaticamente é **decisão de negócio**,
   > não ausência de código. O item fica desmarcado por (a).
+  > **Etapa 57 (2026-09-30): a metade (a) está PAGA quanto a DEFINIR a localização, e o item continua desmarcado
+  > pela SUGESTÃO.** O processamento da nota escolhe o destino **por item** (`aaf09cb` backend, `86ee1c1` tela) e
+  > usa a sugestão da feature 02 só para o **aviso** sobre o padrão (recusado, inativo, inexistente); os **botões** de
+  > sugestão ("já tem este material", "vazia") não estão na janela — ver o item "Definição de localização na entrada"
+  > abaixo, que é o que fica marcado. A etiqueta automática (b) continua decisão de negócio.
 - [x] Quarentena: material aguardando inspeção não entra no disponível (`quantidade_em_inspecao`) — **Etapa 5 (2026-08-08)**. Três movimentos novos no motor (`QUARENTENA`, `LIBERACAO_INSPECAO`, `REPROVACAO_INSPECAO`) com guarda atômica (`c37b67e`); entrada retida em vez de barrada (`4db5e11`). A decisão de inspeção em si (aprovar/reprovar/parcial) é da feature 09 — ver aquele README para o motor real usado na decisão (`DECISAO_INSPECAO`, não os dois tipos separados acima).
 - [ ] E-mail automático na entrada confirmada (feature 19)
   > **Desmarcado: é da feature 19 (notificações), não desta.** Não foi tocado na Etapa 36 e não
@@ -834,15 +839,49 @@ Todos os tipos de entrada da spec, conferência documental e física estruturada
       enquanto o servidor barrava o save**.
       **O que este item NÃO cobre, e por isso o item de backend "Conferência física estruturada"
       continua desmarcado:** pesagem, medição, contagem estruturada e checklist por tipo de material.
-- [ ] Definição de localização na entrada
-  > **Desmarcado: depende da feature 02 (sugestão de localização), não construída.** Não foi tocado
-  > na Etapa 36.
+- [x] Definição de localização na entrada — **Etapa 57 (2026-09-30)**: `aaf09cb` (serviço e rotas: `destinos`
+  > por item em `darEntradaEstoque`, o destino efetivo — o do item → o da nota → o padrão — calculado uma vez e usado na
+  > pré-checagem, no motor e nas séries; `/processar`, `/workflow` e `/aprovar`), `86ee1c1` (a janela *Processar nota
+  > fiscal* com um destino por item e o aviso sobre o padrão), fix-round `18c67a8`
+  > (`localizacao_entrada_id` no item; a devolução ao fornecedor usa o endereço do item; validação estrita de
+  > `destinos`).
+  > ⚠️ **A justificativa que estava aqui — *"Desmarcado: depende da feature 02 (sugestão de localização), não
+  > construída"* — ESTAVA ERRADA desde a Etapa 53**: a sugestão foi entregue na 53 (`GET
+  > /materiais/:id/sugestao-localizacao`), e o que faltava de fato era a tela do recebimento ter onde dizer o destino.
+  > Fica escrita em vez de apagada pela mesma razão das outras correções desta spec.
+  > **O que este item NÃO cobre:** os botões de sugestão na janela (só o aviso), endereço de almoxarifado inativo na
+  > lista, e a quarentena, que não tem endereço — letra D (57) das novidades.
 - [ ] Tipos de entrada no form
   > **Desmarcado por decisão de negócio, não por falta de código.** O `<select>` de forma de
   > recebimento existe no modal de novo recebimento e, desde a Etapa 36, os dois valores que ele
   > oferece são os **únicos** que o servidor aceita (`d02b9f4`). Acrescentar os outros tipos da spec
   > 8.1 ao formulário é o mesmo item do checklist de backend: as features 11–15 🟢 já são a porta
   > deles, e replicá-las aqui criaria uma segunda porta.
+
+## Entregue na Etapa 57 (2026-09-30) — o destino por item no recebimento
+
+Plano: `docs/superpowers/plans/2026-09-30-almoxarifado-etapa57-destino-no-recebimento.md`.
+
+- [x] **RN-01** destino por item: `destinos: [{ item_id, localizacao_id }]` em `/processar`, `/workflow` (acao
+      `processar`) e `/aprovar`; destino efetivo = o do item → o da nota (`localizacao_id`) → o padrão — `aaf09cb`.
+- [x] **RN-02** a pré-checagem da nota inteira usa o destino efetivo de cada item e lista
+      *"Nao foi possivel dar entrada no estoque: ⟨MAT⟩: ⟨motivo⟩; …"*; o destino **da nota** continua checado uma vez,
+      com a mensagem da Etapa 54 — `aaf09cb`.
+- [x] **RN-03** `destinos` malformado: *"Destinos inválidos"*, *"Item ⟨id⟩ não pertence a este recebimento"*,
+      *"Destino inválido para o item ⟨id⟩"*, *"Item ⟨id⟩ repetido nos destinos"* — `aaf09cb`; estrito ("12abc",
+      booleano) no fix-round `18c67a8`. Destino de item que não vai entrar é ignorado sem validar.
+- [x] **RN-04** o workflow repassa `localizacao_id`/`destinos` (antes processava sempre no padrão) — `aaf09cb`.
+- [x] **RN-05** a janela *Processar nota fiscal*: itens que vão entrar (recebida, ou a esperada quando a recebida é
+      zero; sem os já entrados), destino por item sem bloqueadas, sem "pais" e sem inativas, aviso sobre o padrão,
+      erro na janela — `86ee1c1`; teste de corrida (fechar/reabrir) no fix-round.
+- [x] **RN-06** a devolução ao fornecedor sai do endereço onde o item reprovado entrou — `aaf09cb` (pelo histórico da
+      entrada) e fix-round (coluna `localizacao_entrada_id` no item: o mesmo material duas vezes na nota escolhia o
+      endereço do outro item); endereço desativado/bloqueado depois = sem origem, o comportamento de antes.
+- [ ] Botões de sugestão na janela — fora por escopo (a janela usa a sugestão só para o aviso) — **D (57)**.
+- [ ] Endereço de almoxarifado inativo fora da lista — a lista de endereços não traz o dado — **D (57)**.
+
+Testes: `server/tests/api/recebimentoDestinoPorItem.api.test.js` (11 cenários, 16 sabotagens vermelhas) e
+`client/src/components/almoxarifado/RecebimentosProcessarDestino.test.js` (9 cenários, 12 sabotagens vermelhas).
 
 ## Regras essenciais + testes de API exigidos
 
