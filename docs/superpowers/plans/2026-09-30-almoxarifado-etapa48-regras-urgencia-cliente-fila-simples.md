@@ -63,8 +63,49 @@ Cria-se uma regra de urgência e uma de material de cliente. Envia-se uma requis
 3. A fila simples: o recorte bate com o que o `/aprovar` aceita? E a requisição com `regras_avaliadas_em NULL`, que o `/aprovar` **reavalia** e pode barrar?
 4. Cada RN até o último gesto: regra de urgência × auto-aprovação (a `CRITICO` nunca é auto-aprovada; e a `URGENTE` com regra?).
 
+## Fase 2 — feita: 0 CRITICAL, 2 IMPORTANT, 5 MINOR, 5 refutadas (sonda `rev48-probe.js`)
+
+**IMPORTANT-1 — a fila simples mostraria requisição que o `/aprovar` recusa.** Com
+`regras_avaliadas_em NULL` (o avaliador falhou no envio), o recorte a inclui, e o `/aprovar` reavalia,
+cria a pendência e responde 400. Escondê-la não resolve: ela também não está na fila de regras, e
+ficaria órfã nas duas. **Correção (T4):** ela **fica** na fila com a marca
+*"regras ainda não avaliadas — a aprovação vai conferir"*. A RN-04 passa a dizer que a promessa de
+"não oferecer gesto recusado" só vale com o carimbo preenchido.
+
+**IMPORTANT-2 — a trava do Crítico na auto-aprovação compara o valor exato.** Um rascunho antigo com
+`'critico'` (minúsculo), enviado com a auto-aprovação ligada, voltou **APROVADO** (sonda). O defeito é
+anterior à 48, e a 48 impede casos novos, mas não os antigos. **Correção (T1, reversível):**
+`tentarAprovacaoAutomatica` compara `String(urgencia).toUpperCase()`. A consulta de medição em
+produção vai para a **letra A**.
+
+**MINOR:**
+1. `urgencia` que não é texto (ex.: `5`) é recusada pelo **Zod**, antes do serviço, com a mensagem dele. A literal `Urgência inválida` vale para texto fora da lista (declarado no contrato).
+2. O cenário pela `/requisicoes-material` precisa mandar **setor**.
+3. `regraCasa` usa `(req.urgencia || 'NORMAL')`.
+4. No painel: comparar `Number(solicitante_id) !== Number(user.id)`, receber `user` por prop e recarregar com `recarregarEm={requisicoes}`.
+5. O desenho dizia que "só o formulário escreve urgência", **impreciso**: o `/copiar` também escreve, com `NORMAL` padrão, porque não copia a urgência.
+
+**Acrescentado ao T5:** a auto-aprovação ligada com uma requisição `URGENTE` que casa regra fica
+`PENDENTE`, e a requisição não avaliada aparece na fila simples e é barrada no `/aprovar` com a literal.
+
 ## Estado
 
 - [x] Fase 0: medida (seção 1 do desenho)
 - [x] Fase 1: desenho e plano
-- [ ] Fase 2 · [ ] T1 · [ ] T2 · [ ] T3 · [ ] T4 · [ ] T5 · [ ] Fase 5 · [ ] Fase 6
+- [x] Fase 2 (0 CRITICAL, 2 IMPORTANT, 5 MINOR) · [x] T1 (`d8631bd`) · [x] T2 (`68563a5`) · [x] T3 + T4 (`29809af`) · [x] T5 (`410fece`) · [ ] Fase 5 · [ ] Fase 6
+
+## Execução — T1 a T5 (2026-09-30)
+
+| Task | Commit | Cenários | Sabotagens |
+|---|---|---|---|
+| T1 — urgência fechada + trava do Crítico sem caixa | `d8631bd` | `requisicaoUrgencia` 5/5, pelas duas rotas | 4/4 vermelhas |
+| T2 — critérios de urgência e de material de cliente | `68563a5` | `regrasUrgenciaCliente` 4/4, cada critério com as duas metades | 6/6 |
+| T3 + T4 — a aba e a fila simples | `29809af` | `TabRegrasAprovacao` 8/8; `RequisicoesList` +4 (50/50) | 10/10 |
+| T5 — integração | `410fece` | `integracaoRegrasUrgenciaCliente` 4/4 | 2/2 (critério de urgência ignorado; material de cliente zerado na query) |
+
+**Divergências do plano:**
+- **T2 não seguiu TDD.** O teste veio depois da implementação, e por isso as seis sabotagens são o que prova o teste.
+- **T3 e T4 rodaram em série**, como o desenho escolheu.
+- **A marca da requisição não avaliada (IMPORTANT-1 da Fase 2)** entrou na T4, com cenário, e a costura servidor-tela dela está no (4) da T5.
+
+`test:api` **223/223** depois de T1 e T2; `test:almoxarifado` 42/42.
