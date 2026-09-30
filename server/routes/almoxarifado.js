@@ -622,6 +622,17 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       }
     }
 
+    // Etapa 54 (RN-05): só quando a padrão MUDA — editar outro campo de um material cuja padrão já
+    // estava inativa (legado) não pode travar.
+    if (req.body.localizacao_padrao_id !== undefined
+        && Number(req.body.localizacao_padrao_id || 0) !== Number(current.localizacao_padrao_id || 0)) {
+      try {
+        await materialService.validarLocalizacaoPadrao(db, req.body.localizacao_padrao_id);
+      } catch (errPadrao) {
+        return res.status(errPadrao.status || 400).json({ error: errPadrao.message });
+      }
+    }
+
     let locId, locText;
     try {
       ({ locId, locText } = await resolveLocalizacaoFromFk(merged.localizacao_padrao_id));
@@ -1980,6 +1991,15 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     });
   });
 
+  // Etapa 54 (RN-04): localização que é PADRÃO de material ativo não é apagada nem desativada. A
+  // entrada sem destino (recebimento, exclusão de requisição, retorno de terceiros — nenhum tem
+  // campo de destino) cai na padrão; desativá-la mandava o saldo para um endereço que o mapa não
+  // mostra. Descartado: limpar a padrão dos materiais sozinho (muda cadastro sem o dono saber).
+  function mensagemPadraoEmUso(usam) {
+    const codigos = usam.slice(0, 5).map((m) => m.codigo).join(', ') + (usam.length > 5 ? ', …' : '');
+    return `Localização é a padrão de ${usam.length} material(is) ativo(s) (${codigos}). Troque a localização padrão deles antes de apagar ou desativar.`;
+  }
+
   app.put('/api/almoxarifado/localizacoes/:id',(req, res) => {
     if (denyUnlessAlmoxAdmin(req, res)) return;
     const { codigo, descricao, setor, subgrupo, tipo, parent_id, pos_x, pos_y, largura, altura, ativo, almoxarifado_id, bloqueada, tipos_material_permitidos } = req.body;
@@ -2025,7 +2045,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
                 error: `Localização ocupada: há material nela (${ocupantes} item(ns)). Transfira o saldo antes de apagar ou desativar.`,
               });
             }
-            return continuarPut();
+            return stockService.materiaisComPadrao(db, Number(req.params.id)).then((usam) => {
+              if (usam.length > 0) return res.status(400).json({ error: mensagemPadraoEmUso(usam) });
+              return continuarPut();
+            });
           }).catch((e) => res.status(500).json({ error: e.message }));
           return;
         }
@@ -2084,6 +2107,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
             error: `Localização ocupada: há material nela (${ocupantes} item(ns)). Transfira o saldo antes de apagar ou desativar.`,
           });
         }
+        // Etapa 54 (RN-04): nem padrão de material ativo — ver `mensagemPadraoEmUso`.
+        return (linhaLoc && Number(linhaLoc.ativo) === 1 ? stockService.materiaisComPadrao(db, Number(req.params.id)) : Promise.resolve([])).then((usam) => {
+        if (usam.length > 0) return res.status(400).json({ error: mensagemPadraoEmUso(usam) });
         // Etapa 19 (RN-01): leitura previa so para o "de" do log — as leituras que a rota ja
         // fazia sao de SALDO, nao da linha.
         db.get(`SELECT * FROM localizacoes_almoxarifado WHERE id = ?`, [req.params.id], (selErr, anterior) => {
@@ -2103,6 +2129,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
               dados_anteriores: anterior || null, dados_novos: { ativo: 0 },
             }).finally(() => res.json({ success: true }));
           });
+        });
         });
         }).catch((e) => res.status(500).json({ error: e.message }));
       });

@@ -547,6 +547,34 @@ function motivoRecusaEndereco(loc, material, papel) {
   return null;
 }
 
+/**
+ * Etapa 54 (RN-01/RN-02) — o endereço INFORMADO no movimento tem de existir e, como destino, estar
+ * ativo. Só o id EXPLÍCITO: a entrada sem destino que cai na padrão NÃO passa por aqui (Fase 2 —
+ * recusar a padrão inativa travava recebimento, exclusão de requisição e retorno de terceiros, que
+ * não têm campo de destino). A padrão inativa é impedida na origem: não se desativa localização que
+ * é padrão de material ativo, e o cadastro não aceita padrão inativa (RN-04/RN-05).
+ * `aceitaInativa`: o AJUSTE precisa conseguir zerar um endereço desativado (RN-03, checado no ramo).
+ */
+async function validarEnderecoExplicito(db, localizacaoId, papel, { aceitaInativa = false } = {}) {
+  if (localizacaoId === undefined || localizacaoId === null || localizacaoId === '') return null;
+  const loc = await dbGet(db, 'SELECT * FROM localizacoes_almoxarifado WHERE id = ?', [localizacaoId]);
+  if (!loc) throw Object.assign(new Error(`Localização de ${papel} não encontrada`), { status: 400 });
+  if (papel === 'destino' && !aceitaInativa && Number(loc.ativo) !== 1) {
+    throw Object.assign(new Error(`Localização ${loc.codigo} está inativa`), { status: 400 });
+  }
+  return loc;
+}
+
+/**
+ * Etapa 54 (RN-04): materiais ATIVOS que têm esta localização como padrão. Desativar uma delas
+ * armaria a armadilha: a próxima entrada sem destino (recebimento, requisição excluída) cairia num
+ * endereço que o mapa não mostra.
+ */
+async function materiaisComPadrao(db, localizacaoId) {
+  return dbAll(db, `SELECT codigo FROM materiais_almoxarifado WHERE ativo = 1 AND localizacao_padrao_id = ?
+    ORDER BY codigo`, [localizacaoId]);
+}
+
 async function validarLocalizacaoParaMovimento(db, localizacaoId, material, papel) {
   if (!localizacaoId) return;
   const loc = await dbGet(db, 'SELECT * FROM localizacoes_almoxarifado WHERE id = ?', [localizacaoId]);
@@ -982,13 +1010,18 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
   // estoque_saldo_almoxarifado. Usa a MESMA resolução de localização (fallback para
   // localizacao_padrao_id) que será usada mais adiante para aplicar o efeito de saldo.
   if (tiposEntrada.includes(tipo)) {
+    await validarEnderecoExplicito(db, localizacao_destino_id, 'destino');
     await validarLocalizacaoParaMovimento(db, resolveLocalizacaoEntrada(material, localizacao_destino_id), material, 'destino');
   } else if (tiposSaida.includes(tipo)) {
+    await validarEnderecoExplicito(db, localizacao_origem_id, 'origem');
     await validarLocalizacaoParaMovimento(db, resolveLocalizacaoSaida(material, localizacao_origem_id), material, 'origem');
   } else if (tipo === 'TRANSFERENCIA') {
+    await validarEnderecoExplicito(db, localizacao_origem_id, 'origem');
+    await validarEnderecoExplicito(db, localizacao_destino_id, 'destino');
     await validarLocalizacaoParaMovimento(db, localizacao_origem_id, material, 'origem');
     await validarLocalizacaoParaMovimento(db, localizacao_destino_id, material, 'destino');
   } else if (tiposAjuste.includes(tipo) && localizacao_destino_id) {
+    await validarEnderecoExplicito(db, localizacao_destino_id, 'destino', { aceitaInativa: true });
     await validarLocalizacaoParaMovimento(db, localizacao_destino_id, material, 'destino');
   }
 
@@ -1504,6 +1537,18 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
       // Etapa 51 (RN-04): checa ANTES de escrever se o total projetado ficaria negativo num material
       // que não permite — e se as linhas sem lote negativas ("sem localização atribuída") cobrem a
       // diferença. Só recusa se nem absorvendo o total chega a 0; senão absorve depois do SET.
+      // Etapa 54 (RN-03): numa localização INATIVA o ajuste só reduz ou zera — subir saldo nela
+      // recriaria o estado "inativa e ocupada" que a Etapa 52 fechou (o mapa não mostra).
+      const locAjuste = await dbGet(db, 'SELECT codigo, ativo FROM localizacoes_almoxarifado WHERE id = ?', [localizacao_destino_id]);
+      if (locAjuste && Number(locAjuste.ativo) !== 1) {
+        const atualAqui = await dbGet(db, `SELECT COALESCE(SUM(quantidade), 0) as q FROM estoque_saldo_almoxarifado
+          WHERE material_id = ? AND localizacao_id = ? AND lote_id IS ?`, [material_id, localizacao_destino_id, loteIdFinal || null]);
+        if (parseFloat(quantidade) > (Number(atualAqui.q) || 0) + EPS) {
+          throw Object.assign(new Error(
+            `Localização ${locAjuste.codigo} está inativa — o ajuste só pode reduzir ou zerar o saldo dela`,
+          ), { status: 400 });
+        }
+      }
       if (!permiteNegativo) {
         const chave = [material_id, localizacao_destino_id, loteIdFinal || null];
         const proj = await dbGet(db, `SELECT
@@ -2543,6 +2588,8 @@ module.exports = {
   resolveLocalizacaoEntrada,
   resolveLocalizacaoSaida,
   validarLocalizacaoParaMovimento,
+  validarEnderecoExplicito,
+  materiaisComPadrao,
   registrarMovimentacao,
   cancelarMovimentacao,
   criarReserva,

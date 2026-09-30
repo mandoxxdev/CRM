@@ -20,7 +20,7 @@ const { registrarAuditoria } = require('./audit');
 const { EPSILON_DIVERGENCIA } = require('./divergencia');
 const { inserirComNumeroUnico } = require('./numeroDoc');
 const {
-  registrarMovimentacao, resolveLocalizacaoEntrada, validarLocalizacaoParaMovimento,
+  registrarMovimentacao, resolveLocalizacaoEntrada, validarLocalizacaoParaMovimento, validarEnderecoExplicito,
 } = require('./stockService');
 const lotService = require('./lotService');
 // Etapa 14, Task 1 (RN-03): sem ciclo — purchaseService NAO requer receiptService. Chamado pelo
@@ -1160,6 +1160,9 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id 
     // recusada inteira em vez de parar no meio.
     const material = { localizacao_padrao_id: item.localizacao_padrao_id, tipo_material: item.tipo_material };
     try {
+      // Etapa 54 (RN-01/RN-02): o destino INFORMADO na nota tem de existir e estar ativo — a mesma
+      // funcao do motor, antecipada para recusar a nota inteira.
+      await validarEnderecoExplicito(db, localizacao_id, 'destino');
       await validarLocalizacaoParaMovimento(
         db, resolveLocalizacaoEntrada(material, localizacao_id), material, 'destino');
     } catch (e) {

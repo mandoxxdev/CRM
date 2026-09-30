@@ -314,6 +314,11 @@ async function gerarRetalho(db, user, payload = {}) {
     }
   }
 
+  // Etapa 54 (Fase 2, achado 7): o destino INFORMADO do retalho e checado ANTES da perna 1 — o
+  // motor o recusaria so na perna 2, depois da baixa, e a compensacao deixaria SAIDA + ESTORNO no
+  // livro. Nao e copia da regra: e a mesma funcao que o motor chama.
+  await stockService.validarEnderecoExplicito(db, localizacaoId, 'destino');
+
   // A frase montada so fala em BAIXA quando ha baixa (fix round 1, achado do review). Ela era
   // montada incondicionalmente com `quantidade_baixa`, que no modo sem baixa e `undefined` de
   // proposito — entao, sem justificativa do operador, a AUDITORIA do evento gravava "...:

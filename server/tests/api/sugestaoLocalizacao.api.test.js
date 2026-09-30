@@ -54,16 +54,18 @@ let seq = 0;
   const V1 = await loc('V1'); const V2 = await loc('V2');
   const BLOQ = await loc('BLOQ', { bloqueada: 1 });
   const TIPO = await loc('SO-EPI', { tipos: ['EPI'] });
-  const INAT = await loc('INAT', { ativo: 0 });
+  const INAT = await loc('INAT'); // ativa ate receber o saldo — desativada logo abaixo
   const PAI = await loc('PAI'); await loc('FILHA-VAZIA', { parent: PAI });
   const ALMI = await almox(0); const NOALMINAT = await loc('ALMINAT', { almox: ALMI });
   const m = await material({ padrao: P });
-  // INAT com o MAIOR saldo: o motor aceita entrada em localizacao inativa (defeito anotado na letra C),
+  // INAT com o MAIOR saldo e depois desativada (o legado: desde a Etapa 54 o motor recusa entrada em
+  // destino inativo, entao o saldo entra com ela ativa),
   // entao so o filtro de "ativa" nas posicoes com saldo a mantem fora - sem isto, o (2) passava
   // pela lista de vazias, que ja exclui inativa.
   for (const [d, q] of [[A, 5], [B, 20], [P, 3], [INAT, 50]]) {
     const r = await entrada(m, d, q); assert.strictEqual(r.status, 201, JSON.stringify(r.body));
   }
+  await dbRun(db, 'UPDATE localizacoes_almoxarifado SET ativo = 0 WHERE id = ?', [INAT]);
 
   await test('(1) ordem: a PADRAO primeiro, depois onde ja tem o material (maior primeiro), depois vazias', async () => {
     const s = await sugestao(m);
