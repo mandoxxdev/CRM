@@ -15,6 +15,7 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 import RequisicoesList from './RequisicoesList';
 import { getRequisicaoStepIndex, REQUISICAO_FLOW } from './AlmoxPageHeader';
 import api from '../../services/api';
+import { toast } from 'react-toastify';
 
 jest.mock('../../services/api', () => ({
   __esModule: true,
@@ -858,5 +859,65 @@ describe('Etapa 47: pendências de regra na tela de requisições', () => {
     await renderizar();
     expect(urlsGet().filter((u) => String(u).includes('aprovacoes-regra'))).toEqual([]);
     expect(container.querySelector('[data-testid="fila-aprovacoes-regra"]')).toBeNull();
+  });
+});
+
+describe('Etapa 47 (Fase 5): os gestos que a primeira rodada nao exercitava', () => {
+  const PEND = (over = {}) => ({
+    id: 7, requisicao_id: 55, regra_id: 3, regra_nome: 'Valor alto', aprovadores: [99],
+    status: 'ABERTA', aprovador_id: null, aprovador_nome: null, ...over,
+  });
+  let pendenciasDoBanco;
+  let filaDoBanco;
+  beforeEach(() => {
+    pendenciasDoBanco = [PEND()];
+    filaDoBanco = [];
+    const base = api.get.getMockImplementation();
+    api.get.mockImplementation((url, cfg) => {
+      if (url === '/almoxarifado/requisicoes/55/aprovacoes-regra') return Promise.resolve({ data: pendenciasDoBanco });
+      if (url === '/almoxarifado/aprovacoes-regra/pendentes') return Promise.resolve({ data: filaDoBanco });
+      return base(url, cfg);
+    });
+  });
+  const clicar = async (el) => {
+    await act(async () => { el.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+  };
+  const getsDoDetalhe = () => api.get.mock.calls.filter(([u]) => u === '/almoxarifado/requisicoes/55').length;
+
+  test('requisicao REJEITADA com pendencia aberta: nada de Assinar (autorizacao, M-2)', async () => {
+    detalheDoBanco = { ...baseRequisicao('REJEITADO'), solicitante_id: 1, pendencias_regra_abertas: 0 };
+    await renderizar();
+    expect(container.querySelector('[data-testid="aprovacoes-regra"]').textContent).toContain('Valor alto');
+    expect(botaoPorTexto('Assinar')).toBeFalsy();
+  });
+
+  test('assinar a ULTIMA: toast diz que ja pode aprovar, e o detalhe e recarregado', async () => {
+    api.put.mockResolvedValue({ data: { success: true, pendencias_abertas: 0 } });
+    detalheDoBanco = { ...baseRequisicao('PENDENTE'), solicitante_id: 1, pendencias_regra_abertas: 1 };
+    await renderizar();
+    const antes = getsDoDetalhe();
+    await clicar(botaoPorTexto('Assinar'));
+    expect(toast.success).toHaveBeenCalledWith('Aprovação da regra "Valor alto" assinada. A requisição já pode ser aprovada.');
+    expect(getsDoDetalhe()).toBeGreaterThan(antes);
+  });
+
+  test('assinar uma de duas: toast diz quantas faltam', async () => {
+    api.put.mockResolvedValue({ data: { success: true, pendencias_abertas: 1 } });
+    detalheDoBanco = { ...baseRequisicao('PENDENTE'), solicitante_id: 1, pendencias_regra_abertas: 2 };
+    await renderizar();
+    await clicar(botaoPorTexto('Assinar'));
+    expect(toast.success).toHaveBeenCalledWith('Aprovação da regra "Valor alto" assinada. Ainda falta(m) 1.');
+  });
+
+  test('clicar na fila abre a REQUISICAO (requisicao_id, nao o id da pendencia)', async () => {
+    filaDoBanco = [{ id: 7, requisicao_id: 55, numero: 'REQ-055', regra_nome: 'Valor alto', solicitante_nome: 'Joao', valor_total: 1200, pode_assinar: true }];
+    detalheDoBanco = { ...baseRequisicao('PENDENTE'), solicitante_id: 1, pendencias_regra_abertas: 1 };
+    await renderizarSemDetalhe();
+    const fila = container.querySelector('[data-testid="fila-aprovacoes-regra"]');
+    expect(fila.textContent).toContain('R$');
+    const antes = getsDoDetalhe();
+    await clicar(fila.querySelector('button'));
+    expect(getsDoDetalhe()).toBeGreaterThan(antes);
   });
 });

@@ -2526,8 +2526,10 @@ const TabAlertasEstoque = () => {
           <FiBell size={16} style={{ color: '#f59e0b' }} /> Lembretes de requisições pendentes
         </div>
         <p style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', marginBottom: 14, lineHeight: 1.5 }}>
-          Envia e-mail diário quando uma requisição permanece com status <strong>PENDENTE</strong> sem aprovação ou rejeição.
-          Usa os mesmos destinatários configurados acima (ou alertas de estoque). O envio para quando o status muda.
+          Envia e-mail repetido enquanto uma requisição espera um gesto de aprovação. Quem recebe depende do que falta:
+          aprovação normal → os destinatários configurados acima (ou os de alertas de estoque);
+          liberação por valor → os aprovadores de alto valor; assinatura de uma regra de aprovação → quem pode assinar
+          aquela regra. O envio para quando o gesto é feito.
         </p>
         <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, maxWidth: 420 }}>
           <span style={{ fontWeight: 600 }}>Ativar lembretes diários</span>

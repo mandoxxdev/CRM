@@ -289,7 +289,7 @@ const MSG_GATE = /^Requisição tem aprovação de regra pendente: /;
 
     const [pViva] = await pendencias(viva.id);
     assert.strictEqual(pViva.status, 'OBSOLETA');
-    assert.ok(pViva.obsoleta_por_nome);
+    assert.strictEqual(pViva.obsoleta_por_nome, 'Admin', 'a obsolescencia nao registrou QUEM desativou');
     const [pMorta] = await pendencias(morta.id);
     assert.strictEqual(pMorta.status, 'ABERTA', 'desativar reescreveu o historico da requisicao rejeitada');
 
@@ -310,15 +310,17 @@ const MSG_GATE = /^Requisição tem aprovação de regra pendente: /;
     const minha = fila.body.find((x) => x.requisicao_id === r.id);
     assert.ok(minha, 'a pendencia nova nao apareceu na fila');
     assert.strictEqual(minha.pode_assinar, true);
+    assert.strictEqual(minha.valor_total, 1200, 'a fila perdeu o valor da requisicao');
     assert.ok(!fila.body.some((x) => x.status !== 'ABERTA'));
     setUser(BIA);
     const daBia = (await request(app).get('/api/almoxarifado/aprovacoes-regra/pendentes')).body
       .find((x) => x.requisicao_id === r.id);
-    assert.strictEqual(daBia.pode_assinar, false, 'Bia nao esta na lista da regra de valor');
+    // Fase 5 (M-3): quem nao pode assinar nao RECEBE a pendencia — o filtro e do servidor.
+    assert.strictEqual(daBia, undefined, 'Bia nao esta na lista da regra de valor e recebeu a pendencia');
     setUser(SOLIC);
     const doSolic = (await request(app).get('/api/almoxarifado/aprovacoes-regra/pendentes')).body
       .find((x) => x.requisicao_id === r.id);
-    assert.strictEqual(doSolic.pode_assinar, false, 'o solicitante apareceu podendo assinar a propria');
+    assert.strictEqual(doSolic, undefined, 'o solicitante recebeu a pendencia da propria requisicao');
 
     const det = await como(ADMIN).get(`/api/almoxarifado/requisicoes/${r.id}/aprovacoes-regra`);
     assert.strictEqual(det.status, 200);
@@ -347,6 +349,155 @@ const MSG_GATE = /^Requisição tem aprovação de regra pendente: /;
     const assinadas = await dbGet(db, `SELECT COUNT(*) n FROM requisicao_aprovacoes_regra
       WHERE requisicao_id = ? AND aprovador_id = ? AND status = 'APROVADA'`, [r.id, ADMIN.id]);
     assert.strictEqual(assinadas.n, 1, 'uma pessoa carimbou as duas regras');
+  });
+
+  // ═══════════ Fase 5 — os cenários que os três revisores mostraram faltar ═══════════
+  // Regras ativas neste ponto: "Valor alto" (>= 1000, Ana) e "Quantidade grande" (>= 50, Ana).
+
+  await test('(15) quantidade somada POR MATERIAL: duas linhas de 30 casam a regra ">= 50" (regras, I1)', async () => {
+    // O solicitante contornava a regra dividindo o item: duas linhas de 6 não casavam "≥ 10".
+    const r = await enviar([{ material_id: matBarato, quantidade: 30 }, { material_id: matBarato, quantidade: 30 }]);
+    const ps = await pendencias(r.id);
+    assert.deepStrictEqual(ps.map((p) => p.regra_nome), ['Quantidade grande'],
+      `a regra de quantidade foi contornada com linhas repetidas: ${JSON.stringify(ps.map((p) => p.regra_nome))}`);
+    // Metade positiva: materiais DIFERENTES não se somam.
+    const matOutro = await criarMaterial({ custo: 1 });
+    const r2 = await enviar([{ material_id: matBarato, quantidade: 30 }, { material_id: matOutro, quantidade: 30 }]);
+    assert.strictEqual((await pendencias(r2.id)).length, 0, 'somou materiais diferentes');
+  });
+
+  await test('(16) a fronteira e >=: valor exatamente 1000 e quantidade exatamente 50 casam', async () => {
+    const mat500 = await criarMaterial({ custo: 500 });
+    const rValorExato = await enviar([{ material_id: mat500, quantidade: 2 }]);
+    assert.deepStrictEqual((await pendencias(rValorExato.id)).map((p) => p.regra_nome), ['Valor alto']);
+    const rQtdExata = await enviar([{ material_id: matBarato, quantidade: 50 }]);
+    assert.deepStrictEqual((await pendencias(rQtdExata.id)).map((p) => p.regra_nome), ['Quantidade grande']);
+    const rAbaixo = await enviar([{ material_id: matBarato, quantidade: 49 }]);
+    assert.strictEqual((await pendencias(rAbaixo.id)).length, 0);
+  });
+
+  await test('(17) criterios de TIPO e de CENTRO DE CUSTO: casam o que devem e so isso', async () => {
+    const rTipo = await como(ADMIN).post('/api/almoxarifado/regras-aprovacao')
+      .send({ nome: 'Manutenção', tipo_requisicao: 'MANUTENCAO', aprovadores: [BIA.id] });
+    const rCC = await como(ADMIN).post('/api/almoxarifado/regras-aprovacao')
+      .send({ nome: 'CC 5', centro_custo_id: 5, aprovadores: [BIA.id] });
+    assert.strictEqual(rTipo.status, 201); assert.strictEqual(rCC.status, 201);
+    const nomes = async (extra) => (await pendencias((await enviar([{ material_id: matBarato, quantidade: 1 }], extra)).id))
+      .map((p) => p.regra_nome);
+    assert.deepStrictEqual(await nomes({ tipo_requisicao: 'MANUTENCAO' }), ['Manutenção']);
+    assert.deepStrictEqual(await nomes({ tipo_requisicao: 'CONSUMO' }), []);
+    assert.deepStrictEqual(await nomes({ centro_custo_id: 5 }), ['CC 5']);
+    assert.deepStrictEqual(await nomes({ centro_custo_id: 6 }), []);
+    assert.deepStrictEqual(await nomes({}), [], 'regra de tipo/CC casou requisicao sem o criterio');
+    for (const r of [rTipo, rCC]) {
+      await como(ADMIN).put(`/api/almoxarifado/regras-aprovacao/${r.body.id}`)
+        .send({ ...r.body, ativo: false });
+    }
+  });
+
+  await test('(18) quem configura o modulo assina como admin mesmo sem role admin (autorizacao, I-1)', async () => {
+    const SUPER = { id: 20, nome: 'Super', role: 'user', is_superadmin: 1, email: 'super@test.com' };
+    await dbRun(db, 'INSERT OR REPLACE INTO usuarios (id, nome, email, ativo) VALUES (?,?,?,1)', [SUPER.id, SUPER.nome, SUPER.email]);
+    const r = await enviar([{ material_id: matCaro, quantidade: 2 }]); // "Valor alto": só a Ana na lista
+    const [p] = await pendencias(r.id);
+    const fila = await como(SUPER).get('/api/almoxarifado/aprovacoes-regra/pendentes');
+    assert.ok(fila.body.find((x) => x.id === p.id)?.pode_assinar, 'o superadmin nao aparece podendo assinar');
+    const ass = await como(SUPER).put(`/api/almoxarifado/requisicoes/${r.id}/aprovacoes-regra/${p.id}/aprovar`);
+    assert.strictEqual(ass.status, 200, JSON.stringify(ass.body));
+  });
+
+  await test('(19) a fila e filtrada NO SERVIDOR: quem nao pode assinar nao recebe a fila alheia (autorizacao, M-3)', async () => {
+    await enviar([{ material_id: matCaro, quantidade: 2 }]);
+    const doCaio = await como(CAIO).get('/api/almoxarifado/aprovacoes-regra/pendentes');
+    assert.strictEqual(doCaio.status, 200);
+    assert.deepStrictEqual(doCaio.body, [], `o Caio (fora de toda lista) recebeu ${doCaio.body.length} pendencia(s)`);
+    const daAna = await como(ANA).get('/api/almoxarifado/aprovacoes-regra/pendentes');
+    assert.ok(daAna.body.length > 0 && daAna.body.every((x) => x.pode_assinar), 'a Ana perdeu a propria fila');
+  });
+
+  await test('(20) usuario DESATIVADO nao assina, mesmo estando na lista (autorizacao, M-1)', async () => {
+    const r = await enviar([{ material_id: matCaro, quantidade: 2 }]);
+    const [p] = await pendencias(r.id);
+    await dbRun(db, 'UPDATE usuarios SET ativo = 0 WHERE id = ?', [ANA.id]);
+    try {
+      const res = await como(ANA).put(`/api/almoxarifado/requisicoes/${r.id}/aprovacoes-regra/${p.id}/aprovar`);
+      assert.strictEqual(res.status, 403);
+      assert.strictEqual(res.body.error, 'Usuário inativo não pode assinar aprovação de regra');
+
+      // E a regra dela CONTINUA desativável — é a saída para esse caso (regras, M3).
+      const desativa = await como(ADMIN).put(`/api/almoxarifado/regras-aprovacao/${rValor.body.id}`)
+        .send({ nome: 'Valor alto', valor_minimo: 1000, aprovadores: [ANA.id], ativo: false });
+      assert.strictEqual(desativa.status, 200, `desativar regra de aprovador inativo: ${JSON.stringify(desativa.body)}`);
+      assert.ok(desativa.body.pendencias_obsoletadas >= 1);
+      // Metade positiva: ACRESCENTAR um aprovador inativo novo continua recusado.
+      const novoInativo = await como(ADMIN).put(`/api/almoxarifado/regras-aprovacao/${rValor.body.id}`)
+        .send({ nome: 'Valor alto', valor_minimo: 1000, aprovadores: [ANA.id, 99], ativo: false });
+      assert.strictEqual(novoInativo.status, 400);
+      assert.strictEqual(novoInativo.body.error, 'Aprovador inexistente ou inativo: 99');
+    } finally {
+      await dbRun(db, 'UPDATE usuarios SET ativo = 1 WHERE id = ?', [ANA.id]);
+    }
+  });
+
+  await test('(21) contagem da tela nao conta requisicao morta (regras, M4)', async () => {
+    const r = await enviar([{ material_id: matBarato, quantidade: 60 }]); // "Quantidade grande"
+    assert.strictEqual((await como(ADMIN).get(`/api/almoxarifado/requisicoes/${r.id}`)).body.pendencias_regra_abertas, 1);
+    await como(SOLIC).put(`/api/almoxarifado/requisicoes/${r.id}/rejeitar`).send({ motivo: 'desisti' });
+    assert.strictEqual((await como(ADMIN).get(`/api/almoxarifado/requisicoes/${r.id}`)).body.pendencias_regra_abertas, 0);
+    const linha = (await como(ADMIN).get('/api/almoxarifado/requisicoes')).body.find((x) => x.id === r.id);
+    assert.strictEqual(linha.pendencias_regra_abertas, 0);
+  });
+
+  await test('(22) dois /aprovar simultaneos: um passa, o outro desfaz a reserva que criou (testes, 1)', async () => {
+    // O rollback de /aprovar só roda quando o UPDATE perde — e só a CORRIDA faz isso com o código
+    // real (a pré-checagem já barra o caso sequencial). Sem o rollback: duas reservas de 10.
+    const r = await enviar([{ material_id: matBarato, quantidade: 10 }]);
+    assert.strictEqual((await pendencias(r.id)).length, 0);
+    setUser(CAIO);
+    const respostas = await Promise.all([1, 2].map(() => request(app).put(`/api/almoxarifado/requisicoes/${r.id}/aprovar`)));
+    assert.deepStrictEqual(respostas.map((x) => x.status).sort(), [200, 400], JSON.stringify(respostas.map((x) => x.body)));
+    const ativas = await reservasAtivas(r.id);
+    assert.strictEqual(ativas.n, 1, `ficaram ${ativas.n} reservas ativas`);
+    assert.strictEqual(ativas.q, 10, `reservado ${ativas.q} para um item de 10`);
+  });
+
+  await test('(23) /enviar zera o carimbo: rascunho carimbado, avaliador falhando, o /aprovar NAO passa (regras, I2)', async () => {
+    await como(ADMIN).put(`/api/almoxarifado/regras-aprovacao/${rValor.body.id}`)
+      .send({ nome: 'Valor alto', valor_minimo: 1000, aprovadores: [ANA.id], ativo: true });
+    const rasc = await como(SOLIC).post('/api/almoxarifado/requisicoes')
+      .send({ itens: [{ material_id: matCaro, quantidade: 2 }], urgencia: 'NORMAL', salvar_rascunho: true });
+    assert.strictEqual(rasc.body.status, 'RASCUNHO');
+    await dbRun(db, 'UPDATE requisicoes_almoxarifado SET regras_avaliadas_em = CURRENT_TIMESTAMP WHERE id = ?', [rasc.body.id]);
+    const original = approvalRulesService.avaliarRequisicao;
+    approvalRulesService.avaliarRequisicao = async () => { throw new Error('falha proposital'); };
+    try {
+      const env = await como(SOLIC).post(`/api/almoxarifado/requisicoes/${rasc.body.id}/enviar`);
+      assert.strictEqual(env.status, 200, JSON.stringify(env.body));
+    } finally {
+      approvalRulesService.avaliarRequisicao = original;
+    }
+    const ap = await como(CAIO).put(`/api/almoxarifado/requisicoes/${rasc.body.id}/aprovar`);
+    assert.strictEqual(ap.status, 400, `o rascunho carimbado passou pelo gate vazio: ${JSON.stringify(ap.body)}`);
+    assert.strictEqual(ap.body.error, 'Requisição tem aprovação de regra pendente: Valor alto');
+  });
+
+  await test('(24) migracao: a coluna nasce carimbando enviadas e NAO rascunhos; o boot seguinte nao carimba nada', async () => {
+    const { initSchema } = require('../../services/almoxarifado/schema');
+    await dbRun(db, 'ALTER TABLE requisicoes_almoxarifado DROP COLUMN regras_avaliadas_em');
+    const ins = (status) => dbRun(db, `INSERT INTO requisicoes_almoxarifado (numero, solicitante_id, solicitante_nome, status)
+      VALUES (?, 10, 'x', ?)`, [`REQ-MIG-${status}-${Date.now()}`, status]);
+    const enviada = (await ins('PENDENTE')).lastID;
+    const rascunho = (await ins('RASCUNHO')).lastID;
+    await initSchema(db); // a coluna NASCE aqui
+    const carimbo = async (id) => (await dbGet(db, 'SELECT regras_avaliadas_em c FROM requisicoes_almoxarifado WHERE id = ?', [id])).c;
+    assert.ok(await carimbo(enviada), 'a requisicao ja enviada nao foi carimbada no nascimento da coluna');
+    assert.strictEqual(await carimbo(rascunho), null, 'o rascunho foi carimbado');
+
+    // Boot seguinte: uma requisição cujo avaliador falhou (carimbo NULL) tem de CONTINUAR NULL —
+    // senão todo restart abriria em silêncio a porta que a 9.7/C2 fechou.
+    const falhou = (await ins('PENDENTE')).lastID;
+    await initSchema(db);
+    assert.strictEqual(await carimbo(falhou), null, 'o boot seguinte carimbou uma requisicao nao avaliada');
   });
 
   await close();

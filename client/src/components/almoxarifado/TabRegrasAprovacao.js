@@ -117,7 +117,12 @@ const TabRegrasAprovacao = () => {
         await api.post('/almoxarifado/regras-aprovacao', paraPayload(form));
         toast.success('Regra criada');
       } else {
-        const res = await api.put(`/almoxarifado/regras-aprovacao/${editando.id}`, paraPayload(form));
+        // Fase 5 (testes, achado 5): o PUT substitui a regra inteira. `projeto_id` e `ordem` nao tem
+        // campo nesta tela - sem repassa-los, editar pela tela APAGAVA o projeto e zerava a ordem de
+        // uma regra criada pela API (e a regra so de projeto tomava 400 de "sem criterio").
+        const res = await api.put(`/almoxarifado/regras-aprovacao/${editando.id}`, {
+          ...paraPayload(form), projeto_id: editando.projeto_id ?? null, ordem: editando.ordem ?? 0,
+        });
         avisarObsoletadas(res.data?.pendencias_obsoletadas);
         toast.success('Regra salva');
       }
@@ -154,6 +159,7 @@ const TabRegrasAprovacao = () => {
           ativo: !regra.ativo,
         }),
         projeto_id: regra.projeto_id ?? null,
+        ordem: regra.ordem ?? 0,
       });
       avisarObsoletadas(res.data?.pendencias_obsoletadas);
       toast.success(regra.ativo ? 'Regra desativada' : 'Regra ativada');

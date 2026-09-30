@@ -2386,11 +2386,13 @@ async function initSchema(db) {
   // gate de aprovação fecha. As requisições que já existem quando a coluna NASCE foram enviadas
   // antes de existir regra — recebem o carimbo, senão nenhuma delas poderia ser aprovada.
   // `safeAlter` não diz se criou a coluna, por isso o PRAGMA antes.
+  // Fase 5 (regras, I2): RASCUNHO fica de fora — ainda não foi enviado, e com o carimbo o envio
+  // dele com o avaliador falhando passaria pelo gate vazio. (O `/enviar` também zera o carimbo.)
   const colsReqE47 = await dbAll(db, 'PRAGMA table_info(requisicoes_almoxarifado)');
   const colunaAvaliadaNasce = !colsReqE47.some((c) => c.name === 'regras_avaliadas_em');
   await safeAlter(db, 'ALTER TABLE requisicoes_almoxarifado ADD COLUMN regras_avaliadas_em DATETIME');
   if (colunaAvaliadaNasce) {
-    await dbRun(db, 'UPDATE requisicoes_almoxarifado SET regras_avaliadas_em = CURRENT_TIMESTAMP WHERE regras_avaliadas_em IS NULL');
+    await dbRun(db, "UPDATE requisicoes_almoxarifado SET regras_avaliadas_em = CURRENT_TIMESTAMP WHERE regras_avaliadas_em IS NULL AND status <> 'RASCUNHO'");
   }
 
   // ── Config defaults ──

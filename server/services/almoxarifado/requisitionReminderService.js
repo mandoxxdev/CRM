@@ -192,7 +192,7 @@ GMP Industriais — Orion`;
           </tr>
           <tr>
             <td style="padding:14px 24px;background-color:#eff6ff;border-bottom:3px solid #2563eb;font-family:Arial,Helvetica,sans-serif;">
-              <div style="font-size:15px;font-weight:bold;color:#1d4ed8;">📋 Requisição aguardando ${gesto} há ${diasFlex}</div>
+              <div style="font-size:15px;font-weight:bold;color:#1d4ed8;">📋 Requisição aguardando ${alertService.escapeHtml(gesto)} há ${diasFlex}</div>
             </td>
           </tr>
           <tr>

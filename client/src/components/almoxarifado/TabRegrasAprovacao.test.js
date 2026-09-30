@@ -164,3 +164,28 @@ test('desativar regra SEM pendencia nao pergunta nada (metade positiva)', async 
   expect(api.put.mock.calls[0][1].material_critico).toBe(true);
   expect(toast.info).not.toHaveBeenCalled();
 });
+
+test('editar pela tela PRESERVA projeto_id e ordem, que nao tem campo aqui (Fase 5, testes 5)', async () => {
+  // O PUT substitui a regra inteira: sem repassar os dois, editar apagava o projeto e zerava a
+  // ordem — e uma regra só de projeto tomava 400 "sem critério".
+  mockGets([{ ...REGRA_COM_PENDENCIA, projeto_id: 42, ordem: 7 }]);
+  api.put.mockResolvedValue({ data: { regra: {}, pendencias_obsoletadas: 0 } });
+  await renderizar();
+  await clicar(botao('Editar'));
+  digitar(container.querySelector('#regra-nome'), 'Valor alto (editada)');
+  await clicar(botao('Salvar regra'));
+  const [url, body] = api.put.mock.calls[0];
+  expect(url).toBe('/almoxarifado/regras-aprovacao/1');
+  expect(body.nome).toBe('Valor alto (editada)');
+  expect(body.projeto_id).toBe(42);
+  expect(body.ordem).toBe(7);
+});
+
+test('ativar/desativar tambem preserva ordem e projeto', async () => {
+  mockGets([{ ...REGRA_SEM_PENDENCIA, projeto_id: 9, ordem: 3 }]);
+  api.put.mockResolvedValue({ data: { regra: {}, pendencias_obsoletadas: 0 } });
+  await renderizar();
+  await clicar(botao('Desativar'));
+  expect(api.put.mock.calls[0][1].projeto_id).toBe(9);
+  expect(api.put.mock.calls[0][1].ordem).toBe(3);
+});

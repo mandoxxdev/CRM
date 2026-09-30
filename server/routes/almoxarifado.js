@@ -2968,7 +2968,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
                  (SELECT COUNT(*) FROM itens_requisicao_almoxarifado WHERE requisicao_id = r.id) as total_itens,
                  -- Etapa 47 (9.7/I4): a tela sabe que o "Aprovar" vai ser barrado pelas regras.
                  (SELECT COUNT(*) FROM requisicao_aprovacoes_regra p
-                   WHERE p.requisicao_id = r.id AND p.status = 'ABERTA') as pendencias_regra_abertas
+                   WHERE p.requisicao_id = r.id AND p.status = 'ABERTA'
+                     AND r.status IN ('PENDENTE','AGUARDANDO_APROVACAO_VALOR')) as pendencias_regra_abertas
                FROM requisicoes_almoxarifado r WHERE COALESCE(r.ativo, 1) = 1`;
     const params = [];
 
@@ -3002,7 +3003,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   app.get('/api/almoxarifado/requisicoes/:id',(req, res) => {
     db.get(`SELECT *,
               (SELECT COUNT(*) FROM requisicao_aprovacoes_regra p
-                WHERE p.requisicao_id = requisicoes_almoxarifado.id AND p.status = 'ABERTA') as pendencias_regra_abertas
+                WHERE p.requisicao_id = requisicoes_almoxarifado.id AND p.status = 'ABERTA'
+                  AND requisicoes_almoxarifado.status IN ('PENDENTE','AGUARDANDO_APROVACAO_VALOR')) as pendencias_regra_abertas
             FROM requisicoes_almoxarifado WHERE id = ? AND COALESCE(ativo, 1) = 1`, [req.params.id], (err, req_row) => {
       if (err) return res.status(500).json({ error: err.message });
       if (!req_row) return res.status(404).json({ error: 'Requisição não encontrada' });
@@ -3146,7 +3148,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       }
 
       await dbRun(db,
-        `UPDATE requisicoes_almoxarifado SET status='PENDENTE', updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+        // Etapa 47 (Fase 5, regras, I2): `regras_avaliadas_em = NULL` no mesmo UPDATE - o gate fica
+        // FECHADO desde o instante em que a requisicao vira PENDENTE ate o avaliador gravar o carimbo.
+        // Sem isto, um rascunho que ja tivesse carimbo (os da migracao) enviado com o avaliador falhando
+        // deixava o /aprovar passar por vazio.
+        `UPDATE requisicoes_almoxarifado SET status='PENDENTE', regras_avaliadas_em=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
         [req.params.id]);
 
       const avaliacaoValor = await requisitionCreateService.dispararNotificacoesCriacao(

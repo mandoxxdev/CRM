@@ -37,8 +37,16 @@ function erro(status, mensagem) {
   return Object.assign(new Error(mensagem), { status });
 }
 
+/**
+ * Quem assina qualquer regra "como admin": quem pode CONFIGURAR o modulo (superadmin, admin do
+ * modulo, perfil ADMINISTRADOR). Revisao da Fase 5 (autorizacao, I-1): era `role === 'admin'`,
+ * copiado da liberacao por valor, e o superadmin que CRIA a regra levava 403 ao destravar a
+ * pendencia dela - a "saida e um admin" do desenho (9.7/M2) nao incluia quem administra o modulo.
+ * `require` aqui dentro pelo mesmo motivo de permissions.js: evitar ciclo no carregamento.
+ */
 function isAdmin(user) {
-  return user?.role === 'admin';
+  const { canConfigureAlmox } = require('../systemPermissions');
+  return !!user && (user.role === 'admin' || canConfigureAlmox(user));
 }
 
 function parseIds(value) {
@@ -80,7 +88,7 @@ function inteiroPositivoOuNulo(payload, campo) {
   return n;
 }
 
-async function validarRegra(db, payload) {
+async function validarRegra(db, payload, { idsJaNaRegra = [] } = {}) {
   const p = payload || {};
   const nome = typeof p.nome === 'string' ? p.nome.trim() : '';
   if (!nome) throw erro(400, 'Regra precisa de um nome');
@@ -112,7 +120,10 @@ async function validarRegra(db, payload) {
   const ativos = await dbAll(db,
     `SELECT id FROM usuarios WHERE id IN (${placeholders}) AND COALESCE(ativo, 1) = 1`, aprovadores);
   const encontrados = new Set(ativos.map((r) => Number(r.id)));
-  const faltando = aprovadores.filter((id) => !encontrados.has(id));
+  // Fase 5 (regras, M3): quem JA esta na regra nao e revalidado - senao desativar uma regra cujo
+  // aprovador saiu da empresa dava 400, e desativar e justamente a saida para esse caso.
+  const jaNaRegra = new Set(idsJaNaRegra.map(Number));
+  const faltando = aprovadores.filter((id) => !encontrados.has(id) && !jaNaRegra.has(id));
   if (faltando.length) throw erro(400, `Aprovador inexistente ou inativo: ${faltando.join(', ')}`);
 
   const ordem = Number.isInteger(Number(p.ordem)) ? Number(p.ordem) : 0;
@@ -169,7 +180,7 @@ async function criarRegra(db, payload, user) {
 async function atualizarRegra(db, id, payload, user) {
   const atual = await dbGet(db, 'SELECT * FROM regras_aprovacao WHERE id = ?', [id]);
   if (!atual) throw erro(404, 'Regra não encontrada');
-  const r = await validarRegra(db, payload);
+  const r = await validarRegra(db, payload, { idsJaNaRegra: parseIds(atual.aprovadores) });
   await dbRun(db, `UPDATE regras_aprovacao SET nome=?, ativo=?, ordem=?, tipo_requisicao=?,
       material_critico=?, valor_minimo=?, quantidade_minima=?, centro_custo_id=?, projeto_id=?,
       aprovadores=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
@@ -217,10 +228,16 @@ async function avaliarRequisicao(db, requisicaoId) {
   const regras = await dbAll(db, 'SELECT * FROM regras_aprovacao WHERE ativo = 1 ORDER BY ordem, id');
   const casadas = [];
   if (regras.length) {
-    const itens = await dbAll(db, `SELECT ir.quantidade_solicitada, m.material_critico
+    // Somado POR MATERIAL (Fase 5, regras, I1): o avaliador comparava cada LINHA, e a criação
+    // grava linhas repetidas do mesmo material — duas linhas de 6 escapavam da regra "≥ 10" que
+    // uma linha de 12 dispararia. O próprio solicitante contornava a regra. A 9.3 dizia "ALGUM
+    // item tem quantidade ≥"; estava errada: "item" é o material, não a linha.
+    const itens = await dbAll(db, `SELECT ir.material_id, SUM(ir.quantidade_solicitada) AS quantidade_solicitada,
+        MAX(COALESCE(m.material_critico, 0)) AS material_critico
       FROM itens_requisicao_almoxarifado ir
       JOIN materiais_almoxarifado m ON m.id = ir.material_id
-      WHERE ir.requisicao_id = ?`, [requisicaoId]);
+      WHERE ir.requisicao_id = ?
+      GROUP BY ir.material_id`, [requisicaoId]);
     // 9.7/C3: calculado aqui — a coluna `valor_total` ainda é 0 neste ponto do envio.
     const valorTotal = await valueApprovalService.calcularValorTotal(db, requisicaoId);
     for (const regra of regras) {
@@ -291,6 +308,10 @@ async function listarFilaPendentes(db, user) {
   const assinadasPorMim = new Set((await dbAll(db,
     `SELECT requisicao_id FROM requisicao_aprovacoes_regra WHERE aprovador_id = ? AND status = 'APROVADA'`,
     [user?.id || -1])).map((r) => r.requisicao_id));
+  // Fase 5 (autorizacao, M-3): filtrado no SERVIDOR - antes a fila inteira (nomes de regra, ids de
+  // aprovadores) ia a qualquer usuario do modulo e so a tela filtrava. Quem configura o modulo ve
+  // tudo, porque e quem destrava (desativa a regra ou assina como admin).
+  const veTudo = isAdmin(user);
   return rows.map((r) => {
     const aprovadores = parseIds(r.aprovadores);
     const pode = !!user?.id
@@ -298,7 +319,7 @@ async function listarFilaPendentes(db, user) {
       && (aprovadores.includes(Number(user.id)) || isAdmin(user))
       && !assinadasPorMim.has(r.requisicao_id);
     return { ...r, aprovadores, pode_assinar: pode };
-  });
+  }).filter((r) => r.pode_assinar || veTudo);
 }
 
 /** Contagem por requisição, para `GET /requisicoes` e `/:id` (9.7/I4). */
@@ -354,6 +375,12 @@ async function motivoRecusa(db, req, pend, user) {
   }
   if (!parseIds(pend.aprovadores).includes(Number(user.id)) && !isAdmin(user)) {
     return erro(403, 'Você não está entre os aprovadores desta regra');
+  }
+  // Fase 5 (autorizacao, M-1): o JWT sobrevive 24h a desativacao do usuario, e o snapshot da
+  // pendencia o mantem na lista. So recusa quando a linha EXISTE e esta inativa.
+  const cadastro = await dbGet(db, 'SELECT ativo FROM usuarios WHERE id = ?', [user.id]).catch(() => null);
+  if (cadastro && Number(cadastro.ativo) === 0) {
+    return erro(403, 'Usuário inativo não pode assinar aprovação de regra');
   }
   const outra = await dbGet(db, `SELECT id FROM requisicao_aprovacoes_regra
     WHERE requisicao_id = ? AND aprovador_id = ? AND status = 'APROVADA'`, [req.id, user.id]);

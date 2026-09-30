@@ -15,6 +15,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
 import { FiCheckSquare, FiPenTool } from 'react-icons/fi';
 import api from '../../services/api';
+import { canConfigureAlmox } from '../../utils/systemPermissions';
+import { getEffectiveUser } from '../../services/permissionsCache';
 
 const formatMoeda = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -24,11 +26,18 @@ const STATUS_PENDENCIA = {
   OBSOLETA: 'Obsoleta (regra desativada)',
 };
 
-/** Espelho da RN-07 para a UI: na lista, não solicitante, e não assinou outra perna. */
+/**
+ * Espelho da RN-07 para a UI: requisicao ainda aguardando, na lista (ou quem configura o modulo),
+ * nao solicitante, e nao assinou outra perna. Fase 5 (autorizacao): o status da requisicao entrou
+ * (M-2 - rejeitar nao mexe nas pendencias, e o botao aparecia em requisicao rejeitada) e o admin
+ * passou a ser quem configura o modulo, como no servidor (I-1).
+ */
 export function podeAssinar(pendencia, pendencias, requisicao, user) {
   if (!user?.id || pendencia.status !== 'ABERTA') return false;
+  if (!['PENDENTE', 'AGUARDANDO_APROVACAO_VALOR'].includes(requisicao.status)) return false;
   if (Number(user.id) === Number(requisicao.solicitante_id)) return false;
-  const naLista = (pendencia.aprovadores || []).map(Number).includes(Number(user.id)) || user.role === 'admin';
+  const naLista = (pendencia.aprovadores || []).map(Number).includes(Number(user.id))
+    || user.role === 'admin' || canConfigureAlmox(getEffectiveUser(user));
   if (!naLista) return false;
   return !pendencias.some((p) => p.status === 'APROVADA' && Number(p.aprovador_id) === Number(user.id));
 }

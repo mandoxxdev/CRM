@@ -190,6 +190,34 @@ const uniq = (p) => `${p}-${Date.now() % 1000000}-${++seq}`;
     }
   });
 
+  // ── Fase 5 (testes, 6 e 10): o nome da regra no HTML, e o aprovador inativo ────────────────
+  await test('(8) o nome da regra sai ESCAPADO no HTML — na manchete e na linha Regra', async () => {
+    const req = await novaRequisicao();
+    await novaPendencia(req.id, { aprovadores: [U.bia], nome: 'Peças <b>&</b> caras' });
+    await rodar();
+    const [e] = doAssunto('Peças <b>&</b> caras');
+    assert.ok(e, 'nao cobrou');
+    assert.ok(!e.html.includes('<b>&</b>'), 'o nome da regra saiu CRU no HTML — quebra o e-mail');
+    assert.ok(e.html.includes('Peças &lt;b&gt;&amp;&lt;/b&gt; caras'), 'o nome escapado nao aparece no HTML');
+    // As TRÊS ocorrências (<title>, manchete e linha "Regra:") — uma só escapada deixava outra crua.
+    assert.strictEqual(e.html.split('Peças &lt;b&gt;&amp;&lt;/b&gt; caras').length - 1, 3);
+  });
+
+  await test('(9) aprovador inativo sai da plateia; sem ninguem ativo, cai na lista geral', async () => {
+    await dbRun(db, 'UPDATE usuarios SET ativo = 0 WHERE id = ?', [U.caio]);
+    try {
+      const req = await novaRequisicao();
+      await novaPendencia(req.id, { aprovadores: [U.ana, U.caio], nome: 'Regra Com Inativo' });
+      const req2 = await novaRequisicao();
+      await novaPendencia(req2.id, { aprovadores: [U.caio], nome: 'Regra So Inativo' });
+      await rodar();
+      assert.deepStrictEqual(doAssunto('Regra Com Inativo')[0].destinatarios, ['ana@test.com']);
+      assert.deepStrictEqual(doAssunto('Regra So Inativo')[0].destinatarios, [EMAIL_GERAL]);
+    } finally {
+      await dbRun(db, 'UPDATE usuarios SET ativo = 1 WHERE id = ?', [U.caio]);
+    }
+  });
+
   alertService.enviarEmail = enviarOriginal;
   await close();
   console.log(`\n${passed} passed, ${failed} failed\n`);
