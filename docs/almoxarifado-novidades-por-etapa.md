@@ -5029,9 +5029,9 @@ as treze respostas possíveis com a frase exata de cada uma, a permissão por pe
 auditoria, o cartão que para de cobrar, e o pedido de compra que **continua Recebido**. O que **só o
 navegador** prova, e vale os 5 minutos do roteiro do guia:
 
-1. **A coluna Execução cabe na largura?** A tabela de Não Conformidades ganhou a **oitava** coluna, e
-   a de Execução mostra duas linhas no estado *Executada* (rótulo + quem/quando). Conferir que não
-   estoura nem empurra a coluna de ações para fora.
+1. **A coluna Execução cabe na largura?** Ela entrou entre *Decisão* e *Ações*, e mostra **duas
+   linhas** no estado *Executada* (rótulo + quem/quando). Conferir que não estoura a tabela nem
+   empurra a coluna de ações para fora da tela.
 2. **O filtro de execução se comporta como descrito?** Escolher *Pendentes de execução* tem de
    **mudar sozinho** o status para *Decididas*; escolher um status diferente de *Decididas* tem de
    **limpar** o filtro de execução. É o comportamento do passo 2 do roteiro, e é o único lugar do
