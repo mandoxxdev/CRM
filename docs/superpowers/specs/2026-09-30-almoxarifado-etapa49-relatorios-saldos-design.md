@@ -69,3 +69,41 @@ Nenhuma coluna ou filtro existente muda, e o teto de 500 continua.
 | **T4** | integração: a tela lista as chaves novas, e a exportação XLSX de cada uma sai com as colunas do registro | **tronco** |
 
 Tudo é tronco porque as quatro tasks escrevem o **mesmo** registro e a validação de subida é global. Paralelizar custaria conflito certo.
+
+## 6. O que a Fase 2 mudou: 1 CRITICAL, 4 IMPORTANT, provados por sonda (`rev49-sonda-lote*.js`)
+
+**🔴 A RN-01 estava ERRADA: o saldo por lote NÃO é o físico.** Os fluxos isentos de lote gravam na linha
+`lote_id NULL` de `estoque_saldo_almoxarifado`: a entrega de requisição (`requisitionService.js:633`),
+o `AJUSTE` absoluto e os fluxos internos (`stockService.js:641-678`, `:1381`).
+- Sonda: entrada de 100 no lote A e depois a entrega sem lote → o material fica com **70**, o lote A continua com **100**, e aparece uma linha `NULL` com −30.
+- **A invariante que vale** é a soma de TODAS as linhas do material igual a `quantidade_atual`, e ela bateu em todos os passos da sonda.
+
+**RN-01 corrigida:** o relatório mostra, por material com lote:
+- uma linha por lote com o **saldo atribuído**;
+- **mais** a linha **"Sem lote atribuído"**, igual a `quantidade_atual − Σ lotes`, **podendo ser negativa**;
+- a coluna do **físico total** do material;
+- uma `nota` na tela que diz que o saldo do lote é o **atribuído**, não o que está na prateleira.
+
+O cenário obrigatório é o da sonda.
+
+**⚠️ E a tela de lotes JÁ MENTE do mesmo jeito** (`lotService.js:208`, a mesma soma). Isso é anterior a esta
+etapa e fica **fora dela**: consertar muda o motor ou a tela de lotes, e merece etapa própria. Vai
+para a **letra C**, com o cenário.
+
+**A tabela da seção 1 tinha três afirmações falsas:**
+- *"Entradas/saídas · devoluções · ajustes: coberto"* **estava errado.** O filtro é `m.tipo = ?` **exato** (`reportService.js:73`), sobre texto livre: entradas são 8 tipos, ajustes 4, devoluções 2. **RN-05 nova:** o histórico ganha o parâmetro `grupo`, com os valores `ENTRADA`/`SAIDA`/`DEVOLUCAO` vindos de `movementTypes` (listas importadas), `AJUSTE` (`tipo LIKE 'AJUSTE%'`) e `TRANSFERENCIA`. Fora da lista: 400 — `Grupo de movimento inválido: <valor> (use ENTRADA, SAIDA, AJUSTE, DEVOLUCAO ou TRANSFERENCIA)`.
+- *"Histórico completo do item: coberto"* **exagerava**: o relatório corta em 500 e esconde os cancelados. O histórico **completo** é o de `GET /movimentacoes?material_id=` (`routes/almoxarifado.js:920`), sem teto e com os cancelados. É ele que fecha o item.
+- *"Por usuário / centro de custo: nenhuma"* **estava errado**: a mesma rota `/movimentacoes` já filtra `usuario_id` e `centro_custo_id`. O que falta é no **relatório** (a tela e o XLSX). A RN-04 continua, e a coluna usa o **JOIN** de `centros_custo_almoxarifado` daquela rota (código e nome, e não o id). O `LIKE` do usuário leva `ESCAPE '\'`.
+
+**A RN-03 era meia-verdade:** o SQL acompanha `COLUNAS_RETENCAO`, mas as `colunas` do registro são
+**estáticas** (o registro não importa serviço, por regra). Uma quinta retenção sairia no JSON e sumiria
+da tabela e do XLSX. **Correção:** um teste exige `colunas ⊇ COLUNAS_RETENCAO`, então quem acrescentar
+uma retenção toma vermelho no registro.
+
+**Contagem fixa:** `relatoriosRegistro.api.test.js` compara com **19** em quatro linhas. Com as três chaves
+novas, passa a **22**, e isso entra na T1.
+
+**Material de cliente:** `estoque-atual` exclui (`proprietario_cliente_id IS NULL`). **Escolha (letra B):**
+as três chaves novas **incluem** material de cliente, com a coluna **Cliente**. Reserva e lote de
+material de cliente são justamente o que o almoxarife precisa ver. O que a `estoque-atual` exclui é a
+**valorização**, e nenhuma chave nova valoriza.

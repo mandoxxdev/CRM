@@ -47,4 +47,4 @@
 ## Estado
 
 - [x] Fase 0 (desenho, seção 1) · [x] Fase 1
-- [ ] Fase 2 · [ ] T1 · [ ] T2 · [ ] T3 · [ ] T4 · [ ] Fase 5 · [ ] Fase 6
+- [x] Fase 2 (1 CRITICAL, 4 IMPORTANT — seção 6 do desenho) · [ ] T1 · [ ] T2 · [ ] T3 · [ ] T4 · [ ] Fase 5 · [ ] Fase 6
