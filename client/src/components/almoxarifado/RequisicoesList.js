@@ -98,6 +98,22 @@ const pendenteSeparado = (item) => Math.max(0, getSeparado(item) - getEntregue(i
 // chave (o servidor aplica a planejada) — e faz "Qualquer endereço" virar uma troca de verdade.
 const VALOR_PLANEJADA_SEM_SALDOS = '__planejada__';
 
+// Etapa 60 (RN-01/04): o máximo separável que a tela conhece — o do item e, com um "Sai de"
+// escolhido, também a quantidade daquela opção. O servidor recalcula na hora (é ele quem grava
+// `maximo`/`divergente`); aqui só decide quando pedir o motivo, que é opcional.
+const MOTIVO_DIVERGENCIA_MAX = 500;
+const maxSeparavelNaTela = (item, valorOrigemEscolhida, saldos) => {
+  const maxItem = maxQtdSeparacao(item);
+  if (!valorOrigemEscolhida) return maxItem;
+  const opcao = (saldos || []).find((s) => valorOrigem(s) === valorOrigemEscolhida);
+  return opcao ? Math.min(maxItem, Number(opcao.quantidade) || 0) : maxItem;
+};
+// Só abaixo do máximo e acima de zero: quantidade 0 não vai no payload, então não há onde levar o motivo.
+const separacaoDivergente = (qtdDigitada, maximo) => {
+  const q = parseFloat(qtdDigitada) || 0;
+  return q > 0 && q < maximo - 1e-9;
+};
+
 const formatMoeda = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 const RequisicoesList = () => {
@@ -166,6 +182,7 @@ const RequisicoesList = () => {
   // Etapa 59 (RN-05): de onde o item sai na separação ({ [itemId]: valor "loc:lote" }).
   const [origensSeparacao, setOrigensSeparacao] = useState({});
   const [quantidadesSeparacao, setQuantidadesSeparacao] = useState({});
+  const [motivosSeparacao, setMotivosSeparacao] = useState({});
   const [entregaAposSeparar, setEntregaAposSeparar] = useState(false);
   const [saving, setSaving] = useState(false);
   // Etapa 15: etapa opcional de assinatura do recebedor. Guarda reqId + numero (e não o
@@ -517,6 +534,7 @@ const RequisicoesList = () => {
     const qtds = {};
     detalhe.itens.forEach((i) => { qtds[i.id] = maxQtdSeparacao(i); });
     setQuantidadesSeparacao(qtds);
+    setMotivosSeparacao({});
     setShowSeparar(true);
   };
 
@@ -535,6 +553,13 @@ const RequisicoesList = () => {
             return origem.lote_id
               ? { localizacao_origem_id: origem.localizacao_origem_id, lote_id: origem.lote_id }
               : { localizacao_origem_id: origem.localizacao_origem_id };
+          })(),
+          // Etapa 60 (RN-01): motivo só quando preenchido e só para item abaixo do máximo separável.
+          ...(() => {
+            const maximo = maxSeparavelNaTela(i, origensSeparacao[i.id], saldosEntrega[i.material_id]);
+            if (!separacaoDivergente(quantidadesSeparacao[i.id], maximo)) return {};
+            const motivo = String(motivosSeparacao[i.id] || '').trim().slice(0, MOTIVO_DIVERGENCIA_MAX);
+            return motivo ? { motivo_divergencia: motivo } : {};
           })(),
         }))
         .filter((i) => i.quantidade_separada > 0);
@@ -1199,15 +1224,32 @@ const RequisicoesList = () => {
                     <div style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--gmp-text)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
                       Separação{separacoes.length > 0 ? ` (${separacoes.length})` : ''}
                     </div>
-                    {separacoes.map((s) => (
-                      <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--gmp-border)', fontSize: '0.82rem' }}>
-                        <FiPackage size={12} style={{ color: 'var(--gmp-text-light)', flexShrink: 0 }} />
-                        <span style={{ fontWeight: 600 }}>{s.usuario_nome || `Usuário #${s.usuario_id}`}</span>
-                        <span style={{ color: 'var(--gmp-text-light)' }}>
-                          · {formatDate(s.created_at)} · {Number(s.itens_tocados) || 0} {Number(s.itens_tocados) === 1 ? 'item' : 'itens'}
-                        </span>
-                      </div>
-                    ))}
+                    {separacoes.map((s) => {
+                      // Etapa 60 (RN-03): as entradas divergentes da rodada, para quem confere.
+                      const divergentes = (Array.isArray(s.itens) ? s.itens : []).filter((e) => e && e.divergente);
+                      return (
+                        <div key={s.id} style={{ padding: '6px 0', borderBottom: '1px solid var(--gmp-border)', fontSize: '0.82rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <FiPackage size={12} style={{ color: 'var(--gmp-text-light)', flexShrink: 0 }} />
+                            <span style={{ fontWeight: 600 }}>{s.usuario_nome || `Usuário #${s.usuario_id}`}</span>
+                            <span style={{ color: 'var(--gmp-text-light)' }}>
+                              · {formatDate(s.created_at)} · {Number(s.itens_tocados) || 0} {Number(s.itens_tocados) === 1 ? 'item' : 'itens'}
+                            </span>
+                          </div>
+                          {divergentes.map((e, idx) => {
+                            const itemDet = (detalhe.itens || []).find((i) => Number(i.id) === Number(e.item_id));
+                            const nome = itemDet?.material_nome || `Item #${e.item_id}`;
+                            const motivo = typeof e.motivo_divergencia === 'string' ? e.motivo_divergencia.trim() : '';
+                            return (
+                              <div key={`${s.id}-${e.item_id}-${idx}`} data-testid={`divergencia-${s.id}-${e.item_id}`}
+                                style={{ marginLeft: 20, marginTop: 4, fontSize: '0.78rem', color: 'var(--gmp-warning)' }}>
+                                {`${nome}: separou ${e.quantidade} de ${e.maximo}${motivo ? ` — ${motivo}` : ' — sem motivo informado'}`}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
                     {detalhe.conferencia && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', fontSize: '0.82rem', color: 'var(--gmp-success, #2e7d32)' }}>
                         <FiCheckCircle size={13} style={{ flexShrink: 0 }} />
@@ -1696,6 +1738,27 @@ const RequisicoesList = () => {
                         ))}
                       </select>
                     </div>
+                    {/* Etapa 60 (RN-04): abaixo do máximo separável, pede o porquê — sem obrigar. */}
+                    {separacaoDivergente(
+                      quantidadesSeparacao[item.id],
+                      maxSeparavelNaTela(item, origensSeparacao[item.id], saldosEntrega[item.material_id])
+                    ) && (
+                      <div style={{ marginTop: 8 }}>
+                        <label className="almox-label" htmlFor={`separacao-motivo-${item.id}`} style={{ fontSize: '0.8rem' }}>
+                          Motivo da divergência (opcional)
+                        </label>
+                        <textarea id={`separacao-motivo-${item.id}`} className="almox-textarea" rows={2}
+                          maxLength={MOTIVO_DIVERGENCIA_MAX}
+                          value={motivosSeparacao[item.id] || ''}
+                          onChange={e => {
+                            const valor = e.target.value;
+                            setMotivosSeparacao(m => ({ ...m, [item.id]: valor }));
+                          }} />
+                        <div style={{ fontSize: '0.72rem', color: 'var(--gmp-text-light)', marginTop: 2 }}>
+                          Separando menos que o possível — conte o porquê para quem confere.
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div>
                     <input className="almox-count-input" type="number" min="0" step="1"
