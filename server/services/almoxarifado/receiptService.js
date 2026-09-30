@@ -1113,11 +1113,13 @@ function normalizarDestinos(destinos, itens) {
   if (!Array.isArray(destinos)) throw Object.assign(new Error('Destinos inválidos'), { status: 400 });
   for (const d of destinos) {
     if (!d || typeof d !== 'object') throw Object.assign(new Error('Destinos inválidos'), { status: 400 });
-    const itemId = parseInt(d.item_id, 10);
+    // Fase 5: estrito — parseInt aceitava "12abc" e 12.9 como o item 12, e Number(true) virava a localizacao 1.
+    const itemId = Number(d.item_id);
     if (!itens.some((i) => i.id === itemId)) {
       throw Object.assign(new Error(`Item ${d.item_id} não pertence a este recebimento`), { status: 400 });
     }
-    const loc = Number(d.localizacao_id);
+    const bruto = d.localizacao_id;
+    const loc = typeof bruto === 'number' || (typeof bruto === 'string' && /^\d+$/.test(bruto.trim())) ? Number(bruto) : NaN;
     if (!Number.isInteger(loc) || loc <= 0) {
       throw Object.assign(new Error(`Destino inválido para o item ${itemId}`), { status: 400 });
     }
@@ -1316,6 +1318,16 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id,
         // `exigeSerie`: o recebimento e um caminho onde o operador tem como informar as series.
         }, { exigeLote: true, exigeSerie: true });
         entrouFisicamente = true;
+        // Etapa 57 (Fase 5): onde ESTE item entrou (a devolucao ao fornecedor sai dali). E rastro: uma
+        // falha aqui nao pode desfazer uma entrada que ja aconteceu.
+        try {
+          const locEntrada = resolveLocalizacaoEntrada({ localizacao_padrao_id: item.localizacao_padrao_id },
+            destinoPorItem.get(item.id) || localizacao_id);
+          await dbRun(db, 'UPDATE recebimentos_material_itens_almoxarifado SET localizacao_entrada_id = ? WHERE id = ?',
+            [locEntrada || null, item.id]);
+        } catch (errLoc) {
+          console.warn('[recebimento] falha ao gravar localizacao_entrada_id:', errLoc.message);
+        }
 
         // Griffa a origem (Etapa 6b, Task 6, fix round 1 do review): as series que o motor acabou
         // de criar/reativar para este material ainda nao sabem de qual recebimento/item elas

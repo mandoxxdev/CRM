@@ -1255,7 +1255,15 @@ async function executarDevolucao(db, user, nc, insp, previsto, observacoes, id) 
   // que não é a padrão — e a saída sem origem drena a padrão primeiro (claimSaldoSemLote). Origem
   // preferida = onde a ENTRADA_COMPRA deste recebimento/material/lote entrou, se ativo e não
   // bloqueado (bloqueado recusaria a devolução, que antes passava). Senão, o comportamento de antes.
-  const entrada = nc.recebimento_id ? await dbGet(db, `SELECT m.localizacao_destino_id as id
+  // Fase 5: primeiro o endereco gravado NO ITEM da inspecao (o livro nao guarda o item: o mesmo
+  // material duas vezes na nota escolhia o endereco do outro item). Item com endereco gravado mas
+  // inativo/bloqueado = sem origem (o de antes). Item sem endereco gravado (legado) = a busca pelo livro.
+  const doItem = insp.recebimento_item_id ? await dbGet(db, `SELECT ri.localizacao_entrada_id as gravado,
+      CASE WHEN l.ativo = 1 AND COALESCE(l.bloqueada, 0) = 0 THEN l.id END as id
+      FROM recebimentos_material_itens_almoxarifado ri
+      LEFT JOIN localizacoes_almoxarifado l ON l.id = ri.localizacao_entrada_id
+      WHERE ri.id = ?`, [insp.recebimento_item_id]) : null;
+  const entrada = doItem && doItem.gravado ? (doItem.id ? { id: doItem.id } : null) : nc.recebimento_id ? await dbGet(db, `SELECT m.localizacao_destino_id as id
       FROM movimentacoes_almoxarifado m
       JOIN localizacoes_almoxarifado l ON l.id = m.localizacao_destino_id
       WHERE m.recebimento_id = ? AND m.material_id = ? AND m.tipo = 'ENTRADA_COMPRA' AND m.lote_id IS ?

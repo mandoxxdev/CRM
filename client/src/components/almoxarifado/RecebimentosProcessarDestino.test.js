@@ -73,7 +73,9 @@ const LOCALIZACOES = [
 ];
 
 const SUGESTOES = {
-  21: { padrao: { localizacao_id: 310, codigo: 'C-03', recusa: 'endereço só aceita a categoria EPI', inativa: false }, sugestoes: [] },
+  // `recusa` é a literal REAL do motor (`motivoRecusaEndereco` em server/services/almoxarifado/
+  // stockService.js), não um texto inventado: a tela só repete entre parênteses o que o servidor diz.
+  21: { padrao: { localizacao_id: 310, codigo: 'C-03', recusa: "Localização C-03 não aceita o tipo de material 'CONSUMIVEL'", inativa: false }, sugestoes: [] },
   22: { padrao: { localizacao_id: 311, codigo: 'D-04', recusa: null, inativa: true }, sugestoes: [] },
   25: { padrao: null, sugestoes: [] },
 };
@@ -208,7 +210,7 @@ test('(d) sem nenhum destino escolhido manda destinos: []', async () => {
 test('(e) aviso da padrão recusada, inativa e inexistente — e some ao escolher um destino', async () => {
   await abrirModal();
   expect(avisoDo(951).textContent).toBe(
-    'A localização padrão C-03 não recebe este material (endereço só aceita a categoria EPI) — escolha um destino.');
+    "A localização padrão C-03 não recebe este material (Localização C-03 não aceita o tipo de material 'CONSUMIVEL') — escolha um destino.");
   expect(avisoDo(952).textContent).toBe('A localização padrão D-04 está inativa — escolha um destino.');
   expect(avisoDo(955).textContent).toBe('Sem localização padrão — o saldo entra sem endereço.');
 
@@ -258,4 +260,84 @@ test('(h) localizações que não carregam: o modal abre só com a padrão e ain
   expect([...selectDo(951).options].map((o) => o.value)).toEqual(['']);
   await clicar(container.querySelector('[data-testid="confirmar-processar"]'));
   expect(chamadasProcessar()[0][1]).toEqual({ destinos: [] });
+});
+
+test('(i) corrida: respostas da abertura anterior que chegam atrasadas não sobrescrevem as da reabertura', async () => {
+  const base = api.get.getMockImplementation();
+  const pendentes = [];                                   // respostas da 1ª abertura, seguradas
+  let abertura = 0;
+  const NOVAS_LOCALIZACOES = [
+    { id: 401, codigo: 'N-01', endereco_completo: 'Galpão > N-01', parent_id: null, ativo: 1, bloqueada: 0 },
+  ];
+  const NOVAS_SUGESTOES = {
+    21: { padrao: null, sugestoes: [] },
+    22: { padrao: { localizacao_id: 312, codigo: 'E-05', recusa: null, inativa: true }, sugestoes: [] },
+  };
+  // o que as respostas VELHAS trazem — tudo diferente do novo, para qualquer vazamento aparecer
+  const VELHAS_SUGESTOES = {
+    ...SUGESTOES,
+    26: { padrao: { localizacao_id: 399, codigo: 'VELHA', recusa: null, inativa: true }, sugestoes: [] },
+  };
+  api.get.mockImplementation((url) => {
+    const m = /^\/almoxarifado\/materiais\/(\d+)\/sugestao-localizacao$/.exec(url);
+    const ehConsultaModal = url === '/almoxarifado/localizacoes' || m;
+    if (ehConsultaModal && abertura === 1) {
+      return new Promise((resolve) => { pendentes.push({ url, mid: m && Number(m[1]), resolve }); });
+    }
+    if (ehConsultaModal && abertura === 2) {
+      if (!m) return Promise.resolve({ data: NOVAS_LOCALIZACOES });
+      const mid = Number(m[1]);
+      if (NOVAS_SUGESTOES[mid]) return Promise.resolve({ data: NOVAS_SUGESTOES[mid] });
+    }
+    return base(url);
+  });
+
+  await act(async () => {
+    root.render(<MemoryRouter><RecebimentosAlmoxarifado /></MemoryRouter>);
+  });
+  await esperarEfeitos();
+  await clicar([...container.querySelectorAll('.almox-table tbody tr')]
+    .find((tr) => tr.textContent.includes('REC-2026-095')));
+
+  // 1ª abertura: localizações + uma sugestão por material (21, 22, 25, 26) ficam pendentes
+  abertura = 1;
+  await clicar(botaoPorTexto('Processar Nota'));
+  expect(pendentes.map((p) => p.url).sort()).toEqual([
+    '/almoxarifado/localizacoes',
+    '/almoxarifado/materiais/21/sugestao-localizacao',
+    '/almoxarifado/materiais/22/sugestao-localizacao',
+    '/almoxarifado/materiais/25/sugestao-localizacao',
+    '/almoxarifado/materiais/26/sugestao-localizacao',
+  ]);
+  expect([...selectDo(951).options].map((o) => o.value)).toEqual(['']);   // nada chegou ainda
+
+  // fecha e reabre; a reabertura responde na hora com dados novos
+  await clicar([...modal().querySelectorAll('button')].find((b) => b.textContent.trim() === 'Cancelar'));
+  expect(modal()).toBeNull();
+  abertura = 2;
+  await clicar(botaoPorTexto('Processar Nota'));
+
+  const estadoNovo = () => {
+    expect([...selectDo(951).options].map((o) => [o.value, o.textContent])).toEqual([
+      ['', 'Padrão do material'],
+      ['401', 'Galpão > N-01'],
+    ]);
+    expect(avisoDo(951).textContent).toBe('Sem localização padrão — o saldo entra sem endereço.');
+    expect(avisoDo(952).textContent).toBe('A localização padrão E-05 está inativa — escolha um destino.');
+    expect(avisoDo(955).textContent).toBe('Sem localização padrão — o saldo entra sem endereço.');
+    expect(avisoDo(956)).toBeNull();
+  };
+  estadoNovo();                                            // metade positiva: o novo chegou
+
+  // agora as respostas da 1ª abertura chegam, atrasadas
+  await act(async () => {
+    pendentes.forEach((p) => p.resolve({ data: p.mid ? VELHAS_SUGESTOES[p.mid] : LOCALIZACOES }));
+  });
+  await esperarEfeitos();
+
+  expect(modal()).not.toBeNull();
+  estadoNovo();                                            // e nada do velho vazou
+  expect(modal().textContent).not.toContain('VELHA');
+  expect(modal().textContent).not.toContain('C-03');
+  expect(modal().textContent).not.toContain('A-01');
 });

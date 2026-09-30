@@ -1603,6 +1603,10 @@ async function initSchema(db) {
   await dbRun(db, 'CREATE INDEX IF NOT EXISTS idx_receb_nf_fornecedor ON recebimentos_material_almoxarifado(nota_fiscal, fornecedor_id)');
 
   const recebItemCols = [
+    // Etapa 57 (Fase 5): o endereco onde ESTE item entrou. A devolucao ao fornecedor precisa dele: o
+    // livro nao guarda o item, e o mesmo material duas vezes na nota em enderecos diferentes fazia a
+    // busca pela movimentacao escolher o endereco errado.
+    'localizacao_entrada_id INTEGER',
     'valor_unitario REAL DEFAULT 0',
     'valor_total REAL DEFAULT 0',
     'valor_icms REAL DEFAULT 0',

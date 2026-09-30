@@ -9,7 +9,7 @@
 const assert = require('assert');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
-const { dbRun, dbGet } = require('../../services/almoxarifado/db');
+const { dbRun, dbGet, dbAll } = require('../../services/almoxarifado/db');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -170,6 +170,72 @@ let seq = 0;
     setUser({ ...ADMIN });
     assert.strictEqual(await saldoEm(m.id, X.id), 7, 'a devolucao nao saiu de onde a peca entrou');
     assert.strictEqual(await saldoEm(m.id, P.id), 20, 'a devolucao tirou peca BOA da padrao');
+  });
+
+  // ── Fase 5 ────────────────────────────────────────────────────────────────────────────────
+  const fornF5 = (await dbRun(db, "INSERT INTO fornecedores (razao_social, cnpj, status) VALUES ('Forn E57 F5','57.570.570/0002-57','ativo')")).lastID;
+  /** Recebe `itens` (mesmo material pode repetir) pela rota, aprova com `destinos` por índice. */
+  async function receberEAprovar(itens, destinosPorIndice) {
+    const criado = await request(app).post('/api/almoxarifado/recebimentos').send({
+      tipo_recebimento: 'NOTA_FISCAL', nota_fiscal: `NF-E57-F5-${++seq}`, fornecedor_id: fornF5, fornecedor_nome: 'Forn E57 F5', itens,
+    });
+    assert.strictEqual(criado.status, 201, JSON.stringify(criado.body));
+    const ids = (await dbAll(db, 'SELECT id FROM recebimentos_material_itens_almoxarifado WHERE recebimento_id = ? ORDER BY id', [criado.body.id])).map((r) => r.id);
+    const destinos = destinosPorIndice.map((l, i) => (l ? { item_id: ids[i], localizacao_id: l } : null)).filter(Boolean);
+    const ap = await request(app).post(`/api/almoxarifado/recebimentos/${criado.body.id}/aprovar`).send({ destinos });
+    assert.strictEqual(ap.status, 200, JSON.stringify(ap.body));
+    return { rec: criado.body.id, ids };
+  }
+  async function reprovarEDevolver(itemId, reprovada) {
+    setUser({ ...QUALIDADE });
+    const insp = await request(app).post(`/api/almoxarifado/recebimentos/itens/${itemId}/inspecionar`)
+      .send({ quantidade_aprovada: 10 - reprovada, quantidade_reprovada: reprovada, dano_fisico: 1, encaminhamento: 'DEVOLVER' });
+    assert.strictEqual(insp.status, 201, JSON.stringify(insp.body));
+    const lista = await request(app).get('/api/almoxarifado/nao-conformidades?origem=INSPECAO&limite=500');
+    const doc = lista.body.itens.find((n) => n.referencia_id === insp.body.id && n.referencia_tipo === 'INSPECAO');
+    const dec = await request(app).post(`/api/almoxarifado/nao-conformidades/${doc.id}/decidir`).send({ decisao: 'DEVOLVER', justificativa: 'avariada na chegada' });
+    assert.strictEqual(dec.status, 200, JSON.stringify(dec.body));
+    setUser({ ...COMPRAS });
+    const exec = await request(app).post(`/api/almoxarifado/nao-conformidades/${doc.id}/executar`).send({ observacoes: 'coleta' });
+    setUser({ ...ADMIN });
+    return exec;
+  }
+
+  await test('Fase 5: MESMO material duas vezes na nota, em X e Y — reprovar o item de X devolve de X', async () => {
+    const X = await loc('F5X'); const Y = await loc('F5Y'); const m = await material({ critico: true });
+    const { ids } = await receberEAprovar([{ material_id: m.id, quantidade: 10 }, { material_id: m.id, quantidade: 10 }], [X.id, Y.id]);
+    assert.strictEqual(await saldoEm(m.id, X.id), 10); assert.strictEqual(await saldoEm(m.id, Y.id), 10);
+    const exec = await reprovarEDevolver(ids[0], 3);
+    assert.strictEqual(exec.status, 200, JSON.stringify(exec.body));
+    assert.strictEqual(await saldoEm(m.id, X.id), 7, 'nao saiu do endereco do item reprovado');
+    assert.strictEqual(await saldoEm(m.id, Y.id), 10, 'tirou do outro item (o livro nao guarda o item)');
+  });
+
+  await test('Fase 5: endereco de entrada BLOQUEADO depois — a devolucao continua passando (sem origem, o de antes)', async () => {
+    const P = await loc('F5P'); const X = await loc('F5B'); const m = await material({ padrao: P.id, critico: true });
+    const e = await request(app).post('/api/almoxarifado/movimentacoes/v2').send({ material_id: m.id, tipo: 'ENTRADA', quantidade: 20, localizacao_destino_id: P.id, motivo: 'e57' });
+    assert.strictEqual(e.status, 201, JSON.stringify(e.body));
+    const { ids } = await receberEAprovar([{ material_id: m.id, quantidade: 10 }], [X.id]);
+    await dbRun(db, 'UPDATE localizacoes_almoxarifado SET bloqueada = 1 WHERE id = ?', [X.id]);
+    const exec = await reprovarEDevolver(ids[0], 3);
+    assert.strictEqual(exec.status, 200, JSON.stringify(exec.body));
+    // Sem origem, a saida drena a padrao primeiro (o comportamento de antes) — e nao e recusada.
+    assert.strictEqual(await saldoEm(m.id, P.id), 17);
+    assert.strictEqual(await saldoEm(m.id, X.id), 10);
+  });
+
+  await test('Fase 5: RN-03 estrita — item REAL de outra nota, "12abc", booleano como localizacao', async () => {
+    const A = await loc('F5V'); const m = await material();
+    const outra = await nota([{ material: m.id, qtd: 1 }]); const esta = await nota([{ material: m.id, qtd: 1 }]);
+    let r = await processar(esta.rec, { destinos: [{ item_id: outra.ids[0], localizacao_id: A.id }] });
+    assert.strictEqual(r.status, 400); assert.strictEqual(r.body.error, `Item ${outra.ids[0]} não pertence a este recebimento`);
+    r = await processar(esta.rec, { destinos: [{ item_id: `${esta.ids[0]}abc`, localizacao_id: A.id }] });
+    assert.strictEqual(r.status, 400); assert.strictEqual(r.body.error, `Item ${esta.ids[0]}abc não pertence a este recebimento`);
+    r = await processar(esta.rec, { destinos: [{ item_id: esta.ids[0], localizacao_id: true }] });
+    assert.strictEqual(r.status, 400); assert.strictEqual(r.body.error, `Destino inválido para o item ${esta.ids[0]}`);
+    r = await processar(esta.rec, { destinos: [{ item_id: esta.ids[0], localizacao_id: String(A.id) }] });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.strictEqual(await saldoEm(m.id, A.id), 1);
   });
 
   await close();
