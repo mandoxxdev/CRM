@@ -896,9 +896,9 @@ SELECT m.codigo, m.nome, l.codigo AS endereco, s.quantidade
 - ⚠️ **Material COM lote** tem o mesmo sintoma e **não** foi corrigido (letra **C**, item 72) — a consulta acima
   filtra `lote_id IS NULL` de propósito.
 
-### B. Decisões de negócio — B1 a B212; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B216; as em aberto esperam você, as tomadas estão escritas com o descartado
 
-*(**Atualizado em 2026-09-30 de B205 para B212**, com as quatro da Etapa 51 e as três da Etapa 52.)*
+*(**Atualizado em 2026-09-30 de B205 para B216**, com as quatro da Etapa 51, as três da Etapa 52 e as quatro da Etapa 53.)*
 
 *(**Atualizado em 2026-09-30 de B204 para B205**, com a da Etapa 50.)*
 
@@ -3734,6 +3734,26 @@ ocupada: há material nela (N item(ns)). Transfira o saldo antes de apagar ou de
 continua valendo antes dela). **Descartado:** deixar como estava (a lista de vazias vira convite para "limpar"
 endereços) e bloquear também o endereço **pai** com filhas ocupadas (fica declarado em **D (52)**).
 
+**B213 (NOVA, da Etapa 53) — a sugestão de endereço NUNCA preenche o destino sozinha.** **Escolhido:** botões que o
+operador clica; o destino continua **"—"** até alguém escolher, e a entrada sem destino segue a regra de sempre (vai
+para o endereço padrão). **Descartado:** preencher o destino com a primeira sugestão — surpreenderia quem já sabe o
+endereço e trocaria em silêncio o comportamento da entrada sem destino. Reversível: é só a tela.
+
+**B214 (NOVA, da Etapa 53) — a tela mostra só 3 sugestões.** O servidor devolve o padrão, até 10 endereços onde o
+material já está e até 5 vazios. **Escolhido:** a tela mostra os 3 primeiros, em linha, abaixo do destino.
+**Descartado:** mostrar todos (vira uma segunda lista de endereços, que é o que já existe no campo). Reversível: o
+número está só na tela.
+
+**B215 (NOVA, da Etapa 53) — o endereço padrão INATIVO só AVISA; a recusa fica para a Etapa 54.** O sistema aceita
+entrada em endereço inativo (**C73**). **Escolhido:** a sugestão não propõe endereço inativo e a tela avisa
+*"A localização padrão ⟨código⟩ está inativa — escolha um destino."*, sem mudar o que a gravação aceita. **Descartado:**
+pôr "inativo" na regra de endereço já nesta etapa — mudaria o que a gravação de **todo** movimento aceita (inclusive
+estorno e transferência), e esta etapa prometia não mudar nenhuma recusa existente. Vira etapa própria, com teste.
+
+**B216 (NOVA, da Etapa 53) — a sugestão é aberta a quem acessa o módulo, como o Mapa.** **Escolhido:** exige só login,
+a mesma régua do Mapa e da lista de vazias (**B210**) — mostra endereços, que o Mapa já mostra. **Descartado:** exigir o
+perfil de movimentar (quem não pode movimentar não abre o formulário de entrada de qualquer jeito).
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -4729,6 +4749,32 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
     **Etapa 52:** a lista de localizações vazias **declara** isso na nota do relatório — o endereço de material
     com lote pode aparecer **ocupado** (fora da lista) depois de a entrega tirar o material.
 
+73. **NOVO, da Etapa 53 — o sistema ACEITA entrada em endereço INATIVO e em endereço que NÃO EXISTE.** Achado pela
+    revisão do plano da Etapa 53, pelo sistema real. Cenário 1: remova um endereço vazio em Configurações →
+    Localizações (remover **desativa** o endereço) e dê entrada com ele como destino (pela integração, ou por ser o **endereço padrão** do material e o
+    destino ficar em branco): a entrada é **aceita**, o saldo é gravado nesse endereço — e o **Mapa**, que só mostra
+    endereço ativo, **não mostra** o material. Isso fura a regra da Etapa 52 (não se desativa endereço ocupado): o
+    endereço fica inativo **e** ocupado. Cenário 2: uma entrada pela integração com um destino que não existe (id
+    999999) é aceita e grava saldo num endereço órfão. **Até a correção:** a tela de Movimentações **avisa** quando o
+    endereço padrão está inativo (Etapa 53) e não sugere endereço inativo; para medir se isso já aconteceu:
+
+    ```sql
+    -- saldo gravado em endereço INATIVO, de almoxarifado inativo, ou que NÃO EXISTE
+    SELECT m.codigo, m.nome, s.localizacao_id, l.codigo AS endereco, l.ativo AS endereco_ativo,
+           a.ativo AS almox_ativo, SUM(s.quantidade) AS quantidade
+      FROM estoque_saldo_almoxarifado s
+      JOIN materiais_almoxarifado m ON m.id = s.material_id
+      LEFT JOIN localizacoes_almoxarifado l ON l.id = s.localizacao_id
+      LEFT JOIN almoxarifados a ON a.id = l.almoxarifado_id
+     WHERE s.localizacao_id IS NOT NULL
+       AND (l.id IS NULL OR l.ativo <> 1 OR a.ativo = 0)
+     GROUP BY m.id, s.localizacao_id
+    HAVING SUM(s.quantidade) <> 0;
+    ```
+    Vazia: nada a fazer. Com linhas: o material está num endereço que o Mapa não mostra — reative o endereço e
+    transfira o saldo, ou faça a contagem. **É a Etapa 54.**
+
+
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -5293,6 +5339,14 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   com **10** num endereço e **30** "sem localização atribuída", sem padrão, mostra só os 10 no Mapa — os 30 não
   aparecem nem no Mapa nem em *"Materiais sem endereço"*. É anterior à etapa.
 - **(52) A lista não filtra** por almoxarifado ou setor na tela; filtrar é na planilha.
+- **(53) A sugestão existe só em Movimentações.** A tela de **Recebimentos** não tem campo de endereço, e a
+  sugestão não aparece lá.
+- **(53) Endereço padrão que é "pai"** (tem sub-endereço ativo) é **omitido** das sugestões **sem aviso** — o sistema
+  aceita entrada nele, e a tela não diz por que ele não aparece.
+- **(53) "Vazia" não é "tem espaço".** Capacidade e peso não entram na conta (decisão do desenho da feature 02).
+- **(53) "Já tem este material" para material com lote** pode apontar endereço que a entrega já esvaziou (**C72**).
+- **(53) O limite de 10 em "já tem este material" não tem teste** — a tela mostra só 3, então o corte não aparece para
+  o operador; declarado, não provado.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -5667,6 +5721,14 @@ pela rota (17 cenários). O que **só o navegador** prova:
 2. **A recusa de apagar aparece no aviso da tela.** Em **Configurações → Localizações**, remover um endereço com
    material mostra *"Localização ocupada: há material nela (…)"* (ou *"Não é possível remover: localização possui
    saldo"*) no aviso vermelho, e o endereço continua na lista.
+
+**(53) Nenhum clique foi dado nesta etapa.** Os testes provam a sugestão pelo servidor (15 cenários, inclusive que toda
+sugestão é aceita numa entrada de verdade) e a tela com a resposta simulada (8 cenários). O que **só o navegador** prova:
+
+1. **Os botões aparecem e cabem.** Em **Movimentações → Nova Movimentação → Entrada**, escolha um material com endereço
+   padrão e saldo em outros endereços: *"Sugestões:"* e até 3 botões abaixo de *Localização de destino*, e o endereço
+   completo ao passar o mouse.
+2. **O aviso de padrão bloqueado** aparece antes de salvar, e some ao escolher um destino.
 
 ### G. Fragilidades estruturais que continuam de pé
 
@@ -13415,7 +13477,98 @@ que `ativo: 2` pela integração sumia com o endereço do Mapa, e que apagar de 
 defeito, porque o próprio teste gravava o setor em branco como "sem setor" — nunca testava o caso. Corrigido, e a
 verificação endurecida.
 
+## Etapa 53 — A sugestão de localização na entrada (2026-09-30)
+
+Quem dá entrada de material no almoxarifado precisa decidir **onde guardar**. Até aqui, a tela de Movimentações
+oferecia uma lista com **todos** os endereços, sem dizer qual fazia sentido — e, se o operador deixava o destino em
+branco, o material ia para o endereço padrão dele, **mesmo quando esse endereço estava bloqueado** (e aí a entrada
+era recusada, sem que a tela tivesse avisado nada antes). Agora, ao escolher **Entrada** e o material, a tela
+**sugere até três endereços**, com o motivo de cada um: o **endereço padrão** do material, os endereços **onde ele
+já está** (para não espalhar o mesmo material pelo galpão) e endereços **vazios** que aceitam aquele tipo de
+material. E, se o endereço padrão não pode receber o material, a tela **avisa antes** de o operador salvar.
+
+A sugestão **só oferece**: nada é preenchido sozinho, e o operador continua podendo escolher qualquer endereço. Quem
+decide se o endereço aceita é a mesma regra que valida a entrada — por isso **a sugestão nunca propõe um endereço
+que o sistema recusaria**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Na **Entrada**, o campo *Localização de destino* listava todos os endereços, sem indicação | Abaixo do campo aparecem **"Sugestões:"** com até 3 botões — *"⟨código⟩ · padrão do material"*, *"⟨código⟩ · já tem este material (N)"*, *"⟨código⟩ · vazia"*. Clicar preenche o destino |
+| Endereço padrão **bloqueado** (ou que não aceita o tipo do material) só aparecia como erro **depois** de salvar a entrada sem destino | A tela avisa na hora: *"A localização padrão ⟨código⟩ não recebe este material (⟨motivo⟩) — escolha um destino."* |
+| Endereço padrão **inativo** (ou de almoxarifado inativo) recebia a entrada sem destino em silêncio — e o saldo sumia do Mapa | A tela avisa: *"A localização padrão ⟨código⟩ está inativa — escolha um destino."* (o sistema **ainda aceita** essa entrada — ver **C73**; a recusa é a Etapa 54) |
+| A regra "este endereço aceita este material" existia só dentro da gravação do movimento | É **uma regra só**, usada pela gravação (destino e origem) e pela sugestão — as mensagens de recusa não mudaram |
+
+### As regras, com o cenário exato
+
+Preparação: um material **sem lote**, do tipo **Consumível**, com **endereço padrão A**; dê entrada de **20** no
+endereço **B** e de **5** no endereço **C** (Movimentações → Nova Movimentação → Entrada, escolhendo o destino).
+
+**1. A ordem das sugestões.** Em **Movimentações → Nova Movimentação**, tipo **Entrada**, escolha o material. Aparece,
+abaixo de *Localização de destino*: **"Sugestões:"** e os botões *"A · padrão do material"*, *"B · já tem este material
+(20)"*, *"C · já tem este material (5)"*. A ordem é sempre: o padrão; depois onde o material já está, **o endereço com
+mais primeiro**; depois os vazios. Passar o mouse num botão mostra o endereço completo (almoxarifado / setor / pai /
+código).
+
+**2. Nada é preenchido sozinho.** Com as sugestões na tela, o destino continua **"—"** até alguém clicar. Clicou em
+*"B · já tem este material (20)"*, o destino vira **B**.
+
+**3. Trocar de material limpa o que veio da sugestão — e só isso.** Clique numa sugestão e troque o material: o destino
+volta a **"—"** e as sugestões do material anterior **somem na hora** (antes mesmo de as novas chegarem). Se o destino
+foi escolhido **à mão** na lista, ele **fica** ao trocar de material.
+
+**4. Endereço vazio só se aceitar o material.** Um material sem endereço padrão e sem saldo em endereço mostra só
+botões *"· vazia"* — no máximo 5 no servidor, 3 na tela. Os vazios do **mesmo almoxarifado** do endereço padrão vêm
+primeiro. Nunca aparecem: endereço **bloqueado**, endereço que **não aceita o tipo** do material, endereço **inativo**,
+endereço de **almoxarifado inativo**, e endereço **"pai"** (rua, prateleira) que tem sub-endereço ativo — contêiner
+não é vaga. Um endereço onde este material tem saldo **negativo** também não é chamado de *"vazia"*.
+
+**5. Padrão bloqueado: o aviso.** Bloqueie o endereço **A** (Configurações → Localizações). Na Entrada do material, aparece
+em destaque: *"A localização padrão A não recebe este material (Localização A está bloqueada) — escolha um destino."*
+e **A** some das sugestões. Se mesmo assim salvar sem destino, o sistema recusa com *"Localização A está bloqueada"*
+— a mesma frase que estava entre parênteses. Escolha um destino: o aviso some.
+
+**6. Padrão que não aceita o tipo.** Restrinja o endereço **A** ao tipo **EPI**. O aviso fica: *"A localização padrão A
+não recebe este material (Localização A não aceita o tipo de material 'CONSUMIVEL') — escolha um destino."*
+
+**7. Padrão inativo: aviso, mas ainda sem recusa.** Remova o endereço **A** em Configurações → Localizações (remover
+**desativa** o endereço, e o material continua com ele como padrão): aparece *"A localização padrão A
+está inativa — escolha um destino."* e **A** não é sugerido. ⚠️ Se salvar sem destino, **hoje o sistema aceita** e o
+saldo vai para um endereço que o Mapa não mostra — ver **C73**. A Etapa 54 transforma isso em recusa.
+
+**8. Saída não sugere.** Em **Saída**, **Transferência** ou **Ajuste**, não aparece sugestão nenhuma. Se a sugestão
+falhar (servidor fora), o formulário continua funcionando normalmente, só sem os botões.
+
+### O que esta etapa NÃO cobre
+
+1. **Recebimento** (a tela de Recebimentos) não tem campo de endereço — a sugestão existe só em Movimentações (**D (53)**).
+2. **Capacidade e peso** do endereço não entram na conta: um endereço "vazio" é vazio pela regra do Mapa, não por ter espaço.
+3. **Material com lote:** *"já tem este material"* pode apontar um endereço que a entrega de requisição já esvaziou (**C72**).
+4. **Entrada em endereço inativo ou inexistente continua aceita pelo sistema** (**C73**) — a sugestão só não propõe; recusar é a **Etapa 54**.
+5. **Endereço padrão que é "pai"** (tem sub-endereço ativo) é omitido das sugestões **sem aviso** (**D (53)**).
+
+### O que a revisão encontrou
+
+Duas revisões. A do plano **provou pelo sistema real** que o desenho estava errado num ponto que importava: ele dizia que
+a entrada sem destino "continua indo para o endereço padrão, como hoje" — mas se o padrão está bloqueado ou não aceita o
+tipo, a entrada é **recusada**. A sugestão ia esconder o padrão em silêncio e o operador tomaria o erro sem entender; daí
+o aviso (regra 5). A mesma revisão achou que o sistema **aceita entrada em endereço inativo e em endereço que não existe**
+— fora do escopo, virou o **C73** e a próxima etapa. A do código achou cinco coisas, todas corrigidas e com teste: o
+padrão **inativo** não gerava aviso nenhum (regra 7); um endereço **"pai"** com saldo ainda era sugerido como *"já tem
+este material"* ou como padrão; endereço com saldo **negativo** era chamado de *"vazia"*; sem endereço padrão, os vazios
+**sem almoxarifado** subiam para o topo; e a quantidade era buscada endereço por endereço (agora numa consulta só, e
+*"já tem"* limitado a 10). E lacunas de teste: a quantidade mostrada no botão, o aviso sumindo ao escolher destino, a
+limpeza imediata na troca de material e a resposta atrasada do material anterior — nenhuma tinha prova.
+
 ## Onde estamos e o que vem a seguir
+
+- **Etapa 53 entregue (2026-09-30):** **a sugestão de localização na entrada.** Em **Movimentações → Entrada**, ao
+  escolher o material aparecem até três endereços sugeridos — o padrão, onde o material já está, e vazios que o
+  aceitam —, e a tela **avisa** quando o endereço padrão está bloqueado, não aceita o tipo ou está inativo. Nada é
+  preenchido sozinho. **O que é seu:** as decisões **B213 a B216**; o furo **C73** (o sistema ainda aceita entrada em
+  endereço inativo ou inexistente — **é a próxima etapa**); as limitações **(53)** em D e as verificações **(53)** em F.
+  **Próxima: Etapa 54 — o sistema recusa entrada (e transferência) para endereço inativo ou inexistente.**
 
 - **Etapa 52 entregue (2026-09-30):** **a lista de localizações vazias, e o endereço ocupado que não pode mais
   ser apagado.** Em **Relatórios → Estoque → Localizações vazias**, pela **mesma regra do Mapa** (o que um mostra

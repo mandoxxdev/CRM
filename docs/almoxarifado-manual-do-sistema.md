@@ -328,7 +328,7 @@ Duas travas configuráveis por posição, no modal **Editar Localização** (Con
 
 > *"Localização A-01 está bloqueada"*
 
-Atenção a um detalhe que economiza tempo: a validação vale também quando você **não** informa a localização, porque nesse caso o sistema usa a **Localização no estoque** cadastrada no material. Bloquear a posição padrão de um item bloqueia a entrada dele mesmo sem ninguém escolher destino.
+Atenção a um detalhe que economiza tempo: a validação vale também quando você **não** informa a localização, porque nesse caso o sistema usa a **Localização no estoque** cadastrada no material. Bloquear a posição padrão de um item bloqueia a entrada dele mesmo sem ninguém escolher destino. A tela de Movimentações avisa isso antes de salvar (ver 3.8).
 
 Uma exceção deliberada: o **estorno** de uma movimentação **não** valida bloqueio. Reverter um lançamento precisa sempre ser possível, mesmo que a posição tenha sido bloqueada depois do movimento original.
 
@@ -399,6 +399,34 @@ Duas consultas de apoio para quem está organizando o galpão, as duas em **Rela
 - a posição **bloqueada** vazia aparece (coluna Bloqueada = 1); a posição **inativa** não;
 - uma posição **"pai"** (rua, setor) sem saldo próprio aparece mesmo com as filhas ocupadas — a coluna **Filhas ocupadas** diz quantas filhas ativas estão ocupadas; o Mapa e a lista são planos;
 - em material **com lote**, uma posição pode continuar aparecendo **ocupada** depois de a entrega de requisição retirar o material, porque a entrega não escolhe lote (ver 3.6).
+
+### 3.8 A sugestão de posição na entrada
+
+Em **Movimentações → Nova Movimentação**, com o tipo **Entrada** e um material escolhido, aparecem abaixo do campo **Localização de destino** a palavra **"Sugestões:"** e até **três** botões. Cada botão traz o código da posição e o motivo da sugestão; passar o mouse mostra o endereço completo (almoxarifado / setor / posição pai / código). Clicar num botão preenche o destino. **Nada é preenchido sozinho**: enquanto ninguém clica, o destino continua vazio, e uma entrada salva sem destino segue a regra de 3.6 (vai para a posição padrão).
+
+**A ordem das sugestões**, sem repetir posição:
+
+1. *"⟨código⟩ · padrão do material"* — a **Localização no estoque** do cadastro do material;
+2. *"⟨código⟩ · já tem este material (N)"* — as posições onde o material já tem saldo positivo, **da maior para a menor** (N é a quantidade nela). Guardar junto evita espalhar o mesmo material pelo galpão;
+3. *"⟨código⟩ · vazia"* — posições **vazias pela regra do Mapa** (3.7), dando preferência às do mesmo almoxarifado da posição padrão.
+
+**O que nunca é sugerido:** posição **bloqueada**; posição cuja restrição de tipo **não aceita** o tipo do material (3.4); posição **inativa**; posição de almoxarifado **inativo**; e posição **"pai"** que tem alguma posição filha ativa — uma rua ou prateleira que contém outras posições não é vaga. Uma posição onde o material tem saldo **negativo** também não é oferecida como vazia. A regra que decide se a posição aceita o material é **a mesma** que valida a entrada ao salvar, e por isso uma sugestão nunca é recusada pelas travas de 3.4.
+
+"Vazia" quer dizer "o Mapa não mostra material ali" — **não** quer dizer que cabe: capacidade e peso não são modelados (3.5). E, em material **com lote**, *"já tem este material"* pode apontar uma posição que a entrega de requisição já esvaziou (ver 3.6).
+
+**Os avisos sobre a posição padrão.** Eles aparecem abaixo do destino enquanto ele estiver vazio, e somem assim que um destino é escolhido:
+
+- Se a posição padrão está **bloqueada** ou **não aceita o tipo** do material, a entrada sem destino seria recusada ao salvar, e a tela avisa antes, repetindo entre parênteses a mesma frase da recusa:
+
+  > *"A localização padrão A-01 não recebe este material (Localização A-01 está bloqueada) — escolha um destino."*
+
+- Se a posição padrão está **inativa** (ou é de um almoxarifado inativo):
+
+  > *"A localização padrão A-01 está inativa — escolha um destino."*
+
+  Aqui o aviso é o que protege o saldo: o sistema **não recusa** uma entrada numa posição inativa, e o Mapa de Áreas só desenha posições ativas — o material entraria num lugar que nenhuma tela de ocupação mostra. Escolha um destino ativo.
+
+Trocar de material apaga as sugestões na hora e limpa o destino **se** ele veio de uma sugestão; um destino escolhido à mão na lista continua escolhido. As sugestões aparecem **só na Entrada** — não em Saída, Transferência ou Ajuste — e, se a consulta falhar, o formulário funciona normalmente, sem os botões. A tela de **Recebimento** não tem campo de posição e não mostra sugestão.
 
 ---
 

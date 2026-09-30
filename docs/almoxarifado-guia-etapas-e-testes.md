@@ -1,18 +1,25 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-09-30 (Etapa 52) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-09-30 (Etapa 53) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 52) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 53) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-09-30 (Etapa 52 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-09-30 (Etapa 53 ENTREGUE · Etapa 54 começando)
 >
-> **O desenvolvimento parou aqui: Etapa 52, 2026-09-30.** A **Etapa 52 (a lista de localizações vazias)** dá
+> **O desenvolvimento parou aqui: Etapa 53 fechada, Etapa 54 começando — 2026-09-30.** A **Etapa 53 (a sugestão
+> de localização na entrada)**: em **Movimentações → Entrada**, ao escolher o material aparecem até 3 endereços
+> sugeridos (o padrão, onde o material já está, vazios que o aceitam), e a tela **avisa** quando o endereço padrão
+> está bloqueado, não aceita o tipo ou está inativo. **Próxima etapa, já começando: 54 — o sistema recusa entrada
+> (e transferência) para endereço inativo ou inexistente** (novidades, **C73**; ver *"Próxima tarefa detalhada"* no
+> plano da Etapa 53).
+>
+> **Etapas 1 a 20 e 22 a 53 completas.**
+>
+> **Etapa 52, 2026-09-30.** A **Etapa 52 (a lista de localizações vazias)** dá
 > tela ao espaço livre: **Relatórios → Estoque → Localizações vazias**, pela **mesma regra do Mapa**, exportável
 > em planilha. E apagar ou desativar endereço **ocupado** passou a ser recusado — inclusive o endereço padrão de
 > material antigo, que antes era apagado e sumia com o material. **Próxima etapa:** ver *"Próxima tarefa
 > detalhada"* no plano da Etapa 52.
->
-> **Etapas 1 a 20 e 22 a 52 completas.**
 >
 > **Etapa 51, 2026-09-30.** A **Etapa 51 (a saída baixa o endereço de onde o
 > material sai)** conserta o motor de estoque: a entrega de requisição, que não diz de onde sai, passa a tirar
@@ -4939,6 +4946,59 @@ que ele não tinha como repetir com sucesso garantido.
 - **Número de série de material** — continua sendo **digitado pelo operador** e de propósito não
   passa por este gerador. Retentar com outro número gravaria algo que ninguém digitou.
 - **Números de outros módulos do CRM** — a varredura foi do almoxarifado.
+
+---
+
+## Etapa 53 — A sugestão de localização na entrada (ENTREGUE — 2026-09-30)
+
+**O que mudou, em uma frase:** na **Entrada** de material, a tela de Movimentações **sugere onde guardar** — o
+endereço padrão, onde o material já está e endereços vazios que o aceitam — e **avisa** quando o endereço padrão não
+pode receber o material.
+
+**O problema que ela resolve.** O campo de destino listava todos os endereços, sem dizer qual fazia sentido. E, com o
+destino em branco, a entrada ia para o endereço padrão — se ele estivesse **bloqueado**, a entrada era recusada só
+**depois** de salvar, sem aviso antes.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Destino escolhido numa lista com todos os endereços | **"Sugestões:"** com até 3 botões: *"⟨código⟩ · padrão do material"*, *"⟨código⟩ · já tem este material (N)"*, *"⟨código⟩ · vazia"* |
+| Padrão bloqueado ou que não aceita o tipo: erro só ao salvar | Aviso antes: *"A localização padrão ⟨código⟩ não recebe este material (⟨motivo⟩) — escolha um destino."* |
+| Padrão inativo: a entrada ia para um endereço que o Mapa não mostra, sem aviso | Aviso: *"A localização padrão ⟨código⟩ está inativa — escolha um destino."* (a entrada ainda é aceita — novidades **C73**, Etapa 54) |
+
+### Roteiro de teste manual (≈8 min)
+
+**Preparação.** Três endereços **A**, **B** e **C**, sem restrição de tipo. Um material **sem** lote, tipo
+**Consumível**, com endereço padrão **A**. Em **Movimentações → Nova Movimentação → Entrada**, dê entrada de **20** em
+**B** e de **5** em **C** (escolhendo o destino na lista).
+
+1. **As sugestões.** **Nova Movimentação**, tipo **Entrada**, escolha o material. Abaixo de *Localização de destino*:
+   **"Sugestões:"** *"A · padrão do material"*, *"B · já tem este material (20)"*, *"C · já tem este material (5)"*.
+   Passe o mouse num botão: aparece o endereço completo.
+2. **Nada preenche sozinho.** O destino continua **"—"**. Clique em *"B · já tem este material (20)"*: o destino vira **B**.
+3. **Trocar de material.** Com **B** vindo da sugestão, troque o material: o destino volta a **"—"** e os botões
+   mudam. Agora escolha o destino **à mão** na lista e troque de novo o material: o destino escolhido à mão **fica**.
+4. **Padrão bloqueado.** Em **Configurações → Localizações**, bloqueie **A**. Volte à Entrada do material: aparece
+   *"A localização padrão A não recebe este material (Localização A está bloqueada) — escolha um destino."*, e **A**
+   não está nos botões. Salve **sem** destino: o sistema recusa com *"Localização A está bloqueada"*. Escolha um destino:
+   o aviso some. Desbloqueie **A**.
+5. **Padrão que não aceita o tipo.** Restrinja **A** ao tipo **EPI**: o aviso vira *"… (Localização A não aceita o tipo
+   de material 'CONSUMIVEL') — escolha um destino."*. Tire a restrição.
+6. **Padrão inativo.** Com **A** vazio, remova-o em **Configurações → Localizações** (remover **desativa** o
+   endereço; o material continua com ele como padrão): aparece *"A localização padrão A está inativa — escolha um destino."*.
+   ⚠️ **Não salve sem destino** para "ver o erro": hoje o sistema **aceita** e o saldo vai para um endereço que o Mapa
+   não mostra (**C73** — é a Etapa 54).
+7. **Só na entrada.** Troque o tipo para **Saída** ou **Transferência**: os botões e os avisos somem.
+
+### O que esta etapa NÃO cobre
+
+- **Recebimentos** — a tela não tem campo de endereço; a sugestão está só em Movimentações.
+- **Espaço de verdade** — "vazia" é pela regra do Mapa; capacidade e peso não entram.
+- **Material COM lote** — *"já tem este material"* pode apontar um endereço que a entrega já esvaziou (**C72**).
+- **Recusar entrada em endereço inativo ou inexistente** — a sugestão não propõe, mas o sistema ainda aceita
+  (**C73**). É a **Etapa 54**.
+- **Endereço padrão que é "pai"** (tem sub-endereço ativo) some das sugestões **sem aviso**.
 
 ---
 
