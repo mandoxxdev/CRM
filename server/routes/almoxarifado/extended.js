@@ -2114,35 +2114,9 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
   // ── Localizações vazias (sem estoque) ──
   app.get('/api/almoxarifado/localizacoes/vazias', auth, async (req, res) => {
     try {
-      const sql = `
-        SELECT l.*, a.codigo as almoxarifado_codigo, p.codigo as parent_codigo
-        FROM localizacoes_almoxarifado l
-        LEFT JOIN almoxarifados a ON l.almoxarifado_id = a.id
-        LEFT JOIN localizacoes_almoxarifado p ON l.parent_id = p.id
-        WHERE l.ativo = 1
-        AND NOT EXISTS (
-          SELECT 1 FROM estoque_saldo_almoxarifado s
-          WHERE s.localizacao_id = l.id AND s.quantidade > 0
-        )
-        ORDER BY l.setor, l.parent_id, l.subgrupo, l.codigo
-      `;
-      const rows = await dbAll(db, sql);
-
-      // Build endereco_completo for each location
-      const enriched = rows.map(row => {
-        const parts = [];
-        if (row.almoxarifado_codigo) parts.push(row.almoxarifado_codigo);
-        if (row.setor) parts.push(row.setor);
-        if (row.parent_codigo) parts.push(row.parent_codigo);
-        if (row.codigo) parts.push(row.codigo);
-
-        return {
-          ...row,
-          endereco_completo: parts.join(' / ')
-        };
-      });
-
-      res.json(enriched);
+      // Etapa 52 (RN-01/02): a regra de "vazia" e a do mapa (stockService.OCUPACAO_SQL), e o
+      // endereco completo vem montado no SQL - fonte unica com a chave 'localizacoes-vazias'.
+      res.json(await stockService.listarLocalizacoesVazias(db));
     } catch (e) { handleError(res, e); }
   });
 
@@ -2184,6 +2158,8 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     // o alerta MATERIAL_SEM_ENDERECO, senao relatorio e alerta de mesmo nome divergiriam
     // (achado Critico 2 da revisao do plano da etapa). Comportamento identico ao anterior.
     'materiais-sem-endereco': (db) => alertRegistry.listarMateriaisSemEndereco(db),
+    // Etapa 52: localizacoes vazias, pela regra de ocupacao do mapa.
+    'localizacoes-vazias': (db) => stockService.listarLocalizacoesVazias(db),
     // Etapa 49: saldo por lote (atribuido + 'Sem lote atribuido'), series presentes, saldos comprometidos.
     'saldo-por-lote': reportService.relatorioSaldoPorLote,
     'series-em-estoque': reportService.relatorioSeriesEmEstoque,

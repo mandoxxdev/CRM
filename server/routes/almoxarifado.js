@@ -2014,6 +2014,21 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         if (curErr) return res.status(500).json({ error: curErr.message });
         if (!current) return res.status(404).json({ error: 'Localização não encontrada' });
 
+        // Etapa 52 (RN-04): desativar pelo PUT é apagar por outro caminho — a mesma guarda do DELETE.
+        const desativando = ativo !== undefined && !Number(ativo) && Number(current.ativo) === 1;
+        if (desativando) {
+          stockService.contarOcupacaoLocalizacao(db, Number(req.params.id)).then((ocupantes) => {
+            if (ocupantes > 0) {
+              return res.status(400).json({
+                error: `Localização ocupada: há material nela (${ocupantes} item(ns)). Transfira o saldo antes de apagar ou desativar.`,
+              });
+            }
+            return continuarPut();
+          }).catch((e) => res.status(500).json({ error: e.message }));
+          return;
+        }
+        continuarPut();
+        function continuarPut() {
         const bloqueadaFinal = bloqueada === undefined ? (current.bloqueada ? 1 : 0) : (bloqueada ? 1 : 0);
         const tiposFinal = tipos_material_permitidos === undefined
           ? current.tipos_material_permitidos
@@ -2037,6 +2052,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
               });
             });
         });
+        }
       });
   });
 
@@ -2050,6 +2066,15 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         if (saldoErr) return res.status(500).json({ error: saldoErr.message });
         if (row) {
           return res.status(400).json({ error: 'Não é possível remover: localização possui saldo' });
+        }
+        // Etapa 52 (RN-04): a régua de "ocupada" é a do mapa (`OCUPACAO_SQL`). Sem isto, uma
+        // localização ocupada SÓ pelo legado (material com padrão aqui e sem linha endereçada) era
+        // apagada, e o material sumia de todas as telas.
+        stockService.contarOcupacaoLocalizacao(db, Number(req.params.id)).then((ocupantes) => {
+        if (ocupantes > 0) {
+          return res.status(400).json({
+            error: `Localização ocupada: há material nela (${ocupantes} item(ns)). Transfira o saldo antes de apagar ou desativar.`,
+          });
         }
         // Etapa 19 (RN-01): leitura previa so para o "de" do log — as leituras que a rota ja
         // fazia sao de SALDO, nao da linha.
@@ -2071,6 +2096,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
             }).finally(() => res.json({ success: true }));
           });
         });
+        }).catch((e) => res.status(500).json({ error: e.message }));
       });
   });
 

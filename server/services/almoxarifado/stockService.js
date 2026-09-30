@@ -553,18 +553,15 @@ async function validarLocalizacaoParaMovimento(db, localizacaoId, material, pape
 // localizacao: mora em `materiais_almoxarifado` (por material) ou no lote inteiro (por status).
 // Devolver o campo zerado era pior do que nao devolver — sugeria uma dimensao que o sistema nao
 // modela. Este mapa e so por localizacao fisica.
-const MAPA_LOCALIZACOES_SQL = `
-  SELECT l.*,
-    COALESCE(s.qtd_itens, 0) as qtd_itens,
-    COALESCE(s.quantidade_total, 0) as quantidade_total,
-    COALESCE(m.itens_baixo_minimo, 0) as itens_baixo_minimo,
-    COALESCE(m.itens_criticos, 0) as itens_criticos
-  FROM localizacoes_almoxarifado l
-  LEFT JOIN (
-    SELECT loc_id,
-      COUNT(DISTINCT material_id) as qtd_itens,
-      SUM(qty) as quantidade_total
-    FROM (
+/**
+ * Etapa 52 (RN-01): a REGRA UNICA de ocupacao de localizacao - uma linha (loc_id, material_id, qty)
+ * por material que ocupa um endereco: as linhas de saldo COM endereco e quantidade > 0, mais o
+ * FALLBACK do legado (material ativo com padrao e fisico > 0 e nenhuma linha enderecada positiva
+ * ocupa a padrao). Usada pelo mapa, pela lista de localizacoes vazias e pela guarda de apagar/
+ * desativar localizacao - antes eram tres reguas, e a lista dava como vazia o que o mapa mostrava
+ * com 40 (S8 da Fase 0 da Etapa 51), e o DELETE apagava localizacao ocupada so pelo legado.
+ */
+const OCUPACAO_SQL = `
       SELECT localizacao_id as loc_id, material_id, quantidade as qty
       FROM estoque_saldo_almoxarifado
       WHERE localizacao_id IS NOT NULL AND quantidade > 0
@@ -589,6 +586,21 @@ const MAPA_LOCALIZACOES_SQL = `
           SELECT 1 FROM estoque_saldo_almoxarifado s
           WHERE s.material_id = m.id AND s.localizacao_id IS NOT NULL AND s.quantidade > 0
         )
+`;
+
+const MAPA_LOCALIZACOES_SQL = `
+  SELECT l.*,
+    COALESCE(s.qtd_itens, 0) as qtd_itens,
+    COALESCE(s.quantidade_total, 0) as quantidade_total,
+    COALESCE(m.itens_baixo_minimo, 0) as itens_baixo_minimo,
+    COALESCE(m.itens_criticos, 0) as itens_criticos
+  FROM localizacoes_almoxarifado l
+  LEFT JOIN (
+    SELECT loc_id,
+      COUNT(DISTINCT material_id) as qtd_itens,
+      SUM(qty) as quantidade_total
+    FROM (
+      ${OCUPACAO_SQL}
     ) combined
     GROUP BY loc_id
   ) s ON s.loc_id = l.id
@@ -624,6 +636,41 @@ const MAPA_LOCALIZACOES_SQL = `
 
 async function consultarMapaLocalizacoes(db) {
   return dbAll(db, MAPA_LOCALIZACOES_SQL);
+}
+
+/**
+ * Etapa 52 (RN-01/03): localizações ATIVAS vazias pela mesma régua do mapa (`OCUPACAO_SQL`) —
+ * nenhuma localização pode estar ocupada no mapa e vazia aqui, nem o contrário.
+ * O endereço é montado no SELECT (a varredura do registro de relatórios confere as colunas contra o
+ * SQL real): almoxarifado / setor / pai / código, pulando as partes vazias, como a rota montava em JS.
+ * `sub_ocupadas` conta os FILHOS ativos ocupados: o pai sem saldo direto aparece (o invariante com o
+ * mapa exige), e a coluna diz que ele é um contêiner.
+ */
+async function listarLocalizacoesVazias(db) {
+  return dbAll(db, `
+    SELECT l.*, a.codigo as almoxarifado_codigo, p.codigo as parent_codigo,
+      COALESCE(a.codigo || ' / ', '') || COALESCE(NULLIF(l.setor, '') || ' / ', '')
+        || COALESCE(p.codigo || ' / ', '') || l.codigo as endereco_completo,
+      (SELECT COUNT(*) FROM localizacoes_almoxarifado f
+        WHERE f.parent_id = l.id AND f.ativo = 1
+          AND EXISTS (SELECT 1 FROM (${OCUPACAO_SQL}) oc WHERE oc.loc_id = f.id)) as sub_ocupadas
+    FROM localizacoes_almoxarifado l
+    LEFT JOIN almoxarifados a ON l.almoxarifado_id = a.id
+    LEFT JOIN localizacoes_almoxarifado p ON l.parent_id = p.id
+    WHERE l.ativo = 1
+      AND NOT EXISTS (SELECT 1 FROM (${OCUPACAO_SQL}) oc WHERE oc.loc_id = l.id)
+    ORDER BY l.setor, l.parent_id, l.subgrupo, l.codigo`);
+}
+
+/**
+ * Etapa 52 (RN-04): quantos materiais ocupam a localização, pela régua única. O DELETE e o PUT que
+ * desativa localização usam isto — antes o DELETE olhava só `quantidade != 0` e apagava
+ * localização ocupada só pelo legado (40 unidades ficavam invisíveis em todas as telas).
+ */
+async function contarOcupacaoLocalizacao(db, localizacaoId) {
+  const r = await dbGet(db, `SELECT COUNT(DISTINCT material_id) as n FROM (${OCUPACAO_SQL}) oc WHERE oc.loc_id = ?`,
+    [localizacaoId]);
+  return Number(r?.n) || 0;
 }
 
 /**
@@ -2381,6 +2428,8 @@ async function consultarSaldosPorLocalizacao(db, materialId) {
 }
 
 module.exports = {
+  listarLocalizacoesVazias,
+  contarOcupacaoLocalizacao,
   getConfig,
   getMaterial,
   getSaldoDisponivel,

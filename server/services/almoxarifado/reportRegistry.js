@@ -453,6 +453,29 @@ const RELATORIOS = {
     ],
     fn: null,
   },
+  // ── Etapa 52 ─────────────────────────────────────────────────────────────────────────────
+  'localizacoes-vazias': {
+    titulo: 'Localizações vazias',
+    categoria: 'Estoque',
+    acao: null,
+    exportavel: true,
+    nota: 'Localizações ativas sem material, pela mesma regra do Mapa de localizações. Endereço '
+      + 'bloqueado vazio aparece (coluna Bloqueada). Uma localização "pai" sem saldo próprio aparece '
+      + 'mesmo com filhas ocupadas — a coluna Filhas ocupadas diz quantas. Em material com LOTE, um '
+      + 'endereço pode continuar aparecendo ocupado depois de a entrega de requisição retirar o '
+      + 'material, porque a entrega não escolhe lote.',
+    limite: null,
+    params: [],
+    colunas: [
+      { chave: 'codigo', rotulo: 'Código' },
+      { chave: 'endereco_completo', rotulo: 'Endereço' },
+      { chave: 'almoxarifado_codigo', rotulo: 'Almoxarifado' },
+      { chave: 'tipo', rotulo: 'Tipo' },
+      { chave: 'bloqueada', rotulo: 'Bloqueada' },
+      { chave: 'sub_ocupadas', rotulo: 'Filhas ocupadas' },
+    ],
+    fn: null,
+  },
   // ── Etapa 49 — saldos ─────────────────────────────────────────────────────────────────────
   'saldo-por-lote': {
     titulo: 'Saldo por lote',
