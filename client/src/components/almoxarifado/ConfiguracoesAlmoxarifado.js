@@ -1408,7 +1408,74 @@ const TabLocalizacoes = () => {
   const [moverData, setMoverData] = useState({ setor: '', estruturaTipo: '', parent_id: '', subgrupo: '', codigo: '' });
   const [moverError, setMoverError] = useState('');
 
+  // Etapa 55 (RN-01/RN-04): o código proposto vem do SERVIDOR, que conta também as localizações
+  // inativas — o gerador local só vê a lista de `GET /localizacoes` (só ativas) e propunha o código
+  // de uma desativada: o POST a reativava em silêncio e o Mover estourava UNIQUE (500 cru).
+  // O código vira estado, buscado por efeito; a prévia e a gravação usam o código MOSTRADO.
+  // `...Tentativa` força uma nova busca depois que o servidor recusou o código (409/400).
+  const [wizardCodigo, setWizardCodigo] = useState('');
+  const [wizardCodigoLoading, setWizardCodigoLoading] = useState(false);
+  const [wizardCodigoTentativa, setWizardCodigoTentativa] = useState(0);
+  const [moverCodigo, setMoverCodigo] = useState('');
+  const [moverCodigoLoading, setMoverCodigoLoading] = useState(false);
+  const [moverCodigoTentativa, setMoverCodigoTentativa] = useState(0);
+
   useEffect(() => { loadLocs(); loadTipos(); loadSetores(); loadAlmoxarifados(); }, []);
+
+  const wizardPronto = showWizard && !!wizard.setor && !!wizard.estruturaTipo
+    && (wizard.estruturaTipo !== 'child' || !!wizard.parent_id);
+  const wizardParentParam = wizard.estruturaTipo === 'child' && wizard.parent_id
+    ? parseInt(wizard.parent_id, 10) : null;
+
+  useEffect(() => {
+    if (!wizardPronto) { setWizardCodigo(''); setWizardCodigoLoading(false); return undefined; }
+    let cancelado = false;
+    const params = { setor: wizard.setor };
+    if (wizardParentParam) params.parent_id = wizardParentParam;
+    setWizardCodigo('');
+    setWizardCodigoLoading(true);
+    api.get('/almoxarifado/localizacoes/proximo-codigo', { params })
+      .then(r => {
+        if (cancelado) return;
+        const codigo = r?.data?.codigo;
+        setWizardCodigo(codigo || generateNextCodigo(localizacoes, { setor: wizard.setor, parent_id: wizardParentParam }, setoresConfig));
+      })
+      .catch(() => {
+        if (cancelado) return;
+        // RN-04: a tela nunca fica sem proposta — cai no gerador local (o de antes da Etapa 55).
+        setWizardCodigo(generateNextCodigo(localizacoes, { setor: wizard.setor, parent_id: wizardParentParam }, setoresConfig));
+      })
+      .finally(() => { if (!cancelado) setWizardCodigoLoading(false); });
+    return () => { cancelado = true; };
+  }, [wizardPronto, wizard.setor, wizardParentParam, wizardCodigoTentativa, localizacoes, setoresConfig]);
+
+  const moverPronto = !!moverLoc && !!moverData.setor && !!moverData.estruturaTipo
+    && (moverData.estruturaTipo !== 'child' || !!moverData.parent_id);
+  const moverParentParam = moverData.estruturaTipo === 'child' && moverData.parent_id
+    ? parseInt(moverData.parent_id, 10) : null;
+
+  useEffect(() => {
+    if (!moverPronto) { setMoverCodigo(''); setMoverCodigoLoading(false); return undefined; }
+    let cancelado = false;
+    // excluir_id: a própria localização movida não conta como irmã nem como colisão.
+    const params = { setor: moverData.setor, excluir_id: moverLoc.id };
+    if (moverParentParam) params.parent_id = moverParentParam;
+    const fallback = () => generateNextCodigo(
+      localizacoes.filter(l => l.id !== moverLoc.id),
+      { setor: moverData.setor, parent_id: moverParentParam, tipo: moverLoc.tipo },
+      setoresConfig,
+    );
+    setMoverCodigo('');
+    setMoverCodigoLoading(true);
+    api.get('/almoxarifado/localizacoes/proximo-codigo', { params })
+      .then(r => {
+        if (cancelado) return;
+        setMoverCodigo(r?.data?.codigo || fallback());
+      })
+      .catch(() => { if (!cancelado) setMoverCodigo(fallback()); })
+      .finally(() => { if (!cancelado) setMoverCodigoLoading(false); });
+    return () => { cancelado = true; };
+  }, [moverPronto, moverLoc, moverData.setor, moverParentParam, moverCodigoTentativa, localizacoes, setoresConfig]);
 
   const loadSetores = async () => {
     try {
@@ -1493,11 +1560,8 @@ const TabLocalizacoes = () => {
     const parentId = isChild && data.parent_id ? parseInt(data.parent_id, 10) : null;
     const subgrupoOpts = isChild && data.parent_id ? generateSubgrupoOptions(localizacoes, data.parent_id) : [];
     const subgrupo = isChild ? (data.subgrupo || subgrupoOpts[0] || '') : '';
-    const codigo = generateNextCodigo(localizacoes, {
-      setor: data.setor,
-      parent_id: parentId,
-      tipo: data.tipo,
-    }, setoresConfig);
+    // O código é o do estado (buscado no servidor pelo efeito acima) — nunca recalculado aqui.
+    const codigo = wizardCodigo;
     const descricao = data.descricao?.trim() || suggestDescricao({
       setor: data.setor,
       tipo: data.tipo,
@@ -1568,6 +1632,7 @@ const TabLocalizacoes = () => {
   };
 
   const handleWizardConfirm = async () => {
+    if (wizardCodigoLoading) return;
     const { subgrupo, codigo, descricao, parentId } = computeWizardDetails(wizard);
     if (!codigo) { setWizardError('Não foi possível gerar o código. Revise as seleções.'); return; }
     if (isSubgrupoDuplicado(localizacoes, { subgrupo, setor: wizard.setor, parent_id: parentId })) {
@@ -1588,12 +1653,18 @@ const TabLocalizacoes = () => {
         pos_y: wizard.pos_y !== '' && wizard.pos_y != null ? parseFloat(wizard.pos_y) : null,
         largura: parseFloat(wizard.largura) || 120,
         altura: parseFloat(wizard.altura) || 80,
+        // RN-05: o assistente só CRIA. Se o código virou de uma inativa entre a busca e a
+        // gravação (ou veio do gerador local), o servidor responde 409 em vez de reativar a antiga.
+        somente_novo: true,
       });
       toast.success('Localização cadastrada!');
       resetWizard();
       loadLocs();
     } catch (err) {
       setWizardError(err.response?.data?.error || 'Erro ao cadastrar localização');
+      const status = err.response?.status;
+      // Código recusado (409 inativa / 400 já existe): busca outro — a prévia atualiza.
+      if (status === 409 || status === 400) setWizardCodigoTentativa(n => n + 1);
     } finally { setSaving(false); }
   };
 
@@ -1659,12 +1730,13 @@ const TabLocalizacoes = () => {
     const locsExcl = localizacoes.filter(l => l.id !== loc.id);
     const subgrupoOpts = isChild && data.parent_id ? generateSubgrupoOptions(locsExcl, data.parent_id) : [];
     const subgrupo = isChild ? (data.subgrupo || subgrupoOpts[0] || loc.subgrupo || '') : null;
-    const codigo = generateNextCodigo(locsExcl, { setor: data.setor, parent_id: parentId, tipo: loc.tipo }, setoresConfig);
+    // O código é o do estado (buscado no servidor com excluir_id pelo efeito acima).
+    const codigo = moverCodigo;
     return { subgrupo, codigo, parentId };
   };
 
   const handleMoverConfirm = async () => {
-    if (!moverLoc) return;
+    if (!moverLoc || moverCodigoLoading) return;
     const { subgrupo, codigo, parentId } = computeMoverDetails(moverData, moverLoc);
     if (moverData.estruturaTipo === 'child' && !moverData.parent_id) {
       setMoverError('Selecione a estrutura pai no novo setor.');
@@ -1676,6 +1748,7 @@ const TabLocalizacoes = () => {
       setMoverError('Subgrupo já existe na estrutura de destino.');
       return;
     }
+    if (!codigo) { setMoverError('Não foi possível gerar o novo código. Revise as seleções.'); return; }
     setSaving(true);
     try {
       await api.put(`/almoxarifado/localizacoes/${moverLoc.id}`, {
@@ -1693,7 +1766,12 @@ const TabLocalizacoes = () => {
       toast.success('Localização movida com novo código!');
       resetMover();
       loadLocs();
-    } catch (err) { setMoverError(err.response?.data?.error || 'Erro ao mover'); }
+    } catch (err) {
+      setMoverError(err.response?.data?.error || 'Erro ao mover');
+      const status = err.response?.status;
+      // Código recusado pelo servidor (ex.: "Código já existe"): busca outro — a prévia atualiza.
+      if (status === 409 || status === 400) setMoverCodigoTentativa(n => n + 1);
+    }
     finally { setSaving(false); }
   };
 
@@ -1875,7 +1953,7 @@ const TabLocalizacoes = () => {
               </div>
               <div className="almox-field">
                 <label className="almox-label">Código</label>
-                <input className="almox-input" value={computeWizardDetails(wizard).codigo} readOnly style={{ fontFamily: 'monospace', fontWeight: 700, color: '#4facfe', opacity: 0.9 }} />
+                <input className="almox-input" value={wizardCodigoLoading ? 'Gerando código...' : computeWizardDetails(wizard).codigo} readOnly style={{ fontFamily: 'monospace', fontWeight: 700, color: '#4facfe', opacity: 0.9 }} />
                 <p className="almox-wizard-hint">Gerado automaticamente — não editável no cadastro.</p>
               </div>
             </div>
@@ -1890,7 +1968,7 @@ const TabLocalizacoes = () => {
                   <strong>{formatLocalizacaoPath(preview, localizacoes)} / {preview.codigo}</strong>
                 </div>
                 <dl className="almox-wizard-confirm-dl">
-                  <dt>Código</dt><dd style={{ fontFamily: 'monospace', color: '#4facfe' }}>{preview.codigo}</dd>
+                  <dt>Código</dt><dd style={{ fontFamily: 'monospace', color: '#4facfe' }}>{wizardCodigoLoading ? 'Gerando código...' : preview.codigo}</dd>
                   <dt>Almoxarifado</dt><dd>{almoxarifadoSelecionado ? `${almoxarifadoSelecionado.codigo} — ${almoxarifadoSelecionado.nome}` : '—'}</dd>
                   <dt>Setor</dt><dd>{preview.setor}</dd>
                   <dt>Tipo</dt><dd>{preview.tipo}</dd>
@@ -1941,7 +2019,7 @@ const TabLocalizacoes = () => {
                 Próximo <FiArrowRight size={14} />
               </button>
             ) : (
-              <button type="button" className="btn-almox-primary" onClick={handleWizardConfirm} disabled={saving}>
+              <button type="button" className="btn-almox-primary" onClick={handleWizardConfirm} disabled={saving || wizardCodigoLoading || !wizardCodigo}>
                 <FiCheck size={14} /> {saving ? 'Cadastrando...' : 'Confirmar cadastro'}
               </button>
             )}
@@ -2108,7 +2186,7 @@ const TabLocalizacoes = () => {
               <h4>Confirmar movimentação</h4>
               <div className="almox-wizard-confirm-box">
                 <p><span className="almox-wizard-confirm-label">Código atual</span> <s>{moverLoc.codigo}</s></p>
-                <p><span className="almox-wizard-confirm-label">Novo código</span> <strong style={{ fontFamily: 'monospace', color: '#4facfe' }}>{moverPreview.codigo}</strong></p>
+                <p><span className="almox-wizard-confirm-label">Novo código</span> <strong style={{ fontFamily: 'monospace', color: '#4facfe' }}>{moverCodigoLoading ? 'Gerando código...' : moverPreview.codigo}</strong></p>
                 <p><span className="almox-wizard-confirm-label">Novo caminho</span>{' '}
                   <strong>{formatLocalizacaoPath({
                     setor: moverData.setor,
@@ -2147,7 +2225,7 @@ const TabLocalizacoes = () => {
                 Próximo <FiArrowRight size={14} />
               </button>
             ) : (
-              <button type="button" className="btn-almox-primary" onClick={handleMoverConfirm} disabled={saving}>
+              <button type="button" className="btn-almox-primary" onClick={handleMoverConfirm} disabled={saving || moverCodigoLoading || !moverCodigo}>
                 <FiCheck size={14} /> {saving ? 'Movendo...' : 'Confirmar movimentação'}
               </button>
             )}

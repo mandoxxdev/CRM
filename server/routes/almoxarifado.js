@@ -14,6 +14,7 @@ const notificationQueueService = require('../services/almoxarifado/notificationQ
 const alertRegistry = require('../services/almoxarifado/alertRegistry');
 const requisitionReminderService = require('../services/almoxarifado/requisitionReminderService');
 const requisitionService = require('../services/almoxarifado/requisitionService');
+const { proximoCodigoLocalizacao } = require('../services/almoxarifado/localizacaoCodigo');
 const deliverySignatureService = require('../services/almoxarifado/deliverySignatureService');
 const { disponivelSql } = require('../services/almoxarifado/availabilitySql');
 const { valorEstoqueSql, custoUnitarioSql } = require('../services/almoxarifado/custoSql');
@@ -1918,6 +1919,19 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     return JSON.stringify(value);
   }
 
+  // Etapa 55 (RN-01): o próximo código vem do servidor, contando as INATIVAS e a tabela inteira —
+  // ver services/almoxarifado/localizacaoCodigo.js. A tela cai no gerador local se isto falhar.
+  app.get('/api/almoxarifado/localizacoes/proximo-codigo', async (req, res) => {
+    try {
+      const codigo = await proximoCodigoLocalizacao(db, {
+        setor: req.query.setor, parent_id: req.query.parent_id, excluir_id: req.query.excluir_id,
+      });
+      res.json({ codigo });
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
+
   app.post('/api/almoxarifado/localizacoes',(req, res) => {
     if (denyUnlessAlmoxAdmin(req, res)) return;
     const { codigo, descricao, setor, subgrupo, tipo, parent_id, pos_x, pos_y, largura, altura, almoxarifado_id, bloqueada, tipos_material_permitidos } = req.body;
@@ -1946,6 +1960,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
           // Existe uma localização EXCLUÍDA com este código → reativa e atualiza os dados.
           if (existente) {
+            // Etapa 55 (RN-05): o assistente manda `somente_novo` — ele PROPÔS um código novo, e reativar
+            // em silêncio uma localização desativada (com histórico e saldo) não é o que o usuário pediu.
+            // Sem o campo, a reativação da Etapa 19 continua (código digitado à mão).
+            if (req.body.somente_novo === true) {
+              return res.status(409).json({ error: `O código ${codigo} pertence a uma localização desativada — gere outro código` });
+            }
             db.run(`UPDATE localizacoes_almoxarifado
                     SET descricao=?, setor=?, subgrupo=?, tipo=?, parent_id=?, pos_x=?, pos_y=?, largura=?, altura=?, almoxarifado_id=?, bloqueada=?, tipos_material_permitidos=?, ativo=1
                     WHERE id=?`,
@@ -2003,6 +2023,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   app.put('/api/almoxarifado/localizacoes/:id',(req, res) => {
     if (denyUnlessAlmoxAdmin(req, res)) return;
     const { codigo, descricao, setor, subgrupo, tipo, parent_id, pos_x, pos_y, largura, altura, ativo, almoxarifado_id, bloqueada, tipos_material_permitidos } = req.body;
+    // Etapa 55 (Fase 2): sem código o UPDATE estourava o NOT NULL com 500.
+    if (!codigo) return res.status(400).json({ error: 'Código obrigatório' });
     const subgrupoVal = subgrupo ? String(subgrupo).trim() || null : null;
     const parentVal = parent_id ? parseInt(parent_id, 10) : null;
     if (parentVal && parseInt(req.params.id, 10) === parentVal) {
@@ -2054,6 +2076,13 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         }
         continuarPut();
         function continuarPut() {
+        // Etapa 55 (RN-02): código de OUTRA localização — o Mover propunha o de uma inativa e o UPDATE
+        // estourava o UNIQUE com 500 cru. A mensagem diz quando a dona é desativada (a tela não a lista).
+        db.get('SELECT id, ativo FROM localizacoes_almoxarifado WHERE codigo = ? AND id <> ?', [codigo, req.params.id], (cErr, dona) => {
+        if (cErr) return res.status(500).json({ error: cErr.message });
+        if (dona) {
+          return res.status(400).json({ error: Number(dona.ativo) === 1 ? 'Código já existe' : 'Código já existe (localização desativada)' });
+        }
         const bloqueadaFinal = bloqueada === undefined ? (current.bloqueada ? 1 : 0) : (bloqueada ? 1 : 0);
         const tiposFinal = tipos_material_permitidos === undefined
           ? current.tipos_material_permitidos
@@ -2066,9 +2095,13 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
             [codigo, descricao || null, setor || null, subgrupoVal, tipo || 'Almoxarifado', parentVal,
              pos_x ?? null, pos_y ?? null, largura ?? 120, altura ?? 80, almoxarifadoIdParam,
              bloqueadaFinal, tiposFinal,
-             ativo !== undefined ? (Number(ativo) === 1 ? 1 : 0) : 1, req.params.id],
+             // Etapa 55 (RN-03, C74 (3)): sem `ativo` PRESERVA — gravava 1 e reativava pela API.
+             ativo !== undefined ? (Number(ativo) === 1 ? 1 : 0) : current.ativo, req.params.id],
             function (err) {
-              if (err) return res.status(500).json({ error: err.message });
+              if (err) {
+                if (err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Código já existe' });
+                return res.status(500).json({ error: err.message });
+              }
               db.get(`SELECT * FROM localizacoes_almoxarifado WHERE id = ?`, [req.params.id], (e, r) => {
                 auditarCadastro({
                   req, entidade: 'localizacao', entidade_id: Number(req.params.id), acao: 'EDICAO',
@@ -2076,6 +2109,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
                 }).finally(() => res.json(r));
               });
             });
+        });
         });
         }
       });
