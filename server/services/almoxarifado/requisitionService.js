@@ -446,6 +446,7 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
   // separação é tudo ou nada: ou todas as entradas cabem, ou nenhuma é gravada.
   const validados = []; // [{ item, qty, novaSeparada }] — só item existente com qty > 0
   const pedidoSeparacao = new Map();
+  const reguaDivergencia = new Map(); // Etapa 60: item.id -> { maxInicial, origens, saldoOrigem, total, motivo }
   // Etapa 59 (Fase 5): o separado ainda nao entregue de TODOS os itens com origem planejada continua
   // fisicamente la — entra no acumulado desde o inicio. Antes so o do proprio item contava (mesmoPar):
   // dois itens do mesmo material no mesmo par passavam a separacao e a entrega de um clique recusava
@@ -470,6 +471,11 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
     // eslint-disable-next-line no-await-in-loop
     const { disponivel: estoque } = await saldoDisponivelParaItem(db, item);
     const max = maxSeparar(item, estoque);
+    // Etapa 60 (RN-01): a regua da divergencia e o maximo separavel NA HORA, do item AGREGADO (o mesmo
+    // item duas vezes no payload nao vira duas reguas) — guardado no 1o encontro, antes da mutacao.
+    if (!reguaDivergencia.has(item.id)) {
+      reguaDivergencia.set(item.id, { maxInicial: max, origens: new Set(), saldoOrigem: null, total: 0, motivo: null });
+    }
 
     if (qty > max) {
       const err = new Error(
@@ -488,6 +494,21 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
     const pendenteAntes = Math.max(0, getSeparado(item) - getEntregue(item));
     const mesmoPar = Number(item.origem_separacao_id || 0) === Number(origemId || 0)
       && Number(item.lote_separacao_id || 0) === Number(loteId || 0);
+    // Etapa 60 (RN-01/02): acumula a rodada do item para a regua. Com UMA origem na rodada, o separavel
+    // e tambem limitado ao saldo nela menos o ja comprometido (Fase 2: "Sai de" e uma origem por
+    // rodada — 4 em A e 6 em B nao e divergencia na rodada de A).
+    const regua = reguaDivergencia.get(item.id);
+    regua.origens.add(`${origemId}|${loteId}`);
+    regua.total += qty;
+    if (!regua.motivo && typeof entrada.motivo_divergencia === 'string' && entrada.motivo_divergencia.trim()) {
+      regua.motivo = entrada.motivo_divergencia.trim().slice(0, 500);
+    }
+    if (origemId && regua.saldoOrigem === null) {
+      // eslint-disable-next-line no-await-in-loop
+      const so = await dbGet(db, `SELECT COALESCE(SUM(quantidade), 0) as q FROM estoque_saldo_almoxarifado
+        WHERE material_id = ? AND localizacao_id = ? AND lote_id IS ?`, [item.material_id, origemId, loteId]);
+      regua.saldoOrigem = (Number(so.q) || 0) - (pedidoSeparacao.get(`${item.material_id}|${origemId}|${loteId}`) || 0);
+    }
     if (origemId || loteId) {
       try {
         // eslint-disable-next-line no-await-in-loop
@@ -510,6 +531,18 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
   }
 
   // PASSADA 2 — gravar. Daqui em diante nenhuma entrada pode falhar por regra de negócio.
+  // Etapa 60 (RN-01/02): so REGISTRO — a divergencia nao recusa (Fase 2: o parcial legitimo, em varias
+  // viagens ou por origem, e da spec 05). O motivo e opcional; a tela pede quando fica abaixo.
+  const divergenciaPorItem = new Map();
+  for (const [itemId, r] of reguaDivergencia) {
+    const umaOrigem = r.origens.size === 1 && ![...r.origens][0].startsWith('null|');
+    const maximo = umaOrigem && r.saldoOrigem !== null ? Math.min(r.maxInicial, Math.max(0, r.saldoOrigem)) : r.maxInicial;
+    const divergente = r.total < maximo - 1e-9;
+    divergenciaPorItem.set(itemId, {
+      maximo: Math.round(maximo * 1e6) / 1e6, divergente, motivo_divergencia: divergente ? r.motivo : null,
+    });
+  }
+
   const tocados = []; // [{ item_id, material_id, quantidade }]
   for (const { item, qty, novaSeparada, origemId, loteId, planejada } of validados) {
     await dbRun(db, `UPDATE itens_requisicao_almoxarifado SET quantidade_separada = ?,
@@ -518,6 +551,7 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
     tocados.push({
       item_id: item.id, material_id: item.material_id, quantidade: qty,
       ...(origemId ? { localizacao_origem_id: origemId } : {}), ...(loteId ? { lote_id: loteId } : {}),
+      ...divergenciaPorItem.get(item.id),
     });
   }
 
@@ -586,7 +620,10 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
         dados_novos: {
           rodada_id: rodadaId,
           itens_tocados: tocados.length,
-          itens: tocados.map((t) => ({ item_id: t.item_id, quantidade: t.quantidade })),
+          itens: tocados.map((t) => ({
+            item_id: t.item_id, quantidade: t.quantidade,
+            maximo: t.maximo, divergente: t.divergente, motivo_divergencia: t.motivo_divergencia,
+          })),
         },
       });
     } catch (e) {
