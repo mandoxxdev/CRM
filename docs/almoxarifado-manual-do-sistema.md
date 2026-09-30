@@ -442,6 +442,15 @@ Duas consultas de apoio para quem está organizando o galpão, as duas em **Rela
 - uma posição **"pai"** (rua, setor) sem saldo próprio aparece mesmo com as filhas ocupadas — a coluna **Filhas ocupadas** diz quantas filhas ativas estão ocupadas; o Mapa e a lista são planos;
 - em material **com lote**, uma posição pode continuar aparecendo **ocupada** depois de a entrega de requisição retirar o material, porque a entrega não escolhe lote (ver 3.6).
 
+**Aberto pela etiqueta da posição.** A etiqueta de uma posição (seção 4.8) abre o Mapa **já com aquela posição
+selecionada**. Dois avisos podem aparecer no topo:
+
+- *"Etiqueta desatualizada: ⟨código impresso⟩ → ⟨código atual⟩. Reimprima."* — a posição foi **movida** depois da
+  impressão (mover uma posição troca o código dela; seção 3.2). A etiqueta continua abrindo a posição certa, mas o
+  código impresso não é mais o dela. O aviso é daquela posição: fechar a seleção o tira da tela.
+- *"Localização não encontrada ou inativa"* — a posição da etiqueta foi removida ou desativada (o Mapa só mostra
+  posições ativas).
+
 ### 3.8 A sugestão de posição na entrada
 
 Em **Movimentações → Nova Movimentação**, com o tipo **Entrada** e um material escolhido, aparecem abaixo do campo **Localização de destino** a palavra **"Sugestões:"** e até **três** botões. Cada botão traz o código da posição e o motivo da sugestão; passar o mouse mostra o endereço completo (almoxarifado / setor / posição pai / código). Clicar num botão preenche o destino. **Nada é preenchido sozinho**: enquanto ninguém clica, o destino continua vazio, e uma entrada salva sem destino segue a regra de 3.6 (vai para a posição padrão).
@@ -655,9 +664,11 @@ O formato escolhido fica **lembrado** para a próxima vez (por navegador). O arq
   - etiqueta de **lote**: `Lote L-001 · Val 31/01/2026` — a parte da validade só aparece se o lote tiver validade;
   - etiqueta de **série**: `SN: GMP-042`;
   - etiqueta de **retalho**: as dimensões restantes com a espessura e o peso aproximado, no formato `1200x800x3mm · ~18kg` — cada parte é omitida quando o retalho não a tem registrada;
+  - etiqueta de **posição (localização)**: o tipo e o setor da posição (`Prateleira · Corredor A`); no lugar do nome vai o
+    caminho completo da posição;
 - **QR Code**, à direita.
 
-**Não** vão para o papel: fornecedor, corrida, número da nota fiscal, projeto, localização, saldo e situação de inspeção. Isso é escolha de projeto, não omissão — etiqueta cheia de letra miúda é ilegível numa prateleira de galpão, e o QR existe justamente para carregar o resto.
+Na etiqueta de material, lote, série ou retalho **não** vão para o papel: fornecedor, corrida, número da nota fiscal, projeto, localização, saldo e situação de inspeção. Isso é escolha de projeto, não omissão — etiqueta cheia de letra miúda é ilegível numa prateleira de galpão, e o QR existe justamente para carregar o resto.
 
 **O que o QR abre.** Ele contém um endereço do próprio sistema, que leva à tela certa **já filtrada**:
 
@@ -667,6 +678,7 @@ O formato escolhido fica **lembrado** para a próxima vez (por navegador). O arq
 | Lote | a tela **Lotes e Séries**, no material certo, na aba **Lotes**, com a linha daquele lote **destacada** |
 | Série | a tela **Lotes e Séries**, no material certo, na aba **Séries**, com a linha daquela série **destacada** |
 | Retalho | a tela **Sobras e Retalhos**, com a linha daquele retalho **destacada** |
+| Posição (localização) | o **Mapa de Áreas**, com aquela posição selecionada — e o aviso de etiqueta desatualizada quando o código impresso não é mais o da posição (seção 3.7) |
 
 Há dois jeitos de ler o QR. Pelo aplicativo de câmera do celular, ele abre o navegador nesse endereço — como dado de estoque exige sessão, quem não estiver logado cai na tela de login; faça o login e escaneie de novo. Ou, já dentro do sistema, pela tela **Scanner** (seção 4.9), que lê a etiqueta e abre o item sem sair do módulo. Não é preciso aplicativo nem coletor: o leitor é a câmera do próprio celular.
 
@@ -679,6 +691,7 @@ Há dois jeitos de ler o QR. Pelo aplicativo de câmera do celular, ele abre o n
 | **Lotes e Séries → aba Séries** | botão no topo, **"Etiquetas das séries em estoque"**, que gera uma etiqueta para cada série em estoque daquele material de uma vez |
 | **Recebimentos** | botão **"Imprimir etiquetas dos itens"**, na nota já processada — gera uma etiqueta por série (material serializado), ou uma por lote (material com controle de lote), ou uma do material |
 | **Sobras e Retalhos** | botão **Etiqueta** em cada linha de retalho; além disso, ao **gerar um retalho** o modal de impressão abre sozinho com a etiqueta daquele retalho — imprimir é opcional |
+| **Configurações → Localizações** | botão **Etiqueta** em cada linha (a etiqueta daquela posição) e **Etiquetas (N)** no topo, que gera uma etiqueta para cada posição listada |
 
 O modal de impressão se chama **Imprimir etiquetas** e mostra, antes de gerar, quantas etiquetas e quantas páginas o PDF terá. O campo **Cópias** só aparece quando há uma única etiqueta selecionada. Quando não há nada a etiquetar, o botão fica desabilitado com a explicação na tela.
 
@@ -995,11 +1008,11 @@ O formulário de **Nova Movimentação** oferece cinco tipos:
 
 | Tipo na tela | O que faz com o saldo | Campos que aparecem |
 |---|---|---|
-| **Entrada** | Soma ao físico | Localização de destino, Lote, Custo unitário, Séries |
-| **Saída** | Subtrai do físico | Localização de origem, Lote (seletor), Séries, Saída emergencial |
-| **Transferência** | **Não altera o físico** — move de uma localização para outra | Origem **e** destino, Lote (seletor) |
+| **Entrada** | Soma ao físico | Localização de destino, Confirmar endereço lido, Lote, Custo unitário, Séries |
+| **Saída** | Subtrai do físico | Localização de origem, Confirmar endereço lido, Lote (seletor), Séries, Saída emergencial |
+| **Transferência** | **Não altera o físico** — move de uma localização para outra | Origem **e** destino (cada um com seu Confirmar endereço lido), Lote (seletor) |
 | **Ajuste** | Define o físico por um **valor absoluto** (o campo passa a se chamar "Novo Saldo") | Localização de destino (opcional) |
-| **Perda** | Subtrai do físico | Localização de origem, Lote (seletor) |
+| **Perda** | Subtrai do físico | Localização de origem, Confirmar endereço lido, Lote (seletor) |
 
 **Sucata não está na lista, e não é falta.** Baixar material como sucata exige **duas aprovações
 de pessoas diferentes**, e por isso tem processo próprio, na tela **Sobras e Retalhos** — a
@@ -1017,6 +1030,50 @@ Pontos técnicos importantes:
 - **Ajuste é absoluto, não incremental.** Digitar 40 num material que tem 100 leva o saldo a 40. Por isso o rótulo do campo muda para "Novo Saldo" quando o tipo é Ajuste.
 - **Ajuste com localização escolhida** zera/redefine **aquela** localização e recalcula o total do material pela soma das prateleiras. É o único tipo que aceita quantidade **zero** — justamente para permitir "esta prateleira está vazia". Em qualquer outro caso, quantidade 0 é recusada com *"quantidade deve ser maior que zero"*.
 - **Perda é saída de verdade** para o motor: baixa o físico, respeita controle de lote e a situação do lote. O que a diferencia da Saída comum é que ela **é isenta da trava de vencimento** — assim como a sucata, que passa pela mesma isenção quando a baixa dela sai pelo processo de sucateamento: é assim que um lote vencido consegue sair do sistema (4.3).
+
+### 6.2b Conferir o endereço lendo a etiqueta da posição
+
+Quem está na frente da prateleira pode **ler a etiqueta da posição** (seção 4.8) no campo **Confirmar endereço lido**,
+para o sistema conferir que o endereço escolhido no formulário é mesmo aquele. O campo é **opcional**: em branco, a
+movimentação segue como sempre. Ele aceita o que o leitor de código "digitar" — o conteúdo do QR da etiqueta ou o
+código da posição digitado à mão —, sem diferenciar maiúsculas e ignorando espaços nas pontas. O Enter que o leitor
+manda no fim da leitura **não** envia o formulário.
+
+**Contra o que o sistema confere** (a posição onde o material de fato entra ou de onde sai):
+
+| Tipo | Destino conferido | Origem conferida |
+|---|---|---|
+| Entrada | a localização de destino escolhida; sem ela, a **posição padrão** do material (é para lá que a entrada vai) | — |
+| Saída, Perda | — | a localização de origem escolhida — **obrigatória** para conferir a origem |
+| Transferência | a localização de destino escolhida | a localização de origem escolhida |
+
+**Quando a conferência recusa** — nada é gravado, nenhum saldo muda:
+
+- endereço lido diferente: *"Endereço lido (⟨lido⟩) não confere com a localização de ⟨destino ou origem⟩ (⟨código⟩) —
+  se a etiqueta é antiga, reimprima"*;
+- endereço lido num papel que o movimento não tem (ex.: origem numa entrada; entrada sem destino e sem posição
+  padrão): *"Endereço lido (⟨lido⟩), mas o movimento não tem localização de ⟨destino ou origem⟩"*;
+- origem conferida sem a localização de origem escolhida: *"Para confirmar a origem pela leitura, informe a
+  localização de origem"*;
+- **saída** conferida em que o saldo **daquela posição** (do lote escolhido, quando houver) não cobre a quantidade:
+  *"O saldo em ⟨código⟩ (⟨saldo⟩) não cobre a quantidade (⟨quantidade⟩) — a saída tiraria de outros endereços"*. A
+  regra existe porque, sem conferência, a saída completa o que falta tirando de outras posições; conferida, ela só
+  pode sair da posição lida;
+- duas saídas conferidas na mesma posição ao mesmo tempo, quando a posição só cobre uma: a segunda recebe *"O saldo
+  em ⟨código⟩ mudou durante a saída e não cobre mais a quantidade — confira e tente de novo"*;
+- texto lido com mais de 100 caracteres: *"Endereço lido inválido"*.
+
+Na **transferência**, saldo insuficiente na origem continua com a mensagem da própria transferência (*"Saldo
+insuficiente na localização de origem"*) — ela nunca tira de outras posições.
+
+**O que fica registrado.** O extrato guarda, em cada lançamento conferido, o **código da posição conferida** — na
+origem, no destino ou nos dois. O estorno de um lançamento conferido não herda a conferência (ninguém leu etiqueta ao
+estornar).
+
+**Limites.** O **Ajuste** não tem o campo na tela. A conferência olha o **código**: depois de mover uma posição (o
+código muda), reimprima a etiqueta dela. Em material com **número de série**, a conferência vale para o saldo, mas a
+escolha das séries não olha a posição.
+
 
 ### 6.3 Outros movimentos que o sistema gera sozinho
 

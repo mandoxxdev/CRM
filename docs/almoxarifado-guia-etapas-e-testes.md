@@ -1,19 +1,23 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-09-30 (Etapa 55) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-09-30 (Etapa 56) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 55) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 56) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-09-30 (Etapa 55 ENTREGUE · Etapa 56 começando)
+> ## Onde o desenvolvimento está — 2026-09-30 (Etapa 56 ENTREGUE · Etapa 57 começando)
 >
-> **O desenvolvimento parou aqui: Etapa 55 fechada, Etapa 56 começando — 2026-09-30.** A **Etapa 55 (o código
-> proposto para um endereço novo para de ressuscitar endereço removido)**: o próximo código de endereço é calculado
-> pelo servidor, conta os endereços removidos e nunca repete um código existente; o assistente de **Nova localização**
-> avisa em vez de trazer de volta um endereço removido; o **Mover** deixou de mostrar erro técnico. **Próxima etapa,
-> já começando: 56 — a confirmação de endereço por leitura** (feature 02; ver *"Próxima tarefa detalhada"* no plano
-> da Etapa 55).
+> **O desenvolvimento parou aqui: Etapa 56 fechada, Etapa 57 começando — 2026-09-30.** A **Etapa 56 (o endereço ganha
+> etiqueta, e a movimentação pode conferir a etiqueta lida)**: etiqueta com QR para endereço, que o Scanner abre no
+> Mapa (com aviso de etiqueta desatualizada depois de um **Mover**); na movimentação, o campo opcional **Confirmar
+> endereço lido** recusa o endereço errado antes de mexer no saldo. **Próxima etapa, já começando: 57 — o destino do
+> material no processamento do recebimento** (feature 08; ver *"Próxima tarefa detalhada"* no plano da Etapa 56).
 >
-> **Etapas 1 a 20 e 22 a 55 completas.**
+> **Etapas 1 a 20 e 22 a 56 completas.**
+>
+> **Etapa 55, 2026-09-30.** A **Etapa 55 (o código proposto para um endereço novo para de ressuscitar endereço
+> removido)**: o próximo código de endereço é calculado pelo servidor, conta os endereços removidos e nunca repete um
+> código existente; o assistente de **Nova localização** avisa em vez de trazer de volta um endereço removido; o
+> **Mover** deixou de mostrar erro técnico.
 >
 > **Etapa 54, 2026-09-30.** A **Etapa 54 (o sistema para de gravar material em endereço desativado ou que não
 > existe)**: destino desativado ou inexistente é recusado, não se remove endereço que é padrão de material ativo, o
@@ -4956,6 +4960,53 @@ que ele não tinha como repetir com sucesso garantido.
 - **Número de série de material** — continua sendo **digitado pelo operador** e de propósito não
   passa por este gerador. Retentar com outro número gravaria algo que ninguém digitou.
 - **Números de outros módulos do CRM** — a varredura foi do almoxarifado.
+
+---
+
+## Etapa 56 — O endereço ganha etiqueta, e a movimentação pode conferir a etiqueta lida (ENTREGUE — 2026-09-30)
+
+**O que mudou, em uma frase:** cada endereço passa a ter **etiqueta com QR** impressa pelo sistema, e na movimentação
+quem está na prateleira pode **ler a etiqueta** para o sistema conferir o endereço antes de gravar.
+
+**O problema que ela resolve.** Havia etiqueta para material, lote, série e sobra, mas **não para o endereço** — a
+pessoa escolhia a prateleira numa lista e o sistema acreditava. Agora dá para provar, no momento do movimento, que o
+material foi posto ou tirado do endereço certo; e o histórico guarda qual endereço foi conferido.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Endereço sem etiqueta | **Etiqueta** (por linha) e **Etiquetas (N)** em Configurações → Localizações |
+| Ler QR de endereço: não existia | O **Scanner** abre o endereço no **Mapa**, selecionado |
+| Etiqueta velha depois de um **Mover**: ninguém sabia | Mapa: *"Etiqueta desatualizada: ⟨impresso⟩ → ⟨atual⟩. Reimprima."* |
+| Movimentação sem conferência do endereço | Campo opcional **Confirmar endereço lido** — endereço errado é recusado sem mexer no saldo |
+
+### Roteiro de teste manual (≈6 min)
+
+**Preparação.** Dois endereços ativos, **A** e **B** (Configurações → Localizações), e um material qualquer.
+
+1. **Imprimir.** Em **Configurações → Localizações**, clique no ícone **Etiqueta** da linha de **A**: abre o PDF com o
+   código, o caminho do endereço e um QR. (**Etiquetas (N)** imprime todas as listadas.)
+2. **Ler com o Scanner.** Abra **Scanner** no celular e leia o QR: o **Mapa** abre com **A** selecionado.
+3. **Entrada conferida (certa).** **Movimentações → Nova movimentação → Entrada**, material, quantidade 10, destino
+   **A**; no campo **Confirmar endereço lido**, leia a etiqueta de **A** (ou digite o código de A). Salvar: gravado.
+4. **Entrada conferida (errada).** Repita com destino **A** e leia (ou digite) o código de **B**: a tela mostra
+   *"Endereço lido (⟨B⟩) não confere com a localização de destino (⟨A⟩) — se a etiqueta é antiga, reimprima"*, e o
+   saldo não muda.
+5. **Saída conferida.** Faça uma entrada de 50 em **B**. Agora **Saída** de 40 com origem **A** e leia a etiqueta de
+   **A**: recusada com *"O saldo em ⟨A⟩ (10) não cobre a quantidade (40) — a saída tiraria de outros endereços"*. Com
+   quantidade 10: gravada. Sem escolher a origem: *"Para confirmar a origem pela leitura, informe a localização de
+   origem"*.
+6. **Etiqueta velha.** Use **Mover** em **A** (o código dele muda) e leia com o Scanner a etiqueta impressa no passo 1:
+   o Mapa abre o endereço e avisa *"Etiqueta desatualizada: ⟨código antigo⟩ → ⟨código novo⟩. Reimprima."* Clique em
+   **Fechar**: o aviso some.
+
+### O que esta etapa NÃO cobre
+
+- **A conferência é opcional** (**B223**) — o campo pode ficar em branco.
+- **Ajuste** não tem o campo na tela (**D (56)**).
+- A saída com **série** não confere de qual endereço cada série sai (**C76**).
+- A etiqueta confere pelo **código**: depois de um **Mover**, reimprima (**C77**).
 
 ---
 

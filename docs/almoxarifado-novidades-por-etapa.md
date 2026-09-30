@@ -931,9 +931,9 @@ SELECT s.material_id, s.localizacao_id, s.quantidade, l.ativo
   (`ativo` vazio na consulta): só por contagem/ajuste pela integração — o endereço não aparece na lista da tela.
   **Não apague linha por SQL** — a soma das linhas é o físico do material.
 
-### B. Decisões de negócio — B1 a B222; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B225; as em aberto esperam você, as tomadas estão escritas com o descartado
 
-*(**Atualizado em 2026-09-30 de B219 para B222**, com as três da Etapa 55.)*
+*(**Atualizado em 2026-09-30 de B222 para B225**, com as três da Etapa 56; antes, de B219 para B222, com as da Etapa 55.)*
 
 *(**Atualizado em 2026-09-30 de B205 para B219**, com as quatro da Etapa 51, as três da Etapa 52, as quatro da Etapa 53 e as três da Etapa 54.)*
 
@@ -3835,6 +3835,20 @@ enxerga endereços desativados, então pode propor o código de um deles — o s
 tela passa a propor o seguinte (ela lembra os códigos recusados na sessão). **Descartado:** travar o cadastro enquanto
 o servidor não responde.
 
+**B223 (NOVA, da Etapa 56) — conferir o endereço pela leitura da etiqueta é OPCIONAL.** **Escolhido:** o campo
+**Confirmar endereço lido** pode ficar em branco, e a movimentação segue como sempre; lido, é conferido e recusado se
+não bater. **Descartado:** tornar obrigatório — é decisão de processo de vocês (exigiria leitor em todo posto e
+etiqueta em todo endereço antes do deploy). Reversível: vira obrigatório por tipo de movimento, se vocês quiserem.
+
+**B224 (NOVA, da Etapa 56) — conferir a ORIGEM exige a origem escolhida e saldo nela que cubra a quantidade.**
+**Escolhido:** recusar a saída conferida quando o endereço lido não cobre a quantidade (*"O saldo em ⟨código⟩ (⟨saldo⟩)
+não cobre a quantidade (⟨q⟩) — a saída tiraria de outros endereços"*). **Descartado:** aceitar e deixar o sistema
+completar de outros endereços — o histórico diria que tudo saiu do endereço conferido, e não saiu.
+
+**B225 (NOVA, da Etapa 56) — o estorno não copia o endereço conferido.** O estorno reverte o movimento, mas ninguém lê
+etiqueta ao estornar; o histórico do estorno fica sem o código conferido. **Descartado:** copiar o do movimento
+original — afirmaria uma conferência que não aconteceu.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -4881,6 +4895,16 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
     Etapa 55 só mudou **qual** código é proposto (nunca mais o de um endereço desativado — o que antes dava o erro cru
     *"SQLITE_CONSTRAINT: UNIQUE constraint failed: localizacoes_almoxarifado.codigo"*); o fato de renumerar é anterior.
 
+76. **NOVO, da Etapa 56 — a saída de material com SÉRIE não confere de qual endereço cada série sai.** Com a origem
+    conferida pela etiqueta, o saldo sai do endereço conferido, mas a escolha das séries não olha o endereço: uma série
+    registrada em B pode sair numa saída "conferida em A". É anterior a esta etapa (a série nunca foi presa ao
+    endereço); a conferência só tornou isso visível.
+
+77. **NOVO, da Etapa 56 — a etiqueta confere pelo CÓDIGO, não pela identidade do endereço.** Se o **Mover** trocar o
+    código de um endereço (**C75**) e depois **outro** endereço receber o código antigo, a etiqueta velha do primeiro
+    passa a "conferir" o segundo na movimentação. O Mapa pega esse caso (ele abre pela identidade e avisa que a etiqueta
+    está desatualizada); a movimentação não. Saída: reimprimir a etiqueta depois de todo **Mover**.
+
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -5472,6 +5496,14 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   *"Localização não encontrada"*.
 - **(55) Um "pai" que não é número** na consulta do próximo código é ignorado — o cálculo vira o de endereço raiz.
 - **(55) Digitar à mão o código de um endereço desativado continua reativando** (**B221**).
+- **(56) Ajuste não tem o campo "Confirmar endereço lido" na tela** — o formulário não mostra endereço no ajuste; pela
+  integração o ajuste com endereço aceita a conferência.
+- **(56) "Etiquetas (N)" imprime todas as localizações listadas** — a aba não tem filtro, então "as filtradas" é a
+  lista inteira.
+- **(56) Ler no campo de endereço a etiqueta de OUTRA coisa** (ex.: a de um material, cuja URL é longa e não traz
+  código de endereço) dá *"Endereço lido inválido"* quando passa de 100 caracteres, em vez de *"não confere"*.
+- **(56) Leitor configurado com o teclado errado** estraga a URL do QR (`:` e `/` trocados); o campo manda o texto cru e
+  o servidor recusa com *"não confere"* — reconfigure o leitor.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -5874,6 +5906,15 @@ servidor simulado (8 cenários). O que **só o navegador** prova:
    fica desabilitado.
 2. **Mover não mostra mais erro técnico.** Mova um endereço para um setor cujo último código é de um endereço
    removido: a movimentação é aceita com o código seguinte, sem *"SQLITE_CONSTRAINT"* na tela.
+
+**(56) Nenhum clique foi dado nesta etapa.** Os testes provam as regras pelo servidor (11 cenários, inclusive duas
+saídas simultâneas) e as telas com o servidor simulado. O que **só o navegador e a impressora** provam:
+
+1. **A etiqueta imprime legível e o QR lê.** Imprima a etiqueta de um endereço e leia com o **Scanner** do celular: o
+   Mapa abre com o endereço selecionado.
+2. **O leitor de código "digita" no campo.** Com um leitor USB/Bluetooth configurado como teclado, leia a etiqueta no
+   campo **Confirmar endereço lido**: o campo recebe o conteúdo e o Enter do leitor **não** envia o formulário.
+3. **Etiqueta velha.** Depois de um **Mover**, leia a etiqueta antiga: aparece *"Etiqueta desatualizada: … Reimprima."*
 
 ### G. Fragilidades estruturais que continuam de pé
 
@@ -13851,16 +13892,99 @@ movido **dentro de uma estrutura** não tinha teste; e um parâmetro repetido na
 corrigido e com teste. Três testes do servidor passavam mesmo com a regra quebrada — o cálculo "pula o que já existe"
 escondia o erro —, e ganharam cenários com buraco na numeração.
 
+## Etapa 56 — O endereço ganha etiqueta, e a movimentação pode conferir a etiqueta lida (2026-09-30)
+
+Até aqui o galpão tinha etiqueta para material, lote, série e sobra — **mas não para o endereço**. Quem guardava ou
+tirava material de uma prateleira escolhia o endereço numa lista e o sistema acreditava. Agora cada endereço tem
+etiqueta com QR impressa pelo próprio sistema; ler essa etiqueta com o scanner abre o endereço no Mapa; e, na
+movimentação, quem está na frente da prateleira pode **ler a etiqueta** para o sistema conferir se o endereço escolhido
+é mesmo aquele. Se não for, o movimento é recusado antes de mexer em qualquer saldo — e fica registrado no histórico
+qual endereço foi conferido. A conferência é **opcional** (**B223**).
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Endereço não tinha etiqueta | **Configurações → Localizações**: botão **Etiqueta** em cada linha e **Etiquetas (N)** para todas as listadas — PDF com QR |
+| Ler um QR de endereço: não existia | O scanner abre o endereço no **Mapa**, já selecionado |
+| Etiqueta velha (o **Mover** trocou o código do endereço) passava despercebida | O Mapa avisa *"Etiqueta desatualizada: ⟨código impresso⟩ → ⟨código atual⟩. Reimprima."* |
+| QR de endereço desativado abria o Mapa sem seleção nenhuma | Aviso *"Localização não encontrada ou inativa"* |
+| A movimentação aceitava o endereço escolhido na lista, sem conferência | Campo opcional **Confirmar endereço lido**: lido errado → recusa, sem mexer no saldo |
+| Nada registrava que alguém conferiu o endereço na prateleira | O histórico guarda o código do endereço conferido, na origem e/ou no destino |
+
+### As regras, com o cenário exato
+
+**1. Imprimir a etiqueta.** Em **Configurações → Localizações**, clique no ícone **Etiqueta** de uma linha (ou em
+**Etiquetas (N)**, que imprime todas as listadas). A etiqueta traz o código, o caminho completo do endereço, o tipo e o
+setor, e um QR.
+
+**2. Ler a etiqueta com o scanner.** Abra **Scanner** e aponte para o QR: o Mapa abre com o endereço selecionado. Se o
+endereço foi removido (ou desativado), o Mapa mostra *"Localização não encontrada ou inativa"*.
+
+**3. Etiqueta velha depois do Mover.** Imprima a etiqueta de um endereço, use **Mover** para levá-lo a outro lugar (o
+código dele muda — **C75**) e leia a etiqueta antiga: o Mapa abre o endereço certo e avisa *"Etiqueta desatualizada:
+⟨código antigo⟩ → ⟨código novo⟩. Reimprima."* O aviso é daquele endereço: fechar a seleção o tira da tela.
+
+**4. Conferir o destino numa entrada.** Em **Movimentações → Nova movimentação → Entrada**, escolha o destino e, no
+campo **Confirmar endereço lido**, leia a etiqueta (o leitor de código "digita" o conteúdo; a URL do QR ou o código puro
+servem). Endereço certo: a entrada é gravada. Endereço de outra prateleira: *"Endereço lido (⟨lido⟩) não confere com a
+localização de destino (⟨código do destino⟩) — se a etiqueta é antiga, reimprima"*, e nada é gravado. Entrada sem
+destino confere contra o **endereço padrão** do material (é para lá que ela vai). Maiúsculas e espaços nas pontas não
+importam. O Enter que o leitor manda no fim da leitura **não** envia o formulário.
+
+**5. Conferir a origem numa saída.** Na saída, a conferência só vale se a **localização de origem estiver escolhida**
+(*"Para confirmar a origem pela leitura, informe a localização de origem"*) e se o saldo **naquele endereço** cobrir a
+quantidade: com 10 em A e 50 em B, uma saída de 40 conferida em A é recusada com *"O saldo em ⟨A⟩ (10) não cobre a
+quantidade (40) — a saída tiraria de outros endereços"* — sem isto, o sistema tiraria 30 de B e registraria que tudo
+saiu de A. Material com lote: conta só o saldo daquele lote no endereço.
+
+**6. Duas pessoas tirando do mesmo endereço ao mesmo tempo.** Se as duas saídas conferidas passarem juntas e o
+endereço só cobrir uma, a segunda é recusada com *"O saldo em ⟨código⟩ mudou durante a saída e não cobre mais a
+quantidade — confira e tente de novo"*, e nada dela fica gravado.
+
+**7. Transferência.** Confere origem e destino (os dois campos aparecem). Saldo curto na origem recebe a mensagem da
+própria transferência (*"Saldo insuficiente na localização de origem"*).
+
+**8. Leitura sem lugar para conferir.** Ler um endereço num papel que o movimento não tem (ex.: origem numa entrada) →
+*"Endereço lido (⟨lido⟩), mas o movimento não tem localização de origem"*. Texto lido com mais de 100 caracteres →
+*"Endereço lido inválido"*.
+
+### O que esta etapa NÃO cobre
+
+1. **A conferência não é obrigatória** — **B223**.
+2. **Ajuste** não tem o campo na tela (o formulário não mostra endereço nesse tipo); pela integração, aceita.
+3. **Série**: a saída de material com série não confere de qual endereço cada série sai — **C76**.
+4. A etiqueta confere pelo **código**, não pela identidade do endereço — **C77**.
+5. Os detalhes declarados em **D (56)**.
+
+### O que a revisão encontrou
+
+A revisão do **plano** achou dois problemas graves antes de qualquer código: (1) a saída **drena vários endereços**
+quando o da origem não basta — "conferir a origem A" certificaria um endereço de onde o material não saiu (daí a regra
+5); (2) o **Mover** troca o código do endereço e mantém a identidade — a etiqueta velha ficaria errada sem ninguém
+saber (daí o aviso do Mapa e o "reimprima" na recusa). A revisão do **código** achou, reproduzido com duas saídas
+simultâneas, que a checagem de saldo da regra 5 podia ser vencida por concorrência (daí a regra 6); a saída com lote
+não tinha teste; a transferência recebia a mensagem errada; e o aviso do Mapa ficava na tela depois de fechar a
+seleção. Tudo corrigido e com teste.
+
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 56 entregue (2026-09-30):** **o endereço ganha etiqueta, e a movimentação pode conferir a etiqueta lida.**
+  Etiqueta com QR para endereço (Configurações → Localizações); ler abre o endereço no Mapa, que avisa quando a etiqueta
+  está desatualizada; na movimentação, o campo opcional **Confirmar endereço lido** recusa o endereço errado antes de
+  mexer no saldo, e o histórico guarda o endereço conferido. **O que é seu:** as decisões **B223 a B225**; os furos
+  **C76** (série) e **C77** (etiqueta confere pelo código); as limitações **(56)** em D e as verificações **(56)** em F.
+  **Próxima: Etapa 57 — o destino do material no processamento do recebimento (feature 08; ver o plano da Etapa 56).**
 
 - **Etapa 55 entregue (2026-09-30):** **o código proposto para um endereço novo para de ressuscitar endereço
   removido.** O próximo código de endereço é calculado pelo servidor, conta os removidos e nunca repete um código
   existente; o assistente avisa em vez de reativar; o Mover deixou de dar erro técnico; editar pela integração sem
   "ativo" não reativa mais (**C74 (3)** resolvido). **O que é seu:** as decisões **B220 a B222**; o **C75** (Mover
   renumera); as limitações **(55)** em D e as verificações **(55)** em F. **Próxima: Etapa 56 — a confirmação de
-  endereço por leitura (feature 02; ver o plano da Etapa 55).**
+  endereço por leitura (feature 02; ver o plano da Etapa 55).** *(Feita — ver acima.)*
 
 - **Etapa 54 entregue (2026-09-30):** **o sistema para de gravar material em endereço desativado ou que não existe.**
   Destino desativado ou inexistente é recusado; não se remove endereço que é padrão de material ativo; o cadastro não

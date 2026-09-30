@@ -1,8 +1,8 @@
 # 02 — Localizações e Endereçamento
 
-> **Status:** 🟡 — Etapa 2 entregue (2026-08-04): multi-almoxarifado (entidade `almoxarifados` como raiz + migração ledger), restrições de endereço (bloqueio + tipos de material permitidos) aplicadas no motor, exclusão de localização com saldo bloqueada, `endereco_completo` + consultas de vazias/sem-endereço, gestão de almoxarifados e restrições no front. Falta: código de endereço padrão gerado, capacidade/peso/dimensões como enforcement, confirmação por leitura.  **Etapa 54 (2026-09-30): o motor recusa o endereço informado inativo ou inexistente** (`c757276` + fix-round) — ver a seção no fim. **Etapa 55 (2026-09-30): o próximo código de localização é calculado no servidor (`PREFIXO-NN`, contando as inativas e sem colidir com código nenhum)** (`77e51a5` + fix-round 3ac650e) — o código **hierárquico** da spec continua fora (**B220**).
+> **Status:** 🟡 — Etapa 2 entregue (2026-08-04): multi-almoxarifado (entidade `almoxarifados` como raiz + migração ledger), restrições de endereço (bloqueio + tipos de material permitidos) aplicadas no motor, exclusão de localização com saldo bloqueada, `endereco_completo` + consultas de vazias/sem-endereço, gestão de almoxarifados e restrições no front. Falta: código de endereço padrão gerado, capacidade/peso/dimensões como enforcement, confirmação por leitura.  **Etapa 54 (2026-09-30): o motor recusa o endereço informado inativo ou inexistente** (`c757276` + fix-round) — ver a seção no fim. **Etapa 55 (2026-09-30): o próximo código de localização é calculado no servidor (`PREFIXO-NN`, contando as inativas e sem colidir com código nenhum)** (`77e51a5` + fix-round 3ac650e) — o código **hierárquico** da spec continua fora (**B220**). **Etapa 56 (2026-09-30): etiqueta de localização e confirmação do endereço por leitura** (`75cbea1`, `298ffd9` + fix-round 22e00aa) — o item "confirmação por leitura" do checklist está entregue. **Continua 🟡**: falta **áreas especiais com semântica** (o único item aberto que não é corte por decisão; o formato hierárquico ficou fora pela B220 e capacidade/peso por decisão do design).
 > **Spec original:** seções 3, 11
-> **Última atualização:**  2026-09-30 (**Etapa 55** — o próximo código de localização vem do servidor, conta as inativas e não colide; o assistente não reativa localização desativada; o PUT sem `ativo` preserva; antes: **Etapa 54** — o motor recusa o endereço informado inativo ou inexistente, não se desativa endereço que é padrão de material ativo e o cadastro não aceita padrão inativa; antes: **Etapa 53** — a sugestão de localização na entrada, e o aviso de padrão que não recebe o material; antes: **Etapa 52** — a tela de localizações vazias pela regra do mapa, e a recusa de apagar/desativar endereço ocupado; antes: **Etapa 51** — a saída passa a baixar o endereço de onde o material sai; três afirmações desta spec corrigidas à vista em "O que já existe"). Anterior: 2026-08-11 (auditoria spec×código: corrigido o alcance real da validação de tipo permitido e da preservação de campos no PUT; áreas especiais reclassificadas como parcial)
+> **Última atualização:**  2026-09-30 (**Etapa 56** — etiqueta de localização (QR que abre o endereço no Mapa, com aviso de etiqueta desatualizada) e confirmação opcional do endereço lido na movimentação, com o código conferido gravado no livro; antes: **Etapa 55** — o próximo código de localização vem do servidor, conta as inativas e não colide; o assistente não reativa localização desativada; o PUT sem `ativo` preserva; antes: **Etapa 54** — o motor recusa o endereço informado inativo ou inexistente, não se desativa endereço que é padrão de material ativo e o cadastro não aceita padrão inativa; antes: **Etapa 53** — a sugestão de localização na entrada, e o aviso de padrão que não recebe o material; antes: **Etapa 52** — a tela de localizações vazias pela regra do mapa, e a recusa de apagar/desativar endereço ocupado; antes: **Etapa 51** — a saída passa a baixar o endereço de onde o material sai; três afirmações desta spec corrigidas à vista em "O que já existe"). Anterior: 2026-08-11 (auditoria spec×código: corrigido o alcance real da validação de tipo permitido e da preservação de campos no PUT; áreas especiais reclassificadas como parcial)
 > **📋 Plano de implementação:** [docs/superpowers/plans/2026-08-04-almoxarifado-etapa2-cadastros.md](../../../docs/superpowers/plans/2026-08-04-almoxarifado-etapa2-cadastros.md) — Tasks 1, 2, 5, 7 · Design: [docs/superpowers/specs/2026-08-04-almoxarifado-etapa2-cadastros-design.md](../../../docs/superpowers/specs/2026-08-04-almoxarifado-etapa2-cadastros-design.md)
 
 ## Objetivo
@@ -38,7 +38,7 @@ Múltiplos almoxarifados, endereçamento padrão (ALM-CORREDOR-ESTRUTURA-NÍVEL-
 - [x] Bloquear/liberar endereço (`bloqueada` + validação em movimentação — origem OU destino OU transferência OU ajuste de localização); estorno **não** valida restrições (decisão deliberada — reverte mesmo se a localização foi bloqueada depois do movimento original)
 - [x] Consultas: posições vazias (`GET /localizacoes/vazias`), materiais sem endereço (`GET /relatorios/materiais-sem-endereco`) — ocupação continua só parcial no mapa (pré-existente)
 - [x] Sugestão de localização na entrada (usa `localizacao_padrao_id` + restrições + espaço) — **Etapa 53** (`adce812` + fix-round): padrão, onde o material já está e vazias compatíveis, pela mesma regra do motor. **"Espaço" não entra** (capacidade é informativa por decisão do design). Esta linha dizia "hoje existe só o fallback `resolveLocalizacaoEntrada`" — era verdade até a 53; o fallback continua sendo o que a entrada SEM destino usa.
-- [ ] Confirmação de localização por leitura (depende de código de barras — Etapa 15; deixar API pronta para receber `codigo_lido`)
+- [x] Confirmação de localização por leitura — **Etapa 56** (`75cbea1` motor, `298ffd9` tela, fix-round 22e00aa): `codigo_lido_origem`/`codigo_lido_destino` na movimentação, conferidos contra a localização efetiva antes de qualquer efeito e gravados no livro; etiqueta de localização com QR (não existia — a etiqueta era pré-requisito). **Escopo: OPCIONAL** (**B223**) — tornar obrigatória é decisão do P.O. A API recebe o **código**; o `codigo_lido` que esta linha previa virou dois campos, um por papel.
 
 ### Frontend
 - [x] Cadastro/gestão de almoxarifados — aba "Setores e Áreas" em `ConfiguracoesAlmoxarifado.js` (`AlmoxarifadosSection`)
@@ -56,6 +56,7 @@ Múltiplos almoxarifados, endereçamento padrão (ALM-CORREDOR-ESTRUTURA-NÍVEL-
 | Migração vincula localizações existentes ao ALM-GERAL exatamente uma vez | `almoxarifados.api.test.js`: "migracao criou o Almoxarifado Geral e vinculou localizacoes existentes" |
 | Endereço **inativo** não recebe material informado como destino; endereço **inexistente** não é aceito em papel nenhum que o tipo use; origem inativa é aceita; ajuste em inativa só reduz ou zera; localização que é padrão de material ativo não é desativada; cadastro não aceita padrão inativa (**Etapa 54**) | `localizacaoInativaMotor.api.test.js` (15 cenários) |
 | Próximo código de localização: mesmo formato `PREFIXO-NN`, conta as inativas, nunca colide; o assistente não reativa inativa (409); PUT com código de outra → 400; PUT sem `ativo` preserva | `localizacaoProximoCodigo.api.test.js` (12 cenários) e `client/.../LocalizacaoProximoCodigo.test.js` (8) |
+| Endereço **lido** confere com a localização efetiva do papel (destino: informada ou padrão na entrada; transferência/ajuste: só a informada; origem: só a informada, com saldo nela que cubra — inclusive sob concorrência); recusa antes de qualquer efeito; o código conferido vai para o livro | `confirmacaoLeituraLocalizacao.api.test.js` (11 cenários) e, no cliente, `codigoLido.test.js`, `MovimentacoesConfirmacaoLeitura.test.js`, `MapaEtiquetaLocalizacao.test.js`, `LocalizacaoEtiqueta.test.js`, `etiquetasPdf.test.js` |
 
 ## Dependências
 
@@ -243,3 +244,45 @@ vermelhas — **3 ficaram verdes de início** (contar só ativas, filhas só ati
 global compensava a base errada quando o próximo número era exatamente o ocupado; os cenários ganharam **buraco na
 numeração** (inativa `SON-05` → `SON-06`; `FP-09` → `FP-10`; `LOC-07` com setor NULL → `LOC-08`).
 `LocalizacaoProximoCodigo.test.js` (cliente) **8/8**, 8 + 1 sabotagens vermelhas.
+
+## Entregue na Etapa 56 (2026-09-30) — etiqueta de localização e confirmação do endereço por leitura
+
+Plano: [docs/superpowers/plans/2026-09-30-almoxarifado-etapa56-confirmacao-leitura-localizacao.md](../../../docs/superpowers/plans/2026-09-30-almoxarifado-etapa56-confirmacao-leitura-localizacao.md).
+
+**Medido antes de desenhar:** não existia etiqueta de localização (só de material, lote, série, sobra e recebimento);
+o scanner da Etapa 15 é 100% cliente (ler = navegar, `parseQrDestino`); o Mapa já selecionava por `?loc=<id>`;
+`codigo_lido` não existia em lugar nenhum. **Esta linha do checklist dizia "depende de código de barras — Etapa 15";
+estava incompleta**: dependia também de uma etiqueta **de endereço**, que ninguém tinha feito.
+
+- [x] **RN-01 (etiqueta)** — `montarEtiquetaLocalizacao` (`client/src/utils/etiquetasPdf.js`): QR
+  `<origin>/almoxarifado/mapa?loc=<id>&codigo=<encodeURIComponent(codigo)>`; botões **Etiqueta** (por linha) e
+  **Etiquetas (N)** em Configurações → Localizações — `298ffd9`
+- [x] **Mapa** — *"Etiqueta desatualizada: ⟨impresso⟩ → ⟨atual⟩. Reimprima."* quando o código da etiqueta não é o
+  atual; *"Localização não encontrada ou inativa"* quando o `loc` não está no mapa (não afirma isso se a carga falhou)
+  — `298ffd9`; o aviso é da localização **da etiqueta** (fechar a seleção o tira) — 22e00aa
+- [x] **RN-02 (motor)** — `codigo_lido_origem`/`codigo_lido_destino`: texto até 100 caracteres (senão *"Endereço lido
+  inválido"*, validado no motor porque `/transferencias` passa o body cru); confere sem diferenciar maiúsculas contra
+  a localização efetiva; *"Endereço lido (⟨lido⟩) não confere com a localização de ⟨papel⟩ (⟨código⟩) — se a etiqueta é
+  antiga, reimprima"*; *"Endereço lido (⟨lido⟩), mas o movimento não tem localização de ⟨papel⟩"*; origem exige
+  `localizacao_origem_id` (*"Para confirmar a origem pela leitura, informe a localização de origem"*) e saldo nela
+  (do lote, quando houver) que cubra (*"O saldo em ⟨código⟩ (⟨saldo⟩) não cobre a quantidade (⟨q⟩) — a saída tiraria de
+  outros endereços"*); colunas `codigo_lido_origem`/`codigo_lido_destino` no livro — `75cbea1`
+- [x] **Concorrência** (Fase 5, reproduzida por sonda: duas saídas de 10 conferidas em A com A:10 e B:50 davam as duas
+  201 e a segunda drenava B gravando A) — confere **depois** do claim que todas as linhas debitadas são da origem;
+  senão *"O saldo em ⟨código⟩ mudou durante a saída e não cobre mais a quantidade — confira e tente de novo"* e o catch
+  amplo compensa — 22e00aa
+- [x] **Transferência** com origem lida e saldo curto fica com a mensagem dela (*"Saldo insuficiente na localização de
+  origem"*), não a de "outros endereços" — 22e00aa
+- [x] **RN-03/04 (tela)** — campo **Confirmar endereço lido** em Movimentações, na mesma regra dos selects (destino:
+  entradas e transferência; origem: saídas e transferência); `extrairCodigoLido` aceita o código puro ou a URL
+  http(s) da etiqueta (extrai `codigo`), e texto estragado vai cru; o Enter do leitor não envia o formulário — `298ffd9`
+- [ ] **Obrigatória** — não: **opcional por decisão** (**B223**).
+- [ ] **Ajuste na tela** — o modal não mostra localização no ajuste, então não ganhou o campo; o motor aceita (**D (56)**).
+- [ ] **Série** não é presa ao endereço conferido — pré-existente, declarado (**C76**).
+- [ ] **A etiqueta confere pelo código, não pelo id** — declarado (**C77**); o Mapa pega pelo id, a movimentação não.
+
+Testes: `confirmacaoLeituraLocalizacao.api.test.js` **11/11** (8 da implementação + 3 do fix-round; o cenário
+concorrente estável em 3 rodadas), 10 + 3 sabotagens vermelhas. Cliente: `etiquetasPdf.test.js` +2 (código
+`A&B#1+2`), `codigoLido.test.js` 6, `MapaEtiquetaLocalizacao.test.js` 7, `MovimentacoesConfirmacaoLeitura.test.js`
+13, `LocalizacaoEtiqueta.test.js` 3 — 17 sabotagens na tela, 16 vermelhas; a 17ª (o filtro por tipo na montagem do
+POST) é inalcançável pela tela, que já limpa o campo na troca de tipo — fica como segunda barreira, declarada.
