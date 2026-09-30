@@ -680,3 +680,48 @@ reescritas — a spec marca as duas como pagas, e eu confirmei o registro imutá
 `auditoria_log_almoxarifado`. **E a spec 06 tem três itens que dependem de OUTRAS features**
 (material fora da lista técnica → feature 22; dupla aprovação de ajuste → feature 17; e a config de
 regras, que depende da tabela). Os dois primeiros ficam fora, declarados.
+
+### ⚠️ CORREÇÃO DA MINHA PRÓPRIA FASE 0, medida na Fase 1 (2026-09-30)
+
+**O que eu escrevi acima, e o que a spec 06 diz desde 2026-08-29:** *"o lembrete de requisição
+parada NUNCA alcança a requisição de alto valor"* — e eu acrescentei *"a requisição que mais precisa
+de cobrança é a única que fica sem ela"*.
+
+**A primeira frase está certa. A segunda está EXAGERADA, e a diferença muda o desenho da T1.**
+
+Medido em `requisitionValueApprovalService.js:112` e `:322-334`: existe
+**`notificarAprovadoresValor`**, chamada **no instante em que a requisição entra em
+`AGUARDANDO_APROVACAO_VALOR`**, que manda e-mail para os aprovadores de valor configurados —
+assunto *"Aprovação de valor necessária"*, com o limite formatado. Ou seja: **os aprovadores SÃO
+avisados**, uma vez, na entrada.
+
+**O que realmente falta é a COBRANÇA RECORRENTE.** O aviso sai uma vez e nunca repete; o lembrete
+diário — que existe e reincide para `PENDENTE` — não alcança este status. A requisição de alto valor
+tem **notificação de nascimento e nenhuma cobrança de permanência**.
+
+**Por que isso importa para o desenho, e não é detalhe de redação:**
+
+1. **A plateia já está resolvida e medida.** `isAprovadorValor` (`:90-95`) é `admin` **ou** id na
+   lista `aprovadorIds` da configuração, e `getEmailsAprovadores` já converte isso em e-mails. A T1
+   **não** precisa inventar destinatário — e a pergunta que a Fase 0 mandou medir ("quem são os
+   destinatários de cada um") **já tem resposta**: são plateias **diferentes** de propósito (o
+   lembrete de `PENDENTE` vai para quem aprova requisição; este vai para a lista de aprovadores de
+   valor). Isso **confirma** a decisão de não misturar os dois num lembrete só.
+2. **O campo `ultimo_lembrete_enviado` sendo limpo na entrada deixa de ser ironia e passa a ser
+   coerência**: ele é zerado porque o relógio da cobrança recomeça ali. O defeito não é a limpeza —
+   é **não existir quem leia** o campo nesse status.
+3. **E a T1 encolhe:** não é "criar notificação para um estado que ninguém vê", é **estender o
+   alcance do lembrete que já existe**, com a plateia que já existe. Bem menor, e com risco menor.
+
+**Fica escrito, e não corrigido em silêncio, por três motivos.** O texto errado esteve **commitado e
+empurrado** (`06e3b00`). Ele faria a Fase 1 desenhar uma notificação do zero, duplicando
+`notificarAprovadoresValor`. E é a **sexta** vez nesta base que uma medição minha sobre "o que já
+existe" exagerou uma ausência — a mais recente foi a **B180** da Etapa 45, em que eu afirmei que um
+cartão "cobra para sempre" quando ele tinha janela de 7 dias. **O padrão é sempre o mesmo:** eu
+descrevo o que **imagino** que o código faz em vez de ler, e o erro cai sempre no mesmo lado —
+**ausência exagerada**, nunca subestimada.
+
+⚠️ **E isto também é um achado sobre a SPEC 06**, não só sobre mim: o achado 2 dela, escrito em
+2026-08-29, diz *"a requisição que mais precisa de cobrança é a única que fica sem ela"* — a mesma
+frase exagerada, na fonte. A spec será corrigida no fechamento da Etapa 47, dizendo o que ela
+afirmava e o que está certo.
