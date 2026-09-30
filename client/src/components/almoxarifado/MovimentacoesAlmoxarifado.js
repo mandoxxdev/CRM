@@ -282,12 +282,39 @@ const MovimentacoesAlmoxarifado = () => {
   // Série, como lote, só é escolhida (não digitada) numa saída — molde exato do efeito de lotes
   // acima, mesma guarda `cancelado`. Só busca quando o material exige controle de série; senão
   // a lista fica vazia e o bloco de checkboxes nem aparece no JSX.
+  //
+  // Etapa 62 (RN-03): no AJUSTE de material com série a tela precisa também das BLOQUEADAS — as
+  // "presentes" do motor são EM_ESTOQUE + BLOQUEADA (seriesService.contarPresentes), e é contra
+  // elas que o novo total é comparado. Só as EM_ESTOQUE entram na lista de baixa (o motor só
+  // baixa EM_ESTOQUE). `seriesAjusteCarregadas` trava o Confirmar até as duas listas chegarem:
+  // com P ainda desconhecido (0), o contador pediria séries novas que o servidor recusaria.
+  const [seriesBloqueadasAjuste, setSeriesBloqueadasAjuste] = useState([]);
+  const [seriesAjusteCarregadas, setSeriesAjusteCarregadas] = useState(false);
+  const ajusteComSerie = selectedMaterial?.controle_serie === 1 && form.tipo === 'AJUSTE';
   useEffect(() => {
-    if (!form.material_id || !TIPOS_SAIDA_LOTE.includes(form.tipo) || !selectedMaterial?.controle_serie) {
+    setSeriesBloqueadasAjuste([]);
+    setSeriesAjusteCarregadas(false);
+    const buscaSaida = TIPOS_SAIDA_LOTE.includes(form.tipo) || form.tipo === 'AJUSTE';
+    if (!form.material_id || !buscaSaida || !selectedMaterial?.controle_serie) {
       setSeriesDisponiveis([]);
       return;
     }
     let cancelado = false;
+    if (form.tipo === 'AJUSTE') {
+      setSeriesDisponiveis([]);
+      Promise.all([
+        api.get(`/almoxarifado/materiais/${form.material_id}/series?status=EM_ESTOQUE`),
+        api.get(`/almoxarifado/materiais/${form.material_id}/series?status=BLOQUEADA`),
+      ])
+        .then(([emEstoque, bloqueadas]) => {
+          if (cancelado) return;
+          setSeriesDisponiveis(emEstoque.data || []);
+          setSeriesBloqueadasAjuste(bloqueadas.data || []);
+          setSeriesAjusteCarregadas(true);
+        })
+        .catch(() => { if (!cancelado) setSeriesDisponiveis([]); });
+      return () => { cancelado = true; };
+    }
     api.get(`/almoxarifado/materiais/${form.material_id}/series?status=EM_ESTOQUE`)
       .then((res) => {
         if (cancelado) return;
@@ -297,6 +324,20 @@ const MovimentacoesAlmoxarifado = () => {
     return () => { cancelado = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.material_id, form.tipo, selectedMaterial?.controle_serie]);
+
+  // Etapa 62 (RN-03): o AJUSTE define o NOVO total; as séries que entram ou saem são a diferença
+  // `novo − presentes` (a mesma conta do motor). Inteiro obrigatório: série é unidade.
+  const ajusteSerieInfo = (() => {
+    if (!ajusteComSerie) return null;
+    const txt = String(form.quantidade ?? '').trim();
+    const inteiro = /^\d+$/.test(txt);
+    const presentes = seriesDisponiveis.length + seriesBloqueadasAjuste.length;
+    const diferenca = inteiro ? Number(txt) - presentes : 0;
+    const informadas = diferenca > 0 ? linhasSerie(form.series).length
+      : diferenca < 0 ? form.serie_ids.length : 0;
+    const ok = seriesAjusteCarregadas && inteiro && informadas === Math.abs(diferenca);
+    return { inteiro, presentes, diferenca, informadas, ok };
+  })();
 
   // Fix round 1 (review da Task 8): o JSX de checkboxes filtra por `form.lote_id`, mas isso só
   // esconde a série visualmente — o id continua em `form.serie_ids` até algo limpar. Sem este
@@ -385,7 +426,14 @@ const MovimentacoesAlmoxarifado = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.material_id || !form.quantidade || parseFloat(form.quantidade) <= 0) {
+    // Etapa 62: no ajuste com série o novo total pode ser 0 (baixar todas as presentes) — o motor
+    // aceita zero em AJUSTE. Os outros tipos (e o ajuste sem série) seguem com a régua de antes.
+    if (ajusteSerieInfo) {
+      if (!form.material_id || !ajusteSerieInfo.ok) {
+        toast.error('Material com série: informe um total inteiro e exatamente as séries da diferença');
+        return;
+      }
+    } else if (!form.material_id || !form.quantidade || parseFloat(form.quantidade) <= 0) {
       toast.error('Selecione o material e informe a quantidade');
       return;
     }
@@ -441,6 +489,10 @@ const MovimentacoesAlmoxarifado = () => {
       // escolhida na saída.
       if (selectedMaterial?.controle_serie === 1 && form.tipo === 'ENTRADA') payload.series = linhasSerie(form.series);
       if (selectedMaterial?.controle_serie === 1 && TIPOS_SAIDA_LOTE.includes(form.tipo)) payload.serie_ids = form.serie_ids;
+      // Etapa 62 (RN-03): ajuste com série manda SÓ o lado da diferença — subir leva os números
+      // novos, descer leva os ids das EM_ESTOQUE a baixar, zero não leva nada (o motor recusa).
+      if (ajusteSerieInfo?.diferenca > 0) payload.series = linhasSerie(form.series);
+      if (ajusteSerieInfo?.diferenca < 0) payload.serie_ids = form.serie_ids.map(Number);
       if (form.tipo === 'ENTRADA' && form.custo_unitario) {
         const custo = parseFloat(form.custo_unitario);
         if (!Number.isNaN(custo) && custo > 0) payload.custo_unitario = custo;
@@ -951,6 +1003,62 @@ const MovimentacoesAlmoxarifado = () => {
                       <small>{form.serie_ids.length}/{form.quantidade || 0} série(s) selecionada(s)</small>
                     </div>
                   )}
+                  {/* Etapa 62 (RN-03): ajuste de material com série. Sem endereço (o motor recusa por
+                      endereço — e o AJUSTE já não mostra destino); o novo total contra as presentes
+                      (EM_ESTOQUE + BLOQUEADA) diz se pede números novos, séries a baixar, ou nada. */}
+                  {ajusteSerieInfo && (
+                    <div className="almox-field almox-form-full" data-testid="ajuste-serie">
+                      <small data-testid="ajuste-serie-dica" style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
+                        Material com série: o ajuste é do total, sem endereço.
+                      </small>
+                      <div data-testid="ajuste-serie-presentes" style={{ fontSize: '0.85rem', marginTop: 4 }}>
+                        {seriesAjusteCarregadas
+                          ? `Séries presentes: ${ajusteSerieInfo.presentes}`
+                          : 'Carregando séries presentes...'}
+                      </div>
+                      {form.quantidade !== '' && !ajusteSerieInfo.inteiro && (
+                        <small data-testid="ajuste-serie-inteiro" style={{ color: 'var(--gmp-error)', fontSize: '0.75rem' }}>
+                          Material com série: o novo total precisa ser um número inteiro.
+                        </small>
+                      )}
+                      {seriesAjusteCarregadas && ajusteSerieInfo.inteiro && ajusteSerieInfo.diferenca > 0 && (
+                        <>
+                          <label htmlFor="ajuste-serie-novas" style={{ marginTop: 6 }}>Números das novas séries (um por linha) *</label>
+                          <textarea id="ajuste-serie-novas" className="almox-textarea" rows={3} value={form.series}
+                            onChange={(e) => setForm((f) => ({ ...f, series: e.target.value }))} />
+                          <small data-testid="ajuste-serie-contador"
+                            style={{ color: ajusteSerieInfo.ok ? 'var(--gmp-text-light)' : 'var(--gmp-error)' }}>
+                            {ajusteSerieInfo.informadas} de {ajusteSerieInfo.diferenca}
+                          </small>
+                        </>
+                      )}
+                      {seriesAjusteCarregadas && ajusteSerieInfo.inteiro && ajusteSerieInfo.diferenca < 0 && (
+                        <>
+                          <label style={{ marginTop: 6 }}>Séries a baixar *</label>
+                          <div id="ajuste-serie-baixa" style={{ maxHeight: 140, overflowY: 'auto', border: '1px solid var(--gmp-border)', borderRadius: 6, padding: 6 }}>
+                            {seriesDisponiveis.map((s) => (
+                              <label key={s.id} style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: '0.85rem' }}>
+                                <input type="checkbox" data-serie-id={s.id} checked={form.serie_ids.includes(s.id)}
+                                  onChange={(e) => {
+                                    const marcado = e.target.checked;
+                                    setForm((f) => ({
+                                      ...f,
+                                      serie_ids: marcado ? [...f.serie_ids, s.id] : f.serie_ids.filter((id) => id !== s.id),
+                                    }));
+                                  }} />
+                                {s.numero}{s.lote_codigo ? ` · lote ${s.lote_codigo}` : ''}
+                              </label>
+                            ))}
+                            {seriesDisponiveis.length === 0 && <small>Nenhuma série em estoque para baixar (as bloqueadas não saem por ajuste).</small>}
+                          </div>
+                          <small data-testid="ajuste-serie-contador"
+                            style={{ color: ajusteSerieInfo.ok ? 'var(--gmp-text-light)' : 'var(--gmp-error)' }}>
+                            {ajusteSerieInfo.informadas} de {-ajusteSerieInfo.diferenca}
+                          </small>
+                        </>
+                      )}
+                    </div>
+                  )}
 
                   {/* Hint de retalho (Etapa 9, Task 8): NÃO bloqueia — só avisa. Fica antes do
                       checkbox de emergencial de propósito, para o operador ver antes de confirmar
@@ -982,7 +1090,7 @@ const MovimentacoesAlmoxarifado = () => {
               </div>
               <div className="almox-modal-footer">
                 <button type="button" className="btn-almox-secondary" onClick={() => setShowModal(false)}>Cancelar</button>
-                <button type="submit" className="btn-almox-primary" disabled={saving}>
+                <button type="submit" className="btn-almox-primary" disabled={saving || (ajusteSerieInfo ? !ajusteSerieInfo.ok : false)}>
                   {saving ? 'Registrando...' : 'Confirmar Movimentação'}
                 </button>
               </div>

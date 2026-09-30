@@ -58,6 +58,10 @@ const ConferenciaEstoque = () => {
   const [aplicarAjustes, setAplicarAjustes] = useState(true);
   const [showConcluirModal, setShowConcluirModal] = useState(false);
   const [justificativaAjuste, setJustificativaAjuste] = useState('');
+  // Etapa 62 (RN-02): o inventario ajusta o fisico sem saber QUAIS series foram contadas; a conclusao
+  // devolve os materiais com serie cujas presentes nao batem com o fisico. Aviso PERSISTENTE (nao
+  // so toast): a tela volta para a lista e o toast some antes de o operador anotar os codigos.
+  const [seriesARegularizar, setSeriesARegularizar] = useState([]);
   // Etapa 18 (RN-03): cancelar deixou de ser um window.confirm e virou modal com motivo —
   // guarda a conferência inteira (id + numero) porque o cabeçalho do modal mostra o número.
   const [confParaCancelar, setConfParaCancelar] = useState(null);
@@ -226,6 +230,7 @@ const ConferenciaEstoque = () => {
         mensagem = `Conferência concluída! ${res.data.ajustesAplicados} ajustes aplicados.`;
       }
       toast.success(mensagem);
+      setSeriesARegularizar(Array.isArray(res.data.series_a_regularizar) ? res.data.series_a_regularizar : []);
       setShowConcluirModal(false);
       setJustificativaAjuste('');
       setConfAberta(null);
@@ -545,6 +550,28 @@ const ConferenciaEstoque = () => {
           </button>
         </div>
       </div>
+
+      {seriesARegularizar.length > 0 && (
+        <div className="almox-hint-banner" data-testid="aviso-series-a-regularizar" role="alert" style={{ marginBottom: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' }}>
+            <strong>
+              Estes materiais com série ficaram com séries presentes diferentes do físico — regularize em Lotes e Séries:
+            </strong>
+            <button type="button" className="btn-almox-secondary" style={{ fontSize: '0.75rem', padding: '2px 8px' }}
+              onClick={() => setSeriesARegularizar([])} title="Fechar o aviso">
+              Fechar aviso
+            </button>
+          </div>
+          <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+            {seriesARegularizar.map((m) => (
+              <li key={m.material_id}>
+                <a href={`/almoxarifado/lotes?material_id=${m.material_id}&aba=SERIES`}>{m.codigo}</a>
+                {' '}(físico {m.fisico}, presentes {m.presentes})
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="almox-table-container">
         {loading ? <SkeletonTable rows={6} columns={7} /> : conferencias.length === 0 ? (
