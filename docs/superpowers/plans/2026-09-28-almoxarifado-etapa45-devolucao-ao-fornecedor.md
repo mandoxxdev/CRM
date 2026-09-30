@@ -348,6 +348,107 @@ tem de ser a que faz o código **mentir sobre o que fez**.
 3. "Este teste passaria com a feature quebrada?" — em especial os cenários da RN-05, RN-06 e T5.
 4. O backfill oposto ao da 44 cria fila retroativa **zerável**?
 
+
+### ✅ Fase 5 — feita (`7f72e39`)
+
+**Três revisores frescos, lentes distintas, instruídos a refutar: 20 achados reais, 21 hipóteses
+refutadas, 1 CRITICAL.** Zero ruído de estilo — a regra "achado só vale com cenário concreto de
+falha" segurou.
+
+#### O CRITICAL era meu, e o arquivo já avisava contra ele
+
+`nonConformityService.js` importa `EPSILON_DIVERGENCIA` desde a Etapa 43, usa em duas funções, e o
+docblock de `divergencia.js` diz que um `!== 0` cru ali *"transformaria 7e-16 em documento numerado
+contra quem contou certo"*. Escrevi **duas comparações novas de REAL** — `bloqueada < reprovada` e
+`atual < reprovada` — sem a régua que o próprio arquivo declara ter dono único.
+
+Cenário reproduzido: dois recebimentos do mesmo material, inspeções reprovando **2,3** e **3,4** kg.
+`quantidade_bloqueada` vira `5.699999999999999`. Executada a devolução da primeira (2,3), sobra
+`3.3999999999999995`. A segunda cai em `3.3999999999999995 < 3.4` — **verdade em IEEE-754** — e a
+rota responde **200** com *"O material já havia saído do bloqueio — a execução foi registrada sem
+mover saldo"*, com o Compras tendo acabado de despachar a caixa.
+
+**O que torna isso grave não é o arredondamento: é que o estado é ABSORVENTE.** A NC fica
+`EXECUTADA` e sai de `?execucao=PENDENTE`; o cartão de reprovados calava junto (achado irmão,
+abaixo); re-executar é **409**; e o desbloqueio manual recusa pela mesma régua do motor. O material
+sai do galpão, continua contado no físico **e** no bloqueado, e **nenhuma superfície cobra**.
+
+**A mesma forma existia na irmã da Etapa 44** (`liberarRetencaoDaInspecao`), que é o ponto de
+origem: lá o defeito faz a aceitação **fechar a NC sem liberar nada** — o furo **C57** renascendo
+por arredondamento **dentro da etapa escrita para fechá-lo**. Consertadas as duas, com um helper
+único:
+
+```js
+const menosQue = (a, b) => (Number(a) || 0) < Number(b) - EPSILON_DIVERGENCIA;
+```
+
+E o **par obrigatório** no motor: o claim de `baixandoBloqueado` (`stockService.js:1163`) tinha
+`>= ?` seco. Sem a tolerância lá, consertar só o serviço trocaria o defeito silencioso por um
+**beco** — a régua diria "pode" e o motor recusaria. `EPSILON_DIVERGENCIA` entrou em
+`stockService.js` com o raio declarado como deliberadamente limitado a esse claim.
+
+#### O cartão media INTENÇÃO REGISTRADA, não MATERIAL MOVIDO
+
+Dois revisores acharam isto independentemente. A régua da T5 (`decisao = 'DEVOLVER' AND
+execucao_estado = 'EXECUTADA'`) cala o aviso quando a execução **não move nada**: efeito `NENHUMA`
+(NC manual sobre a mesma inspeção, RN-06) e a família `SEM_SALDO` viram `EXECUTADA` do mesmo jeito.
+Régua nova: **`i.devolucao_fornecedor_em IS NULL`** — a coluna só é carimbada dentro de
+`executarDevolucao`, **depois** do claim e só quando o motor baixou (o rollback a apaga), e esse
+caminho já exige `decisao = 'DEVOLVER'` e a RN-06 inteira. **Ela já É a conjunção, medida no
+resultado em vez de declarada na intenção.**
+
+E os dois defeitos **se cobriam**: o cartão era a última superfície que ainda cobraria o material
+perdido pelo CRITICAL, e ele calava pelo mesmo ato.
+
+#### RN-11 ganhou um nível: `SEM_SALDO_JA_LIBERADA`
+
+Instância **alcançável e nomeada** do pool agregado (**B175**/**C63** da Etapa 44): duas NCs da
+mesma inspeção com decisões opostas — a aceitação solta a retenção, e a devolução da outra NC
+baixava 3 kg contra a retenção de **outra inspeção**. Guarda: `insp.liberacao_nc_em` antes das
+demais checagens de saldo, com literal própria (a sétima da tabela congelada do design).
+**O caso geral — retenção drenada à mão — NÃO está fechado**; vai para as letras A e C.
+
+#### `exigeSerie: true` na chamada do motor
+
+O nível 6 da precedência recusa `controle_serie` com 400, então o motor nunca via material
+serializado por este caminho — mas a trava do motor é **a que sobrevive a uma mudança na
+precedência**. Passada, e medida por cenário **comportamental** (patch em
+`stockService.registrarMovimentacao` capturando `args[3]`), não por leitura.
+
+#### Duas lições de método, das quatro que esta etapa deu
+
+1. **Sabotar o OPERADOR virou invisível depois do épsilon.** `>=` → `>` no claim não derruba nada:
+   a tolerância é mais larga que a diferença na fronteira. Isso é o caso (2) da regra do harness —
+   **o defeito virou inalcançável**, não falta asserção. Registrado em vez de fingido, e a régua
+   provada deslocando a **posição** (`>= ? + 1`), que caiu em *"Devolução acima do que está
+   bloqueado: há 3 KG bloqueado(s) (físico: 3)"*.
+2. **Pela quarta vez na etapa um controle caiu na asserção errada.** O cenário (19) — pool agregado
+   — caía no rótulo `efeito` antes de chegar ao saldo. **Reordenei as asserções** para o dano vir
+   primeiro; depois disso o controle caiu em *"baixou o fisico contra a retencao de OUTRA inspecao
+   — material que ninguem devolveu sumiu"*, `17 !== 20`.
+
+#### Números do fix-round
+
+Cenários dos cinco arquivos da etapa: **45 → 52**. `test:api` **213/213 arquivos** · almoxarifado
+**42/0** · validation **4/0** · safealter **3/0** · sqlite **5/0** · client **52 suítes / 829
+testes**. md5 restaurado depois de cada sabotagem (`nonConformityService.js`
+`2035ac20e44ee1b071abb9238adfc254`, `stockService.js` `82cbfee10741df2a9d8a872eabf541f6`,
+`alertRegistry.js` `9a06d147f701fb7a48e60295512bd809`).
+
+#### Achados reais que NÃO viraram código — e onde estão declarados
+
+| Achado | Por que não virou código | Onde ficou |
+|---|---|---|
+| Pool agregado, **caso geral** (retenção drenada à mão) | exige contabilidade de retenção **por origem** no motor — etapa própria, não fix-round | letras **A** e **C** |
+| 400 fatal nos níveis 6/7 (série, lote) **tranca a NC para sempre** — nada cancela, redecide ou reabre uma NC `DECIDIDA`, e ela fica em `?execucao=PENDENTE` eternamente | é um **gesto que não existe**, não um bug de linha; dois revisores | letra **C** + próxima etapa |
+| Lote `BLOQUEADO`/`REPROVADO` recusado pela guarda de status do motor, com mensagem **fora** do contrato congelado — e o lote reprovado é exatamente o que se devolve | um revisor chamou de achado, outro de intencional; mexer aqui é mexer na guarda do motor | letra **C** |
+| Claim serializador de `registrarExecucao` **sem teste** (corrida não reproduzível no harness) | o claim fica; a suíte não o protege | letra **E+** |
+| `status = 'DECIDIDA'` no `WHERE` do backfill sem teste | idem | letra **E+** |
+| Guarda anti-deriva do cenário (0) é **literal de whitespace** — reformatar produz vermelho falso | trocar por parser seria mais frágil que o falso positivo | letra **E+** |
+| Rollback de **código** para a Etapa 44 depois de o ledger ter rodado deixa NC invisível para sempre | risco de deploy, não de código | letra **E+** |
+| `baixandoBloqueado` não é mutuamente exclusivo com `consumindoReserva` | não alcançável hoje; mina estrutural do motor | letra **E+** |
+| Localização padrão bloqueada / `tipos_material_permitidos` tornam a execução fatal com mensagem do motor | fora do contrato congelado, mas é a guarda certa | letra **C** |
+| Título do cenário (8) da T1 promete mais do que mede (*"aparece na posição do cliente"*) | corrigido o título, não o teste | — |
 ---
 
 ## O que a Fase 2 mudou neste plano
@@ -371,5 +472,105 @@ tem de ser a que faz o código **mentir sobre o que fez**.
 - [x] T2 — tronco (estado de execução) — `f8ab433`
 - [x] T3 — rota e fila — `dc629e1` · [x] T4 — tela — `0305acc` · [x] T5 — cartão — `7c9bd1f`
 - [x] T6 — integração — `a5b800c`
-- [ ] Fase 5 — revisão adversarial
-- [ ] Fase 6 — `fechar-etapa`
+- [x] Fase 5 — revisão adversarial (3 revisores, 20 achados, 1 CRITICAL) + fix-round — `7f72e39`
+- [x] Fase 6 — `fechar-etapa` — ver a retro abaixo
+
+---
+
+## Retro de 4 números — Etapa 45
+
+1. **Rodadas de correção até verde: uma** (o fix-round da Fase 5). **Mas houve um vermelho que eu
+   mesmo criei e não medi**, e ele conta mais que a rodada: o commit da **T2** deixou a suíte do
+   **client** vermelha e eu reportei T2 e T3 como fechadas citando **só números de servidor**.
+   `permissaoErro.test.js:52` varre `ACAO_PERFIS` e exige rótulo em `client/src/utils/permissaoErro.js`;
+   `executar_encaminhamento` nasceu sem um — **sétima vez** que este buraco aparece nesta base.
+   A guarda (Etapa 30) funcionou; **a medição falhou**: a `fechar-etapa` lista cinco comandos e eu
+   rodei os três de servidor. Consertado dentro da T4 (`0305acc`) e registrado em `496baa7` com a
+   regra **"ação nova em `ACAO_PERFIS` é mudança de duas pontas"**.
+2. **Achados: 33 reais, 0 ruído** — **13** na Fase 2 (plano, antes de codar, **5 CRITICAL**) e
+   **20** na Fase 5 (três lentes, **1 CRITICAL**). Os revisores ainda **levantaram e refutaram
+   sozinhos 21 hipóteses** antes de reportar, o que é o comportamento pedido pela instrução
+   "refute antes de acusar" — elas não chegaram como achado e por isso não contam como ruído.
+   **O número que ensina:** o único CRITICAL da Fase 5 era **meu**, estava em código que eu
+   escrevi **no fix-round da etapa anterior**, e o arquivo já trazia escrito o aviso exato contra
+   ele. Import presente ≠ régua aplicada — e foi a **presença do import** que fez duas lentes da
+   Etapa 44 passarem por cima.
+3. **Paralelismo: 3 galhos em paralelo (T3, T4, T5) + 3 revisores em paralelo**, sem worktree
+   (arquivos disjuntos, tronco já congelado nas T1/T2). **Um retrabalho, e ele foi barato:** a T4
+   descobriu que `?execucao` **não é filtro independente** — o serviço cola `AND status =
+   'DECIDIDA'` —, então a tela com o status default *"Abertas"* mostraria fila **sempre vazia** e
+   diria "não há nada pendente" sem ter medido nada. Isso é **achado de plano**, não de código: o
+   contrato congelado da seção 5 do design descrevia o parâmetro como se fosse ortogonal. A T4
+   sincronizou os dois selects e a assimetria ficou escrita.
+   ⚠️ **Risco de processo que se repetiu da 44:** um revisor sabotou arquivo **do projeto**.
+   Restaurou e conferiu md5, mas a instrução "trabalhar em cópia" precisa entrar no prompt do
+   revisor, não só na retro.
+4. **Defeito que escapou:** a preencher pela Fase 0 da Etapa 46. **Três candidatos declarados:**
+   (a) **`execucao_observacoes` e `execucao_movimentacao_id` são gravados, voltam na projeção da
+   API e NÃO têm leitor na tela** — é o padrão *"calculado, gravado e sem quem leia"* que esta base
+   já pagou quatro vezes (o mais recente: o `efeito_saldo` da Etapa 44, que **continua** sem
+   rótulo e sem leitor); (b) o **claim serializador** de `registrarExecucao` não tem cenário —
+   corrida não reproduzível no harness, declarado na letra E+; (c) a **RN-11 inteira** nasceu
+   grande (seis níveis de `SEM_SALDO`) e dois deles (`SEM_SALDO_SEM_REPROVADA`,
+   `SEM_SALDO_JA_LIBERADA`) **não estavam no design** — nasceram na execução e no fix-round, que é
+   exatamente o perfil do que escapou na 44.
+
+---
+
+## Próxima tarefa detalhada — Etapa 46: a NC decidida deixa de ser um beco
+
+**Por que esta, e não outra.** A feature 09 fecha em 🟢 com esta etapa, então a escolha cai no que
+o **próprio fechamento da 45** nomeou como furo de operação (letra **C**), e ele é um **gesto que
+não existe**, não um bug de linha — o tipo de coisa que só aparece quando alguém opera.
+
+**O beco, medido (não deduzido):**
+
+- `registrarExecucao` recusa com **400 fatal** nos níveis 6 e 7 da precedência: `controle_serie`
+  (*"Material com controle de série não pode ser devolvido por aqui — dê baixa pela tela de
+  Movimentações"*) e `controle_lote && !lote` (*"Não foi possível identificar o lote do material
+  devolvido"*).
+- A NC fica `status = 'DECIDIDA'`, `execucao_estado = 'PENDENTE'` — e **nada no sistema a tira de
+  lá**. `POST /:id/decidir` tem claim `WHERE status = 'ABERTA'` → **409** em NC decidida. O
+  **único** cancelamento que existe está dentro de `sincronizarNaoConformidadeQuantidade`
+  (`nonConformityService.js:496`), é automático, só para NC de **quantidade**
+  `aberto_automaticamente`, e tem `WHERE id = ? AND status = 'ABERTA'` — **não existe rota de
+  cancelamento**, para nenhum estado.
+- Consequência: a NC mora em `GET /nao-conformidades?execucao=PENDENTE` **para sempre**, e a fila
+  do Compras acumula documentos que ninguém pode resolver por tela nenhuma. É o beco *"Atrasado
+  para sempre"* da Etapa 42 em terceira roupa — a segunda foi a NC fantasma que a RN-05 da 43
+  fechou.
+
+**O que a etapa tem de entregar (esboço, a Fase 1 detalha):**
+
+1. **Rota de cancelamento de NC** — `POST /api/almoxarifado/nao-conformidades/:id/cancelar`, com
+   motivo **obrigatório**, cobrindo `ABERTA` **e** `DECIDIDA`-com-`execucao_estado = 'PENDENTE'`.
+   **Ponto de atenção que já é achado:** `listarNaoConformidades` com `?execucao` cola `AND
+   nc.status = 'DECIDIDA'`, então cancelar **conserva** o `PENDENTE` gravado na coluna
+   (`nonConformityService.js:1218-1220` já documenta isso) — decidir se o cancelamento zera
+   `execucao_estado` ou se a fila passa a excluir `CANCELADA` **explicitamente**. A segunda é a
+   reversível.
+2. **Redecidir** uma NC `DECIDIDA` cuja execução está `PENDENTE` — ou, se isso conflita com "o
+   fato congelado e a decisão imutável" (que é o princípio da 43), **cancelar e abrir nova**, que
+   preserva a imutabilidade e é o caminho mais barato. **Medir antes:** `idx_nc_almox_aberta` é
+   **parcial e por tipo** — abrir nova NC do mesmo tipo na mesma inspeção só é possível se a
+   anterior **não** estiver `ABERTA`; cancelar libera o índice, redecidir não.
+3. **Gate de perfil.** Cancelar NC decidida não é `decidir_nao_conformidade` (quem decidiu não
+   deve poder apagar o próprio rastro) nem `executar_encaminhamento`. **Caminho reversível:**
+   ação nova `cancelar_nao_conformidade` restrita a ADMINISTRADOR + QUALIDADE.
+   ⚠️ **Ação nova em `ACAO_PERFIS` é mudança de DUAS PONTAS** — rótulo em
+   `client/src/utils/permissaoErro.js` no **mesmo commit**, senão `permissaoErro.test.js:52` fica
+   vermelho e a suíte do client é a que eu não medi na T2 desta etapa. **Sétima vez.**
+4. **Trilha:** `NC_CANCELADA` já existe como verbo e já tem rótulo em `auditLabels.js` — nada novo
+   ali, mas confira, porque `auditLabels.api.test.js` derruba a suíte inteira por rótulo faltando.
+
+**O que já está pronto e a Etapa 46 não precisa reabrir:** o documento numerado e sua máquina de
+estados (43), a liberação da retenção pela aceitação (44), a execução do encaminhamento com
+`devolucao_fornecedor_em` como trava de idempotência **na inspeção** (45), o épsilon nas duas
+comparações e no claim `baixandoBloqueado` (45, `7f72e39`), e a régua do cartão de reprovados
+medindo **material movido** (45).
+
+**A alternativa maior, deliberadamente NÃO escolhida agora:** contabilidade de retenção **por
+origem** no motor, que é o que fecha o caso **geral** do pool agregado (letras A e C). Ela mexe em
+`quantidade_bloqueada`/`quantidade_em_inspecao` — colunas agregadas por material, lidas por
+`availabilitySql.js` e por seis ramos de `registrarMovimentacao` —, então é **tronco de motor** e
+etapa própria, com migração e backfill. O beco da NC é **reversível e estreito**; este não.

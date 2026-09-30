@@ -263,6 +263,26 @@ suíte afirmando o contrário. **Testar a função não é testar que alguém a 
    `auditLabels.js` nem leitor — é o padrão *"calculado, gravado e sem quem leia"* que esta base já
    pagou três vezes.
 
+   ### ✅ PREENCHIDO pela Fase 5 da Etapa 45 (2026-09-29) — e escapou de verdade
+
+   **`liberarRetencaoDaInspecao` comparava REAL sem épsilon.** A guarda
+   `material.quantidade_bloqueada < reprovada` — escrita nesta etapa, no fix-round — devolve
+   **verdade** quando o bloqueado é `3.3999999999999995` e a reprovada `3.4`, o que acontece com
+   duas reprovações fracionárias do mesmo material (2,3 + 3,4 = `5.699999999999999`). Consequência
+   **nesta** etapa: a decisão `ACEITAR`/`ACEITAR_SOB_DESVIO` fecha a NC com efeito
+   `SEM_BLOQUEIO` e **não libera nada** — o furo **C57**, que esta etapa existe para fechar,
+   renascendo por arredondamento **dentro dela**.
+
+   Por que escapou: as duas lentes da Fase 5 daqui atacaram atomicidade, ordem de claim e
+   autorização, e o arquivo já importava `EPSILON_DIVERGENCIA` — a presença do import fez a régua
+   **parecer** aplicada. Corrigido em `7f72e39` (Etapa 45), com o helper único `menosQue` usado
+   pelas duas etapas e a tolerância pareada no claim `baixandoBloqueado` do motor.
+
+   Dos dois candidatos declarados acima: (a) **acertou parcialmente** — a RN-11 nascida no
+   fix-round foi de fato onde o defeito estava, mas o problema era a **comparação**, não a regra;
+   (b) o `efeito_saldo` sem rótulo/leitor **não** foi achado por ninguém na Fase 5 da 45 e
+   **continua aberto**.
+
 ---
 
 ## Onde a execução divergiu do plano
