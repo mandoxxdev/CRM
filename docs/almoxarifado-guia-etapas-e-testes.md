@@ -1,19 +1,23 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-09-30 (Etapa 58) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-09-30 (Etapa 59) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 58) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 59) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-09-30 (Etapa 58 ENTREGUE · Etapa 59 começando)
+> ## Onde o desenvolvimento está — 2026-09-30 (Etapa 59 ENTREGUE · Etapa 60 começando)
 >
-> **O desenvolvimento parou aqui: Etapa 58 fechada, Etapa 59 começando — 2026-09-30.** A **Etapa 58 (a entrega de
-> requisição diz de onde cada item sai)**: na janela de entrega, cada item tem **"Sai de"** (endereço e lote) e
-> **"Confirmar endereço lido"**; a escolha é exata (recusa em vez de completar com outro endereço); nada sai pela metade
-> quando há escolha; excluir a requisição devolve ao lote e ao endereço de onde saiu. O botão de um clique continua
-> igual, e ao lado dele há **"Entregar escolhendo de onde sai…"**. **Próxima etapa, já começando: 59 — a separação
-> escolhe de onde sai, e a entrega de um clique usa** (feature 05; ver *"Próxima tarefa detalhada"* no plano da Etapa 58).
+> **O desenvolvimento parou aqui: Etapa 59 fechada, Etapa 60 começando — 2026-09-30.** A **Etapa 59 (a separação diz
+> de onde cada item sai, e a entrega de um clique usa)**: a janela de separação tem **"Sai de"** por item (endereço e
+> lote), conferido como na entrega; o item mostra *"separado de ⟨endereço⟩"*; a entrega — inclusive o botão
+> **"Confirmar Entrega e Baixar Estoque"** — sai de onde foi separado, até o separado ainda não entregue; se a origem
+> não serve mais, a entrega é recusada dizendo o que fazer. **Próxima etapa, já começando: 60 — a divergência na
+> separação com motivo** (feature 05; ver *"Próxima tarefa detalhada"* no plano da Etapa 59).
 >
-> **Etapas 1 a 20 e 22 a 58 completas.**
+> **Etapas 1 a 20 e 22 a 59 completas.**
+>
+> **Etapa 58, 2026-09-30.** A **Etapa 58 (a entrega de requisição diz de onde cada item sai)**: na janela de entrega,
+> cada item tem **"Sai de"** e **"Confirmar endereço lido"**; a escolha é exata; excluir a requisição devolve ao lote e
+> ao endereço de onde saiu. **Próxima etapa: 59** (feita — acima).
 >
 > **Etapa 57, 2026-09-30.** A **Etapa 57 (o recebimento
 > deixa escolher o endereço de cada item)**: **Processar Nota** abre uma janela com um destino por item ("Padrão do
@@ -4972,6 +4976,52 @@ que ele não tinha como repetir com sucesso garantido.
 - **Número de série de material** — continua sendo **digitado pelo operador** e de propósito não
   passa por este gerador. Retentar com outro número gravaria algo que ninguém digitou.
 - **Números de outros módulos do CRM** — a varredura foi do almoxarifado.
+
+---
+
+## Etapa 59 — A separação diz de onde cada item sai, e a entrega de um clique usa (ENTREGUE — 2026-09-30)
+
+**O que mudou, em uma frase:** quem separa diz de onde tirou cada item, e a entrega — até a de um clique — sai dali.
+
+**O problema que ela resolve.** Na Etapa 58 a origem só podia ser escolhida na janela de entrega; o botão de um
+clique, o mais usado, continuava tirando do endereço padrão. Quem vai à prateleira é quem separa — agora é ele quem diz
+de onde o material sai.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A separação só registrava a quantidade | **"Sai de"** por item na separação (endereço e lote) |
+| — | O item mostra *"separado de ⟨endereço⟩"* enquanto há separado a entregar |
+| O botão de um clique entregava sem origem | Entrega **de onde foi separado** (até o que foi separado) |
+| Na janela de entrega, "Sai de" começava em automático | Começa na origem da separação; "automático" a ignora |
+| — | Origem da separação que não serve mais: a entrega é recusada, com o caminho escrito |
+
+### Roteiro de teste manual (≈6 min)
+
+**Preparação.** Dois endereços ativos, **A** e **B**. Um material com **3** em **A** e **50** em **B** (Movimentações →
+Entrada), com endereço padrão **B**. Uma requisição aprovada desse material, com **5** solicitados.
+
+1. **Separar dizendo de onde.** Abra a requisição → **Iniciar Separação**. O item tem **Sai de**, com
+   **"Qualquer endereço (automático)"**, *"⟨A⟩ (3)"* e *"⟨B⟩ (50)"*. Escolha **A**, quantidade 5, confirme:
+   *"⟨material⟩: O saldo em ⟨A⟩ (3) não cobre a quantidade (5) — a saída tiraria de outros endereços"*. Nada foi gravado.
+2. **Separar 3 de A.** Troque a quantidade para 3 e confirme. No detalhe, o item mostra *"separado de ⟨A⟩"*.
+3. **O um clique usa a separação.** Clique **"Confirmar Entrega e Baixar Estoque"**. No **Mapa**, **A** ficou com 0 e
+   **B** continua com 50 — saiu de onde foi separado, não do padrão. O *"separado de"* sumiu.
+4. **Origem que não serve mais.** Em outra requisição, separe 3 de **B**; depois, em **Movimentações**, transfira 49 de
+   **B** para **A**. Clique **"Confirmar Entrega e Baixar Estoque"**: *"⟨material⟩: a origem da separação (⟨B⟩) não
+   serve mais (O saldo em ⟨B⟩ (1) não cobre a quantidade (3) — a saída tiraria de outros endereços) — entregue
+   escolhendo de onde sai"*.
+5. **A saída.** Clique **"Entregar escolhendo de onde sai…"**: o **Sai de** vem em **B**; troque para **"Qualquer
+   endereço (automático)"** e confirme — a entrega sai.
+6. **Rodadas diferentes.** Numa requisição de 6, separe 3 de **A** e, numa segunda rodada, 3 sem mexer no **Sai de**:
+   o *"separado de"* some — a entrega desse item volta ao automático.
+
+### O que esta etapa NÃO cobre
+
+- Uma segunda rodada feita sem mexer no **Sai de** apaga a origem da primeira, sem aviso (**B237**, **D (59)**).
+- Não há reserva por endereço: outra saída pode levar o saldo entre separar e entregar (**D (59)**).
+- Ler a etiqueta do endereço na separação; série e divergência por item (**D (59)**).
 
 ---
 

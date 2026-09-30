@@ -1314,7 +1314,8 @@ Regras:
 - **Tudo o que foi escolhido é conferido antes de qualquer baixa**, em todos os itens: se um item tem escolha inválida, **nenhum** item é entregue. Recusas, sempre com o nome do material na frente: *"Chapa 3mm: Localização A-01 está bloqueada"*, *"Chapa 3mm: Localização de origem não encontrada"*, *"Chapa 3mm: Lote não pertence a este material"*, *"Chapa 3mm: Lote L-7 esta bloqueado e nao pode ser utilizado"* (e a de lote vencido sem liberação, a mesma da movimentação — 4.3).
 - **Dois itens do mesmo material** saindo do mesmo endereço e lote somam: o endereço precisa cobrir a soma.
 - **Confirmar endereço lido.** Com uma origem escolhida, o campo **"Confirmar endereço lido"** aceita a leitura da etiqueta do endereço (ou o código digitado) e confere com a origem escolhida — a mesma regra da movimentação (6.2b): *"Chapa 3mm: Endereço lido (B-02) não confere com a localização de origem (A-01) — se a etiqueta é antiga, reimprima"*. Sem origem escolhida o campo fica desabilitado, com a dica *"Para confirmar a leitura, escolha antes de onde o item sai."*
-- **O botão "Confirmar Entrega e Baixar Estoque"** entrega tudo o que foi separado em um clique, **sem** escolher origem — vale a regra automática.
+- **A origem da separação.** Quando o item foi separado dizendo de onde (10.2), a entrega sai **dali** sem que ninguém precise escolher de novo — inclusive pelo botão **"Confirmar Entrega e Baixar Estoque"**, que entrega tudo o que foi separado em um clique. Na janela de entrega, o **Sai de** desse item já vem com a origem da separação escolhida. A origem da separação vale **só até o que foi separado e ainda não foi entregue**: acima disso (depois de uma entrega parcial o teto de material comum sobe), o que sai nunca foi separado dali, e a entrega é automática. Item separado **sem** origem sai pela regra automática.
+- **Quando a origem da separação não serve mais** — o endereço perdeu saldo para outra saída, foi bloqueado, ou o lote foi bloqueado ou venceu —, a entrega é recusada **antes de qualquer baixa**, com o motivo e o caminho: *"Chapa 3mm: a origem da separação (A-01) não serve mais (O saldo em A-01 (1) não cobre a quantidade (5) — a saída tiraria de outros endereços) — entregue escolhendo de onde sai"*. Pelo botão **Entregar escolhendo de onde sai…**, escolha outro endereço ou **"Qualquer endereço (automático)"** — neste item, "automático" quer dizer **ignorar** a origem da separação. O sistema **não** troca de endereço sozinho: o histórico diria que saiu de onde não saiu. Se a lista de endereços não carregar, o **Sai de** mostra **"Planejada da separação (A-01)"** (a entrega usa a origem da separação) e "automático" continua disponível.
 - Itens **sem** escolha continuam sendo entregues um a um: se um deles for recusado no meio, os anteriores já saíram e ficam contados como entregues.
 
 **O disponível usado aqui soma de volta a reserva da própria requisição** — o que a aprovação reservou é daquela requisição e não pode barrá-la (9.4).
@@ -1617,7 +1618,7 @@ Os botões, na ordem do fluxo: **Iniciar Separação** (que vira **Ajustar Separ
 
 Abaixo dos itens, o bloco **Separação (N)** lista cada rodada de separação com **quem separou, quando e quantos itens tocou**; e, quando a caixa já foi conferida, a linha **Conferida por … em …**.
 
-No modal de separação, cada item mostra **Solicitado · Já separado · Saldo**, com o campo de quantidade limitado ao saldo. No modal de entrega, cada item mostra **Solicitado · Separado · Entregue · Pendente · Saldo**, e a tela antecipa o resultado: *"Será entregue: 8 UN | Permanecerá pendente: 4 UN"*.
+No modal de separação, cada item mostra **Solicitado · Já separado · Saldo**, com o campo de quantidade limitado ao saldo, e o campo **Sai de** (10.2). No detalhe da requisição, o item separado dizendo de onde mostra *"separado de A-01"* (e *"— lote L-7"* quando houver) enquanto houver separado a entregar. No modal de entrega, cada item mostra **Solicitado · Separado · Entregue · Pendente · Saldo**, e a tela antecipa o resultado: *"Será entregue: 8 UN | Permanecerá pendente: 4 UN"*.
 
 O "Saldo" mostrado é o **disponível do material somado ao que a própria requisição já reservou** — o que a aprovação reservou é dela e não pode barrá-la.
 
@@ -1630,6 +1631,14 @@ Registra a quantidade separada por item e leva a requisição para **Em Separaç
 - A aprovação por valor é verificada aqui também: requisição travada por alçada não separa (8.3).
 - **Ou grava tudo, ou nada.** O sistema valida todos os itens do formulário antes de gravar o primeiro: se um item estiver acima do máximo, a recusa aparece e **nenhum** item é gravado.
 - Uma rodada nova **apaga a conferência** já feita (10.3): a caixa mudou e precisa ser conferida de novo. Confirmar o formulário **sem nenhuma quantidade** não é rodada — leva a requisição para *Em Separação*, mas não registra nada nem apaga a conferência.
+
+**De onde sai — "Sai de" na separação.** Cada item do modal de separação tem o campo **Sai de**, com as mesmas opções da entrega (7.5): **"Qualquer endereço (automático)"** e os endereços onde o material está, como *"A-01 (10)"* ou *"B-02 — lote L-7 (4)"*. Quem separa escolhe o endereço (e o lote) de onde tirou. Regras:
+
+- **O endereço escolhido precisa cobrir** a quantidade desta rodada **somada** ao que já foi separado dali (no mesmo lote) e ainda não foi entregue — por este item ou por outro item do mesmo material na requisição. Senão: *"Chapa 3mm: O saldo em A-01 (3) não cobre a quantidade (5) — a saída tiraria de outros endereços"*, com o saldo já descontado do que está separado. As outras recusas são as da entrega, com o nome do material na frente (endereço bloqueado, lote de outro material, lote bloqueado ou vencido).
+- **Ou grava tudo, ou nada** — como a quantidade: um item recusado recusa a rodada inteira.
+- O endereço escolhido vira a **origem da separação** do item, e a entrega sai dali (7.5). Rodadas que nomeiam endereços **diferentes** para o mesmo item — inclusive uma rodada feita com o **Sai de** em automático sobre material já separado de um endereço — deixam o item **sem** origem da separação, e a entrega volta a ser automática.
+- Escolher só o lote, sem endereço, não vira origem da separação.
+- A separação continua **não mexendo em saldo** (10.5): o material separado de A-01 continua contado em A-01 até a entrega, e outra saída pode levá-lo antes — nesse caso a entrega é recusada com o caminho (7.5).
 
 ### 10.3 Conferir separação — a segunda pessoa
 

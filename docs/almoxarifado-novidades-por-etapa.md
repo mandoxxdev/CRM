@@ -931,9 +931,9 @@ SELECT s.material_id, s.localizacao_id, s.quantidade, l.ativo
   (`ativo` vazio na consulta): só por contagem/ajuste pela integração — o endereço não aparece na lista da tela.
   **Não apague linha por SQL** — a soma das linhas é o físico do material.
 
-### B. Decisões de negócio — B1 a B233; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B237; as em aberto esperam você, as tomadas estão escritas com o descartado
 
-*(**Atualizado em 2026-09-30 de B228 para B233**, com as cinco da Etapa 58; antes, de B225 para B228, com as três da Etapa 57; antes, de B222 para B225, com as três da Etapa 56; antes, de B219 para B222, com as da Etapa 55.)*
+*(**Atualizado em 2026-09-30 de B233 para B237**, com as quatro da Etapa 59; antes, de B228 para B233, com as cinco da Etapa 58; antes, de B225 para B228, com as três da Etapa 57; antes, de B222 para B225, com as três da Etapa 56; antes, de B219 para B222, com as da Etapa 55.)*
 
 *(**Atualizado em 2026-09-30 de B205 para B219**, com as quatro da Etapa 51, as três da Etapa 52, as quatro da Etapa 53 e as três da Etapa 54.)*
 
@@ -3901,6 +3901,33 @@ exclusão faz o de antes. **Descartado:** devolver ao padrão sem lote (o lote p
 controle de lote —, nos destinos **Estoque** e **Quarentena**. **Descartado:** herdar também no **Retrabalho**, que é
 uma saída: herdar um lote vencido ou com pouco saldo recusaria uma devolução que antes passava.
 
+**B234 (NOVA, da Etapa 59) — quem diz de onde o material sai é quem SEPARA.** **Escolhido:** a janela de separação
+ganha **"Sai de"** por item (endereço e lote), com as mesmas regras da entrega (o endereço precisa cobrir a quantidade;
+nada é gravado se um item falha); o item guarda essa **origem planejada**, e a entrega a usa quando não se escolhe outra —
+inclusive a de **um clique**. É quem vai à prateleira que sabe de onde tirou. **Descartado:** continuar só na entrega
+(Etapa 58) — o botão de um clique, o mais usado, ficaria para sempre sem origem (**C80**). **Descartado também:** ler a
+etiqueta do endereço na separação — fica para depois (**D (59)**).
+
+**B235 (NOVA, da Etapa 59) — a origem planejada vale só até o que foi separado e ainda não entregue, e "automático"
+é uma escolha de verdade.** **Escolhido:** separados 5 de A, a entrega usa A até 5; acima disso (depois de uma entrega
+parcial o teto de material comum sobe), o que sai **nunca foi separado dali**, e a entrega é automática. Na janela de
+entrega, a origem planejada vem **já escolhida**; trocar para **"Qualquer endereço (automático)"** num item com origem
+planejada diz ao sistema para **ignorá-la** — é a saída quando ela não serve mais. **Descartado:** aplicar a planejada à
+quantidade inteira (recusaria entregas que antes passavam).
+
+**B236 (NOVA, da Etapa 59) — a origem planejada que não serve mais RECUSA a entrega, com o caminho escrito.**
+**Escolhido:** se entre separar e entregar o endereço perdeu saldo (outra saída levou), foi bloqueado, ou o lote foi
+bloqueado/venceu, a entrega é recusada **antes de qualquer baixa**, com *"⟨material⟩: a origem da separação (⟨A⟩) não
+serve mais (⟨motivo⟩) — entregue escolhendo de onde sai"*. **Descartado:** cair em automático em silêncio — o
+histórico diria "saiu de B" para o que saiu fisicamente de A. Não há reserva **por endereço**: o saldo de A continua
+disponível para outras saídas até a entrega (**D (59)**).
+
+**B237 (NOVA, da Etapa 59) — rodadas de separação com origens diferentes deixam o item SEM origem planejada.**
+**Escolhido:** se uma rodada nova nomeia outra origem (ou nenhuma) sobre separado ainda não entregue de outra, a
+origem planejada do item vira **nenhuma** — a entrega volta ao automático. **Descartado:** guardar várias origens por
+item com a quantidade de cada (dividiria a entrega em várias baixas; escopo maior). Consequência a saber: uma segunda
+rodada feita **sem mexer** no "Sai de" (que começa em automático) apaga a origem da primeira, **sem aviso** (**D (59)**).
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -4897,6 +4924,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
     com lote pode aparecer **ocupado** (fora da lista) depois de a entrega tirar o material.
     **Etapa 58:** a entrega **pode** agora escolher de onde sai **com o lote** (**B231**) — escolhendo, o endereço
     esvazia de verdade. A entrega de um clique (**C80**) continua sem escolher, e o furo continua para ela.
+    **Etapa 59:** separando com endereço e lote (**B234**), a entrega de um clique baixa daquele lote naquele
+    endereço — o furo fica só para item separado sem escolher origem.
 
 73. **✅ RESOLVIDO NA ETAPA 54 (c757276 e 30707de) — NOVO, da Etapa 53 — o sistema ACEITA entrada em endereço INATIVO e em endereço que NÃO EXISTE.** Achado pela
     revisão do plano da Etapa 53, pelo sistema real. Cenário 1: remova um endereço vazio em Configurações →
@@ -4969,10 +4998,14 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
     completa com outros endereços, mas o histórico registra só o de entrada como origem. E, em material que permite
     saldo negativo, a falta fica negativa **no endereço de entrada** (antes, no padrão ou em "sem endereço").
 
-80. **NOVO, da Etapa 58 — a entrega de UM clique continua sem origem.** O botão **"Confirmar Entrega e Baixar Estoque"**
+80. **✅ RESOLVIDO NA ETAPA 59 (`11dcdb5`, `29eb434` + fix-round e2b7dab) — NOVO, da
+    Etapa 58 — a entrega de UM clique continua sem origem.** O botão **"Confirmar Entrega e Baixar Estoque"**
     — o jeito mais comum de entregar — não pergunta de onde sai: tira primeiro do endereço padrão, depois dos outros
     (**B206**), e material com lote continua não baixando de lote (**C72**). Para escolher, use **"Entregar escolhendo
     de onde sai…"** (**B230**). A próxima etapa quer que a **separação** registre a origem e a entrega de um clique a use.
+    **Como ficou (Etapa 59):** a separação registra de onde cada item sai (**B234**), e a entrega de um clique usa essa
+    origem, até o separado ainda não entregue (**B235**). **O que resta:** item separado **sem** escolher origem
+    continua saindo pelo automático no botão de um clique.
 
 81. **NOVO, da Etapa 58 — a entrega continua podendo sair pela metade entre itens SEM origem.** Tudo o que foi
     **escolhido** (endereço, lote, leitura) é conferido para todos os itens antes de qualquer baixa. Mas, entre itens
@@ -5597,7 +5630,15 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(58) A devolução para Retrabalho não herda o lote da entrega** (**B233**) — e essa escolha **não tem teste**: a
   regra está no código, mas nenhum cenário automático quebra se ela mudar.
 - **(58) A separação não registra de onde vai sair** — a origem é escolhida na **entrega**. Registrar na separação é
-  a próxima etapa.
+  a próxima etapa. **✅ Resolvido na Etapa 59** (**B234**).
+- **(59) Uma segunda rodada de separação feita sem mexer no "Sai de" apaga a origem da primeira, sem aviso**
+  (**B237**): o campo começa em "Qualquer endereço (automático)", e rodadas com origens diferentes deixam o item sem
+  origem planejada. A entrega volta ao automático para esse item.
+- **(59) Não há reserva por endereço.** Entre separar de A e entregar, outra saída automática pode levar o saldo de A;
+  a entrega então é recusada com *"⟨material⟩: a origem da separação (⟨A⟩) não serve mais (⟨motivo⟩) — entregue
+  escolhendo de onde sai"* (**B236**) — o operador escolhe outra origem ou "automático" na janela.
+- **(59) Ler a etiqueta do endereço na separação** fica fora — a leitura continua só na entrega e na movimentação.
+- **(59) Série e divergência por item** continuam fora (como na **(58)**).
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -6031,6 +6072,16 @@ O que **só o navegador** prova:
    *"⟨endereço⟩ — lote ⟨lote⟩ (⟨quantidade⟩)"*.
 2. **A escolha vale.** Escolha um endereço, confirme a entrega e abra o **Mapa**: o saldo saiu daquele endereço.
 3. **O botão principal continua de um clique.** **"Confirmar Entrega e Baixar Estoque"** entrega sem abrir janela.
+
+**(59) Nenhum clique foi dado nesta etapa.** Os testes provam a regra pelo servidor (11 cenários, com a separação
+pela rota) e as janelas com o servidor simulado (14 cenários). O que **só o navegador** prova:
+
+1. **"Sai de" na separação.** Em **Iniciar Separação**, cada item tem **Sai de**; escolha um endereço e confirme. No
+   detalhe da requisição, o item mostra *"separado de ⟨endereço⟩"* (e *"— lote ⟨lote⟩"* quando houver).
+2. **O um clique usa a separação.** Clique **"Confirmar Entrega e Baixar Estoque"** e abra o **Mapa**: o saldo saiu
+   do endereço escolhido na separação, não do padrão.
+3. **A janela de entrega vem com a origem da separação escolhida**, e trocar para "Qualquer endereço (automático)"
+   entrega pelo automático.
 
 ### G. Fragilidades estruturais que continuam de pé
 
@@ -14232,16 +14283,87 @@ tentativa, o status do lote fora da checagem prévia, e dois itens do mesmo mate
 com teste — menos a herança de lote no Retrabalho, declarada sem teste.
 
 
+## Etapa 59 — A separação diz de onde cada item sai, e a entrega de um clique usa (2026-09-30)
+
+Na Etapa 58 a entrega passou a poder dizer de onde sai — mas só na janela de entrega; o botão de um clique, o mais
+usado, continuava sem origem. Quem vai à prateleira e pega o material é quem **separa**. Agora a separação tem
+**"Sai de"** por item: o separador diz o endereço (e o lote) de onde tirou, o sistema confere que ali há o bastante, e
+o item passa a mostrar *"separado de A-01"*. Na hora de entregar — inclusive pelo botão de um clique — o material sai
+**de onde foi separado**. Se o endereço não serve mais, a entrega é recusada dizendo o que fazer.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A separação só registrava a quantidade | **"Sai de"** por item na separação (endereço e lote), conferido como na entrega (**B234**) |
+| — | O item mostra *"separado de ⟨endereço⟩ — lote ⟨lote⟩"* enquanto há separado a entregar |
+| O botão de um clique entregava sem origem (**C80**) | Entrega **de onde foi separado**, até o separado ainda não entregue (**B235**) |
+| Na janela de entrega, "Sai de" começava em automático | Começa **na origem da separação**; trocar para automático ignora a origem da separação (**B235**) |
+| — | Origem da separação que não serve mais: recusa com o caminho escrito (**B236**) |
+
+### As regras, com o cenário exato
+
+**1. Separar dizendo de onde.** Numa requisição aprovada, clique **Iniciar Separação**. Cada item tem **Sai de**, com
+**"Qualquer endereço (automático)"** e os endereços onde o material está (*"A-01 (10)"*, *"B-02 — lote L-7 (4)"*).
+Escolha **A-01**, informe 6 e confirme. No detalhe, o item mostra *"separado de A-01"*.
+
+**2. O endereço precisa cobrir.** Com o material em **A-01 (3)** e em outro endereço com bastante saldo, separe 5 de
+A-01: recusado com *"⟨material⟩: O saldo em ⟨A-01⟩ (3) não cobre a quantidade (5) — a saída tiraria de outros
+endereços"*, e **nada** da rodada é gravado. O que já foi separado de A-01 e ainda não foi entregue **conta**: com A-01
+em 8 e 5 já separados dali, uma nova rodada de 5 é recusada com *"… O saldo em ⟨A-01⟩ (3) não cobre a quantidade
+(5) …"* — vale também entre dois itens do mesmo material.
+
+**3. O um clique usa a separação.** Com o item separado de A-01, clique **"Confirmar Entrega e Baixar Estoque"**: o
+material sai de **A-01**, não do padrão. Entregue tudo o que foi separado, o *"separado de"* some.
+
+**4. A origem da separação que não serve mais.** Separe 5 de A-01; antes de entregar, transfira 4 de A-01 para outro
+endereço. A entrega é recusada, **sem baixar nenhum item**: *"⟨material⟩: a origem da separação (⟨A-01⟩) não serve
+mais (O saldo em ⟨A-01⟩ (1) não cobre a quantidade (5) — a saída tiraria de outros endereços) — entregue escolhendo de
+onde sai"*. Clique **"Entregar escolhendo de onde sai…"** e escolha outro endereço, ou **"Qualquer endereço
+(automático)"**.
+
+**5. Acima do separado, automático.** Separe 5 de A-01 e entregue 3. Depois, entregue 7: os 2 que ainda estavam
+separados e os 5 a mais saem pelo **automático** — o que passa do separado nunca foi separado de A-01.
+
+**6. Rodadas com origens diferentes.** Separe 3 de A-01 e, numa segunda rodada, 3 de B-02: o item fica **sem** origem
+da separação, e a entrega volta ao automático (**B237**).
+
+### O que esta etapa NÃO cobre
+
+1. Uma segunda rodada feita sem mexer no "Sai de" apaga a origem da primeira, sem aviso — **D (59)**.
+2. Não há reserva por endereço: outra saída pode levar o saldo de A-01 entre separar e entregar — **D (59)**.
+3. Ler a etiqueta do endereço **na separação** — **D (59)**.
+4. Série e divergência por item — **D (59)**.
+
+### O que a revisão encontrou
+
+A revisão do **plano** achou dois problemas graves: sem uma saída explícita, a origem da separação pegaria também o
+"automático" da janela, e uma origem que deixou de servir travaria a entrega sem gesto nenhum para corrigir — daí a
+escolha "automático" passar a **ignorar** a origem da separação; e a origem da separação tinha de entrar na conferência
+feita **antes** da primeira baixa (senão o primeiro item saía e o segundo era recusado). A revisão do **código** achou a
+janela aplicando a origem da separação à quantidade inteira depois de uma entrega parcial (recusava onde o servidor
+aceitaria), a conferência da separação contando só o separado do **próprio** item (dois itens do mesmo material
+passavam e a entrega de um clique recusava um), e um beco sem saída na janela quando a busca de endereços falhava —
+agora a janela mostra **"Planejada da separação (⟨A-01⟩)"** e "automático" volta a ser uma troca de verdade. Tudo
+corrigido e com teste.
+
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 59 entregue (2026-09-30):** **a separação diz de onde cada item sai, e a entrega de um clique usa.** A
+  janela de separação tem **"Sai de"** por item; o item mostra *"separado de ⟨endereço⟩"*; a entrega — inclusive o botão
+  de um clique — sai de onde foi separado, até o separado ainda não entregue; se a origem não serve mais, a entrega é
+  recusada dizendo o que fazer. Fecha o **C80**. **O que é seu:** as decisões **B234 a B237**; as limitações **(59)**
+  em D e as verificações **(59)** em F. **Próxima: Etapa 60 — a divergência na separação, com motivo (feature 05); ver o plano da Etapa 59.**
 
 - **Etapa 58 entregue (2026-09-30):** **a entrega de requisição diz de onde cada item sai.** Na janela de entrega, cada
   item tem **"Sai de"** (endereço e lote) e **"Confirmar endereço lido"**; a escolha é exata; nada sai pela metade quando
   há escolha; excluir a requisição devolve ao lote e ao endereço de onde saiu. O botão de um clique continua igual, e
   ao lado dele há **"Entregar escolhendo de onde sai…"**. **O que é seu:** as decisões **B229 a B233** (a **B231** muda
   a **B204**); os furos **C80** e **C81**; as limitações **(58)** em D e as verificações **(58)** em F. **Próxima: Etapa
-  59 — a separação escolhe de onde sai, e a entrega de um clique usa; ver o plano da Etapa 58.**
+  59 — a separação escolhe de onde sai, e a entrega de um clique usa; ver o plano da Etapa 58.** *(Feita — Etapa 59.)*
 
 - **Etapa 57 entregue (2026-09-30):** **o recebimento deixa escolher o endereço de cada item.** **Processar Nota** abre
   uma janela com os itens que vão entrar e um destino por item (**"Padrão do material"** continua sendo o padrão); um
