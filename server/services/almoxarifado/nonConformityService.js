@@ -62,6 +62,26 @@ const NC_DECISOES = ['ACEITAR', 'ACEITAR_SOB_DESVIO', 'DEVOLVER', 'SUBSTITUICAO'
 const NC_STATUS = ['ABERTA', 'DECIDIDA', 'CANCELADA'];
 
 /**
+ * "Este documento ENCERROU o fato" — em SQL, e em UM lugar so.
+ *
+ * Etapa 46, fix-round da Fase 5. Dois consumidores dependem desta condicao e TEM de andar juntos
+ * (`getUltimaEncerrada` e `carimbarFatoSuperado`); um terceiro, a exclusao do cartao D6, repete a
+ * mesma regra em `alertRegistry.js` com os prefixos `nc.` — e o cenario (0) de
+ * `ncCancelamento.api.test.js` guarda a copia contra deriva.
+ *
+ * Se uma das pontas considerar encerrado o que a outra nao considera, volta o "silencio completo":
+ * documento tido por encerrado que nunca recebe o carimbo de fato superado, e que por isso bloqueia
+ * a abertura do documento novo PARA SEMPRE.
+ *
+ * `decidido_em IS NOT NULL` junto de `cancelado_por_id` NAO e redundancia: hoje
+ * `cancelarNaoConformidade` so aceita `DECIDIDA`, entao todo cancelamento humano tem decisao — mas
+ * a regra que importa e "uma PESSOA encerrou um documento DECIDIDO", e escrever as duas metades
+ * deixa a invariante explicita em vez de dependente de outra funcao. Se algum dia o cancelamento
+ * voltar a alcancar `ABERTA`, esta linha e o que impede o silencio de voltar com ele.
+ */
+const SQL_ENCERRADA = "(status = 'DECIDIDA' OR (cancelado_por_id IS NOT NULL AND decidido_em IS NOT NULL))";
+
+/**
  * Etapa 44 — as DUAS decisoes de ACEITACAO, as unicas que liberam saldo (RN-01).
  *
  * As outras quatro marcam INTENCAO e nao mexem no estoque (RN-04): `SUCATEAR` passa pelas duas
@@ -128,6 +148,9 @@ const EXEC_RECUSA = {
   JA_REGISTRADA: { status: 409, mensagem: 'A execução desta não conformidade já foi registrada' },
   SERIE: { status: 400, mensagem: 'Material com controle de série não pode ser devolvido por aqui — dê baixa pela tela de Movimentações' },
   SEM_LOTE: { status: 400, mensagem: 'Não foi possível identificar o lote do material devolvido' },
+  // Etapa 46 — o documento pode ser CANCELADO entre a leitura e o claim, ou antes dele. Sem esta
+  // literal o caso caia em JA_REGISTRADA, que afirma uma execucao que nao houve.
+  CANCELADA: { status: 400, mensagem: 'Esta não conformidade foi cancelada — não há execução a registrar' },
 };
 
 /** O motivo da movimentacao da devolucao — o que a torna legivel no livro sem cruzar tabela. */
@@ -430,8 +453,26 @@ function getAbertaDe(db, referenciaTipo, referenciaId, tipo) {
 function getUltimaEncerrada(db, referenciaTipo, referenciaId, tipo) {
   return dbGet(db, `SELECT * FROM nao_conformidades_almoxarifado
     WHERE referencia_tipo = ? AND referencia_id = ? AND tipo = ?
-      AND (status = 'DECIDIDA' OR cancelado_por_id IS NOT NULL) AND fato_superado_em IS NULL
+      AND ${SQL_ENCERRADA} AND fato_superado_em IS NULL
     ORDER BY id DESC LIMIT 1`, [referenciaTipo, referenciaId, tipo]);
+}
+
+/**
+ * Carimba "o fato foi SUPERADO" nos documentos JA ENCERRADOS deste item.
+ *
+ * Extraida no fix-round da Fase 5 da Etapa 46 porque o `UPDATE` vivia DENTRO de um ramo que so
+ * era alcancado quando nao havia NC `ABERTA` — ver o comentario do CRITICAL em
+ * `sincronizarNaoConformidadeQuantidade`. Idempotente por `AND fato_superado_em IS NULL`.
+ *
+ * A condicao de "encerrado" e a MESMA de `getUltimaEncerrada`, e as duas tem de andar juntas: se
+ * uma considera um estado encerrado e a outra nao, volta o "silencio completo" (documento tido por
+ * encerrado que nunca recebe o carimbo, e portanto bloqueia a abertura do documento novo para
+ * sempre).
+ */
+function carimbarFatoSuperado(db, itemId) {
+  return dbRun(db, `UPDATE nao_conformidades_almoxarifado SET fato_superado_em = CURRENT_TIMESTAMP
+    WHERE referencia_tipo = 'RECEBIMENTO_ITEM' AND referencia_id = ? AND tipo = 'QUANTIDADE'
+      AND ${SQL_ENCERRADA} AND fato_superado_em IS NULL`, [itemId]);
 }
 
 /**
@@ -486,6 +527,21 @@ async function sincronizarNaoConformidadeQuantidade(db, user, itemId, opcoes = {
     || item.recebimento_status === STATUS_RECEBIMENTO_PROCESSADO;
   const aberta = await getAbertaDe(db, 'RECEBIMENTO_ITEM', id, 'QUANTIDADE');
 
+  // ⚠️ ETAPA 46, FIX-ROUND DA FASE 5 (CRITICAL da lente 1, reproduzido por sonda). Este carimbo
+  // ESTAVA dentro do ramo `!divergente` mais abaixo — que so e alcancado quando NAO existe NC
+  // `ABERTA`, porque TODOS os ramos de `if (aberta)` retornam. Consequencia medida: com qualquer
+  // NC aberta no instante em que o operador corrige a quantidade, o documento ENCERRADO do mesmo
+  // fato nunca era carimbado; quando o fato voltava igual, `getUltimaEncerrada` o achava,
+  // `mesmoFato` batia e NADA nascia. Falta real e viva, ZERO NC no modulo e ZERO cartao — o
+  // "silencio completo" que o comentario do ramo de baixo existe para matar, por um ramo que a
+  // suite nao cobria. O furo e ANTERIOR a esta etapa (reproduzido tambem com a NC encerrada por
+  // DECISAO, sem cancelamento nenhum); o que a 46 fez foi declarar fechada uma classe que fechava
+  // pela metade.
+  //
+  // Rodar aqui e seguro: o carimbo e idempotente (`AND fato_superado_em IS NULL`) e so alcanca
+  // documentos JA ENCERRADOS do mesmo fato — nunca a `aberta` que o ramo abaixo vai tratar.
+  if (!divergente) await carimbarFatoSuperado(db, id);
+
   if (aberta) {
     // RN-11 / D10 — a assimetria e de proposito: com o recebimento PROCESSADO o estoque ja foi
     // creditado, a conta a pagar gerada e o pedido fechado COM ESTE FATO. Uma reconferencia
@@ -526,7 +582,11 @@ async function sincronizarNaoConformidadeQuantidade(db, user, itemId, opcoes = {
       usuario_id: user?.id,
       usuario_nome: user?.nome || user?.email,
       dados_anteriores: { status: 'ABERTA', divergencia: aberta.divergencia },
-      dados_novos: { status: 'CANCELADA' },
+      // `automatico: true` e o par do `false` do cancelamento humano — os dois atos usam o MESMO
+      // verbo `NC_CANCELADA`, e sem esta marca a trilha credita a anulacao a quem apenas reconferiu
+      // a quantidade (medido na Fase 5: o COMPRAS, que toma 403 em `/cancelar`, aparecia como
+      // autor). `cancelado_por_id` fica NULL aqui de proposito: e o discriminador da etapa.
+      dados_novos: { status: 'CANCELADA', cancelado_por_id: null, automatico: true },
       justificativa: motivo,
     });
     return { efeito: 'CANCELADA', nc: await obterNaoConformidade(db, aberta.id) };
@@ -545,9 +605,10 @@ async function sincronizarNaoConformidadeQuantidade(db, user, itemId, opcoes = {
     // O carimbo diz "o fato deste documento foi SUPERADO": o item passou por um estado sem
     // divergencia depois que o documento encerrou, entao um problema futuro e problema NOVO,
     // ainda que o numero coincida.
-    await dbRun(db, `UPDATE nao_conformidades_almoxarifado SET fato_superado_em = CURRENT_TIMESTAMP
-      WHERE referencia_tipo = 'RECEBIMENTO_ITEM' AND referencia_id = ? AND tipo = 'QUANTIDADE'
-        AND (status = 'DECIDIDA' OR cancelado_por_id IS NOT NULL) AND fato_superado_em IS NULL`, [id]);
+    // ⚠️ O `UPDATE` que estava AQUI subiu para antes do `if (aberta)` — ver o comentario do
+    // CRITICAL no topo desta funcao. Ele so era alcancado quando nao havia NC aberta, e era isso
+    // que reabria o "silencio completo" descrito acima. A chamada agora e `carimbarFatoSuperado`,
+    // e ela ja rodou quando a execucao chega aqui.
     return { efeito: 'NENHUMA', nc: null };
   }
 
@@ -928,7 +989,20 @@ function efeitoExecucaoPrevisto(nc, insp, material, lote) {
   if (DECISOES_QUE_LIBERAM.includes(nc.decisao)) return recusa(EXEC_RECUSA.SEM_EXECUCAO);
 
   // (2) RN-07 — so NC DECIDIDA tem execucao. `ABERTA` (ninguem decidiu o que fazer) e `CANCELADA`
-  // (a divergencia sumiu na reconferencia) recusam.
+  // recusam.
+  //
+  // ⚠️ ESTE COMENTARIO DIZIA que `CANCELADA` significa "a divergencia sumiu na reconferencia".
+  // Isso valia ate a Etapa 45 e DEIXOU DE VALER na 46: agora `CANCELADA` tem DOIS significados, e o
+  // mais comum e o humano — uma pessoa encerrou um documento DECIDIDO cuja execucao era impossivel
+  // (serie, lote nao identificavel), com o problema ainda de pe. O comportamento desta linha esta
+  // certo nos dois casos; era a EXPLICACAO que enganava o proximo leitor. Terceira ocorrencia
+  // corrigida desta mesma classe (as outras duas estao em `alertRegistry.js`).
+  // ⚠️ E a partir do fix-round da Fase 5 o nivel 2 DISTINGUE os dois. Uma lente mediu que
+  // `/executar` num documento CANCELADO respondia *"So e possivel registrar a execucao de uma nao
+  // conformidade decidida"* — sobre um documento que FOI decidido, e cuja decisao esta gravada e
+  // legivel. A frase estava tecnicamente defensavel e praticamente enganosa: ela manda decidir o
+  // que ja esta decidido. `CANCELADA` tem literal propria, e ela diz o que aconteceu.
+  if (nc.status === 'CANCELADA') return recusa(EXEC_RECUSA.CANCELADA);
   if (nc.status !== 'DECIDIDA') return recusa(EXEC_RECUSA.NAO_DECIDIDA);
 
   // (3) RN-05, nivel DOCUMENTO — 409. E a protecao do documento; a do SALDO e o claim da inspecao,
@@ -1098,7 +1172,21 @@ async function registrarExecucao(db, user, ncId, dados = {}) {
     execucao_por_nome = ?, execucao_observacoes = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ? AND status = 'DECIDIDA' AND execucao_em IS NULL`,
     [EXECUCAO_EXECUTADA, user?.id || null, user?.nome || user?.email || null, observacoes, id]);
-  if (!upd.changes) throw erro(EXEC_RECUSA.JA_REGISTRADA.mensagem, EXEC_RECUSA.JA_REGISTRADA.status);
+  // ⚠️ `changes === 0` DEIXOU DE RECAIR NUMA LITERAL FIXA — fix-round da Fase 5, achado de uma
+  // lente que reproduziu a corrida com `Promise.all`. O comentario acima ja previa "um cancelamento
+  // concorrente entre o SELECT e este UPDATE", e a mensagem seguia dizendo *"A execucao desta nao
+  // conformidade ja foi registrada"* — com `execucao_em` NULL e `status = CANCELADA`. Era a MESMA
+  // classe de mentira que o achado 9 da Fase 2 corrigiu no lado do cancelamento, intacta deste lado.
+  //
+  // E o caso SEM corrida e mais comum ainda: `POST /executar` num documento que alguem acabou de
+  // cancelar — que e literalmente o estado do furo C64 depois da saida nova.
+  if (!upd.changes) {
+    const agora = await obterNaoConformidade(db, id);
+    const recusa = agora && agora.status === 'CANCELADA'
+      ? EXEC_RECUSA.CANCELADA
+      : EXEC_RECUSA.JA_REGISTRADA;
+    throw erro(recusa.mensagem, recusa.status);
+  }
 
   let execucao = {
     efeito: previsto.efeito, quantidade: null, material_id: null, lote_id: null,
@@ -1220,26 +1308,45 @@ const CANC_RECUSA = {
     status: 409,
     mensagem: 'A execução desta não conformidade já foi registrada — o documento não pode ser cancelado',
   },
-  // ⚠️ LITERAL PROPRIA, e ela nasceu de um achado da Fase 2 (9.3 do desenho). A NC decidida como
-  // ACEITAR/ACEITAR_SOB_DESVIO fica `DECIDIDA` com `execucao_estado = 'NAO_SE_APLICA'` e
-  // `execucao_em` NULL — o claim da decisao nunca escreve `execucao_em` —, E O SALDO JA SE MOVEU:
-  // houve DESBLOQUEIO no motor com `documento_vinculado` = o numero da NC, e `liberacao_nc_em`
-  // carimbado na inspecao. Cair no `JA_EXECUTADA` seria mentir (nao houve execucao registrada) e
-  // cair no `JA_CANCELADA` seria mentir pior. A causa e outra, e a frase diz qual.
-  JA_LIBEROU: {
+  // ⚠️ AS DUAS RECUSAS ABAIXO SUBSTITUIRAM A `JA_LIBEROU`, no fix-round da Fase 5.
+  //
+  // ~~`JA_LIBEROU`: 'A decisao desta nao conformidade ja liberou o material — o documento nao pode
+  // ser cancelado'~~ — ela nasceu do achado 9.3 da Fase 2 afirmando que, na aceitacao, "O SALDO JA
+  // SE MOVEU". Uma lente da Fase 5 mediu por sonda que isso e FALSO em dois casos reais: NC de
+  // origem `RECEBIMENTO` decidida `ACEITAR` (falta de quantidade — nao ha retencao a liberar,
+  // efeito `SEM_BLOQUEIO`) e NC MANUAL de inspecao decidida `ACEITAR_SOB_DESVIO` (a RN-09 da Etapa
+  // 44 proibe liberar). Nos dois: zero movimentacao, `liberacao_nc_em` nulo, bloqueado intacto — e
+  // a frase afirmava um fato de estoque inexistente, deixando o documento incancelavel com uma
+  // mentira. Era a classe de defeito mais caro desta base: mensagem que afirma efeito que nao
+  // houve.
+  //
+  // A regua agora e de ESTADO, nao de efeito de estoque — e por isso as frases sao verdadeiras em
+  // TODOS os casos que cobrem. `NAO_DECIDIDA` tambem carrega o caminho de saida, porque a pessoa
+  // que tenta cancelar um documento aberto precisa saber qual e o gesto certo.
+  NAO_DECIDIDA: {
     status: 409,
-    mensagem: 'A decisão desta não conformidade já liberou o material — o documento não pode ser cancelado',
+    mensagem: 'Só é possível cancelar uma não conformidade já decidida — decida o documento, ou corrija a quantidade conferida',
+  },
+  SEM_PENDENCIA: {
+    status: 409,
+    mensagem: 'Esta decisão não deixou execução pendente — não há o que encerrar',
   },
   JA_CANCELADA: { status: 409, mensagem: 'Esta não conformidade já está cancelada' },
+  // ⚠️ Fallback do `changes === 0` quando a releitura NAO acha recusa: a linha mudou duas vezes no
+  // meio (o caso medido e `/executar` gravando `execucao_em` e o rollback dele limpando). Nao e
+  // "ja esta cancelada" — essa frase mentiria — e nao e erro do chamador: repetir resolve.
+  CONCORRENCIA: {
+    status: 409,
+    mensagem: 'O documento mudou de estado durante o cancelamento — tente de novo',
+  },
 };
 
-/** As DUAS mensagens de sucesso, uma por estado anterior. A diferenca importa: dizer "a execucao
- * deixa de ser cobrada" num documento que nunca foi decidido convidaria a procurar uma decisao que
- * nao existe. */
-const CANC_MSG = {
-  ABERTA: 'Documento cancelado — ele não estava decidido, e nada foi executado',
-  DECIDIDA: 'Documento cancelado — a decisão fica registrada, e a execução deixa de ser cobrada',
-};
+/** A mensagem de sucesso. ⚠️ ERA UM MAPA DE DUAS, uma por estado anterior — e a de `ABERTA`
+ * ("ele nao estava decidido, e nada foi executado") morreu com o corte de escopo do fix-round da
+ * Fase 5: hoje so documento DECIDIDO com execucao PENDENTE cancela, entao o unico estado anterior
+ * possivel e `DECIDIDA`. Fica UMA constante, e nao um mapa de um item, para nao sugerir uma
+ * variacao que nao existe mais. */
+const CANC_MSG_DECIDIDA = 'Documento cancelado — a decisão fica registrada, e a execução deixa de ser cobrada';
 
 /** O minimo do motivo. Mesma regua e mesmo molde de `PUT /conferencias/:id/cancelar`
  * (`routes/almoxarifado.js`), cuja justificativa vale igual aqui: encerrar um documento de
@@ -1358,25 +1465,42 @@ async function cancelarNaoConformidade(db, user, ncId, dados = {}) {
   const estadoAnterior = atual.status;
   const execucaoAnterior = atual.execucao_estado || null;
 
-  // O claim e a serializacao: duas chamadas simultaneas nao cancelam duas vezes, e uma corrida com
-  // `POST /executar` (que grava `execucao_em`) perde aqui em vez de passar. As condicoes do WHERE
-  // repetem as checagens acima DE PROPOSITO — a leitura de cima da a MENSAGEM certa, o WHERE da a
-  // GARANTIA.
+  // O claim e a serializacao, e a Fase 5 provou que ela IMPORTA: com `Promise.all` de dois
+  // cancelamentos na mesma NC, o claim limpo da `1 sucesso / 1 recusa` e UMA linha de trilha; sem
+  // ele, DOIS sucessos e DUAS linhas, com o segundo chamador recebendo 200 sobre documento ja
+  // cancelado. O fechamento da T2 declarou "a corrida nao e reproduzivel no harness" — verdade
+  // para `cancelar x executar`, FALSO para `cancelar x cancelar`, e o cenario que a prende esta em
+  // `ncCancelamento.api.test.js`.
+  //
+  // As condicoes do WHERE repetem as checagens acima DE PROPOSITO: a leitura de cima da a MENSAGEM
+  // certa, o WHERE da a GARANTIA.
+  //
+  // ⚠️ `AND ? IS NOT NULL` sobre o autor NAO e paranoia: `cancelado_por_id` e o DISCRIMINADOR
+  // estrutural da etapa (tres consumidores dependem dele), e ele era gravado por um
+  // `user?.id || null` de campo de auditoria. Com um usuario sem `id` — ou com `id: 0` — a linha
+  // gravava `NULL` e passava a SIGNIFICAR O OPOSTO (cancelamento automatico, "o fato sumiu"),
+  // reabrindo os tres consumidores. A rota nao alcanca isso hoje (o JWT sempre carrega `id`), mas
+  // um discriminador estrutural nao pode depender de um `|| null`. Achado da lente 1 da Fase 5.
+  const cancelPor = user?.id || null;
   const upd = await dbRun(db, `UPDATE nao_conformidades_almoxarifado SET
     status = 'CANCELADA', motivo_cancelamento = ?, cancelado_em = CURRENT_TIMESTAMP,
     cancelado_por_id = ?, cancelado_por_nome = ?, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ? AND execucao_em IS NULL
-      AND (status = 'ABERTA' OR (status = 'DECIDIDA' AND execucao_estado = ?))`,
-    [motivo, user?.id || null, user?.nome || user?.email || null, id, EXECUCAO_PENDENTE]);
+    WHERE id = ? AND execucao_em IS NULL AND status = 'DECIDIDA' AND execucao_estado = ?
+      AND ? IS NOT NULL`,
+    [motivo, cancelPor, user?.nome || user?.email || null, id, EXECUCAO_PENDENTE, cancelPor]);
 
-  // ⚠️ `changes === 0` NAO recai numa literal fixa. O WHERE tem tres condicoes e cada uma tem uma
-  // frase diferente; devolver sempre "ja esta cancelada" mentiria na corrida com `/executar`, que
-  // e justamente a corrida que este claim existe para perder. Rele a linha e escolhe.
+  // ⚠️ `changes === 0` NAO recai numa literal fixa. Cada condicao do WHERE tem uma frase propria, e
+  // devolver sempre "ja esta cancelada" mentiria na corrida com `/executar`.
+  //
+  // E o FALLBACK tambem deixou de ser `JA_CANCELADA`, no fix-round: `recusaDoCancelamento` devolve
+  // `null` exatamente para as linhas que o WHERE aceita, entao "claim falhou E a releitura nao acha
+  // recusa" significa que a linha mudou DUAS vezes no meio (ex.: `/executar` gravou `execucao_em` e
+  // o rollback dele a limpou). Dizer "ja esta cancelada" ali seria a mesma classe de mentira que
+  // este bloco existe para evitar — e o `cancelPor` nulo cai aqui tambem.
   if (!upd.changes) {
     const agora = await obterNaoConformidade(db, id);
     const porQue = agora ? recusaDoCancelamento(agora) : CANC_RECUSA.NAO_ENCONTRADA;
-    const escolhida = porQue || CANC_RECUSA.JA_CANCELADA;
-    throw erro(escolhida.mensagem, escolhida.status);
+    throw erro((porQue || CANC_RECUSA.CONCORRENCIA).mensagem, (porQue || CANC_RECUSA.CONCORRENCIA).status);
   }
 
   try {
@@ -1389,7 +1513,18 @@ async function cancelarNaoConformidade(db, user, ncId, dados = {}) {
       // Os DOIS campos anteriores, e o segundo nao e enfeite: a RN-06 conserva `execucao_estado`,
       // entao a trilha e o unico lugar que diz que havia execucao PENDENTE quando se cancelou.
       dados_anteriores: { status: estadoAnterior, execucao_estado: execucaoAnterior },
-      dados_novos: { status: 'CANCELADA', cancelado_por_nome: user?.nome || user?.email || null },
+      // ⚠️ `cancelado_por_id` na trilha, e `automatico: false` explicito — achado da lente 2 da
+      // Fase 5. Os DOIS escritores de `CANCELADA` usam o MESMO verbo `NC_CANCELADA`, e nenhum
+      // gravava o discriminador: quem audita lia "Nao conformidade cancelada — <nome>" e concluia
+      // que aquela pessoa anulou o documento. Medido: o COMPRAS, que toma 403 em `/cancelar`,
+      // aparecia como autor ao disparar o cancelamento AUTOMATICO por `/conferir`. A trilha agora
+      // diz qual dos dois atos foi.
+      dados_novos: {
+        status: 'CANCELADA',
+        cancelado_por_id: cancelPor,
+        cancelado_por_nome: user?.nome || user?.email || null,
+        automatico: false,
+      },
       justificativa: motivo,
     });
   } catch (e) {
@@ -1402,25 +1537,35 @@ async function cancelarNaoConformidade(db, user, ncId, dados = {}) {
     cancelamento: {
       estado_anterior: estadoAnterior,
       execucao_estado_anterior: execucaoAnterior,
-      mensagem: CANC_MSG[estadoAnterior] || CANC_MSG.ABERTA,
+      mensagem: CANC_MSG_DECIDIDA,
     },
   };
-}
 
-/** A regua das recusas, em funcao PURA da linha — usada na leitura (para a mensagem) e de novo
- * depois do claim (para escolher a mensagem na corrida). Ordem importa: `execucao_em` antes de
- * `NAO_SE_APLICA`, porque uma NC executada tem os dois estados possiveis e a causa mais forte e a
- * execucao registrada. */
+}
+/**
+ * A regua das recusas, em funcao PURA da linha — usada na leitura (para a mensagem) e de novo
+ * depois do claim (para escolher a mensagem quando a linha mudou no meio).
+ *
+ * ⚠️ REESCRITA NO FIX-ROUND DA FASE 5, e a mudanca e de ESCOPO, nao de estilo. Duas lentes
+ * independentes mostraram, por sonda executada, que cancelar NC `ABERTA` silencia divergencia
+ * VIVA: o documento morre sem decisao, o item sai do cartao D6, o gancho nao reabre (a RN-05 o
+ * trata como encerramento) e NAO EXISTE tela de abertura manual. A RN-01 era escopo ACRESCENTADO
+ * — o beco que a etapa existe para resolver e so `DECIDIDA` + `PENDENTE` —, e era ela que abria
+ * essa porta. Ver a letra B: o que foi escolhido, e o que foi descartado.
+ *
+ * E a antiga `JA_LIBEROU` MENTIA em dois casos medidos: NC de origem `RECEBIMENTO` decidida
+ * `ACEITAR` e NC manual de inspecao decidida `ACEITAR_SOB_DESVIO` ficam
+ * `DECIDIDA + NAO_SE_APLICA` com **nada movido** — sem movimentacao, sem `liberacao_nc_em` —, e a
+ * frase afirmava "ja liberou o material". A regua agora e de ESTADO, nao de efeito de estoque, e
+ * por isso a frase pode ser verdadeira em todos os casos que ela cobre.
+ */
 function recusaDoCancelamento(nc) {
+  // Ordem importa: a execucao registrada e a causa mais forte, e uma NC executada tem tambem
+  // `execucao_estado` preenchido — se `SEM_PENDENCIA` viesse antes, a mensagem trocaria de causa.
   if (nc.execucao_em) return CANC_RECUSA.JA_EXECUTADA;
   if (nc.status === 'CANCELADA') return CANC_RECUSA.JA_CANCELADA;
-  if (nc.status === 'DECIDIDA' && nc.execucao_estado === EXECUCAO_NAO_SE_APLICA) {
-    return CANC_RECUSA.JA_LIBEROU;
-  }
-  if (nc.status !== 'ABERTA' && nc.status !== 'DECIDIDA') return CANC_RECUSA.JA_CANCELADA;
-  if (nc.status === 'DECIDIDA' && nc.execucao_estado !== EXECUCAO_PENDENTE) {
-    return CANC_RECUSA.JA_LIBEROU;
-  }
+  if (nc.status !== 'DECIDIDA') return CANC_RECUSA.NAO_DECIDIDA;
+  if (nc.execucao_estado !== EXECUCAO_PENDENTE) return CANC_RECUSA.SEM_PENDENCIA;
   return null;
 }
 async function obterNaoConformidade(db, ncId) {
@@ -1454,7 +1599,7 @@ module.exports = {
   EXECUCAO_EXECUTADA,
   EXECUCAO_NAO_SE_APLICA,
   CANC_RECUSA,
-  CANC_MSG,
+  CANC_MSG_DECIDIDA,
   EFEITO_MSG,
   EFEITO_EXEC_MSG,
   EXEC_RECUSA,

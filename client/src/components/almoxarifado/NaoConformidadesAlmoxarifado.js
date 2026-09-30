@@ -607,7 +607,14 @@ const NaoConformidadesAlmoxarifado = () => {
                           </>
                         ) : nc.status === 'CANCELADA' ? (
                           <div style={{ color: 'var(--gmp-text-light)' }}>
+                            {/* ⚠️ O AUTOR entrou no fix-round da Fase 5: a coluna `cancelado_por_nome` viajava
+                                na projeção desde a T2 e a tela não a mostrava em lugar nenhum — o desenho
+                                justificou a coluna dizendo que "a tela nunca poderia mostrar quem cancelou",
+                                a coluna entrou e a tela continuou sem mostrar. Quando o nome falta (linha
+                                antiga, ou cancelamento automático da reconferência) a frase fica só com a
+                                data, que é o que ela dizia antes. */}
                             Cancelada em {formatDataHora(nc.cancelado_em)}
+                            {nc.cancelado_por_nome ? ` por ${nc.cancelado_por_nome}` : ''}
                           </div>
                         ) : '—'}
                       </td>
@@ -629,9 +636,18 @@ const NaoConformidadesAlmoxarifado = () => {
                           nesta havia uma execução pendente, e ela foi encerrada por alguém, com
                           motivo (visível no painel de detalhes). O texto ECOA a literal do toast,
                           então quem cancelou vê a tela confirmar o que acabou de ler, e quem
-                          chega depois entende por que o documento saiu da fila de Compras. */}
+                          chega depois entende por que o documento saiu da fila de Compras.
+
+                          ⚠️ O RAMO GANHOU `execucao_estado === 'PENDENTE'` NO FIX-ROUND DA FASE 5,
+                          e sem ele a frase acima era FALSA num caso: a NC cancelada que NUNCA foi
+                          decidida (o cancelamento automático da reconferência, e — antes do corte
+                          de escopo — o humano sobre NC aberta) não tinha execução pendente
+                          nenhuma, e a célula afirmava uma cobrança que nunca existiu. Antes desta
+                          etapa aquela linha mostrava `—`, e é para lá que ela volta. Achado de uma
+                          lente da Fase 5, que mediu o cenário (6) da suíte passando verde COM a
+                          contradição viva. */}
                       <td style={{ fontSize: '0.8rem' }}>
-                        {nc.status === 'CANCELADA' ? (
+                        {nc.status === 'CANCELADA' && nc.execucao_estado === 'PENDENTE' ? (
                           <span style={{ color: 'var(--gmp-text-light)' }}>Deixou de ser cobrada</span>
                         ) : nc.execucao_estado === 'EXECUTADA' ? (
                           <>
@@ -704,8 +720,7 @@ const NaoConformidadesAlmoxarifado = () => {
                               fila seria um convite permanente a um 403 que não é engano dele.
                               Continua falhando ABERTO — `pode()` devolve `true` enquanto a carga
                               de permissões não voltou. Quem manda continua sendo o backend. */}
-                          {(nc.status === 'ABERTA'
-                            || (nc.status === 'DECIDIDA' && nc.execucao_estado === 'PENDENTE'))
+                          {nc.status === 'DECIDIDA' && nc.execucao_estado === 'PENDENTE'
                             && pode('cancelar_nao_conformidade') && (
                             <button
                               type="button"

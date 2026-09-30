@@ -213,7 +213,11 @@ async function listarReprovados(db, { dias, inspecaoId, excluirComExecucao } = {
  *
  * ⚠️ ETAPA 46 — A REGUA GANHOU UMA SEGUNDA METADE, e o paragrafo acima ficou VERDADEIRO SO PARA
  * O CANCELAMENTO AUTOMATICO. A regua atual e
- * `status <> 'CANCELADA' OR cancelado_por_id IS NOT NULL`.
+ * `status <> 'CANCELADA' OR (cancelado_por_id IS NOT NULL AND decidido_em IS NOT NULL)` — e a
+ * segunda metade ganhou o `decidido_em` no FIX-ROUND da Fase 5: duas lentes mediram que, sem ele,
+ * cancelar uma NC ABERTA tirava do cartao uma divergencia VIVA sobre a qual ninguem decidiu nada.
+ * Hoje o cancelamento humano so alcanca documento DECIDIDO, mas a condicao fica escrita nas duas
+ * metades porque e ela que impede o silencio de voltar se o escopo do cancelamento se alargar.
  *
  * O porque: a Etapa 46 criou o cancelamento HUMANO (`cancelarNaoConformidade`), em que a
  * divergencia NAO foi corrigida — ela continua de pe, e uma pessoa encerrou o documento. Com a
@@ -235,7 +239,8 @@ async function listarDivergenciasRecebimento(db, { dias, recebimentoId, excluirC
       SELECT 1 FROM nao_conformidades_almoxarifado nc
       WHERE nc.referencia_tipo = 'RECEBIMENTO_ITEM' AND nc.referencia_id = ri.id
         AND nc.tipo = 'QUANTIDADE'
-        AND (nc.status <> 'CANCELADA' OR nc.cancelado_por_id IS NOT NULL))` : '';
+        AND (nc.status <> 'CANCELADA'
+             OR (nc.cancelado_por_id IS NOT NULL AND nc.decidido_em IS NOT NULL)))` : '';
   return dbAll(db, `
     SELECT ri.id AS item_id, ri.recebimento_id, m.codigo AS material_codigo,
       m.nome AS material_nome, ri.quantidade_esperada, ri.quantidade_recebida,
@@ -930,8 +935,8 @@ const ALERT_REGISTRY = Object.freeze([
     corpo: (linha) => [
       `Não conformidade: ${linha.numero}`,
       `Material: ${linha.material_codigo ? `${linha.material_codigo} — ${linha.material_nome}` : '-'}`,
-      `Tipo: ${linha.tipo}`,
-      `Origem: ${linha.origem}`,
+      `Tipo: ${linha.tipo || '-'}`,
+      `Origem: ${linha.origem || '-'}`,
       `Aberta há: ${linha.dias_parada} dia(s)`,
       // A NC de origem INSPECAO tambem congela o `recebimento_id` (o SQL da listagem nao e
       // polimorfico, T1), mas a NC aberta a mao pode nao ter nenhum — dai o travessao.
@@ -941,7 +946,7 @@ const ALERT_REGISTRY = Object.freeze([
   {
     chave: 'NAO_CONFORMIDADE_EXECUCAO_PENDENTE',
     titulo: 'Execução pendente',
-    descricao: 'Não conformidades decididas cuja execução segue pendente há mais dias que o configurado.',
+    descricao: 'Não conformidades decididas cuja execução segue pendente há mais dias que o configurado. Se a execução for impossível (material com número de série, lote não identificável), a Qualidade pode cancelar o documento.',
     configDias: { chave: 'alerta_nc_execucao_pendente_dias', default: 7 },
     // Etapa 46, T3 (RN-08) — a 15a entrada do registro.
     //
@@ -989,13 +994,22 @@ const ALERT_REGISTRY = Object.freeze([
     corpo: (linha) => [
       `Não conformidade: ${linha.numero}`,
       `Material: ${linha.material_codigo ? `${linha.material_codigo} — ${linha.material_nome}` : '-'}`,
-      `Tipo: ${linha.tipo}`,
-      `Origem: ${linha.origem}`,
+      `Tipo: ${linha.tipo || '-'}`,
+      `Origem: ${linha.origem || '-'}`,
       // A DECISAO e o dado que distingue este e-mail do da irma: quem le precisa saber O QUE
       // ficou combinado (devolver? substituir? sucatear?) para saber o que executar.
       `Decisão: ${linha.decisao || '-'}`,
       `Decidida há: ${linha.dias_pendente} dia(s)`,
       `Recebimento: ${linha.recebimento_numero || '-'}${linha.nota_fiscal ? ` (NF ${linha.nota_fiscal})` : ''}`,
+      // ⚠️ A SAIDA NOMEADA NO CORPO, e ela e o conserto de um achado da Fase 5 (lente 2, por sonda
+      // HTTP): quem recebe este aviso e o COMPRAS (ele tem `ver_alertas`), e o COMPRAS NAO TEM
+      // porta de saida para o documento — `/executar` e 400 fatal e `/cancelar` e 403. A QUALIDADE,
+      // unico perfil nao-admin que cancela, esta FORA de `ver_alertas`. Sem esta linha o cartao
+      // ficava aceso indefinidamente para quem so pode tomar 400: o beco reencenado uma camada
+      // acima. DESCARTADO por ora: por a QUALIDADE em `ver_alertas` — alargar permissao e menos
+      // reversivel que escrever a saida, e a central carrega o VALOR EM DINHEIRO do estoque parado
+      // (a razao registrada de a QUALIDADE estar fora). Registrado na letra B.
+      'Execução impossível (número de série, lote não identificável)? A Qualidade pode cancelar o documento em Almoxarifado → Não Conformidades.',
     ].join('\n'),
   },
 ]);

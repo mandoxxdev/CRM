@@ -949,22 +949,28 @@ describe('NaoConformidadesAlmoxarifado — cancelar o documento', () => {
     await clicar(botaoCancelar(linhas()[indice]));
   }
 
-  test('(34) o botão Cancelar aparece em ABERTA e em DECIDIDA+PENDENTE — e em nenhuma das outras três', async () => {
+  test('(34) o botão Cancelar aparece SÓ em DECIDIDA+PENDENTE — e em nenhum dos outros quatro', async () => {
+    // ⚠️ ESTE CENÁRIO MUDOU NO FIX-ROUND DA FASE 5, e a mudança é de ESCOPO: a RN-01 (cancelar NC
+    // `ABERTA`) MORREU. Duas lentes mediram, por sonda, que ela silenciava divergência VIVA — o
+    // documento morria sem decisão, o item saía do cartão e o gancho não reabria. Cancelar `ABERTA`
+    // agora é 409 no servidor, com a literal que ensina o caminho (decidir, ou corrigir a
+    // quantidade), e a tela não oferece o botão que produziria essa recusa.
     ncDoBanco = [NC_ABERTA, NC_A_EXECUTAR, NC_DECIDIDA, NC_EXECUTADA, NC_CANCELADA_APOS_DECISAO];
     await renderizar();
     expect(linhas()).toHaveLength(5);
 
-    // As duas POSITIVAS — são elas que carregam o cenário: sem elas, as negativas abaixo
-    // passariam com a tabela vazia (a forma de teste vazio que esta base já pagou três vezes).
-    expect(linhas()[0].textContent).toContain('NC-2026-0007');   // ABERTA
-    expect(botaoCancelar(linhas()[0])).toBeDefined();
+    // A POSITIVA — é ela que carrega o cenário: sem ela, as negativas abaixo passariam com a
+    // tabela vazia (a forma de teste vazio que esta base já pagou três vezes).
     expect(linhas()[1].textContent).toContain('NC-2026-0021');   // DECIDIDA + PENDENTE
     expect(botaoCancelar(linhas()[1])).toBeDefined();
 
-    // As três negativas, cada uma com uma recusa DIFERENTE do servidor:
-    //   DECIDIDA + NAO_SE_APLICA -> 409 "A decisão desta não conformidade já liberou o material…"
+    // As QUATRO negativas, cada uma com uma recusa DIFERENTE do servidor:
+    //   ABERTA                   -> 409 "Só é possível cancelar uma não conformidade já decidida…"
+    //   DECIDIDA + NAO_SE_APLICA -> 409 "Esta decisão não deixou execução pendente…"
     //   DECIDIDA + EXECUTADA     -> 409 "A execução desta não conformidade já foi registrada…"
     //   CANCELADA                -> 409 "Esta não conformidade já está cancelada"
+    expect(linhas()[0].textContent).toContain('NC-2026-0007');
+    expect(botaoCancelar(linhas()[0])).toBeUndefined();
     expect(linhas()[2].textContent).toContain('NC-2026-0008');
     expect(botaoCancelar(linhas()[2])).toBeUndefined();
     expect(linhas()[3].textContent).toContain('NC-2026-0022');
@@ -997,10 +1003,13 @@ describe('NaoConformidadesAlmoxarifado — cancelar o documento', () => {
   });
 
   test('(36) motivo curto NÃO chama a API, o botão fica desabilitado e o modal continua aberto', async () => {
+    // A linha 0 tem de ser a DECIDIDA+PENDENTE: depois do corte de escopo do fix-round, a
+    // `ABERTA` (o padrao do `beforeEach`) nao tem botao de cancelar.
+    ncDoBanco = [NC_A_EXECUTAR];
     await abrirCancelamentoDa(0);
     // Positiva: o modal abriu no documento certo e o campo existe.
     expect(container.querySelector('.almox-modal')).not.toBeNull();
-    expect(container.querySelector('.almox-modal').textContent).toContain('Cancelar NC-2026-0007');
+    expect(container.querySelector('.almox-modal').textContent).toContain('Cancelar NC-2026-0021');
     expect(campoPorLabel('Motivo')).not.toBeNull();
 
     // ⚠️ A ORDEM DAS ASSERÇÕES AQUI É DE PROPÓSITO, e foi corrigida no controle positivo: com as
@@ -1111,8 +1120,35 @@ describe('NaoConformidadesAlmoxarifado — cancelar o documento', () => {
     // E o que a célula diz no lugar: ela ECOA o toast ("a execução deixa de ser cobrada") em vez
     // de deixar a célula igual à da NC nunca decidida — ver o comentário da coluna no componente.
     expect(celulaExecucao(linhas()[1]).textContent).toContain('cobrada');
+
   });
 
+
+  test('(39b) a CANCELADA que nunca foi decidida mostra `—`, não "Deixou de ser cobrada"', async () => {
+    // ⚠️ NASCEU DO FIX-ROUND DA FASE 5, e sem ele o conserto do (39) ficava largo: uma lente mediu
+    // que a célula dizia "Deixou de ser cobrada" TAMBÉM na NC cancelada que NUNCA foi decidida — o
+    // cancelamento AUTOMÁTICO da reconferência, que deixa `execucao_estado` NULL. Ali não havia
+    // cobrança nenhuma para deixar de existir, e antes desta etapa a célula mostrava `—`. É para
+    // lá que ela volta. O `(39)` sozinho passava verde com a contradição viva.
+    ncDoBanco = [NC_A_EXECUTAR, {
+      ...NC_ABERTA, id: 26, numero: 'NC-2026-0026', status: 'CANCELADA',
+      cancelado_em: '2026-09-30 11:00:00', motivo_cancelamento: 'Divergência corrigida na reconferência',
+      execucao_estado: null, cancelado_por_id: null, cancelado_por_nome: null,
+    }];
+    await renderizar();
+    expect(linhas()).toHaveLength(2);
+
+    // Metade POSITIVA: a linha que cobra continua cobrando.
+    expect(linhas()[0].textContent).toContain('NC-2026-0021');
+    expect(celulaExecucao(linhas()[0]).textContent).toContain('Pendente');
+
+    // A negativa, que é o achado.
+    expect(linhas()[1].textContent).toContain('NC-2026-0026');
+    expect(linhas()[1].textContent).toContain('Cancelada');            // o badge de status fica
+    expect(celulaExecucao(linhas()[1]).textContent).not.toContain('cobrada');
+    expect(celulaExecucao(linhas()[1]).textContent).not.toContain('Pendente');
+    expect(celulaExecucao(linhas()[1]).textContent.trim()).toBe('—');
+  });
   // 🔴 Achado 8 da Fase 2, e a TERCEIRA aparição deste padrão nesta base.
   test('(40) cancelar com a fila ligada larga OS DOIS filtros — a linha não some junto com o toast', async () => {
     // O mock respeita os filtros, como o serviço faz. Sem isto o cenário provaria NADA: a lista
@@ -1158,36 +1194,39 @@ describe('NaoConformidadesAlmoxarifado — cancelar o documento', () => {
     expect(container.querySelector('.almox-empty')).toBeNull();
   });
 
-  test('(41) cancelar uma ABERTA com o filtro padrão também larga o status — mesmo modo de falha', async () => {
-    // A segunda metade do achado 8: o padrão da tela é "Abertas" (`:207`), então cancelar uma NC
-    // aberta faz a linha sumir mesmo sem fila nenhuma ligada.
-    api.get.mockImplementation((url, config) => {
-      if (url === '/almoxarifado/nao-conformidades') {
-        const status = config?.params?.status;
-        const itens = status ? ncDoBanco.filter((nc) => nc.status === status) : ncDoBanco;
-        return Promise.resolve({ data: { itens } });
-      }
-      if (url === '/almoxarifado/anexos') return Promise.resolve({ data: [] });
-      return Promise.resolve({ data: [] });
-    });
+  test('(41) o motivo NÃO vaza de um documento para o outro — o campo nasce vazio a cada abertura', async () => {
+    // ⚠️ ESTE CENÁRIO SUBSTITUIU o antigo (41) ("cancelar uma ABERTA com o filtro padrão também
+    // larga o status"), que morreu com o corte de escopo: cancelar `ABERTA` deixou de existir.
+    //
+    // E ele vem de um achado de lente da Fase 5, provado por execução: removendo o reset do campo,
+    // os 43 cenários continuavam VERDES. O defeito é alcançável e caro — abrir o modal da NC A,
+    // digitar o motivo, clicar Voltar, abrir o modal da NC B: o campo vem pré-preenchido com o
+    // motivo de A, JÁ com 5+ caracteres, logo com o botão HABILITADO. Um clique cancela a NC B
+    // com o motivo de outra NC, e o motivo é o único registro de POR QUE o documento morreu.
+    ncDoBanco = [NC_A_EXECUTAR, { ...NC_A_EXECUTAR, id: 25, numero: 'NC-2026-0025' }];
     await renderizar();
-    expect(chamadasLista()[0][1].params).toEqual({ limite: 200, status: 'ABERTA' });
-    expect(linhas()).toHaveLength(1);
-    expect(linhas()[0].textContent).toContain('NC-2026-0007');
+    expect(linhas()).toHaveLength(2);
 
     await clicar(botaoCancelar(linhas()[0]));
-    preencher(campoPorLabel('Motivo'), 'divergencia corrigida na reconferencia');
-    ncDoBanco = ncDoBanco.map((nc) => (nc.id === 7 ? {
-      ...nc, status: 'CANCELADA', cancelado_em: '2026-09-30 09:10:00',
-      motivo_cancelamento: 'divergencia corrigida na reconferencia',
-    } : nc));
+    expect(container.querySelector('.almox-modal').textContent).toContain('Cancelar NC-2026-0021');
+    preencher(campoPorLabel('Motivo'), 'motivo que pertence SO a NC-2026-0021');
+    expect(campoPorLabel('Motivo').value).toBe('motivo que pertence SO a NC-2026-0021');
+    await clicarBotaoModal('Voltar');
+    expect(container.querySelector('.almox-modal')).toBeNull();
+
+    // O SEGUNDO documento: o campo tem de nascer vazio, e o botão desabilitado com ele.
+    await clicar(botaoCancelar(linhas()[1]));
+    expect(container.querySelector('.almox-modal').textContent).toContain('Cancelar NC-2026-0025');
+    expect(campoPorLabel('Motivo').value).toBe('');
+    expect(botaoModal('Cancelar documento').disabled).toBe(true);
+
+    // E a metade POSITIVA: com motivo próprio, o POST vai com o motivo DESTE documento e para o id
+    // DESTE documento. Sem ela o cenário passaria com um modal que não escreve nada.
+    preencher(campoPorLabel('Motivo'), 'motivo proprio da NC-2026-0025');
     await clicarBotaoModal('Cancelar documento');
     await act(async () => {});
-
-    expect(chamadasLista()[chamadasLista().length - 1][1].params).toEqual({ limite: 200 });
-    expect(filtroStatus().value).toBe('');
-    expect(container.textContent).toContain('NC-2026-0007');
-    expect(container.querySelector('.almox-empty')).toBeNull();
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/nao-conformidades/25/cancelar',
+      { motivo: 'motivo proprio da NC-2026-0025' });
   });
 
   test('(42) o modal avisa que a decisão NÃO é apagada, e que o que acaba é a cobrança da execução', async () => {

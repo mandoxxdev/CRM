@@ -1,44 +1,53 @@
 /**
- * Etapa 46, T2 — CANCELAR o documento, e a régua do "encerrado por PESSOA".
+ * Etapa 46, T2 (+ fix-round da Fase 5) — CANCELAR o documento, e a régua do "encerrado por PESSOA".
  *
  * Plano:  docs/superpowers/plans/2026-09-30-almoxarifado-etapa46-nc-destravada.md (T2)
- * Design: docs/superpowers/specs/2026-09-30-almoxarifado-etapa46-nc-destravada-design.md (secoes 5 e 9)
+ * Design: docs/superpowers/specs/2026-09-30-almoxarifado-etapa46-nc-destravada-design.md (secoes 5, 9 e 10)
  *
  * ── POR QUE ESTA ETAPA EXISTE ────────────────────────────────────────────────────────────────
  * A Etapa 45 recusa a execucao de material com serie, e de lote nao identificavel, com 400
  * FATAL. A recusa esta certa; o que sobrava era um documento DECIDIDA + PENDENTE que NADA em tela
  * nenhuma tirava de la (furo C64, dois revisores independentes).
  *
- * ── O QUE A FASE 2 MUDOU, E E O QUE ESTE ARQUIVO PRENDE ──────────────────────────────────────
- * O discriminador do cancelamento HUMANO nao e `decidido_em` — uma NC ABERTA cancelada por pessoa
- * tem `decidido_em IS NULL`, a MESMA assinatura do cancelamento automatico. E `cancelado_por_id`.
- * E "cancelado por pessoa" e um ENCERRAMENTO, como decidir: os TRES consumidores do estado
- * passam a trata-lo assim, e tocar so um deles reabre o furo do "silencio completo".
+ * ── O CORTE DE ESCOPO DO FIX-ROUND, E ELE MUDOU METADE DESTE ARQUIVO ─────────────────────────
+ * A RN-01 (cancelar NC `ABERTA`) MORREU. Duas lentes da Fase 5 mediram, por sonda, que ela
+ * silenciava divergencia VIVA: o documento morria sem decisao, o item saia do cartao D6, o gancho
+ * nao reabria (a RN-05 o tratava como encerramento) e nao existe tela de abertura manual. O beco
+ * que a etapa existe para resolver e SO `DECIDIDA` + `PENDENTE`. Cancelar `ABERTA` agora RECUSA,
+ * com a literal que ensina o caminho certo (decidir, ou corrigir a quantidade).
+ *
+ * E a recusa `JA_LIBEROU` morreu com ela: a regua era de CLASSE de decisao ("aceitacao") e a
+ * frase afirmava efeito de ESTOQUE ("ja liberou o material") — falso, medido, em NC de origem
+ * RECEBIMENTO e em NC manual de inspecao. A regua agora e de ESTADO, e as duas frases novas
+ * (`NAO_DECIDIDA`, `SEM_PENDENCIA`) sao verdadeiras em todos os casos que cobrem.
  *
  * ── O QUE CADA CENARIO PRENDE ────────────────────────────────────────────────────────────────
  *   (1) motivo com menos de 5 caracteres RECUSA, com a literal congelada
  *   (2) 404 em id inexistente
- *   (3) cancelar ABERTA: estado, autor, motivo, e o indice parcial LIBERADO
- *   (4) cancelar DECIDIDA+PENDENTE: a DECISAO sobrevive campo a campo
+ *   (3) cancelar `ABERTA` RECUSA, e a literal ENSINA a saida  [corte de escopo]
+ *   (4) cancelar DECIDIDA+PENDENTE: a DECISAO sobrevive campo a campo, e o autor e gravado
  *   (5) `execucao_estado` PRESERVADO em PENDENTE (RN-06) — nao zerado
  *   (6) execucao JA REGISTRADA recusa, com a literal dela
- *   (7) decisao de ACEITACAO (NAO_SE_APLICA) recusa com literal PROPRIA — o saldo ja se moveu
+ *   (7) decisao de ACEITACAO recusa por NAO TER PENDENCIA — e a frase nao fala de saldo
  *   (8) ja CANCELADA recusa
- *   (9) as DUAS mensagens de sucesso, uma por estado anterior
+ *   (9) a mensagem de sucesso, unica
  *  (10) a fila `?execucao=PENDENTE` NAO traz a cancelada
- *  (11) a trilha carrega os DOIS campos anteriores
+ *  (11) a trilha carrega os dois campos anteriores E o discriminador
  *  (12) RN-05a: cancelada por PESSOA + reenvio sem mudanca de fato => NENHUMA NC nova
  *  (13) RN-05b: cancelada AUTOMATICA + fato divergente de novo => NASCE NC nova  [CONTROLE]
  *  (14) RN-05c: cancelada por pessoa -> item CORRIGIDO -> quebra igual => NASCE NC nova
  *  (15) RN-05d: cancelada por pessoa NAO volta ao cartao DIVERGENCIA_RECEBIMENTO
+ *  (16) CRITICAL da Fase 5: o carimbo alcanca a linha encerrada MESMO com outra NC aberta
+ *  (17) a corrida `cancelar x cancelar` — UM sucesso, UMA trilha
+ *  (18) `/executar` sobre documento CANCELADO nao mente sobre execucao registrada
  *
  * ── GUARDA ANTI-TESTE-VAZIO ──────────────────────────────────────────────────────────────────
  * O (13) e o CONTROLE do (12): sem ele, trocar a condicao de `getUltimaEncerrada` por um `OR`
  * largo (que casasse QUALQUER cancelada) passaria verde, e o cancelamento automatico deixaria de
  * reabrir — que e o comportamento que o docblock daquela funcao existe para garantir.
- * O (14) e o CRITICAL 9.2: o carimbo `fato_superado_em` tem de ALCANCAR a linha cancelada por
- * pessoa. O guarda que ja existia (`naoConformidadeRegressao.api.test.js:124-160`) usa NC
- * DECIDIDA e continua VERDE com esse furo aberto — por isso o cenario nasce aqui.
+ * O (16) nasceu do CRITICAL: o carimbo `fato_superado_em` vivia num ramo que so era alcancado
+ * quando NAO havia NC aberta, e o (14) — que existia — passava verde porque usa UM documento so.
+ * O (17) nasceu de uma lente que mediu o claim inteiro sendo apagavel com 39 cenarios verdes.
  *
  * Executar: cd server && node tests/api/ncCancelamento.api.test.js
  */
@@ -57,6 +66,7 @@ function test(name, fn) {
 const ADMIN = { id: 460, nome: 'Admin E46', role: 'admin', is_superadmin: 1, email: 'admin46@test.com' };
 const QUALIDADE = { id: 461, nome: 'Fulana Qualidade', perfil_almoxarifado: 'QUALIDADE', email: 'q46@test.com' };
 const COMPRAS = { id: 462, nome: 'Beltrano Compras', perfil_almoxarifado: 'COMPRAS', email: 'c46@test.com' };
+const QUALIDADE_2 = { id: 463, nome: 'Beltrana Qualidade', perfil_almoxarifado: 'QUALIDADE', email: 'q46b@test.com' };
 
 let seq = 0;
 const uniq = (p) => `${p}-${Date.now() % 1000000}-${++seq}`;
@@ -64,7 +74,6 @@ const uniq = (p) => `${p}-${Date.now() % 1000000}-${++seq}`;
 async function erroDe(fn) {
   try { await fn(); return null; } catch (e) { return { message: e.message, status: e.status }; }
 }
-
 (async () => {
   console.log('\n=== Etapa 46 T2: cancelar o documento, e o "encerrado por PESSOA" ===\n');
   const { db, close } = await createTestApp({ user: { ...ADMIN } });
@@ -120,19 +129,37 @@ async function erroDe(fn) {
   const cancelar = (id, motivo = 'baixa dada em Movimentacoes, serie 4471', user = QUALIDADE) =>
     nc.cancelarNaoConformidade(db, user, id, { motivo });
 
-  // ── (1) e (2) as duas recusas de entrada ────────────────────────────────────────────────────
-  await test('(1) motivo com menos de 5 caracteres recusa, com a literal congelada', async () => {
-    const { itemId } = await novoItem({ esperada: 10, recebida: 8 });
+  /** O atalho do caminho que a etapa serve: NC de inspecao DECIDIDA e com execucao PENDENTE. */
+  async function ncDecididaPendente({ reprovada = 3, decisao = 'DEVOLVER' } = {}) {
+    const { inspecaoId, materialId } = await novaInspecaoReprovada({ reprovada });
+    const doc = await nc.abrirNaoConformidadeDeInspecao(db, QUALIDADE, inspecaoId);
+    const d = await decidir(doc.id, decisao);
+    assert.strictEqual(d.execucao_estado, 'PENDENTE', `${decisao} nao deixou execucao PENDENTE`);
+    return { id: doc.id, inspecaoId, materialId };
+  }
+
+  /** O de QUANTIDADE, que e o unico que o gancho reavalia — os cenarios da RN-05 vivem nele. */
+  async function ncQuantidadeDecidida({ esperada = 10, recebida = 8, decisao = 'DEVOLVER' } = {}) {
+    const { itemId } = await novoItem({ esperada, recebida });
     const { nc: doc } = await sync(itemId);
+    assert.strictEqual(doc.status, 'ABERTA');
+    const d = await decidir(doc.id, decisao);
+    assert.strictEqual(d.execucao_estado, 'PENDENTE');
+    return { id: doc.id, itemId };
+  }
+
+  // ── (1) a (3) as recusas de entrada, e a (3) e o CORTE DE ESCOPO ───────────────────────────
+  await test('(1) motivo com menos de 5 caracteres recusa, com a literal congelada', async () => {
+    const { id } = await ncDecididaPendente();
     for (const motivo of [undefined, null, '', '   ', 'abc', ' 1234 ']) {
-      const e = await erroDe(() => nc.cancelarNaoConformidade(db, QUALIDADE, doc.id, { motivo }));
+      const e = await erroDe(() => nc.cancelarNaoConformidade(db, QUALIDADE, id, { motivo }));
       assert.ok(e, `motivo ${JSON.stringify(motivo)} passou`);
       assert.strictEqual(e.status, 400, `motivo ${JSON.stringify(motivo)} deu ${e.status}`);
       assert.strictEqual(e.message, 'O motivo do cancelamento deve ter pelo menos 5 caracteres');
     }
     // Metade positiva: com 5 caracteres passa. Sem ela o cenario passaria com um servico que
-    // recusasse TUDO.
-    const ok = await cancelar(doc.id, 'abcde');
+    // recusasse TUDO — e a regua de 5 e justamente a que mais parece arbitraria.
+    const ok = await cancelar(id, 'abcde');
     assert.strictEqual(ok.status, 'CANCELADA');
   });
 
@@ -142,152 +169,147 @@ async function erroDe(fn) {
     assert.strictEqual(e.message, 'Não conformidade não encontrada');
   });
 
-  // ── (3) cancelar ABERTA: autor gravado, e o indice parcial liberado ─────────────────────────
-  await test('(3) cancelar ABERTA grava autor e motivo, e LIBERA o indice parcial', async () => {
+  await test('(3) [corte de escopo] cancelar ABERTA RECUSA, e a literal ENSINA a saida', async () => {
     const { itemId } = await novoItem({ esperada: 10, recebida: 6 });
     const { nc: doc } = await sync(itemId);
     assert.strictEqual(doc.status, 'ABERTA');
 
-    const r = await cancelar(doc.id, 'balanca descalibrada, divergencia improcedente');
-    assert.strictEqual(r.status, 'CANCELADA');
-    assert.strictEqual(r.cancelamento.estado_anterior, 'ABERTA');
-    assert.strictEqual(r.motivo_cancelamento, 'balanca descalibrada, divergencia improcedente');
+    const e = await erroDe(() => cancelar(doc.id, 'balanca descalibrada, divergencia improcedente'));
+    assert.strictEqual(e.status, 409, `cancelar ABERTA deu ${e && e.status}`);
+    assert.strictEqual(e.message,
+      'Só é possível cancelar uma não conformidade já decidida — decida o documento, ou corrija a quantidade conferida');
 
+    // O que a recusa PROTEGE, e e a razao do corte: o item continua cobrado nas duas superficies.
     const linha = await linhaDe(doc.id);
-    assert.strictEqual(linha.cancelado_por_id, QUALIDADE.id, 'o autor do cancelamento nao foi gravado');
-    assert.strictEqual(linha.cancelado_por_nome, QUALIDADE.nome);
-    assert.ok(linha.cancelado_em, 'cancelado_em vazio');
-    // E o discriminador: esta linha e "encerrada por PESSOA".
-    assert.notStrictEqual(linha.cancelado_por_id, null);
+    assert.strictEqual(linha.status, 'ABERTA', 'a recusa nao impediu a gravacao do CANCELADA');
+    assert.strictEqual(linha.cancelado_por_id, null);
+    const paradas = await nc.listarNaoConformidades(db, { status: 'ABERTA' });
+    assert.ok(paradas.some((l) => l.id === doc.id), 'a NC saiu da lista de abertas');
 
-    // O indice parcial e `WHERE status = 'ABERTA'`: com a primeira cancelada, abrir de novo o
-    // MESMO tipo no MESMO fato passa a ser possivel. E o que a RN-01 promete.
-    const manual = await nc.abrirNaoConformidadeManual(db, ADMIN, {
-      origem: 'RECEBIMENTO', referencia_tipo: 'RECEBIMENTO_ITEM', referencia_id: itemId,
-      tipo: 'QUANTIDADE', descricao: 'reaberta a mao depois do cancelamento',
-    });
-    assert.ok(manual && manual.id, 'o indice parcial nao foi liberado pelo cancelamento');
-    assert.notStrictEqual(manual.id, doc.id, 'reaproveitou a linha antiga em vez de inserir outra');
+    // E a SAIDA que a literal ensina funciona: decidir, e ai o cancelamento passa a ser possivel.
+    await decidir(doc.id, 'DEVOLVER');
+    const ok = await cancelar(doc.id, 'decidida e depois anulada, com motivo');
+    assert.strictEqual(ok.status, 'CANCELADA', 'o caminho que a propria literal indica nao funciona');
   });
 
-  // ── (4) e (5) cancelar DECIDIDA: a decisao SOBREVIVE, e `execucao_estado` fica ──────────────
-  await test('(4) cancelar DECIDIDA+PENDENTE: a DECISAO sobrevive campo a campo', async () => {
-    const { inspecaoId } = await novaInspecaoReprovada({ reprovada: 3 });
-    const doc = await nc.abrirNaoConformidadeDeInspecao(db, QUALIDADE, inspecaoId);
-    const decidida = await decidir(doc.id, 'DEVOLVER');
-    assert.strictEqual(decidida.execucao_estado, 'PENDENTE');
-
-    const r = await cancelar(doc.id, 'devolucao dada baixa em Movimentacoes, serie 4471');
+  // ── (4) e (5) o caminho que a etapa serve ──────────────────────────────────────────────────
+  await test('(4) cancelar DECIDIDA+PENDENTE: a DECISAO sobrevive campo a campo, e o autor e gravado', async () => {
+    const { id } = await ncDecididaPendente({ reprovada: 3, decisao: 'DEVOLVER' });
+    const r = await cancelar(id, 'devolucao dada baixa em Movimentacoes, serie 4471');
     assert.strictEqual(r.status, 'CANCELADA');
     assert.strictEqual(r.cancelamento.estado_anterior, 'DECIDIDA');
 
-    const linha = await linhaDe(doc.id);
+    const linha = await linhaDe(id);
     assert.strictEqual(linha.decisao, 'DEVOLVER', 'a decisao foi APAGADA pelo cancelamento');
     assert.strictEqual(linha.justificativa, 'laudo do inspetor anexo');
     assert.strictEqual(linha.decidido_por_id, QUALIDADE.id);
     assert.strictEqual(linha.decidido_por_nome, QUALIDADE.nome);
     assert.ok(linha.decidido_em, 'decidido_em foi limpo — isto e o rollback, nao o cancelamento');
+    // O autor do cancelamento, que e o DISCRIMINADOR da etapa e nao adorno de auditoria.
+    assert.strictEqual(linha.cancelado_por_id, QUALIDADE.id, 'o autor do cancelamento nao foi gravado');
+    assert.strictEqual(linha.cancelado_por_nome, QUALIDADE.nome);
+    assert.ok(linha.cancelado_em, 'cancelado_em vazio');
+    assert.strictEqual(linha.motivo_cancelamento, 'devolucao dada baixa em Movimentacoes, serie 4471');
   });
 
   await test('(5) [RN-06] `execucao_estado` fica PENDENTE — cancelar nao zera a coluna', async () => {
-    const { inspecaoId } = await novaInspecaoReprovada({ reprovada: 2 });
-    const doc = await nc.abrirNaoConformidadeDeInspecao(db, QUALIDADE, inspecaoId);
-    await decidir(doc.id, 'SUCATEAR');
-    const r = await cancelar(doc.id, 'sucateamento cancelado pela engenharia');
+    const { id } = await ncDecididaPendente({ reprovada: 2, decisao: 'SUCATEAR' });
+    const r = await cancelar(id, 'sucateamento cancelado pela engenharia');
     assert.strictEqual(r.cancelamento.execucao_estado_anterior, 'PENDENTE');
-    const linha = await linhaDe(doc.id);
+    const linha = await linhaDe(id);
     assert.strictEqual(linha.execucao_estado, 'PENDENTE',
       'o cancelamento ZEROU execucao_estado — a RN-06 proibe: quem exclui da fila e o status');
   });
 
-  // ── (6) (7) (8) as tres recusas de estado, e as tres literais sao DIFERENTES ────────────────
+  // ── (6) a (8) as recusas de estado, e as tres literais sao DIFERENTES ──────────────────────
   await test('(6) execucao JA REGISTRADA recusa, com a literal dela', async () => {
-    const { inspecaoId } = await novaInspecaoReprovada({ reprovada: 3 });
-    const doc = await nc.abrirNaoConformidadeDeInspecao(db, QUALIDADE, inspecaoId);
-    await decidir(doc.id, 'DEVOLVER');
-    await nc.registrarExecucao(db, COMPRAS, doc.id, { observacoes: 'coleta 99' });
+    const { id } = await ncDecididaPendente({ reprovada: 3 });
+    await nc.registrarExecucao(db, COMPRAS, id, { observacoes: 'coleta 99' });
 
-    const e = await erroDe(() => cancelar(doc.id, 'tentativa de anular depois do fato'));
+    const e = await erroDe(() => cancelar(id, 'tentativa de anular depois do fato'));
     assert.strictEqual(e.status, 409);
     assert.strictEqual(e.message,
       'A execução desta não conformidade já foi registrada — o documento não pode ser cancelado');
-    const linha = await linhaDe(doc.id);
-    assert.strictEqual(linha.status, 'DECIDIDA', 'a recusa nao impediu a gravacao do CANCELADA');
+    assert.strictEqual((await linhaDe(id)).status, 'DECIDIDA', 'a recusa nao impediu a gravacao');
   });
 
-  await test('(7) decisao de ACEITACAO recusa com literal PROPRIA — o saldo ja se moveu', async () => {
+  await test('(7) decisao de ACEITACAO recusa por NAO TER PENDENCIA — e a frase nao fala de saldo', async () => {
+    // ⚠️ ESTE CENARIO MUDOU DE LITERAL NO FIX-ROUND, e o motivo e o achado: a frase antiga
+    // ("a decisao ja liberou o material") era FALSA nos dois casos de baixo — zero movimentacao,
+    // `liberacao_nc_em` nulo, bloqueado intacto. A regua virou de ESTADO, e a frase nova e
+    // verdadeira nos TRES casos.
+    const casos = [];
+
+    // (a) NC automatica de inspecao: AQUI a aceitacao realmente libera.
     for (const decisao of ['ACEITAR', 'ACEITAR_SOB_DESVIO']) {
       const { inspecaoId } = await novaInspecaoReprovada({ reprovada: 3 });
       const doc = await nc.abrirNaoConformidadeDeInspecao(db, QUALIDADE, inspecaoId);
       const d = await decidir(doc.id, decisao);
-      // A premissa do cenario, medida e nao suposta: ela fica DECIDIDA, NAO_SE_APLICA e
-      // `execucao_em` NULL — e e por isso que um claim so com `execucao_em IS NULL` a aceitaria.
       assert.strictEqual(d.execucao_estado, 'NAO_SE_APLICA', `${decisao} nao deu NAO_SE_APLICA`);
-      assert.strictEqual(await (async () => (await linhaDe(doc.id)).execucao_em)(), null,
-        `${decisao} gravou execucao_em — a premissa deste cenario mudou`);
+      assert.strictEqual(d.liberacao.efeito, 'LIBERADA', `${decisao} de inspecao nao liberou — premissa mudou`);
+      casos.push([`inspecao ${decisao}`, doc.id]);
+    }
 
-      const e = await erroDe(() => cancelar(doc.id, 'anular a aceitacao ja executada'));
-      assert.strictEqual(e.status, 409, `${decisao} nao recusou`);
-      assert.strictEqual(e.message,
-        'A decisão desta não conformidade já liberou o material — o documento não pode ser cancelado',
-        `${decisao} caiu na literal errada — e a errada MENTE sobre a causa`);
+    // (b) NC de QUANTIDADE (origem RECEBIMENTO): a aceitacao NAO move saldo nenhum. Era aqui que
+    // a literal antiga mentia — e este e o caso MAIS COMUM de aceitacao.
+    const { itemId } = await novoItem({ esperada: 10, recebida: 6 });
+    const { nc: quant } = await sync(itemId);
+    const dq = await decidir(quant.id, 'ACEITAR');
+    assert.strictEqual(dq.execucao_estado, 'NAO_SE_APLICA');
+    assert.strictEqual(dq.liberacao.efeito, 'SEM_BLOQUEIO',
+      'a NC de quantidade passou a liberar saldo — a premissa deste cenario mudou');
+    casos.push(['quantidade ACEITAR', quant.id]);
+
+    for (const [nome, id] of casos) {
+      assert.strictEqual((await linhaDe(id)).execucao_em, null, `${nome}: gravou execucao_em`);
+      const e = await erroDe(() => cancelar(id, 'anular a aceitacao ja executada'));
+      assert.strictEqual(e.status, 409, `${nome} nao recusou`);
+      assert.strictEqual(e.message, 'Esta decisão não deixou execução pendente — não há o que encerrar',
+        `${nome} caiu na literal errada`);
+      // A guarda que nasceu do achado: a frase NAO pode afirmar efeito de estoque, porque em (b)
+      // nada se moveu.
+      assert.ok(!/liberou o material/.test(e.message),
+        `${nome}: a literal voltou a afirmar movimento de saldo que pode nao ter havido`);
     }
   });
 
   await test('(8) ja CANCELADA recusa', async () => {
-    const { itemId } = await novoItem({ esperada: 10, recebida: 5 });
-    const { nc: doc } = await sync(itemId);
-    await cancelar(doc.id, 'primeiro cancelamento');
-    const e = await erroDe(() => cancelar(doc.id, 'segundo cancelamento'));
+    const { id } = await ncDecididaPendente({ reprovada: 1 });
+    await cancelar(id, 'primeiro cancelamento');
+    const e = await erroDe(() => cancelar(id, 'segundo cancelamento'));
     assert.strictEqual(e.status, 409);
     assert.strictEqual(e.message, 'Esta não conformidade já está cancelada');
-    const linha = await linhaDe(doc.id);
-    assert.strictEqual(linha.motivo_cancelamento, 'primeiro cancelamento',
+    assert.strictEqual((await linhaDe(id)).motivo_cancelamento, 'primeiro cancelamento',
       'o segundo cancelamento sobrescreveu o motivo do primeiro');
   });
 
-  // ── (9) (10) (11) resposta, fila e trilha ──────────────────────────────────────────────────
-  await test('(9) as DUAS mensagens de sucesso, uma por estado anterior', async () => {
-    const { itemId } = await novoItem({ esperada: 10, recebida: 4 });
-    const { nc: aberta } = await sync(itemId);
-    const rA = await cancelar(aberta.id, 'divergencia improcedente');
-    assert.strictEqual(rA.cancelamento.mensagem,
-      'Documento cancelado — ele não estava decidido, e nada foi executado');
-    assert.strictEqual(rA.cancelamento.execucao_estado_anterior, null,
-      'NC ABERTA nao tem estado de execucao — NULL, nunca string vazia');
-
-    const { inspecaoId } = await novaInspecaoReprovada({ reprovada: 1 });
-    const doc = await nc.abrirNaoConformidadeDeInspecao(db, QUALIDADE, inspecaoId);
-    await decidir(doc.id, 'ANALISE_ENGENHARIA');
-    const rD = await cancelar(doc.id, 'engenharia dispensou a analise');
-    assert.strictEqual(rD.cancelamento.mensagem,
+  // ── (9) a (11) resposta, fila e trilha ─────────────────────────────────────────────────────
+  await test('(9) a mensagem de sucesso, unica — e ela fala da decisao E da cobranca', async () => {
+    const { id } = await ncDecididaPendente({ reprovada: 1, decisao: 'ANALISE_ENGENHARIA' });
+    const r = await cancelar(id, 'engenharia dispensou a analise');
+    assert.strictEqual(r.cancelamento.mensagem,
       'Documento cancelado — a decisão fica registrada, e a execução deixa de ser cobrada');
-    assert.notStrictEqual(rA.cancelamento.mensagem, rD.cancelamento.mensagem,
-      'as duas mensagens ficaram iguais — o estado anterior deixou de importar');
+    assert.strictEqual(r.cancelamento.estado_anterior, 'DECIDIDA');
+    assert.strictEqual(r.cancelamento.execucao_estado_anterior, 'PENDENTE');
   });
 
   await test('(10) a fila `?execucao=PENDENTE` NAO traz a cancelada', async () => {
-    const { inspecaoId } = await novaInspecaoReprovada({ reprovada: 2 });
-    const doc = await nc.abrirNaoConformidadeDeInspecao(db, QUALIDADE, inspecaoId);
-    await decidir(doc.id, 'SUBSTITUICAO');
+    const { id } = await ncDecididaPendente({ reprovada: 2, decisao: 'SUBSTITUICAO' });
     const antes = await nc.listarNaoConformidades(db, { execucao: 'PENDENTE' });
-    assert.ok(antes.some((l) => l.id === doc.id), 'a decidida nao entrou na fila — premissa quebrada');
+    assert.ok(antes.some((l) => l.id === id), 'a decidida nao entrou na fila — premissa quebrada');
 
-    await cancelar(doc.id, 'substituicao negociada fora do sistema');
+    await cancelar(id, 'substituicao negociada fora do sistema');
     const depois = await nc.listarNaoConformidades(db, { execucao: 'PENDENTE' });
-    assert.ok(!depois.some((l) => l.id === doc.id),
+    assert.ok(!depois.some((l) => l.id === id),
       'a cancelada continua na fila do Compras — o `AND status = DECIDIDA` do filtro deixou de valer');
-    // E a metade positiva: a coluna NAO foi zerada (RN-06). Quem a exclui e o status.
-    assert.strictEqual((await linhaDe(doc.id)).execucao_estado, 'PENDENTE');
+    assert.strictEqual((await linhaDe(id)).execucao_estado, 'PENDENTE');
   });
 
-  await test('(11) a trilha carrega os DOIS campos anteriores', async () => {
-    const { inspecaoId } = await novaInspecaoReprovada({ reprovada: 2 });
-    const doc = await nc.abrirNaoConformidadeDeInspecao(db, QUALIDADE, inspecaoId);
-    await decidir(doc.id, 'DEVOLVER');
-    await cancelar(doc.id, 'peca serializada, baixa manual em Movimentacoes');
+  await test('(11) a trilha carrega os dois campos anteriores E o discriminador', async () => {
+    const { id } = await ncDecididaPendente({ reprovada: 2 });
+    await cancelar(id, 'peca serializada, baixa manual em Movimentacoes');
 
-    const trilha = await trilhaDe(doc.id);
+    const trilha = await trilhaDe(id);
     const cancelou = trilha.filter((l) => l.acao === 'NC_CANCELADA');
     assert.strictEqual(cancelou.length, 1, `verbos NC_CANCELADA: ${cancelou.length}`);
     assert.strictEqual(cancelou[0].usuario_nome, QUALIDADE.nome);
@@ -296,28 +318,23 @@ async function erroDe(fn) {
     assert.strictEqual(antes.status, 'DECIDIDA');
     assert.strictEqual(antes.execucao_estado, 'PENDENTE',
       'a trilha e o UNICO lugar que diz que havia execucao pendente quando se cancelou');
-    // E os tres verbos convivem, na ordem: aberta, decidida, cancelada.
+    // ⚠️ O DISCRIMINADOR na trilha — achado da Fase 5: os DOIS escritores de CANCELADA usam o
+    // mesmo verbo, e sem esta marca quem audita credita a anulacao a quem apenas reconferiu.
+    const novos = JSON.parse(cancelou[0].dados_novos);
+    assert.strictEqual(novos.automatico, false, 'a trilha nao diz que foi o cancelamento HUMANO');
+    assert.strictEqual(novos.cancelado_por_id, QUALIDADE.id);
     assert.deepStrictEqual(trilha.map((l) => l.acao), ['NC_ABERTA', 'NC_DECIDIDA', 'NC_CANCELADA']);
   });
 
-  // ── (12) a (15): a RN-05, e os quatro cenarios sao o CORACAO desta task ────────────────────
-  //
-  // "Cancelado por PESSOA" e um ENCERRAMENTO, como decidir, e TRES consumidores do estado
-  // precisam concordar. Cada cenario abaixo prende um deles, e o (13) e o controle do (12).
+  // ── (12) a (16): a RN-05, e o (16) nasceu do CRITICAL da Fase 5 ────────────────────────────
   await test('(12) [RN-05a] cancelada por PESSOA + reenvio sem mudanca de fato => NENHUMA NC nova', async () => {
-    const { itemId } = await novoItem({ esperada: 10, recebida: 8 });
-    const { nc: doc } = await sync(itemId);
-    await decidir(doc.id, 'ACEITAR_SOB_DESVIO');
-    // Decisao de aceitacao nao cancela (cenario 7). Para este fluxo a NC tem de estar cancelavel:
-    // usa-se o caminho ABERTA, que e o que a RN-01 cobre e o que o gancho realmente alcanca.
-    const { itemId: item2 } = await novoItem({ esperada: 10, recebida: 8 });
-    const { nc: doc2 } = await sync(item2);
-    await cancelar(doc2.id, 'balanca descalibrada, divergencia improcedente');
+    const { id, itemId } = await ncQuantidadeDecidida({ esperada: 10, recebida: 8 });
+    await cancelar(id, 'falta absorvida no acerto com o fornecedor, sem reposicao');
 
     // O reenvio da NF: mesma quantidade, mesmo fato. O gancho NAO deve abrir nada.
-    const r = await sync(item2);
+    const r = await sync(itemId);
     assert.strictEqual(r.efeito, 'NENHUMA', `o gancho devolveu ${r.efeito} — reabriu o que uma pessoa anulou`);
-    const linhas = await ncsDoItem(item2);
+    const linhas = await ncsDoItem(itemId);
     assert.strictEqual(linhas.length, 1,
       `nasceu NC nova sobre um fato anulado por pessoa: ${linhas.length} linhas. Isto repetiria a CADA salvamento de NF`);
   });
@@ -340,52 +357,133 @@ async function erroDe(fn) {
     const r = await sync(itemId);
     assert.strictEqual(r.efeito, 'ABERTA',
       `o gancho devolveu ${r.efeito} — a cancelada AUTOMATICA passou a valer como encerramento, e o erro novo ficou sem documento`);
-    const linhas = await ncsDoItem(itemId);
-    assert.strictEqual(linhas.length, 2, `${linhas.length} linhas — a segunda NC nao nasceu`);
+    assert.strictEqual((await ncsDoItem(itemId)).length, 2, 'a segunda NC nao nasceu');
   });
 
   await test('(14) [RN-05c] cancelada por pessoa -> item CORRIGIDO -> quebra igual => NASCE NC nova', async () => {
-    const { itemId } = await novoItem({ esperada: 10, recebida: 8 });
-    const { nc: doc } = await sync(itemId);
-    await cancelar(doc.id, 'divergencia improcedente na primeira leitura');
+    const { id, itemId } = await ncQuantidadeDecidida({ esperada: 10, recebida: 8 });
+    await cancelar(id, 'primeira leitura era da balanca velha');
 
-    // O item e CORRIGIDO. Este passo tem de CARIMBAR `fato_superado_em` na linha CANCELADA —
-    // e o UPDATE do carimbo so alcancava `status = 'DECIDIDA'` antes desta etapa.
+    // O item e CORRIGIDO. Este passo tem de CARIMBAR `fato_superado_em` na linha CANCELADA.
     await setQtd(itemId, 10);
     await sync(itemId);
-    const carimbada = await linhaDe(doc.id);
-    assert.ok(carimbada.fato_superado_em,
+    assert.ok((await linhaDe(id)).fato_superado_em,
       'o carimbo de fato superado NAO alcancou a linha cancelada por pessoa — e o "silencio completo" do passo seguinte');
 
     // Quebra de novo, no MESMO valor. Como o fato foi superado, e problema NOVO.
     await setQtd(itemId, 8);
     const r = await sync(itemId);
-    assert.strictEqual(r.efeito, 'ABERTA',
-      `o gancho devolveu ${r.efeito}: falta real e viva, e ZERO NC no modulo`);
-    const linhas = await ncsDoItem(itemId);
-    assert.strictEqual(linhas.length, 2, `${linhas.length} linhas — a NC do erro novo nao nasceu`);
+    assert.strictEqual(r.efeito, 'ABERTA', `o gancho devolveu ${r.efeito}: falta real e viva, e ZERO NC no modulo`);
+    assert.strictEqual((await ncsDoItem(itemId)).length, 2, 'a NC do erro novo nao nasceu');
   });
 
   await test('(15) [RN-05d] cancelada por pessoa NAO volta ao cartao de divergencia', async () => {
-    const { itemId } = await novoItem({ esperada: 10, recebida: 7 });
-    const { nc: doc } = await sync(itemId);
+    const { id, itemId } = await ncQuantidadeDecidida({ esperada: 10, recebida: 7 });
 
-    const noCartao = async () => {
+    const noCartao = async (item) => {
       const linhas = await listarDivergenciasRecebimento(db, { dias: 30, excluirComNC: true });
-      return linhas.some((l) => l.item_id === itemId);
+      return linhas.some((l) => l.item_id === item);
     };
-    assert.strictEqual(await noCartao(), false, 'com NC ABERTA o item ja deveria estar fora do cartao');
+    assert.strictEqual(await noCartao(itemId), false, 'com NC DECIDIDA o item ja deveria estar fora do cartao');
 
-    await cancelar(doc.id, 'divergencia improcedente, conferido com o fornecedor');
-    assert.strictEqual(await noCartao(), false,
+    await cancelar(id, 'divergencia resolvida com o fornecedor por telefone');
+    assert.strictEqual(await noCartao(itemId), false,
       'o item voltou ao cartao como divergencia NAO DOCUMENTADA — e nao existe porta para documenta-la');
 
-    // A metade POSITIVA, e ela e obrigatoria: um item divergente SEM NC nenhuma TEM de aparecer.
-    // Sem esta linha o cenario passaria com um cartao que nao lista nada.
+    // A metade POSITIVA, obrigatoria: um item divergente SEM NC nenhuma TEM de aparecer. Sem ela o
+    // cenario passaria com um cartao que nao lista nada.
     const { itemId: semNc } = await novoItem({ esperada: 10, recebida: 3 });
-    const linhas = await listarDivergenciasRecebimento(db, { dias: 30, excluirComNC: true });
-    assert.ok(linhas.some((l) => l.item_id === semNc),
+    assert.strictEqual(await noCartao(semNc), true,
       'o cartao nao lista nem o item divergente sem NC — ele esta vazio, e o cenario acima nao prova nada');
+
+    // E a outra metade, que e o corte de escopo: NC ABERTA tambem exclui do cartao (ela E o
+    // documento), mas cancelar ABERTA nao e possivel — entao nao ha caminho para o item sair do
+    // cartao sem documento vivo. Era isso que a RN-01 quebrava.
+    const { nc: aberta } = await sync(semNc);
+    assert.strictEqual(aberta.status, 'ABERTA');
+    assert.strictEqual(await noCartao(semNc), false, 'a NC ABERTA deixou de excluir o item do cartao');
+  });
+
+  await test('(16) [CRITICAL da Fase 5] o carimbo alcanca a encerrada MESMO com outra NC aberta', async () => {
+    // O ramo que a suite nao cobria: `if (aberta)` retorna em TODOS os caminhos, entao o carimbo,
+    // que vivia depois dele, nunca rodava quando havia outro documento aberto no instante da
+    // correcao. Reproduzido por sonda de uma lente da Fase 5.
+    const { id, itemId } = await ncQuantidadeDecidida({ esperada: 10, recebida: 8 });
+    await cancelar(id, 'primeira leitura descartada, ver laudo');
+
+    // O fato MUDA: nasce a segunda NC, e ela fica ABERTA.
+    await setQtd(itemId, 7);
+    const nova = await sync(itemId);
+    assert.strictEqual(nova.efeito, 'ABERTA', `o fato mudou e nao abriu NC nova: ${nova.efeito}`);
+    const abertaId = nova.nc.id;
+
+    // O operador CORRIGE. Com a NC#2 ABERTA, o `if (aberta)` a cancela e RETORNA — e o carimbo da
+    // NC#1 (encerrada) tem de ter rodado ANTES disso.
+    await setQtd(itemId, 10);
+    const corrige = await sync(itemId);
+    assert.strictEqual(corrige.efeito, 'CANCELADA', `a correcao devolveu ${corrige.efeito}`);
+    assert.ok((await linhaDe(id)).fato_superado_em,
+      'a NC#1 encerrada NAO foi carimbada porque havia outra NC aberta — e o "silencio completo" vem no passo seguinte');
+    assert.strictEqual((await linhaDe(abertaId)).status, 'CANCELADA', 'a NC#2 aberta nao foi cancelada pelo gancho');
+
+    // O passo seguinte: quebra no MESMO valor da NC#1. Sem o carimbo, nada nasceria.
+    await setQtd(itemId, 8);
+    const r = await sync(itemId);
+    assert.strictEqual(r.efeito, 'ABERTA',
+      `o gancho devolveu ${r.efeito}: falta real e viva, ZERO NC no modulo e ZERO cartao`);
+    assert.strictEqual((await ncsDoItem(itemId)).length, 3, 'a terceira NC nao nasceu');
+  });
+
+  // ── (17) e (18): concorrencia, e a literal que mentia do outro lado ────────────────────────
+  await test('(17) a corrida `cancelar x cancelar`: UM sucesso, UMA trilha', async () => {
+    // ⚠️ O fechamento da T2 declarou "a corrida nao e reproduzivel no harness". Verdade para
+    // `cancelar x executar`; FALSO para esta — uma lente da Fase 5 mediu que, sem o claim, o
+    // `Promise.all` dava DOIS sucessos e DUAS linhas de trilha, com o segundo chamador recebendo
+    // 200 sobre documento ja cancelado. O claim inteiro era apagavel com 39 cenarios verdes.
+    const { id } = await ncDecididaPendente({ reprovada: 2 });
+    const [a, b] = await Promise.allSettled([
+      nc.cancelarNaoConformidade(db, QUALIDADE, id, { motivo: 'anulado pela Fulana' }),
+      nc.cancelarNaoConformidade(db, QUALIDADE_2, id, { motivo: 'anulado pela Beltrana' }),
+    ]);
+    const ok = [a, b].filter((r) => r.status === 'fulfilled');
+    const nao = [a, b].filter((r) => r.status === 'rejected');
+    assert.strictEqual(ok.length, 1, `${ok.length} cancelamentos passaram — o claim nao serializou`);
+    assert.strictEqual(nao.length, 1, `${nao.length} recusas`);
+    assert.strictEqual(nao[0].reason.status, 409, `a recusa veio com ${nao[0].reason.status}`);
+
+    // UMA linha de trilha: e a metade que prova que nao foi so a resposta que mudou.
+    const cancelou = (await trilhaDe(id)).filter((l) => l.acao === 'NC_CANCELADA');
+    assert.strictEqual(cancelou.length, 1, `${cancelou.length} linhas NC_CANCELADA na trilha`);
+    // E o motivo gravado e o do vencedor, nao uma mistura.
+    const linha = await linhaDe(id);
+    assert.ok(['anulado pela Fulana', 'anulado pela Beltrana'].includes(linha.motivo_cancelamento),
+      `motivo gravado inesperado: ${linha.motivo_cancelamento}`);
+    assert.strictEqual(linha.cancelado_por_nome,
+      linha.motivo_cancelamento === 'anulado pela Fulana' ? QUALIDADE.nome : QUALIDADE_2.nome,
+      'o autor gravado nao corresponde ao motivo gravado — duas escritas se misturaram');
+  });
+
+  await test('(18) `/executar` sobre documento CANCELADO nao mente sobre execucao registrada', async () => {
+    // ⚠️ Era a MESMA classe de mentira que o achado 9 da Fase 2 corrigiu no lado do cancelamento,
+    // intacta deste lado: o `changes === 0` do claim da execucao devolvia a literal fixa
+    // "A execucao desta nao conformidade JA FOI REGISTRADA" — com `execucao_em` NULL e status
+    // CANCELADA. E este e o estado que a Etapa 46 criou: o furo C64 depois da saida nova.
+    const { id } = await ncDecididaPendente({ reprovada: 2 });
+    await cancelar(id, 'baixa manual, documento anulado');
+    const linha = await linhaDe(id);
+    assert.strictEqual(linha.status, 'CANCELADA');
+    assert.strictEqual(linha.execucao_em, null, 'a premissa do cenario mudou: ha execucao registrada');
+    assert.strictEqual(linha.decisao, 'DEVOLVER', 'a premissa mudou: o documento nao esta decidido');
+
+    const e = await erroDe(() => nc.registrarExecucao(db, COMPRAS, id, { observacoes: 'coleta 71' }));
+    assert.ok(e, 'executar um documento cancelado passou');
+    // A literal EXATA, e ela e o achado: antes do fix-round este caso caia em `NAO_DECIDIDA`
+    // ("So e possivel registrar a execucao de uma nao conformidade decidida") sobre um documento
+    // que FOI decidido — a frase mandava decidir o que ja estava decidido.
+    assert.strictEqual(e.message, 'Esta não conformidade foi cancelada — não há execução a registrar');
+    assert.ok(!/já foi registrada/.test(e.message),
+      `a literal voltou a afirmar execucao registrada: ${e.message}`);
+    assert.strictEqual((await linhaDe(id)).execucao_em, null, 'a recusa gravou execucao_em');
   });
 
   await close();

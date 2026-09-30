@@ -210,7 +210,7 @@ async function erroDe(fn) {
   });
 
   // ── (4) RN-07 — so NC decidida ─────────────────────────────────────────────────────────────
-  await test('(4) RN-07 NC ABERTA e NC CANCELADA recusam com 400', async () => {
+  await test('(4) RN-07 NC ABERTA e NC CANCELADA recusam com 400, cada uma com a SUA literal', async () => {
     const ctx = await novaInspecaoReprovada({ reprovada: 3 });
     const aberta = await ncAutomatica(ctx.inspecaoId);
     const e1 = await erroDe(() => executar(aberta.id));
@@ -222,8 +222,18 @@ async function erroDe(fn) {
       SET status = 'CANCELADA', cancelado_em = CURRENT_TIMESTAMP WHERE id = ?`, [aberta.id]);
     const e2 = await erroDe(() => executar(aberta.id));
     assert.ok(e2, 'executou uma NC CANCELADA');
-    assert.strictEqual(e2.status, 400);
-    assert.strictEqual(e2.message, 'Só é possível registrar a execução de uma não conformidade decidida');
+    assert.strictEqual(e2.status, 400, 'o CODIGO do contrato da Etapa 45 mudou');
+    // ⚠️ A LITERAL DESTE SEGUNDO CASO MUDOU NA ETAPA 46, e o codigo NAO. Ela dizia
+    // ~~'So e possivel registrar a execucao de uma nao conformidade decidida'~~ — a mesma do
+    // primeiro caso —, e uma lente da Fase 5 da 46 mediu que isso engana: depois que o
+    // cancelamento humano existe, o documento CANCELADO tipicamente FOI decidido (a decisao fica
+    // gravada e legivel), e a frase mandava decidir o que ja estava decidido. O nivel 2 da
+    // precedencia passou a distinguir os dois estados.
+    //
+    // Este cenario forja o estado por `UPDATE` cru sobre uma NC NUNCA decidida, entao aqui a
+    // frase antiga era tecnicamente verdadeira — e e justamente por isso que ele nao pegava o
+    // problema. O caso real (cancelada DEPOIS de decidida) esta em `ncCancelamento.api.test.js`.
+    assert.strictEqual(e2.message, 'Esta não conformidade foi cancelada — não há execução a registrar');
   });
 
   // ── (5) RN-01 — a decisao de aceitacao nao tem execucao ────────────────────────────────────

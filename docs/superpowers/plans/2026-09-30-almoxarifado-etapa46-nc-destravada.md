@@ -370,6 +370,114 @@ cancelamento **automático**, com 6 espaços. Ou seja: **a contagem e o padrão 
 diferentes**, e foi sorte a contagem ser a mais larga das duas. A regra a acrescentar: **contar com
 o MESMO padrão que a sabotagem usa**, não com uma versão solta dele.
 
+---
+
+## Fase 5 — revisão adversarial: 3 lentes, 23 achados reais, 29 hipóteses refutadas
+
+Três revisores frescos e independentes, instruídos a refutar e a **trabalhar em cópia** (a instrução
+nasceu do risco de processo registrado na retro da Etapa 44, em que uma lente sabotou a árvore).
+Zero ruído: todo achado veio com cenário concreto, `arquivo:linha`, e a maioria com **sonda
+executada** — uma das lentes construiu um harness de sabotagem **em memória** (intercepta
+`Module.prototype._compile` e **aborta se a contagem de substituições não for 1**), que é a resposta
+direta à lição da sabotagem 4 da T3.
+
+**Duas lentes convergiram, por caminhos diferentes, num CORTE DE ESCOPO que eu não tinha visto.**
+
+### 🔴 CRITICAL — o "silêncio completo" continuava aberto por um ramo que a suíte não cobria
+
+O carimbo de `fato_superado_em` vivia **dentro** do ramo `!divergente` de
+`sincronizarNaoConformidadeQuantidade`, que só é alcançado quando **não** existe NC `ABERTA` —
+todos os ramos do `if (aberta)` retornam antes. Sonda: com qualquer NC aberta no instante em que o
+operador corrige a quantidade, o documento **encerrado** do mesmo fato nunca era carimbado; quando
+o fato voltava igual, `getUltimaEncerrada` o achava, `mesmoFato` batia e **nada nascia**. Falta real
+e viva, zero NC no módulo e zero cartão.
+
+**Duas coisas doem aqui.** A Fase 2 declarou essa classe **fechada** (seção 9.2 do desenho), e o
+cenário (14) que a "provava" passava verde porque usa **um** documento só. E o furo é **anterior à
+etapa** — reproduz também com a NC encerrada por **decisão**, sem cancelamento nenhum. A 46 declarou
+fechado o que fechava pela metade.
+
+**Conserto:** o carimbo virou `carimbarFatoSuperado` e roda sempre que `!divergente`, **antes** do
+`if (aberta)`; é idempotente e só alcança documentos já encerrados. E a condição de "encerrado"
+virou **uma constante só** (`SQL_ENCERRADA`), porque as duas pontas têm de andar juntas: se uma
+considera encerrado o que a outra não considera, o silêncio volta.
+
+**Controle positivo, e ele é o mais informativo da etapa:** restaurar a **posição antiga** do
+carimbo derruba **só o (16)** e deixa o (14) passar — prova de que o cenário que existia era verde
+com o furo aberto.
+
+### 🔴 A RN-01 morreu — cancelar NC `ABERTA` silenciava divergência VIVA
+
+Duas lentes, independentes. O documento morria **sem decisão**, o item saía do cartão D6, o gancho
+não reabria (a RN-05 o tratava como encerramento) e **não existe tela de abertura manual**. Uma
+lente mediu com o motivo *"nao quero ver isso na lista"*, que passa a régua de 5 caracteres.
+
+**E a outra fechou o argumento:** o beco que a etapa existe para resolver é **só** `DECIDIDA` +
+`PENDENTE` — a **RN-01 era escopo que eu acrescentei**, e era ela que abria a porta.
+
+**Conserto:** cancelar exige `DECIDIDA` + `PENDENTE`. `ABERTA` recusa com literal que **ensina o
+caminho** (*"decida o documento, ou corrija a quantidade conferida"*), e o cenário (3) prova que o
+caminho indicado funciona. `SQL_ENCERRADA` ganhou `decidido_em IS NOT NULL` junto de
+`cancelado_por_id` — redundante hoje, e é o que impede o silêncio de voltar se o escopo se alargar.
+
+### 🔴 Três mensagens que afirmavam fato que não houve
+
+| Mentia | Medido | Virou |
+|---|---|---|
+| `JA_LIBEROU`: *"a decisão já liberou o material"* | **falso** em NC de origem `RECEBIMENTO` decidida `ACEITAR` e em NC manual: zero movimentação, `liberacao_nc_em` nulo, bloqueado intacto. A régua era de **classe de decisão** | `NAO_DECIDIDA` e `SEM_PENDENCIA` — régua de **estado**, verdadeiras em todos os casos que cobrem |
+| `/executar` em documento cancelado: *"a execução já foi registrada"* | `execucao_em` NULL e status `CANCELADA`. **Mesma classe de mentira** que o achado 9 da Fase 2 corrigiu no lado do cancelamento, intacta deste lado | literal própria no nível 2 da precedência |
+| nível 2: *"Só é possível registrar a execução de uma não conformidade decidida"* | sobre um documento que **FOI** decidido — a frase mandava decidir o que já estava decidido | idem |
+
+### 🔴 A trilha creditava o cancelamento a quem tem 403 nele
+
+Os **dois** escritores de `CANCELADA` usam o mesmo verbo `NC_CANCELADA`, e nenhum gravava o
+discriminador. Sonda: o **COMPRAS**, que toma 403 em `/cancelar`, aparecia como autor ao disparar o
+cancelamento **automático** por `/conferir`. Agora os dois gravam `cancelado_por_id` e
+`automatico: true|false` em `dados_novos`.
+
+### As outras correções
+
+| Achado | Conserto |
+|---|---|
+| o cartão novo cobra o **COMPRAS**, que não tem porta de saída (403 no cancelar), e a **QUALIDADE**, que cancela, está fora de `ver_alertas` | a descrição e o corpo do e-mail **nomeiam a saída**. **Descartado:** pôr a QUALIDADE em `ver_alertas` — alargar permissão é menos reversível, e a central carrega o **valor em dinheiro** do estoque parado, que é a razão registrada de ela estar fora. Letra **B** |
+| a coluna Execução dizia *"Deixou de ser cobrada"* na NC cancelada que **nunca foi decidida** (o cancelamento automático) — cobrança que nunca existiu | o ramo ganhou `execucao_estado === 'PENDENTE'`; cenário **(39b)** novo, e o (39) sozinho passava verde com a contradição viva |
+| o discriminador estrutural era gravado por um `user?.id \|\| null` de campo de auditoria; com id ausente ou `0` a linha **significava o oposto** | `AND ? IS NOT NULL` no claim |
+| o fallback do `changes === 0` do cancelamento caía em *"já está cancelada"* quando a linha mudou **duas** vezes | literal `CONCORRENCIA` própria |
+| a tela nunca mostrava **quem** cancelou, embora a projeção carregasse o nome desde a T2 | mostra |
+| o corpo do e-mail saía com `Tipo: undefined` / `Origem: undefined`, com 7 cenários verdes | `\|\| '-'` nos dois |
+| um comentário do nível 2 dizia que `CANCELADA` significa "a divergência sumiu" | corrigido — **terceira** ocorrência desta classe na etapa |
+
+### Os cenários que faltavam, e um deles refuta uma declaração minha
+
+**(17) a corrida `cancelar × cancelar`.** O fechamento da T2 declarou *"a corrida não é reproduzível
+no harness"* — **verdade para `cancelar × executar`, falso para esta**. Uma lente mediu com
+`Promise.all`: sem o claim, **dois** sucessos e **duas** linhas de trilha, com o segundo chamador
+recebendo 200 sobre documento já cancelado. O claim **inteiro** era apagável com 39 cenários verdes.
+Custou 6 linhas de teste. A declaração estava mais frouxa que o fato.
+
+**(18) `/executar` sobre documento cancelado** — o estado que **esta etapa criou**, e o único
+cenário de `CANCELADA` que existia forjava o estado por `UPDATE` cru numa NC **nunca decidida**.
+
+**(39b)** e **(41)** no client: a coluna na cancelada-nunca-decidida, e **o motivo vazando de um
+documento para o outro** — uma lente provou por execução que remover o reset do campo deixava os 43
+cenários verdes, e o defeito é caro: abrir a NC A, digitar, clicar Voltar, abrir a NC B e o campo
+vem preenchido com 5+ caracteres, **botão habilitado**.
+
+### Uma sabotagem minha atingiu o botão errado
+
+No controle do corte de escopo, o `perl` casou a condição do botão de **execução** em vez do de
+cancelamento. Os testes seguiram **verdes**, porque a condição sabotada ficou mais **larga**, não
+mais estreita — e eu só vi pelo `git diff`. Corrigi as duas explicitamente e refiz o controle.
+**A lição some se não for escrita:** `md5sum` prova que o arquivo mudou, e **não** prova que mudou
+onde se queria. O `git diff` do arquivo sabotado é a única leitura que responde isso.
+
+### Números do fix-round
+
+Cenários: `ncCancelamento` **15 → 18**, `NaoConformidades` (client) **43 → 44**,
+`encaminhamentoExecucao` **24** (um cenário reescrito com a literal nova).
+`test:api` **216/216 arquivos** · almoxarifado **42/0** · validation **4/0** · safealter **3/0** ·
+sqlite **5/0** · client **52 suítes / 846 testes** (eram 845) · build **Compiled successfully**.
+
 ## Fase 2 — o que o revisor do plano achou (12 itens, 3 CRITICAL, 8 refutados)
 
 Revisor fresco, 2026-09-30. **Zero ruído**: todo achado veio com cenário concreto e `arquivo:linha`,
@@ -416,5 +524,5 @@ Exclusividade não é suficiência, e essa é a linha a acrescentar no próximo 
 - [x] Fase 1 — desenho e plano
 - [x] Fase 2 — revisão do plano por agente fresco: **12 achados, 3 CRITICAL, 8 refutados** — desenho e plano corrigidos antes da primeira linha de código
 - [x] T1 — gate + rotulo, as duas pontas no mesmo commit — `a625fb7` · [x] T2 — colunas, servico, rota e RN-05 nos tres consumidores — `2afb944` · [x] T3 — 15ª entrada, config de **quatro** pontas e **nove** contagens (executada sem commit; hash a preencher na integração) · [ ] T4 · [x] T5 — integracao cruzando os galhos — `7812823`
-- [ ] Fase 5 — revisão adversarial
+- [x] Fase 5 — revisão adversarial: 3 lentes, 23 achados, 1 CRITICAL, 29 refutados + fix-round
 - [ ] Fase 6 — `fechar-etapa`
