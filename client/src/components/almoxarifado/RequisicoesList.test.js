@@ -921,3 +921,70 @@ describe('Etapa 47 (Fase 5): os gestos que a primeira rodada nao exercitava', ()
     expect(getsDoDetalhe()).toBeGreaterThan(antes);
   });
 });
+
+// ─── Etapa 48 (T4, RN-04): a fila da aprovação simples ─────────────────────────────────────
+describe('Etapa 48: fila da aprovação simples', () => {
+  let linhasPendentes;
+  beforeEach(() => {
+    const base = api.get.getMockImplementation();
+    api.get.mockImplementation((url, cfg) => {
+      if (url === '/almoxarifado/requisicoes' && cfg?.params?.status === 'PENDENTE') {
+        return Promise.resolve({ data: linhasPendentes });
+      }
+      return base(url, cfg);
+    });
+  });
+  const LINHA = (over) => ({
+    id: 70, numero: 'REQ-070', status: 'PENDENTE', solicitante_id: 1, solicitante_nome: 'Joao',
+    valor_total: 10, pendencias_regra_abertas: 0, regras_avaliadas_em: '2026-09-30 10:00:00', ...over,
+  });
+  const painel = () => container.querySelector('[data-testid="fila-aprovacao-simples"]');
+
+  test('o recorte: so PENDENTE de outra pessoa sem regra aberta — com a metade positiva', async () => {
+    linhasPendentes = [
+      LINHA({ id: 70, numero: 'REQ-070' }),
+      LINHA({ id: 71, numero: 'REQ-071', solicitante_id: 99 }), // a minha (usuário do harness é o 99)
+      LINHA({ id: 72, numero: 'REQ-072', pendencias_regra_abertas: 1 }), // barrada por regra
+      LINHA({ id: 73, numero: 'REQ-073', status: 'APROVADO' }),
+      LINHA({ id: 74, numero: 'REQ-074', regras_avaliadas_em: null }), // não avaliada: FICA, marcada
+    ];
+    detalheDoBanco = { ...baseRequisicao('PENDENTE'), solicitante_id: 1 };
+    await renderizarSemDetalhe();
+    const p = painel();
+    expect(p.textContent).toContain('Requisições aguardando sua aprovação (2)');
+    expect(p.textContent).toContain('REQ-070');
+    expect(p.textContent).not.toContain('REQ-071');
+    expect(p.textContent).not.toContain('REQ-072');
+    expect(p.textContent).not.toContain('REQ-073');
+    expect(p.textContent).toContain('REQ-074');
+    expect(p.textContent).toContain('regras ainda não avaliadas — a aprovação vai conferir');
+  });
+
+  test('sem a permissao de aprovar o painel nao aparece (e a lista continua)', async () => {
+    mockPode = (acao) => acao !== 'aprovar_requisicao';
+    linhasPendentes = [LINHA({})];
+    detalheDoBanco = { ...baseRequisicao('PENDENTE'), solicitante_id: 1 };
+    await renderizarSemDetalhe();
+    expect(painel()).toBeNull();
+    expect(container.textContent).toContain('REQ-055');
+  });
+
+  test('fora do modo almoxarifado: nenhum GET de pendentes', async () => {
+    mockWarehouseMode = false;
+    linhasPendentes = [LINHA({})];
+    detalheDoBanco = { ...baseRequisicao('PENDENTE'), solicitante_id: 1 };
+    await renderizarSemDetalhe();
+    expect(api.get.mock.calls.filter(([u, c]) => u === '/almoxarifado/requisicoes' && c?.params?.status === 'PENDENTE')).toEqual([]);
+    expect(painel()).toBeNull();
+  });
+
+  test('clicar abre a requisicao certa', async () => {
+    linhasPendentes = [LINHA({ id: 55, numero: 'REQ-055' })];
+    detalheDoBanco = { ...baseRequisicao('PENDENTE'), solicitante_id: 1 };
+    await renderizarSemDetalhe();
+    const antes = api.get.mock.calls.filter(([u]) => u === '/almoxarifado/requisicoes/55').length;
+    await act(async () => { painel().querySelector('button').dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    expect(api.get.mock.calls.filter(([u]) => u === '/almoxarifado/requisicoes/55').length).toBeGreaterThan(antes);
+  });
+});

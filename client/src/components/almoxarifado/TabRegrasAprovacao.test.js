@@ -118,7 +118,7 @@ test('criar: o payload tem a forma do contrato (numero, null, booleano, array de
   await clicar(botao('Salvar regra'));
 
   expect(api.post).toHaveBeenCalledWith('/almoxarifado/regras-aprovacao', {
-    nome: 'Qtd grande', tipo_requisicao: null, material_critico: false,
+    nome: 'Qtd grande', tipo_requisicao: null, urgencia: null, material_critico: false, material_cliente: false,
     valor_minimo: null, quantidade_minima: 50, centro_custo_id: null,
     aprovadores: [11], ativo: true,
   });
@@ -188,4 +188,25 @@ test('ativar/desativar tambem preserva ordem e projeto', async () => {
   await clicar(botao('Desativar'));
   expect(api.put.mock.calls[0][1].projeto_id).toBe(9);
   expect(api.put.mock.calls[0][1].ordem).toBe(3);
+});
+
+test('Etapa 48: urgencia e material de cliente — no payload, e descritos na lista', async () => {
+  mockGets([{ ...REGRA_SEM_PENDENCIA, id: 5, nome: 'Urgente de cliente', material_critico: null, centro_custo_id: null,
+    urgencia: 'URGENTE', material_cliente: 1 }]);
+  api.post.mockResolvedValue({ data: { id: 6 } });
+  await renderizar();
+  const linha = container.querySelector('[data-testid="regra-5"]');
+  expect(linha.textContent).toContain('Urgência: Urgente');
+  expect(linha.textContent).toContain('Algum item é material de cliente');
+
+  await clicar(botao('Nova regra'));
+  digitar(container.querySelector('#regra-nome'), 'Crítico de cliente');
+  digitar(container.querySelector('#regra-urgencia'), 'CRITICO');
+  const checkCliente = [...container.querySelectorAll('[data-testid="form-regra"] label')]
+    .find((l) => l.textContent.includes('material de cliente')).querySelector('input');
+  await clicar(checkCliente);
+  await clicar(botao('Salvar regra'));
+  const body = api.post.mock.calls[0][1];
+  expect(body.urgencia).toBe('CRITICO');
+  expect(body.material_cliente).toBe(true);
 });

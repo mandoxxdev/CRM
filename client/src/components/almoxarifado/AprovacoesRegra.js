@@ -133,3 +133,54 @@ export function FilaAprovacoesRegra({ onAbrir, recarregarEm }) {
     </div>
   );
 }
+
+/**
+ * Etapa 48 (RN-04) — a fila da aprovação SIMPLES: requisições PENDENTE de OUTRA pessoa, sem assinatura
+ * de regra aberta. Sem rota nova: é o recorte de `GET /almoxarifado/requisicoes?status=PENDENTE`, com
+ * fetch próprio porque a lista principal pode estar filtrada.
+ *
+ * A requisição com as regras AINDA NÃO AVALIADAS (`regras_avaliadas_em` nulo — o avaliador falhou no
+ * envio) FICA na fila, com uma marca: o /aprovar vai reavaliá-la e pode barrar. Escondê-la a deixaria
+ * órfã, porque ela também não está na fila de regras (Fase 2 da Etapa 48, IMPORTANT-1).
+ *
+ * Quem monta decide a permissão (`pode('aprovar_requisicao')`) e o modo almoxarifado.
+ */
+export function FilaAprovacaoSimples({ user, onAbrir, recarregarEm }) {
+  const [fila, setFila] = useState([]);
+
+  useEffect(() => {
+    let vivo = true;
+    api.get('/almoxarifado/requisicoes', { params: { status: 'PENDENTE' } })
+      .then((res) => {
+        if (!vivo) return;
+        const linhas = Array.isArray(res.data) ? res.data : [];
+        setFila(linhas.filter((r) => r.status === 'PENDENTE'
+          && Number(r.solicitante_id) !== Number(user?.id)
+          && !(Number(r.pendencias_regra_abertas) > 0)));
+      })
+      .catch(() => { if (vivo) setFila([]); });
+    return () => { vivo = false; };
+  }, [recarregarEm, user?.id]);
+
+  if (!fila.length) return null;
+
+  return (
+    <div data-testid="fila-aprovacao-simples" style={{ background: 'rgba(26,163,74,0.06)', border: '1px solid rgba(26,163,74,0.25)', borderRadius: 10, padding: '12px 16px', marginBottom: 16 }}>
+      <div style={{ fontWeight: 700, fontSize: '0.875rem', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <FiCheckSquare size={14} /> Requisições aguardando sua aprovação ({fila.length})
+      </div>
+      {fila.map((r) => (
+        <button key={r.id} type="button" onClick={() => onAbrir(r.id)}
+          style={{ display: 'flex', width: '100%', justifyContent: 'space-between', gap: 10, background: 'none', border: 'none', borderTop: '1px solid var(--gmp-border)', padding: '6px 0', cursor: 'pointer', textAlign: 'left', fontSize: '0.85rem', color: 'inherit' }}>
+          <span>
+            <strong>{r.numero}</strong> · {r.solicitante_nome}
+            {!r.regras_avaliadas_em && (
+              <span style={{ color: 'var(--gmp-warning)' }}> · regras ainda não avaliadas — a aprovação vai conferir</span>
+            )}
+          </span>
+          <span style={{ color: 'var(--gmp-text-light)' }}>{formatMoeda(r.valor_total)}</span>
+        </button>
+      ))}
+    </div>
+  );
+}

@@ -13,7 +13,7 @@ import { TIPO_REQUISICAO_LABELS } from './requisicaoLabels';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import AssinaturaCanvas from './AssinaturaCanvas';
 import AnexosDocumento from './AnexosDocumento';
-import { AprovacoesRegraRequisicao, FilaAprovacoesRegra } from './AprovacoesRegra';
+import { AprovacoesRegraRequisicao, FilaAprovacoesRegra, FilaAprovacaoSimples } from './AprovacoesRegra';
 import {
   FiPlus, FiRefreshCw, FiEye, FiCheck, FiX, FiPackage,
   FiAlertTriangle, FiClock, FiTruck, FiCheckCircle, FiFilter, FiMap, FiTrash2, FiDollarSign,
@@ -812,6 +812,10 @@ const RequisicoesList = () => {
       {/* Etapa 47 (T7): o que este usuario pode assinar agora. So no modo almoxarifado. */}
       {warehouseMode && (
         <FilaAprovacoesRegra recarregarEm={requisicoes} onAbrir={(id) => abrirDetalhe(id)} />
+      )}
+      {/* Etapa 48 (RN-04): a fila da aprovacao simples, so para quem pode aprovar. */}
+      {warehouseMode && pode('aprovar_requisicao') && (
+        <FilaAprovacaoSimples user={user} recarregarEm={requisicoes} onAbrir={(id) => abrirDetalhe(id)} />
       )}
 
       {/* Filtros */}

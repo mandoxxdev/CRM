@@ -20,17 +20,23 @@ import { useAuth } from '../../context/AuthContext';
 import { filterVisibleUsers } from '../../utils/systemPermissions';
 import TIPO_REQUISICAO_LABELS from './requisicaoLabels';
 
+// Etapa 48: os tres valores de TIPOS_URGENCIA (servidor), com os rotulos do formulario de requisicao.
+const URGENCIA_LABELS = { NORMAL: 'Normal', URGENTE: 'Urgente', CRITICO: 'Crítico' };
+
 const formatMoeda = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 const FORM_VAZIO = {
-  nome: '', tipo_requisicao: '', material_critico: false, valor_minimo: '', quantidade_minima: '',
+  nome: '', tipo_requisicao: '', urgencia: '', material_critico: false, material_cliente: false,
+  valor_minimo: '', quantidade_minima: '',
   centro_custo_id: '', aprovadores: [], ativo: true,
 };
 
 function resumoCriterios(regra, centrosPorId) {
   const partes = [];
   if (regra.tipo_requisicao) partes.push(`Tipo: ${TIPO_REQUISICAO_LABELS[regra.tipo_requisicao] || regra.tipo_requisicao}`);
+  if (regra.urgencia) partes.push(`Urgência: ${URGENCIA_LABELS[regra.urgencia] || regra.urgencia}`);
   if (regra.material_critico) partes.push('Algum item é material crítico');
+  if (regra.material_cliente) partes.push('Algum item é material de cliente');
   if (regra.valor_minimo != null) partes.push(`Valor ≥ ${formatMoeda(regra.valor_minimo)}`);
   if (regra.quantidade_minima != null) partes.push(`Algum item com quantidade ≥ ${regra.quantidade_minima}`);
   if (regra.centro_custo_id != null) {
@@ -45,7 +51,9 @@ function paraPayload(form) {
   return {
     nome: form.nome,
     tipo_requisicao: form.tipo_requisicao || null,
+    urgencia: form.urgencia || null,
     material_critico: !!form.material_critico,
+    material_cliente: !!form.material_cliente,
     valor_minimo: form.valor_minimo === '' ? null : Number(form.valor_minimo),
     quantidade_minima: form.quantidade_minima === '' ? null : Number(form.quantidade_minima),
     centro_custo_id: form.centro_custo_id === '' ? null : Number(form.centro_custo_id),
@@ -94,7 +102,9 @@ const TabRegrasAprovacao = () => {
     setForm({
       nome: regra.nome || '',
       tipo_requisicao: regra.tipo_requisicao || '',
+      urgencia: regra.urgencia || '',
       material_critico: !!regra.material_critico,
+      material_cliente: !!regra.material_cliente,
       valor_minimo: regra.valor_minimo ?? '',
       quantidade_minima: regra.quantidade_minima ?? '',
       centro_custo_id: regra.centro_custo_id ?? '',
@@ -151,7 +161,9 @@ const TabRegrasAprovacao = () => {
         ...paraPayload({
           nome: regra.nome,
           tipo_requisicao: regra.tipo_requisicao || '',
+          urgencia: regra.urgencia || '',
           material_critico: !!regra.material_critico,
+          material_cliente: !!regra.material_cliente,
           valor_minimo: regra.valor_minimo ?? '',
           quantidade_minima: regra.quantidade_minima ?? '',
           centro_custo_id: regra.centro_custo_id ?? '',
@@ -211,6 +223,14 @@ const TabRegrasAprovacao = () => {
               </select>
             </div>
             <div className="almox-field">
+              <label className="almox-label" htmlFor="regra-urgencia">Urgência</label>
+              <select id="regra-urgencia" className="almox-form-select" value={form.urgencia}
+                onChange={(e) => setForm((f) => ({ ...f, urgencia: e.target.value }))}>
+                <option value="">Qualquer</option>
+                {Object.entries(URGENCIA_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </div>
+            <div className="almox-field">
               <label className="almox-label" htmlFor="regra-valor">Valor total a partir de (R$)</label>
               <input id="regra-valor" className="almox-input" type="number" min="0" step="0.01" value={form.valor_minimo}
                 onChange={(e) => setForm((f) => ({ ...f, valor_minimo: e.target.value }))} />
@@ -232,6 +252,11 @@ const TabRegrasAprovacao = () => {
               <input type="checkbox" checked={form.material_critico}
                 onChange={(e) => setForm((f) => ({ ...f, material_critico: e.target.checked }))} />
               Algum item é material crítico
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.875rem', marginTop: 22 }}>
+              <input type="checkbox" checked={form.material_cliente}
+                onChange={(e) => setForm((f) => ({ ...f, material_cliente: e.target.checked }))} />
+              Algum item é material de cliente
             </label>
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)', margin: '8px 0 14px' }}>
