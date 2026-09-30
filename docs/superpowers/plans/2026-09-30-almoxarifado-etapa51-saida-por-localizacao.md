@@ -44,4 +44,4 @@ Os oito cenários da sonda pelas rotas reais, incluindo a entrega de requisiçã
 ## Estado
 
 - [x] Fase 0 (sonda, seção 1 do desenho) · [x] Fase 1
-- [ ] Fase 2 · [ ] T1 · [ ] T2 · [ ] T3 · [ ] T4 · [ ] Fase 5 · [ ] Fase 6
+- [x] Fase 2 (1 CRITICAL, 3 IMPORTANT, 2 MINOR — seção 5 do desenho) · [ ] T1 · [ ] T2 · [ ] T3 · [ ] T4 · [ ] Fase 5 · [ ] Fase 6

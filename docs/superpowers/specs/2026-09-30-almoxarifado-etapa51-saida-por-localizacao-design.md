@@ -76,3 +76,42 @@ Tudo é **tronco**: é motor de estoque, na mesma função.
 | **T2** | RN-03 no `syncSaldoLocalizacaoPadrao` |
 | **T3** | RN-04, a guarda do AJUSTE com localização |
 | **T4** | integração: os 8 cenários da sonda viram teste, pelas rotas reais, incluindo a entrega de requisição |
+
+## 5. O que a Fase 2 mudou: 1 CRITICAL, 3 IMPORTANT, 2 MINOR (sonda `rev51-sonda.js`)
+
+**🔴 A RN-04 como "recusar" TRAVARIA o material com lote, e está corrigida para ABSORVER.**
+Cenário (P2): entrada de 100 em A no lote L2, depois a entrega de requisição de 100. O resultado é `A/L2:100, NULL:−100` com o físico em 0. O
+operador conta "L2 em A = 0", que é a verdade:
+- hoje isso grava `fisico = −100`;
+- com "recusar", a contagem seria barrada;
+- e nenhum outro caminho zera a linha de lote.
+
+**RN-04 corrigida:** quando o AJUSTE com localização levaria o total abaixo de 0 em material que não permite
+negativo, o motor **absorve** primeiro. Ele leva as linhas **sem lote negativas** ("sem localização atribuída": a `NULL/NULL`
+primeiro, depois as outras) para cima até o total dar 0. **Só recusa** se nem isso bastar, com a literal da seção 2. No P2 o resultado
+é tudo zerado, que é a verdade física. A RN-04 também vale para o **estorno** de AJUSTE com localização, que hoje só protege a linha.
+
+**Concorrência — o claim relê em vez de pular.** Copiar o "pula quando o débito não casa" do
+`claimSaldoDoLote` recriava a linha fantasma. Duas saídas simultâneas de 60 com A:100 davam `A:40, NULL:−60`: o perdedor leu 100 e falhou o
+débito condicional, e o resto foi negativado com A ainda em 40. No lote isso vira recusa; aqui virava silêncio.
+**Correção:** quando o débito não casar, relê a linha e tira `min(restante, atual)`.
+
+**A condição é `!loteIdFinal`.** O ramo `else` da saída também atende saída **com lote** de material que
+permite negativo. Ela continua como hoje.
+
+**⚠️ A RN-01 NÃO conserta o material com estoque em LOTE.** A entrega de requisição não escolhe lote (**B204**), e a
+RN-01 não toca linha de lote. O P2 continua `A/L:100, NULL:−100` depois dela. **O que esta etapa conserta é o
+material SEM lote**, e a tela de vazias da 52 tem de declarar isso. Vai para a letra **C**.
+
+**RN-03 com o parâmetro `{ drenar }`, ligado só no AJUSTE de ida.** `syncSaldoLocalizacaoPadrao` também é usada pela
+reconciliação de estorno e pelas compensações. Drenar ali mudaria caminhos que o plano não previa.
+
+**Declarados (letra D):**
+- o estorno de saída drenada devolve tudo à linha padrão/NULL. Sem origem declarada (a requisição), o endereço se perde **100%**. O mesmo vale para o estorno de AJUSTE que drenou;
+- a RN-01/02 drena linha em endereço **bloqueado**, a mesma regra que a Etapa 6 decidiu para lote;
+- o alerta "material sem endereço" pode subir, porque material zerado deixa de ter linha endereçada positiva.
+
+**O que ganha teste na T4, além dos 8 da Fase 0:**
+- **P4**: com físico 0 e A:100 fantasma, a transferência A→B era **aceita** hoje (`B:100, NULL:−100`). Com a RN-01, A fica em 0 e a transferência é recusada;
+- o **P2**, material com lote, declarando que continua como está;
+- a corrida de duas saídas.
