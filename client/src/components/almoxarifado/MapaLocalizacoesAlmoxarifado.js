@@ -278,6 +278,9 @@ const MapaLocalizacoesAlmoxarifado = () => {
   const [arrastando, setArrastando] = useState(null);
   const [celulaAlvo, setCelulaAlvo] = useState(null);
   const posicoesEditRef = useRef({});
+  // Etapa 56: só avalia o `?loc` depois de uma carga BEM-SUCEDIDA — com a carga falhando a lista
+  // fica vazia e "não encontrada" mentiria (o erro já aparece no toast).
+  const [carregou, setCarregou] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -290,6 +293,7 @@ const MapaLocalizacoesAlmoxarifado = () => {
       setLocalizacoes(mapRes.data);
       setTiposLoc(metaRes.data.localizacoes_tipos || []);
       setAlmoxarifados(almoxRes.data);
+      setCarregou(true);
     } catch {
       toast.error('Erro ao carregar mapa de localizações');
     } finally {
@@ -308,6 +312,23 @@ const MapaLocalizacoesAlmoxarifado = () => {
       if (loc.setor) setFiltroSetor(loc.setor);
     }
   }, [localizacoes, searchParams]);
+
+  // Etapa 56 (RN-01, crítico 2 da revisão): a etiqueta leva `loc` (id) e o `codigo` impresso. O Mover
+  // renumera o código e mantém o id — a etiqueta continua abrindo a localização certa, mas o código
+  // impresso ficou velho. Comparação exata (o código é o que está impresso; não normaliza).
+  // `?loc` fora da lista (inativa ou apagada: o mapa só traz ativas) também avisa, em vez de abrir
+  // o mapa sem seleção nenhuma e deixar o operador achando que leu a etiqueta certa.
+  const avisoEtiqueta = useMemo(() => {
+    const locId = searchParams.get('loc');
+    if (!locId || !carregou) return null;
+    const loc = localizacoes.find(l => String(l.id) === locId);
+    if (!loc) return { tipo: 'nao-encontrada', texto: 'Localização não encontrada ou inativa' };
+    const codigoEtiqueta = searchParams.get('codigo');
+    if (codigoEtiqueta && codigoEtiqueta !== loc.codigo) {
+      return { tipo: 'desatualizada', texto: `Etiqueta desatualizada: ${codigoEtiqueta} → ${loc.codigo}. Reimprima.` };
+    }
+    return null;
+  }, [localizacoes, searchParams, carregou]);
 
   const setores = useMemo(() => {
     const s = new Set(localizacoes.map(l => l.setor).filter(Boolean));
@@ -530,6 +551,20 @@ const MapaLocalizacoesAlmoxarifado = () => {
           )}
         </div>
       </div>
+
+      {avisoEtiqueta && (
+        <div
+          role="alert"
+          data-testid={avisoEtiqueta.tipo === 'desatualizada' ? 'aviso-etiqueta-desatualizada' : 'aviso-loc-nao-encontrada'}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, padding: '10px 14px',
+            borderRadius: 8, border: '1px solid #f9a825', background: 'rgba(249,168,37,0.12)', fontWeight: 600,
+          }}
+        >
+          <FiAlertTriangle size={16} style={{ color: '#f9a825', flexShrink: 0 }} />
+          <span>{avisoEtiqueta.texto}</span>
+        </div>
+      )}
 
       <div className="almox-kpis" style={{ marginBottom: 20 }}>
         <div className="almox-kpi-card">

@@ -26,6 +26,7 @@ jest.mock('qrcode', () => ({
 import {
   FORMATOS_ETIQUETA, montarEtiquetaMaterial, montarEtiquetaLote,
   montarEtiquetaSerie, montarEtiquetasDoRecebimento, montarEtiquetaRetalho, gerarEtiquetasPDF,
+  montarEtiquetaLocalizacao, etiquetaLocalizacao,
 } from './etiquetasPdf';
 
 const ORIGIN = 'https://crm.gmp.ind.br';
@@ -180,5 +181,33 @@ describe('gerarEtiquetasPDF', () => {
       .rejects.toThrow(/formato de etiqueta desconhecido/);
     await expect(gerarEtiquetasPDF({ formato: 'A4_GRADE', etiquetas: [] }))
       .rejects.toThrow(/nenhuma etiqueta/);
+  });
+});
+
+describe('montarEtiquetaLocalizacao (Etapa 56, RN-01)', () => {
+  const LOC = {
+    id: 42, codigo: 'A&B#1+2', descricao: 'Prateleira do meio', tipo: 'Prateleira', setor: 'Corredor A',
+    endereco_completo: 'ALM-01 / Corredor A / A&B#1+2',
+  };
+
+  test('QR abre o Mapa com loc e o código exato (encodeURIComponent), nome = endereço completo', () => {
+    const e = montarEtiquetaLocalizacao(LOC, ORIGIN);
+    expect(e.codigo).toBe('A&B#1+2');
+    expect(e.nome).toBe('ALM-01 / Corredor A / A&B#1+2');
+    expect(e.linhaControle).toBe('Prateleira · Corredor A');
+    const url = new URL(e.qrUrl);
+    expect(url.origin).toBe(ORIGIN);
+    expect(url.pathname).toBe('/almoxarifado/mapa');
+    expect(url.hash).toBe(''); // sem encode o '#' viraria fragmento e cortaria o código
+    const q = new URLSearchParams(url.search);
+    expect(q.get('loc')).toBe('42');
+    expect(q.get('codigo')).toBe('A&B#1+2');
+  });
+
+  test('sem endereço completo cai na descrição; sem tipo/setor não sobra separador solto', () => {
+    const e = etiquetaLocalizacao({ id: 3, codigo: 'X-1', descricao: 'Gaveta' }, ORIGIN);
+    expect(e.nome).toBe('Gaveta');
+    expect(e.linhaControle).toBe('');
+    expect(e.qrUrl).toBe(`${ORIGIN}/almoxarifado/mapa?loc=3&codigo=X-1`);
   });
 });

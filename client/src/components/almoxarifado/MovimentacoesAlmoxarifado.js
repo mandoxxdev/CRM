@@ -7,6 +7,7 @@ import { SkeletonTable } from '../SkeletonLoader';
 import ExtratoMaterialModal from './ExtratoMaterialModal';
 import SeloProprietario, { rotuloMaterialComDono } from './SeloProprietario';
 import { formatLocalizacaoLabel } from '../../utils/localizacaoLabel';
+import { extrairCodigoLido } from '../../utils/codigoLido';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import './Almoxarifado.css';
 
@@ -137,6 +138,27 @@ const TIPOS_SEM_ESTORNO = [
 ];
 const podeEstornar = (m) => !m.cancelado && m.tipo !== 'ESTORNO' && !TIPOS_SEM_ESTORNO.includes(m.tipo);
 
+// Etapa 56 (RN-03/04): campo opcional "Confirmar endereço lido". O leitor que "digita" termina com
+// Enter — sem o preventDefault, a leitura submeteria o formulário antes do operador conferir o resto.
+const CampoCodigoLido = ({ id, value, onChange, dica }) => (
+  <div style={{ marginTop: 6 }}>
+    <label className="almox-label" htmlFor={id} style={{ fontSize: '0.8rem' }}>Confirmar endereço lido</label>
+    <input
+      id={id}
+      className="almox-input"
+      type="text"
+      autoComplete="off"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
+      placeholder="Leia a etiqueta da localização (opcional)"
+    />
+    {dica && value.trim() && (
+      <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>{dica}</small>
+    )}
+  </div>
+);
+
 const MovimentacoesAlmoxarifado = () => {
   const { bloquearSeNaoPode } = useAlmoxPermissoes();
   const location = useLocation();
@@ -171,6 +193,8 @@ const MovimentacoesAlmoxarifado = () => {
     centro_custo_id: '',
     localizacao_origem_id: '',
     localizacao_destino_id: '',
+    codigo_lido_origem: '',
+    codigo_lido_destino: '',
     lote: '',
     lote_id: '',
     custo_unitario: '',
@@ -372,6 +396,7 @@ const MovimentacoesAlmoxarifado = () => {
     setForm({
       material_id: '', tipo: 'ENTRADA', quantidade: '', motivo: '', referencia: '', observacoes: '',
       os_id: '', projeto_id: '', centro_custo_id: '', localizacao_origem_id: '', localizacao_destino_id: '',
+      codigo_lido_origem: '', codigo_lido_destino: '',
       lote: '', lote_id: '', custo_unitario: '', emergencial: false,
       series: '', serie_ids: []
     });
@@ -419,6 +444,13 @@ const MovimentacoesAlmoxarifado = () => {
       // trocado para AJUSTE) vaze para um tipo onde o campo nem aparece na tela.
       if (TIPOS_COM_ORIGEM.includes(form.tipo) && form.localizacao_origem_id) payload.localizacao_origem_id = Number(form.localizacao_origem_id);
       if (TIPOS_COM_DESTINO.includes(form.tipo) && form.localizacao_destino_id) payload.localizacao_destino_id = Number(form.localizacao_destino_id);
+      // Etapa 56 (RN-03/04): confirmação do endereço por leitura — opcional, e só para o papel que o
+      // tipo exibe. Aceita o código puro ou a URL da etiqueta (extrai `codigo`); vazio não vai no body
+      // (ausente = comportamento de antes). Quem compara e recusa é o servidor.
+      const lidoOrigem = TIPOS_COM_ORIGEM.includes(form.tipo) ? extrairCodigoLido(form.codigo_lido_origem) : '';
+      const lidoDestino = TIPOS_COM_DESTINO.includes(form.tipo) ? extrairCodigoLido(form.codigo_lido_destino) : '';
+      if (lidoOrigem) payload.codigo_lido_origem = lidoOrigem;
+      if (lidoDestino) payload.codigo_lido_destino = lidoDestino;
       // Entrada: lote nasce aqui, texto livre. Saída do formulário (SAIDA/PERDA): lote é
       // escolhido de um já existente (lote_id), nunca digitado — evita saída registrada contra um
       // lote que não existe.
@@ -682,8 +714,10 @@ const MovimentacoesAlmoxarifado = () => {
                           tipo: novoTipo,
                           emergencial: novoTipo === 'SAIDA' ? f.emergencial : false,
                           localizacao_destino_id: TIPOS_COM_DESTINO.includes(novoTipo) ? f.localizacao_destino_id : '',
+                          codigo_lido_destino: TIPOS_COM_DESTINO.includes(novoTipo) ? f.codigo_lido_destino : '',
                           custo_unitario: novoTipo === 'ENTRADA' ? f.custo_unitario : '',
                           localizacao_origem_id: TIPOS_COM_ORIGEM.includes(novoTipo) ? f.localizacao_origem_id : '',
+                          codigo_lido_origem: TIPOS_COM_ORIGEM.includes(novoTipo) ? f.codigo_lido_origem : '',
                           lote: mostraLote ? f.lote : '',
                           lote_id: mostraLote ? f.lote_id : '',
                           series: novoTipo === 'ENTRADA' ? f.series : '',
@@ -818,6 +852,11 @@ const MovimentacoesAlmoxarifado = () => {
                           ))}
                         </div>
                       )}
+                      <CampoCodigoLido
+                        id="mov-codigo-lido-destino"
+                        value={form.codigo_lido_destino}
+                        onChange={(v) => setForm(f => ({ ...f, codigo_lido_destino: v }))}
+                      />
                     </div>
                   )}
                   {form.tipo === 'ENTRADA' && (
@@ -841,6 +880,12 @@ const MovimentacoesAlmoxarifado = () => {
                           </option>
                         ))}
                       </select>
+                      <CampoCodigoLido
+                        id="mov-codigo-lido-origem"
+                        value={form.codigo_lido_origem}
+                        onChange={(v) => setForm(f => ({ ...f, codigo_lido_origem: v }))}
+                        dica={form.localizacao_origem_id ? null : 'Para confirmar a origem, escolha também a localização de origem.'}
+                      />
                     </div>
                   )}
                   {(form.tipo === 'ENTRADA' || TIPOS_COM_LOTE_EXISTENTE.includes(form.tipo)) && (

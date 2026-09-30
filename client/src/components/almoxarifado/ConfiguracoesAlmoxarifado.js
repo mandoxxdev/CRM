@@ -16,6 +16,8 @@ import TabRegrasAprovacao from './TabRegrasAprovacao';
 import { useSearchParams } from 'react-router-dom';
 import { prefixarAlmoxarifado, buildLocalizacaoPath } from '../../utils/localizacaoLabel';
 import { invalidarAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
+import EtiquetasPdfModal from './EtiquetasPdfModal';
+import { montarEtiquetaLocalizacao } from '../../utils/etiquetasPdf';
 import './Almoxarifado.css';
 
 const ICONES = ['📦', '🔧', '🪛', '⚙️', '🛡️', '🧰', '🪝', '💡', '🔩', '🪜', '🧪', '🏗️', '🔌', '🧲', '📋'];
@@ -1429,6 +1431,8 @@ const TabLocalizacoes = () => {
   // Fase 5: códigos que o servidor RECUSOU nesta sessão. Só o fallback local precisa disto — ele não
   // vê as inativas, e sem a lista propunha de novo o mesmo código recusado (409 em laço, sem saída).
   const codigosRecusados = useRef(new Set());
+  // Etapa 56 (RN-01): etiquetas de localização — null = modal fechado (mesmo molde de Materiais).
+  const [etiquetas, setEtiquetas] = useState(null);
 
   useEffect(() => { loadLocs(); loadTipos(); loadSetores(); loadAlmoxarifados(); }, []);
 
@@ -1816,6 +1820,16 @@ const TabLocalizacoes = () => {
         <Link to="/almoxarifado/mapa" className="btn-almox-secondary" style={{ marginLeft: (!showWizard && !showEdit && !moverLoc) ? 'auto' : 0 }}>
           <FiMapPin size={14} /> Ver Mapa de Áreas
         </Link>
+        {localizacoes.length > 0 && (
+          <button
+            type="button"
+            className="btn-almox-secondary"
+            title="Imprimir etiquetas (QR) de todas as localizações listadas"
+            onClick={() => setEtiquetas(localizacoes.map(l => montarEtiquetaLocalizacao(l, window.location.origin)))}
+          >
+            <FiTag size={14} /> Etiquetas ({localizacoes.length})
+          </button>
+        )}
       </div>
 
       {showWizard && (
@@ -2272,6 +2286,7 @@ const TabLocalizacoes = () => {
                     <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                       <button className="almox-btn-icon" onClick={() => handleEditar(loc)} title="Editar"><FiEdit2 size={13} /></button>
                       <button className="almox-btn-icon" onClick={() => startMover(loc)} title="Mover"><FiMove size={13} /></button>
+                      <button className="almox-btn-icon" onClick={() => setEtiquetas([montarEtiquetaLocalizacao(loc, window.location.origin)])} title="Etiqueta" aria-label={`Etiqueta ${loc.codigo}`}><FiTag size={13} /></button>
                       <button className="almox-btn-icon danger" onClick={() => handleDeletar(loc.id)} title="Excluir"><FiTrash2 size={13} /></button>
                     </div>
                   </td>
@@ -2281,6 +2296,7 @@ const TabLocalizacoes = () => {
           </table>
         </div>
       )}
+      <EtiquetasPdfModal etiquetas={etiquetas} onClose={() => setEtiquetas(null)} />
     </div>
   );
 };
