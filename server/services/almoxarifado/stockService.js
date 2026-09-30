@@ -1091,6 +1091,24 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     }
   }
 
+  // Etapa 58: a entrega de requisição com origem informada é ESTRITA (opção do chamador, no 4º
+  // argumento — nunca no body): sem isto a saída só PREFERE a origem e drena os outros endereços,
+  // e o livro grava "saiu de A" para o que saiu de B (Fase 2, crítico 1). Mesma régua da origem
+  // confirmada por leitura: saldo nela cobre a quantidade, e a conferência pós-claim abaixo.
+  let codigoOrigemEstrita = null;
+  if (!confirmadoOrigem && opcoes.origemEstrita && localizacao_origem_id && tiposSaida.includes(tipo)) {
+    const lo = await dbGet(db, 'SELECT codigo FROM localizacoes_almoxarifado WHERE id = ?', [localizacao_origem_id]);
+    codigoOrigemEstrita = lo ? lo.codigo : String(localizacao_origem_id);
+    const aqui = await dbGet(db, `SELECT COALESCE(SUM(quantidade), 0) as q FROM estoque_saldo_almoxarifado
+      WHERE material_id = ? AND localizacao_id = ? AND lote_id IS ?`, [material_id, localizacao_origem_id, loteIdFinal || null]);
+    const saldoAqui = Number(aqui.q) || 0;
+    if (saldoAqui + EPS < parseFloat(quantidade)) {
+      throw Object.assign(new Error(
+        `O saldo em ${codigoOrigemEstrita} (${Math.round(saldoAqui * 1e6) / 1e6}) não cobre a quantidade (${parseFloat(quantidade)}) — a saída tiraria de outros endereços`,
+      ), { status: 400 });
+    }
+  }
+
   // ⚠️ O QUE ESTE MOVIMENTO APLICOU NAS COLUNAS DE RETENÇÃO, para o catch amplo poder reverter.
   //
   // Achado CRITICAL da revisão adversarial da Etapa 44, e ele é do MOTOR, não daquela etapa: os
@@ -1733,14 +1751,15 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
       // do claim, com varios await no meio — duas saidas de 10 confirmadas em A (A:10, B:50) passavam
       // as duas, e a segunda drenava B gravando codigo_lido_origem = A. Confere DEPOIS do claim que
       // tudo saiu da origem; se nao, o catch amplo abaixo compensa as linhas e o fisico.
-      if (confirmadoOrigem && saldoLinhasSaidaParaReverter.length) {
+      const origemConferida = confirmadoOrigem || codigoOrigemEstrita;
+      if (origemConferida && saldoLinhasSaidaParaReverter.length) {
         const ids = saldoLinhasSaidaParaReverter.map((l) => l.id);
         const fora = await dbGet(db, `SELECT COUNT(*) as n FROM estoque_saldo_almoxarifado
           WHERE id IN (${ids.map(() => '?').join(',')}) AND (localizacao_id IS NULL OR localizacao_id <> ?)`,
         [...ids, localizacao_origem_id]);
         if (Number(fora.n) > 0) {
           throw Object.assign(new Error(
-            `O saldo em ${confirmadoOrigem} mudou durante a saída e não cobre mais a quantidade — confira e tente de novo`,
+            `O saldo em ${origemConferida} mudou durante a saída e não cobre mais a quantidade — confira e tente de novo`,
           ), { status: 400 });
         }
       }
@@ -2672,6 +2691,8 @@ module.exports = {
   resolveLocalizacaoSaida,
   validarLocalizacaoParaMovimento,
   validarEnderecoExplicito,
+  normalizarCodigoLido,
+  conferirLeitura,
   materiaisComPadrao,
   registrarMovimentacao,
   cancelarMovimentacao,

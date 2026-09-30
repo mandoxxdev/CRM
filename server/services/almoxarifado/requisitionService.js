@@ -562,6 +562,57 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
     }
   }
 
+  // Etapa 58 (RN-01/02): origem, lote e leitura POR ITEM. Tudo validado ANTES de qualquer baixa
+  // (Fase 2, crítico 2): cada item vira até duas baixas (excedente + reservada), e uma recusa na
+  // segunda deixava a primeira feita. O motor continua sendo a guarda contra concorrência.
+  const origemPorItem = new Map();
+  for (const item of itens) {
+    const entrada = itensAtendidos?.find((ia) => Number(ia.item_id) === Number(item.id));
+    const qty = entrada ? num(entrada.quantidade_atendida) : 0;
+    if (qty <= 0) continue;
+    const origemId = entrada.localizacao_origem_id ? Number(entrada.localizacao_origem_id) : null;
+    const loteId = entrada.lote_id ? Number(entrada.lote_id) : null;
+    const lido = entrada.codigo_lido_origem;
+    if (!origemId && !loteId && (lido === undefined || lido === null || lido === '')) continue;
+    try {
+      const lidoNorm = stockService.normalizarCodigoLido(lido);
+      if (lidoNorm && !origemId) {
+        throw Object.assign(new Error('Para confirmar a origem pela leitura, informe a localização de origem'), { status: 400 });
+      }
+      let codigoOrigem = null;
+      if (origemId) {
+        const loc = await stockService.validarEnderecoExplicito(db, origemId, 'origem');
+        await stockService.validarLocalizacaoParaMovimento(db, origemId, { tipo_material: item.tipo_material }, 'origem');
+        codigoOrigem = loc.codigo;
+        if (lidoNorm) await stockService.conferirLeitura(db, lidoNorm, origemId, 'origem');
+      }
+      let loteCodigo = null;
+      if (loteId) {
+        const lote = await dbGet(db, 'SELECT id, codigo, material_id FROM lotes_almoxarifado WHERE id = ?', [loteId]);
+        if (!lote || Number(lote.material_id) !== Number(item.material_id)) {
+          throw Object.assign(new Error('Lote não pertence a este material'), { status: 400 });
+        }
+        loteCodigo = lote.codigo;
+      }
+      // O item INTEIRO (todas as baixas) cabe no que foi escolhido.
+      const onde = origemId ? 'AND localizacao_id = ?' : '';
+      const s = await dbGet(db, `SELECT COALESCE(SUM(quantidade), 0) as q FROM estoque_saldo_almoxarifado
+        WHERE material_id = ? AND lote_id IS ? ${onde}`, [item.material_id, loteId, ...(origemId ? [origemId] : [])]);
+      const saldo = Number(s.q) || 0;
+      if (saldo + 1e-9 < qty) {
+        throw Object.assign(new Error(origemId
+          ? `O saldo em ${codigoOrigem} (${Math.round(saldo * 1e6) / 1e6}) não cobre a quantidade (${qty}) — a saída tiraria de outros endereços`
+          : `Saldo insuficiente no lote ${loteCodigo}. Disponível: ${Math.round(saldo * 1e6) / 1e6} ${item.unidade || ''}`.trim()),
+        { status: 400 });
+      }
+      origemPorItem.set(item.id, { origemId, loteId, lido: lidoNorm });
+    } catch (e) {
+      const err = new Error(`${item.material_nome}: ${e.message}`);
+      err.status = e.status || 400;
+      throw err;
+    }
+  }
+
   const entregas = [];
 
   for (const item of itens) {
@@ -635,6 +686,11 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
           tipo: 'SAIDA',
           quantidade: baixa.quantidade,
           reserva_id: baixa.reserva_id,
+          ...(origemPorItem.has(item.id) ? {
+            localizacao_origem_id: origemPorItem.get(item.id).origemId || undefined,
+            lote_id: origemPorItem.get(item.id).loteId || undefined,
+            codigo_lido_origem: origemPorItem.get(item.id).lido || undefined,
+          } : {}),
           motivo: `Requisição ${reqRow.numero}`,
           referencia: reqRow.os_referencia || reqRow.numero,
           justificativa: `Entrega requisição ${reqRow.numero}`,
@@ -642,7 +698,7 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
           projeto_id: reqRow.projeto_id || undefined,
           cliente_id: reqRow.cliente_id || undefined,
           centro_custo_id: reqRow.centro_custo_id || undefined,
-        });
+        }, { origemEstrita: !!origemPorItem.get(item.id)?.origemId });
       } catch (e) {
         const err = new Error(`${item.material_nome}: ${e.message}`);
         err.status = e.status;
@@ -708,24 +764,45 @@ async function excluirRequisicao(db, requisicaoId, user, justificativa, alertSer
     const qtyEstorno = getEntregue(item);
     if (qtyEstorno <= 0) continue;
 
-    try {
-      // eslint-disable-next-line no-await-in-loop
-      await stockService.registrarMovimentacao(db, user, {
-        material_id: item.material_id,
-        tipo: 'ENTRADA',
-        quantidade: qtyEstorno,
-        motivo: `Estorno exclusão requisição ${reqRow.numero}`,
-        referencia: reqRow.os_referencia || reqRow.numero,
-        justificativa: justificativa || motivo,
-        requisicao_id: requisicaoId,
-        projeto_id: reqRow.projeto_id || undefined,
-        cliente_id: reqRow.cliente_id || undefined,
-        centro_custo_id: reqRow.centro_custo_id || undefined,
-      });
-    } catch (e) {
-      const err = new Error(`${item.material_nome}: ${e.message}`);
-      err.status = e.status;
-      throw err;
+    // Etapa 58 (Fase 2, crítico 3): a entrega passou a poder sair de um endereço e de um LOTE. O
+    // estorno de uma ENTRADA sem lote e sem endereço devolvia à padrão sem lote — o lote perdia o
+    // que saiu para sempre (o C72 pelo lado inverso). Agora devolve por saída: mesmo lote, e para a
+    // origem dela se ainda ativa e não bloqueada. Se as saídas do livro não somam o entregue
+    // (dado antigo), cai no estorno de antes, inteiro.
+    // eslint-disable-next-line no-await-in-loop
+    const grupos = await dbAll(db, `SELECT m.localizacao_origem_id as origem, m.lote_id, SUM(m.quantidade) as q,
+        MAX(CASE WHEN l.ativo = 1 AND COALESCE(l.bloqueada, 0) = 0 THEN 1 ELSE 0 END) as origem_ok
+      FROM movimentacoes_almoxarifado m
+      LEFT JOIN localizacoes_almoxarifado l ON l.id = m.localizacao_origem_id
+      WHERE m.requisicao_id = ? AND m.material_id = ? AND m.tipo = 'SAIDA' AND COALESCE(m.cancelado, 0) = 0
+      GROUP BY m.localizacao_origem_id, m.lote_id`, [requisicaoId, item.material_id]);
+    const somaLivro = grupos.reduce((s, g) => s + (Number(g.q) || 0), 0);
+    const partes = Math.abs(somaLivro - qtyEstorno) < 1e-9 && grupos.length
+      ? grupos.map((g) => ({ quantidade: Number(g.q), destino: g.origem && g.origem_ok ? g.origem : undefined, lote_id: g.lote_id || undefined }))
+      : [{ quantidade: qtyEstorno, destino: undefined, lote_id: undefined }];
+
+    for (const parte of partes) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        await stockService.registrarMovimentacao(db, user, {
+          material_id: item.material_id,
+          tipo: 'ENTRADA',
+          quantidade: parte.quantidade,
+          localizacao_destino_id: parte.destino,
+          lote_id: parte.lote_id,
+          motivo: `Estorno exclusão requisição ${reqRow.numero}`,
+          referencia: reqRow.os_referencia || reqRow.numero,
+          justificativa: justificativa || motivo,
+          requisicao_id: requisicaoId,
+          projeto_id: reqRow.projeto_id || undefined,
+          cliente_id: reqRow.cliente_id || undefined,
+          centro_custo_id: reqRow.centro_custo_id || undefined,
+        });
+      } catch (e) {
+        const err = new Error(`${item.material_nome}: ${e.message}`);
+        err.status = e.status;
+        throw err;
+      }
     }
 
     estornos.push({ material_id: item.material_id, quantidade: qtyEstorno });

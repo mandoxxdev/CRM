@@ -77,7 +77,9 @@ async function registrarDevolucao(db, user, data) {
   // Heranca de lote (decisao 4): o lote informado a mao ganha do herdado. So herda em material
   // com controle_lote — herdar num material sem controle criaria linhas de saldo quebradas por
   // lote sem que ninguem tenha pedido isso.
-  const loteFinalId = lote_id || (material.controle_lote && saidaOriginal ? saidaOriginal.lote_id : null) || null;
+  // Etapa 58: herda o lote da saida citada sempre que ela TEM lote — a entrega passou a poder
+  // escolher lote tambem em material sem controle_lote, e voltar sem lote tiraria o saldo dele.
+  const loteFinalId = lote_id || (saidaOriginal ? saidaOriginal.lote_id : null) || null;
 
   // Heranca de projeto_id/os_id (Etapa 14, Task 3 — RN-05, emenda I2, MESMO MOLDE da heranca de
   // lote acima): o valor informado a mao pelo chamador GANHA; sem informar, herda da saida
