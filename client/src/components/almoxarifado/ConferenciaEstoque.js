@@ -565,7 +565,7 @@ const ConferenciaEstoque = () => {
           <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
             {seriesARegularizar.map((m) => (
               <li key={m.material_id}>
-                <a href={`/almoxarifado/lotes?material_id=${m.material_id}&aba=SERIES`}>{m.codigo}</a>
+                <a href={`/almoxarifado/lotes?material_id=${m.material_id}&aba=SERIES`} target="_blank" rel="noopener noreferrer">{m.codigo}</a>
                 {' '}(físico {m.fisico}, presentes {m.presentes})
               </li>
             ))}

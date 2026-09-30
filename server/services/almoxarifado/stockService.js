@@ -1029,11 +1029,22 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
       throw Object.assign(new Error('material com controle de serie: ajuste por endereco nao e suportado — ajuste o total do material (sem endereco)'), { status: 400 });
     }
     const novo = parseFloat(quantidade);
-    if (!Number.isInteger(novo)) {
+    // Fase 5: negativo tambem (antes respondia "informe N serie(s)" para um total -2).
+    if (!Number.isInteger(novo) || novo < 0) {
       throw Object.assign(new Error('material com controle de serie exige quantidade inteira'), { status: 400 });
     }
     const presentesAjuste = await seriesService.contarPresentes(db, material_id);
     serieAjusteDelta = novo - presentesAjuste;
+    // Fase 5: numero que ja esta presente e recusado AQUI, antes de qualquer efeito — senao a
+    // recusa vinha do entradaSeries, depois da auditoria do ajuste de material de cliente (orfa).
+    if (serieAjusteDelta > 0 && seriesEntrada.length) {
+      const jaPresentes = await dbAll(db, `SELECT numero FROM series_almoxarifado WHERE material_id = ?
+        AND status IN ('EM_ESTOQUE','BLOQUEADA') AND numero IN (${seriesEntrada.map(() => '?').join(',')})`,
+      [material_id, ...seriesEntrada]);
+      if (jaPresentes.length) {
+        throw Object.assign(new Error(`serie ${jaPresentes[0].numero} ja esta em estoque`), { status: 400 });
+      }
+    }
     const abs = Math.abs(serieAjusteDelta);
     if (serieAjusteDelta === 0) {
       if (seriesEntrada.length || serieIdsSaida.length) {
@@ -1380,6 +1391,9 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
   // populada quando a saída reivindica série(s) especificas. Mesmo escopo aberto: usada depois do
   // INSERT do ledger para vincular `movimentacao_saida_id`, no mesmo padrão de `seriesAfetadas`.
   let seriesClaim = [];
+  // Etapa 62 (Fase 5): o fisico ANTERIOR de um AJUSTE com serie ja gravado — o catch amplo o restaura
+  // (antes o comentario prometia a compensacao e so as series voltavam).
+  let ajusteSerieFisicoAnterior = null;
   let result;
 
   // ── Compensação do catch AMPLO para o efeito FÍSICO (Etapa 6b, Task 4, fix round 1) ──────────
@@ -1694,7 +1708,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
       saldoPosterior = atual.quantidade_atual;
     } else if (tiposAjuste.includes(tipo)) { // AJUSTE sem localização — define valor absoluto (last-writer-wins é aceitável para ajuste)
       // Etapa 62 (RN-01): as series ANTES do SET do fisico — uma recusa aqui nao deixa o fisico
-      // mudado; e se algo falhar depois, o catch amplo compensa seriesAfetadas/seriesClaim.
+      // mudado; e se algo falhar depois, o catch amplo desfaz as series E restaura o fisico.
       if (serieAjuste && serieAjusteDelta > 0) {
         seriesAfetadas = await seriesService.entradaSeries(db, user, {
           material_id, numeros: seriesEntrada, lote_id: loteIdFinal, localizacao_id: material.localizacao_padrao_id || null, movimentacao_id: null,
@@ -1704,8 +1718,22 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
           material_id, serie_ids: serieIdsSaida, lote_id: loteIdFinal, tipo, movimentacao_id: null,
         });
       }
-      await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [saldoPosterior, material_id]);
+      if (serieAjuste) {
+        // Fase 5 (corrida): o fisico e um VALOR ABSOLUTO e as series mudam pela DIFERENCA — duas abas
+        // (ou um ajuste e uma entrega) lendo as mesmas presentes quebravam o invariante (fisico 4,
+        // presentes 6). So grava se as presentes, JA com as series deste ajuste, batem com o novo
+        // total; senao 409 e o catch amplo desfaz as series. Mesmo padrao da regularizacao.
+        const r = await dbRun(db, `UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ? AND (SELECT COUNT(*) FROM series_almoxarifado WHERE material_id = ? AND status IN ('EM_ESTOQUE','BLOQUEADA')) = ?`,
+        [saldoPosterior, material_id, material_id, saldoPosterior]);
+        if (!r.changes) {
+          throw Object.assign(new Error('as series do material mudaram durante o ajuste — recarregue e tente de novo'), { status: 409 });
+        }
+        ajusteSerieFisicoAnterior = saldoAnterior;
+      } else {
+        await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          [saldoPosterior, material_id]);
+      }
     } else {
       // Tipo neutro ao saldo (ex.: RETRABALHO) — achado do review final: este ramo antes caía
       // no "else" de AJUSTE acima e disparava um UPDATE...SET quantidade_atual = <valor lido no
@@ -1941,6 +1969,10 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     // bloco é um no-op.
     if (seriesAfetadas.length > 0) {
       await seriesService.desfazerEntrada(db, seriesAfetadas);
+    }
+    if (ajusteSerieFisicoAnterior !== null) {
+      await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [ajusteSerieFisicoAnterior, material_id]);
     }
     throw e;
   }

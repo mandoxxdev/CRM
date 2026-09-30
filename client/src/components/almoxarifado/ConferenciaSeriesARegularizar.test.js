@@ -106,6 +106,11 @@ describe('conclusão do inventário: séries a regularizar (RN-02)', () => {
       '/almoxarifado/lotes?material_id=100&aba=SERIES',
       '/almoxarifado/lotes?material_id=101&aba=SERIES',
     ]);
+    // abre em nova aba: o aviso vive so em state, e navegar nesta aba o perderia (e aos outros materiais)
+    for (const a of el.querySelectorAll('a')) {
+      expect(a.getAttribute('target')).toBe('_blank');
+      expect(a.getAttribute('rel')).toBe('noopener noreferrer');
+    }
     // persistente: continua na tela depois de outros renders (ex.: Atualizar a lista)
     await clicar(botao('Atualizar'));
     expect(aviso()).toBeTruthy();

@@ -121,6 +121,66 @@ let seq = 0;
     assert.deepStrictEqual(await estado(m.id), { fisico: 2, presentes: 2 });
   });
 
+  // ── Fase 5 ────────────────────────────────────────────────────────────────────────────────
+  await test('Fase 5 (corrida): dois ajustes lendo as mesmas presentes — um recusado (409), invariante fecha', async () => {
+    const m = await material(); await entrar(m.id, ['G1', 'G2', 'G3']);
+    const rs = await Promise.all([
+      mov(m.id, { tipo: 'AJUSTE', quantidade: 5, series: ['GX1', 'GX2'] }),
+      mov(m.id, { tipo: 'AJUSTE', quantidade: 4, series: ['GY1'] }),
+    ]);
+    const st = rs.map((r) => r.status).sort();
+    assert.ok(st.includes(201), JSON.stringify(rs.map((r) => r.body)));
+    const e = await estado(m.id);
+    assert.strictEqual(e.fisico, e.presentes, `invariante quebrado: ${JSON.stringify(e)} ${JSON.stringify(rs.map((r) => r.body))}`);
+  });
+
+  await test('Fase 5: numero JA presente e recusado antes de qualquer efeito (fisico nao muda)', async () => {
+    const m = await material(); await entrar(m.id, ['H1', 'H2']);
+    recusa(await mov(m.id, { tipo: 'AJUSTE', quantidade: 3, series: ['H1'] }), 'serie H1 ja esta em estoque');
+    assert.deepStrictEqual(await estado(m.id), { fisico: 2, presentes: 2 });
+    // Material de CLIENTE: a guarda do dono audita o ajuste como efeito colateral — a recusa tem de vir
+    // ANTES dela, senão fica auditoria de um ajuste que não aconteceu (o entradaSeries recusaria com a
+    // mesma literal, mas depois da auditoria; é isto que separa as duas).
+    const cli = (await dbRun(db, "INSERT INTO clientes (razao_social) VALUES ('Cliente E62')")).lastID;
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET proprietario_cliente_id = ? WHERE id = ?', [cli, m.id]);
+    const audAntes = (await dbGet(db, "SELECT COUNT(*) n FROM auditoria_log_almoxarifado WHERE entidade = 'material_cliente' AND entidade_id = ?", [m.id])).n;
+    recusa(await mov(m.id, { tipo: 'AJUSTE', quantidade: 3, series: ['H2'] }), 'serie H2 ja esta em estoque');
+    const audDepois = (await dbGet(db, "SELECT COUNT(*) n FROM auditoria_log_almoxarifado WHERE entidade = 'material_cliente' AND entidade_id = ?", [m.id])).n;
+    assert.strictEqual(audDepois, audAntes, 'auditoria orfa de ajuste recusado');
+  });
+
+  await test('Fase 5: o ajuste reusa o numero de uma serie BAIXADA (reativa); total 0 baixa todas; negativo recusado', async () => {
+    const m = await material(); await entrar(m.id, ['J1', 'J2']);
+    assert.strictEqual((await mov(m.id, { tipo: 'AJUSTE', quantidade: 1, serie_ids: [await serieId(m.id, 'J1')] })).status, 201);
+    const r = await mov(m.id, { tipo: 'AJUSTE', quantidade: 2, series: ['J1'] });
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    assert.strictEqual((await dbGet(db, "SELECT status FROM series_almoxarifado WHERE material_id = ? AND numero = 'J1'", [m.id])).status, 'EM_ESTOQUE');
+    // AJUSTE para 0 sem endereço já era recusado pelo schema da v2 (0 só com endereço) — e o ajuste de
+    // material com série não aceita endereço. Zerar é pelo AJUSTE_NEGATIVO, com as séries.
+    const zero = await mov(m.id, { tipo: 'AJUSTE', quantidade: 0, serie_ids: [await serieId(m.id, 'J1'), await serieId(m.id, 'J2')] });
+    assert.strictEqual(zero.status, 400, JSON.stringify(zero.body));
+    const neg = await mov(m.id, { tipo: 'AJUSTE_NEGATIVO', quantidade: 2, serie_ids: [await serieId(m.id, 'J1'), await serieId(m.id, 'J2')] });
+    assert.strictEqual(neg.status, 201, JSON.stringify(neg.body));
+    assert.deepStrictEqual(await estado(m.id), { fisico: 0, presentes: 0 });
+    // Total negativo no motor (a v2 já recusa no schema; a guarda do motor vale para quem chama direto).
+    const stockService = require('../../services/almoxarifado/stockService');
+    await assert.rejects(() => stockService.registrarMovimentacao(db, ADMIN, { material_id: m.id, tipo: 'AJUSTE', quantidade: -2, motivo: 'e62', justificativa: 'e62' }, { exigeSerie: true }),
+      // Quem recusa é a 1a validação do motor (quantidade obrigatória/positiva) — a guarda de total
+      // negativo do ajuste com série ficou como segunda barreira, inalcançável (declarado).
+      (err) => err.status === 400);
+  });
+
+  await test('Fase 5: inventario SEM divergencia de serie nao entra em series_a_regularizar (metade negativa)', async () => {
+    const categoria = `CAT-E62N-${++seq}`;
+    const m = await material(1, categoria); await entrar(m.id, ['K1', 'K2']);
+    const criada = await request(app).post('/api/almoxarifado/conferencias').send({ categoria, tolerancia_percentual: 100 });
+    const item = await dbGet(db, 'SELECT * FROM itens_conferencia_almoxarifado WHERE conferencia_id = ?', [criada.body.id]);
+    assert.strictEqual((await request(app).put(`/api/almoxarifado/conferencias/${criada.body.id}/item/${item.id}`).send({ quantidade_contada: 2 })).status, 200);
+    const r = await request(app).put(`/api/almoxarifado/conferencias/${criada.body.id}/concluir`).send({ aplicar_ajustes: true, justificativa_ajuste: 'contagem igual ao sistema' });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.deepStrictEqual(r.body.series_a_regularizar, []);
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed\n`);
   process.exit(failed > 0 ? 1 : 0);

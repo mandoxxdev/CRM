@@ -197,6 +197,68 @@ describe('AJUSTE de material com série (RN-03)', () => {
     expect(api.post).not.toHaveBeenCalled();
   });
 
+  // Review da Etapa 62: o schema só aceita AJUSTE 0 com endereço, e o ajuste de material com
+  // série não aceita endereço — o servidor recusaria. A tela trava e diz como zerar.
+  test('total 0: trava o Confirmar, não pede séries e mostra a dica de como zerar', async () => {
+    await montarAjuste(10, '0');
+    expect(container.querySelector('[data-testid="ajuste-serie-zero"]').textContent)
+      .toContain('Para zerar, use Ajuste negativo com as séries.');
+    expect(textareaNovas()).toBeNull();
+    expect(caixas()).toHaveLength(0);
+    expect(confirmar().disabled).toBe(true);
+    await enviar();
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  test('falha numa das buscas de séries: diz que não carregou, segue travado e "Tentar de novo" refaz', async () => {
+    let falhar = true;
+    const padrao = api.get.getMockImplementation();
+    api.get.mockImplementation((url) => {
+      if (falhar && url === '/almoxarifado/materiais/10/series?status=BLOQUEADA') return Promise.reject(new Error('rede'));
+      return padrao(url);
+    });
+    await montarAjuste(10, '3');
+    const erro = container.querySelector('[data-testid="ajuste-serie-erro"]');
+    expect(erro).toBeTruthy();
+    expect(erro.textContent).toContain('Não foi possível carregar as séries do material.');
+    expect(bloco().textContent).not.toContain('Carregando');
+    expect(confirmar().disabled).toBe(true);
+    await enviar();
+    expect(api.post).not.toHaveBeenCalled();
+
+    falhar = false;
+    const tentar = [...erro.querySelectorAll('button')].find((b) => b.textContent.includes('Tentar de novo'));
+    await act(async () => { tentar.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    await esperar();
+    expect(container.querySelector('[data-testid="ajuste-serie-erro"]')).toBeNull();
+    expect(bloco().textContent).toContain('Séries presentes: 3');
+    expect(confirmar().disabled).toBe(false);
+  });
+
+  test('servidor recusa o POST (séries mudaram): recarrega as séries presentes', async () => {
+    const { toast } = require('react-toastify');
+    await montarAjuste(10, '1');
+    await act(async () => { caixas()[0].click(); });
+    await act(async () => { caixas()[1].click(); });
+    expect(confirmar().disabled).toBe(false);
+
+    const buscasAntes = api.get.mock.calls.filter(([u]) => u === '/almoxarifado/materiais/10/series?status=EM_ESTOQUE').length;
+    // entre a carga e o POST alguém baixou a SN-102: o servidor recusa e a lista nova só tem a 101
+    const padrao = api.get.getMockImplementation();
+    api.get.mockImplementation((url) => (url === '/almoxarifado/materiais/10/series?status=EM_ESTOQUE'
+      ? Promise.resolve({ data: [EM_ESTOQUE[0]] }) : padrao(url)));
+    api.post.mockRejectedValue({ response: { status: 409, data: { error: 'as series do material mudaram durante o ajuste — recarregue e tente de novo' } } });
+    await enviar();
+    await esperar();
+    expect(toast.error).toHaveBeenCalledWith('as series do material mudaram durante o ajuste — recarregue e tente de novo');
+    const buscasDepois = api.get.mock.calls.filter(([u]) => u === '/almoxarifado/materiais/10/series?status=EM_ESTOQUE').length;
+    expect(buscasDepois).toBe(buscasAntes + 1);
+    expect(bloco().textContent).toContain('Séries presentes: 2');
+    expect(caixas()).toHaveLength(1);
+    expect(contador()).toBe('0 de 1');
+    expect(confirmar().disabled).toBe(true);
+  });
+
   test('material sem série: ajuste inalterado (sem bloco, sem busca de séries, sem campo no body)', async () => {
     await montarAjuste(20, '7');
     expect(bloco()).toBeNull();

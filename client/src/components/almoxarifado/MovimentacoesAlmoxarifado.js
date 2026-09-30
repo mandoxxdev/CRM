@@ -290,10 +290,17 @@ const MovimentacoesAlmoxarifado = () => {
   // com P ainda desconhecido (0), o contador pediria séries novas que o servidor recusaria.
   const [seriesBloqueadasAjuste, setSeriesBloqueadasAjuste] = useState([]);
   const [seriesAjusteCarregadas, setSeriesAjusteCarregadas] = useState(false);
+  // Review da Etapa 62: se uma das duas buscas falha, a tela diz isso e segue travada (falha
+  // fechada) — antes ficava em "Carregando..." para sempre. `recargaSeriesAjuste` refaz as buscas
+  // (botão "Tentar de novo" e depois de o servidor recusar o POST do ajuste, que pode ter sido
+  // "as séries do material mudaram durante o ajuste").
+  const [seriesAjusteErro, setSeriesAjusteErro] = useState(false);
+  const [recargaSeriesAjuste, setRecargaSeriesAjuste] = useState(0);
   const ajusteComSerie = selectedMaterial?.controle_serie === 1 && form.tipo === 'AJUSTE';
   useEffect(() => {
     setSeriesBloqueadasAjuste([]);
     setSeriesAjusteCarregadas(false);
+    setSeriesAjusteErro(false);
     const buscaSaida = TIPOS_SAIDA_LOTE.includes(form.tipo) || form.tipo === 'AJUSTE';
     if (!form.material_id || !buscaSaida || !selectedMaterial?.controle_serie) {
       setSeriesDisponiveis([]);
@@ -312,7 +319,12 @@ const MovimentacoesAlmoxarifado = () => {
           setSeriesBloqueadasAjuste(bloqueadas.data || []);
           setSeriesAjusteCarregadas(true);
         })
-        .catch(() => { if (!cancelado) setSeriesDisponiveis([]); });
+        .catch(() => {
+          if (cancelado) return;
+          setSeriesDisponiveis([]);
+          setSeriesBloqueadasAjuste([]);
+          setSeriesAjusteErro(true);
+        });
       return () => { cancelado = true; };
     }
     api.get(`/almoxarifado/materiais/${form.material_id}/series?status=EM_ESTOQUE`)
@@ -323,20 +335,23 @@ const MovimentacoesAlmoxarifado = () => {
       .catch(() => { if (!cancelado) setSeriesDisponiveis([]); });
     return () => { cancelado = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.material_id, form.tipo, selectedMaterial?.controle_serie]);
+  }, [form.material_id, form.tipo, selectedMaterial?.controle_serie, recargaSeriesAjuste]);
 
   // Etapa 62 (RN-03): o AJUSTE define o NOVO total; as séries que entram ou saem são a diferença
   // `novo − presentes` (a mesma conta do motor). Inteiro obrigatório: série é unidade.
+  // Review: total 0 NÃO é aceito — o schema só admite AJUSTE 0 com endereço, e o ajuste de
+  // material com série não aceita endereço; o servidor recusaria. Para zerar, ajuste negativo.
   const ajusteSerieInfo = (() => {
     if (!ajusteComSerie) return null;
     const txt = String(form.quantidade ?? '').trim();
     const inteiro = /^\d+$/.test(txt);
+    const zero = inteiro && Number(txt) === 0;
     const presentes = seriesDisponiveis.length + seriesBloqueadasAjuste.length;
-    const diferenca = inteiro ? Number(txt) - presentes : 0;
+    const diferenca = inteiro && !zero ? Number(txt) - presentes : 0;
     const informadas = diferenca > 0 ? linhasSerie(form.series).length
       : diferenca < 0 ? form.serie_ids.length : 0;
-    const ok = seriesAjusteCarregadas && inteiro && informadas === Math.abs(diferenca);
-    return { inteiro, presentes, diferenca, informadas, ok };
+    const ok = seriesAjusteCarregadas && inteiro && !zero && informadas === Math.abs(diferenca);
+    return { inteiro, zero, presentes, diferenca, informadas, ok };
   })();
 
   // Fix round 1 (review da Task 8): o JSX de checkboxes filtra por `form.lote_id`, mas isso só
@@ -426,11 +441,13 @@ const MovimentacoesAlmoxarifado = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    // Etapa 62: no ajuste com série o novo total pode ser 0 (baixar todas as presentes) — o motor
-    // aceita zero em AJUSTE. Os outros tipos (e o ajuste sem série) seguem com a régua de antes.
+    // Etapa 62: no ajuste com série o novo total é inteiro > 0 (o servidor recusa AJUSTE 0 sem
+    // endereço, e este ajuste não tem endereço) e as séries informadas batem com a diferença.
     if (ajusteSerieInfo) {
       if (!form.material_id || !ajusteSerieInfo.ok) {
-        toast.error('Material com série: informe um total inteiro e exatamente as séries da diferença');
+        toast.error(ajusteSerieInfo.zero
+          ? 'Para zerar, use Ajuste negativo com as séries.'
+          : 'Material com série: informe um total inteiro e exatamente as séries da diferença');
         return;
       }
     } else if (!form.material_id || !form.quantidade || parseFloat(form.quantidade) <= 0) {
@@ -508,6 +525,9 @@ const MovimentacoesAlmoxarifado = () => {
       loadMovimentacoes();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erro ao registrar movimentação');
+      // Review da Etapa 62: a recusa pode ser "as séries do material mudaram durante o ajuste" —
+      // a lista na tela está velha; recarrega as presentes para o operador escolher de novo.
+      if (ajusteSerieInfo) setRecargaSeriesAjuste((n) => n + 1);
     } finally {
       setSaving(false);
     }
@@ -1014,11 +1034,27 @@ const MovimentacoesAlmoxarifado = () => {
                       <div data-testid="ajuste-serie-presentes" style={{ fontSize: '0.85rem', marginTop: 4 }}>
                         {seriesAjusteCarregadas
                           ? `Séries presentes: ${ajusteSerieInfo.presentes}`
-                          : 'Carregando séries presentes...'}
+                          : seriesAjusteErro ? null : 'Carregando séries presentes...'}
                       </div>
+                      {seriesAjusteErro && (
+                        <div data-testid="ajuste-serie-erro" style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
+                          <small style={{ color: 'var(--gmp-error)', fontSize: '0.75rem' }}>
+                            Não foi possível carregar as séries do material.
+                          </small>
+                          <button type="button" className="btn-almox-secondary" style={{ fontSize: '0.75rem', padding: '2px 8px' }}
+                            onClick={() => setRecargaSeriesAjuste((n) => n + 1)}>
+                            Tentar de novo
+                          </button>
+                        </div>
+                      )}
                       {form.quantidade !== '' && !ajusteSerieInfo.inteiro && (
                         <small data-testid="ajuste-serie-inteiro" style={{ color: 'var(--gmp-error)', fontSize: '0.75rem' }}>
                           Material com série: o novo total precisa ser um número inteiro.
+                        </small>
+                      )}
+                      {ajusteSerieInfo.zero && (
+                        <small data-testid="ajuste-serie-zero" style={{ color: 'var(--gmp-error)', fontSize: '0.75rem' }}>
+                          Para zerar, use Ajuste negativo com as séries.
                         </small>
                       )}
                       {seriesAjusteCarregadas && ajusteSerieInfo.inteiro && ajusteSerieInfo.diferenca > 0 && (
