@@ -1853,6 +1853,9 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
   // cancelamento é bem-sucedido, não há mais claim para tentar de novo).
   let compensarQuantidadeMaterial = null; // delta a devolver em quantidade_atual, se o ledger falhar
   let compensarLinha = null; // { loc, loteId, delta } — delta a reaplicar na linha específica de saldo
+  // Etapa 51 (Fase 5): o estorno de entrada sem lote pode debitar VARIAS linhas (claimSaldoSemLote) —
+  // a compensacao devolve cada uma pelo id.
+  let compensarLinhasClaim = null;
   let compensarSyncLocalizacaoPadrao = null; // { loteId } — reconciliarEstornoSemLinha sincronizou a linha padrão; refazer DEPOIS de restaurar quantidade_atual
   let seriesEntradaRevertidas = []; // afetadas[] de reverterEntrada, para desfazerReverterEntrada
   let seriesSaidaRevertidas = []; // afetadas[] de reverterSaida, para desfazerReverterSaida
@@ -1908,9 +1911,23 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
       // DELETE de localizacao com SUM(quantidade) das linhas dando zero (net-zero), sem lote nem
       // permite_saldo_negativo envolvidos.
       const loc = mov.localizacao_destino_id || material.localizacao_padrao_id;
+      // Etapa 51 (Fase 5, IMPORTANT): desde que a saída sem lote drena os endereços, a linha desta
+      // entrada pode já ter sido consumida por uma saída de OUTRO lugar do raciocínio — entradas de
+      // 100 em A e em B, saída de 100 que drenou A, estorno da entrada de A ⇒ A:−100 e B:100 com o
+      // físico em 0 (o endereço fantasma que a etapa existe para eliminar). Sem lote e sem negativo,
+      // quando a linha da entrada não comporta a reversão, o estorno debita como uma SAÍDA: a linha
+      // da entrada primeiro, depois as outras com saldo (`claimSaldoSemLote`).
+      if (!mov.lote_id && !permiteNegativo) {
+        const linhaEntrada = await dbGet(db, `SELECT quantidade FROM estoque_saldo_almoxarifado
+          WHERE material_id = ? AND localizacao_id IS ? AND lote_id IS NULL`, [mov.material_id, loc || null]);
+        if (linhaEntrada && Number(linhaEntrada.quantidade) < Number(mov.quantidade) - EPS) {
+          compensarLinhasClaim = await claimSaldoSemLote(db, mov.material_id, loc, Number(mov.quantidade));
+        }
+      }
       const pisoLinha = (mov.lote_id && !permiteNegativo) ? mov.quantidade : null;
-      const r = await ajustarSaldoExistente(db, mov.material_id, loc, mov.lote_id, -mov.quantidade,
-        { minimo: pisoLinha });
+      const r = compensarLinhasClaim
+        ? { aplicado: true, existe: true, viaClaim: true }
+        : await ajustarSaldoExistente(db, mov.material_id, loc, mov.lote_id, -mov.quantidade, { minimo: pisoLinha });
       if (!r.aplicado && r.existe) {
         // A linha existe e não comporta a reversão. `quantidade_atual` já foi debitado logo acima
         // e não há transação aqui — o `catch` deste método devolve o físico agora (fix round 1,
@@ -1921,7 +1938,9 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
           + `${mov.unidade || ''} nesta localização, menos que os ${mov.quantidade} que a entrada creditou`),
           { status: 400 });
       }
-      if (r.aplicado) {
+      if (r.aplicado && r.viaClaim) {
+        // a compensacao das N linhas fica em `compensarLinhasClaim`, devolvida no catch.
+      } else if (r.aplicado) {
         // Fix round 1 (Task 5): se o ledger falhar depois, a compensação é o delta oposto na
         // MESMA chave (loc, lote) — espelha exatamente o que este `ajustarSaldoExistente` acabou
         // de aplicar (−mov.quantidade), sem piso (a compensação está devolvendo, não retirando).
@@ -2001,12 +2020,24 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
         }
         await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
           [delta, saldoLoc.id]);
-        // Etapa 51 (RN-04, Fase 2): o estorno do AJUSTE com localização também recalcula o total
-        // pela soma — a mesma absorção das linhas sem lote negativas vale aqui.
+        // Etapa 51 (RN-04; Fase 5, MINOR): o estorno do AJUSTE com localização recalcula o total
+        // pela soma. No AJUSTE de IDA a absorção das linhas sem lote negativas se justifica — é uma
+        // contagem, é verdade física. No ESTORNO não há contagem: absorver faria o livro registrar
+        // uma quantidade que não se moveu (estorno de 50 com 45 sumindo na absorção). Então, se o
+        // total ficaria negativo num material que não permite, RECUSA e devolve a linha.
         const matEstorno = await getMaterial(db, mov.material_id);
         const permiteNegEstorno = matEstorno.permite_saldo_negativo
           || (await getConfig(db, 'permite_saldo_negativo_global')) === '1';
-        if (!permiteNegEstorno) await absorverNegativosSemLote(db, mov.material_id, { excluirId: saldoLoc.id });
+        if (!permiteNegEstorno) {
+          const tot = await dbGet(db, 'SELECT COALESCE(SUM(quantidade),0) as t FROM estoque_saldo_almoxarifado WHERE material_id = ?',
+            [mov.material_id]);
+          if (Number(tot.t) < -EPS) {
+            await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+              [delta, saldoLoc.id]);
+            throw Object.assign(new Error('Não é possível estornar: o saldo já foi consumido (o estorno deixaria o material negativo)'),
+              { status: 400 });
+          }
+        }
         await syncMaterialTotals(db, mov.material_id);
         const atual = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mov.material_id]);
         saldoDepois = atual.quantidade_atual;
@@ -2101,6 +2132,12 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
         SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP
         WHERE material_id = ? AND localizacao_id IS ? AND lote_id IS ?`,
         [compensarLinha.delta, mov.material_id, compensarLinha.loc || null, compensarLinha.loteId || null]);
+    }
+    if (compensarLinhasClaim) {
+      for (const l of compensarLinhasClaim) {
+        await dbRun(db, `UPDATE estoque_saldo_almoxarifado
+          SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [l.quantidade, l.id]);
+      }
     }
     if (compensarQuantidadeMaterial) {
       await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = quantidade_atual + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',

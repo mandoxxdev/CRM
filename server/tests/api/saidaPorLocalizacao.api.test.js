@@ -171,6 +171,144 @@ let seq = 0;
     await invariante(m);
   });
 
+  // ═══ Fase 5 (força dos testes): as lacunas que 10 sabotagens verdes mostraram ═══
+  const setLinha = (m, locId, loteId, q) => dbRun(db,
+    'INSERT INTO estoque_saldo_almoxarifado (material_id, localizacao_id, lote_id, quantidade) VALUES (?,?,?,?)', [m, locId, loteId, q]);
+  const setFisico = (m, q) => dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ? WHERE id = ?', [q, m]);
+  const ajusteLoc = (m, locId, q, loteId = null) => stockService.registrarMovimentacao(db, ADMIN, {
+    material_id: m, tipo: 'AJUSTE', quantidade: q, localizacao_destino_id: locId, motivo: 'c', justificativa: 'c',
+    ...(loteId ? { lote_id: loteId } : {}),
+  });
+
+  await test('(14) RN-04 RECUSA quando nem absorvendo o total chega a 0 (linha de lote legada negativa)', async () => {
+    const m = await material({ lote: 1 }); const A = await loc('A'); const B = await loc('B');
+    const L1 = await lotService.criarOuObterLote(db, ADMIN, { material_id: m, codigo: 'L1' });
+    const L2 = await lotService.criarOuObterLote(db, ADMIN, { material_id: m, codigo: 'L2' });
+    await setLinha(m, A, L1.id, 100); await setLinha(m, B, L2.id, -50); await setFisico(m, 50);
+    await assert.rejects(ajusteLoc(m, A, 0, L1.id), (e) => e.status === 400
+      && e.message === 'Ajuste deixaria o saldo do material negativo (-50). O material não permite saldo negativo.');
+    assert.strictEqual(await fisico(m), 50, 'a recusa deixou escrita pela metade');
+  });
+
+  await test('(15) saida COM lote de material que permite negativo continua baixando a linha do lote (!loteIdFinal)', async () => {
+    const m = await material({ lote: 1, negativo: 1 }); const A = await loc('A');
+    const L = await lotService.criarOuObterLote(db, ADMIN, { material_id: m, codigo: 'L' });
+    await entrada(m, A, 10, L.id);
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: m, tipo: 'SAIDA', quantidade: 4, lote_id: L.id, localizacao_origem_id: A, motivo: 'x', justificativa: 'x',
+    });
+    assert.deepStrictEqual(await linhas(m), { 'A/L': 6 });
+  });
+
+  await test('(16) ledger falhando: a compensacao devolve TODAS as linhas, inclusive a do resto', async () => {
+    const m = await material({ negativo: 1 }); const A = await loc('A');
+    await entrada(m, A, 10);
+    await dbRun(db, `CREATE TRIGGER e51_falha BEFORE INSERT ON movimentacoes_almoxarifado
+      WHEN NEW.material_id = ${m} BEGIN SELECT RAISE(ABORT, 'falha proposital'); END`);
+    try {
+      await assert.rejects(entregaSemOrigem(m, 15));
+    } finally {
+      await dbRun(db, 'DROP TRIGGER e51_falha');
+    }
+    assert.strictEqual(await fisico(m), 10);
+    assert.deepStrictEqual(await linhas(m), { A: 10, NULL: 0 });
+    await invariante(m);
+  });
+
+  await test('(17) o ESTORNO do AJUSTE com localizacao tambem absorve (fisico nao fica negativo)', async () => {
+    const m = await material(); const A = await loc('A');
+    await setLinha(m, A, null, 50); await setLinha(m, null, null, -30); await setFisico(m, 20);
+    const aj = await ajusteLoc(m, A, 80);
+    await entregaSemOrigem(m, 50);
+    const movId = aj?.id || aj?.movimentacao_id || (await dbGet(db, "SELECT id FROM movimentacoes_almoxarifado WHERE material_id = ? AND tipo = 'AJUSTE' ORDER BY id DESC LIMIT 1", [m])).id;
+    // Fase 5 (MINOR): no estorno não há contagem — absorver faria o livro registrar quantidade que
+    // não se moveu. Recusa, e nada muda.
+    const antes = await linhas(m);
+    await assert.rejects(stockService.cancelarMovimentacao(db, ADMIN, movId, 'estorno e51'),
+      (e) => e.status === 400 && e.message === 'Não é possível estornar: o saldo já foi consumido (o estorno deixaria o material negativo)');
+    assert.deepStrictEqual(await linhas(m), antes, 'a recusa deixou escrita pela metade');
+    assert.ok(await fisico(m) >= 0, `fisico negativo depois do estorno: ${await fisico(m)}`);
+    await invariante(m);
+  });
+
+  await test('(23) ESTORNO DE ENTRADA depois de saida que drenou o endereco dela: nenhum endereco negativo (Fase 5, IMPORTANT)', async () => {
+    const m = await material(); const A = await loc('A'); const B = await loc('B');
+    await entrada(m, A, 100); await entrada(m, B, 100);
+    await entregaSemOrigem(m, 100); // drena A (desempate por id): A:0, B:100
+    const entA = (await dbGet(db, `SELECT id FROM movimentacoes_almoxarifado
+      WHERE material_id = ? AND tipo = 'ENTRADA' AND localizacao_destino_id = ?`, [m, A])).id;
+    await stockService.cancelarMovimentacao(db, ADMIN, entA, 'entrada lancada errado');
+    const l = await linhas(m);
+    assert.ok(Object.values(l).every((q) => q >= -1e-9), `endereco negativo depois do estorno: ${JSON.stringify(l)}`);
+    assert.strictEqual(await fisico(m), 0);
+    assert.deepStrictEqual(l, { A: 0, B: 0 });
+    await invariante(m);
+  });
+
+  await test('(18) material que PERMITE negativo nao absorve: a divida continua (-70)', async () => {
+    const m = await material({ negativo: 1 }); const A = await loc('A');
+    await setLinha(m, A, null, 50); await setLinha(m, null, null, -80); await setFisico(m, -30);
+    await ajusteLoc(m, A, 10);
+    assert.strictEqual(await fisico(m), -70);
+  });
+
+  await test('(19) absorcao na ORDEM: a NULL primeiro, e linha de lote nunca sobe', async () => {
+    const m = await material(); const A = await loc('A'); const B = await loc('B');
+    const L = await lotService.criarOuObterLote(db, ADMIN, { material_id: m, codigo: 'LX' });
+    await setLinha(m, A, null, 50); await setLinha(m, B, null, -30); await setLinha(m, null, null, -10);
+    await setLinha(m, null, L.id, -5); await setFisico(m, 5);
+    await ajusteLoc(m, A, 40); // soma projetada 40-30-10-5 = -5 -> absorve 5: NULL primeiro
+    const l = await linhas(m);
+    assert.strictEqual(l.NULL, -5, JSON.stringify(l));
+    assert.strictEqual(l.B, -30, JSON.stringify(l));
+    assert.strictEqual(l['NULL/L'], -5, 'a absorcao subiu linha de lote');
+    await invariante(m);
+  });
+
+  await test('(19b) a linha de LOTE sem endereco, que vem PRIMEIRO na ordem, nunca e absorvida', async () => {
+    // Sabotagem Y7 do fix-round ficou verde no (19): lá a NULL sem lote cobria tudo antes de a
+    // ordem chegar ao lote. Aqui o déficit precisa da linha B (com endereço), que ordena DEPOIS
+    // da NULL/L — sem o filtro `lote_id IS NULL`, a NULL/L seria zerada primeiro.
+    const m = await material(); const A = await loc('A'); const B = await loc('B');
+    const L = await lotService.criarOuObterLote(db, ADMIN, { material_id: m, codigo: 'LY' });
+    await setLinha(m, A, null, 50); await setLinha(m, B, null, -30); await setLinha(m, null, L.id, -10);
+    await setFisico(m, 10);
+    await ajusteLoc(m, A, 20); // projetado 20-30-10 = -20; absorvível sem lote = 30
+    const l = await linhas(m);
+    assert.strictEqual(l['NULL/L'], -10, `a absorcao subiu a linha de lote: ${JSON.stringify(l)}`);
+    assert.strictEqual(l.B, -10, JSON.stringify(l));
+    await invariante(m);
+  });
+
+  await test('(20) AJUSTE de LOTE sem localizacao nao drena linha sem lote (drenar so com loteId nulo)', async () => {
+    const m = await material({ lote: 1 }); const A = await loc('A'); const B = await loc('B');
+    const L = await lotService.criarOuObterLote(db, ADMIN, { material_id: m, codigo: 'L' });
+    await entrada(m, A, 30, L.id); await setLinha(m, B, null, 20); await setFisico(m, 50);
+    await stockService.registrarMovimentacao(db, ADMIN, { material_id: m, tipo: 'AJUSTE', quantidade: 5, lote_id: L.id, motivo: 'x', justificativa: 'x' });
+    assert.strictEqual((await linhas(m)).B, 20, JSON.stringify(await linhas(m)));
+  });
+
+  await test('(21) drenagem do AJUSTE na ordem (maior primeiro) e resto fracionario preservado', async () => {
+    const m = await material(); const A = await loc('A'); const B = await loc('B');
+    await entrada(m, A, 30); await entrada(m, B, 20);
+    await stockService.registrarMovimentacao(db, ADMIN, { material_id: m, tipo: 'AJUSTE', quantidade: 5, motivo: 'x', justificativa: 'x' });
+    assert.deepStrictEqual(await linhas(m), { A: 0, B: 5, NULL: 0 });
+    const m2 = await material({ negativo: 1 }); const C = await loc('C');
+    await entrada(m2, C, 10);
+    await entregaSemOrigem(m2, 10.3);
+    await invariante(m2);
+    assert.ok(Math.abs((await linhas(m2)).NULL - -0.3) < 1e-9, JSON.stringify(await linhas(m2)));
+  });
+
+  await test('(22) o resto vai para a ORIGEM DECLARADA, nao para a NULL (desenho, RN-01)', async () => {
+    const m = await material({ negativo: 1 }); const A = await loc('A'); const B = await loc('B');
+    await entrada(m, A, 10);
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: m, tipo: 'SAIDA', quantidade: 15, localizacao_origem_id: B, motivo: 'x', justificativa: 'x',
+    });
+    assert.deepStrictEqual(await linhas(m), { A: 0, B: -5 });
+  });
+
   await test('(13) o mapa mostra o endereco VAZIO depois da entrega', async () => {
     const m = await material(); const A = await loc('MAPA');
     await entrada(m, A, 30);
