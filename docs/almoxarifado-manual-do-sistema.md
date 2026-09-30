@@ -1616,7 +1616,7 @@ Os avisos por situação são estes:
 
 Os botões, na ordem do fluxo: **Iniciar Separação** (que vira **Ajustar Separação** quando a separação já começou), **Conferir separação**, **Liberar para Retirada** — que só aparece se algum item tem quantidade separada — e **Confirmar Entrega e Baixar Estoque**, que entrega em um clique; ao lado dele, **Entregar escolhendo de onde sai…** abre a janela de entrega com o campo **Sai de** por item (7.5). Sem nada separado, no lugar do botão de entrega a tela informa: *"Nenhuma quantidade separada disponível para entrega no momento."*
 
-Abaixo dos itens, o bloco **Separação (N)** lista cada rodada de separação com **quem separou, quando e quantos itens tocou**; e, quando a caixa já foi conferida, a linha **Conferida por … em …**.
+Abaixo dos itens, o bloco **Separação (N)** lista cada rodada de separação com **quem separou, quando e quantos itens tocou**; embaixo da rodada, cada item separado **abaixo do possível** aparece como *"Chapa 3mm: separou 6 de 10 — 4 avariadas na prateleira"* (ou *"— sem motivo informado"*) — ver **Divergência** em 10.2; e, quando a caixa já foi conferida, a linha **Conferida por … em …**.
 
 No modal de separação, cada item mostra **Solicitado · Já separado · Saldo**, com o campo de quantidade limitado ao saldo, e o campo **Sai de** (10.2). No detalhe da requisição, o item separado dizendo de onde mostra *"separado de A-01"* (e *"— lote L-7"* quando houver) enquanto houver separado a entregar. No modal de entrega, cada item mostra **Solicitado · Separado · Entregue · Pendente · Saldo**, e a tela antecipa o resultado: *"Será entregue: 8 UN | Permanecerá pendente: 4 UN"*.
 
@@ -1639,6 +1639,16 @@ Registra a quantidade separada por item e leva a requisição para **Em Separaç
 - O endereço escolhido vira a **origem da separação** do item, e a entrega sai dali (7.5). Rodadas que nomeiam endereços **diferentes** para o mesmo item — inclusive uma rodada feita com o **Sai de** em automático sobre material já separado de um endereço — deixam o item **sem** origem da separação, e a entrega volta a ser automática.
 - Escolher só o lote, sem endereço, não vira origem da separação.
 - A separação continua **não mexendo em saldo** (10.5): o material separado de A-01 continua contado em A-01 até a entrega, e outra saída pode levá-lo antes — nesse caso a entrega é recusada com o caminho (7.5).
+
+**Divergência — separar menos do que dava.** Cada rodada guarda, por item, **quanto dava para separar** naquele momento e se o separador ficou **abaixo** disso — e o porquê, se ele escrever. No modal de separação, quando a quantidade de um item fica abaixo do possível, aparece o campo **"Motivo da divergência (opcional)"**, com a dica *"Separando menos que o possível — conte o porquê para quem confere."*. Regras:
+
+- **O motivo não é obrigatório.** A rodada é aceita com ou sem ele — separar em várias viagens é normal. O que muda é o registro: o bloco **Separação (N)** mostra *"⟨material⟩: separou ⟨q⟩ de ⟨máximo⟩ — ⟨motivo⟩"*, ou *"— sem motivo informado"*, para quem confere.
+- **"Quanto dava"** é o que o item ainda tem a separar, limitado ao que está livre: descontado o que **outros itens do mesmo material** estão separando na mesma rodada; e, quando se escolhe um endereço no **Sai de**, limitado ao saldo nele menos o que **já foi separado dali e ainda não foi entregue** (por esta ou por outra requisição).
+- **Falta de material não é divergência.** Com 3 no estoque e 10 pedidos, separar 3 é separar tudo o que dava — o campo não aparece e nada é registrado como divergência. Separar 4 de um endereço que só tem 4 também não é.
+- **Quem decide o registro é o sistema, não a tela.** A tela faz a mesma conta para saber quando pedir o motivo, mas não enxerga as outras requisições; o motivo digitado é **sempre guardado**, mesmo quando o sistema conclui que não houve divergência.
+- Item com quantidade **0** não entra na rodada — não separar nada de um item não aparece como divergência.
+- A divergência é **só registro**: não bloqueia, não avisa ninguém, não abre não conformidade nem ajusta o inventário. Fica também na **Auditoria**, na linha da rodada.
+- O material separado **sem** escolher endereço por **outra** requisição continua contado como livre (a separação não reserva) — nesse caso o "quanto dava" pode sair maior do que o real.
 
 ### 10.3 Conferir separação — a segunda pessoa
 

@@ -1,19 +1,25 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-09-30 (Etapa 59) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-09-30 (Etapa 60) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 59) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 60) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-09-30 (Etapa 59 ENTREGUE · Etapa 60 começando)
+> ## Onde o desenvolvimento está — 2026-09-30 (Etapa 60 ENTREGUE · Etapa 61 começando)
 >
-> **O desenvolvimento parou aqui: Etapa 59 fechada, Etapa 60 começando — 2026-09-30.** A **Etapa 59 (a separação diz
+> **O desenvolvimento parou aqui: Etapa 60 fechada, Etapa 61 começando — 2026-09-30.** A **Etapa 60 (separar menos do
+> que dava passa a deixar registro, com o porquê)**: cada rodada de separação grava, por item, quanto dava para
+> separar, se ficou abaixo e o motivo; a janela de separação pede **"Motivo da divergência (opcional)"** quando a
+> quantidade fica abaixo do possível — **sem obrigar** —, e o conferente lê a divergência no bloco **Separação** do
+> detalhe. **Próxima etapa, já começando: 61 — a série por item na entrega** (feature 05; ver *"Próxima tarefa
+> detalhada"* no plano da Etapa 60).
+>
+> **Etapas 1 a 20 e 22 a 60 completas.**
+>
+> **Etapa 59, 2026-09-30.** A **Etapa 59 (a separação diz
 > de onde cada item sai, e a entrega de um clique usa)**: a janela de separação tem **"Sai de"** por item (endereço e
 > lote), conferido como na entrega; o item mostra *"separado de ⟨endereço⟩"*; a entrega — inclusive o botão
 > **"Confirmar Entrega e Baixar Estoque"** — sai de onde foi separado, até o separado ainda não entregue; se a origem
-> não serve mais, a entrega é recusada dizendo o que fazer. **Próxima etapa, já começando: 60 — a divergência na
-> separação com motivo** (feature 05; ver *"Próxima tarefa detalhada"* no plano da Etapa 59).
->
-> **Etapas 1 a 20 e 22 a 59 completas.**
+> não serve mais, a entrega é recusada dizendo o que fazer. **Próxima etapa: 60** (feita — acima).
 >
 > **Etapa 58, 2026-09-30.** A **Etapa 58 (a entrega de requisição diz de onde cada item sai)**: na janela de entrega,
 > cada item tem **"Sai de"** e **"Confirmar endereço lido"**; a escolha é exata; excluir a requisição devolve ao lote e
@@ -4976,6 +4982,49 @@ que ele não tinha como repetir com sucesso garantido.
 - **Número de série de material** — continua sendo **digitado pelo operador** e de propósito não
   passa por este gerador. Retentar com outro número gravaria algo que ninguém digitou.
 - **Números de outros módulos do CRM** — a varredura foi do almoxarifado.
+
+---
+
+## Etapa 60 — Separar menos do que dava passa a deixar registro, com o porquê (ENTREGUE — 2026-09-30)
+
+**O que mudou, em uma frase:** quando o separador pega menos do que dava, fica registrado — com o porquê, se ele
+escrever —, e quem confere vê.
+
+**O problema que ela resolve.** Separar menos do que o pedido, havendo material, era aceito calado: o conferente não
+sabia se era avaria, falta na prateleira ou pressa. Agora a rodada guarda quanto dava para separar e se ficou abaixo, e
+a janela pede o porquê. **Não é obrigatório** — separar em várias viagens continua valendo.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Separar menos do que dava era aceito calado | A rodada grava quanto dava, se ficou abaixo e o motivo |
+| — | Abaixo do possível, a janela mostra **"Motivo da divergência (opcional)"** |
+| O bloco **Separação** mostrava quem, quando e quantos itens | Mostra também *"⟨material⟩: separou ⟨q⟩ de ⟨máximo⟩ — ⟨motivo⟩"* |
+
+### Roteiro de teste manual (≈5 min)
+
+**Preparação.** Um material com **20** em estoque (Movimentações → Entrada) e uma requisição aprovada dele com **10**
+solicitados. Outro material com só **3** em estoque e uma requisição aprovada dele com **10**.
+
+1. **O campo aparece abaixo do possível.** Abra a primeira requisição → **Iniciar Separação** e informe **6**: aparece
+   **"Motivo da divergência (opcional)"**, com *"Separando menos que o possível — conte o porquê para quem confere."*.
+   Volte para **10**: o campo some.
+2. **Com motivo.** Informe **6**, escreva *"4 avariadas na prateleira"* e confirme. No detalhe, no bloco **Separação**,
+   a rodada mostra *"⟨material⟩: separou 6 de 10 — 4 avariadas na prateleira"*.
+3. **Sem motivo.** Em outra requisição igual, separe **6** sem escrever nada e confirme: a rodada é aceita e mostra
+   *"⟨material⟩: separou 6 de 10 — sem motivo informado"*.
+4. **Falta de material não é divergência.** Na requisição do segundo material, separe **3**: o campo **não** aparece, e
+   a rodada não mostra divergência.
+5. **Um endereço por rodada.** Com o material em dois endereços (4 em **A**, 6 em **B**), separe 4 escolhendo **Sai de:
+   A**: o campo não aparece — o máximo é o que **A** tem.
+
+### O que esta etapa NÃO cobre
+
+- O motivo **não** é obrigatório, e a divergência **não** avisa ninguém nem abre não conformidade (**B238**).
+- Separado **sem endereço** de outra requisição não sai do "livre" — o máximo pode sair maior que o real (**D (60)**).
+- Não separar nada de um item (quantidade 0) não fica registrado (**D (60)**).
+- A **série** por item continua fora — é a próxima etapa.
 
 ---
 

@@ -931,9 +931,9 @@ SELECT s.material_id, s.localizacao_id, s.quantidade, l.ativo
   (`ativo` vazio na consulta): só por contagem/ajuste pela integração — o endereço não aparece na lista da tela.
   **Não apague linha por SQL** — a soma das linhas é o físico do material.
 
-### B. Decisões de negócio — B1 a B237; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B239; as em aberto esperam você, as tomadas estão escritas com o descartado
 
-*(**Atualizado em 2026-09-30 de B233 para B237**, com as quatro da Etapa 59; antes, de B228 para B233, com as cinco da Etapa 58; antes, de B225 para B228, com as três da Etapa 57; antes, de B222 para B225, com as três da Etapa 56; antes, de B219 para B222, com as da Etapa 55.)*
+*(**Atualizado em 2026-09-30 de B237 para B239**, com as duas da Etapa 60; antes, de B233 para B237, com as quatro da Etapa 59; antes, de B228 para B233, com as cinco da Etapa 58; antes, de B225 para B228, com as três da Etapa 57; antes, de B222 para B225, com as três da Etapa 56; antes, de B219 para B222, com as da Etapa 55.)*
 
 *(**Atualizado em 2026-09-30 de B205 para B219**, com as quatro da Etapa 51, as três da Etapa 52, as quatro da Etapa 53 e as três da Etapa 54.)*
 
@@ -3928,6 +3928,25 @@ origem planejada do item vira **nenhuma** — a entrega volta ao automático. **
 item com a quantidade de cada (dividiria a entrega em várias baixas; escopo maior). Consequência a saber: uma segunda
 rodada feita **sem mexer** no "Sai de" (que começa em automático) apaga a origem da primeira, **sem aviso** (**D (59)**).
 
+**B238 (NOVA, da Etapa 60) — separar menos do que dava é REGISTRADO, com motivo opcional; não é recusado.**
+**Escolhido:** cada rodada de separação grava, por item, **quanto dava para separar** naquela hora, se ficou abaixo
+(**divergente**) e o **motivo** que o separador escrever. A janela pede o motivo quando a quantidade fica abaixo do
+possível, mas **não obriga**; o conferente vê a divergência no bloco **Separação** do detalhe. **Descartado:** exigir
+o motivo — a primeira versão do plano recusava a rodada sem ele, e isso transformava em "divergência obrigatória" o
+parcial **legítimo** que o sistema já oferece: separar em várias viagens, o "Sai de" (uma origem por item em cada
+rodada: com 4 em A e 6 em B, a rodada de A é sempre "4 de 10") e o **Ajustar Separação**. **Descartado também:**
+exigir o motivo só quando o separador declarar "este item está encerrado" — esse gesto não existe hoje. A divergência
+**não** gera alerta, não conformidade nem ajuste de inventário — é só registro. **Se vocês quiserem que o motivo seja
+obrigatório** (ou que a divergência avise alguém), é uma mudança pequena; a decisão é de vocês.
+
+**B239 (NOVA, da Etapa 60) — quem mede "quanto dava" é o servidor, e o motivo escrito nunca é jogado fora.**
+**Escolhido:** o "quanto dava" é o que o item ainda tinha a separar, limitado ao que estava livre — descontado o que
+**outros itens do mesmo material** separam na mesma rodada e, quando se escolhe um endereço, o que **já foi separado
+dali e ainda não foi entregue** (desta ou de **outra** requisição). A janela faz a mesma conta para decidir quando
+pedir o motivo, mas não conhece as outras requisições; por isso o motivo digitado é **sempre gravado**, mesmo quando o
+servidor conclui que não houve divergência. **Descartado:** gravar o motivo só quando o servidor vê divergência (o
+texto do separador sumia sem aviso sempre que as duas contas discordavam).
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -5638,7 +5657,17 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   a entrega então é recusada com *"⟨material⟩: a origem da separação (⟨A⟩) não serve mais (⟨motivo⟩) — entregue
   escolhendo de onde sai"* (**B236**) — o operador escolhe outra origem ou "automático" na janela.
 - **(59) Ler a etiqueta do endereço na separação** fica fora — a leitura continua só na entrega e na movimentação.
-- **(59) Série e divergência por item** continuam fora (como na **(58)**).
+- **(59) Série e divergência por item** continuam fora (como na **(58)**). **Divergência: ✅ registrada na Etapa 60**
+  (**B238**); a **série** por item continua fora.
+- **(60) A divergência é só registro** (**B238**): não recusa, não avisa ninguém, não abre não conformidade nem
+  ajusta inventário.
+- **(60) Separado SEM endereço de outra requisição não sai do "livre".** A separação não reserva; só o separado
+  **com** endereço é descontado. Com outra requisição tendo separado sem escolher endereço, o "quanto dava" pode sair
+  **maior** que o real — e uma separação correta aparecer como divergente.
+- **(60) A janela não conhece as outras requisições**: ela pode não pedir o motivo numa rodada que o servidor grava
+  como divergente (ou pedir numa que ele não grava). O que vale é o que o servidor grava (**B239**).
+- **(60) Não separar nada de um item não fica registrado** — o item com quantidade 0 nem entra na rodada, então não há
+  onde levar o motivo.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -6082,6 +6111,16 @@ pela rota) e as janelas com o servidor simulado (14 cenários). O que **só o na
    do endereço escolhido na separação, não do padrão.
 3. **A janela de entrega vem com a origem da separação escolhida**, e trocar para "Qualquer endereço (automático)"
    entrega pelo automático.
+
+**(60) Nenhum clique foi dado nesta etapa.** Os testes provam a regra pelo servidor (7 cenários) e a janela com o
+servidor simulado (12 cenários). O que **só o navegador** prova:
+
+1. **O campo aparece só abaixo do possível.** Em **Iniciar Separação**, num item com saldo de sobra, baixe a
+   quantidade: aparece **"Motivo da divergência (opcional)"** com *"Separando menos que o possível — conte o porquê
+   para quem confere."*; volte ao máximo e ele some.
+2. **Confirma sem motivo.** Separe menos e confirme **sem** escrever nada: a rodada é aceita.
+3. **O conferente vê.** No detalhe, no bloco **Separação**, a rodada mostra *"⟨material⟩: separou ⟨q⟩ de ⟨máximo⟩ —
+   ⟨motivo⟩"* (ou *"— sem motivo informado"*).
 
 ### G. Fragilidades estruturais que continuam de pé
 
@@ -14348,15 +14387,76 @@ agora a janela mostra **"Planejada da separação (⟨A-01⟩)"** e "automático
 corrigido e com teste.
 
 
+## Etapa 60 — Separar menos do que dava passa a deixar registro, com o porquê (2026-09-30)
+
+Quando o separador pegava menos do que o pedido — e havia material para mais —, o sistema aceitava calado, e quem
+conferia não tinha como saber se era falta, avaria ou pressa. Agora cada rodada de separação guarda, por item, **quanto
+dava para separar** naquele momento e se ficou abaixo; a janela **pede o porquê** (sem obrigar), e o conferente lê a
+divergência no detalhe da requisição. Separar menos **porque não há material** não é divergência.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Separar menos do que dava era aceito calado | A rodada grava **quanto dava**, se ficou **abaixo** e o **motivo** (**B238**) |
+| — | Na janela de separação, abaixo do possível aparece **"Motivo da divergência (opcional)"** |
+| O bloco **Separação** mostrava só quem, quando e quantos itens | Mostra também *"⟨material⟩: separou ⟨q⟩ de ⟨máximo⟩ — ⟨motivo⟩"* |
+| — | Separar menos **por falta de saldo** não é divergência |
+
+### As regras, com o cenário exato
+
+**1. Abaixo do possível, o porquê.** Numa requisição aprovada com um item de 10 e material de sobra, clique **Iniciar
+Separação** e informe 6. Aparece **"Motivo da divergência (opcional)"**, com *"Separando menos que o possível — conte o
+porquê para quem confere."*. Escreva *"4 avariadas na prateleira"* e confirme. No detalhe, bloco **Separação**, a
+rodada mostra *"⟨material⟩: separou 6 de 10 — 4 avariadas na prateleira"*.
+
+**2. O motivo não é obrigatório.** Repita sem escrever nada: a rodada é aceita e mostra *"⟨material⟩: separou 6 de 10
+— sem motivo informado"*.
+
+**3. Falta de material não é divergência.** Com só 3 no estoque e o item pedindo 10, separe 3: o campo **não** aparece,
+e a rodada não mostra divergência.
+
+**4. Um endereço de cada vez não é divergência.** Com 4 em A-01 e 6 em B-02, separe 4 escolhendo **Sai de: A-01**: o
+máximo é o que A-01 tem, e a rodada não é divergente. Separar 3 de B-02 (que tem 6) é.
+
+**5. Dois itens do mesmo material dividem o que está livre.** Com 10 livres e dois itens do mesmo material pedindo 10
+cada, separe 6 e 4: nenhum é divergente.
+
+### O que esta etapa NÃO cobre
+
+1. A divergência **não** avisa ninguém, não abre não conformidade nem ajusta inventário — **B238**, **D (60)**.
+2. O motivo **não** é obrigatório — **B238** (se quiserem que seja, a decisão é de vocês).
+3. Separado **sem endereço** de outra requisição não sai do "livre" — **D (60)**.
+4. Não separar nada de um item (quantidade 0) não fica registrado — **D (60)**.
+5. A **série** por item continua fora — **D (59)**.
+
+### O que a revisão encontrou
+
+A revisão do **plano** derrubou a versão com **recusa**: exigir o motivo tornaria "divergência obrigatória" o parcial
+que o sistema já oferece de propósito (várias viagens, um endereço por rodada, "Ajustar Separação") — e 111 separações
+parciais dos testes automáticos seriam recusadas. Daí o desenho de **só registrar**. A revisão do **código** achou o
+registro **mentindo** em casos reais: dois itens do mesmo material eram medidos cada um contra todo o livre (10 livres,
+6 + 4 → os dois "divergentes"); o separado ainda não entregue de **outra** requisição no mesmo endereço contava como
+livre; e a janela e o servidor faziam contas diferentes — o campo aparecia e o servidor jogava o motivo fora, ou o
+contrário. Tudo corrigido e com teste: as contas agora descontam os outros itens e o já separado, e o motivo escrito é
+**sempre** gravado (**B239**).
+
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 60 entregue (2026-09-30):** **separar menos do que dava passa a deixar registro, com o porquê.** Cada rodada
+  de separação grava, por item, quanto dava para separar, se ficou abaixo e o motivo (opcional); a janela pede o
+  motivo abaixo do possível, e o conferente lê a divergência no bloco **Separação**. **O que é seu:** as decisões
+  **B238** (só registro — se quiserem o motivo obrigatório, é de vocês) e **B239**; as limitações **(60)** em D e as
+  verificações **(60)** em F. **Próxima: Etapa 61 — ver o plano da Etapa 60.**
 
 - **Etapa 59 entregue (2026-09-30):** **a separação diz de onde cada item sai, e a entrega de um clique usa.** A
   janela de separação tem **"Sai de"** por item; o item mostra *"separado de ⟨endereço⟩"*; a entrega — inclusive o botão
   de um clique — sai de onde foi separado, até o separado ainda não entregue; se a origem não serve mais, a entrega é
   recusada dizendo o que fazer. Fecha o **C80**. **O que é seu:** as decisões **B234 a B237**; as limitações **(59)**
-  em D e as verificações **(59)** em F. **Próxima: Etapa 60 — a divergência na separação, com motivo (feature 05); ver o plano da Etapa 59.**
+  em D e as verificações **(59)** em F. **Próxima: Etapa 60 — a divergência na separação, com motivo (feature 05); ver o plano da Etapa 59.** *(Feita — Etapa 60.)*
 
 - **Etapa 58 entregue (2026-09-30):** **a entrega de requisição diz de onde cada item sai.** Na janela de entrega, cada
   item tem **"Sai de"** (endereço e lote) e **"Confirmar endereço lido"**; a escolha é exata; nada sai pela metade quando
