@@ -1,6 +1,7 @@
 # Etapa 55 — o próximo código de localização vem do servidor, e conta as inativas
 
-> Status: **Fase 0-1** (design + plano). Feature 02 (Localizações e endereçamento).
+> Status: **FECHADA (2026-09-30)** — implementação `77e51a5`, fix-round da Fase 5 3ac650e.
+> Feature 02 (Localizações e endereçamento) — continua 🟡 (falta confirmação por leitura e áreas especiais).
 
 ## Fase 0 — medido (2026-09-30), com sonda executada
 
@@ -76,11 +77,78 @@
 
 ## Tasks
 
-- **T1 (tronco, backend)** — rota RN-01 (helper puro testável), RN-02 e RN-03 no PUT. Testes em
-  `server/tests/api/localizacaoProximoCodigo.api.test.js`: pula a inativa (controle: com só ativas,
-  daria o código da inativa), pai, setor com prefixo configurado, derivado, `excluir_id`, colisão
-  global (outro setor com o mesmo prefixo), PUT 400 com a literal, PUT sem `ativo` numa inativa
-  continua inativa, PUT com `ativo:1` reativa.
-- **T2 (galho, front)** — assistente e Mover buscam o código na rota; fallback local; testes do
-  componente.
-- **T3** — verificação, Fase 5, fechamento.
+- [x] **T1 (tronco, backend)** — `77e51a5`. Rota RN-01 (`services/almoxarifado/localizacaoCodigo.js`, helper
+  puro), RN-05 no POST, RN-02 e RN-03 no PUT. `server/tests/api/localizacaoProximoCodigo.api.test.js` 10/10.
+  **Divergência (Fase 3):** 3 das 11 sabotagens ficaram **verdes de início** — contar só as raízes ativas, só as
+  filhas ativas, e casar só `setor = ''` —, porque o laço de colisão global compensava a base errada quando o
+  próximo número era exatamente o ocupado. Os cenários ganharam **buraco na numeração** (inativa `SON-05` → `SON-06`;
+  `FP-09` → `FP-10`; `LOC-07` com setor NULL → `LOC-08`) e as três ficaram vermelhas. O que o teste ancora é a
+  **posição** da régua, não a existência do laço.
+- [x] **T2 (galho, front)** — `77e51a5`, em paralelo com a T1 contra o contrato congelado (sem retrabalho).
+  Assistente e Mover: código em estado buscado por efeito (guarda `cancelado`), confirmar desabilitado carregando,
+  o gravado = o mostrado, `somente_novo` no POST, 409/400 refaz a busca, fallback no gerador local.
+  `client/src/components/almoxarifado/LocalizacaoProximoCodigo.test.js` 7/7, 8 sabotagens vermelhas.
+- [x] **T3** — verificação (api 232/232, almoxarifado 42/42, validation 4/4, safealter 3/3, sqlite 5/5, cliente
+  896/896, build limpo — medidos antes do commit `77e51a5`), Fase 5 e fechamento (abaixo).
+
+## Fase 5 — revisão adversarial do código (um revisor fresco, leitura): 0 crítico
+
+| # | Achado | Cenário | Resolução |
+|---|---|---|---|
+| I-1 | Laço no fallback | Rota caída → o gerador local (só ativas) propõe o código de uma inativa → 409 → nova busca falha → o fallback propõe **o mesmo** código; sem saída a não ser fechar o assistente | Os códigos recusados na sessão entram no gerador local como irmãs fictícias (`comRecusados`, `useRef`); teste **(d2)**, sabotagem vermelha — 3ac650e |
+| I-2 | `excluir_id` no ramo **filha** sem teste | Filhas `P-02` e `P-05`; mover `P-05` para o mesmo pai com `excluir_id` deve dar `P-03`; sem o filtro dá `P-06` — a suíte ficava verde | Teste novo, sabotagem vermelha |
+| M | Parâmetro repetido | `?setor=a&setor=b` chega como array → bind inválido | Vale o primeiro. **O 1º teste passava por coincidência** (`String(['Rep','Outro'])` também dá o prefixo `REP`); trocado por `Q` × `QZE`, e aí a sabotagem ficou vermelha |
+
+**Declarados, não corrigidos (D (55) nas novidades):** a mensagem do 409 fica na tela ao lado do código já
+regenerado; o cabeçalho do caminho no assistente e a linha "Novo caminho" do Mover ficam em branco enquanto o código
+carrega; um 400 que não é de código também refaz a busca; `PUT` sem `ativo` preserva `NULL`/`2` de legado (antes
+normalizava para 1) — só via API; `PUT` sem código num id inexistente responde 400 em vez de 404; `parent_id=abc` cai
+no ramo raiz.
+
+Testes finais: `localizacaoProximoCodigo.api.test.js` **12/12** (11 + 2 sabotagens), `LocalizacaoProximoCodigo.test.js`
+**8/8** (8 + 1 sabotagens).
+
+## Retro (4 números)
+
+- **Rodadas de correção até verde:** 1 fix-round.
+- **Achados:** Fase 2 — 10 (2 CRITICAL, 3 IMPORTANT, 5 MINOR), todos incorporados ao contrato antes do código;
+  Fase 5 — 2 IMPORTANT + 1 MINOR corrigidos, 6 declarados; **0 ruído**.
+- **Paralelismo:** 1 galho (a tela) rodou em paralelo com o tronco (backend) contra o contrato congelado — sem
+  retrabalho.
+- **Defeito que escapou da Etapa 54:** nenhum conhecido. (Mas a Etapa 54 deixou uma **suspeita errada** no plano dela
+  — "o UNIQUE recusa a criação" — que a Fase 0 desta corrigiu: a criação reativava; quem estourava era o Mover.) E o
+  fechamento da 54 **apagou o título** `## Onde estamos e o que vem a seguir` das novidades — restaurado neste
+  fechamento, com nota.
+
+## Próxima tarefa detalhada — Etapa 56: a confirmação de endereço por leitura (feature 02)
+
+**Por que esta.** Na feature 02, o que falta para 🟢 é **confirmação por leitura** e **áreas especiais com
+semântica** (capacidade/peso é informativo por decisão; o código hierárquico ficou fora — B220). A confirmação por
+leitura é a que o operador sente: guardar ou tirar material **do endereço errado** hoje não é detectado.
+
+**Medido no fechamento da 55 (ponto de partida da Fase 0):**
+- **Não existe `codigo_lido`** em lugar nenhum (`grep -rln codigo_lido server client/src` → vazio).
+- **Não existe etiqueta de endereço**: `EtiquetasPdfModal` imprime material, lote, série e recebimento
+  (descritores `{ codigo, nome, linhaControle, qrUrl }` — `client/src/utils/etiquetasPdf.js`).
+- O **scanner** (`ScannerAlmoxarifado.js` + `utils/scannerDestino.js`) só **navega**: aceita URL http(s) cujo path
+  começa em `/almoxarifado/` e vai para lá; texto solto é mostrado e não faz nada.
+
+**Fase 0 da 56 — medir antes de prometer:**
+1. Onde a leitura faria sentido: **Entrada** (confirmar o destino), **Saída/entrega de requisição** (confirmar a
+   origem), **Transferência** (as duas pontas). Ler o formulário de Movimentações e o de entrega da requisição.
+2. O que a etiqueta de endereço conteria: o **código** (`A-01`) em texto ou uma URL `/almoxarifado/...` que o scanner
+   já sabe tratar. Decidir (letra B, reversível) — o código da 55 é estável (o Mover é a exceção, **C75**).
+3. Desenho mínimo candidato: `codigo_lido` **opcional** no `POST /movimentacoes/v2` (e no que a entrega usa); quando
+   vier, o motor compara com o `codigo` da localização do papel (destino na entrada, origem na saída) **antes** de
+   qualquer efeito e recusa com literal (ex.: *"Endereço lido (⟨lido⟩) não confere com o destino ⟨código⟩"*). Sem
+   `codigo_lido`, nada muda. Obrigatoriedade por configuração fica para depois (letra B).
+4. Etiqueta de endereço no `EtiquetasPdfModal` (novo descritor) — medir se cabe na mesma modal.
+
+**Contratos que já existem e a 56 não reabre:** `validarEnderecoExplicito` / `motivoRecusaEndereco` (a regra de
+endereço — a checagem de leitura entra **junto**, no mesmo bloco de validação do motor, antes de qualquer efeito);
+`GET /localizacoes/proximo-codigo` (55); a guarda de desativação (54).
+
+**Pontos de atenção.** Entrada **sem destino** resolve para a padrão — a leitura tem de comparar com o endereço
+**resolvido**, não com o campo vazio. Comparação de código: decidir se ignora maiúsculas/espaços (leitor de código de
+barras costuma mandar sufixo `\n`). Controle positivo: um teste que lê o código **certo** e passa, no mesmo cenário
+do que lê o errado e é recusado.

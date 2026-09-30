@@ -310,7 +310,28 @@ O endereço é montado em quatro níveis, e é exibido no formato `ALM-GERAL / C
 
 Cada localização tem: **Código** (único), **Descrição**, **Setor**, **Subgrupo**, **Tipo**, **Almoxarifado**, além da posição e do tamanho que ela ocupa no Mapa de Áreas.
 
-O **código é sugerido automaticamente** ao criar: o sistema toma o prefixo do setor (ou o prefixo do código da localização pai, quando é uma filha), procura o maior número já usado e propõe o próximo, com dois dígitos — `A-01`, `A-02`, `GAV-03`. O assistente de criação mostra o código e a descrição em pré-visualização antes de confirmar.
+O **código é sugerido automaticamente** ao criar, e o operador não o digita: o assistente de criação mostra o código e
+a descrição em pré-visualização antes de confirmar. A regra da sugestão:
+
+- **Prefixo.** Numa localização filha, o prefixo do código da localização pai (`A-01` → `A`). Numa localização raiz, o
+  prefixo configurado do setor (só de setor ativo); sem prefixo configurado, a letra depois de "Corredor"
+  (`Corredor K` → `K`); sem isso, as três primeiras letras ou números do nome do setor, em maiúsculas; setor em branco
+  → `LOC`.
+- **Número.** O maior número já usado entre as irmãs — **inclusive as posições excluídas** — mais um, com dois dígitos
+  (`A-01`, `A-02`, `GAV-03`; passa de 99 para 100 normalmente). Numa filha que ainda não tem irmãs, parte do número do
+  código da pai.
+- **Nunca repete.** Se o código resultante já existir em **qualquer** lugar do cadastro — outro setor com o mesmo
+  prefixo, uma posição raiz com o mesmo código, uma posição excluída —, a sugestão sobe até o primeiro livre.
+- Enquanto o código é calculado, o campo mostra *"Gerando código..."* e o botão **Confirmar cadastro** fica
+  desabilitado.
+- Se, entre a sugestão e a confirmação, o código passar a ser de uma posição excluída, a gravação é recusada com
+  *"O código ⟨código⟩ pertence a uma localização desativada — gere outro código"* e o assistente já mostra um código
+  novo; basta confirmar de novo.
+
+**Mover** uma localização (para outro setor ou para dentro de outra estrutura) **troca o código dela** pelo próximo
+código do lugar de destino, pela mesma regra — a própria localização movida não conta como já usada. Uma etiqueta
+física feita fora do sistema com o código antigo deixa de valer. Se o código escolhido já pertencer a outra posição, a
+recusa é *"Código já existe"* ou, quando a dona é uma posição excluída, *"Código já existe (localização desativada)"*.
 
 ### 3.3 Tipos de localização
 
@@ -379,7 +400,7 @@ Excluir é permitido apenas quando a posição está vazia, e são duas verifica
 
 A segunda e a terceira recusas valem também para **desativar** a posição pela integração (a tela de localizações não tem esse botão). Uma posição que **já** está inativa responde que já estava inativa, sem recusar.
 
-A exclusão bem-sucedida é uma **inativação**: a posição sai das listas, mas o código continua reservado. Recriar depois o mesmo código reaproveita e reativa aquele endereço.
+A exclusão bem-sucedida é uma **inativação**: a posição sai das listas, mas o código continua reservado. O assistente de criação nunca sugere o código de uma posição excluída (ver 3.2). Pela integração, cadastrar uma posição com o código de uma excluída **reativa** aquele endereço, com o histórico dele.
 
 Três recusas irmãs, na mesma família:
 

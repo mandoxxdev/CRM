@@ -931,7 +931,9 @@ SELECT s.material_id, s.localizacao_id, s.quantidade, l.ativo
   (`ativo` vazio na consulta): só por contagem/ajuste pela integração — o endereço não aparece na lista da tela.
   **Não apague linha por SQL** — a soma das linhas é o físico do material.
 
-### B. Decisões de negócio — B1 a B219; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B222; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+*(**Atualizado em 2026-09-30 de B219 para B222**, com as três da Etapa 55.)*
 
 *(**Atualizado em 2026-09-30 de B205 para B219**, com as quatro da Etapa 51, as três da Etapa 52, as quatro da Etapa 53 e as três da Etapa 54.)*
 
@@ -3813,6 +3815,26 @@ novo. **Descartado:** limpar o padrão desses materiais sozinho ao desativar —
 entrada sem destino deles passaria a ir para "sem localização atribuída" em silêncio. Se a lista for grande demais na
 prática, a alternativa é voltar a esta decisão (reversível: é uma recusa na rota).
 
+**B220 (NOVA, da Etapa 55) — o código do endereço continua no formato `PREFIXO-NN`; o formato hierárquico completo
+ficou fora.** A spec pede um código montado da hierarquia inteira (almoxarifado → corredor → estrutura → nível →
+posição, ex. `ALM-GERAL-A03-E02-N04-P01`). **Escolhido:** manter o formato que a tela já propunha (`A-01`, `EPI-03`) e
+só mudar **quem calcula** — agora o servidor, que enxerga os endereços desativados. **Descartado:** o formato
+hierárquico — trocaria o código de endereços que já têm etiqueta impressa e que a integração já usa. Reversível: um
+formato novo pode entrar só para endereços **novos**, se vocês quiserem.
+
+**B221 (NOVA, da Etapa 55) — só o assistente de "Nova localização" deixou de reativar endereço desativado; digitar o
+código à mão continua reativando.** Desde a Etapa 19, cadastrar um endereço com o código de um que foi removido
+**reativa** o removido (com o histórico dele). **Escolhido:** o assistente, que **propõe** o código, avisa em vez de
+reativar — *"O código ⟨código⟩ pertence a uma localização desativada — gere outro código"* —, e a integração que
+digita o código de propósito continua reativando. **Descartado:** acabar com a reativação para todos — quem remove e
+recoloca um endereço de propósito perderia o caminho que a Etapa 19 criou.
+
+**B222 (NOVA, da Etapa 55) — se o servidor não responder, a tela ainda propõe um código (o cálculo antigo).**
+**Escolhido:** manter o cálculo da tela como reserva, para o cadastro nunca ficar sem proposta. Esse cálculo não
+enxerga endereços desativados, então pode propor o código de um deles — o servidor recusa com o aviso da **B221** e a
+tela passa a propor o seguinte (ela lembra os códigos recusados na sessão). **Descartado:** travar o cadastro enquanto
+o servidor não responde.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -4849,6 +4871,15 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
     **bloqueado** sempre teve. (3) **Editar um endereço pela integração sem mandar o campo "ativo" o REATIVA** — a
     gravação trata o campo ausente como "ativo". A tela não é afetada (ela só lista endereços ativos). Anterior a
     esta etapa.
+    **Etapa 55 (como ficou):** o ponto **(3)** está **resolvido** (`77e51a5`) — editar um endereço sem mandar o campo
+    "ativo" agora **preserva** o que estava gravado; desativado continua desativado. Os pontos (1) e (2) continuam
+    como estão.
+
+75. **NOVO, da Etapa 55 — mover um endereço SEMPRE troca o código dele.** Em **Configurações → Localizações →
+    Mover**, o endereço movido ganha o próximo código do lugar de destino (é assim desde antes desta etapa). Se o
+    endereço tem **etiqueta física** feita fora do sistema com o código antigo, a etiqueta passa a estar errada. A
+    Etapa 55 só mudou **qual** código é proposto (nunca mais o de um endereço desativado — o que antes dava o erro cru
+    *"SQLITE_CONSTRAINT: UNIQUE constraint failed: localizacoes_almoxarifado.codigo"*); o fato de renumerar é anterior.
 
 
 ### D. Limitações declaradas — são decisão, não esquecimento
@@ -5429,6 +5460,18 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   quando **ele** muda.
 - **(54) O padrão inativo que já existe continua recebendo a entrada sem destino** (**B218**) — é decisão; a **A29**
   mede.
+- **(55) Depois de uma recusa de código, a mensagem fica na tela** ao lado do código novo que já foi proposto — o
+  operador pode achar que o código mostrado é o recusado. Basta confirmar de novo.
+- **(55) Dois pontos da tela ficam em branco enquanto o código carrega:** o caminho montado no topo do assistente e a
+  linha "Novo caminho" do Mover (o campo do código e a prévia mostram *"Gerando código..."*).
+- **(55) Qualquer recusa ao salvar faz a tela buscar outro código** — inclusive as que não são de código (ex.:
+  *"Subgrupo já existe neste setor e localização pai"*). Custa uma consulta e muda o código mostrado sem necessidade.
+- **(55) Editar pela integração sem o campo "ativo" preserva também um valor antigo fora do padrão** (vazio ou 2, de
+  dado legado) — antes a edição o transformava em "ativo". A tela não lista esses endereços.
+- **(55) Editar pela integração, sem código, um endereço que não existe** responde *"Código obrigatório"* em vez de
+  *"Localização não encontrada"*.
+- **(55) Um "pai" que não é número** na consulta do próximo código é ignorado — o cálculo vira o de endereço raiz.
+- **(55) Digitar à mão o código de um endereço desativado continua reativando** (**B221**).
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -5821,6 +5864,16 @@ navegador** prova:
 2. **O cadastro de material** não oferece endereço inativo na lista (a lista só mostra ativos) — a recusa nova
    *"Localização padrão ⟨código⟩ está inativa"* só aparece por integração, ou se o endereço for desativado com o
    formulário aberto.
+
+**(55) Nenhum clique foi dado nesta etapa.** Os testes provam a regra pelo servidor (12 cenários) e a tela com o
+servidor simulado (8 cenários). O que **só o navegador** prova:
+
+1. **A proposta pula o endereço removido.** Num setor com dois endereços (ex.: `X-01` e `X-02`), remova `X-02` e abra
+   **Nova localização** no mesmo setor: o código proposto é **`X-03`** (antes: `X-02`, e salvar trazia de volta o
+   removido, com o histórico dele). Enquanto calcula, o campo mostra *"Gerando código..."* e **Confirmar cadastro**
+   fica desabilitado.
+2. **Mover não mostra mais erro técnico.** Mova um endereço para um setor cujo último código é de um endereço
+   removido: a movimentação é aceita com o código seguinte, sem *"SQLITE_CONSTRAINT"* na tela.
 
 ### G. Fragilidades estruturais que continuam de pé
 
@@ -13730,11 +13783,90 @@ saldo **negativo** era recusado (a linha ficava presa para sempre); o id **0** v
 de nota repetia a mesma frase item por item; e lacunas de teste — a recusa do recebimento não se distinguia da do
 motor, e a desativação pelo formulário de edição não tinha a metade "passa quando pode". Tudo corrigido e com teste.
 
+## Etapa 55 — O código proposto para um endereço novo para de ressuscitar endereço removido (2026-09-30)
+
+Quem cadastra um endereço novo em **Configurações → Localizações** recebe um código pronto (`A-01`, `EPI-03`…) — o
+próximo número do setor ou da estrutura. Esse cálculo era feito pela tela, olhando só os endereços **ativos**. Remover
+o último endereço de um setor e cadastrar outro fazia a tela propor **o mesmo código** do removido, e salvar **trazia
+de volta o removido**, com o histórico e o saldo dele — a pessoa achava que tinha criado um endereço novo. No **Mover**,
+o mesmo código dava um erro técnico na tela. Agora o código é calculado pelo servidor, que conta os endereços
+removidos e nunca propõe um código que já existe.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Removido o `X-02`, o assistente propunha **`X-02`** de novo — e salvar **reativava o removido** com o histórico dele | Propõe **`X-03`**; se mesmo assim o código for de um removido, o assistente avisa: *"O código ⟨código⟩ pertence a uma localização desativada — gere outro código"* |
+| **Mover** para um lugar cujo próximo código era de um removido: erro cru *"SQLITE_CONSTRAINT: UNIQUE constraint failed: localizacoes_almoxarifado.codigo"* | O código proposto pula o removido; se o código escolhido já for de outro, *"Código já existe"* ou *"Código já existe (localização desativada)"* |
+| O 1º endereço dentro de `A-01` recebia `A-02` — que já existe como endereço raiz — e salvar dava *"Código já existe"* | O código proposto é o próximo **livre** no cadastro inteiro |
+| Editar um endereço pela integração sem o campo "ativo" o **reativava** (**C74 (3)**) | Preserva o que estava gravado |
+| Editar pela integração sem código: erro técnico | *"Código obrigatório"* |
+| Enquanto calculava, nada indicava | O campo mostra *"Gerando código..."* e o botão de confirmar espera |
+
+O **formato** do código não mudou (**B220**): endereço com etiqueta impressa continua com o mesmo código.
+
+### As regras, com o cenário exato
+
+**1. O próximo número conta os removidos.** Num setor com `X-01` (ativo) e `X-02` (removido), **Nova localização** no
+mesmo setor propõe `X-03`. Se houver um removido com número maior e um buraco no meio (`X-01` ativo, `X-05`
+removido), a proposta é `X-06`, não `X-02` — o número segue o maior já usado, ativo ou não.
+
+**2. O código proposto nunca é de outro endereço.** Se o número seguinte já estiver em uso em **qualquer** lugar do
+cadastro (outro setor com o mesmo prefixo, ou um endereço raiz com o mesmo código de um "filho"), a proposta sobe até o
+primeiro livre. Ex.: o 1º endereço dentro de `A-01` (que não tem nenhum dentro) seria `A-02`; se `A-02` existe, é `A-03`.
+
+**3. O prefixo não mudou.** Dentro de uma estrutura: o prefixo do código dela (`A-01` → `A`). Endereço raiz: o
+prefixo configurado do setor (só de setor **ativo**); sem ele, a letra depois de "Corredor" (`Corredor K` → `K`); sem
+isso, as 3 primeiras letras/números do nome em maiúsculas; setor em branco → `LOC`.
+
+**4. Mover para o mesmo lugar não renumera à toa.** O endereço que está sendo movido não conta como "já usado" no
+cálculo do código dele.
+
+**5. O assistente não reativa.** Se entre calcular e salvar o código passar a ser de um endereço removido, salvar
+responde *"O código ⟨código⟩ pertence a uma localização desativada — gere outro código"*, e a tela já mostra um código
+novo — confirme de novo. Pela integração, mandar o código de um removido **sem** o campo `somente_novo` continua
+reativando (**B221**).
+
+**6. Integração.** `GET /api/almoxarifado/localizacoes/proximo-codigo?setor=⟨nome⟩` (ou `&parent_id=⟨id⟩` para dentro
+de uma estrutura, `&excluir_id=⟨id⟩` para o endereço sendo movido) → `{ "codigo": "…" }`. Estrutura que não existe →
+*"Localização pai não encontrada"*; desativada → *"Localização pai ⟨código⟩ está inativa"*.
+
+### O que esta etapa NÃO cobre
+
+1. **O formato hierárquico completo** da spec — **B220**.
+2. **Mover continua trocando o código** do endereço movido — **C75**.
+3. **Digitar à mão** o código de um removido continua reativando — **B221**.
+4. Os detalhes de tela e de integração declarados em **D (55)**.
+
+### O que a revisão encontrou
+
+A medição antes do código achou que a suspeita anotada na Etapa 54 ("o cadastro seria **recusado** pelo código
+repetido") estava errada quanto ao caminho: o cadastro **não recusava — reativava** o endereço removido; quem dava erro
+era o **Mover**. A revisão do **plano** achou dois problemas graves: sem uma trava no salvamento, a reativação
+silenciosa voltava se o código mudasse entre calcular e salvar (daí o aviso da regra 5); e o endereço sendo movido
+tinha de ficar fora do cálculo, senão movê-lo para o mesmo lugar o renumeraria. Ela também mostrou que as colisões
+mais comuns nem eram com removidos (regra 2). A revisão do **código** achou: com o servidor fora do ar, a tela
+propunha de novo o mesmo código recusado, sem saída (agora ela lembra os recusados); o cálculo para quem está sendo
+movido **dentro de uma estrutura** não tinha teste; e um parâmetro repetido na consulta virava erro técnico. Tudo
+corrigido e com teste. Três testes do servidor passavam mesmo com a regra quebrada — o cálculo "pula o que já existe"
+escondia o erro —, e ganharam cenários com buraco na numeração.
+
+## Onde estamos e o que vem a seguir
+
+*(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 55 entregue (2026-09-30):** **o código proposto para um endereço novo para de ressuscitar endereço
+  removido.** O próximo código de endereço é calculado pelo servidor, conta os removidos e nunca repete um código
+  existente; o assistente avisa em vez de reativar; o Mover deixou de dar erro técnico; editar pela integração sem
+  "ativo" não reativa mais (**C74 (3)** resolvido). **O que é seu:** as decisões **B220 a B222**; o **C75** (Mover
+  renumera); as limitações **(55)** em D e as verificações **(55)** em F. **Próxima: Etapa 56 — a confirmação de
+  endereço por leitura (feature 02; ver o plano da Etapa 55).**
+
 - **Etapa 54 entregue (2026-09-30):** **o sistema para de gravar material em endereço desativado ou que não existe.**
   Destino desativado ou inexistente é recusado; não se remove endereço que é padrão de material ativo; o cadastro não
   aceita padrão desativado; ajuste num endereço desativado só reduz ou zera. O furo **C73** está **resolvido**.
   **O que é seu:** a consulta **A29**; as decisões **B217 a B219**; o **C74**; as limitações **(54)** em D e as
-  verificações **(54)** em F. **Próxima: Etapa 55 — o código de endereço gerado pela hierarquia (feature 02; ver o plano da Etapa 54).**
+  verificações **(54)** em F. **Próxima: Etapa 55 — o código de endereço gerado pela hierarquia (feature 02; ver o plano da Etapa 54).** *(Feita — ver acima; o formato hierárquico ficou fora, **B220**.)*
 
 - **Etapa 53 entregue (2026-09-30):** **a sugestão de localização na entrada.** Em **Movimentações → Entrada**, ao
   escolher o material aparecem até três endereços sugeridos — o padrão, onde o material já está, e vazios que o

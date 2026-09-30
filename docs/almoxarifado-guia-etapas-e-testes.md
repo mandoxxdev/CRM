@@ -1,18 +1,24 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-09-30 (Etapa 54) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-09-30 (Etapa 55) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 54) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 55) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-09-30 (Etapa 54 ENTREGUE · Etapa 55 começando)
+> ## Onde o desenvolvimento está — 2026-09-30 (Etapa 55 ENTREGUE · Etapa 56 começando)
 >
-> **O desenvolvimento parou aqui: Etapa 54 fechada, Etapa 55 começando — 2026-09-30.** A **Etapa 54 (o sistema para
-> de gravar material em endereço desativado ou que não existe)**: destino desativado ou inexistente é recusado, não
-> se remove endereço que é padrão de material ativo, o cadastro de material não aceita padrão desativado, e o ajuste
-> num endereço desativado só reduz ou zera. **Próxima etapa, já começando: 55 — o código de endereço gerado pela
-> hierarquia** (feature 02; ver *"Próxima tarefa detalhada"* no plano da Etapa 54).
+> **O desenvolvimento parou aqui: Etapa 55 fechada, Etapa 56 começando — 2026-09-30.** A **Etapa 55 (o código
+> proposto para um endereço novo para de ressuscitar endereço removido)**: o próximo código de endereço é calculado
+> pelo servidor, conta os endereços removidos e nunca repete um código existente; o assistente de **Nova localização**
+> avisa em vez de trazer de volta um endereço removido; o **Mover** deixou de mostrar erro técnico. **Próxima etapa,
+> já começando: 56 — a confirmação de endereço por leitura** (feature 02; ver *"Próxima tarefa detalhada"* no plano
+> da Etapa 55).
 >
-> **Etapas 1 a 20 e 22 a 54 completas.**
+> **Etapas 1 a 20 e 22 a 55 completas.**
+>
+> **Etapa 54, 2026-09-30.** A **Etapa 54 (o sistema para de gravar material em endereço desativado ou que não
+> existe)**: destino desativado ou inexistente é recusado, não se remove endereço que é padrão de material ativo, o
+> cadastro de material não aceita padrão desativado, e o ajuste num endereço desativado só reduz ou zera. **Próxima
+> etapa: 55** (feita — acima; o formato hierárquico do código ficou fora por decisão, **B220** nas novidades).
 >
 > **Etapa 53, 2026-09-30.** A **Etapa 53 (a sugestão
 > de localização na entrada)**: em **Movimentações → Entrada**, ao escolher o material aparecem até 3 endereços
@@ -4950,6 +4956,52 @@ que ele não tinha como repetir com sucesso garantido.
 - **Número de série de material** — continua sendo **digitado pelo operador** e de propósito não
   passa por este gerador. Retentar com outro número gravaria algo que ninguém digitou.
 - **Números de outros módulos do CRM** — a varredura foi do almoxarifado.
+
+---
+
+## Etapa 55 — O código proposto para um endereço novo para de ressuscitar endereço removido (ENTREGUE — 2026-09-30)
+
+**O que mudou, em uma frase:** o código que o sistema propõe para um endereço novo (e para um endereço movido) passa a
+ser calculado pelo servidor, que **conta os endereços removidos** e **nunca repete** um código que já existe.
+
+**O problema que ela resolve.** A tela calculava o próximo código olhando só os endereços **ativos**. Removido o último
+endereço de um setor, o assistente propunha **o código dele** — e salvar **trazia de volta o endereço removido**, com o
+histórico e o saldo dele, enquanto a pessoa achava que tinha criado um novo. No **Mover**, o mesmo código dava um erro
+técnico na tela (*"SQLITE_CONSTRAINT: UNIQUE constraint failed: localizacoes_almoxarifado.codigo"*).
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Removido o `X-02`, a proposta era `X-02` — e salvar reativava o removido | A proposta é `X-03` |
+| Código que virou de um removido entre calcular e salvar: reativava em silêncio | Aviso: *"O código ⟨código⟩ pertence a uma localização desativada — gere outro código"*, e a tela já propõe outro |
+| Mover para um lugar cujo próximo código era de um removido: erro técnico | Aceito com o código seguinte |
+| 1º endereço dentro de `A-01` recebia `A-02` (que já existe): *"Código já existe"* ao salvar | Recebe o próximo código **livre** |
+| Nada indicava o cálculo | *"Gerando código..."* e o botão de confirmar espera |
+
+### Roteiro de teste manual (≈4 min)
+
+**Preparação.** Em **Configurações → Localizações**, um setor com dois endereços raiz, **X-01** e **X-02** (use
+**Nova localização** duas vezes no mesmo setor).
+
+1. **Remova X-02.** Ele sai da lista.
+2. **Nova localização** no mesmo setor, endereço raiz: o campo do código mostra *"Gerando código..."* por um instante e
+   depois **X-03** (antes desta etapa: **X-02**). **Confirmar cadastro** fica desabilitado enquanto calcula.
+3. **Confirme.** O endereço **X-03** aparece na lista como novo — **X-02** continua removido.
+4. **Mover.** Crie um endereço em outro setor e use **Mover** para levá-lo ao setor do passo 1: o novo código proposto
+   é o seguinte livre (**X-04**), e a movimentação é aceita sem erro técnico.
+5. **Estrutura dentro de outra.** **Nova localização** do tipo "dentro de uma estrutura", escolhendo **X-01** como pai:
+   o código proposto é o próximo **livre** (se **X-02** existe no cadastro, mesmo removido, ele não é proposto).
+
+### O que esta etapa NÃO cobre
+
+- **O formato hierárquico** do código (`ALM-GERAL-A03-E02-N04-P01`) — ficou fora por decisão (**B220**): trocaria o
+  código de etiquetas já impressas.
+- **Mover continua trocando o código** do endereço movido (**C75**) — uma etiqueta física feita fora do sistema fica
+  errada.
+- **Digitar à mão** (pela integração) o código de um endereço removido continua reativando (**B221**).
+- Detalhes declarados em **D (55)** nas novidades: a mensagem de recusa fica na tela ao lado do código novo; dois
+  pontos ficam em branco enquanto o código carrega.
 
 ---
 
