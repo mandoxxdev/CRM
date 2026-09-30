@@ -798,6 +798,12 @@ const MovimentacoesAlmoxarifado = () => {
                           A localização padrão {sugestaoLoc.padrao.codigo} não recebe este material ({sugestaoLoc.padrao.recusa}) — escolha um destino.
                         </div>
                       )}
+                      {/* A padrão INATIVA o motor ainda aceita, e o saldo some do mapa — aqui só avisa. */}
+                      {form.tipo === 'ENTRADA' && !sugestaoLoc?.padrao?.recusa && sugestaoLoc?.padrao?.inativa && !form.localizacao_destino_id && (
+                        <div data-testid="aviso-padrao-inativa" className="almox-hint-banner" style={{ marginTop: 6, fontSize: '0.8rem' }}>
+                          A localização padrão {sugestaoLoc.padrao.codigo} está inativa — escolha um destino.
+                        </div>
+                      )}
                       {form.tipo === 'ENTRADA' && sugestaoLoc?.sugestoes?.length > 0 && (
                         <div data-testid="sugestoes-localizacao" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
                           <span style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)', alignSelf: 'center' }}>Sugestões:</span>

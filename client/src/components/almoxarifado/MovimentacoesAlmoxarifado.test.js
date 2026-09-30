@@ -699,6 +699,57 @@ describe('Etapa 53: sugestao de localizacao na entrada', () => {
     await entradaCom(10);
     const aviso = container.querySelector('[data-testid="aviso-padrao-recusada"]');
     expect(aviso.textContent).toBe('A localização padrão A-01 não recebe este material (Localização A-01 está bloqueada) — escolha um destino.');
+    // Fase 5: escolher o destino SOME com o aviso (a condição !destino não tinha prova).
+    preencher(selectDestino(), '3');
+    expect(container.querySelector('[data-testid="aviso-padrao-recusada"]')).toBeNull();
+    expect(selectDestino().value).toBe('3');
+  });
+
+  test('padrao INATIVA: aviso proprio (o motor ainda aceitaria, e o saldo sumiria do mapa)', async () => {
+    sugestaoDoBanco = { padrao: { localizacao_id: 1, codigo: 'A-01', recusa: null, inativa: true }, sugestoes: [] };
+    await entradaCom(10);
+    expect(container.querySelector('[data-testid="aviso-padrao-inativa"]').textContent)
+      .toBe('A localização padrão A-01 está inativa — escolha um destino.');
+    expect(container.querySelector('[data-testid="aviso-padrao-recusada"]')).toBeNull();
+    preencher(selectDestino(), '2');
+    expect(container.querySelector('[data-testid="aviso-padrao-inativa"]')).toBeNull();
+  });
+
+  test('trocar de material ZERA a sugestao na hora, antes da resposta nova chegar', async () => {
+    await entradaCom(10);
+    expect(blocoSugestoes()).not.toBeNull();
+    let resolver;
+    api.get.mockImplementation((url) => {
+      if (url.endsWith('/sugestao-localizacao')) return new Promise((r) => { resolver = r; });
+      return Promise.resolve({ data: [] });
+    });
+    preencher(container.querySelector('.almox-modal select.almox-form-select'), '11');
+    await esperarEfeitos();
+    expect(blocoSugestoes()).toBeNull(); // as sugestões do material 10 não ficam na tela do 11
+    await act(async () => { resolver({ data: sugestaoDoBanco }); });
+    expect(blocoSugestoes()).not.toBeNull();
+  });
+
+  test('resposta ATRASADA do material anterior nao sobrescreve a do atual', async () => {
+    const pendentes = {};
+    api.get.mockImplementation((url) => {
+      const m = String(url).match(/materiais\/(\d+)\/sugestao-localizacao$/);
+      if (m) return new Promise((r) => { pendentes[m[1]] = r; });
+      if (url === '/almoxarifado/materiais') {
+        return Promise.resolve({ data: [
+          { id: 10, codigo: 'MAT-1', nome: 'Chapa 3mm', unidade: 'PC' },
+          { id: 11, codigo: 'MAT-2', nome: 'Perfil', unidade: 'PC' },
+        ] });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    await entradaCom(10);
+    preencher(container.querySelector('.almox-modal select.almox-form-select'), '11');
+    await esperarEfeitos();
+    const so = (codigo) => ({ padrao: null, sugestoes: [{ localizacao_id: 9, codigo, endereco_completo: codigo, motivo: 'VAZIA_COMPATIVEL', quantidade_no_endereco: 0 }] });
+    await act(async () => { pendentes['11'](({ data: so('DO-11') })); });
+    await act(async () => { pendentes['10'](({ data: so('DO-10') })); }); // chega depois, e é do material velho
+    expect([...blocoSugestoes().querySelectorAll('button')].map((b) => b.textContent)).toEqual(['DO-11 · vazia']);
   });
 
   test('trocar de material LIMPA o destino que veio de sugestao; o escolhido a mao fica', async () => {

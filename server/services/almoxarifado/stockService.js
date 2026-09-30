@@ -570,13 +570,18 @@ async function sugerirLocalizacaoEntrada(db, materialId) {
   if (!material) throw Object.assign(new Error('Material não encontrado'), { status: 404 });
   if (!material.ativo) throw Object.assign(new Error('Material inativo não pode ser movimentado'), { status: 400 });
 
-  const ativa = (loc) => loc && Number(loc.ativo) === 1 && !(loc.almoxarifado_ativo === 0);
   const LOC_SQL = `SELECT l.*, a.ativo as almoxarifado_ativo, a.codigo as almoxarifado_codigo, p.codigo as parent_codigo,
       COALESCE(a.codigo || ' / ', '') || COALESCE(NULLIF(l.setor, '') || ' / ', '')
-        || COALESCE(p.codigo || ' / ', '') || l.codigo as endereco_completo
+        || COALESCE(p.codigo || ' / ', '') || l.codigo as endereco_completo,
+      EXISTS (SELECT 1 FROM localizacoes_almoxarifado f WHERE f.parent_id = l.id AND f.ativo = 1) as tem_filho_ativo
     FROM localizacoes_almoxarifado l
     LEFT JOIN almoxarifados a ON l.almoxarifado_id = a.id
     LEFT JOIN localizacoes_almoxarifado p ON l.parent_id = p.id`;
+  // Um endereço é SUGERÍVEL quando está ativo, num almoxarifado ativo, não é contêiner (pai com filho
+  // ativo) e a regra do motor o aceita. Fase 5: o filtro de "pai" só valia para as vazias — um pai
+  // com saldo, ou uma padrão que é pai, eram sugeridos. Agora vale para os três caminhos.
+  const sugerivel = (loc) => loc && Number(loc.ativo) === 1 && loc.almoxarifado_ativo !== 0
+    && !Number(loc.tem_filho_ativo) && !motivoRecusaEndereco(loc, material, 'destino');
 
   let padrao = null;
   const sugestoes = [];
@@ -594,8 +599,11 @@ async function sugerirLocalizacaoEntrada(db, materialId) {
     const loc = await dbGet(db, `${LOC_SQL} WHERE l.id = ?`, [material.localizacao_padrao_id]);
     if (loc) {
       const recusa = motivoRecusaEndereco(loc, material, 'destino');
-      padrao = { localizacao_id: loc.id, codigo: loc.codigo, recusa };
-      if (!recusa && ativa(loc)) {
+      // Fase 5 (I-2): a padrão INATIVA (ou de almoxarifado inativo) não é recusada pelo motor — a
+      // entrada sem destino cai nela sem aviso (defeito do motor, letra C). A tela avisa por `inativa`.
+      const inativa = Number(loc.ativo) !== 1 || loc.almoxarifado_ativo === 0;
+      padrao = { localizacao_id: loc.id, codigo: loc.codigo, recusa, inativa };
+      if (sugerivel(loc)) {
         const q = await dbGet(db, `SELECT COALESCE(SUM(quantidade),0) q FROM estoque_saldo_almoxarifado
           WHERE material_id = ? AND localizacao_id = ?`, [materialId, loc.id]);
         incluir(loc, 'PADRAO', Number(q.q) || 0);
@@ -603,33 +611,37 @@ async function sugerirLocalizacaoEntrada(db, materialId) {
     }
   }
 
-  const comSaldo = await dbAll(db, `${LOC_SQL}
+  // A quantidade vem do próprio JOIN (sem N+1), e no máximo 10 posições (Fase 5, M-4).
+  const comSaldo = await dbAll(db, `${LOC_SQL.replace('FROM localizacoes_almoxarifado l', ', sd.q as q_material FROM localizacoes_almoxarifado l')}
     JOIN (SELECT localizacao_id, SUM(quantidade) q FROM estoque_saldo_almoxarifado
           WHERE material_id = ? AND localizacao_id IS NOT NULL GROUP BY localizacao_id HAVING SUM(quantidade) > 0) sd
       ON sd.localizacao_id = l.id
     ORDER BY sd.q DESC, l.id`, [materialId]);
+  let jaTem = 0;
   for (const loc of comSaldo) {
-    if (ativa(loc) && !motivoRecusaEndereco(loc, material, 'destino')) {
-      const q = await dbGet(db, `SELECT COALESCE(SUM(quantidade),0) q FROM estoque_saldo_almoxarifado
-        WHERE material_id = ? AND localizacao_id = ?`, [materialId, loc.id]);
-      incluir(loc, 'JA_TEM_O_MATERIAL', Number(q.q) || 0);
-    }
+    if (jaTem >= 10) break;
+    if (sugerivel(loc) && !vistos.has(loc.id)) { incluir(loc, 'JA_TEM_O_MATERIAL', Number(loc.q_material) || 0); jaTem += 1; }
   }
 
   const almoxPadrao = padrao
     ? (await dbGet(db, 'SELECT almoxarifado_id FROM localizacoes_almoxarifado WHERE id = ?', [padrao.localizacao_id]))?.almoxarifado_id
     : null;
-  const vazias = (await listarLocalizacoesVazias(db))
-    .filter((l) => !vistos.has(l.id));
-  const semFilho = await dbAll(db, `SELECT l.id FROM localizacoes_almoxarifado l
-    WHERE NOT EXISTS (SELECT 1 FROM localizacoes_almoxarifado f WHERE f.parent_id = l.id AND f.ativo = 1)`);
-  const idsSemFilho = new Set(semFilho.map((r) => r.id));
-  const almoxAtivos = new Set((await dbAll(db, 'SELECT id FROM almoxarifados WHERE COALESCE(ativo,1) = 1')).map((r) => r.id));
-  const candidatas = vazias
-    .filter((l) => idsSemFilho.has(l.id))
-    .filter((l) => l.almoxarifado_id == null || almoxAtivos.has(l.almoxarifado_id))
-    .filter((l) => !motivoRecusaEndereco(l, material, 'destino'))
-    .sort((a, b) => (Number(b.almoxarifado_id === almoxPadrao) - Number(a.almoxarifado_id === almoxPadrao)));
+  // Fase 5 (M-2): endereço com saldo NEGATIVO deste material não é "vazio" — o rótulo enganaria.
+  const negativos = new Set((await dbAll(db, `SELECT localizacao_id FROM estoque_saldo_almoxarifado
+    WHERE material_id = ? AND localizacao_id IS NOT NULL GROUP BY localizacao_id HAVING SUM(quantidade) < 0`,
+  [materialId])).map((r) => r.localizacao_id));
+  const idsVazias = (await listarLocalizacoesVazias(db)).map((l) => l.id)
+    .filter((id) => !vistos.has(id) && !negativos.has(id));
+  const candidatas = [];
+  for (const id of idsVazias) {
+    const loc = await dbGet(db, `${LOC_SQL} WHERE l.id = ?`, [id]);
+    if (sugerivel(loc)) candidatas.push(loc);
+  }
+  // Fase 5 (M-3): só ordena pelo almoxarifado da padrão quando HÁ padrão — sem ela, `null === null`
+  // jogava para o topo as vazias sem almoxarifado.
+  if (almoxPadrao != null) {
+    candidatas.sort((a, b) => Number(b.almoxarifado_id === almoxPadrao) - Number(a.almoxarifado_id === almoxPadrao));
+  }
   for (const loc of candidatas.slice(0, 5)) incluir(loc, 'VAZIA_COMPATIVEL', 0);
 
   return { padrao, sugestoes };

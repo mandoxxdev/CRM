@@ -129,6 +129,64 @@ let seq = 0;
     assert.strictEqual(i.status, 400); assert.strictEqual(i.body.error, 'Material inativo não pode ser movimentado');
   });
 
+  // Fase 5 (revisão adversarial): lacunas que passavam verdes com o serviço quebrado.
+  await test('(9) quantidade_no_endereco vem certa — a tela mostra esse numero', async () => {
+    // Setup B=20, A=5, P=3, mais a entrada de 1 que o (4) fez em cada sugestao.
+    const s = await sugestao(m);
+    const q = Object.fromEntries(s.sugestoes.map((x) => [x.localizacao_id, x.quantidade_no_endereco]));
+    assert.strictEqual(q[B], 21); assert.strictEqual(q[A], 6); assert.strictEqual(q[P], 4);
+  });
+
+  await test('(10) padrao INATIVA: padrao.inativa=true (a tela avisa), recusa null, e nao entra nas sugestoes', async () => {
+    const PI = await loc('PI', { ativo: 0 }); const mi = await material({ padrao: PI });
+    const s = await sugestao(mi);
+    assert.strictEqual(s.padrao.localizacao_id, PI); assert.strictEqual(s.padrao.inativa, true);
+    assert.strictEqual(s.padrao.recusa, null);
+    assert.ok(!ids(s).includes(PI)); assert.ok(s.sugestoes.length > 0);
+    // Metade positiva: a padrão ativa NÃO vem marcada.
+    assert.strictEqual((await sugestao(m)).padrao.inativa, false);
+  });
+
+  await test('(11) padrao em ALMOXARIFADO inativo: padrao.inativa=true e fora das sugestoes', async () => {
+    const PA = await loc('PA', { almox: ALMI }); const ma = await material({ padrao: PA });
+    const s = await sugestao(ma);
+    assert.strictEqual(s.padrao.inativa, true); assert.ok(!ids(s).includes(PA));
+  });
+
+  await test('(12) vazias: as do almoxarifado da padrao vem ANTES das de outro almoxarifado', async () => {
+    const ALM2 = await almox(); const OUTRA = await loc('AAA-OUTRA', { almox: ALM2 }); // alfabeticamente a 1a: sem a ordenacao, viria antes
+    const ALM3 = await almox(); const PP = await loc('PP', { almox: ALM3 }); const MESMA = await loc('MESMA', { almox: ALM3 });
+    const mp = await material({ padrao: PP });
+    const vaz = (await sugestao(mp)).sugestoes.filter((x) => x.motivo === 'VAZIA_COMPATIVEL').map((x) => x.localizacao_id);
+    assert.strictEqual(vaz[0], MESMA, JSON.stringify(vaz));
+    assert.ok(vaz.includes(OUTRA) && vaz.indexOf(OUTRA) > vaz.indexOf(MESMA), JSON.stringify(vaz));
+  });
+
+  await test('(13) PAI com saldo do material nao e sugerido (nem como padrao, nem como ja-tem)', async () => {
+    const PAI2 = await loc('PAI2'); const mp = await material({ padrao: PAI2 });
+    const r = await entrada(mp, PAI2, 7); assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    await loc('FILHA2', { parent: PAI2 });
+    const s = await sugestao(mp);
+    assert.ok(!ids(s).includes(PAI2), JSON.stringify(s.sugestoes));
+    assert.ok(s.sugestoes.length > 0);
+  });
+
+  await test('(14) endereco com saldo NEGATIVO do material nao e rotulado vazio', async () => {
+    // '0' ordena antes de tudo: sem o filtro, seria a 1a vazia.
+    const NEG = await loc('0-NEG'); const mn = await material();
+    await dbRun(db, `INSERT INTO estoque_saldo_almoxarifado (material_id, localizacao_id, quantidade) VALUES (?,?,?)`, [mn, NEG, -4]);
+    const s = await sugestao(mn);
+    assert.ok(!ids(s).includes(NEG), JSON.stringify(s.sugestoes));
+    assert.ok(s.sugestoes.length > 0);
+  });
+
+  await test('(15) sem padrao: vazia SEM almoxarifado nao pula para o topo (null === null)', async () => {
+    const SEM = await loc('ZZZ-SEMALM', { almox: null });
+    const vaz = (await sugestao(await material())).sugestoes.map((x) => x.localizacao_id);
+    assert.ok(vaz.length > 0);
+    assert.notStrictEqual(vaz[0], SEM, JSON.stringify(vaz));
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed\n`);
   process.exit(failed > 0 ? 1 : 0);
