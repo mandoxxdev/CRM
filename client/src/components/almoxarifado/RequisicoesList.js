@@ -89,7 +89,7 @@ const lerValorOrigem = (valor) => {
   return { localizacao_origem_id, lote_id: lote ? Number(lote) : null };
 };
 
-const formatMoeda =(v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const formatMoeda = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 const RequisicoesList = () => {
   const { pode, bloquearSeNaoPode } = useAlmoxPermissoes();

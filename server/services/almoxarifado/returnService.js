@@ -79,7 +79,10 @@ async function registrarDevolucao(db, user, data) {
   // lote sem que ninguem tenha pedido isso.
   // Etapa 58: herda o lote da saida citada sempre que ela TEM lote — a entrega passou a poder
   // escolher lote tambem em material sem controle_lote, e voltar sem lote tiraria o saldo dele.
-  const loteFinalId = lote_id || (saidaOriginal ? saidaOriginal.lote_id : null) || null;
+  // Fase 5: so para os destinos que ENTRAM (estoque/quarentena) — no RETRABALHO a devolucao e uma
+  // saida, e herdar um lote vencido/curto passaria a recusar o que antes passava.
+  const herdaLote = saidaOriginal && (material.controle_lote || ['ESTOQUE', 'QUARENTENA'].includes(destinoFinal));
+  const loteFinalId = lote_id || (herdaLote ? saidaOriginal.lote_id : null) || null;
 
   // Heranca de projeto_id/os_id (Etapa 14, Task 3 — RN-05, emenda I2, MESMO MOLDE da heranca de
   // lote acima): o valor informado a mao pelo chamador GANHA; sem informar, herda da saida

@@ -200,6 +200,70 @@ let seq = 0;
     assert.strictEqual(await saldoEm(m.id, A.id, ld), 3);
   });
 
+  // ── Fase 5 ────────────────────────────────────────────────────────────────────────────────
+  const tipoRestrito = (locId) => dbRun(db, "UPDATE localizacoes_almoxarifado SET tipos_material_permitidos = '[\"EPI\"]' WHERE id = ?", [locId]);
+  const excluir = (reqId) => request(app).delete(`/api/almoxarifado/requisicoes/${reqId}`).send({ justificativa: 'e58 teste' });
+
+  await test('Fase 5: excluir com a origem que agora NAO aceita o tipo — volta para a padrao, nao trava', async () => {
+    const A = await loc('TXA'); const P = await loc('TXP'); const m = await material(P.id);
+    await entrar(m.id, A.id, 5);
+    const { id, ids } = await req([[m.id, 3]]);
+    const r = await entregar(id, [{ item_id: ids[0], quantidade_atendida: 3, localizacao_origem_id: A.id }]);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    await tipoRestrito(A.id);
+    const del = await excluir(id);
+    assert.strictEqual(del.status, 200, JSON.stringify(del.body));
+    assert.strictEqual(await saldoEm(m.id, P.id), 3); assert.strictEqual(await saldoEm(m.id, A.id), 2);
+  });
+
+  await test('Fase 5: excluir com DUAS partes e a padrao bloqueada — recusa ANTES de creditar qualquer parte', async () => {
+    const A = await loc('DPA'); const B = await loc('DPB'); const P = await loc('DPP'); const m = await material(P.id);
+    await entrar(m.id, A.id, 5); await entrar(m.id, B.id, 5);
+    const { id, ids } = await req([[m.id, 4]]);
+    assert.strictEqual((await entregar(id, [{ item_id: ids[0], quantidade_atendida: 2, localizacao_origem_id: A.id }])).status, 200);
+    assert.strictEqual((await entregar(id, [{ item_id: ids[0], quantidade_atendida: 2, localizacao_origem_id: B.id }])).status, 200);
+    await tipoRestrito(B.id); // a 2a parte cai na padrão...
+    await dbRun(db, 'UPDATE localizacoes_almoxarifado SET bloqueada = 1 WHERE id = ?', [P.id]); // ...que está bloqueada
+    const del = await excluir(id);
+    assert.strictEqual(del.status, 400, JSON.stringify(del.body));
+    assert.strictEqual(await saldoEm(m.id, A.id), 3, 'a 1a parte foi creditada antes da recusa da 2a');
+    // Metade positiva: desbloqueada a padrão, exclui — e uma vez só.
+    await dbRun(db, 'UPDATE localizacoes_almoxarifado SET bloqueada = 0 WHERE id = ?', [P.id]);
+    assert.strictEqual((await excluir(id)).status, 200);
+    assert.strictEqual(await saldoEm(m.id, A.id), 5); assert.strictEqual(await saldoEm(m.id, P.id), 2);
+  });
+
+  await test('Fase 5: lote BLOQUEADO no 2o item recusa a entrega SEM baixar o 1o', async () => {
+    const A = await loc('LBA'); const m1 = await material(); const m2 = await material();
+    await entrar(m1.id, A.id, 10); const cod = `LB-${seq}`; await entrar(m2.id, A.id, 5, cod);
+    const lb = await loteId(m2.id, cod);
+    await dbRun(db, "UPDATE lotes_almoxarifado SET status = 'BLOQUEADO' WHERE id = ?", [lb]);
+    const { id, ids } = await req([[m1.id, 3], [m2.id, 2]]);
+    const r = await entregar(id, [{ item_id: ids[0], quantidade_atendida: 3 }, { item_id: ids[1], quantidade_atendida: 2, lote_id: lb }]);
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, `${m2.nome}: Lote ${cod} esta bloqueado e nao pode ser utilizado`);
+    assert.strictEqual(await entregue(ids[0]), 0);
+  });
+
+  await test('Fase 5: dois itens do MESMO material saindo de A (A:10, 6+6) — recusa antes, nada sai; e a exclusao devolve ao lote', async () => {
+    const A = await loc('MMA'); const m = await material(); const cod = `MM-${seq}`;
+    await entrar(m.id, A.id, 10, cod); const lm = await loteId(m.id, cod);
+    const { id, ids } = await req([[m.id, 6], [m.id, 6]]);
+    let r = await entregar(id, [
+      { item_id: ids[0], quantidade_atendida: 6, localizacao_origem_id: A.id, lote_id: lm },
+      { item_id: ids[1], quantidade_atendida: 6, localizacao_origem_id: A.id, lote_id: lm },
+    ]);
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(await saldoEm(m.id, A.id, lm), 10);
+    r = await entregar(id, [
+      { item_id: ids[0], quantidade_atendida: 6, localizacao_origem_id: A.id, lote_id: lm },
+      { item_id: ids[1], quantidade_atendida: 4, localizacao_origem_id: A.id, lote_id: lm },
+    ]);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.strictEqual((await excluir(id)).status, 200);
+    assert.strictEqual(await saldoEm(m.id, A.id, lm), 10, 'dois itens do mesmo material: o estorno nao voltou ao lote');
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed\n`);
   process.exit(failed > 0 ? 1 : 0);
