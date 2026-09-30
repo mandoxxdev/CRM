@@ -66,6 +66,13 @@ const ACOES = {
   // de uma devolução — ela é de COMPRAS (e de ADMINISTRADOR), e é justamente a plateia diferente
   // de `decidir_nao_conformidade` que faz esta ação existir.
   executar_encaminhamento: 'registrar a execução do encaminhamento',
+  // Etapa 46, T1: entrou JUNTO com a ação em `ACAO_PERFIS`, no MESMO commit — e esta linha existe
+  // para que não haja oitava vez. A sétima, logo acima, custou uma suíte de client vermelha e um
+  // relatório meu afirmando duas tasks fechadas com base só nos números de servidor.
+  // O 403 desta ação é o que COMPRAS e ALMOXARIFE veem ao tentar anular um documento: cancelar é
+  // de ADMINISTRADOR e QUALIDADE, e a exclusão do COMPRAS é deliberada — ele executa e é cobrado
+  // pela fila, então não deve poder limpá-la.
+  cancelar_nao_conformidade: 'cancelar não conformidade',
 
   // Etapa 30, fix-round da revisao adversarial: QUATRO acoes de ACAO_PERFIS nao tinham rotulo, e
   // tres delas ja tinham call site de UI — o toast mostrava a chave crua ("gerenciar plano

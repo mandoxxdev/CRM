@@ -227,6 +227,27 @@ const ACAO_PERFIS = {
   // qualidade reprovou — seria o mesmo conflito de "quem recebe nao julga o proprio recebimento",
   // do lado da baixa. Reversivel numa linha; registrado na letra B.
   executar_encaminhamento: [PERFIS.ADMINISTRADOR, PERFIS.QUALIDADE, PERFIS.COMPRAS],
+
+  // Etapa 46 — ANULAR O DOCUMENTO, e ela existe porque a Etapa 45 criou um beco: a execucao
+  // recusa material com serie e lote nao identificavel com 400 FATAL (niveis 6 e 7 da
+  // precedencia), e o documento ficava DECIDIDA + PENDENTE para sempre, sem nada em tela nenhuma
+  // que o tirasse de la. Dois revisores independentes acharam isso na Fase 5 da 45 (furo C64).
+  //
+  // ⚠️ POR QUE ACAO PROPRIA, e nao uma das duas que ja existem:
+  //
+  // NAO e `decidir_nao_conformidade` porque anular nao e decidir. Quem decidiu nao deve poder
+  // apagar o proprio rastro por baixo de uma acao que se chama "decidir" — a Etapa 43 congelou a
+  // decisao como imutavel e auditada de proposito. Cancelar PRESERVA a decisao; o que ele encerra
+  // e a COBRANCA da execucao. Sao gestos diferentes e merecem gates diferentes.
+  //
+  // NAO e `executar_encaminhamento` porque o COMPRAS a tem (B176), e daria a ele LIMPAR A PROPRIA
+  // FILA. O incentivo esta errado: quem e cobrado pela pendencia nao deve poder apaga-la sem
+  // passar por quem respondeu pelo material. Compras EXECUTA; nao ANULA.
+  //
+  // ALMOXARIFE fica de fora pela mesma razao das outras duas acoes desta familia: quem opera o
+  // estoque nao encerra o documento que julga o que ele recebeu. Reversivel numa linha; registrado
+  // na letra B.
+  cancelar_nao_conformidade: [PERFIS.ADMINISTRADOR, PERFIS.QUALIDADE],
 };
 
 function getPerfilFromUser(user) {

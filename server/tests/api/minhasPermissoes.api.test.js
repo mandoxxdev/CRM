@@ -26,6 +26,10 @@ const GESTOR = { id: 63, nome: 'Gestor', role: 'usuario', perfil_almoxarifado: '
 // Etapa 36, fix-round 1: COMPRAS faltava nas fixtures, e é o único perfil NÃO-admin que tem
 // `autorizar_excedente` — sem ele a ação nova não teria metade positiva neste arquivo.
 const COMPRAS = { id: 68, nome: 'Compras', role: 'usuario', perfil_almoxarifado: 'COMPRAS' };
+// Etapa 46, T1: QUALIDADE faltava nas fixtures deste arquivo, e sem ela a acao nova nao teria
+// METADE POSITIVA aqui — `cancelar_nao_conformidade` e de ADMINISTRADOR e QUALIDADE, e o ADMIN
+// passa em tudo por outro caminho (`isSuperAdmin`), entao ele nao prova gate nenhum.
+const QUALIDADE = { id: 69, nome: 'Qualidade', role: 'usuario', perfil_almoxarifado: 'QUALIDADE' };
 const ADMIN = { id: 64, nome: 'Admin', role: 'admin' };
 
 const get = (app) => request(app).get('/api/almoxarifado/minhas-permissoes');
@@ -111,6 +115,44 @@ const get = (app) => request(app).get('/api/almoxarifado/minhas-permissoes');
     assert.strictEqual(gestor.receber_material, false, 'e o motivo é este: o GESTOR não atravessa as rotas');
     setUser(ALMOXARIFE);
     assert.strictEqual((await get(app)).body.acoes.autorizar_excedente, false);
+  });
+
+  // ── Etapa 46, T1 — a MATRIZ da acao nova, e ela e uma lista NEGATIVA ──────────────────────
+  //
+  // `cancelar_nao_conformidade` existe para dar saida ao documento que a Etapa 45 deixou preso
+  // (furo C64). O que ela NAO concede e a parte que importa, e sao DUAS exclusoes deliberadas:
+  //
+  //   · COMPRAS fica FORA, e esta e a linha decisiva: ele TEM `executar_encaminhamento` (B176) e
+  //     e quem a fila de execucao cobra. Dar-lhe o cancelamento seria dar-lhe LIMPAR A PROPRIA
+  //     FILA — o incentivo exatamente invertido.
+  //   · ALMOXARIFE fica fora pela razao das outras duas acoes da familia: quem opera o estoque
+  //     nao encerra o documento que julga o que ele recebeu.
+  //
+  // ⚠️ ESTE CENARIO PASSA VERDE ANTES DE A ACAO EXISTIR, porque `can()` devolve `false` para o
+  // que nao conhece — a assercao negativa nao fica vermelha na rodada TDD. Logo o CONTROLE
+  // POSITIVO e a unica prova dela: sabotar CONCEDENDO a permissao a COMPRAS e confirmar que o
+  // cenario cai NOMEANDO a acao. Feito na T1; sem isso a lista negativa nao vale nada.
+  await test('(Etapa 46) cancelar_nao_conformidade: QUALIDADE pode; COMPRAS e ALMOXARIFE NAO', async () => {
+    setUser(QUALIDADE);
+    const qual = (await get(app)).body;
+    assert.strictEqual(qual.perfil, 'QUALIDADE');
+    // Metade POSITIVA, e ela precisa vir de um perfil nao-admin: o ADMIN passa por `isSuperAdmin`
+    // e nao prova gate nenhum.
+    assert.strictEqual(qual.acoes.cancelar_nao_conformidade, true, 'QUALIDADE responde pelo documento');
+    assert.strictEqual(qual.acoes.decidir_nao_conformidade, true, 'e continua decidindo');
+
+    setUser(COMPRAS);
+    const compras = (await get(app)).body.acoes;
+    assert.strictEqual(compras.cancelar_nao_conformidade, false,
+      'COMPRAS nao cancela — senao limparia a propria fila de execucao');
+    // A metade positiva do COMPRAS, no mesmo cenario: ele CONTINUA podendo executar. Sem esta
+    // linha, o teste passaria com um perfil COMPRAS que perdeu tudo.
+    assert.strictEqual(compras.executar_encaminhamento, true, 'COMPRAS executa, e e cobrado pela fila');
+
+    setUser(ALMOXARIFE);
+    const almox = (await get(app)).body.acoes;
+    assert.strictEqual(almox.cancelar_nao_conformidade, false);
+    assert.strictEqual(almox.movimentar, true, 'e continua movimentando — o perfil nao ficou vazio');
   });
 
   await test('admin de sistema pode tudo', async () => {
