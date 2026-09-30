@@ -610,3 +610,73 @@ a 🟡 mais antiga da lista que não recebeu etapa nenhuma desde a 28, e o fluxo
 do que acabou de ser construído (requisição → separação → entrega). A **08 (recebimento)** foi
 tocada pelas Etapas 42/43 e o "falta para 🟢" dela precisa ser **relido**, não assumido. **A decisão
 sai da Fase 0 da próxima etapa, com a spec na mão.**
+
+---
+
+## Fase 0 da Etapa 47 — medida em 2026-09-30, com a spec na mão
+
+**A cadeia da Etapa 42 à 46 está fechada** e não tem item pendente dentro dela. A escolha voltou ao
+mapa, pela regra 3 do CLAUDE.md. As 🟡: **00, 01, 02, 05, 06, 08, 21, 22**.
+
+**Escolhida: a feature 06 (Motor de aprovações).** Três razões medidas, não impressões:
+
+1. **É a 🟡 mais antiga sem retorno** — último toque na **Etapa 3** (2026-08-05). Quinze etapas
+   depois, a única coisa que ela ganhou foram itens pagos por OUTRAS features (material de cliente
+   na 8, sucateamento na 9).
+2. **A spec dela já traz DOIS achados medidos e NÃO consertados**, registrados na Fase 0 da Etapa 28
+   (2026-08-29) e intactos treze meses de commits depois. Reverifiquei os dois hoje, e os dois
+   continuam de pé.
+3. **O checklist dela tem a lacuna mais estrutural do módulo**: não existe tabela de regras de
+   aprovação. Confirmado: `grep -c "regras_aprovacao" schema.js` → **0**.
+
+### O que eu medi hoje, com o resultado
+
+| Medição | Resultado |
+|---|---|
+| `limite_aprovacao_auto` no repositório inteiro (`server/` + `client/`, `*.js`) | **1 ocorrência: o próprio seed** (`schema.js:2348`). Zero leitores. A configuração aparece na tela prometendo *"Quantidade máxima para aprovação automática por item"* — e **não existe aprovação automática por quantidade** |
+| o `WHERE` do lembrete de requisição parada | `requisitionReminderService.js:252` → `WHERE status = 'PENDENTE'` |
+| o status que a aprovação por valor grava | `requisitionValueApprovalService.js:146` → `STATUS_AGUARDANDO`, que é **`AGUARDANDO_APROVACAO_VALOR`** (`:14`) |
+| o que a aprovação por valor faz com o campo do lembrete | **limpa `ultimo_lembrete_enviado`** no mesmo `UPDATE` (`:107`, `:146`, `:198`, `:240`) |
+| tabela `regras_aprovacao` | **não existe** |
+| a régua de valor que EXISTE | `liberacao_valor_limite`, padrão R$ 500 (`schema.js:2378`) |
+
+### 🔴 O defeito vivo, e ele tem a MESMA FORMA do furo que a Etapa 46 acabou de fechar
+
+A requisição travada por liberação de valor fica em `AGUARDANDO_APROVACAO_VALOR`. O lembrete de
+requisição parada filtra `status = 'PENDENTE'` — **e portanto nunca a alcança**. E a ironia é
+medida: a própria aprovação por valor **limpa `ultimo_lembrete_enviado`** ao entrar nesse status,
+ou seja, **prepara o campo para um lembrete que nunca dispara**.
+
+**A requisição que mais precisa de cobrança — a que passou do limite em reais — é a única que fica
+sem ela.** É "escrita sem leitor" na forma mais cara, e é exatamente a forma do **C64**: o estado
+que mais precisa de uma superfície é o que nenhuma superfície cobra.
+
+### O escopo, e a ordem tem razão
+
+**Tronco primeiro, e não é escolha de conveniência:** os dois achados de 2026-08-29 são defeitos
+**na própria feature** que a etapa vai construir. Construir regras configuráveis sobre um lembrete
+que não alcança metade dos estados seria empilhar em cima de furo conhecido.
+
+1. **T1 (tronco) — o lembrete alcança a requisição de alto valor.** E aqui há uma decisão de desenho
+   a tomar com medida: o lembrete de `PENDENTE` cobra **quem aprova**; o de
+   `AGUARDANDO_APROVACAO_VALOR` cobra **quem libera por valor** — podem ser plateias e prazos
+   diferentes, e a Etapa 46 acabou de pagar essa lição (uma entrada de alerta por dono e por prazo,
+   nunca uma que mistura dois). **Medir antes:** quem são os destinatários de cada um hoje.
+2. **T2 (tronco) — `limite_aprovacao_auto`: ou ganha leitor, ou sai do seed.** A spec manda escolher.
+   **O caminho reversível é TIRAR do seed** (a configuração promete na tela o que não existe, e
+   remover a promessa é reversível; implementar aprovação automática por quantidade é regra de
+   negócio que ninguém pediu). Registrar na letra B com o descartado.
+3. **T3 (tronco) — `regras_aprovacao`**: tabela, critérios (tipo de requisição, criticidade do
+   material, valor, quantidade, projeto/centro de custo), e **N aprovações** por requisição.
+4. **T4 (tronco) — o avaliador** no envio da requisição, gerando a lista de pendências.
+5. **T5/T6 (galhos) — a aba de configuração das regras** e **a tela da fila de aprovações**.
+6. **T7 (tronco) — integração** cruzando os galhos: requisição que dispara duas regras, aprovada por
+   duas pessoas diferentes, com a segregação da Etapa 3 valendo em cada uma.
+
+### ⚠️ O que a Fase 1 NÃO pode assumir
+
+**A segregação e a rejeição justificada JÁ EXISTEM** (Etapa 3, nas duas lanes) e **não** devem ser
+reescritas — a spec marca as duas como pagas, e eu confirmei o registro imutável via
+`auditoria_log_almoxarifado`. **E a spec 06 tem três itens que dependem de OUTRAS features**
+(material fora da lista técnica → feature 22; dupla aprovação de ajuste → feature 17; e a config de
+regras, que depende da tabela). Os dois primeiros ficam fora, declarados.
