@@ -872,7 +872,7 @@ async function conferirRecebimento(db, user, recebimentoId, data) {
   return { success: true };
 }
 
-async function avancarWorkflow(db, user, recebimentoId, acao) {
+async function avancarWorkflow(db, user, recebimentoId, acao, opcoes = {}) {
   const rec = await dbGet(db, 'SELECT * FROM recebimentos_material_almoxarifado WHERE id = ?', [recebimentoId]);
   if (!rec) throw Object.assign(new Error('Recebimento não encontrado'), { status: 404 });
 
@@ -894,7 +894,8 @@ async function avancarWorkflow(db, user, recebimentoId, acao) {
   }
 
   if (t.handler === 'processar') {
-    return processarNota(db, user, recebimentoId);
+    // Etapa 57 (RN-04): o workflow repassa o destino — antes processava sempre na padrao.
+    return processarNota(db, user, recebimentoId, opcoes);
   }
 
   const sets = ['status = ?', 'etapa_atual = ?', 'updated_at = CURRENT_TIMESTAMP'];
@@ -1101,7 +1102,32 @@ function parseSeries(txt) {
  * Coberto por `server/tests/api/recebimentoEntradaAtomica.api.test.js`, que mede os numeros da
  * reproducao acima (A continua em 10 depois do reprocessamento, nao 20).
  */
-async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id } = {}) {
+/**
+ * Etapa 57 (RN-03) — `destinos` do body ([{ item_id, localizacao_id }]) vira um Map item -> endereço.
+ * Mora aqui, e não em `processarNota`, porque `aprovarRecebimento` também chama `darEntradaEstoque`
+ * com o body cru (Fase 2, crítico 3).
+ */
+function normalizarDestinos(destinos, itens) {
+  const mapa = new Map();
+  if (destinos === undefined || destinos === null) return mapa;
+  if (!Array.isArray(destinos)) throw Object.assign(new Error('Destinos inválidos'), { status: 400 });
+  for (const d of destinos) {
+    if (!d || typeof d !== 'object') throw Object.assign(new Error('Destinos inválidos'), { status: 400 });
+    const itemId = parseInt(d.item_id, 10);
+    if (!itens.some((i) => i.id === itemId)) {
+      throw Object.assign(new Error(`Item ${d.item_id} não pertence a este recebimento`), { status: 400 });
+    }
+    const loc = Number(d.localizacao_id);
+    if (!Number.isInteger(loc) || loc <= 0) {
+      throw Object.assign(new Error(`Destino inválido para o item ${itemId}`), { status: 400 });
+    }
+    if (mapa.has(itemId)) throw Object.assign(new Error(`Item ${itemId} repetido nos destinos`), { status: 400 });
+    mapa.set(itemId, loc);
+  }
+  return mapa;
+}
+
+async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id, destinos } = {}) {
   const itens = await dbAll(db, `SELECT ri.*, m.material_critico, m.controle_certificado,
       m.controle_lote, m.controle_serie, m.ativo as material_ativo, m.codigo as material_codigo,
       m.tipo_material, m.localizacao_padrao_id,
@@ -1121,6 +1147,9 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id 
   } catch (e) {
     throw Object.assign(new Error(`Nao foi possivel dar entrada no estoque: ${e.message}`), { status: 400 });
   }
+  // Etapa 57 (RN-01): destino POR ITEM. O efetivo de cada item (o dele -> o da nota -> a padrao) e
+  // calculado uma vez e usado na pre-checagem E na chamada do motor (Fase 2, critico 1).
+  const destinoPorItem = normalizarDestinos(destinos, itens);
   const problemas = [];
   for (const item of itens) {
     if (!(quantidadeDoItem(item) > 0)) continue; // item sem quantidade nao move estoque
@@ -1166,9 +1195,13 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id 
     // Mesma resolucao e mesma validacao que o motor fara — antecipada aqui para que a nota seja
     // recusada inteira em vez de parar no meio.
     const material = { localizacao_padrao_id: item.localizacao_padrao_id, tipo_material: item.tipo_material };
+    // Item que nao vai entrar (quantidade 0, ja entrou) saiu nos `continue` acima: o destino dele e
+    // ignorado, sem validar — o item fica onde entrou.
+    const destinoItem = destinoPorItem.get(item.id);
     try {
+      if (destinoItem) await validarEnderecoExplicito(db, destinoItem, 'destino');
       await validarLocalizacaoParaMovimento(
-        db, resolveLocalizacaoEntrada(material, localizacao_id), material, 'destino');
+        db, resolveLocalizacaoEntrada(material, destinoItem || localizacao_id), material, 'destino');
     } catch (e) {
       problemas.push(`${item.material_codigo}: ${e.message}`);
     }
@@ -1268,7 +1301,7 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id 
           motivo: `Recebimento ${rec.numero}`,
           referencia: rec.nota_fiscal,
           recebimento_id: recebimentoId,
-          localizacao_destino_id: localizacao_id,
+          localizacao_destino_id: destinoPorItem.get(item.id) || localizacao_id,
           lote_id: loteId,
           documento_vinculado: rec.numero,
           // Etapa 6b, Task 6: a serie nasce aqui. O motor (com exigeSerie) cria/reativa cada
@@ -1427,7 +1460,7 @@ async function gerarContaPagar(db, rec) {
   return r.lastID;
 }
 
-async function processarNota(db, user, recebimentoId, { localizacao_id } = {}) {
+async function processarNota(db, user, recebimentoId, { localizacao_id, destinos } = {}) {
   const rec = await dbGet(db, 'SELECT * FROM recebimentos_material_almoxarifado WHERE id = ?', [recebimentoId]);
   if (!rec) throw Object.assign(new Error('Recebimento não encontrado'), { status: 404 });
   if ([STATUS.PROCESSADO, STATUS.APROVADO].includes(rec.status)) {
@@ -1440,7 +1473,7 @@ async function processarNota(db, user, recebimentoId, { localizacao_id } = {}) {
   }
 
   validarDadosProcessamento(rec);
-  await darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id });
+  await darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id, destinos });
   const contasPagarId = await gerarContaPagar(db, rec);
 
   await dbRun(db, `UPDATE recebimentos_material_almoxarifado SET

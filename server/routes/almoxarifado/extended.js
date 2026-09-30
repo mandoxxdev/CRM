@@ -1210,7 +1210,9 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
 
   app.post('/api/almoxarifado/recebimentos/:id/workflow', auth, requirePermission('receber_material'), async (req, res) => {
     try {
-      res.json(await receiptService.avancarWorkflow(db, req.user, req.params.id, req.body.acao));
+      res.json(await receiptService.avancarWorkflow(db, req.user, req.params.id, req.body.acao, {
+        localizacao_id: req.body.localizacao_id, destinos: req.body.destinos,
+      }));
     } catch (e) { handleError(res, e); }
   });
 

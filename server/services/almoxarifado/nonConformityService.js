@@ -1251,6 +1251,16 @@ async function executarDevolucao(db, user, nc, insp, previsto, observacoes, id) 
   // rollback trocar a funcao por uma que estoura.
   const justificativa = observacoes
     || `Execução da devolução ao fornecedor decidida na não conformidade ${nc.numero}`;
+  // Etapa 57 (RN-06): com destino POR ITEM no recebimento, a peça reprovada pode estar num endereço
+  // que não é a padrão — e a saída sem origem drena a padrão primeiro (claimSaldoSemLote). Origem
+  // preferida = onde a ENTRADA_COMPRA deste recebimento/material/lote entrou, se ativo e não
+  // bloqueado (bloqueado recusaria a devolução, que antes passava). Senão, o comportamento de antes.
+  const entrada = nc.recebimento_id ? await dbGet(db, `SELECT m.localizacao_destino_id as id
+      FROM movimentacoes_almoxarifado m
+      JOIN localizacoes_almoxarifado l ON l.id = m.localizacao_destino_id
+      WHERE m.recebimento_id = ? AND m.material_id = ? AND m.tipo = 'ENTRADA_COMPRA' AND m.lote_id IS ?
+        AND COALESCE(m.cancelado, 0) = 0 AND l.ativo = 1 AND COALESCE(l.bloqueada, 0) = 0
+      ORDER BY m.id DESC LIMIT 1`, [nc.recebimento_id, previsto.material_id, previsto.lote_id || null]) : null;
   const stockService = require('./stockService');
   let mov;
   try {
@@ -1259,6 +1269,7 @@ async function executarDevolucao(db, user, nc, insp, previsto, observacoes, id) 
       tipo: 'DEVOLUCAO_FORNECEDOR',
       quantidade: previsto.quantidade,
       lote_id: previsto.lote_id || null,
+      ...(entrada ? { localizacao_origem_id: entrada.id } : {}),
       justificativa,
       motivo: MOTIVO_DEVOLUCAO_FORNECEDOR,
       documento_vinculado: nc.numero,
