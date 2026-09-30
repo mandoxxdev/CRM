@@ -142,7 +142,9 @@ async function claimSaidaSeries(db, user, { material_id, serie_ids, lote_id = nu
   if (unicos.size !== lista.length) {
     throw erro('serie_ids repetidos na lista informada');
   }
-  const statusDestino = ['SUCATA', 'PERDA'].includes(tipo) ? 'SUCATEADA' : 'ENTREGUE';
+  // Etapa 62: a descida de um AJUSTE baixa a serie (BAIXADA, nao presente) — nao foi entregue a ninguem.
+  const statusDestino = ['AJUSTE', 'AJUSTE_INVENTARIO'].includes(tipo) ? 'BAIXADA'
+    : ['SUCATA', 'PERDA'].includes(tipo) ? 'SUCATEADA' : 'ENTREGUE';
   const claimed = [];
   try {
     for (const id of lista) {

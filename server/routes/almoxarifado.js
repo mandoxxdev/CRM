@@ -1546,6 +1546,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
             falhasRetencao.push(`${material.codigo}: Material inativo não pode ser movimentado`);
             continue;
           }
+          // Etapa 62 (RN-02): material com serie nao pode ser contado em fracao — o ajuste nao se
+          // estorna (AJUSTE_INVENTARIO) e a regularizacao das series (floor) nunca fecharia a diferenca.
+          if (material.controle_serie && !Number.isInteger(Number(item.quantidade_contada))) {
+            falhasRetencao.push(`${material.codigo}: material com controle de serie exige contagem inteira`);
+            continue;
+          }
 
           if (material.proprietario_cliente_id && !can(req.user, 'ajustar_material_cliente')) {
             // Checagem LEVE — de propósito NÃO chama ownerRules.assertAjustePermitido aqui: essa
@@ -1660,7 +1666,21 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         console.warn('[almoxarifado-alertas] Falha ao avisar divergencia de inventario pos-conclusao:', e.message);
       }
 
-      res.json({ success: true, ajustesAplicados, impactoFinanceiro });
+      // Etapa 62 (RN-02): o inventario ajusta o fisico sem saber QUAIS series foram contadas — os
+      // materiais com serie cujas presentes nao batem mais com o fisico vao na resposta, e a tela
+      // manda para Regularizar series (Etapa 61), cujos limites sao exatamente essa diferenca.
+      const seriesARegularizar = [];
+      for (const mid of materiaisAjustados) {
+        // eslint-disable-next-line no-await-in-loop
+        const mt = await dbGet(db, `SELECT id, codigo, quantidade_atual, controle_serie,
+            (SELECT COUNT(*) FROM series_almoxarifado s WHERE s.material_id = m.id AND s.status IN ('EM_ESTOQUE','BLOQUEADA')) as presentes
+          FROM materiais_almoxarifado m WHERE id = ?`, [mid]);
+        if (mt && mt.controle_serie && Number(mt.presentes) !== Number(mt.quantidade_atual)) {
+          seriesARegularizar.push({ material_id: mt.id, codigo: mt.codigo, fisico: mt.quantidade_atual, presentes: Number(mt.presentes) });
+        }
+      }
+
+      res.json({ success: true, ajustesAplicados, impactoFinanceiro, series_a_regularizar: seriesARegularizar });
     } catch (e) {
       res.status(e.status || 500).json({ error: e.message });
     }

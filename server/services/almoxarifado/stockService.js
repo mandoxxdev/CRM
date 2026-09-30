@@ -1017,6 +1017,40 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     }
   }
 
+  // Etapa 62 (RN-01, fecha o C82): AJUSTE de valor absoluto de material com serie, quando o chamador
+  // declara exigeSerie (v1/v2). Sonda: AJUSTE para 5 com 3 series presentes deixava fisico 5 e
+  // presentes 3. As series que entram/saem sao `novo − presentes` (Fase 2: pela diferenca do fisico
+  // o legado fracionario ou divergente nunca fechava). Por ENDERECO nao: a linha, a absorcao dos
+  // negativos e o legado fazem o total do material mudar diferente da linha — recusado (letra B).
+  const serieAjuste = !!(opcoes.exigeSerie && material.controle_serie && tiposAjuste.includes(tipo));
+  let serieAjusteDelta = 0;
+  if (serieAjuste) {
+    if (localizacao_destino_id) {
+      throw Object.assign(new Error('material com controle de serie: ajuste por endereco nao e suportado — ajuste o total do material (sem endereco)'), { status: 400 });
+    }
+    const novo = parseFloat(quantidade);
+    if (!Number.isInteger(novo)) {
+      throw Object.assign(new Error('material com controle de serie exige quantidade inteira'), { status: 400 });
+    }
+    const presentesAjuste = await seriesService.contarPresentes(db, material_id);
+    serieAjusteDelta = novo - presentesAjuste;
+    const abs = Math.abs(serieAjusteDelta);
+    if (serieAjusteDelta === 0) {
+      if (seriesEntrada.length || serieIdsSaida.length) {
+        throw Object.assign(new Error(`material com controle de serie: o ajuste nao muda as series (presentes ${presentesAjuste}) — nao informe series`), { status: 400 });
+      }
+    } else {
+      const certas = serieAjusteDelta > 0 ? seriesEntrada.length : serieIdsSaida.length;
+      const erradas = serieAjusteDelta > 0 ? serieIdsSaida.length : seriesEntrada.length;
+      if (certas !== abs || erradas) {
+        throw Object.assign(new Error(
+          `material com controle de serie: o ajuste ${serieAjusteDelta > 0 ? 'sobe' : 'baixa'} ${abs} serie(s) `
+          + `(fisico novo ${novo}, series presentes ${presentesAjuste}) — informe ${abs} serie(s) (recebidas ${certas + erradas})`,
+        ), { status: 400 });
+      }
+    }
+  }
+
   const regras = avaliarRegrasVinculo(tipo, { os_id, projeto_id, centro_custo_id, justificativa, referencia, emergencial });
   if (!regras.ok) throw Object.assign(new Error(regras.erro), { status: 400 });
   const regularizacaoPendente = regras.pendente ? 1 : 0;
@@ -1659,6 +1693,17 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
       const atual = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [material_id]);
       saldoPosterior = atual.quantidade_atual;
     } else if (tiposAjuste.includes(tipo)) { // AJUSTE sem localização — define valor absoluto (last-writer-wins é aceitável para ajuste)
+      // Etapa 62 (RN-01): as series ANTES do SET do fisico — uma recusa aqui nao deixa o fisico
+      // mudado; e se algo falhar depois, o catch amplo compensa seriesAfetadas/seriesClaim.
+      if (serieAjuste && serieAjusteDelta > 0) {
+        seriesAfetadas = await seriesService.entradaSeries(db, user, {
+          material_id, numeros: seriesEntrada, lote_id: loteIdFinal, localizacao_id: material.localizacao_padrao_id || null, movimentacao_id: null,
+        });
+      } else if (serieAjuste && serieAjusteDelta < 0) {
+        seriesClaim = await seriesService.claimSaidaSeries(db, user, {
+          material_id, serie_ids: serieIdsSaida, lote_id: loteIdFinal, tipo, movimentacao_id: null,
+        });
+      }
       await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [saldoPosterior, material_id]);
     } else {
@@ -2121,6 +2166,16 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
         'estorno de saida recusado: series desta saida ja reentraram no estoque — a devolucao ja repos o material'),
         { status: 400 });
     }
+  }
+
+  // Etapa 62 (Fase 2, critico): o estorno do AJUSTE reverte so o fisico — com series, as criadas pelo
+  // ajuste ficavam presentes e as baixadas ficavam BAIXADA, e o invariante quebrava de novo. O livro
+  // nao guarda com seguranca QUAIS series desfazer (uma entrada posterior reativa a BAIXADA e zera o
+  // vinculo), entao: recusa, e o caminho e um NOVO ajuste (que pede as series). Letra B.
+  if (mov.tipo === 'AJUSTE' && material.controle_serie) {
+    throw Object.assign(new Error(
+      'estorno de ajuste de material com serie recusado — faca um novo ajuste (ele pede as series)'),
+      { status: 400 });
   }
 
   // Claim atômico ANTES de aplicar qualquer efeito inverso (achado do review final: double-cancel
