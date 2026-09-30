@@ -318,3 +318,96 @@ hoje, N sem discriminador de regra depois).
 **O precedente existe e a spec manda usá-lo:** pernas são **linhas**, não estados; o `status` muda só
 na última assinatura, por `CASE` num claim único. Para **N configurável** isso vira **tabela filha +
 contagem de faltantes no `CASE`** — e o desenho anterior não dizia uma palavra sobre isso.
+
+---
+
+## 8. Fase 1-b — o registro da pendência, e por que o molde não se copia inteiro
+
+A pergunta da 7.9 — *"qual é o registro de uma aprovação pendente, e o que `status` guarda enquanto
+k de N assinaram?"* — tem uma resposta que **o molde de duas pernas não dá**, e é preciso dizer por
+quê antes de copiá-lo.
+
+### 8.1 O molde funciona porque as duas pernas moram na MESMA LINHA
+
+`scrapDisposalService.js:375-381`: o claim é **um** `UPDATE`, e ele faz duas coisas ao mesmo tempo —
+assina a perna e decide o status:
+
+```sql
+SET <perna>_id = ?, <perna>_nome = ?, <perna>_em = CURRENT_TIMESTAMP,
+    status = CASE WHEN <outra_perna>_id IS NOT NULL THEN 'APROVADO' ELSE status END
+WHERE id = ? AND status = 'SOLICITADO' AND <perna>_id IS NULL
+  AND (<outra_perna>_id IS NULL OR <outra_perna>_id <> ?)
+```
+
+**Isso só é possível porque as duas assinaturas e o status são colunas da mesma linha.** O módulo
+**não tem transação** — é a primeira frase do docblock daquele arquivo — e o padrão inteiro dele
+(pré-checagem para a mensagem, claim no `WHERE` para a garantia) depende de a escrita ser **atômica
+por ser uma linha só**.
+
+**Com N configurável isso acaba.** A pendência vira **linha de tabela filha**, e "assinar a pendência"
+e "virar o status da requisição" passam a ser **duas tabelas** — portanto **dois `UPDATE`**, sem
+transação para uni-los. Copiar o molde inteiro aqui seria copiar a forma e perder a propriedade que
+a torna segura.
+
+### 8.2 A resposta: a pendência é a VERDADE, e o `status` é cache re-derivável
+
+**RN-08 — quem cobra NUNCA lê o `status`.** O lembrete de pendência de regra, a fila da tela e a
+contagem do que falta leem a **tabela filha**. O `status` da requisição é **derivado** dela.
+
+**Por que esta é a escolha certa aqui, e não preguiça de não achar um claim atômico:** se o processo
+morrer entre o `UPDATE` da pendência e o do status, o pior caso é **o status ficar atrasado** — e
+como nada que cobra lê o status, **nada é silenciado**. O estado converge na próxima leitura que
+re-derivar. A alternativa (status como verdade) tem o pior caso invertido: status dizendo "aprovado"
+com pendência aberta, e **ninguém cobrando** — que é literalmente o furo C64 desta linhagem inteira.
+
+**Escolhido:** verdade na pendência, status derivado.
+**Descartado:** (a) manter pendências em colunas — impossível para N configurável; (b) status como
+verdade com compensação escrita à mão — o pior caso é silêncio, e silêncio é o defeito que estas
+seis etapas pagaram para eliminar; (c) contador desnormalizado na requisição — tem o mesmo problema
+de duas escritas e acrescenta um número que pode divergir da contagem real, sem ninguém para
+conferir.
+
+### 8.3 As três barreiras continuam, e a terceira MUDA de forma
+
+| Barreira | No molde de 2 pernas | Com N pendências |
+|---|---|---|
+| 1 — perfil | duas ações distintas separam os balcões | a **regra** nomeia quem assina; ver 8.4 |
+| 2 — solicitante | `user.id` ≠ `solicitante_id` | **igual**, e continua no serviço |
+| 3 — identidade entre pernas | `<outra_perna>_id IS NULL OR <> ?` no `WHERE` | vira `NOT EXISTS (SELECT 1 FROM pendencias WHERE requisicao_id = ? AND aprovador_id = ?)` no `WHERE` do claim da pendência |
+
+⚠️ **A barreira 3 é a que o molde ensina a não esquecer, e ela é TOCTOU.** O comentário de
+`:381-388` conta o caso: duas requisições simultâneas do **mesmo ADMINISTRADOR**, uma em cada perna,
+leem as duas vazias, passam na pré-checagem, e o `CASE` fecha com **uma pessoa carimbando os dois
+lados**. Com N pendências o caso é o mesmo e **mais fácil de alcançar** (há mais pernas para clicar),
+então a condição **tem de estar no `WHERE`**, não só na pré-checagem. A pré-checagem existe **pela
+mensagem**; o `WHERE` existe pela **garantia**.
+
+### 8.4 O lado do aprovador, que a RN-05 tinha cortado
+
+A base tem **três** modelos de autorização de aprovação, medidos: ação de perfil via
+`requirePermission`; lista de ids em configuração (a liberação por valor, **sem ação em
+`ACAO_PERFIS`**); e duas ações de perfil + segregação por identidade (sucateamento).
+
+**A regra precisa nomear quem assina, e a RN-07 ("a mesma pessoa não satisfaz duas regras") só tem
+sentido se esse lado for resolvível por IDENTIDADE.** Um modelo que diga só "perfil GESTOR" não
+responde *quem* — e a spec 06 registra exatamente essa lacuna ("não sabe resolver perfil → pessoa").
+
+**Escolhido:** a regra nomeia um **conjunto de identidades** (lista de ids), como a liberação por
+valor já faz — é o único dos três modelos que resolve pessoa, já existe na base, já tem tela de
+configuração e já tem fallback documentado.
+**Descartado:** ação de perfil por regra — exigiria uma ação nova em `ACAO_PERFIS` **por regra
+criada**, o que é impossível para regra configurável em runtime; e perfil como conjunto, que devolve
+o problema de resolver perfil → pessoa sem resolver a RN-07.
+
+### 8.5 O que fica para a T3 decidir, e está nomeado
+
+**Regra desativada com pendência em aberto** (a costura que tirou T5/T6 de galho). Três opções, e a
+T3 escolhe com a tela na mão: a pendência **fica** (a regra valia quando a requisição entrou), a
+pendência **some** (a regra deixou de valer), ou a pendência fica **marcada como obsoleta** e deixa
+de bloquear sem sumir do histórico. **A reversível é a terceira** — não destrói registro e não
+trava requisição —, mas a decisão é da T3 porque ela depende do formato final da tabela.
+
+**As literais de recusa de T3/T4/T5 continuam NÃO congeladas**, e agora com a razão certa: elas
+dependem desta escolha e do formato dos critérios. **A Fase 1-b fecha a pergunta estrutural, não o
+contrato de mensagem** — e o plano já registra que congelar antes do formato existir foi como a
+Etapa 45 terminou com duas mensagens fora da tabela.

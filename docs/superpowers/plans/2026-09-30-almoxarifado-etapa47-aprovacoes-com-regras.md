@@ -201,7 +201,7 @@ máquina de estados. **Vai para a letra C** com o cenário medido.
 
 - [x] Fase 0 — medida, **com correção da própria medição** (`06e3b00` + `d716c47`)
 - [x] Fase 1 — desenho e plano (`637d9fa`), **corrigidos pela Fase 2**: ver a seção 7 do desenho
-- [ ] Fase 1-b — as literais de T3/T4/T5 e a resposta da 7.9 (o registro da pendência), ANTES de despachar qualquer task
+- [x] Fase 1-b — a resposta da 7.9 está na **seção 8 do desenho**: a pendência é a verdade, o `status` é cache re-derivável, e quem cobra NUNCA lê o `status`. As literais de T3/T4/T5 continuam fora, agora com a razão certa: dependem da escolha da T3 sobre regra desativada
 - [x] Fase 2 — revisão do plano: **11 achados, 3 CRITICAL, 6 refutados** — o plano NAO estava executavel; desenho e plano corrigidos
 - [ ] T1 · [ ] T2 · [ ] T3 · [ ] T4 · [ ] T5 · [ ] T6 · [ ] T7 · [ ] T8 *(oito, e todas tronco — ver a Fase 2)*
 - [ ] Fase 5 — revisão adversarial
