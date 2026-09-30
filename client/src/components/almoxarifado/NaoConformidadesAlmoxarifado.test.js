@@ -42,11 +42,20 @@ jest.mock('react-toastify', () => ({
 // ⚠️ Etapa 45: `executar_encaminhamento` é a ÚNICA ação desta tela que esconde botão por perfil
 // (a plateia dela é COMPRAS, e não quem decide), então ela precisa ser controlável por cenário.
 // O prefixo `mock` no nome não é estilo: é o que o jest permite referenciar dentro da fábrica.
+//
+// ⚠️ Etapa 46: `cancelar_nao_conformidade` é a SEGUNDA ação que esconde botão por perfil (a
+// plateia dela é QUALIDADE/ADMINISTRADOR, e quem opera a fila não a tem), então ela também
+// precisa ser controlável por cenário — ver (35).
 let mockPodeExecutar = true;
+let mockPodeCancelar = true;
 jest.mock('../../hooks/useAlmoxPermissoes', () => ({
   useAlmoxPermissoes: () => ({
     perfil: 'QUALIDADE',
-    pode: (acao) => (acao === 'executar_encaminhamento' ? mockPodeExecutar : true),
+    pode: (acao) => {
+      if (acao === 'executar_encaminhamento') return mockPodeExecutar;
+      if (acao === 'cancelar_nao_conformidade') return mockPodeCancelar;
+      return true;
+    },
     bloquearSeNaoPode: () => true,
     loading: false,
   }),
@@ -108,6 +117,20 @@ const NC_EXECUTADA = {
   execucao_movimentacao_id: 777,
 };
 
+/**
+ * Etapa 46 — a linha que só existe depois desta etapa, e o motivo do achado 5: o servidor
+ * PRESERVA `execucao_estado = 'PENDENTE'` ao cancelar (RN-06 — quem exclui a cancelada da fila é
+ * o `status`), então esta linha carrega, ao mesmo tempo, status CANCELADA e execução PENDENTE. É
+ * exatamente a combinação que fazia a coluna Execução mentir. Ver (39).
+ */
+const NC_CANCELADA_APOS_DECISAO = {
+  ...NC_A_EXECUTAR,
+  id: 24, numero: 'NC-2026-0024', status: 'CANCELADA',
+  motivo_cancelamento: 'Fornecedor assumiu a troca em campo, devolucao cancelada',
+  cancelado_em: '2026-09-29 17:00:00',
+  execucao_estado: 'PENDENTE', execucao_em: null, execucao_por_nome: null,
+};
+
 let container;
 let root;
 let ncDoBanco;
@@ -118,6 +141,7 @@ beforeEach(() => {
   ncDoBanco = [NC_ABERTA, NC_DECIDIDA];
   falharCarga = null;
   mockPodeExecutar = true;
+  mockPodeCancelar = true;
   // Implementações aqui, não na fábrica do jest.mock: clearAllMocks apaga implementações e só o
   // primeiro teste teria dados.
   api.get.mockImplementation((url) => {
@@ -164,6 +188,12 @@ const filtroExecucao = () => container.querySelector('select[aria-label="Filtrar
 const botaoExecutar = (linha) => [...linha.querySelectorAll('.almox-btn-icon')]
   .find((b) => b.getAttribute('title')?.includes('Registrar execução'));
 
+const botaoCancelar = (linha) => [...linha.querySelectorAll('.almox-btn-icon')]
+  .find((b) => b.getAttribute('title')?.includes('Cancelar'));
+
+const botaoDetalhes = (linha) => [...linha.querySelectorAll('.almox-btn-icon')]
+  .find((b) => b.getAttribute('title')?.includes('Detalhes'));
+
 /** A célula da coluna Execução — 8ª das nove (Número…Decisão, Execução, Ações). */
 const celulaExecucao = (linha) => linha.querySelectorAll('td')[7];
 
@@ -189,10 +219,11 @@ function campoPorLabel(rotulo) {
   return grupo ? grupo.querySelector('input, textarea, select') : null;
 }
 
+const botaoModal = (texto) => [...container.querySelectorAll('.almox-modal-footer button')]
+  .find((b) => b.textContent.trim() === texto);
+
 async function clicarBotaoModal(texto) {
-  const botao = [...container.querySelectorAll('.almox-modal-footer button')]
-    .find((b) => b.textContent.trim() === texto);
-  await clicar(botao);
+  await clicar(botaoModal(texto));
 }
 
 describe('NaoConformidadesAlmoxarifado — lista e filtro', () => {
@@ -883,5 +914,318 @@ describe('NaoConformidadesAlmoxarifado — o modal de decisão fala do segundo g
     expect(sucatear).toContain('Registrar execução de NC-2026-0023');
     expect(sucatear).toContain('não movimenta estoque');
     expect(sucatear).not.toContain('dá a baixa no estoque');
+  });
+});
+
+/**
+ * Etapa 46, T4 — A SAÍDA DO DOCUMENTO PRESO, NA TELA.
+ *
+ * O problema que a etapa resolve: um documento decidido `DEVOLVER` em material com série é
+ * recusado pela execução (400, e a recusa é fatal de propósito) — então ele fica DECIDIDA +
+ * PENDENTE para sempre, cobrando uma execução que ninguém consegue registrar. O cancelamento é a
+ * porta de saída: ele encerra a COBRANÇA sem apagar a decisão.
+ *
+ * O que estes cenários protegem, e cada um nasceu de um achado medido na Fase 2:
+ *
+ * - o botão aparece só onde a rota pode dizer sim (`ABERTA`, ou `DECIDIDA` com execução
+ *   `PENDENTE`) — nas outras três combinações o servidor recusa com 409, e botão de erro garantido
+ *   é armadilha, não gate;
+ * - o botão SOME por perfil, como o de execução e pela mesma razão: quem não pode cancelar não
+ *   deve ver um convite a uma recusa;
+ * - motivo curto NÃO viaja: o servidor exige 5 caracteres (400 literal), e entregar esse 400 ao
+ *   usuário quando a tela já sabe a régua é viagem perdida;
+ * - **a coluna Execução não pode dizer "Pendente" na linha cancelada** (achado 5). O servidor
+ *   PRESERVA `execucao_estado` ao cancelar (RN-06), então sem tratar `status` a linha ficaria com
+ *   badge Cancelada ao lado de execução Pendente — contradizendo o toast que acabou de dizer que a
+ *   execução deixa de ser cobrada;
+ * - **os DOIS filtros são largados** (achado 8). `trocarExecucao` FORÇA o status em `DECIDIDA` ao
+ *   ligar a fila, e o padrão do status é `ABERTA` — nas duas situações a NC cancelada deixa de
+ *   casar o filtro e a linha SOME junto com o toast. É a TERCEIRA aparição deste padrão nesta base
+ *   (achado 11 da Etapa 43, no filtro de status; T4 da Etapa 45, no filtro de execução).
+ */
+describe('NaoConformidadesAlmoxarifado — cancelar o documento', () => {
+  async function abrirCancelamentoDa(indice) {
+    await renderizar();
+    await clicar(botaoCancelar(linhas()[indice]));
+  }
+
+  test('(34) o botão Cancelar aparece em ABERTA e em DECIDIDA+PENDENTE — e em nenhuma das outras três', async () => {
+    ncDoBanco = [NC_ABERTA, NC_A_EXECUTAR, NC_DECIDIDA, NC_EXECUTADA, NC_CANCELADA_APOS_DECISAO];
+    await renderizar();
+    expect(linhas()).toHaveLength(5);
+
+    // As duas POSITIVAS — são elas que carregam o cenário: sem elas, as negativas abaixo
+    // passariam com a tabela vazia (a forma de teste vazio que esta base já pagou três vezes).
+    expect(linhas()[0].textContent).toContain('NC-2026-0007');   // ABERTA
+    expect(botaoCancelar(linhas()[0])).toBeDefined();
+    expect(linhas()[1].textContent).toContain('NC-2026-0021');   // DECIDIDA + PENDENTE
+    expect(botaoCancelar(linhas()[1])).toBeDefined();
+
+    // As três negativas, cada uma com uma recusa DIFERENTE do servidor:
+    //   DECIDIDA + NAO_SE_APLICA -> 409 "A decisão desta não conformidade já liberou o material…"
+    //   DECIDIDA + EXECUTADA     -> 409 "A execução desta não conformidade já foi registrada…"
+    //   CANCELADA                -> 409 "Esta não conformidade já está cancelada"
+    expect(linhas()[2].textContent).toContain('NC-2026-0008');
+    expect(botaoCancelar(linhas()[2])).toBeUndefined();
+    expect(linhas()[3].textContent).toContain('NC-2026-0022');
+    expect(botaoCancelar(linhas()[3])).toBeUndefined();
+    expect(linhas()[4].textContent).toContain('NC-2026-0024');
+    expect(botaoCancelar(linhas()[4])).toBeUndefined();
+  });
+
+  test('(35) sem `cancelar_nao_conformidade` o botão SOME — e os outros da mesma linha ficam', async () => {
+    // ⚠️ Asserção negativa sobre permissão não fica vermelha na rodada TDD: `pode()` com a ação
+    // inexistente já devolveria o que o mock manda. O controle positivo desta é sabotar
+    // CONCEDENDO a permissão (tirar o `pode(...)` do gate) e ver este cenário cair NOMEANDO a
+    // ação — foi o que se fez.
+    mockPodeCancelar = false;
+    ncDoBanco = [NC_ABERTA, NC_A_EXECUTAR];
+    await renderizar();
+    expect(linhas()).toHaveLength(2);
+
+    // A negativa: nenhuma das duas linhas elegíveis oferece o cancelamento.
+    expect(botaoCancelar(linhas()[0])).toBeUndefined();
+    expect(botaoCancelar(linhas()[1])).toBeUndefined();
+
+    // A metade POSITIVA no mesmo teste: o que ele CONTINUA vendo. Sem isto, o cenário passaria
+    // com a tabela sumida — e não provaria que o gate é da AÇÃO, e não da tela toda.
+    expect(linhas()[0].textContent).toContain('NC-2026-0007');
+    expect(botaoDecidir(linhas()[0])).toBeDefined();
+    expect(botaoDetalhes(linhas()[0])).toBeDefined();
+    expect(linhas()[1].textContent).toContain('NC-2026-0021');
+    expect(botaoExecutar(linhas()[1])).toBeDefined();
+  });
+
+  test('(36) motivo curto NÃO chama a API, o botão fica desabilitado e o modal continua aberto', async () => {
+    await abrirCancelamentoDa(0);
+    // Positiva: o modal abriu no documento certo e o campo existe.
+    expect(container.querySelector('.almox-modal')).not.toBeNull();
+    expect(container.querySelector('.almox-modal').textContent).toContain('Cancelar NC-2026-0007');
+    expect(campoPorLabel('Motivo')).not.toBeNull();
+
+    // ⚠️ A ORDEM DAS ASSERÇÕES AQUI É DE PROPÓSITO, e foi corrigida no controle positivo: com as
+    // asserções de `disabled` antes desta, o jest parava nelas e a de "não chamou a API" NUNCA
+    // chegava a ser executada numa sabotagem — ela guardaria o achado no papel e não na prática.
+    // A tentativa de POST com motivo curto vem PRIMEIRO.
+    preencher(campoPorLabel('Motivo'), 'erro');   // quatro caracteres; a régua é `>= 5`
+    expect(campoPorLabel('Motivo').value).toBe('erro');
+    await clicarBotaoModal('Cancelar documento');
+    expect(api.post).not.toHaveBeenCalled();
+    expect(container.querySelector('.almox-modal')).not.toBeNull();
+
+    // E o motivo de a API não ter sido chamada: o botão está desabilitado. O 400 do servidor
+    // (`O motivo do cancelamento deve ter pelo menos 5 caracteres`) é evitável, e entregá-lo
+    // seria a tela sabendo a régua e não a aplicando.
+    expect(botaoModal('Cancelar documento').disabled).toBe(true);
+
+    // Vazio também nasce desabilitado.
+    preencher(campoPorLabel('Motivo'), '');
+    expect(botaoModal('Cancelar documento').disabled).toBe(true);
+
+    // Seis espaços: `trim()` derruba — a mesma régua do servidor, que apara antes de contar.
+    preencher(campoPorLabel('Motivo'), '      ');
+    expect(botaoModal('Cancelar documento').disabled).toBe(true);
+
+    // E a virada: cinco caracteres soltam o botão. Sem esta metade, "fica desabilitado" passaria
+    // com um botão desabilitado para sempre.
+    preencher(campoPorLabel('Motivo'), 'duplicada da NC-2026-0003');
+    expect(botaoModal('Cancelar documento').disabled).toBe(false);
+  });
+
+  test('(37) o POST vai para `/cancelar` do id certo, com `{ motivo }` aparado', async () => {
+    ncDoBanco = [NC_A_EXECUTAR];
+    await renderizar();
+    await clicar(botaoCancelar(linhas()[0]));
+    preencher(campoPorLabel('Motivo'), '  material serializado, devolucao tratada por RMA  ');
+    await clicarBotaoModal('Cancelar documento');
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/nao-conformidades/21/cancelar', {
+      motivo: 'material serializado, devolucao tratada por RMA',
+    });
+    // A lista recarrega: sem isso a linha continuaria DECIDIDA na tela até um F5.
+    expect(chamadasLista().length).toBeGreaterThanOrEqual(2);
+  });
+
+  test('(38) o toast concatena a literal de `cancelamento.mensagem` — as duas, e sem `undefined`', async () => {
+    // A mensagem vem PRONTA do servidor, como em `liberacao` (Etapa 44) e `execucao` (Etapa 45):
+    // qual era o estado anterior e o que deixou de ser cobrado é régua do serviço, e uma segunda
+    // cópia dela aqui divergiria no dia em que a primeira mudasse.
+    const casos = [
+      ['ABERTA', 'Documento cancelado — ele não estava decidido, e nada foi executado'],
+      ['DECIDIDA', 'Documento cancelado — a decisão fica registrada, e a execução deixa de ser cobrada'],
+    ];
+    for (const [estadoAnterior, mensagem] of casos) {
+      jest.clearAllMocks();
+      api.post.mockResolvedValueOnce({
+        data: {
+          id: 21,
+          status: 'CANCELADA',
+          cancelamento: { estado_anterior: estadoAnterior, execucao_estado_anterior: 'PENDENTE', mensagem },
+        },
+      });
+      ncDoBanco = [NC_A_EXECUTAR];
+      await renderizar();
+      await clicar(botaoCancelar(linhas()[0]));
+      preencher(campoPorLabel('Motivo'), 'duplicada da NC-2026-0003');
+      await clicarBotaoModal('Cancelar documento');
+      expect(toast.success).toHaveBeenCalledWith(`Não conformidade NC-2026-0021 cancelada! ${mensagem}`);
+      await act(async () => { root.unmount(); });
+      container.remove();
+      container = document.createElement('div');
+      document.body.appendChild(container);
+      root = createRoot(container);
+    }
+
+    // E o servidor anterior a esta versão, ou a resposta truncada: "cancelada! undefined" é pior
+    // que não avisar nada (mesma lição dos cenários (20) e (28)).
+    jest.clearAllMocks();
+    api.post.mockResolvedValueOnce({ data: { id: 21, status: 'CANCELADA' } });
+    ncDoBanco = [NC_A_EXECUTAR];
+    await renderizar();
+    await clicar(botaoCancelar(linhas()[0]));
+    preencher(campoPorLabel('Motivo'), 'duplicada da NC-2026-0003');
+    await clicarBotaoModal('Cancelar documento');
+    expect(toast.success).toHaveBeenCalledWith('Não conformidade NC-2026-0021 cancelada!');
+    expect(toast.success.mock.calls.map(([m]) => m).join(' | ')).not.toContain('undefined');
+  });
+
+  // 🔴 Achado 5 da Fase 2. O servidor preserva `execucao_estado = 'PENDENTE'` na linha cancelada
+  // de propósito (RN-06: quem exclui a cancelada da fila é o `status`), então a coluna Execução
+  // TEM de olhar o `status` — senão ela contradiz o toast que acabou de dizer que a execução
+  // deixa de ser cobrada, na mesma tela e no mesmo segundo.
+  test('(39) a linha CANCELADA não diz "Pendente" na coluna Execução — e a decidida ao lado diz', async () => {
+    ncDoBanco = [NC_A_EXECUTAR, NC_CANCELADA_APOS_DECISAO];
+    await renderizar();
+    expect(linhas()).toHaveLength(2);
+
+    // A metade POSITIVA, e ela é dupla: a linha que DEVE cobrar continua cobrando (senão o
+    // conserto teria apagado a fila de Compras inteira), e a cancelada carrega, sim,
+    // `execucao_estado = 'PENDENTE'` no dado — é a tela que não o mostra.
+    expect(linhas()[0].textContent).toContain('NC-2026-0021');
+    expect(celulaExecucao(linhas()[0]).textContent).toContain('Pendente');
+    expect(NC_CANCELADA_APOS_DECISAO.execucao_estado).toBe('PENDENTE');
+
+    // A negativa que é o achado.
+    expect(linhas()[1].textContent).toContain('NC-2026-0024');
+    expect(linhas()[1].textContent).toContain('Cancelada');            // o badge de status fica
+    expect(celulaExecucao(linhas()[1]).textContent).not.toContain('Pendente');
+    // E o que a célula diz no lugar: ela ECOA o toast ("a execução deixa de ser cobrada") em vez
+    // de deixar a célula igual à da NC nunca decidida — ver o comentário da coluna no componente.
+    expect(celulaExecucao(linhas()[1]).textContent).toContain('cobrada');
+  });
+
+  // 🔴 Achado 8 da Fase 2, e a TERCEIRA aparição deste padrão nesta base.
+  test('(40) cancelar com a fila ligada larga OS DOIS filtros — a linha não some junto com o toast', async () => {
+    // O mock respeita os filtros, como o serviço faz. Sem isto o cenário provaria NADA: a lista
+    // voltaria igual com ou sem filtro na query, e a sabotagem ficaria verde.
+    ncDoBanco = [NC_A_EXECUTAR];
+    api.get.mockImplementation((url, config) => {
+      if (url === '/almoxarifado/nao-conformidades') {
+        const { status, execucao } = config?.params || {};
+        const itens = ncDoBanco.filter((nc) => (!status || nc.status === status)
+          && (!execucao || (nc.execucao_estado === execucao && nc.status === 'DECIDIDA')));
+        return Promise.resolve({ data: { itens } });
+      }
+      if (url === '/almoxarifado/anexos') return Promise.resolve({ data: [] });
+      return Promise.resolve({ data: [] });
+    });
+    await renderizar();
+    preencher(filtroExecucao(), 'PENDENTE');
+    await act(async () => {});
+    // Ponto de partida: a fila ligada FORÇA o status em DECIDIDA (`trocarExecucao`), e é por isso
+    // que largar só o filtro de execução não devolveria a linha — a cancelada não casa DECIDIDA.
+    expect(filtroStatus().value).toBe('DECIDIDA');
+    expect(linhas()).toHaveLength(1);
+
+    await clicar(botaoCancelar(linhas()[0]));
+    preencher(campoPorLabel('Motivo'), 'material serializado, devolucao tratada por RMA');
+    // O servidor gravou: a NC 21 está CANCELADA, com o `PENDENTE` conservado (RN-06).
+    ncDoBanco = ncDoBanco.map((nc) => (nc.id === 21 ? {
+      ...nc, status: 'CANCELADA', cancelado_em: '2026-09-30 09:00:00',
+      motivo_cancelamento: 'material serializado, devolucao tratada por RMA',
+    } : nc));
+    await clicarBotaoModal('Cancelar documento');
+    await act(async () => {});
+
+    expect(api.post).toHaveBeenCalled();
+    // A metade positiva que carrega o cenário: a recarga saiu sem status E sem execução.
+    expect(chamadasLista()[chamadasLista().length - 1][1].params).toEqual({ limite: 200 });
+    expect(filtroExecucao().value).toBe('');
+    expect(filtroStatus().value).toBe('');
+    // E o desfecho que o usuário vê: a linha continua na tela, agora cancelada.
+    expect(linhas()).toHaveLength(1);
+    expect(container.textContent).toContain('NC-2026-0021');
+    expect(linhas()[0].textContent).toContain('Cancelada');
+    expect(container.querySelector('.almox-empty')).toBeNull();
+  });
+
+  test('(41) cancelar uma ABERTA com o filtro padrão também larga o status — mesmo modo de falha', async () => {
+    // A segunda metade do achado 8: o padrão da tela é "Abertas" (`:207`), então cancelar uma NC
+    // aberta faz a linha sumir mesmo sem fila nenhuma ligada.
+    api.get.mockImplementation((url, config) => {
+      if (url === '/almoxarifado/nao-conformidades') {
+        const status = config?.params?.status;
+        const itens = status ? ncDoBanco.filter((nc) => nc.status === status) : ncDoBanco;
+        return Promise.resolve({ data: { itens } });
+      }
+      if (url === '/almoxarifado/anexos') return Promise.resolve({ data: [] });
+      return Promise.resolve({ data: [] });
+    });
+    await renderizar();
+    expect(chamadasLista()[0][1].params).toEqual({ limite: 200, status: 'ABERTA' });
+    expect(linhas()).toHaveLength(1);
+    expect(linhas()[0].textContent).toContain('NC-2026-0007');
+
+    await clicar(botaoCancelar(linhas()[0]));
+    preencher(campoPorLabel('Motivo'), 'divergencia corrigida na reconferencia');
+    ncDoBanco = ncDoBanco.map((nc) => (nc.id === 7 ? {
+      ...nc, status: 'CANCELADA', cancelado_em: '2026-09-30 09:10:00',
+      motivo_cancelamento: 'divergencia corrigida na reconferencia',
+    } : nc));
+    await clicarBotaoModal('Cancelar documento');
+    await act(async () => {});
+
+    expect(chamadasLista()[chamadasLista().length - 1][1].params).toEqual({ limite: 200 });
+    expect(filtroStatus().value).toBe('');
+    expect(container.textContent).toContain('NC-2026-0007');
+    expect(container.querySelector('.almox-empty')).toBeNull();
+  });
+
+  test('(42) o modal avisa que a decisão NÃO é apagada, e que o que acaba é a cobrança da execução', async () => {
+    // O aviso é o único lugar onde quem clica descobre o que o cancelamento faz com a decisão —
+    // e o modo de falha desta tela já é conhecido (cenários (21) e (32)): texto visível que
+    // afirma o contrário da regra. Aqui a regra é a RN-06: a decisão, o autor e a data FICAM.
+    ncDoBanco = [NC_A_EXECUTAR];
+    await renderizar();
+    await clicar(botaoCancelar(linhas()[0]));
+    const texto = container.querySelector('.almox-modal').textContent;
+
+    expect(texto).toContain('Cancelar NC-2026-0021');
+    expect(texto).toContain('não apaga a decisão');
+    expect(texto).toContain('quem decidiu');
+    expect(texto).toContain('deixa de ser cobrada');
+    // E a negativa: o modal não pode convidar a redecidir no lugar de cancelar — redecidir está
+    // fora de escopo declarado (seção 8 do desenho: cancela-se e abre-se outro documento).
+    expect(texto).not.toContain('decidir de novo');
+  });
+
+  test('(43) recusa do servidor vai LITERAL ao toast e o modal continua aberto', async () => {
+    ncDoBanco = [NC_A_EXECUTAR];
+    await renderizar();
+    await clicar(botaoCancelar(linhas()[0]));
+    api.post.mockRejectedValueOnce({
+      response: {
+        status: 409,
+        data: { error: 'A execução desta não conformidade já foi registrada — o documento não pode ser cancelado' },
+      },
+    });
+    preencher(campoPorLabel('Motivo'), 'duplicada da NC-2026-0003');
+    await clicarBotaoModal('Cancelar documento');
+    expect(toast.error).toHaveBeenCalledWith(
+      'A execução desta não conformidade já foi registrada — o documento não pode ser cancelado',
+    );
+    expect(toast.success).not.toHaveBeenCalled();
+    // Fica aberto: a recusa é do estado do documento, não do que foi digitado — e a corrida com
+    // `/executar` é exatamente o caso em que a linha mudou por baixo de quem olha.
+    expect(container.querySelector('.almox-modal')).not.toBeNull();
   });
 });

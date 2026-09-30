@@ -158,7 +158,9 @@ documento decidido e não executado continua só num filtro que alguém precisa 
 
 Gate: `requirePermission('cancelar_nao_conformidade')`.
 
-**Payload:** `{ "motivo": "texto" }` — obrigatório, `trim()` não vazio.
+**Payload:** `{ "motivo": "texto" }` — obrigatório, com **pelo menos 5 caracteres** depois do
+`trim()`. ~~`trim()` não vazio~~ — a régua apertou na seção 9.4, para casar com o precedente do
+módulo (`PUT /conferencias/:id/cancelar`).
 
 **Resposta 200:** o documento inteiro (mesma projeção de `obterNaoConformidade`) mais
 `{ cancelamento: { estado_anterior, execucao_estado_anterior, mensagem } }`, espelhando a forma
@@ -168,9 +170,10 @@ Gate: `requirePermission('cancelar_nao_conformidade')`.
 
 | Código | Mensagem literal | Quando |
 |---|---|---|
-| 400 | `O motivo do cancelamento é obrigatório` | `motivo` ausente ou só espaço |
+| ~~400~~ | ~~`O motivo do cancelamento é obrigatório`~~ | 🔴 **SUBSTITUÍDA na 9.5** por `O motivo do cancelamento deve ter pelo menos 5 caracteres`. A executora da T4 apontou que quem lê esta tabela antes da 9 é enganado — e estava certa. Riscada, não apagada. |
 | 404 | `Não conformidade não encontrada` | id inexistente |
 | 409 | `A execução desta não conformidade já foi registrada — o documento não pode ser cancelado` | RN-03 |
+| 409 | `A decisão desta não conformidade já liberou o material — o documento não pode ser cancelado` | 🔴 **ACRESCENTADA na 9.5** (achado 9.3) — faltava nesta tabela |
 | 409 | `Esta não conformidade já está cancelada` | RN-04 |
 | 403 | *(corpo padrão de `requirePermission`)* | RN-07 |
 

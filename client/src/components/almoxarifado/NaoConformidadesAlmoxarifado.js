@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   FiAlertOctagon, FiAlertTriangle, FiCheckSquare, FiChevronDown, FiChevronUp, FiRefreshCw, FiTruck,
+  FiXCircle,
 } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import api from '../../services/api';
@@ -78,9 +79,36 @@ import './Almoxarifado.css';
  *    da Etapa 44, e pela mesma razão: a régua de quando a baixa acontece (RN-06, série, lote,
  *    saldo) mora no servidor, e uma segunda cópia dela aqui mentiria sobre o saldo no dia em que
  *    as duas divergissem.
+ *
+ * ── Etapa 46, T4 — A SAÍDA DO DOCUMENTO PRESO ───────────────────────────────────────────────
+ *
+ * A Etapa 45 deixou um beco: material com série decidido `DEVOLVER` é recusado pela execução
+ * (400, e a recusa é fatal de propósito — a Etapa 46 não a afrouxa), então o documento fica
+ * `DECIDIDA` + execução `PENDENTE` para sempre, cobrando um gesto que ninguém consegue registrar.
+ * O botão **Cancelar** é a porta de saída, e três coisas dele são regra, não estilo:
+ *
+ * 1. **Ele não apaga a decisão** (RN-06). O servidor preserva `decisao`, `justificativa`,
+ *    `decidido_por_*`, `decidido_em` — e até o `execucao_estado`. O que o cancelamento encerra é a
+ *    COBRANÇA: quem exclui a linha cancelada da fila é o `status`. O aviso dentro do modal diz
+ *    isso ao usuário, e o cenário (42) prende a frase — este arquivo já deixou texto visível
+ *    atrás da regra duas vezes (cenários (21) e (32)).
+ * 2. **Ele SOME por perfil**, como o de execução e pelo mesmo motivo: `cancelar_nao_conformidade`
+ *    é de QUALIDADE/ADMINISTRADOR (gate próprio — não é `decidir_nao_conformidade`, porque anular
+ *    não é decidir, nem `executar_encaminhamento`, senão Compras limparia a própria fila). Quem
+ *    não pode não deve ver um convite a uma recusa. Continua falhando ABERTO: `pode()` devolve
+ *    `true` enquanto as permissões não voltaram.
+ * 3. **A coluna Execução passa a olhar o `status`.** Como a RN-06 preserva `PENDENTE`, sem isso a
+ *    linha ficaria com badge Cancelada ao lado de execução Pendente — contradizendo, na mesma
+ *    tela e no mesmo segundo, o toast que acabou de dizer que a execução deixa de ser cobrada.
  */
 
 const ROTA = '/almoxarifado/nao-conformidades';
+
+// A régua do motivo é do servidor (400 `O motivo do cancelamento deve ter pelo menos 5
+// caracteres`). Ela é repetida aqui de propósito, e só para DESABILITAR o botão: entregar um 400
+// que a tela já sabia evitar é viagem de ida e volta sem informação nova. Quem recusa de verdade
+// continua sendo o backend — se as duas réguas divergirem, o 400 dele aparece no toast.
+const MOTIVO_CANCELAMENTO_MINIMO = 5;
 
 // Teto pedido ao servidor. O serviço clampa em 500 sem erro; 200 é o que cabe numa tela de fila
 // sem virar rolagem infinita, e o rodapé avisa quando a lista encosta neste número.
@@ -216,6 +244,9 @@ const NaoConformidadesAlmoxarifado = () => {
 
   const [execucaoTarget, setExecucaoTarget] = useState(null);
   const [execucaoObs, setExecucaoObs] = useState('');
+
+  const [cancelamentoTarget, setCancelamentoTarget] = useState(null);
+  const [cancelamentoMotivo, setCancelamentoMotivo] = useState('');
 
   const carregar = useCallback(async () => {
     setLoading(true);
@@ -377,6 +408,69 @@ const NaoConformidadesAlmoxarifado = () => {
     }
   };
 
+  const abrirCancelamento = (nc) => {
+    setCancelamentoTarget(nc);
+    setCancelamentoMotivo('');
+  };
+
+  const motivoCancelamentoValido = cancelamentoMotivo.trim().length >= MOTIVO_CANCELAMENTO_MINIMO;
+
+  /**
+   * A SAÍDA. Não redecide e não apaga nada: o servidor só troca o `status` para `CANCELADA` e
+   * guarda motivo, autor e data. O que a tela tem de acertar aqui são os DOIS filtros.
+   */
+  const submeterCancelamento = async () => {
+    // Trava dupla do motivo: o botão já está desabilitado abaixo de 5 caracteres, mas o guarda
+    // fica porque o submit também é alcançável por Enter/teclado em navegador — e a mensagem é a
+    // literal do servidor, para o usuário não ler duas redações da mesma régua.
+    //
+    // ⚠️ MEDIDO na sabotagem desta task (a 11ª): apagar ESTE `if` sozinho não derruba teste
+    // nenhum — 43/43 continuam verdes —, porque quem impede o clique no harness é o `disabled` do
+    // botão, e o jsdom não dispara `onClick` em botão desabilitado. Mesma situação da regra 2 do
+    // cabeçalho: a garantia está no outro lugar, e o próximo a ler precisa saber disso antes de
+    // "limpar" este guarda achando que a suíte o cobre.
+    if (!motivoCancelamentoValido) {
+      toast.error('O motivo do cancelamento deve ter pelo menos 5 caracteres');
+      return;
+    }
+    setSalvando(true);
+    try {
+      const resp = await api.post(`${ROTA}/${cancelamentoTarget.id}/cancelar`, {
+        motivo: cancelamentoMotivo.trim(),
+      });
+      // Mesma regra de `liberacao` (Etapa 44) e `execucao` (Etapa 45): a literal vem PRONTA do
+      // servidor. Aqui ela carrega a diferença entre cancelar um documento que ninguém decidiu e
+      // cancelar um decidido — no segundo caso a decisão FICA, e é a mensagem que diz isso. O
+      // `?.` protege resposta de servidor anterior a esta versão.
+      const mensagem = resp?.data?.cancelamento?.mensagem;
+      toast.success(`Não conformidade ${cancelamentoTarget.numero} cancelada!${mensagem ? ` ${mensagem}` : ''}`);
+      setCancelamentoTarget(null);
+      // ⚠️ TERCEIRA APARIÇÃO DO MESMO PADRÃO nesta base: achado 11 da Etapa 43 (decidir com o
+      // filtro em "Abertas" escondia a linha), T4 da Etapa 45 (executar com a fila ligada
+      // escondia a linha), e agora o cancelamento — que é o pior dos três, porque ele esconde a
+      // linha pelos DOIS filtros ao mesmo tempo:
+      //
+      //   - o padrão do status é 'ABERTA', e a NC que acabou de ser cancelada não casa mais;
+      //   - `trocarExecucao` FORÇA `statusFiltro = 'DECIDIDA'` ao ligar a fila de Compras, e a
+      //     cancelada não casa 'DECIDIDA' tampouco — então largar SÓ o filtro de execução não
+      //     devolveria a linha (achado 8 da Fase 2, medido).
+      //
+      // Quem acabou de cancelar quer VER o documento cancelado, com o motivo que digitou. O
+      // filtro de origem fica onde estava, porque ele não esconde o que se acabou de fazer.
+      if (statusFiltro && statusFiltro !== 'CANCELADA') setStatusFiltro('');
+      if (execucaoFiltro) setExecucaoFiltro('');
+      setRecarga((n) => n + 1);
+    } catch (err) {
+      toast.error(
+        formatarErroPermissao(err.response?.data)
+        || err.response?.data?.error
+        || 'Erro ao cancelar a não conformidade',
+      );
+    } finally {
+      setSalvando(false);
+    }
+  };
+
   const lista = itens || [];
   const abertas = lista.filter((nc) => nc.status === 'ABERTA').length;
 
@@ -521,8 +615,25 @@ const NaoConformidadesAlmoxarifado = () => {
                           Os três estados são distintos NA TELA, e o vazio é um quarto: NC ainda
                           não decidida não tem execução a mostrar, e igualar vazio a "pendente"
                           inflaria a fila de Compras com documento que ninguém decidiu ainda. */}
+                      {/* ⚠️ ETAPA 46 — O `status` VEM PRIMEIRO, e isso é regra (achado 5 da
+                          Fase 2). O servidor PRESERVA `execucao_estado` ao cancelar (RN-06: quem
+                          exclui a cancelada da fila é o `status`, não o estado de execução), então
+                          sem este primeiro ramo a linha cancelada mostraria o badge "Pendente" ao
+                          lado do badge de status "Cancelada" — contradizendo, na mesma tela e no
+                          mesmo segundo, o toast que acabou de dizer que a execução deixa de ser
+                          cobrada.
+
+                          A ESCOLHA, e o porquê: a célula diz "Deixou de ser cobrada" em vez de um
+                          travessão. O travessão seria mais curto e não mentiria, mas igualaria
+                          esta linha à da NC nunca decidida — e as duas são coisas diferentes:
+                          nesta havia uma execução pendente, e ela foi encerrada por alguém, com
+                          motivo (visível no painel de detalhes). O texto ECOA a literal do toast,
+                          então quem cancelou vê a tela confirmar o que acabou de ler, e quem
+                          chega depois entende por que o documento saiu da fila de Compras. */}
                       <td style={{ fontSize: '0.8rem' }}>
-                        {nc.execucao_estado === 'EXECUTADA' ? (
+                        {nc.status === 'CANCELADA' ? (
+                          <span style={{ color: 'var(--gmp-text-light)' }}>Deixou de ser cobrada</span>
+                        ) : nc.execucao_estado === 'EXECUTADA' ? (
                           <>
                             <div style={{ fontWeight: 700 }}>{ROTULO_EXECUCAO.EXECUTADA}</div>
                             <div style={{ color: 'var(--gmp-text-light)' }}>
@@ -574,6 +685,35 @@ const NaoConformidadesAlmoxarifado = () => {
                               onClick={() => abrirExecucao(nc)}
                             >
                               <FiTruck />
+                            </button>
+                          )}
+                          {/* Etapa 46 — a SAÍDA. As duas condições de visibilidade são as duas
+                              únicas em que a rota pode dizer sim; nas outras três ela recusa com
+                              409, cada uma com literal própria:
+
+                                DECIDIDA + NAO_SE_APLICA -> "A decisão … já liberou o material"
+                                DECIDIDA + EXECUTADA     -> "A execução … já foi registrada"
+                                CANCELADA                -> "Esta não conformidade já está cancelada"
+
+                              Botão com erro garantido é armadilha, não gate (mesmo critério dos
+                              dois botões acima).
+
+                              ⚠️ E aqui o gate de PERFIL ESCONDE, como no de execução e pela mesma
+                              razão já escrita lá: `cancelar_nao_conformidade` tem plateia própria
+                              (QUALIDADE/ADMINISTRADOR), então o botão visível para quem opera a
+                              fila seria um convite permanente a um 403 que não é engano dele.
+                              Continua falhando ABERTO — `pode()` devolve `true` enquanto a carga
+                              de permissões não voltou. Quem manda continua sendo o backend. */}
+                          {(nc.status === 'ABERTA'
+                            || (nc.status === 'DECIDIDA' && nc.execucao_estado === 'PENDENTE'))
+                            && pode('cancelar_nao_conformidade') && (
+                            <button
+                              type="button"
+                              className="almox-btn-icon"
+                              title="Cancelar a não conformidade"
+                              onClick={() => abrirCancelamento(nc)}
+                            >
+                              <FiXCircle />
                             </button>
                           )}
                           <button
@@ -787,6 +927,79 @@ const NaoConformidadesAlmoxarifado = () => {
               <button className="btn-almox-secondary" onClick={() => setExecucaoTarget(null)}>Cancelar</button>
               <button className="btn-almox-primary" disabled={salvando} onClick={submeterExecucao}>
                 {salvando ? 'Salvando...' : 'Registrar execução'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/*
+        Etapa 46 — o modal da SAÍDA. Terceiro modal desta tela, e separado dos outros dois pela
+        mesma razão que os separa entre si: são atos distintos, de plateias distintas. O botão
+        secundário se chama "Voltar", e não "Cancelar" como nos outros dois — num modal cujo botão
+        primário é "Cancelar documento", dois botões com a palavra "Cancelar" seriam um convite ao
+        clique errado num gesto que não tem desfazer.
+      */}
+      {cancelamentoTarget && (
+        <div className="almox-modal-overlay" onClick={() => { if (!salvando) setCancelamentoTarget(null); }}>
+          <div className="almox-modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
+            <div className="almox-modal-header">
+              <h2>Cancelar {cancelamentoTarget.numero}</h2>
+              <button className="almox-modal-close" onClick={() => setCancelamentoTarget(null)}>✕</button>
+            </div>
+            <div className="almox-modal-body">
+              <p style={{ marginTop: 0 }}>
+                <strong>{cancelamentoTarget.material_nome || 'Material não identificado'}</strong>
+                {cancelamentoTarget.material_codigo ? ` (${cancelamentoTarget.material_codigo})` : ''}
+                {cancelamentoTarget.decisao
+                  ? ` — decisão: ${ROTULO_DECISAO[cancelamentoTarget.decisao] || cancelamentoTarget.decisao}`
+                  : ' — ainda não decidida'}
+              </p>
+              {/*
+                ⚠️ ESTE PARÁGRAFO É A ÚNICA EXPLICAÇÃO QUE O USUÁRIO RECEBE do que o cancelamento
+                faz com a decisão, e a tela toda já ficou atrás da regra duas vezes (o parágrafo
+                do modal de decisão, nas Etapas 44 e 45). A regra que ele descreve é a RN-06: o
+                claim do servidor NÃO zera `execucao_estado`, NÃO apaga `decisao`,
+                `justificativa`, `decidido_por_*` nem `decidido_em`. O cenário (42) prende a
+                frase; se a RN-06 mudar, é aqui que se corrige primeiro.
+              */}
+              <p style={{ fontSize: '0.78rem', color: 'var(--gmp-text-light)', marginTop: 0 }}>
+                Cancelar <strong>não apaga a decisão</strong>: o documento continua guardando o que
+                foi decidido, <strong>quem decidiu</strong> e quando. O que termina aqui é a
+                cobrança da execução — ela <strong>deixa de ser cobrada</strong> de quem embala e
+                envia, e o documento sai da fila de pendências. Para mudar o rumo do material,
+                cancele este documento e abra outro: este fica no histórico, com o motivo abaixo.
+              </p>
+              <div className="almox-field">
+                <label className="almox-label">Motivo<span className="required">*</span></label>
+                <textarea
+                  className="almox-input"
+                  rows={3}
+                  value={cancelamentoMotivo}
+                  placeholder="Por que este documento não se cumpre? Mínimo de 5 caracteres — é o que fica para quem auditar depois."
+                  onChange={(e) => setCancelamentoMotivo(e.target.value)}
+                />
+                {!motivoCancelamentoValido && (
+                  <span style={{ fontSize: '0.72rem', color: 'var(--gmp-text-light)' }}>
+                    O motivo precisa de pelo menos {MOTIVO_CANCELAMENTO_MINIMO} caracteres.
+                  </span>
+                )}
+              </div>
+              {!pode('cancelar_nao_conformidade') && (
+                <p style={{ fontSize: '0.78rem', color: 'var(--gmp-warning)', margin: 0 }}>
+                  {formatarErroPermissao({ acao: 'cancelar_nao_conformidade', perfil })
+                    || 'Seu perfil provavelmente não pode cancelar não conformidade.'}
+                </p>
+              )}
+            </div>
+            <div className="almox-modal-footer">
+              <button className="btn-almox-secondary" onClick={() => setCancelamentoTarget(null)}>Voltar</button>
+              <button
+                className="btn-almox-primary"
+                disabled={salvando || !motivoCancelamentoValido}
+                onClick={submeterCancelamento}
+              >
+                {salvando ? 'Salvando...' : 'Cancelar documento'}
               </button>
             </div>
           </div>
