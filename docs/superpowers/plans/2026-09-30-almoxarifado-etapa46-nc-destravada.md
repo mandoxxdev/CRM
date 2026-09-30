@@ -332,6 +332,44 @@ leitura de código):
 
 ---
 
+### ✅ T5 — feita
+
+`ncBecoIntegracao.api.test.js`, **5 cenários, 5/5**.
+
+**O fluxo dela É o cenário real do furo C64**, e isso não é detalhe de fixture: peça com
+**número de série**, decidida `DEVOLVER`, execução recusada com 400 fatal. Se o cancelamento só
+funcionasse em NC sem série, a etapa teria passado ao lado do problema que a originou.
+
+**A composição que nenhuma task prova sozinha:** a T2 prova o cancelamento, a T3 prova que o cartão
+cobra, e nenhuma das duas prova que **cancelar cala o cartão**. O cenário (1) afirma **presença nas
+duas superfícies antes** de afirmar ausência — sem essa metade positiva, *"saiu do cartão"* passaria
+com um cartão vazio. E o saldo é comparado com valor **exato** em cada passo (`10` e `3`), nunca
+"não mudou".
+
+Dois detalhes de método que o arquivo carrega escritos:
+
+- **O cartão é consultado com janela negativa** (`dias: -1`). O SQL usa `> ?` e a NC acabou de ser
+  decidida; com janela positiva o cenário mediria o **prazo**, não a régua, e passaria verde de graça.
+- **O cenário (2) prende o gate pela ROTA**, e tem a metade positiva no mesmo corpo: COMPRAS toma
+  **403 com a ação nomeada** ao cancelar **e continua tomando 400 ao executar**. Sem a segunda
+  metade, passaria com um perfil COMPRAS que perdeu tudo — o modo de falha que a Etapa 45 documentou.
+
+#### As quatro sabotagens
+
+| Sabotagem | Cai | Asserção |
+|---|---|---|
+| a rota de cancelar pendurada em `executar_encaminhamento` | (2) | *"COMPRAS cancelou: 200"* — é a prova de que o gate da rota é o próprio, e não um vizinho onde ADMINISTRADOR e QUALIDADE também estão |
+| a entrada nova do cartão para de olhar `status` | (1) **e** (4) | *"a cancelada continua no cartao — cancelar nao calou a cobranca"* |
+| o cancelamento **apaga** a decisão (o rollback usado como "editar") | (3) | *"a decisao sumiu da leitura — o cancelamento apagou evidencia"* |
+| tira o nível 6 da precedência (a recusa de série) | (1) | o 400 não vem — **o beco deixa de existir e o cenário perde o objeto** |
+
+⚠️ **Uma imprecisão de disciplina, registrada porque passou perto:** na sabotagem da decisão o
+`grep -cF` da âncora devolveu **2**, e a regra manda abortar fora de 1. O `perl` estava **ancorado**
+(`^` + indentação exata de 4 espaços) e atingiu só a linha certa — a segunda ocorrência é o
+cancelamento **automático**, com 6 espaços. Ou seja: **a contagem e o padrão mediam réguas
+diferentes**, e foi sorte a contagem ser a mais larga das duas. A regra a acrescentar: **contar com
+o MESMO padrão que a sabotagem usa**, não com uma versão solta dele.
+
 ## Fase 2 — o que o revisor do plano achou (12 itens, 3 CRITICAL, 8 refutados)
 
 Revisor fresco, 2026-09-30. **Zero ruído**: todo achado veio com cenário concreto e `arquivo:linha`,
