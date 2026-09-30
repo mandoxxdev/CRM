@@ -107,7 +107,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Vinte e sete itens para rodar em produção ANTES do deploy — vinte e quatro são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Vinte e oito itens para rodar em produção ANTES do deploy — vinte e cinco são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-09-30 (Etapa 51) de vinte e sete para vinte e oito**, com a **A28**. As Etapas 49 e 50 não acrescentaram nenhuma.)*
 
 *(**Atualizado em 2026-09-30 (Etapa 48) de vinte e seis para vinte e sete**, com a **A27**.)*
 
@@ -857,7 +859,46 @@ SELECT status, urgencia, COUNT(*) AS qtd
   encaixa em regra de urgência. A trava que impede aprovar Crítico automaticamente e a ordem da lista
   já tratam `critico` minúsculo como Crítico.
 
-### B. Decisões de negócio — B1 a B205; as em aberto esperam você, as tomadas estão escritas com o descartado
+**A28 (NOVA, da Etapa 51 — endereços com saldo que não existe, gravados antes desta etapa: medir antes,
+nada a apagar).** Até esta etapa, a saída sem endereço (a entrega de requisição) **não** baixava o endereço
+de onde o material saía: o endereço ficava com o saldo antigo e o sistema criava, ao lado, uma linha
+**"sem localização atribuída" negativa**. A etapa corrige daqui para frente; o **passado fica** (**B209**).
+
+```sql
+-- (1) materiais SEM lote com linha "sem localização atribuída" NEGATIVA e endereço com saldo ao lado
+SELECT m.codigo, m.nome, m.quantidade_atual AS fisico,
+       s.quantidade AS sem_localizacao,
+       (SELECT COALESCE(SUM(x.quantidade),0) FROM estoque_saldo_almoxarifado x
+         WHERE x.material_id = m.id AND x.lote_id IS NULL AND x.localizacao_id IS NOT NULL
+           AND x.quantidade > 0) AS em_enderecos
+  FROM estoque_saldo_almoxarifado s
+  JOIN materiais_almoxarifado m ON m.id = s.material_id
+ WHERE s.lote_id IS NULL AND s.localizacao_id IS NULL AND s.quantidade < 0
+ ORDER BY s.quantidade;
+
+-- (2) ENDEREÇO REAL com saldo negativo (material sem lote)
+SELECT m.codigo, m.nome, l.codigo AS endereco, s.quantidade
+  FROM estoque_saldo_almoxarifado s
+  JOIN materiais_almoxarifado m ON m.id = s.material_id
+  JOIN localizacoes_almoxarifado l ON l.id = s.localizacao_id
+ WHERE s.lote_id IS NULL AND s.quantidade < 0
+ ORDER BY s.quantidade;
+```
+
+**Como ler o resultado:**
+- **As duas vazias** — nada a fazer. É o esperado: a base de 3/set tinha **zero** movimentos com endereço.
+- **(1) com linhas** — esses materiais têm endereço **aparecendo ocupado** no Mapa com parte do material que já
+  saiu (a soma `em_enderecos` é maior que o físico). Para corrigir, faça a **contagem** de cada endereço
+  listado (ajuste **com** endereço, pela integração): ela zera a linha "sem localização atribuída" negativa
+  (**B207**). **Não apague linha por SQL** — a soma das linhas é o que o sistema usa como físico.
+- **(2) com linhas** — um endereço real ficou negativo (saída com endereço declarado vazio, no modelo antigo).
+  Mesma correção: contagem do endereço.
+- ⚠️ **Material COM lote** tem o mesmo sintoma e **não** foi corrigido (letra **C**, item 72) — a consulta acima
+  filtra `lote_id IS NULL` de propósito.
+
+### B. Decisões de negócio — B1 a B209; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+*(**Atualizado em 2026-09-30 de B205 para B209**, com as quatro da Etapa 51.)*
 
 *(**Atualizado em 2026-09-30 de B204 para B205**, com a da Etapa 50.)*
 
@@ -3646,6 +3687,34 @@ fazer a tela calcular sozinha (seria uma segunda conta, que já provou divergir 
 B204:** a entrega de requisição continua **não** baixando de lote — a tela agora mostra o efeito disso,
 não o muda.
 
+**B206 (NOVA, da Etapa 51) — a saída sem endereço tira dos endereços que TÊM o material.** Quando a saída
+não diz de onde sai (a entrega de requisição nunca diz), o sistema passou a baixar primeiro do endereço
+**padrão** do material (ou do endereço informado, se houver), depois dos endereços com **mais** saldo — a
+mesma regra que já valia para o lote desde a Etapa 6 ("almoxarifado é área física, não filial"). Só o que
+**sobrar** fica como **"sem localização atribuída"**. **Escolhido:** reaproveitar a regra do lote, que já tinha
+teste e já estava escrita. **Descartado:** exigir endereço em toda saída (a entrega de requisição não tem
+esse campo, e travaria o fluxo principal) e escolher o endereço de **menor** saldo (fragmentaria o
+endereçamento sem ganho). **Consequência a saber:** o endereço padrão esvazia primeiro.
+
+**B207 (NOVA, da Etapa 51) — a contagem por endereço ABSORVE o "sem localização atribuída" negativo, em
+vez de ser recusada.** Uma contagem por endereço que deixaria o material com saldo negativo (num material
+que não permite) primeiro zera a linha "sem localização atribuída" negativa; só é recusada se nem isso
+bastar. **Escolhido:** absorver — recusar travaria para sempre o material com lote (o lote entregue sem
+baixa, contado "aqui tem 0", seria barrado, e nenhum outro caminho zera a linha do lote). **Descartado:**
+recusar sempre (a primeira versão do desenho — a revisão do plano provou que travava).
+
+**B208 (NOVA, da Etapa 51) — o ESTORNO de um ajuste por endereço é RECUSADO, e não absorvido, quando
+deixaria o material negativo.** Na contagem a absorção é verdade física (alguém contou). No estorno não há
+contagem: absorver faria o histórico registrar um estorno de 50 em que 45 sumiriam em silêncio.
+**Escolhido:** recusar, com *"Não é possível estornar: o saldo já foi consumido (o estorno deixaria o
+material negativo)"*. **Descartado:** absorver também no estorno (o histórico mentiria sobre a quantidade).
+
+**B209 (NOVA, da Etapa 51) — o passado NÃO é corrigido por migração.** Linhas de endereço com saldo que não
+existe, gravadas antes desta etapa, **ficam**. **Escolhido:** medir (consulta **A28**) e corrigir, se houver,
+por **contagem** no endereço — que agora absorve a linha "sem localização atribuída" (B207). **Descartado:**
+uma migração que redistribuísse as linhas (irreversível, e a base de 3/set tinha **zero** movimentos com
+endereço — o passado é quase vazio).
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -4630,6 +4699,15 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
     a linha *"Sem lote atribuído"* e o físico total. Corrigir a tela (ou fazer essas saídas baixarem de
     lote) é etapa própria — ver **B204**.
 
+72. **NOVO, da Etapa 51 — material COM LOTE: o endereço de onde a entrega de requisição tira o material
+    continua "ocupado".** A Etapa 51 fez a saída sem lote baixar o **endereço** de onde o material sai — mas
+    só para material **sem** lote. Com lote, a entrega de requisição não escolhe lote (**B204**), e a saída
+    sem lote **não toca** linha de lote. Cenário: entrada de **100** no lote L2 no endereço A; entrega de
+    requisição de **100**. O material fica com **0**, mas o endereço A continua com o lote L2 **"com 100"** — e
+    aparece **ocupado** no **Mapa**. **Até a correção:** para material com lote, confira o endereço pela
+    **contagem** (a contagem "L2 em A = 0" agora é aceita e zera a conta — **B207**); e a tela de **localizações
+    vazias** (Etapa 52) **tem de declarar** que, para material com lote, vazio pode aparecer ocupado.
+
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -5170,6 +5248,22 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   ajuste de saldo total baixarem de um lote é mudança de regra do estoque (qual lote? o mais antigo?),
   descartada na **B204** e mantida na **B205**.
 
+- **(51) O estorno de uma saída que tirou de vários endereços devolve tudo para UM lugar.** A saída não
+  guarda de quais endereços tirou; o estorno devolve ao endereço informado na saída ou, sem ele, ao
+  endereço **padrão** do material (ou à linha "sem localização atribuída"). Para a entrega de requisição
+  (que nunca informa endereço), o endereço original **se perde por inteiro** no estorno. O físico fica
+  certo; o endereço, não. Guardar as linhas por movimento é tabela nova, etapa própria.
+- **(51) A saída sem endereço pode tirar de endereço BLOQUEADO.** Quando a saída drena os endereços com
+  saldo, ela não confere se cada um está bloqueado — a mesma regra que já valia para o lote desde a Etapa 6.
+  Só o endereço **informado** passa pela guarda de bloqueio.
+- **(51) O alerta "material sem endereço" pode subir.** Material que zerou deixa de ter endereço com saldo e
+  passa a aparecer no alerta — antes, o endereço esvaziado continuava "com saldo" e escondia o material.
+- **(51) Sob disputa extrema, a releitura desiste depois de 3 tentativas.** Se duas saídas brigarem pela
+  mesma linha mais de três vezes seguidas, o resto vai para "sem localização atribuída" com a linha ainda
+  positiva. É teórico — **não reproduzido** (a revisão mediu 2000 endereços em 220 ms, sem divergência).
+- **(51) A tela de Movimentações não oferece endereço no AJUSTE.** A contagem por endereço (que absorve o
+  "sem localização atribuída", **B207**) existe no sistema mas não tem campo na tela — é pela integração.
+
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
 **"Uma remessa não pode misturar materiais de donos diferentes."** O sistema hoje **recusa** montar
@@ -5524,6 +5618,16 @@ relatório em onze cenários), a rota e o bloco da tela. O que **só o navegador
    quatro linhas. Conferir que não some visualmente embaixo de uma tabela longa.
 2. **No material antigo sem lote nenhum**, a tela mostra *"Nenhum lote cadastrado para este material"*
    **e** o bloco logo abaixo — conferir que as duas mensagens juntas não confundem.
+
+**(51) Nenhum clique foi dado nesta etapa — é mudança no motor.** Os testes provam as regras pela rota e
+pelo motor (24 cenários, inclusive a corrida de duas saídas e o histórico falhando no meio). O que **só o
+navegador** prova:
+
+1. **O endereço esvazia no Mapa.** Dê entrada de um material num endereço (Movimentações → Entrada, com
+   endereço), entregue uma requisição dele inteira, e abra o **Mapa de Áreas**: o endereço tem de aparecer
+   **vazio**. Antes desta etapa, aparecia ocupado.
+2. **A transferência de um endereço já esvaziado é recusada** em **Movimentações → Transferência**, com a mensagem
+   *"Saldo insuficiente na localização de origem"*.
 
 ### G. Fragilidades estruturais que continuam de pé
 
@@ -13116,7 +13220,93 @@ um de tela: ao trocar de material, o bloco do material anterior ficava à mostra
 carregava. Todos corrigidos, e os comportamentos da tela que não tinham teste (aba Séries, resposta
 atrasada, *Atualizar*) ganharam teste — cada um confirmado quebrando o código de propósito.
 
+## Etapa 51 — A saída passa a baixar o endereço de onde o material sai (2026-09-30)
+
+O plano era dar tela às **localizações vazias** — uma lista de onde há espaço livre no almoxarifado.
+Antes de prometer, a etapa **mediu** se o sistema sabia de verdade o que está em cada endereço. **Não
+sabia.** Quando uma saída não diz de onde sai — e a **entrega de requisição**, o fluxo principal, nunca
+diz —, o sistema baixava o material do total, mas **deixava o endereço com o saldo antigo**. Entrada de
+100 no endereço A e entrega de 100: o material ficava com **0**, e o endereço A continuava **"com 100"**,
+aparecendo **ocupado** no Mapa. Uma tela de vazias esconderia exatamente as prateleiras vazias.
+
+Esta etapa conserta isso **no coração do estoque**: a saída sem endereço passa a tirar dos endereços
+que **têm** o material. A tela de vazias ficou para a próxima etapa, agora sobre um número confiável.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Entrega de requisição de 100 do endereço A: o material zera, **A continua "com 100"** e aparece ocupado no Mapa | O endereço A **esvazia** (fica com 0) e aparece **vazio** no Mapa |
+| Saída sem endereço tirava de uma linha só (a do endereço padrão, ou "sem endereço"), que ficava **negativa** | Tira do endereço **padrão** primeiro, depois dos endereços com **mais** saldo; só o que sobra fica como **"sem localização atribuída"** |
+| Saída declarando um endereço **vazio** (B) deixava **B negativo** com o material em outro endereço | O endereço declarado é o **preferido**, não o único: B fica em 0 e o endereço que tem o material cede |
+| **Ajuste de saldo total** para baixo (endereços com 30 e 20, ajustado para 5): os dois endereços continuavam "com 30 e 20" | Os endereços **cedem** até o total dar 5 — nenhum fica com saldo que não existe |
+| Um **ajuste por endereço** podia deixar o material com saldo **negativo** (medido: **−25**) num material que não permite | O ajuste primeiro zera o **"sem localização atribuída"** negativo; só é recusado se nem isso bastar |
+| Transferir de um endereço já esvaziado pela entrega era **aceito** — e criava estoque fantasma no destino | É **recusado**: *"Saldo insuficiente na localização de origem"* |
+| Estornar uma **entrada** depois que a saída já tinha esvaziado aquele endereço deixava o endereço **negativo** | O estorno tira como uma saída: do endereço da entrada primeiro, depois dos outros com saldo |
+
+### As regras, com o cenário exato
+
+**1. A entrega esvazia o endereço.** Em **Movimentações → Entrada**, dê entrada de **100** de um material
+**sem lote** num endereço (A). Faça e entregue uma requisição de **100** desse material. Abra o **Mapa de
+Áreas** (**Almoxarifado → Mapa**): o endereço A aparece **vazio**. Antes, aparecia ocupado com 100.
+
+**2. Quem cede primeiro.** O material está em dois endereços: **A com 60** e **B com 40**, sem endereço padrão.
+Uma entrega de **70** tira **60 de A** (o de mais saldo) e **10 de B**: fica **A:0, B:30**. Se o material tem
+**endereço padrão**, é **ele** que cede primeiro.
+
+**3. A saída que declara endereço vazio.** Em **Movimentações → Saída**, informe como origem um endereço **B**
+que não tem nada desse material (que está todo em A, com 40). A saída de **5** é **aceita**: **B fica em 0** e
+**A cede os 5** (fica com 35). O endereço declarado é a **preferência**, não uma trava — a regra de sempre
+do almoxarifado: *o almoxarifado é área física do mesmo site, não filial*.
+
+**4. O que sobra sem endereço.** Material que **permite saldo negativo**, com **10** no endereço A: uma
+entrega de **15** deixa **A:0** e **"sem localização atribuída" −5**. Em material que **não** permite, a entrega
+maior que o saldo continua sendo recusada antes de chegar aqui.
+
+**5. A transferência de endereço vazio.** Depois do cenário 1, tente em **Movimentações → Transferência**
+mover **100** de A para outro endereço: recusado com *"Saldo insuficiente na localização de origem"*. Antes, a
+transferência era aceita e o material "aparecia" no destino sem existir.
+
+**6. A contagem por endereço que deixaria o material negativo.** (Pela integração — a tela de
+Movimentações não oferece endereço no ajuste.) Material com lote L2 no endereço A (**100**) e uma entrega
+de requisição de **100** (a entrega não escolhe lote: A continua com L2 "100" e o físico vai a 0). A
+contagem **"L2 em A = 0"** é **aceita** e zera tudo. Só é recusada, com *"Ajuste deixaria o saldo do material
+negativo (<valor>). O material não permite saldo negativo."*, quando nem zerando o "sem localização
+atribuída" o material chega a 0.
+
+**7. O estorno de uma contagem por endereço.** Se estornar a contagem deixaria o material negativo (porque
+o material já saiu), o estorno é **recusado**: *"Não é possível estornar: o saldo já foi consumido (o estorno
+deixaria o material negativo)"* (**B208**).
+
+### O que esta etapa NÃO cobre
+
+1. **Material COM lote.** A entrega de requisição não escolhe lote, e o endereço do lote continua "ocupado"
+   depois dela — ver **C72**. A contagem por endereço resolve caso a caso.
+2. **A tela de localizações vazias** — é a **Etapa 52**, agora sobre um número confiável (para material sem lote).
+3. **O passado.** Endereços com saldo que não existe, gravados antes desta etapa, **ficam** — medir pela
+   consulta **A28** e corrigir por contagem (**B209**).
+4. **O estorno de uma saída devolve tudo a um lugar só** (o endereço informado, o padrão ou "sem
+   localização atribuída") — ver **D (51)**.
+
+### O que a revisão encontrou
+
+Duas revisões antes de escrever código e duas depois. A do plano achou que **recusar** a contagem que
+deixaria o material negativo **travaria para sempre** o material com lote — por isso ela **absorve** (**B207**);
+e que copiar a regra do lote **como estava** recriava o estoque fantasma quando duas entregas do mesmo
+material chegam juntas — por isso o sistema **relê** o endereço em vez de pular. Depois do código, a revisão
+por sonda achou o **estorno de entrada** deixando endereço negativo (corrigido: ele tira como uma saída), e o
+estorno da contagem registrando quantidade que não se moveu (corrigido: recusa). A revisão dos testes quebrou
+o código de 13 jeitos e **11 passavam** — ganharam cenário, e cada um foi confirmado quebrando o código de
+novo (12 de 12 ficaram vermelhos; um precisou de um cenário extra para ficar).
+
 ## Onde estamos e o que vem a seguir
+
+- **Etapa 51 entregue (2026-09-30):** **a saída passa a baixar o endereço de onde o material sai.** A entrega
+  de requisição, que não diz de onde sai, agora tira dos endereços que **têm** o material (o padrão primeiro),
+  e o endereço esvaziado aparece **vazio** no Mapa. O ajuste de saldo total e a contagem por endereço deixaram
+  de criar endereço com saldo que não existe. **O que é seu:** a consulta **A28** (o passado); as decisões
+  **B206 a B209**; o furo **C72** (material **com** lote continua com o problema); as limitações **(51)** em D e
+  as verificações **(51)** em F. **Próxima: Etapa 52 — a tela de localizações vazias.**
 
 - **Etapa 50 entregue (2026-09-30):** **a tela de Lotes para de mostrar o saldo do lote como se fosse o
   que está na prateleira.** Abaixo da tabela de lotes aparecem **"Sem lote atribuído"** e **"Físico total

@@ -1,19 +1,25 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-09-30 (Etapa 50) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-09-30 (Etapa 51) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 50) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 51) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-09-30 (Etapa 50 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-09-30 (Etapa 51 ENTREGUE · modo contínuo pelo mapa)
 >
-> **O desenvolvimento parou aqui: Etapa 50, 2026-09-30.** A **Etapa 50 (a tela de Lotes para de mostrar
+> **O desenvolvimento parou aqui: Etapa 51, 2026-09-30.** A **Etapa 51 (a saída baixa o endereço de onde o
+> material sai)** conserta o motor de estoque: a entrega de requisição, que não diz de onde sai, passa a tirar
+> dos endereços que **têm** o material, e o endereço esvaziado aparece **vazio** no Mapa. A etapa nasceu de
+> uma **medição**: a tela de localizações vazias, que era o plano, mentiria sobre prateleiras vazias. **Material
+> com lote** continua com o problema (novidades, C72). **Próxima etapa: 52 — a tela de localizações vazias**
+> (ver *"Próxima tarefa detalhada"* no plano da Etapa 51).
+>
+> **Etapas 1 a 20 e 22 a 51 completas.**
+>
+> **Etapa 50, 2026-09-30.** A **Etapa 50 (a tela de Lotes para de mostrar
 > o saldo do lote como se fosse o físico)** fecha o furo **C71**: em *Lotes e Séries*, abaixo da tabela,
 > aparecem **"Sem lote atribuído"** e **"Físico total do material"**, com a mesma conta do relatório *Saldo
 > por lote*. O saldo de cada lote continua o **atribuído** (é o certo para escolher lote na saída). A
 > revisão achou e corrigiu um defeito que tinha escapado da Etapa 49 no próprio relatório.
-> **Próxima etapa:** ver *"Próxima tarefa detalhada"* no plano da Etapa 50.
->
-> **Etapas 1 a 20 e 22 a 50 completas.**
 >
 > **Etapa 49, 2026-09-30.** A **Etapa 49 (os relatórios de saldo que
 > faltavam)** fecha os relatórios de estoque e de movimentação da feature **21 (Relatórios)**: em
@@ -4927,6 +4933,57 @@ que ele não tinha como repetir com sucesso garantido.
 - **Número de série de material** — continua sendo **digitado pelo operador** e de propósito não
   passa por este gerador. Retentar com outro número gravaria algo que ninguém digitou.
 - **Números de outros módulos do CRM** — a varredura foi do almoxarifado.
+
+---
+
+## Etapa 51 — A saída baixa o endereço de onde o material sai (ENTREGUE — 2026-09-30)
+
+**O que mudou, em uma frase:** quando uma saída não diz de onde sai — como a **entrega de requisição** —, o
+sistema passa a tirar dos **endereços que têm o material**, e o endereço esvaziado aparece **vazio** no Mapa.
+
+**O problema que ela resolve.** Antes, a saída sem endereço baixava o material do total mas **deixava o
+endereço com o saldo antigo**: entrada de 100 no endereço A e entrega de 100 deixavam o material com 0 e o
+endereço A "com 100", **ocupado** no Mapa. Isso impediria a tela de localizações vazias (Etapa 52) de ser
+verdadeira.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Entrega de 100 do endereço A: A continua "com 100" no Mapa | A fica com **0** e aparece **vazio** |
+| Saída declarando um endereço vazio deixava o endereço **negativo** | O endereço declarado é a preferência; quem tem o material cede |
+| Transferir de um endereço já esvaziado era aceito (estoque fantasma no destino) | Recusado: *"Saldo insuficiente na localização de origem"* |
+| Uma contagem por endereço podia deixar o material com saldo negativo | Não deixa — zera primeiro o "sem localização atribuída" negativo |
+
+### Roteiro de teste manual (≈10 min)
+
+**Preparação.** Um material **sem** controle por lote, dois endereços (**A** e **B**) e **dois usuários** — um que
+pede a requisição e outro que aprova (quem pede não aprova a própria).
+
+1. **Entrada no endereço A.** Em **Movimentações → Entrada**, dê entrada de **100** do material com destino **A**.
+2. **O Mapa mostra A ocupado.** **Almoxarifado → Mapa**: o endereço A aparece com o material.
+3. **A entrega.** Com o primeiro usuário, faça uma requisição de **100**; com o segundo, aprove; depois separe e
+   **entregue**.
+4. **O Mapa mostra A vazio.** Volte ao **Mapa** (recarregue): o endereço A aparece **vazio**. *Antes desta
+   etapa, continuava ocupado com 100.*
+5. **A transferência de um endereço vazio.** Em **Movimentações → Transferência**, tente mover **100** de A para
+   B: recusado com *"Saldo insuficiente na localização de origem"*.
+6. **Quem cede primeiro.** Dê entrada de **60** em A e **40** em B. Entregue uma requisição de **70**. No Mapa: A
+   **vazio** e B com **30** (sai primeiro do endereço com mais saldo; se o material tiver endereço padrão, é ele
+   que cede primeiro).
+7. **A saída que declara endereço vazio.** Com o material só em A (por exemplo, 40), em **Movimentações → Saída**
+   informe como origem o endereço **B** e saia com **5**: aceito. B continua vazio e A fica com **35**.
+
+### O que esta etapa NÃO cobre
+
+- **Material COM lote.** A entrega de requisição não escolhe lote, e o endereço do lote continua "ocupado"
+  depois dela (novidades, **C72**). A contagem por endereço resolve caso a caso.
+- **A tela de localizações vazias** — é a Etapa 52.
+- **O passado.** Endereços com saldo que não existe, gravados antes desta etapa, ficam — consulta **A28** das
+  novidades.
+- **O estorno de uma saída** devolve tudo ao endereço informado, ao padrão ou a "sem localização atribuída" — não
+  aos endereços de onde saiu.
+- **A tela de Movimentações não oferece endereço no ajuste** — a contagem por endereço é pela integração.
 
 ---
 

@@ -366,9 +366,17 @@ Há duas coisas diferentes, e confundi-las causa dúvida:
 
 **A localização de cadastro** — o campo **Localização no estoque**, no bloco Estoque e Reposição da ficha do material. É a posição *padrão*: quando uma movimentação não informa origem ou destino, é ela que o sistema usa. Se houver mais de um almoxarifado cadastrado, o formulário pede primeiro o almoxarifado e só então lista as posições dele.
 
-**O saldo endereçado** — as quantidades que efetivamente estão em cada posição, escritas pelas movimentações: a entrada credita o destino, a saída debita a origem, a transferência move de uma posição para outra, e o ajuste com localização **define** (não soma) o que existe naquela prateleira, recalculando em seguida o total do material pela soma de todas as posições.
+**O saldo endereçado** — as quantidades que efetivamente estão em cada posição, escritas pelas movimentações. A regra que vale para todas: **a soma das posições de um material é sempre igual ao físico dele.**
 
-Duas consultas de apoio para quem está organizando o galpão — **posições vazias** e **materiais sem endereço** — existem hoje como consulta de sistema, sem tela própria.
+- **A entrada** credita o destino informado (ou a posição padrão, se não informado).
+- **A saída** tira de **onde o material está**. Quando a saída informa uma origem, essa posição é a **preferida**: sai dela primeiro. O que ela não tiver sai da **posição padrão** do material e, depois, das posições com **mais** saldo. Quando a saída não informa origem — é o caso da **entrega de requisição**, que nunca informa —, a ordem é a mesma a partir da posição padrão. Uma posição informada vazia **não** fica negativa: outra cede. Isso segue a regra de sempre do módulo: os almoxarifados são áreas físicas do mesmo site, não filiais, e uma saída consome o saldo do material onde quer que ele esteja.
+- **O que sobra sem posição.** Se as posições não cobrem a saída inteira, o que falta fica numa conta **"sem localização atribuída"**, que pode ser negativa. Isso só acontece em material que **permite saldo negativo** ou quando o físico estava fora de qualquer posição. Material que não permite saldo negativo tem a saída maior que o saldo recusada antes.
+- **A transferência** move de uma posição para outra e **exige** saldo na origem, mesmo em material que permite negativo: *"Saldo insuficiente na localização de origem"*.
+- **O ajuste de saldo total** (sem posição) define o total do material. Quando ele **aumenta**, a diferença vai para a posição padrão (ou "sem localização atribuída"), porque não há como saber onde o material apareceu. Quando ele **diminui**, as posições **cedem** (a padrão primeiro, depois as maiores) antes de qualquer conta ficar negativa.
+- **O ajuste com localização** — a **contagem daquela prateleira** — **define** (não soma) o que existe ali e recalcula o total do material pela soma de todas as posições. Se a contagem deixaria o material com saldo **negativo** (num material que não permite), o sistema primeiro zera a conta "sem localização atribuída" negativa; só recusa se nem isso bastar: *"Ajuste deixaria o saldo do material negativo (-50). O material não permite saldo negativo."* A tela de Movimentações não oferece posição no ajuste; a contagem por posição é feita pela integração.
+- **Material com lote.** O lote tem posição própria. A saída **sem** lote (como a entrega de requisição, que não escolhe lote) **não** tira de posição de lote. Nesse material, uma posição pode continuar mostrando o lote depois que ele saiu pela entrega, e a contagem daquela posição ("este lote, aqui, tem 0") põe a conta em dia.
+
+Duas consultas de apoio para quem está organizando o galpão: **materiais sem endereço**, em **Relatórios → Estoque → Materiais sem endereço**; e **posições vazias**, que existe como consulta de sistema, ainda sem tela própria.
 
 ### 3.7 O Mapa de Áreas
 
@@ -1053,7 +1061,9 @@ Movimentação errada **não é excluída**. O botão de estornar (seta curva) n
 - **Motivo é obrigatório** → *"Justificativa obrigatória para cancelamento"*.
 - Exige o perfil que pode **ajustar estoque** (mais restrito que o de movimentar).
 - **Estorno de estorno não existe** → *"Estorno não pode ser estornado"*.
-- **Estorno de entrada** vira uma saída, e por isso respeita o disponível: se a mercadoria já foi consumida, a recusa é *"Não é possível estornar: saldo disponível insuficiente (material já consumido)"*.
+- **Estorno de entrada** vira uma saída, e por isso respeita o disponível: se a mercadoria já foi consumida, a recusa é *"Não é possível estornar: saldo disponível insuficiente (material já consumido)"*. Em material sem lote, se a posição da entrada já não tem aquela quantidade (porque uma saída tirou dela), o estorno tira **como uma saída**: da posição da entrada primeiro, depois das outras com saldo — nenhuma posição fica negativa.
+- **Estorno de saída** devolve a quantidade **a uma posição só**: a origem informada na saída ou, sem ela, a posição padrão do material (ou a conta "sem localização atribuída"). A saída não guarda de quais posições tirou; o físico volta certo, a posição pode não ser a original.
+- **Estorno de uma contagem com localização** que deixaria o material com saldo negativo (porque o material já saiu depois da contagem) é recusado: *"Não é possível estornar: o saldo já foi consumido (o estorno deixaria o material negativo)"*.
 - **Duas pessoas estornando ao mesmo tempo:** só a primeira passa; a segunda recebe *"Movimentação já cancelada"*.
 
 Há linhas que o livro **não estorna de propósito**, cada uma com a porta certa nomeada na mensagem:
