@@ -1,8 +1,8 @@
 # 02 — Localizações e Endereçamento
 
-> **Status:** 🟡 — Etapa 2 entregue (2026-08-04): multi-almoxarifado (entidade `almoxarifados` como raiz + migração ledger), restrições de endereço (bloqueio + tipos de material permitidos) aplicadas no motor, exclusão de localização com saldo bloqueada, `endereco_completo` + consultas de vazias/sem-endereço, gestão de almoxarifados e restrições no front. Falta: código de endereço padrão gerado, capacidade/peso/dimensões como enforcement, confirmação por leitura. **Etapa 53 (2026-09-30): a sugestão de localização na entrada está entregue** (`adce812` + fix-round) — ver a seção no fim.
+> **Status:** 🟡 — Etapa 2 entregue (2026-08-04): multi-almoxarifado (entidade `almoxarifados` como raiz + migração ledger), restrições de endereço (bloqueio + tipos de material permitidos) aplicadas no motor, exclusão de localização com saldo bloqueada, `endereco_completo` + consultas de vazias/sem-endereço, gestão de almoxarifados e restrições no front. Falta: código de endereço padrão gerado, capacidade/peso/dimensões como enforcement, confirmação por leitura.  **Etapa 54 (2026-09-30): o motor recusa o endereço informado inativo ou inexistente** (`c757276` + fix-round) — ver a seção no fim.
 > **Spec original:** seções 3, 11
-> **Última atualização:**  2026-09-30 (**Etapa 53** — a sugestão de localização na entrada, e o aviso de padrão que não recebe o material; antes: **Etapa 52** — a tela de localizações vazias pela regra do mapa, e a recusa de apagar/desativar endereço ocupado; antes: **Etapa 51** — a saída passa a baixar o endereço de onde o material sai; três afirmações desta spec corrigidas à vista em "O que já existe"). Anterior: 2026-08-11 (auditoria spec×código: corrigido o alcance real da validação de tipo permitido e da preservação de campos no PUT; áreas especiais reclassificadas como parcial)
+> **Última atualização:**  2026-09-30 (**Etapa 54** — o motor recusa o endereço informado inativo ou inexistente, não se desativa endereço que é padrão de material ativo e o cadastro não aceita padrão inativa; antes: **Etapa 53** — a sugestão de localização na entrada, e o aviso de padrão que não recebe o material; antes: **Etapa 52** — a tela de localizações vazias pela regra do mapa, e a recusa de apagar/desativar endereço ocupado; antes: **Etapa 51** — a saída passa a baixar o endereço de onde o material sai; três afirmações desta spec corrigidas à vista em "O que já existe"). Anterior: 2026-08-11 (auditoria spec×código: corrigido o alcance real da validação de tipo permitido e da preservação de campos no PUT; áreas especiais reclassificadas como parcial)
 > **📋 Plano de implementação:** [docs/superpowers/plans/2026-08-04-almoxarifado-etapa2-cadastros.md](../../../docs/superpowers/plans/2026-08-04-almoxarifado-etapa2-cadastros.md) — Tasks 1, 2, 5, 7 · Design: [docs/superpowers/specs/2026-08-04-almoxarifado-etapa2-cadastros-design.md](../../../docs/superpowers/specs/2026-08-04-almoxarifado-etapa2-cadastros-design.md)
 
 ## Objetivo
@@ -32,7 +32,7 @@ Múltiplos almoxarifados, endereçamento padrão (ALM-CORREDOR-ESTRUTURA-NÍVEL-
 ### Backend
 - [x] Decidir e implementar multi-almoxarifado (ver decisão acima)
 - [ ] Áreas especiais (quarentena, expedição, sucata, devoluções, em-terceiros) como localizações tipadas — **parcial** (reclassificado na auditoria 2026-08-11): `TIPOS_LOCALIZACAO` no `schema.js` já inclui 'Área de expedição', 'Área de quarentena/inspeção' e 'Área de materiais do cliente' (tipos pré-existentes); faltam sucata/devoluções/em-terceiros e, principalmente, nenhuma semântica está atrelada aos tipos — hoje são só rótulos
-- [ ] Código de endereço padrão gerado a partir da hierarquia (ex.: `ALM-GERAL-A03-E02-N04-P01`) — **não entregue**; o que existe é `endereco_completo`, um campo computado só para exibição no `GET /localizacoes` (caminho hierárquico "ALM-GERAL / Corredor A / A-01"), não um código compacto gerado/persistido
+- [ ] Código de endereço padrão gerado a partir da hierarquia (ex.: `ALM-GERAL-A03-E02-N04-P01`) — **não entregue**; o que existe é `endereco_completo`, um campo computado só para exibição no `GET /localizacoes` (caminho hierárquico "ALM-GERAL / Corredor A / A-01"), não um código compacto gerado/persistido. ⚠️ **Correção (fechamento da Etapa 54): "não entregue" estava parcialmente errado.** Existe um gerador **no cliente**: o assistente de nova localização (`ConfiguracoesAlmoxarifado.js`, `generateNextCodigo`) propõe `PREFIXO-NN` (prefixo do setor ou do código do pai + próximo número entre os irmãos), e esse código é gravado. O que **não** existe: o formato hierárquico da spec, e a regra no servidor (ele aceita qualquer `codigo` único). É a **Etapa 55** — ver o plano da Etapa 54
 - [x] Restrições da posição: tipo de material permitido (`tipos_material_permitidos`) → validação na movimentação. **Correção 2026-08-11:** este item afirmava validação em "origem/destino/transferência/ajuste"; em `stockService.validarLocalizacaoParaMovimento` o tipo permitido só é avaliado quando `papel === 'destino'` (restringir por tipo é "o que pode entrar aqui", não "o que pode sair") — na origem a única guarda é `bloqueada`. O bloqueio, esse sim, vale nos quatro papéis
 - [ ] Capacidade, peso máximo, dimensões como enforcement na movimentação — **fora de escopo por decisão do design** (item 3: "informativo apenas — adiado")
 - [x] Bloquear/liberar endereço (`bloqueada` + validação em movimentação — origem OU destino OU transferência OU ajuste de localização); estorno **não** valida restrições (decisão deliberada — reverte mesmo se a localização foi bloqueada depois do movimento original)
@@ -54,7 +54,7 @@ Múltiplos almoxarifados, endereçamento padrão (ALM-CORREDOR-ESTRUTURA-NÍVEL-
 | Endereço bloqueado não recebe nem fornece material (origem, destino, transferência, ajuste) | `restricoesEndereco.api.test.js`: "ENTRADA para localização bloqueada retorna 400", "SAIDA com origem bloqueada retorna 400", "TRANSFERENCIA com destino bloqueado retorna 400", "AJUSTE com localizacao_destino_id bloqueada retorna 400" |
 | Endereço com material não pode ser excluído (inclusive saldo net-zero entre lotes) | `restricoesEndereco.api.test.js`: "DELETE localizacao com saldo retorna 400", "DELETE localizacao bloqueia mesmo quando SUM(quantidade) das linhas dá zero" |
 | Migração vincula localizações existentes ao ALM-GERAL exatamente uma vez | `almoxarifados.api.test.js`: "migracao criou o Almoxarifado Geral e vinculou localizacoes existentes" |
-| Saldo por localização bate com saldo total do material | **Etapa 51:** `saidaPorLocalizacao.api.test.js` confere, em cada um dos 24 cenários, que a soma das linhas é igual a `quantidade_atual` — e, em material sem lote que não permite negativo, que nenhum ENDEREÇO fica com saldo que não existe (a soma já batia antes; o que não batia era o endereço) |
+| Endereço **inativo** não recebe material informado como destino; endereço **inexistente** não é aceito em papel nenhum que o tipo use; origem inativa é aceita; ajuste em inativa só reduz ou zera; localização que é padrão de material ativo não é desativada; cadastro não aceita padrão inativa (**Etapa 54**) | `localizacaoInativaMotor.api.test.js` (15 cenários) |
 
 ## Dependências
 
@@ -154,7 +154,8 @@ padrão || null), e a tela listava todos os endereços sem indicação. Plano:
 - [ ] **Recebimento** — a tela não tem campo de endereço; fora (**D (53)**).
 - [ ] **Capacidade/peso** — fora por decisão do design da 02 (o item do checklist acima).
 - [ ] **Recusar entrada em localização inativa/inexistente no MOTOR** — não é desta etapa: mudaria o que a gravação
-  aceita (**B215**). É a **Etapa 54** (**C73**).
+  aceita (**B215**). É a **Etapa 54** (**C73**). → **Feito na Etapa 54** (`c757276`) — ver a seção abaixo; o
+  endereço **informado**, não a padrão (**B217**).
 
 **O desenho estava errado em dois pontos, e fica dito:** (1) a RN-04 dizia que *"a entrada sem destino continua indo
 para a padrão, como hoje"* — a Fase 2 provou pelo motor que a padrão bloqueada ou que não aceita o tipo **recusa** a
@@ -166,3 +167,42 @@ aceita numa ENTRADA real" e os negativos explícitos (bloqueada, tipo, inativa, 
 negativo). Client: bloco "Etapa 53" de `MovimentacoesAlmoxarifado.test.js`, **8** cenários. Controle positivo: 8 + 5
 sabotagens na implementação, 7 + 4 no fix-round — todas vermelhas no cenário certo. **O limite de 10 do "já tem" não
 tem teste** (declarado em **D (53)**).
+
+## Entregue na Etapa 54 (2026-09-30) — o motor recusa o endereço informado inativo ou inexistente
+
+Fecha o **C73**. Plano: [docs/superpowers/plans/2026-09-30-almoxarifado-etapa54-motor-recusa-localizacao-inativa.md](../../../docs/superpowers/plans/2026-09-30-almoxarifado-etapa54-motor-recusa-localizacao-inativa.md).
+
+- [x] **RN-01** — destino **informado** inativo recusado em toda a família de ENTRADA (inclusive `AJUSTE_POSITIVO`) e
+  no destino da TRANSFERENCIA: *"Localização ⟨código⟩ está inativa"* (`validarEnderecoExplicito`, antes de qualquer
+  efeito) — `c757276`
+- [x] **RN-02** — localização **informada** inexistente recusada: *"Localização de destino não encontrada"* /
+  *"Localização de origem não encontrada"* — `c757276`; id **0** é "não informado" — 30707de
+- [x] **RN-03** — AJUSTE / AJUSTE_INVENTARIO numa inativa só reduz ou zera: *"Localização ⟨código⟩ está inativa — o
+  ajuste só pode reduzir ou zerar o saldo dela"* — `c757276`; teto `max(atual, 0)` para a linha negativa não ficar
+  presa — 30707de
+- [x] **RN-04** — origem inativa aceita (esvaziar o endereço desativado); `PUT` que desativa e `DELETE` de
+  localização ativa que é padrão de material ativo: *"Localização é a padrão de ⟨N⟩ material(is) ativo(s) (⟨até 5
+  códigos⟩[, …]). Troque a localização padrão deles antes de apagar ou desativar."* — `c757276`
+- [x] **RN-05** — cadastro de material (POST sempre; PUT só quando a padrão muda): *"Localização padrão não
+  encontrada"* / *"Localização padrão ⟨código⟩ está inativa"* — `c757276`
+- [x] **RN-06** — estorno continua sem checar endereço (decisão da Etapa 2) — `c757276` (cenário de teste)
+- [x] Recebimento pré-valida o destino informado **uma vez** (*"Nao foi possivel dar entrada no estoque: ⟨motivo⟩"*)
+  — `c757276`, movido para fora do laço de itens — 30707de; retalho pré-valida antes
+  da perna 1 (a baixa) — `c757276`
+- [ ] **Padrão inativa na entrada SEM destino** — **não recusada, por decisão** (**B217**/**B218**): recusar travaria
+  o processamento de nota, a exclusão de requisição e o retorno de terceiros, que não têm campo de destino. É impedida
+  na origem (RN-04/RN-05); o legado se mede na **A29**.
+- [ ] **Almoxarifado inativo** — não recusado pelo motor (**D (54)**).
+- [ ] **Endereço em campo que o tipo não usa** (ex.: origem numa ENTRADA pela integração) — não validado, vai ao
+  livro como veio (**C74**).
+
+**O plano estava errado em dois pontos, e fica dito:** (1) a 1ª versão recusava a padrão inativa no motor — a Fase 2
+mostrou que travaria três fluxos sem campo de destino (**B217**); (2) a Fase 0 dizia que a padrão podia apontar para
+localização **apagada** — o DELETE de localização é *soft* (`ativo = 0`), não há DELETE físico; id inexistente só vem
+de integração ou legado. E a RN-02 dizia *"em qualquer papel e tipo"* — **exagerado**: é validado o campo de
+localização que o tipo **usa** (**C74**).
+
+Testes: `localizacaoInativaMotor.api.test.js` **15/15** (13 da implementação + 2 do fix-round: linha negativa e id 0),
+toda recusa com a metade positiva no mesmo cenário; `sugestaoLocalizacao.api.test.js` 15/15 (a fixture que dava
+entrada em localização já inativa passou a semear ativa e desativar depois). Controle positivo: 19 sabotagens na
+implementação + 4 no fix-round, todas vermelhas no cenário certo.

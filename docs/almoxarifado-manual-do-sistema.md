@@ -342,6 +342,21 @@ Recusa:
 
 Deixar a lista vazia significa **sem restrição** (não "nenhum tipo permitido").
 
+**Posição inativa ou que não existe.** Uma posição inativa não aparece no Mapa de Áreas nem nas listas de escolha, e o sistema não deixa material ser gravado nela quando ela é **informada** no movimento. A trava é avaliada antes de qualquer efeito no saldo, e depende do papel da posição:
+
+| Situação | O que o sistema faz |
+|---|---|
+| Posição **inativa** informada como **destino** — de qualquer entrada (inclusive o ajuste positivo) ou de uma transferência | Recusa: *"Localização A-01 está inativa"* |
+| Posição que **não existe** informada como destino ou como origem | Recusa: *"Localização de destino não encontrada"* ou *"Localização de origem não encontrada"* |
+| Posição **inativa** como **origem** — saída ou transferência | **Aceita.** É assim que se esvazia uma posição desativada que ainda tem saldo: transfira dela para uma posição ativa |
+| **Ajuste com localização** numa posição inativa | Aceito só para **reduzir ou zerar** o saldo dela; para aumentar: *"Localização A-01 está inativa — o ajuste só pode reduzir ou zerar o saldo dela"*. Se o saldo da posição estiver negativo, zerar é aceito |
+
+O campo de posição que conta é o que o tipo de movimento **usa**: o destino na entrada e no ajuste, a origem na saída, os dois na transferência.
+
+Diferente do bloqueio, esta trava **não** vale quando você deixa o destino em branco e a entrada cai na posição padrão do material: se a posição padrão estiver inativa, a entrada é aceita e vai para lá. Duas regras impedem que isso aconteça — uma posição que é padrão de material ativo não pode ser desativada (3.5), e o cadastro do material não aceita posição inativa como padrão (3.6) —, mas um material ainda pode ter a posição padrão inativa — por exemplo, se ele estava inativo quando a posição foi desativada e depois foi reativado, ou se o cadastro é anterior a essas duas regras. A tela de Movimentações avisa nesse caso (3.8), e a correção é trocar a **Localização no estoque** do material.
+
+O **estorno** também aqui é exceção: ele não verifica a posição, e estornar uma saída feita de uma posição que depois foi desativada devolve o material para ela.
+
 ### 3.5 Excluir ou desativar uma localização ocupada
 
 Excluir é permitido apenas quando a posição está vazia, e são duas verificações, nesta ordem:
@@ -356,7 +371,13 @@ Excluir é permitido apenas quando a posição está vazia, e são duas verifica
 
    O número é de **materiais** distintos — um material em dois lotes conta 1.
 
-A mesma segunda recusa vale para **desativar** a posição pela integração (a tela de localizações não tem esse botão). Uma posição que **já** está inativa responde que já estava inativa, sem recusar.
+3. **A posição é a posição padrão de algum material ativo?** Mesmo vazia, ela não pode sair: a entrada sem destino desses materiais cairia numa posição que nenhuma tela mostra.
+
+   > *"Localização é a padrão de 2 material(is) ativo(s) (MAT-001, MAT-002). Troque a localização padrão deles antes de apagar ou desativar."*
+
+   A frase lista até cinco códigos, em ordem alfabética, e termina em *", …"* quando há mais. Material **inativo** não conta. Troque a **Localização no estoque** dos materiais listados e exclua de novo.
+
+A segunda e a terceira recusas valem também para **desativar** a posição pela integração (a tela de localizações não tem esse botão). Uma posição que **já** está inativa responde que já estava inativa, sem recusar.
 
 A exclusão bem-sucedida é uma **inativação**: a posição sai das listas, mas o código continua reservado. Recriar depois o mesmo código reaproveita e reativa aquele endereço.
 
@@ -374,11 +395,11 @@ Três recusas irmãs, na mesma família:
 
 Há duas coisas diferentes, e confundi-las causa dúvida:
 
-**A localização de cadastro** — o campo **Localização no estoque**, no bloco Estoque e Reposição da ficha do material. É a posição *padrão*: quando uma movimentação não informa origem ou destino, é ela que o sistema usa. Se houver mais de um almoxarifado cadastrado, o formulário pede primeiro o almoxarifado e só então lista as posições dele.
+**A localização de cadastro** — o campo **Localização no estoque**, no bloco Estoque e Reposição da ficha do material. É a posição *padrão*: quando uma movimentação não informa origem ou destino, é ela que o sistema usa.  A posição padrão tem de existir e estar **ativa**: *"Localização padrão não encontrada"* ou *"Localização padrão A-01 está inativa"*. Essa verificação só acontece quando a posição padrão **muda** — editar outros campos de um material cuja posição padrão ficou inativa é aceito, e deixar a posição padrão em branco sempre é.
 
 **O saldo endereçado** — as quantidades que efetivamente estão em cada posição, escritas pelas movimentações. A regra que vale para todas: **a soma das posições de um material é sempre igual ao físico dele.**
 
-- **A entrada** credita o destino informado (ou a posição padrão, se não informado).
+ O destino informado tem de estar ativo (3.4).
 - **A saída** tira de **onde o material está**. Quando a saída informa uma origem, essa posição é a **preferida**: sai dela primeiro. O que ela não tiver sai da **posição padrão** do material e, depois, das posições com **mais** saldo. Quando a saída não informa origem — é o caso da **entrega de requisição**, que nunca informa —, a ordem é a mesma a partir da posição padrão. Uma posição informada vazia **não** fica negativa: outra cede. Isso segue a regra de sempre do módulo: os almoxarifados são áreas físicas do mesmo site, não filiais, e uma saída consome o saldo do material onde quer que ele esteja.
 - **O que sobra sem posição.** Se as posições não cobrem a saída inteira, o que falta fica numa conta **"sem localização atribuída"**, que pode ser negativa. Isso só acontece em material que **permite saldo negativo** ou quando o físico estava fora de qualquer posição. Material que não permite saldo negativo tem a saída maior que o saldo recusada antes.
 - **A transferência** move de uma posição para outra e **exige** saldo na origem, mesmo em material que permite negativo: *"Saldo insuficiente na localização de origem"*.
@@ -424,7 +445,7 @@ Em **Movimentações → Nova Movimentação**, com o tipo **Entrada** e um mate
 
   > *"A localização padrão A-01 está inativa — escolha um destino."*
 
-  Aqui o aviso é o que protege o saldo: o sistema **não recusa** uma entrada numa posição inativa, e o Mapa de Áreas só desenha posições ativas — o material entraria num lugar que nenhuma tela de ocupação mostra. Escolha um destino ativo.
+  Aqui o aviso é o que protege o saldo: a entrada **sem destino** vai para a posição padrão mesmo inativa — o sistema não a recusa (3.4) —, e o Mapa de Áreas só desenha posições ativas; o material entraria num lugar que nenhuma tela de ocupação mostra. Escolha um destino ativo, e corrija a **Localização no estoque** do material.
 
 Trocar de material apaga as sugestões na hora e limpa o destino **se** ele veio de uma sugestão; um destino escolhido à mão na lista continua escolhido. As sugestões aparecem **só na Entrada** — não em Saída, Transferência ou Ajuste — e, se a consulta falhar, o formulário funciona normalmente, sem os botões. A tela de **Recebimento** não tem campo de posição e não mostra sugestão.
 
@@ -2139,7 +2160,9 @@ Além disso, antes de mover qualquer saldo, o sistema verifica **item por item**
 | Material com controle de série não aceita quantidade quebrada | *"…: quantidade fracionaria com controle de serie"* |
 | Localização de destino tem de aceitar aquele material | a razão específica da localização (3.4) |
 
-Todas as recusas vêm juntas, dentro de uma frase única que começa com *"Nao foi possivel dar entrada no estoque:"*. **Nenhum item entra enquanto houver um item com problema** — a nota é recusada inteira, você acerta e reprocessa. Isso evita o pior cenário do galpão: metade da nota no estoque e ninguém sabendo qual metade.
+Quando uma localização de destino é informada para a nota inteira (pela integração), ela é conferida **uma vez**, antes dos itens: tem de existir e estar ativa — *"Nao foi possivel dar entrada no estoque: Localização A-01 está inativa"*.
+
+ **Nenhum item entra enquanto houver um item com problema** — a nota é recusada inteira, você acerta e reprocessa. Isso evita o pior cenário do galpão: metade da nota no estoque e ninguém sabendo qual metade.
 
 > **Atenção operacional:** lote e séries são lidos **do que está salvo**, não do que está digitado na tela. Preencha lote/séries e clique em **Salvar Dados Fiscais** antes de **Processar Nota**.
 

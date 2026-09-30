@@ -107,9 +107,10 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Vinte e oito itens para rodar em produção ANTES do deploy — vinte e cinco são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Vinte e nove itens para rodar em produção ANTES do deploy — vinte e seis são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
 
-*(**Atualizado em 2026-09-30 (Etapa 51) de vinte e sete para vinte e oito**, com a **A28**. As Etapas 49 e 50 não acrescentaram nenhuma.)*
+*(**Atualizado em 2026-09-30 (Etapa 54) de vinte e oito para vinte e nove**, com a **A29**. As Etapas 52 e 53 não acrescentaram nenhuma.)*
+
 
 *(**Atualizado em 2026-09-30 (Etapa 48) de vinte e seis para vinte e sete**, com a **A27**.)*
 
@@ -896,9 +897,43 @@ SELECT m.codigo, m.nome, l.codigo AS endereco, s.quantidade
 - ⚠️ **Material COM lote** tem o mesmo sintoma e **não** foi corrigido (letra **C**, item 72) — a consulta acima
   filtra `lote_id IS NULL` de propósito.
 
-### B. Decisões de negócio — B1 a B216; as em aberto esperam você, as tomadas estão escritas com o descartado
+**A29 (NOVA, da Etapa 54 — endereço padrão inativo e saldo em endereço inativo: medir antes, nada a
+apagar).** A partir desta etapa o sistema **recusa** gravar material num endereço inativo ou inexistente
+quando o endereço é **informado**, **não deixa** desativar endereço que é padrão de material ativo e **não
+aceita** endereço padrão inativo no cadastro. O **passado fica**: o que já estava gravado antes do deploy
+continua lá. Duas consultas:
 
-*(**Atualizado em 2026-09-30 de B205 para B216**, com as quatro da Etapa 51, as três da Etapa 52 e as quatro da Etapa 53.)*
+```sql
+-- (a) materiais ATIVOS cujo endereço padrão está inativo ou não existe
+SELECT m.codigo, m.localizacao_padrao_id, l.codigo AS endereco, l.ativo
+  FROM materiais_almoxarifado m
+  LEFT JOIN localizacoes_almoxarifado l ON l.id = m.localizacao_padrao_id
+ WHERE m.ativo = 1 AND m.localizacao_padrao_id IS NOT NULL
+   AND (l.id IS NULL OR l.ativo <> 1);
+
+-- (b) saldo gravado em endereço inativo ou que não existe
+SELECT s.material_id, s.localizacao_id, s.quantidade, l.ativo
+  FROM estoque_saldo_almoxarifado s
+  LEFT JOIN localizacoes_almoxarifado l ON l.id = s.localizacao_id
+ WHERE s.localizacao_id IS NOT NULL AND s.quantidade <> 0
+   AND (l.id IS NULL OR l.ativo <> 1);
+```
+
+**Como ler o resultado:**
+- **As duas vazias** — nada a fazer.
+- **(a) com linhas** — a entrada **sem destino** desses materiais (recebimento, exclusão de requisição, retorno de
+  terceiros) continua caindo nesse endereço, **e é aceita** (**B218**): o saldo vai para um endereço que o Mapa não
+  mostra. Corrija **no cadastro do material**, trocando o endereço padrão por um ativo (o cadastro aceita: a regra
+  nova só olha o padrão quando ele **muda**). Enquanto não trocar, a tela de Movimentações avisa na entrada.
+- **(b) com linhas** — há material num endereço que o Mapa não mostra. Tire de lá pela própria tela: **Transferência**
+  com esse endereço como **origem** (origem inativa é aceita) para um endereço ativo, ou **Ajuste** do endereço para
+  **0** ou para menos (ajuste em endereço inativo só **reduz ou zera**). Linha com endereço que **não existe**
+  (`ativo` vazio na consulta): só por contagem/ajuste pela integração — o endereço não aparece na lista da tela.
+  **Não apague linha por SQL** — a soma das linhas é o físico do material.
+
+### B. Decisões de negócio — B1 a B219; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+*(**Atualizado em 2026-09-30 de B205 para B219**, com as quatro da Etapa 51, as três da Etapa 52, as quatro da Etapa 53 e as três da Etapa 54.)*
 
 *(**Atualizado em 2026-09-30 de B204 para B205**, com a da Etapa 50.)*
 
@@ -3754,6 +3789,30 @@ estorno e transferência), e esta etapa prometia não mudar nenhuma recusa exist
 a mesma régua do Mapa e da lista de vazias (**B210**) — mostra endereços, que o Mapa já mostra. **Descartado:** exigir o
 perfil de movimentar (quem não pode movimentar não abre o formulário de entrada de qualquer jeito).
 
+**B217 (NOVA, da Etapa 54) — o sistema recusa o endereço INFORMADO; o endereço PADRÃO inativo é impedido na origem,
+não na gravação.** A primeira versão do desenho recusava também a entrada **sem destino** que cai num padrão inativo. A
+revisão do plano achou dois problemas graves: o **recebimento** (processar a nota), a **exclusão de requisição** e o
+**retorno de terceiros** caem no padrão **sem o usuário poder escolher destino** — a nota inteira ficaria travada por um
+cadastro que o faturamento não pode mudar, e a exclusão de requisição devolveria o 1º item, recusaria o 2º e, na nova
+tentativa, devolveria o 1º **de novo**. **Escolhido:** recusar só o endereço informado e **impedir que o padrão fique
+inativo** — não se desativa endereço que é padrão de material ativo (**B219**) e o cadastro não aceita padrão inativo.
+**Descartados:** (1) recusar o padrão inativo na gravação — trava os fluxos sem campo de destino; (2) mandar para
+"sem localização atribuída" quando o padrão está inativo — mexe na resolução de endereço de todos os fluxos e na regra
+do Mapa, escopo bem maior; (3) limpar o padrão dos materiais ao desativar o endereço — ver **B219**. Reversível: é uma
+checagem a mais em três pontos.
+
+**B218 (NOVA, da Etapa 54) — o padrão inativo que JÁ EXISTE continua recebendo a entrada sem destino.** Consequência
+direta da **B217**: o que ficou inativo antes do deploy (consulta **A29 (a)**) não trava nada — a entrada sem destino
+continua aceita e o saldo vai para um endereço que o Mapa não mostra, com o aviso da tela de Movimentações.
+**Escolhido:** medir e corrigir no cadastro. **Descartado:** recusar — pelos mesmos motivos da **B217**.
+
+**B219 (NOVA, da Etapa 54) — desativar endereço que é padrão de material ativo é RECUSADO, com os códigos.**
+**Escolhido:** a recusa *"Localização é a padrão de ⟨N⟩ material(is) ativo(s) (⟨até 5 códigos⟩). Troque a localização
+padrão deles antes de apagar ou desativar."* — quem reorganiza o galpão troca o padrão dos materiais listados e tenta de
+novo. **Descartado:** limpar o padrão desses materiais sozinho ao desativar — mudaria cadastro sem o dono saber, e a
+entrada sem destino deles passaria a ir para "sem localização atribuída" em silêncio. Se a lista for grande demais na
+prática, a alternativa é voltar a esta decisão (reversível: é uma recusa na rota).
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -4749,7 +4808,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
     **Etapa 52:** a lista de localizações vazias **declara** isso na nota do relatório — o endereço de material
     com lote pode aparecer **ocupado** (fora da lista) depois de a entrega tirar o material.
 
-73. **NOVO, da Etapa 53 — o sistema ACEITA entrada em endereço INATIVO e em endereço que NÃO EXISTE.** Achado pela
+73. **✅ RESOLVIDO NA ETAPA 54 (c757276 e 30707de) — NOVO, da Etapa 53 — o sistema ACEITA entrada em endereço INATIVO e em endereço que NÃO EXISTE.** Achado pela
     revisão do plano da Etapa 53, pelo sistema real. Cenário 1: remova um endereço vazio em Configurações →
     Localizações (remover **desativa** o endereço) e dê entrada com ele como destino (pela integração, ou por ser o **endereço padrão** do material e o
     destino ficar em branco): a entrada é **aceita**, o saldo é gravado nesse endereço — e o **Mapa**, que só mostra
@@ -4773,6 +4832,23 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
     ```
     Vazia: nada a fazer. Com linhas: o material está num endereço que o Mapa não mostra — reative o endereço e
     transfira o saldo, ou faça a contagem. **É a Etapa 54.**
+    **Etapa 54 (como ficou):** endereço **informado** inativo é recusado como destino (*"Localização ⟨código⟩ está
+    inativa"*), inexistente é recusado em origem e destino (*"Localização de destino não encontrada"* / *"Localização
+    de origem não encontrada"*), e o ajuste num inativo só reduz ou zera. O **Cenário 1 pelo padrão** não é mais
+    possível de criar (não se desativa endereço que é padrão de material ativo — **B219**), mas o padrão inativo
+    **que já existe** continua recebendo a entrada sem destino (**B218**) — meça com a **A29**. Estorno continua sem
+    checar endereço (reverter tem de ser sempre possível): estornar uma saída de um endereço hoje inativo devolve o
+    material para lá.
+
+74. **NOVO, da Etapa 54 — três pontas que a etapa mediu e deixou de fora, de propósito.**
+    (1) **Um endereço num campo que o tipo de movimento não usa** — por exemplo, *origem* numa **Entrada** pela
+    integração — **não é validado** e vai para o histórico do movimento como veio (não mexe em saldo). A tela nunca
+    manda isso. (2) **Algumas coisas acontecem antes da recusa de endereço:** numa entrada com **código de lote novo**,
+    o lote é criado antes de o endereço ser recusado (fica um lote sem saldo); num ajuste de **material de cliente**, a
+    auditoria da permissão especial é gravada antes da recusa. É o mesmo comportamento que a recusa de endereço
+    **bloqueado** sempre teve. (3) **Editar um endereço pela integração sem mandar o campo "ativo" o REATIVA** — a
+    gravação trata o campo ausente como "ativo". A tela não é afetada (ela só lista endereços ativos). Anterior a
+    esta etapa.
 
 
 ### D. Limitações declaradas — são decisão, não esquecimento
@@ -5347,6 +5423,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(53) "Já tem este material" para material com lote** pode apontar endereço que a entrega já esvaziou (**C72**).
 - **(53) O limite de 10 em "já tem este material" não tem teste** — a tela mostra só 3, então o corte não aparece para
   o operador; declarado, não provado.
+- **(54) Almoxarifado inativo não é recusado.** A gravação recusa endereço **inativo**, mas não olha se o
+  **almoxarifado** do endereço está inativo. A sugestão de endereço já não propõe esses endereços.
+- **(54) Reativar um material cujo endereço padrão está inativo não é barrado** — o cadastro só confere o padrão
+  quando **ele** muda.
+- **(54) O padrão inativo que já existe continua recebendo a entrada sem destino** (**B218**) — é decisão; a **A29**
+  mede.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -5729,6 +5811,16 @@ sugestão é aceita numa entrada de verdade) e a tela com a resposta simulada (8
    padrão e saldo em outros endereços: *"Sugestões:"* e até 3 botões abaixo de *Localização de destino*, e o endereço
    completo ao passar o mouse.
 2. **O aviso de padrão bloqueado** aparece antes de salvar, e some ao escolher um destino.
+
+**(54) Nenhum clique foi dado nesta etapa.** Os testes provam as recusas pelo servidor (15 cenários). O que **só o
+navegador** prova:
+
+1. **A recusa de remover aparece no aviso da tela.** Em **Configurações → Localizações**, remova um endereço que é
+   padrão de algum material ativo: o aviso vermelho mostra *"Localização é a padrão de ⟨N⟩ material(is) ativo(s)
+   (…)"* e o endereço continua na lista.
+2. **O cadastro de material** não oferece endereço inativo na lista (a lista só mostra ativos) — a recusa nova
+   *"Localização padrão ⟨código⟩ está inativa"* só aparece por integração, ou se o endereço for desativado com o
+   formulário aberto.
 
 ### G. Fragilidades estruturais que continuam de pé
 
@@ -13535,7 +13627,10 @@ não recebe este material (Localização A não aceita o tipo de material 'CONSU
 **7. Padrão inativo: aviso, mas ainda sem recusa.** Remova o endereço **A** em Configurações → Localizações (remover
 **desativa** o endereço, e o material continua com ele como padrão): aparece *"A localização padrão A
 está inativa — escolha um destino."* e **A** não é sugerido. ⚠️ Se salvar sem destino, **hoje o sistema aceita** e o
-saldo vai para um endereço que o Mapa não mostra — ver **C73**. A Etapa 54 transforma isso em recusa.
+**Desde a Etapa 54 este cenário mudou — e a frase acima ("A Etapa 54 transforma isso em recusa") estava errada
+sobre o COMO:** remover **A** enquanto ele é padrão do material passou a ser **recusado** (**B219**), então o aviso
+só aparece para padrão que **já estava** inativo antes do deploy (**A29**) — e a entrada sem destino nele **continua
+aceita** (**B218**). O que a Etapa 54 recusa é o endereço inativo **informado** como destino.
 
 **8. Saída não sugere.** Em **Saída**, **Transferência** ou **Ajuste**, não aparece sugestão nenhuma. Se a sugestão
 falhar (servidor fora), o formulário continua funcionando normalmente, só sem os botões.
@@ -13561,14 +13656,93 @@ este material"* ou como padrão; endereço com saldo **negativo** era chamado de
 *"já tem"* limitado a 10). E lacunas de teste: a quantidade mostrada no botão, o aviso sumindo ao escolher destino, a
 limpeza imediata na troca de material e a resposta atrasada do material anterior — nenhuma tinha prova.
 
-## Onde estamos e o que vem a seguir
+## Etapa 54 — O sistema para de gravar material em endereço desativado ou que não existe (2026-09-30)
+
+Um endereço desativado some do **Mapa** — é para isso que se desativa. Até aqui, porém, o sistema **aceitava** dar
+entrada ou transferir material **para** um endereço desativado, e até para um endereço que **não existe** (pela
+integração): o material ficava registrado num lugar que nenhuma tela mostra. E o jeito mais comum de isso acontecer
+era silencioso: desativar um endereço vazio que era o **endereço padrão** de algum material — a próxima nota
+processada daquele material ia para lá. Agora o sistema recusa o endereço desativado informado como destino, recusa
+endereço inexistente, **não deixa** desativar um endereço que é padrão de material ativo, e o cadastro de material
+**não aceita** endereço padrão desativado.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Entrada (e ajuste positivo) com destino **desativado** era aceita, e o saldo sumia do Mapa | Recusada: *"Localização ⟨código⟩ está inativa"* |
+| Transferência **para** endereço desativado era aceita | Recusada com a mesma frase; a origem não perde nada |
+| Endereço que **não existe** (pela integração) virava saldo num lugar órfão | Recusado: *"Localização de destino não encontrada"* / *"Localização de origem não encontrada"* |
+| Ajuste de um endereço desativado podia **subir** o saldo dele | Só reduz ou zera: *"Localização ⟨código⟩ está inativa — o ajuste só pode reduzir ou zerar o saldo dela"* |
+| Remover (desativar) um endereço **vazio** que era padrão de material era aceito — e armava a armadilha acima | Recusado: *"Localização é a padrão de ⟨N⟩ material(is) ativo(s) (⟨códigos⟩). Troque a localização padrão deles antes de apagar ou desativar."* |
+| O cadastro de material aceitava qualquer endereço padrão | Recusa: *"Localização padrão ⟨código⟩ está inativa"* / *"Localização padrão não encontrada"* |
+| Processar nota com destino desativado: cada item repetia o erro | A nota inteira é recusada **uma vez**: *"Nao foi possivel dar entrada no estoque: Localização ⟨código⟩ está inativa"* |
+| Retalho com destino desativado: a chapa era baixada, a entrada do retalho recusada, e o histórico ficava com a baixa e o estorno | Recusado **antes** de baixar a chapa — o histórico fica limpo |
+
+**O que continua aceito, de propósito:** tirar material **de** um endereço desativado (saída e transferência com ele
+como origem) — é o jeito de esvaziá-lo; o **estorno** de qualquer movimento (reverter tem de ser sempre possível); e
+a entrada **sem destino** que cai num padrão que **já estava** desativado antes do deploy (**B218**, medido pela **A29**).
+
+### As regras, com o cenário exato
+
+A lista de destino da tela só mostra endereços **ativos** — por isso as recusas de destino desativado não se
+reproduzem clicando na lista; elas protegem a integração, o processamento de nota com destino e o formulário que ficou
+aberto enquanto alguém desativava o endereço. O que se demonstra na tela:
+
+**1. Não se remove endereço que é padrão de material.** Cadastre (ou edite) um material com **endereço padrão X**.
+Em **Configurações → Localizações**, remova **X**: aviso vermelho *"Localização é a padrão de 1 material(is) ativo(s)
+(⟨código do material⟩). Troque a localização padrão deles antes de apagar ou desativar."* e **X** continua na lista.
+Com mais de 5 materiais, a frase lista os 5 primeiros códigos (em ordem alfabética) e termina em *", …"*. Material
+**inativo** não conta. Troque o padrão do material para outro endereço e remova **X** de novo: agora sai da lista.
+
+**2. Esvaziar um endereço desativado continua possível.** Um endereço que ficou desativado com saldo (anterior a esta
+etapa — consulta **A29 (b)**) pode ser esvaziado por **Transferência** (ele como **origem**) ou por **Ajuste**:
+ajustar para **0** ou para menos é aceito; para **mais** que o saldo atual, a recusa é *"Localização ⟨código⟩ está
+inativa — o ajuste só pode reduzir ou zerar o saldo dela"*. Se a linha do endereço estiver **negativa**, ajustar para
+**0** é aceito (o teto é o maior entre o saldo atual e zero).
+
+**3. Destino desativado, pela integração.** `POST /api/almoxarifado/movimentacoes/v2` com `tipo: "ENTRADA"` e
+`localizacao_destino_id` de um endereço desativado → **400** *"Localização ⟨código⟩ está inativa"*, e nada é gravado.
+Com um id que não existe → *"Localização de destino não encontrada"*. Uma **saída** com `localizacao_origem_id`
+inexistente → *"Localização de origem não encontrada"*. O id **0** conta como "não informado" (como em todo o resto).
+
+**4. Cadastro de material (integração ou formulário aberto).** Salvar um material com endereço padrão desativado →
+*"Localização padrão ⟨código⟩ está inativa"*; com um id inexistente → *"Localização padrão não encontrada"*. **Editar
+outro campo** de um material cujo padrão já estava desativado **passa** — a regra só olha o padrão quando ele muda.
+Tirar o padrão (deixar em branco) sempre passa.
+
+### O que esta etapa NÃO cobre
+
+1. **Almoxarifado inativo** não é recusado — só o endereço (**D (54)**).
+2. **O padrão desativado que já existe** continua recebendo a entrada sem destino (**B218**, **A29**).
+3. **Estorno** não checa endereço: estornar uma saída de um endereço hoje desativado devolve o material para lá (**C73**).
+4. **Endereço em campo que o tipo não usa**, efeitos antes da recusa (lote novo, auditoria do dono) e a edição de
+   endereço pela integração sem o campo "ativo" (que o reativa) — **C74**.
+
+### O que a revisão encontrou
+
+A revisão do **plano** mudou o desenho: a primeira versão recusava também a entrada sem destino que cai num padrão
+desativado, e isso travaria o processamento de nota (que não tem campo de destino), a exclusão de requisição (com risco
+de devolver o mesmo item duas vezes) e o retorno de terceiros — daí **B217**: impedir o padrão desativado na origem.
+Ela também achou que o ajuste **subindo** saldo num endereço desativado reabriria o problema, e que o retalho recusava o
+destino só **depois** de baixar a chapa. A revisão do **código** achou: o ajuste para **0** num endereço desativado com
+saldo **negativo** era recusado (a linha ficava presa para sempre); o id **0** virava "não encontrada"; o processamento
+de nota repetia a mesma frase item por item; e lacunas de teste — a recusa do recebimento não se distinguia da do
+motor, e a desativação pelo formulário de edição não tinha a metade "passa quando pode". Tudo corrigido e com teste.
+
+- **Etapa 54 entregue (2026-09-30):** **o sistema para de gravar material em endereço desativado ou que não existe.**
+  Destino desativado ou inexistente é recusado; não se remove endereço que é padrão de material ativo; o cadastro não
+  aceita padrão desativado; ajuste num endereço desativado só reduz ou zera. O furo **C73** está **resolvido**.
+  **O que é seu:** a consulta **A29**; as decisões **B217 a B219**; o **C74**; as limitações **(54)** em D e as
+  verificações **(54)** em F. **Próxima: Etapa 55 — o código de endereço gerado pela hierarquia (feature 02; ver o plano da Etapa 54).**
 
 - **Etapa 53 entregue (2026-09-30):** **a sugestão de localização na entrada.** Em **Movimentações → Entrada**, ao
   escolher o material aparecem até três endereços sugeridos — o padrão, onde o material já está, e vazios que o
   aceitam —, e a tela **avisa** quando o endereço padrão está bloqueado, não aceita o tipo ou está inativo. Nada é
   preenchido sozinho. **O que é seu:** as decisões **B213 a B216**; o furo **C73** (o sistema ainda aceita entrada em
   endereço inativo ou inexistente — **é a próxima etapa**); as limitações **(53)** em D e as verificações **(53)** em F.
-  **Próxima: Etapa 54 — o sistema recusa entrada (e transferência) para endereço inativo ou inexistente.**
+  **Próxima: Etapa 54 — o sistema recusa entrada (e transferência) para endereço inativo ou inexistente.** *(Feita — ver
+  acima.)*
 
 - **Etapa 52 entregue (2026-09-30):** **a lista de localizações vazias, e o endereço ocupado que não pode mais
   ser apagado.** Em **Relatórios → Estoque → Localizações vazias**, pela **mesma regra do Mapa** (o que um mostra

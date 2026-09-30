@@ -1,19 +1,23 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-09-30 (Etapa 53) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-09-30 (Etapa 54) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 53) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 54) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-09-30 (Etapa 53 ENTREGUE · Etapa 54 começando)
+> ## Onde o desenvolvimento está — 2026-09-30 (Etapa 54 ENTREGUE · Etapa 55 começando)
 >
-> **O desenvolvimento parou aqui: Etapa 53 fechada, Etapa 54 começando — 2026-09-30.** A **Etapa 53 (a sugestão
+> **O desenvolvimento parou aqui: Etapa 54 fechada, Etapa 55 começando — 2026-09-30.** A **Etapa 54 (o sistema para
+> de gravar material em endereço desativado ou que não existe)**: destino desativado ou inexistente é recusado, não
+> se remove endereço que é padrão de material ativo, o cadastro de material não aceita padrão desativado, e o ajuste
+> num endereço desativado só reduz ou zera. **Próxima etapa, já começando: 55 — o código de endereço gerado pela
+> hierarquia** (feature 02; ver *"Próxima tarefa detalhada"* no plano da Etapa 54).
+>
+> **Etapas 1 a 20 e 22 a 54 completas.**
+>
+> **Etapa 53, 2026-09-30.** A **Etapa 53 (a sugestão
 > de localização na entrada)**: em **Movimentações → Entrada**, ao escolher o material aparecem até 3 endereços
 > sugeridos (o padrão, onde o material já está, vazios que o aceitam), e a tela **avisa** quando o endereço padrão
-> está bloqueado, não aceita o tipo ou está inativo. **Próxima etapa, já começando: 54 — o sistema recusa entrada
-> (e transferência) para endereço inativo ou inexistente** (novidades, **C73**; ver *"Próxima tarefa detalhada"* no
-> plano da Etapa 53).
->
-> **Etapas 1 a 20 e 22 a 53 completas.**
+> está bloqueado, não aceita o tipo ou está inativo. **Próxima etapa: 54** (feita — acima).
 >
 > **Etapa 52, 2026-09-30.** A **Etapa 52 (a lista de localizações vazias)** dá
 > tela ao espaço livre: **Relatórios → Estoque → Localizações vazias**, pela **mesma regra do Mapa**, exportável
@@ -4949,6 +4953,59 @@ que ele não tinha como repetir com sucesso garantido.
 
 ---
 
+## Etapa 54 — O sistema para de gravar material em endereço desativado ou que não existe (ENTREGUE — 2026-09-30)
+
+**O que mudou, em uma frase:** o sistema **recusa** gravar material num endereço desativado ou que não existe, **não
+deixa** desativar um endereço que é padrão de material ativo, e o cadastro de material **não aceita** endereço padrão
+desativado.
+
+**O problema que ela resolve.** Endereço desativado some do Mapa. Mas o sistema aceitava entrada e transferência
+**para** ele (e, pela integração, para um endereço que nem existe) — o material ficava registrado num lugar que
+nenhuma tela mostra. O caminho mais comum era silencioso: desativar um endereço vazio que era padrão de algum material,
+e a próxima nota processada daquele material ia para lá.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Entrada/transferência para endereço desativado: aceita, saldo invisível no Mapa | Recusada: *"Localização ⟨código⟩ está inativa"* |
+| Endereço inexistente (integração): saldo órfão | Recusado: *"Localização de destino não encontrada"* / *"Localização de origem não encontrada"* |
+| Ajuste podia **subir** o saldo de um endereço desativado | Só reduz ou zera: *"Localização ⟨código⟩ está inativa — o ajuste só pode reduzir ou zerar o saldo dela"* |
+| Remover endereço vazio que é padrão de material: aceito | Recusado: *"Localização é a padrão de ⟨N⟩ material(is) ativo(s) (⟨códigos⟩). Troque a localização padrão deles antes de apagar ou desativar."* |
+| Cadastro aceitava endereço padrão desativado | Recusa: *"Localização padrão ⟨código⟩ está inativa"* |
+
+**Continua aceito, de propósito:** tirar material **de** um endereço desativado (saída, transferência); o estorno; e a
+entrada sem destino num padrão que **já estava** desativado antes do deploy (novidades, **B218** e **A29**).
+
+### Roteiro de teste manual (≈5 min)
+
+**Preparação.** Dois endereços **X** e **Y**, vazios. Um material ativo com endereço padrão **X**.
+
+1. **Não remove o padrão.** Em **Configurações → Localizações**, remova **X**: aviso vermelho *"Localização é a padrão
+   de 1 material(is) ativo(s) (⟨código⟩). Troque a localização padrão deles antes de apagar ou desativar."*, e **X**
+   continua na lista.
+2. **Troca e remove.** Edite o material e troque o endereço padrão para **Y**. Remova **X** de novo: agora sai da lista.
+3. **O cadastro só oferece ativos.** Edite o material: **X** não aparece mais na lista de endereço padrão.
+4. **Esvaziar continua possível** (só se houver endereço desativado com saldo, anterior ao deploy — consulta **A29 (b)**
+   nas novidades): uma **Transferência** com ele como **origem** para **Y** é aceita; um **Ajuste** dele para **0** é
+   aceito; para mais que o saldo atual, a recusa é *"Localização ⟨código⟩ está inativa — o ajuste só pode reduzir ou
+   zerar o saldo dela"*.
+
+As recusas de **destino** desativado ou inexistente não se reproduzem clicando: a lista de destino só mostra endereços
+ativos. Elas protegem a integração e o formulário que ficou aberto enquanto alguém desativava o endereço — o cenário
+pela API está nas novidades (Etapa 54, regra 3).
+
+### O que esta etapa NÃO cobre
+
+- **Almoxarifado inativo** — o sistema recusa endereço desativado, não olha o almoxarifado.
+- **Padrão desativado de antes do deploy** — continua recebendo a entrada sem destino (**B218**); meça com a **A29**.
+- **Estorno** — não checa endereço (reverter tem de ser sempre possível).
+- **Reativar um material** cujo padrão está desativado não é barrado.
+- As pontas da **C74** (endereço em campo que o tipo não usa; lote criado antes da recusa; edição de endereço pela
+  integração sem o campo "ativo" o reativa).
+
+---
+
 ## Etapa 53 — A sugestão de localização na entrada (ENTREGUE — 2026-09-30)
 
 **O que mudou, em uma frase:** na **Entrada** de material, a tela de Movimentações **sugere onde guardar** — o
@@ -4987,8 +5044,9 @@ destino em branco, a entrada ia para o endereço padrão — se ele estivesse **
    de material 'CONSUMIVEL') — escolha um destino."*. Tire a restrição.
 6. **Padrão inativo.** Com **A** vazio, remova-o em **Configurações → Localizações** (remover **desativa** o
    endereço; o material continua com ele como padrão): aparece *"A localização padrão A está inativa — escolha um destino."*.
-   ⚠️ **Não salve sem destino** para "ver o erro": hoje o sistema **aceita** e o saldo vai para um endereço que o Mapa
-   não mostra (**C73** — é a Etapa 54).
+   **Desde a Etapa 54 este passo não se reproduz assim:** remover **A** enquanto ele é padrão do material é
+   **recusado** (*"Localização é a padrão de 1 material(is) ativo(s) (…)"*). O aviso de padrão inativo só aparece
+   para padrão que já estava desativado antes do deploy (novidades, **A29**).
 7. **Só na entrada.** Troque o tipo para **Saída** ou **Transferência**: os botões e os avisos somem.
 
 ### O que esta etapa NÃO cobre
