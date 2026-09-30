@@ -107,7 +107,7 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Dez consultas para rodar em produção ANTES do deploy — duas ações fora do sistema, e uma limpeza de disco que roda sozinha
+### A. Vinte e quatro itens para rodar em produção ANTES do deploy — vinte e um são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
 
 *(Este título dizia "Duas consultas" — **passou a três com a A4, da Etapa 24**, ganhou a
 **limpeza de disco A5 na Etapa 25** e **passou a cinco com a A6 e a A7, da Etapa 26**. Corrigido
@@ -119,6 +119,13 @@ sendo contadas como se fossem. **Correção de estrutura, dita em vez de silenci
 título `### B. Decisões de negócio` **duplicado e vazio** imediatamente antes da A8, o que jogava a
 A8 visualmente para dentro da letra B. O título sobrando foi removido; a letra B continua uma
 só, logo abaixo.)*
+
+**⚠️ Atualizado em 2026-09-29 (Etapa 45) para VINTE E QUATRO — e o título estava defasado desde
+2026-09-16.** Ele dizia "dez" enquanto a lista já tinha vinte e duas entradas: as Etapas 38 a 44
+acrescentaram da **A14** à **A22** sem mexer no título, e a 45 acrescentou a **A23** e a **A24**.
+Fica dito em vez de corrigido em silêncio, pelo motivo que este próprio parágrafo dá desde a Etapa
+26: **a contagem no título é o que faz alguém parar de procurar** — quem confiasse no "dez" pararia
+na A13 e não rodaria as onze consultas seguintes, três delas sobre estoque bloqueado.*
 
 | # | Por quê | Consulta |
 |---|---|---|
@@ -701,7 +708,97 @@ deixar as inspeções antigas liberáveis. Seria conveniente e abriria a porta l
 acima — e o prejuízo de uma porta dessas é permanente, enquanto o desbloqueio manual é o que já
 se fazia ontem.
 
-### B. Decisões de negócio — B1 a B175; as em aberto esperam você, as tomadas estão escritas com o descartado
+**A23 (NOVA, da Etapa 45 — a consulta que MAIS pede sua atenção nesta etapa: material bloqueado por
+mais de uma origem).** A devolução baixa o material **contra a quantidade bloqueada**, e o estoque
+guarda **um número só** de bloqueado por material, sem dizer de qual inspeção veio cada parte. Quando
+duas retenções convivem no mesmo material, ou quando alguém já desbloqueou parte à mão, a devolução
+pode baixar contra a retenção **de outra origem** — o furo **C65**. Esta consulta diz se a sua base
+tem esse desenho hoje:
+
+```sql
+SELECT m.codigo AS material, m.nome, m.unidade,
+       m.quantidade_bloqueada                    AS bloqueado_total,
+       COUNT(i.id)                               AS retencoes_de_inspecao_abertas,
+       SUM(COALESCE(i.quantidade_reprovada, 0))  AS soma_das_retencoes,
+       m.quantidade_bloqueada - SUM(COALESCE(i.quantidade_reprovada, 0)) AS sobra_sem_dono
+  FROM materiais_almoxarifado m
+  JOIN recebimentos_material_itens_almoxarifado ri ON ri.material_id = m.id
+  JOIN inspecoes_recebimento_almoxarifado i        ON i.recebimento_item_id = ri.id
+ WHERE COALESCE(m.quantidade_bloqueada, 0) > 0
+   AND COALESCE(i.quantidade_reprovada, 0) > 0
+   -- Só as retenções AINDA DE PÉ: a inspeção já liberada (Etapa 44) ou já devolvida (Etapa 45)
+   -- não disputa mais o número do bloqueado.
+   AND i.liberacao_nc_em IS NULL
+   AND i.devolucao_fornecedor_em IS NULL
+ GROUP BY m.id
+HAVING COUNT(i.id) > 1
+    OR ABS(m.quantidade_bloqueada - SUM(COALESCE(i.quantidade_reprovada, 0))) > 0.000000001
+ ORDER BY COUNT(i.id) DESC, m.quantidade_bloqueada DESC;
+```
+
+**Como ler o resultado:**
+
+- **0 linhas** — nenhuma exposição. Cada material bloqueado tem **uma** retenção de inspeção, e o
+  número do bloqueado bate com ela. Pode seguir.
+- **`retencoes_de_inspecao_abertas` maior que 1** — este material tem **duas ou mais** reprovações
+  esperando providência. Elas somam no mesmo número, e a ordem em que forem executadas **não** muda o
+  resultado enquanto ninguém mexer no bloqueio por fora. **O que fazer:** despachar/liberar essas
+  inspeções antes de qualquer desbloqueio manual do material, e **não** desbloquear parcialmente à mão
+  enquanto houver devolução pendente.
+- **`sobra_sem_dono` positiva** — há bloqueio neste material que **não** vem de inspeção (bloqueio
+  avulso de qualidade, ajuste). Conviver é seguro; **desbloquear parte à mão no meio de uma devolução
+  pendente é o que não é.**
+- **`sobra_sem_dono` negativa** — o bloqueado é **menor** que a soma das reprovações em aberto: alguém
+  já desbloqueou material que uma inspeção ainda considera retido. **Estas são as linhas que pedem
+  ação antes do deploy:** a devolução dessas inspeções vai responder *"O material já havia saído do
+  bloqueio — a execução foi registrada sem mover saldo"*, e o material sai do galpão sem baixa. Decida
+  caso a caso, pela tela de Movimentações, antes de o Compras começar a usar a fila.
+- ⚠️ **Número minúsculo, tipo `0,0000000000000009`, em `sobra_sem_dono` é ruído de número quebrado**,
+  não sobra de verdade — é por isso que a consulta usa a margem `0.000000001` em vez de comparar com
+  zero. **Foi exatamente esse ruído que produziu o defeito mais grave desta etapa** (ver a Etapa 45
+  em *Onde estamos*), e ele aparece sempre que as quantidades reprovadas têm casa decimal.
+
+**A24 (NOVA, da Etapa 45 — a fila retroativa: o que vai aparecer como *Pendente de execução* no dia
+do deploy).** Todo documento **já decidido** com um dos quatro encaminhamentos é marcado, na
+atualização, como **Pendente de execução** — de propósito: ele descreve providência que ninguém
+registrou ter cumprido, e é isso que a fila existe para mostrar. **Mas ninguém quer descobrir isso
+pela tela na frente do Compras.** Rode antes e saiba o tamanho:
+
+```sql
+SELECT nc.numero, nc.decisao, nc.decidido_em, nc.decidido_por_nome,
+       m.codigo AS material, m.nome,
+       i.quantidade_reprovada, i.data_inspecao,
+       CASE WHEN i.devolucao_fornecedor_em IS NOT NULL THEN 'material JA saiu'
+            WHEN i.liberacao_nc_em IS NOT NULL         THEN 'retencao JA solta'
+            WHEN m.ativo = 0                            THEN 'material inativo'
+            ELSE 'vai devolver de verdade' END AS o_que_vai_acontecer
+  FROM nao_conformidades_almoxarifado nc
+  JOIN inspecoes_recebimento_almoxarifado i ON i.id = nc.referencia_id
+  JOIN recebimentos_material_itens_almoxarifado ri ON ri.id = i.recebimento_item_id
+  JOIN materiais_almoxarifado m ON m.id = ri.material_id
+ WHERE nc.status = 'DECIDIDA'
+   AND nc.referencia_tipo = 'INSPECAO'
+   AND nc.decisao IN ('DEVOLVER','SUBSTITUICAO','ANALISE_ENGENHARIA','SUCATEAR')
+ ORDER BY nc.decisao, nc.decidido_em;
+```
+
+**Como ler o resultado:**
+
+- **Cada linha é um documento que vai nascer na fila.** Se vier **0**, a fila começa vazia.
+- **`o_que_vai_acontecer` = `vai devolver de verdade`** e `decisao = DEVOLVER`: registrar a execução
+  **vai** baixar o estoque. Se a devolução foi feita no mundo real meses atrás e o estoque já foi
+  ajustado à mão, **registrar agora baixaria de novo** — nessas linhas o material aparece como
+  `retencao JA solta` ou responde *"já havia saído do bloqueio"*, mas confira antes de mandar alguém
+  "limpar a fila".
+- **`o_que_vai_acontecer` diferente de `vai devolver de verdade`**: registrar a execução **não move
+  saldo** e serve só para tirar o documento da fila, com a frase do sistema explicando o porquê.
+- **Documentos com `SUBSTITUICAO`, `ANALISE_ENGENHARIA` ou `SUCATEAR`** nunca movem saldo — registrar
+  a execução neles é só carimbar *"cumprido nesta data"*.
+- ⚠️ **Documentos de material com número de série ou com lote não identificável vão TRAVAR na fila** —
+  é o furo **C64**, e não há como tirá-los de lá hoje. Se esta consulta trouxer muitos deles, vale
+  esperar a próxima etapa antes de entregar a fila ao Compras.
+
+### B. Decisões de negócio — B1 a B180; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(O título desta seção dizia "B1 a B24" — **estava defasado**: os itens já iam até B36 antes da
 Etapa 20. Corrigido em 2026-08-28 para B50, depois para B56 com as três da Etapa 24, para B57 com
@@ -3174,6 +3271,100 @@ material inativo existe para evitar. O risco fica **declarado** (furo **C63**) e
 por um travamento. Se na sua operação isso for inaceitável, a guarda é acrescentável — mas ela
 precisa vir junto de um jeito de destravar.
 
+**B176 (NOVA, da Etapa 45) — dei ao COMPRAS a permissão de registrar a execução, e ela só é segura
+por causa de UMA regra.**
+
+**O que foi escolhido:** a ação nova *registrar execução do encaminhamento* é de **Administrador,
+Qualidade e Compras**. O Almoxarife **não** tem.
+**O que foi descartado:** deixá-la só com Administrador e Qualidade.
+**Por quê:** quem despacha material para o fornecedor é o Compras — é ele que fala com a
+transportadora e sabe o dia em que a caixa saiu. Pôr a Qualidade como única executora significaria
+alguém avisar a Qualidade por telefone para ela registrar, que é exatamente o combinado verbal que
+esta etapa existe para acabar.
+
+⚠️ **E aqui está o ponto que precisa da sua leitura, porque é uma soma de permissões, não uma
+permissão.** O Compras **pode abrir** não conformidade à mão (tem *registrar não conformidade*) e
+**não pode decidir** — foi tirado da decisão de propósito na Etapa 43 (**B169**). Se a execução de um
+documento **aberto à mão** devolvesse material, abrir + executar daria ao Compras **meia porta para
+apagar estoque** sem passar pela Qualidade e sem ter *ajustar saldo de estoque*. O que fecha essa
+porta é uma regra só: **somente o documento que nasceu da reprovação da inspeção devolve material**
+(o passo 7 do roteiro). Documento manual registra o ato e **não move saldo**.
+
+**Se você preferir tirar o Compras da execução**, é uma linha — mas então decida quem registra, e
+saiba que a fila `Pendentes de execução` passa a depender de alguém que não despacha material.
+**E se um dia essa regra do documento manual for afrouxada, esta permissão tem de ser revista no
+mesmo ato.**
+
+**B177 (NOVA, da Etapa 45) — o cartão de material reprovado passou a medir MATERIAL QUE SAIU, e não
+providência registrada.**
+
+**O que foi escolhido:** o cartão para de cobrar a inspeção quando o material **saiu de fato** do
+estoque.
+**O que foi descartado:** parar de cobrar quando a execução é **registrada** (que foi a primeira
+versão, entregue e depois trocada na revisão).
+**Por quê:** existem casos em que a execução é registrada e **nada sai** — documento aberto à mão,
+material já desbloqueado por fora, material inativo, saldo insuficiente. Na primeira versão o cartão
+calava nesses casos, com os quilos inteiros ainda no galpão: o aviso morria justamente onde ele era a
+única coisa que ainda cobrava alguém.
+**Consequência declarada:** a inspeção **sai** do cartão passados os 7 dias da janela, executada ou
+não — quem quiser a lista do que falta despachar usa a fila **Pendentes de execução**, que não tem
+prazo. E a varredura diária de segurança também deixa de enfileirar a inspeção já devolvida, que é o
+comportamento desejado.
+
+**B178 (NOVA, da Etapa 45) — na tela de posição por cliente, material do cliente devolvido ao
+fornecedor aparece como CONSUMIDO.**
+
+**O que foi escolhido:** a devolução ao fornecedor entra na coluna **Consumido** da prestação de
+contas por cliente.
+**O que foi descartado:** deixá-la fora dessa conta.
+**Por quê:** deixar fora **não** separa o movimento — ele fica **invisível**, com o saldo do cliente
+caindo sem contrapartida em coluna nenhuma da tela, e a equação *recebido − consumido − devolvido =
+saldo* deixa de fechar. E a coluna **Devolvido** também não serve: ela é a devolução **ao dono**, e
+aqui o cliente **não** recebe o material de volta. Do ponto de vista da prestação de contas, é o
+mesmo grupo de "perda no terceiro", que já mora em Consumido pela mesma razão.
+**Consequência declarada:** o rótulo é impreciso. **Rótulo impreciso e visível vale mais que rótulo
+exato e invisível.** O conserto limpo é uma **coluna própria** na tela de posição por cliente — é
+escopo de outra etapa, e continua registrado aqui.
+
+**B179 (NOVA, da Etapa 45) — duas coisas que o desenho congelou e a execução teve de mudar; ficam
+escritas porque mudança de contrato congelado é decisão.**
+
+**(a) A lista de respostas possíveis nasceu com seis e terminou com oito.** Duas mensagens não
+estavam no desenho: *"Esta não conformidade não tem material reprovado para devolver"* (apareceu na
+construção — a inspeção pode ser corrigida **depois** de o documento nascer) e *"O material desta
+inspeção já havia sido liberado por outra não conformidade — a execução foi registrada sem mover
+saldo"* (apareceu na revisão, e é o que fecha o furo **C63**). **O que foi descartado:** deixar as
+duas caírem na frase genérica *"Esta execução não altera o saldo"* — que é verdade e **não diz nada
+sobre o porquê**, justamente nos dois casos em que o usuário esperava a baixa acontecer.
+
+**(b) O filtro de execução NÃO é independente do filtro de status, e a tela teve de admitir isso.**
+Escolher um estado de execução muda o status para *Decididas*, e escolher outro status larga o filtro
+de execução. **O desenho descrevia os dois como ortogonais** — estava errado: execução só existe em
+documento decidido, então a combinação *"Abertas + Pendentes de execução"* devolve **lista vazia
+sempre**, e a tela diria *"não há nada pendente de execução"* sem ter medido nada. **O que foi
+descartado:** deixar a combinação disponível e "documentar que ela não faz sentido". Um filtro que
+mente com cara de resposta é pior que um filtro que se corrige sozinho.
+
+**B180 (NOVA, da Etapa 45) — uma premissa que EU escrevi sobre o cartão de material reprovado era
+FALSA, e a etapa foi desenhada sobre ela.**
+
+Na medição de abertura desta etapa eu afirmei que *"o cartão de material reprovado cobra a mesma
+inspeção para sempre"*, e usei isso para justificar que a etapa **precisava** silenciá-lo. **Não é
+verdade:** o cartão tem **janela de 7 dias** (configurável em Alertas), e a inspeção sai dele sozinha
+passados os 7 dias, devolvida ou não. O e-mail, então, sai **uma vez só** no instante da reprovação e
+nunca repete.
+
+**O que isso muda:** o silenciamento do cartão **não era urgente** como eu escrevi — ele evita cobrar
+por até 7 dias algo que já foi feito, o que é útil e bem menor do que "para sempre". **O que NÃO
+muda:** a mudança continua certa, e a revisão a tornou mais forte (ver **B177**).
+
+**Fica escrito, e não corrigido em silêncio, por dois motivos.** Primeiro: quem leu a medição de
+abertura pode ter concluído que existe um aviso eterno no sistema, e ia procurar por ele. Segundo, e
+mais importante: **essa premissa passou pela revisão do plano e sobreviveu** — foi derrubada só quando
+alguém foi ler o código da janela. É a quinta vez nesta base que uma medição minha sobre "o que já
+existe" estava errada, e as cinco tinham a mesma forma: eu descrevi o que **imaginei** que o código
+fazia, em vez de ler.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -4052,6 +4243,45 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
     criaria um documento que **nunca fecha** — o beco que a regra do material inativo existe para
     evitar. Ver **B175**.
 
+64. **NOVO, da Etapa 45 — o documento recusado por série ou por lote TRANCA na fila, e nada o
+    destrava.** Quando o material tem **número de série**, ou tem **controle de lote** e o lote não
+    pode ser identificado, o registro da execução é recusado (*"Material com controle de série não
+    pode ser devolvido por aqui — dê baixa pela tela de Movimentações"* / *"Não foi possível
+    identificar o lote do material devolvido"*). A recusa está certa. **O problema é o que sobra
+    depois dela:** o documento fica **Decidido, Pendente de execução**, e **não existe em tela nenhuma
+    um jeito de cancelá-lo, redecidi-lo ou reabri-lo** — decidir de novo é recusado, e o único
+    cancelamento que o sistema faz é automático, só para documento de quantidade ainda **Aberto**.
+
+    **Como isso aparece na operação:** a devolução é feita à mão em **Movimentações** (o caminho que a
+    própria mensagem indica), o material sai corretamente do estoque — e o documento **continua na
+    fila `Pendentes de execução` para sempre**, ensinando o Compras a ignorar a fila. É o beco
+    *"atrasado para sempre"* da Etapa 42 em terceira roupa.
+
+    **Foi achado por dois revisores independentes e NÃO foi consertado nesta etapa de propósito:** o
+    que falta não é uma linha, é um **gesto que não existe** (cancelar ou redecidir documento já
+    decidido), com permissão própria e trilha própria. Está desenhado como a **próxima etapa**.
+    **Enquanto isso, o contorno é operacional:** registre a devolução manual em Movimentações citando
+    o número da NC no campo de documento — o vínculo fica no livro, mesmo com o documento preso.
+
+65. **NOVO, da Etapa 45 — devolver material cujo bloqueio veio de MAIS DE UMA origem pode baixar o
+    material errado.** O estoque guarda **um número só** de quantidade bloqueada por material, sem
+    dizer de qual inspeção veio cada parte. Se o mesmo material está bloqueado por **duas** inspeções
+    (ou por uma inspeção **e** por um bloqueio avulso feito à mão), e alguém desbloqueia parte à mão
+    antes de a devolução ser executada, a execução pode baixar **contra a retenção que sobrou**, que é
+    de outra origem. Resultado: o material que **ninguém** devolveu deixa de estar bloqueado, e a
+    devolução parece ter dado certo.
+
+    **O caso mais provável — duas não conformidades da mesma inspeção com decisões opostas (o furo
+    C63) — está FECHADO nesta etapa:** se a retenção daquela inspeção já foi solta por uma aceitação,
+    a devolução responde *"O material desta inspeção já havia sido liberado por outra não
+    conformidade — a execução foi registrada sem mover saldo"* e **não mexe no saldo**. O que continua
+    aberto é o caso em que a retenção foi drenada **por fora** (desbloqueio avulso, ajuste).
+
+    **Por que não foi fechado:** fechar o caso geral exige o estoque passar a saber **de quem é cada
+    quilo bloqueado** — contabilidade de retenção por origem, que mexe no coração do motor e em seis
+    caminhos que escrevem naquelas colunas. É etapa própria, com migração. **A consulta A23 mede a
+    exposição real da sua base antes do deploy**, e ela é a que mais pede atenção nesta etapa.
+
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -4501,6 +4731,41 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(43) A tela de Recebimento não mostra o número da NC do item.** O vínculo aparece só na tela de
   Não Conformidades, pelo número do recebimento e da nota fiscal. Era promessa do desenho inicial e
   **saiu na revisão do plano**, porque nenhuma tarefa tocava aquela tela — preferiu-se retirar a
+
+- **(45) A devolução ao fornecedor não emite documento fiscal.** Nota de devolução, CFOP e impostos
+  ficam **fora**. O que o sistema registra é **estoque e rastreabilidade**: o que saiu, quanto, de
+  qual lote, por ordem de qual documento, por quem e quando. O número da nota cabe no campo de
+  observações da execução, e é assim que os dois mundos se cruzam hoje. **Foi decidido e não
+  esquecido:** emitir nota é integração fiscal, não é fatia de almoxarifado.
+
+- **(45) Nenhum e-mail sai para o fornecedor.** O sistema não avisa a contraparte externa — o aviso
+  continua sendo telefone, e-mail manual ou o próprio motorista. Existe **e-mail interno** (o cartão
+  de material reprovado avisa a Qualidade e o Compras no instante da reprovação), e ele não mudou.
+
+- **(45) Devolver não pede reposição.** Nenhuma solicitação de compra nasce da devolução, e a decisão
+  *Substituição* continua sendo **só uma decisão**: alguém combina a troca fora do sistema e depois
+  registra a execução dizendo que cumpriu. Ligar as duas coisas exigiria decidir o que acontece
+  quando o fornecedor manda menos, manda diferente ou não manda — é etapa própria.
+
+- **(45) O pedido de compra NÃO é reaberto pela devolução.** O pedido que o recebimento fechou
+  continua **Recebido**, e a quantidade recebida dele **não** é reduzida. É corte deliberado e está
+  **fixado por teste** (se alguém mudar isso sem querer, a suíte acusa). **A razão:** a quantidade
+  recebida conta o que **entrou no galpão**, e entrou; o que a devolução diz é que **saiu depois**.
+  Misturar as duas coisas na mesma coluna faria o histórico do pedido mentir sobre o recebimento.
+  Se a operação precisar tratar a devolução como "o pedido voltou a faltar", isso é decisão de
+  negócio e vira etapa — a consulta que encontra esses casos não existe ainda.
+
+- **(45) Não há como desfazer a execução.** Sem botão de estorno, e o documento decidido **não** pode
+  ser decidido de novo. Um erro de registro se conserta hoje pela tela de **Movimentações**, com
+  ajuste e justificativa — e o documento continua dizendo "executada", o que é a metade
+  desconfortável dessa escolha. Ver **C64**: a próxima etapa é sobre destravar documento.
+
+- **(45) Contas a pagar não é tocada.** Devolver material não estorna valor, não gera crédito e não
+  mexe em título nenhum. O impacto financeiro da devolução é tratado fora do módulo.
+
+- **(45) Material com número de série não é devolvido por aqui.** Devolver peça serializada é
+  escolher **quais** peças, e essa escolha não existe nesta tela. O caminho é **Movimentações**, que
+  tem seletor de série. Mesma limitação, e pelo mesmo motivo, do descarte de devolução da Etapa 7.
   promessa a deixá-la escrita e não cumprida.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
@@ -4755,6 +5020,30 @@ prova, e vale os 5 minutos do roteiro da etapa no guia:
 3. **A trilha mostra o rótulo, não o verbo cru?** **Almoxarifado → Auditoria**, filtro de entidade
    **"Pedido de compra"**: a linha tem de dizer *"Fechamento automático do pedido"*. Há teste de
    cobertura que garante que o rótulo **existe**, mas não que a tela o **usa** naquele filtro.
+
+**(45) Nenhum clique foi dado nesta etapa — a devolução foi provada por teste, não por navegador.**
+Fica declarado porque a etapa **acrescenta uma coluna e um modal** à tela de Não Conformidades e
+**muda um filtro existente**, e ninguém viu isso desenhado. O que os testes provam (e é bastante): a
+baixa no estoque com o número da NC e o motivo, a trava por inspeção, a fila `Pendentes de execução`,
+as treze respostas possíveis com a frase exata de cada uma, a permissão por perfil, a trilha de
+auditoria, o cartão que para de cobrar, e o pedido de compra que **continua Recebido**. O que **só o
+navegador** prova, e vale os 5 minutos do roteiro do guia:
+
+1. **A coluna Execução cabe na largura?** A tabela de Não Conformidades ganhou a **oitava** coluna, e
+   a de Execução mostra duas linhas no estado *Executada* (rótulo + quem/quando). Conferir que não
+   estoura nem empurra a coluna de ações para fora.
+2. **O filtro de execução se comporta como descrito?** Escolher *Pendentes de execução* tem de
+   **mudar sozinho** o status para *Decididas*; escolher um status diferente de *Decididas* tem de
+   **limpar** o filtro de execução. É o comportamento do passo 2 do roteiro, e é o único lugar do
+   módulo onde um filtro mexe em outro — se estiver errado, a fila parece vazia sem estar.
+3. **A linha executada SOME da fila e o aviso aparece?** Com *Pendentes de execução* ligado, registrar
+   a execução tira a linha da lista no mesmo instante do toast. O filtro é largado de propósito para
+   que a linha continue visível — conferir que o usuário vê o que fez, em vez de a lista piscar vazia.
+4. **A trilha mostra o rótulo, não o verbo cru?** **Almoxarifado → Auditoria**, entidade *Não
+   conformidade*: a linha tem de dizer *"Não conformidade executada"*. Há teste que garante que o
+   rótulo **existe**, não que a tela o **usa** naquele filtro.
+5. **O texto do modal muda com a decisão?** Em *Devolver* ele diz que é este registro que dá a baixa;
+   nas outras três decisões, que **não movimenta estoque**. São duas frases diferentes no mesmo modal.
 
 ### G. Fragilidades estruturais que continuam de pé
 
@@ -5650,6 +5939,46 @@ letra **A20** dá a consulta que encontra esses casos, e a correção é pelo l�
 desenho, não descuido:** o gancho vive dentro do fluxo da entrada porque é lá que existe o ato a
 auditar (quem processou a nota); uma varredura periódica fecharia pedido sem autor.
 
+
+---
+
+**G69 (NOVO, da Etapa 45). A trava que impede duas devoluções simultâneas não tem teste — a
+corrida não é reproduzível no ambiente de teste.** O registro da execução "reserva" o documento
+antes de mexer no estoque, de um jeito que dois cliques no mesmo instante não conseguem os dois
+passar. **A proteção existe no código; a suíte não a prova.** Fica declarado em vez de subentendido,
+porque quem for mexer nesse trecho não tem rede: o teste que existe cobre o **segundo** clique
+depois do primeiro ter terminado (*"A execução desta não conformidade já foi registrada"*), não os
+dois ao mesmo tempo. O padrão é o mesmo de todo claim atômico deste módulo, e é o único que este
+banco oferece sem transação.
+
+---
+
+**G70 (NOVO, da Etapa 45). A migração que classifica os documentos antigos só olha os DECIDIDOS —
+e isso também não tem teste.** Ao subir a versão, cada documento já decidido recebe seu estado de
+execução (*Pendente* nos encaminhamentos, *Não se aplica* nas aceitações). Documentos **Abertos** e
+**Cancelados** ficam sem estado, de propósito — decisão que não existe não tem execução a esperar.
+**O que não está medido é justamente esse recorte:** se ele quebrar, documentos cancelados passariam
+a aparecer na fila do Compras. A migração roda **uma vez** e é registrada no controle de versões do
+banco, então um erro aqui não se corrige rodando de novo.
+
+---
+
+**G71 (NOVO, da Etapa 45). Voltar o CÓDIGO para a versão anterior depois de a migração ter rodado
+deixa documentos invisíveis.** Se o banco for migrado e depois alguém restaurar a versão anterior do
+sistema (rollback de deploy), a tela de Não Conformidades passa a pedir colunas que a versão antiga
+não conhece — os documentos existem e **não aparecem**. **Não é defeito desta etapa; é a regra de
+todo deploy com migração neste módulo**, e está escrita aqui porque esta etapa acrescenta seis
+colunas de uma vez. **Como se sai:** subir de novo a versão nova. O dado não se perde.
+
+---
+
+**G72 (NOVO, da Etapa 45). O aviso "algo mudou" que protege a lista de mensagens é literal, e
+reformatar o arquivo produz alarme falso.** Existe uma guarda automática que compara, palavra por
+palavra, a lista de mensagens de recusa escrita em dois lugares do código. Ela pega deriva de
+verdade — foi para isso que nasceu —, mas compara **o texto cru**: trocar a indentação ou quebrar
+uma linha faz a guarda acusar mudança onde não houve. **Mantido de propósito:** a alternativa
+(interpretar o código em vez de comparar o texto) é mais frágil que o alarme falso, e o alarme falso
+aparece na hora, para quem está editando.
 ## Etapa 0 — Fundação (2026-08-03)
 
 **Em uma frase:** antes de construir qualquer tela nova, o módulo ganhou uma base técnica
@@ -11489,7 +11818,179 @@ o furo C57 de volta, e **sem saída**, porque o documento não pode ser decidido
 5. **A tela ainda não mostra, na própria linha, quanto aquele documento liberou.** O aviso aparece
    no momento da decisão; depois, o vínculo está no livro de movimentações, pelo número da NC.
 
+## Etapa 45 — A devolução ao fornecedor deixa de ser um combinado verbal (2026-09-29)
+
+Até aqui, decidir *"Devolver ao fornecedor"* era só isso: uma decisão. O documento fechava, e os
+quilos reprovados ficavam bloqueados no estoque — **para sempre**, porque nada no sistema
+perguntava se a caixa tinha ido embora. Quem despacha material para o fornecedor é o **Compras**,
+dias depois, por telefone e transportadora; o estoque continuava contando material que já não
+estava no galpão, e o cartão de *Material reprovado* seguia cobrando uma providência que talvez já
+tivesse sido tomada — ninguém sabia dizer.
+
+Agora existem **dois gestos, com dois donos e duas datas**. A Qualidade decide; o Compras, quando o
+material sai de fato, clica em **Registrar execução** — e é **esse** clique que dá a baixa no
+estoque. O sistema passa a saber a diferença entre *"combinamos devolver"* e *"devolvemos"*.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Decidir *Devolver ao fornecedor* fechava o documento e **o material continuava bloqueado**, sem prazo e sem cobrança | O documento fica **Pendente de execução** até alguém registrar que o material saiu |
+| Não havia onde registrar que a devolução foi feita | Botão **Registrar execução** na linha do documento, com data, autor e observações (nº da nota de devolução, transportadora, quem recebeu) |
+| A baixa do estoque teria de ser feita à mão em **Movimentações**, sem vínculo com o documento | A baixa é **automática no registro da execução**, com o número da NC no livro e o motivo *"Devolução ao fornecedor"* |
+| A tela de Não Conformidades não tinha como responder *"o material já voltou ao fornecedor?"* | Coluna **Execução** com quatro estados: vazio (não decidido), **Pendente**, **Executada** (com quem e quando) e **Não se aplica** |
+| Não havia fila de trabalho para o Compras | Filtro **Pendentes de execução** — a fila do que falta despachar |
+| O cartão *Material reprovado* cobrava a mesma inspeção por 7 dias, devolvida ou não | O cartão **para de cobrar** a inspeção cujo material **saiu de fato** |
+| Quem decide era quem (não) executava | Ação própria: **Administrador, Qualidade e Compras** registram execução; o **Almoxarife não** |
+
+### As regras, com o cenário exato
+
+**1. Decidir NÃO move o material. Registrar a execução move.**
+Receba um material crítico (10 kg), deixe cair na fila de **Inspeções**, reprove **3**. O material
+fica com **3 bloqueados e 7 disponíveis** e nasce o documento `NC-…`. Vá em **Não Conformidades**,
+decida **Devolver ao fornecedor** com justificativa.
+→ *"Não conformidade NC-… decidida! Esta decisão não altera o saldo"*. O estoque continua com
+**10 no físico**, 3 bloqueados. A coluna **Execução** da linha passa a mostrar **Pendente**.
+Agora clique em **Registrar execução**, escreva *"NF de devolução 123, transportadora X"* e
+confirme.
+→ *"Execução de NC-… registrada!"* — e o material passa a ter **7 no físico e 0 bloqueados**. Em
+**Movimentações** há uma saída de **Devolução ao fornecedor** de 3, com o número da NC no campo de
+documento e o motivo *"Devolução ao fornecedor"*.
+
+**2. A fila do Compras.**
+Em **Não Conformidades**, no filtro de execução, escolha **Pendentes de execução**.
+→ A lista mostra só os documentos decididos que esperam alguém despachar o material.
+⚠️ **Atenção ao apresentar:** escolher um estado de execução **muda o filtro de status para
+"Decididas"** automaticamente, e escolher qualquer status que não seja *Decididas* **larga** o
+filtro de execução. Isso é de propósito: execução só existe em documento decidido, e a combinação
+*"Abertas + Pendentes de execução"* devolveria **lista vazia sempre** — a tela diria "não há nada
+pendente" sem ter medido nada.
+
+**3. Registrar a execução duas vezes é recusado.**
+Clique em **Registrar execução** num documento já executado (ou dê dois cliques rápidos).
+→ *"A execução desta não conformidade já foi registrada"*. O saldo não se move de novo.
+
+**4. Documento não decidido não tem execução a registrar.**
+→ *"Só é possível registrar a execução de uma não conformidade decidida"*. Vale para documento
+**Aberto** e para **Cancelado**.
+
+**5. As decisões de aceitação não têm execução — elas já se executaram.**
+Um documento decidido como **Aceitar** ou **Aceitar sob desvio** nasce com a coluna Execução em
+**Não se aplica**, e não tem botão. Pela porta de programação a resposta é:
+→ *"Esta decisão não tem execução a registrar"*.
+**Por quê:** aceitar **libera** o material no mesmo clique (é a Etapa 44). Não há um segundo gesto
+no mundo físico esperando acontecer.
+
+**6. As outras três decisões registram o ato e não mexem no saldo.**
+**Substituição**, **Análise da Engenharia** e **Sucatear** também ficam **Pendentes de execução** e
+também têm botão — porque alguém precisa poder dizer *"cumprido, nesta data"*. Registrada:
+→ *"Execução de NC-… registrada! Esta execução não altera o saldo"*. O modal avisa antes, com texto
+diferente: *"Esta decisão não movimenta estoque: o registro guarda a data, o autor e a observação de
+que o encaminhamento foi cumprido."*
+
+**7. Só a não conformidade que NASCEU da reprovação devolve material.**
+Um documento aberto à mão (hoje só por integração — não há botão em tela nenhuma), apontando para
+uma inspeção e decidido *Devolver*, registra a execução e **não move saldo**:
+→ *"Execução de NC-… registrada! Só a não conformidade aberta pela reprovação da inspeção devolve
+material"*.
+**Isto é a proteção que sustenta a permissão do Compras**, e vale entender: o Compras **pode abrir**
+documento à mão (ele tem *registrar não conformidade*) e **não pode decidir** — deliberadamente,
+desde a Etapa 43. Se documento manual devolvesse material, abrir + executar somaria a **meia porta**
+para apagar estoque sem passar por ajuste de estoque nem pela Qualidade. Ver **B176**.
+
+**8. Falta de quantidade no recebimento não devolve nada.**
+Documento de **origem Recebimento** (o que nasce quando chega menos do que o pedido), decidido
+*Devolver* e executado, responde a mesma frase do passo 7 — e este é o caso **mais comum** dos dois.
+Não chegou: não há o que mandar de volta.
+
+**9. Se o material já havia saído do bloqueio, a execução é registrada e diz por quê.**
+Cenário real: um Gestor desbloqueou os 3 kg à mão em **Movimentações** antes de o Compras despachar.
+→ *"Execução de NC-… registrada! O material já havia saído do bloqueio — a execução foi registrada
+sem mover saldo"*. **O registro é gravado.** Recusar deixaria o documento cobrando na fila para
+sempre, e a única saída seria mentir em outra decisão — o mesmo beco que a Etapa 44 fechou.
+Há outras quatro respostas da mesma família, todas registrando o ato:
+- *"Não há saldo físico deste material — a execução foi registrada sem mover saldo"*;
+- *"Material inativo — a execução foi registrada sem mover saldo"*;
+- *"O material desta inspeção já havia sido liberado por outra não conformidade — a execução foi
+  registrada sem mover saldo"*;
+- *"Esta não conformidade não tem material reprovado para devolver"*.
+
+**10. Duas devoluções da mesma inspeção: a segunda não baixa de novo.**
+→ *"O material desta inspeção já havia sido devolvido"*. A trava mora na **inspeção**, não no
+documento — porque a mesma inspeção pode, em teoria, carregar mais de um documento, e proteger o
+documento não protegeria o saldo.
+
+**11. Material com número de série não sai por aqui.**
+→ *"Material com controle de série não pode ser devolvido por aqui — dê baixa pela tela de
+Movimentações"*.
+**Por quê:** devolver material serializado é escolher **quais peças** voltam, e essa escolha não
+existe nesta tela. ⚠️ **Leia o furo C64 antes de apresentar este passo:** hoje essa recusa **tranca
+o documento** na fila, e a próxima etapa é justamente sobre isso.
+
+**12. Material com controle de lote devolve do lote certo.**
+A baixa sai da linha do lote que entrou naquele recebimento, não de um saldo genérico. Se o lote não
+puder ser identificado:
+→ *"Não foi possível identificar o lote do material devolvido"*. (Mesma ressalva do **C64**.)
+
+**13. O cartão de Material reprovado para de cobrar o que saiu.**
+**Almoxarifado → Alertas**, cartão *Material reprovado*: a inspeção cujo material **saiu de fato**
+desaparece dele. Enquanto a devolução não for executada, ela continua listada — **inclusive** se a
+execução foi registrada sem mover saldo (passos 7, 8 e 9), porque nesses casos o material
+**continua no galpão**. Ver **B177**.
+
+**14. Quem não pode, não pode — e o saldo nem é tocado.**
+Entre como **Almoxarife** e tente registrar a execução:
+→ *"Sem permissão para registrar a execução do encaminhamento — seu perfil é Almoxarife. Solicite
+acesso a um administrador."* O botão nem aparece para quem não tem a ação; a recusa do servidor vem
+antes de qualquer efeito no saldo.
+
+**15. A devolução ao fornecedor não entra pelo formulário genérico de Movimentações.**
+O tipo é **dedicado** a este fluxo, como já são a devolução ao cliente e o retorno de transformação.
+Registrá-lo pelo formulário genérico é recusado; o caminho é o documento.
+
+### O que esta etapa NÃO cobre
+
+1. **Não emite documento fiscal de devolução.** Nota, CFOP e impostos ficam fora — o registro é de
+   **estoque e rastreabilidade**. A nota continua sendo feita onde é feita hoje, e o número dela cabe
+   no campo de observações.
+2. **Não manda e-mail ao fornecedor.** Nenhum aviso externo sai do sistema.
+3. **Não pede material de reposição.** Devolver não abre solicitação de compra — *Substituição*
+   continua sendo uma **decisão** que alguém cumpre fora do sistema.
+4. **Não reabre o pedido de compra.** O pedido fechado pelo recebimento **continua Recebido** depois
+   da devolução: a quantidade recebida não é reduzida. Corte declarado e fixado por teste.
+5. **Não desfaz.** Registrada, a execução não tem botão de estorno, e o documento não pode ser
+   decidido de novo.
+6. **Não mexe em contas a pagar.** Nenhum valor é estornado.
+7. **Não devolve material com número de série.** Ver o passo 11.
+8. **Não retroage.** Documentos decididos *Devolver* antes desta atualização entram na fila
+   **Pendentes de execução** — que é o comportamento desejado —, mas nada devolve material
+   automaticamente por eles. Ver a consulta **A24**.
+
 ## Onde estamos e o que vem a seguir
+
+- **Etapa 45 entregue (2026-09-29):** **a devolução ao fornecedor deixa de ser um combinado verbal**.
+  Decidir *Devolver* virou **intenção registrada**; quem despacha o material — o **Compras** — clica
+  em **Registrar execução**, e é esse clique que dá a baixa no estoque, com o número da NC no livro.
+  A tela ganhou a coluna **Execução** e a fila **Pendentes de execução**, e o cartão de *Material
+  reprovado* passou a medir **material que saiu**, não intenção registrada. **A feature 09 (Inspeção
+  e qualidade) fecha em 🟢 com esta etapa** — era o último item da lista dela.
+  **O que é seu:** as consultas **A23** (materiais com bloqueio de **mais de uma origem** — a
+  exposição do pool agregado, a única que pede olho antes do deploy) e **A24** (a fila retroativa:
+  quais documentos já decididos vão aparecer como *Pendentes de execução* no dia do deploy); as
+  decisões **B176 a B180** — a que mais pede sua leitura é a **B176** (dei ao **Compras** a permissão
+  de registrar execução, e ela só é segura por causa de **uma** regra) e a **B180**, onde registro que
+  uma premissa que escrevi sobre o cartão **era falsa**; os furos **C64** (o documento recusado por
+  série ou lote **tranca na fila** e nada o destrava — é a próxima etapa) e **C65**; as limitações
+  **(45)** em D; as verificações **(45)** em F; e as fragilidades **G69 a G72**.
+  **As revisões acharam 33 itens, 6 CRITICAL, zero ruído** — 13 no plano, antes de codar, e 20 no
+  código pronto, por três lentes independentes. **O CRITICAL do código era meu**, e é o que mais
+  ensina: duas comparações de número quebrado sem a régua de tolerância que o próprio arquivo declara
+  ter — com duas reprovações fracionárias (2,3 e 3,4 kg) do mesmo material, a segunda devolução
+  responderia *"o material já havia saído do bloqueio"* com a caixa acabando de ser despachada, e o
+  estado resultante **não tem saída**: o documento sai da fila, o cartão cala, repetir dá erro e o
+  desbloqueio manual recusa. **A mesma falha existia na Etapa 44**, onde fazia a aceitação fechar o
+  documento **sem liberar nada** — o furo C57 renascendo por arredondamento dentro da etapa escrita
+  para fechá-lo. Corrigida nas duas, mais a tolerância no motor.
 
 - **Etapa 44 entregue (2026-09-28):** **a Qualidade executa a própria decisão**. Aceitar uma não
   conformidade de inspeção **libera sozinha** o material que a reprovação havia bloqueado, e a tela
