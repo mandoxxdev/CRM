@@ -8,6 +8,7 @@ import ExtratoMaterialModal from './ExtratoMaterialModal';
 import SeloProprietario, { rotuloMaterialComDono } from './SeloProprietario';
 import { formatLocalizacaoLabel } from '../../utils/localizacaoLabel';
 import { extrairCodigoLido } from '../../utils/codigoLido';
+import CampoCodigoLido from './CampoCodigoLido';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import './Almoxarifado.css';
 
@@ -137,27 +138,6 @@ const TIPOS_SEM_ESTORNO = [
   'DEVOLUCAO_FORNECEDOR',
 ];
 const podeEstornar = (m) => !m.cancelado && m.tipo !== 'ESTORNO' && !TIPOS_SEM_ESTORNO.includes(m.tipo);
-
-// Etapa 56 (RN-03/04): campo opcional "Confirmar endereço lido". O leitor que "digita" termina com
-// Enter — sem o preventDefault, a leitura submeteria o formulário antes do operador conferir o resto.
-const CampoCodigoLido = ({ id, value, onChange, dica }) => (
-  <div style={{ marginTop: 6 }}>
-    <label className="almox-label" htmlFor={id} style={{ fontSize: '0.8rem' }}>Confirmar endereço lido</label>
-    <input
-      id={id}
-      className="almox-input"
-      type="text"
-      autoComplete="off"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
-      placeholder="Leia a etiqueta da localização (opcional)"
-    />
-    {dica && value.trim() && (
-      <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>{dica}</small>
-    )}
-  </div>
-);
 
 const MovimentacoesAlmoxarifado = () => {
   const { bloquearSeNaoPode } = useAlmoxPermissoes();

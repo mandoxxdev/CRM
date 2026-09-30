@@ -12,6 +12,8 @@ import { useRequisicoesMaterialContext } from './RequisicoesMaterialContext';
 import { TIPO_REQUISICAO_LABELS } from './requisicaoLabels';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import AssinaturaCanvas from './AssinaturaCanvas';
+import CampoCodigoLido from './CampoCodigoLido';
+import { extrairCodigoLido } from '../../utils/codigoLido';
 import AnexosDocumento from './AnexosDocumento';
 import { AprovacoesRegraRequisicao, FilaAprovacoesRegra, FilaAprovacaoSimples } from './AprovacoesRegra';
 import {
@@ -72,7 +74,22 @@ const URGENCIA_INFO = {
   CRITICO: { label: 'Crítico',  cor: 'var(--gmp-error)' },
 };
 
-const formatMoeda = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+// Etapa 58 (RN-05): "Sai de" na entrega. As opções vêm de GET /almoxarifado/estoque/:id/saldos —
+// só linhas com endereço e saldo positivo (saldo sem endereço não é lugar de onde ir buscar).
+// O value leva endereço e lote juntos porque o mesmo endereço pode ter dois lotes do material.
+const valorOrigem = (s) => `${s.localizacao_id}:${s.lote_id ?? ''}`;
+const rotuloOrigem = (s) => `${s.localizacao_codigo}${s.lote ? ` — lote ${s.lote}` : ''} (${s.quantidade})`;
+const opcoesOrigem = (rows) => (Array.isArray(rows) ? rows : [])
+  .filter((s) => s.localizacao_id != null && Number(s.quantidade) > 0);
+const lerValorOrigem = (valor) => {
+  if (!valor) return null;
+  const [loc, lote] = String(valor).split(':');
+  const localizacao_origem_id = Number(loc);
+  if (!localizacao_origem_id) return null;
+  return { localizacao_origem_id, lote_id: lote ? Number(lote) : null };
+};
+
+const formatMoeda =(v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 const RequisicoesList = () => {
   const { pode, bloquearSeNaoPode } = useAlmoxPermissoes();
@@ -131,6 +148,11 @@ const RequisicoesList = () => {
   const [motivoEncerramento, setMotivoEncerramento] = useState('');
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [quantidadesEntrega, setQuantidadesEntrega] = useState({});
+  // Etapa 58 (RN-05): origem escolhida por item ({ [itemId]: { valor, codigo } }) e as opções por
+  // material. `saldosEntregaSeqRef` descarta a resposta de uma abertura anterior do modal.
+  const [origensEntrega, setOrigensEntrega] = useState({});
+  const [saldosEntrega, setSaldosEntrega] = useState({});
+  const saldosEntregaSeqRef = useRef(0);
   const [quantidadesSeparacao, setQuantidadesSeparacao] = useState({});
   const [entregaAposSeparar, setEntregaAposSeparar] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -209,6 +231,33 @@ const RequisicoesList = () => {
     syncSearchParams(selectedIdRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtroStatus, filtroMinha, filtroAprovacoesValor, filtroTipo]);
+
+  // Etapa 58 (RN-05): ao abrir o modal de entrega, busca onde cada material está. A chave é a lista
+  // de materiais entregáveis — fechar o modal zera a chave, então reabrir busca de novo e a sequência
+  // descarta a resposta atrasada da abertura anterior. Falha da busca = só "Qualquer endereço".
+  const materiaisEntregaKey = showEntregar && detalhe
+    ? [...new Set((detalhe.itens || [])
+      .filter((i) => maxQtdEntrega(i) > 0)
+      .map((i) => i.material_id)
+      .filter(Boolean))].join(',')
+    : '';
+  useEffect(() => {
+    const seq = ++saldosEntregaSeqRef.current;
+    setSaldosEntrega({});
+    setOrigensEntrega({});
+    if (!materiaisEntregaKey) return;
+    materiaisEntregaKey.split(',').forEach(async (materialId) => {
+      let rows = [];
+      try {
+        const res = await api.get(`/almoxarifado/estoque/${materialId}/saldos`);
+        rows = opcoesOrigem(res?.data);
+      } catch (err) {
+        rows = [];
+      }
+      if (saldosEntregaSeqRef.current !== seq) return;
+      setSaldosEntrega((prev) => ({ ...prev, [materialId]: rows }));
+    });
+  }, [materiaisEntregaKey]);
 
   const aplicarDetalhe = useCallback((data, id) => {
     setDetalhe(data);
@@ -439,13 +488,28 @@ const RequisicoesList = () => {
     }
   };
 
-  const montarItensEntrega = (fonte, qtdMap = quantidadesEntrega) => {
+  // `origens` só vem do modal (handleEntregar). A entrega direta (`direto: true`) não escolhe
+  // origem e segue mandando só item + quantidade, como antes da Etapa 58.
+  const montarItensEntrega = (fonte, qtdMap = quantidadesEntrega, origens = null) => {
     if (!fonte?.itens) return [];
     return fonte.itens
-      .map((i) => ({
-        item_id: Number(i.id),
-        quantidade_atendida: parseFloat(qtdMap[i.id] ?? qtdMap[String(i.id)] ?? 0) || 0,
-      }))
+      .map((i) => {
+        const item = {
+          item_id: Number(i.id),
+          quantidade_atendida: parseFloat(qtdMap[i.id] ?? qtdMap[String(i.id)] ?? 0) || 0,
+        };
+        // Etapa 58 (RN-05): as chaves de origem vão SÓ quando escolhidas — "Qualquer endereço"
+        // não manda chave nenhuma (o servidor mantém o comportamento automático de antes).
+        const escolha = origens?.[i.id];
+        const origem = lerValorOrigem(escolha?.valor);
+        if (origem) {
+          item.localizacao_origem_id = origem.localizacao_origem_id;
+          if (origem.lote_id) item.lote_id = origem.lote_id;
+          const codigo = extrairCodigoLido(escolha.codigo);
+          if (codigo) item.codigo_lido_origem = codigo;
+        }
+        return item;
+      })
       .filter((i) => i.item_id && i.quantidade_atendida > 0);
   };
 
@@ -589,7 +653,7 @@ const RequisicoesList = () => {
   };
 
   const handleEntregar = async () => {
-    const itens_atendidos = montarItensEntrega(detalhe);
+    const itens_atendidos = montarItensEntrega(detalhe, quantidadesEntrega, origensEntrega);
     await entregarItens(itens_atendidos);
   };
 
@@ -1230,12 +1294,23 @@ const RequisicoesList = () => {
                       </button>
                     )}
                     {temEntregavel(detalhe.itens) ? (
+                      <>
                       <button className="btn-almox-primary" style={{ width: '100%', justifyContent: 'center' }}
                         onClick={(e) => { if (!bloquearSeNaoPode('separar_emitir', e)) return; handleConfirmarEntrega({ direto: true }); }}
                         disabled={saving || conferenciaPendente}
                         title={conferenciaPendente ? TITLE_CONFERENCIA_PENDENTE : 'Entrega os itens separados e dá baixa no estoque — a movimentação fica registrada no livro'}>
                         <FiTruck size={14} /> {saving ? 'Confirmando...' : 'Confirmar Entrega e Baixar Estoque'}
                       </button>
+                      {/* Etapa 58: a entrega direta (um clique) nao escolhe de onde sai; esta abre o modal com
+                          "Sai de" por item — o mesmo gesto, com a origem, sem mudar o botao principal. */}
+                      <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center' }}
+                        data-testid="entregar-escolhendo-origem"
+                        onClick={(e) => { if (!bloquearSeNaoPode('separar_emitir', e)) return; handleConfirmarEntrega({ direto: false }); }}
+                        disabled={saving || conferenciaPendente}
+                        title="Abre a entrega item a item para escolher o endereço (e o lote) de onde cada material sai">
+                        Entregar escolhendo de onde sai…
+                      </button>
+                      </>
                     ) : (
                       <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', textAlign: 'center', padding: '8px 0' }}>
                         Nenhuma quantidade separada disponível para entrega no momento.
@@ -1249,12 +1324,23 @@ const RequisicoesList = () => {
                       Pronta para retirada — aguardando o solicitante buscar o material separado.
                     </div>
                     {temEntregavel(detalhe.itens) ? (
+                      <>
                       <button className="btn-almox-primary" style={{ width: '100%', justifyContent: 'center' }}
                         onClick={(e) => { if (!bloquearSeNaoPode('separar_emitir', e)) return; handleConfirmarEntrega({ direto: true }); }}
                         disabled={saving || conferenciaPendente}
                         title={conferenciaPendente ? TITLE_CONFERENCIA_PENDENTE : 'Entrega os itens separados e dá baixa no estoque — a movimentação fica registrada no livro'}>
                         <FiTruck size={14} /> {saving ? 'Confirmando...' : 'Confirmar Entrega e Baixar Estoque'}
                       </button>
+                      {/* Etapa 58: a entrega direta (um clique) nao escolhe de onde sai; esta abre o modal com
+                          "Sai de" por item — o mesmo gesto, com a origem, sem mudar o botao principal. */}
+                      <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center' }}
+                        data-testid="entregar-escolhendo-origem"
+                        onClick={(e) => { if (!bloquearSeNaoPode('separar_emitir', e)) return; handleConfirmarEntrega({ direto: false }); }}
+                        disabled={saving || conferenciaPendente}
+                        title="Abre a entrega item a item para escolher o endereço (e o lote) de onde cada material sai">
+                        Entregar escolhendo de onde sai…
+                      </button>
+                      </>
                     ) : (
                       <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', textAlign: 'center', padding: '8px 0' }}>
                         Nenhuma quantidade separada disponível para entrega no momento.
@@ -1574,6 +1660,32 @@ const RequisicoesList = () => {
                         Será entregue: {qtdEntregar} {item.unidade} | Permanecerá pendente: {permanecePendente} {item.unidade}
                       </div>
                     )}
+                    {/* Etapa 58 (RN-05): de onde o item sai — opcional. Com origem escolhida a saída é
+                        estrita no servidor (não completa com outros endereços). */}
+                    <div style={{ marginTop: 8 }}>
+                      <label className="almox-label" htmlFor={`entrega-origem-${item.id}`} style={{ fontSize: '0.8rem' }}>Sai de</label>
+                      <select id={`entrega-origem-${item.id}`} className="almox-form-select"
+                        value={origensEntrega[item.id]?.valor || ''}
+                        onChange={e => {
+                          const valor = e.target.value;
+                          setOrigensEntrega(o => ({
+                            ...o,
+                            [item.id]: { valor, codigo: valor ? (o[item.id]?.codigo || '') : '' },
+                          }));
+                        }}>
+                        <option value="">Qualquer endereço (automático)</option>
+                        {(saldosEntrega[item.material_id] || []).map(s => (
+                          <option key={valorOrigem(s)} value={valorOrigem(s)}>{rotuloOrigem(s)}</option>
+                        ))}
+                      </select>
+                      <CampoCodigoLido
+                        id={`entrega-codigo-lido-${item.id}`}
+                        value={origensEntrega[item.id]?.codigo || ''}
+                        disabled={!origensEntrega[item.id]?.valor}
+                        onChange={v => setOrigensEntrega(o => ({ ...o, [item.id]: { ...o[item.id], codigo: v } }))}
+                        dica={origensEntrega[item.id]?.valor ? null : 'Para confirmar a leitura, escolha antes de onde o item sai.'}
+                      />
+                    </div>
                   </div>
                   <div>
                     <input className="almox-count-input" type="number" min="0" step="1"
