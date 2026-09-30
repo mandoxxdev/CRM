@@ -501,13 +501,18 @@ const ALERT_REGISTRY = Object.freeze([
     evento: true,
     configDias: { chave: 'alerta_eventos_janela_dias', default: 7 },
     // Etapa 45 (T5): `excluirComExecucao` LIGADO — e so aqui. O cartao mostra "material reprovado
-    // nos ultimos 7 dias"; a inspecao cuja devolucao JA FOI EXECUTADA (NC decidida `DEVOLVER` e
-    // com `execucao_estado = 'EXECUTADA'`, T2) nao tem mais nada a cobrar de ninguem, e continuar
-    // listando o que ja foi feito e o jeito mais rapido de ensinar o usuario a ignorar o cartao.
+    // nos ultimos 7 dias"; a inspecao cujo material JA SAIU DE FATO para o fornecedor nao tem mais
+    // nada a cobrar de ninguem, e continuar listando o que ja foi feito e o jeito mais rapido de
+    // ensinar o usuario a ignorar o cartao.
+    //
+    // ⚠️ ESTE COMENTARIO DIZIA que a regua era "NC decidida `DEVOLVER` e com
+    // `execucao_estado = 'EXECUTADA'`". ESTAVA CERTO NA T5 e ficou ERRADO no fix-round da Fase 5:
+    // a regua atual e `i.devolucao_fornecedor_em IS NULL` — MATERIAL MOVIDO, nao intencao
+    // registrada. O porque esta no corpo de `listarReprovados`.
     //
     // ⚠️ A exclusao mora NESTA LINHA e nao dentro de `listarReprovados` — o motivo medido (o
-    // gancho do ato da inspecao) esta no cabecalho daquela funcao, junto com a razao de a regua
-    // exigir as DUAS condicoes.
+    // gancho do ato da inspecao) esta no cabecalho daquela funcao, junto com a historia das
+    // duas reguas e o motivo de a primeira nao bastar.
     //
     // CONSEQUENCIA DECLARADA (RN-01: o `listar` e UM so para a central e para a varredura
     // diaria): a rede de seguranca da varredura tambem deixa de enfileirar a inspecao devolvida.
