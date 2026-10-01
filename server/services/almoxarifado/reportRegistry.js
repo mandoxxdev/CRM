@@ -345,7 +345,11 @@ const RELATORIOS = {
       + '(unidades diferentes não se somam). O fornecedor é agrupado pelo CNPJ do recebimento (sem '
       + 'pontuação), senão pelo cadastro, senão pelo nome digitado — letras acentuadas em maiúsculas e '
       + 'minúsculas podem separar o mesmo nome — e aparece com o nome do recebimento mais recente do grupo. '
-      + 'Materiais de clientes ficam fora. Sem item conferido ou sem inspeção, o índice fica vazio.',
+      + 'Materiais de clientes ficam fora. Sem item conferido ou sem inspeção, o índice fica vazio. '
+      + 'A coluna Agrupado por mostra o que juntou a linha: "CNPJ" seguido do CNPJ como veio no recebimento '
+      + 'mais recente, "Cadastro #" seguido do número do fornecedor no cadastro, ou "Nome digitado". O mesmo '
+      + 'fornecedor pode aparecer em mais de uma linha quando os recebimentos não trazem o mesmo CNPJ (por '
+      + 'exemplo, uma nota com CNPJ e outra só com o nome).',
     limite: null,
     params: [
       { nome: 'data_inicio', rotulo: 'Data início', tipo: 'date', obrigatorio: false },
@@ -353,6 +357,7 @@ const RELATORIOS = {
     ],
     colunas: [
       { chave: 'fornecedor', rotulo: 'Fornecedor' },
+      { chave: 'agrupado_por', rotulo: 'Agrupado por' },
       { chave: 'recebimentos', rotulo: 'Recebimentos' },
       { chave: 'itens_conferidos', rotulo: 'Itens conferidos (conferência finalizada)' },
       { chave: 'itens_divergentes', rotulo: 'Itens com divergência' },

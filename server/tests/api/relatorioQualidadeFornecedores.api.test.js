@@ -142,11 +142,12 @@ let seq = 0;
     assert.strictEqual(e.limite, null);
     assert.deepStrictEqual(e.params.map((p) => [p.nome, p.tipo]), [['data_inicio', 'date'], ['data_fim', 'date']]);
     assert.deepStrictEqual(e.colunas.map((c) => c.chave), [
-      'fornecedor', 'recebimentos', 'itens_conferidos', 'itens_divergentes', 'itens_com_falta', 'itens_com_sobra',
+      'fornecedor', 'agrupado_por', 'recebimentos', 'itens_conferidos', 'itens_divergentes', 'itens_com_falta', 'itens_com_sobra',
       'percentual_divergencia', 'inspecoes', 'inspecoes_com_reprovacao', 'indice_rejeicao',
     ]);
     const rot = Object.fromEntries(e.colunas.map((c) => [c.chave, c.rotulo]));
     assert.strictEqual(rot.fornecedor, 'Fornecedor');
+    assert.strictEqual(rot.agrupado_por, 'Agrupado por');
     assert.strictEqual(rot.indice_rejeicao, '% rejeição');
     assert.ok(/conferência finalizada/i.test(rot.itens_conferidos), `a coluna tem de dizer a regua: ${rot.itens_conferidos}`);
     for (const frase of [
@@ -157,6 +158,8 @@ let seq = 0;
       'Materiais de clientes ficam fora',
       'Liberação posterior por não conformidade e devolução ao fornecedor não mudam o índice',
       'data inválida devolve a lista vazia',
+      'A coluna Agrupado por mostra o que juntou a linha',
+      'O mesmo fornecedor pode aparecer em mais de uma linha quando os recebimentos não trazem o mesmo CNPJ',
     ]) assert.ok(e.nota.includes(frase), `nota sem "${frase}": ${e.nota}`);
   });
 
@@ -361,6 +364,30 @@ let seq = 0;
     assert.deepStrictEqual(await linha(nomeA), [], 'a caixa do CNPJ partiu o fornecedor em duas linhas');
     const l = await umaLinha(nomeB);
     assert.strictEqual(l.recebimentos, 2);
+  });
+
+  await test('[Fase5/C] tres linhas com o mesmo nome se distinguem pela coluna Agrupado por (CNPJ como veio no mais recente / Cadastro #id / Nome digitado)', async () => {
+    const ACME = `ACME ${SUF}`;
+    const fid = (await dbRun(db, "INSERT INTO fornecedores (razao_social, cnpj, status) VALUES (?, NULL, 'ativo')", [ACME])).lastID;
+    const m = await material();
+    // o mesmo CNPJ em duas formas: o MAIS RECENTE (id maior) e o pontuado — e ele que aparece
+    await receber({ fornecedor_nome: ACME, fornecedor_cnpj: '77666555000144' }, [[m, 1]]);
+    await receber({ fornecedor_nome: ACME, fornecedor_cnpj: ' 77.666.555/0001-44 ' }, [[m, 1]]);
+    await receber({ fornecedor_nome: ACME }, [[m, 1]]); // NF digitada sem CNPJ
+    await receber({ fornecedor_id: fid, fornecedor_nome: ACME }, [[m, 1]]); // cadastro sem CNPJ
+    const ls = await linha(ACME);
+    assert.strictEqual(ls.length, 3, `premissa: tres grupos com o mesmo nome (${JSON.stringify(ls)})`);
+    const por = Object.fromEntries(ls.map((l) => [l.agrupado_por, l.recebimentos]));
+    assert.deepStrictEqual(por, { 'CNPJ 77.666.555/0001-44': 2, [`Cadastro #${fid}`]: 1, 'Nome digitado': 1 }, JSON.stringify(ls));
+    await receber({}, [[m, 1]]);
+    const sem = await umaLinha('Sem fornecedor');
+    assert.strictEqual(sem.agrupado_por, 'Sem CNPJ, cadastro ou nome');
+    // export: a coluna nova sai com o rotulo, logo depois de Fornecedor
+    setUser({ ...ADMIN });
+    const res = await request(app).get(`${URL_REL}/export?data_inicio=${HOJE}&data_fim=${HOJE}`).buffer().parse(binaryParser);
+    const wb = XLSX.read(res.body, { type: 'buffer' });
+    const cab = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 })[0];
+    assert.deepStrictEqual(cab.slice(0, 2), ['Fornecedor', 'Agrupado por']);
   });
 
   // ══════════════ D9 / M-2: material de cliente fora ══════════════

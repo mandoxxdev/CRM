@@ -368,6 +368,7 @@ async function relatorioQualidadeFornecedores(db, filters = {}) {
   const rows = await dbAll(db, `
     SELECT
       SUBSTR(MAX(x.carimbo || x.nome_exibido), 32) AS fornecedor,
+      SUBSTR(MAX(x.carimbo || x.agrupamento), 32) AS agrupado_por,
       COUNT(DISTINCT x.recebimento_id) AS recebimentos,
       SUM(x.conferido) AS itens_conferidos,
       SUM(x.conferido * x.divergente) AS itens_divergentes,
@@ -385,6 +386,12 @@ async function relatorioQualidadeFornecedores(db, filters = {}) {
           CASE WHEN ${cnpj} <> '' THEN 'CNPJ ' || ${cnpj}
                WHEN r.fornecedor_id IS NOT NULL THEN 'Fornecedor #' || r.fornecedor_id
                ELSE 'Sem fornecedor' END) AS nome_exibido,
+        -- Fase 5 (C): a chave da linha em texto legivel. Tres linhas "ACME" (CNPJ / cadastro sem
+        -- CNPJ / nome digitado) eram indistinguiveis. O CNPJ sai como veio (o do mais recente).
+        CASE WHEN ${cnpj} <> '' THEN 'CNPJ ' || TRIM(r.fornecedor_cnpj)
+             WHEN r.fornecedor_id IS NOT NULL THEN 'Cadastro #' || r.fornecedor_id
+             WHEN TRIM(COALESCE(r.fornecedor_nome, '')) <> '' THEN 'Nome digitado'
+             ELSE 'Sem CNPJ, cadastro ou nome' END AS agrupamento,
         ri.recebimento_id AS recebimento_id,
         CASE WHEN ri.quantidade_recebida IS NOT NULL AND EXISTS (
                SELECT 1 FROM auditoria_log_almoxarifado a
@@ -409,6 +416,7 @@ async function relatorioQualidadeFornecedores(db, filters = {}) {
   const n = (v) => Number(v) || 0;
   return rows.map((r) => ({
     fornecedor: r.fornecedor,
+    agrupado_por: r.agrupado_por,
     recebimentos: n(r.recebimentos),
     itens_conferidos: n(r.itens_conferidos),
     itens_divergentes: n(r.itens_divergentes),
