@@ -431,7 +431,7 @@ async function listarFilaSeparacao(db, user) {
 async function listarSubstituicoes(db, requisicaoId) {
   return dbAll(db, `SELECT s.id, s.item_id, s.material_id, m.codigo as material_codigo, s.quantidade,
       lp.codigo as planejada_codigo, ltp.codigo as planejada_lote, ls.codigo as saiu_codigo, lts.codigo as saiu_lote,
-      s.automatica, s.motivo, s.usuario_nome, s.created_at as em
+      s.automatica, s.motivo, s.usuario_nome, s.created_at as em, COALESCE(s.momento, 'ENTREGA') as momento
     FROM substituicoes_origem_requisicao s
     JOIN materiais_almoxarifado m ON m.id = s.material_id
     LEFT JOIN localizacoes_almoxarifado lp ON lp.id = s.localizacao_planejada_id
@@ -569,8 +569,16 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
   // fisicamente la — entra no acumulado desde o inicio. Antes so o do proprio item contava (mesmoPar):
   // dois itens do mesmo material no mesmo par passavam a separacao e a entrega de um clique recusava
   // um deles; e a mesma entrada duas vezes no payload contava o pendente em dobro.
+  // Etapa 65 (Fase 2, critico): o RETRATO da planejada antes da rodada — o `item` e mutado em memoria no
+  // laco abaixo, e o pendente "antes" lido dali gravava troca falsa no "A e depois B" sem planejada.
+  const planejadaAntes = new Map(); // item.id -> { origemId, loteId, pend }
   for (const it of itens) {
     const pend = Math.max(0, getSeparado(it) - getEntregue(it));
+    if (it.origem_separacao_id && pend > 1e-9) {
+      planejadaAntes.set(it.id, {
+        origemId: Number(it.origem_separacao_id), loteId: it.lote_separacao_id ? Number(it.lote_separacao_id) : null, pend,
+      });
+    }
     if (it.origem_separacao_id && pend > 1e-9) {
       const k = `${it.material_id}|${Number(it.origem_separacao_id)}|${it.lote_separacao_id ? Number(it.lote_separacao_id) : null}`;
       pedidoSeparacao.set(k, (pedidoSeparacao.get(k) || 0) + pend);
@@ -594,7 +602,7 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
     if (!reguaDivergencia.has(item.id)) {
       reguaDivergencia.set(item.id, {
         maxInicial: max, pend: pendenteSeparacao(item), estoque: num(estoque), material_id: item.material_id,
-        origens: new Set(), saldoOrigem: null, total: 0, motivo: null,
+        origens: new Set(), saldoOrigem: null, total: 0, motivo: null, motivoTroca: null,
       });
     }
 
@@ -613,8 +621,11 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
     const origemId = entrada.localizacao_origem_id ? Number(entrada.localizacao_origem_id) : null;
     const loteId = entrada.lote_id ? Number(entrada.lote_id) : null;
     const pendenteAntes = Math.max(0, getSeparado(item) - getEntregue(item));
+    // Etapa 65 (Fase 2): planejada SEM lote vale qualquer lote do mesmo endereco (a regua da entrega,
+    // Etapa 63) — (A, —) e uma rodada de (A, L1) sao o mesmo par, e a planejada NAO estreita para L1.
+    const planSemLote = !!item.origem_separacao_id && !item.lote_separacao_id;
     const mesmoPar = Number(item.origem_separacao_id || 0) === Number(origemId || 0)
-      && Number(item.lote_separacao_id || 0) === Number(loteId || 0);
+      && (planSemLote || Number(item.lote_separacao_id || 0) === Number(loteId || 0));
     // Etapa 60 (RN-01/02): acumula a rodada do item para a regua. Com UMA origem na rodada, o separavel
     // e tambem limitado ao saldo nela menos o ja comprometido (Fase 2: "Sai de" e uma origem por
     // rodada — 4 em A e 6 em B nao e divergencia na rodada de A).
@@ -651,8 +662,14 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
     }
     // Rodada com origem diferente (ou sem origem) sobre separado pendente de outra: mista -> nula.
     const planejada = pendenteAntes > 1e-9 && !mesmoPar ? { origemId: null, loteId: null }
+      // Etapa 65: o mesmo par sobre separado pendente mantem a planejada como esta (sem lote continua sem).
+      : pendenteAntes > 1e-9 ? { origemId: item.origem_separacao_id || null, loteId: item.lote_separacao_id || null }
       // Fase 5: lote sem endereco nao vira planejada (a entrega exige o endereco, e ficaria preso).
-      : { origemId: origemId || null, loteId: origemId ? loteId : null };
+        : { origemId: origemId || null, loteId: origemId ? loteId : null };
+    // Etapa 65 (RN-01): o motivo da troca — o primeiro nao vazio do item na rodada (so texto; <= 500).
+    if (!regua.motivoTroca && typeof entrada.motivo_substituicao === 'string' && entrada.motivo_substituicao.trim()) {
+      regua.motivoTroca = entrada.motivo_substituicao.trim().slice(0, 500);
+    }
     item.origem_separacao_id = planejada.origemId;
     item.lote_separacao_id = planejada.loteId;
     const novaSeparada = getSeparado(item) + qty;
@@ -705,6 +722,32 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
       VALUES (?, ?, ?, ?, ?)`,
       [requisicaoId, user.id, nomeDoUsuario(user), tocados.length, JSON.stringify(tocados)]);
     rodadaId = ins.lastID;
+
+    // Etapa 65 (RN-01): a TROCA na separacao — item que antes da rodada tinha planejada com separado
+    // pendente e termina a rodada sem ela. Detectada sobre o retrato e a regua (so entradas com
+    // quantidade > 0), gravada DEPOIS da rodada (separacao_id); rodada recusada na passada 1 nao chega
+    // aqui. Separacao nao move estoque: sem movimentacao_ids. Best-effort como a auditoria da rodada
+    // (a rodada ja esta gravada; recusar agora deixaria o separado sem a resposta) — letra B.
+    for (const [itemId, r] of reguaDivergencia) {
+      const antes = planejadaAntes.get(itemId);
+      const item = itens.find((i) => i.id === itemId);
+      if (!antes || !item || item.origem_separacao_id) continue;
+      const pares = [...r.origens].map((k) => k.split('|').map((x) => (x === 'null' ? null : Number(x))));
+      const umPar = pares.length === 1 ? pares[0] : null;
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        await dbRun(db, `INSERT INTO substituicoes_origem_requisicao
+          (requisicao_id, item_id, material_id, quantidade, localizacao_planejada_id, lote_planejado_id,
+           localizacao_saida_id, lote_saida_id, automatica, movimentacao_ids, motivo, usuario_id, usuario_nome,
+           momento, separacao_id)
+          VALUES (?,?,?,?,?,?,?,?,?,NULL,?,?,?,'SEPARACAO',?)`,
+        [requisicaoId, itemId, item.material_id, antes.pend, antes.origemId, antes.loteId,
+          umPar ? umPar[0] : null, umPar ? umPar[1] : null, umPar && !umPar[0] && !umPar[1] ? 1 : 0,
+          r.motivoTroca || null, user.id, nomeDoUsuario(user), rodadaId]);
+      } catch (e) {
+        console.warn(`[almoxarifado-separacao] Falha ao registrar a troca de origem do item ${itemId} na rodada ${rodadaId}: ${e.message}`);
+      }
+    }
 
     // RN-07 como COMPARE-AND-CLEAR (fix-round 1, F4). Reler a conferência e limpar só se a linha
     // ainda for a relida (`WHERE conferido_por_id IS ?`): se alguém conferiu entre a releitura e o

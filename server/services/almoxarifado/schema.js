@@ -2314,6 +2314,11 @@ async function initSchema(db) {
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`);
   await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_substituicoes_req ON substituicoes_origem_requisicao(requisicao_id)`);
+  // Etapa 65: a troca tambem na SEPARACAO (sem movimentacao). O legado e a entrega viram 'ENTREGA'.
+  // Numa linha SEPARACAO, lote_saida_id e o lote SEPARADO na rodada, nao um lote que saiu do estoque —
+  // a rastreabilidade por lote filtra o momento.
+  await safeAlter(db, "ALTER TABLE substituicoes_origem_requisicao ADD COLUMN momento TEXT NOT NULL DEFAULT 'ENTREGA'");
+  await safeAlter(db, 'ALTER TABLE substituicoes_origem_requisicao ADD COLUMN separacao_id INTEGER');
   // Segunda conferência da separação (Etapa 28, RN-05/RN-07). As colunas entram JÁ na Task 1
   // porque uma rodada nova de separação as limpa (a caixa mudou, a conferência anterior não vale).
   await safeAlter(db, 'ALTER TABLE requisicoes_almoxarifado ADD COLUMN conferido_por_id INTEGER');
