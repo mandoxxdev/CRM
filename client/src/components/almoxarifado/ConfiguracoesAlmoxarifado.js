@@ -15,7 +15,7 @@ import {
 import TabRegrasAprovacao from './TabRegrasAprovacao';
 import { useSearchParams } from 'react-router-dom';
 import { prefixarAlmoxarifado, buildLocalizacaoPath } from '../../utils/localizacaoLabel';
-import { invalidarAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
+import { invalidarAlmoxPermissoes, useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import EtiquetasPdfModal from './EtiquetasPdfModal';
 import { montarEtiquetaLocalizacao } from '../../utils/etiquetasPdf';
 import './Almoxarifado.css';
@@ -194,6 +194,7 @@ const TABS = [
   { id: 'tipos', label: 'Tipos de Material', icon: FiPackage },
   { id: 'familias', label: 'Famílias', icon: FiLayers },
   { id: 'categorias', label: 'Categorias', icon: FiTag },
+  { id: 'motivos-movimentacao', label: 'Motivos de Movimentação', icon: FiClipboard }, // Etapa 66 (T4)
   { id: 'materiais-setor', label: 'Materiais por Setor', icon: FiUsers },
   { id: 'estoques', label: 'Estoques Mínimos', icon: FiSliders },
   { id: 'setores', label: 'Setores e Áreas', icon: FiGrid },
@@ -270,6 +271,7 @@ const ConfiguracoesAlmoxarifado = () => {
       {tab === 'tipos' && <TabTiposMaterial />}
       {tab === 'familias' && <TabFamilias />}
       {tab === 'categorias' && <TabCategorias />}
+      {tab === 'motivos-movimentacao' && <TabMotivosMovimentacao />}
       {tab === 'materiais-setor' && <TabMateriaisPorSetor />}
       {tab === 'estoques' && <TabEstoquesMinimos />}
       {tab === 'setores' && <TabSetores />}
@@ -888,6 +890,215 @@ const TabCategorias = () => {
                     )}
                   </div>
                 </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+};
+
+/* ===================== TAB MOTIVOS DE MOVIMENTAÇÃO (Etapa 66, T4) ===================== */
+/*
+ * Molde: TabCategorias logo acima. Diferenças que importam:
+ *  - os checkboxes de tipo vêm de GET /motivos-movimentacao/tipos — a lista dos tipos já existe
+ *    no servidor (TIPOS_MOVIMENTO_ROTA); uma terceira cópia aqui divergiria na primeira mudança;
+ *  - os tipos vão no payload na ORDEM DO SERVIDOR (não na dos cliques), para o mesmo conjunto
+ *    gravar sempre igual;
+ *  - a escrita some para quem não tem `configurar` (useAlmoxPermissoes). Isso só evita abrir um
+ *    formulário que daria 403 — quem decide é o `requirePermission('configurar')` da rota.
+ *  - editar os tipos de um motivo já usado é permitido e NÃO reescreve o livro: a linha antiga
+ *    guarda o texto do motivo da época.
+ */
+const TabMotivosMovimentacao = () => {
+  const { pode } = useAlmoxPermissoes();
+  const podeEscrever = pode('configurar');
+  const [motivos, setMotivos] = useState([]);
+  const [tiposDisponiveis, setTiposDisponiveis] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [editando, setEditando] = useState(null);
+  const [form, setForm] = useState({ nome: '', tipos: [] });
+
+  useEffect(() => {
+    loadMotivos();
+    api.get('/almoxarifado/motivos-movimentacao/tipos')
+      .then(res => setTiposDisponiveis(Array.isArray(res.data) ? res.data : []))
+      .catch(() => toast.error('Erro ao carregar os tipos de movimentação'));
+  }, []);
+
+  const loadMotivos = async () => {
+    setLoading(true);
+    try {
+      // `?todos=1`: sem ele o desativado some da única tela que pode reativá-lo.
+      const res = await api.get('/almoxarifado/motivos-movimentacao?todos=1');
+      setMotivos(Array.isArray(res.data) ? res.data : []);
+    } catch { toast.error('Erro ao carregar motivos de movimentação'); }
+    finally { setLoading(false); }
+  };
+
+  const resetForm = () => {
+    setForm({ nome: '', tipos: [] });
+    setEditando(null);
+    setShowForm(false);
+  };
+
+  const handleEditar = (m) => {
+    setForm({ nome: m.nome, tipos: Array.isArray(m.tipos) ? m.tipos : [] });
+    setEditando(m.id);
+    setShowForm(true);
+  };
+
+  const toggleTipo = (tipo) => {
+    setForm(f => ({
+      ...f,
+      tipos: f.tipos.includes(tipo) ? f.tipos.filter(t => t !== tipo) : [...f.tipos, tipo],
+    }));
+  };
+
+  const handleSalvar = async () => {
+    // Mesmas frases do servidor (motivoMovimentacao.js): o atalho local não muda a mensagem.
+    if (!form.nome.trim()) { toast.error('Nome é obrigatório'); return; }
+    if (form.tipos.length === 0) { toast.error('Informe ao menos um tipo de movimentação'); return; }
+    const tipos = tiposDisponiveis.filter(t => form.tipos.includes(t));
+    setSaving(true);
+    try {
+      if (editando) {
+        // SEM `ativo`: omitir preserva o valor atual (não ressuscita um desativado).
+        await api.put(`/almoxarifado/motivos-movimentacao/${editando}`, { nome: form.nome, tipos });
+        toast.success('Motivo atualizado! As movimentações já registradas mantêm o texto da época.');
+      } else {
+        await api.post('/almoxarifado/motivos-movimentacao', { nome: form.nome, tipos });
+        toast.success('Motivo criado!');
+      }
+      resetForm();
+      loadMotivos();
+    } catch (err) {
+      // Mensagem do servidor CRUA: o duplicado de desativado diz "reative-o".
+      toast.error(err.response?.data?.error || 'Erro ao salvar');
+    } finally { setSaving(false); }
+  };
+
+  const handleDesativar = async (m) => {
+    if (!window.confirm(
+      `Desativar o motivo "${m.nome}"? Ele sai da lista da movimentação, mas as movimentações que já o usam continuam com ele.`
+    )) return;
+    try {
+      await api.delete(`/almoxarifado/motivos-movimentacao/${m.id}`);
+      toast.success('Motivo desativado');
+      loadMotivos();
+    } catch (err) { toast.error(err.response?.data?.error || 'Erro ao desativar'); }
+  };
+
+  const handleReativar = async (m) => {
+    try {
+      // `ativo: 1` explícito e numérico — o servidor recusa qualquer coisa fora de 0|1.
+      await api.put(`/almoxarifado/motivos-movimentacao/${m.id}`, { ativo: 1 });
+      toast.success('Motivo reativado');
+      loadMotivos();
+    } catch (err) { toast.error(err.response?.data?.error || 'Erro ao reativar'); }
+  };
+
+  return (
+    <div>
+      <p style={{ fontSize: '0.85rem', color: 'var(--gmp-text-light)', marginBottom: 20 }}>
+        Motivos padronizados para as movimentações (ex.: Avaria no manuseio, Inventário anual), cada
+        um valendo para os tipos marcados. Desativar não apaga: o motivo sai da lista da movimentação
+        e continua nas movimentações que já o usam.
+      </p>
+
+      {podeEscrever && !showForm && (
+        <button className="btn-almox-primary" style={{ marginBottom: 20 }} onClick={() => setShowForm(true)}>
+          <FiPlus size={14} /> Novo Motivo
+        </button>
+      )}
+
+      {podeEscrever && showForm && (
+        <div style={{ background: 'var(--gmp-surface)', border: '1px solid rgba(79,172,254,0.25)', borderRadius: 12, padding: 24, marginBottom: 24 }}>
+          <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 18 }}>
+            {editando ? '✏️ Editar Motivo' : '➕ Novo Motivo'}
+          </div>
+          <div className="almox-field" style={{ marginBottom: 16, maxWidth: 420 }}>
+            <label className="almox-label">Nome<span className="required">*</span></label>
+            <input type="text" className="almox-input" value={form.nome}
+              onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
+              placeholder="Ex: Avaria no manuseio, Inventário anual..." />
+          </div>
+          <div className="almox-field" style={{ marginBottom: 20 }}>
+            <label className="almox-label">Vale para os tipos<span className="required">*</span></label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 18px', marginTop: 6 }}>
+              {tiposDisponiveis.map(tipo => (
+                <label key={tipo} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', cursor: 'pointer' }}>
+                  <input type="checkbox" value={tipo}
+                    checked={form.tipos.includes(tipo)}
+                    onChange={() => toggleTipo(tipo)} />
+                  {tipo}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button className="btn-almox-primary" onClick={handleSalvar} disabled={saving}>
+              <FiSave size={14} /> {saving ? 'Salvando...' : 'Salvar Motivo'}
+            </button>
+            <button className="btn-almox-secondary" onClick={resetForm}>Cancelar</button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="almox-loading"><FiRefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} /> Carregando...</div>
+      ) : motivos.length === 0 ? (
+        <div className="almox-empty" style={{ padding: 40 }}>
+          <FiClipboard size={40} style={{ opacity: 0.3, display: 'block', margin: '0 auto 12px' }} />
+          <p>Nenhum motivo de movimentação cadastrado</p>
+        </div>
+      ) : (
+        <table className="almox-table">
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Tipos</th>
+              <th style={{ width: 120 }}>Situação</th>
+              {podeEscrever && <th style={{ width: 140 }}>Ações</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {motivos.map(m => (
+              <tr key={m.id} style={{ opacity: m.ativo ? 1 : 0.6 }}>
+                <td style={{ fontWeight: 600 }}>{m.nome}</td>
+                <td style={{ fontSize: '0.78rem' }}>{(m.tipos || []).join(', ')}</td>
+                <td>
+                  {m.ativo ? (
+                    <span style={{ fontSize: '0.7rem', background: 'rgba(67,233,123,0.12)', color: '#27ae60', padding: '2px 10px', borderRadius: 20, fontWeight: 600 }}>Ativo</span>
+                  ) : (
+                    <span style={{ fontSize: '0.7rem', background: 'rgba(120,144,156,0.15)', color: 'var(--gmp-text-light)', padding: '2px 10px', borderRadius: 20, fontWeight: 600 }}>Inativo</span>
+                  )}
+                </td>
+                {podeEscrever && (
+                  <td>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {m.ativo ? (
+                        <>
+                          <button className="almox-btn-icon" title="Editar" onClick={() => handleEditar(m)}>
+                            <FiEdit2 size={13} />
+                          </button>
+                          <button className="almox-btn-icon danger" title="Desativar" onClick={() => handleDesativar(m)}>
+                            <FiTrash2 size={13} />
+                          </button>
+                        </>
+                      ) : (
+                        <button className="btn-almox-secondary" title="Reativar"
+                          style={{ fontSize: '0.75rem', padding: '4px 12px' }}
+                          onClick={() => handleReativar(m)}>
+                          <FiRotateCcw size={12} /> Reativar
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
