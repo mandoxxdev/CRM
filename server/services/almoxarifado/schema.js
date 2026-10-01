@@ -2293,6 +2293,27 @@ async function initSchema(db) {
   )`);
   await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_separacoes_req
     ON separacoes_requisicao_almoxarifado(requisicao_id)`);
+  // Etapa 63: a substituicao da origem separada na entrega (append-only). Tabela propria — a
+  // auditoria e best-effort e restrita a `configurar`, e a rastreabilidade do lote vai consultar por
+  // lote (lote_planejado_id / lote_saida_id), nao por JSON.
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS substituicoes_origem_requisicao (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    requisicao_id INTEGER NOT NULL,
+    item_id INTEGER NOT NULL,
+    material_id INTEGER NOT NULL,
+    quantidade REAL NOT NULL,
+    localizacao_planejada_id INTEGER,
+    lote_planejado_id INTEGER,
+    localizacao_saida_id INTEGER,
+    lote_saida_id INTEGER,
+    automatica INTEGER NOT NULL DEFAULT 0,
+    movimentacao_ids TEXT,
+    motivo TEXT,
+    usuario_id INTEGER,
+    usuario_nome TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_substituicoes_req ON substituicoes_origem_requisicao(requisicao_id)`);
   // Segunda conferência da separação (Etapa 28, RN-05/RN-07). As colunas entram JÁ na Task 1
   // porque uma rodada nova de separação as limpa (a caixa mudou, a conferência anterior não vale).
   await safeAlter(db, 'ALTER TABLE requisicoes_almoxarifado ADD COLUMN conferido_por_id INTEGER');

@@ -3165,9 +3165,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
           // ela é obrigatória (material crítico SEPARADO) saem junto — leitura sem gate novo.
           let assinaturas;
           let separacoes;
+          let substituicoes; // Etapa 63 (RN-03)
           try {
             assinaturas = await deliverySignatureService.listarAssinaturas(db, req.params.id);
             separacoes = await requisitionService.listarSeparacoes(db, req.params.id);
+            substituicoes = await requisitionService.listarSubstituicoes(db, req.params.id);
           } catch (e) {
             return res.status(500).json({ error: e.message });
           }
@@ -3181,6 +3183,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
             ),
             assinaturas_entrega: assinaturas,
             separacoes,
+            substituicoes,
             conferencia,
             conferencia_obrigatoria: requisitionService.conferenciaObrigatoria(itens || []),
           });
