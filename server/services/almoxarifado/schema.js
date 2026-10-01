@@ -1412,6 +1412,14 @@ async function initSchema(db) {
   // e nada acontece sozinho, porque alguem precisa clicar em "registrar execucao".
   await safeAlter(db, 'ALTER TABLE inspecoes_recebimento_almoxarifado ADD COLUMN devolucao_fornecedor_em DATETIME');
 
+  // Etapa 69 (D5) — o TERCEIRO carimbo da mesma familia: "o material reprovado por ESTA inspecao ja
+  // foi SUCATEADO" (a segunda assinatura do sucateamento ligado a NC baixou do bloqueado). As tres
+  // portas sobre o mesmo bloqueado agregado (liberar — 44, devolver — 45, sucatear — 69) olham os
+  // TRES carimbos no claim: com so a porta nova olhando, a devolucao posterior baixaria de novo o
+  // que ja foi para a cacamba, contra a retencao de outra origem.
+  // SEM BACKFILL, pela mesma razao da 45: carimbar o passado trancaria material ainda bloqueado.
+  await safeAlter(db, 'ALTER TABLE inspecoes_recebimento_almoxarifado ADD COLUMN sucateamento_em DATETIME');
+
   // ── Plano de inspeção e medidas (Etapa 27, contrato C2) ──────────────────────────────────────
   //
   // Até aqui `divergencia_dimensional` (acima) era uma CAIXA QUE O INSPETOR MARCAVA. Com plano e
@@ -2044,6 +2052,17 @@ async function initSchema(db) {
   // A fila de pendencias e a tela: "o que esta esperando a minha assinatura" filtra por status.
   await dbRun(db, 'CREATE INDEX IF NOT EXISTS idx_sucateamento_status ON sucateamentos_almoxarifado(status)');
   await dbRun(db, 'CREATE INDEX IF NOT EXISTS idx_sucateamento_material ON sucateamentos_almoxarifado(material_id)');
+
+  // Etapa 69 (D1) — o sucateamento LIGADO a uma NC de inspecao decidida SUCATEAR. NULL = o
+  // sucateamento comum (do disponivel), que nao muda. Com a coluna preenchida a segunda assinatura
+  // baixa do BLOQUEADO (`doBloqueado`), carimba a inspecao e registra a execucao da NC; e o estorno
+  // dessa SUCATA e recusado (D3), casando `referencia = 'SUC-'||id` com esta coluna.
+  await safeAlter(db, 'ALTER TABLE sucateamentos_almoxarifado ADD COLUMN nao_conformidade_id INTEGER');
+  // A guarda REAL contra duas solicitacoes concorrentes para a mesma NC (RN-04): a pre-checagem do
+  // servico e so para a mensagem. Parcial em SOLICITADO — rejeitado/cancelado libera nova solicitacao.
+  await dbRun(db, `CREATE UNIQUE INDEX IF NOT EXISTS ux_sucateamento_nc_solicitado
+    ON sucateamentos_almoxarifado(nao_conformidade_id)
+    WHERE nao_conformidade_id IS NOT NULL AND status = 'SOLICITADO'`);
 
   // ── Ferramentas ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS ferramentas_almoxarifado (

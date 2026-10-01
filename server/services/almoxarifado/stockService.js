@@ -11,7 +11,8 @@ const motivoMovimentacao = require('./motivoMovimentacao');
 const { TIPOS_MOVIMENTO, TIPOS_RETENCAO, AREAS_ESPECIAIS } = require('./schema');
 const { disponivelSql, COLUNAS_RETENCAO } = require('./availabilitySql');
 // Etapa 45 (fix-round): a regua de "isto e diferenca de verdade", dona unica desde a Etapa 10b.
-// Usada SO no claim de `DEVOLUCAO_FORNECEDOR`, e o raio pequeno e deliberado — ver o comentario
+// Usada SO no claim de `baixandoBloqueado` (`DEVOLUCAO_FORNECEDOR` e, desde a Etapa 69, a `SUCATA`
+// com `doBloqueado`), e o raio pequeno e deliberado — ver o comentario
 // la. Afrouxar por epsilon TODO claim de saida e mudanca de motor, nao de etapa.
 const { EPSILON_DIVERGENCIA } = require('./divergencia');
 /**
@@ -1033,7 +1034,18 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
   // ⚠️ A flag desliga DUAS guardas, e por isso o tipo TEM de ser DEDICADO (`TIPOS_DEDICADOS`, em
   // schema.js): sem aquilo, a rota generica `/movimentacoes/v2` aceitaria o tipo e qualquer um com
   // o gate `movimentar` apagaria material bloqueado sem documento nenhum.
-  const baixandoBloqueado = tipo === 'DEVOLUCAO_FORNECEDOR';
+  //
+  // Etapa 69 (D2/RN-01): a `SUCATA` do material REPROVADO tambem baixa do bloqueado — mas por OPCAO
+  // do chamador (`opcoes.doBloqueado`, 4o argumento, NUNCA do body), e nao por tipo novo: um
+  // `SUCATA_REPROVADO` sumiria do relatorio `sucata-financeiro` (que le `tipo = 'SUCATA'`). A
+  // `SUCATA` continua em TIPOS_DEDICADOS, entao a v2 segue recusando o tipo; e o unico chamador que
+  // liga a opcao e a segunda assinatura de um sucateamento LIGADO a NC de inspecao.
+  // Sem a opcao, `SUCATA` e exatamente a de antes (baixa do disponivel).
+  if (opcoes.doBloqueado && tipo !== 'SUCATA') {
+    throw Object.assign(new Error('doBloqueado só vale para SUCATA'), { status: 400 });
+  }
+  const baixandoBloqueado = tipo === 'DEVOLUCAO_FORNECEDOR'
+    || (tipo === 'SUCATA' && opcoes.doBloqueado === true);
 
   // ── Lote (Etapa 6) ──────────────────────────────────────────────────────────
   // Aceita `lote_id` (numero) ou `lote` (codigo). O ledger guarda os DOIS: `lote_id` para juntar
@@ -1570,6 +1582,9 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
       // QUARENTENA e os de inspecao). Aqui a retencao e baixada DENTRO do claim, junto do fisico,
       // e quem a devolve e este ramo. Usar os dois compensaria EM DOBRO — a revisao do plano da 45
       // pegou isso antes de virar codigo: `bloqueada` voltaria a 6 para uma reprovacao de 3.
+      // Etapa 69: vale IGUAL para a `SUCATA` com `doBloqueado` — mesmo claim, mesma compensacao,
+      // e o mesmo motivo para NAO setar `retencaoAplicada` (o cenario (7) de
+      // `sucataBloqueadoMotor.api.test.js` prende a igualdade exata).
       await dbRun(db, `UPDATE materiais_almoxarifado
         SET quantidade_atual = quantidade_atual + ?,
             quantidade_bloqueada = COALESCE(quantidade_bloqueada,0) + ?,
@@ -1698,7 +1713,8 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
         // derrubando a execucao e trancando o documento em PENDENTE. Trocar um defeito silencioso
         // por um beco nao e conserto.
         //
-        // O raio e SO este ramo: `baixandoBloqueado` vale para um unico tipo. Afrouxar por
+        // O raio e SO este ramo: `baixandoBloqueado` vale para um unico tipo (e, desde a Etapa 69,
+        // para a `SUCATA` cujo chamador declara `doBloqueado` no 4o argumento). Afrouxar por
         // epsilon todo claim de saida do motor e decisao de outro tamanho, e nao desta etapa.
         const rowB = await dbGet(db, `UPDATE materiais_almoxarifado
           SET quantidade_atual = quantidade_atual - ?,
@@ -1709,8 +1725,11 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
           RETURNING quantidade_atual`,
           [quantidade, quantidade, material_id, quantidade, quantidade]);
         if (!rowB) {
+          // Etapa 69: a literal nomeia a OPERACAO — "Devolucao acima..." numa sucata mandaria o
+          // operador procurar uma devolucao que ninguem pediu. Os dois numeros continuam.
+          const oQue = tipo === 'SUCATA' ? 'Sucateamento' : 'Devolução';
           throw Object.assign(
-            new Error(`Devolução acima do que está bloqueado: há ${material.quantidade_bloqueada || 0} `
+            new Error(`${oQue} acima do que está bloqueado: há ${material.quantidade_bloqueada || 0} `
               + `${material.unidade} bloqueado(s) (físico: ${material.quantidade_atual})`),
             { status: 400 });
         }
@@ -2217,6 +2236,25 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
     throw Object.assign(
       new Error('Devolução ao fornecedor não pode ser estornada pelo livro — o material voltaria bloqueado com o documento dizendo que foi devolvido'),
       { status: 400 });
+  }
+  // Etapa 69 (D3/RN-02) — a SUCATA do material reprovado herda a recusa da devolucao, e pela mesma
+  // razao: o estorno comum de SUCATA devolve ao DISPONIVEL (ramo `tiposSaida`), entao estorna-la
+  // liberaria material CONDENADO, com a inspecao carimbada, a NC `EXECUTADA` e o sucateamento
+  // `APROVADO` — sem nenhuma porta (as tres olham o carimbo). Correcao de sucateamento indevido = AJUSTE.
+  //
+  // O discriminador e `referencia = 'SUC-<id>'` + `nao_conformidade_id IS NOT NULL` no sucateamento
+  // (Fase 2): a `referencia` e escrita no MESMO INSERT do livro (atomica com a linha), ao contrario
+  // de `movimentacao_sucata_id`, gravado depois. Nao casa por `motivo`: o `returnService` grava
+  // `SUCATA` com o motivo DIGITADO pelo usuario. A SUCATA do sucateamento COMUM continua estornavel.
+  if (mov.tipo === 'SUCATA' && /^SUC-\d+$/.test(String(mov.referencia || ''))) {
+    const sucId = Number(String(mov.referencia).slice(4));
+    const ligado = await dbGet(db, `SELECT id FROM sucateamentos_almoxarifado
+      WHERE id = ? AND material_id = ? AND nao_conformidade_id IS NOT NULL`, [sucId, mov.material_id]);
+    if (ligado) {
+      throw Object.assign(
+        new Error('Sucateamento de material reprovado não pode ser estornado pelo livro — o material voltaria ao estoque disponível com a não conformidade dizendo que foi sucateado'),
+        { status: 400 });
+    }
   }
   if (mov.tipo === 'DESBLOQUEIO' && mov.motivo === MOTIVO_LIBERACAO_NC) {
     throw Object.assign(
