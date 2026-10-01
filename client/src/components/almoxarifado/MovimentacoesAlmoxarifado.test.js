@@ -796,3 +796,147 @@ describe('Etapa 53: sugestao de localizacao na entrada', () => {
     expect(container.querySelector('.almox-modal')).not.toBeNull();
   });
 });
+
+// ─── Etapa 68: aviso de área especial no DESTINO ──────────────────────────────────────────
+// O servidor é a única fonte das frases (GET /localizacoes/:id/aviso-area?material_id=); a tela
+// mostra o `aviso` LITERAL, não bloqueia o envio e falha aberta. Mock só na fronteira HTTP, com as
+// frases do contrato (stockService.avisoAreaEspecial).
+describe('Etapa 68: aviso de area especial no destino', () => {
+  const FRASE_SUCATA = 'Localização C-01 é área de sucata, mas guardar aqui não sucateia — o material continua no estoque disponível até o sucateamento aprovado.';
+  const FRASE_DEVOLUCOES = 'Localização D-01 é área de devoluções, mas guardar aqui não muda o estado do material — ele continua disponível.';
+  const FRASE_CLIENTE = 'Localização D-01 é área de materiais do cliente, e MAT-2 é material próprio.';
+  let respostaAviso;
+  beforeEach(() => {
+    // (loc, material) -> Promise; padrão: 3 = sucata; 4 = devoluções (cliente para o MAT-2); 1/2 = sem área.
+    respostaAviso = (loc, mat) => {
+      if (loc === '3') return Promise.resolve({ data: { area: 'SUCATA', aviso: FRASE_SUCATA } });
+      if (loc === '4' && mat === '11') return Promise.resolve({ data: { area: 'MATERIAIS_CLIENTE', aviso: FRASE_CLIENTE } });
+      if (loc === '4') return Promise.resolve({ data: { area: 'DEVOLUCOES', aviso: FRASE_DEVOLUCOES } });
+      return Promise.resolve({ data: { area: null, aviso: null } });
+    };
+    api.get.mockImplementation((url) => {
+      const m = String(url).match(/^\/almoxarifado\/localizacoes\/(\d+)\/aviso-area\?material_id=(\d+)$/);
+      if (m) return respostaAviso(m[1], m[2]);
+      if (url === '/almoxarifado/movimentacoes') return Promise.resolve({ data: MOVIMENTOS });
+      if (url === '/almoxarifado/materiais') {
+        return Promise.resolve({ data: [
+          { id: 10, codigo: 'MAT-1', nome: 'Chapa 3mm', unidade: 'PC' },
+          { id: 11, codigo: 'MAT-2', nome: 'Perfil', unidade: 'PC' },
+        ] });
+      }
+      if (url === '/almoxarifado/localizacoes') {
+        return Promise.resolve({ data: [1, 2, 3, 4].map((id) => ({ id, codigo: `${'ABCD'[id - 1]}-01` })) });
+      }
+      return Promise.resolve({ data: [] });
+    });
+  });
+  const aviso = () => container.querySelector('[data-testid="aviso-area-especial"]');
+  const selectMaterial = () => container.querySelector('.almox-modal select.almox-form-select');
+  const selectDestino = () => [...container.querySelectorAll('.almox-modal .almox-field')]
+    .find((f) => f.textContent.includes('Localização de destino')).querySelector('select');
+  const urlsAviso = () => api.get.mock.calls.map(([u]) => String(u)).filter((u) => u.includes('/aviso-area'));
+  async function abrir(tipo, materialId) {
+    await abrirModalNovaMovimentacao();
+    if (materialId) preencher(selectMaterial(), String(materialId));
+    preencher(seletorTipo(), tipo);
+    await esperarEfeitos();
+  }
+  async function destino(id) {
+    preencher(selectDestino(), String(id));
+    await esperarEfeitos();
+  }
+  async function enviarQuantidade(qtd) {
+    const inputs = [...container.querySelectorAll('.almox-modal input.almox-input')];
+    preencher(inputs.find((i) => i.type === 'number'), String(qtd));
+    const form = container.querySelector('.almox-modal form');
+    await act(async () => { form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
+  }
+
+  test('destino que e area: o aviso do servidor aparece LITERAL abaixo do destino (ENTRADA e TRANSFERENCIA)', async () => {
+    await abrir('ENTRADA', 10);
+    await destino(3);
+    expect(urlsAviso()).toEqual(['/almoxarifado/localizacoes/3/aviso-area?material_id=10']);
+    expect(aviso().textContent).toBe(FRASE_SUCATA);
+    expect(selectDestino().parentElement.contains(aviso())).toBe(true);
+    preencher(seletorTipo(), 'TRANSFERENCIA');
+    await esperarEfeitos();
+    expect(aviso().textContent).toBe(FRASE_SUCATA);
+  });
+
+  test('aviso null nao mostra nada; e o mesmo campo MOSTRA quando o destino passa a ser area (metade positiva)', async () => {
+    await abrir('ENTRADA', 10);
+    await destino(2);
+    expect(urlsAviso()).toEqual(['/almoxarifado/localizacoes/2/aviso-area?material_id=10']);
+    expect(aviso()).toBeNull();
+    await destino(4);
+    expect(aviso().textContent).toBe(FRASE_DEVOLUCOES);
+  });
+
+  test('sem material ou sem destino nao busca; numa SAIDA (sem destino) tambem nao', async () => {
+    await abrir('ENTRADA', null);
+    await destino(3);
+    expect(urlsAviso()).toEqual([]);
+    expect(aviso()).toBeNull();
+    preencher(seletorTipo(), 'SAIDA');
+    preencher(selectMaterial(), '10');
+    await esperarEfeitos();
+    expect(urlsAviso()).toEqual([]);
+    expect(aviso()).toBeNull();
+  });
+
+  test('trocar destino ou material LIMPA o aviso na hora e refaz a busca', async () => {
+    await abrir('ENTRADA', 10);
+    await destino(3);
+    expect(aviso().textContent).toBe(FRASE_SUCATA);
+    // Troca de destino com a resposta nova pendente: o aviso velho some antes dela chegar.
+    let resolver;
+    respostaAviso = () => new Promise((r) => { resolver = r; });
+    await destino(4);
+    expect(aviso()).toBeNull();
+    await act(async () => { resolver({ data: { area: 'DEVOLUCOES', aviso: FRASE_DEVOLUCOES } }); });
+    expect(aviso().textContent).toBe(FRASE_DEVOLUCOES);
+    // Troca de material: o destino escolhido à mão fica, o aviso some e a busca é refeita com o novo material.
+    preencher(selectMaterial(), '11');
+    await esperarEfeitos();
+    expect(selectDestino().value).toBe('4');
+    expect(aviso()).toBeNull();
+    expect(urlsAviso().slice(-1)).toEqual(['/almoxarifado/localizacoes/4/aviso-area?material_id=11']);
+    await act(async () => { resolver({ data: { area: 'MATERIAIS_CLIENTE', aviso: FRASE_CLIENTE } }); });
+    expect(aviso().textContent).toBe(FRASE_CLIENTE);
+    // Voltar o destino para vazio: nada de aviso.
+    await destino('');
+    expect(aviso()).toBeNull();
+  });
+
+  test('resposta ATRASADA do destino anterior nao sobrescreve a do atual', async () => {
+    const pendentes = {};
+    respostaAviso = (loc) => new Promise((r) => { pendentes[loc] = r; });
+    await abrir('ENTRADA', 10);
+    await destino(3);
+    await destino(4);
+    await act(async () => { pendentes['4']({ data: { area: 'DEVOLUCOES', aviso: FRASE_DEVOLUCOES } }); });
+    await act(async () => { pendentes['3']({ data: { area: 'SUCATA', aviso: FRASE_SUCATA } }); }); // chega depois, é do destino velho
+    expect(aviso().textContent).toBe(FRASE_DEVOLUCOES);
+  });
+
+  test('falha da busca = sem aviso, e o envio sai com o destino (falha aberta)', async () => {
+    respostaAviso = () => Promise.reject(Object.assign(new Error('x'), { response: { status: 404, data: { error: 'Localização não encontrada' } } }));
+    await abrir('ENTRADA', 10);
+    await destino(3);
+    expect(aviso()).toBeNull();
+    await enviarQuantidade(5);
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/movimentacoes/v2', expect.objectContaining({
+      tipo: 'ENTRADA', material_id: 10, quantidade: 5, localizacao_destino_id: 3,
+    }));
+  });
+
+  test('com o aviso NA TELA o envio tambem sai (o aviso nunca bloqueia)', async () => {
+    await abrir('ENTRADA', 10);
+    await destino(3);
+    expect(aviso().textContent).toBe(FRASE_SUCATA);
+    await enviarQuantidade(5);
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/movimentacoes/v2', expect.objectContaining({
+      tipo: 'ENTRADA', material_id: 10, quantidade: 5, localizacao_destino_id: 3,
+    }));
+  });
+});

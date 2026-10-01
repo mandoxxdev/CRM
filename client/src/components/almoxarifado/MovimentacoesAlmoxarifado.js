@@ -282,6 +282,22 @@ const MovimentacoesAlmoxarifado = () => {
     return () => { cancelado = true; };
   }, [form.material_id, form.tipo]);
 
+  // Etapa 68 (RN-04): aviso de ÁREA ESPECIAL do destino escolhido. A frase é do servidor (uma
+  // definição só, stockService.avisoAreaEspecial) e vai LITERAL para a tela. Só avisa: o motor não
+  // recusa por área (D1), então o envio nunca é bloqueado. Mesmo molde da sugestão: zera NA HORA
+  // em qualquer troca (o aviso do destino velho não fica na tela do novo) e a guarda `cancelado`
+  // descarta a resposta atrasada. Falha da rota = sem aviso (falha aberta, como minhas-permissoes).
+  const [avisoArea, setAvisoArea] = useState(null);
+  useEffect(() => {
+    setAvisoArea(null);
+    if (!TIPOS_COM_DESTINO.includes(form.tipo) || !form.localizacao_destino_id || !form.material_id) return undefined;
+    let cancelado = false;
+    api.get(`/almoxarifado/localizacoes/${encodeURIComponent(form.localizacao_destino_id)}/aviso-area?material_id=${encodeURIComponent(form.material_id)}`)
+      .then((res) => { if (!cancelado) setAvisoArea(typeof res.data?.aviso === 'string' && res.data.aviso ? res.data.aviso : null); })
+      .catch(() => { if (!cancelado) setAvisoArea(null); });
+    return () => { cancelado = true; };
+  }, [form.tipo, form.localizacao_destino_id, form.material_id]);
+
   // Série, como lote, só é escolhida (não digitada) numa saída — molde exato do efeito de lotes
   // acima, mesma guarda `cancelado`. Só busca quando o material exige controle de série; senão
   // a lista fica vazia e o bloco de checkboxes nem aparece no JSX.
@@ -1007,6 +1023,12 @@ const MovimentacoesAlmoxarifado = () => {
                           </option>
                         ))}
                       </select>
+                      {/* Etapa 68: área especial — só aviso, o texto é o do servidor. */}
+                      {avisoArea && (
+                        <div data-testid="aviso-area-especial" className="almox-hint-banner" style={{ marginTop: 6, fontSize: '0.8rem' }}>
+                          {avisoArea}
+                        </div>
+                      )}
                       {/* Etapa 53: a padrão que o motor recusaria — sem destino, a entrada toma 400. */}
                       {form.tipo === 'ENTRADA' && sugestaoLoc?.padrao?.recusa && !form.localizacao_destino_id && (
                         <div data-testid="aviso-padrao-recusada" className="almox-hint-banner" style={{ marginTop: 6, fontSize: '0.8rem' }}>
