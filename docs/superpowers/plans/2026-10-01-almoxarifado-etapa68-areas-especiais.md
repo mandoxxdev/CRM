@@ -1,6 +1,6 @@
 # Etapa 68 — áreas especiais de localização com semântica (feature 02)
 
-> Status: **Fases 0, 1 e 2 feitas; T1–T6 implementadas; Fase 5 (revisão adversarial + fix-round) feita (2026-10-01). Falta T7 (fechamento).**
+> Status: **FECHADA (2026-10-01).** Fases 0–6 feitas: T1 `14cc17a`, T2 `d94dc24`, T3 `e79d8b5`, T4 `0d44607`, T5 `fe4e24f`, T6 `d61b1f2`; Fase 5 `588f62b`, `dfc99eb`, `c66fc07`; T7 (documentação) no commit de fechamento. **A feature 02 foi a 🟢.**
 > Feature 02, item *"Áreas especiais (quarentena, expedição, sucata, devoluções, em-terceiros) como localizações
 > tipadas"* (`specs/modulo-almoxarifado/02-localizacoes-enderecamento/README.md:34`), o único item aberto da 02 que não
 > é corte por decisão (`:3`). Requisito: `specs/modulo-almoxarifado/2026-08-02-requisitos-modulo-almoxarifado.md:84-108`
@@ -346,7 +346,18 @@ origem S; (8) Mapa: S
   vazia (sai das ocupadas, entra em `/localizacoes/vazias`), P com 6; (9) `PUT` de S sem `tipo` → continua `Área de
   sucata` e a sugestão continua sem ela. E o mesmo (7) **pelo serviço** (`scrapDisposalService`), porque o default de
   origem depende de quem chama o motor. Controle positivo: desligar a T3 derruba (8).
-- [ ] **T7 — fechamento** (skill `fechar-etapa`): spec 02 (item `[x]` com os hashes e os cortes: em-terceiros fora
+- [x] **T7 — fechamento** (skill `fechar-etapa`). *Feita (2026-10-01; hash no commit de fechamento "Etapa 68: o
+  fechamento").* Novidades: seção da Etapa 68, **A32**, **B284–B295** (as nove do plano + **B293** ancestral inativo,
+  **B294** aviso só com material escolhido, **B295** `material_id` não numérico → 404), **C93–C95**, limitações **(68)**
+  em D, verificações **(68)** em F e a fragilidade **G79** (fixture do `test:almoxarifado` sem a coluna `localizacao`
+  — não é defeito de produção; medido pelo fio principal). Spec 02 → 🟢 (item `[x]` com os hashes e os cortes
+  declarados), **spec 15 corrigida à vista** (dizia que existiam tipos de sucata e retalho — **estava errada**), spec 05
+  `:63` anotada (expedição ganhou aviso; "Aguardando retirada"/"Kit" continuam não existindo), mapa de status, guia
+  (68 entregue, 69 começando) e manual (3.3 reescrita — o tipo deixou de ser só descritivo —, 3.3b nova, 3.7, 3.8,
+  20.2). **Correção feita no fechamento:** o plano e a T6 chamavam a cadeia quarentena → inspeção → sucata de "falta
+  da 19" — a **seção 19 é da especificação original** (sucateamento); a **feature** é a **15** (a 19 do mapa é
+  e-mails). Os documentos dizem "feature 15".
+  Texto original: (skill `fechar-etapa`): spec 02 (item `[x]` com os hashes e os cortes: em-terceiros fora
   por D7, select de endereço em Devoluções e aviso no recebimento como "falta"); **corrigir à vista**
   `15-retalhos-sucatas/README.md:67-69` (Surpresa 5) e `05-separacao-picking/README.md:63` (os tipos agora existem
   para expedição; "Aguardando retirada/Kit" continua não existindo); manual `:342` (o tipo passa a ter semântica de
@@ -417,9 +428,47 @@ e deixa de sugerir a área; nada é recusado nem movido. (d) com linhas — a en
   avisa (o aviso da padrão é o da Etapa 53) — declarar se a Fase 2 achar que deveria.
 - `extended.js:851` (`/transferencias`) passa o body cru ao motor — nada muda, mas a RN-05 entra por ali também.
 
-## Próxima tarefa detalhada
+## Próxima tarefa detalhada — Etapa 69: sucatear o material reprovado na inspeção (feature 15, com a 09)
 
-Fase 2 desta etapa: feita (secao abaixo). T1-T6 feitas (`14cc17a`, `d94dc24`, `e79d8b5`, `0d44607`, `fe4e24f`, T6). Fase 5 (revisao adversarial + fix-round): feita (secao abaixo; `588f62b`, `dfc99eb`). **Proxima: T7 — fechamento** pela skill `fechar-etapa`, com a lista do item T7 acima **mais a letra B da Fase 5** (ancestral inativo encerra a subida da area efetiva no servidor, alinhado ao Mapa; descartado: o Mapa subir pelo inativo); o teste de integracao da T6 e a prova citavel no guia (roteiro: criar area de sucata + posicao, transferir, sucatear, ver a area vazia no Mapa). Pontos de atencao: o guia **nao** promete quarentena -> inspecao -> sucata (letra D) e declara que outras saidas (PERDA, "Sai de") ainda drenam a area de sucata (letra C da Fase 2).
+**Por que esta.** A cadeia da especificação (seção 19) — *quarentena → inspeção → reprovar → sucatear* — está
+**quebrada**, medido na Fase 2 desta etapa: a reprovação deixa o material **bloqueado** (`quantidade_bloqueada`), e o
+`solicitar` do sucateamento só aceita o **disponível** (`scrapDisposalService.js:~238`, *"Saldo disponivel insuficiente
+para sucatear … disponivel 0"*). Desbloquear antes para sucatear deixa o material condenado **livre** para outras saídas
+(**C93**). E a decisão `SUCATEAR` da não conformidade (Etapa 45) só registra a **intenção** (`nonConformityService.js:20`,
+`:87`, `:1012`). É um fluxo de operação real que hoje não fecha, e o molde já existe na base: a **devolução ao
+fornecedor** da Etapa 45 baixa **do bloqueado** pelo motor (`DEVOLUCAO_FORNECEDOR`, `stockService.js:~1028`,
+`baixandoBloqueado` em `:~1347`). Valor alto, esforço médio, sem dependência. As outras 🟡 seguem bloqueadas (21/22
+pela 22; 06 por B11) ou grandes (05: lista de separação como entidade); a 01 sobra com cadastros sem consumidor.
+
+**Fase 0 da 69 — medir antes de prometer:**
+1. **O molde do bloqueado:** como `DEVOLUCAO_FORNECEDOR` baixa `quantidade_bloqueada` e `quantidade_atual` juntos no
+   motor (`baixandoBloqueado`), que guarda impede baixar mais que o bloqueado, como o estorno o desfaz, e se o livro
+   distingue a baixa do bloqueado.
+2. **O processo de sucateamento** (`scrapDisposalService`): onde o `solicitar` valida o disponível, onde a segunda
+   perna emite a `SUCATA`, e o que muda para uma solicitação "do bloqueado" (campo novo? origem `nao_conformidade_id`?).
+   Lote, série e material de cliente: as mesmas recusas de hoje continuam?
+3. **A NC:** de onde sai a quantidade reprovada (decisão de inspeção, `quantidade_reprovada`), se a NC sabe o lote, e
+   se a decisão `SUCATEAR` pode abrir a solicitação de sucateamento (só abrir — as duas assinaturas continuam) ou se o
+   gesto fica na tela de Sucateamentos citando a NC. Medir se já existe "liberação"/"devolução" consumindo o mesmo
+   bloqueado (para não sucatear o que já foi devolvido — duas portas sobre o mesmo saldo).
+4. **A origem (Etapa 68, B289):** o material reprovado está em algum endereço; a baixa do bloqueado usa a área de
+   sucata quando ela cobre? Ou o bloqueado não tem endereço próprio (a retenção é coluna)? Decidir com o motor medido.
+5. **Pequena task junto (G79):** `server/tests/almoxarifado.test.js` monta `materiais_almoxarifado` à mão sem a coluna
+   `localizacao` — o alerta pós-movimentação nunca é exercitado nessa suíte. Acrescentar a coluna (ou usar o schema
+   real) e provar com controle positivo que o alerta roda.
+
+**Contratos que não se reabrem:** as duas assinaturas por pessoas diferentes do sucateamento (20.2); a regra de origem
+da área de sucata (**B289**: só quando cobre, estrita); as decisões de NC da Etapa 45 (`ACEITAR`, `DEVOLVER`…); a
+retenção como coluna do material (o bloqueado não vira saldo por endereço).
+
+**Pontos de atenção.**
+- Baixar do bloqueado é baixar o físico **e** a retenção juntos — o mesmo par da devolução ao fornecedor; sabotar
+  "baixa só o físico" tem de derrubar um teste (o bloqueado ficaria maior que o físico).
+- Duas portas sobre o mesmo bloqueado (devolver ao fornecedor × sucatear): a segunda tem de recusar o que a primeira já
+  levou — teste com as duas.
+- O estorno da `SUCATA` do bloqueado devolve **para o bloqueado**, não para o disponível (senão o estorno libera
+  material condenado).
+- Metade positiva: o sucateamento comum (do disponível) continua igual — os testes das Etapas 9 e 68 verdes.
 
 ## Fase 5 — revisão adversarial do código: 0 críticos, 2 importantes (teste), 1 menor (corrigido) — fix-round feito
 
@@ -483,3 +532,21 @@ Sondas da revisão no scratchpad da sessão (`sonda68r-outraarea.js`, `sonda68r-
   material que permite negativo: sem mudança (o D6 não usa área quando não cobre); D5 com UMA ordenação por chave
   composta (dois `sort` em cadeia desfazem um ao outro); `sugerivel` separado por caminho (a padrão não é filtrada);
   Mapa/Configurações toleram `areas_especiais` ausente (mocks antigos). T3 depende só da T1.
+
+## Retro de 4 números (Fase 6)
+
+- **Rodadas de correção até verde:** **1** (o fix-round da Fase 5: dois testes novos e a parada no ancestral inativo).
+- **Achados da revisão:** Fase 2 — **14** (0 críticos, 5 importantes, 9 menores), todos reais; o **D6 original** teria
+  gravado a área como origem com material vindo da padrão (o estorno jogaria material bom na sucata) e deixado passar a
+  padrão bloqueada — provado por sonda **antes** de existir código. Fase 5 — **3** reais (2 lacunas de teste, 1 menor
+  corrigido), **0 ruído**.
+- **Paralelismo:** tronco T1→T2→T3 sequencial num executor; **T4 e T5 em paralelo**, arquivos disjuntos, **sem
+  retrabalho**. Lição aplicada: os executores dos galhos **não** marcaram o plano (o fio principal marcou), evitando
+  conflito no mesmo arquivo; e o T6 e a Fase 5 não rodaram ao mesmo tempo no mesmo serviço (o restauro de sabotagem
+  por cópia apagaria a edição alheia — lição da Etapa 67).
+- **Defeito que escapou da Etapa 67:** nenhum conhecido. **Erro de documento pego no fechamento:** "feature 19" para o
+  sucateamento — a 19 do mapa é e-mails; o certo é a **15** (a "19" era a seção da especificação). Corrigido em todos
+  os documentos tocados.
+- **Verificação final (medida no fix-round, sem mudança de código depois):** `test:api` 253/253; `test:almoxarifado`
+  42/0; `test:validation` 4/0; `test:safealter` 3/0; `test:sqlite` 5/0; cliente 74 suítes / 1105 testes; build
+  `CI=true` OK.

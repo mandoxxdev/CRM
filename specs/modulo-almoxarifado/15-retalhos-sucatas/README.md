@@ -67,6 +67,12 @@ assinatura). A pré-checagem de disponível existe, e fica, na **solicitação**
 - Tipos de localização preveem área de sucata e de retalhos ("transferir para área de sucata" é
   `TRANSFERENCIA` para uma localização desse tipo — já existia desde a Etapa 7, não foi duplicado
   no processo).
+  ⚠️ **Correção (Etapa 68): esta linha ESTAVA ERRADA.** `TIPOS_LOCALIZACAO` não tinha nenhum dos dois
+  tipos (medido na Fase 0 da Etapa 68: 13 rótulos, nenhum de sucata nem de retalho). O que existia
+  desde a Etapa 7 era só a `TRANSFERENCIA` para qualquer endereço. **A Etapa 68 criou `Área de
+  sucata`** (`14cc17a`) e fez o sucateamento aprovado baixar dela quando o saldo ali cobre a
+  quantidade inteira (`e79d8b5`). **`Área de retalhos` continua não existindo, por decisão (B286):**
+  retalho é estoque aproveitável comum, guardado em endereço normal — o tipo seria só rótulo.
 
 ## Checklist
 

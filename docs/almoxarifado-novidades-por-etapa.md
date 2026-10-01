@@ -107,7 +107,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Trinta e um itens para rodar em produção ANTES do deploy — vinte e oito são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Trinta e dois itens para rodar em produção ANTES do deploy — vinte e nove são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-01 (Etapa 68) de trinta e um para trinta e dois**, com a **A32** — tipos de localização e saldo em área especial.)*
 
 *(**Atualizado em 2026-10-01 (Etapa 67) de trinta para trinta e um**, com a **A31** — reservas e requisições presas por resto de conta de entrega fracionada. As Etapas 62 a 66 não acrescentaram nenhuma.)*
 
@@ -1014,9 +1016,52 @@ SELECT r.id, r.numero, r.status
   como **encerradas incompletas**, o que é falso para elas. Recomendação: deixar e anotar os números — o efeito é
   pequeno e some quando o prazo sai da janela.
 
-### B. Decisões de negócio — B1 a B283; as em aberto esperam você, as tomadas estão escritas com o descartado
+**A32 (NOVA, da Etapa 68 — tipos de localização e saldo em área especial: medir antes, nada é movido).** A partir desta
+etapa, o tipo da localização tem regra: **"Área de …"** gera aviso, sai da sugestão de vagas e, na sucata, vira a origem
+do sucateamento. Nada é recusado nem movido sozinho — mas vale saber o que já existe. Quatro consultas:
 
-*(**Atualizado em 2026-10-01 de B271 para B283**, com as doze da Etapa 67; antes, de B260 para B271, com as onze da Etapa 66; antes, de B255 para B260, com as cinco da Etapa 65; antes, de B251 para B255, com as quatro da Etapa 64; antes, de B247 para B251, com as quatro da Etapa 63; antes, de B243 para B247, com as quatro da Etapa 62; antes, de B239 para B243, com as quatro da Etapa 61; antes, de B237 para B239, com as duas da Etapa 60; antes, de B233 para B237, com as quatro da Etapa 59; antes, de B228 para B233, com as cinco da Etapa 58; antes, de B225 para B228, com as três da Etapa 57; antes, de B222 para B225, com as três da Etapa 56; antes, de B219 para B222, com as da Etapa 55.)*
+```sql
+-- (a) localizações por tipo (o que já existe de área, e de tipo fora da lista)
+SELECT COALESCE(tipo, '(vazio)') AS tipo, ativo, COUNT(*) AS n
+  FROM localizacoes_almoxarifado GROUP BY 1, 2 ORDER BY 1, 2;
+
+-- (b) tipos fora da lista nova (continuam editáveis; só não ganham regra)
+SELECT id, codigo, tipo, ativo FROM localizacoes_almoxarifado
+ WHERE COALESCE(tipo, '') NOT IN ('Almoxarifado','Rua','Prateleira','Gaveta','Box','Área externa','Área de corte',
+   'Área de montagem','Área de elétrica','Área de pintura','Área de expedição','Área de materiais do cliente',
+   'Área de quarentena/inspeção','Área de sucata','Área de devoluções');
+
+-- (c) saldo em área especial hoje, separando material próprio de material de cliente
+SELECT l.tipo, l.codigo AS endereco, m.codigo AS material,
+       CASE WHEN m.proprietario_cliente_id IS NULL THEN 'próprio' ELSE 'cliente' END AS dono,
+       SUM(s.quantidade) AS saldo
+  FROM estoque_saldo_almoxarifado s
+  JOIN localizacoes_almoxarifado l ON l.id = s.localizacao_id
+  JOIN materiais_almoxarifado m ON m.id = s.material_id
+ WHERE l.tipo IN ('Área de expedição','Área de materiais do cliente','Área de quarentena/inspeção')
+ GROUP BY l.id, m.id HAVING SUM(s.quantidade) <> 0 ORDER BY l.tipo, l.codigo;
+
+-- (d) materiais ativos cuja localização padrão é área especial (a sugestão continua propondo a padrão)
+SELECT m.codigo, l.codigo AS padrao, l.tipo
+  FROM materiais_almoxarifado m JOIN localizacoes_almoxarifado l ON l.id = m.localizacao_padrao_id
+ WHERE m.ativo = 1 AND l.tipo IN ('Área de expedição','Área de materiais do cliente','Área de quarentena/inspeção');
+```
+
+**Como ler o resultado:**
+- **(a) sem nenhuma "Área de …", e (b), (c), (d) vazias** — nada a fazer. Na cópia local do banco (de 2026-09-03), só
+  havia `Almoxarifado` e `Prateleira` inativas e `Rua` ativas.
+- **(b) com linhas** — esses endereços continuam funcionando e editáveis (o sistema aceita o tipo que **já** está
+  gravado). Para ganharem a regra de área, troque o tipo em **Editar** para um da lista. Se for só erro de digitação
+  (por exemplo *"Area de quarentena"* sem acento), corrija — senão ele nunca avisa.
+- **(c) com material próprio em área de cliente, ou qualquer material em área de quarentena/expedição** — nada é
+  movido. O sistema passa a **avisar** quando entrar mais e deixa de sugerir a área. Decida se o material deveria estar
+  ali; se não, transfira.
+- **(d) com linhas** — a entrada **sem destino** (recebimento, devolução) continua indo para essa área, porque ela é a
+  padrão cadastrada. Se a área não é o lugar de guarda do material, troque a padrão no cadastro do material.
+
+### B. Decisões de negócio — B1 a B295; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+*(**Atualizado em 2026-10-01 de B283 para B295**, com as doze da Etapa 68; antes, de B271 para B283, com as doze da Etapa 67; antes, de B260 para B271, com as onze da Etapa 66; antes, de B255 para B260, com as cinco da Etapa 65; antes, de B251 para B255, com as quatro da Etapa 64; antes, de B247 para B251, com as quatro da Etapa 63; antes, de B243 para B247, com as quatro da Etapa 62; antes, de B239 para B243, com as quatro da Etapa 61; antes, de B237 para B239, com as duas da Etapa 60; antes, de B233 para B237, com as quatro da Etapa 59; antes, de B228 para B233, com as cinco da Etapa 58; antes, de B225 para B228, com as três da Etapa 57; antes, de B222 para B225, com as três da Etapa 56; antes, de B219 para B222, com as da Etapa 55.)*
 
 *(**Atualizado em 2026-09-30 de B205 para B219**, com as quatro da Etapa 51, as três da Etapa 52, as quatro da Etapa 53 e as três da Etapa 54.)*
 
@@ -4319,6 +4364,68 @@ cobra ação); deixar o prazo só pela API.
 **B283 (NOVA, da Etapa 67) — sem nada para medir, o percentual fica vazio (*"—"*), nunca 0%.** **Descartado:** mostrar
 0% (diria "nenhuma no prazo" sem nenhuma requisição — mentira).
 
+**B284 (NOVA, da Etapa 68) — as áreas especiais AVISAM e SUGEREM; nenhuma RECUSA.** Guardar material próprio na área de
+cliente, ou uma compra na área de quarentena, é aceito como antes — o sistema só avisa. **Descartado:** recusar nesses
+dois casos. Os dois atingiriam a entrada **sem destino** que cai na localização padrão (recebimento, exclusão de
+requisição, retorno de transformação): se a padrão do material for uma área, a entrada travaria sem o operador ter onde
+escolher outro lugar — o mesmo travamento que a **B217** evitou. Apertar depois é trocar o aviso por recusa num ponto
+só.
+
+**B285 (NOVA, da Etapa 68) — a regra de cada área mora no servidor, ligada ao nome do tipo.** As frases de aviso e a
+descrição de cada área vêm do servidor; a tela não tem cópia. **Descartados:** uma coluna nova "área especial" na
+localização (seria a segunda fonte do mesmo fato que o tipo já diz); as frases escritas na tela (duas definições que
+divergem).
+
+**B286 (NOVA, da Etapa 68) — duas áreas novas: "Área de sucata" e "Área de devoluções".** **Descartados:** "Área de
+retalhos" (retalho é estoque aproveitável comum, guardado em endereço normal — o tipo seria só rótulo); "Área de
+materiais não conformes" (é a quarentena, com o bloqueio como estado); "Em terceiros" (**B290**).
+
+**B287 (NOVA, da Etapa 68) — o cadastro recusa tipo fora da lista; editar sem mandar o tipo mantém o gravado.** A
+recusa (*"Tipo de localização inválido: ⟨tipo⟩"*) vale para criar e para **trocar** o tipo; uma localização antiga com
+tipo esquisito continua editável e movível enquanto o tipo não muda. **Descartados:** deixar livre (um erro de digitação
+perderia a regra calado); aceitar "Area" sem acento como "Área" (inventaria equivalência).
+
+**B288 (NOVA, da Etapa 68) — a sugestão da entrada não propõe área especial como vaga.** "Onde o material já está" e
+"vagas compatíveis" deixam de trazer área especial — exceto a **área de materiais do cliente para material de cliente**,
+que vem **primeiro**. A **localização padrão** continua sugerida mesmo sendo área (é cadastro explícito). O formato da
+resposta não mudou; mudou **o que entra** nela (uma mudança deliberada do que a Etapa 53 entregou). **Descartado:** não
+mexer (uma compra seria sugerida para a área de quarentena vazia).
+
+**B289 (NOVA, da Etapa 68) — o sucateamento aprovado baixa da área de sucata SÓ quando o saldo nela cobre a quantidade
+inteira, e só dela.** A área (ou uma posição dentro dela) tem de estar ativa e desbloqueada, e o material sem lote; com
+mais de uma, a de maior saldo. Senão, o sucateamento sai como antes (da padrão). **Descartados:** baixar "um pouco da
+área e o resto da prateleira" (o livro diria que tudo saiu da área, e o estorno devolveria material bom para a sucata —
+a revisão provou isso executando); exigir a origem na solicitação (campo e recusa novos); material com lote (a saída
+com lote não escolhe endereço — **B204**).
+
+**B290 (NOVA, da Etapa 68) — "em terceiros" fica FORA por decisão: o tipo não foi criado.** O material em terceiros
+está fora da empresa; o sistema o guarda como saldo retido (em poder de terceiros), na linha do endereço de onde saiu.
+Uma localização "em terceiros" convidaria a uma transferência que não retém nada. **Descartado:** criar o rótulo só
+para o Mapa.
+
+**B291 (NOVA, da Etapa 68) — o aviso aparece na Nova Movimentação (Entrada e Transferência, no destino).** O
+processamento do recebimento, a devolução e a integração **não** avisam. **Descartado:** avisar no recebimento (o item
+retido indo para a área de quarentena é o uso legítimo dela, e a janela é de outra feature — fica como falta).
+
+**B292 (NOVA, da Etapa 68) — o assistente de Nova Localização oferece as cinco áreas especiais na raiz.**
+**Descartado:** oferecer todos os 15 tipos (as áreas de produção — corte, montagem, elétrica, pintura — seguem pelo
+Editar, como antes; mudança que ninguém pediu).
+
+**B293 (NOVA, da Etapa 68) — uma área DESATIVADA não dá regra a ninguém.** A posição dentro de uma área vale como área
+pela árvore (posição → área acima dela); se a área de cima está desativada, a subida para ali: a posição deixa de
+avisar, volta a ser sugerida e não é mais origem do sucateamento. A própria localização desativada continua respondendo
+pelo seu tipo. **Descartado:** o Mapa passar a considerar as áreas desativadas (teria de carregar as inativas só para
+isso, e a área desativada continuaria pesando na sugestão e na sucata) — o servidor é que foi alinhado ao Mapa (achado
+da revisão do código).
+
+**B294 (NOVA, da Etapa 68) — a tela só pede o aviso com material escolhido.** Na Nova Movimentação, o aviso aparece
+quando há material **e** destino. **Descartado:** pedir só com o destino (o plano previa): o aviso da área de cliente
+depende de o material ser próprio. Reversível: o servidor já responde sem material.
+
+**B295 (NOVA, da Etapa 68) — material com identificador inválido no aviso responde "Material não encontrado".** A rota
+de aviso trata um `material_id` que não é número como inexistente (404), não como erro de formato (400). Só chega por
+API. **Descartado:** um 400 de formato próprio.
+
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -5474,6 +5581,26 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
     por um resto de conta. Liberar uma reserva pelo saldo que a tela mostra também fecha de vez. **O que fazer:** o que
     ficou preso antes **não** se corrige sozinho — consultas e o passo a passo na **A31**.
 
+93. **NOVO, da Etapa 68 — as outras saídas ainda tiram da área de sucata.** Só o **sucateamento aprovado** sabe da área
+    de sucata. Uma **perda**, uma **entrega de requisição** sem lugar escolhido, ou o **"Sai de"** da entrega (que lista
+    todos os endereços com saldo, inclusive a área) podem levar o material condenado como se fosse bom — e o
+    sucateamento pendente desse material, achando a área vazia, sai da prateleira. **O que fazer:** enquanto o
+    sucateamento não é aprovado, não escolha a área de sucata no "Sai de", e prefira **solicitar o sucateamento logo**
+    depois de transferir para a área. Tirar as áreas das saídas automáticas mexe no motor inteiro — ficou fora (**D (68)**).
+
+94. **NOVO, da Etapa 68 — a aprovação do sucateamento pode ser recusada citando a área de sucata.** Se, entre a
+    primeira e a segunda assinatura, alguém tirar material da área de sucata, a segunda aprovação toma *"O saldo em
+    ⟨área⟩ (⟨saldo⟩) não cobre a quantidade (⟨quantidade⟩) — a saída tiraria de outros endereços"* — um endereço que o
+    aprovador nunca escolheu. A assinatura é desfeita (o sucateamento volta a esperar a assinatura). **O que fazer:**
+    aprovar de novo — a nova tentativa sai pela regra de hoje (da área, se ela ainda cobrir; senão, da padrão).
+
+95. **NOVO, da Etapa 68 — mudanças para quem cadastra localização e para quem integra.** (1) O tipo da localização tem
+    de ser um da lista: pela API, *"Area de sucata"* (sem acento) ou qualquer outro texto é recusado com *"Tipo de
+    localização inválido: ⟨tipo⟩"* — uma localização que **já** tem tipo esquisito continua editável enquanto o tipo não
+    muda (**B287**). (2) Editar uma localização sem mandar o tipo **mantém** o tipo — antes o trocava por "Almoxarifado".
+    (3) A sugestão de localização na entrada deixou de trazer área especial como vaga (**B288**). **O que fazer:** rodar
+    a **A32** antes do deploy.
+
 
 
 ### D. Limitações declaradas — são decisão, não esquecimento
@@ -6204,6 +6331,23 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   atrasada e na Central de alertas.
 - **(67) Letras acentuadas em maiúsculas e minúsculas** podem separar o mesmo fornecedor quando ele só tem o nome
   digitado (sem CNPJ nem cadastro).
+- **(68) "Em terceiros" não é área** — fora por decisão: o material em terceiros não tem endereço físico aqui (**B290**).
+- **(68) Nenhuma área recusa material**, e nenhuma retém: o material guardado na área de quarentena continua
+  **disponível** — quem retém é a inspeção ou o bloqueio (**B284**).
+- **(68) Material reprovado na inspeção não chega ao sucateamento.** A reprovação deixa o material **bloqueado**, e o
+  sucateamento só aceita o **disponível**: a solicitação é recusada com *"Saldo disponivel insuficiente para sucatear
+  ⟨material⟩: disponivel 0 …"*. Desbloquear antes para sucatear deixa o material livre para outras saídas (**C93**). A
+  cadeia quarentena → inspeção → sucata da especificação continua **quebrada** — vem de antes desta etapa, e é a
+  **próxima etapa**.
+- **(68) O sucateamento só sai da área quando UMA localização da área cobre tudo.** Saldo espalhado entre duas posições
+  da mesma área de sucata (3 numa, 2 na outra, sucateamento de 5) não soma: sai como antes, da padrão (**B289**).
+- **(68) Material com lote** não usa a área de sucata como origem do sucateamento (**B289**, **B204**).
+- **(68) A tela de Devoluções não tem campo de endereço** — a devolução vai para a padrão; pela API, o endereço já é
+  aceito. É tela de outra feature.
+- **(68) O processamento do recebimento não avisa** quando o destino é área especial (**B291**).
+- **(68) Levar o separado para a área de expedição** (e a entrega baixar de lá) continua falta da separação (feature
+  05), que depende da lista de separação como entidade.
+- **(68) As outras saídas tiram da área de sucata** — perda, entrega automática e "Sai de" (**C93**).
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -6749,8 +6893,19 @@ prova:
    (*requisicoes_no_prazo*, *requisicoes_integrais*, *ajustes* — a tela de relatórios mostra os blocos pelo nome do
    campo) e a nota com as réguas.
 
+**(68) Nenhum clique foi dado nesta etapa.** Os testes provam o servidor pela rota (cadastro e aviso 18 cenários,
+sugestão 6 novos, sucateamento 12, ponta a ponta 9) e as três telas com o servidor simulado. O que **só o navegador**
+prova:
 
-### G. Fragilidades estruturais que continuam de pé
+1. **O assistente.** **Configurações → Setores e Áreas → Nova Localização**: o **Tipo de área** da raiz lista as cinco
+   "Área de …"; criar uma **Área de sucata** e, dentro dela, uma posição — a posição nasce como **Prateleira**.
+2. **O Mapa.** **Mapa de Áreas**: a área de sucata aparece com ♻️ e a de devoluções com ↩️, com as cores próprias; o
+   painel da área mostra a frase em **Área especial**, e o da posição dentro dela começa por *"Dentro de …"*.
+3. **O aviso.** **Nova Movimentação → Transferência** para a posição dentro da área de sucata, com um material
+   escolhido: a frase aparece abaixo do destino, some ao trocar para uma prateleira comum, e a transferência passa.
+4. **O sucateamento.** **Sobras e Retalhos → Sucateamentos**: solicitar e aprovar nas duas pernas um sucateamento que a
+   área cobre — no **Mapa de Áreas**, a posição fica vazia.
+
 
 **G1. Toda coluna nova da tabela de materiais vaza quantidade exata para o requisitante até alguém
 lembrar de escondê-la, uma por uma.** A tela em que o solicitante escolhe material
@@ -7791,6 +7946,18 @@ comparação pela exata e **todos os testes ficaram verdes** — o defeito ficou
 telas e rotas de hoje. **Mantida** como defesa (custa nada, e protege a próxima porta que gravar
 urgência sem passar pelo envio); **declarado** que a suíte não a protege. O mesmo vale para o padrão
 "urgência vazia = Normal" da regra: o envio já grava Normal.
+
+---
+
+**G79 (NOVO, notado no fechamento da Etapa 68, anterior a ela). A suíte `test:almoxarifado` nunca exercita o alerta que
+roda depois de cada movimentação.** O log dela imprime *"[almoxarifado-alertas] … no such column: localizacao"* e
+nenhum teste falha. **Medido:** não é defeito de produção — a tabela de materiais **tem** a coluna `localizacao` no
+schema real, e o alerta a lê ali. O erro vem do **teste**: `server/tests/almoxarifado.test.js` monta a sua própria
+tabela de materiais à mão, **sem** essa coluna, e a checagem de alerta pós-movimentação falha dentro dessa montagem sem
+ninguém notar (o erro do alerta é registrado no log e não desfaz a movimentação). **O risco:** é um teste
+vazio nesse ponto — um defeito real no alerta pós-movimentação passaria por essa suíte verde. A suíte principal
+(`test:api`) monta o schema real. **Correção pequena** (acrescentar a coluna à montagem do teste, ou
+usar o schema real), candidata a entrar como task da próxima etapa.
 
 aparece na hora, para quem está editando.
 ## Etapa 0 — Fundação (2026-08-03)
@@ -15581,9 +15748,106 @@ com um resto de conta depois da entrega fracionada (corrigida) e o mesmo fornece
 **"Agrupado por"**).
 
 
+## Etapa 68 — As áreas especiais passam a dizer o que fazem — e o que não fazem (2026-10-01)
+
+O cadastro de localização tinha tipos como **"Área de quarentena/inspeção"**, **"Área de expedição"** e **"Área de
+materiais do cliente"**, mas eles eram só rótulo: o sistema não fazia nada diferente com eles, e quem guardava material
+"na quarentena" podia achar que ele estava retido — **não estava**. Esta etapa dá a cada área o comportamento que ela
+pode ter **sem travar operação nenhuma**: o sistema **avisa** o que a área não faz, **deixa de sugerir** área especial
+como lugar comum de guarda e, na sucata, **baixa o material da área de sucata** quando o sucateamento é aprovado. Ganham
+existência a **Área de sucata** e a **Área de devoluções**; o assistente de nova localização passa a oferecer as áreas;
+e o Mapa explica cada uma.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| O tipo da área era só um rótulo | Cinco áreas especiais com **aviso e sugestão** — nenhuma recusa nova (**B284**) |
+| Não existiam área de sucata nem de devoluções | **"Área de sucata"** (♻️) e **"Área de devoluções"** (↩️) (**B286**) |
+| O assistente de **Nova Localização** não oferecia nenhuma "Área de …" | Oferece as cinco áreas no **Tipo de área** da raiz (**B292**) |
+| Pela API, o tipo aceitava qualquer texto; editar sem mandar o tipo o trocava por "Almoxarifado" | Tipo fora da lista é recusado; editar sem mandar o tipo **mantém** o gravado (**B287**, **C95**) |
+| A sugestão da entrada podia propor a área de quarentena vazia para uma compra | Área especial não é sugerida como vaga; para material de cliente, a área de cliente vem **primeiro** (**B288**) |
+| Transferir para a área não dizia nada | Aviso, no destino da **Nova Movimentação**, do que a área **não** faz (**B291**, **B294**) |
+| O sucateamento aprovado baixava da padrão; a área de sucata seguia "ocupada" no Mapa | Baixa da área de sucata **quando o saldo ali cobre o sucateamento inteiro** (**B289**) |
+| O Mapa mostrava o tipo e mais nada | O painel da localização diz o que a área faz — também para as posições **dentro** dela |
+
+### As regras, com o cenário exato
+
+Preparação: um material **sem lote** com localização padrão **P** (uma prateleira comum) e saldo 10 em P; um usuário
+com o perfil Administrador do almoxarifado; dois usuários para as duas assinaturas do sucateamento.
+
+**1. Criar a área.** **Configurações → Setores e Áreas → Nova Localização**: no **Tipo de área** da raiz aparecem
+**Área de expedição, Área de materiais do cliente, Área de quarentena/inspeção, Área de sucata e Área de devoluções**.
+Crie **SUC** como **Área de sucata** e, dentro dela, uma posição **SUC-01** (o filho volta a **Prateleira** — ele é
+área pela árvore, não pelo rótulo). Pela API, um tipo fora da lista →
+*"Tipo de localização inválido: Area de sucata"* (sem acento é outro texto).
+
+**2. O Mapa explica.** **Mapa de Áreas** → clique em **SUC**: em **Área especial**, *"Guardar aqui não sucateia: o
+material continua no estoque até o sucateamento aprovado, que baixa daqui quando o saldo aqui cobre o sucateamento
+inteiro."*. Clique em **SUC-01**: a mesma frase, precedida de *"Dentro de SUC (Área de sucata)."*. Uma prateleira
+comum não mostra nada.
+
+**3. A sugestão não manda para a área.** **Nova Movimentação → Entrada** do material: a sugestão de localização traz P
+(e vagas comuns), **não** SUC nem SUC-01.
+
+**4. O aviso.** **Nova Movimentação → Transferência**, de P para **SUC-01**, 4 unidades: abaixo do destino aparece
+*"Localização SUC-01 é área de sucata, mas guardar aqui não sucateia — o material continua no estoque disponível até o
+sucateamento aprovado."* A transferência **passa** (o aviso não bloqueia). As outras frases, com o código da
+localização no lugar de ⟨c⟩:
+- quarentena: *"Localização ⟨c⟩ é área de quarentena/inspeção, mas guardar aqui não retém o material — ele continua
+  disponível. Para reter, use Inspeções ou o bloqueio."*
+- expedição: *"Localização ⟨c⟩ é área de expedição, mas a requisição não usa este endereço — a entrega baixa da origem
+  separada."*
+- devoluções: *"Localização ⟨c⟩ é área de devoluções, mas guardar aqui não muda o estado do material — ele continua
+  disponível."*
+- materiais do cliente, com material **próprio**: *"Localização ⟨c⟩ é área de materiais do cliente, e ⟨m⟩ é material
+  próprio."* (com material de cliente, nada).
+
+**5. O sucateamento baixa da área.** **Sobras e Retalhos → Sucateamentos → Solicitar sucateamento** de 4 do material;
+**Aprovar almoxarifado** com um usuário e **Aprovar gestão** com outro (a ordem não importa). O livro mostra a sucata
+**saindo de SUC-01**; no Mapa, SUC-01 fica vazia e P continua com 6.
+
+**6. Quando a área não cobre, nada muda.** Com só 2 em SUC-01, o sucateamento de 4 sai **como antes** (da padrão, sem
+origem) — a sucata nunca mistura "um pouco da área, um pouco da prateleira" (**B289**).
+
+**7. Área desativada não dá regra a ninguém.** Desative **SUC**: SUC-01 deixa de ser área (sem aviso, volta a ser
+sugerida, e o sucateamento não sai mais dela) (**B293**).
+
+### O que esta etapa NÃO cobre
+
+1. **Em terceiros** não vira área: o material em terceiros não tem endereço físico aqui — é saldo retido (**B290**).
+2. **Nenhuma área recusa nada** — o material "na quarentena" continua disponível; quem retém é a inspeção ou o bloqueio
+   (**B284**).
+3. **As outras saídas ainda tiram da área de sucata** — perda, entrega automática e o "Sai de" podem levar o material de
+   lá (**C93**).
+4. **Material reprovado na inspeção não vai para o sucateamento**: ele fica bloqueado, e o sucateamento só aceita o
+   disponível (**D (68)**) — é a próxima etapa.
+5. Endereço na tela de Devoluções, aviso no processamento do recebimento e levar o separado para a área de expedição
+   (**D (68)**).
+
+### O que a revisão encontrou
+
+A revisão do **plano** derrubou o primeiro desenho do sucateamento: ele gravaria "saiu da área de sucata" quando parte
+vinha da prateleira — e o estorno devolveria material bom para a sucata —, e deixaria passar a baixa de uma padrão
+bloqueada. Daí a regra "só quando a área cobre tudo, e só dela". Ela também mostrou que **as posições dentro de uma área
+não eram a área** (o assistente grava "Prateleira" nos filhos) — daí a área valer pela árvore. A revisão do **código**,
+executando, não achou número errado: achou duas regras sem teste (outra área especial virando origem da sucata; a
+corrida entre a consulta e a baixa) — viraram teste — e o servidor tratando como área a posição de uma área já
+desativada, enquanto o Mapa não — corrigido no servidor.
+
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 68 entregue (2026-10-01):** **as áreas especiais passam a dizer o que fazem — e o que não fazem.** Áreas
+  novas **Área de sucata** e **Área de devoluções**; o assistente de **Nova Localização** oferece as cinco áreas; a
+  **Nova Movimentação** avisa, no destino, o que a área não faz; a sugestão de entrada não manda para área especial; o
+  sucateamento aprovado baixa da área de sucata quando ela cobre tudo; o **Mapa de Áreas** explica cada área. A
+  **feature 02 vai a 🟢**. **O que é seu:** a consulta **A32** (tipos e saldos em área, antes do deploy); as decisões
+  **B284 a B295**; os avisos **C93 a C95**; as limitações **(68)** em D, as verificações **(68)** em F e a fragilidade
+  **G79**. **Próxima: Etapa 69 — sucatear o material reprovado (a cadeia quarentena → inspeção → sucata) — ver o plano
+  da Etapa 68.**
 
 - **Etapa 67 entregue (2026-10-01):** **os indicadores que faltavam da especificação.** Campo **"Data de necessidade"**
   na criação da requisição; cartão **"Requisições no prazo"** no painel; nos **Indicadores gerenciais**, requisições no
@@ -15591,7 +15855,7 @@ com um resto de conta depois da entrega fracionada (corrigida) e o mesmo fornece
   atendimento deixou de contar requisição excluída; a entrega fracionada fecha a requisição e a reserva. **O que é
   seu:** a consulta **A31** (reservas e requisições presas por entrega fracionada antiga); as decisões **B272 a B283**;
   os avisos **C89 a C92**; as limitações **(67)** em D e as verificações **(67)** em F. **Próxima: Etapa 68 — áreas
-  especiais de localização com semântica (feature 02) — ver o plano da Etapa 67.**
+  especiais de localização com semântica (feature 02) — ver o plano da Etapa 67.** *(Feita — Etapa 68.)*
 
 - **Etapa 66 entregue (2026-10-01):** **motivos de movimentação viram cadastro.** **Configurações → Motivos de
   Movimentação** (só o Administrador mexe); na **Nova Movimentação** o motivo é escolhido da lista do tipo (ou digitado,

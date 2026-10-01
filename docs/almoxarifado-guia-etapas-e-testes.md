@@ -1,21 +1,27 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-01 (Etapa 67) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-01 (Etapa 68) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 67) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 68) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-01 (Etapa 67 ENTREGUE · Etapa 68 começando)
+> ## Onde o desenvolvimento está — 2026-10-01 (Etapa 68 ENTREGUE · Etapa 69 começando)
 >
-> **O desenvolvimento parou aqui: Etapa 67 fechada, Etapa 68 começando — 2026-10-01.** A **Etapa 67 (os indicadores
+> **O desenvolvimento parou aqui: Etapa 68 fechada, Etapa 69 começando — 2026-10-01.** A **Etapa 68 (as áreas
+> especiais passam a dizer o que fazem)**: existem a **Área de sucata** e a **Área de devoluções**; o assistente de
+> **Nova Localização** (Configurações → Setores e Áreas) oferece as cinco áreas especiais; a **Nova Movimentação** avisa,
+> abaixo do destino, o que a área **não** faz; a sugestão de entrada não manda para área especial; o sucateamento
+> aprovado baixa da área de sucata quando ela cobre tudo; e o **Mapa de Áreas** explica cada área. Nenhuma área recusa
+> nada. **Próxima etapa, já começando: 69 — sucatear o material reprovado na inspeção** (a cadeia quarentena →
+> inspeção → sucata, que o bloqueio quebra hoje; ver *"Próxima tarefa detalhada"* no plano da Etapa 68).
+>
+> **Etapas 1 a 20 e 22 a 68 completas.**
+>
+> **Etapa 67, 2026-10-01.** A **Etapa 67 (os indicadores
 > que faltavam)**: a requisição ganhou o campo **"Data de necessidade"** (na **Nova Requisição de Material** e na cesta
 > **Solicitação de material**); o painel do almoxarifado tem o cartão **"Requisições no prazo"**; os **Indicadores
 > gerenciais** contam requisições no prazo, integrais e ajustes; e há dois relatórios novos — **Ajustes por motivo**
 > (Movimentações) e **Qualidade por fornecedor** (Gestão). O tempo médio de atendimento deixou de contar requisição
-> excluída, e a entrega em frações fecha a requisição e a reserva. **Próxima etapa, já começando: 68 — áreas
-> especiais de localização com semântica** (feature 02: quarentena, expedição, sucata, devoluções e em-terceiros como
-> tipos de localização que o sistema entende, não só rótulos; ver *"Próxima tarefa detalhada"* no plano da Etapa 67).
->
-> **Etapas 1 a 20 e 22 a 67 completas.**
+> excluída, e a entrega em frações fecha a requisição e a reserva. Próxima: 68 *(feita — acima)*.
 >
 > **Etapa 66, 2026-10-01.** A **Etapa 66 (motivos de
 > movimentação viram cadastro)**: em **Configurações → Motivos de Movimentação** o Administrador mantém a lista de
@@ -5023,6 +5029,67 @@ que ele não tinha como repetir com sucesso garantido.
 - **Número de série de material** — continua sendo **digitado pelo operador** e de propósito não
   passa por este gerador. Retentar com outro número gravaria algo que ninguém digitou.
 - **Números de outros módulos do CRM** — a varredura foi do almoxarifado.
+
+---
+
+## Etapa 68 — As áreas especiais passam a dizer o que fazem — e o que não fazem (ENTREGUE — 2026-10-01)
+
+**O que mudou, em uma frase:** as localizações do tipo "Área de …" (quarentena, expedição, sucata, devoluções, materiais
+do cliente) deixam de ser só um nome — o sistema avisa o que cada uma não faz, deixa de sugeri-las como vaga comum e,
+na sucata, baixa o material de lá quando o sucateamento é aprovado.
+
+**O problema que ela resolve.** Quem guardava material na "Área de quarentena" podia achar que ele estava retido — não
+estava, continuava disponível. A área de sucata não existia, e o material transferido para "a sucata" continuava
+aparecendo lá no Mapa depois de descartado, porque a baixa saía da prateleira. E o assistente de nova localização nem
+oferecia as áreas.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| "Área de …" era só um rótulo | Aviso e sugestão por área — nenhuma recusa nova |
+| Não havia área de sucata nem de devoluções | **Área de sucata** (♻️) e **Área de devoluções** (↩️) |
+| O assistente de **Nova Localização** não oferecia as áreas | Oferece as cinco no **Tipo de área** da raiz |
+| A sugestão de entrada podia propor a área de quarentena vazia | Área especial não é sugerida como vaga (a área de cliente vem primeiro para material de cliente) |
+| Transferir para a área não dizia nada | Aviso abaixo do destino na **Nova Movimentação** |
+| O sucateamento baixava da prateleira; a área de sucata ficava "ocupada" | Baixa da área de sucata quando ela cobre o sucateamento inteiro |
+| O Mapa mostrava só o tipo | O painel explica o que a área faz, também para as posições dentro dela |
+
+### Roteiro de teste manual (≈10 min)
+
+**Preparação.** Um material **sem lote** com localização padrão numa prateleira comum **P** e 10 unidades em P. Entre
+como **Administrador** do almoxarifado; tenha à mão um segundo usuário para a segunda assinatura do sucateamento.
+
+1. **Criar a área.** **Configurações → Setores e Áreas → Nova Localização**: no **Tipo de área** da raiz escolha
+   **Área de sucata** e crie **SUC**. Crie também uma posição **SUC-01** dentro de SUC (ela nasce como **Prateleira** —
+   é área pela árvore, não pelo nome).
+2. **O Mapa explica.** **Mapa de Áreas** → clique em **SUC**: o painel mostra **Área especial** com *"Guardar aqui não
+   sucateia: o material continua no estoque até o sucateamento aprovado, que baixa daqui quando o saldo aqui cobre o
+   sucateamento inteiro."*. Clique em **SUC-01**: a mesma frase, começando por *"Dentro de SUC (Área de sucata)."*.
+3. **A sugestão.** **Movimentações → Nova Movimentação → Entrada** do material: a sugestão de localização traz P, e não
+   SUC nem SUC-01.
+4. **O aviso.** **Nova Movimentação → Transferência** de 4 unidades, de P para **SUC-01**: abaixo do destino aparece
+   *"Localização SUC-01 é área de sucata, mas guardar aqui não sucateia — o material continua no estoque disponível até
+   o sucateamento aprovado."*. Troque o destino para uma prateleira: o aviso some. Volte para SUC-01 e confirme — a
+   transferência passa.
+5. **O sucateamento.** **Sobras e Retalhos → Sucateamentos → Solicitar sucateamento** de 4 do material. **Aprovar
+   almoxarifado** com um usuário, **Aprovar gestão** com o outro. No **Mapa de Áreas**, SUC-01 fica vazia e P continua
+   com 6.
+6. **Quando a área não cobre.** Transfira só 2 para SUC-01 e sucateie 4: a baixa sai da prateleira, como antes (a área
+   só é usada quando cobre tudo).
+7. **Tipo inválido (opcional, pela API).** Criar localização com tipo *"Area de sucata"* (sem acento) responde *"Tipo de
+   localização inválido: Area de sucata"*.
+
+### O que esta etapa NÃO cobre
+
+- **"Em terceiros" não é área** — o material em terceiros não tem endereço físico aqui.
+- **Nenhuma área retém nem recusa** — o material guardado na quarentena continua disponível; quem retém é a inspeção ou
+  o bloqueio.
+- **Material reprovado na inspeção não vai para o sucateamento**: fica bloqueado, e o sucateamento só aceita o
+  disponível. É a próxima etapa.
+- **Outras saídas ainda tiram da área de sucata** — perda, entrega automática e o "Sai de" da entrega.
+- Saldo espalhado em duas posições da área, ou material com lote, não usa a área no sucateamento.
+- A tela de **Devoluções** não tem campo de endereço; o processamento do recebimento não avisa.
 
 ---
 

@@ -335,11 +335,49 @@ recusa é *"Código já existe"* ou, quando a dona é uma posição excluída, *
 
 ### 3.3 Tipos de localização
 
-Ao criar ou editar, escolhe-se um entre treze tipos:
+Ao criar ou editar, escolhe-se um entre quinze tipos:
 
-`Almoxarifado` · `Rua` · `Prateleira` · `Gaveta` · `Box` · `Área externa` · `Área de corte` · `Área de montagem` · `Área de elétrica` · `Área de pintura` · `Área de expedição` · `Área de materiais do cliente` · `Área de quarentena/inspeção`
+`Almoxarifado` · `Rua` · `Prateleira` · `Gaveta` · `Box` · `Área externa` · `Área de corte` · `Área de montagem` · `Área de elétrica` · `Área de pintura` · `Área de expedição` · `Área de materiais do cliente` · `Área de quarentena/inspeção` · `Área de sucata` · `Área de devoluções`
 
-O tipo é **descritivo**: ele define o ícone, a cor e o tamanho com que a posição aparece no Mapa de Áreas, e o rótulo na tabela. Ele **não** carrega regra de negócio — endereçar um material numa posição do tipo "Área de quarentena/inspeção" não coloca esse material em quarentena. Quarentena é um estado de saldo, decidido pela inspeção, não pelo endereço.
+O tipo define o ícone, a cor e o tamanho com que a posição aparece no Mapa de Áreas, e o rótulo na tabela. Para **cinco** deles — as **áreas especiais** (3.3b) — ele também define **avisos e sugestões**; para os outros dez, é só descritivo. **Nenhum tipo retém nem recusa material:** endereçar um material numa posição do tipo "Área de quarentena/inspeção" **não** coloca esse material em quarentena. Quarentena é um estado de saldo, decidido pela inspeção, não pelo endereço.
+
+**O tipo tem de ser um da lista.** Pela tela só se escolhe da lista; quem cria ou altera localização pela integração recebe *"Tipo de localização inválido: ⟨tipo⟩"* para qualquer outro texto (inclusive *"Area de sucata"*, sem acento). Uma localização antiga gravada com um tipo fora da lista continua podendo ser editada e movida, desde que o tipo não seja trocado; para ela ganhar a regra de área, troque o tipo por um da lista. Editar uma localização sem informar o tipo **mantém** o tipo gravado.
+
+### 3.3b Áreas especiais — o que cada uma faz, e o que não faz
+
+São áreas especiais: **Área de quarentena/inspeção**, **Área de expedição**, **Área de sucata**, **Área de devoluções** e **Área de materiais do cliente**. O assistente de **Nova Localização** (Configurações → Setores e Áreas) oferece as cinco no **Tipo de área** da posição raiz.
+
+**A área vale também para o que está dentro dela.** Uma posição criada dentro de uma área especial (por exemplo, uma prateleira **SUC-01** dentro da área de sucata **SUC**) é tratada como parte da área, mesmo com o tipo "Prateleira": o sistema sobe pela hierarquia até achar a área mais próxima. Se a área de cima estiver **desativada**, a subida para ali — área desativada não dá regra a ninguém.
+
+**O que as áreas fazem — três coisas, e nenhuma delas bloqueia:**
+
+1. **Avisam no destino da movimentação.** Em **Movimentações → Nova Movimentação**, nos tipos **Entrada** e **Transferência**, com material e destino escolhidos, aparece abaixo do destino a frase da área (o código da localização no lugar de ⟨c⟩). A movimentação é aceita do mesmo jeito.
+
+   | Área | Aviso |
+   |---|---|
+   | Quarentena/inspeção | *"Localização ⟨c⟩ é área de quarentena/inspeção, mas guardar aqui não retém o material — ele continua disponível. Para reter, use Inspeções ou o bloqueio."* |
+   | Expedição | *"Localização ⟨c⟩ é área de expedição, mas a requisição não usa este endereço — a entrega baixa da origem separada."* |
+   | Sucata | *"Localização ⟨c⟩ é área de sucata, mas guardar aqui não sucateia — o material continua no estoque disponível até o sucateamento aprovado."* |
+   | Devoluções | *"Localização ⟨c⟩ é área de devoluções, mas guardar aqui não muda o estado do material — ele continua disponível."* |
+   | Materiais do cliente | só para material **próprio**: *"Localização ⟨c⟩ é área de materiais do cliente, e ⟨m⟩ é material próprio."* (⟨m⟩ = código do material). Para material de cliente, nenhum aviso. |
+
+   O processamento do recebimento e a devolução **não** mostram esse aviso.
+
+2. **Ficam fora das sugestões de vaga.** A sugestão de posição na entrada (3.8) não oferece área especial como "já tem este material" nem como "vazia" — com uma exceção: para **material de cliente**, a área de materiais do cliente é oferecida, e **antes** das outras vagas. Se a **posição padrão** do material for uma área, ela continua sendo sugerida como padrão (é cadastro explícito).
+
+3. **A área de sucata é de onde sai o sucateamento aprovado** — quando ela cobre a quantidade inteira (20.2).
+
+**O que as áreas NÃO fazem.** Não retêm saldo: o material numa área continua **disponível** e pode sair por qualquer saída — perda, entrega de requisição, transferência. Isso vale também para a área de sucata: enquanto o sucateamento não é aprovado, o material ali pode ser levado por outra saída, inclusive pelo "Sai de" da entrega, que lista os endereços com saldo. Não existe área "em terceiros": o material enviado a terceiros não tem endereço aqui — ele é acompanhado como saldo em poder de terceiros (seção 17).
+
+**No Mapa de Áreas**, a área de sucata aparece com ♻️ e a de devoluções com ↩️, e o painel da posição selecionada mostra, em **Área especial**, o que a área faz. A descrição de cada área:
+
+- **Quarentena/inspeção:** *"Guardar aqui não retém o material: ele continua disponível. Quem retém é a inspeção ou o bloqueio."*
+- **Expedição:** *"A separação da requisição não usa este endereço: a entrega baixa da origem separada."*
+- **Sucata:** *"Guardar aqui não sucateia: o material continua no estoque até o sucateamento aprovado, que baixa daqui quando o saldo aqui cobre o sucateamento inteiro."*
+- **Devoluções:** *"Guardar aqui não muda o estado do material: ele continua disponível."*
+- **Materiais do cliente:** *"Endereço para material de cliente. Material próprio guardado aqui gera aviso."*
+
+Para uma posição dentro da área, a descrição começa por *"Dentro de ⟨código da área⟩ (⟨tipo da área⟩)."*.
 
 ### 3.4 Bloqueio e restrição por tipo de material
 
@@ -432,7 +470,7 @@ Duas consultas de apoio para quem está organizando o galpão, as duas em **Rela
 
 ### 3.7 O Mapa de Áreas
 
-**Almoxarifado → Mapa de Áreas** desenha o galpão em duas dimensões, com uma caixa por posição, arrastável para representar o layout real. Cada caixa mostra a ocupação: quantos materiais distintos estão ali, a quantidade total, quantos itens estão abaixo do mínimo e quantos estão críticos. Há filtro por almoxarifado no topo, e a posição bloqueada aparece com contorno tracejado e o cadeado 🔒.
+**Almoxarifado → Mapa de Áreas** desenha o galpão em duas dimensões, com uma caixa por posição, arrastável para representar o layout real. Cada caixa mostra a ocupação: quantos materiais distintos estão ali, a quantidade total, quantos itens estão abaixo do mínimo e quantos estão críticos. Há filtro por almoxarifado no topo, e a posição bloqueada aparece com contorno tracejado e o cadeado 🔒. Selecionar uma posição que é área especial — ou que está dentro de uma — mostra no painel, em **Área especial**, o que a área faz (3.3b).
 
 **A regra de "ocupada".** Uma posição está ocupada quando tem saldo endereçado maior que zero de algum material, **ou** quando é a posição **padrão** de um material ativo com saldo que não tem saldo endereçado nenhum (o material cadastrado antes do controle por posição). O material de cliente ocupa como qualquer outro — a chapa do cliente ocupa a prateleira de verdade. Material **inativado** ocupa pelo saldo endereçado, mas não pela posição padrão.
 
@@ -461,7 +499,7 @@ Em **Movimentações → Nova Movimentação**, com o tipo **Entrada** e um mate
 2. *"⟨código⟩ · já tem este material (N)"* — as posições onde o material já tem saldo positivo, **da maior para a menor** (N é a quantidade nela). Guardar junto evita espalhar o mesmo material pelo galpão;
 3. *"⟨código⟩ · vazia"* — posições **vazias pela regra do Mapa** (3.7), dando preferência às do mesmo almoxarifado da posição padrão.
 
-**O que nunca é sugerido:** posição **bloqueada**; posição cuja restrição de tipo **não aceita** o tipo do material (3.4); posição **inativa**; posição de almoxarifado **inativo**; e posição **"pai"** que tem alguma posição filha ativa — uma rua ou prateleira que contém outras posições não é vaga. Uma posição onde o material tem saldo **negativo** também não é oferecida como vazia. A regra que decide se a posição aceita o material é **a mesma** que valida a entrada ao salvar, e por isso uma sugestão nunca é recusada pelas travas de 3.4.
+**O que nunca é sugerido:** posição **bloqueada**; posição cuja restrição de tipo **não aceita** o tipo do material (3.4); posição **inativa**; posição de almoxarifado **inativo**; posição **"pai"** que tem alguma posição filha ativa — uma rua ou prateleira que contém outras posições não é vaga; e, como "já tem este material" ou "vazia", **área especial** ou posição dentro de uma (3.3b) — salvo a área de materiais do cliente para material de cliente, que vem **antes** das outras vazias. A posição padrão é sugerida mesmo sendo área. Uma posição onde o material tem saldo **negativo** também não é oferecida como vazia. A regra que decide se a posição aceita o material é **a mesma** que valida a entrada ao salvar, e por isso uma sugestão nunca é recusada pelas travas de 3.4.
 
 "Vazia" quer dizer "o Mapa não mostra material ali" — **não** quer dizer que cabe: capacidade e peso não são modelados (3.5). E, em material **com lote**, *"já tem este material"* pode apontar uma posição que a entrega de requisição já esvaziou (ver 3.6).
 
@@ -4574,6 +4612,21 @@ solicitação e a referência `SUC-<número>` amarrando o lançamento ao process
 de saldo (com os números) e o sistema **desfaz a assinatura recém-dada sozinho**: o processo volta
 a "Solicitado", a assinatura anterior é preservada, e a reversão fica registrada no histórico.
 Nunca existe processo "aprovado" sem a baixa correspondente no livro.
+
+**De onde sai a baixa.** Se existe uma **área de sucata** (3.3b) — ou uma posição dentro dela —, **ativa**, **não
+bloqueada**, em que o saldo **sem lote** do material **cobre a quantidade inteira** do sucateamento, a baixa sai **de
+lá**, e só de lá; com mais de uma que cubra, sai da de maior saldo. Em qualquer outro caso — nenhuma área de sucata, a
+área não cobre tudo, o saldo está espalhado em duas posições da área, ou o sucateamento é de material com lote —, a
+baixa sai como qualquer saída sem endereço informado: da posição padrão primeiro e, se faltar, dos outros endereços. A
+baixa nunca mistura "um pouco da área e o resto da prateleira".
+
+Se, entre a primeira e a segunda assinatura, alguém tirar material da área de sucata que ia ser a origem, a segunda
+assinatura é recusada com *"O saldo em ⟨área⟩ (⟨saldo⟩) não cobre a quantidade (⟨quantidade⟩) — a saída tiraria de
+outros endereços"* e a assinatura é desfeita, como acima. Assinar de novo resolve: a nova tentativa escolhe a origem
+outra vez pela regra deste parágrafo.
+
+**Material reprovado na inspeção não chega aqui.** A reprovação deixa o material **bloqueado**, e o sucateamento só
+aceita o **disponível** — a solicitação é recusada com a mensagem de saldo de 20.1 (*disponivel 0*).
 
 ### 20.3 Rejeitar e cancelar
 
