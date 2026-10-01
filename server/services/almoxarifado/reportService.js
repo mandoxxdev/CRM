@@ -182,6 +182,33 @@ const GRUPOS_MOVIMENTO = {
   TRANSFERENCIA: { tipos: () => ['TRANSFERENCIA'] },
 };
 
+/**
+ * Etapa 67 (RN-05/RN-07): a regua UNICA do "numero de ajustes" — consumida pelo bloco `ajustes`
+ * do `indicadores` e pela chave `ajustes-por-motivo` (T2), para os dois numeros nao divergirem.
+ * Exige `movimentacoes_almoxarifado` com alias `mv` e JOIN em `materiais_almoxarifado` com
+ * alias `m` (ou os aliases passados). O grupo e o mesmo AJUSTE do historico (`LIKE 'AJUSTE%'`:
+ * AJUSTE, AJUSTE_POSITIVO, AJUSTE_NEGATIVO, AJUSTE_INVENTARIO); `cancelado = 0` tira a original
+ * estornada e o ESTORNO nao casa o LIKE; material de cliente fora (D9); material INATIVADO conta
+ * (e fato do livro — o numero nao pode cair ao inativar). A janela/periodo fica com quem chama.
+ */
+function ajustesWhereSql(mv = 'mv', m = 'm') {
+  return `${mv}.cancelado = 0 AND ${mv}.tipo LIKE '${GRUPOS_MOVIMENTO.AJUSTE.like}'`
+    + ` AND ${m}.proprietario_cliente_id IS NULL`;
+}
+
+/**
+ * Etapa 67 (RN-04): requisicao VIVA para os blocos de requisicao do `indicadores` — nao excluida
+ * (`ativo`, a correcao do C89) e fora dos status que nunca foram pedido valido.
+ */
+function REQUISICAO_VIVA_SQL(r = 'r') {
+  return `COALESCE(${r}.ativo, 1) = 1 AND ${r}.status NOT IN ('RASCUNHO', 'CANCELADO', 'REJEITADO')`;
+}
+
+/** D12: percentual com 2 casas, ou null quando nao ha denominador (a tela mostra "—", nunca 0%). */
+function percentualOuNull(parte, total) {
+  return total > 0 ? Number((100 * parte / total).toFixed(2)) : null;
+}
+
 async function relatorioHistoricoMovimentacoes(db, filters = {}) {
   // Etapa 49 (RN-04): usuário e centro de custo — o mesmo JOIN da rota /movimentacoes, para a
   // coluna mostrar código e nome, e não o id.
@@ -526,9 +553,62 @@ async function relatorioIndicadores(db, query = {}) {
     SELECT AVG((julianday(data_entrega) - julianday(created_at)) * 24) AS media_horas,
            COUNT(*) AS total_consideradas
     FROM requisicoes_almoxarifado
-    WHERE data_entrega IS NOT NULL`);
+    WHERE data_entrega IS NOT NULL AND COALESCE(ativo, 1) = 1`);
+  // Etapa 67 (C89): o `ativo` acima. O DELETE /requisicoes/:id estorna as entregas e grava
+  // ativo=0 SEM limpar data_entrega — a entrega desfeita continuava no tempo medio do dashboard.
   const totalConsideradas = Number(atendimento.total_consideradas) || 0;
   const mediaHoras = totalConsideradas > 0 ? Number((atendimento.media_horas || 0).toFixed(2)) : 0;
+
+  // ── Etapa 67 (RN-01/RN-02, D1-D3): requisicoes NO PRAZO. Ancora no PRAZO (date da ──
+  // data_necessidade) dentro de [hoje - janela, hoje], dia UTC como o alerta REQUISICAO_ATRASADA.
+  // No prazo = entrega COMPLETA (data_entrega so existe nela) ate o dia do prazo. Prazo de hoje
+  // ainda sem entrega fica fora do denominador (o dia nao acabou) e e contado em
+  // em_aberto_no_dia. Sem prazo legivel por date() (NULL, '', DD/MM/AAAA legado): fora, contado
+  // em sem_data_valida entre as CRIADAS na janela. Tabela derivada no FROM, nao CTE (a varredura
+  // do registro so captura SELECT).
+  const noPrazo = await dbGet(db, `
+    SELECT
+      COALESCE(SUM(CASE WHEN x.dn >= date('now', '-' || ? || ' days') AND x.dn <= date('now')
+                         AND NOT (x.dn = date('now') AND x.de IS NULL) THEN 1 ELSE 0 END), 0) AS consideradas,
+      COALESCE(SUM(CASE WHEN x.dn >= date('now', '-' || ? || ' days') AND x.dn <= date('now')
+                         AND x.de IS NOT NULL AND x.de <= x.dn THEN 1 ELSE 0 END), 0) AS no_prazo,
+      COALESCE(SUM(CASE WHEN x.dn = date('now') AND x.de IS NULL THEN 1 ELSE 0 END), 0) AS em_aberto_no_dia,
+      COALESCE(SUM(CASE WHEN x.dn IS NULL AND x.created_at >= datetime('now', '-' || ? || ' days')
+                         THEN 1 ELSE 0 END), 0) AS sem_data_valida
+    FROM (
+      SELECT date(r.data_necessidade) AS dn, date(r.data_entrega) AS de, r.created_at
+      FROM requisicoes_almoxarifado r
+      WHERE ${REQUISICAO_VIVA_SQL('r')}
+    ) x`, [janela, janela, janela]);
+  const npConsideradas = Number(noPrazo.consideradas) || 0;
+  const npNoPrazo = Number(noPrazo.no_prazo) || 0;
+
+  // ── Etapa 67 (RN-03, D4): requisicoes INTEGRAIS. Das finalizadas na janela (ENTREGUE/ ──
+  // ENCERRADA, ancora COALESCE(data_entrega, encerrado_em)), integral = data_entrega preenchida:
+  // o motor so grava data_entrega quando TODOS os itens chegaram na quantidade pedida, e item nao
+  // tem cancelamento nem reducao. Entregue e depois encerrada conta UMA vez (e uma linha so).
+  const integrais = await dbGet(db, `
+    SELECT COUNT(*) AS consideradas,
+           COALESCE(SUM(CASE WHEN r.data_entrega IS NOT NULL THEN 1 ELSE 0 END), 0) AS integrais,
+           COALESCE(SUM(CASE WHEN r.data_entrega IS NULL THEN 1 ELSE 0 END), 0) AS encerradas_incompletas
+    FROM requisicoes_almoxarifado r
+    WHERE ${REQUISICAO_VIVA_SQL('r')} AND r.status IN ('ENTREGUE', 'ENCERRADA')
+      AND COALESCE(r.data_entrega, r.encerrado_em) >= datetime('now', '-' || ? || ' days')`, [janela]);
+  const inConsideradas = Number(integrais.consideradas) || 0;
+  const inIntegrais = Number(integrais.integrais) || 0;
+
+  // ── Etapa 67 (RN-05, D9): numero de AJUSTES na janela, pela regua unica ajustesWhereSql ──
+  // (a mesma da chave ajustes-por-motivo). Conta LANCAMENTOS, nunca soma quantidade: o AJUSTE
+  // grava o saldo final (absoluto), nao a diferenca.
+  const ajustesRows = await dbAll(db, `
+    SELECT mv.tipo AS tipo, COUNT(*) AS total
+    FROM movimentacoes_almoxarifado mv
+    JOIN materiais_almoxarifado m ON m.id = mv.material_id
+    WHERE ${ajustesWhereSql('mv', 'm')}
+      AND mv.created_at >= datetime('now', '-' || ? || ' days')
+    GROUP BY mv.tipo
+    ORDER BY mv.tipo`, [janela]);
+  const porTipo = ajustesRows.map((r) => ({ tipo: r.tipo, total: Number(r.total) || 0 }));
 
   return {
     janela_dias: janela,
@@ -540,6 +620,21 @@ async function relatorioIndicadores(db, query = {}) {
     },
     valor_por_grupo: valorPorGrupoRows.map((r) => ({ categoria: r.categoria, valor: Number(r.valor) || 0 })),
     atendimento_requisicoes: { media_horas: mediaHoras, total_consideradas: totalConsideradas },
+    requisicoes_no_prazo: {
+      percentual: percentualOuNull(npNoPrazo, npConsideradas),
+      no_prazo: npNoPrazo,
+      fora_do_prazo: npConsideradas - npNoPrazo,
+      consideradas: npConsideradas,
+      em_aberto_no_dia: Number(noPrazo.em_aberto_no_dia) || 0,
+      sem_data_valida: Number(noPrazo.sem_data_valida) || 0,
+    },
+    requisicoes_integrais: {
+      percentual: percentualOuNull(inIntegrais, inConsideradas),
+      integrais: inIntegrais,
+      encerradas_incompletas: Number(integrais.encerradas_incompletas) || 0,
+      consideradas: inConsideradas,
+    },
+    ajustes: { total: porTipo.reduce((s, r) => s + r.total, 0), por_tipo: porTipo },
   };
 }
 
@@ -622,6 +717,8 @@ module.exports = {
   relatorioConsumoPeriodo, relatorioFerramentasEmprestadas, relatorioEPIPorColaborador,
   relatorioSolicitacoesCompraPendentes, relatorioSucataFinanceiro, relatorioIndicadores,
   relatorioCustoProjeto,
+  // Etapa 67: regua unica dos ajustes (consumida pela chave ajustes-por-motivo)
+  ajustesWhereSql,
   // Etapa 49
   relatorioSaldoPorLote, relatorioSeriesEmEstoque, relatorioSaldosComprometidos,
 };

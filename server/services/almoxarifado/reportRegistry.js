@@ -404,7 +404,8 @@ const RELATORIOS = {
     // D5 (Etapa 13): gate null, IGUAL ao dashboard hoje — o valorTotalEstoque ja e visivel a
     // todo usuario do modulo; gate novo seria regra nova sem pedido. Reversivel (uma linha).
     acao: null,
-    // Devolve OBJETO (giro/cobertura/rupturas/valor_por_grupo/atendimento_requisicoes), nao
+    // Devolve OBJETO (giro/cobertura/rupturas/valor_por_grupo/atendimento_requisicoes e, desde a
+    // Etapa 67, requisicoes_no_prazo/requisicoes_integrais/ajustes), nao
     // array — mesma razao de materiais-cliente/sucata-financeiro (Fase 2 da Task 1, C1).
     exportavel: false,
     // A regua de cada bloco, para a tela nao deixar implicito (RN-05): giro e APROXIMACAO
@@ -422,10 +423,25 @@ const RELATORIOS = {
       + 'materiais próprios e ativos cujo saldo FÍSICO tocou zero por saída ou ajuste de '
       + 'inventário na janela — material 100% reservado não conta, e material inativado sai do '
       + 'histórico. Tempo de atendimento: só requisições com entrega COMPLETA, de TODO o '
-      + 'histórico (sem janela). Materiais de clientes ficam fora de todos os blocos. Janela '
+      + 'histórico (sem janela). Requisição excluída fica fora. Materiais de clientes ficam fora '
+      + 'de giro, cobertura, rupturas, valor e ajustes; os blocos de requisição contam a '
+      + 'requisição inteira. Janela '
       + 'padrão: a mesma da Reposição (config; 90 dias de fábrica). Esta régua de consumo é '
       + 'MAIS LARGA que a dos relatórios de consumo (que contam só saídas diretas); mediana 0 '
-      + 'significa que nenhum material teve consumo na janela.',
+      + 'significa que nenhum material teve consumo na janela. '
+      // Etapa 67 (contrato do plano, literal): as reguas dos tres blocos novos.
+      + 'Requisições no prazo: as que têm o prazo (data de necessidade) entre o início da janela e '
+      + 'hoje; no prazo é a entrega COMPLETA até o dia do prazo; entrega parcial, encerrada '
+      + 'incompleta e ainda aberta com o prazo vencido contam como fora do prazo; prazo de hoje '
+      + 'ainda não entregue não entra (em_aberto_no_dia). Sem data de necessidade, ou com data fora '
+      + 'do formato AAAA-MM-DD, a requisição fica fora e é contada à parte (sem_data_valida). As '
+      + 'datas comparam o DIA em UTC. Requisições integrais: das finalizadas na janela (entrega '
+      + 'completa ou encerramento), as que tiveram todos os itens entregues na quantidade pedida; '
+      + 'encerrada sem completar não é integral, e devolução depois da entrega não desfaz. '
+      + 'Requisição excluída fica fora de todos os blocos de requisição. Ajustes: lançamentos '
+      + 'AJUSTE, AJUSTE_POSITIVO, AJUSTE_NEGATIVO e AJUSTE_INVENTARIO na janela, sem os '
+      + 'estornados; material inativado conta. O detalhe por motivo está no relatório Ajustes por '
+      + 'motivo.',
     limite: null,
     params: [
       { nome: 'janela_dias', rotulo: 'Janela (dias)', tipo: 'number', obrigatorio: false },
