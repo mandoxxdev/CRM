@@ -216,7 +216,7 @@ motivos de **devolução ao estoque** (Etapa 7), espelhado em `DevolucoesAlmoxar
 
 ## Tasks
 
-- [x] **T1 (tronco) — FEITA** (commit "Etapa 66 (T1)", hash registrado na marcação da T2). 17 cenários em
+- [x] **T1 (tronco) — FEITA** (`de04974`). 17 cenários em
   `motivosMovimentacaoCrud.api.test.js`, entrando pela rota e pelo serviço; suítes: api 243/243 arquivos,
   almoxarifado 42/0, validation, safealter, sqlite verdes. Controle positivo (9 sabotagens, cada uma caiu na asserção
   certa): normalização sem minúsculas → (6)/(7)/(9)/(17); sem `AND ativo = 1` → (11); POST sem `configurar` → (16)
@@ -241,7 +241,26 @@ motivos de **devolução ao estoque** (Etapa 7), espelhado em `DevolucoesAlmoxar
   (trilha com de/para; segundo DELETE não audita), `?tipo=` filtra só ativos do tipo. Controle positivo: trocar o índice
   para case-sensitive → o teste de duplicado "avaria"/"Avaria" fica vermelho; tirar o `AND ativo = 1` → o teste de
   idempotência fica vermelho. `auditLabels.api.test.js` precisa continuar verde (prova o rótulo).
-- [ ] **T2 (tronco) — motor e v2: `motivo_id` na movimentação.** Helper (ex.: `services/almoxarifado/motivoMovimentacao.js`,
+- [x] **T2 (tronco) — FEITA** (commit "Etapa 66 (T2)"; hash na próxima marcação do plano / `git log --grep "Etapa 66 (T2)"`).
+  Helper `resolverMotivoDoCadastro(db, params)` em `services/almoxarifado/motivoMovimentacao.js`, chamado como
+  `params = await …` na 1ª linha de `stockService.registrarMovimentacao` (antes da desestruturação); `motivo_id` no
+  INSERT do livro; `MovimentacaoSchema.motivo_id: z.unknown().optional()`. 11 cenários em
+  `motivosMovimentacaoUso.api.test.js` pelas três portas (v2, `/transferencias`, serviço direto) + v1. Suítes: api
+  244/244 arquivos, almoxarifado 42/0, validation, safealter, sqlite verdes. Controle positivo (10 sabotagens, cada uma
+  na asserção certa): schema sem `motivo_id` → v2 (1)(2)(3)(4)(5)(7)(11) vermelhos e serviço (10) + `/transferencias` (9)
+  **verdes** (a prova de fiação que a skill pede); resolver sem reatribuir `params` (o "depois da desestruturação") →
+  (1)(2)(3)(9)(10)(11); sem formato → (5)(9)(10); aceitar "os dois" / inativo / tipo que não serve → (4)(9)(10); INSERT
+  sem `motivo_id` → (1)(9)(10)(11); julgar o motivo antes do tipo → (6); complemento sem trim → (2); v1 repassando
+  `motivo_id` → (8).
+  **Divergências / escolhas desta execução (letra B):** (a) a recusa de FORMATO vem antes da de "os dois" (a Fase 2
+  acrescentou a de formato sem dizer a posição; formato primeiro porque um id mal formado nem chega a ser "o motivo do
+  cadastro"); (b) a resolução só acontece com `tipo` válido — com tipo inválido os params passam intocados e o motor
+  recusa com `'Tipo de movimento inválido'` (na v2 o Zod recusa antes, com a mensagem de tipo dedicado/genérica de
+  hoje); (c) `motivo_id` não-nulo que não é `number` inteiro > 0 → 400, inclusive `true`, `{}`, `-3`; (d) sem
+  `motivo_id` os params voltam com `motivo_id: null` e o texto livre NÃO é trimado (RN-07: "como vierem"); com
+  `motivo_id`, `motivo` só com espaços conta como vazio e o complemento é trimado; (e) inexistente é **400** (não 404),
+  como o contrato. Texto original da task:
+  **T2 (tronco) — motor e v2: `motivo_id` na movimentação.** Helper (ex.: `services/almoxarifado/motivoMovimentacao.js`,
   `resolverMotivoDoCadastro(db, params)` → params novos ou erro 400) chamado no topo de `registrarMovimentacao`;
   `motivo_id` no INSERT; `MovimentacaoSchema.motivo_id`. Depende de T1 (tabela).
   Testes `server/tests/api/motivosMovimentacaoUso.api.test.js`: RN-05 (sem e com complemento; satisfaz "exige

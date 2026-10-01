@@ -6,6 +6,8 @@ const { can } = require('./permissions');
 const alertService = require('./alertService');
 const { avaliarRegrasVinculo } = require('./movementRules');
 const ownerRules = require('./ownerRules');
+// Etapa 66: resolve `motivo_id` (cadastro de motivos) no topo de registrarMovimentacao.
+const motivoMovimentacao = require('./motivoMovimentacao');
 const { TIPOS_MOVIMENTO, TIPOS_RETENCAO } = require('./schema');
 const { disponivelSql, COLUNAS_RETENCAO } = require('./availabilitySql');
 // Etapa 45 (fix-round): a regua de "isto e diferenca de verdade", dona unica desde a Etapa 10b.
@@ -845,8 +847,14 @@ async function contarOcupacaoLocalizacao(db, localizacaoId) {
  *    declarada pelo chamador e não deduzida pelo motor.
  */
 async function registrarMovimentacao(db, user, params, opcoes = {}) {
+  // Etapa 66 (RN-05/RN-06): o motivo do CADASTRO (`motivo_id`) e resolvido AQUI, antes da
+  // desestruturacao — ele reescreve `motivo` e `justificativa`, que a regra "exige justificativa",
+  // o livro, a auditoria e a fila leem abaixo. Recusa (formato, "os dois", inexistente, inativo,
+  // nao serve ao tipo) sai antes de tocar em estoque. Tipo invalido passa intocado e e recusado
+  // logo abaixo com a mensagem de hoje. Ver services/almoxarifado/motivoMovimentacao.js.
+  params = await motivoMovimentacao.resolverMotivoDoCadastro(db, params);
   const {
-    material_id, tipo, quantidade, motivo, referencia, observacoes,
+    material_id, tipo, quantidade, motivo, motivo_id, referencia, observacoes,
     localizacao_origem_id, localizacao_destino_id, lote, lote_id, projeto_id, os_id, cliente_id,
     documento_vinculado, justificativa, reserva_id, recebimento_id, requisicao_id, centro_custo_id,
     emergencial, custo_unitario: custoInformado, quantidade_reprovada,
@@ -1887,8 +1895,8 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, referencia, observacoes,
      usuario_id, usuario_nome, localizacao_origem_id, localizacao_destino_id, lote, lote_id, unidade,
      projeto_id, os_id, cliente_id, documento_vinculado, justificativa, reserva_id, recebimento_id, requisicao_id,
-     centro_custo_id, emergencial, regularizacao_pendente, codigo_lido_origem, codigo_lido_destino)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+     centro_custo_id, emergencial, regularizacao_pendente, codigo_lido_origem, codigo_lido_destino, motivo_id)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
     material_id, tipo, quantidade, saldoAnteriorReal, saldoPosterior,
     motivo || null, referencia || null, observacoes || null,
     user.id, user.nome || user.email,
@@ -1897,6 +1905,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     documento_vinculado || null, justificativa || null,
     reserva_id || null, recebimento_id || null, requisicao_id || null,
     centro_custo_id || null, emergencial ? 1 : 0, regularizacaoPendente, confirmadoOrigem, confirmadoDestino,
+    motivo_id || null,
   ]);
   } catch (e) {
     // Compensa ANTES de relançar — o caminho de entrada/saída com série termina aqui dentro

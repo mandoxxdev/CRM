@@ -124,6 +124,11 @@ const MovimentacaoSchema = z.object({
   // tambem recebe o body cru de /transferencias; assim as duas rotas dao a MESMA mensagem.
   codigo_lido_origem: z.unknown().optional(),
   codigo_lido_destino: z.unknown().optional(),
+  // Etapa 66: o motivo do cadastro. Mesma regua dos `codigo_lido_*` acima — declarado (senao o
+  // z.object o descarta e a feature morre na v2 com os testes de servico verdes) mas SEM tipo: o
+  // formato e julgado no motor (motivoMovimentacao.resolverMotivoDoCadastro), que tambem recebe o
+  // body cru de /transferencias, para as duas rotas darem a MESMA mensagem.
+  motivo_id: z.unknown().optional(),
 }).superRefine((d, ctx) => {
   // quantidade 0 só é aceita para AJUSTE com localização (zera aquela localização
   // e propaga o total do material — ver stockService.registrarMovimentacao). Para

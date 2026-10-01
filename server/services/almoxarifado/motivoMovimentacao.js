@@ -24,6 +24,7 @@ const { dbAll, dbGet, dbRun } = require('./db');
 // da Etapa 19 so alcanca chamadas feitas por `audit.registrarAuditoria(...)`.
 const audit = require('./audit');
 const { TIPOS_MOVIMENTO_ROTA } = require('./schemas');
+const { TIPOS_MOVIMENTO } = require('./schema');
 
 const TABELA = 'motivos_movimentacao_almoxarifado';
 
@@ -173,8 +174,65 @@ async function desativarMotivo(db, id, autor = {}) {
   return { success: true };
 }
 
+// ── Uso na movimentacao (Etapa 66, T2) ─────────────────────────────────────────────────────────
+
+const MSG_USO = Object.freeze({
+  FORMATO: 'motivo_id deve ser um número inteiro positivo',
+  OS_DOIS: 'Informe o motivo do cadastro (motivo_id) ou o motivo digitado (motivo), não os dois',
+  NAO_ENCONTRADO: MSG.NAO_ENCONTRADO,
+  desativado: (nome) => `O motivo "${nome}" está desativado`,
+  naoServe: (nome, tipo) => `O motivo "${nome}" não serve para movimentação do tipo ${tipo}`,
+});
+
+const textoPreenchido = (v) => v !== undefined && v !== null && String(v).trim() !== '';
+
+/**
+ * Chamado no TOPO de `stockService.registrarMovimentacao`, ANTES da desestruturacao dos params
+ * (revisao da Fase 2): o motor le `motivo` e `justificativa` dos params para a regra "exige
+ * justificativa", para o livro, a auditoria e a fila de notificacao — reatribuir depois da
+ * desestruturacao deixaria metade desses leitores com o valor antigo.
+ *
+ * Por estar no MOTOR, vale em toda porta que chega com `motivo_id`: v2 (o schema o declara como
+ * `z.unknown()` de proposito, sem validar), `/transferencias` (body cru) e chamada direta. A
+ * checagem de formato mora aqui para as duas rotas darem a MESMA mensagem (precedente da Etapa 56,
+ * `codigo_lido_*`).
+ *
+ * Devolve params NOVOS (nunca muta os do chamador). Sem `motivo_id` (ausente ou `null`), devolve os
+ * params com `motivo_id: null` e o resto intocado — o texto livre de hoje passa identico (RN-07).
+ *
+ * Tipo invalido NAO e julgado aqui: os params voltam como vieram e o motor recusa logo em seguida
+ * com a mensagem de hoje ('Tipo de movimento inválido'). Ordem fixa do contrato: tipo primeiro.
+ */
+async function resolverMotivoDoCadastro(db, params) {
+  if (!params || typeof params !== 'object') return params;
+  const { motivo_id: bruto, tipo } = params;
+  if (bruto === undefined || bruto === null) return { ...params, motivo_id: null };
+  if (!TIPOS_MOVIMENTO.includes(tipo) || tipo === 'ESTORNO') return params;
+
+  if (typeof bruto !== 'number' || !Number.isInteger(bruto) || bruto <= 0) throw erro(400, MSG_USO.FORMATO);
+  // D4: os dois juntos sao recusados em vez de o cadastro "ganhar" calado. So espacos = vazio.
+  if (textoPreenchido(params.motivo)) throw erro(400, MSG_USO.OS_DOIS);
+  const motivo = await obterMotivo(db, bruto);
+  if (!motivo) throw erro(400, MSG_USO.NAO_ENCONTRADO);
+  if (!motivo.ativo) throw erro(400, MSG_USO.desativado(motivo.nome));
+  if (!motivo.tipos.includes(tipo)) throw erro(400, MSG_USO.naoServe(motivo.nome, tipo));
+
+  // RN-05: o livro grava o NOME DO MOMENTO (D2) e a justificativa leva o nome — e por isso satisfaz
+  // "exige justificativa", a regra 'qualquer' da SAIDA e a do emergencial, como o texto copiado
+  // pela tela ja satisfazia. O complemento livre vem em `justificativa`; vazio nao grava "Nome — ".
+  const complemento = textoPreenchido(params.justificativa) ? String(params.justificativa).trim() : '';
+  return {
+    ...params,
+    motivo_id: motivo.id,
+    motivo: motivo.nome,
+    justificativa: complemento ? `${motivo.nome} — ${complemento}` : motivo.nome,
+  };
+}
+
 module.exports = {
   MSG,
+  MSG_USO,
+  resolverMotivoDoCadastro,
   normalizarNome,
   listarMotivos,
   obterMotivo,
