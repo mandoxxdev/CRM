@@ -141,6 +141,7 @@ export const MovimentacoesAlmoxarifado = page(() => import('../components/almoxa
 export const ConferenciaEstoque = page(() => import('../components/almoxarifado/ConferenciaEstoque'));
 export const RequisicoesList = page(() => import('../components/almoxarifado/RequisicoesList'));
 export const RequisicaoForm = page(() => import('../components/almoxarifado/RequisicaoForm'));
+export const FilaSeparacao = page(() => import('../components/almoxarifado/FilaSeparacao'));
 export const RequisicoesMaterialNovaPage = page(
   () => import('../components/almoxarifado/RequisicoesMaterialPages').then((m) => ({
     default: m.RequisicoesMaterialNovaPage,

@@ -12,7 +12,7 @@ import {
   FiCalendar, FiLogOut, FiMenu, FiX, FiUserPlus, FiPackage, FiBarChart2, FiMap, FiDollarSign, FiSettings, FiShield, FiMoon, FiSun, FiGrid,
   FiShoppingCart, FiTrendingDown, FiTrendingUp, FiCreditCard, FiTruck, FiFileText as FiFileText2, FiTool, FiCheckCircle,   FiSliders, FiCircle, FiDroplet, FiZap, FiLayers, FiClipboard,
   FiArchive, FiActivity, FiList, FiMessageCircle, FiAlertTriangle, FiCheckSquare, FiLock, FiCornerUpLeft,
-  FiScissors, FiBell, FiMail, FiCamera, FiAlertOctagon
+  FiScissors, FiBell, FiMail, FiCamera, FiAlertOctagon, FiInbox
 } from 'react-icons/fi';
 import Notificacoes from './Notificacoes';
 import BuscaGlobal from './BuscaGlobal';
@@ -331,6 +331,7 @@ const Layout = () => {
     { path: '/almoxarifado/scanner', icon: FiCamera, label: 'Scanner' },
     { path: '/almoxarifado/materiais', icon: FiList, label: 'Materiais' },
     { path: '/almoxarifado/requisicoes', icon: FiCheckCircle, label: 'Requisições (almox.)' },
+    { path: '/almoxarifado/fila-separacao', icon: FiInbox, label: 'Fila de separação' },
     { path: '/almoxarifado/requisicoes-material/nova', icon: FiClipboard, label: 'Solicitar Material' },
     { path: '/almoxarifado/requisicoes-material', icon: FiList, label: 'Minhas Requisições' },
     { path: '/almoxarifado/recebimentos', icon: FiPackage, label: 'Recebimentos' },

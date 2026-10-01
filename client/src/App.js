@@ -100,6 +100,7 @@ import {
   ConferenciaEstoque,
   RequisicoesList,
   RequisicaoForm,
+  FilaSeparacao,
   RequisicoesMaterialNovaPage,
   RequisicoesMaterialListaPage,
   ConfiguracoesAlmoxarifado,
@@ -520,6 +521,8 @@ export function AppRoutes() {
             <RequisicaoForm />
           </RequisicoesMaterialProvider>
         } />
+        {/* Etapa 64: a fila de separacao do almoxarife (so leitura; gate separar_emitir no servidor). */}
+        <Route path="fila-separacao" element={<FilaSeparacao />} />
         <Route path="requisicoes-material" element={<RequisicoesMaterialListaPage moduloKey="almoxarifado" />} />
         <Route path="requisicoes-material/nova" element={<RequisicoesMaterialNovaPage moduloKey="almoxarifado" />} />
         <Route path="recebimentos" element={<RecebimentosAlmoxarifado />} />
