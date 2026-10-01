@@ -107,7 +107,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Trinta itens para rodar em produção ANTES do deploy — vinte e sete são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Trinta e um itens para rodar em produção ANTES do deploy — vinte e oito são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-01 (Etapa 67) de trinta para trinta e um**, com a **A31** — reservas e requisições presas por resto de conta de entrega fracionada. As Etapas 62 a 66 não acrescentaram nenhuma.)*
 
 *(**Atualizado em 2026-09-30 (Etapa 61) de vinte e nove para trinta**, com a **A30** — as séries que já não batem com o físico. As Etapas 58, 59 e 60 não acrescentaram nenhuma.)*
 
@@ -969,9 +971,52 @@ SELECT m.id, m.codigo, m.nome, m.quantidade_atual AS fisico,
   **inventário** ainda ajusta só o número, mas ao concluir **lista** os materiais com série a regularizar. Rode esta
   consulta depois de inventário, ou siga o aviso da própria tela.)*
 
-### B. Decisões de negócio — B1 a B271; as em aberto esperam você, as tomadas estão escritas com o descartado
+**A31 (NOVA, da Etapa 67 — reservas e requisições presas por um resto de conta da entrega fracionada: medir antes,
+liberar pela tela).** Até esta etapa, entregar em frações (dez entregas de 0,1, três de 0,3…) somava, no computador,
+*0,9999999999999999* em vez de 1. Duas consequências que podem já estar em produção: **(1)** a requisição ficava em
+**Parcialmente atendida** para sempre, mesmo com tudo entregue; **(2)** a reserva do item ficava **ATIVA** segurando um
+resto invisível (≈ 0,0000000000000001), e o material com esse resto no "reservado". O sistema novo fecha as duas na
+**próxima** entrega ou liberação, mas **não corrige o que já ficou preso**. Três consultas:
 
-*(**Atualizado em 2026-10-01 de B260 para B271**, com as onze da Etapa 66; antes, de B255 para B260, com as cinco da Etapa 65; antes, de B251 para B255, com as quatro da Etapa 64; antes, de B247 para B251, com as quatro da Etapa 63; antes, de B243 para B247, com as quatro da Etapa 62; antes, de B239 para B243, com as quatro da Etapa 61; antes, de B237 para B239, com as duas da Etapa 60; antes, de B233 para B237, com as quatro da Etapa 59; antes, de B228 para B233, com as cinco da Etapa 58; antes, de B225 para B228, com as três da Etapa 57; antes, de B222 para B225, com as três da Etapa 56; antes, de B219 para B222, com as da Etapa 55.)*
+```sql
+-- (1) reservas ATIVAS cujo saldo é só resto de conta (menos de 0,000000001)
+SELECT r.id, r.material_id, m.codigo, r.quantidade, r.quantidade_utilizada,
+       r.quantidade - COALESCE(r.quantidade_utilizada, 0) AS saldo, r.origem, r.item_requisicao_id
+  FROM reservas_material_almoxarifado r
+  JOIN materiais_almoxarifado m ON m.id = r.material_id
+ WHERE r.status = 'ATIVA'
+   AND r.quantidade - COALESCE(r.quantidade_utilizada, 0) <= 0.000000001;
+
+-- (2) materiais com "reservado" que é só resto de conta
+SELECT id, codigo, nome, quantidade_reservada
+  FROM materiais_almoxarifado
+ WHERE quantidade_reservada > 0 AND quantidade_reservada <= 0.000000001;
+
+-- (3) requisições "Parcialmente atendidas" com TODOS os itens entregues (dentro do resto de conta)
+SELECT r.id, r.numero, r.status
+  FROM requisicoes_almoxarifado r
+ WHERE r.status = 'PARCIALMENTE_ATENDIDA' AND COALESCE(r.ativo, 1) = 1
+   AND NOT EXISTS (SELECT 1 FROM itens_requisicao_almoxarifado i
+                    WHERE i.requisicao_id = r.id
+                      AND COALESCE(i.quantidade_entregue, 0) < i.quantidade_solicitada - 0.000000001);
+```
+
+**Como ler o resultado:**
+- **As três vazias** — nada a fazer (é o esperado se ninguém entregou em frações).
+- **(1) com linhas** — em **Reservas**, abra cada uma e use **Liberar** com a quantidade **em branco** ("libera o saldo
+  inteiro") e um motivo como "resto de conta de entrega fracionada". A reserva sai de ATIVA e o resto sai do reservado do
+  material. Não apague por SQL: a liberação grava o lançamento no livro.
+- **(2) com linhas que não aparecem em (1)** — resto sem reserva por trás; não segura nada de verdade (é menor que
+  qualquer quantidade digitável). Pode ficar; anote para a migração.
+- **(3) com linhas** — o sistema **não** as converte em **Entregue**: não há gesto que refaça a última entrega. A
+  decisão é sua: deixar como estão (não contam no "% integrais", que só olha finalizadas; mas, se tiverem data de
+  necessidade vencida dentro da janela, contam como **fora do prazo**) ou **Encerrar** — e aí entram no "% integrais"
+  como **encerradas incompletas**, o que é falso para elas. Recomendação: deixar e anotar os números — o efeito é
+  pequeno e some quando o prazo sai da janela.
+
+### B. Decisões de negócio — B1 a B283; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+*(**Atualizado em 2026-10-01 de B271 para B283**, com as doze da Etapa 67; antes, de B260 para B271, com as onze da Etapa 66; antes, de B255 para B260, com as cinco da Etapa 65; antes, de B251 para B255, com as quatro da Etapa 64; antes, de B247 para B251, com as quatro da Etapa 63; antes, de B243 para B247, com as quatro da Etapa 62; antes, de B239 para B243, com as quatro da Etapa 61; antes, de B237 para B239, com as duas da Etapa 60; antes, de B233 para B237, com as quatro da Etapa 59; antes, de B228 para B233, com as cinco da Etapa 58; antes, de B225 para B228, com as três da Etapa 57; antes, de B222 para B225, com as três da Etapa 56; antes, de B219 para B222, com as da Etapa 55.)*
 
 *(**Atualizado em 2026-09-30 de B205 para B219**, com as quatro da Etapa 51, as três da Etapa 52, as quatro da Etapa 53 e as três da Etapa 54.)*
 
@@ -4209,6 +4254,71 @@ gravação da movimentação não são um bloco só). O efeito é benigno: a mov
 seguintes já são recusadas com *"O motivo "⟨nome⟩" está desativado"*. **Descartado:** travar com uma segunda leitura —
 fecha a janela pela metade e fica para a migração ao Postgres, que tem transação.
 
+**B272 (NOVA, da Etapa 67) — "no prazo" conta pelo PRAZO, e a requisição entra no indicador no dia do prazo.**
+**Escolhido:** entram as requisições cuja **data de necessidade** está entre o início da janela e hoje; no prazo é a que
+teve a entrega **completa** até o dia do prazo. Prazo de hoje ainda não entregue fica fora da conta (o dia não acabou —
+contado à parte como "em aberto no dia"). **Descartados:** contar pela data da entrega (a requisição atrasada que nunca
+foi entregue sumiria da conta — o número sairia melhor do que é); contar o prazo de hoje como atrasado.
+
+**B273 (NOVA, da Etapa 67) — atrasada inclui a que ainda está aberta com o prazo vencido**, a entregue só em parte e a
+encerrada sem completar (inclusive a **Pendente** que ninguém aprovou). Rascunho, rejeitada, cancelada e excluída ficam
+fora de tudo. **Descartado:** contar só as entregues (esconderia a pior falha: a que não foi atendida).
+
+**B274 (NOVA, da Etapa 67) — o dia é o dia em UTC**, como o alerta de requisição atrasada e os relatórios de consumo.
+**Consequência que se vê:** entrega às **22h30 de Brasília** no dia do prazo já é o dia seguinte em UTC e conta **fora do
+prazo** (**C90**). **Descartado:** horário local (depende do fuso do servidor e não existe igual no Postgres). A régua está
+escrita na nota do relatório.
+
+**B275 (NOVA, da Etapa 67) — "integral" é a requisição que chegou a "Entregue"**, entre as finalizadas na janela
+(entregues ou encerradas). O sistema só marca "Entregue" quando todos os itens foram entregues na quantidade pedida, e
+não há como reduzir ou cancelar item. Encerrada sem completar não é integral; devolução depois da entrega não desfaz.
+**Descartado:** comparar item a item no relatório (refaria o que o sistema já garante e criaria uma segunda definição).
+
+**B276 (NOVA, da Etapa 67) — o tempo médio de atendimento passa a ignorar requisição excluída.** Excluir uma requisição
+já entregue desfaz as entregas, mas o tempo médio continuava contando a entrega desfeita (**C89**). **Escolhido:**
+corrigir agora, mesmo sendo um bloco que o plano anterior dizia "não se reabre" — é defeito com cenário, não troca de
+régua. **Descartado:** só declarar (o cartão do painel continuaria contando entrega que não existe mais).
+
+**B277 (NOVA, da Etapa 67) — qualidade por fornecedor conta ITENS e INSPEÇÕES, e "conferido" é a conferência
+FINALIZADA.** Divergência: itens com quantidade recebida diferente da esperada, uma vez por item, pelo estado atual —
+**só** de recebimentos em que alguém clicou **"Finalizar Conferência"** (todo item de recebimento nasce com a quantidade
+recebida igual à esperada, então "tem quantidade" não prova que alguém contou). Rejeição: inspeções com alguma quantidade
+reprovada ÷ inspeções decididas. **Descartados:** somar quantidades (o mesmo fornecedor entrega kg, m e peça);
+contar não conformidades (várias por item, espelho da conferência); e os dois sinais que a revisão do plano propôs —
+o marcador de conferência por item (fica igual para o item conferido com diferença) e o status "Conferido" do recebimento
+(o **Aprovar** pula a conferência). **Limite:** conferência feita só pela API, sem o gesto de finalizar, não conta.
+
+**B278 (NOVA, da Etapa 67) — não conformidade, devolução ao fornecedor e o status "Reprovado" do recebimento NÃO entram na
+rejeição.** Liberar por não conformidade depois de reprovar **não** tira a reprovação do índice: a inspeção reprovou; a
+concessão é decisão nossa, posterior. **Descartado:** descontar as liberadas (o índice mede a entrega do fornecedor, não
+a nossa tolerância).
+
+**B279 (NOVA, da Etapa 67) — o fornecedor é agrupado pelo CNPJ do recebimento, senão pelo cadastro, senão pelo nome
+digitado — e a coluna "Agrupado por" diz qual.** O CNPJ é comparado **sem pontuação** (pontos, barra, hífen e espaços
+saem; letras em maiúsculas — o CNPJ novo tem letras, por isso não "só dígitos"). O nome que aparece é o do recebimento
+mais recente. A mesma empresa pode sair em mais de uma linha quando um recebimento traz o CNPJ e outro só o nome — a
+coluna **"Agrupado por"** (*"CNPJ ⟨como veio⟩"*, *"Cadastro #⟨número⟩"*, *"Nome digitado"*) mostra a diferença.
+**Descartados:** agrupar pelo cadastro primeiro (a nota avulsa não traz o cadastro — partia o mesmo fornecedor em duas
+linhas); juntar pelo nome (homônimos se misturariam).
+
+**B280 (NOVA, da Etapa 67) — material de cliente fica FORA dos ajustes e da qualidade por fornecedor**, como já fica do
+giro, cobertura e rupturas; os indicadores de requisição contam a requisição inteira. Material **inativado conta** nos
+ajustes (é fato do livro). **Descartados:** incluir cliente nos ajustes; tirar o inativado (o número cairia ao inativar).
+
+**B281 (NOVA, da Etapa 67) — os dois relatórios novos ficam abertos a todo usuário do módulo**, como o Histórico de
+movimentações (que já mostra os mesmos ajustes) e os Recebimentos pendentes (que já mostram fornecedor).
+**Descartado:** exigir o perfil de inspeção ou de recebimento (regra nova sem pedido; apertar depois é uma linha).
+
+**B282 (NOVA, da Etapa 67) — o painel ganha UM cartão, "Requisições no prazo", e a criação de requisição ganha o campo
+"Data de necessidade".** Sem o campo, nenhuma tela gravava o prazo e o cartão mostraria *"—"* para sempre (achado da
+revisão do plano). O campo é **opcional** (vazio = sem prazo); o sistema passa a recusar data fora do formato com
+*"data_necessidade deve estar no formato AAAA-MM-DD"* (inclusive dia que não existe, como 30 de fevereiro).
+"Integrais" e "ajustes" ficam no relatório de Indicadores. **Descartados:** três cartões (o painel é para o número que
+cobra ação); deixar o prazo só pela API.
+
+**B283 (NOVA, da Etapa 67) — sem nada para medir, o percentual fica vazio (*"—"*), nunca 0%.** **Descartado:** mostrar
+0% (diria "nenhuma no prazo" sem nenhuma requisição — mentira).
+
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -5343,6 +5453,27 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
     complemento do motivo do cadastro. Esse texto **sempre foi gravado**, só não aparecia. **O que fazer:** nada; só não
     estranhe linhas antigas ganhando uma segunda linha de texto.
 
+89. **NOVO, da Etapa 67 — o "tempo médio de atendimento" pode mudar sem ninguém ter entregue nada.** Ele contava também
+    requisições **excluídas** depois de entregues (a exclusão desfaz as entregas, mas a data da entrega ficava). Agora
+    elas saem da conta (**B276**). **O que fazer:** nada; se o número do painel mudar depois do deploy, é isso.
+
+90. **NOVO, da Etapa 67 — "no prazo" olha o DIA em UTC.** Entrega completa às **22h30 de Brasília** no dia do prazo já
+    é o dia seguinte em UTC e conta **fora do prazo** (das 21h em diante, no horário de Brasília). **O que fazer:** ao
+    explicar um número que parece injusto, confira o horário da entrega; a régua está escrita na nota do relatório
+    (**B274**).
+
+91. **NOVO, da Etapa 67 — o painel do almoxarifado tem um quarto cartão, e a requisição pede a "Data de necessidade".**
+    O cartão **"Requisições no prazo"** mostra o percentual da janela, ou *"—"* com *"sem requisições com prazo no
+    período"* enquanto ninguém informar prazo. O campo **"Data de necessidade"** é opcional na **Nova Requisição de Material** e na
+    cesta **Solicitação de material** (por setor). **Para quem integra pela API:** data fora do formato *AAAA-MM-DD* (inclusive
+    *DD/MM/AAAA*, que antes entrava) agora é recusada com *"data_necessidade deve estar no formato AAAA-MM-DD"*. **O que
+    fazer:** avisar quem cria requisição que o cartão só mede o que tiver prazo informado.
+
+92. **NOVO, da Etapa 67 — entrega fracionada agora fecha a requisição e a reserva.** Dez entregas de 0,1 (ou três de
+    0,3) agora levam a requisição a **Entregue** e a reserva do item a **Consumida**; antes ficavam "parcial" e "ativa"
+    por um resto de conta. Liberar uma reserva pelo saldo que a tela mostra também fecha de vez. **O que fazer:** o que
+    ficou preso antes **não** se corrige sozinho — consultas e o passo a passo na **A31**.
+
 
 
 ### D. Limitações declaradas — são decisão, não esquecimento
@@ -6023,7 +6154,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(64) O menu "Fila de separação" aparece para todos** com acesso ao módulo; quem não tem perfil de separar vê *"Você
   não tem permissão para a fila de separação."* (nunca uma fila vazia falsa).
 - **(64) Data de necessidade gravada como *DD/MM/AAAA*** (legado) ordena errado — a comparação é de texto; o formato
-  *AAAA-MM-DD* ordena certo.
+  *AAAA-MM-DD* ordena certo. *(Como ficou — Etapa 67: a criação passou a recusar data fora de AAAA-MM-DD e a tela grava
+  nesse formato; só o que já está no banco continua no formato antigo — e fica fora do "% no prazo", contado à parte.)*
 - **(64) Item com série sem séries em estoque** aparece como entregável: o "entregável agora" olha o saldo, não as
   séries; a entrega pede as séries e recusa ali.
 - **(64) A avaliação de valor é uma consulta por requisição** da fila (os itens são uma consulta só) — a fila é curta e
@@ -6053,6 +6185,25 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   *"justificativa deve ser texto"*.
 - **(66) Desativar e movimentar no mesmo instante** pode deixar passar uma movimentação com o motivo recém-desativado
   (**B271**).
+- **(67) Consumo previsto × realizado e "consumo não previsto por projeto" continuam fora** — dependem de lista de
+  materiais e ordem de produção (feature 22).
+- **(67) "Tempo médio de recebimento" continua fora.** A especificação da feature dizia que não havia data confiável;
+  **estava errado** — cada item recebido guarda a hora em que entrou no estoque. Falta medir se essa hora é confiável
+  (ela pode voltar a vazia se a entrada falhar) antes de prometer o indicador.
+- **(67) O índice de rejeição é por inspeção, não por quantidade** — uma inspeção que reprova 1 de 100 pesa igual a uma
+  que reprova 100 de 100 (**B277**).
+- **(67) Entrega parcial combinada com o fornecedor conta como divergência** no recebimento de pedido: a quantidade
+  esperada é o saldo da linha do pedido. É a mesma régua do alerta de divergência; está na nota do relatório.
+- **(67) Conferência feita só pela API, sem "Finalizar Conferência"**, não entra como item conferido (**B277**).
+- **(67) O status "Reprovado" do recebimento** (só entra pela API, sem quantidade nem trava) fica fora do índice de
+  rejeição (**B278**).
+- **(67) Um item recebido com quantidade 0** informada na criação do recebimento é gravado com a quantidade esperada —
+  vem de antes e é contrato do recebimento; não foi mexido.
+- **(67) Data inválida nos filtros** dos relatórios novos devolve lista vazia, sem aviso (como o Histórico).
+- **(67) O relatório mostra o número, não a lista** das requisições atrasadas — a lista já está no alerta de requisição
+  atrasada e na Central de alertas.
+- **(67) Letras acentuadas em maiúsculas e minúsculas** podem separar o mesmo fornecedor quando ele só tem o nome
+  digitado (sem CNPJ nem cadastro).
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -6582,6 +6733,21 @@ ponta a ponta 8, relatório 5) e as três telas com o servidor simulado. O que *
    filtro do relatório como *"Avaria no manuseio (desativado)"*, e o livro continua com a linha antiga.
 6. **Sem permissão.** Com um usuário que abre Configurações mas não tem o perfil Administrador do almoxarifado, a aba lista os motivos sem
    **Novo Motivo** e sem a coluna **Ações**.
+
+**(67) Nenhum clique foi dado nesta etapa.** Os testes provam o servidor pela rota (indicadores 28 cenários, ajustes por
+motivo 10, qualidade por fornecedor 18, ponta a ponta 8) e as três telas com o servidor simulado. O que **só o navegador**
+prova:
+
+1. **O campo.** **Nova Requisição de Material** e a cesta **Solicitação de material**: o campo **"Data de necessidade"** abre o
+   calendário; criar com a data preenchida e conferir no detalhe que ela foi gravada; criar sem preencher também passa.
+2. **O cartão.** No painel do almoxarifado, o quarto cartão **"Requisições no prazo"**: sem nenhuma requisição com prazo
+   mostra *"—"* e *"sem requisições com prazo no período"*; depois de entregar completa uma requisição com prazo de hoje,
+   mostra um percentual.
+3. **Os relatórios.** **Relatórios → Movimentações → Ajustes por motivo** e **Relatórios → Gestão → Qualidade por
+   fornecedor** abrem, filtram por período e exportam o Excel com as colunas da tela (inclusive **"Agrupado por"**).
+4. **Indicadores.** **Relatórios → Gestão → Indicadores gerenciais** mostra os blocos novos com o nome técnico
+   (*requisicoes_no_prazo*, *requisicoes_integrais*, *ajustes* — a tela de relatórios mostra os blocos pelo nome do
+   campo) e a nota com as réguas.
 
 
 ### G. Fragilidades estruturais que continuam de pé
@@ -15336,16 +15502,103 @@ texto virava *"[object Object]"* na transferência por API (agora recusado); a t
 do tipo novo não carregava (agora limpa e avisa — **B268**); e a corrida desativar × movimentar (declarada — **B271**).
 
 
+## Etapa 67 — Os indicadores que faltavam: no prazo, integral, fornecedor e ajustes (2026-10-01)
+
+A especificação pedia, entre os "Indicadores principais", cinco números que o sistema não dava: **quantas requisições
+foram atendidas no prazo**, **quantas foram atendidas por inteiro**, **quanto cada fornecedor erra na quantidade**,
+**quanto cada fornecedor tem reprovado na inspeção** e **quantos ajustes de estoque foram feitos** (agora também por
+motivo, aproveitando o cadastro da etapa anterior). Os cinco tinham dado confiável — medido antes de prometer — e cada um
+traz a régua escrita no próprio relatório. Para o "no prazo" existir de verdade, a requisição ganhou o campo **"Data de
+necessidade"**: nenhuma tela gravava o prazo. E o painel ganhou o cartão **"Requisições no prazo"**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Nenhuma tela informava o prazo da requisição | Campo **"Data de necessidade"** (opcional) na **Nova Requisição de Material** e na cesta **Solicitação de material** (**B282**) |
+| Prazo em qualquer formato entrava (inclusive *DD/MM/AAAA*) | Fora de *AAAA-MM-DD*, ou dia que não existe, é recusado com *"data_necessidade deve estar no formato AAAA-MM-DD"* (**C91**) |
+| Painel com três cartões | Quarto cartão **"Requisições no prazo"** — percentual, ou *"—"* sem nada para medir (**B283**) |
+| Indicadores gerenciais sem prazo, integralidade nem ajustes | Blocos *requisicoes_no_prazo*, *requisicoes_integrais* e *ajustes*, com a régua na nota (**B272–B275**) |
+| Ajustes só no histórico, linha a linha | Relatório **Ajustes por motivo** (Movimentações): quantos ajustes por motivo do cadastro, por inventário e por texto livre |
+| Nenhum número de fornecedor | Relatório **Qualidade por fornecedor** (Gestão): itens conferidos, divergentes (falta/sobra), inspeções e % de rejeição, com a coluna **"Agrupado por"** (**B277–B279**) |
+| O tempo médio de atendimento contava requisição excluída | Excluída fica fora (**B276**, **C89**) |
+| Entregar em frações (10 × 0,1) deixava a requisição "parcial" e a reserva "ativa" para sempre | Fecha as duas (**C92**; o que já ficou preso: **A31**) |
+
+### As regras, com o cenário exato
+
+Preparação: um material com saldo; um usuário que cria requisições e um almoxarife.
+
+**1. O campo e a recusa.** **Nova Requisição de Material**: o campo **"Data de necessidade"** abre o calendário. Preencha com hoje e
+crie — grava. Sem preencher também cria (requisição sem prazo). Pela API, *"15/09/2026"* ou *"2026-02-30"* →
+*"data_necessidade deve estar no formato AAAA-MM-DD"*.
+
+**2. No prazo.** Entregue **completa** a requisição de prazo hoje → o cartão **"Requisições no prazo"** do painel mostra
+um percentual. Uma requisição com prazo de **dois dias atrás**, ainda aberta ou entregue só em parte, conta **fora do
+prazo**; a de prazo **hoje** que ainda não foi entregue **não entra** na conta (o dia não acabou — **B272**). Sem nenhuma
+requisição com prazo na janela, o cartão mostra *"—"* e *"sem requisições com prazo no período"*.
+
+**3. Integral.** Entregue um dos dois itens de uma requisição e **Encerre** → nos **Indicadores gerenciais**,
+*requisicoes_integrais* conta uma **encerrada incompleta**; a que foi entregue toda conta como **integral** (**B275**).
+
+**4. Excluída sai.** Exclua uma requisição já entregue → ela sai do "no prazo", do "integral" e do tempo médio de
+atendimento (**B276**).
+
+**5. Ajustes por motivo.** Faça um **Ajuste** com o motivo do cadastro "Avaria no manuseio", outro com texto digitado
+"Avaria no manuseio", e estorne um terceiro. **Relatórios → Movimentações → Ajustes por motivo**: uma linha **Cadastro ·
+Avaria no manuseio** (1), uma **Texto livre · Sem motivo do cadastro** (1) — o texto igual ao nome **não** entra na linha
+do cadastro —, e o estornado não aparece. Conferência de inventário com divergência aparece como **Inventário · Ajuste de
+conferência de inventário**. Material inválido no filtro → *"Parâmetro "material_id" deve ser um número inteiro
+positivo"*.
+
+**6. Qualidade por fornecedor.** Receba 10 de um material crítico de um fornecedor com CNPJ, confira **8** e clique
+**"Finalizar Conferência"**; inspecione reprovando 3. **Relatórios → Gestão → Qualidade por fornecedor**: a linha do
+fornecedor mostra 1 item conferido, 1 com divergência (com falta), **% divergência 100**, 1 inspeção com reprovação,
+**% rejeição 100**. Um recebimento só "salvo", sem **Finalizar Conferência**, **não** conta como conferido (**B277**).
+Uma segunda nota do mesmo fornecedor com o CNPJ digitado com pontuação diferente cai na **mesma linha**; uma nota só com
+o nome sai em outra linha, com **"Agrupado por: Nome digitado"** (**B279**).
+
+**7. O que não muda o índice.** Liberar o material reprovado por não conformidade, ou devolvê-lo ao fornecedor, **não**
+muda o % rejeição (**B278**). Fornecedor sem inspeção mostra o índice vazio, não 0 (**B283**).
+
+### O que esta etapa NÃO cobre
+
+1. Consumo previsto × realizado e "consumo não previsto por projeto" — dependem da feature 22 (**D (67)**).
+2. Tempo médio de recebimento — havia dado (a especificação dizia que não; **estava errada**), mas falta medir se é
+   confiável (**D (67)**).
+3. Rejeição por quantidade, a lista das atrasadas no relatório, e conferência feita só pela API (**D (67)**).
+4. O que já ficou preso por entrega fracionada antes desta etapa não se corrige sozinho (**A31**).
+
+### O que a revisão encontrou
+
+A revisão do **plano** pegou dois furos que teriam entregado números mortos ou falsos: **nenhuma tela gravava a data de
+necessidade** — o "% no prazo" mostraria "—" para sempre (daí o campo novo) — e **todo item de recebimento nasce com a
+quantidade recebida igual à esperada**, então "tem quantidade" não prova conferência e o índice de divergência seria
+diluído por item que ninguém contou. A sugestão da própria revisão para "conferido" **também estava errada**: os dois
+sinais que ela propôs falharam na medição (um marca igual o item conferido com diferença; o outro é pulado pelo
+**Aprovar**) — o que ficou é a conferência **finalizada**. A revisão do **código**, executando, não achou nenhum número
+errado; achou **sete** trocas de régua que os testes não pegariam (todas viraram teste), a **reserva que ficava ativa**
+com um resto de conta depois da entrega fracionada (corrigida) e o mesmo fornecedor em três linhas iguais (daí a coluna
+**"Agrupado por"**).
+
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 67 entregue (2026-10-01):** **os indicadores que faltavam da especificação.** Campo **"Data de necessidade"**
+  na criação da requisição; cartão **"Requisições no prazo"** no painel; nos **Indicadores gerenciais**, requisições no
+  prazo, integrais e ajustes; relatórios novos **Ajustes por motivo** e **Qualidade por fornecedor**; o tempo médio de
+  atendimento deixou de contar requisição excluída; a entrega fracionada fecha a requisição e a reserva. **O que é
+  seu:** a consulta **A31** (reservas e requisições presas por entrega fracionada antiga); as decisões **B272 a B283**;
+  os avisos **C89 a C92**; as limitações **(67)** em D e as verificações **(67)** em F. **Próxima: Etapa 68 — áreas
+  especiais de localização com semântica (feature 02) — ver o plano da Etapa 67.**
 
 - **Etapa 66 entregue (2026-10-01):** **motivos de movimentação viram cadastro.** **Configurações → Motivos de
   Movimentação** (só o Administrador mexe); na **Nova Movimentação** o motivo é escolhido da lista do tipo (ou digitado,
   como antes); o livro e o extrato mostram a justificativa; o **Histórico de movimentações** tem as colunas Motivo e
   Justificativa e o filtro **"Motivo (cadastro)"**. **O que é seu:** as decisões **B261 a B271**; os avisos **C87**
   (colunas novas no meio do Excel) e **C88**; as limitações **(66)** em D e as verificações **(66)** em F. **Próxima:
-  Etapa 67 — ver o plano da Etapa 66.**
+  Etapa 67 — ver o plano da Etapa 66.** *(Feita — Etapa 67.)*
 
 - **Etapa 65 entregue (2026-10-01):** **a troca do lugar separado fica registrada também na separação.** A janela de
   **Ajustar Separação** parte do lugar da rodada anterior quando ele tem saldo; trocar de lugar mostra o aviso e pede o

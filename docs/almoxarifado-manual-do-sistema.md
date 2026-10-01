@@ -1356,11 +1356,17 @@ Os status e as passagens permitidas entre eles são fixos; qualquer tentativa fo
 - **Material existente e ativo** → *"Material(is) inexistente(s) ou inativo(s): MAT-001, MAT-007"*.
 - **Tipo da requisição** — 14 opções: Consumo, Ordem de Produção, Ordem de Serviço, Projeto, Montagem, Instalação Externa, Assistência Técnica, Manutenção, Desenvolvimento, Administrativo, Emergencial, Ferramenta, EPI e Material do Cliente. Sem escolha, assume **Consumo**.
 - **Urgência** — três opções, e só elas: **Normal** (*"Normal — atendimento padrão"*), **Urgente** (*"⚠️ Urgente — linha parada"*) e **Crítico** (*"🔴 Crítico — risco de segurança"*). Sem escolha, assume **Normal**. Urgente e Crítico pedem justificativa na tela (*"Justifique a urgência para requisições urgentes/críticas"*). Qualquer outro valor — inclusive a mesma palavra escrita de outro jeito, como *"urgente"* — é recusado, sem gravar nada: *"Urgência inválida: urgente"*. Um rascunho salvo com a urgência escrita de outro jeito tem a forma corrigida quando é **enviado** (*"critico"* vira Crítico); se for outra palavra, o envio é recusado com a mesma frase e ele continua rascunho.
+- **Data de necessidade** — opcional, no campo **"Data de necessidade"** (calendário) da **Nova Requisição de Material**
+  e da cesta **Solicitação de material**. É o **prazo** da requisição: é por ela que a requisição entra no indicador
+  **"Requisições no prazo"** (21d). Em branco, a requisição fica sem prazo. Pela API, ela tem de vir no formato
+  *AAAA-MM-DD* e ser um dia que existe; fora disso — *15/09/2026*, *2026-02-30* — a criação é recusada, sem gravar nada:
+  *"data_necessidade deve estar no formato AAAA-MM-DD"*.
 - **Rascunho é do dono.** Só o solicitante envia o próprio rascunho: *"Apenas o solicitante pode enviar o rascunho"*; e só rascunho pode ser enviado: *"Apenas rascunhos podem ser enviados"*.
 
 **Enviar é o gatilho de tudo.** Enquanto está em Rascunho, a requisição não dispara e-mail, não é avaliada pelas regras de aprovação nem pela alçada de valor, e não é vista pelo almoxarifado. É o envio que a coloca em circulação — e é **no envio** que o sistema decide quais regras de aprovação ela precisa cumprir (8.4).
 
-Existe ainda **"Copiar como Novo Rascunho"**, que gera um rascunho novo com os mesmos itens, tipo e vínculos, sem as quantidades já entregues. A justificativa só é copiada quando o tipo é Emergencial. A urgência **não** é copiada: a cópia nasce **Normal**.
+Existe ainda **"Copiar como Novo Rascunho"**, que gera um rascunho novo com os mesmos itens, tipo e vínculos, sem as quantidades já entregues. A justificativa só é copiada quando o tipo é Emergencial. A urgência **não** é copiada: a cópia nasce **Normal**. A
+data de necessidade também **não** é copiada.
 
 ### 7.3 Requisição emergencial — o que fura e o que não fura
 
@@ -5197,7 +5203,10 @@ regras, que o rodapé do próprio relatório também declara:
 
 O relatório **Indicadores** aceita uma janela em dias (vazia, usa a mesma janela do consumo
 médio da Reposição; valor inválido responde "Parâmetro \"janela_dias\" deve ser um número
-inteiro maior que zero") e traz cinco blocos — materiais de clientes ficam fora de todos:
+inteiro maior que zero") e traz oito blocos. Materiais de clientes ficam fora de giro, cobertura,
+rupturas, valor e ajustes; os blocos de requisição contam a requisição inteira. A tela mostra os
+três blocos de requisição e o de ajustes pelo nome técnico do campo (*requisicoes_no_prazo*,
+*requisicoes_integrais*, *ajustes*); a nota do rodapé traz a régua de cada um.
 
 - **Giro**: valor consumido na janela dividido pelo valor do estoque ATUAL — é uma
   aproximação declarada (o sistema não guarda histórico diário de estoque).
@@ -5210,11 +5219,104 @@ inteiro maior que zero") e traz cinco blocos — materiais de clientes ficam for
 - **Valor do estoque por grupo**: soma do valor por categoria de material.
 - **Tempo médio de atendimento**: horas entre a criação e a **entrega completa** da
   requisição, considerando todo o histórico (não é limitado pela janela); entregas parciais
-  não contam até completarem.
+  não contam até completarem. Requisição excluída fica fora.
+- **Requisições no prazo** (*requisicoes_no_prazo*): entram as requisições cuja **data de
+  necessidade** (7.2) está entre o início da janela e hoje. **No prazo** é a que teve a
+  entrega **completa** até o dia do prazo; **fora do prazo** é todo o resto que entrou —
+  entregue depois do prazo, entregue só em parte, encerrada sem completar, ou ainda aberta com
+  o prazo vencido (inclusive a pendente que ninguém aprovou):
+  > **% no prazo = no prazo ÷ (no prazo + fora do prazo) × 100**, com duas casas.
+  A requisição com prazo **hoje** que ainda não foi entregue **não entra** na conta (o dia não
+  acabou) — aparece à parte, em *em_aberto_no_dia*. A requisição sem data de necessidade, ou com
+  data fora do formato *AAAA-MM-DD* (as antigas), também não entra — as criadas na janela são
+  contadas à parte, em *sem_data_valida*. Rascunho, rejeitada, cancelada e excluída ficam fora de tudo. **As datas
+  comparam o dia em horário universal (UTC):** uma entrega completa feita das 21h à meia-noite
+  de Brasília no dia do prazo já cai no dia seguinte e conta **fora do prazo**. Sem nenhuma
+  requisição para medir, o percentual fica vazio (*—*), nunca 0%.
+- **Requisições integrais** (*requisicoes_integrais*): das requisições **finalizadas** na
+  janela — entregues por completo ou encerradas —, **integral** é a que teve todos os itens
+  entregues na quantidade pedida; a encerrada sem completar conta como *encerradas_incompletas*:
+  > **% integrais = integrais ÷ (integrais + encerradas incompletas) × 100**.
+  Devolução depois da entrega não desfaz a integral. Requisição ainda aberta (parcial ou não)
+  não entra até ser finalizada.
+- **Ajustes** (*ajustes*): quantos lançamentos de ajuste — AJUSTE, AJUSTE_POSITIVO,
+  AJUSTE_NEGATIVO e AJUSTE_INVENTARIO — foram feitos na janela, no total e por tipo. Os
+  estornados não contam (nem o lançamento estornado, nem a linha do estorno); material inativado
+  conta. Conta **lançamentos**, não quantidade: cada material tem sua unidade, e o AJUSTE grava o
+  saldo final, não a diferença. O detalhe por motivo está em **Ajustes por motivo**, abaixo.
 
-O painel inicial do almoxarifado mostra três desses números em cartões (giro, rupturas e
-tempo de atendimento), com a janela na legenda; se os indicadores falharem, apenas os três
-cartões mostram o erro — o restante do painel continua.
+**Entrega em frações completa.** Uma requisição entregue em várias partes fracionárias (dez
+entregas de 0,1, por exemplo) passa a **Entregue** quando a soma alcança o pedido, e a reserva
+do item fecha como **Consumida** — a diferença de arredondamento do computador
+(0,9999999999999999 em vez de 1) não deixa nada pendente.
+
+O painel inicial do almoxarifado mostra quatro desses números em cartões — giro, rupturas,
+tempo de atendimento e **"Requisições no prazo"** —, com a janela na legenda. O cartão de prazo
+tem a legenda *"Janela de N dias · prazo vencido até hoje · entrega completa até o dia"*; sem
+nada para medir, mostra *"—"* e *"sem requisições com prazo no período"*. Se os indicadores
+falharem, apenas os cartões mostram o erro — o restante do painel continua.
+
+### Ajustes por motivo
+
+No grupo **Movimentações**, visível para todo perfil com acesso ao módulo, com filtros opcionais
+**Data início**, **Data fim** e **Material**. Uma linha por motivo, com **Origem**, **Motivo
+(id)**, **Motivo**, **Ajustes** (quantos lançamentos), **Materiais** (quantos materiais
+diferentes) e **Último em**, do maior número de ajustes para o menor:
+
+- **Origem "Cadastro"** — ajustes feitos escolhendo um motivo da lista (6.4b). O motivo aparece
+  pelo **nome atual**: renomear um motivo junta as linhas antigas a ele (o livro continua com o
+  nome da época); motivo desativado aparece com *"(desativado)"*.
+- **Origem "Inventário"** — os ajustes da conclusão de uma conferência de inventário, na linha
+  *"Ajuste de conferência de inventário"* (o inventário não usa a lista de motivos).
+- **Origem "Texto livre"** — todos os outros, juntos em *"Sem motivo do cadastro"* — **mesmo que
+  o texto digitado seja igual ao nome de um motivo** da lista.
+
+Mesma régua do bloco **Ajustes** dos indicadores: os quatro tipos de ajuste, sem os estornados,
+materiais de clientes fora, material inativado conta; as datas comparam o dia em UTC. O total bate
+com o bloco Ajustes e com o **Histórico de movimentações** filtrado pelo grupo AJUSTE **só no mesmo
+recorte** — os indicadores contam uma janela móvel até agora, e o histórico mostra só as 500 linhas
+mais recentes e inclui materiais de clientes. Material inválido no filtro (pela API) é recusado com
+*"Parâmetro "material_id" deve ser um número inteiro positivo"*.
+
+### Qualidade por fornecedor
+
+No grupo **Gestão**, visível para todo perfil com acesso ao módulo, com filtros opcionais **Data
+início** e **Data fim** (sobre a data do recebimento, dia em UTC; data inválida devolve a lista
+vazia). Uma linha por fornecedor:
+
+| Coluna | O que conta |
+|---|---|
+| **Fornecedor** | o nome que veio no recebimento mais recente do grupo |
+| **Agrupado por** | o que juntou a linha: *"CNPJ ⟨como veio⟩"*, *"Cadastro #⟨número⟩"* ou *"Nome digitado"* |
+| **Recebimentos** | quantos recebimentos do fornecedor no período |
+| **Itens conferidos (conferência finalizada)** | itens de recebimentos em que alguém clicou **"Finalizar Conferência"** |
+| **Itens com divergência** / **Com falta** / **Com sobra** | itens conferidos com quantidade recebida diferente da esperada |
+| **% divergência** | itens com divergência ÷ itens conferidos × 100 |
+| **Inspeções** / **Inspeções com reprovação** | inspeções decididas dos itens do fornecedor, e as que reprovaram alguma quantidade |
+| **% rejeição** | inspeções com reprovação ÷ inspeções × 100 |
+
+Como o sistema decide:
+
+- **Conferido é conferência finalizada.** Todo item de recebimento já nasce com a quantidade
+  recebida igual à esperada; só o gesto **"Finalizar Conferência"** prova que alguém contou.
+  Recebimento apenas salvo, ou aprovado sem passar pela conferência, não tem item conferido.
+- **Divergência é uma vez por item**, pelo estado atual da conferência (inclusive o excedente
+  autorizado, que conta como sobra); as não conformidades que a divergência abriu não somam de
+  novo. **No recebimento de pedido, a esperada é o saldo da linha do pedido:** uma entrega
+  parcial combinada com o fornecedor conta como **falta** — a mesma régua do alerta de
+  divergência.
+- **Rejeição é por inspeção.** Só material crítico passa por inspeção; inspeção antiga sem
+  quantidade fica fora. Liberar depois por não conformidade, ou devolver ao fornecedor, **não**
+  muda o índice — ele mede a entrega do fornecedor.
+- **Os índices contam itens e inspeções, não quantidades** — o mesmo fornecedor entrega em
+  unidades diferentes, que não se somam.
+- **O fornecedor é agrupado pelo CNPJ do recebimento** (pontos, barra, hífen e espaços não
+  importam), senão pelo fornecedor do cadastro, senão pelo nome digitado. A mesma empresa pode
+  aparecer em mais de uma linha quando os recebimentos não trazem o mesmo CNPJ — uma nota com
+  CNPJ e outra só com o nome, por exemplo; a coluna **Agrupado por** mostra a diferença. Pelo
+  nome digitado, letras acentuadas em maiúsculas e minúsculas podem separar o mesmo nome.
+- Materiais de clientes ficam fora. Sem item conferido, ou sem inspeção, o índice correspondente
+  fica vazio (*—*), não 0.
 
 ## 22. Como o sistema calcula
 

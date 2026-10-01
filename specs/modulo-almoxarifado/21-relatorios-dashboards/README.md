@@ -1,6 +1,6 @@
 # 21 — Relatórios, Dashboards e Indicadores
 
-> **Status:** 🟡→quase-🟢 — **Etapa 49 (2026-09-30, `492b14f..` fechamento): os relatórios de SALDO que faltavam** — saldo por lote (atribuído + "Sem lote atribuído", que fecha com o físico), séries em estoque, saldos comprometidos, e o histórico de movimentações por grupo, usuário e centro de custo. Com isso **todos os itens de "Relatórios de estoque" e "Relatórios de movimentação" estão pagos** (cinco deles já estavam cobertos por chaves existentes — ver o checklist). **Falta para 🟢:** previsto × realizado (depende da 22) e os indicadores restantes da spec 27 (cada um com a feature dona); o **saldo por endereço** ficou fora de propósito (ver o item). · **Etapa 13 entregue (2026-08-24, `4fdda54..8bb5e52`)**: tela de relatórios dirigida por registro único com gate declarado por chave, exportação XLSX, indicadores gerenciais e cartões no dashboard. · **Spec original:** seção 27
+> **Status:** 🟡→quase-🟢 — **Etapa 67 (2026-10-01, `22c6e57..80bad3b`): os indicadores que faltavam da spec 27** — % de requisições no prazo e integrais (blocos novos do `indicadores` + cartão "Requisições no prazo" no dashboard + campo "Data de necessidade" na criação, que nenhuma tela gravava), nº de ajustes (bloco + chave `ajustes-por-motivo`), divergência e rejeição por fornecedor (chave `qualidade-fornecedores`, com a coluna "Agrupado por"); o tempo de atendimento deixou de contar requisição excluída (C89). O registro tem **25** chaves. **Falta para 🟢:** previsto × realizado / consumo não previsto por projeto (depende da 22) — o único item da spec 27 ainda aberto, e bloqueado; o tempo médio de recebimento continua candidato (ver o item). · Antes: **Etapa 49 (2026-09-30, `492b14f..` fechamento): os relatórios de SALDO que faltavam** — saldo por lote (atribuído + "Sem lote atribuído", que fecha com o físico), séries em estoque, saldos comprometidos, e o histórico de movimentações por grupo, usuário e centro de custo. Com isso **todos os itens de "Relatórios de estoque" e "Relatórios de movimentação" estão pagos** (cinco deles já estavam cobertos por chaves existentes — ver o checklist). **Falta para 🟢:** previsto × realizado (depende da 22) e os indicadores restantes da spec 27 (cada um com a feature dona); o **saldo por endereço** ficou fora de propósito (ver o item). · **Etapa 13 entregue (2026-08-24, `4fdda54..8bb5e52`)**: tela de relatórios dirigida por registro único com gate declarado por chave, exportação XLSX, indicadores gerenciais e cartões no dashboard. · **Spec original:** seção 27
 >
 > **CORREÇÃO DE FATO (regra 5), Etapa 49:** o item do Levantamento dizia "**são 18**" chaves no
 > registro — **estava errado**: eram **19** (a `custo-por-projeto`, `reportRegistry.js:416`, entrou na
@@ -58,7 +58,8 @@ replicar, com controle positivo do próprio padrão de busca.
 ### Levantamento (fazer primeiro)
 - [x] Listar os tipos do mapa `reports` e casar com a spec 27 — `781c784` (**são 18** — *dizia 18; **estava errado**: eram **19** desde a Etapa 14; **22** na Etapa 49; **agora 23**, Etapa 52 (`localizacoes-vazias`)* —, todos no
   `reportRegistry.js` com titulo/categoria/gate/params/colunas/limite/nota declarados por
-  chave; a validação de subida derruba o processo se dispatcher e registro divergirem)
+  chave; a validação de subida derruba o processo se dispatcher e registro divergirem). **Etapa 67: 25 chaves**
+  (`ajustes-por-motivo`, `2ee2f86`; `qualidade-fornecedores`, `1bfe89b`).
 
 ### Relatórios de estoque (spec 27)
 - [x] Saldo por item — coberto pela chave **`estoque-atual`** (existente, `781c784`). **Por localização / almoxarifado: FORA, de propósito.** Saldo segregado por almoxarifado não se propõe (almoxarifado é área física, não filial — CLAUDE.md); um relatório de **onde está fisicamente** precisaria de saldo por endereço confiável, e a Fase 0 da Etapa 49 não mediu se `estoque_saldo_almoxarifado.localizacao_id` é mantido em toda movimentação (letra D da 49). O endereço **padrão** do material já sai em `materiais-sem-endereco` (o inverso).
@@ -77,8 +78,13 @@ replicar, com controle positivo do próprio padrão de busca.
 - [x] Materiais parados / obsoletos — já era da Etapa 11 (aba Estoque Parado)
 - [x] Valor total do estoque / por grupo — quebra **por grupo** entregue na Etapa 13 (`4f8e3fc`); a valorização **por cliente** continua fora (letra B — valorar patrimônio alheio é decisão de negócio)
 - [ ] Consumo por projeto, previsto × realizado (feature 22)
-- [x] Tempo médio de atendimento de requisição — Etapa 13 (entrega completa, todo o histórico); **de recebimento** ficou de fora (nenhum timestamp de ciclo de recebimento confiável foi levantado — entra com a feature 08 se pedirem)
-- [ ] Indicadores da spec 27 restantes: % requisições no prazo/integrais, divergência e rejeição por fornecedor, nº de ajustes — cada um com a feature dona; **valor de sucata já existe** (relatório sucata-financeiro, Etapa 9)
+- [x] Tempo médio de atendimento de requisição — Etapa 13 (entrega completa, todo o histórico); **Etapa 67 (`9126d88`): requisição excluída fica fora** (C89 — a exclusão desfaz as entregas e deixava `data_entrega`; o tempo médio contava entrega desfeita). **De recebimento** continua fora — *este item dizia "nenhum timestamp de ciclo de recebimento confiável foi levantado"; **estava errado** desde a Etapa 6: cada item do recebimento guarda `entrada_estoque_em` (a hora da entrada no estoque). Não entrou na 67 porque a confiabilidade precisa de medição própria (o claim volta a NULL se a entrada falhar) e o indicador não está nos "Indicadores principais" — candidato.*
+- [x] Indicadores da spec 27 restantes: % requisições no prazo/integrais, divergência e rejeição por fornecedor, nº de ajustes — **Etapa 67** (**valor de sucata já existia**, relatório sucata-financeiro, Etapa 9):
+  - **% no prazo e % integrais** — blocos `requisicoes_no_prazo` e `requisicoes_integrais` do `indicadores` (`9126d88`), cartão **"Requisições no prazo"** no dashboard (`e3ed85d`), campo **"Data de necessidade"** na criação (`81e35fd`) e o formato `AAAA-MM-DD` validado no serviço (`fd159b6`). Régua: prazo na janela, entrega completa até o dia do prazo, dia UTC; integral = chegou a ENTREGUE. A entrega fracionada passou a completar (`22c6e57`) e a fechar a reserva (`f8a8980`).
+  - **Nº de ajustes** — bloco `ajustes` do `indicadores` (`9126d88`) e a chave **`ajustes-por-motivo`** (`2ee2f86`): Cadastro / Inventário / Texto livre, sem estornados, material de cliente fora.
+  - **Divergência e rejeição por fornecedor** — chave **`qualidade-fornecedores`** (`1bfe89b`; coluna "Agrupado por" `6da0048`): conferido = conferência FINALIZADA (auditoria `FINALIZAR_CONFERENCIA`); rejeição = inspeções com reprovação ÷ inspeções decididas; agrupado por CNPJ sem pontuação → cadastro → nome.
+  - Testes: `relatoriosIndicadoresSpec27` 28, `relatorioAjustesPorMotivo` 10, `relatorioQualidadeFornecedores` 18, `indicadoresSpec27Integracao` 8 (`571beee`); mutantes da Fase 5 (`d7f22f8`).
+  - **Fora, declarado:** rejeição por quantidade; a lista das atrasadas dentro do relatório (o alerta já lista); o status `REPROVADO` do recebimento por API; conferência só pela API sem finalizar.
 
 ### Frontend
 - [x] Tela `/almoxarifado/relatorios` — `59fb871..12dfd4d` via merge `8fd7977` (dirigida pela
@@ -88,7 +94,9 @@ replicar, com controle positivo do próprio padrão de busca.
   dispatcher; projeção pelas colunas declaradas — SELECT * nunca vaza); **PDF cortado**
   (impressão do navegador; letra D da Etapa 13)
 - [x] Dashboard: 3 cartões (giro/rupturas/atendimento) — `1aa7c13`+`8bb5e52` (falha isolada
-  com retry; legendas com a janela efetiva e a aproximação do giro)
+  com retry; legendas com a janela efetiva e a aproximação do giro). **Etapa 67: quarto cartão "Requisições no
+  prazo"** (`e3ed85d`) — `—` com "sem requisições com prazo no período" quando não há o que medir; sem o bloco, os três
+  de antes.
 
 ### Gestão e indicadores — entregue na Etapa 13 (`4f8e3fc`+`bc1e2de`)
 - [x] Giro (aproximado e DECLARADO: consumo na janela ÷ estoque ATUAL — sem snapshot
@@ -99,8 +107,8 @@ replicar, com controle positivo do próprio padrão de busca.
 - [x] Tempo médio de atendimento de requisição (entrega COMPLETA, todo o histórico — sem
   janela, declarado)
 - [ ] Consumo por projeto previsto×realizado — depende de BOM/OP (feature 22)
-- [ ] Indicadores restantes da spec 27 (% no prazo, divergência por fornecedor etc.) — cada um
-  com a feature dona dos dados
+- [x] Indicadores restantes da spec 27 (% no prazo, divergência por fornecedor etc.) — **Etapa 67**, ver o item da
+  seção "Gestão e indicadores" acima (hashes e régua lá)
 
 ## Regras essenciais + testes de API exigidos
 

@@ -1,8 +1,9 @@
 # Etapa 67 — os indicadores que faltam da spec 27 (feature 21)
 
-> Status: **EM EXECUÇÃO — Fases 0, 1 e 2 feitas; T1 (tronco) FEITA (`22c6e57`, `fd159b6`, `9126d88`); T2 (`2ee2f86`)
-> e T3 FEITAS no servidor (registro com 25 chaves); T4 (`e3ed85d`), T4b (`81e35fd`) e T5 (integração) FEITAS.**
-> Próximo passo: T6 (verificação e fechamento). Feature 21, item `[ ]` "Indicadores da spec 27 restantes: % requisições no prazo/integrais,
+> Status: **FECHADA (2026-10-01).** T1 `22c6e57`, `fd159b6`, `9126d88` · T2 `2ee2f86` · T3 `1bfe89b` · T4 `e3ed85d` ·
+> T4b `81e35fd` · T5 `571beee` · Fase 5 `f8a8980`, `d7f22f8`, `6da0048` (+ plano `e635e2e`, `80bad3b`) · T6 = o commit
+> de fechamento (documentação). **Próxima: Etapa 68 — áreas especiais com semântica (feature 02)**, detalhada no fim.
+> Feature 21, item "Indicadores da spec 27 restantes: % requisições no prazo/integrais,
 > divergência e rejeição por fornecedor, nº de ajustes" (`specs/modulo-almoxarifado/21-relatorios-dashboards/README.md:81`
 > e `:102`); requisito em `specs/modulo-almoxarifado/2026-08-02-requisitos-modulo-almoxarifado.md:1064-1076`
 > ("Indicadores principais").
@@ -422,7 +423,19 @@ ordem: fornecedor
   nada = "Sem fornecedor"); material de cliente fora; NC e devolução ao fornecedor executada não mudam o índice.
   Molde de fluxo: `recebimentoQuarentena.api.test.js` e `inspecaoIntegracao.api.test.js`. Contagem → 24 nesta worktree
   (o merge da Fase 4 fixa **25**).
-- [ ] **T4 (galho, tela) — cartão "Requisições no prazo" no dashboard.** `AlmoxarifadoDashboard.js` (RN-12), contra o
+- [x] **T4 (galho, tela) — FEITA (2026-10-01): `e3ed85d`.** Cartão **"Requisições no prazo"** (nome da RN-12, não o
+  "% no prazo" do briefing — o plano prevalece), lê o mesmo `indicadores` (sem chamada nova); legenda *"Janela de N dias
+  · prazo vencido até hoje · entrega completa até o dia"*; `null` → *"—"* + *"sem requisições com prazo no período"*
+  (o plano não tinha o texto do subtítulo — usado o do briefing); sem o bloco, os três cartões de antes; 500 → o painel
+  de erro dos vizinhos. `AlmoxarifadoDashboard.test.js` 13/13 (4 novos); 4 sabotagens vermelhas.
+- [x] **T4b (galho, tela; nasceu na Fase 2, crítico 1) — FEITA (2026-10-01): `81e35fd`.** Campo opcional **"Data de
+  necessidade"** em `RequisicaoForm.js` ("Nova Requisição de Material") e `RequisicaoMaterialCesta.js` ("Solicitação de
+  material — ⟨setor⟩"); a chave só vai preenchida (o `RequisicaoForm` espalhava o form inteiro — mandaria `""`); erro do
+  servidor literal no toast. Testes novos (os dois componentes não tinham suíte): `RequisicaoForm.test.js` 5,
+  `RequisicaoMaterialCesta.test.js` 4; 6 sabotagens vermelhas. Regra de CSS para o campo da cesta em
+  `SolicitacaoMaterialEscritorioCesta.css` (fora de `almoxarifado/`, só acrescenta). Cliente 1086/1086, build limpo.
+
+  Texto original: **T4 (galho, tela) — cartão "Requisições no prazo" no dashboard.** `AlmoxarifadoDashboard.js` (RN-12), contra o
   contrato do bloco. Teste RTL em `AlmoxarifadoDashboard.test.js`: 75 → "75%"; `null` → "—"; resposta sem o bloco → os
   três cartões de hoje e nenhum quarto; legenda com a janela.
 - [x] **T5 (integração, cruza galhos) — FEITA (2026-10-01), commit desta linha.** Estado real:
@@ -460,7 +473,14 @@ ordem: fornecedor
   fornecedor G conferido sem divergência → linha com 0 e índice vazio; (7) export XLSX das duas chaves; (8) a mesma
   linha F pelo **serviço** (`reportService` direto) igual à da rota. Controle positivo: contar NC na rejeição
   (sabotagem) → (6) vermelho.
-- [ ] **T6 — verificação, Fase 5 e fechamento** (skill `fechar-etapa`): cinco suítes; spec 21 linhas 81 e 102 `[x]`
+- [x] **T6 — verificação, Fase 5 e fechamento — FEITA (2026-10-01), commit de fechamento.** Spec 21: os dois itens
+  `[x]` com hash e o "tempo médio de recebimento" corrigido **dizendo que estava errado** (`entrada_estoque_em` existe
+  desde a Etapa 6); mapa (21, e as linhas 04 e 07 com a nota da etapa); guia (cabeçalho 67 entregue / 68 começando,
+  seção com roteiro de 8 passos); manual (7.2 o campo e a recusa; 21d os três blocos novos, a entrega fracionada, o
+  quarto cartão, e as seções **Ajustes por motivo** e **Qualidade por fornecedor** — a frase antiga "materiais de
+  clientes ficam fora de todos [os blocos]" foi reescrita); novidades (seção 67, **A31**, **B272–B283**, **C89–C92**,
+  **D (67)**, **F (67)**; a D (64) da data DD/MM/AAAA ganhou o "como ficou").
+  Texto original: verificação, Fase 5 e fechamento (skill `fechar-etapa`): cinco suítes; spec 21 linhas 81 e 102 `[x]`
   com hash, e o "Tempo médio de recebimento" corrigido (regra 5 — surpresa 7); mapa; guia (Antes → Agora, roteiro
   clicável: Relatórios → Gestão → Qualidade por fornecedor; Movimentações → Ajustes por motivo; Indicadores; Dashboard);
   letras B272–B283, C89, D (67).
@@ -542,5 +562,82 @@ nem teste fixa as colunas da qualidade (a tela de relatórios projeta pelas `col
   quando os recebimentos não trazem o mesmo CNPJ (por exemplo, uma nota com CNPJ e outra só com o nome)."* Seis
   sabotagens (C1–C6). Descartado: juntar por nome (fornecedores homônimos se misturariam) e mostrar o CNPJ normalizado.
 
-**Próximo passo:** T6 (fechamento pela skill `fechar-etapa`) — registrar B/C acima no documento de novidades e no guia
-(coluna nova da qualidade; reserva do fracionado agora fecha).
+*(Feito na T6: B/C acima registrados no documento de novidades — C92 e A31 para a reserva, B279 para a coluna — e no
+guia.)*
+
+## Divergências do plano (resumo — o detalhe está em cada task)
+
+1. **A Fase 0 mediu "sem validação" e não mediu "ninguém escreve"** a `data_necessidade` — a Fase 2 pegou (task T4b e
+   validação no serviço nasceram ali). O item "validar o formato" saiu de "O que fica de fora".
+2. **A sugestão da Fase 2 para "conferido" estava errada**: `conferencia_quantidade = 1` (a tela grava 0 para o item
+   divergente) e status ≥ `CONFERIDO_ALMOX` (o `/aprovar` pula a conferência) falharam na medição da T3. Ficou a
+   auditoria `FINALIZAR_CONFERENCIA` (B277).
+3. **"CNPJ só dígitos" virou "CNPJ sem pontuação"** (CNPJ alfanumérico) — B279.
+4. **T2 e T3 rodaram no mesmo agente, em sequência, na árvore principal** — não em worktrees paralelas: dividem
+   `reportRegistry.js`, `reportService.js` e o mapa de `extended.js`, e o restauro de sabotagem **por cópia** de um
+   agente apagaria a edição do outro (lição registrada na retro).
+5. **C89 reabriu um bloco que o plano anterior dizia "não se reabre"** — defeito com cenário (B276).
+6. **A T1 não previa a reserva**: o epsilon da M-1 fechava a requisição e deixava a reserva ATIVA por resto de conta —
+   pego pela Fase 5 e corrigido nos três pontos do `stockService` (`f8a8980`); o legado preso vai na **A31**.
+
+## Verificação final (medida)
+
+- Servidor (depois do último commit de código, `6da0048`): `test:api` **250/250** arquivos, `test:almoxarifado` 42/0,
+  `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 5/0.
+- Cliente: **1086/1086** testes (73 suítes) e `CI=true npx react-scripts build` limpo — **medidos em `81e35fd`** (T4b);
+  os commits seguintes não tocam o cliente; a re-medição no fechamento fica com quem commita a documentação.
+
+## Retro (4 números)
+
+- **Rodadas de correção até verde:** 1 (o fix-round da Fase 5).
+- **Achados da revisão:** Fase 2 — 10 (2 críticos, 4 importantes, 4 menores), **1 sugestão errada** (o sinal de
+  conferido — só a medição na T3 a derrubou; dado sobre o fluxo: a revisão do plano propõe sinais sem medi-los). Fase 5 —
+  **0 números errados**, 7 lacunas de teste (mutantes sobreviventes, todos viraram teste) e 2 menores reais (reserva
+  presa; fornecedor em três linhas iguais); **0 ruído**.
+- **Paralelismo:** T2+T3 no mesmo agente (arquivos compartilhados — **lição:** o restauro de sabotagem por cópia torna
+  paralelos inseguros dois agentes no mesmo arquivo, mesmo em funções diferentes); T4/T4b em paralelo com eles, sem
+  retrabalho.
+- **Defeito que escapou da Etapa 66:** nenhum conhecido.
+
+## Próxima tarefa detalhada — Etapa 68: áreas especiais de localização com semântica (feature 02)
+
+**Por que esta.** É o **único** item aberto da feature 02 que não é corte por decisão
+(`specs/modulo-almoxarifado/02-localizacoes-enderecamento/README.md:3` e `:34`) — pagá-lo leva a 02 a 🟢. As outras
+features 🟡 sobram bloqueadas (21 e 22 pela 22; 06 por B11) ou grandes (05: lista de separação como entidade/rota de
+picking; kits). A 08 tem itens menores (e-mail na entrada confirmada, pedido que reabre — B161), candidatos para a 69.
+
+**O item, como a spec o descreve (`02/README.md:34`):** *"Áreas especiais (quarentena, expedição, sucata, devoluções,
+em-terceiros) como localizações tipadas — parcial: `TIPOS_LOCALIZACAO` já inclui 'Área de expedição', 'Área de
+quarentena/inspeção' e 'Área de materiais do cliente'; faltam sucata/devoluções/em-terceiros e, principalmente, nenhuma
+semântica está atrelada aos tipos — hoje são só rótulos."*
+
+**Fase 0 da 68 — medir antes de prometer:**
+1. **Os tipos e quem os lê.** `TIPOS_LOCALIZACAO` (`server/services/almoxarifado/schema.js:21-25`) é servido em
+   `GET /…/opcoes` (`routes/almoxarifado/extended.js:166`) e o Mapa usa os rótulos para ícone/cor
+   (`MapaLocalizacoesAlmoxarifado.js:36-54`). Medir **todo** leitor do `tipo` da localização (grep pelo nome da coluna,
+   não pelo rótulo) — motor, sugestão de posição na entrada (`motivoRecusaEndereco`, Etapa 53), localizações vazias,
+   restrição por tipo de material (3.4 do manual).
+2. **Que semântica cada área pede, medida contra os fluxos que já existem:** quarentena — o material retido em inspeção
+   tem endereço? (`quantidade_em_inspecao` é retenção, não endereço); sucata — `ENTRADA_RETALHO`/sucata (Etapa 9) grava
+   em que endereço?; devoluções — a devolução ao estoque escolhe destino (12.6); em-terceiros — a remessa (8b) é retenção
+   `quantidade_em_terceiros`, sem endereço físico; expedição — `PRONTA_PARA_RETIRADA` tem lugar? Decidir **por área** se
+   a semântica é **recusa** (ex.: entrada comum não vai para área de quarentena), **sugestão** (o destino padrão de um
+   fluxo) ou **só filtro/relatório**. Semântica que contradiz "almoxarifado é área física, não filial" (CLAUDE.md) não
+   entra.
+3. **Dado em produção:** quantas localizações usam cada tipo hoje e se alguma "área" tem saldo de material comum — uma
+   recusa nova pode travar o que já está lá (consulta para a letra A, como a A29).
+4. **A spec original** (`2026-08-02-requisitos-modulo-almoxarifado.md`, seção de localizações) — o que ela pede de cada
+   área, para não inventar regra.
+
+**Contratos que não se reabrem:** o motor de endereço das Etapas 51–56 (`motivoRecusaEndereco`, destino inativo
+recusado, padrão inativa impedida na origem); retenções como colunas do material (quarentena/terceiros **não** viram
+saldo por endereço); a sugestão de posição da Etapa 53.
+
+**Pontos de atenção.**
+- Recusa nova no motor é a mudança mais cara (pode travar processamento de nota, exclusão de requisição e retorno de
+  terceiros sem campo de destino — a lição da Etapa 54, B217): preferir **sugestão/aviso** onde não houver caso claro.
+- Tipos novos (sucata, devoluções, em-terceiros) entram no `TIPOS_LOCALIZACAO` e no Mapa (ícone/cor) — o teste do
+  registro de tipos e a tela do Mapa precisam acompanhar.
+- Metade positiva em cada teste: o fluxo que a área atende continua passando **e** o que ela recusa/avisa aparece.
+- Se a medição mostrar que alguma área não tem fluxo que a use (ex.: em-terceiros sem endereço físico), declarar como
+  **fora por decisão** na spec, com o motivo — a 02 pode ir a 🟢 com o item marcado e o corte escrito.

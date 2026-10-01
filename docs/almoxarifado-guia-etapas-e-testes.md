@@ -1,21 +1,28 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-01 (Etapa 66) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-01 (Etapa 67) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 66) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 67) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-01 (Etapa 66 ENTREGUE · Etapa 67 começando)
+> ## Onde o desenvolvimento está — 2026-10-01 (Etapa 67 ENTREGUE · Etapa 68 começando)
 >
-> **O desenvolvimento parou aqui: Etapa 66 fechada, Etapa 67 começando — 2026-10-01.** A **Etapa 66 (motivos de
+> **O desenvolvimento parou aqui: Etapa 67 fechada, Etapa 68 começando — 2026-10-01.** A **Etapa 67 (os indicadores
+> que faltavam)**: a requisição ganhou o campo **"Data de necessidade"** (na **Nova Requisição de Material** e na cesta
+> **Solicitação de material**); o painel do almoxarifado tem o cartão **"Requisições no prazo"**; os **Indicadores
+> gerenciais** contam requisições no prazo, integrais e ajustes; e há dois relatórios novos — **Ajustes por motivo**
+> (Movimentações) e **Qualidade por fornecedor** (Gestão). O tempo médio de atendimento deixou de contar requisição
+> excluída, e a entrega em frações fecha a requisição e a reserva. **Próxima etapa, já começando: 68 — áreas
+> especiais de localização com semântica** (feature 02: quarentena, expedição, sucata, devoluções e em-terceiros como
+> tipos de localização que o sistema entende, não só rótulos; ver *"Próxima tarefa detalhada"* no plano da Etapa 67).
+>
+> **Etapas 1 a 20 e 22 a 67 completas.**
+>
+> **Etapa 66, 2026-10-01.** A **Etapa 66 (motivos de
 > movimentação viram cadastro)**: em **Configurações → Motivos de Movimentação** o Administrador mantém a lista de
 > motivos, cada um valendo para os tipos marcados; em **Movimentações → Nova Movimentação** o campo **Motivo** vira uma
 > lista com os motivos do tipo e *"Outro (digitar)"* (com **"Complemento (opcional)"**); o livro e o extrato mostram a
 > justificativa; e **Relatórios → Histórico de movimentações** tem as colunas Motivo e Justificativa e o filtro
-> **"Motivo (cadastro)"**. **Próxima etapa, já começando: 67 — os indicadores que faltam da spec 27** (feature 21:
-> % de requisições no prazo e integrais, divergência e rejeição por fornecedor, número de ajustes — por motivo; ver
-> *"Próxima tarefa detalhada"* no plano da Etapa 66).
->
-> **Etapas 1 a 20 e 22 a 66 completas.**
+> **"Motivo (cadastro)"**. Próxima: 67 *(feita — acima)*.
 >
 > **Etapa 65, 2026-10-01.** A **Etapa 65 (a troca do lugar separado fica registrada também na separação)**: em
 > **Ajustar Separação**, o "Sai de" parte do lugar da rodada anterior quando ele ainda tem saldo; trocar de lugar avisa
@@ -5016,6 +5023,64 @@ que ele não tinha como repetir com sucesso garantido.
 - **Número de série de material** — continua sendo **digitado pelo operador** e de propósito não
   passa por este gerador. Retentar com outro número gravaria algo que ninguém digitou.
 - **Números de outros módulos do CRM** — a varredura foi do almoxarifado.
+
+---
+
+## Etapa 67 — Os indicadores que faltavam: no prazo, integral, fornecedor e ajustes (ENTREGUE — 2026-10-01)
+
+**O que mudou, em uma frase:** o sistema passa a responder "quantas requisições atendemos no prazo e por inteiro",
+"quanto cada fornecedor erra e tem reprovado" e "quantos ajustes fizemos, e por quê" — e a requisição ganha o campo de
+prazo que faltava para a primeira pergunta.
+
+**O problema que ela resolve.** A especificação pedia esses números entre os "Indicadores principais" e nenhum existia.
+Pior: o prazo da requisição só entrava pela API — nenhuma tela o pedia —, então "% no prazo" nunca teria dado.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Nenhuma tela pedia o prazo da requisição | Campo **"Data de necessidade"** (opcional) na **Nova Requisição de Material** e na cesta **Solicitação de material** |
+| Painel com três cartões | Quarto cartão **"Requisições no prazo"** (percentual, ou *"—"* quando não há o que medir) |
+| Indicadores gerenciais sem prazo nem ajustes | Blocos de requisições no prazo, integrais e ajustes, com a régua na nota |
+| Ajustes só linha a linha no histórico | Relatório **Ajustes por motivo** (Movimentações) |
+| Nenhum número por fornecedor | Relatório **Qualidade por fornecedor** (Gestão), com a coluna **"Agrupado por"** |
+| Tempo médio de atendimento contava requisição excluída | Excluída fica fora |
+| Entrega em frações (10 × 0,1) ficava "parcial" para sempre e a reserva "ativa" | Completa a requisição e fecha a reserva |
+
+### Roteiro de teste manual (≈10 min)
+
+**Preparação.** Um material com saldo, um material **crítico** (com inspeção ligada na configuração), um fornecedor com
+CNPJ. Entre como **Administrador** do almoxarifado.
+
+1. **O campo.** **Nova Requisição de Material**: preencha **"Data de necessidade"** com hoje, um item, e crie. Crie outra
+   sem a data — também passa (sem prazo).
+2. **O cartão vazio.** Antes de entregar, abra o painel do almoxarifado: o cartão **"Requisições no prazo"** mostra
+   *"—"* e *"sem requisições com prazo no período"* (a de prazo hoje, ainda não entregue, não entra na conta).
+3. **No prazo.** Aprove, separe e entregue **completa** a requisição de prazo hoje. Volte ao painel: o cartão mostra um
+   percentual (100% se for a única).
+4. **Integral.** Crie uma requisição com dois itens, entregue só um e clique **Encerrar**. Em **Relatórios → Gestão →
+   Indicadores gerenciais**, o bloco *requisicoes_integrais* conta uma **encerrada incompleta**.
+5. **Ajustes por motivo.** Faça um **Ajuste** escolhendo um motivo do cadastro e outro digitando o mesmo texto à mão.
+   **Relatórios → Movimentações → Ajustes por motivo**: uma linha **Cadastro** com o nome do motivo e uma **Texto livre ·
+   Sem motivo do cadastro** — o texto igual ao nome não entra na linha do cadastro. Estorne um dos dois e reabra: ele
+   some da conta.
+6. **Qualidade por fornecedor.** Registre um recebimento do material crítico (10 unidades) do fornecedor com CNPJ,
+   confira **8** e clique **"Finalizar Conferência"**; siga o recebimento até a entrada (o material crítico fica
+   retido para inspeção) e, na inspeção, reprove 3. **Relatórios → Gestão →
+   Qualidade por fornecedor**: a linha do fornecedor mostra 1 item conferido, 1 com divergência (com falta), **% divergência
+   100**, 1 inspeção com reprovação e **% rejeição 100**; **"Agrupado por"** mostra *"CNPJ …"*.
+7. **Só "salvar" não é conferir.** Em outro recebimento, apenas **Salvar Conferência** (sem **Finalizar**): ele não
+   conta como item conferido.
+8. **Exportar.** Nos dois relatórios novos, **Exportar** gera o Excel com as mesmas colunas da tela.
+
+### O que esta etapa NÃO cobre
+
+- **Consumo previsto × realizado** por projeto — depende da lista de materiais e ordem de produção, que o sistema não tem.
+- **Tempo médio de recebimento** — há dado, mas falta medir se é confiável.
+- A rejeição é **por inspeção**, não por quantidade; entrega parcial combinada com o fornecedor conta como falta (está
+  na nota do relatório).
+- Entrega às **22h30 de Brasília** no dia do prazo conta **fora** do prazo — o dia é o dia em UTC (nota do relatório).
+- Requisições e reservas que ficaram presas por entrega fracionada **antes** desta etapa não se corrigem sozinhas.
 
 ---
 
