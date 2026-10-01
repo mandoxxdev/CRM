@@ -1,6 +1,6 @@
 # Etapa 68 — áreas especiais de localização com semântica (feature 02)
 
-> Status: **Fases 0 e 1 feitas (2026-10-01) — plano escrito, NÃO revisado (Fase 2 pendente), nenhum código.**
+> Status: **Fases 0, 1 e 2 feitas; T1–T6 implementadas; Fase 5 (revisão adversarial + fix-round) feita (2026-10-01). Falta T7 (fechamento).**
 > Feature 02, item *"Áreas especiais (quarentena, expedição, sucata, devoluções, em-terceiros) como localizações
 > tipadas"* (`specs/modulo-almoxarifado/02-localizacoes-enderecamento/README.md:34`), o único item aberto da 02 que não
 > é corte por decisão (`:3`). Requisito: `specs/modulo-almoxarifado/2026-08-02-requisitos-modulo-almoxarifado.md:84-108`
@@ -419,7 +419,38 @@ e deixa de sugerir a área; nada é recusado nem movido. (d) com linhas — a en
 
 ## Próxima tarefa detalhada
 
-Fase 2 desta etapa: feita (secao abaixo). T1-T6 feitas (`14cc17a`, `d94dc24`, `e79d8b5`, `0d44607`, `fe4e24f`, T6). **Proxima: T7 — fechamento** pela skill `fechar-etapa`, com a lista do item T7 acima; o teste de integracao da T6 e a prova citavel no guia (roteiro: criar area de sucata + posicao, transferir, sucatear, ver a area vazia no Mapa). Pontos de atencao: o guia **nao** promete quarentena -> inspecao -> sucata (letra D) e declara que outras saidas (PERDA, "Sai de") ainda drenam a area de sucata (letra C da Fase 2).
+Fase 2 desta etapa: feita (secao abaixo). T1-T6 feitas (`14cc17a`, `d94dc24`, `e79d8b5`, `0d44607`, `fe4e24f`, T6). Fase 5 (revisao adversarial + fix-round): feita (secao abaixo; `588f62b`, `dfc99eb`). **Proxima: T7 — fechamento** pela skill `fechar-etapa`, com a lista do item T7 acima **mais a letra B da Fase 5** (ancestral inativo encerra a subida da area efetiva no servidor, alinhado ao Mapa; descartado: o Mapa subir pelo inativo); o teste de integracao da T6 e a prova citavel no guia (roteiro: criar area de sucata + posicao, transferir, sucatear, ver a area vazia no Mapa). Pontos de atencao: o guia **nao** promete quarentena -> inspecao -> sucata (letra D) e declara que outras saidas (PERDA, "Sai de") ainda drenam a area de sucata (letra C da Fase 2).
+
+## Fase 5 — revisão adversarial do código: 0 críticos, 2 importantes (teste), 1 menor (corrigido) — fix-round feito
+
+Sondas da revisão no scratchpad da sessão (`sonda68r-outraarea.js`, `sonda68r-corrida.js`,
+`sonda68r-corrida-estorno.js`, `sonda68r-paiinativo.js`, preload `sonda68r-sabota.js`).
+
+- [x] **IMPORTANTE (teste) — a suíte não sabia distinguir sucata de outra área** (`588f62b`). Trocar
+  `if (area && area.chave === 'SUCATA')` por `if (area)` em `origemAreaDeSucata` passava as 10 da
+  `sucateamentoAreaSucata`. Novo negativo: expedição cobre (EXP:8, P:3, sucata de 3) → origem nula, EXP=8, P=0.
+  Controle positivo: a sabotagem derruba **só** esse teste (11/12, "a expedicao virou origem da sucata").
+- [x] **IMPORTANTE (teste) — `origemEstrita` sem teste** (`588f62b`). A corrida é injetada trocando
+  `stock.carregarArvoreLocalizacoes` (único ponto entre a consulta de saldos e o motor) por uma que transfere S→X
+  antes de devolver: a 2ª perna toma o 400 literal ("O saldo em <S> (0) não cobre a quantidade (4) — a saída
+  tiraria de outros endereços"), a assinatura é compensada (SOLICITADO, `aprovador_almox_id` nulo, nenhuma SUCATA no
+  livro), a retentativa baixa de P sem origem e o estorno devolve para P. Controle positivo: `origemEstrita: false`
+  derruba só esse teste (11/12, "a baixa passou com a origem vazia" — o livro gravaria origem S com material de P).
+- [x] **MENOR (corrigido) — servidor e Mapa divergiam com área-pai INATIVA** (`dfc99eb`). O servidor subia para o pai
+  desativado (o filho seguia "sucata" no aviso, fora da sugestão e virava origem do sucateamento); o Mapa, que só lista
+  ativas, parava. **Decisão (reversível, letra B na T7): ancestral INATIVO encerra a subida no servidor** — uma área
+  desativada não dá semântica a ninguém; a PRÓPRIA localização vale pelo tipo mesmo inativa (o `aviso-area` de uma
+  inativa continua respondendo a área — Etapa 54). Descartado: o cliente passar a subir pelo pai inativo (o Mapa
+  teria de receber as inativas só para isso, e a área desativada continuaria pesando em sugestão e sucata).
+  `carregarArvoreLocalizacoes` passa a ler `ativo`; `resolverAreaEfetiva` para quando o próximo ancestral tem
+  `ativo` ≠ 1 (`ativo` ausente no Map conta como ativo). O comentário do Mapa ("mesma regra do servidor") volta a ser
+  verdade e diz desde quando. Teste `(9)` da `areasEspeciaisIntegracao`, pela rota: com o pai ativo o filho é sucata
+  (controle), `DELETE` da área → aviso `{ area: null, aviso: null }`, sugestão propõe o filho como `JA_TEM_O_MATERIAL`,
+  sucateamento de 5 sai sem origem (P 10→5, filho intacto com 5). Controles positivos: tirar a parada (S3) e tirar
+  `ativo` da carga da árvore (S4) derrubam o (9); parar também na própria inativa (S5) derruba "inativos respondem
+  normal" da `localizacaoAreasEspeciais`.
+- Verificacao do fix-round: `test:api` 253/253 arquivos OK; `test:almoxarifado` 42/0; `test:validation` 4/0; `test:safealter` 3/0;
+  `test:sqlite` OK; cliente 74 suites / 1105 testes; build `CI=true` OK.
 
 ## Fase 2 — revisão do plano: 0 críticos, 5 importantes, 9 menores → plano revisto (vale sobre o texto acima)
 
