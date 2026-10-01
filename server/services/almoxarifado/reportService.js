@@ -309,6 +309,118 @@ async function relatorioAjustesPorMotivo(db, filters = {}) {
   return rows.map((r) => ({ ...r, ajustes: Number(r.ajustes) || 0, materiais: Number(r.materiais) || 0 }));
 }
 
+/**
+ * Etapa 67 (T3): CNPJ sem pontuacao (ponto, barra, hifen, espaco) e em maiusculas — nao "so
+ * digitos": o CNPJ alfanumerico (2026) tem letras, e o SQLite nao tem regex para tirar o resto.
+ */
+function cnpjNormalizadoSql(r = 'r') {
+  return `UPPER(REPLACE(REPLACE(REPLACE(REPLACE(TRIM(COALESCE(${r}.fornecedor_cnpj, '')), '.', ''), '/', ''), '-', ''), ' ', ''))`;
+}
+
+/**
+ * Etapa 67 (T3, D8 revisto na Fase 2): a CHAVE do fornecedor no recebimento — CNPJ normalizado,
+ * senao `fornecedor_id`, senao o nome digitado (trim + espacos duplos colapsados + lower, que no
+ * SQLite so dobra ASCII), senao "sem". O CNPJ vem primeiro porque o pedido grava `fornecedor_id` e a
+ * NF avulsa so nome + CNPJ — pelo id, o mesmo fornecedor sairia em duas linhas. Le o SNAPSHOT do
+ * recebimento, sem JOIN no cadastro core (o harness e uma base sem Compras nao tem o mesmo dado).
+ */
+function chaveFornecedorSql(r = 'r') {
+  const cnpj = cnpjNormalizadoSql(r);
+  return `CASE WHEN ${cnpj} <> '' THEN 'cnpj:' || ${cnpj}
+    WHEN ${r}.fornecedor_id IS NOT NULL THEN 'id:' || ${r}.fornecedor_id
+    WHEN TRIM(COALESCE(${r}.fornecedor_nome, '')) <> ''
+      THEN 'nome:' || LOWER(REPLACE(REPLACE(TRIM(${r}.fornecedor_nome), '  ', ' '), '  ', ' '))
+    ELSE 'sem' END`;
+}
+
+/**
+ * Etapa 67 (T3, RN-08/RN-09/RN-10, D6-D9): "Qualidade por fornecedor" — divergencia de recebimento
+ * e indice de rejeicao, uma linha por fornecedor (chaveFornecedorSql), periodo pelo DIA de
+ * `r.data_recebimento` (UTC; data invalida devolve vazio, como o historico).
+ *
+ * CONFERIDO = o recebimento teve a conferencia FINALIZADA (auditoria FINALIZAR_CONFERENCIA, que so
+ * o gesto "Finalizar Conferencia" do workflow escreve) e o item tem quantidade recebida. Fase 2,
+ * critico 2, medido na T3: todo item NASCE com `quantidade_recebida` (o INSERT grava
+ * `quantidade_recebida || qtd`); `conferencia_quantidade` nao serve porque a tela grava
+ * `recebida === esperada` (o divergente fica 0, igual ao default); status >= CONFERIDO_ALMOX nao
+ * serve porque o /aprovar e o `encaminhar_compras` saem de RECEBIDO pulando a conferencia.
+ *
+ * Divergencia: a MESMA regua do alerta DIVERGENCIA_RECEBIMENTO (divergenciaRealSql, ε 1e-9) sobre
+ * o estado ATUAL do item, uma vez por item — as NCs de quantidade (varias por item ao longo do
+ * tempo) nao somam. Esperada = a gravada no item: no recebimento de pedido e o SALDO da linha, entao
+ * entrega parcial combinada conta como falta (declarado na nota). Rejeicao: inspecoes decididas
+ * (com quantidade) e as com reprovada > ε — contadas por SUBCONSULTA por item, nunca JOIN item x
+ * inspecao na agregacao (RN-10: o item com duas inspecoes contaria duas vezes nos itens). NC,
+ * devolucao ao fornecedor e status REPROVADO do recebimento nao entram (D7). Material de cliente
+ * fora (D9): recebimento so de material de cliente nao gera linha (M-2).
+ *
+ * Toda coluna sai do SQL (a varredura do registro mede por TEMP VIEW): percentuais com
+ * ROUND(100.0 * x / NULLIF(y, 0), 2) — NULL sem denominador (D12). Sem CTE (a varredura so captura
+ * SELECT). O nome exibido e o do recebimento mais recente do grupo: MAX sobre um carimbo de
+ * largura fixa (data + id) concatenado ao nome, recortado depois.
+ */
+async function relatorioQualidadeFornecedores(db, filters = {}) {
+  const params = [];
+  let filtro = '';
+  if (filters.data_inicio) { filtro += ' AND DATE(r.data_recebimento) >= ?'; params.push(filters.data_inicio); }
+  if (filters.data_fim) { filtro += ' AND DATE(r.data_recebimento) <= ?'; params.push(filters.data_fim); }
+  const cnpj = cnpjNormalizadoSql('r');
+  const rows = await dbAll(db, `
+    SELECT
+      SUBSTR(MAX(x.carimbo || x.nome_exibido), 32) AS fornecedor,
+      COUNT(DISTINCT x.recebimento_id) AS recebimentos,
+      SUM(x.conferido) AS itens_conferidos,
+      SUM(x.conferido * x.divergente) AS itens_divergentes,
+      SUM(x.conferido * x.falta) AS itens_com_falta,
+      SUM(x.conferido * x.sobra) AS itens_com_sobra,
+      ROUND(100.0 * SUM(x.conferido * x.divergente) / NULLIF(SUM(x.conferido), 0), 2) AS percentual_divergencia,
+      SUM(x.inspecoes) AS inspecoes,
+      SUM(x.inspecoes_com_reprovacao) AS inspecoes_com_reprovacao,
+      ROUND(100.0 * SUM(x.inspecoes_com_reprovacao) / NULLIF(SUM(x.inspecoes), 0), 2) AS indice_rejeicao
+    FROM (
+      SELECT
+        ${chaveFornecedorSql('r')} AS chave,
+        printf('%-19.19s%012d', COALESCE(r.data_recebimento, ''), r.id) AS carimbo,
+        COALESCE(NULLIF(TRIM(r.fornecedor_nome), ''),
+          CASE WHEN ${cnpj} <> '' THEN 'CNPJ ' || ${cnpj}
+               WHEN r.fornecedor_id IS NOT NULL THEN 'Fornecedor #' || r.fornecedor_id
+               ELSE 'Sem fornecedor' END) AS nome_exibido,
+        ri.recebimento_id AS recebimento_id,
+        CASE WHEN ri.quantidade_recebida IS NOT NULL AND EXISTS (
+               SELECT 1 FROM auditoria_log_almoxarifado a
+               WHERE a.entidade = 'recebimento' AND a.entidade_id = r.id AND a.acao = 'FINALIZAR_CONFERENCIA')
+             THEN 1 ELSE 0 END AS conferido,
+        CASE WHEN ri.quantidade_recebida IS NOT NULL
+               AND ${divergenciaRealSql('ri.quantidade_recebida - ri.quantidade_esperada')} THEN 1 ELSE 0 END AS divergente,
+        CASE WHEN ri.quantidade_recebida - ri.quantidade_esperada < -${EPS_SALDO} THEN 1 ELSE 0 END AS falta,
+        CASE WHEN ri.quantidade_recebida - ri.quantidade_esperada > ${EPS_SALDO} THEN 1 ELSE 0 END AS sobra,
+        (SELECT COUNT(*) FROM inspecoes_recebimento_almoxarifado i
+          WHERE i.recebimento_item_id = ri.id
+            AND (i.quantidade_aprovada IS NOT NULL OR i.quantidade_reprovada IS NOT NULL)) AS inspecoes,
+        (SELECT COUNT(*) FROM inspecoes_recebimento_almoxarifado i
+          WHERE i.recebimento_item_id = ri.id AND i.quantidade_reprovada > ${EPS_SALDO}) AS inspecoes_com_reprovacao
+      FROM recebimentos_material_itens_almoxarifado ri
+      JOIN recebimentos_material_almoxarifado r ON r.id = ri.recebimento_id
+      JOIN materiais_almoxarifado m ON m.id = ri.material_id
+      WHERE m.proprietario_cliente_id IS NULL${filtro}
+    ) x
+    GROUP BY x.chave
+    ORDER BY fornecedor, x.chave`, params);
+  const n = (v) => Number(v) || 0;
+  return rows.map((r) => ({
+    fornecedor: r.fornecedor,
+    recebimentos: n(r.recebimentos),
+    itens_conferidos: n(r.itens_conferidos),
+    itens_divergentes: n(r.itens_divergentes),
+    itens_com_falta: n(r.itens_com_falta),
+    itens_com_sobra: n(r.itens_com_sobra),
+    percentual_divergencia: r.percentual_divergencia === null ? null : Number(r.percentual_divergencia),
+    inspecoes: n(r.inspecoes),
+    inspecoes_com_reprovacao: n(r.inspecoes_com_reprovacao),
+    indice_rejeicao: r.indice_rejeicao === null ? null : Number(r.indice_rejeicao),
+  }));
+}
+
 // Revisao final da Etapa 10b: (1) so conferencia CONCLUIDO — sem o filtro, este relatorio
 // vazava quantidade_sistema/divergencia/contado_por de contagem EM ANDAMENTO e desfazia o modo
 // cego e a dupla contagem por fora (relatorio de divergencia sobre contagem inacabada nem faz
@@ -770,7 +882,7 @@ module.exports = {
   relatorioSolicitacoesCompraPendentes, relatorioSucataFinanceiro, relatorioIndicadores,
   relatorioCustoProjeto,
   // Etapa 67: regua unica dos ajustes (consumida pela chave ajustes-por-motivo)
-  ajustesWhereSql, relatorioAjustesPorMotivo,
+  ajustesWhereSql, relatorioAjustesPorMotivo, relatorioQualidadeFornecedores,
   // Etapa 49
   relatorioSaldoPorLote, relatorioSeriesEmEstoque, relatorioSaldosComprometidos,
 };

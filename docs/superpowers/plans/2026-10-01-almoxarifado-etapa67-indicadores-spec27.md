@@ -1,7 +1,7 @@
 # Etapa 67 — os indicadores que faltam da spec 27 (feature 21)
 
-> Status: **EM EXECUÇÃO — Fases 0, 1 e 2 feitas; T1 (tronco) FEITA (`22c6e57`, `fd159b6`, `9126d88`).** Próximo passo:
-> T2 e T3 em worktrees paralelas + T4 e T4b (tela). Feature 21, item `[ ]` "Indicadores da spec 27 restantes: % requisições no prazo/integrais,
+> Status: **EM EXECUÇÃO — Fases 0, 1 e 2 feitas; T1 (tronco) FEITA (`22c6e57`, `fd159b6`, `9126d88`); T2 (`2ee2f86`)
+> e T3 FEITAS no servidor (registro com 25 chaves).** Próximo passo: T4 e T4b (tela), depois T5 (integração) e T6. Feature 21, item `[ ]` "Indicadores da spec 27 restantes: % requisições no prazo/integrais,
 > divergência e rejeição por fornecedor, nº de ajustes" (`specs/modulo-almoxarifado/21-relatorios-dashboards/README.md:81`
 > e `:102`); requisito em `specs/modulo-almoxarifado/2026-08-02-requisitos-modulo-almoxarifado.md:1064-1076`
 > ("Indicadores principais").
@@ -380,7 +380,42 @@ ordem: fornecedor
   baldes; renomear junta; texto igual ao nome não cai no motivo; desativado mostra o sufixo), RN-07 (paridade com
   `indicadores` e com `historico-movimentacoes?grupo=AJUSTE`), 400 literal de `material_id`, export XLSX com os
   cabeçalhos. Contagem do `relatoriosRegistro` → 24 nesta worktree.
-- [ ] **T3 (galho, servidor) — chave `qualidade-fornecedores`.** Registro + `reports` + função. Testes
+- [x] **T3 (galho, servidor) — FEITA (2026-10-01), commit desta linha.** Estado real:
+  - **"Conferido" medido (Fase 2, crítico 2) — os dois sinais sugeridos foram DESCARTADOS:**
+    `conferencia_quantidade = 1` não serve porque a tela grava `recebida === esperada`
+    (`RecebimentosAlmoxarifado.js`, `salvarConferencia`) — o item divergente fica 0, igual ao default, e o índice
+    seria zero por construção; status ≥ `CONFERIDO_ALMOX` não serve porque `POST /recebimentos/:id/aprovar` leva
+    `RECEBIDO` direto a `APROVADO` e `encaminhar_compras` aceita `RECEBIDO`. **Escolhido:** a auditoria
+    `FINALIZAR_CONFERENCIA` do recebimento (`auditoria_log_almoxarifado`, `entidade='recebimento'`), que só o gesto
+    "Finalizar Conferência" (`avancarWorkflow`) escreve e que existe desde o primeiro commit do módulo; mais
+    `quantidade_recebida IS NOT NULL`. Limite declarado: `/conferir` com `status` no body (só API) não audita e
+    não conta. Provado: criado e nunca conferido = 0; só "Salvar Conferência" = 0; `/aprovar` direto = 0;
+    finalizado = conta, inclusive o divergente com `conferencia_quantidade = 0`.
+  - Chave do fornecedor: CNPJ **sem pontuação** (ponto, barra, hífen, espaço; em maiúsculas — não "só dígitos",
+    porque o CNPJ alfanumérico tem letras e o SQLite não tem regex), senão `fornecedor_id`, senão nome
+    (trim + espaços duplos colapsados + lower ASCII), senão "Sem fornecedor". Nome exibido = o do recebimento mais
+    recente (`MAX` sobre carimbo de largura fixa data+id, recortado). Funções `chaveFornecedorSql`/
+    `cnpjNormalizadoSql` (internas).
+  - Inspeções por subconsulta por item (RN-10); percentuais `ROUND(100.0*x/NULLIF(y,0),2)` no SQL; sem CTE.
+  - Teste `relatorioQualidadeFornecedores.api.test.js` **16/16**. Contagem do registro **25** (`relatoriosRegistro`
+    20/20, a varredura TEMP VIEW pega as 10 colunas).
+  - Controle positivo: 14 sabotagens, **14 vermelhas** no cenário nomeado (qualquer auditoria / régua antiga
+    `recebida IS NOT NULL` → [conferido] e [conferido −]; `conferencia_quantidade = 1` → [conferido] e [RN-08];
+    id antes do CNPJ → [D8 CNPJ]; sem lower → [D8 nome]; nome do mais antigo → [D8 id]; JOIN item × inspeção →
+    [RN-09 −] e [RN-10]; legada contando → [RN-09 −]; NC na rejeição → [RN-09 +] e [D7]; cliente dentro → [D9];
+    0 em vez de null na divergência → [conferido]; 0 em vez de null na rejeição → [RN-08]; qualquer decidida
+    reprovando → [RN-09 −]; `<=`→`<` → todos; sobra sem epsilon → [RN-08]).
+  - **Divergências do texto do plano:** (1) a coluna `itens_conferidos` tem o rótulo
+    **"Itens conferidos (conferência finalizada)"** (a coluna diz a régua); (2) a `nota` é a do plano reescrita pela
+    Fase 2 — conferido = conferência finalizada, entrega parcial combinada conta como falta, chave pelo CNPJ, nome do
+    recebimento mais recente, data inválida devolve vazio; (3) "CNPJ só dígitos" virou "CNPJ sem pontuação".
+  - Fluxo do teste: `/aprovar` depois do `finalizar_conferencia` (o caminho de API que leva o crítico à quarentena
+    sem os dados fiscais do `/processar`); duas linhas semeadas e declaradas (inspeção legada sem quantidade; segunda
+    inspeção do mesmo item, M-4).
+  - Fica para a letra D/E (não corrigido): o `|| qtd` do INSERT do item (`receiptService.js`, `criarRecebimento`)
+    transforma `quantidade_recebida: 0` em `qtd` — contrato do recebimento.
+
+  Texto original: **T3 (galho, servidor) — chave `qualidade-fornecedores`.** Registro + `reports` + função. Testes
   `relatorioQualidadeFornecedores.api.test.js`: RN-08, RN-09, RN-10 com as duas metades; agrupamento D8 (mesmo
   `fornecedor_id` com nomes diferentes = uma linha; só nome, com espaços e maiúsculas ASCII diferentes = uma linha; sem
   nada = "Sem fornecedor"); material de cliente fora; NC e devolução ao fornecedor executada não mudam o índice.

@@ -323,6 +323,48 @@ const RELATORIOS = {
     ],
     fn: null,
   },
+  // Etapa 67 (T3, RN-08/09/10): divergencia de recebimento e indice de rejeicao por fornecedor
+  // (spec 27). Gate null (D10): recebimentos-pendentes ja mostra fornecedor sem gate. A nota e a
+  // literal do plano REVISTA pela Fase 2: "conferido" e a conferencia FINALIZADA (o sinal medido na
+  // T3), a chave do fornecedor comeca pelo CNPJ, e a entrega parcial combinada esta declarada.
+  'qualidade-fornecedores': {
+    titulo: 'Qualidade por fornecedor',
+    categoria: 'Gestão',
+    acao: null,
+    exportavel: true,
+    nota: 'Período pela data do recebimento (DIA em UTC; data inválida devolve a lista vazia). Item conferido '
+      + 'é o de recebimento cuja conferência foi FINALIZADA (botão Finalizar Conferência); recebimento '
+      + 'aprovado sem passar pela conferência não tem item conferido. Divergência: itens conferidos com '
+      + 'quantidade recebida diferente da esperada (falta ou sobra, inclusive o excedente autorizado), '
+      + 'contados uma vez por item pelo estado atual da conferência — as não conformidades abertas por ela '
+      + 'não somam de novo. No recebimento de pedido a esperada é o saldo da linha do pedido: entrega parcial '
+      + 'combinada com o fornecedor conta como falta (a mesma régua do alerta de divergência). Rejeição: '
+      + 'inspeções com alguma quantidade reprovada sobre as inspeções decididas; só material crítico passa por '
+      + 'inspeção, e inspeção antiga sem quantidade fica fora. Liberação posterior por não conformidade e '
+      + 'devolução ao fornecedor não mudam o índice. Os índices contam itens e inspeções, não quantidades '
+      + '(unidades diferentes não se somam). O fornecedor é agrupado pelo CNPJ do recebimento (sem '
+      + 'pontuação), senão pelo cadastro, senão pelo nome digitado — letras acentuadas em maiúsculas e '
+      + 'minúsculas podem separar o mesmo nome — e aparece com o nome do recebimento mais recente do grupo. '
+      + 'Materiais de clientes ficam fora. Sem item conferido ou sem inspeção, o índice fica vazio.',
+    limite: null,
+    params: [
+      { nome: 'data_inicio', rotulo: 'Data início', tipo: 'date', obrigatorio: false },
+      { nome: 'data_fim', rotulo: 'Data fim', tipo: 'date', obrigatorio: false },
+    ],
+    colunas: [
+      { chave: 'fornecedor', rotulo: 'Fornecedor' },
+      { chave: 'recebimentos', rotulo: 'Recebimentos' },
+      { chave: 'itens_conferidos', rotulo: 'Itens conferidos (conferência finalizada)' },
+      { chave: 'itens_divergentes', rotulo: 'Itens com divergência' },
+      { chave: 'itens_com_falta', rotulo: 'Com falta' },
+      { chave: 'itens_com_sobra', rotulo: 'Com sobra' },
+      { chave: 'percentual_divergencia', rotulo: '% divergência' },
+      { chave: 'inspecoes', rotulo: 'Inspeções' },
+      { chave: 'inspecoes_com_reprovacao', rotulo: 'Inspeções com reprovação' },
+      { chave: 'indice_rejeicao', rotulo: '% rejeição' },
+    ],
+    fn: null,
+  },
   'inventario-divergencias': {
     titulo: 'Divergências de inventário',
     categoria: 'Gestão',

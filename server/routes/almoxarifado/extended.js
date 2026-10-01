@@ -2226,6 +2226,8 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     'saldos-comprometidos': reportService.relatorioSaldosComprometidos,
     // Etapa 67 (T2): ajustes por motivo, pela regua unica do bloco `ajustes` do indicadores.
     'ajustes-por-motivo': (db, q) => reportService.relatorioAjustesPorMotivo(db, q),
+    // Etapa 67 (T3): divergencia e rejeicao por fornecedor (snapshot do recebimento).
+    'qualidade-fornecedores': (db, q) => reportService.relatorioQualidadeFornecedores(db, q),
   };
 
   // Exposto SO para o teste de paridade (relatoriosRegistro.api.test.js) inspecionar o PAR
