@@ -38,6 +38,7 @@ const RequisicaoForm = () => {
     centro_custo_id: '',
     local_entrega: '',
     justificativa: '',
+    data_necessidade: '',
   });
 
   const [itens, setItens] = useState([]);
@@ -229,8 +230,12 @@ const RequisicaoForm = () => {
     const setSavingFlag = salvarRascunho ? setSavingDraft : setSaving;
     setSavingFlag(true);
     try {
+      // Etapa 67 (T4b): data_necessidade so vai quando preenchida — vazio = sem prazo (contrato
+      // do servidor, fd159b6). O <input type="date"> ja entrega AAAA-MM-DD.
+      const { data_necessidade: dataNecessidade, ...formSemData } = form;
       const payload = {
-        ...form,
+        ...formSemData,
+        ...(dataNecessidade ? { data_necessidade: dataNecessidade } : {}),
         centro_custo_id: form.centro_custo_id || undefined,
         setor: form.departamento,
         modulo_origem: ctx.moduloOrigem,
@@ -339,6 +344,12 @@ const RequisicaoForm = () => {
                   <input className="almox-input" value={form.local_entrega}
                     onChange={e => setForm(f => ({ ...f, local_entrega: e.target.value }))}
                     placeholder="Ex: Galpão 2 / Bancada 4" />
+                </div>
+                <div className="almox-field">
+                  <label className="almox-label" htmlFor="req-data-necessidade">Data de necessidade</label>
+                  <input id="req-data-necessidade" name="data_necessidade" type="date" className="almox-input"
+                    value={form.data_necessidade}
+                    onChange={e => setForm(f => ({ ...f, data_necessidade: e.target.value }))} />
                 </div>
                 <div className="almox-field">
                   <label className="almox-label">Urgência<span className="required">*</span></label>

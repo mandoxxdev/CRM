@@ -28,6 +28,7 @@ export default function RequisicaoMaterialCesta() {
   const [observacoes, setObservacoes] = useState('');
   const [tipoRequisicao, setTipoRequisicao] = useState('CONSUMO');
   const [justificativa, setJustificativa] = useState('');
+  const [dataNecessidade, setDataNecessidade] = useState('');
   const [sending, setSending] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
 
@@ -161,6 +162,8 @@ export default function RequisicaoMaterialCesta() {
         observacoes,
         tipo_requisicao: tipoRequisicao,
         justificativa,
+        // Etapa 67 (T4b): so quando preenchida — vazio = sem prazo (contrato do servidor).
+        ...(dataNecessidade ? { data_necessidade: dataNecessidade } : {}),
         salvar_rascunho: salvarRascunho,
         itens: cartItems.map((x) => ({
           material_id: x.id,
@@ -173,6 +176,7 @@ export default function RequisicaoMaterialCesta() {
       clearCart();
       setObservacoes('');
       setJustificativa('');
+      setDataNecessidade('');
       navigate(listPath);
     } catch (e) {
       toast.error(e.response?.data?.error || (salvarRascunho ? 'Erro ao salvar rascunho' : 'Erro ao enviar requisição'));
@@ -343,6 +347,13 @@ export default function RequisicaoMaterialCesta() {
               <div className="engc-subtle">Requisições emergenciais exigem justificativa para liberação imediata.</div>
             </div>
           )}
+
+          <div className="engc-obs">
+            <label htmlFor="cesta-data-necessidade">Data de necessidade</label>
+            <input id="cesta-data-necessidade" name="data_necessidade" type="date"
+              value={dataNecessidade} onChange={(e) => setDataNecessidade(e.target.value)} />
+            <div className="engc-subtle">Opcional — prazo usado no indicador de requisições no prazo.</div>
+          </div>
 
           <div className="engc-obs">
             <label>Observações</label>
