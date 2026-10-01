@@ -79,8 +79,12 @@ function normalizarItem(item) {
   };
 }
 
+// Etapa 67 (M-1): epsilon de ponto flutuante, o mesmo 1e-9 do resto do modulo. Sem ele, dez
+// entregas de 0,1 somam 0,9999999999999999 contra solicitada 1: a requisicao ficava
+// PARCIALMENTE_ATENDIDA para sempre, sem data_entrega, e o indicador a contava como nao integral.
+// E epsilon, nao tolerancia: 0,9 de 1 continua parcial.
 function todosItensCompletos(itens) {
-  return itens.every((i) => getEntregue(i) >= num(i.quantidade_solicitada));
+  return itens.every((i) => getEntregue(i) >= num(i.quantidade_solicitada) - 1e-9);
 }
 
 /**
