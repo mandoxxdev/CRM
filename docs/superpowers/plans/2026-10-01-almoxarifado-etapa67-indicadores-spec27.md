@@ -1,7 +1,8 @@
 # Etapa 67 — os indicadores que faltam da spec 27 (feature 21)
 
 > Status: **EM EXECUÇÃO — Fases 0, 1 e 2 feitas; T1 (tronco) FEITA (`22c6e57`, `fd159b6`, `9126d88`); T2 (`2ee2f86`)
-> e T3 FEITAS no servidor (registro com 25 chaves).** Próximo passo: T4 e T4b (tela), depois T5 (integração) e T6. Feature 21, item `[ ]` "Indicadores da spec 27 restantes: % requisições no prazo/integrais,
+> e T3 FEITAS no servidor (registro com 25 chaves); T4 (`e3ed85d`), T4b (`81e35fd`) e T5 (integração) FEITAS.**
+> Próximo passo: T6 (verificação e fechamento). Feature 21, item `[ ]` "Indicadores da spec 27 restantes: % requisições no prazo/integrais,
 > divergência e rejeição por fornecedor, nº de ajustes" (`specs/modulo-almoxarifado/21-relatorios-dashboards/README.md:81`
 > e `:102`); requisito em `specs/modulo-almoxarifado/2026-08-02-requisitos-modulo-almoxarifado.md:1064-1076`
 > ("Indicadores principais").
@@ -424,7 +425,31 @@ ordem: fornecedor
 - [ ] **T4 (galho, tela) — cartão "Requisições no prazo" no dashboard.** `AlmoxarifadoDashboard.js` (RN-12), contra o
   contrato do bloco. Teste RTL em `AlmoxarifadoDashboard.test.js`: 75 → "75%"; `null` → "—"; resposta sem o bloco → os
   três cartões de hoje e nenhum quarto; legenda com a janela.
-- [ ] **T5 (integração, cruza galhos) — `server/tests/api/indicadoresSpec27Integracao.api.test.js`.** Pela rota, ponta
+- [x] **T5 (integração, cruza galhos) — FEITA (2026-10-01), commit desta linha.** Estado real:
+  - `indicadoresSpec27Integracao.api.test.js` **8/8**, tudo pelas rotas HTTP (banco só para localização, material,
+    fornecedor do cadastro, cliente e a config de inspeção de crítico). Cenários: (1) formato inválido na criação → 400
+    literal sem gravar; A (prazo hoje), B e C (prazo há 2 dias), dois itens cada, entregues parcialmente → `em_aberto_no_dia`
+    +1, `fora_do_prazo` +2, integrais parados; A e B completadas, C encerrada → `no_prazo` +1, `fora` +2, `integrais` +2,
+    `encerradas_incompletas` +1, atendimento +2; excluir A → −1 em no prazo, integrais e atendimento (C89). (2) motivo do
+    cadastro + texto livre com o nome do motivo + estorno de um + PERDA com motivo + ajuste de material de cliente →
+    `indicadores.ajustes` (+2) = Σ `ajustes-por-motivo` (+2, um por balde) = histórico `grupo=AJUSTE` sem o de cliente,
+    também nos totais absolutos do recorte (ontem..hoje / `janela_dias=1`). (3) recebimento de **pedido de compra**
+    (`POST /api/compras/pedidos` real, fornecedor com CNPJ) → Finalizar Conferência 8/10 → `/aprovar` (crítico retido 8)
+    → inspeção 5/3 → linha `[1,1,1,1,0,100,1,1,100]`; segundo recebimento por **NF avulsa** do mesmo CNPJ pontuado, sem
+    `fornecedor_id`, outro nome, conferido sem divergência → **mesma linha**, nome do mais recente, `[2,2,1,1,50,1,1,100]`.
+    (4) as duas chaves na lista como exportáveis e o XLSX com os rótulos do registro.
+  - Divergências do texto original: o recebimento F veio de **pedido** e não de NF (o par pedido × NF avulsa é o que a
+    chave pelo CNPJ existe para juntar — o fornecedor G "sem divergência" virou a NF avulsa do mesmo CNPJ); `/aprovar` no
+    lugar do `/processar` (o caminho de API da T3 que retém o crítico); o cenário "pelo serviço" ficou nas T1/T2/T3 (já
+    provado lá) e não foi repetido.
+  - Controle positivo: 8 sabotagens, **8 vermelhas** no cenário certo — atendimento sem `ativo` → [1 C89]; `fornecedor_id`
+    antes do CNPJ → [3 CNPJ]; `ajustesWhereSql` sem `cancelado = 0` → [2]; `exportavel: false` em
+    `qualidade-fornecedores` → [4]; `ajustes-por-motivo` ligado ao histórico no mapa → [2]; `qualidade-fornecedores` com
+    filtro trocado no mapa → [3 pedido], [3 CNPJ], [4]; criação sem `normalizarDataNecessidade` → [1 formato]; chave
+    `ajustes-por-motivo` fora do mapa → a subida do app lança (par registro × mapa), o arquivo inteiro cai.
+  - Nenhum defeito de produção encontrado. Suíte api **250/250**.
+
+  Texto original: **T5 (integração, cruza galhos) — `server/tests/api/indicadoresSpec27Integracao.api.test.js`.** Pela rota, ponta
   a ponta: (1) linha de base do `indicadores`; (2) requisição com prazo hoje → aprovar → separar → entregar completa →
   `no_prazo` +1, `integrais` +1; (3) requisição com prazo há 2 dias, dois itens → entregar um → encerrar →
   `fora_do_prazo` +1, `encerradas_incompletas` +1; (4) excluir a de (2) → os dois voltam e `atendimento` também;
