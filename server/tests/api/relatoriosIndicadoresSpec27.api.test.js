@@ -260,6 +260,59 @@ let seq = 0;
       JSON.stringify(depois.requisicoes_no_prazo));
   });
 
+  // ══════════════ Fase 5 (A): bordas que nenhum teste fixava (mutantes sobreviventes) ══════════════
+  await test('[Fase5/A RN-01] entregue completa no dia SEGUINTE ao prazo -> fora do prazo (sem tolerancia de 1 dia)', async () => {
+    const antes = await indic();
+    const r = await entregueCompleta(await dia(2));
+    // semeado (declarado): nenhuma rota entrega "ontem"; o prazo e D-2 e a entrega D-1 10:00 UTC
+    await dbRun(db, 'UPDATE requisicoes_almoxarifado SET data_entrega = ? WHERE id = ?', [`${await dia(1)} 10:00:00`, r.id]);
+    const depois = await indic();
+    assert.deepStrictEqual(delta(antes, depois, 'requisicoes_no_prazo'),
+      { no_prazo: 0, fora_do_prazo: 1, consideradas: 1, em_aberto_no_dia: 0, sem_data_valida: 0 },
+      JSON.stringify(depois.requisicoes_no_prazo));
+  });
+
+  await test('[Fase5/A RN-04] RASCUNHO e REJEITADA com prazo vencido (pela rota) ficam fora de tudo', async () => {
+    const antes = await indic();
+    setUser({ ...ADMIN });
+    const rasc = await request(app).post('/api/almoxarifado/requisicoes')
+      .send({ itens: [{ material_id: await material(), quantidade: 1 }], data_necessidade: await dia(1), salvar_rascunho: true });
+    assert.strictEqual(rasc.status, 201, JSON.stringify(rasc.body));
+    const rjc = await request(app).post('/api/almoxarifado/requisicoes')
+      .send({ itens: [{ material_id: await material(), quantidade: 1 }], data_necessidade: await dia(1) });
+    assert.strictEqual(rjc.status, 201, JSON.stringify(rjc.body));
+    setUser({ ...APROVADOR });
+    const rej = await request(app).put(`/api/almoxarifado/requisicoes/${rjc.body.id}/rejeitar`).send({ motivo: 'E67 F5' });
+    assert.strictEqual(rej.status, 200, JSON.stringify(rej.body));
+    const st = await dbAll(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id IN (?, ?) ORDER BY id', [rasc.body.id, rjc.body.id]);
+    assert.deepStrictEqual(st.map((x) => x.status), ['RASCUNHO', 'REJEITADO'], 'premissa: os dois status');
+    const depois = await indic();
+    assert.deepStrictEqual(delta(antes, depois, 'requisicoes_no_prazo'),
+      { no_prazo: 0, fora_do_prazo: 0, consideradas: 0, em_aberto_no_dia: 0, sem_data_valida: 0 },
+      `rascunho/rejeitada entraram como fora do prazo: ${JSON.stringify(depois.requisicoes_no_prazo)}`);
+  });
+
+  await test('[Fase5/A RN-02] sem prazo criada ha 60 dias fica fora de sem_data_valida (a janela vale)', async () => {
+    const antes = await indic();
+    const r = await criarAprovada([[await material(), 1]], null);
+    // semeado (declarado): a rota grava created_at = agora
+    await dbRun(db, "UPDATE requisicoes_almoxarifado SET created_at = datetime('now', '-60 days') WHERE id = ?", [r.id]);
+    const depois = await indic();
+    assert.deepStrictEqual(delta(antes, depois, 'requisicoes_no_prazo'),
+      { no_prazo: 0, fora_do_prazo: 0, consideradas: 0, em_aberto_no_dia: 0, sem_data_valida: 0 },
+      JSON.stringify(depois.requisicoes_no_prazo));
+  });
+
+  await test('[Fase5/A RN-03] entregue completa ha 60 dias fica fora dos integrais (a janela vale)', async () => {
+    const antes = await indic();
+    const r = await entregueCompleta(null);
+    // semeado (declarado): a rota grava data_entrega = agora
+    await dbRun(db, "UPDATE requisicoes_almoxarifado SET data_entrega = datetime('now', '-60 days') WHERE id = ?", [r.id]);
+    const depois = await indic();
+    assert.deepStrictEqual(delta(antes, depois, 'requisicoes_integrais'),
+      { integrais: 0, encerradas_incompletas: 0, consideradas: 0 }, JSON.stringify(depois.requisicoes_integrais));
+  });
+
   // ══════════════ RN-03 — integrais ══════════════
   await test('[RN-03 +] entregue completa -> integrais +1; entregue e depois ENCERRADA -> +1 uma vez so', async () => {
     const antes = await indic();

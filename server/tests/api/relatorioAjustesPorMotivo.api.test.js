@@ -289,6 +289,14 @@ function helpers(app, db, setUser) {
       await h.ajusteInventario(p2, 95);
       // o de CLIENTE: o historico o mostra; os dois relatorios da regua unica, nao
       await h.ok({ material_id: c1, tipo: 'AJUSTE_NEGATIVO', quantidade: 1, motivo_id: Mo.id, justificativa: 'cliente' });
+      // Fase 5 (A): um ajuste de 60 dias atras — fora da janela de 1 dia do indicadores e fora do
+      // periodo de hoje dos outros dois. Semeado (declarado): a rota grava created_at = agora.
+      const velho = await h.ok({ material_id: p2, tipo: 'AJUSTE_NEGATIVO', quantidade: 1, motivo_id: Mo.id, justificativa: 'velho' });
+      const velhoId = velho.id || velho.movimentacao?.id
+        || (await dbGet(b.db, "SELECT id FROM movimentacoes_almoxarifado WHERE material_id = ? AND tipo = 'AJUSTE_NEGATIVO' ORDER BY id DESC LIMIT 1", [p2])).id;
+      await dbRun(b.db, "UPDATE movimentacoes_almoxarifado SET created_at = datetime('now', '-60 days') WHERE id = ?", [velhoId]);
+      const semPeriodo = await h.rel('');
+      assert.strictEqual(semPeriodo.reduce((s, l) => s + l.ajustes, 0), 4, 'controle: sem periodo o ajuste velho aparece');
 
       const porMotivo = await h.rel(`?data_inicio=${hoje}&data_fim=${hoje}`);
       const somaMotivo = porMotivo.reduce((s, l) => s + l.ajustes, 0);

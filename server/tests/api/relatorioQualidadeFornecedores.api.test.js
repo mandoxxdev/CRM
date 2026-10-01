@@ -353,6 +353,16 @@ let seq = 0;
     assert.strictEqual(l.recebimentos, 2);
   });
 
+  await test('[Fase5/A D8] CNPJ alfanumerico em minusculas e em maiusculas = uma linha (a chave sobe a caixa)', async () => {
+    const m = await material();
+    const nomeA = `Forn Alfa min ${SUF}`; const nomeB = `Forn Alfa MAI ${SUF}`;
+    await receber({ fornecedor_nome: nomeA, fornecedor_cnpj: `ab.cde.fgh/${SUF.padStart(5, '0').slice(0, 4)}-1z` }, [[m, 1]]);
+    await receber({ fornecedor_nome: nomeB, fornecedor_cnpj: `AB.CDE.FGH/${SUF.padStart(5, '0').slice(0, 4)}-1Z` }, [[m, 1]]);
+    assert.deepStrictEqual(await linha(nomeA), [], 'a caixa do CNPJ partiu o fornecedor em duas linhas');
+    const l = await umaLinha(nomeB);
+    assert.strictEqual(l.recebimentos, 2);
+  });
+
   // ══════════════ D9 / M-2: material de cliente fora ══════════════
   await test('[D9/M-2] recebimento so de material de cliente nao aparece; o item de cliente de um misto nao conta', async () => {
     const Fc = `Forn So Cliente ${SUF}`; const Fm = `Forn Misto ${SUF}`;
