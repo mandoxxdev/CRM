@@ -10,6 +10,7 @@ const stockService = require('./stockService');
 const lotService = require('./lotService');
 // Sem ciclo: reservationService importa db/audit/stockService, nunca este arquivo.
 const reservationService = require('./reservationService');
+const { can } = require('./permissions'); // Etapa 64: posso_conferir na fila
 const {
   PODE_SEPARAR, PODE_ENTREGAR, STATUS_PARCIALMENTE_RESERVADA, STATUS_TOTALMENTE_RESERVADA,
 } = require('./requisitionStateMachine');
@@ -325,6 +326,92 @@ async function conferirSeparacao(db, requisicaoId, user) {
 
 /** Rodadas de separação de uma requisição, em ordem (Etapa 28, RN-02/RN-09). */
 /** Etapa 63 (RN-03): as substituicoes da origem separada, com os codigos, para o detalhe. */
+/**
+ * Etapa 64 — a fila de separação do almoxarife. SÓ LEITURA: não muda regra de separar/entregar, e de
+ * propósito NÃO chama `verificarBloqueioLiberacao` (ela ESCREVE: muda status e notifica). Uma consulta
+ * de requisições + UMA de itens (sem N+1) + uma de separadores.
+ *
+ * `etapas` (Fase 2: uma etapa só escondia as outras):
+ *  - SEPARAR           — em PODE_SEPARAR e algum item SEPARÁVEL AGORA (maxSeparar > 0; o pendente
+ *                        sozinho punha no topo requisição aguardando compra que o separar recusa);
+ *  - AGUARDANDO_SALDO  — algum item com pendente e nada separável (falta estoque);
+ *  - CONFERIR          — material crítico separado sem conferência, em EM_SEPARACAO (o claim só confere ali);
+ *  - REABRIR_SEPARACAO — o mesmo fora de EM_SEPARACAO (a conferência e a entrega recusam; separar de novo reabre);
+ *  - ENTREGAR          — em PODE_ENTREGAR, algo separado e não entregue, sem conferência pendente;
+ *  - APROVACAO_VALOR   — no lugar de SEPARAR/ENTREGAR quando a requisição precisa de aprovação de valor e não
+ *                        tem (pelo que está GRAVADO — a avaliação ao vivo continua sendo a do separar/entregar).
+ */
+async function listarFilaSeparacao(db, user) {
+  const statusFila = [...new Set([...PODE_SEPARAR, ...PODE_ENTREGAR])];
+  const reqs = await dbAll(db, `SELECT r.id, r.numero, r.status, r.urgencia, r.data_necessidade, r.solicitante_nome,
+      r.setor, r.created_at, r.conferido_por_id, r.requer_aprovacao_valor, r.data_aprovacao_valor
+    FROM requisicoes_almoxarifado r
+    WHERE COALESCE(r.ativo, 1) = 1 AND r.status IN (${statusFila.map(() => '?').join(',')})`, statusFila);
+  if (!reqs.length) return [];
+  const ids = reqs.map((r) => r.id);
+  const marcas = ids.map(() => '?').join(',');
+  const itens = await dbAll(db, `SELECT ir.*, ma.codigo as material_codigo, ma.nome as material_nome, ma.unidade,
+      ma.material_critico,
+      (${disponivelSql('ma')} + ${RESERVADO_PARA_ITEM_SQL}) as saldo_disponivel,
+      lsep.codigo as origem_separacao_codigo, ltsep.codigo as lote_separacao_codigo
+    FROM itens_requisicao_almoxarifado ir
+    JOIN materiais_almoxarifado ma ON ir.material_id = ma.id
+    LEFT JOIN localizacoes_almoxarifado lsep ON lsep.id = ir.origem_separacao_id
+    LEFT JOIN lotes_almoxarifado ltsep ON ltsep.id = ir.lote_separacao_id
+    WHERE ir.requisicao_id IN (${marcas})`, ids);
+  const separadores = await dbAll(db, `SELECT requisicao_id, usuario_id, MAX(usuario_nome) as usuario_nome
+    FROM separacoes_requisicao_almoxarifado WHERE requisicao_id IN (${marcas})
+    GROUP BY requisicao_id, usuario_id`, ids);
+  const podeConferirPerfil = can(user, 'conferir_separacao');
+  const RANK = { CRITICO: 1, URGENTE: 2 };
+  const fila = [];
+  for (const r of reqs) {
+    const doReq = itens.filter((i) => i.requisicao_id === r.id);
+    const podeSep = PODE_SEPARAR.includes(r.status);
+    const bloqueioValor = Number(r.requer_aprovacao_valor) === 1 && !r.data_aprovacao_valor;
+    const linhas = doReq.map((i) => {
+      const aSeparar = pendenteSeparacao(i);
+      const separavel = podeSep ? maxSeparar(i, num(i.saldo_disponivel)) : 0;
+      return {
+        item_id: i.id, material_id: i.material_id, material_codigo: i.material_codigo, material_nome: i.material_nome,
+        unidade: i.unidade, a_separar: aSeparar, separavel, a_entregar: Math.max(0, getSeparado(i) - getEntregue(i)),
+        disponivel: num(i.saldo_disponivel), origem_separacao_codigo: i.origem_separacao_codigo || null,
+        lote_separacao_codigo: i.lote_separacao_codigo || null, material_critico: Number(i.material_critico) === 1,
+      };
+    });
+    const etapas = [];
+    if (podeSep && linhas.some((l) => l.separavel > 1e-9)) etapas.push(bloqueioValor ? 'APROVACAO_VALOR' : 'SEPARAR');
+    if (podeSep && linhas.some((l) => l.a_separar > 1e-9 && l.separavel <= 1e-9)) etapas.push('AGUARDANDO_SALDO');
+    const conferenciaPendente = conferenciaObrigatoria(doReq) && !r.conferido_por_id;
+    if (conferenciaPendente) etapas.push(r.status === 'EM_SEPARACAO' ? 'CONFERIR' : 'REABRIR_SEPARACAO');
+    if (PODE_ENTREGAR.includes(r.status) && linhas.some((l) => l.a_entregar > 1e-9) && !conferenciaPendente) {
+      if (!etapas.includes('APROVACAO_VALOR')) etapas.push(bloqueioValor ? 'APROVACAO_VALOR' : 'ENTREGAR');
+    }
+    if (!etapas.length) continue;
+    const quemSeparou = separadores.filter((s) => s.requisicao_id === r.id)
+      .map((s) => ({ id: s.usuario_id, nome: s.usuario_nome }));
+    fila.push({
+      id: r.id, numero: r.numero, status: r.status, urgencia: r.urgencia, data_necessidade: r.data_necessidade || null,
+      solicitante_nome: r.solicitante_nome, setor: r.setor, created_at: r.created_at,
+      etapas, acionavel: etapas.some((e) => ['SEPARAR', 'CONFERIR', 'REABRIR_SEPARACAO', 'ENTREGAR'].includes(e)),
+      conferencia_pendente: conferenciaPendente, separadores: quemSeparou,
+      posso_conferir: conferenciaPendente && r.status === 'EM_SEPARACAO' && podeConferirPerfil
+        && !quemSeparou.some((s) => Number(s.id) === Number(user?.id)),
+      itens: linhas.filter((l) => l.a_separar > 1e-9 || l.a_entregar > 1e-9),
+    });
+  }
+  // Ordem (RN-02): o que dá para fazer agora primeiro; depois urgência (UPPER — há legado em minúsculo),
+  // data de necessidade (sem data por último) e a mais ANTIGA primeiro (fila é FIFO).
+  const dataNec = (x) => (x.data_necessidade ? String(x.data_necessidade) : null);
+  fila.sort((a, b) => (Number(b.acionavel) - Number(a.acionavel))
+    || ((RANK[String(a.urgencia || '').toUpperCase()] || 3) - (RANK[String(b.urgencia || '').toUpperCase()] || 3))
+    || ((dataNec(a) === null) - (dataNec(b) === null))
+    || String(dataNec(a) || '').localeCompare(String(dataNec(b) || ''))
+    || String(a.created_at || '').localeCompare(String(b.created_at || ''))
+    || (a.id - b.id));
+  return fila;
+}
+
 async function listarSubstituicoes(db, requisicaoId) {
   return dbAll(db, `SELECT s.id, s.item_id, s.material_id, m.codigo as material_codigo, s.quantidade,
       lp.codigo as planejada_codigo, ltp.codigo as planejada_lote, ls.codigo as saiu_codigo, lts.codigo as saiu_lote,
@@ -1163,6 +1250,7 @@ async function excluirRequisicao(db, requisicaoId, user, justificativa, alertSer
 }
 
 module.exports = {
+  listarFilaSeparacao,
   listarSubstituicoes,
   num,
   getEntregue,

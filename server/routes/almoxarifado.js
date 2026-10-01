@@ -3611,6 +3611,13 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // estoque real via requisitionService -> stockService).
   const requireSepararEmitir = requirePermission('separar_emitir');
 
+  // Etapa 64: a fila de separação do almoxarife (só leitura) — ver requisitionService.listarFilaSeparacao.
+  app.get('/api/almoxarifado/fila-separacao', requireSepararEmitir, (req, res) => {
+    requisitionService.listarFilaSeparacao(db, req.user)
+      .then((fila) => res.json(fila))
+      .catch((e) => res.status(e.status || 500).json({ error: e.message }));
+  });
+
   // PUT /api/almoxarifado/requisicoes/:id/separacao — iniciar separação (com quantidades opcionais)
   app.put('/api/almoxarifado/requisicoes/:id/separacao', requireSepararEmitir, handleSeparacao);
   // Alias conforme especificação
