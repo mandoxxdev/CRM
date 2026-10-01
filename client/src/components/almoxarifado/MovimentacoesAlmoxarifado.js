@@ -8,6 +8,7 @@ import ExtratoMaterialModal from './ExtratoMaterialModal';
 import SeloProprietario, { rotuloMaterialComDono } from './SeloProprietario';
 import { formatLocalizacaoLabel } from '../../utils/localizacaoLabel';
 import { extrairCodigoLido } from '../../utils/codigoLido';
+import { justificativaDiferente } from '../../utils/justificativaMovimentacao';
 import CampoCodigoLido from './CampoCodigoLido';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import './Almoxarifado.css';
@@ -166,6 +167,8 @@ const MovimentacoesAlmoxarifado = () => {
     tipo: 'ENTRADA',
     quantidade: '',
     motivo: '',
+    motivo_escolha: '',
+    motivo_complemento: '',
     referencia: '',
     observacoes: '',
     os_id: '',
@@ -392,6 +395,46 @@ const MovimentacoesAlmoxarifado = () => {
     return () => { cancelado = true; };
   }, [form.material_id, form.tipo]);
 
+  // Etapa 66 (RN-09): motivos do cadastro que servem ao tipo escolhido. O servidor já devolve só
+  // os ATIVOS daquele tipo (`?tipo=`). Lista vazia — nenhum cadastrado, ou a busca falhou — deixa
+  // só o campo de texto de antes: a busca nunca trava a movimentação (o motivo continua podendo
+  // ser digitado, e quem decide é o servidor).
+  // `motivo_escolha`: '' (nada), 'OUTRO' (texto livre) ou o id do cadastro como string (valor do
+  // <select>); o payload converte com Number().
+  const [motivosDoTipo, setMotivosDoTipo] = useState([]);
+  useEffect(() => {
+    setMotivosDoTipo([]);
+    if (!showModal || !form.tipo) return undefined;
+    let cancelado = false;
+    api.get(`/almoxarifado/motivos-movimentacao?tipo=${encodeURIComponent(form.tipo)}`)
+      .then((res) => {
+        if (cancelado) return;
+        const lista = Array.isArray(res?.data) ? res.data : [];
+        setMotivosDoTipo(lista);
+        setForm((f) => {
+          // Escolha de cadastro que não veio na lista nova (não serve ao tipo, ou foi desativado
+          // entre uma busca e outra) é limpa: o select não pode mostrar uma coisa e o payload
+          // mandar outra.
+          if (f.motivo_escolha && f.motivo_escolha !== 'OUTRO'
+            && !lista.some((m) => String(m.id) === f.motivo_escolha)) {
+            return { ...f, motivo_escolha: '', motivo_complemento: '' };
+          }
+          // Texto já digitado no campo livre (antes de a lista chegar, ou num tipo sem cadastro)
+          // continua visível: vira "Outro" em vez de sumir atrás do select e ir escondido no body.
+          if (lista.length > 0 && !f.motivo_escolha && f.motivo) return { ...f, motivo_escolha: 'OUTRO' };
+          return f;
+        });
+      })
+      .catch(() => { if (!cancelado) setMotivosDoTipo([]); });
+    return () => { cancelado = true; };
+  }, [form.tipo, showModal]);
+
+  const motivoEscolhidoDoCadastro = () => (
+    form.motivo_escolha && form.motivo_escolha !== 'OUTRO'
+      ? motivosDoTipo.find((m) => String(m.id) === form.motivo_escolha) || null
+      : null
+  );
+
   const loadMateriais = async () => {
     try {
       const res = await api.get('/almoxarifado/materiais');
@@ -430,7 +473,8 @@ const MovimentacoesAlmoxarifado = () => {
 
   const openModal = () => {
     setForm({
-      material_id: '', tipo: 'ENTRADA', quantidade: '', motivo: '', referencia: '', observacoes: '',
+      material_id: '', tipo: 'ENTRADA', quantidade: '', motivo: '', motivo_escolha: '', motivo_complemento: '',
+      referencia: '', observacoes: '',
       os_id: '', projeto_id: '', centro_custo_id: '', localizacao_origem_id: '', localizacao_destino_id: '',
       codigo_lido_origem: '', codigo_lido_destino: '',
       lote: '', lote_id: '', custo_unitario: '', emergencial: false,
@@ -475,7 +519,16 @@ const MovimentacoesAlmoxarifado = () => {
         tipo: form.tipo,
         quantidade: parseFloat(form.quantidade),
       };
-      if (form.motivo) {
+      // Etapa 66 (RN-09): motivo do cadastro → `motivo_id` numérico e SEM `motivo` (o servidor
+      // recusa os dois juntos); o complemento opcional vai em `justificativa` e o servidor grava
+      // "Nome — complemento". Sem motivo do cadastro ("Outro" ou tipo sem cadastro) → o payload
+      // de antes, idêntico.
+      const motivoCadastro = motivoEscolhidoDoCadastro();
+      if (motivoCadastro) {
+        payload.motivo_id = Number(motivoCadastro.id);
+        const compl = form.motivo_complemento.trim();
+        if (compl) payload.justificativa = compl;
+      } else if (form.motivo) {
         payload.motivo = form.motivo;
         payload.justificativa = form.motivo;
       }
@@ -682,6 +735,13 @@ const MovimentacoesAlmoxarifado = () => {
                     <td style={{ fontWeight: 600 }}>{m.saldo_posterior} {m.unidade}</td>
                     <td>
                       {m.motivo && <div style={{ fontSize: '0.875rem' }}>{m.motivo}</div>}
+                      {/* Etapa 66 (RN-08): bloqueio, inventário e estorno guardam o porquê em
+                          `justificativa` — só o motivo aparecia. Igual ao motivo não repete. */}
+                      {justificativaDiferente(m) && (
+                        <div data-testid="mov-justificativa" style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>
+                          {justificativaDiferente(m)}
+                        </div>
+                      )}
                       {m.referencia && !vinculo && (
                         <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>📋 {m.referencia}</div>
                       )}
@@ -758,12 +818,19 @@ const MovimentacoesAlmoxarifado = () => {
                       onChange={e => {
                         const novoTipo = e.target.value;
                         const mostraLote = novoTipo === 'ENTRADA' || TIPOS_COM_LOTE_EXISTENTE.includes(novoTipo);
+                        // Etapa 66: o motivo do cadastro escolhido só sobrevive à troca se servir
+                        // ao tipo novo (o efeito dos motivos confere de novo quando a lista chega).
+                        const motivoAtual = motivoEscolhidoDoCadastro();
+                        const motivoServe = !motivoAtual
+                          || (Array.isArray(motivoAtual.tipos) && motivoAtual.tipos.includes(novoTipo));
                         // Limpa qualquer campo que só aparece para outro tipo — o estado nunca
                         // pode carregar um valor que o usuário não está mais vendo na tela
                         // (senão ele vaza escondido para o payload do tipo atual).
                         setForm(f => ({
                           ...f,
                           tipo: novoTipo,
+                          motivo_escolha: motivoServe ? f.motivo_escolha : '',
+                          motivo_complemento: motivoServe ? f.motivo_complemento : '',
                           emergencial: novoTipo === 'SAIDA' ? f.emergencial : false,
                           localizacao_destino_id: TIPOS_COM_DESTINO.includes(novoTipo) ? f.localizacao_destino_id : '',
                           codigo_lido_destino: TIPOS_COM_DESTINO.includes(novoTipo) ? f.codigo_lido_destino : '',
@@ -807,16 +874,58 @@ const MovimentacoesAlmoxarifado = () => {
                       </small>
                     )}
                   </div>
-                  <div className="almox-field">
-                    <label className="almox-label">
-                      Motivo
-                      {(form.tipo === 'SAIDA' || form.tipo === 'AJUSTE' || form.tipo === 'PERDA') && <span className="required">*</span>}
-                    </label>
-                    <input className="almox-input" value={form.motivo}
-                      onChange={e => setForm(f => ({ ...f, motivo: e.target.value }))}
-                      placeholder="Compra, Uso produção, Retorno, etc."
-                      required={form.tipo === 'SAIDA' || form.tipo === 'AJUSTE' || form.tipo === 'PERDA'} />
-                  </div>
+                  {/* Etapa 66 (RN-09): com motivo cadastrado para o tipo, o campo vira select
+                      (cadastro + "Outro (digitar)"); sem cadastro — ou se a busca falhou — fica o
+                      texto livre de antes. Obrigatoriedade igual à de antes: SAIDA/AJUSTE/PERDA
+                      exigem um motivo do cadastro OU o texto. */}
+                  {(() => {
+                    const exige = form.tipo === 'SAIDA' || form.tipo === 'AJUSTE' || form.tipo === 'PERDA';
+                    const rotulo = (
+                      <label className="almox-label" htmlFor={motivosDoTipo.length > 0 ? 'mov-motivo-cadastro' : 'mov-motivo'}>
+                        Motivo
+                        {exige && <span className="required">*</span>}
+                      </label>
+                    );
+                    const campoTexto = (
+                      <input id="mov-motivo" className="almox-input" value={form.motivo}
+                        onChange={e => setForm(f => ({ ...f, motivo: e.target.value }))}
+                        placeholder="Compra, Uso produção, Retorno, etc."
+                        required={exige} />
+                    );
+                    if (motivosDoTipo.length === 0) {
+                      return <div className="almox-field">{rotulo}{campoTexto}</div>;
+                    }
+                    const doCadastro = !!motivoEscolhidoDoCadastro();
+                    return (
+                      <>
+                        <div className="almox-field">
+                          {rotulo}
+                          <select id="mov-motivo-cadastro" className="almox-form-select" value={form.motivo_escolha}
+                            required={exige}
+                            onChange={e => {
+                              const escolha = e.target.value;
+                              // Trocar para um motivo do cadastro LIMPA o texto livre: os dois juntos
+                              // são recusados pelo servidor (400 "não os dois"). Voltar para "Outro"
+                              // começa do texto vazio — o complemento não vira motivo digitado.
+                              setForm(f => ({ ...f, motivo_escolha: escolha, motivo: '', motivo_complemento: '' }));
+                            }}>
+                            <option value="">Selecionar motivo...</option>
+                            {motivosDoTipo.map(m => <option key={m.id} value={String(m.id)}>{m.nome}</option>)}
+                            <option value="OUTRO">Outro (digitar)</option>
+                          </select>
+                          {form.motivo_escolha === 'OUTRO' && <div style={{ marginTop: 6 }}>{campoTexto}</div>}
+                        </div>
+                        {doCadastro && (
+                          <div className="almox-field">
+                            <label className="almox-label" htmlFor="mov-motivo-complemento">Complemento (opcional)</label>
+                            <input id="mov-motivo-complemento" className="almox-input" value={form.motivo_complemento}
+                              onChange={e => setForm(f => ({ ...f, motivo_complemento: e.target.value }))}
+                              placeholder="Detalhe que acompanha o motivo" />
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                   <div className="almox-field">
                     <label className="almox-label">Referência (OS / NF)</label>
                     <input className="almox-input" value={form.referencia}
