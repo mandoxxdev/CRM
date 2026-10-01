@@ -218,3 +218,57 @@ describe('AlmoxarifadoDashboard — falha localizada do endpoint de indicadores'
     expect(document.body.textContent).toContain('consumo ÷ estoque atual (aproximação)');
   });
 });
+
+/**
+ * Etapa 67, T4 (RN-12 / D11 / D12): cartao "Requisicoes no prazo", lido do bloco
+ * `requisicoes_no_prazo` do mesmo GET de indicadores. Percentual null (denominador zero) mostra
+ * "—", nunca "0%". Servidor sem o bloco mantem os tres cartoes de hoje e nenhum quarto.
+ */
+const comNoPrazo = (bloco) => ({ ...INDICADORES_FIXTURE, requisicoes_no_prazo: bloco });
+const BLOCO_75 = {
+  percentual: 75, no_prazo: 3, fora_do_prazo: 1, consideradas: 4, em_aberto_no_dia: 0, sem_data_valida: 0,
+};
+const BLOCO_VAZIO = {
+  percentual: null, no_prazo: 0, fora_do_prazo: 0, consideradas: 0, em_aberto_no_dia: 0, sem_data_valida: 0,
+};
+
+describe('AlmoxarifadoDashboard — cartão "Requisições no prazo" (Etapa 67, RN-12)', () => {
+  test('(+) percentual 75 mostra "75%", com a legenda da régua citando a janela efetiva', async () => {
+    mockarApi({ indicadores: () => Promise.resolve({ data: comNoPrazo(BLOCO_75) }) });
+    await renderizar();
+    const kpi = secaoIndicadores().querySelector('[data-testid="kpi-no-prazo"]');
+    expect(kpi).toBeTruthy();
+    expect(kpi.textContent).toBe('75%');
+    const cartao = kpi.closest('.almox-kpi-card').textContent;
+    expect(cartao).toContain('Requisições no prazo');
+    expect(cartao).toContain('Janela de 45 dias · prazo vencido até hoje · entrega completa até o dia');
+    expect(cartao).not.toContain('sem requisições com prazo no período');
+  });
+
+  test('(−) percentual null mostra "—" e o subtítulo honesto, nunca "0%"', async () => {
+    mockarApi({ indicadores: () => Promise.resolve({ data: comNoPrazo(BLOCO_VAZIO) }) });
+    await renderizar();
+    const kpi = secaoIndicadores().querySelector('[data-testid="kpi-no-prazo"]');
+    expect(kpi.textContent).toBe('—');
+    const cartao = kpi.closest('.almox-kpi-card').textContent;
+    expect(cartao).not.toContain('0%');
+    expect(cartao).toContain('sem requisições com prazo no período');
+    expect(cartao).not.toMatch(/undefined|NaN|null/);
+  });
+
+  test('resposta SEM o bloco (servidor antigo) mantém os três cartões de hoje e nenhum quarto', async () => {
+    await renderizar();
+    const secao = secaoIndicadores();
+    expect(secao.querySelector('[data-testid="kpi-no-prazo"]')).toBeNull();
+    expect(secao.querySelectorAll('.almox-kpi-card').length).toBe(3);
+    expect(secao.textContent).not.toContain('Requisições no prazo');
+  });
+
+  test('falha do endpoint: o cartão some junto com os vizinhos (painel de erro)', async () => {
+    mockarApi({ indicadores: () => Promise.reject({ response: { status: 500, data: { error: 'Erro interno' } } }) });
+    await renderizar();
+    const secao = secaoIndicadores();
+    expect(secao.querySelector('[data-testid="indicadores-erro"]')).toBeTruthy();
+    expect(secao.querySelector('[data-testid="kpi-no-prazo"]')).toBeNull();
+  });
+});
