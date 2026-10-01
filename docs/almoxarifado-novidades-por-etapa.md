@@ -965,11 +965,13 @@ SELECT m.id, m.codigo, m.nome, m.quantidade_atual AS fisico,
   cada série e confere o limite.
 - **Atenção:** o **ajuste de estoque** e o **inventário** de material com série continuam mudando o físico **sem tocar
   nas séries** (**C82**) — esta consulta pode voltar a acusar diferença depois de um ajuste. Rode de novo depois de
-  inventários.
+  inventários. *(Como ficou — Etapa 62: o **ajuste** passou a pedir as séries e não abre mais diferença; o
+  **inventário** ainda ajusta só o número, mas ao concluir **lista** os materiais com série a regularizar. Rode esta
+  consulta depois de inventário, ou siga o aviso da própria tela.)*
 
-### B. Decisões de negócio — B1 a B243; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B247; as em aberto esperam você, as tomadas estão escritas com o descartado
 
-*(**Atualizado em 2026-09-30 de B239 para B243**, com as quatro da Etapa 61; antes, de B237 para B239, com as duas da Etapa 60; antes, de B233 para B237, com as quatro da Etapa 59; antes, de B228 para B233, com as cinco da Etapa 58; antes, de B225 para B228, com as três da Etapa 57; antes, de B222 para B225, com as três da Etapa 56; antes, de B219 para B222, com as da Etapa 55.)*
+*(**Atualizado em 2026-09-30 de B243 para B247**, com as quatro da Etapa 62; antes, de B239 para B243, com as quatro da Etapa 61; antes, de B237 para B239, com as duas da Etapa 60; antes, de B233 para B237, com as quatro da Etapa 59; antes, de B228 para B233, com as cinco da Etapa 58; antes, de B225 para B228, com as três da Etapa 57; antes, de B222 para B225, com as três da Etapa 56; antes, de B219 para B222, com as da Etapa 55.)*
 
 *(**Atualizado em 2026-09-30 de B205 para B219**, com as quatro da Etapa 51, as três da Etapa 52, as quatro da Etapa 53 e as três da Etapa 54.)*
 
@@ -4016,6 +4018,39 @@ servidor (outra entrega levou a série), a lista de séries é recarregada. O en
 físico pelo ajuste de estoque. **Descartado:** travar a entrega de todo material quando a consulta de série falha (um
 erro de rede bloquearia material sem série).
 
+**B244 (NOVA, da Etapa 62) — o AJUSTE de material com série pede as séries, pela diferença para as PRESENTES.**
+**Escolhido:** o ajuste do total de um material com série exige total inteiro e as séries da diferença **novo total −
+séries presentes**: sobe → os números das peças novas; desce → as peças que saem, que ficam **Baixada**; diferença zero
+→ nenhuma série. A conta é pelas **presentes**, não pelo número antigo, para que o ajuste também conserte o estoque
+errado do passado (5 no número e 3 séries: ajustar para 3 não pede nada). O número só é gravado se as séries baterem
+com o novo total na hora da gravação (duas pessoas ao mesmo tempo: a segunda recebe *"as series do material mudaram
+durante o ajuste — recarregue e tente de novo"*). **Descartado:** a diferença pelo número antigo (o estoque antigo
+errado, ou em fração, nunca fecharia); deixar o ajuste mudar só o número e acertar depois pela regularização (era o
+**C82**). Séries **bloqueadas** não descem pelo ajuste — desbloqueie antes (**D (62)**).
+
+**B245 (NOVA, da Etapa 62) — ajuste de material com série POR ENDEREÇO é recusado.**
+**Escolhido:** *"material com controle de serie: ajuste por endereco nao e suportado — ajuste o total do material (sem
+endereco)"*. O ajuste por endereço define o saldo **daquele endereço** e o total do material é recalculado pela soma —
+com saldo antigo ou negativo absorvido, o total muda de um jeito **diferente** do endereço, e as séries pedidas não
+bateriam. **Descartado:** calcular a variação projetada do total (mais conta no motor para um caso que o inventário —
+que é por material — não usa). Para zerar o material, é pelo **Ajuste negativo** com as séries (o ajuste com total 0 sem
+endereço já era recusado pela tela e pelo servidor).
+
+**B246 (NOVA, da Etapa 62) — o ESTORNO de ajuste de material com série é recusado.**
+**Escolhido:** *"estorno de ajuste de material com serie recusado — faca um novo ajuste (ele pede as series)"*. O
+estorno do ajuste volta o número, mas as séries que o ajuste criou continuariam presentes e as que ele baixou
+continuariam baixadas — e o livro não guarda com segurança **quais** desfazer (uma entrada depois pode ter reativado
+uma baixada). Vale também para ajuste **antigo** de material com série. **Descartado:** reverter as séries no estorno.
+O ajuste de material **sem** série continua estornável.
+
+**B247 (NOVA, da Etapa 62) — o INVENTÁRIO de material com série ajusta o número e manda regularizar.**
+**Escolhido:** a contagem não tem como dizer **quais** peças foram contadas, então a conclusão continua ajustando só o
+número; recusa contagem em **fração** de material com série (*"⟨código⟩: material com controle de serie exige contagem
+inteira"* — a regularização nunca fecharia fração); e devolve a lista dos materiais com série que ficaram com séries
+diferentes do físico, que a tela mostra com link para **Lotes e Séries → Séries** (a regularização da **B242**, cujo
+limite é exatamente essa diferença). **Descartado:** pedir as séries na contagem (a tela de contagem não tem esse campo —
+é outra etapa, se quiserem).
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -5100,8 +5135,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
     **sem** escolha, a entrega é item a item como sempre: se o segundo falhar (saldo que alguém tirou no meio), o
     primeiro já saiu — e fica contado como entregue, então nada se perde.
 
-82. **NOVO, da Etapa 61 — o AJUSTE de estoque e o INVENTÁRIO de material com série mudam o físico SEM tocar nas
-    séries.** A entrega agora dá baixa na série (**B240**), mas o ajuste (inclusive o de endereço) e a conferência de
+82. **✅ RESOLVIDO NA ETAPA 62 (`327703d`, `b242545` + fix-round `1080491`) — NOVO, da Etapa 61 — o AJUSTE de estoque
+    e o INVENTÁRIO de material com série mudam o físico SEM tocar nas séries.** *(Como ficou: o **ajuste** pede as
+    séries da diferença para as presentes — **B244**; por endereço e o estorno são recusados — **B245**, **B246**. O
+    **inventário** continua ajustando só o número — não sabe quais peças contou —, mas recusa fração e, ao concluir,
+    **lista** os materiais com série a regularizar com link — **B247**. O texto abaixo é o furo como estava.)* A entrega agora dá baixa na série (**B240**), mas o ajuste (inclusive o de endereço) e a conferência de
     inventário continuam mudando só o número. Cenário: material com 5 séries e físico 5; um ajuste para 3 deixa físico
     **3** e séries presentes **5** — as duas "a mais" continuam aparecendo na janela de entrega. **Até a correção:**
     depois de ajuste ou inventário de material com série, rode a consulta da **A30** e acerte pela **regularização**
@@ -5757,13 +5795,24 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(61) A entrega de um clique de material com série é recusada** (**B240**) — o operador usa **"Entregar escolhendo
   de onde sai…"** e marca as séries. Requisição com item com série e item comum: a de um clique recusa a entrega inteira.
 - **(61) A separação não registra série** — só a entrega (é ela que baixa a peça).
-- **(61) O ajuste e o inventário de material com série não tocam nas séries** — ver **C82**.
+- **(61) O ajuste e o inventário de material com série não tocam nas séries** — ver **C82**. *(Como ficou — Etapa 62:
+  o ajuste pede as séries; o inventário ainda não, mas avisa quais regularizar.)*
 - **(61) A regularização desfaz o que gravou se falhar no meio** — mas esse caminho só acontece em corrida (duas pessoas
   ao mesmo tempo); o teste automático prova a corrida, não a falha no meio de uma lista.
 - **(61) Cancelar uma saída ANTIGA de requisição** (anterior a esta etapa, sem série) pela tela de Movimentações já era
   recusado com uma mensagem enganosa sobre séries — pré-existente, não mexido.
 - **(61) A devolução não baixa o "entregue" do item da requisição** — a exclusão agora desconta as devoluções por conta
   própria (**B241**), mas outros números que leem o "entregue" continuam somando o que voltou.
+- **(62) O inventário não pede as séries** — ajusta o número e lista os materiais a regularizar (**B247**).
+- **(62) Séries bloqueadas não descem pelo ajuste** — só as em estoque aparecem para baixar; desbloqueie antes.
+- **(62) O botão de estorno no livro continua aparecendo** para ajuste de material com série — clicar dá a recusa da
+  **B246**.
+- **(62) Ajuste de material com série por endereço é recusado** (**B245**), e o ajuste para 0 é pelo **Ajuste
+  negativo** com as séries.
+- **(62) A tela não recarrega sozinha** se as séries mudarem entre abrir o ajuste e confirmar — a recusa do servidor
+  (*"as series do material mudaram durante o ajuste…"*) recarrega.
+- **(62) Duas guardas que não são alcançadas hoje** ficaram como segunda barreira: total negativo (a primeira validação
+  do sistema já recusa antes) e a baixa de série num **ajuste de inventário** (o inventário não pede séries).
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -6227,6 +6276,18 @@ servidor simulado. O que **só o navegador** prova:
    escolhendo as series"*.
 3. **A regularização.** Em **Lotes e Séries → Séries**, num material cujo físico não bate: aparecem *"Séries presentes:
    p · Físico: f"* e **Regularizar séries**; com o perfil de ajuste, o formulário; sem ele, só o aviso.
+
+**(62) Nenhum clique foi dado nesta etapa.** Os testes provam a regra pelo servidor (11 cenários, inclusive dois ajustes
+ao mesmo tempo) e as telas com o servidor simulado. O que **só o navegador** prova:
+
+1. **O ajuste com série.** Em **Movimentações → Nova → Ajuste**, escolha um material com série: aparecem *"Material com
+   série: o ajuste é do total, sem endereço."* e *"Séries presentes: P"*; subindo o total, **"Números das novas séries
+   (um por linha)"** com *"n de d"*; descendo, **"Séries a baixar"**; o **Confirmar** (e o Enter) só liberam quando o
+   contador bate. Total 0: *"Para zerar, use Ajuste negativo com as séries."*.
+2. **O aviso do inventário.** Conclua uma contagem de material com série com quantidade diferente do sistema: o aviso
+   *"Estes materiais com série ficaram com séries presentes diferentes do físico…"* fica na tela, e o link abre **Lotes e
+   Séries** em **outra aba**.
+3. **O estorno do ajuste.** No livro, estorne um ajuste de material com série: a recusa da **B246** aparece.
 
 
 ### G. Fragilidades estruturais que continuam de pé
@@ -14620,16 +14681,97 @@ com teste. E uma decisão antiga estava **errada**: a Etapa 6b deixou a entrega 
 lote — está corrigida à vista na seção dela e na **B240**.
 
 
+## Etapa 62 — O ajuste de material com série diz quais peças entram ou saem (2026-09-30)
+
+A Etapa 61 fez a entrega dizer quais peças saem, mas o **ajuste de estoque** ainda mudava só o número: ajustar um
+material com 3 peças para 5 deixava o estoque em 5 e a lista de séries com 3 — as duas "a mais" não existiam em lugar
+nenhum. Agora o ajuste do total de um material com série **pede as séries**: os números das peças novas quando sobe, as
+peças que saem quando desce. E o inventário, que conta o número mas não as peças, avisa quais materiais ficaram com as
+séries diferentes do estoque e leva direto para a regularização.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Ajuste de material com série mudava só o número (ajustar 3 → 5 deixava 5 no estoque e 3 séries) | Ajuste **sobe** → pede os números das peças novas; **desce** → pede quais peças saem (ficam **Baixada**) (**B244**) |
+| A tela de Movimentações não tinha onde informar séries no ajuste | Mostra *"Séries presentes: P"* e, pela diferença, os números novos ou as séries a baixar, com contador *"n de d"* |
+| Ajuste de material com série por endereço era aceito | Recusado — o ajuste de material com série é do **total** (**B245**) |
+| Estornar o ajuste voltava só o número | Estorno de ajuste de material com série é recusado; o caminho é um novo ajuste (**B246**) |
+| O inventário mudava o número de material com série e ninguém ficava sabendo | Contagem em fração é recusada; ao concluir, aparece o aviso dos materiais com série a regularizar, com link (**B247**) |
+
+### As regras, com o cenário exato
+
+**1. Subir pede os números novos.** Material com série com 3 peças (S1, S2, S3). Em **Movimentações → Nova →
+Ajuste**, o bloco mostra *"Material com série: o ajuste é do total, sem endereço."* e *"Séries presentes: 3"*. Digite
+**5** no total: aparece **"Números das novas séries (um por linha)"** com *"0 de 2"*; o **Confirmar** só libera com 2
+números. Informe S4 e S5: estoque 5, séries presentes 5.
+Pelo servidor, sem as séries: *"material com controle de serie: o ajuste sobe 2 serie(s) (fisico novo 5, series
+presentes 3) — informe 2 serie(s) (recebidas 0)"*. Um número que já está em estoque: *"serie ⟨número⟩ ja esta em
+estoque"*.
+
+**2. Descer pede quais peças saem.** Com 3 peças, ajuste para **1**: aparecem as **"Séries a baixar"** (só as que estão
+em estoque) com *"0 de 2"*. Marque S1 e S3: estoque 1, e S1 e S3 ficam **Baixada** (não contam mais como presentes).
+
+**3. A conta é pelo que está presente.** Se o estoque já estava errado (5 no número, 3 séries), ajustar para **3** não
+pede série nenhuma — é justamente o conserto. Informar séries quando a diferença é zero: *"material com controle de
+serie: o ajuste nao muda as series (presentes 3) — nao informe series"*.
+
+**4. Total inteiro, sem endereço, e zerar pelo ajuste negativo.** Total fracionário: *"material com controle de serie
+exige quantidade inteira"*. Com endereço: *"material com controle de serie: ajuste por endereco nao e suportado — ajuste
+o total do material (sem endereco)"*. Total **0** na tela: *"Para zerar, use Ajuste negativo com as séries."*.
+
+**5. Estorno do ajuste é recusado.** Estorne um ajuste de material com série: *"estorno de ajuste de material com serie
+recusado — faca um novo ajuste (ele pede as series)"*. O ajuste de material **sem** série continua estornável.
+
+**6. Duas pessoas ao mesmo tempo.** Se o estoque de séries mudar entre abrir a tela e confirmar (outro ajuste, uma
+entrega): *"as series do material mudaram durante o ajuste — recarregue e tente de novo"* — nada muda, e a tela
+recarrega as séries.
+
+**7. O inventário.** Conte um material com série em fração e conclua aplicando os ajustes: *"Ajuste bloqueado:
+⟨código⟩: material com controle de serie exige contagem inteira"*. Com contagem inteira diferente do sistema, ao
+concluir aparece o aviso fixo *"Estes materiais com série ficaram com séries presentes diferentes do físico — regularize
+em Lotes e Séries:"* com cada material *"⟨código⟩ (físico F, presentes P)"* e o link (abre em outra aba). Na
+**regularização** (Etapa 61) o limite é exatamente essa diferença.
+
+### O que esta etapa NÃO cobre
+
+1. O **inventário** continua ajustando o número sem saber **quais** peças foram contadas — o acerto é pela
+   regularização (**B247**).
+2. Ajuste de material com série **por endereço** — recusado (**B245**).
+3. Séries **bloqueadas** não descem pelo ajuste — desbloqueie antes (**D (62)**).
+4. O botão de estorno no livro continua aparecendo para ajuste de material com série — o servidor recusa com a frase
+   (**D (62)**).
+
+### O que a revisão encontrou
+
+A revisão do **plano** mudou o desenho: estornar o ajuste voltava só o número (as séries criadas continuavam presentes)
+— e o livro não guarda com segurança quais séries desfazer, então o estorno passou a ser recusado; e o ajuste por
+endereço muda o total do material de um jeito diferente do endereço (legado, absorção de saldo negativo), então foi
+recusado. A conta passou a ser "novo total − séries presentes", o que também conserta o estoque antigo errado. A
+revisão do **código** achou uma **corrida**: o número é gravado como valor absoluto e as séries pela diferença — dois
+ajustes ao mesmo tempo deixavam estoque 4 e 6 séries; agora o número só é gravado se as séries baterem (senão, a
+recusa do cenário 6). Também: se algo falhasse depois, as séries voltavam mas o número não (corrigido); um número de
+série repetido deixava uma auditoria de ajuste de material de cliente que não aconteceu (a recusa agora vem antes); e
+na tela, o link do aviso do inventário recarregava a página e sumia com o aviso (abre em outra aba).
+
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 62 entregue (2026-09-30):** **o ajuste de material com série diz quais peças entram ou saem.** O ajuste do
+  total pede os números das peças novas (quando sobe) ou as peças que saem (quando desce, ficam **Baixada**); por
+  endereço e o estorno do ajuste são recusados; o inventário recusa contagem em fração e, ao concluir, avisa quais
+  materiais com série ficaram a regularizar, com link. Fecha o **C82**. **O que é seu:** as decisões **B244 a B247**;
+  as limitações **(62)** em D e as verificações **(62)** em F. **Próxima: Etapa 63 — a substituição de lote com
+  registro (feature 05); ver o plano da Etapa 62.**
 
 - **Etapa 61 entregue (2026-09-30):** **a entrega de material com série diz quais peças saem.** A janela de entrega
   pede as séries (contador e quantidade exata); a de um clique de material com série é recusada; excluir a requisição
   devolve as mesmas peças, só o que falta devolver; e **Lotes e Séries** ganhou **Regularizar séries**. **O que é seu:**
   a consulta **A30** (rodar em produção — as entregas antigas deixaram séries erradas); as decisões **B240 a B243**
   (a **B240** corrige uma decisão da Etapa 6b); os furos **C82** e **C83**; as limitações **(61)** em D e as verificações
-  **(61)** em F. **Próxima: Etapa 62 — o ajuste e o inventário de material com série; ver o plano da Etapa 61.**
+  **(61)** em F. **Próxima: Etapa 62 — o ajuste e o inventário de material com série; ver o plano da Etapa 61.** *(Feita — Etapa 62.)*
 
 - **Etapa 60 entregue (2026-09-30):** **separar menos do que dava passa a deixar registro, com o porquê.** Cada rodada
   de separação grava, por item, quanto dava para separar, se ficou abaixo e o motivo (opcional); a janela pede o

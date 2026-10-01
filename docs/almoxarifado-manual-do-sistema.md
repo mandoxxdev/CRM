@@ -624,7 +624,7 @@ Com **Controle por número de série** ligado, cada unidade tem identidade próp
 | **Entregue** | saiu do estoque numa saída |
 | **Sucateada** | saiu por sucata ou perda |
 | **Estornada** | a entrada que a criou foi cancelada — a série não volta a ficar disponível, porque aquela entrada nunca deveria ter acontecido |
-| **Baixada** | dada como ausente numa **regularização** (a peça não está no estoque, mas a série constava como presente) — não conta como presente |
+| **Baixada** | dada como ausente numa **regularização** (a peça não está no estoque, mas a série constava como presente) ou escolhida para sair num **ajuste** que diminui o saldo — não conta como presente |
 
 O ciclo normal é **Em estoque → Entregue → (devolução) → Em estoque**: devolver uma unidade reativa a série, que volta a ficar disponível. Bloquear e desbloquear é a única transição manual, e vai e volta entre Em estoque e Bloqueada.
 
@@ -641,7 +641,7 @@ Recusas mais comuns, na letra:
 
 **Bloquear e desbloquear** se faz em **Almoxarifado → Lotes e Séries → aba "Séries"**, que lista Número, Status, Lote, Localização e as ações. A **justificativa é obrigatória** e fica registrada junto com a série. Só as séries Em estoque e Bloqueadas têm ação — os estados finais não voltam por essa via.
 
-Uma unidade de controle importante: o sistema mantém a igualdade entre **quantidade de séries presentes** (em estoque + bloqueadas) e **saldo do material**. A entrada, a saída, a **entrega de requisição** (7.5), a **exclusão de requisição** (7.6) e a devolução mexem nas séries junto com o saldo. **O ajuste de estoque e o inventário não mexem**: eles mudam só o número — depois deles, confira as séries e, se não baterem, regularize (abaixo).
+Uma unidade de controle importante: o sistema mantém a igualdade entre **quantidade de séries presentes** (em estoque + bloqueadas) e **saldo do material**. A entrada, a saída, a **entrega de requisição** (7.5), a **exclusão de requisição** (7.6), a devolução e o **ajuste de estoque** (6.2) mexem nas séries junto com o saldo. **O inventário não mexe**: a contagem diz quantas peças há, não quais — ao concluir, ele lista os materiais com série que ficaram com séries diferentes do saldo, com o link para regularizar (13.5 e abaixo).
 
 **Regularizar séries.** Em **Lotes e Séries → aba "Séries"**, escolhido um material com série cujas séries presentes não batem com o saldo, aparece o aviso *"Séries presentes: 3 · Físico: 2"*. Para quem tem o perfil que **ajusta estoque** (Administrador ou Gestor), aparece também o formulário **Regularizar séries**, que acerta nos dois sentidos — sem movimentar estoque, porque o saldo já está certo:
 
@@ -1048,6 +1048,23 @@ Pontos técnicos importantes:
 
 - **Ajuste é absoluto, não incremental.** Digitar 40 num material que tem 100 leva o saldo a 40. Por isso o rótulo do campo muda para "Novo Saldo" quando o tipo é Ajuste.
 - **Ajuste com localização escolhida** zera/redefine **aquela** localização e recalcula o total do material pela soma das prateleiras. É o único tipo que aceita quantidade **zero** — justamente para permitir "esta prateleira está vazia". Em qualquer outro caso, quantidade 0 é recusada com *"quantidade deve ser maior que zero"*.
+- **Ajuste de material com número de série** é sempre do **total** do material — sem localização — e o novo total tem de ser um número inteiro. O formulário mostra *"Material com série: o ajuste é do total, sem endereço."* e *"Séries presentes: P"* (em estoque + bloqueadas). A diferença entre o novo total e as séries presentes decide o que ele pede:
+  - **sobe** → **"Números das novas séries (um por linha)"**, exatamente a diferença (contador *"n de d"*);
+  - **desce** → **"Séries a baixar"**, só entre as que estão em estoque, exatamente a diferença; as escolhidas passam a **Baixada** (4.7);
+  - **igual** → nada é pedido. Isso vale também para acertar um saldo que estava errado: com saldo 5 e 3 séries presentes, ajustar para 3 não pede série nenhuma.
+
+  O **Confirmar** (e o Enter) só liberam com o contador batendo. Total **0** não é aceito: *"Para zerar, use Ajuste negativo com as séries."* As recusas, na ordem em que aparecem:
+
+  | Situação | Mensagem |
+  |---|---|
+  | Com localização | *"material com controle de serie: ajuste por endereco nao e suportado — ajuste o total do material (sem endereco)"* |
+  | Total em fração | *"material com controle de serie exige quantidade inteira"* |
+  | Número informado já em estoque | *"serie SN-001 ja esta em estoque"* |
+  | Quantidade de séries diferente da diferença | *"material com controle de serie: o ajuste sobe 2 serie(s) (fisico novo 5, series presentes 3) — informe 2 serie(s) (recebidas 0)"* (ou *"baixa"*) |
+  | Séries informadas quando a diferença é zero | *"material com controle de serie: o ajuste nao muda as series (presentes 3) — nao informe series"* |
+  | As séries do material mudaram entre abrir a tela e confirmar (outra pessoa ajustou ou entregou) | *"as series do material mudaram durante o ajuste — recarregue e tente de novo"* — nada muda, e a tela recarrega as séries |
+
+  Séries **bloqueadas** contam como presentes mas não aparecem para baixar: desbloqueie antes.
 - **Perda é saída de verdade** para o motor: baixa o físico, respeita controle de lote e a situação do lote. O que a diferencia da Saída comum é que ela **é isenta da trava de vencimento** — assim como a sucata, que passa pela mesma isenção quando a baixa dela sai pelo processo de sucateamento: é assim que um lote vencido consegue sair do sistema (4.3).
 
 ### 6.2b Conferir o endereço lendo a etiqueta da posição
@@ -1240,7 +1257,7 @@ Há linhas que o livro **não estorna de propósito**, cada uma com a porta cert
 | Devolução ao fornecedor | *"Devolução ao fornecedor não pode ser estornada pelo livro — o material voltaria bloqueado com o documento dizendo que foi devolvido"* — e não há outra porta: a execução não se registra duas vezes e o documento decidido não se decide de novo (15b.4-ter) |
 | Qualquer movimentação gerada por uma requisição | *"Movimentação vinculada a requisição — use os fluxos da requisição (exclusão/encerramento)"* |
 
-Em material com número de série há duas guardas a mais, ambas verificadas **antes** de qualquer alteração: não se estorna uma entrada cujas séries já saíram (*"estorno de entrada recusado: ha series desta entrada ja movimentadas — estorne as saidas primeiro"*), nem uma saída cujas séries já voltaram por outro caminho (*"estorno de saida recusado: series desta saida ja reentraram no estoque — a devolucao ja repos o material"*).
+Em material com número de série há duas guardas a mais, ambas verificadas **antes** de qualquer alteração: não se estorna uma entrada cujas séries já saíram (*"estorno de entrada recusado: ha series desta entrada ja movimentadas — estorne as saidas primeiro"*), nem uma saída cujas séries já voltaram por outro caminho (*"estorno de saida recusado: series desta saida ja reentraram no estoque — a devolucao ja repos o material"*). E o **ajuste** de material com série não se estorna — o sistema não tem como saber com segurança quais séries desfazer: *"estorno de ajuste de material com serie recusado — faca um novo ajuste (ele pede as series)"*. O ajuste de material sem série continua estornável.
 
 ---
 
@@ -2014,6 +2031,12 @@ a autorização especial para ajustar saldo de terceiro (16.8), a recusa é sobr
 prioridade sobre a de retenção quando a mesma conferência tem os dois problemas:
 
 > `Ajuste bloqueado — os seguintes materiais são de cliente e exigem a permissão "ajustar_material_cliente": <código> (<cliente>)`
+
+**Material com número de série** tem duas regras próprias na conclusão com ajustes. A contagem tem de ser **inteira** — em fração, a conclusão é recusada:
+
+> `Ajuste bloqueado: <código>: material com controle de serie exige contagem inteira`
+
+E como a contagem diz quantas peças há, mas não **quais**, o ajuste muda só o saldo: ao concluir, os materiais com série que ficaram com as séries presentes diferentes do saldo aparecem num aviso fixo — *"Estes materiais com série ficaram com séries presentes diferentes do físico — regularize em Lotes e Séries:"* — com cada material *"(físico F, presentes P)"* e um link que abre a aba Séries dele em outra aba do navegador. A regularização (4.7) aceita exatamente essa diferença.
 
 **A aplicação é tudo ou nada.** Se qualquer item da conferência for recusado (por retenção ou por
 permissão), **nenhum** ajuste é aplicado — nem os que passariam sozinhos — e a conferência

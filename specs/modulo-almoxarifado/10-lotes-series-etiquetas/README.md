@@ -4,7 +4,7 @@
 > (Etapa 6b, 2026-08-11) e etiquetas com QR (Etapa 6c, 2026-08-11). A feature 10 fica completa
 > **exceto pelas pendências declaradas** nas três etapas (ver as seções de pendências, mais abaixo
 > — nenhuma bloqueia o critério de aceite do módulo) · **Spec original:** seção 10
-> **Última atualização:** 2026-09-30 (**Etapa 61 — a entrega de material com série exige as séries, a
+> **Última atualização:** 2026-09-30 (**Etapa 62 — o ajuste de estoque também pede as séries; o inventário manda regularizar**; antes: **Etapa 61 — a entrega de material com série exige as séries, a
 > exclusão de requisição as devolve, e a regularização acerta o legado** (`6ba7429`, `d74e5a8` + fix-round `77d084c`).
 > A pendência (a) de série **estava errada** — a isenção da entrega era o defeito que quebrava o invariante;
 > corrigida à vista abaixo.) Antes: 2026-09-30 (**Etapa 50 — a tela de Lotes para de mostrar o saldo ATRIBUÍDO
@@ -910,3 +910,14 @@ de teste, registrados de propósito.
   por lote — **continua aberta**: a reserva é do material, não do lote), 08 (entrada — **ligada na
   Task 5**, o lote nasce no recebimento), 09 (reprovação — **ligação pendente**, ver pendência (e)),
   15 (retalhos).
+
+## Etapa 62 (2026-09-30) — o ajuste de estoque também respeita as séries
+
+`327703d`, `b242545`, fix-round `1080491`. Continua 🟢.
+
+- [x] **Ajuste de material com série pede as séries** da diferença `novo total − séries presentes` (números novos ao
+  subir; as que saem ficam **`BAIXADA`** ao descer). O status `BAIXADA` (criado na Etapa 61 para a regularização) passa
+  a ser também o destino da descida do ajuste. Detalhe e literais na seção "Etapa 62" da feature 03.
+- [x] **Inventário:** contagem em fração de material com série recusada; a conclusão devolve `series_a_regularizar` e a
+  tela manda para a **regularização** desta feature (cujo limite é exatamente a diferença).
+- **Continua fora:** o inventário não pede as séries contadas; série `BLOQUEADA` não desce pelo ajuste.
