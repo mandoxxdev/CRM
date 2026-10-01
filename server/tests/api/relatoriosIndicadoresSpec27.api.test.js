@@ -26,6 +26,7 @@ const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
 const { dbGet, dbRun, dbAll } = require('../../services/almoxarifado/db');
 const reportService = require('../../services/almoxarifado/reportService');
+const stockService = require('../../services/almoxarifado/stockService');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -404,6 +405,61 @@ let seq = 0;
     assert.strictEqual(ultimo.status, 'ENTREGUE', `M-1: ${JSON.stringify(ultimo)} entregue=${it.quantidade_entregue}`);
     assert.strictEqual(row.status, 'ENTREGUE');
     assert.ok(row.data_entrega, 'data_entrega tem de ser gravado na entrega completa');
+  });
+
+  // ══════════════ Fase 5 (B): a RESERVA do fracionado tambem fecha (epsilon no motor) ══════════════
+  const reservaDoItem = (itemId) => dbGet(db, `SELECT id, status, quantidade, quantidade_utilizada
+    FROM reservas_material_almoxarifado WHERE item_requisicao_id = ? ORDER BY id DESC LIMIT 1`, [itemId]);
+  const reservadoDo = async (m) => (await dbGet(db, 'SELECT quantidade_reservada q FROM materiais_almoxarifado WHERE id = ?', [m])).q;
+
+  await test('[Fase5/B] dez entregas de 0,1 com reserva: a reserva fecha CONSUMIDA e o reservado do material volta a 0', async () => {
+    const m = await material({ saldo: 5 });
+    const r = await criarAprovada([[m, 1]], null);
+    const res0 = await reservaDoItem(r.itens[0]);
+    assert.ok(res0 && res0.status === 'ATIVA' && res0.quantidade === 1, `premissa: a aprovacao reservou 1 (${JSON.stringify(res0)})`);
+    assert.strictEqual(await reservadoDo(m), 1, 'premissa: reservado 1 no material');
+    await separar(r.id, [[r.itens[0], 1]]);
+    for (let i = 0; i < 10; i++) {
+      // eslint-disable-next-line no-await-in-loop
+      await entregar(r.id, [[r.itens[0], 0.1]]);
+    }
+    const res = await reservaDoItem(r.itens[0]);
+    assert.notStrictEqual(res.quantidade_utilizada, 1, 'controle: a utilizada NAO e 1 exato (senao o teste nao prova o epsilon)');
+    assert.strictEqual(res.status, 'CONSUMIDA', `reserva zumbi: ${JSON.stringify(res)}`);
+    assert.strictEqual(await reservadoDo(m), 0, 'sobra de ponto flutuante ficou presa no reservado do material');
+  });
+
+  await test('[Fase5/B] consumo direto com reserva 0,3 em tres saidas de 0,1: a terceira passa e a reserva fecha', async () => {
+    const m = await material({ saldo: 5 });
+    const res = await stockService.criarReserva(db, ADMIN, { material_id: m, quantidade: 0.3 });
+    const resId = res.id;
+    for (let i = 0; i < 3; i++) {
+      // eslint-disable-next-line no-await-in-loop
+      const s = await v2({ material_id: m, tipo: 'SAIDA', quantidade: 0.1, reserva_id: resId, motivo: 'E67 F5', justificativa: 'E67 F5' });
+      assert.strictEqual(s.status, 201, `saida ${i + 1}: ${JSON.stringify(s.body)}`);
+    }
+    const row = await dbGet(db, 'SELECT status, quantidade_utilizada FROM reservas_material_almoxarifado WHERE id = ?', [resId]);
+    assert.notStrictEqual(row.quantidade_utilizada, 0.3, 'controle: 0,1+0,1+0,1 nao da 0,3 exato');
+    assert.strictEqual(row.status, 'CONSUMIDA', JSON.stringify(row));
+    assert.strictEqual(await reservadoDo(m), 0);
+  });
+
+  await test('[Fase5/B] liberar os 0,3 que sobram de uma reserva de 1 consumida em 0,7 = liberacao TOTAL, reservado 0', async () => {
+    const m = await material({ saldo: 5 });
+    const r = await criarAprovada([[m, 1]], null);
+    await separar(r.id, [[r.itens[0], 1]]);
+    await entregar(r.id, [[r.itens[0], 0.7]]);
+    const res = await reservaDoItem(r.itens[0]);
+    assert.notStrictEqual(res.quantidade - res.quantidade_utilizada, 0.3, 'controle: o saldo da reserva NAO e 0,3 exato');
+    const out = await stockService.liberarReserva(db, ADMIN, res.id, 0.3, {});
+    assert.strictEqual(out.status, 'LIBERADA', JSON.stringify(out));
+    const row = await dbGet(db, 'SELECT status FROM reservas_material_almoxarifado WHERE id = ?', [res.id]);
+    assert.strictEqual(row.status, 'LIBERADA');
+    assert.strictEqual(await reservadoDo(m), 0);
+    // metade negativa: liberar MAIS do que o saldo continua recusado (o epsilon nao vira folga)
+    const r2 = await criarAprovada([[await material({ saldo: 5 }), 1]], null);
+    const res2 = await reservaDoItem(r2.itens[0]);
+    await assert.rejects(stockService.liberarReserva(db, ADMIN, res2.id, 1.001, {}), /Quantidade acima do saldo da reserva/);
   });
 
   await test('[M-1 -] 0,9 de 1 continua PARCIAL (o epsilon nao vira tolerancia)', async () => {

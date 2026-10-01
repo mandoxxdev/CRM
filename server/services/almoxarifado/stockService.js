@@ -280,6 +280,15 @@ async function ajustarSaldoExistente(db, materialId, localizacaoId, loteId, delt
  */
 const EPS = 1e-9; // tolerância de ponto flutuante: quantidade é REAL no SQLite
 
+/**
+ * Etapa 67 (Fase 5): `quantidade_reservada` do material menos `?`, com a sobra de ponto flutuante
+ * (<= EPS) virando ZERO. Dez consumos de 0,1 contra uma reserva de 1 deixavam 1,38e-16 reservado
+ * no material e a reserva ATIVA com 1,1e-16 de saldo: lixo que segura disponivel e mantem uma
+ * reserva zumbi. Usa DOIS placeholders com o mesmo valor (a conta aparece duas vezes).
+ */
+const RESERVADA_MENOS_SQL = `CASE WHEN COALESCE(quantidade_reservada,0) - ? <= ${EPS} THEN 0
+  ELSE COALESCE(quantidade_reservada,0) - ? END`;
+
 async function claimSaldoDoLote(db, materialId, loteId, locPreferida, quantidade) {
   const linhas = await dbAll(db, `
     SELECT id, quantidade FROM estoque_saldo_almoxarifado
@@ -1507,7 +1516,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
         const reserva = await dbGet(db, `UPDATE reservas_material_almoxarifado
           SET quantidade_utilizada = quantidade_utilizada + ?, updated_at = CURRENT_TIMESTAMP
           WHERE id = ? AND material_id = ? AND status = 'ATIVA'
-            AND (quantidade - COALESCE(quantidade_utilizada,0)) >= ?
+            AND (quantidade - COALESCE(quantidade_utilizada,0)) >= ? - ${EPS}
           RETURNING quantidade, quantidade_utilizada`,
           [quantidade, reserva_id, material_id, quantidade]);
         if (!reserva) {
@@ -1547,8 +1556,15 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
         saidaFisicoAplicado = true;
 
         // Reserva zerada não deve seguir ATIVA segurando saldo (reserva zumbi).
-        if (reserva.quantidade - reserva.quantidade_utilizada <= 0) {
+        // Etapa 67 (Fase 5): com tolerancia EPS — a soma de 0,1 dez vezes da 0,9999999999999999, e
+        // `<= 0` deixava a reserva ATIVA para sempre com 1,1e-16 de saldo. A sobra (>= 0) sai do
+        // reservado do material junto, e o reservado que sobra <= EPS vira zero.
+        const sobraReserva = reserva.quantidade - reserva.quantidade_utilizada;
+        if (sobraReserva <= EPS) {
           await dbRun(db, "UPDATE reservas_material_almoxarifado SET status = 'CONSUMIDA', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [reserva_id]);
+          const sobra = Math.max(0, sobraReserva);
+          await dbRun(db, `UPDATE materiais_almoxarifado SET quantidade_reservada = ${RESERVADA_MENOS_SQL},
+            updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [sobra, sobra, material_id]);
         }
       } else if (baixandoTerceiro) {
         // Baixa fisico E retencao NO MESMO UPDATE — molde de DECISAO_INSPECAO, e pela mesma razao:
@@ -2688,10 +2704,13 @@ async function liberarReserva(db, user, reservaId, quantidade = null, options = 
   const restante = reserva.quantidade - (reserva.quantidade_utilizada || 0);
   const qtd = quantidade == null ? restante : Number(quantidade);
   if (!(qtd > 0)) throw Object.assign(new Error('Quantidade a liberar deve ser maior que zero'), { status: 400 });
-  if (qtd > restante) {
+  // Etapa 67 (Fase 5): tolerancia EPS nas duas comparacoes. Reserva de 1 consumida em 0,7 tem
+  // saldo 0,30000000000000004; liberar os 0,3 que a tela mostra virava liberacao PARCIAL e deixava
+  // a reserva ATIVA com 4e-17 (a mesma reserva zumbi do consumo fracionado).
+  if (qtd > restante + EPS) {
     throw Object.assign(new Error(`Quantidade acima do saldo da reserva: ${restante}`), { status: 400 });
   }
-  const total = qtd >= restante;
+  const total = qtd >= restante - EPS;
 
   // Reivindica a reserva num UPDATE condicional (padrão do módulo: não há transação aqui).
   // Sem isso duas liberações concorrentes — ou duas rodadas do job de expiração — passariam
@@ -2703,7 +2722,7 @@ async function liberarReserva(db, user, reservaId, quantidade = null, options = 
         quantidade = quantidade - ?,
         liberado_por = ?, liberado_em = CURRENT_TIMESTAMP, motivo_liberacao = ?,
         updated_at = CURRENT_TIMESTAMP
-    WHERE id = ? AND status = 'ATIVA' AND (quantidade - COALESCE(quantidade_utilizada,0)) >= ?
+    WHERE id = ? AND status = 'ATIVA' AND (quantidade - COALESCE(quantidade_utilizada,0)) >= ? - ${EPS}
     RETURNING id`,
     [total ? statusFinal : 'ATIVA', total ? 0 : qtd, user?.id || null, motivo, reservaId, qtd]);
   if (!claim) {
@@ -2711,8 +2730,8 @@ async function liberarReserva(db, user, reservaId, quantidade = null, options = 
     throw Object.assign(new Error(`Reserva ${String(atual?.status || 'inexistente').toLowerCase()} não pode ser liberada`), { status: 400 });
   }
 
-  await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_reservada = MAX(0, COALESCE(quantidade_reservada,0) - ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-    [qtd, reserva.material_id]);
+  await dbRun(db, `UPDATE materiais_almoxarifado SET quantidade_reservada = ${RESERVADA_MENOS_SQL},
+    updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [qtd, qtd, reserva.material_id]);
 
   await registrarMovimentacao(db, user, {
     material_id: reserva.material_id, tipo: 'LIBERACAO_RESERVA', quantidade: qtd,
