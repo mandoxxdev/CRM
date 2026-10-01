@@ -214,6 +214,16 @@ async function relatorioHistoricoMovimentacoes(db, filters = {}) {
     params.push(`%${termo}%`);
   }
   if (filters.centro_custo_id) { sql += ' AND m.centro_custo_id = ?'; params.push(filters.centro_custo_id); }
+  // Etapa 66 (T3): filtro pelo id do cadastro, nunca pelo nome — o texto livre com o mesmo nome
+  // nao entra, e renomear o motivo nao tira as linhas antigas do filtro. Vazio = sem filtro.
+  const motivoBruto = filters.motivo_id;
+  if (motivoBruto !== undefined && motivoBruto !== null && String(motivoBruto).trim() !== '') {
+    if (!/^\d+$/.test(String(motivoBruto).trim()) || Number(motivoBruto) <= 0) {
+      throw Object.assign(new Error('Parâmetro "motivo_id" deve ser um número inteiro positivo'), { status: 400 });
+    }
+    sql += ' AND m.motivo_id = ?';
+    params.push(Number(motivoBruto));
+  }
   if (filters.data_inicio) { sql += ' AND DATE(m.created_at) >= ?'; params.push(filters.data_inicio); }
   if (filters.data_fim) { sql += ' AND DATE(m.created_at) <= ?'; params.push(filters.data_fim); }
   sql += ' ORDER BY m.created_at DESC LIMIT 500';

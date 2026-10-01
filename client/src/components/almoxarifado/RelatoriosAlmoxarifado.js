@@ -257,6 +257,33 @@ const RelatoriosAlmoxarifado = () => {
     [listaRelatorios, tipoSelecionado],
   );
 
+  // Etapa 66 (T3): parâmetro `tipo: 'select'` declara `opcoes_url` (rota que devolve
+  // `[{ id, nome, ativo }]`). Genérico por declaração — nenhum nome de relatório/parâmetro aqui.
+  // Desativado entra marcado: o histórico tem linhas dele. Falha de carga fica VISÍVEL no campo
+  // (nunca um select vazio calado); a consulta segue possível sem esse filtro.
+  const [opcoesParams, setOpcoesParams] = useState({}); // { [nome]: { opcoes } | { erro } }
+  useEffect(() => {
+    let cancelado = false;
+    setOpcoesParams({});
+    (entradaSelecionada?.params || [])
+      .filter((p) => p.tipo === 'select' && p.opcoes_url)
+      .forEach((p) => {
+        api.get(p.opcoes_url)
+          .then((r) => {
+            if (cancelado) return;
+            const opcoes = (Array.isArray(r.data) ? r.data : []).map((o) => ({
+              valor: String(o.id),
+              rotulo: o.ativo === 0 || o.ativo === false ? `${o.nome} (desativado)` : o.nome,
+            }));
+            setOpcoesParams((s) => ({ ...s, [p.nome]: { opcoes } }));
+          })
+          .catch(() => {
+            if (!cancelado) setOpcoesParams((s) => ({ ...s, [p.nome]: { erro: true } }));
+          });
+      });
+    return () => { cancelado = true; };
+  }, [entradaSelecionada]);
+
   const selecionarRelatorio = (tipo) => {
     setTipoSelecionado(tipo);
     setValoresParams({});
@@ -423,13 +450,32 @@ const RelatoriosAlmoxarifado = () => {
                         <label htmlFor={`param-${p.nome}`} style={{ fontSize: '0.8rem' }}>
                           {p.rotulo}{p.obrigatorio ? ' *' : ''}
                         </label>
-                        <input
-                          id={`param-${p.nome}`}
-                          type={p.tipo === 'date' ? 'date' : p.tipo === 'number' ? 'number' : 'text'}
-                          className="almox-select"
-                          value={valoresParams[p.nome] ?? ''}
-                          onChange={(e) => setValoresParams((s) => ({ ...s, [p.nome]: e.target.value }))}
-                        />
+                        {p.tipo === 'select' ? (
+                          <select
+                            id={`param-${p.nome}`}
+                            className="almox-select"
+                            value={valoresParams[p.nome] ?? ''}
+                            onChange={(e) => setValoresParams((s) => ({ ...s, [p.nome]: e.target.value }))}
+                          >
+                            <option value="">Todos</option>
+                            {(opcoesParams[p.nome]?.opcoes || []).map((o) => (
+                              <option key={o.valor} value={o.valor}>{o.rotulo}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            id={`param-${p.nome}`}
+                            type={p.tipo === 'date' ? 'date' : p.tipo === 'number' ? 'number' : 'text'}
+                            className="almox-select"
+                            value={valoresParams[p.nome] ?? ''}
+                            onChange={(e) => setValoresParams((s) => ({ ...s, [p.nome]: e.target.value }))}
+                          />
+                        )}
+                        {opcoesParams[p.nome]?.erro && (
+                          <span data-testid={`param-erro-${p.nome}`} style={{ fontSize: '0.75rem', color: '#ef4444' }}>
+                            Não foi possível carregar as opções
+                          </span>
+                        )}
                       </div>
                     ))}
                   </div>

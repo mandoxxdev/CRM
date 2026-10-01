@@ -40,10 +40,13 @@
  *   limite:      number|null. Teto que a query do proprio relatorio ja aplica via LIMIT — o
  *                export HERDA esse teto (nao ha paginacao separada); a tela avisa "mostrando os
  *                primeiros N" quando `linhas.length === limite`.
- *   params:      [{ nome, rotulo, tipo: 'date'|'number'|'text', obrigatorio }] — os NOMES REAIS
+ *   params:      [{ nome, rotulo, tipo: 'date'|'number'|'text'|'select', obrigatorio }] — os NOMES REAIS
  *                que a funcao ligada em extended.js consome da querystring (ex.: sucata-financeiro
  *                usa `de`/`ate`, NAO `data_inicio`/`data_fim` — nome errado nao da erro, e
  *                IGNORADO e devolve o periodo inteiro parecendo filtrado).
+ *                `tipo: 'select'` (Etapa 66) exige `opcoes_url`: rota do cliente que devolve
+ *                `[{ id, nome, ativo }]`; a tela mostra `nome` (+ " (desativado)" se ativo=0) e
+ *                manda `id`. Quem valida o valor continua sendo a funcao do relatorio.
  *   colunas:     [{ chave, rotulo }] | null. OBRIGATORIA quando exportavel:true (o export projeta
  *                as linhas por ela ANTES do json_to_sheet — nunca passa o array cru, que a lib
  *                MUTA com push). `null` quando exportavel:false.
@@ -157,6 +160,11 @@ const RELATORIOS = {
       { nome: 'grupo', rotulo: 'Grupo (ENTRADA, SAIDA, AJUSTE, DEVOLUCAO ou TRANSFERENCIA)', tipo: 'text', obrigatorio: false, exemplo: 'ENTRADA' },
       { nome: 'usuario', rotulo: 'Usuário (parte do nome)', tipo: 'text', obrigatorio: false },
       { nome: 'centro_custo_id', rotulo: 'Centro de custo (id)', tipo: 'number', obrigatorio: false },
+      // Etapa 66 (T3): filtro pelo motivo do CADASTRO (m.motivo_id), nunca pelo texto — uma PERDA
+      // de texto livre com o mesmo nome nao entra. Select na tela com opcoes de `opcoes_url`
+      // (?todos=1: desativados inclusos, o historico os tem). `exemplo` e o valor que a varredura do
+      // relatoriosRegistro usa (o 'x' generico seria recusado com 400).
+      { nome: 'motivo_id', rotulo: 'Motivo (cadastro)', tipo: 'select', obrigatorio: false, opcoes_url: '/almoxarifado/motivos-movimentacao?todos=1', exemplo: 1 },
     ],
     colunas: [
       { chave: 'material_codigo', rotulo: 'Código' },
@@ -164,6 +172,10 @@ const RELATORIOS = {
       { chave: 'tipo', rotulo: 'Tipo' },
       { chave: 'quantidade', rotulo: 'Quantidade' },
       { chave: 'saldo_posterior', rotulo: 'Saldo após' },
+      // Etapa 66 (T3): o nome gravado no momento (renomear o cadastro nao reescreve) e o texto
+      // completo ("Nome — complemento"); valem tambem para o texto livre de antes do cadastro.
+      { chave: 'motivo', rotulo: 'Motivo' },
+      { chave: 'justificativa', rotulo: 'Justificativa' },
       { chave: 'referencia', rotulo: 'Referência' },
       { chave: 'usuario_nome', rotulo: 'Usuário' },
       { chave: 'centro_custo', rotulo: 'Centro de custo' },
