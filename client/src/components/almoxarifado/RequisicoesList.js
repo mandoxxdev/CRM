@@ -98,6 +98,20 @@ const pendenteSeparado = (item) => Math.max(0, getSeparado(item) - getEntregue(i
 // chave (o servidor aplica a planejada) — e faz "Qualquer endereço" virar uma troca de verdade.
 const VALOR_PLANEJADA_SEM_SALDOS = '__planejada__';
 
+// Etapa 63 (RN-01/03): a entrega de um item com planejada sai de OUTRO par — outro endereço; o mesmo
+// endereço com outro lote quando a planejada tem lote (planejada sem lote = qualquer lote ali); ou
+// "automático" dito ao servidor (`origem_automatica`). É quando o servidor registra a substituição e a
+// tela pede o motivo. "Qualquer endereço" SEM `automatico` (pré-seleção acima do pendente) e a opção
+// "Planejada da separação" não mandam chave: o servidor aplica a planejada — não é troca.
+const MOTIVO_SUBSTITUICAO_MAX = 500;
+const trocaDaPlanejada = (item, escolha) => {
+  if (!temPlanejada(item) || !escolha || escolha.valor === VALOR_PLANEJADA_SEM_SALDOS) return false;
+  const origem = lerValorOrigem(escolha.valor);
+  if (!origem) return !!escolha.automatico;
+  if (origem.localizacao_origem_id !== Number(item.origem_separacao_id)) return true;
+  return item.lote_separacao_id != null && Number(origem.lote_id || 0) !== Number(item.lote_separacao_id);
+};
+
 // Etapa 61 (RN-04): material com controle de série sai dizendo QUAIS séries saem. As séries vêm de
 // GET /materiais/:id/series?status=EM_ESTOQUE; com um lote escolhido no "Sai de", só as desse lote
 // (o servidor recusa séries de lotes diferentes). O endereço da série é só dica: a transferência
@@ -195,6 +209,8 @@ const RequisicoesList = () => {
   // Etapa 58 (RN-05): origem escolhida por item ({ [itemId]: { valor, codigo } }) e as opções por
   // material. `saldosEntregaSeqRef` descarta a resposta de uma abertura anterior do modal.
   const [origensEntrega, setOrigensEntrega] = useState({});
+  // Etapa 63 (RN-03): motivo da troca da origem separada, por item (só vai quando há troca).
+  const [motivosSubstituicao, setMotivosSubstituicao] = useState({});
   const [saldosEntrega, setSaldosEntrega] = useState({});
   const saldosEntregaSeqRef = useRef(0);
   const [saldosEntregaFalhos, setSaldosEntregaFalhos] = useState({});
@@ -303,6 +319,7 @@ const RequisicoesList = () => {
     setSaldosEntrega({});
     setSaldosEntregaFalhos({});
     setOrigensEntrega({});
+    setMotivosSubstituicao({});
     setOrigensSeparacao({});
     const materiais = materiaisEntregaKey.slice(2);
     if (!materiais) return;
@@ -364,9 +381,13 @@ const RequisicoesList = () => {
   // Revisão da Etapa 59: a planejada é estrita e o servidor só a aplica até `separado - entregue`.
   // Depois de entrega parcial a quantidade entregável pode passar disso; pré-selecionar a planejada
   // aí mandaria origem estrita para a quantidade inteira e o servidor recusaria. Então, quando a
-  // quantidade passa do pendente separado, fica "automático" SEM `origem_automatica` (o servidor
-  // aplica a planejada até o pendente e completa automático acima). Só a pré-seleção inicial segue
-  // essa regra: mudar a quantidade depois não mexe na escolha já feita.
+  // quantidade passa do pendente separado, fica "Qualquer endereço (automático)" SEM chave nenhuma.
+  // Etapa 63 (Fase 2): este comentário dizia que o servidor "aplica a planejada até o pendente e
+  // completa automático acima" — ERA FALSO até a 63: acima do pendente TUDO saía automático, inclusive
+  // o que estava na caixa separado da planejada. Agora o servidor divide a baixa (o separado pendente
+  // sai da planejada, o excedente automático) e não registra substituição; o modal diz isso na dica
+  // "O separado pendente sai de ...". Só a pré-seleção inicial segue essa regra: mudar a quantidade
+  // depois não mexe na escolha já feita.
   // Busca que falhou: opção "Planejada da separação" selecionada, sem chave (o servidor aplica a
   // planejada, como na entrega de um clique) — e "Qualquer endereço" continua sendo uma troca real.
   useEffect(() => {
@@ -642,7 +663,7 @@ const RequisicoesList = () => {
 
   // `origens` só vem do modal (handleEntregar). A entrega direta (`direto: true`) não escolhe
   // origem e segue mandando só item + quantidade, como antes da Etapa 58.
-  const montarItensEntrega = (fonte, qtdMap = quantidadesEntrega, origens = null, seriesMap = null) => {
+  const montarItensEntrega = (fonte, qtdMap = quantidadesEntrega, origens = null, seriesMap = null, motivos = null) => {
     if (!fonte?.itens) return [];
     return fonte.itens
       .map((i) => {
@@ -664,6 +685,9 @@ const RequisicoesList = () => {
           // senão ele aplica a planejada. Item sem planejada segue sem chave nenhuma (Etapa 58).
           item.origem_automatica = true;
         }
+        // Etapa 63 (RN-03): o motivo da troca só vai quando há troca da planejada e foi preenchido.
+        const motivo = String(motivos?.[i.id] ?? '').trim();
+        if (motivo && trocaDaPlanejada(i, escolha)) item.motivo_substituicao = motivo.slice(0, MOTIVO_SUBSTITUICAO_MAX);
         // Etapa 61 (RN-04): só item de material serializado leva `serie_ids` (ids numéricos).
         const ids = seriesMap?.[i.id];
         if (ids?.length) item.serie_ids = ids.map(Number);
@@ -887,7 +911,7 @@ const RequisicoesList = () => {
       const s = seriesDoItem(i);
       if (s && !s.carregando && s.escolhidas.length) seriesMap[i.id] = s.escolhidas;
     });
-    const itens_atendidos = montarItensEntrega(detalhe, quantidadesEntrega, origensEntrega, seriesMap);
+    const itens_atendidos = montarItensEntrega(detalhe, quantidadesEntrega, origensEntrega, seriesMap, motivosSubstituicao);
     await entregarItens(itens_atendidos);
   };
 
@@ -1418,6 +1442,30 @@ const RequisicoesList = () => {
                         Há material crítico separado — outra pessoa do almoxarifado precisa conferir antes de liberar ou entregar.
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* Etapa 63 (RN-03): a entrega saiu de outro par que não o separado — o registro. */}
+                {(Array.isArray(detalhe.substituicoes) ? detalhe.substituicoes : []).length > 0 && (
+                  <div style={{ marginTop: 16 }} data-testid="substituicoes-origem">
+                    <div style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--gmp-text)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                      Substituições ({detalhe.substituicoes.length})
+                    </div>
+                    {detalhe.substituicoes.map((s) => {
+                      const motivo = typeof s.motivo === 'string' ? s.motivo.trim() : '';
+                      return (
+                        <div key={s.id} data-testid={`substituicao-${s.id}`} style={{ padding: '6px 0', borderBottom: '1px solid var(--gmp-border)', fontSize: '0.82rem' }}>
+                          <div data-testid={`substituicao-texto-${s.id}`}>
+                            {`${s.material_codigo}: ${s.quantidade} — separado de ${s.planejada_codigo}${s.planejada_lote ? ` — lote ${s.planejada_lote}` : ''}`
+                              + ` · saiu de ${s.saiu_codigo || 'automático'}${s.saiu_lote ? ` — lote ${s.saiu_lote}` : ''}`
+                              + `${motivo ? ` · ${motivo}` : ''}`}
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>
+                            {s.usuario_nome || 'Usuário'} · {formatDate(s.em)}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 
@@ -2000,6 +2048,26 @@ const RequisicoesList = () => {
                         onChange={v => setOrigensEntrega(o => ({ ...o, [item.id]: { ...o[item.id], codigo: v } }))}
                         dica={lerValorOrigem(origensEntrega[item.id]?.valor) ? null :'Para confirmar a leitura, escolha antes de onde o item sai.'}
                       />
+                      {/* Etapa 63: acima do separado pendente, sem escolha, o servidor divide a baixa. */}
+                      {temPlanejada(item) && qtdEntregar > pendenteSeparado(item) + 1e-9
+                        && !origensEntrega[item.id]?.valor && !origensEntrega[item.id]?.automatico && (
+                        <div id={`entrega-dica-pendente-${item.id}`} style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)', marginTop: 4 }}>
+                          O separado pendente sai de {item.origem_separacao_codigo}{item.lote_separacao_codigo ? ` — lote ${item.lote_separacao_codigo}` : ''}; o restante, automático.
+                        </div>
+                      )}
+                      {/* Etapa 63 (RN-03): saindo de onde não foi separado, o motivo da troca (opcional). */}
+                      {trocaDaPlanejada(item, origensEntrega[item.id]) && (
+                        <div style={{ marginTop: 8 }}>
+                          <label className="almox-label" htmlFor={`entrega-motivo-troca-${item.id}`} style={{ fontSize: '0.8rem' }}>Motivo da troca (opcional)</label>
+                          <input id={`entrega-motivo-troca-${item.id}`} className="almox-input" type="text"
+                            maxLength={MOTIVO_SUBSTITUICAO_MAX}
+                            value={motivosSubstituicao[item.id] || ''}
+                            onChange={e => setMotivosSubstituicao(m => ({ ...m, [item.id]: e.target.value }))} />
+                          <div style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)', marginTop: 2 }}>
+                            Saindo de onde não foi separado — conte o porquê.
+                          </div>
+                        </div>
+                      )}
                     </div>
                     {/* Etapa 61 (RN-04): material com controle de série — quais séries saem. */}
                     {(() => {
