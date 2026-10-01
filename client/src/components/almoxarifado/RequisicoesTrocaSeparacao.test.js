@@ -65,10 +65,12 @@ const emSeparacao = (extra, req = {}) => ({
   itens: [{ ...ITEM_BASE, quantidade_separada: 5, quantidade_entregue: 0, quantidade_atendida: 0, ...extra }],
 });
 
-// B-02 tem dois lotes (L-7 planejado, L-8 não); A-01 sem lote.
+// B-02 tem dois lotes (L-7 planejado, L-8 não); A-01 sem lote. Fase 5: L-7 tem 10 — os 5 já
+// separados continuam no saldo (separar não move estoque) e 5 livres; com 4 a fixture era impossível
+// e o servidor recusaria o PUT que o teste aprovava.
 const SALDOS = [
   { id: 1, material_id: 10, localizacao_id: 1, localizacao_codigo: 'A-01', lote_id: null, lote: null, quantidade: 10 },
-  { id: 4, material_id: 10, localizacao_id: 2, localizacao_codigo: 'B-02', lote_id: 7, lote: 'L-7', quantidade: 4 },
+  { id: 4, material_id: 10, localizacao_id: 2, localizacao_codigo: 'B-02', lote_id: 7, lote: 'L-7', quantidade: 10 },
   { id: 5, material_id: 10, localizacao_id: 2, localizacao_codigo: 'B-02', lote_id: 8, lote: 'L-8', quantidade: 6 },
 ];
 
@@ -197,9 +199,27 @@ describe('Etapa 65 (CRÍTICO 2): o "Sai de" da separação parte da planejada', 
   });
 
   test('planejada sem lote: a opção do endereço sem lote, se existir', async () => {
-    saldos = [...SALDOS, { id: 6, material_id: 10, localizacao_id: 2, localizacao_codigo: 'B-02', lote_id: null, lote: null, quantidade: 3 }];
+    saldos = [...SALDOS, { id: 6, material_id: 10, localizacao_id: 2, localizacao_codigo: 'B-02', lote_id: null, lote: null, quantidade: 10 }];
     await abrirSeparacao({ ...PLANEJADA, ...SEM_LOTE });
     expect(selectSeparacao().value).toBe('2:');
+  });
+
+  // Fase 5 (IMPORTANTE): a planejada só tem o que já está na caixa (5 separados, saldo 5 em L-7) — o
+  // servidor recusaria "O saldo em B-02 (0) não cobre a quantidade (5)". Não pré-seleciona: automático,
+  // com o aviso de troca; e com saldo parcial (7: só 2 livres para 5 sugeridos), também não.
+  test('planejada que não cobre a quantidade sugerida: automático, com o aviso', async () => {
+    saldos = SALDOS.map((s) => (s.lote_id === 7 ? { ...s, quantidade: 5 } : s));
+    await abrirSeparacao(PLANEJADA);
+    expect(selectSeparacao().value).toBe('');
+    expect(aviso()).toBeTruthy();
+    await clicar('Confirmar Separação');
+    expect(itemEnviado()).not.toHaveProperty('localizacao_origem_id');
+  });
+
+  test('planejada com saldo livre parcial (2 de 5): automático', async () => {
+    saldos = SALDOS.map((s) => (s.lote_id === 7 ? { ...s, quantidade: 7 } : s));
+    await abrirSeparacao(PLANEJADA);
+    expect(selectSeparacao().value).toBe('');
   });
 
   // Contrato revisto na Fase 5: planejada sem lote só casa com a opção sem lote — pegar um lote do
@@ -263,7 +283,7 @@ describe('Etapa 65 (RN-04): aviso e motivo da troca na separação', () => {
   });
 
   test('planejada sem lote: lote do mesmo endereço É troca (aviso sem lote); a opção sem lote não', async () => {
-    saldos = [...SALDOS, { id: 6, material_id: 10, localizacao_id: 2, localizacao_codigo: 'B-02', lote_id: null, lote: null, quantidade: 3 }];
+    saldos = [...SALDOS, { id: 6, material_id: 10, localizacao_id: 2, localizacao_codigo: 'B-02', lote_id: null, lote: null, quantidade: 10 }];
     await abrirSeparacao({ ...PLANEJADA, ...SEM_LOTE });
     expect(selectSeparacao().value).toBe('2:');
     expect(aviso()).toBeNull();

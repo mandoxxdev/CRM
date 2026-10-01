@@ -129,9 +129,15 @@ const trocaNaSeparacao = (item, valor) => {
 // Etapa 65 (Fase 2, CRÍTICO 2): a opção do "Sai de" da separação que é a planejada — o par exato
 // (planejada sem lote = a opção do endereço sem lote; uma opção com lote ali seria troca). Fora das
 // opções (sem saldo lá) = '' (automático).
-const valorPlanejadaNaSeparacao = (item, rows) => {
+// Fase 5 da Etapa 65 (IMPORTANTE): só quando a planejada COBRE a quantidade sugerida — o separado
+// pendente continua no saldo da origem (separar não move estoque), e o servidor recusa "O saldo em A
+// (0) não cobre a quantidade (5)" quando A só tem o que já está na caixa. Não cobre = automático (o
+// aviso de troca aparece, honesto).
+const valorPlanejadaNaSeparacao = (item, rows, qtdSugerida = 0, outrosMesmoMaterial = 0) => {
   const valor = valorPlanejada(item);
-  return (rows || []).some((s) => valorOrigem(s) === valor) ? valor : '';
+  if (!(rows || []).some((s) => valorOrigem(s) === valor)) return '';
+  const cobre = maxSeparavelNaTela(item, valor, rows, outrosMesmoMaterial) + 1e-9 >= (Number(qtdSugerida) || 0);
+  return cobre ? valor : '';
 };
 
 // Etapa 61 (RN-04): material com controle de série sai dizendo QUAIS séries saem. As séries vêm de
@@ -376,10 +382,11 @@ const RequisicoesList = () => {
       if (Object.prototype.hasOwnProperty.call(origensSeparacao, item.id)) return;
       const rows = saldosEntrega[item.material_id];
       if (!rows) return;
-      novas[item.id] = valorPlanejadaNaSeparacao(item, rows);
+      novas[item.id] = valorPlanejadaNaSeparacao(item, rows, quantidadesSeparacao[item.id],
+        separandoOutrosDoMaterial(detalhe.itens, item, quantidadesSeparacao));
     });
     if (Object.keys(novas).length) setOrigensSeparacao((prev) => ({ ...novas, ...prev }));
-  }, [showSeparar, detalhe, saldosEntrega, origensSeparacao]);
+  }, [showSeparar, detalhe, saldosEntrega, origensSeparacao, quantidadesSeparacao]);
 
   // Etapa 61 (RN-04): só no modal de entrega. O detalhe da requisição não traz `controle_serie`,
   // então pergunta ao material (GET /materiais/:id). Falha nessa busca = trata como sem série (não
