@@ -969,9 +969,9 @@ SELECT m.id, m.codigo, m.nome, m.quantidade_atual AS fisico,
   **inventário** ainda ajusta só o número, mas ao concluir **lista** os materiais com série a regularizar. Rode esta
   consulta depois de inventário, ou siga o aviso da própria tela.)*
 
-### B. Decisões de negócio — B1 a B247; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B251; as em aberto esperam você, as tomadas estão escritas com o descartado
 
-*(**Atualizado em 2026-09-30 de B243 para B247**, com as quatro da Etapa 62; antes, de B239 para B243, com as quatro da Etapa 61; antes, de B237 para B239, com as duas da Etapa 60; antes, de B233 para B237, com as quatro da Etapa 59; antes, de B228 para B233, com as cinco da Etapa 58; antes, de B225 para B228, com as três da Etapa 57; antes, de B222 para B225, com as três da Etapa 56; antes, de B219 para B222, com as da Etapa 55.)*
+*(**Atualizado em 2026-10-01 de B247 para B251**, com as quatro da Etapa 63; antes, de B243 para B247, com as quatro da Etapa 62; antes, de B239 para B243, com as quatro da Etapa 61; antes, de B237 para B239, com as duas da Etapa 60; antes, de B233 para B237, com as quatro da Etapa 59; antes, de B228 para B233, com as cinco da Etapa 58; antes, de B225 para B228, com as três da Etapa 57; antes, de B222 para B225, com as três da Etapa 56; antes, de B219 para B222, com as da Etapa 55.)*
 
 *(**Atualizado em 2026-09-30 de B205 para B219**, com as quatro da Etapa 51, as três da Etapa 52, as quatro da Etapa 53 e as três da Etapa 54.)*
 
@@ -4051,6 +4051,36 @@ diferentes do físico, que a tela mostra com link para **Lotes e Séries → Sé
 limite é exatamente essa diferença). **Descartado:** pedir as séries na contagem (a tela de contagem não tem esse campo —
 é outra etapa, se quiserem).
 
+**B248 (NOVA, da Etapa 63) — a troca da origem separada é registrada NA ENTREGA, não na separação.**
+**Escolhido:** quando a entrega de um item sai de outro endereço (ou de outro lote, quando o separado tinha lote) que
+não o separado, fica um registro: quanto, separado de onde, saiu de onde, quem, quando e o motivo. A spec 05 fala em
+"substituição de lote com registro" **na separação**; esta etapa paga **na entrega**, que é o gesto que move o estoque.
+**Descartado:** registrar também a troca **na separação** — uma rodada com outra origem sobre separado pendente deixa o
+item **sem** origem planejada (**B237**) e isso continua sem registro. Se quiserem o registro também ali, é outra etapa.
+
+**B249 (NOVA, da Etapa 63) — o registro mora numa tabela própria, só de acréscimo.**
+**Escolhido:** uma lista própria das trocas (nunca apagada nem editada), com o endereço e o lote separados e os que
+saíram, os números das movimentações e o motivo; o detalhe da requisição a lê. **Descartado:** guardar na auditoria —
+ela é melhor-esforço (uma falha de log não desfaz o ato), ler a auditoria é restrito ao perfil de configuração, e a
+rastreabilidade do lote vai precisar consultar por lote, o que a auditoria não permite.
+
+**B250 (NOVA, da Etapa 63) — o motivo da troca é opcional, e pedir "automático" sempre conta como troca.**
+**Escolhido:** mesma decisão da divergência (**B238**): a janela pede *"Motivo da troca (opcional)"* e não obriga. Item
+com origem separada entregue em **"Qualquer endereço (automático)"** (escolhido pelo operador, ou marcado pela própria
+janela porque a origem separada não tem mais saldo) conta como troca **mesmo que o automático acabe tirando do mesmo
+lugar** — o operador pediu para não sair de onde foi separado. **Descartado:** comparar o que o automático tirou com o
+separado (o livro não grava o endereço drenado no automático).
+
+**B251 (NOVA, da Etapa 63) — acima do separado pendente, a baixa se divide — e isso PODE RECUSAR onde antes passava.**
+**Escolhido:** separados 5 de A, entregues 2, e agora uma entrega de 8 sem escolha: os **3 que estão na caixa** saem
+**de A** (estrito), e os **5 a mais** (nunca separados) saem pelo automático. Antes, acima do separado pendente **tudo**
+saía pelo automático, inclusive o que estava na caixa tirado de A — e o livro podia dizer "saiu de B" do que saiu de A
+(a mentira que a **B236** recusa). **Consequência que vocês precisam saber:** se A não tem mais o separado (alguém
+transferiu ou o inventário zerou), essa entrega agora é **recusada** com *"⟨material⟩: a origem da separação (A) não
+serve mais (…) — entregue escolhendo de onde sai"*, onde antes passava. A janela avisa na dica do pendente.
+**Estava errado:** o commit da implementação (`3e022eb`) dizia "nada que hoje passa é recusado" — falso, pela razão
+acima; registrado aqui. **Descartado:** manter a entrega acima do pendente toda automática.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -5155,6 +5185,13 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
     m.requisicao_id WHERE r.ativo = 0 AND r.status = 'CANCELADO';` — cada linha é um crédito em dobro possível; confira
     o físico do material pela contagem.
 
+84. **NOVO, da Etapa 63 — entrega acima do separado pendente pode ser RECUSADA onde antes passava.** Quando a entrega de
+    um item com origem separada passa do que foi separado e ainda não entregue, a parte separada sai **de onde foi
+    separada** e o resto pelo automático (**B251**). Se a origem separada não tiver mais o separado, a entrega — inclusive
+    a de **um clique** — é recusada com *"⟨material⟩: a origem da separação (⟨endereço⟩) não serve mais (…) — entregue
+    escolhendo de onde sai"*. **O que fazer:** **"Entregar escolhendo de onde sai…"** e escolher outro endereço ou
+    **"Qualquer endereço (automático)"** — e a troca fica registrada (**B248**).
+
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -5813,6 +5850,21 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   (*"as series do material mudaram durante o ajuste…"*) recarrega.
 - **(62) Duas guardas que não são alcançadas hoje** ficaram como segunda barreira: total negativo (a primeira validação
   do sistema já recusa antes) e a baixa de série num **ajuste de inventário** (o inventário não pede séries).
+- **(63) A troca na SEPARAÇÃO não é registrada** — só na entrega (**B248**); a rodada com outra origem deixa o item sem
+  origem separada (**B237**), sem registro.
+- **(63) Trocar a SÉRIE escolhida não conta como troca** — o registro é de endereço e lote.
+- **(63) A janela e o servidor comparam o lote de jeitos diferentes** quando o lote vem das séries: a janela olha o lote
+  da opção de "Sai de"; o servidor, o lote das séries escolhidas. Nesse caso a janela pode pedir o motivo e o servidor
+  não registrar troca (o motivo é descartado).
+- **(63) O lote de saída fica em branco** no registro quando o automático tirou de vários lotes.
+- **(63) O registro não acompanha estorno nem exclusão** — é só de acréscimo: uma entrega estornada ou uma requisição
+  excluída continuam mostrando a troca.
+- **(63) Falha no meio de um item** (uma baixa grava e a seguinte falha): o registro é gravado mesmo assim, com a
+  quantidade da troca inteira — a parte que chegou a sair está no livro.
+- **(63) A rastreabilidade do lote ainda não lê as trocas** — o extrato por lote (feature 10) é outra etapa; a lista já
+  guarda os lotes separado e de saída para isso.
+- **(63) Uma guarda redundante** na detecção da troca ficou como segunda barreira (a sabotagem dela não derruba teste:
+  com a origem separada aplicada, endereço e lote já são iguais).
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -6288,6 +6340,18 @@ ao mesmo tempo) e as telas com o servidor simulado. O que **só o navegador** pr
    *"Estes materiais com série ficaram com séries presentes diferentes do físico…"* fica na tela, e o link abre **Lotes e
    Séries** em **outra aba**.
 3. **O estorno do ajuste.** No livro, estorne um ajuste de material com série: a recusa da **B246** aparece.
+
+**(63) Nenhum clique foi dado nesta etapa.** Os testes provam a regra pelo servidor (7 cenários, inclusive série com lote
+acima do pendente e a divisão cruzando a reserva) e as telas com o servidor simulado (16 cenários). O que **só o
+navegador** prova:
+
+1. **O motivo da troca.** Separe um item de **A** e, em **"Entregar escolhendo de onde sai…"**, escolha **B** no "Sai
+   de": aparece **"Motivo da troca (opcional)"** com a dica *"Saindo de onde não foi separado — conte o porquê."*; voltar
+   para A esconde o campo.
+2. **A dica do pendente.** Separe 3 de A, entregue 1, abra a janela e ponha 5: aparece *"O separado pendente sai de A;
+   o restante, automático. Se lá não houver mais o separado, a entrega é recusada — escolha de onde sai."*.
+3. **O bloco no detalhe.** Depois da entrega com troca, o detalhe da requisição mostra **"Substituições (1)"** com
+   *"⟨material⟩: ⟨qtd⟩ — separado de A · saiu de B · ⟨motivo⟩"* e quem/quando.
 
 
 ### G. Fragilidades estruturais que continuam de pé
@@ -14755,16 +14819,81 @@ série repetido deixava uma auditoria de ajuste de material de cliente que não 
 na tela, o link do aviso do inventário recarregava a página e sumia com o aviso (abre em outra aba).
 
 
+## Etapa 63 — A troca do lugar separado fica registrada na entrega (2026-10-01)
+
+Desde a Etapa 59 a separação diz de onde cada item sai, e a entrega sai dali. Mas o operador pode entregar de **outro**
+lugar — o lote separado venceu, foi bloqueado, acabou — e isso acontecia **calado**: depois da entrega, ninguém sabia que
+o que saiu não foi o que foi separado. Agora a troca fica **registrada** na requisição, com o motivo se o operador quiser
+contar. E uma brecha foi fechada no caminho: quando a entrega passava do que estava separado, **tudo** saía pelo
+automático — inclusive o que estava na caixa, separado de A. Agora a parte separada sai de onde foi separada.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Entregar de outro lugar que não o separado não deixava rastro | A troca fica registrada: quanto, separado de onde, saiu de onde, quem, quando e o motivo (**B248**, **B249**) |
+| A janela de entrega não perguntava nada na troca | **"Motivo da troca (opcional)"** quando o "Sai de" difere do separado ou o item vai pelo automático (**B250**) |
+| O detalhe da requisição não mostrava trocas | Bloco **"Substituições (N)"** no detalhe |
+| Entrega acima do separado pendente saía **toda** pelo automático (o livro podia dizer "saiu de B" do que estava na caixa tirado de A) | O separado pendente sai **de onde foi separado**, o resto pelo automático (**B251**) — e pode ser recusada se lá não houver mais o separado (**C84**) |
+
+### As regras, com o cenário exato
+
+**1. Entregar de outro lugar registra a troca.** Material com saldo em **A** e em **B**. Requisição de 5, separada
+**de A** ("Sai de" na separação). Em **"Entregar escolhendo de onde sai…"**, escolha **B**: aparece **"Motivo da troca
+(opcional)"** com a dica *"Saindo de onde não foi separado — conte o porquê."*. Escreva *"A interditada para
+inventário"* e confirme. No detalhe da requisição: **"Substituições (1)"** com *"⟨material⟩: 5 — separado de A · saiu de
+B · A interditada para inventário"* e, abaixo, quem e quando.
+
+**2. Sair de onde foi separado não registra nada.** A mesma requisição entregue pelo botão de um clique (ou escolhendo
+A): nenhum registro, nenhum campo de motivo.
+
+**3. O lote conta só quando o separado tinha lote.** Separado *"de A"* sem lote, entregue de A lote L1: **não** é troca.
+Separado *"de A — lote L1"*, entregue de A lote **L2**: **é** troca (*"separado de A — lote L1 · saiu de A — lote L2"*).
+
+**4. "Automático" conta como troca.** Item separado de A entregue em **"Qualquer endereço (automático)"**: o campo de
+motivo aparece e o registro diz *"saiu de automático"* (com o lote, quando o sistema tirou de um lote só) (**B250**).
+
+**5. Acima do separado, a parte separada sai de onde foi separada.** Separe 5 de A, entregue 2, e depois entregue 8 sem
+escolher: a janela mostra *"O separado pendente sai de A; o restante, automático. Se lá não houver mais o separado, a
+entrega é recusada — escolha de onde sai."*. Os 3 que estavam na caixa saem de A; os outros 5, pelo automático. Se A já
+não tem os 3 (alguém transferiu), a entrega é recusada com *"⟨material⟩: a origem da separação (A) não serve mais (…) —
+entregue escolhendo de onde sai"* — o caminho é escolher de onde sai (**C84**).
+
+### O que esta etapa NÃO cobre
+
+1. A troca **na separação** (outra rodada com outra origem) continua sem registro (**B248**, **B237**).
+2. Trocar a **série** escolhida não conta como troca (**D (63)**).
+3. O extrato por **lote** ainda não lê as trocas (**D (63)**).
+4. O registro não acompanha estorno nem exclusão — é só de acréscimo (**D (63)**).
+
+### O que a revisão encontrou
+
+A revisão do **plano** achou duas coisas antes do código: a primeira versão deixava escapar uma troca real — acima do
+separado pendente tudo saía pelo automático, então os itens separados de A podiam sair de B sem registro e com o livro
+dizendo B; virou a divisão da baixa (cenário 5). E guardar o registro na auditoria não servia (é melhor-esforço,
+restrita ao perfil de configuração e não consultável por lote); virou uma lista própria. A revisão do **código** achou
+uma **regressão da própria etapa**: na baixa dividida, a parte pelo automático de um material com série saía **sem o
+lote das séries** — o mesmo defeito que a Etapa 61 tinha fechado (o saldo por lote e o lote das séries se separavam);
+corrigido e com teste. Também: uma falha no meio das baixas de um item deixava a troca sem registro (agora registra
+sempre), e a frase do commit "nada que hoje passa é recusado" estava errada (**B251**, **C84**) — a janela agora avisa.
+
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 63 entregue (2026-10-01):** **a troca do lugar separado fica registrada na entrega.** Entregar de outro
+  endereço ou lote que não o separado deixa registro (quanto, de onde, para onde, quem, motivo opcional) no bloco
+  **"Substituições"** do detalhe; acima do separado pendente, a parte separada sai de onde foi separada e o resto pelo
+  automático. **O que é seu:** as decisões **B248 a B251** (a **B251** pode recusar onde antes passava); o furo **C84**;
+  as limitações **(63)** em D e as verificações **(63)** em F. **Próxima: Etapa 64 — ver o plano da Etapa 63.**
 
 - **Etapa 62 entregue (2026-09-30):** **o ajuste de material com série diz quais peças entram ou saem.** O ajuste do
   total pede os números das peças novas (quando sobe) ou as peças que saem (quando desce, ficam **Baixada**); por
   endereço e o estorno do ajuste são recusados; o inventário recusa contagem em fração e, ao concluir, avisa quais
   materiais com série ficaram a regularizar, com link. Fecha o **C82**. **O que é seu:** as decisões **B244 a B247**;
   as limitações **(62)** em D e as verificações **(62)** em F. **Próxima: Etapa 63 — a substituição de lote com
-  registro (feature 05); ver o plano da Etapa 62.**
+  registro (feature 05); ver o plano da Etapa 62.** *(Feita — Etapa 63.)*
 
 - **Etapa 61 entregue (2026-09-30):** **a entrega de material com série diz quais peças saem.** A janela de entrega
   pede as séries (contador e quantidade exata); a de um clique de material com série é recusada; excluir a requisição

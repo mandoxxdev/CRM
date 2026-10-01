@@ -1,19 +1,24 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-09-30 (Etapa 62) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-01 (Etapa 63) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 62) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 63) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-09-30 (Etapa 62 ENTREGUE · Etapa 63 começando)
+> ## Onde o desenvolvimento está — 2026-10-01 (Etapa 63 ENTREGUE · Etapa 64 começando)
 >
-> **O desenvolvimento parou aqui: Etapa 62 fechada, Etapa 63 começando — 2026-09-30.** A **Etapa 62 (o ajuste de
-> material com série diz quais peças entram ou saem)**: o **ajuste** do total de um material com série pede os números
-> das peças novas (quando sobe) ou as peças que saem (quando desce, ficam **Baixada**); ajuste por endereço e o estorno
-> do ajuste são recusados; o **inventário** recusa contagem em fração e, ao concluir, avisa quais materiais com série
-> ficaram a regularizar. Fecha o **C82**. **Próxima etapa, já começando: 63 — a substituição de lote com registro**
-> (feature 05; ver *"Próxima tarefa detalhada"* no plano da Etapa 62).
+> **O desenvolvimento parou aqui: Etapa 63 fechada, Etapa 64 começando — 2026-10-01.** A **Etapa 63 (a troca do lugar
+> separado fica registrada na entrega)**: entregar de outro endereço ou lote que não o separado deixa registro — quanto,
+> separado de onde, saiu de onde, quem e o motivo (opcional) — no bloco **"Substituições"** do detalhe da requisição; e
+> acima do separado pendente, a parte separada sai de onde foi separada (o resto pelo automático) — o que **pode recusar**
+> a entrega se lá não houver mais o separado (**B251**, **C84**). **Próxima etapa, já começando: 64 — a fila de
+> separação do almoxarife** (feature 05; ver *"Próxima tarefa detalhada"* no plano da Etapa 63).
 >
-> **Etapas 1 a 20 e 22 a 62 completas.**
+> **Etapas 1 a 20 e 22 a 63 completas.**
+>
+> **Etapa 62, 2026-09-30.** A **Etapa 62 (o ajuste de material com série diz quais peças entram ou saem)**: o
+> **ajuste** do total de um material com série pede os números das peças novas ou as peças que saem; por endereço e o
+> estorno do ajuste são recusados; o inventário recusa fração e avisa quais materiais ficaram a regularizar. Fecha o
+> **C82**. Próxima: 63 *(feita — acima)*.
 >
 > **Etapa 61, 2026-09-30.** A **Etapa 61 (a entrega de
 > material com série diz quais peças saem)**: a janela de entrega pede **as séries** de cada item com série (contador e
@@ -4995,6 +5000,52 @@ que ele não tinha como repetir com sucesso garantido.
 - **Número de série de material** — continua sendo **digitado pelo operador** e de propósito não
   passa por este gerador. Retentar com outro número gravaria algo que ninguém digitou.
 - **Números de outros módulos do CRM** — a varredura foi do almoxarifado.
+
+---
+
+## Etapa 63 — A troca do lugar separado fica registrada na entrega (ENTREGUE — 2026-10-01)
+
+**O que mudou, em uma frase:** quando a entrega sai de outro lugar que não o separado, isso fica registrado (com o
+motivo, se quiser), e a parte separada que ainda está na caixa sai de onde foi separada.
+
+**O problema que ela resolve.** A separação diz de onde cada item sai (Etapa 59), mas o operador pode entregar de
+outro lugar — o lote separado venceu, foi bloqueado, acabou — e isso acontecia calado. E quando a entrega passava do
+que estava separado, **tudo** saía pelo automático, inclusive o que estava na caixa.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Entregar de outro lugar que não o separado não deixava rastro | Registro no bloco **"Substituições"** do detalhe: quanto, separado de onde, saiu de onde, quem, quando, motivo |
+| Nenhum campo de motivo na troca | **"Motivo da troca (opcional)"** quando o "Sai de" difere do separado ou vai pelo automático |
+| Acima do separado pendente, tudo pelo automático | A parte separada sai de onde foi separada; o resto, automático — e recusa se lá não houver mais o separado |
+
+### Roteiro de teste manual (≈5 min)
+
+**Preparação.** Um material com saldo em dois endereços, **A** e **B** (por **Movimentações → Nova → Entrada** com
+destino A, e outra com destino B). Uma requisição aprovada de **5** desse material.
+
+1. **Separar de A.** Em **Separar**, no "Sai de" do item, escolha **A** e separe 5. O item mostra *"separado de A"*.
+2. **Entregar de B, com motivo.** Em **"Entregar escolhendo de onde sai…"**, escolha **B** no "Sai de": aparece
+   **"Motivo da troca (opcional)"** com a dica *"Saindo de onde não foi separado — conte o porquê."*. Escreva *"A
+   interditada"* e confirme. No detalhe da requisição aparece **"Substituições (1)"** com *"⟨material⟩: 5 — separado de
+   A · saiu de B · A interditada"* e quem/quando.
+3. **Sem troca, sem registro.** Outra requisição separada de A e entregue pelo botão de um clique: **nenhum** bloco
+   "Substituições".
+4. **Acima do separado.** Requisição de **10**, separe **3** de A, entregue **1**. Abra **"Entregar escolhendo de onde
+   sai…"** e ponha **5** sem escolher: a dica é *"O separado pendente sai de A; o restante, automático. Se lá não houver
+   mais o separado, a entrega é recusada — escolha de onde sai."*. Confirme: 2 saem de A e 3 pelo automático (confira no
+   livro de movimentações).
+5. **A recusa.** Repita o passo 4, mas antes de entregar transfira todo o saldo de A para B: a entrega é recusada com
+   *"⟨material⟩: a origem da separação (A) não serve mais (…) — entregue escolhendo de onde sai"*. Escolha **B** ou
+   **"Qualquer endereço (automático)"**: passa, e a troca fica registrada.
+
+### O que esta etapa NÃO cobre
+
+- A troca **na separação** (outra rodada com outra origem) continua sem registro (**B248**).
+- Trocar a **série** escolhida não conta como troca.
+- O extrato por **lote** ainda não mostra as trocas.
+- O registro não acompanha estorno nem exclusão (é só de acréscimo).
 
 ---
 
