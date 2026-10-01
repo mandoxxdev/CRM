@@ -1,20 +1,25 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-01 (Etapa 65) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-01 (Etapa 66) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 65) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 66) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-01 (Etapa 65 ENTREGUE · Etapa 66 começando)
+> ## Onde o desenvolvimento está — 2026-10-01 (Etapa 66 ENTREGUE · Etapa 67 começando)
 >
-> **O desenvolvimento parou aqui: Etapa 65 fechada, Etapa 66 começando — 2026-10-01.** A **Etapa 65 (a troca do lugar
-> separado fica registrada também na separação)**: em **Ajustar Separação**, o "Sai de" parte do lugar da rodada
-> anterior quando ele ainda tem saldo; trocar de lugar mostra o aviso *"A origem da separação anterior (⟨A⟩) deixa de
-> valer: o que já está separado passa a sair automático na entrega."* e pede **"Motivo da troca (opcional)"**; e a
-> troca aparece no bloco **"Substituições"** do detalhe (*"… já separados de A · nova separação de B — a origem anterior
-> deixou de valer"*). **Próxima etapa, já começando: 66 — motivos de movimentação e de ajuste como cadastro** (feature
-> 01; ver *"Próxima tarefa detalhada"* no plano da Etapa 65).
+> **O desenvolvimento parou aqui: Etapa 66 fechada, Etapa 67 começando — 2026-10-01.** A **Etapa 66 (motivos de
+> movimentação viram cadastro)**: em **Configurações → Motivos de Movimentação** o Administrador mantém a lista de
+> motivos, cada um valendo para os tipos marcados; em **Movimentações → Nova Movimentação** o campo **Motivo** vira uma
+> lista com os motivos do tipo e *"Outro (digitar)"* (com **"Complemento (opcional)"**); o livro e o extrato mostram a
+> justificativa; e **Relatórios → Histórico de movimentações** tem as colunas Motivo e Justificativa e o filtro
+> **"Motivo (cadastro)"**. **Próxima etapa, já começando: 67 — os indicadores que faltam da spec 27** (feature 21:
+> % de requisições no prazo e integrais, divergência e rejeição por fornecedor, número de ajustes — por motivo; ver
+> *"Próxima tarefa detalhada"* no plano da Etapa 66).
 >
-> **Etapas 1 a 20 e 22 a 65 completas.**
+> **Etapas 1 a 20 e 22 a 66 completas.**
+>
+> **Etapa 65, 2026-10-01.** A **Etapa 65 (a troca do lugar separado fica registrada também na separação)**: em
+> **Ajustar Separação**, o "Sai de" parte do lugar da rodada anterior quando ele ainda tem saldo; trocar de lugar avisa
+> e pede o motivo (opcional); a troca aparece em **"Substituições"**. Próxima: 66 *(feita — acima)*.
 >
 > **Etapa 64, 2026-10-01.** A **Etapa 64 (a fila de separação do almoxarife)**: no menu, **Fila de separação** mostra
 > só as requisições com trabalho de almoxarife, na ordem de trabalho, com um chip por etapa e o que falta em cada item;
@@ -5011,6 +5016,56 @@ que ele não tinha como repetir com sucesso garantido.
 - **Número de série de material** — continua sendo **digitado pelo operador** e de propósito não
   passa por este gerador. Retentar com outro número gravaria algo que ninguém digitou.
 - **Números de outros módulos do CRM** — a varredura foi do almoxarifado.
+
+---
+
+## Etapa 66 — Motivos de movimentação viram cadastro (ENTREGUE — 2026-10-01)
+
+**O que mudou, em uma frase:** o porquê de um ajuste, de uma perda ou de uma saída deixa de ser só texto digitado — vira
+uma lista mantida pelo Administrador, escolhida na movimentação e filtrável no relatório.
+
+**O problema que ela resolve.** Cada um digitava o motivo de um jeito ("avaria", "Avaria", "quebrou"…), e não dava para
+perguntar "quanto saiu por avaria este mês". E o porquê digitado em bloqueio, inventário e estorno era gravado, mas não
+aparecia no livro.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Motivo sempre digitado | **Configurações → Motivos de Movimentação**: a lista de motivos, cada um com os tipos para os quais vale |
+| Na Nova Movimentação, só um campo de texto | **Motivo** é uma lista com os motivos do tipo escolhido + *"Outro (digitar)"*; escolhido da lista, aparece **"Complemento (opcional)"** |
+| O livro e o extrato mostravam só o motivo | Mostram também a justificativa, quando diferente do motivo |
+| O Histórico de movimentações não tinha motivo | Colunas **Motivo** e **Justificativa** (tela e Excel) e o filtro **"Motivo (cadastro)"** |
+
+### Roteiro de teste manual (≈6 min)
+
+**Preparação.** Entre como **Administrador** do almoxarifado. Tenha um material com saldo.
+
+1. **Cadastrar.** **Configurações → Motivos de Movimentação → Novo Motivo**: nome "Avaria no manuseio", marque
+   **AJUSTE** e **PERDA** em **"Vale para os tipos"** e clique **Salvar Motivo** → *"Motivo criado!"*; a linha aparece
+   com *"AJUSTE, PERDA"* e **Ativo**.
+2. **Nome repetido.** Crie "AVARIA NO MANUSEIO" → *"Já existe um motivo com este nome"*.
+3. **Escolher na movimentação.** **Movimentações → Nova Movimentação**, escolha o material, tipo **Perda**, quantidade
+   1. O campo **Motivo** mostra *"Selecionar motivo..."*, "Avaria no manuseio" e *"Outro (digitar)"*. Escolha o motivo,
+   escreva "caixa amassada" em **"Complemento (opcional)"** e registre → *"Movimentação registrada!"*.
+4. **O livro.** A linha da perda mostra *"Avaria no manuseio"* e, abaixo, *"Avaria no manuseio — caixa amassada"*.
+5. **"Outro".** Nova perda com *"Outro (digitar)"* e o texto "Avaria no manuseio" digitado à mão → grava como sempre.
+   Tipo **Entrada**: só o campo de texto (nenhum motivo vale para ele).
+6. **O relatório.** **Relatórios → Histórico de movimentações**: em **"Motivo (cadastro)"** escolha "Avaria no
+   manuseio" → aparece a perda do passo 3 e **não** a do passo 5 (o filtro é pelo cadastro, não pelo texto). As colunas
+   **Motivo** e **Justificativa** aparecem na tela e no Excel.
+7. **Renomear.** Edite o motivo para "Avaria" → *"Motivo atualizado! As movimentações já registradas mantêm o texto da
+   época."*. O livro continua *"Avaria no manuseio"* na perda do passo 3.
+8. **Desativar.** Desative o motivo (confirme) → *"Motivo desativado"*. Na Nova Movimentação ele some da lista; no
+   relatório aparece como *"Avaria (desativado)"*. **Reativar** o devolve.
+
+### O que esta etapa NÃO cobre
+
+- Escolher da lista **não é obrigatório** — o motivo digitado continua aceito.
+- A movimentação rápida da tela de Materiais, bloqueio, inventário, estorno, não conformidade e devolução continuam com o
+  motivo digitado.
+- Motivo de ajuste não muda a aprovação; não há gráfico por motivo; os motivos digitados antes não foram convertidos.
+- Movimentação **estornada** não aparece no histórico (já era assim) — portanto também não no filtro por motivo.
 
 ---
 

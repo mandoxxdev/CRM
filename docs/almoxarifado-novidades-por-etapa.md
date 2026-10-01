@@ -969,9 +969,9 @@ SELECT m.id, m.codigo, m.nome, m.quantidade_atual AS fisico,
   **inventário** ainda ajusta só o número, mas ao concluir **lista** os materiais com série a regularizar. Rode esta
   consulta depois de inventário, ou siga o aviso da própria tela.)*
 
-### B. Decisões de negócio — B1 a B260; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B271; as em aberto esperam você, as tomadas estão escritas com o descartado
 
-*(**Atualizado em 2026-10-01 de B255 para B260**, com as cinco da Etapa 65; antes, de B251 para B255, com as quatro da Etapa 64; antes, de B247 para B251, com as quatro da Etapa 63; antes, de B243 para B247, com as quatro da Etapa 62; antes, de B239 para B243, com as quatro da Etapa 61; antes, de B237 para B239, com as duas da Etapa 60; antes, de B233 para B237, com as quatro da Etapa 59; antes, de B228 para B233, com as cinco da Etapa 58; antes, de B225 para B228, com as três da Etapa 57; antes, de B222 para B225, com as três da Etapa 56; antes, de B219 para B222, com as da Etapa 55.)*
+*(**Atualizado em 2026-10-01 de B260 para B271**, com as onze da Etapa 66; antes, de B255 para B260, com as cinco da Etapa 65; antes, de B251 para B255, com as quatro da Etapa 64; antes, de B247 para B251, com as quatro da Etapa 63; antes, de B243 para B247, com as quatro da Etapa 62; antes, de B239 para B243, com as quatro da Etapa 61; antes, de B237 para B239, com as duas da Etapa 60; antes, de B233 para B237, com as quatro da Etapa 59; antes, de B228 para B233, com as cinco da Etapa 58; antes, de B225 para B228, com as três da Etapa 57; antes, de B222 para B225, com as três da Etapa 56; antes, de B219 para B222, com as da Etapa 55.)*
 
 *(**Atualizado em 2026-09-30 de B205 para B219**, com as quatro da Etapa 51, as três da Etapa 52, as quatro da Etapa 53 e as três da Etapa 54.)*
 
@@ -4144,6 +4144,71 @@ era recusado com *"O saldo em A (0) não cobre a quantidade (5) — a saída tir
 momento (separação ou entrega); as que já existiam — todas da entrega, desde a Etapa 63 — ficam como **entrega**.
 **Descartado:** deixar em branco (todo leitor futuro teria de adivinhar).
 
+**B261 (NOVA, da Etapa 66) — o cadastro de motivos ACOMPANHA o texto livre; escolher dele não é obrigatório.**
+**Escolhido:** a movimentação pode citar um motivo do cadastro **ou** continuar com o motivo digitado, exatamente como
+antes; sem nenhum motivo cadastrado para o tipo, a tela mostra só o campo de texto de sempre. **Descartado:** obrigar a
+escolher do cadastro — com o cadastro vazio no primeiro dia a tela travaria, e quebraria a movimentação rápida da tela de
+Materiais e quem integra por API. Tornar obrigatório (por tipo, configurável) fica para quando o cadastro estiver em uso.
+
+**B262 (NOVA, da Etapa 66) — o livro guarda o NOME do motivo da época, e o motivo do cadastro conta como justificativa.**
+**Escolhido:** a movimentação feita com um motivo do cadastro grava o nome do motivo **naquele momento** (e a ligação com
+o cadastro); renomear ou desativar depois **não reescreve** o que já foi registrado. O nome do motivo também preenche a
+justificativa — e por isso satisfaz "este tipo exige justificativa", a regra da saída "com OS, projeto, centro de custo
+ou justificativa" e a da saída emergencial, como o texto copiado pela tela já satisfazia. O complemento digitado vai
+junto: *"⟨motivo⟩ — ⟨complemento⟩"*. **Descartado:** guardar só a ligação e buscar o nome na hora de ler (renomear
+reescreveria o passado, e todo relatório e o livro teriam de mudar).
+
+**B263 (NOVA, da Etapa 66) — cada motivo diz para quais tipos de movimentação vale, e "Ajuste" não inclui "Ajuste
+positivo/negativo".** **Escolhido:** o motivo tem uma lista de tipos (entre os 15 da movimentação genérica); a tela só
+oferece os motivos do tipo escolhido. O tipo é comparado exato: quem quer o motivo nos três ajustes marca os três.
+**Descartado:** guardar a lista numa tabela separada — sem transação, trocar a lista poderia ficar pela metade e deixar o
+motivo sem tipo nenhum; numa linha só, a troca é uma escrita.
+
+**B264 (NOVA, da Etapa 66) — motivo do cadastro E motivo digitado juntos são recusados.** **Escolhido:** a API recusa
+*"Informe o motivo do cadastro (motivo_id) ou o motivo digitado (motivo), não os dois"*; o detalhe livre vai no
+complemento. **Descartado:** o cadastro "ganhar" calado. Ninguém mandava os dois antes, então a recusa não quebra
+integração — e relaxar depois para "o cadastro prevalece" não quebra ninguém.
+
+**B265 (NOVA, da Etapa 66) — só o Administrador mexe no cadastro de motivos; todos que entram no módulo leem.**
+**Escolhido:** criar, editar, desativar e reativar exigem a permissão de configurar (perfil Administrador); a lista é
+lida por qualquer perfil do módulo — o almoxarife precisa dela para movimentar. **Descartado:** uma permissão nova só
+para motivos (mexeria na regra compartilhada de perfis sem pedido).
+
+**B266 (NOVA, da Etapa 66) — dois motivos não podem ter o "mesmo" nome, ignorando maiúsculas, acentos de grafia
+diferente, espaços repetidos e caracteres invisíveis.** **Escolhido:** "Manutenção", "MANUTENÇÃO", "Avaria  manuseio"
+(dois espaços), "Avaria manuseio" com espaço não-quebrável e com caractere invisível colado são o mesmo nome — o segundo
+é recusado com *"Já existe um motivo com este nome"*, ou *"Já existe um motivo desativado com este nome — reative-o"*
+quando o existente está desativado. O nome é gravado limpo. Um nome feito só de caracteres invisíveis é *"Nome é
+obrigatório"*. **Descartado:** a régua das categorias (diferencia maiúsculas) e a comparação sem distinguir maiúsculas
+do banco (só dobra letras sem acento) — "Avaria" e "avaria" partiriam o relatório por motivo em dois.
+
+**B267 (NOVA, da Etapa 66) — o cadastro começa vazio.** **Escolhido:** nenhum motivo pré-cadastrado; o Administrador
+cadastra os da empresa. **Descartado:** semear motivos genéricos (dado que vocês não pediram aparecendo em produção).
+
+**B268 (NOVA, da Etapa 66) — trocar o tipo da movimentação mantém o motivo escolhido quando ele vale para o tipo novo.**
+**Escolhido:** escolheu "Avaria" num Ajuste e trocou para Perda, e "Avaria" vale para os dois → a escolha fica; se não
+vale, é limpa. **Descartado:** limpar sempre (era o que o plano dizia) — obrigava a escolher de novo o que já estava
+certo. Se a lista do tipo novo não carregar, a escolha é limpa e a tela avisa *"Não foi possível carregar os motivos do
+cadastro — digite o motivo."*.
+
+**B269 (NOVA, da Etapa 66) — a lista de tipos vem do servidor, e a aba mostra os códigos dos tipos.** **Escolhido:** a
+aba **Motivos de Movimentação** pega os tipos possíveis do servidor (não guarda uma cópia) e mostra os códigos como o
+sistema os chama (AJUSTE, AJUSTE_POSITIVO, PERDA…). **Descartado:** rótulos amigáveis na aba — seriam uma terceira cópia
+da lista de tipos, que desalinha na primeira mudança. Se os códigos atrapalharem o Administrador, o de/para é barato.
+
+**B270 (NOVA, da Etapa 66) — o relatório por motivo filtra pelo CADASTRO, não pelo texto.** **Escolhido:** no
+**Histórico de movimentações**, o filtro **"Motivo (cadastro)"** traz só as movimentações gravadas com aquele motivo do
+cadastro — inclusive depois de renomeado, e inclusive desativado (aparece na lista como *"⟨nome⟩ (desativado)"*). Uma
+movimentação de texto livre com o mesmo texto **não** entra. **Descartado:** filtrar pelo nome (juntaria texto livre
+parecido e perderia as renomeadas). Movimentação **estornada** sai do histórico como sempre saiu (o histórico não mostra
+canceladas) — portanto sai também do filtro.
+
+**B271 (NOVA, da Etapa 66) — desativar um motivo no mesmo instante em que alguém salva uma movimentação com ele pode
+deixar essa movimentação passar.** **Escolhido:** aceitar a janela (sem transação no banco, a leitura do motivo e a
+gravação da movimentação não são um bloco só). O efeito é benigno: a movimentação fica com o nome do motivo, e as
+seguintes já são recusadas com *"O motivo "⟨nome⟩" está desativado"*. **Descartado:** travar com uma segunda leitura —
+fecha a janela pela metade e fica para a migração ao Postgres, que tem transação.
+
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -5268,6 +5333,16 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
     estoque. **O que fazer:** ao rastrear um lote pelas trocas, olhe só as linhas que dizem **"saiu de"**; a
     rastreabilidade por lote, quando ler esta lista, vai separar as duas (**D (63)**).
 
+87. **NOVO, da Etapa 66 — o Histórico de movimentações ganhou duas colunas no MEIO.** **Motivo** e **Justificativa**
+    entram logo depois de **Saldo após** — na tela e no Excel exportado. **Referência**, **Usuário**, **Centro de custo**
+    e **Data** andam duas colunas para a direita. **O que fazer:** planilha ou macro que lê o Excel exportado **pela
+    posição da coluna** precisa ser ajustada; quem lê pelo cabeçalho não é afetado.
+
+88. **NOVO, da Etapa 66 — o livro e o extrato passaram a mostrar a justificativa.** Abaixo do motivo, quando é diferente
+    dele, aparece agora a justificativa — o porquê digitado em **bloqueio, desbloqueio, inventário, estorno** e o
+    complemento do motivo do cadastro. Esse texto **sempre foi gravado**, só não aparecia. **O que fazer:** nada; só não
+    estranhe linhas antigas ganhando uma segunda linha de texto.
+
 
 
 ### D. Limitações declaradas — são decisão, não esquecimento
@@ -5961,6 +6036,23 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   troca e registra; o aviso de troca aparece, então ninguém troca sem ver.
 - **(65) Clicar "Confirmar Separação" antes de os saldos chegarem** manda automático (o "Sai de" ainda não foi
   preenchido) — mesma consequência: troca registrada, com o aviso visível.
+- **(66) Escolher o motivo do cadastro NÃO é obrigatório** — o motivo digitado continua aceito em todo lugar (**B261**).
+- **(66) Só a janela Movimentações → Nova Movimentação escolhe do cadastro** (nos cinco tipos dela — Entrada, Saída,
+  Transferência, Ajuste, Perda; pela API, também a rota de transferência). A movimentação
+  rápida da tela de **Materiais**, o **bloqueio/desbloqueio**, o **inventário**, o **estorno**, a **não conformidade** e
+  a **devolução** continuam com o motivo digitado (ou com o texto fixo que já tinham).
+- **(66) Sem regra própria por motivo** — um motivo de ajuste não pede aprovação diferente (isso é a feature 06).
+- **(66) O texto livre antigo não foi convertido** para o cadastro: o filtro **"Motivo (cadastro)"** só acha o que foi
+  gravado escolhendo do cadastro, daqui para a frente.
+- **(66) Não há gráfico "movimentações por motivo"** — o mínimo desta etapa é a coluna e o filtro no histórico.
+- **(66) A aba mostra os tipos pelo código** (AJUSTE, AJUSTE_POSITIVO, PERDA…), não por um nome amigável (**B269**).
+- **(66) Movimentação estornada sai do filtro por motivo** — o histórico não mostra canceladas (já era assim); a linha de
+  estorno não herda o motivo do cadastro.
+- **(66) A transferência por API sem motivo do cadastro** ainda grava como texto qualquer justificativa que não seja
+  texto (ex.: *"[object Object]"*) — vem de antes; com motivo do cadastro, a mesma justificativa é recusada com
+  *"justificativa deve ser texto"*.
+- **(66) Desativar e movimentar no mesmo instante** pode deixar passar uma movimentação com o motivo recém-desativado
+  (**B271**).
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -6471,6 +6563,25 @@ servidor simulado (19 cenários). O que **só o navegador** prova:
 3. **A ausente quando não cobre.** Repita com A tendo só os 5 já separados: o "Sai de" vem em automático, com o aviso.
 4. **O bloco no detalhe.** Confirme a rodada de B com um motivo: o detalhe mostra em **"Substituições"** *"⟨cód⟩: 5 já
    separados de A · nova separação de B — a origem anterior deixou de valer · ⟨motivo⟩"*, com quem e quando.
+
+**(66) Nenhum clique foi dado nesta etapa.** Os testes provam o servidor pela rota (cadastro 18 cenários, uso 11,
+ponta a ponta 8, relatório 5) e as três telas com o servidor simulado. O que **só o navegador** prova:
+
+1. **A aba.** Como Administrador, **Configurações → Motivos de Movimentação → Novo Motivo**: nome "Avaria no manuseio",
+   marcar **AJUSTE** e **PERDA**, **Salvar Motivo** → *"Motivo criado!"* e a linha aparece com *"AJUSTE, PERDA"* e
+   **Ativo**. Criar "AVARIA NO MANUSEIO" → *"Já existe um motivo com este nome"*.
+2. **A movimentação.** **Movimentações → Nova Movimentação**, tipo **Perda**: o campo **Motivo** vira uma lista com
+   *"Selecionar motivo..."*, "Avaria no manuseio" e *"Outro (digitar)"*; escolher o motivo mostra **"Complemento
+   (opcional)"**; com tipo **Entrada** (sem motivo cadastrado) volta o campo de texto de sempre.
+3. **O livro.** Salve a perda com complemento "caixa amassada": a linha mostra *"Avaria no manuseio"* e, abaixo,
+   *"Avaria no manuseio — caixa amassada"*. Uma linha antiga de bloqueio mostra a justificativa abaixo do motivo.
+4. **O relatório.** **Relatórios → Histórico de movimentações**: o filtro **"Motivo (cadastro)"** é uma lista
+   (*"Todos"* e os motivos); filtrar traz a perda; o Excel tem as colunas **Motivo** e **Justificativa**.
+5. **Desativar.** Desative o motivo (a confirmação diz *"Desativar o motivo "Avaria no manuseio"? Ele sai da lista da
+   movimentação, mas as movimentações que já o usam continuam com ele."*): ele some da lista da movimentação, aparece no
+   filtro do relatório como *"Avaria no manuseio (desativado)"*, e o livro continua com a linha antiga.
+6. **Sem permissão.** Com um usuário que abre Configurações mas não tem o perfil Administrador do almoxarifado, a aba lista os motivos sem
+   **Novo Motivo** e sem a coluna **Ações**.
 
 
 ### G. Fragilidades estruturais que continuam de pé
@@ -15144,15 +15255,103 @@ A revisão da **janela** achou que partir de A sem saldo livre fazia o clique se
 aprovava esse clique, com uma situação de estoque impossível) — virou o "só quando cobre" (**B259**).
 
 
+## Etapa 66 — Motivos de movimentação viram cadastro (2026-10-01)
+
+Até aqui, o porquê de um ajuste, de uma perda ou de uma saída manual era **digitado à mão** a cada vez: "avaria",
+"Avaria", "avaria no manuseio", "quebrou"… — impossível perguntar ao sistema "quanto perdemos por avaria este mês". E o
+porquê digitado num bloqueio, num inventário ou num estorno era gravado mas **não aparecia** no livro. Agora o
+Administrador mantém uma lista de **motivos de movimentação**, cada um valendo para os tipos que ele marcar; na
+movimentação o almoxarife **escolhe** o motivo (ou continua digitando, se preferir); o livro e o extrato mostram o porquê
+completo; e o **Histórico de movimentações** ganhou as colunas Motivo e Justificativa e o filtro por motivo.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Motivo sempre digitado à mão | **Configurações → Motivos de Movimentação**: lista de motivos, cada um com os tipos para os quais vale (**B263**) |
+| Na movimentação, só um campo de texto | **Motivo** vira uma lista com os motivos do tipo escolhido + *"Outro (digitar)"*; escolhido do cadastro, aparece **"Complemento (opcional)"**. Sem motivo para o tipo, o campo de texto de sempre (**B261**) |
+| O livro e o extrato mostravam só o motivo | Mostram também a **justificativa** quando ela é diferente — inclusive em bloqueio, inventário e estorno antigos (**C88**) |
+| O Histórico de movimentações não tinha motivo nem no Excel | Colunas **Motivo** e **Justificativa** (na tela e no Excel — **C87**) e filtro **"Motivo (cadastro)"** (**B270**) |
+| — | Renomear ou desativar um motivo não muda o que já foi registrado (**B262**) |
+
+### As regras, com o cenário exato
+
+Preparação: entre como **Administrador** do módulo; um material com saldo.
+
+**1. Cadastrar.** **Configurações → Motivos de Movimentação → Novo Motivo**: nome "Avaria no manuseio", marque **AJUSTE**
+e **PERDA** em **"Vale para os tipos"**, **Salvar Motivo** → *"Motivo criado!"*. Sem nome → *"Nome é obrigatório"*; sem
+tipo marcado → *"Informe ao menos um tipo de movimentação"*.
+
+**2. Nome repetido.** Crie "AVARIA NO MANUSEIO" (ou com dois espaços no meio) → *"Já existe um motivo com este nome"*.
+Se o existente estiver desativado → *"Já existe um motivo desativado com este nome — reative-o"* (**B266**).
+
+**3. Escolher na movimentação.** **Movimentações → Nova Movimentação**, tipo **Perda**: o campo **Motivo** mostra
+*"Selecionar motivo..."*, "Avaria no manuseio" e *"Outro (digitar)"*. Escolha o motivo, escreva "caixa amassada" em
+**"Complemento (opcional)"** e salve → *"Movimentação registrada!"*. No livro, a linha mostra *"Avaria no manuseio"* e,
+abaixo, *"Avaria no manuseio — caixa amassada"*. Troque o tipo para **Transferência**: o motivo não vale para ela, a
+escolha é limpa (e, se ele valesse, ficaria — **B268**).
+
+**4. "Outro" continua como antes.** Escolha *"Outro (digitar)"*, escreva "contagem" → grava "contagem", exatamente como
+a movimentação de sempre. Um tipo sem motivo cadastrado (ex.: **Entrada**) mostra só o campo de texto.
+
+**5. O relatório.** **Relatórios → Histórico de movimentações**: o filtro **"Motivo (cadastro)"** lista *"Todos"* e os
+motivos; escolha "Avaria no manuseio" → aparece a perda do passo 3, e **não** aparece uma perda digitada à mão com o
+mesmo texto (**B270**). As colunas **Motivo** e **Justificativa** estão na tela e no Excel.
+
+**6. Renomear não reescreve.** Edite o motivo para "Avaria" → *"Motivo atualizado! As movimentações já registradas mantêm
+o texto da época."*. A linha do passo 3 continua *"Avaria no manuseio"*; uma perda nova grava "Avaria"; o filtro traz as
+duas.
+
+**7. Desativar.** Desative o motivo (confirmação: *"Desativar o motivo "Avaria"? Ele sai da lista da movimentação, mas as
+movimentações que já o usam continuam com ele."*) → *"Motivo desativado"*. Ele some da lista da movimentação; no
+relatório aparece como *"Avaria (desativado)"*; **Reativar** o devolve (*"Motivo reativado"*).
+
+**8. Pela API (para quem integra).** Motivo do cadastro e motivo digitado juntos → *"Informe o motivo do cadastro
+(motivo_id) ou o motivo digitado (motivo), não os dois"*; motivo desativado → *"O motivo "⟨nome⟩" está desativado"*; que
+não vale para o tipo → *"O motivo "⟨nome⟩" não serve para movimentação do tipo ⟨tipo⟩"*; inexistente → *"Motivo de
+movimentação não encontrado"*; identificador mal formado → *"motivo_id deve ser um número inteiro positivo"* (no
+relatório: *"Parâmetro "motivo_id" deve ser um número inteiro positivo"*); complemento que não é texto → *"justificativa
+deve ser texto"*. Nenhuma recusa mexe no estoque.
+
+**9. Quem pode.** Quem abre Configurações mas não tem o **perfil Administrador** do almoxarifado vê a lista na aba, sem **Novo Motivo** e sem **Ações**; pela API,
+tentar criar responde *"Sem permissão para esta operação"* (**B265**). Qualquer perfil do módulo escolhe o motivo na
+movimentação.
+
+### O que esta etapa NÃO cobre
+
+1. Escolher do cadastro **não é obrigatório** (**B261**).
+2. A movimentação rápida da tela de Materiais, bloqueio, inventário, estorno, não conformidade e devolução continuam com o
+   motivo digitado (**D (66)**).
+3. Sem regra própria por motivo (aprovação de ajuste por motivo é a feature 06), sem gráfico por motivo, e o texto antigo
+   não foi convertido (**D (66)**).
+
+### O que a revisão encontrou
+
+A revisão do **plano** pegou que um identificador de motivo mal formado teria respostas diferentes na movimentação e na
+transferência (agora a mesma mensagem nas duas), que "sem diferenciar maiúsculas" do banco não cobre letra acentuada
+(agora o nome é comparado por uma forma normalizada), e que o filtro do relatório pedia o número interno do motivo (virou
+uma lista com os nomes). A revisão do **código**, executando, achou quatro furos menores: nomes que só diferiam em
+espaços ou em caractere invisível entravam como motivos diferentes (corrigido — **B266**); um complemento que não era
+texto virava *"[object Object]"* na transferência por API (agora recusado); a tela perdia calada a escolha quando a lista
+do tipo novo não carregava (agora limpa e avisa — **B268**); e a corrida desativar × movimentar (declarada — **B271**).
+
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 66 entregue (2026-10-01):** **motivos de movimentação viram cadastro.** **Configurações → Motivos de
+  Movimentação** (só o Administrador mexe); na **Nova Movimentação** o motivo é escolhido da lista do tipo (ou digitado,
+  como antes); o livro e o extrato mostram a justificativa; o **Histórico de movimentações** tem as colunas Motivo e
+  Justificativa e o filtro **"Motivo (cadastro)"**. **O que é seu:** as decisões **B261 a B271**; os avisos **C87**
+  (colunas novas no meio do Excel) e **C88**; as limitações **(66)** em D e as verificações **(66)** em F. **Próxima:
+  Etapa 67 — ver o plano da Etapa 66.**
 
 - **Etapa 65 entregue (2026-10-01):** **a troca do lugar separado fica registrada também na separação.** A janela de
   **Ajustar Separação** parte do lugar da rodada anterior quando ele tem saldo; trocar de lugar mostra o aviso e pede o
   motivo (opcional); a troca aparece em **"Substituições"** com "já separados de … · nova separação de …". **O que é seu:**
   as decisões **B256 a B260** (a **B257** registra que a primeira versão estava errada); o furo **C86**; as limitações
-  **(65)** em D e as verificações **(65)** em F. **Próxima: Etapa 66 — ver o plano da Etapa 65.**
+  **(65)** em D e as verificações **(65)** em F. **Próxima: Etapa 66 — ver o plano da Etapa 65.** *(Feita — Etapa 66.)*
 
 - **Etapa 64 entregue (2026-10-01):** **a fila de separação do almoxarife.** No menu, **Fila de separação**: só as
   requisições com trabalho, na ordem acionável → urgência → necessidade → a mais antiga, com um chip por etapa

@@ -1,7 +1,7 @@
 # Etapa 66 — motivos de movimentação como cadastro (feature 01)
 
-> Status: **PLANO (Fase 1, 2026-10-01)** — Fases 0 e 1 feitas; falta a Fase 2 (revisão do plano por agente fresco)
-> antes de qualquer código. Feature 01, item `[ ]` "Motivos de movimentação e motivos de ajuste (cadastro, hoje texto
+> Status: **FECHADA (2026-10-01)** — `de04974` (T1), `56d8b38` (T2), `448e5d7` (T4), `139dda2` (T5), `1998227` (T3),
+> `f6c9979` (T6) + fix-round da Fase 5 `40dd180`. Feature 01, item (agora `[x]`) "Motivos de movimentação e motivos de ajuste (cadastro, hoje texto
 > livre)" (`specs/modulo-almoxarifado/01-cadastros-materiais/README.md:83`; requisito 4.3 em
 > `specs/modulo-almoxarifado/2026-08-02-requisitos-modulo-almoxarifado.md:216-217`).
 
@@ -241,7 +241,7 @@ motivos de **devolução ao estoque** (Etapa 7), espelhado em `DevolucoesAlmoxar
   (trilha com de/para; segundo DELETE não audita), `?tipo=` filtra só ativos do tipo. Controle positivo: trocar o índice
   para case-sensitive → o teste de duplicado "avaria"/"Avaria" fica vermelho; tirar o `AND ativo = 1` → o teste de
   idempotência fica vermelho. `auditLabels.api.test.js` precisa continuar verde (prova o rótulo).
-- [x] **T2 (tronco) — FEITA** (commit "Etapa 66 (T2)"; hash na próxima marcação do plano / `git log --grep "Etapa 66 (T2)"`).
+- [x] **T2 (tronco) — FEITA** (`56d8b38`).
   Helper `resolverMotivoDoCadastro(db, params)` em `services/almoxarifado/motivoMovimentacao.js`, chamado como
   `params = await …` na 1ª linha de `stockService.registrarMovimentacao` (antes da desestruturação); `motivo_id` no
   INSERT do livro; `MovimentacaoSchema.motivo_id: z.unknown().optional()`. 11 cenários em
@@ -269,18 +269,18 @@ motivos de **devolução ao estoque** (Etapa 7), espelhado em `DevolucoesAlmoxar
   **Três portas, por exigência da skill (fiação):** pela rota v2 (prova o `MovimentacaoSchema` — controle positivo:
   remover `motivo_id` do schema deixa este cenário vermelho e o de serviço verde), pela `/transferencias` (body cru) e
   pelo serviço direto (`stockService.registrarMovimentacao`).
-- [ ] **T3 (galho, servidor) — relatório.** `reportRegistry.js` (param `motivo_id` + colunas Motivo/Justificativa) e
+- [x] **T3 — FEITA** (`1998227`; servidor e tela juntos — o render genérico ganhou `tipo: 'select'` com `opcoes_url`, ver "Divergências"). **T3 (galho, servidor) — relatório.** `reportRegistry.js` (param `motivo_id` + colunas Motivo/Justificativa) e
   `reportService.relatorioHistoricoMovimentacoes` (filtro). Teste no `relatoriosRegistro.api.test.js` ou arquivo novo:
   colunas presentes; filtro; export CSV traz o cabeçalho "Motivo". Consome só o contrato de T2 (coluna `motivo_id`).
-- [ ] **T4 (galho, tela) — aba "Motivos de Movimentação" em Configurações.** `TabMotivosMovimentacao` em
+- [x] **T4 — FEITA** (`448e5d7`; 7 cenários RTL, 8 sabotagens). **T4 (galho, tela) — aba "Motivos de Movimentação" em Configurações.** `TabMotivosMovimentacao` em
   `ConfiguracoesAlmoxarifado.js` (molde `TabCategorias`: GET `?todos=1`, criar, renomear, marcar tipos por checkbox,
   desativar/reativar; mensagem do servidor crua no toast). Teste RTL com `api` mockado na fronteira HTTP.
-- [ ] **T5 (galho, tela) — movimentação e leitura.** `MovimentacoesAlmoxarifado.js` (RN-09: GET `?tipo=` ao trocar o
+- [x] **T5 — FEITA** (`139dda2`; 15 + 2 cenários RTL, 13 sabotagens). **T5 (galho, tela) — movimentação e leitura.** `MovimentacoesAlmoxarifado.js` (RN-09: GET `?tipo=` ao trocar o
   tipo, select + "Outro (digitar)" + complemento, payload) e RN-08 no livro (`:684`) e no `ExtratoMaterialModal.js`
   (`:268`): justificativa abaixo quando diferente do motivo. Testes RTL: payload com cadastro (sem `motivo`), payload com
   "Outro" idêntico ao de hoje, troca de tipo limpa, cadastro vazio mostra só o texto, livro mostra a justificativa
   diferente e não repete a igual.
-- [ ] **T6 (integração, cruza galhos) — `server/tests/api/motivosMovimentacaoIntegracao.api.test.js`.** Fluxo pela rota,
+- [x] **T6 — FEITA** (`f6c9979`; 8 cenários pela rota, 7 sabotagens; nenhum defeito de produção revelado). **T6 (integração, cruza galhos) — `server/tests/api/motivosMovimentacaoIntegracao.api.test.js`.** Fluxo pela rota,
   ponta a ponta: admin cadastra "Avaria no manuseio" (AJUSTE, PERDA) → almoxarife lista `?tipo=PERDA` e o vê → almoxarife
   faz PERDA pela v2 com `motivo_id` + complemento → `GET /movimentacoes` mostra `motivo`, `justificativa` e `motivo_id`
   → `GET /relatorios/historico-movimentacoes?motivo_id=` traz a linha e **não** traz uma PERDA de texto livre com o mesmo
@@ -288,7 +288,7 @@ motivos de **devolução ao estoque** (Etapa 7), espelhado em `DevolucoesAlmoxar
   com aquele `motivo_id` recusa com a mensagem de inativo → `?tipo=PERDA` não o lista, `?todos=1` lista → o extrato do
   material mostra a linha antiga. Controle positivo: gravar `motivo` pelo nome atual via JOIN (sabotagem) deixa o passo
   "renomear não reescreve" vermelho.
-- [ ] **T7 — verificação, Fase 5 e fechamento** (skill `fechar-etapa`): cinco suítes; spec 01 linha 83 `[x]` com hash e
+- [x] **T7 — FEITA** (Fase 5 `40dd180` + este fechamento). **T7 — verificação, Fase 5 e fechamento** (skill `fechar-etapa`): cinco suítes; spec 01 linha 83 `[x]` com hash e
   o que ficou de fora; mapa; guia (Antes → Agora, roteiro clicável); letras B261–B267.
 
 Ordem: T1 → T2 (tronco, sequencial) → T3, T4, T5 em paralelo (T3 em worktree; T4/T5 são tela contra contrato) → T6 →
@@ -333,3 +333,90 @@ T7. T4 e T5 mexem em arquivos diferentes e só consomem o contrato congelado aci
   RN-08 pode duplicar `getByText` em testes RTL existentes (ajustar a consulta, não a regra); escolher motivo do cadastro
   satisfaz também "emergencial exige justificativa" e a regra `'qualquer'` da SAIDA (como o texto copiado já faz hoje —
   letra B).
+
+## Divergências da execução em relação ao plano (dado, não vergonha)
+
+- **RN-09 dizia "trocar o tipo limpa a escolha" — a tela MANTÉM a escolha quando o motivo vale para o tipo novo** (T5,
+  B268), com controle positivo (AJUSTE→PERDA mantém o id 7). Limpar sempre obrigava a escolher de novo o que já estava
+  certo.
+- **O plano dizia "export CSV" — estava errado: o export do histórico é XLSX.** O teste da T3 confere os cabeçalhos do
+  XLSX (Motivo, Justificativa).
+- **A mensagem do filtro do relatório é a do padrão do registry** (`janela_dias`): *"Parâmetro "motivo_id" deve ser um
+  número inteiro positivo"* — diferente, de propósito, da da movimentação (*"motivo_id deve ser um número inteiro
+  positivo"*). O dispatcher não tem validação genérica de parâmetro.
+- **O parâmetro ganhou `exemplo: 1`**: a varredura do `relatoriosRegistro.api.test.js` manda `'x'` em todo parâmetro
+  que não é data/número, e a validação nova o recusava (a primeira suíte completa da T3 ficou vermelha por isso).
+  Convenção da Etapa 49; o teste de varredura não mudou.
+- **O render genérico da tela de relatórios ganhou `tipo: 'select'` com `opcoes_url`** (Fase 2) — genérico, não um caso
+  especial do histórico; relatório sem select não faz busca a mais (sabotagem C3).
+- **A aba mostra os tipos pelo código** (AJUSTE, AJUSTE_POSITIVO…) — um de/para legível seria a terceira cópia da lista
+  (B269).
+- **Escolhas da T1/T2 já registradas acima** (serviço próprio, `GET /tipos`, ordem formato → "os dois", 400 e não 404 no
+  inexistente) viraram a **B269** e o contrato final.
+
+## Fase 5 — revisão adversarial do código: 0 críticos, 0 importantes, 4 menores (todos reproduzidos por sonda)
+
+| Achado | Cenário | Destino |
+|---|---|---|
+| **M1** unicidade não juntava espaços internos, espaço não-quebrável nem invisíveis | `"Avaria manuseio"`, `"Avaria  manuseio"`, `"Avaria manuseio"`, `"Avaria manuseio​"` e `"​"` → 5×201 | **corrigido** (`40dd180`): `limparNome` (tira invisíveis, junta `\s+`) na chave e no nome gravado; teste (18) do Crud; 2 sabotagens |
+| **M2** corrida desativar × movimentar | `LE_MOTIVO > DESATIVA > INSERT_MOV`: a movimentação entra com o motivo desativado | **declarado** (B271) — TOCTOU sem transação; efeito benigno; fica para o Postgres |
+| **M3** a tela perdia a escolha calada quando a busca do tipo novo falhava | motivo 7 (serve AJUSTE e PERDA), troca para PERDA com a busca falhando → estado com 7, tela com texto vazio, payload sem motivo | **corrigido** (`40dd180`): limpa a escolha e avisa *"Não foi possível carregar os motivos do cadastro — digite o motivo."*; 1 cenário + sabotagem |
+| **M4** `/transferencias` (sem Zod) concatenava complemento não-texto | `justificativa: {a:1}` → *"Nome — [object Object]"* | **corrigido no caminho do cadastro** (`40dd180`): 400 *"justificativa deve ser texto"*; sem `motivo_id` o body cru continua como antes (D (66)) |
+
+Refutados por execução: autorização (sem perfil lê, toma 403 na escrita; ALMOXARIFE 403 no POST); v1 ignora `motivo_id`;
+leitores de `motivo`/`justificativa` (regras de vínculo, emergencial, auditoria de dono, fila de notificação)
+equivalentes; estorno não herda `motivo_id`; tipos dedicados/retenção não carregam `motivo_id`; acento colide pelo
+UNIQUE; mutações plausíveis pegas pelos testes; o fluxo de tela aba → movimentação → livro → relatório não quebra.
+
+## Verificação final (medida, após `40dd180`)
+
+`npm run test:api` **246/246 arquivos**; `test:almoxarifado`, `test:validation`, `test:safealter`, `test:sqlite` exit 0;
+cliente **1073/1073 testes, 71 suítes**; `CI=true react-scripts build` **Compiled successfully**. Testes da etapa:
+Crud 18, Uso 11, Integração 8, relatorioMotivoMovimentacao 5; cliente MotivosMovimentacao 7, MovimentacoesMotivoCadastro
+14, RelatoriosAlmoxarifado 29 (3 novos), ExtratoMaterialModal +2.
+
+## Retro (4 números)
+
+- **Rodadas de correção até verde:** 1 (o fix-round da Fase 5).
+- **Achados de revisão:** Fase 2 — 13 (0 críticos, 4 importantes, 9 menores), 0 ruído conhecido; Fase 5 — 4 reais
+  (menores), 0 ruído.
+- **Paralelismo:** 3 galhos (T3, T4, T5) em paralelo **na mesma árvore** (arquivos disjuntos, cada agente rodando só os
+  seus testes durante as sabotagens), sem retrabalho; um único tropeço: um build da T3 pegou ENOENT no meio do
+  backup/restauro de outro agente — repetido, passou. Tronco (T1 → T2) sequencial.
+- **Defeito que escapou da Etapa 65:** nenhum conhecido.
+
+## Próxima tarefa detalhada — Etapa 67: os indicadores que faltam da spec 27 (feature 21)
+
+**Por que esta.** O "falta para 🟢" da 21 tem dois itens: previsto × realizado (bloqueado — depende de BOM/OP, feature
+22) e **"Indicadores da spec 27 restantes: % requisições no prazo/integrais, divergência e rejeição por fornecedor, nº de
+ajustes"** (`specs/modulo-almoxarifado/21-relatorios-dashboards/README.md:81` e `:102`). Este é independente, só leitura
+(sem motor), e o **número de ajustes** agora pode sair **por motivo** — o cadastro da Etapa 66 acabou de criar o dado.
+As outras features 🟡 sobram bloqueadas (22, 06/B11) ou grandes (05: lista como entidade). Na 01, transportadoras e
+tipos de documento seriam cadastros sem consumidor hoje.
+
+**Fase 0 da 67 — medir antes de prometer:**
+1. A lista exata da spec 27 ("Indicadores principais", `2026-08-02-requisitos-modulo-almoxarifado.md:1064-1077`) contra
+   o que o `reportRegistry.js` já serve (`indicadores` em ~401: giro, cobertura, rupturas, valor por grupo,
+   atendimento — só entrega COMPLETA, sem janela) — o que falta de verdade.
+2. **% no prazo / integrais:** que datas existem em `requisicoes_almoxarifado` (`data_necessidade` — há legado em
+   *DD/MM/AAAA*, D (64); a data da entrega final: status/`updated_at`/linhas do livro?) e o que é "integral"
+   (entregue = solicitada por item? item cancelado conta?). Sem timestamp confiável de entrega final, o indicador mente —
+   medir antes.
+3. **Divergência e rejeição por fornecedor:** de onde sai o fornecedor (recebimento/nota, `fornecedor_nome` do
+   relatório de recebimentos ~282), a divergência (divergências do recebimento — "parcial na inspeção", spec 08:746) e a
+   rejeição (inspeção reprovada / NC / devolução ao fornecedor da Etapa 45). Duas fontes para "rejeitado" podem contar
+   em dobro.
+4. **Número de ajustes:** tipos `AJUSTE*` (incluir `AJUSTE_INVENTARIO`? a régua das rupturas já o inclui) no período,
+   por motivo (`motivo_id` + "texto livre" agrupado à parte) e por material; estornados fora (`cancelado = 0`).
+5. O padrão do registry (gate declarado por chave, `colunas`, `nota` com a régua, `exportavel`, params de período) e se
+   o dashboard ganha cartão ou fica só no relatório.
+
+**Contratos que não se reabrem:** o `reportRegistry`/dispatcher fail-closed da Etapa 13; o histórico de movimentações da
+Etapa 66 (colunas, filtro por id); o `indicadores` existente (acrescentar blocos, não mudar a régua dos que existem).
+
+**Pontos de atenção.**
+- Toda régua vai na `nota` (é o único canal que chega ao usuário) — o padrão do `indicadores`.
+- Indicador sem dado confiável **não** entra com aproximação calada: ou régua declarada, ou fica de fora com o motivo.
+- Material de cliente fora (como os blocos existentes) — decidir e declarar.
+- Metade positiva em cada teste: a requisição no prazo conta **e** a atrasada não; o fornecedor com rejeição aparece
+  **e** o sem rejeição tem 0.

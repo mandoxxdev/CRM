@@ -1133,7 +1133,7 @@ Essa separação é deliberada: cada um desses movimentos tem uma tela dona, com
 
 São dois campos com papéis diferentes.
 
-**Motivo** é o campo do formulário. Ele é **obrigatório na tela** para Saída, Ajuste e Perda (o campo fica marcado com asterisco e o navegador não deixa enviar em branco).
+**Motivo** é o campo do formulário. Ele é **obrigatório na tela** para Saída, Ajuste e Perda (o campo fica marcado com asterisco e o navegador não deixa enviar em branco). Quando existe algum **motivo cadastrado** que vale para o tipo escolhido, o campo é uma **lista** (6.4b); quando não existe, é o campo de texto livre. Pela lista ou pelo texto, o motivo também preenche a justificativa — por isso, na tela, quem informou o motivo já cumpriu a exigência abaixo.
 
 **Justificativa** é a exigência do servidor, por tipo de movimento. Sem ela a operação é recusada com a mensagem *"&lt;TIPO&gt; exige justificativa"* — por exemplo, *"AJUSTE exige justificativa"*.
 
@@ -1149,6 +1149,62 @@ São dois campos com papéis diferentes.
 | Entrada, Saída, Transferência | Não |
 
 O raciocínio é uniforme: **todo movimento que muda a resposta à pergunta "onde está esse material?" ou "por que ele sumiu?" precisa da resposta escrita**. Tirar material do disponível sem dizer por que é baixa sem motivo.
+
+### 6.4b Motivos cadastrados — escolher o porquê de uma lista
+
+Para que o porquê de ajustes, perdas e saídas possa ser contado ("quanto saiu por avaria este mês?"), a empresa mantém
+uma **lista de motivos de movimentação**. Escolher da lista **não é obrigatório**: o motivo digitado continua aceito
+em todo lugar.
+
+**O cadastro.** Em **Almoxarifado → Configurações → aba "Motivos de Movimentação"**, quem tem perfil **Administrador**
+do módulo cria (**Novo Motivo**), edita, desativa e reativa motivos. Cada motivo tem um **nome** e os **tipos de
+movimentação para os quais vale** (**"Vale para os tipos"**, ao menos um, entre os tipos da movimentação comum, mostrados
+pelo código: ENTRADA, SAIDA, AJUSTE, AJUSTE_POSITIVO, AJUSTE_NEGATIVO, PERDA, TRANSFERENCIA…). O tipo é comparado
+exato: um motivo marcado só para AJUSTE não vale para AJUSTE_POSITIVO. Ler a lista é liberado a qualquer usuário do
+módulo — a tela de movimentação precisa dela; quem abre Configurações sem o perfil Administrador vê a aba sem
+**Novo Motivo** e sem a coluna **Ações**, e o servidor recusa a gravação com *"Sem permissão para esta operação"*.
+
+| Situação no cadastro | Mensagem |
+|---|---|
+| Nome vazio (ou só espaços / caracteres invisíveis) | *"Nome é obrigatório"* |
+| Nenhum tipo marcado | *"Informe ao menos um tipo de movimentação"* |
+| Tipo que não é da movimentação comum | *"Tipo de movimentação inválido para motivo: ⟨tipo⟩"* |
+| Já existe um motivo com o mesmo nome | *"Já existe um motivo com este nome"* |
+| …e o existente está desativado | *"Já existe um motivo desativado com este nome — reative-o"* |
+
+"O mesmo nome" ignora maiúsculas e minúsculas (inclusive em letras acentuadas: "Manutenção" e "MANUTENÇÃO" são o mesmo),
+espaços repetidos, espaço não-quebrável e caracteres invisíveis; o nome é gravado sem eles.
+
+**Desativar não apaga.** O motivo desativado (confirmação: *"Desativar o motivo "⟨nome⟩"? Ele sai da lista da
+movimentação, mas as movimentações que já o usam continuam com ele."*) sai da lista da movimentação e continua na aba
+como **Inativo**, de onde volta com **Reativar**. **Renomear não reescreve o passado**: cada movimentação guarda o nome
+do motivo **do momento em que foi feita** (*"Motivo atualizado! As movimentações já registradas mantêm o texto da
+época."*).
+
+**Na movimentação.** Em **Nova Movimentação**, ao escolher o tipo, o campo **Motivo** mostra *"Selecionar motivo..."*,
+os motivos **ativos** que valem para aquele tipo e *"Outro (digitar)"*:
+
+- escolhido um motivo da lista, aparece **"Complemento (opcional)"**. O livro grava como motivo o nome do motivo e, como
+  justificativa, o nome — ou *"⟨nome⟩ — ⟨complemento⟩"* quando há complemento;
+- *"Outro (digitar)"* abre o campo de texto e grava exatamente como a movimentação de texto livre;
+- trocar o tipo mantém o motivo escolhido se ele também vale para o novo tipo; se não vale, a escolha é limpa;
+- se a lista do tipo não puder ser carregada, a tela mostra o campo de texto com o aviso *"Não foi possível carregar os
+  motivos do cadastro — digite o motivo."*.
+
+Quem integra pela API e manda o motivo do cadastro recebe estas recusas (nenhuma mexe no estoque):
+
+| Situação | Mensagem |
+|---|---|
+| Identificador do motivo que não é um número inteiro positivo | *"motivo_id deve ser um número inteiro positivo"* |
+| Motivo do cadastro **e** motivo digitado juntos | *"Informe o motivo do cadastro (motivo_id) ou o motivo digitado (motivo), não os dois"* |
+| Complemento que não é texto | *"justificativa deve ser texto"* |
+| Motivo inexistente | *"Motivo de movimentação não encontrado"* |
+| Motivo desativado | *"O motivo "⟨nome⟩" está desativado"* |
+| Motivo que não vale para o tipo | *"O motivo "⟨nome⟩" não serve para movimentação do tipo ⟨tipo⟩"* |
+
+Só a **Nova Movimentação** (e, pela API, a transferência) escolhe da lista. A movimentação rápida da tela de
+**Materiais**, o bloqueio e o desbloqueio, o inventário, o estorno, a não conformidade e a devolução continuam com o
+motivo digitado — ou com o texto que o próprio processo grava.
 
 ### 6.5 Movimentação vinculada — quando o sistema exige que o movimento cite um documento
 
@@ -1230,10 +1286,14 @@ Clicar no nome do material — no livro de Movimentações ou no ícone "Extrato
 
 - **Cartões de saldo:** Físico, Reservado, Bloqueado, Em inspeção, **Disponível** e **Custo médio**. Em material com controle de série, aparece também **Séries em estoque**.
 - **Saldos por localização:** em qual prateleira, de qual lote, quanta quantidade. Não há colunas de reservado/bloqueado aqui de propósito — **retenção não existe por localização**, ela é do material (ou do lote inteiro, por situação). Mostrá-la por prateleira sugeriria uma dimensão que o sistema não modela.
-- **Últimas 100 movimentações:** data, tipo, quantidade, saldo posterior, motivo e vínculo.
+- **Últimas 100 movimentações:** data, tipo, quantidade, saldo posterior, motivo e vínculo. Quando a **justificativa**
+  é diferente do motivo, ela aparece abaixo dele — é ali que fica o porquê digitado num bloqueio, num desbloqueio, num
+  inventário ou num estorno (o motivo dessas linhas é o texto fixo do processo), e o complemento de um motivo
+  cadastrado (*"⟨nome⟩ — ⟨complemento⟩"*). Justificativa igual ao motivo não se repete.
 - **Reservas ativas:** quantidade, quanto já foi utilizado, saldo, destino (OS/projeto), solicitante e prazos.
 
-No **livro** (tela de Movimentações), a coluna Quantidade mostra o **sinal real** do movimento (+ ou −) calculado pela diferença entre saldo anterior e saldo posterior — e não pelo nome do tipo. Isso importa porque Transferência, Bloqueio, Reserva e Liberação **não mexem no físico** (aparecem sem sinal), e um Estorno pode ir em qualquer direção conforme o que reverte.
+No **livro** (tela de Movimentações), a justificativa diferente do motivo aparece da mesma forma, abaixo do motivo.
+A coluna Quantidade mostra o **sinal real** do movimento (+ ou −) calculado pela diferença entre saldo anterior e saldo posterior — e não pelo nome do tipo. Isso importa porque Transferência, Bloqueio, Reserva e Liberação **não mexem no físico** (aparecem sem sinal), e um Estorno pode ir em qualquer direção conforme o que reverte.
 
 ### 6.10 Estorno — o engano se desfaz, nunca se apaga
 
@@ -5097,8 +5157,14 @@ por:
 - **Usuário (parte do nome)** — um `%` ou `_` digitado vale como letra. Maiúsculas e minúsculas são
   equivalentes só em letras sem acento.
 - **Centro de custo (id)** — o número do centro de custo.
+- **Motivo (cadastro)** — uma lista com *"Todos"* e os motivos cadastrados (6.4b), inclusive os desativados, marcados
+  *"(desativado)"*. Traz só as movimentações gravadas **escolhendo aquele motivo da lista** — também as feitas antes de
+  ele ser renomeado; uma movimentação com o mesmo texto **digitado** não entra. Se a lista não carregar, o campo diz
+  *"Não foi possível carregar as opções"* e o relatório roda sem esse filtro. Pela API, um identificador que não é
+  número inteiro positivo é recusado com *"Parâmetro "motivo_id" deve ser um número inteiro positivo"*.
 
-As colunas **Usuário** e **Centro de custo** (código e nome) saem na tela e no Excel. O relatório
+As colunas **Motivo** e **Justificativa** (logo depois de **Saldo após**), **Usuário** e **Centro de custo** (código e
+nome) saem na tela e no Excel. O relatório
 mostra as 500 movimentações mais recentes do filtro e não inclui as canceladas; o histórico completo
 de um material, sem teto e com as canceladas, é a tela **Movimentações** filtrada por ele.
 

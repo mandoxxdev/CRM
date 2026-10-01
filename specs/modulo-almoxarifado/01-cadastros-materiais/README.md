@@ -1,12 +1,14 @@
 # 01 — Cadastros de Materiais
 
-> **Status:** 🟡 — **continua 🟡, e a Etapa 26 não muda a cor**: ela fecha **um** item do
-> checklist de Frontend (as categorias hardcoded), e os outros quatro seguem abertos (tabela de
-> conversões genérica, grupo acima de família, motivos/transportadoras/tipos de documento,
-> `almoxarifadoApi.js` — e ~~ficha técnica/anexos na tela~~, que **saiu desta lista: foi paga na
-> Etapa 34 (`eb89b5e`)**). Etapa 2 entregue (2026-08-04): ~21 colunas novas no material (técnicos, reposição, controles, ABC, unidades compra/consumo + fatores), subfamílias via `parent_id` em famílias, `MaterialSchema`/`MaterialUpdateSchema` (Zod) com validação e auditoria de criação/atualização, form em 6 seções.
+> **Status:** 🟡 — **continua 🟡; a Etapa 66 fecha mais um item** (motivos de movimentação —
+> `de04974..40dd180`). Seguem abertos: tabela de conversões genérica, grupo acima de família,
+> **transportadoras e tipos de documento**, `almoxarifadoApi.js`, e o que a Etapa 66 deixou de fora
+> do próprio item de motivos (ver o item no checklist). Histórico do status: a Etapa 26 fechou as
+> categorias hardcoded; a Etapa 34 pagou a ficha técnica/anexos na tela (`eb89b5e`). Etapa 2 entregue (2026-08-04): ~21 colunas novas no material (técnicos, reposição, controles, ABC, unidades compra/consumo + fatores), subfamílias via `parent_id` em famílias, `MaterialSchema`/`MaterialUpdateSchema` (Zod) com validação e auditoria de criação/atualização, form em 6 seções.
 > **Spec original:** seções 4.1, 4.2, 4.3
-> **Última atualização:** 2026-09-16 (**Etapa 34 (`746a106..054f727`) — a tela de materiais ganhou
+> **Última atualização:** 2026-10-01 (**Etapa 66 (`de04974..40dd180`) — motivos de movimentação
+> viraram cadastro.** Ver a seção "Entregue na Etapa 66", no fim.)
+> Antes: 2026-09-16 (**Etapa 34 (`746a106..054f727`) — a tela de materiais ganhou
 > anexos.** Clipe na coluna de ações de cada linha abrindo o modal **Anexos** (entidade `material`,
 > `eb89b5e`); zero linhas de servidor na etapa inteira. E a frase "plugar aqui é uma linha", que
 > esta spec repetia desde a Etapa 32, **estava errada** — ver a correção no item de checklist de
@@ -80,7 +82,19 @@ Cadastro completo de materiais com todos os campos da spec, famílias/subfamíli
 ### Cadastros complementares (spec 4.3)
 - [x] Unidades de medida · fornecedores (módulo compras) · clientes · setores · localizações · perfis de acesso
 - [ ] Conversões entre unidades (tabela + API) — **não criada**; decisão de escopo do design (item 3): ficou só como colunas `fator_conversao_compra`/`fator_conversao_consumo` + validação no material, sem tabela genérica de conversão
-- [ ] Motivos de movimentação e motivos de ajuste (cadastro, hoje texto livre)
+- [x] Motivos de movimentação e motivos de ajuste (cadastro, hoje texto livre) — **FEITO na Etapa 66 (2026-10-01)**:
+  cadastro `de04974` (tabela, CRUD com gate `configurar`, auditoria), uso na movimentação `56d8b38` (`motivo_id` na v2,
+  na `/transferencias` e no motor; o livro grava o nome da época + o id), aba em Configurações `448e5d7`, escolha na
+  tela de movimentação + justificativa no livro/extrato `139dda2`, relatório "Histórico de movimentações" com colunas
+  Motivo/Justificativa e filtro por motivo `1998227`, integração ponta a ponta `f6c9979`, revisão adversarial
+  `40dd180`. **Escopo:** o cadastro **acompanha** o texto livre (B261). **Ficou de fora, de propósito:**
+  - [ ] tornar obrigatório escolher do cadastro (por tipo, configurável) — depende de o cadastro estar em uso;
+  - [ ] motivo do cadastro na v1 (`POST /movimentacoes`, movimentação rápida da tela de Materiais), bloqueio/
+    desbloqueio, inventário, estorno, NC e devolução — continuam texto fixo + justificativa livre (os tipos deles não
+    estão na rota genérica; DESBLOQUEIO colidiria com o rótulo da liberação por NC);
+  - [ ] regra própria por motivo de ajuste (ex.: dupla aprovação por motivo) — feature 06;
+  - [ ] migrar o texto livre antigo para o cadastro — não, como nas categorias (consulta A6);
+  - [ ] indicador/gráfico "movimentações por motivo" — o mínimo foi a coluna e o filtro.
 - [ ] Tipos de documento · transportadoras
 - [ ] Grupos de e-mail (parcial em `configuracoes_almoxarifado`) · regras de aprovação (feature 06)
 
@@ -111,6 +125,10 @@ Cadastro completo de materiais com todos os campos da spec, famílias/subfamíli
 | `classe_abc` fora de A/B/C → 400 | `materialCompleto.api.test.js`: "POST classe_abc inválida (X) → 400", "PUT classe_abc inválida (X) → 400" |
 | Alteração de cadastro mantém histórico (spec 29) | `materialCompleto.api.test.js`: "PUT altera nome+marca → auditoria com dados_anteriores/dados_novos SÓ dos campos alterados" |
 | Soft delete não some com histórico de movimentações | regra pré-existente; **sem teste de API dedicado** nesta etapa |
+| Motivo de movimentação: nome único (maiúsculas, acento, espaços e invisíveis), tipos válidos, gate `configurar`, desativar não apaga (Etapa 66) | `motivosMovimentacaoCrud.api.test.js` (18 cenários) |
+| Movimentação com `motivo_id`: grava nome da época + id; 5 recusas literais nas três portas (v2, `/transferencias`, serviço); v1 ignora (Etapa 66) | `motivosMovimentacaoUso.api.test.js` (11 cenários) |
+| Ponta a ponta pela rota: cadastrar → listar por tipo → movimentar → livro/extrato → relatório filtrado → renomear não reescreve → desativar recusa → estorno fora do filtro (Etapa 66) | `motivosMovimentacaoIntegracao.api.test.js` (8 cenários) |
+| Histórico de movimentações: colunas Motivo/Justificativa e filtro por `motivo_id` (por id, não por texto) (Etapa 66) | `relatorioMotivoMovimentacao.api.test.js` (5 cenários) |
 
 ## Dependências
 
@@ -270,3 +288,28 @@ rota preserva), e o de reativação manda `ativo: 1` explícito.
 - **Categoria não virou chave estrangeira.** É o que tornaria a RN-05 desnecessária, e é migração
   de schema sobre o cadastro de material: etapa própria.
 - **`parent_id` da tabela continua sem uso.** O CRUD trata a lista como plana.
+
+## Entregue na Etapa 66 (2026-10-01, `de04974..40dd180`) — motivos de movimentação viram cadastro
+
+Plano: `docs/superpowers/plans/2026-10-01-almoxarifado-etapa66-motivos-de-movimentacao.md`.
+
+| Task | Commit | O que entregou |
+|---|---|---|
+| T1 (tronco) | `de04974` | tabela `motivos_movimentacao_almoxarifado` (`nome`, `nome_normalizado` UNIQUE, `tipos` JSON, `ativo`), serviço `services/almoxarifado/motivoMovimentacao.js`, `GET/POST/PUT/DELETE /api/almoxarifado/motivos-movimentacao` (+ `GET …/tipos`), escrita com `configurar`, auditoria `motivo_movimentacao` |
+| T2 (tronco) | `56d8b38` | `motivo_id` na movimentação: resolvido no topo de `stockService.registrarMovimentacao` (antes da desestruturação), `movimentacoes_almoxarifado.motivo_id`, `MovimentacaoSchema.motivo_id: z.unknown()` — a mesma mensagem nas três portas |
+| T4 (galho) | `448e5d7` | aba **Motivos de Movimentação** em Configurações |
+| T5 (galho) | `139dda2` | select de motivos por tipo + "Outro (digitar)" + complemento na Nova Movimentação; justificativa no livro e no extrato (RN-08) |
+| T3 (galho) | `1998227` | Histórico de movimentações: colunas Motivo/Justificativa e filtro `motivo_id`; o render genérico de parâmetros ganhou `tipo: 'select'` com `opcoes_url` |
+| T6 (integração) | `f6c9979` | ponta a ponta pela rota (8 cenários) |
+| Fase 5 | `40dd180` | nome com espaços/invisíveis; complemento não-texto na `/transferencias`; a tela não perde a escolha calada |
+
+**Medido na Fase 0, que nenhum documento dizia:** o motor exige **`justificativa`**, não `motivo` — a tela só funcionava
+porque copiava o texto nos dois campos; o livro e o extrato mostravam só o `motivo`, então o porquê digitado em
+bloqueio, inventário e estorno (gravado em `justificativa`) **nunca aparecia**; e o relatório "Histórico de
+movimentações" não tinha coluna de motivo, nem no export.
+
+**O plano da etapa tinha um erro, registrado lá:** dizia "export CSV" — o export do histórico é **XLSX**; o teste
+confere os cabeçalhos do XLSX.
+
+**Para a rastreabilidade futura:** `motivo` na linha do livro é o nome **da época** (renomear não reescreve); o filtro por
+motivo é pelo **id** (`m.motivo_id`), nunca pelo texto.
