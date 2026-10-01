@@ -66,6 +66,9 @@ const ROTULOS_ENTIDADE = Object.freeze({
   material: 'Material',
   material_cliente: 'Material de cliente',
   movimentacao: 'Movimentação',
+  // Etapa 66: o motivo de movimentacao virou cadastro auditado. Mesma regra da `categoria`: sem
+  // esta linha o teste de cobertura de entidades fica vermelho de proposito.
+  motivo_movimentacao: 'Motivo de movimentação',
   // Etapa 43: a divergência deixa de ser só alerta e vira DOCUMENTO numerado (`NC-…`), com autor,
   // decisão e justificativa. Mesma regra da `categoria` e do `plano_inspecao` acima: sem esta linha
   // o teste de cobertura de entidades fica vermelho de propósito e `nao_conformidade` apareceria

@@ -22,7 +22,7 @@ const { disponivelSql } = require('../../services/almoxarifado/availabilitySql')
 // reprovar depois, por comparacao com NaN.
 const { paraNumeroFinito } = require('../../services/almoxarifado/toleranciaInspecao');
 const { validate, formatZodError } = require('../../services/almoxarifado/validation');
-const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema, RemessaTerceiroSchema, RetornoRemessaSchema, TransformacaoRemessaSchema, EncerramentoRemessaSchema, CancelamentoRemessaSchema, SobraUpdateSchema, GerarRetalhoSchema, SucateamentoCreateSchema, SucateamentoDestinoFormSchema, FerramentaCreateSchema, FerramentaUpdateSchema, EmprestimoSchema, DevolucaoEmprestimoSchema, CalibracaoSchema, JustificativaSchema, ManutencaoSchema, ManutencaoConcluirSchema, OcorrenciaSchema, AssinaturaEntregaFormSchema, AnexoCreateSchema, RecebimentoCreateSchema, RecebimentoFiscalSchema } = require('../../services/almoxarifado/schemas');
+const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema, RemessaTerceiroSchema, RetornoRemessaSchema, TransformacaoRemessaSchema, EncerramentoRemessaSchema, CancelamentoRemessaSchema, SobraUpdateSchema, GerarRetalhoSchema, SucateamentoCreateSchema, SucateamentoDestinoFormSchema, FerramentaCreateSchema, FerramentaUpdateSchema, EmprestimoSchema, DevolucaoEmprestimoSchema, CalibracaoSchema, JustificativaSchema, ManutencaoSchema, ManutencaoConcluirSchema, OcorrenciaSchema, AssinaturaEntregaFormSchema, AnexoCreateSchema, RecebimentoCreateSchema, RecebimentoFiscalSchema, TIPOS_MOVIMENTO_ROTA } = require('../../services/almoxarifado/schemas');
 // Etapa 20 (C1): a limpeza do upload orfao SAIU deste arquivo para um modulo compartilhado —
 // era uma `function` local do closure de `registerExtendedRoutes` e `routes/almoxarifado.js`
 // (rota de foto de material) nao a alcancava. Importada com ALIAS de proposito: o nome
@@ -56,6 +56,9 @@ const inspectionService = require('../../services/almoxarifado/inspectionService
 // regua e como a mensagem literal se parte em duas).
 const nonConformityService = require('../../services/almoxarifado/nonConformityService');
 const returnService = require('../../services/almoxarifado/returnService');
+// Etapa 66: cadastro de motivos de movimentacao — a regra (nome normalizado, tipos, ativo 0|1) e
+// as mensagens literais moram no servico.
+const motivoMovimentacaoService = require('../../services/almoxarifado/motivoMovimentacao');
 const scrapService = require('../../services/almoxarifado/scrapService');
 const scrapDisposalService = require('../../services/almoxarifado/scrapDisposalService');
 const toolService = require('../../services/almoxarifado/toolService');
@@ -271,6 +274,45 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
         dados_novos: { ativo: 0 },
       }, 'exclusao de categoria');
       res.json({ success: true });
+    } catch (e) { handleError(res, e); }
+  });
+
+  // ── Motivos de movimentação (Etapa 66, T1) ─────────────────────────────────────────────────
+  //
+  // Molde: o CRUD de categorias logo acima (GET so com `auth`, escrita com `configurar`, soft
+  // delete idempotente). A REGRA mora em `motivoMovimentacao.js` — estas rotas so traduzem HTTP e
+  // nao revalidam nada. O GET fica aberto a qualquer usuario do modulo (D5): o ALMOXARIFE precisa
+  // da lista na tela de movimentacao.
+  app.get('/api/almoxarifado/motivos-movimentacao', auth, async (req, res) => {
+    try {
+      res.json(await motivoMovimentacaoService.listarMotivos(db, {
+        todos: req.query.todos === '1',
+        tipo: req.query.tipo === undefined ? undefined : String(req.query.tipo),
+      }));
+    } catch (e) { handleError(res, e); }
+  });
+
+  // Fonte unica dos tipos a que um motivo pode servir (os 15 da rota generica). A aba de
+  // Configuracoes desenha os checkboxes daqui, em vez de uma terceira copia da lista na tela.
+  app.get('/api/almoxarifado/motivos-movimentacao/tipos', auth, (req, res) => {
+    res.json(TIPOS_MOVIMENTO_ROTA);
+  });
+
+  app.post('/api/almoxarifado/motivos-movimentacao', auth, requirePermission('configurar'), async (req, res) => {
+    try {
+      res.status(201).json(await motivoMovimentacaoService.criarMotivo(db, req.body, autorDe(req)));
+    } catch (e) { handleError(res, e); }
+  });
+
+  app.put('/api/almoxarifado/motivos-movimentacao/:id', auth, requirePermission('configurar'), async (req, res) => {
+    try {
+      res.json(await motivoMovimentacaoService.atualizarMotivo(db, req.params.id, req.body || {}, autorDe(req)));
+    } catch (e) { handleError(res, e); }
+  });
+
+  app.delete('/api/almoxarifado/motivos-movimentacao/:id', auth, requirePermission('configurar'), async (req, res) => {
+    try {
+      res.json(await motivoMovimentacaoService.desativarMotivo(db, req.params.id, autorDe(req)));
     } catch (e) { handleError(res, e); }
   });
 

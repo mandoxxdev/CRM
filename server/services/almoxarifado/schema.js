@@ -895,6 +895,34 @@ async function initSchema(db) {
       + 'e reinicie o servidor.');
   }
 
+  // ── Motivos de movimentação (Etapa 66) ──
+  // Cadastro que ACOMPANHA o texto livre (D1): a movimentacao pode citar `motivo_id`, e o livro
+  // grava o NOME do momento em `motivo` mais o id (D2). `tipos` e um array JSON na propria linha
+  // (D3: sem transacao, uma tabela de juncao poderia ficar pela metade num PUT). Sem semente (D7).
+  //
+  // Unicidade por `nome_normalizado` (trim + NFC + minusculas pt-BR, calculado no servico) e nao
+  // por `COLLATE NOCASE`, que so dobra ASCII e nao existe no Postgres (revisao da Fase 2). O
+  // try/catch do indice e o mesmo das categorias acima: uma excecao aqui derrubaria o initSchema
+  // inteiro; a tabela nasce vazia nesta etapa, entao em base nova o indice aplica sempre.
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS motivos_movimentacao_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL,
+    nome_normalizado TEXT NOT NULL,
+    tipos TEXT NOT NULL,
+    ativo INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  try {
+    await dbRun(db, `CREATE UNIQUE INDEX IF NOT EXISTS idx_motivos_mov_almox_nome
+      ON motivos_movimentacao_almoxarifado(nome_normalizado)`);
+  } catch (e) {
+    console.error('⚠️  [almoxarifado] Nao foi possivel criar idx_motivos_mov_almox_nome:', e.message,
+      '— ha motivos com nome repetido. Renomeie/desative os duplicados '
+      + '(SELECT nome_normalizado, COUNT(*) FROM motivos_movimentacao_almoxarifado GROUP BY nome_normalizado HAVING COUNT(*) > 1) '
+      + 'e reinicie o servidor.');
+  }
+
   // ── Famílias de material ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS familias_material_almoxarifado (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1214,6 +1242,9 @@ async function initSchema(db) {
     'reserva_id INTEGER',
     'recebimento_id INTEGER',
     'requisicao_id INTEGER',
+    // Etapa 66 (D2): o motivo do cadastro citado pela movimentacao. `motivo` (texto) continua
+    // sendo gravado com o NOME do momento — renomear o cadastro nao reescreve o livro.
+    'motivo_id INTEGER',
   ];
   for (const col of movCols) await safeAlter(db, `ALTER TABLE movimentacoes_almoxarifado ADD COLUMN ${col}`);
 
