@@ -6,7 +6,7 @@ const fs = require('fs');
 const multer = require('multer');
 const XLSX = require('xlsx');
 const { canConfigureAlmox, isSystemAdmin } = require('../../services/systemPermissions');
-const { initSchema, TIPOS_MATERIAL_ENUM, TIPOS_LOCALIZACAO, SETORES_REQUISICAO } = require('../../services/almoxarifado/schema');
+const { initSchema, TIPOS_MATERIAL_ENUM, TIPOS_LOCALIZACAO, AREAS_ESPECIAIS, SETORES_REQUISICAO } = require('../../services/almoxarifado/schema');
 const { requirePermission, can, getPerfilFromUser, ACAO_PERFIS, PERFIS } = require('../../services/almoxarifado/permissions');
 const { dbAll, dbGet, dbRun } = require('../../services/almoxarifado/db');
 // Etapa 33: a URL de arquivo e minada no ponto unico do modulo, nunca montada aqui.
@@ -163,7 +163,10 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
 
   // ── Metadata ──
   app.get('/api/almoxarifado/meta/tipos-material', auth, (req, res) => {
-    res.json({ tipos: TIPOS_MATERIAL_ENUM, setores: SETORES_REQUISICAO, localizacoes_tipos: TIPOS_LOCALIZACAO });
+    // Etapa 68 (D2): `areas_especiais` e aditivo, na ordem em que os tipos aparecem na lista.
+    const areas_especiais = TIPOS_LOCALIZACAO.filter((t) => AREAS_ESPECIAIS[t])
+      .map((t) => ({ tipo: t, chave: AREAS_ESPECIAIS[t].chave, descricao: AREAS_ESPECIAIS[t].descricao }));
+    res.json({ tipos: TIPOS_MATERIAL_ENUM, setores: SETORES_REQUISICAO, localizacoes_tipos: TIPOS_LOCALIZACAO, areas_especiais });
   });
 
   // ── Categorias de material (Etapa 26) ──────────────────────────────────────────────────────

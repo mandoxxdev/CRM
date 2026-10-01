@@ -22,7 +22,18 @@ const requisitionCreateService = require('../services/almoxarifado/requisitionCr
 const requisitionStateMachine = require('../services/almoxarifado/requisitionStateMachine');
 const valueApprovalService = require('../services/almoxarifado/requisitionValueApprovalService');
 const approvalRulesService = require('../services/almoxarifado/approvalRulesService');
-const { TIPOS_URGENCIA } = require('../services/almoxarifado/schema');
+const { TIPOS_URGENCIA, TIPOS_LOCALIZACAO } = require('../services/almoxarifado/schema');
+
+// Etapa 68 (D4): o tipo da localizacao passa a ter semantica (areas especiais) — um erro de
+// digitacao pela API perderia a semantica calado. So tipo PRESENTE (nao undefined/null/'') e fora
+// da lista recusa; ausente/vazio continua 'Almoxarifado' (POST) como hoje. Descartado: normalizar
+// acento/maiuscula (inventa equivalencia).
+function tipoLocalizacaoPresente(tipo) {
+  return tipo !== undefined && tipo !== null && tipo !== '';
+}
+function mensagemTipoInvalido(tipo) {
+  return `Tipo de localização inválido: ${tipo}`;
+}
 const stockService = require('../services/almoxarifado/stockService');
 const materialService = require('../services/almoxarifado/materialService');
 const {
@@ -1956,6 +1967,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     if (denyUnlessAlmoxAdmin(req, res)) return;
     const { codigo, descricao, setor, subgrupo, tipo, parent_id, pos_x, pos_y, largura, altura, almoxarifado_id, bloqueada, tipos_material_permitidos } = req.body;
     if (!codigo) return res.status(400).json({ error: 'Código obrigatório' });
+    // Etapa 68 (RN-02): antes de qualquer escrita — inclusive do ramo de reativacao abaixo.
+    if (tipoLocalizacaoPresente(tipo) && !TIPOS_LOCALIZACAO.includes(tipo)) {
+      return res.status(400).json({ error: mensagemTipoInvalido(tipo) });
+    }
     const subgrupoVal = subgrupo ? String(subgrupo).trim() || null : null;
     const parentVal = parent_id ? parseInt(parent_id, 10) : null;
     const bloqueadaVal = bloqueada ? 1 : 0;
@@ -2076,6 +2091,16 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         if (curErr) return res.status(500).json({ error: curErr.message });
         if (!current) return res.status(404).json({ error: 'Localização não encontrada' });
 
+        // Etapa 68 (RN-03): recusa so quando o tipo MUDA para fora da lista — o legado esquisito
+        // gravado antes continua editavel/movivel (a tela manda o tipo atual). Logo depois do 404 e
+        // antes da guarda de desativacao (Fase 2 da Etapa 68).
+        if (tipoLocalizacaoPresente(tipo) && tipo !== current.tipo && !TIPOS_LOCALIZACAO.includes(tipo)) {
+          return res.status(400).json({ error: mensagemTipoInvalido(tipo) });
+        }
+        // Etapa 68 (Surpresa 2): sem `tipo` no body PRESERVA — `tipo || 'Almoxarifado'` apagava a
+        // area calado (o mesmo padrao que a Etapa 55 corrigiu para `ativo`). null/'' = Almoxarifado.
+        const tipoFinal = tipo === undefined ? current.tipo : (tipo || 'Almoxarifado');
+
         // Etapa 52 (RN-04): desativar pelo PUT é apagar por outro caminho — a mesma guarda do DELETE.
         // Fase 5: `Number(ativo) !== 1` e nao `!Number(ativo)` - `ativo: 2` gravava 2 e a localizacao
         // sumia do mapa (que filtra ativo = 1) com o material dentro.
@@ -2112,7 +2137,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
           if (dupErr) return res.status(500).json({ error: dupErr.message });
           if (isDup) return res.status(400).json({ error: 'Subgrupo já existe neste setor e localização pai' });
           db.run(`UPDATE localizacoes_almoxarifado SET codigo=?, descricao=?, setor=?, subgrupo=?, tipo=?, parent_id=?, pos_x=?, pos_y=?, largura=?, altura=?, almoxarifado_id=COALESCE(?, almoxarifado_id), bloqueada=?, tipos_material_permitidos=?, ativo=? WHERE id=?`,
-            [codigo, descricao || null, setor || null, subgrupoVal, tipo || 'Almoxarifado', parentVal,
+            [codigo, descricao || null, setor || null, subgrupoVal, tipoFinal, parentVal,
              pos_x ?? null, pos_y ?? null, largura ?? 120, altura ?? 80, almoxarifadoIdParam,
              bloqueadaFinal, tiposFinal,
              // Etapa 55 (RN-03, C74 (3)): sem `ativo` PRESERVA — gravava 1 e reativava pela API.

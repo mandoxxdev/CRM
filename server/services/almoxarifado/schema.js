@@ -22,7 +22,37 @@ const TIPOS_LOCALIZACAO = [
   'Almoxarifado', 'Rua', 'Prateleira', 'Gaveta', 'Box', 'Área externa', 'Área de corte',
   'Área de montagem', 'Área de elétrica', 'Área de pintura', 'Área de expedição',
   'Área de materiais do cliente', 'Área de quarentena/inspeção',
+  // Etapa 68 (D3): os dois tipos novos vao NO FIM — a ordem dos 13 antigos e contrato da tela.
+  'Área de sucata', 'Área de devoluções',
 ];
+
+// Etapa 68 (D2): registro das areas especiais, por ROTULO exato de TIPOS_LOCALIZACAO. A semantica
+// e de SUGESTAO e AVISO — nenhuma recusa no motor (D1, licao B217). As frases do aviso saem de
+// `stockService.avisoAreaEspecial`; `descricao` e o texto curto do Mapa. Descartado: coluna nova
+// `area_especial` na localizacao (segunda fonte do mesmo fato que o `tipo` ja diz). Em-terceiros
+// fica fora por decisao (D7): remessa e retencao, sem endereco fisico.
+const AREAS_ESPECIAIS = {
+  'Área de quarentena/inspeção': {
+    chave: 'QUARENTENA',
+    descricao: 'Guardar aqui não retém o material: ele continua disponível. Quem retém é a inspeção ou o bloqueio.',
+  },
+  'Área de expedição': {
+    chave: 'EXPEDICAO',
+    descricao: 'A separação da requisição não usa este endereço: a entrega baixa da origem separada.',
+  },
+  'Área de sucata': {
+    chave: 'SUCATA',
+    descricao: 'Guardar aqui não sucateia: o material continua no estoque até o sucateamento aprovado, que baixa daqui quando o saldo aqui cobre o sucateamento inteiro.',
+  },
+  'Área de devoluções': {
+    chave: 'DEVOLUCOES',
+    descricao: 'Guardar aqui não muda o estado do material: ele continua disponível.',
+  },
+  'Área de materiais do cliente': {
+    chave: 'MATERIAIS_CLIENTE',
+    descricao: 'Endereço para material de cliente. Material próprio guardado aqui gera aviso.',
+  },
+};
 
 const UNIDADES_SEED = [
   ['UN', 'Unidade'], ['KG', 'Quilograma'], ['M', 'Metro'], ['M2', 'Metro quadrado'],
@@ -2635,6 +2665,7 @@ module.exports = {
   LOCALIZACOES_ALMOX_SEED,
   TIPOS_MATERIAL_ENUM,
   TIPOS_LOCALIZACAO,
+  AREAS_ESPECIAIS,
   UNIDADES_SEED,
   SETORES_REQUISICAO,
   TIPOS_MOVIMENTO,
