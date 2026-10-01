@@ -2052,7 +2052,7 @@ const RequisicoesList = () => {
                       {temPlanejada(item) && qtdEntregar > pendenteSeparado(item) + 1e-9
                         && !origensEntrega[item.id]?.valor && !origensEntrega[item.id]?.automatico && (
                         <div id={`entrega-dica-pendente-${item.id}`} style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)', marginTop: 4 }}>
-                          O separado pendente sai de {item.origem_separacao_codigo}{item.lote_separacao_codigo ? ` — lote ${item.lote_separacao_codigo}` : ''}; o restante, automático.
+                          O separado pendente sai de {item.origem_separacao_codigo}{item.lote_separacao_codigo ? ` — lote ${item.lote_separacao_codigo}` : ''}; o restante, automático. Se lá não houver mais o separado, a entrega é recusada — escolha de onde sai.
                         </div>
                       )}
                       {/* Etapa 63 (RN-03): saindo de onde não foi separado, o motivo da troca (opcional). */}

@@ -921,6 +921,9 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
     let entregueAcumulado = getEntregue(item);
     // Etapa 61 (RN-02): as series se dividem entre as baixas, em ordem (a 1a baixa leva as primeiras).
     const seriesRestantes = [...(seriesPorItem.get(item.id)?.ids || [])];
+    // Etapa 63 (Fase 5): o registro sai num finally — se um pedaco do item falhar depois de outro ja
+    // baixado, o livro mostra a saida e a troca nao pode ficar sem registro.
+    try {
     for (const baixa of pedacos) {
       try {
         // eslint-disable-next-line no-await-in-loop
@@ -935,6 +938,10 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
             lote_id: origemPorItem.get(item.id).loteId || undefined,
             codigo_lido_origem: origemPorItem.get(item.id).lido || undefined,
           } : {}),
+          // Etapa 63 (Fase 5, critico): o pedaco AUTOMATICO de um item com serie leva o lote das series —
+          // sem ele o fisico drenava pelo ramo sem lote e as series do lote L saiam (o defeito que a
+          // Fase 2 da Etapa 61 fechou, reaberto pela divisao da baixa).
+          ...(!baixa.comOrigem && seriesPorItem.get(item.id)?.loteSeries ? { lote_id: seriesPorItem.get(item.id).loteSeries } : {}),
           motivo: `Requisição ${reqRow.numero}`,
           referencia: reqRow.os_referencia || reqRow.numero,
           justificativa: `Entrega requisição ${reqRow.numero}`,
@@ -956,6 +963,7 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
         'UPDATE itens_requisicao_almoxarifado SET quantidade_entregue=?, quantidade_atendida=?, quantidade_separada=? WHERE id=?',
         [entregueAcumulado, entregueAcumulado, Math.max(getSeparado(item), entregueAcumulado), item.id]);
     }
+    } finally {
 
     // Etapa 63 (RN-01/02): o registro da substituicao, DEPOIS das baixas do item (um por item por
     // entrega, com os ids das movimentacoes). O lote que saiu vem do LIVRO (no automatico o motor
@@ -974,6 +982,7 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
       [requisicaoId, item.id, item.material_id, s.quantidade, s.planOrigem, s.planLote,
         s.saiuOrigem, loteSaida, s.automatica ? 1 : 0, JSON.stringify(movimentosDoItem), s.motivo,
         user.id, nomeDoUsuario(user)]);
+    }
     }
 
     // Etapa 59 (RN-04): entregue todo o separado, a origem planejada nao vale mais.

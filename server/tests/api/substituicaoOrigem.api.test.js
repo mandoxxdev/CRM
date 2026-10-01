@@ -126,6 +126,53 @@ let seq = 0;
     assert.deepStrictEqual(await subs(id), []);
   });
 
+  // ── Fase 5 ────────────────────────────────────────────────────────────────────────────────
+  await test('Fase 5 (critico): material com SERIE e lote, entrega acima do pendente — o pedaco automatico sai do lote das series', async () => {
+    const A = await loc('SA'); const P = await loc('SP');
+    const c = `E63-SER-${++seq}`;
+    const m = (await dbRun(db, `INSERT INTO materiais_almoxarifado (codigo, nome, unidade, quantidade_atual, ativo, controle_serie, localizacao_padrao_id)
+      VALUES (?, 'Serial', 'UN', 0, 1, 1, ?)`, [c, P.id])).lastID;
+    const lc = `LS-${seq}`;
+    const e = await request(app).post('/api/almoxarifado/movimentacoes/v2').send({
+      material_id: m, tipo: 'ENTRADA', quantidade: 6, motivo: 'e63', localizacao_destino_id: A.id, lote: lc,
+      series: ['S1', 'S2', 'S3', 'S4', 'S5', 'S6'],
+    });
+    assert.strictEqual(e.status, 201, JSON.stringify(e.body));
+    const lote = await loteId(m, lc);
+    const sid = async (n) => (await dbGet(db, 'SELECT id FROM series_almoxarifado WHERE material_id = ? AND numero = ?', [m, n])).id;
+    const { id, ids } = await req([[m, 6]]);
+    await separar(id, [{ item_id: ids[0], quantidade_separada: 3, localizacao_origem_id: A.id, lote_id: lote }]);
+    assert.strictEqual((await entregar(id, [{ item_id: ids[0], quantidade_atendida: 1, serie_ids: [await sid('S1')] }])).status, 200);
+    // Pendente 2 (sai de A/lote); excedente 3 (automatico) — as 5 series sao do lote.
+    const r = await entregar(id, [{ item_id: ids[0], quantidade_atendida: 5, serie_ids: [await sid('S2'), await sid('S3'), await sid('S4'), await sid('S5'), await sid('S6')] }]);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    const semLote = await dbAll(db, "SELECT id FROM movimentacoes_almoxarifado WHERE material_id = ? AND tipo = 'SAIDA' AND lote_id IS NULL", [m]);
+    assert.strictEqual(semLote.length, 0, 'um pedaco saiu sem o lote das series');
+    const saldoLote = Number((await dbGet(db, 'SELECT COALESCE(SUM(quantidade),0) q FROM estoque_saldo_almoxarifado WHERE material_id = ? AND lote_id = ?', [m, lote])).q);
+    const seriesLote = (await dbGet(db, "SELECT COUNT(*) n FROM series_almoxarifado WHERE material_id = ? AND lote_id = ? AND status = 'EM_ESTOQUE'", [m, lote])).n;
+    assert.strictEqual(saldoLote, seriesLote, `saldo do lote ${saldoLote} x series do lote ${seriesLote}`);
+  });
+
+  await test('Fase 5: divisao com RESERVA parcial — o pendente sai da planejada mesmo cruzando as baixas (excedente + reservada)', async () => {
+    const A = await loc('RA'); const P = await loc('RP'); const m = await material(P.id);
+    await entrar(m.id, A.id, 4); await entrar(m.id, P.id, 20);
+    const { id, ids } = await req([[m.id, 10]]);
+    await requisitionService.reservarItensAprovacao(db, id, ADMIN, {});
+    await dbRun(db, 'UPDATE reservas_material_almoxarifado SET quantidade = 3 WHERE item_requisicao_id = ?', [ids[0]]);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_reservada = 3 WHERE id = ?', [m.id]);
+    await separar(id, [{ item_id: ids[0], quantidade_separada: 4, localizacao_origem_id: A.id }]);
+    // Antes da 1a entrega o teto e o separado (4): entrega 1 (de A; consome 1 da reserva). Depois, a de 8:
+    // baixas = excedente 6 (sem reserva) + reservada 2; o pendente (3) sai de A, o resto automatico.
+    assert.strictEqual((await entregar(id, [{ item_id: ids[0], quantidade_atendida: 1 }])).status, 200);
+    const r = await entregar(id, [{ item_id: ids[0], quantidade_atendida: 8 }]);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.strictEqual(await saldoEm(m.id, A.id), 0, 'o pendente nao saiu inteiro de A');
+    assert.strictEqual(await saldoEm(m.id, P.id), 15);
+    const daA = (await dbGet(db, "SELECT COALESCE(SUM(quantidade),0) q FROM movimentacoes_almoxarifado WHERE material_id = ? AND tipo = 'SAIDA' AND localizacao_origem_id = ?", [m.id, A.id])).q;
+    assert.strictEqual(daA, 4);
+    assert.deepStrictEqual(await subs(id), []);
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed\n`);
   process.exit(failed > 0 ? 1 : 0);
