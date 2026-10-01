@@ -302,18 +302,43 @@ T6 (integração) depois de tudo; T7 fechamento.
   (RN-08, quatro cenários, **pela rota** de solicitar/aprovar, e um **pelo serviço**). Controle positivo: sem o filtro
   de bloqueada (a aprovação toma 400 do motor — prova que o filtro é o que impede o travamento); sem `ativo = 1`;
   `ORDER BY` invertido com duas áreas; aplicar também com lote.
-- [ ] **T4 (galho, cliente) — aviso em Movimentações** (`MovimentacoesAlmoxarifado.js:996-1040`): quando
+- [x] **T4 (galho, cliente) — aviso em Movimentações** *Feita (2026-10-01): `0d44607`. Bloco "Etapa 68" de
+  `MovimentacoesAlmoxarifado.test.js`, 7 cenários (5 vermelhos antes); 8 sabotagens vermelhas no cenário nomeado (ver o
+  corpo do commit). Decidido: sem material não busca.* Texto original (`MovimentacoesAlmoxarifado.js:996-1040`): quando
   `TIPOS_COM_DESTINO` e há destino escolhido, chama `/localizacoes/:id/aviso-area?material_id=` e mostra
   `data-testid="aviso-area-especial"` com o `aviso` literal do servidor; guarda `cancelado` contra resposta atrasada
   (padrão da Etapa 53); trocar destino ou material refaz; falha da rota = sem aviso (falha aberta, como
   `minhas-permissoes`). Não bloqueia o envio. Testes no bloco "Etapa 68" de `MovimentacoesAlmoxarifado.test.js` (mock
   só na fronteira HTTP, com as frases do contrato).
-- [ ] **T5 (galho, cliente) — Mapa e assistente.** `MapaLocalizacoesAlmoxarifado.js`: ícone/cor para `Área de sucata`
+- [x] **T5 (galho, cliente) — Mapa e assistente.** *Feita (2026-10-01): `fe4e24f`. `MapaAreasEspeciais.test.js` (7) e
+  bloco "Etapa 68" em `LocalizacaoProximoCodigo.test.js` (5); sabotagens no corpo do commit (subida pela árvore,
+  guarda de ciclo, ausência de `areas_especiais` tolerada, raiz sem as áreas, filho herdando o rótulo).* Texto
+  original: `MapaLocalizacoesAlmoxarifado.js`: ícone/cor para `Área de sucata`
   e `Área de devoluções`; no painel da selecionada, a `descricao` de `areas_especiais` (`data-testid="descricao-area"`).
   `ConfiguracoesAlmoxarifado.js`: o select de raiz do assistente oferece também os `tipo` de `areas_especiais`. Testes:
   `MapaAreasEspeciais.test.js` (novo) e um cenário no teste do assistente (`LocalizacaoProximoCodigo.test.js` já monta
   a tela).
-- [ ] **T6 (integração, cruza T1–T3) — `server/tests/api/areasEspeciaisIntegracao.api.test.js`.** Um fluxo pela
+- [x] **T6 (integração, cruza T1–T3) — `server/tests/api/areasEspeciaisIntegracao.api.test.js`.** *Feita
+  (2026-10-01; hash no commit "Etapa 68 T6"). 8 cenários, TUDO pela rota (o banco não é tocado): (1) `POST
+  /localizacoes` cria S (`Área de sucata`, raiz), F (`Prateleira` com `parent_id` = S) e P; o meta traz
+  `areas_especiais` com o tipo de S; (2) material pela rota com padrão P — a sugestão não traz S nem F (as duas
+  estavam em `/localizacoes/vazias`, conferido) e traz P; (3) ENTRADA 10 em P; `aviso-area` de F = frase literal de
+  SUCATA com o código de F (área EFETIVA), de P = nulls; (4) `/transferencias` 4 P→S → 201, Mapa e
+  `/estoque/:id/saldos` com S:4/P:6; (5) sucateamento de 4, pernas gestão → almoxarifado → `GET /movimentacoes` com
+  a SUCATA de origem S, S com 0 no Mapa e de volta em `/vazias`, P com 6; (6) o mesmo pela posição F, pernas
+  almoxarifado → gestão com outros dois usuários → origem F (e a sugestão, com saldo em F, não traz F no "já tem");
+  (7) parcial: S:2 não cobre 4 → origem nula, S:2, P:4 (como hoje); (8) PUT de S sem `tipo` mantém a área (aviso
+  continua SUCATA, sugestão continua sem S/F); PUT `'Area de sucata'` → 400 literal, nada gravado. Passou de primeira
+  (é integração de peças já testadas) — controle positivo, 6 sabotagens (perl, âncora contada == 1, backup
+  `$TMP/e68t6-*`, restauro por cópia com md5 conferido), cada uma vermelha no cenário nomeado: T3 desligada (origem
+  sempre nula) → (5)(6); subida pela árvore desligada → (2)(3)(6); filtro de área da sugestão tirado → (2)(6);
+  PUT voltando a `tipo || 'Almoxarifado'` → (8); checagem "cobre" tirada → (7) (a 2ª perna toma o 400 do
+  `origemEstrita`); validação de tipo do PUT tirada → (8). **Divergências do texto:** (a) o "já tem" de S no (4)
+  não prova o filtro de área — S tem filho ativo e o filtro de contêiner (Etapa 53) já a tira; por isso o "já tem"
+  da área é provado pela posição F no (6) (a primeira rodada da sabotagem do filtro mostrou isso); (b) o "(7) pelo
+  serviço" não foi repetido aqui — o pedido da T6 foi tudo pela rota, e o caminho do serviço já está em
+  `sucateamentoAreaSucata.api.test.js` (cenário "SERVICO"); (c) a cadeia quarentena → inspeção → sucata **não** é
+  testada nem prometida (quebrada pelo bloqueio, Fase 2). Nenhum defeito de produção revelado.* Texto original: Um fluxo pela
   rota: (1) `POST /localizacoes` cria `Área de sucata` S e `Prateleira` P vazias; (2) a sugestão de entrada do material
   traz P e não S; (3) ENTRADA de 10 em P; (4) `aviso-area` de S devolve a frase de sucata; (5) `/transferencias` de 4
   P→S é aceita (201); (6) Mapa: S com 4; (7) solicitar + aprovar as duas pernas do sucateamento de 4 → livro com
@@ -394,7 +419,7 @@ e deixa de sugerir a área; nada é recusado nem movido. (d) com linhas — a en
 
 ## Próxima tarefa detalhada
 
-Fase 2 desta etapa: revisor fresco com este plano + `02/README.md` + as 4 perguntas da skill.
+Fase 2 desta etapa: feita (secao abaixo). T1-T6 feitas (`14cc17a`, `d94dc24`, `e79d8b5`, `0d44607`, `fe4e24f`, T6). **Proxima: T7 — fechamento** pela skill `fechar-etapa`, com a lista do item T7 acima; o teste de integracao da T6 e a prova citavel no guia (roteiro: criar area de sucata + posicao, transferir, sucatear, ver a area vazia no Mapa). Pontos de atencao: o guia **nao** promete quarentena -> inspecao -> sucata (letra D) e declara que outras saidas (PERDA, "Sai de") ainda drenam a area de sucata (letra C da Fase 2).
 
 ## Fase 2 — revisão do plano: 0 críticos, 5 importantes, 9 menores → plano revisto (vale sobre o texto acima)
 
