@@ -96,8 +96,9 @@ let seq = 0;
     const { id, ids } = await req([[m.id, 9]]);
     await ok(separar(id, [{ item_id: ids[0], quantidade_separada: 3, localizacao_origem_id: C.id }]));
     await ok(separar(id, [
-      { item_id: ids[0], quantidade_separada: 2, localizacao_origem_id: A.id },
-      { item_id: ids[0], quantidade_separada: 2, localizacao_origem_id: B.id, motivo_substituicao: 'segundo' },
+      { item_id: ids[0], quantidade_separada: 1, localizacao_origem_id: A.id, motivo_substituicao: '   ' },
+      { item_id: ids[0], quantidade_separada: 1, localizacao_origem_id: A.id, motivo_substituicao: 'segundo' },
+      { item_id: ids[0], quantidade_separada: 2, localizacao_origem_id: B.id, motivo_substituicao: 'terceiro' },
     ]));
     const s = await subs(id);
     assert.strictEqual(s.length, 1, JSON.stringify(s));
@@ -166,16 +167,20 @@ let seq = 0;
     assert.strictEqual((await planejada(ids[0])).o, A.id);
   });
 
-  await test('Planejada SEM lote (A, —) e rodada (A, L1): o mesmo par — sem troca, a planejada continua (A, —); lote planejado diferente e troca', async () => {
+  await test('Fase 5: planejada SEM lote (A, —) e rodada (A, L1) e troca (par exato) — e a entrega de um clique depois funciona; lote diferente tambem e troca', async () => {
     const A = await loc('LA'); const m = await material();
     const c1 = `L1-${seq}`; const c2 = `L2-${seq}`;
-    await entrar(m.id, A.id, 5); await entrar(m.id, A.id, 10, c1); await entrar(m.id, A.id, 10, c2);
+    await entrar(m.id, A.id, 2); await entrar(m.id, A.id, 10, c1); await entrar(m.id, A.id, 10, c2);
     const l1 = await loteId(m.id, c1); const l2 = await loteId(m.id, c2);
     const r1 = await req([[m.id, 6]]);
     await ok(separar(r1.id, [{ item_id: r1.ids[0], quantidade_separada: 2, localizacao_origem_id: A.id }]));
-    await ok(separar(r1.id, [{ item_id: r1.ids[0], quantidade_separada: 2, localizacao_origem_id: A.id, lote_id: l1 }]));
-    assert.deepStrictEqual(await subs(r1.id), []);
-    assert.deepStrictEqual(await planejada(r1.ids[0]), { o: A.id, l: null });
+    await ok(separar(r1.id, [{ item_id: r1.ids[0], quantidade_separada: 4, localizacao_origem_id: A.id, lote_id: l1 }]));
+    const s1 = await subs(r1.id);
+    assert.strictEqual(s1.length, 1, JSON.stringify(s1));
+    assert.strictEqual(s1[0].planejada_lote, null); assert.strictEqual(s1[0].saiu_lote, c1); assert.strictEqual(s1[0].quantidade, 2);
+    assert.deepStrictEqual(await planejada(r1.ids[0]), { o: null, l: null });
+    // A sonda da Fase 5: com a planejada (A, —) mantida, esta entrega era recusada ("O saldo em A (2) nao cobre (6)").
+    await ok(entregar(r1.id, [{ item_id: r1.ids[0], quantidade_atendida: 6 }]));
     const r2 = await req([[m.id, 6]]);
     await ok(separar(r2.id, [{ item_id: r2.ids[0], quantidade_separada: 2, localizacao_origem_id: A.id, lote_id: l1 }]));
     await ok(separar(r2.id, [{ item_id: r2.ids[0], quantidade_separada: 2, localizacao_origem_id: A.id, lote_id: l2 }]));
@@ -200,6 +205,38 @@ let seq = 0;
     await ok(entregar(r3.id, [{ item_id: r3.ids[0], quantidade_atendida: 3, localizacao_origem_id: B.id }]));
     const s = await subs(r3.id);
     assert.strictEqual(s.length, 1); assert.strictEqual(s[0].momento, 'ENTREGA');
+  });
+
+  await test('Fase 5: rodada SO de lote (sem endereco) sobre planejada A: saida "do lote", NAO automatica', async () => {
+    const A = await loc('OA'); const m = await material();
+    const c = `LO-${seq}`;
+    await entrar(m.id, A.id, 5); await entrar(m.id, A.id, 5, c);
+    const l = await loteId(m.id, c);
+    const { id, ids } = await req([[m.id, 6]]);
+    await ok(separar(id, [{ item_id: ids[0], quantidade_separada: 2, localizacao_origem_id: A.id }]));
+    await ok(separar(id, [{ item_id: ids[0], quantidade_separada: 2, lote_id: l }]));
+    const s = await subs(id);
+    assert.strictEqual(s.length, 1, JSON.stringify(s));
+    assert.strictEqual(s[0].automatica, 0); assert.strictEqual(s[0].saiu_codigo, null); assert.strictEqual(s[0].saiu_lote, c);
+  });
+
+  await test('Fase 5: o INSERT da troca falhando nao derruba a rodada (best-effort): 200, planejada apagada, sem linha', async () => {
+    const A = await loc('FA'); const B = await loc('FB'); const m = await material();
+    await entrar(m.id, A.id, 10); await entrar(m.id, B.id, 10);
+    const { id, ids } = await req([[m.id, 6]]);
+    await ok(separar(id, [{ item_id: ids[0], quantidade_separada: 2, localizacao_origem_id: A.id }]));
+    await dbRun(db, `CREATE TRIGGER e65_falha BEFORE INSERT ON substituicoes_origem_requisicao
+      WHEN NEW.requisicao_id = ${Number(id)} BEGIN SELECT RAISE(ABORT, 'falha forcada'); END`);
+    const warn = console.warn; let avisou = ''; console.warn = (msg) => { avisou += msg; };
+    try {
+      await ok(separar(id, [{ item_id: ids[0], quantidade_separada: 2, localizacao_origem_id: B.id }]));
+    } finally {
+      console.warn = warn;
+      await dbRun(db, 'DROP TRIGGER e65_falha');
+    }
+    assert.ok(/troca de origem/.test(avisou), avisou);
+    assert.deepStrictEqual(await subs(id), []);
+    assert.deepStrictEqual(await planejada(ids[0]), { o: null, l: null });
   });
 
   await test('Pelo SERVICO (sem a rota) tambem registra', async () => {

@@ -621,11 +621,12 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
     const origemId = entrada.localizacao_origem_id ? Number(entrada.localizacao_origem_id) : null;
     const loteId = entrada.lote_id ? Number(entrada.lote_id) : null;
     const pendenteAntes = Math.max(0, getSeparado(item) - getEntregue(item));
-    // Etapa 65 (Fase 2): planejada SEM lote vale qualquer lote do mesmo endereco (a regua da entrega,
-    // Etapa 63) — (A, —) e uma rodada de (A, L1) sao o mesmo par, e a planejada NAO estreita para L1.
-    const planSemLote = !!item.origem_separacao_id && !item.lote_separacao_id;
+    // Etapa 65 (Fase 5): o par exato. A Fase 2 tinha alinhado "planejada sem lote vale qualquer lote"
+    // com a entrega, mas so a COMPARACAO da troca da entrega pensa assim — o saldo da origem e o motor
+    // leem (A, sem lote) como "o saldo sem lote em A", e a entrega de um clique de (A, —) + (A, L1)
+    // passou a ser recusada. Volta o par exato: (A, —) -> (A, L1) apaga a planejada e registra a troca.
     const mesmoPar = Number(item.origem_separacao_id || 0) === Number(origemId || 0)
-      && (planSemLote || Number(item.lote_separacao_id || 0) === Number(loteId || 0));
+      && Number(item.lote_separacao_id || 0) === Number(loteId || 0);
     // Etapa 60 (RN-01/02): acumula a rodada do item para a regua. Com UMA origem na rodada, o separavel
     // e tambem limitado ao saldo nela menos o ja comprometido (Fase 2: "Sai de" e uma origem por
     // rodada — 4 em A e 6 em B nao e divergencia na rodada de A).
@@ -662,10 +663,8 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
     }
     // Rodada com origem diferente (ou sem origem) sobre separado pendente de outra: mista -> nula.
     const planejada = pendenteAntes > 1e-9 && !mesmoPar ? { origemId: null, loteId: null }
-      // Etapa 65: o mesmo par sobre separado pendente mantem a planejada como esta (sem lote continua sem).
-      : pendenteAntes > 1e-9 ? { origemId: item.origem_separacao_id || null, loteId: item.lote_separacao_id || null }
       // Fase 5: lote sem endereco nao vira planejada (a entrega exige o endereco, e ficaria preso).
-        : { origemId: origemId || null, loteId: origemId ? loteId : null };
+      : { origemId: origemId || null, loteId: origemId ? loteId : null };
     // Etapa 65 (RN-01): o motivo da troca — o primeiro nao vazio do item na rodada (so texto; <= 500).
     if (!regua.motivoTroca && typeof entrada.motivo_substituicao === 'string' && entrada.motivo_substituicao.trim()) {
       regua.motivoTroca = entrada.motivo_substituicao.trim().slice(0, 500);
