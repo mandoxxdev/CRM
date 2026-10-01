@@ -84,6 +84,26 @@ async function dispararNotificacoesCriacao(db, requisicaoId, solicitanteEmail = 
   return avaliacaoValor;
 }
 
+const FORMATO_DATA_NECESSIDADE = 'data_necessidade deve estar no formato AAAA-MM-DD';
+
+/**
+ * Etapa 67: `data_necessidade` e o PRAZO do indicador "% no prazo". Vazio, null ou ausente = sem
+ * prazo (NULL). Qualquer outra coisa tem de ser AAAA-MM-DD de um dia que EXISTE — o regex sozinho
+ * deixaria passar 2026-02-30, que o `date()` do SQLite normaliza para outro dia em vez de recusar.
+ * O legado ja gravado (DD/MM/AAAA) continua no banco e o relatorio o conta em `sem_data_valida`.
+ */
+function normalizarDataNecessidade(valor) {
+  if (valor === undefined || valor === null || valor === '') return null;
+  const recusa = () => Object.assign(new Error(FORMATO_DATA_NECESSIDADE), { status: 400 });
+  if (typeof valor !== 'string') throw recusa();
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(valor);
+  if (!m) throw recusa();
+  const [ano, mes, dia] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const d = new Date(Date.UTC(ano, mes - 1, dia));
+  if (d.getUTCFullYear() !== ano || d.getUTCMonth() !== mes - 1 || d.getUTCDate() !== dia) throw recusa();
+  return valor;
+}
+
 /**
  * Cria uma requisição (payload já validado por RequisicaoSchema — ids/quantidades
  * numéricos). Valida whitelist de material por setor (quando setor informado) e
@@ -114,6 +134,11 @@ async function createRequisicao(db, user, payload, { modulo, skipNotificacoes = 
     err.status = 400;
     throw err;
   }
+
+  // Etapa 67 (Fase 2, critico 1): o "% no prazo" compara date(data_necessidade) — texto que o
+  // SQLite nao le (DD/MM/AAAA, "amanha") sumia calado do indicador. Recusa ANTES de qualquer
+  // escrita, aqui no servico (unico escritor da coluna: as duas rotas de criacao passam por ele).
+  const dataNecessidadeFinal = normalizarDataNecessidade(data_necessidade);
 
   if (setorFinal) {
     await sectorMaterialService.ensureSetoresRequisicao(db);
@@ -157,7 +182,7 @@ async function createRequisicao(db, user, payload, { modulo, skipNotificacoes = 
       modulo_origem || null, statusInicial,
       tipo_requisicao || 'CONSUMO', centro_custo_id || null, local_entrega || null,
       projeto_id || null, cliente_id || null, equipamento || null,
-      prioridade || 'NORMAL', data_necessidade || null, justificativa || null,
+      prioridade || 'NORMAL', dataNecessidadeFinal, justificativa || null,
     ]));
 
   const reqId = insertResult.lastID;
@@ -182,4 +207,4 @@ async function createRequisicao(db, user, payload, { modulo, skipNotificacoes = 
   };
 }
 
-module.exports = { createRequisicao, dispararNotificacoesCriacao };
+module.exports = { createRequisicao, dispararNotificacoesCriacao, FORMATO_DATA_NECESSIDADE };
