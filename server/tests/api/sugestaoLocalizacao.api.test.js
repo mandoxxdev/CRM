@@ -32,12 +32,12 @@ let seq = 0;
     [`E53-ALM${++seq}`, 'Alm', ativo])).lastID;
   const ALM = await almox();
   const loc = async (codigo, extra = {}) => (await dbRun(db, `INSERT INTO localizacoes_almoxarifado
-      (codigo, descricao, ativo, bloqueada, parent_id, almoxarifado_id, tipos_material_permitidos) VALUES (?,?,?,?,?,?,?)`,
+      (codigo, descricao, ativo, bloqueada, parent_id, almoxarifado_id, tipos_material_permitidos, tipo) VALUES (?,?,?,?,?,?,?,?)`,
   [`E53-${codigo}-${++seq}`, codigo, extra.ativo ?? 1, extra.bloqueada || 0, extra.parent || null,
-    extra.almox !== undefined ? extra.almox : ALM, extra.tipos ? JSON.stringify(extra.tipos) : null])).lastID;
+    extra.almox !== undefined ? extra.almox : ALM, extra.tipos ? JSON.stringify(extra.tipos) : null, extra.tipoLoc || 'Almoxarifado'])).lastID;
   const material = async (extra = {}) => (await dbRun(db, `INSERT INTO materiais_almoxarifado
-      (codigo, nome, unidade, quantidade_atual, ativo, tipo_material, localizacao_padrao_id) VALUES (?, 'Mat', 'UN', 0, ?, ?, ?)`,
-  [`E53-M${++seq}`, extra.ativo ?? 1, extra.tipo || 'CONSUMIVEL', extra.padrao || null])).lastID;
+      (codigo, nome, unidade, quantidade_atual, ativo, tipo_material, localizacao_padrao_id, proprietario_cliente_id) VALUES (?, 'Mat', 'UN', 0, ?, ?, ?, ?)`,
+  [`E53-M${++seq}`, extra.ativo ?? 1, extra.tipo || 'CONSUMIVEL', extra.padrao || null, extra.cliente || null])).lastID;
   const entrada = async (m, destino, q = 1) => request(app).post('/api/almoxarifado/movimentacoes/v2').send({
     material_id: m, tipo: 'ENTRADA', quantidade: q, motivo: 'e53', ...(destino ? { localizacao_destino_id: destino } : {}),
   });
@@ -187,6 +187,103 @@ let seq = 0;
     const vaz = (await sugestao(await material())).sugestoes.map((x) => x.localizacao_id);
     assert.ok(vaz.length > 0);
     assert.notStrictEqual(vaz[0], SEM, JSON.stringify(vaz));
+  });
+
+  // ── Etapa 68 (RN-06/RN-07): area especial nao e vaga comum ────────────────────────────────
+  // Plano: docs/superpowers/plans/2026-10-01-almoxarifado-etapa68-areas-especiais.md. Muda o
+  // CONJUNTO, nao o formato. Cada cenario usa um almoxarifado proprio com a padrao do material
+  // nele, para as vazias dele virem primeiro (a lista corta em 5).
+  const sugMot = (s, motivo) => s.sugestoes.filter((x) => x.motivo === motivo).map((x) => x.localizacao_id);
+
+  await test('(16) RN-06: area de quarentena vazia (e posicao dentro dela) nao vem; a prateleira vazia vem', async () => {
+    const AX = await almox();
+    const PX = await loc('PX', { almox: AX });
+    const QUAR = await loc('A0-QUAR', { almox: AX, tipoLoc: 'Área de quarentena/inspeção' });
+    const AREA2 = await loc('A0-AREA2', { almox: AX, tipoLoc: 'Área de sucata' });
+    const DENTRO = await loc('A0-DENTRO', { almox: AX, parent: AREA2, tipoLoc: 'Prateleira' });
+    const PRAT = await loc('Z-PRAT', { almox: AX, tipoLoc: 'Prateleira' });
+    const mx = await material({ padrao: PX });
+    const vaz = sugMot(await sugestao(mx), 'VAZIA_COMPATIVEL');
+    assert.ok(vaz.includes(PRAT), `a prateleira vazia sumiu: ${JSON.stringify(vaz)}`);
+    assert.ok(!vaz.includes(QUAR), 'sugeriu a area de quarentena');
+    assert.ok(!vaz.includes(DENTRO), 'sugeriu posicao DENTRO da area de sucata (area efetiva)');
+  });
+
+  await test('(17) RN-06: saldo na area de sucata (e em posicao dela) nao vira JA_TEM; o limite de 10 conta so as nao-area', async () => {
+    const AX = await almox();
+    const PX = await loc('PX', { almox: AX });
+    const mx = await material({ padrao: PX });
+    const S1 = await loc('S1', { almox: AX, tipoLoc: 'Área de sucata' });
+    const S2 = await loc('S2', { almox: AX, tipoLoc: 'Área de sucata' });
+    const S2F = await loc('S2F', { almox: AX, parent: S2, tipoLoc: 'Box' });
+    // As areas com o MAIOR saldo (vem primeiro no ORDER BY sd.q DESC).
+    for (const [d, q] of [[S1, 90], [S2F, 80]]) {
+      await dbRun(db, 'INSERT INTO estoque_saldo_almoxarifado (material_id, localizacao_id, quantidade) VALUES (?,?,?)', [mx, d, q]);
+    }
+    const comuns = [];
+    for (let i = 0; i < 11; i++) {
+      const L = await loc(`C${i}`, { almox: AX, tipoLoc: 'Prateleira' });
+      comuns.push(L);
+      await dbRun(db, 'INSERT INTO estoque_saldo_almoxarifado (material_id, localizacao_id, quantidade) VALUES (?,?,?)', [mx, L, 20 - i]);
+    }
+    const ja = sugMot(await sugestao(mx), 'JA_TEM_O_MATERIAL');
+    assert.ok(!ja.includes(S1) && !ja.includes(S2F), `sugeriu area de sucata: ${JSON.stringify(ja)}`);
+    assert.deepStrictEqual(ja, comuns.slice(0, 10), 'as 10 comuns de maior saldo');
+  });
+
+  await test('(18) RN-06 metade positiva: a PADRAO numa area de expedicao continua vindo como PADRAO', async () => {
+    const AX = await almox();
+    const EXP = await loc('EXP', { almox: AX, tipoLoc: 'Área de expedição' });
+    const mx = await material({ padrao: EXP });
+    const s = await sugestao(mx);
+    assert.strictEqual(s.padrao.localizacao_id, EXP);
+    assert.deepStrictEqual(s.sugestoes[0] && [s.sugestoes[0].localizacao_id, s.sugestoes[0].motivo], [EXP, 'PADRAO']);
+  });
+
+  await test('(19) RN-07: area de cliente — material de cliente a recebe PRIMEIRO entre as vazias; proprio nao', async () => {
+    const cli = (await dbRun(db, `INSERT INTO clientes (razao_social) VALUES ('Cliente E68')`)).lastID;
+    const AX = await almox(); const AOUTRO = await almox();
+    const PX = await loc('PX', { almox: AX });
+    const PRAT = await loc('PRAT', { almox: AX, tipoLoc: 'Prateleira' });
+    // A area de cliente fica em OUTRO almoxarifado: so a chave composta a poe antes da PRAT (que e
+    // do almoxarifado da padrao) — dois sorts em cadeia desfariam um ao outro.
+    const CLI = await loc('Z-CLI', { almox: AOUTRO, tipoLoc: 'Área de materiais do cliente' });
+    const mc = await material({ padrao: PX, cliente: cli });
+    const vc = sugMot(await sugestao(mc), 'VAZIA_COMPATIVEL');
+    assert.strictEqual(vc[0], CLI, JSON.stringify(vc));
+    assert.strictEqual(vc[1], PRAT, `depois da area de cliente, a regra do almoxarifado da padrao: ${JSON.stringify(vc)}`);
+    const mp = await material({ padrao: PX });
+    const vp = sugMot(await sugestao(mp), 'VAZIA_COMPATIVEL');
+    assert.ok(!vp.includes(CLI), `material proprio recebeu a area de cliente: ${JSON.stringify(vp)}`);
+    assert.strictEqual(vp[0], PRAT, JSON.stringify(vp));
+  });
+
+  await test('(20) RN-07: JA_TEM inclui a area de cliente para material de cliente, nao para proprio', async () => {
+    const cli = (await dbRun(db, `INSERT INTO clientes (razao_social) VALUES ('Cliente E68b')`)).lastID;
+    const AX = await almox();
+    const PX = await loc('PX', { almox: AX });
+    const CLI = await loc('CLI', { almox: AX, tipoLoc: 'Área de materiais do cliente' });
+    const mc = await material({ padrao: PX, cliente: cli });
+    const mp = await material({ padrao: PX });
+    for (const mm of [mc, mp]) {
+      await dbRun(db, 'INSERT INTO estoque_saldo_almoxarifado (material_id, localizacao_id, quantidade) VALUES (?,?,?)', [mm, CLI, 5]);
+    }
+    assert.deepStrictEqual(sugMot(await sugestao(mc), 'JA_TEM_O_MATERIAL'), [CLI]);
+    assert.deepStrictEqual(sugMot(await sugestao(mp), 'JA_TEM_O_MATERIAL'), []);
+  });
+
+  await test('(21) INVARIANTE com areas no banco: toda sugestao continua aceita numa ENTRADA real', async () => {
+    const AX = await almox();
+    const PX = await loc('PX', { almox: AX });
+    await loc('A0-Q', { almox: AX, tipoLoc: 'Área de quarentena/inspeção' });
+    await loc('Z-P', { almox: AX, tipoLoc: 'Prateleira' });
+    const mx = await material({ padrao: PX });
+    const s = (await sugestao(mx)).sugestoes;
+    assert.ok(s.length >= 3, `lista curta demais: ${s.length}`);
+    for (const x of s) {
+      const r = await entrada(mx, x.localizacao_id);
+      assert.strictEqual(r.status, 201, `o motor recusou a sugestao ${x.codigo}: ${JSON.stringify(r.body)}`);
+    }
   });
 
   await close();

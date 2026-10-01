@@ -8,7 +8,7 @@ const { avaliarRegrasVinculo } = require('./movementRules');
 const ownerRules = require('./ownerRules');
 // Etapa 66: resolve `motivo_id` (cadastro de motivos) no topo de registrarMovimentacao.
 const motivoMovimentacao = require('./motivoMovimentacao');
-const { TIPOS_MOVIMENTO, TIPOS_RETENCAO } = require('./schema');
+const { TIPOS_MOVIMENTO, TIPOS_RETENCAO, AREAS_ESPECIAIS } = require('./schema');
 const { disponivelSql, COLUNAS_RETENCAO } = require('./availabilitySql');
 // Etapa 45 (fix-round): a regua de "isto e diferenca de verdade", dona unica desde a Etapa 10b.
 // Usada SO no claim de `DEVOLUCAO_FORNECEDOR`, e o raio pequeno e deliberado — ver o comentario
@@ -559,6 +559,72 @@ function motivoRecusaEndereco(loc, material, papel) {
 }
 
 /**
+ * Etapa 68 (D2) — a chave da area especial de um ROTULO de tipo (`AREAS_ESPECIAIS`), ou null.
+ */
+function areaEspecialDe(tipo) {
+  const a = tipo ? AREAS_ESPECIAIS[tipo] : null;
+  return a ? a.chave : null;
+}
+
+/**
+ * Etapa 68 (Fase 2) — a area EFETIVA de uma localizacao: o tipo proprio se for area, senao o do
+ * ancestral MAIS PROXIMO que for area (o assistente grava 'Prateleira' nas posicoes de dentro da
+ * area). `porId` e um Map id -> { id, parent_id, tipo }. Guarda de ciclo: parent_id e editavel por
+ * SQL e um ciclo travaria a subida. Devolve { chave, localizacao_id } (a linha que da a area) ou null.
+ */
+function resolverAreaEfetiva(porId, localizacaoId) {
+  const vistos = new Set();
+  let atual = porId.get(Number(localizacaoId));
+  while (atual && !vistos.has(atual.id)) {
+    vistos.add(atual.id);
+    const chave = areaEspecialDe(atual.tipo);
+    if (chave) return { chave, localizacao_id: atual.id };
+    atual = atual.parent_id ? porId.get(Number(atual.parent_id)) : null;
+  }
+  return null;
+}
+
+async function carregarArvoreLocalizacoes(db) {
+  const linhas = await dbAll(db, 'SELECT id, parent_id, tipo FROM localizacoes_almoxarifado');
+  return new Map(linhas.map((l) => [Number(l.id), l]));
+}
+
+/** Etapa 68: a chave da area efetiva de UMA localizacao (null se nao esta em area). */
+async function areaEfetivaDaLocalizacao(db, localizacaoId) {
+  const r = resolverAreaEfetiva(await carregarArvoreLocalizacoes(db), localizacaoId);
+  return r ? r.chave : null;
+}
+
+/**
+ * Etapa 68 (RN-04, D1) — a frase de AVISO de guardar `material` em `loc`, ou null. PURA, ao lado de
+ * `motivoRecusaEndereco` e no mesmo formato, mas NUNCA vira recusa (licao B217: a entrada sem destino
+ * cai na padrao). Apertar depois e trocar o aviso por `throw` aqui. `loc.area_especial` (chave da
+ * area EFETIVA, ja resolvida pela arvore) vale sobre o tipo da propria linha; sem ele, usa o tipo.
+ * MATERIAIS_CLIENTE so avisa material PROPRIO (sem material, nao da para saber o dono → null).
+ */
+function avisoAreaEspecial(loc, material) {
+  if (!loc) return null;
+  const chave = loc.area_especial !== undefined ? loc.area_especial : areaEspecialDe(loc.tipo);
+  const c = loc.codigo;
+  switch (chave) {
+    case 'QUARENTENA':
+      return `Localização ${c} é área de quarentena/inspeção, mas guardar aqui não retém o material — ele continua disponível. Para reter, use Inspeções ou o bloqueio.`;
+    case 'EXPEDICAO':
+      // Fase 2: sem "não daqui" — o "Sai de" da entrega pode ser a propria area.
+      return `Localização ${c} é área de expedição, mas a requisição não usa este endereço — a entrega baixa da origem separada.`;
+    case 'SUCATA':
+      return `Localização ${c} é área de sucata, mas guardar aqui não sucateia — o material continua no estoque disponível até o sucateamento aprovado.`;
+    case 'DEVOLUCOES':
+      return `Localização ${c} é área de devoluções, mas guardar aqui não muda o estado do material — ele continua disponível.`;
+    case 'MATERIAIS_CLIENTE':
+      if (!material || material.proprietario_cliente_id) return null;
+      return `Localização ${c} é área de materiais do cliente, e ${material.codigo} é material próprio.`;
+    default:
+      return null;
+  }
+}
+
+/**
  * Etapa 54 (RN-01/RN-02) — o endereço INFORMADO no movimento tem de existir e, como destino, estar
  * ativo. Só o id EXPLÍCITO: a entrada sem destino que cai na padrão NÃO passa por aqui (Fase 2 —
  * recusar a padrão inativa travava recebimento, exclusão de requisição e retorno de terceiros, que
@@ -652,6 +718,18 @@ async function sugerirLocalizacaoEntrada(db, materialId) {
   // com saldo, ou uma padrão que é pai, eram sugeridos. Agora vale para os três caminhos.
   const sugerivel = (loc) => loc && Number(loc.ativo) === 1 && loc.almoxarifado_ativo !== 0
     && !Number(loc.tem_filho_ativo) && !motivoRecusaEndereco(loc, material, 'destino');
+  // Etapa 68 (D5, RN-06/RN-07): "ja tem" e "vazia" nao propoem AREA ESPECIAL (efetiva, pela arvore)
+  // como vaga comum — uma compra ia para a quarentena vazia. Excecao: area de materiais do cliente
+  // para material DE CLIENTE. A PADRAO nao passa por aqui (cadastro explicito, continua sugerida):
+  // `sugerivel` fica separado por caminho (Fase 2). Muda o CONJUNTO, nao o formato da Etapa 53.
+  const arvore = await carregarArvoreLocalizacoes(db);
+  const ehDeCliente = !!material.proprietario_cliente_id;
+  const areaDe = (loc) => { const a = resolverAreaEfetiva(arvore, loc.id); return a ? a.chave : null; };
+  const vagaComum = (loc) => {
+    const area = areaDe(loc);
+    return !area || (area === 'MATERIAIS_CLIENTE' && ehDeCliente);
+  };
+  const sugerivelComoVaga = (loc) => sugerivel(loc) && vagaComum(loc);
 
   let padrao = null;
   const sugestoes = [];
@@ -690,7 +768,7 @@ async function sugerirLocalizacaoEntrada(db, materialId) {
   let jaTem = 0;
   for (const loc of comSaldo) {
     if (jaTem >= 10) break;
-    if (sugerivel(loc) && !vistos.has(loc.id)) { incluir(loc, 'JA_TEM_O_MATERIAL', Number(loc.q_material) || 0); jaTem += 1; }
+    if (sugerivelComoVaga(loc) && !vistos.has(loc.id)) { incluir(loc, 'JA_TEM_O_MATERIAL', Number(loc.q_material) || 0); jaTem += 1; }
   }
 
   const almoxPadrao = padrao
@@ -705,13 +783,20 @@ async function sugerirLocalizacaoEntrada(db, materialId) {
   const candidatas = [];
   for (const id of idsVazias) {
     const loc = await dbGet(db, `${LOC_SQL} WHERE l.id = ?`, [id]);
-    if (sugerivel(loc)) candidatas.push(loc);
+    if (sugerivelComoVaga(loc)) candidatas.push(loc);
   }
   // Fase 5 (M-3): só ordena pelo almoxarifado da padrão quando HÁ padrão — sem ela, `null === null`
   // jogava para o topo as vazias sem almoxarifado.
-  if (almoxPadrao != null) {
-    candidatas.sort((a, b) => Number(b.almoxarifado_id === almoxPadrao) - Number(a.almoxarifado_id === almoxPadrao));
-  }
+  // Etapa 68 (RN-07): UMA ordenação por chave composta — área de cliente primeiro (só chega aqui para
+  // material de cliente), depois o almoxarifado da padrão. Dois `sort` em cadeia desfariam um ao outro.
+  const peso = (loc) => [
+    areaDe(loc) === 'MATERIAIS_CLIENTE' ? 1 : 0,
+    almoxPadrao != null && loc.almoxarifado_id === almoxPadrao ? 1 : 0,
+  ];
+  candidatas.sort((a, b) => {
+    const pa = peso(a); const pb = peso(b);
+    return (pb[0] - pa[0]) || (pb[1] - pa[1]);
+  });
   for (const loc of candidatas.slice(0, 5)) incluir(loc, 'VAZIA_COMPATIVEL', 0);
 
   return { padrao, sugestoes };
@@ -2793,6 +2878,11 @@ async function consultarSaldosPorLocalizacao(db, materialId) {
 
 module.exports = {
   motivoRecusaEndereco,
+  areaEspecialDe,
+  avisoAreaEspecial,
+  resolverAreaEfetiva,
+  carregarArvoreLocalizacoes,
+  areaEfetivaDaLocalizacao,
   sugerirLocalizacaoEntrada,
   listarLocalizacoesVazias,
   contarOcupacaoLocalizacao,

@@ -1215,6 +1215,26 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     } catch (e) { handleError(res, e); }
   });
 
+  // Etapa 68 (RN-04, D8) — o aviso de area especial do DESTINO escolhido na tela de Movimentacoes.
+  // So `auth`, como a sugestao (B216): e informacao para quem ja esta montando o movimento, e quem
+  // decide e o motor (que nao recusa por area — D1). Area EFETIVA pela arvore (posicao dentro da
+  // area). Ordem: 404 da localizacao, depois 404 do material; inativos respondem normal (o motor e
+  // quem recusa destino inativo — Etapa 54). Sem material_id, MATERIAIS_CLIENTE responde aviso null.
+  app.get('/api/almoxarifado/localizacoes/:id/aviso-area', auth, async (req, res) => {
+    try {
+      const loc = await dbGet(db, 'SELECT * FROM localizacoes_almoxarifado WHERE id = ?', [Number(req.params.id)]);
+      if (!loc) return res.status(404).json({ error: 'Localização não encontrada' });
+      const mid = req.query.material_id;
+      let material = null;
+      if (mid !== undefined && mid !== '') {
+        material = await dbGet(db, 'SELECT id, codigo, proprietario_cliente_id FROM materiais_almoxarifado WHERE id = ?', [Number(mid)]);
+        if (!material) return res.status(404).json({ error: 'Material não encontrado' });
+      }
+      const area = await stockService.areaEfetivaDaLocalizacao(db, loc.id);
+      res.json({ area, aviso: stockService.avisoAreaEspecial({ ...loc, area_especial: area }, material) });
+    } catch (e) { handleError(res, e); }
+  });
+
   // Etapa 50 (C71): o fisico e o 'sem lote atribuido' do material. Rota NOVA: a /lotes continua array,
   // porque quatro seletores de lote a consomem com com_saldo=1.
   app.get('/api/almoxarifado/materiais/:id/lotes/resumo', auth, requirePermission('visualizar'), async (req, res) => {

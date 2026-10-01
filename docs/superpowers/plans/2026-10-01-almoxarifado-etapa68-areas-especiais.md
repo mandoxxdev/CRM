@@ -260,7 +260,22 @@ T6 (integração) depois de tudo; T7 fechamento.
   `server/tests/api/localizacaoAreasEspeciais.api.test.js` (RN-01..RN-03, entrando **pela rota**). Controle positivo:
   tirar a validação do POST; validar só o POST (o PUT para fora passa); recusar o legado igual (o PUT do mesmo tipo
   esquisito tem de cair); voltar o `|| 'Almoxarifado'` no PUT — cada uma vermelha num cenário nomeado.
-- [ ] **T2 (tronco) — aviso e sugestão.** `stockService.avisoAreaEspecial(loc, material)` (pura, ao lado de
+- [x] **T2 (tronco) — aviso e sugestão.** *Feita (2026-10-01; T1 = `14cc17a`; hash da T2 no commit "Etapa 68 T2").
+  `stockService`: `areaEspecialDe(tipo)`, `resolverAreaEfetiva(porId, id)` (subida pelo `parent_id` com guarda de
+  ciclo), `carregarArvoreLocalizacoes(db)`, `areaEfetivaDaLocalizacao(db, id)` e `avisoAreaEspecial(loc, material)`
+  (pura; `loc.area_especial`, quando presente, vale sobre o `tipo` da linha). Rota `GET /localizacoes/:id/aviso-area`
+  em `extended.js` (só `auth`). Sugestão: `sugerivelComoVaga` nos caminhos "já tem" e "vazia" (a `PADRAO` continua
+  com o `sugerivel` de antes) e UMA ordenação por chave composta. Testes: +6 no bloco T2 de
+  `localizacaoAreasEspeciais.api.test.js` (18 no arquivo) e +6 em `sugestaoLocalizacao.api.test.js` ((16)–(21); os 15
+  da Etapa 53 verdes, inclusive a invariante). RN-05 passou de primeira (é regressão: nada muda no motor) — controle
+  positivo dela abaixo. Sabotagens, cada uma vermelha no cenário nomeado: sem exceção do cliente → (19)(20); filtro
+  aplicado na PADRAO → (18); aviso de cliente também para material de cliente → RN-04 serviço e rota-cliente; frase
+  trocada → RN-04 serviço e rota; subida pela árvore desligada → "área EFETIVA" (aviso) e (16)(17) (sugestão); guarda
+  de ciclo tirada → o arquivo TRAVA (timeout 120 s, rc 124 — o ciclo é o que a guarda impede); chaves da ordenação
+  invertidas → (19); aviso virando recusa no `motivoRecusaEndereco` → RN-05. Divergência: a frase EXPEDICAO é a revista
+  na Fase 2 (sem "não daqui"); `material_id` não numérico → 404 "Material não encontrado" (decisão reversível, letra B:
+  tratado como inexistente, não como 400 de formato).*
+  Texto original: `stockService.avisoAreaEspecial(loc, material)` (pura, ao lado de
   `motivoRecusaEndereco`, exportada) + `areaEspecialDe(tipo)`; rota `GET /localizacoes/:id/aviso-area` (em
   `extended.js`, perto da sugestão); `sugerirLocalizacaoEntrada` com RN-06/RN-07 (no `sugerivel` dos dois caminhos
   "já tem" e "vazia"; **não** na `PADRAO`). Testes no mesmo arquivo da T1 (bloco "aviso") e **estender**
