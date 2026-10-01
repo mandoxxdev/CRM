@@ -49,6 +49,7 @@ const SETORES = [
 let container;
 let root;
 let proximoImpl;
+let metaImpl;
 
 beforeEach(() => {
   global.IS_REACT_ACT_ENVIRONMENT = true;
@@ -57,11 +58,13 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   proximoImpl = () => Promise.resolve({ data: { codigo: 'SND-03' } });
+  // Meta como os mocks antigos: SEM areas_especiais (o bloco "Etapa 68" troca).
+  metaImpl = () => Promise.resolve({ data: { localizacoes_tipos: [], tipos: [] } });
   api.get.mockImplementation((url) => {
     if (url === ROTA_PROXIMO) return proximoImpl();
     if (url === '/almoxarifado/localizacoes') return Promise.resolve({ data: LOCS });
     if (url === '/almoxarifado/setores') return Promise.resolve({ data: SETORES });
-    if (url === '/almoxarifado/meta/tipos-material') return Promise.resolve({ data: { localizacoes_tipos: [], tipos: [] } });
+    if (url === '/almoxarifado/meta/tipos-material') return metaImpl();
     if (url === '/almoxarifado/almoxarifados') return Promise.resolve({ data: [{ id: 1, codigo: 'ALM-01', nome: 'Geral', ativo: 1 }] });
     return Promise.resolve({ data: [] });
   });
@@ -216,4 +219,120 @@ test('(e2) Mover com erro do servidor mostra a mensagem e busca outro código', 
   await clicar(botao(/Confirmar movimentação/));
   expect(container.textContent).toContain('Código já existe (localização desativada)');
   expect(container.textContent).toContain('SND-08');
+});
+
+// ── Etapa 68 (T5) — o assistente conhece as áreas especiais ─────────────────────────────────────
+describe('Etapa 68: áreas especiais no assistente', () => {
+  const TIPOS_LOC = [
+    'Almoxarifado', 'Rua', 'Prateleira', 'Gaveta', 'Box', 'Área externa', 'Área de corte',
+    'Área de montagem', 'Área de elétrica', 'Área de pintura', 'Área de expedição',
+    'Área de materiais do cliente', 'Área de quarentena/inspeção', 'Área de sucata', 'Área de devoluções',
+  ];
+  const AREAS = [
+    { tipo: 'Área de quarentena/inspeção', chave: 'QUARENTENA', descricao: 'q' },
+    { tipo: 'Área de expedição', chave: 'EXPEDICAO', descricao: 'e' },
+    { tipo: 'Área de materiais do cliente', chave: 'MATERIAIS_CLIENTE', descricao: 'c' },
+    { tipo: 'Área de sucata', chave: 'SUCATA', descricao: 's' },
+    { tipo: 'Área de devoluções', chave: 'DEVOLUCOES', descricao: 'd' },
+  ];
+  const comAreas = () => Promise.resolve({ data: { localizacoes_tipos: TIPOS_LOC, tipos: [], areas_especiais: AREAS } });
+
+  const selectTipoArea = () => {
+    const label = [...container.querySelectorAll('label')].find(l => /Tipo de área/.test(l.textContent));
+    return label ? label.parentElement.querySelector('select') : null;
+  };
+  const opcoes = (sel) => [...sel.querySelectorAll('option')].map(o => o.value);
+  const escolher = async (sel, valor) => {
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
+      setter.call(sel, valor);
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await flush();
+  };
+
+  // Assistente até o passo 4 (Detalhes), posição raiz no setor Sonda.
+  async function ateDetalhesRaiz() {
+    await renderAba();
+    await clicar(botao(/Nova Localização/));
+    await clicar(botao(/Próximo/));
+    await clicar(botao(/^.*Sonda/));
+    await clicar(botao(/Próximo/));
+    await clicar(botao(/Posição raiz/));
+    await clicar(botao(/Próximo/));
+  }
+
+  test('(f) raiz: o select oferece as áreas de areas_especiais além dos 6 de sempre, e o POST manda a escolhida', async () => {
+    metaImpl = comAreas;
+    await ateDetalhesRaiz();
+    const sel = selectTipoArea();
+    expect(sel).toBeTruthy();
+    const ops = opcoes(sel);
+    ['Prateleira', 'Gaveta', 'Box', 'Rua', 'Almoxarifado', 'Área externa'].forEach(t => expect(ops).toContain(t));
+    AREAS.forEach(a => expect(ops).toContain(a.tipo));
+    // Só as áreas do registro: tipo comum fora dos 6 (ex.: Área de corte) continua fora da raiz.
+    expect(ops).not.toContain('Área de corte');
+    await escolher(sel, 'Área de sucata');
+    await clicar(botao(/Próximo/));
+    await clicar(botao(/Confirmar cadastro/));
+    expect(api.post).toHaveBeenCalledTimes(1);
+    expect(api.post.mock.calls[0][1].tipo).toBe('Área de sucata');
+    expect(api.post.mock.calls[0][1].parent_id).toBeNull();
+  });
+
+  test('(g) escolheu área na raiz e voltou para posição filha: o filho NÃO leva o rótulo da área', async () => {
+    metaImpl = comAreas;
+    await ateDetalhesRaiz();
+    await escolher(selectTipoArea(), 'Área de sucata');
+    await clicar(botao(/Voltar/));                         // passo 4 -> 3
+    await clicar(botao(/Dentro de uma estrutura existente/));
+    const pai = [...container.querySelectorAll('select')].find(s => [...s.options].some(o => o.value === '1'));
+    await escolher(pai, '1');                              // SND-01
+    await clicar(botao(/Próximo/));
+    expect(selectTipoArea()).toBeNull();                   // filho não escolhe tipo
+    await clicar(botao(/Próximo/));
+    await clicar(botao(/Confirmar cadastro/));
+    expect(api.post).toHaveBeenCalledTimes(1);
+    const corpo = api.post.mock.calls[0][1];
+    expect(corpo.parent_id).toBe(1);
+    expect(corpo.tipo).not.toBe('Área de sucata');
+    expect(corpo.tipo).toBe('Prateleira');
+  });
+
+  test('(h) meta sem areas_especiais (servidor anterior): a raiz oferece os 6 de sempre e nada quebra', async () => {
+    await ateDetalhesRaiz();
+    const ops = opcoes(selectTipoArea());
+    expect(ops).toEqual(expect.arrayContaining(['Prateleira', 'Gaveta', 'Box', 'Rua', 'Almoxarifado', 'Área externa']));
+    expect(ops).not.toContain('Área de sucata');
+    expect(ops).not.toContain('Área de devoluções');
+  });
+
+  test('(i) recusa do servidor ("Tipo de localização inválido") aparece na tela, literal', async () => {
+    metaImpl = comAreas;
+    await ateDetalhesRaiz();
+    await escolher(selectTipoArea(), 'Área de devoluções');
+    await clicar(botao(/Próximo/));
+    const msg = 'Tipo de localização inválido: Área de devoluções';
+    api.post.mockRejectedValueOnce({ response: { status: 400, data: { error: msg } } });
+    await clicar(botao(/Confirmar cadastro/));
+    expect(container.textContent).toContain(msg);
+  });
+
+  test('(j) Editar localização de tipo legado (fora da lista): o select mostra o tipo atual e o PUT o manda de volta', async () => {
+    metaImpl = comAreas;
+    const LEGADA = { id: 3, codigo: 'LEG-01', setor: 'Sonda', parent_id: null, tipo: 'Depósito antigo', almoxarifado_id: 1, ativo: 1 };
+    const getOriginal = api.get.getMockImplementation();
+    api.get.mockImplementation((url, cfg) => (url === '/almoxarifado/localizacoes'
+      ? Promise.resolve({ data: [...LOCS, LEGADA] }) : getOriginal(url, cfg)));
+    await renderAba();
+    const linha = [...container.querySelectorAll('tr')].find(tr => tr.textContent.includes('LEG-01'));
+    await clicar(linha.querySelector('button[title="Editar"]'));
+    const sel = selectTipoArea();
+    expect(sel.value).toBe('Depósito antigo');
+    expect(opcoes(sel)).toContain('Área de sucata');       // Editar oferece a lista inteira
+    await clicar(botao(/^\s*Salvar\s*$/));
+    expect(api.put).toHaveBeenCalledTimes(1);
+    expect(api.put.mock.calls[0][0]).toBe('/almoxarifado/localizacoes/3');
+    expect(api.put.mock.calls[0][1].tipo).toBe('Depósito antigo');
+  });
 });

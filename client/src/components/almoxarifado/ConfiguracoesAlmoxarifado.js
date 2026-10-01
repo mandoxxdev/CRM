@@ -1609,6 +1609,8 @@ const TabLocalizacoes = () => {
   const [setoresConfig, setSetoresConfig] = useState([]);
   const [tiposLoc, setTiposLoc] = useState([]);
   const [tiposMaterial, setTiposMaterial] = useState([]);
+  // Etapa 68: `areas_especiais` do meta (aditivo; servidor anterior não manda — fica []).
+  const [areasEspeciais, setAreasEspeciais] = useState([]);
   const [almoxarifados, setAlmoxarifados] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1713,6 +1715,7 @@ const TabLocalizacoes = () => {
       const r = await api.get('/almoxarifado/meta/tipos-material');
       setTiposLoc(r.data.localizacoes_tipos || []);
       setTiposMaterial(r.data.tipos || []);
+      setAreasEspeciais(Array.isArray(r.data.areas_especiais) ? r.data.areas_especiais : []);
     } catch { /* ignore */ }
   };
   const loadAlmoxarifados = async () => {
@@ -1727,9 +1730,12 @@ const TabLocalizacoes = () => {
     catch { toast.error('Erro ao carregar localizações'); } finally { setLoading(false); }
   };
 
-  const tiposAreaRaiz = TIPOS_AREA_RAIZ.filter(t =>
-    !tiposLoc.length || tiposLoc.includes(t) || TIPOS_AREA_RAIZ.includes(t)
-  );
+  // Etapa 68: a raiz oferece os 6 de sempre e as áreas especiais do registro do servidor
+  // (`areas_especiais`) — sem cópia da lista aqui. Antes, as "Área de …" só eram alcançáveis pelo
+  // Editar. (O filtro antigo `tiposLoc.includes(t) || TIPOS_AREA_RAIZ.includes(t)` era sempre
+  // verdadeiro para os 6 — saiu.)
+  const tiposAreaEspecial = areasEspeciais.map(a => a && a.tipo).filter(Boolean);
+  const tiposAreaRaiz = [...TIPOS_AREA_RAIZ, ...tiposAreaEspecial.filter(t => !TIPOS_AREA_RAIZ.includes(t))];
   const setoresOptions = buildSetoresOptions(setoresConfig, localizacoes);
 
   // almoxarifadoId é opcional: o wizard passa (uma posição filha não pode ter pai em outro
@@ -2018,7 +2024,12 @@ const TabLocalizacoes = () => {
   const moverParents = moverLoc ? parentOptionsForSetor(moverData.setor, moverLoc.id) : [];
   const moverPreview = moverLoc ? computeMoverDetails(moverData, moverLoc) : null;
   const editLoc = editando ? localizacoes.find(l => l.id === editando) : null;
-  const tiposEdit = tiposLoc.length ? tiposLoc : ['Almoxarifado', 'Rua', 'Prateleira', 'Gaveta', 'Box', 'Área externa'];
+  const tiposEditBase = tiposLoc.length ? tiposLoc : ['Almoxarifado', 'Rua', 'Prateleira', 'Gaveta', 'Box', 'Área externa'];
+  // Etapa 68: tipo legado (gravado antes da validação, fora da lista) continua aparecendo como o
+  // atual — sem a opção, o select mostrava o primeiro da lista enquanto o PUT mandava o legado.
+  // O servidor aceita o PUT com o MESMO tipo legado (só recusa quando MUDA para fora da lista).
+  const tiposEdit = editForm.tipo && !tiposEditBase.includes(editForm.tipo)
+    ? [editForm.tipo, ...tiposEditBase] : tiposEditBase;
 
   return (
     <div>
@@ -2125,7 +2136,15 @@ const TabLocalizacoes = () => {
                 />
                 <RadioCard
                   selected={wizard.estruturaTipo === 'child'}
-                  onClick={() => setWizard(w => ({ ...w, estruturaTipo: 'child', parent_id: '' }))}
+                  // Etapa 68 (Fase 2): escolher área na raiz e voltar para posição filha NÃO leva
+                  // o rótulo da área para o filho — o filho herda a área pela árvore (parent_id),
+                  // não pelo tipo. O filho volta ao tipo padrão do assistente.
+                  onClick={() => setWizard(w => ({
+                    ...w,
+                    estruturaTipo: 'child',
+                    parent_id: '',
+                    tipo: tiposAreaEspecial.includes(w.tipo) ? WIZARD_INITIAL.tipo : w.tipo,
+                  }))}
                   title="Dentro de uma estrutura existente"
                   subtitle="Posição filha (ex.: coluna dentro da prateleira)"
                   icon="📦"
@@ -2161,7 +2180,7 @@ const TabLocalizacoes = () => {
                 <div className="almox-field" style={{ marginBottom: 16 }}>
                   <label className="almox-label">Tipo de área<span className="required">*</span></label>
                   <select className="almox-select" value={wizard.tipo} onChange={e => setWizard(w => ({ ...w, tipo: e.target.value }))}>
-                    {(tiposLoc.length ? tiposAreaRaiz.filter(t => tiposLoc.includes(t) || TIPOS_AREA_RAIZ.includes(t)) : tiposAreaRaiz).map(t => (
+                    {tiposAreaRaiz.map(t => (
                       <option key={t} value={t}>{t}</option>
                     ))}
                   </select>

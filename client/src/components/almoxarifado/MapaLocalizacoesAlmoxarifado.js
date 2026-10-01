@@ -36,6 +36,9 @@ const TIPO_ICONES = {
   'Área de expedição': '🚚',
   'Área de materiais do cliente': '👤',
   'Área de quarentena/inspeção': '🔍',
+  // Etapa 68: os dois tipos novos do servidor (TIPOS_LOCALIZACAO) — sem isto caíam no 📍 genérico.
+  'Área de sucata': '♻️',
+  'Área de devoluções': '↩️',
 };
 
 const TIPO_CORES = {
@@ -52,6 +55,8 @@ const TIPO_CORES = {
   'Área de expedição': '#66bb6a',
   'Área de materiais do cliente': '#8d6e63',
   'Área de quarentena/inspeção': '#ff7043',
+  'Área de sucata': '#9e9d24',
+  'Área de devoluções': '#7e57c2',
 };
 
 const TIPO_TAMANHOS = {
@@ -82,6 +87,23 @@ function statusLocalizacao(loc) {
   if (loc.itens_criticos > 0) return 'critico';
   if (loc.itens_baixo_minimo > 0) return 'baixo';
   return 'ok';
+}
+
+// Etapa 68: área EFETIVA = a própria localização, se o tipo dela for área especial; senão o
+// ancestral mais próximo que for (o assistente grava `Prateleira` nas posições dentro de uma área).
+// Mesma regra do servidor (`stockService.resolverAreaEfetiva`), com a mesma guarda de ciclo. A
+// subida usa a lista do mapa (só ativas): pai inativo encerra a subida. `areasPorTipo` vem de
+// `areas_especiais` do meta — sem ele (servidor anterior), nenhuma área.
+function areaEfetivaDe(loc, porId, areasPorTipo) {
+  const vistos = new Set();
+  let atual = loc;
+  while (atual && !vistos.has(atual.id)) {
+    vistos.add(atual.id);
+    const area = areasPorTipo[atual.tipo];
+    if (area) return { ...area, origem: atual };
+    atual = atual.parent_id != null ? porId.get(atual.parent_id) : null;
+  }
+  return null;
 }
 
 function corStatus(status) {
@@ -265,6 +287,7 @@ const MapaLocalizacoesAlmoxarifado = () => {
 
   const [localizacoes, setLocalizacoes] = useState([]);
   const [tiposLoc, setTiposLoc] = useState([]);
+  const [areasEspeciais, setAreasEspeciais] = useState([]);
   const [almoxarifados, setAlmoxarifados] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtroSetor, setFiltroSetor] = useState('');
@@ -292,6 +315,8 @@ const MapaLocalizacoesAlmoxarifado = () => {
       ]);
       setLocalizacoes(mapRes.data);
       setTiposLoc(metaRes.data.localizacoes_tipos || []);
+      // Etapa 68: aditivo no meta — servidor anterior não manda; sem ele o painel só não descreve.
+      setAreasEspeciais(Array.isArray(metaRes.data.areas_especiais) ? metaRes.data.areas_especiais : []);
       setAlmoxarifados(almoxRes.data);
       setCarregou(true);
     } catch {
@@ -332,6 +357,16 @@ const MapaLocalizacoesAlmoxarifado = () => {
     }
     return null;
   }, [localizacoes, searchParams, carregou, selecionada]);
+
+  // Etapa 68: descrição da área especial (efetiva) da selecionada — o texto curto do registro do
+  // servidor, nunca uma cópia local das frases.
+  const areaSelecionada = useMemo(() => {
+    if (!selecionada || !areasEspeciais.length) return null;
+    const areasPorTipo = {};
+    areasEspeciais.forEach(a => { if (a && a.tipo) areasPorTipo[a.tipo] = a; });
+    const porId = new Map(localizacoes.map(l => [l.id, l]));
+    return areaEfetivaDe(porId.get(selecionada.id) || selecionada, porId, areasPorTipo);
+  }, [selecionada, areasEspeciais, localizacoes]);
 
   const setores = useMemo(() => {
     const s = new Set(localizacoes.map(l => l.setor).filter(Boolean));
@@ -799,6 +834,17 @@ const MapaLocalizacoesAlmoxarifado = () => {
               <p className="almox-mapa-detail-desc">{selecionada.descricao || 'Sem descrição'}</p>
               <dl className="almox-mapa-detail-list">
                 <dt>Tipo</dt><dd>{selecionada.tipo || 'Almoxarifado'}</dd>
+                {areaSelecionada && (
+                  <>
+                    <dt>Área especial</dt>
+                    <dd data-testid="descricao-area" style={{ fontSize: '0.8rem' }}>
+                      {areaSelecionada.origem.id !== selecionada.id && (
+                        <strong>{`Dentro de ${areaSelecionada.origem.codigo} (${areaSelecionada.tipo}). `}</strong>
+                      )}
+                      {areaSelecionada.descricao}
+                    </dd>
+                  </>
+                )}
                 <dt>Almoxarifado</dt>
                 <dd>{almoxarifados.find(a => a.id === selecionada.almoxarifado_id)?.codigo || '—'}</dd>
                 <dt>Setor</dt><dd>{selecionada.setor || '—'}</dd>
