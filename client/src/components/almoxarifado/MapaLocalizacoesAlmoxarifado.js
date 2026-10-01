@@ -92,7 +92,8 @@ function statusLocalizacao(loc) {
 // Etapa 68: área EFETIVA = a própria localização, se o tipo dela for área especial; senão o
 // ancestral mais próximo que for (o assistente grava `Prateleira` nas posições dentro de uma área).
 // Mesma regra do servidor (`stockService.resolverAreaEfetiva`), com a mesma guarda de ciclo. A
-// subida usa a lista do mapa (só ativas): pai inativo encerra a subida. `areasPorTipo` vem de
+// subida usa a lista do mapa (só ativas): pai inativo encerra a subida — o servidor faz o mesmo
+// desde a Fase 5 da Etapa 68 (antes subia para o pai inativo). `areasPorTipo` vem de
 // `areas_especiais` do meta — sem ele (servidor anterior), nenhuma área.
 function areaEfetivaDe(loc, porId, areasPorTipo) {
   const vistos = new Set();

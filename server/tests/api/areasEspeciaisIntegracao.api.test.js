@@ -235,6 +235,34 @@ const FRASE_SUCATA = (c) => `Localização ${c} é área de sucata, mas guardar 
     assert.strictEqual((await aviso(ctx.S.id, ctx.mA.id)).area, 'SUCATA', 'o 400 gravou alguma coisa');
   });
 
+  await test('(9) Fase 5: area-pai DESATIVADA nao da semantica ao filho — aviso nulo, sugestao propoe o filho, sucateamento nao usa o filho', async () => {
+    // Antes o servidor subia para o pai inativo (o filho continuava "sucata") e o Mapa parava nele
+    // (a lista do Mapa so tem ativas) — sonda68r-paiinativo. Decisao: o servidor tambem para.
+    const SA = await novaLoc('Área de sucata');
+    const FA = await novaLoc('Prateleira', { parent_id: SA.id, subgrupo: 'A1' });
+    const P2 = await novaLoc('Prateleira');
+    const m = await novoMat(P2.id);
+    await entrada(m.id, P2.id, 10);
+    await entrada(m.id, FA.id, 5);
+    // Controle: com o pai ATIVO, o filho e sucata (aviso + fora da sugestao).
+    assert.strictEqual((await aviso(FA.id, m.id)).area, 'SUCATA', 'controle: o filho nem herdava a area');
+    assert.ok(!idsSug(await sugestao(m.id)).includes(FA.id), 'controle: o filho ja era sugerido com o pai ativo');
+    comoAdmin();
+    ok(await request(app).delete(`/api/almoxarifado/localizacoes/${SA.id}`), 200, 'DELETE (desativa) a area');
+    assert.deepStrictEqual(await aviso(FA.id, m.id), { area: null, aviso: null });
+    const s = await sugestao(m.id);
+    const f = s.sugestoes.find((x) => x.localizacao_id === FA.id);
+    assert.ok(f, `o filho (vaga comum agora) nao foi sugerido: ${JSON.stringify(s.sugestoes)}`);
+    assert.strictEqual(f.motivo, 'JA_TEM_O_MATERIAL');
+    const id = await solicitar(m.id, 5);
+    assert.strictEqual((await perna(id, 'gestao', GESTOR)).status, 200);
+    const r = await perna(id, 'almoxarifado', APROV_ALM);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.strictEqual((await sucataNoLivro(m.id)).localizacao_origem_id, null, 'o filho do pai inativo virou origem da sucata');
+    assert.strictEqual(await saldoEm(m.id, FA.id), 5);
+    assert.strictEqual(await saldoEm(m.id, P2.id), 5);
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);

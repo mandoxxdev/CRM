@@ -571,6 +571,12 @@ function areaEspecialDe(tipo) {
  * ancestral MAIS PROXIMO que for area (o assistente grava 'Prateleira' nas posicoes de dentro da
  * area). `porId` e um Map id -> { id, parent_id, tipo }. Guarda de ciclo: parent_id e editavel por
  * SQL e um ciclo travaria a subida. Devolve { chave, localizacao_id } (a linha que da a area) ou null.
+ *
+ * Fase 5: ANCESTRAL INATIVO encerra a subida — uma area desativada nao da semantica a ninguem. Antes
+ * o servidor subia para o pai inativo (o filho seguia "sucata" no aviso, na sugestao e na origem do
+ * sucateamento) enquanto o Mapa, que so lista ativas, parava nele. A PROPRIA localizacao vale pelo
+ * tipo mesmo inativa (o aviso-area de uma inativa responde normal — Etapa 54). `ativo` ausente no
+ * Map (chamador antigo) conta como ativo.
  */
 function resolverAreaEfetiva(porId, localizacaoId) {
   const vistos = new Set();
@@ -580,12 +586,13 @@ function resolverAreaEfetiva(porId, localizacaoId) {
     const chave = areaEspecialDe(atual.tipo);
     if (chave) return { chave, localizacao_id: atual.id };
     atual = atual.parent_id ? porId.get(Number(atual.parent_id)) : null;
+    if (atual && atual.ativo !== undefined && Number(atual.ativo) !== 1) return null;
   }
   return null;
 }
 
 async function carregarArvoreLocalizacoes(db) {
-  const linhas = await dbAll(db, 'SELECT id, parent_id, tipo FROM localizacoes_almoxarifado');
+  const linhas = await dbAll(db, 'SELECT id, parent_id, tipo, ativo FROM localizacoes_almoxarifado');
   return new Map(linhas.map((l) => [Number(l.id), l]));
 }
 
