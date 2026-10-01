@@ -20,7 +20,7 @@ jest.mock('../../services/api', () => ({
 
 const item = (over = {}) => ({
   item_id: 1, material_id: 10, material_codigo: 'MAT-1', material_nome: 'Chapa 3mm', unidade: 'PC',
-  a_separar: 0, separavel: 0, a_entregar: 0, disponivel: 0,
+  a_separar: 0, separavel: 0, a_entregar: 0, entregavel: 0, disponivel: 0,
   origem_separacao_codigo: null, lote_separacao_codigo: null, material_critico: 0, ...over,
 });
 
@@ -37,15 +37,17 @@ const FILA = [
   req({
     id: 30, numero: 'REQ-030', urgencia: 'CRITICO', data_necessidade: '2026-10-05',
     etapas: ['SEPARAR', 'ENTREGAR'],
-    itens: [item({ item_id: 301, a_separar: 5, separavel: 3, a_entregar: 2, disponivel: 3,
+    itens: [item({ item_id: 301, a_separar: 5, separavel: 3, a_entregar: 2, entregavel: 1, disponivel: 3,
       origem_separacao_codigo: 'A-01', lote_separacao_codigo: 'L-77' })],
   }),
-  req({ id: 10, numero: 'REQ-010', urgencia: 'URGENTE', etapas: ['APROVACAO_VALOR'] }),
   req({
     id: 20, numero: 'REQ-020', status: 'EM_SEPARACAO', etapas: ['CONFERIR'], conferencia_pendente: true,
     posso_conferir: false, separadores: [{ id: 7, nome: 'João Almox' }],
   }),
   req({ id: 25, numero: 'REQ-025', status: 'PRONTA_PARA_RETIRADA', etapas: ['REABRIR_SEPARACAO'] }),
+  // APROVACAO_VALOR vem da avaliacao ao vivo e o servidor manda acionavel: false (Fase 5); na
+  // ordem do servidor fica entre as nao acionaveis, a frente por ser URGENTE.
+  req({ id: 10, numero: 'REQ-010', urgencia: 'URGENTE', etapas: ['APROVACAO_VALOR'], acionavel: false }),
   req({ id: 5, numero: 'REQ-005', status: 'AGUARDANDO_COMPRA', etapas: ['AGUARDANDO_SALDO'], acionavel: false }),
   req({ id: 4, numero: 'REQ-004', status: 'AGUARDANDO_COMPRA', etapas: ['AGUARDANDO_SALDO'], acionavel: false }),
 ];
@@ -100,8 +102,8 @@ afterEach(() => {
 test('carrega a fila ao montar e preserva a ordem do servidor (acionáveis e Aguardando)', async () => {
   await montar();
   expect(api.get).toHaveBeenCalledWith('/almoxarifado/fila-separacao');
-  expect(numeros('[data-testid="fila-acionaveis"]')).toEqual(['REQ-030', 'REQ-010', 'REQ-020', 'REQ-025']);
-  expect(numeros('[data-testid="fila-aguardando"]')).toEqual(['REQ-005', 'REQ-004']);
+  expect(numeros('[data-testid="fila-acionaveis"]')).toEqual(['REQ-030', 'REQ-020', 'REQ-025']);
+  expect(numeros('[data-testid="fila-aguardando"]')).toEqual(['REQ-010', 'REQ-005', 'REQ-004']);
 });
 
 test('um chip por etapa, com o rótulo combinado', async () => {
@@ -119,7 +121,7 @@ test('um chip por etapa, com o rótulo combinado', async () => {
   expect(r30.querySelector('[data-testid="fila-urgencia"]').textContent).toBe('Crítico');
   expect(r30.textContent).toContain('Necessário em 05/10/2026');
   expect(q('[data-testid="fila-item-301"]').textContent).toBe(
-    'MAT-1 — Chapa 3mm: a separar 5 PC (separável agora 3) · a entregar 2 PC · disponível 3 · separado de A-01 — L-77'
+    'MAT-1 — Chapa 3mm: a separar 5 PC (separável agora 3) · a entregar 2 PC (entregável agora 1) · disponível 3 · separado de A-01 — L-77'
   );
 });
 
@@ -130,12 +132,51 @@ test('grupo Aguardando só com as não acionáveis', async () => {
   expect(grupo.querySelector('h2').textContent).toBe('Aguardando');
   expect(grupo.querySelector('[data-testid="fila-req-30"]')).toBeNull();
   expect(q('[data-testid="fila-acionaveis"] [data-testid="fila-req-5"]')).toBeNull();
+  // aprovacao de valor pendente nao e trabalho do almoxarife: vai para Aguardando, com o chip.
+  expect(grupo.querySelector('[data-testid="fila-req-10"] [data-testid="fila-etapa-APROVACAO_VALOR"]')).not.toBeNull();
+  expect(q('[data-testid="fila-acionaveis"] [data-testid="fila-req-10"]')).toBeNull();
+});
+
+test('CONFERENCIA_SEM_SAIDA vira chip "peça ao administrador" no grupo Aguardando', async () => {
+  api.get.mockResolvedValue({
+    data: [
+      req({
+        id: 26, numero: 'REQ-026', status: 'PRONTA_PARA_RETIRADA', etapas: ['CONFERENCIA_SEM_SAIDA'],
+        acionavel: false, conferencia_pendente: true,
+      }),
+    ],
+  });
+  await montar();
+  const chip = q('[data-testid="fila-aguardando"] [data-testid="fila-req-26"] [data-testid="fila-etapa-CONFERENCIA_SEM_SAIDA"]');
+  expect(chip).not.toBeNull();
+  expect(chip.textContent).toBe('Conferência pendente — peça ao administrador');
+  expect(q('[data-testid="fila-acionaveis"]')).toBeNull();
+});
+
+test('item a entregar mostra o entregável agora (separado limitado ao disponível)', async () => {
+  api.get.mockResolvedValue({
+    data: [
+      req({
+        id: 40, numero: 'REQ-040', status: 'PRONTA_PARA_RETIRADA', etapas: ['AGUARDANDO_SALDO'], acionavel: false,
+        itens: [item({ item_id: 401, a_entregar: 4, entregavel: 0, disponivel: 0 })],
+      }),
+      req({
+        id: 41, numero: 'REQ-041', status: 'PRONTA_PARA_RETIRADA', etapas: ['ENTREGAR'],
+        itens: [item({ item_id: 411, a_entregar: 4, entregavel: 2.5, disponivel: 2.5 })],
+      }),
+    ],
+  });
+  await montar();
+  expect(q('[data-testid="fila-item-401"]').textContent)
+    .toBe('MAT-1 — Chapa 3mm: a entregar 4 PC (entregável agora 0) · disponível 0');
+  expect(q('[data-testid="fila-item-411"]').textContent)
+    .toBe('MAT-1 — Chapa 3mm: a entregar 4 PC (entregável agora 2,5) · disponível 2,5');
 });
 
 test('quem separou é avisado no chip Conferir; quem pode conferir vê só "Conferir"', async () => {
   api.get.mockResolvedValue({
     data: [
-      FILA[2],
+      FILA.find((r) => r.id === 20),
       req({ id: 21, numero: 'REQ-021', status: 'EM_SEPARACAO', etapas: ['CONFERIR'], conferencia_pendente: true, posso_conferir: true }),
     ],
   });

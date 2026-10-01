@@ -120,10 +120,20 @@ let seq = 0;
     assert.deepStrictEqual(linha.itens.map((i) => [i.a_separar, i.a_entregar]), [[3, 2], [4, 0]]);
   });
 
-  await test('APROVACAO_VALOR no lugar de SEPARAR quando a aprovacao de valor esta pendente (pelo gravado)', async () => {
+  await test('APROVACAO_VALOR pela avaliacao AO VIVO (limite ativo e custo acima); com a aprovacao dada, SEPARAR', async () => {
+    const setCfg = (k, v) => dbRun(db, `INSERT INTO configuracoes_almoxarifado (chave, valor) VALUES (?,?)
+      ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor`, [k, v]);
+    await setCfg('liberacao_valor_ativo', '1'); await setCfg('liberacao_valor_limite', '100');
     const m = await material({ qtd: 10 });
-    const { id } = await req([[m, 2]], { valor: true });
-    assert.deepStrictEqual(daFila((await fila()).body, id).etapas, ['APROVACAO_VALOR']);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET custo_unitario = 80, custo_medio = 80 WHERE id = ?', [m]);
+    const caro = await req([[m, 2]]); // 160 > 100
+    const aprovada = await req([[m, 2]]);
+    await dbRun(db, "UPDATE requisicoes_almoxarifado SET data_aprovacao_valor = '2026-09-30 10:00:00' WHERE id = ?", [aprovada.id]);
+    const r = (await fila()).body;
+    assert.deepStrictEqual(daFila(r, caro.id).etapas, ['APROVACAO_VALOR']);
+    assert.strictEqual(daFila(r, caro.id).acionavel, false);
+    assert.deepStrictEqual(daFila(r, aprovada.id).etapas, ['SEPARAR']);
+    await setCfg('liberacao_valor_ativo', '0');
   });
 
   await test('Gate: chao de fabrica (sem separar_emitir) recebe 403', async () => {
@@ -139,6 +149,40 @@ let seq = 0;
     await fila();
     const depois = await dbGet(db, 'SELECT status, updated_at FROM requisicoes_almoxarifado WHERE id = ?', [id]);
     assert.deepStrictEqual(depois, antes);
+  });
+
+  // ── Fase 5 ────────────────────────────────────────────────────────────────────────────────
+  await test('Fase 5 (critico): separado mas o saldo foi embora (outra requisicao levou) — nao e ENTREGAR, e AGUARDANDO_SALDO', async () => {
+    const m = await material({ qtd: 10 });
+    const a = await req([[m, 10]]); const b = await req([[m, 10]]);
+    await requisitionService.separarRequisicao(db, a.id, [{ item_id: a.ids[0], quantidade_separada: 10 }], ADMIN);
+    await requisitionService.separarRequisicao(db, b.id, [{ item_id: b.ids[0], quantidade_separada: 10 }], ADMIN);
+    await requisitionService.entregarRequisicao(db, a.id, [{ item_id: a.ids[0], quantidade_atendida: 10 }], ADMIN, null);
+    const linha = daFila((await fila()).body, b.id);
+    assert.deepStrictEqual(linha.etapas, ['AGUARDANDO_SALDO']);
+    assert.strictEqual(linha.acionavel, false);
+    assert.strictEqual(linha.itens[0].entregavel, 0);
+  });
+
+  await test('Fase 5 (critico): conferencia pendente em PRONTA_PARA_RETIRADA — CONFERENCIA_SEM_SAIDA, nao acionavel', async () => {
+    const m = await material({ qtd: 10, critico: 1 });
+    const { id } = await req([[m, 3, 3, 0]], { status: 'PRONTA_PARA_RETIRADA' });
+    const linha = daFila((await fila()).body, id);
+    assert.deepStrictEqual(linha.etapas, ['CONFERENCIA_SEM_SAIDA']);
+    assert.strictEqual(linha.acionavel, false);
+  });
+
+  await test('Fase 5: a RESERVA da propria requisicao conta como separavel (totalmente reservada segurando todo o saldo)', async () => {
+    const m = await material({ qtd: 5 });
+    const { id } = await req([[m, 5]]);
+    await requisitionService.reservarItensAprovacao(db, id, ADMIN, {});
+    const r = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [id]);
+    const linha = daFila((await fila()).body, id);
+    assert.deepStrictEqual(linha.etapas, ['SEPARAR'], `status ${r.status}: ${JSON.stringify(linha)}`);
+    assert.strictEqual(linha.itens[0].separavel, 5);
+    // E a reserva de OUTRA requisicao tira do separavel desta.
+    const outra = await req([[m, 5]]);
+    assert.deepStrictEqual(daFila((await fila()).body, outra.id).etapas, ['AGUARDANDO_SALDO']);
   });
 
   await close();

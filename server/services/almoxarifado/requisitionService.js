@@ -324,7 +324,6 @@ async function conferirSeparacao(db, requisicaoId, user) {
   };
 }
 
-/** Rodadas de separação de uma requisição, em ordem (Etapa 28, RN-02/RN-09). */
 /** Etapa 63 (RN-03): as substituicoes da origem separada, com os codigos, para o detalhe. */
 /**
  * Etapa 64 — a fila de separação do almoxarife. SÓ LEITURA: não muda regra de separar/entregar, e de
@@ -368,13 +367,21 @@ async function listarFilaSeparacao(db, user) {
   for (const r of reqs) {
     const doReq = itens.filter((i) => i.requisicao_id === r.id);
     const podeSep = PODE_SEPARAR.includes(r.status);
-    const bloqueioValor = Number(r.requer_aprovacao_valor) === 1 && !r.data_aprovacao_valor;
+    // Fase 5: avaliacao de valor AO VIVO pela parte SO-LEITURA (avaliarRequisicaoValor) — o gravado nunca
+    // coincide com um status separavel (quem grava o flag muda o status junto), e o risco real era o
+    // limite baixar ou o custo subir depois: a fila dizia Separar e o separar recusava com 403.
+    // eslint-disable-next-line no-await-in-loop
+    const avaliacaoValor = r.data_aprovacao_valor ? null : await valueApprovalService.avaliarRequisicaoValor(db, r.id);
+    const bloqueioValor = !!(avaliacaoValor && avaliacaoValor.requer_aprovacao_valor);
     const linhas = doReq.map((i) => {
       const aSeparar = pendenteSeparacao(i);
       const separavel = podeSep ? maxSeparar(i, num(i.saldo_disponivel)) : 0;
       return {
         item_id: i.id, material_id: i.material_id, material_codigo: i.material_codigo, material_nome: i.material_nome,
         unidade: i.unidade, a_separar: aSeparar, separavel, a_entregar: Math.max(0, getSeparado(i) - getEntregue(i)),
+        // Fase 5 (critico): a separacao NAO reserva — o separado de A pode ter saido por B. Entregavel agora
+        // e o separado limitado ao disponivel; sem isso a fila dizia "Entregar" e a entrega recusava.
+        entregavel: Math.min(Math.max(0, getSeparado(i) - getEntregue(i)), Math.max(0, num(i.saldo_disponivel))),
         disponivel: num(i.saldo_disponivel), origem_separacao_codigo: i.origem_separacao_codigo || null,
         lote_separacao_codigo: i.lote_separacao_codigo || null, material_critico: Number(i.material_critico) === 1,
       };
@@ -383,9 +390,18 @@ async function listarFilaSeparacao(db, user) {
     if (podeSep && linhas.some((l) => l.separavel > 1e-9)) etapas.push(bloqueioValor ? 'APROVACAO_VALOR' : 'SEPARAR');
     if (podeSep && linhas.some((l) => l.a_separar > 1e-9 && l.separavel <= 1e-9)) etapas.push('AGUARDANDO_SALDO');
     const conferenciaPendente = conferenciaObrigatoria(doReq) && !r.conferido_por_id;
-    if (conferenciaPendente) etapas.push(r.status === 'EM_SEPARACAO' ? 'CONFERIR' : 'REABRIR_SEPARACAO');
+    // Fase 5 (critico): REABRIR so onde separar de novo e possivel (PODE_SEPARAR); em PRONTA_PARA_RETIRADA nao
+    // ha transicao de volta — CONFERENCIA_SEM_SAIDA, nao acionavel (o administrador resolve).
+    if (conferenciaPendente) {
+      etapas.push(r.status === 'EM_SEPARACAO' ? 'CONFERIR'
+        : PODE_SEPARAR.includes(r.status) ? 'REABRIR_SEPARACAO' : 'CONFERENCIA_SEM_SAIDA');
+    }
     if (PODE_ENTREGAR.includes(r.status) && linhas.some((l) => l.a_entregar > 1e-9) && !conferenciaPendente) {
-      if (!etapas.includes('APROVACAO_VALOR')) etapas.push(bloqueioValor ? 'APROVACAO_VALOR' : 'ENTREGAR');
+      if (linhas.some((l) => l.entregavel > 1e-9)) {
+        if (!etapas.includes('APROVACAO_VALOR')) etapas.push(bloqueioValor ? 'APROVACAO_VALOR' : 'ENTREGAR');
+      } else if (!etapas.includes('AGUARDANDO_SALDO')) {
+        etapas.push('AGUARDANDO_SALDO');
+      }
     }
     if (!etapas.length) continue;
     const quemSeparou = separadores.filter((s) => s.requisicao_id === r.id)
@@ -425,6 +441,7 @@ async function listarSubstituicoes(db, requisicaoId) {
     WHERE s.requisicao_id = ? ORDER BY s.id`, [requisicaoId]);
 }
 
+/** Rodadas de separação de uma requisição, em ordem (Etapa 28, RN-02/RN-09). */
 async function listarSeparacoes(db, requisicaoId) {
   const rows = await dbAll(db, `SELECT id, usuario_id, usuario_nome, itens_tocados, itens_json, created_at
     FROM separacoes_requisicao_almoxarifado WHERE requisicao_id = ?

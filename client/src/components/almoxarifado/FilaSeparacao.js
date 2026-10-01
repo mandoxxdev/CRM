@@ -31,6 +31,9 @@ const ETAPA_INFO = {
   CONFERIR: { label: 'Conferir', cls: 'devolucao' },
   REABRIR_SEPARACAO: { label: 'Separar de novo para conferir', cls: 'estorno' },
   ENTREGAR: { label: 'Entregar', cls: 'ok' },
+  // Fase 5: conferência pendente numa requisição já PRONTA_PARA_RETIRADA, que não pode voltar
+  // à separação — não acionável, só o administrador resolve.
+  CONFERENCIA_SEM_SAIDA: { label: 'Conferência pendente — peça ao administrador', cls: 'zerado' },
 };
 
 const URGENCIA_INFO = {
@@ -74,7 +77,8 @@ const descricaoItem = (it) => {
     partes.push(`a separar ${fmtQtd(it.a_separar)}${un} (separável agora ${fmtQtd(it.separavel)})`);
   }
   if (Number(it.a_entregar) > 0) {
-    partes.push(`a entregar ${fmtQtd(it.a_entregar)}${un}`);
+    // `entregavel` = o separado limitado ao disponível (Fase 5): é o que sai agora.
+    partes.push(`a entregar ${fmtQtd(it.a_entregar)}${un} (entregável agora ${fmtQtd(it.entregavel)})`);
   }
   partes.push(`disponível ${fmtQtd(it.disponivel)}`);
   if (it.origem_separacao_codigo) {
