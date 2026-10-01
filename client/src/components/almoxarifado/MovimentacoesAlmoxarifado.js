@@ -402,8 +402,10 @@ const MovimentacoesAlmoxarifado = () => {
   // `motivo_escolha`: '' (nada), 'OUTRO' (texto livre) ou o id do cadastro como string (valor do
   // <select>); o payload converte com Number().
   const [motivosDoTipo, setMotivosDoTipo] = useState([]);
+  const [motivosErro, setMotivosErro] = useState(false);
   useEffect(() => {
     setMotivosDoTipo([]);
+    setMotivosErro(false);
     if (!showModal || !form.tipo) return undefined;
     let cancelado = false;
     api.get(`/almoxarifado/motivos-movimentacao?tipo=${encodeURIComponent(form.tipo)}`)
@@ -425,7 +427,16 @@ const MovimentacoesAlmoxarifado = () => {
           return f;
         });
       })
-      .catch(() => { if (!cancelado) setMotivosDoTipo([]); });
+      .catch(() => {
+        if (cancelado) return;
+        setMotivosDoTipo([]);
+        // Fase 5 (M3): a escolha do cadastro feita no tipo anterior ficava no estado sem select
+        // para mostrá-la — a tela exibia o campo de texto vazio e o payload ia sem motivo nenhum.
+        // Limpa, e o aviso abaixo do campo diz por que o select sumiu.
+        setMotivosErro(true);
+        setForm((f) => (f.motivo_escolha && f.motivo_escolha !== 'OUTRO'
+          ? { ...f, motivo_escolha: '', motivo_complemento: '' } : f));
+      });
     return () => { cancelado = true; };
   }, [form.tipo, showModal]);
 
@@ -893,7 +904,16 @@ const MovimentacoesAlmoxarifado = () => {
                         required={exige} />
                     );
                     if (motivosDoTipo.length === 0) {
-                      return <div className="almox-field">{rotulo}{campoTexto}</div>;
+                      return (
+                        <div className="almox-field">
+                          {rotulo}{campoTexto}
+                          {motivosErro && (
+                            <div data-testid="mov-motivos-erro" style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)', marginTop: 4 }}>
+                              Não foi possível carregar os motivos do cadastro — digite o motivo.
+                            </div>
+                          )}
+                        </div>
+                      );
                     }
                     const doCadastro = !!motivoEscolhidoDoCadastro();
                     return (

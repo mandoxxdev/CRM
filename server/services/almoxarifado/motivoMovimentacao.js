@@ -42,15 +42,21 @@ const MSG = Object.freeze({
 
 const erro = (status, message) => Object.assign(new Error(message), { status });
 
+// Fase 5 (M1): caracteres invisiveis (zero-width, BOM, word joiner) saem, e todo espaco interno
+// (inclusive o nao-quebravel) vira um so — "Avaria  manuseio", "Avaria manuseio" e
+// "Avaria manuseio​" eram tres motivos que a lista mostrava iguais, e "​" passava como nome.
+const limparNome = (nome) => String(nome).replace(/[​-‍⁠﻿]/g, '')
+  .replace(/\s+/g, ' ').trim().normalize('NFC');
+
 /** Chave de unicidade: "Manutenção", "MANUTENÇÃO" e a forma NFD do mesmo nome dao a mesma. */
 function normalizarNome(nome) {
-  return String(nome).trim().normalize('NFC').toLocaleLowerCase('pt-BR');
+  return limparNome(nome).toLocaleLowerCase('pt-BR');
 }
 
 function validarNome(nome) {
   // So texto: `String(42)` e `String({})` virariam nome "42"/"[object Object]" em silencio.
-  if (typeof nome !== 'string' || !nome.trim()) throw erro(400, MSG.NOME_OBRIGATORIO);
-  return nome.trim().normalize('NFC');
+  if (typeof nome !== 'string' || !limparNome(nome)) throw erro(400, MSG.NOME_OBRIGATORIO);
+  return limparNome(nome);
 }
 
 /** Lista nao vazia, cada um da rota generica; repetidos saem em silencio, ordem preservada. */
@@ -182,6 +188,8 @@ const MSG_USO = Object.freeze({
   NAO_ENCONTRADO: MSG.NAO_ENCONTRADO,
   desativado: (nome) => `O motivo "${nome}" está desativado`,
   naoServe: (nome, tipo) => `O motivo "${nome}" não serve para movimentação do tipo ${tipo}`,
+  // Fase 5 (M4): a `/transferencias` nao passa pelo Zod — `{a:1}` virava "Nome — [object Object]".
+  COMPLEMENTO: 'justificativa deve ser texto',
 });
 
 const textoPreenchido = (v) => v !== undefined && v !== null && String(v).trim() !== '';
@@ -212,6 +220,9 @@ async function resolverMotivoDoCadastro(db, params) {
   if (typeof bruto !== 'number' || !Number.isInteger(bruto) || bruto <= 0) throw erro(400, MSG_USO.FORMATO);
   // D4: os dois juntos sao recusados em vez de o cadastro "ganhar" calado. So espacos = vazio.
   if (textoPreenchido(params.motivo)) throw erro(400, MSG_USO.OS_DOIS);
+  if (params.justificativa !== undefined && params.justificativa !== null && typeof params.justificativa !== 'string') {
+    throw erro(400, MSG_USO.COMPLEMENTO);
+  }
   const motivo = await obterMotivo(db, bruto);
   if (!motivo) throw erro(400, MSG_USO.NAO_ENCONTRADO);
   if (!motivo.ativo) throw erro(400, MSG_USO.desativado(motivo.nome));

@@ -275,6 +275,24 @@ describe('Movimentação — motivo do cadastro (Etapa 66, RN-09)', () => {
     expect(p).not.toHaveProperty('motivo_id');
   });
 
+  // Fase 5 (M3): o motivo 7 SERVE à PERDA, então a troca de tipo o mantinha — mas a busca da PERDA
+  // falhou: a escolha ficava no estado sem select para mostrá-la (o operador achava que ia com o
+  // motivo) e ressuscitava na volta. Agora é limpa, e um aviso diz por que o select sumiu.
+  test('escolha que serve ao tipo novo, mas a busca do tipo novo falha: limpa e avisa', async () => {
+    await abrirCom('AJUSTE');
+    preencher(selectMotivo(), '7');
+    expect(container.querySelector('[data-testid="mov-motivos-erro"]')).toBeNull();
+    falharMotivos = true;
+    await trocarTipo('PERDA');
+    expect(selectMotivo()).toBeNull();
+    expect(container.querySelector('[data-testid="mov-motivos-erro"]').textContent)
+      .toBe('Não foi possível carregar os motivos do cadastro — digite o motivo.');
+    falharMotivos = false;
+    await trocarTipo('AJUSTE');
+    expect(container.querySelector('[data-testid="mov-motivos-erro"]')).toBeNull();
+    expect(selectMotivo().value).toBe('');
+  });
+
   test('falha ao buscar os motivos: cai no texto livre e a movimentação segue', async () => {
     falharMotivos = true;
     await abrirCom('AJUSTE');

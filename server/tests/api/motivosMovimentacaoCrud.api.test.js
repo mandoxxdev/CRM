@@ -349,6 +349,28 @@ const uniq = (p) => `${p} ${Date.now() % 1000000}-${++seq}`;
     assert.deepStrictEqual(await motivoService.desativarMotivo(db, c.id, autor), { success: true, ja_inativo: true });
   });
 
+  await test('(18) Fase 5 (M1): espacos internos, espaco nao-quebravel e caracteres invisiveis nao criam outro motivo; so invisivel = sem nome', async () => {
+    setUser({ ...ADMIN });
+    const base = uniq('Avaria manuseio');
+    const r = await criar({ nome: `  ${base}  `, tipos: ['PERDA'] });
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    assert.strictEqual(r.body.nome, base);
+    for (const igual of [base.replace(' ', '  '), base.replace(' ', ' '), `${base}​`, `﻿${base.toUpperCase()}`]) {
+      const d = await criar({ nome: igual, tipos: ['PERDA'] });
+      assert.strictEqual(d.status, 400, `${JSON.stringify(igual)} entrou: ${JSON.stringify(d.body)}`);
+      assert.strictEqual(d.body.error, 'Já existe um motivo com este nome');
+    }
+    for (const vazio of ['​', '   ', '⁠﻿']) {
+      const v = await criar({ nome: vazio, tipos: ['PERDA'] });
+      assert.strictEqual(v.status, 400, JSON.stringify(vazio));
+      assert.strictEqual(v.body.error, 'Nome é obrigatório');
+    }
+    // O nome gravado tambem sai limpo (a lista nao mostra dois "iguais").
+    const e = await request(app).put(`${URL}/${r.body.id}`).send({ nome: `${base}​  x` });
+    assert.strictEqual(e.status, 200, JSON.stringify(e.body));
+    assert.strictEqual(e.body.nome, `${base} x`);
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);

@@ -214,6 +214,10 @@ const uniq = (p) => `${p} ${Date.now() % 1000000}-${++seq}`;
     recusa(await transf({ motivo_id: doTransf.id, motivo: 'x' }), OS_DOIS);
     recusa(await transf({ motivo_id: avaria.id }), naoServe(avaria.nome, 'TRANSFERENCIA'));
     recusa(await transf({ motivo_id: inativo.id }), desativado(inativo.nome));
+    // Fase 5 (M4): complemento que nao e texto — a /transferencias nao tem Zod e gravava "Nome — [object Object]".
+    for (const ruim of [{ a: 1 }, 123, ['x', 'y']]) {
+      recusa(await transf({ motivo_id: doTransf.id, justificativa: ruim }), 'justificativa deve ser texto');
+    }
     assert.deepStrictEqual(await estado(m), antes, 'uma recusa da /transferencias mexeu no livro');
     const r = await transf({ motivo_id: doTransf.id, justificativa: 'corredor 3' });
     assert.strictEqual(r.status, 201, JSON.stringify(r.body));
