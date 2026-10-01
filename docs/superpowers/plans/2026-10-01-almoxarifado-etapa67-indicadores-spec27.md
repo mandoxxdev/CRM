@@ -294,7 +294,7 @@ ordem: ajustes DESC, motivo
 ```
 titulo: 'Qualidade por fornecedor', categoria: 'Gestão', acao: null, exportavel: true, limite: null
 params: data_inicio (date), data_fim (date)   — sobre DATE(r.data_recebimento)
-colunas: fornecedor 'Fornecedor' · recebimentos 'Recebimentos' · itens_conferidos 'Itens conferidos' ·
+colunas: fornecedor 'Fornecedor' · agrupado_por 'Agrupado por' (Fase 5) · recebimentos 'Recebimentos' · itens_conferidos 'Itens conferidos' ·
          itens_divergentes 'Itens com divergência' · itens_com_falta 'Com falta' · itens_com_sobra 'Com sobra' ·
          percentual_divergencia '% divergência' · inspecoes 'Inspeções' ·
          inspecoes_com_reprovacao 'Inspeções com reprovação' · indice_rejeicao '% rejeição'
@@ -512,3 +512,35 @@ T5 → T6. T2 e T3 não dividem regra: T2 só consome o fragmento da T1; T3 não
   M-2: recebimento só de material de cliente não conta (o fornecedor sem nada elegível não aparece); M-3: datas
   inválidas → vazio (como o histórico), declarado; M-4: RN-10 semeada à mão (não há caminho real que retenha duas
   vezes) — declarado no teste.
+
+## Fase 5 — revisão adversarial: fix-round (2026-10-01)
+
+A revisão (sondas `sonda67r-*.js` no scratchpad) achou 7 mutantes sobreviventes no `reportService.js` e dois menores.
+Tudo corrigido em três commits; cinco suítes do servidor verdes depois (`test:api` 250/250 arquivos,
+`test:almoxarifado` 42/0, `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 5/0). Client não roda: nenhuma tela
+nem teste fixa as colunas da qualidade (a tela de relatórios projeta pelas `colunas` do registro).
+
+- [x] **A — testes que matam os 7 mutantes** (`d7f22f8`). Cenários novos: entregue no dia **seguinte** ao prazo = fora;
+  RASCUNHO e REJEITADA com prazo vencido, pela rota, fora de tudo; sem prazo criada há 60 dias fora de
+  `sem_data_valida`; entregue há 60 dias fora dos integrais; ajuste de 60 dias atrás fora do bloco `ajustes` (no RN-07,
+  com controle de que sem período ele aparece); CNPJ alfanumérico minúsculo × maiúsculo = uma linha. `created_at` /
+  `data_entrega` semeados por UPDATE, declarado no teste. Sabotagem por `perl -0pi` (âncora == 1, restauro por cópia com
+  md5): cada um dos 7 mutantes derruba a asserção nova certa (A1 `x.de <= date(x.dn,'+1 day')`, A2 sem RASCUNHO, A3 sem
+  REJEITADO, A4 sem janela no `sem_data_valida`, A5 sem janela nos integrais, A6 sem janela no bloco ajustes, A7 sem
+  UPPER na chave do CNPJ).
+- [x] **B — reserva zumbi do fracionado** (`f8a8980`). O epsilon da T1 fechava a requisição, mas a reserva ficava ATIVA
+  com `quantidade_utilizada` 0,9999999999999999 e o material com `quantidade_reservada` 1,38e-16. Corrigido com EPS 1e-9
+  nos três pontos da mesma conta em `stockService.js`: fechamento da reserva no consumo (a sobra sai do reservado do
+  material; `RESERVADA_MENOS_SQL` zera o que fica <= EPS), claim do consumo com reserva (0,3 em três saídas de 0,1
+  recusava a terceira) e `liberarReserva` (liberar 0,3 de saldo 0,30000000000000004 virava parcial). Liberar acima do
+  saldo continua 400. Seis sabotagens (B1–B6) derrubam a asserção certa. Os `> 0` de `reservationService` só escolhem
+  entre `liberarReserva` e fechar sem saldo — inofensivos, não mexidos.
+- [x] **C — coluna "Agrupado por"** (`6da0048`). `agrupado_por` sai do SQL ao lado de Fornecedor: `CNPJ <como veio no
+  recebimento mais recente>` / `Cadastro #<id>` / `Nome digitado` / `Sem CNPJ, cadastro ou nome`. Nota ganhou: *"A coluna
+  Agrupado por mostra o que juntou a linha: "CNPJ" seguido do CNPJ como veio no recebimento mais recente, "Cadastro #"
+  seguido do número do fornecedor no cadastro, ou "Nome digitado". O mesmo fornecedor pode aparecer em mais de uma linha
+  quando os recebimentos não trazem o mesmo CNPJ (por exemplo, uma nota com CNPJ e outra só com o nome)."* Seis
+  sabotagens (C1–C6). Descartado: juntar por nome (fornecedores homônimos se misturariam) e mostrar o CNPJ normalizado.
+
+**Próximo passo:** T6 (fechamento pela skill `fechar-etapa`) — registrar B/C acima no documento de novidades e no guia
+(coluna nova da qualidade; reserva do fracionado agora fecha).
