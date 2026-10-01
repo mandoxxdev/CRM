@@ -71,6 +71,41 @@ function erro(msg, status = 400) {
  * copiar o bloco da perna do almoxarifado e esquecer de trocar uma das colunas faria a perna de
  * gestao conferir a si mesma e nunca fechar o processo.
  */
+/**
+ * Etapa 68 (D6 revisto na Fase 2) — a origem da SUCATA quando o material ja foi transferido para a
+ * area de sucata (spec 19: "Transferir para area de sucata → Registrar venda ou descarte").
+ * Devolve o id de UMA localizacao cuja area EFETIVA e SUCATA (tipo proprio ou do ancestral mais
+ * proximo), ativa, nao bloqueada, com saldo SEM LOTE que cobre a quantidade INTEIRA — a de maior
+ * saldo, empate pelo menor id —, ou null (o comportamento de hoje: sem origem).
+ *
+ * So quando cobre tudo, e o chamador manda `origemEstrita`: com dreno parcial a origem nao-estrita
+ * gravava "saiu de S" com parte vinda de P, e o estorno devolvia tudo para S (sonda68-d6). Saldo
+ * espalhado em duas posicoes da area: nenhuma cobre sozinha → hoje (declarado). Bloqueada fica fora
+ * porque o motor recusa origem bloqueada e a aprovacao travaria; inativa fica fora por decisao.
+ * Material com lote: nao chega aqui (a saida com lote nao drena por endereco — B204/C72).
+ * Descartados: drenar so a area (recusaria o descarte de material nao transferido) e dividir em dois
+ * movimentos (mais regra no motor por um caso raro).
+ */
+async function origemAreaDeSucata(db, materialId, quantidade) {
+  const linhas = await dbAll(db, `SELECT s.localizacao_id id, SUM(s.quantidade) q
+      FROM estoque_saldo_almoxarifado s
+      JOIN localizacoes_almoxarifado l ON l.id = s.localizacao_id
+     WHERE s.material_id = ? AND s.lote_id IS NULL AND s.localizacao_id IS NOT NULL
+       AND l.ativo = 1 AND COALESCE(l.bloqueada, 0) = 0
+     GROUP BY s.localizacao_id
+    HAVING SUM(s.quantidade) > 0
+     ORDER BY q DESC, s.localizacao_id`, [materialId]);
+  if (!linhas.length) return null;
+  const arvore = await stockService.carregarArvoreLocalizacoes(db);
+  const EPS = 1e-9; // mesma tolerancia do motor (quantidade e REAL no SQLite)
+  for (const l of linhas) {
+    if (Number(l.q) + EPS < Number(quantidade)) continue;
+    const area = stockService.resolverAreaEfetiva(arvore, l.id);
+    if (area && area.chave === 'SUCATA') return Number(l.id);
+  }
+  return null;
+}
+
 const PERNAS = {
   almoxarifado: {
     acao: 'aprovar_sucateamento',
@@ -391,11 +426,14 @@ async function aprovar(db, user, id, pernaNome) {
 
   if (fechou) {
     try {
+      // Etapa 68 (D6 revisto): DENTRO do try — erro de banco aqui ainda compensa a assinatura.
+      const origemSucata = atual.lote_id ? null : await origemAreaDeSucata(db, atual.material_id, atual.quantidade);
       movimentacao = await stockService.registrarMovimentacao(db, user, {
         material_id: atual.material_id,
         tipo: 'SUCATA',
         quantidade: atual.quantidade,
         lote_id: atual.lote_id || undefined,
+        localizacao_origem_id: origemSucata || undefined,
         // O vinculo da SOLICITACAO vai junto: para material de cliente ele e o que a guarda do dono
         // exige (e ja foi validado la), e para material nosso ele e o que amarra a sucata ao
         // trabalho de onde ela saiu no extrato.
@@ -417,7 +455,9 @@ async function aprovar(db, user, id, pernaNome) {
         // contagem de series. Declarando, o mesmo caso vira uma recusa limpa do motor seguida de
         // compensacao. Custo no caminho legitimo: zero, porque material serializado nao chega aqui.
         // Como sempre neste modulo, no 4o argumento e nunca no body (stockService.js:569-607).
-      }, { exigeLote: true, exigeSerie: true });
+        // Etapa 68: `origemEstrita` so com a origem da area — o motor confere que o saldo nela cobre
+        // e nao drena outros enderecos. Sem origem, nada muda (o motor baixa como sempre baixou).
+      }, { exigeLote: true, exigeSerie: true, origemEstrita: !!origemSucata });
     } catch (e) {
       await compensarAssinatura(db, user, id, perna, e.message);
       // Re-lanca o erro ORIGINAL do motor, sem mascarar: "Saldo insuficiente. Disponivel: 20 UN" e

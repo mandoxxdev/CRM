@@ -283,7 +283,21 @@ T6 (integração) depois de tudo; T7 fechamento.
   numa ENTRADA real") continuando verde. RN-05 pela rota (`/movimentacoes/v2` ENTRADA e `/transferencias`) com o Mapa
   conferido. Controle positivo: tirar a exceção do cliente (RN-07 cai), aplicar o filtro também na PADRAO (RN-06
   metade positiva cai), devolver o aviso de cliente para material de cliente, trocar uma frase.
-- [ ] **T3 (tronco) — sucateamento baixa da área de sucata** (`scrapDisposalService.js:394-410`): resolve a origem
+- [x] **T3 (tronco) — sucateamento baixa da área de sucata** *Feita (2026-10-01; T2 = `d94dc24`; hash da T3 no commit
+  "Etapa 68 T3"), pelo D6 REVISTO: `origemAreaDeSucata(db, material, qtd)` em `scrapDisposalService.js` (localização
+  ativa, não bloqueada, área EFETIVA = SUCATA, saldo sem lote que cobre a quantidade INTEIRA; maior saldo, empate menor
+  id), resolvida dentro do `try` da segunda perna e mandada com `origemEstrita: true`; senão nada muda. Teste
+  `sucateamentoAreaSucata.api.test.js` — 10 cenários (9 pela rota, pernas em ordens diferentes e 3 usuários
+  distintos; 1 pelo serviço), 4 vermelhos antes da implementação; os 6 que passaram de primeira são as metades "como
+  hoje" (sem área, bloqueada, parcial + estorno, P bloqueada + parcial, inativa, com lote) e cada um tem sabotagem
+  abaixo. Sabotagens: sem filtro de bloqueada → "BLOQUEADA" toma o 400 do motor (a aprovação travaria); sem
+  `ativo = 1` → "INATIVA"; `ORDER BY q ASC` e desempate por maior id → "duas áreas"; sem a checagem "cobre" → "NÃO
+  cobre" toma o 400 do `origemEstrita` + "P bloqueada" + "espalhado em duas"; sem "cobre" E sem `origemEstrita` → o
+  defeito da sonda68-d6 volta (livro com origem S, estorno joga em S; P bloqueada drenada por S); área efetiva
+  desligada → "posição Box". **Divergência:** a sabotagem "aplicar também com lote" só no chamador fica VERDE — a
+  consulta já filtra `lote_id IS NULL`, as duas camadas são redundantes; tirando as duas, "COM lote" fica vermelho.
+  `origemEstrita` sozinho (com "cobre" intacto) não é distinguível sem corrida — é a defesa contra o saldo de S mudar
+  entre a consulta e o claim.* Texto original: (`scrapDisposalService.js:394-410`): resolve a origem
   pela D6 antes do `registrarMovimentacao` (só sem `lote_id`). Teste `server/tests/api/sucateamentoAreaSucata.api.test.js`
   (RN-08, quatro cenários, **pela rota** de solicitar/aprovar, e um **pelo serviço**). Controle positivo: sem o filtro
   de bloqueada (a aprovação toma 400 do motor — prova que o filtro é o que impede o travamento); sem `ativo = 1`;
