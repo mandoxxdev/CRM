@@ -1640,7 +1640,7 @@ Separação é a etapa em que o almoxarifado **junta fisicamente** o material da
 
 ### 10.1 O que a tela mostra
 
-A separação não tem tela própria: ela acontece **dentro da requisição**. Ao abrir uma requisição aprovada, o almoxarifado vê um **passo a passo** no topo (Criar → Aprovar → Separar → Retirada → Entregar → Encerrar), um aviso do que fazer agora, e os botões da etapa.
+A separação acontece **dentro da requisição**; para saber o que separar, conferir e entregar agora, e em que ordem, o almoxarife usa a **Fila de separação** (10.6). Ao abrir uma requisição aprovada, o almoxarifado vê um **passo a passo** no topo (Criar → Aprovar → Separar → Retirada → Entregar → Encerrar), um aviso do que fazer agora, e os botões da etapa.
 
 Os avisos por situação são estes:
 
@@ -1724,6 +1724,63 @@ Esta é a pergunta mais importante do capítulo, e a resposta é: **na entrega, 
 Ou seja: **o disponível cai na aprovação** (pela reserva) e **o físico cai na entrega**. A separação não mexe em saldo nenhum — ela registra o trabalho de campo e prepara a entrega. Quem espera ver o estoque baixar ao separar vai achar que o sistema não funcionou; ele funcionou, e o material já estava protegido desde a aprovação.
 
 ---
+
+### 10.6 Fila de separação — o que fazer agora, e em que ordem
+
+A **Fila de separação** (menu do almoxarifado, logo abaixo de **Requisições (almox.)**) é a lista de trabalho do
+almoxarife: mostra **só as requisições que têm algo a separar, conferir ou entregar**, na ordem em que devem ser
+feitas, e o que falta em cada item. É **só consulta**: separar, conferir e entregar continuam na requisição (10.2 a
+10.4 e 7.5), com as mesmas regras. O botão **Abrir** leva à tela de requisições com o detalhe daquela requisição. O
+botão **Atualizar** recalcula a fila.
+
+Quem vê: quem tem a permissão **separar e emitir** (Administrador e Almoxarife). O menu aparece para todos com acesso
+ao almoxarifado; os demais veem *"Você não tem permissão para a fila de separação."*. Sem nenhuma requisição com
+trabalho, a tela diz *"Nada para separar ou entregar agora."*.
+
+**Quem entra.** Requisições ativas nos estados em que se pode separar (Aprovado, Aguard. Estoque, Aguard. Compra,
+Totalmente Reservada, Parcialmente Reservada, Em Separação, Parcialmente Atendida) ou entregar (Em Separação, Pronta p/ Retirada, Parcialmente Atendida) e que tenham pelo menos uma das etapas abaixo. As demais não aparecem.
+
+**As etapas — um chip para cada uma que se aplica.** Uma requisição pode ter mais de uma ao mesmo tempo.
+
+| Chip | Quando aparece | Dá para agir agora? |
+|---|---|---|
+| **Separar** | Algum item é **separável agora**: o menor entre o que falta separar e o disponível (que conta o que a própria requisição reservou — 10.1) é maior que zero | Sim |
+| **Aguardando saldo** | Algum item falta separar e não há nada disponível para ele; ou há separado a entregar, mas nada **entregável agora** | Não |
+| **Conferir** | Material crítico separado sem a segunda conferência (10.3), com a requisição *Em Separação*. Para quem separou, o chip diz **"Conferir — você separou, peça a outra pessoa"** | Sim |
+| **Separar de novo para conferir** | A mesma conferência pendente, num estado de separação que não é *Em Separação* (por exemplo, *Parcialmente Atendida*): o caminho é **Ajustar Separação** e confirmar, que volta a *Em Separação* (10.3) | Sim |
+| **Conferência pendente — peça ao administrador** | A mesma conferência pendente com a requisição *Pronta p/ Retirada*, de onde não há volta à separação | Não |
+| **Entregar** | Há separado não entregue, nenhuma conferência pendente, e algum item **entregável agora**: o separado ainda não entregue, limitado ao disponível | Sim |
+| **Aguardando aprovação de valor** | No lugar de *Separar* ou *Entregar*, quando a requisição não tem aprovação de valor e o valor dela (soma das quantidades solicitadas pelo custo) passa do limite **ativo naquele momento** (8.3) | Não |
+
+A conta da aprovação de valor é feita na hora em que a fila é aberta, com a configuração vigente — se o limite baixou
+ou o custo subiu depois da aprovação da requisição, a fila já mostra o bloqueio. A fila **não grava nada** e não
+notifica ninguém: quem aplica a regra é o separar e o entregar.
+
+**A ordem.** De cima para baixo:
+
+1. as requisições em que **dá para agir agora** (com *Separar*, *Conferir*, *Separar de novo para conferir* ou
+   *Entregar*); as outras ficam embaixo, no grupo **"Aguardando"**;
+2. a **urgência**: Crítico, depois Urgente, depois as demais;
+3. a **data de necessidade**, a mais cedo primeiro; requisição sem data vem depois das que têm;
+4. a **mais antiga** primeiro (ordem de chegada).
+
+A prioridade da requisição não entra na ordem. Datas de necessidade antigas gravadas no formato *DD/MM/AAAA* não
+ordenam corretamente entre si.
+
+**Cada linha mostra** o número, a urgência, *"Necessário em DD/MM/AAAA"* (ou *"Sem data de necessidade"*), o
+solicitante e o setor, os chips, *"Separado por: ⟨nomes⟩"* quando já houve rodada de separação, e os itens com algo a
+fazer, assim:
+
+> *"a separar 5 UN (separável agora 3) · a entregar 2 UN (entregável agora 2) · disponível 3 · separado de A-01 — L-7"*
+
+Cada parte só aparece quando se aplica (*a separar* só se falta separar; *a entregar* só se há separado não entregue;
+*separado de* só se o item tem endereço de separação — 10.2).
+
+**A fila é uma fotografia.** Como a separação não reserva saldo (10.5), outra pessoa pode separar ou entregar o mesmo
+material depois que a fila foi aberta: uma requisição que estava em *Separar* ou *Entregar* pode ser recusada no
+gesto. Clique **Atualizar** antes de ir à prateleira. Item de material com série aparece como entregável pelo saldo,
+mesmo sem séries em estoque — a entrega pede as séries e recusa ali (7.5).
+
 
 ## 11. Transferências entre localizações
 

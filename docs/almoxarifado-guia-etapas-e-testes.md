@@ -1,19 +1,25 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-01 (Etapa 63) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-01 (Etapa 64) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 63) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 64) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-01 (Etapa 63 ENTREGUE · Etapa 64 começando)
+> ## Onde o desenvolvimento está — 2026-10-01 (Etapa 64 ENTREGUE · Etapa 65 começando)
 >
-> **O desenvolvimento parou aqui: Etapa 63 fechada, Etapa 64 começando — 2026-10-01.** A **Etapa 63 (a troca do lugar
+> **O desenvolvimento parou aqui: Etapa 64 fechada, Etapa 65 começando — 2026-10-01.** A **Etapa 64 (a fila de
+> separação do almoxarife)**: no menu, **Fila de separação** mostra só as requisições com trabalho de almoxarife, na
+> ordem de trabalho (o que dá para fazer agora, urgência, data de necessidade, a mais antiga), com um chip por etapa
+> (**Separar**, **Conferir**, **Entregar**, **Aguardando saldo**, **Aguardando aprovação de valor**…) e o que falta em
+> cada item; é só leitura, e não manda fazer o que vai ser recusado. **Próxima etapa, já começando: 65 — a troca de
+> origem na separação fica registrada** (feature 05; ver *"Próxima tarefa detalhada"* no plano da Etapa 64).
+>
+> **Etapas 1 a 20 e 22 a 64 completas.**
+>
+> **Etapa 63, 2026-10-01.** A **Etapa 63 (a troca do lugar
 > separado fica registrada na entrega)**: entregar de outro endereço ou lote que não o separado deixa registro — quanto,
 > separado de onde, saiu de onde, quem e o motivo (opcional) — no bloco **"Substituições"** do detalhe da requisição; e
 > acima do separado pendente, a parte separada sai de onde foi separada (o resto pelo automático) — o que **pode recusar**
-> a entrega se lá não houver mais o separado (**B251**, **C84**). **Próxima etapa, já começando: 64 — a fila de
-> separação do almoxarife** (feature 05; ver *"Próxima tarefa detalhada"* no plano da Etapa 63).
->
-> **Etapas 1 a 20 e 22 a 63 completas.**
+> a entrega se lá não houver mais o separado (**B251**, **C84**). Próxima: 64 *(feita — acima)*.
 >
 > **Etapa 62, 2026-09-30.** A **Etapa 62 (o ajuste de material com série diz quais peças entram ou saem)**: o
 > **ajuste** do total de um material com série pede os números das peças novas ou as peças que saem; por endereço e o
@@ -5002,6 +5008,59 @@ que ele não tinha como repetir com sucesso garantido.
 - **Números de outros módulos do CRM** — a varredura foi do almoxarifado.
 
 ---
+
+## Etapa 64 — A fila de separação do almoxarife (ENTREGUE — 2026-10-01)
+
+**O que mudou, em uma frase:** o almoxarife tem uma tela que diz o que separar, conferir e entregar agora, e em que
+ordem.
+
+**O problema que ela resolve.** O almoxarife trabalhava na lista geral de requisições (a mais nova primeiro, só o
+cabeçalho) e abria uma por uma para descobrir o que tinha de fazer. Agora a **Fila de separação** mostra só as
+requisições com trabalho, na ordem de trabalho, com o que falta em cada item — e não manda fazer o que vai ser
+recusado (sem saldo, sem conferência, sem aprovação de valor).
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Abrir requisição por requisição para saber o que separar | Menu **Fila de separação**: só as requisições com trabalho, com os itens |
+| A mais nova primeiro | O que dá para fazer agora primeiro; depois Crítico → Urgente → Normal; depois a data de necessidade; depois a mais antiga |
+| Requisição sem saldo parecia separável | **"Aguardando saldo"**, no grupo **"Aguardando"** |
+| Conferência pendente descoberta no clique | **"Conferir"**, **"Conferir — você separou, peça a outra pessoa"**, **"Separar de novo para conferir"** ou **"Conferência pendente — peça ao administrador"** |
+| Limite de valor estourado descoberto no clique | **"Aguardando aprovação de valor"** |
+
+### Roteiro de teste manual (≈5 min)
+
+**Preparação.** Entre como **Almoxarife** (ou Administrador). Tenha um material com saldo 10 e outro com saldo 0.
+
+1. **O menu.** No almoxarifado, **Fila de separação** fica logo abaixo de **Requisições (almox.)**. Sem requisições
+   com trabalho, a tela diz *"Nada para separar ou entregar agora."*.
+2. **A ordem.** Crie e aprove três requisições do material com saldo — **Normal**, **Urgente** e **Crítico**. Na fila:
+   Crítico, Urgente, Normal. Cada uma com o chip **"Separar"** e o item *"a separar ⟨q⟩ (separável agora ⟨q⟩) ·
+   disponível ⟨d⟩"*.
+3. **Sem saldo.** Crie e aprove uma requisição de 5 do material com saldo **0**: ela aparece embaixo, no grupo
+   **"Aguardando"**, com **"Aguardando saldo"** e *"separável agora 0"*. Dê entrada de 3 e clique **Atualizar**: ela
+   sobe com **"Separar"**.
+4. **Entregar.** Separe uma requisição (pela requisição, **Iniciar Separação**): na fila ela passa a ter **"Entregar"**
+   e *"a entregar ⟨q⟩ (entregável agora ⟨q⟩)"*.
+5. **Conferência.** Com um material **crítico**, separe uma requisição: na fila, para você, o chip diz **"Conferir —
+   você separou, peça a outra pessoa"** e a linha mostra *"Separado por: ⟨seu nome⟩"*. Entre como outro almoxarife:
+   **"Conferir"**.
+6. **Abrir.** Clique **Abrir**: abre a tela de requisições com o detalhe daquela requisição.
+7. **Sem permissão.** Entre com um usuário que acessa o almoxarifado mas não é almoxarife: o menu aparece, e a tela diz
+   *"Você não tem permissão para a fila de separação."*.
+
+### O que esta etapa NÃO cobre
+
+- Lista de separação juntando várias requisições, agrupamento por projeto/setor/localização e rota de picking.
+- **Abrir** abre o detalhe, não a janela de separar.
+- O menu aparece para todos com acesso ao módulo.
+- Data de necessidade antiga gravada como *DD/MM/AAAA* fica fora de ordem.
+- Item com série sem séries em estoque aparece como entregável (a entrega recusa ali).
+- A fila é uma fotografia: outra pessoa pode levar o material depois — clique **Atualizar**.
+
+---
+
 
 ## Etapa 63 — A troca do lugar separado fica registrada na entrega (ENTREGUE — 2026-10-01)
 

@@ -969,9 +969,9 @@ SELECT m.id, m.codigo, m.nome, m.quantidade_atual AS fisico,
   **inventário** ainda ajusta só o número, mas ao concluir **lista** os materiais com série a regularizar. Rode esta
   consulta depois de inventário, ou siga o aviso da própria tela.)*
 
-### B. Decisões de negócio — B1 a B251; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B255; as em aberto esperam você, as tomadas estão escritas com o descartado
 
-*(**Atualizado em 2026-10-01 de B247 para B251**, com as quatro da Etapa 63; antes, de B243 para B247, com as quatro da Etapa 62; antes, de B239 para B243, com as quatro da Etapa 61; antes, de B237 para B239, com as duas da Etapa 60; antes, de B233 para B237, com as quatro da Etapa 59; antes, de B228 para B233, com as cinco da Etapa 58; antes, de B225 para B228, com as três da Etapa 57; antes, de B222 para B225, com as três da Etapa 56; antes, de B219 para B222, com as da Etapa 55.)*
+*(**Atualizado em 2026-10-01 de B251 para B255**, com as quatro da Etapa 64; antes, de B247 para B251, com as quatro da Etapa 63; antes, de B243 para B247, com as quatro da Etapa 62; antes, de B239 para B243, com as quatro da Etapa 61; antes, de B237 para B239, com as duas da Etapa 60; antes, de B233 para B237, com as quatro da Etapa 59; antes, de B228 para B233, com as cinco da Etapa 58; antes, de B225 para B228, com as três da Etapa 57; antes, de B222 para B225, com as três da Etapa 56; antes, de B219 para B222, com as da Etapa 55.)*
 
 *(**Atualizado em 2026-09-30 de B205 para B219**, com as quatro da Etapa 51, as três da Etapa 52, as quatro da Etapa 53 e as três da Etapa 54.)*
 
@@ -4081,6 +4081,36 @@ serve mais (…) — entregue escolhendo de onde sai"*, onde antes passava. A ja
 **Estava errado:** o commit da implementação (`3e022eb`) dizia "nada que hoje passa é recusado" — falso, pela razão
 acima; registrado aqui. **Descartado:** manter a entrega acima do pendente toda automática.
 
+**B252 (NOVA, da Etapa 64) — a ordem da fila: o que dá para fazer agora, urgência, necessidade, a mais antiga.**
+**Escolhido:** primeiro as requisições **acionáveis** (com Separar, Conferir, Separar de novo para conferir ou Entregar);
+depois **Crítico, Urgente, Normal** (urgência em minúsculo, do legado, conta igual); depois a **data de necessidade**
+mais cedo (sem data por último); depois a **mais antiga** primeiro — fila é ordem de chegada. **Descartado:** a ordem da
+lista geral (a mais nova primeiro — a lista geral não muda); usar a **prioridade** da requisição (não entra na ordem;
+se quiserem, é um critério a mais entre urgência e data).
+
+**B253 (NOVA, da Etapa 64) — "Separar" e "Entregar" só com o que dá para fazer AGORA.**
+**Escolhido:** **Separar** só quando algum item é separável agora (o mesmo teto do separar: o menor entre o que falta
+separar e o disponível, contando a reserva da própria requisição); **Entregar** só quando algum item é entregável agora
+(o separado ainda não entregue, limitado ao disponível — a separação não reserva, e outra requisição pode ter levado o
+material). Sem isso, **Aguardando saldo**, não acionável. **Descartado:** "tem pendente" como critério (punha no topo
+requisição aguardando compra que o separar recusa); uma etapa só por requisição (escondia as outras — virou um chip por
+etapa).
+
+**B254 (NOVA, da Etapa 64) — a conferência pendente diz o caminho conforme o estado.**
+**Escolhido:** **Conferir** só em *Em Separação* (é o único estado em que a conferência é aceita — **B63**), dizendo
+"você separou, peça a outra pessoa" a quem separou; **Separar de novo para conferir** nos outros estados de separação
+(o caminho do **C37**); **Conferência pendente — peça ao administrador**, não acionável, em *Pronta para Retirada*, de
+onde não há volta à separação. **Descartado:** um "Conferir" único (a conferência e a entrega recusariam).
+
+**B255 (NOVA, da Etapa 64) — a aprovação de valor é avaliada NA HORA, sem gravar nada.**
+**Escolhido:** para cada requisição sem aprovação de valor, a fila soma o valor e compara com o limite **ativo**
+naquela hora; acima, **Aguardando aprovação de valor** no lugar de Separar/Entregar. Nada é gravado e ninguém é
+notificado — a fila nunca chama o que muda status. **Estava errado:** o plano e o commit da implementação (`fb06142`)
+descartaram a avaliação na hora dizendo que "a avaliação escreve" — **falso**: quem escreve é a gravação do valor e a
+verificação da liberação; a avaliação só lê. E o valor **gravado**, que a primeira versão lia, nunca aparecia na fila
+(quem grava a exigência muda o status junto). **Descartado:** ler o gravado (não pegava o limite que baixou nem o custo
+que subiu: a fila dizia Separar e o separar recusava).
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -5192,6 +5222,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
     escolhendo de onde sai"*. **O que fazer:** **"Entregar escolhendo de onde sai…"** e escolher outro endereço ou
     **"Qualquer endereço (automático)"** — e a troca fica registrada (**B248**).
 
+85. **NOVO, da Etapa 64 — a fila é uma fotografia: atualize antes de ir à prateleira.** A **Fila de separação** calcula
+    "separável agora" e "entregável agora" no momento em que abre (ou em **Atualizar**). A separação **não reserva**:
+    se outra pessoa separar ou entregar o mesmo material depois, a requisição que estava em **"Separar"** ou
+    **"Entregar"** pode ser recusada no gesto. **O que fazer:** **Atualizar** a fila; quem decide é o gesto na
+    requisição. Data de necessidade antiga gravada como *DD/MM/AAAA* fica fora de ordem (**D (64)**).
+
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -5865,6 +5901,17 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   guarda os lotes separado e de saída para isso.
 - **(63) Uma guarda redundante** na detecção da troca ficou como segunda barreira (a sabotagem dela não derruba teste:
   com a origem separada aplicada, endereço e lote já são iguais).
+- **(64) A fila é por requisição** — sem lista de separação como entidade, sem agrupamento por projeto/setor/localização
+  e sem rota de picking (dependem da lista como entidade).
+- **(64) "Abrir" abre o detalhe da requisição**, não a janela de separar — a fila não tem regra nova de separar/entregar.
+- **(64) O menu "Fila de separação" aparece para todos** com acesso ao módulo; quem não tem perfil de separar vê *"Você
+  não tem permissão para a fila de separação."* (nunca uma fila vazia falsa).
+- **(64) Data de necessidade gravada como *DD/MM/AAAA*** (legado) ordena errado — a comparação é de texto; o formato
+  *AAAA-MM-DD* ordena certo.
+- **(64) Item com série sem séries em estoque** aparece como entregável: o "entregável agora" olha o saldo, não as
+  séries; a entrega pede as séries e recusa ali.
+- **(64) A avaliação de valor é uma consulta por requisição** da fila (os itens são uma consulta só) — a fila é curta e
+  só lê.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -6352,6 +6399,17 @@ navegador** prova:
    o restante, automático. Se lá não houver mais o separado, a entrega é recusada — escolha de onde sai."*.
 3. **O bloco no detalhe.** Depois da entrega com troca, o detalhe da requisição mostra **"Substituições (1)"** com
    *"⟨material⟩: ⟨qtd⟩ — separado de A · saiu de B · ⟨motivo⟩"* e quem/quando.
+
+**(64) Nenhum clique foi dado nesta etapa.** Os testes provam a fila pelo servidor (11 cenários) e a tela com o servidor
+simulado (10 cenários). O que **só o navegador** prova:
+
+1. **O menu e a ordem.** Como Almoxarife, **Fila de separação** aparece logo abaixo de **Requisições (almox.)**; três
+   requisições Normal/Urgente/Crítica aparecem Crítica, Urgente, Normal.
+2. **O grupo "Aguardando".** Requisição sem saldo cai em **"Aguardando"** com **"Aguardando saldo"**; dar entrada e
+   **Atualizar** a sobe para o topo com **"Separar"**.
+3. **A data.** Requisição com necessidade em 05/10/2026 mostra *"Necessário em 05/10/2026"* (e não 04/10 — o fuso).
+4. **Abrir.** O botão abre a tela de requisições com o detalhe daquela requisição.
+5. **Sem permissão.** Usuário sem perfil de almoxarife vê *"Você não tem permissão para a fila de separação."*.
 
 
 ### G. Fragilidades estruturais que continuam de pé
@@ -14878,15 +14936,103 @@ corrigido e com teste. Também: uma falha no meio das baixas de um item deixava 
 sempre), e a frase do commit "nada que hoje passa é recusado" estava errada (**B251**, **C84**) — a janela agora avisa.
 
 
+## Etapa 64 — A fila de separação do almoxarife (2026-10-01)
+
+Até aqui o almoxarife trabalhava na lista geral de requisições — a mais nova primeiro, só o cabeçalho — e abria uma por
+uma para descobrir o que tinha de separar, conferir ou entregar. Agora existe a **Fila de separação**, no menu do
+almoxarifado: só as requisições que têm trabalho, **na ordem em que devem ser feitas** (o que dá para fazer agora,
+depois a urgência, a data de necessidade e a mais antiga primeiro), cada uma com **o que fazer** e, por item, quanto
+falta e quanto dá para fazer **agora**. A fila é só leitura: o separar, o conferir e o entregar continuam na requisição,
+com as mesmas regras — e a fila **não manda fazer o que vai ser recusado**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Para saber o que separar, abrir requisição por requisição na lista geral | **Fila de separação** (menu, logo abaixo de "Requisições (almox.)"): só as requisições com trabalho, cada uma com seus itens |
+| A lista geral põe a mais **nova** primeiro | A fila põe primeiro o que dá para fazer agora; depois Crítico, Urgente, Normal; depois a data de necessidade (sem data por último); depois a mais **antiga** (**B252**) |
+| Requisição aguardando compra parecia "a separar" | **"Separar"** só com algum item separável **agora**; sem saldo, **"Aguardando saldo"**, no grupo **"Aguardando"** (**B253**) |
+| Requisição separada cujo saldo outra levou parecia pronta para entregar | **"Entregar"** só com algo entregável agora (o separado limitado ao disponível); senão, **"Aguardando saldo"** (**B253**) |
+| Conferência obrigatória pendente só se descobria clicando | **"Conferir"** (ou **"Conferir — você separou, peça a outra pessoa"**), **"Separar de novo para conferir"** ou **"Conferência pendente — peça ao administrador"**, conforme o estado (**B254**) |
+| Requisição que passou do limite de valor depois de aprovada parecia separável | **"Aguardando aprovação de valor"**, avaliado na hora (**B255**) |
+
+### As regras, com o cenário exato
+
+**1. Quem não tem trabalho não aparece.** Requisição pendente de aprovação, entregue ou cancelada: fora. Requisição
+com tudo separado e nada a entregar: fora. Entre na fila como **Almoxarife** ou **Administrador**; sem nenhuma
+requisição com trabalho, a tela diz *"Nada para separar ou entregar agora."*.
+
+**2. A ordem.** Crie três requisições aprovadas com saldo: uma **Normal** de ontem, uma **Urgente** de hoje e uma
+**Crítica** de hoje. A fila mostra Crítica, Urgente, Normal. Entre duas da mesma urgência, a de data de necessidade
+mais cedo vem antes; sem data vem depois (*"Sem data de necessidade"*); com tudo igual, a **mais antiga** primeiro.
+A **prioridade** da requisição não entra na ordem (**B252**).
+
+**3. "Separar" só com o que dá para separar agora.** Material com **0** em estoque, requisição aprovada de 5 (fica em
+*Aguard. Estoque*): a linha aparece no grupo **"Aguardando"** com o chip **"Aguardando saldo"**, e o item diz *"a
+separar 5 UN (separável agora 0) · disponível 0"*. Dê entrada de 3: em **Atualizar** ela sobe, com **"Separar"** e
+*"separável agora 3"*. Os dois chips aparecem juntos quando um item tem saldo e outro não.
+
+**4. A reserva da própria requisição conta.** Requisição totalmente reservada que segura todo o saldo: **"Separar"**,
+com *"separável agora"* igual ao reservado. Outra requisição do mesmo material, sem reserva: **"Aguardando saldo"** — a
+reserva da primeira não é dela.
+
+**5. "Entregar" só com o que dá para entregar agora.** Material com 10; requisições **A** e **B** de 10, as duas
+separam 10 (a separação não reserva). Entregue **A**. Na fila, **B** fica com **"Aguardando saldo"** e o item diz *"a
+entregar 10 UN (entregável agora 0)"* — sem isso a fila diria "Entregar" e a entrega recusaria.
+
+**6. A conferência.** Material **crítico** separado, requisição *Em Separação*: chip **"Conferir"**; para quem separou,
+**"Conferir — você separou, peça a outra pessoa"** (a conferência dele seria recusada), e a linha mostra *"Separado
+por: ⟨nome⟩"*. A mesma situação em *Parcialmente Atendida*: **"Separar de novo para conferir"** (o caminho é **Ajustar
+Separação** e confirmar, que volta a *Em Separação*). Em *Pronta p/ Retirada*: **"Conferência pendente — peça ao
+administrador"**, no grupo **"Aguardando"** — dali não há volta à separação, e a entrega recusa sem conferência.
+
+**7. Valor acima do limite.** Com a aprovação por valor ativa e limite de **100**, um material de custo **80** e uma
+requisição de 2 (**160**) sem aprovação de valor: **"Aguardando aprovação de valor"**, no grupo **"Aguardando"**. Com a
+aprovação de valor dada: **"Separar"**.
+
+**8. Abrir.** O botão **Abrir** leva à tela de requisições de sempre, com o detalhe daquela requisição.
+
+**9. Sem permissão.** Um usuário com acesso ao módulo mas sem perfil de almoxarife vê o menu, mas a tela diz *"Você
+não tem permissão para a fila de separação."* — nunca "fila vazia" (**D (64)**).
+
+### O que esta etapa NÃO cobre
+
+1. **Lista de separação como entidade**, agrupamento por projeto/setor/localização e **rota de picking** — a fila é
+   por requisição (**D (64)**).
+2. **Abrir** abre o detalhe, não a janela de separar (**D (64)**).
+3. O menu aparece para todos com acesso ao módulo (**D (64)**).
+4. Data de necessidade antiga gravada como *DD/MM/AAAA* fica fora de ordem (**D (64)**).
+5. Item com série sem séries em estoque aparece como entregável — a entrega pede as séries e recusa ali (**D (64)**).
+
+### O que a revisão encontrou
+
+A revisão do **plano** achou duas coisas antes do código: "a separar" pelo pendente punha no topo, como "Separar",
+requisição aguardando compra que o separar recusa — virou o **separável agora** e o "Aguardando saldo"; e uma etapa só
+por requisição escondia as outras (um item crítico na caixa ficava "Separar" para sempre) — virou um chip por etapa. A
+revisão do **código** achou mais duas promessas que o gesto recusava: **"Entregar"** com o saldo já levado por outra
+requisição (virou o **entregável agora**), e **"Separar de novo para conferir"** em *Pronta p/ Retirada*, onde não há
+volta à separação (virou **"Conferência pendente — peça ao administrador"**). E a decisão de ler o valor **gravado** em
+vez de avaliar na hora tinha um motivo errado — a avaliação não grava nada — e o gravado nunca aparecia na fila; agora
+avalia na hora (**B255**).
+
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 64 entregue (2026-10-01):** **a fila de separação do almoxarife.** No menu, **Fila de separação**: só as
+  requisições com trabalho, na ordem acionável → urgência → necessidade → a mais antiga, com um chip por etapa
+  (Separar, Conferir, Entregar, Aguardando saldo, Aguardando aprovação de valor…) e, por item, o que falta e o que dá
+  para fazer agora. Só leitura — e não manda fazer o que vai ser recusado. **O que é seu:** as decisões **B252 a
+  B255** (a **B255** corrige o motivo errado do commit da implementação); o furo **C85**; as limitações **(64)** em D e
+  as verificações **(64)** em F. **Próxima: Etapa 65 — a troca de origem na separação fica registrada; ver o plano da
+  Etapa 64.**
 
 - **Etapa 63 entregue (2026-10-01):** **a troca do lugar separado fica registrada na entrega.** Entregar de outro
   endereço ou lote que não o separado deixa registro (quanto, de onde, para onde, quem, motivo opcional) no bloco
   **"Substituições"** do detalhe; acima do separado pendente, a parte separada sai de onde foi separada e o resto pelo
   automático. **O que é seu:** as decisões **B248 a B251** (a **B251** pode recusar onde antes passava); o furo **C84**;
-  as limitações **(63)** em D e as verificações **(63)** em F. **Próxima: Etapa 64 — ver o plano da Etapa 63.**
+  as limitações **(63)** em D e as verificações **(63)** em F. **Próxima: Etapa 64 — ver o plano da Etapa 63.** *(Feita — Etapa 64.)*
 
 - **Etapa 62 entregue (2026-09-30):** **o ajuste de material com série diz quais peças entram ou saem.** O ajuste do
   total pede os números das peças novas (quando sobe) ou as peças que saem (quando desce, ficam **Baixada**); por
