@@ -197,6 +197,58 @@ const cod = (p) => `E68S-${p}-${++seq}`;
     assert.strictEqual((await livro(await movDo(id))).localizacao_origem_id, null);
   });
 
+  await test('RN-08 (Fase 5): OUTRA area especial (expedicao) cobre a quantidade → NAO vira origem, baixa de P', async () => {
+    // Sem este negativo, `if (area)` no lugar de `area.chave === 'SUCATA'` passava a suite inteira:
+    // toda area especial com saldo virava origem da sucata (sonda68r-outraarea).
+    const EXP = await loc('Área de expedição');
+    const { P, m } = await cenario((p) => [[p, 3], [EXP, 8]]);
+    const id = await solicitarRota(m, 3);
+    const r = await aprovarRota(id, 'gestao');
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.strictEqual((await livro(await movDo(id))).localizacao_origem_id, null, 'a expedicao virou origem da sucata');
+    assert.deepStrictEqual([await saldoEm(m, EXP), await saldoEm(m, P)], [8, 0]);
+  });
+
+  await test('RN-08 (Fase 5): corrida — S esvazia entre a escolha da origem e a baixa → 400 literal, assinatura compensada; retentativa baixa de P', async () => {
+    // `origemEstrita` e o que impede o livro de gravar "saiu de S" com material vindo de P (e o
+    // estorno de jogar material bom em S). A corrida e injetada no unico ponto entre a consulta de
+    // saldos de `origemAreaDeSucata` e o motor: a carga da arvore (sonda68r-corrida).
+    const S = await loc('Área de sucata'); const X = await loc('Prateleira');
+    const { P, m } = await cenario((p) => [[p, 10], [S, 4]]);
+    const codS = (await dbGet(db, 'SELECT codigo FROM localizacoes_almoxarifado WHERE id = ?', [S])).codigo;
+    const id = await solicitarRota(m, 4);
+    assert.strictEqual((await perna(id, 'gestao')).status, 200);
+    const orig = stock.carregarArvoreLocalizacoes; let feito = false;
+    stock.carregarArvoreLocalizacoes = async (d) => {
+      const arv = await orig(d);
+      if (!feito) {
+        feito = true;
+        await stock.registrarMovimentacao(db, ADMIN, { material_id: m, tipo: 'TRANSFERENCIA', quantidade: 4,
+          localizacao_origem_id: S, localizacao_destino_id: X, justificativa: 'corrida e68' });
+      }
+      return arv;
+    };
+    let r;
+    try { r = await perna(id, 'almoxarifado'); } finally { stock.carregarArvoreLocalizacoes = orig; }
+    assert.ok(feito, 'a corrida nao foi injetada — o teste nao provaria nada');
+    assert.strictEqual(r.status, 400, `a baixa passou com a origem vazia: ${JSON.stringify(r.body)}`);
+    assert.strictEqual(r.body.error, `O saldo em ${codS} (0) não cobre a quantidade (4) — a saída tiraria de outros endereços`);
+    const suc = await dbGet(db, 'SELECT status, movimentacao_sucata_id, aprovador_almox_id FROM sucateamentos_almoxarifado WHERE id = ?', [id]);
+    assert.deepStrictEqual(suc, { status: 'SOLICITADO', movimentacao_sucata_id: null, aprovador_almox_id: null });
+    const nSucata = (await dbGet(db, "SELECT COUNT(*) n FROM movimentacoes_almoxarifado WHERE material_id = ? AND tipo = 'SUCATA'", [m])).n;
+    assert.strictEqual(nSucata, 0, 'ficou SUCATA no livro');
+    assert.deepStrictEqual([await saldoEm(m, S), await saldoEm(m, P), await saldoEm(m, X)], [0, 10, 4]);
+    // Retentativa: S vazia nao e mais candidata → comportamento de hoje (sem origem, baixa de P).
+    const r2 = await perna(id, 'almoxarifado');
+    assert.strictEqual(r2.status, 200, JSON.stringify(r2.body));
+    const movId = await movDo(id);
+    assert.strictEqual((await livro(movId)).localizacao_origem_id, null);
+    assert.deepStrictEqual([await saldoEm(m, S), await saldoEm(m, P), await saldoEm(m, X)], [0, 6, 4]);
+    // E o estorno devolve para P, nao para S.
+    await stock.cancelarMovimentacao(db, ADMIN, movId, 'estorno e68');
+    assert.deepStrictEqual([await saldoEm(m, S), await saldoEm(m, P)], [0, 10]);
+  });
+
   await test('RN-08 (SERVICO): solicitar + aprovar as duas pernas direto no scrapDisposalService → origem S', async () => {
     const S = await loc('Área de sucata');
     const { P, m } = await cenario((p) => [[p, 10], [S, 4]]);
