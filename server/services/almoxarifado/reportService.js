@@ -257,6 +257,58 @@ async function relatorioHistoricoMovimentacoes(db, filters = {}) {
   return dbAll(db, sql, params);
 }
 
+/**
+ * Etapa 67 (T2, RN-06/RN-07): "Ajustes por motivo" — quantos lancamentos de ajuste por motivo,
+ * pela MESMA regua do bloco `ajustes` do `indicadores` (`ajustesWhereSql`): grupo AJUSTE do
+ * historico, sem os estornados, sem material de cliente, com material inativado.
+ *
+ * Tres baldes, nesta ordem de decisao:
+ *   - `motivo_id` preenchido -> origem 'Cadastro', agrupado pelo ID e mostrado pelo nome ATUAL do
+ *     cadastro (+ ' (desativado)'): renomear junta as linhas antigas. O livro (`mv.motivo`) guarda
+ *     o nome do momento e continua assim — por isso o nome vem do JOIN, nunca de `mv.motivo`;
+ *   - AJUSTE_INVENTARIO -> origem 'Inventário' (o cadastro nao serve a tipo dedicado);
+ *   - o resto -> origem 'Texto livre', motivo 'Sem motivo do cadastro', mesmo que o texto digitado
+ *     seja igual ao nome de um motivo (agrupar por texto juntaria coisas que o cadastro separa).
+ * Conta LANCAMENTOS e materiais distintos, nunca soma quantidade (unidades diferentes; o AJUSTE
+ * grava o saldo final). Datas pelo DIA (UTC), sem validacao — mesmo molde do historico (data
+ * invalida devolve vazio). Sem CTE: a varredura do registro so captura SELECT.
+ */
+async function relatorioAjustesPorMotivo(db, filters = {}) {
+  const params = [];
+  let filtro = '';
+  const materialBruto = filters.material_id;
+  if (materialBruto !== undefined && materialBruto !== null && String(materialBruto).trim() !== '') {
+    if (!/^\d+$/.test(String(materialBruto).trim()) || Number(materialBruto) <= 0) {
+      throw Object.assign(new Error('Parâmetro "material_id" deve ser um número inteiro positivo'), { status: 400 });
+    }
+    filtro += ' AND mv.material_id = ?';
+    params.push(Number(materialBruto));
+  }
+  if (filters.data_inicio) { filtro += ' AND DATE(mv.created_at) >= ?'; params.push(filters.data_inicio); }
+  if (filters.data_fim) { filtro += ' AND DATE(mv.created_at) <= ?'; params.push(filters.data_fim); }
+  const rows = await dbAll(db, `
+    SELECT
+      CASE WHEN mv.motivo_id IS NOT NULL THEN 'Cadastro'
+           WHEN mv.tipo = 'AJUSTE_INVENTARIO' THEN 'Inventário'
+           ELSE 'Texto livre' END AS origem,
+      mv.motivo_id AS motivo_id,
+      CASE WHEN mv.motivo_id IS NOT NULL
+             THEN COALESCE(mm.nome, 'Motivo #' || mv.motivo_id)
+                  || CASE WHEN COALESCE(mm.ativo, 1) = 0 THEN ' (desativado)' ELSE '' END
+           WHEN mv.tipo = 'AJUSTE_INVENTARIO' THEN 'Ajuste de conferência de inventário'
+           ELSE 'Sem motivo do cadastro' END AS motivo,
+      COUNT(*) AS ajustes,
+      COUNT(DISTINCT mv.material_id) AS materiais,
+      MAX(mv.created_at) AS ultimo_em
+    FROM movimentacoes_almoxarifado mv
+    JOIN materiais_almoxarifado m ON m.id = mv.material_id
+    LEFT JOIN motivos_movimentacao_almoxarifado mm ON mm.id = mv.motivo_id
+    WHERE ${ajustesWhereSql('mv', 'm')}${filtro}
+    GROUP BY 1, 2, 3
+    ORDER BY ajustes DESC, motivo`, params);
+  return rows.map((r) => ({ ...r, ajustes: Number(r.ajustes) || 0, materiais: Number(r.materiais) || 0 }));
+}
+
 // Revisao final da Etapa 10b: (1) so conferencia CONCLUIDO — sem o filtro, este relatorio
 // vazava quantidade_sistema/divergencia/contado_por de contagem EM ANDAMENTO e desfazia o modo
 // cego e a dupla contagem por fora (relatorio de divergencia sobre contagem inacabada nem faz
@@ -718,7 +770,7 @@ module.exports = {
   relatorioSolicitacoesCompraPendentes, relatorioSucataFinanceiro, relatorioIndicadores,
   relatorioCustoProjeto,
   // Etapa 67: regua unica dos ajustes (consumida pela chave ajustes-por-motivo)
-  ajustesWhereSql,
+  ajustesWhereSql, relatorioAjustesPorMotivo,
   // Etapa 49
   relatorioSaldoPorLote, relatorioSeriesEmEstoque, relatorioSaldosComprometidos,
 };

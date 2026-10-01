@@ -183,6 +183,42 @@ const RELATORIOS = {
     ],
     fn: null,
   },
+  // Etapa 67 (T2, RN-06/RN-07): o "numero de ajustes" da spec 27 aberto por motivo. Gate null
+  // (D10): o historico ja mostra os mesmos ajustes sem gate. A regua e a do bloco `ajustes` do
+  // indicadores (reportService.ajustesWhereSql) — os dois numeros nao podem divergir.
+  'ajustes-por-motivo': {
+    titulo: 'Ajustes por motivo',
+    categoria: 'Movimentações',
+    acao: null,
+    exportavel: true,
+    // Literal do plano + a frase da paridade (Fase 2: as reguas de janela do indicadores e do
+    // historico diferem, e as condicoes em que os tres numeros batem ficam declaradas).
+    nota: 'Conta os lançamentos AJUSTE, AJUSTE_POSITIVO, AJUSTE_NEGATIVO e AJUSTE_INVENTARIO (o mesmo grupo '
+      + 'AJUSTE do Histórico de movimentações), sem os estornados. O motivo do cadastro aparece pelo nome '
+      + 'ATUAL: renomear junta as linhas antigas, e o livro continua com o nome do momento. O ajuste de '
+      + 'inventário não usa o cadastro e tem linha própria; os demais sem motivo do cadastro aparecem '
+      + 'juntos em "Sem motivo do cadastro", mesmo que o texto digitado seja igual ao nome de um motivo. '
+      + 'Quantidades não são somadas (cada material tem sua unidade, e o AJUSTE grava o saldo final, não '
+      + 'a diferença). Materiais de clientes ficam fora; material inativado conta. As datas comparam o '
+      + 'DIA em UTC. O total bate com o bloco Ajustes dos Indicadores e com o Histórico de movimentações '
+      + '(grupo AJUSTE) só no mesmo recorte: os Indicadores contam uma janela móvel até agora, e o '
+      + 'Histórico mostra só as 500 linhas mais recentes e inclui materiais de clientes.',
+    limite: null,
+    params: [
+      { nome: 'data_inicio', rotulo: 'Data início', tipo: 'date', obrigatorio: false },
+      { nome: 'data_fim', rotulo: 'Data fim', tipo: 'date', obrigatorio: false },
+      { nome: 'material_id', rotulo: 'Material', tipo: 'number', obrigatorio: false },
+    ],
+    colunas: [
+      { chave: 'origem', rotulo: 'Origem' },
+      { chave: 'motivo_id', rotulo: 'Motivo (id)' },
+      { chave: 'motivo', rotulo: 'Motivo' },
+      { chave: 'ajustes', rotulo: 'Ajustes' },
+      { chave: 'materiais', rotulo: 'Materiais' },
+      { chave: 'ultimo_em', rotulo: 'Último em' },
+    ],
+    fn: null,
+  },
   'reservado-os': {
     titulo: 'Reservas por OS',
     categoria: 'Movimentações',

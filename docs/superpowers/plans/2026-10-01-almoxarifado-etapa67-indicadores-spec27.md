@@ -355,7 +355,27 @@ ordem: fornecedor
   outro dia e o teste fica intermitente. Controle positivo: tirar o `ativo` (C89 volta), trocar `<=` por `<` no prazo,
   contar prazo de hoje não entregue, tirar `cancelado = 0`, tirar o filtro de dono — cada uma tem de cair num cenário
   nomeado.
-- [ ] **T2 (galho, servidor) — chave `ajustes-por-motivo`.** Registro + `reports` em `extended.js` + função em
+- [x] **T2 (galho, servidor) — FEITA (2026-10-01), commit desta linha.** Estado real:
+  - Executada na árvore principal (não em worktree), em sequência com a T3; a contagem do registro foi a **24** aqui
+    e a T3 a leva a 25.
+  - `reportService.relatorioAjustesPorMotivo(db, {data_inicio, data_fim, material_id})` (exportado) sobre
+    `ajustesWhereSql`; `GROUP BY 1, 2, 3` (origem, motivo_id, motivo), `ORDER BY ajustes DESC, motivo`; o balde
+    decide por `mv.motivo_id` e o nome vem do JOIN no cadastro (nunca de `mv.motivo`).
+  - Teste `relatorioAjustesPorMotivo.api.test.js` **10/10**; RN-07 num banco próprio (Σ por motivo = 3 =
+    `indicadores.ajustes.total` com `janela_dias=1` = histórico `grupo=AJUSTE` do dia sem o material de cliente,
+    que o histórico traz — 4 linhas) e pelo serviço igual à rota.
+  - Controle positivo: 10 sabotagens, 9 vermelhas no cenário nomeado (nome do livro → [renomear]; sem sufixo →
+    [desativado]; sem `ajustesWhereSql` → [RN-06 −] estorno; sem o dono → [RN-06 −] cliente; sem balde de inventário →
+    [RN-06 +]; `<=`→`<` → [filtros]; ordem ASC → [renomear]; sem 400 → [400]; sem filtro de material → todos;
+    agrupar texto livre pelo nome do cadastro → [RN-06 +]). **1 mutante equivalente:** trocar só o JOIN para casar
+    também pelo nome não muda nada — os dois `CASE` decidem por `mv.motivo_id`; a sabotagem real precisou mexer nos
+    três pontos.
+  - **Divergência do texto do plano:** a `nota` é a literal do plano **mais** uma frase da paridade (Fase 2):
+    "O total bate com o bloco Ajustes dos Indicadores e com o Histórico de movimentações (grupo AJUSTE) só no mesmo
+    recorte: os Indicadores contam uma janela móvel até agora, e o Histórico mostra só as 500 linhas mais recentes e
+    inclui materiais de clientes."
+
+  Texto original: **T2 (galho, servidor) — chave `ajustes-por-motivo`.** Registro + `reports` em `extended.js` + função em
   `reportService.js` consumindo o fragmento da T1. Testes `relatorioAjustesPorMotivo.api.test.js`: RN-06 (os três
   baldes; renomear junta; texto igual ao nome não cai no motivo; desativado mostra o sufixo), RN-07 (paridade com
   `indicadores` e com `historico-movimentacoes?grupo=AJUSTE`), 400 literal de `material_id`, export XLSX com os
