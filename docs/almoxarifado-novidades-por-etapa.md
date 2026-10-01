@@ -969,9 +969,9 @@ SELECT m.id, m.codigo, m.nome, m.quantidade_atual AS fisico,
   **inventário** ainda ajusta só o número, mas ao concluir **lista** os materiais com série a regularizar. Rode esta
   consulta depois de inventário, ou siga o aviso da própria tela.)*
 
-### B. Decisões de negócio — B1 a B255; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B260; as em aberto esperam você, as tomadas estão escritas com o descartado
 
-*(**Atualizado em 2026-10-01 de B251 para B255**, com as quatro da Etapa 64; antes, de B247 para B251, com as quatro da Etapa 63; antes, de B243 para B247, com as quatro da Etapa 62; antes, de B239 para B243, com as quatro da Etapa 61; antes, de B237 para B239, com as duas da Etapa 60; antes, de B233 para B237, com as quatro da Etapa 59; antes, de B228 para B233, com as cinco da Etapa 58; antes, de B225 para B228, com as três da Etapa 57; antes, de B222 para B225, com as três da Etapa 56; antes, de B219 para B222, com as da Etapa 55.)*
+*(**Atualizado em 2026-10-01 de B255 para B260**, com as cinco da Etapa 65; antes, de B251 para B255, com as quatro da Etapa 64; antes, de B247 para B251, com as quatro da Etapa 63; antes, de B243 para B247, com as quatro da Etapa 62; antes, de B239 para B243, com as quatro da Etapa 61; antes, de B237 para B239, com as duas da Etapa 60; antes, de B233 para B237, com as quatro da Etapa 59; antes, de B228 para B233, com as cinco da Etapa 58; antes, de B225 para B228, com as três da Etapa 57; antes, de B222 para B225, com as três da Etapa 56; antes, de B219 para B222, com as da Etapa 55.)*
 
 *(**Atualizado em 2026-09-30 de B205 para B219**, com as quatro da Etapa 51, as três da Etapa 52, as quatro da Etapa 53 e as três da Etapa 54.)*
 
@@ -4111,6 +4111,40 @@ verificação da liberação; a avaliação só lê. E o valor **gravado**, que 
 (quem grava a exigência muda o status junto). **Descartado:** ler o gravado (não pegava o limite que baixou nem o custo
 que subiu: a fila dizia Separar e o separar recusava).
 
+**B256 (NOVA, da Etapa 65) — a troca de origem na SEPARAÇÃO é só registrada; a origem da separação continua sendo
+apagada.** **Escolhido:** quando uma rodada nova de separação tira de outro lugar (ou em automático, ou de mais de um
+lugar) o que ainda falta de um item que já tinha separado de A sem entregar, o item continua ficando **sem origem da
+separação** (como na **B237**) — e agora isso fica no bloco **"Substituições"** do detalhe, com quanto já estava separado
+de A, de onde veio a rodada nova, quem fez e o motivo (opcional). **Descartado:** trocar a origem da separação pela nova
+(a caixa tem peças de A **e** de B; dizer "veio tudo de B" seria falso); guardar várias origens por item com a quantidade
+de cada (é a lista de separação como entidade — escopo maior).
+
+**B257 (NOVA, da Etapa 65) — na separação, "o mesmo lugar" é o mesmo endereço E o mesmo lote.** **Escolhido:** a
+separação compara endereço e lote exatos: separado de **A sem lote** e uma rodada nova de **A, lote L1** é troca (a origem
+da separação é apagada e a troca registrada). **Descartado:** usar a régua da entrega (Etapa 63: "origem sem lote vale
+qualquer lote do endereço") — a primeira versão desta etapa fez isso e a revisão provou, executando, que a entrega de um
+clique passava a ser **recusada** (*"O saldo em A (2) não cobre a quantidade (6)…"*): o saldo da origem e o motor de
+estoque leem "A sem lote" como "o saldo sem lote em A". Ensinar o motor a ler "qualquer lote" é escopo do motor, para uma
+régua que só a comparação da entrega usava.
+
+**B258 (NOVA, da Etapa 65) — se o registro da troca falhar, a separação vale assim mesmo.** **Escolhido:** a rodada já
+está gravada quando o registro da troca é escrito; se esse registro falhar, a separação responde sucesso e a falha vai
+para o log do servidor (como o rastro de auditoria da rodada). **Descartado:** responder erro depois de a rodada já ter
+sido gravada — o separador veria "erro" com a separação feita, e tentaria de novo.
+
+**B259 (NOVA, da Etapa 65) — o "Sai de" da separação parte da origem da rodada anterior, só quando ela cobre.**
+**Escolhido:** ao abrir **Ajustar Separação** num item que já tem separado de A sem entregar, o "Sai de" vem com **A**
+(mesmo endereço e lote) se A está entre as opções **e** tem saldo livre para a quantidade sugerida (o que já está
+separado continua no saldo de A — separar não move estoque); senão, vem em **automático** e o aviso de troca aparece.
+**Descartado:** sempre partir de A (a primeira versão: com A só tendo o que já está na caixa, o clique em "Confirmar"
+era recusado com *"O saldo em A (0) não cobre a quantidade (5) — a saída tiraria de outros endereços"*); nunca partir de A
+(a segunda rodada de um clique apagaria a origem de todo item — o **D (59)**).
+
+**B260 (NOVA, da Etapa 65) — as trocas antigas contam como "na entrega".** **Escolhido:** a lista de trocas ganhou o
+momento (separação ou entrega); as que já existiam — todas da entrega, desde a Etapa 63 — ficam como **entrega**.
+**Descartado:** deixar em branco (todo leitor futuro teria de adivinhar).
+
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -5228,6 +5262,13 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
     **"Entregar"** pode ser recusada no gesto. **O que fazer:** **Atualizar** a fila; quem decide é o gesto na
     requisição. Data de necessidade antiga gravada como *DD/MM/AAAA* fica fora de ordem (**D (64)**).
 
+86. **NOVO, da Etapa 65 — nas trocas registradas na SEPARAÇÃO, o "lote" é o lote separado, não um lote que saiu do
+    estoque.** O bloco **"Substituições"** mistura agora trocas da separação (*"⟨cód⟩: ⟨q⟩ já separados de A · nova
+    separação de B…"*) e da entrega (*"⟨cód⟩: ⟨q⟩ — separado de A · saiu de B…"*). Só as da **entrega** são saídas de
+    estoque. **O que fazer:** ao rastrear um lote pelas trocas, olhe só as linhas que dizem **"saiu de"**; a
+    rastreabilidade por lote, quando ler esta lista, vai separar as duas (**D (63)**).
+
+
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -5849,7 +5890,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   a próxima etapa. **✅ Resolvido na Etapa 59** (**B234**).
 - **(59) Uma segunda rodada de separação feita sem mexer no "Sai de" apaga a origem da primeira, sem aviso**
   (**B237**): o campo começa em "Qualquer endereço (automático)", e rodadas com origens diferentes deixam o item sem
-  origem planejada. A entrega volta ao automático para esse item.
+  origem planejada. A entrega volta ao automático para esse item. **Etapa 65:** a janela agora parte da origem da rodada anterior quando ela tem saldo livre para a quantidade sugerida (**B259**); quando não tem, abre em automático **com o aviso** *"A origem da separação anterior (⟨A⟩) deixa de valer: o que já está separado passa a sair automático na entrega."*, e a troca fica registrada em **"Substituições"** (**B256**). Deixou de ser **sem aviso**.
 - **(59) Não há reserva por endereço.** Entre separar de A e entregar, outra saída automática pode levar o saldo de A;
   a entrega então é recusada com *"⟨material⟩: a origem da separação (⟨A⟩) não serve mais (⟨motivo⟩) — entregue
   escolhendo de onde sai"* (**B236**) — o operador escolhe outra origem ou "automático" na janela.
@@ -5887,7 +5928,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(62) Duas guardas que não são alcançadas hoje** ficaram como segunda barreira: total negativo (a primeira validação
   do sistema já recusa antes) e a baixa de série num **ajuste de inventário** (o inventário não pede séries).
 - **(63) A troca na SEPARAÇÃO não é registrada** — só na entrega (**B248**); a rodada com outra origem deixa o item sem
-  origem separada (**B237**), sem registro.
+  origem separada (**B237**), sem registro. **✅ Registrada na Etapa 65** (**B256**).
 - **(63) Trocar a SÉRIE escolhida não conta como troca** — o registro é de endereço e lote.
 - **(63) A janela e o servidor comparam o lote de jeitos diferentes** quando o lote vem das séries: a janela olha o lote
   da opção de "Sai de"; o servidor, o lote das séries escolhidas. Nesse caso a janela pode pedir o motivo e o servidor
@@ -5912,6 +5953,14 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   séries; a entrega pede as séries e recusa ali.
 - **(64) A avaliação de valor é uma consulta por requisição** da fila (os itens são uma consulta só) — a fila é curta e
   só lê.
+- **(65) A troca de SÉRIE continua sem registro** — trocar as séries escolhidas não conta como troca (como na **(63)**);
+  o item "substituição de lote com registro" da separação continua aberto por isso.
+- **(65) A origem da separação continua sendo UMA por item** — rodadas de lugares diferentes deixam o item sem origem
+  (caixa mista), registrado como troca (**B256**); guardar várias é a lista de separação como entidade.
+- **(65) Se os saldos não carregarem** na janela de separação (falha na busca), o "Sai de" fica em automático: a rodada
+  troca e registra; o aviso de troca aparece, então ninguém troca sem ver.
+- **(65) Clicar "Confirmar Separação" antes de os saldos chegarem** manda automático (o "Sai de" ainda não foi
+  preenchido) — mesma consequência: troca registrada, com o aviso visível.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -6410,6 +6459,18 @@ simulado (10 cenários). O que **só o navegador** prova:
 3. **A data.** Requisição com necessidade em 05/10/2026 mostra *"Necessário em 05/10/2026"* (e não 04/10 — o fuso).
 4. **Abrir.** O botão abre a tela de requisições com o detalhe daquela requisição.
 5. **Sem permissão.** Usuário sem perfil de almoxarife vê *"Você não tem permissão para a fila de separação."*.
+
+**(65) Nenhum clique foi dado nesta etapa.** Os testes provam a regra pelo servidor (12 cenários) e a janela com o
+servidor simulado (19 cenários). O que **só o navegador** prova:
+
+1. **O "Sai de" partindo de A.** Separe 5 de um material de **A** (com saldo sobrando em A) numa requisição de 10; em
+   **Ajustar Separação**, o "Sai de" do item já vem com **A**, sem aviso.
+2. **O aviso e o motivo.** Troque o "Sai de" para **B**: aparece *"A origem da separação anterior (A) deixa de valer: o
+   que já está separado passa a sair automático na entrega."* e o campo **"Motivo da troca (opcional)"**; voltar para A
+   esconde os dois.
+3. **A ausente quando não cobre.** Repita com A tendo só os 5 já separados: o "Sai de" vem em automático, com o aviso.
+4. **O bloco no detalhe.** Confirme a rodada de B com um motivo: o detalhe mostra em **"Substituições"** *"⟨cód⟩: 5 já
+   separados de A · nova separação de B — a origem anterior deixou de valer · ⟨motivo⟩"*, com quem e quando.
 
 
 ### G. Fragilidades estruturais que continuam de pé
@@ -15016,9 +15077,82 @@ vez de avaliar na hora tinha um motivo errado — a avaliação não grava nada 
 avalia na hora (**B255**).
 
 
+## Etapa 65 — A troca do lugar separado fica registrada também na separação (2026-10-01)
+
+Desde a Etapa 59 a separação diz de onde cada item sai, e a entrega de um clique tira de lá. Mas uma **segunda rodada**
+de separação tirada de outro lugar — ou feita sem mexer no "Sai de", que abria em automático — apagava essa origem
+**calada**: os 5 que estavam na caixa tirados de A deixavam de ter dono, e ninguém ficava sabendo. Agora a janela de
+separação **parte do lugar da rodada anterior** quando ele ainda tem saldo, **avisa** quando a rodada nova vem de outro
+lugar e pede o porquê (opcional), e a troca fica registrada no bloco **"Substituições"** do detalhe — o mesmo onde a
+Etapa 63 já registrava as trocas da entrega.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| **Ajustar Separação** abria o "Sai de" em automático — a rodada de um clique apagava a origem da rodada anterior | O "Sai de" vem com o lugar da rodada anterior quando ele tem saldo livre para a quantidade sugerida (**B259**) |
+| Separar de outro lugar sobre o que já estava separado apagava a origem sem aviso | Aviso *"A origem da separação anterior (⟨A⟩) deixa de valer: o que já está separado passa a sair automático na entrega."* e **"Motivo da troca (opcional)"** |
+| A troca na separação não deixava rastro | Linha em **"Substituições"**: *"⟨cód⟩: ⟨q⟩ já separados de A · nova separação de B — a origem anterior deixou de valer"* (**B256**) |
+| As trocas registradas eram só da entrega, e diziam "saiu de" | Cada troca diz se foi **na separação** (nada saiu do estoque) ou **na entrega** ("saiu de") — as antigas contam como entrega (**B260**) |
+
+### As regras, com o cenário exato
+
+Preparação: um material com **10 em A** e **10 em B** (sem lote), uma requisição aprovada de **10**.
+
+**1. A troca fica registrada.** Separe **5** com "Sai de" **A**. Abra **Ajustar Separação**: o "Sai de" vem com **A**.
+Troque para **B**: aparece *"A origem da separação anterior (A) deixa de valer: o que já está separado passa a sair
+automático na entrega."* e **"Motivo da troca (opcional)"**. Escreva "A acabou na prateleira", ponha **3** e confirme.
+No detalhe, **"Substituições (1)"** mostra *"⟨cód⟩: 5 já separados de A · nova separação de B — a origem anterior
+deixou de valer · A acabou na prateleira"*, com quem e quando. O item deixa de mostrar *"separado de A"*.
+
+**2. Em automático também é troca.** Repita com "Sai de" em **"Qualquer endereço (automático)"**: a linha diz *"… · nova
+separação sem origem (automática) — a origem anterior deixou de valer"*.
+
+**3. O mesmo lugar não é troca.** Separe 3 de A e, na rodada seguinte, mais 2 de **A**: sem aviso, sem linha em
+"Substituições"; o item continua *"separado de A"*.
+
+**4. "O mesmo lugar" é o mesmo endereço e o mesmo lote.** Com A tendo saldo **sem lote** e no **lote L1**: separe 2 de
+"A" sem lote e depois 4 de "A — lote L1". É troca: a linha diz *"… 2 já separados de A · nova separação de A — lote L1 —
+a origem anterior deixou de valer"*. A entrega de um clique das 6 depois passa (sai em automático) (**B257**).
+
+**5. A janela só parte de A quando A cobre.** Com A tendo **só** os 5 já separados (nada livre), **Ajustar Separação**
+abre o "Sai de" em **automático**, já com o aviso — partir de A faria o servidor recusar *"O saldo em A (0) não cobre a
+quantidade (5) — a saída tiraria de outros endereços"* (**B259**).
+
+**6. Separação recusada não registra.** Numa rodada com dois itens, se o segundo é recusado (por exemplo, o lugar
+escolhido não cobre), nada é gravado: nem a separação, nem a troca do primeiro, e o primeiro continua *"separado de A"*.
+
+**7. Mais de um lugar na mesma rodada.** Pela integração (a janela tem um "Sai de" por item), uma rodada que tira de A e
+de B sobre o que estava separado de C gera a linha *"… nova separação de mais de uma origem — …"*.
+
+### O que esta etapa NÃO cobre
+
+1. A troca de **série** continua sem registro (**D (65)**).
+2. A origem da separação continua **uma** por item — caixa de dois lugares fica sem origem, registrada como troca
+   (**B256**, **D (65)**).
+3. Se os saldos não carregarem, ou o clique vier antes de eles chegarem, a janela manda automático — a troca é
+   registrada e o aviso aparece (**D (65)**).
+
+### O que a revisão encontrou
+
+A revisão do **plano** pegou que o "antes" da rodada não podia ser lido do item já alterado no meio da conta (gravaria
+troca falsa numa rodada que tira de A e de B sem nada separado antes) e que a janela, abrindo em automático, faria a
+segunda rodada de um clique registrar troca em **todo** item — virou o "Sai de" partindo do lugar anterior. Ela também
+mandou alinhar "sem lote vale qualquer lote" com a entrega; **isso estava errado**: a revisão do **código** provou,
+executando, que a entrega de um clique passava a ser recusada, e a régua voltou a ser endereço e lote exatos (**B257**).
+A revisão da **janela** achou que partir de A sem saldo livre fazia o clique ser recusado pelo servidor (e o teste
+aprovava esse clique, com uma situação de estoque impossível) — virou o "só quando cobre" (**B259**).
+
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 65 entregue (2026-10-01):** **a troca do lugar separado fica registrada também na separação.** A janela de
+  **Ajustar Separação** parte do lugar da rodada anterior quando ele tem saldo; trocar de lugar mostra o aviso e pede o
+  motivo (opcional); a troca aparece em **"Substituições"** com "já separados de … · nova separação de …". **O que é seu:**
+  as decisões **B256 a B260** (a **B257** registra que a primeira versão estava errada); o furo **C86**; as limitações
+  **(65)** em D e as verificações **(65)** em F. **Próxima: Etapa 66 — ver o plano da Etapa 65.**
 
 - **Etapa 64 entregue (2026-10-01):** **a fila de separação do almoxarife.** No menu, **Fila de separação**: só as
   requisições com trabalho, na ordem acionável → urgência → necessidade → a mais antiga, com um chip por etapa
@@ -15026,7 +15160,7 @@ avalia na hora (**B255**).
   para fazer agora. Só leitura — e não manda fazer o que vai ser recusado. **O que é seu:** as decisões **B252 a
   B255** (a **B255** corrige o motivo errado do commit da implementação); o furo **C85**; as limitações **(64)** em D e
   as verificações **(64)** em F. **Próxima: Etapa 65 — a troca de origem na separação fica registrada; ver o plano da
-  Etapa 64.**
+  Etapa 64.** *(Feita — Etapa 65.)*
 
 - **Etapa 63 entregue (2026-10-01):** **a troca do lugar separado fica registrada na entrega.** Entregar de outro
   endereço ou lote que não o separado deixa registro (quanto, de onde, para onde, quem, motivo opcional) no bloco

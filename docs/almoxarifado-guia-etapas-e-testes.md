@@ -1,19 +1,24 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-01 (Etapa 64) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-01 (Etapa 65) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 64) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 65) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-01 (Etapa 64 ENTREGUE · Etapa 65 começando)
+> ## Onde o desenvolvimento está — 2026-10-01 (Etapa 65 ENTREGUE · Etapa 66 começando)
 >
-> **O desenvolvimento parou aqui: Etapa 64 fechada, Etapa 65 começando — 2026-10-01.** A **Etapa 64 (a fila de
-> separação do almoxarife)**: no menu, **Fila de separação** mostra só as requisições com trabalho de almoxarife, na
-> ordem de trabalho (o que dá para fazer agora, urgência, data de necessidade, a mais antiga), com um chip por etapa
-> (**Separar**, **Conferir**, **Entregar**, **Aguardando saldo**, **Aguardando aprovação de valor**…) e o que falta em
-> cada item; é só leitura, e não manda fazer o que vai ser recusado. **Próxima etapa, já começando: 65 — a troca de
-> origem na separação fica registrada** (feature 05; ver *"Próxima tarefa detalhada"* no plano da Etapa 64).
+> **O desenvolvimento parou aqui: Etapa 65 fechada, Etapa 66 começando — 2026-10-01.** A **Etapa 65 (a troca do lugar
+> separado fica registrada também na separação)**: em **Ajustar Separação**, o "Sai de" parte do lugar da rodada
+> anterior quando ele ainda tem saldo; trocar de lugar mostra o aviso *"A origem da separação anterior (⟨A⟩) deixa de
+> valer: o que já está separado passa a sair automático na entrega."* e pede **"Motivo da troca (opcional)"**; e a
+> troca aparece no bloco **"Substituições"** do detalhe (*"… já separados de A · nova separação de B — a origem anterior
+> deixou de valer"*). **Próxima etapa, já começando: 66 — motivos de movimentação e de ajuste como cadastro** (feature
+> 01; ver *"Próxima tarefa detalhada"* no plano da Etapa 65).
 >
-> **Etapas 1 a 20 e 22 a 64 completas.**
+> **Etapas 1 a 20 e 22 a 65 completas.**
+>
+> **Etapa 64, 2026-10-01.** A **Etapa 64 (a fila de separação do almoxarife)**: no menu, **Fila de separação** mostra
+> só as requisições com trabalho de almoxarife, na ordem de trabalho, com um chip por etapa e o que falta em cada item;
+> só leitura, e não manda fazer o que vai ser recusado. Próxima: 65 *(feita — acima)*.
 >
 > **Etapa 63, 2026-10-01.** A **Etapa 63 (a troca do lugar
 > separado fica registrada na entrega)**: entregar de outro endereço ou lote que não o separado deixa registro — quanto,
@@ -5006,6 +5011,55 @@ que ele não tinha como repetir com sucesso garantido.
 - **Número de série de material** — continua sendo **digitado pelo operador** e de propósito não
   passa por este gerador. Retentar com outro número gravaria algo que ninguém digitou.
 - **Números de outros módulos do CRM** — a varredura foi do almoxarifado.
+
+---
+
+## Etapa 65 — A troca do lugar separado fica registrada também na separação (ENTREGUE — 2026-10-01)
+
+**O que mudou, em uma frase:** separar de outro lugar o que já estava separado de A não apaga mais a origem calado — a
+janela avisa, pede o porquê, e a troca fica registrada.
+
+**O problema que ela resolve.** Desde a Etapa 59 a separação diz de onde cada item sai, e a entrega de um clique tira de
+lá. Mas uma segunda rodada de separação tirada de outro lugar — ou feita sem mexer no "Sai de", que abria em automático
+— apagava essa origem sem aviso e sem rastro. Agora a janela parte do lugar anterior quando ele ainda tem saldo, avisa a
+troca, e o detalhe da requisição mostra a troca no bloco **"Substituições"**, junto com as trocas feitas na entrega.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| **Ajustar Separação** abria o "Sai de" em automático | O "Sai de" vem com o lugar da rodada anterior, se ele tem saldo livre para a quantidade sugerida |
+| Trocar de lugar apagava a origem sem aviso | Aviso *"A origem da separação anterior (⟨A⟩) deixa de valer: o que já está separado passa a sair automático na entrega."* e **"Motivo da troca (opcional)"** |
+| A troca na separação não deixava rastro | **"Substituições"** mostra *"⟨cód⟩: ⟨q⟩ já separados de A · nova separação de B — a origem anterior deixou de valer"* |
+| As trocas registradas eram só as da entrega | Cada linha diz se foi na separação ("nova separação de …") ou na entrega ("saiu de …") |
+
+### Roteiro de teste manual (≈5 min)
+
+**Preparação.** Entre como **Almoxarife** (ou Administrador). Tenha um material com **10 em A** e **10 em B**, e uma
+requisição aprovada de **10** desse material.
+
+1. **A primeira rodada.** Na requisição, **Iniciar Separação**, ponha **5** e "Sai de" **A**; confirme. O item mostra
+   *"separado de A"*.
+2. **O "Sai de" partindo de A.** Clique **Ajustar Separação**: o "Sai de" do item já vem com **A**, sem aviso.
+3. **O aviso.** Troque o "Sai de" para **B**: aparece *"A origem da separação anterior (A) deixa de valer: o que já está
+   separado passa a sair automático na entrega."* e o campo **"Motivo da troca (opcional)"**. Volte para **A**: os dois
+   somem. Volte para **B**.
+4. **Confirmar a troca.** Escreva "A acabou na prateleira", ponha **3** e confirme.
+5. **O registro.** No detalhe da requisição, **"Substituições (1)"** mostra *"⟨cód⟩: 5 já separados de A · nova
+   separação de B — a origem anterior deixou de valer · A acabou na prateleira"*, com seu nome e a hora. O item não
+   mostra mais *"separado de A"*.
+6. **O mesmo lugar não é troca.** Numa outra requisição, separe 3 de **A** e depois mais 2 de **A**: sem aviso e sem
+   linha em "Substituições".
+7. **Quando A não cobre.** Numa requisição de 10 de um material com só **5 em A** (e saldo em B), separe 5 de A e
+   clique **Ajustar Separação**: o "Sai de" vem em **automático**, já com o aviso (A só tem o que está na caixa).
+
+### O que esta etapa NÃO cobre
+
+- Trocar a **série** escolhida não é registrado como troca.
+- A origem da separação continua **uma** por item: depois de rodadas de lugares diferentes, o item fica sem origem (a
+  troca fica registrada) e a entrega de um clique sai em automático.
+- Se os saldos não carregarem, ou se você confirmar antes de eles chegarem, a rodada vai em automático (com o aviso na
+  tela, e a troca registrada).
 
 ---
 
