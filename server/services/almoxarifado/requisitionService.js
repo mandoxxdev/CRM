@@ -13,6 +13,7 @@ const reservationService = require('./reservationService');
 const { can } = require('./permissions'); // Etapa 64: posso_conferir na fila
 const {
   PODE_SEPARAR, PODE_ENTREGAR, STATUS_PARCIALMENTE_RESERVADA, STATUS_TOTALMENTE_RESERVADA,
+  calcularStatusPosAprovacao,
 } = require('./requisitionStateMachine');
 
 function num(v) {
@@ -194,6 +195,48 @@ async function reservarItensAprovacao(db, requisicaoId, user, reqRow = {}) {
 
   if (reservas.length === 0) return { status: null, reservas };
   return { status: algumFaltou ? STATUS_PARCIALMENTE_RESERVADA : STATUS_TOTALMENTE_RESERVADA, reservas };
+}
+
+/**
+ * Etapa 73 (T2, D3/B359) — O POS-APROVACAO, UMA FUNCAO SO PARA AS TRES PORTAS (`/aprovar`,
+ * `/aprovar-valor` e a aprovacao automatica do `POST /requisicoes`/`/enviar`).
+ *
+ * Ate a 73 so o `/aprovar` fazia as duas coisas; a liberacao por valor reservava mas ficava APROVADO
+ * sem saldo, e a aprovacao automatica gravava APROVADO sem reservar nada (C122) — o mesmo fato com
+ * tres status conforme a porta.
+ *
+ * A ORDEM E A REGRA: o status pos-aprovacao e calculado ANTES de reservar. Depois de reservar, o
+ * disponivel do material ja caiu e o calculo diria AGUARDANDO_* para quem acabou de reservar tudo.
+ * Se algo foi reservado, o status de reserva vence; se nada, fica o calculado (APROVADO quando
+ * algum item tinha disponivel e a reserva falhou; AGUARDANDO_COMPRA/AGUARDANDO_ESTOQUE sem saldo).
+ *
+ * Nao grava o status — quem chama grava num UPDATE guardado e, se perder, chama `desfazerReservas`.
+ * @returns {Promise<{status: string, reservas: Array<{item_id, reserva_id, quantidade}>}>}
+ */
+async function prepararPosAprovacao(db, requisicaoId, user, reqRow = {}) {
+  const statusPos = await calcularStatusPosAprovacao(db, requisicaoId);
+  const reserva = await reservarItensAprovacao(db, requisicaoId, user, reqRow);
+  return { status: reserva.status || statusPos, reservas: reserva.reservas };
+}
+
+/**
+ * Devolve SO as reservas que a chamada criou (perdeu o UPDATE guardado). Nao
+ * `liberarReservasDaRequisicao`: ela soltaria tambem as de uma aprovacao concorrente que venceu
+ * (Etapa 47, 9.7/C1). Cada uma no seu try — uma falha nao deixa as outras presas.
+ */
+async function desfazerReservas(db, user, reservas = []) {
+  for (const r of reservas) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await stockService.liberarReserva(db, user, r.reserva_id, null, {
+        statusFinal: 'LIBERADA',
+        motivo: 'Aprovação recusada — reserva desfeita',
+        motivoMovimentacao: 'Liberação por aprovação recusada',
+      });
+    } catch (relErr) {
+      console.warn('[almoxarifado-aprovar] Falha ao desfazer reserva', r.reserva_id, '—', relErr.message);
+    }
+  }
 }
 
 /** Molde: scrapDisposalService.js — nome para a trilha e para a rodada. */
@@ -1327,6 +1370,8 @@ module.exports = {
   carregarItensRequisicao,
   saldoDisponivelParaItem,
   reservarItensAprovacao,
+  prepararPosAprovacao, // Etapa 73
+  desfazerReservas, // Etapa 73
   separarRequisicao,
   entregarRequisicao,
   excluirRequisicao,

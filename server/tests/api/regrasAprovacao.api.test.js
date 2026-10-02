@@ -222,8 +222,13 @@ const MSG_GATE = /^Requisição tem aprovação de regra pendente: /;
     assert.strictEqual(r.status, 'PENDENTE',
       `com o avaliador falhando a auto-aprovacao aprovou: ${JSON.stringify(r)}`);
     const row = await dbGet(db, 'SELECT regras_avaliadas_em FROM requisicoes_almoxarifado WHERE id = ?', [r.id]);
-    assert.strictEqual(row.regras_avaliadas_em, null);
-    assert.strictEqual((await pendencias(r.id)).length, 0);
+    // Etapa 73 (T2, B359): a aprovacao automatica agora faz a MESMA pre-checagem do /aprovar
+    // (`exigirSemPendenciaAberta`), que reavalia as regras quando o avaliador falhou no envio — o
+    // avaliador real roda (o monkeypatch ja foi desfeito), carimba e abre a pendencia. Ate a 72 a
+    // porta automatica so olhava o GATE_SQL e deixava o carimbo NULL. A porta continua fechada
+    // (PENDENTE, sem reserva) — o que mudou e QUEM reavalia primeiro.
+    assert.ok(row.regras_avaliadas_em, 'a pre-checagem da aprovacao automatica reavaliou e carimbou');
+    assert.deepStrictEqual((await pendencias(r.id)).map((p) => p.regra_nome), ['Material crítico']);
 
     const ap = await como(CAIO).put(`/api/almoxarifado/requisicoes/${r.id}/aprovar`);
     assert.strictEqual(ap.status, 400, `o /aprovar passou por vazio: ${JSON.stringify(ap.body)}`);
@@ -236,7 +241,8 @@ const MSG_GATE = /^Requisição tem aprovação de regra pendente: /;
     assert.strictEqual(comRegra.status, 'PENDENTE');
     assert.strictEqual(comRegra.aprovacao, undefined);
     const semRegra = await enviar([{ material_id: matBarato, quantidade: 1 }]);
-    assert.strictEqual(semRegra.status, 'APROVADO', JSON.stringify(semRegra));
+    // Etapa 73 (D4/B360): status gravado — a aprovacao automatica reserva (C122), nao 'APROVADO' fixo.
+    assert.strictEqual(semRegra.status, 'TOTALMENTE_RESERVADA', JSON.stringify(semRegra));
     assert.strictEqual(semRegra.aprovacao, 'automatica');
     await setConfig('aprovacao_automatica', '0');
   });

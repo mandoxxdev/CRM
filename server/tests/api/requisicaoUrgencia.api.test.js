@@ -92,7 +92,10 @@ const SOLIC = { id: 10, nome: 'Solicitante', email: 'solic@test.com' };
       // Metade positiva: um antigo NORMAL continua sendo auto-aprovado.
       const normal = await antigo('NORMAL');
       const env2 = await como(SOLIC).post(`/api/almoxarifado/requisicoes/${normal}/enviar`);
-      assert.strictEqual(env2.body.status, 'APROVADO', JSON.stringify(env2.body));
+      // Etapa 73 (D4/B360): a resposta da aprovacao automatica devolve o status GRAVADO; o material
+      // tem saldo, entao a aprovacao reserva (C122) e o status e o da reserva, nao mais 'APROVADO' fixo.
+      assert.strictEqual(env2.body.status, 'TOTALMENTE_RESERVADA', JSON.stringify(env2.body));
+      assert.strictEqual(env2.body.aprovacao, 'automatica');
     } finally {
       await dbRun(db, "UPDATE configuracoes_almoxarifado SET valor = '0' WHERE chave = 'aprovacao_automatica'");
     }
@@ -106,7 +109,9 @@ const SOLIC = { id: 10, nome: 'Solicitante', email: 'solic@test.com' };
         .send({ itens: ITENS, urgencia: 'CRITICO', justificativa_urgencia: 'risco' });
       assert.strictEqual(crit.body.status, 'PENDENTE', `CRITICO foi auto-aprovada na criacao: ${JSON.stringify(crit.body)}`);
       const normal = await como(SOLIC).post('/api/almoxarifado/requisicoes').send({ itens: ITENS, urgencia: 'NORMAL' });
-      assert.strictEqual(normal.body.status, 'APROVADO', JSON.stringify(normal.body));
+      // Etapa 73 (D4/B360): status gravado (com reserva), nao 'APROVADO' fixo.
+      assert.strictEqual(normal.body.status, 'TOTALMENTE_RESERVADA', JSON.stringify(normal.body));
+      assert.strictEqual(normal.body.aprovacao, 'automatica');
     } finally {
       await dbRun(db, "UPDATE configuracoes_almoxarifado SET valor = '0' WHERE chave = 'aprovacao_automatica'");
     }

@@ -126,7 +126,11 @@ const reservasDa = (db, reqId) => dbAll(db,
     assert.strictEqual(row.status, 'PARCIALMENTE_RESERVADA');
   });
 
-  await test('[aprovar-valor] sem saldo nenhum continua APROVADO e não cria reserva (regressão)', async () => {
+  // Etapa 73 (T2, RN-05, D3/B359): este cenário dizia "sem saldo continua APROVADO" — DEIXOU DE SER
+  // A REGRA. A liberação por valor passou a ter o mesmo pós-aprovação do /aprovar: sem saldo e sem
+  // compra a caminho o destino é AGUARDANDO_ESTOQUE (com compra, AGUARDANDO_COMPRA — coberto em
+  // requisicaoPosAprovacaoPortas). O que este teste protegia continua aqui: sem saldo, nenhuma reserva.
+  await test('[aprovar-valor] sem saldo nenhum vai a AGUARDANDO_ESTOQUE e não cria reserva (Etapa 73; era APROVADO)', async () => {
     await setupLiberacaoValor();
     const mat = await novoMaterial(db, 0);
     const reqId = await requisicaoAguardandoValor(mat, 5);
@@ -136,7 +140,8 @@ const reservasDa = (db, reqId) => dbAll(db,
 
     assert.strictEqual((await reservasDa(db, reqId)).length, 0, 'criou reserva sem saldo');
     const row = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [reqId]);
-    assert.strictEqual(row.status, 'APROVADO', 'o comportamento antigo tem de sobreviver quando não há o que reservar');
+    assert.strictEqual(row.status, 'AGUARDANDO_ESTOQUE', 'sem saldo, a liberação por valor tem o mesmo destino do /aprovar');
+    assert.strictEqual(res.body.status, 'AGUARDANDO_ESTOQUE', 'resposta = banco');
   });
 
   await test('[aprovar-valor] a resposta informa as reservas criadas', async () => {

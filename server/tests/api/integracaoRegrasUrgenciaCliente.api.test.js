@@ -83,7 +83,9 @@ const CAIO = { id: 13, nome: 'Caio', email: 'caio@test.com', perfil_almoxarifado
       assert.strictEqual(comRegra.body.status, 'PENDENTE', JSON.stringify(comRegra.body));
       const semRegra = await como(SOLIC).post('/api/almoxarifado/requisicoes')
         .send({ urgencia: 'NORMAL', itens: [{ material_id: matNosso, quantidade: 1 }] });
-      assert.strictEqual(semRegra.body.status, 'APROVADO', JSON.stringify(semRegra.body));
+      // Etapa 73 (D4/B360): a aprovacao automatica reserva (C122) e responde o status gravado.
+      assert.strictEqual(semRegra.body.status, 'TOTALMENTE_RESERVADA', JSON.stringify(semRegra.body));
+      assert.strictEqual(semRegra.body.aprovacao, 'automatica');
     } finally {
       await setConfig('aprovacao_automatica', '0');
     }

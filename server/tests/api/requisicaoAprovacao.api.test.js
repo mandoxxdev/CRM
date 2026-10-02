@@ -234,8 +234,9 @@ async function setupLiberacaoValor(db, { limite = 100, aprovadorIds = [] } = {})
   // 6690c1a: a lane /aprovar-valor passou a RESERVAR, e o material tem saldo (criarMaterial
   // nasce com 50), então o destino correto é TOTALMENTE_RESERVADA. Nenhuma regra afrouxada —
   // a segregação e a auditoria seguem asseguradas, e o teste ganhou a asserção NOVA de que o
-  // hold realmente saiu. (O caso "aprovar por valor sem saldo continua APROVADO" está em
-  // reservaPontasFaltantes.api.test.js.)
+  // hold realmente saiu. (O caso "aprovar por valor sem saldo" está em
+  // reservaPontasFaltantes.api.test.js — desde a Etapa 73 ele vai a AGUARDANDO_ESTOQUE, não mais
+  // APROVADO.)
   await test('[aprovar-valor] aprovador diferente do solicitante -> 200 com reserva, auditado', async () => {
     await setupLiberacaoValor(db, { limite: 100, aprovadorIds: [66] });
     const matId = await criarMaterial('MATAPR-10');

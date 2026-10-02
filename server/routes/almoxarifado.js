@@ -3225,18 +3225,39 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
    * Etapa 47 (RN-10, 9.7/M1): não se aplica com pendência de regra aberta nem com regras ainda
    * não avaliadas — a guarda está no WHERE, e `changes` diz a verdade. Antes eram dois `db.run`
    * com callback arrow (sem `this.changes`) e a resposta afirmava APROVADO sem conferir.
-   * @returns {Promise<boolean>} true se a requisição foi aprovada automaticamente.
+   *
+   * Etapa 73 (T2, RN-06, C122, D3/B359): gravava APROVADO direto — sem reservar nada com saldo e
+   * sem calcular AGUARDANDO_* sem saldo. A Etapa 4 fez o /aprovar reservar e a Task 6 fez o
+   * /aprovar-valor reservar ("o mesmo fato teria dois status conforme a rota que aprovou"); esta
+   * terceira porta tinha ficado de fora. Agora segue a ordem do /aprovar: pré-checagem do gate
+   * (se lançar, fica PENDENTE e NADA é reservado), pós-aprovação (status calculado + reserva no
+   * nome de quem criou/enviou, D5/B361), UPDATE guardado e, perdendo, desfaz as reservas.
+   * A pré-checagem reavalia as regras se o avaliador falhou no envio (mesmo efeito do /aprovar):
+   * sem regra casada, a requisição aprova sozinha mesmo depois da falha (B359).
+   * @returns {Promise<null|{status: string, reservas: Array}>} null se não aprovou.
    */
-  async function tentarAprovacaoAutomatica(requisicaoId, urgencia) {
+  async function tentarAprovacaoAutomatica(requisicaoId, urgencia, user) {
     const cfg = await dbGet(db, `SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'aprovacao_automatica'`);
     // Etapa 48 (Fase 2, IMPORTANT-2): sem distinguir maiuscula - um rascunho gravado antes da lista
     // fechar com 'critico' minusculo escapava da trava e era auto-aprovado.
-    if (!cfg || cfg.valor !== '1' || String(urgencia || '').toUpperCase() === 'CRITICO') return false;
+    if (!cfg || cfg.valor !== '1' || String(urgencia || '').toUpperCase() === 'CRITICO') return null;
+    const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId]);
+    if (!reqRow || reqRow.status !== 'PENDENTE') return null;
+    try {
+      await approvalRulesService.exigirSemPendenciaAberta(db, reqRow);
+    } catch (e) {
+      return null;
+    }
+    const pos = await requisitionService.prepararPosAprovacao(db, requisicaoId, user, reqRow);
     const upd = await dbRun(db,
-      `UPDATE requisicoes_almoxarifado SET status='APROVADO', aprovador_nome='Sistema (automático)', data_aprovacao=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
+      `UPDATE requisicoes_almoxarifado SET status=?, aprovador_nome='Sistema (automático)', data_aprovacao=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
        WHERE id=? AND status='PENDENTE' AND ${approvalRulesService.GATE_SQL}`,
-      [requisicaoId]);
-    return upd.changes > 0;
+      [pos.status, requisicaoId]);
+    if (!upd.changes) {
+      await requisitionService.desfazerReservas(db, user, pos.reservas);
+      return null;
+    }
+    return { status: pos.status, reservas: pos.reservas };
   }
 
   // POST /api/almoxarifado/requisicoes — criar requisição
@@ -3264,10 +3285,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         });
       }
 
-      const auto = await tentarAprovacaoAutomatica(result.id, req.body.urgencia);
+      const auto = await tentarAprovacaoAutomatica(result.id, req.body.urgencia, req.user);
+      // Etapa 73 (D4/B360): o status GRAVADO (TOTALMENTE_RESERVADA, AGUARDANDO_COMPRA...), nao mais
+      // 'APROVADO' fixo. A tela (RequisicaoForm) le so `aprovacao`.
       res.status(201).json({
         id: result.id, numero: result.numero,
-        status: auto ? 'APROVADO' : 'PENDENTE',
+        status: auto ? auto.status : 'PENDENTE',
         ...(auto ? { aprovacao: 'automatica' } : {}),
         valor_total: result.valor_total,
       });
@@ -3332,10 +3355,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       }
 
       // Mesma checagem de aprovação automática que o POST /requisicoes aplica na criação direta.
-      const auto = await tentarAprovacaoAutomatica(req.params.id, reqRow.urgencia);
+      const auto = await tentarAprovacaoAutomatica(req.params.id, reqRow.urgencia, req.user);
       res.json({
         id: Number(req.params.id), numero: reqRow.numero,
-        status: auto ? 'APROVADO' : 'PENDENTE',
+        status: auto ? auto.status : 'PENDENTE', // Etapa 73 (D4/B360)
         ...(auto ? { aprovacao: 'automatica' } : {}),
         valor_total: avaliacaoValor.valor_total,
       });
@@ -3387,8 +3410,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // reservaria em dobro (medido pela revisão: duas reservas de 10 para um item de 10).
       await approvalRulesService.exigirSemPendenciaAberta(db, reqRow);
 
-      const statusPosAprovacao = await requisitionStateMachine.calcularStatusPosAprovacao(db, req.params.id);
-
+      // Etapa 73 (T2, D3/B359): o cálculo do status e a reserva (abaixo) viraram UMA função,
+      // `requisitionService.prepararPosAprovacao`, a mesma das outras duas portas (/aprovar-valor e
+      // a aprovação automática). Mesma ordem de sempre: calcula ANTES de reservar.
+      //
       // Etapa 4 (design, decisão 2 — ligação 04→07): a aprovação RESERVA o saldo de cada item,
       // e a requisição assume TOTALMENTE_RESERVADA/PARCIALMENTE_RESERVADA em vez de ficar só
       // APROVADO. Sem isso o material aprovado continuava no bolo do disponível e podia ser
@@ -3403,8 +3428,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // concorrentes). A janela invertida — reserva criada com a requisição ainda PENDENTE — é
       // inofensiva: a reserva já segura o saldo e carrega requisicao_id, então a entrega a
       // encontra normalmente depois.
-      const reserva = await requisitionService.reservarItensAprovacao(db, req.params.id, req.user, reqRow);
-      const statusFinal = reserva.status || statusPosAprovacao;
+      const reserva = await requisitionService.prepararPosAprovacao(db, req.params.id, req.user, reqRow);
+      const statusFinal = reserva.status;
 
       // A GARANTIA: status ainda PENDENTE e o gate das regras, no mesmo UPDATE. `status='PENDENTE'`
       // fecha também o achado anterior à etapa — dois /aprovar simultâneos respondiam 200 os dois
@@ -3416,17 +3441,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       if (!upd.changes) {
         // Perdeu: devolve SÓ as reservas que ESTA chamada criou. Não `liberarReservasDaRequisicao`
         // — ela soltaria também as de um /aprovar concorrente que venceu (9.7/C1).
-        for (const r of reserva.reservas) {
-          try {
-            await stockService.liberarReserva(db, req.user, r.reserva_id, null, {
-              statusFinal: 'LIBERADA',
-              motivo: 'Aprovação recusada — reserva desfeita',
-              motivoMovimentacao: 'Liberação por aprovação recusada',
-            });
-          } catch (relErr) {
-            console.warn('[almoxarifado-aprovar] Falha ao desfazer reserva', r.reserva_id, '—', relErr.message);
-          }
-        }
+        await requisitionService.desfazerReservas(db, req.user, reserva.reservas);
         const atual = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
         const msgGate = await approvalRulesService.mensagemGateAtual(db, req.params.id);
         return res.status(400).json({
@@ -3513,20 +3528,34 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // status vivem lá, e não faz sentido segurar saldo de uma aprovação que vai ser recusada.
       // Se nada for reservado, `status` vem null e o APROVADO gravado pelo serviço permanece —
       // o comportamento anterior sobrevive intacto quando não há o que reservar.
+      //
+      // Etapa 73 (T2, RN-05, D3/B359): o "se nada for reservado, o APROVADO permanece" deixou de
+      // valer. Sem saldo nenhum a liberação por valor ficava APROVADO — nunca AGUARDANDO_COMPRA/
+      // AGUARDANDO_ESTOQUE como o /aprovar. Agora passa pelo mesmo pós-aprovação das outras portas
+      // e grava o status calculado. O UPDATE ganhou guarda (`status = 'APROVADO'`): antes era sem
+      // guarda e sobrescrevia quem mexesse na requisição entre o serviço e aqui. Perdendo, desfaz as
+      // reservas desta chamada e responde o status RELIDO (Fase 2 da 73), não o calculado.
       const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
-      const reserva = await requisitionService.reservarItensAprovacao(db, req.params.id, req.user, reqRow);
-      if (reserva.status) {
-        await dbRun(db,
-          `UPDATE requisicoes_almoxarifado SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-          [reserva.status, req.params.id]);
-        result.status = reserva.status;
+      const pos = await requisitionService.prepararPosAprovacao(db, req.params.id, req.user, reqRow);
+      result.reservas = pos.reservas;
+      if (pos.status !== 'APROVADO') {
+        const upd = await dbRun(db,
+          `UPDATE requisicoes_almoxarifado SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='APROVADO'`,
+          [pos.status, req.params.id]);
+        if (upd.changes) {
+          result.status = pos.status;
+        } else {
+          await requisitionService.desfazerReservas(db, req.user, pos.reservas);
+          const atual = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
+          result.status = atual?.status;
+          result.reservas = [];
+        }
       }
-      result.reservas = reserva.reservas;
 
       await registrarAuditoria(db, {
         entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'APROVACAO_VALOR',
         usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
-        dados_novos: { status: result.status, reservas: reserva.reservas },
+        dados_novos: { status: result.status, reservas: result.reservas },
       });
 
       res.json(result);
