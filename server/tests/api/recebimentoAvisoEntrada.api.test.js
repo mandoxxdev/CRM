@@ -186,6 +186,49 @@ let seq = 0;
     assert.strictEqual(aviso.FRASE_SEM_RESERVA, r.linhas[7]);
   });
 
+  // Etapa 75 (T3, D7/B389): o aviso da LIBERACAO (inspecao aprovou / NC aceitou). Um material so: L2 nao se aplica.
+  const baseLib = { numero_requisicao: 'REQ-75', status: 'TOTALMENTE_RESERVADA', numero_recebimento: 'REC-75', link: 'http://x/l' };
+  await test('[Etapa 75] montarAvisoLiberacao INSPECAO com reserva: assunto, 1a linha, a linha com o reservado e L1 (constante da 74)', async () => {
+    const r = aviso.montarAvisoLiberacao({ ...baseLib, origem: 'INSPECAO',
+      material: { codigo: 'M1', nome: 'Chapa', unidade: 'PC', liberado: 4, pendente: 4, reservado: 4 } });
+    assert.strictEqual(r.assunto, '[Almoxarifado] Material liberado para a sua requisição REQ-75');
+    assert.strictEqual(r.corpo_texto, [
+      'O material que a sua requisição aguardava foi aprovado na inspeção e está no estoque.',
+      'Requisição: REQ-75',
+      'Situação da requisição: Totalmente reservada',
+      'Recebimento: REC-75',
+      'Material liberado:',
+      '- M1 — Chapa: liberado 4 PC (pendente na requisição: 4 PC; reservado para a sua requisição: 4 PC)',
+      'O material indicado como reservado fica guardado para a sua requisição — outra requisição não pode levá-lo. A separação é feita pelo almoxarifado.',
+      'Link: http://x/l',
+    ].join('\n'));
+    assert.strictEqual(r.linhas[6], aviso.FRASE_TUDO_RESERVADO);
+  });
+
+  await test('[Etapa 75] montarAvisoLiberacao NAO_CONFORMIDADE sem reserva: 1a linha com o numero da NC, a linha sem o reservado e L0', async () => {
+    const r = aviso.montarAvisoLiberacao({ ...baseLib, status: 'AGUARDANDO_ESTOQUE', origem: 'NAO_CONFORMIDADE', documento_numero: 'NC-20261002-0001',
+      material: { codigo: 'M1', nome: 'Chapa', unidade: 'PC', liberado: 1, pendente: 3, reservado: 0 } });
+    assert.strictEqual(r.assunto, '[Almoxarifado] Material liberado para a sua requisição REQ-75');
+    assert.deepStrictEqual(r.linhas, [
+      'O material que a sua requisição aguardava foi liberado pela não conformidade NC-20261002-0001 e está no estoque.',
+      'Requisição: REQ-75',
+      'Situação da requisição: Aguardando estoque',
+      'Recebimento: REC-75',
+      'Material liberado:',
+      '- M1 — Chapa: liberado 1 PC (pendente na requisição: 3 PC)',
+      'O material ainda não está reservado para a sua requisição — a separação é feita pelo almoxarifado.',
+      'Link: http://x/l',
+    ]);
+    assert.strictEqual(r.linhas[6], aviso.FRASE_SEM_RESERVA);
+  });
+
+  await test('[Etapa 75] montarAvisoLiberacao sem recebimento: a linha "Recebimento:" sai (nao imprime "null")', async () => {
+    const r = aviso.montarAvisoLiberacao({ ...baseLib, numero_recebimento: null, origem: 'INSPECAO',
+      material: { codigo: 'M1', nome: 'Chapa', unidade: 'PC', liberado: 2, pendente: 2, reservado: 2 } });
+    assert.ok(!r.linhas.some((l) => l.startsWith('Recebimento:')), JSON.stringify(r.linhas));
+    assert.ok(!r.corpo_texto.includes('null'), r.corpo_texto);
+  });
+
   await test('o mapa de link espelha o basePath de requisicoesMaterialConfig.js (fonte unica, por teste)', async () => {
     const src = fs.readFileSync(path.join(__dirname, '../../../client/src/config/requisicoesMaterialConfig.js'), 'utf8');
     const pares = {};

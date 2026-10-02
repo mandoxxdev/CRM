@@ -159,6 +159,36 @@ function montarAvisoRequisitante(dados) {
   return { assunto, corpo_texto: linhas.join('\n'), linhas };
 }
 
+/**
+ * Etapa 75 (T3, D7/B389) — pura. O aviso da LIBERAÇÃO (a inspeção aprovou / a NC aceitou o material que a
+ * requisição aguardava). `dados`: { origem: 'INSPECAO'|'NAO_CONFORMIDADE', documento_numero (NC),
+ * numero_requisicao, status, numero_recebimento (pode faltar), material: { codigo, nome, unidade, liberado,
+ * pendente, reservado }, link }. Um material só (a liberação é de um item): a frase é L1 com reserva, L0 sem
+ * — as constantes da 74, sem cópia; L2 não se aplica.
+ */
+function montarAvisoLiberacao(dados) {
+  const assunto = `[Almoxarifado] Material liberado para a sua requisição ${dados.numero_requisicao}`;
+  const m = dados.material;
+  const reservado = Number(m.reservado) > EPS;
+  const linhas = [
+    dados.origem === 'NAO_CONFORMIDADE'
+      ? `O material que a sua requisição aguardava foi liberado pela não conformidade ${dados.documento_numero} e está no estoque.`
+      : 'O material que a sua requisição aguardava foi aprovado na inspeção e está no estoque.',
+    `Requisição: ${dados.numero_requisicao}`,
+    `Situação da requisição: ${SITUACAO_REQUISICAO[dados.status] || dados.status}`,
+  ];
+  if (dados.numero_recebimento) linhas.push(`Recebimento: ${dados.numero_recebimento}`);
+  linhas.push(
+    'Material liberado:',
+    `- ${m.codigo} — ${m.nome}: liberado ${qtdComUnidade(m.liberado, m.unidade)}`
+      + ` (pendente na requisição: ${qtdComUnidade(m.pendente, m.unidade)}`
+      + (reservado ? `; reservado para a sua requisição: ${qtdComUnidade(m.reservado, m.unidade)})` : ')'),
+    reservado ? FRASE_TUDO_RESERVADO : FRASE_SEM_RESERVA,
+    `Link: ${dados.link}`,
+  );
+  return { assunto, corpo_texto: linhas.join('\n'), linhas };
+}
+
 function html(linhas, escapeHtml) {
   return `<div>${linhas.map((l) => `<p>${escapeHtml(l)}</p>`).join('\n')}</div>`;
 }
@@ -349,8 +379,105 @@ async function avisarEntradaConfirmada(db, user, recebimentoId) {
   return resultado;
 }
 
+/**
+ * Etapa 75 (T3, D7/B389, RN-09) — avisa quem esperava de que o material saiu da inspeção (ou da NC). Chamada
+ * pelo `aposLiberacaoSemFalhar` (reservaChegadaService) DEPOIS da reserva, com o resultado dela (o parcial,
+ * se a reserva falhou no meio — Fase 2: o e-mail diz o que de fato ficou).
+ *
+ * Quem: requisição ativa em `STATUS_QUE_ESPERAM` (a lista da 70) com item do material; `reservado` = o que
+ * ESTA liberação reservou para o item (do resultado, nunca do banco: outra liberação do mesmo material na
+ * mesma nota não conta); `pendente = MAX(0, solicitada − separada) − (hold ATIVO do item − reservado)` (a
+ * reserva desta liberação NÃO desconta — senão quem ganhou tudo ficaria sem e-mail, a Surpresa 1 da 74);
+ * entra se `pendente > 0` E (`reservado > 0` OU há disponível livre do material) — sem isso o e-mail
+ * prometeria material reservado a outra requisição (o defeito A2 da 74).
+ * Mesmo evento e mesma chave da 70; dedupe POR DOCUMENTO (`inspecao-liberada-<id>-req-<rid>` /
+ * `nc-liberada-<id>-req-<rid>`): a chave da 70 (`recebimento-entrada-<rec>-req-<rid>`) engoliria a segunda
+ * liberação da mesma nota (dois itens, ou inspeção + NC). Lança só em erro de banco — quem chama engole.
+ * @returns {Promise<{requisitantes: Array<{requisicao_id, enfileirada, ...}>} | {desligado: true}>}
+ */
+async function avisarLiberacao(db, user, ctx, resultadoReserva) {
+  const alertService = require('./alertService');
+  if (!(await chaveLigada(alertService, db, 'notificar_recebimento_solicitante', '1'))) return { desligado: true };
+  const resultado = { requisitantes: [] };
+  const liberado = Number(ctx && ctx.quantidade) || 0;
+  if (!(liberado > EPS) || !ctx.material_id) return resultado;
+  const mat = await dbGet(db, `SELECT id, codigo, nome, unidade, ${disponivelSql()} AS disponivel
+    FROM materiais_almoxarifado WHERE id = ?`, [ctx.material_id]);
+  if (!mat) return resultado;
+  const rec = ctx.recebimento_id
+    ? await dbGet(db, 'SELECT numero FROM recebimentos_material_almoxarifado WHERE id = ?', [ctx.recebimento_id])
+    : null;
+
+  const reservadoPorItem = new Map();
+  for (const r of (resultadoReserva && resultadoReserva.reservas) || []) {
+    if (Number(r.material_id) !== Number(mat.id)) continue;
+    reservadoPorItem.set(Number(r.item_id), (reservadoPorItem.get(Number(r.item_id)) || 0) + (Number(r.quantidade) || 0));
+  }
+
+  const marcasSt = STATUS_QUE_ESPERAM.map(() => '?').join(',');
+  const linhasReq = await dbAll(db, `SELECT r.id AS requisicao_id, r.numero, r.status, r.solicitante_id, r.modulo_origem,
+      ir.id AS item_id,
+      MAX(0, COALESCE(ir.quantidade_solicitada, 0) - COALESCE(ir.quantidade_separada, 0)) AS pendente_separacao,
+      COALESCE((SELECT SUM(rs.quantidade - COALESCE(rs.quantidade_utilizada, 0))
+        FROM reservas_material_almoxarifado rs
+        WHERE rs.item_requisicao_id = ir.id AND rs.material_id = ir.material_id
+          AND rs.status = 'ATIVA' AND rs.origem = 'REQUISICAO'), 0) AS hold
+    FROM itens_requisicao_almoxarifado ir
+    JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id
+    WHERE COALESCE(r.ativo, 1) = 1 AND r.status IN (${marcasSt}) AND ir.material_id = ?
+    ORDER BY r.id, ir.id`, [...STATUS_QUE_ESPERAM, mat.id]);
+
+  const porRequisicao = new Map();
+  for (const l of linhasReq) {
+    const reservado = reservadoPorItem.get(Number(l.item_id)) || 0;
+    const pendente = Number(l.pendente_separacao) - (Number(l.hold) - reservado);
+    if (!(pendente > EPS)) continue;
+    if (!porRequisicao.has(l.requisicao_id)) porRequisicao.set(l.requisicao_id, { ...l, pendente: 0, reservado: 0 });
+    const req = porRequisicao.get(l.requisicao_id);
+    req.pendente += pendente;
+    req.reservado += Math.min(reservado, pendente);
+  }
+  const haLivre = Number(mat.disponivel) > EPS;
+  const avisaveis = [...porRequisicao.values()].filter((r) => r.reservado > EPS || haLivre);
+  if (!avisaveis.length) return resultado;
+
+  const emails = await emailsDosUsuarios(db, [...new Set(avisaveis.map((r) => r.solicitante_id))]);
+  const appBase = alertService.resolveAppBaseUrl(await alertService.getConfigValue(db, alertService.APP_URL_CONFIG_KEY));
+  const prefixo = ctx.origem === 'NAO_CONFORMIDADE' ? 'nc-liberada' : 'inspecao-liberada';
+  for (const r of avisaveis) {
+    const aviso = montarAvisoLiberacao({
+      origem: ctx.origem,
+      documento_numero: ctx.documento_numero,
+      numero_requisicao: r.numero,
+      status: r.status,
+      numero_recebimento: rec ? rec.numero : null,
+      material: { codigo: mat.codigo, nome: mat.nome, unidade: mat.unidade, liberado, pendente: r.pendente, reservado: r.reservado },
+      link: `${appBase}${caminhoRequisicoesDoModulo(r.modulo_origem)}`,
+    });
+    // eslint-disable-next-line no-await-in-loop
+    const fila = await notificationQueueService.enfileirar(db, {
+      evento: EVENTO_REQUISITANTE,
+      dedupe_chave: `${prefixo}-${ctx.documento_id}-req-${r.requisicao_id}`,
+      destinatarios: emails.has(r.solicitante_id) ? [emails.get(r.solicitante_id)] : [],
+      assunto: aviso.assunto,
+      corpo_texto: aviso.corpo_texto,
+      corpo_html: html(aviso.linhas, alertService.escapeHtml),
+      payload: {
+        recebimento_id: ctx.recebimento_id ? Number(ctx.recebimento_id) : null,
+        requisicao_id: r.requisicao_id, numero_requisicao: r.numero,
+        origem: ctx.origem, documento_id: ctx.documento_id,
+      },
+    });
+    resultado.requisitantes.push({ requisicao_id: r.requisicao_id, ...fila });
+  }
+  return resultado;
+}
+
 module.exports = {
   avisarEntradaConfirmada,
+  // Etapa 75 (T3): o aviso da liberação (inspeção / NC).
+  avisarLiberacao,
+  montarAvisoLiberacao,
   montarAvisoNota,
   montarAvisoRequisitante,
   caminhoRequisicoesDoModulo,

@@ -1,6 +1,8 @@
 # Etapa 75 — o material que a inspeção libera fica com quem esperava (C126, feature 07 com a 09 e a 19)
 
-> Status: **PLANO (Fases 0 e 1) — 2026-10-02.** Fase 2 (revisão do plano) ainda não rodou. Nada de produção escrito.
+> Status: **TRONCO ENTREGUE (T0–T3) — 2026-10-02.** Fases 0, 1 e 2 feitas; T0 `1b2a6959`, T1 `f149977b`, T2
+> `c4d9212c`, T3 no commit seguinte. Falta: T4 (integração), Fase 5 (revisão adversarial), T5 (fechamento). Ver
+> "Tronco executado (T0–T3)" no fim.
 > Origem: "Próxima tarefa detalhada — Etapa 75" de
 > `docs/superpowers/plans/2026-10-02-almoxarifado-etapa74-reserva-na-chegada.md:697-736` e o aviso **C126** de
 > `docs/almoxarifado-novidades-por-etapa.md:6652`.
@@ -357,7 +359,7 @@ galhos depois de T1: só **consomem** `aposLiberacaoSemFalhar`/`reservarLiberaca
   livre, **é**). Controles positivos: (1) sem o `NOT EXISTS` → o crítico ganha 4 e cai; (2) teto trocado pelo disponível
   global dentro do miolo → um RN-04 da 74 cai (prova que a extração preservou o teto). Carga fria `node -e` de
   `reservaChegadaService` e `inspectionService` nas duas ordens.
-- [x] **T1 (tronco) — a inspeção reserva para quem esperava.** ✅ (hash no commit seguinte do plano). Realizado:
+- [x] **T1 (tronco) — a inspeção reserva para quem esperava.** ✅ `f149977b`. Realizado:
   `rotulosDaLiberacao(ctx, recNumero)`, `reservarLiberacaoParaQuemEspera(db, user, ctx, resultado?)` (4º argumento
   opcional: o acumulador preenchido no lugar — é como o `aposLiberacaoSemFalhar` devolve o PARCIAL, Fase 2),
   `aposLiberacaoSemFalhar` (devolve o resultado; a metade do aviso é a T3) e o gancho em `decidirInspecao`. Teste
@@ -379,7 +381,7 @@ galhos depois de T1: só **consomem** `aposLiberacaoSemFalhar`/`reservarLiberaca
   existe como sabotagem útil — no lugar, reprovação total com R esperando e saldo livre de ajuste: nenhuma reserva (cai
   se o teto for o disponível); (4) gancho sem `try` + `criarReserva` lançando → RN-06 cai com 500; (5) `sistema: false`
   → RN-08 cai com a reserva ausente (o warn do 403).
-- [x] **T2 — a NC que aceita também reserva.** ✅ T1 = `f149977b`; T2 no commit seguinte. **Rodou no tronco, sem
+- [x] **T2 — a NC que aceita também reserva.** ✅ `c4d9212c`. **Rodou no tronco, sem
   worktree** (Fase 2). Realizado pelo contrato: gancho em `decidirNaoConformidade` depois da auditoria, antes do
   `obterNaoConformidade`. Teste novo `ncReservaLiberacao` 10/10 (RN-04 com as duas que liberam e as quatro que não,
   `SEM_BLOQUEIO` depois do avulso, RN-06 por item e por escape, RN-07 409). Os 10 arquivos que decidem NC verdes **sem
@@ -396,7 +398,21 @@ galhos depois de T1: só **consomem** `aposLiberacaoSemFalhar`/`reservarLiberaca
   comentado → RN-04 cai; (2) gancho sem a guarda `efeito === 'LIBERADA'` → a negativa `SEM_BLOQUEIO` cai (reserva de
   saldo livre que não veio da NC); (3) gancho **antes** da auditoria com `criarReserva` lançando sem `try` → a decisão
   responde 500 com a NC DECIDIDA (prova a posição). Commit na branch da worktree; o fio principal faz o merge.
-- [ ] **T3 (galho, árvore principal, ∥ T2) — o solicitante é avisado.** `avisarLiberacao` + `montarAvisoLiberacao` + a
+- [x] **T3 — o solicitante é avisado.** ✅ (hash no fechamento do tronco, abaixo). Rodou no tronco, depois da T2.
+  Realizado pelo contrato: `montarAvisoLiberacao(dados)` (pura; `dados.material` é UM objeto — um material só, L2
+  não se aplica; sem recebimento a linha `Recebimento:` sai), `avisarLiberacao(db, user, ctx, resultadoReserva)` e a
+  segunda metade do `aposLiberacaoSemFalhar` (warn `[almoxarifado-reservas] aviso da liberacao falhou (<origem>
+  <documento_id>): <msg>`). `reservaChegadaService` passou a requerer o `receiptNotificationService` pelo OBJETO (já o
+  requeria no topo pela `QTD_DO_ITEM_SQL`; sem ciclo novo — a carga fria da T0 continua verde). Testes: 3 puros
+  novos em `recebimentoAvisoEntrada` (23/23), `inspecaoReservaLiberacaoAviso` 10/10 (L1, L0 com a reserva falhando,
+  R4 sem e-mail, quem não ganhou com disponível livre recebe L0, NC com a 1ª linha da NC, dois itens → duas chaves,
+  a mesma liberação nunca duas vezes, toggle 0, aviso lançando não derruba, resultado PARCIAL no e-mail). Divergência
+  de medição: a fila guarda `hash_dedupe = sha256(evento|chave)`, não a chave — o teste compara o hash. Medido antes:
+  os quatro `alerta*` que contam a fila (Fase 0 §4) continuam verdes **sem edição** (o harness deles não tem a tabela
+  `usuarios` → `SEM_DESTINATARIO`, nada enfileirado). Controles: (s1) dedupe da 70 → cai o "dois itens" (e o L1/NC na
+  asserção do hash); (s2) sem o filtro de avisáveis → cai só o R4; (s3) pendente descontando a reserva desta liberação
+  → 7 caem, o L1 em `[]` (quem ganhou tudo fica sem e-mail); (s4) 1ª linha trocada → cai o L1 da rota e o puro.
+  Suíte: api 284/284, almoxarifado 44/0, validation, safealter, sqlite verdes. Original: `avisarLiberacao` + `montarAvisoLiberacao` + a
   segunda metade de `aposLiberacaoSemFalhar`. Testes: em `recebimentoAvisoEntrada.api.test.js` a função pura (assunto,
   as duas primeiras linhas, as duas formas da linha, L0/L1 pelas constantes); teste novo
   `server/tests/api/inspecaoReservaLiberacaoAviso.api.test.js` pela rota da inspeção com `usuarios`: RN-09 (L1, L0 com a
@@ -485,3 +501,67 @@ gesto": decisão → reserva → aprovação de outra → separar → entregar �
 - **Paralelismo revisto**: T2 e T3 sabotam produção e rodariam suítes — pela regra da Etapa 72 **não rodam em
   paralelo**: o tronco inteiro (T0→T3) roda num agente só, sequencial; a T4 depois; a revisão adversarial depois, com a
   árvore quieta. (Sem worktree.)
+
+## Tronco executado (T0–T3) — contrato final realizado (para a T4 e o fechamento)
+
+Hashes: T0 `1b2a6959`, T1 `f149977b`, T2 `c4d9212c`, T3 no commit que registra esta seção. Tudo na árvore principal,
+sequencial, sem worktree. Testes da 74 sem edição em todas as tasks.
+
+**Serviço (`reservaChegadaService.js`):**
+- `distribuirParaQuemEspera(db, user, materialId, teto, rotulos, acc)` — interna; `min(teto, disponível agora)`.
+- `rotulosDaChegada(rec)` (74, byte a byte) e `rotulosDaLiberacao(ctx, recNumero)`; nove campos: `recebimento_id`,
+  `observacao(c)`, `motivo`, `falhaReserva(c, e)`, `motivoDesfazer`, `falhaDesfazer(id, e)`, `saiuDaEspera`,
+  `excessoDesfeito`, `falhaRecalculo(id, e)`.
+- `reservarLiberacaoParaQuemEspera(db, user, ctx, resultado?)` — exportada; 4º argumento opcional = acumulador
+  preenchido no lugar (é por ele que o parcial chega ao aviso).
+- `aposLiberacaoSemFalhar(db, user, ctx)` — exportada, nunca lança, **devolve** o resultado (parcial na falha); depois
+  chama `receiptNotificationService.avisarLiberacao(db, user, ctx, r)` pelo objeto.
+- D8: o livre da nota na chegada ganhou `AND NOT EXISTS (SELECT 1 FROM inspecoes_recebimento_almoxarifado i WHERE
+  i.recebimento_item_id = ri.id)`.
+
+**Literais (reserva):**
+- INSPECAO: observação `Reserva na liberação da inspeção — recebimento <REC> — requisição <REQ>`; motivo da
+  movimentação `Reserva na liberação da inspeção — recebimento <REC>`.
+- NAO_CONFORMIDADE: observação `Reserva na liberação da não conformidade <NC> — requisição <REQ>`; motivo `Reserva na
+  liberação da não conformidade <NC>`.
+- Desfazer: `motivoMovimentacao` `Liberação de reserva na liberação da inspeção desfeita` / `… na liberação da não
+  conformidade <NC> desfeita`; motivo `Requisição saiu da espera durante a reserva na liberação da inspeção` (ou da NC
+  `<NC>`); `Reserva na liberação da inspeção acima do pendente — excesso desfeito` (ou da NC `<NC>`).
+
+**Textos do log (`console.warn`):**
+- por item: `[almoxarifado-reservas] Falha ao reservar na liberação da inspeção <inspecao_id> o item <item> da
+  requisição <req>: <msg>` / `… na liberação da não conformidade <NC> o item …`;
+- desfazer: `[almoxarifado-reservas] Falha ao desfazer a reserva <id> na liberação da inspeção <inspecao_id>: <msg>`;
+- recálculo: `[almoxarifado-reservas] recalculo do status apos a reserva na liberacao falhou (<origem> <doc>,
+  requisicao <id>): <msg>`;
+- escape do laço / gancho: `[almoxarifado-reservas] reserva na liberacao falhou (INSPECAO <inspecao_id>): <msg>` e
+  `(NAO_CONFORMIDADE <nc_id>)` (o id, não o número);
+- aviso: `[almoxarifado-reservas] aviso da liberacao falhou (<origem> <documento_id>): <msg>`.
+
+**Aviso (`receiptNotificationService.js`):** `avisarLiberacao(db, user, ctx, resultadoReserva)` → `{ requisitantes }` |
+`{ desligado: true }`; `montarAvisoLiberacao({ origem, documento_numero, numero_requisicao, status, numero_recebimento,
+material: { codigo, nome, unidade, liberado, pendente, reservado }, link })`.
+- assunto `[Almoxarifado] Material liberado para a sua requisição <REQ>`;
+- 1ª linha `O material que a sua requisição aguardava foi aprovado na inspeção e está no estoque.` / `O material que a
+  sua requisição aguardava foi liberado pela não conformidade <NC> e está no estoque.`;
+- `Requisição: <REQ>` · `Situação da requisição: <…>` (relida depois da reserva) · `Recebimento: <REC>` (sai sem nota) ·
+  `Material liberado:` · `- <cod> — <nome>: liberado <q un> (pendente na requisição: <p un>[; reservado para a sua
+  requisição: <r un>])` · L1/L0 (constantes da 74) · `Link: …`;
+- evento `RECEBIMENTO_ENTRADA_REQUISITANTE`; dedupe `inspecao-liberada-<inspecao_id>-req-<rid>` /
+  `nc-liberada-<nc_id>-req-<rid>` (a fila guarda `sha256(evento|chave)`); payload `{ recebimento_id, requisicao_id,
+  numero_requisicao, origem, documento_id }`.
+
+**Ganchos:** `decidirInspecao` depois da NC, antes do `return`, `if (aprovada > 1e-9)`; `decidirNaoConformidade`
+depois da auditoria, antes do `obterNaoConformidade`, `if (liberacao.efeito === 'LIBERADA')`. As duas guardas são
+**redundantes por construção** (controle positivo não cai: o serviço devolve vazio com quantidade 0/null) — declaradas,
+não falta de asserção.
+
+**Achados do tronco para a doc:** (1) o RN-06 "escape" com uma candidata só não testava nada (o `sort` de um elemento
+não chama o comparador) — corrigido na T2; (2) as duas guardas redundantes acima; (3) a fila guarda o hash do dedupe,
+não a chave (o plano falava em "chave").
+
+## Próximo passo (atualizado)
+
+**T4** (integração, `inspecaoReservaLiberacaoIntegracao.api.test.js`, só pelas portas reais, com a correção da Fase 2:
+R2 termina PARCIALMENTE_RESERVADA com 1 + 1 de 4). Para a retomada pela rota existe porta medível: a falha forçada no
+lote na 1ª execução de `/processar` (molde do teste `[RN-07/D8] retomada pela rota` de `reservaLiberacaoBase`).

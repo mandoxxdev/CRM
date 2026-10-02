@@ -31,7 +31,9 @@ const requisitionStateMachine = require('./requisitionStateMachine');
 const requisitionService = require('./requisitionService');
 const valueApprovalService = require('./requisitionValueApprovalService');
 const ownerRules = require('./ownerRules');
-const { QTD_DO_ITEM_SQL } = require('./receiptNotificationService');
+const receiptNotificationService = require('./receiptNotificationService');
+
+const { QTD_DO_ITEM_SQL } = receiptNotificationService;
 
 const EPS = 1e-9;
 
@@ -358,6 +360,13 @@ async function aposLiberacaoSemFalhar(db, user, ctx) {
   } catch (e) {
     console.warn(`[almoxarifado-reservas] reserva na liberacao falhou (${ctx && ctx.origem} ${ctx && ctx.documento_id}): ${e.message}`);
     r = resultado;
+  }
+  // T3 (D7/B389): o solicitante é avisado com o que DE FATO ficou reservado. Pelo objeto do módulo
+  // (monkeypatch dos testes); a falha do aviso nunca derruba a decisão nem a reserva.
+  try {
+    await receiptNotificationService.avisarLiberacao(db, user, ctx, r);
+  } catch (e) {
+    console.warn(`[almoxarifado-reservas] aviso da liberacao falhou (${ctx && ctx.origem} ${ctx && ctx.documento_id}): ${e.message}`);
   }
   return r;
 }
