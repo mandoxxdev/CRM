@@ -127,7 +127,17 @@
 > 🟢**; o corte **B174** da Etapa 44 fica pago para o `SUCATEAR` (ver a correção no item do checklist). Continua fora:
 > material de cliente pela tela (só API), sucatear parte da reprovada, série — e o sucateamento **comum** da feature 15,
 > que na reprovação parcial baixa material bom (**C96** das novidades, decisão **B307**).
-> **Última atualização:** 2026-10-01 (**Etapa 69 — a decisão Sucatear executa pelo sucateamento; a feature continua
+> **Etapa 75 (2026-10-02, `1b2a6959`, `f149977b`, `c4d9212c`, `c8c089cb`, `82b7fd75` + Fase 5 `655d75b8`/`936179b2`/
+> `18405a2e`) — O QUE A INSPEÇÃO LIBERA FICA COM QUEM ESPERAVA.** A decisão da inspeção (`decidirInspecao`), depois da
+> NC automática e antes do `return`, reserva a **parte aprovada** para as requisições que esperavam o material, na ordem
+> da fila de separação; a decisão da NC (`decidirNaoConformidade`) faz o mesmo quando o efeito é `LIBERADA` (`ACEITAR`/
+> `ACEITAR_SOB_DESVIO`). Teto = o que a decisão liberou, limitado ao disponível; a reserva leva o `recebimento_id` da nota;
+> o dono é quem decidiu (a QUALIDADE reserva pelo sistema); best-effort — a decisão nunca cai e as **respostas não
+> mudaram**; o solicitante é avisado (feature 19). Isso fecha o "Fica de fora" da Etapa 74 sobre a inspeção (o **C126**
+> das novidades). Fica fora: o **desbloqueio avulso** e o estorno de bloqueio avulso não reservam (**B383**); a aprovação
+> no mesmo instante da decisão inverte a fila (**C131**). Detalhe na spec 07. **A feature continua 🟢.**
+> **Última atualização:** 2026-10-02 (**Etapa 75 — a inspeção e a NC que liberam reservam para quem esperava; a
+> feature continua 🟢**). Antes: 2026-10-01 (**Etapa 69 — a decisão Sucatear executa pelo sucateamento; a feature continua
 > 🟢**). Antes: 2026-09-30 (**Etapa 46 — o documento decidido deixa de ser um beco; a feature CONTINUA 🟢, e a etapa não paga item de checklist: ela fecha o furo C64 que a 45 criou**. Antes: 2026-09-29 (**Etapa 45 — o encaminhamento ganha status; a feature vira 🟢**). Antes: 2026-09-28 (Etapas 43 e 44 — a NC numerada e a liberação pela decisão; as duas escreveram no cabeçalho e na seção "O que falta para 🟢" e a **43 esqueceu de marcar o checklist**, corrigido aqui). Antes: 2026-09-02 (**Etapa 32 — anexos**; antes: 2026-08-31 (**Etapa 30, `af7adea..7982f18`: o cadastro do plano ganha
 > tela** — o item 5 de "O que falta para 🟢", criado no fechamento da 29, está **pago**. Com ele
 > **não falta mais tela nenhuma** no ciclo dimensional: cadastrar plano, medir na inspeção e reler
@@ -622,6 +632,9 @@ do efeito de saldo. A reprovação parcial fica em aberto até alguém decidir s
 | Desvio autorizado exige responsável + justificativa e fica registrado | não implementado — fora do escopo da Etapa 5 |
 | NC `SUCATEAR`: a viabilidade é uma função pura com a precedência de recusas; o `/executar` recusa o possível e só registra sem baixa com motivo; as três portas (44/45/69) olham os três carimbos; o cartão *Material reprovado* exclui o sucateado | `sucateamentoReprovadoRegra.api.test.js` (13) — Etapa 69, `db8fa69`; `encaminhamentoExecucao` (9)/(9b)/(16) e `encaminhamentoRotas` (7) mudados de propósito (o `SUCATEAR` saiu do laço "registram sem mover") |
 | A cadeia receber → reprovar → NC → solicitar → duas assinaturas → bloqueado zera, com o lote do certificado nascendo Bloqueado | `sucateamentoReprovadoIntegracao.api.test.js` (12, pelas rotas) — `7c0676c`, `c517248`, `827d655` |
+| A decisão da inspeção reserva a parte aprovada para quem esperava (ordem da fila, teto = aprovado, resposta inalterada, Qualidade pelo gate real) | `inspecaoReservaLiberacao.api.test.js` (15) — Etapa 75, `f149977b` |
+| A NC que aceita reserva o liberado; as outras quatro decisões e o `SEM_BLOQUEIO` não | `ncReservaLiberacao.api.test.js` (10) — `c4d9212c` |
+| A jornada: nota retida → nada reservado → inspeção 5/1 → reservas e e-mails → aprovada depois não leva → NC aceita completa quem faltava | `inspecaoReservaLiberacaoIntegracao.api.test.js` (13, perfis reais) — `82b7fd75` |
 
 ## Dependências
 

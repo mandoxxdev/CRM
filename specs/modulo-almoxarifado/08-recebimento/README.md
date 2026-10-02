@@ -994,7 +994,11 @@ de `fecharSolicitacoesDoPedido` e **antes** do aviso da Etapa 70, dentro da marc
 (`63e377e1`, testes `21f9306b`). O estorno da `ENTRADA_COMPRA` (o motor) solta só o necessário das reservas desta nota,
 de quem ainda espera sem nada separado (`9af1691a`), e o estorno que não acontece recria o que soltou (`65d9bc8f`); a
 recusa por material só reservado diz quem segura (`eaef9ed1`). Detalhes: spec 07 e as novidades (B367–B382,
-C126–C130). A inspeção que libera o retido ainda **não** reserva (C126 — Etapa 75).
+C126–C130). ~~A inspeção que libera o retido ainda **não** reserva (C126 — Etapa 75).~~ *(Paga na Etapa 75: a inspeção
+que aprova e a NC que aceita reservam o liberado — spec 07 e 09. Do lado do recebimento, a Etapa 75 mudou uma coisa: se
+a nota for retomada depois de falhar no meio, a reserva da chegada não conta como livre o item que já tem inspeção
+registrada (`1b2a6959`, B390); e o e-mail da chegada passou a usar o pendente de entrega menos o hold alheio — a mesma
+régua da reserva (`655d75b8`, B393) — e a seguir a regra do dono (`18405a2e`, B395).)*
 
 ## Regras essenciais + testes de API exigidos
 

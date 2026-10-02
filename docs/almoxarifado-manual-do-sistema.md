@@ -1385,8 +1385,10 @@ Estornar a entrada de nota **sem** pedido não toca pedido nenhum.
 
 Inspeção decidida só com aprovado não impede o estorno.
 
-**Estornar a entrada de uma nota que reservou material para requisições (9.3b).** Se o disponível não cobre o estorno
-porque aquela nota reservou o que trouxe para quem esperava, o estorno **solta** dessas reservas só o que falta — da
+**Estornar a entrada de uma nota que reservou material para requisições (9.3b, 9.3c).** Vale igual para as reservas
+que a **inspeção** ou a **não conformidade** daquela nota criaram ao liberar o material (elas levam a marca da nota).
+Se o disponível não cobre o estorno porque aquela nota reservou o que trouxe para quem esperava, o estorno **solta**
+dessas reservas só o que falta — da
 **última** requisição na ordem da fila para a primeira, e só de requisições que ainda **esperam sem nada separado** — e
 a requisição que perdeu a reserva volta ao status de espera (normalmente *Aguard. Compra*, já que o pedido reabre).
 Reservas feitas na aprovação ou à mão **nunca** são soltas pelo estorno. Se nem assim cobre (alguém já separou ou
@@ -1780,11 +1782,34 @@ a distribuir = mínimo(o que ENTROU LIVRE desta nota, disponível do material na
 
 **A reserva criada.** É uma reserva de requisição comum — a entrega a consome como qualquer outra (9.4). Na tela **Reservas** ela aparece no nome de **quem processou a nota**, com a observação *"Reserva na chegada do recebimento ⟨REC⟩ — requisição ⟨REQ⟩"*. Se a configuração de dias de validade estiver ligada, ela nasce com validade (9.7).
 
-**Nunca derruba a nota.** Se a reserva falhar por qualquer motivo, a nota fica **Processado** do mesmo jeito; quem esperava pode separar o que estiver disponível. Duas notas do mesmo material processadas ao mesmo tempo não reservam em dobro: o que falta é relido antes de cada reserva, e o que passar do pendente é desfeito (*"Reserva na chegada acima do pendente — excesso desfeito"*).
+**Nunca derruba a nota.** Se a reserva falhar por qualquer motivo, a nota fica **Processado** do mesmo jeito; quem esperava pode separar o que estiver disponível. Duas notas do mesmo material processadas ao mesmo tempo — ou uma nota e uma decisão de inspeção do mesmo material — não disputam: a distribuição de um material espera a anterior do mesmo material terminar, e cada requisição fica com o que lhe cabe. Como defesa, o que falta é relido antes de cada reserva, e o que passar do pendente é desfeito (*"Reserva na chegada acima do pendente — excesso desfeito"*).
 
 **O e-mail.** O aviso ao solicitante (21c) diz, em cada material, *"reservado para a sua requisição: N"* quando houve reserva, e termina com uma de três frases (21c.1). Quem esperava e não ficou com nada — nem há saldo livre do material — **não** recebe o aviso daquela nota.
 
-**O que NÃO reserva na chegada:** a inspeção que libera o material retido, e as entradas que não são nota (entrada manual, devolução, transferência, ajuste, retorno de terceiro) — o material fica disponível para quem chegar primeiro.
+**O que NÃO reserva na chegada:** o material que entrou **retido para inspeção** — ele é reservado depois, quando a inspeção o aprova (9.3c) —, e as entradas que não são nota (entrada manual, devolução, transferência, ajuste, retorno de terceiro): o material fica disponível para quem chegar primeiro. Se uma nota que falhou no meio for processada de novo depois de o item crítico já ter sido inspecionado, a nota **não** conta esse item como livre — o que a inspeção liberou já foi distribuído por ela.
+
+### 9.3c Reserva na liberação da inspeção e da não conformidade
+
+O material crítico entra **retido para inspeção** (14.6) e não é reservado na chegada. Quando ele é liberado, o liberado é reservado para quem esperava, pelas mesmas regras de 9.3b (quem esperava, a ordem da fila, quem é pulado, o status que acompanha). Duas portas liberam:
+
+- **A decisão da inspeção** (15.2) — a **Quantidade aprovada** é reservada; o reprovado não.
+- **A decisão da não conformidade** do reprovado como **Aceitar** ou **Aceitar sob desvio** (15b.4-bis) — o que a decisão devolveu ao disponível é reservado. As outras decisões (*Devolver*, *Sucatear*, *Substituição*, *Análise da engenharia*) não liberam nada e não reservam; nem a não conformidade cujo material já tinha saído do bloqueio por fora (*Desbloquear Material*).
+
+**Quanto, no máximo.**
+
+```
+a distribuir = mínimo(o que ESTA decisão liberou, disponível do material naquele momento)
+```
+
+Saldo que já estava no estoque (de ajuste, de outra nota, de uma entrada manual) não é distribuído pela decisão.
+
+**A reserva criada.** Na tela **Reservas**, no nome de **quem decidiu** — inclusive quem tem só o perfil **Qualidade**, que não reserva à mão: a reserva é feita pelo sistema em nome dele. A observação diz a porta: *"Reserva na liberação da inspeção — recebimento ⟨REC⟩ — requisição ⟨REQ⟩"* ou *"Reserva na liberação da não conformidade ⟨NC⟩ — requisição ⟨REQ⟩"*. Ela leva a marca da nota: estornar a entrada da nota depois solta essa reserva como solta a da chegada (só o necessário, só de quem ainda não separou — 6.10).
+
+**Nunca derruba a decisão.** Se a reserva falhar, a decisão da inspeção (ou da não conformidade) fica gravada, o saldo já mudou, e só um aviso vai ao log; a resposta da tela é a mesma de sempre. Decidir de novo é recusado como sempre (*"Item não possui quantidade em inspeção retida"*, *"Esta não conformidade já foi encerrada"*) — nada é reservado duas vezes.
+
+**O e-mail.** O solicitante de cada requisição que ganhou reserva — ou que ainda tem saldo livre do material para separar — recebe *"Material liberado para a sua requisição"* (21c.1), uma vez por decisão.
+
+**O que NÃO reserva:** **Desbloquear Material** (o desbloqueio avulso da tela **Inspeções**) e o estorno de um bloqueio avulso — são ajustes de prateleira, sem documento; o material volta ao disponível para quem chegar primeiro. E uma requisição aprovada **no exato instante** em que a inspeção é decidida pode levar o material antes de quem esperava: o **Aprovar** não passa pela distribuição de quem esperava.
 
 ### 9.4 Consumo contra reserva
 
@@ -3455,6 +3480,8 @@ Os três resultados possíveis:
 
 A quantidade física do material **não muda** em nenhum dos três casos — o material continua na prateleira; o que muda é o que se pode fazer com ele. E decidir é uma operação única: aprovar e reprovar acontecem juntos, nunca em dois passos que poderiam ficar pela metade.
 
+**A parte aprovada vai primeiro para quem esperava.** Logo depois da decisão, a quantidade aprovada é **reservada** para as requisições que esperavam aquele material, na ordem da **Fila de separação** — a urgente primeiro (9.3c). Essas requisições passam a **Parcialmente** ou **Totalmente Reservada**, e o solicitante recebe *"Material liberado para a sua requisição"* (21c.1). Só o que sobrar fica livre para quem for aprovado depois. A reserva é consequência da decisão, não condição: se ela falhar, a decisão vale do mesmo jeito.
+
 **O campo Encaminhamento é a intenção da qualidade, não o ato.** Ele fica no registro da inspeção e
 não move material nenhum. O que decide e o que executa o destino da parte reprovada é o documento de
 **não conformidade** que a reprovação abre sozinha (15b): é lá que se escolhe entre aceitar, devolver,
@@ -3765,7 +3792,10 @@ Quando o documento veio de uma **inspeção** e é a aceitação de uma reprova�
 ou **Aceitar sob desvio** faz o sistema devolver ao disponível, sozinho, a quantidade que aquela
 inspeção reprovou — a mesma que estava em **bloqueado** (15.3). A movimentação nasce como um
 **Desbloqueio** no livro, com o motivo *"Liberação por não conformidade"* e o **número do
-documento** no campo de documento vinculado, e leva a justificativa da decisão.
+documento** no campo de documento vinculado, e leva a justificativa da decisão. Logo em seguida, o
+liberado é **reservado** para as requisições que esperavam aquele material, na ordem da **Fila de
+separação** (9.3c), e o solicitante recebe *"Material liberado para a sua requisição"* (21c.1) — só o que
+sobrar fica livre. A reserva é consequência da decisão: se ela falhar, a decisão vale do mesmo jeito.
 
 **Decidir *Devolver ao fornecedor*, *Substituição*, *Análise da Engenharia* ou *Sucatear* não muda
 saldo nenhum neste clique.** Essas quatro registram o que se **decidiu** e deixam o documento
@@ -5348,8 +5378,10 @@ falha do servidor de e-mail nunca trava uma movimentação, uma devolução ou u
 - **Material chegou para a sua requisição** (aviso ao solicitante) — quando uma nota é processada (ou o recebimento é
   aprovado direto) e um material **entrou disponível** (não retido para inspeção), o **solicitante** de cada requisição
   que o esperava recebe **um** e-mail. "Esperava" é decidido **item a item**: a requisição está ativa, numa situação de
-  onde ainda se separa — **exceto Em separação** (o almoxarife já está com ela) —, e tem item daquele material com
-  **pendente de separação maior que o que já está reservado para o item**. Um e-mail por requisição por nota, para o
+  onde ainda se separa — **exceto Em separação** (o almoxarife já está com ela) —, e tem item daquele material em que
+  falta material, pela mesma conta da reserva na chegada (9.3b): **o que ainda falta entregar, menos o que o item já tem
+  reservado por outro motivo que não esta nota**. Material de cliente só aparece para a requisição que tem o projeto
+  do dono (a saída recusaria as demais). Um e-mail por requisição por nota, para o
   e-mail do cadastro do usuário; usuário inativo ou sem e-mail não recebe (sem erro). **Ligado de fábrica**, pela chave
   *"Avisar o Solicitante quando o Material Chega"* (21c.6). Assunto *"[Almoxarifado] Chegou material da sua requisição
   REQ-…"*; o corpo diz a requisição, a situação dela, o recebimento e, por material, quanto entrou e quanto está
@@ -5366,8 +5398,23 @@ falha do servidor de e-mail nunca trava uma movimentação, uma devolução ou u
   e não ganhou nada — com o saldo todo reservado a outras requisições — **não** recebe o aviso daquela nota (será
   avisado na próxima). O link abre a lista **Minhas Requisições** do módulo de onde a requisição saiu (Comercial,
   Compras, Fábrica, …); sem módulo de origem, a lista de requisições do almoxarifado. Material que entrou **retido
-  para inspeção** não gera este aviso — ele ainda pode ser reprovado. Uma requisição que continua esperando recebe um
-  aviso **a cada nota** daquele material.
+  para inspeção** não gera este aviso — ele ainda pode ser reprovado; o aviso dele vem quando a inspeção o libera (o
+  próximo item). Uma requisição que continua esperando recebe um aviso **a cada nota** daquele material.
+- **Material liberado para a sua requisição** (aviso ao solicitante, na liberação) — quando a **inspeção aprova**
+  material retido, ou a **não conformidade** do reprovado é decidida **Aceitar**/**Aceitar sob desvio**, o liberado é
+  reservado para quem esperava (9.3c) e o solicitante de cada requisição que ganhou reserva — ou que ainda tem saldo
+  livre do material para separar — recebe **um** e-mail por decisão. Mesmas regras de quem esperava, do material de
+  cliente e do e-mail do usuário que o aviso da chegada; governado pela mesma chave *"Avisar o Solicitante quando o
+  Material Chega"*. Assunto *"[Almoxarifado] Material liberado para a sua requisição REQ-…"*. A primeira linha diz a
+  porta: *"O material que a sua requisição aguardava foi aprovado na inspeção e está no estoque."* ou *"O material que
+  a sua requisição aguardava foi liberado pela não conformidade NC-… e está no estoque."* Depois: a requisição, a
+  situação dela (já com a reserva), o recebimento e a linha do material — *"⟨cód⟩ — ⟨nome⟩: liberado ⟨q⟩ ⟨un⟩
+  (pendente na requisição: ⟨p⟩ ⟨un⟩; reservado para a sua requisição: ⟨r⟩ ⟨un⟩)"* (sem a parte do reservado quando não
+  houve reserva) — e a frase final: *"O material indicado como reservado fica guardado para a sua requisição — outra
+  requisição não pode levá-lo. A separação é feita pelo almoxarifado."* com reserva, ou *"O material ainda não está
+  reservado para a sua requisição — a separação é feita pelo almoxarifado."* sem. Duas inspeções da mesma nota (dois
+  itens) avisam duas vezes; a mesma decisão nunca avisa duas vezes. Na tela **Notificações**, aparece no filtro
+  *Aviso ao requisitante*. A requisição **Em separação** ganha a reserva, mas não recebe este aviso.
 - **Entrada de recebimento** (aviso da nota) — um e-mail **por nota** que deu entrada no estoque, com o recebimento, a
   nota fiscal, o fornecedor, o pedido de compra (quando há), data/hora, quem processou, cada item que entrou com a
   quantidade, o endereço e *"disponível"* ou *"retido para inspeção"*, e as requisições que aguardavam aqueles
@@ -5379,7 +5426,9 @@ falha do servidor de e-mail nunca trava uma movimentação, uma devolução ou u
 
 Os dois avisos de recebimento são montados **depois** que a nota termina de entrar e **nunca** atrapalham o
 processamento: se falharem, a nota fica processada do mesmo jeito. Só a nota processada (ou o recebimento aprovado
-direto) os gera — entrada avulsa, devolução ao estoque, retorno de terceiro e a liberação de material retido não.
+direto) os gera — entrada avulsa, devolução ao estoque e retorno de terceiro não. A liberação de material retido tem
+o aviso próprio (*Material liberado para a sua requisição*, acima), que também nunca derruba a decisão da inspeção ou
+da não conformidade.
 
 O que **não** gera aviso de movimentação, de propósito: reservas e liberações, envio e retorno
 de remessa a terceiro (a remessa tem o aviso próprio de vencida) e os ajustes aplicados pela

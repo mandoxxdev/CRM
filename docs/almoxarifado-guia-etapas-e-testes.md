@@ -1,21 +1,31 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-02 (Etapa 74) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-02 (Etapa 75) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 74) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 75) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-02 (Etapa 74 ENTREGUE · Etapa 75 começando)
+> ## Onde o desenvolvimento está — 2026-10-02 (Etapa 75 ENTREGUE · Etapa 76 começando)
 >
-> **O desenvolvimento parou aqui: Etapa 74 fechada, Etapa 75 começando — 2026-10-02.** A **Etapa 74 (a requisição que
+> **O desenvolvimento parou aqui: Etapa 75 fechada, Etapa 76 começando — 2026-10-02.** A **Etapa 75 (o material que a
+> inspeção libera fica com quem esperava)**: material crítico entra retido para inspeção e não é reservado na chegada;
+> agora, quando a **inspeção aprova** (ou a **não conformidade** do reprovado é decidida **Aceitar**/**Aceitar sob
+> desvio**), o liberado é **reservado** para as requisições que esperavam, na ordem da fila de separação, e o
+> solicitante recebe *"Material liberado para a sua requisição"*. Quem é aprovado depois só leva o que sobrou. A revisão
+> corrigiu também o e-mail da chegada (o pendente de quem tem material separado na caixa) e a corrida de duas liberações
+> do mesmo material, que deixava a fila inteira sem nada. **Próxima etapa, já começando: 76 — liberar à mão ou deixar
+> vencer a reserva de uma requisição passa a recalcular o status dela** (hoje a requisição continua *Totalmente
+> Reservada* sem nada seguro; ver *"Próxima tarefa detalhada"* no plano da Etapa 75).
+>
+> **Etapas 1 a 20 e 22 a 75 completas.**
+>
+> **Etapa 74, 2026-10-02.** A **Etapa 74 (a requisição que
 > esperava fica com o material que chegou)**: ao processar a nota, o que chegou livre é **reservado** para as
 > requisições que esperavam, na ordem da fila de separação (urgência, necessidade, mais antiga); a que ganhou vira
 > **Parcialmente/Totalmente Reservada**, o e-mail diz quanto ficou reservado, e quem é aprovado depois só leva o que
 > sobrou. Estornar a entrada da nota solta essa reserva de quem ainda não separou; **Encerrar Requisição** e **Rejeitar**
 > por valor passaram a liberar reservas; e o painel **📋 Requisições Abertas** mostra as reservadas. **Próxima etapa, já
 > começando: 75 — a inspeção que libera o material retido reserva para quem esperava** (hoje o material aprovado na
-> inspeção fica solto; ver *"Próxima tarefa detalhada"* no plano da Etapa 74).
->
-> **Etapas 1 a 20 e 22 a 74 completas.**
+> inspeção fica solto; ver *"Próxima tarefa detalhada"* no plano da Etapa 74). *(feita — acima)*
 >
 > **Etapa 73, 2026-10-02.** A **Etapa 73 (a requisição que
 > espera compra nasce com o status certo)**: com a compra já pedida ao fornecedor, a requisição sem saldo nasce **Aguard.
@@ -5422,11 +5432,72 @@ Gerar solicitações → Gerar pedido**). Dois usuários: um cria as requisiçõ
 ### O que esta etapa NÃO cobre
 
 - **A inspeção que libera o material retido não reserva para quem esperava** (aviso **C126** das novidades) — é a
-  próxima etapa; até lá, depois de aprovar uma inspeção, separe logo quem esperava aquele material.
+  próxima etapa; até lá, depois de aprovar uma inspeção, separe logo quem esperava aquele material. *(Feita na Etapa 75
+  — seção abaixo.)*
 - **Entradas que não são nota** (manual, devolução, transferência, ajuste) deixam o material solto.
 - **Liberar à mão uma reserva de requisição, ou ela vencer**, não muda o status da requisição (aviso **C127**).
 - **Nada é reservado no dia do deploy** — quem esperava ganha a reserva na próxima nota (consulta **A38**).
 - **A requisição em *Aguardando aprovação de valor*** não ganha reserva na chegada.
+
+---
+
+## Etapa 75 — O material que a inspeção libera fica com quem esperava (ENTREGUE — 2026-10-02)
+
+**O que mudou, em uma frase:** quando a inspeção aprova o material crítico que estava retido — ou a não conformidade do
+reprovado é aceita —, o que foi liberado é reservado para as requisições que esperavam aquele material, na ordem da
+fila de separação, e o solicitante recebe um e-mail.
+
+**O problema que ela resolve.** Material crítico entra retido para inspeção, então a nota não o reserva para ninguém.
+Quando a Qualidade aprovava, o material ficava solto: uma requisição aprovada logo depois levava tudo, e a que esperava
+ouvia *"Máximo: 0"* ao separar. Quem pediu o material crítico também não recebia e-mail nenhum.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A inspeção aprovava e o material ficava solto | A parte aprovada é reservada para quem esperava, na ordem da fila |
+| A não conformidade aceita devolvia o reprovado ao estoque solto | O liberado é reservado para quem ainda faltava |
+| Quem pediu material crítico não recebia e-mail | Recebe *"[Almoxarifado] Material liberado para a sua requisição ⟨REQ⟩"* |
+| O e-mail da chegada dizia um pendente menor para quem tinha material separado na caixa | Diz o pendente certo |
+| Duas inspeções do mesmo material ao mesmo tempo deixavam a fila inteira sem nada | Cada requisição fica com o que lhe cabe |
+
+### Roteiro de teste manual (≈15 min)
+
+**Preparação.** Um material **M** com a caixa **Material crítico** marcada no cadastro (a inspeção de materiais
+críticos no recebimento vem ligada de fábrica), sem saldo, com fornecedor e pedido de compra. Três usuários: um cria as requisições, **outro** aprova,
+e um da **Qualidade** decide a inspeção. Crie **R2** (urgência **Normal**, 4 de M) e **depois** **R1** (urgência
+**Urgente**, 4 de M); aprove as duas: **Aguard. Compra**.
+
+1. **A nota retém e não reserva.** Processe uma nota de **6** de M (**Recebimentos**, até **Processar Nota**). R1 e R2
+   continuam **Aguard. Compra**; nenhuma reserva nova na tela **Reservas**; o item aparece em **Inspeções**, aba
+   **Pendentes**.
+2. **A inspeção aprova e reserva.** Como Qualidade, em **Inspeções**, decida o item: **Quantidade aprovada** 5,
+   **Quantidade reprovada** 1, observação, **Salvar**. Em **Requisições (almox.)**: R1 está **Totalmente Reservada** (4)
+   e R2 **Parcialmente Reservada** (1). Na tela **Reservas**: *"Reserva na liberação da inspeção — recebimento ⟨REC⟩ —
+   requisição ⟨REQ⟩"*, no nome de quem decidiu.
+3. **Quem chega depois não leva.** Crie e aprove **R3** (2 de M): fica **Aguard. Compra**, sem reserva. Na **Fila de
+   separação**, R1 e R2 estão em **Separar**.
+4. **A não conformidade aceita completa quem faltava.** Em **Não Conformidades**, a do 1 reprovado: decida **Aceitar**
+   → **Registrar decisão**. R2 passa a ter 2 de 4 reservados (continua **Parcialmente Reservada**); a reserva nova diz
+   *"Reserva na liberação da não conformidade ⟨NC⟩ — requisição ⟨R2⟩"*. R3 continua sem nada.
+5. **O e-mail** (se o e-mail estiver configurado). O solicitante de R1 recebe *"[Almoxarifado] Material liberado para a
+   sua requisição ⟨R1⟩"*, começando com *"O material que a sua requisição aguardava foi aprovado na inspeção e está no
+   estoque."*, com *"liberado 5 ⟨un⟩ (pendente na requisição: 4 ⟨un⟩; reservado para a sua requisição: 4 ⟨un⟩)"*. Depois
+   da não conformidade, o de R2 recebe outro, começando com *"…foi liberado pela não conformidade ⟨NC⟩ e está no
+   estoque."* Na tela **Notificações**, o filtro *Aviso ao requisitante* mostra as linhas.
+6. **Decidir de novo não reserva de novo.** Tente decidir de novo a mesma inspeção: *"Item não possui quantidade em
+   inspeção retida"*, e nada muda nas reservas.
+
+### O que esta etapa NÃO cobre
+
+- **Aprovar uma requisição no exato instante** em que a inspeção é decidida pode inverter a fila — a aprovada leva antes
+  de quem esperava (aviso **C131** das novidades). Na prática: não aprove requisições daquele material enquanto a
+  Qualidade decide a inspeção dele.
+- **Desbloquear Material** (o desbloqueio avulso da tela **Inspeções**) devolve ao estoque sem reservar para ninguém.
+- **Liberar à mão uma reserva de requisição, ou ela vencer**, ainda não muda o status da requisição (aviso **C127**) — é
+  a próxima etapa.
+- **Nada é reservado no dia do deploy** — quem esperava ganha a reserva na próxima decisão (consulta **A39**).
+- **A requisição *Em Separação*** ganha a reserva, mas não recebe o e-mail.
 
 ---
 

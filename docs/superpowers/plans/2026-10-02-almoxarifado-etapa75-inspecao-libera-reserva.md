@@ -1,8 +1,9 @@
 # Etapa 75 — o material que a inspeção libera fica com quem esperava (C126, feature 07 com a 09 e a 19)
 
-> Status: **T0–T4 + FASE 5 ENTREGUES — 2026-10-02.** Fases 0, 1 e 2 feitas; T0 `1b2a6959`, T1 `f149977b`, T2
-> `c4d9212c`, T3 `c8c089cb`, T4 `82b7fd75`; Fase 5 (revisão adversarial + fix-round) `655d75b8`, `936179b2`,
-> `18405a2e`. Falta: **T5 (fechamento)**. Ver "Tronco executado (T0–T3)" e "Fase 5" no fim.
+> Status: **FECHADA — 2026-10-02.** Plano `1070d1fa`; T0 `1b2a6959`, T1 `f149977b`, T2 `c4d9212c`, T3 `c8c089cb`
+> (marcações `c601809b`), T4 `82b7fd75`; Fase 5 (revisão adversarial + fix-round) `655d75b8`, `936179b2`, `18405a2e`
+> (registro `949bfaf8`); T5 (fechamento) — commit de documentação desta etapa. Ver "Tronco executado (T0–T3)", "Fase 5",
+> "Verificação final", "Retro" e "Próxima tarefa detalhada — Etapa 76" no fim.
 > Origem: "Próxima tarefa detalhada — Etapa 75" de
 > `docs/superpowers/plans/2026-10-02-almoxarifado-etapa74-reserva-na-chegada.md:697-736` e o aviso **C126** de
 > `docs/almoxarifado-novidades-por-etapa.md:6652`.
@@ -462,7 +463,20 @@ galhos depois de T1: só **consomem** `aposLiberacaoSemFalhar`/`reservarLiberaca
   declarar no plano. Controles: (s1) gancho da inspeção desligado → cai na primeira asserção de reserva; (s2) gancho da
   NC desligado → cai em R2 depois da NC; (s3) ordem sem urgência → cai em R1/R2; (s4) aviso desligado no
   `aposLiberacaoSemFalhar` → cai nos e-mails.
-- [ ] **T5 — fechamento (skill `fechar-etapa`).** Novidades: seção da 75 (Antes → Agora; roteiro clicável: aprovar
+- [x] **T5 — fechamento (skill `fechar-etapa`).** ✅ Feito no commit de documentação desta etapa (só `docs/` e
+  `specs/`). Realizado: novidades (seção da 75 antes de "Onde estamos"; **A39**; **B383–B395**, com a **B380 (b)**
+  corrigida à vista — "estava errada"; **C126** resolvido; **C130 (2)** estendido à liberação; **C131–C134** novos; **D
+  (75)**; **F (75)**; **G85** — o padrão "controle positivo que não consegue falhar" no plano); specs 07 (cabeçalho,
+  item `[x]` com hashes e escopo, 11 linhas na tabela de regras/testes), 09 (bloco da Etapa 75, três linhas na tabela),
+  08 (a frase da 74 "a inspeção ainda não reserva" riscada à vista com o que a 75 mudou no recebimento), 19 (item `[x]`
+  do aviso da liberação, dedupe por documento na lista); mapa (cabeçalho, linhas 04, 07, 09, 19); guia (cabeçalho "75
+  ENTREGUE · 76 começando", seção da 75 com roteiro de 6 passos); manual (9.3b ajustado, **9.3c** nova, 15.2 e
+  15b.4-bis com a reserva depois da decisão, 6.10 com a reserva da inspeção no estorno, 21c.1 com a régua certa, a
+  regra do dono e o aviso **Material liberado para a sua requisição**). A **Surpresa 3** (desbloqueio avulso drena o
+  reprovado da NC) **já estava nomeada** na letra C (o item do documento de inspeção drenado "por fora") — sem C novo.
+  **Divergência do texto original da T5:** pedia "C novo para a Surpresa 3 se nenhum a nomeia" — nomeava; e a
+  numeração de C ficou C131–C134 (a inversão inspeção × aprovar, a premissa da trava, as três janelas, o que muda).
+  Original: Novidades: seção da 75 (Antes → Agora; roteiro clicável: aprovar
   requisição de material crítico → processar a nota → *Inspeções* → aprovar → a requisição vira *Reservada* → aprovar
   outra → fica esperando; NC aceita → o liberado vai para quem esperava); **B383–B392** ajustadas ao realizado; **C126
   resolvido**; Surpresa 3 (desbloqueio avulso drena a NC) como C novo se nenhum C a nomeia; Surpresa 4 anotada na seção;
@@ -664,3 +678,91 @@ acima lista: B393–B395, a B380 (b) corrigida à vista, o C novo da inversão i
 `solicitada − separada` e a do miolo `solicitada − entregue` (herdado da 74; na jornada coincidem porque nada fica
 separado sem entregar) — medir se uma requisição `PARCIALMENTE_ATENDIDA` com material separado na caixa recebe um
 pendente que não bate com o reservado.
+
+## Divergências do plano (registradas, não escondidas)
+
+1. **Quatro controles positivos do plano original não conseguiam falhar** (Fase 2) — refeitos antes de executar; duas
+   guardas (`aprovada > 1e-9` na inspeção, `efeito === 'LIBERADA'` na NC) ficaram **declaradas redundantes por
+   construção** (sabotagem não cai: o serviço devolve vazio no passo 1). Registrado como **G85** nas novidades.
+2. **O paralelismo planejado (T2 em worktree ∥ T3)** foi trocado pelo tronco inteiro sequencial num agente só (Fase 2:
+   as duas sabotam produção — regra da G84).
+3. **O `reservarLiberacaoParaQuemEspera` ganhou um 4º argumento** (acumulador preenchido no lugar) — o contrato dizia
+   "void" para o `aposLiberacaoSemFalhar`; é por ele que o resultado PARCIAL chega ao e-mail.
+4. **O dedupe é guardado como hash** (`sha256(evento|chave)`), não a chave — os testes comparam o hash.
+5. **A régua do aviso** (Fase 5): o contrato congelado dizia `pendente = MAX(0, solicitada − separada) − (hold − reservado)`
+   (`:304`) — **estava errado** (desconta o separado duas vezes); o realizado é `faltaDoItem` (pendente de entrega − hold
+   alheio), a régua do miolo, nos dois avisos (74 e 75). Corrige a B380 (b) da 74.
+6. **A trava por material** (B394) não estava no plano — nasceu da Fase 5 (a corrida de duas liberações zerava a fila;
+   o plano declarava "desfazer de excesso duplo" como herdado e inofensivo — o efeito real era a fila inteira zerada).
+7. **T4: a frase L0 não aparece na jornada** pelas portas reais (o miolo é guloso — quem está na fila sempre leva); L0 é
+   coberta na T3 (candidata pulada ou reserva falhando). Declarado.
+
+## Verificação final
+
+Medida pelo fix-round da Fase 5, no último commit de código (`18405a2e`): `test:api` **286/286** arquivos;
+`test:almoxarifado` **44/0**; `test:validation` 4/0; `test:safealter` 3/0; `test:sqlite` 5/0. Os testes da 74 e da 75
+verdes sem edição; só duas asserções da 70 (`recebimentoAvisoEntrada`) mudaram, com o motivo no teste e no commit.
+Cliente e `CI=true` build: **re-medidos no fechamento** pelo fio principal (a etapa não tocou o cliente) — no HEAD com a Fase 5:
+cliente **74 suítes / 1155 testes**, `CI=true` build "Compiled successfully". `git status`: só `docs/bkp_bancoprod.md` e `server/nodemon.json` fora do controle, como antes.
+
+## Retro (4 números)
+
+- **Rodadas de correção até verde:** **1** (o fix-round da Fase 5: três commits, um por assunto).
+- **Achados — reais × ruído:** Fase 2 — **14** achados (0 críticos, 6 importantes — **4 deles controles positivos
+  vazios** —, 8 menores), todos aplicados; Fase 5 — **2 importantes + 2 menores reais** (um menor já estava declarado
+  como C130 (2)), **0 ruído**; mais um item medido para a letra C (a inversão inspeção × aprovar, C131).
+- **Paralelismo:** **nenhum galho em paralelo** — o tronco inteiro (T0→T3) num agente só, sequencial (regra da G84
+  aplicada na Fase 2); T4 depois; a revisão adversarial com a árvore quieta. Zero contaminação, zero retrabalho por
+  paralelismo.
+- **Defeito que escapou da etapa anterior (74):** **dois**, achados agora — (1) a régua do aviso da chegada (a B380 (b)
+  declarava a diferença inofensiva; era o "pendente 2; reservado 2" para quem tem material separado na caixa); (2) a
+  corrida de duas notas do mesmo material, que o desfazer de excesso transformava em fila zerada (a 74 só testava "não
+  passa do teto", não "quem esperava fica com algo").
+- **Lição do fluxo:** controle positivo escrito no **plano** também precisa saber falhar — quem escreve o plano diz
+  qual asserção cai e por qual caminho do código, e a revisão do plano confere (**G85**).
+
+## Próxima tarefa detalhada — Etapa 76: liberar à mão ou deixar vencer a reserva de uma requisição recalcula o status dela (C127, feature 07 com a 04)
+
+**Por que esta.** Depois das Etapas 73–75, o status da requisição passou a **dizer** quanto está seguro
+(*Parcialmente/Totalmente Reservada*), e a reserva passou a nascer sozinha (na aprovação, na chegada da nota, na
+liberação da inspeção/NC). Mas a reserva ainda **sai** por portas que não recalculam o status: a liberação à mão pela
+tela **Reservas** e a expiração (`reserva_dias_validade` — a reserva da chegada e a da liberação nascem com validade se a
+config estiver ligada). Resultado: requisição *Totalmente Reservada* sem nada seguro, e o rótulo mente até a próxima
+nota (**C127**, anterior, da Etapa 4; o manual 9.6 e 9.7 declara). O miolo já tem a função certa:
+`reservaChegadaService.recalcularStatusDeReserva` (pela máquina, só a partir de APROVADO/AGUARDANDO_*/*_RESERVADA, com
+`WHERE status = <lido>`). Valor alto (o status é o que a fila, o painel e o e-mail leem), esforço baixo. A inversão
+inspeção × **Aprovar** (**C131**) fica como candidata da 77 (exige pôr o `/aprovar` na mesma trava e decidir a ordem).
+
+**Fase 0 da 76 — medir antes de prometer:**
+1. **Todas as portas que tiram reserva de requisição sem recalcular:** `stockService.liberarReserva` (`:3008`) e seus
+   chamadores — a rota `POST /reservas/:id/liberar` (`routes/almoxarifado/extended.js:935`), `reservationService
+   .processarExpiracao` (`:106-151`, `statusFinal: 'EXPIRADA'`) e `:187` (`liberarReservasDaRequisicao` — cancelar,
+  excluir, encerrar, rejeitar por valor: status terminal, medir se importa), `requisitionService
+   :267` (desfazer — já recalcula?), `reservaChegadaService:70/:448` (já recalculam). E a **transferência** de reserva
+   entre projetos (`reservationService.transferirReserva` `:46`) — a reserva sai da requisição? Medir com sonda pelas
+   rotas: R `TOTALMENTE_RESERVADA` → liberar à mão → status relido; idem expiração (`expira_em` no passado +
+   `POST /reservas/processar-expiracao`).
+2. **O que o recálculo deve dar:** `recalcularStatusDeReserva` volta a `AGUARDANDO_*`/`APROVADO` pela mesma
+   `calcularStatusPosAprovacao` — confirmar que, com o saldo devolvido ao disponível, a requisição não vira `APROVADO`
+   (seta `TOTALMENTE_RESERVADA → APROVADO` existe na máquina?) quando o certo seria `AGUARDANDO_*` ou continuar
+   reservada parcialmente; e que `EM_SEPARACAO`/`PARCIALMENTE_ATENDIDA` não regridem (fora do conjunto recalculável).
+3. **Liberação parcial** (a reserva continua ATIVA com saldo menor): `TOTALMENTE` → `PARCIALMENTE`? E a liberação de
+   uma reserva **manual** (sem `requisicao_id`) não toca requisição nenhuma (metade positiva).
+4. **A tela Reservas** já avisa antes de liberar (*"Esta reserva pertence à requisição #N…"*) — o texto continua certo?
+   O toast/resposta da liberação ganha algo? (Preferir resposta inalterada, como nas Etapas 74/75.)
+5. **A expiração em lote:** recalcular uma vez por requisição tocada (não por reserva), sem derrubar o processamento
+   das demais (o job já é tolerante a falha por reserva).
+
+**Contratos que não se reabrem:** o motor (`liberarReserva`, `criarReserva`, opções no 4º argumento); a máquina de
+status (setas da 74); a reserva na chegada e na liberação (74/75, inclusive a trava por material); o estorno
+(B374/B381/B382); `/encerrar`, `/rejeitar-valor`, cancelar e excluir (já liberam — medir se recalculam ou se o status
+terminal torna isso irrelevante).
+
+**Pontos de atenção.**
+- O recálculo é efeito, não condição: a liberação nunca cai por causa dele (best-effort, como na 74).
+- Corrida liberação à mão × nota/inspeção do mesmo material: a trava por material (B394) só cobre o miolo — decidir se
+  o recálculo entra nela ou se o `WHERE status = <lido>` basta.
+- Metade positiva em todo teste: liberar a reserva de uma requisição *Parcialmente Atendida* (fora do conjunto) não
+  muda o status; liberar uma reserva manual não toca requisição.
+- A literal da tela Reservas e as do manual 9.6/9.7 ("liberar à mão não muda o status", "a expiração não muda o
+  status") **mudam** — corrigir à vista no fechamento.

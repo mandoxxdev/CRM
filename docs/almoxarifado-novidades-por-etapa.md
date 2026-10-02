@@ -107,7 +107,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Trinta e oito itens para rodar em produção ANTES do deploy — trinta e cinco são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Trinta e nove itens para rodar em produção ANTES do deploy — trinta e seis são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-02 (Etapa 75) de trinta e oito para trinta e nove**, com a **A39** — o material crítico que está retido ou bloqueado hoje com requisição esperando (o tamanho do que a primeira inspeção ou não conformidade vai reservar), e o diagnóstico de quem esperava material crítico e perdeu para uma requisição aprovada depois da inspeção.)*
 
 *(**Atualizado em 2026-10-02 (Etapa 74) de trinta e sete para trinta e oito**, com a **A38** — as requisições já encerradas ou rejeitadas por valor que ficaram com **reserva ativa presa** (o *Encerrar* e o *Rejeitar* por valor não liberavam), e o tamanho do que a primeira nota de cada material vai reservar para quem espera.)*
 
@@ -1339,8 +1341,47 @@ SELECT esp.numero AS esperava, esp.created_at, dep.numero AS levou, dep.created_
 - **(3)** é só diagnóstico: a reserva já feita para quem chegou depois **não é desfeita** por esta versão. Se alguma
   dessas precisa do material com urgência, quem opera decide liberar a reserva da outra pela tela **Reservas**.
 
+**A39 (NOVA, da Etapa 75 — o material crítico retido com quem espera, e quem perdeu para uma aprovada depois da
+inspeção).** A partir desta etapa, quando a **inspeção aprova** o material crítico retido, ou a **não conformidade** é
+decidida *Aceitar*/*Aceitar sob desvio*, o que foi liberado é **reservado** para as requisições que esperavam, na ordem
+da fila de separação (**B383**). Nada é reservado no deploy (**B391**). Duas consultas:
 
-### B. Decisões de negócio — B1 a B382; as em aberto esperam você, as tomadas estão escritas com o descartado
+```sql
+-- (1) o tamanho da primeira liberação: itens de nota ainda retidos para inspeção, e quantas requisições esperam o material
+SELECT ri.material_id, ri.recebimento_id, ri.quantidade_em_inspecao AS retido_no_item,
+  (SELECT COUNT(*) FROM itens_requisicao_almoxarifado ir JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id
+    WHERE ir.material_id = ri.material_id AND COALESCE(r.ativo,1) = 1
+      AND r.status IN ('APROVADO','AGUARDANDO_ESTOQUE','AGUARDANDO_COMPRA','PARCIALMENTE_RESERVADA',
+                       'TOTALMENTE_RESERVADA','PARCIALMENTE_ATENDIDA','EM_SEPARACAO')) AS requisicoes_esperando
+  FROM recebimentos_material_itens_almoxarifado ri
+ WHERE COALESCE(ri.quantidade_em_inspecao, 0) > 0;
+-- e as não conformidades de inspeção ainda abertas (cada uma, se aceita, libera o reprovado para quem espera):
+SELECT id, numero, recebimento_id FROM nao_conformidades_almoxarifado
+ WHERE status = 'ABERTA' AND origem = 'INSPECAO' AND referencia_tipo = 'INSPECAO';
+
+-- (2) só diagnóstico: quem esperava material crítico e hoje está sem saldo dele, com outra requisição aprovada DEPOIS
+--     da inspeção segurando-o (a disputa do C126 que já aconteceu)
+SELECT esp.numero AS esperava, esp.created_at, dep.numero AS levou, dep.data_aprovacao, ir2.material_id
+  FROM requisicoes_almoxarifado esp
+  JOIN itens_requisicao_almoxarifado ir1 ON ir1.requisicao_id = esp.id
+  JOIN materiais_almoxarifado m ON m.id = ir1.material_id AND COALESCE(m.material_critico,0) = 1
+  JOIN itens_requisicao_almoxarifado ir2 ON ir2.material_id = ir1.material_id AND ir2.requisicao_id <> esp.id
+  JOIN requisicoes_almoxarifado dep ON dep.id = ir2.requisicao_id AND dep.created_at > esp.created_at
+  JOIN reservas_material_almoxarifado x ON x.item_requisicao_id = ir2.id AND x.status = 'ATIVA'
+ WHERE esp.status IN ('AGUARDANDO_ESTOQUE','AGUARDANDO_COMPRA') AND COALESCE(esp.ativo,1) = 1;
+```
+
+**Como ler o resultado:**
+- **(1)** é o tamanho do que muda: a **primeira decisão** de cada um desses itens (ou de cada não conformidade aceita)
+  depois do deploy reserva o que liberar para quem espera. Vazia — nada muda até chegar material crítico novo.
+- **(2)** é só diagnóstico: a reserva já feita para quem chegou depois **não é desfeita** por esta versão (**B391**). Se
+  alguma requisição que esperava precisa do material com urgência, quem opera decide liberar a reserva da outra pela
+  tela **Reservas**.
+
+
+### B. Decisões de negócio — B1 a B395; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+*(**Atualizado em 2026-10-02 de B382 para B395**, com as treze da Etapa 75 — e a **B380 (b)** corrigida à vista: estava errada.)*
 
 *(**Atualizado em 2026-10-02 de B366 para B382**, com as dezesseis da Etapa 74.)*
 
@@ -5241,8 +5282,12 @@ de requisição"* e *"Liberação por rejeição de valor da requisição"*). As
 **B380 (NOVA, da Etapa 74, revisão do plano) — quem não pode levar é pulado, e a conta é a do pendente de entrega.**
 (a) A requisição cuja **liberação por valor** bloquearia agora (a mesma avaliação ao vivo da fila de separação) é
 pulada: a reserva ficaria presa atrás da alçada — e ela **perde o lugar** naquela nota (**C130**). (b) "Quanto falta" é
-o **pendente de entrega** menos o já reservado do item (protege o que foi separado e ainda não entregue); o e-mail da
-Etapa 70 continua usando o pendente de separação para decidir quem avisar — diferença declarada. (c) Duas notas do
+o **pendente de entrega** menos o já reservado do item (protege o que foi separado e ainda não entregue); ~~o e-mail da
+Etapa 70 continua usando o pendente de separação para decidir quem avisar — diferença declarada~~. ***Isto estava
+errado (corrigido na Etapa 75, B393):** a "diferença declarada" não era inofensiva — era um defeito. Numa requisição
+*Parcialmente Atendida* com material separado e ainda não entregue, o e-mail descontava o separado duas vezes e dizia,
+por exemplo, "pendente 2; reservado 2" quando a reserva tinha sido de 4 e faltavam 4. Hoje o e-mail usa a mesma conta
+da reserva.* (c) Duas notas do
 mesmo material ao mesmo tempo, ou nota e aprovação: o que falta é **relido** antes de cada reserva, e o excesso que
 passar do pendente é desfeito (*"Reserva na chegada acima do pendente — excesso desfeito"*). (d) Empate na mesma
 requisição: pelo número do item.
@@ -5263,6 +5308,83 @@ material da entrada está no estoque mas **reservado**, a recusa era *"Não é p
 insuficiente (material já consumido)"* — falsa, nada tinha saído. Agora: *"Não é possível estornar: o material está
 reservado para requisições (⟨números⟩) — libere as reservas antes de estornar"* (reserva sem requisição aparece como
 *"reservas manuais"*). A frase antiga continua para consumo de verdade, bloqueio, inspeção e terceiros.
+
+**B383 (NOVA, da Etapa 75) — duas portas reservam para quem esperava: a inspeção que aprova e a não conformidade que
+aceita.** Quando a **inspeção aprova** (toda ou parte) o material que entrou retido, a parte aprovada é reservada para
+quem esperava; quando a **não conformidade** da inspeção é decidida *Aceitar* ou *Aceitar sob desvio* e o reprovado
+volta ao disponível, o liberado também. **Descartados:** (a) o desbloqueio avulso (**Desbloquear Material** na tela
+**Inspeções**) — é ajuste de prateleira, sem nota nem documento: reservar ali faria um desbloqueio administrativo distribuir material
+sem ninguém pedir; (b) o estorno de um bloqueio avulso, pelo mesmo motivo; (c) pendurar no motor de estoque (o motor não
+sabe de requisição, e o desbloqueio avulso pegaria carona).
+
+**B384 (NOVA, da Etapa 75) — uma conta só para as três portas.** A nota (Etapa 74), a inspeção e a não conformidade usam
+o mesmo miolo de "quem esperava, em que ordem, quanto falta" — com o teto de cada porta. **Descartados:** (a) chamar de
+novo a reserva da nota depois da inspeção (medido: a inspeção aprovou 1 e ela reservou 4 — 3 eram de uma entrada manual
+alheia); (b) copiar a conta (duas réguas de quem esperava — a lição da Etapa 74).
+
+**B385 (NOVA, da Etapa 75) — o teto é o que esta decisão liberou.** A inspeção reserva no máximo a quantidade
+**aprovada**; a não conformidade, a quantidade **liberada** — e nunca mais que o disponível na hora. **Descartado:** o
+disponível inteiro do material (distribuiria saldo de ajuste ou de outra nota).
+
+**B386 (NOVA, da Etapa 75) — a reserva da inspeção leva a marca da nota.** Assim o estorno da entrada depois de uma
+inspeção aprovada inteira solta essa reserva como solta a da chegada (**B374**: só o necessário, só de quem não
+separou) e recalcula o status. **Descartados:** (a) sem marca (o estorno recusaria até alguém liberar à mão — e liberar
+à mão deixa o status mentindo, **C127**); (b) guardar o número da inspeção ou da não conformidade na reserva (a
+observação já diz o documento; nenhuma regra precisa distinguir).
+
+**B387 (NOVA, da Etapa 75) — a reserva é efeito, não condição: nunca derruba a decisão.** Se reservar falhar, a decisão
+da Qualidade fica gravada, o saldo já mudou, e só um aviso vai ao log. As respostas da inspeção e da não conformidade
+não mudaram. **Descartados:** (a) uma informação nova na resposta (exigiria tela para valer algo); (b) recusar a decisão
+quando a reserva falha.
+
+**B388 (NOVA, da Etapa 75) — a reserva fica no nome de quem decidiu.** Na tela **Reservas**, o solicitante é quem
+decidiu a inspeção (ou a não conformidade) — inclusive quem tem só o perfil **Qualidade**, que não pode reservar à mão:
+a reserva automática é feita pelo sistema em nome dele. **Descartado:** o nome do solicitante da requisição (a trilha
+diria que outra pessoa agiu).
+
+**B389 (NOVA, da Etapa 75) — o solicitante é avisado, uma vez por liberação.** O e-mail sai pelo mesmo aviso da Etapa 70
+(liga e desliga junto, **Avisar o Solicitante quando o Material Chega**), com assunto próprio *"[Almoxarifado] Material
+liberado para a sua requisição ⟨REQ⟩"* e primeira linha que diz a porta (*"…foi aprovado na inspeção e está no
+estoque."* / *"…foi liberado pela não conformidade ⟨NC⟩ e está no estoque."*). Cada inspeção e cada não conformidade
+avisa **uma** vez; duas inspeções da mesma nota avisam duas vezes. Recebe quem ganhou reserva **ou** tem saldo livre do
+material para separar. **Descartados:** (a) um tipo de aviso novo (mexeria no filtro da tela de Notificações); (b) usar
+a mesma marca de "já avisado" da nota (a segunda liberação da mesma nota seria engolida); (c) não avisar (o material
+crítico chegava em silêncio para quem pediu); (d) avisar todos os que esperavam (prometeria material reservado a outra).
+
+**B390 (NOVA, da Etapa 75) — a nota não reconta o item que já passou pela inspeção.** Se uma nota for retomada depois de
+falhar no meio, e o item crítico já tiver sido inspecionado, a reserva da nota **não** o conta como livre — o que a
+inspeção liberou foi distribuído pela porta da inspeção. **Descartado:** deixar (a retomada reservaria o reprovado com
+saldo de outra origem).
+
+**B391 (NOVA, da Etapa 75) — sem reserva retroativa.** Inspeções e não conformidades decididas antes do deploy não
+reservam; os itens ainda retidos no deploy reservam quando forem decididos (**A39 (1)** mostra o tamanho).
+**Descartado:** reservar no deploy (o mesmo motivo da **B377**).
+
+**B392 (NOVA, da Etapa 75) — as regras da Etapa 74 valem iguais na liberação.** Material de cliente (só para quem tem o
+projeto do dono), liberação por valor que bloquearia (pulada), *Em Separação* (ganha a reserva e mantém o status), o
+recálculo de status pela máquina — herdados, sem regra nova. **Descartado:** regras próprias da inspeção (duas réguas).
+
+**B393 (NOVA, da Etapa 75, revisão do código) — uma régua só para "quanto falta", nos dois e-mails e na reserva.** O
+e-mail da chegada (Etapa 74) e o da liberação descontavam duas vezes o que estava separado na caixa: numa requisição
+*Parcialmente Atendida* (pediu 10, separou 6, entregou 4, reserva de 2 cobrindo a caixa), a reserva ficava com os 4 que
+faltavam e o e-mail dizia *"pendente 2; reservado 2"*. Agora a reserva e os dois e-mails usam a mesma conta: o
+**pendente de entrega** menos o já reservado alheio — e o e-mail diz 4 e 4. Corrige a **B380 (b)** à vista (ela
+declarava a diferença inofensiva). **Descartado:** descontar o maior entre o reservado e o separado (a separação não
+consome a reserva; quem protege o separado de ser prometido a outro é a própria reserva).
+
+**B394 (NOVA, da Etapa 75, revisão do código) — duas liberações do mesmo material ao mesmo tempo esperam uma pela
+outra.** Medido: duas inspeções (ou duas notas) do mesmo material ao mesmo tempo reservavam as duas, as duas viam
+reserva demais e as duas desfaziam tudo — a fila inteira ficava sem nada, e quem fosse aprovado depois levava (o
+**C126** reaberto, oito de oito vezes). Agora a distribuição de um material espera a anterior do mesmo material
+terminar. **Premissa:** o sistema roda em **um** processo, com **um** banco SQLite — com mais de um processo, ou na
+migração para Postgres, isto vira uma trava no próprio banco (registrado no código). O "desfazer o excesso" continua,
+como defesa. **Descartados:** uma fila única para todos os materiais (atrasaria materiais independentes); travar só
+a rota (a não conformidade e a nota entram por outras portas).
+
+**B395 (NOVA, da Etapa 75, revisão do código) — o e-mail segue a regra do dono.** A requisição que a reserva pula por ser
+material de cliente sem o projeto do dono recebia *"Material liberado para a sua requisição"* — prometendo o que ela não
+pode retirar. Agora não recebe; no e-mail da chegada (Etapa 74), a linha daquele material sai (os outros materiais da
+nota continuam). **Descartado:** uma frase nova "material de outro cliente" (mais um texto para quem não pode agir).
 
 
 ### C. Furos e mudanças de número que quem opera precisa saber
@@ -6649,7 +6771,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      na ordem em que foram pedidos. **O que fazer:** integrações que conferiam `status === 'APROVADO'` na resposta da
      criação devem aceitar os status de reserva e de espera.
 
-126. **NOVO, da Etapa 74 (não corrigido — candidato da Etapa 75) — a inspeção que libera o material retido não reserva
+126. **✅ RESOLVIDO NA ETAPA 75 (`f149977b`, `c4d9212c`, `c8c089cb`; revisão `655d75b8`, `936179b2`, `18405a2e`) — a
+     inspeção que libera o material retido não reservava para quem esperava, nem avisava.** Agora a inspeção que aprova e
+     a não conformidade que aceita reservam o liberado para quem esperava, na ordem da fila, e avisam o solicitante
+     (**B383** a **B389**). Continua: a aprovação feita **no mesmo instante** da inspeção inverte a fila (**C131**). O
+     texto original, para o histórico:
+     **NOVO, da Etapa 74 (não corrigido — candidato da Etapa 75) — a inspeção que libera o material retido não reserva
      para quem esperava, nem avisa.** Material crítico chega e fica retido para inspeção (fora do disponível); a nota
      não o reserva para ninguém (**B370**). Quando a **inspeção aprova**, o material vira disponível solto: uma
      requisição aprovada depois leva o que a que esperava aguardava (medido na sonda: T1 esperava, a inspeção aprovou
@@ -6683,8 +6810,42 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 130. **NOVO, da Etapa 74 (declarado) — três efeitos da reserva na chegada que quem opera vai notar.** (1) A reserva
      fica no **nome de quem processou a nota** (na tela **Reservas**, o solicitante é o faturista — **B372**). (2) A
      requisição *Em Separação* ganha reserva na chegada, mas **não** recebe o e-mail (o aviso segue a lista da Etapa
-     70). (3) A requisição pulada porque a **liberação por valor** bloquearia (**B380**) perde o lugar naquela nota: o
-     material vai para a próxima da fila, e quando o valor for liberado ela só leva o que sobrou.
+     70). *(**Etapa 75:** vale igual para a reserva feita pela **inspeção** que aprova e pela **não conformidade** que
+     aceita — a *Em Separação* ganha a reserva e não recebe o e-mail; medido na revisão.)* (3) A requisição pulada porque
+     a **liberação por valor** bloquearia (**B380**) perde o lugar naquela nota: o material vai para a próxima da fila, e
+     quando o valor for liberado ela só leva o que sobrou.
+
+131. **NOVO, da Etapa 75 (medido, não corrigido) — a inspeção e uma aprovação no mesmo instante invertem a fila, sempre.**
+     R1 esperava 4; a inspeção aprova 4 e, no mesmo instante, R3 é aprovada pelo **Aprovar**: **R3 leva os 4** (fica
+     *Totalmente Reservada*) e R1 fica com nada (*Aguardando estoque*). Medido oito de oito vezes, também depois da trava
+     por material (**B394**): o **Aprovar** não passa pela distribuição de quem esperava, então a trava não o alcança. É
+     a mesma família da "corrida nota × aprovação" da Etapa 74 (**D (74)**), só que aqui medida como inversão
+     sistemática, não ocasional. **O que fazer:** não aprovar requisições daquele material enquanto a Qualidade decide a
+     inspeção dele; se aconteceu, a **A39 (2)** acha, e quem opera decide liberar a reserva da que chegou depois.
+
+132. **NOVO, da Etapa 75 (declarado) — a trava por material vale para um processo só.** As liberações do mesmo material
+     esperam umas pelas outras (**B394**) por uma fila na memória do servidor. Se o sistema passar a rodar em **mais de um
+     processo** (dois servidores, ou o modo *cluster*), ou quando migrar para Postgres, a fila precisa virar uma trava no
+     banco — senão a corrida que zerava a fila volta. Registrado no código e no plano da migração.
+
+133. **NOVO, da Etapa 75 (declarado, anteriores e raros) — três janelas pequenas da liberação.** (1) Entre a decisão da
+     inspeção zerar o retido e gravar a linha da inspeção, o item parece livre e não inspecionado — uma nota retomada
+     exatamente nesse instante o contaria como livre (**B390** se apoia na linha gravada). (2) Duas liberações
+     simultâneas que passem do pendente desfazem o excesso — hoje é defesa, porque a trava (**B394**) as põe em fila.
+     (3) Com dois itens do **mesmo material crítico** na mesma nota, o estorno da entrada de um pode soltar a reserva
+     feita pela inspeção do outro (as reservas são marcadas pela nota e o material — o mesmo do **C129 (2)**; a conta
+     total fica certa).
+
+134. **NOVO, da Etapa 75 — o que muda para quem decide a inspeção e a não conformidade, e para quem recebe o e-mail.**
+     (1) Aprovar uma inspeção (ou aceitar uma não conformidade) pode mudar o status de requisições: as que esperavam
+     viram *Parcialmente/Totalmente Reservada* e aparecem como **Separar** na fila. (2) Quem pediu material crítico
+     passa a receber *"[Almoxarifado] Material liberado para a sua requisição ⟨REQ⟩"* — antes, o material crítico chegava
+     em silêncio (a nota não avisa o retido). (3) Na tela **Reservas**, essas reservas aparecem no nome de quem decidiu
+     (inclusive a Qualidade), com a observação *"Reserva na liberação da inspeção — recebimento ⟨REC⟩ — requisição
+     ⟨REQ⟩"* ou *"Reserva na liberação da não conformidade ⟨NC⟩ — requisição ⟨REQ⟩"*. (4) O e-mail da chegada da nota
+     (Etapa 74) mudou junto: diz o pendente certo para quem tem material separado na caixa (**B393**) e não lista o
+     material de cliente para quem não pode retirá-lo (**B395**). **O que fazer:** avisar a Qualidade de que aprovar a
+     inspeção agora reserva para quem esperava — o resultado aparece na fila de separação.
 
 
 
@@ -7511,7 +7672,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   (**A37**, **B364**); e os itens gravados fora de ordem antes desta versão continuam na ordem em que foram gravados.
 - **(74) Só a nota de compra reserva para quem esperava** — a inspeção que libera o retido (**C126**, próxima etapa) e
   as entradas que não são nota (entrada manual, devolução, transferência, ajuste, retorno de terceiro) deixam o
-  material livre: não há "quem esperava" ligado a elas.
+  material livre: não há "quem esperava" ligado a elas. *(**Etapa 75:** a inspeção que aprova e a não conformidade que
+  aceita passaram a reservar — **B383**. As outras entradas continuam como descrito.)*
 - **(74) A requisição em *Aguardando aprovação de valor* não ganha reserva na chegada** — ela não está entre as que
   podem separar; e a que está *Aguardando* mas cuja liberação por valor bloquearia é pulada (**B380**, **C130**).
 - **(74) Sem reserva retroativa** — nada é reservado no deploy; quem esperava ganha reserva na próxima nota (**B377**,
@@ -7525,6 +7687,17 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   para a requisição de um item só que ganhou parte do que pedia na chegada.
 - **(74) Sem tela nova** — a reserva da chegada aparece na tela **Reservas** com a observação *"Reserva na chegada do
   recebimento ⟨REC⟩ — requisição ⟨REQ⟩"*; não há coluna "reservado na chegada".
+- **(75) O desbloqueio avulso não reserva** — **Desbloquear Material** (na tela **Inspeções**) e o estorno de um
+  bloqueio avulso devolvem o material ao disponível sem reservar para ninguém: são ajuste de prateleira, sem nota nem
+  documento (**B383**). Um teste prende o comportamento, para a mudança futura ser vista e não escondida.
+- **(75) Sem reserva retroativa** — inspeções e não conformidades decididas antes do deploy não reservam (**B391**,
+  **A39**).
+- **(75) O e-mail da liberação tem só duas formas** — *tudo reservado* ou *nada reservado* (a forma "só parte" da Etapa 74
+  não se aplica: cada liberação é de um material só).
+- **(75) A aprovação no mesmo instante da inspeção inverte a fila** — o **Aprovar** não passa pela distribuição de quem
+  esperava (**C131**); sem trava entre a decisão da Qualidade e a aprovação — fica para a migração de banco.
+- **(75) Sem tela nova e sem informação nova na resposta** — a inspeção e a não conformidade respondem como antes; a
+  reserva aparece na tela **Reservas** e na fila de separação (**B387**).
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -8173,6 +8346,21 @@ prova:
 4. **O estorno.** Em **Movimentações**, estornar a entrada da nota de uma requisição que ainda não separou: o toast de
    sucesso, e a requisição volta a **Aguard. Compra**; com uma que já separou, o toast de erro diz *"…o material está
    reservado para requisições (⟨números⟩) — libere as reservas antes de estornar"*.
+
+**(75) Nenhum clique foi dado nesta etapa, e o cliente não mudou.** Os testes provam o servidor pela rota (com usuários
+reais por perfil — a Qualidade decide) e pelo serviço: a base 3; a inspeção 15; a não conformidade 10; o e-mail 10 mais
+as funções puras; a jornada ponta a ponta 13; a revisão 8. O que **só o navegador** prova:
+
+1. **A inspeção reserva.** Duas requisições de um material **crítico**, uma **Urgente** e uma **Normal**, as duas
+   **Aguard. Compra**; processar a nota (o material entra retido — nenhuma muda); em **Inspeções**, decidir o item com
+   **Quantidade aprovada** e **Salvar**: a urgente vira **Parcialmente/Totalmente Reservada** — e o badge da lista de
+   requisições mostra isso ao reabrir a tela.
+2. **A tela Reservas.** A reserva aparece com a observação *"Reserva na liberação da inspeção — recebimento ⟨REC⟩ —
+   requisição ⟨REQ⟩"* e no nome de quem decidiu a inspeção (um usuário só **Qualidade** também).
+3. **A não conformidade.** Decidir a não conformidade do reprovado como **Aceitar** (**Registrar decisão**): o liberado
+   vai para quem ainda faltava; a observação diz *"Reserva na liberação da não conformidade ⟨NC⟩ — requisição ⟨REQ⟩"*.
+4. **O e-mail.** Com e-mail configurado, o solicitante recebe *"[Almoxarifado] Material liberado para a sua requisição
+   ⟨REQ⟩"*; na tela **Notificações**, o filtro *Aviso ao requisitante* mostra a linha.
 
 
 
@@ -9272,6 +9460,15 @@ inteira — e a suíte do segundo viu o arquivo quebrado e acusou falhas em test
 elas o mesmo `indicadoresSpec27Integracao` do **G80**, que passou 5 vezes seguidas com a árvore parada). Não é defeito
 de produção. **A regra para as próximas etapas:** um executor que sabota código de produção não roda em paralelo com
 outro que roda a suíte na mesma árvore (ou cada um numa worktree própria).
+
+**G85 (NOVO, notado na Etapa 75 — do fluxo de trabalho, não do sistema). Controle positivo que não consegue falhar.** O
+plano da Etapa 75 prescrevia, como prova de cada regra, quatro sabotagens que **nunca** poderiam derrubar o teste: a
+reserva por item engole a própria falha e o gancho nunca lança, então "tirar a proteção → a decisão responde 500" nunca
+dá 500; e duas guardas cobriam um caso em que o serviço já devolvia vazio. A revisão do plano pegou as quatro antes da
+execução, e elas foram refeitas para sabotar algo que **escapa** da proteção (as duas guardas ficaram declaradas como
+redundantes por construção). Não é defeito de produção — é o mesmo padrão do teste vazio do CLAUDE.md, agora no **plano**:
+um controle positivo escrito no papel também precisa saber falhar. **A regra:** quem escreve o plano diz, para cada
+sabotagem, qual asserção cai e por qual caminho do código — e a revisão do plano confere.
 
 aparece na hora, para quem está editando.
 ## Etapa 0 — Fundação (2026-08-03)
@@ -17688,9 +17885,101 @@ uma entrada já estornada soltava a reserva de quem esperava; o estorno recusado
 acontecia; e a recusa dizia *"material já consumido"* com o material só reservado (corrigidos, **B381**, **B382**).
 
 
+## Etapa 75 — O material que a inspeção libera fica com quem esperava (2026-10-02)
+
+Material crítico não entra direto no estoque: a nota o deixa **retido para inspeção**, e a reserva da chegada (Etapa 74)
+não o reserva para ninguém — ele ainda não está disponível. O problema aparecia depois: quando a Qualidade **aprovava** a
+inspeção, o material virava disponível **solto**, e uma requisição aprovada logo em seguida levava tudo; a que esperava
+havia semanas ouvia *"Máximo: 0"* ao separar. O mesmo acontecia quando a **não conformidade** do reprovado era aceita e
+o material voltava ao estoque. E o solicitante do material crítico não recebia e-mail nenhum — nem na chegada, nem na
+inspeção. Agora a inspeção que aprova e a não conformidade que aceita **reservam** o que liberaram para quem esperava,
+na mesma ordem da fila de separação, e o solicitante recebe *"Material liberado para a sua requisição"* dizendo quanto
+ficou reservado. Quem é aprovado depois só leva o que sobrou.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A inspeção aprovava e o material ficava livre para quem chegasse primeiro (**C126**) | Reserva o aprovado para quem esperava, na ordem da fila (**B383**, **B385**) |
+| A não conformidade aceita devolvia o reprovado ao estoque solto | Reserva o liberado para quem ainda faltava (**B383**) |
+| O solicitante do material crítico não recebia e-mail nenhum | Recebe *"[Almoxarifado] Material liberado para a sua requisição ⟨REQ⟩"*, com o quanto ficou reservado (**B389**) |
+| O e-mail da chegada (Etapa 74) dizia *"pendente 2; reservado 2"* para quem tinha material separado na caixa | Diz o pendente certo — a mesma conta da reserva (**B393**) |
+| Duas inspeções (ou duas notas) do mesmo material ao mesmo tempo deixavam a fila inteira sem nada | Uma espera a outra; cada requisição fica com o que lhe cabe (**B394**) |
+| O e-mail prometia material de cliente a quem não podia retirá-lo | Não promete (**B395**) |
+
+### As regras, com o cenário exato
+
+Preparação: um material **M** com a caixa **Material crítico** marcada no cadastro (a inspeção de materiais críticos no
+recebimento vem ligada de fábrica), sem saldo, com fornecedor e pedido. Duas requisições de M,
+aprovadas por outra pessoa: **R2 Normal** pedindo 4, criada **antes**, e **R1 Urgente** pedindo 4, criada depois. As duas
+ficam **Aguard. Compra**.
+
+**1. A nota retém, e ninguém ganha nada ainda.** Processar uma nota de **6** de M (**Recebimentos**, até **Processar
+Nota**): o material entra **retido para inspeção**; R1 e R2 continuam **Aguard. Compra**, nenhuma reserva, nenhum e-mail.
+
+**2. A inspeção aprova e reserva na ordem da fila.** Em **Inspeções**, decidir o item: **Quantidade aprovada** 5,
+**Quantidade reprovada** 1, **Salvar**. R1 (urgente) fica com **4** — **Totalmente Reservada**; R2 com **1** —
+**Parcialmente Reservada**. Na tela **Reservas**, as duas têm a observação *"Reserva na liberação da inspeção —
+recebimento ⟨REC⟩ — requisição ⟨REQ⟩"*, no nome de quem decidiu. Uma não conformidade é aberta para o 1 reprovado (como
+antes).
+
+**3. O e-mail diz a verdade.** R1 recebe *"[Almoxarifado] Material liberado para a sua requisição ⟨R1⟩"*, que começa com
+*"O material que a sua requisição aguardava foi aprovado na inspeção e está no estoque."*, lista *"⟨cód⟩ — ⟨M⟩:
+liberado 5 ⟨un⟩ (pendente na requisição: 4 ⟨un⟩; reservado para a sua requisição: 4 ⟨un⟩)"* e termina com *"O material
+indicado como reservado fica guardado para a sua requisição — outra requisição não pode levá-lo. A separação é feita
+pelo almoxarifado."* R2 recebe o mesmo com *"reservado … 1"*.
+
+**4. Quem chega depois não leva.** Uma requisição **R4** de M, aprovada agora: fica **Aguard. Compra**, sem reserva. Na
+**Fila de separação**, R1 e R2 aparecem em **Separar**. Decidir o mesmo item de novo: *"Item não possui quantidade em
+inspeção retida"* — nada é reservado duas vezes.
+
+**5. A não conformidade aceita completa quem faltava.** Em **Não Conformidades**, decidir a do reprovado como
+**Aceitar** (**Registrar decisão**): o 1 liberado vai para **R2** (agora 2 de 4, ainda **Parcialmente Reservada**),
+com a observação *"Reserva na liberação da não conformidade ⟨NC⟩ — requisição ⟨R2⟩"*; o e-mail de R2 começa com *"O
+material que a sua requisição aguardava foi liberado pela não conformidade ⟨NC⟩ e está no estoque."* R4 continua sem
+nada.
+
+**6. O estorno da entrada solta a reserva da inspeção.** Outra nota de 3, inspeção aprovando os 3 para uma requisição
+que esperava: em **Movimentações**, estornar a entrada da nota passa, a reserva é liberada (*"Estorno da entrada do
+recebimento ⟨REC⟩"*) e a requisição volta a esperar. Com material reprovado na inspeção, o estorno continua recusado
+como antes.
+
+### O que esta etapa NÃO cobre
+
+1. **A aprovação feita no mesmo instante da inspeção inverte a fila** (**C131**) — sem trava entre a decisão da
+   Qualidade e o **Aprovar**.
+2. **O desbloqueio avulso** (**Desbloquear Material**) e o estorno de bloqueio avulso não reservam (**B383**).
+3. **Nada é reservado no deploy** (**B391**, **A39**).
+4. **Liberar à mão ou deixar vencer** uma reserva de requisição ainda não recalcula o status (**C127**) — próxima etapa.
+5. **A requisição *Em Separação*** ganha a reserva e não recebe o e-mail (**C130 (2)**).
+
+### O que a revisão encontrou
+
+A medição reproduziu o problema pelas rotas (a inspeção aprovou 4, nada foi reservado, uma requisição aprovada depois
+levou os 4 e a que esperava ouviu *"Máximo: 0"*) e achou que a **não conformidade** aceita era uma segunda porta do mesmo
+problema, e que chamar de novo a reserva da nota depois da inspeção reservaria material de outra origem (aprovou 1,
+reservou 4). A revisão do **plano** achou que **quatro** das sabotagens previstas como prova nunca conseguiriam falhar
+(**G85**) — foram refeitas antes de executar. A revisão do **código**, executando, achou: o e-mail — o desta etapa e o da
+Etapa 74 — descontava duas vezes o que estava separado na caixa (a **B380 (b)** da Etapa 74 declarava isso inofensivo e
+**estava errada** — corrigido, **B393**); duas inspeções (ou duas notas) do mesmo material ao mesmo tempo zeravam a fila
+inteira, oito de oito vezes (corrigido com a trava por material, **B394**); e o e-mail prometia material de cliente a
+quem não podia retirá-lo (**B395**). A inversão inspeção × **Aprovar** no mesmo instante ficou medida e declarada
+(**C131**).
+
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 75 entregue (2026-10-02):** **o material que a inspeção libera fica com quem esperava.** A inspeção que aprova
+  e a não conformidade que aceita reservam o que liberaram para quem esperava, na ordem da fila de separação, e o
+  solicitante recebe *"Material liberado para a sua requisição"* com o quanto ficou reservado. Quem é aprovado depois
+  só leva o que sobrou. A revisão corrigiu também o e-mail da chegada da Etapa 74 (a conta do pendente com material
+  separado na caixa), a corrida de duas liberações do mesmo material que zerava a fila, e o e-mail que prometia material
+  de cliente. **O que é seu:** a consulta **A39**; as decisões **B383 a B395** (e a **B380 (b)** corrigida à vista); os
+  avisos **C131 a C134** (o **C131** — aprovar no mesmo instante da inspeção inverte a fila — e o **C134**, o que muda
+  para a Qualidade); as limitações **(75)** em D e as verificações **(75)** em F. **Próxima: Etapa 76 — liberar à mão ou
+  deixar vencer a reserva de uma requisição passa a recalcular o status dela (C127) — ver o plano da Etapa 75.**
 
 - **Etapa 74 entregue (2026-10-02):** **a requisição que esperava fica com o material que chegou.** A nota processada
   reserva o que chegou livre para quem esperava, na ordem da fila de separação (urgência, necessidade, mais antiga); a
@@ -17700,8 +17989,8 @@ acontecia; e a recusa dizia *"material já consumido"* com o material só reserv
   por valor deixavam reserva presa, e o painel *Requisições Abertas* não listava as reservadas. **O que é seu:** a
   consulta **A38** (reservas presas no passado e o tamanho da primeira chegada); as decisões **B367 a B382**; os avisos
   **C126 a C130** (o **C126** é a próxima etapa, e o **C128** muda o que integrações veem depois de cada nota); as
-  limitações **(74)** em D e as verificações **(74)** em F. **Próxima: Etapa 75 — a inspeção que libera o material
-  retido reserva para quem esperava (C126) — ver o plano da Etapa 74.**
+  limitações **(74)** em D e as verificações **(74)** em F. ~~**Próxima: Etapa 75 — a inspeção que libera o material
+  retido reserva para quem esperava (C126) — ver o plano da Etapa 74.**~~ *(Feita — Etapa 75.)*
 
 - **Etapa 73 entregue (2026-10-02):** **a requisição que espera compra nasce com o status certo, em qualquer forma de
   aprovar.** Com a compra já pedida ao fornecedor, a requisição sem saldo nasce *Aguardando compra* (antes, *Aguardando
