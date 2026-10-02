@@ -277,7 +277,9 @@ module.exports = function registerRequisicoesMaterialRoutes(app, db, authenticat
 
            LEFT JOIN tipos_material_almoxarifado tm ON ma.tipo_material_id = tm.id
 
-           WHERE ir.requisicao_id = ?`,
+           WHERE ir.requisicao_id = ?
+
+           ORDER BY ir.id`,
 
           [req.params.id],
 

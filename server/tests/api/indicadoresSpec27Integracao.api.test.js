@@ -59,8 +59,19 @@ let seq = 0;
   console.log('\n=== Etapa 67 Task 5: indicadores da spec 27 ponta a ponta (rotas) ===\n');
   const { app, db, close, setUser } = await createTestApp({ user: { ...ADMIN } });
   const dia = async (n) => (await dbGet(db, 'SELECT date(\'now\', ?) AS d', [`${-n} days`])).d;
-  const HOJE = await dia(0);
-  const ONTEM = await dia(1);
+  // Etapa 73 (T0, G80 causa 1): HOJE/ONTEM eram lidos UMA vez aqui; a rodada que atravessava a
+  // meia-noite UTC derrubava 7 de 8 cenarios (sonda73-g80-virada.js). Agora cada cenario le os seus
+  // na entrada (`datas()`), e nao existe mais HOJE/ONTEM neste escopo — esquecer de ler e ReferenceError.
+  const datas = async () => ({ HOJE: await dia(0), ONTEM: await dia(1) });
+  /** A cadeia [1 parcial] -> [1 completar] -> [1 C89] usa a mesma A com prazo "hoje": se faltar menos
+   *  de `margem` segundos para a meia-noite UTC, espera a virada antes de montar A. */
+  const esperarViradaSePerto = async (margem = 30) => {
+    const { s } = await dbGet(db, "SELECT (julianday(date('now','+1 day')) - julianday('now')) * 86400 AS s");
+    if (s < margem) {
+      console.log(`  (faltam ${s.toFixed(1)} s para a meia-noite UTC: esperando a virada)`);
+      await new Promise((r) => { setTimeout(r, Math.ceil(s + 1) * 1000); });
+    }
+  };
 
   const loc = async () => {
     const c = `E67T5-L${++seq}`;
@@ -111,7 +122,11 @@ let seq = 0;
     const det = await request(app).get(`/api/almoxarifado/requisicoes/${cr.body.id}`);
     assert.strictEqual(det.status, 200);
     assert.strictEqual(det.body.data_necessidade, dataNecessidade, 'a rota de criacao nao gravou o prazo');
-    return { id: cr.body.id, itens: det.body.itens.map((i) => i.id) };
+    // Etapa 73 (T0, G80 causa 2): o item e achado pelo MATERIAL, nao pela posicao no detalhe.
+    // `itens[k]` = o item do k-esimo material pedido — separar e entregar usam este mapa.
+    const porMaterial = new Map(det.body.itens.map((i) => [i.material_id, i.id]));
+    assert.strictEqual(porMaterial.size, itens.length, `um item por material: ${JSON.stringify(det.body.itens)}`);
+    return { id: cr.body.id, itens: itens.map(([materialId]) => porMaterial.get(materialId)) };
   };
   const separar = async (reqId, pares) => {
     setUser({ ...ADMIN });
@@ -135,6 +150,7 @@ let seq = 0;
 
   const ctx = {};
   await test('[1 formato] criacao com data_necessidade DD/MM/AAAA -> 400 literal e nada gravado', async () => {
+    const { HOJE } = await datas();
     const m = await material();
     const n0 = (await dbGet(db, 'SELECT COUNT(*) n FROM requisicoes_almoxarifado')).n;
     setUser({ ...ADMIN });
@@ -146,6 +162,8 @@ let seq = 0;
   });
 
   await test('[1 parcial] prazo HOJE parcial -> em_aberto_no_dia; prazo ha 2 dias parcial -> fora_do_prazo; integrais parados', async () => {
+    await esperarViradaSePerto();
+    const { HOJE } = await datas();
     ctx.base = await indic();
     ctx.A = await separada(HOJE); // prazo hoje: vai fechar no prazo
     ctx.B = await separada(await dia(2)); // prazo vencido: vai fechar atrasada
@@ -202,6 +220,8 @@ let seq = 0;
 
   // ══════════════ (2) ajustes: o bloco e o relatorio por motivo no mesmo recorte ══════════════
   await test('[2] motivo do cadastro + texto livre + estorno: bloco ajustes = Σ ajustes-por-motivo = historico proprio', async () => {
+    await esperarViradaSePerto(); // antes/depois do recorte no mesmo par de dias
+    const { HOJE, ONTEM } = await datas();
     setUser({ ...ADMIN });
     const cad = await request(app).post('/api/almoxarifado/motivos-movimentacao')
       .send({ nome: `Avaria E67T5 ${SUF}`, tipos: ['AJUSTE_NEGATIVO', 'AJUSTE_POSITIVO', 'PERDA'] });
@@ -266,9 +286,12 @@ let seq = 0;
   const NOME_CADASTRO = `Fornecedor Cadastro E67T5 ${SUF}`;
   const NOME_NF = `Forn NF Avulsa E67T5 ${SUF}`;
   const URL_QF = '/api/almoxarifado/relatorios/qualidade-fornecedores';
+  // Etapa 73 (T0): o recorte e lido NA CHAMADA e cobre ontem+hoje — o [3 CNPJ] agrega o recebimento
+  // do [3 pedido], que pode ter ficado do outro lado da meia-noite (o fornecedor e unico por SUF).
   const qf = async () => {
+    const { HOJE, ONTEM } = await datas();
     setUser({ ...ADMIN });
-    const r = await request(app).get(`${URL_QF}?data_inicio=${HOJE}&data_fim=${HOJE}`);
+    const r = await request(app).get(`${URL_QF}?data_inicio=${ONTEM}&data_fim=${HOJE}`);
     assert.strictEqual(r.status, 200, JSON.stringify(r.body));
     return r.body;
   };
@@ -358,12 +381,13 @@ let seq = 0;
 
   // ══════════════ (4) export das duas chaves novas ══════════════
   await test('[4] lista: as duas chaves novas exportaveis; export XLSX responde com os cabecalhos', async () => {
+    const { HOJE, ONTEM } = await datas();
     setUser({ ...ADMIN });
     const lista = await request(app).get('/api/almoxarifado/relatorios');
     assert.strictEqual(lista.status, 200);
     for (const [tipo, primeiro, qs, minLinhas] of [
       ['ajustes-por-motivo', 'Origem', `?data_inicio=${ONTEM}&data_fim=${HOJE}`, 2],
-      ['qualidade-fornecedores', 'Fornecedor', `?data_inicio=${HOJE}&data_fim=${HOJE}`, 1],
+      ['qualidade-fornecedores', 'Fornecedor', `?data_inicio=${ONTEM}&data_fim=${HOJE}`, 1],
     ]) {
       const e = lista.body.relatorios.find((r) => r.tipo === tipo);
       assert.ok(e, `${tipo} fora da lista`);

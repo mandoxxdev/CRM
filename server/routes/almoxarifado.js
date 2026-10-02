@@ -3181,7 +3181,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
               LEFT JOIN almoxarifados a ON l.almoxarifado_id = a.id
               LEFT JOIN localizacoes_almoxarifado lsep ON lsep.id = ir.origem_separacao_id
               LEFT JOIN lotes_almoxarifado ltsep ON ltsep.id = ir.lote_separacao_id
-              WHERE ir.requisicao_id = ?`,
+              WHERE ir.requisicao_id = ?
+              -- Etapa 73 (T0): a ordem do pedido (o id do item nasce na ordem do payload).
+              ORDER BY ir.id`,
         [req.params.id], async (err2, itens) => {
           if (err2) return res.status(500).json({ error: err2.message });
           // Etapa 15 (C2, mudança aditiva): quem vê a requisição vê as assinaturas de entrega

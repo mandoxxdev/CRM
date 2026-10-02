@@ -187,10 +187,17 @@ async function createRequisicao(db, user, payload, { modulo, skipNotificacoes = 
 
   const reqId = insertResult.lastID;
 
-  await Promise.all(itens.map((item) => dbRun(db,
-    `INSERT INTO itens_requisicao_almoxarifado (requisicao_id, material_id, quantidade_solicitada, observacoes)
-     VALUES (?,?,?,?)`,
-    [reqId, item.material_id, item.quantidade, item.observacoes || null])));
+  // Etapa 73 (T0, G80): um item por vez, NA ORDEM do payload. Era Promise.all(itens.map(INSERT)) e o
+  // node-sqlite3 nao garante a ordem de execucao de comandos paralelos na mesma conexao: o id do
+  // item saia trocado (medido: 16-17 de 20 requisicoes de 5 itens) e o detalhe, que segue o id,
+  // mostrava B antes de A para quem pediu A e B.
+  for (const item of itens) {
+    // eslint-disable-next-line no-await-in-loop
+    await dbRun(db,
+      `INSERT INTO itens_requisicao_almoxarifado (requisicao_id, material_id, quantidade_solicitada, observacoes)
+       VALUES (?,?,?,?)`,
+      [reqId, item.material_id, item.quantidade, item.observacoes || null]);
+  }
 
   if (isRascunho || skipNotificacoes) {
     return { id: reqId, numero, status: statusInicial };
