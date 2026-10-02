@@ -1366,8 +1366,15 @@ A trilha de auditoria do pedido registra *"Recebido do pedido estornado"* (*"Est
 ⟨quantidade⟩ do pedido"*) e, quando reabre, *"Reabertura automática do pedido"*. Se a parte do pedido falhar, o estorno
 do estoque continua valendo.
 
-O estorno **não** desfaz o resto da nota: o recebimento continua *Processado*, a conta a pagar e a solicitação de compra
-ficam como estão. Estornar a entrada de nota **sem** pedido não toca pedido nenhum.
+**Estornar a entrada também reabre a solicitação de compra que ela tinha atendido.** Se aquela entrada era o que cobria
+uma solicitação de compra do almoxarifado (seção 21b.3b) — a solicitação estava *Recebida* por causa dela e, sem ela,
+deixa de estar coberta —, a solicitação volta a **Vinculada**, com a trilha *"Solicitação reaberta (estorno)"*
+(*"Estorno da movimentação #⟨id⟩ reabriu a solicitação"*), e volta a contar como "a caminho" na sugestão de
+reposição. Não reabre quando o pedido está *Recebido* à mão, *Cancelado* ou *Rejeitado*, nem a solicitação *Cancelada*.
+Uma nota que entrou **antes** de a solicitação ser ligada ao pedido não reabre nada: aquela entrada não era dela.
+
+O estorno **não** desfaz o resto da nota: o recebimento continua *Processado* e a conta a pagar fica como está.
+Estornar a entrada de nota **sem** pedido não toca pedido nenhum.
 
 **Duas recusas próprias da entrada de compra**, verificadas antes de qualquer alteração:
 
@@ -5010,8 +5017,19 @@ devolução **não** é descontada) nos últimos N dias, dividida por N — N é
 **Janela do Consumo Médio (dias)**, padrão 90, e a legenda da aba mostra o valor em uso.
 
 A **posição** do material é `disponível + a caminho`, onde "a caminho" soma as solicitações de
-compra abertas (pendentes ou vinculadas a pedido) criadas nos últimos **Horizonte da
-Solicitação (dias)** — padrão 60. O material é sugerido quando `posição < ponto efetivo`.
+compra abertas criadas nos últimos **Horizonte da Solicitação (dias)** — padrão 60:
+
+- a solicitação **Pendente** conta a quantidade inteira;
+- a solicitação **Vinculada** a um pedido conta **só o que ainda falta chegar para ela** — o que ela pediu menos o que
+  as notas do pedido já entregaram para ela (seção 21b.3b). Uma solicitação de 10 com 4 já recebidos conta 6: os 4
+  já estão no disponível e não contam duas vezes;
+- a solicitação vinculada a um pedido **encerrado** (*Recebido* à mão, *Cancelado* ou *Rejeitado*) conta **zero** — o
+  pedido não vai trazer mais nada;
+- a solicitação vinculada a um pedido que **já entregou todo** o material dela conta **zero**.
+
+O "a caminho" de uma solicitação vinculada não é limitado pelo que o pedido comprou: uma solicitação de 100 ligada a um
+pedido de 5 conta 100 enquanto o pedido estiver em andamento — a decisão de comprar menos é do comprador, que cancela a
+solicitação ou gera outro pedido. O material é sugerido quando `posição < ponto efetivo`.
 Consequências práticas:
 
 - **O que já foi pedido não é pedido de novo** — gerar a solicitação tira o material da lista.
@@ -5050,9 +5068,13 @@ escolhe *quais* materiais, nunca *quanto* — e o painel de resultado lista cada
 criada com a quantidade real gravada. Cada criação fica registrada na auditoria. As
 solicitações aparecem na aba **Solicitações** (pendentes e vinculadas a pedido, com o motivo).
 
-Também existe a varredura **verificar mínimos**, que percorre os materiais próprios abaixo do
-mínimo e cria as solicitações que faltam — cada solicitação criada por ela registra na
-auditoria **quem disparou a varredura**.
+Também existe a varredura **verificar mínimos** (pela API), que percorre os materiais próprios
+abaixo do mínimo e cria as solicitações que faltam — cada solicitação criada por ela registra na
+auditoria **quem disparou a varredura**. Ela **não** cria solicitação para o material que já
+tem uma solicitação **Pendente**, nem para o que tem uma **Vinculada** a pedido em andamento
+(não encerrado) criada dentro do horizonte. Fora do horizonte, a vinculada antiga deixa de
+segurar — um pedido esperado há mais de 60 dias pode ganhar uma segunda solicitação, que o
+comprador cancela se o pedido ainda vier.
 
 ### 21b.3b O ciclo da solicitação — vincular, receber, cancelar
 
@@ -5064,19 +5086,42 @@ Uma solicitação de compra passa por, no máximo, três estados:
   botão **Gerar pedido** desta mesma aba (seção 21b.3d). O vínculo é
   validado nas duas pontas: pedido inexistente é recusado com "Pedido de compra não
   encontrado", e solicitação já finalizada, com "Solicitação já finalizada (RECEBIDA ou
-  CANCELADA) — não pode ser vinculada a um pedido". Vincular de novo a **outro** pedido
-  substitui o vínculo anterior — e a chegada do pedido antigo deixa de fechar esta
-  solicitação (só o vínculo atual fecha).
-- **Recebida** ou **Cancelada** — os dois estados finais. Uma solicitação finalizada não muda
-  mais de estado: não pode ser cancelada de novo, re-vinculada, nem "reaberta" pela chegada
-  de uma nota.
+  CANCELADA) — não pode ser vinculada a um pedido". Vincular a um pedido que **já recebeu todo**
+  o material da solicitação também é recusado: "O pedido ⟨número⟩ já recebeu todo o ⟨nome do
+  material⟩: vincule a solicitação a outro pedido" (o pedido sem número aparece como #⟨id⟩).
+  Vincular de novo a **outro** pedido substitui o vínculo anterior — e a chegada do pedido
+  antigo deixa de fechar esta solicitação (só o vínculo atual fecha); o que já tinha chegado
+  para ela pelo primeiro pedido continua dela.
+- **Recebida** ou **Cancelada** — os dois estados finais. Uma solicitação finalizada não pode
+  ser cancelada de novo nem re-vinculada. A **Recebida** só volta a **Vinculada** por um
+  caminho: o estorno da entrada que a tinha atendido (seção 6.10). A **Cancelada** nunca volta.
 
-**Recebida (automático).** Quando a **nota fiscal do pedido vinculado é processada** no
-recebimento, todas as solicitações vinculadas àquele pedido viram **Recebida**, com registro
-na auditoria. Isso acontece na **primeira** nota do pedido, mesmo que a entrega seja parcial —
-o sistema não confere quantidade nesse fechamento. Se a entrega parcial deixar o material
-ainda abaixo do ponto de reposição, ele simplesmente **volta a ser sugerido** pela régua
-normal.
+**O que chegou para cada solicitação.** Cada vez que uma nota de um pedido é processada (pelo
+processamento da nota ou pela aprovação direta do recebimento), o que entrou de cada material é
+**atribuído** às solicitações vinculadas àquele pedido e material, por ordem de criação — cada
+uma recebe até o que falta para ela, e o que sobrar não é de nenhuma. Esse registro é gravado
+uma vez, na entrada, e não é recalculado depois: cancelar uma solicitação não passa o que ela
+recebeu para outra, e uma nota que entrou **antes** de a solicitação ser ligada ao pedido não
+conta para ela. Na aba **Solicitações**, a solicitação vinculada mostra ao lado do status
+**"chegou ⟨X⟩ de ⟨Y⟩"** (X é o que chegou para ela; Y, o que ela pediu) quando alguma coisa já
+chegou, e **"pedido encerrado — nada a caminho"** quando o pedido dela foi encerrado
+(*Recebido* à mão, *Cancelado* ou *Rejeitado*). A solicitação Pendente não mostra nenhum dos
+dois.
+
+**Recebida (automático).** Ao processar uma nota do pedido vinculado, a solicitação vira
+**Recebida**, com registro na auditoria que diz a regra que a fechou, quando:
+
+| Regra (na auditoria) | Quando |
+|---|---|
+| `MATERIAL_COMPLETO` | o pedido completou o material dela — tudo o que foi pedido daquele material no pedido chegou. Fecha todas as solicitações daquele material no pedido |
+| `SOLICITADO_RECEBIDO` | o que chegou **para ela** já cobre o que ela pediu, mesmo com o pedido ainda trazendo mais. Vale por solicitação: num pedido de 10 com duas solicitações (6 e 4), a nota de 6 fecha a de 6 e deixa a de 4 vinculada |
+| `SEM_LINHA_NO_PEDIDO` | o pedido não tem linha do material dela (vínculo feito pela API a um pedido de outro material) — fecha na primeira nota processada do pedido |
+
+A nota **parcial** não fecha: a solicitação continua vinculada, mostrando quanto chegou, e
+conta só o que falta como "a caminho" (seção 21b.1). A nota de **outro** material do mesmo
+pedido também não fecha. Pedido encerrado não fecha a solicitação: ela continua vinculada,
+com o aviso de pedido encerrado, até o comprador cancelá-la ou re-vinculá-la — e enquanto
+isso não conta nada como "a caminho", então o material volta à sugestão.
 
 **Volta a Pendente (automático).** Se o **pedido de compra** ao qual ela estava vinculada for
 **excluído** no módulo Compras, a solicitação volta a **Pendente** e solta o vínculo — o material

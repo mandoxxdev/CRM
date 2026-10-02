@@ -326,6 +326,12 @@ módulo que ninguém opera criaria contrato contra comportamento não exercitado
   Aproximação declarada: fecha na PRIMEIRA nota do pedido, sem conferir quantidade (B22 das
   novidades). Solicitação finalizada é terminal — não ressuscita nem re-vincula (`2de7944`
   protege por teste).
+  *(**Corrigido à vista na Etapa 72:** a "aproximação declarada" acima **deixou de valer** — a solicitação agora fecha
+  quando **o material dela** chega no pedido (*MATERIAL_COMPLETO*) ou quando o que chegou para ela cobre o que ela pediu
+  (*SOLICITADO_RECEBIDO*), não na primeira nota (B343, `c57c0c7`); e "finalizada é terminal, não ressuscita" também
+  mudou pela metade: a *Recebida* **reabre** quando a entrada que a cobriu é estornada (B348, `6981afc`). A
+  *Cancelada* continua terminal, e nenhuma das duas re-vincula. O recebido de cada solicitação é um livro gravado na
+  entrada de cada nota (B352, `f192901`).)*
 - [x] Comprador vê disponível/reservas/consumo/último preço na tela de compra (`e78bc09` + fix
   `14feaf8` no endpoint; tela `56a6bfe` + fix `fac3f11`, merge `8145265`): painel "Ver
   contexto" na tela de Reposição com disponível/reservado/em terceiros, consumo médio diário,

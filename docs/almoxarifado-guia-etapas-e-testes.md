@@ -1,21 +1,30 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-02 (Etapa 71) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-02 (Etapa 72) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 71) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 72) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-02 (Etapa 71 ENTREGUE · Etapa 72 começando)
+> ## Onde o desenvolvimento está — 2026-10-02 (Etapa 72 ENTREGUE · Etapa 73 começando)
 >
-> **O desenvolvimento parou aqui: Etapa 71 fechada, Etapa 72 começando — 2026-10-02.** A **Etapa 71 (estornar a
+> **O desenvolvimento parou aqui: Etapa 72 fechada, Etapa 73 começando — 2026-10-02.** A **Etapa 72 (a solicitação de
+> compra só fecha quando o material dela chega)**: a nota parcial — ou de outro material do pedido — não fecha mais a
+> solicitação de compra; ela continua na aba **Solicitações** da tela **Reposição e Compras** com *"chegou 4 de 10"*, e a
+> sugestão de reposição conta só o que ainda falta, sem mandar comprar de novo o que vem pelo pedido. Pedido cancelado
+> deixa de contar (*"pedido encerrado — nada a caminho"*); estornar a entrada que a fechou a reabre. A verificação de
+> mínimos parou de abrir solicitação em dobro assim que o pedido é gerado. **Próxima etapa, já começando: 73 — a
+> requisição que espera compra** (nasce *Aguardando estoque* com a compra vinculada e não muda quando o material chega;
+> ver *"Próxima tarefa detalhada"* no plano da Etapa 72).
+>
+> **Etapas 1 a 20 e 22 a 72 completas.**
+>
+> **Etapa 71, 2026-10-02.** A **Etapa 71 (estornar a
 > entrada da nota reabre o pedido de compra)**: em **Movimentações**, estornar a linha **ENTRADA_COMPRA** de uma nota
 > contra pedido **desconta** o pedido e o **reabre** quando a nota o tinha fechado — ele volta ao status de antes, aos
 > atrasados e aos pendentes do Recebimento, e a nota do que falta passa sem autorização de excedente; a tela avisa
 > *"Pedido de compra … reaberto: faltam … para receber"*. A mesma NF pode ser relançada depois de estornar todas as
 > entradas dela (**atenção:** ficam duas contas a pagar — avisar o Financeiro). Entrada com material em inspeção ou
 > reprovado não se estorna. **A feature de Recebimento vai a 🟢.** **Próxima etapa, já começando: 72 — a solicitação de
-> compra que fecha na primeira nota parcial** (ver *"Próxima tarefa detalhada"* no plano da Etapa 71).
->
-> **Etapas 1 a 20 e 22 a 71 completas.**
+> compra que fecha na primeira nota parcial** (ver *"Próxima tarefa detalhada"* no plano da Etapa 71). *(feita — acima)*
 >
 > **Etapa 70, 2026-10-01.** A **Etapa 70 (quem esperava o
 > material fica sabendo que ele chegou)**: ao processar uma nota, o **solicitante** de cada requisição que esperava o
@@ -3622,7 +3631,8 @@ Etapa 11 serve).
    vinculado (recebimento → dados fiscais → processar). Volte à aba de solicitações do
    almoxarifado: a solicitação **sumiu das pendentes** (virou RECEBIDA — confira no relatório
    Solicitações de Compra, que mostra o status). Vale também para entrega **parcial**: a
-   primeira nota fecha.
+   primeira nota fecha. *(**Deixou de valer na Etapa 72:** a nota parcial **não** fecha mais a solicitação —
+   ela fica na aba com "chegou X de Y" até o material dela chegar; ver a seção da Etapa 72.)*
 6. **Cancelada não ressuscita.** Vincule outra solicitação a um pedido, **cancele-a** (com
    justificativa) e só depois processe a nota do pedido: a solicitação **continua CANCELADA**.
    Tentar cancelar de novo:
@@ -5280,10 +5290,67 @@ dados fiscais e **Processar Nota**. Em **Compras → Pedidos**, o pedido está *
 ### O que esta etapa NÃO cobre
 
 - **Devolução ao fornecedor e sucata** não reabrem o pedido — cobrar a reposição é lápis → **Status**.
-- **Estorno do recebimento inteiro** não existe: o recebimento, a conta a pagar e a solicitação de compra ficam.
+- **Estorno do recebimento inteiro** não existe: o recebimento, a conta a pagar e a solicitação de compra ficam. *(A solicitação de compra **reabre** desde a Etapa 72.)*
 - **O aviso do pedido vem depois** do estorno, não no modal.
 - **Pedido mudado à mão antes desta versão** pode ser reaberto pelo estorno (não há trilha daquela mudança).
 - **O e-mail de atrasado** do pedido reaberto pode não sair de novo — acompanhe pela central de alertas.
+
+---
+
+## Etapa 72 — A solicitação de compra só fecha quando o material dela chega (ENTREGUE — 2026-10-02)
+
+**O que mudou, em uma frase:** a solicitação de compra vinculada a um pedido não fecha mais na primeira nota do pedido —
+ela continua na aba Solicitações, mostrando quanto já chegou, até o material dela chegar, e a sugestão de reposição
+para de mandar comprar de novo o que ainda vem.
+
+**O problema que ela resolve.** Com uma solicitação de 10 e um pedido de 10, a primeira nota (4) fechava a
+solicitação. Daí a sugestão de reposição mandava comprar os 6 que estavam a caminho, a verificação de mínimos abria
+outra solicitação de 10, e a linha sumia da aba. Pior: num pedido de dois materiais, a nota de um fechava a
+solicitação do outro.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A primeira nota (parcial) fechava a solicitação | Ela continua *Vinculado* até o material dela chegar |
+| A nota de um material fechava a solicitação de outro do mesmo pedido | Cada uma fecha pelo material dela |
+| Depois da nota parcial, a sugestão mandava comprar de novo | Conta só o que ainda falta como "a caminho" |
+| A verificação de mínimos abria outra solicitação assim que o pedido era gerado | Não abre enquanto o pedido estiver em andamento |
+| A linha sumia da aba Solicitações | Fica, com *"chegou 4 de 10"* |
+| Pedido cancelado: a solicitação já tinha fechado | Conta zero e mostra *"pedido encerrado — nada a caminho"* |
+| Estornar a entrada deixava a solicitação *Recebida* | O estorno a reabre |
+
+### Roteiro de teste manual (≈15 min)
+
+**Preparação.** Um material **M** com **mínimo 9**, **máximo 10** e saldo 0, com fornecedor. **Almoxarifado →
+Reposição e Compras**, aba **Sugestões de Compra**: marque M e clique **Gerar solicitações**. Aba **Solicitações**: na
+linha de M, **Gerar pedido** — o pedido de compra abre preenchido; salve com **10**. A linha fica **Vinculado**.
+
+1. **A nota parcial não fecha.** **Recebimentos → Novo Recebimento**, forma *Pedido de compra*, esse pedido, **4** de
+   M; conferência, dados fiscais e **Processar Nota**. Volte à aba **Solicitações**: a linha continua lá, *Vinculado*,
+   com **"chegou 4 de 10"**.
+2. **A sugestão não pede de novo.** Aba **Sugestões de Compra**: M **não** aparece (4 em estoque + 6 a caminho cobrem a
+   mínima).
+3. **A nota que completa.** Receba e processe os **6** que faltam: a linha sai da aba Solicitações. **Almoxarifado →
+   Auditoria**: a solicitação mostra *"Recebida"*.
+4. **O estorno reabre.** **Movimentações**, linha **ENTRADA_COMPRA** dos 6 → seta curva → motivo → **Confirmar
+   Estorno**. A linha volta à aba com **"chegou 4 de 10"**; a Auditoria mostra *"Solicitação reaberta (estorno)"*.
+5. **O pedido cancelado.** No Compras, lápis → **Status** → **Cancelado**. Na aba Solicitações, a linha mostra
+   **"pedido encerrado — nada a caminho"**, e M volta à sugestão com o que falta. Cancele a solicitação antiga na própria
+   aba (botão de cancelar, com justificativa).
+6. **Dois materiais no mesmo pedido** (opcional). Um pedido com dois materiais, cada um com a sua solicitação
+   vinculada; receba só um: a solicitação do outro continua *Vinculado*.
+
+### O que esta etapa NÃO cobre
+
+- **A requisição que espera compra** continua nascendo *Aguardando estoque* com a compra vinculada, e não muda de status
+  quando o material chega — é a próxima etapa.
+- **Solicitações fechadas cedo antes desta versão** não reabrem sozinhas (consulta **A36** das novidades).
+- **"Chegou X de Y"** aparece só na aba Solicitações — não no relatório de **Relatórios**, na exportação nem no painel
+  **Ver contexto**.
+- **Encerrar o pedido no Compras não fecha a solicitação** — cancele-a na aba.
+- **Pedido ainda esperado depois de 60 dias**: a verificação de mínimos pode abrir uma segunda solicitação (cancele a
+  sobrando).
 
 ---
 

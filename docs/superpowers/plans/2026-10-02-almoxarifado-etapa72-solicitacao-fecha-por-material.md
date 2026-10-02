@@ -1,7 +1,8 @@
 # Etapa 72 — a solicitação de compra que fecha quando o material dela chega, não na primeira nota (feature 18, com a 08)
 
-> Status: **T0–T4 feitas + Fase 5 (fix-round da revisão: o livro de atribuição) — 2026-10-02.** Próximo passo:
-> **T5 (fechamento, skill `fechar-etapa`)**, que agora também registra B352–B356 e C118 da Fase 5 (seção no fim).
+> Status: **FECHADA — 2026-10-02.** T0 `db9c63f`, T1 `c57c0c7`, T2 `6981afc`, T3 `bc9170e`, T4 `c28e0bd`, Fase 5
+> `f192901` (+ `6e1ac7c` no plano), T5 fechamento (seção no fim). Próxima: **Etapa 73 — a requisição que espera compra**
+> (seção "Próxima tarefa detalhada — Etapa 73" no fim).
 > Feature 18 (reposição), com a 08 (o gancho mora no recebimento). Origem: "Próxima tarefa detalhada — Etapa 72" de
 > `docs/superpowers/plans/2026-10-01-almoxarifado-etapa71-pedido-reabre.md:651-691`. Decisão revogada (em parte):
 > **B22(a)** (`docs/almoxarifado-novidades-por-etapa.md:1552-1563`, "fecha na primeira nota, mesmo parcial") e a
@@ -459,7 +460,7 @@ T2); **T4** (integração) depois de T2 e T3; **T5** fechamento. Executores de g
   outra vez + nota de 5 de Y → as duas `RECEBIDA`, pedido `recebido`, trilha das solicitações pela `GET /auditoria`
   na ordem (`RECEBIDA`, `REABERTA`, `RECEBIDA` para X) com o rótulo novo. Segundo cenário: pedido cancelado pelo
   `PATCH` com entrega parcial → material volta à sugestão com o que falta e o `verificar-minimos` abre solicitação nova.
-- [ ] **T5 — fechamento (skill `fechar-etapa`).** Spec 18: **corrigir o "O que ficou de fora" e o cabeçalho, dizendo que
+- [x] **T5 — fechamento (skill `fechar-etapa`).** *(feita — ver a seção "T5 — fechamento" no fim.)* Spec 18: **corrigir o "O que ficou de fora" e o cabeçalho, dizendo que
   estavam errados desde a Etapa 14**; regra nova na tabela; RN-01..RN-10. Spec 22 (`:322-327`): a "aproximação
   declarada" da B22 vira a regra nova. Mapa (linhas 18 e 22). Guia do usuário: a seção da Etapa 14 (`:3623-3627`)
   recebe a nota de que a frase "a primeira nota fecha" **deixou de valer na 72**, e seção nova com Antes → Agora e
@@ -501,7 +502,7 @@ aberta depois (`verificar-minimos`/sugestão): se foi, reabrir a antiga duplica 
   sobrevive à nota parcial). O "chegou X de Y" vai só na aba (T3), e o contexto ganha o mesmo campo numa etapa que
   precisar.
 
-## Próxima tarefa detalhada — Etapa 73 (preencher no fechamento)
+## Candidata da Fase 0 para a Etapa 73 (o texto final está na seção "Próxima tarefa detalhada — Etapa 73", no fim)
 
 Candidata medida nesta Fase 0: **a requisição que espera compra** (feature 04, com a 18). (1) `calcularStatusPosAprovacao`
 (`requisitionStateMachine.js:136-140`) conta só `PENDENTE`, então com o pedido gerado a requisição nasce
@@ -644,3 +645,99 @@ conjunto de hoje muda de dono quando o conjunto muda:
   (H) estorno negativando em dobro → (S6-servico); (I) `SOLICITADO_RECEBIDO` do par junto → (3b)(8); (J) `/processar`
   sem `recebimentoId` → 20 testes; (K) `/aprovar` direto sem `recebimentoId` → (S1-aprovar).
 - **Commit `f192901`.** Suítes: `test:api` 270/270, `test:almoxarifado` 44/0, validation 4, safealter 3, sqlite 5; client `ReposicaoAlmoxarifado` 48/48 e `CI=true` build ok (o cliente não mudou). Numa rodada anterior da suíte o `indicadoresSpec27Integracao` caiu 3 testes de "prazo HOJE" perto de 01:00 local (virada de data) e passou isolado e na rodada seguinte — flaky de data, não toca a solicitação.
+
+## T5 — fechamento (2026-10-02)
+
+- [x] **T5 — fechamento (skill `fechar-etapa`).** Artefatos 1, 2, 3, 4, 5 e 7, escritos pelo fork de documentação (só
+  `docs/` e `specs/`):
+  - **Novidades:** seção "Etapa 72" antes de "Onde estamos" (Antes → Agora, 8 cenários com as literais do código, o
+    que não cobre, o que as revisões acharam); **A36** (o título da letra A passa a trinta e seis); **B343–B356**
+    (título "B1 a B356"); **B22** e **B334** corrigidas à vista; **C114–C120** (o **C109** ganhou a nota de que a
+    solicitação reabre); **D (72)** (seis itens; o D (71) da solicitação marcado pago); **F (72)**; **G80** anotado
+    (reincidiu) e **G84** novo (sabotagem concorrente contamina a suíte de outro agente); bullet da Etapa 72 em "Onde
+    estamos", o da 71 marcado "(Feita — Etapa 72.)".
+  - **Spec 18:** cabeçalho e "O que ficou de fora" **corrigidos dizendo que estavam errados desde a Etapa 14**; a linha
+    "Vincular pedido fecha a solicitação" da tabela de regras corrigida (vincular não fecha); item novo `[x]` no
+    checklist com todos os hashes; cinco linhas novas na tabela de regras/testes.
+  - **Spec 22:** a "aproximação declarada" da B22 corrigida à vista. **Spec 08:** linha de status e bloco "Etapa 72"
+    (o gancho mora no recebimento). **Mapa:** cabeçalho e linhas 08, 18 e 22.
+  - **Guia:** cabeçalho "Etapa 72 ENTREGUE · Etapa 73 começando" e "22 a 72"; a frase da Etapa 14 "a primeira nota
+    fecha" (`:3625`) com a nota de que deixou de valer; seção nova da Etapa 72 (Antes → Agora, roteiro de 6 passos, o
+    que não cobre).
+  - **Manual:** 6.10 (o estorno reabre a solicitação), 21b.1 (o "a caminho" por estado da solicitação), 21b.3 (a
+    verificação de mínimos e o horizonte), 21b.3b (a recusa nova do vínculo, o que chegou para cada solicitação, "chegou
+    X de Y", "pedido encerrado — nada a caminho", a tabela das três regras de fechamento). Sem número de etapa nem
+    menção a defeito.
+- **Verificação final:** `test:api` **270/270**, `test:almoxarifado` 44/0, validation 4/0, safealter 3/0, sqlite 5/0
+  (medidos na Fase 5, `f192901`, o último commit de código). Cliente e `CI=true` build: **re-medidos no fechamento** pelo fio
+  principal no HEAD com a Fase 5: cliente **74 suítes / 1145 testes**, `CI=true` build "Compiled successfully".
+
+## Divergências do plano (registradas, não escondidas)
+
+1. **T0:** a previsão do controle positivo estava errada (`1=1` derruba o (5), não o (1c)/(10)); a sabotagem certa é
+   tirar o nível por material.
+2. **T1:** a condição atômica do `UPDATE` fixa o conjunto por `id IN (...)` em vez de reler o solicitado da própria
+   tabela; a solicitação ligada no meio espera a próxima nota.
+3. **T2:** `reabrirSolicitacoesDoMaterial` ganhou `quantidadeDescontada` para reconstruir o "antes"; a negativa "outra
+   nota já cobria" usa pedido de 20.
+4. **Fase 2:** a afirmação da D5 "o caso não existe na prática" **estava errada** (a revisão achou o recebido antes do
+   vínculo e as duas solicitações no mesmo par).
+5. **Fase 5 — redesenho:** o rateio **calculado** (Fase 2) caiu em três cenários reproduzidos pelas rotas e virou o
+   **livro de atribuição** persistido (B352). `recebido_no_vinculo` deixou de ser lido. O `SOLICITADO_RECEBIDO` passou a
+   ser por solicitação (B354), revogando o "fecham juntas" da D1.
+6. **Fase 5 — B355:** a orientação pedia teto geral do "a caminho" pelo saldo do pedido; aplicado só ao material
+   completo, porque o teto geral revogaria a B344 e derrubaria testes da Etapa 14.
+7. **T4:** o arquivo saiu como `solicitacaoPorMaterialIntegracao.api.test.js` (o plano dizia
+   `solicitacaoFechaPorMaterialIntegracao`); mínimo 9 / máximo 10 em vez de mínimo 10; o "chegou 4 de 10" ficou com a T3.
+8. **T3 × T4 em paralelo:** a suíte de um viu a sabotagem do outro (falsos vermelhos em `indicadoresSpec27Integracao`
+   e `relatorioSolicitacoesChegou` numa rodada) — registrado como **G84**.
+
+## Retro (4 números)
+
+- **Rodadas de correção até verde:** 1 (o fix-round da Fase 5) — mas com **redesenho**: o rateio calculado virou livro.
+- **Achados da revisão — reais × ruído:** Fase 2: 17 achados (0 críticos, 5 importantes, 12 menores), 0 ruído conhecido
+  — mas a solução da Fase 2 (o rateio calculado com `recebido_no_vinculo`) foi ela mesma a origem dos achados da Fase 5.
+  Fase 5: 3 importantes + 1 menor, todos reproduzidos por sonda pelas rotas, 0 ruído; S5 (o horizonte do dedupe)
+  declarado (C118). **Lição:** rateio calculado de uma quantidade compartilhada não fecha nos casos de borda (cancelar,
+  vincular tarde, estornar o que veio antes); livro persistido no momento do fato fecha.
+- **Paralelismo:** T3 e T4 rodaram em paralelo; sem retrabalho de código, mas com **contaminação**: a suíte de um viu o
+  arquivo sabotado do outro. Regra para as próximas: executor que sabota código de produção não roda em paralelo com
+  outro que roda a suíte na mesma árvore (ou cada um em worktree própria).
+- **Defeito que escapou da Etapa 71:** nenhum conhecido.
+
+## Próxima tarefa detalhada — Etapa 73: a requisição que espera compra (feature 04, com a 18)
+
+**Por que esta.** É o **C116** desta etapa e o fim natural da região que as Etapas 70–72 abriram (aviso de entrada →
+pedido que reabre → solicitação por material). Medido nesta fase (leitura, sem sonda):
+- `calcularStatusPosAprovacao` (`server/services/almoxarifado/requisitionStateMachine.js:120-142`) só olha
+  `status = 'PENDENTE'` em `solicitacoes_compra_almoxarifado` (dentro do horizonte): com o pedido gerado (*Vinculado*),
+  a requisição sem saldo nasce **`AGUARDANDO_ESTOQUE`** em vez de **`AGUARDANDO_COMPRA`**. Chamador único:
+  `routes/almoxarifado.js:3388` (o `/aprovar`).
+- `TRANSICOES` (`requisitionStateMachine.js:48-49`): `AGUARDANDO_ESTOQUE` e `AGUARDANDO_COMPRA` só saem por
+  `EM_SEPARACAO` ou `CANCELADO`. **Nada** move a requisição quando o material chega — o aviso ao solicitante da Etapa 70
+  existe, o status não.
+
+**Fase 0 da 73 — medir antes de prometer:**
+1. Quem lê `AGUARDANDO_COMPRA`/`AGUARDANDO_ESTOQUE` (fila de separação da 64, `PODE_SEPARAR`, telas de requisição,
+   relatórios, indicadores da 67, aviso da 70 — `receiptNotificationService` usa `PODE_SEPARAR`?) e o que muda se um
+   deles virar outro status — **grep pelo nome do status no servidor e no cliente**.
+2. O critério certo para "aguardando compra": solicitação `PENDENTE` **ou** `VINCULADO` com `a_caminho > 0`
+   (`purchaseService.posicaoDasSolicitacoes`, da 72) — e por item (como a 70 fez) ou pela requisição inteira (hoje é
+   "nenhum item tem disponível").
+3. Se a requisição deve **mudar de status** quando o material chega (e para qual: `APROVADO`? reservar como a
+   aprovação faz — `PARCIALMENTE_RESERVADA`/`TOTALMENTE_RESERVADA`?) ou só **ser separável** (hoje `PODE_SEPARAR` já
+   inclui os dois `AGUARDANDO_*`? medir). Se já é separável, a mudança pode ser só de rótulo/critério — escopo menor.
+4. Uma sonda pelas rotas: requisição sem saldo → aprovar com compra vinculada (status?) → nota parcial → nota que
+   completa → o status e a fila de separação em cada passo.
+5. **Task pequena junto (G80):** o `indicadoresSpec27Integracao.api.test.js` lê "hoje" uma vez e cai perto da virada da
+   data — ler o dia por cenário (do SQLite), com controle positivo (forçar a virada).
+
+**Contratos que não se reabrem:** o livro de atribuição e o fechamento da solicitação (72); o pedido que reabre (71);
+o aviso de entrada (70, salvo se a Fase 0 mostrar que ele lê o status); a fila de separação (64, só leitura).
+
+**Pontos de atenção.**
+- Mudança de status em requisição já existente em produção: quantas estão em `AGUARDANDO_*` hoje (consulta para a
+  letra A antes do deploy).
+- Corrida entre o `/aprovar` da requisição e o processamento de uma nota do mesmo material.
+- Reserva: se a chegada do material reservar automaticamente para a requisição que esperava, duas requisições
+  disputando o mesmo material precisam de ordem (a mais antiga? a mais urgente?) — decisão reversível, letra B.

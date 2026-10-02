@@ -107,7 +107,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Trinta e cinco itens para rodar em produção ANTES do deploy — trinta e dois são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Trinta e seis itens para rodar em produção ANTES do deploy — trinta e três são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-02 (Etapa 72) de trinta e cinco para trinta e seis**, com a **A36** — as solicitações de compra que a regra antiga fechou como *Recebidas* na **primeira** nota, parcial ou não, com o pedido ainda trazendo o material delas.)*
 
 *(**Atualizado em 2026-10-02 (Etapa 71) de trinta e quatro para trinta e cinco**, com a **A35** — os pedidos de compra cuja entrada foi estornada **antes** desta etapa (a linha do pedido não descontou e o pedido pode estar *Recebido* com material faltando), e os pedidos fechados pelo **excedente cruzado** (chegou a mais de um material e nada de outro, e o pedido virou *Recebido*).)*
 
@@ -1213,7 +1215,38 @@ SELECT p.id, p.numero, p.status, s.total_pedido, s.soma_recebida, s.saldo_por_ma
   falta, lápis → **Status** de volta para *Enviado* (ou o que era); se a empresa aceitou o excedente no lugar do que não
   veio, deixar como está.
 
-### B. Decisões de negócio — B1 a B342; as em aberto esperam você, as tomadas estão escritas com o descartado
+**A36 (NOVA, da Etapa 72 — as solicitações de compra que fecharam cedo: medir antes, nada é movido).** A partir
+desta etapa, a solicitação de compra vinculada a um pedido só vira *Recebida* quando **o material dela** chegou. Até
+aqui, a **primeira** nota processada do pedido — parcial, ou até de **outro** material — fechava todas as solicitações
+dele. As que fecharam assim em produção continuam *Recebidas*, e o que ainda vem pelo pedido **não** conta no "a
+caminho" da sugestão de reposição: a sugestão pode estar mandando comprar de novo o que já está comprado. Uma consulta:
+
+```sql
+-- solicitações RECEBIDAS cujo pedido ainda está vivo, ainda tem saldo do material delas, e cujo recebido não cobre o pedido delas
+SELECT s.id, s.material_id, s.quantidade, s.pedido_compra_id, p.numero, p.status, s.recebida_em,
+       SUM(COALESCE(ip.quantidade,0)) AS pedida, SUM(COALESCE(ip.quantidade_recebida,0)) AS recebida
+  FROM solicitacoes_compra_almoxarifado s
+  JOIN pedidos_compra p ON p.id = s.pedido_compra_id
+  JOIN itens_pedido_compra ip ON ip.pedido_id = s.pedido_compra_id AND ip.material_id = s.material_id
+ WHERE s.status = 'RECEBIDA' AND LOWER(COALESCE(p.status,'')) NOT IN ('recebido','cancelado','rejeitado')
+ GROUP BY s.id
+HAVING SUM(COALESCE(ip.quantidade,0)) - SUM(COALESCE(ip.quantidade_recebida,0)) > 1e-9
+   AND SUM(COALESCE(ip.quantidade_recebida,0)) < s.quantidade - 1e-9;
+```
+
+**Como ler o resultado:**
+- **Vazia** — nada a fazer.
+- **Com linhas** — cada linha é uma solicitação que a regra antiga fechou com material ainda a caminho pelo pedido. Para
+  as que o comprador confirmar, reabrir: `UPDATE solicitacoes_compra_almoxarifado SET status = 'VINCULADO', recebida_em =
+  NULL WHERE id IN (...)`. **Antes de reabrir, confira** se já foi aberta uma solicitação **nova** do mesmo material
+  depois dela (pelo *Gerar solicitações* da tela de Reposição ou pelo `verificar-minimos`): se foi, reabrir a antiga
+  **dobra** o "a caminho" — escolha uma das duas (cancele a nova, ou deixe a antiga como está). Não automatizado de
+  propósito (**B349**): o comprador pode já ter resolvido com outra solicitação.
+- **Atenção:** a solicitação reaberta por este `UPDATE` volta sem nada no livro de atribuição desta etapa (**B353**) —
+  o "a caminho" dela é a quantidade inteira enquanto o pedido não completar o material (**C119**).
+
+
+### B. Decisões de negócio — B1 a B356; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-01 de B295 para B315**, com as vinte da Etapa 69.)*
 
@@ -1561,6 +1594,12 @@ próprio. **Descartado** cancelamento em cascata (o almoxarifado mandaria em doc
 Compras). **(c)** re-vincular a outro pedido **sobrescreve** o vínculo anterior sem histórico —
 e a chegada do pedido antigo então não fecha mais nada (é o furo C15). Se qualquer uma das três
 apertar na prática, o desenho comporta evolução — mas hoje é assim.
+
+*(**Corrigido à vista na Etapa 72:** a aproximação **(a)** deixou de valer — a solicitação agora fecha quando **o
+material dela** chega (**B343**). O motivo do descarte acima, "exigiria amarrar item de nota a solicitação (vínculo que
+o schema não tem)", **deixou de ser verdade na Etapa 37** (a linha do pedido passou a ter o material e o acumulador do
+recebido), e "travaria solicitação aberta para sempre em pedidos que nunca completam" tem saída: o pedido que nunca
+completa é encerrado pelo comprador e deixa de contar (**B345**). As aproximações **(b)** e **(c)** continuam valendo.)*
 
 **B23 (NOVO, da Etapa 14) — o contexto do material mostra o último custo pago TAMBÉM para
 material de cliente.** O painel de contexto responde para material de propriedade de cliente
@@ -4811,6 +4850,9 @@ gesto do Financeiro), a **solicitação de compra** continua *Recebida* e o **av
 (**B322**). **Descartado:** um "estorno do recebimento inteiro" como documento (rota e status novos, reverteria conta e
 etiquetas — ninguém pediu).
 
+*(**Corrigido à vista na Etapa 72:** a solicitação de compra **não** continua mais *Recebida* — o estorno a reabre
+quando era ela que a entrada estornada tinha coberto (**B348**). O resto desta decisão continua valendo.)*
+
 **B335 (NOVA, da Etapa 71) — os e-mails de atrasado e de parcial seguem a regra de não repetir.** O **cartão** da
 central volta na hora em que o pedido reabre; o **e-mail** só sai de novo se a previsão de entrega ou o saldo forem
 diferentes dos já avisados (**C112**). **Descartado:** forçar e-mail novo na reabertura (mudaria a chave de repetição de
@@ -4861,6 +4903,91 @@ recebimento como documento (**B334**).
 trilha falhar). É o que separa o *Recebido* do comprador do *Recebido* do automático (**B330**) — e acaba a assimetria
 declarada na **B163**. É a única linha desta etapa no módulo Compras. **Descartado:** comparar a data da última
 alteração do pedido com a da trilha (outras escritas tocam a data; resolução de segundo).
+
+**B343 (NOVA, da Etapa 72) — a solicitação de compra fecha quando o material DELA chega, não na primeira nota.** A
+solicitação vinculada a um pedido vira *Recebida* quando, para o material dela no pedido, **(a)** o pedido completou o
+material (tudo o que foi pedido daquele material chegou — regra *MATERIAL_COMPLETO* na trilha), ou **(b)** o que chegou
+**para ela** já cobre o que ela pediu (*SOLICITADO_RECEBIDO*, **por solicitação** desde a revisão do código — **B354**).
+Revoga a **B22(a)**. **Descartados:** fechar na primeira nota (o defeito); fechar quando o pedido **inteiro** completa (a
+solicitação de X ficaria aberta esperando Y, sem nada de X a caminho); só a condição (a) (solicitação de 10 num pedido de
+15 com 12 recebidos ficaria aberta com o pedido dela atendido).
+
+**B344 (NOVA, da Etapa 72) — o "a caminho" de uma solicitação vinculada é o que AINDA FALTA chegar para ela, sem teto
+pelo saldo do pedido.** A solicitação de 10 com 4 recebidos conta **6** a caminho na sugestão de reposição (não 10, que
+contaria os 4 duas vezes, e não 0, que mandaria comprar de novo). A solicitação *Pendente* continua contando a quantidade
+inteira. **Descartado:** limitar ao saldo do pedido (100 solicitados e 5 comprados contaria só 5) — muda o que a Etapa
+14 prende (a solicitação vinculada "segura a posição inteira") e é uma regra de negócio diferente (a sugestão passaria a
+pedir o complemento do que o comprador escolheu não comprar). A exceção, da revisão do código, está na **B355**.
+
+**B345 (NOVA, da Etapa 72) — pedido encerrado não traz mais nada.** Pedido *Recebido* (à mão), *Cancelado* ou
+*Rejeitado*: as solicitações vinculadas a ele contam **0** a caminho e não seguram o `verificar-minimos`. A solicitação
+**não** é fechada por isso: continua *Vinculado* na aba Solicitações, com o aviso *"pedido encerrado — nada a caminho"*,
+e o comprador cancela ou re-vincula (**C117**). **Descartados:** fechar a solicitação quando o comprador encerra o pedido
+(gancho no Compras); cancelar em cascata (**B22(b)**); ignorar o status (o pedido cancelado com entrega parcial seguraria a
+posição por 60 dias).
+
+**B346 (NOVA, da Etapa 72) — material sem linha no pedido vinculado: a regra de antes.** A solicitação ligada (pela API
+`vincular-pedido`) a um pedido que não tem o material dela fecha na primeira nota processada do pedido (regra
+*SEM_LINHA_NO_PEDIDO* na trilha), e conta a quantidade inteira a caminho enquanto vinculada. **Descartados:** nunca fechar
+(ficaria eterna até o horizonte); fechar quando o pedido inteiro completa (pedido só de texto livre nunca completa).
+
+**B347 (NOVA, da Etapa 72) — o `verificar-minimos` não abre segunda solicitação para material que já tem compra
+vinculada a pedido em andamento.** Deduplica contra a *Pendente* (como antes) **e** contra a *Vinculado* de pedido vivo,
+**dentro do horizonte** da sugestão (60 dias — alinhado na revisão do plano, para um pedido esquecido não bloquear para
+sempre). Corrige o **C114**. **Descartado:** deduplicar contra "aberta com a caminho > 0". O preço do horizonte está no
+**C118**.
+
+**B348 (NOVA, da Etapa 72) — o estorno da entrada reabre a solicitação que ela tinha fechado.** No mesmo gancho do
+estorno da Etapa 71: a solicitação *Recebida* volta a *Vinculado* quando **estava coberta antes** do estorno e **deixou
+de estar** depois, com o pedido vivo. Trilha *"Solicitação reaberta (estorno)"* e, na resposta do estorno,
+`pedido_compra.solicitacoes_reabertas`. Revoga a metade "a solicitação de compra continua *Recebida*" da **B334**.
+**Descartados:** reabrir com o pedido encerrado (não contaria nada e só sujaria a aba); reabrir a *Cancelada* (decisão
+humana, nunca); reabrir a solicitação legada que a regra antiga fechou cedo (ela não "deixou de estar coberta" por este
+estorno — inflaria a posição).
+
+**B349 (NOVA, da Etapa 72) — sem reabertura automática do passado.** As solicitações que a regra antiga fechou cedo
+continuam *Recebidas*; a **A36** lista quais e traz o `UPDATE` pronto. **Descartado:** migração no boot (escrita em
+produção sem ninguém olhar, sobre dado que o comprador pode já ter resolvido com outra solicitação).
+
+**B350 (NOVA, da Etapa 72) — a requisição que espera compra fica para a próxima etapa.** Requisição de material sem
+saldo, com compra **vinculada** a pedido, é aprovada como *Aguardando estoque* em vez de *Aguardando compra* (**C116**).
+**Descartado:** trocar a regra aqui (é uma linha, mas muda o status em que requisições nascem, e a Etapa 73 mexe no
+mesmo lugar).
+
+**B351 (NOVA, da Etapa 72) — uma régua só para "o material completou no pedido".** A soma por material do pedido saiu
+para um módulo próprio que o fechamento do pedido (Etapa 71) e o da solicitação leem. **Descartado:** escrever a soma de
+novo no lado das solicitações (a segunda régua — o defeito que a Etapa 71 corrigiu no fechamento do pedido).
+
+**B352 (NOVA, da Etapa 72, revisão do código) — o que chegou para cada solicitação é um LIVRO, não uma conta.** Na
+entrada de cada nota, o que entrou do material é **atribuído** às solicitações vinculadas daquele pedido e material, em
+ordem de criação, cada uma até o que falta para ela; o que sobrar não é de ninguém. O "chegou" de uma solicitação é a
+soma do que o livro atribuiu a ela — nunca recalculado. O estorno tira do livro **só** o que aquela entrada tinha
+atribuído. A primeira versão desta etapa **calculava** a parte de cada solicitação a cada leitura, rateando o recebido
+do pedido entre as solicitações vinculadas de hoje — **estava errada**: a revisão do código reproduziu três casos em que
+a conta mudava de dono (cancelar uma solicitação passava o que ela recebeu para a irmã, e a sugestão comprava em dobro;
+estornar uma nota anterior ao vínculo reabria quem já tinha recebido; e o rateio sub-creditava a solicitação ligada
+depois). **Descartado:** corrigir o cálculo caso a caso (cada caso pedia mais um retrato).
+
+**B353 (NOVA, da Etapa 72, revisão do código) — o livro nasce vazio, sem preencher o passado.** É exato para o que
+existe hoje: em produção a regra antiga fecha a solicitação na primeira nota, então toda solicitação vinculada ou não teve
+nota desde o vínculo, ou foi ligada a pedido já parcialmente recebido (o que entrou antes não é dela). **Descartado:**
+preencher o livro na criação do schema com o recebido atual (gravaria linhas sem entrada de origem, que nenhum estorno
+desfaria, e daria à solicitação o recebido de antes do vínculo).
+
+**B354 (NOVA, da Etapa 72, revisão do código) — "o que ela pediu chegou" vale por solicitação.** Duas solicitações (6
+e 4) num pedido de 10: chegou a nota de 6 → a de 6 fecha (*Recebida*), a de 4 continua *Vinculado*. Revoga o "todas as
+do mesmo pedido e material fecham juntas" da **B343** original. *MATERIAL_COMPLETO* continua fechando todas de uma vez.
+
+**B355 (NOVA, da Etapa 72, revisão do código) — o "a caminho" é 0 quando o material já completou no pedido; fora isso,
+sem teto pelo saldo.** É o caso do "a caminho" fantasma: a solicitação vinculada a um pedido que já entregou todo o
+material dela contaria a quantidade inteira para sempre. **Descartado:** o teto geral pelo saldo do pedido, que a
+orientação da revisão pedia — revogaria a **B344** e derrubaria o que a Etapa 14 prende (solicitação de 100 num pedido de
+5). Revisitável trocando uma linha.
+
+**B356 (NOVA, da Etapa 72, revisão do código) — vincular a solicitação a um pedido que já recebeu todo o material dela é
+recusado.** *"O pedido ⟨número⟩ já recebeu todo o ⟨nome do material⟩: vincule a solicitação a outro pedido"* (sem número,
+o pedido aparece como *#⟨id⟩*). Só entra pela API `vincular-pedido`: o **Gerar pedido** da tela sempre cria pedido novo.
+**Descartado:** aceitar e contar 0 (a solicitação ficaria vinculada a um pedido que nunca a fecharia por quantidade).
 
 
 ### C. Furos e mudanças de número que quem opera precisa saber
@@ -6126,7 +6253,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 
 109. **NOVO, da Etapa 71 — relançar a nota deixa DUAS contas a pagar, e o estorno não desfaz o resto.** O estorno
      desfaz o **estoque** e o **recebido do pedido**; o recebimento continua *Processado*, a conta a pagar da nota
-     continua lá, a solicitação de compra continua *Recebida* e o e-mail de entrada já enviado não muda (**B334**).
+     continua lá, a solicitação de compra continua *Recebida* e o e-mail de entrada já enviado não muda (**B334**). *(Desde a Etapa 72 a solicitação de compra **reabre** — **B348**.)*
      Quem estorna tudo e relança a mesma nota gera **uma segunda conta a pagar** para a mesma compra. **O que fazer:**
      ao relançar uma nota, avisar o Financeiro para cancelar a conta do primeiro lançamento.
 
@@ -6153,6 +6280,56 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      partir desta etapa (**B342**). Num pedido fechado pelo automático e **reescrito à mão antes do deploy**, o automático
      ainda é o último registro, e o estorno reabre. **O que fazer:** depois de estornar, conferir o status do pedido; se
      era decisão do comprador, ele volta pelo lápis → **Status**.
+
+114. **✅ RESOLVIDO NA ETAPA 72 (defeito anterior, da Etapa 14) — o `verificar-minimos` abria solicitação de compra em
+     dobro.** O controle de repetição olhava só a solicitação *Pendente*: assim que o comprador gerava o pedido
+     (*Vinculado*), a próxima verificação abria **outra** solicitação da mesma quantidade, antes de chegar qualquer
+     nota. Agora a *Vinculado* de pedido em andamento também segura (**B347**). **O que fazer:** nada; solicitações em
+     dobro abertas no passado aparecem na aba Solicitações — cancelar a sobrando.
+
+115. **✅ RESOLVIDO NA ETAPA 72 — a nota de um material fechava a solicitação de OUTRO.** Num pedido com dois
+     materiais, a nota só de um deles fechava como *Recebidas* as solicitações dos dois, e o que não chegou voltava
+     inteiro à sugestão de reposição — com o pedido ainda aberto. Agora cada solicitação fecha pelo material dela
+     (**B343**). As fechadas assim no passado: **A36**.
+
+116. **NOVO, da Etapa 72 (não corrigido) — requisição de material com compra VINCULADA nasce *Aguardando estoque*, não
+     *Aguardando compra*.** A aprovação da requisição sem saldo olha só a solicitação *Pendente*: depois que o
+     comprador gera o pedido, a requisição nova daquele material é aprovada como "aguardando estoque". Nada a move
+     quando o material chega (o solicitante recebe o e-mail da Etapa 70, o status não muda). **O que fazer:** ler
+     *Aguardando estoque* e *Aguardando compra* como a mesma coisa enquanto a Etapa 73 não chega (**B350**).
+
+117. **NOVO, da Etapa 72 — a solicitação de um pedido encerrado fica na aba até o comprador agir.** Pedido cancelado,
+     rejeitado ou fechado à mão: a solicitação continua *Vinculado* na aba Solicitações com *"pedido encerrado — nada a
+     caminho"*, não conta mais a caminho e não segura o `verificar-minimos`, que abre uma nova (**B345**). Duas
+     consequências: **(1)** se o comprador **voltar** o pedido para *Enviado*, a antiga volta a contar **junto** com a
+     nova — a posição dobra e a sugestão compra a menos; **(2)** uma nota processada contra o pedido cancelado (o
+     recebimento aceita) ainda fecha a antiga. **O que fazer:** ao encerrar um pedido, cancelar (ou re-vincular) as
+     solicitações dele na aba Solicitações.
+
+118. **NOVO, da Etapa 72 (não corrigido) — solicitação vinculada há mais de 60 dias a um pedido ainda aberto: o
+     `verificar-minimos` abre outra.** O controle de repetição corta pelo mesmo horizonte da sugestão (60 dias, **B347**)
+     para um pedido esquecido não travar a reposição para sempre — e o preço é o inverso: um pedido **vivo** e
+     **velho**, sem nada recebido, ganha uma segunda solicitação (compra em dobro). Qual dos dois vale é regra de
+     negócio. **O que fazer:** pedido com mais de 60 dias ainda esperado deve ter a previsão de entrega revista no
+     Compras; se a segunda solicitação nascer, cancelar a sobrando.
+
+119. **NOVO, da Etapa 72 — o que o "chegou" de uma solicitação NÃO enxerga.** O "chegou X de Y" da aba e o "a caminho"
+     da sugestão vêm do livro de atribuição (**B352**), que começa a ser escrito no deploy: **(1)** a solicitação
+     *Vinculado* de **antes** do deploy (ou reaberta pela **A36**) começa com o livro vazio — conta a quantidade
+     inteira a caminho até o pedido completar o material (**B353**); **(2)** item de nota sem o vínculo com a entrada
+     (a gravação dele falhou com aviso no log, Etapa 71) não escreve o livro — a solicitação fecha quando o material
+     completa no pedido; **(3)** re-vincular a solicitação a outro pedido **leva** o que chegou para ela pelo primeiro;
+     **(4)** anteriores e inalterados: pedido em unidade diferente da solicitação (caixa × peça) soma número sem
+     converter, e material crítico retido em inspeção some do disponível **e** do a caminho até ser decidido.
+     **O que fazer:** na dúvida sobre uma solicitação, o lápis do pedido no Compras mostra o recebido real por linha.
+
+120. **NOVO, da Etapa 72 — o que muda para quem compra.** (1) A nota **parcial** não fecha mais a solicitação: ela
+     continua na aba Solicitações com *"chegou ⟨X⟩ de ⟨Y⟩"*, e a sugestão de reposição para de pedir o que ainda vem
+     pelo pedido. (2) Estornar a entrada que tinha fechado a solicitação a **reabre** (trilha *"Solicitação reaberta
+     (estorno)"*); a resposta do estorno ganha `pedido_compra.solicitacoes_reabertas` (integrações). (3) Vincular pela
+     API a um pedido que já recebeu todo o material da solicitação é recusado: *"O pedido ⟨número⟩ já recebeu todo o
+     ⟨nome do material⟩: vincule a solicitação a outro pedido"*. **O que fazer:** avisar Compras de que a solicitação
+     vinculada agora some da aba só quando o material dela chega.
 
 
 
@@ -6944,12 +7121,25 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   que entrou); o recebimento continua *Processado*, a conta a pagar e a solicitação de compra ficam (**B334**,
   **C109**).
 - **(71) A solicitação de compra continua *Recebida* depois do estorno** — ela já fecha na **primeira** nota, parcial ou
-  não, então não há "fechou por este pedido" para desfazer (próxima candidata: a Etapa 72 olha isso).
+  não, então não há "fechou por este pedido" para desfazer (próxima candidata: a Etapa 72 olha isso). *(✅ Pago na Etapa 72: a solicitação fecha pelo material e o estorno a reabre — **B343**, **B348**.)*
 - **(71) O modal de estorno não diz antes que a entrada é de um pedido** — o aviso do pedido vem **depois** de estornar.
   Avisar antes exige a lista de movimentações trazer o pedido.
 - **(71) Entrada com material em inspeção ou reprovado não se estorna** — decida a inspeção; o reprovado sai pela não
   conformidade (**B339**, **B340**).
 - **(71) O pedido reaberto pode não mandar e-mail de atrasado de novo** (**B335**, **C112**).
+- **(72) A requisição que espera compra não muda de status quando o material chega** — e nasce *Aguardando estoque*
+  quando a compra já está vinculada (**C116**, **B350**). É a próxima etapa.
+- **(72) "Chegou X de Y" só na aba Solicitações** — o relatório *Solicitações de compra* em **Relatórios** e a
+  exportação continuam com as colunas de antes; o painel **Ver contexto** lista a solicitação *Vinculado*, sem o aviso de
+  pedido encerrado.
+- **(72) Sem teto do "a caminho" pelo saldo do pedido** — a solicitação de 100 num pedido de 5 conta 100 a caminho
+  enquanto vinculada, como na Etapa 14; a exceção é o material que já completou no pedido, que conta 0 (**B344**,
+  **B355**).
+- **(72) Solicitações fechadas cedo no passado não reabrem sozinhas** — a **A36** lista e traz o comando (**B349**).
+- **(72) Encerrar um pedido no Compras não fecha a solicitação** — ela fica na aba com *"pedido encerrado — nada a
+  caminho"* até o comprador cancelar ou re-vincular (**B345**, **C117**).
+- **(72) O livro de atribuição não tem tela** — o que chegou para cada solicitação aparece como *"chegou X de Y"*; o
+  detalhe por nota fica nas tabelas (e na trilha *"Recebida"*, que guarda a regra e o atribuído).
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -7553,6 +7743,21 @@ navegador** prova:
    processar fecha o pedido de novo.
 4. **A trilha.** **Auditoria**: aparecem *"Recebido do pedido estornado"*, *"Reabertura automática do pedido"* e, depois
    de mudar o status de um pedido pelo lápis no Compras, *"Mudança manual de status do pedido"*.
+
+**(72) Nenhum clique foi dado nesta etapa.** Os testes provam o servidor pela rota e pelo serviço (o fechamento por
+material: 17 cenários; a reabertura no estorno: 8; o livro de atribuição: 11; o relatório da aba: 4; ponta a ponta do
+mínimo ao pedido cancelado: 7) e a aba Solicitações com o servidor simulado (4 cenários). O que **só o navegador**
+prova:
+
+1. **A nota parcial não some com a solicitação.** **Reposição e Compras → Solicitações**: com uma solicitação de 10
+   vinculada a um pedido de 10, processar uma nota de **4** — a linha continua lá, *Vinculado*, com *"chegou 4 de 10"*.
+2. **A sugestão não pede de novo.** Na aba **Sugestões de Compra**, o material não aparece para comprar enquanto o
+   que falta (6) cobre a mínima.
+3. **O pedido encerrado.** No Compras, lápis → **Status** → *Cancelado*: na aba Solicitações a linha mostra *"pedido
+   encerrado — nada a caminho"*, e o material volta à sugestão com o que falta.
+4. **A trilha da reabertura.** Estornar (Movimentações, seta curva) a entrada da nota que completou o material:
+   **Auditoria** mostra *"Solicitação reaberta (estorno)"* e a linha volta à aba.
+
 
 
 **G1. Toda coluna nova da tabela de materiais vaza quantidade exata para o requisitante até alguém
@@ -8618,7 +8823,7 @@ rodada atravessar a meia-noite UTC.** `indicadoresSpec27Integracao.api.test.js` 
 rodada completa da suíte que começou antes e terminou depois da meia-noite UTC, 3 cenários caíram — sozinho, o arquivo
 passa 8/8 e passou de novo minutos depois. Não é defeito de produção (o indicador lê o dia na hora). **O risco:** um
 vermelho falso em rodada noturna faz alguém "consertar" o indicador. **Correção pequena:** ler o dia antes de cada
-cenário, ou fixar as datas relativas a um dia lido do banco por cenário.
+cenário, ou fixar as datas relativas a um dia lido do banco por cenário. *(**Reincidiu na Etapa 72:** caiu de novo numa rodada perto da virada da data, e também durante sabotagem concorrente de outro agente — **G84**; isolado, 5 de 5 verdes. O conserto continua pequeno e pendente.)*
 
 **G81 (NOVO, notado na Etapa 69). A suíte `test:almoxarifado` ainda ignora o pré-cadastro dos tipos de material.** A
 mesma montagem à mão do G79 não tem a coluna `descricao` em `tipos_material_almoxarifado`, e o pré-cadastro é pulado com
@@ -8634,6 +8839,14 @@ documento. Não corrigido nesta etapa (não era dela); correção pequena (o mes
 **G83 (NOVO, da Etapa 70). Um caminho da marca de processamento não tem teste.** Se a nota virar *Processado* entre a
 leitura da situação e a colocação da marca, a resposta é a recusa de sempre (*"Nota já processada"*), não o 409 — o
 ambiente de teste não consegue produzir essa ordem de forma determinística. Declarado.
+
+**G84 (NOVO, notado na Etapa 72 — do fluxo de trabalho, não do sistema). Sabotagem concorrente contamina a suíte de
+outro agente.** Na Etapa 72, dois executores trabalharam em paralelo na mesma árvore: um sabotava de propósito um
+arquivo de produção (o controle positivo: quebrar o código e ver o teste ficar vermelho) enquanto o outro rodava a suíte
+inteira — e a suíte do segundo viu o arquivo quebrado e acusou falhas em testes que não tinham nada com a etapa (entre
+elas o mesmo `indicadoresSpec27Integracao` do **G80**, que passou 5 vezes seguidas com a árvore parada). Não é defeito
+de produção. **A regra para as próximas etapas:** um executor que sabota código de produção não roda em paralelo com
+outro que roda a suíte na mesma árvore (ou cada um numa worktree própria).
 
 aparece na hora, para quem está editando.
 ## Etapa 0 — Fundação (2026-08-03)
@@ -16802,9 +17015,105 @@ mesma NF — o uso mais comum do estorno — era recusado. A revisão do **códi
 continuava estornável (e sairia duas vezes) e que o estorno desfazia o fechamento **à mão** do comprador — os dois
 corrigidos, o segundo com a trilha nova da mudança manual no Compras.
 
+## Etapa 72 — A solicitação de compra só fecha quando o material dela chega (2026-10-02)
+
+Quando o almoxarifado pede compra de um material, nasce uma solicitação de compra; o comprador gera o pedido e ela fica
+*Vinculado*. Até aqui, a **primeira** nota daquele pedido — mesmo de 4 de 10, e até de **outro** material do pedido —
+fechava a solicitação como *Recebida*. A partir daí o sistema esquecia que o resto ainda vinha: a sugestão de reposição
+mandava comprar de novo os 6 que estavam a caminho, a verificação de mínimos abria outra solicitação de 10, e a linha
+sumia da aba Solicitações. Agora a solicitação só fecha quando **o material dela** chegou; enquanto isso, ela continua
+na aba com *"chegou 4 de 10"*, e a sugestão conta só o que ainda falta. Pedido cancelado deixa de contar. O estorno da
+entrada que a tinha fechado a reabre. No caminho, a etapa corrigiu um defeito antigo: a verificação de mínimos abria
+solicitação em dobro assim que o pedido era gerado, antes de qualquer nota.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A primeira nota do pedido (4 de 10) fechava a solicitação | Ela continua *Vinculado* até o material dela chegar (**B343**) |
+| A nota de um material fechava a solicitação de **outro** material do mesmo pedido | Cada solicitação fecha pelo material dela (**B343**, **C115**) |
+| Depois da nota parcial, a sugestão mandava comprar de novo o que vinha pelo pedido | A sugestão conta como *a caminho* só o que ainda falta (6 de 10) (**B344**) |
+| A verificação de mínimos abria outra solicitação assim que o pedido era gerado | Não abre enquanto houver compra vinculada a pedido em andamento (**B347**, **C114**) |
+| A solicitação sumia da aba Solicitações na primeira nota | Fica, com *"chegou 4 de 10"* (**B352**) |
+| Pedido cancelado com entrega parcial: a solicitação já tinha fechado na nota | Não conta mais nada: *"pedido encerrado — nada a caminho"* (**B345**) |
+| Estornar a entrada deixava a solicitação *Recebida* | O estorno a reabre — trilha *"Solicitação reaberta (estorno)"* (**B348**) |
+| Duas solicitações (6 e 4) no mesmo pedido: a primeira nota fechava as duas | A de 6 fecha quando os 6 dela chegam; a de 4 espera os dela (**B354**) |
+
+### As regras, com o cenário exato
+
+Preparação: um material **M** com **mínimo 9**, **máximo 10** e saldo 0, com fornecedor. Em **Reposição e Compras**,
+aba **Sugestões de Compra**, marcar M e **Gerar solicitações**; na aba **Solicitações**, **Gerar pedido** na linha de M
+(o pedido de compra abre preenchido; salvar com **10**). A solicitação passa a *Vinculado*. Os recebimentos são em
+**Recebimentos → Novo Recebimento**, forma *Pedido de compra*, até **Processar Nota**.
+
+**1. A compra vinculada não gera outra solicitação.** Com a solicitação *Vinculado* e nada recebido, a verificação de
+mínimos (`POST /api/almoxarifado/compras/verificar-minimos`, pela API ou integração) responde `criadas: []`, e
+**Gerar solicitações** não oferece M (os 10 estão a caminho).
+
+**2. A nota parcial não fecha.** Processar uma nota de **4** de M: na aba **Solicitações**, a linha continua
+*Vinculado*, com *"chegou 4 de 10"*. Na aba **Sugestões de Compra**, M não aparece (4 em estoque + 6 a caminho cobrem a
+mínima 9). A verificação de mínimos continua respondendo `criadas: []`.
+
+**3. A nota que completa fecha.** Processar uma nota de **6**: a linha sai da aba Solicitações. Em **Auditoria**, a
+solicitação mostra *"Recebida"*, com a regra *MATERIAL_COMPLETO*.
+
+**4. O estorno reabre.** **Movimentações**: estornar (seta curva) a entrada **ENTRADA_COMPRA** dos 6. A linha volta à
+aba Solicitações com *"chegou 4 de 10"*, e a **Auditoria** mostra *"Solicitação reaberta (estorno)"* (justificativa
+*"Estorno da movimentação #⟨id⟩ reabriu a solicitação"*). Uma nova nota de 6 fecha de novo.
+
+**5. Pedido com dois materiais.** Um pedido com 10 de **X** e 5 de **Y**, cada um com a sua solicitação. Nota só de X:
+a solicitação de X fecha, a de Y continua *Vinculado* — Y não volta à sugestão.
+
+**6. Duas solicitações no mesmo pedido.** Duas solicitações de M (6 e 4) vinculadas ao mesmo pedido de 10 (a segunda
+pela API `vincular-pedido` — o **Gerar pedido** da tela sempre cria pedido novo). Nota de 6: a de 6 fecha (*Recebida*);
+a de 4 continua *Vinculado*, sem *"chegou"* — nada dela chegou.
+
+**7. Pedido cancelado.** Com a nota de 4 do cenário 2, no Compras lápis → **Status** → *Cancelado*. Na aba Solicitações
+a linha mostra *"pedido encerrado — nada a caminho"*; M volta à sugestão com o que falta, e a verificação de mínimos
+abre uma solicitação nova. A antiga fica até o comprador cancelá-la (**C117**).
+
+**8. Vincular a um pedido que já entregou tudo (API).** `POST /api/almoxarifado/compras/solicitacoes/:id/vincular-pedido`
+para um pedido cuja linha do material já recebeu tudo: *"O pedido ⟨número⟩ já recebeu todo o ⟨nome do material⟩:
+vincule a solicitação a outro pedido"*.
+
+### O que esta etapa NÃO cobre
+
+1. **A requisição que espera compra** continua nascendo *Aguardando estoque* com a compra vinculada, e não muda de
+   status quando o material chega (**C116**) — é a próxima etapa.
+2. **As solicitações fechadas cedo no passado** não reabrem sozinhas — **A36**.
+3. **O "chegou X de Y" é só da aba** — o relatório em **Relatórios**, a exportação e o painel **Ver contexto** ficam como
+   estavam.
+4. **Sem teto pelo saldo do pedido** no *a caminho* (**B344**, **B355**).
+5. **Encerrar o pedido não fecha a solicitação** — o comprador cancela ou re-vincula (**C117**).
+6. **Pedido vivo com mais de 60 dias** ganha segunda solicitação na verificação de mínimos (**C118**).
+
+### O que a revisão encontrou
+
+A medição reproduziu o defeito pelas rotas e achou mais dois do mesmo desenho: a verificação de mínimos já abria
+solicitação em dobro antes de qualquer nota (Etapa 14), e a nota de um material fechava a solicitação de outro. Também
+mostrou que a spec da reposição dizia, desde a Etapa 14, que fechar a solicitação no recebimento "não existe" — **estava
+errado**. A revisão do **plano** achou que o recebido do pedido não era de ninguém em particular: com duas solicitações
+no mesmo pedido, ou com o pedido ligado depois de parte entregue, a conta enganava — e a afirmação do plano de que "o
+caso não existe na prática" **estava errada**. A revisão do **código** reproduziu, pelas rotas, três casos em que a
+conta calculada mudava de dono (cancelar uma solicitação passava o que ela recebeu para a irmã e a sugestão comprava em
+dobro; estornar uma nota anterior ao vínculo reabria quem já tinha recebido; vincular a pedido já entregue criava um *a
+caminho* que nunca chegaria) — e a conta virou um **livro** gravado na entrada de cada nota (**B352**).
+
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 72 entregue (2026-10-02):** **a solicitação de compra só fecha quando o material dela chega.** A nota parcial
+  (ou de outro material do pedido) não fecha mais a solicitação: ela continua na aba Solicitações com *"chegou X de Y"*,
+  e a sugestão de reposição conta só o que ainda falta — para de mandar comprar de novo o que já vem pelo pedido. Pedido
+  cancelado deixa de contar; o estorno da entrada que a fechou a reabre. Corrigido um defeito antigo: a verificação de
+  mínimos abria solicitação em dobro assim que o pedido era gerado. O que chegou para cada solicitação passou a ser um
+  livro gravado na entrada de cada nota (a primeira versão, calculada, falhou em três casos na revisão). **O que é seu:**
+  a consulta **A36** (solicitações fechadas cedo no passado); as decisões **B343 a B356**; os avisos **C114 a C120** (o
+  **C116** é a próxima etapa, e o **C118** é uma regra a decidir); as limitações **(72)** em D, as verificações **(72)**
+  em F e a fragilidade de processo **G84**. **Próxima: Etapa 73 — a requisição que espera compra (feature 04, com a
+  18) — ver o plano da Etapa 72.**
 
 - **Etapa 71 entregue (2026-10-02):** **estornar a entrada da nota reabre o pedido de compra.** Estornar (Movimentações
   → seta curva) a entrada de uma nota contra pedido **desconta** o pedido e o **reabre** quando a nota o tinha fechado
@@ -16817,6 +17126,7 @@ corrigidos, o segundo com a trilha nova da mudança manual no Compras.
   cruzado); as decisões **B329 a B342**; os avisos **C107 a C113** (o **C109** é o mais importante: relançar a nota deixa
   duas contas a pagar); as limitações **(71)** em D e as verificações **(71)** em F. **Próxima: Etapa 72 — a solicitação
   de compra que fecha na primeira nota parcial (feature 18, com a 08) — ver o plano da Etapa 71.**
+  *(Feita — Etapa 72.)*
 
 - **Etapa 70 entregue (2026-10-01):** **quem esperava o material fica sabendo que ele chegou.** Ao processar uma nota,
   o solicitante de cada requisição que esperava o material recebe um e-mail (ligado de fábrica), com o link para a
