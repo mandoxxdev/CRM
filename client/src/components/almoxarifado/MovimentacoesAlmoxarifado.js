@@ -618,6 +618,25 @@ const MovimentacoesAlmoxarifado = () => {
     setEstornoMotivo('');
   };
 
+  // Etapa 71: o estorno da ENTRADA_COMPRA de uma nota contra pedido desconta a linha do pedido e
+  // pode reabri-lo; o servidor devolve `pedido_compra` só quando um pedido foi tocado. Leitura
+  // defensiva: roda depois do toast.success, e um TypeError aqui cairia no catch como toast.error
+  // de um estorno que deu certo. Sem aviso em pedido cancelado/rejeitado (decisão do comprador,
+  // o status não muda) nem quando o saldo a receber voltou a 0 (Fase 2 do plano).
+  const avisarPedidoCompra = (pc) => {
+    if (!pc || typeof pc !== 'object') return;
+    const status = String(pc.status || '').toLowerCase();
+    if (status === 'cancelado' || status === 'rejeitado') return;
+    const saldo = Number(Number(pc.saldo_pendente).toFixed(6));
+    if (!Number.isFinite(saldo) || saldo <= 0) return;
+    const numero = pc.numero || `#${pc.id}`;
+    if (pc.reaberto === true) {
+      toast.info(`Pedido de compra ${numero} reaberto: faltam ${saldo} para receber`);
+    } else {
+      toast.info(`Pedido de compra ${numero}: o saldo a receber voltou a ${saldo}`);
+    }
+  };
+
   const confirmarEstorno = async () => {
     if (!estornoMotivo.trim()) {
       toast.error('Informe o motivo do estorno');
@@ -625,8 +644,9 @@ const MovimentacoesAlmoxarifado = () => {
     }
     setEstornoSaving(true);
     try {
-      await api.post(`/almoxarifado/movimentacoes/${estornoTarget.id}/cancelar`, { motivo: estornoMotivo.trim() });
+      const resp = await api.post(`/almoxarifado/movimentacoes/${estornoTarget.id}/cancelar`, { motivo: estornoMotivo.trim() });
       toast.success('Movimentação estornada!');
+      avisarPedidoCompra(resp?.data?.pedido_compra);
       setEstornoTarget(null);
       loadMovimentacoes();
     } catch (err) {

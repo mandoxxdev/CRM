@@ -940,3 +940,108 @@ describe('Etapa 68: aviso de area especial no destino', () => {
     }));
   });
 });
+
+/**
+ * Etapa 71 T3: o estorno da ENTRADA_COMPRA de uma nota contra pedido desconta a linha do pedido e,
+ * se a conta fechava antes e nao fecha depois, reabre o pedido. O servidor devolve isso em
+ * `pedido_compra` (so quando um pedido foi tocado); a tela avisa DEPOIS do sucesso:
+ * - reaberto -> "Pedido de compra <numero> reaberto: faltam <saldo> para receber";
+ * - so descontado -> "Pedido de compra <numero>: o saldo a receber voltou a <saldo>";
+ * - pedido cancelado/rejeitado (o comprador decidiu) ou saldo 0 -> nada alem do sucesso (Fase 2).
+ * A leitura e defensiva: um TypeError depois do toast.success cairia no catch e mostraria um
+ * toast.error de um estorno que deu certo.
+ */
+describe('MovimentacoesAlmoxarifado — aviso do pedido de compra no estorno (Etapa 71)', () => {
+  const { toast } = jest.requireMock('react-toastify');
+
+  const pedido = (extra) => ({
+    id: 7, numero: 'PC-0007', pedido_item_id: 70, quantidade_estornada: 10,
+    situacao_antes: 'RECEBIDO', situacao_depois: 'ABERTO', saldo_pendente: 10,
+    status_anterior: 'recebido', status: 'enviado', reaberto: true, ...extra,
+  });
+
+  async function estornar() {
+    await renderizar();
+    await act(async () => { linhas()[0].querySelector('.almox-btn-icon.danger').click(); });
+    const textarea = container.querySelector('.almox-modal textarea');
+    const setValue = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+    act(() => {
+      setValue.call(textarea, 'lancei errado');
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    const botao = [...container.querySelectorAll('.almox-modal button')].find((b) => b.textContent === 'Confirmar Estorno');
+    await act(async () => { botao.click(); });
+    await esperarEfeitos();
+  }
+
+  const modalAberto = () => !!container.querySelector('.almox-modal textarea');
+
+  test('pedido reaberto: aviso literal de reabertura, depois do sucesso', async () => {
+    api.post.mockResolvedValue({ data: { success: true, estorno_id: 99, pedido_compra: pedido() } });
+    await estornar();
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/movimentacoes/1/cancelar', { motivo: 'lancei errado' });
+    expect(toast.success).toHaveBeenCalledWith('Movimentação estornada!');
+    expect(toast.info.mock.calls).toEqual([['Pedido de compra PC-0007 reaberto: faltam 10 para receber']]);
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(modalAberto()).toBe(false);
+  });
+
+  test('pedido so descontado: aviso literal do saldo, sem ruido de ponto flutuante', async () => {
+    api.post.mockResolvedValue({ data: { success: true, estorno_id: 99, pedido_compra: pedido({
+      reaberto: false, situacao_antes: 'PARCIAL', situacao_depois: 'PARCIAL',
+      status_anterior: 'enviado', status: 'enviado', saldo_pendente: 0.30000000000000004,
+    }) } });
+    await estornar();
+    expect(toast.success).toHaveBeenCalledWith('Movimentação estornada!');
+    expect(toast.info.mock.calls).toEqual([['Pedido de compra PC-0007: o saldo a receber voltou a 0.3']]);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['cancelado', { status: 'cancelado', status_anterior: 'cancelado', reaberto: false }],
+    ['rejeitado', { status: 'rejeitado', status_anterior: 'rejeitado', reaberto: false }],
+    ['saldo 0', { status: 'enviado', reaberto: false, saldo_pendente: 0 }],
+  ])('pedido %s: so o sucesso, sem aviso extra', async (_nome, extra) => {
+    api.post.mockResolvedValue({ data: { success: true, estorno_id: 99, pedido_compra: pedido(extra) } });
+    await estornar();
+    expect(toast.success).toHaveBeenCalledWith('Movimentação estornada!');
+    expect(toast.info).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(modalAberto()).toBe(false);
+  });
+
+  test('metade positiva: o mesmo pedido com status vivo e saldo > 0 AVISA (o filtro nao engole tudo)', async () => {
+    api.post.mockResolvedValue({ data: { success: true, estorno_id: 99, pedido_compra: pedido({
+      status: 'pendente', reaberto: false, saldo_pendente: 4,
+    }) } });
+    await estornar();
+    expect(toast.info.mock.calls).toEqual([['Pedido de compra PC-0007: o saldo a receber voltou a 4']]);
+  });
+
+  test('sem pedido_compra: so o sucesso de hoje', async () => {
+    api.post.mockResolvedValue({ data: { success: true, estorno_id: 99 } });
+    await estornar();
+    expect(toast.success).toHaveBeenCalledWith('Movimentação estornada!');
+    expect(toast.info).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  test('resposta sem data: nada de TypeError no catch, e o modal fecha', async () => {
+    api.post.mockResolvedValue(undefined);
+    await estornar();
+    expect(toast.success).toHaveBeenCalledWith('Movimentação estornada!');
+    expect(toast.info).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(modalAberto()).toBe(false);
+  });
+
+  test('recusa 400 da inspecao: mostra o error do servidor literal, sem sucesso', async () => {
+    const msg = 'Esta entrada tem 4 PC em inspeção — decida a inspeção antes de estornar a entrada';
+    api.post.mockRejectedValue(Object.assign(new Error('400'), { response: { status: 400, data: { error: msg } } }));
+    await estornar();
+    expect(toast.error.mock.calls).toEqual([[msg]]);
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.info).not.toHaveBeenCalled();
+    expect(modalAberto()).toBe(true);
+  });
+});
