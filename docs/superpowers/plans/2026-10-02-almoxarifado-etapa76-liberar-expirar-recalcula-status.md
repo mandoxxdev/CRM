@@ -358,7 +358,18 @@ sequencial pelo mesmo motivo, com zero retrabalho.
   (s5) sem o `DISTINCT` → **cai (c)**: duas linhas da mesma requisição, o espião conta 2.
   *Declarado redundante por construção (não é controle):* a ordem crescente das travas (D3) — nenhum outro chamador
   pega duas travas, então inverter a ordem não produz ciclo que um teste veja.
-- [ ] **T1 — liberar à mão recalcula.** O gancho na rota, pelo contrato. Teste novo
+- [x] **T1 — liberar à mão recalcula.** — **feita em `a3f3195f`.** Gancho com `[result.reserva_id]` (Fase 2).
+  Teste `reservaLiberarRecalculaStatus` 13/13 (RN-01 ×2, RN-02 ×3, RN-04 ×3, RN-05 ×2, RN-06, RN-07 (a) pela rota,
+  RN-08); vermelho antes do gancho: 7 caíram (as que mudam status, RN-05 e RN-07 por `PRESA` — sem gancho o portão
+  nunca é alcançado). Controles: s1 (gancho removido) → RN-01 `TOTALMENTE_RESERVADA ≠ APROVADO`, RN-02 ×2, RN-05 ×2,
+  RN-07; s2 (a rota recalculando sem trava, lendo o `requisicao_id` da reserva) → RN-07 `['APROVADO', 4]` com
+  **RN-01 verde** (também caem os dois RN-05, porque a sabotagem não passa pelas funções monkeypatcheadas — esperado);
+  s3 (o `catch` da rota relança) → só RN-05 do gancho, `500 {"error":"gancho simulado 76L"}`; a variante com só o
+  `recalcularStatusSobTrava` lançando continua verde (o `try` da T0). s4 (fire-and-forget) declarado não-controle,
+  não rodado. `reservaConsumo` 10/10, `reservaTransferenciaExpiracao` 15/15, `reservaCicloIntegracao` 7/7 e o
+  cliente `ReservasAlmoxarifado` 10/10 sem edição. Literal do aviso da rota: `[almoxarifado-reservas] recalculo do
+  status apos liberacao manual da reserva falhou (reserva <id>): <msg>`. Texto original da T1:
+  O gancho na rota, pelo contrato. Teste novo
   `server/tests/api/reservaLiberarRecalculaStatus.api.test.js`, **pela rota** (`POST /reservas/:id/liberar`, gate real,
   usuários por perfil — ALMOXARIFE libera, QUALIDADE não): RN-01 (com a metade positiva da R2 e
   `deepStrictEqual(Object.keys(body).sort(), ['quantidade_liberada','reserva_id','status','success'])`), RN-02 (as três),
