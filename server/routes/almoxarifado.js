@@ -3660,6 +3660,15 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     try {
       const result = await valueApprovalService.rejeitarValor(db, req.params.id, req.user, req.body.motivo);
 
+      // Etapa 74 (T3, Fase 2): REJEITADO e terminal — o hold ATIVO da requisicao (da aprovacao ou da chegada)
+      // nao pode ficar preso. Best-effort, o molde do cancelamento: a rejeicao ja aconteceu.
+      try {
+        await reservationService.liberarReservasDaRequisicao(db, req.user, req.params.id, 'Requisição rejeitada por valor',
+          { motivoMovimentacao: 'Liberação por rejeição de valor da requisição' });
+      } catch (relErr) {
+        console.warn('[almoxarifado] Liberação de reservas na rejeição por valor:', relErr.message);
+      }
+
       await registrarAuditoria(db, {
         entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'REJEICAO_VALOR',
         usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
@@ -3846,6 +3855,15 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         `UPDATE requisicoes_almoxarifado SET status='ENCERRADA', encerrado_por=?, encerrado_em=CURRENT_TIMESTAMP,
          updated_at=CURRENT_TIMESTAMP WHERE id=?`,
         [req.user.id, req.params.id]);
+
+      // Etapa 74 (T3, Fase 2): ENCERRADA e terminal ("nenhuma entrega futura") — o hold que sobrou (da aprovacao ou
+      // da chegada) volta ao disponivel. Best-effort, o molde do cancelamento: o encerramento ja aconteceu.
+      try {
+        await reservationService.liberarReservasDaRequisicao(db, req.user, req.params.id, 'Requisição encerrada',
+          { motivoMovimentacao: 'Liberação por encerramento de requisição' });
+      } catch (relErr) {
+        console.warn('[almoxarifado] Liberação de reservas no encerramento:', relErr.message);
+      }
 
       await registrarAuditoria(db, {
         entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'ENCERRAMENTO',

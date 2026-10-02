@@ -170,7 +170,10 @@ async function processarExpiracao(db, user, options = {}) {
  * Best-effort de propósito: uma reserva problemática não pode impedir o cancelamento da
  * requisição, que é a ação que o usuário pediu. Devolve o resumo para quem quiser logar.
  */
-async function liberarReservasDaRequisicao(db, user, requisicaoId, motivo) {
+// Etapa 74 (T3, Fase 2): `opcoes.motivoMovimentacao` — o /encerrar e o /rejeitar-valor tambem soltam o hold
+// (a reserva na chegada passou a criar hold sozinha, e status terminal com hold preso e saldo inutilizavel);
+// o rastro no livro diz qual foi o ato, nao "cancelamento". Sem opcoes, o de sempre.
+async function liberarReservasDaRequisicao(db, user, requisicaoId, motivo, opcoes = {}) {
   const ativas = await dbAll(db,
     `SELECT id, quantidade, COALESCE(quantidade_utilizada,0) as quantidade_utilizada
      FROM reservas_material_almoxarifado
@@ -184,7 +187,7 @@ async function liberarReservasDaRequisicao(db, user, requisicaoId, motivo) {
         await stockService.liberarReserva(db, user, r.id, null, {
           statusFinal: 'LIBERADA',
           motivo: motivo || 'Requisição cancelada',
-          motivoMovimentacao: 'Liberação por cancelamento de requisição',
+          motivoMovimentacao: opcoes.motivoMovimentacao || 'Liberação por cancelamento de requisição',
         });
       } else {
         // Sem saldo restante não há o que devolver; só sai de ATIVA.

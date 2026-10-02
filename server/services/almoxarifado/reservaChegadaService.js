@@ -39,6 +39,8 @@ const EPS = 1e-9;
 const STATUS_CANDIDATOS = requisitionStateMachine.PODE_SEPARAR;
 // De onde o status é recalculado (Fase 2, crítico): EM_SEPARACAO e PARCIALMENTE_ATENDIDA já passaram da
 // separação e mantêm o status; CANCELADO/REJEITADO/ENCERRADA nunca são ressuscitados.
+// Etapa 74 (T3): quem "espera" para o estorno — a lista da 70 (PODE_SEPARAR sem EM_SEPARACAO).
+const STATUS_QUE_ESPERAM = requisitionStateMachine.PODE_SEPARAR.filter((s) => s !== 'EM_SEPARACAO');
 const STATUS_RECALCULAVEIS = ['APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA',
   requisitionStateMachine.STATUS_PARCIALMENTE_RESERVADA, requisitionStateMachine.STATUS_TOTALMENTE_RESERVADA];
 
@@ -246,8 +248,67 @@ async function reservarChegadaParaQuemEspera(db, user, recebimentoId) {
   return resultado;
 }
 
+/**
+ * Etapa 74 (T3, D8/B374 + Fase 2) — o estorno da ENTRADA_COMPRA desfaz a reserva que a PRÓPRIA nota criou,
+ * só o necessário. Chamada LAZY pelo motor (`stockService.cancelarMovimentacao`) depois das guardas de
+ * inspeção/reprovado/série e ANTES do claim. Sem isto, toda nota que atendeu alguém ficaria inestornável
+ * ("material já consumido") até alguém liberar à mão — e liberar à mão deixa o status mentindo (C127).
+ *
+ * Regras: só reservas ATIVAS com `recebimento_id` desta movimentação e do material dela, de requisições
+ * que ainda ESPERAM (`STATUS_QUE_ESPERAM` da 70) e não têm NADA separado na caixa (Fase 2: quem já separou
+ * não perde a reserva no estorno); da última na ordem de prioridade para a primeira; só o que falta para
+ * o estorno caber no disponível. Se nem liberando tudo o que pode o estorno caberia, não toca em nada (a
+ * recusa da 71 acontece no ramo de entrada, intacta). Reservas da aprovação ou manuais nunca são tocadas.
+ * @returns {Promise<number[]>} os ids das requisições que perderam reserva (o motor recalcula o status).
+ */
+async function liberarParaEstorno(db, user, mov) {
+  const qtd = num(mov.quantidade);
+  const mat = await dbGet(db, `SELECT ${disponivelSql()} AS disponivel FROM materiais_almoxarifado WHERE id = ?`, [mov.material_id]);
+  const disp = num(mat && mat.disponivel);
+  if (disp >= qtd - EPS) return [];
+
+  const marcasSt = STATUS_QUE_ESPERAM.map(() => '?').join(',');
+  const reservas = await dbAll(db, `SELECT rs.id AS reserva_id, rs.item_requisicao_id AS item_id,
+      rs.quantidade - COALESCE(rs.quantidade_utilizada, 0) AS saldo,
+      r.id, r.numero, r.urgencia, r.data_necessidade, r.created_at
+    FROM reservas_material_almoxarifado rs
+    JOIN requisicoes_almoxarifado r ON r.id = rs.requisicao_id
+    WHERE rs.status = 'ATIVA' AND rs.origem = 'REQUISICAO' AND rs.recebimento_id = ? AND rs.material_id = ?
+      AND COALESCE(r.ativo, 1) = 1 AND r.status IN (${marcasSt})
+      AND NOT EXISTS (SELECT 1 FROM itens_requisicao_almoxarifado ix
+        WHERE ix.requisicao_id = r.id
+          AND COALESCE(ix.quantidade_separada, 0) - COALESCE(ix.quantidade_entregue, ix.quantidade_atendida, 0) > ${EPS})`,
+  [mov.recebimento_id, mov.material_id, ...STATUS_QUE_ESPERAM]);
+  const liberaveis = reservas.filter((x) => num(x.saldo) > EPS)
+    .sort((a, b) => requisitionService.compararPrioridade(b, a) || (b.item_id - a.item_id));
+  const total = liberaveis.reduce((s, x) => s + num(x.saldo), 0);
+  if (disp + total < qtd - EPS) return [];
+
+  const rec = await dbGet(db, 'SELECT numero FROM recebimentos_material_almoxarifado WHERE id = ?', [mov.recebimento_id]);
+  let falta = qtd - disp;
+  const tocadas = [];
+  for (const r of liberaveis) {
+    if (falta <= EPS) break;
+    const q = Math.min(num(r.saldo), falta);
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await stockService.liberarReserva(db, user, r.reserva_id, q >= num(r.saldo) - EPS ? null : q, {
+        statusFinal: 'LIBERADA',
+        motivo: `Estorno da entrada do recebimento ${rec ? rec.numero : mov.recebimento_id}`,
+        motivoMovimentacao: 'Liberação por estorno da entrada',
+      });
+      falta -= q;
+      if (!tocadas.includes(Number(r.id))) tocadas.push(Number(r.id));
+    } catch (e) {
+      console.warn(`[almoxarifado-reservas] Falha ao liberar a reserva ${r.reserva_id} no estorno da entrada: ${e.message}`);
+    }
+  }
+  return tocadas;
+}
+
 module.exports = {
   reservarChegadaParaQuemEspera,
   recalcularStatusDeReserva,
+  liberarParaEstorno,
   STATUS_RECALCULAVEIS,
 };

@@ -2412,6 +2412,21 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
       { status: 400 });
   }
 
+  // Etapa 74 (T3, D8/B374): o estorno da ENTRADA_COMPRA desfaz, antes do claim, a reserva que a propria nota
+  // criou para quem esperava (reservaChegadaService) — so o necessario, da ultima na ordem para a primeira,
+  // so de quem espera sem nada separado. Sem isto a nota que atendeu alguem ficava inestornavel ("material ja
+  // consumido") ate alguem liberar a mao. Se nem assim cabe, nada e tocado e a recusa abaixo e a da 71.
+  // `require` lazy: reservaChegadaService requer este motor no topo. Nao-fatal: a falha cai na recusa de hoje.
+  let requisicoesDoEstorno = [];
+  if (mov.tipo === 'ENTRADA_COMPRA' && mov.recebimento_id) {
+    try {
+      // eslint-disable-next-line global-require
+      requisicoesDoEstorno = await require('./reservaChegadaService').liberarParaEstorno(db, user, mov);
+    } catch (e) {
+      console.warn(`[almoxarifado] liberacao das reservas da chegada no estorno falhou (movimentacao ${movimentoId}): ${e.message}`);
+    }
+  }
+
   // Claim atômico ANTES de aplicar qualquer efeito inverso (achado do review final: double-cancel
   // race). O UPDATE...WHERE cancelado = 0 é a própria seção crítica sob o lock de linha do SQLite:
   // de duas chamadas concorrentes para o mesmo movimentoId, só uma tem changes = 1 — essa é a
@@ -2420,7 +2435,10 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
   const claim = await dbRun(db, `UPDATE movimentacoes_almoxarifado
     SET cancelado = 1, cancelado_por = ?, cancelado_em = CURRENT_TIMESTAMP, cancelamento_motivo = ?, regularizacao_pendente = 0
     WHERE id = ? AND cancelado = 0`, [user.id, motivo, movimentoId]);
-  if (!claim.changes) throw Object.assign(new Error('Movimentação já cancelada'), { status: 400 });
+  if (!claim.changes) {
+    await recalcularStatusAposEstorno(db, requisicoesDoEstorno);
+    throw Object.assign(new Error('Movimentação já cancelada'), { status: 400 });
+  }
 
   let estornoId;
 
@@ -2738,6 +2756,8 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
     // voltado. regularizacao_pendente volta ao valor original lido antes do claim.
     await dbRun(db, `UPDATE movimentacoes_almoxarifado SET cancelado = 0, cancelado_por = NULL, cancelado_em = NULL,
       cancelamento_motivo = NULL, regularizacao_pendente = ? WHERE id = ?`, [mov.regularizacao_pendente, movimentoId]);
+    // Etapa 74 (T3): o estorno nao aconteceu, mas as reservas da chegada ja foram liberadas — o status acompanha.
+    await recalcularStatusAposEstorno(db, requisicoesDoEstorno);
     throw err;
   }
 
@@ -2768,6 +2788,10 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
     }
   }
 
+  // Etapa 74 (T3): o status das requisicoes que perderam a reserva da chegada, DEPOIS de o pedido reabrir
+  // (AGUARDANDO_COMPRA conta a compra que volta a vir; antes dele seria AGUARDANDO_ESTOQUE).
+  await recalcularStatusAposEstorno(db, requisicoesDoEstorno);
+
   try {
     await alertService.verificarAlertaPorMaterialId(db, mov.material_id);
   } catch (alertErr) {
@@ -2789,6 +2813,21 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
   return pedidoCompra
     ? { success: true, estorno_id: estornoId, pedido_compra: pedidoCompra }
     : { success: true, estorno_id: estornoId };
+}
+
+/**
+ * Etapa 74 (T3): recalcula o status das requisicoes que perderam a reserva da chegada no estorno. Cada uma no
+ * seu try — o estorno (ou a recusa dele) nunca muda por causa do rotulo. `require` lazy (ver acima).
+ */
+async function recalcularStatusAposEstorno(db, requisicaoIds) {
+  for (const id of requisicaoIds || []) {
+    try {
+      // eslint-disable-next-line global-require, no-await-in-loop
+      await require('./reservaChegadaService').recalcularStatusDeReserva(db, id);
+    } catch (e) {
+      console.warn(`[almoxarifado] recalculo do status apos estorno falhou (requisicao ${id}): ${e.message}`);
+    }
+  }
 }
 
 /**
