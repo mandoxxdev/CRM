@@ -1,6 +1,6 @@
 # Etapa 71 — o pedido de compra que reabre quando a entrada é estornada (feature 08, B161)
 
-> Status: **PLANO (Fases 0 e 1 feitas, 2026-10-01). Nada executado.** Próximo passo: Fase 2 (revisão do plano por agente
+> Status: **TRONCO FEITO (T0, T1, T2 — 2026-10-01).** Próximo passo: T3 (galho, tela) e T4 (integração), depois T5. Ordem original: Fase 2 (revisão do plano por agente
 > fresco), depois T0 → T1 → T2 (tronco), T3 (galho) em paralelo à T2, T4 (integração), T5 (fechamento).
 > Feature 08 (recebimento), item (4) da lista "o que falta para 🟢" (`specs/modulo-almoxarifado/08-recebimento/README.md:3`):
 > *"o pedido que reabre — estornar a movimentação de entrada de um pedido já fechado não reverte `quantidade_recebida` nem
@@ -372,7 +372,32 @@ fechamento. Executores de galho **não** marcam este plano.
   dois ids diferentes, cada um com a quantidade do seu item); item com 0 → `NULL`; reprocessamento (falha parcial
   retomada) não reescreve o do item que já entrou. Controle positivo: gravar o id no item errado (`itens[0]`) → cai o
   de dois itens; não gravar → cai tudo.
-- [ ] **T2 (tronco) — desconto, reabertura e o gancho.** `estornarEntradaNoPedido` + gancho em `cancelarMovimentacao` +
+- [x] **T2 (tronco) — FEITA** (hash no commit "Almoxarifado Etapa 71 T2"). `estornarEntradaNoPedido` (+
+  `resolverItemDaEntrada`, `destinoDaReabertura`, `situacaoDoPedido`) e `SQL_PEDIDO_COMPLETO` em `receiptService.js`;
+  gancho e recusa da inspeção em `cancelarMovimentacao`; dois rótulos; cabeçalho do `fecharPedidosCompletos` reescrito
+  (decisão 4). Com a Fase 2: recusa `Esta entrada tem <q> <un> em inspeção — decida a inspeção antes de estornar a
+  entrada` (antes do claim; item do vínculo, ou, no legado, os itens sem dono do par — conservador); NF duplicada ignora
+  o recebimento com entradas **todas** estornadas **e** nenhum item ainda por entrar (o documento que falhou no meio
+  continua dono da NF — acréscimo meu, cenário (9c)); linha+status antes das trilhas, cada trilha no seu try; adoção com
+  `changes === 1`; `ORDER BY id DESC` + `JSON.parse` com try; o `WHERE` do fechamento **e o da reabertura** repetem a
+  régua (`SQL_PEDIDO_COMPLETO` — o da reabertura é acréscimo meu, cenário (11b), pela corrida inversa).
+  `fecharPedidosCompletos` passou a ser exportada (para o cenário (11)). `pedidoReabreNoEstorno.api.test.js` **25/25**
+  (rota e serviço). Sabotagens, cada uma derrubando o cenário certo: (a) primeiro item do par → (6)(6b)(6c)(6d)(6e);
+  (b) sem `antes` → (3b); (c) sempre `pendente` → (2)(4)(7b); (d) gancho na rota → (2b)(4)(6c)(11b) pelo serviço + (7);
+  (e) gancho antes do claim → (5)(5b) "descontou de novo"; (f) `throw` no catch → (7); (g) sem adoção → (6b)(6c)(6e);
+  (h) fechamento sem a régua no WHERE → (11); (i) reabertura sem a régua → (11b); (j) sem a recusa da inspeção →
+  (8)(8b); (k) NF sem o filtro → (9)(9b); (l) NF sem a cláusula do item pendente → (9c); (m) trilha sem try → (7b);
+  (n) adoção sem `changes === 1` → (6e). Suíte: api 264/264, almoxarifado 44/44, validation 4/4, safealter 3/3,
+  sqlite 5/5 — **nenhum teste existente mudou de asserção** (o (8) da 42 e o da 45 verdes sem edição; só um comentário
+  de `comprasPedidoAtrasoIntegracao` ganhou a nota da 71).
+  **Contrato final que a T3 consome** (`POST /api/almoxarifado/movimentacoes/:id/cancelar`, 200): `{ success: true,
+  estorno_id, pedido_compra? }`, com `pedido_compra = { id, numero, pedido_item_id, quantidade_estornada,
+  situacao_antes, situacao_depois, saldo_pendente, status_anterior, status, reaberto }` **só** quando um pedido foi
+  tocado (inclusive cancelado/rejeitado e recebido-à-mão-com-conta-aberta, com `reaberto: false`). `saldo_pendente` já
+  vem limpo (6 casas). Para o toast da Fase 2: sem toast quando `status` é `cancelado`/`rejeitado` ou quando
+  `saldo_pendente` é 0. Recusa nova possível no `catch` da tela: 400 `Esta entrada tem 4 PC em inspeção — decida a
+  inspeção antes de estornar a entrada`.
+  Plano original da T2: desconto, reabertura e o gancho. `estornarEntradaNoPedido` + gancho em `cancelarMovimentacao` +
   dois rótulos em `auditLabels.js`; **reescrever o cabeçalho de `fecharPedidosCompletos`** (decisão 4 "só sobe" →
   "sobe aqui; desce em `estornarEntradaNoPedido`", com a B161 citada como revogada em parte). Teste novo
   `server/tests/api/pedidoReabreNoEstorno.api.test.js` — RN-01 a RN-08, **pela rota** `/movimentacoes/:id/cancelar` e

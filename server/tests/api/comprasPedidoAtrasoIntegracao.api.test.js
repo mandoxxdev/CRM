@@ -53,7 +53,9 @@
  * `status = 'recebido'` no fim de `darEntradaEstoque`; RN-E10 é a consequência pela régua única
  * `derivarAtraso`, que **não mudou**). A limitação D6 acabou; o `PATCH` continua existindo e continua
  * sendo a saída para o que o gancho automático NÃO cobre — ele só sobe (RN-E03) e não sobrescreve
- * `cancelado`/`rejeitado` (RN-E04).
+ * `cancelado`/`rejeitado` (RN-E04). (Etapa 71: o fechamento continua só subindo, mas o ESTORNO da
+ * entrada no livro agora desconta a linha e reabre o pedido que a conta tinha fechado —
+ * `pedidoReabreNoEstorno.api.test.js`. Nenhum cenário deste arquivo estorna entrada.)
  *
  * ⚠️ O BLOCO D (desde a Etapa 42), o 9a e o 9c DEVOLVEM o pedido para `pendente` no fim, e isso é
  * medição, não higiene: o BLOCO F conta `duplicadas: 1` justamente porque aquele pedido continua na

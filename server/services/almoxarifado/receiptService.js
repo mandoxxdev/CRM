@@ -276,9 +276,26 @@ async function assertNotaNaoDuplicada(db, { nota_fiscal, fornecedor_id, forneced
   // (Fase 2) O filtro de CANCELADO saiu: `STATUS` do recebimento nao tem 'CANCELADO' (os 11 status
   // sao RECEBIDO..BLOQUEADO), entao a clausula era codigo morto que fazia o proximo leitor acreditar
   // num cancelamento que nao existe. Se um dia existir, ela volta COM o teste que a exercita.
-  let sql = `SELECT id, numero, fornecedor_id, fornecedor_cnpj, fornecedor_nome
-    FROM recebimentos_material_almoxarifado WHERE UPPER(TRIM(nota_fiscal)) = UPPER(?)`;
-  if (recebimentoId) { sql += ' AND id <> ?'; params.push(recebimentoId); }
+  // Etapa 71 (Fase 2, decisao reversivel da letra B): o recebimento cujas entradas de estoque EXISTEM
+  // e estao TODAS estornadas no livro nao bloqueia a NF. "Lancei errado -> estornei -> relanco" e o
+  // caso mais comum do estorno (sonda 71r-c: o relancamento tomava 409 no POST e no /fiscal). Um
+  // recebimento com QUALQUER entrada viva continua bloqueando, e o sem entrada nenhuma (ainda nao
+  // processado) tambem — ele e o documento em andamento da mesma NF. Declarado: a conta a pagar do
+  // primeiro fica (D6); relancar deixa duas contas para a mesma compra.
+  let sql = `SELECT r.id, r.numero, r.fornecedor_id, r.fornecedor_cnpj, r.fornecedor_nome
+    FROM recebimentos_material_almoxarifado r WHERE UPPER(TRIM(r.nota_fiscal)) = UPPER(?)
+      AND NOT (
+        EXISTS (SELECT 1 FROM movimentacoes_almoxarifado m
+          WHERE m.recebimento_id = r.id AND m.tipo = 'ENTRADA_COMPRA')
+        AND NOT EXISTS (SELECT 1 FROM movimentacoes_almoxarifado m
+          WHERE m.recebimento_id = r.id AND m.tipo = 'ENTRADA_COMPRA' AND COALESCE(m.cancelado, 0) = 0)
+        -- e nenhum item ainda por entrar: o documento que falhou no meio (um item entrou e foi
+        -- estornado, o outro espera o reprocessamento) continua sendo o dono da NF.
+        AND NOT EXISTS (SELECT 1 FROM recebimentos_material_itens_almoxarifado i
+          WHERE i.recebimento_id = r.id AND i.entrada_estoque_em IS NULL
+            AND CAST(COALESCE(i.quantidade_recebida, i.quantidade_esperada, 0) AS REAL) > 0)
+      )`;
+  if (recebimentoId) { sql += ' AND r.id <> ?'; params.push(recebimentoId); }
 
   // A NF e seletiva: este `dbAll` traz 0 ou 1 linha no caso normal, e as duplicatas de acervo sao
   // exatamente o que se quer ver. `LIMIT 1` aqui seria errado — o candidato certo pode ser o segundo.
@@ -1910,6 +1927,16 @@ const SOMA_POR_PEDIDO_SQL = `SELECT pedido_id,
     GROUP BY pedido_id, material_id)
   GROUP BY pedido_id`;
 
+/**
+ * Etapa 71 (Fase 2) — a regua do "completo" escrita como CONDICAO de `WHERE` sobre `pedidos_compra`,
+ * para os dois UPDATE de status (o fechamento e a reabertura) a repetirem atomicamente. E a MESMA
+ * regua de `situacaoRecebimentoPedido` (pedida > 0 e saldo por material <= epsilon), sobre a MESMA
+ * agregacao — nao uma segunda definicao.
+ */
+const SQL_PEDIDO_COMPLETO = `EXISTS (SELECT 1 FROM (${SOMA_POR_PEDIDO_SQL}) s
+    WHERE s.pedido_id = pedidos_compra.id AND s.total_pedido > 0
+      AND s.saldo_por_material <= ${EPSILON_DIVERGENCIA})`;
+
 async function listarPedidosCompraAux(db, { search, pendentes } = {}) {
   const tableExists = await dbGet(db,
     "SELECT name FROM sqlite_master WHERE type='table' AND name='pedidos_compra'");
@@ -2015,12 +2042,17 @@ async function listarPedidosCompraAux(db, { search, pendentes } = {}) {
  *    gravado a partir das linhas do pedido resolvido, `resolverLinhaDoPedido`), mas seria confiar num
  *    invariante em vez de no dado.
  *
- * 4. **So SOBE (RN-E03).** Nao existe estorno de `quantidade_recebida` neste modulo (o acumulador e
- *    `+ qtd` idempotente por claim), entao um gancho que descesse precisaria de uma regua de estorno
- *    que nao existe. ⚠️ O gesto de estorno EXISTE em outro lugar e vale saber:
- *    `POST /movimentacoes/:id/cancelar` reverte o SALDO e nao toca em nada disto — o pedido fica
- *    `recebido` com estoque 0, e a recuperacao e o `PATCH` manual. Limitacao NOVA desta etapa,
- *    declarada na letra B e no guia do usuario.
+ * 4. **SOBE AQUI; DESCE em `estornarEntradaNoPedido` (Etapa 71 — revoga em parte a RN-E03 e a
+ *    B161).** Ate a 71 esta decisao dizia "so sobe: nao existe estorno de `quantidade_recebida`", e
+ *    a B161 declarava que o estorno do livro (`POST /movimentacoes/:id/cancelar`) revertia o SALDO
+ *    sem tocar no pedido, com a recuperacao pelo `PATCH` manual. A recuperacao NAO bastava (Fase 0
+ *    da 71): o `PATCH` volta o status mas nao o acumulador, e a nota seguinte com o que faltava
+ *    tomava 400 "maior que o saldo do pedido (0)". Agora o estorno de uma `ENTRADA_COMPRA` de nota
+ *    contra pedido desconta a linha e reabre o pedido que a conta tinha fechado — isso mora no
+ *    MOTOR (`cancelarMovimentacao` chama `estornarEntradaNoPedido`), e esta funcao continua so
+ *    subindo. O que continua valendo da RN-E03: o pedido que o comprador fechou a mao com a conta
+ *    ja aberta nao e rebaixado por ninguem (cenario (8) deste arquivo e (3b) de
+ *    `pedidoReabreNoEstorno`).
  *
  * 5. **Nao sobrescreve o que o COMPRADOR decidiu (RN-E04).** `cancelado`/`rejeitado` ficam como
  *    estao — o aux `?pendentes=1` nao filtra status, entao a nota PODE chegar num pedido cancelado, e
@@ -2073,9 +2105,15 @@ async function fecharPedidosCompletos(db, user, recebimentoId) {
       soma?.total_pedido, soma?.soma_recebida, soma?.saldo_por_material);
     if (situacao !== 'RECEBIDO') continue;
 
+    // Etapa 71 (Fase 2): o WHERE REPETE a regua ("completo" = pedida > 0 e saldo por material zero),
+    // e isto e o que torna a decisao atomica contra o estorno. A soma acima e lida FORA do UPDATE: um
+    // estorno que desconte a linha entre a leitura e este UPDATE faria o pedido virar `recebido` com a
+    // conta ja aberta — e o estorno, que leu o status antes, nao teria reaberto. Cenario (11) de
+    // `pedidoReabreNoEstorno`.
     const r = await dbRun(db, `UPDATE pedidos_compra
         SET status = 'recebido', updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND LOWER(COALESCE(status, '')) NOT IN ('recebido', 'cancelado', 'rejeitado')`,
+      WHERE id = ? AND LOWER(COALESCE(status, '')) NOT IN ('recebido', 'cancelado', 'rejeitado')
+        AND ${SQL_PEDIDO_COMPLETO}`,
     [pedidoId]);
 
     if (!r.changes) {
@@ -2105,6 +2143,192 @@ async function fecharPedidosCompletos(db, user, recebimentoId) {
     fechados.push(pedidoId);
   }
   return fechados;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+// Etapa 71 (RN-01..RN-07, D1-D5) — O ESTORNO DA ENTRADA DESCONTA O PEDIDO E REABRE O QUE FECHOU
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+
+/** Os status para onde a reabertura pode voltar (D2): os de pedido "em andamento" do Compras. */
+const STATUS_REABERTURA = ['pendente', 'aprovado', 'em_analise', 'enviado'];
+
+/** A situacao do pedido pela regua UNICA (3 argumentos), recortada a um pedido. */
+async function situacaoDoPedido(db, pedidoId) {
+  const soma = await dbGet(db,
+    `SELECT total_pedido, soma_recebida, saldo_por_material FROM (${SOMA_POR_PEDIDO_SQL}) WHERE pedido_id = ?`,
+    [pedidoId]);
+  return derivarRecebimentoDoPedido(soma?.total_pedido, soma?.soma_recebida, soma?.saldo_por_material);
+}
+
+/**
+ * D4 — o item do recebimento que gerou ESTA movimentacao.
+ *
+ * Primeiro o vinculo gravado desde a T1 (`movimentacao_entrada_id`). Sem ele (recebimento anterior a
+ * 71), o par (recebimento, material) entre os itens que ENTRARAM e ainda nao tem vinculo: um so ->
+ * ele; varios -> o primeiro (menor id) de quantidade igual a da movimentacao; nenhum -> null. O item
+ * escolhido ADOTA o vinculo (`WHERE movimentacao_entrada_id IS NULL`, `changes === 1`), senao o
+ * estorno da OUTRA movimentacao do mesmo par cairia no mesmo item. Se a adocao perde a corrida
+ * (`changes` 0), o item nao e mais "sem dono" — devolve null em vez de descontar o item alheio.
+ */
+async function resolverItemDaEntrada(db, mov) {
+  const colunas = 'id, pedido_item_id, quantidade_recebida, quantidade_esperada';
+  const vinculado = await dbGet(db, `SELECT ${colunas} FROM recebimentos_material_itens_almoxarifado
+    WHERE movimentacao_entrada_id = ? AND recebimento_id = ? ORDER BY id LIMIT 1`, [mov.id, mov.recebimento_id]);
+  if (vinculado) return vinculado;
+
+  const candidatos = await dbAll(db, `SELECT ${colunas} FROM recebimentos_material_itens_almoxarifado
+    WHERE recebimento_id = ? AND material_id = ? AND entrada_estoque_em IS NOT NULL
+      AND movimentacao_entrada_id IS NULL
+    ORDER BY id`, [mov.recebimento_id, mov.material_id]);
+  let escolhido = null;
+  if (candidatos.length === 1) {
+    [escolhido] = candidatos;
+  } else if (candidatos.length > 1) {
+    const qtdMov = quantidadeFinita(mov.quantidade);
+    escolhido = candidatos.find((c) => Math.abs(quantidadeFinita(quantidadeDoItem(c)) - qtdMov)
+      <= EPSILON_DIVERGENCIA) || null;
+  }
+  if (!escolhido) return null;
+  const adotou = await dbRun(db, `UPDATE recebimentos_material_itens_almoxarifado
+    SET movimentacao_entrada_id = ? WHERE id = ? AND movimentacao_entrada_id IS NULL`, [mov.id, escolhido.id]);
+  return adotou.changes === 1 ? escolhido : null;
+}
+
+/**
+ * D2 — para onde o pedido volta: o `dados_anteriores.status` da ULTIMA trilha
+ * `STATUS_AUTOMATICO_RECEBIDO` do pedido (`ORDER BY id DESC`), se for um de `STATUS_REABERTURA`; sem
+ * trilha (o comprador fechou a mao com a conta fechando), ou com trilha ilegivel, `pendente`.
+ * Declarado (Fase 2): se o pedido foi fechado pelo automatico, reaberto e fechado de novo A MAO, a
+ * ultima trilha automatica e a do primeiro fechamento — o destino e o status de antes DELE.
+ */
+async function destinoDaReabertura(db, pedidoId) {
+  const trilha = await dbGet(db, `SELECT dados_anteriores FROM auditoria_log_almoxarifado
+    WHERE entidade = 'pedido_compra' AND entidade_id = ? AND acao = 'STATUS_AUTOMATICO_RECEBIDO'
+    ORDER BY id DESC LIMIT 1`, [pedidoId]);
+  if (!trilha || !trilha.dados_anteriores) return 'pendente';
+  let anterior = null;
+  try {
+    anterior = JSON.parse(trilha.dados_anteriores);
+  } catch (_) {
+    return 'pendente';
+  }
+  const status = String((anterior && anterior.status) || '').toLowerCase();
+  return STATUS_REABERTURA.includes(status) ? status : 'pendente';
+}
+
+const numeroLimpo = (v) => Number(quantidadeFinita(v).toFixed(6));
+
+/**
+ * O GANCHO DO ESTORNO (chamado por `stockService.cancelarMovimentacao`, DEPOIS do claim e da
+ * auditoria do cancelamento — por isso roda uma vez so por movimentacao, RN-05).
+ *
+ * Devolve `null` quando nao ha pedido a tocar (nao e `ENTRADA_COMPRA` de nota; sem tabela de compras;
+ * item nao resolvido; item sem `pedido_item_id`; linha ou pedido apagados) ou o objeto do contrato.
+ *
+ * ORDEM DAS ESCRITAS (Fase 2): a LINHA e o STATUS primeiro, as trilhas depois, cada uma no seu try.
+ * A trilha e rastro; perder uma linha de auditoria com um `warn` e reparavel, deixar a linha
+ * descontada com o pedido sem reabrir porque o INSERT da auditoria falhou no meio nao e.
+ *
+ * Quem chama trata a excecao como nao-fatal (D5): um estorno de saldo legitimo nao falha porque a
+ * tabela do Compras falhou.
+ */
+async function estornarEntradaNoPedido(db, user, mov) {
+  if (!mov || mov.tipo !== 'ENTRADA_COMPRA' || !mov.recebimento_id) return null;
+  const tabela = await dbGet(db,
+    "SELECT name FROM sqlite_master WHERE type='table' AND name='pedidos_compra'");
+  if (!tabela) return null;
+
+  const item = await resolverItemDaEntrada(db, mov);
+  if (!item) {
+    console.warn(`[recebimento] estorno da movimentacao ${mov.id}: item do recebimento ${mov.recebimento_id} `
+      + 'nao encontrado — pedido nao descontado');
+    return null;
+  }
+  if (!item.pedido_item_id) return null;
+  const linha = await dbGet(db, 'SELECT id, pedido_id, quantidade_recebida FROM itens_pedido_compra WHERE id = ?',
+    [item.pedido_item_id]);
+  if (!linha || linha.pedido_id == null) return null;
+  const pedido = await dbGet(db, 'SELECT id, numero, status FROM pedidos_compra WHERE id = ?', [linha.pedido_id]);
+  if (!pedido) return null;
+
+  const qtd = quantidadeFinita(mov.quantidade);
+  const antes = await situacaoDoPedido(db, pedido.id);
+  const recebidaAntes = quantidadeFinita(linha.quantidade_recebida);
+
+  // (1) A LINHA — aritmetica atomica, piso em 0 (D1).
+  await dbRun(db, `UPDATE itens_pedido_compra
+      SET quantidade_recebida = MAX(0, COALESCE(quantidade_recebida, 0) - ?)
+    WHERE id = ?`, [qtd, linha.id]);
+  if (recebidaAntes + EPSILON_DIVERGENCIA < qtd) {
+    console.warn(`[recebimento] estorno da movimentacao ${mov.id}: linha do pedido ${linha.id} tinha `
+      + `${numeroLimpo(recebidaAntes)}, descontado ate 0`);
+  }
+  const recebidaDepois = quantidadeFinita((await dbGet(db,
+    'SELECT quantidade_recebida FROM itens_pedido_compra WHERE id = ?', [linha.id]))?.quantidade_recebida);
+  const depois = await situacaoDoPedido(db, pedido.id);
+
+  // (2) O STATUS (D2/D3) — so o que a conta fechava ANTES e deixou de fechar DEPOIS, e so se o status
+  // e `recebido`. Guarda atomica no WHERE: o status E a regua (o pedido continua aberto) — senao uma
+  // nota processada entre a leitura "depois" e este UPDATE seria reaberta (cenario (11b)).
+  let reaberto = false;
+  let destino = null;
+  if (antes.situacao_recebimento === 'RECEBIDO' && depois.situacao_recebimento !== 'RECEBIDO'
+    && String(pedido.status || '').toLowerCase() === 'recebido') {
+    destino = await destinoDaReabertura(db, pedido.id);
+    const r = await dbRun(db, `UPDATE pedidos_compra SET status = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND LOWER(COALESCE(status, '')) = 'recebido' AND NOT ${SQL_PEDIDO_COMPLETO}`,
+    [destino, pedido.id]);
+    reaberto = r.changes === 1;
+  }
+
+  // (3) AS TRILHAS — cada uma no seu try (Fase 2).
+  try {
+    await registrarAuditoria(db, {
+      entidade: 'pedido_compra',
+      entidade_id: pedido.id,
+      acao: 'RECEBIDO_ESTORNADO',
+      usuario_id: user?.id,
+      usuario_nome: user?.nome || user?.email,
+      dados_anteriores: { pedido_item_id: linha.id, quantidade_recebida: numeroLimpo(recebidaAntes) },
+      dados_novos: {
+        quantidade_recebida: numeroLimpo(recebidaDepois), movimentacao_id: mov.id, recebimento_id: mov.recebimento_id,
+      },
+      justificativa: `Estorno da movimentação #${mov.id} descontou ${numeroLimpo(qtd)} do pedido`,
+    });
+  } catch (e) {
+    console.warn(`[recebimento] trilha RECEBIDO_ESTORNADO do pedido ${pedido.id} falhou: ${e.message}`);
+  }
+  if (reaberto) {
+    try {
+      await registrarAuditoria(db, {
+        entidade: 'pedido_compra',
+        entidade_id: pedido.id,
+        acao: 'STATUS_AUTOMATICO_REABERTO',
+        usuario_id: user?.id,
+        usuario_nome: user?.nome || user?.email,
+        dados_anteriores: { status: 'recebido' },
+        dados_novos: { status: destino },
+        justificativa: `Estorno da movimentação #${mov.id} reabriu o pedido`,
+      });
+    } catch (e) {
+      console.warn(`[recebimento] trilha STATUS_AUTOMATICO_REABERTO do pedido ${pedido.id} falhou: ${e.message}`);
+    }
+  }
+
+  const statusAgora = reaberto ? destino
+    : ((await dbGet(db, 'SELECT status FROM pedidos_compra WHERE id = ?', [pedido.id]))?.status ?? pedido.status);
+  return {
+    id: pedido.id,
+    numero: pedido.numero,
+    pedido_item_id: linha.id,
+    quantidade_estornada: numeroLimpo(qtd),
+    situacao_antes: antes.situacao_recebimento,
+    situacao_depois: depois.situacao_recebimento,
+    saldo_pendente: depois.saldo_pendente,
+    status_anterior: pedido.status,
+    status: statusAgora,
+    reaberto,
+  };
 }
 
 /**
@@ -2323,4 +2547,10 @@ module.exports = {
   listarItensPedidoCompraAux,
   listarFornecedoresAux,
   getRecebimento,
+  // Etapa 71 (D5): o gancho do estorno — chamado pelo MOTOR (`stockService.cancelarMovimentacao`) por
+  // `require` lazy, porque este arquivo requer o motor no topo.
+  estornarEntradaNoPedido,
+  // Exportada para teste (Etapa 71, cenario (11) de `pedidoReabreNoEstorno`): a corrida estorno x
+  // fechamento so e medivel chamando o fechamento com a leitura da soma interceptada.
+  fecharPedidosCompletos,
 };

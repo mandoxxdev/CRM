@@ -2317,6 +2317,30 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
   const tiposSaida = movementTypes.TIPOS_SAIDA;
   const material = await getMaterial(db, mov.material_id);
 
+  // Etapa 71 (Fase 2, corrige a RN-08/C108 do plano, que estavam ERRADAS): a ENTRADA_COMPRA de nota
+  // cujo item ainda tem quantidade EM INSPECAO nao e estornavel. O plano dizia que o motor ja recusava
+  // (falta de disponivel, "material ja consumido") — so recusava SEM outro estoque do material. Com
+  // outro saldo cobrindo o disponivel (saldo global, regra do CLAUDE.md) o estorno passava, a inspecao
+  // continuava com o retido e depois aprovava o que "nao entrou" (sonda 71r-b). A porta certa e a
+  // inspecao: decidida ela, o estorno segue o caminho normal. Antes do claim: nada foi tocado.
+  //
+  // O item e o do vinculo (T1); sem vinculo (legado), os itens do par recebimento+material ainda sem
+  // dono — conservador: um irmao retido do mesmo material tambem recusa.
+  if (mov.tipo === 'ENTRADA_COMPRA' && mov.recebimento_id) {
+    const retido = await dbGet(db, `SELECT COALESCE(SUM(COALESCE(quantidade_em_inspecao, 0)), 0) AS q
+      FROM recebimentos_material_itens_almoxarifado
+      WHERE recebimento_id = ? AND (movimentacao_entrada_id = ?
+        OR (movimentacao_entrada_id IS NULL AND material_id = ?))`,
+    [mov.recebimento_id, movimentoId, mov.material_id]);
+    const emInspecao = parseFloat(retido && retido.q) || 0;
+    if (emInspecao > EPSILON_DIVERGENCIA) {
+      const qtdTexto = Number(emInspecao.toFixed(6));
+      throw Object.assign(new Error(
+        `Esta entrada tem ${qtdTexto} ${material.unidade || 'un'} em inspeção — decida a inspeção antes de estornar a entrada`),
+      { status: 400 });
+    }
+  }
+
   // Serie (Etapa 6b, Task 5): guarda ANTES do claim `cancelado = 1` — antes de marcar a
   // movimentação como cancelada, precisa ficar claro que a reversão é possível. Estornar uma
   // ENTRADA de material com série só é seguro se TODAS as unidades daquela entrada ainda
@@ -2706,6 +2730,21 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
     dados_novos: { estorno_id: estornoId, ...camposDeOrigem(user) },
   });
 
+  // Etapa 71 (D5/B333) — O PEDIDO DE COMPRA DESCONTA E REABRE. No MOTOR (e nao na rota) porque o
+  // estorno entra por mais de uma porta; DEPOIS do claim e da auditoria do cancelamento, entao roda
+  // uma vez so por movimentacao (o segundo estorno morre no claim, RN-05). Nao-fatal: um estorno de
+  // saldo legitimo nao pode falhar porque a tabela do Compras falhou. `require` lazy porque o
+  // receiptService requer este motor no topo.
+  let pedidoCompra = null;
+  if (mov.tipo === 'ENTRADA_COMPRA' && mov.recebimento_id) {
+    try {
+      // eslint-disable-next-line global-require
+      pedidoCompra = await require('./receiptService').estornarEntradaNoPedido(db, user, mov);
+    } catch (e) {
+      console.warn(`[almoxarifado] desconto do pedido de compra no estorno falhou (movimentacao ${movimentoId}): ${e.message}`);
+    }
+  }
+
   try {
     await alertService.verificarAlertaPorMaterialId(db, mov.material_id);
   } catch (alertErr) {
@@ -2723,7 +2762,10 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
     console.warn('[almoxarifado-notificacoes] Falha ao suprimir notificacao pós-estorno:', notifErr.message);
   }
 
-  return { success: true, estorno_id: estornoId };
+  // A chave `pedido_compra` so existe quando um pedido foi tocado (aditivo — nenhuma resposta muda).
+  return pedidoCompra
+    ? { success: true, estorno_id: estornoId, pedido_compra: pedidoCompra }
+    : { success: true, estorno_id: estornoId };
 }
 
 /**

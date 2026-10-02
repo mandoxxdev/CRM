@@ -173,6 +173,11 @@ const GRUPOS_ACAO = congelarGrupos([
   // diz "automático" de proposito: e o que permite ao comprador distinguir, na trilha, o fechamento
   // que o almoxarifado fez do que ele mesmo fez pelo `PATCH .../status`.
   { rotulo: 'Fechamento automático do pedido', verbos: ['STATUS_AUTOMATICO_RECEBIDO'] },
+  // Etapa 71 (D1/D2): o estorno da entrada da nota DESCONTA a linha do pedido e REABRE o pedido que a
+  // conta tinha fechado. Dois rotulos, e nao um: descontar acontece em todo estorno de entrada contra
+  // pedido; reabrir so quando o status muda — "o que reabriu este mes" e pergunta propria.
+  { rotulo: 'Recebido do pedido estornado', verbos: ['RECEBIDO_ESTORNADO'] },
+  { rotulo: 'Reabertura automática do pedido', verbos: ['STATUS_AUTOMATICO_REABERTO'] },
   // Etapa 36 (RN-18): quem autorizou receber ACIMA do pedido, e em que item. Sem esta linha o
   // cenario "TODO verbo gravavel tem rotulo" de `auditLabels.api.test.js` fica vermelho — a
   // varredura le o literal `acao: 'EXCEDENTE_AUTORIZADO'` do receiptService. E o mesmo buraco de
