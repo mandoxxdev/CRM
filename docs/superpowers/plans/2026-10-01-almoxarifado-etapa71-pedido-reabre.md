@@ -1,6 +1,6 @@
 # Etapa 71 — o pedido de compra que reabre quando a entrada é estornada (feature 08, B161)
 
-> Status: **TRONCO FEITO (T0, T1, T2 — 2026-10-01).** Próximo passo: T3 (galho, tela) e T4 (integração), depois T5. Ordem original: Fase 2 (revisão do plano por agente
+> Status: **T0–T4 FEITAS (2026-10-01).** Próximo passo: T5 (fechamento, skill `fechar-etapa`). Ordem original: Fase 2 (revisão do plano por agente
 > fresco), depois T0 → T1 → T2 (tronco), T3 (galho) em paralelo à T2, T4 (integração), T5 (fechamento).
 > Feature 08 (recebimento), item (4) da lista "o que falta para 🟢" (`specs/modulo-almoxarifado/08-recebimento/README.md:3`):
 > *"o pedido que reabre — estornar a movimentação de entrada de um pedido já fechado não reverte `quantidade_recebida` nem
@@ -421,7 +421,30 @@ fechamento. Executores de galho **não** marcam este plano.
   literal de saldo (2), sem filtro de status (2), saldo 0 avisa (1), sem `toFixed` (1), `resp.data` não defensivo (1),
   filtro que engole tudo (3), catch genérico (1), `reaberto` ignorado (1); restauro por cópia com md5 conferido.
   Suíte do client 1141/1141 (74 suítes), `CI=true` build ok.
-- [ ] **T4 (integração, cruza galhos) — a cadeia inteira.** `server/tests/api/pedidoReabreIntegracao.api.test.js`, só
+- [x] **T4 (integração, cruza galhos) — FEITA** (commit "Etapa 71 T4"; hash no próximo commit do plano).
+  `pedidoReabreIntegracao.api.test.js` **10/10**, tudo pelas rotas (só a tabela CORE `contas_pagar` é fixture), com a
+  conferência inteira (`iniciar_conferencia` → `PUT /conferir` → `finalizar_conferencia` → ... → `POST /processar`):
+  **(A1–A5)** pedido `enviado`/vencido com **dois materiais** (MA 10 + MB 5) pela rota de Compras → nota inteira fecha
+  (fora de atrasados/pendentes; a nota de 10 de MA toma 400 com o pedido quitado — a barreira que o estorno abre) →
+  `GET /movimentacoes` acha a entrada de MA → `/cancelar` → `pedido_compra` com o contrato inteiro (`RECEBIDO` →
+  `PARCIAL`, saldo 10, `enviado`, `reaberto: true`) → `GET /api/compras/pedidos/:id` `enviado`, dentro de `?atrasados=1`,
+  `?pendentes=1`, cartão de atrasado **e** de parcial; itens oferece 10 de MA e **não** reabre MB → nota de 10 sem
+  excedente → fecha → trilha na ordem do plano pela `GET /auditoria`, com os dois rótulos. **(B)** "lancei errado":
+  estorno das duas entradas (o segundo `reaberto: false`, `ABERTO` saldo 10, status `aprovado`), com uma viva a mesma NF
+  dá 409, com todas estornadas relança (201) e fecha — **2 contas a pagar** com a mesma NF (D6, declarado). **(C)** KG:
+  0,1 + 0,2 de 0,3 sem 400; estorno da de 0,2 → `saldo_pendente` 0.2 limpo; nova de 0,2 passa e fecha. **(D)** crítico
+  retido com outro estoque → 400 `Esta entrada tem 4 UN em inspeção — ...`, saldo/linha/status intactos; inspecionado,
+  estorna e reabre. **(E)** nota avulsa do mesmo material MA → sem `pedido_compra`, linha e trilha intactas. **(F)**
+  `/aprovar` direto 6 + 4 → estorno da de 4 → `PARCIAL` saldo 4, no cartão de parcial.
+  **Divergências do texto:** (1) a rota de itens **omite** a linha quitada (devolve `[]` com o pedido quitado), não
+  "oferece 0" — o teste prende a omissão; (2) "pelo serviço do motor" do segundo cenário ficou na T2 ((2b)(4)(6c)): a T4
+  é só rotas, por instrução; (3) o `/fiscal` da nota avulsa exige `fornecedor_nome` (o da nota contra pedido herda do
+  pedido) — comportamento anterior, não defeito. **Nenhum defeito de produção revelado.**
+  Controle positivo (script `e71t4-sabota.sh`: `perl -0pi`, âncora contada == 1, backup e restauro por cópia com md5):
+  S1 gancho do motor desligado → (A2)(A3)(A4)(A5)(B)(C)(D)(F), o (E) continua verde (metade negativa); S2 reabertura
+  sempre `pendente` → (A2)(A5)(B)(C)(D)(F); S3 barreira sem epsilon → só (C) (400 na nota de 0,2); S4 NF sem o filtro
+  dos estornados → só (B) (409 no relançamento); S5 sem a recusa da inspeção → só (D). Suíte: api 265/265.
+  Plano original da T4: `server/tests/api/pedidoReabreIntegracao.api.test.js`, só
   pelas portas reais: `POST /api/compras/pedidos` (`enviado`, previsão vencida, 1 linha de 10) → recebimento pelas seis
   portas → processar → pedido `recebido`, fora de `?atrasados=1` e de `?pendentes=1` → `GET /movimentacoes` acha a
   `ENTRADA_COMPRA` → `POST /movimentacoes/:id/cancelar` → resposta com `pedido_compra.reaberto` → pedido `enviado`,
