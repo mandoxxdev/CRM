@@ -210,13 +210,24 @@ async function reservarItensAprovacao(db, requisicaoId, user, reqRow = {}) {
  * Se algo foi reservado, o status de reserva vence; se nada, fica o calculado (APROVADO quando
  * algum item tinha disponivel e a reserva falhou; AGUARDANDO_COMPRA/AGUARDANDO_ESTOQUE sem saldo).
  *
+ * Etapa 73 (Fase 5, IMPORTANTE): "se nada, fica o calculado" estava errado sob corrida. Duas
+ * aprovacoes simultaneas disputando as ultimas unidades calculavam APROVADO as duas (havia saldo
+ * quando calcularam); uma reservava tudo e a outra gravava APROVADO sem reserva e sem saldo (8 de 8
+ * rodadas na sonda da revisao, nas tres portas). Agora, se nada ficou seguro e o calculado era
+ * APROVADO (que supoe saldo), o status e RECALCULADO com o disponivel relido — a mesma
+ * `calcularStatusPosAprovacao`. Nao ha reserva desta chamada a descontar (nada foi reservado), entao
+ * a releitura diz a verdade: AGUARDANDO_* se o saldo sumiu; APROVADO se ainda ha saldo e a reserva
+ * falhou por outro motivo (o comportamento de antes).
+ *
  * Nao grava o status — quem chama grava num UPDATE guardado e, se perder, chama `desfazerReservas`.
  * @returns {Promise<{status: string, reservas: Array<{item_id, reserva_id, quantidade}>}>}
  */
 async function prepararPosAprovacao(db, requisicaoId, user, reqRow = {}) {
   const statusPos = await calcularStatusPosAprovacao(db, requisicaoId);
   const reserva = await reservarItensAprovacao(db, requisicaoId, user, reqRow);
-  return { status: reserva.status || statusPos, reservas: reserva.reservas };
+  if (reserva.status) return { status: reserva.status, reservas: reserva.reservas };
+  const status = statusPos === 'APROVADO' ? await calcularStatusPosAprovacao(db, requisicaoId) : statusPos;
+  return { status, reservas: reserva.reservas };
 }
 
 /**
