@@ -157,6 +157,21 @@ async function processarExpiracao(db, user, options = {}) {
     }
   }
 
+  // Etapa 76 (T2, D1/B396 + D6/B401): a requisição dona de reserva vencida acompanha — sem isto ela
+  // continuava "Totalmente Reservada" sem nada seguro (C127; a reserva da APROVAÇÃO também vence). Depois do
+  // lote, UMA vez por requisição, só das reservas que DE FATO expiraram (`liberadas`; as de `erros` continuam
+  // ATIVAS). Best-effort (D5): o job nunca cai por causa do status, e o recálculo não é erro de reserva.
+  // Require LAZY: no topo fecharia o ciclo reservationService -> reservaChegadaService -> requisitionService
+  // -> reservationService (plano §7 — o `{}` velho só quebra no sort da distribuição).
+  if (liberadas.length) {
+    try {
+      const reservaChegadaService = require('./reservaChegadaService');
+      await reservaChegadaService.recalcularRequisicoesDasReservas(db, liberadas.map((l) => l.id), 'expiracao da reserva');
+    } catch (e) {
+      console.warn(`[almoxarifado-reservas] recalculo do status apos expiracao da reserva falhou: ${e.message}`);
+    }
+  }
+
   return { processadas: liberadas.length, liberadas, erros };
 }
 
