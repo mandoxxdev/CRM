@@ -1,6 +1,6 @@
 # Etapa 76 — liberar à mão ou deixar vencer a reserva de uma requisição recalcula o status dela (C127, feature 07 com a 04)
 
-> Status: **PLANO (Fases 0 e 1) — 2026-10-02.** Nada de código de produção escrito; nada commitado.
+> Status: **EXECUÇÃO — T0–T3 feitas e commitadas (2026-10-02); falta a T4 (fechamento) e a Fase 5.**
 > Origem: "Próxima tarefa detalhada — Etapa 76" de
 > `docs/superpowers/plans/2026-10-02-almoxarifado-etapa75-inspecao-libera-reserva.md:724-768` e o aviso **C127** de
 > `docs/almoxarifado-novidades-por-etapa.md:6786`.
@@ -420,7 +420,13 @@ sequencial pelo mesmo motivo, com zero retrabalho.
   (s5) `require('./reservaChegadaService')` movido para o topo de `reservationService.js` → **cai (h) da T0** (carga
   fria com `requisitionService` primeiro: `reservaChegadaService.requisitionService` parcial) — *medir na T2: se a carga
   fria NÃO cair, o ciclo é inofensivo nesta ordem e o controle é declarado inalcançável, não forçado.*
-- [ ] **T3 (integração, cruza T1 × T2 × 74) — a jornada de quem perde e ganha a reserva.** Arquivo
+- [x] **T3 (integração, cruza T1 × T2 × 74) — a jornada de quem perde e ganha a reserva.** — **feita em
+  `6d7c09cc`.** `reservaRecalculoIntegracao` 7/7 (usuário padrão CONSULTA; a validade ligada antes da nota — Fase 2;
+  o job também testado com ALMOXARIFE → 403 antes do ADMINISTRADOR). Passou de primeira → os três controles:
+  s1 (gancho da rota) → jornada 2 `TOTALMENTE_RESERVADA ≠ APROVADO` e a 3 (painel); s2 (gancho do job) → **só**
+  a jornada 6 (`['TOTALMENTE_RESERVADA','TOTALMENTE_RESERVADA']`); s3 (a 74 devolvendo vazio) → jornada 4 na
+  asserção da **reserva da chegada de R1** (`[] ≠ [[4,'REQUISICAO',rec,true]]`, a linha anterior à do status, no
+  mesmo passo — divergência menor do texto do plano) e arrasta 5 e 6. Texto original da T3: Arquivo
   `server/tests/api/reservaRecalculoIntegracao.api.test.js`, só pelas portas reais e com **usuários reais por perfil**
   (solicitante sem perfil = PRODUCAO; GESTOR aprova; ALMOXARIFE libera, separa e entrega; COMPRAS recebe a nota;
   ADMINISTRADOR roda o job): material com 4 → R1 (URGENTE, 4) aprovada → `TOTALMENTE_RESERVADA`; R2 (NORMAL, 4) aprovada
