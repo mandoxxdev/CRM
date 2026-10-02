@@ -339,7 +339,23 @@ Ordem topológica: **T0 → T1 → T2** (tronco, sequenciais, um executor por ve
   o cenário que força a `posicaoDasSolicitacoes` a lançar (monkeypatch) cai; (e) carga fria `node -e
   "require('./services/almoxarifado/requisitionStateMachine'); require('./services/almoxarifado/purchaseService')"` e na
   ordem inversa, e `require('./services/almoxarifado/alertRegistry')` primeiro, sem ciclo.
-- [ ] **T2 (tronco) — as três portas com o mesmo pós-aprovação.** `prepararPosAprovacao` + `desfazerReservas` (o `/aprovar`
+- [x] **T2 — feita em `6fc7122a`.** RED: 9 de 11 cenários caindo pelo motivo certo (`/aprovar-valor` respondendo
+  `APROVADO` sem saldo; automática `APROVADO` com e sem saldo; `prepararPosAprovacao is not a function`). Teste
+  `requisicaoPosAprovacaoPortas.api.test.js`, 11/11. Asserções existentes que mudaram — **exatamente as previstas na
+  Fase 2**: `requisicaoUrgencia` (3)/(3b), `integracaoRegrasUrgenciaCliente` (3), `regrasAprovacao` (10) →
+  `TOTALMENTE_RESERVADA`; `regrasAprovacao` (9) → a pré-checagem automática carimba e abre a pendência; 
+  `reservaPontasFaltantes` → `AGUARDANDO_ESTOQUE`; comentário de `requisicaoAprovacao`. O `(22)` de `regrasAprovacao`
+  caiu na primeira rodada **só em cascata** (o `(10)` falhava antes de desligar a config); voltou sozinho.
+  Controles: (a) automática sem pós-aprovação → 5 caem; (b) sem pré-checagem → a negativa da regra cai; (c) sem
+  `desfazerReservas` → corrida cai na rodada 1 (a corrida acontece em 6 de 6 rodadas); (d) `/aprovar-valor` sem o
+  UPDATE → 4 caem; (e) `/aprovar` com o gate depois de reservar → `regrasAprovacao` (5) cai com reserva órfã. Suíte:
+  `test:api` 273/273, almoxarifado 44/0, validation 4/0, safealter 3/0, sqlite 5/0. **Divergências do contrato:**
+  (1) `tentarAprovacaoAutomatica` também devolve `null` sem reservar quando a requisição relida já não está
+  `PENDENTE` (evita reservar-e-desfazer à toa no segundo `/enviar` de uma corrida; o UPDATE guardado continua sendo a
+  garantia); (2) no `/aprovar-valor` com `changes = 0` a resposta traz `reservas: []` (as desta chamada foram
+  desfeitas) e a auditoria grava o status relido. **Achado confirmado:** a aprovação automática não grava auditoria
+  `APROVACAO` (só a trilha da reserva) — registrar como C no fechamento.
+  Texto original: **T2 (tronco) — as três portas com o mesmo pós-aprovação.** `prepararPosAprovacao` + `desfazerReservas` (o `/aprovar`
   migra sem mudar comportamento), a liberação por valor e a aprovação automática pelo contrato. Teste novo
   `server/tests/api/requisicaoPosAprovacaoPortas.api.test.js`: RN-05 e RN-06 pelas rotas, incluindo o `/enviar` do
   rascunho e as duas negativas da RN-06 (a da regra com pendência confere `reservas_material_almoxarifado` sem linha da
