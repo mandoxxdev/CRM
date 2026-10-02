@@ -1490,6 +1490,49 @@ async function gerarContaPagar(db, rec) {
   return r.lastID;
 }
 
+/**
+ * Etapa 70 (T0b, importante da Fase 2) — o claim do PROCESSAMENTO, no nivel do recebimento.
+ *
+ * O defeito (sonda `sonda70r-corrida2.js`): dois "Processar Nota" simultaneos passavam os dois a
+ * checagem de status (os dois liam `EM_ENTRADA_NF`). O claim POR ITEM de `darEntradaEstoque` fazia
+ * so um mover cada item, mas OS DOIS seguiam ate o fim: `gerarContaPagar` duas vezes (a conta a
+ * pagar em dobro, Surpresa 5 do plano) e o gancho pos-entrada rodando no PERDEDOR antes de o
+ * vencedor terminar o laco — o aviso de entrada (dedupe por recebimento) guardava o conteudo
+ * ERRADO, com o material critico "disponivel" porque a QUARENTENA ainda nao tinha acontecido.
+ *
+ * O claim: `processando_em` so e escrito se estiver vazio (ou VELHO — mais de 10 minutos: um
+ * processo que morreu no meio nao trava a nota para sempre) e o status nao for terminal. O perdedor
+ * toma 409 com a literal; se o motivo da falha foi o status ter virado terminal entre a leitura e o
+ * claim, a recusa e a de sempre (400 de "ja processada"). Quem ganhou SEMPRE devolve a marca
+ * (`liberarProcessamento` no `finally`), inclusive na falha parcial — a retomada continua possivel,
+ * e o claim por item continua sendo o que impede creditar duas vezes.
+ * Descartado: status novo `PROCESSANDO` (mexeria em telas, filtros e na maquina do workflow).
+ */
+const LITERAL_EM_PROCESSAMENTO = 'Esta nota já está sendo processada';
+
+async function reivindicarProcessamento(db, recebimentoId, mensagemTerminal) {
+  const claim = await dbGet(db, `UPDATE recebimentos_material_almoxarifado
+    SET processando_em = CURRENT_TIMESTAMP
+    WHERE id = ? AND status NOT IN ('PROCESSADO', 'APROVADO')
+      AND (processando_em IS NULL OR processando_em < datetime('now', '-10 minutes'))
+    RETURNING id`, [recebimentoId]);
+  if (claim) return;
+  const atual = await dbGet(db, 'SELECT status FROM recebimentos_material_almoxarifado WHERE id = ?', [recebimentoId]);
+  if (atual && [STATUS.PROCESSADO, STATUS.APROVADO].includes(atual.status)) {
+    throw Object.assign(new Error(mensagemTerminal), { status: 400 });
+  }
+  throw Object.assign(new Error(LITERAL_EM_PROCESSAMENTO), { status: 409 });
+}
+
+async function liberarProcessamento(db, recebimentoId) {
+  try {
+    await dbRun(db, 'UPDATE recebimentos_material_almoxarifado SET processando_em = NULL WHERE id = ?', [recebimentoId]);
+  } catch (e) {
+    // Nao mascara o resultado de quem chamou; a marca expira sozinha em 10 minutos.
+    console.warn(`[recebimento] falha ao liberar a marca de processamento (recebimento ${recebimentoId}): ${e.message}`);
+  }
+}
+
 async function processarNota(db, user, recebimentoId, { localizacao_id, destinos } = {}) {
   const rec = await dbGet(db, 'SELECT * FROM recebimentos_material_almoxarifado WHERE id = ?', [recebimentoId]);
   if (!rec) throw Object.assign(new Error('Recebimento não encontrado'), { status: 404 });
@@ -1503,6 +1546,18 @@ async function processarNota(db, user, recebimentoId, { localizacao_id, destinos
   }
 
   validarDadosProcessamento(rec);
+  // Etapa 70 (T0b): so um processamento por vez; a marca volta no `finally` (ver o cabecalho de
+  // `reivindicarProcessamento`).
+  await reivindicarProcessamento(db, recebimentoId, 'Nota já processada');
+  try {
+    return await concluirProcessamentoNota(db, user, rec, recebimentoId, { localizacao_id, destinos });
+  } finally {
+    await liberarProcessamento(db, recebimentoId);
+  }
+}
+
+/** O corpo de `processarNota` depois do claim (Etapa 70, T0b) — so ela chama. */
+async function concluirProcessamentoNota(db, user, rec, recebimentoId, { localizacao_id, destinos }) {
   await darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id, destinos });
   const contasPagarId = await gerarContaPagar(db, rec);
 
@@ -1548,6 +1603,17 @@ async function aprovarRecebimento(db, user, recebimentoId, opts = {}) {
     return processarNota(db, user, recebimentoId, opts);
   }
 
+  // Etapa 70 (T0b): o ramo direto tambem da entrada no estoque — mesmo claim, mesma literal 409.
+  await reivindicarProcessamento(db, recebimentoId, 'Recebimento já aprovado/processado');
+  try {
+    return await concluirAprovacaoDireta(db, user, rec, recebimentoId, opts);
+  } finally {
+    await liberarProcessamento(db, recebimentoId);
+  }
+}
+
+/** O ramo direto de `aprovarRecebimento` depois do claim (Etapa 70, T0b) — so ela chama. */
+async function concluirAprovacaoDireta(db, user, rec, recebimentoId, opts) {
   await darEntradaEstoque(db, user, rec, recebimentoId, opts);
   await dbRun(db, `UPDATE recebimentos_material_almoxarifado
     SET status = 'APROVADO', etapa_atual = 'CONCLUIDO', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,

@@ -326,6 +326,21 @@ T2 em worktree); **T4** (integração) depois de T2; **T5** fechamento. Executor
   952 de `RecebimentosProcessarDestino.test.js` ("recebida 0 → cai na esperada"); `relatorioQualidadeFornecedores`
   (67) não mudou. Sabotagens: `||` em `quantidadeDoItem` → 4/5 caem; `|| qtd` no INSERT → cai só a asserção do
   INSERT; `||` na tela → (a) cai (o ALM-0207 aparece); `||` contra o teste da 57 → cai com o 400 do destino inativo.
+  Commit `faa8f65`. Suíte: api 257/258 antes do ajuste do teste da 57 (o único vermelho era ele) → verde.
+- [x] **T0b (tronco, Fase 2) — claim do processamento.** `processando_em DATETIME` (`recebCols`, safeAlter);
+  `reivindicarProcessamento` = `UPDATE … SET processando_em = CURRENT_TIMESTAMP WHERE id = ? AND status NOT IN
+  ('PROCESSADO','APROVADO') AND (processando_em IS NULL OR processando_em < datetime('now','-10 minutes')) RETURNING id`;
+  sem claim → status terminal dá a recusa de sempre (400), senão **409 `Esta nota já está sendo processada`**;
+  `liberarProcessamento` no `finally` (falha não mascara o resultado; a marca expira em 10 min). Vale em `processarNota`
+  e no ramo direto de `aprovarRecebimento` (o ramo que delega herda o de `processarNota`). **Divergência do plano:** a
+  expiração de 10 min não estava escrita — sem ela, um processo que morre no meio trava a nota para sempre com 409.
+  Teste novo `recebimentoProcessamentoConcorrente.api.test.js` (7): corrida pelo serviço (1 ok + 1 409, **uma** conta a
+  pagar — a Surpresa 5 era real: sem o claim saem `contas_pagar_id` 1 e 2), pela rota `[200, 409]`, corrida no
+  `aprovarRecebimento` direto, sequencial continua 400, pré-checagem limpa a marca, falha parcial retomável, marca
+  recente 409 / velha liberada. Sabotagens: sem claim em `processarNota` → 3 caem (duas contas a pagar medidas); não
+  libera → 5 caem; sem expiração → cai só o da marca velha; sem claim no `aprovar` → cai o da corrida do aprovar. O
+  ramo "status virou terminal entre a leitura e o claim → 400" não tem cenário determinístico no harness (declarado).
+  Suíte: api 259/259, almoxarifado 44/44, validation 4/4, safealter 3/3, sqlite 5/5.
 - [ ] **T1 (tronco) — o serviço e a configuração.** `receiptNotificationService.js` (contrato acima); as duas chaves
   semeadas em `schema.js`; `CHAVES_BOOL` em `routes/almoxarifado.js:2729`. Teste novo
   `server/tests/api/recebimentoAvisoEntrada.api.test.js` (pelo **serviço**, harness real, `usuarios` criado como em

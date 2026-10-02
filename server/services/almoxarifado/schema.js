@@ -1662,6 +1662,10 @@ async function initSchema(db) {
     'faturamento_data DATETIME',
     'contas_pagar_id INTEGER',
     'etapa_atual TEXT DEFAULT \'ALMOXARIFADO\'',
+    // Etapa 70 (T0b): claim do PROCESSAMENTO no nivel do documento — dois "Processar Nota" ao
+    // mesmo tempo geravam duas contas a pagar e o gancho pos-entrada rodava no perdedor. Ver
+    // `reivindicarProcessamento` no receiptService. Nao e status novo (telas e listas nao mudam).
+    'processando_em DATETIME',
   ];
   for (const col of recebCols) await safeAlter(db, `ALTER TABLE recebimentos_material_almoxarifado ADD COLUMN ${col}`);
 
