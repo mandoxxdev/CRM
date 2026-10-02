@@ -231,6 +231,11 @@ const statusPos = await calcularStatusPosAprovacao(db, requisicaoId);
 const reserva = await reservarItensAprovacao(db, requisicaoId, user, reqRow);
 return { status: reserva.status || statusPos, reservas: reserva.reservas };
 ```
+> **Este contrato estava errado sob corrida — corrigido na Fase 5 (`5ea57d03`).** "Se nada foi reservado, fica o
+> calculado" deixava APROVADO sem reserva e sem saldo para o perdedor de duas aprovações simultâneas. Agora: se nada
+> ficou seguro e o calculado era `APROVADO`, recalcula com o disponível relido. E `reservarItensAprovacao` passou a
+> desfazer as próprias reservas numa falha e a descontar o hold ATIVO do item (`851ef2cf`). Ver "Fase 5" no fim.
+
 E `desfazerReservas(db, user, reservas)` (exportada): o laço de `liberarReserva` com `statusFinal: 'LIBERADA'`,
 `motivo: 'Aprovação recusada — reserva desfeita'`, `motivoMovimentacao: 'Liberação por aprovação recusada'`, cada uma no
 seu try com o `console.warn` de hoje (`routes/almoxarifado.js:3417-3427`). O `/aprovar` passa a usar as duas **sem mudar
@@ -493,3 +498,44 @@ a `*_RESERVADA` (setas `AGUARDANDO_* → *_RESERVADA` na máquina) e a literal d
   AGUARDANDO_ESTOQUE — declarado); pedido apagado/sem linha conta como a caminho (D4 da 72); dois `/enviar`
   simultâneos seguram em dobro por um instante (declarado); `/enviar` feito por admin: o dono da reserva é o admin
   (declarado).
+
+## Fase 5 — revisão do código (T0–T4, até a T4 `7d55a1dd` / plano `764aee6c`): 0 críticos, 1 importante, 1 menor, 2 C → fix-round
+
+Sonda da revisão: `sonda73f-portas.js` (scratchpad), pelas rotas com o harness real.
+
+- [x] **IMPORTANTE — corrigido em `5ea57d03`.** `prepararPosAprovacao` calculava o status ANTES de reservar e, sem nada
+  reservado, devolvia o calculado. Duas criações simultâneas com aprovação automática pelo último saldo (5 e 5 de 5): as
+  duas calculavam `APROVADO`, uma reservava tudo e a outra gravava **`APROVADO` sem reserva e sem saldo** — **8 de 8
+  rodadas** na sonda; o `/aprovar` tinha a mesma janela (medido no teste: cai na rodada 1). Correção: se nada ficou
+  seguro e o calculado era `APROVADO`, recalcula com a mesma `calcularStatusPosAprovacao` (nada desta chamada a
+  descontar, a releitura diz a verdade). As três portas passam pela função. Descartado: recalcular também quando o
+  calculado era `AGUARDANDO_*` (mudaria o caso sem corrida sem ganho medido).
+- [x] **MENOR — corrigido em `851ef2cf`.** Falha de banco no meio da reserva automática (SQLITE_BUSY simulado na leitura
+  do saldo do 2º item): `POST /requisicoes` respondia **500** para uma requisição já criada, `PENDENTE`, com a reserva
+  do 1º item presa; e o `/aprovar` manual depois reservava o mesmo item **em dobro** (duas reservas de 4 para um item de
+  4). Correção: (a) `reservarItensAprovacao` desfaz as próprias reservas numa falha fora do try do item e relança (vale
+  para as três portas; o `/aprovar` continua respondendo erro, sem saldo preso); `tentarAprovacaoAutomatica` captura a
+  falha do pós-aprovação (e do UPDATE, desfazendo), registra `console.warn` e devolve `null` → **201 `PENDENTE`**; (b)
+  `reservarItensAprovacao` idempotente: desconta o hold ATIVO do próprio item (`reservado_para_item`) e conta o item
+  como seguro no status. Descartado: transação em volta da criação + reserva (fica para a migração Postgres).
+- Teste novo `server/tests/api/requisicaoPosAprovacaoFalhas.api.test.js`, 5/5 (RED: 5 de 5 caindo pelo motivo certo
+  antes do fix): [corrida automática] 6 rodadas, o perdedor `AGUARDANDO_ESTOQUE`, resposta = banco; [corrida /aprovar]
+  6 rodadas; [serviço] saldo levado por terceiro entre o cálculo e a reserva (determinístico, monkeypatch de
+  `criarReserva`) → `AGUARDANDO_ESTOQUE`; [falha no meio] 201 `PENDENTE`, nenhuma reserva ATIVA, disponível de volta a
+  10, aviso com o id, e o `/aprovar` depois reserva 4+4 uma vez; [idempotente] hold órfão de 4 e de 2 → o `/aprovar`
+  reserva só os 2 que faltam, `TOTALMENTE_RESERVADA`.
+- Controles positivos (perl `-0pi`, âncora contada = 1, backup `$TMP/e73f5-*`, restauro por cópia com md5 conferido,
+  `node --check`, nunca com a suíte rodando): (a) sem o recálculo → as duas corridas e o serviço caem (3); (b) sem o
+  `desfazerReservas` no catch do serviço → só [falha no meio] cai, em "nenhuma reserva órfã"; (c) automática relançando
+  a falha → só [falha no meio] cai, no 201 (veio 500); (d) sem descontar o hold → só [idempotente] cai, em "sem reserva
+  em dobro" (`{m1: 8, m2: 6}`).
+- Suíte depois do fix: `test:api` 275/275 arquivos, almoxarifado 44/0, validation 4/0, safealter 3/0, sqlite 5/0.
+  `requisicaoPosAprovacaoPortas` 11/11 sem edição.
+- **Para a letra C (não corrigido, registrar no fechamento — T5):**
+  - **A aprovação automática não grava auditoria `APROVACAO`** (só a trilha da reserva). Sonda [C]: 17 aprovadas
+    automaticamente, 0 linhas `APROVACAO`. Impacto só na trilha — nenhum indicador lê `APROVACAO`. Anterior à 73.
+  - **Reserva de material de cliente sem OS na aprovação** (sonda [B]: material com `proprietario_cliente_id`, requisição
+    sem cliente/OS → `TOTALMENTE_RESERVADA` com reserva de 3). Anterior — vem da Etapa 4 (`/aprovar`); a 73 só estendeu
+    a mesma reserva às outras duas portas.
+- **Próximo passo:** T5 (fechamento, skill `fechar-etapa`) — incluir os dois C acima e citar `5ea57d03`/`851ef2cf` na
+  seção da 73 do documento de novidades.
