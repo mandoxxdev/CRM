@@ -1,7 +1,8 @@
 # Etapa 76 — liberar à mão ou deixar vencer a reserva de uma requisição recalcula o status dela (C127, feature 07 com a 04)
 
-> Status: **EXECUÇÃO — T0–T3 e a Fase 5 (revisão + fix-round: `eb642441`, `ab5677a4`, `8a70fe52`) feitas e commitadas
-> (2026-10-02); falta a T4 (fechamento). Ver "Fase 5" no fim — a D3 mudou (a janela da 74/75 e do estorno foi fechada).**
+> Status: **FECHADA (2026-10-02).** T0 `4f51cdbd` · T1 `a3f3195f` · T2 `66aa8e31` · T3 `6d7c09cc` · Fase 5 `eb642441`,
+> `ab5677a4`, `8a70fe52` · T4 (documentação) no commit de fechamento. Ver "Fase 5" — a D3 mudou (a janela da 74/75 e do
+> estorno foi fechada) — e "Próxima tarefa detalhada — Etapa 77" no fim.
 > Origem: "Próxima tarefa detalhada — Etapa 76" de
 > `docs/superpowers/plans/2026-10-02-almoxarifado-etapa75-inspecao-libera-reserva.md:724-768` e o aviso **C127** de
 > `docs/almoxarifado-novidades-por-etapa.md:6786`.
@@ -441,7 +442,18 @@ sequencial pelo mesmo motivo, com zero retrabalho.
   **Controles:** (s1) gancho da rota desligado → cai no passo "R1 `APROVADO`" depois da liberação; (s2) gancho do job
   desligado → cai no passo das expirações; (s3) a 74 desligada (`reservarChegadaParaQuemEspera` devolvendo vazio) → cai
   em "R1 `TOTALMENTE_RESERVADA` de novo" — prova que a jornada cruza a 74 de verdade e que `APROVADO` é candidata.
-- [ ] **T4 — fechamento (skill `fechar-etapa`).** Novidades: seção da 76 (Antes → Agora; roteiro clicável: aprovar
+- [x] **T4 — fechamento (skill `fechar-etapa`)** — feita no commit de fechamento (só `docs/` e `specs/`). Novidades:
+  seção da 76, **A40**, **B396–B406** (B398 com a nota "estendida na Fase 5 a todos os chamadores (`eb642441`)"; B406 o
+  incidente, transcrito literal), **C127 resolvido**, **C131** com o custo medido, **C135** (a não-redistribuição — C121
+  por outra porta, com "redistribuir excluindo a dona" descartada), **C136** (saída genérica consome reserva de
+  requisição — só pela API: a tela Movimentações não cita reserva), **C137** (perfil PRODUCAO libera reserva alheia),
+  **C138** (o que muda), D (76), F (76), **G86** (o runner — pago). **Não** foi aberto o C "janela do recálculo sem
+  trava" (fechada na Fase 5). Spec 07 (cabeçalho, item `[x]`, oito linhas na tabela, os dois "falta C127" riscados);
+  spec 04 não cita a C127 (sem edição); mapa (cabeçalho, linhas 04 e 07); guia (cabeçalho "76 ENTREGUE · 77
+  começando", seção da 76, as duas frases "não muda o status" riscadas à vista); manual 9.6 (o parágrafo substituído
+  por uma tabela do que o status vira e o aviso de que o liberado não vai para quem esperava) e 9.7. Texto original da
+  T4:
+  Novidades: seção da 76 (Antes → Agora; roteiro clicável: aprovar
   requisição com saldo → *Totalmente Reservada* → tela **Reservas** → liberar → a requisição vira *Aprovado*; liberar
   só parte → *Parcialmente Reservada*; ligar a validade, rodar a expiração → idem); **B396–B406** (a B406 é o incidente
   do `bkp_bancoprod.md`, transcrita deste plano); **C127 resolvido**; **C novos:** a saída genérica que consome a reserva
@@ -466,7 +478,7 @@ sequencial pelo mesmo motivo, com zero retrabalho.
 - **E-mail ao solicitante quando a reserva dele é liberada ou vence**: nenhuma porta hoje avisa a perda; fora (o
   aviso da 70/74/75 é de chegada).
 
-## Letra A — consulta para produção (candidata, a confirmar no fechamento)
+## Letra A — consulta para produção (confirmada no fechamento como **A40**)
 
 **A40 — requisições que hoje dizem *Reservada* sem estar** (o tamanho do C127 em produção; a 76 não corrige o passado —
 D9). Somente leitura:
@@ -498,7 +510,7 @@ WHERE COALESCE(r.ativo, 1) = 1 AND r.status = 'TOTALMENTE_RESERVADA'
 O que fazer com o resultado: nada é urgente — a fila de separação já mostra o saldo de verdade; o rótulo se corrige
 na próxima nota/inspeção/NC do material ou numa liberação/expiração depois do deploy.
 
-## Próximo passo
+## Próximo passo (da Fase 1 — feito: ver "Fase 2" abaixo)
 
 **Fase 2** — revisão do plano por um agente fresco, com as quatro perguntas da skill (contratos e literais; RN × spec 07;
 independência real de T1/T2; cada RN seguida até o último gesto — p.ex. RN-01: liberar → R `APROVADO` → a próxima nota
@@ -579,3 +591,85 @@ fim) — 8/8. Sob a trava presa ele prende fora de um `comLimite` (0,5 s) e quem
 
 **Próximo:** T4 (fechamento), com as três mudanças acima: B398 estendida (sem o C da janela), o teste novo nas tabelas
 da spec 07, e a guarda do runner na letra D/F (lição: exit code não é placar).
+
+## Divergências do plano (registradas, não escondidas)
+
+1. **A D3/B398 mudou na Fase 5:** o plano declarava a janela do recálculo sem trava na 74/75 e no estorno como "C novo";
+   a revisão do código a mediu (*Totalmente Reservada* com hold 4 de 8) e ela foi fechada (`eb642441`). O C não foi aberto.
+2. **A justificativa da D2 estava errada** ("o aviso 'chegou' (manual 9.7) cobre"): o aviso é o indicador da tela de
+   detalhe (manual 10.1) e não impede quem é aprovado depois. Corrigida na Fase 2 — virou o **C135**.
+3. **O s5 da T2 cai de verdade** — a Fase 2 temia "inalcançável"; com o (h) rodando uma distribuição com duas candidatas
+   depois de carregar `requisitionService` primeiro, o require no topo derruba o (h) (`RESULTADO 200 0/0`).
+4. **T3 s3** caiu uma asserção antes da que o plano nomeava (a reserva da chegada, não "R1 TOTALMENTE de novo"), no mesmo
+   passo.
+5. **A Surpresa 1 é só pela API**: a tela **Movimentações** não oferece citar reserva (`reserva_id` não aparece no
+   cliente); o C136 diz isso.
+6. **A Fase 5 achou um defeito do executor da suíte, fora do escopo do módulo** (`run-all` só pelo código de saída —
+   G86), pago na própria etapa.
+
+## Verificação final
+
+`test:api` **291/291** arquivos (3017 testes nos placares, com a guarda nova do `run-all`), `test:almoxarifado` 44/0,
+`test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 5/0 — medidos no fix-round da Fase 5 (`eb642441`/`ab5677a4`/
+`8a70fe52`, o último código). Cliente e `CI=true` build: **re-medidos no fechamento** pelo fio principal (a etapa não
+tocou o cliente) — no HEAD com a Fase 5: cliente **74 suítes / 1155 testes**, `CI=true` build "Compiled successfully". `git status`: só os dois arquivos locais excluídos por
+`.git/info/exclude` fora do controle.
+
+## Retro — 4 números
+
+1. **Rodadas de correção até verde:** 1 (o fix-round da Fase 5).
+2. **Achados da revisão — reais × ruído:** Fase 2: 10 achados (3 importantes — um deles um controle positivo que não
+   conseguia falhar, pego **antes** de executar, a G85 funcionando), 0 ruído. Fase 5: 2 importantes + 1 menor, todos
+   reais, 0 ruído — um deles **sistêmico** (o `run-all` aceitava arquivo só pelo código de saída; a guarda rodada nos 291
+   arquivos não achou nenhum teste vazio escondido).
+3. **Paralelismo:** zero galhos em paralelo — o tronco inteiro (T0→T3) num agente só (T1/T2 sabotam produção no mesmo
+   SQLite — G84); a revisão com a árvore quieta. Zero retrabalho por paralelismo.
+4. **Defeito que escapou da etapa anterior:** o recálculo da chegada/liberação (74/75) e do estorno rodava fora da trava
+   (a 75 introduziu a trava só na distribuição) — achado e fechado aqui. **Lição:** quando uma trava é introduzida, todo
+   escritor do mesmo estado precisa passar por ela, não só o caminho que motivou a trava; e o executor da suíte também
+   precisa saber falhar (código de saída não é placar).
+
+## Próxima tarefa detalhada — Etapa 77: a reserva de uma requisição só sai pela requisição (C136 + C137, feature 07)
+
+**Por que esta (valor × esforço).** As três candidatas: a **C131** (inspeção/nota × **Aprovar** invertem a fila) tem o
+custo medido nesta etapa — seis portas e trava multimaterial **antes** do movimento do motor; é grande e o efeito é uma
+corrida de instante. A **C136** é pior que a C127 que acabamos de pagar — o material **sai** "pela requisição" sem ela
+saber, e ela separa de novo do disponível (consumo em dobro do ponto de vista da requisição) — e a **C137** (qualquer
+usuário sem perfil libera a reserva de requisição alheia, e agora isso muda o status dela) é a outra metade da mesma
+pergunta: **quem pode tirar a reserva de uma requisição, e por qual porta**. As duas são de regra/autorização, pequenas,
+e cabem numa etapa. A C131 fica para a 78 (ou para a migração Postgres, onde a trava vira `SELECT … FOR UPDATE`).
+
+**Fase 0 da 77 — medir antes de prometer:**
+1. **A C136 pelas rotas:** `POST /movimentacoes/v2` `{tipo: 'SAIDA', reserva_id: <reserva de requisição>}` → hoje 201 e
+   a reserva `CONSUMIDA` (sonda `sonda76-c127b.js` G). Onde o motor aceita: `stockService.js:1021` (`consumindoReserva`)
+   e `:1619-1675` — sem olhar `origem`/`requisicao_id`. **Quem usa `reserva_id` na saída genérica hoje** (cliente:
+   nenhum — `grep reserva_id client/src` só acha um comentário; integrações; os testes `reservaConsumo` que provam
+   *"saída COM reserva_id consome a reserva"* — com reserva **manual** ou de requisição?). A entrega da requisição
+   consome a reserva por outro caminho (`requisitionService` — `origem='REQUISICAO'` do item): medir que ela não passa
+   pela mesma porta que vai recusar.
+2. **A decisão a tomar (reversível, letra B):** recusar a saída genérica contra reserva de `origem = 'REQUISICAO'`
+   (literal nova ensinando *"esta reserva pertence à requisição ⟨número⟩ — entregue pela requisição"*) **ou** aceitar e
+   descontar da requisição (como entrega parcial? — mudaria o "entregue" sem separação). Medir o que cada uma quebra.
+3. **A C137:** `permissions.js:103` (`reservar` inclui `PRODUCAO`) e `getPerfilFromUser` (fallback PRODUCAO); a rota
+   `POST /reservas/:id/liberar` (`extended.js:933`, gate `reservar`). Medir quem libera reserva de requisição hoje (perfis
+   que têm `reservar`) e se o solicitante da própria requisição deve poder liberar a dele. Opções (letra B): liberar
+   reserva de **requisição** exige uma ação nova (ex.: `liberar_reserva_requisicao`, só ALMOXARIFE/ADMIN) ou o mesmo
+   `reservar` mais "ser o solicitante"; a reserva **manual** continua como hoje. Lembrar das duas camadas (CLAUDE.md):
+   o backend decide; `minhas-permissoes` só esconde o botão.
+4. **A tela Reservas:** o botão **Liberar** aparece para quem? (`ReservasAlmoxarifado.js:380`); o modal diz
+   *"requisição #⟨id⟩"* — o **id**, não o número (Surpresa 6 da 76, cosmético — cabe aqui se barato).
+
+**Contratos que não se reabrem:** o recálculo da 76 (`recalcularStatusSobTrava`, as duas portas, respostas
+inalteradas); a reserva na chegada/liberação (74/75) e a trava por material; a entrega da requisição consumindo a
+reserva do item; o estorno (B374/B381/B382); a reserva manual (criar, liberar, transferir) para quem já pode.
+
+**Pontos de atenção:**
+- **Duas camadas de autorização:** o módulo abre a tela; o perfil autoriza a ação. Ação nova em `ACAO_PERFIS` é
+  **tronco** (todas as telas e testes de permissão leem).
+- **Asserção negativa de permissão não fica vermelha na rodada TDD** (o `can()` devolve false para o que não conhece) —
+  o controle positivo é **conceder** a permissão proibida e ver o teste cair nomeando a ação (skill `fechar-etapa`).
+- A recusa nova da saída genérica precisa da **metade positiva**: a mesma saída com reserva **manual** continua
+  consumindo (o teste `reservaConsumo` existente).
+- Integrações que citam `reserva_id` de requisição em saída avulsa passam a tomar 400 — vai para a letra C (o que muda
+  para quem integra) e a A (consulta: saídas genéricas que consumiram reserva de requisição no passado, para medir o
+  tamanho).

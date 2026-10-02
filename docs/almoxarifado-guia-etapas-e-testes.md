@@ -1,22 +1,30 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-02 (Etapa 75) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-02 (Etapa 76) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 75) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 76) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-02 (Etapa 75 ENTREGUE · Etapa 76 começando)
+> ## Onde o desenvolvimento está — 2026-10-02 (Etapa 76 ENTREGUE · Etapa 77 começando)
 >
-> **O desenvolvimento parou aqui: Etapa 75 fechada, Etapa 76 começando — 2026-10-02.** A **Etapa 75 (o material que a
+> **O desenvolvimento parou aqui: Etapa 76 fechada, Etapa 77 começando — 2026-10-02.** A **Etapa 76 (liberar ou deixar
+> vencer a reserva de uma requisição atualiza o status dela)**: liberar à mão na tela **Reservas** (tudo ou parte) ou a
+> reserva vencer pelo **Processar expiração** passa a recalcular o status da requisição dona — liberou tudo, **Aprovado**;
+> parte, **Parcialmente Reservada**. A revisão estendeu ao recálculo da chegada, da inspeção e do estorno a espera pela
+> trava do material, e corrigiu o executor da suíte de testes, que podia contar como verde um arquivo que pendurasse.
+> **Próxima etapa, já começando: 77 — a reserva de uma requisição só sai pela requisição** (uma saída avulsa pela API
+> pode gastar a reserva de uma requisição sem ela saber, e qualquer usuário sem perfil libera reserva alheia; ver
+> *"Próxima tarefa detalhada"* no plano da Etapa 76).
+>
+> **Etapas 1 a 20 e 22 a 76 completas.**
+>
+> **Etapa 75, 2026-10-02.** A **Etapa 75 (o material que a
 > inspeção libera fica com quem esperava)**: material crítico entra retido para inspeção e não é reservado na chegada;
 > agora, quando a **inspeção aprova** (ou a **não conformidade** do reprovado é decidida **Aceitar**/**Aceitar sob
 > desvio**), o liberado é **reservado** para as requisições que esperavam, na ordem da fila de separação, e o
 > solicitante recebe *"Material liberado para a sua requisição"*. Quem é aprovado depois só leva o que sobrou. A revisão
 > corrigiu também o e-mail da chegada (o pendente de quem tem material separado na caixa) e a corrida de duas liberações
-> do mesmo material, que deixava a fila inteira sem nada. **Próxima etapa, já começando: 76 — liberar à mão ou deixar
-> vencer a reserva de uma requisição passa a recalcular o status dela** (hoje a requisição continua *Totalmente
-> Reservada* sem nada seguro; ver *"Próxima tarefa detalhada"* no plano da Etapa 75).
->
-> **Etapas 1 a 20 e 22 a 75 completas.**
+> do mesmo material, que deixava a fila inteira sem nada. ~~**Próxima etapa, já começando: 76 — liberar à mão ou deixar
+> vencer a reserva de uma requisição passa a recalcular o status dela**~~ *(feita — acima)*.
 >
 > **Etapa 74, 2026-10-02.** A **Etapa 74 (a requisição que
 > esperava fica com o material que chegou)**: ao processar a nota, o que chegou livre é **reservado** para as
@@ -5435,7 +5443,8 @@ Gerar solicitações → Gerar pedido**). Dois usuários: um cria as requisiçõ
   próxima etapa; até lá, depois de aprovar uma inspeção, separe logo quem esperava aquele material. *(Feita na Etapa 75
   — seção abaixo.)*
 - **Entradas que não são nota** (manual, devolução, transferência, ajuste) deixam o material solto.
-- **Liberar à mão uma reserva de requisição, ou ela vencer**, não muda o status da requisição (aviso **C127**).
+- ~~**Liberar à mão uma reserva de requisição, ou ela vencer**, não muda o status da requisição (aviso **C127**).~~
+  *(Mudou na Etapa 76: liberar à mão ou vencer recalcula o status — seção da Etapa 76.)*
 - **Nada é reservado no dia do deploy** — quem esperava ganha a reserva na próxima nota (consulta **A38**).
 - **A requisição em *Aguardando aprovação de valor*** não ganha reserva na chegada.
 
@@ -5494,10 +5503,59 @@ e um da **Qualidade** decide a inspeção. Crie **R2** (urgência **Normal**, 4 
   de quem esperava (aviso **C131** das novidades). Na prática: não aprove requisições daquele material enquanto a
   Qualidade decide a inspeção dele.
 - **Desbloquear Material** (o desbloqueio avulso da tela **Inspeções**) devolve ao estoque sem reservar para ninguém.
-- **Liberar à mão uma reserva de requisição, ou ela vencer**, ainda não muda o status da requisição (aviso **C127**) — é
-  a próxima etapa.
+- ~~**Liberar à mão uma reserva de requisição, ou ela vencer**, ainda não muda o status da requisição (aviso **C127**) — é
+  a próxima etapa.~~ *(Feito na Etapa 76 — seção abaixo.)*
 - **Nada é reservado no dia do deploy** — quem esperava ganha a reserva na próxima decisão (consulta **A39**).
 - **A requisição *Em Separação*** ganha a reserva, mas não recebe o e-mail.
+
+---
+
+## Etapa 76 — Liberar ou deixar vencer a reserva de uma requisição atualiza o status dela (ENTREGUE — 2026-10-02)
+
+**O que mudou, em uma frase:** quando o almoxarife libera à mão a reserva de uma requisição na tela **Reservas**, ou a
+reserva vence, o status da requisição passa a acompanhar — liberou tudo, ela volta a **Aprovado**; liberou parte, fica
+**Parcialmente Reservada**.
+
+**O problema que ela resolve.** O saldo voltava ao disponível, mas a requisição continuava dizendo **Totalmente
+Reservada** com nada seguro — a lista, o painel e o e-mail repetiam o rótulo errado.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Liberar tudo à mão: a requisição continuava **Totalmente Reservada** | Vira **Aprovado** |
+| Liberar parte: o status não mudava | Vira **Parcialmente Reservada** |
+| Reserva vencida (**Processar expiração**): o rótulo mentia | O status da requisição dona é recalculado |
+| *Em Separação* / *Parcialmente Atendida* | Não mudam (já estão separando) |
+
+### Roteiro de teste manual (≈10 min)
+
+**Preparação.** Um material **M** com **4** em estoque. Um usuário cria a requisição **R1** (4 de M) e **outro** aprova:
+R1 fica **Totalmente Reservada**. Crie e aprove **R2** (4 de M): fica **Aguard. Estoque**.
+
+1. **Liberar tudo.** Na tela **Reservas**, ache a reserva de R1 e clique no cadeado (**Liberar**). O modal avisa
+   *"Esta reserva pertence à requisição #⟨id⟩. Liberar devolve o saldo ao disponível geral e a entrega dessa requisição
+   volta a disputar estoque com as demais."* Deixe **Quantidade a liberar** em branco, escreva o **Motivo**, clique
+   **Liberar**. Em **Requisições (almox.)**: R1 está **Aprovado**. R2 **continua Aguard. Estoque** — isso é esperado: o
+   liberado não vai sozinho para quem esperava (aviso **C135** das novidades). Na **Fila de separação**, as duas
+   aparecem em **Separar**.
+2. **Liberar parte.** Aprove de novo uma requisição de 4 com saldo (fica **Totalmente Reservada**) e libere **2**
+   (**Quantidade a liberar** = 2): ela vira **Parcialmente Reservada**.
+3. **Quem separa não regride.** Inicie a separação de uma requisição reservada (**Em Separação**) e libere a reserva
+   dela: o status continua **Em Separação**.
+4. **O vencimento** (precisa da validade de reserva ligada — configuração `reserva_dias_validade`, sem campo na tela).
+   Com uma reserva de requisição vencida, na tela **Reservas** clique **Processar expiração** (só Administrador): o toast
+   diz *"⟨n⟩ reserva(s) expirada(s) e devolvida(s) ao disponível"* e a requisição dona vira **Aprovado**.
+5. **O painel.** O cartão **📋 Requisições Abertas** do painel mostra o status novo.
+
+### O que esta etapa NÃO cobre
+
+- **O material liberado não vai para quem esperava** — fica solto; uma requisição aprovada depois pode levá-lo (aviso
+  **C135**).
+- **Uma saída avulsa pela API pode gastar a reserva de uma requisição** sem ela saber (aviso **C136**), e **qualquer
+  usuário sem perfil pode liberar a reserva de outra pessoa** (aviso **C137**) — próxima etapa.
+- **As requisições que já mentiam antes do deploy** não são corrigidas sozinhas (consulta **A40**).
+- **O solicitante não recebe e-mail** quando a reserva dele é liberada ou vence.
 
 ---
 

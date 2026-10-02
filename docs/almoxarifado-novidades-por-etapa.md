@@ -107,7 +107,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Trinta e nove itens para rodar em produção ANTES do deploy — trinta e seis são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Quarenta itens para rodar em produção ANTES do deploy — trinta e sete são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-02 (Etapa 76) de trinta e nove para quarenta**, com a **A40** — as requisições que hoje dizem *Totalmente/Parcialmente Reservada* sem nada reservado de verdade (deixadas assim por liberações à mão e vencimentos de antes desta versão), que o deploy não corrige sozinho.)*
 
 *(**Atualizado em 2026-10-02 (Etapa 75) de trinta e oito para trinta e nove**, com a **A39** — o material crítico que está retido ou bloqueado hoje com requisição esperando (o tamanho do que a primeira inspeção ou não conformidade vai reservar), e o diagnóstico de quem esperava material crítico e perdeu para uma requisição aprovada depois da inspeção.)*
 
@@ -1378,8 +1380,47 @@ SELECT esp.numero AS esperava, esp.created_at, dep.numero AS levou, dep.data_apr
   alguma requisição que esperava precisa do material com urgência, quem opera decide liberar a reserva da outra pela
   tela **Reservas**.
 
+**A40 (NOVA, da Etapa 76 — as requisições que hoje dizem *Reservada* sem estar).** A partir desta etapa, **liberar à
+mão** a reserva de uma requisição (tela **Reservas**) ou a reserva **vencer** recalcula o status da requisição
+(**B396**). As que já ficaram mentindo antes do deploy **não** são recalculadas (**B404**). Somente leitura:
 
-### B. Decisões de negócio — B1 a B395; as em aberto esperam você, as tomadas estão escritas com o descartado
+```sql
+-- (1) *_RESERVADA sem NENHUMA reserva ativa
+SELECT r.numero, r.status, r.updated_at
+  FROM requisicoes_almoxarifado r
+ WHERE COALESCE(r.ativo, 1) = 1
+   AND r.status IN ('TOTALMENTE_RESERVADA', 'PARCIALMENTE_RESERVADA')
+   AND NOT EXISTS (SELECT 1 FROM reservas_material_almoxarifado rs
+                    WHERE rs.requisicao_id = r.id AND rs.status = 'ATIVA'
+                      AND rs.quantidade - COALESCE(rs.quantidade_utilizada, 0) > 1e-9)
+ ORDER BY r.updated_at;
+
+-- (2) TOTALMENTE_RESERVADA com algum item pendente descoberto
+SELECT r.numero, ir.id AS item_id,
+       ir.quantidade_solicitada - COALESCE(ir.quantidade_entregue, ir.quantidade_atendida, 0) AS pendente,
+       COALESCE((SELECT SUM(rs.quantidade - COALESCE(rs.quantidade_utilizada, 0)) FROM reservas_material_almoxarifado rs
+                  WHERE rs.item_requisicao_id = ir.id AND rs.status = 'ATIVA' AND rs.origem = 'REQUISICAO'), 0) AS hold
+  FROM requisicoes_almoxarifado r JOIN itens_requisicao_almoxarifado ir ON ir.requisicao_id = r.id
+ WHERE COALESCE(r.ativo, 1) = 1 AND r.status = 'TOTALMENTE_RESERVADA'
+   AND ir.quantidade_solicitada - COALESCE(ir.quantidade_entregue, ir.quantidade_atendida, 0) > 1e-9
+   AND COALESCE((SELECT SUM(rs.quantidade - COALESCE(rs.quantidade_utilizada, 0)) FROM reservas_material_almoxarifado rs
+                  WHERE rs.item_requisicao_id = ir.id AND rs.status = 'ATIVA' AND rs.origem = 'REQUISICAO'), 0)
+       < ir.quantidade_solicitada - COALESCE(ir.quantidade_entregue, ir.quantidade_atendida, 0) - 1e-9;
+```
+
+**Como ler o resultado:**
+- **Vazias** — nada a fazer.
+- **Com linhas** — nada é urgente: a **Fila de separação** já mostra o saldo de verdade (lê o saldo, não o rótulo). O
+  rótulo de cada uma se corrige sozinho na próxima nota, inspeção ou não conformidade do material, ou na próxima
+  liberação/vencimento de reserva dela depois do deploy. As da **(1)** (sem reserva nenhuma) esperam esse próximo
+  evento. Para corrigir já uma da **(2)** (que ainda tem reserva de algum item): na tela **Reservas**, liberar a reserva
+  restante dela — a liberação recalcula o status (e devolve o saldo ao disponível: só faça se a requisição de fato não
+  vai mais precisar dele).
+
+
+### B. Decisões de negócio — B1 a B406; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+*(**Atualizado em 2026-10-02 de B395 para B406**, com as onze da Etapa 76 — e a **B406**, o incidente do arquivo de backup que foi para o repositório por engano.)*
 
 *(**Atualizado em 2026-10-02 de B382 para B395**, com as treze da Etapa 75 — e a **B380 (b)** corrigida à vista: estava errada.)*
 
@@ -5386,6 +5427,69 @@ material de cliente sem o projeto do dono recebia *"Material liberado para a sua
 pode retirar. Agora não recebe; no e-mail da chegada (Etapa 74), a linha daquele material sai (os outros materiais da
 nota continuam). **Descartado:** uma frase nova "material de outro cliente" (mais um texto para quem não pode agir).
 
+**B396 (NOVA, da Etapa 76) — duas portas recalculam: liberar à mão e a reserva vencer; o recálculo fica nas portas, não
+no motor.** A liberação pela tela **Reservas** (total ou parcial) e o job de vencimento (**Processar expiração**) passam
+a recalcular o status da requisição dona com a mesma régua da Etapa 74. **Descartados:** (a) recalcular dentro da
+própria liberação do motor — a distribuição da chegada já chama essa liberação segurando a trava do material, e a trava
+não aceita ser pega duas vezes (travaria para sempre); (b) recalcular também no cancelar/excluir/encerrar/rejeitar — a
+requisição vai para um status final, o recálculo seria inútil.
+
+**B397 (NOVA, da Etapa 76) — o liberado volta ao disponível e NÃO é redistribuído para a fila.** Se a dona ainda é a
+primeira da fila (o caso comum), redistribuir devolveria a reserva a ela mesma e anularia o gesto de quem liberou; no
+vencimento, a reserva renasceria a cada prazo. **Consequência declarada (C135):** quem esperava o mesmo material
+continua esperando com o saldo livre, e uma requisição aprovada depois pode levá-lo. **Descartados:** redistribuir
+para toda a fila; redistribuir **excluindo a dona** (o gesto de liberar é do operador sobre aquela requisição — dar o
+material a outra é outra decisão; candidata junto com o **C131**).
+
+**B398 (NOVA, da Etapa 76; estendida na revisão do código) — o recálculo roda sob a trava por material (B394) de todos
+os materiais da requisição, em ordem crescente.** Medido: sem a trava, um recálculo atrasado gravou *Aprovado* com 4
+reservados, três de três vezes, enquanto uma nota do mesmo material entrava — conferir o status antes de gravar não
+basta, porque o status lido não muda (o que muda é a reserva). Na revisão do código a mesma janela foi achada no
+recálculo da reserva na chegada/liberação (Etapas 74/75) e no do estorno (medido: *Totalmente Reservada* com 4 de 8) —
+**estendida a todos os chamadores** (`eb642441`); não há aviso aberto dessa janela. **Descartados:** (a) só a
+conferência do status (não basta); (b) a trava só do material da reserva liberada (numa requisição de dois materiais,
+a nota do outro material corre com o recálculo); (c) a trava dentro da função de recálculo para todos (ela esperaria
+a si mesma). A ordem crescente das travas é redundante hoje (nenhum outro caminho pega duas) — declarado.
+
+**B399 (NOVA, da Etapa 76) — respostas inalteradas e tela intocada.** *Liberar* continua respondendo `{success,
+reserva_id, quantidade_liberada, status}`; o job continua `{success, processadas, liberadas, erros}`. O texto do modal
+(*"Liberar devolve o saldo ao disponível geral e a entrega dessa requisição volta a disputar estoque com as demais."*)
+continua verdadeiro. **Descartado:** devolver o status novo da requisição e mostrar num aviso (exigiria tela nova).
+
+**B400 (NOVA, da Etapa 76) — o recálculo nunca derruba a liberação nem o vencimento.** O saldo já voltou ao disponível;
+o rótulo é efeito. Falha vira aviso no log do servidor (*"[almoxarifado-reservas] recalculo do status apos liberacao
+manual da reserva falhou (reserva ⟨id⟩): …"* e *"… apos expiracao da reserva falhou: …"*). **Descartado:** desfazer a
+liberação por causa de um rótulo.
+
+**B401 (NOVA, da Etapa 76) — o vencimento recalcula depois do lote, uma vez por requisição, só das reservas que de
+fato venceram.** **Descartados:** recalcular a cada reserva dentro do lote (a primeira veria a segunda ainda ativa);
+recalcular as que falharam ao vencer (continuam ativas — inútil).
+
+**B402 (NOVA, da Etapa 76) — a saída genérica que consome a reserva de uma requisição fica de fora** (**C136**). É
+decisão de contrato (a saída genérica pode usar reserva de requisição?), não de rótulo. **Descartados agora:**
+recalcular depois do consumo (o rótulo ficaria certo e o material continuaria saindo sem a requisição saber); recusar
+já (muda o contrato da movimentação sem medir quem usa). Candidata da Etapa 77.
+
+**B403 (NOVA, da Etapa 76) — a inversão inspeção × Aprovar (C131) fica para depois.** Medido: pôr o **Aprovar** na
+trava **não** resolve — em seis de seis rodadas o **Aprovar** reserva antes de a inspeção começar a distribuir, porque o
+saldo já ficou livre no movimento da inspeção. Consertar exige a trava **antes** desse movimento nas três portas que
+liberam (nota, inspeção, não conformidade) e em **todos** os materiais nas três portas de aprovação.
+
+**B404 (NOVA, da Etapa 76) — sem corrigir o passado no deploy.** As requisições que já mentem não são recalculadas; a
+próxima nota, inspeção, não conformidade, liberação ou vencimento que as tocar corrige. A **A40** as acha.
+**Descartado:** recalcular tudo na subida do servidor (o mesmo da **B377**/**B391**).
+
+**B405 (NOVA, da Etapa 76) — sem régua nova.** O recálculo é o da Etapa 74: mesmo conjunto de status, mesma máquina,
+nenhuma transição nova. Depois de liberar **tudo**, o material liberado está no disponível na hora do recálculo — o
+resultado é **Aprovado** (aprovada, com saldo, sem reserva); liberar **parte** dá **Parcialmente Reservada**.
+**Descartado:** uma régua própria para a liberação (duas réguas para o mesmo rótulo).
+
+**B406 (NOVA, da Etapa 76) — Etapa 75, incidente: `docs/bkp_bancoprod.md`** (guia local de backup do banco de produção,
+com host do servidor e usuário SSH — sem senhas) entrou por engano no commit `0993f9ca` por um `git add docs/` e foi
+empurrado; removido do topo em `1e84729e` e excluído localmente (`.git/info/exclude`). Continua no histórico do branch.
+**Escolhido:** remover do topo (reversível). **Descartado:** reescrever o histórico com force push (destrutivo, decisão
+do dono do repositório — recomendado se o repositório for público ou compartilhado).
+
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -6783,7 +6887,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      4, T3 aprovada depois levou os 4). É o **C121** por outra porta. **O que fazer:** até a Etapa 75, depois de aprovar
      uma inspeção, olhar a fila de separação e separar logo quem esperava aquele material.
 
-127. **NOVO, da Etapa 74 (anterior, da Etapa 4; não corrigido) — liberar uma reserva de requisição à mão, ou a reserva
+127. **✅ RESOLVIDO NA ETAPA 76 (`4f51cdbd`, `a3f3195f`, `66aa8e31`; revisão `eb642441`) — liberar à mão ou a reserva
+     vencer não recalculava o status.** Agora a liberação pela tela **Reservas** (total ou parcial) e o job de
+     vencimento recalculam o status da requisição dona: liberar tudo dá **Aprovado**, liberar parte dá **Parcialmente
+     Reservada** (**B396**, **B405**). As que já mentiam antes do deploy: **A40**. O liberado **não** vai para quem
+     esperava (**C135**). O texto original, para o histórico:
+     **NOVO, da Etapa 74 (anterior, da Etapa 4; não corrigido) — liberar uma reserva de requisição à mão, ou a reserva
      expirar, não recalcula o status da requisição.** Pela tela **Reservas**, liberar a reserva de uma requisição
      *Totalmente Reservada* deixa a requisição **Totalmente Reservada sem nada seguro**; o mesmo quando a reserva vence
      (`reserva_dias_validade` ligada — a reserva da chegada também nasce com validade). A próxima nota do material
@@ -6822,6 +6931,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      a mesma família da "corrida nota × aprovação" da Etapa 74 (**D (74)**), só que aqui medida como inversão
      sistemática, não ocasional. **O que fazer:** não aprovar requisições daquele material enquanto a Qualidade decide a
      inspeção dele; se aconteceu, a **A39 (2)** acha, e quem opera decide liberar a reserva da que chegou depois.
+     *(**Etapa 76 — custo medido:** pôr o **Aprovar** na trava por material **não** resolve: em seis de seis rodadas
+     ele reserva antes de a inspeção começar a distribuir, porque o saldo já fica livre no movimento da própria
+     inspeção. O conserto exige a trava **antes** desse movimento nas três portas que liberam material — nota, inspeção,
+     não conformidade — e em **todos** os materiais nas três formas de aprovar (**B403**). Não é tarefa pequena.)*
 
 132. **NOVO, da Etapa 75 (declarado) — a trava por material vale para um processo só.** As liberações do mesmo material
      esperam umas pelas outras (**B394**) por uma fila na memória do servidor. Se o sistema passar a rodar em **mais de um
@@ -6846,6 +6959,36 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      (Etapa 74) mudou junto: diz o pendente certo para quem tem material separado na caixa (**B393**) e não lista o
      material de cliente para quem não pode retirá-lo (**B395**). **O que fazer:** avisar a Qualidade de que aprovar a
      inspeção agora reserva para quem esperava — o resultado aparece na fila de separação.
+
+135. **NOVO, da Etapa 76 (decisão declarada) — o material liberado à mão ou vencido não vai para quem esperava.**
+     R1 tinha 4 reservados; o almoxarife libera a reserva pela tela **Reservas** (ou ela vence): R1 vira **Aprovado** e
+     os 4 voltam ao disponível **soltos**. R2, que esperava o mesmo material, continua **Aguard. Estoque** — e uma
+     requisição aprovada **depois** leva os 4. É o **C121** por outra porta, por decisão (**B397**): redistribuir
+     devolveria a reserva à própria R1 e anularia o gesto. A **Fila de separação** mostra **Separar** para quem pode
+     separar. **O que fazer:** depois de liberar à mão uma reserva que outra requisição esperava, separar logo quem
+     esperava (ou aprovar com cuidado as que chegarem depois).
+
+136. **NOVO, da Etapa 76 (medido, não corrigido — candidato da Etapa 77) — uma saída avulsa pode gastar a reserva de
+     uma requisição sem ela saber.** Uma saída feita **pela API** de movimentações citando o número da reserva de uma
+     requisição é aceita (a tela **Movimentações** não oferece citar reserva — o caminho é de integração): a reserva fica **consumida**, o material sai — e a requisição continua **Totalmente
+     Reservada** com o item **ainda pendente** (nada foi entregue a ela). Depois ela separa de novo, do disponível. É
+     pior que o rótulo errado do **C127**: o material sai "pela requisição" sem a requisição saber. A pergunta é de
+     regra — a saída avulsa pode usar reserva de requisição? (**B402**). **O que fazer:** até a Etapa 77, integrações
+     não devem citar reserva de requisição em saída avulsa; entregar sempre pela própria requisição.
+
+137. **NOVO, da Etapa 76 (anterior, da Etapa 4; não corrigido) — qualquer usuário sem perfil libera a reserva de
+     qualquer requisição.** Liberar reserva exige a permissão *reservar*, que o perfil **Produção** tem — e quem não tem
+     perfil cai em **Produção**. Então qualquer usuário do módulo pode liberar, pela tela **Reservas**, a reserva da
+     requisição de outra pessoa (desde a Etapa 76, isso também muda o status dela). É decisão de perfil da Etapa 4.
+     **O que fazer:** se isso não é o desejado, decidir quais perfis podem liberar reserva de requisição alheia —
+     candidato da Etapa 77, junto com o **C136**.
+
+138. **NOVO, da Etapa 76 — o que muda para quem libera reserva e para quem acompanha a requisição.** (1) Liberar pela
+     tela **Reservas** a reserva de uma requisição muda o status dela na hora: *Totalmente Reservada* → **Aprovado**
+     (liberou tudo) ou **Parcialmente Reservada** (liberou parte); *Em Separação* e *Parcialmente Atendida* não mudam.
+     (2) O mesmo quando **Processar expiração** vence reservas de requisições. (3) As respostas da API não mudaram
+     (**B399**). **O que fazer:** integrações que liam *Totalmente Reservada* como estável até a separação devem aceitar
+     *Aprovado* depois de uma liberação.
 
 
 
@@ -7698,6 +7841,16 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   esperava (**C131**); sem trava entre a decisão da Qualidade e a aprovação — fica para a migração de banco.
 - **(75) Sem tela nova e sem informação nova na resposta** — a inspeção e a não conformidade respondem como antes; a
   reserva aparece na tela **Reservas** e na fila de separação (**B387**).
+- **(76) O liberado não é redistribuído** — liberar à mão ou vencer devolve o material ao disponível solto; quem
+  esperava não ganha nada (**B397**, **C135**).
+- **(76) O passado não é corrigido no deploy** — as requisições que já dizem *Reservada* sem estar ficam assim até o
+  próximo evento do material (**B404**, **A40**).
+- **(76) Sem aviso a quem perdeu a reserva** — o solicitante não recebe e-mail quando a reserva da requisição dele é
+  liberada à mão ou vence (os e-mails das Etapas 70/74/75 são de chegada).
+- **(76) Sem tela nova e sem informação nova na resposta** — a liberação e o vencimento respondem como antes; o status
+  novo aparece ao reabrir a lista de requisições (**B399**).
+- **(76) A saída avulsa que gasta reserva de requisição e o perfil que libera reserva alheia** ficam para a Etapa 77
+  (**C136**, **C137**); a inversão inspeção × **Aprovar** também (**C131**, **B403**).
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -8361,6 +8514,21 @@ as funções puras; a jornada ponta a ponta 13; a revisão 8. O que **só o nave
    vai para quem ainda faltava; a observação diz *"Reserva na liberação da não conformidade ⟨NC⟩ — requisição ⟨REQ⟩"*.
 4. **O e-mail.** Com e-mail configurado, o solicitante recebe *"[Almoxarifado] Material liberado para a sua requisição
    ⟨REQ⟩"*; na tela **Notificações**, o filtro *Aviso ao requisitante* mostra a linha.
+
+**(76) Nenhum clique foi dado nesta etapa, e o cliente não mudou.** Os testes provam o servidor pela rota (com usuários
+reais por perfil) e pelo serviço: a base 14; a liberação à mão 13; o vencimento 10; a jornada ponta a ponta 7; a
+revisão 3. O que **só o navegador** prova:
+
+1. **Liberar tudo.** Uma requisição **Totalmente Reservada**; na tela **Reservas**, botão **Liberar** (cadeado) da
+   reserva dela, **Quantidade a liberar** em branco, **Motivo**, **Liberar**; reabrir **Requisições**: o badge diz
+   **Aprovado**.
+2. **Liberar parte.** O mesmo com **Quantidade a liberar** menor que o saldo reservado: o badge diz **Parcialmente
+   Reservada**, e o banner do detalhe é o de reserva parcial.
+3. **O vencimento.** Com a validade da reserva ligada (configuração `reserva_dias_validade` — não tem campo na tela;
+   a reserva da requisição nasce com o vencimento quando ela está ligada), uma reserva de requisição vencida; na tela **Reservas**,
+   **Processar expiração**: o toast diz *"⟨n⟩ reserva(s) expirada(s) e devolvida(s) ao disponível"*, e a requisição
+   dona vira **Aprovado**.
+4. **O painel.** O cartão **📋 Requisições Abertas** do painel mostra a requisição com o status novo.
 
 
 
@@ -9469,6 +9637,20 @@ execução, e elas foram refeitas para sabotar algo que **escapa** da proteção
 redundantes por construção). Não é defeito de produção — é o mesmo padrão do teste vazio do CLAUDE.md, agora no **plano**:
 um controle positivo escrito no papel também precisa saber falhar. **A regra:** quem escreve o plano diz, para cada
 sabotagem, qual asserção cai e por qual caminho do código — e a revisão do plano confere.
+
+**G86 (NOVO e ✅ PAGO NA ETAPA 76 — `ab5677a4`, `8a70fe52`; do fluxo de testes, não do sistema). O executor da suíte
+aceitava um arquivo só pelo código de saída — um teste que pendurasse podia sair verde sem placar.** O `run-all` que
+roda os 291 arquivos de teste da API olhava só se o processo terminava com código 0. Um arquivo que prendesse numa
+promessa nunca resolvida, com o relógio de limite marcado para não segurar o processo (`.unref()`), esvaziava a fila de
+eventos e o Node **saía com 0 no meio do arquivo, sem imprimir o placar** — contado como verde. Medido: um arquivo
+sintético desse jeito saía 0 com um teste que falharia nem rodado; o teste real da Etapa 75 sob uma trava presa (sonda)
+também saía 0. Só 4 dos 290 arquivos tinham rede própria. **Pago:** (1) o `run-all` carrega antes de cada arquivo uma
+guarda (`server/tests/helpers/guardaProcessExit.js`): terminar com código 0 **sem** chamar `process.exit` vira falha,
+com *"[run-all] o arquivo terminou sem chamar process.exit (placar ausente)"*; (2) cada arquivo tem limite de tempo
+(**120 s**, ajustável por `RUN_ALL_TIMEOUT_MS`; o mais lento leva 4 s), com *"[run-all] o arquivo passou de ⟨N⟩ ms e
+foi interrompido (timeout): ⟨arquivo⟩"*; (3) o teste da Etapa 75 que usava `.unref()` passou a usar relógio vivo. **A
+guarda rodada nos 291 arquivos não achou nenhum teste vazio escondido** — todos chamam `process.exit`. **A lição:**
+código de saída não é placar; o executor da suíte também precisa saber falhar (o mesmo princípio do controle positivo).
 
 aparece na hora, para quem está editando.
 ## Etapa 0 — Fundação (2026-08-03)
@@ -17967,9 +18149,93 @@ quem não podia retirá-lo (**B395**). A inversão inspeção × **Aprovar** no 
 (**C131**).
 
 
+## Etapa 76 — Liberar ou deixar vencer a reserva de uma requisição atualiza o status dela (2026-10-02)
+
+A reserva de uma requisição pode deixar de existir por dois caminhos de rotina: o almoxarife a **libera à mão** na tela
+**Reservas** (por exemplo, para atender uma urgência de outra área), ou ela **vence** quando a validade de reserva está
+ligada. Nos dois casos o saldo voltava ao disponível, mas a requisição continuava dizendo **Totalmente Reservada** — com
+nada seguro. Quem olhava a lista ou o painel achava que o material estava garantido; o e-mail e o alerta de atraso
+repetiam o rótulo errado. Agora a liberação e o vencimento **recalculam** o status da requisição dona na hora, com a
+mesma régua de quando o material chega: liberou tudo, ela volta a **Aprovado**; liberou parte, fica **Parcialmente
+Reservada**. A Fila de separação já mostrava o saldo de verdade; agora o rótulo também.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Liberar à mão a reserva de uma requisição deixava-a **Totalmente Reservada** sem nada seguro (**C127**) | Ela vira **Aprovado** (**B396**, **B405**) |
+| Liberar **parte** da reserva não mudava o status | Ela vira **Parcialmente Reservada** |
+| A reserva **vencida** pelo **Processar expiração** deixava o rótulo mentindo | O status da requisição dona é recalculado, uma vez por requisição, depois do lote (**B401**) |
+| Um recálculo atrasado podia gravar um status velho enquanto uma nota do mesmo material entrava | O recálculo espera a nota (e vice-versa) — vale também para a chegada, a inspeção e o estorno (**B398**) |
+| Um arquivo de teste que pendurasse podia contar como verde (**G86**) | O executor da suíte reprova arquivo sem placar e arquivo acima do limite de tempo |
+
+### As regras, com o cenário exato
+
+Preparação: um material **M** com 4 em estoque. Uma requisição **R1** de 4 de M, aprovada por outra pessoa: fica
+**Totalmente Reservada**. Uma requisição **R2** de 4 de M, aprovada depois: fica **Aguard. Estoque**.
+
+**1. Liberar tudo devolve a requisição a Aprovado.** Na tela **Reservas**, botão **Liberar** (cadeado) da reserva de
+R1. O modal avisa *"Esta reserva pertence à requisição #⟨id⟩. Liberar devolve o saldo ao disponível geral e a entrega
+dessa requisição volta a disputar estoque com as demais."*; **Quantidade a liberar** em branco (*"Em branco libera o
+saldo inteiro."*), **Motivo**, **Liberar**. Em **Requisições**, R1 agora é **Aprovado** — antes ficava **Totalmente
+Reservada**. R2 continua **Aguard. Estoque**: o liberado **não** vai para ela (**B397**, **C135**); na **Fila de
+separação**, as duas aparecem em **Separar**.
+
+**2. Liberar parte deixa Parcialmente Reservada.** Com R1 de novo **Totalmente Reservada** (4), liberar **2** (a reserva
+continua ativa com 2): R1 vira **Parcialmente Reservada**. Numa requisição de dois itens, liberar a reserva de um deles
+dá o mesmo.
+
+**3. Quem já está separando não regride.** Liberar a reserva de uma requisição **Em Separação** ou **Parcialmente
+Atendida**: o status não muda (a régua só mexe em *Aprovado*, *Aguardando* e *Reservada*).
+
+**4. O vencimento recalcula.** Com a validade de reserva ligada, as reservas de requisição nascem com data de
+vencimento; vencida a de R1, na tela **Reservas**, **Processar expiração**: o toast diz *"⟨n⟩ reserva(s) expirada(s) e
+devolvida(s) ao disponível"* e R1 vira **Aprovado**. Uma requisição com dois itens cujas duas reservas vencem no mesmo
+lote é recalculada **uma** vez. Se só uma das duas venceu, ela fica **Parcialmente Reservada**.
+
+**5. A reserva manual não toca requisição.** Liberar ou vencer uma reserva criada na própria tela **Reservas** (sem
+requisição) não muda nenhuma requisição.
+
+**6. A permissão é a de sempre.** Um usuário só **Qualidade** não libera (sem a permissão *reservar*): a reserva fica
+ativa e o status não muda. **Processar expiração** é só do **Administrador**.
+
+### O que esta etapa NÃO cobre
+
+1. **O liberado não vai para quem esperava** (**C135**, **B397**) — uma aprovada depois pode levá-lo.
+2. **A saída avulsa pela API que gasta a reserva de uma requisição** (**C136**) e **o usuário sem perfil que libera a
+   reserva de qualquer requisição** (**C137**) — próxima etapa.
+3. **A inversão inspeção × Aprovar** (**C131**) — o custo foi medido (**B403**); fica para depois.
+4. **O passado** — as requisições que já mentem no deploy (**A40**, **B404**).
+5. **Aviso a quem perdeu a reserva** — o solicitante não recebe e-mail quando a reserva dele é liberada ou vence.
+
+### O que a revisão encontrou
+
+A medição reproduziu o problema pelas rotas (liberar e vencer deixavam *Totalmente Reservada* sem nada) e mediu que
+conferir o status antes de gravar **não basta**: um recálculo atrasado gravou *Aprovado* com 4 reservados, três de três
+vezes, enquanto uma nota do mesmo material entrava — por isso o recálculo roda sob a trava por material. Mediu também
+que pôr o **Aprovar** nessa trava **não** resolve a inversão inspeção × **Aprovar** (seis de seis), e achou dois
+problemas novos, deixados para a próxima etapa: a saída avulsa pela API que gasta a reserva de uma requisição sem ela
+saber, e o perfil padrão podendo liberar reserva alheia. A revisão do **plano** achou que uma requisição com dois itens
+do mesmo material travaria o material para sempre sem um teste que o provasse, e que um dos controles previstos não
+conseguiria falhar — ambos corrigidos antes de executar. A revisão do **código**, executando, achou: o recálculo da
+chegada, da inspeção e do estorno ainda rodava fora da trava (medido: *Totalmente Reservada* com 4 de 8 — corrigido,
+**B398**); e o executor da suíte de testes aceitava um arquivo só pelo código de saída — um teste que pendurasse saía
+verde sem placar (**G86**, pago; a guarda rodada nos 291 arquivos não achou nenhum teste vazio escondido).
+
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 76 entregue (2026-10-02):** **liberar ou deixar vencer a reserva de uma requisição atualiza o status dela.**
+  A liberação pela tela **Reservas** e o **Processar expiração** recalculam o status da requisição dona: liberou tudo,
+  **Aprovado**; parte, **Parcialmente Reservada**. O recálculo espera uma nota do mesmo material que esteja entrando — e
+  a revisão estendeu isso ao recálculo da chegada, da inspeção e do estorno. Corrigido também o executor da suíte de
+  testes, que podia contar como verde um arquivo que pendurasse (**G86**). **O que é seu:** a consulta **A40**; as
+  decisões **B396 a B406** (a **B406** é o incidente do arquivo de backup no repositório — o histórico do branch ainda o
+  contém); os avisos **C135 a C138** (o **C136** e o **C137** são a próxima etapa); as limitações **(76)** em D e as
+  verificações **(76)** em F. **Próxima: Etapa 77 — a reserva de uma requisição só sai pela requisição (a saída avulsa
+  que gasta reserva de requisição, C136, e quem pode liberar reserva alheia, C137) — ver o plano da Etapa 76.**
 
 - **Etapa 75 entregue (2026-10-02):** **o material que a inspeção libera fica com quem esperava.** A inspeção que aprova
   e a não conformidade que aceita reservam o que liberaram para quem esperava, na ordem da fila de separação, e o
@@ -17978,8 +18244,9 @@ quem não podia retirá-lo (**B395**). A inversão inspeção × **Aprovar** no 
   separado na caixa), a corrida de duas liberações do mesmo material que zerava a fila, e o e-mail que prometia material
   de cliente. **O que é seu:** a consulta **A39**; as decisões **B383 a B395** (e a **B380 (b)** corrigida à vista); os
   avisos **C131 a C134** (o **C131** — aprovar no mesmo instante da inspeção inverte a fila — e o **C134**, o que muda
-  para a Qualidade); as limitações **(75)** em D e as verificações **(75)** em F. **Próxima: Etapa 76 — liberar à mão ou
-  deixar vencer a reserva de uma requisição passa a recalcular o status dela (C127) — ver o plano da Etapa 75.**
+  para a Qualidade); as limitações **(75)** em D e as verificações **(75)** em F. ~~**Próxima: Etapa 76 — liberar à mão ou
+  deixar vencer a reserva de uma requisição passa a recalcular o status dela (C127) — ver o plano da Etapa 75.**~~
+  *(Feita — Etapa 76.)*
 
 - **Etapa 74 entregue (2026-10-02):** **a requisição que esperava fica com o material que chegou.** A nota processada
   reserva o que chegou livre para quem esperava, na ordem da fila de separação (urgência, necessidade, mais antiga); a

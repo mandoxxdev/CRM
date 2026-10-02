@@ -1849,7 +1849,20 @@ Liberar devolve ao disponível o que a reserva ainda segura. Pode ser **total** 
 
 **Liberação automática:** **cancelar**, **excluir**, **encerrar** (**Encerrar Requisição**) ou **rejeitar a liberação por valor** de uma requisição solta todas as reservas ativas dela. Isso é essencial porque a expiração é opcional (9.7) — sem essa liberação, o saldo ficaria preso a uma requisição morta para sempre. No livro, o motivo diz qual foi o gesto (por exemplo, *"Liberação por encerramento de requisição"*, *"Liberação por rejeição de valor da requisição"*).
 
-**Liberar à mão não muda o status da requisição.** Liberar pela tela **Reservas** a reserva de uma requisição **Totalmente Reservada** deixa a requisição com esse status mesmo sem nada seguro — o rótulo só se corrige na próxima nota do material (9.3b) ou na separação. Antes de liberar à mão, considere que a requisição continuará parecendo reservada; a **Fila de separação** mostra o saldo de verdade.
+**Liberar à mão atualiza o status da requisição.** Logo depois de liberar pela tela **Reservas** a reserva de uma requisição, o sistema recalcula o status dela pela mesma régua de quando o material chega (9.3b):
+
+| A requisição estava | Liberou | Fica |
+|---|---|---|
+| **Totalmente Reservada** | a reserva inteira (ou a única reserva que ela tinha) | **Aprovado** — aprovada, com o material no disponível, sem nada seguro para ela |
+| **Totalmente Reservada** | só uma parte, ou a reserva de um dos itens | **Parcialmente Reservada** |
+| **Parcialmente Reservada** | a parte que restava reservada | **Aprovado** |
+| **Em Separação** ou **Parcialmente Atendida** | qualquer quantidade | não muda — ela já está sendo separada ou entregue |
+
+Como decide: o sistema olha, item a item, quanto ainda falta entregar e quanto continua reservado para aquele item. Se todos os itens pendentes continuam cobertos, **Totalmente Reservada**; se só alguns, **Parcialmente Reservada**; se nenhum, a requisição volta ao status de quem foi aprovado — **Aprovado** quando há saldo disponível do material (o caso normal, porque o que acabou de ser liberado está no disponível), ou **Aguardando estoque/compra** se o saldo já tiver sido levado por outra requisição no mesmo instante. O recálculo espera uma nota, inspeção ou não conformidade do mesmo material que esteja reservando naquele momento, para não gravar um status velho.
+
+**O liberado não vai sozinho para quem esperava.** O saldo liberado volta ao disponível **solto**: uma outra requisição que esperava o mesmo material continua **Aguardando**, e uma requisição aprovada depois pode levá-lo. Se a liberação foi feita para atender outra requisição, separe-a logo — a **Fila de separação** mostra **Separar** para quem pode separar.
+
+Liberar uma reserva **manual** (criada na própria tela **Reservas**, sem requisição) não muda nenhuma requisição. Se o recálculo do status falhar, a liberação vale assim mesmo (o saldo já voltou ao disponível) e o aviso fica no log do servidor; o status se corrige no próximo evento do material.
 
 ### 9.7 Expiração
 
@@ -1859,7 +1872,9 @@ A expiração é **opcional** e roda por acionamento — o botão **Processar ex
 - O vencimento é **no dia seguinte** à data: a data gravada é o último dia válido do hold.
 - Ao expirar, o saldo volta ao disponível e a reserva fica **EXPIRADA** — e não *Liberada*. "Venceu sozinha" e "alguém soltou" são fatos diferentes no relatório.
 - O processamento é seguro para repetir: rodar duas vezes não devolve saldo em dobro, e uma reserva problemática não interrompe o processamento das demais.
-- Como na liberação à mão (9.6), a expiração **não muda o status** da requisição dona da reserva.
+- Como na liberação à mão (9.6), a expiração **atualiza o status** da requisição dona da reserva, com a mesma tabela: a requisição **Totalmente Reservada** cuja reserva venceu volta a **Aprovado**; se só uma de duas reservas venceu, fica **Parcialmente Reservada**. O recálculo é feito **uma vez por requisição**, depois de todo o processamento, só para as reservas que de fato venceram — a que falhou ao vencer continua ativa e a requisição dela não muda.
+- A reserva nascida de requisição também tem validade quando a configuração de dias de validade está ligada — não só as reservas manuais.
+- O vencimento não avisa o solicitante por e-mail; o status novo aparece na lista de requisições e no painel.
 
 ---
 
