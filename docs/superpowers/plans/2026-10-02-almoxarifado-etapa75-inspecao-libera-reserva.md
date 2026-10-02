@@ -1,7 +1,7 @@
 # Etapa 75 — o material que a inspeção libera fica com quem esperava (C126, feature 07 com a 09 e a 19)
 
 > Status: **TRONCO ENTREGUE (T0–T3) — 2026-10-02.** Fases 0, 1 e 2 feitas; T0 `1b2a6959`, T1 `f149977b`, T2
-> `c4d9212c`, T3 no commit seguinte. Falta: T4 (integração), Fase 5 (revisão adversarial), T5 (fechamento). Ver
+> `c4d9212c`, T3 `c8c089cb`. Falta: T4 (integração), Fase 5 (revisão adversarial), T5 (fechamento). Ver
 > "Tronco executado (T0–T3)" no fim.
 > Origem: "Próxima tarefa detalhada — Etapa 75" de
 > `docs/superpowers/plans/2026-10-02-almoxarifado-etapa74-reserva-na-chegada.md:697-736` e o aviso **C126** de
@@ -398,7 +398,7 @@ galhos depois de T1: só **consomem** `aposLiberacaoSemFalhar`/`reservarLiberaca
   comentado → RN-04 cai; (2) gancho sem a guarda `efeito === 'LIBERADA'` → a negativa `SEM_BLOQUEIO` cai (reserva de
   saldo livre que não veio da NC); (3) gancho **antes** da auditoria com `criarReserva` lançando sem `try` → a decisão
   responde 500 com a NC DECIDIDA (prova a posição). Commit na branch da worktree; o fio principal faz o merge.
-- [x] **T3 — o solicitante é avisado.** ✅ (hash no fechamento do tronco, abaixo). Rodou no tronco, depois da T2.
+- [x] **T3 — o solicitante é avisado.** ✅ `c8c089cb`. Rodou no tronco, depois da T2.
   Realizado pelo contrato: `montarAvisoLiberacao(dados)` (pura; `dados.material` é UM objeto — um material só, L2
   não se aplica; sem recebimento a linha `Recebimento:` sai), `avisarLiberacao(db, user, ctx, resultadoReserva)` e a
   segunda metade do `aposLiberacaoSemFalhar` (warn `[almoxarifado-reservas] aviso da liberacao falhou (<origem>
@@ -504,7 +504,7 @@ gesto": decisão → reserva → aprovação de outra → separar → entregar �
 
 ## Tronco executado (T0–T3) — contrato final realizado (para a T4 e o fechamento)
 
-Hashes: T0 `1b2a6959`, T1 `f149977b`, T2 `c4d9212c`, T3 no commit que registra esta seção. Tudo na árvore principal,
+Hashes: T0 `1b2a6959`, T1 `f149977b`, T2 `c4d9212c`, T3 `c8c089cb`. Tudo na árvore principal,
 sequencial, sem worktree. Testes da 74 sem edição em todas as tasks.
 
 **Serviço (`reservaChegadaService.js`):**
