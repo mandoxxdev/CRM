@@ -1,7 +1,7 @@
 # Etapa 72 — a solicitação de compra que fecha quando o material dela chega, não na primeira nota (feature 18, com a 08)
 
-> Status: **PLANO (Fases 0 e 1 feitas, 2026-10-02).** Próximo passo: Fase 2 (revisão do plano por agente fresco), depois
-> T0 → T1 → T2 (tronco), T3 (galho) em paralelo à T2 depois da T1, T4 (integração), T5 (fechamento).
+> Status: **T0–T4 feitas + Fase 5 (fix-round da revisão: o livro de atribuição) — 2026-10-02.** Próximo passo:
+> **T5 (fechamento, skill `fechar-etapa`)**, que agora também registra B352–B356 e C118 da Fase 5 (seção no fim).
 > Feature 18 (reposição), com a 08 (o gancho mora no recebimento). Origem: "Próxima tarefa detalhada — Etapa 72" de
 > `docs/superpowers/plans/2026-10-01-almoxarifado-etapa71-pedido-reabre.md:651-691`. Decisão revogada (em parte):
 > **B22(a)** (`docs/almoxarifado-novidades-por-etapa.md:1552-1563`, "fecha na primeira nota, mesmo parcial") e a
@@ -419,8 +419,7 @@ T2); **T4** (integração) depois de T2 e T3; **T5** fechamento. Executores de g
   -n "deepStrictEqual" tests/api/pedidoReabre*.js`. Controle positivo: (a) não chamar o gancho → RN-08; (b) reabrir
   sem olhar o pedido encerrado → negativa do `cancelado`; (c) reabrir sem a condição → negativa do "outra nota já cobria";
   (d) `throw` fora do try → RN-09.
-- [x] **T3 (galho, backend do relatório + cliente) — a aba mostra quanto chegou.** *(feita — hash no commit seguinte
-  (o próprio commit da T3 marca isto). `reportService.relatorioSolicitacoesCompraPendentes` lê
+- [x] **T3 (galho, backend do relatório + cliente) — a aba mostra quanto chegou.** *(feita — `bc9170e`. `reportService.relatorioSolicitacoesCompraPendentes` lê
   `posicaoDasSolicitacoes({ solicitacao_ids })` e põe por linha `recebido_no_pedido` (= `recebido_atribuido`),
   `a_caminho`, `pedido_encerrado`; export/tela de Relatórios inalterados (projetam `colunas` do registro).
   `relatorioSolicitacoesChegou.api.test.js` 4/4 — PENDENTE, VINCULADO sem nota, duas solicitações 6+4 com nota de 7
@@ -435,8 +434,8 @@ T2); **T4** (integração) depois de T2 e T3; **T5** fechamento. Executores de g
   e a ausência em `PENDENTE`. Controle positivo: trocar as literais → cai; `a_caminho` recalculado à parte no relatório
   (em vez da fonte da T1) → o cenário de duas solicitações no mesmo par diverge da sugestão (ter um assert que compara os
   dois). `CI=true` build do client.
-- [x] **T4 (integração, cruza galhos) — a jornada do comprador.** *(feita — T2 em `6981afc`; hash da T4 no commit
-  seguinte. O arquivo saiu como `server/tests/api/solicitacaoPorMaterialIntegracao.api.test.js` (nome dado pelo
+- [x] **T4 (integração, cruza galhos) — a jornada do comprador.** *(feita — T2 em `6981afc`; T4 em `c28e0bd`.
+  O arquivo saiu como `server/tests/api/solicitacaoPorMaterialIntegracao.api.test.js` (nome dado pelo
   orquestrador; o texto abaixo dizia `solicitacaoFechaPorMaterialIntegracao`). 7/7, tudo pelas rotas (material e minimo
   por `POST`/`PUT /materiais`, solicitação pelo `verificar-minimos`, pedido pelo Compras, nota pelas nove portas com a
   conferência inteira, estorno pela rota do livro, status lido por `contexto-material` + `GET /auditoria` — não há GET de
@@ -540,3 +539,108 @@ a corrida C98.
   pode bloquear para sempre com pedido esquecido → **alinhado ao horizonte da requisição** (VINCULADO fora do horizonte
   não bloqueia); pedido apagado (LEFT JOIN) = "sem linha" também no dedupe; gancho usa `linha.material_id` (o SELECT
   passa a trazê-lo); a condição do fechamento relê o solicitado no próprio UPDATE.
+
+## Fase 5 — fix-round da revisão: o rateio CALCULADO vira um LIVRO de atribuição (2026-10-02, `f192901`)
+
+**Achados da revisão** (sondas `sonda72f-a.js` S1–S5 e `sonda72f-b.js` S2b/S6 no scratchpad, executadas pelas rotas),
+todos com a mesma raiz — o recebido de cada solicitação era **calculado** a cada leitura, rateando o recebido do par
+(pedido, material) entre as `VINCULADO` **de hoje** a partir de um retrato fixo (`recebido_no_vinculo`). Um cálculo sobre o
+conjunto de hoje muda de dono quando o conjunto muda:
+
+| Achado | Sonda | Medido antes do fix |
+|---|---|---|
+| **I1** solicitação CANCELADA no meio passa o que recebeu para a irmã (compra em dobro) | S3 | A10+B10, nota de 10 (de A), cancela A → B `atribuido 10, a_caminho 0`; a sugestão (mín. 25) não contava nada de B a caminho |
+| **I2** estorno de nota ANTERIOR ao vínculo reabre solicitação cujo material chegou | S4 | pedido 20, nota 10 sem sol., liga A10, nota 10 (dela) → A `RECEBIDA`; estorno da 1ª → `solicitacoes_reabertas [A]`, A `a_caminho 10` |
+| **I3** vincular a pedido cuja linha do material já está completa cria "a caminho" fantasma | S2/S2b | A `a_caminho 10` de um pedido que já entregou tudo; só fechava quando chegasse nota de OUTRO material |
+| **M** o rateio guloso sub-credita a solicitação ligada depois | S1 | pedido 30, A10, nota 5, liga B10, nota 15 → B `atribuido 5` (os 15 chegaram depois dela) |
+| S5 dedupe com horizonte compra em dobro com pedido vivo e velho | S5 | **não corrigido** — letra C (C118) |
+
+**Decisão (B352, reversível):** trocar o rateio calculado por um **livro de atribuição persistido**. Descartado:
+**corrigir o cálculo do rateio caso a caso** (cada caso pedia mais um retrato; o quarto achado mostraria o quinto).
+
+### O que foi feito
+
+- **Tabela nova `solicitacao_compra_recebimentos`** (`schema.js`, `CREATE TABLE IF NOT EXISTS` + índices por
+  `solicitacao_id` e `movimentacao_id`): `(id, solicitacao_id, pedido_compra_id, material_id, movimentacao_id, quantidade,
+  created_at)`.
+- **Escrita (`purchaseService.atribuirEntradasDoRecebimento`)**: `fecharSolicitacoesDoPedido(db, user, pedidoId,
+  { recebimentoId })` — os dois chamadores do `receiptService` (`processarNota` e `concluirAprovacaoDireta`) passam o
+  recebimento. Para cada movimentação de entrada do recebimento cuja linha é do pedido (vínculo item→movimentação da
+  Etapa 71, `movimentacao_entrada_id`), a quantidade é atribuída às `VINCULADO` do par em ordem de id, cada uma até o que
+  falta para ela; o resto não é de ninguém. Uma linha por (solicitação, movimentação). O `INSERT ... SELECT MIN(?,
+  quantidade − SUM(livro))` recalcula o "falta" no mesmo comando. Movimentação que já tem linha é pulada (idempotente);
+  movimentação cancelada é pulada. Sem `recebimentoId` (chamada direta pelo serviço) só avalia.
+- **Leitura**: `recebido_atribuido` = `SUM(livro)` da solicitação (todas as linhas dela, de qualquer pedido). Nunca
+  recalculado. `posicaoDasSolicitacoes` mantém o contrato (mesmos campos).
+- **Fechamento**: `MATERIAL_COMPLETO` e `SEM_LINHA_NO_PEDIDO` como antes (par inteiro); **`SOLICITADO_RECEBIDO` passa a
+  ser POR SOLICITAÇÃO** (`SUM(livro) ≥ quantidade − ε`, repetido no `WHERE` do `UPDATE`). A trilha `RECEBIDA` ganha
+  `recebido_atribuido` (aditivo) e `solicitado` passa a ser o da solicitação (era o do par).
+- **Estorno (`estornarNoLivro`, dentro de `reabrirSolicitacoesDoMaterial`)**: grava a linha **negativa** do saldo de cada
+  solicitação nas linhas da movimentação M (`INSERT ... SELECT -SUM ... HAVING SUM > ε`, idempotente), sempre (pedido
+  vivo ou não). Reabre a `RECEBIDA` do par que estava coberta antes (material completo ou livro ≥ pedido, com o "antes"
+  reconstruído pela linha do pedido e pelo que o livro tirou dela) e deixou de estar. Nota anterior ao vínculo não tem
+  linha → não tira nada de ninguém (I2).
+- **Cancelamento** não move nada no livro (I1).
+- **I3**: `vincularPedidoCompra` recusa com 400 e a literal nova
+  **`O pedido <numero> já recebeu todo o <nome do material>: vincule a solicitação a outro pedido`** quando a linha do
+  material no pedido tem pedida > 0 e saldo ≤ ε. Pedido sem linha do material continua aceito (D4). Gerar o pedido pelo
+  Compras nunca cai nisso (vincula logo depois de inserir as linhas, 0 recebido).
+- `recebido_no_vinculo` **deixou de ser lido** (coluna mantida, ainda gravada pelo vínculo como rastro). `ratearRecebido`
+  e `limiarDoPar` saíram. O "rateado em ordem de id" das seções acima (Fase 2, T1, T3) vale agora como "atribuído pelo
+  livro em ordem de id, na entrada".
+
+### Decisões da Fase 5 (letra B — a T5 transcreve)
+
+- **B352 — livro de atribuição no lugar do rateio calculado.** Descartado: corrigir o rateio caso a caso.
+- **B353 — sem backfill do livro.** O livro nasce vazio. **É exato para o legado de produção:** a Etapa 72 ainda não
+  está em produção (branch `desenvolvimento-almoxarifado`, merge só no fim do módulo), e lá a regra antiga fecha a
+  solicitação na primeira nota — então toda `VINCULADO` de produção ou não teve nota processada desde o vínculo, ou foi
+  ligada a pedido já parcialmente recebido (o que entrou antes **não é dela**). Nos dois casos o livro certo é vazio.
+  Descartado: backfill na criação do schema atribuindo o recebido atual do par às `VINCULADO` em ordem de id (gravaria
+  linhas sem `movimentacao_id`, que nenhum estorno desfaria, e daria à solicitação o recebido de antes do vínculo — o I2
+  de volta).
+- **B354 — `SOLICITADO_RECEBIDO` por solicitação.** Revoga o "todas as solicitações do mesmo (pedido, material) fecham
+  juntas" da D1/B343: com o livro, a solicitação cujos itens já chegaram fecha sozinha (6 + 4 num pedido de 10, nota de 6
+  → a de 6 `RECEBIDA`, a de 4 `VINCULADO`). `MATERIAL_COMPLETO` continua fechando o par inteiro.
+- **B355 — o "a caminho" de uma `VINCULADO` cujo material já completou no pedido é 0; fora isso, sem teto pelo saldo.**
+  **Divergência declarada da instrução do orquestrador**, que pedia `a_caminho = max(0, min(solicitado − atribuído, saldo
+  do pedido no material))` em geral. Medido: o `MIN` geral **revoga a D2/B344** e derruba o **(7a)** da Etapa 14
+  (`solicitacaoCicloVida`: solicitação de 100 num pedido de 5 "segura a posição inteira enquanto VINCULADO") e o
+  **passo 4** de `integracaoComprasJornada` (20 num pedido de 5) — regra de negócio que esta etapa declarou não mexer.
+  O fantasma (I3) é o caso saldo = 0, e esse está coberto: o vínculo novo é recusado e o legado conta 0 (é o estado em
+  que a solicitação ficaria ao fechar por `MATERIAL_COMPLETO` na próxima nota). Descartado: o `MIN` geral (revisitável:
+  trocar `materialCompleto ? 0 :` em `posicaoDasSolicitacoes` por um teto distribuído em ordem de id).
+- **B356 — vincular a pedido com o material já completo é recusado (400, literal acima).** Descartado: aceitar e contar
+  0 (a solicitação ficaria `VINCULADO` a um pedido que nunca a fecharia por quantidade).
+
+### Letra C (a T5 transcreve)
+
+- **C118 — S5, não corrigido:** o dedupe do `verificar-minimos` corta a `VINCULADO` fora do horizonte (60 dias) mesmo
+  com o pedido vivo; a sonda S5 abre uma segunda solicitação de 10 com o pedido de 10 ainda `pendente` e nada recebido
+  (compra em dobro). É o reverso da (7b) da T1 ("pedido esquecido não bloqueia para sempre"); decidir qual dos dois vale
+  é regra de negócio, fora do fix-round.
+- Item sem `movimentacao_entrada_id` (a griffagem da Etapa 71 falhou com `warn`) não escreve o livro: a solicitação fecha
+  por `MATERIAL_COMPLETO` ou fica com o "a caminho" a mais até o comprador agir. Declarado.
+- Re-vincular uma `VINCULADO` a outro pedido carrega o livro dela (o que chegou para ela pelo primeiro pedido continua
+  dela). Declarado.
+
+### Testes
+
+- **Novo** `server/tests/api/solicitacaoLivroAtribuicao.api.test.js` — 11/11: (S1) rota, (S1-servico) gancho rodando de
+  novo não atribui em dobro, (S1-aprovar) a segunda porta escreve o livro, (S2) rota **e** serviço com a literal,
+  (S2-legado), (S3) rota, (S3-servico), (S4) rota, (S4-servico) por `stockService.cancelarMovimentacao`, (S6) rota,
+  (S6-servico) estorno chamado de novo não negativa em dobro.
+- **Mudaram, com motivo:** `solicitacaoFechaPorMaterial` (1)(3) — a trilha ganhou `recebido_atribuido`; **(3b)** — a de 6
+  fecha sozinha com a nota de 6 (B354); **(8)** — idem com a nota de 7, a posição do material é só a de 4 `[1, 3]`.
+  `relatorioSolicitacoesChegou` (2) — nota de 7 → nota de 5 (com a de 7 a de 6 fecharia e sairia da aba; com 5 as duas
+  ficam e o teste continua separando o atribuído `[5, 0]` do recebido do par). `solicitacaoPorMaterialIntegracao` (A3) —
+  `recebido_atribuido` na trilha. **Nenhum teste da 14 ou da 71 mudou.**
+- Sabotagens (harness `e72f5-sab.sh`/`e72f5-sabK.sh` no scratchpad, perl `-0pi` com âncora contada = 1, backup
+  `e72f5-*.bkp`, restauro por cópia com md5 conferido, `node --check`, suíte parada): (A) livro sem o "até o que falta" →
+  (S1)(3)(8); (B) sem a idempotência por movimentação → (S1-servico); (C) vínculo sem a recusa do material completo →
+  (S2); (D) sem o 0 do material completo → (S2-legado); (E) atribuído calculado do par (o defeito antigo) → 8 testes,
+  entre eles (S1)(S3)(S3-servico); (F) livro atribuindo notas de outros recebimentos do pedido (a nota anterior ao
+  vínculo) → (S4)(S4-servico)(9); (G) estorno sem mexer no livro → (S4)(S6)(S6-servico) + (1)(2) da T2 + (A4)(A6) da T4;
+  (H) estorno negativando em dobro → (S6-servico); (I) `SOLICITADO_RECEBIDO` do par junto → (3b)(8); (J) `/processar`
+  sem `recebimentoId` → 20 testes; (K) `/aprovar` direto sem `recebimentoId` → (S1-aprovar).
+- **Commit `f192901`.** Suítes: `test:api` 270/270, `test:almoxarifado` 44/0, validation 4, safealter 3, sqlite 5; client `ReposicaoAlmoxarifado` 48/48 e `CI=true` build ok (o cliente não mudou). Numa rodada anterior da suíte o `indicadoresSpec27Integracao` caiu 3 testes de "prazo HOJE" perto de 01:00 local (virada de data) e passou isolado e na rodada seguinte — flaky de data, não toca a solicitação.
