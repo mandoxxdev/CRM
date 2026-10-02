@@ -51,11 +51,11 @@ function capturarWarn(fn) {
     "INSERT INTO fornecedores (razao_social, cnpj, status) VALUES ('Fornecedor E42 T2','55666777000188','ativo')");
 
   let seq = 0;
-  async function novoMaterial() {
+  async function novoMaterial(unidade = 'PC') {
     seq += 1;
     const m = await dbRun(db, `INSERT INTO materiais_almoxarifado
-      (codigo, nome, unidade, quantidade_atual, ativo) VALUES (?,?,'PC',0,1)`,
-    [`MAT-E42T2-${String(seq).padStart(3, '0')}`, `Chapa E42 T2 ${seq}`]);
+      (codigo, nome, unidade, quantidade_atual, ativo) VALUES (?,?,?,0,1)`,
+    [`MAT-E42T2-${String(seq).padStart(3, '0')}`, `Chapa E42 T2 ${seq}`, unidade]);
     return m.lastID;
   }
 
@@ -85,16 +85,19 @@ function capturarWarn(fn) {
    * mao. E o caminho que o operador percorre, e e o unico jeito de provar que o gancho roda DENTRO
    * do claim da entrada fisica e nao num atalho de teste.
    */
-  async function receberPeloFluxo(pedido, itensDaTela, { valorNota = 100 } = {}) {
+  async function receberPeloFluxo(pedido, itensDaTela, { valorNota = 100, autorizarExcedente = false } = {}) {
     setUser(ADMIN);
+    // `autorizar_excedente` so viaja quando pedido (Etapa 71, cenario (10)): nos outros cenarios o
+    // corpo continua EXATAMENTE o de antes.
+    const exc = autorizarExcedente ? { autorizar_excedente: true } : {};
     const criado = await request(app).post('/api/almoxarifado/recebimentos').send({
-      tipo_recebimento: 'PEDIDO_COMPRA', pedido_compra_id: pedido.id, itens: itensDaTela,
+      tipo_recebimento: 'PEDIDO_COMPRA', pedido_compra_id: pedido.id, itens: itensDaTela, ...exc,
     });
     assert.strictEqual(criado.status, 201, `POST /recebimentos: ${JSON.stringify(criado.body)}`);
     const recId = criado.body.id;
 
     const conf = await request(app).put(`/api/almoxarifado/recebimentos/${recId}/conferir`)
-      .send({ itens: itensDaTela });
+      .send({ itens: itensDaTela, ...exc });
     assert.strictEqual(conf.status, 200, `PUT /conferir: ${JSON.stringify(conf.body)}`);
 
     for (const acao of ['encaminhar_compras', 'finalizar_compras', 'iniciar_faturamento']) {
@@ -104,7 +107,7 @@ function capturarWarn(fn) {
     const fiscal = await request(app).put(`/api/almoxarifado/recebimentos/${recId}/fiscal`).send({
       nota_fiscal: `NF-E42T2-${recId}`, fornecedor_id: forn.lastID,
       fornecedor_nome: 'Fornecedor E42 T2', data_emissao_nf: '2026-09-01',
-      data_entrada_nf: '2026-09-02', valor_total_nota: valorNota, itens: itensDaTela,
+      data_entrada_nf: '2026-09-02', valor_total_nota: valorNota, itens: itensDaTela, ...exc,
     });
     assert.strictEqual(fiscal.status, 200, `PUT /fiscal: ${JSON.stringify(fiscal.body)}`);
     return recId;
@@ -530,6 +533,77 @@ function capturarWarn(fn) {
 
     assert.strictEqual(await statusDoPedido(pedido.id), 'recebido',
       'chegou MAIS que o pedido e ele nao fechou — o gancho esta comparando por igualdade em vez de usar a regua');
+  });
+
+  // ── (10) Etapa 71, T0 (RN-09): UMA regua para "completo" — o excedente cruzado NAO fecha ──────
+  //
+  // ⚠️ Defeito ANTERIOR (Etapa 42), medido na Fase 0 da 71 (sonda 71b). A revisao adversarial da 42
+  // corrigiu o excedente cruzado na LEITURA (3o argumento de `derivarRecebimentoDoPedido`,
+  // `saldo_por_material` em `SOMA_POR_PEDIDO_SQL`), mas o PROPRIO fechamento continuava chamando a
+  // regua com 2 argumentos: nota de 25 de A num pedido A(10)+B(10), com excedente autorizado, gravava
+  // `recebido` com a situacao derivada `PARCIAL` saldo 10 — fora de `?atrasados=1`, fora do alerta de
+  // parcial (status decidido) e fora de `?pendentes=1`, com a rota de itens oferecendo os 10 de B. A
+  // Etapa 71 precisa da regua unica porque a reabertura decide "fechava antes / nao fecha depois".
+  await test('(10) RN-09 excedente de A (25 de 10) com 0 de B NAO fecha o pedido; chegando os 10 de B, fecha', async () => {
+    const matA = await novoMaterial();
+    const matB = await novoMaterial();
+    const { pedido, linhas } = await novoPedido({ status: 'enviado', itens: [
+      { material_id: matA, quantidade: 10, valor_unitario: 1 },
+      { material_id: matB, quantidade: 10, valor_unitario: 1 },
+    ] });
+
+    const rec1 = await receberPeloFluxo(pedido, [itemDaTela(matA, linhas[0].id, 25)],
+      { autorizarExcedente: true, valorNota: 25 });
+    assert.strictEqual((await processar(rec1)).status, 200);
+    assert.strictEqual(await saldoDoMaterial(matA), 25, 'fixture: os 25 de A tinham de entrar');
+
+    assert.strictEqual(await statusDoPedido(pedido.id), 'enviado',
+      'o excesso de A pagou a falta de B e o fechamento gravou recebido — a regua do fechamento '
+      + 'nao e a mesma da leitura (2 argumentos em vez de 3)');
+    const situacao = (await receiptService.situacaoDosPedidosCompra(db)).find((l) => l.id === pedido.id);
+    assert.strictEqual(situacao.situacao_recebimento, 'PARCIAL', JSON.stringify(situacao));
+    assert.strictEqual(situacao.saldo_pendente, 10, JSON.stringify(situacao));
+    const pend = await request(app).get('/api/almoxarifado/recebimentos-aux/pedidos-compra?pendentes=1');
+    assert.ok(pend.body.some((p) => p.id === pedido.id),
+      'o pedido com os 10 de B faltando sumiu de ?pendentes=1 — o filtro compara a soma do PEDIDO');
+    assert.ok(!(await auditoriasDoPedido(pedido.id)).some((a) => a.acao === 'STATUS_AUTOMATICO_RECEBIDO'),
+      'trilha de fechamento gravada para um pedido que nao fechou');
+
+    // A metade POSITIVA: os 10 de B chegam (sem excedente) e o pedido fecha pela mesma regua.
+    const rec2 = await receberPeloFluxo(pedido, [itemDaTela(matB, linhas[1].id, 10)], { valorNota: 10 });
+    assert.strictEqual((await processar(rec2)).status, 200);
+    assert.strictEqual(await statusDoPedido(pedido.id), 'recebido',
+      'chegaram os 10 de B e o pedido nao fechou — a regua por material ficou estrita demais');
+    const pend2 = await request(app).get('/api/almoxarifado/recebimentos-aux/pedidos-compra?pendentes=1');
+    assert.ok(!pend2.body.some((p) => p.id === pedido.id), 'o pedido completo continuou em ?pendentes=1');
+  });
+
+  // ── (11) Etapa 71, T0 (Fase 2): a barreira do POST com float — 0,1 + 0,2 de 0,3 KG ─────────────
+  //
+  // Defeito ANTERIOR medido na revisao do plano da 71 (sonda 71r-b): `assertSaldoDoPedidoPermitido`
+  // comparava `recebidaTotal > saldoMaterial` sem epsilon, e o saldo de 0,3 - 0,1 e
+  // 0.19999999999999998 — a nota com EXATAMENTE o que falta tomava 400 "maior que o saldo do pedido
+  // (0.19999999999999998)" e so passava com autorizacao de excedente. A reabertura da 71 desconta
+  // por subtracao REAL, entao "a proxima nota espera o que falta" (RN-10) depende disto em KG.
+  await test('(11) RN-10 float na barreira: pedido de 0,3 KG, nota de 0,1 e depois a de 0,2 passa SEM excedente e fecha', async () => {
+    const mat = await novoMaterial('KG');
+    const { pedido, linhas } = await novoPedido({ itens: [{ material_id: mat, quantidade: 0.3, valor_unitario: 1 }] });
+    const rec1 = await receberPeloFluxo(pedido, [itemDaTela(mat, linhas[0].id, 0.1)]);
+    assert.strictEqual((await processar(rec1)).status, 200);
+    assert.notStrictEqual(0.3 - 0.1, 0.2, 'este cenario depende de 0.3 - 0.1 !== 0.2 neste runtime');
+
+    // A metade NEGATIVA primeiro: o epsilon nao pode virar folga — 0,21 continua acima do saldo.
+    setUser(ADMIN);
+    const acima = await request(app).post('/api/almoxarifado/recebimentos').send({
+      tipo_recebimento: 'PEDIDO_COMPRA', pedido_compra_id: pedido.id,
+      itens: [itemDaTela(mat, linhas[0].id, 0.21)],
+    });
+    assert.strictEqual(acima.status, 400, `0,21 contra saldo 0,2 tinha de ser recusado: ${JSON.stringify(acima.body)}`);
+
+    const rec2 = await receberPeloFluxo(pedido, [itemDaTela(mat, linhas[0].id, 0.2)]);
+    assert.strictEqual((await processar(rec2)).status, 200);
+    assert.strictEqual(await statusDoPedido(pedido.id), 'recebido',
+      'a nota de 0,2 entrou e o pedido de 0,3 nao fechou');
   });
 
   await close();

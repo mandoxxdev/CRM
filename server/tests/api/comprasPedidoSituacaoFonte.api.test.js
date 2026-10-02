@@ -155,6 +155,12 @@ function diasDeHoje(n) {
   //
   // O "completo" passou a ser medido na unidade que a escrita ja usa: soma dos deficits POR MATERIAL,
   // cada um clampado em zero antes de somar. Excesso de um material nao compensa falta de outro.
+  //
+  // ⚠️ ESTE COMENTARIO ESTAVA ERRADO ATE A ETAPA 71: ele dava como corrigidos o fechamento e o
+  // `?pendentes=1`, e so a LEITURA tinha sido. O cenario montava o estado por `UPDATE` e lia so
+  // `situacaoDosPedidosCompra` — passava com o fechamento (2 argumentos) e o filtro (soma do pedido)
+  // ainda errados. A T0 da 71 corrigiu os dois; o filtro agora e asserido aqui e o fechamento pelas
+  // seis portas no cenario (10) de `comprasPedidoStatusAutomatico`.
   await test('(1c) RN-E08 excedente de um material NAO paga o saldo de outro (deficit por material)', async () => {
     const matA = await novoMaterial();
     const matB = await novoMaterial();
@@ -180,12 +186,45 @@ function diasDeHoje(n) {
     // o que mudou e so a regua do "completo" e do saldo.
     assert.strictEqual(linha.quantidade_pedida, 20, JSON.stringify(linha));
     assert.strictEqual(linha.quantidade_recebida, 25, JSON.stringify(linha));
+    // Etapa 71, T0: o FILTRO tambem. Ate a 71 este cenario so lia `situacaoDosPedidosCompra`, e o
+    // `?pendentes=1` comparava `soma_recebida < total_pedido` por PEDIDO (25 < 20 e falso) — o
+    // pedido com B faltando saia da aba de recebimento enquanto a leitura dizia PARCIAL.
+    const pendentes = await request(app).get('/api/almoxarifado/recebimentos-aux/pedidos-compra?pendentes=1');
+    assert.ok(pendentes.body.some((p) => p.id === r.body.id),
+      'o pedido com os 10 de B faltando sumiu de ?pendentes=1 — o filtro ainda usa a soma do PEDIDO');
 
     // E a metade POSITIVA: chegando os 10 de B, agora fecha.
     await dbRun(db, 'UPDATE itens_pedido_compra SET quantidade_recebida = 10 WHERE id = ?', [linhas[1].id]);
     const fechado = (await receiptService.situacaoDosPedidosCompra(db)).find((l) => l.id === r.body.id);
     assert.strictEqual(fechado.situacao_recebimento, 'RECEBIDO', JSON.stringify(fechado));
     assert.strictEqual(fechado.saldo_pendente, 0, JSON.stringify(fechado));
+    const pendentes2 = await request(app).get('/api/almoxarifado/recebimentos-aux/pedidos-compra?pendentes=1');
+    assert.ok(!pendentes2.body.some((p) => p.id === r.body.id),
+      'o pedido completo continuou em ?pendentes=1');
+  });
+
+  // ── (1d) Etapa 71, T0: o `?pendentes=1` com FLOAT (2,2 + 17,9 de 20,1) ─────────────────────────
+  //
+  // O (1b) prende a REGUA com float; nenhum cenario prendia o FILTRO. A clausula antiga
+  // (`soma_recebida < total_pedido`) mantinha o pedido fisicamente completo em `?pendentes=1`
+  // (20.099999999999998 < 20.1), contradizendo a leitura (RECEBIDO saldo 0). A nova
+  // (`saldo_por_material > EPSILON_DIVERGENCIA`) e a mesma regua do resto.
+  await test('(1d) RN-09 ?pendentes=1 com float: 2,2 + 17,9 de 20,1 sai do filtro; 2,2 de 20,1 fica', async () => {
+    const { pedido } = await novoPedido({ quantidade: 20.1 });
+    const linhaId = await linhaDo(pedido.id);
+    const noFiltro = async () => (await request(app)
+      .get(`/api/almoxarifado/recebimentos-aux/pedidos-compra?pendentes=1&search=${encodeURIComponent(pedido.numero)}`))
+      .body.some((p) => p.id === pedido.id);
+
+    await receber(linhaId, 2.2);
+    assert.strictEqual(await noFiltro(), true, 'o parcial de 2,2 sumiu de ?pendentes=1');
+
+    await dbRun(db, 'UPDATE itens_pedido_compra SET quantidade_recebida = quantidade_recebida + ? WHERE id = ?',
+      [17.9, linhaId]);
+    const soma = (await dbGet(db, 'SELECT quantidade_recebida AS q FROM itens_pedido_compra WHERE id = ?', [linhaId])).q;
+    assert.notStrictEqual(soma, 20.1, `este cenario depende do residuo de float no SQLite; deu ${soma}`);
+    assert.strictEqual(await noFiltro(), false,
+      `o pedido fisicamente completo (${soma} de 20,1) continuou em ?pendentes=1 por residuo de float`);
   });
 
   // ── (2) O CORACAO: 51 PARCIAIS, AS DUAS FONTES NO MESMO BANCO ───────────────────────────────

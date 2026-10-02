@@ -826,7 +826,12 @@ function assertSaldoDoPedidoPermitido(user, resolvidos, linhas, autorizado) {
     const doMaterial = linhas.filter((l) => String(l.material_id) === chave);
     const saldoMaterial = doMaterial.reduce((s, l) => s + l.saldo, 0);
     const { recebidaTotal } = grupo;
-    if (recebidaTotal > saldoMaterial) {
+    // Etapa 71 (Fase 2, defeito anterior medido por sonda): EPSILON, e o mesmo dono de "zero para
+    // efeito pratico" do resto do modulo. Sem ele, pedido de 0,3 KG com nota de 0,1 deixava saldo
+    // 0.19999999999999998, e a nota com EXATAMENTE o que falta (0,2) tomava 400 "maior que o saldo
+    // do pedido" — so passava com autorizacao de EXCEDENTE, gravando trilha de excedente sobre o que
+    // nao excedeu. O epsilon e 1e-9: folga de ruido, nunca de quantidade (0,21 contra 0,2 recusa).
+    if (recebidaTotal > saldoMaterial + EPSILON_DIVERGENCIA) {
       // O codigo que o operador reconhece: o do cadastro do material, senao o que o Compras
       // digitou na linha do pedido, senao o id — nunca uma mensagem sem referencia nenhuma.
       const codigo = doMaterial[0].material_codigo || doMaterial[0].codigo || `#${chave}`;
@@ -1837,6 +1842,13 @@ function derivarRecebimentoDoPedido(quantidadePedida, quantidadeRecebida, saldoP
   // "completo" agregava por PEDIDO enquanto a regua da ESCRITA (`assertSaldoDoPedidoPermitido`)
   // agrega por MATERIAL — duas unidades de medida para a mesma pergunta.
   //
+  // ⚠️ ESTE COMENTARIO ESTAVA ERRADO ATE A ETAPA 71 ao dar o achado por corrigido: a 42 corrigiu so
+  // a LEITURA. O proprio fechamento (`fecharPedidosCompletos`) continuou chamando esta regua com 2
+  // argumentos e o `?pendentes=1` continuou comparando a soma do PEDIDO — medido na Fase 0 da 71
+  // (sonda 71b): status `recebido`, situacao `PARCIAL` saldo 10, fora de `?pendentes=1`. A T0 da 71
+  // levou o 3o argumento ao fechamento e o saldo por material ao filtro; os cenarios (10) de
+  // `comprasPedidoStatusAutomatico` e (1c)/(1d) de `comprasPedidoSituacaoFonte` prendem as tres portas.
+  //
   // `quantidade_pedida` e `quantidade_recebida` continuam sendo os totais CRUS do pedido (so limpos
   // do ruido de float): elas sao o que a tela e o e-mail EXIBEM, e mostrar 20 pedidos quando o
   // pedido pediu 20 e o certo, mesmo que o saldo venha de outra conta.
@@ -1872,6 +1884,8 @@ function derivarRecebimentoDoPedido(quantidadePedida, quantidadeRecebida, saldoP
  * 25 de A num pedido A(10)+B(10), com excedente autorizado, fechava o pedido com B em ZERO, e a rota
  * de itens continuava oferecendo 10 de B com teto 10 — a mesma base afirmando "completo" e "faltam
  * 10". O cenario (1c) de `comprasPedidoSituacaoFonte` prende isto.
+ * ⚠️ (Etapa 71) A frase acima dava o achado por fechado e ESTAVA ERRADA: so a leitura usava a coluna;
+ * o fechamento automatico e o `?pendentes=1` so passaram a usa-la na T0 da 71.
  *
  * `MAX(a, b)` de DOIS argumentos e a funcao ESCALAR do SQLite (a agregada e a de um argumento so) — e
  * o que permite clampar linha a linha dentro da propria soma.
@@ -1921,9 +1935,15 @@ async function listarPedidosCompraAux(db, { search, pendentes } = {}) {
   // porque e o que o operador precisa cobrar.
   const apenasPendentes = pendentes === '1' || pendentes === 'true' || pendentes === true;
   if (apenasPendentes) {
+    // Etapa 71, T0: a ultima clausula e o SALDO POR MATERIAL (a mesma regua de
+    // `derivarRecebimentoDoPedido` com 3 argumentos), e nao mais `soma_recebida < total_pedido`.
+    // A comparacao por PEDIDO tinha dois defeitos medidos: o excesso de um material pagava a falta de
+    // outro (25 de A num A(10)+B(10) tirava o pedido do filtro com B faltando) e o residuo de float
+    // mantinha o pedido completo DENTRO (2,2 + 17,9 de 20,1). O epsilon e interpolado da constante —
+    // nunca reescrito.
     sql += ` AND (i.soma_recebida IS NULL OR i.soma_recebida = 0
       OR i.total_pedido IS NULL OR i.total_pedido = 0
-      OR i.soma_recebida < i.total_pedido)`;
+      OR i.saldo_por_material > ${EPSILON_DIVERGENCIA})`;
   }
   sql += ' ORDER BY p.created_at DESC LIMIT 50';
   const linhas = await dbAll(db, sql, params);
@@ -2033,10 +2053,15 @@ async function fecharPedidosCompletos(db, user, recebimentoId) {
     // A MESMA agregacao das duas rotas de leitura (`SOMA_POR_PEDIDO_SQL`), recortada a este pedido:
     // uma segunda soma escrita aqui divergiria da tela na primeira edicao, e "completo" passaria a
     // significar coisas diferentes no e-mail, na aba e neste UPDATE.
+    //
+    // ⚠️ Etapa 71, T0: com o `saldo_por_material` (3o argumento). Ate a 71 este SELECT lia so os dois
+    // totais e a regua corria com 2 argumentos — a correcao do excedente cruzado da 42 tinha chegado
+    // a LEITURA e nao a ESTE fechamento: 25 de A num A(10)+B(10) gravava `recebido` com B faltando.
     const soma = await dbGet(db,
-      `SELECT total_pedido, soma_recebida FROM (${SOMA_POR_PEDIDO_SQL}) WHERE pedido_id = ?`, [pedidoId]);
+      `SELECT total_pedido, soma_recebida, saldo_por_material FROM (${SOMA_POR_PEDIDO_SQL}) WHERE pedido_id = ?`,
+      [pedidoId]);
     const { situacao_recebimento: situacao } = derivarRecebimentoDoPedido(
-      soma?.total_pedido, soma?.soma_recebida);
+      soma?.total_pedido, soma?.soma_recebida, soma?.saldo_por_material);
     if (situacao !== 'RECEBIDO') continue;
 
     const r = await dbRun(db, `UPDATE pedidos_compra
