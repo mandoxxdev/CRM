@@ -1,6 +1,8 @@
 # Etapa 71 — o pedido de compra que reabre quando a entrada é estornada (feature 08, B161)
 
-> Status: **T0–T4 FEITAS (2026-10-01).** Próximo passo: T5 (fechamento, skill `fechar-etapa`). Ordem original: Fase 2 (revisão do plano por agente
+> Status: **T0–T4 FEITAS (2026-10-01); Fase 5 (fix-round da revisão) FEITA (2026-10-02) — `9a442f1`, `2335c52`,
+> `a9696f3`.** Próximo passo: T5 (fechamento, skill `fechar-etapa`), levando as decisões da Fase 5 (seção no fim) para
+> as letras B/C. Ordem original: Fase 2 (revisão do plano por agente
 > fresco), depois T0 → T1 → T2 (tronco), T3 (galho) em paralelo à T2, T4 (integração), T5 (fechamento).
 > Feature 08 (recebimento), item (4) da lista "o que falta para 🟢" (`specs/modulo-almoxarifado/08-recebimento/README.md:3`):
 > *"o pedido que reabre — estornar a movimentação de entrada de um pedido já fechado não reverte `quantidade_recebida` nem
@@ -421,7 +423,7 @@ fechamento. Executores de galho **não** marcam este plano.
   literal de saldo (2), sem filtro de status (2), saldo 0 avisa (1), sem `toFixed` (1), `resp.data` não defensivo (1),
   filtro que engole tudo (3), catch genérico (1), `reaberto` ignorado (1); restauro por cópia com md5 conferido.
   Suíte do client 1141/1141 (74 suítes), `CI=true` build ok.
-- [x] **T4 (integração, cruza galhos) — FEITA** (commit "Etapa 71 T4"; hash no próximo commit do plano).
+- [x] **T4 (integração, cruza galhos) — FEITA** (`87fe520`).
   `pedidoReabreIntegracao.api.test.js` **10/10**, tudo pelas rotas (só a tabela CORE `contas_pagar` é fixture), com a
   conferência inteira (`iniciar_conferencia` → `PUT /conferir` → `finalizar_conferencia` → ... → `POST /processar`):
   **(A1–A5)** pedido `enviado`/vencido com **dois materiais** (MA 10 + MB 5) pela rota de Compras → nota inteira fecha
@@ -458,7 +460,9 @@ fechamento. Executores de galho **não** marcam este plano.
   reabre o pedido"; roteiro clicável: pedido → nota → processar → Movimentações → Estornar → Compras mostra o pedido de
   volta), letras B329–B338, **C107** (excedente cruzado fechava o pedido — defeito anterior corrigido na T0), **C108**
   (literal "material já consumido" no estorno de material retido — não corrigida), **A35**, D (71): o que o estorno não
-  desfaz (D6) e o e-mail que não repete (D7). Retro de 4 números.
+  desfaz (D6) e o e-mail que não repete (D7). Retro de 4 números. **Acrescentar da Fase 5:** as três decisões (letra B),
+  a correção do (2b)/D2 dizendo que estava errado, a trilha nova `STATUS_MANUAL_ALTERADO` no guia (filtro "Mudança
+  manual de status do pedido" na Auditoria) e a literal nova do reprovado no roteiro de teste.
 
 ## Letra A — consulta para produção (A35)
 
@@ -543,3 +547,57 @@ no passado).
   reescrever a recebida depois do PROCESSADO (anterior, só API) → letra C; reabertura após fechamento manual usa a
   trilha do primeiro fechamento automático → declarado; corrida estorno × processar: o UPDATE do fechamento automático
   repete a régua no WHERE.
+
+## Fase 5 — fix-round da revisão da etapa (2026-10-02): 2 importantes, 1 menor → 3 commits
+
+Sondas da revisão (`sonda71f-reprovado.js`, `sonda71f-amao.js`, `sonda71f-nfserie.js`, scratchpad da sessão) viraram os
+cenários (12)–(14b) de `server/tests/api/pedidoReabreNoEstorno.api.test.js` (**36/36**). Cada um ficou vermelho antes do
+conserto pelo motivo certo (9 falhas no RED, as mesmas que as sondas mostravam).
+
+- [x] **IMPORTANTE — o reprovado saía duas vezes** (`9a442f1`). A guarda da Fase 2 só olhava `quantidade_em_inspecao`; a
+  reprovação zera isso e passa o retido para `quantidade_bloqueada` com NC aberta → o estorno passava. Sem lote: 60 → 50
+  pelo estorno → 40 pela devolução da NC (físico real 50). Com lote: a NC ficava presa (`Saldo insuficiente no lote`).
+  **Decisão (reversível, letra B):** recusar o estorno de `ENTRADA_COMPRA` cujo item do recebimento tem **qualquer**
+  inspeção com `quantidade_reprovada > 0` (mesma resolução de item da guarda do em_inspecao: vínculo da T1 ou par legado
+  sem dono). Literal nova, 400: **`Esta entrada teve <q> <un> reprovado(s) na inspeção — o reprovado sai pela não
+  conformidade; esta entrada não pode ser estornada`** (q = soma do reprovado, 6 casas). Inspeção só com aprovado continua
+  estornável. Descartado: estornar só a parte aprovada (uma movimentação por item — partir o estorno é motor novo) e
+  liberar o bloqueado no estorno (apagaria a NC aberta). Cenários (12)/(12b) sem/com lote (400, nada muda, a NC devolve e
+  o saldo fecha em 50, e depois da devolução continua recusado), (12c) 6 aprovados/4 reprovados → literal com 4, (12d)
+  metade positiva.
+- [x] **IMPORTANTE — o fechamento à mão era desfeito pelo estorno** (`2335c52`). Comprador marca *Recebido* com 6 de 10;
+  outra nota completa; o estorno dela reabria para `pendente` (contra a RN-E03); e sem trilha automática o destino caía em
+  `pendente` — o defeito que o `81a734c` dizia descartar. **Medido:** a porta manual (`PATCH
+  /api/compras/pedidos/:id/status` → `pedidoCompraService.alterarStatusPedido`) **não era auditada** — gravava só a coluna.
+  **Decisão (reversível, letra B):** (a) o PATCH passa a gravar `STATUS_MANUAL_ALTERADO` em `auditoria_log_almoxarifado`
+  (`dados_anteriores`/`dados_novos` com o status, autor `req.user`), **só quando o status muda**, não-fatal; rótulo
+  **"Mudança manual de status do pedido"**; (b) `destinoDaReabertura` só devolve destino quando o **último** registro de
+  status do pedido (`ORDER BY id DESC` entre `STATUS_AUTOMATICO_RECEBIDO`, `STATUS_AUTOMATICO_REABERTO`,
+  `STATUS_MANUAL_ALTERADO`) é o fechamento automático; senão `null` → o estorno só desconta a linha e responde `reaberto:
+  false`; (c) **o fallback "sem trilha → `pendente`" saiu** (trilha automática ilegível ainda cai em `pendente`: o
+  fechamento automático é certo, só o "de onde" se perdeu). **Limite declarado:** mudança manual feita antes deste deploy
+  não tem rastro — num pedido fechado pelo automático e reescrito à mão antes dele, o estorno ainda reabre. Descartado:
+  comparar `updated_at` com a data da trilha (outras escritas tocam a coluna; resolução de segundo).
+  **A Fase 2 estava errada** no ponto "reabertura após fechamento manual usa a trilha do primeiro fechamento automático →
+  declarado" e no (2b), que **prendia** "fechado à mão sem trilha reabre para `pendente`" como correto — o (2b) mudou de
+  asserção (agora `reaberto: false`, status `recebido`), dito no commit. `comprasPedidoStatusAutomatico` e
+  `recebimentoFechaPedidoIntegracao` contavam toda trilha do pedido como trilha do gancho; o PATCH das fixtures agora deixa
+  linha própria → os helpers excluem `STATUS_MANUAL_ALTERADO` (nenhuma asserção mudou). Cenários (13) 6 de 10 à mão,
+  (13b) automático → manual `pendente` → manual `recebido` (trilha na ordem exata), (13c) sem trilha nenhuma, (13d) PATCH
+  sem mudança não grava e o estorno reabre (metade positiva), (13e) rótulo na `GET /almoxarifado/auditoria`.
+- [x] **MENOR — `''` legado na NF relançável** (`a9696f3`). O filtro "nenhum item ainda por entrar" usava
+  `COALESCE(quantidade_recebida, quantidade_esperada)`: o `''` não é NULL, o `CAST` virava 0 e o documento com item
+  esperando perdia a NF (relançamento 201). Agora usa `QTD_DO_ITEM_SQL` (espelho de `quantidadeDoItem`, Etapa 70),
+  exportada de `receiptNotificationService`. Cenários (14) `''` esperando → 409 e o 0 conferido → 201; (14b) NF com série
+  relançada duas vezes com estorno entre elas e a terceira viva → 409 (a outra metade da sonda, que já passava).
+
+**Controle positivo** (`e71f5-sabota.sh`: `perl -0pi`, âncora contada == 1, backup `$TMP/e71f5-*`, `node --check`,
+restauro por cópia com md5 conferido em todas): S1 sem a guarda do reprovado → (12)(12b)(12c); S2 guarda que recusa tudo
+→ (12d) e 29 outros; S3 manual fora da lista de trilhas → só (13b); S4 fallback `pendente` de volta → só (13c); S5 PATCH
+sem trilha → (13)(13b)(13e); S6 PATCH que grava sem mudança → só (13d); S7 `COALESCE` puro na NF → só (14); S8 sem o
+rótulo → (13e) + `auditLabels` "TODO verbo gravável tem rótulo". Cada commit intermediário conferido numa worktree:
+`9a442f1` 29/29, `2335c52` 34/34 no arquivo.
+
+**Suíte:** api **265/265**, almoxarifado 44/44, validation 4/4, safealter 3/3, sqlite 5/5. Client não rodado: nenhum
+arquivo do client mudou — a literal nova do reprovado chega pelo `toast.error` genérico do catch (já testado na T3 com a
+literal do em_inspecao), e o toast já lê `reaberto`.
