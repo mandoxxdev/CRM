@@ -66,7 +66,9 @@ const MSG_PEDE_SUCATEAMENTO = 'Esta não conformidade pede sucateamento: o almox
 const MSG_LOTE_BLOQUEADO = (l) => `O lote ${l} está bloqueado (Certificado do fornecedor nao anexado): libere o lote para sucatear o reprovado, ou registre a execução sem baixa informando o motivo.`;
 const MSG_SUC_ABERTO = (id) => `Já existe o sucateamento SUC-${id} desta não conformidade aguardando aprovação no almoxarifado.`;
 const MSG_ESTORNO = 'Sucateamento de material reprovado não pode ser estornado pelo livro — o material voltaria ao estoque disponível com a não conformidade dizendo que foi sucateado';
-const MSG_JA_SUCATEADA = 'O material desta inspeção já havia sido sucateado — a execução foi registrada sem mover saldo';
+// Fase 5 (fix-round): a literal nova do lote sem saldo.
+const MSG_LOTE_SEM_SALDO = (l, s, q) => `O lote ${l} tem ${s} KG em estoque, menos que o reprovado (${q}) — o reprovado já saiu do lote; registre a execução sem baixa informando o motivo`;
+const MSG_JA_SUCATEADA ='O material desta inspeção já havia sido sucateado — a execução foi registrada sem mover saldo';
 
 (async () => {
   console.log('\n=== Etapa 69 T7: sucatear o reprovado ponta a ponta (rotas) ===\n');
@@ -339,6 +341,39 @@ const MSG_JA_SUCATEADA = 'O material desta inspeção já havia sido sucateado �
     const doc = ok(await como(ADMIN).get(`${API}/nao-conformidades/${c.ncId}`), 200, 'GET NC');
     assert.strictEqual(doc.execucao_estado, 'PENDENTE', 'o comum mexeu na NC');
     assert.ok((await ncsPendentes()).includes(c.ncId), 'o comum tirou a NC da fila');
+  });
+
+  // ── Fix-round da Fase 5 (achados 1 e 2 da revisao adversarial, sondas 69f) ──────────────────
+  const stock = require('../../services/almoxarifado/stockService');
+
+  await test('(11) Fase 5: o lote do reprovado ja sem saldo -> solicitar e /executar recusam ensinando; motivo_sem_baixa registra sem baixa', async () => {
+    const E3 = await novaLoc('Prateleira');
+    const c = await ateNcDecidida({ entradaEm: E3 });
+    ok(await como(QUALIDADE).put(`${API}/lotes/${c.loteId}/status`).send({ status: 'ATIVO', justificativa: 'certificado conferido' }), 200, 'lote ATIVO');
+    // Fixture (a sonda 69f-lote-beco): outro lote do mesmo material entra com 5, e uma SAIDA leva os
+    // 10 do lote do reprovado. O agregado continua "viavel" (fisico 5 >= 3, bloqueado 3 >= 3), mas
+    // o LOTE do reprovado esta zerado — o motor recusaria so na segunda assinatura.
+    await stock.registrarMovimentacao(db, ADMIN, { material_id: c.materialId, tipo: 'ENTRADA', quantidade: 5, justificativa: 'outro lote', lote: cod('L0') });
+    await stock.registrarMovimentacao(db, ADMIN, { material_id: c.materialId, tipo: 'SAIDA', quantidade: 10, justificativa: 'consumo', lote_id: c.loteId });
+    assert.strictEqual(await saldoLote(c.materialId, c.loteId), 0, 'a fixture nao zerou o lote do reprovado');
+    const s0 = await saldos(c.materialId);
+    assert.deepStrictEqual([s0.quantidade_atual, s0.quantidade_bloqueada], [5, 3], JSON.stringify(s0));
+
+    const r = await executar(c.ncId);
+    assert.strictEqual(r.status, 409, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, MSG_LOTE_SEM_SALDO(c.loteCod, 0, 3));
+    const sol = await solicitar(c.ncId);
+    assert.strictEqual(sol.status, 400, JSON.stringify(sol.body));
+    assert.strictEqual(sol.body.error, MSG_LOTE_SEM_SALDO(c.loteCod, 0, 3));
+    const nSuc = await dbGet(db, 'SELECT COUNT(*) n FROM sucateamentos_almoxarifado WHERE nao_conformidade_id = ?', [c.ncId]);
+    assert.strictEqual(nSuc.n, 0, 'a solicitacao foi criada mesmo com o lote sem saldo — duas assinaturas gastas para o motor recusar');
+    assert.ok((await ncsPendentes()).includes(c.ncId), 'as recusas tiraram a NC da fila');
+
+    const ex = ok(await executar(c.ncId, { motivo_sem_baixa: 'o lote foi consumido antes do sucateamento' }), 200, '/executar com motivo_sem_baixa');
+    assert.strictEqual(ex.execucao_estado, 'EXECUTADA', JSON.stringify(ex));
+    assert.ok(!(await ncsPendentes()).includes(c.ncId), 'o registro sem baixa nao tirou a NC da fila');
+    const s1 = await saldos(c.materialId);
+    assert.deepStrictEqual([s1.quantidade_atual, s1.quantidade_bloqueada], [5, 3], 'o registro sem baixa moveu saldo');
   });
 
   await close();

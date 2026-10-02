@@ -329,7 +329,7 @@ async function solicitarDoReprovado(db, user, ncId, payload = {}) {
     insp = await ncs.getInspecao(db, doc.referencia_id);
     if (insp && insp.material_id) {
       material = await dbGet(db, 'SELECT * FROM materiais_almoxarifado WHERE id = ?', [insp.material_id]);
-      lote = await ncs.resolverLoteDaInspecao(db, insp, insp.material_id);
+      lote = await ncs.carregarLoteDoReprovado(db, insp, material);
     }
     aberto = await ncs.sucateamentoAbertoDaNc(db, doc.id);
   }

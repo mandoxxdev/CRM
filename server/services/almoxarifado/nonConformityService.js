@@ -183,6 +183,8 @@ const execRecusaLoteForaDeAtivo = (lote) => ({
   status: 409,
   mensagem: `O lote ${lote.codigo} está ${String(lote.status || '').toLowerCase()} (${lote.status_motivo || 'sem motivo registrado'}): libere o lote para sucatear o reprovado, ou registre a execução sem baixa informando o motivo.`,
 });
+/** Etapa 69 (fix-round da Fase 5, achado 1) — o lote do reprovado ja nao cobre a reprovada. */
+const msgLoteSemSaldo = (lote, un, reprovada) => `O lote ${lote.codigo} tem ${Math.round((Number(lote.saldo_em_estoque) || 0) * 1e6) / 1e6} ${un} em estoque, menos que o reprovado (${reprovada}) — o reprovado já saiu do lote; registre a execução sem baixa informando o motivo`;
 
 /**
  * Etapa 69 (RN-03/RN-04) — as recusas da SOLICITACAO do sucateamento do reprovado, NA ORDEM do
@@ -1032,6 +1034,25 @@ async function resolverLoteDaInspecao(db, insp, materialId) {
   return null;
 }
 
+/**
+ * Etapa 69 (fix-round da Fase 5, achado 1) — o lote do reprovado COM o saldo que o motor vai conferir
+ * na segunda assinatura: a soma das linhas > 0 do lote (`claimSaldoDoLote`). `saldo_em_estoque = null`
+ * quando o motor nao confere (material ou config global com saldo negativo permitido). Consumido pelas
+ * DUAS portas (solicitacao e `/executar` de SUCATEAR), para nao divergirem.
+ */
+async function carregarLoteDoReprovado(db, insp, material) {
+  if (!insp || !material) return null;
+  const lote = await resolverLoteDaInspecao(db, insp, material.id);
+  if (!lote) return null;
+  const stockService = require('./stockService');
+  const negativo = material.permite_saldo_negativo
+    || (await stockService.getConfig(db, 'permite_saldo_negativo_global')) === '1';
+  if (negativo) return { ...lote, saldo_em_estoque: null };
+  const r = await dbGet(db, `SELECT COALESCE(SUM(quantidade), 0) AS q FROM estoque_saldo_almoxarifado
+    WHERE material_id = ? AND lote_id = ? AND quantidade > 0`, [material.id, lote.id]);
+  return { ...lote, saldo_em_estoque: Number(r.q) || 0 };
+}
+
 /** Etapa 69 — o sucateamento `SOLICITADO` aberto desta NC (o UNIQUE parcial garante no maximo um). */
 function sucateamentoAbertoDaNc(db, ncId) {
   return dbGet(db, `SELECT id FROM sucateamentos_almoxarifado
@@ -1125,6 +1146,15 @@ function sucateamentoDoReprovadoPrevisto(nc, insp, material, lote, solicitadoAbe
       mensagem: `Não há saldo físico deste material para sucatear — físico ${Number(material.quantidade_atual) || 0} ${un}, reprovado ${reprovada}`,
     });
   }
+  // (16b) Etapa 69, fix-round da Fase 5 (achado 1): o agregado (15/16) nao ve o LOTE. Com o lote do
+  // reprovado ja sem saldo (saiu por SAIDA — o bloqueio e por material, nao por lote), a viabilidade
+  // dizia "viavel" para sempre, a solicitacao gastava duas assinaturas e o motor recusava na segunda
+  // ("Saldo insuficiente no lote"). `saldo_em_estoque` e carregado por `carregarLoteDoReprovado` com
+  // a MESMA regua do claim do motor (linhas > 0 do lote); `null` = o motor nao confere (saldo negativo
+  // permitido) ou chamador puro sem a leitura — nao recusa.
+  if (lote && lote.saldo_em_estoque != null && menosQue(lote.saldo_em_estoque, reprovada)) {
+    return recusa({ codigo: 'SEM_SALDO_LOTE', status: 400, mensagem: msgLoteSemSaldo(lote, un, reprovada) });
+  }
   if (solicitadoAberto) { // (17) a pre-checagem; o UNIQUE parcial e a garantia
     return recusa({
       codigo: 'JA_SOLICITADO', status: 409,
@@ -1154,6 +1184,9 @@ function efeitoExecucaoSucatear(nc, insp, material, lote, extra) {
   switch (p.codigo) {
     case 'LOTE_STATUS':
       return extra.motivoSemBaixa ? nada('SEM_BAIXA', EFEITO_EXEC_MSG.SEM_BAIXA) : recusa(execRecusaLoteForaDeAtivo(lote));
+    // Fase 5 (achado 1): o lote do reprovado ja sem saldo — mesmo tratamento do lote fora de ATIVO.
+    case 'SEM_SALDO_LOTE':
+      return extra.motivoSemBaixa ? nada('SEM_BAIXA', EFEITO_EXEC_MSG.SEM_BAIXA) : recusa({ status: 409, mensagem: p.mensagem });
     case 'SEM_REPROVADA': return nada('SEM_SALDO', EFEITO_EXEC_MSG.SEM_SALDO_SEM_REPROVADA_SUCATEAR);
     case 'JA_SUCATEADA': return nada('SEM_SALDO', EFEITO_EXEC_MSG.SEM_SALDO_JA_SUCATEADA);
     case 'JA_DEVOLVIDA': return nada('SEM_SALDO', EFEITO_EXEC_MSG.SEM_SALDO_JA_DEVOLVIDA);
@@ -1409,9 +1442,12 @@ async function registrarExecucao(db, user, ncId, dados = {}) {
     insp = await getInspecao(db, atual.referencia_id);
     if (insp?.material_id) {
       material = await dbGet(db, `SELECT id, codigo, unidade, ativo, quantidade_atual,
-        quantidade_bloqueada, controle_lote, controle_serie
+        quantidade_bloqueada, controle_lote, controle_serie, permite_saldo_negativo
         FROM materiais_almoxarifado WHERE id = ?`, [insp.material_id]);
-      lote = await resolverLoteDaInspecao(db, insp, insp.material_id);
+      // Fase 5: no SUCATEAR o lote vem com o saldo (nivel 16b); a devolucao (45) segue como era.
+      lote = atual.decisao === 'SUCATEAR'
+        ? await carregarLoteDoReprovado(db, insp, material)
+        : await resolverLoteDaInspecao(db, insp, insp.material_id);
     }
     if (atual.decisao === 'SUCATEAR') solicitadoAberto = await sucateamentoAbertoDaNc(db, id);
   }
@@ -1863,6 +1899,7 @@ module.exports = {
   retencaoDaInspecaoJaSaiu,
   origemDaEntradaDaInspecao,
   resolverLoteDaInspecao,
+  carregarLoteDoReprovado,
   getInspecao,
   sucateamentoAbertoDaNc,
   SUC_RECUSA,
