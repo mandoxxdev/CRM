@@ -746,7 +746,7 @@ Há dois jeitos de ler o QR. Pelo aplicativo de câmera do celular, ele abre o n
 | **Materiais** | em cada linha. Material **sem** controle de lote nem de série abre o modal direto, com a etiqueta simples do material. Material **com** um dos dois controles **leva você para Lotes e Séries**, já naquele material — porque a etiqueta certa de um material controlado é a do lote ou da série específicos, não uma etiqueta genérica |
 | **Lotes e Séries** | em cada linha de lote e em cada linha de série — inclusive séries já entregues ou sucateadas, para reimprimir uma via danificada |
 | **Lotes e Séries → aba Séries** | botão no topo, **"Etiquetas das séries em estoque"**, que gera uma etiqueta para cada série em estoque daquele material de uma vez |
-| **Recebimentos** | botão **"Imprimir etiquetas dos itens"**, na nota já processada — gera uma etiqueta por série (material serializado), ou uma por lote (material com controle de lote), ou uma do material |
+| **Recebimentos** | botão **"Imprimir etiquetas dos itens"**, na nota já processada — gera uma etiqueta por série (material serializado), ou uma por lote (material com controle de lote), ou uma do material. Item que chegou **zero** (conferido com 0) não ganha etiqueta |
 | **Sobras e Retalhos** | botão **Etiqueta** em cada linha de retalho; além disso, ao **gerar um retalho** o modal de impressão abre sozinho com a etiqueta daquele retalho — imprimir é opcional |
 | **Configurações → Localizações** | botão **Etiqueta** em cada linha (a etiqueta daquela posição) e **Etiquetas (N)** no topo, que gera uma etiqueta para cada posição listada |
 
@@ -2400,6 +2400,24 @@ Tentar pular etapa é recusado com a mensagem nomeando a situação atual — po
 
 O botão abre a janela **Processar nota fiscal**, com a pergunta *"Processar nota fiscal? Isso dará entrada no estoque e gerará contas a pagar."* e a lista dos itens que vão entrar, cada um com o **endereço de destino** — a regra completa está em 14.3b. **Confirmar** dá a entrada; **Cancelar** fecha sem mexer em nada.
 
+**Quanto entra de cada item.** Entra a quantidade **conferida** (14.2b). Item conferido com **0** — chegou zero — **não**
+entra no estoque e não aparece na lista da janela; a nota é processada do mesmo jeito com os outros itens, e a
+divergência do item zero continua registrada na não conformidade de quantidade. Item **sem** quantidade conferida
+(campo deixado em branco) entra com a quantidade **esperada**.
+
+**Uma nota é processada uma vez só.** Processar de novo uma nota já processada é recusado com *"Nota já processada"*.
+E se dois processamentos da mesma nota começarem ao mesmo tempo (dois cliques, duas abas, duas pessoas), o segundo é
+recusado com:
+
+> *"Esta nota já está sendo processada"*
+
+— a nota fica *Processado* com **uma** conta a pagar. A trava dura enquanto o processamento roda; se um processamento
+for interrompido no meio (queda do servidor), ela se desfaz sozinha em 10 minutos e a nota pode ser processada de
+novo — o que já tinha entrado não entra duas vezes.
+
+**Depois de processar, dois avisos por e-mail podem sair** — ao solicitante de cada requisição que esperava o material,
+e o aviso da nota para uma lista; as regras estão em 21c.1.
+
 ### 14.2b Conferir a quantidade que chegou
 
 Enquanto o recebimento está com o almoxarifado — situações **RECEBIDO** e **EM_CONFERENCIA** —, cada item do painel de detalhe mostra **duas** quantidades e tem um campo para registrar a contagem física:
@@ -2421,6 +2439,14 @@ Registrar quantidade diferente da esperada também **dispara o aviso de divergê
 Se a abertura do documento falhar por qualquer motivo, **a conferência é salva do mesmo jeito**: o material chegou, e travar o registro por causa do documento deixaria saldo real fora do sistema. O item continua aparecendo no cartão *"Divergência de recebimento"* da central de alertas, que é exatamente a rede de segurança para esse caso (15b.7).
 
 **Campo vazio não é zero.** Deixar "Qtd. conferida" em branco significa *"não contei este item"*: o sistema preserva a quantidade que já estava gravada e **não** desmarca a conferência que outra pessoa já tenha feito naquele item. Isso importa quando se salva a contagem de um item e os outros ficam em branco — os outros não são zerados nem desmarcados.
+
+**E zero é zero.** Digitar **0** significa *"contei e não chegou nada"*: o item fica com quantidade recebida 0, a
+divergência aparece, e no processamento ele **não** entra no estoque (14.2). A mesma régua vale em todo lugar que grava
+a quantidade recebida — ao criar o recebimento, ao salvar a conferência e ao salvar os dados fiscais: em branco ou só
+espaços é "não informado"; um número (inclusive escrito como texto, *" 4 "*) é gravado como número; qualquer outra coisa
+é recusada antes de gravar nada:
+
+> *"quantidade_recebida deve ser um número"*
 
 **O campo só existe nessas duas situações.** Depois que o documento sai do almoxarifado, a quantidade já é base de custo médio e de conta a pagar, e corrigi-la pelo painel seria mexer no passado sem deixar rastro.
 
@@ -5151,6 +5177,32 @@ falha do servidor de e-mail nunca trava uma movimentação, uma devolução ou u
   > depois. Se o pedido for completado nesse intervalo, o e-mail já estava na fila e **sai de todo
   > jeito** — ele era verdade quando foi escrito. Basta conferir o pedido na aba Compras: lá o estado
   > é sempre o de agora.
+- **Material chegou para a sua requisição** (aviso ao solicitante) — quando uma nota é processada (ou o recebimento é
+  aprovado direto) e um material **entrou disponível** (não retido para inspeção), o **solicitante** de cada requisição
+  que o esperava recebe **um** e-mail. "Esperava" é decidido **item a item**: a requisição está ativa, numa situação de
+  onde ainda se separa — **exceto Em separação** (o almoxarife já está com ela) —, e tem item daquele material com
+  **pendente de separação maior que o que já está reservado para o item**. Um e-mail por requisição por nota, para o
+  e-mail do cadastro do usuário; usuário inativo ou sem e-mail não recebe (sem erro). **Ligado de fábrica**, pela chave
+  *"Avisar o Solicitante quando o Material Chega"* (21c.6). Assunto *"[Almoxarifado] Chegou material da sua requisição
+  REQ-…"*; o corpo diz a requisição, a situação dela, o recebimento e, por material, quanto entrou e quanto está
+  pendente na requisição, e termina com *"O material ainda não está reservado para a sua requisição — a separação é
+  feita pelo almoxarifado."* — a requisição **não** muda de situação sozinha (continua, por exemplo, *Aguardando
+  compra*). O link abre a lista **Minhas Requisições** do módulo de onde a requisição saiu (Comercial, Compras,
+  Fábrica, …); sem módulo de origem, a lista de requisições do almoxarifado. Material que entrou **retido para
+  inspeção** não gera este aviso — ele ainda pode ser reprovado. Uma requisição que continua esperando recebe um aviso
+  **a cada nota** daquele material.
+- **Entrada de recebimento** (aviso da nota) — um e-mail **por nota** que deu entrada no estoque, com o recebimento, a
+  nota fiscal, o fornecedor, o pedido de compra (quando há), data/hora, quem processou, cada item que entrou com a
+  quantidade, o endereço e *"disponível"* ou *"retido para inspeção"*, e as requisições que aguardavam aqueles
+  materiais (com o nome de quem pediu). Item que chegou **zero** não aparece; nota em que nada entrou não gera aviso.
+  **Desligado de fábrica**, pela chave *"Avisar Entrada de Recebimento por E-mail"* (21c.6). Assunto *"[Almoxarifado]
+  Entrada confirmada — REC-…"*, seguido de *" — NF …"* quando a nota tem número. O link abre a lista de Recebimentos.
+  Processar a mesma nota de novo não manda outro; estornar depois uma entrada da nota **não** corrige o aviso já
+  enviado.
+
+Os dois avisos de recebimento são montados **depois** que a nota termina de entrar e **nunca** atrapalham o
+processamento: se falharem, a nota fica processada do mesmo jeito. Só a nota processada (ou o recebimento aprovado
+direto) os gera — entrada avulsa, devolução ao estoque, retorno de terceiro e a liberação de material retido não.
 
 O que **não** gera aviso de movimentação, de propósito: reservas e liberações, envio e retorno
 de remessa a terceiro (a remessa tem o aviso próprio de vencida) e os ajustes aplicados pela
@@ -5168,6 +5220,11 @@ o e-mail de movimentação que cairia nela). Família **com** lista própria ign
 destino foi escolhido explicitamente. As solicitações de compra usam a lista própria de compras
 e não dependem do checkbox de alertas.
 
+O **aviso da nota** (entrada de recebimento) vai para a lista **"Destinatários — Entrada de Recebimento"**; vazia, para
+a lista de **Compras** e, sem ela, para a lista geral de e-mails de Compras. Tudo vazio: o aviso da nota não é gerado
+(sem erro), e o aviso ao solicitante sai do mesmo jeito — ele vai para o e-mail de quem pediu, não para uma lista.
+Nenhum dos dois depende do checkbox de alertas.
+
 Atenção ao volume com a chave de movimentações ligada: cada item de um fluxo em lote gera um
 e-mail — entregar uma requisição de 10 itens gera 10 avisos.
 
@@ -5184,7 +5241,8 @@ depois de um reenvio manual.
 
 Em **Almoxarifado → Notificações** (perfis Gestor e Administrador; os demais recebem a recusa
 de permissão — a tela mostra o motivo, nunca uma lista vazia): três cartões com o total de
-**pendentes, enviadas e falhas** do conjunto inteiro, filtros por status e por evento, e cada
+**pendentes, enviadas e falhas** do conjunto inteiro, filtros por status e por evento (os avisos de recebimento
+aparecem no filtro como **"Entrada de recebimento"** e **"Aviso ao requisitante"**), e cada
 linha com destinatários, tentativas, o motivo literal da última falha e as datas de criação e
 envio. Filtro de status inválido pela API responde:
 
@@ -5207,13 +5265,15 @@ não há e-mail de correção — o livro de movimentações é a fonte da verda
 
 ### 21c.6 As configurações — e a validação
 
-Em **Configurações → Configurações Gerais**: a chave liga/desliga (**só aceita 0 ou 1** — outro
-valor é recusado com `Configuração "notificar_movimentacoes" deve ser 0 ou 1`), o intervalo do
+Em **Configurações → Configurações Gerais**: as chaves liga/desliga — **"Notificar movimentações por e-mail"**,
+**"Avisar Entrada de Recebimento por E-mail"** (desligada de fábrica) e **"Avisar o Solicitante quando o Material
+Chega"** (ligada de fábrica) —, que **só aceitam 0 ou 1** (outro valor é recusado com `Configuração "<chave>" deve ser
+0 ou 1`, por exemplo `Configuração "notificar_movimentacoes" deve ser 0 ou 1`), o intervalo do
 processador da fila em minutos e o máximo de tentativas (**número inteiro maior que zero** —
 `Configuração "<chave>" deve ser um número inteiro maior que zero`), as janelas em dias — lote
 vencendo, calibração, quarentena parada, reserva parada e eventos — (`Configuração "<chave>"
-deve ser um número de dias maior que zero`) e as cinco listas
-de destinatários (texto livre). Mudar o **intervalo do processador** só passa a valer depois de
+deve ser um número de dias maior que zero`) e as listas
+de destinatários (texto livre) — inclusive **"Destinatários — Entrada de Recebimento"**, a do aviso da nota. Mudar o **intervalo do processador** só passa a valer depois de
 reiniciar o sistema; o espaçamento das retentativas muda imediatamente.
 
 **As credenciais têm uma tela só, e é de propósito.** A **senha do servidor de e-mail (SMTP)** e a

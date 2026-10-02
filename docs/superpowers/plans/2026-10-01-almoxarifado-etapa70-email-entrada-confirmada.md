@@ -1,7 +1,9 @@
 # Etapa 70 — o aviso da nota que entrou no estoque (feature 08, com a 19)
 
-> Status: **T0–T4 feitas e a Fase 5 (fix-round da revisão de execução) feita (2026-10-01) — falta a T5 (fechamento).**
-> Último commit da Fase 5: `e8f503c`. Ver a seção "Fase 5" antes da letra A.
+> Status: **FECHADA (2026-10-01).** T0, T0b, T1–T4, Fase 5 e T5 (fechamento) feitas. Commits: `faa8f65` (T0), `0d8bcfa`
+> (T0b), `5aaa5c1` (T1), `a2db931` (T2), `b90e228` + `4778f76` (T3), `585e384` (T4), `f039576`, `b5f51c0`, `e8f503c`,
+> `eb6c614` (Fase 5) e o commit de documentação do fechamento. **Próxima: Etapa 71 — ver "Próxima tarefa detalhada"
+> no fim.**
 > Feature 08 (recebimento), item *"E-mail automático na entrada confirmada (feature 19)"*
 > (`specs/modulo-almoxarifado/08-recebimento/README.md:780`), com a infraestrutura da 19 (fila
 > `fila_notificacoes_almoxarifado`). Requisito: especificação original seção 8.4 (*"… Atualização do saldo → E-mail
@@ -458,7 +460,7 @@ T2 em worktree); **T4** (integração) depois de T2; **T5** fechamento. Executor
   `RECEBIMENTO_ENTRADA_REQUISITANTE` (para o solicitante), e a solicitação de compra virou `RECEBIDA`; (5) reprocessar
   → 400 e a fila igual; (6) a requisição continua `AGUARDANDO_COMPRA` e **é separável** (`/separar` 200) — o aviso não
   quebrou o gesto seguinte; (7) a mesma jornada **pelo serviço** (`aprovarRecebimento` ramo direto) com outro material.
-- [ ] **T5 (fechamento) — skill `fechar-etapa`.** Spec 08: item `[x]` com hashes **e** a correção dizendo que o
+- [x] **T5 (fechamento) — skill `fechar-etapa`. FEITA** (commit de documentação do fechamento): novidades (seção 70, A34, B316–B328, C101–C106, D (70), F (70), G82–G83), spec 08 (item `[x]` com hashes **e** a frase "Desmarcado: é da feature 19 … não foi tocado" corrigida à vista como ERRADA), spec 19 (item novo na cobertura de eventos, réguas de dedupe, última atualização), mapa (cabeçalho, linhas 08 e 19), guia (cabeçalho 70 entregue · 71 começando, seção 70 com roteiro), manual (14.2, 14.2b, 21c.1, 21c.2, 21c.4, 21c.6). O comentário de `nonConformityService.js:20` já tinha sido corrigido no fechamento da 69 (`f63a8fb`). *Texto original:* Spec 08: item `[x]` com hashes **e** a correção dizendo que o
   *"Desmarcado: é da feature 19 … não foi tocado"* estava errado (o `MOVIMENTACAO` cobria a entrada desde `77d1f38`);
   spec 19: linha nova na tabela de eventos + o `[ ]` de "destinatários por tipo de evento" ganha a nota "o recebimento
   ganhou lista própria"; mapa; guia (Antes → Agora, roteiro clicável: ligar/desligar, processar, ver no painel);
@@ -594,3 +596,74 @@ Nada é retroativo: só notas processadas **depois** do deploy avisam.
   "retido" lido na retomada reflete o estado atual (declarado); T3 nasce do commit da T1 (o teste
   `configuracoesGerais.api.test.js:91-104` lê o `CAMPOS` do cliente); SMTP desligado gera FALHA + FALHA_NOTIFICACAO
   (ruído declarado); o guia explica "Chegou" com a requisição ainda "Aguardando compra".
+
+## Divergências do plano (registradas, não escondidas)
+
+1. **O plano tinha UMA chave, ligada** (D3 original). A Fase 2 mediu produção (três endereços reais em Compras, SMTP
+   configurado) e virou **duas**: `notificar_recebimento_entrada` `'0'` e `notificar_recebimento_solicitante` `'1'`
+   (B318). O texto da RN-07 ("`'0'` → nenhum dos dois") não vale mais: cada chave governa o seu aviso.
+2. **O critério do D4 estava errado** ("só `AGUARDANDO_*`") — a requisição com um item com saldo fica
+   PARCIALMENTE_RESERVADA e nunca seria avisada. Virou **por item** (B319).
+3. **O link do requisitante** do contrato (`/almoxarifado/requisicoes`) quebrava para quem pede de outro módulo — virou
+   o `basePath` do `modulo_origem` (B324).
+4. **Duas tasks novas antes do tronco** (T0, T0b): o "chegou zero" (defeito anterior, CRÍTICO da Fase 2) e o claim do
+   processamento (a corrida gravava o aviso errado e a conta a pagar saía em dobro — a Surpresa 5 era real).
+5. **A T0 estava incompleta** — cobria o INSERT e deixava as duas portas de UPDATE (`/conferir`, `/fiscal`) gravarem
+   `''` como texto; a Fase 5 achou e pagou (`f039576`).
+6. **A T4 deixou de fora** o item (7) (a jornada pelo serviço no `aprovarRecebimento` direto) — o ramo direto já tem
+   cenário pela rota na T2.
+
+## Verificação final (medida no fix-round da Fase 5, sem código depois)
+
+api **262/262**, almoxarifado **44/0**, validation **4/0**, safealter **3/0**, sqlite **5/0**; client **74 suítes /
+1132 testes**; `CI=true npx react-scripts build` ok.
+
+## Retro (4 números)
+
+- **Rodadas de correção até verde:** 1 (o fix-round da Fase 5).
+- **Achados de revisão:** Fase 2 — 14 (1 crítico que era **defeito anterior real**: o "chegou zero"; 5 importantes;
+  8 menores), **0 ruído**. Fase 5 — 1 importante + 2 menores reais, **0 ruído**.
+- **Paralelismo:** T3 (tela) e T4 (integração) em paralelo, sem retrabalho; a revisão de código só depois de as duas
+  terminarem (lição da 68/69: o revisor não pode ler arquivo que um executor está sabotando).
+- **Defeito que escapou da Etapa 69:** nenhum conhecido.
+
+## Próxima tarefa detalhada — Etapa 71: o pedido de compra que reabre quando a entrada é estornada (B161, feature 08)
+
+**Por que esta.** Com o e-mail pago, a feature 08 tem dois itens para 🟢: a **conferência física estruturada** (fora
+por decisão do design desde a Etapa 5) e **o pedido que reabre** — a limitação que a Etapa 42 criou e a letra B
+chama de *"o item de maior atenção desta lista"* (**B161**): estornar a `ENTRADA_COMPRA` de um pedido já fechado deixa o
+pedido *Recebido* com saldo que não fecha e **nenhum sinal** (fora dos atrasados, do alerta de parcial e da lista de
+pendentes do Recebimento). É estado silencioso errado, e a recuperação hoje depende de alguém lembrar de mudar o
+status à mão. Pagar leva a 08 a 🟢 com a conferência física declarada como corte. Os outros candidatos ficam para
+depois: o aviso ao requisitante na **liberação da inspeção** (mesmo serviço da 70, outro gancho — pequena), OS/projeto
+no modal de sucateamento de material de cliente (69, D (69)), a auditoria do aprovar direto (G82).
+
+**Fase 0 da 71 — medir antes de prometer:**
+1. **O acumulador do pedido**: `itens_pedido_compra.quantidade_recebida` só soma (`receiptService.js:~1474`, dentro do
+   claim de `darEntradaEstoque`, por `pedido_item_id`). O estorno (`stockService.cancelarMovimentacao`, `~2193`) de uma
+   `ENTRADA_COMPRA` com `recebimento_id` sabe chegar à linha do pedido? (movimentação → `recebimento_id` +
+   `material_id`/`recebimento_item_id`? → item do recebimento → `pedido_item_id`). Medir com o nome das colunas.
+2. **O fechamento automático** (`fecharPedidosCompletos`, `receiptService.js:~2012`, Etapa 42) e a derivação
+   (`derivarRecebimentoDoPedido` `~1824`, `situacaoDosPedidosCompra` `~2120`): o que lê, o que grava
+   (`pedidos_compra.status = 'recebido'` + auditoria), e o que acontece com o status manual do comprador
+   (`PATCH /api/compras/pedidos/:id/status`, `routes/compras.js:260`, Etapa 39) — reabrir automaticamente não pode
+   atropelar uma decisão manual (ex.: comprador marcou *Recebido* de propósito com saldo aberto).
+3. **Quem mais muda o saldo físico de uma entrada de pedido sem estorno**: devolução ao fornecedor (`DEVOLUCAO_FORNECEDOR`,
+   Etapa 45 — devolver material reprovado **reabre** o pedido? a especificação de compras espera reposição?), sucata do
+   reprovado (69). Decidir por porta (letra B) — a B161 fala de estorno e devolução.
+4. **Sinais que hoje somem**: lista de atrasados, alerta `PEDIDO_COMPRA_PARCIAL`, `?pendentes=1` do Recebimento — o
+   que cada um lê, para o pedido reaberto voltar a aparecer nos três.
+
+**Contratos que não se reabrem:** a entrada atômica e idempotente da nota (claim por item, Etapas 5/36); o claim
+`processando_em` (70); o fechamento automático **só sobe** para quem não estornou (Etapa 42); o status manual do
+comprador (39); o motor de estorno (recusas e literais existentes).
+
+**Pontos de atenção.**
+- Escolha reversível (letra B): **subtrair do acumulador e reabrir o status** quando a conta deixa de fechar, ou
+  **só subtrair** (o pedido fica *Recebido* mas a situação derivada mostra saldo pendente e volta aos sinais). A
+  segunda não mexe no status do core — medir qual dos sinais lê o status e qual lê a derivação.
+- Idempotência do estorno: estornar duas vezes é recusado pelo motor — conferir que o decremento não dobra numa
+  corrida (o claim do `cancelado` é a régua).
+- Auditoria: a reabertura automática grava trilha como o fechamento grava.
+- Metade positiva no teste: pedido fechado → estorno de uma entrada → volta para os atrasados/parciais **e** um
+  estorno de entrada que **não** é de pedido não toca pedido nenhum.

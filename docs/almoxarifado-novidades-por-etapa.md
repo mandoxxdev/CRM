@@ -107,7 +107,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Trinta e três itens para rodar em produção ANTES do deploy — trinta são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Trinta e quatro itens para rodar em produção ANTES do deploy — trinta e um são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-01 (Etapa 70) de trinta e três para trinta e quatro**, com a **A34** — para quem o aviso de entrada de recebimento vai sair no dia do deploy, quais requisições seriam avisadas (e há quanto tempo esperam), e as notas antigas em que o item contado **zero** entrou no estoque com a quantidade esperada.)*
 
 *(**Atualizado em 2026-10-01 (Etapa 69) de trinta e dois para trinta e três**, com a **A33** — material reprovado esperando sucateamento, e o sucateamento comum que pode ter levado material bom no lugar do reprovado.)*
 
@@ -1102,7 +1104,62 @@ SELECT s.id AS sucateamento, s.status, s.quantidade, s.created_at, m.codigo, nc.
   justificativa citando o sucateamento) e, depois, o sucateamento **pela não conformidade**. Se o sucateamento comum foi
   de sobra legítima do mesmo material, não há nada a corrigir — a consulta só junta material e data, não prova o erro.
 
-### B. Decisões de negócio — B1 a B315; as em aberto esperam você, as tomadas estão escritas com o descartado
+**A34 (NOVA, da Etapa 70 — o aviso de entrada de recebimento e o "chegou zero" do passado: medir antes, nada é
+movido).** A partir desta etapa, processar uma nota pode mandar **dois** avisos por e-mail: um **da nota** (para uma
+lista — nasce **desligado**) e um **a cada solicitante** de requisição que esperava o material que entrou (nasce
+**ligado**). E o item conferido com **0** deixou de entrar no estoque com a quantidade esperada — o que entrou assim no
+passado continua no saldo. Três consultas:
+
+```sql
+-- (a) para quem o aviso DA NOTA iria, se alguém o ligar (a lista própria vazia cai na de Compras, depois na outra)
+SELECT chave, valor FROM configuracoes_almoxarifado
+ WHERE chave IN ('notificar_recebimento_entrada', 'notificar_recebimento_solicitante',
+                 'notificacoes_dest_recebimento', 'notificacoes_dest_compras', 'compras_notificar_emails',
+                 'alertas_smtp_host');
+
+-- (b) requisições que podem ser avisadas na próxima nota do material, há quanto tempo esperam, e quem não recebe
+SELECT r.numero, r.status, COALESCE(r.modulo_origem, 'almoxarifado') AS modulo,
+       CAST(julianday('now') - julianday(r.created_at) AS INTEGER) AS dias_desde_a_criacao,
+       u.email, COALESCE(u.ativo, 1) AS usuario_ativo
+  FROM requisicoes_almoxarifado r
+  LEFT JOIN usuarios u ON u.id = r.solicitante_id
+ WHERE COALESCE(r.ativo, 1) = 1
+   AND r.status IN ('APROVADO','AGUARDANDO_ESTOQUE','AGUARDANDO_COMPRA','PARCIALMENTE_RESERVADA',
+                    'TOTALMENTE_RESERVADA','PARCIALMENTE_ATENDIDA')
+ ORDER BY r.created_at;
+
+-- (c) itens CONTADOS ZERO de notas já processadas, com o que entrou daquele material pela nota
+SELECT r.numero, r.status, r.nota_fiscal, ri.id AS item_id, m.codigo, ri.quantidade_esperada, ri.quantidade_recebida,
+       (SELECT COALESCE(SUM(mv.quantidade), 0) FROM movimentacoes_almoxarifado mv
+         WHERE mv.recebimento_id = r.id AND mv.material_id = ri.material_id
+           AND mv.tipo = 'ENTRADA_COMPRA' AND COALESCE(mv.cancelado, 0) = 0) AS entrou_pela_nota
+  FROM recebimentos_material_itens_almoxarifado ri
+  JOIN recebimentos_material_almoxarifado r ON r.id = ri.recebimento_id
+  JOIN materiais_almoxarifado m ON m.id = ri.material_id
+ WHERE r.status IN ('PROCESSADO', 'APROVADO')
+   AND (ri.quantidade_recebida = 0
+        OR (typeof(ri.quantidade_recebida) = 'text' AND TRIM(ri.quantidade_recebida) = ''))
+ ORDER BY r.id;
+```
+
+**Como ler o resultado:**
+- **(a)** — se `notificar_recebimento_entrada` estiver `0` (o de fábrica), **nenhum** aviso da nota sai; quem o ligar
+  em Configurações manda para `notificacoes_dest_recebimento` ou, vazia, para a lista de Compras (na cópia de produção de
+  30/09 medida na revisão: a lista de Compras tem **três** endereços reais e o SMTP está configurado — ligar é decisão
+  de quem opera, por isso nasce desligado, **B318**). O aviso **ao solicitante** nasce **ligado**: vai só para o e-mail
+  de quem pediu.
+- **(b) com requisições de muitos dias** — são as que podem receber um e-mail **a cada nota** do material enquanto
+  ninguém as separar, encerrar ou cancelar (**C101**). Antes do deploy, vale encerrar ou cancelar as que ninguém mais
+  espera. Linha com `email` vazio ou `usuario_ativo = 0` **não** recebe aviso (sem erro).
+- **(c) vazia** — nada a fazer.
+- **(c) com `quantidade_recebida = 0` e `entrou_pela_nota` > 0** — **saldo possivelmente inflado**: até esta etapa, o
+  item conferido com zero entrava no estoque com a quantidade **esperada**. Conte o material na prateleira; se não está
+  lá, a correção é um **AJUSTE** negativo (com justificativa citando a nota). A não conformidade de quantidade daquela
+  conferência já registra a falta.
+- **(c) com `quantidade_recebida` em branco (texto vazio)** — nada a fazer: em branco é "não informado", e entrou a
+  esperada, que é a regra de hoje também.
+
+### B. Decisões de negócio — B1 a B328; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-01 de B295 para B315**, com as vinte da Etapa 69.)*
 
@@ -4562,6 +4619,86 @@ quebraria no dia em que a redação mudasse). (2) O botão **Solicitar sucateame
 de inspeção** (para os outros, o servidor recusaria sempre). (3) Na fila de sucateamentos, a origem **NC-…** aparece
 como selo na célula do Material, sem link (a tela de Não Conformidades não abre por número).
 
+**B316 (NOVA, da Etapa 70) — o "e-mail na entrada confirmada" é pago como "aviso DA NOTA + aviso a quem esperava".**
+**O que foi escolhido:** ao processar uma nota, **um** aviso por nota (NF, fornecedor, pedido, itens, quanto entrou, o
+que ficou retido para inspeção) e **um** aviso a cada solicitante de requisição que esperava o material. O e-mail por
+movimentação de 2026-08 (um por item, desligado de fábrica) **continua igual**, ao lado. **Descartado:** dar o item
+como pago por aquele e-mail por movimentação (ele chega só às listas do almoxarifado, um por item, sem dizer de que
+nota veio e sem avisar quem esperava) e transformá-lo em "um por nota" (mudaria um aviso que já existe e está em uso).
+
+**B317 (NOVA, da Etapa 70) — para quem vai o aviso da nota.** Lista própria **"Destinatários — Entrada de
+Recebimento"**; vazia, a lista de **Compras** (e, sem ela, a lista geral de e-mails de Compras). O interruptor de
+**Alertas de Estoque** não governa este aviso. **Descartado:** o comprador do pedido e o solicitante da solicitação de
+compra que a especificação nomeia — **o banco não tem nenhum dos dois** (medido); e a lista de entradas do
+almoxarifado (outra plateia, sob outro interruptor).
+
+**B318 (NOVA, da Etapa 70; mudada na revisão do plano) — dois interruptores: o aviso da nota nasce DESLIGADO, o aviso ao
+solicitante nasce LIGADO.** O plano tinha um interruptor só, ligado. A revisão mediu, numa cópia de produção, que a
+lista de Compras tem **três endereços reais** e o SMTP está configurado: ligado de fábrica, o primeiro processamento
+depois do deploy mandaria e-mail a três pessoas sem ninguém ter pedido. O aviso **da nota** vai para uma lista
+compartilhada — ligar é decisão de quem opera. O aviso **ao solicitante** vai só para quem pediu o material — é o
+valor desta etapa, e nasce ligado. **Descartado:** um interruptor só (ligado ou desligado), e os dois desligados (a
+funcionalidade nasceria inerte, como o e-mail por movimentação).
+
+**B319 (NOVA, da Etapa 70; mudada na revisão do plano) — quem "esperava o material", item a item.** **Escolhido:** a
+requisição ativa em qualquer situação de onde ainda se separa — exceto **Em separação** (o almoxarife já está com ela)
+— que tem **item** do material que entrou **livre** nesta nota com **pendente de separação maior que o que já está
+reservado para o item**. Um aviso por requisição por nota. Solicitante sem e-mail ou inativo: sem aviso, sem erro.
+**Descartado:** só as requisições "Aguardando compra/estoque" (o plano original) — a revisão mostrou que uma requisição
+com um item que tinha saldo e outro que não tinha fica **Parcialmente reservada** e nunca seria avisada; e mudar a
+situação da requisição sozinha (a máquina de estados não se autocorrige, e a Fila de separação já é o canal do
+almoxarife).
+
+**B320 (NOVA, da Etapa 70) — material retido para inspeção.** O aviso da nota lista o item com *"retido para
+inspeção"*; o solicitante **não** é avisado por material retido. **Descartado:** avisar o solicitante já na entrada
+retida — prometeria material que ainda pode ser reprovado. Avisar quando a inspeção **libera** é outra porta (falta,
+D (70)).
+
+**B321 (NOVA, da Etapa 70) — quando e de onde sai o conteúdo.** O aviso é montado **depois** de a nota virar
+*Processado* (ou *Aprovado*, no aprovar direto), sem derrubar nada se falhar (o processamento responde como sempre), e
+o conteúdo é **lido do banco** (todo item que já entrou), não do que aquele clique moveu — a retomada depois de uma
+falha no meio lista a nota inteira. **Descartado:** montar no meio da entrada (uma falha no status deixaria aviso de
+nota não processada).
+
+**B322 (NOVA, da Etapa 70) — estornar uma entrada da nota não corrige o aviso.** O aviso da nota e o do solicitante
+continuam como foram enviados (o do e-mail por movimentação continua sendo suprimido se ainda não saiu). **Descartado:**
+suprimir ou corrigir — uma nota de 10 itens com 1 estornado não deixou de entrar, e ligar o estorno ao recebimento é
+etapa própria.
+
+**B323 (NOVA, da Etapa 70) — o painel de Notificações filtra os dois avisos novos**, com os rótulos *"Entrada de
+recebimento"* e *"Aviso ao requisitante"*. **Descartado:** deixá-los fora do filtro (a lista do filtro é fixa — o evento
+novo ficaria invisível nela).
+
+**B324 (NOVA, da Etapa 70, revisão do plano) — o link do aviso ao solicitante abre a lista do MÓDULO de onde a
+requisição saiu** (Comercial → `/comercial/requisicoes-material`, Fábrica → `/fabrica/requisicoes-material`, …; sem
+módulo, a lista de requisições do almoxarifado). **Descartado:** sempre o almoxarifado — quem pediu pelo Comercial não
+tem acesso ao módulo e cairia em "sem acesso". O mapa de caminhos do servidor é cópia do da tela, amarrada por teste.
+
+**B325 (NOVA, da Etapa 70) — material de cliente avisa igual; e a linha "Requisições que aguardavam estes materiais"
+do aviso da nota lista quem espera qualquer material que entrou, livre ou retido.** O aviso da nota é para Compras e o
+almoxarifado (que precisam saber quem espera o retido); só o aviso **ao solicitante** exige material livre.
+**Descartado:** excluir material de cliente (nada na regra o distingue: quem pediu quer saber que chegou).
+
+**B326 (NOVA, da Etapa 70; defeito ANTERIOR corrigido) — "chegou zero" é zero.** Até aqui, o item conferido com **0**
+entrava no estoque com a quantidade **esperada** (a tela deixa digitar 0 de propósito; o servidor tratava 0 como "não
+informado"). Agora: **0 = chegou zero** (não entra; a não conformidade de quantidade continua); **em branco ou só
+espaços = não informado** (entra a esperada, como sempre); texto que não é número é recusado com *"quantidade_recebida
+deve ser um número"*, antes de gravar qualquer coisa — nas três portas que gravam a quantidade (criar, salvar a
+conferência, salvar os dados fiscais). A tela usa a **mesma régua** no Processar, no contador de séries e nas
+etiquetas. **Descartado:** aceitar e gravar o texto (a coluna guardava `''` e o item era pulado calado, com a tela
+dizendo que entraria a esperada — achado da revisão do código). O passado está na **A34 (c)**.
+
+**B327 (NOVA, da Etapa 70) — dois "Processar Nota" ao mesmo tempo: o segundo é recusado.** Uma marca no recebimento
+diz que ele está sendo processado; o segundo clique recebe *"Esta nota já está sendo processada"* (antes, os dois
+passavam e a nota gerava **duas contas a pagar** — medido). A marca vence em **10 minutos** (sem isso, um processamento
+que morre no meio travaria a nota para sempre) e tem **dono**: só quem a pôs a tira, e quem a perdeu (processamento de
+mais de 10 minutos assumido por outro) não gera conta a pagar. **Descartado:** uma situação nova "Processando" (mexeria
+em telas e listas), e renovar a marca a cada item (estreita a janela sem fechá-la — **C104**).
+
+**B328 (NOVA, da Etapa 70, Fase 5) — as etiquetas da nota usam a mesma régua do processamento**: item contado zero não
+ganha etiqueta. **Descartado:** imprimir só o que tem a marca de entrada no estoque — nota processada antes de essa
+marca existir ficaria sem etiqueta nenhuma, e numa nota processada todo item com quantidade maior que zero entrou.
+
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -5769,6 +5906,41 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      fica registrada na segunda aprovação."*). Quem é do **Compras** ou da **Qualidade** não consegue solicitar (não
      movimenta estoque): precisa pedir ao almoxarifado. **O que fazer:** avisar a Qualidade e o Compras.
 
+101. **NOVO, da Etapa 70 — requisição esquecida recebe um e-mail a cada nota do material.** O aviso ao solicitante sai
+     uma vez **por nota**: enquanto a requisição continuar esperando (ninguém separou, encerrou nem cancelou), cada nova
+     entrada daquele material manda outro e-mail ao mesmo solicitante. Não há corte por idade (**B319**). **O que
+     fazer:** rodar a **A34 (b)** e encerrar ou cancelar as requisições que ninguém mais espera.
+
+102. **NOVO, da Etapa 70 — o e-mail diz "Chegou", e a requisição continua "Aguardando compra".** A situação da
+     requisição **não muda sozinha** quando o material entra (decisão, **B319**): o material está no estoque, mas não
+     reservado para ela — e o e-mail diz isso (*"O material ainda não está reservado para a sua requisição — a
+     separação é feita pelo almoxarifado."*). O almoxarife vê a requisição como acionável na **Fila de separação**.
+     **O que fazer:** explicar ao solicitante que o próximo passo é do almoxarifado.
+
+103. **NOVO, da Etapa 70 — sem servidor de e-mail configurado, os avisos novos viram falha (e o aviso de falha).** Cada
+     aviso tenta 5 vezes, com espera crescente, vira **falha** e gera **um** aviso de falha ao administrador — que
+     também falha. O painel de Notificações mostra essas linhas. **O que fazer:** configurar o SMTP em **Configurações →
+     Alertas de Estoque** e usar **Reenviar** (na produção medida, o SMTP já está configurado).
+
+104. **NOVO, da Etapa 70 — processamento de nota que passa de 10 minutos.** A marca de "em processamento" vence em 10
+     minutos: se o processamento durar mais e alguém clicar de novo, o segundo assume e termina a nota; o primeiro,
+     ao perceber, não gera conta a pagar (sai **uma** só) e responde *"Esta nota já está sendo processada"*. O que
+     sobra: o aviso de entrada daquela nota pode sair do segundo antes de o primeiro terminar o item que estava
+     processando — e o aviso não se corrige. Na prática uma nota não leva 10 minutos (simulado, não medido). **O que
+     fazer:** nada; se acontecer, conferir os itens da nota no livro de movimentações (**B327**).
+
+105. **NOVO (anterior à Etapa 70, só pela API) — salvar a conferência com "status: APROVADO" aprova sem dar entrada.**
+     A rota de conferência aceita mudar a situação para *Aprovado*; o recebimento fica aprovado **sem** o material ter
+     entrado, e depois **Processar** responde *"Nota já processada"* — o material nunca entra. A tela não manda isso.
+     **O que fazer:** integrações não devem mudar a situação pela conferência; se um recebimento aparecer *Aprovado* sem
+     movimentação de entrada, é este caso.
+
+106. **NOVO, da Etapa 70 — mudanças para quem processa nota.** (1) Item com **"Qtd. conferida" = 0** não entra mais no
+     estoque (antes entrava a esperada — **B326**, **A34 (c)**); em branco continua sendo "não contei", e entra a
+     esperada. (2) Clicar **Processar** duas vezes, ou de duas telas, recusa o segundo com *"Esta nota já está sendo
+     processada"*. (3) Ao processar, o solicitante de cada requisição que esperava o material recebe e-mail (ligado de
+     fábrica); o aviso da nota para a lista só sai se alguém ligar. **O que fazer:** avisar o almoxarifado.
+
 
 
 ### D. Limitações declaradas — são decisão, não esquecimento
@@ -6538,6 +6710,19 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   (**B298**).
 - **(69) O sucateamento continua sem e-mail** — o aviso por e-mail do sucateamento é da feature de notificações
   (decisão da Etapa 9).
+- **(70) Só a nota processada avisa.** Entrada avulsa, devolução ao estoque, retorno de terceiro e a liberação de
+  material retido (pela inspeção ou pela não conformidade) **não** mandam o aviso de entrada nem o aviso ao solicitante.
+  O mais sentido é a **liberação da inspeção**: o solicitante que esperava material crítico não é avisado quando ele é
+  liberado (mesmo serviço, outro gancho — próxima candidata).
+- **(70) O comprador do pedido e o solicitante da solicitação de compra não recebem** — o banco não guarda nenhum dos
+  dois (a especificação os nomeia). O aviso da nota vai para uma **lista** (**B317**).
+- **(70) A requisição não muda de situação quando o material chega** — continua *Aguardando compra*; o almoxarife a vê
+  na Fila de separação (**B319**, **C102**).
+- **(70) Estornar a entrada não corrige o aviso já enviado** (**B322**).
+- **(70) O link do aviso da nota abre a lista de Recebimentos**, não o recebimento — a tela não abre um recebimento
+  pelo endereço; o número está no assunto.
+- **(70) Sem matriz de destinatários por evento nem modelo de e-mail configurável** — cortes da feature de
+  notificações que continuam valendo; o texto dos dois avisos é fixo.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -7109,6 +7294,22 @@ servidor simulado. O que **só o navegador** prova:
 4. **A fila de sucateamentos.** **Sobras e Retalhos → Sucateamentos**: o sucateamento vindo da não conformidade mostra o
    selo **Origem: NC-…** e *"Material reprovado — baixa do material bloqueado, não do disponível"*; o comum, nada. Ao
    aprovar a segunda perna, o aviso cita o bloqueado e a NC.
+
+**(70) Nenhum clique foi dado nesta etapa.** Os testes provam o servidor pela rota (chegou-zero 17 cenários,
+processamento concorrente 11, o serviço do aviso 17, os ganchos pelas rotas 12, ponta a ponta 6 — do pedido de Compras
+à separação, com requisições de dois módulos) e as duas telas com o servidor simulado. O que **só o navegador** prova:
+
+1. **As configurações.** **Configurações → Configurações Gerais**: aparecem **"Avisar Entrada de Recebimento por
+   E-mail"** (desligado), **"Avisar o Solicitante quando o Material Chega"** (ligado) e **"Destinatários — Entrada de
+   Recebimento"** (vazio); salvar sem mexer não muda nada.
+2. **O zero.** Num recebimento em conferência, digitar **0** em **"Qtd. conferida"** de um item e salvar; levar até
+   **Processar Nota**: a janela não lista aquele item para entrar, e depois de processar o saldo dele não mudou.
+3. **O clique duplo.** Clicar **Processar** e, sem esperar, de novo (ou em duas abas): uma das duas mostra *"Esta nota
+   já está sendo processada"*; a nota fica *Processado* com **uma** conta a pagar.
+4. **O painel.** **Notificações**, filtro de evento: aparecem **"Entrada de recebimento"** e **"Aviso ao
+   requisitante"**; depois de processar uma nota de material que uma requisição esperava, a linha do aviso ao
+   requisitante está lá, para o e-mail de quem pediu. Com o SMTP configurado, conferir o e-mail que chegou e clicar no
+   link (ele abre a lista do módulo de onde a requisição saiu).
 
 
 **G1. Toda coluna nova da tabela de materiais vaza quantidade exata para o requisitante até alguém
@@ -8180,6 +8381,16 @@ cenário, ou fixar as datas relativas a um dia lido do banco por cenário.
 mesma montagem à mão do G79 não tem a coluna `descricao` em `tipos_material_almoxarifado`, e o pré-cadastro é pulado com
 *"has no column named descricao"* — sem derrubar nada, e fora do padrão que o espião do G79 vigia. Mesma classe do G79
 (teste vazio nesse ponto); correção do mesmo tamanho.
+
+**G82 (NOVO, notado na Etapa 70, anterior a ela). O "Aprovar" direto do recebimento não deixa trilha de auditoria.** O
+processamento da nota grava o evento de auditoria *Processar nota*; o caminho de **aprovar direto** (recebimento que
+ainda não chegou à entrada de nota) dá entrada no estoque e muda a situação para *Aprovado* **sem** registro na
+trilha. A movimentação de entrada fica no livro — o rastro do estoque existe —, mas a trilha não diz quem aprovou o
+documento. Não corrigido nesta etapa (não era dela); correção pequena (o mesmo registro do processar).
+
+**G83 (NOVO, da Etapa 70). Um caminho da marca de processamento não tem teste.** Se a nota virar *Processado* entre a
+leitura da situação e a colocação da marca, a resposta é a recusa de sempre (*"Nota já processada"*), não o 409 — o
+ambiente de teste não consegue produzir essa ordem de forma determinística. Declarado.
 
 aparece na hora, para quem está editando.
 ## Etapa 0 — Fundação (2026-08-03)
@@ -16150,9 +16361,131 @@ consegue fazer — corrigido (a recusa ensina e o motivo destrava); e uma corrid
 suíte de testes do almoxarifado passou a exercitar o alerta depois de cada movimentação (**G79**, pago).
 
 
+## Etapa 70 — Quem esperava o material fica sabendo que ele chegou (2026-10-01)
+
+Quando uma nota de compra entrava no estoque, ninguém era avisado de verdade: existia um e-mail por **movimentação**
+(um por item, desligado de fábrica, só para as listas do almoxarifado), mas a pessoa que tinha pedido o material — o
+solicitante da requisição que ficou *Aguardando compra* — não ficava sabendo de nada, e a requisição continuava
+parada. Agora, ao processar a nota, **cada solicitante** de requisição que esperava aquele material recebe um e-mail
+dizendo o que chegou e quanto falta na requisição dele, com o link para a lista do módulo de onde ele pediu; e há um
+aviso **da nota inteira** (NF, fornecedor, pedido, itens, o que ficou retido para inspeção, quem esperava) para uma
+lista configurável, que nasce desligado. No caminho, a etapa corrigiu dois defeitos antigos do recebimento: o item
+contado **zero** entrava no estoque com a quantidade **esperada**, e dois cliques em **Processar** geravam **duas**
+contas a pagar.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| O solicitante da requisição *Aguardando compra* não era avisado quando o material chegava | Recebe um e-mail por nota, com o que entrou e o pendente da requisição dele (**B316**, **B319**) |
+| Só existia o e-mail por movimentação, um por item, sem dizer de que nota | Aviso **da nota** (um só) para uma lista própria — desligado de fábrica (**B317**, **B318**) |
+| Item conferido com **0** entrava no estoque com a quantidade esperada | **0 é zero**: não entra; em branco continua "não contei" (**B326**, **A34 c**) |
+| Texto inválido na quantidade conferida era gravado e o item pulado calado | Recusado: *"quantidade_recebida deve ser um número"* (**B326**) |
+| Dois **Processar** simultâneos passavam os dois e geravam duas contas a pagar | O segundo recebe *"Esta nota já está sendo processada"*; sai uma conta só (**B327**) |
+| A etiqueta saía para item que chegou zero | Item contado zero não ganha etiqueta (**B328**) |
+| O painel de Notificações não tinha esses eventos no filtro | Filtro com **"Entrada de recebimento"** e **"Aviso ao requisitante"** (**B323**) |
+
+### As regras, com o cenário exato
+
+Preparação: um usuário **Ana** com e-mail cadastrado, que pede pelo **Comercial**; um material **M** sem saldo e um
+material **N** com saldo 0 também. Ana cria uma requisição de **4 M** em **Comercial → Solicitar Material**;
+aprovada, ela fica **Aguardando compra** (há solicitação de compra de M). Em **Compras → Pedidos**, crie um pedido com
+**10 M** e **5 N** e, no Almoxarifado, um recebimento contra esse pedido.
+
+**1. As chaves.** **Configurações → Configurações Gerais**: **"Avisar Entrada de Recebimento por E-mail"** desligado
+(*"Um e-mail por nota que deu entrada no estoque, para a lista de destinatários abaixo (sem lista própria, vai para a
+de Compras) — desligado por padrão"*), **"Avisar o Solicitante quando o Material Chega"** ligado (*"Um e-mail só para
+quem pediu, em cada requisição que esperava um material que entrou disponível no estoque — ligado por padrão"*) e
+**"Destinatários — Entrada de Recebimento"** vazio. Pela API, um valor que não é 0 nem 1: *"Configuração
+"notificar_recebimento_entrada" deve ser 0 ou 1"*.
+
+**2. Chegou zero.** Na conferência do recebimento, digite **10** em M e **0** em N e salve (a divergência de N aparece e
+a não conformidade de quantidade nasce, como sempre). Leve até **Processar Nota**: a janela lista só M. Processado, o
+saldo de **M** é 10 e o de **N** continua **0**. Pela API, *"abc"* na quantidade: *"quantidade_recebida deve ser um
+número"*, e nada é gravado.
+
+**3. O aviso a quem esperava.** Em **Notificações**, filtro **"Aviso ao requisitante"**: uma linha para o e-mail da
+Ana. Assunto: *"[Almoxarifado] Chegou material da sua requisição REQ-…"*. Corpo:
+
+```
+Chegou ao estoque material que a sua requisição aguardava.
+Requisição: REQ-…
+Situação da requisição: Aguardando compra
+Recebimento: REC-…
+Materiais que chegaram:
+- M — <nome de M>: entrou 10 <unidade> (pendente na requisição: 4 <unidade>)
+O material ainda não está reservado para a sua requisição — a separação é feita pelo almoxarifado.
+Link: <endereço do sistema>/comercial/requisicoes-material
+```
+
+Uma requisição do **almoxarifado** leva o link `/almoxarifado/requisicoes-material`; sem módulo de origem,
+`/almoxarifado/requisicoes`. Requisição **Em separação**, de outro material, já atendida, totalmente reservada para o
+item, ou de usuário sem e-mail/inativo: **nenhum** aviso.
+
+**4. O aviso da nota.** Com a chave desligada (de fábrica), o filtro **"Entrada de recebimento"** fica vazio. Ligue a
+chave, preencha (ou não) os destinatários e processe outra nota: uma linha. Assunto: *"[Almoxarifado] Entrada
+confirmada — REC-… — NF ⟨número⟩"*. Corpo:
+
+```
+A nota deu entrada no estoque.
+Recebimento: REC-…
+Nota fiscal: <NF | não informada>
+Fornecedor: <nome | CNPJ | não informado>
+Pedido de compra: <número>            (só quando há pedido)
+Data/hora: <data e hora>
+Usuário: <quem processou>
+Itens que entraram:
+- <código> — <nome>: <qtd> <unidade>[ em <endereço>] — disponível | retido para inspeção
+Requisições que aguardavam estes materiais: REQ-… (Ana), …      (só quando há)
+Link: <endereço do sistema>/almoxarifado/recebimentos
+```
+
+O item contado zero não aparece. Material **crítico** que entrou retido aparece *"retido para inspeção"*, e **não**
+gera aviso ao solicitante (**B320**).
+
+**5. Não repete.** **Processar** de novo a mesma nota: *"Nota já processada"*, e a fila não ganha linha nova. Dois
+cliques simultâneos em **Processar**: um processa, o outro recebe *"Esta nota já está sendo processada"*; **uma** conta
+a pagar.
+
+**6. A requisição continua separável.** A requisição da Ana continua **Aguardando compra** — o e-mail diz que a
+separação é do almoxarifado. Na **Fila de separação** ela aparece com **Separar**, e separar funciona.
+
+**7. A etiqueta.** **Imprimir etiquetas dos itens** da nota processada: M ganha etiqueta; N (contado zero), não.
+
+### O que esta etapa NÃO cobre
+
+1. **Outras entradas** (avulsa, devolução, retorno de terceiro) e a **liberação da inspeção** não avisam (**D (70)**).
+2. **Comprador e solicitante da compra** como destinatários — o banco não os tem (**B317**).
+3. **A situação da requisição** não muda sozinha (**B319**, **C102**).
+4. **Estorno** não corrige o aviso enviado (**B322**).
+5. **Matriz de destinatários e modelos de e-mail** — cortes da feature de notificações.
+
+### O que a revisão encontrou
+
+A medição achou que o item da especificação, lido ao pé da letra, **já estava marcado como pago** desde a Etapa 12 (o
+e-mail por movimentação) — e a spec do recebimento dizia o contrário; o que faltava era outra coisa (o aviso de nota e
+o aviso a quem esperava). A revisão do **plano** achou um defeito antigo grave: o item contado **zero** entrava no
+estoque com a quantidade esperada — corrigido antes do aviso, para ele nunca anunciar o que não chegou; mediu numa
+cópia de produção que o interruptor ligado de fábrica mandaria e-mail a três pessoas reais no dia do deploy (por isso
+o aviso da nota nasce desligado); mostrou que dois cliques simultâneos gravavam o aviso **errado** e geravam duas
+contas a pagar (resolvido com a marca de processamento); que "quem esperava" pelo status perdia a maioria dos casos
+(virou por item); e que o link quebrava para quem pediu de outro módulo. A revisão do **código** achou o vazio gravado
+como texto pela conferência e pelos dados fiscais (o item era pulado calado enquanto a tela dizia que entraria a
+esperada), a etiqueta do item zero e a marca de processamento sem dono — os três corrigidos.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 70 entregue (2026-10-01):** **quem esperava o material fica sabendo que ele chegou.** Ao processar uma nota,
+  o solicitante de cada requisição que esperava o material recebe um e-mail (ligado de fábrica), com o link para a
+  lista do módulo de onde pediu; o aviso **da nota inteira** para uma lista nasce desligado (**Configurações →
+  Configurações Gerais**); o painel de **Notificações** filtra os dois. E dois defeitos antigos do recebimento
+  corrigidos: o item contado **zero** não entra mais com a quantidade esperada, e dois **Processar** simultâneos não
+  geram mais duas contas a pagar. **O que é seu:** a consulta **A34** (para quem os avisos vão, requisições antigas que
+  seriam avisadas, e o "chegou zero" que inflou saldo no passado); as decisões **B316 a B328**; os avisos **C101 a
+  C106**; as limitações **(70)** em D, as verificações **(70)** em F e as fragilidades **G82** e **G83**. **Próxima:
+  Etapa 71 — o pedido de compra que reabre quando a entrada é estornada (B161, feature 08) — ver o plano da Etapa 70.**
 
 - **Etapa 69 entregue (2026-10-01):** **o material reprovado na inspeção vai para o sucateamento.** Na tela de **Não
   Conformidades**, a decisão **Sucatear** ganhou **Solicitar sucateamento**: o pedido nasce com o material, a quantidade
@@ -16163,7 +16496,7 @@ suíte de testes do almoxarifado passou a exercitar o alerta depois de cada movi
   as decisões **B296 a B315**; os avisos **C96 a C100** (o **C96** é o mais importante: não sucatear reprovado pelo
   formulário comum); as limitações **(69)** em D, as verificações **(69)** em F e as fragilidades **G80** e **G81**
   (**G79** pago). **Próxima: Etapa 70 — o e-mail automático na entrada confirmada do recebimento (feature 08, com a
-  19) — ver o plano da Etapa 69.**
+  19) — ver o plano da Etapa 69.** *(Feita — Etapa 70.)*
 
 - **Etapa 68 entregue (2026-10-01):** **as áreas especiais passam a dizer o que fazem — e o que não fazem.** Áreas
   novas **Área de sucata** e **Área de devoluções**; o assistente de **Nova Localização** oferece as cinco áreas; a

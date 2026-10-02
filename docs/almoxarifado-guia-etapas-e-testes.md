@@ -1,20 +1,29 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-01 (Etapa 69) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-01 (Etapa 70) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 69) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 70) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-01 (Etapa 69 ENTREGUE · Etapa 70 começando)
+> ## Onde o desenvolvimento está — 2026-10-01 (Etapa 70 ENTREGUE · Etapa 71 começando)
 >
-> **O desenvolvimento parou aqui: Etapa 69 fechada, Etapa 70 começando — 2026-10-01.** A **Etapa 69 (o material
+> **O desenvolvimento parou aqui: Etapa 70 fechada, Etapa 71 começando — 2026-10-01.** A **Etapa 70 (quem esperava o
+> material fica sabendo que ele chegou)**: ao processar uma nota, o **solicitante** de cada requisição que esperava o
+> material recebe um e-mail com o que chegou e o link para a lista do módulo de onde pediu (ligado de fábrica); o
+> aviso **da nota inteira** para uma lista nasce desligado (**Configurações → Configurações Gerais**); o painel de
+> **Notificações** filtra os dois. E dois defeitos antigos do recebimento foram corrigidos: o item contado **zero** não
+> entra mais com a quantidade esperada, e dois cliques em **Processar** não geram mais duas contas a pagar. **Próxima
+> etapa, já começando: 71 — o pedido de compra que reabre quando a entrada é estornada (B161)** (ver *"Próxima tarefa
+> detalhada"* no plano da Etapa 70).
+>
+> **Etapas 1 a 20 e 22 a 70 completas.**
+>
+> **Etapa 69, 2026-10-01.** A **Etapa 69 (o material
 > reprovado na inspeção vai para o sucateamento)**: em **Não Conformidades**, a decisão **Sucatear** ganhou o botão
 > **Solicitar sucateamento** (do almoxarifado); o pedido passa pelas duas aprovações de sempre em **Sobras e Retalhos →
 > Sucateamentos** e a segunda baixa **do bloqueado** — o material aprovado não é tocado; **Registrar execução** de um
 > Sucatear recusa e diz o caminho. **Atenção:** o formulário comum de sucateamento, numa reprovação parcial, continua
 > levando material **bom** — reprovado se sucateia pela não conformidade (C96). **Próxima etapa, já começando: 70 — o
-> e-mail automático na entrada confirmada do recebimento** (ver *"Próxima tarefa detalhada"* no plano da Etapa 69).
->
-> **Etapas 1 a 20 e 22 a 69 completas.**
+> e-mail automático na entrada confirmada do recebimento** (ver *"Próxima tarefa detalhada"* no plano da Etapa 69). *(feita — acima)*
 >
 > **Etapa 68, 2026-10-01.** A **Etapa 68 (as áreas
 > especiais passam a dizer o que fazem)**: existem a **Área de sucata** e a **Área de devoluções**; o assistente de
@@ -5153,6 +5162,62 @@ nasce **Bloqueado**, por falta de certificado) e, em **Inspeções**, com a Qual
 - **Material de cliente pela tela** — a janela não tem OS/projeto; só pela API (ou registrar a execução sem baixa).
 - **O formulário comum de sucateamento** continua aceitando o disponível de material com reprovado pendente (decisão).
 - **E-mail do sucateamento** — é da feature de notificações.
+
+---
+
+## Etapa 70 — Quem esperava o material fica sabendo que ele chegou (ENTREGUE — 2026-10-01)
+
+**O que mudou, em uma frase:** ao processar uma nota de compra, quem pediu aquele material recebe um e-mail dizendo
+que ele chegou — e o recebimento parou de dar entrada no item contado zero e de gerar conta a pagar em dobro.
+
+**O problema que ela resolve.** A requisição que ficava *Aguardando compra* nunca ficava sabendo que o material tinha
+chegado: o único e-mail que existia era um por movimentação, desligado de fábrica, só para as listas do almoxarifado.
+E, no recebimento, contar **0** de um item fazia entrar a quantidade **esperada**; e dois cliques em **Processar** ao
+mesmo tempo geravam duas contas a pagar.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Quem pediu o material não era avisado de nada | E-mail ao solicitante de cada requisição que esperava o material (ligado de fábrica) |
+| Nenhum aviso falava da nota inteira | Aviso **da nota** (NF, fornecedor, pedido, itens, retido para inspeção) para uma lista — **desligado de fábrica** |
+| Item contado **0** entrava com a quantidade esperada | Não entra; **em branco** continua "não contei" (entra a esperada) |
+| Dois **Processar** juntos geravam duas contas a pagar | O segundo recebe *"Esta nota já está sendo processada"* |
+| Etiqueta para item que chegou zero | Sem etiqueta |
+| O filtro do painel de Notificações não tinha esses avisos | **"Entrada de recebimento"** e **"Aviso ao requisitante"** |
+
+### Roteiro de teste manual (≈15 min)
+
+**Preparação.** Um usuário **Ana** com e-mail cadastrado e acesso ao **Comercial**; dois materiais **M** e **N** sem
+saldo. Com a Ana, crie em **Comercial → Solicitar Material** uma requisição de **4 M** e aprove-a (ela fica
+**Aguardando compra** se houver solicitação de compra de M — gere em **Reposição**, se preciso). Em **Compras →
+Pedidos**, crie um pedido com **10 M** e **5 N**.
+
+1. **As configurações.** **Configurações → Configurações Gerais**: **"Avisar Entrada de Recebimento por E-mail"**
+   desligado, **"Avisar o Solicitante quando o Material Chega"** ligado, **"Destinatários — Entrada de Recebimento"**
+   vazio.
+2. **O recebimento.** **Recebimentos → Novo Recebimento**, contra o pedido. **Iniciar Conferência (Almoxarifado)**; em **"Qtd. conferida"**, **10**
+   em M e **0** em N; **Salvar Conferência** (a divergência de N aparece). Siga até a entrada de NF e preencha os dados
+   fiscais.
+3. **Processar.** **Processar Nota**: a janela lista só **M**. Confirme. O saldo de **M** vira 10 e o de **N** continua
+   **0**.
+4. **O e-mail da Ana.** **Notificações**, filtro **"Aviso ao requisitante"**: uma linha para o e-mail da Ana, assunto
+   *"[Almoxarifado] Chegou material da sua requisição REQ-…"*. Com o SMTP configurado, o e-mail chega; o link abre
+   **Comercial → Minhas Requisições**.
+5. **O aviso da nota está desligado.** Filtro **"Entrada de recebimento"**: nenhuma linha. Ligue **"Avisar Entrada de
+   Recebimento por E-mail"**, processe outra nota e veja a linha *"[Almoxarifado] Entrada confirmada — REC-… — NF …"*.
+6. **Clique duplo.** Numa terceira nota, clique **Processar** em duas abas quase juntas: uma das duas mostra *"Esta
+   nota já está sendo processada"*; a nota fica **Processado** e o Financeiro tem **uma** conta a pagar dela.
+7. **A requisição.** A da Ana continua **Aguardando compra** (o e-mail diz que a separação é do almoxarifado). Na
+   **Fila de separação** ela aparece para separar.
+
+### O que esta etapa NÃO cobre
+
+- **Outras entradas** (avulsa, devolução, retorno de terceiro) e a **liberação da inspeção** — não mandam aviso.
+- **Comprador e solicitante da compra** — o sistema não sabe quem são; o aviso da nota vai para uma lista.
+- **A situação da requisição** não muda sozinha quando o material chega.
+- **Estornar** a entrada não corrige o e-mail já enviado.
+- **Requisição esquecida** recebe um e-mail a cada nota do material — encerre as que ninguém mais espera.
 
 ---
 
