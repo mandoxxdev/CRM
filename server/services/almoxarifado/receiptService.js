@@ -19,6 +19,8 @@ const { registrarAuditoria } = require('./audit');
 // dono unico de "isto e zero para efeito pratico" — reescrever o literal aqui seria a segunda
 // definicao, e a divergencia entre as duas apareceria na primeira edicao de uma delas.
 const { EPSILON_DIVERGENCIA } = require('./divergencia');
+// Etapa 72, T0 (D9): o nivel por material da regua do pedido — modulo proprio, sem ciclo (so texto SQL).
+const { SOMA_POR_MATERIAL_SQL } = require('./pedidoCompraSaldoSql');
 const { inserirComNumeroUnico } = require('./numeroDoc');
 const {
   registrarMovimentacao, resolveLocalizacaoEntrada, validarLocalizacaoParaMovimento, validarEnderecoExplicito,
@@ -1917,16 +1919,18 @@ function derivarRecebimentoDoPedido(quantidadePedida, quantidadeRecebida, saldoP
  *
  * `MAX(a, b)` de DOIS argumentos e a funcao ESCALAR do SQLite (a agregada e a de um argumento so) — e
  * o que permite clampar linha a linha dentro da propria soma.
+ *
+ * ⚠️ (Etapa 72, T0 — D9/B351) O NIVEL INTERNO (a soma por pedido+material) mora em
+ * `pedidoCompraSaldoSql.SOMA_POR_MATERIAL_SQL`, e esta consulta so agrega por pedido em cima dele. A
+ * mudanca e de LUGAR, nao de regua: `purchaseService` passou a precisar do mesmo nivel por material
+ * (a solicitacao de compra fecha quando o material DELA completa no pedido) e nao pode requerer este
+ * arquivo (ciclo). Uma copia la seria a segunda regua — o defeito que a Etapa 71 corrigiu aqui.
  */
 const SOMA_POR_PEDIDO_SQL = `SELECT pedido_id,
     SUM(total_material) as total_pedido,
     SUM(recebida_material) as soma_recebida,
     SUM(MAX(0, total_material - recebida_material)) as saldo_por_material
-  FROM (SELECT pedido_id, material_id,
-      SUM(COALESCE(quantidade, 0)) as total_material,
-      SUM(COALESCE(quantidade_recebida, 0)) as recebida_material
-    FROM itens_pedido_compra WHERE material_id IS NOT NULL
-    GROUP BY pedido_id, material_id)
+  FROM (${SOMA_POR_MATERIAL_SQL})
   GROUP BY pedido_id`;
 
 /**
@@ -2062,6 +2066,9 @@ async function listarPedidosCompraAux(db, { search, pendentes } = {}) {
  *    (e nao num `if` antes dele) para ser ATOMICA: dois `processar` simultaneos de notas diferentes do
  *    mesmo pedido nao podem os dois achar que ganharam. `r.changes` e o que decide se audita — e por
  *    isso `recebido` tambem entra na lista: idempotencia, sem UPDATE e sem segunda linha de trilha.
+ *    (Etapa 72) A lista tem nome: `pedidoCompraSaldoSql.STATUS_PEDIDO_ENCERRADO` — a mesma que diz
+ *    "pedido encerrado nao traz mais nada" para a solicitacao de compra. O literal do UPDATE abaixo
+ *    ficou como estava (a T0 da 72 e sem mudanca de comportamento); quem mudar um muda o outro.
  *
  * 6. **NAO-FATAL, com guarda de tabela ausente**, como o acumulador e o `gerarContaPagar`. Um
  *    `throw` aqui faria `processarNota` falhar DEPOIS de o estoque ter entrado: o recebimento ficaria
