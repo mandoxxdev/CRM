@@ -1354,7 +1354,7 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id,
 
         const numerosSerie = parseSeries(item.series);
 
-        await registrarMovimentacao(db, user, {
+        const movEntrada = await registrarMovimentacao(db, user, {
           material_id: item.material_id,
           tipo: 'ENTRADA_COMPRA',
           quantidade: qtd,
@@ -1399,6 +1399,15 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id,
         // `exigeSerie`: o recebimento e um caminho onde o operador tem como informar as series.
         }, { exigeLote: true, exigeSerie: true });
         entrouFisicamente = true;
+        // Etapa 71 (D4/B332): QUAL movimentacao este item gerou — o estorno dela (T2) desconta a linha
+        // do pedido DESTE item, e o par (recebimento, material) e ambiguo com dois itens do mesmo
+        // material. Rastro, como o `localizacao_entrada_id` abaixo: falhar aqui nao desfaz a entrada.
+        try {
+          await dbRun(db, 'UPDATE recebimentos_material_itens_almoxarifado SET movimentacao_entrada_id = ? WHERE id = ?',
+            [movEntrada && movEntrada.id != null ? movEntrada.id : null, item.id]);
+        } catch (errMov) {
+          console.warn(`[recebimento] falha ao gravar movimentacao_entrada_id: ${errMov.message}`);
+        }
         // Etapa 57 (Fase 5): onde ESTE item entrou (a devolucao ao fornecedor sai dali). E rastro: uma
         // falha aqui nao pode desfazer uma entrada que ja aconteceu.
         try {

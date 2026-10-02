@@ -1716,6 +1716,12 @@ async function initSchema(db) {
     // INTEGER SOLTO, sem FK, no padrao do modulo: o pedido e tabela CORE e a linha pode ser
     // apagada pelo Compras sem que o recebimento deixe de ser historico valido.
     'pedido_item_id INTEGER',
+    // Etapa 71 (D4/B332): QUAL `ENTRADA_COMPRA` este item gerou. Sem ela o estorno da entrada so
+    // achava o item pelo par (recebimento_id, material_id) — ambiguo quando a nota tem dois itens do
+    // mesmo material (duas linhas do mesmo pedido). Mesmo padrao de `localizacao_entrada_id`:
+    // gravada por `darEntradaEstoque` logo depois da entrada, INTEGER solto, sem FK, sem backfill
+    // (o passado se resolve na hora do estorno, `estornarEntradaNoPedido`).
+    'movimentacao_entrada_id INTEGER',
   ];
   for (const col of recebItemCols) await safeAlter(db, `ALTER TABLE recebimentos_material_itens_almoxarifado ADD COLUMN ${col}`);
   await migrateBackfillItemQuantidadeEmInspecao(db);

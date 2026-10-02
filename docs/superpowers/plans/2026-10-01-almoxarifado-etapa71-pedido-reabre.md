@@ -359,7 +359,14 @@ fechamento. Executores de galho **não** marcam este plano.
   no segundo). **Corrigir os dois comentários que afirmavam a correção** (`receiptService.js:1832-1839`, teste
   `:150-157`), dizendo que estavam errados. Controle positivo: voltar o fechamento a 2 argumentos → (10) cai; voltar a
   cláusula → (1c) cai; o cenário de float de `?pendentes` (20,1 = 2,2 + 17,9 — achar o teste existente) continua verde.
-- [ ] **T1 (tronco) — o vínculo item → movimentação.** Coluna + escrita (contrato). Teste novo
+- [x] **T1 (tronco) — FEITA** (hash no commit "Almoxarifado Etapa 71 T1"). Coluna em `recebItemCols` + escrita em
+  `darEntradaEstoque` (try próprio, literal do contrato). `recebimentoVinculoMovimentacao.api.test.js` 4/4: (1) processar
+  com dois itens do mesmo material (3 e 5) + outro; (2) `/aprovar` direto (resposta `{ success: true }` prova o ramo);
+  (3) item com **recebida** 0 (a esperada tem de ser > 0 pelo schema — divergência pequena do texto "item com 0") →
+  `NULL`; (4) falha parcial real (série duplicada) + reprocessar → o vínculo do item 1 não muda. Sabotagens: S1 gravar em
+  `itens[0]` → (1)(2)(4); S2 não gravar → os 4; S3 reescrever o vínculo do item já entrado → (4). Suíte: api 263/263,
+  almoxarifado 44/44, validation 4/4, safealter 3/3, sqlite 5/5.
+  Plano original da T1: Coluna + escrita (contrato). Teste novo
   `server/tests/api/recebimentoVinculoMovimentacao.api.test.js`: pelo `/processar` e pelo `/aprovar` direto, cada item
   com quantidade > 0 fica com `movimentacao_entrada_id` = id da `ENTRADA_COMPRA` dele (dois itens do mesmo material →
   dois ids diferentes, cada um com a quantidade do seu item); item com 0 → `NULL`; reprocessamento (falha parcial
