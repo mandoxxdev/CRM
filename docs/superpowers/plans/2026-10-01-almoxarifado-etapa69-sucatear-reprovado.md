@@ -399,7 +399,7 @@ fechamento. Executores de galho **não** marcam este plano (o fio principal marc
   pelo `/executar`), RN-07 nas três direções, RN-10. Controle positivo: trocar dois níveis de ordem (o cenário do nível
   cai); tirar o carimbo novo do claim da 45 (a devolução depois do sucateamento baixa — vermelho); RN-08 recusando
   também o não viável (o cenário "drenado" cai com 400 — prova a ausência de beco).
-- [x] **T3 (tronco) — o lado do sucateamento e a rota.** *Feita (2026-10-01): `sucateamentoReprovado.api.test.js`
+- [x] **T3 (tronco) — o lado do sucateamento e a rota.** *Feita (2026-10-01, `419b5a7`): `sucateamentoReprovado.api.test.js`
   16/0 (pela rota com cinco usuários distintos — QUALIDADE decide, ALMOX1 solicita, ALMOX2 e GESTOR assinam — e pelo
   serviço; o típico é o crítico com `controle_certificado` e lote, cujo lote nasce BLOQUEADO e a solicitação recusa no
   nível 14 até a QUALIDADE mudar o status); `sucateamento*.api.test.js` e `sucataDedicada` verdes. Sabotagens: sem
@@ -430,7 +430,10 @@ fechamento. Executores de galho **não** marcam este plano (o fio principal marc
   sucateamento — o cenário RN-07 fica vermelho; uma segunda solicitação **não** serve de prova, porque o nível 5 já a
   recusa pela `execucao_movimentacao_id`); sem desfazer `sucateamento_em` na falha do motor (a retentativa toma 409 — beco); NC gravando
   `execucao_em` sem `COALESCE` (legado perde a data — D7).
-- [ ] **T4 (galho, cliente) — tela de Não Conformidades** (RN-12). `NaoConformidadesAlmoxarifado.js`: botão,
+- [ ] **T4 (galho, cliente) — tela de Não Conformidades** (RN-12). *Nota do tronco: o teste (33) de
+  `NaoConformidadesAlmoxarifado.test.js` afirma "não movimenta estoque" no modal de execução de SUCATEAR — é a T4 que
+  o muda (o backend agora recusa o SUCATEAR viável com 409 e aceita `motivo_sem_baixa`; contrato final no relatório
+  do tronco e nas decisões (i)-(x) acima).* `NaoConformidadesAlmoxarifado.js`: botão,
   modal, toast, texto do modal de execução para `SUCATEAR`; `data-testid="btn-solicitar-sucateamento"`. Testes no
   `NaoConformidadesAlmoxarifado.test.js` (mock só na fronteira HTTP, com as literais do contrato): botão só nas linhas
   certas e só com `movimentar`; payload enviado; toast; erro 409 mostrado literal; o modal de execução não diz mais "não
