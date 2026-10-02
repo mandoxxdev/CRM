@@ -31,6 +31,13 @@
  *    Ver a secao 3 do design da Etapa 44 (RN-01 a RN-10) e a ORDEM DAS OPERACOES em
  *    `decidirNaoConformidade`, que e o ponto de maior risco desta feature.
  *
+ *    ⚠️ E A FRASE ACIMA ("DEVOLVER ... e SUCATEAR continuam marcando intencao") TAMBEM DEIXOU DE
+ *    VALER, de novo pela metade, e fica corrigida a vista: a DECISAO continua sem mover saldo, mas a
+ *    EXECUCAO move. `DEVOLVER` baixa do bloqueado no `/executar` desde a Etapa 45
+ *    (DEVOLUCAO_FORNECEDOR); `SUCATEAR` baixa do bloqueado desde a Etapa 69, pelo sucateamento
+ *    ligado a NC (`solicitar-sucateamento` + as duas assinaturas — o `/executar` recusa ensinando
+ *    esse caminho quando ele e viavel). So `SUBSTITUICAO` e `ANALISE_ENGENHARIA` seguem so intencao.
+ *
  * ── POR QUE `receiptService` NAO E IMPORTADO AQUI ────────────────────────────────────────────
  * A T3 vai fazer `receiptService` chamar `sincronizarNaoConformidadeQuantidade` nos seus DOIS
  * escritores de `quantidade_recebida`. Um `require('./receiptService')` no topo daqui fecharia
