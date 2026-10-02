@@ -476,7 +476,26 @@ fechamento.
 - (texto original da T4:) **T4 (galho, worktree, em paralelo à T2) — o painel não perde a reservada.** Pelo contrato. Teste no
   `requisicaoDashboard.api.test.js` (RN-13), os de lá sem edição. Controle: tirar `TOTALMENTE_RESERVADA` da lista → cai.
   Commit na branch da worktree; o fio principal faz o merge depois da T2.
-- [ ] **T5 (integração, cruza T1 × T2 × T3 × T4) — a jornada de quem espera.** Arquivo
+- [x] **T5 (integração, cruza T1 × T2 × T3 × T4) — a jornada de quem espera.** — **FEITA** (teste novo
+  `server/tests/api/recebimentoReservaChegadaIntegracao.api.test.js` 11/11, tudo pelas rotas; suíte 280/280). Cenário
+  como o executor recebeu (vale sobre o texto abaixo): R2 NORMAL (3) criada **antes** de R1 URGENTE (6), as duas
+  `AGUARDANDO_COMPRA` → nota de 4 → R1 4 `PARCIALMENTE_RESERVADA`, R2 nada; e-mail de R1 com *"reservado para a sua
+  requisição: 4 PC"* e L1, R2 **sem** e-mail → R3 aprovada depois `AGUARDANDO_COMPRA` sem reserva → fila R1 `SEPARAR`
+  (separável 4), R2/R3 `AGUARDANDO_SALDO`; painel lista R1 → separar/entregar 4 de R1 (a saída cita o `reserva_id` da
+  chegada — o s4 do plano) → nota de 6 → R1 2 (mantém `PARCIALMENTE_ATENDIDA`), R2 3 `TOTALMENTE`, R3 1 `PARCIALMENTE`,
+  solicitação `RECEBIDA`, painel com as duas → R1 `ENTREGUE`. Estorno: nota A toda de E1 (URGENTE, separa 2), nota B de
+  E2 → estorno de B 200, reserva `LIBERADA`, E2 `AGUARDANDO_COMPRA` (pedido reaberto, solicitação `VINCULADO`); estorno
+  de A → 400 literal da 71, E1 intacta; nota nova → E2 reservada de novo. Cancelada pela rota **durante** a reserva
+  (monkeypatch só como relógio) → reserva desfeita, `CANCELADO`, estorno não a toca. `/encerrar` de
+  `PARCIALMENTE_ATENDIDA` libera o hold da chegada. Automática: Q1 (5) espera, nota de 7 → Q1 `TOTALMENTE`, Q2 (4)
+  criada depois → `PARCIALMENTE_RESERVADA` com os 2 que sobraram (resposta = banco), painel com as duas.
+  **Divergência:** a automática usa `URGENTE`, não `CRITICO` — `CRITICO` nunca é aprovado automaticamente (Etapa 48,
+  `tentarAprovacaoAutomatica`); medido (a primeira versão do teste ficou `PENDENTE`). Controles positivos (8, perl com
+  âncora contada = 1, restauro por cópia com md5 conferido): s1 gancho desligado → cai a jornada 2 na primeira asserção
+  de reserva; s2 ordem sem urgência → jornada 2 (R1/R2); s3 estorno sem `liberarParaEstorno` → estorno com a literal
+  *"material já consumido"*; s4 sem a releitura → cancelada; s5 painel sem os `*_RESERVADA` → jornadas 3 e 5 e
+  automática; s6 `/encerrar` sem liberar → encerrar; s7 frase L1 trocada → e-mails da jornada 2 e 5; s8 estorno sem
+  recálculo → E2 fica sem voltar a `AGUARDANDO_COMPRA`. Nenhum defeito de produção revelado. Texto original: Arquivo
   `server/tests/api/recebimentoReservaChegadaIntegracao.api.test.js`, só pelas portas reais: material com mínimo →
   `verificar-minimos` → pedido com `solicitacao_id` → R1 (NORMAL, 6) e R2 (URGENTE, 3) aprovadas → `AGUARDANDO_COMPRA` →
   nota de 4 de 10 pelas seis portas → R2 `TOTALMENTE_RESERVADA` (3), R1 `PARCIALMENTE_RESERVADA` (1), e-mails L1 nos
