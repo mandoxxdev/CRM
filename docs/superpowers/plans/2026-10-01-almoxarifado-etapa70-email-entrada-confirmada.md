@@ -406,7 +406,21 @@ T2 em worktree); **T4** (integração) depois de T2; **T5** fechamento. Executor
   `throw` no `catch` → RN-05 cai com 500; (i) gancho **antes** do `UPDATE` de status → (só registrar: o cenário que
   distingue é a falha no UPDATE; se não houver como provocar no harness, declarar a sabotagem como sobrevivente com
   motivo).
-- [ ] **T3 (galho, cliente) — a tela.** `ConfiguracoesAlmoxarifado.js` `CAMPOS` (as duas linhas do contrato, junto das
+- [x] **T3 (galho, cliente) — a tela. FEITA em `b90e228`.** As **três** linhas do contrato final (o texto abaixo dizia
+  "duas" — escrito antes de a Fase 2 separar `notificacoes_dest_recebimento`; estava errado) entraram em `CAMPOS` logo
+  depois de `notificacoes_dest_compras`: *Avisar Entrada de Recebimento por E-mail* (boolean, ajuda diz lista
+  compartilhada/Compras e "desligado por padrão"), *Avisar o Solicitante quando o Material Chega* (boolean, "só para
+  quem pediu", "ligado por padrão"), *Destinatários — Entrada de Recebimento* (text). Fixture com as três (ids 22-24,
+  defaults semeados). Teste novo de Salvar: default manda `'0'`/`'1'`/`''`; ligar/desligar/preencher manda cada chave
+  com o próprio valor. Painel: `RECEBIMENTO_ENTRADA` (*Entrada de recebimento*) e `RECEBIMENTO_ENTRADA_REQUISITANTE`
+  (*Aviso ao requisitante*) no filtro + teste que confere literal/rótulo e o `?evento=`; comentário "8" → "10 eventos".
+  **Correção do controle previsto:** tirar a linha da fixture NÃO derruba "os testes de Salvar" (booleana não tem
+  prefixo do guard de dias, como as da 46 tinham) — derruba o teste novo, porque o payload leva `''` e o PUT
+  recusaria com "deve ser 0 ou 1". Sabotagens (perl, âncora 1, restauro por cópia + md5 OK): S1 fixture sem
+  `notificar_recebimento_entrada` → 1 cai; S2 sem a opção REQUISITANTE → 1 cai; S3 chaves das duas booleanas
+  trocadas → 1 cai; S4 `notificacoes_dest_recebimentos` (typo) em `CAMPOS` → `configuracoesGerais.api.test.js` 3/15
+  caem. Verde: client 74 suítes / 1124 testes, `CI=true` build ok, `configuracoesGerais.api` 15/15.
+  *Texto original:* `ConfiguracoesAlmoxarifado.js` `CAMPOS` (as duas linhas do contrato, junto das
   de notificação); fixture de `ConfiguracoesGerais.test.js` com as duas chaves; um teste de Salvar mandando
   `notificar_recebimento_entrada: '0'`; `NotificacoesAlmoxarifado.js` `EVENTO_OPCOES` com os dois eventos (D8) e o
   comentário "8 eventos" corrigido. A amarração `configuracoesGerais.api.test.js` tem de passar sem mexer nela (a T1
