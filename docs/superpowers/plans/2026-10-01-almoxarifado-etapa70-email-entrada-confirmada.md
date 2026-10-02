@@ -425,7 +425,31 @@ T2 em worktree); **T4** (integração) depois de T2; **T5** fechamento. Executor
   `notificar_recebimento_entrada: '0'`; `NotificacoesAlmoxarifado.js` `EVENTO_OPCOES` com os dois eventos (D8) e o
   comentário "8 eventos" corrigido. A amarração `configuracoesGerais.api.test.js` tem de passar sem mexer nela (a T1
   dá o leitor literal). Controle positivo: tirar a linha da fixture → os testes de Salvar caem (como na 46).
-- [ ] **T4 (integração, cruza galhos e o módulo Compras).** `server/tests/api/recebimentoAvisoEntradaIntegracao.api.test.js`,
+- [x] **T4 (integração) — FEITA.** `recebimentoAvisoEntradaIntegracao.api.test.js` (6), TUDO pelas rotas (fixture só a
+  tabela core `usuarios`): configuração pelo `PUT /configuracoes`; fornecedor e pedido pela rota de Compras (pedido
+  vinculado à solicitação que nasceu de `verificar-minimos`); R1 por `POST /api/requisicoes-material` com
+  `modulo_origem: 'comercial'` (quem pede ≠ quem aprova), R2 e R3 por `POST /almoxarifado/requisicoes`; `/aprovar` →
+  R1 `AGUARDANDO_COMPRA`, R2 `PARCIALMENTE_RESERVADA` (MS com saldo reservado, M1 sem), R3 `AGUARDANDO_ESTOQUE` (só o
+  MZ e o crítico MC); recebimento contra o pedido com o payload da tela → `iniciar_conferencia` → `/conferir` (MZ = 0)
+  → `finalizar_conferencia` → `encaminhar_compras` → `finalizar_compras` → `iniciar_faturamento` → `/fiscal` →
+  `/processar`. A jornada roda DUAS vezes: (A) chave da nota em `'0'` → 0 aviso da nota, 2 de requisitante (metade
+  positiva); (B) ligada pela rota → exatamente 1 aviso da nota para a lista de Compras (fallback D2), com pedido, M1
+  disponível, MC retido, sem o MZ, e R1/R2/R3 na linha de requisições (decisão B da T1); exatamente 2 avisos de
+  requisitante (R1 com link `/comercial/requisicoes-material` e "Aguardando compra"; R2 com
+  `/almoxarifado/requisicoes-material`, "Parcialmente reservada", sem o MS reservado), nenhum para R3; reprocessar
+  400 `Nota já processada` e a fila inteira não cresce; MZ saldo 0 com a NC de quantidade (-5) aberta; MC com 3 em
+  inspeção; solicitação `RECEBIDA`; R1 continua `AGUARDANDO_COMPRA` e `/separar` 4 → 200 e `EM_SEPARACAO`.
+  **Divergência do texto original:** o item (7) "a mesma jornada pelo serviço (`aprovarRecebimento` direto)" ficou de
+  fora — o ramo direto já tem cenário pela rota em `recebimentoAvisoEntradaRotas.api.test.js` (T2) e o pedido desta
+  task foi "tudo pelas rotas". Controle positivo (perl, âncora contada = 1, restauro por cópia com md5 conferido):
+  (s1) `||` em `quantidadeDoItem` → cai só o "ZERO não entrou" (o aviso continua certo: o SQL do serviço tem o próprio
+  `COALESCE`); (s2) só `AGUARDANDO_*` → cai a R2 (linha de requisições e aviso por requisição); (s3) link fixo → cai
+  o link do Comercial; (s4) chave da nota ignorada → cai a rodada (A); (s5) retido como livre → R3 ganha aviso, cai;
+  (s6) sem o fallback `notificacoes_dest_compras` → cai o (B) da nota (lista vazia não enfileira: 0 linhas); (s7) sem o
+  gancho em `concluirProcessamentoNota` → caem (A), (B) nota e (B) requisitantes. Nenhum defeito de produção revelado.
+  Suíte: api 262/262.
+
+  *Texto original da T4:* **T4 (integração, cruza galhos e o módulo Compras).** `server/tests/api/recebimentoAvisoEntradaIntegracao.api.test.js`,
   molde de `recebimentoContraPedidoIntegracao.api.test.js` + `requisicaoEstados.api.test.js:218-229`: (1) material M
   sem saldo + solicitação de compra `PENDENTE` → requisição de M (solicitante com e-mail em `usuarios`) → `/aprovar` →
   `AGUARDANDO_COMPRA`; (2) `POST /api/compras/pedidos` com M; (3) `POST /recebimentos` contra o pedido →
