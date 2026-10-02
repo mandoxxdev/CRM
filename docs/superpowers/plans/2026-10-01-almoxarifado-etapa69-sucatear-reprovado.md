@@ -1,7 +1,8 @@
 # Etapa 69 — sucatear o material reprovado na inspeção (feature 15, com a 09)
 
-> Status: **Fases 0 e 1 feitas (2026-10-01) — plano escrito, aguardando a Fase 2 (revisão do plano por agente fresco).**
-> Nenhuma linha de produção escrita; nada commitado.
+> Status: **Fases 0–4 feitas e fix-round da Fase 5 fechado (2026-10-01) — T1–T7 commitadas (T7 `7c0676c`); a revisão
+> adversarial achou 1 importante + 2 menores: dois corrigidos (`c517248` lote sem saldo, `827d655` material de cliente),
+> um declarado para a letra C (corrida 45 × 2ª assinatura). Falta só a T8 (fechamento, skill `fechar-etapa`).**
 > Feature 15 (sucateamento) com a 09 (NC de inspeção). Requisito: especificação original seção 19 (*"quarentena →
 > inspeção → reprovar → sucatear"*, `specs/modulo-almoxarifado/2026-08-02-requisitos-modulo-almoxarifado.md:816-848`) e
 > o corte declarado **B174** da Etapa 44 (`specs/modulo-almoxarifado/09-inspecao-qualidade/README.md:248-249`: *"as
@@ -466,7 +467,7 @@ fechamento. Executores de galho **não** marcam este plano (o fio principal marc
   (prova que o espião sabe falhar). Divergência esperada: se o recebimento com `status` passar a mudar o pedido para
   RECEBIDO, conferir que o teste "Workflow NF" não dependia da falha.
 - [x] **T7 (integração, cruza T1–T3) — `server/tests/api/sucateamentoReprovadoIntegracao.api.test.js`, tudo pela rota.**
-  *Feita (2026-10-01, commit desta entrada): 10/0, pelas rotas com sete usuários (ALMOX1 recebe e solicita, QUALIDADE
+  *Feita (2026-10-01, `7c0676c`): 10/0, pelas rotas com sete usuários (ALMOX1 recebe e solicita, QUALIDADE
   inspeciona/decide/libera o lote, COMPRAS executa, GESTOR e ALMOX2 assinam, ADMIN2 prova a barreira 3). Cadeia real
   do recebimento: `POST /recebimentos` → `iniciar_conferencia` → `finalizar_conferencia` → `/aprovar` (entrada em E) →
   lote nasce BLOQUEADO → reprova 3/10 → NC automática → SUCATEAR. Passos: (2) `/executar` 409 literal do lote; (3) lote
@@ -591,3 +592,53 @@ caçamba, a correção é um AJUSTE (positivo do bom, com justificativa) e depoi
   checam **os três carimbos** no claim, e a perda do claim relê os carimbos para nomear a causa certa; SUCATA infla
   giro/consumo/sugestão de reposição como a DEVOLUCAO_FORNECEDOR — declarado (letra D); o toast da T4 é só texto (sem
   link para a aba — sem dependência da T5).
+
+## Fase 5 — revisão adversarial: 1 importante + 2 menores → fix-round (2026-10-01)
+
+Reproduzidos por sonda executada (scratchpad: `sonda69f-lote-beco.js`, `sonda69f-cliente.js`, `sonda69f-corrida45.js`).
+
+- [x] **IMPORTANTE (achado 1) — beco do lote sem saldo.** *Corrigido em `c517248`.* A viabilidade
+  (`sucateamentoDoReprovadoPrevisto`, níveis 15/16) olhava só o **agregado** do material; o bloqueio é por material, não
+  por lote. Com o lote do reprovado consumido por uma `SAIDA` (outro lote cobrindo o agregado: físico 5, bloqueado 3), o
+  `/executar` dizia "pede sucateamento" para sempre, o `motivo_sem_baixa` não destravava, e cada solicitação gastava duas
+  assinaturas até o motor recusar *"Saldo insuficiente no lote"*. Agora: nível **16b** na viabilidade, depois dos 15/16;
+  `carregarLoteDoReprovado` (nonConformityService) traz o lote com `saldo_em_estoque` = soma das linhas > 0 do lote (a
+  régua do `claimSaldoDoLote`), `null` quando saldo negativo é permitido (material ou config global — o motor não
+  confere); as **duas** portas usam a mesma carga (a devolução 45 continua com `resolverLoteDaInspecao`). Solicitação →
+  400; `/executar` → 409, e com `motivo_sem_baixa` registra **sem baixa** (o tratamento do lote fora de ATIVO). Literal:
+  **`O lote <L> tem <s> <un> em estoque, menos que o reprovado (<q>) — o reprovado já saiu do lote; registre a execução sem baixa informando o motivo`**.
+  Teste: cenário (11) do `sucateamentoReprovadoIntegracao` (pelas rotas; a `SAIDA` do lote é fixture pelo serviço).
+- [x] **MENOR (achado 2) — material de cliente mandado ao beco.** *Corrigido em `827d655`.* Viável + material com
+  `proprietario_cliente_id`: o `/executar` mandava "Solicitar sucateamento", mas o modal não tem OS/projeto e a
+  solicitação recusa pela guarda do dono. Agora o `/executar` recusa 409 ensinando, e `motivo_sem_baixa` destrava.
+  Literal: **`Material de cliente: o sucateamento precisa da OS ou do projeto do cliente — solicite pela API informando os_origem_id/projeto_origem_id, ou registre a execução sem baixa informando o motivo`**.
+  O nível ficou **só no `/executar`** (em `efeitoExecucaoSucatear`), não na viabilidade compartilhada: a solicitação
+  continua com a guarda do dono, cuja literal já nomeia o cliente e aceita OS/projeto pela API (descartado: o nível na
+  viabilidade, que trocaria essa literal correta por uma genérica). Teste: cenário (12).
+  **Falta (letra D na T8):** o modal "Solicitar sucateamento" da tela de NC não tem os campos de OS/projeto — material
+  de cliente só sucateia pela API (ou registra sem baixa).
+- [ ] **MENOR (achado 3) — NÃO corrigido, vai para a letra C na T8.** Corrida devolução (45) × 2ª assinatura que falha
+  no motor: a 2ª perna põe o carimbo `sucateamento_em` na inspeção **antes** do motor; se nesse intervalo o `/executar`
+  de uma NC `DEVOLVER` da mesma inspeção roda, ele lê o carimbo, registra `SEM_SALDO` *"O material desta inspeção já
+  havia sido sucateado"* e fecha; o motor então recusa, a compensação desfaz o carimbo e a assinatura — e a NC
+  `DEVOLVER` ficou EXECUTADA dizendo "já sucateado" sem nada sucateado (o reprovado continua bloqueado). Cenário em
+  `sonda69f-corrida45.js` (motor injetado para recusar a `SUCATA doBloqueado` depois de executar a NC concorrente).
+  Janela estreita (dois awaits no mesmo processo) e saída existente (o sucateamento volta a SOLICITADO e pode ser
+  assinado de novo, baixando o bloqueado); a correção (carimbo só depois do motor, ou "carimbo pendente" que a 45 trate
+  como recusa temporária) mexe na serialização das três portas e fica para depois da migração Postgres (transação).
+
+**Letra B (para a T8):** (a) a régua do saldo do lote é a do claim do motor (linhas > 0), não `quantidade_atual` nem o
+saldo por localização; (b) com saldo negativo permitido o nível 16b não recusa (o motor também não); (c) o nível do
+cliente só no `/executar` (motivo acima); (d) o lote sem saldo devolve 400 na solicitação e 409 no `/executar`, como o
+par de literais do lote fora de ATIVO.
+
+**Controle positivo (sabotagens, `perl -0pi` com âncora contada == 1, backup `e69f5-*`, restauro por cópia com md5
+conferido; só o arquivo de integração rodado durante a sabotagem):** S1 nível 16b desligado → (11) cai no 1º assert
+(veio "pede sucateamento"); S2 ramo do cliente desligado → (12) cai no 1º assert (veio "pede sucateamento"); S3
+`SEM_SALDO_LOTE` ignorando o motivo → (11) cai em "/executar com motivo_sem_baixa: esperava 200, veio 409"; S4 cliente
+ignorando o motivo → (12) idem; S5 solicitação carregando o lote sem saldo → (11) "201 !== 400" (a solicitação seria
+criada); S6 `SELECT` do `/executar` sem `proprietario_cliente_id` → (12) cai no 1º assert. Todas restauradas com md5
+igual. **Suítes:** integração 12/0; `test:api` 257/257 arquivos; `test:almoxarifado` 44/0; validation 4/0; safealter
+3/0; sqlite 5/0; client 74 suítes / 1122 testes (NaoConformidades 53/53 — a tela mostra o `error` literal e o campo
+"Motivo para registrar sem baixa" já é sempre visível no modal de SUCATEAR, sem mudança no client); build
+`Compiled successfully` com `CI=true`.
