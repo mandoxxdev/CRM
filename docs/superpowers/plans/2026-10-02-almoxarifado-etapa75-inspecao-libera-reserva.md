@@ -421,7 +421,34 @@ galhos depois de T1: só **consomem** `aposLiberacaoSemFalhar`/`reservarLiberaca
   Controles: (1) dedupe da 70 (`recebimento-entrada-…`) → o segundo item da mesma nota fica sem e-mail e cai; (2) sem o
   filtro de avisáveis → R4 recebe e cai; (3) pendente descontando a reserva desta liberação → quem ganhou tudo fica sem
   e-mail e cai; (4) literal da 1ª linha trocada → cai.
-- [ ] **T4 (integração, cruza T1 × T2 × T3 × 74) — a jornada de quem espera o material crítico.** Arquivo
+- [x] **T4 (integração, cruza T1 × T2 × T3 × 74) — a jornada de quem espera o material crítico.** ✅ commit "Etapa 75
+  T4" (teste + este plano, o mesmo commit). Realizado: `inspecaoReservaLiberacaoIntegracao` **13/13**, tudo pelas
+  rotas e com **usuários reais por perfil** pelo gate real — solicitante sem perfil (PRODUCAO), GESTOR aprova e
+  estorna, COMPRAS compra e recebe a nota pelas seis portas, QUALIDADE decide a inspeção e a NC, ALM1 separa e entrega,
+  ALM2 faz a segunda conferência (crítico: entregar sem conferência → 400, provado no caminho). Usuário padrão do
+  harness = CONSULTA: rota chamada sem `as(...)` dá 403. Jornada: R2 (NORMAL, 4, antes) e R1 (URGENTE, 4) →
+  nota de 6 retida (nada reservado, nenhum e-mail) → R3 aprovada com o retido → inspeção 5/1 → R1 4 TOTALMENTE, R2 1
+  PARCIALMENTE, R3 nada, dono = a inspetora; e-mails de R1/R2 literais (assunto, 1ª linha, situação relida, linha
+  `liberado 5 PC (pendente 4; reservado 4|1)`, L1, nunca L0, dedupe `inspecao-liberada-<insp>-req-<rid>`, payload),
+  R3 sem e-mail; decidir de novo → 400 sem reserva/e-mail novos; fila R1/R2 SEPARAR, R3 AGUARDANDO_SALDO; R4 aprovada
+  depois não leva; R1 separar/conferir/entregar 4 → ENTREGUE, a saída cita a reserva da INSPEÇÃO; NC `ACEITAR` → o 1
+  vai para R2 (1 + 1 de 4, PARCIALMENTE_RESERVADA), literal da NC, e-mail com a 1ª linha da NC (`pendente 3;
+  reservado 1`), R3/R4 nada; R2 entrega parcial de 2 → PARCIALMENTE_ATENDIDA, saldo zerado. **Retomada (B390) pela
+  rota**: a 1ª `processar` falha no lote do comum (o crítico já entrou retido), entrada avulsa de 5 do crítico (saldo
+  alheio), inspeção 1/3 → W1 1; a 2ª `processar` reserva o comum a W2 e W1 continua com 1. **Estorno só-aprovado**:
+  inspeção 3/0 → R5 TOTALMENTE; QUALIDADE não estorna (403); GESTOR estorna → 200, reserva LIBERADA com
+  `Estorno da entrada do recebimento <REC>`, R5 volta a esperar. **L0 não aparece na jornada — declarado:** pelas portas
+  reais o miolo é guloso, quem está na fila sempre leva; L0 só sai com a candidata pulada (regra do dono, valor ao vivo)
+  ou a reserva falhando — coberto na T3 (`inspecaoReservaLiberacaoAviso`). Controles positivos (perl `-0pi`, âncora
+  contada = 1, backup `e75t4-*`, restauro por cópia com md5 conferido, um de cada vez, sem suíte junto): (s1) gancho da
+  inspeção desligado → cai a jornada 4 em "R1 (URGENTE) passa na frente" (10 caem); (s2) gancho da NC desligado → caem só
+  as duas da jornada 7; (s3) ordem sem `compararPrioridade` → cai a jornada 4 em R1 e o separar de R1 (`Máximo: 1`);
+  (s4) aviso desligado no `aposLiberacaoSemFalhar` → caem os e-mails (jornada 4 e NC); (s5) sem o `NOT EXISTS` da B390
+  → cai só a retomada (W1 ganha +3 "na chegada" do saldo alheio) — **a 1ª versão do teste NÃO caía** (sem saldo
+  alheio o disponível era 0 e o teto escondia a falta da B390; corrigido com a entrada avulsa); (s6) `liberarParaEstorno`
+  sem soltar → cai o estorno com a recusa "o material está reservado para requisições (…)"; (s7) dedupe da 70 no aviso
+  → caem o hash da inspeção e o da NC. Suíte: api **285/285**. Nenhum defeito de produção revelado.
+  Original: Arquivo
   `server/tests/api/inspecaoReservaLiberacaoIntegracao.api.test.js`, só pelas portas reais: material crítico com mínimo
   → pedido → R1 (URGENTE, 4) e R2 (NORMAL, 4, criada antes) aprovadas → `AGUARDANDO_*` → nota de 6 pelas portas do
   recebimento, retida → **nada reservado**, nenhum e-mail ao solicitante → R3 aprovada com o material retido →
@@ -562,6 +589,8 @@ não a chave (o plano falava em "chave").
 
 ## Próximo passo (atualizado)
 
-**T4** (integração, `inspecaoReservaLiberacaoIntegracao.api.test.js`, só pelas portas reais, com a correção da Fase 2:
-R2 termina PARCIALMENTE_RESERVADA com 1 + 1 de 4). Para a retomada pela rota existe porta medível: a falha forçada no
-lote na 1ª execução de `/processar` (molde do teste `[RN-07/D8] retomada pela rota` de `reservaLiberacaoBase`).
+~~**T4**~~ feita (ver a T4 acima: 13/13, 7 controles, api 285/285). **Próximo: a revisão adversarial (Fase 5)** com a
+árvore quieta, depois a **T5** (fechamento, skill `fechar-etapa`). Ponto para a revisão: a régua do aviso usa
+`solicitada − separada` e a do miolo `solicitada − entregue` (herdado da 74; na jornada coincidem porque nada fica
+separado sem entregar) — medir se uma requisição `PARCIALMENTE_ATENDIDA` com material separado na caixa recebe um
+pendente que não bate com o reservado.
