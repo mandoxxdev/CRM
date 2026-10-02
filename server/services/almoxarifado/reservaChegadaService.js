@@ -10,6 +10,7 @@
  * Regras (plano, D2–D6 e a revisão da Fase 2, que vale sobre o texto original):
  *  - candidata: requisição ativa em `PODE_SEPARAR` (EM_SEPARACAO entra — o hold do item soma de volta no
  *    separável dela), item do material com `falta = pendente de ENTREGA − hold ATIVO do item` > 1e-9;
+ *    (`receiptNotificationService.faltaDoItem` — Etapa 75, Fase 5: a mesma regua dos dois avisos);
  *    pulada quando a avaliação de valor AO VIVO bloqueia (a mesma da fila da 64) ou quando a saída não
  *    passaria na regra do dono (material de cliente sem o projeto do dono — a entrega recusaria);
  *  - teto: `min(o que entrou livre desta nota do material, disponível do material agora)` — o retido
@@ -33,7 +34,7 @@ const valueApprovalService = require('./requisitionValueApprovalService');
 const ownerRules = require('./ownerRules');
 const receiptNotificationService = require('./receiptNotificationService');
 
-const { QTD_DO_ITEM_SQL } = receiptNotificationService;
+const { QTD_DO_ITEM_SQL, faltaDoItem } = receiptNotificationService;
 
 const EPS = 1e-9;
 
@@ -220,7 +221,7 @@ async function distribuirParaQuemEspera(db, user, materialId, teto, rotulos, acc
     WHERE COALESCE(r.ativo, 1) = 1 AND r.status IN (${marcasSt}) AND ir.material_id = ?`,
   [...STATUS_CANDIDATOS, materialId]);
   const naFila = candidatos
-    .filter((c) => pendenteDeEntrega(c) - num(c.hold) > EPS)
+    .filter((c) => faltaDoItem(c, c.hold) > EPS)
     .sort((a, b) => requisitionService.compararPrioridade(a, b) || (a.item_id - b.item_id));
 
   for (const c of naFila) {
@@ -232,7 +233,7 @@ async function distribuirParaQuemEspera(db, user, materialId, teto, rotulos, acc
     // A falta RELIDA agora (Fase 2 da 74): outra nota ou uma aprovação pode ter reservado no meio.
     // eslint-disable-next-line no-await-in-loop
     const item = await lerItem(db, c.item_id);
-    const falta = item ? pendenteDeEntrega(item) - num(item.hold) : 0;
+    const falta = item ? faltaDoItem(item, item.hold) : 0;
     if (falta <= EPS) continue;
     const q = Math.min(falta, distribuivel);
 

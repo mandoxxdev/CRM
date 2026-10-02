@@ -424,7 +424,12 @@ let seq = 0;
     const m = await material(); const outro = await material();
     await requisicao({ status: 'EM_SEPARACAO', itens: [{ material_id: m, qtd: 4 }] });
     await requisicao({ itens: [{ material_id: outro, qtd: 4 }] });
-    await requisicao({ status: 'PARCIALMENTE_ATENDIDA', itens: [{ material_id: m, qtd: 4, separada: 4 }] });
+    // Etapa 75 (Fase 5): a regua e a do miolo (pendente de ENTREGA - hold). O separado na caixa so conta
+    // como "ja atendido" quando o hold o cobre — sem hold o miolo da 74 o reserva na chegada (RN-06 da 74),
+    // e o aviso tem de dizer o mesmo. Antes: so `separada: 4`, sem a reserva.
+    const separado = await requisicao({ status: 'PARCIALMENTE_ATENDIDA', itens: [{ material_id: m, qtd: 4, separada: 4 }] });
+    await dbRun(db, `INSERT INTO reservas_material_almoxarifado (material_id, quantidade, status, origem, item_requisicao_id)
+      VALUES (?, 4, 'ATIVA', 'REQUISICAO', ?)`, [m, separado.itemIds[0]]);
     const res = await requisicao({ status: 'TOTALMENTE_RESERVADA', itens: [{ material_id: m, qtd: 3 }] });
     await dbRun(db, `INSERT INTO reservas_material_almoxarifado (material_id, quantidade, status, origem, item_requisicao_id)
       VALUES (?, 3, 'ATIVA', 'REQUISICAO', ?)`, [m, res.itemIds[0]]);
@@ -468,12 +473,14 @@ let seq = 0;
   });
 
   await test('mesmo material em dois itens (nota e requisicao): entrou e pendente somados por material', async () => {
+    // Etapa 75 (Fase 5): pendente = pendente de ENTREGA - hold (a regua do miolo): 3 + (2 - 0) = 5. Era 3 + (2 - 1)
+    // = 4 pela regua antiga (solicitada - separada), que o miolo da 74 nao usa — ele reservaria 5.
     const m = await material();
     await requisicao({ itens: [{ material_id: m, qtd: 3 }, { material_id: m, qtd: 2, separada: 1 }] });
     const n = await notaQueEntrou([{ material_id: m, qtd: 4 }, { material_id: m, qtd: 1.1 }]);
     await aviso.avisarEntradaConfirmada(db, ADMIN, n.id);
     const [l] = await filaReq(n.id);
-    assert.ok(l.corpo_texto.includes(': entrou 5.1 UN (pendente na requisição: 4 UN)'), l.corpo_texto);
+    assert.ok(l.corpo_texto.includes(': entrou 5.1 UN (pendente na requisição: 5 UN)'), l.corpo_texto);
   });
 
   await test('dedupe: a segunda chamada e DUPLICADA nos dois avisos e a fila nao cresce', async () => {

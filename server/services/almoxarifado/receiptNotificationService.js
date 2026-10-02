@@ -44,6 +44,26 @@ const QTD_DO_ITEM_SQL = `(CASE WHEN ri.quantidade_recebida IS NULL
 const EVENTO_NOTA = 'RECEBIMENTO_ENTRADA';
 const EVENTO_REQUISITANTE = 'RECEBIMENTO_ENTRADA_REQUISITANTE';
 
+/**
+ * Etapa 75 (Fase 5) — a FALTA do item: a regua UNICA do miolo da reserva (`reservaChegadaService`, quem
+ * ganha e quanto) e dos dois avisos ao solicitante (chegada da 74, liberacao da 75 — o "pendente na
+ * requisicao" do e-mail). Pura. `item`: { quantidade_solicitada, quantidade_entregue, quantidade_atendida };
+ * `hold`: o hold ATIVO que ja cobre o item (o aviso passa o hold ALHEIO ao documento).
+ *
+ * falta = pendente de ENTREGA − hold
+ *
+ * O separado na caixa NAO desconta: a separacao nao consome a reserva (so a entrega) e o separado continua no
+ * saldo — quem o protege de ser prometido a outro e o hold. A regua antiga dos avisos,
+ * `(solicitada − separada) − hold`, descontava duas vezes o separado que o hold cobre: numa
+ * PARCIALMENTE_ATENDIDA 10/6/4 com hold 2 o e-mail dizia "pendente 2; reservado 2" e o miolo tinha
+ * reservado 4 (o certo e 4/4). Descartado na Fase 5: `pendente − max(hold, separado na caixa)` — deixava o
+ * separado do livre (sem hold) fora do hold e o disponivel contava a caixa como livre (o RN-06 da 74 caiu).
+ */
+function faltaDoItem(item, hold) {
+  const entregue = Number(item.quantidade_entregue ?? item.quantidade_atendida) || 0;
+  return Math.max(0, (Number(item.quantidade_solicitada) || 0) - entregue) - (Number(hold) || 0);
+}
+
 // Fase 2: EM_SEPARACAO fica fora — a separacao ja esta acontecendo, o almoxarife esta com ela.
 const STATUS_QUE_ESPERAM = PODE_SEPARAR.filter((s) => s !== 'EM_SEPARACAO');
 
@@ -256,7 +276,11 @@ async function avisarEntradaConfirmada(db, user, recebimentoId) {
   }
   const materiaisDaNota = [...new Set(itens.map((it) => it.material_id))];
 
-  // Requisicoes com pendente (separacao - reservado do item) de material que entrou nesta nota.
+  // Requisicoes com pendente (entrega - reservado do item) de material que entrou nesta nota.
+  // Etapa 75 (Fase 5): o pendente e a `faltaDoItem` (a regua do MIOLO) com o hold ALHEIO a esta nota, nao
+  // `(solicitada - separada) - hold`: o hold que sobra numa PARCIALMENTE_ATENDIDA cobre justamente o
+  // separado na caixa, e a regua antiga o descontava duas vezes ("pendente 2; reservado 2" quando a
+  // chegada tinha reservado 4 — o certo e 4/4).
   // Etapa 74 (T2, D7): o hold que ESTA nota criou (reservaChegadaService, `recebimento_id`) NAO desconta
   // o pendente — senao quem ganhou tudo na chegada ficava sem e-mail (Surpresa 1); os demais holds
   // descontam como antes. `reservado_nesta_nota`: o que a chegada desta nota reservou para o item (ATIVA
@@ -265,12 +289,13 @@ async function avisarEntradaConfirmada(db, user, recebimentoId) {
   const marcasSt = STATUS_QUE_ESPERAM.map(() => '?').join(',');
   const linhasReq = await dbAll(db, `SELECT r.id AS requisicao_id, r.numero, r.status, r.solicitante_id,
       r.solicitante_nome, r.modulo_origem, ir.material_id,
-      MAX(0, COALESCE(ir.quantidade_solicitada, 0) - COALESCE(ir.quantidade_separada, 0)) - COALESCE((
+      ir.quantidade_solicitada, ir.quantidade_entregue, ir.quantidade_atendida,
+      COALESCE((
         SELECT SUM(rs.quantidade - COALESCE(rs.quantidade_utilizada, 0))
         FROM reservas_material_almoxarifado rs
         WHERE rs.item_requisicao_id = ir.id AND rs.material_id = ir.material_id
           AND rs.status = 'ATIVA' AND rs.origem = 'REQUISICAO'
-          AND COALESCE(rs.recebimento_id, 0) <> ?), 0) AS pendente,
+          AND COALESCE(rs.recebimento_id, 0) <> ?), 0) AS hold_alheio,
       COALESCE((
         SELECT SUM(rs.quantidade)
         FROM reservas_material_almoxarifado rs
@@ -284,6 +309,7 @@ async function avisarEntradaConfirmada(db, user, recebimentoId) {
   // Agrupa por requisicao; `pendenteLivre` so com o material que entrou livre (o que avisa o solicitante).
   const porRequisicao = new Map();
   for (const l of linhasReq) {
+    l.pendente = faltaDoItem(l, l.hold_alheio);
     if (!(Number(l.pendente) > EPS)) continue;
     if (!porRequisicao.has(l.requisicao_id)) {
       porRequisicao.set(l.requisicao_id, { ...l, pendentePorMaterial: new Map(), reservadoPorMaterial: new Map() });
@@ -386,7 +412,9 @@ async function avisarEntradaConfirmada(db, user, recebimentoId) {
  *
  * Quem: requisição ativa em `STATUS_QUE_ESPERAM` (a lista da 70) com item do material; `reservado` = o que
  * ESTA liberação reservou para o item (do resultado, nunca do banco: outra liberação do mesmo material na
- * mesma nota não conta); `pendente = MAX(0, solicitada − separada) − (hold ATIVO do item − reservado)` (a
+ * mesma nota não conta); `pendente = faltaDoItem(item, hold ATIVO do item − reservado)` — a régua do miolo
+ * (Fase 5: era `(solicitada − separada) − (hold − reservado)`, que descontava duas vezes o separado na caixa
+ * que o hold cobre — numa PARCIALMENTE_ATENDIDA o e-mail dizia "pendente 2; reservado 2" e o certo era 4/4) (a
  * reserva desta liberação NÃO desconta — senão quem ganhou tudo ficaria sem e-mail, a Surpresa 1 da 74);
  * entra se `pendente > 0` E (`reservado > 0` OU há disponível livre do material) — sem isso o e-mail
  * prometeria material reservado a outra requisição (o defeito A2 da 74).
@@ -417,7 +445,7 @@ async function avisarLiberacao(db, user, ctx, resultadoReserva) {
   const marcasSt = STATUS_QUE_ESPERAM.map(() => '?').join(',');
   const linhasReq = await dbAll(db, `SELECT r.id AS requisicao_id, r.numero, r.status, r.solicitante_id, r.modulo_origem,
       ir.id AS item_id,
-      MAX(0, COALESCE(ir.quantidade_solicitada, 0) - COALESCE(ir.quantidade_separada, 0)) AS pendente_separacao,
+      ir.quantidade_solicitada, ir.quantidade_entregue, ir.quantidade_atendida,
       COALESCE((SELECT SUM(rs.quantidade - COALESCE(rs.quantidade_utilizada, 0))
         FROM reservas_material_almoxarifado rs
         WHERE rs.item_requisicao_id = ir.id AND rs.material_id = ir.material_id
@@ -430,7 +458,7 @@ async function avisarLiberacao(db, user, ctx, resultadoReserva) {
   const porRequisicao = new Map();
   for (const l of linhasReq) {
     const reservado = reservadoPorItem.get(Number(l.item_id)) || 0;
-    const pendente = Number(l.pendente_separacao) - (Number(l.hold) - reservado);
+    const pendente = faltaDoItem(l, Number(l.hold) - reservado);
     if (!(pendente > EPS)) continue;
     if (!porRequisicao.has(l.requisicao_id)) porRequisicao.set(l.requisicao_id, { ...l, pendente: 0, reservado: 0 });
     const req = porRequisicao.get(l.requisicao_id);
@@ -478,6 +506,8 @@ module.exports = {
   // Etapa 75 (T3): o aviso da liberação (inspeção / NC).
   avisarLiberacao,
   montarAvisoLiberacao,
+  // Etapa 75 (Fase 5): a regua unica da falta do item (miolo da reserva e os dois avisos).
+  faltaDoItem,
   montarAvisoNota,
   montarAvisoRequisitante,
   caminhoRequisicoesDoModulo,
