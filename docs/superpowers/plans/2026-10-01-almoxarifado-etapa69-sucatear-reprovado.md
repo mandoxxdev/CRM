@@ -1,8 +1,10 @@
 # Etapa 69 — sucatear o material reprovado na inspeção (feature 15, com a 09)
 
-> Status: **Fases 0–4 feitas e fix-round da Fase 5 fechado (2026-10-01) — T1–T7 commitadas (T7 `7c0676c`); a revisão
-> adversarial achou 1 importante + 2 menores: dois corrigidos (`c517248` lote sem saldo, `827d655` material de cliente),
-> um declarado para a letra C (corrida 45 × 2ª assinatura). Falta só a T8 (fechamento, skill `fechar-etapa`).**
+> Status: **FECHADA (2026-10-01).** T1 `99bbce4`, T2 `db8fa69`, T3 `419b5a7`, T4 `ff4d8e9`, T5 `b3c75e5`, T6 `9a45c31`,
+> T7 `7c0676c`, fix-round da Fase 5 `c517248`/`827d655`, T8 = commit de documentação. Verificação final (medida no
+> fix-round): api 257/257, almoxarifado 44/0, validation 4/0, safealter 3/0, sqlite 5/0, cliente 1122/1122 (74
+> suítes), build `CI=true` ok. **Próxima: Etapa 70 — ver "Próxima tarefa detalhada" no fim deste plano.**
+> *(Antes: "Fases 0–4 feitas e fix-round da Fase 5 fechado — falta só a T8".)*
 > Feature 15 (sucateamento) com a 09 (NC de inspeção). Requisito: especificação original seção 19 (*"quarentena →
 > inspeção → reprovar → sucatear"*, `specs/modulo-almoxarifado/2026-08-02-requisitos-modulo-almoxarifado.md:816-848`) e
 > o corte declarado **B174** da Etapa 44 (`specs/modulo-almoxarifado/09-inspecao-qualidade/README.md:248-249`: *"as
@@ -498,7 +500,13 @@ fechamento. Executores de galho **não** marcam este plano (o fio principal marc
   declarado D12 — teste para ninguém "consertar" sem ler a decisão). Passa de primeira? Controle positivo, cada um
   vermelho num passo nomeado: T1 desligada (o (4) toma "Saldo insuficiente"); recusa do estorno desligada → (5); carimbo
   fora do claim da 45 → (6); exclusão do cartão tirada → (4).
-- [ ] **T8 — fechamento** (skill `fechar-etapa`): spec 15 (item novo `[x]` "sucatear o reprovado"), spec 09 (B174 pago
+- [x] **T8 — fechamento** *(feita, 2026-10-01 — commit de documentação desta etapa: novidades — seção da Etapa 69,
+  **A33**, **B296–B315** (as treze do plano + (i)–(x) do tronco e (a)–(d) da Fase 5 agrupadas em B309–B315), **C96–C100**,
+  **D (69)**, **F (69)**, **G79 pago**, **G80** (o teste da 67 que lê "hoje" uma vez) e **G81** (seed de tipos da
+  fixture); a citação errada do **C93** corrigida à vista na D (68) e no plano da 68; spec 15 (item novo `[x]`), spec 09
+  (cabeçalho, B174 corrigido à vista para o `SUCATEAR`, tabela de testes), mapa, guia e manual (15b.4-bis, 15b.4-ter,
+  20.1, 20.2b). **Não feito por estar fora de docs/specs:** a frase do comentário em `nonConformityService.js:20` sobre o
+  `SUCATEAR` (é código — fica para o próximo commit que tocar o arquivo).)* Texto original — **fechamento** (skill `fechar-etapa`): spec 15 (item novo `[x]` "sucatear o reprovado"), spec 09 (B174 pago
   para o `SUCATEAR`; o cabeçalho diz que a decisão `SUCATEAR` agora executa; a frase do `nonConformityService.js:20`
   sobre o `SUCATEAR` corrigida à vista), mapa de status, guia (69), manual (NC e sucateamento), novidades: seção da
   etapa, **A33**, **B296–B308**, **C** novas (Surpresa 1; origem não estrita herdada da 45; o legado), D (69), F (69);
@@ -642,3 +650,68 @@ igual. **Suítes:** integração 12/0; `test:api` 257/257 arquivos; `test:almoxa
 3/0; sqlite 5/0; client 74 suítes / 1122 testes (NaoConformidades 53/53 — a tela mostra o `error` literal e o campo
 "Motivo para registrar sem baixa" já é sempre visível no modal de SUCATEAR, sem mudança no client); build
 `Compiled successfully` com `CI=true`.
+
+## Divergências do plano (registradas para a próxima sessão)
+
+1. **T3 — sem `doBloqueado`, a segunda perna NÃO toma "Saldo insuficiente"** na reprovação parcial, como o plano previa:
+   ela baixa do **disponível** (é a Surpresa 1). O controle positivo caiu em "o reprovado continua bloqueado".
+2. **T6 — o teste novo usa o caminho do ZERADO**, não "com mínimo": o caminho do mínimo só grava depois de envio real
+   de e-mail (sem SMTP não deixa rastro).
+3. **Fase 2 — a regra nova do `/executar` não cabia "depois do nível 5"**: o nível 4 devolvia NENHUMA para tudo que não
+   era DEVOLVER, e a inspeção só era carregada para DEVOLVER — a T2 dividiu o nível 4 e carregou a inspeção para
+   SUCATEAR. Sem isso, a função nova veria inspeção vazia e registraria calada.
+4. **Fase 5 — material de cliente: o nível ficou só no `/executar`**, não na viabilidade compartilhada (o pedido do
+   fix-round dizia viabilidade) — a solicitação já recusa pela guarda do dono, com a mensagem que nomeia o cliente (B314).
+5. **Citação errada que escapou da Etapa 68:** o plano da 68 e a D (68) citavam o **C93** para "desbloquear para
+   sucatear" — corrigido à vista (o C93 é outra coisa). Mais: a D (68) dizia que a solicitação era recusada com
+   "disponivel 0", o que só valia com toda a quantidade reprovada (Surpresa 1).
+
+## Retro (4 números)
+
+- **Rodadas de correção até verde:** 1 (o fix-round da Fase 5).
+- **Achados da revisão:** Fase 2 — 13 (0 críticos, 5 importantes, 8 menores); duas sondas provaram no motor real (lote do
+  certificado nascendo Bloqueado; área de sucata ignorada com lote). Fase 5 — 1 importante + 2 menores, todos reais
+  (reproduzidos por sonda), **0 ruído**; dois corrigidos, um declarado (C98).
+- **Paralelismo:** tronco T1→T3 sequencial num executor; **T4, T5 e T6 em paralelo** (arquivos disjuntos), sem
+  retrabalho; T7 depois. Um 252/253 transitório no `test:api` foi artefato de **sabotagem concorrente com a suíte** (o
+  `perl -i` sumiu com o arquivo por um instante) — lição: não sabotar com a suíte rodando. Outro vermelho transitório
+  (`indicadoresSpec27Integracao`) foi a rodada atravessando a meia-noite UTC — virou **G80**.
+- **Defeito que escapou da etapa anterior (68):** a citação errada do C93 na D (68) e no plano da 68 (documento, não
+  código).
+
+## Próxima tarefa detalhada — Etapa 70: o e-mail automático na entrada confirmada do recebimento (feature 08, com a 19)
+
+**Por que esta.** O "falta para 🟢" da **08** tem quatro itens: conferência física estruturada (corte de design),
+**e-mail na entrada confirmada**, o pedido que reabre (**B161** — decisão tomada: o automático só sobe; reverter exige
+régua de estorno de pedido, etapa inteira) e tipos de entrada no form (decisão). O e-mail é o único **sem decisão
+pendente e sem dependência**: a feature 19 (fila `fila_notificacoes_almoxarifado`, dedupe por hash, retry/backoff,
+destinatários por papel) está 🟢 desde a Etapa 12 e já enfileira avisos de movimentação, de requisição e de estoque
+zerado — falta o evento "a nota entrou no estoque". Valor: quem pediu o material (Compras, o solicitante da
+requisição de compra) fica sabendo sem abrir a tela. As outras 🟡 seguem bloqueadas (21/22 pela 22; 06 por B11) ou
+grandes (05: lista como entidade).
+
+**Fase 0 da 70 — medir antes de prometer:**
+1. **Onde a entrada é confirmada:** os caminhos que levam o recebimento a dar entrada no estoque (`/processar`,
+   `/workflow`, `/aprovar` em `receiptService.js` — a Etapa 57 mediu os três) e o ponto único **depois** do claim
+   idempotente da entrada (a nota não pode avisar duas vezes nem avisar entrada que falhou — Etapa 5/36).
+2. **O que a fila da 19 já tem:** os tipos de notificação existentes (`notificationQueueService.js`), como cada um
+   escolhe destinatários (papel, lista da empresa, a chave *"Notificar movimentações por e-mail"*), o dedupe por hash e
+   o modelo de mensagem — para o evento novo não inventar um mecanismo paralelo.
+3. **Quem deve receber:** o comprador do pedido de compra (se houver), o solicitante da solicitação de compra que
+   originou o pedido (Compras: `solicitacoes_compra`), e/ou a lista de e-mails do almoxarifado — medir o que o banco
+   sabe de cada um (há e-mail do comprador? do solicitante?). **Não inventar destinatário** que o banco não tem.
+4. **Item retido em inspeção:** a entrada do crítico é "retida" — o e-mail diz "entrou, aguardando inspeção"? Medir o
+   que a tela de recebimento chama de "entrada confirmada" e alinhar com a spec 08 (`08-recebimento/README.md:780`).
+
+**Contratos que não se reabrem:** a idempotência da entrada da nota (Etapa 5/36), o destino por item (57), a fila e o
+dedupe da 19 (12), o aviso interno de movimentação (21c.1).
+
+**Pontos de atenção.**
+- Aviso **depois** da entrada gravada, best-effort (falha da fila não desfaz a entrada — padrão do módulo).
+- Uma nota com N itens = **um** e-mail, não N (dedupe por recebimento).
+- A chave de configuração que liga/desliga o aviso — decidir (letra B, reversível) se reaproveita a de movimentações
+  ou nasce uma própria.
+- Metade positiva no teste: a entrada confirmada enfileira **um** aviso; reprocessar a mesma nota **não** enfileira de
+  novo; entrada recusada **não** enfileira.
+- Corrigir de passagem o comentário de `nonConformityService.js:20` (diz que `SUCATEAR` não baixa — desde a 69 baixa
+  pelo sucateamento), se a etapa tocar o arquivo; senão, num commit próprio.

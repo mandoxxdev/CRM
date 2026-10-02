@@ -107,7 +107,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Trinta e dois itens para rodar em produção ANTES do deploy — vinte e nove são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Trinta e três itens para rodar em produção ANTES do deploy — trinta são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-01 (Etapa 69) de trinta e dois para trinta e três**, com a **A33** — material reprovado esperando sucateamento, e o sucateamento comum que pode ter levado material bom no lugar do reprovado.)*
 
 *(**Atualizado em 2026-10-01 (Etapa 68) de trinta e um para trinta e dois**, com a **A32** — tipos de localização e saldo em área especial.)*
 
@@ -1059,7 +1061,50 @@ SELECT m.codigo, l.codigo AS padrao, l.tipo
 - **(d) com linhas** — a entrada **sem destino** (recebimento, devolução) continua indo para essa área, porque ela é a
   padrão cadastrada. Se a área não é o lugar de guarda do material, troque a padrão no cadastro do material.
 
-### B. Decisões de negócio — B1 a B295; as em aberto esperam você, as tomadas estão escritas com o descartado
+**A33 (NOVA, da Etapa 69 — material reprovado esperando sucateamento, e sucateamento comum que pode ter levado
+material bom: medir antes, nada é movido).** A partir desta etapa, a não conformidade decidida **Sucatear** ganha o
+gesto **"Solicitar sucateamento"**, e a baixa sai do material **bloqueado** (o reprovado), não do disponível. Antes não
+havia esse caminho — e a medição achou que, na reprovação **parcial**, o sucateamento comum **aceitava** e baixava
+material **aprovado** no lugar do reprovado (**C96**). Duas consultas:
+
+```sql
+-- (a) NCs decididas SUCATEAR cujo reprovado ainda está retido (o que a etapa passa a resolver)
+SELECT nc.numero, nc.execucao_estado, nc.execucao_em, m.codigo AS material, i.quantidade_reprovada,
+       m.quantidade_bloqueada, m.quantidade_atual
+  FROM nao_conformidades_almoxarifado nc
+  JOIN inspecoes_recebimento_almoxarifado i ON i.id = nc.referencia_id
+  JOIN recebimentos_material_itens_almoxarifado ri ON ri.id = i.recebimento_item_id
+  JOIN materiais_almoxarifado m ON m.id = ri.material_id
+ WHERE nc.referencia_tipo = 'INSPECAO' AND nc.decisao = 'SUCATEAR' AND nc.status = 'DECIDIDA'
+   AND nc.aberto_automaticamente = 1 AND nc.execucao_movimentacao_id IS NULL
+   AND i.liberacao_nc_em IS NULL AND i.devolucao_fornecedor_em IS NULL
+ ORDER BY nc.decidido_em;
+
+-- (b) sucateamento COMUM do mesmo material depois de uma NC SUCATEAR, com o bloqueado ainda de pé
+SELECT s.id AS sucateamento, s.status, s.quantidade, s.created_at, m.codigo, nc.numero, m.quantidade_bloqueada
+  FROM sucateamentos_almoxarifado s
+  JOIN materiais_almoxarifado m ON m.id = s.material_id
+  JOIN nao_conformidades_almoxarifado nc ON nc.material_id = s.material_id
+       AND nc.decisao = 'SUCATEAR' AND nc.decidido_em <= s.created_at
+ WHERE COALESCE(m.quantidade_bloqueada, 0) > 0
+ ORDER BY s.created_at;
+```
+
+**Como ler o resultado:**
+- **(a) vazia** — nada a fazer.
+- **(a) com linhas** — são os documentos que, depois do deploy, ganham **Solicitar sucateamento** na tela de Não
+  Conformidades. Os que aparecem com execução **Executada** foram "executados" sem baixa nenhuma (antes desta etapa,
+  registrar a execução de um Sucatear só tirava o documento da fila): eles **continuam aceitos** pela solicitação, que
+  baixa o reprovado e grava a movimentação na execução já registrada (**B302**).
+- **(b) vazia** — nada a fazer.
+- **(b) com linhas** — **possível material bom sucateado no lugar do reprovado.** Confira cada caso: se o reprovado
+  ainda está bloqueado e o aprovado foi para a caçamba, a correção é um **AJUSTE** positivo do material bom (com
+  justificativa citando o sucateamento) e, depois, o sucateamento **pela não conformidade**. Se o sucateamento comum foi
+  de sobra legítima do mesmo material, não há nada a corrigir — a consulta só junta material e data, não prova o erro.
+
+### B. Decisões de negócio — B1 a B315; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+*(**Atualizado em 2026-10-01 de B295 para B315**, com as vinte da Etapa 69.)*
 
 *(**Atualizado em 2026-10-01 de B283 para B295**, com as doze da Etapa 68; antes, de B271 para B283, com as doze da Etapa 67; antes, de B260 para B271, com as onze da Etapa 66; antes, de B255 para B260, com as cinco da Etapa 65; antes, de B251 para B255, com as quatro da Etapa 64; antes, de B247 para B251, com as quatro da Etapa 63; antes, de B243 para B247, com as quatro da Etapa 62; antes, de B239 para B243, com as quatro da Etapa 61; antes, de B237 para B239, com as duas da Etapa 60; antes, de B233 para B237, com as quatro da Etapa 59; antes, de B228 para B233, com as cinco da Etapa 58; antes, de B225 para B228, com as três da Etapa 57; antes, de B222 para B225, com as três da Etapa 56; antes, de B219 para B222, com as da Etapa 55.)*
 
@@ -4426,6 +4471,97 @@ depende de o material ser próprio. Reversível: o servidor já responde sem mat
 de aviso trata um `material_id` que não é número como inexistente (404), não como erro de formato (400). Só chega por
 API. **Descartado:** um 400 de formato próprio.
 
+**B296 (NOVA, da Etapa 69) — o sucateamento do reprovado é um gesto PRÓPRIO na não conformidade: "Solicitar
+sucateamento".** Ele cria o sucateamento já com material, quantidade e lote **tirados da inspeção** — o usuário só
+escreve a justificativa (e, se quiser, classificação, peso e observações). **Descartados:** (a) um campo "NC" opcional
+no formulário comum de sucateamento (obrigaria a mexer no contrato da Etapa 9 por nada); (b) o **Registrar execução**
+abrir a solicitação (quem registra execução inclui o Compras, que não movimenta estoque).
+
+**B297 (NOVA, da Etapa 69) — a baixa continua sendo uma SUCATA; o que muda é que ela sai do BLOQUEADO.** No livro é a
+mesma "Sucata" de sempre — por isso o **relatório financeiro de sucata** a conta sem mudança. **Descartados:** um tipo
+de movimento novo (sumiria do relatório financeiro) e reaproveitar a "Devolução ao fornecedor" (o livro mentiria).
+
+**B298 (NOVA, da Etapa 69) — essa baixa NÃO pode ser estornada pelo livro.** Como na devolução ao fornecedor: o
+material voltaria ao estoque disponível com a não conformidade dizendo que foi sucateado. **Descartado:** o estorno
+devolver ao bloqueado (o material voltaria bloqueado sem nenhuma porta para sair — as três saídas do reprovado olham a
+inspeção). Corrigir um sucateamento indevido = **AJUSTE** com justificativa.
+
+**B299 (NOVA, da Etapa 69) — vai para o sucateamento a quantidade reprovada INTEIRA**, do lote da inspeção.
+**Descartado:** sucatear parte (a trava é por inspeção — uma inspeção "meio sucateada" não tem onde guardar o resto).
+
+**B300 (NOVA, da Etapa 69) — a trava fica na INSPEÇÃO, e as três saídas do reprovado olham umas às outras.** Liberar
+(decisão Aceitar), devolver ao fornecedor e sucatear: cada uma recusa (ou registra sem mover) quando o material da
+inspeção já saiu por uma das outras duas. **Reabre declaradamente** a liberação (Etapa 44) e a devolução (Etapa 45) —
+uma condição a mais em cada, com mensagem própria. **Descartado:** só a porta nova olhar as outras (a devolução
+posterior baixaria de novo o que já foi para a caçamba).
+
+**B301 (NOVA, da Etapa 69) — "Registrar execução" de uma NC Sucatear passa a RECUSAR quando o sucateamento é
+possível**, dizendo o caminho; quando não é possível por saldo (o material já saiu do bloqueio ou do físico), registra
+como antes. **Descartado:** manter o registro sem mover nada (tirava o documento da fila com o condenado ainda no
+galpão).
+
+**B302 (NOVA, da Etapa 69) — documento antigo já "executado" sem baixa continua aceito.** O critério é não haver
+movimentação registrada na execução — não o estado "Executada". Na baixa, a data e o autor da execução antiga são
+**preservados**. **Descartado:** exigir execução pendente (o legado ficaria sem saída).
+
+**B303 (NOVA, da Etapa 69) — não conformidade CANCELADA não sucateia.** A solicitação recusa; e, se o documento for
+cancelado com o sucateamento esperando assinatura, as assinaturas recusam (a que fecharia o processo desfaz a própria
+assinatura). **Descartado:** sucatear documento cancelado (cancelar encerra a cobrança, não autoriza baixa).
+
+**B304 (NOVA, da Etapa 69) — de onde sai a baixa:** (1) da **área de sucata**, quando uma localização dela cobre tudo —
+agora também **com lote** (o lote do reprovado transferido para a área); senão (2) do **endereço onde o item entrou**
+(a regra da devolução ao fornecedor, não estrita); senão (3) sem endereço. **Descartado:** estrito no endereço de entrada
+(divergiria do molde da devolução por um caso raro; o risco — livro com origem de entrada e parte vinda de outro
+endereço — é o mesmo da devolução).
+
+**B305 (NOVA, da Etapa 69) — lote fora de ATIVO recusa já na SOLICITAÇÃO**, com o status e o caminho. O motor não
+mudou. **Descartado:** o motor aceitar lote reprovado para sucata (reabriria a guarda de status, deliberada na 45).
+
+**B306 (NOVA, da Etapa 69) — quem solicita é quem movimenta estoque** (Administrador e Almoxarife), sem ação nova de
+perfil. A Qualidade decide; o almoxarifado solicita; almoxarifado + gestão assinam (o solicitante não assina).
+**Descartado:** a Qualidade solicitar (quem decide também pediria; e a Qualidade não movimenta estoque em lugar nenhum).
+
+**B307 (NOVA, da Etapa 69) — o sucateamento COMUM (do disponível) NÃO muda**, nem ganha recusa para material com
+reprovado pendente. O caso perigoso (**C96**) vira aviso e consulta (**A33 b**), e fica fixado por teste para ninguém
+"consertar" sem ler esta decisão. **Descartado:** recusar o comum quando há NC Sucatear pendente (o operador que
+sucateia sobra legítima do mesmo material seria barrado).
+
+**B308 (NOVA, da Etapa 69) — G79: a suíte do almoxarifado ganhou as colunas que faltavam na sua tabela montada à
+mão**, em vez de trocar a montagem pelo schema real. **Descartado:** reescrever a montagem de 700 linhas (risco de mudar
+o que os outros testes provam).
+
+**B309 (NOVA, da Etapa 69) — o que o "Registrar execução" de uma NC Sucatear faz em cada caso.** Possível → recusa
+ensinando "Solicitar sucateamento". Já há sucateamento esperando assinatura → recusa citando o `SUC-…`. Lote fora de
+ATIVO, lote sem saldo, ou material de cliente → recusa ensinando, **e** aceita registrar **sem baixa** se o campo
+**"Motivo para registrar sem baixa"** vier preenchido (o motivo fica na execução). Impossível por saldo → registra como
+antes. Documento **manual** → registra como antes ("não altera o saldo"). **Descartado:** o motivo destravar também o
+caso possível (seria o silêncio de antes com um campo a mais).
+
+**B310 (NOVA, da Etapa 69) — duas mensagens novas de "registrada sem mover saldo" para o Sucatear** (sem reprovado;
+já devolvido) — as de antes falavam em "devolver".
+
+**B311 (NOVA, da Etapa 69) — quando uma assinatura é desfeita, a mensagem diz a causa real** (documento cancelado; o
+material já foi sucateado, devolvido ou liberado por outro caminho), e a trilha também. **Descartado:** a mensagem
+genérica "saiu por outro caminho" (fica só de reserva).
+
+**B312 (NOVA, da Etapa 69) — duas escolhas internas**: a baixa do reprovado não leva o número do recebimento (a
+devolução leva; aqui não se sabe o que a coluna dispara em relatórios de recebimento); e a segunda solicitação
+simultânea para o mesmo documento é recusada pelo próprio serviço (409), e não só pela rota.
+
+**B313 (NOVA, da Etapa 69, Fase 5) — "o lote ainda tem o reprovado?" usa a régua do motor**: soma das linhas positivas
+do lote. Com saldo negativo permitido, a verificação não recusa (o motor também não confere). A solicitação responde
+400 e o "Registrar execução" 409 — o mesmo par do lote fora de ATIVO.
+
+**B314 (NOVA, da Etapa 69, Fase 5) — material de cliente: a recusa ensinando fica só no "Registrar execução".** A
+solicitação continua com a guarda do dono, cuja mensagem já nomeia o cliente e aceita OS/projeto pela API.
+**Descartado:** a mesma recusa na solicitação (trocaria a mensagem certa, que nomeia o cliente, por uma genérica).
+
+**B315 (NOVA, da Etapa 69) — três escolhas de tela.** (1) O campo **"Motivo para registrar sem baixa"** aparece
+**sempre** no Registrar execução de um Sucatear, e não só depois da recusa do lote (revelar casando o texto da recusa
+quebraria no dia em que a redação mudasse). (2) O botão **Solicitar sucateamento** também exige documento **automático
+de inspeção** (para os outros, o servidor recusaria sempre). (3) Na fila de sucateamentos, a origem **NC-…** aparece
+como selo na célula do Material, sem link (a tela de Não Conformidades não abre por número).
+
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -5601,6 +5737,38 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
     (3) A sugestão de localização na entrada deixou de trazer área especial como vaga (**B288**). **O que fazer:** rodar
     a **A32** antes do deploy.
 
+96. **NOVO, da Etapa 69 (e continua valendo) — o sucateamento COMUM, numa reprovação parcial, baixa material BOM.**
+    Chegaram 10, a inspeção reprovou 3: o material tem 7 disponíveis e 3 bloqueados. Um **Solicitar sucateamento** de 3
+    pela tela de **Sobras e Retalhos** (o formulário comum) é **aceito**, e as duas assinaturas baixam 3 do
+    **disponível** — material **aprovado** vai para a caçamba e o reprovado continua bloqueado. Foi medido antes desta
+    etapa e **não foi mudado** (**B307**). **O que fazer:** material reprovado se sucateia **pela não conformidade**
+    (**Não Conformidades → Solicitar sucateamento**), nunca pelo formulário comum; e rodar a **A33 (b)**.
+
+97. **NOVO, da Etapa 69 — o "bloqueado" é um total por material, e o sucateamento do reprovado pode baixar o bloqueio de
+    OUTRA origem.** Agrava o **C65**: entre a solicitação e a segunda assinatura (que pode levar dias), se o bloqueio
+    daquela inspeção for desfeito à mão e outra inspeção bloquear o mesmo material, a baixa sai do bloqueio da outra — e
+    a devolução da outra, depois, diz que já não havia o que devolver. A trilha da solicitação guarda quanto estava
+    bloqueado na hora. **O que fazer:** não desbloquear à mão material que tem sucateamento esperando assinatura;
+    aprovar logo.
+
+98. **NOVO, da Etapa 69 — corrida rara entre devolver e sucatear a mesma inspeção.** Se a segunda assinatura do
+    sucateamento falhar no estoque **no exato momento** em que alguém registra a execução de uma NC "Devolver" da mesma
+    inspeção, a devolução pode ser registrada dizendo *"O material desta inspeção já havia sido sucateado — a execução
+    foi registrada sem mover saldo"* — e o sucateamento, desfeito, volta a esperar assinatura com o reprovado ainda
+    bloqueado. Janela estreita; corrigir exige transação de banco (depois da migração para Postgres). **O que fazer:**
+    se uma devolução disser "já sucateado" e o sucateamento estiver em **Solicitado**, aprovar o sucateamento de novo.
+
+99. **NOVO, da Etapa 69 (vale também para a devolução ao fornecedor) — a sucata do reprovado conta como consumo.** Ela
+    é uma saída como as outras: entra no giro, no consumo médio e na **sugestão de reposição** do material. Sucatear
+    muito de uma vez pode inflar a sugestão de compra daquele material. **O que fazer:** conferir a sugestão de
+    reposição de material com sucateamento grande recente.
+
+100. **NOVO, da Etapa 69 — mudanças para quem registra a execução de não conformidade.** "Registrar execução" de uma
+     NC **Sucatear** deixou de "dar como cumprido sem mexer em nada": agora ela **recusa** e diz o caminho (*"Esta não
+     conformidade pede sucateamento: o almoxarifado registra em "Solicitar sucateamento" (duas aprovações) — a execução
+     fica registrada na segunda aprovação."*). Quem é do **Compras** ou da **Qualidade** não consegue solicitar (não
+     movimenta estoque): precisa pedir ao almoxarifado. **O que fazer:** avisar a Qualidade e o Compras.
+
 
 
 ### D. Limitações declaradas — são decisão, não esquecimento
@@ -6339,6 +6507,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   ⟨material⟩: disponivel 0 …"*. Desbloquear antes para sucatear deixa o material livre para outras saídas (**C93**). A
   cadeia quarentena → inspeção → sucata da especificação continua **quebrada** — vem de antes desta etapa, e é a
   **próxima etapa**.
+  > ✅ **PAGO NA ETAPA 69** — a não conformidade decidida Sucatear ganhou **Solicitar sucateamento**, que baixa do
+  > bloqueado. **E duas frases deste item estavam ERRADAS, e ficam corrigidas aqui em vez de apagadas:** (1) a citação
+  > **(C93)** — o C93 trata das *outras saídas que tiram da área de sucata*, não de "desbloquear para sucatear"; esse
+  > risco não tinha item próprio. (2) "a solicitação é recusada" só valia quando **toda** a quantidade retida era
+  > reprovada; na reprovação **parcial** (o caso comum) o sucateamento comum era **aceito** e baixava material **bom** —
+  > ver **C96** e a consulta **A33 (b)**.
 - **(68) O sucateamento só sai da área quando UMA localização da área cobre tudo.** Saldo espalhado entre duas posições
   da mesma área de sucata (3 numa, 2 na outra, sucateamento de 5) não soma: sai como antes, da padrão (**B289**).
 - **(68) Material com lote** não usa a área de sucata como origem do sucateamento (**B289**, **B204**).
@@ -6348,6 +6522,22 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(68) Levar o separado para a área de expedição** (e a entrega baixar de lá) continua falta da separação (feature
   05), que depende da lista de separação como entidade.
 - **(68) As outras saídas tiram da área de sucata** — perda, entrega automática e "Sai de" (**C93**).
+- **(69) Material de cliente reprovado só se sucateia pela API.** A janela **Solicitar sucateamento** não tem campos de
+  OS nem de projeto, e a saída de material de cliente exige a OS ou o projeto **desse** cliente. O "Registrar execução"
+  recusa com *"Material de cliente: o sucateamento precisa da OS ou do projeto do cliente — solicite pela API informando
+  os_origem_id/projeto_origem_id, ou registre a execução sem baixa informando o motivo"* (**B314**).
+- **(69) Sucatear parte da reprovada não existe** — vai a quantidade reprovada inteira (**B299**).
+- **(69) Material com série não se sucateia pela não conformidade** — recusado com *"Material com controle de série não
+  pode ser sucateado por aqui — dê baixa pela tela de Movimentações"*, como no sucateamento comum.
+- **(69) O sucateamento comum na reprovação parcial continua baixando do disponível** — é decisão (**B307**), com aviso
+  (**C96**) e consulta (**A33 b**); um teste prende o comportamento para ninguém mudá-lo sem ler a decisão.
+- **(69) Lote fora de ATIVO** (o típico do material com controle de certificado, cujo lote nasce **Bloqueado**) não
+  vai para o sucateamento: a Qualidade muda o status do lote antes, ou a execução é registrada sem baixa com o motivo
+  (**B305**, **B309**).
+- **(69) O estorno pelo livro da sucata do reprovado é recusado** — corrigir um sucateamento indevido é AJUSTE
+  (**B298**).
+- **(69) O sucateamento continua sem e-mail** — o aviso por e-mail do sucateamento é da feature de notificações
+  (decisão da Etapa 9).
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -6905,6 +7095,20 @@ prova:
    escolhido: a frase aparece abaixo do destino, some ao trocar para uma prateleira comum, e a transferência passa.
 4. **O sucateamento.** **Sobras e Retalhos → Sucateamentos**: solicitar e aprovar nas duas pernas um sucateamento que a
    área cobre — no **Mapa de Áreas**, a posição fica vazia.
+
+**(69) Nenhum clique foi dado nesta etapa.** Os testes provam o servidor pela rota (o motor 10 cenários, as regras da
+não conformidade 13, o sucateamento 16, ponta a ponta 12 — este com sete usuários diferentes) e as duas telas com o
+servidor simulado. O que **só o navegador** prova:
+
+1. **O botão.** **Não Conformidades**: numa não conformidade de inspeção decidida **Sucatear**, com um usuário
+   Almoxarife, aparece **Solicitar sucateamento**; com um usuário da Qualidade ou do Compras, **não** aparece.
+2. **A janela de solicitar.** A justificativa vem preenchida com a da decisão; ao confirmar, o aviso diz o número
+   **SUC-…** e aponta para *Sobras e Retalhos › Sucateamentos*.
+3. **O Registrar execução de um Sucatear.** O texto diz que a baixa é a segunda aprovação; o campo **"Motivo para
+   registrar sem baixa"** aparece; confirmar num documento possível de sucatear mostra a recusa que ensina o caminho.
+4. **A fila de sucateamentos.** **Sobras e Retalhos → Sucateamentos**: o sucateamento vindo da não conformidade mostra o
+   selo **Origem: NC-…** e *"Material reprovado — baixa do material bloqueado, não do disponível"*; o comum, nada. Ao
+   aprovar a segunda perna, o aviso cita o bloqueado e a NC.
 
 
 **G1. Toda coluna nova da tabela de materiais vaza quantidade exata para o requisitante até alguém
@@ -7958,6 +8162,24 @@ ninguém notar (o erro do alerta é registrado no log e não desfaz a movimenta�
 vazio nesse ponto — um defeito real no alerta pós-movimentação passaria por essa suíte verde. A suíte principal
 (`test:api`) monta o schema real. **Correção pequena** (acrescentar a coluna à montagem do teste, ou
 usar o schema real), candidata a entrar como task da próxima etapa.
+> ✅ **PAGO NA ETAPA 69** (`9a45c31`): a montagem ganhou `localizacao` (e o irmão da mesma classe — `status` e
+> `updated_at` no pedido de compra); um teste novo prova que o alerta pós-movimentação roda (o material que zera fica
+> **ZERADO** e enfileira exatamente um aviso de estoque zerado); e um espião faz a suíte **falhar** se aparecer
+> *"[almoxarifado-alertas] Falha"* ou *"no such column"* no log. Controle positivo: tirar a coluna derruba o teste novo
+> e o espião; tirar a chamada do alerta no motor derruba o teste novo. A suíte foi de 42 para 44 testes e o log de 19
+> avisos para zero (**B308**).
+
+**G80 (NOVO, notado na Etapa 69). O teste ponta a ponta dos indicadores da Etapa 67 lê "hoje" uma vez e falha se a
+rodada atravessar a meia-noite UTC.** `indicadoresSpec27Integracao.api.test.js` calcula o dia do prazo no começo; numa
+rodada completa da suíte que começou antes e terminou depois da meia-noite UTC, 3 cenários caíram — sozinho, o arquivo
+passa 8/8 e passou de novo minutos depois. Não é defeito de produção (o indicador lê o dia na hora). **O risco:** um
+vermelho falso em rodada noturna faz alguém "consertar" o indicador. **Correção pequena:** ler o dia antes de cada
+cenário, ou fixar as datas relativas a um dia lido do banco por cenário.
+
+**G81 (NOVO, notado na Etapa 69). A suíte `test:almoxarifado` ainda ignora o pré-cadastro dos tipos de material.** A
+mesma montagem à mão do G79 não tem a coluna `descricao` em `tipos_material_almoxarifado`, e o pré-cadastro é pulado com
+*"has no column named descricao"* — sem derrubar nada, e fora do padrão que o espião do G79 vigia. Mesma classe do G79
+(teste vazio nesse ponto); correção do mesmo tamanho.
 
 aparece na hora, para quem está editando.
 ## Etapa 0 — Fundação (2026-08-03)
@@ -15836,9 +16058,112 @@ corrida entre a consulta e a baixa) — viraram teste — e o servidor tratando 
 desativada, enquanto o Mapa não — corrigido no servidor.
 
 
+## Etapa 69 — O material reprovado na inspeção vai para o sucateamento (2026-10-01)
+
+A especificação pede a cadeia **quarentena → inspeção → reprovar → sucatear**, e o último elo não existia: a peça
+reprovada fica **bloqueada**, a Qualidade decidia **Sucatear** na não conformidade — e nada acontecia. O formulário de
+sucateamento só aceita o **disponível**: com tudo reprovado ele recusava; e, pior, na reprovação **parcial** (chegaram
+10, reprovou 3) ele **aceitava** e baixava 3 peças **boas**, deixando as ruins no galpão. E registrar a execução de um
+Sucatear tirava o documento da fila sem mexer em nada. Agora a não conformidade decidida **Sucatear** tem o gesto
+**Solicitar sucateamento**: o sucateamento nasce com o material, a quantidade reprovada e o lote **da inspeção**, passa
+pelas **mesmas duas aprovações** de sempre, e a segunda aprovação baixa **do bloqueado** — o aprovado não é tocado — e
+registra a execução do documento.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A decisão **Sucatear** da não conformidade só registrava intenção | **Solicitar sucateamento** na própria não conformidade, com material, quantidade e lote da inspeção (**B296**, **B299**) |
+| O sucateamento só baixava do disponível; com o reprovado bloqueado, recusava *"disponivel 0"* | A segunda aprovação baixa **do bloqueado**: físico e bloqueado caem juntos, o disponível fica igual (**B297**) |
+| Na reprovação parcial, sucatear "o reprovado" pelo formulário comum levava material **bom** | O caminho certo é o da não conformidade; o formulário comum **não mudou** e o risco está avisado (**B307**, **C96**, **A33**) |
+| **Registrar execução** de um Sucatear tirava o documento da fila sem mexer em nada | Recusa e diz o caminho; registra sem baixa só com motivo escrito, quando o sucateamento não é possível (**B301**, **B309**) |
+| Liberar, devolver e sucatear o mesmo reprovado não se olhavam por completo | As três saídas olham a inspeção: o que saiu por uma não sai pela outra (**B300**) |
+| A sucata podia ser estornada pelo livro e voltava ao disponível | A sucata do reprovado **não** se estorna pelo livro (**B298**) |
+| A fila de sucateamentos não dizia de onde vinha o pedido | Selo **Origem: NC-…** e *"Material reprovado — baixa do material bloqueado, não do disponível"* |
+| O cartão **Material reprovado** continuava listando o que foi sucateado | O sucateado sai do cartão |
+
+### As regras, com o cenário exato
+
+Preparação: um material **crítico** (exige inspeção) com **controle de lote e de certificado**; usuários: um da
+**Qualidade**, dois **Almoxarifes** (A e B) e um **Gestor**. Receba 10 desse material numa nota (o lote nasce
+**Bloqueado** — falta o certificado) e, em **Inspeções**, reprove **3** e aprove 7. A não conformidade **NC-…** nasce
+sozinha; decida-a **Sucatear** (com a Qualidade).
+
+**1. Registrar execução recusa e ensina.** Em **Não Conformidades → Registrar execução**, sem motivo: *"O lote ⟨L⟩
+está bloqueado (⟨motivo do lote⟩): libere o lote para sucatear o reprovado, ou registre a execução sem baixa
+informando o motivo."* O documento continua na fila.
+
+**2. Liberar o lote.** Mude o status do lote para **Ativo** (Qualidade, em **Lotes e Séries**). **Registrar execução**
+de novo: *"Esta não conformidade pede sucateamento: o almoxarifado registra em "Solicitar sucateamento" (duas
+aprovações) — a execução fica registrada na segunda aprovação."*
+
+**3. Solicitar.** Com o Almoxarife A, **Solicitar sucateamento** na linha da NC: a justificativa já vem preenchida;
+confirme. O aviso: *"Sucateamento SUC-⟨n⟩ solicitado para NC-⟨…⟩. A baixa do material reprovado acontece na segunda
+aprovação, em Sobras e Retalhos › Sucateamentos."* Nada saiu do estoque (físico 10, bloqueado 3). Uma segunda
+solicitação: *"Já existe um sucateamento solicitado para esta não conformidade (SUC-⟨n⟩) — aprove ou rejeite esse
+antes"*; e o Registrar execução agora diz *"Já existe o sucateamento SUC-⟨n⟩ desta não conformidade aguardando
+aprovação no almoxarifado."*
+
+**4. As duas aprovações.** **Sobras e Retalhos → Sucateamentos**: a linha tem **Origem: NC-…**. O Gestor aprova a
+perna da gestão (nada sai); o Almoxarife **B** aprova a do almoxarifado: *"Sucateamento aprovado nas duas pernas — a
+baixa do material bloqueado (reprovado na NC-…) foi emitida no estoque"*. Resultado: **físico 7, bloqueado 0,
+disponível 7** — as 7 aprovadas intactas; no livro, a **Sucata** do lote com a NC; a NC fica **Executada** e sai do
+cartão **Material reprovado**. Quem solicitou não aprova, e a mesma pessoa não aprova as duas pernas (como sempre).
+
+**5. Estornar pelo livro.** Em **Movimentações**, estornar essa sucata: *"Sucateamento de material reprovado não pode
+ser estornado pelo livro — o material voltaria ao estoque disponível com a não conformidade dizendo que foi
+sucateado"*.
+
+**6. O que já saiu não sai de novo.** Uma não conformidade **Devolver** da mesma inspeção, ao registrar a execução:
+*"O material desta inspeção já havia sido sucateado — a execução foi registrada sem mover saldo"*. E, ao contrário, se
+a inspeção já foi devolvida, a solicitação recusa: *"O material desta inspeção já havia sido devolvido ao fornecedor"*.
+
+**7. Quando o lote não tem mais o reprovado.** Se uma saída levou as peças do lote reprovado (o total do material ainda
+cobre, mas o lote não), a solicitação recusa: *"O lote ⟨L⟩ tem ⟨s⟩ ⟨un⟩ em estoque, menos que o reprovado (⟨q⟩) — o
+reprovado já saiu do lote; registre a execução sem baixa informando o motivo"*. No Registrar execução, preencher
+**"Motivo para registrar sem baixa"** registra: *"A execução foi registrada sem baixa, pelo motivo informado — o
+material continua bloqueado"*.
+
+**8. O risco que continua (C96).** Repita a preparação, mas use o **formulário comum** de **Sobras e Retalhos →
+Solicitar sucateamento** para 3 unidades: ele é aceito e, aprovado, baixa 3 do **disponível** — o reprovado continua
+bloqueado. É por isso que o reprovado se sucateia **pela não conformidade**.
+
+### O que esta etapa NÃO cobre
+
+1. **Sucatear parte da reprovada** — vai a quantidade inteira (**B299**).
+2. **Material com série** — recusado, como no sucateamento comum.
+3. **Material de cliente pela tela** — a janela não tem OS/projeto; só pela API (**B314**, **D (69)**).
+4. **O sucateamento comum** continua aceitando o disponível de material com reprovado pendente (**B307**, **C96**).
+5. **E-mail do sucateamento** — feature de notificações.
+6. **A corrida rara** entre devolver e sucatear a mesma inspeção (**C98**) — depende de transação de banco.
+
+### O que a revisão encontrou
+
+A medição achou que a cadeia não estava só quebrada: na reprovação parcial ela funcionava **errado em silêncio**
+(material bom para a caçamba) — daí o aviso **C96** e a consulta **A33**. A revisão do **plano** provou, executando no
+motor real, que o material com controle de certificado tem o lote **Bloqueado** desde a entrada — o caso típico teria
+"executado" o documento sem baixa nenhuma — e que, com lote, a área de sucata era ignorada e o saldo por endereço
+ficava errado; os dois foram corrigidos antes do código. A revisão do **código**, executando, achou um beco: com o lote
+do reprovado esvaziado por outra saída, o documento dizia "pede sucateamento" para sempre e cada tentativa gastava duas
+assinaturas — corrigido (o lote é conferido antes); achou o material de cliente mandado para um gesto que a tela não
+consegue fazer — corrigido (a recusa ensina e o motivo destrava); e uma corrida rara, declarada (**C98**). De quebra, a
+suíte de testes do almoxarifado passou a exercitar o alerta depois de cada movimentação (**G79**, pago).
+
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 69 entregue (2026-10-01):** **o material reprovado na inspeção vai para o sucateamento.** Na tela de **Não
+  Conformidades**, a decisão **Sucatear** ganhou **Solicitar sucateamento**: o pedido nasce com o material, a quantidade
+  reprovada e o lote da inspeção, passa pelas duas aprovações de sempre em **Sobras e Retalhos**, e a segunda baixa **do
+  bloqueado** — o aprovado não é tocado. **Registrar execução** de um Sucatear recusa e ensina o caminho; a sucata do
+  reprovado não se estorna pelo livro; liberar, devolver e sucatear o mesmo reprovado olham umas às outras. **O que é
+  seu:** a consulta **A33** (reprovado esperando sucateamento e o possível material bom já sucateado, antes do deploy);
+  as decisões **B296 a B315**; os avisos **C96 a C100** (o **C96** é o mais importante: não sucatear reprovado pelo
+  formulário comum); as limitações **(69)** em D, as verificações **(69)** em F e as fragilidades **G80** e **G81**
+  (**G79** pago). **Próxima: Etapa 70 — o e-mail automático na entrada confirmada do recebimento (feature 08, com a
+  19) — ver o plano da Etapa 69.**
 
 - **Etapa 68 entregue (2026-10-01):** **as áreas especiais passam a dizer o que fazem — e o que não fazem.** Áreas
   novas **Área de sucata** e **Área de devoluções**; o assistente de **Nova Localização** oferece as cinco áreas; a
@@ -15847,7 +16172,7 @@ desativada, enquanto o Mapa não — corrigido no servidor.
   **feature 02 vai a 🟢**. **O que é seu:** a consulta **A32** (tipos e saldos em área, antes do deploy); as decisões
   **B284 a B295**; os avisos **C93 a C95**; as limitações **(68)** em D, as verificações **(68)** em F e a fragilidade
   **G79**. **Próxima: Etapa 69 — sucatear o material reprovado (a cadeia quarentena → inspeção → sucata) — ver o plano
-  da Etapa 68.**
+  da Etapa 68.** *(Feita — Etapa 69.)*
 
 - **Etapa 67 entregue (2026-10-01):** **os indicadores que faltavam da especificação.** Campo **"Data de necessidade"**
   na criação da requisição; cartão **"Requisições no prazo"** no painel; nos **Indicadores gerenciais**, requisições no

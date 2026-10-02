@@ -434,7 +434,10 @@ e deixa de sugerir a área; nada é recusado nem movido. (d) com linhas — a en
 **quebrada**, medido na Fase 2 desta etapa: a reprovação deixa o material **bloqueado** (`quantidade_bloqueada`), e o
 `solicitar` do sucateamento só aceita o **disponível** (`scrapDisposalService.js:~238`, *"Saldo disponivel insuficiente
 para sucatear … disponivel 0"*). Desbloquear antes para sucatear deixa o material condenado **livre** para outras saídas
-(**C93**). E a decisão `SUCATEAR` da não conformidade (Etapa 45) só registra a **intenção** (`nonConformityService.js:20`,
+(**C93**) *(⚠️ **citação ERRADA**, corrigida no fechamento da Etapa 69 em vez de apagada: o C93 trata das **outras
+saídas que tiram da área de sucata**, não de "desbloquear para sucatear"; esse risco não tinha item próprio. E a
+recusa "disponivel 0" só valia com **toda** a quantidade retida reprovada — na reprovação parcial o sucateamento comum
+aceitava e baixava material bom: C96 das novidades)*. E a decisão `SUCATEAR` da não conformidade (Etapa 45) só registra a **intenção** (`nonConformityService.js:20`,
 `:87`, `:1012`). É um fluxo de operação real que hoje não fecha, e o molde já existe na base: a **devolução ao
 fornecedor** da Etapa 45 baixa **do bloqueado** pelo motor (`DEVOLUCAO_FORNECEDOR`, `stockService.js:~1028`,
 `baixandoBloqueado` em `:~1347`). Valor alto, esforço médio, sem dependência. As outras 🟡 seguem bloqueadas (21/22

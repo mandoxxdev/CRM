@@ -115,7 +115,20 @@
 > da conta, como sempre estiveram: são pendências, não checklist. *Este cabeçalho listava também
 > "cadastro do plano pela tela" (pago na Etapa 30) e "anexos" (pago na 32) — os dois saíram.* ·
 > **Spec original:** seção 9
-> **Última atualização:** 2026-09-30 (**Etapa 46 — o documento decidido deixa de ser um beco; a feature CONTINUA 🟢, e a etapa não paga item de checklist: ela fecha o furo C64 que a 45 criou**. Antes: 2026-09-29 (**Etapa 45 — o encaminhamento ganha status; a feature vira 🟢**). Antes: 2026-09-28 (Etapas 43 e 44 — a NC numerada e a liberação pela decisão; as duas escreveram no cabeçalho e na seção "O que falta para 🟢" e a **43 esqueceu de marcar o checklist**, corrigido aqui). Antes: 2026-09-02 (**Etapa 32 — anexos**; antes: 2026-08-31 (**Etapa 30, `af7adea..7982f18`: o cadastro do plano ganha
+> **Etapa 69 (2026-10-01, `99bbce4`, `db8fa69`, `419b5a7`, `ff4d8e9`, `b3c75e5`, `7c0676c` + fix-round
+> `c517248`/`827d655`) — A DECISÃO `SUCATEAR` PASSA A EXECUTAR.** A NC automática de inspeção decidida *Sucatear*
+> ganhou *Solicitar sucateamento*: o sucateamento nasce ligado ao documento, com material, quantidade reprovada e lote da
+> inspeção, passa pelas duas assinaturas da feature 15 e a segunda baixa a `SUCATA` **do bloqueado**, carimba a inspeção
+> (`sucateamento_em`, irmão de `liberacao_nc_em` e `devolucao_fornecedor_em`) e registra a execução da NC. O
+> `/executar` de `SUCATEAR` **deixou de registrar "sem mover" calado**: recusa ensinando quando o sucateamento é
+> possível, e só registra sem baixa com `motivo_sem_baixa` explícito (lote fora de ATIVO, lote sem o reprovado, material
+> de cliente) ou quando é impossível por saldo. As **três** portas sobre o mesmo bloqueado (liberar — 44, devolver — 45,
+> sucatear — 69) olham os três carimbos — **reabertura declarada** das Etapas 44 e 45 (**B300**). **A feature continua
+> 🟢**; o corte **B174** da Etapa 44 fica pago para o `SUCATEAR` (ver a correção no item do checklist). Continua fora:
+> material de cliente pela tela (só API), sucatear parte da reprovada, série — e o sucateamento **comum** da feature 15,
+> que na reprovação parcial baixa material bom (**C96** das novidades, decisão **B307**).
+> **Última atualização:** 2026-10-01 (**Etapa 69 — a decisão Sucatear executa pelo sucateamento; a feature continua
+> 🟢**). Antes: 2026-09-30 (**Etapa 46 — o documento decidido deixa de ser um beco; a feature CONTINUA 🟢, e a etapa não paga item de checklist: ela fecha o furo C64 que a 45 criou**. Antes: 2026-09-29 (**Etapa 45 — o encaminhamento ganha status; a feature vira 🟢**). Antes: 2026-09-28 (Etapas 43 e 44 — a NC numerada e a liberação pela decisão; as duas escreveram no cabeçalho e na seção "O que falta para 🟢" e a **43 esqueceu de marcar o checklist**, corrigido aqui). Antes: 2026-09-02 (**Etapa 32 — anexos**; antes: 2026-08-31 (**Etapa 30, `af7adea..7982f18`: o cadastro do plano ganha
 > tela** — o item 5 de "O que falta para 🟢", criado no fechamento da 29, está **pago**. Com ele
 > **não falta mais tela nenhuma** no ciclo dimensional: cadastrar plano, medir na inspeção e reler
 > as medidas são todos cliques. A feature **continua 🟡**, e os quatro itens restantes são **fluxo
@@ -247,7 +260,10 @@ Inspeção de recebimento com plano, quarentena e bloqueio efetivos no saldo, n�
       > de um documento.
       > **O que NÃO entrou, e é corte declarado:** as outras quatro decisões (`DEVOLVER`,
       > `SUBSTITUICAO`, `ANALISE_ENGENHARIA`, `SUCATEAR`) continuam marcando intenção sem tocar no
-      > saldo (**B174**); e a liberação **não** reabilita o lote — em material com `controle_lote`,
+      > saldo (**B174**) — *(**esta frase DEIXOU DE VALER para duas das quatro**, e fica corrigida aqui em
+      > vez de apagada: o `DEVOLVER` move saldo desde a Etapa 45 (registro da execução) e o `SUCATEAR`
+      > desde a Etapa 69 (pelas duas assinaturas do sucateamento, `419b5a7`); `SUBSTITUICAO` e
+      > `ANALISE_ENGENHARIA` continuam só intenção)*; e a liberação **não** reabilita o lote — em material com `controle_lote`,
       > lote `REPROVADO` continua barrando a saída (furo **C62**, fixado por teste em
       > `naoConformidadeLiberacaoIntegracao.api.test.js`).
 - [x] Solicitar análise da Engenharia / devolução ao fornecedor / substituição (registrar o encaminhamento pretendido) — **Etapa 5** (`dc841f2`): o campo `encaminhamento` (`DEVOLVER` | `ANALISE_ENGENHARIA` | `SUBSTITUICAO`) é validado e gravado em `inspecoes_recebimento_almoxarifado` na reprovação.
@@ -604,6 +620,8 @@ do efeito de saldo. A reprovação parcial fica em aberto até alguém decidir s
 | O plano deixa rastro na **tela-contrato** da auditoria (`entidade=plano_inspecao`, rótulo "Plano de inspeção", de/para do nominal) | `(7)` — `server/tests/api/inspecaoIntegracao.api.test.js` (`cdb64a6`) |
 | A decisão de inspeção **não** deixa rastro na auditoria (ausência declarada, com a metade positiva ao lado) | `(8)` — `server/tests/api/inspecaoIntegracao.api.test.js` |
 | Desvio autorizado exige responsável + justificativa e fica registrado | não implementado — fora do escopo da Etapa 5 |
+| NC `SUCATEAR`: a viabilidade é uma função pura com a precedência de recusas; o `/executar` recusa o possível e só registra sem baixa com motivo; as três portas (44/45/69) olham os três carimbos; o cartão *Material reprovado* exclui o sucateado | `sucateamentoReprovadoRegra.api.test.js` (13) — Etapa 69, `db8fa69`; `encaminhamentoExecucao` (9)/(9b)/(16) e `encaminhamentoRotas` (7) mudados de propósito (o `SUCATEAR` saiu do laço "registram sem mover") |
+| A cadeia receber → reprovar → NC → solicitar → duas assinaturas → bloqueado zera, com o lote do certificado nascendo Bloqueado | `sucateamentoReprovadoIntegracao.api.test.js` (12, pelas rotas) — `7c0676c`, `c517248`, `827d655` |
 
 ## Dependências
 

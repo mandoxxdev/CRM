@@ -3616,11 +3616,16 @@ saldo nenhum neste clique.** Essas quatro registram o que se **decidiu** e deixa
 **Pendente de execução**: falta alguém confirmar que o encaminhamento foi cumprido (15b.4-ter). Até
 esse registro, o material reprovado continua **bloqueado** na prateleira.
 
-Das quatro, **só a execução de *Devolver ao fornecedor* baixa estoque** — e quem baixa é o registro
-da execução, nunca a decisão. *Substituição*, *Análise da Engenharia* e *Sucatear* não mexem em
-saldo nem quando executadas: pedir a reposição ao fornecedor, cumprir o destino que a Engenharia
-definiu e baixar a sucata (que passa pelo fluxo de sucateamento, com as duas aprovações — seção 20)
-continuam sendo gestos próprios, nas telas de sempre.
+Das quatro, **duas chegam a baixar estoque — e nunca no clique da decisão**:
+
+- ***Devolver ao fornecedor*** baixa no **registro da execução** (15b.4-ter);
+- ***Sucatear*** baixa pelo **processo de sucateamento** aberto na própria não conformidade — o botão
+  **Solicitar sucateamento** (20.2b) —, na **segunda aprovação** do sucateamento, que é também o que
+  registra a execução do documento.
+
+*Substituição* e *Análise da Engenharia* não mexem em saldo nem quando executadas: pedir a reposição
+ao fornecedor e cumprir o destino que a Engenharia definiu continuam sendo gestos próprios, nas telas
+de sempre.
 
 **A tela diz, em todos os casos, o que aconteceu com o saldo** — porque "não mexeu" é informação, e
 não ausência dela. O aviso de sucesso da **decisão** traz uma destas frases:
@@ -3631,6 +3636,7 @@ não ausência dela. O aviso de sucesso da **decisão** traz uma destas frases:
 | *"Esta decisão não altera o saldo"* | a decisão é uma das quatro que deixam o documento pendente de execução |
 | *"Esta não conformidade não tem material bloqueado para liberar"* | o documento veio de **recebimento** (faltar material não bloqueia nada), ou a inspeção não reprovou quantidade nenhuma |
 | *"O material desta inspeção já havia sido liberado"* | outro documento da mesma inspeção já liberou |
+| *"O material desta inspeção já saiu do estoque — a decisão foi registrada sem liberar saldo"* | o material daquela inspeção já foi **devolvido ao fornecedor** ou **sucateado** por outro documento — liberar soltaria bloqueio de outra origem |
 | *"Não conformidade aberta manualmente não libera saldo"* | o documento foi criado à mão, e não pelo registro automático da reprovação |
 | *"Material inativo — a decisão foi registrada sem liberar saldo"* | o material foi desativado no cadastro depois da reprovação |
 | *"O material já havia sido desbloqueado fora do documento — a decisão foi registrada sem liberar saldo"* | o bloqueio do material é **menor** que a quantidade reprovada: alguém já o desbloqueou pela tela de Movimentações |
@@ -3720,8 +3726,13 @@ O texto do modal muda com a decisão, porque o efeito muda:
 - em **Devolver ao fornecedor**, ele pede que se confirme que o material **saiu de fato** para o
   fornecedor, e avisa que **é este registro que dá a baixa no estoque — antes dele o material segue
   retido**;
-- nas outras três, ele diz que a decisão **não movimenta estoque**: o registro guarda a data, o
-  autor e a observação de que o encaminhamento foi cumprido.
+- em **Sucatear**, ele diz que o sucateamento do material reprovado é feito em **Solicitar
+  sucateamento**, que a baixa acontece na **segunda aprovação** do sucateamento e que é ela que
+  registra esta execução — e que aqui só se registra quando o sucateamento não é possível. Este
+  modal tem um segundo campo, **Motivo para registrar sem baixa** (ver *A execução de Sucatear*,
+  abaixo);
+- em **Substituição** e **Análise da Engenharia**, ele diz que a decisão **não movimenta estoque**:
+  o registro guarda a data, o autor e a observação de que o encaminhamento foi cumprido.
 
 #### O que a execução de *Devolver ao fornecedor* faz com o saldo
 
@@ -3762,7 +3773,7 @@ o saldo, a frase que explica o que aconteceu com ele:
 | O que a tela diz | Quando |
 |---|---|
 | *"⟨N⟩ devolvido(s) ao fornecedor"* | a devolução baixou N unidades — o caso normal |
-| *"Esta execução não altera o saldo"* | a decisão é *Substituição*, *Análise da Engenharia* ou *Sucatear* |
+| *"Esta execução não altera o saldo"* | a decisão é *Substituição* ou *Análise da Engenharia* — ou *Sucatear* num documento aberto à mão, em material com número de série, ou sem lote identificável |
 | *"Só a não conformidade aberta pela reprovação da inspeção devolve material"* | o documento foi aberto à mão, e não pelo registro automático da reprovação |
 | *"O material desta inspeção já havia sido devolvido"* | o material daquela inspeção já tinha saído |
 | *"O material já havia saído do bloqueio — a execução foi registrada sem mover saldo"* | o bloqueio do material é **menor** que a quantidade reprovada: alguém já o soltou pela tela de Movimentações |
@@ -3770,6 +3781,32 @@ o saldo, a frase que explica o que aconteceu com ele:
 | *"Material inativo — a execução foi registrada sem mover saldo"* | o material foi desativado no cadastro depois da reprovação |
 | *"Esta não conformidade não tem material reprovado para devolver"* | a inspeção do documento não tem quantidade reprovada |
 | *"O material desta inspeção já havia sido liberado por outra não conformidade — a execução foi registrada sem mover saldo"* | outro documento da mesma inspeção foi **aceito** e já soltou a retenção daquela inspeção |
+| *"O material desta inspeção já havia sido sucateado — a execução foi registrada sem mover saldo"* | o material daquela inspeção já foi para o **sucateamento** por outro documento |
+| *"O material desta inspeção já havia sido devolvido ao fornecedor — a execução foi registrada sem mover saldo"* | (num *Sucatear*) o material daquela inspeção já foi **devolvido** por outro documento |
+| *"Esta não conformidade não tem material reprovado para sucatear — a execução foi registrada sem mover saldo"* | (num *Sucatear*) a inspeção do documento não tem quantidade reprovada |
+| *"A execução foi registrada sem baixa, pelo motivo informado — o material continua bloqueado"* | (num *Sucatear*) o sucateamento não era possível pelo lote ou por ser material de cliente, e o **Motivo para registrar sem baixa** foi preenchido |
+
+#### A execução de *Sucatear* — o registro é a segunda aprovação do sucateamento
+
+Num documento decidido **Sucatear**, quem dá a baixa **não** é este botão: é o sucateamento aberto
+pela própria não conformidade (**Solicitar sucateamento**, 20.2b), na segunda aprovação — e é essa
+aprovação que grava a execução do documento, com a data, o autor e a movimentação. Por isso o
+**Registrar execução** de um *Sucatear* se comporta assim:
+
+| Situação | O que acontece |
+|---|---|
+| O sucateamento **é possível** | **Recusa:** *"Esta não conformidade pede sucateamento: o almoxarifado registra em "Solicitar sucateamento" (duas aprovações) — a execução fica registrada na segunda aprovação."* |
+| Já existe um sucateamento **esperando assinatura** para o documento | **Recusa:** *"Já existe o sucateamento SUC-⟨n⟩ desta não conformidade aguardando aprovação no almoxarifado."* |
+| O **lote** do material reprovado não está **Ativo** (o caso típico do material com controle de certificado, cujo lote nasce Bloqueado) | **Recusa:** *"O lote ⟨L⟩ está ⟨status⟩ (⟨motivo do lote⟩): libere o lote para sucatear o reprovado, ou registre a execução sem baixa informando o motivo."* |
+| O lote **não tem mais** a quantidade reprovada (saiu por outra saída) | **Recusa:** *"O lote ⟨L⟩ tem ⟨s⟩ ⟨un⟩ em estoque, menos que o reprovado (⟨q⟩) — o reprovado já saiu do lote; registre a execução sem baixa informando o motivo"* |
+| O material é **de cliente** | **Recusa:** *"Material de cliente: o sucateamento precisa da OS ou do projeto do cliente — solicite pela API informando os_origem_id/projeto_origem_id, ou registre a execução sem baixa informando o motivo"* |
+| O sucateamento é **impossível por saldo** (o material já saiu do bloqueio ou do físico, já foi devolvido, sucateado ou liberado, ou foi desativado) | Registra **sem mover saldo**, com a frase correspondente da tabela acima |
+
+Nos três casos de **lote** e de **material de cliente**, preencher o campo **Motivo para registrar sem
+baixa** faz o registro passar **sem baixa**: o material **continua bloqueado**, e o motivo fica
+gravado nas observações da execução. Esse campo **não** destrava o caso em que o sucateamento é
+possível, nem o que já tem sucateamento esperando assinatura — ali o caminho é o sucateamento (ou
+rejeitá-lo, em *Sobras e Retalhos*, antes de registrar).
 
 #### As quatro regras que quem executa precisa conhecer
 
@@ -3854,7 +3891,7 @@ permanece.
 #### O painel de Alertas para de cobrar o que saiu
 
 O cartão **Material reprovado** da central de alertas (21c-bis) deixa de listar a inspeção **cujo
-material saiu de fato** para o fornecedor. Se a execução foi registrada **sem mover saldo** — qualquer
+material saiu de fato** — para o fornecedor ou para o sucateamento. Se a execução foi registrada **sem mover saldo** — qualquer
 uma das frases acima que termina em "sem mover saldo" —, o aviso **continua** listando, porque o
 material continua no galpão. O cartão mede **material movido**, não intenção registrada. Pela mesma
 régua, **cancelar o documento não tira a inspeção deste cartão** (15b.4-quater): o cancelamento
@@ -4575,6 +4612,12 @@ O que o sistema valida já na solicitação (para a recusa não esperar duas ass
 - **Material de cliente exige o vínculo do dono** (OS/projeto do próprio cliente), com a mesma
   regra e a mesma mensagem da saída comum (16.4).
 
+⚠️ **Este formulário baixa sempre do DISPONÍVEL — nunca do material bloqueado.** Material
+**reprovado na inspeção** se sucateia pela não conformidade (20.2b). Se a inspeção reprovou só
+parte do que chegou (10 chegaram, 3 reprovadas), o material tem 7 disponíveis e 3 bloqueados: um
+pedido de 3 por **este** formulário é **aceito**, e as duas aprovações baixam 3 peças **aprovadas** —
+as reprovadas continuam bloqueadas no galpão.
+
 A **classificação** é texto livre com seis sugestões que aparecem ao digitar: aço carbono, inox,
 alumínio, cobre, cavaco, misto. Ela agrupa o relatório financeiro — vale combinar a grafia com a
 equipe.
@@ -4625,8 +4668,86 @@ assinatura é recusada com *"O saldo em ⟨área⟩ (⟨saldo⟩) não cobre a q
 outros endereços"* e a assinatura é desfeita, como acima. Assinar de novo resolve: a nova tentativa escolhe a origem
 outra vez pela regra deste parágrafo.
 
-**Material reprovado na inspeção não chega aqui.** A reprovação deixa o material **bloqueado**, e o sucateamento só
-aceita o **disponível** — a solicitação é recusada com a mensagem de saldo de 20.1 (*disponivel 0*).
+### 20.2b Sucatear o material reprovado na inspeção — pela não conformidade
+
+O material reprovado numa inspeção fica **bloqueado** (15.3), e o formulário de 20.1 só baixa o
+disponível. O caminho dele é a **não conformidade** que a reprovação abriu: decidida **Sucatear**
+(15b.4), a linha dela na tela **Não Conformidades** ganha o botão **Solicitar sucateamento**.
+
+**Quem vê o botão:** quem pode movimentar estoque (Administrador e Almoxarife) — a Qualidade decide,
+o almoxarifado solicita, almoxarifado e gestão aprovam. O botão aparece na não conformidade aberta
+**automaticamente pela reprovação da inspeção**, **decidida Sucatear**, **não cancelada**, e cuja
+execução **ainda não tem baixa** — inclusive a que já aparece como *Executada* sem baixa nenhuma.
+
+**A janela.** Mostra o material e a decisão, e explica: *"Vai para o sucateamento toda a quantidade
+reprovada na inspeção, do lote dela. Solicitar não movimenta estoque: o pedido espera as duas
+aprovações (almoxarifado e gestão) em Sobras e Retalhos › Sucateamentos, e a segunda dá a baixa do
+material bloqueado e registra a execução desta não conformidade."* A **justificativa** (obrigatória)
+vem preenchida com a da decisão; classificação, peso estimado e observações são opcionais. **Material,
+quantidade e lote não se escolhem** — vêm da inspeção: a quantidade reprovada **inteira**, do lote
+do item inspecionado. Ao confirmar: *"Sucateamento SUC-⟨n⟩ solicitado para ⟨NC⟩. A baixa do
+material reprovado acontece na segunda aprovação, em Sobras e Retalhos › Sucateamentos."*
+
+**As aprovações são as de 20.2**, com as mesmas três regras de segregação. Na fila, o pedido traz o
+selo **Origem: ⟨NC⟩** e a frase *"Material reprovado — baixa do material bloqueado, não do
+disponível"*. Na segunda aprovação: *"Sucateamento aprovado nas duas pernas — a baixa do material
+bloqueado (reprovado na ⟨NC⟩) foi emitida no estoque"*. Nesse momento:
+
+- o **físico** e o **bloqueado** caem juntos pela quantidade reprovada — o **disponível não muda**
+  (as peças aprovadas não são tocadas); se o bloqueado já não cobre a quantidade, a aprovação é
+  recusada com *"Sucateamento acima do que está bloqueado: há ⟨b⟩ ⟨un⟩ bloqueado(s) (físico: ⟨a⟩)"* e
+  desfeita;
+- a linha de **Sucata** entra no livro com o lote, a referência `SUC-⟨n⟩` e o número da não
+  conformidade como documento vinculado — e conta no relatório financeiro de sucata como qualquer
+  outra;
+- a não conformidade fica **Executada**, com essa movimentação; e a inspeção sai do cartão
+  **Material reprovado**.
+
+**De onde sai a baixa.** De uma **área de sucata** (3.3b) — ou posição dentro dela — onde o saldo do
+material (do **lote** reprovado, quando o material controla lote) cubra a quantidade inteira; senão, do **endereço onde aquele item do
+recebimento entrou** (completando com os outros, se faltar, como na devolução ao fornecedor —
+15b.4-ter); senão, como qualquer saída sem endereço declarado.
+
+**O que a solicitação recusa** — na ordem em que o sistema confere:
+
+| Situação | Mensagem |
+|---|---|
+| O documento foi cancelado | *"Esta não conformidade foi cancelada — não há sucateamento a solicitar"* |
+| O documento ainda não foi decidido | *"Só é possível sucatear o material de uma não conformidade decidida"* |
+| A decisão não é Sucatear | *"A decisão desta não conformidade não é Sucatear — o material reprovado só vai para o sucateamento por essa decisão"* |
+| A execução do documento já tem baixa | *"O material desta não conformidade já saiu do estoque"* |
+| O documento foi aberto à mão | *"Só a não conformidade aberta pela reprovação da inspeção sucateia material reprovado"* |
+| A inspeção não tem quantidade reprovada | *"Esta não conformidade não tem material reprovado para sucatear"* |
+| O material da inspeção já foi sucateado | *"O material desta inspeção já foi sucateado"* |
+| … já foi devolvido ao fornecedor | *"O material desta inspeção já havia sido devolvido ao fornecedor"* |
+| … já foi liberado por outra não conformidade | *"O material desta inspeção já havia sido liberado por outra não conformidade"* |
+| Material inativo | *"O material ⟨código⟩ esta inativo e nao pode ser movimentado — reative o cadastro antes de sucatear"* |
+| Material com número de série | *"Material com controle de série não pode ser sucateado por aqui — dê baixa pela tela de Movimentações"* |
+| Material com lote e o lote não identificável | *"Não foi possível identificar o lote do material reprovado"* |
+| O lote não está **Ativo** | *"O lote ⟨L⟩ está ⟨status⟩ — o estoque não baixa lote fora de ATIVO, nem para sucata. Mude o status do lote antes de sucatear"* |
+| O bloqueado é menor que a reprovação | *"O material já havia saído do bloqueio — há ⟨b⟩ ⟨un⟩ bloqueado(s), a reprovação foi de ⟨r⟩"* |
+| O físico é menor que a reprovação | *"Não há saldo físico deste material para sucatear — físico ⟨a⟩ ⟨un⟩, reprovado ⟨r⟩"* |
+| O lote não tem mais a quantidade reprovada | *"O lote ⟨L⟩ tem ⟨s⟩ ⟨un⟩ em estoque, menos que o reprovado (⟨q⟩) — o reprovado já saiu do lote; registre a execução sem baixa informando o motivo"* |
+| Já há um sucateamento esperando assinatura para o documento | *"Já existe um sucateamento solicitado para esta não conformidade (SUC-⟨n⟩) — aprove ou rejeite esse antes"* |
+| Material de cliente sem OS/projeto do cliente | a mensagem da guarda do dono (16.4) — a janela não tem esses campos; só pela API |
+| Justificativa em branco | *"justificativa é obrigatória para sucatear"* |
+
+**Se algo mudou entre o pedido e a segunda aprovação**, a aprovação é recusada e **desfeita** (o
+pedido volta a *Solicitado*), com a causa: o documento foi cancelado (*"A não conformidade ⟨NC⟩ foi
+cancelada — o sucateamento não baixa material de documento cancelado"*; a outra perna, antes de
+assinar, recusa com *"A não conformidade foi cancelada — recuse este sucateamento."*), ou o material
+da inspeção saiu por outro caminho (*"O material desta inspeção já foi sucateado — a assinatura foi
+desfeita"*, e as variantes *"já havia sido devolvido ao fornecedor"* e *"já havia sido liberado por
+outra não conformidade"*).
+
+**A baixa não se desfaz pelo livro.** O estorno dessa sucata é recusado: *"Sucateamento de material
+reprovado não pode ser estornado pelo livro — o material voltaria ao estoque disponível com a não
+conformidade dizendo que foi sucateado"*. Corrigir um sucateamento indevido é um **ajuste** de
+estoque, com justificativa. O estorno de uma sucata do processo comum (20.1) continua possível.
+
+**A quantidade sai uma vez por inspeção.** Depois de sucateado, o material daquela inspeção não sai
+de novo por outro documento: a devolução ao fornecedor registra *"O material desta inspeção já havia
+sido sucateado — a execução foi registrada sem mover saldo"*, e a aceitação registra sem liberar.
 
 ### 20.3 Rejeitar e cancelar
 

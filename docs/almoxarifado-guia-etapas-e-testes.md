@@ -1,20 +1,27 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-01 (Etapa 68) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-01 (Etapa 69) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 68) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 69) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-01 (Etapa 68 ENTREGUE · Etapa 69 começando)
+> ## Onde o desenvolvimento está — 2026-10-01 (Etapa 69 ENTREGUE · Etapa 70 começando)
 >
-> **O desenvolvimento parou aqui: Etapa 68 fechada, Etapa 69 começando — 2026-10-01.** A **Etapa 68 (as áreas
+> **O desenvolvimento parou aqui: Etapa 69 fechada, Etapa 70 começando — 2026-10-01.** A **Etapa 69 (o material
+> reprovado na inspeção vai para o sucateamento)**: em **Não Conformidades**, a decisão **Sucatear** ganhou o botão
+> **Solicitar sucateamento** (do almoxarifado); o pedido passa pelas duas aprovações de sempre em **Sobras e Retalhos →
+> Sucateamentos** e a segunda baixa **do bloqueado** — o material aprovado não é tocado; **Registrar execução** de um
+> Sucatear recusa e diz o caminho. **Atenção:** o formulário comum de sucateamento, numa reprovação parcial, continua
+> levando material **bom** — reprovado se sucateia pela não conformidade (C96). **Próxima etapa, já começando: 70 — o
+> e-mail automático na entrada confirmada do recebimento** (ver *"Próxima tarefa detalhada"* no plano da Etapa 69).
+>
+> **Etapas 1 a 20 e 22 a 69 completas.**
+>
+> **Etapa 68, 2026-10-01.** A **Etapa 68 (as áreas
 > especiais passam a dizer o que fazem)**: existem a **Área de sucata** e a **Área de devoluções**; o assistente de
 > **Nova Localização** (Configurações → Setores e Áreas) oferece as cinco áreas especiais; a **Nova Movimentação** avisa,
 > abaixo do destino, o que a área **não** faz; a sugestão de entrada não manda para área especial; o sucateamento
 > aprovado baixa da área de sucata quando ela cobre tudo; e o **Mapa de Áreas** explica cada área. Nenhuma área recusa
-> nada. **Próxima etapa, já começando: 69 — sucatear o material reprovado na inspeção** (a cadeia quarentena →
-> inspeção → sucata, que o bloqueio quebra hoje; ver *"Próxima tarefa detalhada"* no plano da Etapa 68).
->
-> **Etapas 1 a 20 e 22 a 68 completas.**
+> nada. Próxima: 69 *(feita — acima)*.
 >
 > **Etapa 67, 2026-10-01.** A **Etapa 67 (os indicadores
 > que faltavam)**: a requisição ganhou o campo **"Data de necessidade"** (na **Nova Requisição de Material** e na cesta
@@ -5090,6 +5097,62 @@ como **Administrador** do almoxarifado; tenha à mão um segundo usuário para a
 - **Outras saídas ainda tiram da área de sucata** — perda, entrega automática e o "Sai de" da entrega.
 - Saldo espalhado em duas posições da área, ou material com lote, não usa a área no sucateamento.
 - A tela de **Devoluções** não tem campo de endereço; o processamento do recebimento não avisa.
+
+---
+
+## Etapa 69 — O material reprovado na inspeção vai para o sucateamento (ENTREGUE — 2026-10-01)
+
+**O que mudou, em uma frase:** a não conformidade decidida **Sucatear** ganhou o botão **Solicitar sucateamento**, e
+a baixa, depois das duas aprovações de sempre, sai do material **bloqueado** (o reprovado) — não do disponível.
+
+**O problema que ela resolve.** A peça reprovada na inspeção fica bloqueada, e a decisão "Sucatear" não fazia nada. O
+formulário de sucateamento só aceita o disponível: com tudo reprovado ele recusava, e na reprovação **parcial** (chegou
+10, reprovou 3) ele **aceitava** e baixava 3 peças **boas**, deixando as ruins no galpão. Registrar a execução do
+Sucatear tirava o documento da fila sem mexer em nada.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| "Sucatear" na não conformidade era só intenção | **Solicitar sucateamento** na linha da não conformidade |
+| O sucateamento do reprovado recusava (ou levava material bom) | A segunda aprovação baixa **do bloqueado**; o disponível não muda |
+| **Registrar execução** de Sucatear limpava a fila sem baixa | Recusa e diz o caminho; sem baixa, só com motivo escrito |
+| A fila de sucateamentos não dizia a origem | Selo **Origem: NC-…** e *"Material reprovado — baixa do material bloqueado, não do disponível"* |
+| A sucata podia ser estornada pelo livro | A sucata do reprovado não se estorna pelo livro |
+
+### Roteiro de teste manual (≈15 min)
+
+**Preparação.** Um material **crítico** (exige inspeção) com **controle de lote e de certificado**. Usuários: um da
+**Qualidade**, dois **Almoxarifes** (A e B) e um **Gestor**. Registre e processe uma nota de **10** desse material (o lote
+nasce **Bloqueado**, por falta de certificado) e, em **Inspeções**, com a Qualidade, reprove **3** e aprove 7. Em
+**Não Conformidades** aparece uma **NC-…** nova; decida-a **Sucatear**.
+
+1. **Registrar execução recusa e ensina.** **Registrar execução** na NC, sem motivo: a mensagem começa por *"O lote …
+   está bloqueado (…): libere o lote para sucatear o reprovado, ou registre a execução sem baixa informando o motivo."*
+   A NC continua pendente.
+2. **Liberar o lote.** Em **Lotes e Séries**, mude o status do lote para **Ativo**. **Registrar execução** de novo:
+   *"Esta não conformidade pede sucateamento: o almoxarifado registra em "Solicitar sucateamento" (duas aprovações) — a
+   execução fica registrada na segunda aprovação."*
+3. **O botão é do almoxarifado.** Com a Qualidade, a linha **não** tem **Solicitar sucateamento**. Entre com o
+   Almoxarife A: o botão aparece.
+4. **Solicitar.** Clique, confira a justificativa (vem a da decisão) e confirme. O aviso cita **SUC-…** e *"Sobras e
+   Retalhos › Sucateamentos"*. Nada saiu: o material continua com físico 10 e 3 bloqueados (confira em **Materiais**).
+5. **As aprovações.** **Sobras e Retalhos → Sucateamentos**: a linha tem **Origem: NC-…**. Com o **Gestor**, **Aprovar
+   gestão** (nada sai). Com o Almoxarife **B**, **Aprovar almoxarifado**: o aviso diz que a baixa do material bloqueado
+   foi emitida. Confira: **físico 7, bloqueado 0**; a NC fica **Executada** e sai do cartão **Material reprovado**.
+6. **Estorno recusado.** Em **Movimentações**, estornar essa sucata: *"Sucateamento de material reprovado não pode ser
+   estornado pelo livro — …"*.
+7. **O que não fazer (C96).** Repita a preparação e, em vez da NC, use o formulário comum de **Sobras e Retalhos →
+   Solicitar sucateamento** para 3: ele aceita, e as duas aprovações baixam 3 do **disponível** — o reprovado continua
+   bloqueado. Reprovado se sucateia **pela não conformidade**.
+
+### O que esta etapa NÃO cobre
+
+- **Sucatear parte** da quantidade reprovada — vai a quantidade inteira.
+- **Material com série** — recusado.
+- **Material de cliente pela tela** — a janela não tem OS/projeto; só pela API (ou registrar a execução sem baixa).
+- **O formulário comum de sucateamento** continua aceitando o disponível de material com reprovado pendente (decisão).
+- **E-mail do sucateamento** — é da feature de notificações.
 
 ---
 
