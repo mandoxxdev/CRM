@@ -2339,6 +2339,29 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
         `Esta entrada tem ${qtdTexto} ${material.unidade || 'un'} em inspeção — decida a inspeção antes de estornar a entrada`),
       { status: 400 });
     }
+
+    // Etapa 71, Fase 5 (decisao reversivel, letra B): a entrada cujo item teve QUALQUER inspecao com
+    // REPROVADO tambem nao e estornavel. A reprovacao zera o em_inspecao e passa o retido para
+    // `quantidade_bloqueada` com NC aberta — a guarda acima nao via, e o estorno passava: sem lote o
+    // reprovado saia DUAS vezes (estorno + devolucao/sucata da NC); com lote a NC ficava presa
+    // ("Saldo insuficiente no lote"). O reprovado tem caminho proprio (a NC: devolver/sucatear); o
+    // estorno da entrada inteira debitaria de novo o que ja saiu ou esta bloqueado. Descartado:
+    // estornar so a parte aprovada (o livro tem UMA movimentacao por item; partir o estorno e motor
+    // novo) e liberar o bloqueado no estorno (apagaria a NC aberta). Inspecao so com aprovado
+    // continua estornavel. Mesma resolucao de item da guarda acima (vinculo ou par legado sem dono).
+    const reprovado = await dbGet(db, `SELECT COALESCE(SUM(COALESCE(i.quantidade_reprovada, 0)), 0) AS q
+      FROM inspecoes_recebimento_almoxarifado i
+      JOIN recebimentos_material_itens_almoxarifado ri ON ri.id = i.recebimento_item_id
+      WHERE ri.recebimento_id = ? AND (ri.movimentacao_entrada_id = ?
+        OR (ri.movimentacao_entrada_id IS NULL AND ri.material_id = ?))`,
+    [mov.recebimento_id, movimentoId, mov.material_id]);
+    const qtdReprovada = parseFloat(reprovado && reprovado.q) || 0;
+    if (qtdReprovada > EPSILON_DIVERGENCIA) {
+      throw Object.assign(new Error(
+        `Esta entrada teve ${Number(qtdReprovada.toFixed(6))} ${material.unidade || 'un'} reprovado(s) na inspeção — `
+        + 'o reprovado sai pela não conformidade; esta entrada não pode ser estornada'),
+      { status: 400 });
+    }
   }
 
   // Serie (Etapa 6b, Task 5): guarda ANTES do claim `cancelado = 1` — antes de marcar a

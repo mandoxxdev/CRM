@@ -700,6 +700,95 @@ function capturarWarn(fn) {
     assert.strictEqual(await statusDe(pedido.id), 'recebido', 'o estorno reabriu um pedido que a outra nota completou');
   });
 
+  // ══ Fase 5 (revisao da etapa) — sondas sonda71f-reprovado, sonda71f-amao, sonda71f-nfserie ══════
+
+  // ── (12) o REPROVADO tem caminho proprio: a entrada com reprovacao nao e estornavel ────────────
+  //
+  // A guarda da Fase 2 so olhava `quantidade_em_inspecao`; a reprovacao zera isso e passa o retido
+  // para `quantidade_bloqueada` com NC aberta. O estorno passava: SEM lote o reprovado saia DUAS
+  // vezes (estorno + devolucao); COM lote a NC ficava presa ("Saldo insuficiente no lote").
+  const LITERAL_REPROVADO = (q, un) => `Esta entrada teve ${q} ${un} reprovado(s) na inspeção — `
+    + 'o reprovado sai pela não conformidade; esta entrada não pode ser estornada';
+
+  async function entradaInspecionada({ comLote, aprovada, reprovada }) {
+    const mat = await novoMaterial({ unidade: 'KG', critico: 1 });
+    setUser(ADMIN);
+    const previa = await request(app).post('/api/almoxarifado/movimentacoes/v2').send({
+      material_id: mat, tipo: 'ENTRADA_MANUAL', quantidade: 50, motivo: 'estoque previo', justificativa: 'estoque previo',
+    });
+    assert.strictEqual(previa.status, 201, JSON.stringify(previa.body));
+    const { pedido, linhas } = await novoPedido([{ material_id: mat, quantidade: 10, valor_unitario: 1 }], { status: 'enviado' });
+    nf += 1;
+    const criado = await request(app).post('/api/almoxarifado/recebimentos').send({
+      tipo_recebimento: 'NOTA_FISCAL', nota_fiscal: `NF-E71F5-${nf}`, fornecedor_id: forn.lastID,
+      fornecedor_nome: 'Fornecedor E71 T2',
+      itens: [{ material_id: mat, quantidade: 10, ...(comLote ? { lote: `L-E71F5-${nf}` } : {}) }],
+    });
+    assert.strictEqual(criado.status, 201, JSON.stringify(criado.body));
+    const item = await dbGet(db, 'SELECT id FROM recebimentos_material_itens_almoxarifado WHERE recebimento_id = ?', [criado.body.id]);
+    await dbRun(db, 'UPDATE recebimentos_material_itens_almoxarifado SET pedido_item_id = ? WHERE id = ?', [linhas[0], item.id]);
+    assert.strictEqual((await request(app).post(`/api/almoxarifado/recebimentos/${criado.body.id}/aprovar`).send({})).status, 200);
+    assert.strictEqual(await statusDe(pedido.id), 'recebido', 'fixture: a nota de 10 tinha de fechar o pedido');
+    const insp = await request(app).post(`/api/almoxarifado/recebimentos/itens/${item.id}/inspecionar`).send({
+      quantidade_aprovada: aprovada, quantidade_reprovada: reprovada,
+      ...(reprovada > 0 ? { dano_fisico: 1, encaminhamento: 'DEVOLVER' } : { resultado: 'APROVADO' }),
+    });
+    assert.strictEqual(insp.status, 201, JSON.stringify(insp.body));
+    const [mov] = await entradasDe(criado.body.id);
+    return { mat, pedido, linha: linhas[0], mov, inspecaoId: insp.body.id };
+  }
+  const contasDo = async (mat) => dbGet(db, `SELECT quantidade_atual AS atual, quantidade_bloqueada AS bloqueada,
+    quantidade_em_inspecao AS em_inspecao FROM materiais_almoxarifado WHERE id = ?`, [mat]);
+
+  for (const comLote of [false, true]) {
+    await test(`(12${comLote ? 'b' : ''}) Fase 5: entrada com 10 REPROVADOS (${comLote ? 'COM' : 'SEM'} lote) -> 400 com a literal, nada muda; a NC devolve e o saldo fecha em 50`, async () => {
+      const f = await entradaInspecionada({ comLote, aprovada: 0, reprovada: 10 });
+      const antes = await contasDo(f.mat);
+      assert.deepStrictEqual(antes, { atual: 60, bloqueada: 10, em_inspecao: 0 }, `fixture: ${JSON.stringify(antes)}`);
+
+      const r = await estornarPelaRota(f.mov.id);
+      assert.strictEqual(r.status, 400, `a entrada com reprovado foi estornada: ${JSON.stringify(r.body)}`);
+      assert.strictEqual(r.body.error, LITERAL_REPROVADO(10, 'KG'));
+      assert.deepStrictEqual(await contasDo(f.mat), antes, 'o estorno recusado mexeu no saldo');
+      assert.strictEqual((await dbGet(db, 'SELECT cancelado FROM movimentacoes_almoxarifado WHERE id = ?', [f.mov.id])).cancelado, 0);
+      assert.strictEqual(await recebidaDa(f.linha), 10, 'o estorno recusado descontou a linha');
+      assert.strictEqual(await statusDe(f.pedido.id), 'recebido', 'o estorno recusado reabriu o pedido');
+
+      // O caminho do reprovado: NC -> DEVOLVER -> executar. Sem o estorno no meio, ela nao fica presa.
+      const lista = await request(app).get('/api/almoxarifado/nao-conformidades?origem=INSPECAO&limite=500');
+      const nc = lista.body.itens.find((n) => n.referencia_id === f.inspecaoId && n.referencia_tipo === 'INSPECAO');
+      assert.ok(nc, 'fixture: a reprovacao tinha de abrir NC');
+      assert.strictEqual((await request(app).post(`/api/almoxarifado/nao-conformidades/${nc.id}/decidir`)
+        .send({ decisao: 'DEVOLVER', justificativa: 'devolver' })).status, 200);
+      const ex = await request(app).post(`/api/almoxarifado/nao-conformidades/${nc.id}/executar`).send({ observacoes: 'coleta' });
+      assert.strictEqual(ex.status, 200, `a NC ficou presa: ${JSON.stringify(ex.body)}`);
+      assert.deepStrictEqual(await contasDo(f.mat), { atual: 50, bloqueada: 0, em_inspecao: 0 },
+        'o fisico real e 50 bons: os 10 reprovados voltaram ao fornecedor UMA vez');
+
+      // Depois da devolucao a entrada continua nao estornavel pela mesma porta (a reprovacao continua la).
+      const depois = await estornarPeloServico(f.mov.id).then(() => null, (e) => e);
+      assert.ok(depois && depois.status === 400, 'o estorno passou depois da devolucao');
+      assert.strictEqual(depois.message, LITERAL_REPROVADO(10, 'KG'));
+    });
+  }
+
+  await test('(12c) Fase 5: reprovacao PARCIAL (6 aprovados, 4 reprovados) tambem recusa, com o reprovado na literal', async () => {
+    const f = await entradaInspecionada({ comLote: false, aprovada: 6, reprovada: 4 });
+    const r = await estornarPelaRota(f.mov.id);
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, LITERAL_REPROVADO(4, 'KG'));
+    assert.strictEqual(await recebidaDa(f.linha), 10);
+  });
+
+  await test('(12d) Fase 5, metade positiva: inspecao SO com aprovado continua estornavel e reabre o pedido', async () => {
+    const f = await entradaInspecionada({ comLote: false, aprovada: 10, reprovada: 0 });
+    const r = await estornarPelaRota(f.mov.id);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.strictEqual(r.body.pedido_compra.reaberto, true);
+    assert.strictEqual(await recebidaDa(f.linha), 0);
+    assert.deepStrictEqual(await contasDo(f.mat), { atual: 50, bloqueada: 0, em_inspecao: 0 });
+  });
+
   await close();
   console.log(`\npedidoReabreNoEstorno: ${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);
