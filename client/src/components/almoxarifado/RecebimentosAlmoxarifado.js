@@ -18,6 +18,7 @@ import AnexosDocumento from './AnexosDocumento';
 // instante e tomar 403 do servidor; é o desenho, não defeito.
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import { montarEtiquetasDoRecebimento } from '../../utils/etiquetasPdf';
+import { quantidadeQueEntra } from '../../utils/quantidadeQueEntra';
 import './Almoxarifado.css';
 
 const STATUS_INFO = {
@@ -136,12 +137,9 @@ const mensagemPedidoSemSaldo = (linhas, pedido, pedidoId) => {
  *
  * ⚠️ Etapa 70 (T0): recebida **0** é "chegou zero" e NÃO entra — antes era `||`, que trocava o 0
  * pela esperada (aqui e no servidor), e a nota dava entrada no que não chegou.
+ * `quantidadeQueEntra` mora em `utils/quantidadeQueEntra.js` desde a Fase 5 (as etiquetas usam a
+ * mesma régua).
  */
-const quantidadeQueEntra = (item) => {
-  const recebida = item.quantidade_recebida;
-  const informada = recebida !== null && recebida !== undefined && recebida !== '';
-  return (informada ? Number(recebida) : Number(item.quantidade_esperada)) || 0;
-};
 const itensQueVaoEntrar = (itens) => (itens || [])
   .filter((it) => quantidadeQueEntra(it) > 0 && !it.entrada_estoque_em);
 

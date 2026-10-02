@@ -3,6 +3,7 @@
 
 import jsPDF from 'jspdf';
 import QRCode from 'qrcode';
+import { quantidadeQueEntra } from './quantidadeQueEntra';
 
 export const FORMATOS_ETIQUETA = {
   A4_GRADE: {
@@ -104,8 +105,10 @@ const linhasDeSeries = (txt) => String(txt || '').split(/\r?\n/).map((s) => s.tr
 export function montarEtiquetasDoRecebimento(itens, materiais, origin) {
   const out = [];
   for (const item of itens || []) {
-    const qtd = Number(item.quantidade_recebida || item.quantidade_esperada) || 0;
-    if (qtd <= 0) continue;
+    // Etapa 70, Fase 5: a MESMA regua do servidor e do modal de Processar (`quantidadeQueEntra`).
+    // Era `Number(recebida || esperada)`: o item que chegou ZERO (recebida 0) caia na esperada e
+    // ganhava etiqueta de material que nao entrou no estoque.
+    if (!(quantidadeQueEntra(item) > 0)) continue;
     const m = (materiais || []).find((x) => x.id === item.material_id);
     if (!m) continue; // sem o material nao ha codigo/flags confiaveis para a etiqueta
     if (m.controle_serie === 1) {
