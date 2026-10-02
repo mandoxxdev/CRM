@@ -410,9 +410,17 @@ fechamento. Executores de galho **não** marcam este plano.
   testes que prendiam o "só sobe" pelo **estorno** (se houver algum além dos comentários de
   `comprasPedidoAtrasoIntegracao.api.test.js:55,321`) mudam **dizendo** que a regra mudou; o (8) da 42 e o da 45
   continuam verdes sem edição (são RN-03 e D8).
-- [ ] **T3 (galho, cliente) — o aviso na tela de Movimentações.** Os dois `toast.info` do contrato. Teste em
+- [x] **T3 (galho, cliente) — o aviso na tela de Movimentações.** (`63b2680`) Os dois `toast.info` do contrato. Teste em
   `MovimentacoesAlmoxarifado.test.js`: resposta com `pedido_compra.reaberto: true` → a literal de reabertura; `false` →
   a de saldo; sem a chave → só o `toast.success` de hoje. Controle positivo: trocar as literais → cai.
+  **Feito:** `avisarPedidoCompra(resp?.data?.pedido_compra)` depois do `toast.success` — sem aviso em
+  `cancelado`/`rejeitado` nem com saldo 0 (Fase 2), saldo com `toFixed(6)`, leitura defensiva (resposta sem `data` não
+  cai no catch). 9 testes novos (reaberto, só descontado com 0.30000000000000004 → "0.3", cancelado/rejeitado/saldo 0
+  sem aviso + metade positiva com status vivo, sem a chave, sem `data` com modal fechando, recusa 400 da inspeção
+  literal no `toast.error`): arquivo 57/57. Controle positivo — 9 sabotagens, cada uma cai: literal de reabertura (1),
+  literal de saldo (2), sem filtro de status (2), saldo 0 avisa (1), sem `toFixed` (1), `resp.data` não defensivo (1),
+  filtro que engole tudo (3), catch genérico (1), `reaberto` ignorado (1); restauro por cópia com md5 conferido.
+  Suíte do client 1141/1141 (74 suítes), `CI=true` build ok.
 - [ ] **T4 (integração, cruza galhos) — a cadeia inteira.** `server/tests/api/pedidoReabreIntegracao.api.test.js`, só
   pelas portas reais: `POST /api/compras/pedidos` (`enviado`, previsão vencida, 1 linha de 10) → recebimento pelas seis
   portas → processar → pedido `recebido`, fora de `?atrasados=1` e de `?pendentes=1` → `GET /movimentacoes` acha a
