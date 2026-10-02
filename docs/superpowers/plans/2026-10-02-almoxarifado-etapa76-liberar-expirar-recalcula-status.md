@@ -314,7 +314,20 @@ sequencial pelo mesmo motivo, com zero retrabalho.
 - **A revisão adversarial (Fase 5) só começa com a T3 commitada** e a árvore quieta.
 - Scratchpad com nome único (`msg-e76-t0.txt`…). Executores **não** marcam este plano; o fio principal marca.
 
-- [ ] **T0 (tronco) — o recálculo sob a trava, e a função das portas.** Pelo contrato "T0". Teste novo
+- [x] **T0 (tronco) — o recálculo sob a trava, e a função das portas.** — **feita em `4f51cdbd`.** Teste
+  `reservaRecalculoBase` 14/14 (a–i, mais (b+) lista vazia, (c+) um de dois itens → PARCIALMENTE, (e+) a consulta
+  falhando → warn `(reservas <ids>)`, (f/g) positiva sem corrida, (i) dois itens do mesmo material — Fase 2, (i+)
+  requisição sem itens). Os 14 arquivos da 74/75 e os três de reserva verdes **sem edição** antes e depois.
+  Controles, cada um derrubando a asserção certa: s1 (sem trava) → (f) **e** (g) `['APROVADO', 4]`; s2 (só o 1º
+  material) → **só** (g); s3 (catch relança) → (e) "não lança"; s4 (as duas metades do filtro juntas) → (b) espião
+  `[null]`; s5 (sem DISTINCT das requisições) → (c) espião `[R, R]`; s6 (sem DISTINCT dos materiais) → (i) `PRESA:
+  passou de 4000 ms`. **Achado no s6:** com o timer do `comLimite` em `unref()` (o molde da 75) a trava presa
+  esvaziava o event loop e o Node **saía com 0 no meio do arquivo**, sem placar — o runner contaria verde. O
+  timer agora é vivo e o arquivo tem uma rede no `exit` (sai 1 se não chegou ao placar). O
+  `reservaLiberacaoRevisaoFase5` (75) tem o mesmo `unref()` — latente, não editado (os testes da 75 não se
+  editam nesta etapa; candidata do fechamento). O (h) roda uma nota com duas candidatas em cada uma das três
+  ordens de carga (s5 da T2 mede se ele cai). Texto original da T0:
+  Pelo contrato "T0". Teste novo
   `server/tests/api/reservaRecalculoBase.api.test.js`, **pelo serviço** (a liberação feita direto em
   `stockService.liberarReserva`, sem o gancho das portas, para isolar a função):
   (a) R `TOTALMENTE`, liberar a reserva, `recalcularRequisicoesDasReservas(db, [id], 'teste')` → `[{de:
