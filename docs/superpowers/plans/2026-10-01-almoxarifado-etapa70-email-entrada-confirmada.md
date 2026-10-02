@@ -341,7 +341,24 @@ T2 em worktree); **T4** (integração) depois de T2; **T5** fechamento. Executor
   libera → 5 caem; sem expiração → cai só o da marca velha; sem claim no `aprovar` → cai o da corrida do aprovar. O
   ramo "status virou terminal entre a leitura e o claim → 400" não tem cenário determinístico no harness (declarado).
   Suíte: api 259/259, almoxarifado 44/44, validation 4/4, safealter 3/3, sqlite 5/5.
-- [ ] **T1 (tronco) — o serviço e a configuração.** `receiptNotificationService.js` (contrato acima); as duas chaves
+  Commit `0d8bcfa`.
+- [x] **T1 (tronco) — o serviço e a configuração. FEITA** (registro abaixo; o texto original da task segue).
+  `receiptNotificationService.js` com o contrato REVISTO pela Fase 2: chaves `notificar_recebimento_entrada` ('0') e
+  `notificar_recebimento_solicitante` ('1') + `notificacoes_dest_recebimento` ('') semeadas; `CHAVES_BOOL` com as duas.
+  Retorno: `{desligado:true}` (as duas em '0') | `{sem_entrada:true}` | `{ nota: <enfileirar> | {enfileirada:false,
+  motivo:'DESLIGADO'}, requisitantes: [{requisicao_id, ...enfileirar}] }`. Critério por item (PODE_SEPARAR − EM_SEPARACAO,
+  `ativo`, pendente de separação − reservado ATIVO do item > 1e-9, material que entrou livre). Link do requisitante =
+  `basePath` do `modulo_origem` + `/requisicoes-material` (sem módulo → `/almoxarifado/requisicoes`); o mapa do servidor
+  é espelho de `requisicoesMaterialConfig.js` amarrado por teste que lê o arquivo do cliente. "Situação da requisição"
+  ganhou rótulos para os seis status possíveis. **Decisão registrável (letra B):** a linha "Requisições que aguardavam
+  estes materiais" do aviso da nota lista quem espera QUALQUER material que entrou (livre ou retido) — é a plateia de
+  Compras/almoxarifado; só o aviso ao solicitante exige material livre. Teste `recebimentoAvisoEntrada.api.test.js`
+  (17). Sabotagens (todas caem na asserção certa): (a) lista `notificacoes_dest_entradas` → RN-06; (b) aceitar
+  EM_SEPARACAO → negativas; (b2) ignorar reserva → por item + negativas; (b3) só AGUARDANDO_* → o PARCIALMENTE_RESERVADA;
+  (c) retido como livre → RN-09; (d) dedupe com `Date.now()` → dedupe; (e) sem filtro `entrada_estoque_em` → RN-04 (D6);
+  (f) link fixo → espelho + RN-08; (g) sem as chaves em `CHAVES_BOOL` → RN-07 (PUT 200). Suíte: api 260/260,
+  almoxarifado 44/44, validation 4/4, safealter 3/3, sqlite 5/5.
+- [ ] ~~**T1 (texto original)**~~ **T1 (tronco) — o serviço e a configuração.** `receiptNotificationService.js` (contrato acima); as duas chaves
   semeadas em `schema.js`; `CHAVES_BOOL` em `routes/almoxarifado.js:2729`. Teste novo
   `server/tests/api/recebimentoAvisoEntrada.api.test.js` (pelo **serviço**, harness real, `usuarios` criado como em
   `regrasUrgenciaCliente.api.test.js:31`): `montarAvisoNota`/`montarAvisoRequisitante` com as literais exatas; RN-04,

@@ -2587,6 +2587,13 @@ async function initSchema(db) {
     ['notificacoes_dest_ajustes', '', 'E-mails para notificacao de ajuste de estoque (lista; vazio = usa alertas_estoque_emails)'],
     ['notificacoes_dest_terceiros', '', 'E-mails para notificacao de movimentacao de terceiro (lista; vazio = usa alertas_estoque_emails)'],
     ['notificacoes_dest_compras', '', 'E-mails para notificacao de solicitacao de compra gerada (lista; vazio = usa compras_notificar_emails)'],
+    // Etapa 70 (receiptNotificationService): o aviso da nota que entrou no estoque e o aviso a quem
+    // pediu o material. DUAS chaves (Fase 2): o da nota vai para uma lista compartilhada e nasce '0'
+    // (o deploy mandaria e-mail na hora para gente real — ligar e decisao de quem opera); o do
+    // solicitante vai so a quem pediu e nasce '1' (e o valor da etapa).
+    ['notificar_recebimento_entrada', '0', 'Enviar aviso quando um recebimento termina de dar entrada no estoque (um por nota)'],
+    ['notificar_recebimento_solicitante', '1', 'Enviar aviso ao solicitante da requisicao que aguardava o material que entrou no estoque'],
+    ['notificacoes_dest_recebimento', '', 'E-mails para o aviso de entrada de recebimento (lista; vazio = usa notificacoes_dest_compras, depois compras_notificar_emails)'],
     // Etapa 16 (C4): janelas dos alertas do registro (alertRegistry.js). Mesma licao da Etapa 10
     // registrada acima — chave nao semeada e ineditavel pelo PUT /configuracoes. As tres caem na
     // validacao de dias pelo prefixo unico 'alerta_' (routes/almoxarifado.js, PREFIXOS_DIAS);

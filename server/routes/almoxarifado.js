@@ -2726,7 +2726,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // Revisao da Task 1 (Minor i): a RN-09 promete "0 ou 1" para o liga/desliga — sem esta
       // guarda, 'banana' gravava com 200 e o gancho da Task 2 trataria como desligado em
       // silencio (getConfig compara com '1').
-      const CHAVES_BOOL = ['notificar_movimentacoes'];
+      // Etapa 70: as duas chaves do aviso de entrada de recebimento (receiptNotificationService
+      // compara com '1' — 'talvez' seria desligado em silencio).
+      const CHAVES_BOOL = ['notificar_movimentacoes', 'notificar_recebimento_entrada', 'notificar_recebimento_solicitante'];
       for (const [chave, valor] of entradas) {
         // Etapa 20 (C4, RN-06): as duas chaves de SEGREDO sao semeadas, entao passavam na guarda
         // de chaves conhecidas acima e esta rota as gravava — SEM o `shouldUpdateSecret` que a
