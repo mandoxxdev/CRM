@@ -476,7 +476,7 @@ fechamento.
 - (texto original da T4:) **T4 (galho, worktree, em paralelo à T2) — o painel não perde a reservada.** Pelo contrato. Teste no
   `requisicaoDashboard.api.test.js` (RN-13), os de lá sem edição. Controle: tirar `TOTALMENTE_RESERVADA` da lista → cai.
   Commit na branch da worktree; o fio principal faz o merge depois da T2.
-- [x] **T5 (integração, cruza T1 × T2 × T3 × T4) — a jornada de quem espera.** — **FEITA** (teste novo
+- [x] **T5 (integração, cruza T1 × T2 × T3 × T4) — a jornada de quem espera.** — **FEITA `6792c8e0`** (teste novo
   `server/tests/api/recebimentoReservaChegadaIntegracao.api.test.js` 11/11, tudo pelas rotas; suíte 280/280). Cenário
   como o executor recebeu (vale sobre o texto abaixo): R2 NORMAL (3) criada **antes** de R1 URGENTE (6), as duas
   `AGUARDANDO_COMPRA` → nota de 4 → R1 4 `PARCIALMENTE_RESERVADA`, R2 nada; e-mail de R1 com *"reservado para a sua
@@ -485,7 +485,8 @@ fechamento.
   chegada — o s4 do plano) → nota de 6 → R1 2 (mantém `PARCIALMENTE_ATENDIDA`), R2 3 `TOTALMENTE`, R3 1 `PARCIALMENTE`,
   solicitação `RECEBIDA`, painel com as duas → R1 `ENTREGUE`. Estorno: nota A toda de E1 (URGENTE, separa 2), nota B de
   E2 → estorno de B 200, reserva `LIBERADA`, E2 `AGUARDANDO_COMPRA` (pedido reaberto, solicitação `VINCULADO`); estorno
-  de A → 400 literal da 71, E1 intacta; nota nova → E2 reservada de novo. Cancelada pela rota **durante** a reserva
+  de A → 400 literal da 71 (**desde a Fase 5, `eaef9ed1`: a literal do reservado**, "reservado para requisições
+  (<E1>)" — nada saiu, E1 segura os 6), E1 intacta; nota nova → E2 reservada de novo. Cancelada pela rota **durante** a reserva
   (monkeypatch só como relógio) → reserva desfeita, `CANCELADO`, estorno não a toca. `/encerrar` de
   `PARCIALMENTE_ATENDIDA` libera o hold da chegada. Automática: Q1 (5) espera, nota de 7 → Q1 `TOTALMENTE`, Q2 (4)
   criada depois → `PARCIALMENTE_RESERVADA` com os 2 que sobraram (resposta = banco), painel com as duas.
@@ -567,6 +568,8 @@ ORDER BY ir.material_id, r.created_at;
    status recalculado antes de relançar.
 5. **O e-mail não vai a EM_SEPARACAO** (a lista da 70 fica), embora ela ganhe reserva na chegada — declarado.
 6. **O estorno também recalcula no claim perdido** (duplo clique): a liberação já aconteceu antes do claim.
+   **Insuficiente — corrigido na Fase 5 (`65d9bc8f`):** recalcular o status de quem perdeu a reserva não devolvia a
+   reserva; o duplo clique sequencial (a movimentação já cancelada) chegava a liberar. Ver a seção Fase 5 abaixo.
 
 ## Fase 2 — revisão do plano: 2 críticos, 9 importantes, 9 menores → plano revisto (vale sobre o texto acima)
 
@@ -603,3 +606,53 @@ ORDER BY ir.material_id, r.created_at;
   `requisicaoEsperaCompraIntegracao.api.test.js:251` e `:257` (listar na T1).
 - **Paralelismo revisto**: a T4 toca `routes/almoxarifado.js`, o mesmo arquivo do conserto de `/encerrar` (T3) → a T4
   roda NO MESMO agente do tronco, sequencial. Revisão adversarial só depois, com a árvore quieta.
+
+## Fase 5 — revisão adversarial por execução: 2 importantes, 1 menor → corrigidos (`65d9bc8f`, `eaef9ed1`)
+
+Três sondas executadas (scratchpad `sonda74f-estorno-{repetido,lote,mensagem}.js`) viraram testes em
+`recebimentoReservaChegadaEstorno.api.test.js` (agora 14/14; a integração segue 11/11).
+
+- **IMPORTANTE 1 — estorno repetido liberava a reserva (`65d9bc8f`).** `cancelarMovimentacao` chamava
+  `liberarParaEstorno` antes de olhar `mov.cancelado`: o segundo `POST /movimentacoes/:id/cancelar` numa ENTRADA_COMPRA
+  já estornada respondia 400 "Movimentação já cancelada" **depois** de soltar a reserva da chegada (sonda: R1
+  `TOTALMENTE_RESERVADA` → `APROVADO`, hold 0; R3 aprovada depois levava os 4 — o C121 de volta). Agora a recusa (mesma
+  literal) vem logo depois do 404, antes de qualquer efeito. As demais guardas baratas já precediam a liberação.
+- **IMPORTANTE 2 — recusa depois de liberar (`65d9bc8f`).** A guarda da linha do lote (`ajustarSaldoExistente` com
+  `minimo`) vinha depois da liberação: a requisição perdia a reserva e o estorno não acontecia. **As duas defesas:**
+  (a) pré-checagem da linha do lote antes de liberar (mesma condição e mesma literal do ramo, extraída para
+  `mensagemLoteNaoComportaEstorno`; o ramo fica para a corrida); (b) **recriação geral** — `liberarParaEstorno` passa a
+  devolver o detalhe do que liberou, e qualquer falha depois (claim perdido, guarda do ramo, ledger) chama
+  `reservaChegadaService.recriarAposEstornoRecusado`: `criarReserva` com a mesma requisição/item/material/quantidade/
+  `recebimento_id`, origem REQUISICAO, observação `Reserva recriada após estorno recusado — recebimento <n>, requisição
+  <n>` (livro: `Reserva recriada após estorno recusado — recebimento <n>`), status recalculado; a falha original continua
+  sendo a resposta. Falha da recriação → `[almoxarifado-reservas] Falha ao recriar a reserva <id> apos estorno recusado:
+  <msg>` (por reserva) ou `[almoxarifado] recriacao das reservas da chegada apos estorno recusado falhou (movimentacao
+  <id>): <msg>` (o todo), e segue. **Descartado:** reativar a linha LIBERADA original (o livro já tem a LIBERACAO_RESERVA
+  e pularia o hold atômico de `criarReserva`); mover a liberação para depois do débito; transação (Postgres depois).
+- **MENOR 3 — "material já consumido" quando só está reservado (`eaef9ed1`).** Quando disponível + reservado cobrem o
+  estorno, a recusa é a literal nova
+  `Não é possível estornar: o material está reservado para requisições (<numeros>) — libere as reservas antes de estornar`
+  (números das requisições com reserva ATIVA do material; reserva sem requisição entra como `reservas manuais`). Consumo
+  real, bloqueio, inspeção e terceiros ficam com a literal da 71; as recusas de inspeção/reprovado da 71 não mudam. O
+  toast do estorno (`MovimentacoesAlmoxarifado.js:654`) mostra o `error` literal; nenhuma literal no client.
+  **Testes que mudaram, com o motivo:** [RN-11] negativa R3 pela aprovação, [RN-11, Fase 2] EM_SEPARACAO e
+  PARCIALMENTE_ATENDIDA com 2 na caixa, e o `[estorno]` da integração (E1 separada) afirmavam a literal da 71 num caso
+  em que nada saiu — o físico cobria. O de reserva parcialmente **consumida** continua com a da 71.
+
+**Testes novos (5):** estorno repetido; nota com lote já saído (recusa antes de liberar, reservas idênticas); ledger
+do ESTORNO forçado a falhar por trigger (reserva recriada com os mesmos campos, status e saldo voltam, `cancelado` 0);
+corrida simulada por trigger que marca a movimentação cancelada no instante da liberação (400 "já cancelada", hold
+recriado); a literal nova com a sonda da mensagem.
+
+**Controles positivos** (perl com âncora contada = 1, backup `e74f5-stockService.js.bkp`, restauro por cópia com md5
+conferido, `node --check`, suíte parada): S1 sem a recusa antecipada → cai só o "repetido"; S2 sem a pré-checagem do
+lote → cai só o "lote" (as reservas diferem: a recriação salvou o hold, mas a original ficou LIBERADA); S3 sem a
+recriação no catch → cai só o "ledger"; S4 sem a recriação no claim perdido → cai só a "corrida"; S5 literal antiga
+forçada → caem os 4 do arquivo de estorno e o `[estorno]` da integração.
+
+**Verificação (estado final):** `test:api` 280/280 arquivos; `test:almoxarifado` 44/0; `test:validation` 4/0;
+`test:safealter` 3/0; `test:sqlite` 5/0; client 74 suítes / 1155 testes; build CI ok.
+
+**Próximo passo:** T6 (fechamento, skill `fechar-etapa`) — acrescentar às letras: B (Fase 5: recusa antecipada,
+pré-checagem + recriação, literal do reservado, com o descartado acima) e a seção da 74 nas novidades com a literal
+nova no roteiro do estorno.
