@@ -368,7 +368,7 @@ fechamento. Executores de galho **não** marcam este plano (o fio principal marc
   "bloqueado > físico" detectado; (c) compensação com `retencaoAplicada` também → bloqueado volta em dobro; (d) recusa
   do estorno desligada → o estorno ligado devolve ao disponível (vermelho); (e) recusa casando todo `SUCATA` → o estorno
   comum cai.
-- [x] **T2 (tronco) — o lado da NC.** *Feita (2026-10-01): `sucateamentoReprovadoRegra.api.test.js` 13/0;
+- [x] **T2 (tronco) — o lado da NC.** *Feita (2026-10-01, `db8fa69`): `sucateamentoReprovadoRegra.api.test.js` 13/0;
   `encaminhamentoExecucao` (9) sem o SUCATEAR + (9b) novo, (16) e `encaminhamentoRotas` (7) com SUBSTITUICAO — 25/0 e
   8/0. Sabotagens: nível 15 depois do 16 → (1) "nivel 15" e (6); ordem dos carimbos no helper → (1) "nivel 8"; carimbo
   fora do claim da 45 → (9); RN-08 recusando o drenado → (6) com 409; sem carregar a inspeção para SUCATEAR → (2)-(7);
@@ -399,7 +399,24 @@ fechamento. Executores de galho **não** marcam este plano (o fio principal marc
   pelo `/executar`), RN-07 nas três direções, RN-10. Controle positivo: trocar dois níveis de ordem (o cenário do nível
   cai); tirar o carimbo novo do claim da 45 (a devolução depois do sucateamento baixa — vermelho); RN-08 recusando
   também o não viável (o cenário "drenado" cai com 400 — prova a ausência de beco).
-- [ ] **T3 (tronco) — o lado do sucateamento e a rota.** `scrapDisposalService.js`: `solicitarDoReprovado(db, user,
+- [x] **T3 (tronco) — o lado do sucateamento e a rota.** *Feita (2026-10-01): `sucateamentoReprovado.api.test.js`
+  16/0 (pela rota com cinco usuários distintos — QUALIDADE decide, ALMOX1 solicita, ALMOX2 e GESTOR assinam — e pelo
+  serviço; o típico é o crítico com `controle_certificado` e lote, cujo lote nasce BLOQUEADO e a solicitação recusa no
+  nível 14 até a QUALIDADE mudar o status); `sucateamento*.api.test.js` e `sucataDedicada` verdes. Sabotagens: sem
+  `doBloqueado` → (2)(3)(5)(9)-(12) — **divergência do previsto:** a 2ª perna NÃO toma "Saldo insuficiente" na
+  reprovação parcial, ela BAIXA do disponível (é a Surpresa 1) e o vermelho é "o reprovado continua bloqueado"; sem o
+  carimbo no claim → (2) e (11) (a devolução da outra NC baixa de novo); sem desfazer o carimbo na falha → (5) "beco";
+  sem `COALESCE` → (10) "o legado perdeu a data"; fila sem o JOIN → (2) RN-11; área sem o lote → (7c); sem a
+  pré-checagem da NC cancelada → (6). api 256/256, almoxarifado 42/0, validation 4/0, safealter 3/0, sqlite 5/0.
+  Decisões reversíveis (letra B): (vi) NC cancelada — a perna que NÃO fecha recusa antes do claim com a literal da Fase
+  2 ("A não conformidade foi cancelada — recuse este sucateamento."); a que fecha relê depois do claim com a literal do
+  contrato e compensa; (vii) perda do claim da inspeção relê os carimbos: "…já foi sucateado / já havia sido devolvido ao
+  fornecedor / já havia sido liberado por outra não conformidade — a assinatura foi desfeita" (409), e a literal do
+  contrato fica de fallback; (viii) a compensação nomeia a causa real na auditoria (`compensarAssinatura` ganhou
+  `causa`); (ix) a SUCATA do reprovado NÃO leva `recebimento_id` ao motor (não está no contrato; a devolução leva) —
+  descartado: herdar da 45 sem saber o que a coluna dispara em relatórios de recebimento; (x) a colisão do UNIQUE
+  parcial vira 409 no SERVIÇO (não na rota), para o chamador direto receber o mesmo.*
+  Texto original: `scrapDisposalService.js`: `solicitarDoReprovado(db, user,
   ncId, payload)` (RN-04, reusa o INSERT/auditoria do `solicitar` — extrair a escrita para uma função interna, as
   recusas comuns continuam no `solicitar`); `aprovar` com os passos 1–5 do contrato (RN-05, RN-06, RN-09); `listar` com
   o LEFT JOIN (RN-11). `schemas.js`: `SucateamentoDoReprovadoSchema`. `extended.js`: a rota nova, perto de

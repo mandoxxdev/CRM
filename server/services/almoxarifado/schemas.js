@@ -607,6 +607,21 @@ const SucateamentoCreateSchema = z.object({
 });
 
 /**
+ * POST /nao-conformidades/:id/solicitar-sucateamento (Etapa 69, RN-04). Material, quantidade e lote
+ * NAO existem aqui de proposito: sao DERIVADOS da inspecao da NC (a reprovada inteira — D4). O Zod
+ * descarta em silencio o que o cliente mandar a mais (status, aprovadores, material_id, quantidade),
+ * como no `SucateamentoCreateSchema`.
+ */
+const SucateamentoDoReprovadoSchema = z.object({
+  justificativa: z.string().trim().min(1, 'justificativa é obrigatória para sucatear'),
+  classificacao: z.string().nullable().optional(),
+  peso_estimado: z.number().nonnegative().nullable().optional(),
+  projeto_origem_id: z.number().int().positive().nullable().optional(),
+  os_origem_id: z.number().int().positive().nullable().optional(),
+  observacoes: z.string().nullable().optional(),
+});
+
+/**
  * PUT /sucateamentos/:id/destino (Etapa 9, Task 6) — o destino final, DEPOIS da baixa.
  *
  * O enum vem de `scrapDisposalStateMachine.DESTINOS_FINAIS`, importado, e nao reescrito aqui.
@@ -811,6 +826,7 @@ module.exports = {
   EncerramentoRemessaSchema, CancelamentoRemessaSchema,
   SobraUpdateSchema, GerarRetalhoSchema,
   SucateamentoCreateSchema, SucateamentoDestinoSchema, SucateamentoDestinoFormSchema,
+  SucateamentoDoReprovadoSchema,
   FerramentaCreateSchema, FerramentaUpdateSchema, EmprestimoSchema, DevolucaoEmprestimoSchema,
   CalibracaoSchema, JustificativaSchema, ManutencaoSchema, ManutencaoConcluirSchema,
   OcorrenciaSchema, AssinaturaEntregaFormSchema,

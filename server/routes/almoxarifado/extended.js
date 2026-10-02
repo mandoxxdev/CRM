@@ -22,7 +22,7 @@ const { disponivelSql } = require('../../services/almoxarifado/availabilitySql')
 // reprovar depois, por comparacao com NaN.
 const { paraNumeroFinito } = require('../../services/almoxarifado/toleranciaInspecao');
 const { validate, formatZodError } = require('../../services/almoxarifado/validation');
-const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema, RemessaTerceiroSchema, RetornoRemessaSchema, TransformacaoRemessaSchema, EncerramentoRemessaSchema, CancelamentoRemessaSchema, SobraUpdateSchema, GerarRetalhoSchema, SucateamentoCreateSchema, SucateamentoDestinoFormSchema, FerramentaCreateSchema, FerramentaUpdateSchema, EmprestimoSchema, DevolucaoEmprestimoSchema, CalibracaoSchema, JustificativaSchema, ManutencaoSchema, ManutencaoConcluirSchema, OcorrenciaSchema, AssinaturaEntregaFormSchema, AnexoCreateSchema, RecebimentoCreateSchema, RecebimentoFiscalSchema, TIPOS_MOVIMENTO_ROTA } = require('../../services/almoxarifado/schemas');
+const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema, RemessaTerceiroSchema, RetornoRemessaSchema, TransformacaoRemessaSchema, EncerramentoRemessaSchema, CancelamentoRemessaSchema, SobraUpdateSchema, GerarRetalhoSchema, SucateamentoCreateSchema, SucateamentoDoReprovadoSchema, SucateamentoDestinoFormSchema, FerramentaCreateSchema, FerramentaUpdateSchema, EmprestimoSchema, DevolucaoEmprestimoSchema, CalibracaoSchema, JustificativaSchema, ManutencaoSchema, ManutencaoConcluirSchema, OcorrenciaSchema, AssinaturaEntregaFormSchema, AnexoCreateSchema, RecebimentoCreateSchema, RecebimentoFiscalSchema, TIPOS_MOVIMENTO_ROTA } = require('../../services/almoxarifado/schemas');
 // Etapa 20 (C1): a limpeza do upload orfao SAIU deste arquivo para um modulo compartilhado —
 // era uma `function` local do closure de `registerExtendedRoutes` e `routes/almoxarifado.js`
 // (rota de foto de material) nao a alcancava. Importada com ALIAS de proposito: o nome
@@ -1169,6 +1169,18 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
       }));
     } catch (e) { handleError(res, e); }
   });
+
+  // Etapa 69 (RN-04, D1, D11) — SOLICITAR o sucateamento do material REPROVADO desta NC. Rota da NC,
+  // e nao campo novo em `POST /sucateamentos`: material, quantidade (a reprovada inteira) e lote sao
+  // DERIVADOS da inspecao, e o Zod do caminho comum teria de afrouxar para isso. Gate `movimentar`
+  // (ADMINISTRADOR, ALMOXARIFE), o mesmo do sucateamento comum: a QUALIDADE decide, o almoxarifado
+  // solicita, almoxarifado + gestao assinam. `validate` DEPOIS do gate (403 antes de 400). A
+  // colisao do UNIQUE parcial vira 409 dentro do servico (o chamador direto recebe o mesmo).
+  app.post('/api/almoxarifado/nao-conformidades/:id/solicitar-sucateamento', auth, requirePermission('movimentar'),
+    validate(SucateamentoDoReprovadoSchema), async (req, res) => {
+      try { res.status(201).json(await scrapDisposalService.solicitarDoReprovado(db, req.user, req.params.id, req.body)); }
+      catch (e) { handleError(res, e); }
+    });
 
   // Etapa 46 — a SAIDA do documento preso. Gate PROPRIO: nao e `decidir_nao_conformidade` (anular
   // nao e decidir, e a decisao fica preservada) nem `executar_encaminhamento` (senao o COMPRAS
