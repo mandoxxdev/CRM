@@ -290,10 +290,12 @@ async function assertNotaNaoDuplicada(db, { nota_fiscal, fornecedor_id, forneced
         AND NOT EXISTS (SELECT 1 FROM movimentacoes_almoxarifado m
           WHERE m.recebimento_id = r.id AND m.tipo = 'ENTRADA_COMPRA' AND COALESCE(m.cancelado, 0) = 0)
         -- e nenhum item ainda por entrar: o documento que falhou no meio (um item entrou e foi
-        -- estornado, o outro espera o reprocessamento) continua sendo o dono da NF.
-        AND NOT EXISTS (SELECT 1 FROM recebimentos_material_itens_almoxarifado i
-          WHERE i.recebimento_id = r.id AND i.entrada_estoque_em IS NULL
-            AND CAST(COALESCE(i.quantidade_recebida, i.quantidade_esperada, 0) AS REAL) > 0)
+        -- estornado, o outro espera o reprocessamento) continua sendo o dono da NF. A quantidade
+        -- e a regua da Etapa 70 (QTD_DO_ITEM_SQL = quantidadeDoItem): o '' legado vale a esperada
+        -- (Fase 5 — com COALESCE puro o '' virava 0 e o documento que espera perdia a NF).
+        AND NOT EXISTS (SELECT 1 FROM recebimentos_material_itens_almoxarifado ri
+          WHERE ri.recebimento_id = r.id AND ri.entrada_estoque_em IS NULL
+            AND CAST(COALESCE(${receiptNotificationService.QTD_DO_ITEM_SQL}, 0) AS REAL) > 0)
       )`;
   if (recebimentoId) { sql += ' AND r.id <> ?'; params.push(recebimentoId); }
 

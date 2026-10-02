@@ -313,4 +313,6 @@ module.exports = {
   BASE_PATH_POR_MODULO,
   EVENTO_NOTA,
   EVENTO_REQUISITANTE,
+  // Etapa 71, Fase 5: a NF relancavel (`receiptService.assertNotaNaoDuplicada`) usa a MESMA regua.
+  QTD_DO_ITEM_SQL,
 };

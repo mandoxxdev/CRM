@@ -874,6 +874,56 @@ function capturarWarn(fn) {
     assert.strictEqual(linha.acao_rotulo, 'Mudança manual de status do pedido', JSON.stringify(linha));
   });
 
+  // ── (14) a NF relancavel usa a regua da Etapa 70 (quantidadeDoItem / QTD_DO_ITEM_SQL) ─────────
+  await test('(14) Fase 5: item legado com recebida \'\' esperando entrar (esperada 5) continua dono da NF -> 409', async () => {
+    const mat = await novoMaterial();
+    setUser(ADMIN);
+    const c = await request(app).post('/api/almoxarifado/recebimentos').send({
+      tipo_recebimento: 'NOTA_FISCAL', nota_fiscal: 'NF-E71F5-VAZIO', fornecedor_id: forn.lastID, fornecedor_nome: 'Fornecedor E71 T2',
+      itens: [{ material_id: mat, quantidade: 3 }, { material_id: mat, quantidade: 5 }],
+    });
+    assert.strictEqual(c.status, 201, JSON.stringify(c.body));
+    const itens = await dbAll(db, 'SELECT id FROM recebimentos_material_itens_almoxarifado WHERE recebimento_id = ? ORDER BY id', [c.body.id]);
+    assert.strictEqual((await request(app).post(`/api/almoxarifado/recebimentos/${c.body.id}/aprovar`).send({})).status, 200);
+    // Simula a falha no meio com o `''` legado: o item 2 "nao entrou" e a recebida dele e texto vazio.
+    await dbRun(db, "UPDATE recebimentos_material_itens_almoxarifado SET entrada_estoque_em = NULL, quantidade_recebida = '' WHERE id = ?", [itens[1].id]);
+    for (const m of await entradasDe(c.body.id)) {
+      assert.strictEqual((await estornarPelaRota(m.id)).status, 200);
+    }
+    const relanca = () => request(app).post('/api/almoxarifado/recebimentos').send({
+      tipo_recebimento: 'NOTA_FISCAL', nota_fiscal: 'NF-E71F5-VAZIO', fornecedor_id: forn.lastID, fornecedor_nome: 'Fornecedor E71 T2',
+      itens: [{ material_id: mat, quantidade: 8 }],
+    });
+    const dup = await relanca();
+    assert.strictEqual(dup.status, 409, `o '' legado virou 0 e o documento que espera perdeu a NF: ${JSON.stringify(dup.body)}`);
+    // Metade positiva: o mesmo item com a recebida 0 CONFERIDA ("chegou zero") nao espera nada -> relanca.
+    await dbRun(db, 'UPDATE recebimentos_material_itens_almoxarifado SET quantidade_recebida = 0 WHERE id = ?', [itens[1].id]);
+    assert.strictEqual((await relanca()).status, 201, 'o item conferido 0 segurou a NF');
+  });
+
+  await test('(14b) Fase 5: NF de material com SERIE relancada duas vezes (estorno entre elas); com a terceira viva, 409', async () => {
+    const mat = await novoMaterial();
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET controle_serie = 1 WHERE id = ?', [mat]);
+    const lancar = async () => {
+      const c = await request(app).post('/api/almoxarifado/recebimentos').send({
+        tipo_recebimento: 'NOTA_FISCAL', nota_fiscal: 'NF-E71F5-SERIE', fornecedor_id: forn.lastID, fornecedor_nome: 'Fornecedor E71 T2',
+        itens: [{ material_id: mat, quantidade: 2, series: 'SN-E71F5-A\nSN-E71F5-B' }],
+      });
+      if (c.status !== 201) return c;
+      assert.strictEqual((await request(app).post(`/api/almoxarifado/recebimentos/${c.body.id}/aprovar`).send({})).status, 200);
+      return c;
+    };
+    for (let i = 0; i < 2; i += 1) {
+      const c = await lancar();
+      assert.strictEqual(c.status, 201, `lancamento ${i + 1}: ${JSON.stringify(c.body)}`);
+      assert.strictEqual((await estornarPelaRota((await entradasDe(c.body.id))[0].id)).status, 200);
+    }
+    const terceira = await lancar();
+    assert.strictEqual(terceira.status, 201, JSON.stringify(terceira.body));
+    assert.strictEqual(await saldoAtual(mat), 2);
+    assert.strictEqual((await lancar()).status, 409, 'com a terceira viva a NF tinha de bloquear');
+  });
+
   await close();
   console.log(`\npedidoReabreNoEstorno: ${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);
