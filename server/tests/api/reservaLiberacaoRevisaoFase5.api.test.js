@@ -54,6 +54,10 @@ let seq = 0;
     const orig = console.warn; console.warn = () => {};
     try { return await fn(); } finally { console.warn = orig; }
   };
+  // Um lock que nao solta PRENDE a suite em vez de falhar: toda espera concorrente tem limite.
+  const comLimite = (p, ms = 15000) => Promise.race([p, new Promise((_, rej) => {
+    setTimeout(() => rej(new Error(`PRESA: passou de ${ms} ms (o lock do material nao soltou?)`)), ms).unref();
+  })]);
 
   const material = async ({ critico = 1, cliente = null } = {}) => {
     const c = `E75F-${++seq}`;
@@ -159,6 +163,64 @@ let seq = 0;
     const cod = await codigo(m);
     const [aR] = await avisos(R);
     assert.ok(aR.corpo_texto.includes(`- ${cod} — Mat ${cod}: liberado 6 PC (pendente na requisição: 6 PC; reservado para a sua requisição: 6 PC)`), aR.corpo_texto.split('\n')[5]);
+  });
+
+  // ══════════════ 2. A corrida: dois documentos do mesmo material ao mesmo tempo ══════════════
+
+  const RODADAS = 5;
+  await test(`[corrida 75] duas inspecoes simultaneas do mesmo material (${RODADAS} rodadas, pela rota): R1 fica com 4 e R2 com 4`, async () => {
+    const resultados = [];
+    for (let i = 0; i < RODADAS; i++) {
+      /* eslint-disable no-await-in-loop */
+      const m = await material();
+      const R1 = await reqDireta('AGUARDANDO_ESTOQUE', [[m, 4]], { criado: '2026-09-01 08:00:00' });
+      const R2 = await reqDireta('AGUARDANDO_ESTOQUE', [[m, 4]], { criado: '2026-09-01 09:00:00' });
+      const recA = await nota([[m, 4]]);
+      const recB = await nota([[m, 4]]);
+      const [a, b] = await comLimite(semWarn(async () => Promise.all([inspecionar(await itemDaNota(recA), 4, 0), inspecionar(await itemDaNota(recB), 4, 0)])));
+      assert.deepStrictEqual([a.status, b.status], [201, 201]);
+      resultados.push(`${await hold(R1)}/${await hold(R2)} ${await st(R1)}/${await st(R2)}`);
+      /* eslint-enable no-await-in-loop */
+    }
+    assert.deepStrictEqual(resultados, Array(RODADAS).fill('4/4 TOTALMENTE_RESERVADA/TOTALMENTE_RESERVADA'));
+  });
+
+  await test(`[corrida 74] duas notas simultaneas do mesmo material (${RODADAS} rodadas, pela rota): R1 fica com 4 e R2 com 4`, async () => {
+    const resultados = [];
+    for (let i = 0; i < RODADAS; i++) {
+      /* eslint-disable no-await-in-loop */
+      const m = await material({ critico: 0 });
+      const R1 = await reqDireta('AGUARDANDO_ESTOQUE', [[m, 4]], { criado: '2026-09-01 08:00:00' });
+      const R2 = await reqDireta('AGUARDANDO_ESTOQUE', [[m, 4]], { criado: '2026-09-01 09:00:00' });
+      const recA = await notaSemProcessar([[m, 4]]);
+      const recB = await notaSemProcessar([[m, 4]]);
+      const [a, b] = await comLimite(semWarn(() => Promise.all([processar(recA), processar(recB)])));
+      assert.deepStrictEqual([a.status, b.status], [200, 200], JSON.stringify([a.body, b.body]));
+      resultados.push(`${await hold(R1)}/${await hold(R2)} ${await st(R1)}/${await st(R2)}`);
+      /* eslint-enable no-await-in-loop */
+    }
+    assert.deepStrictEqual(resultados, Array(RODADAS).fill('4/4 TOTALMENTE_RESERVADA/TOTALMENTE_RESERVADA'));
+  });
+
+
+  await test('[corrida] o lock solta quando a distribuicao LANCA: a inspecao seguinte do mesmo material reserva (nao fica presa na fila)', async () => {
+    const requisitionService = require('../../services/almoxarifado/requisitionService');
+    const m = await material();
+    const R1 = await reqDireta('AGUARDANDO_ESTOQUE', [[m, 4]], { criado: '2026-09-01 08:00:00' });
+    await reqDireta('AGUARDANDO_ESTOQUE', [[m, 4]], { criado: '2026-09-01 09:00:00' }); // 2 candidatas: o sort chama o comparador
+    const recA = await nota([[m, 4]]);
+    const recB = await nota([[m, 4]]);
+    const orig = requisitionService.compararPrioridade;
+    requisitionService.compararPrioridade = () => { throw new Error('falha simulada 75F'); };
+    let a;
+    try {
+      a = await semWarn(async () => inspecionar(await itemDaNota(recA), 4, 0));
+    } finally { requisitionService.compararPrioridade = orig; }
+    assert.strictEqual(a.status, 201, 'a decisao nao cai com a reserva lancando');
+    assert.strictEqual(await hold(R1), 0, 'a primeira nao reservou (lancou)');
+    const b = await comLimite(semWarn(async () => inspecionar(await itemDaNota(recB), 4, 0)), 4000);
+    assert.strictEqual(b.status, 201);
+    assert.strictEqual(await hold(R1), 4, 'a segunda distribuicao rodou');
   });
 
   await close();

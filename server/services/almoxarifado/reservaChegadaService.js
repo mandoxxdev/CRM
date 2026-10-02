@@ -203,8 +203,39 @@ async function recalcularTocadas(db, acc, rotulos) {
  * esperava" (candidatas, ordem, regra do dono, valor ao vivo, falta relida, desfazer) é uma só.
  * O teto é sempre limitado pelo disponível do material AGORA (D4 da 74 / D3 da 75): nunca distribui
  * saldo que não existe. Não recalcula status (quem chama, no `finally`); acumula em `acc`.
+ *
+ * Etapa 75 (Fase 5) — SERIALIZADO POR MATERIAL. Medido na revisão: duas inspeções simultâneas do mesmo
+ * material (ou duas notas da 74) reservavam cada uma para R1, cada uma relia o hold de R1 acima do pendente
+ * (a reserva da outra já estava lá) e as DUAS desfaziam o seu — a fila inteira ficava sem nada (8/8
+ * rodadas, C126 reaberta). Com a fila por material, a segunda distribuição só começa depois que a primeira
+ * terminou: relê a falta de R1 já coberta e passa para R2. O "desfazer o excesso" fica como DEFESA (a
+ * corrida com o `/aprovar`, que não passa por aqui, ainda pode criar excesso).
+ * PREMISSA: o app é UM processo Node e o SQLite UMA conexão — um lock em memória basta. Com mais de um
+ * processo (ou na migração para Postgres) isto vira `SELECT ... FOR UPDATE` na linha do material ou um
+ * advisory lock por `material_id` dentro da transação.
  */
+const filaPorMaterial = new Map();
+async function comLockDoMaterial(materialId, fn) {
+  const chave = Number(materialId);
+  const anterior = filaPorMaterial.get(chave) || Promise.resolve();
+  let soltar;
+  const minha = new Promise((resolve) => { soltar = resolve; });
+  const cauda = anterior.then(() => minha);
+  filaPorMaterial.set(chave, cauda);
+  await anterior;
+  try {
+    return await fn();
+  } finally {
+    soltar();
+    if (filaPorMaterial.get(chave) === cauda) filaPorMaterial.delete(chave);
+  }
+}
+
 async function distribuirParaQuemEspera(db, user, materialId, teto, rotulos, acc) {
+  return comLockDoMaterial(materialId, () => distribuirSemLock(db, user, materialId, teto, rotulos, acc));
+}
+
+async function distribuirSemLock(db, user, materialId, teto, rotulos, acc) {
   if (!(teto > EPS)) return;
   const material = await dbGet(db, `SELECT *, ${disponivelSql()} AS disponivel FROM materiais_almoxarifado WHERE id = ?`, [materialId]);
   if (!material) return;
