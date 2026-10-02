@@ -3248,11 +3248,29 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     } catch (e) {
       return null;
     }
-    const pos = await requisitionService.prepararPosAprovacao(db, requisicaoId, user, reqRow);
-    const upd = await dbRun(db,
-      `UPDATE requisicoes_almoxarifado SET status=?, aprovador_nome='Sistema (automático)', data_aprovacao=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
-       WHERE id=? AND status='PENDENTE' AND ${approvalRulesService.GATE_SQL}`,
-      [pos.status, requisicaoId]);
+    // Etapa 73 (Fase 5, MENOR): uma falha no meio (ex.: SQLITE_BUSY lendo o saldo de um item) saia
+    // como 500 para uma requisicao JA criada, com a reserva do 1o item presa e a requisicao PENDENTE.
+    // Agora prepararPosAprovacao desfaz as proprias reservas antes de lancar, e aqui a falha vira
+    // "a aprovacao automatica nao aconteceu": a requisicao fica PENDENTE (201) e o /aprovar manual
+    // aprova depois. O mesmo para o UPDATE que falha (desfaz o que reservou).
+    let pos;
+    try {
+      pos = await requisitionService.prepararPosAprovacao(db, requisicaoId, user, reqRow);
+    } catch (e) {
+      console.warn(`[almoxarifado-aprovacao-automatica] Falha ao aprovar automaticamente a requisição ${requisicaoId}; fica PENDENTE: ${e.message}`);
+      return null;
+    }
+    let upd;
+    try {
+      upd = await dbRun(db,
+        `UPDATE requisicoes_almoxarifado SET status=?, aprovador_nome='Sistema (automático)', data_aprovacao=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
+         WHERE id=? AND status='PENDENTE' AND ${approvalRulesService.GATE_SQL}`,
+        [pos.status, requisicaoId]);
+    } catch (e) {
+      console.warn(`[almoxarifado-aprovacao-automatica] Falha ao gravar a aprovação automática da requisição ${requisicaoId}; fica PENDENTE: ${e.message}`);
+      await requisitionService.desfazerReservas(db, user, pos.reservas);
+      return null;
+    }
     if (!upd.changes) {
       await requisitionService.desfazerReservas(db, user, pos.reservas);
       return null;

@@ -150,6 +150,10 @@ async function saldoDisponivelParaItem(db, item) {
  * As reservas são criadas uma a uma (`criarReserva` relê o disponível a cada chamada), então
  * dois itens do MESMO material não reservam o mesmo saldo duas vezes.
  *
+ * Etapa 73 (Fase 5): idempotente — o hold ATIVO que o item já tem conta como reservado (só o que
+ * falta é reservado, e o status considera o item seguro). Uma falha fora do try de um item (ex.: a
+ * leitura do saldo) desfaz as reservas desta chamada e relança.
+ *
  * Falha de reserva de um item não derruba a aprovação: a decisão de aprovar já foi tomada e é
  * independente de haver saldo (é justamente o caso AGUARDANDO_ESTOQUE). Um item que não
  * conseguiu reservar conta como não reservado — no pior caso a requisição fica
@@ -159,41 +163,59 @@ async function reservarItensAprovacao(db, requisicaoId, user, reqRow = {}) {
   const itens = await carregarItensRequisicao(db, requisicaoId);
   const reservas = [];
   let algumFaltou = false;
+  let algumSeguro = false; // algum item com hold: criado agora OU ja existente (Etapa 73, Fase 5)
 
-  for (const item of itens) {
-    const pendente = pendenteEntrega(item);
-    if (pendente <= 0) continue; // item já atendido não precisa de hold
+  try {
+    for (const item of itens) {
+      const pendente = pendenteEntrega(item);
+      if (pendente <= 0) continue; // item já atendido não precisa de hold
 
-    // eslint-disable-next-line no-await-in-loop
-    const { disponivel } = await saldoDisponivelParaItem(db, item);
-    const aReservar = Math.min(pendente, Math.max(0, disponivel));
-    if (aReservar <= 0) { algumFaltou = true; continue; }
-
-    try {
+      // Etapa 73 (Fase 5, MENOR): desconta a reserva ATIVA que o item JA tem. Uma aprovacao que falhou
+      // no meio podia deixar o hold de um item; o /aprovar seguinte reservava o mesmo item de novo
+      // (duas reservas de 4 para um item de 4). `disponivel` ja soma o hold do proprio item de volta,
+      // entao o livre de verdade e `disponivel - reservado_para_item`.
       // eslint-disable-next-line no-await-in-loop
-      const r = await stockService.criarReserva(db, user, {
-        material_id: item.material_id,
-        quantidade: aReservar,
-        projeto_id: reqRow.projeto_id || null,
-        os_id: reqRow.os_id || null,
-        os_referencia: reqRow.os_referencia || null,
-        cliente_id: reqRow.cliente_id || null,
-        observacoes: `Reserva automática da requisição ${reqRow.numero || requisicaoId}`,
-      }, {
-        sistema: true,
-        requisicao_id: Number(requisicaoId),
-        item_requisicao_id: item.id,
-        motivo: `Reserva automática requisição ${reqRow.numero || requisicaoId}`,
-      });
-      reservas.push({ item_id: item.id, reserva_id: r.id, quantidade: aReservar });
-      if (aReservar < pendente) algumFaltou = true;
-    } catch (e) {
-      console.warn(`[almoxarifado-reservas] Falha ao reservar item ${item.id} da requisição ${requisicaoId}: ${e.message}`);
-      algumFaltou = true;
+      const { disponivel, reservado_para_item: jaReservado } = await saldoDisponivelParaItem(db, item);
+      const falta = pendente - jaReservado;
+      if (jaReservado > 0) algumSeguro = true;
+      if (falta <= 1e-9) continue; // o item ja esta todo seguro
+      const aReservar = Math.min(falta, Math.max(0, disponivel - jaReservado));
+      if (aReservar <= 0) { algumFaltou = true; continue; }
+
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        const r = await stockService.criarReserva(db, user, {
+          material_id: item.material_id,
+          quantidade: aReservar,
+          projeto_id: reqRow.projeto_id || null,
+          os_id: reqRow.os_id || null,
+          os_referencia: reqRow.os_referencia || null,
+          cliente_id: reqRow.cliente_id || null,
+          observacoes: `Reserva automática da requisição ${reqRow.numero || requisicaoId}`,
+        }, {
+          sistema: true,
+          requisicao_id: Number(requisicaoId),
+          item_requisicao_id: item.id,
+          motivo: `Reserva automática requisição ${reqRow.numero || requisicaoId}`,
+        });
+        reservas.push({ item_id: item.id, reserva_id: r.id, quantidade: aReservar });
+        algumSeguro = true;
+        if (aReservar < falta) algumFaltou = true;
+      } catch (e) {
+        console.warn(`[almoxarifado-reservas] Falha ao reservar item ${item.id} da requisição ${requisicaoId}: ${e.message}`);
+        algumFaltou = true;
+      }
     }
+  } catch (e) {
+    // Etapa 73 (Fase 5, MENOR): uma falha FORA do try da reserva (a leitura do saldo do item, uma
+    // falha de banco) saia daqui com as reservas dos itens anteriores ja criadas e ninguem sabendo
+    // delas: reserva orfa com a requisicao PENDENTE. Desfaz as desta chamada e relanca — quem chama
+    // decide (o /aprovar responde erro; a aprovacao automatica deixa a requisicao PENDENTE).
+    await desfazerReservas(db, user, reservas);
+    throw e;
   }
 
-  if (reservas.length === 0) return { status: null, reservas };
+  if (!algumSeguro) return { status: null, reservas };
   return { status: algumFaltou ? STATUS_PARCIALMENTE_RESERVADA : STATUS_TOTALMENTE_RESERVADA, reservas };
 }
 
@@ -218,6 +240,9 @@ async function reservarItensAprovacao(db, requisicaoId, user, reqRow = {}) {
  * `calcularStatusPosAprovacao`. Nao ha reserva desta chamada a descontar (nada foi reservado), entao
  * a releitura diz a verdade: AGUARDANDO_* se o saldo sumiu; APROVADO se ainda ha saldo e a reserva
  * falhou por outro motivo (o comportamento de antes).
+ *
+ * Uma falha no meio da reserva (ex.: SQLITE_BUSY lendo o saldo de um item) LANCA, ja com as reservas
+ * desta chamada desfeitas (reservarItensAprovacao).
  *
  * Nao grava o status — quem chama grava num UPDATE guardado e, se perder, chama `desfazerReservas`.
  * @returns {Promise<{status: string, reservas: Array<{item_id, reserva_id, quantidade}>}>}

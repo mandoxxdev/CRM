@@ -145,6 +145,74 @@ const APR = { id: 7352, nome: 'Aprovador E73F5', role: 'admin', is_superadmin: 1
     assert.strictEqual(await disponivel(m), 0, 'premissa: o terceiro levou o saldo');
   });
 
+  // ══════════════ MENOR — falha no meio da reserva automatica ══════════════
+  await test('[falha no meio] SQLITE_BUSY na leitura do 2o item: 201 PENDENTE, nenhuma reserva ATIVA, saldo devolvido; /aprovar depois reserva uma vez', async () => {
+    await setConfig('aprovacao_automatica', '1');
+    const m1 = await material({ saldo: 10 });
+    const m2 = await material({ saldo: 10 });
+    const origCriar = stockService.criarReserva;
+    const origGet = db.get;
+    let armado = false;
+    let disparou = false;
+    stockService.criarReserva = async (...args) => { const r = await origCriar(...args); armado = true; return r; };
+    db.get = function (sql, ...rest) {
+      if (armado && typeof sql === 'string' && sql.includes('as reservado_para_item')) {
+        armado = false; disparou = true;
+        const cb = rest[rest.length - 1];
+        return setImmediate(() => cb(new Error('SQLITE_BUSY: database is locked (simulado)')));
+      }
+      return origGet.call(this, sql, ...rest);
+    };
+    const avisos = [];
+    const origWarn = console.warn;
+    console.warn = (...a) => { avisos.push(a.join(' ')); origWarn(...a); };
+    let r;
+    try {
+      r = await postReq([[m1, 4], [m2, 4]]);
+    } finally {
+      stockService.criarReserva = origCriar; db.get = origGet; console.warn = origWarn;
+      await setConfig('aprovacao_automatica', '0');
+    }
+    assert.ok(disparou, 'premissa: a falha simulada disparou');
+    assert.strictEqual(r.status, 201, `a requisicao existe: ${r.status} ${JSON.stringify(r.body)}`);
+    assert.strictEqual(r.body.status, 'PENDENTE', JSON.stringify(r.body));
+    assert.ok(!r.body.aprovacao, 'nao diz que aprovou');
+    const id = r.body.id;
+    assert.strictEqual(await statusDe(id), 'PENDENTE');
+    assert.deepStrictEqual(await ativas(id), [], 'nenhuma reserva orfa segurando saldo');
+    assert.strictEqual(await disponivel(m1), 10, 'o saldo do 1o item voltou');
+    assert.ok(avisos.some((w) => w.includes('SQLITE_BUSY') && w.includes(String(id))), `registra o aviso: ${JSON.stringify(avisos)}`);
+
+    const ap = await request(app).put(`/api/almoxarifado/requisicoes/${id}/aprovar`).send({});
+    assert.strictEqual(ap.status, 200, JSON.stringify(ap.body));
+    assert.strictEqual(ap.body.status, 'TOTALMENTE_RESERVADA');
+    assert.deepStrictEqual((await ativas(id)).map((x) => [x.material_id, x.quantidade]), [[m1, 4], [m2, 4]]);
+    assert.strictEqual(await disponivel(m1), 6);
+    assert.strictEqual(await disponivel(m2), 6);
+  });
+
+  await test('[idempotente] item que ja tem reserva ATIVA da requisicao: o /aprovar reserva so o que falta', async () => {
+    const m1 = await material({ saldo: 10 });
+    const m2 = await material({ saldo: 10 });
+    const id = await pendente([[m1, 4], [m2, 4]]);
+    const [i1, i2] = await itensDe(id);
+    // reserva orfa: o item 1 inteiro e metade do item 2, como sobra de uma aprovacao que falhou
+    for (const [it, q] of [[i1, 4], [i2, 2]]) {
+      // eslint-disable-next-line no-await-in-loop
+      await stockService.criarReserva(db, { ...SOL }, { material_id: it.material_id, quantidade: q, observacoes: 'orfa' },
+        { sistema: true, requisicao_id: id, item_requisicao_id: it.id, motivo: 'orfa' });
+    }
+    const ap = await request(app).put(`/api/almoxarifado/requisicoes/${id}/aprovar`).send({});
+    assert.strictEqual(ap.status, 200, JSON.stringify(ap.body));
+    assert.strictEqual(ap.body.status, 'TOTALMENTE_RESERVADA', JSON.stringify(ap.body));
+    const porItem = {};
+    for (const x of await ativas(id)) porItem[x.material_id] = (porItem[x.material_id] || 0) + Number(x.quantidade);
+    assert.deepStrictEqual(porItem, { [m1]: 4, [m2]: 4 }, `sem reserva em dobro: ${JSON.stringify(porItem)}`);
+    assert.strictEqual(await disponivel(m1), 6);
+    assert.strictEqual(await disponivel(m2), 6);
+    assert.deepStrictEqual(ap.body.reservas.map((x) => x.quantidade), [2], 'esta chamada reservou so os 2 que faltavam');
+  });
+
   await close();
   console.log(`\n${passed} passaram, ${failed} falharam\n`);
   process.exit(failed > 0 ? 1 : 0);
