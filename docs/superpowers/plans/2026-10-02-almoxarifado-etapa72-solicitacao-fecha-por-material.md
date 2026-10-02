@@ -426,7 +426,23 @@ T2); **T4** (integração) depois de T2 e T3; **T5** fechamento. Executores de g
   e a ausência em `PENDENTE`. Controle positivo: trocar as literais → cai; `a_caminho` recalculado à parte no relatório
   (em vez da fonte da T1) → o cenário de duas solicitações no mesmo par diverge da sugestão (ter um assert que compara os
   dois). `CI=true` build do client.
-- [ ] **T4 (integração, cruza galhos) — a jornada do comprador.** `server/tests/api/solicitacaoFechaPorMaterialIntegracao.api.test.js`,
+- [x] **T4 (integração, cruza galhos) — a jornada do comprador.** *(feita — T2 em `6981afc`; hash da T4 no commit
+  seguinte. O arquivo saiu como `server/tests/api/solicitacaoPorMaterialIntegracao.api.test.js` (nome dado pelo
+  orquestrador; o texto abaixo dizia `solicitacaoFechaPorMaterialIntegracao`). 7/7, tudo pelas rotas (material e minimo
+  por `POST`/`PUT /materiais`, solicitação pelo `verificar-minimos`, pedido pelo Compras, nota pelas nove portas com a
+  conferência inteira, estorno pela rota do livro, status lido por `contexto-material` + `GET /auditoria` — não há GET de
+  solicitação no módulo). Suíte `test:api` 269/269 (inclui o teste da T3 ainda não commitado na árvore). **Ajustes ao
+  roteiro abaixo:** (1) minimo 9 / máxima 10, não minimo 10: o `verificar-minimos` dispara com `atual <= minimo`, então
+  com minimo 10 o material completo (saldo 10) ganharia solicitação nova assim que a dele fechasse; (2) o `a_caminho` 6
+  de um material que a sugestão corretamente **omite** é lido subindo o minimo para 16 pelo `PUT` e voltando a 9;
+  (3) o "chegou 4 de 10" do relatório **ficou fora** — a T3 ainda está em execução em paralelo e o arquivo não pode
+  depender de campos não commitados; entra num assert do fechamento ou da T3; (4) pedido cancelado: a sugestão pede 6
+  (máx(10, 9) − 4) e o `verificar-minimos` abre 9 (máx(10 − 4, 9)), a antiga fica `VINCULADO` (C117). Controles
+  positivos (6, perl com âncora contada = 1, restauro por cópia com md5 conferido): (s1) fechar na 1ª nota → (A2);
+  (s2) gancho de reabrir desligado no `receiptService` → (A4)(A6); (s3) motor (`stockService`) sem chamar
+  `estornarEntradaNoPedido` → (A4); (s4) `a_caminho` com a quantidade inteira → (A2)(A4); (s5) dedupe só `PENDENTE` →
+  (A1); (s6) pedido encerrado contando `a_caminho` → (B). Nenhum defeito de produção revelado.)*
+  Roteiro original: `server/tests/api/solicitacaoFechaPorMaterialIntegracao.api.test.js`,
   só pelas portas reais: material com mínimo → `verificar-minimos` → `POST /api/compras/pedidos` com `solicitacao_id`
   (dois materiais, X 10 e Y 5, cada um com a sua solicitação) → nota de 4 de X → **a sugestão não sugere X**
   (`a_caminho` 6), `verificar-minimos` → `[]`, relatório com `chegou 4 de 10`, contexto-material com a solicitação em
