@@ -87,8 +87,10 @@ function diasDeHoje(n) {
     .body.find((p) => p.id === id);
   const statusCore = async (id) => (await dbGet(db,
     'SELECT status FROM pedidos_compra WHERE id = ?', [id])).status;
+  // Etapa 71, Fase 5: a porta manual (PATCH ./status) passou a gravar STATUS_MANUAL_ALTERADO; o
+  // PATCH da fixture do (1) nao e o fato medido — esta trilha e a do fechamento automatico.
   const trilhaDoPedido = (id) => dbAll(db, `SELECT acao, usuario_nome FROM auditoria_log_almoxarifado
-    WHERE entidade = 'pedido_compra' AND entidade_id = ? ORDER BY id`, [id]);
+    WHERE entidade = 'pedido_compra' AND entidade_id = ? AND acao <> 'STATUS_MANUAL_ALTERADO' ORDER BY id`, [id]);
   const cartaoParcial = async () => (await alertRegistry.montarCentral(db)).alertas
     .find((a) => a.chave === 'PEDIDO_COMPRA_PARCIAL');
   const filaParcial = () => dbAll(db,

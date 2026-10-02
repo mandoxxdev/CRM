@@ -178,6 +178,9 @@ const GRUPOS_ACAO = congelarGrupos([
   // pedido; reabrir so quando o status muda — "o que reabriu este mes" e pergunta propria.
   { rotulo: 'Recebido do pedido estornado', verbos: ['RECEBIDO_ESTORNADO'] },
   { rotulo: 'Reabertura automática do pedido', verbos: ['STATUS_AUTOMATICO_REABERTO'] },
+  // Etapa 71, Fase 5: a porta manual do Compras (`PATCH /api/compras/pedidos/:id/status`) passou a
+  // deixar trilha — e o que o estorno le para nao desfazer o fechamento do comprador (RN-E03).
+  { rotulo: 'Mudança manual de status do pedido', verbos: ['STATUS_MANUAL_ALTERADO'] },
   // Etapa 36 (RN-18): quem autorizou receber ACIMA do pedido, e em que item. Sem esta linha o
   // cenario "TODO verbo gravavel tem rotulo" de `auditLabels.api.test.js` fica vermelho — a
   // varredura le o literal `acao: 'EXCEDENTE_AUTORIZADO'` do receiptService. E o mesmo buraco de

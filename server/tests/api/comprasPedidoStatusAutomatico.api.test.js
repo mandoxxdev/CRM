@@ -73,9 +73,11 @@ function capturarWarn(fn) {
 
   const statusDoPedido = async (id) => (await dbGet(db,
     'SELECT status FROM pedidos_compra WHERE id = ?', [id])).status;
+  // Etapa 71, Fase 5: a porta manual (PATCH ./status) passou a gravar STATUS_MANUAL_ALTERADO. Este
+  // arquivo mede a trilha do GANCHO automatico — os PATCH das fixtures nao sao o fato medido aqui.
   const auditoriasDoPedido = (id) => dbAll(db, `SELECT acao, usuario_id, usuario_nome, dados_anteriores,
       dados_novos FROM auditoria_log_almoxarifado
-    WHERE entidade = 'pedido_compra' AND entidade_id = ? ORDER BY id`, [id]);
+    WHERE entidade = 'pedido_compra' AND entidade_id = ? AND acao <> 'STATUS_MANUAL_ALTERADO' ORDER BY id`, [id]);
   const saldoDoMaterial = async (materialId) => (await dbGet(db,
     'SELECT COALESCE(SUM(quantidade),0) AS q FROM estoque_saldo_almoxarifado WHERE material_id = ?',
     [materialId])).q;

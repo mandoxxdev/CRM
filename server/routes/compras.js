@@ -236,7 +236,8 @@ app.delete('/api/compras/pedidos/:id', authenticateToken, checkModulePermission(
  *
  * ⚠️ PORTA NOVA, e nao guarda afrouxada, porque `atualizarPedido` faz DELETE+INSERT das linhas e
  * zeraria `quantidade_recebida` (estoque recebido duas vezes) — o raciocinio inteiro esta no
- * cabecalho de `alterarStatusPedido`. Aqui o servico escreve UMA coluna e nunca toca
+ * cabecalho de `alterarStatusPedido`. Aqui o servico escreve UMA coluna (e, desde a Fase 5 da
+ * Etapa 71, a trilha `STATUS_MANUAL_ALTERADO` quando o status muda — `req.user` vai junto) e nunca toca
  * `itens_pedido_compra`, entao a porta e permitida COM ou SEM recebimento: o pedido preso no beco
  * e, por definicao, um pedido COM recebimento.
  *
@@ -260,7 +261,7 @@ app.delete('/api/compras/pedidos/:id', authenticateToken, checkModulePermission(
 app.patch('/api/compras/pedidos/:id/status', authenticateToken, checkModulePermission('compras'),
   validate(PedidoStatusSchema), async (req, res) => {
     try {
-      res.json(await pedidoCompraService.alterarStatusPedido(db, req.params.id, req.body.status));
+      res.json(await pedidoCompraService.alterarStatusPedido(db, req.params.id, req.body.status, req.user));
     } catch (e) {
       res.status(e.status || 500).json({ error: e.message });
     }

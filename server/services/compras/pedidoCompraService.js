@@ -108,6 +108,7 @@ const {
 const { inserirComNumeroUnico } = require('../almoxarifado/numeroDoc');
 const purchaseService = require('../almoxarifado/purchaseService');
 const { can, getPerfilFromUser } = require('../almoxarifado/permissions');
+const { registrarAuditoria } = require('../almoxarifado/audit');
 
 /** Molde de erro traduzido (mesmo `erro()` dos servicos do almoxarifado: a rota le `.status`). */
 const erro = (msg, status = 400) => Object.assign(new Error(msg), { status });
@@ -446,11 +447,35 @@ async function obterPedido(db, pedidoId) {
  * do `criarPedido`/`atualizarPedido`. Nao ha segunda lista de 7 status neste arquivo de proposito:
  * duas listas divergiriam na primeira edicao e a literal do 400 sairia diferente em cada porta.
  */
-async function alterarStatusPedido(db, pedidoId, status) {
-  const pedido = await dbGet(db, 'SELECT id, numero FROM pedidos_compra WHERE id = ?', [pedidoId]);
+async function alterarStatusPedido(db, pedidoId, status, user = null) {
+  const pedido = await dbGet(db, 'SELECT id, numero, status FROM pedidos_compra WHERE id = ?', [pedidoId]);
   if (!pedido) throw erro(PEDIDO_NAO_ENCONTRADO, 404);
   await dbRun(db, 'UPDATE pedidos_compra SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
     [status, pedido.id]);
+  // Etapa 71, Fase 5 (decisao reversivel, letra B) — a porta manual passa a DEIXAR TRILHA. Ate aqui
+  // ela nao auditava (assimetria deliberada da Etapa 42: o autor era o proprio ato humano), e por
+  // isso o estorno da 71 nao tinha como saber que o `recebido` era do comprador: reabria o pedido
+  // fechado a mao (contra a RN-E03). Agora o estorno so reabre quando o ULTIMO registro de status do
+  // pedido e o fechamento automatico (`receiptService.destinoDaReabertura`). Grava so quando o status
+  // MUDA (o PATCH que reescreve o mesmo valor nao e decisao nova). Nao-fatal: a trilha nao vale
+  // derrubar a correcao do comprador — o `warn` e a pista. Mesma tabela/verbo-literal das trilhas
+  // automaticas do pedido, para a `GET /almoxarifado/auditoria` mostrar as tres juntas.
+  if (String(pedido.status || '').toLowerCase() !== String(status || '').toLowerCase()) {
+    try {
+      await registrarAuditoria(db, {
+        entidade: 'pedido_compra',
+        entidade_id: pedido.id,
+        acao: 'STATUS_MANUAL_ALTERADO',
+        usuario_id: user?.id,
+        usuario_nome: user?.nome || user?.email,
+        dados_anteriores: { status: pedido.status },
+        dados_novos: { status },
+        justificativa: 'Status alterado pelo comprador',
+      });
+    } catch (e) {
+      console.warn(`[compras] trilha STATUS_MANUAL_ALTERADO do pedido ${pedido.numero || pedido.id} falhou: ${e.message}`);
+    }
+  }
   return { id: pedido.id, numero: pedido.numero, status };
 }
 

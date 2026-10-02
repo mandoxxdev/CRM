@@ -230,7 +230,12 @@ function capturarWarn(fn) {
     assert.strictEqual(reab[0].justificativa, `Estorno da movimentação #${mov.id} reabriu o pedido`);
   });
 
-  await test('(2b) RN-02 pelo SERVICO: pedido fechado a mao com a conta fechando (sem trilha automatica) reabre para pendente', async () => {
+  // ⚠️ Fase 5 (revisao da etapa): este cenario PRENDIA o contrario — "fechado a mao com a conta
+  // fechando, sem trilha automatica, reabre para pendente". Estava ERRADO: o `recebido` escrito pelo
+  // comprador e decisao dele (RN-E03), e o estorno que o rebaixava para `pendente` era o defeito que o
+  // 81a734c dizia descartar. Regra nova: so reabre quando o ULTIMO registro de status do pedido e o
+  // fechamento automatico; sem trilha automatica, nao reabre — o estorno so desconta a linha.
+  await test('(2b) RN-02 pelo SERVICO (Fase 5): pedido fechado A MAO com a conta fechando NAO reabre — so desconta', async () => {
     const mat = await novoMaterial();
     const { pedido, linhas } = await novoPedido([{ material_id: mat, quantidade: 5, valor_unitario: 1 }]);
     assert.strictEqual((await request(app).patch(`/api/compras/pedidos/${pedido.id}/status`).send({ status: 'aprovado' })).status, 200);
@@ -242,9 +247,10 @@ function capturarWarn(fn) {
     const [mov] = await entradasDe(recId);
     const r = await estornarPeloServico(mov.id);
     assert.strictEqual(r.success, true);
-    assert.strictEqual(r.pedido_compra.reaberto, true, JSON.stringify(r));
-    assert.strictEqual(await statusDe(pedido.id), 'pendente',
-      'sem trilha do fechamento automatico o destino e pendente');
+    assert.strictEqual(r.pedido_compra.reaberto, false, JSON.stringify(r));
+    assert.strictEqual(r.pedido_compra.status, 'recebido');
+    assert.strictEqual(await statusDe(pedido.id), 'recebido',
+      'o estorno rebaixou o recebido que o comprador escreveu a mao');
     assert.strictEqual(await recebidaDa(linhas[0]), 0);
   });
 
@@ -787,6 +793,85 @@ function capturarWarn(fn) {
     assert.strictEqual(r.body.pedido_compra.reaberto, true);
     assert.strictEqual(await recebidaDa(f.linha), 0);
     assert.deepStrictEqual(await contasDo(f.mat), { atual: 50, bloqueada: 0, em_inspecao: 0 });
+  });
+
+  // ── (13) o fechamento A MAO nao e desfeito pelo estorno ─────────────────────────────────────
+  const patchStatus = async (pedidoId, status) => {
+    const r = await request(app).patch(`/api/compras/pedidos/${pedidoId}/status`).send({ status });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+  };
+
+  await test('(13) Fase 5: comprador fecha A MAO com 6 de 10, outra nota completa, estorno dela -> continua recebido, linha 6', async () => {
+    const mat = await novoMaterial();
+    const { pedido, linhas } = await novoPedido([{ material_id: mat, quantidade: 10, valor_unitario: 1 }], { status: 'enviado' });
+    await receber(pedido, [itemDaTela(mat, linhas[0], 6)]);
+    assert.strictEqual(await statusDe(pedido.id), 'enviado');
+    await patchStatus(pedido.id, 'recebido');
+    const rec4 = await receber(pedido, [itemDaTela(mat, linhas[0], 4)]);
+    const r = await estornarPelaRota((await entradasDe(rec4))[0].id);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.strictEqual(r.body.pedido_compra.situacao_antes, 'RECEBIDO');
+    assert.strictEqual(r.body.pedido_compra.situacao_depois, 'PARCIAL');
+    assert.strictEqual(r.body.pedido_compra.reaberto, false, JSON.stringify(r.body));
+    assert.strictEqual(r.body.pedido_compra.status, 'recebido');
+    assert.strictEqual(await statusDe(pedido.id), 'recebido', 'o estorno desfez o fechamento a mao do comprador (RN-E03)');
+    assert.strictEqual(await recebidaDa(linhas[0]), 6);
+    // A porta manual agora deixa trilha — e e ela que o estorno le.
+    const manuais = (await trilhaDo(pedido.id)).filter((t) => t.acao === 'STATUS_MANUAL_ALTERADO');
+    assert.strictEqual(manuais.length, 1, JSON.stringify(manuais));
+    assert.deepStrictEqual(JSON.parse(manuais[0].dados_anteriores), { status: 'enviado' });
+    assert.deepStrictEqual(JSON.parse(manuais[0].dados_novos), { status: 'recebido' });
+  });
+
+  await test('(13b) Fase 5: automatico fecha, comprador reabre e fecha A MAO depois -> o ultimo registro e manual, o estorno nao reabre', async () => {
+    const mat = await novoMaterial();
+    const { pedido, linhas } = await novoPedido([{ material_id: mat, quantidade: 10, valor_unitario: 1 }], { status: 'enviado' });
+    const rec = await receber(pedido, [itemDaTela(mat, linhas[0], 10)]);
+    assert.strictEqual(await statusDe(pedido.id), 'recebido');
+    await patchStatus(pedido.id, 'pendente');
+    await patchStatus(pedido.id, 'recebido');
+    const r = await estornarPelaRota((await entradasDe(rec))[0].id);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.strictEqual(r.body.pedido_compra.reaberto, false, JSON.stringify(r.body));
+    assert.strictEqual(await statusDe(pedido.id), 'recebido');
+    assert.strictEqual(await recebidaDa(linhas[0]), 0);
+    const acoes = (await trilhaDo(pedido.id)).map((t) => t.acao);
+    assert.deepStrictEqual(acoes, ['STATUS_AUTOMATICO_RECEBIDO', 'STATUS_MANUAL_ALTERADO', 'STATUS_MANUAL_ALTERADO',
+      'RECEBIDO_ESTORNADO'], JSON.stringify(acoes));
+  });
+
+  await test('(13c) Fase 5: sem trilha NENHUMA (legado anterior a auditoria da porta manual) -> nao reabre (o fallback "pendente" saiu)', async () => {
+    const mat = await novoMaterial();
+    const { pedido, linhas } = await novoPedido([{ material_id: mat, quantidade: 5, valor_unitario: 1 }]);
+    await patchStatus(pedido.id, 'recebido');
+    const rec = await receber(pedido, [itemDaTela(mat, linhas[0], 5)]);
+    await dbRun(db, "DELETE FROM auditoria_log_almoxarifado WHERE entidade = 'pedido_compra' AND entidade_id = ?", [pedido.id]);
+    const r = await estornarPeloServico((await entradasDe(rec))[0].id);
+    assert.strictEqual(r.pedido_compra.reaberto, false, JSON.stringify(r));
+    assert.strictEqual(await statusDe(pedido.id), 'recebido', 'sem trilha automatica o pedido foi reaberto');
+  });
+
+  await test('(13d) Fase 5: PATCH que nao muda o status nao grava trilha; o automatico continua sendo o ultimo e o estorno reabre', async () => {
+    const mat = await novoMaterial();
+    const { pedido, linhas } = await novoPedido([{ material_id: mat, quantidade: 10, valor_unitario: 1 }], { status: 'enviado' });
+    const rec = await receber(pedido, [itemDaTela(mat, linhas[0], 10)]);
+    await patchStatus(pedido.id, 'recebido');   // ja era recebido: nao e mudanca
+    assert.ok(!(await trilhaDo(pedido.id)).some((t) => t.acao === 'STATUS_MANUAL_ALTERADO'), 'PATCH sem mudanca gravou trilha');
+    const r = await estornarPelaRota((await entradasDe(rec))[0].id);
+    assert.strictEqual(r.body.pedido_compra.reaberto, true, JSON.stringify(r.body));
+    assert.strictEqual(await statusDe(pedido.id), 'enviado');
+  });
+
+  await test('(13e) Fase 5: a trilha manual tem rotulo e aparece na GET /auditoria', async () => {
+    const mat = await novoMaterial();
+    const { pedido } = await novoPedido([{ material_id: mat, quantidade: 1, valor_unitario: 1 }]);
+    await patchStatus(pedido.id, 'aprovado');
+    const r = await request(app).get(`/api/almoxarifado/auditoria?entidade=pedido_compra&entidade_id=${pedido.id}`);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    const lista = Array.isArray(r.body) ? r.body : (r.body.itens || r.body.registros || r.body.data || []);
+    const linha = lista.find((l) => l.acao === 'STATUS_MANUAL_ALTERADO' && Number(l.entidade_id) === pedido.id);
+    assert.ok(linha, `trilha manual fora da auditoria: ${JSON.stringify(r.body).slice(0, 400)}`);
+    assert.strictEqual(linha.acao_rotulo, 'Mudança manual de status do pedido', JSON.stringify(linha));
   });
 
   await close();
