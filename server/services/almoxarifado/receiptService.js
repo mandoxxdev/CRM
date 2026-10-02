@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const { dbRun, dbGet, dbAll } = require('./db');
 // Etapa 36 (RN-11): o enum de `tipo_recebimento` tem fonte UNICA em schema.js — quem grava (aqui) e
 // quem valida (schemas.js/Zod) leem a MESMA lista. Sem ciclo: schema.js so requer ./db.
@@ -1564,16 +1565,32 @@ async function gerarContaPagar(db, rec) {
  * (`liberarProcessamento` no `finally`), inclusive na falha parcial — a retomada continua possivel,
  * e o claim por item continua sendo o que impede creditar duas vezes.
  * Descartado: status novo `PROCESSANDO` (mexeria em telas, filtros e na maquina do workflow).
+ *
+ * Etapa 70, Fase 5 — o DONO da marca. A expiracao de 10 min tinha um efeito colateral: um
+ * processamento LONGO (mais de 10 min em voo) perdia a nota para um segundo clique, os dois iam ate
+ * o fim e saiam DUAS contas a pagar (sonda `sonda70f-claim.js` (b): contas [2, 3]); e a liberacao
+ * zerava a marca sem conferir de quem era (o primeiro, ao terminar, apagava a do segundo em voo).
+ * Agora a marca e UNICA por execucao — `'<YYYY-MM-DD HH:MM:SS> #<uuid>'`: o prefixo de data mantem a
+ * comparacao de expiracao (`< datetime('now','-10 minutes')`, texto ordenavel) e o sufixo
+ * identifica o dono. `reivindicarProcessamento` devolve o uuid; `liberarProcessamento` so limpa
+ * a marca cujo sufixo e o MEU uuid; e `concluirProcessamentoNota` confere a posse
+ * (`aindaDonoDoProcessamento`) ANTES de `gerarContaPagar` — se perdeu: nao cria a conta, registra
+ * `console.warn` e recusa com o 409 literal (quem assumiu a marca termina a nota).
+ * A expiracao continua: sem ela um processo morto trava a nota para sempre. Marca vencida que
+ * ninguem assumiu continua sendo do dono (a posse e pelo uuid, nao pela idade).
+ * Descartado: renovar a marca a cada item (heartbeat) — reduz a janela mas nao a fecha, e espalha
+ * escrita pelo laco do motor; a conferencia no ponto irreversivel (a conta) e o que impede o dobro.
  */
 const LITERAL_EM_PROCESSAMENTO = 'Esta nota já está sendo processada';
 
 async function reivindicarProcessamento(db, recebimentoId, mensagemTerminal) {
+  const dono = crypto.randomUUID();
   const claim = await dbGet(db, `UPDATE recebimentos_material_almoxarifado
-    SET processando_em = CURRENT_TIMESTAMP
+    SET processando_em = strftime('%Y-%m-%d %H:%M:%S', 'now') || ' #' || ?
     WHERE id = ? AND status NOT IN ('PROCESSADO', 'APROVADO')
       AND (processando_em IS NULL OR processando_em < datetime('now', '-10 minutes'))
-    RETURNING id`, [recebimentoId]);
-  if (claim) return;
+    RETURNING id`, [dono, recebimentoId]);
+  if (claim) return dono;
   const atual = await dbGet(db, 'SELECT status FROM recebimentos_material_almoxarifado WHERE id = ?', [recebimentoId]);
   if (atual && [STATUS.PROCESSADO, STATUS.APROVADO].includes(atual.status)) {
     throw Object.assign(new Error(mensagemTerminal), { status: 400 });
@@ -1581,9 +1598,21 @@ async function reivindicarProcessamento(db, recebimentoId, mensagemTerminal) {
   throw Object.assign(new Error(LITERAL_EM_PROCESSAMENTO), { status: 409 });
 }
 
-async function liberarProcessamento(db, recebimentoId) {
+// O dono e o sufixo `#<uuid>` da marca (o prefixo de data so serve a expiracao).
+const DONO_DA_MARCA_SQL = "substr(processando_em, instr(processando_em, ' #') + 2)";
+
+/** A marca ainda e desta execucao? (Fase 5 — ver o cabecalho de `reivindicarProcessamento`.) */
+async function aindaDonoDoProcessamento(db, recebimentoId, dono) {
+  const row = await dbGet(db, `SELECT 1 AS ok FROM recebimentos_material_almoxarifado
+    WHERE id = ? AND instr(processando_em, ' #') > 0 AND ${DONO_DA_MARCA_SQL} = ?`, [recebimentoId, dono]);
+  return !!row;
+}
+
+async function liberarProcessamento(db, recebimentoId, dono) {
   try {
-    await dbRun(db, 'UPDATE recebimentos_material_almoxarifado SET processando_em = NULL WHERE id = ?', [recebimentoId]);
+    // So a PROPRIA marca: a de outra execucao que assumiu a nota (marca vencida) continua.
+    await dbRun(db, `UPDATE recebimentos_material_almoxarifado SET processando_em = NULL
+      WHERE id = ? AND instr(processando_em, ' #') > 0 AND ${DONO_DA_MARCA_SQL} = ?`, [recebimentoId, dono]);
   } catch (e) {
     // Nao mascara o resultado de quem chamou; a marca expira sozinha em 10 minutos.
     console.warn(`[recebimento] falha ao liberar a marca de processamento (recebimento ${recebimentoId}): ${e.message}`);
@@ -1605,17 +1634,26 @@ async function processarNota(db, user, recebimentoId, { localizacao_id, destinos
   validarDadosProcessamento(rec);
   // Etapa 70 (T0b): so um processamento por vez; a marca volta no `finally` (ver o cabecalho de
   // `reivindicarProcessamento`).
-  await reivindicarProcessamento(db, recebimentoId, 'Nota já processada');
+  const marca = await reivindicarProcessamento(db, recebimentoId, 'Nota já processada');
   try {
-    return await concluirProcessamentoNota(db, user, rec, recebimentoId, { localizacao_id, destinos });
+    return await concluirProcessamentoNota(db, user, rec, recebimentoId, { localizacao_id, destinos }, marca);
   } finally {
-    await liberarProcessamento(db, recebimentoId);
+    await liberarProcessamento(db, recebimentoId, marca);
   }
 }
 
 /** O corpo de `processarNota` depois do claim (Etapa 70, T0b) — so ela chama. */
-async function concluirProcessamentoNota(db, user, rec, recebimentoId, { localizacao_id, destinos }) {
+async function concluirProcessamentoNota(db, user, rec, recebimentoId, { localizacao_id, destinos }, marca) {
   await darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id, destinos });
+  // Etapa 70, Fase 5: a conta a pagar e o ponto IRREVERSIVEL — so sai se a marca ainda e minha. Se
+  // outra execucao assumiu (a minha venceu no meio de um processamento longo), ELA termina a nota:
+  // aqui nao se cria conta nem se sobrescreve status/`contas_pagar_id`. A entrada no estoque que
+  // esta execucao ja fez e legitima (o claim por item de `darEntradaEstoque` impede o dobro).
+  if (!(await aindaDonoDoProcessamento(db, recebimentoId, marca))) {
+    console.warn(`[recebimento] a marca de processamento passou a outra execucao (recebimento ${recebimentoId}): `
+      + 'conta a pagar nao gerada por esta execucao');
+    throw Object.assign(new Error(LITERAL_EM_PROCESSAMENTO), { status: 409 });
+  }
   const contasPagarId = await gerarContaPagar(db, rec);
 
   await dbRun(db, `UPDATE recebimentos_material_almoxarifado SET
@@ -1664,11 +1702,11 @@ async function aprovarRecebimento(db, user, recebimentoId, opts = {}) {
   }
 
   // Etapa 70 (T0b): o ramo direto tambem da entrada no estoque — mesmo claim, mesma literal 409.
-  await reivindicarProcessamento(db, recebimentoId, 'Recebimento já aprovado/processado');
+  const marca = await reivindicarProcessamento(db, recebimentoId, 'Recebimento já aprovado/processado');
   try {
     return await concluirAprovacaoDireta(db, user, rec, recebimentoId, opts);
   } finally {
-    await liberarProcessamento(db, recebimentoId);
+    await liberarProcessamento(db, recebimentoId, marca);
   }
 }
 

@@ -167,6 +167,107 @@ const resultado = (p) => p.then((v) => ({ ok: v }), (e) => ({ erro: e.message, s
     assert.strictEqual((await recRow(db, r)).processando_em, null);
   });
 
+
+  // ---------------------------------------------------------------------------------------------
+  // Etapa 70, Fase 5 (fix-round, MENOR) — o DONO da marca. A marca vence em 10 min (sem isso um
+  // processo morto trava a nota), mas um processamento LONGO perdia a nota no meio: o segundo
+  // reivindicava a marca vencida, os dois iam ate o fim e saiam DUAS contas a pagar (sonda
+  // `sonda70f-claim.js` (b): contas [2, 3]); e `liberarProcessamento` zerava a marca sem conferir de
+  // quem era — o primeiro, ao terminar, apagava a marca do segundo ainda em voo.
+  // Agora a marca e unica por execucao; a liberacao so limpa a PROPRIA; e o ponto que cria a conta
+  // a pagar confere que a marca ainda e sua (se perdeu: nao cria, `console.warn`, 409 literal).
+  // ---------------------------------------------------------------------------------------------
+  const envelhecerMarca = (r) => dbRun(db, `UPDATE recebimentos_material_almoxarifado
+    SET processando_em = datetime('now', '-11 minutes') || substr(processando_em, 20) WHERE id = ?`, [r]);
+  const capturarWarn = async (fn) => {
+    const orig = console.warn; const msgs = [];
+    console.warn = (...a) => { msgs.push(a.join(' ')); };
+    try { return { valor: await fn(), msgs }; } finally { console.warn = orig; }
+  };
+
+  await test('DONO: processamento longo perde a marca vencida para outro — UMA conta a pagar, o primeiro toma 409 e avisa no log', async () => {
+    const m = await novoMaterial(db);
+    const r = await recebimentoCom(db, [{ material_id: m, qtd: 4, lote: 'L-DONO-1' }]);
+    const original = lotService.criarOuObterLote;
+    let resB; let disparou = false;
+    lotService.criarOuObterLote = async (d, u, p) => {
+      if (!disparou) {
+        disparou = true;
+        await envelhecerMarca(r); // A esta em voo ha mais de 10 min
+        resB = await resultado(receiptService.processarNota(db, { ...ADMIN, nome: 'B' }, r));
+      }
+      return original(d, u, p);
+    };
+    let resA; let msgs;
+    try {
+      ({ valor: resA, msgs } = await capturarWarn(() => resultado(receiptService.processarNota(db, { ...ADMIN, nome: 'A' }, r))));
+    } finally {
+      lotService.criarOuObterLote = original;
+    }
+    assert.ok(resB.ok, `B assumiu a marca vencida e processou: ${JSON.stringify(resB)}`);
+    const rec = await recRow(db, r);
+    assert.strictEqual((await contasDe(db, rec.numero)).length, 1, 'a conta a pagar nao pode sair em dobro (era: 2)');
+    assert.strictEqual(rec.contas_pagar_id, resB.ok.contas_pagar_id, 'A nao sobrescreve a conta de B');
+    assert.deepStrictEqual(resA, { erro: LITERAL_409, status: 409 }, 'A perdeu a marca: recusa com a literal');
+    assert.ok(msgs.some((x) => x.includes(`[recebimento] a marca de processamento passou a outra execucao (recebimento ${r})`)),
+      `console.warn com a literal: ${JSON.stringify(msgs)}`);
+    assert.strictEqual(rec.status, 'PROCESSADO');
+    assert.strictEqual(await saldo(db, m), 4, 'o estoque entrou uma vez');
+    assert.strictEqual(rec.processando_em, null);
+  });
+
+  await test('DONO: marca vencida mas NINGUEM assumiu — o dono termina normalmente, com a conta', async () => {
+    const m = await novoMaterial(db);
+    const r = await recebimentoCom(db, [{ material_id: m, qtd: 2, lote: 'L-DONO-2' }]);
+    const original = lotService.criarOuObterLote;
+    let disparou = false;
+    lotService.criarOuObterLote = async (d, u, p) => {
+      if (!disparou) { disparou = true; await envelhecerMarca(r); }
+      return original(d, u, p);
+    };
+    let ok;
+    try { ok = await receiptService.processarNota(db, ADMIN, r); } finally { lotService.criarOuObterLote = original; }
+    assert.strictEqual(ok.status, 'PROCESSADO');
+    const rec = await recRow(db, r);
+    assert.strictEqual((await contasDe(db, rec.numero)).length, 1, 'a expiracao sozinha nao tira a posse');
+    assert.strictEqual(rec.processando_em, null, 'e a propria marca (envelhecida) e liberada');
+  });
+
+  await test('DONO: a liberacao so limpa a PROPRIA marca — a do outro em voo continua', async () => {
+    const m = await novoMaterial(db);
+    const r = await recebimentoCom(db, [{ material_id: m, qtd: 3, lote: 'L-DONO-3' }]);
+    const original = lotService.criarOuObterLote;
+    const MARCA_DO_OUTRO = '2099-01-01 00:00:00 #outra-execucao';
+    lotService.criarOuObterLote = async () => {
+      // outra execucao assumiu a nota (marca vencida) e esta em voo; A falha em seguida
+      await dbRun(db, 'UPDATE recebimentos_material_almoxarifado SET processando_em = ? WHERE id = ?', [MARCA_DO_OUTRO, r]);
+      throw Object.assign(new Error('falha simulada depois de perder a marca'), { status: 400 });
+    };
+    try {
+      await assert.rejects(() => receiptService.processarNota(db, ADMIN, r), /falha simulada/);
+    } finally {
+      lotService.criarOuObterLote = original;
+    }
+    assert.strictEqual((await recRow(db, r)).processando_em, MARCA_DO_OUTRO, 'o finally de A nao apaga a marca de quem esta em voo');
+  });
+
+  await test('DONO: o mesmo vale no ramo direto de aprovarRecebimento (liberacao confere o dono)', async () => {
+    const m = await novoMaterial(db);
+    const r = await recebimentoCom(db, [{ material_id: m, qtd: 3, lote: 'L-DONO-4' }], 'RECEBIDO');
+    const original = lotService.criarOuObterLote;
+    const MARCA_DO_OUTRO = '2099-01-01 00:00:00 #outra-execucao-aprovar';
+    lotService.criarOuObterLote = async () => {
+      await dbRun(db, 'UPDATE recebimentos_material_almoxarifado SET processando_em = ? WHERE id = ?', [MARCA_DO_OUTRO, r]);
+      throw Object.assign(new Error('falha simulada no aprovar'), { status: 400 });
+    };
+    try {
+      await assert.rejects(() => receiptService.aprovarRecebimento(db, ADMIN, r), /falha simulada/);
+    } finally {
+      lotService.criarOuObterLote = original;
+    }
+    assert.strictEqual((await recRow(db, r)).processando_em, MARCA_DO_OUTRO);
+  });
+
   await close();
   console.log(`\n${passed} passou, ${failed} falhou`);
   process.exit(failed > 0 ? 1 : 0);
