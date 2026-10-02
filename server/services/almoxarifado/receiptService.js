@@ -46,6 +46,26 @@ const { can, getPerfilFromUser } = require('./permissions');
 // `sincronizarNaoConformidadeQuantidade` em tempo de execucao para provar que o gancho que explode
 // nao derruba a conferencia, e uma desestruturacao capturaria a funcao original antes do patch.
 const nonConformityService = require('./nonConformityService');
+// Etapa 70 (T2): o aviso da nota que entrou no estoque. Sem ciclo: o servico requer db,
+// notificationQueueService e requisitionStateMachine — nenhum chega de volta aqui; `alertService` e
+// requerido LAZY la dentro. Pelo OBJETO do modulo pelo mesmo motivo dos de cima (monkeypatch).
+const receiptNotificationService = require('./receiptNotificationService');
+
+/**
+ * Etapa 70 (T2, D6, RN-05): o gancho do aviso, DEPOIS do UPDATE de status terminal e do
+ * `fecharSolicitacoesDoPedido` — o ultimo passo de cada ponto terminal. Best-effort: o recebimento
+ * ja esta PROCESSADO/APROVADO e o estoque ja entrou quando chegamos aqui; uma falha do aviso so vira
+ * `console.warn` com a literal do contrato, nunca muda a resposta. Roda DENTRO do claim do
+ * processamento (T0b): o perdedor de dois cliques toma 409 antes e nunca chega aqui com o laco do
+ * vencedor pela metade.
+ */
+async function avisarEntradaConfirmadaSemFalhar(db, user, recebimentoId) {
+  try {
+    await receiptNotificationService.avisarEntradaConfirmada(db, user, recebimentoId);
+  } catch (e) {
+    console.warn(`[recebimento] aviso de entrada confirmada falhou (recebimento ${recebimentoId}): ${e.message}`);
+  }
+}
 
 /**
  * Etapa 17 (RN-04, gancho C4.2) — aviso pos-escrita da quantidade recebida, nos DOIS escritores
@@ -1589,6 +1609,9 @@ async function concluirProcessamentoNota(db, user, rec, recebimentoId, { localiz
     }
   }
 
+  // Etapa 70 (T2): o aviso da nota e o de quem esperava o material — o ultimo passo.
+  await avisarEntradaConfirmadaSemFalhar(db, user, recebimentoId);
+
   return { success: true, status: STATUS.PROCESSADO, contas_pagar_id: contasPagarId };
 }
 
@@ -1632,6 +1655,10 @@ async function concluirAprovacaoDireta(db, user, rec, recebimentoId, opts) {
       console.warn('[almoxarifado-compras] Falha ao fechar solicitacoes do pedido apos aprovar recebimento:', e.message);
     }
   }
+
+  // Etapa 70 (T2): o mesmo aviso no ramo direto. O ramo que DELEGA para processarNota nao chega
+  // aqui — o aviso ja saiu la.
+  await avisarEntradaConfirmadaSemFalhar(db, user, recebimentoId);
 
   return { success: true };
 }

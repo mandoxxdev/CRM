@@ -358,7 +358,7 @@ T2 em worktree); **T4** (integração) depois de T2; **T5** fechamento. Executor
   (c) retido como livre → RN-09; (d) dedupe com `Date.now()` → dedupe; (e) sem filtro `entrada_estoque_em` → RN-04 (D6);
   (f) link fixo → espelho + RN-08; (g) sem as chaves em `CHAVES_BOOL` → RN-07 (PUT 200). Suíte: api 260/260,
   almoxarifado 44/44, validation 4/4, safealter 3/3, sqlite 5/5.
-- [ ] ~~**T1 (texto original)**~~ **T1 (tronco) — o serviço e a configuração.** `receiptNotificationService.js` (contrato acima); as duas chaves
+  *Texto original da T1 (substituído pelo registro acima — o (b) "aceitar APROVADO" deixou de valer: a Fase 2 pôs APROVADO no critério):* `receiptNotificationService.js` (contrato acima); as duas chaves
   semeadas em `schema.js`; `CHAVES_BOOL` em `routes/almoxarifado.js:2729`. Teste novo
   `server/tests/api/recebimentoAvisoEntrada.api.test.js` (pelo **serviço**, harness real, `usuarios` criado como em
   `regrasUrgenciaCliente.api.test.js:31`): `montarAvisoNota`/`montarAvisoRequisitante` com as literais exatas; RN-04,
@@ -367,7 +367,37 @@ T2 em worktree); **T4** (integração) depois de T2; **T5** fechamento. Executor
   Controle positivo: (a) ler a lista de `notificacoes_dest_entradas` em vez da cadeia → RN-06 cai; (b) aceitar
   `APROVADO` na RN-08 → a negativa cai; (c) contar retido como livre → RN-09 cai; (d) dedupe com `Date.now()` → o
   "segunda chamada DUPLICADA" cai; (e) ler itens sem o filtro `entrada_estoque_em` → RN-03/04 caem.
-- [ ] **T2 (tronco) — os ganchos.** Os dois pontos em `receiptService.js` (contrato). Testes no mesmo arquivo, **pelas
+  Commit `5aaa5c1`.
+- [x] **T2 (tronco) — os ganchos. FEITA.** `avisarEntradaConfirmadaSemFalhar` em `receiptService.js` (try/catch →
+  `console.warn('[recebimento] aviso de entrada confirmada falhou (recebimento <id>): <msg>')`), chamado no fim de
+  `concluirProcessamentoNota` e de `concluirAprovacaoDireta` — os dois corpos que rodam DENTRO do claim da T0b, depois
+  do UPDATE de status e do `fecharSolicitacoesDoPedido`. **Divergência:** testes num arquivo próprio
+  `recebimentoAvisoEntradaRotas.api.test.js` (12), não no da T1 — lá o serviço é chamado direto sobre entrada sem gancho,
+  e o gancho tornaria a 2ª chamada DUPLICADA. Cenário novo além do plano: **D6 por trigger** (`RAISE(ABORT)` no UPDATE de
+  status → 500 e fila vazia), o que tornou a sabotagem (i) matável. Sabotagens: (f) gancho só em `processarNota` → cai o
+  `/aprovar` direto; (g) gancho também no ramo que delega → **sobrevive** (12/12: o dedupe segura — esperado, a
+  duplicação de chamada é inofensiva); (h) `throw` no catch → RN-05 cai com 500; (i) gancho antes do UPDATE → cai o D6;
+  (j) sem o claim da T0b → caem as duas corridas, e a do serviço cai pelo **conteúdo** (o aviso guardado lista o crítico
+  "disponível" — o defeito da sonda `sonda70r-corrida2.js` reproduzido). Suíte: api 261/261, almoxarifado 44/44,
+  validation 4/4, safealter 3/3, sqlite 5/5.
+
+  **Contrato final que a T3 (tela) consome** — `GET/PUT /api/almoxarifado/configuracoes` (o PUT só grava chave semeada;
+  `CHAVES_BOOL` recusa fora de '0'/'1' com `Configuração "<chave>" deve ser 0 ou 1`):
+
+  | chave | tipo | default semeado | label/descrição sugeridos |
+  |---|---|---|---|
+  | `notificar_recebimento_entrada` | boolean | `'0'` | *Avisar Entrada de Recebimento por E-mail* — um e-mail por nota que entrou no estoque, para a lista abaixo (desligado por padrão) |
+  | `notificar_recebimento_solicitante` | boolean | `'1'` | *Avisar o Solicitante quando o Material Chega* — um e-mail ao solicitante de cada requisição que esperava o material que entrou livre (ligado por padrão) |
+  | `notificacoes_dest_recebimento` | text (lista: JSON ou vírgula) | `''` | *Destinatários — Entrada de recebimento* — vazio usa os destinatários de Compras (`notificacoes_dest_compras`, depois `compras_notificar_emails`) |
+
+  As três têm leitor literal no servidor (`receiptNotificationService.js`), então a amarração de
+  `configuracoesGerais.api.test.js` passa ao entrarem em `CAMPOS`; a fixture de `ConfiguracoesGerais.test.js` precisa
+  das três linhas. Painel (`NotificacoesAlmoxarifado.js`, `EVENTO_OPCOES`, D8): eventos `RECEBIMENTO_ENTRADA` (*Entrada
+  de recebimento*) e `RECEBIMENTO_ENTRADA_REQUISITANTE` (*Aviso ao requisitante*); `GET /notificacoes?evento=` já aceita
+  por igualdade. Payloads: nota `{ recebimento_id, numero, itens, requisicoes: [ids] }`; requisitante
+  `{ recebimento_id, requisicao_id, numero_requisicao }`.
+
+  *Texto original da T2:* **T2 (tronco) — os ganchos.** Os dois pontos em `receiptService.js` (contrato). Testes no mesmo arquivo, **pelas
   rotas**: RN-01 pelas quatro entradas (`/processar`, `/workflow processar`, `/aprovar` delegando, `/aprovar` direto);
   RN-02 (reprocessar; `Promise.all` de dois `/processar`); RN-03 (pré-checagem recusa, corrige, processa); RN-05 (fila
   quebrada → 200 e estado intacto); RN-10 (com `notificar_movimentacoes = '1'`: 2 `MOVIMENTACAO` + 1 `RECEBIMENTO_ENTRADA`).
