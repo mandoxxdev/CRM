@@ -9,6 +9,9 @@
 const { dbGet, dbAll } = require('./db');
 const { disponivelSql } = require('./availabilitySql');
 
+// Etapa 73 (T1): abaixo disso o "a caminho" e residuo de ponto flutuante, nao compra vindo.
+const EPS_A_CAMINHO = 1e-9;
+
 /**
  * Le a config `reposicao_horizonte_solicitacao_dias` (default 60) — mesmo padrao inline usado
  * por cada servico do modulo (alertService.getConfigValue, stockService, purchaseService
@@ -116,6 +119,14 @@ function validarTransicao(statusAtual, novoStatus) {
  * solicitação órfã antiga continuaria empurrando requisições novas para AGUARDANDO_COMPRA
  * indefinidamente.
  *
+ * Etapa 73 (C116): o parágrafo do topo dizia "status PENDENTE" — DEIXOU DE SER A REGRA. Assim que o
+ * comprador gerava o pedido (solicitação VINCULADO), a requisição sem saldo ia para
+ * AGUARDANDO_ESTOQUE com a compra a caminho. Agora conta a solicitação (PENDENTE ou VINCULADO) com
+ * `a_caminho > 0` dentro do horizonte, lida de `purchaseService.posicaoDasSolicitacoes` (a fonte
+ * única da Etapa 72). Pedido encerrado ou material já completo no pedido: `a_caminho` 0, não conta.
+ * Pedido avulso do Compras SEM solicitação não conta (coerente com a reposição — declarado no plano).
+ * Se a posição lançar, cai para a consulta antiga só de PENDENTE (a aprovação não quebra pelo rótulo).
+ *
  * @returns {Promise<'APROVADO'|'AGUARDANDO_ESTOQUE'|'AGUARDANDO_COMPRA'>}
  */
 async function calcularStatusPosAprovacao(db, requisicaoId) {
@@ -131,8 +142,28 @@ async function calcularStatusPosAprovacao(db, requisicaoId) {
   }
 
   const materialIds = [...new Set(itens.map((i) => i.material_id))];
-  const placeholders = materialIds.map(() => '?').join(',');
   const horizonte = await lerHorizonteSolicitacaoDias(db);
+
+  // Etapa 73 (T1, C116, D1/B357): "aguardando compra" = existe solicitacao do material, dentro do
+  // horizonte, com algo A CAMINHO — pela fonte unica da Etapa 72. Para PENDENTE, `a_caminho` e a
+  // quantidade inteira (a regra de antes, intacta); o que entra e o VINCULADO a pedido vivo com saldo
+  // a receber. VINCULADO de pedido encerrado, ou de material ja completo no pedido, tem a_caminho 0 e
+  // NAO conta (nada vem). Require DENTRO da funcao: alertRegistry requer esta maquina e o
+  // purchaseService requer o alertService — no topo arriscaria ciclo.
+  try {
+    const purchaseService = require('./purchaseService');
+    for (const materialId of materialIds) {
+      // eslint-disable-next-line no-await-in-loop
+      const linhas = await purchaseService.posicaoDasSolicitacoes(db, { material_id: materialId, horizonteDias: horizonte });
+      if (linhas.some((l) => l.dentro_horizonte && Number(l.a_caminho) > EPS_A_CAMINHO)) return 'AGUARDANDO_COMPRA';
+    }
+    return 'AGUARDANDO_ESTOQUE';
+  } catch (e) {
+    // A aprovacao nunca quebra por causa do rotulo: cai para a regra de antes da 73 (so PENDENTE).
+    console.warn(`[almoxarifado-aprovar] posicao das solicitacoes indisponivel: ${e.message}`);
+  }
+
+  const placeholders = materialIds.map(() => '?').join(',');
   const compraPendente = await dbGet(db,
     `SELECT COUNT(*) as n FROM solicitacoes_compra_almoxarifado
      WHERE status = 'PENDENTE' AND material_id IN (${placeholders})
