@@ -30,6 +30,8 @@
 const { dbGet, dbAll } = require('./db');
 const notificationQueueService = require('./notificationQueueService');
 const { PODE_SEPARAR } = require('./requisitionStateMachine');
+// Etapa 74 (T2): o disponivel atual do material decide se a linha de quem nao ganhou reserva entra no aviso.
+const { disponivelSql } = require('./availabilitySql');
 
 const EPS = 1e-9;
 
@@ -122,11 +124,26 @@ function montarAvisoNota(dados) {
 }
 
 /**
+ * Etapa 74 (T2, D7/B373): as três frases finais do aviso ao solicitante. L0 é a da Etapa 70, intacta.
+ * L1: todo material listado ganhou reserva nesta nota. L2: parte ganhou, parte não.
+ */
+const FRASE_SEM_RESERVA = 'O material ainda não está reservado para a sua requisição — a separação é feita pelo almoxarifado.';
+const FRASE_TUDO_RESERVADO = 'O material indicado como reservado fica guardado para a sua requisição — outra requisição '
+  + 'não pode levá-lo. A separação é feita pelo almoxarifado.';
+const FRASE_PARTE_RESERVADA = 'Só o material indicado como reservado fica guardado para a sua requisição; o restante ainda '
+  + 'não está reservado — a separação é feita pelo almoxarifado.';
+
+/**
  * Pura. `dados`: { numero_requisicao, status, numero_recebimento,
- * materiais: [{ codigo, nome, unidade, entrou, pendente }], link }.
+ * materiais: [{ codigo, nome, unidade, entrou, pendente, reservado? }], link }.
+ * Etapa 74: `reservado` (> 0) é o que esta nota reservou para a requisição; a linha ganha
+ * "; reservado para a sua requisição: N" e a frase final passa a ter três formas (L0/L1/L2).
  */
 function montarAvisoRequisitante(dados) {
   const assunto = `[Almoxarifado] Chegou material da sua requisição ${dados.numero_requisicao}`;
+  const comReserva = dados.materiais.filter((m) => Number(m.reservado) > EPS).length;
+  let frase = FRASE_SEM_RESERVA;
+  if (comReserva > 0) frase = comReserva === dados.materiais.length ? FRASE_TUDO_RESERVADO : FRASE_PARTE_RESERVADA;
   const linhas = [
     'Chegou ao estoque material que a sua requisição aguardava.',
     `Requisição: ${dados.numero_requisicao}`,
@@ -134,8 +151,9 @@ function montarAvisoRequisitante(dados) {
     `Recebimento: ${dados.numero_recebimento}`,
     'Materiais que chegaram:',
     ...dados.materiais.map((m) => `- ${m.codigo} — ${m.nome}: entrou ${qtdComUnidade(m.entrou, m.unidade)}`
-      + ` (pendente na requisição: ${qtdComUnidade(m.pendente, m.unidade)})`),
-    'O material ainda não está reservado para a sua requisição — a separação é feita pelo almoxarifado.',
+      + ` (pendente na requisição: ${qtdComUnidade(m.pendente, m.unidade)}`
+      + (Number(m.reservado) > EPS ? `; reservado para a sua requisição: ${qtdComUnidade(m.reservado, m.unidade)})` : ')')),
+    frase,
     `Link: ${dados.link}`,
   ];
   return { assunto, corpo_texto: linhas.join('\n'), linhas };
@@ -209,6 +227,10 @@ async function avisarEntradaConfirmada(db, user, recebimentoId) {
   const materiaisDaNota = [...new Set(itens.map((it) => it.material_id))];
 
   // Requisicoes com pendente (separacao - reservado do item) de material que entrou nesta nota.
+  // Etapa 74 (T2, D7): o hold que ESTA nota criou (reservaChegadaService, `recebimento_id`) NAO desconta
+  // o pendente — senao quem ganhou tudo na chegada ficava sem e-mail (Surpresa 1); os demais holds
+  // descontam como antes. `reservado_nesta_nota`: o que a chegada desta nota reservou para o item (ATIVA
+  // ou ja consumida; a liberada nao conta — a liberacao total guarda a quantidade so como historico).
   const marcasMat = materiaisDaNota.map(() => '?').join(',');
   const marcasSt = STATUS_QUE_ESPERAM.map(() => '?').join(',');
   const linhasReq = await dbAll(db, `SELECT r.id AS requisicao_id, r.numero, r.status, r.solicitante_id,
@@ -217,21 +239,29 @@ async function avisarEntradaConfirmada(db, user, recebimentoId) {
         SELECT SUM(rs.quantidade - COALESCE(rs.quantidade_utilizada, 0))
         FROM reservas_material_almoxarifado rs
         WHERE rs.item_requisicao_id = ir.id AND rs.material_id = ir.material_id
-          AND rs.status = 'ATIVA' AND rs.origem = 'REQUISICAO'), 0) AS pendente
+          AND rs.status = 'ATIVA' AND rs.origem = 'REQUISICAO'
+          AND COALESCE(rs.recebimento_id, 0) <> ?), 0) AS pendente,
+      COALESCE((
+        SELECT SUM(rs.quantidade)
+        FROM reservas_material_almoxarifado rs
+        WHERE rs.item_requisicao_id = ir.id AND rs.material_id = ir.material_id
+          AND rs.status IN ('ATIVA', 'CONSUMIDA') AND rs.recebimento_id = ?), 0) AS reservado_nesta_nota
     FROM itens_requisicao_almoxarifado ir
     JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id
     WHERE COALESCE(r.ativo, 1) = 1 AND r.status IN (${marcasSt}) AND ir.material_id IN (${marcasMat})
-    ORDER BY r.id, ir.id`, [...STATUS_QUE_ESPERAM, ...materiaisDaNota]);
+    ORDER BY r.id, ir.id`, [Number(recebimentoId), Number(recebimentoId), ...STATUS_QUE_ESPERAM, ...materiaisDaNota]);
 
   // Agrupa por requisicao; `pendenteLivre` so com o material que entrou livre (o que avisa o solicitante).
   const porRequisicao = new Map();
   for (const l of linhasReq) {
     if (!(Number(l.pendente) > EPS)) continue;
     if (!porRequisicao.has(l.requisicao_id)) {
-      porRequisicao.set(l.requisicao_id, { ...l, pendentePorMaterial: new Map() });
+      porRequisicao.set(l.requisicao_id, { ...l, pendentePorMaterial: new Map(), reservadoPorMaterial: new Map() });
     }
     const req = porRequisicao.get(l.requisicao_id);
     req.pendentePorMaterial.set(l.material_id, (req.pendentePorMaterial.get(l.material_id) || 0) + Number(l.pendente));
+    req.reservadoPorMaterial.set(l.material_id,
+      (req.reservadoPorMaterial.get(l.material_id) || 0) + Math.min(Number(l.reservado_nesta_nota) || 0, Number(l.pendente)));
   }
   const requisicoes = [...porRequisicao.values()];
 
@@ -271,15 +301,29 @@ async function avisarEntradaConfirmada(db, user, recebimentoId) {
   }
 
   if (avisarSolicitante) {
-    const avisaveis = requisicoes.filter((r) => [...r.pendentePorMaterial.keys()].some((m) => livrePorMaterial.has(m)));
+    // Etapa 74 (T2, D7 + Fase 2): a LINHA de um material so entra quando a chegada reservou dele para esta
+    // requisicao OU ainda ha disponivel livre dele para separar — senao o e-mail prometeria material que
+    // foi reservado para outra requisicao (o defeito medido na A2 da Fase 0). Sem linha, sem e-mail.
+    const disponivelPorMaterial = new Map();
+    for (const m of livrePorMaterial.keys()) {
+      // eslint-disable-next-line no-await-in-loop
+      const row = await dbGet(db, `SELECT ${disponivelSql()} AS d FROM materiais_almoxarifado WHERE id = ?`, [m]);
+      disponivelPorMaterial.set(m, Number(row && row.d) || 0);
+    }
+    const linhaAvisavel = (r, m) => livrePorMaterial.has(m)
+      && ((r.reservadoPorMaterial.get(m) || 0) > EPS || (disponivelPorMaterial.get(m) || 0) > EPS);
+    const avisaveis = requisicoes.filter((r) => [...r.pendentePorMaterial.keys()].some((m) => linhaAvisavel(r, m)));
     const emails = await emailsDosUsuarios(db, [...new Set(avisaveis.map((r) => r.solicitante_id))]);
     const materialInfo = new Map(itens.map((it) => [it.material_id, it]));
     for (const r of avisaveis) {
       const materiais = [...r.pendentePorMaterial.entries()]
-        .filter(([m]) => livrePorMaterial.has(m))
+        .filter(([m]) => linhaAvisavel(r, m))
         .map(([m, pendente]) => {
           const info = materialInfo.get(m);
-          return { codigo: info.codigo, nome: info.nome, unidade: info.unidade, entrou: livrePorMaterial.get(m), pendente };
+          return {
+            codigo: info.codigo, nome: info.nome, unidade: info.unidade, entrou: livrePorMaterial.get(m), pendente,
+            reservado: r.reservadoPorMaterial.get(m) || 0,
+          };
         });
       const aviso = montarAvisoRequisitante({
         numero_requisicao: r.numero,
@@ -315,4 +359,8 @@ module.exports = {
   EVENTO_REQUISITANTE,
   // Etapa 71, Fase 5: a NF relancavel (`receiptService.assertNotaNaoDuplicada`) usa a MESMA regua.
   QTD_DO_ITEM_SQL,
+  // Etapa 74 (T2): as tres frases finais do aviso ao solicitante (L0 da 70, L1, L2).
+  FRASE_SEM_RESERVA,
+  FRASE_TUDO_RESERVADO,
+  FRASE_PARTE_RESERVADA,
 };

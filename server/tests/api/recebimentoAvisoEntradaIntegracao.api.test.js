@@ -218,14 +218,18 @@ let seq = 0;
     assert.deepStrictEqual(JSON.parse(l1.destinatarios), [VENDEDOR.email]);
     assert.ok(/^Link: \S*\/comercial\/requisicoes-material$/m.test(l1.corpo_texto),
       `quem pediu pelo Comercial recebe o link do Comercial: ${l1.corpo_texto}`);
-    assert.ok(l1.corpo_texto.includes('Situação da requisição: Aguardando compra'), l1.corpo_texto);
-    assert.ok(l1.corpo_texto.includes(`- ${B.M1.codigo} — `) && l1.corpo_texto.includes(': entrou 7 UN (pendente na requisição: 4 UN)'), l1.corpo_texto);
+    // Etapa 74 (C121, D5/D7): a chegada reservou os 4 de R1 e os 3 de R2 (eram 7) — o status acompanha e o
+    // e-mail diz quanto ficou reservado. Antes da 74: "Aguardando compra" e "(pendente na requisição: 4 UN)".
+    assert.ok(l1.corpo_texto.includes('Situação da requisição: Totalmente reservada'), l1.corpo_texto);
+    assert.ok(l1.corpo_texto.includes(`- ${B.M1.codigo} — `)
+      && l1.corpo_texto.includes(': entrou 7 UN (pendente na requisição: 4 UN; reservado para a sua requisição: 4 UN)'), l1.corpo_texto);
 
     const l2 = porReq.get(B.r2.id);
     assert.deepStrictEqual(JSON.parse(l2.destinatarios), [ALMOX.email]);
     assert.ok(/^Link: \S*\/almoxarifado\/requisicoes-material$/m.test(l2.corpo_texto), l2.corpo_texto);
-    assert.ok(l2.corpo_texto.includes('Situação da requisição: Parcialmente reservada'), l2.corpo_texto);
-    assert.ok(l2.corpo_texto.includes(': entrou 7 UN (pendente na requisição: 3 UN)'), l2.corpo_texto);
+    // Etapa 74: R2 tinha o MS reservado na aprovação e ganhou os 3 de M1 na chegada -> Totalmente reservada.
+    assert.ok(l2.corpo_texto.includes('Situação da requisição: Totalmente reservada'), l2.corpo_texto);
+    assert.ok(l2.corpo_texto.includes(': entrou 7 UN (pendente na requisição: 3 UN; reservado para a sua requisição: 3 UN)'), l2.corpo_texto);
     assert.ok(!l2.corpo_texto.includes(B.MS.codigo), `o item ja reservado (MS) nao e "chegou": ${l2.corpo_texto}`);
   });
 
@@ -254,9 +258,11 @@ let seq = 0;
     assert.strictEqual(sol.status, 'RECEBIDA');
   });
 
-  await test('(B) a requisicao avisada continua como estava e e SEPARAVEL (o aviso nao quebrou o gesto seguinte)', async () => {
-    assert.strictEqual(await statusReq(B.r1.id), 'AGUARDANDO_COMPRA', 'D4: o status nao se ajusta sozinho');
-    assert.strictEqual(await statusReq(B.r2.id), 'PARCIALMENTE_RESERVADA');
+  // Etapa 74 (C121): a D4 da 70 ("o status nao se ajusta sozinho") deixou de valer — a chegada reserva para quem
+  // esperava e o status acompanha (D5/B371). O gesto seguinte (separar) continua aceito.
+  await test('(B) a requisicao avisada ganhou a reserva na chegada e continua SEPARAVEL (Etapa 74; era "continua como estava")', async () => {
+    assert.strictEqual(await statusReq(B.r1.id), 'TOTALMENTE_RESERVADA', 'Etapa 74: a chegada reservou os 4 de R1');
+    assert.strictEqual(await statusReq(B.r2.id), 'TOTALMENTE_RESERVADA', 'Etapa 74: MS da aprovacao + M1 da chegada');
     const item = await dbGet(db, 'SELECT id FROM itens_requisicao_almoxarifado WHERE requisicao_id = ?', [B.r1.id]);
     const s = ok(await como(ADMIN).put(`${API}/requisicoes/${B.r1.id}/separar`)
       .send({ itens_separados: [{ item_id: item.id, quantidade_separada: 4 }] }), 200, 'separar R1');

@@ -11,8 +11,10 @@
  *    R2 (valor alto) pelo `PUT /aprovar-valor`, R3 pelo `POST /enviar` do rascunho com a aprovacao
  *    automatica ligada -> as tres AGUARDANDO_COMPRA (T1: VINCULADO a caminho conta; T2: as tres portas
  *    calculam igual), resposta = banco;
- *  - nota parcial (4 de 10) pelas seis portas do recebimento -> o status NAO muda (RN-08/B358), a fila
- *    de separacao mostra SEPARAR com `separavel` > 0, e o detalhe traz por item o que o banner da T3 le
+ *  - nota parcial (4 de 10) pelas seis portas do recebimento -> ETAPA 74: a chegada reserva para quem
+ *    esperava, na ordem da fila, e o status acompanha (a RN-08/B358 da 73, "o status NAO muda", foi
+ *    REVOGADA pela 74 — ver a jornada 2); a fila
+ *    de separacao mostra SEPARAR com `separavel` > 0 para quem ganhou reserva, e o detalhe traz por item o que o banner da T3 le
  *    (`saldo_atual` > 0, `quantidade_solicitada`, `quantidade_separada`, `material_id`,
  *    `material_nome`, `unidade`), com os itens na ordem do pedido (T0);
  *  - separar -> entregar; a nota do resto fecha a solicitacao (RECEBIDA); a requisicao seguinte sem
@@ -205,33 +207,45 @@ const APR = { id: 7342, nome: 'Aprovador E73T4', role: 'admin', is_superadmin: 1
     }
   });
 
-  await test('[jornada 2] nota parcial (4 de 10): o status NAO muda, a fila mostra SEPARAR e o detalhe traz saldo_atual > 0 por item, na ordem pedida', async () => {
+  // Etapa 74 (C121) — a RN-08 da 73 ("a chegada nao muda o status") e REVOGADA: a nota agora reserva o que
+  // entrou livre para quem esperava, na ordem da fila (as tres sao NORMAL: R1, R2, R3 pela criacao), e o
+  // status acompanha (D5/B371). Antes da 74 este teste afirmava: disponivel 4 depois da nota, as tres
+  // AGUARDANDO_COMPRA, as tres SEPARAR na fila e saldo_atual 4 no detalhe de cada uma — o mesmo material
+  // prometido a tres requisicoes (a C121 medida na Fase 0 da 74).
+  await test('[jornada 2] nota parcial (4 de 10): a chegada reserva na ordem (R1 3, R2 1, R3 nada), o status acompanha, a fila e o detalhe dizem o mesmo (Etapa 74; era "o status NAO muda")', async () => {
     assert.ok(j.R3, 'premissa: jornada 1');
     await receber(j.compra.pedido, j.mA, 4);
-    assert.strictEqual(await disponivel(j.mA), 4, 'premissa: a nota parcial entrou livre');
+    assert.strictEqual(await disponivel(j.mA), 0, 'Etapa 74: os 4 que entraram ficaram reservados para quem esperava');
     assert.strictEqual(await statusSolicitacao(j.compra.solicitacao), 'VINCULADO', 'premissa: ainda faltam 6');
+    const esperado = new Map([[j.R1.id, ['PARCIALMENTE_RESERVADA', 3]], [j.R2.id, ['PARCIALMENTE_RESERVADA', 1]],
+      [j.R3.id, ['AGUARDANDO_COMPRA', 0]]]);
     for (const r of [j.R1, j.R2, j.R3]) {
       // eslint-disable-next-line no-await-in-loop
-      assert.strictEqual(await statusDe(r.id), 'AGUARDANDO_COMPRA', `RN-08: a chegada nao muda o status (${r.id})`);
+      assert.strictEqual(await statusDe(r.id), esperado.get(r.id)[0], `Etapa 74: o status acompanha a reserva (${r.id})`);
+      // eslint-disable-next-line no-await-in-loop
+      const soma = (await ativas(r.id)).reduce((s, x) => s + Number(x.quantidade), 0); // so mA tem reserva (mB sem saldo)
+      assert.strictEqual(soma, esperado.get(r.id)[1], `reserva da chegada de ${r.id}`);
     }
-    // A fila de separacao do almoxarife (Etapa 64): as tres entram como SEPARAR.
+    // A fila de separacao do almoxarife (Etapa 64): quem ganhou reserva SEPARAR; R3 espera saldo.
     const f = await request(app).get('/api/almoxarifado/fila-separacao');
     assert.strictEqual(f.status, 200, JSON.stringify(f.body));
-    for (const r of [j.R1, j.R2, j.R3]) {
+    for (const r of [j.R1, j.R2]) {
       const linha = f.body.find((x) => x.id === r.id);
       assert.ok(linha, `requisicao ${r.id} fora da fila`);
       assert.ok(linha.etapas.includes('SEPARAR'), `fila de ${r.id}: ${JSON.stringify(linha.etapas)}`);
       const it = linha.itens.find((i) => Number(i.material_id) === j.mA && i.separavel > 1e-9);
       assert.ok(it, `fila de ${r.id} sem separavel > 0: ${JSON.stringify(linha.itens)}`);
     }
-    // O detalhe: o que o banner da T3 le, item a item.
+    const l3 = f.body.find((x) => x.id === j.R3.id);
+    assert.deepStrictEqual(l3.etapas, ['AGUARDANDO_SALDO'], 'R3 nao ganhou nada: a fila nao promete o que foi reservado');
+    // O detalhe: o que o banner da T3 le, item a item — saldo_atual = livre + o hold da propria requisicao.
     for (const r of [j.R1, j.R2, j.R3]) {
       // eslint-disable-next-line no-await-in-loop
       const det = await detalhe(r.id);
-      assert.strictEqual(det.status, 'AGUARDANDO_COMPRA');
+      assert.strictEqual(det.status, esperado.get(r.id)[0]);
       const it = doMaterial(det, j.mA);
       assert.ok(it, `item do material ${j.mA} no detalhe de ${r.id}`);
-      assert.strictEqual(Number(it.saldo_atual), 4, `saldo_atual do item de ${r.id}: ${JSON.stringify(it)}`);
+      assert.strictEqual(Number(it.saldo_atual), esperado.get(r.id)[1], `saldo_atual do item de ${r.id}: ${JSON.stringify(it)}`);
       assert.ok(Number(it.quantidade_solicitada) > 0);
       assert.strictEqual(Number(it.quantidade_separada || 0), 0);
       assert.ok(it.material_nome && it.unidade === 'PC', `campos do banner: ${JSON.stringify(it)}`);
@@ -249,11 +263,14 @@ const APR = { id: 7342, nome: 'Aprovador E73T4', role: 'admin', is_superadmin: 1
     assert.strictEqual(await statusDe(j.R1.id), 'EM_SEPARACAO');
     const e1 = await entregar(j.R1.id, [[itA, 3]]);
     assert.ok(['PARCIALMENTE_ATENDIDA', 'ENTREGUE'].includes(e1.status), JSON.stringify(e1));
-    assert.strictEqual(await disponivel(j.mA), 1, 'a entrega baixou os 3');
+    // Etapa 74: a entrega consumiu a reserva da chegada de R1; o 1 que sobrou no fisico e o hold de R2 (era: disponivel 1).
+    assert.strictEqual(await disponivel(j.mA), 0, 'a entrega baixou os 3 e o 1 restante e de R2');
     // O resto do pedido chega: 1 + 6 = 7 = o que R2 (6) e R3 (1) pedem.
     await receber(j.compra.pedido, j.mA, 6);
     assert.strictEqual(await statusSolicitacao(j.compra.solicitacao), 'RECEBIDA', 'a nota do resto fecha a solicitacao (Etapa 72)');
-    assert.strictEqual(await disponivel(j.mA), 7);
+    // Etapa 74: a nota do resto reserva os 5 que faltam a R2 e o 1 de R3 (era: disponivel 7, livre).
+    assert.strictEqual(await disponivel(j.mA), 0);
+    assert.deepStrictEqual([await statusDe(j.R2.id), await statusDe(j.R3.id)], ['TOTALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA']);
     for (const [r, q] of [[j.R2, 6], [j.R3, 1]]) {
       // eslint-disable-next-line no-await-in-loop
       const it = doMaterial(await detalhe(r.id), j.mA).id;

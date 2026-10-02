@@ -53,6 +53,10 @@ const nonConformityService = require('./nonConformityService');
 // notificationQueueService e requisitionStateMachine — nenhum chega de volta aqui; `alertService` e
 // requerido LAZY la dentro. Pelo OBJETO do modulo pelo mesmo motivo dos de cima (monkeypatch).
 const receiptNotificationService = require('./receiptNotificationService');
+// Etapa 74 (T1, D1/B367): a reserva na chegada para quem esperava. Sem ciclo (carga fria nas duas ordens):
+// o servico requer stockService/requisitionService/receiptNotificationService, nenhum requer este arquivo
+// no topo. Pelo OBJETO do modulo pelo mesmo motivo dos de cima (o teste da RN-07 monkeypatcha).
+const reservaChegadaService = require('./reservaChegadaService');
 
 /**
  * Etapa 70 (T2, D6, RN-05): o gancho do aviso, DEPOIS do UPDATE de status terminal e do
@@ -67,6 +71,21 @@ async function avisarEntradaConfirmadaSemFalhar(db, user, recebimentoId) {
     await receiptNotificationService.avisarEntradaConfirmada(db, user, recebimentoId);
   } catch (e) {
     console.warn(`[recebimento] aviso de entrada confirmada falhou (recebimento ${recebimentoId}): ${e.message}`);
+  }
+}
+
+/**
+ * Etapa 74 (T1, D1/B367): a reserva na chegada, nos dois pontos terminais, DEPOIS de
+ * `fecharSolicitacoesDoPedido` e ANTES do aviso (o aviso le o banco: com a reserva depois, o e-mail diria
+ * "ainda nao esta reservado" a quem acabou de ganhar). Best-effort, o molde do aviso: a nota ja entrou e
+ * ja esta PROCESSADO/APROVADO; uma falha so vira `console.warn` com a literal do contrato. Roda dentro do
+ * claim do processamento (Etapa 70 T0b): o perdedor de dois cliques toma 409 antes.
+ */
+async function reservarChegadaSemFalhar(db, user, recebimentoId) {
+  try {
+    await reservaChegadaService.reservarChegadaParaQuemEspera(db, user, recebimentoId);
+  } catch (e) {
+    console.warn(`[recebimento] reserva na chegada falhou (recebimento ${recebimentoId}): ${e.message}`);
   }
 }
 
@@ -1719,6 +1738,8 @@ async function concluirProcessamentoNota(db, user, rec, recebimentoId, { localiz
     }
   }
 
+  // Etapa 74 (T1): antes do aviso, o que entrou livre fica reservado para quem esperava (C121).
+  await reservarChegadaSemFalhar(db, user, recebimentoId);
   // Etapa 70 (T2): o aviso da nota e o de quem esperava o material — o ultimo passo.
   await avisarEntradaConfirmadaSemFalhar(db, user, recebimentoId);
 
@@ -1765,6 +1786,9 @@ async function concluirAprovacaoDireta(db, user, rec, recebimentoId, opts) {
       console.warn('[almoxarifado-compras] Falha ao fechar solicitacoes do pedido apos aprovar recebimento:', e.message);
     }
   }
+
+  // Etapa 74 (T1): a mesma reserva na chegada no ramo direto, antes do aviso.
+  await reservarChegadaSemFalhar(db, user, recebimentoId);
 
   // Etapa 70 (T2): o mesmo aviso no ramo direto. O ramo que DELEGA para processarNota nao chega
   // aqui — o aviso ja saiu la.

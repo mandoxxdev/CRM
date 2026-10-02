@@ -146,6 +146,46 @@ let seq = 0;
     ].join('\n'));
   });
 
+  // Etapa 74 (T2, D7/B373): o aviso conta a reserva da chegada. Os dois testes da 70 acima e o de
+  // RN-08 positiva continuam sem edicao: sao o caso L0 (nada reservado nesta nota).
+  const baseReq = { numero_requisicao: 'REQ-74', status: 'TOTALMENTE_RESERVADA', numero_recebimento: 'REC-74', link: 'http://x/l' };
+  await test('[Etapa 74] L1: todo material listado com reserva -> a linha cita o reservado e a frase L1', async () => {
+    const r = aviso.montarAvisoRequisitante({ ...baseReq,
+      materiais: [{ codigo: 'M1', nome: 'Chapa', unidade: 'PC', entrou: 4, pendente: 3, reservado: 3 }] });
+    assert.deepStrictEqual(r.linhas.slice(4), [
+      'Materiais que chegaram:',
+      '- M1 — Chapa: entrou 4 PC (pendente na requisição: 3 PC; reservado para a sua requisição: 3 PC)',
+      'O material indicado como reservado fica guardado para a sua requisição — outra requisição não pode levá-lo. A separação é feita pelo almoxarifado.',
+      'Link: http://x/l',
+    ]);
+    assert.strictEqual(r.linhas[2], 'Situação da requisição: Totalmente reservada');
+    assert.strictEqual(aviso.FRASE_TUDO_RESERVADO, r.linhas[6]);
+  });
+
+  await test('[Etapa 74] L2: um material com reserva e outro sem -> so o reservado cita a reserva, frase L2', async () => {
+    const r = aviso.montarAvisoRequisitante({ ...baseReq, status: 'PARCIALMENTE_RESERVADA',
+      materiais: [{ codigo: 'M1', nome: 'Chapa', unidade: 'PC', entrou: 4, pendente: 6, reservado: 1 },
+        { codigo: 'M2', nome: 'Tubo', unidade: 'UN', entrou: 2, pendente: 5, reservado: 0 }] });
+    assert.deepStrictEqual(r.linhas.slice(5, 8), [
+      '- M1 — Chapa: entrou 4 PC (pendente na requisição: 6 PC; reservado para a sua requisição: 1 PC)',
+      '- M2 — Tubo: entrou 2 UN (pendente na requisição: 5 UN)',
+      'Só o material indicado como reservado fica guardado para a sua requisição; o restante ainda não está reservado — a separação é feita pelo almoxarifado.',
+    ]);
+    assert.strictEqual(aviso.FRASE_PARTE_RESERVADA, r.linhas[7]);
+  });
+
+  await test('[Etapa 74] L0: nenhum reservado (reservado 0 ou ausente) -> a linha e a frase da Etapa 70, sem edicao', async () => {
+    const r = aviso.montarAvisoRequisitante({ ...baseReq, status: 'AGUARDANDO_ESTOQUE',
+      materiais: [{ codigo: 'M1', nome: 'Chapa', unidade: 'PC', entrou: 4, pendente: 6, reservado: 0 },
+        { codigo: 'M2', nome: 'Tubo', unidade: 'UN', entrou: 2, pendente: 5 }] });
+    assert.deepStrictEqual(r.linhas.slice(5, 8), [
+      '- M1 — Chapa: entrou 4 PC (pendente na requisição: 6 PC)',
+      '- M2 — Tubo: entrou 2 UN (pendente na requisição: 5 UN)',
+      'O material ainda não está reservado para a sua requisição — a separação é feita pelo almoxarifado.',
+    ]);
+    assert.strictEqual(aviso.FRASE_SEM_RESERVA, r.linhas[7]);
+  });
+
   await test('o mapa de link espelha o basePath de requisicoesMaterialConfig.js (fonte unica, por teste)', async () => {
     const src = fs.readFileSync(path.join(__dirname, '../../../client/src/config/requisicoesMaterialConfig.js'), 'utf8');
     const pares = {};
