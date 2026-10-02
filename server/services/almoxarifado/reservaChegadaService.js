@@ -226,6 +226,65 @@ async function comLockDoMaterial(materialId, fn) {
   }
 }
 
+/**
+ * Etapa 76 (T0, D3/B398) — o recálculo do status SOB A TRAVA de todos os materiais da requisição.
+ *
+ * Medido na Fase 0 (sonda76-corrida, 3/3): o `WHERE status = <lido>` de `recalcularStatusDeReserva` só
+ * detecta mudança de STATUS, não de hold. Um recálculo que leu hold 0 e é atropelado por uma nota do
+ * mesmo material (que reserva 4 e recalcula sem mudar o status) grava a leitura velha: APROVADO com hold
+ * 4. Com a trava, a nota espera o recálculo (ou o contrário) e o último a escrever leu o hold certo.
+ *
+ * Todas as travas dos materiais da requisição (um material só deixaria a nota do OUTRO correr), aninhadas
+ * em ordem crescente de `material_id` — só este recálculo pega mais de uma trava; a distribuição segura uma
+ * e não pede outra, então não há ciclo. `DISTINCT`: dois itens do mesmo material pegariam a mesma trava
+ * duas vezes e ela NÃO é reentrante (o material ficaria travado até reiniciar o processo).
+ *
+ * NUNCA chamar de dentro de `distribuirSemLock` (nem de nada que rode sob `comLockDoMaterial`): esperaria a
+ * si mesma. Por isso o gancho fica nas portas (rota de liberar, job de expiração), não em `liberarReserva`.
+ * Lança só erro de banco (quem chama engole).
+ * @returns {Promise<{requisicao_id, de, para}|null>}
+ */
+async function recalcularStatusSobTrava(db, requisicaoId) {
+  const mats = (await dbAll(db, `SELECT DISTINCT material_id FROM itens_requisicao_almoxarifado
+    WHERE requisicao_id = ? AND material_id IS NOT NULL ORDER BY material_id`, [requisicaoId]))
+    .map((x) => Number(x.material_id));
+  const recalcular = () => module.exports.recalcularStatusDeReserva(db, requisicaoId);
+  const aninhar = (i) => (i >= mats.length ? recalcular() : comLockDoMaterial(mats[i], () => aninhar(i + 1)));
+  return aninhar(0);
+}
+
+/**
+ * Etapa 76 (T0, D1/B396) — o que as duas portas chamam depois de tirar reserva de requisição (liberar à
+ * mão, expiração): recalcula, uma vez por requisição, o status das donas das reservas. NUNCA lança — a
+ * liberação e a expiração já aconteceram; o status é efeito (D5/B400).
+ * `rotulo`: 'liberacao manual da reserva' | 'expiracao da reserva' (vai no aviso).
+ * @returns {Promise<Array<{requisicao_id, de, para}>>} só as que mudaram.
+ */
+async function recalcularRequisicoesDasReservas(db, reservaIds, rotulo) {
+  const ids = (reservaIds || []).map(Number).filter((x) => Number.isFinite(x));
+  if (!ids.length) return [];
+  let requisicoes;
+  try {
+    requisicoes = await dbAll(db, `SELECT DISTINCT requisicao_id FROM reservas_material_almoxarifado
+      WHERE id IN (${ids.map(() => '?').join(',')}) AND requisicao_id IS NOT NULL AND origem = 'REQUISICAO'
+      ORDER BY requisicao_id`, ids);
+  } catch (e) {
+    console.warn(`[almoxarifado-reservas] recalculo do status apos ${rotulo} falhou (reservas ${ids.join(',')}): ${e.message}`);
+    return [];
+  }
+  const mudaram = [];
+  for (const { requisicao_id: id } of requisicoes) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const r = await module.exports.recalcularStatusSobTrava(db, id);
+      if (r) mudaram.push(r);
+    } catch (e) {
+      console.warn(`[almoxarifado-reservas] recalculo do status apos ${rotulo} falhou (requisicao ${id}): ${e.message}`);
+    }
+  }
+  return mudaram;
+}
+
 async function distribuirParaQuemEspera(db, user, materialId, teto, rotulos, acc) {
   return comLockDoMaterial(materialId, () => distribuirSemLock(db, user, materialId, teto, rotulos, acc));
 }
@@ -511,6 +570,8 @@ module.exports = {
   reservarLiberacaoParaQuemEspera,
   aposLiberacaoSemFalhar,
   recalcularStatusDeReserva,
+  recalcularStatusSobTrava,
+  recalcularRequisicoesDasReservas,
   liberarParaEstorno,
   recriarAposEstornoRecusado,
   STATUS_RECALCULAVEIS,
