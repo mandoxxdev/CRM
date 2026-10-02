@@ -157,6 +157,117 @@ const itemDe = (db, recId, matId) => dbGet(db, `SELECT * FROM recebimentos_mater
     assert.notStrictEqual(ncDepois[0].status, 'CANCELADA', 'a divergencia continua registrada depois de processar');
   });
 
+
+  // ---------------------------------------------------------------------------------------------
+  // Etapa 70, Fase 5 (fix-round, IMPORTANTE) — `quantidade_recebida = ''` gravado pelas portas de
+  // UPDATE. `/conferir` e `/fiscal` gravavam `item.quantidade_recebida ?? null`: o `''` (a tela
+  // reenvia o estado cru do campo que o operador limpou) passava pelo `??`, a coluna REAL guardava
+  // TEXTO, `quantidadeDoItem` (`??`) devolvia `''`, `'' > 0` e falso — o item era pulado calado e a
+  // nota fechava PROCESSADO sem dar entrada, enquanto a tela (`quantidadeQueEntra`) mostrava a
+  // esperada (sonda `sonda70f-vazio.js`). Conserto na ORIGEM (as tres portas normalizam com
+  // `normalizarRecebida`) e na leitura (o `''` legado vale "nao informado", a mesma regua da tela).
+  // ---------------------------------------------------------------------------------------------
+  const LITERAL_RECEBIDA = 'quantidade_recebida deve ser um número';
+  const tipoRecebida = async (itemId) => (await dbGet(db, `SELECT quantidade_recebida q, typeof(quantidade_recebida) t
+    FROM recebimentos_material_itens_almoxarifado WHERE id = ?`, [itemId]));
+  const processarPelaRota = (r) => request(app).post(`/api/almoxarifado/recebimentos/${r}/processar`).send({});
+
+  for (const porta of ['conferir', 'fiscal']) {
+    for (const vazio of ['', '   ']) {
+      await test(`ROTA /${porta} com quantidade_recebida ${JSON.stringify(vazio)}: nao grava texto e processa dando entrada da ESPERADA`, async () => {
+        const m = await novoMaterial(db);
+        const r = await recebimentoCom(db, [{ material_id: m, esperada: 5, recebida: null }]);
+        const it = await itemDe(db, r, m);
+        const res = await request(app).put(`/api/almoxarifado/recebimentos/${r}/${porta}`)
+          .send({ itens: [{ id: it.id, quantidade_recebida: vazio }] });
+        assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+        assert.deepStrictEqual(await tipoRecebida(it.id), { q: null, t: 'null' }, 'o vazio vale "nao informado": a coluna nao guarda texto');
+        const proc = await processarPelaRota(r);
+        assert.strictEqual(proc.status, 200, JSON.stringify(proc.body));
+        assert.strictEqual(await saldo(db, m), 5, 'o item nao conferido entra pela esperada (era: pulado calado, saldo 0)');
+        assert.notStrictEqual((await itemDe(db, r, m)).entrada_estoque_em, null);
+      });
+    }
+
+    await test(`ROTA /${porta} com quantidade_recebida 0: grava 0 e NAO entra`, async () => {
+      const m = await novoMaterial(db);
+      const r = await recebimentoCom(db, [{ material_id: m, esperada: 5, recebida: null }]);
+      const it = await itemDe(db, r, m);
+      const res = await request(app).put(`/api/almoxarifado/recebimentos/${r}/${porta}`)
+        .send({ itens: [{ id: it.id, quantidade_recebida: 0 }] });
+      assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+      assert.strictEqual((await tipoRecebida(it.id)).q, 0);
+      const proc = await processarPelaRota(r);
+      assert.strictEqual(proc.status, 200, JSON.stringify(proc.body));
+      assert.strictEqual(await saldo(db, m), 0, 'chegou zero continua nao entrando');
+    });
+
+    await test(`ROTA /${porta} com quantidade_recebida ' 4 ' (texto numerico da tela) grava o numero 4`, async () => {
+      const m = await novoMaterial(db);
+      const r = await recebimentoCom(db, [{ material_id: m, esperada: 5, recebida: null }]);
+      const it = await itemDe(db, r, m);
+      const res = await request(app).put(`/api/almoxarifado/recebimentos/${r}/${porta}`)
+        .send({ itens: [{ id: it.id, quantidade_recebida: ' 4 ' }] });
+      assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+      assert.deepStrictEqual(await tipoRecebida(it.id), { q: 4, t: 'real' });
+    });
+
+    await test(`ROTA /${porta} com quantidade_recebida 'abc' recusa 400 com a literal e nao grava nada`, async () => {
+      const m = await novoMaterial(db);
+      const r = await recebimentoCom(db, [{ material_id: m, esperada: 5, recebida: 3 }]);
+      const it = await itemDe(db, r, m);
+      const res = await request(app).put(`/api/almoxarifado/recebimentos/${r}/${porta}`)
+        .send({ nota_fiscal: 'NF-TROCADA', status: 'EM_CONFERENCIA', itens: [{ id: it.id, quantidade_recebida: 'abc' }] });
+      assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+      assert.strictEqual(res.body.error, LITERAL_RECEBIDA);
+      assert.deepStrictEqual(await tipoRecebida(it.id), { q: 3, t: 'real' }, 'a recusa vem antes de qualquer UPDATE');
+      const cab = await dbGet(db, 'SELECT nota_fiscal, status FROM recebimentos_material_almoxarifado WHERE id = ?', [r]);
+      assert.notStrictEqual(cab.nota_fiscal, 'NF-TROCADA', 'nem o cabecalho e escrito');
+      assert.strictEqual(cab.status, 'EM_ENTRADA_NF', 'nem o status');
+    });
+  }
+
+  await test('POST /recebimentos: recebida "   " nasce com a esperada; "abc" recusa 400 com a literal', async () => {
+    const m = await novoMaterial(db);
+    const ok = await request(app).post('/api/almoxarifado/recebimentos').send({
+      tipo_recebimento: 'NOTA_FISCAL', nota_fiscal: 'NF-Z70-ESP', fornecedor_nome: 'Acme Zero',
+      itens: [{ material_id: m, quantidade: 5, quantidade_recebida: '   ' }],
+    });
+    assert.strictEqual(ok.status, 201, JSON.stringify(ok.body));
+    assert.deepStrictEqual(await tipoRecebida((await itemDe(db, ok.body.id, m)).id), { q: 5, t: 'real' });
+    const antes = (await dbGet(db, 'SELECT COUNT(*) n FROM recebimentos_material_almoxarifado')).n;
+    const ruim = await request(app).post('/api/almoxarifado/recebimentos').send({
+      tipo_recebimento: 'NOTA_FISCAL', nota_fiscal: 'NF-Z70-ABC', fornecedor_nome: 'Acme Zero',
+      itens: [{ material_id: m, quantidade: 5, quantidade_recebida: 'abc' }],
+    });
+    assert.strictEqual(ruim.status, 400, JSON.stringify(ruim.body));
+    assert.strictEqual(ruim.body.error, LITERAL_RECEBIDA);
+    assert.strictEqual((await dbGet(db, 'SELECT COUNT(*) n FROM recebimentos_material_almoxarifado')).n, antes,
+      'a recusa vem antes do INSERT do cabecalho');
+  });
+
+  await test('LEGADO: linha com quantidade_recebida "" gravada direto entra pela esperada (e o aviso anuncia a esperada)', async () => {
+    const m = await novoMaterial(db);
+    const codigo = (await dbGet(db, 'SELECT codigo FROM materiais_almoxarifado WHERE id = ?', [m])).codigo;
+    const r = await recebimentoCom(db, [{ material_id: m, esperada: 7, recebida: '' }]);
+    const it = await itemDe(db, r, m);
+    assert.strictEqual((await tipoRecebida(it.id)).t, 'text', 'pre-condicao: o legado e texto');
+    await dbRun(db, "UPDATE configuracoes_almoxarifado SET valor = '1' WHERE chave = 'notificar_recebimento_entrada'");
+    await dbRun(db, "UPDATE configuracoes_almoxarifado SET valor = 'compras@x.com' WHERE chave = 'notificacoes_dest_recebimento'");
+    try {
+      const proc = await processarPelaRota(r);
+      assert.strictEqual(proc.status, 200, JSON.stringify(proc.body));
+      assert.strictEqual(await saldo(db, m), 7, 'o "" legado e "nao informado": vale a esperada');
+      const aviso = await dbGet(db, `SELECT corpo_texto FROM fila_notificacoes_almoxarifado
+        WHERE evento = 'RECEBIMENTO_ENTRADA' AND json_extract(payload, '$.recebimento_id') = ?`, [r]);
+      assert.ok(aviso, 'a nota avisou');
+      const linha = aviso.corpo_texto.split('\n').find((l) => l.startsWith(`- ${codigo} `));
+      assert.ok(linha && linha.includes(': 7 UN'), `o aviso anuncia a esperada (linha: ${linha})`);
+    } finally {
+      await dbRun(db, "UPDATE configuracoes_almoxarifado SET valor = '0' WHERE chave = 'notificar_recebimento_entrada'");
+    }
+  });
+
   await close();
   console.log(`\n${passed} passou, ${failed} falhou`);
   process.exit(failed > 0 ? 1 : 0);

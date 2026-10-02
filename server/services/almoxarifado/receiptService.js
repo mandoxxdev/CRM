@@ -317,6 +317,9 @@ async function criarRecebimento(db, user, data) {
     fornecedor_id, fornecedor_nome, fornecedor_cnpj, observacoes, itens: itensInput,
   } = data;
 
+  // Etapa 70, Fase 5: a recebida ilegivel recusa ANTES de qualquer leitura/INSERT (o INSERT do
+  // item normaliza de novo com a mesma funcao). Ver `normalizarRecebida`.
+  normalizarRecebidasDoPayload(itensInput);
   let pedido = null;
   let itens = itensInput || [];
   // (Etapa 37) As linhas do pedido COM o saldo de cada uma, e a ligacao item -> linha resolvida
@@ -511,7 +514,7 @@ async function criarRecebimento(db, user, data) {
        valor_unitario, valor_total, valor_icms, valor_ipi, reducao_icms_percent)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
       r.lastID, item.material_id, linhaResolvida ? linhaResolvida.id : null, qtd,
-      recebidaInformada(item.quantidade_recebida) ? item.quantidade_recebida : qtd, item.lote || null, item.series || null, item.observacoes || null,
+      normalizarRecebida(item.quantidade_recebida) ?? qtd, item.lote || null, item.series || null, item.observacoes || null,
       vUnit, vTotal, parseFloat(item.valor_icms) || 0, parseFloat(item.valor_ipi) || 0,
       parseFloat(item.reducao_icms_percent) || 0,
     ]);
@@ -840,7 +843,10 @@ function assertSaldoDoPedidoPermitido(user, resolvidos, linhas, autorizado) {
 }
 
 async function conferirRecebimento(db, user, recebimentoId, data) {
-  const { status, itens } = data;
+  const { status } = data;
+  // Etapa 70, Fase 5: ANTES de tudo (o UPDATE de status vem logo abaixo) — '' vira null, texto
+  // nao numerico recusa 400. Ver `normalizarRecebida`.
+  const itens = normalizarRecebidasDoPayload(data.itens);
   const validStatus = [
     STATUS.EM_CONFERENCIA, STATUS.CONFERIDO_ALMOX, STATUS.APROVADO, STATUS.REPROVADO,
     STATUS.PARCIALMENTE_APROVADO, STATUS.BLOQUEADO,
@@ -876,7 +882,7 @@ async function conferirRecebimento(db, user, recebimentoId, data) {
         observacoes = COALESCE(?, observacoes),
         series = COALESCE(?, series)
         WHERE id = ? AND recebimento_id = ?`, [
-        item.quantidade_recebida ?? null,
+        item.quantidade_recebida, // ja normalizado: numero ou null (null = COALESCE mantem)
         item.conferencia_quantidade != null ? (item.conferencia_quantidade ? 1 : 0) : null,
         item.conferencia_descricao != null ? (item.conferencia_descricao ? 1 : 0) : null,
         item.observacoes ?? null,
@@ -953,8 +959,9 @@ async function salvarDadosFiscal(db, user, recebimentoId, data) {
     nota_fiscal, nota_serie, data_emissao_nf, data_entrada_nf, cfop_nota, cfop_entrada, chave_nfe,
     fornecedor_id, fornecedor_nome, fornecedor_cnpj, pedido_compra_id, pedido_compra_numero, tipo_recebimento,
     base_icms, valor_icms, valor_produtos, frete, desconto, outras_despesas, valor_ipi, valor_total_nota,
-    itens,
   } = data;
+  // Etapa 70, Fase 5: antes da guarda de NF e do UPDATE do cabecalho. Ver `normalizarRecebida`.
+  const itens = normalizarRecebidasDoPayload(data.itens);
 
   let pedido = null;
   if (pedido_compra_id || pedido_compra_numero) {
@@ -1049,7 +1056,7 @@ async function salvarDadosFiscal(db, user, recebimentoId, data) {
         corrida_lote = COALESCE(?, corrida_lote),
         series = COALESCE(?, series)
         WHERE id = ? AND recebimento_id = ?`, [
-        item.quantidade_recebida ?? null, vUnit || null, vTotal || null,
+        item.quantidade_recebida, vUnit || null, vTotal || null, // recebida ja normalizada
         item.valor_icms ?? null, item.valor_ipi ?? null, item.reducao_icms_percent ?? null,
         item.conferencia_quantidade != null ? (item.conferencia_quantidade ? 1 : 0) : null,
         item.conferencia_descricao != null ? (item.conferencia_descricao ? 1 : 0) : null,
@@ -1093,17 +1100,47 @@ function validarDadosProcessamento(rec) {
  * chegar ate eles). O espelho na tela e `quantidadeQueEntra` (RecebimentosAlmoxarifado.js).
  */
 function quantidadeDoItem(item) {
-  return item.quantidade_recebida ?? item.quantidade_esperada;
+  // Etapa 70, Fase 5: o `''` (ou so espacos) LEGADO vale "nao informado" — a mesma regua de
+  // `quantidadeQueEntra` na tela. As portas de escrita ja nao gravam texto (`normalizarRecebida`),
+  // mas linha gravada antes do conserto existe: com o `??` puro ela devolvia `''`, `'' > 0` era
+  // falso e o item era pulado CALADO com a nota fechando PROCESSADO (sonda `sonda70f-vazio.js`).
+  return recebidaVazia(item.quantidade_recebida) ? item.quantidade_esperada : item.quantidade_recebida;
+}
+
+function recebidaVazia(valor) {
+  return valor === undefined || valor === null || (typeof valor === 'string' && valor.trim() === '');
 }
 
 /**
- * Etapa 70 (T0): "o payload trouxe a quantidade recebida?" para o INSERT de `criarRecebimento`.
- * O 0 e informado (e um fato: nao chegou nada); `null`/`undefined`/`''` nao sao — esses nascem com
- * a esperada, como sempre nasceram. Antes o INSERT usava `item.quantidade_recebida || qtd` (letra D
- * da Etapa 67) e o 0 virava a esperada ANTES de existir divergencia.
+ * Etapa 70 (T0 + Fase 5) — a recebida que o payload trouxe, como a coluna REAL deve guardar.
+ * `null`/`undefined`/`''`/so espacos -> `null` ("nao informado": no INSERT nasce a esperada, nos
+ * UPDATEs o `COALESCE` mantem o gravado); numero ou texto numerico (`'4'`, `' 4 '` — a tela manda o
+ * estado cru do `<input>`) -> numero; o 0 e informado (e um fato: nao chegou nada). Texto nao
+ * numerico -> 400 `quantidade_recebida deve ser um número`.
+ *
+ * Por que existe (Fase 5): T0 consertou o INSERT com `recebidaInformada`, mas `/conferir` e
+ * `/fiscal` gravavam `item.quantidade_recebida ?? null` — o `''` passava pelo `??`, o SQLite
+ * guardava TEXTO na coluna REAL e o processamento pulava o item sem avisar, enquanto a tela
+ * mostrava a esperada. Uma funcao para as TRES portas, para nao divergirem de novo.
+ * Descartado: deixar o UPDATE gravar `''` e so consertar a leitura — a coluna seguiria aceitando
+ * texto e cada leitor novo (SQL com `COALESCE`, relatorios) teria de lembrar do caso.
  */
-function recebidaInformada(valor) {
-  return valor !== undefined && valor !== null && valor !== '';
+const LITERAL_RECEBIDA_INVALIDA = 'quantidade_recebida deve ser um número';
+function normalizarRecebida(valor) {
+  if (recebidaVazia(valor)) return null;
+  const n = typeof valor === 'string' ? Number(valor.trim()) : valor;
+  if (typeof n !== 'number' || !Number.isFinite(n)) {
+    throw Object.assign(new Error(LITERAL_RECEBIDA_INVALIDA), { status: 400 });
+  }
+  return n;
+}
+
+/** Copia dos itens do payload com `quantidade_recebida` normalizada (lanca 400 se ilegivel). */
+function normalizarRecebidasDoPayload(itens) {
+  if (!Array.isArray(itens)) return itens;
+  return itens.map((item) => (item && typeof item === 'object'
+    ? { ...item, quantidade_recebida: normalizarRecebida(item.quantidade_recebida) }
+    : item));
 }
 
 /**

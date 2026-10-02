@@ -32,6 +32,13 @@ const notificationQueueService = require('./notificationQueueService');
 const { PODE_SEPARAR } = require('./requisitionStateMachine');
 
 const EPS = 1e-9;
+
+// Etapa 70, Fase 5: a quantidade que o item levou ao estoque, em SQL — `quantidadeDoItem` do
+// `receiptService`. `COALESCE` puro devolvia o `''` legado (texto na coluna REAL), e no SQLite
+// TEXTO e sempre maior que numero: o item passava no `> 0` e o aviso anunciava "0".
+const QTD_DO_ITEM_SQL = `(CASE WHEN ri.quantidade_recebida IS NULL
+      OR (typeof(ri.quantidade_recebida) = 'text' AND TRIM(ri.quantidade_recebida) = '')
+    THEN ri.quantidade_esperada ELSE ri.quantidade_recebida END)`;
 const EVENTO_NOTA = 'RECEBIMENTO_ENTRADA';
 const EVENTO_REQUISITANTE = 'RECEBIMENTO_ENTRADA_REQUISITANTE';
 
@@ -179,17 +186,17 @@ async function avisarEntradaConfirmada(db, user, recebimentoId) {
   const rec = await dbGet(db, 'SELECT * FROM recebimentos_material_almoxarifado WHERE id = ?', [recebimentoId]);
   if (!rec) return { sem_entrada: true };
 
-  // `COALESCE(recebida, esperada)` e o espelho SQL de `quantidadeDoItem` (`??`, Etapa 70 T0): o 0
-  // conferido nao entrou e nao aparece. So o que tem `entrada_estoque_em` (D6).
+  // `QTD_DO_ITEM_SQL` e o espelho SQL de `quantidadeDoItem` (Etapa 70 T0 + Fase 5): o 0 conferido
+  // nao entrou e nao aparece; o `''` LEGADO vale a esperada. So o que tem `entrada_estoque_em` (D6).
   const itens = await dbAll(db, `SELECT ri.id, ri.material_id,
-      COALESCE(ri.quantidade_recebida, ri.quantidade_esperada) AS quantidade,
+      ${QTD_DO_ITEM_SQL} AS quantidade,
       COALESCE(ri.quantidade_em_inspecao, 0) AS em_inspecao,
       m.codigo, m.nome, m.unidade, l.codigo AS localizacao
     FROM recebimentos_material_itens_almoxarifado ri
     JOIN materiais_almoxarifado m ON m.id = ri.material_id
     LEFT JOIN localizacoes_almoxarifado l ON l.id = ri.localizacao_entrada_id
     WHERE ri.recebimento_id = ? AND ri.entrada_estoque_em IS NOT NULL
-      AND COALESCE(ri.quantidade_recebida, ri.quantidade_esperada) > 0
+      AND ${QTD_DO_ITEM_SQL} > 0
     ORDER BY ri.id`, [recebimentoId]);
   if (!itens.length) return { sem_entrada: true };
 
