@@ -1,7 +1,9 @@
 # Etapa 74 — a requisição que esperava fica com o material que chegou (C121, feature 07 com a 08 e a 19)
 
-> Status: **EM EXECUÇÃO — 2026-10-02.** Fases 0, 1 e 2 feitas; tronco T0→T4 sequencial num agente só (a Fase 2
-> moveu a T4 para o tronco). Ver as marcas nas Tasks.
+> Status: **FECHADA — 2026-10-02.** T0 `5462b68c`, T1 `63e377e1`, T2 `21f9306b` (produção em `63e377e1`), T3
+> `9af1691a`, T4 `00a5ff18`, cliente (comentário) `e96b7392`, T5 `6792c8e0`, Fase 5 `65d9bc8f` + `eaef9ed1`; plano
+> `1cffa6c0`, `1b5e01d9`, `8c6a7d5b`, `7603db76`; T6 (fechamento) no commit de documentação desta etapa. Próxima:
+> **Etapa 75 — a inspeção que libera o retido reserva para quem esperava (C126)**, ver o fim deste plano.
 > Origem: "Próxima tarefa detalhada — Etapa 74" de
 > `docs/superpowers/plans/2026-10-02-almoxarifado-etapa73-requisicao-espera-compra.md:595-635` e o aviso **C121** de
 > `docs/almoxarifado-novidades-por-etapa.md:6450`.
@@ -511,7 +513,18 @@ fechamento.
   R2/R1; (s3) estorno sem `liberarParaEstorno` → o segundo cenário cai com a literal *"material já consumido"*; (s4) a
   entrega sem consumir reserva com `recebimento_id` não existe como sabotagem (o motor não distingue) — no lugar,
   conferir pela trilha que a movimentação de entrega cita o `reserva_id` da chegada. Só roda com a T4 já mergeada.
-- [ ] **T6 — fechamento (skill `fechar-etapa`).** Novidades: seção da 74 (Antes → Agora, cenários com as literais
+- [x] **T6 — fechamento (skill `fechar-etapa`).** — **FEITA** (commit de documentação desta etapa). Feito: novidades
+  (seção 74; **A38** com as reservas presas do passado e o tamanho da primeira chegada; **B367–B382** — as onze do plano
+  ajustadas ao realizado, **B375 revista** pela Fase 2 (a chegada **pula** material de cliente sem o projeto do dono,
+  não repete o C124), **B378–B380** da Fase 2 e **B381–B382** da Fase 5; **C121 resolvido**; **C124** anotado ("a
+  chegada não repete"); **C126–C130**; **B358** e o roteiro 3 da seção 73 anotados como revistos — a "RN-08 da 73"
+  revogada à vista; D (74); F (74)); spec 07 (cabeçalho, item novo com os hashes, `/encerrar`+`/rejeitar-valor`, a
+  linha da tabela **corrigida dizendo que estava errada** e as linhas novas); spec 04 (setas, o "status não muda"
+  revisto à vista, `/encerrar`/`/rejeitar-valor`, painel); spec 08 (bloco do gancho); mapa (cabeçalho e linhas 04,
+  07, 08, 19); guia (cabeçalho "74 ENTREGUE · 75 começando", seção da 74 com roteiro de 7 passos, notas na 73); manual
+  (reservas, recebimento, requisição, estorno, encerrar). **Divergência da T6:** C128 ficou como "o que muda para quem
+  opera, recebe o e-mail e integra" e os limites declarados da Fase 2/5 viraram C129–C130 (o plano previa C126–C128).
+  Texto original da T6: Novidades: seção da 74 (Antes → Agora, cenários com as literais
   lidas do código, o que não cobre); **B367–B377**; **C121 marcado resolvido**; **C124** ganha "vale também na
   chegada"; **C126** (a inspeção que libera não reserva nem avisa — Surpresa 3, candidata da 75), **C127** (liberar à
   mão não recalcula o status — Surpresa 2), **C128** (o que muda para quem opera: a requisição muda de status quando a
@@ -656,3 +669,68 @@ forçada → caem os 4 do arquivo de estorno e o `[estorno]` da integração.
 **Próximo passo:** T6 (fechamento, skill `fechar-etapa`) — acrescentar às letras: B (Fase 5: recusa antecipada,
 pré-checagem + recriação, literal do reservado, com o descartado acima) e a seção da 74 nas novidades com a literal
 nova no roteiro do estorno.
+
+## Verificação final (medida no HEAD da Fase 5)
+
+`test:api` **280/280** arquivos; `test:almoxarifado` 44/0; `test:validation` 4/0; `test:safealter` 3/0;
+`test:sqlite` 5/0; cliente **74 suítes / 1155 testes**; `CI=true` build ok — medidos pelo executor da Fase 5 no estado
+final do código (`eaef9ed1`); a T6 só tocou `docs/` e `specs/`.
+
+## Retro (4 números)
+
+1. **Rodadas de correção até verde:** 1 (a Fase 5).
+2. **Achados das revisões:** Fase 2 — **20** (2 críticos, 9 importantes, 9 menores), todos reais; os dois críticos eram
+   do desenho do recálculo de status (ressuscitar cancelada, regredir *Em Separação*) e teriam passado nos testes do
+   plano original. Fase 5 — **2 importantes + 1 menor, 0 ruído**, todos no estorno e todos achados **executando**
+   (estorno repetido; estorno recusado pelo lote depois de soltar; literal *"material já consumido"* com o material só
+   reservado).
+3. **Paralelismo:** zero de fato. A Fase 2 moveu a T4 para o tronco (mesmo arquivo do `/encerrar` da T3) e o tronco
+   inteiro rodou num agente só; a T5 e a revisão rodaram com a árvore quieta. **Sem contaminação** — a regra G84 aplicada
+   pela segunda etapa seguida.
+4. **Defeito que escapou da Etapa 73:** nenhum conhecido. *(A 73 deixou a C121 declarada, e foi a 74.)*
+
+**O que esta etapa ensinou:** "o status acompanha" precisa de um **conjunto de origem** e da máquina, não só do
+destino — um recálculo livre ressuscita documento terminado. E todo efeito colateral que roda **antes** de uma recusa
+(aqui, soltar a reserva antes do claim e da guarda do lote) precisa de um caminho de volta — a Fase 5 achou os dois casos
+por execução, nenhum por leitura.
+
+## Próxima tarefa detalhada — Etapa 75: a inspeção que libera o retido reserva para quem esperava (C126, feature 07 com a 09)
+
+**Por que esta.** É o **C121 pela outra porta** (Surpresa 3 da Fase 0 desta etapa): o material crítico entra **retido**
+(`quantidade_em_inspecao`), a nota não o reserva (B370), e quando a inspeção **aprova** ele vira disponível solto — a
+requisição aprovada depois leva o que a que esperava aguardava (sonda `sonda74-c121.js`, bloco D: T1 esperava, a
+inspeção aprovou 4, T3 aprovada depois levou os 4). Tudo o que a reserva precisa já existe: `reservaChegadaService`
+(teto, ordem, releitura, excesso, recálculo pela máquina).
+
+**Fase 0 da 75 — medir antes de prometer:**
+1. **As portas que soltam o retido para o disponível.** `inspectionService.decidirInspecao`
+   (`server/services/almoxarifado/inspectionService.js:182`, claim de `quantidade_em_inspecao` `:252-256`, movimentação
+   `DECISAO_INSPECAO` `:274`): a parte **aprovada** vira disponível; a reprovada vai a `quantidade_bloqueada`. E a
+   **liberação pela NC** (Etapa 44, `nonConformityService.js` ~`:864-996`, `DESBLOQUEIO` no motor): o reprovado que a
+   Qualidade aceita depois também vira disponível. Medir as duas e quem mais tira de `quantidade_em_inspecao` ou de
+   `quantidade_bloqueada` para o disponível (grep pelo nome da coluna).
+2. **O teto por porta.** Na chegada o teto é "o que entrou livre desta nota"; na inspeção, "o que esta decisão aprovou"
+   (por item do recebimento → material). Reaproveitar `reservarChegadaParaQuemEspera` com um teto injetado, ou extrair
+   o miolo (candidatos/ordem/reserva/releitura/excesso/recálculo) para uma função comum chamada pelas duas portas.
+   Atenção ao `recebimento_id` da reserva (o estorno da entrada da Etapa 74 solta "as reservas desta nota" — a reserva
+   feita na **inspeção** daquela nota deve ou não entrar nesse conjunto?).
+3. **O e-mail.** A inspeção hoje **não avisa** ninguém (grep `avisarEntradaConfirmada` → só `receiptService`). Decidir
+   se a liberação da inspeção manda o aviso ao solicitante (o mesmo `montarAvisoRequisitante` com as frases L0/L1/L2) —
+   e com que dedupe (o da 70 é por recebimento + requisição: a nota já avisou "chegou, ainda não reservado").
+4. **Sonda pelas rotas:** material crítico com `inspecao_material_critico = '1'`, R1 esperando; nota de 4 retida; T3
+   aprovada; `POST /inspecoes/:id/decidir` (ou a rota real — medir) aprovando 4 → quem leva. Repetir com aprovação
+   parcial (3 aprovados, 1 reprovado) e com a liberação pela NC.
+
+**Contratos que não se reabrem:** a reserva na chegada (74, inclusive a ordem `compararPrioridade` e o recálculo pela
+máquina); a inspeção (claim de dois níveis, medidas, a guarda de fechamento); a liberação/devolução/sucateamento das
+Etapas 44/45/69 (os três carimbos); o e-mail da 70 (assunto, dedupe).
+
+**Pontos de atenção.**
+- O gancho é **best-effort** como o da 74: a decisão da inspeção nunca falha por causa da reserva.
+- A inspeção roda **fora** da marca de processamento da nota: duas decisões simultâneas (ou decisão × nota × aprovação)
+  precisam da releitura da falta antes de cada `criarReserva` e do desfazer o excesso — já existem no serviço.
+- O estorno da entrada (Etapa 71/74) **recusa** com material em inspeção ou reprovado; depois de decidida a inspeção,
+  o estorno da entrada pode passar — e a reserva feita na inspeção tem de seguir a regra B374 (só o necessário, só de
+  quem não separou) ou ficar fora dela: decidir e registrar.
+- Metade positiva em cada teste: quem esperava fica com o aprovado **e** a aprovada depois não leva; o reprovado não é
+  reservado para ninguém.

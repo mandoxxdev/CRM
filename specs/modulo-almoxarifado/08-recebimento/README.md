@@ -983,6 +983,19 @@ A soma por material do pedido saiu para `pedidoCompraSaldoSql.js` (`db9c63f`) �
 Etapa 71 não mudou (os testes da 42/71 passaram sem edição; só os dois `deepStrictEqual(pedido_compra)` ganharam a chave
 nova). Detalhes: spec 18 e as novidades (B343–B356, C114–C120).
 
+## Etapa 74 (2026-10-02) — o recebimento reserva o que chegou para quem esperava
+
+Também não é item novo desta feature (a reserva mora na 07), mas o gancho mora aqui: os dois `concluir*` (o
+`processarNota` e o `aprovarRecebimento` direto) chamam `reservaChegadaService.reservarChegadaParaQuemEspera` **depois**
+de `fecharSolicitacoesDoPedido` e **antes** do aviso da Etapa 70, dentro da marca de processamento, best-effort
+(`[recebimento] reserva na chegada falhou (recebimento <id>): <msg>` — a nota segue `PROCESSADO`/`APROVADO`)
+(`63e377e1`). O teto é o que entrou **livre** desta nota por material (o retido para inspeção não entra). O aviso da 70
+(`receiptNotificationService`) passou a contar a reserva: *"reservado para a sua requisição: N"* e três frases finais
+(`63e377e1`, testes `21f9306b`). O estorno da `ENTRADA_COMPRA` (o motor) solta só o necessário das reservas desta nota,
+de quem ainda espera sem nada separado (`9af1691a`), e o estorno que não acontece recria o que soltou (`65d9bc8f`); a
+recusa por material só reservado diz quem segura (`eaef9ed1`). Detalhes: spec 07 e as novidades (B367–B382,
+C126–C130). A inspeção que libera o retido ainda **não** reserva (C126 — Etapa 75).
+
 ## Regras essenciais + testes de API exigidos
 
 > **Correção (auditoria de 2026-08-11): esta tabela lia como se todos os testes existissem — e

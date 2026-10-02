@@ -107,7 +107,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Trinta e sete itens para rodar em produção ANTES do deploy — trinta e quatro são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Trinta e oito itens para rodar em produção ANTES do deploy — trinta e cinco são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-02 (Etapa 74) de trinta e sete para trinta e oito**, com a **A38** — as requisições já encerradas ou rejeitadas por valor que ficaram com **reserva ativa presa** (o *Encerrar* e o *Rejeitar* por valor não liberavam), e o tamanho do que a primeira nota de cada material vai reservar para quem espera.)*
 
 *(**Atualizado em 2026-10-02 (Etapa 73) de trinta e seis para trinta e sete**, com a **A37** — as requisições que esperam hoje com o rótulo errado (*Aguardando estoque* com compra já vinculada a pedido) e as aprovadas sem reserva pela aprovação automática ou pela liberação por valor sem saldo.)*
 
@@ -1290,8 +1292,57 @@ SELECT r.id, r.numero, r.data_aprovacao_valor FROM requisicoes_almoxarifado r
   automatizado de propósito (**B364**): reservar retroativamente disputa saldo que pode já ter outro dono.
 - **(2), (3) e (4) vazias** — nada a fazer.
 
+**A38 (NOVA, da Etapa 74 — reservas presas em requisição encerrada ou rejeitada, e o tamanho da primeira chegada).**
+Até esta etapa, **Encerrar Requisição** (de uma *Parcialmente Atendida*) e **Rejeitar** a liberação por valor não
+liberavam as reservas da requisição — o saldo ficava preso a um documento morto, invisível para quem separa. A partir
+desta etapa, os dois liberam (**B379**), e a nota que dá entrada passa a **reservar** o que chegou para quem esperava
+(**B367**). Três consultas:
 
-### B. Decisões de negócio — B1 a B366; as em aberto esperam você, as tomadas estão escritas com o descartado
+```sql
+-- (1) reservas ATIVAS presas em requisição que já não pode usar (o defeito anterior do Encerrar/Rejeitar por valor)
+SELECT r.id, r.numero, r.status, x.id AS reserva_id, x.material_id,
+       x.quantidade - COALESCE(x.quantidade_utilizada,0) AS saldo_preso
+  FROM reservas_material_almoxarifado x
+  JOIN requisicoes_almoxarifado r ON r.id = x.requisicao_id
+ WHERE x.status = 'ATIVA' AND x.origem = 'REQUISICAO'
+   AND (r.status IN ('ENCERRADA','REJEITADO','CANCELADO','ENTREGUE') OR COALESCE(r.ativo,1) = 0);
+
+-- (2) o tamanho da primeira chegada: quem espera hoje, por material, e quanto falta (a régua da reserva na chegada)
+SELECT ir.material_id, r.id, r.numero, r.status, r.urgencia, r.created_at,
+  MAX(0, COALESCE(ir.quantidade_solicitada,0) - COALESCE(ir.quantidade_entregue, ir.quantidade_atendida, 0)) -
+  COALESCE((SELECT SUM(x.quantidade - COALESCE(x.quantidade_utilizada,0)) FROM reservas_material_almoxarifado x
+            WHERE x.item_requisicao_id = ir.id AND x.status = 'ATIVA' AND x.origem = 'REQUISICAO'), 0) AS falta
+  FROM itens_requisicao_almoxarifado ir JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id
+ WHERE COALESCE(r.ativo,1) = 1
+   AND r.status IN ('APROVADO','AGUARDANDO_ESTOQUE','AGUARDANDO_COMPRA','PARCIALMENTE_RESERVADA',
+                    'TOTALMENTE_RESERVADA','PARCIALMENTE_ATENDIDA','EM_SEPARACAO')
+ ORDER BY ir.material_id, r.created_at;
+
+-- (3) só diagnóstico: requisições que esperavam e hoje estão sem saldo para o material, com outra aprovada DEPOIS
+--     segurando-o (a disputa do C121 que já aconteceu)
+SELECT esp.numero AS esperava, esp.created_at, dep.numero AS levou, dep.created_at AS criada_em, ir2.material_id
+  FROM requisicoes_almoxarifado esp
+  JOIN itens_requisicao_almoxarifado ir1 ON ir1.requisicao_id = esp.id
+  JOIN itens_requisicao_almoxarifado ir2 ON ir2.material_id = ir1.material_id AND ir2.requisicao_id <> esp.id
+  JOIN requisicoes_almoxarifado dep ON dep.id = ir2.requisicao_id AND dep.created_at > esp.created_at
+  JOIN reservas_material_almoxarifado x ON x.item_requisicao_id = ir2.id AND x.status = 'ATIVA'
+ WHERE esp.status IN ('AGUARDANDO_ESTOQUE','AGUARDANDO_COMPRA') AND COALESCE(esp.ativo,1) = 1;
+```
+
+**Como ler o resultado:**
+- **(1) com linhas** — saldo preso a requisição terminada. Liberar pela tela **Reservas** (botão de liberar em cada
+  uma), por quem opera; depois do deploy isso não se repete pelo *Encerrar* nem pelo *Rejeitar* por valor. Vazia —
+  nada a fazer.
+- **(2)** é o tamanho do que muda: na **primeira nota** de cada um desses materiais depois do deploy, o que entrar livre
+  vai ser reservado para essas requisições, na ordem da fila de separação (urgência, necessidade, mais antiga). Nada é
+  reservado no deploy (**B377**) — só a partir da próxima nota.
+- **(3)** é só diagnóstico: a reserva já feita para quem chegou depois **não é desfeita** por esta versão. Se alguma
+  dessas precisa do material com urgência, quem opera decide liberar a reserva da outra pela tela **Reservas**.
+
+
+### B. Decisões de negócio — B1 a B382; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+*(**Atualizado em 2026-10-02 de B366 para B382**, com as dezesseis da Etapa 74.)*
 
 *(**Atualizado em 2026-10-01 de B295 para B315**, com as vinte da Etapa 69.)*
 
@@ -5052,6 +5103,10 @@ cada material e o aviso de que o saldo é compartilhado. Itens do mesmo material
 que chegaram não aparecem como 8). **Descartados:** (a) voltar a *Aprovado* na chegada (sem valor medido, e exigiria
 seta nova na máquina e escrita na requisição a partir do recebimento); (b) reservar na chegada — é a próxima etapa
 (**C121**).
+> ⚠️ **Revista na Etapa 74 (`63e377e1`) — "o status não muda quando o material chega" deixou de valer.** A nota agora
+> **reserva** o que chegou para quem esperava, e a requisição que ganhou reserva passa a *Parcialmente/Totalmente
+> Reservada* (**B367**, **B371**). O banner *"Chegou material… ainda não está reservado"* continua, mas só aparece
+> quando o material chegou por outra porta (ajuste, devolução, inspeção liberada) ou a reserva falhou.
 
 **B359 (NOVA, da Etapa 73) — as três formas de aprovar fazem o mesmo depois de aprovar.** *Aprovar*, *Aprovar
 Liberação* (alçada por valor) e a **aprovação automática** passam por uma função só: reservam o que há e gravam
@@ -5102,6 +5157,112 @@ dobro**. Agora a reserva desfeita volta o saldo, a requisição fica *Pendente* 
 *"[almoxarifado-aprovacao-automatica] Falha ao aprovar automaticamente a requisição ⟨id⟩; fica PENDENTE: ⟨motivo⟩"*
 no log, e a reserva da aprovação desconta o que o item já tem seguro (não reserva duas vezes). **Descartado:** uma
 transação em volta da criação e da reserva (fica para a migração de banco).
+
+**B367 (NOVA, da Etapa 74) — a nota que dá entrada reserva o que chegou para quem esperava.** No fim do
+processamento da nota (**Processar Nota** e o **Aprovar** direto do recebimento), depois de fechar as solicitações de
+compra e **antes** do e-mail da Etapa 70, o que entrou **livre** é reservado para as requisições que esperavam aquele
+material. Se a reserva falhar, a nota segue *Processado* normalmente — falha de reserva nunca impede a entrada (aviso
+*"[recebimento] reserva na chegada falhou (recebimento ⟨id⟩): ⟨motivo⟩"* no log). **Descartados:** (a) depois do
+e-mail (o e-mail diria "ainda não está reservado" a quem acabou de ganhar); (b) por item, dentro da entrada no estoque
+(uma nota recusada depois deixaria reserva de material que não entrou); (c) recusar a nota se a reserva falhar.
+
+**B368 (NOVA, da Etapa 74) — quem "esperava".** Toda requisição ativa que ainda pode separar (*Aprovado*, *Aguardando
+compra/estoque*, *Parcialmente/Totalmente Reservada*, *Parcialmente Atendida* e — pela revisão do plano — também *Em
+Separação*), com algum item daquele material em que o **pendente de entrega** menos o que o item já tem reservado é
+maior que zero. **Descartados:** (a) só *Aguardando* (deixaria de fora a *Aprovado* sem reserva e a *Parcialmente
+Reservada* que espera o resto); (b) deixar *Em Separação* de fora — o plano original fazia isso, e a revisão mostrou
+que a requisição que separa o que tinha e espera o resto perdia a próxima nota inteira para uma aprovada depois.
+
+**B369 (NOVA, da Etapa 74) — a ordem é a da fila de separação.** Urgência (*Crítica* > *Urgente* > o resto), depois a
+data de necessidade (sem data por último), depois a mais antiga, depois o número. A fila e a reserva usam **a mesma**
+função. **Descartados:** (a) data de aprovação (duas réguas de "quem é primeiro"); (b) só a mais antiga (a crítica de
+linha parada esperaria a normal antiga); (c) rateio proporcional (ninguém completa).
+
+**B370 (NOVA, da Etapa 74) — reserva no máximo o que ESTA nota trouxe livre.** Por material: o menor entre o que entrou
+livre desta nota e o disponível na hora. O que ficou retido para inspeção não entra; a nota não distribui saldo que veio
+de ajuste ou devolução. **Descartado:** o disponível inteiro do material.
+
+**B371 (NOVA, da Etapa 74) — o status acompanha a reserva, e a máquina ganhou as setas.** A requisição que ganhou
+reserva vai a *Totalmente Reservada* (tudo coberto) ou *Parcialmente Reservada*; a *Parcialmente Atendida* e a *Em
+Separação* ganham a reserva e **mantêm** o status. Setas novas na máquina: *Aguardando → Parcialmente/Totalmente
+Reservada*, *Parcialmente → Totalmente Reservada*, e as de volta para o estorno. **Reabre a B362 de propósito.**
+**Descartados:** (a) manter *Aguardando compra* com o material seguro (o rótulo mentiria ao contrário); (b) status por
+item.
+
+**B372 (NOVA, da Etapa 74) — a reserva da chegada é uma reserva de requisição comum, marcada com a nota.** Ela guarda
+o recebimento que a criou (coluna nova), é consumida na entrega como qualquer outra e fica no nome de **quem processou a
+nota** (como a da aprovação fica no nome de quem aprovou). A observação diz *"Reserva na chegada do recebimento ⟨REC⟩
+— requisição ⟨REQ⟩"*. **Descartados:** (a) marcar só pelo texto (o estorno teria de casar por texto); (b) o solicitante
+como dono (a trilha diria que outra pessoa fez).
+
+**B373 (NOVA, da Etapa 74) — o e-mail da Etapa 70 diz o que ficou reservado.** Cada material ganha *"reservado para a
+sua requisição: ⟨N⟩"* quando houve reserva, e a frase final tem três formas: tudo reservado — *"O material indicado como
+reservado fica guardado para a sua requisição — outra requisição não pode levá-lo. A separação é feita pelo
+almoxarifado."*; parte — *"Só o material indicado como reservado fica guardado para a sua requisição; o restante ainda
+não está reservado — a separação é feita pelo almoxarifado."*; nada — a de antes, *"O material ainda não está
+reservado para a sua requisição — a separação é feita pelo almoxarifado."* Recebe o e-mail quem ganhou reserva **ou**
+ainda tem saldo livre do material; quem esperava e não ganhou nada, com o saldo todo reservado a outras, **não**
+recebe; e cada e-mail só lista os materiais com reserva para ela ou com saldo livre (revisão do plano). **Descartados:**
+(a) manter o e-mail (prometia os mesmos 4 a quem esperava 6 e a quem esperava 3); (b) avisar todos.
+
+**B374 (NOVA, da Etapa 74) — o estorno da entrada da nota libera a reserva que a própria nota criou, só o
+necessário.** Se o disponível não cobre o estorno e as reservas **desta nota** cobrem, o estorno libera delas só o que
+falta, começando pela **última** na ordem de prioridade — e **só** de requisições que esperam sem nada separado
+(revisão do plano). Depois, o status delas é recalculado (com o pedido já reaberto). Reservas da aprovação ou manuais
+**nunca** são tocadas pelo estorno. **Descartados:** (a) recusar o estorno pedindo para liberar à mão (e liberar à mão
+deixa o status mentindo — **C127**); (b) liberar todas as reservas da nota.
+
+**B375 (NOVA, da Etapa 74; revista pela revisão do plano) — material de cliente: a chegada não reserva para quem não
+poderia levá-lo.** A requisição que a saída recusaria (material de cliente sem o projeto do dono) é **pulada** — a
+reserva ficaria presa e passaria na frente de quem pode levar. O plano original reservava "como a aprovação" (repetindo
+o **C124**); **descartado** na revisão. A regra do dono olha o projeto da requisição, como a entrega (a requisição não
+tem campo de OS).
+
+**B376 (NOVA, da Etapa 74) — o painel *Requisições Abertas* mostra as reservadas.** O cartão do painel do almoxarifado
+não listava *Parcialmente/Totalmente Reservada* — a requisição sumiria do painel justamente quando o material chega.
+**Descartado:** deixar como estava.
+
+**B377 (NOVA, da Etapa 74) — sem reserva retroativa.** Quem esperava antes do deploy ganha reserva na **próxima** nota
+do material; nada é reservado no deploy (**A38 (2)** mostra o tamanho). **Descartado:** reservar no boot o saldo livre
+(disputa saldo que pode já ter dono informal — o mesmo motivo da **B364**).
+
+**B378 (NOVA, da Etapa 74, revisão do plano — crítico) — o recálculo de status obedece à máquina.** O plano original
+recalculava o status de toda requisição "tocada" sem consultar a máquina: uma requisição **cancelada** no meio da
+reserva voltaria a *Aguardando estoque* (ressuscitada), e um estorno numa *Em Separação* a faria regredir a *Aguardando*
+com material na caixa. Agora: "tocada" é **a que ficou com ao menos uma reserva viva desta chamada** (sem reserva, o
+status não muda); o recálculo só parte de *Aprovado*, *Aguardando* e *Reservada*; e só grava se a máquina aceitar a
+seta, e se ninguém mudou o status no meio. **Descartado:** o recálculo livre do plano.
+
+**B379 (NOVA, da Etapa 74, revisão do plano) — *Encerrar Requisição* e *Rejeitar* a liberação por valor liberam as
+reservas.** Defeito anterior: as duas ações terminavam a requisição e deixavam a reserva **ativa** para sempre. Com a
+reserva na chegada, isso passaria a acontecer sozinho. Agora as duas liberam (o livro diz *"Liberação por encerramento
+de requisição"* e *"Liberação por rejeição de valor da requisição"*). As presas do passado: **A38 (1)**.
+
+**B380 (NOVA, da Etapa 74, revisão do plano) — quem não pode levar é pulado, e a conta é a do pendente de entrega.**
+(a) A requisição cuja **liberação por valor** bloquearia agora (a mesma avaliação ao vivo da fila de separação) é
+pulada: a reserva ficaria presa atrás da alçada — e ela **perde o lugar** naquela nota (**C130**). (b) "Quanto falta" é
+o **pendente de entrega** menos o já reservado do item (protege o que foi separado e ainda não entregue); o e-mail da
+Etapa 70 continua usando o pendente de separação para decidir quem avisar — diferença declarada. (c) Duas notas do
+mesmo material ao mesmo tempo, ou nota e aprovação: o que falta é **relido** antes de cada reserva, e o excesso que
+passar do pendente é desfeito (*"Reserva na chegada acima do pendente — excesso desfeito"*). (d) Empate na mesma
+requisição: pelo número do item.
+
+**B381 (NOVA, da Etapa 74, revisão do código) — o estorno que não acontece não leva a reserva de quem esperava.** Dois
+defeitos achados executando: (1) estornar de novo uma entrada **já estornada** respondia *"Movimentação já cancelada"*
+— mas antes já tinha soltado a reserva de quem esperava (e uma requisição aprovada depois levava o material); (2) o
+estorno soltava a reserva e **depois** era recusado pela conferência do lote (*"…o lote ⟨L⟩ tem ⟨q⟩ ⟨un⟩ nesta
+localização, menos que os ⟨q⟩ que a entrada creditou"*) — a requisição perdia a reserva e o estorno não acontecia.
+Agora: a entrada já estornada é recusada antes de qualquer efeito; a conferência do lote vem antes de soltar; e
+**qualquer** falha depois de soltar recria exatamente as reservas soltas (*"Reserva recriada após estorno recusado —
+recebimento ⟨REC⟩, requisição ⟨REQ⟩"*), com o status recalculado — a recusa original continua sendo a resposta.
+**Descartados:** reativar a reserva original (pularia a conferência atômica de saldo); soltar só depois de debitar;
+transação (fica para a migração de banco).
+
+**B382 (NOVA, da Etapa 74, revisão do código) — a recusa do estorno diz quem segura o material reservado.** Quando o
+material da entrada está no estoque mas **reservado**, a recusa era *"Não é possível estornar: saldo disponível
+insuficiente (material já consumido)"* — falsa, nada tinha saído. Agora: *"Não é possível estornar: o material está
+reservado para requisições (⟨números⟩) — libere as reservas antes de estornar"* (reserva sem requisição aparece como
+*"reservas manuais"*). A frase antiga continua para consumo de verdade, bloqueio, inspeção e terceiros.
 
 
 ### C. Furos e mudanças de número que quem opera precisa saber
@@ -6447,7 +6608,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      ⟨nome do material⟩: vincule a solicitação a outro pedido"*. **O que fazer:** avisar Compras de que a solicitação
      vinculada agora some da aba só quando o material dela chega.
 
-121. **NOVO, da Etapa 73 (não corrigido — é a Etapa 74) — a requisição que esperava perde o material que chegou para
+121. **✅ RESOLVIDO NA ETAPA 74 (`63e377e1`, revisão `65d9bc8f`) — a requisição que esperava perde o material que
+     chegou para uma aprovada depois.** A nota que dá entrada agora reserva o que chegou para quem esperava, na ordem
+     da fila de separação; quem é aprovado depois (inclusive pela aprovação automática) só leva o que sobrou
+     (**B367** a **B371**). Continua por outra porta: quando a **inspeção libera** material retido (**C126**). O texto
+     original, para o histórico:
+     **NOVO, da Etapa 73 (não corrigido — é a Etapa 74) — a requisição que esperava perde o material que chegou para
      uma aprovada depois.** R1 e R2 esperam (*Aguardando compra*); chega a nota de 4; R3, criada e aprovada **depois**,
      reserva os 4 — e R1 e R2 voltam a "aguardando saldo" na fila. O *separar* de R1 é recusado com *"… Máximo: 0
      (pendente: 6, disponível: 0)"*. É a regra da reserva na aprovação agindo como deve, sem ninguém ter decidido a
@@ -6472,6 +6638,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      cliente.** A reserva na aprovação não olha o dono do material; a regra do dono vale na **saída** (a entrega exige
      a OS ou o projeto do cliente). A Etapa 73 só estendeu a mesma reserva às outras duas portas. **O que fazer:**
      requisição de material de cliente sem OS fica com o material seguro e trava na entrega — informar a OS na criação.
+     *(**Etapa 74:** a **reserva na chegada** não repete isso — a requisição que a saída recusaria é pulada, **B375**.
+     A reserva na **aprovação** continua como descrito acima.)*
 
 125. **NOVO, da Etapa 73 — o que muda para quem aprova e para quem integra.** (1) Requisição sem saldo com a compra já
      pedida ao fornecedor aparece **Aguard. Compra** (antes, **Aguard. Estoque**). (2) **Aprovar Liberação** sem saldo
@@ -6480,6 +6648,43 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      (*TOTALMENTE_RESERVADA*, *AGUARDANDO_COMPRA*…), não mais *APROVADO* (**B360**). (4) Os itens da requisição aparecem
      na ordem em que foram pedidos. **O que fazer:** integrações que conferiam `status === 'APROVADO'` na resposta da
      criação devem aceitar os status de reserva e de espera.
+
+126. **NOVO, da Etapa 74 (não corrigido — candidato da Etapa 75) — a inspeção que libera o material retido não reserva
+     para quem esperava, nem avisa.** Material crítico chega e fica retido para inspeção (fora do disponível); a nota
+     não o reserva para ninguém (**B370**). Quando a **inspeção aprova**, o material vira disponível solto: uma
+     requisição aprovada depois leva o que a que esperava aguardava (medido na sonda: T1 esperava, a inspeção aprovou
+     4, T3 aprovada depois levou os 4). É o **C121** por outra porta. **O que fazer:** até a Etapa 75, depois de aprovar
+     uma inspeção, olhar a fila de separação e separar logo quem esperava aquele material.
+
+127. **NOVO, da Etapa 74 (anterior, da Etapa 4; não corrigido) — liberar uma reserva de requisição à mão, ou a reserva
+     expirar, não recalcula o status da requisição.** Pela tela **Reservas**, liberar a reserva de uma requisição
+     *Totalmente Reservada* deixa a requisição **Totalmente Reservada sem nada seguro**; o mesmo quando a reserva vence
+     (`reserva_dias_validade` ligada — a reserva da chegada também nasce com validade). A próxima nota do material
+     reserva de novo para ela (a régua se corrige), mas até lá o rótulo mente. **O que fazer:** depois de liberar à
+     mão, conferir o status da requisição; se ela precisa do material, a fila de separação mostra o saldo de verdade.
+
+128. **NOVO, da Etapa 74 — o que muda para quem opera, para quem recebe o e-mail e para quem integra.** (1) Processar
+     uma nota pode mudar o status de requisições: as que esperavam o material viram *Parcialmente/Totalmente
+     Reservada* e aparecem como **Separar** na fila; a aprovada depois fica esperando. (2) O e-mail *"chegou material"*
+     diz quanto ficou reservado — e quem não ganhou nada nem tem saldo livre não recebe. (3) Estornar a entrada de uma
+     nota que reservou para alguém **solta** a reserva de quem ainda não separou (só o necessário); se não der, a
+     recusa diz quem segura o material (**B382**). (4) **Encerrar Requisição** e **Rejeitar** por valor liberam as
+     reservas. (5) O painel *Requisições Abertas* lista as reservadas. **O que fazer:** integrações que liam
+     *Aguardando compra/estoque* como estável até a separação devem aceitar *Parcialmente/Totalmente Reservada* depois
+     de cada nota.
+
+129. **NOVO, da Etapa 74 (declarado, não corrigido) — dois limites do estorno da entrada com reserva na chegada.**
+     (1) **Dois cliques simultâneos** no estorno: as duas tentativas podem soltar a reserva antes de uma delas perder;
+     a que perde **recria** o que soltou (**B381**), mas numa janela de milissegundos outra aprovação pode levar o
+     saldo. (2) As reservas da chegada são marcadas pela **nota e o material**, não pela movimentação: com dois itens
+     do mesmo material na mesma nota, o estorno de uma das entradas pode soltar a reserva feita com a outra (a conta
+     total fica certa).
+
+130. **NOVO, da Etapa 74 (declarado) — três efeitos da reserva na chegada que quem opera vai notar.** (1) A reserva
+     fica no **nome de quem processou a nota** (na tela **Reservas**, o solicitante é o faturista — **B372**). (2) A
+     requisição *Em Separação* ganha reserva na chegada, mas **não** recebe o e-mail (o aviso segue a lista da Etapa
+     70). (3) A requisição pulada porque a **liberação por valor** bloquearia (**B380**) perde o lugar naquela nota: o
+     material vai para a próxima da fila, e quando o valor for liberado ela só leva o que sobrou.
 
 
 
@@ -7292,9 +7497,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(72) O livro de atribuição não tem tela** — o que chegou para cada solicitação aparece como *"chegou X de Y"*; o
   detalhe por nota fica nas tabelas (e na trilha *"Recebida"*, que guarda a regra e o atribuído).
 - **(73) O status da requisição não muda quando o material chega** — por decisão: a fila e o separar já trabalham
-  pelo saldo, e o detalhe mostra *"Chegou material…"* (**B358**).
+  pelo saldo, e o detalhe mostra *"Chegou material…"* (**B358**). *(**Revisto na Etapa 74:** a nota agora reserva e o
+  status acompanha a reserva — **B367**, **B371**.)*
 - **(73) O material que chega não é reservado para quem esperava** — quem aprovar depois pode levá-lo (**C121**). É a
-  próxima etapa.
+  próxima etapa. *(**✅ Pago na Etapa 74**, para a nota — a inspeção que libera continua, **C126**.)*
 - **(73) Pedido lançado direto no Compras, sem solicitação de compra, não conta como "a caminho"** — a requisição vai a
   *Aguardando estoque* com compra vindo (coerente com a sugestão de reposição) (**B357**).
 - **(73) O horizonte de 60 dias vale para a requisição também** — uma compra de prazo longo, cuja solicitação tem mais
@@ -7303,6 +7509,22 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   status por item.
 - **(73) Requisições antigas não foram corrigidas** — nem o rótulo, nem a reserva que a aprovação automática não fez
   (**A37**, **B364**); e os itens gravados fora de ordem antes desta versão continuam na ordem em que foram gravados.
+- **(74) Só a nota de compra reserva para quem esperava** — a inspeção que libera o retido (**C126**, próxima etapa) e
+  as entradas que não são nota (entrada manual, devolução, transferência, ajuste, retorno de terceiro) deixam o
+  material livre: não há "quem esperava" ligado a elas.
+- **(74) A requisição em *Aguardando aprovação de valor* não ganha reserva na chegada** — ela não está entre as que
+  podem separar; e a que está *Aguardando* mas cuja liberação por valor bloquearia é pulada (**B380**, **C130**).
+- **(74) Sem reserva retroativa** — nada é reservado no deploy; quem esperava ganha reserva na próxima nota (**B377**,
+  **A38 (2)**).
+- **(74) A reserva já feita para quem chegou depois não é desfeita** — a ordem vale a partir das próximas notas (**A38
+  (3)** só diagnostica).
+- **(74) Corrida nota × aprovação** — numa corrida de milissegundos, uma aprovação feita no instante da nota pode levar
+  antes; a soma das reservas nunca passa do que há (sem trava entre o recebimento e a aprovação — fica para a migração
+  de banco).
+- **(74) O banner *Parcialmente Reservada*** diz *"Parte dos itens não tinha saldo e ficou sem reserva…"* — inexato
+  para a requisição de um item só que ganhou parte do que pedia na chegada.
+- **(74) Sem tela nova** — a reserva da chegada aparece na tela **Reservas** com a observação *"Reserva na chegada do
+  recebimento ⟨REC⟩ — requisição ⟨REQ⟩"*; não há coluna "reservado na chegada".
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -7935,6 +8157,22 @@ simulado (10 cenários). O que **só o navegador** prova:
    com saldo: ela nasce **Totalmente Reservada**, e a tela **Reservas** mostra a reserva no nome de quem criou.
 4. **A ordem dos itens.** Criar uma requisição com cinco materiais numa ordem qualquer: o detalhe e o comprovante os
    mostram na mesma ordem.
+
+**(74) Nenhum clique foi dado nesta etapa.** Os testes provam o servidor pela rota e pelo serviço (a base: 8; a reserva
+na chegada pelas duas portas do recebimento: 23; o e-mail: 5 de rota mais a função pura; o estorno e o *Encerrar*/
+*Rejeitar*: 14; o painel; a jornada ponta a ponta: 11). O cliente só teve um comentário trocado. O que **só o navegador**
+prova:
+
+1. **O status muda com a nota.** Duas requisições do mesmo material sem saldo, uma **Urgente** criada depois de uma
+   **Normal**, as duas **Aguard. Compra**; processar uma nota que não dá para as duas: a urgente vira **Parcialmente**
+   ou **Totalmente Reservada**, a normal continua **Aguard. Compra** — e o badge da lista mostra isso sem recarregar
+   duas vezes.
+2. **A tela Reservas.** A reserva criada pela nota aparece com a observação *"Reserva na chegada do recebimento ⟨REC⟩ —
+   requisição ⟨REQ⟩"* e no nome de quem processou a nota.
+3. **O painel.** O cartão **📋 Requisições Abertas** do painel do almoxarifado lista a requisição reservada.
+4. **O estorno.** Em **Movimentações**, estornar a entrada da nota de uma requisição que ainda não separou: o toast de
+   sucesso, e a requisição volta a **Aguard. Compra**; com uma que já separou, o toast de erro diz *"…o material está
+   reservado para requisições (⟨números⟩) — libere as reservas antes de estornar"*.
 
 
 
@@ -17329,6 +17567,9 @@ pedido (**Recebimentos**, até **Processar Nota**). Abrir a requisição em **Re
 **Aguard. Compra**, e o aviso passa a dizer *"Chegou material para esta requisição — já dá para separar. O material
 ainda não está reservado para ela. Dá para separar agora: 4 ⟨unidade⟩ de ⟨M⟩. O saldo é compartilhado: enquanto não
 for separado, outra requisição pode separá-lo antes."* **Iniciar Separação** funciona.
+*(**Mudou na Etapa 74:** a nota agora **reserva** o que chegou para quem esperava — neste roteiro a requisição vira
+**Parcialmente Reservada** com os 4, e o banner passa a ser o de reserva. O banner acima continua valendo quando o
+material chega por outra porta — ajuste, devolução, inspeção liberada.)*
 
 **4. A liberação por valor faz o mesmo.** Com a alçada por valor ligada (**Configurações → Configurações Gerais**),
 uma requisição de M acima do limite, sem saldo, cai em **Aguard. Aprov. Valor**; **Aprovar Liberação**: fica **Aguard.
@@ -17365,9 +17606,102 @@ rodadas; corrigido, **B365**) e uma falha no meio da reserva automática prenden
 **B366**).
 
 
+## Etapa 74 — A requisição que esperava fica com o material que chegou (2026-10-02)
+
+Até aqui, quando a nota do fornecedor dava entrada, o material ficava **solto**: quem esperava há semanas recebia o
+e-mail *"chegou"*, mas uma requisição aprovada **depois** — ou criada depois, com a aprovação automática ligada —
+reservava tudo primeiro, e a que esperava ouvia *"Máximo: 0"* ao tentar separar. O e-mail ainda prometia os mesmos 4 a
+quem esperava 6 e a quem esperava 3. Agora a nota, ao ser processada, **reserva** o que chegou livre para quem esperava,
+na ordem da fila de separação (urgência, necessidade, mais antiga); a requisição que ganhou vira *Parcialmente* ou
+*Totalmente Reservada*, o e-mail diz quanto ficou reservado, e quem é aprovado depois só leva o que sobrou. Estornar a
+entrada da nota solta essa reserva de quem ainda não separou. No caminho, a etapa corrigiu dois defeitos antigos: o
+*Encerrar* e o *Rejeitar* por valor deixavam reserva presa, e o painel não mostrava as requisições reservadas.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A nota dava entrada e o material ficava livre para quem chegasse primeiro | Reserva o que entrou livre para quem esperava, na ordem da fila (**B367**, **B369**) |
+| A requisição aprovada depois levava o material de quem esperava (**C121**) | Só leva o que sobrou |
+| A requisição que esperava continuava **Aguard. Compra** com o material no prédio | Vira **Parcialmente/Totalmente Reservada** (**B371**) |
+| O e-mail *"chegou material"* prometia o mesmo material a todos | Diz *"reservado para a sua requisição: N"*; quem não ganhou nada nem tem saldo livre não recebe (**B373**) |
+| Estornar a entrada com o material reservado: *"…(material já consumido)"* | Solta a reserva de quem ainda não separou; senão, diz quem segura o material (**B374**, **B382**) |
+| **Encerrar Requisição** e **Rejeitar** por valor deixavam a reserva ativa para sempre | Liberam (**B379**) |
+| O painel *Requisições Abertas* não listava as reservadas | Lista (**B376**) |
+
+### As regras, com o cenário exato
+
+Preparação: um material **M** sem saldo, com fornecedor e pedido de compra (como na Etapa 73: **Reposição e Compras →
+Gerar solicitações → Gerar pedido**). Duas requisições de M, aprovadas por outra pessoa: **R2 Normal** pedindo 3, criada
+**antes**, e **R1 Urgente** pedindo 6, criada depois. As duas ficam **Aguard. Compra**.
+
+**1. Quem esperava fica com o que chegou, na ordem da fila.** Processar uma nota de **4** de M (**Recebimentos**, até
+**Processar Nota**). R1 (urgente) vira **Parcialmente Reservada** com os 4; R2 continua **Aguard. Compra**, sem nada. Na
+tela **Reservas**, a reserva de R1 tem a observação *"Reserva na chegada do recebimento ⟨REC⟩ — requisição ⟨R1⟩"*. Na
+**Fila de separação**, R1 aparece em **Separar**; R2 em **Aguardando saldo**.
+
+**2. O e-mail diz a verdade.** O e-mail de R1 lista *"⟨cód⟩ — ⟨M⟩: entrou 4 ⟨un⟩ (pendente na requisição: 6 ⟨un⟩;
+reservado para a sua requisição: 4 ⟨un⟩)"* e termina com *"O material indicado como reservado fica guardado para a sua
+requisição — outra requisição não pode levá-lo. A separação é feita pelo almoxarifado."* R2 **não** recebe e-mail
+(nada sobrou livre).
+
+**3. Quem chega depois não leva.** Uma terceira requisição **R3** de M, aprovada agora: fica **Aguard. Compra**, sem
+reserva. *Iniciar Separação* de R1 funciona com os 4.
+
+**4. A próxima nota completa na mesma ordem.** Separar e entregar os 4 de R1; processar a nota do resto (6): R1 recebe
+os 2 que faltam, R2 vira **Totalmente Reservada** com 3, R3 recebe 1 (**Parcialmente Reservada**). O painel
+**📋 Requisições Abertas** lista as reservadas.
+
+**5. O estorno solta só de quem não separou.** Em **Movimentações**, estornar a entrada de uma nota cuja reserva é de
+uma requisição que ainda não separou: o estorno passa, a reserva é liberada (*"Estorno da entrada do recebimento
+⟨REC⟩"*) e a requisição volta a **Aguard. Compra**. Estornar a entrada de uma nota cuja reserva é de uma requisição que
+**já separou**: recusado com *"Não é possível estornar: o material está reservado para requisições (⟨números⟩) —
+libere as reservas antes de estornar"*. Estornar de novo a mesma entrada: *"Movimentação já cancelada"* — e a reserva
+de quem esperava fica intacta.
+
+**6. Encerrar libera.** Uma requisição **Parcialmente Atendida** com reserva: **Encerrar Requisição** → a reserva é
+liberada (*"Liberação por encerramento de requisição"* no livro). O mesmo com **Rejeitar** a liberação por valor
+(*"Liberação por rejeição de valor da requisição"*).
+
+**7. A aprovação automática não toma mais.** Com **Configurações → Configurações Gerais → Aprovação Automática** ligada:
+Q1 (5) esperando; nota de 7 → Q1 **Totalmente Reservada**; Q2 (4) criada depois → **Parcialmente Reservada** com os 2
+que sobraram (urgência *Crítica* continua sem aprovação automática).
+
+### O que esta etapa NÃO cobre
+
+1. **A inspeção que libera o material retido não reserva para quem esperava** (**C126**) — próxima etapa.
+2. **Entradas que não são nota** (manual, devolução, transferência, ajuste) deixam o material livre.
+3. **Liberar à mão ou deixar vencer** uma reserva de requisição não recalcula o status dela (**C127**).
+4. **Nada é reservado no deploy**, e reserva já feita para quem chegou depois não é desfeita (**B377**, **A38**).
+5. **Requisição em *Aguardando aprovação de valor*** não ganha reserva na chegada (**B380**).
+
+### O que a revisão encontrou
+
+A medição reproduziu o problema pelas rotas (R3 aprovada depois levou os 4; a de quem esperava ouviu *"Máximo: 0"*) e
+achou que o e-mail da Etapa 70 prometia o mesmo material a todos, que o painel não mostrava as reservadas e que a
+**spec das reservas estava errada** numa linha da tabela de regras. A revisão do **plano** achou dois defeitos críticos
+no desenho do recálculo de status — uma requisição cancelada no meio seria ressuscitada, e um estorno faria uma *Em
+Separação* regredir — e nove importantes, entre eles reservas presas no *Encerrar* e no *Rejeitar* por valor (defeito
+anterior, corrigido), duas notas ao mesmo tempo reservando em dobro e a *Em Separação* perdendo a próxima nota
+(**B378** a **B380**). A revisão do **código**, executando, achou três defeitos — todos no estorno: estornar de novo
+uma entrada já estornada soltava a reserva de quem esperava; o estorno recusado pelo lote soltava a reserva e não
+acontecia; e a recusa dizia *"material já consumido"* com o material só reservado (corrigidos, **B381**, **B382**).
+
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 74 entregue (2026-10-02):** **a requisição que esperava fica com o material que chegou.** A nota processada
+  reserva o que chegou livre para quem esperava, na ordem da fila de separação (urgência, necessidade, mais antiga); a
+  requisição que ganhou vira *Parcialmente/Totalmente Reservada*, o e-mail diz quanto ficou reservado, e quem é
+  aprovado depois (inclusive pela aprovação automática) só leva o que sobrou. Estornar a entrada da nota solta essa
+  reserva de quem ainda não separou; senão a recusa diz quem segura o material. Corrigidos: o *Encerrar* e o *Rejeitar*
+  por valor deixavam reserva presa, e o painel *Requisições Abertas* não listava as reservadas. **O que é seu:** a
+  consulta **A38** (reservas presas no passado e o tamanho da primeira chegada); as decisões **B367 a B382**; os avisos
+  **C126 a C130** (o **C126** é a próxima etapa, e o **C128** muda o que integrações veem depois de cada nota); as
+  limitações **(74)** em D e as verificações **(74)** em F. **Próxima: Etapa 75 — a inspeção que libera o material
+  retido reserva para quem esperava (C126) — ver o plano da Etapa 74.**
 
 - **Etapa 73 entregue (2026-10-02):** **a requisição que espera compra nasce com o status certo, em qualquer forma de
   aprovar.** Com a compra já pedida ao fornecedor, a requisição sem saldo nasce *Aguardando compra* (antes, *Aguardando
@@ -17380,6 +17714,7 @@ rodadas; corrigido, **B365**) e uma falha no meio da reserva automática prenden
   **C121** é a próxima etapa, e o **C125** muda a resposta da API para quem integra); as limitações **(73)** em D e as
   verificações **(73)** em F. **Próxima: Etapa 74 — a requisição que esperava fica com o material que chegou (C121,
   feature 07 com a 08) — ver o plano da Etapa 73.**
+  *(Feita — Etapa 74.)*
 
 - **Etapa 72 entregue (2026-10-02):** **a solicitação de compra só fecha quando o material dela chega.** A nota parcial
   (ou de outro material do pedido) não fecha mais a solicitação: ela continua na aba Solicitações com *"chegou X de Y"*,

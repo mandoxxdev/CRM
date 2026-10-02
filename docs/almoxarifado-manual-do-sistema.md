@@ -1340,10 +1340,10 @@ Movimentação errada **não é excluída**. O botão de estornar (seta curva) n
 - **Motivo é obrigatório** → *"Justificativa obrigatória para cancelamento"*.
 - Exige o perfil que pode **ajustar estoque** (mais restrito que o de movimentar).
 - **Estorno de estorno não existe** → *"Estorno não pode ser estornado"*.
-- **Estorno de entrada** vira uma saída, e por isso respeita o disponível: se a mercadoria já foi consumida, a recusa é *"Não é possível estornar: saldo disponível insuficiente (material já consumido)"*. Em material sem lote, se a posição da entrada já não tem aquela quantidade (porque uma saída tirou dela), o estorno tira **como uma saída**: da posição da entrada primeiro, depois das outras com saldo — nenhuma posição fica negativa.
+- **Estorno de entrada** vira uma saída, e por isso respeita o disponível: se a mercadoria já foi consumida, a recusa é *"Não é possível estornar: saldo disponível insuficiente (material já consumido)"*. Se a mercadoria **está no estoque mas reservada** (o físico cobre, o disponível não), a recusa diz quem a segura: *"Não é possível estornar: o material está reservado para requisições (⟨números⟩) — libere as reservas antes de estornar"* (uma reserva sem requisição aparece como *"reservas manuais"*). Em material sem lote, se a posição da entrada já não tem aquela quantidade (porque uma saída tirou dela), o estorno tira **como uma saída**: da posição da entrada primeiro, depois das outras com saldo — nenhuma posição fica negativa.
 - **Estorno de saída** devolve a quantidade **a uma posição só**: a origem informada na saída ou, sem ela, a posição padrão do material (ou a conta "sem localização atribuída"). A saída não guarda de quais posições tirou; o físico volta certo, a posição pode não ser a original.
 - **Estorno de uma contagem com localização** que deixaria o material com saldo negativo (porque o material já saiu depois da contagem) é recusado: *"Não é possível estornar: o saldo já foi consumido (o estorno deixaria o material negativo)"*.
-- **Duas pessoas estornando ao mesmo tempo:** só a primeira passa; a segunda recebe *"Movimentação já cancelada"*.
+- **Duas pessoas estornando ao mesmo tempo:** só a primeira passa; a segunda recebe *"Movimentação já cancelada"*. Estornar de novo uma linha **já estornada** recebe a mesma mensagem, antes de qualquer alteração.
 
 **Estornar a entrada de uma nota de compra mexe no pedido de compra.** Quando a linha estornada é a **ENTRADA_COMPRA**
 (a entrada que o processamento da nota gera — o livro mostra o tipo por esse código) de uma nota recebida **contra um
@@ -1385,6 +1385,16 @@ Estornar a entrada de nota **sem** pedido não toca pedido nenhum.
 
 Inspeção decidida só com aprovado não impede o estorno.
 
+**Estornar a entrada de uma nota que reservou material para requisições (9.3b).** Se o disponível não cobre o estorno
+porque aquela nota reservou o que trouxe para quem esperava, o estorno **solta** dessas reservas só o que falta — da
+**última** requisição na ordem da fila para a primeira, e só de requisições que ainda **esperam sem nada separado** — e
+a requisição que perdeu a reserva volta ao status de espera (normalmente *Aguard. Compra*, já que o pedido reabre).
+Reservas feitas na aprovação ou à mão **nunca** são soltas pelo estorno. Se nem assim cobre (alguém já separou ou
+entregou), o estorno é recusado com a mensagem do material reservado (acima) e nada é solto. Se o estorno for recusado
+**depois** de soltar (por exemplo, pela conferência do lote — *"Não é possível estornar: o lote ⟨L⟩ tem ⟨q⟩ ⟨un⟩ nesta
+localização, menos que os ⟨q⟩ que a entrada creditou"*), as reservas soltas são **recriadas** iguais (observação
+*"Reserva recriada após estorno recusado — recebimento ⟨REC⟩, requisição ⟨REQ⟩"*) e a recusa é a resposta.
+
 Há linhas que o livro **não estorna de propósito**, cada uma com a porta certa nomeada na mensagem:
 
 | Linha | Mensagem |
@@ -1425,7 +1435,7 @@ Os status e as passagens permitidas entre eles são fixos; qualquer tentativa fo
 **Os três status que muita gente estranha:**
 
 - **Aguard. Estoque** e **Aguard. Compra** — a requisição cai automaticamente num deles quando, na aprovação, **nenhum item** tem saldo disponível — qualquer que seja a forma de aprovar (**Só Aprovar**, **Aprovar Liberação** ou a aprovação automática). Fica em *Aguard. Compra* quando algum dos materiais tem **compra a caminho**: uma solicitação de compra ainda não pedida, ou já pedida ao fornecedor (vinculada a um pedido) com material que ainda falta chegar, aberta há no máximo 60 dias. É a mesma conta do "a caminho" da sugestão de reposição: pedido cancelado ou rejeitado, e material que já chegou todo pelo pedido, **não** contam; pedido lançado direto no Compras, sem solicitação de compra, também não. Caso contrário, *Aguard. Estoque*. Se ao menos um item tem disponível, ela segue o caminho normal (a reserva decide o status, 9.3).
-- **A chegada do material não muda o status.** A requisição continua *Aguard. Compra* ou *Aguard. Estoque* depois que a nota entra; a separação já pode começar (ela trabalha pelo saldo, não pelo status), e o detalhe passa a dizer que o material chegou (10.1). O material que chega **não** fica reservado para ela: outra requisição aprovada depois pode reservá-lo, e quem separar primeiro leva.
+- **A chegada do material pela nota de compra reserva para quem esperava, e o status acompanha.** Quando a nota do material entra, o que chegou livre é reservado para as requisições que esperavam, na ordem da fila de separação, e a que ficou com reserva passa a *Parcialmente Reservada* ou *Totalmente Reservada* (9.3b). Uma requisição aprovada depois só leva o que sobrou. Quando o material chega por **outra porta** (ajuste, devolução, inspeção liberada) ou a reserva não acontece, a requisição continua *Aguard. Compra* ou *Aguard. Estoque*; a separação já pode começar (ela trabalha pelo saldo, não pelo status), o detalhe diz que o material chegou (10.1) — e esse material não fica reservado para ela.
 - **Totalmente Reservada** / **Parcialmente Reservada** — é o estado **normal** de uma requisição recém-aprovada que encontrou saldo (seção 9).
 
 ### 7.2 Criação — o que o sistema valida
@@ -1515,7 +1525,7 @@ Regras:
 ### 7.6 Confirmação de recebimento, encerramento e cancelamento
 
 - **Confirmar recebimento** é o testemunho do **próprio solicitante** de que o material chegou às mãos dele. **Não há atalho de administrador**: *"Apenas o solicitante pode confirmar o recebimento"*. Só vale nos status Entregue, Parcialmente Atendida e Encerrada (*"Confirmação de recebimento não permitida no status EM_SEPARACAO"*), e só uma vez (*"Recebimento já confirmado"*).
-- **Encerrar** fecha a requisição de vez: cancela o saldo pendente e nenhuma entrega futura é aceita. Parte de Entregue ou Parcialmente Atendida, e exige o perfil de aprovação — *"Sem permissão para encerrar requisições"*. O motivo é opcional — contraste deliberado com a rejeição, onde ele é obrigatório.
+- **Encerrar** fecha a requisição de vez: cancela o saldo pendente e nenhuma entrega futura é aceita. Parte de Entregue ou Parcialmente Atendida, e exige o perfil de aprovação — *"Sem permissão para encerrar requisições"*. O motivo é opcional — contraste deliberado com a rejeição, onde ele é obrigatório. Encerrar **libera as reservas** que a requisição ainda segurava (no livro, *"Liberação por encerramento de requisição"*) — inclusive a que a nota reservou para ela na chegada (9.3b). **Rejeitar** a liberação por valor (8.3) também libera (*"Liberação por rejeição de valor da requisição"*).
 - **Cancelar** é do solicitante (ou de administrador do sistema): sem permissão, *"Sem permissão"*; em status que não aceita, *"Não é possível cancelar neste status"*. Cancelar **libera as reservas** daquela requisição.
 - **Excluir** uma requisição **estorna as entregas já feitas** (devolve ao estoque, com linha no livro) e **libera as reservas** que ela ainda segurava. A devolução é **por saída**, e só do que **ainda não voltou**: o que já foi devolvido pela Devolução citando aquela saída é descontado, então excluir depois de devolver não credita o estoque duas vezes. Cada quantidade volta ao **lote** de onde saiu e ao **endereço** de onde saiu, se esse endereço ainda pode receber o material (ativo, não bloqueado, com o tipo do material permitido); senão, vai para o endereço padrão. Material com número de série volta **com as mesmas séries** que saíram (voltam a Em estoque); se as séries daquela saída não batem com o que falta devolver, a exclusão é recusada com *"Chapa 3mm: as series desta entrega nao batem com o que falta devolver — use a devolucao"*. Tudo é conferido antes da primeira devolução — se o padrão também não puder receber, a exclusão é recusada com a mensagem do endereço, e nada volta. Numa requisição antiga cujo histórico de saídas não fecha com o total entregue, o estorno é feito numa entrada só, no endereço padrão e sem lote, descontado o que já foi devolvido. É restrito a administradores do almoxarifado ou super administrador: *"Apenas administradores do Almoxarifado ou Super Administrador podem excluir requisições"*.
 
@@ -1740,6 +1750,42 @@ O status final da requisição sai daí:
 
 **Falhar em reservar não derruba a aprovação.** A decisão de aprovar já foi tomada e é independente de haver saldo — é exatamente o caso "Aguard. Estoque". No pior cenário a requisição fica sem hold e a separação disputa o disponível como qualquer outra saída. Se a falha acontece **no meio** (um item reservado, o seguinte não), as reservas já feitas por aquela aprovação são desfeitas: nenhum saldo fica preso por uma aprovação que não terminou.
 
+### 9.3b Reserva na chegada da nota — quem esperava fica com o que chegou
+
+Quando uma nota de compra dá entrada no estoque (**Processar Nota**, ou o **Aprovar** direto do recebimento), o sistema reserva o que entrou **livre** para as requisições que **esperavam** aquele material — antes que qualquer outra requisição, aprovada depois, possa levá-lo.
+
+**Quem esperava.** Toda requisição ativa que ainda pode ser separada — **Aprovado**, **Aguard. Compra**, **Aguard. Estoque**, **Parcialmente Reservada**, **Totalmente Reservada**, **Parcialmente Atendida** e **Em Separação** — com algum item daquele material em que falta:
+
+```
+falta do item = quantidade ainda pendente de entrega − o que o item já tem reservado
+```
+
+**Em que ordem.** A mesma da **Fila de separação** (10.6): urgência (**Crítica**, depois **Urgente**, depois as demais), depois a data de necessidade mais cedo (sem data por último), depois a requisição mais antiga. A primeira da fila leva o que falta para ela; o que sobrar passa à seguinte.
+
+**Quanto, no máximo.** Para cada material da nota:
+
+```
+a distribuir = mínimo(o que ENTROU LIVRE desta nota, disponível do material naquele momento)
+```
+
+- O que entrou **retido para inspeção** (14.6) não entra na conta — não está disponível.
+- A nota distribui só o que **ela** trouxe: saldo que já estava no estoque (de ajuste, devolução, outra entrada) não é distribuído por ela.
+
+**Quem é pulado.**
+- A requisição cuja **liberação por valor** (8.3) bloquearia a separação naquele momento — a reserva ficaria presa atrás da alçada. O material vai para a próxima da fila; quando a liberação vier, ela leva só o que sobrou.
+- A requisição de **material de cliente** que a saída recusaria (sem o projeto do dono — 13) — a reserva ficaria presa e passaria na frente de quem pode levar.
+- A requisição em **Aguard. Aprov. Valor** não está entre as que podem separar e não recebe reserva na chegada.
+
+**O status acompanha.** A requisição que ficou com reserva desta nota passa a **Totalmente Reservada** (todo item pendente coberto) ou **Parcialmente Reservada**. **Em Separação** e **Parcialmente Atendida** ganham a reserva e mantêm o status. Requisição cancelada, rejeitada ou encerrada nunca é tocada; se uma for cancelada no exato momento da reserva, a reserva é desfeita. O cartão **📋 Requisições Abertas** do Dashboard lista também as requisições *Parcialmente* e *Totalmente Reservada* — a requisição não some do painel quando o material chega.
+
+**A reserva criada.** É uma reserva de requisição comum — a entrega a consome como qualquer outra (9.4). Na tela **Reservas** ela aparece no nome de **quem processou a nota**, com a observação *"Reserva na chegada do recebimento ⟨REC⟩ — requisição ⟨REQ⟩"*. Se a configuração de dias de validade estiver ligada, ela nasce com validade (9.7).
+
+**Nunca derruba a nota.** Se a reserva falhar por qualquer motivo, a nota fica **Processado** do mesmo jeito; quem esperava pode separar o que estiver disponível. Duas notas do mesmo material processadas ao mesmo tempo não reservam em dobro: o que falta é relido antes de cada reserva, e o que passar do pendente é desfeito (*"Reserva na chegada acima do pendente — excesso desfeito"*).
+
+**O e-mail.** O aviso ao solicitante (21c) diz, em cada material, *"reservado para a sua requisição: N"* quando houve reserva, e termina com uma de três frases (21c.1). Quem esperava e não ficou com nada — nem há saldo livre do material — **não** recebe o aviso daquela nota.
+
+**O que NÃO reserva na chegada:** a inspeção que libera o material retido, e as entradas que não são nota (entrada manual, devolução, transferência, ajuste, retorno de terceiro) — o material fica disponível para quem chegar primeiro.
+
 ### 9.4 Consumo contra reserva
 
 Esta é a regra que faz a reserva ser útil em vez de virar armadilha. Uma saída pode **citar a reserva**; nesse caso ela consome o que já estava separado para ela e **não é barrada pelo disponível** — o disponível justamente exclui o reservado.
@@ -1776,7 +1822,9 @@ Liberar devolve ao disponível o que a reserva ainda segura. Pode ser **total** 
 - **A tela exige o motivo** antes de enviar (*"Informe o motivo da liberação"*), e ele fica gravado junto com **quem liberou e quando** — na própria reserva e no livro.
 - Ao liberar uma reserva nascida de requisição, a tela avisa antes: *"Esta reserva pertence à requisição #N. Liberar devolve o saldo ao disponível geral e a entrega dessa requisição volta a disputar estoque com as demais."*
 
-**Liberação automática:** **cancelar** ou **excluir** uma requisição solta todas as reservas ativas que ela criou. Isso é essencial porque a expiração é opcional (9.7) — sem essa liberação, o saldo ficaria preso a uma requisição morta para sempre.
+**Liberação automática:** **cancelar**, **excluir**, **encerrar** (**Encerrar Requisição**) ou **rejeitar a liberação por valor** de uma requisição solta todas as reservas ativas dela. Isso é essencial porque a expiração é opcional (9.7) — sem essa liberação, o saldo ficaria preso a uma requisição morta para sempre. No livro, o motivo diz qual foi o gesto (por exemplo, *"Liberação por encerramento de requisição"*, *"Liberação por rejeição de valor da requisição"*).
+
+**Liberar à mão não muda o status da requisição.** Liberar pela tela **Reservas** a reserva de uma requisição **Totalmente Reservada** deixa a requisição com esse status mesmo sem nada seguro — o rótulo só se corrige na próxima nota do material (9.3b) ou na separação. Antes de liberar à mão, considere que a requisição continuará parecendo reservada; a **Fila de separação** mostra o saldo de verdade.
 
 ### 9.7 Expiração
 
@@ -1786,6 +1834,7 @@ A expiração é **opcional** e roda por acionamento — o botão **Processar ex
 - O vencimento é **no dia seguinte** à data: a data gravada é o último dia válido do hold.
 - Ao expirar, o saldo volta ao disponível e a reserva fica **EXPIRADA** — e não *Liberada*. "Venceu sozinha" e "alguém soltou" são fatos diferentes no relatório.
 - O processamento é seguro para repetir: rodar duas vezes não devolve saldo em dobro, e uma reserva problemática não interrompe o processamento das demais.
+- Como na liberação à mão (9.6), a expiração **não muda o status** da requisição dona da reserva.
 
 ---
 
@@ -1808,7 +1857,7 @@ Os avisos por situação são estes:
 | Aguard. Compra | *"Sem saldo disponível — há uma solicitação de compra em andamento para os materiais desta requisição."* |
 | Aguard. Estoque ou Aguard. Compra, **com saldo** para algum item ainda não separado | *"Chegou material para esta requisição — já dá para separar. O material ainda não está reservado para ela."*, seguido de *"Dá para separar agora: ⟨quantidade⟩ ⟨unidade⟩ de ⟨material⟩"* (um por material) e de *"O saldo é compartilhado: enquanto não for separado, outra requisição pode separá-lo antes."* |
 
-O aviso de "chegou" aparece no lugar do de "sem saldo" e não muda o status. A quantidade é o menor entre o que falta separar e o saldo disponível; itens do mesmo material dividem esse saldo entre si (4 que chegaram não aparecem como 4 para cada item).
+O aviso de "chegou" aparece no lugar do de "sem saldo" e não muda o status. Quando o material chega pela **nota de compra**, ele em geral já foi reservado para quem esperava (9.3b) e a requisição já está *Parcialmente/Totalmente Reservada* — o aviso de "chegou" é o caso do material que chegou por outra porta (ajuste, devolução, inspeção liberada) ou cuja reserva não aconteceu. A quantidade é o menor entre o que falta separar e o saldo disponível; itens do mesmo material dividem esse saldo entre si (4 que chegaram não aparecem como 4 para cada item).
 
 Os botões, na ordem do fluxo: **Iniciar Separação** (que vira **Ajustar Separação** quando a separação já começou), **Conferir separação**, **Liberar para Retirada** — que só aparece se algum item tem quantidade separada — e **Confirmar Entrega e Baixar Estoque**, que entrega em um clique; ao lado dele, **Entregar escolhendo de onde sai…** abre a janela de entrega com o campo **Sai de** por item (7.5). Sem nada separado, no lugar do botão de entrega a tela informa: *"Nenhuma quantidade separada disponível para entrega no momento."*
 
@@ -2478,8 +2527,13 @@ recusado com:
 for interrompido no meio (queda do servidor), ela se desfaz sozinha em 10 minutos e a nota pode ser processada de
 novo — o que já tinha entrado não entra duas vezes.
 
-**Depois de processar, dois avisos por e-mail podem sair** — ao solicitante de cada requisição que esperava o material,
-e o aviso da nota para uma lista; as regras estão em 21c.1.
+**Ao terminar de processar, a nota reserva o que chegou para quem esperava** — as requisições que aguardavam o
+material ficam com o que entrou livre, na ordem da fila de separação, e passam a *Parcialmente/Totalmente Reservada*
+(9.3b). Isso vale para **Processar Nota** e para o **Aprovar** direto; se a reserva falhar, a nota fica processada do
+mesmo jeito.
+
+**Depois de processar, dois avisos por e-mail podem sair** — ao solicitante de cada requisição que esperava o material
+(dizendo quanto ficou reservado para ela), e o aviso da nota para uma lista; as regras estão em 21c.1.
 
 ### 14.2b Conferir a quantidade que chegou
 
@@ -5299,12 +5353,21 @@ falha do servidor de e-mail nunca trava uma movimentação, uma devolução ou u
   e-mail do cadastro do usuário; usuário inativo ou sem e-mail não recebe (sem erro). **Ligado de fábrica**, pela chave
   *"Avisar o Solicitante quando o Material Chega"* (21c.6). Assunto *"[Almoxarifado] Chegou material da sua requisição
   REQ-…"*; o corpo diz a requisição, a situação dela, o recebimento e, por material, quanto entrou e quanto está
-  pendente na requisição, e termina com *"O material ainda não está reservado para a sua requisição — a separação é
-  feita pelo almoxarifado."* — a requisição **não** muda de situação sozinha (continua, por exemplo, *Aguardando
-  compra*). O link abre a lista **Minhas Requisições** do módulo de onde a requisição saiu (Comercial, Compras,
-  Fábrica, …); sem módulo de origem, a lista de requisições do almoxarifado. Material que entrou **retido para
-  inspeção** não gera este aviso — ele ainda pode ser reprovado. Uma requisição que continua esperando recebe um aviso
-  **a cada nota** daquele material.
+  pendente na requisição. Antes do aviso, a nota já reservou o que chegou para quem esperava (9.3b), e o e-mail conta
+  isso: cada material que ganhou reserva para esta requisição diz *"⟨cód⟩ — ⟨nome⟩: entrou ⟨q⟩ ⟨un⟩ (pendente na
+  requisição: ⟨p⟩ ⟨un⟩; reservado para a sua requisição: ⟨r⟩ ⟨un⟩)"*, e a frase final é uma de três:
+  - todo material listado ganhou reserva — *"O material indicado como reservado fica guardado para a sua requisição —
+    outra requisição não pode levá-lo. A separação é feita pelo almoxarifado."*;
+  - parte ganhou, parte não — *"Só o material indicado como reservado fica guardado para a sua requisição; o restante
+    ainda não está reservado — a separação é feita pelo almoxarifado."*;
+  - nenhum ganhou — *"O material ainda não está reservado para a sua requisição — a separação é feita pelo
+    almoxarifado."*
+  O e-mail só lista os materiais que ganharam reserva para esta requisição ou que ainda têm saldo livre; quem esperava
+  e não ganhou nada — com o saldo todo reservado a outras requisições — **não** recebe o aviso daquela nota (será
+  avisado na próxima). O link abre a lista **Minhas Requisições** do módulo de onde a requisição saiu (Comercial,
+  Compras, Fábrica, …); sem módulo de origem, a lista de requisições do almoxarifado. Material que entrou **retido
+  para inspeção** não gera este aviso — ele ainda pode ser reprovado. Uma requisição que continua esperando recebe um
+  aviso **a cada nota** daquele material.
 - **Entrada de recebimento** (aviso da nota) — um e-mail **por nota** que deu entrada no estoque, com o recebimento, a
   nota fiscal, o fornecedor, o pedido de compra (quando há), data/hora, quem processou, cada item que entrou com a
   quantidade, o endereço e *"disponível"* ou *"retido para inspeção"*, e as requisições que aguardavam aqueles
