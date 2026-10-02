@@ -426,7 +426,16 @@ fechamento.
   passa **sem edição**. Controles positivos: (1) `criarReserva` lendo `data.recebimento_id` → (a) cai; (2) tirar a
   urgência de `compararPrioridade` → (c) e um teste da 64 caem; (3) carga fria `node -e` de `requisitionService` e de
   `stockService` sem ciclo.
-- [ ] **T1 (tronco) — a reserva na chegada.** `reservaChegadaService.reservarChegadaParaQuemEspera` +
+- [x] **T1 (tronco) — a reserva na chegada.** — **FEITA `63e377e1`** (teste novo 23/23; 10 controles positivos,
+  cada um derrubando a asserção certa — teto global, ordem por criação, sem releitura, falta sem o hold, gancho sem try,
+  EM_SEPARACAO fora, sem pulo de valor, sem pulo do dono, sem desfazer o excesso, recálculo sem a máquina; suíte
+  277/277 + 44 + 4 + 3 + 5). **Divergências:** (a) a produção do aviso (contrato da T2) entrou NESTE commit — com o
+  gancho e sem ela caíram 7 asserções da 70 (`recebimentoAvisoEntradaIntegracao` A/B e `recebimentoAvisoEntradaRotas`
+  RN-01/RN-02), a Surpresa 1 medida; nenhum commit fica vermelho. (b) asserções revogadas à vista:
+  `requisicaoEsperaCompraIntegracao` jornada 2 e 3 (RN-08 da 73) e `recebimentoAvisoEntradaIntegracao` (B) :221-228 e
+  :257 (D4 da 70); nenhum outro teste caiu. (c) RN-14 revista pela Fase 2: a regra do dono espelha a ENTREGA, que só
+  leva `projeto_id` (a tabela de requisições não tem `os_id`). (d) RN-08: o controle "sem a régua idempotente" só
+  derruba com saldo sobrando (o teste foi montado assim) — com disponível 0 o teto já protegia. `reservaChegadaService.reservarChegadaParaQuemEspera` +
   `recalcularStatusDeReserva` + o gancho nos dois `concluir*`, pelo contrato. Teste novo
   `server/tests/api/recebimentoReservaChegada.api.test.js`, **pelas rotas** (nota pelas seis portas do recebimento, e o
   ramo direto `POST /recebimentos/:id/aprovar`): RN-01, RN-02, RN-03, RN-04, RN-05, RN-06, RN-07 (as duas portas),
@@ -438,7 +447,9 @@ fechamento.
   nota (usar o disponível global) → RN-04 cai; (2) ordem só por `created_at` → RN-02 cai; (3) sem a releitura → RN-09 cai com hold órfão; (4)
   sem a régua idempotente (não descontar o hold) → RN-08 cai com reserva em dobro; (5) sem o `try` do gancho → RN-07
   cai com 500; (6) `STATUS_QUE_ESPERAM` com `EM_SEPARACAO` → a negativa da RN-06 cai.
-- [ ] **T2 (tronco) — o e-mail diz a verdade.** `receiptNotificationService` pelo contrato. Testes: em
+- [x] **T2 (tronco) — o e-mail diz a verdade.** — **FEITA**: produção em `63e377e1` (ver T1), testes de rota
+  `21f9306b` (5/5) + L0/L1/L2 da função pura em `recebimentoAvisoEntrada` (`:144`/`:318` sem edição). Controles: hold
+  desta nota descontado → 4 caem; sem filtro das linhas → R4 recebe; L1 trocada → cai (rota e pura). Suíte 278/278. `receiptNotificationService` pelo contrato. Testes: em
   `recebimentoAvisoEntrada.api.test.js` (função pura) as três frases L0/L1/L2 e a linha com *"reservado para a sua
   requisição"* — as duas asserções de `:144,:318` **continuam** (são o caso L0) sem edição; teste novo
   `server/tests/api/recebimentoReservaChegadaAviso.api.test.js` pelas rotas com `usuarios`: RN-10 inteira (L1 para quem
