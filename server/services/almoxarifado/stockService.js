@@ -2897,11 +2897,14 @@ async function mensagemEstornoSemDisponivel(db, mov) {
   }
 }
 
+// Etapa 76 (Fase 5): o recalculo do estorno roda SOB A TRAVA por material (`recalcularStatusSobTrava`), como o
+// das portas da 76 e o da 74/75 - fora dela, uma nota do mesmo material que reserva no meio deixava a leitura
+// velha ser gravada (sonda76f). Sem deadlock: o estorno nunca roda dentro de `comLockDoMaterial`.
 async function recalcularStatusAposEstorno(db, requisicaoIds) {
   for (const id of requisicaoIds || []) {
     try {
       // eslint-disable-next-line global-require, no-await-in-loop
-      await require('./reservaChegadaService').recalcularStatusDeReserva(db, id);
+      await require('./reservaChegadaService').recalcularStatusSobTrava(db, id);
     } catch (e) {
       console.warn(`[almoxarifado] recalculo do status apos estorno falhou (requisicao ${id}): ${e.message}`);
     }

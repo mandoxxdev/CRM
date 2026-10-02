@@ -179,12 +179,20 @@ async function reservarChegadaParaQuemEspera(db, user, recebimentoId) {
   return resultado;
 }
 
-/** O status das requisições tocadas acompanha (D5 da 74); cada uma no seu try. */
+/**
+ * O status das requisições tocadas acompanha (D5 da 74); cada uma no seu try.
+ * Etapa 76 (Fase 5): SOB A TRAVA (`recalcularStatusSobTrava`), pelo objeto do módulo. Medido na revisão
+ * (sonda76f-tocadas): este recálculo roda no `finally`, DEPOIS de a distribuição soltar a trava; fora
+ * dela, a nota lia hold 8, o operador liberava a reserva antiga pela tela (hold 4, o recálculo da rota lia
+ * PARCIALMENTE == atual e não gravava) e o UPDATE atrasado da nota gravava TOTALMENTE_RESERVADA com metade.
+ * Sem deadlock: quem chama já saiu de `distribuirParaQuemEspera` (a trava não é reentrante — nunca chamar
+ * isto de dentro de `comLockDoMaterial`).
+ */
 async function recalcularTocadas(db, acc, rotulos) {
   for (const id of acc.tocadas) {
     try {
       // eslint-disable-next-line no-await-in-loop
-      const mudou = await recalcularStatusDeReserva(db, id);
+      const mudou = await module.exports.recalcularStatusSobTrava(db, id);
       if (mudou) acc.resultado.status.push(mudou);
     } catch (e) {
       console.warn(rotulos.falhaRecalculo(id, e));
