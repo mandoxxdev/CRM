@@ -384,7 +384,7 @@ Ordem topológica: **T0 → T1 → T2** (tronco, sequenciais, um executor por ve
   literal de hoje; `AGUARDANDO_ESTOQUE` idem; item **já todo separado** com saldo > 0 → literal de hoje (não é "pode
   separar"); `TOTALMENTE_RESERVADA` inalterado. Controles positivos: literal trocada → cai; condição sem o pendente → o
   cenário "já todo separado" cai. Suíte do cliente e `CI=true npx react-scripts build`.
-- [x] **T4 — feita em (commit desta task; hash no fechamento).** `requisicaoEsperaCompraIntegracao.api.test.js`, 6/6, tudo
+- [x] **T4 — feita em `7d55a1dd`.** `requisicaoEsperaCompraIntegracao.api.test.js`, 6/6, tudo
   pelas rotas: [jornada 1] compra VINCULADA (verificar-minimos + pedido) → R1 `/aprovar`, R2 `/aprovar-valor` (liberação
   ligada só na chamada), R3 `/enviar` do rascunho com a automática ligada → as três `AGUARDANDO_COMPRA`, resposta =
   banco, sem reserva; [jornada 2] nota de 4 de 10 pelas seis portas → status não muda, a fila mostra `SEPARAR` com
