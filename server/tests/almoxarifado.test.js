@@ -46,7 +46,12 @@ async function setupDb() {
     -- coluna nova precisa ser declarada aqui também — senão as leituras auditadas na Task 1
     -- (purchaseService, reportService, alertService) estouram com "no such column".
     -- NULL = material nosso, igual à produção.
-    proprietario_cliente_id INTEGER
+    proprietario_cliente_id INTEGER,
+    -- Etapa 69 (G79): o schema real tem localizacao (schema.js:366) e
+    -- alertService.verificarAlertaPorMaterialId a le. Sem ela, o alerta pos-movimentacao
+    -- estourava "no such column" dentro do try do motor (que so faz console.warn) e a suite
+    -- inteira passava sem nunca exercita-lo — 19 avisos engolidos.
+    localizacao TEXT
   )`);
   await dbRun(db, `CREATE TABLE movimentacoes_almoxarifado (
     id INTEGER PRIMARY KEY AUTOINCREMENT, material_id INTEGER, tipo TEXT, quantidade REAL,
@@ -112,8 +117,26 @@ async function criarRequisicaoPendente(db, { numero, updatedOffset = '-25 hours'
   return dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [reqRes.lastID]);
 }
 
+// Etapa 69 (G79, RN-14): espiao de console. O motor engole falha do alerta pos-movimentacao num
+// try que so faz console.warn, e o recebimento faz o mesmo com o fechamento do pedido — entao uma
+// fixture com coluna faltando deixava a suite verde sem exercitar esses caminhos (19 avisos
+// "no such column" medidos). Qualquer aviso dessa classe agora derruba a suite no fim.
+const AVISOS_PROIBIDOS = [/\[almoxarifado-alertas\] Falha/, /no such column/];
+const avisosCapturados = [];
+function espiarConsole() {
+  for (const metodo of ['warn', 'error']) {
+    const original = console[metodo].bind(console);
+    console[metodo] = (...args) => {
+      const texto = args.map((a) => (a instanceof Error ? a.message : String(a))).join(' ');
+      if (AVISOS_PROIBIDOS.some((re) => re.test(texto))) avisosCapturados.push(texto);
+      original(...args);
+    };
+  }
+}
+
 async function run() {
   console.log('\n🧪 Testes Almoxarifado v3\n');
+  espiarConsole();
   const db = await setupDb();
 
   await test('Entrada de material aumenta saldo', async () => {
@@ -245,7 +268,10 @@ async function run() {
       id INTEGER PRIMARY KEY AUTOINCREMENT, razao_social TEXT, cnpj TEXT, status TEXT DEFAULT 'ativo'
     )`);
     await dbRun(db, `CREATE TABLE IF NOT EXISTS pedidos_compra (
-      id INTEGER PRIMARY KEY AUTOINCREMENT, numero TEXT UNIQUE, fornecedor_id INTEGER, valor_total REAL DEFAULT 0
+      id INTEGER PRIMARY KEY AUTOINCREMENT, numero TEXT UNIQUE, fornecedor_id INTEGER, valor_total REAL DEFAULT 0,
+      -- Etapa 69 (G79): status/updated_at como no index.js — sem eles fecharPedidosCompletos
+      -- estourava "no such column: status" e o fechamento automatico do pedido nunca rodava aqui.
+      status TEXT DEFAULT 'pendente', updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
     const forn = await dbRun(db, `INSERT INTO fornecedores (razao_social, cnpj) VALUES ('Forn Test', '12.345.678/0001-90')`);
     const ped = await dbRun(db, `INSERT INTO pedidos_compra (numero, fornecedor_id, valor_total) VALUES ('PC-001', ?, 500)`, [forn.lastID]);
@@ -482,6 +508,39 @@ async function run() {
     assert.strictEqual(r2.deveAlertar, true);
   });
 
+  await test('Alerta pós-movimentação roda no motor (zerado enfileira)', async () => {
+    // Etapa 69 (G79, RN-14). Por que o ZERADO e nao o minimo: o caminho do minimo
+    // (processarAlertaMaterial) so grava em alertas_estoque_material_almoxarifado DEPOIS de um
+    // envio real (marcarAlertaEnviado) — sem SMTP, cruzar o minimo nao deixa rastro nenhum. O
+    // zerado (processarAlertaZerado/avaliarZerado, alertService.js:631/:560) e para material SEM
+    // minimo, so ENFILEIRA (nunca envia) e grava estado_zerado — efeito observavel sem rede.
+    // A unica porta para ele aqui e o hook do motor (stockService, verificarAlertaPorMaterialId
+    // com saldo_anterior) — este teste nao chama o alertService direto.
+    const id = await criarMaterial(db, 'T-ALERT-ZERO', 10);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_minima = 0 WHERE id = ?', [id]);
+    await dbRun(db, `INSERT OR REPLACE INTO configuracoes_almoxarifado (chave, valor) VALUES ('alertas_estoque_emails', 'almox@test.com')`);
+    try {
+      await stockService.registrarMovimentacao(db, userAlmox, {
+        material_id: id, tipo: 'SAIDA_PRODUCAO', quantidade: 10, os_id: 1, motivo: 'Zera para o alerta',
+      });
+      const m = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [id]);
+      assert.strictEqual(m.quantidade_atual, 0);
+      const estado = await dbGet(db,
+        'SELECT estado_zerado, ultimo_alerta_zerado FROM alertas_estoque_material_almoxarifado WHERE material_id = ?', [id]);
+      assert.ok(estado, 'o hook do motor deveria ter gravado o estado do material');
+      assert.strictEqual(estado.estado_zerado, 'ZERADO');
+      assert.ok(estado.ultimo_alerta_zerado, 'a zeragem observada (saldo_anterior 10) deveria carimbar o alerta');
+      const fila = await dbAll(db,
+        `SELECT payload, destinatarios FROM fila_notificacoes_almoxarifado WHERE evento = 'ESTOQUE_ZERADO'`);
+      const doMaterial = fila.filter((f) => JSON.parse(f.payload || '{}').material_id === id);
+      assert.strictEqual(doMaterial.length, 1, 'exatamente um aviso de zerado enfileirado para o material');
+      assert.deepStrictEqual(JSON.parse(doMaterial[0].destinatarios), ['almox@test.com']);
+    } finally {
+      // Sem destinatario o resto da suite volta a nao enfileirar nem tentar SMTP no minimo.
+      await dbRun(db, `DELETE FROM configuracoes_almoxarifado WHERE chave = 'alertas_estoque_emails'`);
+    }
+  });
+
   await test('Mapa — material com localizacao_padrao_id aparece na localização', async () => {
     const locRes = await dbRun(db, `INSERT INTO localizacoes_almoxarifado (codigo, descricao, ativo) VALUES ('C-01', 'Corredor C', 1)`);
     const locId = locRes.lastID;
@@ -712,6 +771,11 @@ async function run() {
     assert.strictEqual(sim, true);
     assert.strictEqual(nao, false);
     assert.strictEqual(admin, true);
+  });
+
+  await test('Espião — nenhum aviso de coluna faltando ou de alerta pós-movimentação falho', async () => {
+    assert.strictEqual(avisosCapturados.length, 0,
+      `${avisosCapturados.length} aviso(s) proibido(s); o primeiro: ${avisosCapturados[0]}`);
   });
 
   console.log(`\n📊 Resultado: ${passed} passou, ${failed} falhou\n`);
