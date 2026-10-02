@@ -490,11 +490,36 @@ async function relatorioEPIPorColaborador(db) {
 // deixava a solicitacao vinculada invisivel na tela inteira (Fase 2). Renomear tocaria o
 // dispatcher de relatorios (routes/almoxarifado/extended.js) a toa; o nome ficou desatualizado
 // de proposito.
+//
+// Etapa 72, T3 (RN-10): com a T1 a VINCULADO nao fecha mais na nota parcial, entao a aba precisa
+// dizer quanto ja chegou. Cada linha ganha tres campos ADITIVOS, lidos da FONTE UNICA por
+// solicitacao (`purchaseService.posicaoDasSolicitacoes`, a mesma que a sugestao soma) — nunca uma
+// terceira conta aqui: `quantidade - recebido do par` por linha diverge da sugestao quando ha duas
+// solicitacoes no mesmo par (tests/api/relatorioSolicitacoesChegou.api.test.js, teste 2).
+//   - recebido_no_pedido = recebido_atribuido (o recebido do par RATEADO em ordem de id; null em
+//     PENDENTE ou par sem linha). Nao e o recebido do par inteiro (Fase 2 do plano da 72);
+//   - a_caminho, pedido_encerrado: como a fonte devolve.
+// Export e tela de Relatorios nao mudam: projetam `colunas` do reportRegistry (declarado no plano).
+// require tardio: purchaseService nao importa este arquivo hoje, mas o par de services nao deve
+// virar ciclo por acidente.
 async function relatorioSolicitacoesCompraPendentes(db) {
-  return dbAll(db, `SELECT s.*, m.nome as material_nome, m.codigo as material_codigo
+  const linhas = await dbAll(db, `SELECT s.*, m.nome as material_nome, m.codigo as material_codigo
     FROM solicitacoes_compra_almoxarifado s
     JOIN materiais_almoxarifado m ON s.material_id = m.id
     WHERE s.status IN ('PENDENTE','VINCULADO') ORDER BY s.created_at`);
+  if (!linhas.length) return linhas;
+  const { posicaoDasSolicitacoes } = require('./purchaseService');
+  const posicoes = new Map((await posicaoDasSolicitacoes(db, { solicitacao_ids: linhas.map((l) => l.id) }))
+    .map((p) => [p.solicitacao_id, p]));
+  return linhas.map((l) => {
+    const p = posicoes.get(l.id);
+    return {
+      ...l,
+      recebido_no_pedido: p ? p.recebido_atribuido : null,
+      a_caminho: p ? p.a_caminho : null,
+      pedido_encerrado: p ? p.pedido_encerrado : false,
+    };
+  });
 }
 
 /**

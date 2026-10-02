@@ -1103,3 +1103,57 @@ describe('ReposicaoAlmoxarifado — aba Solicitações — Gerar pedido (Etapa 3
     expect(botao('Gerar pedido', linhaMaterial('ALM-0907'))).toBeTruthy();
   });
 });
+
+// Etapa 72, T3 (RN-10) — com a T1 a VINCULADO nao fecha mais na nota parcial; a aba diz quanto
+// chegou. O relatorio traz `recebido_no_pedido` (= recebido ATRIBUIDO a esta solicitacao, rateado
+// no par — nao o recebido do pedido inteiro), `a_caminho` e `pedido_encerrado`.
+describe('ReposicaoAlmoxarifado — aba Solicitações — quanto chegou (Etapa 72)', () => {
+  const SOLICITACOES_CHEGOU = [
+    { id: 71, material_id: 71, material_codigo: 'ALM-0071', material_nome: 'Pendente sem pedido',
+      quantidade: 10, motivo: 'PONTO_REPOSICAO', status: 'PENDENTE', created_at: '2026-09-20 10:00:00',
+      recebido_no_pedido: null, a_caminho: 10, pedido_encerrado: false },
+    { id: 72, material_id: 72, material_codigo: 'ALM-0072', material_nome: 'Vinculada sem nota',
+      quantidade: 10, motivo: 'PONTO_REPOSICAO', status: 'VINCULADO', created_at: '2026-09-20 10:00:00',
+      recebido_no_pedido: 0, a_caminho: 10, pedido_encerrado: false },
+    { id: 73, material_id: 73, material_codigo: 'ALM-0073', material_nome: 'Vinculada parcial',
+      quantidade: 10, motivo: 'PONTO_REPOSICAO', status: 'VINCULADO', created_at: '2026-09-20 10:00:00',
+      recebido_no_pedido: 4.5, a_caminho: 5.5, pedido_encerrado: false },
+    { id: 74, material_id: 74, material_codigo: 'ALM-0074', material_nome: 'Vinculada encerrada',
+      quantidade: 10, motivo: 'PONTO_REPOSICAO', status: 'VINCULADO', created_at: '2026-09-20 10:00:00',
+      recebido_no_pedido: 4, a_caminho: 0, pedido_encerrado: true },
+  ];
+
+  const abrir = async () => {
+    mockarApi({ solicitacoes: SOLICITACOES_CHEGOU });
+    await renderizar();
+    await clicar(botao('Solicitações'));
+  };
+
+  test('VINCULADO com chegada parcial mostra "chegou X de Y" (formatNum)', async () => {
+    await abrir();
+    expect(linhaMaterial('ALM-0073').textContent).toContain('chegou 4,5 de 10');
+    expect(linhaMaterial('ALM-0073').textContent).not.toContain('pedido encerrado');
+  });
+
+  test('pedido encerrado mostra o aviso no lugar do "chegou"', async () => {
+    await abrir();
+    expect(linhaMaterial('ALM-0074').textContent).toContain('pedido encerrado — nada a caminho');
+    expect(linhaMaterial('ALM-0074').textContent).not.toContain('chegou');
+  });
+
+  test('PENDENTE e VINCULADO sem nota nao mostram nenhum dos dois', async () => {
+    await abrir();
+    for (const codigo of ['ALM-0071', 'ALM-0072']) {
+      expect(linhaMaterial(codigo).textContent).not.toContain('chegou');
+      expect(linhaMaterial(codigo).textContent).not.toContain('pedido encerrado');
+    }
+  });
+
+  test('payload antigo (sem os campos novos) nao mostra nada nem explode', async () => {
+    await renderizar();
+    await clicar(botao('Solicitações'));
+    expect(texto()).not.toContain('chegou');
+    expect(texto()).not.toContain('pedido encerrado');
+    expect(texto()).not.toMatch(/undefined|NaN/);
+  });
+});

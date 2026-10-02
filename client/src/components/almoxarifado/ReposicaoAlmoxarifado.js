@@ -835,10 +835,22 @@ const ReposicaoAlmoxarifado = () => {
                           <td>
                             {/* RN-06: só PENDENTE/VINCULADO aparecem aqui — o relatório
                                 (E11, `solicitacoes-compra`) já lista SÓ o pipeline aberto;
-                                RECEBIDA/CANCELADA somem da lista por conta própria. */}
+                                RECEBIDA/CANCELADA somem da lista por conta própria.
+                                Etapa 72: a nota PARCIAL não fecha mais a solicitação — ela
+                                fica aqui como VINCULADO até o material dela chegar, e a
+                                linha diz quanto já chegou. `recebido_no_pedido` é o recebido
+                                ATRIBUÍDO a esta solicitação (rateado no par), não o do pedido
+                                inteiro. Pedido encerrado não traz mais nada (RN-06). */}
                             <span className={`almox-badge almox-badge-${s.status === 'VINCULADO' ? 'ok' : 'ajuste'}`}>
                               {s.status}
                             </span>
+                            {s.status === 'VINCULADO' && (s.pedido_encerrado ? (
+                              <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>pedido encerrado — nada a caminho</div>
+                            ) : Number(s.recebido_no_pedido) > 0 ? (
+                              <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>
+                                chegou {formatNum(s.recebido_no_pedido)} de {formatNum(s.quantidade)}
+                              </div>
+                            ) : null)}
                           </td>
                           <td>{formatData(s.created_at)}</td>
                           <td>

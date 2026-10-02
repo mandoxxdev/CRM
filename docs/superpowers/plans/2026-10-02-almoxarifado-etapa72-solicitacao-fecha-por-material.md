@@ -419,7 +419,16 @@ T2); **T4** (integração) depois de T2 e T3; **T5** fechamento. Executores de g
   -n "deepStrictEqual" tests/api/pedidoReabre*.js`. Controle positivo: (a) não chamar o gancho → RN-08; (b) reabrir
   sem olhar o pedido encerrado → negativa do `cancelado`; (c) reabrir sem a condição → negativa do "outra nota já cobria";
   (d) `throw` fora do try → RN-09.
-- [ ] **T3 (galho, backend do relatório + cliente) — a aba mostra quanto chegou.** Os três campos no relatório (consumindo
+- [x] **T3 (galho, backend do relatório + cliente) — a aba mostra quanto chegou.** *(feita — hash no commit seguinte
+  (o próprio commit da T3 marca isto). `reportService.relatorioSolicitacoesCompraPendentes` lê
+  `posicaoDasSolicitacoes({ solicitacao_ids })` e põe por linha `recebido_no_pedido` (= `recebido_atribuido`),
+  `a_caminho`, `pedido_encerrado`; export/tela de Relatórios inalterados (projetam `colunas` do registro).
+  `relatorioSolicitacoesChegou.api.test.js` 4/4 — PENDENTE, VINCULADO sem nota, duas solicitações 6+4 com nota de 7
+  (relatório [6, 1] e Σ `a_caminho` == sugestão), pedido cancelado depois da nota de 4. Cliente: 4 testes novos no
+  `ReposicaoAlmoxarifado.test.js` (48/48), suíte 1145/1145, `CI=true` build ok; test:api 269/269. Controles
+  positivos: terceira conta no `a_caminho` → (2) cai; recebido do par no lugar do atribuído → (2); sem
+  `pedido_encerrado` → (3); literais trocadas → cada uma cai; sem o `> 0` → 2 caem; encerrado ignorado → 1 cai.)*
+  Os três campos no relatório (consumindo
   a fonte da T1, nunca uma terceira conta) + os dois textos na aba. Testes: em `reposicaoJornada.api.test.js` **ou**
   arquivo novo `relatorioSolicitacoesChegou.api.test.js` (preferir novo; o da jornada é da 11), os três campos em
   `PENDENTE`, `VINCULADO` parcial, `VINCULADO` com pedido `cancelado`; no `ReposicaoAlmoxarifado.test.js`, as duas literais
