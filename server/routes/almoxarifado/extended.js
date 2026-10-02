@@ -935,6 +935,10 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
 
   app.post('/api/almoxarifado/reservas/:id/liberar', auth, requirePermission('reservar'), async (req, res) => {
     try {
+      // Etapa 77 (T0, C137): reserva de origem REQUISICAO so sai por quem pediu a requisicao ou por
+      // `liberar_reserva_requisicao` (ADMINISTRADOR, ALMOXARIFE). Antes do estado: o nao-dono toma 403
+      // mesmo com a reserva ja liberada. Manual e inexistente passam direto (404/400 sao do motor).
+      await reservationService.assertPodeLiberarReserva(db, req.user, req.params.id);
       const result = await stockService.liberarReserva(db, req.user, req.params.id, req.body.quantidade, {
         motivo: req.body.motivo || req.body.motivo_liberacao || null,
       });
@@ -947,7 +951,12 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
         console.warn(`[almoxarifado-reservas] recalculo do status apos liberacao manual da reserva falhou (reserva ${result.reserva_id}): ${e.message}`);
       }
       res.json(result);
-    } catch (e) { handleError(res, e); }
+    } catch (e) {
+      // O 403 da Etapa 77 sai com `acao` e SEM `perfil` (molde do /rejeitar): com `perfil`, o
+      // interceptor do axios trocaria a regra ("so quem pediu...") por "Solicite acesso".
+      if (e.acao) return res.status(403).json({ error: e.message, acao: e.acao });
+      handleError(res, e);
+    }
   });
 
   // Transferência entre projetos/OS — troca de dono, sem tocar em saldo. `reservar_outra_os`

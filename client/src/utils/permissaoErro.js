@@ -73,6 +73,11 @@ const ACOES = {
   // de ADMINISTRADOR e QUALIDADE, e a exclusão do COMPRAS é deliberada — ele executa e é cobrado
   // pela fila, então não deve poder limpá-la.
   cancelar_nao_conformidade: 'cancelar não conformidade',
+  // Etapa 77, T0: entra NO MESMO commit que cria a ação em ACAO_PERFIS (permissaoErro.test.js importa
+  // o mapa do servidor). O 403 da rota de liberar SAI SEM `perfil` de propósito (a regra é "só quem
+  // pediu, o almoxarife ou o administrador", não "solicite acesso"), então este rótulo serve ao gate
+  // da tela (`bloquearSeNaoPode`) e ao /minhas-permissoes.
+  liberar_reserva_requisicao: 'liberar a reserva de uma requisição',
 
   // Etapa 30, fix-round da revisao adversarial: QUATRO acoes de ACAO_PERFIS nao tinham rotulo, e
   // tres delas ja tinham call site de UI — o toast mostrava a chave crua ("gerenciar plano

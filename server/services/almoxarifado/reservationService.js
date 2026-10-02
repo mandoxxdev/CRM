@@ -8,6 +8,7 @@
 const { dbAll, dbGet, dbRun } = require('./db');
 const { registrarAuditoria } = require('./audit');
 const stockService = require('./stockService');
+const { can } = require('./permissions');
 
 const CAMPOS_DONO = ['projeto_id', 'os_id', 'os_referencia', 'cliente_id'];
 
@@ -16,12 +17,21 @@ const CAMPOS_DONO = ['projeto_id', 'os_id', 'os_referencia', 'cliente_id'];
  * reserva ainda segura, e vem do banco em vez de ser recalculado no front para não haver duas
  * definições do mesmo número.
  */
+//
+// Etapa 77 (T0, D7/B413): duas chaves aditivas para a tela saber DE QUEM e a reserva de requisicao —
+// `requisicao_numero` (a tela mostrava o id, Surpresa 6 da 76) e `requisicao_solicitante_id` (quem
+// PEDIU a requisicao; `null` na reserva manual). ATENCAO: o `solicitante_id` que vem pelo `r.*` NAO
+// e o dono — na reserva de origem REQUISICAO ele e QUEM APROVOU (o `user` da aprovacao), e na da
+// chegada/inspecao e a Qualidade/o sistema. Quem decide se pode liberar e `requisicao_solicitante_id`.
+// O nome do solicitante fica de fora de proposito: a tela nao precisa e a listagem nao tem gate de perfil.
 async function listarReservas(db, filters = {}) {
   let sql = `SELECT r.*,
       m.codigo as material_codigo, m.nome as material_nome, m.unidade as material_unidade,
-      (r.quantidade - COALESCE(r.quantidade_utilizada, 0)) as saldo
+      (r.quantidade - COALESCE(r.quantidade_utilizada, 0)) as saldo,
+      rq.numero as requisicao_numero, rq.solicitante_id as requisicao_solicitante_id
     FROM reservas_material_almoxarifado r
     JOIN materiais_almoxarifado m ON r.material_id = m.id
+    LEFT JOIN requisicoes_almoxarifado rq ON rq.id = r.requisicao_id
     WHERE 1=1`;
   const params = [];
   if (filters.status) { sql += ' AND r.status = ?'; params.push(filters.status); }
@@ -221,4 +231,40 @@ async function liberarReservasDaRequisicao(db, user, requisicaoId, motivo, opcoe
   return { liberadas, erros };
 }
 
-module.exports = { listarReservas, transferirReserva, processarExpiracao, liberarReservasDaRequisicao };
+/**
+ * Etapa 77 (T0, C137, D3/B409 + D5/B411) — quem pode liberar A MAO uma reserva de REQUISICAO.
+ *
+ * Chamada pela ROTA `POST /reservas/:id/liberar`, depois do `requirePermission('reservar')` e antes
+ * de `stockService.liberarReserva`. NAO mora no motor de proposito: `liberarReserva` tem oito
+ * chamadores de SISTEMA (cancelar, excluir, encerrar, rejeitar-valor, expiracao, desfazer aprovacao
+ * perdedora, desfazer chegada, estorno da entrada), todos legitimos sem dono nem perfil.
+ *
+ * Regra: reserva de origem REQUISICAO so sai por QUEM PEDIU a requisicao
+ * (`requisicoes_almoxarifado.solicitante_id`) ou por quem tem `liberar_reserva_requisicao`
+ * (ADMINISTRADOR, ALMOXARIFE). O dono NAO e `reservas.solicitante_id` — nessa reserva a coluna
+ * guarda QUEM APROVOU (Surpresa 2 da Fase 0); compara-la daria a liberacao ao aprovador e a negaria
+ * a quem pediu.
+ *
+ * Reserva inexistente, manual, ou sem `requisicao_id`: retorna sem barrar — o 404/400 continua sendo
+ * do `liberarReserva`, e a manual segue a regra de hoje (D6/B412). Reserva de requisicao em qualquer
+ * status cai aqui ANTES do estado: o nao-dono toma 403, nao "Reserva liberada nao pode ser liberada".
+ *
+ * O erro carrega `acao` e NAO `perfil` (Fase 2 do plano, molde do /rejeitar): o interceptor do axios
+ * reescreve todo 403 com `acao` E `perfil` para "Solicite acesso a um administrador" — e a regra aqui
+ * e de identidade, nao de acesso que se pede.
+ */
+async function assertPodeLiberarReserva(db, user, reservaId) {
+  const r = await dbGet(db, 'SELECT id, origem, requisicao_id FROM reservas_material_almoxarifado WHERE id = ?', [reservaId]);
+  if (!r) return;
+  if (r.origem !== 'REQUISICAO' || r.requisicao_id == null) return;
+  const q = await dbGet(db, 'SELECT numero, solicitante_id FROM requisicoes_almoxarifado WHERE id = ?', [r.requisicao_id]);
+  if (q && Number(user?.id) === Number(q.solicitante_id)) return;
+  if (can(user, 'liberar_reserva_requisicao')) return;
+  const numero = (q && q.numero) || `#${r.requisicao_id}`;
+  throw Object.assign(
+    new Error(`Sem permissão para liberar a reserva da requisição ${numero}: só quem pediu a requisição, o almoxarife ou o administrador liberam`),
+    { status: 403, acao: 'liberar_reserva_requisicao' },
+  );
+}
+
+module.exports = { listarReservas, transferirReserva, processarExpiracao, liberarReservasDaRequisicao, assertPodeLiberarReserva };

@@ -102,6 +102,16 @@ const ACAO_PERFIS = {
   inspecionar: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE, PERFIS.QUALIDADE],
   reservar: [PERFIS.ADMINISTRADOR, PERFIS.ENGENHARIA, PERFIS.PRODUCAO, PERFIS.ALMOXARIFE],
   reservar_outra_os: [PERFIS.ADMINISTRADOR, PERFIS.GESTOR],
+  // Etapa 77 (T0, C137, D3/B409): liberar a mao (POST /reservas/:id/liberar) uma reserva de origem
+  // REQUISICAO. Ate a 76 bastava `reservar` — e o fallback de getPerfilFromUser cai em PRODUCAO, entao
+  // qualquer usuario sem perfil soltava o material prometido a requisicao de OUTRA pessoa.
+  // Esta acao NAO e a regra inteira: QUEM PEDIU a requisicao tambem libera (desistencia parcial, como o
+  // /rejeitar e o /cancelar ja lhe dao), e essa excecao por IDENTIDADE mora em
+  // reservationService.assertPodeLiberarReserva, chamada pela rota — nao aqui.
+  // GESTOR fica de fora DE PROPOSITO (D4/B410): a rota continua exigindo `reservar`, que ele nao tem;
+  // lista-lo aqui seria configuracao morta (regra da Etapa 36). Ele solta tudo pelo /encerrar.
+  // `reservar` continua inalterado: reserva MANUAL segue liberavel por qualquer `reservar` (D6/B412).
+  liberar_reserva_requisicao: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE],
   inventario: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE, PERFIS.GESTOR],
   configurar: [PERFIS.ADMINISTRADOR],
   // Etapa 27 (C4): cadastrar o PLANO DE INSPECAO (caracteristica, nominal e os dois desvios) e
