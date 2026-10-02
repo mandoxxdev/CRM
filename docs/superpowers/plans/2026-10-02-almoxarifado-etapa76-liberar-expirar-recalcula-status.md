@@ -1,6 +1,7 @@
 # Etapa 76 — liberar à mão ou deixar vencer a reserva de uma requisição recalcula o status dela (C127, feature 07 com a 04)
 
-> Status: **EXECUÇÃO — T0–T3 feitas e commitadas (2026-10-02); falta a T4 (fechamento) e a Fase 5.**
+> Status: **EXECUÇÃO — T0–T3 e a Fase 5 (revisão + fix-round: `eb642441`, `ab5677a4`, `8a70fe52`) feitas e commitadas
+> (2026-10-02); falta a T4 (fechamento). Ver "Fase 5" no fim — a D3 mudou (a janela da 74/75 e do estorno foi fechada).**
 > Origem: "Próxima tarefa detalhada — Etapa 76" de
 > `docs/superpowers/plans/2026-10-02-almoxarifado-etapa75-inspecao-libera-reserva.md:724-768` e o aviso **C127** de
 > `docs/almoxarifado-novidades-por-etapa.md:6786`.
@@ -528,3 +529,53 @@ positivo acima consegue cair, pelo caminho que o plano diz?** Depois, T0.
   sabotar as duas juntas; o portão do RN-07 segura uma vez só; o roteiro do guia diz que a R2 continua
   AGUARDANDO_ESTOQUE com saldo livre (declarado, não defeito); a Surpresa 5 (perfil PRODUCAO libera reserva de
   qualquer requisição, `permissions.js:103`) **vira C no fechamento** (não há C que a nomeie hoje).
+
+## Fase 5 — revisão adversarial + fix-round (2026-10-02)
+
+Sondas da revisão no scratchpad da sessão: `sonda76f-comum.js`, `sonda76f-tocadas.js` (a corrida), `sonda76f-runner.js`
+(+ alvos `-unref`/`-vivo`), `sonda76f-preload-trava.js` (a trava que não solta), `sonda76f-job-e-dupla.js`. Três achados,
+três commits.
+
+**1. IMPORTANTE — o recálculo das tocadas (74/75) corria com a liberação à mão (`eb642441`).** `recalcularTocadas` roda
+no `finally` de `reservarChegadaParaQuemEspera`/`reservarLiberacaoParaQuemEspera`, DEPOIS de a distribuição soltar a
+trava, e chamava `recalcularStatusDeReserva` direto. Caminho determinístico (sonda76f-tocadas, `db.run` segurado): R
+pede 8, aprovada com 4 (PARCIALMENTE); a nota de 4 reserva +4 (hold 8) e o recálculo lê TOTALMENTE; antes do UPDATE dele
+o operador libera r1 pela tela (hold 4) — o recálculo da rota, sob a trava, lê PARCIALMENTE == atual e não grava — e o
+UPDATE atrasado da nota (`WHERE status = 'PARCIALMENTE_RESERVADA'`) passa: **TOTALMENTE_RESERVADA com hold 4 de 8**.
+Correção: `recalcularTocadas` chama `module.exports.recalcularStatusSobTrava`; o estorno
+(`stockService.recalcularStatusAposEstorno`) também — mesma janela. Sem deadlock: os dois rodam fora de
+`comLockDoMaterial` (a trava não é reentrante; o estorno nunca roda dentro dela). Teste novo
+`reservaRecalculoRevisaoFase5` **3/3**: (a) a corrida da sonda (UPDATE segurado, liberação pela rota no meio) →
+`PARCIALMENTE_RESERVADA` hold 4; (b) espião na nota → `[R]`; (c) espião no estorno → `[R]`, R volta a
+`AGUARDANDO_ESTOQUE`. Antes da correção 0/3. Controles: tocadas sem trava → (a) `TOTALMENTE_RESERVADA` e (b) `[]` caem,
+(c) passa; estorno sem trava → só (c) cai. Os 20 arquivos de reserva/chegada/inspeção/NC verdes sem edição.
+**A D3/B398 muda:** "os chamadores da 74/75 e do estorno continuam sem trava — janela declarada (C novo)" deixou de ser
+verdade. **No fechamento (T4): NÃO abrir o C novo "a janela do recálculo sem trava"**; a B398 é transcrita com a nota
+"estendida na Fase 5 a todos os chamadores (`eb642441`)". Descartado: a trava dentro de `recalcularStatusDeReserva`
+(o `recalcularStatusSobTrava` a chama já segurando as travas — esperaria a si mesma).
+
+**2. IMPORTANTE (sistêmico, teste vazio) — o `run-all` aceitava arquivo só pelo exit code (`ab5677a4`).** Um arquivo
+cuja promise prende com timer `.unref()` esvazia o event loop e sai com 0 sem placar → verde. Medido antes: os 290
+arquivos chamam `process.exit` (223 `failed > 0 ? 1 : 0`, 58 `failed ? 1 : 0`, 5 `failed === 0 ? 0 : 1`, 4 `falhou`);
+só 4 (os da 76) tinham rede própria no `exit`; ≥ 4 formatos de placar ("N passed", "N passaram", "N passou"…). Regra
+escolhida (uma só para todos, sem editar arquivo): preload `server/tests/helpers/guardaProcessExit.js` (`node -r`),
+ligado por `RUN_ALL_GUARDA_EXIT=1` e apagado ao carregar (um `fork` do teste herda o `-r` mas não é julgado — provado);
+sem `process.exit` + código 0 → **1** com a literal `[run-all] o arquivo terminou sem chamar process.exit (placar
+ausente)`. Provas: alvo sintético com `unref` → antes exit 0 sem placar, agora falha; `reservaLiberacaoRevisaoFase5`
+real sob `sonda76f-preload-trava` (`SONDA_TRAVA=1`, `NODE_OPTIONS=-r …`) → antes exit 0 sem placar, agora falha;
+alvo com `exitCode = 1` sem `process.exit` continua falha. **A guarda nos 291 arquivos: nenhum achado** — 291/291 com a
+guarda (nenhum arquivo existente terminava sem `process.exit`). Descartado: exigir regex de placar (formatos demais).
+
+**3. MENOR — sem limite de tempo por arquivo (`ab5677a4`).** `spawnSync` com `timeout` (`RUN_ALL_TIMEOUT_MS`, padrão
+**120 s**) e a literal `[run-all] o arquivo passou de N ms e foi interrompido (timeout): <arquivo>`. Medido: o mais
+lento dos 291 levou **4,0 s** (`anexoDocumento`) — 30x de folga. Prova: alvo com `setInterval` e limite de 3 s → falha
+por tempo. O runner agora aceita arquivos como argumento e imprime o mais lento.
+
+**Junto (`8a70fe52`):** o `comLimite` do `reservaLiberacaoRevisaoFase5` (75) perdeu o `.unref()` (timer vivo, limpo no
+fim) — 8/8. Sob a trava presa ele prende fora de um `comLimite` (0,5 s) e quem o reprova é a guarda do item 2.
+
+**Suíte inteira depois do fix-round:** `test:api` **291/291** arquivos (3017 testes nos placares), `test:almoxarifado`
+44/0, `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 5/0.
+
+**Próximo:** T4 (fechamento), com as três mudanças acima: B398 estendida (sem o C da janela), o teste novo nas tabelas
+da spec 07, e a guarda do runner na letra D/F (lição: exit code não é placar).
