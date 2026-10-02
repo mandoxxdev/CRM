@@ -430,7 +430,11 @@ fechamento. Executores de galho **não** marcam este plano (o fio principal marc
   sucateamento — o cenário RN-07 fica vermelho; uma segunda solicitação **não** serve de prova, porque o nível 5 já a
   recusa pela `execucao_movimentacao_id`); sem desfazer `sucateamento_em` na falha do motor (a retentativa toma 409 — beco); NC gravando
   `execucao_em` sem `COALESCE` (legado perde a data — D7).
-- [ ] **T4 (galho, cliente) — tela de Não Conformidades** (RN-12). *Nota do tronco: o teste (33) de
+- [x] **T4 (galho, cliente) — tela de Não Conformidades** (RN-12). *Feita (2026-10-01, `ff4d8e9`): botão *Solicitar
+  sucateamento* por `execucao_movimentacao_id == null` (D7), modal, toast `SUC-…`; o modal de execução do SUCATEAR deixa
+  de dizer "não movimenta estoque" e ganha o campo *Motivo para registrar sem baixa* (`motivo_sem_baixa`), sempre
+  visível no SUCATEAR (decidido; descartado revelar casando o texto do 409). Teste (33) mudado de propósito + (45)-(52);
+  NC 53/53, client 1122/1122, build CI ok; doze sabotagens vermelhas no corpo do commit.* *Nota do tronco: o teste (33) de
   `NaoConformidadesAlmoxarifado.test.js` afirma "não movimenta estoque" no modal de execução de SUCATEAR — é a T4 que
   o muda (o backend agora recusa o SUCATEAR viável com 409 e aceita `motivo_sem_baixa`; contrato final no relatório
   do tronco e nas decisões (i)-(x) acima).* `NaoConformidadesAlmoxarifado.js`: botão,
@@ -438,7 +442,9 @@ fechamento. Executores de galho **não** marcam este plano (o fio principal marc
   `NaoConformidadesAlmoxarifado.test.js` (mock só na fronteira HTTP, com as literais do contrato): botão só nas linhas
   certas e só com `movimentar`; payload enviado; toast; erro 409 mostrado literal; o modal de execução não diz mais "não
   movimenta estoque" para `SUCATEAR`. Sabotagens no corpo do commit.
-- [ ] **T5 (galho, cliente) — tela de Sobras** (RN-13). Coluna/selo `NC-…` na fila de sucateamentos e
+- [x] **T5 (galho, cliente) — tela de Sobras** (RN-13). *Feita (2026-10-01, `b3c75e5`): selo `NC-…` dentro da célula
+  Material (decidido; descartado coluna nova e link para a NC, que não tem deep-link por id), `?aba=sucateamentos`,
+  recusas novas da 2ª assinatura literais; Sobras 54/54 (10 novos), sabotagens no corpo do commit.* Coluna/selo `NC-…` na fila de sucateamentos e
   `?aba=sucateamentos`. Testes em `SobrasAlmoxarifado.test.js`. Sabotagens no corpo do commit.
 - [x] **T6 (galho, teste) — G79** (RN-14). *Feita (2026-10-01, `9a45c31`): `test:almoxarifado` 44/0 (era 42/0), zero
   `no such column` no log (eram 19 avisos). **Divergência do plano:** o teste novo usa material **sem** mínimo (caminho
@@ -459,7 +465,26 @@ fechamento. Executores de galho **não** marcam este plano (o fio principal marc
   `localizacao` da fixture → o teste novo **e** o espião ficam vermelhos; tirar `status` → o espião fica vermelho
   (prova que o espião sabe falhar). Divergência esperada: se o recebimento com `status` passar a mudar o pedido para
   RECEBIDO, conferir que o teste "Workflow NF" não dependia da falha.
-- [ ] **T7 (integração, cruza T1–T3) — `server/tests/api/sucateamentoReprovadoIntegracao.api.test.js`, tudo pela rota.**
+- [x] **T7 (integração, cruza T1–T3) — `server/tests/api/sucateamentoReprovadoIntegracao.api.test.js`, tudo pela rota.**
+  *Feita (2026-10-01, commit desta entrada): 10/0, pelas rotas com sete usuários (ALMOX1 recebe e solicita, QUALIDADE
+  inspeciona/decide/libera o lote, COMPRAS executa, GESTOR e ALMOX2 assinam, ADMIN2 prova a barreira 3). Cadeia real
+  do recebimento: `POST /recebimentos` → `iniciar_conferencia` → `finalizar_conferencia` → `/aprovar` (entrada em E) →
+  lote nasce BLOQUEADO → reprova 3/10 → NC automática → SUCATEAR. Passos: (2) `/executar` 409 literal do lote; (3) lote
+  ATIVO → 409 "pede sucateamento"; (4) solicita 201 derivado + `/executar` 409 com o SUC aberto; (5) gestão nada move,
+  almoxarifado baixa: bloqueado 0, físico 7, livre 7, lote −3, livro (motivo, NC, `SUC-id`, lote, origem E), NC
+  EXECUTADA, fora da fila e do cartão, `sucata-financeiro` conta a linha (com a classificação); (6) estorno 400 literal,
+  `cancelado` 0; (7) NC `DEVOLVER` da mesma inspeção (fixture) → `SEM_SALDO` "já havia sido sucateado", o bloqueio de
+  outra origem (5) intacto; (8) mesma pessoa nas duas pernas 403 literal; (9) **sonda B** (lote + reprovado transferido
+  pela rota para a área de sucata → origem S, E fica com 7); (10) Surpresa 1 fixada (comum de 3 baixa do disponível,
+  bloqueado 3, NC pendente). Sem "hoje" (relatório sem de/até; cartão na janela de 7 dias do SQLite) — a rodada
+  atravessou a meia-noite UTC e passou. Passou de primeira → controle positivo, cada um vermelho no passo certo:
+  motor sem `doBloqueado` → (5) "o reprovado continua bloqueado" (e (8)(9)); recusa do estorno desligada → (6)
+  (`estorno_id` devolvido) e (7) em cascata; precedência **e** claim da 45 sem o carimbo → (7) `BAIXADA` 3 de novo;
+  cartão sem `sucateamento_em` → (5) "continua no cartão"; origem da área sem o lote → (9) "saiu de E, não de S";
+  `/executar` sem a recusa do viável → (3) EXECUTADA `NENHUMA`. **Sobreviveu (por desenho, igual à T2):** tirar só a
+  precedência `JA_SUCATEADA` da 45 — o claim relê os carimbos e devolve a mesma literal. Nenhum defeito de produção
+  revelado. test:api 257/257.*
+  Texto original:
   (1) material crítico **com lote**, recebe 10 (retido), QUALIDADE reprova 3 → NC nasce sozinha → decide `SUCATEAR`
   (nada move; NC `PENDENTE`); (2) `/executar` → 400 literal da RN-08 (NC continua na fila); (3) ALMOXARIFE solicita →
   201, físico 10 / bloqueado 3 intactos, a linha de `/sucateamentos` traz `NC-…`; (4) perna gestão (GESTOR) → nada move;
