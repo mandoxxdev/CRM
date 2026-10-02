@@ -456,7 +456,13 @@ fechamento.
   ganhou tudo **e** para quem ganhou parte; L2; L0 com a reserva forçada a falhar; R4 sem e-mail). Controles: (1) voltar
   a descontar o hold desta nota → quem ganhou tudo fica sem e-mail (RN-10 cai); (2) sem o filtro de avisáveis → R4
   recebe (cai); (3) literal trocada → cai. Suíte do servidor inteira.
-- [ ] **T3 (tronco) — o estorno desfaz o que a nota fez.** `liberarParaEstorno` + as duas chamadas no motor, pelo
+- [x] **T3 (tronco) — o estorno desfaz o que a nota fez.** — **FEITA `9af1691a`** (teste novo 9/9, inclui o
+  `/encerrar` e o `/rejeitar-valor` da Fase 2; os testes da 71 passaram sem edição; controles: liberar tudo, sem o
+  filtro de `recebimento_id`, sem recálculo, recálculo antes do pedido reabrir, sem o filtro "nada separado",
+  `/encerrar` e `/rejeitar-valor` sem liberar — todos caem na asserção certa; suíte 279/279 + 44 + 4 + 3 + 5).
+  **Divergência:** o controle "sem o filtro nada separado" passou no primeiro teste (EM_SEPARACAO já fica fora pela
+  lista de status) — acrescentado o caso PARCIALMENTE_ATENDIDA com 2 na caixa, que cai. `liberarReservasDaRequisicao`
+  ganhou `opcoes.motivoMovimentacao` (o livro diz "encerramento"/"rejeição de valor", não "cancelamento"). `liberarParaEstorno` + as duas chamadas no motor, pelo
   contrato. Teste novo `server/tests/api/recebimentoReservaChegadaEstorno.api.test.js`, pela rota `POST
   /movimentacoes/:id/cancelar`: RN-11 inteira (as duas negativas com a literal de hoje lida do código, e o "só o
   necessário, da última na ordem"). **Medir antes** que os testes da 71 (`recebimentoEstorno*`, `estornoEntrada*` —
@@ -464,7 +470,10 @@ fechamento.
   → o "só o necessário" cai; (2) liberar também reservas sem `recebimento_id` → a negativa de R3 cai; (3) sem o
   recálculo do status → R1 fica `PARCIALMENTE_RESERVADA` sem hold e cai; (4) recalcular **antes** do
   `estornarEntradaNoPedido` → R1 vai a `AGUARDANDO_ESTOQUE` e cai (prova a ordem).
-- [ ] **T4 (galho, worktree, em paralelo à T2) — o painel não perde a reservada.** Pelo contrato. Teste no
+- [x] **T4 — o painel não perde a reservada.** — **FEITA `00a5ff18`** no tronco, sequencial (Fase 2), sem worktree
+  (teste RN-13 novo; os 5 de lá sem edição; controle: sem TOTALMENTE_RESERVADA → cai; suíte 279/279). Comentário de
+  `RequisicoesList.js:168` (item da T6) feito em `e96b7392` — client 74 suítes/1155 testes, build CI ok.
+- (texto original da T4:) **T4 (galho, worktree, em paralelo à T2) — o painel não perde a reservada.** Pelo contrato. Teste no
   `requisicaoDashboard.api.test.js` (RN-13), os de lá sem edição. Controle: tirar `TOTALMENTE_RESERVADA` da lista → cai.
   Commit na branch da worktree; o fio principal faz o merge depois da T2.
 - [ ] **T5 (integração, cruza T1 × T2 × T3 × T4) — a jornada de quem espera.** Arquivo
@@ -525,7 +534,20 @@ ORDER BY ir.material_id, r.created_at;
 
 ## Divergências do plano (registradas, não escondidas)
 
-_(preencher na execução)_
+1. **A produção do aviso (T2) entrou no commit da T1** (`63e377e1`): o gancho sem o aviso derrubava 7 asserções da 70.
+2. **A regra do dono espelha a entrega** (só `projeto_id`): `requisicoes_almoxarifado` não tem `os_id`; a reserva da
+   chegada também grava `os_id` NULL (como a da aprovação).
+3. **Literais novas não previstas no contrato:** excesso desfeito → motivo `Reserva na chegada acima do pendente —
+   excesso desfeito`; liberação na chegada (RN-09 e excesso) → livro `Liberação de reserva na chegada desfeita`;
+   falha de liberação → `[almoxarifado-reservas] Falha ao desfazer a reserva <id> da chegada: <msg>`; recálculo na
+   chegada falhou → `[almoxarifado-reservas] recalculo do status apos a reserva na chegada falhou (requisicao <id>): <msg>`;
+   estorno sem conseguir liberar → `[almoxarifado] liberacao das reservas da chegada no estorno falhou (movimentacao <id>): <msg>`;
+   `/encerrar` → `Requisição encerrada` / `Liberação por encerramento de requisição`; `/rejeitar-valor` →
+   `Requisição rejeitada por valor` / `Liberação por rejeição de valor da requisição`.
+4. **O recálculo da chegada roda num `finally`**: mesmo com erro de banco no meio, as requisições já tocadas têm o
+   status recalculado antes de relançar.
+5. **O e-mail não vai a EM_SEPARACAO** (a lista da 70 fica), embora ela ganhe reserva na chegada — declarado.
+6. **O estorno também recalcula no claim perdido** (duplo clique): a liberação já aconteceu antes do claim.
 
 ## Fase 2 — revisão do plano: 2 críticos, 9 importantes, 9 menores → plano revisto (vale sobre o texto acima)
 
