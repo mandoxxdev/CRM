@@ -235,6 +235,108 @@ const API = '/api/almoxarifado';
     assert.strictEqual(await st(R), 'TOTALMENTE_RESERVADA');
   });
 
+  // ══════════════ Fase 5: o estorno recusado nao leva a reserva de quem esperava ══════════════
+  const reservasCompletas = (reqId) => dbAll(db, `SELECT id, requisicao_id, item_requisicao_id, material_id, quantidade,
+      quantidade_utilizada, status, origem, recebimento_id, observacoes
+    FROM reservas_material_almoxarifado WHERE requisicao_id = ? ORDER BY id`, [reqId]);
+  const cancelada = async (movId) => Number((await dbGet(db, 'SELECT cancelado FROM movimentacoes_almoxarifado WHERE id = ?', [movId])).cancelado);
+
+  await test('[Fase 5] estorno REPETIDO numa entrada ja estornada: 400 "Movimentação já cancelada" e a reserva da chegada fica', async () => {
+    const m = await material();
+    const p = await pedidoAvulso(m, 10);
+    const R1 = await criar([[m, 4]]);
+    await aprovar(R1);
+    const { mov } = await receber(p, m, 4);
+    assert.strictEqual(await holdAtivo(R1), 4, 'premissa: a chegada reservou os 4 a R1');
+    await entradaManual(m, 4); // o saldo livre paga o primeiro estorno
+    const e1 = await estornar(mov);
+    assert.strictEqual(e1.status, 200, JSON.stringify(e1.body));
+    const antes = await reservas(R1);
+    const e2 = await estornar(mov);
+    assert.strictEqual(e2.status, 400, JSON.stringify(e2.body));
+    assert.strictEqual(e2.body.error, 'Movimentação já cancelada');
+    assert.deepStrictEqual(await reservas(R1), antes, 'o segundo POST nao libera nada');
+    assert.strictEqual(await holdAtivo(R1), 4);
+    assert.strictEqual(await st(R1), 'TOTALMENTE_RESERVADA');
+    assert.deepStrictEqual({ ...(await mat(m)) }, { q: 4, r: 4, d: 0 });
+  });
+
+  await test('[Fase 5] nota com lote cujo lote ja saiu: a recusa do lote vem ANTES de liberar — R1 mantem a reserva da chegada', async () => {
+    const m = await material();
+    const R1 = await criar([[m, 4]]);
+    await aprovar(R1);
+    const rec = (await dbRun(db, `INSERT INTO recebimentos_material_almoxarifado
+      (numero, status, nota_fiscal, fornecedor_nome, data_emissao_nf, data_entrada_nf, valor_total_nota)
+      VALUES ('REC-E74F5-L', 'EM_ENTRADA_NF', 'NF-E74F5-L', 'F', '2026-09-01', '2026-09-02', 4)`)).lastID;
+    await dbRun(db, `INSERT INTO recebimentos_material_itens_almoxarifado
+      (recebimento_id, material_id, quantidade_esperada, quantidade_recebida, lote) VALUES (?,?,4,4,'L1')`, [rec, m]);
+    const pr = await request(app).post(`${API}/recebimentos/${rec}/processar`).send({});
+    assert.strictEqual(pr.status, 200, JSON.stringify(pr.body));
+    const mov = await dbGet(db, "SELECT id, lote_id FROM movimentacoes_almoxarifado WHERE recebimento_id = ? AND tipo = 'ENTRADA_COMPRA'", [rec]);
+    assert.strictEqual(await holdAtivo(R1), 4, 'premissa: a chegada reservou os 4 a R1');
+    const e = await request(app).post(`${API}/movimentacoes/v2`).send({ material_id: m, tipo: 'ENTRADA', quantidade: 4, motivo: 'setup', lote: 'L0' });
+    assert.strictEqual(e.status, 201, JSON.stringify(e.body));
+    // R2 (ja separada, sem reserva) leva os 4 do lote L1 da nota
+    const r2 = (await dbRun(db, `INSERT INTO requisicoes_almoxarifado (numero, solicitante_id, solicitante_nome, status)
+      VALUES ('REQ-E74F5-L', 1, 'Sol', 'EM_SEPARACAO')`)).lastID;
+    const it2 = (await dbRun(db, `INSERT INTO itens_requisicao_almoxarifado (requisicao_id, material_id, quantidade_solicitada,
+      quantidade_separada, quantidade_entregue, quantidade_atendida) VALUES (?,?,4,4,0,0)`, [r2, m])).lastID;
+    const ent = await request(app).put(`${API}/requisicoes/${r2}/entregar`).send({ itens_atendidos: [{ item_id: it2, quantidade_atendida: 4, lote_id: mov.lote_id }] });
+    assert.strictEqual(ent.status, 200, JSON.stringify(ent.body));
+    const antes = await reservasCompletas(R1);
+    const es = await estornar(mov.id);
+    assert.strictEqual(es.status, 400, JSON.stringify(es.body));
+    assert.strictEqual(es.body.error, 'Não é possível estornar: o lote L1 tem 0 PC nesta localização, menos que os 4 que a entrada creditou');
+    assert.deepStrictEqual(await reservasCompletas(R1), antes, 'nada liberado: a recusa do lote veio antes');
+    assert.strictEqual(await st(R1), 'TOTALMENTE_RESERVADA');
+    assert.deepStrictEqual({ ...(await mat(m)) }, { q: 4, r: 4, d: 0 });
+    assert.strictEqual(await cancelada(mov.id), 0);
+  });
+
+  await test('[Fase 5] estorno que FALHA depois de liberar (ledger do ESTORNO forcado a falhar): a reserva e recriada igual e o status volta', async () => {
+    const m = await material();
+    const p = await pedidoAvulso(m, 4);
+    const R1 = await criar([[m, 4]]);
+    await aprovar(R1);
+    const { rec, mov } = await receber(p, m, 4);
+    assert.strictEqual(await st(R1), 'TOTALMENTE_RESERVADA', 'premissa');
+    const [orig] = await reservasCompletas(R1);
+    await dbRun(db, `CREATE TRIGGER e74f5_falha_estorno BEFORE INSERT ON movimentacoes_almoxarifado
+      WHEN NEW.tipo = 'ESTORNO' BEGIN SELECT RAISE(ABORT, 'e74f5 ledger forcado'); END`);
+    let e;
+    try { e = await estornar(mov); } finally { await dbRun(db, 'DROP TRIGGER IF EXISTS e74f5_falha_estorno'); }
+    assert.ok(e.status >= 400, `a falha original continua sendo a resposta: ${e.status} ${JSON.stringify(e.body)}`);
+    assert.match(String(e.body.error), /e74f5 ledger forcado/);
+    const rs = await reservasCompletas(R1);
+    assert.strictEqual(rs.length, 2, JSON.stringify(rs));
+    assert.strictEqual(rs[0].status, 'LIBERADA', 'a original continua LIBERADA (historico)');
+    const nova = rs[1];
+    assert.deepStrictEqual(
+      [nova.status, nova.origem, nova.requisicao_id, nova.item_requisicao_id, nova.material_id, Number(nova.quantidade), nova.recebimento_id],
+      ['ATIVA', 'REQUISICAO', orig.requisicao_id, orig.item_requisicao_id, orig.material_id, Number(orig.quantidade), rec]);
+    assert.match(String(nova.observacoes), /recriada após estorno recusado/);
+    assert.strictEqual(await st(R1), 'TOTALMENTE_RESERVADA');
+    assert.deepStrictEqual({ ...(await mat(m)) }, { q: 4, r: 4, d: 0 });
+    assert.strictEqual(await cancelada(mov), 0);
+  });
+
+  await test('[Fase 5] corrida: outro estorno ganha o claim enquanto este liberava -> 400 "Movimentação já cancelada" e a reserva liberada e recriada', async () => {
+    const m = await material();
+    const p = await pedidoAvulso(m, 4);
+    const R1 = await criar([[m, 4]]);
+    await aprovar(R1);
+    const { mov } = await receber(p, m, 4);
+    // Simula o concorrente: no instante em que a reserva vira LIBERADA, a movimentacao e marcada cancelada.
+    await dbRun(db, `CREATE TRIGGER e74f5_corrida AFTER UPDATE OF status ON reservas_material_almoxarifado
+      WHEN NEW.status = 'LIBERADA' BEGIN UPDATE movimentacoes_almoxarifado SET cancelado = 1 WHERE id = ${Number(mov)}; END`);
+    let e;
+    try { e = await estornar(mov); } finally { await dbRun(db, 'DROP TRIGGER IF EXISTS e74f5_corrida'); }
+    assert.strictEqual(e.status, 400, JSON.stringify(e.body));
+    assert.strictEqual(e.body.error, 'Movimentação já cancelada');
+    assert.strictEqual(await holdAtivo(R1), 4, 'a reserva liberada foi recriada');
+    assert.strictEqual(await st(R1), 'TOTALMENTE_RESERVADA');
+  });
+
   // ══════════════ Fase 2: as portas terminais soltam a reserva ══════════════
   await test('[Fase 2] /encerrar (PARCIALMENTE_ATENDIDA -> ENCERRADA) libera o hold ATIVO da requisicao', async () => {
     const m = await material();

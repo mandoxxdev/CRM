@@ -2194,6 +2194,12 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
   if (!motivo) throw Object.assign(new Error('Justificativa obrigatória para cancelamento'), { status: 400 });
   const mov = await dbGet(db, 'SELECT * FROM movimentacoes_almoxarifado WHERE id = ?', [movimentoId]);
   if (!mov) throw Object.assign(new Error('Movimentação não encontrada'), { status: 404 });
+  // Etapa 74 (Fase 5): a movimentacao ja cancelada e recusada AQUI, antes de qualquer efeito — ate a Fase 5 so
+  // o claim (la embaixo) recusava, e o segundo POST de estorno numa ENTRADA_COMPRA ja estornada liberava ANTES
+  // a reserva da chegada de quem esperava (liberarParaEstorno) e so depois respondia "ja cancelada": a
+  // requisicao perdia o material para quem fosse aprovado depois (C121 de volta). Mesma literal do claim, que
+  // continua sendo a guarda da corrida (duas chamadas que passam aqui juntas).
+  if (Number(mov.cancelado) === 1) throw Object.assign(new Error('Movimentação já cancelada'), { status: 400 });
   if (mov.tipo === 'ESTORNO') throw Object.assign(new Error('Estorno não pode ser estornado'), { status: 400 });
   if (['RESERVA', 'LIBERACAO_RESERVA'].includes(mov.tipo)) {
     throw Object.assign(new Error('Use a liberação de reserva para desfazer reservas'), { status: 400 });
@@ -2417,11 +2423,32 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
   // so de quem espera sem nada separado. Sem isto a nota que atendeu alguem ficava inestornavel ("material ja
   // consumido") ate alguem liberar a mao. Se nem assim cabe, nada e tocado e a recusa abaixo e a da 71.
   // `require` lazy: reservaChegadaService requer este motor no topo. Nao-fatal: a falha cai na recusa de hoje.
+  //
+  // Etapa 74 (Fase 5): duas defesas para a reserva liberada nao se perder num estorno que nao acontece.
+  //  (1) PRE-CHECAGEM do lote, antes de liberar: a recusa da linha do lote (ramo de ENTRADA, `minimo`) vinha
+  //      DEPOIS da liberacao — a requisicao perdia a reserva e o estorno nao acontecia. Mesma condicao e mesma
+  //      literal do ramo (que continua la, para a corrida). So ENTRADA_COMPRA: e o unico tipo que libera.
+  //  (2) RECRIACAO geral: se o estorno falhar por QUALQUER motivo depois de liberar (claim perdido, ledger,
+  //      guarda do ramo), `recriarReservasDoEstorno` recria exatamente o que foi liberado e o status e
+  //      recalculado; a falha original continua sendo a resposta.
+  // Descartado: mover a liberacao para DEPOIS do debito do ramo de entrada (ela existe justamente para o
+  // debito caber no disponivel) e envolver tudo numa transacao (o motor nao tem transacao — Postgres depois).
+  let liberadasNoEstorno = [];
   let requisicoesDoEstorno = [];
   if (mov.tipo === 'ENTRADA_COMPRA' && mov.recebimento_id) {
+    const permiteNegativoPre = material.permite_saldo_negativo || (await getConfig(db, 'permite_saldo_negativo_global')) === '1';
+    if (mov.lote_id && !permiteNegativoPre) {
+      const linhaLote = await dbGet(db, `SELECT quantidade FROM estoque_saldo_almoxarifado
+        WHERE material_id = ? AND localizacao_id IS ? AND lote_id IS ?`,
+      [mov.material_id, (mov.localizacao_destino_id || material.localizacao_padrao_id) || null, mov.lote_id]);
+      if (linhaLote && Number(linhaLote.quantidade) < Number(mov.quantidade)) {
+        throw Object.assign(new Error(mensagemLoteNaoComportaEstorno(mov, linhaLote.quantidade)), { status: 400 });
+      }
+    }
     try {
       // eslint-disable-next-line global-require
-      requisicoesDoEstorno = await require('./reservaChegadaService').liberarParaEstorno(db, user, mov);
+      liberadasNoEstorno = await require('./reservaChegadaService').liberarParaEstorno(db, user, mov);
+      requisicoesDoEstorno = [...new Set(liberadasNoEstorno.map((l) => l.requisicao_id))];
     } catch (e) {
       console.warn(`[almoxarifado] liberacao das reservas da chegada no estorno falhou (movimentacao ${movimentoId}): ${e.message}`);
     }
@@ -2436,6 +2463,8 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
     SET cancelado = 1, cancelado_por = ?, cancelado_em = CURRENT_TIMESTAMP, cancelamento_motivo = ?, regularizacao_pendente = 0
     WHERE id = ? AND cancelado = 0`, [user.id, motivo, movimentoId]);
   if (!claim.changes) {
+    // Etapa 74 (Fase 5): outro estorno ganhou o claim — o que ESTE liberou volta para quem esperava.
+    await recriarReservasDoEstorno(db, user, liberadasNoEstorno, movimentoId);
     await recalcularStatusAposEstorno(db, requisicoesDoEstorno);
     throw Object.assign(new Error('Movimentação já cancelada'), { status: 400 });
   }
@@ -2536,10 +2565,7 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
         // e não há transação aqui — o `catch` deste método devolve o físico agora (fix round 1,
         // Task 5: `compensarQuantidadeMaterial`, setado acima, cobre exatamente este caso; a
         // compensação manual que existia aqui foi removida para não devolver em dobro).
-        throw Object.assign(new Error(
-          `Não é possível estornar: o lote ${mov.lote || mov.lote_id} tem ${r.quantidade} `
-          + `${mov.unidade || ''} nesta localização, menos que os ${mov.quantidade} que a entrada creditou`),
-          { status: 400 });
+        throw Object.assign(new Error(mensagemLoteNaoComportaEstorno(mov, r.quantidade)), { status: 400 });
       }
       if (r.aplicado && r.viaClaim) {
         // a compensacao das N linhas fica em `compensarLinhasClaim`, devolvida no catch.
@@ -2756,7 +2782,9 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
     // voltado. regularizacao_pendente volta ao valor original lido antes do claim.
     await dbRun(db, `UPDATE movimentacoes_almoxarifado SET cancelado = 0, cancelado_por = NULL, cancelado_em = NULL,
       cancelamento_motivo = NULL, regularizacao_pendente = ? WHERE id = ?`, [mov.regularizacao_pendente, movimentoId]);
-    // Etapa 74 (T3): o estorno nao aconteceu, mas as reservas da chegada ja foram liberadas — o status acompanha.
+    // Etapa 74 (T3 + Fase 5): o estorno nao aconteceu, mas as reservas da chegada ja foram liberadas — recria
+    // o que foi liberado (o fisico ja voltou acima, entao o hold cabe de novo) e o status acompanha.
+    await recriarReservasDoEstorno(db, user, liberadasNoEstorno, movimentoId);
     await recalcularStatusAposEstorno(db, requisicoesDoEstorno);
     throw err;
   }
@@ -2819,6 +2847,22 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
  * Etapa 74 (T3): recalcula o status das requisicoes que perderam a reserva da chegada no estorno. Cada uma no
  * seu try — o estorno (ou a recusa dele) nunca muda por causa do rotulo. `require` lazy (ver acima).
  */
+async function recriarReservasDoEstorno(db, user, liberadas, movimentoId) {
+  if (!liberadas || !liberadas.length) return;
+  try {
+    // eslint-disable-next-line global-require
+    await require('./reservaChegadaService').recriarAposEstornoRecusado(db, user, liberadas);
+  } catch (e) {
+    console.warn(`[almoxarifado] recriacao das reservas da chegada apos estorno recusado falhou (movimentacao ${movimentoId}): ${e.message}`);
+  }
+}
+
+/** A recusa da linha do lote no estorno da entrada — uma literal, dois lugares (pre-checagem da Fase 5 e o ramo). */
+function mensagemLoteNaoComportaEstorno(mov, quantidadeLinha) {
+  return `Não é possível estornar: o lote ${mov.lote || mov.lote_id} tem ${quantidadeLinha} `
+    + `${mov.unidade || ''} nesta localização, menos que os ${mov.quantidade} que a entrada creditou`;
+}
+
 async function recalcularStatusAposEstorno(db, requisicaoIds) {
   for (const id of requisicaoIds || []) {
     try {

@@ -259,7 +259,9 @@ async function reservarChegadaParaQuemEspera(db, user, recebimentoId) {
  * não perde a reserva no estorno); da última na ordem de prioridade para a primeira; só o que falta para
  * o estorno caber no disponível. Se nem liberando tudo o que pode o estorno caberia, não toca em nada (a
  * recusa da 71 acontece no ramo de entrada, intacta). Reservas da aprovação ou manuais nunca são tocadas.
- * @returns {Promise<number[]>} os ids das requisições que perderam reserva (o motor recalcula o status).
+ * @returns {Promise<Array<{reserva_id, requisicao_id, item_id, material_id, quantidade, recebimento_id, ...}>>} o que
+ *   foi liberado, uma entrada por liberação. Fase 5: o motor recalcula o status das requisições a partir disto e,
+ *   se o estorno NÃO acontecer depois (qualquer recusa ou falha), recria exatamente isto (`recriarAposEstornoRecusado`).
  */
 async function liberarParaEstorno(db, user, mov) {
   const qtd = num(mov.quantidade);
@@ -269,6 +271,7 @@ async function liberarParaEstorno(db, user, mov) {
 
   const marcasSt = STATUS_QUE_ESPERAM.map(() => '?').join(',');
   const reservas = await dbAll(db, `SELECT rs.id AS reserva_id, rs.item_requisicao_id AS item_id,
+      rs.projeto_id, rs.os_id, rs.os_referencia, rs.cliente_id, rs.data_necessidade AS rs_data_necessidade,
       rs.quantidade - COALESCE(rs.quantidade_utilizada, 0) AS saldo,
       r.id, r.numero, r.urgencia, r.data_necessidade, r.created_at
     FROM reservas_material_almoxarifado rs
@@ -286,7 +289,7 @@ async function liberarParaEstorno(db, user, mov) {
 
   const rec = await dbGet(db, 'SELECT numero FROM recebimentos_material_almoxarifado WHERE id = ?', [mov.recebimento_id]);
   let falta = qtd - disp;
-  const tocadas = [];
+  const liberadas = [];
   for (const r of liberaveis) {
     if (falta <= EPS) break;
     const q = Math.min(num(r.saldo), falta);
@@ -298,17 +301,65 @@ async function liberarParaEstorno(db, user, mov) {
         motivoMovimentacao: 'Liberação por estorno da entrada',
       });
       falta -= q;
-      if (!tocadas.includes(Number(r.id))) tocadas.push(Number(r.id));
+      liberadas.push({
+        reserva_id: r.reserva_id, requisicao_id: Number(r.id), numero: r.numero, item_id: r.item_id,
+        material_id: mov.material_id, quantidade: q, recebimento_id: Number(mov.recebimento_id),
+        recebimento_numero: rec ? rec.numero : String(mov.recebimento_id),
+        projeto_id: r.projeto_id, os_id: r.os_id, os_referencia: r.os_referencia, cliente_id: r.cliente_id,
+        data_necessidade: r.rs_data_necessidade,
+      });
     } catch (e) {
       console.warn(`[almoxarifado-reservas] Falha ao liberar a reserva ${r.reserva_id} no estorno da entrada: ${e.message}`);
     }
   }
-  return tocadas;
+  return liberadas;
+}
+
+/**
+ * Etapa 74 (Fase 5) — o estorno liberou reservas da chegada e depois NÃO aconteceu (recusa do lote, claim
+ * perdido para outro estorno, ledger que falhou): sem isto a requisição perdia a reserva e o estorno não
+ * acontecia — o material voltava a ficar livre para quem fosse aprovado depois (C121 de novo). Recria
+ * exatamente o que `liberarParaEstorno` liberou: mesma requisição/item/material/quantidade/recebimento_id,
+ * origem REQUISICAO. A original fica LIBERADA (histórico: o livro tem a LIBERACAO_RESERVA dela); a nova
+ * diz na observação que foi recriada. Cada uma no seu try: falhou, `console.warn` literal e segue — quem
+ * chama devolve a falha ORIGINAL do estorno, nunca esta. O status é recalculado por quem chama.
+ * Descartado: "reativar" a linha original (UPDATE status = 'ATIVA'): o livro já tem a LIBERACAO_RESERVA
+ * dela e o hold do material já foi devolvido; reativar sem passar por `criarReserva` pularia o hold
+ * atômico contra o disponível.
+ */
+async function recriarAposEstornoRecusado(db, user, liberadas) {
+  const recriadas = [];
+  for (const l of liberadas || []) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const r = await stockService.criarReserva(db, user, {
+        material_id: l.material_id,
+        quantidade: l.quantidade,
+        projeto_id: l.projeto_id || null,
+        os_id: l.os_id || null,
+        os_referencia: l.os_referencia || null,
+        cliente_id: l.cliente_id || null,
+        data_necessidade: l.data_necessidade || null,
+        observacoes: `Reserva recriada após estorno recusado — recebimento ${l.recebimento_numero}, requisição ${l.numero}`,
+      }, {
+        sistema: true,
+        requisicao_id: l.requisicao_id,
+        item_requisicao_id: l.item_id,
+        recebimento_id: l.recebimento_id,
+        motivo: `Reserva recriada após estorno recusado — recebimento ${l.recebimento_numero}`,
+      });
+      recriadas.push(r.id);
+    } catch (e) {
+      console.warn(`[almoxarifado-reservas] Falha ao recriar a reserva ${l.reserva_id} apos estorno recusado: ${e.message}`);
+    }
+  }
+  return recriadas;
 }
 
 module.exports = {
   reservarChegadaParaQuemEspera,
   recalcularStatusDeReserva,
   liberarParaEstorno,
+  recriarAposEstornoRecusado,
   STATUS_RECALCULAVEIS,
 };
