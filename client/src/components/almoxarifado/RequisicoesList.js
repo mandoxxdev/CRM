@@ -165,7 +165,10 @@ const maxSeparavelNaTela = (item, valorOrigemEscolhida, saldos, outrosMesmoMater
     ? pendenteSeparado(item) : 0;
   return Math.min(base, Math.max(0, (Number(opcao.quantidade) || 0) - jaPlanejadoNoPar));
 };
-// Etapa 73 (RN-07, B358): a chegada do material não muda o status — AGUARDANDO_COMPRA/ESTOQUE seguem.
+// Etapa 73 (RN-07, B358): dizia "a chegada do material não muda o status". DEIXOU DE VALER na Etapa 74:
+// a nota que chega RESERVA o que entrou livre para quem esperava e a requisição vai a
+// PARCIALMENTE/TOTALMENTE_RESERVADA. AGUARDANDO_COMPRA/ESTOQUE com saldo agora só acontece quando o material
+// chegou por outra porta (ajuste, devolução, inspeção liberada) ou a reserva na chegada falhou.
 // É o detalhe que diz que chegou: por item, o que dá para separar AGORA na régua da tela
 // (`maxSeparavelNaTela`, sem "Sai de"), com os itens do mesmo material dividindo o saldo — o que um
 // item leva sai do livre do seguinte, para 4 que chegaram não virarem 8. Só os itens com algo > 0.
