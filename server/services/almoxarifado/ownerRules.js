@@ -304,8 +304,26 @@ async function assertMesmoDonoNoRetalho(db, materialOrigem, materialRetalho) {
       + 'material do retalho com o mesmo proprietario da origem, ou escolha outro material de retalho.');
 }
 
+/**
+ * Etapa 75 (Fase 5) — a SAIDA da entrega passaria na regra do dono? (a entrega leva so o projeto da
+ * requisicao — requisitionService). Booleano, nunca lanca: e a pergunta que o miolo da reserva
+ * (`reservaChegadaService`, quem e pulado) e os dois avisos ao solicitante (chegada 74, liberacao 75 — quem
+ * NAO e avisado) fazem com a MESMA regra. Antes da Fase 5 o miolo pulava a requisicao sem o projeto do
+ * dono e o aviso mandava a ela "Material liberado para a sua requisicao" com L0 — material que ela nunca
+ * poderia retirar. Qualquer falha (projeto inexistente, banco) conta como "nao passa", como no miolo.
+ */
+async function saidaPassaNaRegraDoDono(db, material, projetoId) {
+  if (!material?.proprietario_cliente_id) return true;
+  try {
+    await assertSaidaPermitida(db, material, 'SAIDA', { projeto_id: projetoId || undefined });
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 module.exports = {
   TIPOS_ISENTOS_DONO, TIPOS_SAIDA_COM_DONO, TIPOS_AJUSTE_DONO,
-  assertSaidaPermitida, assertAjustePermitido,
+  assertSaidaPermitida, assertAjustePermitido, saidaPassaNaRegraDoDono,
   assertMesmoDonoNaTransformacao, assertMesmoDonoNoRetalho,
 };

@@ -259,7 +259,7 @@ async function avisarEntradaConfirmada(db, user, recebimentoId) {
   const itens = await dbAll(db, `SELECT ri.id, ri.material_id,
       ${QTD_DO_ITEM_SQL} AS quantidade,
       COALESCE(ri.quantidade_em_inspecao, 0) AS em_inspecao,
-      m.codigo, m.nome, m.unidade, l.codigo AS localizacao
+      m.codigo, m.nome, m.unidade, m.proprietario_cliente_id, l.codigo AS localizacao
     FROM recebimentos_material_itens_almoxarifado ri
     JOIN materiais_almoxarifado m ON m.id = ri.material_id
     LEFT JOIN localizacoes_almoxarifado l ON l.id = ri.localizacao_entrada_id
@@ -288,7 +288,7 @@ async function avisarEntradaConfirmada(db, user, recebimentoId) {
   const marcasMat = materiaisDaNota.map(() => '?').join(',');
   const marcasSt = STATUS_QUE_ESPERAM.map(() => '?').join(',');
   const linhasReq = await dbAll(db, `SELECT r.id AS requisicao_id, r.numero, r.status, r.solicitante_id,
-      r.solicitante_nome, r.modulo_origem, ir.material_id,
+      r.solicitante_nome, r.modulo_origem, r.projeto_id, ir.material_id,
       ir.quantidade_solicitada, ir.quantidade_entregue, ir.quantidade_atendida,
       COALESCE((
         SELECT SUM(rs.quantidade - COALESCE(rs.quantidade_utilizada, 0))
@@ -366,11 +366,23 @@ async function avisarEntradaConfirmada(db, user, recebimentoId) {
       const row = await dbGet(db, `SELECT ${disponivelSql()} AS d FROM materiais_almoxarifado WHERE id = ?`, [m]);
       disponivelPorMaterial.set(m, Number(row && row.d) || 0);
     }
+    // Etapa 75 (Fase 5): nem a linha do material de cliente que a requisicao nao pode retirar (sem o projeto do
+    // dono a entrega recusaria) — a MESMA regra com que o miolo da 74 a pulou. Antes ela recebia "Chegou
+    // material" com L0 (havia livre) de um material que nunca poderia levar.
+    const ownerRules = require('./ownerRules');
+    const materialInfo = new Map(itens.map((it) => [it.material_id, it]));
+    const donoRecusa = new Set();
+    for (const r of requisicoes) {
+      for (const m of r.pendentePorMaterial.keys()) {
+        // eslint-disable-next-line no-await-in-loop
+        if (!(await ownerRules.saidaPassaNaRegraDoDono(db, materialInfo.get(m), r.projeto_id))) donoRecusa.add(`${r.requisicao_id}|${m}`);
+      }
+    }
     const linhaAvisavel = (r, m) => livrePorMaterial.has(m)
+      && !donoRecusa.has(`${r.requisicao_id}|${m}`)
       && ((r.reservadoPorMaterial.get(m) || 0) > EPS || (disponivelPorMaterial.get(m) || 0) > EPS);
     const avisaveis = requisicoes.filter((r) => [...r.pendentePorMaterial.keys()].some((m) => linhaAvisavel(r, m)));
     const emails = await emailsDosUsuarios(db, [...new Set(avisaveis.map((r) => r.solicitante_id))]);
-    const materialInfo = new Map(itens.map((it) => [it.material_id, it]));
     for (const r of avisaveis) {
       const materiais = [...r.pendentePorMaterial.entries()]
         .filter(([m]) => linhaAvisavel(r, m))
@@ -429,7 +441,7 @@ async function avisarLiberacao(db, user, ctx, resultadoReserva) {
   const resultado = { requisitantes: [] };
   const liberado = Number(ctx && ctx.quantidade) || 0;
   if (!(liberado > EPS) || !ctx.material_id) return resultado;
-  const mat = await dbGet(db, `SELECT id, codigo, nome, unidade, ${disponivelSql()} AS disponivel
+  const mat = await dbGet(db, `SELECT id, codigo, nome, unidade, proprietario_cliente_id, ${disponivelSql()} AS disponivel
     FROM materiais_almoxarifado WHERE id = ?`, [ctx.material_id]);
   if (!mat) return resultado;
   const rec = ctx.recebimento_id
@@ -443,7 +455,7 @@ async function avisarLiberacao(db, user, ctx, resultadoReserva) {
   }
 
   const marcasSt = STATUS_QUE_ESPERAM.map(() => '?').join(',');
-  const linhasReq = await dbAll(db, `SELECT r.id AS requisicao_id, r.numero, r.status, r.solicitante_id, r.modulo_origem,
+  const linhasReq = await dbAll(db, `SELECT r.id AS requisicao_id, r.numero, r.status, r.solicitante_id, r.modulo_origem, r.projeto_id,
       ir.id AS item_id,
       ir.quantidade_solicitada, ir.quantidade_entregue, ir.quantidade_atendida,
       COALESCE((SELECT SUM(rs.quantidade - COALESCE(rs.quantidade_utilizada, 0))
@@ -466,7 +478,16 @@ async function avisarLiberacao(db, user, ctx, resultadoReserva) {
     req.reservado += Math.min(reservado, pendente);
   }
   const haLivre = Number(mat.disponivel) > EPS;
-  const avisaveis = [...porRequisicao.values()].filter((r) => r.reservado > EPS || haLivre);
+  // Etapa 75 (Fase 5): a requisicao que a regra do dono pulou no miolo (material de cliente sem o projeto do
+  // dono — a entrega recusaria) nao e avisada: antes recebia "Material liberado para a sua requisicao" com L0.
+  const ownerRules = require('./ownerRules');
+  const avisaveis = [];
+  for (const r of porRequisicao.values()) {
+    if (!(r.reservado > EPS || haLivre)) continue;
+    // eslint-disable-next-line no-await-in-loop
+    if (!(await ownerRules.saidaPassaNaRegraDoDono(db, mat, r.projeto_id))) continue;
+    avisaveis.push(r);
+  }
   if (!avisaveis.length) return resultado;
 
   const emails = await emailsDosUsuarios(db, [...new Set(avisaveis.map((r) => r.solicitante_id))]);

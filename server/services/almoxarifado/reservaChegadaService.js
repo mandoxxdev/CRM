@@ -101,13 +101,8 @@ function rotulosDaChegada(rec) {
 
 /** A saída da entrega passaria na regra do dono? (a entrega leva só o projeto — requisitionService). */
 async function passaNaRegraDoDono(db, material, candidato) {
-  if (!material.proprietario_cliente_id) return true;
-  try {
-    await ownerRules.assertSaidaPermitida(db, material, 'SAIDA', { projeto_id: candidato.projeto_id || undefined });
-    return true;
-  } catch (e) {
-    return false;
-  }
+  // Etapa 75 (Fase 5): a mesma pergunta que os dois avisos fazem (ownerRules.saidaPassaNaRegraDoDono).
+  return ownerRules.saidaPassaNaRegraDoDono(db, material, candidato.projeto_id);
 }
 
 async function bloqueadaPorValor(db, candidato) {

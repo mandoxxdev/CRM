@@ -223,6 +223,39 @@ let seq = 0;
     assert.strictEqual(await hold(R1), 4, 'a segunda distribuicao rodou');
   });
 
+  // ══════════════ 3. A regra do dono no aviso ══════════════
+
+  const cenarioDono = async () => {
+    const cli = (await dbRun(db, "INSERT INTO clientes (razao_social) VALUES ('Cliente 75F')")).lastID;
+    const projDono = (await dbRun(db, 'INSERT INTO projetos (cliente_id, nome) VALUES (?, ?)', [cli, 'Proj dono 75F'])).lastID;
+    return { cli, projDono };
+  };
+
+  await test('[dono 75] material de cliente: a requisicao sem o projeto do dono (pulada pelo miolo) nao recebe o e-mail da liberacao; a do dono recebe', async () => {
+    const { cli, projDono } = await cenarioDono();
+    const m = await material({ cliente: cli });
+    const semProjeto = await reqDireta('AGUARDANDO_ESTOQUE', [[m, 4]], { criado: '2026-09-01 08:00:00' });
+    const doDono = await reqDireta('AGUARDANDO_ESTOQUE', [[m, 2]], { criado: '2026-09-01 09:00:00', projeto_id: projDono });
+    const rec = await nota([[m, 4]]);
+    const ins = await inspecionar(await itemDaNota(rec), 4, 0);
+    assert.strictEqual(ins.status, 201, JSON.stringify(ins.body));
+    assert.deepStrictEqual([await hold(semProjeto), await hold(doDono)], [0, 2], 'o miolo pula a sem projeto e reserva para a do dono');
+    assert.strictEqual((await avisos(doDono)).length, 1, 'a do dono e avisada');
+    assert.strictEqual((await avisos(semProjeto)).length, 0, 'a sem o projeto do dono nao pode levar: sem e-mail (havia 2 livres)');
+  });
+
+  await test('[dono 74] material de cliente: a requisicao sem o projeto do dono (pulada pelo miolo) nao recebe o e-mail da chegada; a do dono recebe', async () => {
+    const { cli, projDono } = await cenarioDono();
+    const m = await material({ critico: 0, cliente: cli });
+    const semProjeto = await reqDireta('AGUARDANDO_ESTOQUE', [[m, 4]], { criado: '2026-09-01 08:00:00' });
+    const doDono = await reqDireta('AGUARDANDO_ESTOQUE', [[m, 2]], { criado: '2026-09-01 09:00:00', projeto_id: projDono });
+    await nota([[m, 4]]);
+    assert.deepStrictEqual([await hold(semProjeto), await hold(doDono)], [0, 2]);
+    assert.strictEqual((await avisos(doDono)).length, 1, 'a do dono e avisada');
+    assert.strictEqual((await avisos(semProjeto)).length, 0, 'a sem o projeto do dono nao pode levar: sem e-mail (havia 2 livres)');
+  });
+
+
   await close();
   console.log(`\n${passed} passaram, ${failed} falharam\n`);
   process.exit(failed ? 1 : 0);
