@@ -1,21 +1,30 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-01 (Etapa 70) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-02 (Etapa 71) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 70) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 71) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-01 (Etapa 70 ENTREGUE · Etapa 71 começando)
+> ## Onde o desenvolvimento está — 2026-10-02 (Etapa 71 ENTREGUE · Etapa 72 começando)
 >
-> **O desenvolvimento parou aqui: Etapa 70 fechada, Etapa 71 começando — 2026-10-01.** A **Etapa 70 (quem esperava o
+> **O desenvolvimento parou aqui: Etapa 71 fechada, Etapa 72 começando — 2026-10-02.** A **Etapa 71 (estornar a
+> entrada da nota reabre o pedido de compra)**: em **Movimentações**, estornar a linha **ENTRADA_COMPRA** de uma nota
+> contra pedido **desconta** o pedido e o **reabre** quando a nota o tinha fechado — ele volta ao status de antes, aos
+> atrasados e aos pendentes do Recebimento, e a nota do que falta passa sem autorização de excedente; a tela avisa
+> *"Pedido de compra … reaberto: faltam … para receber"*. A mesma NF pode ser relançada depois de estornar todas as
+> entradas dela (**atenção:** ficam duas contas a pagar — avisar o Financeiro). Entrada com material em inspeção ou
+> reprovado não se estorna. **A feature de Recebimento vai a 🟢.** **Próxima etapa, já começando: 72 — a solicitação de
+> compra que fecha na primeira nota parcial** (ver *"Próxima tarefa detalhada"* no plano da Etapa 71).
+>
+> **Etapas 1 a 20 e 22 a 71 completas.**
+>
+> **Etapa 70, 2026-10-01.** A **Etapa 70 (quem esperava o
 > material fica sabendo que ele chegou)**: ao processar uma nota, o **solicitante** de cada requisição que esperava o
 > material recebe um e-mail com o que chegou e o link para a lista do módulo de onde pediu (ligado de fábrica); o
 > aviso **da nota inteira** para uma lista nasce desligado (**Configurações → Configurações Gerais**); o painel de
 > **Notificações** filtra os dois. E dois defeitos antigos do recebimento foram corrigidos: o item contado **zero** não
 > entra mais com a quantidade esperada, e dois cliques em **Processar** não geram mais duas contas a pagar. **Próxima
 > etapa, já começando: 71 — o pedido de compra que reabre quando a entrada é estornada (B161)** (ver *"Próxima tarefa
-> detalhada"* no plano da Etapa 70).
->
-> **Etapas 1 a 20 e 22 a 70 completas.**
+> detalhada"* no plano da Etapa 70). *(feita — acima)*
 >
 > **Etapa 69, 2026-10-01.** A **Etapa 69 (o material
 > reprovado na inspeção vai para o sucateamento)**: em **Não Conformidades**, a decisão **Sucatear** ganhou o botão
@@ -5218,6 +5227,63 @@ Pedidos**, crie um pedido com **10 M** e **5 N**.
 - **A situação da requisição** não muda sozinha quando o material chega.
 - **Estornar** a entrada não corrige o e-mail já enviado.
 - **Requisição esquecida** recebe um e-mail a cada nota do material — encerre as que ninguém mais espera.
+
+---
+
+## Etapa 71 — Estornar a entrada da nota reabre o pedido de compra (ENTREGUE — 2026-10-02)
+
+**O que mudou, em uma frase:** estornar a entrada de uma nota que tinha fechado um pedido de compra agora devolve o
+pedido ao estado de antes — ele volta a aparecer como faltando material, e a nota do que falta passa sem autorização.
+
+**O problema que ela resolve.** Quem lançava uma nota errada e estornava a entrada deixava o pedido *Recebido*: ele
+sumia dos atrasados e dos pendentes do Recebimento, e a nota certa era **recusada** como excedente, porque o pedido
+continuava dizendo que tudo tinha chegado. A saída era SQL.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Estorno da entrada deixava o pedido *Recebido*, sem sinal | O pedido volta ao status de antes (ex.: *Enviado*), aos atrasados, aos pendentes e ao alerta de parcial |
+| A nota do que faltava era recusada *"…maior que o saldo do pedido (0)…"* | Passa sem autorização de excedente |
+| O estorno não dizia nada do pedido | *"Pedido de compra ⟨número⟩ reaberto: faltam ⟨saldo⟩ para receber"* |
+| A mesma NF não podia ser relançada | Pode, depois de **todas** as entradas dela estornadas (ficam duas contas a pagar) |
+| Estorno de entrada com material em inspeção ou reprovado podia passar | Recusado, com a mensagem própria |
+| Excedente de um material fechava o pedido mesmo faltando outro | Não fecha: a conta é por material |
+| Mudança manual de status do pedido sem trilha | *"Mudança manual de status do pedido"* na Auditoria |
+
+### Roteiro de teste manual (≈15 min)
+
+**Preparação.** Em **Compras → Pedidos → Novo Pedido**, um pedido de **10** de um material **M** e **5** de outro
+**P**, **Previsão de entrega** ontem, status **Enviado**. No Almoxarifado, **Recebimentos → Novo Recebimento**, forma
+*Pedido de compra*, esse pedido, as quantidades cheias; **Iniciar Conferência (Almoxarifado)**, conferir, preencher os
+dados fiscais e **Processar Nota**. Em **Compras → Pedidos**, o pedido está **Recebido** e sem selo de atraso.
+
+1. **A barreira.** Tente outro recebimento de **10 M** contra o mesmo pedido: recusado com *"Quantidade recebida (10)
+   maior que o saldo do pedido (0) para o material … — a autorização de excedente é de Compras ou do Administrador"*.
+2. **O estorno.** **Almoxarifado → Movimentações**, linha **ENTRADA_COMPRA** de M → seta curva → motivo → **Confirmar
+   Estorno**: aparecem *"Movimentação estornada!"* e *"Pedido de compra ⟨número⟩ reaberto: faltam 10 para receber"*.
+3. **O pedido voltou.** **Compras → Pedidos**: **Enviado**, com *"Atrasado há 1 dia"* (e na caixa **"Só atrasados"**).
+   Na central de alertas, o atrasado e o parcial.
+4. **A nota do que falta.** Novo recebimento contra o pedido: a linha de M mostra **"Saldo pendente: 10"**; salve 10
+   **sem** marcar a autorização — passa. Processe: o pedido volta a **Recebido**.
+5. **A trilha.** **Almoxarifado → Auditoria**: *"Recebido do pedido estornado"* e *"Reabertura automática do pedido"*.
+6. **O fechamento à mão.** Outro pedido de 10, recebido 6. No Compras, lápis → **Status** → **Recebido** (a Auditoria
+   mostra *"Mudança manual de status do pedido"*). Receba os 4 e estorne essa entrada: o aviso é *"Pedido de compra
+   ⟨número⟩: o saldo a receber voltou a 4"* e o pedido **continua Recebido** — a decisão era do comprador.
+7. **Relançar a mesma NF.** Estorne **todas** as entradas de uma nota e crie outro recebimento com a mesma NF: passa
+   (com uma entrada ainda viva, a recusa é *"Nota fiscal … já lançada no recebimento REC-… para este fornecedor"*).
+   Confira no Financeiro: são **duas** contas a pagar.
+8. **Material crítico.** Recebido e ainda em inspeção, o estorno é recusado com *"Esta entrada tem ⟨q⟩ ⟨un⟩ em
+   inspeção — decida a inspeção antes de estornar a entrada"*; com parte reprovada, com *"Esta entrada teve ⟨q⟩ ⟨un⟩
+   reprovado(s) na inspeção — o reprovado sai pela não conformidade; esta entrada não pode ser estornada"*.
+
+### O que esta etapa NÃO cobre
+
+- **Devolução ao fornecedor e sucata** não reabrem o pedido — cobrar a reposição é lápis → **Status**.
+- **Estorno do recebimento inteiro** não existe: o recebimento, a conta a pagar e a solicitação de compra ficam.
+- **O aviso do pedido vem depois** do estorno, não no modal.
+- **Pedido mudado à mão antes desta versão** pode ser reaberto pelo estorno (não há trilha daquela mudança).
+- **O e-mail de atrasado** do pedido reaberto pode não sair de novo — acompanhe pela central de alertas.
 
 ---
 

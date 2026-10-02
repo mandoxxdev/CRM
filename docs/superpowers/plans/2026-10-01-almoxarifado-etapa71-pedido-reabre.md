@@ -1,8 +1,9 @@
 # Etapa 71 — o pedido de compra que reabre quando a entrada é estornada (feature 08, B161)
 
-> Status: **T0–T4 FEITAS (2026-10-01); Fase 5 (fix-round da revisão) FEITA (2026-10-02) — `9a442f1`, `2335c52`,
-> `a9696f3`.** Próximo passo: T5 (fechamento, skill `fechar-etapa`), levando as decisões da Fase 5 (seção no fim) para
-> as letras B/C. Ordem original: Fase 2 (revisão do plano por agente
+> Status: **FECHADA (2026-10-02).** T0 `39da666`, T1 `beedc40`, T2 `81a734c` (+ `44c6803` hashes no plano), T3
+> `63b2680` (+ `b2a5ea7`), T4 `87fe520`, Fase 5 `9a442f1`, `2335c52`, `a9696f3` (+ `f89cfa3` plano), T5 (fechamento —
+> docs, commit de fechamento). A feature 08 foi a 🟢 com a conferência física estruturada como corte declarado (B338).
+> Próxima: **Etapa 72** — ver "Próxima tarefa detalhada" no fim. Ordem original: Fase 2 (revisão do plano por agente
 > fresco), depois T0 → T1 → T2 (tronco), T3 (galho) em paralelo à T2, T4 (integração), T5 (fechamento).
 > Feature 08 (recebimento), item (4) da lista "o que falta para 🟢" (`specs/modulo-almoxarifado/08-recebimento/README.md:3`):
 > *"o pedido que reabre — estornar a movimentação de entrada de um pedido já fechado não reverte `quantidade_recebida` nem
@@ -455,7 +456,16 @@ fechamento. Executores de galho **não** marcam este plano.
   na ordem `STATUS_AUTOMATICO_RECEBIDO`, `RECEBIDO_ESTORNADO`, `STATUS_AUTOMATICO_REABERTO`, `STATUS_AUTOMATICO_RECEBIDO`
   → `GET /almoxarifado/auditoria` devolve os dois rótulos novos. Segundo cenário: o mesmo pelo `/aprovar` direto e pelo
   serviço do motor, com estorno parcial (6 + 4) terminando no cartão de parcial.
-- [ ] **T5 — fechamento** (skill `fechar-etapa`): spec 08 (item (4) pago; **corrigir a B161 e a frase da Surpresa 1
+- [x] **T5 — fechamento — FEITA (2026-10-02)**, commit de fechamento desta entrada (só `docs/` e `specs/`).
+  Novidades: seção da Etapa 71, **A35** revista (exclui movimentações com trilha `RECEBIDO_ESTORNADO`, prefere
+  `movimentacao_entrada_id`, avisa o par ambíguo, e a consulta (b) dos pedidos `recebido` com saldo por material),
+  **B329–B342** (as dez do plano mais B339 inspeção, B340 reprovado, B341 NF relançável, B342 PATCH auditado), **B161**
+  e **B163** corrigidas à vista, **C107–C113**, **D (71)**, **F (71)**; spec 08 a 🟢 (com a caixa "Divergências:
+  registro formal" marcada — estava desmarcada por esquecimento desde a 43); mapa; guia; manual (6.10, 14.1b, 14.1c,
+  14b.1b, 14b.4b). **Divergência do texto original da T5:** a C108 do plano ("literal 'material já consumido' não
+  corrigida") **deixou de existir como furo** — a Fase 2 pôs a recusa própria do material em inspeção antes do claim, e
+  o material retido nunca mais chega à literal genérica; a C108 das novidades virou "mudanças para quem estorna".
+  Plano original da T5 (skill `fechar-etapa`): spec 08 (item (4) pago; **corrigir a B161 e a frase da Surpresa 1
   dizendo que estavam erradas**; o 🟢 com o corte do D10), mapa, guia do usuário (Antes → Agora: "estornar a entrada
   reabre o pedido"; roteiro clicável: pedido → nota → processar → Movimentações → Estornar → Compras mostra o pedido de
   volta), letras B329–B338, **C107** (excedente cruzado fechava o pedido — defeito anterior corrigido na T0), **C108**
@@ -601,3 +611,81 @@ rótulo → (13e) + `auditLabels` "TODO verbo gravável tem rótulo". Cada commi
 **Suíte:** api **265/265**, almoxarifado 44/44, validation 4/4, safealter 3/3, sqlite 5/5. Client não rodado: nenhum
 arquivo do client mudou — a literal nova do reprovado chega pelo `toast.error` genérico do catch (já testado na T3 com a
 literal do em_inspecao), e o toast já lê `reaberto`.
+
+**Registro sem drama:** o corpo do commit `9a442f1` cita a literal nova com acento ("inspeção", "não"), fora da
+convenção "corpo sem acento" do CLAUDE.md. Não foi emendado: reescreveria quatro commits já integrados.
+
+## Divergências do plano (o que a execução mudou, e por quê)
+
+1. **D2 estava errado no plano e na Fase 2** — "sem trilha automática → reabre para `pendente`" desfazia o fechamento à
+   mão do comprador e rebaixava pedido `enviado`; a Fase 5 trocou por "só reabre quando o ÚLTIMO registro de status é o
+   fechamento automático" e passou a auditar o `PATCH` manual do Compras (`2335c52`). O plano dizia "nenhuma linha do
+   Compras muda" — **mudou uma** (a trilha no `alterarStatusPedido`), declarada na spec 08 e na B342.
+2. **A recusa do estorno cresceu duas vezes:** a Fase 2 acrescentou "material em inspeção" (a RN-08 afirmava uma recusa
+   que só existia sem outro estoque — estava errada) e a Fase 5 acrescentou "material reprovado" (a guarda da Fase 2 não
+   via o reprovado, que sai da inspeção para o bloqueado).
+3. **NF relançável** não estava no plano original (Fase 2), e ganhou a cláusula "nenhum item ainda por entrar" na T2 e
+   a régua de quantidade da Etapa 70 na Fase 5.
+4. **O epsilon da barreira** entrou na T0 (Fase 2: defeito anterior que recusava 0,1 + 0,2 de 0,3).
+5. **O `WHERE` da reabertura** também repete a régua (acréscimo da T2, corrida inversa ao fechamento).
+6. **A C108 do plano** deixou de existir como furo (ver a T5).
+
+## Verificação final (medida)
+
+`cd server && npm run test:api` → **265/265** arquivos; `test:almoxarifado` 44/0; `test:validation` 4/0;
+`test:safealter` 3/0; `test:sqlite` 5/0 (medidos no fix-round da Fase 5, `a9696f3`, o último commit de código).
+Cliente: **1141/1141** (74 suítes) e `CI=true npx react-scripts build` ok — medidos na T3 (`63b2680`, o único commit de
+cliente da etapa) e RE-MEDIDOS no fechamento pelo fio principal, no HEAD com a Fase 5: cliente 74 suítes / 1141 testes, `CI=true` build "Compiled successfully". `git status`: só `docs/bkp_bancoprod.md` e
+`server/nodemon.json` fora do controle, como antes.
+
+## Retro (4 números)
+
+- **Rodadas de correção até verde:** 1 (o fix-round da Fase 5).
+- **Achados da revisão:** Fase 2 — 13 (0 críticos, 5 importantes — 3 provados por sonda — e 8 menores), 1 deles errado
+  depois (o fallback da reabertura, corrigido na Fase 5); Fase 5 — 2 importantes + 1 menor, todos reais, **0 ruído**.
+- **Paralelismo:** T3 (cliente) e T4 (integração) em paralelo, sem retrabalho; a revisão adversarial rodou **depois**
+  dos dois (lição das Etapas 68/69: revisor não pode ler arquivo no meio de uma sabotagem alheia).
+- **Defeito que escapou da Etapa 70:** nenhum conhecido. Da Etapa 42: dois (a régua do fechamento por pedido e a B161
+  subestimada), achados pela medição desta etapa.
+
+## Próxima tarefa detalhada — Etapa 72: a solicitação de compra que fecha na primeira nota parcial (feature 18, com a 08)
+
+**Por que esta.** Com a 08 a 🟢, os 🟡 do mapa que sobram estão bloqueados ou são grandes: 21 e 22 dependem de
+BOM/OP; 06 depende da decisão B11 (dupla aprovação de ajuste); 05 pede a lista de separação como entidade; 23 espera a
+perna Perfis (B56/spec 28, decisão); 01 tem cadastros sem consumidor (tipos de documento, transportadoras). O defeito
+que esta etapa mediu de passagem (Surpresa 4) tem **custo de dinheiro**: `fecharSolicitacoesDoPedido`
+(`server/services/almoxarifado/purchaseService.js:113-126`) marca **todas** as solicitações `VINCULADO` do pedido como
+`RECEBIDA` (terminal) na **primeira** nota, parcial ou não. Medido na leitura: o **"a caminho"** da sugestão de
+reposição (`purchaseService.js:225-245`) e a lista `solicitacoes_abertas` do material (`:192-196`) só contam
+`PENDENTE`/`VINCULADO` — logo, depois de uma nota parcial, o que **ainda vem** pelo pedido some do "a caminho", e a
+sugestão pode mandar **comprar de novo** o que já está encomendado. E o `verificarEstoqueMinimo` (`:26-28`) só deduplica
+contra `PENDENTE`. A **letra E** da Etapa 11 já previa "o fix definitivo (status terminal no recebimento)" (comentário em
+`:233-236`).
+
+**Fase 0 da 72 — medir antes de prometer:**
+1. **Sonda pelas rotas:** material com mínimo → `verificar-minimos` → solicitação → pedido de 10 vinculado → nota de 4
+   → a solicitação vira `RECEBIDA`? A sugestão de reposição desse material passa a sugerir compra (o `a_caminho` caiu
+   de 10 para 0)? Um segundo `verificar-minimos` abre solicitação nova (o material continua abaixo do mínimo)?
+2. **A régua de "pedido completo"** já é única desde a 71 (`SQL_PEDIDO_COMPLETO`, `situacaoDoPedido` em
+   `receiptService.js`) — medir se "a solicitação fecha quando o PEDIDO completa o material DELA" (por material, não
+   pelo pedido inteiro) é implementável com o que existe (`solicitacoes_compra_almoxarifado` tem `material_id`,
+   `quantidade`, `pedido_compra_id`).
+3. **O estorno da 71** (`estornarEntradaNoPedido`): se a solicitação fechar só na completude, o estorno que reabre o
+   pedido deveria reabrir a solicitação (`RECEBIDA` → `VINCULADO`)? Medir quem lê `recebida_em` e se `RECEBIDA` é
+   terminal por alguma razão além da Etapa 14 (`STATUS_TERMINAIS`, `:46`).
+4. **Quem mais lê o status da solicitação:** tela de Reposição/Compras (`client/src/components/almoxarifado/`),
+   relatórios (`reportRegistry`), o vínculo (`vincularPedidoCompra` recusa terminal), testes da Etapa 14
+   (`server/tests/api/*solicitac*`).
+
+**Contratos que não se reabrem:** o fechamento e a reabertura do **pedido** (Etapas 42/71, régua única); a entrada
+atômica da nota; o estorno do motor; o `verificarEstoqueMinimo` só para material próprio (Etapa 8).
+
+**Pontos de atenção.**
+- Decidir (letra B, reversível) se a solicitação fecha "quando o pedido completa o material dela" ou "quando o pedido
+  inteiro completa", e se o estorno a reabre — medir os testes da Etapa 14 que prendem o fechamento na primeira nota
+  antes (vão mudar **dizendo** que a regra mudou).
+- O "a caminho" da reposição é o sintoma de valor: o teste de integração precisa entrar pela sugestão de reposição
+  (a tela), não só pelo status da solicitação.
+- Metade positiva: a nota que completa o material fecha a solicitação (e só a desse material).
+- Consulta para a letra A: solicitações `RECEBIDA` cujo pedido ainda tem saldo do material dela (fechadas cedo no
+  passado).

@@ -1345,6 +1345,39 @@ Movimentação errada **não é excluída**. O botão de estornar (seta curva) n
 - **Estorno de uma contagem com localização** que deixaria o material com saldo negativo (porque o material já saiu depois da contagem) é recusado: *"Não é possível estornar: o saldo já foi consumido (o estorno deixaria o material negativo)"*.
 - **Duas pessoas estornando ao mesmo tempo:** só a primeira passa; a segunda recebe *"Movimentação já cancelada"*.
 
+**Estornar a entrada de uma nota de compra mexe no pedido de compra.** Quando a linha estornada é a **ENTRADA_COMPRA**
+(a entrada que o processamento da nota gera — o livro mostra o tipo por esse código) de uma nota recebida **contra um
+pedido**, o sistema:
+
+- **desconta** da linha do pedido a quantidade daquela entrada (sem deixar a linha negativa) — o pedido volta a dizer
+  que esse material falta, e a próxima nota dele é aceita sem autorização de excedente;
+- **reabre** o pedido quando a nota o tinha fechado: se antes do estorno o pedido estava completo e *Recebido*, depois
+  dele deixou de estar completo, e o último registro de status do pedido é o **fechamento automático**, o pedido volta
+  ao status que tinha antes de fechar (*Pendente*, *Aprovado*, *Em Análise* ou *Enviado*) — e com isso volta à lista de
+  atrasados (se a previsão venceu), aos pendentes do Recebimento e ao alerta de parcial;
+- **não reabre** quando o último *Recebido* foi escrito **à mão** pelo comprador (lápis → *Status*, que deixa a trilha
+  *"Mudança manual de status do pedido"*), nem quando o pedido está *Cancelado* ou *Rejeitado* — nesses casos só a linha
+  desconta.
+
+Depois de *"Movimentação estornada!"*, a tela mostra um segundo aviso: *"Pedido de compra ⟨número⟩ reaberto: faltam
+⟨saldo⟩ para receber"* (o pedido reabriu) ou *"Pedido de compra ⟨número⟩: o saldo a receber voltou a ⟨saldo⟩"* (só a
+linha descontou). Não há segundo aviso quando o pedido está cancelado ou rejeitado, nem quando o saldo voltou a zero.
+A trilha de auditoria do pedido registra *"Recebido do pedido estornado"* (*"Estorno da movimentação #⟨id⟩ descontou
+⟨quantidade⟩ do pedido"*) e, quando reabre, *"Reabertura automática do pedido"*. Se a parte do pedido falhar, o estorno
+do estoque continua valendo.
+
+O estorno **não** desfaz o resto da nota: o recebimento continua *Processado*, a conta a pagar e a solicitação de compra
+ficam como estão. Estornar a entrada de nota **sem** pedido não toca pedido nenhum.
+
+**Duas recusas próprias da entrada de compra**, verificadas antes de qualquer alteração:
+
+| Situação | Mensagem |
+|---|---|
+| A entrada tem material **ainda em inspeção** | *"Esta entrada tem ⟨q⟩ ⟨un⟩ em inspeção — decida a inspeção antes de estornar a entrada"* |
+| A entrada teve material **reprovado** na inspeção | *"Esta entrada teve ⟨q⟩ ⟨un⟩ reprovado(s) na inspeção — o reprovado sai pela não conformidade; esta entrada não pode ser estornada"* |
+
+Inspeção decidida só com aprovado não impede o estorno.
+
 Há linhas que o livro **não estorna de propósito**, cada uma com a porta certa nomeada na mensagem:
 
 | Linha | Mensagem |
@@ -2324,6 +2357,10 @@ Casar por **qualquer** uma é o que faz a regra valer no caminho real: um docume
 | Mesma nota, **fornecedores diferentes** | Duas empresas podem emitir nota com o mesmo número |
 | Dois recebimentos **sem número de nota**, mesmo fornecedor | Receber por pedido de compra sem nota é legítimo |
 | Mesma nota, **fornecedor não identificado** nos dois (sem cadastro, sem CNPJ e sem nome) | Tratar "sem fornecedor" como um fornecedor único juntaria documentos de origens diferentes |
+| Mesma nota de um recebimento cujas **entradas foram todas estornadas** (e que não tem item ainda esperando entrar) | É o "lancei errado, estornei, relanço": o documento estornado deixa de ser dono da nota. Com **qualquer** entrada ainda valendo — ou um item ainda por processar —, a recusa continua |
+
+**Relançar deixa duas contas a pagar.** O estorno não cancela a conta a pagar gerada pelo primeiro lançamento; o
+relançamento gera outra. Quem relança uma nota precisa avisar o Financeiro para cancelar a primeira.
 
 **Uma consequência que parece erro e não é:** se você **alterar o fornecedor** de um recebimento (ao preencher os dados fiscais) para o mesmo fornecedor de outro documento que já tem aquela nota, a partir dali ele passa a receber a recusa citando o outro documento. É o comportamento correto — os dois passaram a ser a mesma nota do mesmo fornecedor.
 
@@ -2343,10 +2380,15 @@ Quando a forma é **Pedido de compra**, o recebimento deixa de ser uma digitaç�
 
 A soma por material é deliberada: um pedido pode ter **duas linhas do mesmo material** (preços ou prazos diferentes), e o que limita o recebimento é o total do material, não cada linha isolada. Por isso, quando você digita quantidade em duas linhas do mesmo material, o sistema **soma as duas** antes de comparar com o saldo — e, se a soma passar, o aviso aparece nas **duas** linhas.
 
+Em quantidade fracionada, a diferença de arredondamento do computador não conta como excedente: um pedido de 0,3 kg
+recebido em 0,1 e depois 0,2 aceita a segunda nota (o saldo calculado seria 0,19999… e não 0,2).
+
 **Só o que entra no estoque consome o saldo.** Criar o recebimento **não** muda o saldo do pedido. O pedido só passa a contar quando o material **entra fisicamente no estoque**, o que acontece no **Processar Nota** (ou na aprovação direta do recebimento). Consequências práticas:
 
 - um recebimento criado e ainda não processado **não** reduz o saldo — o pedido continua oferecendo o mesmo saldo até a entrada acontecer;
 - processar a mesma nota duas vezes **não** conta duas vezes;
+- **estornar** a entrada da nota (6.10) **devolve** o saldo ao pedido — a linha deixa de contar o que foi estornado, e
+  a próxima nota daquele material é aceita sem autorização de excedente;
 - **dois recebimentos criados contra o mesmo pedido, antes de qualquer um ser processado, são aceitos os dois** — cada um é medido contra o saldo que existia quando foi criado. Quem lança recebimento em duplicata contra o mesmo pedido precisa saber disso.
 
 **O aviso que aparece enquanto você digita.** Passando do saldo, aparece embaixo da linha, em vermelho:
@@ -2715,22 +2757,27 @@ descrito na seção 21c-bis.
 > pedida, o sistema grava **Status: Recebido** no pedido sozinho, e o selo de atraso cai junto —
 > ninguém precisa lembrar de mudar o status à mão.
 >
-> A régua é exatamente esta: soma de **tudo o que entrou fisicamente no estoque** por aquele pedido
-> **≥** soma de **tudo o que o pedido pediu**, contando só as linhas que têm material do cadastro
-> (linha de frete ou serviço, sem material, não entra na conta). Chegar **mais** do que o pedido
-> pediu também fecha.
+> A régua é **por material**: o pedido fecha quando, para **cada material** dele, o que entrou
+> fisicamente no estoque por aquele pedido **≥** o que o pedido pediu daquele material (somando as
+> linhas do mesmo material), contando só as linhas que têm material do cadastro (linha de frete ou
+> serviço, sem material, não entra na conta). Chegar **mais** do que o pedido pediu de um material
+> também conta como completo **para aquele material** — mas o que chegou a mais de um material **não
+> paga** o que faltou de outro: um pedido de 10 A + 10 B que recebeu 25 de A e nada de B **não** fecha.
+> Diferença de arredondamento de quantidade fracionada não impede o fechamento.
 >
 > **O que o automático NÃO faz** (e por isso o caminho manual da seção 14b.4b continua existindo):
 > - **recebimento parcial não fecha nada** — enquanto faltar material, o pedido segue em aberto e
 >   atrasado, e é isso que o alerta *"Pedido de compra recebido parcialmente"* (21c-bis) avisa;
-> - **ele nunca reabre um pedido**: se depois de fechado o material voltar (devolução, estorno de
->   movimentação), o status **continua** *Recebido* — quem corrige é o comprador, por 14b.4b;
+> - **devolução ao fornecedor e sucata não reabrem o pedido**: o material entrou e saiu por decisão de
+>   qualidade; se o fornecedor vai repor, quem reabre é o comprador, por 14b.4b. Já o **estorno** da
+>   entrada da nota **reabre** o pedido que o fechamento automático tinha fechado (6.10);
 > - **ele não mexe em pedido Cancelado nem Rejeitado**: se a nota chegar num pedido que você cancelou,
 >   o material entra no estoque (ele está fisicamente no galpão) mas o status fica como você deixou.
 >
 > Toda mudança automática fica registrada na **trilha de auditoria** como *"Fechamento automático do
 > pedido"*, com o nome de quem processou a nota — é onde você descobre por que um pedido seu mudou de
-> status sem você ter tocado nele.
+> status sem você ter tocado nele. A reabertura pelo estorno aparece como *"Reabertura automática do
+> pedido"*, e o desconto da linha como *"Recebido do pedido estornado"*.
 
 ### 14b.2 Criar um pedido
 
@@ -2838,10 +2885,18 @@ dela continua *Aprovado*.
 
 O **Status** é o único campo que continua editável depois do primeiro recebimento.
 
-Este caminho **não** é o normal para o pedido que chegou inteiro — esse fecha sozinho (14b.1b). Ele
-existe para os três casos em que a decisão é sua: **reabrir** um pedido fechado (o material voltou por
-devolução ou por estorno de movimentação), **fechar** um pedido que chegou por fora do sistema, e mexer
-no status de um pedido **Cancelado** ou **Rejeitado**, que o automático nunca toca.
+Este caminho **não** é o normal para o pedido que chegou inteiro — esse fecha sozinho (14b.1b) — nem
+para o pedido cuja entrada foi **estornada**, que reabre sozinho (6.10). Ele existe para os casos em que
+a decisão é sua: **reabrir** um pedido fechado cujo material voltou por **devolução** ao fornecedor ou
+**sucata** (que não reabrem sozinhos), **fechar** um pedido que chegou por fora do sistema — ou dar por
+encerrado um pedido com saldo aberto —, e mexer no status de um pedido **Cancelado** ou **Rejeitado**,
+que o automático nunca toca.
+
+**A mudança fica registrada.** Toda mudança de status por este caminho grava na trilha de auditoria
+*"Mudança manual de status do pedido"*, com o status de antes, o de depois e quem mudou (salvar sem
+mudar o status não grava nada). Isso tem um efeito: um pedido que **você** marcou *Recebido* **não** é
+reaberto quando alguém estorna depois a entrada de uma nota dele — o estorno só devolve o saldo da
+linha. A decisão de reabrir continua sua.
 
 Clique no **lápis** do pedido na aba Pedidos de Compra. Se ele já teve recebimento, o formulário abre
 com uma faixa de aviso no topo:

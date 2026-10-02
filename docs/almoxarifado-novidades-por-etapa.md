@@ -107,7 +107,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Trinta e quatro itens para rodar em produção ANTES do deploy — trinta e um são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Trinta e cinco itens para rodar em produção ANTES do deploy — trinta e dois são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-02 (Etapa 71) de trinta e quatro para trinta e cinco**, com a **A35** — os pedidos de compra cuja entrada foi estornada **antes** desta etapa (a linha do pedido não descontou e o pedido pode estar *Recebido* com material faltando), e os pedidos fechados pelo **excedente cruzado** (chegou a mais de um material e nada de outro, e o pedido virou *Recebido*).)*
 
 *(**Atualizado em 2026-10-01 (Etapa 70) de trinta e três para trinta e quatro**, com a **A34** — para quem o aviso de entrada de recebimento vai sair no dia do deploy, quais requisições seriam avisadas (e há quanto tempo esperam), e as notas antigas em que o item contado **zero** entrou no estoque com a quantidade esperada.)*
 
@@ -1159,7 +1161,59 @@ SELECT r.numero, r.status, r.nota_fiscal, ri.id AS item_id, m.codigo, ri.quantid
 - **(c) com `quantidade_recebida` em branco (texto vazio)** — nada a fazer: em branco é "não informado", e entrou a
   esperada, que é a regra de hoje também.
 
-### B. Decisões de negócio — B1 a B328; as em aberto esperam você, as tomadas estão escritas com o descartado
+**A35 (NOVA, da Etapa 71 — o pedido de compra que ficou *Recebido* com material faltando: medir antes, nada é
+movido).** A partir desta etapa, estornar a entrada de uma nota **desconta** a linha do pedido e **reabre** o pedido
+que a conta tinha fechado. Mas isso vale do deploy em diante: o estorno feito **antes** deixou a linha dizendo que o
+material chegou, e a próxima nota do que falta é recusada com *"…maior que o saldo do pedido (0)…"*. E a etapa
+corrigiu a régua do fechamento: um pedido que recebeu **a mais** de um material e **nada** de outro fechava como
+*Recebido* — o que já fechou assim continua fechado. Duas consultas:
+
+```sql
+-- (a) entradas de nota contra pedido ESTORNADAS que ainda não descontaram a linha do pedido
+--     (as que o estorno já descontou — trilha RECEBIDO_ESTORNADO com o id da movimentação — ficam de fora)
+SELECT m.id AS movimentacao, m.recebimento_id, m.material_id, m.quantidade, m.cancelado_em,
+       ri.id AS item_recebimento, ri.pedido_item_id, ip.pedido_id, p.numero, p.status,
+       ip.quantidade AS pedida_na_linha, ip.quantidade_recebida AS recebida_na_linha
+  FROM movimentacoes_almoxarifado m
+  JOIN recebimentos_material_itens_almoxarifado ri
+    ON ri.recebimento_id = m.recebimento_id
+   AND (ri.movimentacao_entrada_id = m.id
+        OR (ri.movimentacao_entrada_id IS NULL AND ri.material_id = m.material_id))
+  JOIN itens_pedido_compra ip ON ip.id = ri.pedido_item_id
+  JOIN pedidos_compra p ON p.id = ip.pedido_id
+ WHERE m.tipo = 'ENTRADA_COMPRA' AND m.cancelado = 1
+   AND NOT EXISTS (SELECT 1 FROM auditoria_log_almoxarifado a
+                    WHERE a.entidade = 'pedido_compra' AND a.acao = 'RECEBIDO_ESTORNADO'
+                      AND json_extract(a.dados_novos, '$.movimentacao_id') = m.id)
+ ORDER BY m.id, ri.id;
+
+-- (b) pedidos "Recebido" que, pela régua por material, ainda têm saldo (o excedente de um material pagou a falta de outro)
+SELECT p.id, p.numero, p.status, s.total_pedido, s.soma_recebida, s.saldo_por_material
+  FROM pedidos_compra p
+  JOIN (SELECT pedido_id, SUM(total_material) AS total_pedido, SUM(recebida_material) AS soma_recebida,
+               SUM(MAX(0, total_material - recebida_material)) AS saldo_por_material
+          FROM (SELECT pedido_id, material_id, SUM(COALESCE(quantidade, 0)) AS total_material,
+                       SUM(COALESCE(quantidade_recebida, 0)) AS recebida_material
+                  FROM itens_pedido_compra WHERE material_id IS NOT NULL
+                 GROUP BY pedido_id, material_id)
+         GROUP BY pedido_id) s ON s.pedido_id = p.id
+ WHERE LOWER(COALESCE(p.status, '')) = 'recebido' AND s.saldo_por_material > 1e-9;
+```
+
+**Como ler o resultado:**
+- **(a) vazia** — nada a fazer.
+- **(a) com linhas** — cada linha é uma entrada estornada cuja linha do pedido **não** foi descontada. A correção é
+  por linha do pedido: `UPDATE itens_pedido_compra SET quantidade_recebida = MAX(0, quantidade_recebida - <quantidade>)
+  WHERE id = <pedido_item_id>`, e depois, se o pedido estiver *Recebido* e faltar material, o lápis → **Status** no
+  Compras. **Atenção:** se a **mesma movimentação** aparecer em **duas** linhas, a nota tinha dois itens do mesmo
+  material (o vínculo do passado é ambíguo) — desconte **uma vez só**, na linha do pedido cuja quantidade bate com a da
+  movimentação. Não automatizado de propósito (**B332**).
+- **(b) vazia** — nada a fazer.
+- **(b) com pedidos** — pedido fechado pelo excedente cruzado: falta material de verdade. Se ainda se espera o que
+  falta, lápis → **Status** de volta para *Enviado* (ou o que era); se a empresa aceitou o excedente no lugar do que não
+  veio, deixar como está.
+
+### B. Decisões de negócio — B1 a B342; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-01 de B295 para B315**, com as vinte da Etapa 69.)*
 
@@ -3449,6 +3503,17 @@ sinal nenhum** de que falta material. Antes desta etapa o selo de atrasado era o
 Recuperação: lápis → Status de volta para *Pendente* (e, se o número do recebido estiver errado, ele
 se corrige por consulta). Está na letra **D** também, como limitação declarada.
 
+> ⚠️ **REVOGADA EM PARTE NA ETAPA 71 (2026-10-02) — e este texto subestimava o problema, o que fica dito em vez de
+> apagado.** (1) **Não era só "sem sinal": a nota seguinte era RECUSADA.** Depois do estorno, a linha do pedido
+> continuava dizendo que o material tinha chegado, e a nota do que faltava tomava *"Quantidade recebida (10) maior que
+> o saldo do pedido (0) …"* — só passava com autorização de **excedente**, gravando trilha de excedente sobre um
+> material que nunca entrou duas vezes. (2) **A frase *"se o número do recebido estiver errado, ele se corrige por
+> consulta"* ESTAVA ERRADA:** a consulta só **lê** o acumulador; não havia porta de tela que o corrigisse (só SQL), e a
+> recuperação pelo lápis voltava o status mas deixava a nota recusada. **Desde a Etapa 71**, estornar a entrada de uma
+> nota contra pedido **desconta** a linha e **reabre** o pedido que a conta tinha fechado (**B329**, **B330**); o que
+> continua valendo desta decisão é a outra metade — **devolução e sucata não reabrem** (**B336**). O passado está na
+> **A35**.
+
 **B162 (NOVA, da Etapa 42) — o automático não mexe em pedido Cancelado nem Rejeitado.**
 
 **O que foi escolhido:** se a nota chega num pedido que você cancelou (ou rejeitou), o material
@@ -3468,6 +3533,12 @@ Ressuscitar o pedido nesse caso seria decidir no seu lugar.
 muda **sozinho**, por um ato de outro módulo. Sem a trilha, ninguém responde *"quem mudou meu
 pedido?"*. **A assimetria fica declarada:** se você quiser a trilha também na mudança manual, é uma
 linha — e vale dizer que hoje ela não existe.
+
+> **A assimetria ACABOU na Etapa 71 (2026-10-02, `2335c52`)** — a frase "hoje ela não existe" deixou de ser verdade. A
+> mudança manual de status do pedido (lápis → **Status**, no Compras) passou a gravar a trilha *"Mudança manual de
+> status do pedido"* (status de antes e de depois, quem mudou), **só quando o status muda de fato**. Motivo: o estorno
+> que reabre o pedido precisa saber se o último *Recebido* foi escrito pelo automático ou pelo comprador (**B342**).
+> Mudanças manuais feitas **antes** do deploy continuam sem trilha (**C113**).
 
 **B164 (NOVA, da Etapa 42) — o alerta de pedido parcial avisa por SALDO, não por dia nem por mês.**
 
@@ -4699,6 +4770,98 @@ em telas e listas), e renovar a marca a cada item (estreita a janela sem fechá-
 ganha etiqueta. **Descartado:** imprimir só o que tem a marca de entrada no estoque — nota processada antes de essa
 marca existir ficaria sem etiqueta nenhuma, e numa nota processada todo item com quantidade maior que zero entrou.
 
+**B329 (NOVA, da Etapa 71) — estornar a entrada de uma nota contra pedido DESCONTA a linha do pedido.** O estorno
+(Almoxarifado → Movimentações → estornar a linha **ENTRADA_COMPRA**) tira da linha do pedido a mesma quantidade que a
+entrada tinha somado, sem deixar a linha negativa, e grava a trilha *"Recebido do pedido estornado"*. Com isso a nota
+seguinte do que falta **passa** sem autorização de excedente. Revoga a metade "o acumulador só soma" da **B161**.
+**Descartado:** só reabrir o status (a nota seguinte continuaria recusada); uma porta manual para editar o recebido
+(mais um gesto a lembrar, com o estado errado silencioso até lá); recalcular o recebido somando o livro (as linhas do
+passado não sabem qual movimentação é sua).
+
+**B330 (NOVA, da Etapa 71; mudada na revisão do código) — o pedido REABRE quando a conta fechava antes do estorno, deixa
+de fechar depois, e o último *Recebido* foi escrito pelo automático.** Ele volta ao status que tinha **antes** do
+fechamento automático (*Enviado*, *Aprovado*, *Pendente* ou *Em Análise* — o que a trilha do fechamento guardou), com a
+trilha *"Reabertura automática do pedido"*. O pedido reaberto volta à lista de atrasados (se vencido), aos pendentes do
+Recebimento, à linha oferecida na nova nota e ao alerta de parcial. **Se o último registro de status do pedido for uma
+mudança MANUAL** (o comprador marcou *Recebido*, ou mexeu no status depois do automático), o estorno só desconta a linha
+e **não** reabre — a decisão é do comprador. **A primeira versão desta regra estava errada, e fica dito:** sem trilha
+do automático, o pedido reabria para *Pendente* — e com isso o estorno desfazia o fechamento à mão do comprador e
+rebaixava um pedido *Enviado* para "não enviado" (achado da revisão do código, corrigido). **Descartado:** reabrir sempre
+para *Pendente*; reabrir sempre que a conta não fecha (atropelaria quem fechou de propósito com saldo aberto).
+
+**B331 (NOVA, da Etapa 71) — pedido *Cancelado* ou *Rejeitado* não é reaberto**: a linha desconta, o status fica. Mesmo
+motivo da **B162** — a decisão do comprador não é desfeita por ato de outro módulo.
+
+**B332 (NOVA, da Etapa 71) — cada item da nota passa a guardar qual entrada de estoque ele gerou.** É o que liga o
+estorno à linha certa do pedido quando a nota tem **dois itens do mesmo material**. Nas notas do passado (sem esse
+vínculo), o estorno escolhe o item pelo par nota + material — com dois, o de quantidade igual à da entrada — e o item
+escolhido passa a guardar o vínculo, para o estorno da outra entrada não cair nele de novo. **Descartado:** gravar o
+item no livro de movimentações (mexeria no motor, que dezenas de portas chamam) e um backfill do passado (o par continua
+ambíguo; a **A35** mede).
+
+**B333 (NOVA, da Etapa 71) — o desconto mora no motor do estorno e não derruba o estorno.** Vale em toda porta que
+estorna (a tela, a API, os serviços), roda **uma vez** por movimentação (o segundo estorno é recusado com *"Movimentação
+já cancelada"* antes de chegar lá), e se a parte do pedido falhar o estorno do saldo continua valendo, com aviso no log.
+A resposta do estorno ganha o pedido tocado — e a tela avisa (**C108**). **Descartado:** na rota (o serviço chamado
+direto ficaria sem); fatal (um estorno de saldo legítimo não pode falhar porque a tabela do Compras falhou).
+
+**B334 (NOVA, da Etapa 71) — o que o estorno NÃO desfaz.** O recebimento continua *Processado* (a nota existiu e
+entrou; o estorno é outro fato, no livro), a **conta a pagar** fica (a obrigação é da nota fiscal — cancelar nota é
+gesto do Financeiro), a **solicitação de compra** continua *Recebida* e o **aviso de entrada** já enviado não muda
+(**B322**). **Descartado:** um "estorno do recebimento inteiro" como documento (rota e status novos, reverteria conta e
+etiquetas — ninguém pediu).
+
+**B335 (NOVA, da Etapa 71) — os e-mails de atrasado e de parcial seguem a regra de não repetir.** O **cartão** da
+central volta na hora em que o pedido reabre; o **e-mail** só sai de novo se a previsão de entrega ou o saldo forem
+diferentes dos já avisados (**C112**). **Descartado:** forçar e-mail novo na reabertura (mudaria a chave de repetição de
+todos os alertas).
+
+**B336 (NOVA, da Etapa 71) — devolução ao fornecedor e sucata do reprovado NÃO reabrem o pedido.** O material entrou de
+verdade e saiu por decisão de qualidade; se o fornecedor repõe ou não é decisão comercial da não conformidade, não
+dedução do sistema. Se Compras quiser cobrar a reposição: lápis → **Status**. **Descartado:** reabrir na execução da
+devolução (o pedido de quem decidiu "devolver sem repor" ficaria atrasado para sempre).
+
+**B337 (NOVA, da Etapa 71; corrige defeito ANTERIOR da Etapa 42) — uma régua só para "pedido completo", por material.**
+O fechamento automático e a lista de pendentes do Recebimento passaram a usar a mesma conta que a tela já usava: o que
+chegou **a mais** de um material **não** paga o que faltou de outro (antes, um pedido de 10 A + 10 B que recebeu 25 de A
+e nada de B virava *Recebido* — **C107**). E a barreira do saldo do pedido ganhou a tolerância de arredondamento:
+pedido de 0,3 kg recebido em 0,1 + 0,2 deixou de recusar a segunda nota com *"maior que o saldo do pedido
+(0.19999999999999998)"*. **Descartado:** deixar para depois — a reabertura (**B330**) compararia "fechava antes / não
+fecha depois" com uma régua, e o fechamento usaria outra.
+
+**B338 (NOVA, da Etapa 71) — a feature de Recebimento vai a 🟢 com a conferência física estruturada declarada como
+CORTE.** Contagem/pesagem/medição/checklist por tipo de material está fora por decisão do design desde a Etapa 5 (o
+cliente não especificou além da spec 8.2), e a conferência de quantidade com não conformidade numerada cobre o que o
+sistema decide. **Descartado:** manter 🟡 por um item que nenhuma etapa vai pagar sem especificação nova. **Reversível:**
+é uma linha no mapa; se a empresa quiser a conferência estruturada, ela vira etapa.
+
+**B339 (NOVA, da Etapa 71, revisão do plano) — não se estorna a entrada de material que ainda está em inspeção.** Com
+outro saldo do mesmo material, o estorno passava e a inspeção depois **aprovava** o que "não tinha entrado". Agora:
+*"Esta entrada tem ⟨q⟩ ⟨un⟩ em inspeção — decida a inspeção antes de estornar a entrada"*. Decidida a inspeção (só
+com aprovado), o estorno segue normal. **Descartado:** deixar o estorno passar e a inspeção "se ajustar" (não há como
+desfazer a retenção pela metade).
+
+**B340 (NOVA, da Etapa 71, revisão do código) — não se estorna a entrada que teve material REPROVADO na inspeção.** A
+reprovação tira o material da inspeção e o **bloqueia** com não conformidade aberta; o estorno passava, e o reprovado
+saía **duas vezes** (pelo estorno e depois pela devolução/sucata da não conformidade — com lote, a não conformidade
+ficava presa). Agora: *"Esta entrada teve ⟨q⟩ ⟨un⟩ reprovado(s) na inspeção — o reprovado sai pela não conformidade;
+esta entrada não pode ser estornada"*. **Descartado:** estornar só a parte aprovada (o estorno é por movimentação
+inteira — partir seria motor novo) e liberar o bloqueado no estorno (apagaria a não conformidade aberta).
+
+**B341 (NOVA, da Etapa 71, revisão do plano) — a mesma nota fiscal pode ser relançada depois de TODAS as entradas
+dela serem estornadas.** "Lancei errado → estornei → relanço" é o uso mais comum do estorno, e o relançamento tomava
+*"Nota fiscal ⟨NF⟩ já lançada no recebimento REC-… para este fornecedor"*. Agora o recebimento cujas entradas existem e
+estão **todas** estornadas, **e** que não tem item ainda esperando entrar, deixa de bloquear a nota; qualquer entrada
+viva (ou item ainda por processar) continua bloqueando. **Consequência declarada:** a conta a pagar do primeiro
+lançamento **fica** — relançar deixa **duas** contas a pagar da mesma compra (**C109**). **Descartado:** cancelar o
+recebimento como documento (**B334**).
+
+**B342 (NOVA, da Etapa 71, revisão do código) — a mudança manual de status do pedido passa a deixar trilha.** O lápis →
+**Status** do Compras grava *"Mudança manual de status do pedido"* quando o status muda (sem falhar a mudança se a
+trilha falhar). É o que separa o *Recebido* do comprador do *Recebido* do automático (**B330**) — e acaba a assimetria
+declarada na **B163**. É a única linha desta etapa no módulo Compras. **Descartado:** comparar a data da última
+alteração do pedido com a da trilha (outras escritas tocam a data; resolução de segundo).
+
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -5441,6 +5604,9 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
     **parcial** não muda status nenhum. E há uma limitação **nova** no lugar da antiga, que vale ler:
     estornar uma movimentação de entrada depois de o pedido ter fechado **não deixa sinal nenhum** de
     que falta material (**B161**).
+    **Etapa 71 (2026-10-02): a limitação nova está PAGA** — o estorno da entrada desconta a linha e reabre o pedido
+    que o automático fechou (**B329**, **B330**); "o automático só fecha" deixou de ser verdade para o estorno (a
+    devolução e a sucata continuam não reabrindo, **B336**).
 
 57. **✅ RESOLVIDO NA ETAPA 44 — a Qualidade decide e a decisão EXECUTA.** Aceitar (ou aceitar sob
     desvio) uma não conformidade de inspeção agora **libera sozinha** o material que a reprovação
@@ -5941,6 +6107,53 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      processada"*. (3) Ao processar, o solicitante de cada requisição que esperava o material recebe e-mail (ligado de
      fábrica); o aviso da nota para a lista só sai se alguém ligar. **O que fazer:** avisar o almoxarifado.
 
+107. **✅ CORRIGIDO NA ETAPA 71 (defeito anterior, da Etapa 42) — o excedente de um material fechava o pedido.** Um
+     pedido de 10 A + 10 B que recebia 25 de A (com o excedente autorizado) e nada de B virava *Recebido*: saía da lista
+     de atrasados, dos pendentes do Recebimento e do alerta de parcial, embora a tela mostrasse saldo 10 de B. A régua
+     do fechamento somava o pedido inteiro; agora soma **por material** (**B337**). Os comentários do código que davam
+     a correção da Etapa 42 por feita **estavam errados** — ela tinha corrigido só a leitura. **O que fazer:** a
+     **A35 (b)** acha os pedidos que já fecharam assim.
+
+108. **NOVO, da Etapa 71 — mudanças para quem estorna entrada de nota.** (1) Estornar a linha **ENTRADA_COMPRA** de
+     uma nota contra pedido agora **mexe no pedido**: a tela mostra, depois de *"Movimentação estornada!"*, um segundo
+     aviso — *"Pedido de compra ⟨número⟩ reaberto: faltam ⟨saldo⟩ para receber"* (o pedido voltou a *Enviado*/…, aos
+     atrasados e aos pendentes) ou *"Pedido de compra ⟨número⟩: o saldo a receber voltou a ⟨saldo⟩"* (só a linha
+     descontou). (2) Duas recusas novas no estorno: material **em inspeção** (*"Esta entrada tem ⟨q⟩ ⟨un⟩ em inspeção —
+     decida a inspeção antes de estornar a entrada"*) e material **reprovado** (*"Esta entrada teve ⟨q⟩ ⟨un⟩
+     reprovado(s) na inspeção — o reprovado sai pela não conformidade; esta entrada não pode ser estornada"*). (3) A
+     mesma NF pode ser relançada depois de **todas** as entradas dela estornadas. **O que fazer:** avisar quem estorna
+     (almoxarifado) e quem acompanha pedidos (Compras).
+
+109. **NOVO, da Etapa 71 — relançar a nota deixa DUAS contas a pagar, e o estorno não desfaz o resto.** O estorno
+     desfaz o **estoque** e o **recebido do pedido**; o recebimento continua *Processado*, a conta a pagar da nota
+     continua lá, a solicitação de compra continua *Recebida* e o e-mail de entrada já enviado não muda (**B334**).
+     Quem estorna tudo e relança a mesma nota gera **uma segunda conta a pagar** para a mesma compra. **O que fazer:**
+     ao relançar uma nota, avisar o Financeiro para cancelar a conta do primeiro lançamento.
+
+110. **NOVO (anterior à Etapa 71) — falha na trilha de auditoria do estorno, depois de o estorno feito.** Se o registro
+     de auditoria do cancelamento falhar (banco ocupado, disco cheio), a tela recebe erro, mas o saldo **já foi**
+     revertido — e o desconto do pedido, que vem depois, não acontece. Tentar de novo responde *"Movimentação já
+     cancelada"*. Raro; sem transação de banco não há como fechar (depois da migração para Postgres). **O que fazer:**
+     se um estorno der erro, conferir o livro antes de tentar de novo; se o estorno aparece feito e o pedido não
+     descontou, a **A35 (a)** acha o caso.
+
+111. **NOVO (anterior à Etapa 71, só pela API) — salvar a conferência de uma nota já processada reescreve a quantidade
+     conferida.** A rota de conferência não confere a situação do recebimento: chamada depois de *Processado*, ela grava a
+     nova contagem — que não mexe no estoque (a entrada já foi), mas passa a ser o número lido por relatórios e pela
+     escolha do item no estorno de notas antigas (**B332**). A revisão do plano registrou o caso como alcançável só pela
+     API (não foi medido pela tela). **O que fazer:** integrações não devem regravar a conferência de nota processada.
+
+112. **NOVO, da Etapa 71 — o pedido reaberto pode não mandar e-mail de atrasado de novo.** O **cartão** de atrasado e o
+     de parcial voltam na central na hora; o **e-mail** só sai se a previsão de entrega ou o saldo forem diferentes dos
+     já avisados antes do fechamento (**B335**). **O que fazer:** acompanhar pedido reaberto pela central de alertas, não
+     pelo e-mail.
+
+113. **NOVO, da Etapa 71 — mudança manual de status feita ANTES do deploy não tem trilha.** A regra "o estorno não desfaz
+     o *Recebido* do comprador" (**B330**) depende da trilha *"Mudança manual de status do pedido"*, que só existe a
+     partir desta etapa (**B342**). Num pedido fechado pelo automático e **reescrito à mão antes do deploy**, o automático
+     ainda é o último registro, e o estorno reabre. **O que fazer:** depois de estornar, conferir o status do pedido; se
+     era decisão do comprador, ele volta pelo lápis → **Status**.
+
 
 
 ### D. Limitações declaradas — são decisão, não esquecimento
@@ -6277,7 +6490,9 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   *"parcial"* no pedido — enquanto faltar material o pedido segue *Pendente*/*Aprovado*, e é o **alerta
   de parcial** (abaixo, também novo) que avisa. E o automático **não reabre** pedido nenhum: ver
   **B161**, que descreve a limitação NOVA que esta etapa cria no lugar da antiga (movimentação
-  cancelada depois do fechamento não deixa sinal).
+  cancelada depois do fechamento não deixa sinal). **Etapa 71 (2026-10-02): essa limitação nova está paga** — o
+  estorno da entrada reabre o pedido que o automático fechou (**B329**, **B330**); devolução e sucata continuam não
+  reabrindo (**B336**, **D (71)**).
 
 - ~~**(39) Não existe alerta de "pedido recebido parcialmente".**~~ **RESOLVIDO NA ETAPA 42 (B164).**
   O texto antigo fica porque ele **já era uma correção** de outro texto errado, e a sequência é a
@@ -6723,6 +6938,18 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   pelo endereço; o número está no assunto.
 - **(70) Sem matriz de destinatários por evento nem modelo de e-mail configurável** — cortes da feature de
   notificações que continuam valendo; o texto dos dois avisos é fixo.
+- **(71) Devolução ao fornecedor e sucata do reprovado não reabrem o pedido de compra** — o material entrou e saiu por
+  decisão de qualidade; cobrar a reposição é lápis → **Status** no Compras (**B336**).
+- **(71) Não existe estorno do recebimento inteiro.** O estorno é por entrada (uma linha **ENTRADA_COMPRA** por item
+  que entrou); o recebimento continua *Processado*, a conta a pagar e a solicitação de compra ficam (**B334**,
+  **C109**).
+- **(71) A solicitação de compra continua *Recebida* depois do estorno** — ela já fecha na **primeira** nota, parcial ou
+  não, então não há "fechou por este pedido" para desfazer (próxima candidata: a Etapa 72 olha isso).
+- **(71) O modal de estorno não diz antes que a entrada é de um pedido** — o aviso do pedido vem **depois** de estornar.
+  Avisar antes exige a lista de movimentações trazer o pedido.
+- **(71) Entrada com material em inspeção ou reprovado não se estorna** — decida a inspeção; o reprovado sai pela não
+  conformidade (**B339**, **B340**).
+- **(71) O pedido reaberto pode não mandar e-mail de atrasado de novo** (**B335**, **C112**).
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -7310,6 +7537,22 @@ processamento concorrente 11, o serviço do aviso 17, os ganchos pelas rotas 12,
    requisitante"**; depois de processar uma nota de material que uma requisição esperava, a linha do aviso ao
    requisitante está lá, para o e-mail de quem pediu. Com o SMTP configurado, conferir o e-mail que chegou e clicar no
    link (ele abre a lista do módulo de onde a requisição saiu).
+
+**(71) Nenhum clique foi dado nesta etapa.** Os testes provam o servidor pela rota e pelo serviço (o estorno que
+desconta e reabre: 36 cenários; o vínculo item ↔ entrada: 4; a régua por material: 14 + 11; ponta a ponta do pedido de
+Compras à segunda nota: 10) e a tela de Movimentações com o servidor simulado (9 cenários do aviso). O que **só o
+navegador** prova:
+
+1. **O aviso depois do estorno.** Num pedido fechado pela nota, **Movimentações → estornar** (seta curva) a linha
+   **ENTRADA_COMPRA**, com motivo: aparecem *"Movimentação estornada!"* **e** *"Pedido de compra ⟨número⟩ reaberto:
+   faltam ⟨saldo⟩ para receber"*.
+2. **O pedido de volta.** **Compras → Pedidos**: o pedido voltou ao status de antes (ex.: *Enviado*), com o selo
+   *"Atrasado há N dias"* se a previsão venceu; em **Recebimentos → Novo Recebimento**, forma *Pedido de compra*, ele
+   está na lista e a linha oferece o saldo estornado.
+3. **A nova nota.** Salvar o recebimento com a quantidade estornada **sem** a caixa de autorização de excedente: passa;
+   processar fecha o pedido de novo.
+4. **A trilha.** **Auditoria**: aparecem *"Recebido do pedido estornado"*, *"Reabertura automática do pedido"* e, depois
+   de mudar o status de um pedido pelo lápis no Compras, *"Mudança manual de status do pedido"*.
 
 
 **G1. Toda coluna nova da tabela de materiais vaza quantidade exata para o requisitante até alguém
@@ -16473,9 +16716,107 @@ contas a pagar (resolvido com a marca de processamento); que "quem esperava" pel
 como texto pela conferência e pelos dados fiscais (o item era pulado calado enquanto a tela dizia que entraria a
 esperada), a etiqueta do item zero e a marca de processamento sem dono — os três corrigidos.
 
+## Etapa 71 — Estornar a entrada da nota reabre o pedido de compra (2026-10-02)
+
+Quando alguém estornava a entrada de uma nota que tinha fechado um pedido de compra — porque lançou errado, ou porque o
+material não era aquele —, o estoque voltava, mas o pedido continuava *Recebido*: sumia da lista de atrasados, dos
+pendentes do Recebimento e do alerta de parcial, e **não sobrava sinal nenhum** de que faltava material. Pior: a nota
+seguinte, com o material que de fato faltava, era **recusada** como se fosse excedente, porque o pedido continuava
+dizendo que tudo tinha chegado. Agora o estorno **desconta** o pedido e **reabre** o que a nota tinha fechado — ele volta
+ao status de antes, aos atrasados, aos pendentes e à nova nota, que passa sem autorização. A tela avisa qual pedido foi
+reaberto. No caminho, a etapa corrigiu um defeito antigo: o pedido que recebia **a mais** de um material e **nada** de
+outro fechava como *Recebido*.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Estornar a entrada deixava o pedido *Recebido*, sem sinal de que faltava material | O pedido volta ao status de antes do fechamento (ex.: *Enviado*), aos atrasados, aos pendentes e ao alerta de parcial (**B329**, **B330**) |
+| A nota do que faltava era recusada *"…maior que o saldo do pedido (0)…"* | Passa sem autorização de excedente, e fecha o pedido de novo |
+| O estorno não dizia nada sobre o pedido | Segundo aviso: *"Pedido de compra ⟨número⟩ reaberto: faltam ⟨saldo⟩ para receber"* (**C108**) |
+| Relançar a mesma NF depois de estornar tudo: *"Nota fiscal … já lançada …"* | Aceita — com **duas** contas a pagar declaradas (**B341**, **C109**) |
+| Estornar entrada com material em inspeção (havendo outro saldo) passava | Recusado, com a mensagem própria (**B339**) |
+| Estornar entrada com material reprovado passava, e o reprovado saía duas vezes | Recusado — o reprovado sai pela não conformidade (**B340**) |
+| 25 de A e 0 de B num pedido de 10 A + 10 B fechava o pedido | Não fecha: a conta é por material (**B337**, **C107**) |
+| Pedido de 0,3 kg recebido em 0,1 + 0,2: a segunda nota recusada | Passa (**B337**) |
+| A mudança manual de status do pedido não deixava trilha | Trilha *"Mudança manual de status do pedido"* (**B342**) |
+
+### As regras, com o cenário exato
+
+Preparação: em **Compras → Pedidos → Novo Pedido**, um pedido com **10** de um material **M** (e, para o cenário 2,
+**5** de outro material **P**), **Previsão de entrega** ontem, e o status **Enviado**. No Almoxarifado, **Recebimentos →
+Novo Recebimento**, forma *Pedido de compra*, esse pedido, todas as quantidades; siga a conferência e os dados fiscais
+até **Processar Nota**. O pedido vira *Recebido* sozinho e sai da lista de atrasados.
+
+**1. A nota do que falta é recusada antes do estorno.** Com o pedido *Recebido*, tentar um novo recebimento de **10 M**
+contra ele: *"Quantidade recebida (10) maior que o saldo do pedido (0) para o material ⟨código de M⟩ — a autorização de
+excedente é de Compras ou do Administrador"*. É a barreira que o estorno vai abrir.
+
+**2. Estornar a entrada reabre o pedido.** **Almoxarifado → Movimentações**: na linha **ENTRADA_COMPRA** de M, a seta
+curva (**Estornar Movimentação**), motivo *"lançado errado"*, **Confirmar Estorno**. Aparecem *"Movimentação
+estornada!"* e *"Pedido de compra ⟨número⟩ reaberto: faltam 10 para receber"*. Em **Compras → Pedidos**, o pedido está
+**Enviado** com o selo *"Atrasado há 1 dia"* (e na caixa **"Só atrasados"**); a central de alertas mostra o atrasado e o
+parcial. P não é reaberto (o saldo dele continua 0).
+
+**3. A nota do que falta passa.** Novo recebimento contra o pedido: a linha de M oferece **"Saldo pendente: 10"**;
+salvar 10 **sem** a caixa de autorização — passa. Processar: o pedido volta a *Recebido*.
+
+**4. A trilha.** **Almoxarifado → Auditoria**, entidade do pedido: *"Fechamento automático do pedido"*, *"Recebido do
+pedido estornado"* (*"Estorno da movimentação #⟨id⟩ descontou 10 do pedido"*), *"Reabertura automática do pedido"*
+(*"Estorno da movimentação #⟨id⟩ reabriu o pedido"*) e o segundo fechamento.
+
+**5. O pedido que o comprador fechou à mão não é reaberto.** Outro pedido de 10, recebido 6; no Compras, lápis →
+**Status** → *Recebido* (a Auditoria mostra *"Mudança manual de status do pedido"*). Chega a nota dos 4; estorná-la: o
+aviso é *"Pedido de compra ⟨número⟩: o saldo a receber voltou a 4"* e o pedido **continua** *Recebido* — a decisão era do
+comprador.
+
+**6. "Lancei errado": relançar a mesma NF.** Num recebimento com duas entradas, estornar só uma e criar outro
+recebimento com a **mesma NF** do mesmo fornecedor: *"Nota fiscal ⟨NF⟩ já lançada no recebimento REC-… para este
+fornecedor"*. Estornar a outra entrada também e relançar: passa. **Atenção:** a conta a pagar do primeiro lançamento
+continua lá — são **duas** (avisar o Financeiro).
+
+**7. Material em inspeção ou reprovado.** Um material **crítico** (que entra retido) recebido contra o pedido: antes de
+decidir a inspeção, estornar a entrada → *"Esta entrada tem ⟨q⟩ ⟨un⟩ em inspeção — decida a inspeção antes de estornar a
+entrada"*. Decidida a inspeção **reprovando** parte → *"Esta entrada teve ⟨q⟩ ⟨un⟩ reprovado(s) na inspeção — o
+reprovado sai pela não conformidade; esta entrada não pode ser estornada"*. Aprovando tudo, o estorno passa e reabre.
+
+**8. Nota avulsa.** Estornar a entrada de uma nota **sem pedido**: só *"Movimentação estornada!"* — nenhum pedido é
+tocado.
+
+### O que esta etapa NÃO cobre
+
+1. **Devolução e sucata não reabrem o pedido** (**B336**).
+2. **Não há estorno do recebimento inteiro**; a conta a pagar e a solicitação de compra ficam (**B334**, **C109**).
+3. **O aviso do pedido vem depois** do estorno, não no modal.
+4. **Pedido reescrito à mão antes do deploy** pode ser reaberto pelo estorno (**C113**).
+5. **O e-mail de atrasado do pedido reaberto** pode não sair de novo (**C112**).
+
+### O que a revisão encontrou
+
+A medição mostrou que a limitação registrada na Etapa 42 estava **subestimada** — não era só "sem sinal": a nota do
+que faltava era recusada, e a recuperação que o documento ensinava não resolvia (a frase "o recebido se corrige por
+consulta" estava errada) — e achou um defeito antigo da mesma régua: o fechamento por excedente cruzado. A revisão do
+**plano** achou que a consulta de produção descontaria em dobro, o arredondamento que recusava a nota fracionada exata
+(defeito anterior, corrigido), o material em inspeção que o estorno deixava passar havendo outro saldo, e que relançar a
+mesma NF — o uso mais comum do estorno — era recusado. A revisão do **código** achou que o material **reprovado**
+continuava estornável (e sairia duas vezes) e que o estorno desfazia o fechamento **à mão** do comprador — os dois
+corrigidos, o segundo com a trilha nova da mudança manual no Compras.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 71 entregue (2026-10-02):** **estornar a entrada da nota reabre o pedido de compra.** Estornar (Movimentações
+  → seta curva) a entrada de uma nota contra pedido **desconta** o pedido e o **reabre** quando a nota o tinha fechado
+  — ele volta ao status de antes, aos atrasados, aos pendentes do Recebimento e à nova nota, que passa sem autorização;
+  a tela avisa o pedido reaberto. A mesma NF pode ser relançada depois de estornar todas as entradas dela. Recusados:
+  estorno de entrada com material em inspeção ou reprovado. Corrigidos dois defeitos antigos: o excedente de um
+  material fechava o pedido, e a nota fracionada exata (0,1 + 0,2 de 0,3) era recusada. A mudança manual de status do
+  pedido passou a deixar trilha. **A feature de Recebimento vai a 🟢** (a conferência física estruturada fica como corte
+  declarado). **O que é seu:** a consulta **A35** (pedidos estornados antes do deploy e os fechados pelo excedente
+  cruzado); as decisões **B329 a B342**; os avisos **C107 a C113** (o **C109** é o mais importante: relançar a nota deixa
+  duas contas a pagar); as limitações **(71)** em D e as verificações **(71)** em F. **Próxima: Etapa 72 — a solicitação
+  de compra que fecha na primeira nota parcial (feature 18, com a 08) — ver o plano da Etapa 71.**
 
 - **Etapa 70 entregue (2026-10-01):** **quem esperava o material fica sabendo que ele chegou.** Ao processar uma nota,
   o solicitante de cada requisição que esperava o material recebe um e-mail (ligado de fábrica), com o link para a
@@ -16486,6 +16827,7 @@ esperada), a etiqueta do item zero e a marca de processamento sem dono — os tr
   seriam avisadas, e o "chegou zero" que inflou saldo no passado); as decisões **B316 a B328**; os avisos **C101 a
   C106**; as limitações **(70)** em D, as verificações **(70)** em F e as fragilidades **G82** e **G83**. **Próxima:
   Etapa 71 — o pedido de compra que reabre quando a entrada é estornada (B161, feature 08) — ver o plano da Etapa 70.**
+  *(Feita — Etapa 71.)*
 
 - **Etapa 69 entregue (2026-10-01):** **o material reprovado na inspeção vai para o sucateamento.** Na tela de **Não
   Conformidades**, a decisão **Sucatear** ganhou **Solicitar sucateamento**: o pedido nasce com o material, a quantidade

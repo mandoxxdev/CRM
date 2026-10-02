@@ -1,6 +1,6 @@
 # 08 — Entrada e Recebimento de Materiais
 
-> **Status:** 🟡 — workflow fiscal NF maduro, quarentena na entrada fechada (Etapa 5), **lote nasce aqui desde a Etapa 6**, entrada da nota **atômica e idempotente** desde o review final do branch (2026-08-10), desde a **Etapa 36** as duas portas de escrita têm enum, guarda de NF duplicada e barreira de excedente, mais o campo de quantidade conferida na tela, e desde a **Etapa 37** (`ea0aa4f..13ad237`) o **recebimento parcial contra o PEDIDO DE COMPRA existe de ponta a ponta** — o pedido tem saldo, a tela carrega os itens com o que falta chegar, e a porta recusa acima do saldo. E desde a **Etapa 42** (2026-09-27) o recebimento **FECHA o pedido**: a entrada física que completa o pedido grava `pedidos_compra.status = 'recebido'`, com trilha de auditoria, e o pedido parcial ganhou alerta próprio. **E desde a Etapa 43** (2026-09-28, `4e11793..`) a **divergência tem DOCUMENTO NUMERADO**: registrar quantidade diferente da esperada — na conferência **e** nos dados fiscais, que é o caminho que a tela usa — abre sozinha uma não conformidade `NC-…` (`nao_conformidades_almoxarifado`, tabela única compartilhada com a feature 09), que congela o fato, guarda a decisão com autor e justificativa, tem trilha, anexos, alerta de documento parado e tela própria; reconferir atualiza o mesmo documento e corrigir a divergência o cancela. **O que falta para 🟢:** (1) **conferência física estruturada** (contagem, pesagem, medição, checklist por tipo de material); ~~(2) **divergência formal numerada**~~ — **PAGO na Etapa 43**, riscado em vez de apagado; (3) ~~definição de localização na entrada (feature 02)~~ — **PAGO na Etapa 57** (`aaf09cb`, `86ee1c1`, fix-round `18c67a8`): destino **por item** ao processar a nota, riscado em vez de apagado; ~~sobra o e-mail automático na entrada confirmada (feature 19)~~ — **PAGO na Etapa 70**; (4) **o pedido que reabre** — a limitação NOVA da Etapa 42: estornar a movimentação de entrada de um pedido já fechado não reverte `quantidade_recebida` nem o status, e o estado não deixa sinal (`B161` das novidades). **E desde a Etapa 57** (2026-09-30) o processamento da nota abre uma janela com um **destino por item** ("Padrão do material" continua o padrão, B226), a pré-checagem da nota inteira lista "MAT: motivo" do destino de cada item, `/processar`, `/workflow` e `/aprovar` aceitam `destinos`, o item grava `localizacao_entrada_id`, e a devolução ao fornecedor sai do endereço onde o item reprovado entrou (B227). **E desde a Etapa 70** (2026-10-01, `faa8f65..eb6c614`) o item da lista **"e-mail automático na entrada confirmada"** está pago — aviso da nota (nasce desligado) e aviso a cada solicitante que esperava o material (nasce ligado) —, e dois defeitos anteriores foram corrigidos: o item conferido com **0** deixou de entrar com a quantidade esperada, e dois processamentos simultâneos deixaram de gerar duas contas a pagar. **O que sobra para 🟢:** (1) conferência física estruturada (decisão do design, fora desde a Etapa 5) e (4) o pedido que reabre no estorno (`B161`) — a próxima etapa (71).
+> **Status:** 🟢 **desde a Etapa 71 (2026-10-02), com os cortes declarados** — a conferência física estruturada (contagem/pesagem/medição/checklist por tipo de material), fora por decisão do design desde a Etapa 5 (**B338** das novidades), e os dois itens do checklist que já estavam desmarcados **por decisão de negócio**, não por falta: "Tipos de entrada no form" (as features 11–15 são a porta dos outros tipos) e, no item "Ao aprovar", a etiqueta automática e os botões de sugestão na janela (letra D (57)). O item (4) "o pedido que reabre" foi pago (`39da666`, `beedc40`, `81a734c`, `63b2680`, `87fe520` + Fase 5 `9a442f1`, `2335c52`, `a9696f3`) — ver o bloco "Entregue na Etapa 71" no fim. Histórico do status: 🟡 — workflow fiscal NF maduro, quarentena na entrada fechada (Etapa 5), **lote nasce aqui desde a Etapa 6**, entrada da nota **atômica e idempotente** desde o review final do branch (2026-08-10), desde a **Etapa 36** as duas portas de escrita têm enum, guarda de NF duplicada e barreira de excedente, mais o campo de quantidade conferida na tela, e desde a **Etapa 37** (`ea0aa4f..13ad237`) o **recebimento parcial contra o PEDIDO DE COMPRA existe de ponta a ponta** — o pedido tem saldo, a tela carrega os itens com o que falta chegar, e a porta recusa acima do saldo. E desde a **Etapa 42** (2026-09-27) o recebimento **FECHA o pedido**: a entrada física que completa o pedido grava `pedidos_compra.status = 'recebido'`, com trilha de auditoria, e o pedido parcial ganhou alerta próprio. **E desde a Etapa 43** (2026-09-28, `4e11793..`) a **divergência tem DOCUMENTO NUMERADO**: registrar quantidade diferente da esperada — na conferência **e** nos dados fiscais, que é o caminho que a tela usa — abre sozinha uma não conformidade `NC-…` (`nao_conformidades_almoxarifado`, tabela única compartilhada com a feature 09), que congela o fato, guarda a decisão com autor e justificativa, tem trilha, anexos, alerta de documento parado e tela própria; reconferir atualiza o mesmo documento e corrigir a divergência o cancela. **O que falta para 🟢:** (1) **conferência física estruturada** (contagem, pesagem, medição, checklist por tipo de material); ~~(2) **divergência formal numerada**~~ — **PAGO na Etapa 43**, riscado em vez de apagado; (3) ~~definição de localização na entrada (feature 02)~~ — **PAGO na Etapa 57** (`aaf09cb`, `86ee1c1`, fix-round `18c67a8`): destino **por item** ao processar a nota, riscado em vez de apagado; ~~sobra o e-mail automático na entrada confirmada (feature 19)~~ — **PAGO na Etapa 70**; (4) **o pedido que reabre** — a limitação NOVA da Etapa 42: estornar a movimentação de entrada de um pedido já fechado não reverte `quantidade_recebida` nem o status, e o estado não deixa sinal (`B161` das novidades). **E desde a Etapa 57** (2026-09-30) o processamento da nota abre uma janela com um **destino por item** ("Padrão do material" continua o padrão, B226), a pré-checagem da nota inteira lista "MAT: motivo" do destino de cada item, `/processar`, `/workflow` e `/aprovar` aceitam `destinos`, o item grava `localizacao_entrada_id`, e a devolução ao fornecedor sai do endereço onde o item reprovado entrou (B227). **E desde a Etapa 70** (2026-10-01, `faa8f65..eb6c614`) o item da lista **"e-mail automático na entrada confirmada"** está pago — aviso da nota (nasce desligado) e aviso a cada solicitante que esperava o material (nasce ligado) —, e dois defeitos anteriores foram corrigidos: o item conferido com **0** deixou de entrar com a quantidade esperada, e dois processamentos simultâneos deixaram de gerar duas contas a pagar. **O que sobra para 🟢:** (1) conferência física estruturada (decisão do design, fora desde a Etapa 5) e (4) o pedido que reabre no estorno (`B161`) — a próxima etapa (71). **E desde a Etapa 71** (2026-10-02) o (4) está **PAGO**: estornar a `ENTRADA_COMPRA` de nota contra pedido desconta a linha do pedido e reabre o pedido que o fechamento automático tinha fechado; a régua do "completo" passou a ser por material também no fechamento e no `?pendentes=1` (defeito anterior da Etapa 42, **C107**); a barreira do saldo ganhou o epsilon. **Sobra só o (1), declarado como corte** (B338) — por isso o 🟢 no topo.
 
 > ⚠️ **ESTA LISTA TINHA UM ITEM (1) FALSO, e ele enganou três etapas.** Até a Etapa 42 o primeiro item era *"criação de pedido de compra no módulo Compras — … tudo o que a Etapa 37 entregou fica inerte até isso existir. É a **Etapa 38**, já decidida e desenhada"*. **A Etapa 38 ENTREGOU** (2026-09-16), e a 41 ainda acrescentou o caminho cotação → "Gerar pedido" — mas a frase continuou aqui dizendo que a feature era inerte em produção. Quem lesse esta spec entre 2026-09-16 e 2026-09-27 seria ativamente enganado sobre o estado do módulo. Corrigido ao medir, na Fase 0 da Etapa 42, e dito em vez de apagado. **O handoff da Etapa 41 repetiu o erro por outro lado**, falando de um *"item (5)"* desta lista — que nunca teve cinco itens. **A frase anterior deste status dizia que faltava "etiqueta" — ESTAVA ERRADA:** a etiqueta foi entregue na **Etapa 6c** (`4ebd1ce`), ver a correção no item de checklist "Ao aprovar" · **Spec original:** seção 8
 > **Etapa 31 (2026-08-31, `1e6c9a9..67b6758`) — o NÚMERO deste documento mudou de forma, e só ele.** O `REC-` era montado com os **últimos dígitos** do milissegundo mais um sorteio de 0 a 99, e por isso o carimbo **repetia** a cada **27,78 horas**. Agora vem do gerador único `services/almoxarifado/numeroDoc.js` (relógio inteiro em base36 + 8 aleatórios), com retry na colisão. **Nada mais desta feature mudou** — nem status, nem checklist, nem comportamento: o número passa de 12–14 caracteres só com dígitos para 20 com letras, os antigos **não** foram migrados e continuam legíveis (RN-05, testada). Furo **C41** das novidades.
@@ -153,7 +153,7 @@
 > linha do pedido. Mais **6 Minor** (`e253ad2` corrida do `<select>`; `93cce5e` os dois contratos que
 > a suíte exercitava sem afirmar; `e0f8b18` o hash da T6; `13ad237` `var(--gmp-danger)`, que **nunca
 > existiu** — só `--gmp-error` —, e por isso os avisos saíam na cor herdada).
-> **Última atualização:** 2026-09-30 (**Etapa 57** — o destino por item no processamento da nota, e a devolução ao fornecedor saindo do endereço de entrada; antes: 2026-09-16, Etapa 37 — saldo do pedido, recebimento parcial pela tela,
+> **Última atualização:** 2026-10-02 (**Etapa 71** — o estorno da entrada da nota desconta a linha do pedido e reabre o pedido que o automático fechou; régua única por material; NF relançável depois de todas as entradas estornadas; estorno recusado com material em inspeção ou reprovado; a feature vai a 🟢 com a conferência física estruturada como corte); antes: 2026-10-01 (**Etapa 70** — aviso de entrada da nota e ao solicitante); antes: 2026-09-30 (**Etapa 57** — o destino por item no processamento da nota, e a devolução ao fornecedor saindo do endereço de entrada; antes: 2026-09-16, Etapa 37 — saldo do pedido, recebimento parcial pela tela,
 > acumulador na entrada física e a situação derivada; antes: 2026-09-16, Etapa 36 — enum, NF duplicada, barreira de excedente,
 > quantidade conferida na tela e a régua do workflow; antes: 2026-09-16, Etapa 35 — erro de carga visível, painel que não mente e
 > barra de etapas neutra; antes: 2026-09-16, Etapa 34 — anexos no painel + primeira suíte da tela;
@@ -479,6 +479,28 @@ Todos os tipos de entrada da spec, conferência documental e física estruturada
       > ausente (um `throw` travaria a nota com o estoque já creditado, e o claim impediria o
       > reprocessamento); e **audita**, embora o `PATCH .../status` manual não audite — ali o autor é
       > o próprio ato humano na porta, aqui o pedido muda sozinho por ato de outro módulo.
+      >
+      > ⚠️ **Etapa 71 (2026-10-02): dois destes "limites" deixaram de valer, e ficam corrigidos em vez de apagados.**
+      > (1) *"o gancho só sobe (nunca reabre pedido)"* — o **estorno** da entrada agora desce: desconta a linha e reabre o
+      > pedido que o automático fechou (`81a734c`, corrigido na Fase 5 por `2335c52`). E a B161 **subestimava** a
+      > limitação: a nota seguinte do que faltava era **recusada** (*"maior que o saldo do pedido (0)"*), e a frase da
+      > B161 *"o recebido se corrige por consulta"* **estava errada** (a consulta só lê o acumulador). Devolução e sucata
+      > continuam não reabrindo (B336). (2) *"embora o `PATCH .../status` manual não audite"* — passou a auditar
+      > (`STATUS_MANUAL_ALTERADO`, `2335c52`), porque a reabertura precisa saber quem escreveu o último *Recebido*.
+      > **E um terceiro ponto deste item estava errado desde a Etapa 42:** o fechamento chamava
+      > `derivarRecebimentoDoPedido` com **dois** argumentos e o `?pendentes=1` somava por pedido — o excedente cruzado
+      > fechava o pedido. A correção da revisão da 42 tinha chegado só à leitura; os comentários que a davam por completa
+      > estavam errados (`39da666`, C107).
+- [x] **O pedido que reabre — estornar a entrada da nota desconta a linha e reabre o pedido (Etapa 71, 2026-10-02)** —
+      **`39da666`** (T0: régua única do "completo" por material no fechamento e no `?pendentes=1`, epsilon na barreira
+      do saldo), **`beedc40`** (T1: `movimentacao_entrada_id` no item do recebimento), **`81a734c`** (T2:
+      `estornarEntradaNoPedido` + gancho em `cancelarMovimentacao`, recusa com material em inspeção, NF relançável),
+      **`63b2680`** (T3: aviso na tela de Movimentações), **`87fe520`** (T4: integração pelas rotas), Fase 5
+      **`9a442f1`** (recusa com reprovado), **`2335c52`** (fechamento manual não é desfeito; `PATCH` do Compras auditado)
+      e **`a9696f3`** (NF relançável com a régua de quantidade da Etapa 70). Testes: `pedidoReabreNoEstorno` (36),
+      `pedidoReabreIntegracao` (10), `recebimentoVinculoMovimentacao` (4), `comprasPedidoStatusAutomatico` (14),
+      `comprasPedidoSituacaoFonte` (11), `MovimentacoesAlmoxarifado.test.js` (bloco da Etapa 71, 9). Decisões
+      B329–B342 das novidades; passado na A35.
 - [x] Recebimento parcial de pedido (validar suporte real + saldo pendente do pedido) —
       **`ea0aa4f`** (as duas colunas + índice + stub do harness), **`57ace18`** (a régua do saldo no
       `POST`), **`d062889`** (o acumulador na entrada física), **`402070c`** + **`eb10d9c`** (a
@@ -618,6 +640,9 @@ Todos os tipos de entrada da spec, conferência documental e física estruturada
       quantidade não numérica passa a tomar 400. Os 9 arquivos de teste internos que criam
       recebimento pela rota passaram sem alteração.
 - [ ] Conferência física estruturada (spec 8.3): contagem, pesagem, medição, checklist configurável por tipo de material. **Fora do escopo da Etapa 5**, mesma decisão acima.
+  > **Etapa 71 (2026-10-02): continua desmarcado, agora como CORTE DECLARADO que não impede o 🟢 da feature (B338).**
+  > É o único item que sobrava; nenhuma etapa o pagará sem especificação nova do cliente. Reversível: vira etapa se a
+  > empresa pedir.
   > **Continua desmarcado, e agora com um recorte exato (Etapa 36):** a **quantidade conferida** por
   > item passou a existir (campo "Qtd. conferida" no painel, `e2a23a9`; ver o item de frontend
   > abaixo), com o aviso de divergência e a gravação pela rota `PUT /:id/conferir`. **Contagem
@@ -743,7 +768,12 @@ Todos os tipos de entrada da spec, conferência documental e física estruturada
       > só sob `selectedId`), com **controle positivo executado** e o placar **idêntico** com e sem
       > a linha (17/17 e 35/35). Fingir um vermelho seria pior; remover a proteção porque nada cai
       > seria muito pior.
-- [ ] Divergências: registro formal (tipo, quantidade, ação) — parcial na inspeção
+- [x] Divergências: registro formal (tipo, quantidade, ação) — parcial na inspeção
+  > **Marcado no fechamento da Etapa 71 (2026-10-02) — a caixa estava DESMARCADA POR ESQUECIMENTO, e isso fica dito.**
+  > O registro formal foi **pago na Etapa 43** (`4e11793`, `6a4c984`, `21ef822`, `9b6f205`, `1bab308` + `9e4fb3d`):
+  > divergência de quantidade abre sozinha uma não conformidade numerada `NC-…`, com fato congelado, decisão com autor e
+  > justificativa, trilha e anexos — o status no topo desta spec já o registrava como "(2) PAGO na Etapa 43", mas esta
+  > caixa ficou com o texto das Etapas 36/37 abaixo. Quem lesse só o checklist acharia que falta.
   > **Continua desmarcado (Etapa 36), e o que mudou é que ele deixou de ser impossível.** Antes
   > desta etapa **nenhum gesto de tela** produzia `recebida ≠ esperada`, então "registrar a
   > divergência formalmente" não tinha nem dado de entrada. Agora tem: a quantidade conferida é
@@ -905,6 +935,39 @@ Plano: `docs/superpowers/plans/2026-09-30-almoxarifado-etapa57-destino-no-recebi
 Testes: `server/tests/api/recebimentoDestinoPorItem.api.test.js` (11 cenários, 16 sabotagens vermelhas) e
 `client/src/components/almoxarifado/RecebimentosProcessarDestino.test.js` (9 cenários, 12 sabotagens vermelhas).
 
+## Entregue na Etapa 71 (2026-10-02) — o pedido que reabre no estorno
+
+Plano: `docs/superpowers/plans/2026-10-01-almoxarifado-etapa71-pedido-reabre.md`. Decisões B329–B342, avisos
+C107–C113 e a consulta A35 nas novidades.
+
+- **O estorno da `ENTRADA_COMPRA` de nota contra pedido** (`stockService.cancelarMovimentacao` → gancho
+  `receiptService.estornarEntradaNoPedido`, não-fatal, depois do claim e da auditoria do cancelamento) desconta da
+  linha do pedido a quantidade da movimentação (piso 0, trilha `RECEBIDO_ESTORNADO` — rótulo *"Recebido do pedido
+  estornado"*) e, se a conta fechava antes e deixou de fechar, e o **último** registro de status do pedido é o
+  fechamento automático, volta o pedido ao status anterior ao fechamento (trilha `STATUS_AUTOMATICO_REABERTO` — rótulo
+  *"Reabertura automática do pedido"*). A resposta do estorno ganha `pedido_compra` quando um pedido foi tocado, e a tela
+  de Movimentações avisa.
+- **O vínculo** item do recebimento ↔ `ENTRADA_COMPRA` (`movimentacao_entrada_id`), gravado na entrada; o passado se
+  resolve pelo par nota + material com adoção.
+- **Recusas novas no estorno** (antes do claim): material ainda em inspeção; material com reprovado na inspeção.
+- **NF relançável**: `assertNotaNaoDuplicada` ignora o recebimento com entradas **todas** estornadas e nenhum item por
+  entrar (régua de quantidade da Etapa 70).
+- **Régua única do "completo"** (`SQL_PEDIDO_COMPLETO`, por material) no fechamento automático, no `?pendentes=1` e
+  repetida no `WHERE` dos dois `UPDATE` de status; epsilon na barreira do saldo.
+- **Toque no módulo Compras, declarado:** o `PATCH /api/compras/pedidos/:id/status` passou a gravar
+  `STATUS_MANUAL_ALTERADO` (rótulo *"Mudança manual de status do pedido"*) quando o status muda, não-fatal — é o que
+  separa o *Recebido* do comprador do automático. Limite: mudança manual anterior ao deploy não tem trilha (C113).
+
+**Correções desta spec, ditas em vez de apagadas:** a limitação B161 estava **subestimada** (a nota do que faltava era
+recusada, e "o recebido se corrige por consulta" estava errado); a correção da revisão da Etapa 42 tinha chegado só à
+leitura (o fechamento e o `?pendentes=1` continuavam por pedido); e a caixa "Divergências: registro formal" estava
+desmarcada por esquecimento desde a Etapa 43. **A Fase 2 da própria etapa errou num ponto** (o fallback "sem trilha
+→ reabre para pendente", que desfazia o fechamento à mão) — corrigido na Fase 5 (`2335c52`).
+
+**O que não cobre:** devolução e sucata não reabrem o pedido (B336); não há estorno do recebimento inteiro (conta a
+pagar, solicitação de compra e o aviso da 70 ficam — B334); relançar a NF deixa duas contas a pagar (C109); o aviso do
+pedido vem depois do estorno, não no modal.
+
 ## Regras essenciais + testes de API exigidos
 
 > **Correção (auditoria de 2026-08-11): esta tabela lia como se todos os testes existissem — e
@@ -950,6 +1013,8 @@ Testes: `server/tests/api/recebimentoDestinoPorItem.api.test.js` (11 cenários, 
 | Anexar certificado libera o lote — mas nunca um lote REPROVADO | `anexar o certificado libera o lote` + `lote REPROVADO continua bloqueado depois de anexar o certificado` — mesmo arquivo (`c11db85`) | ✅ |
 | Upload de certificado sem permissão não grava arquivo (permissão antes do multer) | `upload de certificado sem permissao nao grava arquivo` — mesmo arquivo | ✅ |
 | Workflow não pula etapas | `avancar etapa fora de ordem falha` + `acao de workflow inexistente falha` + `id inexistente responde 404` + a sequência completa de cinco 200 — `server/tests/api/recebimentoWorkflowOrdem.api.test.js` (`9d19e7d`, zero linhas de produção) | ✅ |
+| Estornar a entrada da nota desconta a linha do pedido e reabre o pedido que o automático fechou; não reabre o fechado à mão; recusa com material em inspeção ou reprovado; NF relançável só com todas as entradas estornadas (Etapa 71) | `server/tests/api/pedidoReabreNoEstorno.api.test.js` (36 cenários, pela rota e pelo serviço) + `pedidoReabreIntegracao.api.test.js` (10, ponta a ponta pelas rotas, do pedido de Compras à segunda nota) + `recebimentoVinculoMovimentacao.api.test.js` (4) | ✅ `39da666`/`beedc40`/`81a734c`/`87fe520` + Fase 5 `9a442f1`/`2335c52`/`a9696f3` |
+| Régua única do "pedido completo", por material, no fechamento e no `?pendentes=1`; barreira com epsilon (Etapa 71, defeito anterior da 42) | `comprasPedidoStatusAutomatico.api.test.js` (10)(11) + `comprasPedidoSituacaoFonte.api.test.js` (1c)(1d) | ✅ `39da666` |
 | Recebimento parcial mantém pendência do pedido | `recebimento parcial atualiza saldo pendente do pedido` — **entregue como** `server/tests/api/pedidoSaldoRecebido.api.test.js` (o acumulador: 11 cenários, incluindo o `pedido_item_id` honrado com duas linhas pendentes do mesmo material e o preço herdado da linha do pedido) + `server/tests/api/recebimentoContraPedidoIntegracao.api.test.js` (a jornada inteira: parcial de 6 em 10 → `PARCIAL`/saldo 4 → recusa do segundo → autorização → `RECEBIDO`/saldo 0, e o `/conferir`+`/fiscal` ecoando 200 sem trilha nova). Ao lado deles, `pedidosCompraSaldoAux.api.test.js` (a leitura derivada e o `?pendentes=1`) e `recebimentoExcedentePedido.api.test.js` (a régua do saldo na porta) | ✅ `ea0aa4f`/`57ace18`/`d062889`/`402070c`/`eb10d9c`/`a9acb4c`/`838f971` + onda `4007344..13ad237` |
 
 ## Dependências
