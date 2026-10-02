@@ -2803,6 +2803,8 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
  *    tomar 403 no meio da aprovação.
  *  - `opcoes.requisicao_id`/`item_requisicao_id`: vínculo que a entrega usa para achar e consumir
  *    a reserva daquele item (ver requisitionService.entregarRequisicao).
+ *  - `opcoes.recebimento_id` (Etapa 74): a nota cuja chegada criou a reserva (reservaChegadaService) —
+ *    o estorno da entrada desfaz só estas.
  */
 async function criarReserva(db, user, data, opcoes = {}) {
   const { material_id, quantidade, projeto_id, os_id, os_referencia, cliente_id, equipamento, submontagem, observacoes,
@@ -2845,14 +2847,17 @@ async function criarReserva(db, user, data, opcoes = {}) {
     const r = await dbRun(db, `INSERT INTO reservas_material_almoxarifado
       (material_id, quantidade, projeto_id, os_id, os_referencia, cliente_id, equipamento, submontagem,
        solicitante_id, solicitante_nome, observacoes, requisicao_id, item_requisicao_id, origem,
-       data_necessidade, expira_em)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+       data_necessidade, expira_em, recebimento_id)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
       material_id, qtd, projeto_id || null, os_id || null, os_referencia || null,
       cliente_id || null, equipamento || null, submontagem || null,
       user.id, user.nome || user.email, observacoes || null,
       opcoes.requisicao_id || null, opcoes.item_requisicao_id || null,
       opcoes.requisicao_id ? 'REQUISICAO' : 'MANUAL',
       data_necessidade || opcoes.data_necessidade || null, expiraEm,
+      // Etapa 74 (B372): a nota cuja chegada criou a reserva — só pelo 4º argumento, pelo mesmo motivo
+      // de requisicao_id (a rota POST /reservas repassa o body inteiro como `data`).
+      opcoes.recebimento_id || null,
     ]);
     reservaId = r.lastID;
 

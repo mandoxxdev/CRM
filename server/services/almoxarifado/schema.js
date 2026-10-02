@@ -1319,6 +1319,11 @@ async function initSchema(db) {
   await safeAlter(db, 'ALTER TABLE reservas_material_almoxarifado ADD COLUMN requisicao_id INTEGER');
   await safeAlter(db, 'ALTER TABLE reservas_material_almoxarifado ADD COLUMN item_requisicao_id INTEGER');
   await safeAlter(db, "ALTER TABLE reservas_material_almoxarifado ADD COLUMN origem TEXT DEFAULT 'MANUAL'");
+  // Etapa 74 (B372) — a reserva que a CHEGADA da nota criou para quem esperava o material
+  // (reservaChegadaService). Continua sendo uma reserva de requisição comum (origem REQUISICAO, a
+  // entrega consome igual); a coluna existe para o estorno da entrada (Etapa 71) achar e desfazer só
+  // as reservas que aquela nota criou. Gravada só pelo 4º argumento de criarReserva — nunca do body.
+  await safeAlter(db, 'ALTER TABLE reservas_material_almoxarifado ADD COLUMN recebimento_id INTEGER');
 
   // ── Recebimentos ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS recebimentos_material_almoxarifado (

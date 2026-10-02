@@ -445,7 +445,6 @@ async function listarFilaSeparacao(db, user) {
     FROM separacoes_requisicao_almoxarifado WHERE requisicao_id IN (${marcas})
     GROUP BY requisicao_id, usuario_id`, ids);
   const podeConferirPerfil = can(user, 'conferir_separacao');
-  const RANK = { CRITICO: 1, URGENTE: 2 };
   const fila = [];
   for (const r of reqs) {
     const doReq = itens.filter((i) => i.requisicao_id === r.id);
@@ -499,16 +498,28 @@ async function listarFilaSeparacao(db, user) {
       itens: linhas.filter((l) => l.a_separar > 1e-9 || l.a_entregar > 1e-9),
     });
   }
-  // Ordem (RN-02): o que dá para fazer agora primeiro; depois urgência (UPPER — há legado em minúsculo),
-  // data de necessidade (sem data por último) e a mais ANTIGA primeiro (fila é FIFO).
+  // Ordem (RN-02): o que dá para fazer agora primeiro; depois a prioridade (compararPrioridade).
+  fila.sort((a, b) => (Number(b.acionavel) - Number(a.acionavel)) || compararPrioridade(a, b));
+  return fila;
+}
+
+/**
+ * Etapa 74 (T0, D3/B369) — QUEM É PRIMEIRO, uma função só. Extraída da ordem da fila de separação da 64
+ * (que continua igual: a fila soma o "acionável" na frente) e usada também pela reserva na chegada
+ * (reservaChegadaService): a fila e a reserva não podem discordar sobre quem leva o material.
+ * Urgência (UPPER — há legado em minúsculo: CRITICO 1, URGENTE 2, o resto 3) → data de necessidade
+ * (sem data por último) → a mais ANTIGA primeiro (FIFO) → id.
+ * `a`/`b`: { urgencia, data_necessidade, created_at, id }.
+ */
+const RANK_URGENCIA = { CRITICO: 1, URGENTE: 2 };
+function compararPrioridade(a, b) {
+  const rank = (x) => RANK_URGENCIA[String(x.urgencia || '').toUpperCase()] || 3;
   const dataNec = (x) => (x.data_necessidade ? String(x.data_necessidade) : null);
-  fila.sort((a, b) => (Number(b.acionavel) - Number(a.acionavel))
-    || ((RANK[String(a.urgencia || '').toUpperCase()] || 3) - (RANK[String(b.urgencia || '').toUpperCase()] || 3))
+  return (rank(a) - rank(b))
     || ((dataNec(a) === null) - (dataNec(b) === null))
     || String(dataNec(a) || '').localeCompare(String(dataNec(b) || ''))
     || String(a.created_at || '').localeCompare(String(b.created_at || ''))
-    || (a.id - b.id));
-  return fila;
+    || (a.id - b.id);
 }
 
 async function listarSubstituicoes(db, requisicaoId) {
@@ -1393,6 +1404,7 @@ async function excluirRequisicao(db, requisicaoId, user, justificativa, alertSer
 
 module.exports = {
   listarFilaSeparacao,
+  compararPrioridade, // Etapa 74 (T0): a ordem unica da fila e da reserva na chegada
   listarSubstituicoes,
   num,
   getEntregue,

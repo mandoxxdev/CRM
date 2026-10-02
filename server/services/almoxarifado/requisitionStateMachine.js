@@ -48,14 +48,22 @@ const TRANSICOES = {
     'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA'],
   APROVADO: ['EM_SEPARACAO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA',
     'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA', 'CANCELADO'],
-  AGUARDANDO_ESTOQUE: ['EM_SEPARACAO', 'CANCELADO'],
-  AGUARDANDO_COMPRA: ['EM_SEPARACAO', 'CANCELADO'],
+  // Etapa 74 (D5/B371): a requisição que esperava ganha a reserva quando a nota chega
+  // (reservaChegadaService) — AGUARDANDO_* -> *_RESERVADA. Reabre a B362 de propósito: agora há
+  // escritor de status fora das três portas de aprovação.
+  AGUARDANDO_ESTOQUE: ['EM_SEPARACAO', 'CANCELADO', 'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA'],
+  AGUARDANDO_COMPRA: ['EM_SEPARACAO', 'CANCELADO', 'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA'],
   // Etapa 4 (design, decisão 2): entram ENTRE APROVADO e EM_SEPARACAO. A aprovação reserva o
   // saldo de cada item e a requisição para num deles em vez de ficar só APROVADO. Daqui só se
   // vai para a separação (o caminho normal) ou para o cancelamento — não há atalho para
   // PRONTA_PARA_RETIRADA/ENTREGUE, que continuam exigindo passar por EM_SEPARACAO.
-  PARCIALMENTE_RESERVADA: ['EM_SEPARACAO', 'CANCELADO'],
-  TOTALMENTE_RESERVADA: ['EM_SEPARACAO', 'CANCELADO'],
+  // Etapa 74 (D5/B371): PARCIALMENTE -> TOTALMENTE quando a nota traz o resto; e, para o estorno da
+  // entrada que desfaz a reserva da chegada, de volta a AGUARDANDO_*/APROVADO (sem hold nenhum) ou
+  // de TOTALMENTE a PARCIALMENTE (perdeu parte). Só o recálculo de reservaChegadaService grava estas.
+  PARCIALMENTE_RESERVADA: ['EM_SEPARACAO', 'CANCELADO', 'TOTALMENTE_RESERVADA',
+    'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA', 'APROVADO'],
+  TOTALMENTE_RESERVADA: ['EM_SEPARACAO', 'CANCELADO', 'PARCIALMENTE_RESERVADA',
+    'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA', 'APROVADO'],
   EM_SEPARACAO: ['PRONTA_PARA_RETIRADA', 'PARCIALMENTE_ATENDIDA', 'ENTREGUE'],
   PRONTA_PARA_RETIRADA: ['PARCIALMENTE_ATENDIDA', 'ENTREGUE'],
   PARCIALMENTE_ATENDIDA: ['EM_SEPARACAO', 'ENTREGUE', 'ENCERRADA'],
