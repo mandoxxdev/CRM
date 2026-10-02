@@ -49,6 +49,9 @@ const stockService = require('../../services/almoxarifado/stockService');
 const lotService = require('../../services/almoxarifado/lotService');
 const seriesService = require('../../services/almoxarifado/seriesService');
 const reservationService = require('../../services/almoxarifado/reservationService');
+// Etapa 76 (T1, C127): o recálculo do status depois de liberar à mão. Pelo OBJETO do módulo (os testes
+// fazem monkeypatch de `recalcularRequisicoesDasReservas`/`recalcularStatusSobTrava`).
+const reservaChegadaService = require('../../services/almoxarifado/reservaChegadaService');
 const receiptService = require('../../services/almoxarifado/receiptService');
 const inspectionService = require('../../services/almoxarifado/inspectionService');
 // Etapa 43: a nao conformidade numerada. O servico ja valida enum, id e estado, e lanca com
@@ -935,6 +938,14 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
       const result = await stockService.liberarReserva(db, req.user, req.params.id, req.body.quantidade, {
         motivo: req.body.motivo || req.body.motivo_liberacao || null,
       });
+      // Etapa 76 (T1, D1/B396 + D5/B400): a requisição dona acompanha — sem isto ela continuava "Totalmente
+      // Reservada" sem nada seguro (C127). Sob a trava dos materiais dela (T0); best-effort: o saldo já voltou
+      // ao disponível e a resposta é a de sempre (D4). O liberado NÃO é redistribuído para a fila (D2).
+      try {
+        await reservaChegadaService.recalcularRequisicoesDasReservas(db, [result.reserva_id], 'liberacao manual da reserva');
+      } catch (e) {
+        console.warn(`[almoxarifado-reservas] recalculo do status apos liberacao manual da reserva falhou (reserva ${result.reserva_id}): ${e.message}`);
+      }
       res.json(result);
     } catch (e) { handleError(res, e); }
   });
