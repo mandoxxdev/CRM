@@ -491,7 +491,7 @@ async function criarRecebimento(db, user, data) {
        valor_unitario, valor_total, valor_icms, valor_ipi, reducao_icms_percent)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
       r.lastID, item.material_id, linhaResolvida ? linhaResolvida.id : null, qtd,
-      item.quantidade_recebida || qtd, item.lote || null, item.series || null, item.observacoes || null,
+      recebidaInformada(item.quantidade_recebida) ? item.quantidade_recebida : qtd, item.lote || null, item.series || null, item.observacoes || null,
       vUnit, vTotal, parseFloat(item.valor_icms) || 0, parseFloat(item.valor_ipi) || 0,
       parseFloat(item.reducao_icms_percent) || 0,
     ]);
@@ -659,7 +659,8 @@ async function assertExcedentePermitido(db, user, recebimentoId, itens, autoriza
 /**
  * RN-18 na TERCEIRA porta (fix-round 2, F5) — o item NASCE com a quantidade recebida.
  *
- * `criarRecebimento` grava `quantidade_recebida = item.quantidade_recebida || qtd` e nunca chamou
+ * `criarRecebimento` grava `quantidade_recebida` (o informado, ou a esperada — Etapa 70 T0: o 0
+ * informado fica 0, antes o `|| qtd` o trocava pela esperada) e nunca chamou
  * a barreira: a RN-18 tinha duas portas, nao tres. Antes da onda de correcao, a barreira do
  * `/fiscal` parava esse documento por ACIDENTE — qualquer edicao fiscal reenviava 999 sobre uma
  * esperada de 10 e tomava 400 (era exatamente o F1, o defeito que TRAVAVA o documento). Com a
@@ -1063,9 +1064,26 @@ function validarDadosProcessamento(rec) {
  * Quantidade que um item de recebimento leva para o estoque. Um lugar so — a pre-checagem e o
  * laco de entrada TEM de concordar sobre quais itens movem estoque, senao a pre-checagem valida
  * um conjunto e o laco move outro.
+ *
+ * ⚠️ Etapa 70 (T0, critico da Fase 2): `??` e NAO `||`. Com `||` o 0 conferido ("chegou zero" — a
+ * tela grava o 0 de proposito) caia na ESPERADA e entrava no estoque o que nao chegou: esperada 5,
+ * conferida 0 -> saldo 5 (sonda `sonda70r-zero.js`). NULL continua sendo "ninguem conferiu" e vale
+ * o documento (a esperada). O item zerado nao move estoque, nao e reclamado e nao trava a nota (o
+ * `continue` da pre-checagem e o `if (qtd > 0)` do laco ja tratavam o 0 — o que faltava era o 0
+ * chegar ate eles). O espelho na tela e `quantidadeQueEntra` (RecebimentosAlmoxarifado.js).
  */
 function quantidadeDoItem(item) {
-  return item.quantidade_recebida || item.quantidade_esperada;
+  return item.quantidade_recebida ?? item.quantidade_esperada;
+}
+
+/**
+ * Etapa 70 (T0): "o payload trouxe a quantidade recebida?" para o INSERT de `criarRecebimento`.
+ * O 0 e informado (e um fato: nao chegou nada); `null`/`undefined`/`''` nao sao — esses nascem com
+ * a esperada, como sempre nasceram. Antes o INSERT usava `item.quantidade_recebida || qtd` (letra D
+ * da Etapa 67) e o 0 virava a esperada ANTES de existir divergencia.
+ */
+function recebidaInformada(valor) {
+  return valor !== undefined && valor !== null && valor !== '';
 }
 
 /**

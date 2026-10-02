@@ -109,12 +109,19 @@ let seq = 0;
     assert.strictEqual(ok.status, 200, JSON.stringify(ok.body));
   });
 
-  await test('Destino de item que NAO vai entrar e ignorado (sem validar); recebida=0 usa a esperada', async () => {
+  // Etapa 70 (T0): este cenario dizia "recebida=0 usa a esperada" e PRENDIA o defeito — o 0 conferido
+  // ("chegou zero") entrava no estoque pela esperada. Agora: recebida NULA (nao conferido) usa a esperada;
+  // recebida 0 com esperada 4 NAO entra e o destino dele e ignorado sem validar, como o do item zerado.
+  await test('Destino de item que NAO vai entrar e ignorado (sem validar); recebida nula usa a esperada, recebida 0 nao entra', async () => {
     const A = await loc('IG'); const I = await loc('IGI', { ativo: 0 }); const m1 = await material(); const m2 = await material();
-    const { rec, ids } = await nota([{ material: m1.id, qtd: 0, esperada: 0, recebida: 0 }, { material: m2.id, esperada: 6, recebida: 0 }]);
-    const r = await processar(rec, { destinos: [{ item_id: ids[0], localizacao_id: I.id }, { item_id: ids[1], localizacao_id: A.id }] });
+    const m3 = await material();
+    const { rec, ids } = await nota([{ material: m1.id, qtd: 0, esperada: 0, recebida: 0 }, { material: m2.id, esperada: 6, qtd: null },
+      { material: m3.id, esperada: 4, recebida: 0 }]);
+    const r = await processar(rec, { destinos: [{ item_id: ids[0], localizacao_id: I.id }, { item_id: ids[1], localizacao_id: A.id },
+      { item_id: ids[2], localizacao_id: I.id }] });
     assert.strictEqual(r.status, 200, JSON.stringify(r.body));
     assert.strictEqual(await saldoEm(m2.id, A.id), 6);
+    assert.strictEqual(await nEntradas(m3.id), 0, 'chegou zero nao entra pela esperada');
   });
 
   await test('RN-04 o workflow (acao processar) repassa os destinos', async () => {

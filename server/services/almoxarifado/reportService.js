@@ -341,7 +341,8 @@ function chaveFornecedorSql(r = 'r') {
  * CONFERIDO = o recebimento teve a conferencia FINALIZADA (auditoria FINALIZAR_CONFERENCIA, que so
  * o gesto "Finalizar Conferencia" do workflow escreve) e o item tem quantidade recebida. Fase 2,
  * critico 2, medido na T3: todo item NASCE com `quantidade_recebida` (o INSERT grava
- * `quantidade_recebida || qtd`); `conferencia_quantidade` nao serve porque a tela grava
+ * o informado ou a esperada — desde a Etapa 70 T0 o 0 informado fica 0, antes o `|| qtd` o
+ * trocava pela esperada); `conferencia_quantidade` nao serve porque a tela grava
  * `recebida === esperada` (o divergente fica 0, igual ao default); status >= CONFERIDO_ALMOX nao
  * serve porque o /aprovar e o `encaminhar_compras` saem de RECEBIDO pulando a conferencia.
  *

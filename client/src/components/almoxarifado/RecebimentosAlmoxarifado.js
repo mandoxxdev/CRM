@@ -129,12 +129,19 @@ const mensagemPedidoSemSaldo = (linhas, pedido, pedidoId) => {
  * Etapa 57 (RN-05) — o modal de "Processar nota" escolhe o destino POR ITEM.
  *
  * `itensQueVaoEntrar` usa a MESMA regra do servidor (`receiptService.processarNota`,
- * `quantidadeDoItem` + `entrada_estoque_em`): quantidade = recebida || esperada, e só entra o que
+ * `quantidadeDoItem` + `entrada_estoque_em`): quantidade = recebida ?? esperada, e só entra o que
  * tem quantidade > 0 e ainda não entrou. Uma regra diferente aqui ofereceria destino para um item
  * que o servidor ignora (o destino dele é ignorado sem validar — Fase 2, IMPORTANTE) ou esconderia
- * um item que vai entrar (recebida 0 com esperada > 0 entra pela esperada).
+ * um item que vai entrar (recebida vazia/nula com esperada > 0 entra pela esperada).
+ *
+ * ⚠️ Etapa 70 (T0): recebida **0** é "chegou zero" e NÃO entra — antes era `||`, que trocava o 0
+ * pela esperada (aqui e no servidor), e a nota dava entrada no que não chegou.
  */
-const quantidadeQueEntra = (item) => Number(item.quantidade_recebida) || Number(item.quantidade_esperada) || 0;
+const quantidadeQueEntra = (item) => {
+  const recebida = item.quantidade_recebida;
+  const informada = recebida !== null && recebida !== undefined && recebida !== '';
+  return (informada ? Number(recebida) : Number(item.quantidade_esperada)) || 0;
+};
 const itensQueVaoEntrar = (itens) => (itens || [])
   .filter((it) => quantidadeQueEntra(it) > 0 && !it.entrada_estoque_em);
 
@@ -1180,7 +1187,7 @@ const RecebimentosAlmoxarifado = () => {
                         </div>
                         {materiais.find((m) => m.id === item.material_id)?.controle_serie === 1 && (() => {
                           const seriesPreenchidas = String(item.series || '').split(/\r?\n/).filter((s) => s.trim()).length;
-                          const quantidadeEsperada = item.quantidade_recebida || item.quantidade_esperada || 0;
+                          const quantidadeEsperada = quantidadeQueEntra(item);
                           return (
                             <div className="almox-field" style={{ gridColumn: '1 / -1', marginTop: 6 }}>
                               <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Séries (uma por linha) — <span style={{ color: seriesPreenchidas === quantidadeEsperada ? 'var(--gmp-text-light)' : 'var(--gmp-error)' }}>{seriesPreenchidas}/{quantidadeEsperada}</span></label>

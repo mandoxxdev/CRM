@@ -42,9 +42,9 @@ const ITENS = [
   // entra (recebida 10); a padrão RECUSA o material
   { id: 951, material_id: 21, material_codigo: 'ALM-0201', material_nome: 'Tinta Epóxi', unidade: 'L',
     quantidade_esperada: 10, quantidade_recebida: 10, entrada_estoque_em: null },
-  // entra pela ESPERADA (recebida 0 → cai na esperada, igual ao servidor); padrão INATIVA
+  // entra pela ESPERADA (recebida NULA = não conferido → cai na esperada, igual ao servidor); padrão INATIVA
   { id: 952, material_id: 22, material_codigo: 'ALM-0202', material_nome: 'Eletrodo 6013', unidade: 'KG',
-    quantidade_esperada: 5, quantidade_recebida: 0, entrada_estoque_em: null },
+    quantidade_esperada: 5, quantidade_recebida: null, entrada_estoque_em: null },
   // já entrou numa tentativa anterior → NÃO aparece
   { id: 953, material_id: 23, material_codigo: 'ALM-0203', material_nome: 'Luva Nitrílica', unidade: 'PC',
     quantidade_esperada: 7, quantidade_recebida: 7, entrada_estoque_em: '2026-09-21 08:00:00' },
@@ -57,6 +57,10 @@ const ITENS = [
   // entra; a sugestão FALHA (400 material inativo) → sem aviso, sem quebrar
   { id: 956, material_id: 26, material_codigo: 'ALM-0206', material_nome: 'Broca 8mm', unidade: 'PC',
     quantidade_esperada: 4, quantidade_recebida: 4, entrada_estoque_em: null },
+  // Etapa 70 (T0): CHEGOU ZERO (recebida 0 com esperada 5) → NÃO aparece. Era o mesmo `||` do servidor que
+  // trocava o 0 pela esperada e dava entrada no que não chegou.
+  { id: 957, material_id: 27, material_codigo: 'ALM-0207', material_nome: 'Rebite Pop', unidade: 'PC',
+    quantidade_esperada: 5, quantidade_recebida: 0, entrada_estoque_em: null },
 ];
 
 const DETALHE = {
@@ -153,7 +157,7 @@ async function abrirModal() {
   await esperarEfeitos();
 }
 
-test('(a) o modal lista SÓ os itens que vão entrar — recebida 0 com esperada > 0 entra; já entrado e zero não', async () => {
+test('(a) o modal lista SÓ os itens que vão entrar — recebida nula entra pela esperada; chegou zero, já entrado e zero não', async () => {
   const confirmSpy = jest.spyOn(window, 'confirm').mockImplementation(() => true);
   await abrirModal();
   expect(modal()).not.toBeNull();
@@ -163,13 +167,14 @@ test('(a) o modal lista SÓ os itens que vão entrar — recebida 0 com esperada
 
   const ids = linhasModal().map((tr) => tr.getAttribute('data-testid'));
   expect(ids).toEqual(['processar-item-951', 'processar-item-952', 'processar-item-955', 'processar-item-956']);
-  // o 952 aparece com a quantidade ESPERADA (5), porque a recebida é 0
+  // o 952 aparece com a quantidade ESPERADA (5), porque a recebida é nula (não conferido)
   const t952 = linhasModal()[1].textContent;
   expect(t952).toContain('ALM-0202');
   expect(t952).toContain('Eletrodo 6013');
   expect(t952).toContain('5 KG');
   expect(modal().textContent).not.toContain('ALM-0203');
   expect(modal().textContent).not.toContain('ALM-0204');
+  expect(modal().textContent).not.toContain('ALM-0207');   // chegou zero não entra (Etapa 70, T0)
   // nada saiu antes de confirmar
   expect(chamadasProcessar()).toHaveLength(0);
 });
