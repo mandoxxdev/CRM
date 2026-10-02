@@ -55,9 +55,15 @@ let seq = 0;
     try { return await fn(); } finally { console.warn = orig; }
   };
   // Um lock que nao solta PRENDE a suite em vez de falhar: toda espera concorrente tem limite.
-  const comLimite = (p, ms = 15000) => Promise.race([p, new Promise((_, rej) => {
-    setTimeout(() => rej(new Error(`PRESA: passou de ${ms} ms (o lock do material nao soltou?)`)), ms).unref();
-  })]);
+  // Etapa 76 (Fase 5): o timer era `.unref()` - com o lock preso e o timer solto o event loop esvaziava e o
+  // arquivo saia com 0 no meio, sem placar (sonda76f-runner): o run-all contava verde. Timer vivo, limpo no fim.
+  const comLimite = (p, ms = 15000) => {
+    let t;
+    const limite = new Promise((_, rej) => {
+      t = setTimeout(() => rej(new Error(`PRESA: passou de ${ms} ms (o lock do material nao soltou?)`)), ms);
+    });
+    return Promise.race([p, limite]).finally(() => clearTimeout(t));
+  };
 
   const material = async ({ critico = 1, cliente = null } = {}) => {
     const c = `E75F-${++seq}`;
