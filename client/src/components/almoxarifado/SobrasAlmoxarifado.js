@@ -164,7 +164,11 @@ const SobrasAlmoxarifado = () => {
   // primary/secondary alternando, sem CSS novo). O `modal` e COMPARTILHADO entre as duas abas de
   // proposito: o botao "Sucatear" na linha do retalho abre o modal de solicitar sucateamento SEM
   // trocar de aba — o operador nao precisa sair de Retalhos para sucatear o que acabou de ver.
-  const [aba, setAba] = useState('RETALHOS');
+  // Etapa 69 (RN-13): `?aba=sucateamentos` abre direto na fila — o toast da NC ("Solicitar
+  // sucateamento") aponta para Sobras e Retalhos › Sucateamentos. One-shot, lido so no mount,
+  // mesmo espirito do `?sobra_id=` acima.
+  const [aba, setAba] = useState(() => (
+    (searchParams.get('aba') || '').toLowerCase() === 'sucateamentos' ? 'SUCATEAMENTOS' : 'RETALHOS'));
 
   const [sucateamentos, setSucateamentos] = useState([]);
   const [loadingSuc, setLoadingSuc] = useState(true);
@@ -466,8 +470,13 @@ const SobrasAlmoxarifado = () => {
     if (!bloquearSeNaoPode(acao, evento)) return;
     try {
       const res = await api.post(`/almoxarifado/sucateamentos/${sucateamento.id}/aprovar-${perna}`, {});
+      // Etapa 69: o sucateamento ligado a NC baixa do BLOQUEADO (o reprovado), nao do disponivel
+      // — o toast diz de onde saiu, para ninguem procurar a baixa no saldo livre.
+      const baixa = sucateamento.nao_conformidade_numero
+        ? `Sucateamento aprovado nas duas pernas — a baixa do material bloqueado (reprovado na ${sucateamento.nao_conformidade_numero}) foi emitida no estoque`
+        : 'Sucateamento aprovado nas duas pernas — a baixa foi emitida no estoque';
       toast.success(res.data?.baixa_emitida
-        ? 'Sucateamento aprovado nas duas pernas — a baixa foi emitida no estoque'
+        ? baixa
         : 'Perna assinada — falta a assinatura da outra perna para a baixa sair');
       recarregarSuc();
     } catch (err) {
@@ -719,6 +728,21 @@ const SobrasAlmoxarifado = () => {
                       <td>
                         {s.material_codigo} — {s.material_nome}
                         <SeloProprietario material={s} />
+                        {/* Etapa 69 (RN-13): o sucateamento que nasceu de uma NC decidida Sucatear.
+                            A segunda assinatura dele baixa do BLOQUEADO (o reprovado), nao do
+                            disponivel — o aprovador precisa saber de onde sai antes de assinar.
+                            O comum (`nao_conformidade_numero` null) nao ganha nada. */}
+                        {s.nao_conformidade_numero && (
+                          <div style={{ marginTop: 4 }}>
+                            <span className="almox-badge almox-badge-critico" data-testid="selo-nc-sucateamento"
+                              title={`Origem: não conformidade ${s.nao_conformidade_numero}`}>
+                              Origem: {s.nao_conformidade_numero}
+                            </span>
+                            <small style={{ display: 'block', color: '#6b7280', marginTop: 2 }}>
+                              Material reprovado — baixa do material bloqueado, não do disponível
+                            </small>
+                          </div>
+                        )}
                       </td>
                       <td>{s.quantidade} {s.material_unidade || ''}</td>
                       <td>{s.classificacao || '—'}</td>

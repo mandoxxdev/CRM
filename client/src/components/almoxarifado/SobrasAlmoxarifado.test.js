@@ -656,3 +656,85 @@ describe('SobrasAlmoxarifado — sucateamento: solicitar', () => {
     expect(toast.error).toHaveBeenCalledWith('Material de cliente exige projeto ou OS do dono');
   });
 });
+
+// Etapa 69, T5 (RN-13) — o sucateamento que nasceu de uma NC decidida Sucatear. GET /sucateamentos
+// traz `nao_conformidade_id`/`nao_conformidade_numero` (LEFT JOIN; null no sucateamento comum). A
+// segunda assinatura desse sucateamento baixa do BLOQUEADO (o reprovado), nao do disponivel — a
+// tela precisa dizer as duas coisas na linha, senao o aprovador assina sem saber de onde sai.
+// Fixture propria (nao mexe em SUCATEAMENTOS, cujos indices os testes acima usam): um comum
+// com os campos explicitamente null e um ligado a NC.
+const SUC_COMUM = { ...SUCATEAMENTOS[0], id: 601, nao_conformidade_id: null, nao_conformidade_numero: null };
+const SUC_DA_NC = {
+  ...SUCATEAMENTOS[0], id: 602, quantidade: 3, justificativa: 'Reprovado na inspeção — trincas',
+  nao_conformidade_id: 77, nao_conformidade_numero: 'NC-2026-0007',
+};
+
+describe('SobrasAlmoxarifado — sucateamento ligado a NC (Etapa 69, RN-13)', () => {
+  beforeEach(() => {
+    const getPadrao = api.get.getMockImplementation();
+    api.get.mockImplementation((url, ...resto) => (url === '/almoxarifado/sucateamentos'
+      ? Promise.resolve({ data: [SUC_COMUM, SUC_DA_NC] })
+      : getPadrao(url, ...resto)));
+  });
+
+  test('a linha ligada mostra a origem NC-… e que a baixa sai do material bloqueado', async () => {
+    await renderizar();
+    await abrirAbaSucateamentos();
+    const [, ligada] = linhasSuc();
+    const selo = ligada.querySelector('[data-testid="selo-nc-sucateamento"]');
+    expect(selo).toBeTruthy();
+    expect(selo.textContent).toContain('NC-2026-0007');
+    expect(ligada.textContent).toMatch(/baixa do material bloqueado/i);
+  });
+
+  test('o sucateamento comum NAO mostra selo de NC nem fala em bloqueado (metade positiva)', async () => {
+    await renderizar();
+    await abrirAbaSucateamentos();
+    const [comum] = linhasSuc();
+    expect(comum.querySelector('[data-testid="selo-nc-sucateamento"]')).toBeNull();
+    expect(comum.textContent).not.toMatch(/NC-/);
+    expect(comum.textContent).not.toMatch(/bloqueado/i);
+  });
+
+  test('fechar as duas assinaturas do ligado avisa que a baixa saiu do bloqueado da NC', async () => {
+    mockUser = { id: 60, nome: 'Gestora Teste' };
+    await renderizar();
+    await abrirAbaSucateamentos();
+    await clicar(botao('Aprovar gestão', linhasSuc()[1]));
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/sucateamentos/602/aprovar-gestao', {});
+    expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/bloqueado.*NC-2026-0007/i));
+  });
+
+  test('fechar as duas assinaturas do comum NAO fala em bloqueado (metade positiva)', async () => {
+    mockUser = { id: 60, nome: 'Gestora Teste' };
+    await renderizar();
+    await abrirAbaSucateamentos();
+    await clicar(botao('Aprovar gestão', linhasSuc()[0]));
+    expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/foi emitida no estoque/i));
+    expect(toast.success).not.toHaveBeenCalledWith(expect.stringMatching(/bloqueado/i));
+  });
+
+  test.each([
+    'Sucateamento acima do que está bloqueado: há 1 KG bloqueado(s) (físico: 10)',
+    'A não conformidade NC-2026-0007 foi cancelada — o sucateamento não baixa material de documento cancelado',
+    'O material desta inspeção já havia sido devolvido ao fornecedor — a assinatura foi desfeita',
+  ])('a recusa do servidor na segunda assinatura chega literal: %s', async (literal) => {
+    api.post.mockImplementationOnce(() => Promise.reject({ response: { status: 400, data: { error: literal } } }));
+    await renderizar();
+    await abrirAbaSucateamentos();
+    await clicar(botao('Aprovar almoxarifado', linhasSuc()[1]));
+    expect(toast.error).toHaveBeenCalledWith(literal);
+  });
+
+  test('?aba=sucateamentos abre direto na fila de sucateamentos', async () => {
+    await renderizar('/almoxarifado/sobras?aba=sucateamentos');
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/sucateamentos', expect.anything());
+    expect(linhasSuc()).toHaveLength(2);
+  });
+
+  test('sem ?aba a tela abre em Retalhos (metade positiva)', async () => {
+    await renderizar();
+    expect(linhasSuc()).toHaveLength(0);
+    expect(api.get).not.toHaveBeenCalledWith('/almoxarifado/sucateamentos', expect.anything());
+  });
+});
