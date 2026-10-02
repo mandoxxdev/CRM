@@ -379,7 +379,17 @@ galhos depois de T1: só **consomem** `aposLiberacaoSemFalhar`/`reservarLiberaca
   existe como sabotagem útil — no lugar, reprovação total com R esperando e saldo livre de ajuste: nenhuma reserva (cai
   se o teto for o disponível); (4) gancho sem `try` + `criarReserva` lançando → RN-06 cai com 500; (5) `sistema: false`
   → RN-08 cai com a reserva ausente (o warn do 403).
-- [ ] **T2 (galho, worktree, ∥ T3) — a NC que aceita também reserva.** O gancho em `decidirNaoConformidade`, pelo
+- [x] **T2 — a NC que aceita também reserva.** ✅ T1 = `f149977b`; T2 no commit seguinte. **Rodou no tronco, sem
+  worktree** (Fase 2). Realizado pelo contrato: gancho em `decidirNaoConformidade` depois da auditoria, antes do
+  `obterNaoConformidade`. Teste novo `ncReservaLiberacao` 10/10 (RN-04 com as duas que liberam e as quatro que não,
+  `SEM_BLOQUEIO` depois do avulso, RN-06 por item e por escape, RN-07 409). Os 10 arquivos que decidem NC verdes **sem
+  edição**. Achado no próprio teste: o RN-06 "escape" com UMA candidata nunca chamava o comparador (o `sort` de um
+  elemento não compara) — passava sem provar nada; ganhou a segunda candidata. Controles: (s1) gancho desligado →
+  RN-04 (as duas), RN-06 e RN-07 caem; (s2) sem a guarda `efeito === 'LIBERADA'` → **nada cai: defeito inalcançável
+  declarado** (todo efeito que não é LIBERADA sai com `quantidade: null` — `nada()` `:781`, `JA_LIBERADA`/
+  `SEM_BLOQUEIO_JA_SAIU` `:984-986` —, e o serviço devolve vazio no passo 1); (s3) sem wrapper e com `throw` +
+  `compararPrioridade` lançando → RN-06 escape cai com 500 `{"error":"ordem quebrou 75 nc"}`. Suíte: api 283/283,
+  almoxarifado 44/0, validation, safealter, sqlite verdes. Original: O gancho em `decidirNaoConformidade`, pelo
   contrato. Teste novo `server/tests/api/ncReservaLiberacao.api.test.js`, pelas rotas: RN-04 inteira (as duas decisões
   que liberam, as quatro que não, o `SEM_BLOQUEIO` depois do avulso), RN-06 (NC), RN-07 (NC, 409). **Medir antes:** os
   testes da 44/45/69 (`grep -ln "nao-conformidades/.*decidir" tests/api`) passam sem edição. Controles: (1) gancho

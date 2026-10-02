@@ -956,6 +956,25 @@ async function decidirNaoConformidade(db, user, ncId, dados = {}) {
     console.warn(`[NC] decisão ${id} gravada, mas a trilha falhou: ${e.message}`);
   }
 
+  // Etapa 75 (T2, C126 — a segunda porta, D1/D5): o que a aceitação devolveu ao disponível vai para quem
+  // esperava, pelo mesmo miolo da inspeção (T1). Só `LIBERADA` moveu saldo: as outras decisões e os efeitos
+  // SEM_BLOQUEIO/JA_LIBERADA não têm o que distribuir. DEPOIS da auditoria e da liberação (que é FATAL, RN-02
+  // da 44 — lá a liberação É a decisão; aqui a reserva é efeito): nada aqui pode desfazer a decisão nem
+  // virar 500 — o `aposLiberacaoSemFalhar` nunca lança e o `try` cobre a carga do módulo. Resposta
+  // inalterada. `require` lazy, como o do stockService acima.
+  if (liberacao.efeito === 'LIBERADA') {
+    try {
+      const reservaChegadaService = require('./reservaChegadaService');
+      await reservaChegadaService.aposLiberacaoSemFalhar(db, user, {
+        origem: 'NAO_CONFORMIDADE', documento_id: id, documento_numero: atual.numero,
+        material_id: liberacao.material_id, quantidade: liberacao.quantidade,
+        recebimento_id: atual.recebimento_id || insp?.recebimento_id || null,
+      });
+    } catch (e) {
+      console.warn(`[almoxarifado-reservas] reserva na liberacao falhou (NAO_CONFORMIDADE ${id}): ${e.message}`);
+    }
+  }
+
   const nc = await obterNaoConformidade(db, id);
   return { ...nc, liberacao };
 }
