@@ -390,7 +390,20 @@ sequencial pelo mesmo motivo, com zero retrabalho.
   interno da T0 segura) — o teste tem as duas variantes justamente para isso; a sabotagem é medida contra a segunda.
   (s4) gancho **depois** do `res.json` sem `await` (fire-and-forget) → **não é controle confiável** (pode passar por
   ordem de microtarefas) — não usar; declarado.
-- [ ] **T2 — a expiração recalcula.** O gancho no job, pelo contrato. Teste novo
+- [x] **T2 — a expiração recalcula.** — **feita em `66aa8e31`.** Teste `reservaExpiracaoRecalculaStatus` 10/10
+  (RN-03 ×4 — uma delas pelo serviço; RN-04 ×3 — `EM_SEPARACAO`, manual com a asserção de zero chamadas em
+  `recalcularStatusSobTrava` (Fase 2) e "nada venceu → gancho não chamado"; RN-05 ×2; RN-06 com a metade positiva:
+  ADMINISTRADOR depois expira e recalcula). A validade é ligada só durante a criação das reservas de cada cenário
+  (o lote do job é sempre só o do cenário). Controles: s1 (gancho removido) → RN-03 `TOTALMENTE_RESERVADA ≠
+  APROVADO` e 8 caem; s2 (uma chamada por reserva, `for` sobre `liberadas`) → **só** o espião do lote de dois itens
+  (`[{ids:[2]},{ids:[3]}]`); s3 (`vencidas`) → **só** o espião do caso da reserva que falhou (`ids [6, 7]`); s4
+  (`catch` relança) → **só** RN-05 do gancho, `500`; **s5 (require no topo) → cai o (h) da T0** na ordem
+  `requisitionService → reservaChegadaService → reservationService`: `RESULTADO 200 0/0` (a nota com duas
+  candidatas não reserva — o `{}` velho quebra no sort, a distribuição lança e o warn engole). Controle alcançável,
+  não declarado. `reservaTransferenciaExpiracao` 15/15 e `reservaCicloIntegracao` 7/7 sem edição. Literal do
+  aviso do job: `[almoxarifado-reservas] recalculo do status apos expiracao da reserva falhou: <msg>` (o gancho
+  inteiro) e `... apos expiracao da reserva falhou (requisicao <id>): <msg>` (uma requisição). Texto original:
+  O gancho no job, pelo contrato. Teste novo
   `server/tests/api/reservaExpiracaoRecalculaStatus.api.test.js`, **pela rota** do job (ADMINISTRADOR) e **pelo serviço**
   (`reservationService.processarExpiracao` direto, com `referencia`): RN-03 inteira (as quatro), RN-04 (job:
   `EM_SEPARACAO` e manual), RN-05 (job), RN-06 (job, não-admin 403), e o corpo com as mesmas chaves. **Espião** em
