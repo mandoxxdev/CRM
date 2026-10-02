@@ -361,6 +361,25 @@ async function decidirInspecao(db, user, itemId, data = {}) {
     }
   }
 
+  // Etapa 75 (T1, C126, D5/B387) — a parte APROVADA vai para quem esperava (na ordem da fila), pelo mesmo
+  // miolo da reserva na chegada (74), com o teto desta decisão. Depois do aviso e da NC, antes do
+  // `return`: os dois claims e o INSERT já aconteceram, então nada aqui pode desfazer a decisão — o
+  // `aposLiberacaoSemFalhar` nunca lança, e o `try` abaixo cobre até a falha de carga do módulo. Resposta
+  // inalterada. `require` lazy: o reservaChegadaService puxa o motor e a requisição; carga fria medida
+  // nas duas ordens (reservaLiberacaoBase). Sem efeito quando nada foi aprovado (a guarda só evita a
+  // chamada — o serviço também devolve vazio com quantidade 0).
+  if (aprovada > 1e-9) {
+    try {
+      const reservaChegadaService = require('./reservaChegadaService');
+      await reservaChegadaService.aposLiberacaoSemFalhar(db, user, {
+        origem: 'INSPECAO', documento_id: ins.lastID, documento_numero: null,
+        material_id: item.material_id, quantidade: aprovada, recebimento_id: item.recebimento_id,
+      });
+    } catch (e) {
+      console.warn(`[almoxarifado-reservas] reserva na liberacao falhou (INSPECAO ${ins.lastID}): ${e.message}`);
+    }
+  }
+
   // `divergencia_dimensional` volta no retorno DE PROPOSITO (campo novo, aditivo): com medidas ela
   // pode ser o contrario do que o payload mandou, e sem ela quem chamou nao teria como saber que a
   // marcacao manual foi ignorada — a tela mostraria uma coisa e o banco guardaria outra, que e

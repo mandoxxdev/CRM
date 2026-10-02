@@ -343,7 +343,13 @@ galhos depois de T1: só **consomem** `aposLiberacaoSemFalhar`/`reservarLiberaca
 - Scratchpad com nome único por agente (`msg-e75-t2.txt`, `bak-e75-t3-rns.js`...). Executores **não** marcam este plano;
   o fio principal marca.
 
-- [ ] **T0 (tronco) — o miolo com teto injetado, e a retomada que não reconta o inspecionado.** Pelo contrato "T0".
+- [x] **T0 (tronco) — o miolo com teto injetado, e a retomada que não reconta o inspecionado.** ✅ `1b2a6959`.
+  Realizado: `distribuirParaQuemEspera` + `rotulosDaChegada(rec)` (9 rótulos: observação, motivo, recebimento_id,
+  aviso por item, motivo/aviso do desfazer, saiu da espera, excesso, aviso do recálculo — literais da 74 byte a byte)
+  + `recalcularTocadas`. Testes da 74 sem edição: 8 + 23 + 5 + 14 + 11 verdes. Teste novo 3/3 (D8 pelo serviço, D8
+  pela rota com retomada forçada pelo lote, carga fria). Controles: sem `NOT EXISTS` → os dois D8 caem; teto = disponível
+  → cai o RN-04 da 74 "reserva 4, não 6". Suíte: api 281/281, almoxarifado 44/0, validation, safealter, sqlite verdes.
+  Pelo contrato "T0".
   **Medir antes e citar no commit:** os testes da 74 (`recebimentoReservaChegada*`, `reservaChegadaBase`) passam **sem
   edição** depois da extração. Teste novo `server/tests/api/reservaLiberacaoBase.api.test.js`, **pelo serviço**: RN-07
   (parte D8 — nota mista crítico+comum, entrada manual de 5, inspeção 1/3 pela rota, depois
@@ -351,7 +357,18 @@ galhos depois de T1: só **consomem** `aposLiberacaoSemFalhar`/`reservarLiberaca
   livre, **é**). Controles positivos: (1) sem o `NOT EXISTS` → o crítico ganha 4 e cai; (2) teto trocado pelo disponível
   global dentro do miolo → um RN-04 da 74 cai (prova que a extração preservou o teto). Carga fria `node -e` de
   `reservaChegadaService` e `inspectionService` nas duas ordens.
-- [ ] **T1 (tronco) — a inspeção reserva para quem esperava.** `reservarLiberacaoParaQuemEspera` +
+- [x] **T1 (tronco) — a inspeção reserva para quem esperava.** ✅ (hash no commit seguinte do plano). Realizado:
+  `rotulosDaLiberacao(ctx, recNumero)`, `reservarLiberacaoParaQuemEspera(db, user, ctx, resultado?)` (4º argumento
+  opcional: o acumulador preenchido no lugar — é como o `aposLiberacaoSemFalhar` devolve o PARCIAL, Fase 2),
+  `aposLiberacaoSemFalhar` (devolve o resultado; a metade do aviso é a T3) e o gancho em `decidirInspecao`. Teste
+  novo 15/15. Os 26 arquivos que passam por `inspecionar` continuam verdes **sem edição** (nenhum caiu). Controles:
+  (s1) gancho desligado → 9 caem, RN-01 na 1ª asserção de reserva; (s2) teto = disponível → cai só o RN-03 da entrada
+  manual; (s3) sem a guarda `aprovada > 1e-9` → **nada cai: defeito inalcançável declarado** (o passo 1 do serviço
+  devolve vazio com quantidade 0; a guarda só evita a chamada); (s4) gancho sem wrapper e com `throw` no catch +
+  `compararPrioridade` lançando → RN-06 (escape) cai com `{"error":"ordem quebrou 75"}` (500); (s5) `sistema: false` →
+  RN-08 cai com a reserva ausente (e todos os que decidem como QUALIDADE); (s6) catch zerando o parcial → cai o
+  `[servico]` do resultado parcial. Suíte: api 282/282, almoxarifado 44/0, validation, safealter, sqlite verdes.
+  Original: `reservarLiberacaoParaQuemEspera` +
   `aposLiberacaoSemFalhar` (só a metade da reserva) + o gancho em `decidirInspecao`. Teste novo
   `server/tests/api/inspecaoReservaLiberacao.api.test.js`, **pelas rotas** (nota pelas portas do recebimento,
   `POST /recebimentos/itens/:id/inspecionar`): RN-01, RN-02, RN-03 (as três), RN-05, RN-06 (inspeção), RN-07 (inspeção),

@@ -290,6 +290,79 @@ async function distribuirParaQuemEspera(db, user, materialId, teto, rotulos, acc
 }
 
 /**
+ * Etapa 75 (T1) — os textos da liberação pela inspeção ou pela não conformidade (contrato do plano). O
+ * documento entra no texto de log (a inspeção não tem número: vai o id; a NC vai pelo número).
+ */
+function rotulosDaLiberacao(ctx, recNumero) {
+  const ehNc = ctx.origem === 'NAO_CONFORMIDADE';
+  const nc = ctx.documento_numero || ctx.documento_id;
+  const onde = ehNc ? `na liberação da não conformidade ${nc}` : `na liberação da inspeção ${ctx.documento_id}`;
+  const ondeCurto = ehNc ? `na liberação da não conformidade ${nc}` : 'na liberação da inspeção';
+  return {
+    recebimento_id: ctx.recebimento_id ? Number(ctx.recebimento_id) : null,
+    observacao: ehNc
+      ? (c) => `Reserva na liberação da não conformidade ${nc} — requisição ${c.numero}`
+      : (c) => `Reserva na liberação da inspeção — recebimento ${recNumero} — requisição ${c.numero}`,
+    motivo: ehNc ? `Reserva na liberação da não conformidade ${nc}` : `Reserva na liberação da inspeção — recebimento ${recNumero}`,
+    falhaReserva: (c, e) => `[almoxarifado-reservas] Falha ao reservar ${onde} o item ${c.item_id} da requisição ${c.requisicao_id}: ${e.message}`,
+    motivoDesfazer: `Liberação de reserva ${ondeCurto} desfeita`,
+    falhaDesfazer: (reservaId, e) => `[almoxarifado-reservas] Falha ao desfazer a reserva ${reservaId} ${onde}: ${e.message}`,
+    saiuDaEspera: `Requisição saiu da espera durante a reserva ${ondeCurto}`,
+    excessoDesfeito: `Reserva ${ondeCurto} acima do pendente — excesso desfeito`,
+    falhaRecalculo: (id, e) => `[almoxarifado-reservas] recalculo do status apos a reserva na liberacao falhou (${ctx.origem} ${ctx.documento_id}, requisicao ${id}): ${e.message}`,
+  };
+}
+
+/**
+ * Etapa 75 (T1, C126) — o que a inspeção aprovou (ou a NC aceitou) é reservado para quem esperava, pelo
+ * mesmo miolo da chegada (D2/B384), com o teto desta decisão: `min(quantidade liberada, disponível agora)`
+ * (D3/B385 — nunca saldo de ajuste). A reserva é marcada com a nota (D4/B386): o estorno da entrada depois
+ * da inspeção a solta pela B374. O dono é quem decidiu, com `sistema: true` (D6/B388 — a QUALIDADE não
+ * tem `reservar`).
+ * @param {object} ctx { origem: 'INSPECAO'|'NAO_CONFORMIDADE', documento_id, documento_numero, material_id,
+ *   quantidade, recebimento_id }
+ * @param {object} [resultado] acumulador preenchido no lugar (Fase 2: quem chama vê o parcial se lançar).
+ * @returns {Promise<{reservas: Array, status: Array}>} Lança só em erro fora do try por item — e, mesmo então,
+ *   o status das requisições já tocadas é recalculado antes de relançar.
+ */
+async function reservarLiberacaoParaQuemEspera(db, user, ctx, resultado = { reservas: [], status: [] }) {
+  const quantidade = num(ctx && ctx.quantidade);
+  if (!(quantidade > EPS) || !ctx.material_id) return resultado;
+  const material = await dbGet(db, `SELECT id, ${disponivelSql()} AS disponivel FROM materiais_almoxarifado WHERE id = ?`, [ctx.material_id]);
+  if (!material) return resultado;
+  const rec = ctx.recebimento_id
+    ? await dbGet(db, 'SELECT numero FROM recebimentos_material_almoxarifado WHERE id = ?', [ctx.recebimento_id])
+    : null;
+  const teto = Math.min(quantidade, Math.max(0, num(material.disponivel)));
+  const rotulos = rotulosDaLiberacao(ctx, rec ? rec.numero : ctx.recebimento_id);
+  const acc = { tocadas: new Set(), resultado };
+  try {
+    await distribuirParaQuemEspera(db, user, material.id, teto, rotulos, acc);
+  } finally {
+    await recalcularTocadas(db, acc, rotulos);
+  }
+  return resultado;
+}
+
+/**
+ * Etapa 75 (T1, D5/B387) — o gancho das duas portas (decisão da inspeção, liberação pela NC). NUNCA lança:
+ * a decisão da Qualidade já está gravada e o saldo já mudou; a reserva é efeito. Chamada pelo OBJETO do
+ * módulo (monkeypatch dos testes). Fase 2: na falha devolve o resultado PARCIAL (o que de fato ficou
+ * reservado antes de a falha escapar) — o aviso (T3) diz a verdade a partir dele.
+ */
+async function aposLiberacaoSemFalhar(db, user, ctx) {
+  const resultado = { reservas: [], status: [] };
+  let r = resultado;
+  try {
+    r = (await module.exports.reservarLiberacaoParaQuemEspera(db, user, ctx, resultado)) || resultado;
+  } catch (e) {
+    console.warn(`[almoxarifado-reservas] reserva na liberacao falhou (${ctx && ctx.origem} ${ctx && ctx.documento_id}): ${e.message}`);
+    r = resultado;
+  }
+  return r;
+}
+
+/**
  * Etapa 74 (T3, D8/B374 + Fase 2) — o estorno da ENTRADA_COMPRA desfaz a reserva que a PRÓPRIA nota criou,
  * só o necessário. Chamada LAZY pelo motor (`stockService.cancelarMovimentacao`) depois das guardas de
  * inspeção/reprovado/série e ANTES do claim. Sem isto, toda nota que atendeu alguém ficaria inestornável
@@ -399,6 +472,8 @@ async function recriarAposEstornoRecusado(db, user, liberadas) {
 
 module.exports = {
   reservarChegadaParaQuemEspera,
+  reservarLiberacaoParaQuemEspera,
+  aposLiberacaoSemFalhar,
   recalcularStatusDeReserva,
   liberarParaEstorno,
   recriarAposEstornoRecusado,
