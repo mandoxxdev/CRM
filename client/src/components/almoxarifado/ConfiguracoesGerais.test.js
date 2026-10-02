@@ -95,6 +95,14 @@ const RESPOSTA_DO_SERVIDOR = {
   // Etapa 43 acima previa exatamente isso, e a fixture continua sendo a quarta ponta da config
   // que nenhum plano listou.
   alerta_nc_execucao_pendente_dias: { valor: '7', descricao: 'Alerta de execucao pendente da NC (dias)', id: 21 },
+  // Etapa 70 (T3): os avisos de entrada do recebimento. Os defaults sao os SEMEADOS no
+  // schema.js (D3 revisto na Fase 2): o da nota nasce '0' (lista compartilhada — ligar e
+  // decisao de quem opera), o do solicitante nasce '1'. Booleana fora da fixture nao derruba o
+  // guard de dias (nao tem prefixo), mas vai no payload como '' — e o PUT recusa '' com
+  // `Configuracao "<chave>" deve ser 0 ou 1` (CHAVES_BOOL), entao a linha e obrigatoria aqui.
+  notificar_recebimento_entrada: { valor: '0', descricao: 'Aviso de entrada de recebimento', id: 22 },
+  notificar_recebimento_solicitante: { valor: '1', descricao: 'Aviso ao solicitante', id: 23 },
+  notificacoes_dest_recebimento: { valor: '', descricao: 'Destinatarios — recebimento', id: 24 },
 };
 
 let container;
@@ -567,4 +575,61 @@ test('a chave de dias da execucao pendente da NC (Etapa 46) aparece, recusa 0 e 
   expect(api.put.mock.calls[0][1].alerta_nc_execucao_pendente_dias).toBe('30');
   // A irma segue no MESMO payload, com o valor da fixture — o salvar manda o mapa inteiro.
   expect(api.put.mock.calls[0][1].alerta_nc_parada_dias).toBe('7');
+});
+
+/**
+ * Etapa 70 (T3) — os dois avisos do recebimento que entrou no estoque e a lista de destino do
+ * aviso da nota (receiptNotificationService.js). A tela mostra o valor SEMEADO de cada um (nota
+ * desligada, solicitante ligado) e o Salvar manda '0'/'1' — o PUT recusa qualquer outra coisa
+ * nas booleanas. O valor da nota vai '0' mesmo sem ninguem tocar no switch: e o default de
+ * producao, e a fixture sem esta linha mandaria '' (controle positivo medido na T3).
+ */
+test('os avisos de entrada do recebimento (Etapa 70) mostram o default semeado e entram no payload', async () => {
+  await renderAbaGeral();
+
+  expect(container.textContent).toContain('Avisar Entrada de Recebimento por E-mail');
+  expect(container.textContent).toContain('Avisar o Solicitante quando o Material Chega');
+  expect(container.textContent).toContain('Destinatários — Entrada de Recebimento');
+
+  const switchNota = switchDoCampo('Avisar Entrada de Recebimento por E-mail');
+  const switchSolicitante = switchDoCampo('Avisar o Solicitante quando o Material Chega');
+  const inputDest = inputTextoDoCampo('Destinatários — Entrada de Recebimento');
+  expect(switchNota).not.toBeNull();
+  expect(switchSolicitante).not.toBeNull();
+  expect(inputDest).not.toBeNull();
+  expect(switchNota.checked).toBe(false);
+  expect(switchSolicitante.checked).toBe(true);
+
+  const botao = [...container.querySelectorAll('button')]
+    .find(b => /Salvar Configurações/.test(b.textContent));
+  await act(async () => { botao.click(); });
+  expect(api.put).toHaveBeenCalledTimes(1);
+  let corpo = api.put.mock.calls[0][1];
+  expect(corpo.notificar_recebimento_entrada).toBe('0');
+  expect(corpo.notificar_recebimento_solicitante).toBe('1');
+  expect(corpo.notificacoes_dest_recebimento).toBe('');
+
+  // Liga o da nota, desliga o do solicitante e preenche a lista — cada um vai com o proprio
+  // valor (uma tela que trocasse as chaves passaria no bloco acima, que tem um '0' e um '1').
+  await act(async () => {
+    const setChecked = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'checked').set;
+    setChecked.call(switchNota, true);
+    switchNota.dispatchEvent(new Event('click', { bubbles: true }));
+  });
+  await act(async () => {
+    const setChecked = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'checked').set;
+    setChecked.call(switchSolicitante, false);
+    switchSolicitante.dispatchEvent(new Event('click', { bubbles: true }));
+  });
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')
+      .set.call(inputDest, 'compras@gmp.com,almox@gmp.com');
+    inputDest.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await act(async () => { botao.click(); });
+  expect(api.put).toHaveBeenCalledTimes(2);
+  corpo = api.put.mock.calls[1][1];
+  expect(corpo.notificar_recebimento_entrada).toBe('1');
+  expect(corpo.notificar_recebimento_solicitante).toBe('0');
+  expect(corpo.notificacoes_dest_recebimento).toBe('compras@gmp.com,almox@gmp.com');
 });

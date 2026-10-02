@@ -3306,6 +3306,14 @@ const TabConfiguracoes = () => {
     { chave: 'notificacoes_dest_ajustes', label: 'Destinatários — Ajustes', tipo: 'text', descricao: 'E-mails (lista) para notificação de ajuste de estoque; vazio usa o e-mail de alertas' },
     { chave: 'notificacoes_dest_terceiros', label: 'Destinatários — Terceiros', tipo: 'text', descricao: 'E-mails (lista) para notificação de movimentação de terceiro; vazio usa o e-mail de alertas' },
     { chave: 'notificacoes_dest_compras', label: 'Destinatários — Compras', tipo: 'text', descricao: 'E-mails (lista) para notificação de solicitação de compra gerada; vazio usa compras_notificar_emails' },
+    // Etapa 70 (T3): os avisos de quando a nota de um recebimento dá entrada no estoque — lidos
+    // por receiptNotificationService.js. O da nota nasce DESLIGADO (D3 revisto na Fase 2: ele
+    // vai para a lista compartilhada de Compras, que em produção já tem destinatários reais;
+    // ligar é decisão de quem opera). O do solicitante nasce LIGADO: vai só a quem pediu o
+    // material, e é o valor da etapa.
+    { chave: 'notificar_recebimento_entrada', label: 'Avisar Entrada de Recebimento por E-mail', tipo: 'boolean', descricao: 'Um e-mail por nota que deu entrada no estoque, para a lista de destinatários abaixo (sem lista própria, vai para a de Compras) — desligado por padrão' },
+    { chave: 'notificar_recebimento_solicitante', label: 'Avisar o Solicitante quando o Material Chega', tipo: 'boolean', descricao: 'Um e-mail só para quem pediu, em cada requisição que esperava um material que entrou disponível no estoque — ligado por padrão' },
+    { chave: 'notificacoes_dest_recebimento', label: 'Destinatários — Entrada de Recebimento', tipo: 'text', descricao: 'E-mails (lista) do aviso de entrada da nota; vazio usa os destinatários de Compras (e, sem eles, compras_notificar_emails)' },
   ];
   // Saíram daqui por não ter leitor nenhum no servidor — nenhuma delas fazia coisa alguma:
   // `prazo_atendimento_horas` (semeada, mas nada calcula prazo de atendimento),
