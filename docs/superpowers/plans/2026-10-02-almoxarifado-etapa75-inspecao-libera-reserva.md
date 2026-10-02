@@ -1,8 +1,8 @@
 # Etapa 75 — o material que a inspeção libera fica com quem esperava (C126, feature 07 com a 09 e a 19)
 
-> Status: **TRONCO ENTREGUE (T0–T3) — 2026-10-02.** Fases 0, 1 e 2 feitas; T0 `1b2a6959`, T1 `f149977b`, T2
-> `c4d9212c`, T3 `c8c089cb`. Falta: T4 (integração), Fase 5 (revisão adversarial), T5 (fechamento). Ver
-> "Tronco executado (T0–T3)" no fim.
+> Status: **T0–T4 + FASE 5 ENTREGUES — 2026-10-02.** Fases 0, 1 e 2 feitas; T0 `1b2a6959`, T1 `f149977b`, T2
+> `c4d9212c`, T3 `c8c089cb`, T4 `82b7fd75`; Fase 5 (revisão adversarial + fix-round) `655d75b8`, `936179b2`,
+> `18405a2e`. Falta: **T5 (fechamento)**. Ver "Tronco executado (T0–T3)" e "Fase 5" no fim.
 > Origem: "Próxima tarefa detalhada — Etapa 75" de
 > `docs/superpowers/plans/2026-10-02-almoxarifado-etapa74-reserva-na-chegada.md:697-736` e o aviso **C126** de
 > `docs/almoxarifado-novidades-por-etapa.md:6652`.
@@ -421,7 +421,7 @@ galhos depois de T1: só **consomem** `aposLiberacaoSemFalhar`/`reservarLiberaca
   Controles: (1) dedupe da 70 (`recebimento-entrada-…`) → o segundo item da mesma nota fica sem e-mail e cai; (2) sem o
   filtro de avisáveis → R4 recebe e cai; (3) pendente descontando a reserva desta liberação → quem ganhou tudo fica sem
   e-mail e cai; (4) literal da 1ª linha trocada → cai.
-- [x] **T4 (integração, cruza T1 × T2 × T3 × 74) — a jornada de quem espera o material crítico.** ✅ commit "Etapa 75
+- [x] **T4 (integração, cruza T1 × T2 × T3 × 74) — a jornada de quem espera o material crítico.** ✅ `82b7fd75` "Etapa 75
   T4" (teste + este plano, o mesmo commit). Realizado: `inspecaoReservaLiberacaoIntegracao` **13/13**, tudo pelas
   rotas e com **usuários reais por perfil** pelo gate real — solicitante sem perfil (PRODUCAO), GESTOR aprova e
   estorna, COMPRAS compra e recebe a nota pelas seis portas, QUALIDADE decide a inspeção e a NC, ALM1 separa e entrega,
@@ -587,10 +587,80 @@ não falta de asserção.
 não chama o comparador) — corrigido na T2; (2) as duas guardas redundantes acima; (3) a fila guarda o hash do dedupe,
 não a chave (o plano falava em "chave").
 
+## Fase 5 — revisão adversarial + fix-round (2026-10-02)
+
+Sondas executadas pela revisão (scratchpad da sessão: `sonda75f-lib.js`, `-1-regua`, `-2-corrida`,
+`-3-estorno-dono-nota`, `-mut`), transformadas em `server/tests/api/reservaLiberacaoRevisaoFase5.api.test.js`
+(**8/8**). Três achados corrigidos, um confirmado como já declarado, um registrado para a letra C.
+
+**1. IMPORTANTE — a régua do pendente nos dois avisos (`655d75b8`).** O aviso da liberação (75) e o da chegada (74)
+calculavam `pendente = (solicitada − separada) − hold alheio`; o hold que sobra numa `PARCIALMENTE_ATENDIDA` cobre
+justamente o separado na caixa, então o separado era descontado duas vezes: 10/6/4 com hold 2 → o miolo reservava 4 e
+o e-mail dizia **"pendente 2; reservado 2"** (o certo é 4/4). Nenhum teste tinha separado ≠ entregue (a mutação `regua`
+da sonda passava verde). Correção: **uma régua só**, `receiptNotificationService.faltaDoItem(item, hold) = pendente de
+ENTREGA − hold`, usada pelo miolo (filtro + falta relida, sem mudar comportamento) e pelos dois avisos (com o hold
+alheio ao documento). **Tentado e descartado:** `pendente − max(hold, separado na caixa)` no miolo e nos avisos — o
+RN-06 da 74 caiu, e com razão: a separação não consome a reserva, o separado continua no saldo e quem o protege de ser
+prometido a outro é o hold (reservar o pendente de entrega inteiro é o certo). **A B380 (b) estava errada no que
+declarava** ("o e-mail da 70 continua usando o pendente de separação — diferença declarada"): a diferença não era
+inofensiva, era o defeito; o T5 corrige a B380 à vista. Testes da 70 revistos com motivo no teste e no commit
+(`recebimentoAvisoEntrada`): a negativa "item já separado" ganhou o hold que cobre a caixa (sem hold o miolo da 74
+reserva na chegada e o aviso tem de dizer o mesmo); "mesmo material em dois itens" passa de pendente 4 para 5.
+Controles: aviso 75 com a régua antiga → caem `regua 75` e `regua = miolo`; aviso 74 com a régua antiga → caem
+`regua 74` e o "dois itens" da 70.
+
+**2. IMPORTANTE — duas inspeções (ou duas notas) do mesmo material ao mesmo tempo zeravam a fila (`936179b2`).**
+Medido 8/8 na sonda: as duas chamadas reservavam para R1, as duas reliam o hold acima do pendente e as **duas**
+desfaziam — R1 = 0, R2 = 0, todas as reservas `LIBERADA` (C126 reaberta). Correção: `distribuirParaQuemEspera` passa
+por `comLockDoMaterial` — fila de promises por `material_id`, em memória; solta no `finally` (inclusive quando a
+distribuição lança) e apaga a entrada do mapa quando ninguém espera. **Premissa declarada no código:** um processo Node,
+uma conexão SQLite; na migração Postgres (ou com mais de um processo) vira `SELECT … FOR UPDATE` na linha do material
+ou advisory lock por `material_id`. O "desfazer excesso" fica como defesa. Descartados: lock global (serializaria
+materiais independentes) e lock na rota (NC e nota entram por outras portas). Testes: corrida 75 (5 rodadas,
+`Promise.all` de duas inspeções pela rota) e corrida 74 (duas notas pelo `processar`) → **R1 4 e R2 4,
+TOTALMENTE_RESERVADA** em 5/5; o lock solta quando a distribuição lança. Toda espera concorrente do teste tem limite
+(um lock preso falha em 15 s em vez de travar a suíte — a 1ª sabotagem sem o limite **travou** o runner). Controles:
+sem o lock → as duas corridas voltam a `0/0` em 5/5; sem `soltar()` → as duas corridas `PRESA`; soltando só no sucesso
+(sem `finally`) → cai só o teste do lançamento. Sonda depois do fix: 8/8 rodadas R1 = 4 e R2 = 4.
+
+**3. MENOR — material de cliente: quem a regra do dono pulou recebia o e-mail (`18405a2e`).** A requisição sem o
+projeto do dono é pulada pelo miolo (a entrega recusaria) mas recebia "Material liberado para a sua requisição" com L0
+(havia livre); o mesmo no aviso da chegada. Correção: `ownerRules.saidaPassaNaRegraDoDono(db, material, projetoId)`
+(booleano, nunca lança) é a pergunta única — o miolo delega a ela; o aviso 75 tira a requisição; o aviso 74 tira a
+linha daquele material (os outros materiais da nota continuam). `ownerRules` entra lazy nos avisos (carga fria nas duas
+ordens conferida). Descartados: frase nova "material de outro cliente" e filtro em SQL (segunda regra). Controles: sem
+o filtro no aviso 75 → cai só `dono 75`; sem o filtro no aviso 74 → cai só `dono 74`.
+
+**4. MENOR (não corrigido, confirmado) — `EM_SEPARACAO` ganha a reserva da liberação sem e-mail.** Sonda C: hold 4,
+status mantido, 0 e-mails. Já declarado como **C130 (2)** ("a requisição *Em Separação* ganha reserva na chegada, mas
+não recebe o e-mail — o aviso segue a lista da Etapa 70"); vale igual para a liberação da inspeção/NC. O T5 estende o
+texto do C130 (2) à liberação.
+
+**5. Para a letra C (não corrigido, medido) — inspeção × `/aprovar` do mesmo material ao mesmo tempo.** O `/aprovar`
+não passa pelo miolo, então o lock não o alcança. Sonda (8/8, **determinístico**, também depois do lock): R1 esperava
+4, a inspeção aprova 4 e R3 é aprovada no mesmo instante → **R3 leva os 4 (`TOTALMENTE_RESERVADA`) e R1 fica com 0
+(`AGUARDANDO_ESTOQUE`)** — a ordem da fila invertida. Mesma família da "Corrida nota × aprovação" da 74 (limitação
+D declarada, Postgres depois); aqui medida como inversão sistemática, não "milissegundos". Candidato a C novo no T5.
+
+**Outros achados da revisão, não mexidos:** (a) estorno pós-inspeção numa requisição que já separou → 400 "o material
+está reservado para requisições (…)" (a B382 da 74 protege quem tem material na caixa — comportamento pretendido); (b)
+nota com dois itens do mesmo crítico + NC `ACEITAR_SOB_DESVIO`: R1 4, R2 4, saldo fechado, 2 avisos cada (um por
+documento — o dedupe por documento da T3, pretendido).
+
+Suíte depois do fix-round: api **286/286** arquivos; almoxarifado **44/44**; validation 4/4; safealter 3/3;
+sqlite 5/5. Os testes da 74 e da 75 continuam verdes sem edição; só os dois da 70 acima mudaram de asserção.
+
+**Para o T5 (letra B, numeração depois da B392):** **B393** régua única `faltaDoItem` (+ B380 (b) corrigida à vista);
+**B394** lock por material em processo (premissa e troca no Postgres); **B395** o aviso segue a regra do dono do
+miolo. **Letra C:** a inversão inspeção × `/aprovar` (item 5) como C novo; C130 (2) estendido à liberação.
+
 ## Próximo passo (atualizado)
 
-~~**T4**~~ feita (ver a T4 acima: 13/13, 7 controles, api 285/285). **Próximo: a revisão adversarial (Fase 5)** com a
-árvore quieta, depois a **T5** (fechamento, skill `fechar-etapa`). Ponto para a revisão: a régua do aviso usa
+~~**T4**~~ feita (`82b7fd75`, 13/13, 7 controles). ~~**Fase 5**~~ feita (ver "Fase 5" acima: 3 achados corrigidos em
+`655d75b8`, `936179b2`, `18405a2e`; api 286/286). **Próximo: T5** (fechamento, skill `fechar-etapa`) — além do que a T5
+acima lista: B393–B395, a B380 (b) corrigida à vista, o C novo da inversão inspeção × `/aprovar`, o C130 (2) estendido
+à liberação, e a seção da 75 dizendo que o e-mail da chegada (74) também mudou de régua e passou a seguir o dono.
+~~Ponto para a revisão~~ (respondido na Fase 5, item 1): a régua do aviso usa
 `solicitada − separada` e a do miolo `solicitada − entregue` (herdado da 74; na jornada coincidem porque nada fica
 separado sem entregar) — medir se uma requisição `PARCIALMENTE_ATENDIDA` com material separado na caixa recebe um
 pendente que não bate com o reservado.
