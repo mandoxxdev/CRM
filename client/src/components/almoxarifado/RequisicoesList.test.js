@@ -1005,3 +1005,96 @@ describe('Etapa 48: fila da aprovação simples', () => {
     expect(api.get.mock.calls.filter(([u]) => u === '/almoxarifado/requisicoes/55').length).toBeGreaterThan(antes);
   });
 });
+
+// ─── Etapa 73 (RN-07, B358): a tela diz que chegou ──────────────────────────────────────────
+//
+// A chegada do material NÃO muda o status (D2/B358): a requisição continua AGUARDANDO_COMPRA ou
+// AGUARDANDO_ESTOQUE. Quem diz que chegou é o banner do detalhe, pela régua da tela
+// (`maxSeparavelNaTela` = min(pendente de separação, saldo)), dizendo QUANTO dá para separar e que o
+// saldo é compartilhado — separar não reserva.
+describe('Etapa 73: o banner diz que chegou material para a requisição que espera', () => {
+  const LITERAL_CHEGOU = 'Chegou material para esta requisição — já dá para separar. O material ainda não está reservado para ela.';
+  const LITERAL_COMPRA_HOJE = 'Sem saldo disponível — há uma solicitação de compra em andamento para os materiais desta requisição.';
+  const LITERAL_ESTOQUE_HOJE = 'Sem saldo disponível no momento — inicie a separação assim que o estoque for reposto.';
+  const comItens = (status, itens) => ({ ...baseRequisicao(status), itens });
+  const item = (extra) => ({ ...ITEM, unidade: 'PC', ...extra });
+
+  test('AGUARDANDO_COMPRA com saldo 4 e pendente 6: a literal nova, quanto dá e que o saldo é compartilhado', async () => {
+    detalheDoBanco = comItens('AGUARDANDO_COMPRA', [item({ quantidade_solicitada: 6, saldo_atual: 4 })]);
+    await renderizar();
+    expect(container.textContent).toContain(LITERAL_CHEGOU);
+    expect(container.textContent).toContain('Dá para separar agora: 4 PC de Chapa 3mm.');
+    expect(container.textContent).toContain('outra requisição pode separá-lo antes');
+    expect(container.textContent).not.toContain(LITERAL_COMPRA_HOJE);
+    // O status não muda (D2): o badge continua o de quem espera compra.
+    expect(container.textContent).toContain('Aguard. Compra');
+  });
+
+  test('AGUARDANDO_COMPRA com saldo 0: só a literal de hoje (metade positiva)', async () => {
+    detalheDoBanco = comItens('AGUARDANDO_COMPRA', [item({ quantidade_solicitada: 6, saldo_atual: 0 })]);
+    await renderizar();
+    expect(container.textContent).toContain(LITERAL_COMPRA_HOJE);
+    expect(container.textContent).not.toContain('Chegou material');
+  });
+
+  test('AGUARDANDO_ESTOQUE com saldo 4 e pendente 6: a literal nova', async () => {
+    detalheDoBanco = comItens('AGUARDANDO_ESTOQUE', [item({ quantidade_solicitada: 6, saldo_atual: 4 })]);
+    await renderizar();
+    expect(container.textContent).toContain(LITERAL_CHEGOU);
+    expect(container.textContent).toContain('Dá para separar agora: 4 PC de Chapa 3mm.');
+    expect(container.textContent).not.toContain(LITERAL_ESTOQUE_HOJE);
+  });
+
+  test('AGUARDANDO_ESTOQUE com saldo 0: só a literal de hoje', async () => {
+    detalheDoBanco = comItens('AGUARDANDO_ESTOQUE', [item({ quantidade_solicitada: 6, saldo_atual: 0 })]);
+    await renderizar();
+    expect(container.textContent).toContain(LITERAL_ESTOQUE_HOJE);
+    expect(container.textContent).not.toContain('Chegou material');
+  });
+
+  test('item JÁ TODO SEPARADO com saldo > 0: a literal de hoje (não é "dá para separar")', async () => {
+    detalheDoBanco = comItens('AGUARDANDO_COMPRA', [item({ quantidade_solicitada: 6, quantidade_separada: 6, saldo_atual: 10 })]);
+    await renderizar();
+    expect(container.textContent).toContain(LITERAL_COMPRA_HOJE);
+    expect(container.textContent).not.toContain('Chegou material');
+  });
+
+  test('separado em parte: o quanto dá é o pendente de separação, não o saldo', async () => {
+    detalheDoBanco = comItens('AGUARDANDO_COMPRA', [item({ quantidade_solicitada: 6, quantidade_separada: 2, saldo_atual: 10 })]);
+    await renderizar();
+    expect(container.textContent).toContain('Dá para separar agora: 4 PC de Chapa 3mm.');
+  });
+
+  test('dois itens do MESMO material dividem o saldo: 4 que chegaram não viram 8', async () => {
+    detalheDoBanco = comItens('AGUARDANDO_COMPRA', [
+      item({ id: 1, quantidade_solicitada: 3, saldo_atual: 4 }),
+      item({ id: 2, quantidade_solicitada: 3, saldo_atual: 4 }),
+    ]);
+    await renderizar();
+    expect(container.textContent).toContain('Dá para separar agora: 3 PC de Chapa 3mm; 1 PC de Chapa 3mm.');
+  });
+
+  test('só o item com saldo entra na lista do quanto dá', async () => {
+    detalheDoBanco = comItens('AGUARDANDO_COMPRA', [
+      item({ id: 1, quantidade_solicitada: 6, saldo_atual: 0 }),
+      item({ id: 2, material_id: 11, material_nome: 'Parafuso M8', quantidade_solicitada: 2, saldo_atual: 50 }),
+    ]);
+    await renderizar();
+    expect(container.textContent).toContain('Dá para separar agora: 2 PC de Parafuso M8.');
+    expect(container.textContent).not.toContain('de Chapa 3mm');
+  });
+
+  test('TOTALMENTE_RESERVADA com saldo: inalterado, sem o banner novo', async () => {
+    detalheDoBanco = comItens('TOTALMENTE_RESERVADA', [item({ quantidade_solicitada: 6, saldo_atual: 10 })]);
+    await renderizar();
+    expect(container.textContent).toContain('Todo o saldo desta requisição está reservado — inicie a separação.');
+    expect(container.textContent).not.toContain('Chegou material');
+  });
+
+  test('fora do modo almoxarifado: nada do banner (o bloco inteiro é do almoxarife)', async () => {
+    mockWarehouseMode = false;
+    detalheDoBanco = comItens('AGUARDANDO_COMPRA', [item({ quantidade_solicitada: 6, saldo_atual: 4 })]);
+    await renderizar();
+    expect(container.textContent).not.toContain('Chegou material');
+  });
+});

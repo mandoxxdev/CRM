@@ -165,6 +165,20 @@ const maxSeparavelNaTela = (item, valorOrigemEscolhida, saldos, outrosMesmoMater
     ? pendenteSeparado(item) : 0;
   return Math.min(base, Math.max(0, (Number(opcao.quantidade) || 0) - jaPlanejadoNoPar));
 };
+// Etapa 73 (RN-07, B358): a chegada do material não muda o status — AGUARDANDO_COMPRA/ESTOQUE seguem.
+// É o detalhe que diz que chegou: por item, o que dá para separar AGORA na régua da tela
+// (`maxSeparavelNaTela`, sem "Sai de"), com os itens do mesmo material dividindo o saldo — o que um
+// item leva sai do livre do seguinte, para 4 que chegaram não virarem 8. Só os itens com algo > 0.
+const separavelAgoraPorItem = (itens) => {
+  const jaContado = {};
+  return (itens || []).reduce((acc, item) => {
+    const outros = jaContado[item.material_id] || 0;
+    const quantidade = maxSeparavelNaTela(item, null, null, outros);
+    jaContado[item.material_id] = outros + quantidade;
+    if (quantidade > 1e-9) acc.push({ item, quantidade: Number(quantidade.toFixed(4)) });
+    return acc;
+  }, []);
+};
 // O que os OUTROS itens do mesmo material estão separando no modal agora (dividem o saldo).
 const separandoOutrosDoMaterial = (itens, item, quantidades) => (itens || [])
   .filter((i) => i.id !== item.id && Number(i.material_id) === Number(item.material_id))
@@ -1633,11 +1647,24 @@ const RequisicoesList = () => {
                     </button>
                   </div>
                 )}
-                {warehouseMode && ['APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA', 'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA'].includes(detalhe.status) && (
+                {warehouseMode && ['APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA', 'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA'].includes(detalhe.status) && (() => {
+                  // Etapa 73 (RN-07): quem espera e já tem o que separar ouve que chegou — no lugar do
+                  // "sem saldo", que deixaria de ser verdade. Separar não reserva: o saldo é de todos.
+                  const esperando = ['AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA'].includes(detalhe.status);
+                  const chegou = esperando ? separavelAgoraPorItem(detalhe.itens) : [];
+                  return (
                   <div style={{ marginTop: 20 }}>
                     <div className="almox-hint-banner" style={{ marginBottom: 12, fontSize: '0.8rem' }}>
-                      {detalhe.status === 'AGUARDANDO_ESTOQUE' && 'Sem saldo disponível no momento — inicie a separação assim que o estoque for reposto.'}
-                      {detalhe.status === 'AGUARDANDO_COMPRA' && 'Sem saldo disponível — há uma solicitação de compra em andamento para os materiais desta requisição.'}
+                      {chegou.length > 0 && (
+                        <>
+                          Chegou material para esta requisição — já dá para separar. O material ainda não está reservado para ela.
+                          {' '}Dá para separar agora: {chegou.map(({ item, quantidade }) =>
+                            `${quantidade} ${item.unidade || item.material_unidade || ''} de ${item.material_nome}`.replace(/\s+/g, ' ')).join('; ')}.
+                          {' '}O saldo é compartilhado: enquanto não for separado, outra requisição pode separá-lo antes.
+                        </>
+                      )}
+                      {chegou.length === 0 && detalhe.status === 'AGUARDANDO_ESTOQUE' && 'Sem saldo disponível no momento — inicie a separação assim que o estoque for reposto.'}
+                      {chegou.length === 0 && detalhe.status === 'AGUARDANDO_COMPRA' && 'Sem saldo disponível — há uma solicitação de compra em andamento para os materiais desta requisição.'}
                       {detalhe.status === 'APROVADO' && 'Próximo passo: separe os materiais (máximo disponível em estoque) e confirme a entrega.'}
                       {detalhe.status === 'PARCIALMENTE_RESERVADA' && 'Parte dos itens não tinha saldo e ficou sem reserva — separe o que está reservado e acompanhe a reposição do restante.'}
                       {detalhe.status === 'TOTALMENTE_RESERVADA' && 'Todo o saldo desta requisição está reservado — inicie a separação.'}
@@ -1648,7 +1675,8 @@ const RequisicoesList = () => {
                       <FiPackage size={14} /> Iniciar Separação
                     </button>
                   </div>
-                )}
+                  );
+                })()}
                 {warehouseMode && detalhe.status === 'EM_SEPARACAO' && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 20 }}>
                     <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center' }}
