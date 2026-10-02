@@ -8,6 +8,164 @@ const { registrarAuditoria } = require('./audit');
 // Task 3, RN-06 — resumo de solicitacoes de compra geradas).
 const alertService = require('./alertService');
 const notificationQueueService = require('./notificationQueueService');
+// Etapa 72 (D9): o nivel por material da regua do pedido e a lista de "pedido encerrado". Modulo de
+// texto SQL, sem ciclo — este arquivo NAO pode requerer receiptService (receiptService requer este).
+const {
+  SOMA_POR_MATERIAL_SQL, STATUS_PEDIDO_ENCERRADO, STATUS_PEDIDO_ENCERRADO_SQL,
+} = require('./pedidoCompraSaldoSql');
+const { EPSILON_DIVERGENCIA } = require('./divergencia');
+
+const tabelaExiste = async (db, nome) => !!(await dbGet(db,
+  "SELECT name FROM sqlite_master WHERE type='table' AND name = ?", [nome]));
+
+// Numero limpo do ruido de float (6 casas, como `numeroLimpo` do receiptService) e zero abaixo do epsilon.
+const limpo = (v) => {
+  const n = Number(v) || 0;
+  return Math.abs(n) <= EPSILON_DIVERGENCIA ? 0 : Number(n.toFixed(6));
+};
+
+/**
+ * Etapa 72 (Fase 2 do plano) — o RATEIO do recebido de um par (pedido, material) entre as
+ * solicitacoes do par, em ORDEM DE ID. Cada solicitacao enxerga so o recebido do par ACIMA do
+ * `recebido_no_vinculo` dela (o que entrou antes de ela ser ligada ao pedido nao e dela) e leva ate a
+ * sua quantidade; o resto passa a proxima. Devolve o atribuido de cada uma, na ordem recebida.
+ *
+ * `sols` ja vem ordenado por id.
+ */
+function ratearRecebido(sols, recebidoPar) {
+  let consumido = 0;
+  return sols.map((s) => {
+    const visivel = Math.max(0, recebidoPar - (Number(s.recebido_no_vinculo) || 0));
+    const atribuido = Math.min(Number(s.quantidade) || 0, Math.max(0, visivel - consumido));
+    consumido += atribuido;
+    return atribuido;
+  });
+}
+
+/**
+ * O recebido do par a partir do qual o rateio acima cobre TODAS as solicitacoes do conjunto: com o
+ * rateio guloso em ordem de id, a solicitacao i fica inteira exatamente quando
+ * `recebido >= recebido_no_vinculo_i + soma das quantidades ate i`. O limiar e o maior desses.
+ * Sem `recebido_no_vinculo` (tudo 0) e a soma do solicitado — a regra D1(b) do plano.
+ * Fechar (fecharSolicitacoesDoPedido) e reabrir (reabrirSolicitacoesDoMaterial) usam o MESMO limiar.
+ */
+function limiarDoPar(sols) {
+  let acumulado = 0; let limiar = 0;
+  for (const s of sols) {
+    acumulado += Number(s.quantidade) || 0;
+    limiar = Math.max(limiar, (Number(s.recebido_no_vinculo) || 0) + acumulado);
+  }
+  return limiar;
+}
+
+/**
+ * Etapa 72, T1 — A POSICAO DE CADA SOLICITACAO ABERTA, a fonte UNICA do "a caminho" (Fase 2 do plano:
+ * uma funcao por solicitacao; a sugestao de reposicao soma por material, o relatorio da aba
+ * Solicitacoes le por linha, e ninguem escreve uma terceira conta).
+ *
+ * Por solicitacao PENDENTE ou VINCULADO devolve:
+ *   { solicitacao_id, material_id, status, pedido_id, solicitado, recebido_no_pedido,
+ *     recebido_atribuido, a_caminho, pedido_encerrado, sem_linha_no_pedido, created_at,
+ *     dentro_horizonte }
+ *
+ * - PENDENTE: `a_caminho` = quantidade inteira; `recebido_no_pedido`/`recebido_atribuido` null;
+ *   `pedido_encerrado` false.
+ * - VINCULADO, pedido com status em `STATUS_PEDIDO_ENCERRADO` (D3): `a_caminho` 0, `pedido_encerrado`
+ *   true — o pedido encerrado nao traz mais nada. A solicitacao NAO e fechada por isso.
+ * - VINCULADO sem linha do material no pedido, ou pedido apagado (D4): `a_caminho` = quantidade
+ *   inteira, recebidos null, `sem_linha_no_pedido` true — a regra de antes da 72.
+ * - VINCULADO com linha: `recebido_no_pedido` = recebido do par (pedido, material);
+ *   `recebido_atribuido` = o rateio em ordem de id (`ratearRecebido`); `a_caminho` =
+ *   `MAX(0, solicitado - recebido_atribuido)`. Sem teto pelo saldo do pedido (D2/B344).
+ *
+ * O rateio corre sobre TODAS as VINCULADO do par, independente de horizonte e dos filtros: o filtro
+ * por `solicitacao_ids` e aplicado na SAIDA (filtrar antes mudaria o rateio). `material_id` pode
+ * filtrar antes porque o par e por material.
+ *
+ * `horizonteDias`: quando vem, `dentro_horizonte` diz se o `created_at` DA SOLICITACAO esta dentro
+ * dele, medido pelo `datetime('now')` do SQLite (o mesmo recorte que a sugestao sempre usou). Sem ele,
+ * `dentro_horizonte` e true.
+ */
+async function posicaoDasSolicitacoes(db, { solicitacao_ids: solicitacaoIds, material_id: materialId,
+  horizonteDias } = {}) {
+  const params = [];
+  let horizonteSql = '1';
+  if (horizonteDias != null) {
+    horizonteSql = "(sc.created_at >= datetime('now', '-' || ? || ' days'))";
+    params.push(horizonteDias);
+  }
+  let sql = `SELECT sc.id, sc.material_id, sc.status, sc.quantidade, sc.pedido_compra_id,
+      sc.recebido_no_vinculo, sc.created_at, ${horizonteSql} AS dentro_horizonte
+    FROM solicitacoes_compra_almoxarifado sc
+    WHERE sc.status IN ('PENDENTE','VINCULADO')`;
+  if (materialId != null) { sql += ' AND sc.material_id = ?'; params.push(materialId); }
+  sql += ' ORDER BY sc.id';
+  const sols = await dbAll(db, sql, params);
+
+  const vinculadas = sols.filter((s) => s.status === 'VINCULADO' && s.pedido_compra_id != null);
+  const pedidos = new Map();
+  const somas = new Map();
+  if (vinculadas.length) {
+    const pedidoIds = [...new Set(vinculadas.map((s) => s.pedido_compra_id))];
+    const ph = pedidoIds.map(() => '?').join(',');
+    if (await tabelaExiste(db, 'pedidos_compra')) {
+      for (const p of await dbAll(db, `SELECT id, status FROM pedidos_compra WHERE id IN (${ph})`, pedidoIds)) {
+        pedidos.set(p.id, p);
+      }
+    }
+    if (await tabelaExiste(db, 'itens_pedido_compra')) {
+      for (const s of await dbAll(db, `SELECT pedido_id, material_id, total_material, recebida_material
+          FROM (${SOMA_POR_MATERIAL_SQL}) WHERE pedido_id IN (${ph})`, pedidoIds)) {
+        somas.set(`${s.pedido_id}:${s.material_id}`, s);
+      }
+    }
+  }
+
+  // Rateio por par (pedido, material), em ordem de id (as linhas ja vem ORDER BY sc.id).
+  const pares = new Map();
+  for (const s of vinculadas) {
+    const chave = `${s.pedido_compra_id}:${s.material_id}`;
+    if (!pares.has(chave)) pares.set(chave, []);
+    pares.get(chave).push(s);
+  }
+  const atribuidoPorId = new Map();
+  for (const [chave, grupo] of pares) {
+    const soma = somas.get(chave);
+    if (!soma || !(soma.total_material > 0) || !pedidos.has(grupo[0].pedido_compra_id)) continue;
+    const atribuidos = ratearRecebido(grupo, Number(soma.recebida_material) || 0);
+    grupo.forEach((s, i) => atribuidoPorId.set(s.id, atribuidos[i]));
+  }
+
+  const filtro = Array.isArray(solicitacaoIds) ? new Set(solicitacaoIds.map(Number)) : null;
+  const saida = [];
+  for (const s of sols) {
+    if (filtro && !filtro.has(s.id)) continue;
+    const base = {
+      solicitacao_id: s.id, material_id: s.material_id, status: s.status,
+      pedido_id: s.pedido_compra_id ?? null, solicitado: limpo(s.quantidade),
+      recebido_no_pedido: null, recebido_atribuido: null, a_caminho: limpo(s.quantidade),
+      pedido_encerrado: false, sem_linha_no_pedido: false, created_at: s.created_at,
+      dentro_horizonte: !!s.dentro_horizonte,
+    };
+    if (s.status === 'VINCULADO' && s.pedido_compra_id != null) {
+      const pedido = pedidos.get(s.pedido_compra_id);
+      const soma = somas.get(`${s.pedido_compra_id}:${s.material_id}`);
+      const temLinha = !!pedido && !!soma && soma.total_material > 0;
+      base.sem_linha_no_pedido = !temLinha;
+      if (temLinha) {
+        base.recebido_no_pedido = limpo(soma.recebida_material);
+        base.recebido_atribuido = limpo(atribuidoPorId.get(s.id));
+        base.a_caminho = limpo(Math.max(0, (Number(s.quantidade) || 0) - atribuidoPorId.get(s.id)));
+      }
+      if (pedido && STATUS_PEDIDO_ENCERRADO.includes(String(pedido.status || '').toLowerCase())) {
+        base.pedido_encerrado = true;
+        base.a_caminho = 0;
+      }
+    }
+    saida.push(base);
+  }
+  return saida;
+}
 
 // Revisao final da E14 (lente B, Important-1): esta funcao criava solicitacao SEM auditoria e
 // a rota nem passava req.user — invisivel enquanto era ADMIN-only; o D9 abriu a rota para
@@ -21,10 +179,27 @@ async function verificarEstoqueMinimo(db, user = null) {
       -- da Task 1 caca — ninguem percebe ate chegar o pedido ao fornecedor.
       AND proprietario_cliente_id IS NULL`);
 
+  // Etapa 72, T1 (D5/B347, Surpresa 1 da Fase 0 — C114): o dedupe olhava so PENDENTE. Assim que o
+  // comprador gerava o pedido (VINCULADO), o material continuava abaixo do minimo e a verificacao
+  // seguinte abria OUTRA solicitacao da mesma quantidade — antes de qualquer nota. Agora a VINCULADO
+  // tambem segura, desde que o pedido esteja vivo (fora de `STATUS_PEDIDO_ENCERRADO`, D3) e ela esteja
+  // dentro do horizonte da reposicao (Fase 2: sem horizonte, um pedido esquecido bloquearia o minimo
+  // para sempre). Pedido apagado (LEFT JOIN nulo) conta como vivo: e o "sem linha" da D4.
+  // Sem a tabela `pedidos_compra` (banco do almoxarifado sem o core): so PENDENTE, como antes.
+  const temPedidos = await tabelaExiste(db, 'pedidos_compra');
+  const horizonte = await lerConfigNumero(db, 'reposicao_horizonte_solicitacao_dias', 60);
+  const sqlDedupe = temPedidos
+    ? `SELECT sc.id FROM solicitacoes_compra_almoxarifado sc
+        LEFT JOIN pedidos_compra p ON p.id = sc.pedido_compra_id
+        WHERE sc.material_id = ? AND (sc.status = 'PENDENTE'
+          OR (sc.status = 'VINCULADO' AND LOWER(COALESCE(p.status, '')) NOT IN (${STATUS_PEDIDO_ENCERRADO_SQL})
+              AND sc.created_at >= datetime('now', '-' || ? || ' days')))
+        LIMIT 1`
+    : "SELECT id FROM solicitacoes_compra_almoxarifado WHERE material_id = ? AND status = 'PENDENTE'";
+
   const criadas = [];
   for (const m of criticos) {
-    const existente = await dbGet(db,
-      "SELECT id FROM solicitacoes_compra_almoxarifado WHERE material_id = ? AND status = 'PENDENTE'", [m.id]);
+    const existente = await dbGet(db, sqlDedupe, temPedidos ? [m.id, horizonte] : [m.id]);
     if (!existente) {
       const qtd = Math.max(m.quantidade_maxima - m.quantidade_atual, m.quantidade_minima);
       const r = await dbRun(db, `INSERT INTO solicitacoes_compra_almoxarifado (material_id, quantidade, motivo) VALUES (?,?,?)`,
@@ -64,8 +239,19 @@ async function vincularPedidoCompra(db, solicitacaoId, pedidoCompraId) {
   // de compra nao existe", nao inventar um segundo.
   if (!pedido) throw Object.assign(new Error('Pedido de compra não encontrado'), { status: 400 });
 
-  await dbRun(db, "UPDATE solicitacoes_compra_almoxarifado SET pedido_compra_id = ?, status = 'VINCULADO' WHERE id = ?",
-    [pedidoCompraId, solicitacaoId]);
+  // Etapa 72, T1 (Fase 2): grava quanto do material da solicitacao o pedido JA tinha recebido agora.
+  // Gerar o pedido pela sugestao chama esta funcao logo depois de inserir as linhas (0 recebido); o
+  // `vincular-pedido` manual pode ligar a um pedido ja parcialmente recebido, e o que entrou antes
+  // nao e desta solicitacao. Re-vincular sobrescreve (o vinculo novo e o que vale).
+  let recebidoNoVinculo = 0;
+  if (await tabelaExiste(db, 'itens_pedido_compra')) {
+    const soma = await dbGet(db, `SELECT recebida_material FROM (${SOMA_POR_MATERIAL_SQL})
+      WHERE pedido_id = ? AND material_id = ?`, [pedidoCompraId, sol.material_id]);
+    recebidoNoVinculo = limpo(soma?.recebida_material);
+  }
+  await dbRun(db, `UPDATE solicitacoes_compra_almoxarifado
+      SET pedido_compra_id = ?, status = 'VINCULADO', recebido_no_vinculo = ? WHERE id = ?`,
+  [pedidoCompraId, recebidoNoVinculo, solicitacaoId]);
   return { success: true };
 }
 
@@ -110,19 +296,85 @@ async function cancelarSolicitacao(db, user, solicitacaoId, motivo) {
 // dedupe do segundo recebimento do mesmo pedido (I1) — a auditoria fica DENTRO do laco das
 // linhas EFETIVAMENTE fechadas por ESTA chamada, entao um segundo recebimento do mesmo pedido
 // nao encontra nenhuma linha VINCULADO e nao audita nada de novo.
+//
+// ⚠️ ETAPA 72, T1 (D1/B343 — REVOGA A B22(a) da Etapa 14, "fecha na primeira nota, mesmo parcial"):
+// ate a 72 o UPDATE abaixo fechava TODA VINCULADO do pedido na primeira nota, parcial ou nao, e
+// mesmo a de um material que nem tinha chegado (Surpresa 2 da Fase 0). O "o que faltar reaparece na
+// sugestao" da B22 era exatamente o defeito: a sugestao mandava comprar de novo o que ainda vinha
+// pelo pedido. Agora fecha por PAR (pedido, material), todas as VINCULADO do par juntas, quando:
+//   - MATERIAL_COMPLETO: o pedido completou o material (pedida > 0 e pedida - recebida <= epsilon,
+//     o nivel por material da regua unica, `SOMA_POR_MATERIAL_SQL`); ou
+//   - SOLICITADO_RECEBIDO: o recebido do par cobre o que as solicitacoes pediram, contando so o que
+//     chegou depois do vinculo de cada uma (`limiarDoPar`); ou
+//   - SEM_LINHA_NO_PEDIDO: o material nem tem linha no pedido (D4, legado: `vincular-pedido` manual
+//     nao exige o material no pedido) — fecha na nota, como antes.
+// O WHERE do UPDATE repete a condicao lendo SO `itens_pedido_compra` e fixa o conjunto por `id IN`
+// (o solicitado que entrou no limiar): um estorno entre a leitura e o UPDATE nao fecha nada, e uma
+// solicitacao vinculada nesse meio-tempo fica para a proxima nota. Retorno: [{ id, material_id, regra }].
 async function fecharSolicitacoesDoPedido(db, user, pedidoCompraId) {
-  if (!pedidoCompraId) return;
-  const fechadas = await dbAll(db, `UPDATE solicitacoes_compra_almoxarifado
-      SET status = 'RECEBIDA', recebida_em = CURRENT_TIMESTAMP
-      WHERE pedido_compra_id = ? AND status = 'VINCULADO'
-      RETURNING id`, [pedidoCompraId]);
-  for (const linha of fechadas) {
-    await registrarAuditoria(db, {
-      entidade: 'solicitacao_compra', entidade_id: linha.id, acao: 'RECEBIDA',
-      usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
-      dados_novos: { pedido_compra_id: pedidoCompraId },
-    });
+  if (!pedidoCompraId) return [];
+  const vinculadas = await dbAll(db, `SELECT id, material_id, quantidade, recebido_no_vinculo
+    FROM solicitacoes_compra_almoxarifado
+    WHERE pedido_compra_id = ? AND status = 'VINCULADO' ORDER BY id`, [pedidoCompraId]);
+  if (!vinculadas.length) return [];
+  const temItens = await tabelaExiste(db, 'itens_pedido_compra');
+
+  const porMaterial = new Map();
+  for (const s of vinculadas) {
+    if (!porMaterial.has(s.material_id)) porMaterial.set(s.material_id, []);
+    porMaterial.get(s.material_id).push(s);
   }
+
+  const resultado = [];
+  for (const [materialId, grupo] of porMaterial) {
+    const soma = temItens ? await dbGet(db, `SELECT total_material, recebida_material
+      FROM (${SOMA_POR_MATERIAL_SQL}) WHERE pedido_id = ? AND material_id = ?`, [pedidoCompraId, materialId]) : null;
+    const ids = grupo.map((s) => s.id);
+    const solicitado = grupo.reduce((t, s) => t + (Number(s.quantidade) || 0), 0);
+    const limiar = limiarDoPar(grupo);
+    const total = Number(soma?.total_material) || 0;
+    const recebida = Number(soma?.recebida_material) || 0;
+
+    let regra = null;
+    let condicao;
+    let condicaoParams;
+    if (!(total > 0)) {
+      regra = 'SEM_LINHA_NO_PEDIDO';
+      condicao = temItens
+        ? `COALESCE((SELECT SUM(COALESCE(quantidade, 0)) FROM itens_pedido_compra
+            WHERE pedido_id = ? AND material_id = ?), 0) <= 0`
+        : '1';
+      condicaoParams = temItens ? [pedidoCompraId, materialId] : [];
+    } else {
+      if (total - recebida <= EPSILON_DIVERGENCIA) regra = 'MATERIAL_COMPLETO';
+      else if (recebida >= limiar - EPSILON_DIVERGENCIA) regra = 'SOLICITADO_RECEBIDO';
+      condicao = `EXISTS (SELECT 1 FROM (${SOMA_POR_MATERIAL_SQL}) s
+          WHERE s.pedido_id = ? AND s.material_id = ? AND s.total_material > 0
+            AND (s.total_material - s.recebida_material <= ${EPSILON_DIVERGENCIA}
+              OR s.recebida_material >= ? - ${EPSILON_DIVERGENCIA}))`;
+      condicaoParams = [pedidoCompraId, materialId, limiar];
+    }
+    if (!regra) continue;
+
+    const fechadas = await dbAll(db, `UPDATE solicitacoes_compra_almoxarifado
+        SET status = 'RECEBIDA', recebida_em = CURRENT_TIMESTAMP
+        WHERE pedido_compra_id = ? AND material_id = ? AND status = 'VINCULADO'
+          AND id IN (${ids.map(() => '?').join(',')}) AND ${condicao}
+        RETURNING id`, [pedidoCompraId, materialId, ...ids, ...condicaoParams]);
+    for (const linha of fechadas.sort((a, b) => a.id - b.id)) {
+      // dados_novos ADITIVO: `pedido_compra_id` continua la (o (5) da Etapa 14 le).
+      await registrarAuditoria(db, {
+        entidade: 'solicitacao_compra', entidade_id: linha.id, acao: 'RECEBIDA',
+        usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
+        dados_novos: {
+          pedido_compra_id: pedidoCompraId, material_id: materialId, regra,
+          recebido_no_pedido: limpo(recebida), solicitado: limpo(solicitado),
+        },
+      });
+      resultado.push({ id: linha.id, material_id: materialId, regra });
+    }
+  }
+  return resultado;
 }
 
 async function lerConfigNumero(db, chave, fallback) {
@@ -226,25 +478,31 @@ async function calcularSugestoes(db) {
            f.razao_social AS fornecedor_nome,
            COALESCE(${disponivelSql('m')}, 0) AS disponivel,
            ${custoUnitarioSql('m')} AS custo_unitario,
-           ${consumoJanelaSql('m')} AS consumo_janela,
-           COALESCE((SELECT SUM(sc.quantidade) FROM solicitacoes_compra_almoxarifado sc
-                     WHERE sc.material_id = m.id AND sc.status IN ('PENDENTE','VINCULADO')
-                       AND sc.created_at >= datetime('now', '-' || ? || ' days')), 0) AS a_caminho,
-           -- Revisao final E11 (achado 5): o espelho do a_caminho, para FORA do horizonte —
-           -- expoe a solicitacao velha que deixou de segurar a posicao (RN-03) mas continua
-           -- aberta de verdade, para a tela avisar "ha solicitacao antiga aberta" em vez de
-           -- fingir que ela nunca existiu. O fix definitivo (status terminal no recebimento)
-           -- e a letra E; isto e a mitigacao honesta ate la.
-           COALESCE((SELECT SUM(sc.quantidade) FROM solicitacoes_compra_almoxarifado sc
-                     WHERE sc.material_id = m.id AND sc.status IN ('PENDENTE','VINCULADO')
-                       AND sc.created_at < datetime('now', '-' || ? || ' days')), 0) AS a_caminho_vencido
+           ${consumoJanelaSql('m')} AS consumo_janela
     FROM materiais_almoxarifado m
     LEFT JOIN fornecedores f ON m.fornecedor_id = f.id
     WHERE m.ativo = 1 AND m.proprietario_cliente_id IS NULL`,
-    // Etapa 13, Task 2 (C4): consumo_janela agora vem de consumoJanelaSql('m') — os bind params
-    // dela (TIPOS_SAIDA + janela) tem de vir NA MESMA ORDEM que os `?` da subquery aparecem no
-    // texto acima, antes dos dois `horizonte` de a_caminho/a_caminho_vencido.
-    [...consumoJanelaParams(janela), horizonte, horizonte]);
+    // Etapa 13, Task 2 (C4): consumo_janela vem de consumoJanelaSql('m') — os bind params dela
+    // (TIPOS_SAIDA + janela) na MESMA ORDEM que os `?` da subquery aparecem no texto acima.
+    consumoJanelaParams(janela));
+
+  // Etapa 72, T1 (D2/B344 + Fase 2): o "a caminho" saiu das duas subqueries `SUM(sc.quantidade)` e
+  // vem da fonte unica por solicitacao (`posicaoDasSolicitacoes`). A subquery somava a quantidade
+  // INTEIRA da VINCULADO: com o fechamento por material (a nota parcial nao fecha mais), os 4 que
+  // chegaram de 10 contariam duas vezes (4 no disponivel + 10 a caminho). Agora a VINCULADO conta so
+  // o que FALTA chegar, e pedido encerrado nao conta nada. PENDENTE continua com a quantidade inteira.
+  // O horizonte e o recorte de sempre, pelo `created_at` DA SOLICITACAO, aplicado sobre essa saida:
+  // dentro dele vai para `a_caminho`; fora, para `a_caminho_vencido` — o espelho da revisao final
+  // E11 (achado 5), que expoe a solicitacao velha que deixou de segurar a posicao mas continua aberta.
+  const aCaminho = new Map(); const aCaminhoVencido = new Map();
+  for (const p of await posicaoDasSolicitacoes(db, { horizonteDias: horizonte })) {
+    const alvo = p.dentro_horizonte ? aCaminho : aCaminhoVencido;
+    alvo.set(p.material_id, (alvo.get(p.material_id) || 0) + p.a_caminho);
+  }
+  for (const r of rows) {
+    r.a_caminho = aCaminho.get(r.material_id) || 0;
+    r.a_caminho_vencido = aCaminhoVencido.get(r.material_id) || 0;
+  }
 
   // RN-06 (revisao final E11, medido): o resumo tem de contar TODOS os criticos zerados,
   // sugeridos ou nao — clicar em "Gerar" faz a solicitacao entrar em a_caminho e o item some
@@ -494,4 +752,6 @@ module.exports = {
   verificarEstoqueMinimo, vincularPedidoCompra, calcularSugestoes,
   gerarSolicitacoesDaSugestao, estoqueParado,
   cancelarSolicitacao, fecharSolicitacoesDoPedido, contextoMaterial,
+  // Etapa 72, T1: a fonte unica do "a caminho" por solicitacao (a T3 — relatorio da aba — consome).
+  posicaoDasSolicitacoes,
 };

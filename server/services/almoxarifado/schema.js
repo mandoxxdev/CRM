@@ -2270,6 +2270,11 @@ async function initSchema(db) {
   await safeAlter(db, 'ALTER TABLE solicitacoes_compra_almoxarifado ADD COLUMN cancelada_em DATETIME');
   await safeAlter(db, 'ALTER TABLE solicitacoes_compra_almoxarifado ADD COLUMN cancelada_por TEXT');
   await safeAlter(db, 'ALTER TABLE solicitacoes_compra_almoxarifado ADD COLUMN cancelamento_motivo TEXT');
+  // Etapa 72, T1 (Fase 2 do plano): quanto do material o pedido ja tinha recebido NO MOMENTO do
+  // vinculo. A solicitacao so enxerga o que chegou DEPOIS dele — senao, ligada por `vincular-pedido` a
+  // um pedido ja parcialmente recebido, ela contaria como "chegou" o que entrou antes de ela existir.
+  // NULL (legado, vinculado antes da 72) vale 0 — declarado.
+  await safeAlter(db, 'ALTER TABLE solicitacoes_compra_almoxarifado ADD COLUMN recebido_no_vinculo REAL');
 
   // ── Alertas de estoque mínimo ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS alertas_estoque_material_almoxarifado (

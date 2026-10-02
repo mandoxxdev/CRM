@@ -378,7 +378,19 @@ T2); **T4** (integração) depois de T2 e T3; **T5** fechamento. Executores de g
   42/71 caem (prova que a régua passa pelo módulo novo e não por uma cópia). Sonda de carga fria: `node -e
   "require('./services/almoxarifado/purchaseService'); require('./services/almoxarifado/receiptService')"` nas duas
   ordens, sem ciclo.
-- [ ] **T1 (tronco) — fecha por material, "a caminho" é o que falta, mínimo não duplica.** `fecharSolicitacoesDoPedido`,
+- [x] **T1 (tronco) — fecha por material, "a caminho" é o que falta, mínimo não duplica.** *(feita — T0 em
+  `db9c63f`; hash da T1 no commit da T2. `solicitacaoFechaPorMaterial.api.test.js` 17/17; suíte 266/266 **sem edição** de
+  nenhum teste da 14/71. Contrato entregue: `posicaoDasSolicitacoes(db, { solicitacao_ids?, material_id?, horizonteDias? })`
+  → por solicitação PENDENTE/VINCULADO `{ solicitacao_id, material_id, status, pedido_id, solicitado, recebido_no_pedido,
+  recebido_atribuido, a_caminho, pedido_encerrado, sem_linha_no_pedido, created_at, dentro_horizonte }`; coluna
+  `recebido_no_vinculo` gravada por `vincularPedidoCompra` (as duas portas de vínculo passam por ela, então o Compras não
+  mudou). **Divergência do contrato da Fase 1:** a condição atômica do `UPDATE` não relê o solicitado da própria tabela —
+  fixa o conjunto por `id IN (...)` (o que entrou no limiar) e relê só `itens_pedido_compra`; a solicitação vinculada entre
+  a leitura e o `UPDATE` fica para a próxima nota. O limiar com `recebido_no_vinculo` é `max_i(rnv_i + Σ_{j≤i} q_j)`, o
+  ponto em que o rateio guloso cobre todas. Controles positivos (9, cada um no cenário certo): (a) fechar na 1ª nota →
+  (1)(1b)(2)(3)(3b)…; (b) só a condição (a) → (3)(9); (c) `a_caminho` inteiro → (5)(5b)(6)(8)(9); (d) sem recorte de
+  encerrado → (6); (e) dedupe só PENDENTE → (7); (f) sem `SEM_LINHA_NO_PEDIDO` → (4) **e** (I-1) da 14; (g) dedupe sem
+  horizonte → (7b); (h) rateio sem `recebido_no_vinculo` → (9); (i) sem rateio → (8).)* `fecharSolicitacoesDoPedido`,
   a fonte do `a_caminho` (+ `a_caminho_vencido`) e o dedupe do `verificarEstoqueMinimo` (contrato). Teste novo
   `server/tests/api/solicitacaoFechaPorMaterial.api.test.js`, **pelas rotas** (pedido por `POST /api/compras/pedidos` com
   `solicitacao_id`, nota pelas seis portas, `/aprovar` direto num cenário, sugestão por `GET /reposicao/sugestoes`):
