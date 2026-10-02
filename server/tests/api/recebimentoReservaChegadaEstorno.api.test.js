@@ -25,6 +25,8 @@ function test(name, fn) {
 // A literal de recusa da 71 lida do CODIGO (nao reescrita aqui): se mudar la, este teste acompanha.
 const STOCK_SRC = fs.readFileSync(path.join(__dirname, '../../services/almoxarifado/stockService.js'), 'utf8');
 const RECUSA_71 = /'(Não é possível estornar: saldo disponível insuficiente \(material já consumido\))'/.exec(STOCK_SRC)[1];
+// Etapa 74 Fase 5: quando o fisico cobre o estorno e o que falta esta RESERVADO, a recusa diz quem segura.
+const RECUSA_RESERVADO = (numeros) => `Não é possível estornar: o material está reservado para requisições (${numeros.join(', ')}) — libere as reservas antes de estornar`;
 
 const SOL = { id: 7451, nome: 'Solicitante E74T3', role: 'admin', is_superadmin: 1, email: 'e74t3s@test.com' };
 const APR = { id: 7452, nome: 'Aprovador E74T3', role: 'admin', is_superadmin: 1, email: 'e74t3a@test.com' };
@@ -60,6 +62,7 @@ const API = '/api/almoxarifado';
   const holdAtivo = async (reqId) => (await reservas(reqId)).filter((r) => r.status === 'ATIVA')
     .reduce((s, r) => s + Number(r.quantidade) - Number(r.quantidade_utilizada || 0), 0);
   const itemDe = async (reqId) => (await dbGet(db, 'SELECT id FROM itens_requisicao_almoxarifado WHERE requisicao_id = ?', [reqId])).id;
+  const numeroReq = async (id) => (await dbGet(db, 'SELECT numero FROM requisicoes_almoxarifado WHERE id = ?', [id])).numero;
 
   const compraVinculada = async (m, quantidade) => {
     const v = await request(app).post(`${API}/compras/verificar-minimos`).send({});
@@ -157,7 +160,7 @@ const API = '/api/almoxarifado';
     assert.deepStrictEqual({ ...(await mat(m)) }, { q: 3, r: 3, d: 0 }, 'os 3 livres pagaram o resto do estorno');
   });
 
-  await test('[RN-11] negativa: os 4 reservados a R3 pela APROVACAO (nao pela chegada) -> 400 com a literal da 71, nada liberado', async () => {
+  await test('[RN-11] negativa: os 4 reservados a R3 pela APROVACAO (nao pela chegada) -> 400 com a literal do reservado (Fase 5; era a da 71), nada liberado', async () => {
     const m = await material();
     const p = await pedidoAvulso(m, 4);
     const { mov } = await receber(p, m, 4); // ninguem esperava: entra livre
@@ -165,7 +168,7 @@ const API = '/api/almoxarifado';
     assert.strictEqual(await aprovar(R3), 'TOTALMENTE_RESERVADA');
     const e = await estornar(mov);
     assert.strictEqual(e.status, 400, JSON.stringify(e.body));
-    assert.strictEqual(e.body.error, RECUSA_71);
+    assert.strictEqual(e.body.error, RECUSA_RESERVADO([await numeroReq(R3)]), 'nada saiu: os 4 estao reservados a R3 (Fase 5)');
     assert.deepStrictEqual((await reservas(R3)).map((r) => r.status), ['ATIVA']);
     assert.strictEqual(await st(R3), 'TOTALMENTE_RESERVADA');
   });
@@ -187,7 +190,7 @@ const API = '/api/almoxarifado';
     assert.deepStrictEqual(await reservas(R1), antes, 'nada liberado');
   });
 
-  await test('[RN-11, Fase 2] quem ja SEPAROU nao perde a reserva no estorno: EM_SEPARACAO com 2 na caixa -> 400 com a literal da 71, reserva intacta', async () => {
+  await test('[RN-11, Fase 2] quem ja SEPAROU nao perde a reserva no estorno: EM_SEPARACAO com 2 na caixa -> 400 com a literal do reservado (Fase 5; era a da 71), reserva intacta', async () => {
     const m = await material();
     const p = await pedidoAvulso(m, 4);
     const R = await criar([[m, 4]]);
@@ -198,7 +201,7 @@ const API = '/api/almoxarifado';
     assert.strictEqual(await st(R), 'EM_SEPARACAO');
     const e = await estornar(mov);
     assert.strictEqual(e.status, 400, JSON.stringify(e.body));
-    assert.strictEqual(e.body.error, RECUSA_71);
+    assert.strictEqual(e.body.error, RECUSA_RESERVADO([await numeroReq(R)]), 'nada saiu: os 4 estao reservados a R (Fase 5)');
     assert.strictEqual(await holdAtivo(R), 4);
     assert.strictEqual(await st(R), 'EM_SEPARACAO');
   });
@@ -218,7 +221,7 @@ const API = '/api/almoxarifado';
     await entradaManual(m, 2); // disponivel 2 + os 2 da reserva cobririam o estorno de 4
     const e = await estornar(mov);
     assert.strictEqual(e.status, 400, JSON.stringify(e.body));
-    assert.strictEqual(e.body.error, RECUSA_71);
+    assert.strictEqual(e.body.error, RECUSA_RESERVADO([await numeroReq(R)]), 'o fisico (4) cobre; falta o reservado a R (Fase 5)');
     assert.strictEqual(await holdAtivo(R), 2, 'o que esta na caixa nao perde a reserva');
   });
 
@@ -335,6 +338,22 @@ const API = '/api/almoxarifado';
     assert.strictEqual(e.body.error, 'Movimentação já cancelada');
     assert.strictEqual(await holdAtivo(R1), 4, 'a reserva liberada foi recriada');
     assert.strictEqual(await st(R1), 'TOTALMENTE_RESERVADA');
+  });
+
+  await test('[Fase 5] recusa por material RESERVADO (nao consumido) diz quem segura: literal nova com o numero da requisicao', async () => {
+    const m = await material(); const outro = await material();
+    await entradaManual(outro, 2);
+    const p = await pedidoAvulso(m, 10);
+    const R1 = await criar([[m, 4], [outro, 2]]);
+    await aprovar(R1);
+    const itOutro = (await dbGet(db, 'SELECT id FROM itens_requisicao_almoxarifado WHERE requisicao_id = ? AND material_id = ?', [R1, outro])).id;
+    assert.strictEqual((await request(app).put(`${API}/requisicoes/${R1}/separar`).send({ itens_separados: [{ item_id: itOutro, quantidade_separada: 2 }] })).status, 200);
+    const { mov } = await receber(p, m, 4);
+    assert.deepStrictEqual({ ...(await mat(m)) }, { q: 4, r: 4, d: 0 }, 'premissa: nada saiu, tudo reservado');
+    const e = await estornar(mov);
+    assert.strictEqual(e.status, 400, JSON.stringify(e.body));
+    assert.strictEqual(e.body.error, RECUSA_RESERVADO([await numeroReq(R1)]));
+    assert.notStrictEqual(e.body.error, RECUSA_71);
   });
 
   // ══════════════ Fase 2: as portas terminais soltam a reserva ══════════════

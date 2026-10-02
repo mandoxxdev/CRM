@@ -40,6 +40,8 @@ function test(name, fn) {
 // A literal de recusa da 71 lida do CODIGO (nao reescrita aqui).
 const STOCK_SRC = fs.readFileSync(path.join(__dirname, '../../services/almoxarifado/stockService.js'), 'utf8');
 const RECUSA_71 = /'(Não é possível estornar: saldo disponível insuficiente \(material já consumido\))'/.exec(STOCK_SRC)[1];
+// Etapa 74 Fase 5: o fisico cobre o estorno e o que falta esta RESERVADO -> a recusa diz quem segura.
+const RECUSA_RESERVADO = (numeros) => `Não é possível estornar: o material está reservado para requisições (${numeros.join(', ')}) — libere as reservas antes de estornar`;
 const L1 = 'O material indicado como reservado fica guardado para a sua requisição — outra requisição não pode levá-lo. A separação é feita pelo almoxarifado.';
 
 // Solicitante chao de fabrica (sem perfil -> PRODUCAO); aprovador/almoxarife/faturista admin.
@@ -301,10 +303,12 @@ const API = '/api/almoxarifado';
     assert.strictEqual(await st(E2.id), 'AGUARDANDO_COMPRA', 'recalculado DEPOIS de o pedido reabrir');
     assert.strictEqual(await holdAtivo(E1.id), 6, 'E1 intacta');
 
-    // Com E1 ja separada: a recusa de hoje (71), nada tocado.
+    // Com E1 ja separada: recusa, nada tocado. Fase 5: nada saiu (os 6 estao reservados a E1), entao a recusa
+    // diz quem segura — nao mais "material ja consumido" (a literal da 71 fica para o consumo real).
     const e2 = await estornar(notaA.mov);
     assert.strictEqual(e2.status, 400, JSON.stringify(e2.body));
-    assert.strictEqual(e2.body.error, RECUSA_71);
+    assert.strictEqual(e2.body.error, RECUSA_RESERVADO([E1.numero]));
+    assert.notStrictEqual(e2.body.error, RECUSA_71);
     assert.strictEqual(await holdAtivo(E1.id), 6, 'quem ja separou nao perde a reserva');
     assert.strictEqual(await st(E1.id), 'EM_SEPARACAO');
 

@@ -2508,7 +2508,7 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
         WHERE id = ? AND (? = 1 OR ${disponivelSql()} >= ?)
         RETURNING quantidade_atual`,
         [mov.quantidade, mov.material_id, permiteNegativo ? 1 : 0, mov.quantidade]);
-      if (!row) throw Object.assign(new Error('Não é possível estornar: saldo disponível insuficiente (material já consumido)'), { status: 400 });
+      if (!row) throw Object.assign(new Error(await mensagemEstornoSemDisponivel(db, mov)), { status: 400 });
       saldoDepois = row.quantidade_atual;
       saldoAntes = saldoDepois + parseFloat(mov.quantidade);
       // A partir daqui quantidade_atual JÁ foi debitado — se qualquer coisa adiante falhar
@@ -2861,6 +2861,40 @@ async function recriarReservasDoEstorno(db, user, liberadas, movimentoId) {
 function mensagemLoteNaoComportaEstorno(mov, quantidadeLinha) {
   return `Não é possível estornar: o lote ${mov.lote || mov.lote_id} tem ${quantidadeLinha} `
     + `${mov.unidade || ''} nesta localização, menos que os ${mov.quantidade} que a entrada creditou`;
+}
+
+/**
+ * Etapa 74 (Fase 5): a recusa do estorno de entrada por falta de DISPONIVEL. Ate a Fase 5 era sempre "material ja
+ * consumido" — mentira quando nada saiu e o que falta esta so RESERVADO (quem ja separou, reserva da aprovacao):
+ * o usuario procurava uma saida que nao existe. Quando o disponivel + o reservado cobrem o estorno, a recusa diz
+ * quem segura (numeros das requisicoes com reserva ATIVA do material; reserva sem requisicao = "reservas
+ * manuais"). Fora disso (consumo real, bloqueio, inspecao, terceiros) fica a literal da 71.
+ */
+async function mensagemEstornoSemDisponivel(db, mov) {
+  const RECUSA_CONSUMIDO = 'Não é possível estornar: saldo disponível insuficiente (material já consumido)';
+  try {
+    const m = await dbGet(db, `SELECT ${disponivelSql()} AS disponivel, COALESCE(quantidade_reservada, 0) AS reservada
+      FROM materiais_almoxarifado WHERE id = ?`, [mov.material_id]);
+    const disp = Number(m && m.disponivel) || 0;
+    const reservada = Number(m && m.reservada) || 0;
+    if (!(reservada > EPS) || disp + reservada < Number(mov.quantidade) - EPS) return RECUSA_CONSUMIDO;
+    const linhas = await dbAll(db, `SELECT rs.requisicao_id, r.numero FROM reservas_material_almoxarifado rs
+      LEFT JOIN requisicoes_almoxarifado r ON r.id = rs.requisicao_id
+      WHERE rs.material_id = ? AND rs.status = 'ATIVA' AND rs.quantidade - COALESCE(rs.quantidade_utilizada, 0) > ${EPS}
+      ORDER BY rs.id`, [mov.material_id]);
+    const nomes = [];
+    let manual = false;
+    for (const l of linhas) {
+      if (!l.requisicao_id) { manual = true; continue; }
+      const n = l.numero || `#${l.requisicao_id}`;
+      if (!nomes.includes(n)) nomes.push(n);
+    }
+    if (manual) nomes.push('reservas manuais');
+    if (!nomes.length) return RECUSA_CONSUMIDO;
+    return `Não é possível estornar: o material está reservado para requisições (${nomes.join(', ')}) — libere as reservas antes de estornar`;
+  } catch (e) {
+    return RECUSA_CONSUMIDO;
+  }
 }
 
 async function recalcularStatusAposEstorno(db, requisicaoIds) {
