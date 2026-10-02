@@ -370,12 +370,38 @@ Ordem topológica: **T0 → T1 → T2** (tronco, sequenciais, um executor por ve
   cai; (d) liberação por valor sem o `UPDATE` do status → RN-05 cai; (e) `/aprovar` com a ordem trocada (reservar antes do
   gate) → o teste da Etapa 47 que prova "nenhum saldo preso por aprovação recusada" cai (prova que a migração do
   `/aprovar` não regrediu).
-- [ ] **T3 (galho, cliente, worktree, em paralelo à T2) — a tela diz que chegou.** Banner pelo contrato. Testes no
+- [x] **T3 — feita em `371aa7ec`.** Banner nos dois status de espera, no modo almoxarifado, quando algum item tem
+  `maxSeparavelNaTela > 0`: a literal da RN-07, QUANTO dá para separar por item e o aviso de que o saldo é
+  compartilhado (Fase 2). 10 testes novos em `RequisicoesList.test.js` (61/61); controles: literal trocada (2 caem),
+  sem o pendente (4), sem dividir o saldo (1), sem substituir o aviso antigo (1), sem filtrar o status (1). Cliente 74
+  suítes / 1155 testes; `CI=true` build ok. **Divergência:** feita na árvore principal, sem worktree, por instrução do
+  disparo (a T2 não rodava no cliente; ninguém mais editava `client/`). **Acréscimo ao contrato:** itens do mesmo
+  material dividem o saldo (4 que chegaram não viram 8). **Depende do detalhe** (`GET /requisicoes/:id`) trazer por
+  item `saldo_atual`, `quantidade_separada`, `material_nome` e `unidade` (e `material_id` para dividir) — a T4 prende
+  isso pela rota.
+  Texto original: **T3 (galho, cliente, worktree, em paralelo à T2) — a tela diz que chegou.** Banner pelo contrato. Testes no
   `RequisicoesList.test.js`: `AGUARDANDO_COMPRA` com item de saldo 4 e pendente 6 → literal nova; o mesmo com saldo 0 →
   literal de hoje; `AGUARDANDO_ESTOQUE` idem; item **já todo separado** com saldo > 0 → literal de hoje (não é "pode
   separar"); `TOTALMENTE_RESERVADA` inalterado. Controles positivos: literal trocada → cai; condição sem o pendente → o
   cenário "já todo separado" cai. Suíte do cliente e `CI=true npx react-scripts build`.
-- [ ] **T4 (integração, cruza T1 × T2 × T3 pelo contrato) — a jornada de quem espera compra.** Arquivo
+- [x] **T4 — feita em (commit desta task; hash no fechamento).** `requisicaoEsperaCompraIntegracao.api.test.js`, 6/6, tudo
+  pelas rotas: [jornada 1] compra VINCULADA (verificar-minimos + pedido) → R1 `/aprovar`, R2 `/aprovar-valor` (liberação
+  ligada só na chamada), R3 `/enviar` do rascunho com a automática ligada → as três `AGUARDANDO_COMPRA`, resposta =
+  banco, sem reserva; [jornada 2] nota de 4 de 10 pelas seis portas → status não muda, a fila mostra `SEPARAR` com
+  `separavel` > 0, o detalhe traz `saldo_atual` 4 e os campos do banner em cada item, e os itens de R1 voltam na ordem
+  do pedido (`[mA, mB]` com `id(mB) < id(mA)`, para a ordem não passar por acaso); [jornada 3] separar → entregar R1;
+  nota de 6 → solicitação `RECEBIDA`; R2 e R3 separadas e `ENTREGUE`; [jornada 4] R4 sem saldo e sem compra viva →
+  `AGUARDANDO_ESTOQUE` (medido: nenhuma solicitação nova nasce sozinha com o saldo a zero); [jornada 5] com saldo, a
+  automática → `TOTALMENTE_RESERVADA` respondido = gravado, reserva de 2 no nome do solicitante, disponível 5 → 3,
+  `quantidade_reservada_item` 2 no detalhe; [cancelado] pedido cancelado com a solicitação `VINCULADO` → as três portas
+  `AGUARDANDO_ESTOQUE`. Passou de primeira; controles positivos (perl, âncora contada = 1, backup `e73t4-*`, restauro
+  por cópia com md5 conferido): (s1) T1 desfeita (a posição lança → só PENDENTE) → jornada 1 cai (+ jornada 2 em
+  cascata); (s2) automática sem pós-aprovação → jornada 1, 5 (`APROVADO`) e cancelado caem (+2 cascata); (s3)
+  `/aprovar-valor` sem o UPDATE → jornada 1 e cancelado caem (+2 cascata); (s4) detalhe `ORDER BY ir.material_id` → só
+  a asserção da ordem cai; (s5) `saldo_atual` zerado no detalhe → só a jornada 2 cai na asserção do `saldo_atual`.
+  Sem defeito de produção revelado. Suíte: `test:api` 274/274. Diferença do texto original: a R5 usa um material próprio
+  com saldo, não o da jornada (que acabou zerado pelas entregas) — o fato provado é o mesmo: a automática reserva.
+  Texto original: **T4 (integração, cruza T1 × T2 × T3 pelo contrato) — a jornada de quem espera compra.** Arquivo
   `server/tests/api/requisicaoEsperaCompraIntegracao.api.test.js`, só pelas portas reais: material com mínimo →
   `verificar-minimos` → R1 aprovada (`/aprovar`) → `AGUARDANDO_COMPRA` → pedido gerado (VINCULADO) → R2 de valor alto
   liberada pelo `/aprovar-valor` → `AGUARDANDO_COMPRA` (as duas portas, mesmo fato, mesmo status) → aprovação automática
