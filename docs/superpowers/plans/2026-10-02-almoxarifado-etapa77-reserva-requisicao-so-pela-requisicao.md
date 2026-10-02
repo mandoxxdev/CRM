@@ -332,7 +332,17 @@ Ordem topológica: **T0 → T1 → T3 → T4**, com **T2 (galho)** em paralelo a
 - **A revisão adversarial (Fase 5) só começa com a T3 commitada** e a árvore quieta.
 - Scratchpad com nome único (`msg-e77-t0.txt`…). Executores **não** marcam este plano; o fio principal marca.
 
-- [ ] **T0 (tronco) — quem libera reserva de requisição (C137) + a listagem diz de quem é.** Pelo contrato: a ação no
+- [x] **T0 — FEITA em `413dec88`.** Teste novo `reservaLiberarSoQuemPode` 15/15 (vermelho antes: 8 falhas, a lista
+  negativa tomava 200). Contrato final: ação `liberar_reserva_requisicao` = `[ADMINISTRADOR, ALMOXARIFE]`, rótulo
+  `'liberar a reserva de uma requisição'`; 403 = `{ error: M2, acao: 'liberar_reserva_requisicao' }` **sem `perfil`**
+  (Fase 2), o erro do serviço carrega só `status`/`acao`; `GET /reservas` + `requisicao_numero`,
+  `requisicao_solicitante_id` (`null` na manual). Controles: s1 PRODUCAO derrubou RN-06 (a)(b)(e)(f)(g) + RN-09 — (f)
+  e (g) a mais que o previsto, porque usam PRODUCAO; s1 ENGENHARIA → só (c)(e); s2 → RN-05 (a)(b); s3 → RN-05 (a)(b) +
+  RN-06 (f); s4 (guarda inteira) → RN-07; s5 → RN-06 (a)(b)(c)(f)(g); s6 → mesmos cinco no `deepStrictEqual` do corpo;
+  s7 (sem as duas colunas) → RN-08; rótulo apagado → `permissaoErro.test.js` cai nomeando a ação. Os seis medidos
+  antes verdes sem edição. Suítes: test:api 292/292, test:almoxarifado 44/0, validation 4/0, safealter 3/0, sqlite
+  verde; cliente `src/utils` + `ReservasAlmoxarifado` 111/111.
+  Enunciado original: **T0 (tronco) — quem libera reserva de requisição (C137) + a listagem diz de quem é.** Pelo contrato: a ação no
   mapa, o rótulo no cliente (**mesmo commit**), `assertPodeLiberarReserva`, a rota, o `listarReservas`. Teste novo
   `server/tests/api/reservaLiberarSoQuemPode.api.test.js`, **pela rota** (usuários por perfil reais): RN-05 (a–d),
   RN-06 (a–g), RN-07, RN-08, RN-09. Nomes dos testes com o ID (`[RN-06] (b) PRODUCAO que não pediu …`).
