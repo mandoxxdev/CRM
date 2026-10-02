@@ -4048,8 +4048,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
             if (err4) return res.status(500).json({ error: err4.message });
             db.all(`SELECT r.*, (SELECT COUNT(*) FROM itens_requisicao_almoxarifado WHERE requisicao_id = r.id) as total_itens
                     FROM requisicoes_almoxarifado r
+                    -- Etapa 74 (T4, D10/B376): as reservadas tambem estao abertas — a reserva na chegada leva a requisicao
+                    -- a *_RESERVADA quando o material chega, e sem elas aqui ela sumia do painel nesse momento.
                     WHERE r.status IN ('PENDENTE','APROVADO','EM_SEPARACAO','PARCIALMENTE_ATENDIDA',
-                                        'AGUARDANDO_ESTOQUE','AGUARDANDO_COMPRA','PRONTA_PARA_RETIRADA','AGUARDANDO_APROVACAO_VALOR')
+                                        'AGUARDANDO_ESTOQUE','AGUARDANDO_COMPRA','PRONTA_PARA_RETIRADA','AGUARDANDO_APROVACAO_VALOR',
+                                        'PARCIALMENTE_RESERVADA','TOTALMENTE_RESERVADA')
                     ORDER BY CASE UPPER(r.urgencia) WHEN 'CRITICO' THEN 1 WHEN 'URGENTE' THEN 2 ELSE 3 END, r.created_at ASC
                     LIMIT 5`, [], (err5, abertas) => {
               if (err5) return res.status(500).json({ error: err5.message });
