@@ -342,7 +342,7 @@ Ordem topológica: **T0 → T1 → T2** (tronco, sequenciais, um executor — me
 (galho de cliente, contra o contrato acima, em paralelo à T2, worktree); **T4** (integração) depois de T2; **T5**
 fechamento. Executores de galho **não** marcam este plano.
 
-- [x] **T0 (tronco) — FEITA** (hash no commit "Almoxarifado Etapa 71 T0"). Três trocas: fechamento com 3 argumentos,
+- [x] **T0 (tronco) — FEITA** (`39da666`). Três trocas: fechamento com 3 argumentos,
   `?pendentes=1` com `saldo_por_material > ${EPSILON_DIVERGENCIA}` e a barreira do `POST` com epsilon (Fase 2).
   Testes: (10) e (11) em `comprasPedidoStatusAutomatico` (14/14), (1c) com `?pendentes=1` e **(1d) novo** em
   `comprasPedidoSituacaoFonte` (11/11). **Divergência:** o "cenário de float de `?pendentes`" que o plano mandava achar
@@ -359,7 +359,7 @@ fechamento. Executores de galho **não** marcam este plano.
   no segundo). **Corrigir os dois comentários que afirmavam a correção** (`receiptService.js:1832-1839`, teste
   `:150-157`), dizendo que estavam errados. Controle positivo: voltar o fechamento a 2 argumentos → (10) cai; voltar a
   cláusula → (1c) cai; o cenário de float de `?pendentes` (20,1 = 2,2 + 17,9 — achar o teste existente) continua verde.
-- [x] **T1 (tronco) — FEITA** (hash no commit "Almoxarifado Etapa 71 T1"). Coluna em `recebItemCols` + escrita em
+- [x] **T1 (tronco) — FEITA** (`beedc40`). Coluna em `recebItemCols` + escrita em
   `darEntradaEstoque` (try próprio, literal do contrato). `recebimentoVinculoMovimentacao.api.test.js` 4/4: (1) processar
   com dois itens do mesmo material (3 e 5) + outro; (2) `/aprovar` direto (resposta `{ success: true }` prova o ramo);
   (3) item com **recebida** 0 (a esperada tem de ser > 0 pelo schema — divergência pequena do texto "item com 0") →
@@ -372,7 +372,7 @@ fechamento. Executores de galho **não** marcam este plano.
   dois ids diferentes, cada um com a quantidade do seu item); item com 0 → `NULL`; reprocessamento (falha parcial
   retomada) não reescreve o do item que já entrou. Controle positivo: gravar o id no item errado (`itens[0]`) → cai o
   de dois itens; não gravar → cai tudo.
-- [x] **T2 (tronco) — FEITA** (hash no commit "Almoxarifado Etapa 71 T2"). `estornarEntradaNoPedido` (+
+- [x] **T2 (tronco) — FEITA** (`81a734c`). `estornarEntradaNoPedido` (+
   `resolverItemDaEntrada`, `destinoDaReabertura`, `situacaoDoPedido`) e `SQL_PEDIDO_COMPLETO` em `receiptService.js`;
   gancho e recusa da inspeção em `cancelarMovimentacao`; dois rótulos; cabeçalho do `fecharPedidosCompletos` reescrito
   (decisão 4). Com a Fase 2: recusa `Esta entrada tem <q> <un> em inspeção — decida a inspeção antes de estornar a
