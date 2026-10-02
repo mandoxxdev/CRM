@@ -183,6 +183,15 @@ const execRecusaLoteForaDeAtivo = (lote) => ({
   status: 409,
   mensagem: `O lote ${lote.codigo} está ${String(lote.status || '').toLowerCase()} (${lote.status_motivo || 'sem motivo registrado'}): libere o lote para sucatear o reprovado, ou registre a execução sem baixa informando o motivo.`,
 });
+// Etapa 69 (fix-round da Fase 5, achado 2): material de CLIENTE reprovado. O `/executar` mandava
+// "Solicitar sucateamento", mas a tela nao tem OS/projeto e a solicitacao recusava pela guarda do
+// dono (a SUCATA de material de cliente exige OS/projeto DESSE cliente): o operador ficava sem
+// caminho. Recusa ensinando os dois caminhos; `motivo_sem_baixa` registra sem baixa.
+const EXEC_RECUSA_CLIENTE_SEM_OS = {
+  status: 409,
+  mensagem: 'Material de cliente: o sucateamento precisa da OS ou do projeto do cliente — solicite pela API informando os_origem_id/projeto_origem_id, ou registre a execução sem baixa informando o motivo',
+};
+
 /** Etapa 69 (fix-round da Fase 5, achado 1) — o lote do reprovado ja nao cobre a reprovada. */
 const msgLoteSemSaldo = (lote, un, reprovada) => `O lote ${lote.codigo} tem ${Math.round((Number(lote.saldo_em_estoque) || 0) * 1e6) / 1e6} ${un} em estoque, menos que o reprovado (${reprovada}) — o reprovado já saiu do lote; registre a execução sem baixa informando o motivo`;
 
@@ -1180,7 +1189,14 @@ function efeitoExecucaoSucatear(nc, insp, material, lote, extra) {
 
   if (extra.solicitadoAberto) return recusa(execRecusaSucateamentoAberto(extra.solicitadoAberto.id));
   const p = sucateamentoDoReprovadoPrevisto(nc, insp, material, lote, null);
-  if (p.efeito === 'SUCATEAVEL') return recusa(EXEC_RECUSA.PEDE_SUCATEAMENTO);
+  if (p.efeito === 'SUCATEAVEL') {
+    // Fase 5 (achado 2): material de cliente — a solicitacao pela tela (sem OS/projeto) seria
+    // recusada pela guarda do dono; ensinar "Solicitar sucateamento" era mandar para um beco.
+    if (material && material.proprietario_cliente_id) {
+      return extra.motivoSemBaixa ? nada('SEM_BAIXA', EFEITO_EXEC_MSG.SEM_BAIXA) : recusa(EXEC_RECUSA_CLIENTE_SEM_OS);
+    }
+    return recusa(EXEC_RECUSA.PEDE_SUCATEAMENTO);
+  }
   switch (p.codigo) {
     case 'LOTE_STATUS':
       return extra.motivoSemBaixa ? nada('SEM_BAIXA', EFEITO_EXEC_MSG.SEM_BAIXA) : recusa(execRecusaLoteForaDeAtivo(lote));
@@ -1442,7 +1458,7 @@ async function registrarExecucao(db, user, ncId, dados = {}) {
     insp = await getInspecao(db, atual.referencia_id);
     if (insp?.material_id) {
       material = await dbGet(db, `SELECT id, codigo, unidade, ativo, quantidade_atual,
-        quantidade_bloqueada, controle_lote, controle_serie, permite_saldo_negativo
+        quantidade_bloqueada, controle_lote, controle_serie, proprietario_cliente_id, permite_saldo_negativo
         FROM materiais_almoxarifado WHERE id = ?`, [insp.material_id]);
       // Fase 5: no SUCATEAR o lote vem com o saldo (nivel 16b); a devolucao (45) segue como era.
       lote = atual.decisao === 'SUCATEAR'

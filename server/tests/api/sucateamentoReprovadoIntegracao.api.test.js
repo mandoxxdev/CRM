@@ -66,8 +66,9 @@ const MSG_PEDE_SUCATEAMENTO = 'Esta não conformidade pede sucateamento: o almox
 const MSG_LOTE_BLOQUEADO = (l) => `O lote ${l} está bloqueado (Certificado do fornecedor nao anexado): libere o lote para sucatear o reprovado, ou registre a execução sem baixa informando o motivo.`;
 const MSG_SUC_ABERTO = (id) => `Já existe o sucateamento SUC-${id} desta não conformidade aguardando aprovação no almoxarifado.`;
 const MSG_ESTORNO = 'Sucateamento de material reprovado não pode ser estornado pelo livro — o material voltaria ao estoque disponível com a não conformidade dizendo que foi sucateado';
-// Fase 5 (fix-round): a literal nova do lote sem saldo.
+// Fase 5 (fix-round): as duas literais novas.
 const MSG_LOTE_SEM_SALDO = (l, s, q) => `O lote ${l} tem ${s} KG em estoque, menos que o reprovado (${q}) — o reprovado já saiu do lote; registre a execução sem baixa informando o motivo`;
+const MSG_CLIENTE_SEM_OS = 'Material de cliente: o sucateamento precisa da OS ou do projeto do cliente — solicite pela API informando os_origem_id/projeto_origem_id, ou registre a execução sem baixa informando o motivo';
 const MSG_JA_SUCATEADA ='O material desta inspeção já havia sido sucateado — a execução foi registrada sem mover saldo';
 
 (async () => {
@@ -374,6 +375,30 @@ const MSG_JA_SUCATEADA ='O material desta inspeção já havia sido sucateado �
     assert.ok(!(await ncsPendentes()).includes(c.ncId), 'o registro sem baixa nao tirou a NC da fila');
     const s1 = await saldos(c.materialId);
     assert.deepStrictEqual([s1.quantidade_atual, s1.quantidade_bloqueada], [5, 3], 'o registro sem baixa moveu saldo');
+  });
+
+  await test('(12) Fase 5: material de CLIENTE reprovado -> /executar recusa ensinando a OS/projeto; motivo_sem_baixa registra sem baixa', async () => {
+    const E4 = await novaLoc('Prateleira');
+    const c = await ateNcDecidida({ comLote: false, entradaEm: E4 });
+    // Fixture: o material passa a ser do cliente (o recebimento de material de cliente nao e o que
+    // este teste prova; o achado e o /executar mandar "Solicitar sucateamento" que a tela nao completa).
+    const cli = (await dbRun(db, "INSERT INTO clientes (razao_social) VALUES ('Cliente Dono T7')")).lastID;
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET proprietario_cliente_id = ? WHERE id = ?', [cli, c.materialId]);
+
+    const r = await executar(c.ncId);
+    assert.strictEqual(r.status, 409, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, MSG_CLIENTE_SEM_OS);
+    // a solicitacao pela tela (sem OS/projeto) continua recusada pela guarda do dono — por isso o
+    // /executar nao pode mandar "use Solicitar sucateamento"
+    const sol = await solicitar(c.ncId);
+    assert.strictEqual(sol.status, 400, JSON.stringify(sol.body));
+    assert.ok(/pertence ao cliente Cliente Dono T7/.test(sol.body.error), sol.body.error);
+    assert.ok((await ncsPendentes()).includes(c.ncId), 'a recusa tirou a NC da fila');
+
+    const ex = ok(await executar(c.ncId, { motivo_sem_baixa: 'material de cliente devolvido por fora' }), 200, '/executar com motivo_sem_baixa');
+    assert.strictEqual(ex.execucao_estado, 'EXECUTADA', JSON.stringify(ex));
+    const s = await saldos(c.materialId);
+    assert.deepStrictEqual([s.quantidade_atual, s.quantidade_bloqueada], [10, 3], 'o registro sem baixa moveu saldo');
   });
 
   await close();
