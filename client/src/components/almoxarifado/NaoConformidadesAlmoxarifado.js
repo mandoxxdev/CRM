@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  FiAlertOctagon, FiAlertTriangle, FiCheckSquare, FiChevronDown, FiChevronUp, FiRefreshCw, FiTruck,
-  FiXCircle,
+  FiAlertOctagon, FiAlertTriangle, FiCheckSquare, FiChevronDown, FiChevronUp, FiRefreshCw, FiTrash2,
+  FiTruck, FiXCircle,
 } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import api from '../../services/api';
@@ -100,6 +100,27 @@ import './Almoxarifado.css';
  * 3. **A coluna Execução passa a olhar o `status`.** Como a RN-06 preserva `PENDENTE`, sem isso a
  *    linha ficaria com badge Cancelada ao lado de execução Pendente — contradizendo, na mesma
  *    tela e no mesmo segundo, o toast que acabou de dizer que a execução deixa de ser cobrada.
+ *
+ * ── Etapa 69, T4 — SUCATEAR GANHA PORTA (RN-12) ─────────────────────────────────────────────
+ *
+ * Até a Etapa 68 o `/executar` de uma NC decidida `SUCATEAR` registrava "sem mover" e tirava o
+ * documento da fila com o material condenado AINDA no bloqueado — e este arquivo dizia ao usuário
+ * que aquilo "não movimenta estoque", como se fosse o fim. Desde a T2 o servidor recusa o SUCATEAR
+ * viável com 409 (a literal ensina o caminho) e a T3 abriu
+ * `POST /nao-conformidades/:id/solicitar-sucateamento`: o almoxarifado solicita, as duas
+ * assinaturas da Etapa 9 aprovam, e a SEGUNDA baixa a SUCATA do bloqueado e marca a NC executada.
+ * Três regras daqui:
+ *
+ * 1. **O botão olha `execucao_movimentacao_id`, não `execucao_estado`** (Fase 2, D7 × RN-12). A
+ *    NC ANTIGA que o `/executar` de antes fechou "sem mover" está EXECUTADA sem baixa — e é a que
+ *    mais precisa do botão. Gate de perfil ESCONDE (`movimentar` é do almoxarifado, a plateia não é
+ *    quem decide), falhando aberto como os outros dois.
+ * 2. **O toast é só texto**, com o SUC e onde ele espera — sem link para a aba de Sobras (Fase 2:
+ *    a T5 é outro galho, sem dependência).
+ * 3. **"Motivo para registrar sem baixa"** só no modal de execução de SUCATEAR, e SEMPRE visível
+ *    nele (não só depois do 409 do lote): revelar o campo casando o texto da recusa faria uma
+ *    correção de redação no servidor esconder a única saída do caso do lote bloqueado. O servidor
+ *    só o aceita nesse caso; nos outros a recusa literal explica.
  */
 
 const ROTA = '/almoxarifado/nao-conformidades';
@@ -224,6 +245,24 @@ const PainelErroCarga = ({ mensagem, onTentarNovamente }) => (
 
 const FORM_DECISAO_VAZIO = { decisao: '', justificativa: '' };
 
+// Etapa 69 — as mesmas sugestões da tela de Sobras (`SobrasAlmoxarifado.js`), em datalist: a
+// classificação é texto livre no servidor, a lista só poupa digitação.
+const CLASSIFICACOES_SUGERIDAS = ['aço carbono', 'inox', 'alumínio', 'cobre', 'cavaco', 'misto'];
+
+/**
+ * Etapa 69 (RN-12) — quando o botão "Solicitar sucateamento" aparece. Cada condição é uma recusa
+ * da rota (botão com erro garantido é armadilha): decidida (CANCELADA/ABERTA recusam), decisão
+ * SUCATEAR, NC automática de inspeção (a manual recusa — "Só a não conformidade aberta pela
+ * reprovação da inspeção sucateia"), e SEM baixa ainda. ⚠️ NÃO usa `execucao_estado` — ver a
+ * regra 1 da Etapa 69 no cabeçalho. O SOLICITADO já aberto não vem na lista: a rota recusa com o
+ * SUC-id, literal no toast.
+ */
+const podeSolicitarSucateamento = (nc) => nc.status === 'DECIDIDA'
+  && nc.decisao === 'SUCATEAR'
+  && nc.origem === 'INSPECAO'
+  && Boolean(nc.aberto_automaticamente)
+  && nc.execucao_movimentacao_id == null;
+
 const NaoConformidadesAlmoxarifado = () => {
   const { perfil, pode, bloquearSeNaoPode } = useAlmoxPermissoes();
 
@@ -244,6 +283,10 @@ const NaoConformidadesAlmoxarifado = () => {
 
   const [execucaoTarget, setExecucaoTarget] = useState(null);
   const [execucaoObs, setExecucaoObs] = useState('');
+  const [execucaoMotivoSemBaixa, setExecucaoMotivoSemBaixa] = useState('');
+
+  const [sucTarget, setSucTarget] = useState(null);
+  const [sucForm, setSucForm] = useState({ justificativa: '', classificacao: '', peso_estimado: '', observacoes: '' });
 
   const [cancelamentoTarget, setCancelamentoTarget] = useState(null);
   const [cancelamentoMotivo, setCancelamentoMotivo] = useState('');
@@ -369,6 +412,7 @@ const NaoConformidadesAlmoxarifado = () => {
   const abrirExecucao = (nc) => {
     setExecucaoTarget(nc);
     setExecucaoObs('');
+    setExecucaoMotivoSemBaixa('');
   };
 
   /**
@@ -382,7 +426,12 @@ const NaoConformidadesAlmoxarifado = () => {
     setSalvando(true);
     try {
       const obs = execucaoObs.trim();
-      const resp = await api.post(`${ROTA}/${execucaoTarget.id}/executar`, obs ? { observacoes: obs } : {});
+      const corpo = obs ? { observacoes: obs } : {};
+      // Etapa 69 — `motivo_sem_baixa` só existe no modal de SUCATEAR e só viaja com conteúdo. O
+      // servidor o aceita só no lote fora de ATIVO; mandá-lo vazio seria ruído no contrato.
+      const motivoSemBaixa = execucaoMotivoSemBaixa.trim();
+      if (execucaoTarget.decisao === 'SUCATEAR' && motivoSemBaixa) corpo.motivo_sem_baixa = motivoSemBaixa;
+      const resp = await api.post(`${ROTA}/${execucaoTarget.id}/executar`, corpo);
       // Mesma regra da decisão (Etapa 44): a literal do que aconteceu com o saldo vem PRONTA do
       // servidor. Aqui ela pesa mais ainda, porque os desfechos sem baixa não são erro — a
       // execução FICA registrada e a mensagem é o único lugar que diz por que o saldo não mudou
@@ -402,6 +451,52 @@ const NaoConformidadesAlmoxarifado = () => {
         formatarErroPermissao(err.response?.data)
         || err.response?.data?.error
         || 'Erro ao registrar a execução',
+      );
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  const abrirSucateamento = (nc) => {
+    setSucTarget(nc);
+    // A justificativa nasce com a da DECISÃO (RN-12): é o mesmo porquê, e o almoxarife que solicita
+    // não deveria ter de redigir de novo o que a Qualidade já escreveu. Editável.
+    setSucForm({ justificativa: nc.justificativa || '', classificacao: '', peso_estimado: '', observacoes: '' });
+  };
+
+  /**
+   * Etapa 69 (RN-12) — SOLICITAR o sucateamento do reprovado. Material, quantidade e lote NÃO vão
+   * no corpo: o servidor os DERIVA da inspeção (a reprovada inteira — D4), e o Zod descartaria o
+   * que fosse a mais. Não move estoque: a baixa é a segunda aprovação, na tela de Sobras.
+   */
+  const submeterSucateamento = async () => {
+    const justificativa = sucForm.justificativa.trim();
+    if (!justificativa) {
+      // A literal do Zod do servidor (`SucateamentoDoReprovadoSchema`) — uma régua, uma redação.
+      toast.error('Justificativa é obrigatória para sucatear');
+      return;
+    }
+    const payload = { justificativa };
+    const classificacao = sucForm.classificacao.trim();
+    if (classificacao) payload.classificacao = classificacao;
+    if (String(sucForm.peso_estimado).trim() !== '') payload.peso_estimado = Number(sucForm.peso_estimado);
+    const observacoes = sucForm.observacoes.trim();
+    if (observacoes) payload.observacoes = observacoes;
+    setSalvando(true);
+    try {
+      const resp = await api.post(`${ROTA}/${sucTarget.id}/solicitar-sucateamento`, payload);
+      const sucId = resp?.data?.id;
+      // Só texto (Fase 2): sem link para a aba — a T5 é outro galho. O `?.` protege resposta sem
+      // `id`: "SUC-undefined" seria pior que não dizer o número.
+      toast.success(`Sucateamento ${sucId != null ? `SUC-${sucId} ` : ''}solicitado para ${sucTarget.numero}. `
+        + 'A baixa do material reprovado acontece na segunda aprovação, em Sobras e Retalhos › Sucateamentos.');
+      setSucTarget(null);
+      setRecarga((n) => n + 1);
+    } catch (err) {
+      toast.error(
+        formatarErroPermissao(err.response?.data)
+        || err.response?.data?.error
+        || 'Erro ao solicitar o sucateamento',
       );
     } finally {
       setSalvando(false);
@@ -747,6 +842,21 @@ const NaoConformidadesAlmoxarifado = () => {
                               <FiXCircle />
                             </button>
                           )}
+                          {/* Etapa 69 (RN-12) — a porta do SUCATEAR. Visibilidade em
+                              `podeSolicitarSucateamento` (sem `execucao_estado`, de propósito — a
+                              NC antiga executada sem baixa também precisa dela). Gate de perfil
+                              ESCONDE: `movimentar` é do almoxarifado, não de quem decide. */}
+                          {podeSolicitarSucateamento(nc) && pode('movimentar') && (
+                            <button
+                              type="button"
+                              className="almox-btn-icon"
+                              data-testid="btn-solicitar-sucateamento"
+                              title="Solicitar sucateamento"
+                              onClick={() => abrirSucateamento(nc)}
+                            >
+                              <FiTrash2 />
+                            </button>
+                          )}
                           <button
                             type="button"
                             className="almox-btn-icon"
@@ -849,6 +959,10 @@ const NaoConformidadesAlmoxarifado = () => {
                 depois dela: `Devolver ao fornecedor` agora baixa o material, no gesto seguinte,
                 por quem tem `executar_encaminhamento`. Corrigido aqui, no mesmo commit da tela,
                 e o cenário (26) prende a frase nova sem largar as duas negativas do (21).
+
+                ⚠️ ETAPA 69, TERCEIRA VEZ: "Sucatear registra só a intenção" virou meia verdade —
+                a decisão continua sem mexer no saldo, mas agora tem um segundo gesto (Solicitar
+                sucateamento) cuja segunda aprovação baixa o reprovado. O cenário (52) prende.
               */}
               <p style={{ fontSize: '0.78rem', color: 'var(--gmp-text-light)', marginTop: 0 }}>
                 <strong>Aceitar</strong> e <strong>Aceitar sob desvio</strong> liberam o material
@@ -856,8 +970,10 @@ const NaoConformidadesAlmoxarifado = () => {
                 <strong> não mexem no saldo</strong> neste clique: <strong>Devolver ao
                 fornecedor</strong> passa a esperar o registro da execução (coluna
                 <em> Execução</em>), e é ele que baixa o material — até lá ele segue retido.
-                Substituição, Análise da Engenharia e Sucatear registram só a intenção. O aviso ao
-                confirmar diz o que aconteceu.
+                <strong> Sucatear</strong> passa a esperar o almoxarifado em <em>Solicitar
+                sucateamento</em>: a baixa é a segunda aprovação do sucateamento. Substituição e
+                Análise da Engenharia registram só a intenção. O aviso ao confirmar diz o que
+                aconteceu.
               </p>
               <div className="almox-field">
                 <label className="almox-label">Decisão<span className="required">*</span></label>
@@ -922,6 +1038,12 @@ const NaoConformidadesAlmoxarifado = () => {
                 Dizer a mesma frase nos dois casos faria "registrei a execução do sucateamento"
                 parecer que o estoque baixou — o mesmo silêncio do furo C57, um andar acima.
                 Quanto/se o saldo se move, quem diz é o servidor, no toast.
+
+                ⚠️ Etapa 69: `SUCATEAR` deixou o ramo do "não movimenta estoque". Aquela frase era
+                verdade enquanto o `/executar` fechava o SUCATEAR calado — com o condenado ainda no
+                bloqueado. Agora a baixa é a SEGUNDA APROVAÇÃO do sucateamento solicitado, e este
+                registro só serve quando o sucateamento não é possível (o servidor recusa com 409
+                o caso viável, e diz por quê). O cenário (33) prende as duas metades.
               */}
               <p style={{ fontSize: '0.78rem', color: 'var(--gmp-text-light)', marginTop: 0 }}>
                 {execucaoTarget.decisao === 'DEVOLVER' ? (
@@ -929,6 +1051,14 @@ const NaoConformidadesAlmoxarifado = () => {
                     Confirme que o material <strong>saiu de fato</strong> para o fornecedor. É este
                     registro que dá a baixa no estoque — antes dele o material segue retido. O
                     aviso ao confirmar diz quanto saiu, ou por que não saiu.
+                  </>
+                ) : execucaoTarget.decisao === 'SUCATEAR' ? (
+                  <>
+                    O sucateamento do material reprovado é feito em <strong>Solicitar
+                    sucateamento</strong>: a baixa acontece na <strong>segunda aprovação</strong> do
+                    sucateamento, e é ela que registra esta execução. Registre aqui só quando o
+                    sucateamento não é possível — se ele for, o sistema recusa e diz o caminho. Com
+                    o lote bloqueado, informe o motivo abaixo para registrar sem baixa.
                   </>
                 ) : (
                   <>
@@ -947,6 +1077,20 @@ const NaoConformidadesAlmoxarifado = () => {
                   onChange={(e) => setExecucaoObs(e.target.value)}
                 />
               </div>
+              {/* Etapa 69 — sempre visível no SUCATEAR, e não só depois do 409 do lote: ver a
+                  regra 3 da Etapa 69 no cabeçalho. */}
+              {execucaoTarget.decisao === 'SUCATEAR' && (
+                <div className="almox-field">
+                  <label className="almox-label">Motivo para registrar sem baixa</label>
+                  <textarea
+                    className="almox-input"
+                    rows={2}
+                    value={execucaoMotivoSemBaixa}
+                    placeholder="Só quando o lote está bloqueado e o material não vai sair — fica registrado na execução."
+                    onChange={(e) => setExecucaoMotivoSemBaixa(e.target.value)}
+                  />
+                </div>
+              )}
               {!pode('executar_encaminhamento') && (
                 <p style={{ fontSize: '0.78rem', color: 'var(--gmp-warning)', margin: 0 }}>
                   {formatarErroPermissao({ acao: 'executar_encaminhamento', perfil })
@@ -958,6 +1102,85 @@ const NaoConformidadesAlmoxarifado = () => {
               <button className="btn-almox-secondary" onClick={() => setExecucaoTarget(null)}>Cancelar</button>
               <button className="btn-almox-primary" disabled={salvando} onClick={submeterExecucao}>
                 {salvando ? 'Salvando...' : 'Registrar execução'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/*
+        Etapa 69 (RN-12) — o modal da SOLICITAÇÃO do sucateamento do reprovado. Sem campo de
+        material, quantidade ou lote: o servidor os deriva da inspeção (a reprovada inteira). Os
+        campos são os do contrato da T3; OS/projeto de origem ficam de fora — a guarda do dono recusa
+        material de cliente com literal própria, e o caso é raro o bastante para a tela de Sobras.
+      */}
+      {sucTarget && (
+        <div className="almox-modal-overlay" onClick={() => { if (!salvando) setSucTarget(null); }}>
+          <div className="almox-modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
+            <div className="almox-modal-header">
+              <h2>Solicitar sucateamento — {sucTarget.numero}</h2>
+              <button className="almox-modal-close" onClick={() => setSucTarget(null)}>✕</button>
+            </div>
+            <div className="almox-modal-body">
+              <p style={{ marginTop: 0 }}>
+                <strong>{sucTarget.material_nome || 'Material não identificado'}</strong>
+                {sucTarget.material_codigo ? ` (${sucTarget.material_codigo})` : ''}
+                {' — decisão: '}
+                {ROTULO_DECISAO[sucTarget.decisao] || sucTarget.decisao}
+              </p>
+              <p style={{ fontSize: '0.78rem', color: 'var(--gmp-text-light)', marginTop: 0 }}>
+                Vai para o sucateamento <strong>toda a quantidade reprovada</strong> na inspeção, do
+                lote dela. Solicitar <strong>não movimenta estoque</strong>: o pedido espera as duas
+                aprovações (almoxarifado e gestão) em Sobras e Retalhos › Sucateamentos, e a segunda
+                dá a baixa do material bloqueado e registra a execução desta não conformidade.
+              </p>
+              <div className="almox-field">
+                <label className="almox-label">Justificativa<span className="required">*</span></label>
+                <textarea
+                  className="almox-input"
+                  rows={3}
+                  value={sucForm.justificativa}
+                  placeholder="Por que este material vai para a sucata — fica no livro de movimentações."
+                  onChange={(e) => setSucForm((f) => ({ ...f, justificativa: e.target.value }))}
+                />
+              </div>
+              <div className="almox-field">
+                <label className="almox-label">Classificação</label>
+                <input
+                  className="almox-input"
+                  list="almox-nc-suc-classificacoes"
+                  value={sucForm.classificacao}
+                  onChange={(e) => setSucForm((f) => ({ ...f, classificacao: e.target.value }))}
+                />
+                <datalist id="almox-nc-suc-classificacoes">
+                  {CLASSIFICACOES_SUGERIDAS.map((c) => <option key={c} value={c} />)}
+                </datalist>
+              </div>
+              <div className="almox-field">
+                <label className="almox-label">Peso estimado (kg)</label>
+                <input
+                  className="almox-input"
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={sucForm.peso_estimado}
+                  onChange={(e) => setSucForm((f) => ({ ...f, peso_estimado: e.target.value }))}
+                />
+              </div>
+              <div className="almox-field">
+                <label className="almox-label">Observações</label>
+                <textarea
+                  className="almox-input"
+                  rows={2}
+                  value={sucForm.observacoes}
+                  onChange={(e) => setSucForm((f) => ({ ...f, observacoes: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="almox-modal-footer">
+              <button className="btn-almox-secondary" onClick={() => setSucTarget(null)}>Cancelar</button>
+              <button className="btn-almox-primary" disabled={salvando} onClick={submeterSucateamento}>
+                {salvando ? 'Salvando...' : 'Solicitar sucateamento'}
               </button>
             </div>
           </div>

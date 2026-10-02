@@ -46,14 +46,19 @@ jest.mock('react-toastify', () => ({
 // ⚠️ Etapa 46: `cancelar_nao_conformidade` é a SEGUNDA ação que esconde botão por perfil (a
 // plateia dela é QUALIDADE/ADMINISTRADOR, e quem opera a fila não a tem), então ela também
 // precisa ser controlável por cenário — ver (35).
+//
+// ⚠️ Etapa 69: `movimentar` é a TERCEIRA — o botão "Solicitar sucateamento" é do almoxarifado
+// (ADMINISTRADOR/ALMOXARIFE), não de quem decide. Ver (45).
 let mockPodeExecutar = true;
 let mockPodeCancelar = true;
+let mockPodeMovimentar = true;
 jest.mock('../../hooks/useAlmoxPermissoes', () => ({
   useAlmoxPermissoes: () => ({
     perfil: 'QUALIDADE',
     pode: (acao) => {
       if (acao === 'executar_encaminhamento') return mockPodeExecutar;
       if (acao === 'cancelar_nao_conformidade') return mockPodeCancelar;
+      if (acao === 'movimentar') return mockPodeMovimentar;
       return true;
     },
     bloquearSeNaoPode: () => true,
@@ -142,6 +147,7 @@ beforeEach(() => {
   falharCarga = null;
   mockPodeExecutar = true;
   mockPodeCancelar = true;
+  mockPodeMovimentar = true;
   // Implementações aqui, não na fábrica do jest.mock: clearAllMocks apaga implementações e só o
   // primeiro teste teria dados.
   api.get.mockImplementation((url) => {
@@ -902,7 +908,11 @@ describe('NaoConformidadesAlmoxarifado — o modal de decisão fala do segundo g
   });
 
   test('(33) o modal de execução muda o texto conforme a decisão — só DEVOLVER move saldo', async () => {
-    ncDoBanco = [NC_A_EXECUTAR, { ...NC_A_EXECUTAR, id: 23, numero: 'NC-2026-0023', decisao: 'SUCATEAR' }];
+    ncDoBanco = [
+      NC_A_EXECUTAR,
+      { ...NC_A_EXECUTAR, id: 23, numero: 'NC-2026-0023', decisao: 'SUCATEAR' },
+      { ...NC_A_EXECUTAR, id: 25, numero: 'NC-2026-0025', decisao: 'SUBSTITUICAO' },
+    ];
     await renderizar();
 
     await clicar(botaoExecutar(linhas()[0]));
@@ -912,13 +922,30 @@ describe('NaoConformidadesAlmoxarifado — o modal de decisão fala do segundo g
     expect(devolver).toContain('dá a baixa no estoque');
     await clicarBotaoModal('Cancelar');
 
-    // E o sucateamento: mesmo botão, texto OPOSTO. Dizer a mesma frase nos dois faria "registrei a
-    // execução do sucateamento" parecer que o estoque baixou.
+    // ⚠️ ETAPA 69 — ESTE CENÁRIO MUDOU, e a afirmação antiga fica escrita para não voltar. Até a
+    // Etapa 68 ele exigia que o modal de SUCATEAR dissesse "não movimenta estoque" — verdade
+    // enquanto o `/executar` de SUCATEAR registrava "sem mover" e tirava a NC da fila com o material
+    // condenado ainda bloqueado (Surpresa 2 da Fase 0 da 69). Desde a T2 o servidor RECUSA o
+    // SUCATEAR viável com 409 e a baixa é a SEGUNDA APROVAÇÃO do sucateamento solicitado pelo botão
+    // "Solicitar sucateamento" (T3). O texto agora diz isso — e NÃO pode dizer "não movimenta
+    // estoque", que mandaria o almoxarife registrar a execução achando que o material saiu.
     await clicar(botaoExecutar(linhas()[1]));
     const sucatear = container.querySelector('.almox-modal').textContent;
     expect(sucatear).toContain('Registrar execução de NC-2026-0023');
-    expect(sucatear).toContain('não movimenta estoque');
+    expect(sucatear).not.toContain('não movimenta estoque');
+    expect(sucatear).toContain('Solicitar sucateamento');
+    expect(sucatear).toContain('segunda aprovação');
     expect(sucatear).not.toContain('dá a baixa no estoque');
+    await clicarBotaoModal('Cancelar');
+
+    // Metade POSITIVA da troca: as decisões que de fato não movem (Substituição, Análise da
+    // Engenharia) continuam dizendo "não movimenta estoque" — sem isto, apagar a frase de todos os
+    // ramos passaria verde.
+    await clicar(botaoExecutar(linhas()[2]));
+    const substituicao = container.querySelector('.almox-modal').textContent;
+    expect(substituicao).toContain('Registrar execução de NC-2026-0025');
+    expect(substituicao).toContain('não movimenta estoque');
+    expect(substituicao).not.toContain('segunda aprovação');
   });
 });
 
@@ -1295,5 +1322,226 @@ describe('NaoConformidadesAlmoxarifado — cancelar o documento', () => {
     // Fica aberto: a recusa é do estado do documento, não do que foi digitado — e a corrida com
     // `/executar` é exatamente o caso em que a linha mudou por baixo de quem olha.
     expect(container.querySelector('.almox-modal')).not.toBeNull();
+  });
+});
+
+/**
+ * Etapa 69, T4 (RN-12) — SOLICITAR O SUCATEAMENTO DO REPROVADO, NA TELA DA NC.
+ *
+ * O problema: a NC de inspeção decidida Sucatear não tinha porta. O `/executar` registrava "sem
+ * mover" e tirava a NC da fila com o material condenado ainda no bloqueado. Desde a T2/T3 o
+ * servidor recusa o SUCATEAR viável no `/executar` (409) e abre a rota
+ * `POST /nao-conformidades/:id/solicitar-sucateamento` (gate `movimentar`), cuja segunda
+ * aprovação baixa a SUCATA do bloqueado. Esta tela tem de oferecer o gesto — senão é a feature 07
+ * de novo: backend correto que ninguém alcança.
+ *
+ * O que estes cenários prendem:
+ * - o botão olha `execucao_movimentacao_id == null`, e NÃO `execucao_estado === 'PENDENTE'`
+ *   (Fase 2, D7 × RN-12): a NC ANTIGA, que o `/executar` de antes fechou "sem mover", está
+ *   EXECUTADA sem baixa — e é exatamente a que mais precisa do botão;
+ * - some sem `movimentar`, na NC cancelada e na que já baixou;
+ * - o payload leva só o que o contrato aceita (material/quantidade/lote são derivados no servidor);
+ * - as recusas (409/400) vão LITERAIS ao toast;
+ * - o caminho `motivo_sem_baixa` do `/executar` (lote fora de ATIVO) existe na tela.
+ */
+const NC_SUCATEAR_PENDENTE = {
+  ...NC_DECIDIDA,
+  id: 31, numero: 'NC-2026-0031', decisao: 'SUCATEAR',
+  material_id: 14, material_codigo: 'ALM-0014', material_nome: 'Chapa Inox 3mm',
+  justificativa: 'Trinca na dobra, sem recuperacao',
+  execucao_estado: 'PENDENTE', execucao_em: null, execucao_por_nome: null,
+  execucao_movimentacao_id: null,
+};
+
+// A NC LEGADA: o `/executar` de antes da Etapa 69 a fechou "sem mover" — EXECUTADA, sem baixa, e o
+// reprovado continua no bloqueado. É a metade positiva que a Fase 2 mandou provar.
+const NC_SUCATEAR_LEGADA = {
+  ...NC_SUCATEAR_PENDENTE,
+  id: 32, numero: 'NC-2026-0032',
+  execucao_estado: 'EXECUTADA', execucao_em: '2026-09-20 10:00:00', execucao_por_nome: 'Marina Prado',
+  execucao_movimentacao_id: null,
+};
+
+const NC_SUCATEAR_BAIXADA = {
+  ...NC_SUCATEAR_PENDENTE,
+  id: 33, numero: 'NC-2026-0033',
+  execucao_estado: 'EXECUTADA', execucao_em: '2026-09-30 10:00:00', execucao_por_nome: 'Marina Prado',
+  execucao_movimentacao_id: 901,
+};
+
+const NC_SUCATEAR_CANCELADA = {
+  ...NC_SUCATEAR_PENDENTE,
+  id: 34, numero: 'NC-2026-0034', status: 'CANCELADA',
+  motivo_cancelamento: 'Fornecedor recolheu', cancelado_em: '2026-09-30 11:00:00', cancelado_por_nome: 'Ana Souza',
+};
+
+const botaoSolicitarSuc = (linha) => linha.querySelector('[data-testid="btn-solicitar-sucateamento"]');
+
+describe('NaoConformidadesAlmoxarifado — solicitar o sucateamento do reprovado (Etapa 69)', () => {
+  test('(45) o botão aparece na SUCATEAR sem baixa — inclusive na ANTIGA executada — e some sem `movimentar`', async () => {
+    ncDoBanco = [NC_SUCATEAR_PENDENTE, NC_SUCATEAR_LEGADA, NC_SUCATEAR_BAIXADA, NC_SUCATEAR_CANCELADA,
+      NC_A_EXECUTAR, NC_ABERTA,
+      { ...NC_SUCATEAR_PENDENTE, id: 35, numero: 'NC-2026-0035', aberto_automaticamente: 0, aberto_por_nome: 'Ana Souza' },
+      { ...NC_SUCATEAR_PENDENTE, id: 36, numero: 'NC-2026-0036', origem: 'RECEBIMENTO', referencia_tipo: 'RECEBIMENTO_ITEM' }];
+    await renderizar();
+    expect(linhas()).toHaveLength(8);
+    // As duas positivas. A legada é a que a Fase 2 mandou provar: `execucao_estado` é EXECUTADA,
+    // então um botão que olhasse `PENDENTE` a deixaria sem porta para sempre.
+    expect(linhas()[0].textContent).toContain('NC-2026-0031');
+    expect(botaoSolicitarSuc(linhas()[0])).not.toBeNull();
+    expect(linhas()[1].textContent).toContain('NC-2026-0032');
+    expect(celulaExecucao(linhas()[1]).textContent).toContain('Executada');
+    expect(botaoSolicitarSuc(linhas()[1])).not.toBeNull();
+    // As negativas, cada uma por uma razão diferente na rota:
+    //   já baixada -> 409 "O material desta não conformidade já saiu do estoque"
+    //   cancelada  -> 400 "Esta não conformidade foi cancelada — não há sucateamento a solicitar"
+    //   DEVOLVER   -> 400 "A decisão desta não conformidade não é Sucatear …"
+    //   aberta     -> 400 "Só é possível sucatear o material de uma não conformidade decidida"
+    expect(botaoSolicitarSuc(linhas()[2])).toBeNull();
+    expect(botaoSolicitarSuc(linhas()[3])).toBeNull();
+    expect(botaoSolicitarSuc(linhas()[4])).toBeNull();
+    expect(botaoSolicitarSuc(linhas()[5])).toBeNull();
+    // manual -> 400 "Só a não conformidade aberta pela reprovação da inspeção sucateia material reprovado"
+    expect(linhas()[6].textContent).toContain('NC-2026-0035');
+    expect(botaoSolicitarSuc(linhas()[6])).toBeNull();
+    // automatica do RECEBIMENTO (divergencia de quantidade) -> o mesmo 400 da manual: nao ha inspecao
+    expect(linhas()[7].textContent).toContain('NC-2026-0036');
+    expect(botaoSolicitarSuc(linhas()[7])).toBeNull();
+
+    // Sem `movimentar` (a QUALIDADE decide, o almoxarifado solicita): some — e a linha fica.
+    mockPodeMovimentar = false;
+    await act(async () => { root.render(<MemoryRouter><NaoConformidadesAlmoxarifado /></MemoryRouter>); });
+    expect(linhas()).toHaveLength(8);
+    expect(linhas()[0].textContent).toContain('NC-2026-0031');
+    expect(botaoSolicitarSuc(linhas()[0])).toBeNull();
+    expect(botaoSolicitarSuc(linhas()[1])).toBeNull();
+    expect(botaoDetalhes(linhas()[0])).toBeDefined();
+  });
+
+  test('(46) o modal nasce com a justificativa da decisão e o POST leva só os campos do contrato', async () => {
+    ncDoBanco = [NC_SUCATEAR_PENDENTE];
+    api.post.mockResolvedValueOnce({ data: { id: 57, status: 'SOLICITADO', nao_conformidade_id: 31 } });
+    await renderizar();
+    await clicar(botaoSolicitarSuc(linhas()[0]));
+    const modal = container.querySelector('.almox-modal');
+    expect(modal).not.toBeNull();
+    expect(modal.textContent).toContain('NC-2026-0031');
+    expect(campoPorLabel('Justificativa').value).toBe('Trinca na dobra, sem recuperacao');
+
+    preencher(campoPorLabel('Justificativa'), '  Trinca na dobra, condenada pela qualidade  ');
+    preencher(campoPorLabel('Classificação'), 'inox');
+    preencher(campoPorLabel('Peso estimado (kg)'), '12.5');
+    preencher(campoPorLabel('Observações'), '  cacamba 2  ');
+    await clicarBotaoModal('Solicitar sucateamento');
+
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/nao-conformidades/31/solicitar-sucateamento', {
+      justificativa: 'Trinca na dobra, condenada pela qualidade',
+      classificacao: 'inox',
+      peso_estimado: 12.5,
+      observacoes: 'cacamba 2',
+    });
+    // O toast diz o SUC e onde ele espera — só texto (sem link: sem dependência da T5).
+    expect(toast.success).toHaveBeenCalledTimes(1);
+    const msg = toast.success.mock.calls[0][0];
+    expect(typeof msg).toBe('string');
+    expect(msg).toContain('SUC-57');
+    expect(msg).toContain('NC-2026-0031');
+    expect(msg).toContain('Sobras e Retalhos › Sucateamentos');
+    expect(msg).not.toContain('undefined');
+    expect(container.querySelector('.almox-modal')).toBeNull();
+    expect(chamadasLista().length).toBeGreaterThanOrEqual(2);
+  });
+
+  test('(47) campos opcionais vazios NÃO viajam, e justificativa vazia não manda o POST', async () => {
+    ncDoBanco = [{ ...NC_SUCATEAR_PENDENTE, justificativa: null }];
+    api.post.mockResolvedValueOnce({ data: { id: 58 } });
+    await renderizar();
+    await clicar(botaoSolicitarSuc(linhas()[0]));
+    expect(campoPorLabel('Justificativa').value).toBe('');
+    await clicarBotaoModal('Solicitar sucateamento');
+    expect(api.post).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith('Justificativa é obrigatória para sucatear');
+    expect(container.querySelector('.almox-modal')).not.toBeNull();
+
+    preencher(campoPorLabel('Justificativa'), 'Condenada');
+    await clicarBotaoModal('Solicitar sucateamento');
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/nao-conformidades/31/solicitar-sucateamento', {
+      justificativa: 'Condenada',
+    });
+  });
+
+  test('(48) recusa do servidor vai LITERAL ao toast e o modal continua aberto', async () => {
+    ncDoBanco = [NC_SUCATEAR_LEGADA];
+    await renderizar();
+    await clicar(botaoSolicitarSuc(linhas()[0]));
+    const literal = 'Já existe um sucateamento solicitado para esta não conformidade (SUC-57) — aprove ou rejeite esse antes';
+    api.post.mockRejectedValueOnce({ response: { status: 409, data: { error: literal } } });
+    await clicarBotaoModal('Solicitar sucateamento');
+    expect(toast.error).toHaveBeenCalledWith(literal);
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(container.querySelector('.almox-modal')).not.toBeNull();
+
+    const literal2 = 'O material desta não conformidade já saiu do estoque';
+    api.post.mockRejectedValueOnce({ response: { status: 409, data: { error: literal2 } } });
+    await clicarBotaoModal('Solicitar sucateamento');
+    expect(toast.error).toHaveBeenCalledWith(literal2);
+  });
+
+  test('(49) o `/executar` de SUCATEAR viável: o 409 que ensina o caminho vai literal ao toast', async () => {
+    ncDoBanco = [NC_SUCATEAR_PENDENTE];
+    await renderizar();
+    await clicar(botaoExecutar(linhas()[0]));
+    const literal = 'Esta não conformidade pede sucateamento: o almoxarifado registra em "Solicitar sucateamento" (duas aprovações) — a execução fica registrada na segunda aprovação.';
+    api.post.mockRejectedValueOnce({ response: { status: 409, data: { error: literal } } });
+    await clicarBotaoModal('Registrar execução');
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/nao-conformidades/31/executar', {});
+    expect(toast.error).toHaveBeenCalledWith(literal);
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(container.querySelector('.almox-modal')).not.toBeNull();
+  });
+
+  test('(50) lote bloqueado: o 409 aparece literal e o "Motivo para registrar sem baixa" vai como `motivo_sem_baixa`', async () => {
+    ncDoBanco = [NC_SUCATEAR_PENDENTE];
+    await renderizar();
+    await clicar(botaoExecutar(linhas()[0]));
+    const literal = 'O lote L-2026-09 está bloqueado (aguardando certificado): libere o lote para sucatear o reprovado, ou registre a execução sem baixa informando o motivo.';
+    api.post.mockRejectedValueOnce({ response: { status: 409, data: { error: literal } } });
+    await clicarBotaoModal('Registrar execução');
+    expect(toast.error).toHaveBeenCalledWith(literal);
+
+    const campo = campoPorLabel('Motivo para registrar sem baixa');
+    expect(campo).not.toBeNull();
+    preencher(campo, '  Certificado nunca veio, fornecedor fechou  ');
+    api.post.mockResolvedValueOnce({
+      data: { execucao: { efeito: 'SEM_BAIXA', mensagem: 'A execução foi registrada sem baixa, pelo motivo informado — o material continua bloqueado' } },
+    });
+    await clicarBotaoModal('Registrar execução');
+    expect(api.post).toHaveBeenLastCalledWith('/almoxarifado/nao-conformidades/31/executar', {
+      motivo_sem_baixa: 'Certificado nunca veio, fornecedor fechou',
+    });
+    expect(toast.success).toHaveBeenCalledWith(
+      'Execução de NC-2026-0031 registrada! A execução foi registrada sem baixa, pelo motivo informado — o material continua bloqueado',
+    );
+  });
+
+  test('(51) o campo de motivo sem baixa é SÓ do SUCATEAR — o modal de DEVOLVER não o tem nem o manda', async () => {
+    ncDoBanco = [NC_A_EXECUTAR];
+    await renderizar();
+    await clicar(botaoExecutar(linhas()[0]));
+    expect(campoPorLabel('Observações')).not.toBeNull();
+    expect(campoPorLabel('Motivo para registrar sem baixa')).toBeNull();
+    await clicarBotaoModal('Registrar execução');
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/nao-conformidades/21/executar', {});
+  });
+
+  test('(52) o modal de decisão diz que Sucatear segue pela solicitação do sucateamento — e não "só a intenção"', async () => {
+    await renderizar();
+    await clicar(botaoDecidir(linhas()[0]));
+    const texto = container.querySelector('.almox-modal').textContent;
+    expect(texto).toContain('Solicitar sucateamento');
+    expect(texto).not.toContain('Sucatear registram só a intenção');
+    // As proteções do (21)/(32) continuam.
+    expect(texto).toContain('não mexem no saldo');
+    expect(texto).not.toContain('continua bloqueado');
   });
 });
