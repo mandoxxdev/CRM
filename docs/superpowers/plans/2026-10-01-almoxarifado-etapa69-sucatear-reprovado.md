@@ -353,7 +353,7 @@ depois da T3 — contrato congelado acima); **T6** (G79, galho de teste, indepen
 com qualquer task; toca **só** `server/tests/almoxarifado.test.js`); **T7** (integração) depois de T1–T3; **T8**
 fechamento. Executores de galho **não** marcam este plano (o fio principal marca — lição da 68).
 
-- [x] **T1 (tronco) — motor e schema.** *Feita (2026-10-01): `sucataBloqueadoMotor.api.test.js` 10/0; as cinco
+- [x] **T1 (tronco) — motor e schema.** *Feita (2026-10-01, `99bbce4`): `sucataBloqueadoMotor.api.test.js` 10/0; as cinco
   sabotagens (a)-(e) vermelhas na asserção certa (a: (1)(3)(4)(8)(10); b: (1)(7)(8)(10); c: (7) "bloqueado 6"; d:
   (8); e: (9)); api 254/254, almoxarifado 42/0, validation 4/0, safealter 3/0, sqlite 5/0. Divergência: a guarda de
   tipo recusa `doBloqueado` truthy (não só `=== true`) com tipo ≠ SUCATA; a baixa só liga com `=== true`.*
@@ -368,7 +368,25 @@ fechamento. Executores de galho **não** marcam este plano (o fio principal marc
   "bloqueado > físico" detectado; (c) compensação com `retencaoAplicada` também → bloqueado volta em dobro; (d) recusa
   do estorno desligada → o estorno ligado devolve ao disponível (vermelho); (e) recusa casando todo `SUCATA` → o estorno
   comum cai.
-- [ ] **T2 (tronco) — o lado da NC.** `nonConformityService.js`: `sucateamentoDoReprovadoPrevisto` (pura, RN-03,
+- [x] **T2 (tronco) — o lado da NC.** *Feita (2026-10-01): `sucateamentoReprovadoRegra.api.test.js` 13/0;
+  `encaminhamentoExecucao` (9) sem o SUCATEAR + (9b) novo, (16) e `encaminhamentoRotas` (7) com SUBSTITUICAO — 25/0 e
+  8/0. Sabotagens: nível 15 depois do 16 → (1) "nivel 15" e (6); ordem dos carimbos no helper → (1) "nivel 8"; carimbo
+  fora do claim da 45 → (9); RN-08 recusando o drenado → (6) com 409; sem carregar a inspeção para SUCATEAR → (2)-(7);
+  claim da 44 sem os carimbos → (11); `motivo_sem_baixa` ignorado → (5); exclusão do cartão → (12). **Sobreviveu (por
+  desenho):** tirar o nível 5b da precedência da 44 — o claim da 44, que relê os carimbos, dá o mesmo efeito e a mesma
+  literal (a precedência é a mensagem; o claim é a garantia). api 255/255, almoxarifado 42/0, validation 4/0,
+  safealter 3/0, sqlite 5/0. Decisões reversíveis da execução (para a letra B no fechamento):
+  (i) `/executar` de SUCATEAR em NC MANUAL registra `NENHUMA` "Esta execução não altera o saldo" (como antes), e não o
+  `NENHUMA_MANUAL` (cuja literal diz "devolve material") — descartado: a literal da devolução numa decisão de sucatear;
+  (ii) o 409 do lote vale para QUALQUER status fora de ATIVO, com a literal `O lote <L> está <status minúsculo>
+  (<status_motivo ou "sem motivo registrado">): …` — para BLOQUEADO é exatamente a literal da Fase 2;
+  (iii) `motivo_sem_baixa` só abre o caminho do lote fora de ATIVO (efeito `SEM_BAIXA`, literal "A execução foi
+  registrada sem baixa, pelo motivo informado — o material continua bloqueado"); NÃO abre o viável nem o SOLICITADO
+  aberto; é gravado em `execucao_observacoes` como "… — Registrada sem baixa: <motivo>"; (iv) duas literais novas de
+  SEM_SALDO para o SUCATEAR não viável (`SEM_SALDO_SEM_REPROVADA_SUCATEAR`, `SEM_SALDO_JA_DEVOLVIDA`) — as de hoje
+  diziam "devolver"; (v) o SOLICITADO aberto recusa o `/executar` ANTES da viabilidade (com o bloqueio drenado e um
+  SOLICITADO aberto, o caminho é rejeitar o sucateamento e então registrar).*
+  Texto original: `nonConformityService.js`: `sucateamentoDoReprovadoPrevisto` (pura, RN-03,
   exportada); helper `retencaoDaInspecaoJaSaiu(insp)` usado pelas três portas; nível novo em `efeitoExecucaoPrevisto`
   (RN-08) e em `efeitoPrevisto` (44); claims de liberação e devolução com os carimbos (RN-07); extrair a origem de
   entrada de `executarDevolucao` para `origemDaEntradaDaInspecao(db, insp, nc, materialId, loteId)` **sem mudar

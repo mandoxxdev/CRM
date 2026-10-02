@@ -173,7 +173,11 @@ async function listarReprovados(db, { dias, inspecaoId, excluirComExecucao } = {
   // o motor de fato baixou (o rollback a apaga se o motor falhar) — e esse caminho ja exige
   // `decisao = 'DEVOLVER'` e a RN-06 inteira. Ou seja: a coluna ja E a conjuncao, medida no
   // resultado em vez de declarada na intencao. Deixa de ser preciso ler a NC.
-  const semExecucao = excluirComExecucao ? 'AND i.devolucao_fornecedor_em IS NULL' : '';
+  // Etapa 69 (RN-10): o carimbo IRMAO `i.sucateamento_em` entra pela mesma razao — ele so e gravado
+  // na segunda assinatura do sucateamento ligado a NC, quando o motor de fato baixou do bloqueado (a
+  // compensacao o apaga se o motor falhar). Sem ele o cartao cobraria material que ja foi para a cacamba.
+  const semExecucao = excluirComExecucao
+    ? 'AND i.devolucao_fornecedor_em IS NULL AND i.sucateamento_em IS NULL' : '';
   return dbAll(db, `
     SELECT i.id AS inspecao_id, m.codigo AS material_codigo, m.nome AS material_nome,
       i.quantidade_reprovada, i.encaminhamento, r.numero AS recebimento_numero, r.nota_fiscal,

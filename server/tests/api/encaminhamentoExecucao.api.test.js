@@ -20,7 +20,8 @@
  *   (6)  RN-06: NC aberta A MAO sobre inspecao NAO baixa saldo — a porta que sustenta COMPRAS
  *   (7)  RN-06: NC AUTOMATICA de origem RECEBIMENTO tambem nao — o caso mais comum
  *   (8)  RN-05 (saldo): duas NCs de TIPOS diferentes da MESMA inspecao — a segunda e JA_DEVOLVIDA
- *   (9)  RN-04: as outras tres decisoes registram autor e data sem mover saldo
+ *   (9)  RN-04: SUBSTITUICAO e ANALISE_ENGENHARIA registram autor e data sem mover saldo
+ *   (9b) Etapa 69 (D6): o SUCATEAR viavel RECUSA o `/executar`; drenado registra sem mover
  *   (10) RN-11: os TRES estados conhecidos registram sem mover (bloqueio drenado, fisico, inativo)
  *   (11) RN-12: o lote e resolvido e DEBITADO — a linha do lote cai e a de lote NULL nao negativa
  *   (12) RN-12: `controle_lote` sem lote resolvivel RECUSA com literal propria
@@ -336,9 +337,13 @@ async function erroDe(fn) {
     'nasceu uma segunda linha de devolucao no livro');
   });
 
-  // ── (9) RN-04 — as outras tres registram sem mover ─────────────────────────────────────────
-  await test('(9) RN-04 SUBSTITUICAO, ANALISE_ENGENHARIA e SUCATEAR registram autor e data sem mover saldo', async () => {
-    for (const decisao of ['SUBSTITUICAO', 'ANALISE_ENGENHARIA', 'SUCATEAR']) {
+  // ── (9) RN-04 — as outras DUAS registram sem mover ─────────────────────────────────────────
+  // ⚠️ Etapa 69 (D6, reabertura declarada da RN-04 SO para `SUCATEAR`): o SUCATEAR saiu deste laco.
+  // Registrar "sem mover" um SUCATEAR viavel tirava a NC da fila com o condenado no bloqueado
+  // (Surpresa 2 da Fase 0 da 69). Ele ganhou o cenario (9b) abaixo, e a precedencia inteira mora em
+  // `sucateamentoReprovadoRegra.api.test.js`.
+  await test('(9) RN-04 SUBSTITUICAO e ANALISE_ENGENHARIA registram autor e data sem mover saldo', async () => {
+    for (const decisao of ['SUBSTITUICAO', 'ANALISE_ENGENHARIA']) {
       const ctx = await ncDecidida(decisao, { reprovada: 3, esperada: 10 });
       const antes = await saldos(ctx.materialId);
       const res = await executar(ctx.ncId);
@@ -353,6 +358,22 @@ async function erroDe(fn) {
       assert.strictEqual(insp.devolucao_fornecedor_em, null,
         `${decisao} carimbou a inspecao e trancaria uma devolucao futura`);
     }
+  });
+
+  await test('(9b) Etapa 69 SUCATEAR viavel RECUSA (409, ensina o caminho); drenado registra SEM_SALDO', async () => {
+    const viavel = await ncDecidida('SUCATEAR', { reprovada: 3, esperada: 10 });
+    const e = await erroDe(() => executar(viavel.ncId));
+    assert.ok(e, 'o SUCATEAR viavel foi registrado sem baixa — a NC sairia da fila com o condenado no bloqueado');
+    assert.strictEqual(e.status, 409);
+    assert.ok(/Solicitar sucateamento/.test(e.message), e.message);
+    assert.strictEqual((await nc.obterNaoConformidade(db, viavel.ncId)).execucao_estado, nc.EXECUCAO_PENDENTE);
+    // A metade sem beco: com o bloqueio drenado, a execucao registra, como a RN-11 manda.
+    const drenado = await ncDecidida('SUCATEAR', { reprovada: 3, esperada: 10 });
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = 0 WHERE id = ?', [drenado.materialId]);
+    const res = await executar(drenado.ncId);
+    assert.strictEqual(res.execucao.efeito, 'SEM_SALDO');
+    assert.strictEqual(res.execucao_estado, nc.EXECUCAO_EXECUTADA);
+    assert.strictEqual((await inspecaoDe(drenado.inspecaoId)).devolucao_fornecedor_em, null);
   });
 
   // ── (10) RN-11 — os tres estados conhecidos ────────────────────────────────────────────────
@@ -669,7 +690,9 @@ async function erroDe(fn) {
   await test('(16) o backfill da estado a NC ja decidida, e NAO rebaixa uma EXECUTADA', async () => {
     const pendente = await ncDecidida('DEVOLVER', { reprovada: 3, esperada: 10 });
     const aceita = await ncDecidida('ACEITAR', { reprovada: 3, esperada: 10 });
-    const executada = await ncDecidida('SUCATEAR', { reprovada: 1, esperada: 5 });
+    // Etapa 69: era 'SUCATEAR' — e o SUCATEAR viavel passou a recusar o `/executar` (D6). O que este
+    // cenario prova e "o backfill nao rebaixa uma EXECUTADA", nao o SUCATEAR: SUBSTITUICAO serve igual.
+    const executada = await ncDecidida('SUBSTITUICAO', { reprovada: 1, esperada: 5 });
     await executar(executada.ncId);
 
     // Simula "estas NCs ja estavam decididas no dia do deploy": o estado ainda nao existia.

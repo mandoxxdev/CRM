@@ -1161,8 +1161,11 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
   // pelo mesmo achado 6 que fez a abertura manual passar por lista branca.
   app.post('/api/almoxarifado/nao-conformidades/:id/executar', auth, requirePermission('executar_encaminhamento'), async (req, res) => {
     try {
+      // Etapa 69 (Fase 2): `motivo_sem_baixa` e o SEGUNDO campo da lista branca — o registro sem
+      // baixa de um SUCATEAR com lote fora de ATIVO exige o motivo explicito.
       res.json(await nonConformityService.registrarExecucao(db, req.user, req.params.id, {
         observacoes: (req.body || {}).observacoes,
+        motivo_sem_baixa: (req.body || {}).motivo_sem_baixa,
       }));
     } catch (e) { handleError(res, e); }
   });

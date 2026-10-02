@@ -97,6 +97,9 @@ const EFEITO_MSG = {
   SEM_BLOQUEIO_MANUAL: 'Não conformidade aberta manualmente não libera saldo',
   SEM_BLOQUEIO_INATIVO: 'Material inativo — a decisão foi registrada sem liberar saldo',
   SEM_BLOQUEIO_DRENADO: 'O material já havia sido desbloqueado fora do documento — a decisão foi registrada sem liberar saldo',
+  // Etapa 69 (RN-07): a retencao desta inspecao ja saiu pela DEVOLUCAO (45) ou pelo SUCATEAMENTO
+  // (69). Sem esta literal, a aceitacao liberaria do pool AGREGADO a retencao de outra origem.
+  SEM_BLOQUEIO_JA_SAIU: 'O material desta inspeção já saiu do estoque — a decisão foi registrada sem liberar saldo',
   NENHUMA: 'Esta decisão não altera o saldo',
 };
 
@@ -139,6 +142,17 @@ const EFEITO_EXEC_MSG = {
   SEM_SALDO_JA_LIBERADA: 'O material desta inspeção já havia sido liberado por outra não conformidade — a execução foi registrada sem mover saldo',
   NENHUMA: 'Esta execução não altera o saldo',
   NENHUMA_MANUAL: 'Só a não conformidade aberta pela reprovação da inspeção devolve material',
+  // Etapa 69 (RN-07): a terceira porta. A retencao desta inspecao ja foi para a cacamba pela
+  // segunda assinatura de um sucateamento ligado a OUTRA NC da mesma inspecao.
+  SEM_SALDO_JA_SUCATEADA: 'O material desta inspeção já havia sido sucateado — a execução foi registrada sem mover saldo',
+  // Etapa 69 (RN-08): as literais do `/executar` de SUCATEAR quando o sucateamento NAO e viavel e
+  // a execucao registra sem mover. As de saldo (bloqueio, fisico, inativo, liberada) sao as de hoje;
+  // estas duas existem porque as de hoje dizem "devolver"/"devolvido" sem dizer o efeito.
+  SEM_SALDO_SEM_REPROVADA_SUCATEAR: 'Esta não conformidade não tem material reprovado para sucatear — a execução foi registrada sem mover saldo',
+  SEM_SALDO_JA_DEVOLVIDA: 'O material desta inspeção já havia sido devolvido ao fornecedor — a execução foi registrada sem mover saldo',
+  // Etapa 69 (Fase 2): o lote fora de ATIVO recusa o `/executar` de SUCATEAR; com `motivo_sem_baixa`
+  // explicito no body a execucao e registrada SEM baixa — o `/executar` nao fecha calado.
+  SEM_BAIXA: 'A execução foi registrada sem baixa, pelo motivo informado — o material continua bloqueado',
 };
 
 /** As recusas da execucao, com o codigo HTTP de cada uma (secao 5 do design). */
@@ -151,6 +165,44 @@ const EXEC_RECUSA = {
   // Etapa 46 — o documento pode ser CANCELADO entre a leitura e o claim, ou antes dele. Sem esta
   // literal o caso caia em JA_REGISTRADA, que afirma uma execucao que nao houve.
   CANCELADA: { status: 400, mensagem: 'Esta não conformidade foi cancelada — não há execução a registrar' },
+  // Etapa 69 (RN-08, mapeamento da Fase 2) — o `/executar` de SUCATEAR VIAVEL recusa e ENSINA o
+  // caminho. Antes ele registrava "sem mover" e a NC saia da fila com o condenado no bloqueado
+  // (Surpresa 2 da Fase 0). Reabre a RN-04 da 45 SO para `SUCATEAR`.
+  PEDE_SUCATEAMENTO: {
+    status: 409,
+    mensagem: 'Esta não conformidade pede sucateamento: o almoxarifado registra em "Solicitar sucateamento" (duas aprovações) — a execução fica registrada na segunda aprovação.',
+  },
+};
+
+/** Etapa 69 (Fase 2) — as duas recusas do `/executar` de SUCATEAR que carregam dado na literal. */
+const execRecusaSucateamentoAberto = (sucId) => ({
+  status: 409,
+  mensagem: `Já existe o sucateamento SUC-${sucId} desta não conformidade aguardando aprovação no almoxarifado.`,
+});
+const execRecusaLoteForaDeAtivo = (lote) => ({
+  status: 409,
+  mensagem: `O lote ${lote.codigo} está ${String(lote.status || '').toLowerCase()} (${lote.status_motivo || 'sem motivo registrado'}): libere o lote para sucatear o reprovado, ou registre a execução sem baixa informando o motivo.`,
+});
+
+/**
+ * Etapa 69 (RN-03/RN-04) — as recusas da SOLICITACAO do sucateamento do reprovado, NA ORDEM do
+ * contrato (a ordem e contrato: `sucateamentoDoReprovadoPrevisto` as testa nesta sequencia). O
+ * `codigo` e o que o `/executar` de SUCATEAR usa para mapear cada nivel no seu proprio efeito —
+ * casar por mensagem faria uma correcao de texto mudar comportamento.
+ */
+const SUC_RECUSA = {
+  NAO_ENCONTRADA: { codigo: 'NAO_ENCONTRADA', status: 404, mensagem: 'Não conformidade não encontrada' },
+  CANCELADA: { codigo: 'CANCELADA', status: 400, mensagem: 'Esta não conformidade foi cancelada — não há sucateamento a solicitar' },
+  NAO_DECIDIDA: { codigo: 'NAO_DECIDIDA', status: 400, mensagem: 'Só é possível sucatear o material de uma não conformidade decidida' },
+  DECISAO: { codigo: 'DECISAO', status: 400, mensagem: 'A decisão desta não conformidade não é Sucatear — o material reprovado só vai para o sucateamento por essa decisão' },
+  JA_SAIU_NC: { codigo: 'JA_SAIU_NC', status: 409, mensagem: 'O material desta não conformidade já saiu do estoque' },
+  MANUAL: { codigo: 'MANUAL', status: 400, mensagem: 'Só a não conformidade aberta pela reprovação da inspeção sucateia material reprovado' },
+  SEM_REPROVADA: { codigo: 'SEM_REPROVADA', status: 400, mensagem: 'Esta não conformidade não tem material reprovado para sucatear' },
+  JA_SUCATEADA: { codigo: 'JA_SUCATEADA', status: 409, mensagem: 'O material desta inspeção já foi sucateado' },
+  JA_DEVOLVIDA: { codigo: 'JA_DEVOLVIDA', status: 400, mensagem: 'O material desta inspeção já havia sido devolvido ao fornecedor' },
+  JA_LIBERADA: { codigo: 'JA_LIBERADA', status: 400, mensagem: 'O material desta inspeção já havia sido liberado por outra não conformidade' },
+  SERIE: { codigo: 'SERIE', status: 400, mensagem: 'Material com controle de série não pode ser sucateado por aqui — dê baixa pela tela de Movimentações' },
+  SEM_LOTE: { codigo: 'SEM_LOTE', status: 400, mensagem: 'Não foi possível identificar o lote do material reprovado' },
 };
 
 /** O motivo da movimentacao da devolucao — o que a torna legivel no livro sem cruzar tabela. */
@@ -743,6 +795,14 @@ function efeitoPrevisto(nc, insp, material, decisao) {
   // diz por que. Descartado: recusar a decisao.
   if (material && !material.ativo) return nada('SEM_BLOQUEIO', EFEITO_MSG.SEM_BLOQUEIO_INATIVO);
 
+  // (5b) Etapa 69 (RN-07, Surpresa 4) — A RETENCAO DESTA INSPECAO JA SAIU por uma das outras duas
+  // portas (devolucao — 45, sucateamento — 69). Antes desta linha a liberacao NAO olhava a
+  // devolucao (a 45 olhava a liberacao, a 44 nao olhava a 45): com bloqueio de outra origem no
+  // pool agregado, aceitar depois de devolver soltava a retencao alheia, com mensagem de sucesso.
+  // `liberacao_nc_em` fica de fora daqui de proposito: quem a nomeia e o claim (`JA_LIBERADA`).
+  const saiu = retencaoDaInspecaoJaSaiu(insp);
+  if (saiu === 'DEVOLVIDA' || saiu === 'SUCATEADA') return nada('SEM_BLOQUEIO', EFEITO_MSG.SEM_BLOQUEIO_JA_SAIU);
+
   // (6) RN-11 — O POOL JÁ FOI DRENADO POR FORA. Achado da revisão adversarial, e é o caso mais
   // provável de todos: o workaround que existia ANTES desta etapa era justamente alguém da gestão
   // desbloquear na mão pela tela de Movimentações. Depois dela, esse mesmo gesto INUTILIZAVA o
@@ -892,10 +952,19 @@ async function decidirNaoConformidade(db, user, ncId, dados = {}) {
 async function executarLiberacao(db, user, nc, insp, previsto, justificativa, id) {
   // Passo 3 — o claim da INSPECAO (RN-03). E por INSPECAO e nao por NC de proposito: ver o
   // comentario da coluna `liberacao_nc_em` em schema.js.
+  // Etapa 69 (RN-07): o claim olha os TRES carimbos — a precedencia leu a inspecao antes, e entre a
+  // leitura e este UPDATE a devolucao ou o sucateamento podem ter levado a retencao. A perda do
+  // claim RELE os carimbos para nomear a causa certa ("ja liberado" mentiria sobre um devolvido).
   const claim = await dbRun(db, `UPDATE inspecoes_recebimento_almoxarifado
     SET liberacao_nc_em = CURRENT_TIMESTAMP
-    WHERE id = ? AND liberacao_nc_em IS NULL`, [insp.id]);
+    WHERE id = ? AND liberacao_nc_em IS NULL AND devolucao_fornecedor_em IS NULL
+      AND sucateamento_em IS NULL`, [insp.id]);
   if (!claim.changes) {
+    const agora = await dbGet(db, `SELECT liberacao_nc_em, devolucao_fornecedor_em, sucateamento_em
+      FROM inspecoes_recebimento_almoxarifado WHERE id = ?`, [insp.id]);
+    if (agora && !agora.liberacao_nc_em && (agora.devolucao_fornecedor_em || agora.sucateamento_em)) {
+      return { efeito: 'SEM_BLOQUEIO', quantidade: null, material_id: null, mensagem: EFEITO_MSG.SEM_BLOQUEIO_JA_SAIU };
+    }
     return { efeito: 'JA_LIBERADA', quantidade: null, material_id: null, mensagem: EFEITO_MSG.JA_LIBERADA };
   }
 
@@ -963,6 +1032,172 @@ async function resolverLoteDaInspecao(db, insp, materialId) {
   return null;
 }
 
+/** Etapa 69 — o sucateamento `SOLICITADO` aberto desta NC (o UNIQUE parcial garante no maximo um). */
+function sucateamentoAbertoDaNc(db, ncId) {
+  return dbGet(db, `SELECT id FROM sucateamentos_almoxarifado
+    WHERE nao_conformidade_id = ? AND status = 'SOLICITADO' ORDER BY id LIMIT 1`, [ncId]).then((r) => r || null);
+}
+
+/**
+ * Etapa 69 (RN-07) — "a retencao DESTA inspecao ja saiu do bloqueado? por qual porta?".
+ *
+ * Tres portas tiram a mesma retencao de um pool AGREGADO por material: a liberacao (44,
+ * `liberacao_nc_em`), a devolucao ao fornecedor (45, `devolucao_fornecedor_em`) e o sucateamento
+ * do reprovado (69, `sucateamento_em`). Cada porta tem de olhar as OUTRAS duas — o motor nao salva,
+ * porque com bloqueio de outra origem no pool a segunda baixa passa em silencio. Esta funcao e a
+ * regua unica da leitura; os claims repetem os tres carimbos no WHERE (a leitura da a mensagem, o
+ * WHERE da a garantia — o padrao do modulo).
+ *
+ * A ordem do retorno (sucateada, devolvida, liberada) e a da precedencia da solicitacao (niveis
+ * 8-10 do contrato). Pura: so le a linha.
+ */
+function retencaoDaInspecaoJaSaiu(insp) {
+  if (!insp) return null;
+  if (insp.sucateamento_em) return 'SUCATEADA';
+  if (insp.devolucao_fornecedor_em) return 'DEVOLVIDA';
+  if (insp.liberacao_nc_em) return 'LIBERADA';
+  return null;
+}
+
+/**
+ * Etapa 69 (RN-03) — o sucateamento do material REPROVADO desta NC e viavel? Decide SEM ESCREVER.
+ *
+ * Uma funcao so, consumida pelas DUAS rotas (a solicitacao, `scrapDisposalService.solicitarDoReprovado`,
+ * e o `/executar` de SUCATEAR) — e o que impede as duas de divergirem sobre "da para sucatear?".
+ * A ORDEM DOS TESTES E O CONTRATO (19 niveis no plano; os dois ultimos — dono do material e
+ * justificativa — sao do servico, que tem banco e payload).
+ *
+ * Devolve `{ efeito: 'SUCATEAVEL', quantidade, material_id, lote_id }` ou
+ * `{ efeito: 'RECUSA', codigo, status, mensagem }`.
+ *
+ * `quantidade` e a reprovada INTEIRA (D4): a idempotencia e por inspecao, e uma inspecao "meio
+ * sucateada" nao tem coluna para o resto.
+ */
+function sucateamentoDoReprovadoPrevisto(nc, insp, material, lote, solicitadoAberto) {
+  const recusa = (r) => ({ efeito: 'RECUSA', codigo: r.codigo, status: r.status, mensagem: r.mensagem });
+
+  if (!nc) return recusa(SUC_RECUSA.NAO_ENCONTRADA); // (1)
+  if (nc.status === 'CANCELADA') return recusa(SUC_RECUSA.CANCELADA); // (2) D8
+  if (nc.status !== 'DECIDIDA') return recusa(SUC_RECUSA.NAO_DECIDIDA); // (3)
+  if (nc.decisao !== 'SUCATEAR') return recusa(SUC_RECUSA.DECISAO); // (4)
+  // (5) D7 — o criterio e a MOVIMENTACAO, nao `execucao_em`: a NC legada `EXECUTADA` sem baixa (o
+  // `/executar` de antes registrava SUCATEAR sem mover) continua aceita.
+  if (nc.execucao_movimentacao_id != null) return recusa(SUC_RECUSA.JA_SAIU_NC);
+  // (6) a mesma porta lateral da RN-06 da 45 / RN-09 da 44: NC aberta a mao aponta para QUALQUER
+  // inspecao da historia, e o pool e agregado.
+  if (!nc.aberto_automaticamente || nc.origem !== 'INSPECAO' || nc.referencia_tipo !== 'INSPECAO') {
+    return recusa(SUC_RECUSA.MANUAL);
+  }
+  const reprovada = Number(insp?.quantidade_reprovada) || 0;
+  if (!insp || !(reprovada > 0) || !insp.material_id || !material) return recusa(SUC_RECUSA.SEM_REPROVADA); // (7)
+  const saiu = retencaoDaInspecaoJaSaiu(insp); // (8) (9) (10)
+  if (saiu === 'SUCATEADA') return recusa(SUC_RECUSA.JA_SUCATEADA);
+  if (saiu === 'DEVOLVIDA') return recusa(SUC_RECUSA.JA_DEVOLVIDA);
+  if (saiu === 'LIBERADA') return recusa(SUC_RECUSA.JA_LIBERADA);
+  if (!material.ativo) { // (11) a literal de hoje do `solicitar`
+    return recusa({
+      codigo: 'INATIVO', status: 400,
+      mensagem: `O material ${material.codigo} esta inativo e nao pode ser movimentado — reative o cadastro antes de sucatear`,
+    });
+  }
+  if (material.controle_serie) return recusa(SUC_RECUSA.SERIE); // (12)
+  if (material.controle_lote && !lote) return recusa(SUC_RECUSA.SEM_LOTE); // (13)
+  // (14) D10 — o motor recusa SAIDA de lote fora de ATIVO, inclusive descarte (guarda deliberada da
+  // 45). Descobrir isso so na segunda assinatura custaria duas pessoas. O tipico: material critico
+  // com `controle_certificado` nasce com o lote BLOQUEADO ("Certificado do fornecedor nao anexado").
+  if (lote && lote.status !== 'ATIVO') {
+    return recusa({
+      codigo: 'LOTE_STATUS', status: 400,
+      mensagem: `O lote ${lote.codigo} está ${String(lote.status || '').toLowerCase()} — o estoque não baixa lote fora de ATIVO, nem para sucata. Mude o status do lote antes de sucatear`,
+    });
+  }
+  // (15) (16) `menosQue`, nunca `<` cru — a mesma regua do CRITICAL do epsilon da 45.
+  const un = material.unidade || '';
+  if (menosQue(material.quantidade_bloqueada, reprovada)) {
+    return recusa({
+      codigo: 'SEM_BLOQUEIO', status: 400,
+      mensagem: `O material já havia saído do bloqueio — há ${Number(material.quantidade_bloqueada) || 0} ${un} bloqueado(s), a reprovação foi de ${reprovada}`,
+    });
+  }
+  if (menosQue(material.quantidade_atual, reprovada)) {
+    return recusa({
+      codigo: 'SEM_FISICO', status: 400,
+      mensagem: `Não há saldo físico deste material para sucatear — físico ${Number(material.quantidade_atual) || 0} ${un}, reprovado ${reprovada}`,
+    });
+  }
+  if (solicitadoAberto) { // (17) a pre-checagem; o UNIQUE parcial e a garantia
+    return recusa({
+      codigo: 'JA_SOLICITADO', status: 409,
+      mensagem: `Já existe um sucateamento solicitado para esta não conformidade (SUC-${solicitadoAberto.id}) — aprove ou rejeite esse antes`,
+    });
+  }
+  return { efeito: 'SUCATEAVEL', quantidade: reprovada, material_id: insp.material_id, lote_id: lote ? lote.id : null };
+}
+
+/**
+ * Etapa 69 (RN-08, mapeamento da Fase 2) — o efeito do `/executar` de uma NC decidida SUCATEAR.
+ * Chamado por `efeitoExecucaoPrevisto` DEPOIS dos niveis de documento (1-3). Puro.
+ *
+ *  - ha sucateamento SOLICITADO aberto  -> RECUSA 409 (a cobranca termina quando o material sai)
+ *  - viavel                             -> RECUSA 409 que ensina "Solicitar sucateamento"
+ *  - lote fora de ATIVO                 -> RECUSA 409, ou SEM_BAIXA com `motivo_sem_baixa` explicito
+ *  - inviavel por estado conhecido      -> registra sem mover (a licao RN-11 da 44: sem beco)
+ *  - NC manual, serie, lote nao identificavel -> NENHUMA, como hoje
+ */
+function efeitoExecucaoSucatear(nc, insp, material, lote, extra) {
+  const nada = (efeito, mensagem) => ({ efeito, quantidade: null, material_id: null, lote_id: null, mensagem });
+  const recusa = (r) => ({ efeito: 'RECUSA', recusa: r, mensagem: r.mensagem });
+
+  if (extra.solicitadoAberto) return recusa(execRecusaSucateamentoAberto(extra.solicitadoAberto.id));
+  const p = sucateamentoDoReprovadoPrevisto(nc, insp, material, lote, null);
+  if (p.efeito === 'SUCATEAVEL') return recusa(EXEC_RECUSA.PEDE_SUCATEAMENTO);
+  switch (p.codigo) {
+    case 'LOTE_STATUS':
+      return extra.motivoSemBaixa ? nada('SEM_BAIXA', EFEITO_EXEC_MSG.SEM_BAIXA) : recusa(execRecusaLoteForaDeAtivo(lote));
+    case 'SEM_REPROVADA': return nada('SEM_SALDO', EFEITO_EXEC_MSG.SEM_SALDO_SEM_REPROVADA_SUCATEAR);
+    case 'JA_SUCATEADA': return nada('SEM_SALDO', EFEITO_EXEC_MSG.SEM_SALDO_JA_SUCATEADA);
+    case 'JA_DEVOLVIDA': return nada('SEM_SALDO', EFEITO_EXEC_MSG.SEM_SALDO_JA_DEVOLVIDA);
+    case 'JA_LIBERADA': return nada('SEM_SALDO', EFEITO_EXEC_MSG.SEM_SALDO_JA_LIBERADA);
+    case 'INATIVO': return nada('SEM_SALDO', EFEITO_EXEC_MSG.SEM_SALDO_INATIVO);
+    case 'SEM_BLOQUEIO': return nada('SEM_SALDO', EFEITO_EXEC_MSG.SEM_SALDO_BLOQUEIO);
+    case 'SEM_FISICO': return nada('SEM_SALDO', EFEITO_EXEC_MSG.SEM_SALDO_FISICO);
+    // A movimentacao ja existe mas `execucao_em` nao: so por escrita fora do codigo. Documento.
+    case 'JA_SAIU_NC': return recusa(EXEC_RECUSA.JA_REGISTRADA);
+    // MANUAL (como hoje: a NC manual de SUCATEAR registrava NENHUMA), SERIE e SEM_LOTE (contrato).
+    default: return nada('NENHUMA', EFEITO_EXEC_MSG.NENHUMA);
+  }
+}
+
+/**
+ * Etapa 69 — extraida de `executarDevolucao` SEM mudar comportamento (os testes da 57 provam), para
+ * a segunda assinatura do sucateamento do reprovado usar a MESMA origem (D9, caso 2).
+ *
+ * Etapa 57 (RN-06): com destino POR ITEM no recebimento, a peca reprovada pode estar num endereco
+ * que nao e a padrao — e a saida sem origem drena a padrao primeiro (claimSaldoSemLote). Origem
+ * preferida = onde a ENTRADA_COMPRA deste recebimento/material/lote entrou, se ativo e nao
+ * bloqueado (bloqueado recusaria a baixa). Senao, `null` (o comportamento de antes).
+ * Fase 5 da 57: primeiro o endereco gravado NO ITEM da inspecao (o livro nao guarda o item: o mesmo
+ * material duas vezes na nota escolhia o endereco do outro item). Item com endereco gravado mas
+ * inativo/bloqueado = sem origem. Item sem endereco gravado (legado) = a busca pelo livro.
+ * NAO e estrita: o motor so PREFERE a origem (molde da devolucao — o risco fica declarado em C).
+ */
+async function origemDaEntradaDaInspecao(db, insp, nc, materialId, loteId) {
+  const doItem = insp && insp.recebimento_item_id ? await dbGet(db, `SELECT ri.localizacao_entrada_id as gravado,
+      CASE WHEN l.ativo = 1 AND COALESCE(l.bloqueada, 0) = 0 THEN l.id END as id
+      FROM recebimentos_material_itens_almoxarifado ri
+      LEFT JOIN localizacoes_almoxarifado l ON l.id = ri.localizacao_entrada_id
+      WHERE ri.id = ?`, [insp.recebimento_item_id]) : null;
+  if (doItem && doItem.gravado) return doItem.id ? { id: doItem.id } : null;
+  if (!nc || !nc.recebimento_id) return null;
+  const doLivro = await dbGet(db, `SELECT m.localizacao_destino_id as id
+      FROM movimentacoes_almoxarifado m
+      JOIN localizacoes_almoxarifado l ON l.id = m.localizacao_destino_id
+      WHERE m.recebimento_id = ? AND m.material_id = ? AND m.tipo = 'ENTRADA_COMPRA' AND m.lote_id IS ?
+        AND COALESCE(m.cancelado, 0) = 0 AND l.ativo = 1 AND COALESCE(l.bloqueada, 0) = 0
+      ORDER BY m.id DESC LIMIT 1`, [nc.recebimento_id, materialId, loteId || null]);
+  return doLivro || null;
+}
+
 /**
  * Etapa 45, RN-01..RN-13 — decide, SEM ESCREVER, qual sera o efeito desta execucao no saldo.
  *
@@ -977,7 +1212,7 @@ async function resolverLoteDaInspecao(db, insp, materialId) {
  *   - `DEVOLVIVEL` significa "nada impede, tente o claim"; quem o traduz em `BAIXADA` ou
  *     `JA_DEVOLVIDA` e o claim da INSPECAO, que e o unico que sabe a resposta.
  */
-function efeitoExecucaoPrevisto(nc, insp, material, lote) {
+function efeitoExecucaoPrevisto(nc, insp, material, lote, extra = {}) {
   const nada = (efeito, mensagem) => ({
     efeito, quantidade: null, material_id: null, lote_id: null, mensagem,
   });
@@ -1012,6 +1247,12 @@ function efeitoExecucaoPrevisto(nc, insp, material, lote) {
   // (4) RN-04 — `SUBSTITUICAO`, `ANALISE_ENGENHARIA` e `SUCATEAR` registram data, autor e
   // observacao, e NAO movem estoque. Corte declarado: criar a reposicao da substituicao e baixar
   // o sucateamento tem cada um o proprio fluxo de aprovacao.
+  //
+  // ⚠️ Etapa 69 (RN-08, Fase 2): o nivel 4 se DIVIDE para `SUCATEAR`. Ele devolvia NENHUMA para
+  // tudo que nao era DEVOLVER, e a NC de SUCATEAR saia da fila com o condenado no bloqueado (Surpresa
+  // 2 da Fase 0). Agora ela tem a sua precedencia propria (`efeitoExecucaoSucatear`), que recusa o
+  // viavel e registra sem mover o inviavel. `SUBSTITUICAO` e `ANALISE_ENGENHARIA`: como antes.
+  if (nc.decisao === 'SUCATEAR') return efeitoExecucaoSucatear(nc, insp, material, lote, extra);
   if (nc.decisao !== DECISAO_QUE_DEVOLVE) return nada('NENHUMA', EFEITO_EXEC_MSG.NENHUMA);
 
   // (5) RN-06 — ⚠️ A LINHA QUE SUSTENTA A CONCESSAO A COMPRAS. Irma da RN-09 da Etapa 44, e aqui
@@ -1070,6 +1311,11 @@ function efeitoExecucaoPrevisto(nc, insp, material, lote) {
   // marca nenhuma na inspecao, e esse caminho continua aberto. Fechar de verdade exige
   // contabilizar retencao POR ORIGEM, que e tabela nova e etapa propria. Declarado nas letras
   // A (consulta pre-deploy) e C do documento de novidades.
+  // Etapa 69 (RN-07): a TERCEIRA porta. Depois do sucateamento do reprovado (outra NC da mesma
+  // inspecao), a devolucao baixaria de novo o que ja foi para a cacamba, contra a retencao alheia.
+  if (insp.sucateamento_em) {
+    return nada('SEM_SALDO', EFEITO_EXEC_MSG.SEM_SALDO_JA_SUCATEADA);
+  }
   if (insp.liberacao_nc_em) {
     return nada('SEM_SALDO', EFEITO_EXEC_MSG.SEM_SALDO_JA_LIBERADA);
   }
@@ -1140,16 +1386,24 @@ async function registrarExecucao(db, user, ncId, dados = {}) {
   const atual = await dbGet(db, 'SELECT * FROM nao_conformidades_almoxarifado WHERE id = ?', [id]);
   if (!atual) throw erro('Não conformidade não encontrada', 404);
 
-  const observacoes = String(dados.observacoes ?? '').trim() || null;
+  // Etapa 69 (Fase 2): `motivo_sem_baixa` — o registro SEM baixa de um SUCATEAR cujo lote esta fora
+  // de ATIVO exige o motivo EXPLICITO (o `/executar` nao fecha calado). Vai para as observacoes da
+  // execucao, que e o campo que a tela e a trilha ja mostram. Nas outras decisoes e ignorado.
+  const motivoSemBaixa = String(dados.motivo_sem_baixa ?? '').trim() || null;
+  let observacoes = String(dados.observacoes ?? '').trim() || null;
 
   // ── Passo 1: resolver e calcular, SEM ESCREVER ─────────────────────────────────────────────
   // As leituras so acontecem no caminho que pode mover saldo; nos outros a precedencia decide
   // sozinha, com `insp`/`material`/`lote` nulos, e e de proposito: uma NC manual NAO deve nem
   // chegar a ler a inspecao alheia para a qual aponta.
+  // ⚠️ Etapa 69 (Fase 2): `SUCATEAR` passa a carregar tambem. Sem isto a precedencia nova veria
+  // inspecao vazia, diria "nao viavel" e registraria calada — o defeito que a etapa veio fechar.
   let insp = null;
   let material = null;
   let lote = null;
-  if (atual.decisao === DECISAO_QUE_DEVOLVE && atual.status === 'DECIDIDA' && !atual.execucao_em
+  let solicitadoAberto = null;
+  if ((atual.decisao === DECISAO_QUE_DEVOLVE || atual.decisao === 'SUCATEAR')
+      && atual.status === 'DECIDIDA' && !atual.execucao_em
       && atual.aberto_automaticamente
       && atual.origem === 'INSPECAO' && atual.referencia_tipo === 'INSPECAO') {
     insp = await getInspecao(db, atual.referencia_id);
@@ -1159,9 +1413,13 @@ async function registrarExecucao(db, user, ncId, dados = {}) {
         FROM materiais_almoxarifado WHERE id = ?`, [insp.material_id]);
       lote = await resolverLoteDaInspecao(db, insp, insp.material_id);
     }
+    if (atual.decisao === 'SUCATEAR') solicitadoAberto = await sucateamentoAbertoDaNc(db, id);
   }
-  const previsto = efeitoExecucaoPrevisto(atual, insp, material, lote);
+  const previsto = efeitoExecucaoPrevisto(atual, insp, material, lote, { solicitadoAberto, motivoSemBaixa });
   if (previsto.efeito === 'RECUSA') throw erro(previsto.recusa.mensagem, previsto.recusa.status);
+  if (previsto.efeito === 'SEM_BAIXA') {
+    observacoes = [observacoes, `Registrada sem baixa: ${motivoSemBaixa}`].filter(Boolean).join(' — ');
+  }
 
   // ── Passo 2: o claim da EXECUCAO. E o serializador, e vem ANTES de qualquer efeito de saldo ──
   // `AND execucao_em IS NULL` no proprio UPDATE, e nao so no SELECT: e o que faz duas execucoes
@@ -1236,14 +1494,26 @@ async function executarDevolucao(db, user, nc, insp, previsto, observacoes, id) 
   // Passo 3 — o claim da INSPECAO (RN-05). E por INSPECAO e nao por NC de proposito: duas NCs de
   // TIPOS diferentes da mesma inspecao baixariam a reprovada duas vezes, e o motor nao salva
   // porque o pool e agregado. Ver o comentario da coluna em schema.js.
+  // Etapa 69 (RN-07): o claim olha os TRES carimbos (liberacao — 44, sucateamento — 69), e a perda
+  // do claim RELE para nomear a causa. Sem `sucateamento_em` aqui, a devolucao de outra NC da mesma
+  // inspecao baixaria de novo o que ja foi para a cacamba, contra a retencao alheia.
   const claim = await dbRun(db, `UPDATE inspecoes_recebimento_almoxarifado
     SET devolucao_fornecedor_em = CURRENT_TIMESTAMP
-    WHERE id = ? AND devolucao_fornecedor_em IS NULL`, [insp.id]);
+    WHERE id = ? AND devolucao_fornecedor_em IS NULL AND sucateamento_em IS NULL
+      AND liberacao_nc_em IS NULL`, [insp.id]);
   if (!claim.changes) {
-    return {
-      efeito: 'JA_DEVOLVIDA', quantidade: null, material_id: null, lote_id: null,
-      movimentacao_id: null, mensagem: EFEITO_EXEC_MSG.JA_DEVOLVIDA,
-    };
+    const agora = await dbGet(db, `SELECT liberacao_nc_em, devolucao_fornecedor_em, sucateamento_em
+      FROM inspecoes_recebimento_almoxarifado WHERE id = ?`, [insp.id]);
+    const semMover = (efeito, mensagem) => ({
+      efeito, quantidade: null, material_id: null, lote_id: null, movimentacao_id: null, mensagem,
+    });
+    if (agora && !agora.devolucao_fornecedor_em && agora.sucateamento_em) {
+      return semMover('SEM_SALDO', EFEITO_EXEC_MSG.SEM_SALDO_JA_SUCATEADA);
+    }
+    if (agora && !agora.devolucao_fornecedor_em && agora.liberacao_nc_em) {
+      return semMover('SEM_SALDO', EFEITO_EXEC_MSG.SEM_SALDO_JA_LIBERADA);
+    }
+    return semMover('JA_DEVOLVIDA', EFEITO_EXEC_MSG.JA_DEVOLVIDA);
   }
 
   // Passo 4 — o motor. `require` preguicoso e chamada POR PROPRIEDADE, pelas duas razoes escritas
@@ -1251,24 +1521,9 @@ async function executarDevolucao(db, user, nc, insp, previsto, observacoes, id) 
   // rollback trocar a funcao por uma que estoura.
   const justificativa = observacoes
     || `Execução da devolução ao fornecedor decidida na não conformidade ${nc.numero}`;
-  // Etapa 57 (RN-06): com destino POR ITEM no recebimento, a peça reprovada pode estar num endereço
-  // que não é a padrão — e a saída sem origem drena a padrão primeiro (claimSaldoSemLote). Origem
-  // preferida = onde a ENTRADA_COMPRA deste recebimento/material/lote entrou, se ativo e não
-  // bloqueado (bloqueado recusaria a devolução, que antes passava). Senão, o comportamento de antes.
-  // Fase 5: primeiro o endereco gravado NO ITEM da inspecao (o livro nao guarda o item: o mesmo
-  // material duas vezes na nota escolhia o endereco do outro item). Item com endereco gravado mas
-  // inativo/bloqueado = sem origem (o de antes). Item sem endereco gravado (legado) = a busca pelo livro.
-  const doItem = insp.recebimento_item_id ? await dbGet(db, `SELECT ri.localizacao_entrada_id as gravado,
-      CASE WHEN l.ativo = 1 AND COALESCE(l.bloqueada, 0) = 0 THEN l.id END as id
-      FROM recebimentos_material_itens_almoxarifado ri
-      LEFT JOIN localizacoes_almoxarifado l ON l.id = ri.localizacao_entrada_id
-      WHERE ri.id = ?`, [insp.recebimento_item_id]) : null;
-  const entrada = doItem && doItem.gravado ? (doItem.id ? { id: doItem.id } : null) : nc.recebimento_id ? await dbGet(db, `SELECT m.localizacao_destino_id as id
-      FROM movimentacoes_almoxarifado m
-      JOIN localizacoes_almoxarifado l ON l.id = m.localizacao_destino_id
-      WHERE m.recebimento_id = ? AND m.material_id = ? AND m.tipo = 'ENTRADA_COMPRA' AND m.lote_id IS ?
-        AND COALESCE(m.cancelado, 0) = 0 AND l.ativo = 1 AND COALESCE(l.bloqueada, 0) = 0
-      ORDER BY m.id DESC LIMIT 1`, [nc.recebimento_id, previsto.material_id, previsto.lote_id || null]) : null;
+  // Etapa 57 (RN-06) — a origem e onde a peca reprovada ENTROU. Etapa 69: extraida para
+  // `origemDaEntradaDaInspecao` (o sucateamento do reprovado usa a mesma), sem mudar comportamento.
+  const entrada = await origemDaEntradaDaInspecao(db, insp, nc, previsto.material_id, previsto.lote_id);
   const stockService = require('./stockService');
   let mov;
   try {
@@ -1603,6 +1858,14 @@ module.exports = {
   efeitoPrevisto,
   registrarExecucao,
   efeitoExecucaoPrevisto,
+  // Etapa 69 — consumidos por `scrapDisposalService` (solicitar do reprovado e a segunda assinatura).
+  sucateamentoDoReprovadoPrevisto,
+  retencaoDaInspecaoJaSaiu,
+  origemDaEntradaDaInspecao,
+  resolverLoteDaInspecao,
+  getInspecao,
+  sucateamentoAbertoDaNc,
+  SUC_RECUSA,
   cancelarNaoConformidade,
   listarNaoConformidades,
   obterNaoConformidade,

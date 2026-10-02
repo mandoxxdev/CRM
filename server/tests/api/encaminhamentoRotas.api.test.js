@@ -242,7 +242,9 @@ const uniq = (p) => `${p}-${Date.now() % 1000000}-${++seq}`;
   await test('(7) ?execucao=PENDENTE traz o pendente e NAO traz executada, ABERTA nem CANCELADA', async () => {
     setUser({ ...ADMIN });
     const pendente = await ncDecidida('DEVOLVER');
-    const executada = await ncDecidida('SUCATEAR');
+    // Etapa 69: era 'SUCATEAR' — o SUCATEAR viavel passou a recusar o `/executar` (D6). O cenario prova
+    // "executada sai da fila", nao o SUCATEAR: SUBSTITUICAO serve igual.
+    const executada = await ncDecidida('SUBSTITUICAO');
     await executarHttp(executada.ncId);
 
     const semDecidir = await novaInspecaoReprovada({ reprovada: 2, esperada: 9 });
