@@ -25,37 +25,102 @@ const limpo = (v) => {
 };
 
 /**
- * Etapa 72 (Fase 2 do plano) — o RATEIO do recebido de um par (pedido, material) entre as
- * solicitacoes do par, em ORDEM DE ID. Cada solicitacao enxerga so o recebido do par ACIMA do
- * `recebido_no_vinculo` dela (o que entrou antes de ela ser ligada ao pedido nao e dela) e leva ate a
- * sua quantidade; o resto passa a proxima. Devolve o atribuido de cada uma, na ordem recebida.
+ * Etapa 72, Fase 5 — O LIVRO DE ATRIBUICAO (`solicitacao_compra_recebimentos`, schema.js).
  *
- * `sols` ja vem ordenado por id.
+ * POR QUE TROCOU (revisao da Fase 5, achados I1/I2/I3/M, todos com a mesma raiz): ate a Fase 5 o
+ * recebido de cada solicitacao era CALCULADO a cada leitura — o recebido do par (pedido, material)
+ * rateado em ordem de id entre as VINCULADO de HOJE, cada uma enxergando so o que passou do retrato
+ * `recebido_no_vinculo`. Um calculo sobre o conjunto de hoje muda de dono quando o conjunto muda:
+ *   - I1: a irma CANCELADA saia do rateio e o que ela recebeu passava para a outra (que deixava de
+ *     estar "a caminho" com nada dela tendo chegado — compra em dobro pela sugestao ao contrario);
+ *   - I2: o estorno de uma nota ANTERIOR ao vinculo baixava o recebido do par abaixo do retrato e
+ *     reabria a solicitacao cujo material ja tinha chegado;
+ *   - M: o rateio guloso dava a primeira o que chegou antes da segunda existir, sub-creditando-a.
+ * Descartado: "corrigir o calculo do rateio caso a caso" (cada caso pedia mais um retrato; o quarto
+ * achado mostraria o quinto). Agora o que entrou e atribuido UMA VEZ, na entrada, e gravado.
+ *
+ * `SUM(quantidade)` por solicitacao — linhas negativas (estorno) incluidas. Todas as linhas da
+ * solicitacao, de qualquer pedido: re-vincular nao apaga o que ja chegou para ela (declarado).
  */
-function ratearRecebido(sols, recebidoPar) {
-  let consumido = 0;
-  return sols.map((s) => {
-    const visivel = Math.max(0, recebidoPar - (Number(s.recebido_no_vinculo) || 0));
-    const atribuido = Math.min(Number(s.quantidade) || 0, Math.max(0, visivel - consumido));
-    consumido += atribuido;
-    return atribuido;
-  });
+const LIVRO = 'solicitacao_compra_recebimentos';
+
+async function atribuidoPorSolicitacao(db, ids) {
+  const mapa = new Map();
+  if (!ids.length || !(await tabelaExiste(db, LIVRO))) return mapa;
+  const linhas = await dbAll(db, `SELECT solicitacao_id, SUM(quantidade) AS atribuido FROM ${LIVRO}
+    WHERE solicitacao_id IN (${ids.map(() => '?').join(',')}) GROUP BY solicitacao_id`, ids);
+  for (const l of linhas) mapa.set(l.solicitacao_id, Number(l.atribuido) || 0);
+  return mapa;
+}
+
+// O SQL do atribuido de UMA solicitacao, para as condicoes atomicas dos UPDATEs (le so o livro).
+const ATRIBUIDO_SQL = (alias) => `COALESCE((SELECT SUM(l.quantidade) FROM ${LIVRO} l
+  WHERE l.solicitacao_id = ${alias}.id), 0)`;
+
+/**
+ * A ESCRITA do livro: as entradas de UM recebimento num pedido. Para cada movimentacao de entrada do
+ * recebimento cuja linha do pedido e de `pedidoCompraId` (o vinculo item -> movimentacao da Etapa 71,
+ * `movimentacao_entrada_id`), a quantidade que entrou e atribuida as solicitacoes VINCULADO do par
+ * (pedido, material da LINHA) em ORDEM DE ID, cada uma ate o que falta para ela (quantidade - ja
+ * atribuido). O que sobra nao e de ninguem.
+ *
+ * - Movimentacao que ja tem linha no livro e pulada (o gancho rodando duas vezes nao atribui em dobro).
+ * - Movimentacao cancelada e pulada.
+ * - O INSERT recalcula o "falta" lendo o proprio livro no mesmo comando (`MIN(?, quantidade - SUM)`),
+ *   entao duas notas do mesmo pedido entrelacadas nao atribuem acima do que a solicitacao pediu.
+ * - Item sem `movimentacao_entrada_id` (a griffagem da Etapa 71 falhou com warn) nao atribui nada:
+ *   a solicitacao fecha pela regra do material completo, ou fica com o "a caminho" a mais (declarado).
+ */
+async function atribuirEntradasDoRecebimento(db, pedidoCompraId, recebimentoId) {
+  if (pedidoCompraId == null || recebimentoId == null) return;
+  if (!(await tabelaExiste(db, 'itens_pedido_compra')) || !(await tabelaExiste(db, LIVRO))) return;
+  const entradas = await dbAll(db, `SELECT mv.id AS movimentacao_id, ip.material_id, mv.quantidade
+    FROM recebimentos_material_itens_almoxarifado ri
+    JOIN itens_pedido_compra ip ON ip.id = ri.pedido_item_id
+    JOIN movimentacoes_almoxarifado mv ON mv.id = ri.movimentacao_entrada_id
+    WHERE ri.recebimento_id = ? AND ip.pedido_id = ? AND ip.material_id IS NOT NULL
+      AND COALESCE(mv.cancelado, 0) = 0
+      AND NOT EXISTS (SELECT 1 FROM ${LIVRO} l WHERE l.movimentacao_id = mv.id)
+    ORDER BY mv.id`, [recebimentoId, pedidoCompraId]);
+  for (const e of entradas) {
+    let restante = Number(e.quantidade) || 0;
+    if (!(restante > EPSILON_DIVERGENCIA)) continue;
+    const vinculadas = await dbAll(db, `SELECT id FROM solicitacoes_compra_almoxarifado
+      WHERE pedido_compra_id = ? AND material_id = ? AND status = 'VINCULADO' ORDER BY id`,
+    [pedidoCompraId, e.material_id]);
+    for (const s of vinculadas) {
+      if (!(restante > EPSILON_DIVERGENCIA)) break;
+      const linha = await dbGet(db, `INSERT INTO ${LIVRO}
+          (solicitacao_id, pedido_compra_id, material_id, movimentacao_id, quantidade)
+        SELECT sc.id, ?, ?, ?, MIN(?, sc.quantidade - ${ATRIBUIDO_SQL('sc')})
+        FROM solicitacoes_compra_almoxarifado sc
+        WHERE sc.id = ? AND sc.status = 'VINCULADO'
+          AND sc.quantidade - ${ATRIBUIDO_SQL('sc')} > ${EPSILON_DIVERGENCIA}
+        RETURNING quantidade`, [pedidoCompraId, e.material_id, e.movimentacao_id, restante, s.id]);
+      if (linha) restante -= Number(linha.quantidade) || 0;
+    }
+  }
 }
 
 /**
- * O recebido do par a partir do qual o rateio acima cobre TODAS as solicitacoes do conjunto: com o
- * rateio guloso em ordem de id, a solicitacao i fica inteira exatamente quando
- * `recebido >= recebido_no_vinculo_i + soma das quantidades ate i`. O limiar e o maior desses.
- * Sem `recebido_no_vinculo` (tudo 0) e a soma do solicitado — a regra D1(b) do plano.
- * Fechar (fecharSolicitacoesDoPedido) e reabrir (reabrirSolicitacoesDoMaterial) usam o MESMO limiar.
+ * O ESTORNO no livro: para cada solicitacao com saldo positivo de linhas da movimentacao `M`, grava a
+ * linha NEGATIVA desse saldo (mesma `movimentacao_id`). Um comando so (`INSERT ... SELECT ... HAVING`):
+ * rodar duas vezes nao negativa em dobro, porque o saldo da movimentacao ja e 0. So as linhas de `M` —
+ * uma nota que nao tem linha no livro (anterior ao vinculo, I2) nao tira nada de ninguem.
+ * Devolve `Map(solicitacao_id -> quantidade negativada)`.
  */
-function limiarDoPar(sols) {
-  let acumulado = 0; let limiar = 0;
-  for (const s of sols) {
-    acumulado += Number(s.quantidade) || 0;
-    limiar = Math.max(limiar, (Number(s.recebido_no_vinculo) || 0) + acumulado);
-  }
-  return limiar;
+async function estornarNoLivro(db, movimentacaoId) {
+  const desfeito = new Map();
+  if (movimentacaoId == null || !(await tabelaExiste(db, LIVRO))) return desfeito;
+  const linhas = await dbAll(db, `INSERT INTO ${LIVRO}
+      (solicitacao_id, pedido_compra_id, material_id, movimentacao_id, quantidade)
+    SELECT solicitacao_id, MAX(pedido_compra_id), MAX(material_id), movimentacao_id, -SUM(quantidade)
+    FROM ${LIVRO} WHERE movimentacao_id = ?
+    GROUP BY solicitacao_id, movimentacao_id
+    HAVING SUM(quantidade) > ${EPSILON_DIVERGENCIA}
+    RETURNING solicitacao_id, quantidade`, [movimentacaoId]);
+  for (const l of linhas) desfeito.set(l.solicitacao_id, -(Number(l.quantidade) || 0));
+  return desfeito;
 }
 
 /**
@@ -63,7 +128,7 @@ function limiarDoPar(sols) {
  * uma funcao por solicitacao; a sugestao de reposicao soma por material, o relatorio da aba
  * Solicitacoes le por linha, e ninguem escreve uma terceira conta).
  *
- * Por solicitacao PENDENTE ou VINCULADO devolve:
+ * Por solicitacao PENDENTE ou VINCULADO devolve (contrato da T1, inalterado na Fase 5):
  *   { solicitacao_id, material_id, status, pedido_id, solicitado, recebido_no_pedido,
  *     recebido_atribuido, a_caminho, pedido_encerrado, sem_linha_no_pedido, created_at,
  *     dentro_horizonte }
@@ -75,12 +140,12 @@ function limiarDoPar(sols) {
  * - VINCULADO sem linha do material no pedido, ou pedido apagado (D4): `a_caminho` = quantidade
  *   inteira, recebidos null, `sem_linha_no_pedido` true — a regra de antes da 72.
  * - VINCULADO com linha: `recebido_no_pedido` = recebido do par (pedido, material);
- *   `recebido_atribuido` = o rateio em ordem de id (`ratearRecebido`); `a_caminho` =
- *   `MAX(0, solicitado - recebido_atribuido)`. Sem teto pelo saldo do pedido (D2/B344).
- *
- * O rateio corre sobre TODAS as VINCULADO do par, independente de horizonte e dos filtros: o filtro
- * por `solicitacao_ids` e aplicado na SAIDA (filtrar antes mudaria o rateio). `material_id` pode
- * filtrar antes porque o par e por material.
+ *   `recebido_atribuido` = SUM do LIVRO de atribuicao (Fase 5 — gravado na entrada, nunca recalculado;
+ *   ate a Fase 5 era o rateio calculado com `recebido_no_vinculo`); `a_caminho` =
+ *   `MAX(0, solicitado - recebido_atribuido)`, e **0 quando o material ja completou no pedido** (Fase 5,
+ *   I3: o pedido nao tem mais nada daquele material para trazer — e a solicitacao fecha na proxima nota
+ *   pela MATERIAL_COMPLETO). Fora isso, sem teto pelo saldo do pedido (D2/B344 mantida — a Fase 5
+ *   descartou o `MIN(falta, saldo)` geral, que revogaria a B344 e o (7a) da Etapa 14).
  *
  * `horizonteDias`: quando vem, `dentro_horizonte` diz se o `created_at` DA SOLICITACAO esta dentro
  * dele, medido pelo `datetime('now')` do SQLite (o mesmo recorte que a sugestao sempre usou). Sem ele,
@@ -95,10 +160,15 @@ async function posicaoDasSolicitacoes(db, { solicitacao_ids: solicitacaoIds, mat
     params.push(horizonteDias);
   }
   let sql = `SELECT sc.id, sc.material_id, sc.status, sc.quantidade, sc.pedido_compra_id,
-      sc.recebido_no_vinculo, sc.created_at, ${horizonteSql} AS dentro_horizonte
+      sc.created_at, ${horizonteSql} AS dentro_horizonte
     FROM solicitacoes_compra_almoxarifado sc
     WHERE sc.status IN ('PENDENTE','VINCULADO')`;
   if (materialId != null) { sql += ' AND sc.material_id = ?'; params.push(materialId); }
+  if (Array.isArray(solicitacaoIds)) {
+    if (!solicitacaoIds.length) return [];
+    sql += ` AND sc.id IN (${solicitacaoIds.map(() => '?').join(',')})`;
+    params.push(...solicitacaoIds.map(Number));
+  }
   sql += ' ORDER BY sc.id';
   const sols = await dbAll(db, sql, params);
 
@@ -120,26 +190,10 @@ async function posicaoDasSolicitacoes(db, { solicitacao_ids: solicitacaoIds, mat
       }
     }
   }
+  const atribuidoPorId = await atribuidoPorSolicitacao(db, vinculadas.map((s) => s.id));
 
-  // Rateio por par (pedido, material), em ordem de id (as linhas ja vem ORDER BY sc.id).
-  const pares = new Map();
-  for (const s of vinculadas) {
-    const chave = `${s.pedido_compra_id}:${s.material_id}`;
-    if (!pares.has(chave)) pares.set(chave, []);
-    pares.get(chave).push(s);
-  }
-  const atribuidoPorId = new Map();
-  for (const [chave, grupo] of pares) {
-    const soma = somas.get(chave);
-    if (!soma || !(soma.total_material > 0) || !pedidos.has(grupo[0].pedido_compra_id)) continue;
-    const atribuidos = ratearRecebido(grupo, Number(soma.recebida_material) || 0);
-    grupo.forEach((s, i) => atribuidoPorId.set(s.id, atribuidos[i]));
-  }
-
-  const filtro = Array.isArray(solicitacaoIds) ? new Set(solicitacaoIds.map(Number)) : null;
   const saida = [];
   for (const s of sols) {
-    if (filtro && !filtro.has(s.id)) continue;
     const base = {
       solicitacao_id: s.id, material_id: s.material_id, status: s.status,
       pedido_id: s.pedido_compra_id ?? null, solicitado: limpo(s.quantidade),
@@ -153,9 +207,12 @@ async function posicaoDasSolicitacoes(db, { solicitacao_ids: solicitacaoIds, mat
       const temLinha = !!pedido && !!soma && soma.total_material > 0;
       base.sem_linha_no_pedido = !temLinha;
       if (temLinha) {
+        const atribuido = atribuidoPorId.get(s.id) || 0;
+        const materialCompleto = (Number(soma.total_material) || 0) - (Number(soma.recebida_material) || 0)
+          <= EPSILON_DIVERGENCIA;
         base.recebido_no_pedido = limpo(soma.recebida_material);
-        base.recebido_atribuido = limpo(atribuidoPorId.get(s.id));
-        base.a_caminho = limpo(Math.max(0, (Number(s.quantidade) || 0) - atribuidoPorId.get(s.id)));
+        base.recebido_atribuido = limpo(atribuido);
+        base.a_caminho = materialCompleto ? 0 : limpo(Math.max(0, (Number(s.quantidade) || 0) - atribuido));
       }
       if (pedido && STATUS_PEDIDO_ENCERRADO.includes(String(pedido.status || '').toLowerCase())) {
         base.pedido_encerrado = true;
@@ -234,7 +291,7 @@ async function vincularPedidoCompra(db, solicitacaoId, pedidoCompraId) {
       new Error('Solicitação já finalizada (RECEBIDA ou CANCELADA) — não pode ser vinculada a um pedido'),
       { status: 400 });
   }
-  const pedido = await dbGet(db, 'SELECT id FROM pedidos_compra WHERE id = ?', [pedidoCompraId]);
+  const pedido = await dbGet(db, 'SELECT id, numero FROM pedidos_compra WHERE id = ?', [pedidoCompraId]);
   // Literal REUSADO de receiptService.criarRecebimento:76 (RN-01b) — um literal so para "pedido
   // de compra nao existe", nao inventar um segundo.
   if (!pedido) throw Object.assign(new Error('Pedido de compra não encontrado'), { status: 400 });
@@ -243,11 +300,28 @@ async function vincularPedidoCompra(db, solicitacaoId, pedidoCompraId) {
   // Gerar o pedido pela sugestao chama esta funcao logo depois de inserir as linhas (0 recebido); o
   // `vincular-pedido` manual pode ligar a um pedido ja parcialmente recebido, e o que entrou antes
   // nao e desta solicitacao. Re-vincular sobrescreve (o vinculo novo e o que vale).
+  // Fase 5: a coluna virou RASTRO — nenhuma conta le mais. O que e da solicitacao vem do livro de
+  // atribuicao, que so recebe o que entra DEPOIS do vinculo (a nota anterior nao tem linha).
   let recebidoNoVinculo = 0;
   if (await tabelaExiste(db, 'itens_pedido_compra')) {
-    const soma = await dbGet(db, `SELECT recebida_material FROM (${SOMA_POR_MATERIAL_SQL})
+    const soma = await dbGet(db, `SELECT total_material, recebida_material FROM (${SOMA_POR_MATERIAL_SQL})
       WHERE pedido_id = ? AND material_id = ?`, [pedidoCompraId, sol.material_id]);
     recebidoNoVinculo = limpo(soma?.recebida_material);
+    // Etapa 72, Fase 5 (I3): o pedido cujo material da solicitacao JA chegou inteiro (linha do material
+    // com pedida > 0 e saldo <= epsilon) nao tem mais nada a trazer para ela. Vincular criava um "a
+    // caminho" fantasma: a solicitacao segurava a posicao por um pedido que ja tinha entregado tudo, e
+    // so fechava quando chegasse uma nota de OUTRO material do pedido. Recusa com a literal. Pedido sem
+    // linha do material continua aceito (D4, legado). As duas portas de vinculo passam aqui; gerar o
+    // pedido pelo Compras vincula logo depois de inserir as linhas (0 recebido) e nunca cai nisto.
+    if (soma && Number(soma.total_material) > 0
+      && Number(soma.total_material) - Number(soma.recebida_material) <= EPSILON_DIVERGENCIA) {
+      const material = await dbGet(db, 'SELECT nome FROM materiais_almoxarifado WHERE id = ?', [sol.material_id]);
+      const numero = pedido.numero || `#${pedido.id}`;
+      const nome = material?.nome || `material #${sol.material_id}`;
+      throw Object.assign(
+        new Error(`O pedido ${numero} já recebeu todo o ${nome}: vincule a solicitação a outro pedido`),
+        { status: 400 });
+    }
   }
   await dbRun(db, `UPDATE solicitacoes_compra_almoxarifado
       SET pedido_compra_id = ?, status = 'VINCULADO', recebido_no_vinculo = ? WHERE id = ?`,
@@ -299,25 +373,31 @@ async function cancelarSolicitacao(db, user, solicitacaoId, motivo) {
 //
 // ⚠️ ETAPA 72, T1 (D1/B343 — REVOGA A B22(a) da Etapa 14, "fecha na primeira nota, mesmo parcial"):
 // ate a 72 o UPDATE abaixo fechava TODA VINCULADO do pedido na primeira nota, parcial ou nao, e
-// mesmo a de um material que nem tinha chegado (Surpresa 2 da Fase 0). O "o que faltar reaparece na
-// sugestao" da B22 era exatamente o defeito: a sugestao mandava comprar de novo o que ainda vinha
-// pelo pedido. Agora fecha por PAR (pedido, material), todas as VINCULADO do par juntas, quando:
+// mesmo a de um material que nem tinha chegado (Surpresa 2 da Fase 0). Agora fecha por PAR
+// (pedido, material):
 //   - MATERIAL_COMPLETO: o pedido completou o material (pedida > 0 e pedida - recebida <= epsilon,
-//     o nivel por material da regua unica, `SOMA_POR_MATERIAL_SQL`); ou
-//   - SOLICITADO_RECEBIDO: o recebido do par cobre o que as solicitacoes pediram, contando so o que
-//     chegou depois do vinculo de cada uma (`limiarDoPar`); ou
+//     o nivel por material da regua unica, `SOMA_POR_MATERIAL_SQL`) — todas as VINCULADO do par;
+//   - SOLICITADO_RECEBIDO (Fase 5: POR SOLICITACAO): o que o LIVRO atribuiu a ela cobre o que ela
+//     pediu (`SUM(livro) >= quantidade - epsilon`). Ate a Fase 5 era o par inteiro contra um limiar
+//     calculado com `recebido_no_vinculo`; com o livro, a solicitacao cuja quantidade ja chegou fecha
+//     sozinha, sem esperar a irma;
 //   - SEM_LINHA_NO_PEDIDO: o material nem tem linha no pedido (D4, legado: `vincular-pedido` manual
 //     nao exige o material no pedido) — fecha na nota, como antes.
-// O WHERE do UPDATE repete a condicao lendo SO `itens_pedido_compra` e fixa o conjunto por `id IN`
-// (o solicitado que entrou no limiar): um estorno entre a leitura e o UPDATE nao fecha nada, e uma
-// solicitacao vinculada nesse meio-tempo fica para a proxima nota. Retorno: [{ id, material_id, regra }].
-async function fecharSolicitacoesDoPedido(db, user, pedidoCompraId) {
+// Fase 5: com `{ recebimentoId }` (os dois chamadores do receiptService passam), ANTES de avaliar,
+// grava no livro o que as entradas DESTE recebimento trouxeram (`atribuirEntradasDoRecebimento`).
+// Sem ele (chamada direta pelo servico) so avalia. Cada UPDATE repete a condicao no WHERE lendo so
+// `itens_pedido_compra` e o livro (nunca a propria tabela que escreve) — atomico contra um estorno no
+// meio. Retorno: [{ id, material_id, regra }].
+async function fecharSolicitacoesDoPedido(db, user, pedidoCompraId, { recebimentoId } = {}) {
   if (!pedidoCompraId) return [];
-  const vinculadas = await dbAll(db, `SELECT id, material_id, quantidade, recebido_no_vinculo
+  if (recebimentoId != null) await atribuirEntradasDoRecebimento(db, pedidoCompraId, recebimentoId);
+  const vinculadas = await dbAll(db, `SELECT id, material_id, quantidade
     FROM solicitacoes_compra_almoxarifado
     WHERE pedido_compra_id = ? AND status = 'VINCULADO' ORDER BY id`, [pedidoCompraId]);
   if (!vinculadas.length) return [];
   const temItens = await tabelaExiste(db, 'itens_pedido_compra');
+  const temLivro = await tabelaExiste(db, LIVRO);
+  const atribuido = await atribuidoPorSolicitacao(db, vinculadas.map((s) => s.id));
 
   const porMaterial = new Map();
   for (const s of vinculadas) {
@@ -329,13 +409,11 @@ async function fecharSolicitacoesDoPedido(db, user, pedidoCompraId) {
   for (const [materialId, grupo] of porMaterial) {
     const soma = temItens ? await dbGet(db, `SELECT total_material, recebida_material
       FROM (${SOMA_POR_MATERIAL_SQL}) WHERE pedido_id = ? AND material_id = ?`, [pedidoCompraId, materialId]) : null;
-    const ids = grupo.map((s) => s.id);
-    const solicitado = grupo.reduce((t, s) => t + (Number(s.quantidade) || 0), 0);
-    const limiar = limiarDoPar(grupo);
     const total = Number(soma?.total_material) || 0;
     const recebida = Number(soma?.recebida_material) || 0;
 
     let regra = null;
+    let alvo = grupo;
     let condicao;
     let condicaoParams;
     if (!(total > 0)) {
@@ -345,30 +423,37 @@ async function fecharSolicitacoesDoPedido(db, user, pedidoCompraId) {
             WHERE pedido_id = ? AND material_id = ?), 0) <= 0`
         : '1';
       condicaoParams = temItens ? [pedidoCompraId, materialId] : [];
-    } else {
-      if (total - recebida <= EPSILON_DIVERGENCIA) regra = 'MATERIAL_COMPLETO';
-      else if (recebida >= limiar - EPSILON_DIVERGENCIA) regra = 'SOLICITADO_RECEBIDO';
+    } else if (total - recebida <= EPSILON_DIVERGENCIA) {
+      regra = 'MATERIAL_COMPLETO';
       condicao = `EXISTS (SELECT 1 FROM (${SOMA_POR_MATERIAL_SQL}) s
           WHERE s.pedido_id = ? AND s.material_id = ? AND s.total_material > 0
-            AND (s.total_material - s.recebida_material <= ${EPSILON_DIVERGENCIA}
-              OR s.recebida_material >= ? - ${EPSILON_DIVERGENCIA}))`;
-      condicaoParams = [pedidoCompraId, materialId, limiar];
+            AND s.total_material - s.recebida_material <= ${EPSILON_DIVERGENCIA})`;
+      condicaoParams = [pedidoCompraId, materialId];
+    } else if (temLivro) {
+      alvo = grupo.filter((s) => (atribuido.get(s.id) || 0) >= (Number(s.quantidade) || 0) - EPSILON_DIVERGENCIA);
+      if (alvo.length) regra = 'SOLICITADO_RECEBIDO';
+      condicao = `${ATRIBUIDO_SQL('solicitacoes_compra_almoxarifado')} >= quantidade - ${EPSILON_DIVERGENCIA}`;
+      condicaoParams = [];
     }
     if (!regra) continue;
 
+    const ids = alvo.map((s) => s.id);
     const fechadas = await dbAll(db, `UPDATE solicitacoes_compra_almoxarifado
         SET status = 'RECEBIDA', recebida_em = CURRENT_TIMESTAMP
         WHERE pedido_compra_id = ? AND material_id = ? AND status = 'VINCULADO'
           AND id IN (${ids.map(() => '?').join(',')}) AND ${condicao}
         RETURNING id`, [pedidoCompraId, materialId, ...ids, ...condicaoParams]);
+    const porId = new Map(grupo.map((s) => [s.id, s]));
     for (const linha of fechadas.sort((a, b) => a.id - b.id)) {
-      // dados_novos ADITIVO: `pedido_compra_id` continua la (o (5) da Etapa 14 le).
+      // dados_novos ADITIVO: `pedido_compra_id` continua la (o (5) da Etapa 14 le). Fase 5:
+      // `solicitado` e o DESTA solicitacao (era o do par) e `recebido_atribuido` (o livro) entra.
       await registrarAuditoria(db, {
         entidade: 'solicitacao_compra', entidade_id: linha.id, acao: 'RECEBIDA',
         usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
         dados_novos: {
           pedido_compra_id: pedidoCompraId, material_id: materialId, regra,
-          recebido_no_pedido: limpo(recebida), solicitado: limpo(solicitado),
+          recebido_no_pedido: limpo(recebida), solicitado: limpo(porId.get(linha.id)?.quantidade),
+          recebido_atribuido: limpo(atribuido.get(linha.id)),
         },
       });
       resultado.push({ id: linha.id, material_id: materialId, regra });
@@ -383,21 +468,23 @@ async function fecharSolicitacoesDoPedido(db, user, pedidoCompraId) {
  *
  * Chamada pelo gancho do estorno (`receiptService.estornarEntradaNoPedido`), DEPOIS de a linha ter
  * sido descontada e do passo do status do pedido. `quantidadeDescontada` e o que o estorno tirou da
- * linha (recebida antes - recebida depois): com ela o recebido do par ANTES do estorno e reconstruido
- * sem uma segunda leitura.
+ * linha (recebida antes - recebida depois).
  *
- * Reabre (RECEBIDA -> VINCULADO, `recebida_em` NULL) as RECEBIDA do par (pedido, material) quando:
- *   - o pedido existe e esta vivo (fora de `STATUS_PEDIDO_ENCERRADO`): reabrir com o pedido
- *     encerrado nao contaria nada (D3) e so sujaria a aba;
- *   - o par tem linha no pedido (sem linha nunca reabre — o estorno sempre vem de uma linha com
- *     material, entao pela porta real o caso nao existe);
- *   - a condicao de fechamento da T1 (material completo OU recebido >= limiar) VALIA antes deste
- *     estorno e DEIXOU de valer depois. Sem o "valia antes", o legado fechado cedo pela regra antiga
- *     (RECEBIDA com 4 de 10) reabriria no estorno dos 4 e passaria a contar 10 a caminho de uma
- *     compra que o comprador talvez ja tenha refeito.
- * CANCELADA nunca reabre (decisao humana). O UPDATE repete "deixou de valer" e "pedido vivo" no WHERE,
- * atomico contra uma nota processada no meio. Uma trilha `REABERTA` por solicitacao, cada uma no seu
- * try (perder a trilha e reparavel; desfazer a reabertura por causa dela, nao).
+ * Fase 5 — o LIVRO primeiro: as linhas da movimentacao estornada sao negativadas
+ * (`estornarNoLivro`), SEMPRE (pedido vivo ou nao: o livro diz o que chegou para quem). So as dela:
+ * a nota que entrou ANTES do vinculo nao tem linha no livro e nao tira nada de ninguem (I2).
+ *
+ * Depois reabre (RECEBIDA -> VINCULADO, `recebida_em` NULL) as RECEBIDA do par (pedido, material) que
+ * estavam COBERTAS antes deste estorno e DEIXARAM de estar depois. "Coberta" = a condicao de
+ * fechamento da T1: o material completo no pedido OU o livro dela >= o que ela pediu. O "antes" e
+ * reconstruido com `quantidadeDescontada` (a linha do pedido) e com o que `estornarNoLivro` tirou dela
+ * (o livro). Sem o "valia antes", o legado fechado cedo pela regra antiga (RECEBIDA com 4 de 10)
+ * reabriria no estorno dos 4. So reabre com o pedido vivo (fora de `STATUS_PEDIDO_ENCERRADO`):
+ * reabrir com o pedido encerrado nao contaria nada (D3) e so sujaria a aba. CANCELADA nunca reabre
+ * (decisao humana), e o cancelamento nao move nada no livro (I1: a irma nao herda).
+ *
+ * O UPDATE repete "deixou de valer" (livro + linha) e "pedido vivo" no WHERE, atomico contra uma nota
+ * processada no meio. Uma trilha `REABERTA` por solicitacao, cada uma no seu try.
  *
  * Retorno: ids reabertos.
  */
@@ -405,12 +492,12 @@ async function reabrirSolicitacoesDoMaterial(db, user, {
   pedidoId, materialId, movimentacaoId, quantidadeDescontada = 0,
 } = {}) {
   if (pedidoId == null || materialId == null) return [];
+  const tirado = await estornarNoLivro(db, movimentacaoId);
   if (!(await tabelaExiste(db, 'pedidos_compra')) || !(await tabelaExiste(db, 'itens_pedido_compra'))) return [];
   const pedido = await dbGet(db, 'SELECT id, status FROM pedidos_compra WHERE id = ?', [pedidoId]);
   if (!pedido || STATUS_PEDIDO_ENCERRADO.includes(String(pedido.status || '').toLowerCase())) return [];
 
-  const recebidas = await dbAll(db, `SELECT id, quantidade, recebido_no_vinculo
-    FROM solicitacoes_compra_almoxarifado
+  const recebidas = await dbAll(db, `SELECT id, quantidade FROM solicitacoes_compra_almoxarifado
     WHERE pedido_compra_id = ? AND material_id = ? AND status = 'RECEBIDA' ORDER BY id`, [pedidoId, materialId]);
   if (!recebidas.length) return [];
 
@@ -420,11 +507,18 @@ async function reabrirSolicitacoesDoMaterial(db, user, {
   if (!(total > 0)) return [];
   const depois = Number(soma.recebida_material) || 0;
   const antes = depois + Math.max(0, Number(quantidadeDescontada) || 0);
-  const limiar = limiarDoPar(recebidas);
-  const fecha = (recebido) => total - recebido <= EPSILON_DIVERGENCIA || recebido >= limiar - EPSILON_DIVERGENCIA;
-  if (!fecha(antes) || fecha(depois)) return [];
+  const completoAntes = total - antes <= EPSILON_DIVERGENCIA;
+  const completoDepois = total - depois <= EPSILON_DIVERGENCIA;
+  const atribuido = await atribuidoPorSolicitacao(db, recebidas.map((s) => s.id));
+  const cobre = (s, livro) => livro >= (Number(s.quantidade) || 0) - EPSILON_DIVERGENCIA;
+  const candidatas = recebidas.filter((s) => {
+    const livroDepois = atribuido.get(s.id) || 0;
+    const livroAntes = livroDepois + (tirado.get(s.id) || 0);
+    return (completoAntes || cobre(s, livroAntes)) && !(completoDepois || cobre(s, livroDepois));
+  });
+  if (!candidatas.length) return [];
 
-  const ids = recebidas.map((s) => s.id);
+  const ids = candidatas.map((s) => s.id);
   const reabertas = await dbAll(db, `UPDATE solicitacoes_compra_almoxarifado
       SET status = 'VINCULADO', recebida_em = NULL
       WHERE pedido_compra_id = ? AND material_id = ? AND status = 'RECEBIDA'
@@ -433,9 +527,9 @@ async function reabrirSolicitacoesDoMaterial(db, user, {
           AND LOWER(COALESCE(p.status, '')) NOT IN (${STATUS_PEDIDO_ENCERRADO_SQL}))
         AND NOT EXISTS (SELECT 1 FROM (${SOMA_POR_MATERIAL_SQL}) s
           WHERE s.pedido_id = ? AND s.material_id = ? AND s.total_material > 0
-            AND (s.total_material - s.recebida_material <= ${EPSILON_DIVERGENCIA}
-              OR s.recebida_material >= ? - ${EPSILON_DIVERGENCIA}))
-      RETURNING id`, [pedidoId, materialId, ...ids, pedidoId, pedidoId, materialId, limiar]);
+            AND s.total_material - s.recebida_material <= ${EPSILON_DIVERGENCIA})
+        AND ${ATRIBUIDO_SQL('solicitacoes_compra_almoxarifado')} < quantidade - ${EPSILON_DIVERGENCIA}
+      RETURNING id`, [pedidoId, materialId, ...ids, pedidoId, pedidoId, materialId]);
 
   const reabertasIds = reabertas.map((r) => r.id).sort((a, b) => a - b);
   for (const id of reabertasIds) {

@@ -496,8 +496,9 @@ async function relatorioEPIPorColaborador(db) {
 // solicitacao (`purchaseService.posicaoDasSolicitacoes`, a mesma que a sugestao soma) — nunca uma
 // terceira conta aqui: `quantidade - recebido do par` por linha diverge da sugestao quando ha duas
 // solicitacoes no mesmo par (tests/api/relatorioSolicitacoesChegou.api.test.js, teste 2).
-//   - recebido_no_pedido = recebido_atribuido (o recebido do par RATEADO em ordem de id; null em
-//     PENDENTE ou par sem linha). Nao e o recebido do par inteiro (Fase 2 do plano da 72);
+//   - recebido_no_pedido = recebido_atribuido (o que o LIVRO de atribuicao deu a esta solicitacao,
+//     Fase 5; ate ela era o recebido do par rateado em ordem de id; null em PENDENTE ou par sem
+//     linha). Nao e o recebido do par inteiro (Fase 2 do plano da 72);
 //   - a_caminho, pedido_encerrado: como a fonte devolve.
 // Export e tela de Relatorios nao mudam: projetam `colunas` do reportRegistry (declarado no plano).
 // require tardio: purchaseService nao importa este arquivo hoje, mas o par de services nao deve

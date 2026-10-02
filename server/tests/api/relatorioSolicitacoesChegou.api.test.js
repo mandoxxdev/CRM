@@ -8,8 +8,9 @@
  *
  * O relatorio `solicitacoes-compra` ganha por linha, ADITIVOS (export e tela de Relatorios projetam
  * `colunas` do registro e nao mudam):
- *   - `recebido_no_pedido` = o `recebido_atribuido` da solicitacao (o recebido do par RATEADO em
- *     ordem de id, Fase 2) — nao o recebido do par inteiro; `null` em PENDENTE ou par sem linha;
+ *   - `recebido_no_pedido` = o `recebido_atribuido` da solicitacao (o que o LIVRO de atribuicao deu
+ *     a ela, Fase 5 — ate ela, o recebido do par rateado em ordem de id) — nao o recebido do par
+ *     inteiro; `null` em PENDENTE ou par sem linha;
  *   - `a_caminho` — a parte da solicitacao no que ainda falta chegar;
  *   - `pedido_encerrado` — pedido recebido/cancelado/rejeitado.
  *
@@ -149,16 +150,19 @@ const ADMIN = { id: 273, nome: 'Admin E72 T3', role: 'admin', is_superadmin: 1, 
       { status: 'VINCULADO', recebido_no_pedido: 0, a_caminho: 10, pedido_encerrado: false });
   });
 
-  await test('(2) duas solicitacoes (6 + 4) no pedido de 10, nota de 7: o relatorio mostra o RATEADO [6, 1] e a soma do a_caminho bate com a sugestao', async () => {
+  await test('(2) duas solicitacoes (6 + 4) no pedido de 10, nota de 5: o relatorio mostra o do LIVRO [5, 0] e a soma do a_caminho bate com a sugestao', async () => {
     const mat = await novoMaterial(6);
     const s6 = await solicitacaoPeloMinimo(mat);
     const s4 = await solicitacaoDireta(mat, 4);
     const { pedido, linhaDe: linha } = await novoPedido([{ material_id: mat, quantidade: 10, valor_unitario: 1 }], s6);
     await vincular(s4, pedido.id);
-    await receber(pedido, [itemDaTela(mat, linha(mat), 7)]);
+    // Etapa 72, Fase 5: era nota de 7 -> [6, 1]. Com o livro a de 6 recebe 6 e FECHA sozinha
+    // (SOLICITADO_RECEBIDO por solicitacao) e sai da aba; a nota de 5 mantem as duas na aba e continua
+    // separando o atribuido (5, 0) do recebido do par (5, 5).
+    await receber(pedido, [itemDaTela(mat, linha(mat), 5)]);
     const linhas = (await relatorio()).filter((x) => x.material_id === mat);
     assert.deepStrictEqual(linhas.map((l) => [l.id, l.status, l.recebido_no_pedido, l.a_caminho, l.pedido_encerrado]),
-      [[s6, 'VINCULADO', 6, 0, false], [s4, 'VINCULADO', 1, 3, false]]);
+      [[s6, 'VINCULADO', 5, 1, false], [s4, 'VINCULADO', 0, 4, false]]);
     // Mesma fonte da sugestao: sobe o minimo para o material aparecer nela e compara.
     await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_minima = 20 WHERE id = ?', [mat]);
     const item = await sugestaoDe(mat);

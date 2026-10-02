@@ -10,11 +10,12 @@
  * `verificar-minimos` ja duplicava ANTES de qualquer nota, porque o dedupe olhava so PENDENTE.
  *
  * ── A REGRA (contrato da T1, com a Fase 2 do plano) ──────────────────────────────────────────────
- * - fecha por (pedido, material): material completo no pedido (MATERIAL_COMPLETO), ou o que chegou
- *   cobre o que as solicitacoes do par pediram (SOLICITADO_RECEBIDO), ou o material nem tem linha no
- *   pedido (SEM_LINHA_NO_PEDIDO, a regra de antes, legado);
- * - o "a caminho" e o que FALTA chegar, por solicitacao, com o recebido do par rateado em ordem de id
- *   e cada solicitacao enxergando so o que chegou depois do vinculo dela (`recebido_no_vinculo`);
+ * - fecha por (pedido, material): material completo no pedido (MATERIAL_COMPLETO), ou o material nem
+ *   tem linha no pedido (SEM_LINHA_NO_PEDIDO, a regra de antes, legado); e, POR SOLICITACAO, quando o
+ *   que o LIVRO de atribuicao deu a ela cobre o que ela pediu (SOLICITADO_RECEBIDO, Fase 5);
+ * - o "a caminho" e o que FALTA chegar, por solicitacao: quantidade menos o livro dela (Fase 5 — o
+ *   livro grava na entrada, em ordem de id, so o que chegou depois do vinculo; ate a Fase 5 era um
+ *   rateio calculado com `recebido_no_vinculo`, ver solicitacaoLivroAtribuicao.api.test.js);
  * - pedido encerrado (recebido/cancelado/rejeitado) nao traz nada;
  * - o `verificar-minimos` nao duplica o que esta vindo (VINCULADO de pedido vivo, dentro do horizonte).
  *
@@ -198,6 +199,7 @@ const ADMIN = { id: 272, nome: 'Admin E72 T1', role: 'admin', is_superadmin: 1, 
     assert.strictEqual(trilha.length, 1);
     assert.deepStrictEqual(JSON.parse(trilha[0].dados_novos), {
       pedido_compra_id: pedido.id, material_id: mat, regra: 'MATERIAL_COMPLETO', recebido_no_pedido: 10, solicitado: 10,
+      recebido_atribuido: 10, // Fase 5: aditivo, o que o livro deu a ela (4 + 6)
     });
   });
 
@@ -248,11 +250,15 @@ const ADMIN = { id: 272, nome: 'Admin E72 T1', role: 'admin', is_superadmin: 1, 
     assert.strictEqual((await sol(solId)).status, 'RECEBIDA', '12 >= 10 e nao fechou');
     assert.deepStrictEqual(JSON.parse((await trilhaRecebida(solId))[0].dados_novos), {
       pedido_compra_id: pedido.id, material_id: mat, regra: 'SOLICITADO_RECEBIDO', recebido_no_pedido: 12, solicitado: 10,
+      recebido_atribuido: 10, // Fase 5: 7 da primeira nota + 3 da segunda (o resto, 2, nao e de ninguem)
     });
     assert.strictEqual(await statusPedido(pedido.id), 'pendente', 'o pedido com 3 faltando foi fechado');
   });
 
-  await test('(3b) RN-03: duas solicitacoes (6 + 4) do mesmo material no pedido de 10 -> 6 nao fecha nenhuma, +4 fecha as duas', async () => {
+  // Etapa 72, Fase 5 (MUDOU): ate a Fase 5 o par fechava junto ("6 nao fecha nenhuma, +4 fecha as
+  // duas"). Com o livro, SOLICITADO_RECEBIDO e POR SOLICITACAO: os 6 que chegaram sao da de 6 (a de
+  // menor id) e ela fecha sozinha; a de 4 fecha quando os 4 dela chegam (aqui pelo material completo).
+  await test('(3b) RN-03 (Fase 5): duas solicitacoes (6 + 4) no pedido de 10 -> nota de 6 fecha a de 6 (livro), +4 fecha a de 4', async () => {
     const mat = await novoMaterial(6);
     const s6 = await solicitacaoPeloMinimo(mat);
     const s4 = await solicitacaoDireta(mat, 4);
@@ -260,8 +266,9 @@ const ADMIN = { id: 272, nome: 'Admin E72 T1', role: 'admin', is_superadmin: 1, 
       { solicitacaoId: s6 });
     await vincular(s4, pedido.id);
     await receber(pedido, [itemDaTela(mat, linhaDe(mat), 6)]);
-    assert.deepStrictEqual([(await sol(s6)).status, (await sol(s4)).status], ['VINCULADO', 'VINCULADO'],
-      '6 de 10 solicitados fechou alguma');
+    assert.deepStrictEqual([(await sol(s6)).status, (await sol(s4)).status], ['RECEBIDA', 'VINCULADO'],
+      'os 6 que chegaram nao fecharam a de 6, ou fecharam a de 4');
+    assert.strictEqual(JSON.parse((await trilhaRecebida(s6))[0].dados_novos).regra, 'SOLICITADO_RECEBIDO');
     await receber(pedido, [itemDaTela(mat, linhaDe(mat), 4)]);
     assert.deepStrictEqual([(await sol(s6)).status, (await sol(s4)).status], ['RECEBIDA', 'RECEBIDA']);
     assert.strictEqual((await trilhaRecebida(s6)).length + (await trilhaRecebida(s4)).length, 2, 'duas trilhas');
@@ -341,7 +348,9 @@ const ADMIN = { id: 272, nome: 'Admin E72 T1', role: 'admin', is_superadmin: 1, 
   });
 
   // ── Fase 2: o recebido do par e rateado por solicitacao, em ordem de id ─────────────────────────
-  await test('(8) Fase 2: duas solicitacoes (6 + 4) no pedido de 10, nota de 7 -> atribuido [6, 1], a caminho [0, 3]; a sugestao soma 3', async () => {
+  // Etapa 72, Fase 5 (MUDOU): o "[6, 1]" era o rateio calculado com as duas abertas. Com o livro a nota
+  // de 7 da 6 a de 6 (que FECHA, sai da posicao) e 1 a de 4; a posicao do material e so a de 4.
+  await test('(8) Fase 5: duas solicitacoes (6 + 4) no pedido de 10, nota de 7 -> a de 6 fecha pelo livro, a de 4 fica com 1 atribuido e 3 a caminho; a sugestao soma 3', async () => {
     const mat = await novoMaterial(6);
     const s6 = await solicitacaoPeloMinimo(mat);
     const s4 = await solicitacaoDireta(mat, 4);
@@ -349,9 +358,10 @@ const ADMIN = { id: 272, nome: 'Admin E72 T1', role: 'admin', is_superadmin: 1, 
       { solicitacaoId: s6 });
     await vincular(s4, pedido.id);
     await receber(pedido, [itemDaTela(mat, linhaDe(mat), 7)]);
+    assert.strictEqual((await sol(s6)).status, 'RECEBIDA', 'a de 6 recebeu 6 no livro e nao fechou');
     const pos = await purchaseService.posicaoDasSolicitacoes(db, { material_id: mat });
     assert.deepStrictEqual(pos.map((p) => [p.solicitacao_id, p.recebido_atribuido, p.a_caminho, p.pedido_encerrado]),
-      [[s6, 6, 0, false], [s4, 1, 3, false]]);
+      [[s4, 1, 3, false]]);
     assert.ok(pos.every((p) => p.recebido_no_pedido === 7 && p.pedido_id === pedido.id), JSON.stringify(pos));
     await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_minima = 20 WHERE id = ?', [mat]);
     const item = await sugestaoDe(mat);

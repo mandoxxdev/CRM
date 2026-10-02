@@ -217,6 +217,7 @@ let seq = 0;
     assert.deepStrictEqual(t.map((x) => x.acao), ['RECEBIDA']);
     assert.deepStrictEqual(JSON.parse(t[0].dados_novos), {
       pedido_compra_id: A.pedido.id, material_id: A.X.id, regra: 'MATERIAL_COMPLETO', recebido_no_pedido: 10, solicitado: 10,
+      recebido_atribuido: 10, // Etapa 72, Fase 5: a trilha ganhou o que o livro deu a ela (aditivo)
     });
     assert.deepStrictEqual(await abertasNoContexto(A.X), [], 'a RECEBIDA continuou aberta no contexto');
     assert.strictEqual((await trilhaDaSol(A.sy)).length, 0, 'a nota de X auditou Y');

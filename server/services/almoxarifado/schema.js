@@ -2275,6 +2275,35 @@ async function initSchema(db) {
   // um pedido ja parcialmente recebido, ela contaria como "chegou" o que entrou antes de ela existir.
   // NULL (legado, vinculado antes da 72) vale 0 — declarado.
   await safeAlter(db, 'ALTER TABLE solicitacoes_compra_almoxarifado ADD COLUMN recebido_no_vinculo REAL');
+  // Etapa 72, Fase 5: `recebido_no_vinculo` DEIXOU DE SER LIDO. Continua gravado pelo vinculo, como
+  // rastro ("quanto o pedido ja tinha recebido quando a solicitacao foi ligada"), mas nenhuma conta
+  // usa: o que cada solicitacao recebeu vem do LIVRO abaixo.
+
+  // Etapa 72, Fase 5 — O LIVRO DE ATRIBUICAO: o que de cada entrada de nota foi de cada solicitacao.
+  // Antes dele o "recebido da solicitacao" era CALCULADO a cada leitura, rateando o recebido do par
+  // (pedido, material) entre as VINCULADO de hoje a partir de um retrato fixo (`recebido_no_vinculo`).
+  // O calculo mudava de dono quando o conjunto mudava: a irma cancelada passava o que recebeu para a
+  // outra (compra em dobro), o estorno de uma nota anterior ao vinculo reabria quem ja tinha recebido,
+  // e a solicitacao ligada depois era sub-creditada. Agora a atribuicao e GRAVADA uma vez, na entrada
+  // (`purchaseService.fecharSolicitacoesDoPedido` com o recebimento), e nunca recalculada: o recebido
+  // da solicitacao e SUM(quantidade) das linhas dela. O estorno da movimentacao grava a linha NEGATIVA
+  // das linhas dela (`quantidade` < 0, mesma `movimentacao_id`) — o livro so cresce, o rastro fica.
+  // Sem backfill (decisao da Fase 5, letra B): o livro nasce vazio, o que e exato para o legado de
+  // producao (ver o plano da Etapa 72, Fase 5).
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS solicitacao_compra_recebimentos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    solicitacao_id INTEGER NOT NULL,
+    pedido_compra_id INTEGER,
+    material_id INTEGER NOT NULL,
+    movimentacao_id INTEGER,
+    quantidade REAL NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (solicitacao_id) REFERENCES solicitacoes_compra_almoxarifado(id)
+  )`);
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_sc_recebimentos_solicitacao
+    ON solicitacao_compra_recebimentos(solicitacao_id)`);
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_sc_recebimentos_movimentacao
+    ON solicitacao_compra_recebimentos(movimentacao_id)`);
 
   // ── Alertas de estoque mínimo ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS alertas_estoque_material_almoxarifado (

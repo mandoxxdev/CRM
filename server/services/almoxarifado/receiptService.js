@@ -1713,7 +1713,7 @@ async function concluirProcessamentoNota(db, user, rec, recebimentoId, { localiz
   // fica VINCULADO, nao RECEBIDA, porque o recebimento nunca chegou a PROCESSADO de verdade.
   if (rec.pedido_compra_id) {
     try {
-      await purchaseService.fecharSolicitacoesDoPedido(db, user, rec.pedido_compra_id);
+      await purchaseService.fecharSolicitacoesDoPedido(db, user, rec.pedido_compra_id, { recebimentoId });
     } catch (e) {
       console.warn('[almoxarifado-compras] Falha ao fechar solicitacoes do pedido apos processar nota:', e.message);
     }
@@ -1760,7 +1760,7 @@ async function concluirAprovacaoDireta(db, user, rec, recebimentoId, opts) {
   // nao duplicaria auditoria porque o `AND status='VINCULADO'` already fechou na 1a chamada.
   if (rec.pedido_compra_id) {
     try {
-      await purchaseService.fecharSolicitacoesDoPedido(db, user, rec.pedido_compra_id);
+      await purchaseService.fecharSolicitacoesDoPedido(db, user, rec.pedido_compra_id, { recebimentoId });
     } catch (e) {
       console.warn('[almoxarifado-compras] Falha ao fechar solicitacoes do pedido apos aprovar recebimento:', e.message);
     }
