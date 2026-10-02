@@ -1,7 +1,7 @@
 # Etapa 70 — o aviso da nota que entrou no estoque (feature 08, com a 19)
 
-> Status: **Fases 0 e 1 feitas (2026-10-01) — plano escrito, aguardando a Fase 2 (revisão do plano por agente
-> fresco).** Nenhum código de produção, nenhum commit.
+> Status: **T0–T4 feitas e a Fase 5 (fix-round da revisão de execução) feita (2026-10-01) — falta a T5 (fechamento).**
+> Último commit da Fase 5: `e8f503c`. Ver a seção "Fase 5" antes da letra A.
 > Feature 08 (recebimento), item *"E-mail automático na entrada confirmada (feature 19)"*
 > (`specs/modulo-almoxarifado/08-recebimento/README.md:780`), com a infraestrutura da 19 (fila
 > `fila_notificacoes_almoxarifado`). Requisito: especificação original seção 8.4 (*"… Atualização do saldo → E-mail
@@ -447,7 +447,7 @@ T2 em worktree); **T4** (integração) depois de T2; **T5** fechamento. Executor
   o link do Comercial; (s4) chave da nota ignorada → cai a rodada (A); (s5) retido como livre → R3 ganha aviso, cai;
   (s6) sem o fallback `notificacoes_dest_compras` → cai o (B) da nota (lista vazia não enfileira: 0 linhas); (s7) sem o
   gancho em `concluirProcessamentoNota` → caem (A), (B) nota e (B) requisitantes. Nenhum defeito de produção revelado.
-  Suíte: api 262/262.
+  Suíte: api 262/262. Commit `585e384`.
 
   *Texto original da T4:* **T4 (integração, cruza galhos e o módulo Compras).** `server/tests/api/recebimentoAvisoEntradaIntegracao.api.test.js`,
   molde de `recebimentoContraPedidoIntegracao.api.test.js` + `requisicaoEstados.api.test.js:218-229`: (1) material M
@@ -464,6 +464,55 @@ T2 em worktree); **T4** (integração) depois de T2; **T5** fechamento. Executor
   ganhou lista própria"; mapa; guia (Antes → Agora, roteiro clicável: ligar/desligar, processar, ver no painel);
   manual 21c.1 (o aviso novo); letra B (B316–B323), A34, D (70), G (o `aprovarRecebimento` sem auditoria, se
   confirmado); o comentário de `nonConformityService.js:20` (pendência da 69) num commit próprio se ainda estiver lá.
+
+## Fase 5 — fix-round da revisão de execução (1 importante, 2 menores) — FEITA (2026-10-01)
+
+Sondas da revisão: `sonda70f-vazio.js` e `sonda70f-claim.js` (scratchpad da sessão). Três commits, um por assunto.
+
+- [x] **IMPORTANTE — `quantidade_recebida = ''` gravado por `/conferir` e `/fiscal`.** Os dois UPDATEs gravavam
+  `item.quantidade_recebida ?? null`; o `''` (a tela reenvia o estado cru do campo limpo) passava, a coluna REAL
+  guardava texto, `quantidadeDoItem` (`??`) devolvia `''`, `'' > 0` é falso → item pulado **calado** e a nota fechava
+  PROCESSADO com saldo 0, enquanto o modal de Processar mostrava a esperada (sonda: esperada 5 → saldo 0).
+  **Correção da T0:** o registro da T0 diz que "`recebidaInformada` mantém o `''` caindo na esperada" — valia só
+  para o INSERT; as duas portas de UPDATE ficaram de fora (a T0 estava incompleta, não errada no que afirmou).
+  Conserto na origem: `normalizarRecebida` (substitui `recebidaInformada`) é a função única das **três** portas
+  (INSERT de `criarRecebimento`, UPDATE de `/conferir` e de `/fiscal`): `null`/`undefined`/`''`/só espaços → `null`;
+  número ou texto numérico → número; 0 é "chegou zero"; texto não numérico → **400 `quantidade_recebida deve ser um
+  número`**, antes de qualquer escrita (cabeçalho, status e, na criação, antes do INSERT). Leitura: `quantidadeDoItem`
+  trata o `''` legado como não informado; o SQL do aviso (`receiptNotificationService`, `QTD_DO_ITEM_SQL`) idem — o
+  `COALESCE` puro devolvia o `''` e, como no SQLite texto > número, o aviso anunciava "0 UN".
+  Teste `recebimentoChegouZero.api.test.js` 17/17 (12 novos, pelas rotas: `/conferir` e `/fiscal` com `''` e `'   '`
+  → processa com a esperada; com 0 → não entra; `' 4 '` → grava 4 REAL; `'abc'` → 400 sem escrever nada; POST com
+  `'   '`/`'abc'`; legado `''` gravado direto → entra a esperada e o aviso diz "7 UN"). Sabotagens (perl, âncora = 1,
+  restauro por cópia + md5 OK): conferir sem normalizar → 3 caem; fiscal sem normalizar → 3; `quantidadeDoItem` com
+  `??` puro → LEGADO; INSERT com `??` → POST; sem a validação antecipada no criar → "recusa antes do INSERT"; SQL do
+  aviso com `COALESCE` → LEGADO pela linha "0 UN". Commit `f039576`.
+- [x] **MENOR — claim `processando_em` sem dono.** Processamento > 10 min perdia a nota para um segundo clique e
+  saíam duas contas a pagar (sonda (b): contas `[2, 3]`); `liberarProcessamento` zerava a marca de quem estivesse em
+  voo. Agora a marca é `'<YYYY-MM-DD HH:MM:SS> #<uuid>'` (prefixo mantém a expiração; sufixo = dono);
+  `liberarProcessamento` só limpa a marca com o MEU uuid; `concluirProcessamentoNota` confere a posse antes de
+  `gerarContaPagar` — perdeu: não cria conta, não sobrescreve status, `console.warn('[recebimento] a marca de
+  processamento passou a outra execucao (recebimento <id>): conta a pagar nao gerada por esta execucao')` e 409
+  `Esta nota já está sendo processada`. A expiração continua; marca vencida que ninguém assumiu segue do dono
+  (posse pelo uuid, não pela idade). Sonda (b) depois: A 409, B PROCESSADO, contas `[2]`, saldo 4.
+  Teste `recebimentoProcessamentoConcorrente.api.test.js` 11/11 (4 novos). Sabotagens: sem a conferência de posse →
+  cai o da conta em dobro; liberação sem dono → caem os 2 de "a marca do outro continua" (processar e aprovar
+  direto); posse pela idade → cai "vencida mas ninguém assumiu". Commit `b5f51c0`.
+  **Limite declarado (letra C na T5):** quando o segundo assume no meio, o aviso de entrada sai do segundo, que pode
+  ter rodado o gancho antes de o primeiro terminar o item em voo (o dedupe guarda esse conteúdo). Só acontece com
+  processamento > 10 min; o heartbeat (renovar a marca por item) foi descartado — reduz a janela sem fechá-la.
+- [x] **MENOR — etiquetas para item que chegou zero.** `montarEtiquetasDoRecebimento` usava
+  `Number(recebida || esperada)`. `quantidadeQueEntra` saiu de `RecebimentosAlmoxarifado.js` para
+  `client/src/utils/quantidadeQueEntra.js` (régua única: modal de Processar, contador de séries, etiquetas) e ganhou
+  o "só espaços = não informado" alinhado ao servidor. **Não** filtra por `entrada_estoque_em` (descartado, letra B na
+  T5): nota processada antes da coluna ficaria sem etiqueta, e em nota PROCESSADO todo item com quantidade > 0 entrou.
+  Teste `etiquetasPdf.test.js` 28/28 (8 novos). Sabotagens: régua antiga → cai o "chegou zero"; sem o trim → caem 2.
+  Commit `e8f503c`.
+
+Suíte final: api 262/262, almoxarifado 44/44, validation 4/4, safealter 3/3, sqlite 5/5; client 74 suítes / 1132
+testes; `CI=true` build ok. **Próximo passo: T5 (fechamento)** — além do já listado nela, registrar na letra B a
+literal nova `quantidade_recebida deve ser um número`, a decisão das etiquetas (sem filtro `entrada_estoque_em`) e o
+formato da marca; na letra C o limite do aviso com posse perdida.
 
 ## Letra A — consulta para produção (A34)
 
