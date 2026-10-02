@@ -377,6 +377,86 @@ async function fecharSolicitacoesDoPedido(db, user, pedidoCompraId) {
   return resultado;
 }
 
+/**
+ * Etapa 72, T2 (D6/B348 revista na Fase 2 — REVOGA EM PARTE a B334/D6 da Etapa 71, "o estorno nao
+ * toca a solicitacao") — O ESTORNO REABRE A SOLICITACAO que a entrada estornada tinha fechado.
+ *
+ * Chamada pelo gancho do estorno (`receiptService.estornarEntradaNoPedido`), DEPOIS de a linha ter
+ * sido descontada e do passo do status do pedido. `quantidadeDescontada` e o que o estorno tirou da
+ * linha (recebida antes - recebida depois): com ela o recebido do par ANTES do estorno e reconstruido
+ * sem uma segunda leitura.
+ *
+ * Reabre (RECEBIDA -> VINCULADO, `recebida_em` NULL) as RECEBIDA do par (pedido, material) quando:
+ *   - o pedido existe e esta vivo (fora de `STATUS_PEDIDO_ENCERRADO`): reabrir com o pedido
+ *     encerrado nao contaria nada (D3) e so sujaria a aba;
+ *   - o par tem linha no pedido (sem linha nunca reabre — o estorno sempre vem de uma linha com
+ *     material, entao pela porta real o caso nao existe);
+ *   - a condicao de fechamento da T1 (material completo OU recebido >= limiar) VALIA antes deste
+ *     estorno e DEIXOU de valer depois. Sem o "valia antes", o legado fechado cedo pela regra antiga
+ *     (RECEBIDA com 4 de 10) reabriria no estorno dos 4 e passaria a contar 10 a caminho de uma
+ *     compra que o comprador talvez ja tenha refeito.
+ * CANCELADA nunca reabre (decisao humana). O UPDATE repete "deixou de valer" e "pedido vivo" no WHERE,
+ * atomico contra uma nota processada no meio. Uma trilha `REABERTA` por solicitacao, cada uma no seu
+ * try (perder a trilha e reparavel; desfazer a reabertura por causa dela, nao).
+ *
+ * Retorno: ids reabertos.
+ */
+async function reabrirSolicitacoesDoMaterial(db, user, {
+  pedidoId, materialId, movimentacaoId, quantidadeDescontada = 0,
+} = {}) {
+  if (pedidoId == null || materialId == null) return [];
+  if (!(await tabelaExiste(db, 'pedidos_compra')) || !(await tabelaExiste(db, 'itens_pedido_compra'))) return [];
+  const pedido = await dbGet(db, 'SELECT id, status FROM pedidos_compra WHERE id = ?', [pedidoId]);
+  if (!pedido || STATUS_PEDIDO_ENCERRADO.includes(String(pedido.status || '').toLowerCase())) return [];
+
+  const recebidas = await dbAll(db, `SELECT id, quantidade, recebido_no_vinculo
+    FROM solicitacoes_compra_almoxarifado
+    WHERE pedido_compra_id = ? AND material_id = ? AND status = 'RECEBIDA' ORDER BY id`, [pedidoId, materialId]);
+  if (!recebidas.length) return [];
+
+  const soma = await dbGet(db, `SELECT total_material, recebida_material FROM (${SOMA_POR_MATERIAL_SQL})
+    WHERE pedido_id = ? AND material_id = ?`, [pedidoId, materialId]);
+  const total = Number(soma?.total_material) || 0;
+  if (!(total > 0)) return [];
+  const depois = Number(soma.recebida_material) || 0;
+  const antes = depois + Math.max(0, Number(quantidadeDescontada) || 0);
+  const limiar = limiarDoPar(recebidas);
+  const fecha = (recebido) => total - recebido <= EPSILON_DIVERGENCIA || recebido >= limiar - EPSILON_DIVERGENCIA;
+  if (!fecha(antes) || fecha(depois)) return [];
+
+  const ids = recebidas.map((s) => s.id);
+  const reabertas = await dbAll(db, `UPDATE solicitacoes_compra_almoxarifado
+      SET status = 'VINCULADO', recebida_em = NULL
+      WHERE pedido_compra_id = ? AND material_id = ? AND status = 'RECEBIDA'
+        AND id IN (${ids.map(() => '?').join(',')})
+        AND EXISTS (SELECT 1 FROM pedidos_compra p WHERE p.id = ?
+          AND LOWER(COALESCE(p.status, '')) NOT IN (${STATUS_PEDIDO_ENCERRADO_SQL}))
+        AND NOT EXISTS (SELECT 1 FROM (${SOMA_POR_MATERIAL_SQL}) s
+          WHERE s.pedido_id = ? AND s.material_id = ? AND s.total_material > 0
+            AND (s.total_material - s.recebida_material <= ${EPSILON_DIVERGENCIA}
+              OR s.recebida_material >= ? - ${EPSILON_DIVERGENCIA}))
+      RETURNING id`, [pedidoId, materialId, ...ids, pedidoId, pedidoId, materialId, limiar]);
+
+  const reabertasIds = reabertas.map((r) => r.id).sort((a, b) => a - b);
+  for (const id of reabertasIds) {
+    try {
+      await registrarAuditoria(db, {
+        entidade: 'solicitacao_compra', entidade_id: id, acao: 'REABERTA',
+        usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
+        dados_anteriores: { status: 'RECEBIDA' },
+        dados_novos: {
+          status: 'VINCULADO', pedido_compra_id: pedidoId, material_id: materialId,
+          movimentacao_id: movimentacaoId, recebido_no_pedido: limpo(depois),
+        },
+        justificativa: `Estorno da movimentação #${movimentacaoId} reabriu a solicitação`,
+      });
+    } catch (e) {
+      console.warn(`[almoxarifado-compras] trilha REABERTA da solicitacao ${id} falhou: ${e.message}`);
+    }
+  }
+  return reabertasIds;
+}
+
 async function lerConfigNumero(db, chave, fallback) {
   const row = await dbGet(db, 'SELECT valor FROM configuracoes_almoxarifado WHERE chave = ?', [chave]);
   const n = parseFloat(row?.valor);
@@ -754,4 +834,6 @@ module.exports = {
   cancelarSolicitacao, fecharSolicitacoesDoPedido, contextoMaterial,
   // Etapa 72, T1: a fonte unica do "a caminho" por solicitacao (a T3 — relatorio da aba — consome).
   posicaoDasSolicitacoes,
+  // Etapa 72, T2: chamada pelo gancho do estorno PELO OBJETO do modulo (monkeypatch do RN-09).
+  reabrirSolicitacoesDoMaterial,
 };

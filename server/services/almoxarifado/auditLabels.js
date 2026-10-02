@@ -165,6 +165,9 @@ const GRUPOS_ACAO = congelarGrupos([
   { rotulo: 'Início do faturamento', verbos: ['INICIAR_FATURAMENTO'] },
   { rotulo: 'Processamento da nota', verbos: ['PROCESSAR_NOTA'] },
   { rotulo: 'Recebida', verbos: ['RECEBIDA'] },
+  // Etapa 72 (D6): o estorno da entrada que tinha fechado a solicitacao de compra a devolve a
+  // VINCULADO. Verbo proprio (conferido antes: 'REABERTA' nao estava em nenhum grupo).
+  { rotulo: 'Solicitação reaberta (estorno)', verbos: ['REABERTA'] },
   // Etapa 42 (RN-E07): a entrada fisica que completa o pedido de compra grava
   // `pedidos_compra.status = 'recebido'` sozinha. Rotulo PROPRIO, e NAO agrupado com
   // 'Mudança de status': aquele grupo e de `lote`/`serie` (lotService:105,143, seriesService:316) e

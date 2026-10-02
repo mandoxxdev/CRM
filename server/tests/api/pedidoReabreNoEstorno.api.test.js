@@ -147,6 +147,8 @@ function capturarWarn(fn) {
       id: pedido.id, numero: pedido.numero, pedido_item_id: linhas[0], quantidade_estornada: 6,
       situacao_antes: 'PARCIAL', situacao_depois: 'ABERTO', saldo_pendente: 10,
       status_anterior: 'pendente', status: 'pendente', reaberto: false,
+      // Etapa 72, T2: o contrato CRESCEU — a chave existe sempre que ha pedido ([] sem solicitacao a reabrir).
+      solicitacoes_reabertas: [],
     }, `contrato da resposta: ${JSON.stringify(r.body)}`);
 
     assert.strictEqual(await recebidaDa(linhas[0]), 0, 'a linha do pedido nao foi descontada');

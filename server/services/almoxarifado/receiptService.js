@@ -2266,7 +2266,9 @@ async function estornarEntradaNoPedido(db, user, mov) {
     return null;
   }
   if (!item.pedido_item_id) return null;
-  const linha = await dbGet(db, 'SELECT id, pedido_id, quantidade_recebida FROM itens_pedido_compra WHERE id = ?',
+  // Etapa 72 (Fase 2): `material_id` da LINHA — e o material dela que define o par (pedido, material)
+  // da solicitacao a reabrir, nao o da movimentacao.
+  const linha = await dbGet(db, 'SELECT id, pedido_id, material_id, quantidade_recebida FROM itens_pedido_compra WHERE id = ?',
     [item.pedido_item_id]);
   if (!linha || linha.pedido_id == null) return null;
   const pedido = await dbGet(db, 'SELECT id, numero, status FROM pedidos_compra WHERE id = ?', [linha.pedido_id]);
@@ -2301,6 +2303,25 @@ async function estornarEntradaNoPedido(db, user, mov) {
         WHERE id = ? AND LOWER(COALESCE(status, '')) = 'recebido' AND NOT ${SQL_PEDIDO_COMPLETO}`,
       [destino, pedido.id]);
       reaberto = r.changes === 1;
+    }
+  }
+
+  // (2b) Etapa 72, T2 (D6/B348 — revoga em parte a B334/D6 da 71): A SOLICITACAO DE COMPRA que esta
+  // entrada tinha fechado volta a VINCULADO, se a condicao de fechamento por material valia antes do
+  // estorno e deixou de valer. DEPOIS do passo do pedido (o pedido `recebido` que o estorno reabriu
+  // ja esta vivo aqui) e antes das trilhas do pedido. Nao-fatal: o estorno do saldo e o desconto da
+  // linha ja aconteceram. Pelo OBJETO `purchaseService` (monkeypatch do RN-09).
+  let solicitacoesReabertas = [];
+  if (linha.material_id != null) {
+    try {
+      solicitacoesReabertas = await purchaseService.reabrirSolicitacoesDoMaterial(db, user, {
+        pedidoId: pedido.id,
+        materialId: linha.material_id,
+        movimentacaoId: mov.id,
+        quantidadeDescontada: recebidaAntes - recebidaDepois,
+      });
+    } catch (e) {
+      console.warn(`[recebimento] reabertura das solicitacoes do pedido ${pedido.id} no estorno falhou: ${e.message}`);
     }
   }
 
@@ -2351,6 +2372,8 @@ async function estornarEntradaNoPedido(db, user, mov) {
     status_anterior: pedido.status,
     status: statusAgora,
     reaberto,
+    // Etapa 72: sempre presente quando ha pedido; [] sem reabertura.
+    solicitacoes_reabertas: solicitacoesReabertas,
   };
 }
 

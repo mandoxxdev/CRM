@@ -183,6 +183,8 @@ let seq = 0;
       id: A.pedido.id, numero: A.pedido.numero, pedido_item_id: A.linha(A.MA), quantidade_estornada: 10,
       situacao_antes: 'RECEBIDO', situacao_depois: 'PARCIAL', saldo_pendente: 10,
       status_anterior: 'recebido', status: 'enviado', reaberto: true,
+      // Etapa 72, T2: o contrato CRESCEU — a chave existe sempre que ha pedido ([] sem solicitacao a reabrir).
+      solicitacoes_reabertas: [],
     }, `contrato da resposta: ${JSON.stringify(r.body)}`);
     assert.strictEqual(await statusDe(A.pedido.id), 'enviado', 'o Compras nao mostra o pedido reaberto no status de antes');
     assert.strictEqual(await saldo(A.MA), 0, 'o saldo de MA tinha de voltar a 0');

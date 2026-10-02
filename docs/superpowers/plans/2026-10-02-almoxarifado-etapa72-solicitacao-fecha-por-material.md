@@ -401,7 +401,17 @@ T2); **T4** (integração) depois de T2 e T3; **T5** fechamento. Executores de g
   `UPDATE` sem `material_id` → RN-01/RN-02; (b) só a condição (a) da D1 → RN-03; (c) `a_caminho` com `quantidade`
   inteira no `VINCULADO` → RN-05 (`a_caminho` 10); (d) sem o recorte de pedido encerrado → RN-06; (e) dedupe só `PENDENTE`
   → RN-07; (f) sem o ramo `SEM_LINHA_NO_PEDIDO` → RN-04 **e** o (I-1) da 14.
-- [ ] **T2 (tronco) — o estorno reabre a solicitação.** `reabrirSolicitacoesDoMaterial` + o gancho em
+- [x] **T2 (tronco) — o estorno reabre a solicitação.** *(feita — T1 em `c57c0c7`; hash da T2 no commit seguinte
+  (o próprio commit da T2 marca isto). `solicitacaoReabreNoEstorno.api.test.js` 8/8 (rota em (1)(3a-e)(4), serviço em
+  (2)); suíte 267/267. Os dois `deepStrictEqual(pedido_compra)` da 71 (`pedidoReabreNoEstorno:146`,
+  `pedidoReabreIntegracao:182`) ganharam `solicitacoes_reabertas: []` — única edição em teste existente.
+  **Divergência do contrato da Fase 1:** `reabrirSolicitacoesDoMaterial` recebe também `quantidadeDescontada`
+  (recebida antes − depois na linha), que é o que reconstrói o recebido do par ANTES do estorno para a regra "valia antes
+  e deixou de valer" da Fase 2; o gancho passa `linha.material_id` e só chama quando ele não é nulo. A negativa "outra nota
+  já cobria" usa pedido de **20** (10 + 10): num pedido de 10 a segunda nota de 10 exigiria excedente. Negativa nova (3e):
+  legado fechado cedo pela regra antiga não reabre. Rótulo `'REABERTA'` conferido ausente antes de criar. Controles
+  positivos: (a) gancho não chamado → (1)(2)(4); (b) sem olhar pedido encerrado (guarda JS **e** do `WHERE`) → (3b);
+  (c) sem "valia antes" → (3e); (c2) sem "deixou de valer" (JS e `WHERE`) → (3d); (d) chamada fora do try → (4).)* `reabrirSolicitacoesDoMaterial` + o gancho em
   `estornarEntradaNoPedido` + rótulo. Teste novo `server/tests/api/solicitacaoReabreNoEstorno.api.test.js`: RN-08 e RN-09,
   **pela rota** `/movimentacoes/:id/cancelar` **e pelo serviço** `stockService.cancelarMovimentacao` (regra da skill:
   o estorno entra por mais de uma porta). O `pedidoReabreNoEstorno` da 71 passa **sem edição**, salvo os `deepStrictEqual`
