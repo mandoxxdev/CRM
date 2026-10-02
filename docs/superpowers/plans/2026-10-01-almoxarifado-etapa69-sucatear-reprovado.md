@@ -440,7 +440,17 @@ fechamento. Executores de galho **não** marcam este plano (o fio principal marc
   movimenta estoque" para `SUCATEAR`. Sabotagens no corpo do commit.
 - [ ] **T5 (galho, cliente) — tela de Sobras** (RN-13). Coluna/selo `NC-…` na fila de sucateamentos e
   `?aba=sucateamentos`. Testes em `SobrasAlmoxarifado.test.js`. Sabotagens no corpo do commit.
-- [ ] **T6 (galho, teste) — G79** (RN-14). `server/tests/almoxarifado.test.js`: `localizacao TEXT` na montagem de
+- [x] **T6 (galho, teste) — G79** (RN-14). *Feita (2026-10-01, `9a45c31`): `test:almoxarifado` 44/0 (era 42/0), zero
+  `no such column` no log (eram 19 avisos). **Divergência do plano:** o teste novo usa material **sem** mínimo (caminho
+  do zerado), não "com mínimo" — o caminho do mínimo só grava em `alertas_estoque_material_almoxarifado` depois de envio
+  real (`marcarAlertaEnviado`), então sem SMTP não deixa rastro; o zerado enfileira e grava `estado_zerado`. Exige
+  `ZERADO` + carimbo + exatamente um `ESTOQUE_ZERADO` na fila. `pedidos_compra` ganhou `status` **e** `updated_at`
+  (`fecharPedidosCompletos` grava os dois); "Workflow NF" segue verde. Espião olha `warn` e `error`. Sabotagens: sem
+  `localizacao` → teste novo + espião vermelhos (42/2); sem `status` → espião vermelho (43/1); motor sem a chamada
+  `verificarAlertaPorMaterialId` → teste novo vermelho (43/1). `test:api` 255/256 — `indicadoresSpec27Integracao`
+  intermitente na rodada cheia (8/0 isolado), não tocado. Sobra da mesma classe, fora: seed de
+  `tipos_material_almoxarifado` ignorado (fixture sem `descricao`, "has no column named", fora do padrão do espião).*
+  `server/tests/almoxarifado.test.js`: `localizacao TEXT` na montagem de
   `materiais_almoxarifado` e `status TEXT` em `pedidos_compra`; espião de `console.warn` que **falha a suíte** se
   aparecer `[almoxarifado-alertas] Falha` ou `no such column`; teste novo *"Alerta pós-movimentação roda no motor"* —
   material com mínimo configurado, `registrarMovimentacao` que o leva ao zero (ou abaixo do mínimo) e a linha em
