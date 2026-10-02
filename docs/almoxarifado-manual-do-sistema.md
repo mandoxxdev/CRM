@@ -1424,7 +1424,8 @@ Os status e as passagens permitidas entre eles são fixos; qualquer tentativa fo
 
 **Os três status que muita gente estranha:**
 
-- **Aguard. Estoque** e **Aguard. Compra** — a requisição cai automaticamente num deles quando, na aprovação, **nenhum item** tem saldo disponível. Fica em *Aguard. Compra* quando já existe uma solicitação de compra pendente para algum dos materiais; caso contrário, *Aguard. Estoque*. Se ao menos um item tem disponível, ela segue o caminho normal.
+- **Aguard. Estoque** e **Aguard. Compra** — a requisição cai automaticamente num deles quando, na aprovação, **nenhum item** tem saldo disponível — qualquer que seja a forma de aprovar (**Só Aprovar**, **Aprovar Liberação** ou a aprovação automática). Fica em *Aguard. Compra* quando algum dos materiais tem **compra a caminho**: uma solicitação de compra ainda não pedida, ou já pedida ao fornecedor (vinculada a um pedido) com material que ainda falta chegar, aberta há no máximo 60 dias. É a mesma conta do "a caminho" da sugestão de reposição: pedido cancelado ou rejeitado, e material que já chegou todo pelo pedido, **não** contam; pedido lançado direto no Compras, sem solicitação de compra, também não. Caso contrário, *Aguard. Estoque*. Se ao menos um item tem disponível, ela segue o caminho normal (a reserva decide o status, 9.3).
+- **A chegada do material não muda o status.** A requisição continua *Aguard. Compra* ou *Aguard. Estoque* depois que a nota entra; a separação já pode começar (ela trabalha pelo saldo, não pelo status), e o detalhe passa a dizer que o material chegou (10.1). O material que chega **não** fica reservado para ela: outra requisição aprovada depois pode reservá-lo, e quem separar primeiro leva.
 - **Totalmente Reservada** / **Parcialmente Reservada** — é o estado **normal** de uma requisição recém-aprovada que encontrou saldo (seção 9).
 
 ### 7.2 Criação — o que o sistema valida
@@ -1440,6 +1441,7 @@ Os status e as passagens permitidas entre eles são fixos; qualquer tentativa fo
   *AAAA-MM-DD* e ser um dia que existe; fora disso — *15/09/2026*, *2026-02-30* — a criação é recusada, sem gravar nada:
   *"data_necessidade deve estar no formato AAAA-MM-DD"*.
 - **Rascunho é do dono.** Só o solicitante envia o próprio rascunho: *"Apenas o solicitante pode enviar o rascunho"*; e só rascunho pode ser enviado: *"Apenas rascunhos podem ser enviados"*.
+- **A ordem dos itens é a do pedido.** Os itens são gravados e mostrados — no detalhe, no comprovante e na fila de separação — na ordem em que o solicitante os incluiu, tanto na tela do almoxarifado quanto na de requisição das outras áreas.
 
 **Enviar é o gatilho de tudo.** Enquanto está em Rascunho, a requisição não dispara e-mail, não é avaliada pelas regras de aprovação nem pela alçada de valor, e não é vista pelo almoxarifado. É o envio que a coloca em circulação — e é **no envio** que o sistema decide quais regras de aprovação ela precisa cumprir (8.4).
 
@@ -1580,7 +1582,7 @@ Repare que o teste é **"maior que zero"**, não "preenchido". Materiais que nun
 3. Se o valor da requisição **subir** depois (itens alterados) e ultrapassar o limite sem ter sido liberada antes, ela volta a travar na tentativa de separar/entregar: *"Valor total (R$ 12.400,00) excede o limite de liberação automática (R$ 10.000,00). Aprovação de alto valor necessária."*
 4. **Quem pode liberar:** os usuários da lista configurada, mais o administrador do sistema. Fora disso: *"Sem permissão para aprovar liberação por valor"*. A segregação continua valendo — o solicitante não libera a própria, ainda que esteja na lista.
 5. Só requisição nesse status pode ser liberada ou reprovada: *"Apenas requisições aguardando aprovação de valor podem ser liberadas"* / *"Apenas requisições aguardando aprovação de valor podem ser reprovadas"*.
-6. **A liberação por valor reserva o estoque**, exatamente como a aprovação comum (9.3). O solicitante é notificado por e-mail da liberação ou da reprovação, com o motivo.
+6. **A liberação por valor reserva o estoque e calcula a espera**, exatamente como a aprovação comum (9.3): sem saldo nenhum, a requisição liberada fica **Aguard. Compra** ou **Aguard. Estoque** (7.1), não *Aprovado*. O solicitante é notificado por e-mail da liberação ou da reprovação, com o motivo.
 
 Reprovar por valor rejeita a requisição. Aqui **não há segregação**: o solicitante pode desistir da própria mesmo sendo aprovador de valor.
 
@@ -1642,13 +1644,18 @@ Cada assinatura fica na auditoria da requisição como **Aprovação de regra**,
 
 ### 8.5 Aprovação automática
 
-Existe ainda uma configuração de **aprovação automática**. Com ela ligada, a requisição enviada é aprovada na hora, com o aprovador registrado como **"Sistema (automático)"**.
+Existe ainda uma configuração de **aprovação automática** (**Configurações → Configurações Gerais → Aprovação Automática**). Com ela ligada, a requisição enviada é aprovada na hora, com o aprovador registrado como **"Sistema (automático)"**.
+
+**Ela faz o mesmo que a aprovação comum depois de aprovar:** reserva o saldo disponível (9.3) e grava **Totalmente Reservada**, **Parcialmente Reservada**, ou — sem saldo nenhum — **Aguard. Compra** / **Aguard. Estoque** (7.1). A reserva fica no nome de quem criou ou enviou a requisição. Por integração, a resposta da criação ou do envio traz o status gravado e a indicação de aprovação automática.
+
+Se duas requisições disputam o último saldo ao mesmo tempo, a que fica sem nada é gravada esperando (*Aguard. Compra* ou *Aguard. Estoque*), nunca *Aprovado* sem reserva. Se a aprovação automática falhar no meio (por exemplo, o banco ocupado), nada fica reservado: a requisição continua **Pendente** e é aprovada pela forma comum.
 
 Três ressalvas:
 
 - **Urgência "Crítico" nunca é auto-aprovada** — justamente a que mais chama atenção precisa de olho humano. Vale também para um rascunho antigo em que a urgência esteja escrita de outro jeito (*"critico"*).
 - A aprovação automática **só corre depois** da alçada por valor. Requisição que caiu em *Aguard. Aprov. Valor* não é auto-aprovada.
-- **Requisição com assinatura de regra pendente não é auto-aprovada** (8.4) — ela fica **Pendente**.
+- **Requisição com assinatura de regra pendente não é auto-aprovada** (8.4) — ela fica **Pendente**, sem nenhuma reserva (as regras são conferidas antes de reservar).
+- A aprovação automática registra o aprovador e a data na própria requisição, mas **não** grava o registro *Aprovação* na **Auditoria** — para saber quem aprovou uma requisição automática, leia o aprovador nela.
 
 > As regras de aprovação em vigor são estas: **segregação**, **limite por valor**, **regras de aprovação configuráveis** (inclusive por urgência e por material de cliente) e **aprovação automática**.
 
@@ -1711,11 +1718,13 @@ Reservas nascidas de requisição aparecem com a etiqueta **REQ #número**; as f
 
 ### 9.3 Reserva automática na aprovação
 
-Ao aprovar uma requisição, o sistema percorre os itens e, para cada um, reserva:
+Ao aprovar uma requisição — por qualquer das três formas: **Só Aprovar**, **Aprovar Liberação** ou a aprovação automática —, o sistema percorre os itens e, para cada um, reserva:
 
 ```
-a reservar = mínimo(quantidade ainda pendente de entrega, disponível do material)
+a reservar = mínimo(quantidade ainda pendente de entrega − o que o item já tem reservado, disponível do material)
 ```
+
+O "já tem reservado" faz a reserva nunca dobrar: um item que já segura saldo da própria requisição só reserva o que falta.
 
 As reservas são criadas **uma a uma**, relendo o disponível a cada uma — dois itens do mesmo material não reservam o mesmo saldo duas vezes.
 
@@ -1725,9 +1734,11 @@ O status final da requisição sai daí:
 |---|---|
 | Todo item pendente saiu com o pedido **inteiro** reservado | **Totalmente Reservada** |
 | Alguma coisa foi reservada, mas não tudo | **Parcialmente Reservada** |
-| Nada foi reservado | Mantém **Aprovado**, **Aguard. Estoque** ou **Aguard. Compra** |
+| Nada foi reservado, e nenhum item tinha saldo | **Aguard. Compra** ou **Aguard. Estoque** (7.1) |
+| Nada foi reservado, mas algum item tinha saldo (a reserva falhou) | **Aprovado** |
+| Nada foi reservado porque outra aprovação levou o último saldo ao mesmo tempo | O sistema relê o saldo e grava **Aguard. Compra** ou **Aguard. Estoque** |
 
-**Falhar em reservar não derruba a aprovação.** A decisão de aprovar já foi tomada e é independente de haver saldo — é exatamente o caso "Aguard. Estoque". No pior cenário a requisição fica sem hold e a separação disputa o disponível como qualquer outra saída.
+**Falhar em reservar não derruba a aprovação.** A decisão de aprovar já foi tomada e é independente de haver saldo — é exatamente o caso "Aguard. Estoque". No pior cenário a requisição fica sem hold e a separação disputa o disponível como qualquer outra saída. Se a falha acontece **no meio** (um item reservado, o seguinte não), as reservas já feitas por aquela aprovação são desfeitas: nenhum saldo fica preso por uma aprovação que não terminou.
 
 ### 9.4 Consumo contra reserva
 
@@ -1795,6 +1806,9 @@ Os avisos por situação são estes:
 | Parcialmente Reservada | *"Parte dos itens não tinha saldo e ficou sem reserva — separe o que está reservado e acompanhe a reposição do restante."* |
 | Aguard. Estoque | *"Sem saldo disponível no momento — inicie a separação assim que o estoque for reposto."* |
 | Aguard. Compra | *"Sem saldo disponível — há uma solicitação de compra em andamento para os materiais desta requisição."* |
+| Aguard. Estoque ou Aguard. Compra, **com saldo** para algum item ainda não separado | *"Chegou material para esta requisição — já dá para separar. O material ainda não está reservado para ela."*, seguido de *"Dá para separar agora: ⟨quantidade⟩ ⟨unidade⟩ de ⟨material⟩"* (um por material) e de *"O saldo é compartilhado: enquanto não for separado, outra requisição pode separá-lo antes."* |
+
+O aviso de "chegou" aparece no lugar do de "sem saldo" e não muda o status. A quantidade é o menor entre o que falta separar e o saldo disponível; itens do mesmo material dividem esse saldo entre si (4 que chegaram não aparecem como 4 para cada item).
 
 Os botões, na ordem do fluxo: **Iniciar Separação** (que vira **Ajustar Separação** quando a separação já começou), **Conferir separação**, **Liberar para Retirada** — que só aparece se algum item tem quantidade separada — e **Confirmar Entrega e Baixar Estoque**, que entrega em um clique; ao lado dele, **Entregar escolhendo de onde sai…** abre a janela de entrega com o campo **Sai de** por item (7.5). Sem nada separado, no lugar do botão de entrega a tela informa: *"Nenhuma quantidade separada disponível para entrega no momento."*
 

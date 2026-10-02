@@ -1,21 +1,30 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-02 (Etapa 72) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-02 (Etapa 73) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 72) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 73) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-02 (Etapa 72 ENTREGUE · Etapa 73 começando)
+> ## Onde o desenvolvimento está — 2026-10-02 (Etapa 73 ENTREGUE · Etapa 74 começando)
 >
-> **O desenvolvimento parou aqui: Etapa 72 fechada, Etapa 73 começando — 2026-10-02.** A **Etapa 72 (a solicitação de
+> **O desenvolvimento parou aqui: Etapa 73 fechada, Etapa 74 começando — 2026-10-02.** A **Etapa 73 (a requisição que
+> espera compra nasce com o status certo)**: com a compra já pedida ao fornecedor, a requisição sem saldo nasce **Aguard.
+> Compra** (antes, **Aguard. Estoque**); as três formas de aprovar — **Só Aprovar**, **Aprovar Liberação** e a aprovação
+> automática — fazem o mesmo depois de aprovar (a liberação por valor sem saldo não fica mais **Aprovado**, e a
+> automática passa a reservar); o detalhe da requisição em espera diz *"Chegou material para esta requisição — já dá para
+> separar…"* e quanto; e os itens aparecem na ordem em que foram pedidos. **Próxima etapa, já começando: 74 — a
+> requisição que esperava fica com o material que chegou** (hoje quem aprova depois pode levá-lo; ver *"Próxima tarefa
+> detalhada"* no plano da Etapa 73).
+>
+> **Etapas 1 a 20 e 22 a 73 completas.**
+>
+> **Etapa 72, 2026-10-02.** A **Etapa 72 (a solicitação de
 > compra só fecha quando o material dela chega)**: a nota parcial — ou de outro material do pedido — não fecha mais a
 > solicitação de compra; ela continua na aba **Solicitações** da tela **Reposição e Compras** com *"chegou 4 de 10"*, e a
 > sugestão de reposição conta só o que ainda falta, sem mandar comprar de novo o que vem pelo pedido. Pedido cancelado
 > deixa de contar (*"pedido encerrado — nada a caminho"*); estornar a entrada que a fechou a reabre. A verificação de
 > mínimos parou de abrir solicitação em dobro assim que o pedido é gerado. **Próxima etapa, já começando: 73 — a
 > requisição que espera compra** (nasce *Aguardando estoque* com a compra vinculada e não muda quando o material chega;
-> ver *"Próxima tarefa detalhada"* no plano da Etapa 72).
->
-> **Etapas 1 a 20 e 22 a 72 completas.**
+> ver *"Próxima tarefa detalhada"* no plano da Etapa 72). *(feita — acima)*
 >
 > **Etapa 71, 2026-10-02.** A **Etapa 71 (estornar a
 > entrada da nota reabre o pedido de compra)**: em **Movimentações**, estornar a linha **ENTRADA_COMPRA** de uma nota
@@ -5297,6 +5306,61 @@ dados fiscais e **Processar Nota**. Em **Compras → Pedidos**, o pedido está *
 
 ---
 
+## Etapa 73 — A requisição que espera compra nasce com o status certo, em qualquer forma de aprovar (ENTREGUE — 2026-10-02)
+
+**O que mudou, em uma frase:** a requisição sem saldo cuja compra já foi pedida ao fornecedor passa a esperar como
+**Aguard. Compra** (e não **Aguard. Estoque**), as três formas de aprovar fazem o mesmo depois de aprovar, e o detalhe
+avisa quando o material chegou.
+
+**O problema que ela resolve.** Bastava o comprador gerar o pedido para a requisição seguinte do material nascer
+**Aguard. Estoque** — como se nada viesse. A **liberação por valor** sem saldo deixava a requisição **Aprovado**, e a
+**aprovação automática** não reservava nada, nem com saldo. E quando o material chegava, o detalhe continuava dizendo
+"sem saldo".
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Com o pedido gerado, a requisição nascia **Aguard. Estoque** | Nasce **Aguard. Compra** enquanto a compra estiver a caminho |
+| **Aprovar Liberação** sem saldo deixava **Aprovado** | Deixa **Aguard. Compra** ou **Aguard. Estoque** |
+| A aprovação automática não reservava | Reserva o que há, como **Só Aprovar** |
+| O detalhe em espera dizia "sem saldo" mesmo depois de chegar material | Diz *"Chegou material para esta requisição — já dá para separar…"* e quanto |
+| Duas aprovações ao mesmo tempo pelo último saldo deixavam uma **Aprovado** sem nada | A que perde fica esperando |
+| Os itens podiam aparecer fora da ordem pedida | Aparecem na ordem em que foram pedidos |
+
+### Roteiro de teste manual (≈15 min)
+
+**Preparação.** Um material **M** sem saldo, com mínimo e fornecedor. **Almoxarifado → Reposição e Compras**, aba
+**Sugestões de Compra**: marque M e **Gerar solicitações**; aba **Solicitações**: **Gerar pedido** na linha de M e
+salve o pedido (a linha fica **Vinculado**). Use dois usuários: um cria as requisições, **outro** aprova.
+
+1. **O rótulo certo.** Crie uma requisição de M e aprove (**Só Aprovar**): o badge mostra **Aguard. Compra** e o aviso
+   *"Sem saldo disponível — há uma solicitação de compra em andamento para os materiais desta requisição."*
+2. **O pedido cancelado.** No Compras, lápis → **Status** → **Cancelado** no pedido de M. Crie e aprove outra requisição
+   de M: **Aguard. Estoque**. (Para seguir, gere um pedido novo de M.)
+3. **Chegou material.** Processe uma nota de **4** do pedido de M (**Recebimentos**, até **Processar Nota**). Abra a
+   requisição do passo 1 em **Requisições (almox.)**: o badge continua **Aguard. Compra**, e o aviso diz *"Chegou material
+   para esta requisição — já dá para separar. O material ainda não está reservado para ela. Dá para separar agora: 4 … de
+   M. O saldo é compartilhado: enquanto não for separado, outra requisição pode separá-lo antes."* **Iniciar Separação**
+   funciona.
+4. **A aprovação automática reserva.** **Configurações → Configurações Gerais → Aprovação Automática** ligada. Crie uma
+   requisição de um material **com** saldo: ela nasce **Totalmente Reservada**, e a tela **Reservas** mostra a reserva no
+   seu nome. Desligue depois.
+5. **A liberação por valor** (opcional). Com a alçada por valor ligada, uma requisição de M acima do limite, sem saldo:
+   **Aprovar Liberação** deixa **Aguard. Compra** (não mais **Aprovado**).
+6. **A ordem dos itens.** Crie uma requisição com cinco materiais numa ordem qualquer: o detalhe os mostra na mesma
+   ordem.
+
+### O que esta etapa NÃO cobre
+
+- **O material que chega não é reservado para quem esperava** — uma requisição aprovada depois pode levá-lo (aviso
+  **C121** das novidades). É a próxima etapa; até lá, separe logo quem já mostra *"Chegou material…"*.
+- **O status não muda quando o material chega** — por decisão; o aviso do detalhe é que muda.
+- **Pedido lançado direto no Compras, sem solicitação**, não conta como compra a caminho.
+- **Requisições de antes desta versão** ficam como estão (consulta **A37** das novidades).
+
+---
+
 ## Etapa 72 — A solicitação de compra só fecha quando o material dela chega (ENTREGUE — 2026-10-02)
 
 **O que mudou, em uma frase:** a solicitação de compra vinculada a um pedido não fecha mais na primeira nota do pedido —
@@ -5344,7 +5408,7 @@ linha de M, **Gerar pedido** — o pedido de compra abre preenchido; salve com *
 ### O que esta etapa NÃO cobre
 
 - **A requisição que espera compra** continua nascendo *Aguardando estoque* com a compra vinculada, e não muda de status
-  quando o material chega — é a próxima etapa.
+  quando o material chega — é a próxima etapa. *(Paga na Etapa 73: nasce **Aguard. Compra**; a chegada continua sem mudar o status, por decisão, e o detalhe avisa.)*
 - **Solicitações fechadas cedo antes desta versão** não reabrem sozinhas (consulta **A36** das novidades).
 - **"Chegou X de Y"** aparece só na aba Solicitações — não no relatório de **Relatórios**, na exportação nem no painel
   **Ver contexto**.

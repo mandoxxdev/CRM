@@ -2,7 +2,10 @@
 
 > **Status:** 🟢 Etapa 4 completa — backend (2026-08-05) e tela (2026-08-06) ·
 > **Spec original:** seção 7
-> **Última atualização:** 2026-08-11 (auditoria spec×código)
+> **Última atualização:** 2026-10-02 (**Etapa 73** — a aprovação automática passou a reservar como as outras duas
+> portas; a linha "Reserva automática ao aprovar requisição" estava errada para ela e foi corrigida à vista;
+> `6fc7122a`, Fase 5 `5ea57d03`/`851ef2cf`. Continua 🟢; falta reservar o que chega para quem esperava — C121, Etapa 74.)
+> Antes: 2026-08-11 (auditoria spec×código)
 > **Design da etapa:** `docs/superpowers/specs/2026-08-05-almoxarifado-etapa4-reservas-design.md`
 
 > ⚠️ **Correção de uma afirmação errada que estava aqui.** Este arquivo dizia
@@ -38,6 +41,14 @@ Reserva automática pós-aprovação, reserva manual, por projeto/OS/lote, com e
 
 ### Backend
 - [x] Reserva automática ao aprovar requisição (liga 04→07; status `PARCIALMENTE/TOTALMENTE_RESERVADA`) — `6690c1a`
+  > ⚠️ **Esta linha estava errada até a Etapa 73** — corrigida à vista, não apagada. Valia para o `/aprovar` (Etapa 4) e o
+  > `/aprovar-valor` (Task 6), **não** para a terceira porta: a **aprovação automática** (`tentarAprovacaoAutomatica`,
+  > configuração `aprovacao_automatica`) gravava `APROVADO` com e sem saldo e **não reservava nada** (C122). Desde
+  > `6fc7122a` as três portas passam pela mesma `requisitionService.prepararPosAprovacao`: reserva + status
+  > (`*_RESERVADA` ou `AGUARDANDO_*`), com o gate de regras conferido antes de reservar. Fase 5 (`5ea57d03`, `851ef2cf`):
+  > o perdedor de duas aprovações simultâneas pelo último saldo deixa de ficar `APROVADO` sem reserva (recalcula), a
+  > falha no meio da reserva desfaz as próprias reservas (a automática fica `PENDENTE`, 201) e a reserva desconta o hold
+  > ATIVO que o item já tem (idempotente). Não reserva o que **chega** para quem esperava — C121, Etapa 74.
 - [ ] Reserva por lote específico / número de série — **fora da Etapa 4**. Atualização (2026-08-11): a dependência de **lote** caiu — a feature 10 (lotes) foi entregue na Etapa 6 (2026-08-09/10), então reserva por lote ficou implementável; número de série continua dependendo da 6b
 - [x] Data de necessidade na reserva (`data_necessidade`) — `6690c1a`. **Prioridade** ficou fora: sem demanda concreta, `data_necessidade` cobre o ordenamento útil
 - [x] Expiração automática (`POST /reservas/processar-expiracao` + config `reserva_dias_validade`) — `6690c1a`. **Opt-in**: sem a config e sem `expira_em` explícito a reserva não expira, senão as reservas manuais existentes começariam a ser liberadas sozinhas. Alerta por e-mail fica com a feature 20

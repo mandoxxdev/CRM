@@ -107,7 +107,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Trinta e seis itens para rodar em produção ANTES do deploy — trinta e três são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Trinta e sete itens para rodar em produção ANTES do deploy — trinta e quatro são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-02 (Etapa 73) de trinta e seis para trinta e sete**, com a **A37** — as requisições que esperam hoje com o rótulo errado (*Aguardando estoque* com compra já vinculada a pedido) e as aprovadas sem reserva pela aprovação automática ou pela liberação por valor sem saldo.)*
 
 *(**Atualizado em 2026-10-02 (Etapa 72) de trinta e cinco para trinta e seis**, com a **A36** — as solicitações de compra que a regra antiga fechou como *Recebidas* na **primeira** nota, parcial ou não, com o pedido ainda trazendo o material delas.)*
 
@@ -1245,8 +1247,51 @@ HAVING SUM(COALESCE(ip.quantidade,0)) - SUM(COALESCE(ip.quantidade_recebida,0)) 
 - **Atenção:** a solicitação reaberta por este `UPDATE` volta sem nada no livro de atribuição desta etapa (**B353**) —
   o "a caminho" dela é a quantidade inteira enquanto o pedido não completar o material (**C119**).
 
+**A37 (NOVA, da Etapa 73 — requisições que esperam com o rótulo errado ou aprovadas sem reserva: medir antes, nada é
+movido).** A partir desta etapa, a requisição sem saldo cujo material já tem compra **vinculada a pedido** (e ainda a
+caminho) é aprovada como *Aguardando compra* — antes ia para *Aguardando estoque* (**C116**). E as três formas de
+aprovar fazem o mesmo depois de aprovar: a **liberação por valor** sem saldo não fica mais *Aprovado*, e a **aprovação
+automática** passa a reservar (antes não reservava nada — **C122**). As requisições de antes do deploy **ficam como
+estão** (**B364**). Quatro consultas:
 
-### B. Decisões de negócio — B1 a B356; as em aberto esperam você, as tomadas estão escritas com o descartado
+```sql
+-- (1) quantas requisições esperam hoje, por status
+SELECT status, COUNT(*) FROM requisicoes_almoxarifado
+ WHERE status IN ('AGUARDANDO_ESTOQUE','AGUARDANDO_COMPRA') AND COALESCE(ativo,1) = 1 GROUP BY status;
+
+-- (2) Aguardando estoque com compra VINCULADA a pedido vivo de algum material dela (o rótulo errado do C116)
+SELECT DISTINCT r.id, r.numero, r.created_at
+  FROM requisicoes_almoxarifado r
+  JOIN itens_requisicao_almoxarifado ir ON ir.requisicao_id = r.id
+  JOIN solicitacoes_compra_almoxarifado s ON s.material_id = ir.material_id AND s.status = 'VINCULADO'
+  LEFT JOIN pedidos_compra p ON p.id = s.pedido_compra_id
+ WHERE r.status = 'AGUARDANDO_ESTOQUE' AND COALESCE(r.ativo,1) = 1
+   AND LOWER(COALESCE(p.status,'')) NOT IN ('recebido','cancelado','rejeitado');
+
+-- (3) aprovadas pela aprovação automática sem reserva, ainda antes da separação
+SELECT r.id, r.numero, r.data_aprovacao FROM requisicoes_almoxarifado r
+ WHERE r.aprovador_nome = 'Sistema (automático)' AND r.status = 'APROVADO' AND COALESCE(r.ativo,1) = 1
+   AND NOT EXISTS (SELECT 1 FROM reservas_material_almoxarifado x WHERE x.requisicao_id = r.id AND x.status = 'ATIVA');
+
+-- (4) liberadas por valor que ficaram Aprovado sem reserva (sem saldo na liberação)
+SELECT r.id, r.numero, r.data_aprovacao_valor FROM requisicoes_almoxarifado r
+ WHERE r.aprovador_valor_id IS NOT NULL AND r.status = 'APROVADO' AND COALESCE(r.ativo,1) = 1
+   AND NOT EXISTS (SELECT 1 FROM reservas_material_almoxarifado x WHERE x.requisicao_id = r.id AND x.status = 'ATIVA');
+```
+
+**Como ler o resultado:**
+- **(1)** é só o tamanho: quantas esperam hoje.
+- **(2) com linhas** — rótulo errado: elas esperam compra que já foi pedida ao fornecedor. A conta é **aproximada** (não
+  desconta o que já chegou do pedido; a régua exata é a da tela). Para corrigir só o rótulo:
+  `UPDATE requisicoes_almoxarifado SET status = 'AGUARDANDO_COMPRA' WHERE id IN (...)`. Nada mais depende do rótulo: a
+  fila de separação e o separar trabalham pelo saldo.
+- **(3) e (4) com linhas** — aprovadas sem segurar nada: separam disputando o disponível com qualquer outra saída. Se o
+  material está em estoque e alguém quer garanti-lo, reservar pela tela **Reservas**, uma a uma, por quem opera. Não
+  automatizado de propósito (**B364**): reservar retroativamente disputa saldo que pode já ter outro dono.
+- **(2), (3) e (4) vazias** — nada a fazer.
+
+
+### B. Decisões de negócio — B1 a B366; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-01 de B295 para B315**, com as vinte da Etapa 69.)*
 
@@ -4989,6 +5034,75 @@ recusado.** *"O pedido ⟨número⟩ já recebeu todo o ⟨nome do material⟩: 
 o pedido aparece como *#⟨id⟩*). Só entra pela API `vincular-pedido`: o **Gerar pedido** da tela sempre cria pedido novo.
 **Descartado:** aceitar e contar 0 (a solicitação ficaria vinculada a um pedido que nunca a fecharia por quantidade).
 
+**B357 (NOVA, da Etapa 73) — "Aguardando compra" é ter compra do material ainda a caminho, pedida ou não.** Na
+aprovação, se **nenhum** item tem disponível, a requisição vai a *Aguardando compra* quando algum material dela tem
+solicitação de compra com **algo ainda a caminho** dentro do horizonte de 60 dias — *Pendente* (ainda não pedida) ou
+*Vinculado* a pedido vivo (já pedida ao fornecedor, com o que falta chegar). A conta é a mesma da sugestão de reposição
+(a da Etapa 72): pedido cancelado ou rejeitado, e material que já completou no pedido, **não** contam. Senão,
+*Aguardando estoque*. Vale para a requisição inteira, como antes. **Descartados:** (a) contar toda *Vinculado*
+(diria "aguardando compra" para quem não tem nada vindo — pedido cancelado); (b) status por item (outra máquina de
+estados); (c) uma terceira conta do "a caminho". **Fica de fora:** pedido lançado direto no Compras **sem**
+solicitação não conta (a requisição vai a *Aguardando estoque* com compra vindo) — coerente com a reposição.
+
+**B358 (NOVA, da Etapa 73) — o status NÃO muda quando o material chega; a tela diz que chegou.** A fila de separação e
+o separar já trabalham pelo saldo, não pelo status, e o solicitante já recebe o e-mail da Etapa 70 — trocar o status só
+mudaria o rótulo. No lugar, o detalhe da requisição em espera, com saldo para algum item, mostra *"Chegou material para
+esta requisição — já dá para separar. O material ainda não está reservado para ela."*, **quanto** dá para separar de
+cada material e o aviso de que o saldo é compartilhado. Itens do mesmo material dividem o saldo na conta da tela (4
+que chegaram não aparecem como 8). **Descartados:** (a) voltar a *Aprovado* na chegada (sem valor medido, e exigiria
+seta nova na máquina e escrita na requisição a partir do recebimento); (b) reservar na chegada — é a próxima etapa
+(**C121**).
+
+**B359 (NOVA, da Etapa 73) — as três formas de aprovar fazem o mesmo depois de aprovar.** *Aprovar*, *Aprovar
+Liberação* (alçada por valor) e a **aprovação automática** passam por uma função só: reservam o que há e gravam
+*Totalmente/Parcialmente Reservada*, ou *Aguardando compra/estoque* quando nada há. A aprovação automática passa a
+conferir as regras de aprovação **antes** de reservar (com assinatura pendente, fica *Pendente* sem nenhuma reserva) e
+devolve as reservas se perder a corrida para outra pessoa. **Mudança de comportamento da Etapa 47 (anotada):** a
+aprovação automática reavalia as regras sozinha — se a avaliação tinha falhado no envio e nenhuma regra casa, ela
+aprova (coerente com o *Aprovar*). **Agravante declarado:** com a aprovação automática ligada, a requisição **nova**
+reserva na criação o material que acabou de chegar — a disputa do **C121** passa a acontecer sem ninguém aprovar.
+**Descartados:** (a) só o *Aprovar* (o mesmo fato com três status conforme a porta); (b) aprovação automática com o
+status mas sem reservar (*Totalmente Reservada* sem nada seguro); (c) desligar a aprovação automática (decisão de quem
+opera).
+
+**B360 (NOVA, da Etapa 73) — a resposta da criação e do envio com aprovação automática diz o status gravado.** Antes
+dizia sempre *APROVADO*; agora *TOTALMENTE_RESERVADA*, *AGUARDANDO_COMPRA*… (continua com `aprovacao: 'automatica'`).
+Integrações que liam `status === 'APROVADO'` mudam (**C125**). **Descartado:** responder *APROVADO* com outro status
+gravado (a resposta mentiria sobre o banco).
+
+**B361 (NOVA, da Etapa 73) — a reserva da aprovação automática fica no nome de quem criou ou enviou a requisição.** Não
+há usuário "Sistema" no banco e o estoque exige um usuário na trilha; a reserva sai como as das outras portas.
+Consequência: o *Enviar* feito por um administrador deixa a reserva no nome dele. **Descartado:** um usuário sintético.
+
+**B362 (NOVA, da Etapa 73) — a máquina de estados não ganhou setas novas.** As portas gravam o status final direto
+(como o *Aprovar* já fazia de *Pendente* para *Aguardando*). **Descartado:** declarar agora as setas
+*Pendente → Aguardando/Reservada* (é documentação da máquina, não desta regra).
+
+**B363 (NOVA, da Etapa 73) — os itens da requisição gravam e voltam na ordem em que foram pedidos.** A criação gravava
+os itens em paralelo, e o número de cada item podia sair trocado — quem pedia A e B podia ver B e A no detalhe, no
+comprovante e na fila. Agora a criação grava um por um e o detalhe ordena pelo número do item (nas duas rotas — a do
+almoxarifado e a das outras áreas). **Descartados:** (a) só ordenar na leitura (o número já nascia trocado); (b) só
+arrumar o teste que tropeçava nisso (**G80**); (c) serializar o banco inteiro.
+
+**B364 (NOVA, da Etapa 73) — sem correção automática do passado.** Requisições que nasceram *Aguardando estoque* com a
+compra vinculada, ou *Aprovado* sem reserva (aprovação automática ou liberação por valor sem saldo), ficam como estão;
+a **A37** lista. **Descartado:** reservar retroativamente no boot (disputa saldo que pode já ter outro dono).
+
+**B365 (NOVA, da Etapa 73, revisão do código) — duas aprovações ao mesmo tempo pelo último saldo: quem perde fica
+esperando, não *Aprovado*.** O status era calculado antes de reservar; na corrida, as duas viam saldo, uma reservava
+tudo e a outra ficava *Aprovado* **sem reserva e sem saldo** (8 de 8 rodadas na sonda; com a aprovação automática,
+isso acontece em toda criação simultânea). Agora, se nada ficou seguro e o calculado era *Aprovado*, o sistema relê o
+saldo e grava o status certo (*Aguardando…*). Vale para as três portas. **Descartado:** recalcular também quando o
+calculado já era *Aguardando* (mudaria o caso sem corrida, sem ganho medido).
+
+**B366 (NOVA, da Etapa 73, revisão do código) — a aprovação automática que falha no meio não prende saldo nem
+responde erro.** Uma falha de banco no meio da reserva (um item reservado, o outro não) respondia *erro 500* para uma
+requisição **já criada**, com o saldo do primeiro item preso — e o *Aprovar* manual depois reservava o mesmo item **em
+dobro**. Agora a reserva desfeita volta o saldo, a requisição fica *Pendente* (resposta 201) com o aviso
+*"[almoxarifado-aprovacao-automatica] Falha ao aprovar automaticamente a requisição ⟨id⟩; fica PENDENTE: ⟨motivo⟩"*
+no log, e a reserva da aprovação desconta o que o item já tem seguro (não reserva duas vezes). **Descartado:** uma
+transação em volta da criação e da reserva (fica para a migração de banco).
+
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -6292,7 +6406,9 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      inteiro à sugestão de reposição — com o pedido ainda aberto. Agora cada solicitação fecha pelo material dela
      (**B343**). As fechadas assim no passado: **A36**.
 
-116. **NOVO, da Etapa 72 (não corrigido) — requisição de material com compra VINCULADA nasce *Aguardando estoque*, não
+116. **✅ RESOLVIDO NA ETAPA 73 (`c47621d9`) — a requisição com compra vinculada nasce *Aguardando compra*; a chegada
+     do material segue sem mudar o status, por decisão (**B357**, **B358**), e a tela diz que chegou. O texto original:**
+     **NOVO, da Etapa 72 (não corrigido) — requisição de material com compra VINCULADA nasce *Aguardando estoque*, não
      *Aguardando compra*.** A aprovação da requisição sem saldo olha só a solicitação *Pendente*: depois que o
      comprador gera o pedido, a requisição nova daquele material é aprovada como "aguardando estoque". Nada a move
      quando o material chega (o solicitante recebe o e-mail da Etapa 70, o status não muda). **O que fazer:** ler
@@ -6330,6 +6446,40 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      API a um pedido que já recebeu todo o material da solicitação é recusado: *"O pedido ⟨número⟩ já recebeu todo o
      ⟨nome do material⟩: vincule a solicitação a outro pedido"*. **O que fazer:** avisar Compras de que a solicitação
      vinculada agora some da aba só quando o material dela chega.
+
+121. **NOVO, da Etapa 73 (não corrigido — é a Etapa 74) — a requisição que esperava perde o material que chegou para
+     uma aprovada depois.** R1 e R2 esperam (*Aguardando compra*); chega a nota de 4; R3, criada e aprovada **depois**,
+     reserva os 4 — e R1 e R2 voltam a "aguardando saldo" na fila. O *separar* de R1 é recusado com *"… Máximo: 0
+     (pendente: 6, disponível: 0)"*. É a regra da reserva na aprovação agindo como deve, sem ninguém ter decidido a
+     ordem de quem esperava. **Agravado na Etapa 73:** com a **aprovação automática** ligada, a requisição nova reserva
+     na **criação** — a disputa acontece sem ninguém aprovar (**B359**). **O que fazer:** até a Etapa 74, quem espera e
+     já pode separar (o banner *"Chegou material…"*) deve ser separado logo; com a aprovação automática ligada, olhar a
+     fila de separação depois de cada nota.
+
+122. **✅ RESOLVIDO NA ETAPA 73 (`6fc7122a`) — a aprovação automática não reservava.** Ligada a configuração, a
+     requisição era aprovada como *Aprovado* com saldo e sem saldo, sem segurar nada — a reserva na aprovação, que o
+     *Aprovar* e a liberação por valor faziam, não valia para ela. Agora as três portas reservam e calculam o status
+     do mesmo jeito (**B359**). As aprovadas assim no passado: **A37 (3)**. A configuração nasce desligada: o defeito
+     só existia onde alguém a ligou.
+
+123. **NOVO, da Etapa 73 (anterior, não corrigido) — a aprovação automática não grava a trilha *Aprovação*.** Ela deixa
+     o aprovador *"Sistema (automático)"* e a data de aprovação na requisição, e a reserva deixa a trilha dela — mas
+     **não** grava o registro *Aprovação* na **Auditoria** (sonda: 17 aprovadas automaticamente, 0 registros). Nenhum
+     indicador nem relatório lê esse registro (os de prazo usam a data da requisição). **O que fazer:** para saber
+     quem aprovou uma requisição automática, ler o aprovador na própria requisição.
+
+124. **NOVO, da Etapa 73 (anterior, da Etapa 4) — a aprovação reserva material de cliente mesmo sem OS ou projeto do
+     cliente.** A reserva na aprovação não olha o dono do material; a regra do dono vale na **saída** (a entrega exige
+     a OS ou o projeto do cliente). A Etapa 73 só estendeu a mesma reserva às outras duas portas. **O que fazer:**
+     requisição de material de cliente sem OS fica com o material seguro e trava na entrega — informar a OS na criação.
+
+125. **NOVO, da Etapa 73 — o que muda para quem aprova e para quem integra.** (1) Requisição sem saldo com a compra já
+     pedida ao fornecedor aparece **Aguard. Compra** (antes, **Aguard. Estoque**). (2) **Aprovar Liberação** sem saldo
+     deixa **Aguard. Compra/Estoque** (antes, *Aprovado*). (3) Com a **aprovação automática** ligada, a requisição já
+     nasce reservada quando há saldo — e a resposta da criação/envio pela API diz o status gravado
+     (*TOTALMENTE_RESERVADA*, *AGUARDANDO_COMPRA*…), não mais *APROVADO* (**B360**). (4) Os itens da requisição aparecem
+     na ordem em que foram pedidos. **O que fazer:** integrações que conferiam `status === 'APROVADO'` na resposta da
+     criação devem aceitar os status de reserva e de espera.
 
 
 
@@ -7128,7 +7278,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   conformidade (**B339**, **B340**).
 - **(71) O pedido reaberto pode não mandar e-mail de atrasado de novo** (**B335**, **C112**).
 - **(72) A requisição que espera compra não muda de status quando o material chega** — e nasce *Aguardando estoque*
-  quando a compra já está vinculada (**C116**, **B350**). É a próxima etapa.
+  quando a compra já está vinculada (**C116**, **B350**). É a próxima etapa. *(✅ Pago na Etapa 73: nasce *Aguardando
+  compra* (**B357**); não mudar o status na chegada virou decisão, com a tela dizendo que chegou (**B358**).)*
 - **(72) "Chegou X de Y" só na aba Solicitações** — o relatório *Solicitações de compra* em **Relatórios** e a
   exportação continuam com as colunas de antes; o painel **Ver contexto** lista a solicitação *Vinculado*, sem o aviso de
   pedido encerrado.
@@ -7140,6 +7291,18 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   caminho"* até o comprador cancelar ou re-vincular (**B345**, **C117**).
 - **(72) O livro de atribuição não tem tela** — o que chegou para cada solicitação aparece como *"chegou X de Y"*; o
   detalhe por nota fica nas tabelas (e na trilha *"Recebida"*, que guarda a regra e o atribuído).
+- **(73) O status da requisição não muda quando o material chega** — por decisão: a fila e o separar já trabalham
+  pelo saldo, e o detalhe mostra *"Chegou material…"* (**B358**).
+- **(73) O material que chega não é reservado para quem esperava** — quem aprovar depois pode levá-lo (**C121**). É a
+  próxima etapa.
+- **(73) Pedido lançado direto no Compras, sem solicitação de compra, não conta como "a caminho"** — a requisição vai a
+  *Aguardando estoque* com compra vindo (coerente com a sugestão de reposição) (**B357**).
+- **(73) O horizonte de 60 dias vale para a requisição também** — uma compra de prazo longo, cuja solicitação tem mais
+  de 60 dias, deixa a requisição em *Aguardando estoque* (o mesmo corte da sugestão e da verificação de mínimos).
+- **(73) "Aguardando compra" é da requisição inteira** — com algum item com saldo, a reserva decide o status; não há
+  status por item.
+- **(73) Requisições antigas não foram corrigidas** — nem o rótulo, nem a reserva que a aprovação automática não fez
+  (**A37**, **B364**); e os itens gravados fora de ordem antes desta versão continuam na ordem em que foram gravados.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -7757,6 +7920,21 @@ prova:
    encerrado — nada a caminho"*, e o material volta à sugestão com o que falta.
 4. **A trilha da reabertura.** Estornar (Movimentações, seta curva) a entrada da nota que completou o material:
    **Auditoria** mostra *"Solicitação reaberta (estorno)"* e a linha volta à aba.
+
+**(73) Nenhum clique foi dado nesta etapa.** Os testes provam o servidor pela rota e pelo serviço (a ordem dos itens:
+3 cenários, 20 repetições cada; o "aguardando compra" com compra vinculada: 10; as três portas de aprovação: 11; as
+corridas e a falha no meio: 5; ponta a ponta das três portas até a entrega: 6) e o banner do detalhe com o servidor
+simulado (10 cenários). O que **só o navegador** prova:
+
+1. **O rótulo.** Material sem saldo, solicitação de compra com **Gerar pedido** feito (*Vinculado*): aprovar uma
+   requisição dele — o badge mostra **Aguard. Compra** (antes, **Aguard. Estoque**).
+2. **O banner.** Processar uma nota parcial do material e abrir a requisição no modo almoxarifado: o aviso diz
+   *"Chegou material para esta requisição — já dá para separar…"* com **quanto** dá para separar, e o status continua
+   **Aguard. Compra**.
+3. **A aprovação automática reserva.** Ligar **Configurações → Configurações Gerais → Aprovação Automática**, criar uma requisição de material
+   com saldo: ela nasce **Totalmente Reservada**, e a tela **Reservas** mostra a reserva no nome de quem criou.
+4. **A ordem dos itens.** Criar uma requisição com cinco materiais numa ordem qualquer: o detalhe e o comprovante os
+   mostram na mesma ordem.
 
 
 
@@ -8824,6 +9002,15 @@ rodada completa da suíte que começou antes e terminou depois da meia-noite UTC
 passa 8/8 e passou de novo minutos depois. Não é defeito de produção (o indicador lê o dia na hora). **O risco:** um
 vermelho falso em rodada noturna faz alguém "consertar" o indicador. **Correção pequena:** ler o dia antes de cada
 cenário, ou fixar as datas relativas a um dia lido do banco por cenário. *(**Reincidiu na Etapa 72:** caiu de novo numa rodada perto da virada da data, e também durante sabotagem concorrente de outro agente — **G84**; isolado, 5 de 5 verdes. O conserto continua pequeno e pendente.)*
+> ✅ **PAGO NA ETAPA 73** (`bd753746`) — e o registro acima **estava incompleto**: a causa frequente **não era a
+> data**. Medido às 04:37 UTC, longe da virada, o arquivo isolado caiu 3 vezes em 12: a criação da requisição gravava os
+> itens **em paralelo**, o número de cada item podia sair trocado, e o teste separava "o primeiro item" supondo a ordem
+> do pedido. Era também um defeito pequeno de **produção** — quem pedia A e B podia ver B e A no detalhe (**B363**). A
+> causa da data também era real (com o "hoje" de um dia antes, 7 dos 8 cenários caem). Correção: a criação grava os
+> itens em ordem e o detalhe ordena pelo número do item; o teste acha cada item pelo material (no separar e nas
+> entregas), lê o dia em cada cenário e espera a virada quando faltam menos de 30 segundos para a meia-noite UTC.
+> Controle positivo: os itens trocados à mão derrubam o teste antigo e não o novo; o "hoje" de um dia antes num cenário
+> derruba só aquele. O arquivo passou 30 vezes seguidas.
 
 **G81 (NOVO, notado na Etapa 69). A suíte `test:almoxarifado` ainda ignora o pré-cadastro dos tipos de material.** A
 mesma montagem à mão do G79 não tem a coluna `descricao` em `tipos_material_almoxarifado`, e o pré-cadastro é pulado com
@@ -17100,9 +17287,99 @@ dobro; estornar uma nota anterior ao vínculo reabria quem já tinha recebido; v
 caminho* que nunca chegaria) — e a conta virou um **livro** gravado na entrada de cada nota (**B352**).
 
 
+## Etapa 73 — A requisição que espera compra nasce com o status certo, em qualquer forma de aprovar (2026-10-02)
+
+Quando uma requisição é aprovada e nenhum material dela tem saldo, ela fica esperando: *Aguardando compra* se a compra
+está a caminho, *Aguardando estoque* se não. Até aqui, bastava o comprador **gerar o pedido** para a requisição seguinte
+daquele material cair em *Aguardando estoque* — como se nada viesse, com o pedido já feito ao fornecedor. E as três
+formas de aprovar se comportavam diferente: o *Aprovar* reservava e calculava a espera; a liberação por valor, sem
+saldo, ficava *Aprovado*; e a **aprovação automática** não reservava nada, nem com saldo. Agora a compra pedida ao
+fornecedor conta como "a caminho" (com a mesma conta da sugestão de reposição), as três formas de aprovar fazem o mesmo
+depois de aprovar, e o detalhe da requisição em espera avisa quando o material chegou e quanto dá para separar. No
+caminho, a etapa corrigiu um defeito pequeno: os itens da requisição podiam aparecer fora da ordem em que foram pedidos.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Com o pedido gerado, a requisição sem saldo nascia **Aguard. Estoque** | Nasce **Aguard. Compra** enquanto a compra estiver a caminho (**B357**, **C116**) |
+| **Aprovar Liberação** sem saldo deixava **Aprovado** | Deixa **Aguard. Compra** ou **Aguard. Estoque**, como o *Aprovar* (**B359**) |
+| A **aprovação automática** aprovava sem reservar nada, com ou sem saldo | Reserva o que há e calcula a espera, como o *Aprovar* (**B359**, **C122**) |
+| A resposta da criação com aprovação automática dizia sempre *APROVADO* | Diz o status gravado (**B360**) |
+| O detalhe da requisição em espera dizia *"Sem saldo disponível"* mesmo depois de o material chegar | Diz *"Chegou material para esta requisição — já dá para separar…"* e quanto (**B358**) |
+| Duas aprovações ao mesmo tempo pelo último saldo: uma ficava *Aprovado* sem nada | A que perde fica esperando (**B365**) |
+| Os itens podiam aparecer fora da ordem em que foram pedidos | Aparecem na ordem do pedido (**B363**) |
+
+### As regras, com o cenário exato
+
+Preparação: um material **M** sem saldo, com mínimo e fornecedor. Em **Reposição e Compras**, aba **Sugestões de
+Compra**, marcar M e **Gerar solicitações**; na aba **Solicitações**, **Gerar pedido** na linha de M e salvar o pedido.
+A solicitação fica *Vinculado*. Um solicitante cria uma requisição de M; **outra pessoa** a aprova (segregação).
+
+**1. Compra pedida é compra.** Aprovar a requisição de M (**Só Aprovar**): o badge mostra **Aguard. Compra** e o
+aviso, *"Sem saldo disponível — há uma solicitação de compra em andamento para os materiais desta requisição."* Sem
+solicitação nenhuma de M, a mesma requisição fica **Aguard. Estoque**, com *"Sem saldo disponível no momento — inicie a
+separação assim que o estoque for reposto."*
+
+**2. Pedido cancelado não é compra.** No Compras, lápis → **Status** → *Cancelado* no pedido de M. Uma requisição nova
+de M, aprovada: **Aguard. Estoque**.
+
+**3. A chegada não muda o status — a tela avisa.** Com M **Aguard. Compra**, processar uma nota de **4** de 10 do
+pedido (**Recebimentos**, até **Processar Nota**). Abrir a requisição em **Requisições (almox.)**: o badge continua
+**Aguard. Compra**, e o aviso passa a dizer *"Chegou material para esta requisição — já dá para separar. O material
+ainda não está reservado para ela. Dá para separar agora: 4 ⟨unidade⟩ de ⟨M⟩. O saldo é compartilhado: enquanto não
+for separado, outra requisição pode separá-lo antes."* **Iniciar Separação** funciona.
+
+**4. A liberação por valor faz o mesmo.** Com a alçada por valor ligada (**Configurações → Configurações Gerais**),
+uma requisição de M acima do limite, sem saldo, cai em **Aguard. Aprov. Valor**; **Aprovar Liberação**: fica **Aguard.
+Compra** (antes ficava **Aprovado**).
+
+**5. A aprovação automática reserva.** Ligar **Configurações → Configurações Gerais → Aprovação Automática**. Criar uma
+requisição de um material **com** saldo 5, pedindo 2: ela nasce **Totalmente Reservada**; a tela **Reservas** mostra a
+reserva de 2 no nome de quem criou, e o disponível cai para 3. Sem saldo e com compra a caminho: **Aguard. Compra**.
+Urgência *Crítico* continua sem aprovação automática (fica **Pendente**, sem reserva).
+
+**6. A ordem dos itens.** Criar uma requisição com cinco materiais numa ordem qualquer: o detalhe mostra os itens na
+mesma ordem.
+
+### O que esta etapa NÃO cobre
+
+1. **O material que chega não é reservado para quem esperava** — uma requisição aprovada depois pode levá-lo
+   (**C121**). É a próxima etapa.
+2. **O status não muda quando o material chega** — por decisão (**B358**).
+3. **Pedido lançado direto no Compras, sem solicitação de compra**, não conta como "a caminho" (**B357**).
+4. **Requisições antigas** ficam como estão — rótulo e reserva (**A37**, **B364**).
+5. **A aprovação automática ainda não grava o registro *Aprovação* na Auditoria** (anterior, **C123**).
+
+### O que a revisão encontrou
+
+A medição mostrou que mudar o status quando o material chega **não tem valor** — a fila de separação e o separar já
+trabalham pelo saldo — e achou o defeito de verdade, que fica para a próxima etapa: quem esperava perde o material para
+quem aprova depois (**C121**). Achou também que a aprovação automática nunca reservou — a spec das reservas dizia
+"reserva automática ao aprovar requisição" sem ressalva, e **estava errada** para essa porta — e que o teste dos
+indicadores que caía de vez em quando (**G80**) caía, na maioria das vezes, pela **ordem dos itens**, não pela data — o
+registro **estava incompleto**. A revisão do **plano** completou a lista de testes antigos que mudariam e apontou que,
+com a aprovação automática ligada, a disputa do **C121** passa a acontecer sem ninguém aprovar. A revisão do **código**
+reproduziu, pelas rotas, duas criações simultâneas pelo último saldo deixando uma delas *Aprovado* sem nada (8 de 8
+rodadas; corrigido, **B365**) e uma falha no meio da reserva automática prendendo saldo e respondendo erro (corrigido,
+**B366**).
+
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 73 entregue (2026-10-02):** **a requisição que espera compra nasce com o status certo, em qualquer forma de
+  aprovar.** Com a compra já pedida ao fornecedor, a requisição sem saldo nasce *Aguardando compra* (antes, *Aguardando
+  estoque*). As três formas de aprovar — *Aprovar*, *Aprovar Liberação* e a aprovação automática — fazem o mesmo depois
+  de aprovar: a liberação por valor sem saldo não fica mais *Aprovado*, e a aprovação automática passa a reservar (antes
+  não reservava nada). O detalhe da requisição em espera diz quando o material chegou e quanto dá para separar; o
+  status não muda na chegada, por decisão. Corrigidos: duas aprovações simultâneas pelo último saldo deixavam uma
+  *Aprovado* sem nada; e os itens podiam aparecer fora da ordem pedida (era também a causa do teste intermitente
+  **G80**, agora pago). **O que é seu:** a consulta **A37**; as decisões **B357 a B366**; os avisos **C121 a C125** (o
+  **C121** é a próxima etapa, e o **C125** muda a resposta da API para quem integra); as limitações **(73)** em D e as
+  verificações **(73)** em F. **Próxima: Etapa 74 — a requisição que esperava fica com o material que chegou (C121,
+  feature 07 com a 08) — ver o plano da Etapa 73.**
 
 - **Etapa 72 entregue (2026-10-02):** **a solicitação de compra só fecha quando o material dela chega.** A nota parcial
   (ou de outro material do pedido) não fecha mais a solicitação: ela continua na aba Solicitações com *"chegou X de Y"*,
@@ -17114,6 +17391,7 @@ caminho* que nunca chegaria) — e a conta virou um **livro** gravado na entrada
   **C116** é a próxima etapa, e o **C118** é uma regra a decidir); as limitações **(72)** em D, as verificações **(72)**
   em F e a fragilidade de processo **G84**. **Próxima: Etapa 73 — a requisição que espera compra (feature 04, com a
   18) — ver o plano da Etapa 72.**
+  *(Feita — Etapa 73.)*
 
 - **Etapa 71 entregue (2026-10-02):** **estornar a entrada da nota reabre o pedido de compra.** Estornar (Movimentações
   → seta curva) a entrada de uma nota contra pedido **desconta** o pedido e o **reabre** quando a nota o tinha fechado

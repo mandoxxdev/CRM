@@ -1,7 +1,9 @@
 # Etapa 73 — a requisição que espera compra nasce com o status certo, em qualquer porta de aprovação (feature 04, com a 07 e a 18)
 
-> Status: **PLANO (Fase 1) — 2026-10-02.** Nada de código ainda. Próximo passo: Fase 2 (revisão do plano por agente
-> fresco). Origem: "Próxima tarefa detalhada — Etapa 73" de
+> Status: **FECHADA — 2026-10-02.** T0 `bd753746`, T1 `c47621d9`, T2 `6fc7122a`, T3 `371aa7ec`, T4 `7d55a1dd`
+> (+ `764aee6c`), Fase 5 `5ea57d03` e `851ef2cf` (+ plano `555bbf67`); fechamento T5 (este commit de documentação).
+> Próxima: **Etapa 74 — a requisição que esperava fica com o material que chegou** (seção "Próxima tarefa detalhada"
+> no fim). Origem: "Próxima tarefa detalhada — Etapa 73" de
 > `docs/superpowers/plans/2026-10-02-almoxarifado-etapa72-solicitacao-fecha-por-material.md:708-743`.
 
 **Escopo desta etapa (reduzido pela medição — ver Fase 0 §3):**
@@ -418,7 +420,19 @@ Ordem topológica: **T0 → T1 → T2** (tronco, sequenciais, um executor por ve
   → requisição nova → `AGUARDANDO_ESTOQUE`. Controles positivos: (s1) T1 desfeita → R2/R3 caem; (s2) aprovação automática
   sem pós-aprovação → R3 e R5 caem; (s3) liberação por valor sem o `UPDATE` → R2 cai. Só roda depois que T2 e T3
   commitaram e a worktree da T3 voltou (nunca em paralelo a uma sabotagem).
-- [ ] **T5 — fechamento (skill `fechar-etapa`).** Spec 04 (linha `:72` do `AGUARDANDO_COMPRA`: "pendente" vira "a caminho",
+- [x] **T5 — fechamento feito (skill `fechar-etapa`), no commit de documentação desta etapa.** Novidades: seção da 73
+  (Antes → Agora, 6 cenários com as literais lidas do código, o que não cobre, o que a revisão encontrou); **A37** com
+  as **quatro** consultas (a (4) — liberadas por valor que ficaram *Aprovado* sem reserva — veio da Fase 2); **B357 a
+  B366** (B365/B366 são as decisões da Fase 5); **C116** e **C122** marcados resolvidos; **C121** (agravada pela
+  aprovação automática), **C123** (sem trilha *Aprovação* na automática), **C124** (reserva de material de cliente sem
+  OS, anterior), **C125** (o que muda para quem aprova e integra); **D (73)** seis itens, o (72) da requisição marcado
+  pago; **F (73)** quatro verificações; **G80 PAGO** com a causa que faltava (a ordem dos itens), dito como registro
+  incompleto. Spec 04 (linha do `AGUARDANDO_COMPRA` + item novo da ordem dos itens + cabeçalho da 73), **spec 07 `:40`
+  corrigida dizendo que estava errada** (não valia para a aprovação automática) e cabeçalho; mapa (cabeçalho, linhas 04
+  e 07); guia (cabeçalho "73 ENTREGUE · 74 começando", seção da 73 com roteiro de 6 passos, o item da 72 marcado pago);
+  manual (7.1 a regra de *Aguard. Compra* e a chegada que não muda o status, 7.2 a ordem dos itens, 8.3 a liberação
+  por valor sem saldo, 8.5 o que a aprovação automática faz e a ressalva da trilha, 9.3 a fórmula com o "já reservado"
+  e a tabela de status, 10.1 o aviso "Chegou material…"). Texto original da task: Spec 04 (linha `:72` do `AGUARDANDO_COMPRA`: "pendente" vira "a caminho",
   com a regra da 73) e **spec 07 `:40` corrigida dizendo que estava errada** (a reserva automática não valia para a
   aprovação automática até a 73). Mapa (linhas 04 e 07). Guia do usuário: seção da 73 (Antes → Agora, roteiro clicável:
   gerar o pedido → aprovar requisição sem saldo → "Aguard. Compra"; nota parcial → o detalhe diz "Chegou material…"),
@@ -539,3 +553,83 @@ Sonda da revisão: `sonda73f-portas.js` (scratchpad), pelas rotas com o harness 
     a mesma reserva às outras duas portas.
 - **Próximo passo:** T5 (fechamento, skill `fechar-etapa`) — incluir os dois C acima e citar `5ea57d03`/`851ef2cf` na
   seção da 73 do documento de novidades.
+
+## Divergências do plano (registradas, não escondidas)
+
+1. **G80 tinha duas causas, e a frequente não era a data** (Fase 0 §5) — o registro G80 das novidades estava
+   incompleto; corrigido à vista no fechamento.
+2. **A lista de asserções que mudariam estava incompleta** (Fase 2): além das quatro da D4, `regrasAprovacao` (9) e
+   `reservaPontasFaltantes` (e um comentário de `requisicaoAprovacao`). A T2 mudou exatamente essas, com o motivo no
+   commit `6fc7122a`.
+3. **`ORDER BY ir.id` nas duas rotas de detalhe**, não só na do almoxarifado (a `GET /api/requisicoes-material/:id`
+   tinha o mesmo `SELECT` sem ordem) — T0.
+4. **`tentarAprovacaoAutomatica` devolve `null` sem reservar quando a requisição relida já não está `PENDENTE`**, e o
+   `/aprovar-valor` com `changes = 0` responde `reservas: []` com o status relido — T2.
+5. **O contrato do `prepararPosAprovacao` estava errado sob corrida** ("sem nada reservado, fica o calculado" deixava
+   `APROVADO` sem reserva) — corrigido na Fase 5 (`5ea57d03`); e a reserva da aprovação passou a desfazer as próprias
+   reservas numa falha e a descontar o hold ATIVO do item (`851ef2cf`). As duas mudanças valem para as três portas.
+6. **T3 feita na árvore principal, sem worktree**, por instrução do disparo (a T2 não tocava o cliente nem rodava o Jest
+   do cliente; a T3 não tocava o servidor). **Acréscimo ao contrato:** o banner mostra quanto dá para separar e divide o
+   saldo entre itens do mesmo material.
+7. **A37 ganhou a consulta (4)** (Fase 2) — as liberadas por valor que ficaram `APROVADO` sem reserva.
+
+## Verificação final (medida)
+
+`test:api` **275/275**, `test:almoxarifado` 44/0, `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 5/0
+(medidos na Fase 5, `851ef2cf`, o último commit de código). Cliente e `CI=true` build: **re-medidos no fechamento**
+pelo fio principal no HEAD com a Fase 5: cliente **74 suítes / 1155 testes**, `CI=true` build "Compiled successfully". `git status`: só `docs/bkp_bancoprod.md` e `server/nodemon.json`
+fora do controle, como antes.
+
+## Retro (4 números)
+
+1. **Rodadas de correção até verde:** 1 (o fix-round da Fase 5).
+2. **Achados das revisões:** Fase 2 — 14 (0 críticos, 4 importantes — um provado por sonda, `sonda73r-gate.js`, a
+   lista incompleta de asserções); Fase 5 — 1 importante + 1 menor, os dois reais e reproduzidos por sonda
+   (`sonda73f-portas.js`), 0 ruído; mais 2 itens anteriores para a letra C (trilha da automática, reserva de material
+   de cliente sem OS).
+3. **Paralelismo:** a T3 (cliente) rodou em paralelo com o tronco T0–T2 (servidor) **sem contaminação** — a regra nova
+   do G84 funcionou (quem sabota produção não roda junto de quem roda a mesma suíte; agentes em arquivos disjuntos). A
+   T4 e a revisão da Fase 5 rodaram com a árvore quieta. Sem retrabalho.
+4. **Defeito que escapou da etapa anterior (72):** nenhum conhecido.
+
+## Próxima tarefa detalhada — Etapa 74: a requisição que esperava fica com o material que chegou (C121, feature 07 com a 08)
+
+**Por que esta.** É o defeito de verdade que a Fase 0 da 73 achou (Surpresa 1, sonda `sonda73-requisicao.js` B1): R1
+e R2 esperam (*Aguardando compra*); chega a nota de 4; R3, aprovada **depois**, reserva os 4 — e o separar de R1 é
+recusado com *"… Máximo: 0 (pendente: 6, disponível: 0)"*. Desde a 73, com a **aprovação automática** ligada, isso
+acontece na **criação** de qualquer requisição nova, sem ninguém aprovar (B359, C121 agravada). É a feature 07 (reservas)
+encostando na 08 (o recebimento é o gatilho).
+
+**Fase 0 da 74 — medir antes de prometer** (sonda pelas rotas, harness real):
+1. **Onde pendurar.** No fim de `processarNota` e do ramo direto de `aprovarRecebimento` (`concluirAprovacaoDireta`),
+   depois de `darEntradaEstoque` e dentro da marca de processamento da 70 — **antes** ou **depois** do aviso da 70? Se
+   antes, a literal da 70 (*"O material ainda não está reservado para a sua requisição"*, `receiptNotificationService.js`)
+   precisa dizer a verdade (reservado / não reservado por requisição). O banner da 73 (*"O material ainda não está
+   reservado para ela"*) também passa a ter de ler o hold.
+2. **A ordem de quem leva** (decisão B, reversível): a mais antiga por `data_aprovacao`? urgência primeiro (CRITICO >
+   URGENTE > NORMAL) e depois a mais antiga? `data_necessidade`? A fila de separação da 64 já ordena (acionável →
+   urgência → necessidade → mais antiga) — **reaproveitar a mesma ordem** é o candidato natural (uma régua só).
+3. **Quanto cada uma leva:** o pendente de separação − o hold que ela já tem (a régua idempotente da 73,
+   `reservarItensAprovacao`), só do que entrou **livre** (material crítico retido para inspeção não reserva — como o
+   aviso da 70); requisição `EM_SEPARACAO`/`PARCIALMENTE_*` também espera? (`STATUS_QUE_ESPERAM` da 70 = `PODE_SEPARAR −
+   EM_SEPARACAO`).
+4. **O status:** a requisição que ganhou reserva passa de `AGUARDANDO_*` a `*_RESERVADA` — setas novas em `TRANSICOES`
+   (`AGUARDANDO_* → PARCIALMENTE/TOTALMENTE_RESERVADA`), o que reabre a B362/D6 da 73 de propósito; quem lê o status
+   (fila 64, alertas, dashboard, indicadores 67) — medir.
+5. **O estorno da entrada (Etapa 71):** a reserva que a própria nota criou segura saldo que o estorno vai tirar — o motor
+   recusa o estorno com saldo reservado? libera a reserva antes? (`stockService.cancelarMovimentacao`, ramo de entrada;
+   o gancho `estornarEntradaNoPedido`). Medir com sonda; decidir (letra B).
+6. **Corridas:** a nota × um `/aprovar` (ou a aprovação automática) do mesmo material no mesmo instante — a reserva é
+   atômica no motor (`criarReserva`), mas a ordem de quem leva pode inverter; o recálculo da 73 (`5ea57d03`) cobre o
+   perdedor?
+
+**Contratos que não se reabrem:** a fila de separação (64, só leitura — só a ordem pode ser reaproveitada); o livro de
+atribuição da solicitação (72); o pedido que reabre (71); o pós-aprovação único das três portas e a reserva idempotente
+(73); o motor de reserva (`criarReserva`, consumo contra reserva, Etapa 4).
+
+**Pontos de atenção.**
+- Recusa nova no recebimento é cara (a nota não pode deixar de entrar por causa de uma reserva): a reserva na chegada é
+  **best-effort** como o aviso da 70 — falhar não desfaz a entrada.
+- Metade positiva em cada teste: quem esperava fica com o hold **e** quem não esperava (aprovada depois) não leva.
+- Material de cliente: a reserva não olha o dono (C124) — decidir se a reserva na chegada respeita o dono.
+- A literal da 70 e o banner da 73 mudam: listar os testes que prendem as duas antes de mexer.
