@@ -62,18 +62,38 @@ async function lerItem(db, itemId) {
     FROM itens_requisicao_almoxarifado ir WHERE ir.id = ?`, [itemId]);
 }
 
-async function liberarSemFalhar(db, user, reservaId, quantidade, motivo) {
+async function liberarSemFalhar(db, user, reservaId, quantidade, motivo, rotulos) {
   try {
     await stockService.liberarReserva(db, user, reservaId, quantidade, {
       statusFinal: 'LIBERADA',
       motivo,
-      motivoMovimentacao: 'Liberação de reserva na chegada desfeita',
+      motivoMovimentacao: rotulos.motivoDesfazer,
     });
     return true;
   } catch (e) {
-    console.warn(`[almoxarifado-reservas] Falha ao desfazer a reserva ${reservaId} da chegada: ${e.message}`);
+    console.warn(rotulos.falhaDesfazer(reservaId, e));
     return false;
   }
+}
+
+/**
+ * Etapa 75 (T0, D2/B384 + Fase 2) — os textos que o miolo grava ou escreve no log. Os da chegada (74) são
+ * os valores de sempre (os testes da 74 não mudam); a liberação da inspeção/NC (75) passa os seus. Fase 2:
+ * não só a observação e o motivo — o aviso por item, o desfazer e o recálculo também, senão uma falha na
+ * liberação da inspeção apareceria no log como "falha ao reservar NA CHEGADA".
+ */
+function rotulosDaChegada(rec) {
+  return {
+    recebimento_id: Number(rec.id),
+    observacao: (c) => `Reserva na chegada do recebimento ${rec.numero} — requisição ${c.numero}`,
+    motivo: `Reserva na chegada — recebimento ${rec.numero}`,
+    falhaReserva: (c, e) => `[almoxarifado-reservas] Falha ao reservar na chegada o item ${c.item_id} da requisição ${c.requisicao_id}: ${e.message}`,
+    motivoDesfazer: 'Liberação de reserva na chegada desfeita',
+    falhaDesfazer: (reservaId, e) => `[almoxarifado-reservas] Falha ao desfazer a reserva ${reservaId} da chegada: ${e.message}`,
+    saiuDaEspera: 'Requisição saiu da espera durante a reserva na chegada',
+    excessoDesfeito: 'Reserva na chegada acima do pendente — excesso desfeito',
+    falhaRecalculo: (id, e) => `[almoxarifado-reservas] recalculo do status apos a reserva na chegada falhou (requisicao ${id}): ${e.message}`,
+  };
 }
 
 /** A saída da entrega passaria na regra do dono? (a entrega leva só o projeto — requisitionService). */
@@ -132,10 +152,15 @@ async function reservarChegadaParaQuemEspera(db, user, recebimentoId) {
   const rec = await dbGet(db, 'SELECT id, numero FROM recebimentos_material_almoxarifado WHERE id = ?', [recebimentoId]);
   if (!rec) return resultado;
 
+  // Etapa 75 (D8/B390): o item que JÁ TEM inspeção registrada também fica de fora — depois da decisão o
+  // `quantidade_em_inspecao` dele é 0 e, sem este filtro, a retomada da nota contava o item inteiro como
+  // livre (inclusive o reprovado) e completava com saldo alheio (Fase 0, Surpresa 2: aprovou 1, reservou
+  // 4). O que a inspeção liberou é distribuído pela porta da inspeção (`reservarLiberacaoParaQuemEspera`).
   const itensNota = await dbAll(db, `SELECT ri.material_id, ${QTD_DO_ITEM_SQL} AS quantidade,
       COALESCE(ri.quantidade_em_inspecao, 0) AS em_inspecao
     FROM recebimentos_material_itens_almoxarifado ri
     WHERE ri.recebimento_id = ? AND ri.entrada_estoque_em IS NOT NULL AND ${QTD_DO_ITEM_SQL} > 0
+      AND NOT EXISTS (SELECT 1 FROM inspecoes_recebimento_almoxarifado i WHERE i.recebimento_item_id = ri.id)
     ORDER BY ri.id`, [recebimentoId]);
   const livrePorMaterial = new Map();
   for (const it of itensNota) {
@@ -143,109 +168,125 @@ async function reservarChegadaParaQuemEspera(db, user, recebimentoId) {
     livrePorMaterial.set(it.material_id, (livrePorMaterial.get(it.material_id) || 0) + num(it.quantidade));
   }
 
-  const tocadas = new Set();
-  const marcasSt = STATUS_CANDIDATOS.map(() => '?').join(',');
+  const rotulos = rotulosDaChegada(rec);
+  const acc = { tocadas: new Set(), resultado };
   try {
     for (const [materialId, livre] of livrePorMaterial) {
-      if (livre <= EPS) continue;
       // eslint-disable-next-line no-await-in-loop
-      const material = await dbGet(db, `SELECT *, ${disponivelSql()} AS disponivel FROM materiais_almoxarifado WHERE id = ?`, [materialId]);
-      if (!material) continue;
-      let distribuivel = Math.min(livre, Math.max(0, num(material.disponivel)));
-      if (distribuivel <= EPS) continue;
-
-      // eslint-disable-next-line no-await-in-loop
-      const candidatos = await dbAll(db, `SELECT ir.id AS item_id, ir.requisicao_id, ir.quantidade_solicitada,
-          ir.quantidade_entregue, ir.quantidade_atendida, ${HOLD_DO_ITEM_SQL} AS hold,
-          r.id, r.numero, r.status, r.urgencia, r.data_necessidade, r.created_at, r.projeto_id,
-          r.os_referencia, r.cliente_id, r.data_aprovacao_valor
-        FROM itens_requisicao_almoxarifado ir
-        JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id
-        WHERE COALESCE(r.ativo, 1) = 1 AND r.status IN (${marcasSt}) AND ir.material_id = ?`,
-      [...STATUS_CANDIDATOS, materialId]);
-      const naFila = candidatos
-        .filter((c) => pendenteDeEntrega(c) - num(c.hold) > EPS)
-        .sort((a, b) => requisitionService.compararPrioridade(a, b) || (a.item_id - b.item_id));
-
-      for (const c of naFila) {
-        if (distribuivel <= EPS) break;
-        // eslint-disable-next-line no-await-in-loop
-        if (!(await passaNaRegraDoDono(db, material, c))) continue;
-        // eslint-disable-next-line no-await-in-loop
-        if (await bloqueadaPorValor(db, c)) continue;
-        // A falta RELIDA agora (Fase 2): outra nota ou uma aprovação pode ter reservado no meio.
-        // eslint-disable-next-line no-await-in-loop
-        const item = await lerItem(db, c.item_id);
-        const falta = item ? pendenteDeEntrega(item) - num(item.hold) : 0;
-        if (falta <= EPS) continue;
-        const q = Math.min(falta, distribuivel);
-
-        let reserva;
-        try {
-          // eslint-disable-next-line no-await-in-loop
-          reserva = await stockService.criarReserva(db, user, {
-            material_id: materialId,
-            quantidade: q,
-            projeto_id: c.projeto_id || null,
-            os_referencia: c.os_referencia || null,
-            cliente_id: c.cliente_id || null,
-            data_necessidade: c.data_necessidade || null,
-            observacoes: `Reserva na chegada do recebimento ${rec.numero} — requisição ${c.numero}`,
-          }, {
-            sistema: true,
-            requisicao_id: Number(c.requisicao_id),
-            item_requisicao_id: c.item_id,
-            recebimento_id: Number(recebimentoId),
-            motivo: `Reserva na chegada — recebimento ${rec.numero}`,
-          });
-        } catch (e) {
-          console.warn(`[almoxarifado-reservas] Falha ao reservar na chegada o item ${c.item_id} da requisição ${c.requisicao_id}: ${e.message}`);
-          continue;
-        }
-
-        // RN-09: a requisição saiu da espera entre a leitura e a reserva (cancelada, excluída) → desfaz.
-        // eslint-disable-next-line no-await-in-loop
-        const atual = await dbGet(db, 'SELECT status, ativo FROM requisicoes_almoxarifado WHERE id = ?', [c.requisicao_id]);
-        if (!atual || Number(atual.ativo ?? 1) === 0 || !STATUS_CANDIDATOS.includes(atual.status)) {
-          // eslint-disable-next-line no-await-in-loop
-          await liberarSemFalhar(db, user, reserva.id, null, 'Requisição saiu da espera durante a reserva na chegada');
-          continue;
-        }
-
-        // Fase 2: o hold do item passou do pendente (corrida com outra nota / com a aprovação) → desfaz o excesso.
-        let ficou = q;
-        // eslint-disable-next-line no-await-in-loop
-        const depois = await lerItem(db, c.item_id);
-        const excesso = depois ? num(depois.hold) - pendenteDeEntrega(depois) : 0;
-        if (excesso > EPS) {
-          const devolver = Math.min(excesso, q);
-          // eslint-disable-next-line no-await-in-loop
-          if (await liberarSemFalhar(db, user, reserva.id, devolver >= q - EPS ? null : devolver,
-            'Reserva na chegada acima do pendente — excesso desfeito')) {
-            ficou = q - devolver;
-          }
-        }
-        if (ficou <= EPS) continue;
-        distribuivel -= ficou;
-        tocadas.add(Number(c.requisicao_id));
-        resultado.reservas.push({
-          requisicao_id: Number(c.requisicao_id), item_id: c.item_id, material_id: materialId,
-          reserva_id: reserva.id, quantidade: ficou,
-        });
-      }
+      await distribuirParaQuemEspera(db, user, materialId, livre, rotulos, acc);
     }
   } finally {
-    for (const id of tocadas) {
-      try {
-        // eslint-disable-next-line no-await-in-loop
-        const mudou = await recalcularStatusDeReserva(db, id);
-        if (mudou) resultado.status.push(mudou);
-      } catch (e) {
-        console.warn(`[almoxarifado-reservas] recalculo do status apos a reserva na chegada falhou (requisicao ${id}): ${e.message}`);
-      }
-    }
+    await recalcularTocadas(db, acc, rotulos);
   }
   return resultado;
+}
+
+/** O status das requisições tocadas acompanha (D5 da 74); cada uma no seu try. */
+async function recalcularTocadas(db, acc, rotulos) {
+  for (const id of acc.tocadas) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const mudou = await recalcularStatusDeReserva(db, id);
+      if (mudou) acc.resultado.status.push(mudou);
+    } catch (e) {
+      console.warn(rotulos.falhaRecalculo(id, e));
+    }
+  }
+}
+
+/**
+ * Etapa 75 (T0, D2/B384) — o laço por material da 74, extraído com o TETO injetado: a chegada passa o que
+ * entrou livre desta nota; a liberação da inspeção/NC passa o que a decisão liberou. A régua de "quem
+ * esperava" (candidatas, ordem, regra do dono, valor ao vivo, falta relida, desfazer) é uma só.
+ * O teto é sempre limitado pelo disponível do material AGORA (D4 da 74 / D3 da 75): nunca distribui
+ * saldo que não existe. Não recalcula status (quem chama, no `finally`); acumula em `acc`.
+ */
+async function distribuirParaQuemEspera(db, user, materialId, teto, rotulos, acc) {
+  if (!(teto > EPS)) return;
+  const material = await dbGet(db, `SELECT *, ${disponivelSql()} AS disponivel FROM materiais_almoxarifado WHERE id = ?`, [materialId]);
+  if (!material) return;
+  let distribuivel = Math.min(teto, Math.max(0, num(material.disponivel)));
+  if (distribuivel <= EPS) return;
+
+  const marcasSt = STATUS_CANDIDATOS.map(() => '?').join(',');
+  const candidatos = await dbAll(db, `SELECT ir.id AS item_id, ir.requisicao_id, ir.quantidade_solicitada,
+      ir.quantidade_entregue, ir.quantidade_atendida, ${HOLD_DO_ITEM_SQL} AS hold,
+      r.id, r.numero, r.status, r.urgencia, r.data_necessidade, r.created_at, r.projeto_id,
+      r.os_referencia, r.cliente_id, r.data_aprovacao_valor
+    FROM itens_requisicao_almoxarifado ir
+    JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id
+    WHERE COALESCE(r.ativo, 1) = 1 AND r.status IN (${marcasSt}) AND ir.material_id = ?`,
+  [...STATUS_CANDIDATOS, materialId]);
+  const naFila = candidatos
+    .filter((c) => pendenteDeEntrega(c) - num(c.hold) > EPS)
+    .sort((a, b) => requisitionService.compararPrioridade(a, b) || (a.item_id - b.item_id));
+
+  for (const c of naFila) {
+    if (distribuivel <= EPS) break;
+    // eslint-disable-next-line no-await-in-loop
+    if (!(await passaNaRegraDoDono(db, material, c))) continue;
+    // eslint-disable-next-line no-await-in-loop
+    if (await bloqueadaPorValor(db, c)) continue;
+    // A falta RELIDA agora (Fase 2 da 74): outra nota ou uma aprovação pode ter reservado no meio.
+    // eslint-disable-next-line no-await-in-loop
+    const item = await lerItem(db, c.item_id);
+    const falta = item ? pendenteDeEntrega(item) - num(item.hold) : 0;
+    if (falta <= EPS) continue;
+    const q = Math.min(falta, distribuivel);
+
+    let reserva;
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      reserva = await stockService.criarReserva(db, user, {
+        material_id: materialId,
+        quantidade: q,
+        projeto_id: c.projeto_id || null,
+        os_referencia: c.os_referencia || null,
+        cliente_id: c.cliente_id || null,
+        data_necessidade: c.data_necessidade || null,
+        observacoes: rotulos.observacao(c),
+      }, {
+        sistema: true,
+        requisicao_id: Number(c.requisicao_id),
+        item_requisicao_id: c.item_id,
+        recebimento_id: rotulos.recebimento_id,
+        motivo: rotulos.motivo,
+      });
+    } catch (e) {
+      console.warn(rotulos.falhaReserva(c, e));
+      continue;
+    }
+
+    // RN-09 da 74: a requisição saiu da espera entre a leitura e a reserva (cancelada, excluída) → desfaz.
+    // eslint-disable-next-line no-await-in-loop
+    const atual = await dbGet(db, 'SELECT status, ativo FROM requisicoes_almoxarifado WHERE id = ?', [c.requisicao_id]);
+    if (!atual || Number(atual.ativo ?? 1) === 0 || !STATUS_CANDIDATOS.includes(atual.status)) {
+      // eslint-disable-next-line no-await-in-loop
+      await liberarSemFalhar(db, user, reserva.id, null, rotulos.saiuDaEspera, rotulos);
+      continue;
+    }
+
+    // Fase 2 da 74: o hold do item passou do pendente (corrida com outra nota / com a aprovação) → desfaz o excesso.
+    let ficou = q;
+    // eslint-disable-next-line no-await-in-loop
+    const depois = await lerItem(db, c.item_id);
+    const excesso = depois ? num(depois.hold) - pendenteDeEntrega(depois) : 0;
+    if (excesso > EPS) {
+      const devolver = Math.min(excesso, q);
+      // eslint-disable-next-line no-await-in-loop
+      if (await liberarSemFalhar(db, user, reserva.id, devolver >= q - EPS ? null : devolver,
+        rotulos.excessoDesfeito, rotulos)) {
+        ficou = q - devolver;
+      }
+    }
+    if (ficou <= EPS) continue;
+    distribuivel -= ficou;
+    acc.tocadas.add(Number(c.requisicao_id));
+    acc.resultado.reservas.push({
+      requisicao_id: Number(c.requisicao_id), item_id: c.item_id, material_id: materialId,
+      reserva_id: reserva.id, quantidade: ficou,
+    });
+  }
 }
 
 /**
