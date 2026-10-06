@@ -399,3 +399,26 @@ test('na Geral, enquanto o GET nao resolve, o spinner fica so no conteudo e a ba
   expect(container.textContent).not.toMatch(/Carregando configurações/);
   expect([...container.querySelectorAll('label')].some(l => l.textContent.trim() === 'Nome da Empresa')).toBe(true);
 });
+
+test('acessibilidade (revisao da Etapa 36): todo aria-controls aponta para um id que existe e o painel e rotulado pela aba ativa', async () => {
+  await render('/configuracoes?modulo=administrativo&tab=email');
+
+  const controles = [...container.querySelectorAll('[aria-controls]')].map(t => t.getAttribute('aria-controls'));
+  expect(controles.length).toBeGreaterThan(0);
+  controles.forEach((id) => expect(container.querySelector(`#${id}`)).not.toBeNull());
+
+  const painel = container.querySelector('[role="tabpanel"]');
+  expect(painel.getAttribute('aria-labelledby')).toBe('ui-tab-email');
+  expect(container.querySelector('#ui-tab-email')).not.toBeNull();
+});
+
+test('acessibilidade: em modulo embutido (sem barra interna) o painel e rotulado pela aba do modulo', async () => {
+  await render('/configuracoes?modulo=almoxarifado');
+
+  const painel = container.querySelector('[role="tabpanel"]');
+  expect(painel.getAttribute('aria-labelledby')).toBe('ui-tab-almoxarifado');
+  expect(container.querySelector('#ui-tab-almoxarifado')).not.toBeNull();
+  [...container.querySelectorAll('[aria-controls]')].forEach((t) => {
+    expect(container.querySelector(`#${t.getAttribute('aria-controls')}`)).not.toBeNull();
+  });
+});

@@ -12,14 +12,18 @@ import './Tabs.css';
  *   tamanho: 'md' | 'sm'          — 'sm' e o segundo nivel (abas internas de um modulo)
  *
  * Acessibilidade: `role="tablist"`/`role="tab"`, `aria-selected` so na ativa, `aria-controls`
- * apontando para `ui-tabpanel-<id>` (o pai pode dar esse id ao painel; nao e obrigatorio),
- * roving tabindex (so a ativa entra no Tab do teclado) e setas ← → com volta circular, Home/End.
+ * SO quando o pai passa `painelId` (o id do unico painel que troca de conteudo — e o padrao
+ * desta base: um `role="tabpanel"` por tela, nao um por aba). Sem `painelId` nenhum
+ * `aria-controls` e emitido: a revisao da Etapa 36 achou 12 `aria-controls` apontando para ids
+ * que nao existiam no DOM, e o leitor de tela anunciava relacao com elemento inexistente.
+ * Roving tabindex (so a ativa entra no Tab do teclado) e setas ← → com volta circular, Home/End.
+ * Cada aba tem `id="ui-tab-<id>"` — e o alvo do `aria-labelledby` do painel.
  *
  * Nomes de classe: `.ui-tabs`, `.ui-tab`, `.ui-tab-ativa`, `.ui-tabs-sm`. NENHUM pode conter
  * 'header', 'toolbar', 'barra', 'actions' etc. — `mobile-app.css:231-238` forca `flex-wrap:
  * wrap` nesses fragmentos e a barra deixaria de rolar no celular.
  */
-const Tabs = ({ abas = [], ativa, onChange, ariaLabel, tamanho = 'md' }) => {
+const Tabs = ({ abas = [], ativa, onChange, ariaLabel, tamanho = 'md', painelId }) => {
   const listaRef = useRef(null);
 
   const irPara = (indice) => {
@@ -75,7 +79,7 @@ const Tabs = ({ abas = [], ativa, onChange, ariaLabel, tamanho = 'md' }) => {
             id={`ui-tab-${aba.id}`}
             data-id={aba.id}
             aria-selected={selecionada ? 'true' : 'false'}
-            aria-controls={`ui-tabpanel-${aba.id}`}
+            aria-controls={painelId || undefined}
             tabIndex={selecionada ? 0 : -1}
             className={`ui-tab${selecionada ? ' ui-tab-ativa' : ''}`}
             onClick={() => onChange?.(aba.id)}

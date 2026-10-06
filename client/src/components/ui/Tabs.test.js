@@ -67,12 +67,21 @@ test('so a ativa tem aria-selected="true" e a classe ui-tab-ativa; as outras sao
   expect(empresa.getAttribute('tabindex')).toBe('-1');
 });
 
-test('aria-controls aponta para o painel da aba e data-id carrega o id', () => {
+test('sem painelId NENHUMA aba emite aria-controls (nao ha painel por aba nesta base); o id da aba existe', () => {
   render({ ativa: 'empresa', onChange: jest.fn() });
 
   const [empresa] = tabs();
-  expect(empresa.getAttribute('aria-controls')).toBe('ui-tabpanel-empresa');
+  expect(empresa.hasAttribute('aria-controls')).toBe(false);
+  expect(tabs().every((t) => !t.hasAttribute('aria-controls'))).toBe(true);
   expect(empresa.id).toBe('ui-tab-empresa');
+});
+
+test('com painelId todas as abas apontam para o MESMO painel (o unico que troca de conteudo)', () => {
+  render({ ativa: 'empresa', onChange: jest.fn(), painelId: 'ui-tabpanel-teste' });
+
+  expect(tabs().map((t) => t.getAttribute('aria-controls'))).toEqual([
+    'ui-tabpanel-teste', 'ui-tabpanel-teste', 'ui-tabpanel-teste',
+  ]);
 });
 
 test('clicar chama onChange(id) da aba clicada, e nao da ativa', () => {

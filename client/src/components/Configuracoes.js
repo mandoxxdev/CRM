@@ -27,6 +27,8 @@ const ConfiguracoesProducao = lazy(() => import('./producao/ConfiguracoesProduca
 // modulo). `administrativo` e a aba "Geral" e aparece sempre — nao entra em modulosConfiguraveis.
 const MODULOS_SEM_CONFIGURACAO = ['admin', 'todolist'];
 const MODULO_GERAL = 'administrativo';
+// O unico `role="tabpanel"` da tela (RN-36.09): os dois niveis de abas apontam para ele.
+const PAINEL_ID = 'ui-tabpanel-configuracoes';
 const MODULOS_EMBUTIDOS = ['almoxarifado', 'operacional'];
 
 // Etapa 36 (RN-36.02/03): onde cada aba antiga da tela ficou. Geral = Empresa, Sistema, E-mail,
@@ -262,6 +264,7 @@ const Configuracoes = () => {
         ativa={moduloAtivo}
         onChange={trocarModulo}
         ariaLabel="Módulos"
+        painelId={PAINEL_ID}
       />
 
       {abasDoModulo.length > 0 && !geralCarregando && (
@@ -271,13 +274,18 @@ const Configuracoes = () => {
           onChange={trocarAba}
           ariaLabel="Abas do módulo"
           tamanho="sm"
+          painelId={PAINEL_ID}
         />
       )}
 
+      {/* Um painel so, que troca de conteudo: os dois niveis apontam para ele (aria-controls) e
+          ele e rotulado pela aba mais interna que esta ativa (achado da revisao da Etapa 36:
+          antes o id variava por modulo e 12 aria-controls apontavam para ids inexistentes). */}
       <div
         className={`configuracoes-content${moduloEmbutido ? ' configuracoes-content--embutido' : ''}`}
         role="tabpanel"
-        id={`ui-tabpanel-${moduloAtivo}`}
+        id={PAINEL_ID}
+        aria-labelledby={`ui-tab-${activeTab || moduloAtivo}`}
       >
         {geralCarregando && (
           <div className="configuracoes-loading">
