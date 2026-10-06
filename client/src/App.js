@@ -47,6 +47,7 @@ import {
   OSComercialForm,
   Compras,
   PedidoCompraForm,
+  FornecedorForm,
   ComprasSolicitacoesCompra,
   GruposFornecedores,
   FornecedoresDoGrupo,
@@ -352,6 +353,14 @@ function AppRoutes() {
         } />
         <Route path="pedidos/editar/:id" element={
           <PedidoCompraForm />
+        } />
+        {/* Etapa 34: mesmo caso do pedido — sem estas duas, "Novo Fornecedor" e o lapis da
+            lista caiam no `path="*"` e mostravam a propria lista. */}
+        <Route path="fornecedores/novo" element={
+          <FornecedorForm />
+        } />
+        <Route path="fornecedores/editar/:id" element={
+          <FornecedorForm />
         } />
         <Route path="cotacoes" element={
           <Compras />
