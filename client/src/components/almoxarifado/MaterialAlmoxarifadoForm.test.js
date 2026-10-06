@@ -21,7 +21,8 @@
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
-import MaterialAlmoxarifadoForm from './MaterialAlmoxarifadoForm';
+// Etapa 35: LEGENDA_ABC é a constante exportada que a tela e o manual citam (RN-35.03).
+import MaterialAlmoxarifadoForm, { LEGENDA_ABC } from './MaterialAlmoxarifadoForm';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 
@@ -350,5 +351,139 @@ describe('MaterialAlmoxarifadoForm — RN-04: categoria fora do catálogo aparec
     preencher(categoriaSelect(), 'Chapas');
     await submeter();
     expect(api.put.mock.calls[0][1].categoria).toBe('Chapas');
+  });
+});
+
+/**
+ * Etapa 35 — unidades e classe ABC (RN-35.01 a RN-35.03).
+ *
+ *  - RN-35.01: Unidade de Consumo e o fator dela SAEM da tela. As colunas ficam e o PUT do servidor
+ *    preserva chave omitida — então a prova é no PAYLOAD: a chave não pode existir (nem como '').
+ *    Controle positivo registrado no plano: antes da implementação o (b) falha porque o state
+ *    nasce com `unidade_consumo: ''` e o spread `...form` leva a chave.
+ *  - RN-35.02: o fator parecia operar e não opera (o manual já dizia "o sistema não converte").
+ *    A tela passa a explicar: exemplo vivo "1 CX = 12 UN" e a frase informativa.
+ *  - RN-35.03: a legenda A/B/C vem da constante exportada LEGENDA_ABC (o manual cita a mesma).
+ */
+// Localiza um <select>/<input> pelo rótulo visível da seção, igual a categoriaSelect(): funciona
+// antes e depois da etapa, então o vermelho do TDD é de asserção, não de seletor.
+function campoPorRotulo(regex) {
+  return [...container.querySelectorAll('.almox-field')]
+    .find((d) => regex.test(d.querySelector('.almox-label')?.textContent.trim() || ''));
+}
+const selectUnidadeMedida = () => campoPorRotulo(/^Unidade de Medida$/i).querySelector('select');
+const selectUnidadeCompra = () => campoPorRotulo(/^Unidade de Compra$/i).querySelector('select');
+const inputFator = () => campoPorRotulo(/^Fator de convers/i).querySelector('input');
+const rotulos = () => [...container.querySelectorAll('.almox-label')].map((l) => l.textContent.trim());
+
+// Material gravado ANTES da etapa, com unidade de consumo preenchida pela API/tela antiga.
+const MATERIAL_COM_CONSUMO = {
+  id: 79, codigo: 'CHP-004', nome: 'Cabo de aco', familia_id: 5,
+  unidade: 'M', categoria: 'Chapas', quantidade_atual: 100,
+  unidade_compra: 'ROLO', fator_conversao_compra: 50,
+  unidade_consumo: 'M', fator_conversao_consumo: 1,
+  proprietario_cliente_id: null,
+};
+
+describe('MaterialAlmoxarifadoForm — RN-35.01: unidade de consumo sai da tela e do payload', () => {
+  test('(a) nao existe mais "Unidade de Consumo" nem "Fator de Conversão (Consumo)"', async () => {
+    await renderizarNovo();
+    const labels = rotulos();
+    // Metade positiva: a seção continua lá, com as unidades que ficaram.
+    expect(labels).toContain('Unidade de Medida');
+    expect(labels).toContain('Unidade de Compra');
+    expect(labels.some((l) => /^Fator de convers/i.test(l))).toBe(true);
+    // Metade negativa.
+    expect(labels).not.toContain('Unidade de Consumo');
+    expect(labels.some((l) => /Consumo\)/i.test(l))).toBe(false);
+    expect(container.textContent).not.toMatch(/Unidade de Consumo/i);
+  });
+
+  test('(b) salvar o minimo: o POST nao leva unidade_consumo nem fator_conversao_consumo', async () => {
+    await renderizarNovo();
+    await preencherObrigatorios();
+    await submeter();
+    expect(api.post).toHaveBeenCalled();
+    const payload = api.post.mock.calls[0][1];
+    // Metade positiva: os campos que FICARAM continuam indo (o spread do form não sumiu).
+    expect(payload).toHaveProperty('unidade', 'UN');
+    expect(payload).toHaveProperty('unidade_compra');
+    expect(payload).toHaveProperty('fator_conversao_compra');
+    // Controle positivo: hoje a chave vai como '' — a asserção abaixo diz qual valor foi.
+    expect(payload).not.toHaveProperty('unidade_consumo');
+    expect(payload).not.toHaveProperty('fator_conversao_consumo');
+  });
+
+  test('(c) editar material com unidade_consumo gravada: o PUT nao manda a chave (servidor preserva)', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/clientes') return Promise.resolve({ data: [CLIENTE_UM] });
+      if (url === '/almoxarifado/familias') return Promise.resolve({ data: [FAMILIA] });
+      if (url === '/almoxarifado/categorias') return Promise.resolve({ data: CATALOGO });
+      if (url === '/almoxarifado/materiais/79') return Promise.resolve({ data: MATERIAL_COM_CONSUMO });
+      return Promise.resolve({ data: [] });
+    });
+    await renderizarEdicao(79);
+    // Metade positiva: o que a tela ainda mostra foi carregado do GET.
+    expect(selectUnidadeMedida().value).toBe('M');
+    expect(selectUnidadeCompra().value).toBe('ROLO');
+    expect(inputFator().value).toBe('50');
+    await submeter();
+    expect(api.put).toHaveBeenCalled();
+    const payload = api.put.mock.calls[0][1];
+    expect(payload.unidade_compra).toBe('ROLO');
+    expect(payload).not.toHaveProperty('unidade_consumo');
+    expect(payload).not.toHaveProperty('fator_conversao_consumo');
+  });
+});
+
+describe('MaterialAlmoxarifadoForm — RN-35.02: o fator de conversão se explica na tela', () => {
+  test('(d) escolher CX e digitar 12 mostra "1 CX = 12 UN"; apagar o fator some com o exemplo', async () => {
+    await renderizarNovo();
+    expect(selectUnidadeMedida().value).toBe('UN');
+    // Antes de escolher a unidade de compra não há exemplo (o placeholder é atributo, não texto).
+    expect(container.textContent).not.toMatch(/1 CX = 12 UN/);
+    preencher(selectUnidadeCompra(), 'CX');
+    preencher(inputFator(), '12');
+    expect(container.textContent).toMatch(/1 CX = 12 UN/);
+    // O exemplo é montado com o que está digitado — não é texto fixo com "UN".
+    preencher(selectUnidadeMedida(), 'M');
+    preencher(selectUnidadeCompra(), 'ROLO');
+    preencher(inputFator(), '50');
+    expect(container.textContent).toMatch(/1 ROLO = 50 M/);
+    expect(container.textContent).not.toMatch(/1 CX = 12 UN/);
+    preencher(inputFator(), '');
+    expect(container.textContent).not.toMatch(/1 ROLO = 50 M/);
+    expect(container.textContent).not.toMatch(/1 ROLO = /);
+  });
+
+  test('(e) a frase "o sistema não converte sozinho" aparece quando há unidade de compra', async () => {
+    await renderizarNovo();
+    expect(container.textContent).not.toMatch(/o sistema não converte sozinho/i);
+    preencher(selectUnidadeCompra(), 'CX');
+    expect(container.textContent).toMatch(/o sistema não converte sozinho/i);
+    expect(container.textContent).toMatch(/Informativo/);
+    // A ajuda do rótulo nomeia as duas unidades escolhidas.
+    expect(container.textContent).toMatch(/Quantas UN há em 1 CX/);
+  });
+});
+
+describe('MaterialAlmoxarifadoForm — RN-35.03: a classe ABC tem legenda', () => {
+  test('(f) a legenda traz A, B e C e diz que é classificação manual', async () => {
+    await renderizarNovo();
+    const legenda = container.querySelector('.almox-legenda-abc');
+    expect(legenda).not.toBeNull();
+    const texto = legenda.textContent;
+    expect(texto).toMatch(/A —/);
+    expect(texto).toMatch(/B —/);
+    expect(texto).toMatch(/C —/);
+    expect(texto).toMatch(/classificação manual/i);
+    // A constante exportada é a MESMA que a tela mostra (e a que o manual cita).
+    expect(Object.keys(LEGENDA_ABC)).toEqual(['A', 'B', 'C']);
+    expect(texto).toContain(LEGENDA_ABC.A);
+    expect(texto).toContain(LEGENDA_ABC.B);
+    expect(texto).toContain(LEGENDA_ABC.C);
+    // O select continua lá, com as três classes.
+    const select = campoPorRotulo(/^Classe ABC$/).querySelector('select');
+    expect([...select.querySelectorAll('option')].map((o) => o.value)).toEqual(['', 'A', 'B', 'C']);
   });
 });

@@ -491,6 +491,28 @@
 }
 .almox-label .required { color: var(--gmp-error); margin-left: 2px; }
 
+/* Etapa 35 — texto de ajuda abaixo de um campo (exemplo vivo do fator de conversao) e a
+   legenda da classe ABC. Lista compacta, mesma cor dos <small> de ajuda do formulario. */
+.almox-help {
+  margin: 2px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--gmp-text-light);
+}
+.almox-help strong { color: var(--gmp-text); font-weight: 600; }
+
+.almox-legenda-abc {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--gmp-text-light);
+}
+.almox-legenda-abc li { margin: 0 0 2px; }
+.almox-legenda-abc strong { color: var(--gmp-text); font-weight: 600; }
+.almox-legenda-abc-rodape { margin-top: 4px; font-style: italic; }
+
 .almox-input,
 .almox-textarea,
 .almox-form-select {

@@ -18,6 +18,16 @@ const UNIDADES = ['UN', 'KG', 'G', 'L', 'ML', 'M', 'CM', 'M²', 'M³', 'CX', 'PC
 
 const CLASSES_ABC = ['A', 'B', 'C'];
 
+// Etapa 35 (RN-35.03): legenda da classe ABC. NÃO há definição escrita no projeto — este é o
+// significado usual (curva de Pareto) e está marcado como dúvida D-35 em
+// docs/compras-novidades-por-etapa.md. Trocar a definição é editar esta constante; o teste e o
+// manual do sistema (§2.5) citam o mesmo texto.
+export const LEGENDA_ABC = {
+  A: 'itens de maior valor ou consumo: poucos itens que concentram a maior parte do valor em estoque; contagem e reposição mais frequentes.',
+  B: 'intermediários: valor e giro médios; controle normal.',
+  C: 'muitos itens de baixo valor: controle simplificado, contagem menos frequente.',
+};
+
 // Cada seção do formulário é um "cartão" com o mesmo visual (Task 6 — reorganização em seções).
 const sectionCardStyle = { background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 12, padding: 24 };
 
@@ -123,11 +133,12 @@ const MaterialAlmoxarifadoForm = () => {
     requer_foto: false,
 
     // ── Unidades e custos ──
+    // Etapa 35 (RN-35.01): `unidade_consumo` e `fator_conversao_consumo` saíram do state de
+    // propósito. O spread `...form` no submit leva TODA chave do state, e '' na chave faria o
+    // PUT gravar vazio por cima do que está no banco; sem a chave o servidor preserva a coluna.
     classe_abc: '',
     unidade_compra: '',
-    fator_conversao_compra: '',
-    unidade_consumo: '',
-    fator_conversao_consumo: ''
+    fator_conversao_compra: ''
   });
 
   useEffect(() => {
@@ -332,9 +343,9 @@ const MaterialAlmoxarifadoForm = () => {
 
         classe_abc: m.classe_abc || '',
         unidade_compra: m.unidade_compra || '',
-        fator_conversao_compra: m.fator_conversao_compra ?? '',
-        unidade_consumo: m.unidade_consumo || '',
-        fator_conversao_consumo: m.fator_conversao_consumo ?? ''
+        fator_conversao_compra: m.fator_conversao_compra ?? ''
+        // Etapa 35: unidade_consumo/fator_conversao_consumo NÃO entram — a tela não os mostra
+        // mais e a chave omitida no PUT preserva o que o material já tinha gravado.
       });
       if (m.localizacao_padrao_id) {
         setMaterialLocInfo({ id: m.localizacao_padrao_id, label: m.localizacao });
@@ -405,11 +416,7 @@ const MaterialAlmoxarifadoForm = () => {
     // Fatores de conversão (Etapa 2, Task 4): espelha no cliente a invariante que o servidor
     // valida via superRefine — evita um round-trip só para descobrir que faltou o fator.
     if (form.unidade_compra && !(Number(form.fator_conversao_compra) > 0)) {
-      toast.error('Informe um fator de conversão de compra maior que zero');
-      return;
-    }
-    if (form.unidade_consumo && !(Number(form.fator_conversao_consumo) > 0)) {
-      toast.error('Informe um fator de conversão de consumo maior que zero');
+      toast.error('Informe um fator de conversão maior que zero');
       return;
     }
     setSaving(true);
@@ -867,6 +874,13 @@ const MaterialAlmoxarifadoForm = () => {
                     <option value="">— não classificado —</option>
                     {CLASSES_ABC.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
+                  {/* Etapa 35 (RN-35.03): o select sozinho não dizia o que A, B e C significam. */}
+                  <ul className="almox-legenda-abc">
+                    {CLASSES_ABC.map(c => (
+                      <li key={c}><strong>{c}</strong> — {LEGENDA_ABC[c]}</li>
+                    ))}
+                    <li className="almox-legenda-abc-rodape">Classificação manual, definida por quem analisa consumo e valor.</li>
+                  </ul>
                 </div>
                 <div className="almox-field">
                   <label className="almox-label">Custo Unitário (R$)</label>
@@ -880,38 +894,33 @@ const MaterialAlmoxarifadoForm = () => {
                     {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
                   </select>
                 </div>
+                {/* Etapa 35 (RN-35.02): o fator PARECIA operar e não opera — o servidor só grava e
+                    devolve; nenhuma entrada ou saída é convertida (o manual já dizia isso). A tela
+                    agora explica o que o número é, monta o exemplo com o que está digitado e diz
+                    que é informativo. Os campos de CONSUMO saíram (RN-35.01): só o CRUD os lia. */}
                 <div className="almox-field">
                   <label className="almox-label">
-                    Fator de Conversão (Compra)
+                    Fator de conversão
                     {form.unidade_compra && <span className="required">*</span>}
                   </label>
                   <input className="almox-input" type="number" min="0" step="0.0001"
                     value={form.fator_conversao_compra} onChange={e => set('fator_conversao_compra', e.target.value)}
                     placeholder="Ex.: 12 (1 CX = 12 UN)" />
-                  {form.unidade_compra && (
+                  {form.unidade_compra ? (
+                    <>
+                      <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
+                        Quantas {form.unidade} há em 1 {form.unidade_compra}. Obrigatório e maior que zero.
+                      </small>
+                      <p className="almox-help">
+                        {Number(form.fator_conversao_compra) > 0 && (
+                          <strong>1 {form.unidade_compra} = {form.fator_conversao_compra} {form.unidade}. </strong>
+                        )}
+                        Informativo: as entradas e saídas são lançadas na unidade de medida; o sistema não converte sozinho.
+                      </p>
+                    </>
+                  ) : (
                     <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
-                      Obrigatório e maior que zero quando a unidade de compra é informada.
-                    </small>
-                  )}
-                </div>
-                <div className="almox-field">
-                  <label className="almox-label">Unidade de Consumo</label>
-                  <select className="almox-form-select" value={form.unidade_consumo} onChange={e => set('unidade_consumo', e.target.value)}>
-                    <option value="">— igual à unidade de medida —</option>
-                    {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
-                  </select>
-                </div>
-                <div className="almox-field">
-                  <label className="almox-label">
-                    Fator de Conversão (Consumo)
-                    {form.unidade_consumo && <span className="required">*</span>}
-                  </label>
-                  <input className="almox-input" type="number" min="0" step="0.0001"
-                    value={form.fator_conversao_consumo} onChange={e => set('fator_conversao_consumo', e.target.value)}
-                    placeholder="Ex.: 1" />
-                  {form.unidade_consumo && (
-                    <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
-                      Obrigatório e maior que zero quando a unidade de consumo é informada.
+                      Só se aplica quando a unidade de compra é diferente da unidade de medida.
                     </small>
                   )}
                 </div>
