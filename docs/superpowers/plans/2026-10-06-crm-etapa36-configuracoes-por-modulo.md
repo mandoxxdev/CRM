@@ -154,7 +154,24 @@ segundo nível. Foco visível (`:focus-visible` com anel).
 3. `Configuracoes.css`: aposentar `.configuracoes-tabs .tab` (vira `Tabs`); manter o resto.
 4. `App.js`: nada (a rota é a mesma). `PropostasList.js:180`: nada (o `state.tab` legado é traduzido).
 
-### T3 — galho: `embedded` nas duas telas de módulo (RN-36.04, 36.05)
+### T3 — galho: `embedded` nas duas telas de módulo (RN-36.04, 36.05) ✅ `127425bc` (branch `c36b`)
+
+> **Medido (executor B, worktree `CRM-wt-c36b`):** 11 testes novos (`ConfiguracoesEmbedded.test.js`
+> 7, `ConfiguracoesProducao.test.js` 4) — vermelho **6 falhas / 5 verdes** antes de implementar (os
+> 5 verdes são os cenários "sem prop" que descrevem a tela de hoje), **11/11** depois. Sabotagem:
+> `setTab` local no lugar do `setSearchParams` → **2 falhas** (só os testes de URL); `{true &&`
+> no `.almox-header` → **1 falha** (o de `embedded`); restauro por edição, 0 marcas, sem CR.
+> Controle de regressão: `Categorias` + `ConfiguracoesGerais` + `PerfisAcesso` **3 suítes / 27
+> testes verdes, `git status` vazio** nos três. Jest do client **51 suítes / 740 testes** (baseline
+> 49/729 → +2/+11, exatamente os novos). `CI=true build` compilou limpo (`main.a25437d6.js`
+> 112,75 kB). Zero linhas de servidor. Divergências do plano: nenhuma de contrato; detalhe de
+> implementação não previsto — os botões da barra interna ganharam `flexShrink: 0` (sem isso o
+> `nowrap` da barra não impede o flex de espremer cada aba), e `.producao-embedded` foi
+> acrescentado em `Producao.css` (o plano só nomeava a classe). Decisão reversível: o cabeçalho do
+> card "Motivos de parada" é um `div` com estilo inline (flex + `wrap`), **sem** classe nova — uma
+> classe `*-header` cairia no `[class*='header']` do mobile de qualquer jeito; inline evita CSS novo
+> para uma linha. Reverter = extrair para classe.
+
 1. Teste primeiro: em `ConfiguracoesAlmoxarifado` — novo arquivo
    `almoxarifado/ConfiguracoesEmbedded.test.js` (montagem igual a `ConfiguracoesGerais.test.js`,
    inclusive o mock de `useAuth` — ele **lança** sem provider): sem prop → o `h1` "Configurações do
@@ -204,9 +221,16 @@ Template de proposta → voltar por Propostas > "Configurar template"); linha no
   interna do almox continua inline (`#4facfe`) — migrá-la é da etapa que migrar as outras seis.
 
 ## Retro (preencher no fechamento)
-- Rodadas de correção até verde: _preencher_
-- Achados da revisão: _preencher_ (reais vs. ruído)
-- Paralelismo: _preencher_
+- Rodadas de correção até verde: _preencher_ · **T3 (executor B): 1 rodada** — vermelho 6/11,
+  implementação, verde 11/11 de primeira; nenhum teste precisou de ajuste depois de escrito.
+- Achados da revisão: _preencher_ (reais vs. ruído) · **T3:** o achado "a URL nunca é escrita"
+  (`setTab` local) era **real** e foi confirmado pelo vermelho dos 2 testes de URL; o ponto de
+  atenção "os três testes existentes só leem `?tab=`" também se confirmou (verdes sem edição).
+  Achado meu, fora do plano: `flexWrap: 'nowrap'` sozinho não garante a rolagem — o flex ainda
+  espreme as abas; precisou de `flexShrink: 0` nos botões.
+- Paralelismo: _preencher_ · **T3:** rodou isolada na worktree `c36b` sem tocar
+  `Configuracoes.js`/`ui/Tabs`; os únicos arquivos em comum com T1/T2 são zero — a tabela de
+  contratos bastou para não precisar ler o galho do executor A.
 - Defeito escapado: preencher na etapa seguinte.
 
 ## Como foi executado

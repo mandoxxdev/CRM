@@ -1,5 +1,7 @@
 /* Produção GMP — Orion theme */
 .producao-page { padding: 24px; max-width: 1400px; margin: 0 auto; color: var(--gmp-text); }
+/* Etapa 36: a tela de configuracoes embutida em /configuracoes. So a cor — padding, max-width e o rodape do mobile sao da pagina hospedeira. */
+.producao-embedded { color: var(--gmp-text); }
 .producao-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
 .producao-header h1 { font-size: 1.6rem; font-weight: 700; margin: 0; }
 .producao-header p { font-size: 0.875rem; color: var(--gmp-text-light); margin: 4px 0 0; }

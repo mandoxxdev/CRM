@@ -194,18 +194,32 @@ const TABS = [
   { id: 'geral', label: 'Configurações Gerais', icon: FiSettings },
 ];
 
-const ConfiguracoesAlmoxarifado = () => {
+/**
+ * Etapa 36 (RN-36.04): `embedded` e a tela renderizada DENTRO da aba "Almoxarifado" de
+ * /configuracoes — sem o cabecalho proprio e sem o wrapper `.almox-page` (padding, max-width e
+ * o rodape de 72px do mobile), que a pagina hospedeira ja da. A barra das 11 abas internas fica.
+ *
+ * A aba interna vive na URL (`?tab=`) NOS DOIS MODOS. Antes, `?tab=` era lido uma vez no
+ * `useState` inicial e o clique so fazia `setTab` local: clicar "Localizacoes" e dar F5 voltava
+ * para "Tipos" (achado da revisao do plano). Derivar de `searchParams` e escrever com `replace`
+ * faz a URL ser a fonte da verdade sem encher o historico com um passo por aba. Descartado:
+ * remontar a tela com `key` quando a URL muda — perderia o estado das abas sem necessidade.
+ */
+const ConfiguracoesAlmoxarifado = ({ embedded = false }) => {
   const { user } = useAuth();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const isAdmin = canConfigureAlmox(getEffectiveUser(user));
-  const initialTab = searchParams.get('tab');
-  const [tab, setTab] = useState(
-    initialTab && TABS.some(t => t.id === initialTab) ? initialTab : 'tipos'
-  );
+  const tabParam = searchParams.get('tab');
+  const tab = tabParam && TABS.some(t => t.id === tabParam) ? tabParam : 'tipos';
+  const wrapperClass = embedded ? 'almox-embedded' : 'almox-page';
+
+  const irParaAba = (id) => {
+    setSearchParams(prev => { prev.set('tab', id); return prev; }, { replace: true });
+  };
 
   if (!isAdmin) {
     return (
-      <div className="almox-page">
+      <div className={wrapperClass}>
         <div className="almox-empty" style={{ padding: 60, textAlign: 'center' }}>
           <FiShield size={48} style={{ color: '#4facfe', opacity: 0.5, display: 'block', margin: '0 auto 16px' }} />
           <h2 style={{ margin: '0 0 8px', fontSize: '1.1rem' }}>Acesso restrito — administrador do Almoxarifado</h2>
@@ -221,34 +235,37 @@ const ConfiguracoesAlmoxarifado = () => {
   }
 
   return (
-    <div className="almox-page">
-      <div className="almox-header">
-        <div>
-          <h1 style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <FiSettings size={22} style={{ color: '#4facfe' }} /> Configurações do Almoxarifado
-          </h1>
-          <p>
-            Gerencie tipos de material, famílias, estoques mínimos, setores, localizações e configurações gerais
-          </p>
+    <div className={wrapperClass}>
+      {!embedded && (
+        <div className="almox-header">
+          <div>
+            <h1 style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <FiSettings size={22} style={{ color: '#4facfe' }} /> Configurações do Almoxarifado
+            </h1>
+            <p>
+              Gerencie tipos de material, famílias, estoques mínimos, setores, localizações e configurações gerais
+            </p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(79,172,254,0.1)', border: '1px solid rgba(79,172,254,0.2)', borderRadius: 8, padding: '6px 12px', fontSize: '0.8rem', color: '#4facfe' }}>
+            <FiShield size={14} /> Somente Administradores
+          </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(79,172,254,0.1)', border: '1px solid rgba(79,172,254,0.2)', borderRadius: 8, padding: '6px 12px', fontSize: '0.8rem', color: '#4facfe' }}>
-          <FiShield size={14} /> Somente Administradores
-        </div>
-      </div>
+      )}
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--gmp-border)', marginBottom: 24 }}>
+      {/* Tabs — rola de lado: com `html { overflow-x: hidden }` do mobile, 11 abas sem rolagem
+          propria deixam as ultimas inalcancaveis em 360px. */}
+      <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--gmp-border)', marginBottom: 24, overflowX: 'auto', flexWrap: 'nowrap', whiteSpace: 'nowrap' }}>
         {TABS.map(t => {
           const Icon = t.icon;
           return (
-            <button key={t.id} onClick={() => setTab(t.id)}
+            <button key={t.id} onClick={() => irParaAba(t.id)}
               style={{
                 background: 'none', border: 'none', cursor: 'pointer',
                 padding: '10px 18px', fontSize: '0.875rem', fontWeight: 600,
                 color: tab === t.id ? '#4facfe' : 'var(--gmp-text-light)',
                 borderBottom: `2px solid ${tab === t.id ? '#4facfe' : 'transparent'}`,
                 display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.15s',
-                marginBottom: -1,
+                marginBottom: -1, flexShrink: 0,
               }}>
               <Icon size={15} /> {t.label}
             </button>

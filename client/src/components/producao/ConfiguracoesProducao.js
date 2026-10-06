@@ -5,7 +5,14 @@ import { FiPlus, FiEdit, FiTrash2, FiX } from 'react-icons/fi';
 import ProducaoPageHeader from './ProducaoPageHeader';
 import './Producao.css';
 
-const ConfiguracoesProducao = () => {
+/**
+ * Etapa 36 (RN-36.05): `embedded` e a tela renderizada DENTRO da aba "Operacional" de
+ * /configuracoes — sem o `ProducaoPageHeader` e sem o wrapper `.producao-page`, que a pagina
+ * hospedeira ja da. O botao "Novo motivo" morava nas acoes do header; para nao ter dois caminhos
+ * de render (botao no header OU no card), ele vive no cabecalho do card "Motivos de parada" nos
+ * dois modos e `embedded` apenas suprime o header.
+ */
+const ConfiguracoesProducao = ({ embedded = false }) => {
   const [motivos, setMotivos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -58,20 +65,28 @@ const ConfiguracoesProducao = () => {
     }
   };
 
+  const abrirNovoMotivo = () => {
+    setEditing(null);
+    setForm({ descricao: '', categoria: 'outros', tipo: 'nao_planejada' });
+    setShowModal(true);
+  };
+
   return (
-    <div className="producao-page">
-      <ProducaoPageHeader
-        title="Configurações — Produção"
-        subtitle="Motivos de parada e parâmetros do módulo (administradores)"
-        actions={(
-          <button type="button" className="producao-btn producao-btn-primary" onClick={() => { setEditing(null); setForm({ descricao: '', categoria: 'outros', tipo: 'nao_planejada' }); setShowModal(true); }}>
-            <FiPlus /> Novo motivo
-          </button>
-        )}
-      />
+    <div className={embedded ? 'producao-embedded' : 'producao-page'}>
+      {!embedded && (
+        <ProducaoPageHeader
+          title="Configurações — Produção"
+          subtitle="Motivos de parada e parâmetros do módulo (administradores)"
+        />
+      )}
 
       <div className="producao-card">
-        <h3>Motivos de parada</h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+          <h3 style={{ margin: 0 }}>Motivos de parada</h3>
+          <button type="button" className="producao-btn producao-btn-primary" onClick={abrirNovoMotivo}>
+            <FiPlus /> Novo motivo
+          </button>
+        </div>
         {loading ? <div className="producao-empty">Carregando...</div> : (
           <div className="producao-table-wrap">
             <table className="producao-table">
