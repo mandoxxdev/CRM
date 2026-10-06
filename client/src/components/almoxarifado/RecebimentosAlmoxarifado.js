@@ -732,7 +732,8 @@ const RecebimentosAlmoxarifado = () => {
                                   <th>Un</th>
                                   <th className="num">Vl. unit.</th>
                                   <th className="num">Total</th>
-                                  <th>Entrega</th>
+                                  {/* Etapa 33 (RN-33.04): sem coluna "Entrega" por item — a
+                                      previsão é do pedido e está em "Condições do pedido". */}
                                 </tr>
                               </thead>
                               <tbody>
@@ -754,7 +755,6 @@ const RecebimentosAlmoxarifado = () => {
                                     <td>{it.unidade || 'UN'}</td>
                                     <td className="num">{formatMoneyUnit(it.valor_unitario)}</td>
                                     <td className="num">{formatMoney(it.valor_linha)}</td>
-                                    <td>{formatDateOnly(it.data_entrega)}</td>
                                   </tr>
                                 ))}
                               </tbody>

@@ -35,7 +35,7 @@ import './PedidoCompraForm.css';
 const LINHA_VAZIA = {
   material_id: '', material_nome: '', codigo: '', descricao: '', ncm: '',
   quantidade: 1, unidade: 'UN', valor_unitario: '', ipi_percentual: 0,
-  peso_unitario: '', data_entrega: '', observacao: '',
+  peso_unitario: '', observacao: '',
 };
 
 const CABECALHO_VAZIO = {
@@ -67,7 +67,6 @@ const moedaUnit = (v) => Number(v || 0).toLocaleString('pt-BR', {
   style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 4,
 });
 
-const hojeISO = () => new Date().toISOString().slice(0, 10);
 const emDias = (n) => {
   const d = new Date();
   d.setDate(d.getDate() + n);
@@ -200,7 +199,6 @@ const PedidoCompraForm = () => {
             material_nome: i.material_nome || i.descricao || '',
             valor_unitario: i.valor_unitario ?? '',
             ipi_percentual: i.ipi_percentual ?? 0,
-            data_entrega: i.data_entrega || '',
           }));
           setItens(its);
           // O IPI padrão do pedido aberto é o que a maioria dos itens usa.
@@ -403,7 +401,6 @@ const PedidoCompraForm = () => {
           observacao: i.observacao || null,
           ncm: i.ncm || null,
           peso_unitario: Number(i.peso_unitario) || 0,
-          data_entrega: i.data_entrega || null,
           quantidade: Number(i.quantidade) || 0,
           unidade: i.unidade || 'UN',
           valor_unitario: Number(i.valor_unitario) || 0,
@@ -614,7 +611,7 @@ const PedidoCompraForm = () => {
                     </strong>
 
                     <button type="button" className="pcf-item-detalhes"
-                      title="Unidade, IPI e entrega deste item"
+                      title="Unidade, IPI e observações deste item"
                       onClick={() => setDetalhesAbertos((d) => ({ ...d, [idx]: !d[idx] }))}>
                       {aberto ? <FiChevronUp /> : <FiChevronDown />}
                       {ipiDiverge && <em title="IPI diferente do padrão">IPI {it.ipi_percentual}%</em>}
@@ -637,22 +634,8 @@ const PedidoCompraForm = () => {
                         onChange={(v) => mudarItem(idx, 'ipi_percentual', v === '' ? 0 : v)}
                         permitirOutro tipoOutro="number" sufixoOutro="%" />
 
-                      <div className="pcf-chips-bloco">
-                        <span className="pcf-chips-label">Entrega deste item</span>
-                        <div className="pcf-chips">
-                          {[['Hoje', hojeISO()], ['Em 7 dias', emDias(7)], ['Em 15 dias', emDias(15)],
-                            ['Em 30 dias', emDias(30)]].map(([rot, valor]) => (
-                              <button type="button" key={rot}
-                                className={`pcf-chip${it.data_entrega === valor ? ' pcf-chip-ativo' : ''}`}
-                                onClick={() => mudarItem(idx, 'data_entrega', it.data_entrega === valor ? '' : valor)}>
-                                {it.data_entrega === valor && <FiCheck />}{rot}
-                              </button>
-                            ))}
-                          <input type="date" className="pcf-data-input" value={it.data_entrega || ''}
-                            onChange={(e) => mudarItem(idx, 'data_entrega', e.target.value)} />
-                        </div>
-                        {it.data_entrega && <div className="pcf-escolhido">{dataCurta(it.data_entrega)}</div>}
-                      </div>
+                      {/* Etapa 33 (RN-33.01): não há data de entrega por item — a entrega é do
+                          pedido, na seção "3. Entrega". */}
 
                       <div className="pcf-livres">
                         <label><span>Descrição no pedido</span>
@@ -670,26 +653,15 @@ const PedidoCompraForm = () => {
           </div>
         </section>
 
-        {/* ── 3. condições ──────────────────────────────────────── */}
+        {/* ── 3. entrega ────────────────────────────────────────── */}
+        {/* Etapa 33 (RN-33.02): a entrega é UMA por pedido — previsão + local — e ganha
+            seção própria. Antes os dois viviam dentro de "Condições" e cada item tinha a sua
+            data, que ninguém usava no recebimento. "Cobrar em" fica em "Mais opções". */}
         <section className="pcf-bloco">
-          <h2>3. Condições</h2>
-
-          <Chips label="Condição de pagamento" opcoes={ops.condicao_pagamento || []}
-            valor={cab.condicao_pagamento}
-            onChange={(v) => setCampo('condicao_pagamento', v)}
-            permitirOutro
-            ajuda="a que você digitar em “Outro” vira botão no próximo pedido" />
-
-          <Chips label="Quem paga o frete" opcoes={ops.frete_modalidade || []}
-            valor={cab.frete_modalidade}
-            onChange={(v) => setCampo('frete_modalidade', v)} />
-
-          <Chips label="Via de transporte" opcoes={ops.via_transporte || []}
-            valor={cab.via_transporte}
-            onChange={(v) => setCampo('via_transporte', v)} permitirOutro />
+          <h2>3. Entrega</h2>
 
           <div className="pcf-chips-bloco">
-            <span className="pcf-chips-label">Previsão de entrega do pedido</span>
+            <span className="pcf-chips-label">Previsão de entrega</span>
             <div className="pcf-chips">
               {[['Em 7 dias', emDias(7)], ['Em 15 dias', emDias(15)], ['Em 30 dias', emDias(30)],
                 ['Em 45 dias', emDias(45)]].map(([rot, valor]) => (
@@ -708,9 +680,28 @@ const PedidoCompraForm = () => {
           <BotoesLocal campo="local_entrega" outro={entregaOutro} setOutro={setEntregaOutro} />
         </section>
 
-        {/* ── 4. totais ─────────────────────────────────────────── */}
+        {/* ── 4. condições ──────────────────────────────────────── */}
         <section className="pcf-bloco">
-          <h2>4. Total</h2>
+          <h2>4. Condições</h2>
+
+          <Chips label="Condição de pagamento" opcoes={ops.condicao_pagamento || []}
+            valor={cab.condicao_pagamento}
+            onChange={(v) => setCampo('condicao_pagamento', v)}
+            permitirOutro
+            ajuda="a que você digitar em “Outro” vira botão no próximo pedido" />
+
+          <Chips label="Quem paga o frete" opcoes={ops.frete_modalidade || []}
+            valor={cab.frete_modalidade}
+            onChange={(v) => setCampo('frete_modalidade', v)} />
+
+          <Chips label="Via de transporte" opcoes={ops.via_transporte || []}
+            valor={cab.via_transporte}
+            onChange={(v) => setCampo('via_transporte', v)} permitirOutro />
+        </section>
+
+        {/* ── 5. totais ─────────────────────────────────────────── */}
+        <section className="pcf-bloco">
+          <h2>5. Total</h2>
           <div className="pcf-encargos">
             <label><span>Frete (R$)</span>
               <input type="number" min="0" step="0.01" placeholder="0,00" value={cab.valor_frete}
@@ -740,7 +731,7 @@ const PedidoCompraForm = () => {
           </div>
         </section>
 
-        {/* ── 5. o que quase nunca muda ─────────────────────────── */}
+        {/* ── 6. o que quase nunca muda ─────────────────────────── */}
         <section className="pcf-bloco">
           <button type="button" className="pcf-mais" onClick={() => setMaisOpcoes((v) => !v)}>
             {maisOpcoes ? <FiChevronUp /> : <FiChevronDown />} Mais opções
