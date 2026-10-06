@@ -93,15 +93,43 @@ function corpoPedido(materialId, over = {}) {
     assert.strictEqual(r.body.observacoes, 'OS 1714 TQVS-4_INOX 304');
   });
 
-  await test('os itens voltam com NCM, data de entrega e IPI (colunas da Etapa 32)', async () => {
+  await test('os itens voltam com NCM e IPI; a data de entrega por item é IGNORADA (RN-33.03)', async () => {
     const r = await request(app).get(`/api/compras/pedidos/${criadoId}`);
     const item = r.body.itens[0];
     assert.strictEqual(item.ncm, '73181500');
-    assert.strictEqual(item.data_entrega, '2025-12-18');
+    // Etapa 33: o corpo mandou data_entrega: '2025-12-18' e o servidor tem de descartar —
+    // a entrega é do pedido (previsao_entrega), não do item. Resposta sem a chave E banco NULL.
+    assert.strictEqual(item.data_entrega, undefined,
+      `RN-33.03: a leitura ainda projeta data_entrega por item (${item.data_entrega})`);
+    const row = await dbGet(db,
+      'SELECT data_entrega FROM itens_pedido_compra WHERE pedido_id = ? AND item_numero = 1', [criadoId]);
+    assert.strictEqual(row.data_entrega, null,
+      `RN-33.03: o POST gravou data_entrega por item (${row.data_entrega})`);
     assert.strictEqual(item.ipi_percentual, 6.5);
     assert.strictEqual(item.item_numero, 1);
     assert.strictEqual(item.valor_linha, 28.48);
     assert.strictEqual(item.ipi_linha, 1.85);
+  });
+
+  await test('RN-33.05: pedido antigo com data_entrega por item abre sem a data e o primeiro PUT zera', async () => {
+    // Simula um pedido gravado ANTES da Etapa 33: a coluna preenchida por INSERT direto.
+    await dbRun(db,
+      'UPDATE itens_pedido_compra SET data_entrega = ? WHERE pedido_id = ?', ['2025-12-18', criadoId]);
+    const antes = await dbGet(db,
+      'SELECT COUNT(*) AS n FROM itens_pedido_compra WHERE pedido_id = ? AND data_entrega IS NOT NULL', [criadoId]);
+    assert.strictEqual(antes.n, 2, 'setup: a coluna devia estar preenchida nos 2 itens');
+
+    const lido = await request(app).get(`/api/compras/pedidos/${criadoId}`);
+    assert.ok(lido.body.itens.every((i) => i.data_entrega === undefined),
+      'RN-33.05: a tela abriria mostrando a data antiga por item');
+
+    const r = await request(app).put(`/api/compras/pedidos/${criadoId}`).send({
+      numero: lido.body.numero, fornecedor_id: 1, itens: lido.body.itens,
+    });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    const depois = await dbGet(db,
+      'SELECT COUNT(*) AS n FROM itens_pedido_compra WHERE pedido_id = ? AND data_entrega IS NOT NULL', [criadoId]);
+    assert.strictEqual(depois.n, 0, `RN-33.05: o PUT manteve data_entrega em ${depois.n} item(ns)`);
   });
 
   await test('RN-10: valor_total é gravado como espelho de total_geral', async () => {

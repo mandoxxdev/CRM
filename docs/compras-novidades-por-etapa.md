@@ -71,7 +71,67 @@
 
 ## Etapa 33 — A entrega é do pedido, não do item (2026-10-06)
 
-_Em execução — seção escrita no fechamento da etapa._
+**Em uma frase.** O pedido de compra passou a ter **uma** seção "Entrega" (previsão + local), e a
+linha do item deixou de pedir data de entrega própria — inclusive na tela de recebimento.
+
+### O que há de novo (visível para o usuário)
+
+- **Tela do pedido (Compras → Pedidos → Novo / editar):** a seção **"3. Entrega"** é nova e reúne
+  *Previsão de entrega* (botões 7/15/30/45 dias ou data livre) e *Entregar em* (nossa empresa,
+  endereço do fornecedor ou outro). Os dois já existiam, mas escondidos no fim de "Condições".
+- **"Condições"** virou a seção **4** (pagamento, frete, via de transporte) e **"Total"** a **5**.
+  *Cobrar em* continua em **"Mais opções"**, como antes.
+- **Na linha do item**, o painel de detalhes (seta ao lado da lixeira) ficou só com **Unidade, IPI,
+  Descrição e Observação**. O bloco "Entrega deste item" (Hoje / 7 / 15 / 30 dias + data) sumiu.
+- **Recebimento por pedido (Almoxarifado → Recebimentos NF → Novo → Por Pedido de Compra):** a
+  tabela de itens do pedido não mostra mais a coluna **"Entrega"**. A previsão do pedido continua
+  no bloco "Condições do pedido", logo acima.
+
+### Por baixo do capô
+
+- O servidor **ignora** `data_entrega` por item no `POST`/`PUT /api/compras/pedidos`: a coluna
+  `itens_pedido_compra.data_entrega` fica no banco (reversível) mas é sempre gravada como vazia e
+  **não é mais devolvida** na leitura — nem para o comprador nem para o almoxarife (as duas telas
+  leem o mesmo serviço, `pedidoLeitura`).
+- **Pedido antigo** que tinha data por item: abre sem mostrar a data; ao salvar de novo, a coluna é
+  zerada. Não houve migração de dados (ver A1 no bloco do topo).
+- Nenhuma rota nova, nenhum campo novo no corpo do pedido.
+
+### Antes → Agora
+
+| | Antes | Agora |
+|---|---|---|
+| Data de entrega | uma por **item**, em "detalhes" da linha, mais a previsão do pedido escondida em "Condições" | **uma por pedido**, na seção "3. Entrega", ao lado do local |
+| Seções do pedido | 1 Fornecedor · 2 Itens · 3 Condições · 4 Total · Mais opções | 1 Fornecedor · 2 Itens · **3 Entrega** · 4 Condições · 5 Total · Mais opções |
+| Painel de detalhes do item | Unidade, IPI, Entrega, Descrição, Observação | Unidade, IPI, Descrição, Observação |
+| Recebimento por pedido | coluna "Entrega" em cada item | sem a coluna; previsão no cabeçalho do pedido |
+| Servidor | gravava e devolvia `data_entrega` por item | descarta na gravação e não devolve |
+
+### Roteiro de teste manual (clicável)
+
+1. **Compras → Pedidos de Compra → Novo pedido.** Confira os títulos das seções: *1. Fornecedor*,
+   *2. O que está sendo comprado*, **3. Entrega**, *4. Condições*, *5. Total* e o botão *Mais opções*.
+2. Em **3. Entrega**, clique em **Em 15 dias** — a data aparece abaixo dos botões (ex.: 21/10/2026).
+   Clique em **Outro endereço** e digite um endereço em *Entregar em*.
+3. Em **2. O que está sendo comprado**, clique **Adicionar um → Escolher material**, escolha um
+   material, informe quantidade e preço. Clique na **seta** ao lado da lixeira (dica ao passar o mouse:
+   *"Unidade, IPI e observações deste item"*): o painel mostra **Unidade**, **IPI deste item**,
+   **Descrição no pedido** e **Observação do item** — **não** há "Entrega deste item".
+4. Escolha o fornecedor em **1. Fornecedor** e clique **Salvar pedido**. Reabra o pedido na lista:
+   a previsão e o local de entrega voltam preenchidos em **3. Entrega**.
+5. **Almoxarifado → Recebimentos NF → Novo Recebimento → Forma de recebimento: Por Pedido de
+   Compra → selecione o pedido.** No painel do pedido, o bloco *Condições do pedido* mostra
+   **Previsão de entrega**; a tabela de itens tem as colunas #, Código, Descrição, NCM, Qtd, Un,
+   Vl. unit. e Total — **sem "Entrega"**.
+6. *(Pedido antigo, se houver)* Abra um pedido criado antes desta etapa que tinha data por item:
+   o painel de detalhes do item não mostra data; salve e reabra — continua sem.
+
+### O que a etapa NÃO cobre
+
+- Apagar a coluna `itens_pedido_compra.data_entrega` do banco (fica, sem leitor; A1).
+- Entrega parcelada (mais de uma data por pedido) ou previsão por fornecedor.
+- Imprimir a previsão/local no documento PDF do pedido além do que a Etapa 32 já imprimia.
+- O pedido de compra da branch do almoxarifado (B1) — esta etapa é só da linha `main`.
 
 ## Etapa 34 — A ficha do fornecedor (2026-10-06)
 
