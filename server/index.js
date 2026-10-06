@@ -3482,6 +3482,11 @@ app.get('/api', (req, res) => {
   });
 });
 
+// ========== ROTA DE BUSCA DE CEP (Etapa 34) ==========
+// Proxy da ViaCEP, montável em routes/cep.js para o teste injetar o fetch. Fica ao lado do
+// proxy de CNPJ abaixo porque é o mesmo tipo de coisa: consulta externa que o browser não faz.
+require('./routes/cep')(app, authenticateToken);
+
 // ========== ROTA DE BUSCA DE CNPJ ==========
 // Endpoint para buscar dados de CNPJ (com autenticação)
 app.get('/api/cnpj/:cnpj', authenticateToken, async (req, res) => {
