@@ -1,0 +1,222 @@
+/* Ficha do fornecedor — Etapa 34 (RN-34.09).
+   Tudo escopado em .fornecedor-form-page / .fornecedor-form: `.form-group`, `.form-grid` e
+   `.form-section` existem soltos em 33 arquivos do projeto com estilos diferentes, e esta
+   tela não pode depender de qual CSS de módulo o usuário carregou antes. Tokens --gmp-* do
+   design system (design-tokens.css), com fallback literal. */
+
+.fornecedor-form-page {
+  padding: 8px 4px 40px;
+  color: var(--gmp-text, #121212);
+}
+
+/* ── topo ───────────────────────────────────────────────────────── */
+
+.fornecedor-form-topo {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.fornecedor-form-topo h1 {
+  margin: 6px 0 0;
+  font-size: 1.6rem;
+  font-weight: 800;
+}
+
+.fornecedor-form-voltar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--gmp-text-light, #6a6a6a);
+}
+
+.fornecedor-form-voltar:hover { color: var(--gmp-text, #121212); }
+
+.fornecedor-form-carregando {
+  padding: 48px;
+  text-align: center;
+  color: var(--gmp-text-light, #6a6a6a);
+}
+
+.fornecedor-form-erro {
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  border-radius: var(--radius-md, 12px);
+  border: 1px solid var(--gmp-error, #e5193a);
+  background: var(--gmp-error-50, rgba(229, 25, 58, 0.08));
+  color: var(--gmp-error-dark, #b91c1c);
+  font-weight: 600;
+}
+
+/* ── seções ─────────────────────────────────────────────────────── */
+
+.fornecedor-form .form-section {
+  background: var(--gmp-surface, #f6f6f6);
+  border: 1px solid var(--gmp-border, rgba(0, 0, 0, 0.1));
+  border-radius: var(--radius-md, 12px);
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.05));
+  padding: 20px 24px 8px;
+  margin-bottom: 20px;
+}
+
+.fornecedor-form .form-section > h2 {
+  margin: 0 0 16px;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--gmp-text-light, #6a6a6a);
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--gmp-border, rgba(0, 0, 0, 0.1));
+}
+
+.fornecedor-form .form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px 18px;
+}
+
+.fornecedor-form .form-group {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 12px;
+}
+
+.fornecedor-form .form-group.span-2 { grid-column: span 2; }
+
+.fornecedor-form label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--gmp-text, #121212);
+}
+
+.fornecedor-form label .obrigatorio { color: var(--gmp-error, #e5193a); }
+
+.fornecedor-form input,
+.fornecedor-form select {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 40px;
+  padding: 9px 12px;
+  font-size: 0.95rem;
+  color: var(--gmp-text, #121212);
+  background: var(--gmp-bg, #fff);
+  border: 1px solid var(--gmp-border, rgba(0, 0, 0, 0.15));
+  border-radius: 8px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.fornecedor-form input:focus,
+.fornecedor-form select:focus {
+  outline: none;
+  border-color: var(--gmp-primary, #4facfe);
+  box-shadow: 0 0 0 3px rgba(79, 172, 254, 0.15);
+}
+
+.fornecedor-form input:disabled,
+.fornecedor-form select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* CNPJ / CEP com lupa — o botão fica DENTRO do campo, como no ClienteForm. */
+.fornecedor-form .input-com-botao {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.fornecedor-form .input-com-botao input { padding-right: 46px; }
+
+.fornecedor-form .btn-buscar-cnpj,
+.fornecedor-form .btn-buscar-cep {
+  position: absolute;
+  right: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 30px;
+  border: none;
+  border-radius: 6px;
+  background: linear-gradient(135deg, var(--gmp-primary, #4facfe) 0%, var(--gmp-primary-dark, #3b82f6) 100%);
+  color: #fff;
+  cursor: pointer;
+}
+
+.fornecedor-form .btn-buscar-cnpj:disabled,
+.fornecedor-form .btn-buscar-cep:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.fornecedor-form .girando { animation: fornecedor-form-girar 1s linear infinite; }
+
+@keyframes fornecedor-form-girar {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ── ações ──────────────────────────────────────────────────────── */
+
+.fornecedor-form .form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 8px;
+  padding-top: 20px;
+  border-top: 1px solid var(--gmp-border, rgba(0, 0, 0, 0.1));
+}
+
+.fornecedor-form .form-actions .btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 30px;
+  background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.fornecedor-form .form-actions .btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(37, 99, 235, 0.4);
+}
+
+.fornecedor-form .form-actions .btn-secondary {
+  padding: 12px 22px;
+  background: var(--gmp-surface, #f6f6f6);
+  color: var(--gmp-text, #121212);
+  border: 1px solid var(--gmp-border, rgba(0, 0, 0, 0.15));
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.fornecedor-form .form-actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── celular ────────────────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  .fornecedor-form .form-grid { grid-template-columns: 1fr; }
+  .fornecedor-form .form-group.span-2 { grid-column: auto; }
+  .fornecedor-form .form-section { padding: 16px 14px 4px; }
+  .fornecedor-form .form-actions { flex-direction: column-reverse; }
+  .fornecedor-form .form-actions button { width: 100%; justify-content: center; }
+}

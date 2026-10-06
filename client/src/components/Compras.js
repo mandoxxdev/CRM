@@ -134,6 +134,7 @@ const Compras = () => {
             'Contato': f.contato || '',
             'Email': f.email || '',
             'Telefone': f.telefone || '',
+            'Telefone vendedor': f.telefone_vendedor || '',
             'Status': f.status || '',
             'Cadastrado em': formatDate(f.created_at)
           }));
@@ -202,7 +203,13 @@ const Compras = () => {
                   <td>{fornecedor.cnpj || '-'}</td>
                   <td>{fornecedor.contato || '-'}</td>
                   <td>{fornecedor.email || '-'}</td>
-                  <td>{fornecedor.telefone || '-'}</td>
+                  <td>
+                    {/* Etapa 34 (RN-34.08): empresa em cima, vendedor embaixo. */}
+                    <div className="cell-primary">{fornecedor.telefone || '-'}</div>
+                    {fornecedor.telefone_vendedor && (
+                      <div className="cell-secondary">{fornecedor.telefone_vendedor}</div>
+                    )}
+                  </td>
                   <td>
                     <span 
                       className="status-badge" 

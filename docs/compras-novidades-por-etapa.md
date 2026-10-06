@@ -135,7 +135,100 @@ linha do item deixou de pedir data de entrega própria — inclusive na tela de 
 
 ## Etapa 34 — A ficha do fornecedor (2026-10-06)
 
-_Em execução — seção escrita no fechamento da etapa._
+**Em uma frase.** O fornecedor ganhou uma tela própria de cadastro e edição — com dois
+telefones (empresa e vendedor), endereço completo e preenchimento automático por CNPJ e por
+CEP — e os botões "Novo Fornecedor" e o lápis da lista, que não faziam nada, passaram a abri-la.
+
+### O que há de novo (visível para o usuário)
+
+- **Compras > Fornecedores > Novo Fornecedor** abre a ficha completa, em três blocos:
+  *Identificação* (razão social, nome fantasia, CNPJ com lupa, inscrição estadual, grupo
+  homologado), *Contato* (nome do vendedor, telefone da empresa, telefone do vendedor, e-mail)
+  e *Endereço* (CEP com lupa, endereço, cidade, estado). O lápis de cada linha da lista abre a
+  mesma ficha para editar, com o campo *Status* (ativo/inativo).
+- **CNPJ preenche a ficha.** No cadastro novo, basta digitar o CNPJ e sair do campo: razão
+  social, nome fantasia, e-mail, telefone da empresa, endereço, cidade, estado e CEP vêm da
+  Receita. Na edição a consulta é pela lupa e **só preenche o que está vazio** — o que você já
+  digitou não é sobrescrito. Se a consulta falhar, aparece "Não foi possível consultar o CNPJ"
+  e nada muda.
+- **CEP preenche o endereço.** Digitou o CEP e saiu do campo: endereço (rua e bairro), cidade
+  e estado entram sozinhos, também só nos campos vazios. CEP inexistente avisa "CEP não
+  encontrado".
+- **Dois telefones.** *Telefone da empresa* e *Telefone do vendedor* são campos separados, os
+  dois com máscara enquanto se digita. O antigo "Contato" agora se chama *Nome do vendedor*.
+- **A lista mostra os dois telefones** na mesma coluna (empresa em cima, vendedor embaixo) e
+  a exportação para Excel ganhou a coluna "Telefone vendedor".
+- **"Remover do grupo" passou a remover** (em Fornecedores Homologados > grupo). Antes mostrava
+  "removido" e o fornecedor continuava no grupo.
+
+### Por baixo do capô
+
+- As rotas de fornecedor (`POST`/`PUT /api/compras/fornecedores`) saíram do arquivo principal
+  do servidor para um módulo próprio (`server/routes/compras/fornecedores.js`), onde a suíte de
+  testes consegue montá-las. Nasceu `GET /api/compras/fornecedores/:id` (devolve a ficha, sem a
+  planilha de itens que a lista carrega inteira).
+- Coluna nova no banco: `fornecedores.telefone_vendedor` (criada sozinha ao subir o servidor).
+  A coluna `celular` da Etapa 32 continua intocada — o documento do pedido a imprime.
+- O `POST` passou a gravar **as 13 colunas** da ficha. Antes descartava endereço, cidade,
+  estado, CEP e inscrição estadual em silêncio.
+- O `PUT` mudou de semântica: **chave ausente não mexe; vazio ou nulo limpa**. É o que deixa
+  o modal antigo do grupo (que manda 7 campos) continuar sem apagar cidade/CEP/telefone do
+  vendedor — e é o que consertou o "Remover do grupo" (manda `grupo_id: null`, que antes era
+  ignorado). Decisão registrada em **B2**.
+- Proxy novo `GET /api/cep/:cep` (ViaCEP, 8 s de timeout), ao lado do proxy de CNPJ que já
+  existia. Decisão registrada em **B6**.
+- Utilitário `client/src/utils/cnpj.js` (validação de dígitos, máscaras, tradução da consulta,
+  "preencher só vazios") — o cadastro de cliente do comercial pode adotá-lo depois.
+- Testes: `comprasFornecedor.api.test.js` (22 cenários), `cep.api.test.js` (8),
+  `cnpj.test.js` (10), `FornecedorForm.test.js` (16), `Compras.fornecedores.test.js` (2).
+
+### Antes → Agora
+
+| | Antes | Agora |
+|---|---|---|
+| "Novo Fornecedor" na lista | Não fazia nada (a rota caía na própria lista) | Abre a ficha completa |
+| Lápis "Editar" na lista | Idem | Abre a ficha preenchida, com status |
+| Cadastro possível | Só o modal do grupo homologado (7 campos) | Ficha com 13 campos; o modal continua funcionando |
+| Endereço, cidade, estado, CEP, IE no cadastro novo | Descartados pelo servidor | Gravados |
+| Telefone | Um campo ("Telefone") e "Contato" | Telefone da empresa, telefone do vendedor e nome do vendedor |
+| Preenchimento por CNPJ | Só no cadastro de cliente (comercial) | Na ficha do fornecedor, sem sobrescrever o que já foi digitado |
+| Preenchimento por CEP | Não existia em lugar nenhum do sistema | Endereço, cidade e estado pelo CEP |
+| "Remover do grupo" (Fornecedores Homologados) | Mostrava "removido" e **não removia** | Remove |
+| Lista / Excel | Um telefone | Os dois telefones; coluna "Telefone vendedor" no Excel |
+
+### Roteiro de teste manual (clicável)
+
+1. **Compras > Fornecedores > Novo Fornecedor.** A tela "Novo fornecedor" abre com os três
+   blocos. (Antes: nada acontecia.)
+2. Em *CNPJ*, digite `54.984.382/0001-64` e clique fora do campo (ou na lupa). Razão social,
+   nome fantasia, endereço, cidade, estado, CEP e telefone da empresa se preenchem. Digite um
+   CNPJ com dígito errado (ex.: `54.984.382/0001-65`) e saia do campo: nada é consultado.
+3. Apague o CEP e o endereço, digite `01310-100` em *CEP* e saia do campo: endereço vira
+   "Avenida Paulista, Bela Vista", cidade "São Paulo", estado "SP". Digite `99999-999`:
+   aparece "CEP não encontrado".
+4. Em *Telefone do vendedor*, digite `11987654321`: aparece `(11) 98765-4321`. Em *Telefone da
+   empresa*, `1141772311` vira `(11) 4177-2311`.
+5. Preencha *Nome do vendedor*, escolha um *Grupo homologado* e clique **Salvar**. Toast
+   "Fornecedor salvo"; a lista mostra o fornecedor com os dois telefones na coluna Telefone.
+6. Clique no lápis do fornecedor recém-criado: a ficha abre preenchida, com *Status*. Apague
+   a cidade, clique na lupa do CNPJ: só a cidade é preenchida de novo — o resto fica como
+   estava. Troque o status para *Inativo* e salve; a lista mostra o badge "inativo".
+7. Apague a razão social e clique Salvar: a tela mostra "Razão social é obrigatória" e não
+   grava.
+8. **Fornecedores Homologados > um grupo > "Remover do grupo"** em um fornecedor: confirme e
+   recarregue a página — o fornecedor **saiu** do grupo (antes voltava).
+9. **Exportar Excel** na aba Fornecedores: a planilha tem a coluna "Telefone vendedor".
+
+### O que a etapa NÃO cobre
+
+- O modal de edição dentro do grupo homologado continua com 7 campos (não ganhou os dois
+  telefones nem o endereço completo); edição completa é pela ficha.
+- A lista de fornecedores continua carregando a planilha de itens inteira (dívida **G2**).
+- O `DELETE` de grupos continua sombreado pelo `DELETE` genérico (dívida **G1**).
+- O cadastro de **cliente** (comercial) não foi tocado — continua com a lógica própria de CNPJ
+  e sem consulta de CEP.
+- Não valida se o grupo informado existe (nunca validou; o modal depende disso).
+- Sem foto na ficha (a foto continua pelo modal do grupo, como antes).
 
 ## Etapa 35 — Cadastro de material: unidades e classe ABC (2026-10-06)
 
