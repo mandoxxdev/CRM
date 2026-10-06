@@ -77,49 +77,8 @@
   color: var(--gmp-error);
 }
 
-.configuracoes-tabs {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 2rem;
-  border-bottom: 2px solid var(--gmp-border);
-}
-
-.configuracoes-tabs .tab {
-  padding: 1rem 1.5rem;
-  background: transparent;
-  border: none;
-  border-bottom: 3px solid transparent;
-  color: var(--gmp-text-light);
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  transition: all 0.3s ease;
-}
-
-[data-theme="dark"] .configuracoes-tabs .tab {
-  color: var(--gmp-text-light);
-}
-
-.configuracoes-tabs .tab:hover {
-  color: var(--gmp-primary);
-  background: var(--gmp-bg);
-}
-
-[data-theme="dark"] .configuracoes-tabs .tab:hover {
-  background: rgba(51, 133, 214, 0.1);
-}
-
-.configuracoes-tabs .tab.active {
-  color: var(--gmp-primary);
-  border-bottom-color: var(--gmp-primary);
-  background: var(--gmp-bg);
-}
-
-[data-theme="dark"] .configuracoes-tabs .tab.active {
-  background: rgba(51, 133, 214, 0.15);
-}
+/* Etapa 36: a barra de abas (.configuracoes-tabs .tab) virou o componente ui/Tabs — os dois
+   niveis (modulos e abas internas) usam .ui-tabs / .ui-tabs-sm. */
 
 .configuracoes-content {
   background: var(--gmp-surface);
@@ -132,6 +91,31 @@
 [data-theme="dark"] .configuracoes-content {
   background: var(--gmp-surface);
   border-color: var(--gmp-border);
+}
+
+/* Etapa 36 (RN-36.10): card dentro de card. Quando o modulo ativo e embutido (almoxarifado,
+   operacional) as abas internas ja desenham .almox-card / .producao-* com surface e borda
+   proprias — o conteudo perde fundo, sombra, borda e padding para nao duplicar a moldura. */
+.configuracoes-content--embutido,
+[data-theme="dark"] .configuracoes-content--embutido {
+  background: transparent;
+  box-shadow: none;
+  border: none;
+  padding: 0;
+  border-radius: 0;
+}
+
+/* Etapa 36 (RN-36.06): modulo sem tela de configuracao propria — a aba existe (e onde elas vao
+   nascer), o painel so diz isso. */
+.configuracoes-sem-config {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--gmp-text-light);
+}
+
+.configuracoes-sem-config p {
+  margin: 0;
+  font-size: 1.05rem;
 }
 
 .config-section h2 {
@@ -229,11 +213,6 @@
     flex-direction: column;
     align-items: flex-start;
     gap: 1rem;
-  }
-
-  .configuracoes-tabs {
-    overflow-x: auto;
-    flex-wrap: nowrap;
   }
 
   .config-grid {
