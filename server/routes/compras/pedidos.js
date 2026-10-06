@@ -90,10 +90,13 @@ module.exports = function (app, db, authenticateToken, checkModulePermission) {
       const it = calculados[i];
       await dbRun(
         db,
+        // Etapa 33 (RN-33.03): `data_entrega` por item saiu da lista de colunas de propósito —
+        // a entrega é do pedido (previsao_entrega). O corpo pode ainda trazer a chave (tela
+        // antiga em cache) e ela é descartada; a coluna fica no banco com DEFAULT NULL.
         `INSERT INTO itens_pedido_compra
          (pedido_id, material_id, codigo, descricao, observacao, ncm, peso_unitario,
-          data_entrega, quantidade, unidade, valor_unitario, ipi_percentual, item_numero)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          quantidade, unidade, valor_unitario, ipi_percentual, item_numero)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           pedidoId,
           parseInt(it.material_id, 10),
@@ -102,7 +105,6 @@ module.exports = function (app, db, authenticateToken, checkModulePermission) {
           it.observacao || null,
           it.ncm || null,
           Number(it.peso_unitario) || 0,
-          it.data_entrega || null,
           Number(it.quantidade) || 0,
           it.unidade || 'UN',
           Number(it.valor_unitario) || 0,

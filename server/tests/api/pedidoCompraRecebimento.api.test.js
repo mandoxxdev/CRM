@@ -145,7 +145,10 @@ function corpoPedido(materialId, over = {}) {
     assert.strictEqual(i1.valor_unitario, 2.191,
       'RN-12: o unitário guarda mais de 2 casas e não pode ser arredondado na leitura');
     assert.strictEqual(i1.ipi_percentual, 6.5);
-    assert.strictEqual(i1.data_entrega, '2025-12-18');
+    // Etapa 33 (RN-33.03/33.04): o corpo mandou data_entrega por item e o servidor descartou;
+    // o recebimento não tem mais coluna "Entrega" por item — a previsão fica no cabeçalho.
+    assert.strictEqual(i1.data_entrega, undefined,
+      `RN-33.03: a rota do almoxarife ainda projeta data_entrega por item (${i1.data_entrega})`);
     assert.strictEqual(i1.observacao, 'entregar com a NF');
     assert.strictEqual(i1.valor_linha, 28.48);
     assert.strictEqual(i1.material_nome, `Material recebimento 1`);

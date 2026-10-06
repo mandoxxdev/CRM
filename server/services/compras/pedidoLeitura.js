@@ -33,7 +33,7 @@ const SQL_PEDIDO = `
 
 const SQL_ITENS = `
   SELECT i.id, i.material_id, i.codigo, i.descricao, i.observacao, i.ncm, i.peso_unitario,
-         i.data_entrega, i.quantidade, i.unidade, i.valor_unitario, i.ipi_percentual,
+         i.quantidade, i.unidade, i.valor_unitario, i.ipi_percentual,
          i.item_numero,
          m.codigo AS material_codigo,
          m.nome   AS material_nome
