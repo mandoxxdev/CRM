@@ -13,7 +13,7 @@
 
 ## Tasks — tudo tronco, um executor, só client
 
-### T1 — testes primeiro
+### T1 — testes primeiro ✅ `0e7c0a36`
 `client/src/components/almoxarifado/MaterialAlmoxarifadoForm.test.js` (existe, 354 linhas; reusar
 a montagem e os mocks de lá). Cenários novos, numerados RN-35:
 (a) RN-35.01 — não existe label "Unidade de Consumo" nem "Fator de Conversão (Consumo)";
@@ -26,7 +26,7 @@ as chaves `unidade_consumo` nem `fator_conversao_consumo`;
 Rodar → (a), (b), (d), (e), (f) falham; (c) pode passar por acaso — **controle positivo**: antes de
 implementar, confirmar que (b) falha porque o payload hoje leva `unidade_consumo: ''`.
 
-### T2 — implementar em `MaterialAlmoxarifadoForm.js`
+### T2 — implementar em `MaterialAlmoxarifadoForm.js` ✅ `0e7c0a36`
 - Estado inicial (`:126-130`): tirar `unidade_consumo` e `fator_conversao_consumo`; carga na edição
   (`:333-337`) idem; validação (`:411-414`) sai; o `set` genérico já não cria as chaves.
 - Bloco "Unidades e Custos" (`:877-917`): o `<select>` de consumo e o input do fator de consumo saem.
@@ -42,14 +42,17 @@ implementar, confirmar que (b) falha porque o payload hoje leva `unidade_consumo
 - CSS: `client/src/components/almoxarifado/Almoxarifado.css` — `.almox-legenda-abc` (lista compacta,
   `--gmp-text-light`, 13px) e `.almox-help` se ainda não existir (`grep -n "almox-help" Almoxarifado.css`).
 
-### T3 — documentação
+### T3 — documentação ✅ (commit de fechamento — o que contém esta marcação)
 - `docs/almoxarifado-manual-do-sistema.md` §2.3 (`:182-198`): tirar "Unidade de Consumo" e o
   segundo fator; reescrever o parágrafo do fator com o exemplo; §2.4/`:216-220`: colar a legenda.
+  **Correção ao plano:** a classificação ABC é a **§2.5** do manual (`:216-220` estava certo, o
+  número da seção não); e a tabela de seções do cadastro (`:120`) também listava "Unidade de
+  Consumo, Fator de Conversão (Consumo)" — o plano não a tinha visto; foi corrigida junto.
   ⚠️ A versão da branch `desenvolvimento-almoxarifado` deste manual é mais nova — anotar em B4 do
   `compras-novidades-por-etapa.md` que a mesma edição precisa ser repetida lá no merge.
 - Seção da Etapa 35 no `docs/compras-novidades-por-etapa.md`, com a dúvida **D-35** (legenda sem
-  fonte) e **D-35b** (o recebimento deve converter pelo fator? hoje não converte).
-- Marcar este plano.
+  fonte) e **D-35b** (o recebimento deve converter pelo fator? hoje não converte). ✅ (fechamento)
+- Marcar este plano. ✅ (fechamento)
 
 ## Pontos de atenção
 - `refineUnidadesFator` no servidor continua exigindo fator quando `unidade_consumo` vem — como a
@@ -59,12 +62,35 @@ implementar, confirmar que (b) falha porque o payload hoje leva `unidade_consumo
 - A tela está **idêntica** nas duas linhas a menos de 2 linhas — o commit desta etapa é candidato a
   `cherry-pick` para a branch do almoxarifado (B4).
 
-## Retro (preencher no fechamento)
-- Rodadas de correção até verde: _preencher_
-- Achados da revisão: _preencher_ (reais vs. ruído)
-- Paralelismo: _preencher_
+## Retro (preenchido no fechamento)
+- Rodadas de correção até verde: **0** — o primeiro `jest` depois da implementação deu 22/22.
+- Achados da revisão: não houve revisão por agente (plano: tudo tronco, um executor). Achado
+  próprio durante a T3: a tabela de seções do manual (`:120`) ainda listava os campos de consumo
+  — **real**, corrigido. O número de seção "§2.4" do plano para a ABC era **ruído** (é §2.5).
+- Paralelismo: nenhum, de propósito — três tasks encadeadas (teste → código → doc) no mesmo
+  arquivo; as três suítes de verificação (jest inteiro, build, API) rodaram em paralelo.
 - Defeito escapado: preencher na etapa seguinte.
 
 ## Como foi executado
 
-_Preencher no fechamento, com o que foi medido de verdade (hashes, contagens de teste, controle positivo)._
+- **Vermelho (T1):** 6 cenários (a)–(f) escritos antes de tocar o componente. Resultado:
+  **6 falharam, 16 passaram, 22 no total**. Controle positivo confirmado no (b):
+  `expect(payload).not.toHaveProperty('unidade_consumo')` → `Received value: ""` — a chave ia vazia
+  em todo submit. O (c) **não** passou por acaso como o plano admitia: `Received value: "M"`, porque
+  `loadMaterial` carregava `unidade_consumo` do GET para o state e o `PUT` a reenviava.
+- **Verde (T2):** `0e7c0a36` — 3 arquivos, +202/−36. `MaterialAlmoxarifadoForm.test.js`:
+  **22 passaram, 22 no total** na primeira rodada. Sobrou no componente só comentário citando
+  `unidade_consumo` (grep confirmado).
+- **Suíte inteira do client:** `CI=true npx react-scripts test --watchAll=false` →
+  **44 suítes, 691 testes, todos verdes**.
+- **Build:** `CI=true npx react-scripts build` → "Compiled successfully." (exit 0, sem warning
+  virando erro).
+- **Controle de que a API não mudou:** `cd server && node tests/api/materialCompleto.api.test.js`
+  → **20 passed, 0 failed**; `git status server/` vazio (zero linhas de servidor, como combinado).
+- **Decisões tomadas sem perguntar (reversíveis):** o toast de validação do fator passou de
+  "fator de conversão de compra" para "fator de conversão", acompanhando o rótulo novo; sem
+  unidade de compra o campo mostra "Só se aplica quando a unidade de compra é diferente da
+  unidade de medida" (o plano não dizia o que mostrar nesse estado); a frase "Informativo: … não
+  converte sozinho" aparece só com unidade de compra escolhida (cenário (e) do plano).
+- **Commits:** `0e7c0a36` (código) + o commit de fechamento (manual §2.3/§2.5 e `:120`, seção
+  da Etapa 35 em `compras-novidades-por-etapa.md`, este plano).
