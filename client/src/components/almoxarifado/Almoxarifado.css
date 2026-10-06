@@ -11,6 +11,12 @@
   color: var(--gmp-text);
 }
 
+/* Etapa 36: a tela de configuracoes embutida em /configuracoes. So a cor — padding, max-width
+   e o rodape do mobile (`[class*='-page']`) sao da pagina hospedeira. */
+.almox-embedded {
+  color: var(--gmp-text);
+}
+
 .almox-header {
   display: flex;
   align-items: center;
