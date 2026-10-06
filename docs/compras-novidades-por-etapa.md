@@ -55,17 +55,28 @@
   administrador do almoxarifado?
 
 ### G. Dívidas conhecidas, declaradas
-- O `DELETE` genérico de `/api/compras/:tipo/:id` continua sombreando `grupos` (400 'Tipo
-  inválido') — caracterizado por teste desde a Etapa 32/38, não consertado (escopo da aba Grupos).
+- **G1** O `DELETE` genérico de `/api/compras/:tipo/:id` continua sombreando `grupos` (400 'Tipo
+  inválido') — não consertado (escopo da aba Grupos). Em `main` ele mora no `index.js`, fora do
+  harness — não há teste que o caracterize.
+- **G2** `GET /api/compras/fornecedores` é `SELECT *` e devolve `planilha_dados` (a planilha
+  inteira em JSON) para quatro telas que não a leem (`Compras.js`, `PedidoCompraForm.js`,
+  `FornecedoresDoGrupo.js`, `ItensFornecedor.js`). Só custo de payload; a projeção nomeada do
+  `GET /:id` da Etapa 34 é o modelo para a lista numa etapa posterior.
 
 ---
 
-<!-- As seções das etapas são escritas no fechamento de cada uma, neste formato:
-## Etapa NN — Título (data)
-**Em uma frase.** …
-### O que há de novo (visível para o usuário)
-### Por baixo do capô
-### Antes → Agora (tabela)
-### Roteiro de teste manual (clicável)
-### O que a etapa NÃO cobre
--->
+<!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
+**Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
+### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 33 — A entrega é do pedido, não do item (2026-10-06)
+
+_Em execução — seção escrita no fechamento da etapa._
+
+## Etapa 34 — A ficha do fornecedor (2026-10-06)
+
+_Em execução — seção escrita no fechamento da etapa._
+
+## Etapa 35 — Cadastro de material: unidades e classe ABC (2026-10-06)
+
+_Em execução — seção escrita no fechamento da etapa._

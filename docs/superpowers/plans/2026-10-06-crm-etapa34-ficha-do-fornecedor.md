@@ -10,9 +10,18 @@
 - **RN-34.02** `telefone` = Telefone da empresa; **`telefone_vendedor`** = coluna nova; `contato` rotulado "Nome do vendedor"; `celular` intocada.
 - **RN-34.03** CNPJ → `GET /api/cnpj/:cnpj` preenche razão, fantasia, e-mail, telefone da empresa, endereço, cidade, estado, CEP; na edição **só vazios**; falha → toast "Não foi possível consultar o CNPJ".
 - **RN-34.04** CEP (8 dígitos) → `GET /api/cep/:cep` (ViaCEP) preenche endereço (`logradouro, bairro`), cidade, estado, só vazios; 404 → toast "CEP não encontrado".
-- **RN-34.05** POST/PUT gravam as 13 colunas; PUT: **ausente não mexe, `''`/`null` limpa**.
-- **RN-34.06** `GET /api/compras/fornecedores/:id` nasce; 404 "Fornecedor não encontrado".
-- **RN-34.07** 400 "Razão social é obrigatória" / "Status inválido" / "Grupo inválido".
+- **RN-34.05** POST/PUT gravam as 13 colunas; PUT: **ausente não mexe, `''`/`null` limpa** (grava
+  `NULL`). Exceção única: `razao_social` é obrigatória também no PUT (ausente ou `''` → 400).
+  `grupo_id`: ausente/`''`/`null` → `NULL` no POST e **limpa** no PUT; inteiro grava **sem validar
+  existência** (como hoje); não-inteiro **não vazio** (`'abc'`) → 400 "Grupo inválido".
+  ⚠️ Achado da revisão do plano: em `main` o PUT trata `grupo_id: null` como "não mexe"
+  (`index.js:20578`), então o botão **"Remover do grupo"** de `FornecedoresDoGrupo.js:191` mostra
+  "removido" e **não remove**. A semântica nova conserta isso de tabela — provado pelo cenário (4).
+- **RN-34.06** `GET /api/compras/fornecedores/:id` nasce; 404 "Fornecedor não encontrado" (literal já
+  usada pelas outras rotas de fornecedor, `index.js:20589`).
+- **RN-34.07** 400 "Razão social é obrigatória" (literal existente, `index.js:20559`) / "Status
+  inválido" (mesma de `pedidos.js:77`) / "Grupo inválido" (literal **nova**; 'Grupo não encontrado'
+  do `index.js:20423` é de outra rota e não se aplica — existência não é validada).
 - **RN-34.08** lista mostra os dois telefones.
 - **RN-34.09** CSS escopado `.fornecedor-form`, seções Identificação / Contato / Endereço, tokens `--gmp-*`.
 
@@ -26,9 +35,11 @@ foto, created_at, updated_at`, **nunca** `planilha_dados/planilha_nome/planilha_
 ### T1 — tronco: rotas de fornecedor viram módulo + coluna nova + harness (RN-34.02, 05, 06, 07)
 1. **Harness primeiro**: `server/tests/helpers/testApp.js:46-60` — o stub de `fornecedores` passa a
    espelhar a produção: acrescentar `contato`, `grupo_id INTEGER`, `planilha_dados`, `planilha_nome`,
-   `planilha_atualizado_em`, `foto` e **`telefone_vendedor`**. Ver como `pedidos.js` é montado no
-   harness (`grep -n "routes/compras" server/tests/helpers/testApp.js`) e montar o módulo novo do
-   mesmo jeito.
+   `planilha_atualizado_em`, `foto`, **`created_at`/`updated_at DATETIME DEFAULT CURRENT_TIMESTAMP`**
+   (o PUT escreve `updated_at` — sem elas o módulo dá "no such column" em todo cenário) e
+   **`telefone_vendedor`**. `pedidos.js` é montado em `testApp.js:123` com `(app, db, fakeAuth,
+   fakeCheckModulePermission)`; o harness **não** carrega o `index.js`, logo não roda ALTER nenhum —
+   montar o módulo novo do mesmo jeito, logo abaixo.
 2. **Teste primeiro**: `server/tests/api/comprasFornecedor.api.test.js` (novo, runner próprio como
    `pedidoCompra.api.test.js`). Cenários numerados:
    (1) POST com as 13 colunas → 201 e `SELECT` devolve todas gravadas (inclusive `cidade`, que hoje
@@ -36,20 +47,30 @@ foto, created_at, updated_at`, **nunca** `planilha_dados/planilha_nome/planilha_
    (2) POST do modal (`razao_social, nome_fantasia, cnpj, grupo_id`) → 201, endereço `NULL`;
    (3) PUT do modal com os 7 textos + `grupo_id` em fornecedor que tinha `cidade` e
    `telefone_vendedor` → os dois **permanecem** (RN-34.05);
-   (4) PUT com `telefone_vendedor: ''` → `NULL`; com `null` → `NULL`;
+   (4) PUT com `telefone_vendedor: ''` → `NULL`; com `null` → `NULL`; **PUT com `grupo_id: null`
+   em fornecedor que tinha grupo → `grupo_id` vira `NULL`** (é o corpo exato do "Remover do grupo",
+   `FornecedoresDoGrupo.js:191` — hoje no-op; controle positivo: antes do código o teste falha);
    (5) GET `/:id` → 200 com as chaves do contrato e **sem** `planilha_*`; `/9999` → 404 literal;
-   (6) POST sem razão → 400 literal; PUT `status: 'x'` → 400 "Status inválido"; `grupo_id: 'abc'` → 400 "Grupo inválido";
+   (6) POST sem razão → 400 literal; **PUT sem razão e PUT com `razao_social: ''` → 400 literal**;
+   PUT `status: 'x'` → 400 "Status inválido"; `grupo_id: 'abc'` → 400 "Grupo inválido";
+   `grupo_id: ''` no POST → 201 com `grupo_id NULL`;
    (7) PUT `status: 'inativo'` grava; POST ignora `status`;
-   (8) as rotas exigem `authenticateToken` + módulo `compras` (`setUser(null)` → 401; usuário sem o módulo → 403);
-   (9) caracterização: `DELETE /api/compras/grupos/:id` ainda responde 400 'Tipo inválido' (o genérico sombreia — **não consertar**, só detectar reordenação).
+   (8) as três rotas exigem `authenticateToken` (`setUser(null)` → 401). ⚠️ **Não** escrever cenário
+   de 403 por módulo: `fakeCheckModulePermission` do harness é no-op (`testApp.js:116`) — seria teste
+   vazio. O gate de módulo é provado por leitura (o `guard` do módulo) e citado no fechamento.
    Rodar → falha (não há GET `/:id`; POST não grava cidade).
+   *(Nota: o `DELETE /api/compras/grupos/:id` sombreado pelo genérico mora no `index.js`, que o harness
+   não carrega — não é testável aqui; continua em G do doc de novidades.)*
 3. Implementar `server/routes/compras/fornecedores.js` (registrador `module.exports = function (app, db,
    authenticateToken, checkModulePermission)`), com `GET /:id`, `POST`, `PUT`. Validação à mão como
    em `pedidos.js` (em `main` não há Zod em compras). `ALTER TABLE fornecedores ADD COLUMN
    telefone_vendedor TEXT` no `index.js` ao lado dos ALTERs de `celular` (`:19592-19599`, mesmo
    padrão de erro `duplicate` ignorado). Remover o `POST`/`PUT` inline do `index.js:20550-20592` e
-   registrar o módulo **antes** do `app.delete('/api/compras/:tipo/:id')` (`:20395`) — a ordem é
-   comportamento (cenário 9).
+   registrar o módulo ao lado do `require('./routes/compras/pedidos')` (mesmo padrão). A ordem em
+   relação ao `DELETE` genérico (`:20395`) é **inócua** para este módulo (só GET/POST/PUT; verbos
+   diferentes não se sombreiam) — o `DELETE /fornecedores/:id` continua no genérico, como `Compras.js` usa.
+   Os textos opcionais gravam `NULL` quando vêm `''` (hoje `nome_fantasia`/`cnpj` gravam `''`;
+   nenhum consumidor distingue — `Compras.js:200`, `pedidos.js:280-288` usam `|| null`/`|| ''`).
 4. `GET /api/compras/fornecedores` (lista, `index.js:20333`) continua `SELECT *` — não tocar;
    `telefone_vendedor` chega sozinho.
 5. Rodar o arquivo novo + `pedidoCompra*.api.test.js` + `comprasMinimos` (o pedido lê fornecedor) → verde.
@@ -65,7 +86,8 @@ foto, created_at, updated_at`, **nunca** `planilha_dados/planilha_nome/planilha_
 
 ### T3 — galho: `FornecedorForm` (RN-34.01, 02, 03, 04, 07, 09)
 1. **Teste primeiro** `client/src/components/compras/FornecedorForm.test.js` (mock de
-   `../../services/api` e `react-hot-toast`; montar com `MemoryRouter` + `Routes` para
+   `../../services/api` e **`react-toastify`** — é a única lib de toast de `main`
+   (`client/package.json:25`; `react-hot-toast` NÃO existe aqui); montar com `MemoryRouter` + `Routes` para
    `/compras/fornecedores/novo` e `/editar/:id`). Cenários:
    (a) `/novo` renderiza as três seções e os campos (testids `fornecedor-razao, -fantasia, -cnpj, -ie,
    -contato, -email, -telefone, -telefone-vendedor, -endereco, -cidade, -estado, -cep, -grupo`; `-status` só na edição);
@@ -94,13 +116,15 @@ foto, created_at, updated_at`, **nunca** `planilha_dados/planilha_nome/planilha_
      640px)` uma coluna, foco com anel `rgba(79,172,254,.15)`, botão primário no gradiente azul da GMP
      (ver `ClienteForm.css:109-121`). **Não** definir `.form-group`/`.form-grid` globais — só sob
      `.fornecedor-form`.
-3. Rotas: `client/src/App.js` — `fornecedores/novo` e `fornecedores/editar/:id` **antes** do
-   `path="*"` do módulo (mesma armadilha do pedido, comentada em `App.js:342-343`); `lazyModules.js`
+3. Rotas: `client/src/App.js` — acrescentar `fornecedores/novo` e `fornecedores/editar/:id` ao lado
+   das rotas de `pedidos/novo` (o React Router 6 ranqueia por especificidade; a posição em relação ao
+   `path="*"` **não** importa — o que importa é a rota existir, como o comentário em `App.js:348-349`
+   diz); `lazyModules.js`
    — `export const FornecedorForm = page(() => import('../components/compras/FornecedorForm'))`.
 4. Jest do arquivo → verde; `CI=true build` limpo.
 
 ### T4 — galho: lista mostra os dois telefones (RN-34.08)
-`client/src/components/Compras.js:204` — célula Telefone vira `cell-primary` (empresa) +
+`client/src/components/Compras.js:205` — célula Telefone vira `cell-primary` (empresa) +
 `cell-secondary` (vendedor, se houver); exportação para Excel ganha a coluna "Telefone vendedor".
 Teste: se existir `Compras.test.js` em `main` (não existe — criar `Compras.fornecedores.test.js`
 mínimo: lista com um fornecedor com os dois telefones mostra os dois).
@@ -111,12 +135,16 @@ Suíte inteira (cinco comandos do servidor + jest + build). Marcar este plano; s
 T2, T3+T4 podem ser três commits), sem trailer.
 
 ## Pontos de atenção
-- **Semântica do PUT muda** (substituição total → ausente não mexe). O único consumidor do PUT em
-  `main` é o modal de `FornecedoresDoGrupo.js` (`:131`, `:167`, `:191`), que manda os 7 textos
-  sempre — o cenário (3) prova que ele continua igual. Registrar na letra B.
-- O proxy de CNPJ (`index.js:3487`) devolve `{success, source, data}` — o client lê `resp.data.data`.
+- **Semântica do PUT muda.** Hoje (`index.js:20568-20592`): `nome_fantasia`/`cnpj` ausentes viram
+  `''`, `contato/email/telefone/endereco` ausentes viram `NULL`, e `grupo_id` ausente **ou `null`**
+  não mexe. O único consumidor do PUT em `main` é o modal de `FornecedoresDoGrupo.js`: os três
+  `api.put` (`:131`, `:167`, `:191`) mandam exatamente 8 chaves (os 7 textos + `grupo_id`), nenhum
+  manda `status`. Com a semântica nova o único comportamento visível que muda é o "Remover do grupo"
+  (`:191`, `grupo_id: null`), que passa a funcionar. Cenários (3) e (4). Registrar em B2.
+- O proxy de CNPJ (`index.js:3487`) devolve `{success, source, data}` — o client lê `resp.data.data`;
+  o `data` já traz `cidade` e `estado` normalizados (`:3530-3533`), além de `municipio`/`uf`.
 - `ClienteForm.js` **não é tocado** (o comercial não está no lote).
-- `estado` da consulta de CNPJ vem como `uf`; da ViaCEP também `uf`. Normalizar no util.
+- Só a ViaCEP precisa de normalização: `localidade` → cidade, `uf` → estado.
 - `mascararTelefoneCompleto` ao carregar na edição (o ClienteForm faz; o form antigo da branch não fazia).
 
 ## Retro (preencher no fechamento)

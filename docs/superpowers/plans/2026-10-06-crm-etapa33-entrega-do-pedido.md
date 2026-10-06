@@ -7,7 +7,7 @@
 ## Regras (copiadas do design para `grep RN-33`)
 
 - **RN-33.01** sem data de entrega por item na tela.
-- **RN-33.02** seção "3. Entrega" com *Previsão de entrega* + *Entregar em*; "4. Condições"; "5. Total".
+- **RN-33.02** seção "3. Entrega" com *Previsão de entrega* + *Entregar em*; "4. Condições" (pagamento, frete, via); "5. Total". *Cobrar em* **continua** na seção colapsável "Mais opções" (`:744-764`), que não é tocada.
 - **RN-33.03** servidor grava `NULL` em `itens_pedido_compra.data_entrega` mesmo recebendo valor; leitura não projeta.
 - **RN-33.04** recebimento sem a coluna **Entrega** por item.
 - **RN-33.05** pedido antigo abre sem a data; o primeiro `PUT` zera. Sem migração.
@@ -33,8 +33,10 @@ mesma regra.
 1. **Teste primeiro**: criar `client/src/components/compras/PedidoCompraForm.entrega.test.js`
    (não existe teste do form em `main`; modelo de montagem: `Compras.test.js` não existe em `main`
    — montar `<MemoryRouter initialEntries={['/compras/pedidos/novo']}>` com `<Routes>` e o
-   componente, mockando `../../services/api` (`get` para `/compras/pedidos-aux/opcoes` e
-   `/compras/pedidos-aux/materiais`, `post`) e `react-hot-toast`). Cenários:
+   componente, mockando `../../services/api` — o `get` tem de responder aos **três** GETs da montagem
+   (`PedidoCompraForm.js:182-184`: `/compras/fornecedores`, `/compras/pedidos-aux/opcoes` e o
+   terceiro que estiver lá; `/compras/pedidos-aux/materiais` só na busca) — e **`react-toastify`**
+   (única lib de toast de `main`, `client/package.json:25`; `react-hot-toast` não existe aqui). Cenários:
    (a) não existe texto "Entrega deste item" nem botão com `title` "Unidade, IPI e entrega deste item";
    (b) existe o heading "3. Entrega" com "Previsão de entrega" e "Entregar em", e "4. Condições";
    (c) ao adicionar um item e salvar, o corpo do `POST` tem `itens[0]` **sem** a chave `data_entrega`.
@@ -53,8 +55,8 @@ mesma regra.
 1. Procurar teste de `RecebimentosAlmoxarifado` em `main` que afirme a coluna "Entrega"
    (`grep -n "Entrega" client/src/components/almoxarifado/*.test.js`); se existir, ajustar primeiro.
 2. `client/src/components/almoxarifado/RecebimentosAlmoxarifado.js:735` (`<th>Entrega</th>`) e
-   `:757` (`<td>{formatDateOnly(it.data_entrega)}</td>`) saem. Se `formatDateOnly` ficar sem uso,
-   remover o import (CI=true faz warning virar erro).
+   `:757` (`<td>{formatDateOnly(it.data_entrega)}</td>`) saem. `formatDateOnly` é função local
+   (`:365`) e continua usada em `:698-699` — nada a remover.
 
 ### T4 — fechamento
 Marcar este plano; `docs/compras-novidades-por-etapa.md` (seção da Etapa 33: "Em uma frase", "O que

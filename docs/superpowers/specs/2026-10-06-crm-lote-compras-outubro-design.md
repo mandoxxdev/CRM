@@ -43,8 +43,13 @@ seção "3. Condições". Dois testes de API afirmam que `data_entrega` por item
   (Etapa 32, `:19592-19599` — "o documento mostra IE e celular"), `grupo_id`, `planilha_*`, `foto`.
 - `POST /api/compras/fornecedores` (`index.js:20550`) grava **só** razão, fantasia, cnpj, contato,
   email, telefone, grupo_id; **não grava endereço, cidade, estado, cep**. `PUT` (`:20568`) grava os
-  7 textos (com endereço) por **substituição total** — chave ausente vira `NULL`. Não existe
-  `GET /api/compras/fornecedores/:id`; a lista é `SELECT *`.
+  7 textos (com endereço) por substituição: `nome_fantasia`/`cnpj` ausentes viram `''`,
+  `contato/email/telefone/endereco` ausentes viram `NULL`, e **`grupo_id` ausente ou `null` não
+  mexe** (`:20578`). ⚠️ A primeira versão deste parágrafo dizia "substituição total — chave ausente
+  vira NULL" e **estava errada**; a revisão do plano corrigiu, e a consequência é concreta: o botão
+  **"Remover do grupo"** (`FornecedoresDoGrupo.js:191`, manda `grupo_id: null`) mostra "removido"
+  e **não remove nada** em `main`. Não existe `GET /api/compras/fornecedores/:id`; a lista é
+  `SELECT *` e carrega `planilha_dados` inteiro em quatro telas (dívida G2).
 - `server/tests/helpers/testApp.js:46-60` stuba `fornecedores` **sem** `contato`, `grupo_id`,
   `foto`, `planilha_*` — diverge da produção.
 - **Não há biblioteca de CNPJ.** O que o P.O. chamou de biblioteca é `ClienteForm.js:208-376`:
@@ -123,7 +128,8 @@ do item deixa de ter data própria.
   item" sai; o painel de detalhes da linha fica com Unidade, IPI, Descrição e Observação.
 - **RN-33.02** A seção "3. Entrega" do pedido reúne *Previsão de entrega* (chips 7/15/30/45 dias +
   data livre) e *Entregar em* (`local_entrega`, botões + "Outro"). Ela nasce da seção "Condições",
-  que vira "4. Condições" (pagamento, frete, via, cobrar em) — "Total" vira 5.
+  que vira "4. Condições" (pagamento, frete, via) — "Total" vira 5. *Cobrar em* **continua** na seção
+  colapsável "Mais opções" (`PedidoCompraForm.js:744-764`), que não é tocada.
 - **RN-33.03** O servidor **ignora** `data_entrega` por item: `POST`/`PUT /api/compras/pedidos`
   gravam `NULL` na coluna mesmo que o corpo traga valor. A coluna `itens_pedido_compra.data_entrega`
   **fica** (reversível; nada a lê depois desta etapa). A leitura (`pedidoLeitura.SQL_ITENS`) deixa
@@ -174,7 +180,10 @@ sistema.
   telefone_vendedor, endereco, cidade, estado, cep, grupo_id` (+ `status` só no `PUT`).
   Semântica do `PUT`: **chave ausente não mexe; `''`/`null` limpa** — é o que deixa o modal do
   grupo (que manda 7 textos) continuar sem zerar cidade/estado/cep/telefone do vendedor.
-  ⚠️ Isto muda a semântica atual de "substituição total" — provado por teste nos dois sentidos.
+  Exceção: `razao_social` obrigatória também no PUT. `grupo_id`: ausente/`''`/`null` → `NULL`
+  (no PUT, **limpa**); inteiro grava sem validar existência (como hoje); não-inteiro não vazio →
+  400 "Grupo inválido". ⚠️ Isto muda a semântica atual (seção 1.3) — provado por teste nos dois
+  sentidos, e conserta o "Remover do grupo".
 - **RN-34.06** `GET /api/compras/fornecedores/:id` **nasce** (projeção nomeada, sem `planilha_*`),
   404 "Fornecedor não encontrado".
 - **RN-34.07** Razão social obrigatória (400 "Razão social é obrigatória", literal já existente);
