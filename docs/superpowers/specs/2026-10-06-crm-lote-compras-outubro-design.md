@@ -289,6 +289,39 @@ galho contra o contrato da seção 4. Integração serial em `main` com a suíte
 (`test:api`, `test:almoxarifado`, `test:validation`, `test:safealter`, `test:sqlite`, jest do client,
 `CI=true build`).
 
+## 7b. Como foi executado (2026-10-06, medido)
+
+- **Fase 0:** quatro agentes de medição em paralelo (pedido, material, Configurações, fornecedor)
+  mediram a **branch** antes de a divergência ser notada; a task 1 só fez sentido depois de medir
+  `main` (seção 1.1/1.2). Lição registrada na memória do projeto: medir na linha que produção roda.
+- **Fase 2:** um revisor fresco achou 1 bloqueio (`react-hot-toast` não existe em `main`) e 7
+  correções (stub sem `created_at/updated_at`, semântica do PUT descrita errada, cenários vazios
+  no harness, "Cobrar em" fica em Mais opções, linhas erradas) — commit `9188c2c2`.
+- **Fase 3:** três executores em paralelo, um por worktree (`c33`, `c34`, `c35`, junction de
+  `node_modules`). Controle positivo medido por cada um: 33 → 3+3+1 vermelhos antes do código;
+  34 → 13/22 vermelhos contra o código antigo portado, sabotagens em T2/T3 (2/8, 2/10, 3/16);
+  35 → 6/22 vermelhos (o (c) do plano, que "poderia passar por acaso", falhou de verdade).
+- **Fase 4 (integração em `main`, merges `ca8a1364` e `891c960a`):** servidor `test:api`
+  **172/172** arquivos (170 da baseline + `comprasFornecedor` 22 + `cep` 8), `test:almoxarifado`
+  48/0 no último bloco, `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 5/0; client
+  **49 suítes / 723 testes** (baseline 44/685), `CI=true build` "Compiled successfully".
+- **Fase 5:** revisão adversarial em worktree própria (`review-lote`) — resultado na seção 7c.
+
+## 7c. Revisão adversarial — o que achou e o que foi corrigido
+
+Três lentes (correção das RN, autorização, "este teste passaria com a feature quebrada?") mais
+produção×harness. **7/7 sabotagens** pegas pelos testes das três etapas. Achados reais: **F1**
+(Major, carga da edição corrompia CNPJ legado fora de 14 dígitos), **F2** (Minor, segundo blur
+no mesmo CNPJ sobrepunha correção do usuário), **F3** (Major, `ALTER` de `fornecedores` soltos
+fora de `db.serialize` falham no primeiro boot de banco novo — herdado da Etapa 32, agravado
+porque o módulo novo lê as colunas), **F4** (a imagem local do container era anterior ao lote).
+Os três primeiros foram corrigidos em `main` na onda de correção (tabela no plano da Etapa 34),
+cada um com teste e sabotagem (1, 2 e 1 vermelhos; F3 provado por boot em volume novo). Nenhum
+achado nas Etapas 33 e 35 além das sabotagens verdes. Lição para o fluxo: a Fase 2 revisa o
+**plano**; a carga de dado legado (texto livre gravado por anos) só aparece quando alguém olha o
+**banco** — entra como pergunta fixa da Fase 5: "que valor fora do padrão já está gravado nesta
+coluna?".
+
 ## 8. Documentação que esta etapa entrega
 
 - `docs/compras-novidades-por-etapa.md` — **novo**, o documento didático para apresentar (pedido do

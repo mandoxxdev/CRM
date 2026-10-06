@@ -187,7 +187,30 @@ T2, T3+T4 podem ser três commits), sem trailer.
 - **Paralelismo:** nenhum dentro da etapa — um executor só, T1→T2→T3→T4 em sequência (as três
   suítes finais rodaram em paralelo em background). O paralelismo do lote é entre etapas
   (worktrees `c33`/`c34`/`c35`).
-- **Defeito escapado:** preencher na etapa seguinte.
+- **Defeito escapado (achado pela revisão adversarial do lote, antes do push):** **F1** — a carga
+  da edição mascarava o CNPJ com a função **progressiva** (`formatarCNPJ`), que corta em 14 dígitos
+  e descarta letras: fornecedor gravado com `"ISENTO"` abria com o campo vazio e o Salvar gravava
+  `NULL`; `"12345678901"` virava `"12.345.678/901"`. Nenhum dos 16 cenários do form usava CNPJ
+  fora do padrão. Corrigido na onda abaixo.
+
+## Onda de correção — revisão adversarial do lote (2026-10-06, em `main`)
+
+Revisor fresco em worktree própria (`review-lote`), 7/7 sabotagens pegas pelos testes
+(PUT substituição total 19/22; `grupo_id null` no-op 21/22; `INSERT` com `data_entrega` 24/25;
+leitura projetando `data_entrega` 23/25 + 9/10; proxy ignorando `erro:"true"` 7/8; CNPJ
+sobrescrevendo na edição 15/16; `unidade_consumo` de volta ao payload 21/22). Achados reais, todos
+reproduzidos antes de corrigir:
+
+| # | Sev. | Achado | Correção | Prova |
+|---|---|---|---|---|
+| F1 | Major | `formDoServidor` usava `formatarCNPJ` (progressiva) na carga → CNPJ legado fora de 14 dígitos corrompido/apagado ao salvar sem tocar | `formatarCNPJCompleto` em `utils/cnpj.js` (só mascara com exatamente 14 dígitos e nenhuma letra; senão devolve como veio — regra de `formatarCEP`/`mascararTelefoneCompleto`), usada só na carga; a progressiva fica no `onChange` | `cnpj.test.js` (ISENTO, 11 dígitos, `DE123…`, `A11222333000181`); `FornecedorForm.test.js` (j): editar `"ISENTO"` + Salvar → PUT com `"ISENTO"`; 14 dígitos crus abrem mascarados. Sabotagem (voltar à progressiva): **1 vermelho**; regex `\D`→`D`: **1 vermelho** |
+| F2 | Minor | Cadastro novo: segundo blur no **mesmo** CNPJ re-consultava e sobrepunha o endereço que o usuário tinha corrigido | `useRef` com o último CNPJ consultado; o blur só consulta quando mudou; a lupa continua sempre | `FornecedorForm.test.js` (j): 2 blurs → 1 consulta, endereço corrigido preservado. Sabotagem: **2 vermelhos** |
+| F3 | Major | `index.js`: os `ALTER TABLE fornecedores` são `db.run` soltos (fora de `db.serialize`) e em banco **novo** chegam antes do `CREATE` — medido no log do primeiro boot do container (`no such table: fornecedores` para `grupo_id`, `planilha_*`, `foto`); `telefone_vendedor` tinha a mesma exposição. Até reiniciar, `POST` e `GET /:id` do módulo novo → 500 | `ALTERS_FORNECEDORES` roda no **callback** do `CREATE` (ordem garantida); os dois blocos soltos viraram ponteiros | Não há teste de boot no harness (o `index.js` não é carregado). Prova: rebuild da imagem `crm-gmp:local` + container com volume **novo** → log sem `no such table: fornecedores` — ver "Como foi executado" |
+| F4 | — | A imagem `crm-gmp:local` que o André subiu era anterior ao lote (sem `routes/compras/fornecedores.js`) | Rebuild no fechamento | — |
+
+Refutados pelo revisor (tentou e não quebrou): RN-34.05 com os corpos exatos dos três `api.put`
+do modal; RN-33.03/05 pedido antigo; RN-35.01 pela rota; RN-34.03/04 ordem CNPJ×CEP; autorização
+das rotas novas (`guard` real, inline antigas removidas, sem rota duplicada).
 
 ## Como foi executado
 

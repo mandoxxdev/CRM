@@ -5,15 +5,25 @@
 > roteiro curto para demonstrar ao vivo. Pedido do André em 2026-10-06. O equivalente do
 > almoxarifado é `docs/almoxarifado-novidades-por-etapa.md`.
 >
-> **Onde o desenvolvimento está:** lote de 2026-10-06, branch `main`. Etapas **33, 34 e 35**
-> em execução nesta noite; Etapa **36** só especificada (depende das decisões do bloco abaixo).
-> Design do lote: `docs/superpowers/specs/2026-10-06-crm-lote-compras-outubro-design.md`.
+> **Onde o desenvolvimento está:** lote de 2026-10-06, branch `main`. Etapas **33, 34 e 35
+> entregues e integradas** (merges `ca8a1364` e `891c960a`; seções abaixo). Etapa **36**
+> (Configurações por módulo + categorias por família) só especificada — depende das decisões
+> **D-36a–c** do bloco abaixo. Design do lote:
+> `docs/superpowers/specs/2026-10-06-crm-lote-compras-outubro-design.md`; índice do módulo:
+> `specs/modulo-compras/README.md`.
 
 ## ⚠️ Leia antes de apresentar — o que exige decisão ou ação sua
 
 ### A. Para rodar em produção antes do deploy
-- **A1** — nada ainda. (As etapas desta noite não exigem limpeza de dado; a Etapa 33 deixa a coluna
+- **A1** — nada a limpar. (As etapas desta noite não exigem limpeza de dado; a Etapa 33 deixa a coluna
   `itens_pedido_compra.data_entrega` no banco, sem leitor — pode ser apagada numa migração futura.)
+- **A2** — **Consulta, não ação:** fornecedores com CNPJ fora do padrão de 14 dígitos
+  (`SELECT id, razao_social, cnpj FROM fornecedores WHERE LENGTH(REPLACE(REPLACE(REPLACE(cnpj,'.',''),'/',''),'-','')) <> 14 AND cnpj IS NOT NULL AND cnpj <> ''`).
+  A tela nova **preserva** esses valores como estão (achado F1 da revisão, corrigido antes do
+  push); a consulta é só para você saber quantos existem e decidir se vale normalizar à mão.
+- **A3** — O deploy desta versão em banco **já existente** não exige nada. Em banco **novo** o
+  primeiro boot deixou de falhar nos `ALTER` de `fornecedores` (F3 — estava assim desde a Etapa 32
+  para `grupo_id`/`planilha_*`/`foto`; o container local mostrou o erro).
 
 ### B. Decisões que eu tomei e você pode reverter
 - **B1 — Esta frente vive em `main`, e `main` tem OUTRO pedido de compra.** A branch
@@ -22,7 +32,10 @@
   implementar o lote contra `main` (é o que a empresa vê). **Descartado:** fazer na branch (ninguém
   veria até o merge do módulo). **Pendente para o merge:** escolher um dos dois pedidos — a
   reconciliação não é feita aqui.
-- **B2 — Etapa 34: o `PUT` de fornecedor muda de "substitui tudo" para "chave ausente não mexe".**
+- **B2 — Etapa 34: o `PUT` de fornecedor muda de "substitui tudo" para "chave ausente não mexe; vazio/nulo limpa".**
+  Efeito colateral bom, achado pela revisão do plano: em `main` o botão **"Remover do grupo"** (tela
+  Fornecedores homologados → grupo) mostrava "removido" e **não removia** — o servidor tratava
+  `grupo_id: null` como "não mexer". Agora remove de verdade (provado por teste).
   Necessário para o modal antigo do grupo (que manda só 7 campos) não apagar cidade/CEP/telefone
   do vendedor. Provado por teste nos dois sentidos. **Descartado:** manter substituição total e
   ensinar o modal a mandar 13 campos (mais frágil).
@@ -62,6 +75,13 @@
   inteira em JSON) para quatro telas que não a leem (`Compras.js`, `PedidoCompraForm.js`,
   `FornecedoresDoGrupo.js`, `ItensFornecedor.js`). Só custo de payload; a projeção nomeada do
   `GET /:id` da Etapa 34 é o modelo para a lista numa etapa posterior.
+- **G3** `client/.env.production` tem `CI=false` e `DISABLE_ESLINT_PLUGIN=true`: o build de produção
+  **não** cai por warning de lint — a regra "CI=true faz warning virar erro" do `CLAUDE.md` vale
+  para o comando de verificação que rodamos, não para o deploy. `Compras.js` (8 warnings) e
+  `MaterialAlmoxarifadoForm.js` (2) já tinham warnings antes do lote; os arquivos novos estão limpos.
+- **G4** O cadastro de fornecedor aceita CNPJ em texto livre (sem validação de dígitos no servidor,
+  sem `UNIQUE`). A tela nova valida os dígitos só para **consultar**; gravar continua livre, de
+  propósito (há CNPJ legado fora do padrão — A2).
 
 ---
 

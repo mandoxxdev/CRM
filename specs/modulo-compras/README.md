@@ -28,9 +28,9 @@
 | Etapa | Tema | Status | Design / plano |
 |---|---|---|---|
 | 32 | Pedido de compra: modelo, cálculo, rotas, formulário, lote | 🟢 (`e5f8087f..98f6fc9d`) | `docs/superpowers/specs/2026-09-11-compras-etapa32-pedido-de-compra-design.md` · plano `…plans/2026-09-11-compras-etapa32-pedido-de-compra.md` |
-| 33 | A entrega é do pedido, não do item | 🟡 em execução (2026-10-06) | design do lote §3 · `…plans/2026-10-06-crm-etapa33-entrega-do-pedido.md` |
-| 34 | Ficha do fornecedor: tela própria, 2 telefones, CNPJ/CEP, CSS | 🟡 em execução (2026-10-06) | design do lote §4 · `…plans/2026-10-06-crm-etapa34-ficha-do-fornecedor.md` |
-| 35 | Cadastro de material: unidades e classe ABC (tela do almoxarifado) | 🟡 em execução (2026-10-06) | design do lote §5 · `…plans/2026-10-06-crm-etapa35-material-unidades-e-abc.md` |
+| 33 | A entrega é do pedido, não do item | 🟢 2026-10-06 (`75f378b4`, `9a7f9776`, `bc8da840`; merge `ca8a1364`) — `data_entrega` por item sai da tela, do `INSERT`, da leitura e do recebimento; a coluna fica no banco sem leitor | design do lote §3 · `…plans/2026-10-06-crm-etapa33-entrega-do-pedido.md` |
+| 34 | Ficha do fornecedor: tela própria, 2 telefones, CNPJ/CEP, CSS | 🟢 2026-10-06 (`d151751c` rotas+coluna, `a294c3d4` CEP, `977c6022` tela, `25397815`; merge `891c960a`) — `server/routes/compras/fornecedores.js`, `server/routes/cep.js`, `FornecedorForm.js`, `utils/cnpj.js`; o "Remover do grupo" passou a remover | design do lote §4 · `…plans/2026-10-06-crm-etapa34-ficha-do-fornecedor.md` |
+| 35 | Cadastro de material: unidades e classe ABC (tela do almoxarifado) | 🟢 2026-10-06 (`0e7c0a36`, `fba88f1d`) — só client + manual; candidato a cherry-pick para a branch do almoxarifado (B4) | design do lote §5 · `…plans/2026-10-06-crm-etapa35-material-unidades-e-abc.md` |
 | 36 | Configurações por módulo + categorias por família | 🔴 só spec — decisões D-36a–d pendentes | design do lote §6 |
 
 Design do lote: `docs/superpowers/specs/2026-10-06-crm-lote-compras-outubro-design.md`.
@@ -38,6 +38,7 @@ Documento de apresentação: `docs/compras-novidades-por-etapa.md`.
 
 ## O que ainda NÃO existe em Compras (`main`)
 
-Tela de cotação (`/compras/cotacoes/nova` e `/editar/:id` são caminhos mortos); itens de cotação;
+Tela de cotação (`/compras/cotacoes/nova` e `/editar/:id` são caminhos mortos — os de fornecedor
+deixaram de ser na Etapa 34); itens de cotação;
 conversão cotação → pedido; perfis de ação no core (só `checkModulePermission('compras')`);
 paginação; projeção nomeada na lista de fornecedores (`SELECT *` carrega `planilha_dados`, G2).
