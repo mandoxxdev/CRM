@@ -1,20 +1,78 @@
-import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 import { useTheme } from '../context/ThemeContext';
-import { FiSettings, FiSave, FiRefreshCw, FiBriefcase, FiMail, FiDatabase, FiGlobe, FiDollarSign, FiLayers, FiGrid, FiPackage, FiFileText } from 'react-icons/fi';
+import { useAuth } from '../context/AuthContext';
+import { getEffectiveUser } from '../services/permissionsCache';
+import { canConfigureModule } from '../utils/systemPermissions';
+import { MODULOS_META, MODULOS_ORDEM } from '../constants/modulosMeta';
+import { FiSettings, FiRefreshCw, FiBriefcase, FiMail, FiDatabase, FiGlobe, FiDollarSign, FiLayers, FiGrid, FiPackage, FiFileText } from 'react-icons/fi';
 import VariaveisTecnicas from './VariaveisTecnicas';
 import OpcoesPorFamilia from './OpcoesPorFamilia';
 import ConfigTemplateProposta from './ConfigTemplateProposta';
+import Tabs from './ui/Tabs';
+import ModuleLoading from './ModuleLoading';
 import { mascararTelefoneDigitando, mascararTelefoneCompleto } from '../utils/telefone';
 import './Configuracoes.css';
 
+// Etapa 36 (RN-36.04/05): as telas de configuracao do almoxarifado e da producao sao
+// EMBUTIDAS aqui (prop `embedded`), nao movidas — as rotas antigas continuam. `lazy` LOCAL de
+// proposito: importar direto incharia o chunk desta tela com as duas telas inteiras, e importar
+// de `routes/lazyModules.js` faria ciclo (ele ja importa `Configuracoes`).
+const ConfiguracoesAlmoxarifado = lazy(() => import('./almoxarifado/ConfiguracoesAlmoxarifado'));
+const ConfiguracoesProducao = lazy(() => import('./producao/ConfiguracoesProducao'));
+
+// Etapa 36 (RN-36.01): a barra de modulos vem de MODULOS_ORDEM/MODULOS_META (a lista que o
+// cliente ja tem), sem `admin` (e /admin) e sem `todolist` (nao tem configuracao nem admin de
+// modulo). `administrativo` e a aba "Geral" e aparece sempre — nao entra em modulosConfiguraveis.
+const MODULOS_SEM_CONFIGURACAO = ['admin', 'todolist'];
+const MODULO_GERAL = 'administrativo';
+const MODULOS_EMBUTIDOS = ['almoxarifado', 'operacional'];
+
+// Etapa 36 (RN-36.02/03): onde cada aba antiga da tela ficou. Geral = Empresa, Sistema, E-mail,
+// Backup; Comercial = os tres blocos que operam familias_produto/propostas. Mudar de modulo e
+// trocar uma linha aqui. Exportado para o teste e para traduzir o `location.state.tab` legado.
+export const ABAS_POR_MODULO = {
+  administrativo: [
+    { id: 'empresa', label: 'Empresa', icon: FiBriefcase },
+    { id: 'sistema', label: 'Sistema', icon: FiSettings },
+    { id: 'email', label: 'E-mail', icon: FiMail },
+    { id: 'backup', label: 'Backup', icon: FiDatabase },
+  ],
+  comercial: [
+    { id: 'template-proposta', label: 'Template de proposta', icon: FiFileText },
+    { id: 'opcoes-familia', label: 'Opções por família', icon: FiPackage },
+    { id: 'variaveis-tecnicas', label: 'Variáveis técnicas', icon: FiGrid },
+  ],
+};
+
+/** Modulos (alem da Geral) que o usuario pode configurar — a mesma regua do item "Configuracoes" do menu. */
+export function modulosConfiguraveis(user) {
+  if (!user) return [];
+  return MODULOS_ORDEM.filter((m) => (
+    m !== MODULO_GERAL
+    && !MODULOS_SEM_CONFIGURACAO.includes(m)
+    && canConfigureModule(user, m)
+  ));
+}
+
+const moduloDaAbaLegada = (tab) => (
+  Object.keys(ABAS_POR_MODULO).find((m) => ABAS_POR_MODULO[m].some((a) => a.id === tab)) || null
+);
+
+const PainelSemConfiguracoes = ({ nome }) => (
+  <div className="config-section configuracoes-sem-config">
+    <p>O módulo {nome} ainda não tem configurações próprias.</p>
+  </div>
+);
+
 const Configuracoes = () => {
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [configs, setConfigs] = useState({});
-  const [activeTab, setActiveTab] = useState('empresa');
   const [mensagem, setMensagem] = useState(null);
   // Etapa 21 (RN-07): a senha do SMTP tem estado LOCAL e nasce vazia — nunca recebe o valor que
   // vem do servidor. Molde: ConfiguracoesAlmoxarifado.js:2015/2193-2195.
@@ -22,12 +80,42 @@ const Configuracoes = () => {
   const [senhaSmtpConfigurada, setSenhaSmtpConfigurada] = useState(false);
   const { theme, toggleTheme } = useTheme();
 
+  // Etapa 36 (RN-36.07): a URL e a fonte da verdade. `?modulo=` escolhe o modulo (invalido ou
+  // nao permitido -> Geral); `?tab=` a aba interna (fora do mapa -> primeira aba do modulo). Para
+  // os modulos embutidos o `?tab=` e lido pela propria tela embutida, nao validado aqui.
+  const effectiveUser = getEffectiveUser(user);
+  const modulosVisiveis = [MODULO_GERAL, ...modulosConfiguraveis(effectiveUser)];
+  const moduloParam = searchParams.get('modulo');
+  const moduloAtivo = modulosVisiveis.includes(moduloParam) ? moduloParam : MODULO_GERAL;
+  const abasDoModulo = ABAS_POR_MODULO[moduloAtivo] || [];
+  const tabParam = searchParams.get('tab');
+  const activeTab = abasDoModulo.some((a) => a.id === tabParam) ? tabParam : (abasDoModulo[0]?.id ?? null);
+  const moduloEmbutido = MODULOS_EMBUTIDOS.includes(moduloAtivo);
+
+  // `location.state.tab` legado (PropostasList.js: "Config. template" manda `template-proposta`)
+  // e traduzido para a URL UMA vez, e so quando `?modulo` esta ausente. O `replace` derruba o
+  // `state`, entao o efeito nao roda de novo e F5 cai na URL.
+  const tabLegada = location.state?.tab;
   useEffect(() => {
-    const tab = location.state?.tab;
-    if (tab && ['empresa', 'sistema', 'email', 'backup', 'variaveis-tecnicas', 'template-proposta', 'opcoes-familia'].includes(tab)) {
-      setActiveTab(tab);
-    }
-  }, [location.state?.tab]);
+    if (!tabLegada || searchParams.get('modulo')) return;
+    const modulo = moduloDaAbaLegada(tabLegada);
+    if (!modulo) return;
+    setSearchParams({ modulo, tab: tabLegada }, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabLegada]);
+
+  const trocarModulo = (id) => {
+    // Trocar de modulo LIMPA `?tab=` — a aba interna de um modulo nao faz sentido no outro.
+    setSearchParams({ modulo: id });
+  };
+
+  const trocarAba = (id) => {
+    setSearchParams((prev) => {
+      prev.set('modulo', moduloAtivo);
+      prev.set('tab', id);
+      return prev;
+    }, { replace: true });
+  };
 
   useEffect(() => {
     loadConfiguracoes();
@@ -139,24 +227,15 @@ const Configuracoes = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="configuracoes-loading">
-        <div className="loading-spinner"></div>
-        <p>Carregando configurações...</p>
-      </div>
-    );
-  }
-
-  const tabs = [
-    { id: 'empresa', label: 'Empresa', icon: FiBriefcase },
-    { id: 'sistema', label: 'Sistema', icon: FiSettings },
-    { id: 'email', label: 'Email', icon: FiMail },
-    { id: 'backup', label: 'Backup', icon: FiDatabase },
-    { id: 'variaveis-tecnicas', label: 'Variáveis técnicas', icon: FiGrid },
-    { id: 'template-proposta', label: 'Template de proposta', icon: FiFileText },
-    { id: 'opcoes-familia', label: 'Opções por família', icon: FiPackage },
-  ];
+  // Etapa 36 (RN-36.07): a barra de modulos renderiza FORA do `loading` — o spinner do GET
+  // /configuracoes fica so no conteudo da Geral; `?modulo=almoxarifado` nao espera por ele.
+  const abasDeModulos = modulosVisiveis.map((m) => ({
+    id: m,
+    label: m === MODULO_GERAL ? 'Geral' : MODULOS_META[m].nome,
+    icon: MODULOS_META[m].icon,
+  }));
+  const geralAtiva = moduloAtivo === MODULO_GERAL;
+  const geralCarregando = geralAtiva && loading;
 
   return (
     <div className="configuracoes">
@@ -165,9 +244,11 @@ const Configuracoes = () => {
           <h1><FiSettings /> Configurações do Sistema</h1>
           <p>Gerencie as configurações gerais do sistema</p>
         </div>
-        <button onClick={loadConfiguracoes} className="btn-refresh" disabled={loading}>
-          <FiRefreshCw /> Atualizar
-        </button>
+        {geralAtiva && (
+          <button onClick={loadConfiguracoes} className="btn-refresh" disabled={loading}>
+            <FiRefreshCw /> Atualizar
+          </button>
+        )}
       </div>
 
       {mensagem && (
@@ -176,23 +257,52 @@ const Configuracoes = () => {
         </div>
       )}
 
-      <div className="configuracoes-tabs">
-        {tabs.map(tab => {
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.id}
-              className={`tab ${activeTab === tab.id ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab.id)}
-            >
-              <Icon /> {tab.label}
-            </button>
-          );
-        })}
-      </div>
+      <Tabs
+        abas={abasDeModulos}
+        ativa={moduloAtivo}
+        onChange={trocarModulo}
+        ariaLabel="Módulos"
+      />
 
-      <div className="configuracoes-content">
-        {activeTab === 'empresa' && (
+      {abasDoModulo.length > 0 && !geralCarregando && (
+        <Tabs
+          abas={abasDoModulo}
+          ativa={activeTab}
+          onChange={trocarAba}
+          ariaLabel="Abas do módulo"
+          tamanho="sm"
+        />
+      )}
+
+      <div
+        className={`configuracoes-content${moduloEmbutido ? ' configuracoes-content--embutido' : ''}`}
+        role="tabpanel"
+        id={`ui-tabpanel-${moduloAtivo}`}
+      >
+        {geralCarregando && (
+          <div className="configuracoes-loading">
+            <div className="loading-spinner"></div>
+            <p>Carregando configurações...</p>
+          </div>
+        )}
+
+        {moduloAtivo === 'almoxarifado' && (
+          <Suspense fallback={<ModuleLoading module="almoxarifado" inline />}>
+            <ConfiguracoesAlmoxarifado embedded />
+          </Suspense>
+        )}
+
+        {moduloAtivo === 'operacional' && (
+          <Suspense fallback={<ModuleLoading module="operacional" inline />}>
+            <ConfiguracoesProducao embedded />
+          </Suspense>
+        )}
+
+        {!geralAtiva && !moduloEmbutido && abasDoModulo.length === 0 && (
+          <PainelSemConfiguracoes nome={MODULOS_META[moduloAtivo].nome} />
+        )}
+
+        {!geralCarregando && activeTab === 'empresa' && (
           <div className="config-section">
             <h2><FiBriefcase /> Informações da Empresa</h2>
             <div className="config-grid">
@@ -275,7 +385,7 @@ const Configuracoes = () => {
           </div>
         )}
 
-        {activeTab === 'sistema' && (
+        {!geralCarregando && activeTab === 'sistema' && (
           <div className="config-section">
             <h2><FiSettings /> Configurações do Sistema</h2>
             <div className="config-grid">
@@ -339,7 +449,7 @@ const Configuracoes = () => {
           </div>
         )}
 
-        {activeTab === 'email' && (
+        {!geralCarregando && activeTab === 'email' && (
           <div className="config-section">
             <h2><FiMail /> Configurações de Email</h2>
             <div className="config-grid">
@@ -405,7 +515,7 @@ const Configuracoes = () => {
           <OpcoesPorFamilia />
         )}
 
-        {activeTab === 'backup' && (
+        {!geralCarregando && activeTab === 'backup' && (
           <div className="config-section">
             <h2><FiDatabase /> Configurações de Backup</h2>
             <div className="config-grid">
