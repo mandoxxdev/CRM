@@ -19590,7 +19590,9 @@ COLUNAS_PEDIDO_COMPRA_E32.forEach((col) => {
 });
 
 // O bloco "Dados do Fornecedor" do documento mostra IE e celular; o cadastro não tinha.
-['inscricao_estadual TEXT', 'celular TEXT'].forEach((col) => {
+// Etapa 34: `telefone_vendedor` é coluna NOVA — `celular` (acima) é impressa no documento do
+// pedido como telefone da empresa e não foi reaproveitada (o rótulo mentiria).
+['inscricao_estadual TEXT', 'celular TEXT', 'telefone_vendedor TEXT'].forEach((col) => {
   db.run(`ALTER TABLE fornecedores ADD COLUMN ${col}`, (e) => {
     if (e && e.message.indexOf('duplicate') === -1) {
       console.error(`Erro ao adicionar ${col.split(' ')[0]} em fornecedores:`, e.message);
@@ -20361,6 +20363,10 @@ app.get('/api/compras/fornecedores', authenticateToken, checkModulePermission('c
 // um motivo concreto: precisa vir ANTES do `app.delete('/api/compras/:tipo/:id')` genérico
 // logo abaixo, senão o DELETE do módulo nunca roda.
 require('./routes/compras/pedidos')(app, db, authenticateToken, checkModulePermission);
+// Ficha do fornecedor (Etapa 34) — POST/PUT saíram daqui para `routes/compras/fornecedores.js`
+// (onde o harness os monta) e GET /:id nasceu lá. Só GET/POST/PUT: a posição em relação ao
+// DELETE genérico abaixo é inócua — o DELETE /fornecedores/:id continua no genérico.
+require('./routes/compras/fornecedores')(app, db, authenticateToken, checkModulePermission);
 
 // Cotações
 app.get('/api/compras/cotacoes', authenticateToken, checkModulePermission('compras'), (req, res) => {
@@ -20546,50 +20552,9 @@ app.get('/api/compras/grupos/:grupoId/fornecedores', authenticateToken, checkMod
   });
 });
 
-// Criar fornecedor (opcional: grupo_id para já homologar no grupo)
-app.post('/api/compras/fornecedores', authenticateToken, checkModulePermission('compras'), (req, res) => {
-  const body = req.body || {};
-  const razao_social = (body.razao_social || '').trim();
-  const nome_fantasia = (body.nome_fantasia || '').trim();
-  const cnpj = (body.cnpj || '').trim();
-  const contato = body.contato != null ? String(body.contato).trim() : null;
-  const email = body.email != null ? String(body.email).trim() : null;
-  const telefone = body.telefone != null ? String(body.telefone).trim() : null;
-  const grupo_id = body.grupo_id != null ? (parseInt(body.grupo_id, 10) || null) : null;
-  if (!razao_social) return res.status(400).json({ error: 'Razão social é obrigatória' });
-  db.run('INSERT INTO fornecedores (razao_social, nome_fantasia, cnpj, contato, email, telefone, grupo_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    [razao_social, nome_fantasia, cnpj, contato, email, telefone, grupo_id, 'ativo'], function(err) {
-    if (err) return res.status(500).json({ error: err.message });
-    res.status(201).json({ id: this.lastID, razao_social, nome_fantasia, grupo_id });
-  });
-});
-
-// Atualizar fornecedor (ex.: grupo_id para homologar no grupo)
-app.put('/api/compras/fornecedores/:id', authenticateToken, checkModulePermission('compras'), (req, res) => {
-  const id = req.params.id;
-  const body = req.body || {};
-  const razao_social = (body.razao_social || '').trim();
-  const nome_fantasia = (body.nome_fantasia || '').trim();
-  const cnpj = (body.cnpj || '').trim();
-  const contato = body.contato != null ? String(body.contato).trim() : null;
-  const email = body.email != null ? String(body.email).trim() : null;
-  const telefone = body.telefone != null ? String(body.telefone).trim() : null;
-  const endereco = body.endereco != null ? String(body.endereco).trim() : null;
-  const grupo_id = body.grupo_id != null ? (parseInt(body.grupo_id, 10) || null) : undefined;
-  if (!razao_social) return res.status(400).json({ error: 'Razão social é obrigatória' });
-  const updates = ['razao_social = ?', 'nome_fantasia = ?', 'cnpj = ?', 'contato = ?', 'email = ?', 'telefone = ?', 'endereco = ?', 'updated_at = CURRENT_TIMESTAMP'];
-  const params = [razao_social, nome_fantasia, cnpj, contato, email, telefone, endereco];
-  if (grupo_id !== undefined) {
-    updates.push('grupo_id = ?');
-    params.push(grupo_id);
-  }
-  params.push(id);
-  db.run('UPDATE fornecedores SET ' + updates.join(', ') + ' WHERE id = ?', params, function(err) {
-    if (err) return res.status(500).json({ error: err.message });
-    if (this.changes === 0) return res.status(404).json({ error: 'Fornecedor não encontrado' });
-    res.json({ message: 'Fornecedor atualizado' });
-  });
-});
+// Criar/atualizar/ler fornecedor: Etapa 34 — moram em routes/compras/fornecedores.js (registrado
+// acima, ao lado do pedidos.js). Saíram daqui porque o harness não carrega o index.js e nenhum
+// teste os alcançava — o POST não gravava endereço e o PUT ignorava `grupo_id: null`.
 
 app.post('/api/compras/fornecedores/:id/foto', authenticateToken, checkModulePermission('compras'), uploadFornecedor.single('foto'), (req, res) => {
   const id = req.params.id;

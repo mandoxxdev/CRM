@@ -43,20 +43,35 @@ async function createTestApp(options = {}) {
   // Etapa 32: o pedido de compra lê o bloco fiscal do fornecedor para congelar no documento
   // (RN-06), então o stub cresceu. Continua sendo subconjunto do index.js — nada aqui é
   // "tabela de teste": são as mesmas colunas, com os mesmos nomes.
+  // Etapa 34: as rotas de fornecedor (POST/PUT/GET /:id) saíram do index.js para
+  // routes/compras/fornecedores.js e passaram a ser montadas aqui, então o stub precisa do
+  // conjunto COMPLETO de colunas da produção (CREATE + todos os ALTERs do index.js): o PUT
+  // escreve `updated_at`, o POST grava `contato`/`grupo_id`, o GET /:id precisa NÃO devolver
+  // `planilha_*` — nada disso é provável sem as colunas. `telefone_vendedor` é a coluna nova
+  // desta etapa (ALTER no index.js, que o harness não carrega).
   await dbRun(db, `CREATE TABLE IF NOT EXISTS fornecedores (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     razao_social TEXT NOT NULL,
     nome_fantasia TEXT,
     cnpj TEXT,
-    inscricao_estadual TEXT,
+    contato TEXT,
+    email TEXT,
+    telefone TEXT,
     endereco TEXT,
     cidade TEXT,
     estado TEXT,
     cep TEXT,
-    telefone TEXT,
+    status TEXT DEFAULT 'ativo',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    inscricao_estadual TEXT,
     celular TEXT,
-    email TEXT,
-    status TEXT DEFAULT 'ativo'
+    grupo_id INTEGER,
+    planilha_dados TEXT,
+    planilha_nome TEXT,
+    planilha_atualizado_em DATETIME,
+    foto TEXT,
+    telefone_vendedor TEXT
   )`);
 
   // `pedidos_compra` é tabela CORE (index.js), fora do initSchema do almoxarifado. Até a
@@ -121,6 +136,9 @@ async function createTestApp(options = {}) {
   // Sem isto, provar a fiação do pedido de compra seria impossível (o INSERT direto que os
   // testes antigos faziam nunca exerce middleware, ordem de registro nem validação).
   require('../../routes/compras/pedidos')(app, db, fakeAuth, fakeCheckModulePermission);
+  // Etapa 34 — compras/fornecedores: POST/PUT saíram do index.js (onde nenhum teste os
+  // alcançava) e GET /:id nasceu. Mesmo padrão de DI do pedidos.js.
+  require('../../routes/compras/fornecedores')(app, db, fakeAuth, fakeCheckModulePermission);
 
   // O registrador principal agenda a extended num callback do sqlite
   // (almoxarifado.js:1663). Roundtrip no sqlite: garante que a extended
