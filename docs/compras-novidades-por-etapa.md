@@ -79,6 +79,12 @@
   **não** cai por warning de lint — a regra "CI=true faz warning virar erro" do `CLAUDE.md` vale
   para o comando de verificação que rodamos, não para o deploy. `Compras.js` (8 warnings) e
   `MaterialAlmoxarifadoForm.js` (2) já tinham warnings antes do lote; os arquivos novos estão limpos.
+- **G5** **Primeiro boot em banco novo ainda falha para `pedidos_compra`** (não para
+  `fornecedores`, corrigido na Etapa 34): os 5 `ALTER` da Etapa 32 (`transportadora`,
+  `transportadora_telefone`, `snap_fornecedor_nome/cnpj/ie`) rodam soltos antes do `CREATE` —
+  medido no log do container em volume novo em 2026-10-07. Em banco já existente (produção) não
+  acontece. Correção de 10 linhas, mesmo padrão da 34: mover `COLUNAS_PEDIDO_COMPRA_E32.forEach(…)`
+  para o callback do `CREATE TABLE pedidos_compra` (`server/index.js`, bloco da Etapa 32).
 - **G4** O cadastro de fornecedor aceita CNPJ em texto livre (sem validação de dígitos no servidor,
   sem `UNIQUE`). A tela nova valida os dígitos só para **consultar**; gravar continua livre, de
   propósito (há CNPJ legado fora do padrão — A2).

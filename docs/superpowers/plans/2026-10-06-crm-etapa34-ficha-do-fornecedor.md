@@ -208,6 +208,15 @@ reproduzidos antes de corrigir:
 | F3 | Major | `index.js`: os `ALTER TABLE fornecedores` são `db.run` soltos (fora de `db.serialize`) e em banco **novo** chegam antes do `CREATE` — medido no log do primeiro boot do container (`no such table: fornecedores` para `grupo_id`, `planilha_*`, `foto`); `telefone_vendedor` tinha a mesma exposição. Até reiniciar, `POST` e `GET /:id` do módulo novo → 500 | `ALTERS_FORNECEDORES` roda no **callback** do `CREATE` (ordem garantida); os dois blocos soltos viraram ponteiros | Não há teste de boot no harness (o `index.js` não é carregado). Prova: rebuild da imagem `crm-gmp:local` + container com volume **novo** → log sem `no such table: fornecedores` — ver "Como foi executado" |
 | F4 | — | A imagem `crm-gmp:local` que o André subiu era anterior ao lote (sem `routes/compras/fornecedores.js`) | Rebuild no fechamento | — |
 
+**Prova do F3 (medida no fechamento, commit `62adb0a7` + rebuild da imagem `crm-gmp:local`):**
+container `crm-gmp-f3test` em volume **novo** → log com **0** ocorrências de `no such table:
+fornecedores`, "✅ Rotas de fornecedor registradas (Etapa 34)" e HTTP 200 na raiz. O `crm-gmp`
+do André foi recriado com a imagem nova sobre os volumes `crm_data`/`crm_uploads` (`Up`, HTTP 200
+em `:3100`, 0 "Erro ao adicionar"). ⚠️ O mesmo log do volume novo mostra que **`pedidos_compra`
+tem o defeito idêntico** (5 `ALTER` da Etapa 32 — `transportadora`, `transportadora_telefone`,
+`snap_fornecedor_*` — antes do `CREATE`): fora deste lote, registrado como **G5** no doc de
+novidades com a correção (mesmo padrão: `COLUNAS_PEDIDO_COMPRA_E32` para o callback do `CREATE`).
+
 Refutados pelo revisor (tentou e não quebrou): RN-34.05 com os corpos exatos dos três `api.put`
 do modal; RN-33.03/05 pedido antigo; RN-35.01 pela rota; RN-34.03/04 ordem CNPJ×CEP; autorização
 das rotas novas (`guard` real, inline antigas removidas, sem rota duplicada).
