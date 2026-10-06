@@ -249,7 +249,19 @@ tinha `unidade_consumo` e salvar → `PUT` sem a chave (preserva); (d) o exemplo
 **Descartado:** apagar as colunas; fazer o recebimento converter pelo fator (seria regra de
 estoque nova no motor — é a pergunta D-35b para o P.O., não uma decisão de madrugada).
 
-## 6. Etapa 36 — Configurações por módulo e categorias por família (SÓ SPEC — decisões pendentes)
+## 6. Etapas 36 e 37 — Configurações por módulo (36, executada) e categorias por família (37, espera decisão)
+
+> **Reescrito em 2026-10-07.** O André mandou executar o que já estava entendido sem dúvida. A
+> task 3 (abas por módulo) tem caminho reversível para cada escolha em aberto e virou a **Etapa
+> 36**, com plano próprio (`docs/superpowers/plans/2026-10-06-crm-etapa36-configuracoes-por-modulo.md`)
+> — decisões: **embutir** as telas de configuração existentes (almoxarifado, produção) em abas de
+> `/configuracoes` em vez de movê-las, mantendo as rotas antigas; aba visível para quem já passa em
+> `canConfigureModule` do módulo; lista de módulos vinda de `modulosMeta.js`; abas antigas de
+> proposta/família/variáveis vão para a aba **Comercial**; URL `?modulo=&tab=`. A task 2
+> (categorias por família) virou a **Etapa 37** e continua parada na decisão **D-36a** abaixo,
+> porque o modelo atual é o inverso do pedido. O texto original desta seção segue, como registro:
+
+## 6 (original). Etapa 36 — Configurações por módulo e categorias por família (SÓ SPEC — decisões pendentes)
 
 **O que a task 3 pede:** `/configuracoes` com uma aba por módulo, gerada da lista de módulos, e
 dentro de cada aba as configurações daquele módulo; o almoxarifado entra com o que hoje está em
