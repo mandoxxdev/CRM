@@ -5,10 +5,10 @@
 > roteiro curto para demonstrar ao vivo. Pedido do André em 2026-10-06. O equivalente do
 > almoxarifado é `docs/almoxarifado-novidades-por-etapa.md`.
 >
-> **Onde o desenvolvimento está:** lote de 2026-10-06, branch `main`. Etapas **33, 34 e 35
-> entregues e integradas** (merges `ca8a1364` e `891c960a`; seções abaixo). Etapa **36**
-> (Configurações por módulo + categorias por família) só especificada — depende das decisões
-> **D-36a–c** do bloco abaixo. Design do lote:
+> **Onde o desenvolvimento está:** lote de 2026-10-06, branch `main`. Etapas **33, 34, 35 e 36
+> entregues e integradas** (merges `ca8a1364`, `891c960a`, `2bec1eb9`, `a84d2121`; seções abaixo).
+> Etapa **37** (categorias por família) só especificada — depende da decisão **D-36a** do bloco
+> abaixo. Design do lote:
 > `docs/superpowers/specs/2026-10-06-crm-lote-compras-outubro-design.md`; índice do módulo:
 > `specs/modulo-compras/README.md`.
 
@@ -51,6 +51,27 @@
 - **B6 — Etapa 34: consulta de CEP é um proxy novo para a ViaCEP (`GET /api/cep/:cep`).** O P.O.
   falou em "biblioteca do CNPJ"; não é biblioteca, é o proxy `GET /api/cnpj/:cnpj` do comercial
   (BrasilAPI → ReceitaWS), e ele **já devolve o endereço** — a Etapa 34 usa os dois.
+- **B8 — Etapa 36: as telas de configuração do Almoxarifado e da Produção foram EMBUTIDAS em
+  abas de `/configuracoes`, não movidas.** As rotas antigas (`/almoxarifado/configuracoes`,
+  `/fabrica/configuracoes`) e os itens de menu continuam — é o que atende o administrador do
+  almoxarifado que não tem o módulo Administrativo (ele não chega a `/configuracoes`). Reverter =
+  apagar a aba. **Descartado:** mover as 11 abas do almoxarifado (quebraria o acesso desse perfil).
+- **B9 — Etapa 36: quem vê qual aba.** A aba de um módulo aparece para quem já pode configurar
+  aquele módulo (a mesma régua do item "Configurações" do menu de cada módulo); **Geral** aparece
+  sempre para quem entra na tela — um admin do almoxarifado que recebeu o módulo Administrativo
+  vê Geral (SMTP, backup) + Almoxarifado, exatamente o que já via nas 7 abas antigas. Módulo sem
+  tela de configuração (Compras, Financeiro, Engenharia, Projetos, Frota) ganha uma aba que diz
+  "ainda não tem configurações próprias" — é o lugar onde elas vão nascer.
+- **B10 — Etapa 36: as abas "Template de proposta", "Opções por família" e "Variáveis técnicas"
+  saíram de Geral e foram para a aba Comercial** (operam propostas e famílias de produto). O
+  botão "Configurar template" da lista de propostas continua abrindo a aba certa. Reverter = uma
+  linha no mapa `ABAS_POR_MODULO`.
+- **B11 — Etapa 36: a aba interna das configurações do almoxarifado passou a ficar na URL
+  (`?tab=`).** Antes, recarregar a página voltava para "Tipos de Material" (achado da revisão do
+  plano). Vale também na rota antiga.
+- **B12 — Etapa 36: o botão Voltar do navegador volta de MÓDULO, não de aba.** Trocar de módulo
+  entra no histórico; trocar de aba interna não (senão cada aba viraria um passo do Voltar).
+  Reverter = uma linha (`push` ↔ `replace`).
 
 ### D. Dúvidas para você (ou para o P.O.)
 - **D-35** — O que A, B e C significam **para a GMP**? A legenda atual é a definição genérica.
@@ -90,6 +111,15 @@
   `familias_produto.clausulas_modelo_id` (Comercial) — 3 erros no primeiro boot de banco novo,
   todos curados no segundo boot. Não tocado (não é Compras); a correção é a mesma de G5, tabela a
   tabela.
+- **G7** A lista de módulos do sistema existe em **quatro** lugares (`modulosMeta.js`,
+  `TipoSelecao.todosModulos`, `MODULE_ADMIN_KEYS` no servidor, `DEFAULT_MODULOS_TIPO`). A Etapa 36
+  usou a do cliente (`modulosMeta.js`) e **não** criou uma quinta; unificar é etapa própria.
+- **G8** As abas da Etapa 36 usam um componente `Tabs` reutilizável novo; as outras seis barras de
+  abas do sistema (Admin, Compras/Financeiro, Minha Conta, OS comercial, Operacional, e a barra
+  interna do almoxarifado) continuam cada uma com o próprio CSS. Migrar é etapa própria.
+- **G9** `canConfigureModule` diverge entre cliente e servidor: o cliente aceita `role === 'admin'`,
+  o servidor só superadmin/admin de módulo. A Etapa 36 não cria porta de servidor, então nada ficou
+  mais frouxo — mas a divergência existe desde antes e precisa fechar quando o core ganhar perfis.
 - **G4** O cadastro de fornecedor aceita CNPJ em texto livre (sem validação de dígitos no servidor,
   sem `UNIQUE`). A tela nova valida os dígitos só para **consultar**; gravar continua livre, de
   propósito (há CNPJ legado fora do padrão — A2).
@@ -99,6 +129,82 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 36 — Configurações com uma aba por módulo (2026-10-07)
+
+**Em uma frase.** A tela **Administrativo → Configurações** ganhou uma barra com **um botão por
+módulo** (Geral, Comercial, Compras, Financeiro, Operacional, Cálculos de Engenharia, Engenharia /
+Projetos, Almoxarifado, Frota) e as configurações do Almoxarifado e da Produção passaram a abrir
+**dentro dela** — é o lugar único onde as configurações de cada módulo vão morar.
+
+### O que há de novo (visível para o usuário)
+- **Barra de módulos** no topo de Configurações. Cada pessoa vê **só os módulos que já podia
+  configurar** (a mesma regra do item "Configurações" do menu de cada módulo). O administrador do
+  sistema vê todos.
+- **Geral** = Empresa, Sistema, E-mail, Backup (como antes).
+- **Comercial** = Template de proposta, Opções por família, Variáveis técnicas (saíram de "Geral",
+  porque são de propostas e produtos). O botão **"Configurar template"** da lista de propostas
+  continua abrindo direto a aba certa.
+- **Almoxarifado** = as 11 abas que já existiam em *Almoxarifado → Configurações* (Tipos de
+  Material, Famílias, Categorias, Materiais por Setor, Estoques Mínimos, Setores, Localizações,
+  Alertas, Liberação por Valor, Perfis de Acesso, Configurações Gerais) — **a mesma tela, embutida**.
+  O caminho antigo continua funcionando.
+- **Operacional** = Motivos de parada (a tela de *Fábrica → Configurações*, embutida).
+- **Compras, Financeiro, Engenharia, Projetos, Frota** = uma aba que diz *"O módulo ⟨Nome⟩ ainda
+  não tem configurações próprias."* — a aba existe para as configurações nascerem ali (é onde a
+  próxima etapa, categorias por família, vai entrar em Almoxarifado).
+- **A URL guarda onde você está**: `?modulo=almoxarifado&tab=localizacoes`. Recarregar a página
+  (F5) ou mandar o link para alguém abre **no mesmo lugar**. Antes, recarregar a tela do
+  almoxarifado voltava sempre para "Tipos de Material".
+- No celular, as duas barras rolam para o lado; nenhuma aba fica escondida.
+
+### Por baixo do capô
+- Componente de abas **reutilizável** (`client/src/components/ui/Tabs.js`) com acessibilidade de
+  verdade (`role="tablist"`, setas do teclado trocam de aba, foco visível). Primeira tela a usá-lo.
+- `Configuracoes.js` virou duas camadas: módulo (`?modulo=`) e aba interna (`?tab=`); a lista de
+  módulos vem de `modulosMeta.js`, sem lista nova. As telas embutidas carregam **sob demanda**
+  (lazy) — abrir "Geral" não baixa o código do almoxarifado.
+- `ConfiguracoesAlmoxarifado` e `ConfiguracoesProducao` ganharam a prop `embedded` (sem cabeçalho
+  próprio, sem padding duplo). A aba interna do almoxarifado passou a ser **lida e escrita na URL**
+  — nos dois caminhos.
+- **Zero linhas de servidor.** Nenhuma permissão nova: quem não podia configurar um módulo continua
+  sem ver a aba dele, e o backend continua sendo quem decide em cada rota.
+
+### Antes → Agora
+| Antes | Agora |
+|---|---|
+| Configurações do sistema, do almoxarifado e da produção em **três telas**, em três menus | **Uma** tela com uma aba por módulo; as três telas antigas continuam existindo para quem só tem acesso ao próprio módulo |
+| 7 abas misturadas em "Configurações do Sistema" (empresa, SMTP, backup, proposta, família…) | **Geral** (4 abas do sistema) e **Comercial** (3 abas de propostas/produtos) |
+| Recarregar a página das configurações do almoxarifado voltava para "Tipos de Material" | A aba fica na URL; F5 e links abrem no lugar certo |
+| Módulo sem configuração: nenhum lugar previsto | Aba do módulo já existe, dizendo que ainda não há configurações |
+| Abas sem teclado nem `role` de acessibilidade | Setas ← → trocam de aba; leitores de tela entendem a barra |
+
+### Roteiro de teste manual (clicável)
+1. Entre como administrador. Menu **Administrativo → Configurações**. Veja a barra de módulos no topo:
+   **Geral** selecionada, depois Comercial, Compras, Financeiro, Operacional, Cálculos de Engenharia,
+   Engenharia / Projetos, Almoxarifado, Frota (sem "Admin" e sem "TODOLIST").
+2. Em **Geral**, abra **Empresa** e altere um campo: salva sozinho, como antes. Confira que a aba
+   **E-mail** e **Backup** continuam ali e que **Template de proposta** não está mais em Geral.
+3. Clique **Comercial**: Template de proposta, Opções por família, Variáveis técnicas.
+4. Clique **Almoxarifado**: a barra com as 11 abas aparece, **sem** o cabeçalho "Configurações do
+   Almoxarifado". Clique **Localizações**. Olhe a URL: termina em `?modulo=almoxarifado&tab=localizacoes`.
+   **Aperte F5**: a tela volta em Almoxarifado → Localizações.
+5. Clique **Compras**: *"O módulo Compras ainda não tem configurações próprias."*
+6. Vá a **Comercial → Propostas** e clique **"Configurar template"**: abre Configurações já em
+   Comercial → Template de proposta.
+7. Menu **Almoxarifado → Configurações** (o caminho antigo): a tela abre como sempre, **com**
+   cabeçalho; clique em **Perfis de Acesso** e veja a URL ganhar `?tab=perfis`.
+8. Entre com um usuário que é administrador do almoxarifado **mas não tem** o módulo Administrativo:
+   ele não vê Administrativo → Configurações (como antes) e continua usando o caminho do passo 7.
+9. No celular (ou janela estreita): as duas barras rolam para o lado.
+
+### O que a etapa NÃO cobre
+- **Categorias por família** (task 2) — espera a decisão D-36a (Etapa 37).
+- Migrar as outras seis barras de abas do sistema para o componente novo (G8).
+- Unificar as quatro listas de módulos (G7) e a divergência cliente/servidor de
+  `canConfigureModule` (G9).
+- Abrir `/configuracoes` para quem **não** tem o módulo Administrativo (a regra de acesso ao
+  módulo não mudou — B9).
 
 ## Etapa 33 — A entrega é do pedido, não do item (2026-10-06)
 

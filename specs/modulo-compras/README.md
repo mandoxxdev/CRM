@@ -31,7 +31,8 @@
 | 33 | A entrega é do pedido, não do item | 🟢 2026-10-06 (`75f378b4`, `9a7f9776`, `bc8da840`; merge `ca8a1364`) — `data_entrega` por item sai da tela, do `INSERT`, da leitura e do recebimento; a coluna fica no banco sem leitor | design do lote §3 · `…plans/2026-10-06-crm-etapa33-entrega-do-pedido.md` |
 | 34 | Ficha do fornecedor: tela própria, 2 telefones, CNPJ/CEP, CSS | 🟢 2026-10-06 (`d151751c` rotas+coluna, `a294c3d4` CEP, `977c6022` tela, `25397815`; merge `891c960a`) — `server/routes/compras/fornecedores.js`, `server/routes/cep.js`, `FornecedorForm.js`, `utils/cnpj.js`; o "Remover do grupo" passou a remover | design do lote §4 · `…plans/2026-10-06-crm-etapa34-ficha-do-fornecedor.md` |
 | 35 | Cadastro de material: unidades e classe ABC (tela do almoxarifado) | 🟢 2026-10-06 (`0e7c0a36`, `fba88f1d`) — só client + manual; candidato a cherry-pick para a branch do almoxarifado (B4) | design do lote §5 · `…plans/2026-10-06-crm-etapa35-material-unidades-e-abc.md` |
-| 36 | Configurações por módulo + categorias por família | 🔴 só spec — decisões D-36a–d pendentes | design do lote §6 |
+| 36 | Configurações com uma aba por módulo (`/configuracoes`; almoxarifado e produção embutidos; `Tabs` reutilizável) | 🟢 2026-10-07 (`724cbbdd` Tabs, `74c30cd4` Configuracoes, `127425bc` embedded; merges `2bec1eb9`, `a84d2121`) — zero linhas de servidor | design do lote §6 · `…plans/2026-10-06-crm-etapa36-configuracoes-por-modulo.md` |
+| 37 | Categorias por família (árvore cadastrável em Configurações → Almoxarifado) | 🔴 espera a decisão **D-36a** (o modelo atual é família → categoria, o inverso do pedido) | design do lote §6 (original) |
 
 Design do lote: `docs/superpowers/specs/2026-10-06-crm-lote-compras-outubro-design.md`.
 Documento de apresentação: `docs/compras-novidades-por-etapa.md`.

@@ -242,7 +242,7 @@ Template de proposta → voltar por Propostas > "Configurar template"); linha no
   no-op (`irPara(indice)`) → 2/10 falham; `aria-selected` sempre `"false"` → 1/10 falha. **T2**
   aba de módulo sem `canConfigureModule` (`&& true`) → 3/18 falham; `?tab=` usado cru sem cair
   na primeira aba → 2/18 falham. Restaurado: 10/10 e 18/18.
-- Achados da revisão: _preencher no T4_ (reais vs. ruído)
+- Achados da revisão (T4): revisão do PLANO — 1 trava real (URL da aba interna nunca escrita) + 8 correções, todas confirmadas na execução (0 ruído); revisão ADVERSARIAL do código — 1 achado real (Minor, `aria-controls` pendurados), 0 ruído, 6/6 sabotagens pegas, 8/9 cenários de integração real verdes de primeira.
 - Paralelismo (executor A): T1 → T2 em série na worktree `c36a`; T3 em worktree separada pelo
   executor B. Arquivos disjuntos confirmados: A tocou `ui/Tabs.*`, `Configuracoes.*`
   (+ `.test.js` novo) e este plano; nunca abriu `ConfiguracoesAlmoxarifado`/`ConfiguracoesProducao`
@@ -262,5 +262,41 @@ Template de proposta → voltar por Propostas > "Configurar template"); linha no
 
 ## Como foi executado
 
-_Preencher no fechamento (T4), com o que foi medido de verdade. Executor A: T1 `724cbbdd`,
-T2 `74c30cd4` — números na retro acima._
+Dois executores em paralelo, worktrees `c36a` (A: T1 `724cbbdd` → T2 `74c30cd4`) e `c36b`
+(B: T3 `127425bc`), a partir de `7492c6e0`. Merges em `main`: `2bec1eb9` (T3) e `a84d2121`
+(T1+T2; conflito só no bloco da retro deste plano, resolvido mantendo as duas metades — nenhum
+arquivo de código conflitou, como a revisão do plano previa).
+
+**Integração medida em `main` (`a84d2121`):** jest do client **53 suítes / 768 testes** (baseline
+49/729 → +4 suítes, +39 testes: 10 `Tabs`, 18 `Configuracoes`, 7 `ConfiguracoesEmbedded`, 4
+`ConfiguracoesProducao`); `CI=true npx react-scripts build` "Compiled successfully."; servidor
+`test:api` **172/172** arquivos (nada de servidor foi tocado — controle de que a etapa é só client).
+Revisão adversarial (Fase 5) na worktree `review36` — resultado na seção abaixo.
+
+## Revisão adversarial (2026-10-07) e onda de correção
+
+Revisor fresco, worktree `review36`. Lente 1 montou `Configuracoes` **com as telas reais** do
+almoxarifado e da produção (sem stubs — a integração dos dois galhos, que nenhum executor tinha
+rodado): 8/9 cenários passaram de primeira (F5 em `?modulo=almoxarifado&tab=localizacoes` reabre
+Localizações; trocar de módulo limpa `?tab=`; `state.tab` legado traduz e não faz loop; admin de
+módulo vê só Geral + o seu; senha SMTP salva no blur; rota antiga escreve `?tab=` sem `?modulo=`).
+Lente 2: **6/6 sabotagens pegas** (sem `embedded` 1/18; `useState('tipos')` ignorando `?tab=`
+28/34; `onChange(indice)` 6; `todolist` na lista 3; `?tab=` preservado ao trocar módulo 1;
+módulo sem `canConfigureModule` 2). Lente 3: `Categorias`/`ConfiguracoesGerais`/`PerfisAcesso`
+27/27; classes aposentadas não referenciadas; sem ciclo com `lazyModules`; nenhuma classe casa
+com `mobile-app.css:231-238`.
+
+**Achado real (Minor, o único):** `Tabs.js:78` emitia `aria-controls="ui-tabpanel-<id>"` para
+toda aba e `Configuracoes.js:280` dava ao único painel o id `ui-tabpanel-<modulo>` — em
+`?modulo=administrativo&tab=email`, **12 `aria-controls` apontavam para ids inexistentes** (8
+módulos inativos + as 4 abas internas), e o painel não tinha `aria-labelledby`. **Correção
+(onda, em `main`):** `Tabs` ganhou a prop `painelId` e só emite `aria-controls` quando ela vem
+(todas as abas apontam para o **mesmo** painel — o padrão desta base é um `tabpanel` por tela);
+`Configuracoes` usa `PAINEL_ID` fixo nos dois níveis e `aria-labelledby="ui-tab-<aba mais interna
+ativa>"`. Testes: `Tabs.test.js` (sem `painelId` nenhum `aria-controls`; com, todos iguais) e
+`Configuracoes.test.js` (todo `aria-controls` resolve no DOM; `aria-labelledby` = `ui-tab-email`
+na Geral e `ui-tab-almoxarifado` no embutido). Controle positivo: com o comportamento antigo,
+**4 vermelhos** de 31.
+
+Observação do revisor, aceita como decisão: setas ← → na barra de **módulos** fazem `push`
+(uma entrada de histórico por tecla); abas internas fazem `replace`. Declarado em B12.
