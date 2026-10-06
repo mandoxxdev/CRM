@@ -399,3 +399,40 @@ describe('FornecedorForm — (i) erro do servidor', () => {
     expect(alerta().textContent).toMatch(/Fornecedor não encontrado/);
   });
 });
+
+describe('FornecedorForm — (j) achados da revisao adversarial (F1, F2)', () => {
+  test('F1: editar fornecedor com CNPJ legado "ISENTO" e so clicar Salvar mantem "ISENTO" no PUT', async () => {
+    api.get.mockImplementation((url) => (
+      url === '/compras/fornecedores/8'
+        ? Promise.resolve({ data: { ...FORNECEDOR_7, id: 8, cnpj: 'ISENTO' } })
+        : respostaPadrao(url)
+    ));
+    await renderEm('/compras/fornecedores/editar/8');
+    expect(campo('cnpj').value).toBe('ISENTO');
+    await submeter();
+    expect(api.put).toHaveBeenCalledTimes(1);
+    expect(api.put.mock.calls[0][1].cnpj).toBe('ISENTO');
+  });
+
+  test('F1: CNPJ gravado com 14 digitos sem mascara abre mascarado', async () => {
+    api.get.mockImplementation((url) => (
+      url === '/compras/fornecedores/9'
+        ? Promise.resolve({ data: { ...FORNECEDOR_7, id: 9, cnpj: '54984382000164' } })
+        : respostaPadrao(url)
+    ));
+    await renderEm('/compras/fornecedores/editar/9');
+    expect(campo('cnpj').value).toBe('54.984.382/0001-64');
+  });
+
+  test('F2: no cadastro novo, sair de novo do MESMO CNPJ nao re-consulta nem sobrepoe o endereco corrigido', async () => {
+    await renderEm('/compras/fornecedores/novo');
+    await digitar('cnpj', '11.222.333/0001-81');
+    await sairDoCampo('cnpj');
+    const consultas = () => api.get.mock.calls.filter(([u]) => u === `/cnpj/${CNPJ_VALIDO}`).length;
+    expect(consultas()).toBe(1);
+    await digitar('endereco', 'RUA DAS FLORES, 100 - SALA 2, CENTRO');
+    await sairDoCampo('cnpj');
+    expect(consultas()).toBe(1);
+    expect(campo('endereco').value).toBe('RUA DAS FLORES, 100 - SALA 2, CENTRO');
+  });
+});

@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { FiArrowLeft, FiSave, FiSearch, FiLoader } from 'react-icons/fi';
 import api from '../../services/api';
 import { mascararTelefoneDigitando, mascararTelefoneCompleto } from '../../utils/telefone';
 import {
-  somenteDigitos, formatarCNPJ, formatarCEP, validarCNPJ, camposDaConsultaCNPJ, mesclarSoVazios,
+  somenteDigitos, formatarCNPJ, formatarCNPJCompleto, formatarCEP, validarCNPJ, camposDaConsultaCNPJ, mesclarSoVazios,
 } from '../../utils/cnpj';
 import './FornecedorForm.css';
 
@@ -53,7 +53,7 @@ function formDoServidor(f) {
     ...FORM_VAZIO,
     razao_social: texto(f.razao_social),
     nome_fantasia: texto(f.nome_fantasia),
-    cnpj: formatarCNPJ(texto(f.cnpj)),
+    cnpj: formatarCNPJCompleto(texto(f.cnpj)),
     inscricao_estadual: texto(f.inscricao_estadual),
     contato: texto(f.contato),
     email: texto(f.email),
@@ -142,9 +142,16 @@ const FornecedorForm = () => {
     }
   }, [editando]);
 
+  // F2 da revisão: no cadastro novo, um segundo blur no MESMO CNPJ re-consultava e sobrepunha o
+  // endereço que o usuário já tinha corrigido. O blur só consulta quando o CNPJ mudou; a lupa
+  // continua consultando sempre.
+  const ultimoCnpjConsultado = useRef('');
   const onBlurCNPJ = () => {
     const digitos = somenteDigitos(form.cnpj);
-    if (!editando && digitos.length === 14 && validarCNPJ(digitos)) buscarCNPJ(form.cnpj);
+    if (editando || digitos.length !== 14 || !validarCNPJ(digitos)) return;
+    if (ultimoCnpjConsultado.current === digitos) return;
+    ultimoCnpjConsultado.current = digitos;
+    buscarCNPJ(form.cnpj);
   };
 
   /* ── CEP ──────────────────────────────────────────────────────────── */

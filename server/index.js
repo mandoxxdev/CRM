@@ -19521,6 +19521,25 @@ db.run(`
 `);
 
 // ========== TABELAS MÓDULO COMPRAS ==========
+// Os ALTERs de `fornecedores` rodam no CALLBACK do CREATE, nao soltos: os db.run deste arquivo
+// ficam fora de db.serialize e, em banco NOVO, os ALTERs chegavam antes do CREATE ("no such
+// table: fornecedores" no primeiro boot do container, medido na revisao da Etapa 34). Ate o
+// processo reiniciar, POST /api/compras/fornecedores e GET /:id respondiam 500 (coluna ausente).
+// `grupo_id` referencia `grupos_compras`, criada mais abaixo — o SQLite nao exige a tabela
+// referenciada na hora do ALTER.
+const ALTERS_FORNECEDORES = [
+  // Etapa 32: o bloco "Dados do Fornecedor" do documento mostra IE e celular; o cadastro nao tinha.
+  'inscricao_estadual TEXT',
+  'celular TEXT',
+  // Etapa 34: `telefone_vendedor` e coluna NOVA — `celular` e impressa no documento do pedido
+  // como telefone da empresa e nao foi reaproveitada (o rotulo mentiria).
+  'telefone_vendedor TEXT',
+  'grupo_id INTEGER REFERENCES grupos_compras(id)',
+  'planilha_dados TEXT',
+  'planilha_nome TEXT',
+  'planilha_atualizado_em DATETIME',
+  'foto TEXT',
+];
 db.run(`CREATE TABLE IF NOT EXISTS fornecedores (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   razao_social TEXT NOT NULL,
@@ -19536,7 +19555,16 @@ db.run(`CREATE TABLE IF NOT EXISTS fornecedores (
   status TEXT DEFAULT 'ativo',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-)`);
+)`, (errCreate) => {
+  if (errCreate) { console.error('Erro ao criar fornecedores:', errCreate.message); return; }
+  ALTERS_FORNECEDORES.forEach((col) => {
+    db.run(`ALTER TABLE fornecedores ADD COLUMN ${col}`, (e) => {
+      if (e && e.message.indexOf('duplicate') === -1) {
+        console.error(`Erro ao adicionar ${col.split(' ')[0]} em fornecedores:`, e.message);
+      }
+    });
+  });
+});
 
 db.run(`CREATE TABLE IF NOT EXISTS pedidos_compra (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -19594,16 +19622,7 @@ COLUNAS_PEDIDO_COMPRA_E32.forEach((col) => {
   });
 });
 
-// O bloco "Dados do Fornecedor" do documento mostra IE e celular; o cadastro não tinha.
-// Etapa 34: `telefone_vendedor` é coluna NOVA — `celular` (acima) é impressa no documento do
-// pedido como telefone da empresa e não foi reaproveitada (o rótulo mentiria).
-['inscricao_estadual TEXT', 'celular TEXT', 'telefone_vendedor TEXT'].forEach((col) => {
-  db.run(`ALTER TABLE fornecedores ADD COLUMN ${col}`, (e) => {
-    if (e && e.message.indexOf('duplicate') === -1) {
-      console.error(`Erro ao adicionar ${col.split(' ')[0]} em fornecedores:`, e.message);
-    }
-  });
-});
+// (IE, celular e telefone_vendedor de fornecedores: ver ALTERS_FORNECEDORES, no CREATE da tabela.)
 
 db.run(`CREATE TABLE IF NOT EXISTS cotacoes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -19630,21 +19649,7 @@ db.run(`CREATE TABLE IF NOT EXISTS grupos_compras (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )`);
-db.run('ALTER TABLE fornecedores ADD COLUMN grupo_id INTEGER REFERENCES grupos_compras(id)', (e) => {
-  if (e && e.message.indexOf('duplicate') === -1) console.error('Erro ao adicionar grupo_id em fornecedores:', e.message);
-});
-db.run('ALTER TABLE fornecedores ADD COLUMN planilha_dados TEXT', (e) => {
-  if (e && e.message.indexOf('duplicate') === -1) console.error('Erro ao adicionar planilha_dados em fornecedores:', e.message);
-});
-db.run('ALTER TABLE fornecedores ADD COLUMN planilha_nome TEXT', (e) => {
-  if (e && e.message.indexOf('duplicate') === -1) console.error('Erro ao adicionar planilha_nome em fornecedores:', e.message);
-});
-db.run('ALTER TABLE fornecedores ADD COLUMN planilha_atualizado_em DATETIME', (e) => {
-  if (e && e.message.indexOf('duplicate') === -1) console.error('Erro ao adicionar planilha_atualizado_em em fornecedores:', e.message);
-});
-db.run('ALTER TABLE fornecedores ADD COLUMN foto TEXT', (e) => {
-  if (e && e.message.indexOf('duplicate') === -1) console.error('Erro ao adicionar foto em fornecedores:', e.message);
-});
+// (grupo_id, planilha_* e foto de fornecedores: ver ALTERS_FORNECEDORES, no CREATE da tabela.)
 // Itens padrão / lista de preços por fornecedor (planilha)
 db.run(`CREATE TABLE IF NOT EXISTS itens_fornecedor (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

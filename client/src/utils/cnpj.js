@@ -24,6 +24,21 @@ export function formatarCNPJ(valor) {
     .replace(/(\d{4})(\d)/, '$1-$2');
 }
 
+/**
+ * Máscara de um CNPJ JÁ GRAVADO (carga da edição): só mascara quando há exatamente 14 dígitos;
+ * qualquer outra coisa volta como veio. O cadastro aceitou texto livre por anos ("ISENTO",
+ * 11 dígitos, "DE123…") — a progressiva acima cortaria e o Salvar gravaria um CNPJ inventado
+ * sem o usuário tocar no campo (F1 da revisão da Etapa 34). Mesma regra de `formatarCEP` e de
+ * `mascararTelefoneCompleto`.
+ */
+export function formatarCNPJCompleto(valor) {
+  const bruto = String(valor ?? '').trim();
+  const d = somenteDigitos(bruto);
+  // Só mascara se, tirando a pontuação da máscara, sobram exatamente os 14 dígitos — nada de letra.
+  if (d.length === 14 && !/\D/.test(bruto.replace(/[./-]/g, ''))) return formatarCNPJ(d);
+  return bruto;
+}
+
 /** 00000-000 quando há 8 dígitos; qualquer outra coisa volta como veio. */
 export function formatarCEP(valor) {
   const bruto = String(valor ?? '');
