@@ -109,7 +109,7 @@ T1+T2, em worktree separada: executor A faz T1 → T2 na mesma worktree; executo
 T2 **mocka** as duas telas de módulo no teste (fronteira de componente, contrato congelado); T3
 testa as telas reais com e sem `embedded`. Arquivos disjuntos (verificado na revisão).
 
-### T1 — tronco: `client/src/components/ui/Tabs.js` + `Tabs.css` + `Tabs.test.js` (RN-36.09)
+### T1 — tronco: `client/src/components/ui/Tabs.js` + `Tabs.css` + `Tabs.test.js` (RN-36.09) ✅ `724cbbdd`
 Teste primeiro: renderiza N `role="tab"` dentro de `role="tablist"`; a ativa tem
 `aria-selected=true`; clicar chama `onChange(id)`; `ArrowRight` na última volta para a primeira;
 `ArrowLeft` idem. CSS: `.ui-tabs` (flex, `gap`, `border-bottom: 2px solid var(--gmp-border)`,
@@ -117,7 +117,7 @@ Teste primeiro: renderiza N `role="tab"` dentro de `role="tablist"`; a ativa tem
 `.ui-tab-ativa` (`color: var(--gmp-primary)`, `border-bottom-color`), `.ui-tabs-sm` menor para o
 segundo nível. Foco visível (`:focus-visible` com anel).
 
-### T2 — galho: `Configuracoes.js` vira duas camadas (RN-36.01, 02, 03, 06, 07, 08)
+### T2 — galho: `Configuracoes.js` vira duas camadas (RN-36.01, 02, 03, 06, 07, 08) ✅ `74c30cd4`
 1. Teste primeiro `client/src/components/Configuracoes.test.js` (não existe; modelo de montagem:
    `almoxarifado/ConfiguracoesGerais.test.js` — `createRoot`+`act`, mocks de `../services/api`,
    `react-toastify`, `../context/AuthContext` (`useAuth`), `../services/permissionsCache`
@@ -204,11 +204,36 @@ Template de proposta → voltar por Propostas > "Configurar template"); linha no
   interna do almox continua inline (`#4facfe`) — migrá-la é da etapa que migrar as outras seis.
 
 ## Retro (preencher no fechamento)
-- Rodadas de correção até verde: _preencher_
-- Achados da revisão: _preencher_ (reais vs. ruído)
-- Paralelismo: _preencher_
+- Rodadas de correção até verde (executor A, T1+T2): **T1** — 1 rodada (vermelho por módulo
+  ausente → verde 10/10 na primeira implementação). **T2** — 1 rodada de harness + 1 de código:
+  o teste nem compilou na primeira (`jest.mock` recusa variável fora de escopo na factory; o
+  prefixo `mock` resolve) → vermelho real 18/18 → verde 18/18 na primeira implementação; depois
+  um ajuste sem teste quebrado: os blocos `sistema`/`email`/`backup` precisaram do mesmo guard
+  `!geralCarregando` que `empresa` ganhou (antes o `return` cedo do `loading` escondia a tela
+  inteira; sem ele, `?tab=sistema` mostraria spinner e formulário vazio juntos).
+- Sabotagens (controle positivo, restauradas por edição — nunca `git checkout`): **T1** setas
+  no-op (`irPara(indice)`) → 2/10 falham; `aria-selected` sempre `"false"` → 1/10 falha. **T2**
+  aba de módulo sem `canConfigureModule` (`&& true`) → 3/18 falham; `?tab=` usado cru sem cair
+  na primeira aba → 2/18 falham. Restaurado: 10/10 e 18/18.
+- Achados da revisão: _preencher no T4_ (reais vs. ruído)
+- Paralelismo (executor A): T1 → T2 em série na worktree `c36a`; T3 em worktree separada pelo
+  executor B. Arquivos disjuntos confirmados: A tocou `ui/Tabs.*`, `Configuracoes.*`
+  (+ `.test.js` novo) e este plano; nunca abriu `ConfiguracoesAlmoxarifado`/`ConfiguracoesProducao`
+  — no teste da T2 as duas são stubs (`jest.mock` com `__esModule`+`default`, `require('react')`
+  dentro da factory, `await act(async () => {})` extra para o `Suspense`).
+- Divergências do plano (executor A): (1) as **três telas do Comercial também viraram stubs** no
+  `Configuracoes.test.js` — o plano só mandava mockar almox/produção, mas `ConfigTemplateProposta`
+  usa `axios` cru (não o `api` mockado) e `OpcoesPorFamilia`/`VariaveisTecnicas` disparam 3–4
+  GETs na montagem; o que a tela prova é **qual componente abre em qual aba**. (2) Decisão
+  reversível não prevista: trocar **módulo** = `push` (o Voltar do navegador volta de módulo);
+  trocar **aba interna** = `replace` (mesma convenção da T3 no almox). (3) `?modulo=` é escrito
+  sempre, inclusive `administrativo` — Geral explícita na URL em vez de "ausente = Geral".
+- Números medidos (executor A, worktree `c36a`, antes do merge com T3): jest do client
+  **51 suítes / 757 testes** (baseline 49/729: +2 suítes, +28 testes = 10 `Tabs` + 18
+  `Configuracoes`); `CI=true npx react-scripts build` → "Compiled successfully.".
 - Defeito escapado: preencher na etapa seguinte.
 
 ## Como foi executado
 
-_Preencher no fechamento, com o que foi medido de verdade._
+_Preencher no fechamento (T4), com o que foi medido de verdade. Executor A: T1 `724cbbdd`,
+T2 `74c30cd4` — números na retro acima._
