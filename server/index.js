@@ -19578,7 +19578,21 @@ db.run(`CREATE TABLE IF NOT EXISTS pedidos_compra (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (fornecedor_id) REFERENCES fornecedores(id)
-)`);
+)`, (errCreate) => {
+  // G5 (lote de outubro): os ALTERs abaixo eram db.run soltos e, em banco NOVO, chegavam antes
+  // deste CREATE ("no such table: pedidos_compra" no primeiro boot, medido no container). Mesma
+  // correcao que fornecedores recebeu na Etapa 34: rodar no callback do CREATE. A const
+  // COLUNAS_PEDIDO_COMPRA_E32 e declarada logo abaixo, mas este callback so executa depois que o
+  // arquivo inteiro ja rodou — nao ha TDZ.
+  if (errCreate) { console.error('Erro ao criar pedidos_compra:', errCreate.message); return; }
+  COLUNAS_PEDIDO_COMPRA_E32.forEach((col) => {
+    db.run(`ALTER TABLE pedidos_compra ADD COLUMN ${col}`, (e) => {
+      if (e && e.message.indexOf('duplicate') === -1) {
+        console.error(`Erro ao adicionar ${col.split(' ')[0]} em pedidos_compra:`, e.message);
+      }
+    });
+  });
+});
 
 // ── Etapa 32: pedido de compra completo (documento que vai ao fornecedor) ──
 // O pedido precisa carregar o que o ERP atual imprime: dados complementares, os cinco
@@ -19614,13 +19628,7 @@ const COLUNAS_PEDIDO_COMPRA_E32 = [
   'snap_fornecedor_telefone TEXT',
   'snap_fornecedor_email TEXT',
 ];
-COLUNAS_PEDIDO_COMPRA_E32.forEach((col) => {
-  db.run(`ALTER TABLE pedidos_compra ADD COLUMN ${col}`, (e) => {
-    if (e && e.message.indexOf('duplicate') === -1) {
-      console.error(`Erro ao adicionar ${col.split(' ')[0]} em pedidos_compra:`, e.message);
-    }
-  });
-});
+// (os ALTERs de COLUNAS_PEDIDO_COMPRA_E32 rodam no callback do CREATE TABLE pedidos_compra, acima — G5.)
 
 // (IE, celular e telefone_vendedor de fornecedores: ver ALTERS_FORNECEDORES, no CREATE da tabela.)
 

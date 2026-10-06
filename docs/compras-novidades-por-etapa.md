@@ -79,12 +79,17 @@
   **não** cai por warning de lint — a regra "CI=true faz warning virar erro" do `CLAUDE.md` vale
   para o comando de verificação que rodamos, não para o deploy. `Compras.js` (8 warnings) e
   `MaterialAlmoxarifadoForm.js` (2) já tinham warnings antes do lote; os arquivos novos estão limpos.
-- **G5** **Primeiro boot em banco novo ainda falha para `pedidos_compra`** (não para
-  `fornecedores`, corrigido na Etapa 34): os 5 `ALTER` da Etapa 32 (`transportadora`,
-  `transportadora_telefone`, `snap_fornecedor_nome/cnpj/ie`) rodam soltos antes do `CREATE` —
-  medido no log do container em volume novo em 2026-10-07. Em banco já existente (produção) não
-  acontece. Correção de 10 linhas, mesmo padrão da 34: mover `COLUNAS_PEDIDO_COMPRA_E32.forEach(…)`
-  para o callback do `CREATE TABLE pedidos_compra` (`server/index.js`, bloco da Etapa 32).
+- **G5 — corrigido em 2026-10-07 (madrugada), depois do fechamento do lote.** O primeiro boot em
+  banco novo também falhava para `pedidos_compra` (os `ALTER` da Etapa 32 — `transportadora`,
+  `snap_fornecedor_*` — rodavam soltos antes do `CREATE`; medido no log do container em volume
+  novo). Mesma correção da Etapa 34: os `ALTER` rodam no callback do `CREATE`. Prova: container
+  em volume novo sem **nenhum** erro de `fornecedores` nem de `pedidos_compra` no boot (antes eram
+  5 + 5). Em banco já existente (produção) nunca aconteceu — nada a fazer no deploy.
+- **G6** O mesmo log do volume novo mostra que a classe de defeito **existe em outros módulos**,
+  fora de Compras: `os_itens.codigo_produto` (Operacional), `propostas` (migração de aceitas) e
+  `familias_produto.clausulas_modelo_id` (Comercial) — 3 erros no primeiro boot de banco novo,
+  todos curados no segundo boot. Não tocado (não é Compras); a correção é a mesma de G5, tabela a
+  tabela.
 - **G4** O cadastro de fornecedor aceita CNPJ em texto livre (sem validação de dígitos no servidor,
   sem `UNIQUE`). A tela nova valida os dígitos só para **consultar**; gravar continua livre, de
   propósito (há CNPJ legado fora do padrão — A2).
