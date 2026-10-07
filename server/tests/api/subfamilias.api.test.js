@@ -261,6 +261,118 @@ async function criarMaterialReq(app, body) {
     assert.strictEqual(res.body.categoria_id, null, 'categoria_id:null explícito deveria limpar o vínculo');
   });
 
+  // ── Etapa 37 (T1): contagens, itens, filtro e DELETE honestos para subfamília.
+  // O material grava familia_id = raiz e subfamilia_id = filha; antes desta etapa a sub
+  // aparecia com 0 itens, expandia vazia, o filtro ?subfamilia_id= era ignorado e o DELETE
+  // da sub com itens passava (tornando os materiais dela ineditáveis). Raiz e sub PRÓPRIAS —
+  // subA já tem 2 materiais a esta altura do arquivo. ──
+
+  let raiz37, sub37, outraSub37, mat37, matSemSub37;
+
+  await test('E37 setup: raiz, duas subs e material com familia_id=raiz + subfamilia_id=sub', async () => {
+    raiz37 = await criarFamilia(app, 'Raiz E37');
+    sub37 = await criarFamilia(app, 'Sub E37', { parent_id: raiz37.id });
+    outraSub37 = await criarFamilia(app, 'Outra Sub E37', { parent_id: raiz37.id });
+    const res = await criarMaterialReq(app, {
+      codigo: 'MAT-E37-001', nome: 'Material da sub E37', familia_id: raiz37.id, subfamilia_id: sub37.id,
+    });
+    assert.strictEqual(res.status, 201, JSON.stringify(res.body));
+    mat37 = res.body;
+    const row = await dbGet(db, 'SELECT familia_id, subfamilia_id FROM materiais_almoxarifado WHERE id = ?', [mat37.id]);
+    assert.strictEqual(row.familia_id, raiz37.id, 'material deveria gravar familia_id = raiz');
+    assert.strictEqual(row.subfamilia_id, sub37.id, 'material deveria gravar subfamilia_id = sub');
+  });
+
+  await test('E37 (a) GET /familias: qtd_itens = 1 na raiz E na subfamília', async () => {
+    const res = await request(app).get('/api/almoxarifado/familias');
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    const linhaRaiz = res.body.find((f) => f.id === raiz37.id);
+    const linhaSub = res.body.find((f) => f.id === sub37.id);
+    assert.ok(linhaRaiz && linhaSub, 'raiz e sub deveriam estar na lista');
+    assert.strictEqual(Number(linhaRaiz.qtd_itens), 1, `qtd_itens da raiz deveria ser 1, veio ${linhaRaiz.qtd_itens}`);
+    assert.strictEqual(Number(linhaSub.qtd_itens), 1, `qtd_itens da sub deveria ser 1, veio ${linhaSub.qtd_itens}`);
+  });
+
+  await test('E37 (a) GET /familias/:id da subfamília: qtd_itens = 1', async () => {
+    const res = await request(app).get(`/api/almoxarifado/familias/${sub37.id}`);
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(Number(res.body.qtd_itens), 1, `qtd_itens da sub deveria ser 1, veio ${res.body.qtd_itens}`);
+    const raizRes = await request(app).get(`/api/almoxarifado/familias/${raiz37.id}`);
+    assert.strictEqual(Number(raizRes.body.qtd_itens), 1, `qtd_itens da raiz deveria ser 1, veio ${raizRes.body.qtd_itens}`);
+  });
+
+  await test('E37 (b) GET /familias/:id/itens da subfamília traz o material com familia_nome da raiz', async () => {
+    const res = await request(app).get(`/api/almoxarifado/familias/${sub37.id}/itens`);
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(res.body.length, 1, `itens da sub deveria ter 1 material, veio ${res.body.length}`);
+    assert.strictEqual(res.body[0].id, mat37.id);
+    assert.strictEqual(res.body[0].familia_nome, raiz37.nome, 'familia_nome deveria ser o da raiz (JOIN por familia_id)');
+
+    const raizRes = await request(app).get(`/api/almoxarifado/familias/${raiz37.id}/itens`);
+    assert.strictEqual(raizRes.status, 200);
+    assert.ok(raizRes.body.some((m) => m.id === mat37.id), 'itens da raiz deveria continuar trazendo o material da sub');
+  });
+
+  await test('E37 (c) GET /materiais?subfamilia_id=S traz só o material da sub; outra sub → vazio; combinado com familia_id idem', async () => {
+    const res = await request(app).get(`/api/almoxarifado/materiais?subfamilia_id=${sub37.id}`);
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(res.body.length, 1, `?subfamilia_id=S deveria trazer 1, veio ${res.body.length}`);
+    assert.strictEqual(res.body[0].id, mat37.id);
+
+    const outra = await request(app).get(`/api/almoxarifado/materiais?subfamilia_id=${outraSub37.id}`);
+    assert.strictEqual(outra.status, 200);
+    assert.strictEqual(outra.body.length, 0, `?subfamilia_id=outra deveria vir vazio, veio ${outra.body.length}`);
+
+    const combinado = await request(app).get(`/api/almoxarifado/materiais?familia_id=${raiz37.id}&subfamilia_id=${sub37.id}`);
+    assert.strictEqual(combinado.status, 200);
+    assert.strictEqual(combinado.body.length, 1, `familia_id=R&subfamilia_id=S deveria trazer 1, veio ${combinado.body.length}`);
+    assert.strictEqual(combinado.body[0].id, mat37.id);
+
+    const combinadoOutra = await request(app).get(`/api/almoxarifado/materiais?familia_id=${raiz37.id}&subfamilia_id=${outraSub37.id}`);
+    assert.strictEqual(combinadoOutra.body.length, 0, 'familia_id=R&subfamilia_id=outra deveria vir vazio');
+  });
+
+  await test('E37 (d) material da raiz sem subfamília não entra na contagem da sub (mas entra na da raiz)', async () => {
+    const res = await criarMaterialReq(app, {
+      codigo: 'MAT-E37-002', nome: 'Material sem sub E37', familia_id: raiz37.id,
+    });
+    assert.strictEqual(res.status, 201, JSON.stringify(res.body));
+    matSemSub37 = res.body;
+
+    const lista = await request(app).get('/api/almoxarifado/familias');
+    const linhaRaiz = lista.body.find((f) => f.id === raiz37.id);
+    const linhaSub = lista.body.find((f) => f.id === sub37.id);
+    assert.strictEqual(Number(linhaRaiz.qtd_itens), 2, `raiz deveria contar 2, veio ${linhaRaiz.qtd_itens}`);
+    assert.strictEqual(Number(linhaSub.qtd_itens), 1, `sub deveria continuar com 1, veio ${linhaSub.qtd_itens}`);
+
+    const itensSub = await request(app).get(`/api/almoxarifado/familias/${sub37.id}/itens`);
+    assert.strictEqual(itensSub.body.length, 1, 'itens da sub não deveriam incluir o material sem sub');
+    const filtro = await request(app).get(`/api/almoxarifado/materiais?subfamilia_id=${sub37.id}`);
+    assert.strictEqual(filtro.body.length, 1, '?subfamilia_id=S não deveria incluir o material sem sub');
+  });
+
+  await test('E37 (e) DELETE /familias/S com material ativo → 400 "possui 1 item(ns) ativo(s)" e a sub continua ativa', async () => {
+    const res = await request(app).delete(`/api/almoxarifado/familias/${sub37.id}`);
+    assert.strictEqual(res.status, 400, `esperava 400, veio ${res.status} ${JSON.stringify(res.body)}`);
+    assert.ok(/possui 1 item\(ns\) ativo\(s\)/.test(res.body.error), `literal esperada, veio: ${res.body.error}`);
+    const row = await dbGet(db, 'SELECT ativo FROM familias_material_almoxarifado WHERE id = ?', [sub37.id]);
+    assert.strictEqual(Number(row.ativo), 1, 'sub deveria continuar ativa');
+  });
+
+  await test('E37 (e) depois de inativar o material, DELETE /familias/S passa', async () => {
+    const del = await request(app).delete(`/api/almoxarifado/materiais/${mat37.id}`);
+    assert.strictEqual(del.status, 200, JSON.stringify(del.body));
+
+    const lista = await request(app).get('/api/almoxarifado/familias');
+    const linhaSub = lista.body.find((f) => f.id === sub37.id);
+    assert.strictEqual(Number(linhaSub.qtd_itens), 0, 'material inativo não conta');
+
+    const res = await request(app).delete(`/api/almoxarifado/familias/${sub37.id}`);
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    const row = await dbGet(db, 'SELECT ativo FROM familias_material_almoxarifado WHERE id = ?', [sub37.id]);
+    assert.strictEqual(Number(row.ativo), 0, 'sub deveria ter sido inativada');
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);

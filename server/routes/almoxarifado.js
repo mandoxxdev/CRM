@@ -301,7 +301,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
   // GET /api/almoxarifado/materiais — listar
   app.get('/api/almoxarifado/materiais', async (req, res) => {
-    const { search, categoria, status, familia_id, setor } = req.query;
+    const { search, categoria, status, familia_id, subfamilia_id, setor } = req.query;
 
     try {
       const sectorMaterialService = require('../services/almoxarifado/sectorMaterialService');
@@ -348,6 +348,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       if (familia_id) {
         sql += ` AND m.familia_id = ?`;
         params.push(parseInt(familia_id, 10));
+      }
+      // Etapa 37 (RN-37.06): o material grava familia_id = raiz e subfamilia_id = filha, entao
+      // filtrar uma subfamilia por `familia_id` devolvia nada. Combinavel com familia_id.
+      if (subfamilia_id) {
+        sql += ` AND m.subfamilia_id = ?`;
+        params.push(parseInt(subfamilia_id, 10));
       }
       if (status === 'critico') {
         sql += ` AND m.quantidade_atual <= m.quantidade_minima AND m.quantidade_minima > 0`;
@@ -2248,10 +2254,19 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     });
   }
 
+  // Etapa 37 (RN-37.05): qtd_itens conta `familia_id = f.id OR subfamilia_id = f.id`. O material
+  // grava familia_id = raiz e subfamilia_id = filha, entao so `familia_id` dava 0 para toda
+  // subfamilia. A forma OR (e nao CASE por parent_id) vale para raiz — subfamilia_id = raiz nunca
+  // ocorre — e, para sub, tambem conta material gravado pela API com familia_id = sub direto.
+  // A raiz continua INCLUINDO os materiais das subs: e o total da familia. Mesma subquery em
+  // GET /familias e GET /familias/:id — manter iguais.
+  const QTD_ITENS_FAMILIA_SUBQUERY =
+    `(SELECT COUNT(*) FROM materiais_almoxarifado m WHERE (m.familia_id = f.id OR m.subfamilia_id = f.id) AND m.ativo = 1) as qtd_itens`;
+
   app.get('/api/almoxarifado/familias',(req, res) => {
     const { ativo } = req.query;
     let sql = `SELECT f.*, p.nome as parent_nome,
-                 (SELECT COUNT(*) FROM materiais_almoxarifado m WHERE m.familia_id = f.id AND m.ativo = 1) as qtd_itens
+                 ${QTD_ITENS_FAMILIA_SUBQUERY}
                FROM familias_material_almoxarifado f
                LEFT JOIN familias_material_almoxarifado p ON f.parent_id = p.id
                WHERE 1=1`;
@@ -2268,7 +2283,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
   app.get('/api/almoxarifado/familias/:id',(req, res) => {
     db.get(`SELECT f.*, p.nome as parent_nome,
-              (SELECT COUNT(*) FROM materiais_almoxarifado m WHERE m.familia_id = f.id AND m.ativo = 1) as qtd_itens
+              ${QTD_ITENS_FAMILIA_SUBQUERY}
             FROM familias_material_almoxarifado f
             LEFT JOIN familias_material_almoxarifado p ON f.parent_id = p.id
             WHERE f.id = ?`, [req.params.id], (err, row) => {
@@ -2285,9 +2300,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
             LEFT JOIN familias_material_almoxarifado f ON m.familia_id = f.id
             LEFT JOIN localizacoes_almoxarifado l ON m.localizacao_padrao_id = l.id
             LEFT JOIN almoxarifados a ON l.almoxarifado_id = a.id
-            WHERE m.familia_id = ? AND m.ativo = 1
+            WHERE (m.familia_id = ? OR m.subfamilia_id = ?) AND m.ativo = 1
             ORDER BY m.nome ASC`,
-      [req.params.id], (err, rows) => {
+      // Etapa 37 (RN-37.05/37.08): expandir uma subfamilia mostrava vazio — o material dela tem
+      // familia_id = raiz. Uma query so, sem db.get previo; familia_nome continua o da raiz.
+      [req.params.id, req.params.id], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
       });
@@ -2420,7 +2437,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
   app.delete('/api/almoxarifado/familias/:id',(req, res) => {
     if (denyUnlessAlmoxAdmin(req, res)) return;
-    db.get('SELECT COUNT(*) as c FROM materiais_almoxarifado WHERE familia_id = ? AND ativo = 1', [req.params.id], (err, row) => {
+    // Etapa 37 (RN-37.04): a contagem so por familia_id deixava inativar uma SUBFAMILIA com
+    // itens (eles tem familia_id = raiz) — a sub sumia da arvore e todo material dela ficava
+    // ineditavel (validateSubfamilia exige sub ativa → 400 "Subfamilia invalida" no PUT).
+    db.get('SELECT COUNT(*) as c FROM materiais_almoxarifado WHERE (familia_id = ? OR subfamilia_id = ?) AND ativo = 1', [req.params.id, req.params.id], (err, row) => {
       if (err) return res.status(500).json({ error: err.message });
       if (row.c > 0) {
         return res.status(400).json({ error: `Não é possível remover: família possui ${row.c} item(ns) ativo(s)` });

@@ -97,7 +97,11 @@ Front: `TabFamilias` (`ConfiguracoesAlmoxarifado.js`), `MateriaisAlmoxarifado.js
 
 ## Tasks
 
-**T1 — tronco (servidor, pequeno):** RN-37.04 (metade servidor), 37.05, 37.06. Teste primeiro em
+**T1 — tronco (servidor, pequeno):** ✅ `0777d1b3` (branch `c37`) — `subfamilias` 24/7 vermelho →
+31/0; sabotagem 4/4; `materialCompleto` 20/0, `materialServiceCriacao` 13/0, `conferenciaEscopo`
+10/0, `categoriasCrud` 11/0; `test:api` 172/172. A subquery de `qtd_itens` virou a constante
+`QTD_ITENS_FAMILIA_SUBQUERY` usada pelas duas rotas (o contrato pedia "manter iguais"; uma
+constante é a forma que não deixa divergir). RN-37.04 (metade servidor), 37.05, 37.06. Teste primeiro em
 `server/tests/api/subfamilias.api.test.js` (acrescentar ao fim, mesmo runner). ⚠️ O arquivo é
 sequencial com estado compartilhado — ao chegar no fim, `subA` já tem **2** materiais; os cenários
 novos criam **raiz e sub próprias** (como os testes de `:157` em diante fazem). Cenários: (a)
@@ -184,9 +188,17 @@ item de subfamílias; índice; retro.
 - Linhas do servidor citadas são de `main` `34d348ed`; conferir antes de editar.
 
 ## Retro (preencher no fechamento)
-- Rodadas de correção até verde: _preencher_
-- Achados da revisão: _preencher_ (reais vs. ruído)
-- Paralelismo: _preencher_
+- Rodadas de correção até verde: **T1: 0** — os 8 cenários novos ficaram vermelhos exatamente nos
+  4 pontos previstos (sub com `qtd_itens` 0; itens vazio; `?subfamilia_id=` ignorado devolvendo
+  os 5 materiais do arquivo; DELETE da sub com item respondendo 200) e as 5 edições da tabela de
+  contratos os fecharam de primeira (31/0). Nenhuma suíte vizinha quebrou. _T2/T3: preencher._
+- Achados da revisão: _preencher_ (reais vs. ruído). **T1:** o achado do DELETE (`:2423`) era
+  real e o controle positivo confirmou (200 antes, 400 depois). A linha "(d) material sem sub não
+  entra na contagem de S" rendeu mais do que parecia: é o único cenário que cai em **três**
+  sabotagens diferentes (qtd_itens, itens, filtro), porque afirma o lado negativo das três rotas.
+- Paralelismo: _preencher_. **T1:** feita na worktree `CRM-wt-c37` (branch `c37`) sem tocar em
+  `client/`; T2/T3 consomem o contrato congelado — nenhuma mudança de contrato foi necessária
+  (o único desvio é interno: a constante `QTD_ITENS_FAMILIA_SUBQUERY`, invisível à API).
 - Defeito escapado: preencher na etapa seguinte.
 
 ## Como foi executado
